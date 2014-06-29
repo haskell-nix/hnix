@@ -18,26 +18,30 @@
 module Nix where
 
 import           Control.Applicative
-import           Control.Monad hiding (forM_)
+import           Control.Arrow
+import           Control.Monad hiding (forM_, mapM, sequence)
 --import           Control.Monad.IO.Class
 --import           Control.Monad.Trans.Class
 --import           Control.Monad.Trans.Control
 --import           Control.Monad.Trans.Either
+--import           Control.Monad.Trans.Reader
 import           Data.Char
 import           Data.Data
 import           Data.Foldable
 import           Data.Map (Map)
 import qualified Data.Map as Map
 --import           Data.Monoid
+import qualified Data.Text as T
 import           Data.Text hiding (concat, concatMap, head, map)
-import           Data.Text.IO
---import           Data.Traversable
+--import           Data.Text.IO
+import           Data.Traversable
 --import           Data.Typeable
 import           GHC.Generics
 import qualified Prelude
-import           Prelude hiding (readFile, concat, concatMap, elem)
+import           Prelude hiding (readFile, concat, concatMap, elem, mapM,
+                                 sequence)
 import           System.Environment
-import           System.IO.Memoize
+--import           System.IO.Memoize
 -- import           Text.Parsec hiding ((<|>), many, optional)
 -- import           Text.Parsec.Text
 import           Text.Trifecta
@@ -50,6 +54,14 @@ trace _ x = x
 loeb :: Functor f => f (f a -> a) -> f a
 loeb xs = ys where ys = fmap ($ ys) xs
 {-# INLINE loeb #-}
+
+newtype Fix (f :: * -> *) = Fix { outF :: f (Fix f) }
+
+cata :: Functor f => (f a -> a) -> Fix f -> a
+cata f = f . fmap (cata f) . outF
+
+cataM :: (Traversable f, Monad m) => (f a -> m a) -> Fix f -> m a
+cataM f = f <=< mapM (cataM f) . outF
 
 data NAtom
     = NStr Text
@@ -104,6 +116,16 @@ data NExprF r
       -- ^ The untyped lambda calculus core
     deriving (Ord, Eq, Generic, Typeable, Data)
 
+-- An 'NValue' is the most reduced form of an 'NExpr' after evaluation
+-- is completed.
+data NValueF r
+    = NVConstant NAtom
+    | NVList [r]
+    | NVSet (Map Text r)
+    | NVArgSet (Map Text (Maybe r))
+    | NVFunction r (NValue -> IO r)
+    deriving (Generic, Typeable)
+
 instance Functor NExprF where
     fmap _ (NConstant a)  = NConstant a
     fmap f (NList r)      = NList (fmap f r)
@@ -119,14 +141,16 @@ instance Functor NExprF where
     fmap f (NApp r r1)    = NApp (f r) (f r1)
     fmap f (NAbs r r1)    = NAbs (f r) (f r1)
 
-newtype Fix (f :: * -> *) = Fix { outF :: f (Fix f) }
-
-cata :: Functor f => (f a -> a) -> Fix f -> a
-cata f = f . fmap (cata f) . outF
-
 type NExpr = Fix NExprF
 
-newtype NEnv a = NEnv { getEnv :: Map a a }
+instance Functor NValueF where
+    fmap _ (NVConstant a) = NVConstant a
+    fmap f (NVList xs) = NVList (fmap f xs)
+    fmap f (NVSet h) = NVSet (fmap f h)
+    fmap f (NVArgSet h) = NVArgSet (fmap (fmap f) h)
+    fmap f (NVFunction argset k) = NVFunction (f argset) (fmap f . k)
+
+type NValue = Fix NValueF
 
 instance Show f => Show (NExprF f) where
     show (NConstant x) = show x
@@ -181,6 +205,13 @@ dumpExpr = cata phi where
   phi (NApp f x)    = "NApp " ++ f ++ " " ++ x
   phi (NAbs a b)    = "NAbs " ++ a ++ " " ++ b
 
+valueText :: NValue -> Text
+valueText = cata phi where
+    phi (NVConstant a) = atomText a
+    phi (NVList _) = error "Cannot coerce a list to a string"
+    phi (NVSet _) = error "Cannot coerce a set to a string"
+    phi (NVArgSet _) = error "Cannot coerce an argument list to a string"
+
 mkInt :: Integer -> NExpr
 mkInt = Fix . NConstant . NInt
 
@@ -199,23 +230,9 @@ mkBool = Fix . NConstant . NBool
 mkNull :: NExpr
 mkNull = Fix (NConstant NNull)
 
-instance Show (Fix NExprF) where
-    show (Fix f) = show f
-
-instance Eq (Fix NExprF) where
-    Fix x == Fix y = x == y
-
-instance Ord (Fix NExprF) where
-    compare (Fix x) (Fix y) = compare x y
-
--- | Given an argument passed to a function, "fit" it within the arguments as
---   specified by the definition of the function.
---
--- For example, a function may be defined as @{ foo, bar }: body@, in which
--- case the argument must be a set that provides at least the keys @foo@ and
--- @bar@.
-fitArgument :: NExpr -> NExpr -> NExpr
-fitArgument _ _ = undefined
+instance Show (Fix NExprF) where show (Fix f) = show f
+instance Eq (Fix NExprF)   where Fix x == Fix y = x == y
+instance Ord (Fix NExprF)  where compare (Fix x) (Fix y) = compare x y
 
 nixApp :: Parser NExpr
 nixApp = go <$> some (whiteSpace *> nixTerm True)
@@ -262,9 +279,9 @@ maybeSetOrLambda allowLambdas = do
             trace ("results are = " ++ show y) $ return ()
             if y
                 then if allowLambdas
-                    then trace "looking for set" $ setOrArgs
+                    then setOrArgs
                     else error "Unexpected lambda"
-                else trace "just want a string" $ (keyName <?> "string")
+                else keyName <?> "string"
 
 isPathChar :: Char -> Bool
 isPathChar c = isAlpha c || c `Prelude.elem` ".:/"
@@ -279,11 +296,9 @@ stringChar = char '\\' *> oneChar
 
 symName :: Parser Text
 symName = do
-    trace "symName" $ return ()
     chars <- some (satisfy (\c -> isAlpha c || c == '.'))
     trace ("chars = " ++ show chars) $ return ()
     guard (isLower (head chars))
-    trace ("chars2 = " ++ show chars) $ return ()
     return $ pack (trace ("chars: " ++ show chars) chars)
 
 stringish :: Parser NExpr
@@ -364,13 +379,79 @@ setOrArgs = do
 --         Left e  -> error (show e)
 --         Right r -> return $ Just r
 
+buildArgument :: NValue -> NValue -> NValue
+buildArgument paramSpec arg = do
+    -- Having the typed lambda calculus would make this code much safer.
+    Fix $ NVSet $ case paramSpec of
+        Fix (NVArgSet s) ->
+            case arg of
+                Fix (NVSet s') ->
+                    Map.foldlWithKey' (go s') Map.empty s
+                _ -> error "Unexpected function environment"
+        Fix (NVConstant (NSym name)) ->
+            Map.singleton name arg
+  where
+    go env m k v = case Map.lookup k env of
+        Nothing
+            | Just v' <- v -> Map.insert k v' m
+            | otherwise   -> error $ "Could not find " ++ show k
+        Just v' -> Map.insert k v' m
+
+evalExpr :: NExpr -> NValue -> IO NValue
+evalExpr = cata phi
+  where
+    phi :: NExprF (NValue -> IO NValue) -> NValue -> IO NValue
+    phi (NConstant x) = const $ return $ Fix $ NVConstant x
+
+    phi (NList l)     = \env ->
+        Fix . NVList <$> mapM ($ env) l
+
+    phi (NConcat l)   = \env ->
+        Fix . NVConstant . NStr . T.concat
+            <$> mapM (fmap valueText . ($ env)) l
+
+    phi (NArgSet xs)  = error "Cannot evaluate an argument set"
+
+    phi (NSet b xs)   = \env ->
+        Fix . NVSet . Map.fromList
+            <$> mapM (fmap (first valueText) . go env) xs
+      where
+        go env (x, y) = liftM2 (,) (x env) (y env)
+
+    phi (NLet v e)    = error "let: not implemented"
+    phi (NIf i t e)   = error "if: not implemented"
+    phi (NWith c v)   = error "with: not implemented"
+    phi (NAssert e v) = error "assert: not implemented"
+    phi (NVar v)      = error "var: not implemented"
+
+    phi (NApp fun x) = \env -> do
+        fun' <- fun env
+        case fun' of
+            Fix (NVFunction argset f) -> do
+                arg <- x env
+                let arg' = buildArgument argset arg
+                f arg'
+            _ -> error "Attempt to call non-function"
+
+    phi (NAbs a b)    = \env -> do
+        -- jww (2014-06-28): arglists should not receive the current
+        -- environment, but rather should recursively view their own arg
+        -- set
+        args <- a env
+        return $ Fix $ NVFunction args b
+
 nix :: FilePath -> IO ()
 nix path = do
-    mpkgs <- parseFromFile nixApp path
-    forM_ mpkgs $ \pkgs -> do
-        mem <- once (return pkgs)
-        res <- join $ loeb (return (const mem))
-        Prelude.print res
+    mn <- parseFromFile nixApp path
+    forM_ mn $ \n -> do
+        top <- evalExpr n (Fix (NVSet Map.empty)) -- evaluate the top level
+        case top of
+            Fix (NVConstant atom) ->
+                Prelude.putStrLn $ "Evaluated atom: " ++ show atom
+            Fix (NVList xs) ->
+                Prelude.putStrLn "Evaluated to a list"
+            Fix (NVSet atom) ->
+                Prelude.putStrLn "Evaluated to a set"
 
 main :: IO ()
 main = do
