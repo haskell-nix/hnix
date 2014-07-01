@@ -1,0 +1,43 @@
+Name:                hnix
+Version:             0.0.1
+Synopsis:            Haskell implementation of the Nix language
+Description:
+  Haskell implementation of the Nix language.
+
+License:             BSD3
+License-file:        LICENSE
+Author:              John Wiegley
+Maintainer:          johnw@newartisans.com
+Category:            Data, Nix
+Build-type:          Simple
+Cabal-version:       >=1.8
+Homepage:            http://github.com/jwiegley/hnix
+
+Library
+  Exposed-modules:
+    Nix.Parser
+  Default-extensions: 
+    DataKinds
+    DeriveDataTypeable
+    DeriveGeneric
+    FlexibleContexts
+    FlexibleInstances
+    GADTs
+    KindSignatures
+    LambdaCase
+    MultiWayIf
+    OverloadedStrings
+    PatternGuards
+    RankNTypes
+    TupleSections
+  Build-depends:
+      base                     >= 4.3          && < 5
+    , containers
+    , parsers
+    , trifecta
+    , text
+  ghc-options: -Wall
+
+source-repository head
+  type:     git
+  location: git://github.com/jwiegley/hnix.git
