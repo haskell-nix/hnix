@@ -17,17 +17,16 @@ import qualified Prelude
 import           Prelude hiding (elem)
 
 nixApp :: Parser NExpr
-nixApp = go <$> some (whiteSpace *> nixExpr True)
+nixApp = go <$> someTill (whiteSpace *> nixExpr True)
+                         (try (lookAhead (char ';')))
   where
     go []     = error "some has failed us"
     go [x]    = x
     go (f:xs) = Fix (NApp f (go xs))
 
 nixExpr :: Bool -> Parser NExpr
-nixExpr allowLambdas =
-    buildExpressionParser table (nixTerm allowLambdas) <?> "expression"
- where
-    table :: OperatorTable Parser NExpr
+nixExpr = buildExpressionParser table . nixTerm
+  where
     table =
         [ [ prefix "-"  NNeg ]
         , [ binary "++" NConcat AssocRight ]
@@ -45,7 +44,7 @@ nixExpr allowLambdas =
     --     Postfix (pure (Fix . NOper . fun) <* symbol name)
 
 nixTerm :: Bool -> Parser NExpr
-nixTerm allowLambdas = choice
+nixTerm allowLambdas = trace "in nixTerm" (return ()) >> choice
     [ nixInt
     , nixBool
     , nixNull
@@ -67,12 +66,12 @@ nixNull :: Parser NExpr
 nixNull = string "null" *> pure mkNull <?> "null"
 
 nixParens :: Parser NExpr
-nixParens = between (symbolic '(') (symbolic ')') nixApp <?> "parens"
+nixParens = parens nixApp <?> "parens"
 
 nixList :: Parser NExpr
-nixList = between (symbolic '[') (symbolic ']')
-              (Fix . NList <$> many (nixTerm False))
-              <?> "list"
+nixList = do
+    trace "in nixList" $ return ()
+    brackets (Fix . NList <$> many (nixTerm False)) <?> "list"
 
 nixPath :: Parser NExpr
 nixPath = try $ do
@@ -112,9 +111,8 @@ symName = do
 
 stringish :: Parser NExpr
 stringish
-     =  (char '"' *>
-         (merge <$> manyTill stringChar (char '"')))
-    <|> (char '$' *> between (symbolic '{') (symbolic '}') nixApp)
+     =  (char '"' *> (merge <$> manyTill stringChar (char '"')))
+    <|> (char '$' *> braces nixApp)
   where
     merge = foldl1' (\x y -> Fix (NOper (NConcat x y)))
 
@@ -126,18 +124,25 @@ stringish
         oneChar = mkStr . singleton <$> anyChar
 
 argExpr :: Parser NExpr
-argExpr =  (Fix . NArgSet . Map.fromList <$> argList)
-       <|> ((mkSym <$> symName) <?> "argname")
+argExpr = do
+    trace "in argExpr" $ return ()
+    (Fix . NArgSet . Map.fromList <$> argList)
+        <|> ((mkSym <$> symName) <?> "argname")
   where
-    argList = between (symbolic '{') (symbolic '}')
-                  ((argName <* whiteSpace) `sepBy` symbolic ',')
-                  <?> "arglist"
+    argList = do
+        trace "in argList" $ return ()
+        braces ((argName <* trace "FOO" whiteSpace) `sepBy` trace "BAR" (symbolic ','))
+            <?> "arglist"
 
-    argName = (,) <$> (symName <* whiteSpace)
-                  <*> optional (symbolic '?' *> nixTerm False)
+    argName = do
+        trace "in argName" $ return ()
+        (,) <$> (symName <* whiteSpace)
+            <*> optional (symbolic '?' *> nixExpr False)
 
 nvPair :: Parser (NExpr, NExpr)
-nvPair = (,) <$> keyName <*> (symbolic '=' *> nixApp)
+nvPair = do
+    trace "in nvPair" $ return ()
+    (,) <$> keyName <*> (symbolic '=' *> nixApp)
 
 keyName :: Parser NExpr
 keyName = (stringish <|> (mkSym <$> symName)) <* whiteSpace
@@ -153,9 +158,8 @@ setOrArgs = do
         else try (lookAhead lookaheadForSet)
     trace ("Do we have a set: " ++ show haveSet) $ return ()
     if haveSet
-        then between (symbolic '{') (symbolic '}')
-                 (Fix . NSet sawRec <$> nvPair `endBy` symbolic ';')
-                 <?> "set"
+        then braces (Fix . NSet sawRec <$> nvPair `endBy` symbolic ';')
+            <?> "set"
         else do
             trace "parsing arguments" $ return ()
             args <- argExpr <?> "arguments"
@@ -169,7 +173,8 @@ lookaheadForSet = do
     x <- (symbolic '{' *> return True) <|> return False
     if not x then return x else do
         y <- (keyName *> return True) <|> return False
-        if not y then return y else
+        if not y then return y else do
+            trace "still in lookaheadForSet" $ return ()
             (symbolic '=' *> return True) <|> return False
 
 parseNixFile :: MonadIO m => FilePath -> m (Result NExpr)

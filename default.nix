@@ -1,5 +1,5 @@
 { cabal, parsers, trifecta, text, ansiWlPprint, parsec, transformers
-, useParsec ? false
+, useParsec ? true
 }:
 
 cabal.mkDerivation (self: rec {
