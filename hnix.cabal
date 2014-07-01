@@ -25,6 +25,7 @@ Library
     Nix.Types
   Other-modules:
     Nix.Internal
+    Nix.Parser.Library
   Default-extensions: 
     DataKinds
     DeriveDataTypeable

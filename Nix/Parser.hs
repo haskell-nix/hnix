@@ -11,42 +11,10 @@ import qualified Data.Map as Map
 import           Data.Text hiding (concat, concatMap, head, map)
 import           Nix.Types
 import           Nix.Internal
+import           Nix.Parser.Library
 import qualified Prelude
 import           Prelude hiding (readFile, concat, concatMap, elem, mapM,
                                  sequence)
-
-#if USE_PARSEC
-import           Data.Text.IO
-import           Text.Parsec hiding ((<|>), many, optional)
-import           Text.Parsec.Text
-import           Text.PrettyPrint.ANSI.Leijen (Doc, text)
-
-symbol :: String -> Parser String
-symbol str = string str <* whiteSpace
-
-symbolic :: Char -> Parser Char
-symbolic c = char c <* whiteSpace
-
-decimal :: Parser Integer
-decimal = read <$> some digit
-
-whiteSpace :: Parser ()
-whiteSpace = spaces
-
-data Result a = Success a
-              | Failure Doc
-
-parseFromFileEx :: MonadIO m => Parser a -> FilePath -> m (Result a)
-parseFromFileEx p path =
-    (either (Failure . text . show) Success . parse p path)
-        `liftM` liftIO (readFile path)
-#else
-import           Text.Trifecta
-import           Text.Parser.LookAhead
-#endif
-
-parseNixFile :: MonadIO m => FilePath -> m (Result NExpr)
-parseNixFile = parseFromFileEx nixApp
 
 nixApp :: Parser NExpr
 nixApp = go <$> some (whiteSpace *> nixTerm True)
@@ -174,3 +142,6 @@ setOrArgs = do
             trace ("args: " ++ show args) $ return ()
             symbolic ':' *> ((Fix .) . NAbs <$> pure args <*> nixApp)
                 <|> pure args
+
+parseNixFile :: MonadIO m => FilePath -> m (Result NExpr)
+parseNixFile = parseFromFileEx nixApp
