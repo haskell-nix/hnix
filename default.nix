@@ -1,14 +1,18 @@
-{ cabal, parsers, trifecta, text }:
+{ cabal, parsers, trifecta, text, ansiWlPprint, parsec, transformers
+, useParsec ? false
+}:
 
-cabal.mkDerivation (self: {
+cabal.mkDerivation (self: rec {
   pname = "hnix";
   version = "0.0.1";
   src = ./.;
+  isLibrary = true;
+  isExecutable = true;
   buildDepends = [
-    parsers
-    trifecta
+    ansiWlPprint
     text
-  ];
+    transformers
+  ] ++ (if useParsec then [ parsec ] else [ parsers trifecta ]);
   meta = {
     homepage = "https://github.com/jwiegley/hnix";
     description = "Haskell implementation of the Nix language";

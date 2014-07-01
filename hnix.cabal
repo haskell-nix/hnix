@@ -10,12 +10,21 @@ Author:              John Wiegley
 Maintainer:          johnw@newartisans.com
 Category:            Data, Nix
 Build-type:          Simple
-Cabal-version:       >=1.8
+Cabal-version:       >=1.10
 Homepage:            http://github.com/jwiegley/hnix
 
+Flag Parsec
+  Description: Use parsec instead of Trifecta
+  Default: False
+
 Library
+  default-language: Haskell2010
   Exposed-modules:
+    Nix.Eval
     Nix.Parser
+    Nix.Types
+  Other-modules:
+    Nix.Internal
   Default-extensions: 
     DataKinds
     DeriveDataTypeable
@@ -32,10 +41,52 @@ Library
     TupleSections
   Build-depends:
       base                     >= 4.3          && < 5
+    , ansi-wl-pprint
     , containers
-    , parsers
-    , trifecta
     , text
+    , transformers
+  if flag(parsec)
+    ghc-options: -DUSE_PARSEC
+    Build-depends:
+        parsec
+  else
+    Build-depends:
+        parsers
+      , trifecta
+  ghc-options: -Wall
+
+executable hnix
+  default-language: Haskell2010
+  main-is: Nix.hs
+  Default-extensions: 
+    DataKinds
+    DeriveDataTypeable
+    DeriveGeneric
+    FlexibleContexts
+    FlexibleInstances
+    GADTs
+    KindSignatures
+    LambdaCase
+    MultiWayIf
+    OverloadedStrings
+    PatternGuards
+    RankNTypes
+    TupleSections
+  build-depends:       
+      base                     >= 4.3          && < 5
+    , hnix
+    , ansi-wl-pprint
+    , containers
+    , text
+    , transformers
+  if flag(parsec)
+    ghc-options: -DUSE_PARSEC
+    Build-depends:
+        parsec
+  else
+    Build-depends:
+        parsers
+      , trifecta
   ghc-options: -Wall
 
 source-repository head
