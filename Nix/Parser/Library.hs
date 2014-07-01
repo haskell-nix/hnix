@@ -4,9 +4,11 @@ module Nix.Parser.Library
     (
 #if USE_PARSEC
       module Text.Parsec
+    , module Text.Parsec.Expr
     , module Text.Parsec.Text
 #else
       module Text.Trifecta
+    , module Text.Parser.Expression
     , module Text.Parser.LookAhead
 #endif
     )
@@ -17,6 +19,7 @@ module Nix.Parser.Library
 import Control.Applicative
 import Data.Text.IO
 import Text.Parsec hiding ((<|>), many, optional)
+import Text.Parsec.Expr
 import Text.Parsec.Text
 import Text.PrettyPrint.ANSI.Leijen (Doc, text)
 
@@ -42,6 +45,7 @@ parseFromFileEx p path =
 
 #else
 
+import Text.Parser.Expression
 import Text.Parser.LookAhead
 import Text.Trifecta
 

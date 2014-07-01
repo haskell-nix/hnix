@@ -37,9 +37,9 @@ evalExpr = cata phi
     phi (NList l)     = \env ->
         Fix . NVList <$> mapM ($ env) l
 
-    phi (NConcat l)   = \env ->
-        Fix . NVConstant . NStr . T.concat
-            <$> mapM (fmap valueText . ($ env)) l
+    -- phi (NConcat l)   = \env ->
+    --     Fix . NVConstant . NStr . T.concat
+    --         <$> mapM (fmap valueText . ($ env)) l
 
     phi (NArgSet _xs) = error "Cannot evaluate an argument set"
 

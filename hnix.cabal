@@ -29,6 +29,7 @@ Library
   Default-extensions: 
     DataKinds
     DeriveDataTypeable
+    DeriveFunctor
     DeriveGeneric
     FlexibleContexts
     FlexibleInstances
@@ -62,6 +63,7 @@ executable hnix
   Default-extensions: 
     DataKinds
     DeriveDataTypeable
+    DeriveFunctor
     DeriveGeneric
     FlexibleContexts
     FlexibleInstances

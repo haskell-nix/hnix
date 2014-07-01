@@ -43,12 +43,45 @@ atomText (NPath p) = pack p
 atomText (NBool b) = if b then "true" else "false"
 atomText (NSym s)  = s
 atomText NNull     = "null"
+
+data NOperF r
+    = NNot r
+    | NNeg r
+
+    | NEq r r
+    | NNEq r r
+    | NLt r r
+    | NLte r r
+    | NGt r r
+    | NGte r r
+    | NAnd r r
+    | NOr r r
+    | NImpl r r
+    | NUpdate r r
+    | NHasAttr r r
+
+    | NPlus r r
+    | NMinus r r
+    | NMult r r
+    | NDiv r r
+    | NConcat r r
+    deriving (Eq, Ord, Generic, Typeable, Data, Functor)
+
+  --   show (NConcat l) = go l
+  --     where
+  --       go [] = ""
+  --       go [x] = show x
+  --       go (x:xs) = show x ++ " ++ " ++ go xs
+
+
+  -- phi (NConcat l)   = "NConcat " ++ show l
 
 data NExprF r
     = NConstant NAtom
 
+    | NOper (NOperF r)
+
     | NList [r]
-    | NConcat [r]
       -- ^ A "concat" is a list of things which must combine to form a string.
     | NArgSet (Map Text (Maybe r))
     | NSet  Bool [(r, r)]
@@ -62,7 +95,7 @@ data NExprF r
     | NApp r r
     | NAbs r r
       -- ^ The untyped lambda calculus core
-    deriving (Ord, Eq, Generic, Typeable, Data)
+    deriving (Ord, Eq, Generic, Typeable, Data, Functor)
 
 type NExpr = Fix NExprF
 
@@ -70,35 +103,29 @@ instance Show (Fix NExprF) where show (Fix f) = show f
 instance Eq (Fix NExprF)   where Fix x == Fix y = x == y
 instance Ord (Fix NExprF)  where compare (Fix x) (Fix y) = compare x y
 
-instance Functor NExprF where
-    fmap _ (NConstant a)  = NConstant a
-    fmap f (NList r)      = NList (fmap f r)
-    fmap f (NConcat r)    = NConcat (fmap f r)
-    fmap f (NArgSet h)    = NArgSet (fmap (fmap f) h)
-    fmap f (NSet b h)     = NSet b $ map go h
-      where go (k, v) = (f k, f v)
-    fmap f (NLet r r1)    = NLet (f r) (f r1)
-    fmap f (NIf r r1 r2)  = NIf (f r) (f r1) (f r2)
-    fmap f (NWith r r1)   = NWith (f r) (f r1)
-    fmap f (NAssert r r1) = NAssert (f r) (f r1)
-    fmap f (NVar r)       = NVar (f r)
-    fmap f (NApp r r1)    = NApp (f r) (f r1)
-    fmap f (NAbs r r1)    = NAbs (f r) (f r1)
+-- instance Functor NExprF where
+--     fmap _ (NConstant a)  = NConstant a
+--     fmap f (NList r)      = NList (fmap f r)
+--     fmap f (NArgSet h)    = NArgSet (fmap (fmap f) h)
+--     fmap f (NSet b h)     = NSet b $ map go h
+--       where go (k, v) = (f k, f v)
+--     fmap f (NLet r r1)    = NLet (f r) (f r1)
+--     fmap f (NIf r r1 r2)  = NIf (f r) (f r1) (f r2)
+--     fmap f (NWith r r1)   = NWith (f r) (f r1)
+--     fmap f (NAssert r r1) = NAssert (f r) (f r1)
+--     fmap f (NVar r)       = NVar (f r)
+--     fmap f (NApp r r1)    = NApp (f r) (f r1)
+--     fmap f (NAbs r r1)    = NAbs (f r) (f r1)
 
 instance Show f => Show (NExprF f) where
     show (NConstant x) = show x
+    -- show (NOper x) = show x
 
     show (NList l) = "[ " ++ go l ++ " ]"
       where
         go [] = ""
         go [x] = show x
         go (x:xs) = show x ++ ", " ++ go xs
-
-    show (NConcat l) = go l
-      where
-        go [] = ""
-        go [x] = show x
-        go (x:xs) = show x ++ " ++ " ++ go xs
 
     show (NArgSet h) = "{ " ++ go (Map.toList h) ++ " }"
       where
@@ -126,8 +153,8 @@ instance Show f => Show (NExprF f) where
 dumpExpr :: NExpr -> String
 dumpExpr = cata phi where
   phi (NConstant x) = "NConstant " ++ show x
+  -- phi (NOper x)     = "NOper " ++ show x
   phi (NList l)     = "NList [" ++ show l ++ "]"
-  phi (NConcat l)   = "NConcat " ++ show l
   phi (NArgSet xs)  = "NArgSet " ++ show xs
   phi (NSet b xs)   = "NSet " ++ show b ++ " " ++ show xs
   phi (NLet v e)    = "NLet " ++ v ++ " " ++ e

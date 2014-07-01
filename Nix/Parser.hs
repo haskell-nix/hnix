@@ -3,25 +3,46 @@
 module Nix.Parser (parseNixFile, Result(..)) where
 
 import           Control.Applicative
-import           Control.Monad hiding (forM_, mapM, sequence)
+import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Char
 import           Data.Foldable
+import           Data.List (foldl1')
 import qualified Data.Map as Map
-import           Data.Text hiding (concat, concatMap, head, map)
+import           Data.Text hiding (head, map, foldl1')
 import           Nix.Types
 import           Nix.Internal
 import           Nix.Parser.Library
 import qualified Prelude
-import           Prelude hiding (readFile, concat, concatMap, elem, mapM,
-                                 sequence)
+import           Prelude hiding (elem)
 
 nixApp :: Parser NExpr
-nixApp = go <$> some (whiteSpace *> nixTerm True)
+nixApp = go <$> some (whiteSpace *> nixExpr True)
   where
     go []     = error "some has failed us"
     go [x]    = x
     go (f:xs) = Fix (NApp f (go xs))
+
+nixExpr :: Bool -> Parser NExpr
+nixExpr allowLambdas =
+    buildExpressionParser table (nixTerm allowLambdas) <?> "expression"
+ where
+    table :: OperatorTable Parser NExpr
+    table =
+        [ [ prefix "-"  NNeg ]
+        , [ binary "++" NConcat AssocRight ]
+        , [ binary "*"  NMult   AssocLeft,
+            binary "/"  NDiv    AssocLeft ]
+        , [ binary "+"  NPlus   AssocLeft,
+            binary "-"  NMinus  AssocLeft ]
+        ]
+
+    binary  name fun =
+        Infix (pure (\x y -> Fix (NOper (fun x y))) <* symbol name)
+    prefix  name fun =
+        Prefix (pure (Fix . NOper . fun) <* symbol name)
+    -- postfix name fun =
+    --     Postfix (pure (Fix . NOper . fun) <* symbol name)
 
 nixTerm :: Bool -> Parser NExpr
 nixTerm allowLambdas = choice
@@ -92,9 +113,11 @@ symName = do
 stringish :: Parser NExpr
 stringish
      =  (char '"' *>
-         (Fix . NConcat <$> manyTill stringChar (char '"')))
+         (merge <$> manyTill stringChar (char '"')))
     <|> (char '$' *> between (symbolic '{') (symbolic '}') nixApp)
   where
+    merge = foldl1' (\x y -> Fix (NOper (NConcat x y)))
+
     stringChar :: Parser NExpr
     stringChar = char '\\' *> oneChar
              <|> (string "${" *> nixApp <* char '}')
@@ -111,8 +134,8 @@ argExpr =  (Fix . NArgSet . Map.fromList <$> argList)
                   <?> "arglist"
 
     argName = (,) <$> (symName <* whiteSpace)
-                  <*> optional (try (symbolic '?' *> nixApp))
-1
+                  <*> optional (symbolic '?' *> nixTerm False)
+
 nvPair :: Parser (NExpr, NExpr)
 nvPair = (,) <$> keyName <*> (symbolic '=' *> nixApp)
 
