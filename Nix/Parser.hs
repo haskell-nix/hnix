@@ -18,7 +18,7 @@ import           Prelude hiding (elem)
 
 nixApp :: Parser NExpr
 nixApp = go <$> someTill (whiteSpace *> nixExpr True)
-                         (try (lookAhead (char ';')))
+    (try (lookAhead (() <$ oneOf "=,;])}" <|> eof)))
   where
     go []     = error "some has failed us"
     go [x]    = x
@@ -44,34 +44,32 @@ nixExpr = buildExpressionParser table . nixTerm
     --     Postfix (pure (Fix . NOper . fun) <* symbol name)
 
 nixTerm :: Bool -> Parser NExpr
-nixTerm allowLambdas = trace "in nixTerm" (return ()) >> choice
+nixTerm allowLambdas = choice
     [ nixInt
     , nixBool
     , nixNull
     , nixParens
     , nixList
     , nixPath
-    , maybeSetOrLambda allowLambdas
+    , setLambdaStringOrSym allowLambdas
     ]
 
 nixInt :: Parser NExpr
 nixInt = mkInt <$> decimal <?> "integer"
 
 nixBool :: Parser NExpr
-nixBool =  (string "true"  *> pure (mkBool True))
-       <|> (string "false" *> pure (mkBool False))
+nixBool =  (try (string "true")  *> pure (mkBool True))
+       <|> (try (string "false") *> pure (mkBool False))
        <?> "bool"
 
 nixNull :: Parser NExpr
-nixNull = string "null" *> pure mkNull <?> "null"
+nixNull = try (string "null") *> pure mkNull <?> "null"
 
 nixParens :: Parser NExpr
 nixParens = parens nixApp <?> "parens"
 
 nixList :: Parser NExpr
-nixList = do
-    trace "in nixList" $ return ()
-    brackets (Fix . NList <$> many (nixTerm False)) <?> "list"
+nixList = brackets (Fix . NList <$> many (trace "in nixList" $ nixTerm False)) <?> "list"
 
 nixPath :: Parser NExpr
 nixPath = try $ do
@@ -82,9 +80,9 @@ nixPath = try $ do
   where
     isPathChar c = isAlpha c || c `Prelude.elem` ".:/"
 
-maybeSetOrLambda :: Bool -> Parser NExpr
-maybeSetOrLambda allowLambdas = do
-    trace "maybeSetOrLambda" $ return ()
+setLambdaStringOrSym :: Bool -> Parser NExpr
+setLambdaStringOrSym allowLambdas = do
+    trace "setLambdaStringOrSym" $ return ()
     x <- try (lookAhead symName)
         <|> try (lookAhead (singleton <$> char '{'))
         <|> return ""
@@ -92,8 +90,7 @@ maybeSetOrLambda allowLambdas = do
         then setOrArgs
         else do
             trace "might still have a lambda" $ return ()
-            y <- try (lookAhead (symName *> whiteSpace *> symbolic ':'
-                                     *> return True))
+            y <- try (lookAhead (True <$ (symName *> whiteSpace *> symbolic ':')))
                 <|> return False
             trace ("results are = " ++ show y) $ return ()
             if y
@@ -124,25 +121,16 @@ stringish
         oneChar = mkStr . singleton <$> anyChar
 
 argExpr :: Parser NExpr
-argExpr = do
-    trace "in argExpr" $ return ()
-    (Fix . NArgSet . Map.fromList <$> argList)
-        <|> ((mkSym <$> symName) <?> "argname")
+argExpr =  (Fix . NArgSet . Map.fromList <$> argList)
+       <|> ((mkSym <$> symName) <?> "argname")
   where
-    argList = do
-        trace "in argList" $ return ()
-        braces ((argName <* trace "FOO" whiteSpace) `sepBy` trace "BAR" (symbolic ','))
-            <?> "arglist"
-
-    argName = do
-        trace "in argName" $ return ()
-        (,) <$> (symName <* whiteSpace)
-            <*> optional (symbolic '?' *> nixExpr False)
+    argList = braces ((argName <* whiteSpace) `sepBy` symbolic ',')
+                  <?> "arglist"
+    argName = (,) <$> (symName <* whiteSpace)
+                  <*> optional (symbolic '?' *> nixExpr False)
 
 nvPair :: Parser (NExpr, NExpr)
-nvPair = do
-    trace "in nvPair" $ return ()
-    (,) <$> keyName <*> (symbolic '=' *> nixApp)
+nvPair = (,) <$> keyName <*> (symbolic '=' *> nixApp)
 
 keyName :: Parser NExpr
 keyName = (stringish <|> (mkSym <$> symName)) <* whiteSpace

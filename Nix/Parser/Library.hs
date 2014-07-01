@@ -69,7 +69,7 @@ import Text.Trifecta as X
 #endif
 
 someTill :: Parser a -> Parser end -> Parser [a]
-someTill p end = go *> scan
+someTill p end = go
   where
-    go = do { x <- p; xs <- scan; return (x:xs) }
+    go   = (:) <$> p <*> scan
     scan = (end *> return []) <|>  go
