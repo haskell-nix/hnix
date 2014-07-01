@@ -1,59 +1,17 @@
-{ cabal
-, aeson
-, conduit
-, conduitCombinators
-, conduitExtra
-, logging
-, monadLogger
-, ioStorage
-, lens
-, optparseApplicative
-, parallelIo
-, regexPosix
-, safe
-, shelly
-, systemFileio
-, systemFilepath
-, temporary
-, text
-, textFormat
-, time
-, unorderedContainers
-, yaml
-}:
+{ cabal, parsers, trifecta, text }:
 
 cabal.mkDerivation (self: {
-  pname = "pushme";
-  version = "2.0.0";
+  pname = "hnix";
+  version = "0.0.1";
   src = ./.;
-  isLibrary = false;
-  isExecutable = true;
   buildDepends = [
-    aeson
-    conduit
-    conduitCombinators
-    conduitExtra
-    logging
-    monadLogger
-    ioStorage
-    lens
-    optparseApplicative
-    parallelIo
-    regexPosix
-    safe
-    shelly
-    systemFileio
-    systemFilepath
-    temporary
+    parsers
+    trifecta
     text
-    textFormat
-    time
-    unorderedContainers
-    yaml
   ];
   meta = {
-    homepage = "https://github.com/jwiegley/pushme";
-    description = "Tool to synchronize multiple directories with rsync, zfs or git-annex";
+    homepage = "https://github.com/jwiegley/hnix";
+    description = "Haskell implementation of the Nix language";
     license = self.stdenv.lib.licenses.bsd3;
     platforms = self.ghc.meta.platforms;
   };
