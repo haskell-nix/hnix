@@ -10,15 +10,17 @@ import           Data.Foldable
 import           Data.List (foldl1')
 import qualified Data.Map as Map
 import           Data.Text hiding (head, map, foldl1')
+import qualified Data.Text as T
 import           Nix.Types
 import           Nix.Internal
 import           Nix.Parser.Library
-import qualified Prelude
 import           Prelude hiding (elem)
+import qualified Prelude
 
 nixApp :: Parser NExpr
-nixApp = go <$> someTill (whiteSpace *> nixExpr True)
-    (try (lookAhead (() <$ oneOf "=,;])}" <|> eof)))
+nixApp = go <$>
+    someTill (whiteSpace *> nixExpr True)
+             (try (lookAhead (() <$ oneOf "=,;])}" <|> eof)))
   where
     go []     = error "some has failed us"
     go [x]    = x
@@ -36,12 +38,9 @@ nixExpr = buildExpressionParser table . nixTerm
             binary "-"  NMinus  AssocLeft ]
         ]
 
-    binary  name fun =
-        Infix (pure (\x y -> Fix (NOper (fun x y))) <* symbol name)
-    prefix  name fun =
-        Prefix (pure (Fix . NOper . fun) <* symbol name)
-    -- postfix name fun =
-    --     Postfix (pure (Fix . NOper . fun) <* symbol name)
+    binary  name fun = Infix ((\x y -> Fix (NOper (fun x y))) <$ symbol name)
+    prefix  name fun = Prefix (Fix . NOper . fun <$ symbol name)
+    -- postfix name fun = Postfix (Fix . NOper . fun <$ symbol name)
 
 nixTerm :: Bool -> Parser NExpr
 nixTerm allowLambdas = choice
@@ -58,28 +57,23 @@ nixInt :: Parser NExpr
 nixInt = mkInt <$> decimal <?> "integer"
 
 nixBool :: Parser NExpr
-nixBool =  (try (string "true")  *> pure (mkBool True))
-       <|> (try (string "false") *> pure (mkBool False))
-       <?> "bool"
+nixBool = try (mkBool . (== "true") <$> string "true") <?> "bool"
 
 nixNull :: Parser NExpr
-nixNull = try (string "null") *> pure mkNull <?> "null"
+nixNull = try (mkNull <$ string "null") <?> "null"
 
 nixParens :: Parser NExpr
 nixParens = parens nixApp <?> "parens"
 
 nixList :: Parser NExpr
-nixList = brackets (Fix . NList <$> many (trace "in nixList" $ nixTerm False)) <?> "list"
+nixList = brackets (Fix . NList <$> many (nixTerm False)) <?> "list"
 
 nixPath :: Parser NExpr
-nixPath = try $ do
-    chars <- some (satisfy isPathChar)
-    trace ("Path chars: " ++ show chars) $ return ()
-    guard ('/' `elem` chars)
-    return $ mkPath chars
-  where
-    isPathChar c = isAlpha c || c `Prelude.elem` ".:/"
+nixPath = try $ fmap mkPath $ mfilter ('/' `elem`) $ some (oneOf "A-Za-z_0-9.:/")
 
+-- | This is a bit tricky because we don't know whether we're looking at a set
+--   or a lambda until we've looked ahead a bit.  And then it may be neither,
+--   in which case we fall back to expected a plain string or identifier.
 setLambdaStringOrSym :: Bool -> Parser NExpr
 setLambdaStringOrSym allowLambdas = do
     trace "setLambdaStringOrSym" $ return ()
@@ -100,32 +94,25 @@ setLambdaStringOrSym allowLambdas = do
                 else keyName <?> "string"
 
 symName :: Parser Text
-symName = do
-    chars <- some (satisfy (\c -> isAlpha c || c == '.'))
-    trace ("chars = " ++ show chars) $ return ()
-    guard (isLower (head chars))
-    return $ pack (trace ("chars: " ++ show chars) chars)
+symName = pack <$> ((:) <$> letter <*> many (alphaNum <|> char '.'))
 
 stringish :: Parser NExpr
-stringish
-     =  (char '"' *> (merge <$> manyTill stringChar (char '"')))
-    <|> (char '$' *> braces nixApp)
+stringish =  (char '"' *> (merge <$> manyTill stringChar (char '"')))
+         <|> (char '$' *> braces nixApp)
   where
     merge = foldl1' (\x y -> Fix (NOper (NConcat x y)))
 
-    stringChar :: Parser NExpr
-    stringChar = char '\\' *> oneChar
-             <|> (string "${" *> nixApp <* char '}')
-             <|> (mkStr . pack <$> many (noneOf "\"\\"))
-      where
-        oneChar = mkStr . singleton <$> anyChar
+    stringChar =  char '\\' *> (mkStr . singleton <$> anyChar)
+              <|> (string "${" *> nixApp <* char '}')
+              <|> (mkStr . pack <$> many (noneOf "\"\\"))
 
 argExpr :: Parser NExpr
 argExpr =  (Fix . NArgSet . Map.fromList <$> argList)
        <|> ((mkSym <$> symName) <?> "argname")
   where
-    argList = braces ((argName <* whiteSpace) `sepBy` symbolic ',')
-                  <?> "arglist"
+    argList =  braces ((argName <* whiteSpace) `sepBy` symbolic ',')
+           <?> "arglist"
+
     argName = (,) <$> (symName <* whiteSpace)
                   <*> optional (symbolic '?' *> nixExpr False)
 
