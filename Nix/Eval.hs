@@ -2,13 +2,11 @@ module Nix.Eval where
 
 import           Control.Applicative
 import           Control.Arrow
-import           Control.Monad hiding (forM_, mapM, sequence)
+import           Control.Monad hiding (mapM)
 import qualified Data.Map as Map
-import qualified Data.Text as T
 import           Data.Traversable
 import           Nix.Types
-import           Prelude hiding (readFile, concat, concatMap, elem, mapM,
-                                 sequence)
+import           Prelude hiding (mapM)
 
 buildArgument :: NValue -> NValue -> NValue
 buildArgument paramSpec arg =
