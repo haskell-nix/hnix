@@ -2,7 +2,7 @@
 
 module Nix.Parser.Library ( module Nix.Parser.Library, module X ) where
 
-import Control.Applicative
+import           Control.Applicative
 
 #if USE_PARSEC
 
@@ -59,9 +59,6 @@ reserved = P.reserved lexer
 symbol :: String -> Parser Text
 symbol str = pack <$> P.symbol lexer str
 
-symbolic :: Char -> Parser Char
-symbolic c = char c <* whiteSpace
-
 decimal :: Parser Integer
 decimal = read <$> some digit
 
@@ -78,10 +75,63 @@ parseFromFileEx p path =
 
 #else
 
+import Data.Char
+import Data.List (nub)
+import Data.Text
 import Text.Parser.Expression as X
 import Text.Parser.LookAhead as X
-import Text.Parser.Token as X
-import Text.Trifecta as X
+import Text.Trifecta as X hiding (whiteSpace, symbol, symbolic)
+
+identifier :: Parser Text
+identifier = pack <$> ((:) <$> letter <*> many (alphaNum <|> oneOf "_."))
+
+reserved :: String -> Parser Text
+reserved = fmap pack . symbol
+
+-----------------------------------------------------------
+-- White space & symbols
+-----------------------------------------------------------
+symbol name = lexeme (string name)
+
+lexeme p
+    = do{ x <- p; whiteSpace; return x  }
+
+whiteSpace =
+    skipMany (simpleSpace <|> oneLineComment <|> multiLineComment <?> "")
+
+simpleSpace = skipSome (satisfy isSpace)
+
+oneLineComment =
+    do{ try (string "#")
+      ; skipMany (satisfy (/= '\n'))
+      ; return ()
+      }
+
+multiLineComment =
+    do { try (string "/*")
+       ; inComment
+       }
+
+inComment
+    | True      = inCommentMulti
+    | otherwise = inCommentSingle
+
+inCommentMulti
+    =   do{ try (string "*/") ; return () }
+    <|> do{ multiLineComment                     ; inCommentMulti }
+    <|> do{ skipSome (noneOf startEnd)          ; inCommentMulti }
+    <|> do{ oneOf startEnd                       ; inCommentMulti }
+    <?> "end of comment"
+    where
+      startEnd   = nub ("*/" ++ "/*")
+
+inCommentSingle
+    =   do{ try (string "*/"); return () }
+    <|> do{ skipSome (noneOf startEnd)         ; inCommentSingle }
+    <|> do{ oneOf startEnd                      ; inCommentSingle }
+    <?> "end of comment"
+    where
+      startEnd   = nub ("*/" ++ "/*")
 
 #endif
 
@@ -90,3 +140,6 @@ someTill p end = go
   where
     go   = (:) <$> p <*> scan
     scan = (end *> return []) <|>  go
+
+symbolic :: Char -> Parser Char
+symbolic c = char c <* whiteSpace
