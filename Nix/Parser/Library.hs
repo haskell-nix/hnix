@@ -25,7 +25,17 @@ lexer = P.makeTokenParser P.LanguageDef
     , P.identLetter     = alphaNum <|> char '_'
     , P.opStart         = oneOf ":!#$%&*+./<=>?@\\^|-~"
     , P.opLetter        = oneOf "@"
-    , P.reservedNames   = []
+    , P.reservedNames   =
+        [ "let", "in"
+        , "if", "then", "else"
+        , "true", "false"
+        , "null"
+        , "assert"
+        , "with"
+        , "rec"
+        , "inherit"
+        , "or"
+        ]
     , P.reservedOpNames = []
     , P.caseSensitive   = True
     }
