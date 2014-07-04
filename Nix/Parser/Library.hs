@@ -153,7 +153,8 @@ reservedNames =
     ]
 
 stopWords :: Parser ()
-stopWords = () <$ (reserved "in" <|> reserved "then" <|> reserved "else")
+stopWords = () <$
+    (whiteSpace *> (reserved "in" <|> reserved "then" <|> reserved "else"))
 
 someTill :: Parser a -> Parser end -> Parser [a]
 someTill p end = go
