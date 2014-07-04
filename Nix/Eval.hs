@@ -31,6 +31,7 @@ evalExpr = cata phi
   where
     phi :: NExprF (NValue -> IO NValue) -> NValue -> IO NValue
     phi (NConstant x) = const $ return $ Fix $ NVConstant x
+    phi (NOper _x) = error "Operators are not yet defined"
 
     phi (NList l)     = \env ->
         Fix . NVList <$> mapM ($ env) l
