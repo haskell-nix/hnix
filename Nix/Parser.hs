@@ -10,7 +10,6 @@ import           Data.List (foldl1')
 import qualified Data.Map as Map
 import           Data.Text hiding (head, map, foldl1')
 import           Nix.Types
-import           Nix.Internal
 import           Nix.Parser.Library
 import           Prelude hiding (elem)
 
@@ -22,7 +21,7 @@ nixApp = go <$> someTill (whiteSpace *> nixExpr True) (try (lookAhead stop))
     go [x]    = x
     go (f:xs) = Fix (NApp f (go xs))
 
-    stop = () <$ oneOf "=,;])}" <|> reservedWords <|> eof
+    stop = () <$ oneOf "=,;])}" <|> stopWords <|> eof
 
 nixExpr :: Bool -> Parser NExpr
 nixExpr = buildExpressionParser table . nixTerm
@@ -45,8 +44,10 @@ nixExpr = buildExpressionParser table . nixTerm
         , [ binary "->" NImpl    AssocNone ]
         ]
 
-    binary  name fun = Infix ((\x y -> Fix (NOper (fun x y))) <$ symbol name)
-    prefix  name fun = Prefix (Fix . NOper . fun <$ symbol name)
+    binary  name fun =
+        Infix  $ (\x y -> Fix (NOper (fun x y))) <$ reservedOp name
+    prefix  name fun =
+        Prefix $ Fix . NOper . fun <$ reservedOp name
     -- postfix name fun = Postfix (Fix . NOper . fun <$ symbol name)
 
 nixTerm :: Bool -> Parser NExpr
@@ -96,18 +97,15 @@ nixIf =  fmap Fix $ NIf
 --   in which case we fall back to expected a plain string or identifier.
 setLambdaStringOrSym :: Bool -> Parser NExpr
 setLambdaStringOrSym allowLambdas = do
-    trace "setLambdaStringOrSym" $ return ()
     isSetOrArgs <- try (lookAhead (reserved "rec") *> pure True)
         <|> try (lookAhead (singleton <$> char '{') *> pure True)
         <|> pure False
     if isSetOrArgs
         then setOrArgs
         else do
-            trace "might still have a lambda" $ return ()
             y <- try (lookAhead (True <$ (identifier *> whiteSpace
                                           *> symbolic ':')))
                 <|> return False
-            trace ("results are = " ++ show y) $ return ()
             if y
                 then if allowLambdas
                     then setOrArgs
@@ -145,31 +143,24 @@ keyName = (stringish <|> (mkSym <$> identifier)) <* whiteSpace
 
 setOrArgs :: Parser NExpr
 setOrArgs = do
-    trace "setOrArgs" $ return ()
     sawRec <- try (reserved "rec" *> pure True) <|> pure False
-    trace ("Do we have sawRec: " ++ show sawRec) $ return ()
     haveSet <-
         if sawRec
         then return True
         else try (lookAhead lookaheadForSet)
-    trace ("Do we have a set: " ++ show haveSet) $ return ()
     if haveSet
         then braces (Fix . NSet sawRec <$> nixBinders) <?> "set"
         else do
-            trace "parsing arguments" $ return ()
             args <- argExpr <?> "arguments"
-            trace ("args: " ++ show args) $ return ()
             symbolic ':' *> fmap Fix (NAbs <$> pure args <*> nixApp)
                 <|> pure args
 
 lookaheadForSet :: Parser Bool
 lookaheadForSet = do
-    trace "lookaheadForSet" $ return ()
     x <- (symbolic '{' *> return True) <|> return False
     if not x then return x else do
         y <- (keyName *> return True) <|> return False
-        if not y then return y else do
-            trace "still in lookaheadForSet" $ return ()
+        if not y then return y else
             (symbolic '=' *> return True) <|> return False
 
 parseNixFile :: MonadIO m => FilePath -> m (Result NExpr)

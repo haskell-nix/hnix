@@ -3,7 +3,6 @@
 module Nix.Parser.Library ( module Nix.Parser.Library, module X ) where
 
 import           Control.Applicative
-import           Data.Foldable
 
 #if USE_PARSEC
 
@@ -47,6 +46,9 @@ identifier = pack <$> P.identifier lexer
 reserved :: String -> Parser ()
 reserved = P.reserved lexer
 
+reservedOp :: String -> Parser ()
+reservedOp = P.reservedOp lexer
+
 symbol :: String -> Parser Text
 symbol str = pack <$> P.symbol lexer str
 
@@ -78,6 +80,9 @@ identifier = pack <$> ((:) <$> letter <*> many (alphaNum <|> oneOf "_."))
 
 reserved :: String -> Parser Text
 reserved = fmap pack . symbol
+
+reservedOp :: String -> Parser Text
+reservedOp = reserved
 
 -----------------------------------------------------------
 -- White space & symbols
@@ -147,8 +152,8 @@ reservedNames =
     , "or"
     ]
 
-reservedWords :: Parser ()
-reservedWords = () <$ asum (map string reservedNames)
+stopWords :: Parser ()
+stopWords = () <$ (reserved "in" <|> reserved "then" <|> reserved "else")
 
 someTill :: Parser a -> Parser end -> Parser [a]
 someTill p end = go
