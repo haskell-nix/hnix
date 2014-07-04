@@ -89,10 +89,10 @@ nixLet =  (Fix .) . NLet
 setLambdaStringOrSym :: Bool -> Parser NExpr
 setLambdaStringOrSym allowLambdas = do
     trace "setLambdaStringOrSym" $ return ()
-    x <- try (lookAhead identifier)
-        <|> try (lookAhead (singleton <$> char '{'))
-        <|> return ""
-    if x == "rec" || x == "{"
+    isSetOrArgs <- try (lookAhead (reserved "rec") *> pure True) <|>
+                   try (lookAhead (singleton <$> char '{') *> pure True)
+                   <|> pure False
+    if isSetOrArgs
         then setOrArgs
         else do
             trace "might still have a lambda" $ return ()
