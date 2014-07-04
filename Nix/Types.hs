@@ -100,7 +100,7 @@ data NExprF r
     | NArgSet (Map Text (Maybe r))
     | NSet  Bool [(r, r)]
 
-    | NLet r r
+    | NLet [(r, r)] r
     | NIf r r r
     | NWith r r
     | NAssert r r
@@ -157,7 +157,7 @@ dumpExpr = cata phi where
   phi (NList l)     = "NList [" ++ show l ++ "]"
   phi (NArgSet xs)  = "NArgSet " ++ show xs
   phi (NSet b xs)   = "NSet " ++ show b ++ " " ++ show xs
-  phi (NLet v e)    = "NLet " ++ v ++ " " ++ e
+  phi (NLet v e)    = "NLet " ++ show v ++ " " ++ e
   phi (NIf i t e)   = "NIf " ++ i ++ " " ++ t ++ " " ++ e
   phi (NWith c v)   = "NWith " ++ c ++ " " ++ v
   phi (NAssert e v) = "NAssert " ++ e ++ " " ++ v

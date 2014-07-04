@@ -14,6 +14,7 @@ import           Nix.Internal
 import           Nix.Parser.Library
 import           Prelude hiding (elem)
 
+-- | The lexer for this parser is defined in 'Nix.Parser.Library'.
 nixApp :: Parser NExpr
 nixApp = go <$>
     someTill (whiteSpace *> nixExpr True)
@@ -55,6 +56,7 @@ nixTerm allowLambdas = choice
     , nixParens
     , nixList
     , nixPath
+    , nixLet
     , setLambdaStringOrSym allowLambdas
     ]
 
@@ -75,6 +77,11 @@ nixList = brackets (Fix . NList <$> many (nixTerm False)) <?> "list"
 
 nixPath :: Parser NExpr
 nixPath = try $ fmap mkPath $ mfilter ('/' `elem`) $ some (oneOf "A-Za-z_0-9.:/")
+
+nixLet :: Parser NExpr
+nixLet =  (Fix .) . NLet
+      <$> (symbol "let" *> nixBinders)
+      <*> (whiteSpace *> symbol "in" *> nixApp)
 
 -- | This is a bit tricky because we don't know whether we're looking at a set
 --   or a lambda until we've looked ahead a bit.  And then it may be neither,
@@ -99,7 +106,7 @@ setLambdaStringOrSym allowLambdas = do
                 else keyName <?> "string"
 
 symName :: Parser Text
-symName = pack <$> ((:) <$> letter <*> many (alphaNum <|> char '.'))
+symName = pack <$> ((:) <$> letter <*> many (alphaNum <|> oneOf "._"))
 
 stringish :: Parser NExpr
 stringish =  (char '"' *> (merge <$> manyTill stringChar (char '"')))
@@ -124,6 +131,9 @@ argExpr =  (Fix . NArgSet . Map.fromList <$> argList)
 nvPair :: Parser (NExpr, NExpr)
 nvPair = (,) <$> keyName <*> (symbolic '=' *> nixApp)
 
+nixBinders :: Parser [(NExpr, NExpr)]
+nixBinders = nvPair `endBy` symbolic ';'
+
 keyName :: Parser NExpr
 keyName = (stringish <|> (mkSym <$> symName)) <* whiteSpace
 
@@ -138,8 +148,7 @@ setOrArgs = do
         else try (lookAhead lookaheadForSet)
     trace ("Do we have a set: " ++ show haveSet) $ return ()
     if haveSet
-        then braces (Fix . NSet sawRec <$> nvPair `endBy` symbolic ';')
-            <?> "set"
+        then braces (Fix . NSet sawRec <$> nixBinders) <?> "set"
         else do
             trace "parsing arguments" $ return ()
             args <- argExpr <?> "arguments"
