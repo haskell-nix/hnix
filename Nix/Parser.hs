@@ -16,13 +16,13 @@ import           Prelude hiding (elem)
 
 -- | The lexer for this parser is defined in 'Nix.Parser.Library'.
 nixApp :: Parser NExpr
-nixApp = go <$>
-    someTill (whiteSpace *> nixExpr True)
-        (try (lookAhead (() <$ oneOf "=,;])}" <|> reserved "then" <|> reserved "else" <|> eof)))
+nixApp = go <$> someTill (whiteSpace *> nixExpr True) (try (lookAhead stop))
   where
     go []     = error "some has failed us"
     go [x]    = x
     go (f:xs) = Fix (NApp f (go xs))
+
+    stop = () <$ oneOf "=,;])}" <|> eof
 
 nixExpr :: Bool -> Parser NExpr
 nixExpr = buildExpressionParser table . nixTerm
@@ -51,13 +51,13 @@ nixExpr = buildExpressionParser table . nixTerm
 nixTerm :: Bool -> Parser NExpr
 nixTerm allowLambdas = choice
     [ nixInt
-    , nixBool
-    , nixNull
     , nixParens
     , nixList
-    , nixPath
     , nixLet
     , nixIf
+    , nixBool
+    , nixNull
+    , nixPath                   -- can be expensive due to back-tracking
     , setLambdaStringOrSym allowLambdas
     ]
 
@@ -85,10 +85,10 @@ nixLet =  (Fix .) . NLet
       <*> (whiteSpace *> reserved "in" *> nixApp)
 
 nixIf :: Parser NExpr
-nixIf = Fix <$> (NIf
-      <$> (reserved "if" *> nixApp)
-      <*> (reserved "then" *> nixApp)
-      <*> (reserved "else" *> nixApp))
+nixIf =  ((Fix .) .) . NIf
+     <$> (reserved "if" *> nixExpr False)
+     <*> (whiteSpace *> reserved "then" *> nixApp)
+     <*> (whiteSpace *> reserved "else" *> nixApp)
 
 -- | This is a bit tricky because we don't know whether we're looking at a set
 --   or a lambda until we've looked ahead a bit.  And then it may be neither,
@@ -96,14 +96,15 @@ nixIf = Fix <$> (NIf
 setLambdaStringOrSym :: Bool -> Parser NExpr
 setLambdaStringOrSym allowLambdas = do
     trace "setLambdaStringOrSym" $ return ()
-    isSetOrArgs <- try (lookAhead (reserved "rec") *> pure True) <|>
-                   try (lookAhead (singleton <$> char '{') *> pure True)
-                   <|> pure False
+    isSetOrArgs <- try (lookAhead (reserved "rec") *> pure True)
+        <|> try (lookAhead (singleton <$> char '{') *> pure True)
+        <|> pure False
     if isSetOrArgs
         then setOrArgs
         else do
             trace "might still have a lambda" $ return ()
-            y <- try (lookAhead (True <$ (identifier *> whiteSpace *> symbolic ':')))
+            y <- try (lookAhead (True <$ (identifier *> whiteSpace
+                                          *> symbolic ':')))
                 <|> return False
             trace ("results are = " ++ show y) $ return ()
             if y
