@@ -3,12 +3,13 @@
 module Nix.Parser.Library ( module Nix.Parser.Library, module X ) where
 
 import           Control.Applicative
+import           Data.Foldable
 
 #if USE_PARSEC
 
 import           Control.Monad
 import           Control.Monad.IO.Class
-import           Data.Text as T
+import           Data.Text as T hiding (map)
 import           Data.Text.IO as T
 import           Text.Parsec as X hiding ((<|>), many, optional)
 import           Text.Parsec.Expr as X
@@ -26,17 +27,7 @@ lexer = P.makeTokenParser P.LanguageDef
     , P.identLetter     = alphaNum <|> oneOf "_"
     , P.opStart         = oneOf ":!#$%&*+./<=>?@\\^|-~"
     , P.opLetter        = oneOf "@"
-    , P.reservedNames   =
-        [ "let", "in"
-        , "if", "then", "else"
-        , "true", "false"
-        , "null"
-        , "assert"
-        , "with"
-        , "rec"
-        , "inherit"
-        , "or"
-        ]
+    , P.reservedNames   = reservedNames
     , P.reservedOpNames = []
     , P.caseSensitive   = True
     }
@@ -77,7 +68,7 @@ parseFromFileEx p path =
 
 import Data.Char
 import Data.List (nub)
-import Data.Text
+import Data.Text hiding (map)
 import Text.Parser.Expression as X
 import Text.Parser.LookAhead as X
 import Text.Trifecta as X hiding (whiteSpace, symbol, symbolic)
@@ -142,6 +133,22 @@ inCommentSingle
       startEnd   = nub ("*/" ++ "/*")
 
 #endif
+
+reservedNames :: [String]
+reservedNames =
+    [ "let", "in"
+    , "if", "then", "else"
+    , "true", "false"
+    , "null"
+    , "assert"
+    , "with"
+    , "rec"
+    , "inherit"
+    , "or"
+    ]
+
+reservedWords :: Parser ()
+reservedWords = () <$ asum (map string reservedNames)
 
 someTill :: Parser a -> Parser end -> Parser [a]
 someTill p end = go

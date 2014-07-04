@@ -22,7 +22,7 @@ nixApp = go <$> someTill (whiteSpace *> nixExpr True) (try (lookAhead stop))
     go [x]    = x
     go (f:xs) = Fix (NApp f (go xs))
 
-    stop = () <$ oneOf "=,;])}" <|> eof
+    stop = () <$ oneOf "=,;])}" <|> reservedWords <|> eof
 
 nixExpr :: Bool -> Parser NExpr
 nixExpr = buildExpressionParser table . nixTerm
@@ -81,13 +81,13 @@ nixPath :: Parser NExpr
 nixPath = try $ fmap mkPath $ mfilter ('/' `elem`) $ some (oneOf "A-Za-z_0-9.:/")
 
 nixLet :: Parser NExpr
-nixLet =  (Fix .) . NLet
+nixLet =  fmap Fix $ NLet
       <$> (reserved "let" *> nixBinders)
       <*> (whiteSpace *> reserved "in" *> nixApp)
 
 nixIf :: Parser NExpr
-nixIf =  ((Fix .) .) . NIf
-     <$> (reserved "if" *> nixExpr False)
+nixIf =  fmap Fix $ NIf
+     <$> (reserved "if" *> nixApp)
      <*> (whiteSpace *> reserved "then" *> nixApp)
      <*> (whiteSpace *> reserved "else" *> nixApp)
 
@@ -159,7 +159,7 @@ setOrArgs = do
             trace "parsing arguments" $ return ()
             args <- argExpr <?> "arguments"
             trace ("args: " ++ show args) $ return ()
-            symbolic ':' *> ((Fix .) . NAbs <$> pure args <*> nixApp)
+            symbolic ':' *> fmap Fix (NAbs <$> pure args <*> nixApp)
                 <|> pure args
 
 lookaheadForSet :: Parser Bool
