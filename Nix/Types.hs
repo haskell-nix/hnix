@@ -67,14 +67,28 @@ data NOperF r
     | NConcat r r
     deriving (Eq, Ord, Generic, Typeable, Data, Functor)
 
-  --   show (NConcat l) = go l
-  --     where
-  --       go [] = ""
-  --       go [x] = show x
-  --       go (x:xs) = show x ++ " ++ " ++ go xs
+instance Show f => Show (NOperF f) where
+    show (NNot r) = "! " ++ show r
+    show (NNeg r) = "-"  ++ show r
 
+    show (NEq r1 r2)      = show r1 ++ " == " ++ show r2
+    show (NNEq r1 r2)     = show r1 ++ " != " ++ show r2
+    show (NLt r1 r2)      = show r1 ++ " < " ++ show r2
+    show (NLte r1 r2)     = show r1 ++ " <= " ++ show r2
+    show (NGt r1 r2)      = show r1 ++ " > " ++ show r2
+    show (NGte r1 r2)     = show r1 ++ " >= " ++ show r2
+    show (NAnd r1 r2)     = show r1 ++ " && " ++ show r2
+    show (NOr r1 r2)      = show r1 ++ " || " ++ show r2
+    show (NImpl r1 r2)    = show r1 ++ " -> " ++ show r2
+    show (NUpdate r1 r2)  = show r1 ++ " // " ++ show r2
+    show (NHasAttr r1 r2) = show r1 ++ " ? " ++ show r2
 
-  -- phi (NConcat l)   = "NConcat " ++ show l
+    show (NPlus r1 r2)    = show r1 ++ " + " ++ show r2
+    show (NMinus r1 r2)   = show r1 ++ " - " ++ show r2
+    show (NMult r1 r2)    = show r1 ++ " * " ++ show r2
+    show (NDiv r1 r2)     = show r1 ++ " / " ++ show r2
+
+    show (NConcat r1 r2)  = show r1 ++ " ++ " ++ show r2
 
 data NExprF r
     = NConstant NAtom
@@ -119,7 +133,7 @@ instance Ord (Fix NExprF)  where compare (Fix x) (Fix y) = compare x y
 
 instance Show f => Show (NExprF f) where
     show (NConstant x) = show x
-    -- show (NOper x) = show x
+    show (NOper x) = show x
 
     show (NList l) = "[ " ++ go l ++ " ]"
       where

@@ -5,22 +5,19 @@ module Nix.Parser (parseNixFile, Result(..)) where
 import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.IO.Class
-import           Data.Char
 import           Data.Foldable
 import           Data.List (foldl1')
 import qualified Data.Map as Map
 import           Data.Text hiding (head, map, foldl1')
-import qualified Data.Text as T
 import           Nix.Types
 import           Nix.Internal
 import           Nix.Parser.Library
 import           Prelude hiding (elem)
-import qualified Prelude
 
 nixApp :: Parser NExpr
 nixApp = go <$>
     someTill (whiteSpace *> nixExpr True)
-             (try (lookAhead (() <$ oneOf "=,;])}" <|> eof)))
+        (try (lookAhead (() <$ oneOf "=,;])}" <|> eof)))
   where
     go []     = error "some has failed us"
     go [x]    = x
@@ -31,11 +28,19 @@ nixExpr = buildExpressionParser table . nixTerm
   where
     table =
         [ [ prefix "-"  NNeg ]
+        , [ prefix "~"  NNeg ]
+        , [ prefix "?"  NNeg ]
         , [ binary "++" NConcat AssocRight ]
-        , [ binary "*"  NMult   AssocLeft,
-            binary "/"  NDiv    AssocLeft ]
-        , [ binary "+"  NPlus   AssocLeft,
-            binary "-"  NMinus  AssocLeft ]
+        , [ binary "*"  NMult   AssocLeft, binary "/"  NDiv    AssocLeft ]
+        , [ binary "+"  NPlus   AssocLeft, binary "-"  NMinus  AssocLeft ]
+        , [ prefix "!"  NNot ]
+        , [ binary "//" NUpdate AssocRight ]
+        , [ binary "<"  NLt     AssocLeft, binary ">"  NGt     AssocLeft
+          , binary "<=" NLte    AssocLeft, binary ">=" NGte    AssocLeft ]
+        , [ binary "==" NEq     AssocNone, binary "!=" NNEq    AssocNone ]
+        , [ binary "&&" NAnd    AssocLeft ]
+        , [ binary "||" NOr     AssocLeft ]
+        , [ binary "->" NImpl   AssocNone ]
         ]
 
     binary  name fun = Infix ((\x y -> Fix (NOper (fun x y))) <$ symbol name)
