@@ -80,8 +80,8 @@ nixPath = try $ fmap mkPath $ mfilter ('/' `elem`) $ some (oneOf "A-Za-z_0-9.:/"
 
 nixLet :: Parser NExpr
 nixLet =  (Fix .) . NLet
-      <$> (symbol "let" *> nixBinders)
-      <*> (whiteSpace *> symbol "in" *> nixApp)
+      <$> (reserved "let" *> nixBinders)
+      <*> (whiteSpace *> reserved "in" *> nixApp)
 
 -- | This is a bit tricky because we don't know whether we're looking at a set
 --   or a lambda until we've looked ahead a bit.  And then it may be neither,
@@ -89,14 +89,14 @@ nixLet =  (Fix .) . NLet
 setLambdaStringOrSym :: Bool -> Parser NExpr
 setLambdaStringOrSym allowLambdas = do
     trace "setLambdaStringOrSym" $ return ()
-    x <- try (lookAhead symName)
+    x <- try (lookAhead identifier)
         <|> try (lookAhead (singleton <$> char '{'))
         <|> return ""
     if x == "rec" || x == "{"
         then setOrArgs
         else do
             trace "might still have a lambda" $ return ()
-            y <- try (lookAhead (True <$ (symName *> whiteSpace *> symbolic ':')))
+            y <- try (lookAhead (True <$ (identifier *> whiteSpace *> symbolic ':')))
                 <|> return False
             trace ("results are = " ++ show y) $ return ()
             if y
@@ -104,9 +104,6 @@ setLambdaStringOrSym allowLambdas = do
                     then setOrArgs
                     else error "Unexpected lambda"
                 else keyName <?> "string"
-
-symName :: Parser Text
-symName = pack <$> ((:) <$> letter <*> many (alphaNum <|> oneOf "._"))
 
 stringish :: Parser NExpr
 stringish =  (char '"' *> (merge <$> manyTill stringChar (char '"')))
@@ -120,12 +117,12 @@ stringish =  (char '"' *> (merge <$> manyTill stringChar (char '"')))
 
 argExpr :: Parser NExpr
 argExpr =  (Fix . NArgSet . Map.fromList <$> argList)
-       <|> ((mkSym <$> symName) <?> "argname")
+       <|> ((mkSym <$> identifier) <?> "argname")
   where
     argList =  braces ((argName <* whiteSpace) `sepBy` symbolic ',')
            <?> "arglist"
 
-    argName = (,) <$> (symName <* whiteSpace)
+    argName = (,) <$> (identifier <* whiteSpace)
                   <*> optional (symbolic '?' *> nixExpr False)
 
 nvPair :: Parser (NExpr, NExpr)
@@ -135,12 +132,12 @@ nixBinders :: Parser [(NExpr, NExpr)]
 nixBinders = nvPair `endBy` symbolic ';'
 
 keyName :: Parser NExpr
-keyName = (stringish <|> (mkSym <$> symName)) <* whiteSpace
+keyName = (stringish <|> (mkSym <$> identifier)) <* whiteSpace
 
 setOrArgs :: Parser NExpr
 setOrArgs = do
     trace "setOrArgs" $ return ()
-    sawRec <- try (symbol "rec" *> pure True) <|> pure False
+    sawRec <- try (reserved "rec" *> pure True) <|> pure False
     trace ("Do we have sawRec: " ++ show sawRec) $ return ()
     haveSet <-
         if sawRec

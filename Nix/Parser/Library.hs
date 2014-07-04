@@ -2,12 +2,13 @@
 
 module Nix.Parser.Library ( module Nix.Parser.Library, module X ) where
 
-import           Control.Applicative
+import Control.Applicative
 
 #if USE_PARSEC
 
 import           Control.Monad
 import           Control.Monad.IO.Class
+import           Data.Text as T
 import           Data.Text.IO as T
 import           Text.Parsec as X hiding ((<|>), many, optional)
 import           Text.Parsec.Expr as X
@@ -22,7 +23,7 @@ lexer = P.makeTokenParser P.LanguageDef
     , P.commentLine     = "#"
     , P.nestedComments  = True
     , P.identStart      = letter <|> char '_'
-    , P.identLetter     = alphaNum <|> char '_'
+    , P.identLetter     = alphaNum <|> oneOf "_."
     , P.opStart         = oneOf ":!#$%&*+./<=>?@\\^|-~"
     , P.opLetter        = oneOf "@"
     , P.reservedNames   =
@@ -49,8 +50,14 @@ brackets = P.brackets lexer
 braces :: Parser a -> Parser a
 braces = P.braces lexer
 
-symbol :: String -> Parser String
-symbol str = string str <* whiteSpace
+identifier :: Parser Text
+identifier = pack <$> P.identifier lexer
+
+reserved :: String -> Parser ()
+reserved = P.reserved lexer
+
+symbol :: String -> Parser Text
+symbol str = pack <$> P.symbol lexer str
 
 symbolic :: Char -> Parser Char
 symbolic c = char c <* whiteSpace
