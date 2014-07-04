@@ -23,7 +23,7 @@ lexer = P.makeTokenParser P.LanguageDef
     , P.commentLine     = "#"
     , P.nestedComments  = True
     , P.identStart      = letter <|> char '_'
-    , P.identLetter     = alphaNum <|> oneOf "_."
+    , P.identLetter     = alphaNum <|> oneOf "_"
     , P.opStart         = oneOf ":!#$%&*+./<=>?@\\^|-~"
     , P.opLetter        = oneOf "@"
     , P.reservedNames   =
@@ -91,44 +91,52 @@ reserved = fmap pack . symbol
 -----------------------------------------------------------
 -- White space & symbols
 -----------------------------------------------------------
+symbol :: (CharParsing m, Monad m) => String -> m String
 symbol name = lexeme (string name)
 
-lexeme p
-    = do{ x <- p; whiteSpace; return x  }
+lexeme :: (CharParsing m, Monad m) => m b -> m b
+lexeme p = do{ x <- p; whiteSpace; return x  }
 
+whiteSpace :: (CharParsing m, Monad m) => m ()
 whiteSpace =
     skipMany (simpleSpace <|> oneLineComment <|> multiLineComment <?> "")
 
+simpleSpace :: CharParsing m => m ()
 simpleSpace = skipSome (satisfy isSpace)
 
+oneLineComment :: (CharParsing m, Monad m) => m ()
 oneLineComment =
-    do{ try (string "#")
+    do{ _ <- try (string "#")
       ; skipMany (satisfy (/= '\n'))
       ; return ()
       }
 
+multiLineComment :: (CharParsing m, Monad m) => m ()
 multiLineComment =
-    do { try (string "/*")
+    do { _ <- try (string "/*")
        ; inComment
        }
 
+inComment :: (CharParsing m, Monad m) => m ()
 inComment
     | True      = inCommentMulti
     | otherwise = inCommentSingle
 
+inCommentMulti :: (CharParsing m, Monad m) => m ()
 inCommentMulti
-    =   do{ try (string "*/") ; return () }
-    <|> do{ multiLineComment                     ; inCommentMulti }
+    =   do{ _ <- try (string "*/") ; return () }
+    <|> do{ multiLineComment                    ; inCommentMulti }
     <|> do{ skipSome (noneOf startEnd)          ; inCommentMulti }
-    <|> do{ oneOf startEnd                       ; inCommentMulti }
+    <|> do{ _ <- oneOf startEnd                  ; inCommentMulti }
     <?> "end of comment"
     where
       startEnd   = nub ("*/" ++ "/*")
 
+inCommentSingle :: (CharParsing m, Monad m) => m ()
 inCommentSingle
-    =   do{ try (string "*/"); return () }
+    =   do{ _ <- try (string "*/"); return () }
     <|> do{ skipSome (noneOf startEnd)         ; inCommentSingle }
-    <|> do{ oneOf startEnd                      ; inCommentSingle }
+    <|> do{ _ <- oneOf startEnd                 ; inCommentSingle }
     <?> "end of comment"
     where
       startEnd   = nub ("*/" ++ "/*")

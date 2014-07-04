@@ -28,20 +28,21 @@ nixExpr :: Bool -> Parser NExpr
 nixExpr = buildExpressionParser table . nixTerm
   where
     table =
-        [ [ prefix "-"  NNeg ]
-        , [ prefix "~"  NNeg ]
-        , [ prefix "?"  NNeg ]
-        , [ binary "++" NConcat AssocRight ]
-        , [ binary "*"  NMult   AssocLeft, binary "/"  NDiv    AssocLeft ]
-        , [ binary "+"  NPlus   AssocLeft, binary "-"  NMinus  AssocLeft ]
+        [ [ binary "."  NAttr    AssocNone ]
+        , [ prefix "-"  NNeg ]
+        -- , [ prefix "~"  NSubpath ]  -- deprecated
+        , [ binary "?"  NHasAttr AssocNone ]
+        , [ binary "++" NConcat  AssocRight ]
+        , [ binary "*"  NMult    AssocLeft, binary "/"  NDiv    AssocLeft ]
+        , [ binary "+"  NPlus    AssocLeft, binary "-"  NMinus  AssocLeft ]
         , [ prefix "!"  NNot ]
-        , [ binary "//" NUpdate AssocRight ]
-        , [ binary "<"  NLt     AssocLeft, binary ">"  NGt     AssocLeft
-          , binary "<=" NLte    AssocLeft, binary ">=" NGte    AssocLeft ]
-        , [ binary "==" NEq     AssocNone, binary "!=" NNEq    AssocNone ]
-        , [ binary "&&" NAnd    AssocLeft ]
-        , [ binary "||" NOr     AssocLeft ]
-        , [ binary "->" NImpl   AssocNone ]
+        , [ binary "//" NUpdate  AssocRight ]
+        , [ binary "<"  NLt      AssocLeft, binary ">"  NGt     AssocLeft
+          , binary "<=" NLte     AssocLeft, binary ">=" NGte    AssocLeft ]
+        , [ binary "==" NEq      AssocNone, binary "!=" NNEq    AssocNone ]
+        , [ binary "&&" NAnd     AssocLeft ]
+        , [ binary "||" NOr      AssocLeft ]
+        , [ binary "->" NImpl    AssocNone ]
         ]
 
     binary  name fun = Infix ((\x y -> Fix (NOper (fun x y))) <$ symbol name)

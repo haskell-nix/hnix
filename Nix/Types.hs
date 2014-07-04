@@ -59,6 +59,7 @@ data NOperF r
     | NImpl r r
     | NUpdate r r
     | NHasAttr r r
+    | NAttr r r
 
     | NPlus r r
     | NMinus r r
@@ -82,6 +83,7 @@ instance Show f => Show (NOperF f) where
     show (NImpl r1 r2)    = show r1 ++ " -> " ++ show r2
     show (NUpdate r1 r2)  = show r1 ++ " // " ++ show r2
     show (NHasAttr r1 r2) = show r1 ++ " ? " ++ show r2
+    show (NAttr r1 r2)    = show r1 ++ "." ++ show r2
 
     show (NPlus r1 r2)    = show r1 ++ " + " ++ show r2
     show (NMinus r1 r2)   = show r1 ++ " - " ++ show r2
