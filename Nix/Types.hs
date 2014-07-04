@@ -106,6 +106,7 @@ data NExprF r
     | NIf r r r
     | NWith r r
     | NAssert r r
+    | NInherit [r]
 
     | NVar r
     | NApp r r
@@ -147,6 +148,7 @@ instance Show f => Show (NExprF f) where
     show (NIf i t e)   = "if " ++ show i ++ " then " ++ show t ++ " else " ++ show e
     show (NWith c v)   = "with " ++ show c ++ "; " ++ show v
     show (NAssert e v) = "assert " ++ show e ++ "; " ++ show v
+    show (NInherit xs) = "inherit " ++ show xs
 
     show (NVar v)      = show v
     show (NApp f x)    = show f ++ " " ++ show x
@@ -163,6 +165,7 @@ dumpExpr = cata phi where
   phi (NIf i t e)   = "NIf " ++ i ++ " " ++ t ++ " " ++ e
   phi (NWith c v)   = "NWith " ++ c ++ " " ++ v
   phi (NAssert e v) = "NAssert " ++ e ++ " " ++ v
+  phi (NInherit xs) = "NInherit " ++ show xs
   phi (NVar v)      = "NVar " ++ v
   phi (NApp f x)    = "NApp " ++ f ++ " " ++ x
   phi (NAbs a b)    = "NAbs " ++ a ++ " " ++ b
