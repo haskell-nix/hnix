@@ -18,7 +18,7 @@ import           Prelude hiding (elem)
 nixApp :: Parser NExpr
 nixApp = go <$>
     someTill (whiteSpace *> nixExpr True)
-        (try (lookAhead (() <$ oneOf "=,;])}" <|> eof)))
+        (try (lookAhead (() <$ oneOf "=,;])}" <|> reserved "then" <|> reserved "else" <|> eof)))
   where
     go []     = error "some has failed us"
     go [x]    = x
@@ -57,6 +57,7 @@ nixTerm allowLambdas = choice
     , nixList
     , nixPath
     , nixLet
+    , nixIf
     , setLambdaStringOrSym allowLambdas
     ]
 
@@ -82,6 +83,12 @@ nixLet :: Parser NExpr
 nixLet =  (Fix .) . NLet
       <$> (reserved "let" *> nixBinders)
       <*> (whiteSpace *> reserved "in" *> nixApp)
+
+nixIf :: Parser NExpr
+nixIf = Fix <$> (NIf
+      <$> (reserved "if" *> nixApp)
+      <*> (reserved "then" *> nixApp)
+      <*> (reserved "else" *> nixApp))
 
 -- | This is a bit tricky because we don't know whether we're looking at a set
 --   or a lambda until we've looked ahead a bit.  And then it may be neither,
