@@ -8,6 +8,7 @@ cabal.mkDerivation (self: rec {
   src = ./.;
   isLibrary = true;
   isExecutable = true;
+  noHaddock = true;
   buildDepends = [
     ansiWlPprint
     text
