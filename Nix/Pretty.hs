@@ -65,6 +65,6 @@ prettyNix (Fix expr) = go expr where
   go (NInherit attrs) = text "inherit"
 
   go (NVar e) = prettyNix e
-  go (NApp fun arg) = prettyNix fun <+> prettyNix arg
+  go (NApp fun arg) = prettyNix fun <+> parens (prettyNix arg)
   go (NAbs args body) = (prettyNix args <> colon) $$ prettyNix body
 
