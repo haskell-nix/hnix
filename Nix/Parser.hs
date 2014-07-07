@@ -27,7 +27,7 @@ nixExpr :: Bool -> Parser NExpr
 nixExpr = buildExpressionParser table . nixTerm
   where
     table =
-        [ [ binary "."  NAttr    AssocNone ]
+        [ [ binary "."  NAttr    AssocLeft ]
         , [ prefix "-"  NNeg ]
         -- , [ prefix "~"  NSubpath ]  -- deprecated
         , [ binary "?"  NHasAttr AssocNone ]
