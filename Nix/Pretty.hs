@@ -12,7 +12,7 @@ prettySetArg :: (Text, Maybe NExpr) -> Doc
 prettySetArg (n, Nothing) = text (show n)
 prettySetArg (n, Just v) = text (show n) <+> text "?" <+> prettyNix v
 
-prettyFold = foldr (<+>) empty
+prettyFold = foldr ($$) empty
 
 prettyNix :: NExpr -> Doc
 prettyNix (Fix expr) = go expr where
@@ -23,8 +23,8 @@ prettyNix (Fix expr) = go expr where
   go (NArgSet args) = lbrace <+> (prettyFold $ map prettySetArg $ toList args) <+> rbrace
 
   go (NSet rec list) = 
-    (if rec then text "rec" else empty)
-    <+> lbrace <+> (foldr (<+>) empty $ map prettyBind list) <+> rbrace
+    (case rec of Rec -> "rec"; otherwise -> empty)
+    <+> lbrace <+> (prettyFold $ map prettyBind list) <+> rbrace
 
   go (NLet binds body) = text "let"
   go (NIf cond trueBody falseBody) =
@@ -38,5 +38,5 @@ prettyNix (Fix expr) = go expr where
 
   go (NVar e) = prettyNix e
   go (NApp fun arg) = prettyNix fun <+> prettyNix arg
-  go (NAbs args body) = prettyNix args <> colon <+> prettyNix body
+  go (NAbs args body) = (prettyNix args <> colon) $$ prettyNix body
 
