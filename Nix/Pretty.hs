@@ -3,27 +3,53 @@ module Nix.Pretty where
 import Text.PrettyPrint.HughesPJ
 import Nix.Types
 import Data.Map (toList)
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 
 prettyBind :: (NExpr, NExpr) -> Doc
 prettyBind (n, v) = prettyNix n <+> equals <+> prettyNix v <> semi
 
 prettySetArg :: (Text, Maybe NExpr) -> Doc
-prettySetArg (n, Nothing) = text (show n)
-prettySetArg (n, Just v) = text (show n) <+> text "?" <+> prettyNix v
+prettySetArg (n, Nothing) = text (unpack n)
+prettySetArg (n, Just v) = text (unpack n) <+> text "?" <+> prettyNix v
 
 prettyFold = foldr ($$) empty
 
+infixOper :: NExpr -> String -> NExpr -> Doc
+infixOper l op r = prettyNix l <+> text op <+> prettyNix r
+
+prettyOper :: NOperF NExpr -> Doc
+prettyOper (NNot r) = text "!" <> prettyNix r
+prettyOper (NNeg r) = text "-" <> prettyNix r
+prettyOper (NEq r1 r2)      = infixOper r1 "==" r2
+prettyOper (NNEq r1 r2)     = infixOper r1 "!=" r2
+prettyOper (NLt r1 r2)      = infixOper r1 "<" r2
+prettyOper (NLte r1 r2)     = infixOper r1 "<=" r2
+prettyOper (NGt r1 r2)      = infixOper r1 ">" r2
+prettyOper (NGte r1 r2)     = infixOper r1 ">=" r2
+prettyOper (NAnd r1 r2)     = infixOper r1 "&&" r2
+prettyOper (NOr r1 r2)      = infixOper r1 "||" r2
+prettyOper (NImpl r1 r2)    = infixOper r1 ">" r2
+prettyOper (NUpdate r1 r2)  = infixOper r1 "//" r2
+prettyOper (NHasAttr r1 r2) = infixOper r1 "?" r2
+prettyOper (NAttr r1 r2)    = prettyNix r1 <> text "." <> prettyNix r2
+
+prettyOper (NPlus r1 r2)    = infixOper r1 "+" r2
+prettyOper (NMinus r1 r2)   = infixOper r1 "-" r2
+prettyOper (NMult r1 r2)    = infixOper r1 "*" r2
+prettyOper (NDiv r1 r2)     = infixOper r1 "/" r2
+
+prettyOper (NConcat r1 r2)  = infixOper r1 "++" r2
+
 prettyNix :: NExpr -> Doc
 prettyNix (Fix expr) = go expr where
-  go (NConstant atom) = text $ show atom
-  go (NOper oper) = text $ show oper
+  go (NConstant atom) = text $ unpack $ atomText atom
+  go (NOper oper) = prettyOper oper 
   go (NList list) = lbrack <+> (prettyFold $ map prettyNix list) <+> rbrack
 
   go (NArgSet args) = lbrace <+> (prettyFold $ map prettySetArg $ toList args) <+> rbrace
 
   go (NSet rec list) = 
-    (case rec of Rec -> "rec"; otherwise -> empty)
+    (case rec of Rec -> "rec"; NonRec -> empty)
     <+> lbrace <+> (prettyFold $ map prettyBind list) <+> rbrace
 
   go (NLet binds body) = text "let"
