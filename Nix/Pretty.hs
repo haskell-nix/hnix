@@ -12,8 +12,6 @@ prettySetArg :: (Text, Maybe NExpr) -> Doc
 prettySetArg (n, Nothing) = text (unpack n)
 prettySetArg (n, Just v) = text (unpack n) <+> text "?" <+> prettyNix v
 
-prettyFold = foldr ($$) empty
-
 infixOper :: NExpr -> String -> NExpr -> Doc
 infixOper l op r = prettyNix l <+> text op <+> prettyNix r
 
@@ -44,19 +42,19 @@ prettyNix :: NExpr -> Doc
 prettyNix (Fix expr) = go expr where
   go (NConstant atom) = text $ unpack $ atomText atom
   go (NOper oper) = prettyOper oper 
-  go (NList list) = lbrack <+> (prettyFold $ map prettyNix list) <+> rbrack
+  go (NList list) = lbrack <+> (fsep $ map prettyNix list) <+> rbrack
 
-  go (NArgSet args) = lbrace <+> (prettyFold $ map prettySetArg $ toList args) <+> rbrace
+  go (NArgSet args) = lbrace <+> (vcat $ map prettySetArg $ toList args) <+> rbrace
 
   go (NSet rec list) = 
     (case rec of Rec -> "rec"; NonRec -> empty)
-    <+> lbrace <+> (prettyFold $ map prettyBind list) <+> rbrace
+    <+> lbrace <+> (vcat $ map prettyBind list) <+> rbrace
 
   go (NLet binds body) = text "let"
   go (NIf cond trueBody falseBody) =
-    text "if" <+> prettyNix cond
-    <+> text "then" <+> prettyNix trueBody
-    <+> text "else" <+> prettyNix falseBody
+    (text "if" <+> prettyNix cond)
+    $$ (text "then" <+> prettyNix trueBody)
+    $$ (text "else" <+> prettyNix falseBody)
 
   go (NWith scope body) = text "with" <+> prettyNix scope <> semi <+> prettyNix body
   go (NAssert cond body) = text "assert" <+> prettyNix cond <> semi <+> prettyNix body
