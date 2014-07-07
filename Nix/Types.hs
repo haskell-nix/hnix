@@ -92,6 +92,13 @@ instance Show f => Show (NOperF f) where
 
     show (NConcat r1 r2)  = show r1 ++ " ++ " ++ show r2
 
+data NSetBind = Rec | NonRec
+    deriving (Ord, Eq, Generic, Typeable, Data)
+
+instance Show NSetBind where
+    show Rec = "rec"
+    show NonRec = ""
+
 data NExprF r
     = NConstant NAtom
 
@@ -100,7 +107,7 @@ data NExprF r
     | NList [r]
       -- ^ A "concat" is a list of things which must combine to form a string.
     | NArgSet (Map Text (Maybe r))
-    | NSet  Bool [(r, r)]
+    | NSet NSetBind [(r, r)]
 
     | NLet [(r, r)] r
     | NIf r r r
@@ -139,8 +146,7 @@ instance Show f => Show (NExprF f) where
         showArg (k, Nothing) = unpack k
         showArg (k, Just v) = unpack k ++ " ? " ++ show v
 
-    show (NSet b xs) = (if b then "rec " else "")
-                           ++ "{ " ++ concatMap go xs ++ " }"
+    show (NSet b xs) = show b ++ " { " ++ concatMap go xs ++ " }"
       where
         go (k, v) = show k ++ " = " ++ show v ++ "; "
 

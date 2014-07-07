@@ -149,7 +149,7 @@ setOrArgs = do
         then return True
         else try (lookAhead lookaheadForSet)
     if haveSet
-        then braces (Fix . NSet sawRec <$> nixBinders) <?> "set"
+        then braces (Fix . NSet (if sawRec then Rec else NonRec) <$> nixBinders) <?> "set"
         else do
             args <- argExpr <?> "arguments"
             symbolic ':' *> fmap Fix (NAbs <$> pure args <*> nixApp)
