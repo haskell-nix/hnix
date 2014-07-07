@@ -38,9 +38,13 @@ prettyOper (NDiv r1 r2)     = infixOper r1 "/" r2
 
 prettyOper (NConcat r1 r2)  = infixOper r1 "++" r2
 
+prettyAtom :: NAtom -> Doc
+prettyAtom (NStr s) = doubleQuotes $ text $ unpack $ s
+prettyAtom atom = text $ unpack $ atomText atom
+
 prettyNix :: NExpr -> Doc
 prettyNix (Fix expr) = go expr where
-  go (NConstant atom) = text $ unpack $ atomText atom
+  go (NConstant atom) = prettyAtom atom
   go (NOper oper) = prettyOper oper 
   go (NList list) = lbrack <+> (fsep $ map prettyNix list) <+> rbrack
 
