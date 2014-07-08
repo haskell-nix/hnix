@@ -56,7 +56,14 @@ evalExpr = cata phi
         NVConstant (NBool False) -> f env
         _ -> error "condition must be a boolean"
 
-    phi (NWith _c _v)   = error "with: not implemented"
+    phi (NWith scope e) = \env -> case env of
+      (Fix (NVSet env')) -> do
+        s <- scope env
+        case s of
+          (Fix (NVSet scope')) -> e . Fix . NVSet $ Map.union scope' env'
+          _ -> error "scope must be a set in with statement"
+      _ -> error "invalid evaluation environment"
+
     phi (NAssert _e _v) = error "assert: not implemented"
     phi (NVar _v)       = error "var: not implemented"
 
