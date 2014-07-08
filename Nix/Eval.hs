@@ -49,7 +49,13 @@ evalExpr = cata phi
         go env (x, y) = liftM2 (,) (x env) (y env)
 
     phi (NLet _v _e)    = error "let: not implemented"
-    phi (NIf _i _t _e)  = error "if: not implemented"
+    phi (NIf cond t f)  = \env -> do
+      (Fix cval) <- cond env
+      case cval of
+        NVConstant (NBool True) -> t env
+        NVConstant (NBool False) -> f env
+        _ -> error "condition must be a boolean"
+
     phi (NWith _c _v)   = error "with: not implemented"
     phi (NAssert _e _v) = error "assert: not implemented"
     phi (NVar _v)       = error "var: not implemented"
