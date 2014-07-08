@@ -64,7 +64,13 @@ evalExpr = cata phi
           _ -> error "scope must be a set in with statement"
       _ -> error "invalid evaluation environment"
 
-    phi (NAssert _e _v) = error "assert: not implemented"
+    phi (NAssert cond e) = \env -> do
+      (Fix cond') <- cond env
+      case cond' of
+        (NVConstant (NBool True)) -> e env
+        (NVConstant (NBool False)) -> error "assertion failed"
+        _ -> error "assertion condition must be boolean"
+
     phi (NVar _v)       = error "var: not implemented"
 
     phi (NApp fun x) = \env -> do
