@@ -42,13 +42,23 @@ evalExpr = cata phi
 
     phi (NArgSet s) = \env -> Fix . NVArgSet <$> mapM (T.sequence . fmap ($ env)) s
 
+    -- TODO: recursive sets
     phi (NSet _b xs)   = \env ->
         Fix . NVSet . Map.fromList
             <$> mapM (fmap (first valueText) . go env) xs
       where
         go env (x, y) = liftM2 (,) (x env) (y env)
 
-    phi (NLet _v _e)    = error "let: not implemented"
+    -- TODO: recursive binding
+    phi (NLet binds e) = \env -> case env of
+      (Fix (NVSet env')) -> do
+        letenv <- Map.fromList <$> mapM (fmap (first valueText) . go) binds
+        let newenv = Map.union letenv env'
+        e . Fix . NVSet $ newenv
+        where
+          go (x, y) = liftM2 (,) (x env) (y env)
+      _ -> error "invalid evaluation environment"
+
     phi (NIf cond t f)  = \env -> do
       (Fix cval) <- cond env
       case cval of
