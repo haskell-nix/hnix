@@ -4,7 +4,7 @@ import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad hiding (mapM)
 import qualified Data.Map as Map
-import           Data.Traversable
+import           Data.Traversable as T
 import           Nix.Types
 import           Prelude hiding (mapM)
 
@@ -40,7 +40,7 @@ evalExpr = cata phi
     --     Fix . NVConstant . NStr . T.concat
     --         <$> mapM (fmap valueText . ($ env)) l
 
-    phi (NArgSet _xs) = error "Cannot evaluate an argument set"
+    phi (NArgSet s) = \env -> Fix . NVArgSet <$> mapM (T.sequence . fmap ($ env)) s
 
     phi (NSet _b xs)   = \env ->
         Fix . NVSet . Map.fromList
