@@ -45,7 +45,6 @@ Library
       base                     >= 4.3          && < 5
     , ansi-wl-pprint
     , containers
-    , pretty
     , text
     , transformers
   if flag(parsec)
@@ -81,7 +80,6 @@ executable hnix
     , hnix
     , ansi-wl-pprint
     , containers
-    , pretty
     , text
     , transformers
   if flag(parsec)

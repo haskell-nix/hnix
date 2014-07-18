@@ -5,8 +5,9 @@ import Nix.Eval
 import Nix.Parser
 import Nix.Pretty
 import Nix.Types
-import Text.PrettyPrint.HughesPJ 
+import Text.PrettyPrint.ANSI.Leijen
 import System.Environment
+import System.IO
 
 nix :: FilePath -> IO ()
 nix path = do
@@ -14,7 +15,7 @@ nix path = do
     case res of
         Failure e -> error $ "Parse failed: " ++ show e
         Success n -> do
-            putStrLn $ render (prettyNix n)
+            displayIO stdout $ renderPretty 0.4 80 (prettyNix n)
             top <- evalExpr n (Fix (NVSet Map.empty)) -- evaluate top level
             print top
 
