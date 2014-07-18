@@ -1,5 +1,5 @@
 { cabal, parsers, trifecta, text, ansiWlPprint, parsec, transformers
-, pretty, useParsec ? true
+, useParsec ? true
 }:
 
 cabal.mkDerivation (self: rec {
@@ -11,7 +11,6 @@ cabal.mkDerivation (self: rec {
   noHaddock = true;
   buildDepends = [
     ansiWlPprint
-    pretty
     text
     transformers
   ] ++ (if useParsec then [ parsec ] else [ parsers trifecta ]);
