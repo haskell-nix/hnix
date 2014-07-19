@@ -24,11 +24,10 @@ nixApp = go <$> someTill (whiteSpace *> nixExpr True) (try (lookAhead stop))
     stop = () <$ oneOf "=,;])}" <|> stopWords <|> eof
 
 nixExpr :: Bool -> Parser NExpr
-nixExpr = buildExpressionParser table . nixTerm
+nixExpr = buildExpressionParser table . nixTermOrAttr
   where
     table =
-        [ [ binary "."  NAttr    AssocLeft ]
-        , [ prefix "-"  NNeg ]
+        [ [ prefix "-"  NNeg ]
         -- , [ prefix "~"  NSubpath ]  -- deprecated
         , [ binary "?"  NHasAttr AssocNone ]
         , [ binary "++" NConcat  AssocRight ]
@@ -49,6 +48,10 @@ nixExpr = buildExpressionParser table . nixTerm
     prefix  name fun =
         Prefix $ Fix . NOper . fun <$ reservedOp name
     -- postfix name fun = Postfix (Fix . NOper . fun <$ symbol name)
+
+nixTermOrAttr :: Bool -> Parser NExpr
+nixTermOrAttr = buildExpressionParser table . nixTerm where
+  table = [[Infix ((\x y -> Fix (NOper (NAttr x y))) <$ reservedOp ".") AssocLeft]]
 
 nixTerm :: Bool -> Parser NExpr
 nixTerm allowLambdas = choice
@@ -76,7 +79,7 @@ nixParens :: Parser NExpr
 nixParens = parens nixApp <?> "parens"
 
 nixList :: Parser NExpr
-nixList = brackets (Fix . NList <$> many (nixTerm False)) <?> "list"
+nixList = brackets (Fix . NList <$> many (nixTermOrAttr False)) <?> "list"
 
 nixPath :: Parser NExpr
 nixPath = try $ fmap mkPath $ mfilter ('/' `elem`) $ some (oneOf "A-Za-z_0-9.:/")
