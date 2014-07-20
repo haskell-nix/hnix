@@ -70,7 +70,9 @@ nixInt :: Parser NExpr
 nixInt = mkInt <$> decimal <?> "integer"
 
 nixBool :: Parser NExpr
-nixBool = try (mkBool . (== "true") <$> string "true") <?> "bool"
+nixBool = try (true <|> false) <?> "bool" where
+  true = mkBool . (== "true") <$> string "true"
+  false =mkBool . (== "false") <$> string "false"
 
 nixNull :: Parser NExpr
 nixNull = try (mkNull <$ string "null") <?> "null"
