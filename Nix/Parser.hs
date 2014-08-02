@@ -101,21 +101,11 @@ nixIf =  fmap Fix $ NIf
 --   or a lambda until we've looked ahead a bit.  And then it may be neither,
 --   in which case we fall back to expected a plain string or identifier.
 setLambdaStringOrSym :: Bool -> Parser NExpr
-setLambdaStringOrSym allowLambdas = do
-    isSetOrArgs <- try (lookAhead (reserved "rec") *> pure True)
-        <|> try (lookAhead (singleton <$> char '{') *> pure True)
-        <|> pure False
-    if isSetOrArgs
-        then setOrArgs
-        else do
-            y <- try (lookAhead (True <$ (identifier *> whiteSpace
-                                          *> symbolic ':')))
-                <|> return False
-            if y
-                then if allowLambdas
-                    then setOrArgs
-                    else error "Unexpected lambda"
-                else keyName <?> "string"
+setLambdaStringOrSym True = try nixLambda <|> setLambdaStringOrSym False
+setLambdaStringOrSym False  = try nixSet <|> keyName
+
+nixLambda :: Parser NExpr
+nixLambda = Fix <$> (NAbs <$> (argExpr <?> "arguments") <*> nixApp)
 
 stringish :: Parser NExpr
 stringish =  (char '"' *> (merge <$> manyTill stringChar (char '"')))
@@ -129,9 +119,9 @@ stringish =  (char '"' *> (merge <$> manyTill stringChar (char '"')))
 
 argExpr :: Parser NExpr
 argExpr =  (Fix . NArgSet . Map.fromList <$> argList)
-       <|> ((mkSym <$> identifier) <?> "argname")
+       <|> ((mkSym <$> identifier <* symbolic ':') <?> "argname")
   where
-    argList =  braces ((argName <* whiteSpace) `sepBy` symbolic ',')
+    argList =  braces ((argName <* whiteSpace) `sepBy` symbolic ',') <* symbolic ':'
            <?> "arglist"
 
     argName = (,) <$> (identifier <* whiteSpace)
@@ -147,20 +137,6 @@ nixBinders = (scopedInherit <|> inherit <|> namedVar) `endBy` symbolic ';' where
 keyName :: Parser NExpr
 keyName = (stringish <|> (mkSym <$> identifier)) <* whiteSpace
 
-setOrArgs :: Parser NExpr
-setOrArgs = do
-    sawRec <- try (reserved "rec" *> pure True) <|> pure False
-    haveSet <-
-        if sawRec
-        then return True
-        else try (lookAhead lookaheadForSet)
-    if haveSet
-        then braces (Fix . NSet (if sawRec then Rec else NonRec) <$> nixBinders) <?> "set"
-        else do
-            args <- argExpr <?> "arguments"
-            symbolic ':' *> fmap Fix (NAbs <$> pure args <*> nixApp)
-                <|> pure args
-
 lookaheadForSet :: Parser Bool
 lookaheadForSet = do
     x <- (symbolic '{' *> return True) <|> return False
@@ -168,6 +144,10 @@ lookaheadForSet = do
         y <- (keyName *> return True) <|> return False
         if not y then return y else
             (symbolic '=' *> return True) <|> return False
+
+nixSet :: Parser NExpr
+nixSet = Fix <$> (NSet <$> isRec <*> (braces nixBinders <?> "set")) where
+  isRec = try (reserved "rec" *> pure Rec) <|> pure NonRec
 
 parseNixFile :: MonadIO m => FilePath -> m (Result NExpr)
 parseNixFile = parseFromFileEx nixApp
