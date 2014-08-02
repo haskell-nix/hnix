@@ -19,7 +19,7 @@ nixApp = go <$> someTill (whiteSpace *> nixExpr True) (try (lookAhead stop))
   where
     go []     = error "some has failed us"
     go [x]    = x
-    go (f:xs) = Fix (NApp f (go xs))
+    go (f:x:xs) = go (Fix (NApp f x) : xs)
 
     stop = () <$ oneOf "=,;])}" <|> stopWords <|> eof
 
