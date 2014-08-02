@@ -7,8 +7,8 @@ import Text.PrettyPrint.ANSI.Leijen
 
 prettyBind :: Binding NExpr -> Doc
 prettyBind (NamedVar n v) = prettyNix n <+> equals <+> prettyNix v <> semi
-prettyBind (Inherit ns) = text "inherit" <+> fillSep (map prettyNix ns)
-prettyBind (ScopedInherit s ns) = text "inherit" <+> parens (prettyNix s) <+> fillSep (map prettyNix ns)
+prettyBind (Inherit ns) = text "inherit" <+> fillSep (map prettyNix ns) <> semi
+prettyBind (ScopedInherit s ns) = text "inherit" <+> parens (prettyNix s) <+> fillSep (map prettyNix ns) <> semi
 
 prettySetArg :: (Text, Maybe NExpr) -> Doc
 prettySetArg (n, Nothing) = text (unpack n)
