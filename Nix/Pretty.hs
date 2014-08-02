@@ -5,8 +5,10 @@ import Data.Text (Text, unpack)
 import Nix.Types
 import Text.PrettyPrint.ANSI.Leijen
 
-prettyBind :: (NExpr, NExpr) -> Doc
-prettyBind (n, v) = prettyNix n <+> equals <+> prettyNix v <> semi
+prettyBind :: Binding NExpr -> Doc
+prettyBind (NamedVar n v) = prettyNix n <+> equals <+> prettyNix v <> semi
+prettyBind (Inherit ns) = text "inherit" <+> fillSep (map prettyNix ns)
+prettyBind (ScopedInherit s ns) = text "inherit" <+> parens (prettyNix s) <+> fillSep (map prettyNix ns)
 
 prettySetArg :: (Text, Maybe NExpr) -> Doc
 prettySetArg (n, Nothing) = text (unpack n)
@@ -62,7 +64,6 @@ prettyNix (Fix expr) = go expr where
 
   go (NWith scope body) = text "with" <+> prettyNix scope <> semi <+> prettyNix body
   go (NAssert cond body) = text "assert" <+> prettyNix cond <> semi <+> prettyNix body
-  go (NInherit _attrs) = text "inherit"
 
   go (NVar e) = prettyNix e
   go (NApp fun arg) = prettyNix fun <+> parens (prettyNix arg)

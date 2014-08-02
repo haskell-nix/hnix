@@ -99,6 +99,15 @@ instance Show NSetBind where
     show Rec = "rec"
     show NonRec = ""
 
+-- | A single line of the bindings section of a let expression.
+data Binding r = NamedVar r r | Inherit [r] | ScopedInherit r [r]
+     deriving (Typeable, Data, Ord, Eq, Functor)
+
+instance Show r => Show (Binding r) where
+         show (NamedVar name val) = show name ++ " = " ++ show val ++ ";"
+         show (Inherit names) = "inherit " ++ concatMap show names ++ ";"
+         show (ScopedInherit context names) = "inherit (" ++ show context ++ ") " ++ concatMap show names ++ "; "
+
 data NExprF r
     = NConstant NAtom
 
@@ -107,13 +116,12 @@ data NExprF r
     | NList [r]
       -- ^ A "concat" is a list of things which must combine to form a string.
     | NArgSet (Map Text (Maybe r))
-    | NSet NSetBind [(r, r)]
+    | NSet NSetBind [Binding r]
 
-    | NLet [(r, r)] r
+    | NLet [Binding r] r
     | NIf r r r
     | NWith r r
     | NAssert r r
-    | NInherit [r]
 
     | NVar r
     | NApp r r
@@ -146,15 +154,12 @@ instance Show f => Show (NExprF f) where
         showArg (k, Nothing) = unpack k
         showArg (k, Just v) = unpack k ++ " ? " ++ show v
 
-    show (NSet b xs) = show b ++ " { " ++ concatMap go xs ++ " }"
-      where
-        go (k, v) = show k ++ " = " ++ show v ++ "; "
+    show (NSet b xs) = show b ++ " { " ++ concatMap show xs ++ " }"
 
     show (NLet v e)    = "let " ++ show v ++ "; " ++ show e
     show (NIf i t e)   = "if " ++ show i ++ " then " ++ show t ++ " else " ++ show e
     show (NWith c v)   = "with " ++ show c ++ "; " ++ show v
     show (NAssert e v) = "assert " ++ show e ++ "; " ++ show v
-    show (NInherit xs) = "inherit " ++ show xs
 
     show (NVar v)      = show v
     show (NApp f x)    = show f ++ " " ++ show x
@@ -171,7 +176,6 @@ dumpExpr = cata phi where
   phi (NIf i t e)   = "NIf " ++ i ++ " " ++ t ++ " " ++ e
   phi (NWith c v)   = "NWith " ++ c ++ " " ++ v
   phi (NAssert e v) = "NAssert " ++ e ++ " " ++ v
-  phi (NInherit xs) = "NInherit " ++ show xs
   phi (NVar v)      = "NVar " ++ v
   phi (NApp f x)    = "NApp " ++ f ++ " " ++ x
   phi (NAbs a b)    = "NAbs " ++ a ++ " " ++ b

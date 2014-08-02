@@ -137,11 +137,12 @@ argExpr =  (Fix . NArgSet . Map.fromList <$> argList)
     argName = (,) <$> (identifier <* whiteSpace)
                   <*> optional (symbolic '?' *> nixExpr False)
 
-nvPair :: Parser (NExpr, NExpr)
-nvPair = (,) <$> keyName <*> (symbolic '=' *> nixApp)
-
-nixBinders :: Parser [(NExpr, NExpr)]
-nixBinders = nvPair `endBy` symbolic ';'
+nixBinders :: Parser [Binding NExpr]
+nixBinders = (scopedInherit <|> inherit <|> namedVar) `endBy` symbolic ';' where
+  scopedInherit = (reserved "inherit" *> whiteSpace *> symbolic '(') *>
+    (ScopedInherit <$> nixExpr False <* symbolic ')' <*> many keyName) <?> "scoped inherit binding"
+  inherit = Inherit <$> (reserved "inherit" *> many keyName) <?> "inherited binding"
+  namedVar =  NamedVar <$> keyName <*> (symbolic '=' *> nixApp) <?> "variable binding"
 
 keyName :: Parser NExpr
 keyName = (stringish <|> (mkSym <$> identifier)) <* whiteSpace
