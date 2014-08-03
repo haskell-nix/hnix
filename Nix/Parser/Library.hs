@@ -83,7 +83,7 @@ import qualified Data.HashSet as HashSet
 identStyle :: IdentifierStyle Parser
 identStyle = IdentifierStyle
   { _styleName = "nix"
-  , _styleStart = letter
+  , _styleStart = letter <|> char '_'
   , _styleLetter = alphaNum <|> oneOf "_."
   , _styleReserved = HashSet.fromList reservedNames
   , _styleHighlight = Identifier
