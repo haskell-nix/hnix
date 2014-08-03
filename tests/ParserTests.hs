@@ -40,6 +40,18 @@ case_simple_let = assertParseString "let a = 4; in a" $ Fix (NLet binds asym) wh
   binds = [(asym, Fix (NConstant (NInt 4)))]
   asym = Fix (NConstant (NSym "a"))
 
+case_identifier_special_chars :: Assertion
+case_identifier_special_chars = do
+  assertParseString "_a" $ Fix (NConstant (NSym "_a"))
+  assertParseString "a_b" $ Fix (NConstant (NSym "a_b"))
+  assertParseString "a'b" $ Fix (NConstant (NSym "a'b"))
+  assertParseString "a''b" $ Fix (NConstant (NSym "a''b"))
+  assertParseString "a-b" $ Fix (NConstant (NSym "a-b"))
+  assertParseString "a--b" $ Fix (NConstant (NSym "a--b"))
+  assertParseString "a12a" $ Fix (NConstant (NSym "a12a"))
+  assertParseFail ".a"
+  assertParseFail "'a"
+
 tests :: TestTree
 tests = $testGroupGenerator
 
@@ -48,3 +60,8 @@ assertParseString :: String -> NExpr -> Assertion
 assertParseString str expected = case parseNixString str of
   Success actual -> assertEqual ("When parsing " ++ str) expected actual
   Failure err    -> assertFailure $ "Unexpected error parsing `" ++ str ++ "':\n" ++ show err
+
+assertParseFail :: String -> Assertion
+assertParseFail str = case parseNixString str of
+  Failure _ -> return ()
+  Success r -> assertFailure $ "Unexpected success parsing `" ++ str ++ ":\nParsed value:" ++ show r

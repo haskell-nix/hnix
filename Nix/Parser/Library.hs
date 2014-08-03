@@ -8,6 +8,7 @@ import           Control.Applicative
 
 import           Control.Monad
 import           Control.Monad.IO.Class
+import           Data.Functor.Identity
 import           Data.Text as T hiding (map)
 import           Data.Text.IO as T
 import           Text.Parsec as X hiding ((<|>), many, optional)
@@ -16,16 +17,16 @@ import           Text.Parsec.Text as X
 import qualified Text.Parsec.Token as P
 import           Text.PrettyPrint.ANSI.Leijen as X (Doc, text)
 
-lexer :: Stream s m Char => P.GenTokenParser s u m
+lexer :: P.GenTokenParser Text () Identity
 lexer = P.makeTokenParser P.LanguageDef
     { P.commentStart    = "/*"
     , P.commentEnd      = "*/"
     , P.commentLine     = "#"
     , P.nestedComments  = True
-    , P.identStart      = letter <|> char '_'
-    , P.identLetter     = alphaNum <|> oneOf "_"
-    , P.opStart         = oneOf ":!#$%&*+./<=>?@\\^|-~"
-    , P.opLetter        = oneOf "@"
+    , P.identStart      = identStart
+    , P.identLetter     = identLetter
+    , P.opStart         = opStart
+    , P.opLetter        = opLetter
     , P.reservedNames   = reservedNames
     , P.reservedOpNames = []
     , P.caseSensitive   = True
@@ -82,9 +83,9 @@ import qualified Data.HashSet as HashSet
 
 identStyle :: IdentifierStyle Parser
 identStyle = IdentifierStyle
-  { _styleName = "nix"
-  , _styleStart = letter <|> char '_'
-  , _styleLetter = alphaNum <|> oneOf "_."
+  { _styleName = "nix identifier"
+  , _styleStart = identStart
+  , _styleLetter = identLetter
   , _styleReserved = HashSet.fromList reservedNames
   , _styleHighlight = Identifier
   , _styleReservedHighlight = ReservedIdentifier
@@ -97,7 +98,8 @@ reserved :: String -> Parser Text
 reserved n = pack n <$ reserve identStyle n
 
 reservedOp :: String -> Parser Text
-reservedOp = reserved
+reservedOp o = token $ try $ pack o <$
+  highlight ReservedOperator (string o) <* (notFollowedBy opLetter <?> "end of " ++ o)
 
 -----------------------------------------------------------
 -- White space & symbols
@@ -154,6 +156,18 @@ parseFromString :: Parser a -> String -> Result a
 parseFromString p = parseString p (Directed "<string>" 0 0 0 0)
 
 #endif
+
+opStart :: Parser Char
+opStart = oneOf ":!#$%&*+./<=>?@\\^|-~"
+
+opLetter :: Parser Char
+opLetter = oneOf "@"
+
+identStart :: Parser Char
+identStart = letter <|> char '_'
+
+identLetter :: Parser Char
+identLetter = alphaNum <|> oneOf "_'-"
 
 reservedNames :: [String]
 reservedNames =
