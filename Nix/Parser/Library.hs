@@ -73,15 +73,28 @@ import Data.List (nub)
 import Data.Text hiding (map)
 import Text.Parser.Expression as X
 import Text.Parser.LookAhead as X
+import Text.Parser.Token.Highlight
 import Text.Trifecta as X hiding (whiteSpace, symbol, symbolic, parseString)
 import Text.Trifecta (parseString)
 import Text.Trifecta.Delta
 
+import qualified Data.HashSet as HashSet
+
+identStyle :: IdentifierStyle Parser
+identStyle = IdentifierStyle
+  { _styleName = "nix"
+  , _styleStart = letter
+  , _styleLetter = alphaNum <|> oneOf "_."
+  , _styleReserved = HashSet.fromList reservedNames
+  , _styleHighlight = Identifier
+  , _styleReservedHighlight = ReservedIdentifier
+  }
+
 identifier :: Parser Text
-identifier = pack <$> ((:) <$> letter <*> many (alphaNum <|> oneOf "_."))
+identifier = ident identStyle
 
 reserved :: String -> Parser Text
-reserved = fmap pack . symbol
+reserved n = pack n <$ reserve identStyle n
 
 reservedOp :: String -> Parser Text
 reservedOp = reserved

@@ -55,6 +55,7 @@ Library
     Build-depends:
         parsers
       , trifecta
+      , unordered-containers
   ghc-options: -Wall
 
 executable hnix
@@ -90,6 +91,7 @@ executable hnix
     Build-depends:
         parsers
       , trifecta
+      , unordered-containers
   ghc-options: -Wall
 
 test-suite hnix-tests
