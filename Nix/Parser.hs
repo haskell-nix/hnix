@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 
-module Nix.Parser (parseNixFile, Result(..)) where
+module Nix.Parser (parseNixFile, parseNixString, Result(..)) where
 
 import           Control.Applicative
 import           Control.Monad
@@ -170,3 +170,7 @@ lookaheadForSet = do
 
 parseNixFile :: MonadIO m => FilePath -> m (Result NExpr)
 parseNixFile = parseFromFileEx nixApp
+
+
+parseNixString :: String -> Result NExpr
+parseNixString = parseFromString nixApp

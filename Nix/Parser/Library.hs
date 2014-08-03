@@ -66,6 +66,9 @@ parseFromFileEx p path =
     (either (Failure . text . show) Success . parse p path)
         `liftM` liftIO (T.readFile path)
 
+parseFromString :: Parser a -> String -> Result a
+parseFromString p = either (Failure . text . show) Success . parse p "<string>" . pack
+
 #else
 
 import Data.Char
@@ -73,7 +76,9 @@ import Data.List (nub)
 import Data.Text hiding (map)
 import Text.Parser.Expression as X
 import Text.Parser.LookAhead as X
-import Text.Trifecta as X hiding (whiteSpace, symbol, symbolic)
+import Text.Trifecta as X hiding (whiteSpace, symbol, symbolic, parseString)
+import Text.Trifecta (parseString)
+import Text.Trifecta.Delta
 
 identifier :: Parser Text
 identifier = pack <$> ((:) <$> letter <*> many (alphaNum <|> oneOf "_."))
@@ -136,6 +141,9 @@ inCommentSingle
     <?> "end of comment"
     where
       startEnd   = nub ("*/" ++ "/*")
+
+parseFromString :: Parser a -> String -> Result a
+parseFromString p = parseString p (Directed "<string>" 0 0 0 0)
 
 #endif
 
