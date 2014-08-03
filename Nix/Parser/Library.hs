@@ -49,9 +49,6 @@ reserved = P.reserved lexer
 reservedOp :: String -> Parser ()
 reservedOp = P.reservedOp lexer
 
-symbol :: String -> Parser Text
-symbol str = pack <$> P.symbol lexer str
-
 decimal :: Parser Integer
 decimal = read <$> some digit
 
@@ -92,8 +89,6 @@ reservedOp = reserved
 -----------------------------------------------------------
 -- White space & symbols
 -----------------------------------------------------------
-symbol :: (CharParsing m, Monad m) => String -> m String
-symbol name = lexeme (string name)
 
 lexeme :: (CharParsing m, Monad m) => m b -> m b
 lexeme p = do{ x <- p; whiteSpace; return x  }
