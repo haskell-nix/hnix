@@ -81,7 +81,7 @@ nixParens :: Parser NExpr
 nixParens = parens nixApp <?> "parens"
 
 nixList :: Parser NExpr
-nixList = brackets (Fix . NList <$> many (nixTermOrAttr False)) <?> "list"
+nixList = brackets (Fix . NList <$> many (nixTermOrAttr False <* whiteSpace)) <?> "list"
 
 nixPath :: Parser NExpr
 nixPath = try $ fmap mkPath $ mfilter ('/' `elem`) $ some (oneOf "A-Za-z_0-9.:/")
