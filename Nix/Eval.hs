@@ -41,7 +41,7 @@ evalExpr = cata phi
     --     Fix . NVConstant . NStr . T.concat
     --         <$> mapM (fmap valueText . ($ env)) l
 
-    phi (NArgSet s) = \env -> Fix . NVArgSet <$> mapM (T.sequence . fmap ($ env)) s
+    phi (NArgs s) = \env -> Fix . NVArgSet <$> mapM (T.sequence . fmap ($ env)) (formalsAsMap s)
 
     -- TODO: recursive sets
     phi (NSet _b binds)   = \env ->

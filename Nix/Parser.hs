@@ -118,13 +118,18 @@ stringish =  (char '"' *> (merge <$> manyTill stringChar (char '"')))
               <|> (mkStr . pack <$> many (noneOf "\"\\"))
 
 argExpr :: Parser NExpr
-argExpr =  (Fix . NArgSet . Map.fromList <$> argList)
-       <|> ((mkSym <$> identifier <* symbolic ':') <?> "argname")
+argExpr = (try (Fix . NArgs . FormalSet <$> paramSet)
+          <|> try (Fix . NArgs . FormalName <$> identifier <* whiteSpace)
+          <|> try (Fix . NArgs <$> (FormalLeftAt <$> identifier <* whiteSpace <*> paramSet))
+          <|> try (Fix . NArgs <$> (FormalRightAt <$> paramSet <*> identifier <* whiteSpace))) <* symbolic ':'
   where
-    argList =  braces ((argName <* whiteSpace) `sepBy` symbolic ',') <* symbolic ':'
+  paramSet :: Parser (FormalParamSet NExpr)
+  paramSet =  (FormalParamSet . Map.fromList <$> argList)
+  argList :: Parser [(Text, Maybe NExpr)]
+  argList =  braces ((argName <* whiteSpace) `sepBy` symbolic ',') <* symbolic ':'
            <?> "arglist"
-
-    argName = (,) <$> (identifier <* whiteSpace)
+  argName :: Parser (Text, Maybe NExpr)
+  argName = (,) <$> (identifier <* whiteSpace)
                   <*> optional (symbolic '?' *> nixExpr False)
 
 nixBinders :: Parser [Binding NExpr]
@@ -136,14 +141,6 @@ nixBinders = (scopedInherit <|> inherit <|> namedVar) `endBy` symbolic ';' where
 
 keyName :: Parser NExpr
 keyName = (stringish <|> (mkSym <$> identifier)) <* whiteSpace
-
-lookaheadForSet :: Parser Bool
-lookaheadForSet = do
-    x <- (symbolic '{' *> return True) <|> return False
-    if not x then return x else do
-        y <- (keyName *> return True) <|> return False
-        if not y then return y else
-            (symbolic '=' *> return True) <|> return False
 
 nixSet :: Parser NExpr
 nixSet = Fix <$> (NSet <$> isRec <*> (braces nixBinders <?> "set")) where
