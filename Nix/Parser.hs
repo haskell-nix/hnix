@@ -71,8 +71,8 @@ nixInt = mkInt <$> decimal <?> "integer"
 
 nixBool :: Parser NExpr
 nixBool = try (true <|> false) <?> "bool" where
-  true = mkBool . (== "true") <$> string "true"
-  false =mkBool . (== "false") <$> string "false"
+  true = mkBool True <$ string "true"
+  false = mkBool False <$ string "false"
 
 nixNull :: Parser NExpr
 nixNull = try (mkNull <$ string "null") <?> "null"
@@ -169,8 +169,7 @@ lookaheadForSet = do
             (symbolic '=' *> return True) <|> return False
 
 parseNixFile :: MonadIO m => FilePath -> m (Result NExpr)
-parseNixFile = parseFromFileEx nixApp
-
+parseNixFile = parseFromFileEx $ nixApp <* eof
 
 parseNixString :: String -> Result NExpr
-parseNixString = parseFromString nixApp
+parseNixString = parseFromString $ nixApp <* eof

@@ -76,7 +76,7 @@ executable hnix
     PatternGuards
     RankNTypes
     TupleSections
-  build-depends:       
+  build-depends:
       base                     >= 4.3          && < 5
     , hnix
     , ansi-wl-pprint
@@ -102,6 +102,7 @@ test-suite hnix-tests
   build-depends:
       base >= 4.3 && < 5
     , containers
+    , text
     , hnix
     , tasty
     , tasty-th
