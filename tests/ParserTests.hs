@@ -7,6 +7,8 @@ import Test.Tasty.HUnit
 import Test.Tasty.TH
 import Data.Text (pack)
 
+import qualified Data.Map as Map
+
 import Nix.Types
 import Nix.Parser
 
@@ -61,6 +63,19 @@ case_int_null_list = assertParseString "[1 2 3 null 4]" $ Fix (NList (map (Fix .
 
 case_simple_lambda :: Assertion
 case_simple_lambda = assertParseString "a: a" $ Fix (NAbs (Fix $ NArgs $ FormalName "a") (mkSym "a"))
+
+case_lambda_pattern :: Assertion
+case_lambda_pattern = do
+  assertParseString "{b, c ? 1}: b" $
+    Fix $ NAbs (Fix $ NArgs $ FormalSet args) (mkSym "b")
+  assertParseString "a@{b,c ? 1}: b" $
+    Fix $ NAbs (Fix $ NArgs $ FormalLeftAt "a" args) (mkSym "b")
+  assertParseString "{b,c?1}@a: c" $
+    Fix $ NAbs (Fix $ NArgs $ FormalRightAt args "a") (mkSym "c")
+  assertParseFail "a@b: a"
+  assertParseFail "{a}@{b}: a"
+ where
+  args = FormalParamSet $ Map.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
 
 case_lambda_app_int :: Assertion
 case_lambda_app_int = assertParseString "(a: a) 3" $ Fix (NApp lam int) where
