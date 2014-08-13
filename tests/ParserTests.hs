@@ -32,12 +32,12 @@ case_int_null_list :: Assertion
 case_int_null_list = assertParseString "[1 2 3 null 4]" $ Fix (NList (map (Fix . NConstant) [NInt 1, NInt 2, NInt 3, NNull, NInt 4]))
 
 case_simple_lambda :: Assertion
-case_simple_lambda = assertParseString "a: a" $ Fix (NAbs (mkSym "a") (mkSym "a"))
+case_simple_lambda = assertParseString "a: a" $ Fix (NAbs (Fix $ NArgs $ FormalName "a") (mkSym "a"))
 
 case_lambda_app_int :: Assertion
 case_lambda_app_int = assertParseString "(a: a) 3" $ Fix (NApp lam int) where
   int = mkInt 3
-  lam = Fix (NAbs asym asym)
+  lam = Fix (NAbs (Fix $ NArgs $ FormalName "a") asym)
   asym = mkSym "a"
 
 case_simple_let :: Assertion
