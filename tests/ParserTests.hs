@@ -20,8 +20,8 @@ case_constant_bool = do
 
 case_simple_set :: Assertion
 case_simple_set = assertParseString "{ a = 23; b = 4; }" $ Fix $ NSet NonRec
-  [ (mkSym "a", mkInt 23)
-  , (mkSym "b", mkInt 4)
+  [ NamedVar (mkSym "a") $ mkInt 23
+  , NamedVar (mkSym "b") $ mkInt 4
   ]
 
 case_int_list :: Assertion
@@ -42,7 +42,7 @@ case_lambda_app_int = assertParseString "(a: a) 3" $ Fix (NApp lam int) where
 
 case_simple_let :: Assertion
 case_simple_let = assertParseString "let a = 4; in a" $ Fix (NLet binds asym) where
-  binds = [(asym, mkInt 4)]
+  binds = [NamedVar asym $ mkInt 4]
   asym = mkSym "a"
 
 case_identifier_special_chars :: Assertion

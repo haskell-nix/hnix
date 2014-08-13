@@ -10,14 +10,14 @@ prettyBind (NamedVar n v) = prettyNix n <+> equals <+> prettyNix v <> semi
 prettyBind (Inherit ns) = text "inherit" <+> fillSep (map prettyNix ns) <> semi
 prettyBind (ScopedInherit s ns) = text "inherit" <+> parens (prettyNix s) <+> fillSep (map prettyNix ns) <> semi
 
-prettyFormals :: Formals -> Doc
+prettyFormals :: Formals NExpr -> Doc
 prettyFormals (FormalName n) = text $ unpack n
-prettyFormals (FormalSet s) =prettyParamSet s
-prettyFormals (FormalLeftAt s n) = prettyParamSet s <> text "@" <> text (unpack n)
-prettyFormals (FormalRightAt n s) text (unpack n) <> text "@" <> prettyParamSet s
+prettyFormals (FormalSet s) = prettyParamSet s
+prettyFormals (FormalLeftAt n s) = text (unpack n) <> text "@" <> prettyParamSet s
+prettyFormals (FormalRightAt s n) = prettyParamSet s <> text "@" <> text (unpack n)
 
-prettyParamSet :: FormalParamSet -> Doc
-prettyParamSet s = lbrace <+> hcat (map prettySetArg $ toList args) <+> rbrace
+prettyParamSet :: FormalParamSet NExpr -> Doc
+prettyParamSet (FormalParamSet args) = lbrace <+> hcat (map prettySetArg $ toList args) <+> rbrace
 
 prettySetArg :: (Text, Maybe NExpr) -> Doc
 prettySetArg (n, Nothing) = text (unpack n)
