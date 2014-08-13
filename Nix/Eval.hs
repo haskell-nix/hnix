@@ -4,6 +4,7 @@ import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad hiding (mapM)
 import qualified Data.Map as Map
+import           Data.Text (Text)
 import           Data.Traversable as T
 import           Nix.Types
 import           Prelude hiding (mapM)
@@ -40,23 +41,18 @@ evalExpr = cata phi
     --     Fix . NVConstant . NStr . T.concat
     --         <$> mapM (fmap valueText . ($ env)) l
 
-    phi (NArgSet s) = \env -> Fix . NVArgSet <$> mapM (T.sequence . fmap ($ env)) s
+    phi (NArgs s) = \env -> Fix . NVArgSet <$> mapM (T.sequence . fmap ($ env)) (formalsAsMap s)
 
     -- TODO: recursive sets
-    phi (NSet _b xs)   = \env ->
-        Fix . NVSet . Map.fromList
-            <$> mapM (fmap (first valueText) . go env) xs
-      where
-        go env (x, y) = liftM2 (,) (x env) (y env)
+    phi (NSet _b binds)   = \env ->
+        Fix . NVSet <$> evalBinds env binds
 
     -- TODO: recursive binding
     phi (NLet binds e) = \env -> case env of
       (Fix (NVSet env')) -> do
-        letenv <- Map.fromList <$> mapM (fmap (first valueText) . go) binds
+        letenv <- evalBinds env binds
         let newenv = Map.union letenv env'
         e . Fix . NVSet $ newenv
-        where
-          go (x, y) = liftM2 (,) (x env) (y env)
       _ -> error "invalid evaluation environment"
 
     phi (NIf cond t f)  = \env -> do
@@ -98,3 +94,12 @@ evalExpr = cata phi
         -- set
         args <- a env
         return $ Fix $ NVFunction args b
+
+evalBinds :: NValue -> [Binding (NValue -> IO NValue)] ->
+  IO (Map.Map Text NValue)
+evalBinds env xs =
+  Map.fromList <$> mapM (fmap (first valueText)) (concatMap go xs) where
+    go :: Binding (NValue -> IO NValue) -> [IO (NValue, NValue)]
+    go (NamedVar x y) = [liftM2 (,) (x env) (y env)]
+    go (Inherit ys) = map (\y -> (,) <$> y env <*> y env) ys
+    go (ScopedInherit x ys) = map (\y -> (,) <$> x env <*> y env) ys

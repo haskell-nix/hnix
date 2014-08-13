@@ -5,7 +5,7 @@
 cabal.mkDerivation (self: rec {
   pname = "hnix";
   version = "0.0.1";
-  src = ./.;
+  src = builtins.filterSource (path: type: type != "unknown") ./.;
   isLibrary = true;
   isExecutable = true;
   noHaddock = true;

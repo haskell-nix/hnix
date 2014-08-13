@@ -1,3 +1,10 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 module Nix.Types where
 
 import           Control.Monad hiding (forM_, mapM, sequence)
@@ -99,6 +106,51 @@ instance Show NSetBind where
     show Rec = "rec"
     show NonRec = ""
 
+-- | A single line of the bindings section of a let expression.
+data Binding r = NamedVar r r | Inherit [r] | ScopedInherit r [r]
+     deriving (Typeable, Data, Ord, Eq, Functor)
+
+instance Show r => Show (Binding r) where
+         show (NamedVar name val) = show name ++ " = " ++ show val ++ ";"
+         show (Inherit names) = "inherit " ++ concatMap show names ++ ";"
+         show (ScopedInherit context names) = "inherit (" ++ show context ++ ") " ++ concatMap show names ++ ";"
+
+data FormalParamSet r = FormalParamSet (Map Text (Maybe r))
+                 deriving (Eq, Ord, Generic, Typeable, Data, Functor)
+
+instance Show r => Show (FormalParamSet r) where
+    show (FormalParamSet h) = "{ " ++ go (Map.toList h) ++ " }"
+      where
+        go [] = ""
+        go [x] = showArg x
+        go (x:xs) = showArg x ++ ", " ++ go xs
+
+        showArg (k, Nothing) = unpack k
+        showArg (k, Just v) = unpack k ++ " ? " ++ show v
+
+-- | @Formals@ represents all the ways the formal parameters to a
+-- function can be represented.
+data Formals r =
+   FormalName Text |
+   FormalSet (FormalParamSet r) |
+   FormalLeftAt Text (FormalParamSet r) |
+   FormalRightAt (FormalParamSet r)  Text
+   deriving (Ord, Eq, Generic, Typeable, Data, Functor)
+
+instance Show r => Show (Formals r) where
+    show (FormalName n) = show n
+    show (FormalSet s) = show s
+    show (FormalLeftAt n s) = show n ++ "@" ++ show s
+    show (FormalRightAt s n) = show s ++ "@" ++ show n
+
+-- | @formalsAsMap@ combines the outer and inner name bindings of
+-- 'Formals'
+formalsAsMap :: Formals r -> Map Text (Maybe r)
+formalsAsMap (FormalName n) = Map.singleton n Nothing
+formalsAsMap (FormalSet (FormalParamSet s)) = s
+formalsAsMap (FormalLeftAt n (FormalParamSet s)) = Map.insert n Nothing s
+formalsAsMap (FormalRightAt (FormalParamSet s) n) = Map.insert n Nothing s
+
 data NExprF r
     = NConstant NAtom
 
@@ -106,14 +158,13 @@ data NExprF r
 
     | NList [r]
       -- ^ A "concat" is a list of things which must combine to form a string.
-    | NArgSet (Map Text (Maybe r))
-    | NSet NSetBind [(r, r)]
+    | NArgs (Formals r)
+    | NSet NSetBind [Binding r]
 
-    | NLet [(r, r)] r
+    | NLet [Binding r] r
     | NIf r r r
     | NWith r r
     | NAssert r r
-    | NInherit [r]
 
     | NVar r
     | NApp r r
@@ -137,24 +188,13 @@ instance Show f => Show (NExprF f) where
         go [x] = show x
         go (x:xs) = show x ++ ", " ++ go xs
 
-    show (NArgSet h) = "{ " ++ go (Map.toList h) ++ " }"
-      where
-        go [] = ""
-        go [x] = showArg x
-        go (x:xs) = showArg x ++ ", " ++ go xs
-
-        showArg (k, Nothing) = unpack k
-        showArg (k, Just v) = unpack k ++ " ? " ++ show v
-
-    show (NSet b xs) = show b ++ " { " ++ concatMap go xs ++ " }"
-      where
-        go (k, v) = show k ++ " = " ++ show v ++ "; "
+    show (NArgs fs) = show fs
+    show (NSet b xs) = show b ++ " { " ++ concatMap show xs ++ " }"
 
     show (NLet v e)    = "let " ++ show v ++ "; " ++ show e
     show (NIf i t e)   = "if " ++ show i ++ " then " ++ show t ++ " else " ++ show e
     show (NWith c v)   = "with " ++ show c ++ "; " ++ show v
     show (NAssert e v) = "assert " ++ show e ++ "; " ++ show v
-    show (NInherit xs) = "inherit " ++ show xs
 
     show (NVar v)      = show v
     show (NApp f x)    = show f ++ " " ++ show x
@@ -165,13 +205,12 @@ dumpExpr = cata phi where
   phi (NConstant x) = "NConstant " ++ show x
   phi (NOper x)     = "NOper " ++ show x
   phi (NList l)     = "NList [" ++ show l ++ "]"
-  phi (NArgSet xs)  = "NArgSet " ++ show xs
+  phi (NArgs xs)  = "NArgs " ++ show xs
   phi (NSet b xs)   = "NSet " ++ show b ++ " " ++ show xs
   phi (NLet v e)    = "NLet " ++ show v ++ " " ++ e
   phi (NIf i t e)   = "NIf " ++ i ++ " " ++ t ++ " " ++ e
   phi (NWith c v)   = "NWith " ++ c ++ " " ++ v
   phi (NAssert e v) = "NAssert " ++ e ++ " " ++ v
-  phi (NInherit xs) = "NInherit " ++ show xs
   phi (NVar v)      = "NVar " ++ v
   phi (NApp f x)    = "NApp " ++ f ++ " " ++ x
   phi (NAbs a b)    = "NAbs " ++ a ++ " " ++ b

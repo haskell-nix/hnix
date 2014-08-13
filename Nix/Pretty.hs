@@ -5,8 +5,19 @@ import Data.Text (Text, unpack)
 import Nix.Types
 import Text.PrettyPrint.ANSI.Leijen
 
-prettyBind :: (NExpr, NExpr) -> Doc
-prettyBind (n, v) = prettyNix n <+> equals <+> prettyNix v <> semi
+prettyBind :: Binding NExpr -> Doc
+prettyBind (NamedVar n v) = prettyNix n <+> equals <+> prettyNix v <> semi
+prettyBind (Inherit ns) = text "inherit" <+> fillSep (map prettyNix ns) <> semi
+prettyBind (ScopedInherit s ns) = text "inherit" <+> parens (prettyNix s) <+> fillSep (map prettyNix ns) <> semi
+
+prettyFormals :: Formals -> Doc
+prettyFormals (FormalName n) = text $ unpack n
+prettyFormals (FormalSet s) =prettyParamSet s
+prettyFormals (FormalLeftAt s n) = prettyParamSet s <> text "@" <> text (unpack n)
+prettyFormals (FormalRightAt n s) text (unpack n) <> text "@" <> prettyParamSet s
+
+prettyParamSet :: FormalParamSet -> Doc
+prettyParamSet s = lbrace <+> hcat (map prettySetArg $ toList args) <+> rbrace
 
 prettySetArg :: (Text, Maybe NExpr) -> Doc
 prettySetArg (n, Nothing) = text (unpack n)
@@ -48,7 +59,7 @@ prettyNix (Fix expr) = go expr where
   go (NOper oper) = prettyOper oper
   go (NList xs) = lbracket <+> fillSep (map prettyNix xs) <+> rbracket
 
-  go (NArgSet args) = lbrace <+> vcat (map prettySetArg $ toList args) <+> rbrace
+  go (NArgs fs) = prettyFormals fs
 
   go (NSet rec xs) =
     (case rec of Rec -> "rec"; NonRec -> empty)
@@ -62,7 +73,6 @@ prettyNix (Fix expr) = go expr where
 
   go (NWith scope body) = text "with" <+> prettyNix scope <> semi <+> prettyNix body
   go (NAssert cond body) = text "assert" <+> prettyNix cond <> semi <+> prettyNix body
-  go (NInherit _attrs) = text "inherit"
 
   go (NVar e) = prettyNix e
   go (NApp fun arg) = prettyNix fun <+> parens (prettyNix arg)
