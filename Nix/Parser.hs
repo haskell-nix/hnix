@@ -133,10 +133,14 @@ argExpr = (try (Fix . NArgs . FormalSet <$> paramSet)
                   <*> optional (symbolic '?' *> nixExpr False)
 
 nixBinders :: Parser [Binding NExpr]
-nixBinders = (scopedInherit <|> inherit <|> namedVar) `endBy` symbolic ';' where
-  scopedInherit = (reserved "inherit" *> whiteSpace *> symbolic '(') *>
+nixBinders = choice
+  [ reserved "inherit" *> whiteSpace *> (scopedInherit <|> inherit) <?> "inherited binding"
+  , namedVar
+  ] `endBy` symbolic ';'
+ where
+  scopedInherit = try (symbolic '(') *>
     (ScopedInherit <$> nixExpr False <* symbolic ')' <*> many keyName) <?> "scoped inherit binding"
-  inherit = Inherit <$> (reserved "inherit" *> many keyName) <?> "inherited binding"
+  inherit = Inherit <$> many keyName
   namedVar =  NamedVar <$> keyName <*> (symbolic '=' *> nixApp) <?> "variable binding"
 
 keyName :: Parser NExpr
