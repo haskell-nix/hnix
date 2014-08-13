@@ -19,9 +19,37 @@ case_constant_bool = do
   assertParseString "false" $ mkBool False
 
 case_simple_set :: Assertion
-case_simple_set = assertParseString "{ a = 23; b = 4; }" $ Fix $ NSet NonRec
-  [ NamedVar (mkSym "a") $ mkInt 23
-  , NamedVar (mkSym "b") $ mkInt 4
+case_simple_set = do
+  assertParseString "{ a = 23; b = 4; }" $ Fix $ NSet NonRec
+    [ NamedVar (mkSym "a") $ mkInt 23
+    , NamedVar (mkSym "b") $ mkInt 4
+    ]
+  assertParseFail "{ a = 23 }"
+
+case_set_inherit :: Assertion
+case_set_inherit = do
+  assertParseString "{ e = 3; inherit a b; }" $ Fix $ NSet NonRec
+    [ NamedVar (mkSym "e") $ mkInt 3
+    , Inherit [mkSym "a", mkSym "b"]
+    ]
+  assertParseString "{ inherit; }" $ Fix $ NSet NonRec [ Inherit [] ]
+
+case_set_scoped_inherit :: Assertion
+case_set_scoped_inherit = assertParseString "{ inherit (a) b c; e = 4; inherit(a)b c; }" $ Fix $ NSet NonRec
+  [ ScopedInherit (mkSym "a") [mkSym "b", mkSym "c"]
+  , NamedVar (mkSym "e") $ mkInt 4
+  , ScopedInherit (mkSym "a") [mkSym "b", mkSym "c"]
+  ]
+
+case_set_rec :: Assertion
+case_set_rec = assertParseString "rec { a = 3; b = a; }" $ Fix $ NSet Rec
+  [ NamedVar (mkSym "a") $ mkInt 3
+  , NamedVar (mkSym "b") $ mkSym "a"
+  ]
+
+case_set_inherit_direct :: Assertion
+case_set_inherit_direct = assertParseString "{ inherit ({a = 3;}); }" $ Fix $ NSet NonRec
+  [ flip ScopedInherit [] $ Fix $ NSet NonRec [NamedVar (mkSym "a") $ mkInt 3]
   ]
 
 case_int_list :: Assertion
@@ -41,9 +69,24 @@ case_lambda_app_int = assertParseString "(a: a) 3" $ Fix (NApp lam int) where
   asym = mkSym "a"
 
 case_simple_let :: Assertion
-case_simple_let = assertParseString "let a = 4; in a" $ Fix (NLet binds asym) where
+case_simple_let = do
+  assertParseString "let a = 4; in a" $ Fix (NLet binds asym)
+  assertParseFail "let a = 4 in a"
+ where
   binds = [NamedVar asym $ mkInt 4]
   asym = mkSym "a"
+
+case_nested_let :: Assertion
+case_nested_let = do
+  assertParseString "let a = 4; in let b = 5; in a" $ Fix $ NLet [NamedVar (mkSym "a") $ mkInt 4] $
+    Fix $ NLet [NamedVar (mkSym "b") $ mkInt 5] $ mkSym "a"
+  assertParseFail "let a = 4; let b = 3; in b"
+
+case_let_scoped_inherit :: Assertion
+case_let_scoped_inherit = do
+  assertParseString "let a = null; inherit (b) c; in c" $ Fix $
+    NLet [NamedVar (mkSym "a") mkNull, ScopedInherit (mkSym "b") [mkSym "c"]] $ mkSym "c"
+  assertParseFail "let inherit (b) c in c"
 
 case_identifier_special_chars :: Assertion
 case_identifier_special_chars = do
