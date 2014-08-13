@@ -114,7 +114,7 @@ stringish =  (char '"' *> (merge <$> manyTill stringChar (char '"')))
     merge = foldl1' (\x y -> Fix (NOper (NConcat x y)))
 
     stringChar =  char '\\' *> (mkStr . singleton <$> anyChar)
-              <|> (string "${" *> nixApp <* char '}')
+              <|> (try (string "${") *> nixApp <* char '}')
               <|> (mkStr . pack <$> many (noneOf "\"\\"))
 
 argExpr :: Parser NExpr
