@@ -118,19 +118,28 @@ stringish =  (char '"' *> (merge <$> manyTill stringChar (char '"')))
               <|> (mkStr . pack <$> many (noneOf "\"\\"))
 
 argExpr :: Parser NExpr
-argExpr = (try (Fix . NArgs . FormalSet <$> paramSet)
-          <|> try (Fix . NArgs . FormalName <$> identifier <* whiteSpace)
-          <|> try (Fix . NArgs <$> (FormalLeftAt <$> identifier <* whiteSpace <*> paramSet))
-          <|> try (Fix . NArgs <$> (FormalRightAt <$> paramSet <*> identifier <* whiteSpace))) <* symbolic ':'
-  where
+argExpr = Fix . NArgs <$> choice
+  [ idOrAtPattern <$> identifier <* whiteSpace <*> optional (symbolic '@' *> paramSet)
+  , setOrAtPattern <$> paramSet <* whiteSpace <*> optional (symbolic '@' *> identifier)
+  ] <* symbolic ':'
+ where
   paramSet :: Parser (FormalParamSet NExpr)
-  paramSet =  (FormalParamSet . Map.fromList <$> argList)
+  paramSet = FormalParamSet . Map.fromList <$> argList
+
   argList :: Parser [(Text, Maybe NExpr)]
-  argList =  braces ((argName <* whiteSpace) `sepBy` symbolic ',') <* symbolic ':'
-           <?> "arglist"
+  argList =  braces ((argName <* whiteSpace) `sepBy` symbolic ',') <?> "arglist"
+
   argName :: Parser (Text, Maybe NExpr)
-  argName = (,) <$> (identifier <* whiteSpace)
-                  <*> optional (symbolic '?' *> nixExpr False)
+  argName = (,) <$> identifier <* whiteSpace
+                <*> optional (symbolic '?' *> nixExpr False)
+
+  idOrAtPattern :: Text -> Maybe (FormalParamSet NExpr) -> Formals NExpr
+  idOrAtPattern i Nothing = FormalName i
+  idOrAtPattern i (Just s) = FormalLeftAt i s
+
+  setOrAtPattern :: FormalParamSet NExpr -> Maybe Text -> Formals NExpr
+  setOrAtPattern s Nothing = FormalSet s
+  setOrAtPattern s (Just i) = FormalRightAt s i
 
 nixBinders :: Parser [Binding NExpr]
 nixBinders = choice
