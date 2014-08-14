@@ -8,6 +8,7 @@ import           Control.Applicative
 
 import           Control.Monad
 import           Control.Monad.IO.Class
+import           Data.Functor.Identity
 import           Data.Text as T hiding (map)
 import           Data.Text.IO as T
 import           Text.Parsec as X hiding ((<|>), many, optional)
@@ -16,16 +17,16 @@ import           Text.Parsec.Text as X
 import qualified Text.Parsec.Token as P
 import           Text.PrettyPrint.ANSI.Leijen as X (Doc, text)
 
-lexer :: Stream s m Char => P.GenTokenParser s u m
+lexer :: P.GenTokenParser Text () Identity
 lexer = P.makeTokenParser P.LanguageDef
     { P.commentStart    = "/*"
     , P.commentEnd      = "*/"
     , P.commentLine     = "#"
     , P.nestedComments  = True
-    , P.identStart      = letter <|> char '_'
-    , P.identLetter     = alphaNum <|> oneOf "_"
-    , P.opStart         = oneOf ":!#$%&*+./<=>?@\\^|-~"
-    , P.opLetter        = oneOf "@"
+    , P.identStart      = identStart
+    , P.identLetter     = identLetter
+    , P.opStart         = opStart
+    , P.opLetter        = opLetter
     , P.reservedNames   = reservedNames
     , P.reservedOpNames = []
     , P.caseSensitive   = True
@@ -49,9 +50,6 @@ reserved = P.reserved lexer
 reservedOp :: String -> Parser ()
 reservedOp = P.reservedOp lexer
 
-symbol :: String -> Parser Text
-symbol str = pack <$> P.symbol lexer str
-
 decimal :: Parser Integer
 decimal = read <$> some digit
 
@@ -66,6 +64,9 @@ parseFromFileEx p path =
     (either (Failure . text . show) Success . parse p path)
         `liftM` liftIO (T.readFile path)
 
+parseFromString :: Parser a -> String -> Result a
+parseFromString p = either (Failure . text . show) Success . parse p "<string>" . pack
+
 #else
 
 import Data.Char
@@ -73,22 +74,36 @@ import Data.List (nub)
 import Data.Text hiding (map)
 import Text.Parser.Expression as X
 import Text.Parser.LookAhead as X
-import Text.Trifecta as X hiding (whiteSpace, symbol, symbolic)
+import Text.Parser.Token.Highlight
+import Text.Trifecta as X hiding (whiteSpace, symbol, symbolic, parseString)
+import Text.Trifecta (parseString)
+import Text.Trifecta.Delta
+
+import qualified Data.HashSet as HashSet
+
+identStyle :: IdentifierStyle Parser
+identStyle = IdentifierStyle
+  { _styleName = "nix identifier"
+  , _styleStart = identStart
+  , _styleLetter = identLetter
+  , _styleReserved = HashSet.fromList reservedNames
+  , _styleHighlight = Identifier
+  , _styleReservedHighlight = ReservedIdentifier
+  }
 
 identifier :: Parser Text
-identifier = pack <$> ((:) <$> letter <*> many (alphaNum <|> oneOf "_."))
+identifier = ident identStyle
 
 reserved :: String -> Parser Text
-reserved = fmap pack . symbol
+reserved n = pack n <$ reserve identStyle n
 
 reservedOp :: String -> Parser Text
-reservedOp = reserved
+reservedOp o = token $ try $ pack o <$
+  highlight ReservedOperator (string o) <* (notFollowedBy opLetter <?> "end of " ++ o)
 
 -----------------------------------------------------------
 -- White space & symbols
 -----------------------------------------------------------
-symbol :: (CharParsing m, Monad m) => String -> m String
-symbol name = lexeme (string name)
 
 lexeme :: (CharParsing m, Monad m) => m b -> m b
 lexeme p = do{ x <- p; whiteSpace; return x  }
@@ -137,7 +152,22 @@ inCommentSingle
     where
       startEnd   = nub ("*/" ++ "/*")
 
+parseFromString :: Parser a -> String -> Result a
+parseFromString p = parseString p (Directed "<string>" 0 0 0 0)
+
 #endif
+
+opStart :: Parser Char
+opStart = oneOf ":!#$%&*+./<=>?@\\^|-~"
+
+opLetter :: Parser Char
+opLetter = oneOf "@"
+
+identStart :: Parser Char
+identStart = letter <|> char '_'
+
+identLetter :: Parser Char
+identLetter = alphaNum <|> oneOf "_'-"
 
 reservedNames :: [String]
 reservedNames =

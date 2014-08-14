@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 
-module Nix.Parser (parseNixFile, Result(..)) where
+module Nix.Parser (parseNixFile, parseNixString, Result(..)) where
 
 import           Control.Applicative
 import           Control.Monad
@@ -71,8 +71,8 @@ nixInt = mkInt <$> decimal <?> "integer"
 
 nixBool :: Parser NExpr
 nixBool = try (true <|> false) <?> "bool" where
-  true = mkBool . (== "true") <$> string "true"
-  false =mkBool . (== "false") <$> string "false"
+  true = mkBool True <$ string "true"
+  false = mkBool False <$ string "false"
 
 nixNull :: Parser NExpr
 nixNull = try (mkNull <$ string "null") <?> "null"
@@ -81,7 +81,7 @@ nixParens :: Parser NExpr
 nixParens = parens nixApp <?> "parens"
 
 nixList :: Parser NExpr
-nixList = brackets (Fix . NList <$> many (nixTermOrAttr False)) <?> "list"
+nixList = brackets (Fix . NList <$> many (nixTermOrAttr False <* whiteSpace)) <?> "list"
 
 nixPath :: Parser NExpr
 nixPath = try $ fmap mkPath $ mfilter ('/' `elem`) $ some (oneOf "A-Za-z_0-9.:/")
@@ -114,29 +114,42 @@ stringish =  (char '"' *> (merge <$> manyTill stringChar (char '"')))
     merge = foldl1' (\x y -> Fix (NOper (NConcat x y)))
 
     stringChar =  char '\\' *> (mkStr . singleton <$> anyChar)
-              <|> (string "${" *> nixApp <* char '}')
+              <|> (try (string "${") *> nixApp <* char '}')
               <|> (mkStr . pack <$> many (noneOf "\"\\"))
 
 argExpr :: Parser NExpr
-argExpr = (try (Fix . NArgs . FormalSet <$> paramSet)
-          <|> try (Fix . NArgs . FormalName <$> identifier <* whiteSpace)
-          <|> try (Fix . NArgs <$> (FormalLeftAt <$> identifier <* whiteSpace <*> paramSet))
-          <|> try (Fix . NArgs <$> (FormalRightAt <$> paramSet <*> identifier <* whiteSpace))) <* symbolic ':'
-  where
+argExpr = Fix . NArgs <$> choice
+  [ idOrAtPattern <$> identifier <* whiteSpace <*> optional (symbolic '@' *> paramSet)
+  , setOrAtPattern <$> paramSet <* whiteSpace <*> optional (symbolic '@' *> identifier)
+  ] <* symbolic ':'
+ where
   paramSet :: Parser (FormalParamSet NExpr)
-  paramSet =  (FormalParamSet . Map.fromList <$> argList)
+  paramSet = FormalParamSet . Map.fromList <$> argList
+
   argList :: Parser [(Text, Maybe NExpr)]
-  argList =  braces ((argName <* whiteSpace) `sepBy` symbolic ',') <* symbolic ':'
-           <?> "arglist"
+  argList =  braces ((argName <* whiteSpace) `sepBy` symbolic ',') <?> "arglist"
+
   argName :: Parser (Text, Maybe NExpr)
-  argName = (,) <$> (identifier <* whiteSpace)
-                  <*> optional (symbolic '?' *> nixExpr False)
+  argName = (,) <$> identifier <* whiteSpace
+                <*> optional (symbolic '?' *> nixExpr False)
+
+  idOrAtPattern :: Text -> Maybe (FormalParamSet NExpr) -> Formals NExpr
+  idOrAtPattern i Nothing = FormalName i
+  idOrAtPattern i (Just s) = FormalLeftAt i s
+
+  setOrAtPattern :: FormalParamSet NExpr -> Maybe Text -> Formals NExpr
+  setOrAtPattern s Nothing = FormalSet s
+  setOrAtPattern s (Just i) = FormalRightAt s i
 
 nixBinders :: Parser [Binding NExpr]
-nixBinders = (scopedInherit <|> inherit <|> namedVar) `endBy` symbolic ';' where
-  scopedInherit = (reserved "inherit" *> whiteSpace *> symbolic '(') *>
+nixBinders = choice
+  [ reserved "inherit" *> whiteSpace *> (scopedInherit <|> inherit) <?> "inherited binding"
+  , namedVar
+  ] `endBy` symbolic ';'
+ where
+  scopedInherit = try (symbolic '(') *>
     (ScopedInherit <$> nixExpr False <* symbolic ')' <*> many keyName) <?> "scoped inherit binding"
-  inherit = Inherit <$> (reserved "inherit" *> many keyName) <?> "inherited binding"
+  inherit = Inherit <$> many keyName
   namedVar =  NamedVar <$> keyName <*> (symbolic '=' *> nixApp) <?> "variable binding"
 
 keyName :: Parser NExpr
@@ -147,4 +160,7 @@ nixSet = Fix <$> (NSet <$> isRec <*> (braces nixBinders <?> "set")) where
   isRec = try (reserved "rec" *> pure Rec) <|> pure NonRec
 
 parseNixFile :: MonadIO m => FilePath -> m (Result NExpr)
-parseNixFile = parseFromFileEx nixApp
+parseNixFile = parseFromFileEx $ nixApp <* eof
+
+parseNixString :: String -> Result NExpr
+parseNixString = parseFromString $ nixApp <* eof

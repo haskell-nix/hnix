@@ -55,6 +55,7 @@ Library
     Build-depends:
         parsers
       , trifecta
+      , unordered-containers
   ghc-options: -Wall
 
 executable hnix
@@ -75,7 +76,7 @@ executable hnix
     PatternGuards
     RankNTypes
     TupleSections
-  build-depends:       
+  build-depends:
       base                     >= 4.3          && < 5
     , hnix
     , ansi-wl-pprint
@@ -90,7 +91,22 @@ executable hnix
     Build-depends:
         parsers
       , trifecta
+      , unordered-containers
   ghc-options: -Wall
+
+test-suite hnix-tests
+  type: exitcode-stdio-1.0
+  hs-source-dirs: tests
+  default-language: Haskell2010
+  main-is: Main.hs
+  build-depends:
+      base >= 4.3 && < 5
+    , containers
+    , text
+    , hnix
+    , tasty
+    , tasty-th
+    , tasty-hunit
 
 source-repository head
   type:     git
