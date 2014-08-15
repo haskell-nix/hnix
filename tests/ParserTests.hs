@@ -70,12 +70,31 @@ case_set_inherit_direct = assertParseString "{ inherit ({a = 3;}); }" $ Fix $ NS
   [ flip Inherit [] $ Just $ Fix $ NSet NonRec [NamedVar (mkSelector "a") $ mkInt 3]
   ]
 
+case_inherit_selector :: Assertion
+case_inherit_selector = do
+  assertParseString "{ inherit \"a\"; }" $ Fix $ NSet NonRec
+    [ Inherit Nothing [ [DynamicKey (Plain "a")] ] ]
+  assertParseFail "{ inherit a.x; }"
+
 case_int_list :: Assertion
 case_int_list = assertParseString "[1 2 3]" $ Fix $ NList
   [ mkInt i | i <- [1,2,3] ]
 
 case_int_null_list :: Assertion
 case_int_null_list = assertParseString "[1 2 3 null 4]" $ Fix (NList (map (Fix . NConstant) [NInt 1, NInt 2, NInt 3, NNull, NInt 4]))
+
+case_mixed_list :: Assertion
+case_mixed_list = do
+  assertParseString "[{a = 3;}.a (if true then null else false) null false 4 [] c.d or null]" $ Fix $ NList
+    [ Fix (NSelect (Fix (NSet NonRec [NamedVar (mkSelector "a") (mkInt 3)])) (mkSelector "a") Nothing)
+    , Fix (NIf (mkBool True) mkNull (mkBool False))
+    , mkNull, mkBool False, mkInt 4, Fix (NList [])
+    , Fix (NSelect (mkSym "c") (mkSelector "d") (Just mkNull))
+    ]
+  assertParseFail "[if true then null else null]"
+  assertParseFail "[a ? b]"
+  assertParseFail "[a : a]"
+  assertParseFail "[${\"test\")]"
 
 case_simple_lambda :: Assertion
 case_simple_lambda = assertParseString "a: a" $ Fix $ NAbs (FormalName "a") (mkSym "a")
@@ -184,4 +203,4 @@ assertParseString str expected = case parseNixString str of
 assertParseFail :: String -> Assertion
 assertParseFail str = case parseNixString str of
   Failure _ -> return ()
-  Success r -> assertFailure $ "Unexpected success parsing `" ++ str ++ ":\nParsed value:" ++ show r
+  Success r -> assertFailure $ "Unexpected success parsing `" ++ str ++ ":\nParsed value: " ++ show r

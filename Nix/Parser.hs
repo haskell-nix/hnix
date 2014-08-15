@@ -166,7 +166,7 @@ argExpr = choice
 
 nixBinders :: Parser [Binding NExpr]
 nixBinders = (inherit <|> namedVar) `endBy` symbolic ';' where
-  inherit = Inherit <$> (reserved "inherit" *> optional scope) <*> many nixSelector
+  inherit = Inherit <$> (reserved "inherit" *> optional scope) <*> many ((:[]) <$> keyName)
          <?> "inherited binding"
   namedVar = NamedVar <$> nixSelector <*> (symbolic '=' *> nixApp)
           <?> "variable binding"
