@@ -6,55 +6,61 @@ import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Foldable
-import           Data.List (foldl1')
 import qualified Data.Map as Map
-import           Data.Text hiding (head, map, foldl1')
+import           Data.Text hiding (head, map, foldl1', foldl')
 import           Nix.Types
 import           Nix.Parser.Library
 import           Prelude hiding (elem)
 
 -- | The lexer for this parser is defined in 'Nix.Parser.Library'.
 nixApp :: Parser NExpr
-nixApp = go <$> someTill (whiteSpace *> nixExpr True) (try (lookAhead stop))
+nixApp = go <$> some (whiteSpace *> nixExpr)
   where
     go []     = error "some has failed us"
     go [x]    = x
     go (f:x:xs) = go (Fix (NApp f x) : xs)
 
-    stop = () <$ oneOf "=,;])}" <|> stopWords <|> eof
+nixExpr :: Parser NExpr
+nixExpr = nixExprWith nixOperators
 
-nixExpr :: Bool -> Parser NExpr
-nixExpr = buildExpressionParser table . nixTermOrAttr
+nixExprWith :: [Either NSpecialOp [NOperatorDef]] -> Parser NExpr
+nixExprWith = foldl' makeParser nixTerm
   where
-    table =
-        [ [ prefix "-"  NNeg ]
-        -- , [ prefix "~"  NSubpath ]  -- deprecated
-        , [ binary "?"  NHasAttr AssocNone ]
-        , [ binary "++" NConcat  AssocRight ]
-        , [ binary "*"  NMult    AssocLeft, binary "/"  NDiv    AssocLeft ]
-        , [ binary "+"  NPlus    AssocLeft, binary "-"  NMinus  AssocLeft ]
-        , [ prefix "!"  NNot ]
-        , [ binary "//" NUpdate  AssocRight ]
-        , [ binary "<"  NLt      AssocLeft, binary ">"  NGt     AssocLeft
-          , binary "<=" NLte     AssocLeft, binary ">=" NGte    AssocLeft ]
-        , [ binary "==" NEq      AssocNone, binary "!=" NNEq    AssocNone ]
-        , [ binary "&&" NAnd     AssocLeft ]
-        , [ binary "||" NOr      AssocLeft ]
-        , [ binary "->" NImpl    AssocNone ]
-        ]
+    makeParser term (Left NSelectOp) = nixSelect term
+    makeParser term (Left NAppOp) = term
+    makeParser term (Left NHasAttrOp) = nixHasAttr term
+    makeParser term (Right ops) = buildExpressionParser [map buildOp ops] term
 
-    binary  name fun =
-        Infix  $ (\x y -> Fix (NOper (fun x y))) <$ reservedOp name
-    prefix  name fun =
-        Prefix $ Fix . NOper . fun <$ reservedOp name
-    -- postfix name fun = Postfix (Fix . NOper . fun <$ symbol name)
+    buildOp (NUnaryDef n op) = Prefix $ Fix . NOper . NUnary op <$ reservedOp n
+    buildOp (NBinaryDef n op a) = Infix (mkOper <$ reservedOp n) (toAssoc a)
+      where mkOper r1 = Fix . NOper . NBinary op r1
 
-nixTermOrAttr :: Bool -> Parser NExpr
-nixTermOrAttr = buildExpressionParser table . nixTerm where
-  table = [[Infix ((\x y -> Fix (NOper (NAttr x y))) <$ reservedOp ".") AssocLeft]]
+    toAssoc NAssocNone = AssocNone
+    toAssoc NAssocLeft = AssocLeft
+    toAssoc NAssocRight = AssocRight
 
-nixTerm :: Bool -> Parser NExpr
-nixTerm allowLambdas = choice
+nixAntiquoted :: Parser a -> Parser (Antiquoted a NExpr)
+nixAntiquoted p = Plain <$> p
+ <|> Antiquoted <$> (try (string "${") *> whiteSpace *> nixApp <* symbolic '}')
+
+nixSelector :: Parser (NSelector NExpr)
+nixSelector = keyName `sepBy1` symbolic '.'
+
+nixSelect :: Parser NExpr -> Parser NExpr
+nixSelect term = build
+  <$> term
+  <*> optional ((,) <$> (char '.' *> nixSelector) <*> optional (reserved "or" *> nixApp))
+ where
+  build t Nothing = t
+  build t (Just (s,o)) = Fix $ NSelect t s o
+
+nixHasAttr :: Parser NExpr -> Parser NExpr
+nixHasAttr term = build <$> term <*> optional (reservedOp "?" *> nixSelector) where
+  build t Nothing = t
+  build t (Just s) = Fix $ NHasAttr t s
+
+nixTerm :: Parser NExpr
+nixTerm = choice
     [ nixInt
     , nixParens
     , nixList
@@ -63,8 +69,13 @@ nixTerm allowLambdas = choice
     , nixBool
     , nixNull
     , nixPath                   -- can be expensive due to back-tracking
-    , setLambdaStringOrSym allowLambdas
-    ]
+    , try nixLambda <|> nixSet
+    , nixStringExpr
+    , nixSym
+    ] <* whiteSpace
+
+nixSym :: Parser NExpr
+nixSym = mkSym <$> identifier
 
 nixInt :: Parser NExpr
 nixInt = mkInt <$> decimal <?> "integer"
@@ -81,7 +92,10 @@ nixParens :: Parser NExpr
 nixParens = parens nixApp <?> "parens"
 
 nixList :: Parser NExpr
-nixList = brackets (Fix . NList <$> many (nixTermOrAttr False <* whiteSpace)) <?> "list"
+nixList = brackets (Fix . NList <$> many (listTerm <* whiteSpace)) <?> "list" where
+ listTerm = nixSelect $ choice
+   [ nixInt, nixParens, nixList, nixSet, nixBool, nixNull, nixPath, nixStringExpr
+   , nixSym ]
 
 nixPath :: Parser NExpr
 nixPath = try $ fmap mkPath $ mfilter ('/' `elem`) $ some (oneOf "A-Za-z_0-9.:/")
@@ -97,28 +111,37 @@ nixIf =  fmap Fix $ NIf
      <*> (whiteSpace *> reserved "then" *> nixApp)
      <*> (whiteSpace *> reserved "else" *> nixApp)
 
--- | This is a bit tricky because we don't know whether we're looking at a set
---   or a lambda until we've looked ahead a bit.  And then it may be neither,
---   in which case we fall back to expected a plain string or identifier.
-setLambdaStringOrSym :: Bool -> Parser NExpr
-setLambdaStringOrSym True = try nixLambda <|> setLambdaStringOrSym False
-setLambdaStringOrSym False  = try nixSet <|> keyName
-
 nixLambda :: Parser NExpr
 nixLambda = Fix <$> (NAbs <$> (argExpr <?> "arguments") <*> nixApp)
 
-stringish :: Parser NExpr
-stringish =  (char '"' *> (merge <$> manyTill stringChar (char '"')))
-         <|> (char '$' *> braces nixApp)
+nixStringExpr :: Parser NExpr
+nixStringExpr = Fix . NStr <$> nixString
+
+nixString :: Parser (NString NExpr)
+nixString = NString . merge <$> (char '"' *> manyTill stringChar (symbolic '"'))
   where
-    merge = foldl1' (\x y -> Fix (NOper (NConcat x y)))
+    merge [] = [Plain ""]
+    merge [x] = [x]
+    merge (Plain a : Plain b : rs) = merge (Plain (a `append` b) : rs)
+    merge (x : rs) = x : merge rs
 
-    stringChar =  char '\\' *> (mkStr . singleton <$> anyChar)
-              <|> (try (string "${") *> nixApp <* char '}')
-              <|> (mkStr . pack <$> many (noneOf "\"\\"))
+    stringChar =  char '\\' *> (Plain . singleton <$> escapeCode)
+              <|> Antiquoted <$> (try (string "${") *> nixApp <* char '}')
+              <|> Plain . singleton <$> char '$'
+              <|> Plain . pack <$> some (noneOf "\"\\$")
 
-argExpr :: Parser NExpr
-argExpr = Fix . NArgs <$> choice
+    escapeCode = choice $ map (\(x,y) -> x <$ char y)
+      [ ('\n', 'n')
+      , ('\r', 'r')
+      , ('\t', 't')
+      , ('\\', '\\')
+      , ('$' , '$')
+      , ('"' , '"')
+      , ('\'', '\'')
+      ]
+
+argExpr :: Parser (Formals NExpr)
+argExpr = choice
   [ idOrAtPattern <$> identifier <* whiteSpace <*> optional (symbolic '@' *> paramSet)
   , setOrAtPattern <$> paramSet <* whiteSpace <*> optional (symbolic '@' *> identifier)
   ] <* symbolic ':'
@@ -127,11 +150,11 @@ argExpr = Fix . NArgs <$> choice
   paramSet = FormalParamSet . Map.fromList <$> argList
 
   argList :: Parser [(Text, Maybe NExpr)]
-  argList =  braces ((argName <* whiteSpace) `sepBy` symbolic ',') <?> "arglist"
+  argList = braces ((argName <* whiteSpace) `sepBy` symbolic ',') <?> "arglist"
 
   argName :: Parser (Text, Maybe NExpr)
   argName = (,) <$> identifier <* whiteSpace
-                <*> optional (symbolic '?' *> nixExpr False)
+                <*> optional (symbolic '?' *> nixApp)
 
   idOrAtPattern :: Text -> Maybe (FormalParamSet NExpr) -> Formals NExpr
   idOrAtPattern i Nothing = FormalName i
@@ -142,18 +165,17 @@ argExpr = Fix . NArgs <$> choice
   setOrAtPattern s (Just i) = FormalRightAt s i
 
 nixBinders :: Parser [Binding NExpr]
-nixBinders = choice
-  [ reserved "inherit" *> whiteSpace *> (scopedInherit <|> inherit) <?> "inherited binding"
-  , namedVar
-  ] `endBy` symbolic ';'
- where
-  scopedInherit = try (symbolic '(') *>
-    (ScopedInherit <$> nixExpr False <* symbolic ')' <*> many keyName) <?> "scoped inherit binding"
-  inherit = Inherit <$> many keyName
-  namedVar =  NamedVar <$> keyName <*> (symbolic '=' *> nixApp) <?> "variable binding"
+nixBinders = (inherit <|> namedVar) `endBy` symbolic ';' where
+  inherit = Inherit <$> (reserved "inherit" *> optional scope) <*> many nixSelector
+         <?> "inherited binding"
+  namedVar = NamedVar <$> nixSelector <*> (symbolic '=' *> nixApp)
+          <?> "variable binding"
+  scope = parens nixApp <?> "inherit scope"
 
-keyName :: Parser NExpr
-keyName = (stringish <|> (mkSym <$> identifier)) <* whiteSpace
+keyName :: Parser (NKeyName NExpr)
+keyName = dynamicKey <|> staticKey where
+  staticKey = StaticKey <$> identifier
+  dynamicKey = DynamicKey <$> nixAntiquoted nixString
 
 nixSet :: Parser NExpr
 nixSet = Fix <$> (NSet <$> isRec <*> (braces nixBinders <?> "set")) where

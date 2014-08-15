@@ -17,6 +17,7 @@ nix path = do
         Success n -> do
             displayIO stdout $ renderPretty 0.4 80 (prettyNix n)
             top <- evalExpr n (Fix (NVSet Map.empty)) -- evaluate top level
+            putStrLn ""
             print top
 
 main :: IO ()

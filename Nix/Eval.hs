@@ -2,55 +2,54 @@ module Nix.Eval where
 
 import           Control.Applicative
 import           Control.Arrow
-import           Control.Monad hiding (mapM)
+import           Control.Monad hiding (mapM, sequence)
+import           Data.Foldable (foldl')
 import qualified Data.Map as Map
 import           Data.Text (Text)
+import qualified Data.Text as Text
 import           Data.Traversable as T
 import           Nix.Types
-import           Prelude hiding (mapM)
+import           Prelude hiding (mapM, sequence)
 
-buildArgument :: NValue -> NValue -> NValue
-buildArgument paramSpec arg =
-    -- Having the typed lambda calculus would make this code much safer.
-    Fix $ NVSet $ case paramSpec of
-        Fix (NVArgSet s) ->
-            case arg of
-                Fix (NVSet s') ->
-                    Map.foldlWithKey' (go s') Map.empty s
-                _ -> error "Unexpected function environment"
-        Fix (NVConstant (NSym name)) -> Map.singleton name arg
-        _ -> error $ "Unexpected param spec: " ++ show paramSpec
+buildArgument :: Formals NValue -> NValue -> NValue
+buildArgument paramSpec arg = either error (Fix . NVSet) $ case paramSpec of
+    FormalName name -> return $ Map.singleton name arg
+    FormalSet s -> lookupParamSet s
+    FormalLeftAt name s -> Map.insert name arg <$> lookupParamSet s
+    FormalRightAt s name -> Map.insert name arg <$> lookupParamSet s
   where
-    go env m k v = case Map.lookup k env of
-        Nothing
-            | Just v' <- v -> Map.insert k v' m
-            | otherwise   -> error $ "Could not find " ++ show k
-        Just v' -> Map.insert k v' m
+    go env k def = maybe (Left err) return $ Map.lookup k env <|> def
+      where err = "Could not find " ++ show k
+
+    lookupParamSet (FormalParamSet s) = case arg of
+      Fix (NVSet env) -> Map.traverseWithKey (go env) s
+      _               -> Left "Unexpected function environment"
 
 evalExpr :: NExpr -> NValue -> IO NValue
 evalExpr = cata phi
   where
     phi :: NExprF (NValue -> IO NValue) -> NValue -> IO NValue
+    phi (NConstant (NSym var)) = \env -> case env of
+      Fix (NVSet s) -> maybe err return $ Map.lookup var s
+      _ -> error "invalid evaluation environment"
+     where err = error ("Undefined variable: " ++ show var)
     phi (NConstant x) = const $ return $ Fix $ NVConstant x
+    phi (NStr str) = fmap (Fix . NVStr) . flip evalString str
     phi (NOper _x) = error "Operators are not yet defined"
+    phi (NSelect _x _attr _or) = error "Select expressions are not yet supported"
+    phi (NHasAttr _x _attr) = error "Has attr expressions are not yet supported"
 
     phi (NList l)     = \env ->
         Fix . NVList <$> mapM ($ env) l
 
-    -- phi (NConcat l)   = \env ->
-    --     Fix . NVConstant . NStr . T.concat
-    --         <$> mapM (fmap valueText . ($ env)) l
-
-    phi (NArgs s) = \env -> Fix . NVArgSet <$> mapM (T.sequence . fmap ($ env)) (formalsAsMap s)
-
     -- TODO: recursive sets
     phi (NSet _b binds)   = \env ->
-        Fix . NVSet <$> evalBinds env binds
+        Fix . NVSet <$> evalBinds True env binds
 
     -- TODO: recursive binding
     phi (NLet binds e) = \env -> case env of
       (Fix (NVSet env')) -> do
-        letenv <- evalBinds env binds
+        letenv <- evalBinds False env binds
         let newenv = Map.union letenv env'
         e . Fix . NVSet $ newenv
       _ -> error "invalid evaluation environment"
@@ -77,8 +76,6 @@ evalExpr = cata phi
         (NVConstant (NBool False)) -> error "assertion failed"
         _ -> error "assertion condition must be boolean"
 
-    phi (NVar _v)       = error "var: not implemented"
-
     phi (NApp fun x) = \env -> do
         fun' <- fun env
         case fun' of
@@ -92,14 +89,42 @@ evalExpr = cata phi
         -- jww (2014-06-28): arglists should not receive the current
         -- environment, but rather should recursively view their own arg
         -- set
-        args <- a env
+        args <- traverse ($ env) a
         return $ Fix $ NVFunction args b
 
-evalBinds :: NValue -> [Binding (NValue -> IO NValue)] ->
+evalString :: NValue -> NString (NValue -> IO NValue) -> IO Text
+evalString env (NString parts)
+  = Text.concat <$> mapM (runAntiquoted return (fmap valueText . ($ env))) parts
+
+evalBinds :: Bool -> NValue -> [Binding (NValue -> IO NValue)] ->
   IO (Map.Map Text NValue)
-evalBinds env xs =
-  Map.fromList <$> mapM (fmap (first valueText)) (concatMap go xs) where
-    go :: Binding (NValue -> IO NValue) -> [IO (NValue, NValue)]
-    go (NamedVar x y) = [liftM2 (,) (x env) (y env)]
-    go (Inherit ys) = map (\y -> (,) <$> y env <*> y env) ys
-    go (ScopedInherit x ys) = map (\y -> (,) <$> x env <*> y env) ys
+evalBinds allowDynamic env xs = buildResult <$> sequence (concatMap go xs) where
+  buildResult :: [([Text], NValue)] -> Map.Map Text NValue
+  buildResult = foldl' insert Map.empty . map (first reverse) where
+    insert _ ([], _) = error "invalid selector with no components"
+    insert m (p:ps, v) = modifyPath ps (insertIfNotMember p v) where
+      alreadyDefinedErr = error $ "attribute " ++ attr ++ " already defined"
+      attr = show $ Text.intercalate "." $ reverse (p:ps)
+
+      modifyPath :: [Text] -> (Map.Map Text NValue -> Map.Map Text NValue) -> Map.Map Text NValue
+      modifyPath [] f = f m
+      modifyPath (x:parts) f = modifyPath parts $ \m' -> case Map.lookup x m' of
+        Nothing                -> Map.singleton x $ g Map.empty
+        Just (Fix (NVSet m'')) -> Map.insert x (g m'') m'
+        Just _                 -> alreadyDefinedErr
+       where g = Fix . NVSet . f
+
+      insertIfNotMember k x m'
+        | Map.notMember k m' = Map.insert k x m'
+        | otherwise = alreadyDefinedErr
+
+  -- TODO: Inherit
+  go :: Binding (NValue -> IO NValue) -> [IO ([Text], NValue)]
+  go (NamedVar x y) = [liftM2 (,) (evalSelector allowDynamic env x) (y env)]
+
+  evalSelector :: Bool -> NValue -> NSelector (NValue -> IO NValue) -> IO [Text]
+  evalSelector dyn e = mapM evalKeyName where
+    evalKeyName (StaticKey k) = return k
+    evalKeyName (DynamicKey k)
+      | dyn       = runAntiquoted (evalString e) (fmap valueText . ($ e)) k
+      | otherwise = error "dynamic attribute not allowed in this context"
