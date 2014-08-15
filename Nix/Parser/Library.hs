@@ -91,7 +91,6 @@ reservedNames :: [String]
 reservedNames =
     [ "let", "in"
     , "if", "then", "else"
-    , "true", "false"
     , "null"
     , "assert"
     , "with"
