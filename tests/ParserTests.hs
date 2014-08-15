@@ -201,6 +201,17 @@ case_string_antiquote = do
   assertParseFail "${true}"
   assertParseFail "\"${true\""
 
+case_select :: Assertion
+case_select = do
+  assertParseString "a .  e .di. f" $ Fix $ NSelect (mkSym "a")
+    [ StaticKey "e", StaticKey "di", StaticKey "f" ]
+    Nothing
+  assertParseString "a.e . d    or null" $ Fix $ NSelect (mkSym "a")
+    [ StaticKey "e", StaticKey "d" ]
+    (Just mkNull)
+  assertParseString "{}.\"\"or null" $ Fix $ NSelect (Fix (NSet NonRec []))
+    [ DynamicKey (Plain "") ] (Just mkNull)
+
 case_select_path :: Assertion
 case_select_path = do
   assertParseString "f ./." $ Fix $ NApp (mkSym "f") (mkPath "./.")
