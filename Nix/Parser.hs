@@ -69,6 +69,8 @@ nixTerm = choice
     , nixList
     , nixLet
     , nixIf
+    , nixAssert
+    , nixWith
     , nixBool
     , nixNull
     , nixPath                 -- can be expensive due to back-tracking
@@ -116,6 +118,16 @@ nixIf =  fmap Fix $ NIf
      <$> (reserved "if" *> nixApp)
      <*> (whiteSpace *> reserved "then" *> nixApp)
      <*> (whiteSpace *> reserved "else" *> nixApp)
+
+nixAssert :: Parser NExpr
+nixAssert = fmap Fix $ NAssert
+  <$> (reserved "assert" *> nixApp)
+  <*> (semi *> nixApp)
+
+nixWith :: Parser NExpr
+nixWith = fmap Fix $ NWith
+  <$> (reserved "with" *> nixApp)
+  <*> (semi *> nixApp)
 
 nixLambda :: Parser NExpr
 nixLambda = Fix <$> (NAbs <$> (argExpr <?> "arguments") <*> nixApp)
