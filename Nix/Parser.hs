@@ -43,20 +43,19 @@ nixAntiquoted :: Parser a -> Parser (Antiquoted a NExpr)
 nixAntiquoted p = Plain <$> p
  <|> Antiquoted <$> (try (string "${") *> whiteSpace *> nixApp <* symbolic '}')
 
+selDot :: Parser ()
+selDot = try (char '.' *> notFollowedBy (("path" :: String) <$ nixPath)) *> whiteSpace
+
 nixSelector :: Parser (NSelector NExpr)
-nixSelector = keyName `sepBy1` symbolic '.'
+nixSelector = keyName `sepBy1` selDot where
 
 nixSelect :: Parser NExpr -> Parser NExpr
 nixSelect term = build
   <$> term
-  <*> optional (char '.' *> choice
-    [ Left <$> nixPath
-    , fmap Right $ (,) <$> nixSelector <*> optional (reserved "or" *> nixApp)
-    ])
+  <*> optional ((,) <$> (selDot *> nixSelector) <*> optional (reserved "or" *> nixApp))
  where
   build t Nothing = t
-  build t (Just (Left p)) = Fix $ NApp t (mkPath $ '.' : p)
-  build t (Just (Right (s,o))) = Fix $ NSelect t s o
+  build t (Just (s,o)) = Fix $ NSelect t s o
 
 nixHasAttr :: Parser NExpr -> Parser NExpr
 nixHasAttr term = build <$> term <*> optional (reservedOp "?" *> nixSelector) where
@@ -72,7 +71,7 @@ nixTerm = choice
     , nixIf
     , nixBool
     , nixNull
-    , nixPathExpr                 -- can be expensive due to back-tracking
+    , nixPath                 -- can be expensive due to back-tracking
     , try nixLambda <|> nixSet
     , nixStringExpr
     , nixSym
@@ -98,14 +97,11 @@ nixParens = parens nixApp <?> "parens"
 nixList :: Parser NExpr
 nixList = brackets (Fix . NList <$> many (listTerm <* whiteSpace)) <?> "list" where
  listTerm = nixSelect $ choice
-   [ nixInt, nixParens, nixList, nixSet, nixBool, nixNull, nixPathExpr, nixStringExpr
+   [ nixInt, nixParens, nixList, nixSet, nixBool, nixNull, nixPath, nixStringExpr
    , nixSym ]
 
-nixPathExpr :: Parser NExpr
-nixPathExpr = mkPath <$> nixPath
-
-nixPath :: Parser String
-nixPath = (++)
+nixPath :: Parser NExpr
+nixPath = fmap mkPath $ (++)
   <$> try ((++) <$> many (oneOf pathChars) <*> string "/")
   <*> some (oneOf ('/':pathChars))
  where pathChars = ['A'..'Z'] ++ ['a'..'z'] ++ "._-+" ++ ['0'..'9']

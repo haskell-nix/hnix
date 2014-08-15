@@ -201,8 +201,11 @@ case_string_antiquote = do
   assertParseFail "${true}"
   assertParseFail "\"${true\""
 
-case_fun_app_path :: Assertion
-case_fun_app_path = assertParseString "f ./." $ Fix $ NApp (mkSym "f") (mkPath "./.")
+case_select_path :: Assertion
+case_select_path = do
+  assertParseString "f ./." $ Fix $ NApp (mkSym "f") (mkPath "./.")
+  assertParseString "f.b ../a" $ Fix $ NApp select (mkPath "../a")
+ where select = Fix $ NSelect (mkSym "f") (mkSelector "b") Nothing
 
 tests :: TestTree
 tests = $testGroupGenerator
