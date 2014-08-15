@@ -18,7 +18,7 @@ Flag Parsec
   Default: False
 
 Library
-  default-language: Haskell2010
+  Default-language: Haskell2010
   Exposed-modules:
     Nix.Eval
     Nix.Parser
@@ -26,7 +26,7 @@ Library
   Other-modules:
     Nix.Internal
     Nix.Parser.Library
-  Default-extensions: 
+  Default-extensions:
     DataKinds
     DeriveDataTypeable
     DeriveFunctor
@@ -47,21 +47,19 @@ Library
     , containers
     , text
     , transformers
+    , parsers >= 0.10
+    , unordered-containers
   if flag(parsec)
-    ghc-options: -DUSE_PARSEC
-    Build-depends:
-        parsec
+    Cpp-options: -DUSE_PARSEC
+    Build-depends: parsec
   else
-    Build-depends:
-        parsers
-      , trifecta
-      , unordered-containers
+    Build-depends: trifecta
   ghc-options: -Wall
 
-executable hnix
-  default-language: Haskell2010
-  main-is: Nix.hs
-  Default-extensions: 
+Executable hnix
+  Default-language: Haskell2010
+  Main-is: Nix.hs
+  Default-extensions:
     DataKinds
     DeriveDataTypeable
     DeriveFunctor
@@ -76,30 +74,28 @@ executable hnix
     PatternGuards
     RankNTypes
     TupleSections
-  build-depends:
+  Build-depends:
       base                     >= 4.3          && < 5
     , hnix
     , ansi-wl-pprint
     , containers
     , text
     , transformers
+    , parsers >= 0.10
+    , unordered-containers
   if flag(parsec)
-    ghc-options: -DUSE_PARSEC
-    Build-depends:
-        parsec
+    Cpp-options: -DUSE_PARSEC
+    Build-depends: parsec
   else
-    Build-depends:
-        parsers
-      , trifecta
-      , unordered-containers
-  ghc-options: -Wall
+    Build-depends: trifecta
+  Ghc-options: -Wall
 
-test-suite hnix-tests
-  type: exitcode-stdio-1.0
-  hs-source-dirs: tests
-  default-language: Haskell2010
-  main-is: Main.hs
-  build-depends:
+Test-suite hnix-tests
+  Type: exitcode-stdio-1.0
+  Hs-source-dirs: tests
+  Default-language: Haskell2010
+  Main-is: Main.hs
+  Build-depends:
       base >= 4.3 && < 5
     , containers
     , text
