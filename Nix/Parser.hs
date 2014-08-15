@@ -49,10 +49,14 @@ nixSelector = keyName `sepBy1` symbolic '.'
 nixSelect :: Parser NExpr -> Parser NExpr
 nixSelect term = build
   <$> term
-  <*> optional ((,) <$> (char '.' *> nixSelector) <*> optional (reserved "or" *> nixApp))
+  <*> optional (char '.' *> choice
+    [ Left <$> nixPath
+    , fmap Right $ (,) <$> nixSelector <*> optional (reserved "or" *> nixApp)
+    ])
  where
   build t Nothing = t
-  build t (Just (s,o)) = Fix $ NSelect t s o
+  build t (Just (Left p)) = Fix $ NApp t (mkPath $ '.' : p)
+  build t (Just (Right (s,o))) = Fix $ NSelect t s o
 
 nixHasAttr :: Parser NExpr -> Parser NExpr
 nixHasAttr term = build <$> term <*> optional (reservedOp "?" *> nixSelector) where
@@ -68,7 +72,7 @@ nixTerm = choice
     , nixIf
     , nixBool
     , nixNull
-    , nixPath                   -- can be expensive due to back-tracking
+    , nixPathExpr                 -- can be expensive due to back-tracking
     , try nixLambda <|> nixSet
     , nixStringExpr
     , nixSym
@@ -94,11 +98,17 @@ nixParens = parens nixApp <?> "parens"
 nixList :: Parser NExpr
 nixList = brackets (Fix . NList <$> many (listTerm <* whiteSpace)) <?> "list" where
  listTerm = nixSelect $ choice
-   [ nixInt, nixParens, nixList, nixSet, nixBool, nixNull, nixPath, nixStringExpr
+   [ nixInt, nixParens, nixList, nixSet, nixBool, nixNull, nixPathExpr, nixStringExpr
    , nixSym ]
 
-nixPath :: Parser NExpr
-nixPath = try $ fmap mkPath $ mfilter ('/' `elem`) $ some (oneOf "A-Za-z_0-9.:/")
+nixPathExpr :: Parser NExpr
+nixPathExpr = mkPath <$> nixPath
+
+nixPath :: Parser String
+nixPath = (++)
+  <$> try ((++) <$> many (oneOf pathChars) <*> string "/")
+  <*> some (oneOf ('/':pathChars))
+ where pathChars = ['A'..'Z'] ++ ['a'..'z'] ++ "._-+" ++ ['0'..'9']
 
 nixLet :: Parser NExpr
 nixLet =  fmap Fix $ NLet

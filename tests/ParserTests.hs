@@ -20,6 +20,16 @@ case_constant_bool = do
   assertParseString "true" $ mkBool True
   assertParseString "false" $ mkBool False
 
+case_constant_path :: Assertion
+case_constant_path = do
+  assertParseString "./." $ mkPath "./."
+  assertParseString "./+-_/cdef/09ad+-/" $ mkPath "./+-_/cdef/09ad+-/"
+  assertParseString "/abc" $ mkPath "/abc"
+  assertParseString "../abc" $ mkPath "../abc"
+  assertParseFail "."
+  assertParseFail ".."
+  assertParseFail "/"
+
 case_simple_set :: Assertion
 case_simple_set = do
   assertParseString "{ a = 23; b = 4; }" $ Fix $ NSet NonRec
@@ -103,7 +113,7 @@ case_lambda_pattern :: Assertion
 case_lambda_pattern = do
   assertParseString "{b, c ? 1}: b" $
     Fix $ NAbs (FormalSet args) (mkSym "b")
-  assertParseString "{b ? x: x}: b" $
+  assertParseString "{ b ? x: x  }: b" $
     Fix $ NAbs (FormalSet args2) (mkSym "b")
   assertParseString "a@{b,c ? 1}: b" $
     Fix $ NAbs (FormalLeftAt "a" args) (mkSym "b")
@@ -190,6 +200,9 @@ case_string_antiquote = do
   assertParseFail "\"a"
   assertParseFail "${true}"
   assertParseFail "\"${true\""
+
+case_fun_app_path :: Assertion
+case_fun_app_path = assertParseString "f ./." $ Fix $ NApp (mkSym "f") (mkPath "./.")
 
 tests :: TestTree
 tests = $testGroupGenerator
