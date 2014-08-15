@@ -76,10 +76,10 @@ reservedOp o = token $ try $ () <$
   highlight ReservedOperator (string o) <* (notFollowedBy opLetter <?> "end of " ++ o)
 
 opStart :: CharParsing m => m Char
-opStart = oneOf ":!#$%&*+./<=>?@\\^|-~"
+opStart = oneOf ".+-*/=<>&|!?"
 
 opLetter :: CharParsing m => m Char
-opLetter = oneOf "@>-+"
+opLetter = oneOf ">-+/&|="
 
 identStart :: CharParsing m => m Char
 identStart = letter <|> char '_'
