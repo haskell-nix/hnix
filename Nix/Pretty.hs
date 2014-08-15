@@ -58,7 +58,7 @@ prettyFormals (FormalRightAt s n) = prettyParamSet s <> text "@" <> text (unpack
 
 prettyParamSet :: FormalParamSet NixDoc -> Doc
 prettyParamSet (FormalParamSet args) =
-  lbrace <+> hcat (map prettySetArg $ toList args) <+> rbrace
+  lbrace <+> (hcat . punctuate (comma <> space) . map prettySetArg) (toList args) <+> rbrace
 
 prettyBind :: Binding NixDoc -> Doc
 prettyBind (NamedVar n v) = prettySelector n <+> equals <+> withoutParens v <> semi
