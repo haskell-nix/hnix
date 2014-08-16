@@ -154,15 +154,7 @@ nixString = NString . merge <$> (char '"' *> manyTill stringChar (symbolic '"'))
       <|> Plain . singleton <$> char '$'
       <|> Plain . pack <$> some (noneOf "\"\\$")
 
-    escapeCode = choice $ map (\(x,y) -> x <$ char y)
-      [ ('\n', 'n')
-      , ('\r', 'r')
-      , ('\t', 't')
-      , ('\\', '\\')
-      , ('$' , '$')
-      , ('"' , '"')
-      , ('\'', '\'')
-      ]
+    escapeCode = choice [ c <$ char e | (c,e) <- escapeCodes ]
 
 argExpr :: Parser (Formals NExpr)
 argExpr = choice

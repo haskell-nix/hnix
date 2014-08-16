@@ -47,8 +47,9 @@ wrapParens op sub
 
 prettyString :: NString NixDoc -> Doc
 prettyString (NString parts) = dquotes . hcat . map prettyPart $ parts
-  where prettyPart (Plain t)      = text . unpack $ t
+  where prettyPart (Plain t)      = text . concatMap escape . unpack $ t
         prettyPart (Antiquoted r) = text "$" <> braces (withoutParens r)
+        escape x = maybe [x] (('\\':) . (:[])) $ toEscapeCode x
 
 prettyFormals :: Formals NixDoc -> Doc
 prettyFormals (FormalName n) = text $ unpack n

@@ -17,6 +17,7 @@ import qualified Data.Map as Map
 import           Data.Maybe (catMaybes)
 import           Data.Text hiding (concat, concatMap, head, map, zipWith, reverse, intercalate)
 import           Data.Traversable
+import           Data.Tuple (swap)
 import           GHC.Exts
 import           GHC.Generics
 import           Prelude hiding (readFile, concat, concatMap, elem, mapM,
@@ -59,6 +60,23 @@ runAntiquoted _ f (Antiquoted r) = f r
 -- the final string is constructed by concating all the parts.
 newtype NString r = NString [Antiquoted Text r]
   deriving (Eq, Ord, Generic, Typeable, Data, Functor, Show)
+
+escapeCodes :: [(Char, Char)]
+escapeCodes =
+  [ ('\n', 'n' )
+  , ('\r', 'r' )
+  , ('\t', 't' )
+  , ('\\', '\\')
+  , ('$' , '$' )
+  , ('"' , '"' )
+  , ('\'', '\'')
+  ]
+
+fromEscapeCode :: Char -> Maybe Char
+fromEscapeCode = (`lookup` map swap escapeCodes)
+
+toEscapeCode :: Char -> Maybe Char
+toEscapeCode = (`lookup` escapeCodes)
 
 instance IsString (NString r) where
   fromString = NString . (:[]) . Plain . pack
