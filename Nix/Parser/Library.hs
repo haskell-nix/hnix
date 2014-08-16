@@ -68,18 +68,18 @@ identStyle = IdentifierStyle
 identifier :: (TokenParsing m, Monad m) => m Text
 identifier = ident identStyle
 
-reserved :: (TokenParsing m, Monad m) => String -> m Text
-reserved n = pack n <$ reserve identStyle n
+reserved :: (TokenParsing m, Monad m) => String -> m ()
+reserved = reserve identStyle
 
-reservedOp :: TokenParsing m => String -> m Text
-reservedOp o = token $ try $ pack o <$
+reservedOp :: TokenParsing m => String -> m ()
+reservedOp o = token $ try $ () <$
   highlight ReservedOperator (string o) <* (notFollowedBy opLetter <?> "end of " ++ o)
 
 opStart :: CharParsing m => m Char
-opStart = oneOf ":!#$%&*+./<=>?@\\^|-~"
+opStart = oneOf ".+-*/=<>&|!?"
 
 opLetter :: CharParsing m => m Char
-opLetter = oneOf "@"
+opLetter = oneOf ">-+/&|="
 
 identStart :: CharParsing m => m Char
 identStart = letter <|> char '_'
@@ -91,7 +91,6 @@ reservedNames :: [String]
 reservedNames =
     [ "let", "in"
     , "if", "then", "else"
-    , "true", "false"
     , "null"
     , "assert"
     , "with"

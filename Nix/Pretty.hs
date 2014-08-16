@@ -1,79 +1,131 @@
 module Nix.Pretty where
 
 import Data.Map (toList)
+import Data.Maybe (isJust)
 import Data.Text (Text, unpack)
 import Nix.Types
 import Text.PrettyPrint.ANSI.Leijen
 
-prettyBind :: Binding NExpr -> Doc
-prettyBind (NamedVar n v) = prettyNix n <+> equals <+> prettyNix v <> semi
-prettyBind (Inherit ns) = text "inherit" <+> fillSep (map prettyNix ns) <> semi
-prettyBind (ScopedInherit s ns) = text "inherit" <+> parens (prettyNix s) <+> fillSep (map prettyNix ns) <> semi
+-- | This type represents a pretty printed nix expression
+-- together with some information about the expression.
+data NixDoc = NixDoc
+  { -- | The rendered expression, without any parentheses.
+    withoutParens    :: Doc
 
-prettyFormals :: Formals NExpr -> Doc
+    -- | The root operator is the operator at the root of
+    -- the expression tree. For example, in '(a * b) + c', '+' would be the root
+    -- operator. It is needed to determine if we need to wrap the expression in
+    -- parentheses.
+  , rootOp :: OperatorInfo
+  }
+
+-- | A simple expression is never wrapped in parentheses. The expression
+-- behaves as if it's root operator had a precedence higher than all
+-- other operators (including function application).
+simpleExpr :: Doc -> NixDoc
+simpleExpr = flip NixDoc $ OperatorInfo maxBound NAssocNone "simple expr"
+
+-- | An expression that behaves as if it's root operator
+-- had a precedence lower than all other operators.
+-- That ensures that the expression is wrapped in parantheses in
+-- almost always, but it's still rendered without parentheses
+-- in cases where parentheses are never required (such as in the LHS
+-- of a binding).
+leastPrecedence :: Doc -> NixDoc
+leastPrecedence = flip NixDoc $ OperatorInfo minBound NAssocNone "least precedence"
+
+appOpNonAssoc :: OperatorInfo
+appOpNonAssoc = appOp { associativity = NAssocNone }
+
+wrapParens :: OperatorInfo -> NixDoc -> Doc
+wrapParens op sub
+  | precedence (rootOp sub) > precedence op = withoutParens sub
+  | precedence (rootOp sub) == precedence op
+    && associativity (rootOp sub) == associativity op
+    && associativity op /= NAssocNone = withoutParens sub
+  | otherwise = parens $ withoutParens sub
+
+prettyString :: NString NixDoc -> Doc
+prettyString (NString parts) = dquotes . hcat . map prettyPart $ parts
+  where prettyPart (Plain t)      = text . unpack $ t
+        prettyPart (Antiquoted r) = text "$" <> braces (withoutParens r)
+
+prettyFormals :: Formals NixDoc -> Doc
 prettyFormals (FormalName n) = text $ unpack n
 prettyFormals (FormalSet s) = prettyParamSet s
 prettyFormals (FormalLeftAt n s) = text (unpack n) <> text "@" <> prettyParamSet s
 prettyFormals (FormalRightAt s n) = prettyParamSet s <> text "@" <> text (unpack n)
 
-prettyParamSet :: FormalParamSet NExpr -> Doc
-prettyParamSet (FormalParamSet args) = lbrace <+> hcat (map prettySetArg $ toList args) <+> rbrace
+prettyParamSet :: FormalParamSet NixDoc -> Doc
+prettyParamSet (FormalParamSet args) =
+  lbrace <+> (hcat . punctuate (comma <> space) . map prettySetArg) (toList args) <+> rbrace
 
-prettySetArg :: (Text, Maybe NExpr) -> Doc
+prettyBind :: Binding NixDoc -> Doc
+prettyBind (NamedVar n v) = prettySelector n <+> equals <+> withoutParens v <> semi
+prettyBind (Inherit s ns)
+  = text "inherit" <+> scope <> fillSep (map prettySelector ns) <> semi
+ where scope = maybe empty ((<> space) . parens . withoutParens) s
+
+prettyKeyName :: NKeyName NixDoc -> Doc
+prettyKeyName (StaticKey key) = text . unpack $ key
+prettyKeyName (DynamicKey key) = runAntiquoted prettyString withoutParens key
+
+prettySelector :: NSelector NixDoc -> Doc
+prettySelector = hcat . punctuate dot . map prettyKeyName
+
+prettySetArg :: (Text, Maybe NixDoc) -> Doc
 prettySetArg (n, Nothing) = text (unpack n)
-prettySetArg (n, Just v) = text (unpack n) <+> text "?" <+> prettyNix v
+prettySetArg (n, Just v) = text (unpack n) <+> text "?" <+> withoutParens v
 
-infixOper :: NExpr -> String -> NExpr -> Doc
-infixOper l op r = prettyNix l <+> text op <+> prettyNix r
+prettyOper :: NOperF NixDoc -> NixDoc
+prettyOper (NBinary op r1 r2) = flip NixDoc opInfo $ hsep
+  [ wrapParens (f NAssocLeft) r1
+  , text $ operatorName opInfo
+  , wrapParens (f NAssocRight) r2
+  ]
+ where
+  opInfo = getBinaryOperator op
+  f x
+    | associativity opInfo /= x = opInfo { associativity = NAssocNone }
+    | otherwise = opInfo
+prettyOper (NUnary op r1) =
+  NixDoc (text (operatorName opInfo) <> wrapParens opInfo r1) opInfo
+ where opInfo = getUnaryOperator op
 
-prettyOper :: NOperF NExpr -> Doc
-prettyOper (NNot r) = text "!" <> prettyNix r
-prettyOper (NNeg r) = text "-" <> prettyNix r
-prettyOper (NEq r1 r2)      = infixOper r1 "==" r2
-prettyOper (NNEq r1 r2)     = infixOper r1 "!=" r2
-prettyOper (NLt r1 r2)      = infixOper r1 "<" r2
-prettyOper (NLte r1 r2)     = infixOper r1 "<=" r2
-prettyOper (NGt r1 r2)      = infixOper r1 ">" r2
-prettyOper (NGte r1 r2)     = infixOper r1 ">=" r2
-prettyOper (NAnd r1 r2)     = infixOper r1 "&&" r2
-prettyOper (NOr r1 r2)      = infixOper r1 "||" r2
-prettyOper (NImpl r1 r2)    = infixOper r1 ">" r2
-prettyOper (NUpdate r1 r2)  = infixOper r1 "//" r2
-prettyOper (NHasAttr r1 r2) = infixOper r1 "?" r2
-prettyOper (NAttr r1 r2)    = prettyNix r1 <> text "." <> prettyNix r2
-
-prettyOper (NPlus r1 r2)    = infixOper r1 "+" r2
-prettyOper (NMinus r1 r2)   = infixOper r1 "-" r2
-prettyOper (NMult r1 r2)    = infixOper r1 "*" r2
-prettyOper (NDiv r1 r2)     = infixOper r1 "/" r2
-
-prettyOper (NConcat r1 r2)  = infixOper r1 "++" r2
-
-prettyAtom :: NAtom -> Doc
-prettyAtom (NStr s) = dquotes $ text $ unpack s
-prettyAtom atom = text $ unpack $ atomText atom
+prettyAtom :: NAtom -> NixDoc
+prettyAtom atom = simpleExpr $ text $ unpack $ atomText atom
 
 prettyNix :: NExpr -> Doc
-prettyNix (Fix expr) = go expr where
-  go (NConstant atom) = prettyAtom atom
-  go (NOper oper) = prettyOper oper
-  go (NList xs) = lbracket <+> fillSep (map prettyNix xs) <+> rbracket
+prettyNix = withoutParens . cata phi where
+  phi :: NExprF NixDoc -> NixDoc
+  phi (NConstant atom) = prettyAtom atom
+  phi (NStr str) = simpleExpr $ prettyString str
+  phi (NList xs) = simpleExpr $ group $
+    nest 2 (vsep $ lbracket : map (wrapParens appOpNonAssoc) xs) <$> rbracket
+  phi (NSet rec xs) = simpleExpr $ group $
+    nest 2 (vsep $ prefix rec <> lbrace : map prettyBind xs) <$> rbrace
+   where
+    prefix Rec = text "rec" <> space
+    prefix NonRec = empty
+  phi (NAbs args body) = leastPrecedence $
+    (prettyFormals args <> colon) </> withoutParens body
 
-  go (NArgs fs) = prettyFormals fs
+  phi (NOper oper) = prettyOper oper
+  phi (NSelect r attr o) = (if isJust o then leastPrecedence else flip NixDoc selectOp) $
+     wrapParens selectOp r <> dot <> prettySelector attr <> ordoc
+    where ordoc = maybe empty ((space <>) . withoutParens) o
+  phi (NHasAttr r attr)
+    = NixDoc (wrapParens hasAttrOp r <+> text "?" <+> prettySelector attr) hasAttrOp
+  phi (NApp fun arg)
+    = NixDoc (wrapParens appOp fun <+> wrapParens appOpNonAssoc arg) appOp
 
-  go (NSet rec xs) =
-    (case rec of Rec -> "rec"; NonRec -> empty)
-    <+> lbrace <+> vcat (map prettyBind xs) <+> rbrace
-
-  go (NLet _binds _body) = text "let"
-  go (NIf cond trueBody falseBody) =
-    (text "if" <+> prettyNix cond)
-    <$$> (text "then" <+> prettyNix trueBody)
-    <$$> (text "else" <+> prettyNix falseBody)
-
-  go (NWith scope body) = text "with" <+> prettyNix scope <> semi <+> prettyNix body
-  go (NAssert cond body) = text "assert" <+> prettyNix cond <> semi <+> prettyNix body
-
-  go (NVar e) = prettyNix e
-  go (NApp fun arg) = prettyNix fun <+> parens (prettyNix arg)
-  go (NAbs args body) = (prettyNix args <> colon) <$$> prettyNix body
+  phi (NLet _binds _body) = simpleExpr $ text "let"
+  phi (NIf cond trueBody falseBody) = leastPrecedence $
+    group $ nest 2 $ (text "if" <+> withoutParens cond) <$>
+      (  align (text "then" <+> withoutParens trueBody)
+     <$> align (text "else" <+> withoutParens falseBody)
+      )
+  phi (NWith scope body) = leastPrecedence $
+    text "with"  <+> withoutParens scope <> semi <+> withoutParens body
+  phi (NAssert cond body) = leastPrecedence $
+    text "assert" <+> withoutParens cond <> semi <+> withoutParens body
