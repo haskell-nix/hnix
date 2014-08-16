@@ -72,7 +72,7 @@ nixTerm = choice
     , nixBool
     , nixNull
     , nixPath                 -- can be expensive due to back-tracking
-    , try nixLambda <|> nixSet
+    , nixLambda <|> nixSet
     , nixStringExpr
     , nixSym
     ] <* whiteSpace
@@ -118,7 +118,7 @@ nixIf =  fmap Fix $ NIf
      <*> (whiteSpace *> reserved "else" *> nixApp)
 
 nixLambda :: Parser NExpr
-nixLambda = Fix <$> (NAbs <$> (argExpr <?> "arguments") <*> nixApp)
+nixLambda = Fix <$> (NAbs <$> (try argExpr <?> "arguments") <*> nixApp)
 
 nixStringExpr :: Parser NExpr
 nixStringExpr = Fix . NStr <$> nixString
