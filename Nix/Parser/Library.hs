@@ -57,16 +57,16 @@ inComment = choice
 
 identStyle :: CharParsing m => IdentifierStyle m
 identStyle = IdentifierStyle
-  { _styleName = "nix identifier"
+  { _styleName = "identifier"
   , _styleStart = identStart
   , _styleLetter = identLetter
-  , _styleReserved = HashSet.fromList reservedNames
+  , _styleReserved = reservedNames
   , _styleHighlight = Identifier
   , _styleReservedHighlight = ReservedIdentifier
   }
 
 identifier :: (TokenParsing m, Monad m) => m Text
-identifier = ident identStyle
+identifier = ident identStyle <?> "identifier"
 
 reserved :: (TokenParsing m, Monad m) => String -> m ()
 reserved = reserve identStyle
@@ -87,8 +87,8 @@ identStart = letter <|> char '_'
 identLetter :: CharParsing m => m Char
 identLetter = alphaNum <|> oneOf "_'-"
 
-reservedNames :: [String]
-reservedNames =
+reservedNames :: HashSet.HashSet String
+reservedNames = HashSet.fromList
     [ "let", "in"
     , "if", "then", "else"
     , "null"

@@ -36,12 +36,15 @@ nixExprWith = foldl' makeParser nixTerm
     toAssoc NAssocLeft = AssocLeft
     toAssoc NAssocRight = AssocRight
 
+antiStart :: Parser String
+antiStart = try (string "${") <?> show ("${" :: String)
+
 nixAntiquoted :: Parser a -> Parser (Antiquoted a NExpr)
-nixAntiquoted p = Plain <$> p
- <|> Antiquoted <$> (try (string "${") *> whiteSpace *> nixApp <* symbolic '}')
+nixAntiquoted p = Antiquoted <$> (antiStart *> nixApp <* symbolic '}') <|> Plain <$> p
 
 selDot :: Parser ()
 selDot = try (char '.' *> notFollowedBy (("path" :: String) <$ nixPath)) *> whiteSpace
+      <?> "."
 
 nixSelector :: Parser (NSelector NExpr)
 nixSelector = keyName `sepBy1` selDot where
@@ -70,8 +73,9 @@ nixTerm = choice
     , nixWith
     , nixBool
     , nixNull
-    , nixPath                 -- can be expensive due to back-tracking
-    , nixLambda <|> nixSet
+    , nixPath
+    , nixLambda
+    , nixSet
     , nixStringExpr
     , nixSym
     ] <* whiteSpace
@@ -88,7 +92,7 @@ nixBool = try (true <|> false) <?> "bool" where
   false = mkBool False <$ symbol "false"
 
 nixNull :: Parser NExpr
-nixNull = mkNull <$ symbol "null" <?> "null"
+nixNull = mkNull <$ try (symbol "null") <?> "null"
 
 nixParens :: Parser NExpr
 nixParens = parens nixApp <?> "parens"
@@ -102,21 +106,24 @@ nixList :: Parser NExpr
 nixList = brackets (Fix . NList <$> many nixFunArg) <?> "list"
 
 nixPath :: Parser NExpr
-nixPath = fmap mkPath $ (++)
-  <$> try ((++) <$> many (oneOf pathChars) <*> string "/")
+nixPath = token $ fmap mkPath $ (++)
+  <$> (try ((++) <$> many (oneOf pathChars) <*> string "/") <?> "path")
   <*> some (oneOf ('/':pathChars))
+  <?> "path"
  where pathChars = ['A'..'Z'] ++ ['a'..'z'] ++ "._-+" ++ ['0'..'9']
 
 nixLet :: Parser NExpr
 nixLet =  fmap Fix $ NLet
       <$> (reserved "let" *> nixBinders)
       <*> (whiteSpace *> reserved "in" *> nixApp)
+      <?> "let"
 
 nixIf :: Parser NExpr
 nixIf =  fmap Fix $ NIf
      <$> (reserved "if" *> nixApp)
      <*> (whiteSpace *> reserved "then" *> nixApp)
      <*> (whiteSpace *> reserved "else" *> nixApp)
+     <?> "if"
 
 nixAssert :: Parser NExpr
 nixAssert = fmap Fix $ NAssert
@@ -129,13 +136,13 @@ nixWith = fmap Fix $ NWith
   <*> (semi *> nixApp)
 
 nixLambda :: Parser NExpr
-nixLambda = Fix <$> (NAbs <$> (try argExpr <?> "arguments") <*> nixApp)
+nixLambda = Fix <$> (NAbs <$> (try argExpr <?> "lambda arguments") <*> nixApp) <?> "lambda"
 
 nixStringExpr :: Parser NExpr
 nixStringExpr = Fix . NStr <$> nixString
 
 nixString :: Parser (NString NExpr)
-nixString = NString . merge <$> (char '"' *> manyTill stringChar (symbolic '"'))
+nixString = NString . merge <$> (char '"' *> manyTill stringChar (symbolic '"')) <?> "string"
   where
     merge [] = [Plain ""]
     merge [x] = [x]
@@ -143,9 +150,9 @@ nixString = NString . merge <$> (char '"' *> manyTill stringChar (symbolic '"'))
     merge (x : rs) = x : merge rs
 
     stringChar =  char '\\' *> (Plain . singleton <$> escapeCode)
-              <|> Antiquoted <$> (try (string "${") *> nixApp <* char '}')
-              <|> Plain . singleton <$> char '$'
-              <|> Plain . pack <$> some (noneOf "\"\\$")
+      <|> Antiquoted <$> (antiStart *> nixApp <* char '}') -- don't skip trailing space
+      <|> Plain . singleton <$> char '$'
+      <|> Plain . pack <$> some (noneOf "\"\\$")
 
     escapeCode = choice $ map (\(x,y) -> x <$ char y)
       [ ('\n', 'n')
@@ -159,18 +166,18 @@ nixString = NString . merge <$> (char '"' *> manyTill stringChar (symbolic '"'))
 
 argExpr :: Parser (Formals NExpr)
 argExpr = choice
-  [ idOrAtPattern <$> identifier <* whiteSpace <*> optional (symbolic '@' *> paramSet)
-  , setOrAtPattern <$> paramSet <* whiteSpace <*> optional (symbolic '@' *> identifier)
+  [ idOrAtPattern <$> identifier <*> optional (symbolic '@' *> paramSet)
+  , setOrAtPattern <$> paramSet <*> optional (symbolic '@' *> identifier)
   ] <* symbolic ':'
  where
   paramSet :: Parser (FormalParamSet NExpr)
   paramSet = FormalParamSet . Map.fromList <$> argList
 
   argList :: Parser [(Text, Maybe NExpr)]
-  argList = braces ((argName <* whiteSpace) `sepBy` symbolic ',') <?> "arglist"
+  argList = braces (argName `sepBy` symbolic ',') <?> "arglist"
 
   argName :: Parser (Text, Maybe NExpr)
-  argName = (,) <$> identifier <* whiteSpace
+  argName = (,) <$> identifier
                 <*> optional (symbolic '?' *> nixApp)
 
   idOrAtPattern :: Text -> Maybe (FormalParamSet NExpr) -> Formals NExpr
@@ -195,8 +202,9 @@ keyName = dynamicKey <|> staticKey where
   dynamicKey = DynamicKey <$> nixAntiquoted nixString
 
 nixSet :: Parser NExpr
-nixSet = Fix <$> (NSet <$> isRec <*> (braces nixBinders <?> "set")) where
-  isRec = try (reserved "rec" *> pure Rec) <|> pure NonRec
+nixSet = Fix <$> (NSet <$> isRec <*> braces nixBinders) <?> "set" where
+  isRec = (try (reserved "rec" *> pure Rec) <?> "recursive set")
+       <|> pure NonRec
 
 parseNixFile :: MonadIO m => FilePath -> m (Result NExpr)
 parseNixFile = parseFromFileEx $ nixApp <* eof

@@ -236,7 +236,7 @@ data NExprF r
 
 type NExpr = Fix NExprF
 
-instance Show (Fix NExprF) where show (Fix f) = show f
+instance Show (Fix NExprF) where showsPrec p (Fix f) = showsPrec p f
 instance Eq (Fix NExprF)   where Fix x == Fix y = x == y
 instance Ord (Fix NExprF)  where compare (Fix x) (Fix y) = compare x y
 
@@ -283,7 +283,7 @@ instance Show f => Show (NValueF f) where
       showsCon1 con a d = showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a
 
 type NValue = Fix NValueF
-instance Show (Fix NValueF) where show (Fix f) = show f
+instance Show (Fix NValueF) where showsPrec p (Fix f) = showsPrec p f
 
 valueText :: NValue -> Text
 valueText = cata phi where
