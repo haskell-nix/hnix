@@ -14,11 +14,8 @@ import           Prelude hiding (elem)
 
 -- | The lexer for this parser is defined in 'Nix.Parser.Library'.
 nixApp :: Parser NExpr
-nixApp = go <$> some (whiteSpace *> nixExpr)
-  where
-    go []     = error "some has failed us"
-    go [x]    = x
-    go (f:x:xs) = go (Fix (NApp f x) : xs)
+nixApp = foldl' go <$> (whiteSpace *> nixExpr) <*> many nixFunArg
+  where go f a = Fix (NApp f a)
 
 nixExpr :: Parser NExpr
 nixExpr = nixExprWith nixOperators
@@ -83,24 +80,26 @@ nixSym :: Parser NExpr
 nixSym = mkSym <$> identifier
 
 nixInt :: Parser NExpr
-nixInt = mkInt <$> decimal <?> "integer"
+nixInt = mkInt <$> token decimal <?> "integer"
 
 nixBool :: Parser NExpr
 nixBool = try (true <|> false) <?> "bool" where
-  true = mkBool True <$ string "true"
-  false = mkBool False <$ string "false"
+  true = mkBool True <$ symbol "true"
+  false = mkBool False <$ symbol "false"
 
 nixNull :: Parser NExpr
-nixNull = try (mkNull <$ string "null") <?> "null"
+nixNull = mkNull <$ symbol "null" <?> "null"
 
 nixParens :: Parser NExpr
 nixParens = parens nixApp <?> "parens"
 
+nixFunArg :: Parser NExpr
+nixFunArg = nixSelect $ choice
+  [ nixInt, nixParens, nixList, nixSet, nixBool, nixNull, nixPath, nixStringExpr
+  , nixSym ]
+
 nixList :: Parser NExpr
-nixList = brackets (Fix . NList <$> many (listTerm <* whiteSpace)) <?> "list" where
- listTerm = nixSelect $ choice
-   [ nixInt, nixParens, nixList, nixSet, nixBool, nixNull, nixPath, nixStringExpr
-   , nixSym ]
+nixList = brackets (Fix . NList <$> many nixFunArg) <?> "list"
 
 nixPath :: Parser NExpr
 nixPath = fmap mkPath $ (++)

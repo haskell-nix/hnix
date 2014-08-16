@@ -218,6 +218,13 @@ case_select_path = do
   assertParseString "f.b ../a" $ Fix $ NApp select (mkPath "../a")
  where select = Fix $ NSelect (mkSym "f") (mkSelector "b") Nothing
 
+case_fun_app :: Assertion
+case_fun_app = do
+  assertParseString "f a b" $ Fix $ NApp (Fix $ NApp (mkSym "f") (mkSym "a")) (mkSym "b")
+  assertParseString "f a.x or null" $ Fix $ NApp (mkSym "f") $ Fix $
+    NSelect (mkSym "a") (mkSelector "x") (Just mkNull)
+  assertParseFail "f if true then null else null"
+
 tests :: TestTree
 tests = $testGroupGenerator
 
