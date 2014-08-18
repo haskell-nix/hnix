@@ -54,7 +54,7 @@ prettyString (NString DoubleQuoted parts) = dquotes . hcat . map prettyPart $ pa
         escape '"' = "\""
         escape x = maybe [x] (('\\':) . (:[])) $ toEscapeCode x
 prettyString (NString Indented parts)
-  = group $ nest 2 (squote <> squote <$> content) <$> squote <> squote
+  = group $ nest 2 (squote <> squote <$$> content) <$$> squote <> squote
  where
   content = vsep . map prettyLine . stripLastIfEmpty . splitLines $ parts
   stripLastIfEmpty = reverse . f . reverse where
@@ -129,14 +129,15 @@ prettyNix = withoutParens . cata phi where
   phi (NOper oper) = prettyOper oper
   phi (NSelect r attr o) = (if isJust o then leastPrecedence else flip NixDoc selectOp) $
      wrapParens selectOp r <> dot <> prettySelector attr <> ordoc
-    where ordoc = maybe empty ((space <>) . withoutParens) o
+    where ordoc = maybe empty (((space <> text "or") <+>) . withoutParens) o
   phi (NHasAttr r attr)
     = NixDoc (wrapParens hasAttrOp r <+> text "?" <+> prettySelector attr) hasAttrOp
   phi (NApp fun arg)
     = NixDoc (wrapParens appOp fun <+> wrapParens appOpNonAssoc arg) appOp
 
   phi (NSym name) = simpleExpr $ text (unpack name)
-  phi (NLet _binds _body) = simpleExpr $ text "let"
+  phi (NLet binds body) = leastPrecedence $ group $ nest 2 $
+        vsep (text "let" : map prettyBind binds) <$> text "in" <+> withoutParens body
   phi (NIf cond trueBody falseBody) = leastPrecedence $
     group $ nest 2 $ (text "if" <+> withoutParens cond) <$>
       (  align (text "then" <+> withoutParens trueBody)
