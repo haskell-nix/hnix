@@ -13,34 +13,27 @@ import           Nix.Parser.Library
 import           Prelude hiding (elem)
 
 -- | The lexer for this parser is defined in 'Nix.Parser.Library'.
-nixApp :: Parser NExpr
-nixApp = foldl' go <$> (whiteSpace *> nixExpr) <*> many nixFunArg
-  where go f a = Fix (NApp f a)
-
 nixExpr :: Parser NExpr
-nixExpr = nixExprWith nixOperators
+nixExpr = whiteSpace *> foldl' makeParser nixTerm nixOperators where
+  makeParser term (Left NSelectOp) = nixSelect term
+  makeParser term (Left NAppOp)
+    = foldl' (fmap Fix . NApp) <$> term <*> many nixFunArg
+  makeParser term (Left NHasAttrOp) = nixHasAttr term
+  makeParser term (Right ops) = buildExpressionParser [map buildOp ops] term
 
-nixExprWith :: [Either NSpecialOp [NOperatorDef]] -> Parser NExpr
-nixExprWith = foldl' makeParser nixTerm
-  where
-    makeParser term (Left NSelectOp) = nixSelect term
-    makeParser term (Left NAppOp) = term
-    makeParser term (Left NHasAttrOp) = nixHasAttr term
-    makeParser term (Right ops) = buildExpressionParser [map buildOp ops] term
+  buildOp (NUnaryDef n op) = Prefix $ Fix . NOper . NUnary op <$ reservedOp n
+  buildOp (NBinaryDef n op a) = Infix (mkOper <$ reservedOp n) (toAssoc a)
+    where mkOper r1 = Fix . NOper . NBinary op r1
 
-    buildOp (NUnaryDef n op) = Prefix $ Fix . NOper . NUnary op <$ reservedOp n
-    buildOp (NBinaryDef n op a) = Infix (mkOper <$ reservedOp n) (toAssoc a)
-      where mkOper r1 = Fix . NOper . NBinary op r1
-
-    toAssoc NAssocNone = AssocNone
-    toAssoc NAssocLeft = AssocLeft
-    toAssoc NAssocRight = AssocRight
+  toAssoc NAssocNone = AssocNone
+  toAssoc NAssocLeft = AssocLeft
+  toAssoc NAssocRight = AssocRight
 
 antiStart :: Parser String
 antiStart = try (string "${") <?> show ("${" :: String)
 
 nixAntiquoted :: Parser a -> Parser (Antiquoted a NExpr)
-nixAntiquoted p = Antiquoted <$> (antiStart *> nixApp <* symbolic '}') <|> Plain <$> p
+nixAntiquoted p = Antiquoted <$> (antiStart *> nixExpr <* symbolic '}') <|> Plain <$> p
 
 selDot :: Parser ()
 selDot = try (char '.' *> notFollowedBy (("path" :: String) <$ nixPath)) *> whiteSpace
@@ -52,7 +45,7 @@ nixSelector = keyName `sepBy1` selDot where
 nixSelect :: Parser NExpr -> Parser NExpr
 nixSelect term = build
   <$> term
-  <*> optional ((,) <$> (selDot *> nixSelector) <*> optional (reserved "or" *> nixApp))
+  <*> optional ((,) <$> (selDot *> nixSelector) <*> optional (reserved "or" *> nixExpr))
  where
   build t Nothing = t
   build t (Just (s,o)) = Fix $ NSelect t s o
@@ -74,12 +67,12 @@ nixTerm :: Parser NExpr
 nixTerm = nixSelect $ choice
   [ nixFunArgUnamb
   , nixLambda
+  , nixSym
   , nixSet
   , nixLet
   , nixIf
   , nixAssert
   , nixWith
-  , nixSym
   ]
 
 nixSym :: Parser NExpr
@@ -97,7 +90,7 @@ nixNull :: Parser NExpr
 nixNull = mkNull <$ try (symbol "null") <?> "null"
 
 nixParens :: Parser NExpr
-nixParens = parens nixApp <?> "parens"
+nixParens = parens nixExpr <?> "parens"
 
 nixList :: Parser NExpr
 nixList = brackets (Fix . NList <$> many nixFunArg) <?> "list"
@@ -118,28 +111,28 @@ nixPath = token $ fmap (mkPath False) $ (++)
 nixLet :: Parser NExpr
 nixLet =  fmap Fix $ NLet
       <$> (reserved "let" *> nixBinders)
-      <*> (whiteSpace *> reserved "in" *> nixApp)
+      <*> (whiteSpace *> reserved "in" *> nixExpr)
       <?> "let"
 
 nixIf :: Parser NExpr
 nixIf =  fmap Fix $ NIf
-     <$> (reserved "if" *> nixApp)
-     <*> (whiteSpace *> reserved "then" *> nixApp)
-     <*> (whiteSpace *> reserved "else" *> nixApp)
+     <$> (reserved "if" *> nixExpr)
+     <*> (whiteSpace *> reserved "then" *> nixExpr)
+     <*> (whiteSpace *> reserved "else" *> nixExpr)
      <?> "if"
 
 nixAssert :: Parser NExpr
 nixAssert = fmap Fix $ NAssert
-  <$> (reserved "assert" *> nixApp)
-  <*> (semi *> nixApp)
+  <$> (reserved "assert" *> nixExpr)
+  <*> (semi *> nixExpr)
 
 nixWith :: Parser NExpr
 nixWith = fmap Fix $ NWith
-  <$> (reserved "with" *> nixApp)
-  <*> (semi *> nixApp)
+  <$> (reserved "with" *> nixExpr)
+  <*> (semi *> nixExpr)
 
 nixLambda :: Parser NExpr
-nixLambda = Fix <$> (NAbs <$> (try argExpr <?> "lambda arguments") <*> nixApp) <?> "lambda"
+nixLambda = Fix <$> (NAbs <$> (try argExpr <?> "lambda arguments") <*> nixExpr) <?> "lambda"
 
 nixStringExpr :: Parser NExpr
 nixStringExpr = Fix . NStr <$> nixString
@@ -175,7 +168,7 @@ nixString = doubleQuoted <|> indented <?> "string"
 
     stringChar end escStart esc
        =  esc
-      <|> Antiquoted <$> (antiStart *> nixApp <* char '}') -- don't skip trailing space
+      <|> Antiquoted <$> (antiStart *> nixExpr <* char '}') -- don't skip trailing space
       <|> Plain . singleton <$> char '$'
       <|> Plain . pack <$> some plainChar
      where plainChar = notFollowedBy (end <|> void (char '$') <|> escStart) *> anyChar
@@ -196,7 +189,7 @@ argExpr = choice
 
   argName :: Parser (Text, Maybe NExpr)
   argName = (,) <$> identifier
-                <*> optional (symbolic '?' *> nixApp)
+                <*> optional (symbolic '?' *> nixExpr)
 
   idOrAtPattern :: Text -> Maybe (FormalParamSet NExpr) -> Formals NExpr
   idOrAtPattern i Nothing = FormalName i
@@ -210,9 +203,9 @@ nixBinders :: Parser [Binding NExpr]
 nixBinders = (inherit <|> namedVar) `endBy` symbolic ';' where
   inherit = Inherit <$> (reserved "inherit" *> optional scope) <*> many ((:[]) <$> keyName)
          <?> "inherited binding"
-  namedVar = NamedVar <$> nixSelector <*> (symbolic '=' *> nixApp)
+  namedVar = NamedVar <$> nixSelector <*> (symbolic '=' *> nixExpr)
           <?> "variable binding"
-  scope = parens nixApp <?> "inherit scope"
+  scope = parens nixExpr <?> "inherit scope"
 
 keyName :: Parser (NKeyName NExpr)
 keyName = dynamicKey <|> staticKey where
@@ -225,7 +218,7 @@ nixSet = Fix <$> (NSet <$> isRec <*> braces nixBinders) <?> "set" where
        <|> pure NonRec
 
 parseNixFile :: MonadIO m => FilePath -> m (Result NExpr)
-parseNixFile = parseFromFileEx $ nixApp <* eof
+parseNixFile = parseFromFileEx $ nixExpr <* eof
 
 parseNixString :: String -> Result NExpr
-parseNixString = parseFromString $ nixApp <* eof
+parseNixString = parseFromString $ nixExpr <* eof

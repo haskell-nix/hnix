@@ -264,6 +264,12 @@ case_indented_string_escape = assertParseString
   "'' ''\\n ''\\t ''\\\\ ''${ \\ \\n ' ''' ''" $
   mkStr Indented  "\n \t \\ ${ \\ \\n ' '' "
 
+case_operator_fun_app :: Assertion
+case_operator_fun_app = do
+  assertParseString "a ++ b" $ Fix $ NOper (NBinary NConcat (mkSym "a") (mkSym "b"))
+  assertParseString "a ++ f b" $ Fix $ NOper (NBinary NConcat (mkSym "a") (Fix
+    (NApp (mkSym "f") (mkSym "b"))))
+
 tests :: TestTree
 tests = $testGroupGenerator
 
