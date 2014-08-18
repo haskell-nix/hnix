@@ -9,19 +9,23 @@
 
 module Nix.Types where
 
+import           Control.Applicative
 import           Control.Monad hiding (forM_, mapM, sequence)
 import           Data.Data
 import           Data.Foldable
+import           Data.List (intercalate)
 import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.Maybe (catMaybes)
-import           Data.Text hiding (concat, concatMap, head, map, zipWith, reverse, intercalate)
+import           Data.Monoid
+import           Data.Text (Text, pack)
+import qualified Data.Text as T
 import           Data.Traversable
 import           Data.Tuple (swap)
 import           GHC.Exts
 import           GHC.Generics
 import           Prelude hiding (readFile, concat, concatMap, elem, mapM,
-                                 sequence)
+                                 sequence, minimum, foldr)
 
 newtype Fix (f :: * -> *) = Fix { outF :: f (Fix f) }
 
@@ -37,31 +41,93 @@ data NAtom
   -- | An integer. The c nix implementation currently only supports integers that
   -- fit in the range of 'Int64'.
   = NInt Integer
-  | NPath FilePath
+
+  -- | The first argument of 'NPath' is 'True' if the path must be looked up in the Nix
+  -- search path.
+  -- For example, @<nixpkgs/pkgs>@ is represented by @NPath True "nixpkgs/pkgs"@,
+  -- while @foo/bar@ is represented by @NPath False "foo/bar@.
+  | NPath Bool FilePath
+
   | NBool Bool
   | NNull
   deriving (Eq, Ord, Generic, Typeable, Data, Show)
 
 atomText :: NAtom -> Text
 atomText (NInt i)  = pack (show i)
-atomText (NPath p) = pack p
 atomText (NBool b) = if b then "true" else "false"
 atomText NNull     = "null"
+atomText (NPath s p)
+  | s = pack ("<" ++ p ++ ">")
+  | otherwise = pack p
 
 -- | 'Antiquoted' represents an expression that is either
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
 data Antiquoted v r = Plain v | Antiquoted r
   deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show)
 
+-- | Merge adjacent 'Plain' values with 'mappend'.
+mergePlain :: Monoid v => [Antiquoted v r] -> [Antiquoted v r]
+mergePlain [] = []
+mergePlain (Plain a: Plain b: xs) = mergePlain (Plain (a <> b) : xs)
+mergePlain (x:xs) = x : mergePlain xs
+
+-- | Remove 'Plain' values equal to 'mempty'.
+removePlainEmpty :: (Eq v, Monoid v) => [Antiquoted v r] -> [Antiquoted v r]
+removePlainEmpty = filter f where
+  f (Plain x) = x /= mempty
+  f _ = True
+
 runAntiquoted :: (v -> a) -> (r -> a) -> Antiquoted v r -> a
 runAntiquoted f _ (Plain v) = f v
 runAntiquoted _ f (Antiquoted r) = f r
 
+data StringKind = DoubleQuoted | Indented
+  deriving (Eq, Ord, Generic, Typeable, Data, Show)
+
 -- | A 'NixString' is a list of things that are either a plain string
 -- or an antiquoted expression. After the antiquotes have been evaluated,
 -- the final string is constructed by concating all the parts.
-newtype NString r = NString [Antiquoted Text r]
+data NString r = NString StringKind [Antiquoted Text r] | NUri Text
   deriving (Eq, Ord, Generic, Typeable, Data, Functor, Show)
+
+-- | Split a stream representing a string with antiquotes on line breaks.
+splitLines :: [Antiquoted Text r] -> [[Antiquoted Text r]]
+splitLines = uncurry (flip (:)) . go where
+  go (Plain t : xs) = (Plain l :) <$> foldr f (go xs) ls where
+    (l : ls) = T.split (=='\n') t
+    f prefix (finished, current) = ((Plain prefix : current) : finished, [])
+  go (Antiquoted a : xs) = (Antiquoted a :) <$> go xs
+  go [] = ([],[])
+
+-- | Join a stream of strings containing antiquotes again. This is the inverse
+-- of 'splitLines'.
+unsplitLines :: [[Antiquoted Text r]] -> [Antiquoted Text r]
+unsplitLines = intercalate [Plain "\n"]
+
+-- | Form an indented string by stripping spaces equal to the minimal indent.
+stripIndent :: [Antiquoted Text r] -> NString r
+stripIndent [] = NString Indented []
+stripIndent xs = NString Indented . removePlainEmpty . mergePlain . unsplitLines $ ls'
+ where
+  ls = stripEmptyOpening $ splitLines xs
+  ls' = map (dropSpaces minIndent) ls
+
+  minIndent = minimum . map (countSpaces . mergePlain) . stripEmptyLines $ ls
+
+  stripEmptyLines = filter f where
+    f [Plain t] = not $ T.null $ T.strip t
+    f _ = True
+
+  stripEmptyOpening ([Plain t]:ts) | T.null (T.strip t) = ts
+  stripEmptyOpening ts = ts
+
+  countSpaces (Antiquoted _:_) = 0
+  countSpaces (Plain t : _) = T.length . T.takeWhile (== ' ') $ t
+  countSpaces [] = 0
+
+  dropSpaces 0 x = x
+  dropSpaces n (Plain t : cs) = Plain (T.drop n t) : cs
+  dropSpaces _ _ = error "stripIndent: impossible"
 
 escapeCodes :: [(Char, Char)]
 escapeCodes =
@@ -70,8 +136,6 @@ escapeCodes =
   , ('\t', 't' )
   , ('\\', '\\')
   , ('$' , '$' )
-  , ('"' , '"' )
-  , ('\'', '\'')
   ]
 
 fromEscapeCode :: Char -> Maybe Char
@@ -81,7 +145,8 @@ toEscapeCode :: Char -> Maybe Char
 toEscapeCode = (`lookup` escapeCodes)
 
 instance IsString (NString r) where
-  fromString = NString . (:[]) . Plain . pack
+  fromString "" = NString DoubleQuoted []
+  fromString x = NString DoubleQuoted . (:[]) . Plain . pack $ x
 
 -- | A 'KeyName' is something that can appear at the right side of an equals sign.
 -- For example, @a@ is a 'KeyName' in @{ a = 3; }@, @let a = 3; in ...@, @{}.a@ or @{} ? a@.
@@ -266,11 +331,16 @@ instance Ord (Fix NExprF)  where compare (Fix x) (Fix y) = compare x y
 mkInt :: Integer -> NExpr
 mkInt = Fix . NConstant . NInt
 
-mkStr :: Text -> NExpr
-mkStr = Fix . NStr . NString . (:[]) . Plain
+mkStr :: StringKind -> Text -> NExpr
+mkStr kind x = Fix . NStr . NString kind $ if x == ""
+  then []
+  else [Plain x]
 
-mkPath :: FilePath -> NExpr
-mkPath = Fix . NConstant . NPath
+mkUri :: Text -> NExpr
+mkUri = Fix . NStr . NUri
+
+mkPath :: Bool -> FilePath -> NExpr
+mkPath b = Fix . NConstant . NPath b
 
 mkSym :: Text -> NExpr
 mkSym = Fix . NSym

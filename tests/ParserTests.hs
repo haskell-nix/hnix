@@ -22,10 +22,12 @@ case_constant_bool = do
 
 case_constant_path :: Assertion
 case_constant_path = do
-  assertParseString "./." $ mkPath "./."
-  assertParseString "./+-_/cdef/09ad+-/" $ mkPath "./+-_/cdef/09ad+-/"
-  assertParseString "/abc" $ mkPath "/abc"
-  assertParseString "../abc" $ mkPath "../abc"
+  assertParseString "./." $ mkPath False "./."
+  assertParseString "./+-_/cdef/09ad+-/" $ mkPath False "./+-_/cdef/09ad+-/"
+  assertParseString "/abc" $ mkPath False "/abc"
+  assertParseString "../abc" $ mkPath False "../abc"
+  assertParseString "<abc>" $ mkPath True "abc"
+  assertParseString "<../cdef>" $ mkPath True "../cdef"
   assertParseFail "."
   assertParseFail ".."
   assertParseFail "/"
@@ -72,8 +74,8 @@ case_set_complex_keynames = do
   assertParseString "{ \"a${let a = \"b\"; in a}c\".e = 4; }" $ Fix $ NSet NonRec
     [ NamedVar [DynamicKey (Plain str), StaticKey "e"] $ mkInt 4 ]
  where
-  letExpr = Fix $ NLet [ NamedVar (mkSelector "a") (mkStr "b") ] (mkSym "a")
-  str = NString [Plain "a", Antiquoted letExpr, Plain "c"]
+  letExpr = Fix $ NLet [ NamedVar (mkSelector "a") (mkStr DoubleQuoted "b") ] (mkSym "a")
+  str = NString DoubleQuoted [Plain "a", Antiquoted letExpr, Plain "c"]
 
 case_set_inherit_direct :: Assertion
 case_set_inherit_direct = assertParseString "{ inherit ({a = 3;}); }" $ Fix $ NSet NonRec
@@ -108,6 +110,13 @@ case_mixed_list = do
 
 case_simple_lambda :: Assertion
 case_simple_lambda = assertParseString "a: a" $ Fix $ NAbs (FormalName "a") (mkSym "a")
+
+case_lambda_or_uri :: Assertion
+case_lambda_or_uri = do
+  assertParseString "a :b" $ Fix $ NAbs (FormalName "a") (mkSym "b")
+  assertParseString "a c:def" $ Fix $ NApp (mkSym "a") (mkUri "c:def")
+  assertParseString "c:def: c" $ Fix $ NApp (mkUri "c:def:") (mkSym "c")
+  assertParseFail "def:"
 
 case_lambda_pattern :: Assertion
 case_lambda_pattern = do
@@ -166,18 +175,18 @@ case_identifier_special_chars = do
   assertParseFail "'a"
 
 makeStringParseTest :: String -> Assertion
-makeStringParseTest str = assertParseString ("\"" ++ str ++ "\"") $ mkStr $ pack str
+makeStringParseTest str = assertParseString ("\"" ++ str ++ "\"") $ mkStr DoubleQuoted $ pack str
 
 case_simple_string :: Assertion
-case_simple_string = mapM_ makeStringParseTest ["abcdef", "a", "A"]
+case_simple_string = mapM_ makeStringParseTest ["abcdef", "a", "A", "   a a  ", ""]
 
 case_string_dollar :: Assertion
 case_string_dollar = mapM_ makeStringParseTest ["a$b", "a$$b", "$cdef", "gh$i"]
 
 case_string_escape :: Assertion
 case_string_escape = do
-  assertParseString "\"\\$\\n\\t\\r\\\\\"" $ mkStr "$\n\t\r\\"
-  assertParseString "\" \\\" \\' \"" $ mkStr " \" ' "
+  assertParseString "\"\\$\\n\\t\\r\\\\\"" $ mkStr DoubleQuoted "$\n\t\r\\"
+  assertParseString "\" \\\" \\' \"" $ mkStr DoubleQuoted " \" ' "
 
 case_if :: Assertion
 case_if = do
@@ -191,12 +200,12 @@ case_if = do
 case_string_antiquote :: Assertion
 case_string_antiquote = do
   assertParseString "\"abc${  if true then \"def\" else \"abc\"  } g\"" $
-    Fix $ NStr $ NString
+    Fix $ NStr $ NString DoubleQuoted
       [ Plain "abc"
-      , Antiquoted $ Fix $ NIf (mkBool True) (mkStr "def") (mkStr "abc")
+      , Antiquoted $ Fix $ NIf (mkBool True) (mkStr DoubleQuoted "def") (mkStr DoubleQuoted "abc")
       , Plain " g"
       ]
-  assertParseString "\"\\${a}\"" $ mkStr "${a}"
+  assertParseString "\"\\${a}\"" $ mkStr DoubleQuoted "${a}"
   assertParseFail "\"a"
   assertParseFail "${true}"
   assertParseFail "\"${true\""
@@ -214,8 +223,8 @@ case_select = do
 
 case_select_path :: Assertion
 case_select_path = do
-  assertParseString "f ./." $ Fix $ NApp (mkSym "f") (mkPath "./.")
-  assertParseString "f.b ../a" $ Fix $ NApp select (mkPath "../a")
+  assertParseString "f ./." $ Fix $ NApp (mkSym "f") (mkPath False "./.")
+  assertParseString "f.b ../a" $ Fix $ NApp select (mkPath False "../a")
  where select = Fix $ NSelect (mkSym "f") (mkSelector "b") Nothing
 
 case_fun_app :: Assertion
@@ -224,6 +233,36 @@ case_fun_app = do
   assertParseString "f a.x or null" $ Fix $ NApp (mkSym "f") $ Fix $
     NSelect (mkSym "a") (mkSelector "x") (Just mkNull)
   assertParseFail "f if true then null else null"
+
+case_uri :: Assertion
+case_uri = do
+  assertParseString "a:a" $ mkUri "a:a"
+  assertParseString "http://foo.bar" $ mkUri "http://foo.bar"
+  assertParseString "a+de+.adA+-:%%%ads%5asdk&/" $ mkUri "a+de+.adA+-:%%%ads%5asdk&/"
+  assertParseFail "http://foo${\"bar\"}"
+  assertParseFail ":bcdef"
+  assertParseFail "a%20:asda"
+  assertParseFail ".:adasd"
+  assertParseFail "+:acdcd"
+
+case_indented_string :: Assertion
+case_indented_string = do
+  assertParseString "''a''" $ mkStr Indented "a"
+  assertParseString "''\n  foo\n  bar''" $ mkStr Indented "foo\nbar"
+  assertParseString "''        ''" $ mkStr Indented ""
+  assertParseString "'''''''" $ mkStr Indented "''"
+  assertParseString "''   ${null}\n   a${null}''" $ Fix $ NStr $ NString Indented
+    [ Antiquoted mkNull
+    , Plain "\na"
+    , Antiquoted mkNull
+    ]
+  assertParseFail "'''''"
+  assertParseFail "''   '"
+
+case_indented_string_escape :: Assertion
+case_indented_string_escape = assertParseString
+  "'' ''\\n ''\\t ''\\\\ ''${ \\ \\n ' ''' ''" $
+  mkStr Indented  "\n \t \\ ${ \\ \\n ' '' "
 
 tests :: TestTree
 tests = $testGroupGenerator

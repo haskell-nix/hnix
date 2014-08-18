@@ -62,23 +62,25 @@ nixHasAttr term = build <$> term <*> optional (reservedOp "?" *> nixSelector) wh
   build t Nothing = t
   build t (Just s) = Fix $ NHasAttr t s
 
+nixFunArgUnamb :: Parser NExpr
+nixFunArgUnamb = choice
+  [ nixInt, nixBool, nixNull, nixParens, nixList, nixPath, nixSPath, nixUri
+  , nixStringExpr ]
+
+nixFunArg :: Parser NExpr
+nixFunArg = nixSelect $ nixFunArgUnamb <|> nixSet <|> nixSym
+
 nixTerm :: Parser NExpr
-nixTerm = choice
-    [ nixInt
-    , nixParens
-    , nixList
-    , nixLet
-    , nixIf
-    , nixAssert
-    , nixWith
-    , nixBool
-    , nixNull
-    , nixPath
-    , nixLambda
-    , nixSet
-    , nixStringExpr
-    , nixSym
-    ] <* whiteSpace
+nixTerm = nixSelect $ choice
+  [ nixFunArgUnamb
+  , nixLambda
+  , nixSet
+  , nixLet
+  , nixIf
+  , nixAssert
+  , nixWith
+  , nixSym
+  ]
 
 nixSym :: Parser NExpr
 nixSym = mkSym <$> identifier
@@ -97,20 +99,21 @@ nixNull = mkNull <$ try (symbol "null") <?> "null"
 nixParens :: Parser NExpr
 nixParens = parens nixApp <?> "parens"
 
-nixFunArg :: Parser NExpr
-nixFunArg = nixSelect $ choice
-  [ nixInt, nixParens, nixList, nixSet, nixBool, nixNull, nixPath, nixStringExpr
-  , nixSym ]
-
 nixList :: Parser NExpr
 nixList = brackets (Fix . NList <$> many nixFunArg) <?> "list"
 
+pathChars :: String
+pathChars = ['A'..'Z'] ++ ['a'..'z'] ++ "._-+" ++ ['0'..'9']
+
+nixSPath :: Parser NExpr
+nixSPath = mkPath True <$> try (char '<' *> some (oneOf ('/':pathChars)) <* symbolic '>')
+        <?> "spath"
+
 nixPath :: Parser NExpr
-nixPath = token $ fmap mkPath $ (++)
-  <$> (try ((++) <$> many (oneOf pathChars) <*> string "/") <?> "path")
-  <*> some (oneOf ('/':pathChars))
-  <?> "path"
- where pathChars = ['A'..'Z'] ++ ['a'..'z'] ++ "._-+" ++ ['0'..'9']
+nixPath = token $ fmap (mkPath False) $ (++)
+    <$> (try ((++) <$> many (oneOf pathChars) <*> string "/") <?> "path")
+    <*> some (oneOf ('/':pathChars))
+    <?> "path"
 
 nixLet :: Parser NExpr
 nixLet =  fmap Fix $ NLet
@@ -141,20 +144,43 @@ nixLambda = Fix <$> (NAbs <$> (try argExpr <?> "lambda arguments") <*> nixApp) <
 nixStringExpr :: Parser NExpr
 nixStringExpr = Fix . NStr <$> nixString
 
-nixString :: Parser (NString NExpr)
-nixString = NString . merge <$> (char '"' *> manyTill stringChar (symbolic '"')) <?> "string"
-  where
-    merge [] = [Plain ""]
-    merge [x] = [x]
-    merge (Plain a : Plain b : rs) = merge (Plain (a `append` b) : rs)
-    merge (x : rs) = x : merge rs
+nixUri :: Parser NExpr
+nixUri = token $ fmap (mkUri . pack) $ (++)
+  <$> try ((++) <$> (scheme <* char ':') <*> fmap (\x -> [':',x]) afterColonC)
+  <*> many afterColonC
+ where
+  scheme = (:) <$> letter <*> many (alphaNum <|> oneOf "+-.")
+  afterColonC = alphaNum <|> oneOf "%/?:@&=+$,-_.!~*'"
 
-    stringChar =  char '\\' *> (Plain . singleton <$> escapeCode)
+nixString :: Parser (NString NExpr)
+nixString = doubleQuoted <|> indented <?> "string"
+  where
+    doubleQuoted = NString DoubleQuoted . removePlainEmpty . mergePlain
+                <$> (doubleQ *> many (stringChar doubleQ (void $ char '\\') doubleEscape)
+                             <* token doubleQ)
+                <?> "double quoted string"
+
+    doubleQ = void $ char '"'
+    doubleEscape = Plain . singleton <$> (char '\\' *> escapeCode)
+
+    indented = stripIndent
+            <$> (indentedQ *> many (stringChar indentedQ indentedQ indentedEscape)
+                           <* token indentedQ)
+            <?> "indented string"
+
+    indentedQ = void $ try (string "''") <?> "\"''\""
+    indentedEscape = fmap Plain
+              $  try (indentedQ *> char '\\') *> fmap singleton escapeCode
+             <|> try (indentedQ *> ("''" <$ char '\'' <|> "$"  <$ char '$'))
+
+    stringChar end escStart esc
+       =  esc
       <|> Antiquoted <$> (antiStart *> nixApp <* char '}') -- don't skip trailing space
       <|> Plain . singleton <$> char '$'
-      <|> Plain . pack <$> some (noneOf "\"\\$")
+      <|> Plain . pack <$> some plainChar
+     where plainChar = notFollowedBy (end <|> void (char '$') <|> escStart) *> anyChar
 
-    escapeCode = choice [ c <$ char e | (c,e) <- escapeCodes ]
+    escapeCode = choice [ c <$ char e | (c,e) <- escapeCodes ] <|> anyChar
 
 argExpr :: Parser (Formals NExpr)
 argExpr = choice

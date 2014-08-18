@@ -2,9 +2,11 @@ module Nix.Pretty where
 
 import Data.Map (toList)
 import Data.Maybe (isJust)
-import Data.Text (Text, unpack)
+import Data.Text (Text, unpack, replace, strip)
 import Nix.Types
 import Text.PrettyPrint.ANSI.Leijen
+
+import qualified Data.Text as Text
 
 -- | This type represents a pretty printed nix expression
 -- together with some information about the expression.
@@ -46,10 +48,23 @@ wrapParens op sub
   | otherwise = parens $ withoutParens sub
 
 prettyString :: NString NixDoc -> Doc
-prettyString (NString parts) = dquotes . hcat . map prettyPart $ parts
+prettyString (NString DoubleQuoted parts) = dquotes . hcat . map prettyPart $ parts
   where prettyPart (Plain t)      = text . concatMap escape . unpack $ t
         prettyPart (Antiquoted r) = text "$" <> braces (withoutParens r)
+        escape '"' = "\""
         escape x = maybe [x] (('\\':) . (:[])) $ toEscapeCode x
+prettyString (NString Indented parts)
+  = group $ nest 2 (squote <> squote <$> content) <$> squote <> squote
+ where
+  content = vsep . map prettyLine . stripLastIfEmpty . splitLines $ parts
+  stripLastIfEmpty = reverse . f . reverse where
+    f ([Plain t] : xs) | Text.null (strip t) = xs
+    f xs = xs
+  prettyLine = hcat . map prettyPart
+  prettyPart (Plain t) = text . unpack . replace "$" "''$" . replace "''" "'''" $ t
+  prettyPart (Antiquoted r) = text "$" <> braces (withoutParens r)
+
+prettyString (NUri uri) = text (unpack uri)
 
 prettyFormals :: Formals NixDoc -> Doc
 prettyFormals (FormalName n) = text $ unpack n

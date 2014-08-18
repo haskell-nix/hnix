@@ -93,8 +93,9 @@ evalExpr = cata phi
         return $ Fix $ NVFunction args b
 
 evalString :: NValue -> NString (NValue -> IO NValue) -> IO Text
-evalString env (NString parts)
+evalString env (NString _ parts)
   = Text.concat <$> mapM (runAntiquoted return (fmap valueText . ($ env))) parts
+evalString env (NUri t) = return t
 
 evalBinds :: Bool -> NValue -> [Binding (NValue -> IO NValue)] ->
   IO (Map.Map Text NValue)
