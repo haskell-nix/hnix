@@ -120,6 +120,7 @@ prettyNix = withoutParens . cata phi where
   phi (NApp fun arg)
     = NixDoc (wrapParens appOp fun <+> wrapParens appOpNonAssoc arg) appOp
 
+  phi (NSym name) = simpleExpr $ text (unpack name)
   phi (NLet _binds _body) = simpleExpr $ text "let"
   phi (NIf cond trueBody falseBody) = leastPrecedence $
     group $ nest 2 $ (text "if" <+> withoutParens cond) <$>

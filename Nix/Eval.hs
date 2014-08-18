@@ -29,7 +29,7 @@ evalExpr :: NExpr -> NValue -> IO NValue
 evalExpr = cata phi
   where
     phi :: NExprF (NValue -> IO NValue) -> NValue -> IO NValue
-    phi (NConstant (NSym var)) = \env -> case env of
+    phi (NSym var) = \env -> case env of
       Fix (NVSet s) -> maybe err return $ Map.lookup var s
       _ -> error "invalid evaluation environment"
      where err = error ("Undefined variable: " ++ show var)

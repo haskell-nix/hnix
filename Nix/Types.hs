@@ -31,11 +31,14 @@ cata f = f . fmap (cata f) . outF
 cataM :: (Traversable f, Monad m) => (f a -> m a) -> Fix f -> m a
 cataM f = f <=< mapM (cataM f) . outF
 
+-- | Atoms are values that evaluate to themselves. This means that they appear in both
+-- the parsed AST (in the form of literals) and the evaluated form.
 data NAtom
+  -- | An integer. The c nix implementation currently only supports integers that
+  -- fit in the range of 'Int64'.
   = NInt Integer
   | NPath FilePath
   | NBool Bool
-  | NSym Text
   | NNull
   deriving (Eq, Ord, Generic, Typeable, Data, Show)
 
@@ -43,7 +46,6 @@ atomText :: NAtom -> Text
 atomText (NInt i)  = pack (show i)
 atomText (NPath p) = pack p
 atomText (NBool b) = if b then "true" else "false"
-atomText (NSym s)  = s
 atomText NNull     = "null"
 
 -- | 'Antiquoted' represents an expression that is either
@@ -246,6 +248,9 @@ data NExprF r
     | NApp r r
 
     -- language constructs
+    -- | A 'NSym' is a reference to a variable. For example, @f@ is represented as
+    -- @NSym "f"@ and @a@ as @NSym "a" in @f a@.
+    | NSym Text
     | NLet [Binding r] r
     | NIf r r r
     | NWith r r
@@ -268,7 +273,7 @@ mkPath :: FilePath -> NExpr
 mkPath = Fix . NConstant . NPath
 
 mkSym :: Text -> NExpr
-mkSym = Fix . NConstant . NSym
+mkSym = Fix . NSym
 
 mkSelector :: Text -> NSelector NExpr
 mkSelector = (:[]) . StaticKey
