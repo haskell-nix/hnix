@@ -190,7 +190,7 @@ getBinaryOperator = (m Map.!) where
 
 getSpecialOperatorPrec :: NSpecialOp -> Int
 getSpecialOperatorPrec = (m Map.!) where
-  m = Map.fromList . catMaybes . zipWith buildEntry [1..] $ nixOperators
+  m = Map.fromList . catMaybes . zipWith buildEntry [1..] . reverse $ nixOperators
   buildEntry _ (Right _) = Nothing
   buildEntry i (Left op) = Just (op, i)
 
