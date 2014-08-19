@@ -23,8 +23,8 @@ Library
     Nix.Eval
     Nix.Parser
     Nix.Types
+    Nix.Pretty
   Other-modules:
-    Nix.Internal
     Nix.Parser.Library
   Default-extensions:
     DataKinds
