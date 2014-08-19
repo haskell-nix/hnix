@@ -14,10 +14,10 @@ import           Prelude hiding (elem)
 
 -- | The lexer for this parser is defined in 'Nix.Parser.Library'.
 nixExpr :: Parser NExpr
-nixExpr = whiteSpace *> foldl' makeParser nixTerm nixOperators where
+nixExpr = whiteSpace *> (nixToplevelForm <|> foldl' makeParser nixOpArg nixOperators)
+ where
   makeParser term (Left NSelectOp) = nixSelect term
-  makeParser term (Left NAppOp)
-    = foldl' (fmap Fix . NApp) <$> term <*> many nixFunArg
+  makeParser term (Left NAppOp) = chainl1 term $ pure $ \a b -> Fix (NApp a b)
   makeParser term (Left NHasAttrOp) = nixHasAttr term
   makeParser term (Right ops) = buildExpressionParser [map buildOp ops] term
 
@@ -55,25 +55,13 @@ nixHasAttr term = build <$> term <*> optional (reservedOp "?" *> nixSelector) wh
   build t Nothing = t
   build t (Just s) = Fix $ NHasAttr t s
 
-nixFunArgUnamb :: Parser NExpr
-nixFunArgUnamb = choice
+nixOpArg :: Parser NExpr
+nixOpArg = nixSelect $ choice
   [ nixInt, nixBool, nixNull, nixParens, nixList, nixPath, nixSPath, nixUri
-  , nixStringExpr ]
+  , nixStringExpr, nixSet, nixSym ]
 
-nixFunArg :: Parser NExpr
-nixFunArg = nixSelect $ nixFunArgUnamb <|> nixSet <|> nixSym
-
-nixTerm :: Parser NExpr
-nixTerm = nixSelect $ choice
-  [ nixFunArgUnamb
-  , nixLambda
-  , nixSym
-  , nixSet
-  , nixLet
-  , nixIf
-  , nixAssert
-  , nixWith
-  ]
+nixToplevelForm :: Parser NExpr
+nixToplevelForm = choice [nixLambda, nixLet, nixIf, nixAssert, nixWith]
 
 nixSym :: Parser NExpr
 nixSym = mkSym <$> identifier
@@ -93,7 +81,7 @@ nixParens :: Parser NExpr
 nixParens = parens nixExpr <?> "parens"
 
 nixList :: Parser NExpr
-nixList = brackets (Fix . NList <$> many nixFunArg) <?> "list"
+nixList = brackets (Fix . NList <$> many nixOpArg) <?> "list"
 
 pathChars :: String
 pathChars = ['A'..'Z'] ++ ['a'..'z'] ++ "._-+" ++ ['0'..'9']
@@ -103,9 +91,9 @@ nixSPath = mkPath True <$> try (char '<' *> some (oneOf ('/':pathChars)) <* symb
         <?> "spath"
 
 nixPath :: Parser NExpr
-nixPath = token $ fmap (mkPath False) $ (++)
+nixPath = token $ notFollowedBy (try (string "//")) *> fmap (mkPath False) ((++)
     <$> (try ((++) <$> many (oneOf pathChars) <*> string "/") <?> "path")
-    <*> some (oneOf ('/':pathChars))
+    <*> some (oneOf ('/':pathChars)))
     <?> "path"
 
 nixLet :: Parser NExpr
@@ -137,13 +125,15 @@ nixLambda = Fix <$> (NAbs <$> (try argExpr <?> "lambda arguments") <*> nixExpr) 
 nixStringExpr :: Parser NExpr
 nixStringExpr = Fix . NStr <$> nixString
 
+uriAfterColonC :: Parser Char
+uriAfterColonC = alphaNum <|> oneOf "%/?:@&=+$,-_.!~*'"
+
 nixUri :: Parser NExpr
 nixUri = token $ fmap (mkUri . pack) $ (++)
-  <$> try ((++) <$> (scheme <* char ':') <*> fmap (\x -> [':',x]) afterColonC)
-  <*> many afterColonC
+  <$> try ((++) <$> (scheme <* char ':') <*> fmap (\x -> [':',x]) uriAfterColonC)
+  <*> many uriAfterColonC
  where
   scheme = (:) <$> letter <*> many (alphaNum <|> oneOf "+-.")
-  afterColonC = alphaNum <|> oneOf "%/?:@&=+$,-_.!~*'"
 
 nixString :: Parser (NString NExpr)
 nixString = doubleQuoted <|> indented <?> "string"
@@ -177,7 +167,7 @@ nixString = doubleQuoted <|> indented <?> "string"
 
 argExpr :: Parser (Formals NExpr)
 argExpr = choice
-  [ idOrAtPattern <$> identifier <*> optional (symbolic '@' *> paramSet)
+  [ idOrAtPattern <$> identifierNotUri <*> optional (symbolic '@' *> paramSet)
   , setOrAtPattern <$> paramSet <*> optional (symbolic '@' *> identifier)
   ] <* symbolic ':'
  where
@@ -186,6 +176,9 @@ argExpr = choice
 
   argList :: Parser [(Text, Maybe NExpr)]
   argList = braces (argName `sepBy` symbolic ',') <?> "arglist"
+
+  identifierNotUri :: Parser Text
+  identifierNotUri = notFollowedBy nixUri *> identifier
 
   argName :: Parser (Text, Maybe NExpr)
   argName = (,) <$> identifier

@@ -354,6 +354,12 @@ mkBool = Fix . NConstant . NBool
 mkNull :: NExpr
 mkNull = Fix (NConstant NNull)
 
+mkOper :: NUnaryOp -> NExpr -> NExpr
+mkOper op = Fix . NOper . NUnary op
+
+mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
+mkOper2 op a = Fix . NOper . NBinary op a
+
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.
 data NValueF r

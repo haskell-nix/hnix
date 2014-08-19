@@ -116,6 +116,8 @@ case_lambda_or_uri = do
   assertParseString "a :b" $ Fix $ NAbs (FormalName "a") (mkSym "b")
   assertParseString "a c:def" $ Fix $ NApp (mkSym "a") (mkUri "c:def")
   assertParseString "c:def: c" $ Fix $ NApp (mkUri "c:def:") (mkSym "c")
+  assertParseString "a:{}" $ Fix $ NAbs (FormalName "a") $ Fix $ NSet NonRec []
+  assertParseString "a:[a]" $ Fix $ NAbs (FormalName "a") $ Fix $ NList [mkSym "a"]
   assertParseFail "def:"
 
 case_lambda_pattern :: Assertion
@@ -266,9 +268,20 @@ case_indented_string_escape = assertParseString
 
 case_operator_fun_app :: Assertion
 case_operator_fun_app = do
-  assertParseString "a ++ b" $ Fix $ NOper (NBinary NConcat (mkSym "a") (mkSym "b"))
-  assertParseString "a ++ f b" $ Fix $ NOper (NBinary NConcat (mkSym "a") (Fix
-    (NApp (mkSym "f") (mkSym "b"))))
+  assertParseString "a ++ b" $ mkOper2 NConcat (mkSym "a") (mkSym "b")
+  assertParseString "a ++ f b" $ mkOper2 NConcat (mkSym "a") $ Fix $ NApp
+    (mkSym "f") (mkSym "b")
+
+case_operators :: Assertion
+case_operators = do
+  assertParseString "1 + 2 - 3" $ mkOper2 NMinus
+    (mkOper2 NPlus (mkInt 1) (mkInt 2)) (mkInt 3)
+  assertParseFail "1 + if true then 1 else 2"
+  assertParseString "1 + (if true then 2 else 3)" $ mkOper2 NPlus (mkInt 1) $ Fix $ NIf
+   (mkBool True) (mkInt 2) (mkInt 3)
+  assertParseString "{ a = 3; } // rec { b = 4; }" $ mkOper2 NUpdate
+    (Fix $ NSet NonRec [NamedVar (mkSelector "a") (mkInt 3)])
+    (Fix $ NSet Rec    [NamedVar (mkSelector "b") (mkInt 4)])
 
 tests :: TestTree
 tests = $testGroupGenerator
