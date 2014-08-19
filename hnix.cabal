@@ -59,6 +59,7 @@ Library
 Executable hnix
   Default-language: Haskell2010
   Main-is: Nix.hs
+  Hs-source-dirs: main
   Default-extensions:
     DataKinds
     DeriveDataTypeable
@@ -77,17 +78,8 @@ Executable hnix
   Build-depends:
       base                     >= 4.3          && < 5
     , hnix
-    , ansi-wl-pprint
     , containers
-    , text
-    , transformers
-    , parsers >= 0.10
-    , unordered-containers
-  if flag(parsec)
-    Cpp-options: -DUSE_PARSEC
-    Build-depends: parsec
-  else
-    Build-depends: trifecta
+    , ansi-wl-pprint
   Ghc-options: -Wall
 
 Test-suite hnix-tests
