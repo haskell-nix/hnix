@@ -5,7 +5,6 @@ module Nix.Parser.Library ( module Nix.Parser.Library, module X) where
 import Control.Applicative
 import Control.Monad
 import Control.Monad.IO.Class
-import Data.Char
 import Data.Text hiding (map)
 import Text.Parser.Expression as X
 import Text.Parser.LookAhead as X
@@ -14,6 +13,7 @@ import Text.Parser.Char as X hiding (text)
 import Text.Parser.Combinators as X
 import Text.PrettyPrint.ANSI.Leijen as X (Doc, text)
 import Text.Parser.Token.Highlight
+import Text.Parser.Token.Style
 
 import qualified Data.HashSet as HashSet
 
@@ -32,28 +32,19 @@ newtype NixParser p a = NixParser { runNixParser :: p a }
   deriving (Functor, Applicative, Alternative, Monad, MonadPlus, Parsing, CharParsing, LookAheadParsing)
 
 instance TokenParsing p => TokenParsing (NixParser p) where
-  someSpace = skipSome (simpleSpace <|> oneLineComment <|> multiLineComment <?> "")
+  someSpace = NixParser $ buildSomeSpaceParser someSpace commentStyle
   nesting = NixParser . nesting . runNixParser
   highlight h = NixParser . highlight h . runNixParser
   semi = token $ char ';' <?> ";"
   token p = p <* whiteSpace
 
-simpleSpace :: CharParsing m => m ()
-simpleSpace = skipSome (satisfy isSpace)
-
-oneLineComment :: CharParsing m => m ()
-oneLineComment = char '#' *> skipMany (notChar '\n')
-
-multiLineComment :: CharParsing m => m ()
-multiLineComment = try (string "/*") *> inComment
-
-inComment :: CharParsing m => m ()
-inComment = choice
-  [ () <$ try (string "*/")
-  , multiLineComment       *> inComment
-  , skipSome (noneOf "*/") *> inComment
-  , oneOf "*/"             *> inComment
-  ] <?> "end of comment"
+commentStyle :: CommentStyle
+commentStyle = CommentStyle
+  { _commentStart = "/*"
+  , _commentEnd   = "*/"
+  , _commentLine  = "#"
+  , _commentNesting = True
+  }
 
 identStyle :: CharParsing m => IdentifierStyle m
 identStyle = IdentifierStyle
