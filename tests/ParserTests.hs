@@ -28,9 +28,15 @@ case_constant_path = do
   assertParseString "../abc" $ mkPath False "../abc"
   assertParseString "<abc>" $ mkPath True "abc"
   assertParseString "<../cdef>" $ mkPath True "../cdef"
+  assertParseString "a//b" $ mkOper2 NUpdate (mkSym "a") (mkSym "b")
+  assertParseString "a/b//c/def//<g> < def/d" $ mkOper2 NLt
+    (mkOper2 NUpdate (mkPath False "a/b") $ mkOper2 NUpdate
+      (mkPath False "c/def") (mkPath True "g"))
+    (mkPath False "def/d")
   assertParseFail "."
   assertParseFail ".."
   assertParseFail "/"
+  assertParseFail "a/"
 
 case_simple_set :: Assertion
 case_simple_set = do
@@ -227,6 +233,7 @@ case_select_path :: Assertion
 case_select_path = do
   assertParseString "f ./." $ Fix $ NApp (mkSym "f") (mkPath False "./.")
   assertParseString "f.b ../a" $ Fix $ NApp select (mkPath False "../a")
+  assertParseString "{}./def" $ Fix $ NApp (Fix (NSet NonRec [])) (mkPath False "./def")
  where select = Fix $ NSelect (mkSym "f") (mkSelector "b") Nothing
 
 case_fun_app :: Assertion

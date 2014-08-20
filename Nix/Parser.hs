@@ -22,8 +22,7 @@ nixExpr = whiteSpace *> (nixToplevelForm <|> foldl' makeParser nixOpArg nixOpera
   makeParser term (Right ops) = buildExpressionParser [map buildOp ops] term
 
   buildOp (NUnaryDef n op) = Prefix $ Fix . NOper . NUnary op <$ reservedOp n
-  buildOp (NBinaryDef n op a) = Infix (mkOper <$ reservedOp n) (toAssoc a)
-    where mkOper r1 = Fix . NOper . NBinary op r1
+  buildOp (NBinaryDef n op a) = Infix (mkOper2 op <$ reservedOp n) (toAssoc a)
 
   toAssoc NAssocNone = AssocNone
   toAssoc NAssocLeft = AssocLeft
@@ -86,14 +85,17 @@ nixList = brackets (Fix . NList <$> many nixOpArg) <?> "list"
 pathChars :: String
 pathChars = ['A'..'Z'] ++ ['a'..'z'] ++ "._-+" ++ ['0'..'9']
 
+slash :: Parser Char
+slash = try (char '/' <* notFollowedBy (char '/')) <?> "slash"
+
 nixSPath :: Parser NExpr
-nixSPath = mkPath True <$> try (char '<' *> some (oneOf ('/':pathChars)) <* symbolic '>')
+nixSPath = mkPath True <$> try (char '<' *> some (oneOf pathChars <|> slash) <* symbolic '>')
         <?> "spath"
 
 nixPath :: Parser NExpr
-nixPath = token $ notFollowedBy (try (string "//")) *> fmap (mkPath False) ((++)
-    <$> (try ((++) <$> many (oneOf pathChars) <*> string "/") <?> "path")
-    <*> some (oneOf ('/':pathChars)))
+nixPath = token $ fmap (mkPath False) $ ((++)
+    <$> (try ((++) <$> many (oneOf pathChars) <*> fmap (:[]) slash) <?> "path")
+    <*> some (oneOf pathChars <|> slash))
     <?> "path"
 
 nixLet :: Parser NExpr
