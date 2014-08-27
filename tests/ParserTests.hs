@@ -294,6 +294,12 @@ case_operators = do
     (mkOper2 NMinus (mkSym "a") (mkSym "b")) $
     mkSym "c"
 
+case_comments :: Assertion
+case_comments = do
+  Success expected <- parseNixFile "data/let.nix"
+  assertParseFile "let-comments-multiline.nix" expected
+  assertParseFile "let-comments.nix" expected
+
 tests :: TestTree
 tests = $testGroupGenerator
 
@@ -302,6 +308,13 @@ assertParseString :: String -> NExpr -> Assertion
 assertParseString str expected = case parseNixString str of
   Success actual -> assertEqual ("When parsing " ++ str) expected actual
   Failure err    -> assertFailure $ "Unexpected error parsing `" ++ str ++ "':\n" ++ show err
+
+assertParseFile :: FilePath -> NExpr -> Assertion
+assertParseFile file expected = do
+  res <- parseNixFile $ "data/" ++ file
+  case res of
+    Success actual -> assertEqual ("Parsing data file " ++ file) expected actual
+    Failure err    -> assertFailure $ "Unexpected error parsing data file `" ++ file ++ "':\n" ++ show err
 
 assertParseFail :: String -> Assertion
 assertParseFail str = case parseNixString str of

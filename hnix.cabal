@@ -87,6 +87,8 @@ Test-suite hnix-tests
   Hs-source-dirs: tests
   Default-language: Haskell2010
   Main-is: Main.hs
+  Other-modules:
+    ParserTests
   Build-depends:
       base >= 4.3 && < 5
     , containers
@@ -95,6 +97,20 @@ Test-suite hnix-tests
     , tasty
     , tasty-th
     , tasty-hunit
+
+Benchmark benchmarks
+  Type: exitcode-stdio-1.0
+  Hs-source-dirs: benchmarks
+  Default-language: Haskell2010
+  Main-is: Main.hs
+  Other-modules:
+    ParserBench
+  Build-depends:
+      base >= 4.3 && < 5
+    , containers
+    , text
+    , hnix
+    , criterion
 
 source-repository head
   type:     git
