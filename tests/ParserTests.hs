@@ -289,6 +289,10 @@ case_operators = do
   assertParseString "{ a = 3; } // rec { b = 4; }" $ mkOper2 NUpdate
     (Fix $ NSet NonRec [NamedVar (mkSelector "a") (mkInt 3)])
     (Fix $ NSet Rec    [NamedVar (mkSelector "b") (mkInt 4)])
+  assertParseString "--a" $ mkOper NNeg $ mkOper NNeg $ mkSym "a"
+  assertParseString "a - b - c" $ mkOper2 NMinus
+    (mkOper2 NMinus (mkSym "a") (mkSym "b")) $
+    mkSym "c"
 
 tests :: TestTree
 tests = $testGroupGenerator

@@ -209,28 +209,26 @@ data NAssoc = NAssocNone | NAssocLeft | NAssocRight
 
 data NOperatorDef
   = NUnaryDef String NUnaryOp
-  | NBinaryDef String NBinaryOp NAssoc
+  | NBinaryDef NAssoc [(String, NBinaryOp)]
   deriving (Eq, Ord, Generic, Typeable, Data, Show)
 
-nixOperators :: [Either NSpecialOp [NOperatorDef]]
+nixOperators :: [Either NSpecialOp NOperatorDef]
 nixOperators =
   [ Left NSelectOp
   , Left NAppOp
-  , Right [ NUnaryDef  "-"  NNeg           ]
+  , Right $ NUnaryDef  "-"  NNeg
   , Left NHasAttrOp
   ] ++ map Right
-  [ [ NBinaryDef "++" NConcat  NAssocRight ]
-  , [ NBinaryDef "*"  NMult    NAssocLeft  , NBinaryDef "/" NDiv   NAssocLeft ]
-  , [ NBinaryDef "+"  NPlus    NAssocLeft  , NBinaryDef "-" NMinus NAssocLeft ]
-  , [ NUnaryDef  "!"  NNot                 ]
-  , [ NBinaryDef "//" NUpdate NAssocRight  ]
-  , [ NBinaryDef "<"  NLt     NAssocLeft   , NBinaryDef ">"  NGt  NAssocLeft
-    , NBinaryDef "<=" NLte    NAssocLeft   , NBinaryDef ">=" NGte NAssocLeft
-    ]
-  , [ NBinaryDef "==" NEq     NAssocNone   , NBinaryDef "!=" NNEq NAssocNone  ]
-  , [ NBinaryDef "&&" NAnd    NAssocLeft   ]
-  , [ NBinaryDef "||" NOr     NAssocLeft   ]
-  , [ NBinaryDef "->" NImpl   NAssocNone   ]
+  [ NBinaryDef NAssocRight [("++", NConcat)]
+  , NBinaryDef NAssocLeft [("*", NMult), ("/", NDiv)]
+  , NBinaryDef NAssocLeft [("+", NPlus), ("-", NMinus)]
+  , NUnaryDef  "!"  NNot
+  , NBinaryDef NAssocRight [("//", NUpdate)]
+  , NBinaryDef NAssocLeft [("<", NLt), (">", NGt), ("<=", NLte), (">=", NGte)]
+  , NBinaryDef NAssocNone [("==", NEq), ("!=", NNEq)]
+  , NBinaryDef NAssocLeft [("&&", NAnd)]
+  , NBinaryDef NAssocLeft [("||", NOr)]
+  , NBinaryDef NAssocNone [("->", NImpl)]
   ]
 
 data OperatorInfo = OperatorInfo
@@ -242,16 +240,15 @@ data OperatorInfo = OperatorInfo
 getUnaryOperator :: NUnaryOp -> OperatorInfo
 getUnaryOperator = (m Map.!) where
   m = Map.fromList . concat . zipWith buildEntry [1..] . reverse $ nixOperators
-  buildEntry _ (Left _) = []
-  buildEntry i (Right ops) =
-    [ (op, OperatorInfo i NAssocNone name) | NUnaryDef name op <- ops ]
+  buildEntry i (Right (NUnaryDef name op)) = [(op, OperatorInfo i NAssocNone name)]
+  buildEntry _ _                           = []
 
 getBinaryOperator :: NBinaryOp -> OperatorInfo
 getBinaryOperator = (m Map.!) where
   m = Map.fromList . concat . zipWith buildEntry [1..] . reverse $ nixOperators
-  buildEntry _ (Left _) = []
-  buildEntry i (Right ops) =
-    [ (op, OperatorInfo i assoc name) | NBinaryDef name op assoc <- ops ]
+  buildEntry i (Right (NBinaryDef assoc ops)) =
+    [ (op, OperatorInfo i assoc name) | (name,op) <- ops ]
+  buildEntry _ _                              = []
 
 getSpecialOperatorPrec :: NSpecialOp -> Int
 getSpecialOperatorPrec = (m Map.!) where

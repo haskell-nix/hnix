@@ -19,14 +19,14 @@ nixExpr = whiteSpace *> (nixToplevelForm <|> foldl' makeParser nixOpArg nixOpera
   makeParser term (Left NSelectOp) = nixSelect term
   makeParser term (Left NAppOp) = chainl1 term $ pure $ \a b -> Fix (NApp a b)
   makeParser term (Left NHasAttrOp) = nixHasAttr term
-  makeParser term (Right ops) = buildExpressionParser [map buildOp ops] term
-
-  buildOp (NUnaryDef n op) = Prefix $ Fix . NOper . NUnary op <$ reservedOp n
-  buildOp (NBinaryDef n op a) = Infix (mkOper2 op <$ reservedOp n) (toAssoc a)
-
-  toAssoc NAssocNone = AssocNone
-  toAssoc NAssocLeft = AssocLeft
-  toAssoc NAssocRight = AssocRight
+  makeParser term (Right (NUnaryDef name op))
+    = build <$> many (void $ symbol name) <*> term
+   where build = flip $ foldl' (\t' () -> mkOper op t')
+  makeParser term (Right (NBinaryDef assoc ops)) = case assoc of
+    NAssocLeft  -> chainl1 term op
+    NAssocRight -> chainr1 term op
+    NAssocNone  -> term <**> (flip <$> op <*> term <|> pure id)
+   where op = choice . map (\(n,o) -> mkOper2 o <$ reservedOp n) $ ops
 
 antiStart :: Parser String
 antiStart = try (string "${") <?> show ("${" :: String)
