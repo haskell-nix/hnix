@@ -98,7 +98,7 @@ Test-suite hnix-tests
     , tasty-th
     , tasty-hunit
 
-Benchmark benchmarks
+Benchmark hnix-benchmarks
   Type: exitcode-stdio-1.0
   Hs-source-dirs: benchmarks
   Default-language: Haskell2010
