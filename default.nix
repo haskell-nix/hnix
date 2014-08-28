@@ -1,4 +1,5 @@
 { cabal, parsers, trifecta, text, ansiWlPprint, parsec, transformers
+, tasty, tastyHunit, tastyTh, unorderedContainers
 , useParsec ? true
 }:
 
@@ -10,10 +11,11 @@ cabal.mkDerivation (self: rec {
   isExecutable = true;
   noHaddock = true;
   buildDepends = [
-    ansiWlPprint
-    text
-    transformers
-  ] ++ (if useParsec then [ parsec ] else [ parsers trifecta ]);
+    ansiWlPprint text transformers parsers
+  ] ++ (if useParsec then [ parsec ] else [ trifecta ]);
+  testDepends = [
+    tasty tastyHunit tastyTh unorderedContainers
+  ];
   meta = {
     homepage = "https://github.com/jwiegley/hnix";
     description = "Haskell implementation of the Nix language";
