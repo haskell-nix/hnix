@@ -23,20 +23,36 @@ case_constant_bool = do
 case_constant_path :: Assertion
 case_constant_path = do
   assertParseString "./." $ mkPath False "./."
-  assertParseString "./+-_/cdef/09ad+-/" $ mkPath False "./+-_/cdef/09ad+-/"
+  assertParseString "./+-_/cdef/09ad+-" $ mkPath False "./+-_/cdef/09ad+-"
   assertParseString "/abc" $ mkPath False "/abc"
   assertParseString "../abc" $ mkPath False "../abc"
   assertParseString "<abc>" $ mkPath True "abc"
   assertParseString "<../cdef>" $ mkPath True "../cdef"
   assertParseString "a//b" $ mkOper2 NUpdate (mkSym "a") (mkSym "b")
+  assertParseString "rec+def/cdef" $ mkPath False "rec+def/cdef"
   assertParseString "a/b//c/def//<g> < def/d" $ mkOper2 NLt
     (mkOper2 NUpdate (mkPath False "a/b") $ mkOper2 NUpdate
       (mkPath False "c/def") (mkPath True "g"))
     (mkPath False "def/d")
+  assertParseString "a'b/c" $ Fix $ NApp (mkSym "a'b") (mkPath False "/c")
   assertParseFail "."
   assertParseFail ".."
   assertParseFail "/"
   assertParseFail "a/"
+  assertParseFail "a/def/"
+
+case_constant_uri :: Assertion
+case_constant_uri = do
+  assertParseString "a:a" $ mkUri "a:a"
+  assertParseString "http://foo.bar" $ mkUri "http://foo.bar"
+  assertParseString "a+de+.adA+-:%%%ads%5asdk&/" $ mkUri "a+de+.adA+-:%%%ads%5asdk&/"
+  assertParseString "rec+def:c" $ mkUri "rec+def:c"
+  assertParseString "f.foo:bar" $ mkUri "f.foo:bar"
+  assertParseFail "http://foo${\"bar\"}"
+  assertParseFail ":bcdef"
+  assertParseFail "a%20:asda"
+  assertParseFail ".:adasd"
+  assertParseFail "+:acdcd"
 
 case_simple_set :: Assertion
 case_simple_set = do
@@ -170,6 +186,15 @@ case_let_scoped_inherit = do
     (mkSym "c")
   assertParseFail "let inherit (b) c in c"
 
+case_if :: Assertion
+case_if = do
+  assertParseString "if true then true else false" $ Fix $ NIf (mkBool True) (mkBool True) (mkBool False)
+  assertParseFail "if true then false"
+  assertParseFail "else"
+  assertParseFail "if true then false else"
+  assertParseFail "if true then false else false else"
+  assertParseFail "1 + 2 then"
+
 case_identifier_special_chars :: Assertion
 case_identifier_special_chars = do
   assertParseString "_a" $ mkSym "_a"
@@ -195,15 +220,6 @@ case_string_escape :: Assertion
 case_string_escape = do
   assertParseString "\"\\$\\n\\t\\r\\\\\"" $ mkStr DoubleQuoted "$\n\t\r\\"
   assertParseString "\" \\\" \\' \"" $ mkStr DoubleQuoted " \" ' "
-
-case_if :: Assertion
-case_if = do
-  assertParseString "if true then true else false" $ Fix $ NIf (mkBool True) (mkBool True) (mkBool False)
-  assertParseFail "if true then false"
-  assertParseFail "else"
-  assertParseFail "if true then false else"
-  assertParseFail "if true then false else false else"
-  assertParseFail "1 + 2 then"
 
 case_string_antiquote :: Assertion
 case_string_antiquote = do
@@ -234,6 +250,9 @@ case_select_path = do
   assertParseString "f ./." $ Fix $ NApp (mkSym "f") (mkPath False "./.")
   assertParseString "f.b ../a" $ Fix $ NApp select (mkPath False "../a")
   assertParseString "{}./def" $ Fix $ NApp (Fix (NSet NonRec [])) (mkPath False "./def")
+  assertParseString "{}.\"\"./def" $ Fix $ NApp
+    (Fix $ NSelect (Fix (NSet NonRec [])) [DynamicKey (Plain "")] Nothing)
+    (mkPath False "./def")
  where select = Fix $ NSelect (mkSym "f") (mkSelector "b") Nothing
 
 case_fun_app :: Assertion
@@ -242,17 +261,6 @@ case_fun_app = do
   assertParseString "f a.x or null" $ Fix $ NApp (mkSym "f") $ Fix $
     NSelect (mkSym "a") (mkSelector "x") (Just mkNull)
   assertParseFail "f if true then null else null"
-
-case_uri :: Assertion
-case_uri = do
-  assertParseString "a:a" $ mkUri "a:a"
-  assertParseString "http://foo.bar" $ mkUri "http://foo.bar"
-  assertParseString "a+de+.adA+-:%%%ads%5asdk&/" $ mkUri "a+de+.adA+-:%%%ads%5asdk&/"
-  assertParseFail "http://foo${\"bar\"}"
-  assertParseFail ":bcdef"
-  assertParseFail "a%20:asda"
-  assertParseFail ".:adasd"
-  assertParseFail "+:acdcd"
 
 case_indented_string :: Assertion
 case_indented_string = do
@@ -293,6 +301,9 @@ case_operators = do
   assertParseString "a - b - c" $ mkOper2 NMinus
     (mkOper2 NMinus (mkSym "a") (mkSym "b")) $
     mkSym "c"
+  assertParseString "foo<bar" $ mkOper2 NLt (mkSym "foo") (mkSym "bar")
+  assertParseFail "+ 3"
+  assertParseFail "foo +"
 
 case_comments :: Assertion
 case_comments = do
