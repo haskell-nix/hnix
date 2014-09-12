@@ -82,7 +82,6 @@ reservedNames :: HashSet.HashSet String
 reservedNames = HashSet.fromList
     [ "let", "in"
     , "if", "then", "else"
-    , "null"
     , "assert"
     , "with"
     , "rec"
