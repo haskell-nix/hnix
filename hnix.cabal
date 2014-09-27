@@ -49,6 +49,7 @@ Library
     , transformers
     , parsers >= 0.10
     , unordered-containers
+    , data-fix
   if flag(parsec)
     Cpp-options: -DUSE_PARSEC
     Build-depends: parsec
@@ -80,6 +81,7 @@ Executable hnix
     , hnix
     , containers
     , ansi-wl-pprint
+    , data-fix
   Ghc-options: -Wall
 
 Test-suite hnix-tests
@@ -93,6 +95,7 @@ Test-suite hnix-tests
       base >= 4.3 && < 5
     , containers
     , text
+    , data-fix
     , hnix
     , tasty
     , tasty-th

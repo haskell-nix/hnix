@@ -5,9 +5,10 @@ import Nix.Pretty
 import Nix.Eval
 import Nix.Types
 
-import Text.PrettyPrint.ANSI.Leijen
+import Data.Fix
 import System.Environment
 import System.IO
+import Text.PrettyPrint.ANSI.Leijen
 
 import qualified Data.Map as Map
 

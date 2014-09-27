@@ -1,5 +1,6 @@
 module Nix.Pretty where
 
+import Data.Fix
 import Data.Map (toList)
 import Data.Maybe (isJust)
 import Data.Text (Text, unpack, replace, strip)

@@ -3,6 +3,7 @@ module Nix.Eval where
 import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad hiding (mapM, sequence)
+import           Data.Fix
 import           Data.Foldable (foldl')
 import qualified Data.Map as Map
 import           Data.Text (Text)

@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFunctor #-}
@@ -12,6 +11,7 @@ module Nix.Types where
 import           Control.Applicative
 import           Control.Monad hiding (forM_, mapM, sequence)
 import           Data.Data
+import           Data.Fix
 import           Data.Foldable
 import           Data.List (intercalate)
 import           Data.Map (Map)
@@ -26,14 +26,6 @@ import           GHC.Exts
 import           GHC.Generics
 import           Prelude hiding (readFile, concat, concatMap, elem, mapM,
                                  sequence, minimum, foldr)
-
-newtype Fix (f :: * -> *) = Fix { outF :: f (Fix f) }
-
-cata :: Functor f => (f a -> a) -> Fix f -> a
-cata f = f . fmap (cata f) . outF
-
-cataM :: (Traversable f, Monad m) => (f a -> m a) -> Fix f -> m a
-cataM f = f <=< mapM (cataM f) . outF
 
 -- | Atoms are values that evaluate to themselves. This means that they appear in both
 -- the parsed AST (in the form of literals) and the evaluated form.
@@ -287,14 +279,6 @@ data Formals r
   | FormalRightAt (FormalParamSet r) Text
   deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show, Foldable, Traversable)
 
--- | @formalsAsMap@ combines the outer and inner name bindings of
--- 'Formals'
-formalsAsMap :: Formals r -> Map Text (Maybe r)
-formalsAsMap (FormalName n) = Map.singleton n Nothing
-formalsAsMap (FormalSet (FormalParamSet s)) = s
-formalsAsMap (FormalLeftAt n (FormalParamSet s)) = Map.insert n Nothing s
-formalsAsMap (FormalRightAt (FormalParamSet s) n) = Map.insert n Nothing s
-
 data NExprF r
     -- value types
     = NConstant NAtom
@@ -320,10 +304,6 @@ data NExprF r
     deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show)
 
 type NExpr = Fix NExprF
-
-instance Show (Fix NExprF) where showsPrec p (Fix f) = showsPrec p f
-instance Eq (Fix NExprF)   where Fix x == Fix y = x == y
-instance Ord (Fix NExprF)  where compare (Fix x) (Fix y) = compare x y
 
 mkInt :: Integer -> NExpr
 mkInt = Fix . NConstant . NInt
@@ -379,7 +359,6 @@ instance Show f => Show (NValueF f) where
       showsCon1 con a d = showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a
 
 type NValue = Fix NValueF
-instance Show (Fix NValueF) where showsPrec p (Fix f) = showsPrec p f
 
 valueText :: NValue -> Text
 valueText = cata phi where

@@ -2,10 +2,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 module ParserTests (tests) where
 
+import Data.Fix
+import Data.Text (pack)
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.TH
-import Data.Text (pack)
 
 import qualified Data.Map as Map
 

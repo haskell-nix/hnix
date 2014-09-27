@@ -5,11 +5,12 @@ module Nix.Parser (parseNixFile, parseNixString, Result(..)) where
 import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.IO.Class
-import           Data.Foldable
+import           Data.Fix
+import           Data.Foldable hiding (concat)
 import qualified Data.Map as Map
-import           Data.Text hiding (head, map, foldl1', foldl')
-import           Nix.Types
+import           Data.Text hiding (head, map, foldl1', foldl', concat)
 import           Nix.Parser.Library
+import           Nix.Types
 import           Prelude hiding (elem)
 
 -- | The lexer for this parser is defined in 'Nix.Parser.Library'.
@@ -95,7 +96,11 @@ nixSPath = mkPath True <$> try (char '<' *> some (oneOf pathChars <|> slash) <* 
 nixPath :: Parser NExpr
 nixPath = token $ fmap (mkPath False) $ ((++)
     <$> (try ((++) <$> many (oneOf pathChars) <*> fmap (:[]) slash) <?> "path")
-    <*> some (oneOf pathChars <|> slash))
+    <*> fmap concat
+      (  some (some (oneOf pathChars)
+     <|> liftA2 (:) slash (some (oneOf pathChars)))
+      )
+    )
     <?> "path"
 
 nixLet :: Parser NExpr
