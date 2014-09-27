@@ -1,5 +1,5 @@
 { cabal, parsers, trifecta, text, ansiWlPprint, parsec, transformers
-, tasty, tastyHunit, tastyTh, unorderedContainers
+, tasty, tastyHunit, tastyTh, unorderedContainers, dataFix
 , useParsec ? true
 }:
 
@@ -11,7 +11,7 @@ cabal.mkDerivation (self: rec {
   isExecutable = true;
   noHaddock = true;
   buildDepends = [
-    ansiWlPprint text transformers parsers
+    ansiWlPprint text transformers parsers dataFix
   ] ++ (if useParsec then [ parsec ] else [ trifecta ]);
   testDepends = [
     tasty tastyHunit tastyTh unorderedContainers
