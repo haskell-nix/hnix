@@ -59,7 +59,7 @@ Library
 
 Executable hnix
   Default-language: Haskell2010
-  Main-is: Nix.hs
+  Main-is: Main.hs
   Hs-source-dirs: main
   Default-extensions:
     DataKinds
