@@ -1,25 +1,21 @@
-{ cabal, parsers, trifecta, text, ansiWlPprint, parsec, transformers
-, tasty, tastyHunit, tastyTh, unorderedContainers, dataFix
-, useParsec ? true
+{ mkDerivation, ansi-wl-pprint, base, containers, data-fix, parsers
+, stdenv, tasty, tasty-hunit, tasty-th, text, transformers
+, trifecta, unordered-containers
 }:
-
-cabal.mkDerivation (self: rec {
+mkDerivation {
   pname = "hnix";
   version = "0.0.1";
-  src = builtins.filterSource (path: type: type != "unknown") ./.;
+  src = ./.;
   isLibrary = true;
   isExecutable = true;
-  noHaddock = true;
   buildDepends = [
-    ansiWlPprint text transformers parsers dataFix
-  ] ++ (if useParsec then [ parsec ] else [ trifecta ]);
-  testDepends = [
-    tasty tastyHunit tastyTh unorderedContainers
+    ansi-wl-pprint base containers data-fix parsers text transformers
+    trifecta unordered-containers
   ];
-  meta = {
-    homepage = "https://github.com/jwiegley/hnix";
-    description = "Haskell implementation of the Nix language";
-    license = self.stdenv.lib.licenses.bsd3;
-    platforms = self.ghc.meta.platforms;
-  };
-})
+  testDepends = [
+    base containers data-fix tasty tasty-hunit tasty-th text
+  ];
+  homepage = "http://github.com/jwiegley/hnix";
+  description = "Haskell implementation of the Nix language";
+  license = stdenv.lib.licenses.bsd3;
+}
