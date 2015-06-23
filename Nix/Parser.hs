@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Nix.Parser (parseNixFile, parseNixString, Result(..)) where
 

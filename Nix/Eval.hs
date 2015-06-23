@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Nix.Eval where
 
 import           Control.Applicative

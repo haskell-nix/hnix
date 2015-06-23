@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Nix.Parser.Library ( module Nix.Parser.Library, module X) where
 
 import Control.Applicative
