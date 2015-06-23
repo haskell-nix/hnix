@@ -337,6 +337,55 @@ mkOper op = Fix . NOper . NUnary op
 mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkOper2 op a = Fix . NOper . NBinary op a
 
+mkFormalSet :: [(Text, Maybe NExpr)] -> Formals NExpr
+mkFormalSet = FormalSet . FormalParamSet . Map.fromList
+
+mkApp :: NExpr -> NExpr -> NExpr
+mkApp e = Fix . NApp e
+
+mkRecSet :: [Binding NExpr] -> NExpr
+mkRecSet = Fix . NSet Rec
+
+mkNonRecSet :: [Binding NExpr] -> NExpr
+mkNonRecSet = Fix . NSet NonRec
+
+mkLet :: [Binding NExpr] -> NExpr -> NExpr
+mkLet bs = Fix . NLet bs
+
+mkList :: [NExpr] -> NExpr
+mkList = Fix . NList
+
+mkWith :: NExpr -> NExpr -> NExpr
+mkWith e = Fix . NWith e
+
+mkAssert :: NExpr -> NExpr -> NExpr
+mkAssert e = Fix . NWith e
+
+mkIf :: NExpr -> NExpr -> NExpr -> NExpr
+mkIf e1 e2 = Fix . NIf e1 e2
+
+mkFunction :: Formals NExpr -> NExpr -> NExpr
+mkFunction params = Fix . NAbs params
+
+-- | Shorthand for producing a binding of a name to an expression.
+bindTo :: Text -> NExpr -> Binding NExpr
+bindTo name val = NamedVar (mkSelector name) val
+
+-- | Append a list of bindings to a set or let expression.
+-- For example, adding `[a = 1, b = 2]` to `let c = 3; in 4` produces
+-- `let a = 1; b = 2; c = 3; in 4`.
+appendBindings :: [Binding NExpr] -> NExpr -> NExpr
+appendBindings newBindings (Fix e) = case e of
+  NLet bindings e' -> Fix $ NLet (bindings <> newBindings) e'
+  NSet bindType bindings -> Fix $ NSet bindType (bindings <> newBindings)
+  _ -> error "Can only append bindings to a set or a let"
+
+-- | Applies a transformation to the body of a nix function.
+modifyFunctionBody :: (NExpr -> NExpr) -> NExpr -> NExpr
+modifyFunctionBody f (Fix e) = case e of
+  NAbs params body -> Fix $ NAbs params (f body)
+  _ -> error "Not a function"
+
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.
 data NValueF r

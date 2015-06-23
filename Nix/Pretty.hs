@@ -119,16 +119,14 @@ prettyNix = withoutParens . cata phi where
   phi :: NExprF NixDoc -> NixDoc
   phi (NConstant atom) = prettyAtom atom
   phi (NStr str) = simpleExpr $ prettyString str
+  phi (NList []) = simpleExpr $ lbracket <> rbracket
   phi (NList xs) = simpleExpr $ group $
     nest 2 (vsep $ lbracket : map (wrapParens appOpNonAssoc) xs) <$> rbracket
+  phi (NSet rec []) = simpleExpr $ recPrefix rec <> lbrace <> rbrace
   phi (NSet rec xs) = simpleExpr $ group $
-    nest 2 (vsep $ prefix rec <> lbrace : map prettyBind xs) <$> rbrace
-   where
-    prefix Rec = text "rec" <> space
-    prefix NonRec = empty
+    nest 2 (vsep $ recPrefix rec <> lbrace : map prettyBind xs) <$> rbrace
   phi (NAbs args body) = leastPrecedence $
     (prettyFormals args <> colon) </> withoutParens body
-
   phi (NOper oper) = prettyOper oper
   phi (NSelect r attr o) = (if isJust o then leastPrecedence else flip NixDoc selectOp) $
      wrapParens selectOp r <> dot <> prettySelector attr <> ordoc
@@ -150,3 +148,6 @@ prettyNix = withoutParens . cata phi where
     text "with"  <+> withoutParens scope <> semi <+> withoutParens body
   phi (NAssert cond body) = leastPrecedence $
     text "assert" <+> withoutParens cond <> semi <+> withoutParens body
+
+  recPrefix Rec = text "rec" <> space
+  recPrefix NonRec = empty
