@@ -1,5 +1,7 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Nix.Pretty where
 
+import Prelude hiding ((<$>))
 import Data.Fix
 import Data.Map (toList)
 import Data.Maybe (isJust)
@@ -23,12 +25,12 @@ data NixDoc = NixDoc
   }
 
 -- | A simple expression is never wrapped in parentheses. The expression
--- behaves as if it's root operator had a precedence higher than all
+-- behaves as if its root operator had a precedence higher than all
 -- other operators (including function application).
 simpleExpr :: Doc -> NixDoc
 simpleExpr = flip NixDoc $ OperatorInfo maxBound NAssocNone "simple expr"
 
--- | An expression that behaves as if it's root operator
+-- | An expression that behaves as if its root operator
 -- had a precedence lower than all other operators.
 -- That ensures that the expression is wrapped in parantheses in
 -- almost always, but it's still rendered without parentheses
