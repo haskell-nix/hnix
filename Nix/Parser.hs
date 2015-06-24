@@ -16,7 +16,7 @@ import           Prelude hiding (elem)
 
 -- | The lexer for this parser is defined in 'Nix.Parser.Library'.
 nixExpr :: Parser NExpr
-nixExpr = whiteSpace *> (nixToplevelForm <|> foldl' makeParser nixOpArg nixOperators)
+nixExpr = whiteSpace *> (nixToplevelForm <|> foldl' makeParser nixTerm nixOperators)
  where
   makeParser term (Left NSelectOp) = nixSelect term
   makeParser term (Left NAppOp) = chainl1 term $ pure $ \a b -> Fix (NApp a b)
@@ -56,8 +56,9 @@ nixHasAttr term = build <$> term <*> optional (reservedOp "?" *> nixSelector) wh
   build t Nothing = t
   build t (Just s) = Fix $ NHasAttr t s
 
-nixOpArg :: Parser NExpr
-nixOpArg = nixSelect $ choice
+-- | A self-contained unit.
+nixTerm :: Parser NExpr
+nixTerm = nixSelect $ choice
   [ nixInt, nixBool, nixNull, nixParens, nixList, nixPath, nixSPath, nixUri
   , nixStringExpr, nixSet, nixSym ]
 
@@ -82,7 +83,7 @@ nixParens :: Parser NExpr
 nixParens = parens nixExpr <?> "parens"
 
 nixList :: Parser NExpr
-nixList = brackets (Fix . NList <$> many nixOpArg) <?> "list"
+nixList = brackets (Fix . NList <$> many nixTerm) <?> "list"
 
 pathChars :: String
 pathChars = ['A'..'Z'] ++ ['a'..'z'] ++ "._-+" ++ ['0'..'9']
@@ -90,6 +91,8 @@ pathChars = ['A'..'Z'] ++ ['a'..'z'] ++ "._-+" ++ ['0'..'9']
 slash :: Parser Char
 slash = try (char '/' <* notFollowedBy (char '/')) <?> "slash"
 
+-- | A path surrounded by angle brackets, indicating that it should be
+-- looked up in the NIX_PATH environment variable at evaluation.
 nixSPath :: Parser NExpr
 nixSPath = mkPath True <$> try (char '<' *> some (oneOf pathChars <|> slash) <* symbolic '>')
         <?> "spath"
@@ -173,32 +176,50 @@ nixString = doubleQuoted <|> indented <?> "string"
 
     escapeCode = choice [ c <$ char e | (c,e) <- escapeCodes ] <|> anyChar
 
+-- | Gets all of the arguments for a function.
 argExpr :: Parser (Formals NExpr)
-argExpr = choice
-  [ idOrAtPattern <$> identifierNotUri <*> optional (symbolic '@' *> paramSet)
-  , setOrAtPattern <$> paramSet <*> optional (symbolic '@' *> identifier)
-  ] <* symbolic ':'
- where
-  paramSet :: Parser (FormalParamSet NExpr)
-  paramSet = FormalParamSet . Map.fromList <$> argList
+argExpr = choice [atLeft, onlyname, atRight] <* symbolic ':' where
+  -- An argument not in curly braces. There's some potential ambiguity
+  -- in the case of, for example `x:y`. Is it a lambda function `x: y`, or
+  -- a URI `x:y`? Nix syntax says it's the latter. So we need to fail if
+  -- there's a valid URI parse here.
+  onlyname = choice [nixUri >> unexpected "valid uri",
+                     FormalName <$> identifier]
 
-  argList :: Parser [(Text, Maybe NExpr)]
-  argList = braces (argName `sepBy` symbolic ',') <?> "arglist"
+  -- Parameters named by an identifier on the left (`args @ {x, y}`)
+  atLeft = try $ do
+    name <- identifier <* symbolic '@'
+    ps <- params
+    return $ FormalSet ps (Just name)
 
-  identifierNotUri :: Parser Text
-  identifierNotUri = notFollowedBy nixUri *> identifier
+  -- Parameters named by an identifier on the right, or none (`{x, y} @ args`)
+  atRight = do
+    ps <- params
+    name <- optional $ symbolic '@' *> identifier
+    return $ FormalSet ps name
 
-  argName :: Parser (Text, Maybe NExpr)
-  argName = (,) <$> identifier
-                <*> optional (symbolic '?' *> nixExpr)
+  -- Return the parameters set.
+  params = do
+    (args, dotdots) <- braces getParams
+    let pset = if dotdots then VariadicParamSet else FixedParamSet
+    return $ pset $ Map.fromList args
 
-  idOrAtPattern :: Text -> Maybe (FormalParamSet NExpr) -> Formals NExpr
-  idOrAtPattern i Nothing = FormalName i
-  idOrAtPattern i (Just s) = FormalLeftAt i s
-
-  setOrAtPattern :: FormalParamSet NExpr -> Maybe Text -> Formals NExpr
-  setOrAtPattern s Nothing = FormalSet s
-  setOrAtPattern s (Just i) = FormalRightAt s i
+  -- Collects the parameters within curly braces. Returns the parameters and
+  -- a boolean indicating if the parameters are variadic.
+  getParams :: Parser ([(Text, Maybe NExpr)], Bool)
+  getParams = go [] where
+    -- Attempt to parse `...`. If this succeeds, stop and return True.
+    -- Otherwise, attempt to parse an argument, optionally with a
+    -- default. If this fails, then return what has been accumulated
+    -- so far.
+    go acc = (token (string "...") >> return (acc, True)) <|> getMore acc
+    getMore acc = do
+      -- Could be nothing, in which just return what we have so far.
+      option (acc, False) $ do
+        -- Get an argument name and an optional default.
+        pair <- liftA2 (,) identifier (optional $ symbolic '?' *> nixExpr)
+        -- Either return this, or attempt to get a comma and restart.
+        option (acc ++ [pair], False) $ symbolic ',' >> go (acc ++ [pair])
 
 nixBinders :: Parser [Binding NExpr]
 nixBinders = (inherit <|> namedVar) `endBy` symbolic ';' where
