@@ -146,18 +146,23 @@ case_lambda_or_uri = do
 case_lambda_pattern :: Assertion
 case_lambda_pattern = do
   assertParseString "{b, c ? 1}: b" $
-    Fix $ NAbs (FormalSet args) (mkSym "b")
+    Fix $ NAbs (FormalSet args Nothing) (mkSym "b")
   assertParseString "{ b ? x: x  }: b" $
-    Fix $ NAbs (FormalSet args2) (mkSym "b")
+    Fix $ NAbs (FormalSet args2 Nothing) (mkSym "b")
   assertParseString "a@{b,c ? 1}: b" $
-    Fix $ NAbs (FormalLeftAt "a" args) (mkSym "b")
+    Fix $ NAbs (FormalSet args (Just "a")) (mkSym "b")
   assertParseString "{b,c?1}@a: c" $
-    Fix $ NAbs (FormalRightAt args "a") (mkSym "c")
+    Fix $ NAbs (FormalSet args (Just "a")) (mkSym "c")
+  assertParseString "{b,c?1,...}@a: c" $
+    Fix $ NAbs (FormalSet vargs (Just "a")) (mkSym "c")
+  assertParseString "{...}: 1" $
+    Fix $ NAbs (FormalSet (VariadicParamSet mempty) Nothing) (mkInt 1)
   assertParseFail "a@b: a"
   assertParseFail "{a}@{b}: a"
  where
-  args = FormalParamSet $ Map.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
-  args2 = FormalParamSet $ Map.fromList [("b", Just lam)]
+  args = FixedParamSet $ Map.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
+  vargs = VariadicParamSet $ Map.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
+  args2 = FixedParamSet $ Map.fromList [("b", Just lam)]
   lam = Fix $ NAbs (FormalName "x") (mkSym "x")
 
 case_lambda_app_int :: Assertion

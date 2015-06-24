@@ -71,13 +71,18 @@ prettyString (NUri uri) = text (unpack uri)
 
 prettyFormals :: Formals NixDoc -> Doc
 prettyFormals (FormalName n) = text $ unpack n
-prettyFormals (FormalSet s) = prettyParamSet s
-prettyFormals (FormalLeftAt n s) = text (unpack n) <> text "@" <> prettyParamSet s
-prettyFormals (FormalRightAt s n) = prettyParamSet s <> text "@" <> text (unpack n)
+prettyFormals (FormalSet s mname) = prettyParamSet s <> case mname of
+  Nothing -> empty
+  Just name -> text "@" <> text (unpack name)
 
 prettyParamSet :: FormalParamSet NixDoc -> Doc
-prettyParamSet (FormalParamSet args) =
-  lbrace <+> (hcat . punctuate (comma <> space) . map prettySetArg) (toList args) <+> rbrace
+prettyParamSet params = lbrace <+> middle <+> rbrace
+  where
+    prettyArgs = case params of
+      FixedParamSet args -> map prettySetArg (toList args)
+                             
+      VariadicParamSet args -> map prettySetArg (toList args) ++ [text "..."]
+    middle = hcat $ punctuate (comma <> space) prettyArgs
 
 prettyBind :: Binding NixDoc -> Doc
 prettyBind (NamedVar n v) = prettySelector n <+> equals <+> withoutParens v <> semi

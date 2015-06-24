@@ -16,16 +16,17 @@ import           Prelude hiding (mapM, sequence)
 buildArgument :: Formals NValue -> NValue -> NValue
 buildArgument paramSpec arg = either error (Fix . NVSet) $ case paramSpec of
     FormalName name -> return $ Map.singleton name arg
-    FormalSet s -> lookupParamSet s
-    FormalLeftAt name s -> Map.insert name arg <$> lookupParamSet s
-    FormalRightAt s name -> Map.insert name arg <$> lookupParamSet s
+    FormalSet s Nothing -> lookupParamSet s
+    FormalSet s (Just name) -> Map.insert name arg <$> lookupParamSet s
   where
     go env k def = maybe (Left err) return $ Map.lookup k env <|> def
       where err = "Could not find " ++ show k
 
-    lookupParamSet (FormalParamSet s) = case arg of
-      Fix (NVSet env) -> Map.traverseWithKey (go env) s
-      _               -> Left "Unexpected function environment"
+    lookupParamSet fps = case fps of
+      FixedParamSet s -> case arg of
+        Fix (NVSet env) -> Map.traverseWithKey (go env) s
+        _               -> Left "Unexpected function environment"
+      _ -> error "Can't yet handle variadic param sets"
 
 evalExpr :: NExpr -> NValue -> IO NValue
 evalExpr = cata phi

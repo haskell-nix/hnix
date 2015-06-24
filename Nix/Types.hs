@@ -104,7 +104,9 @@ stripIndent xs = NString Indented . removePlainEmpty . mergePlain . unsplitLines
   ls = stripEmptyOpening $ splitLines xs
   ls' = map (dropSpaces minIndent) ls
 
-  minIndent = minimum . map (countSpaces . mergePlain) . stripEmptyLines $ ls
+  minIndent = case stripEmptyLines ls of
+    [] -> 0
+    nonEmptyLs -> minimum $ map (countSpaces . mergePlain) nonEmptyLs
 
   stripEmptyLines = filter f where
     f [Plain t] = not $ T.null $ T.strip t
@@ -267,18 +269,22 @@ data Binding r
   | Inherit (Maybe r) [NSelector r]
   deriving (Typeable, Data, Ord, Eq, Functor, Show)
 
-data FormalParamSet r = FormalParamSet (Map Text (Maybe r))
+-- | For functions which are called with a set as an argument.
+data FormalParamSet r
+  = FixedParamSet (Map Text (Maybe r))    -- ^ E.g. `{foo, bar}`
+  | VariadicParamSet (Map Text (Maybe r)) -- ^ E.g. `{foo, bar, ...}`
   deriving (Eq, Ord, Generic, Typeable, Data, Functor, Show, Foldable, Traversable)
 
 -- | @Formals@ represents all the ways the formal parameters to a
 -- function can be represented.
 data Formals r
   = FormalName Text
-  | FormalSet (FormalParamSet r)
-  | FormalLeftAt Text (FormalParamSet r)
-  | FormalRightAt (FormalParamSet r) Text
+  | FormalSet (FormalParamSet r) (Maybe Text)
   deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show, Foldable, Traversable)
 
+-- | A functor-ized nix expression type, which lets us do things like traverse
+-- expressions and map functions over them. The actual NExpr type is defined
+-- below.
 data NExprF r
     -- value types
     = NConstant NAtom
@@ -338,7 +344,13 @@ mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkOper2 op a = Fix . NOper . NBinary op a
 
 mkFormalSet :: [(Text, Maybe NExpr)] -> Formals NExpr
-mkFormalSet = FormalSet . FormalParamSet . Map.fromList
+mkFormalSet = mkFixedParamSet
+
+mkFixedParamSet :: [(Text, Maybe NExpr)] -> Formals NExpr
+mkFixedParamSet ps = FormalSet (FixedParamSet $ Map.fromList ps) Nothing
+
+mkVariadicParamSet :: [(Text, Maybe NExpr)] -> Formals NExpr
+mkVariadicParamSet ps = FormalSet (VariadicParamSet $ Map.fromList ps) Nothing
 
 mkApp :: NExpr -> NExpr -> NExpr
 mkApp e = Fix . NApp e
