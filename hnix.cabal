@@ -1,5 +1,5 @@
 Name:                hnix
-Version:             0.2.0
+Version:             0.2.1
 Synopsis:            Haskell implementation of the Nix language
 Description:
   Haskell implementation of the Nix language.
@@ -16,6 +16,8 @@ Homepage:            http://github.com/jwiegley/hnix
 Flag Parsec
   Description: Use parsec instead of Trifecta
   Default: False
+
+Extra-source-files: data/*
 
 Library
   Default-language: Haskell2010
