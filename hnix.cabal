@@ -13,11 +13,11 @@ Build-type:          Simple
 Cabal-version:       >=1.10
 Homepage:            http://github.com/jwiegley/hnix
 
+Extra-source-files: data/*.nix
+
 Flag Parsec
   Description: Use parsec instead of Trifecta
   Default: False
-
-Extra-source-files: data/*
 
 Library
   Default-language: Haskell2010
