@@ -130,6 +130,7 @@ escapeCodes =
   , ('\t', 't' )
   , ('\\', '\\')
   , ('$' , '$' )
+  , ('"', '"')
   ]
 
 fromEscapeCode :: Char -> Maybe Char

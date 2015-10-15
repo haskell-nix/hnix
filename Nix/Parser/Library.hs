@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Nix.Parser.Library ( module Nix.Parser.Library, module X) where
 
+import Prelude
 import Control.Applicative
 import Control.Monad
 import Control.Monad.IO.Class

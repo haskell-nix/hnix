@@ -7,9 +7,11 @@ import Data.Map (toList)
 import Data.Maybe (isJust)
 import Data.Text (Text, unpack, replace, strip)
 import Nix.Types
+import Nix.Parser.Library (reservedNames)
 import Text.PrettyPrint.ANSI.Leijen
 
 import qualified Data.Text as Text
+import qualified Data.HashSet as HashSet
 
 -- | This type represents a pretty printed nix expression
 -- together with some information about the expression.
@@ -54,7 +56,7 @@ prettyString :: NString NixDoc -> Doc
 prettyString (NString DoubleQuoted parts) = dquotes . hcat . map prettyPart $ parts
   where prettyPart (Plain t)      = text . concatMap escape . unpack $ t
         prettyPart (Antiquoted r) = text "$" <> braces (withoutParens r)
-        escape '"' = "\""
+        escape '"' = "\\\""
         escape x = maybe [x] (('\\':) . (:[])) $ toEscapeCode x
 prettyString (NString Indented parts)
   = group $ nest 2 (squote <> squote <$$> content) <$$> squote <> squote
@@ -80,7 +82,7 @@ prettyParamSet params = lbrace <+> middle <+> rbrace
   where
     prettyArgs = case params of
       FixedParamSet args -> map prettySetArg (toList args)
-                             
+
       VariadicParamSet args -> map prettySetArg (toList args) ++ [text "..."]
     middle = hcat $ punctuate (comma <> space) prettyArgs
 
@@ -91,6 +93,8 @@ prettyBind (Inherit s ns)
  where scope = maybe empty ((<> space) . parens . withoutParens) s
 
 prettyKeyName :: NKeyName NixDoc -> Doc
+prettyKeyName (StaticKey key)
+  | HashSet.member (unpack key) reservedNames = dquotes $ text $ unpack key
 prettyKeyName (StaticKey key) = text . unpack $ key
 prettyKeyName (DynamicKey key) = runAntiquoted prettyString withoutParens key
 
@@ -131,7 +135,7 @@ prettyNix = withoutParens . cata phi where
   phi (NSet rec xs) = simpleExpr $ group $
     nest 2 (vsep $ recPrefix rec <> lbrace : map prettyBind xs) <$> rbrace
   phi (NAbs args body) = leastPrecedence $
-    (prettyFormals args <> colon) </> withoutParens body
+    (prettyFormals args <> colon) </> (nest 2 $ withoutParens body)
   phi (NOper oper) = prettyOper oper
   phi (NSelect r attr o) = (if isJust o then leastPrecedence else flip NixDoc selectOp) $
      wrapParens selectOp r <> dot <> prettySelector attr <> ordoc
