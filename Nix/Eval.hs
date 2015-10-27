@@ -98,7 +98,7 @@ evalExpr = cata phi
 evalString :: NValue -> NString (NValue -> IO NValue) -> IO Text
 evalString env (NString _ parts)
   = Text.concat <$> mapM (runAntiquoted return (fmap valueText . ($ env))) parts
-evalString env (NUri t) = return t
+evalString _ (NUri t) = return t
 
 evalBinds :: Bool -> NValue -> [Binding (NValue -> IO NValue)] ->
   IO (Map.Map Text NValue)
@@ -125,6 +125,7 @@ evalBinds allowDynamic env xs = buildResult <$> sequence (concatMap go xs) where
   -- TODO: Inherit
   go :: Binding (NValue -> IO NValue) -> [IO ([Text], NValue)]
   go (NamedVar x y) = [liftM2 (,) (evalSelector allowDynamic env x) (y env)]
+  go _ = [] -- HACK! But who cares right now
 
   evalSelector :: Bool -> NValue -> NSelector (NValue -> IO NValue) -> IO [Text]
   evalSelector dyn e = mapM evalKeyName where
