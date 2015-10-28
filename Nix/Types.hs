@@ -48,9 +48,17 @@ atomText :: NAtom -> Text
 atomText (NInt i)  = pack (show i)
 atomText (NBool b) = if b then "true" else "false"
 atomText NNull     = "null"
-atomText (NPath s p)
-  | s = pack ("<" ++ p ++ ">")
-  | otherwise = pack p
+atomText (NPath isFromEnv p)
+  | isFromEnv = pack ("<" ++ p ++ ">")
+  -- If it's not an absolute path, we need to prefix with ./
+  | otherwise = case pack p of
+    "./" -> "./."
+    "../" -> "../."
+    ".." -> "../."
+    txt | "/" `T.isPrefixOf` txt -> txt
+        | "./" `T.isPrefixOf` txt -> txt
+        | "../" `T.isPrefixOf` txt -> txt
+        | otherwise -> "./" <> txt
 
 -- | 'Antiquoted' represents an expression that is either
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).

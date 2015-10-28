@@ -1,11 +1,19 @@
 { mkDerivation, ansi-wl-pprint, base, containers, data-fix, parsers
 , stdenv, tasty, tasty-hunit, tasty-th, text, transformers
-, trifecta, unordered-containers, cabal-install
+, trifecta, unordered-containers, cabal-install, pkgs
 }:
+
+let
+  inherit (builtins) filterSource;
+  inherit (pkgs.lib) elem;
+in
+
 mkDerivation {
   pname = "hnix";
-  version = "0.2.2";
-  src = ./.;
+  version = "0.2.3";
+  src = let
+    notNamed = list: name: !(elem (baseNameOf name) list);
+  in filterSource (n: _: notNamed [".git" "dist" "benchmarks"] n) ./.;
   isLibrary = true;
   isExecutable = true;
   buildDepends = [

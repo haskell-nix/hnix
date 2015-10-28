@@ -1,7 +1,12 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Nix.Parser (parseNixFile, parseNixString, Result(..)) where
+module Nix.Parser (
+  parseNixFile,
+  parseNixString,
+  parseNixText,
+  Result(..)
+  ) where
 
 import           Control.Applicative
 import           Control.Monad
@@ -244,3 +249,6 @@ parseNixFile = parseFromFileEx $ nixExpr <* eof
 
 parseNixString :: String -> Result NExpr
 parseNixString = parseFromString $ nixExpr <* eof
+
+parseNixText :: Text -> Result NExpr
+parseNixText = parseNixString . unpack
