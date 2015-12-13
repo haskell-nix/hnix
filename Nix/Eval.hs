@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 module Nix.Eval where
 
 import           Control.Applicative
@@ -38,15 +39,49 @@ evalExpr = cata phi
      where err = error ("Undefined variable: " ++ show var)
     phi (NConstant x) = const $ return $ Fix $ NVConstant x
     phi (NStr str) = fmap (Fix . NVStr) . flip evalString str
-    phi (NOper _x) = error "Operators are not yet defined"
+
+    phi (NOper x) = \env -> case x of
+      NUnary op arg -> arg env >>= \case
+        Fix (NVConstant c) -> pure $ Fix $ NVConstant $ case (op, c) of
+          (NNeg, NInt  i) -> NInt  (-i)
+          (NNot, NBool b) -> NBool (not b)
+          _               -> error $ "unsupported argument type for unary operator " ++ show op
+        _ -> error $ "argument to unary operator must evaluate to an atomic type"
+      NBinary op larg rarg -> do
+        lval <- larg env
+        rval <- rarg env
+        case (lval, rval) of
+         (Fix (NVConstant lc), Fix (NVConstant rc)) -> pure $ Fix $ NVConstant $ case (op, lc, rc) of
+           (NEq,  l, r) -> NBool $ l == r
+           (NNEq, l, r) -> NBool $ l /= r
+           (NLt,  l, r) -> NBool $ l <  r
+           (NLte, l, r) -> NBool $ l <= r
+           (NGt,  l, r) -> NBool $ l >  r
+           (NGte, l, r) -> NBool $ l >= r
+           (NAnd,  NBool l, NBool r) -> NBool $ l && r
+           (NOr,   NBool l, NBool r) -> NBool $ l || r
+           (NImpl, NBool l, NBool r) -> NBool $ not l || r
+           (NPlus,  NInt l, NInt r) -> NInt $ l + r
+           (NMinus, NInt l, NInt r) -> NInt $ l - r
+           (NMult,  NInt l, NInt r) -> NInt $ l * r
+           (NDiv,   NInt l, NInt r) -> NInt $ l `div` r
+           _ -> error $ "unsupported argument types for binary operator " ++ show op
+         (Fix (NVStr ls), Fix (NVStr rs)) -> case op of
+           NConcat -> pure $ Fix $ NVStr $ ls `mappend` rs
+           _ -> error $ "unsupported argument types for binary operator " ++ show op
+         (Fix (NVSet ls), Fix (NVSet rs)) -> case op of
+           NUpdate -> pure $ Fix $ NVSet $ rs `Map.union` ls
+           _ -> error $ "unsupported argument types for binary operator " ++ show op
+         _ -> error $ "unsupported argument types for binary operator " ++ show op
+
     phi (NSelect _x _attr _or) = error "Select expressions are not yet supported"
     phi (NHasAttr _x _attr) = error "Has attr expressions are not yet supported"
 
-    phi (NList l)     = \env ->
+    phi (NList l) = \env ->
         Fix . NVList <$> mapM ($ env) l
 
     -- TODO: recursive sets
-    phi (NSet _b binds)   = \env ->
+    phi (NSet _b binds) = \env ->
         Fix . NVSet <$> evalBinds True env binds
 
     -- TODO: recursive binding
@@ -57,7 +92,7 @@ evalExpr = cata phi
         e . Fix . NVSet $ newenv
       _ -> error "invalid evaluation environment"
 
-    phi (NIf cond t f)  = \env -> do
+    phi (NIf cond t f) = \env -> do
       (Fix cval) <- cond env
       case cval of
         NVConstant (NBool True) -> t env
@@ -88,7 +123,7 @@ evalExpr = cata phi
                 f arg'
             _ -> error "Attempt to call non-function"
 
-    phi (NAbs a b)    = \env -> do
+    phi (NAbs a b) = \env -> do
         -- jww (2014-06-28): arglists should not receive the current
         -- environment, but rather should recursively view their own arg
         -- set
