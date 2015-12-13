@@ -75,7 +75,12 @@ evalExpr = cata phi
          _ -> error $ "unsupported argument types for binary operator " ++ show op
 
     phi (NSelect _x _attr _or) = error "Select expressions are not yet supported"
-    phi (NHasAttr _x _attr) = error "Has attr expressions are not yet supported"
+
+    phi (NHasAttr aset attr) = \env -> aset env >>= \case
+      Fix (NVSet s) -> evalSelector True env attr >>= \case
+        [keyName] -> pure $ Fix $ NVConstant $ NBool $ keyName `Map.member` s
+        _ -> error $ "attribute name argument to hasAttr is not a single-part name"
+      _ -> error $ "argument to hasAttr has wrong type"
 
     phi (NList l) = \env ->
         Fix . NVList <$> mapM ($ env) l
@@ -162,9 +167,9 @@ evalBinds allowDynamic env xs = buildResult <$> sequence (concatMap go xs) where
   go (NamedVar x y) = [liftM2 (,) (evalSelector allowDynamic env x) (y env)]
   go _ = [] -- HACK! But who cares right now
 
-  evalSelector :: Bool -> NValue -> NSelector (NValue -> IO NValue) -> IO [Text]
-  evalSelector dyn e = mapM evalKeyName where
-    evalKeyName (StaticKey k) = return k
-    evalKeyName (DynamicKey k)
-      | dyn       = runAntiquoted (evalString e) (fmap valueText . ($ e)) k
-      | otherwise = error "dynamic attribute not allowed in this context"
+evalSelector :: Bool -> NValue -> NSelector (NValue -> IO NValue) -> IO [Text]
+evalSelector dyn e = mapM evalKeyName where
+  evalKeyName (StaticKey k) = return k
+  evalKeyName (DynamicKey k)
+    | dyn       = runAntiquoted (evalString e) (fmap valueText . ($ e)) k
+    | otherwise = error "dynamic attribute not allowed in this context"
