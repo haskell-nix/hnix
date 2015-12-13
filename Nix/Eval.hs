@@ -74,7 +74,20 @@ evalExpr = cata phi
            _ -> error $ "unsupported argument types for binary operator " ++ show op
          _ -> error $ "unsupported argument types for binary operator " ++ show op
 
-    phi (NSelect _x _attr _or) = error "Select expressions are not yet supported"
+    phi (NSelect aset attr alternative) = go where
+      go = \env -> do
+        aset' <- aset env
+        ks    <- evalSelector True env attr
+        case extract aset' ks of
+         Just v  -> pure v
+         Nothing -> case alternative of
+           Just v  -> v env
+           Nothing -> error "could not look up attribute in value"
+      extract (Fix (NVSet s)) (k:ks) = case (Map.lookup k s) of
+                                        Just v  -> extract v ks
+                                        Nothing -> Nothing
+      extract               _  (_:_) = Nothing
+      extract               v     [] = Just v
 
     phi (NHasAttr aset attr) = \env -> aset env >>= \case
       Fix (NVSet s) -> evalSelector True env attr >>= \case
