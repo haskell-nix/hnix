@@ -109,12 +109,12 @@ evalExpr = cata phi
         pure mergedEnv
       _ -> error "invalid evaluation environment"
 
-    -- TODO: recursive binding
     phi (NLet binds e) = \env -> case env of
       (Fix (NVSet env')) -> do
-        letenv <- evalBinds False env binds
-        let newenv = Map.union letenv env'
-        e . Fix . NVSet $ newenv
+        rec
+          mergedEnv   <- pure $ Fix $ NVSet $ evaledBinds `Map.union` env'
+          evaledBinds <- evalBinds True mergedEnv binds
+        e mergedEnv
       _ -> error "invalid evaluation environment"
 
     phi (NIf cond t f) = \env -> do
