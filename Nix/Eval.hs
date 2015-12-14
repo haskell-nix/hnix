@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecursiveDo #-}
 module Nix.Eval where
 
 import           Control.Applicative
@@ -98,9 +99,15 @@ evalExpr = cata phi
     phi (NList l) = \env ->
         Fix . NVList <$> mapM ($ env) l
 
-    -- TODO: recursive sets
-    phi (NSet _b binds) = \env ->
-        Fix . NVSet <$> evalBinds True env binds
+    phi (NSet recBind binds) = \env -> case env of
+      (Fix (NVSet env')) -> do
+        rec
+          mergedEnv <- pure $ case recBind of
+            Rec    -> Fix $ NVSet $ evaledBinds `Map.union` env'
+            NonRec -> env
+          evaledBinds <- evalBinds True mergedEnv binds
+        pure mergedEnv
+      _ -> error "invalid evaluation environment"
 
     -- TODO: recursive binding
     phi (NLet binds e) = \env -> case env of
@@ -181,8 +188,8 @@ evalBinds allowDynamic env xs = buildResult <$> sequence (concatMap go xs) where
   go _ = [] -- HACK! But who cares right now
 
 evalSelector :: Bool -> NValue -> NSelector (NValue -> IO NValue) -> IO [Text]
-evalSelector dyn e = mapM evalKeyName where
+evalSelector dyn env = mapM evalKeyName where
   evalKeyName (StaticKey k) = return k
   evalKeyName (DynamicKey k)
-    | dyn       = runAntiquoted (evalString e) (fmap valueText . ($ e)) k
+    | dyn       = runAntiquoted (evalString env) (fmap valueText . ($ env)) k
     | otherwise = error "dynamic attribute not allowed in this context"
