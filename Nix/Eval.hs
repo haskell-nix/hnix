@@ -1,9 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecursiveDo #-}
 module Nix.Eval where
 
 import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad hiding (mapM, sequence)
+import           Control.Monad.Fix
 import           Data.Fix
 import           Data.Foldable (foldl')
 import qualified Data.Map as Map
@@ -28,7 +31,7 @@ buildArgument paramSpec arg = either error (Fix . NVSet) $ case paramSpec of
         _               -> Left "Unexpected function environment"
       _ -> error "Can't yet handle variadic param sets"
 
-evalExpr :: Monad m => NExpr -> NValue m -> m (NValue m)
+evalExpr :: MonadFix m => NExpr -> NValue m -> m (NValue m)
 evalExpr = cata phi
   where
     phi (NSym var) = \env -> case env of
@@ -37,26 +40,84 @@ evalExpr = cata phi
      where err = error ("Undefined variable: " ++ show var)
     phi (NConstant x) = const $ return $ Fix $ NVConstant x
     phi (NStr str) = fmap (Fix . NVStr) . flip evalString str
-    phi (NOper _x) = error "Operators are not yet defined"
-    phi (NSelect _x _attr _or) = error "Select expressions are not yet supported"
-    phi (NHasAttr _x _attr) = error "Has attr expressions are not yet supported"
 
-    phi (NList l)     = \env ->
+    phi (NOper x) = \env -> case x of
+      NUnary op arg -> arg env >>= \case
+        Fix (NVConstant c) -> pure $ Fix $ NVConstant $ case (op, c) of
+          (NNeg, NInt  i) -> NInt  (-i)
+          (NNot, NBool b) -> NBool (not b)
+          _               -> error $ "unsupported argument type for unary operator " ++ show op
+        _ -> error "argument to unary operator must evaluate to an atomic type"
+      NBinary op larg rarg -> do
+        lval <- larg env
+        rval <- rarg env
+        case (lval, rval) of
+         (Fix (NVConstant lc), Fix (NVConstant rc)) -> pure $ Fix $ NVConstant $ case (op, lc, rc) of
+           (NEq,  l, r) -> NBool $ l == r
+           (NNEq, l, r) -> NBool $ l /= r
+           (NLt,  l, r) -> NBool $ l <  r
+           (NLte, l, r) -> NBool $ l <= r
+           (NGt,  l, r) -> NBool $ l >  r
+           (NGte, l, r) -> NBool $ l >= r
+           (NAnd,  NBool l, NBool r) -> NBool $ l && r
+           (NOr,   NBool l, NBool r) -> NBool $ l || r
+           (NImpl, NBool l, NBool r) -> NBool $ not l || r
+           (NPlus,  NInt l, NInt r) -> NInt $ l + r
+           (NMinus, NInt l, NInt r) -> NInt $ l - r
+           (NMult,  NInt l, NInt r) -> NInt $ l * r
+           (NDiv,   NInt l, NInt r) -> NInt $ l `div` r
+           _ -> error $ "unsupported argument types for binary operator " ++ show op
+         (Fix (NVStr ls), Fix (NVStr rs)) -> case op of
+           NConcat -> pure $ Fix $ NVStr $ ls `mappend` rs
+           _ -> error $ "unsupported argument types for binary operator " ++ show op
+         (Fix (NVSet ls), Fix (NVSet rs)) -> case op of
+           NUpdate -> pure $ Fix $ NVSet $ rs `Map.union` ls
+           _ -> error $ "unsupported argument types for binary operator " ++ show op
+         _ -> error $ "unsupported argument types for binary operator " ++ show op
+
+    phi (NSelect aset attr alternative) = go where
+      go env = do
+        aset' <- aset env
+        ks    <- evalSelector True env attr
+        case extract aset' ks of
+         Just v  -> pure v
+         Nothing -> case alternative of
+           Just v  -> v env
+           Nothing -> error "could not look up attribute in value"
+      extract (Fix (NVSet s)) (k:ks) = case Map.lookup k s of
+                                        Just v  -> extract v ks
+                                        Nothing -> Nothing
+      extract               _  (_:_) = Nothing
+      extract               v     [] = Just v
+
+    phi (NHasAttr aset attr) = \env -> aset env >>= \case
+      Fix (NVSet s) -> evalSelector True env attr >>= \case
+        [keyName] -> pure $ Fix $ NVConstant $ NBool $ keyName `Map.member` s
+        _ -> error "attribute name argument to hasAttr is not a single-part name"
+      _ -> error "argument to hasAttr has wrong type"
+
+    phi (NList l) = \env ->
         Fix . NVList <$> mapM ($ env) l
 
-    -- TODO: recursive sets
-    phi (NSet _b binds)   = \env ->
-        Fix . NVSet <$> evalBinds True env binds
-
-    -- TODO: recursive binding
-    phi (NLet binds e) = \env -> case env of
+    phi (NSet recBind binds) = \env -> case env of
       (Fix (NVSet env')) -> do
-        letenv <- evalBinds False env binds
-        let newenv = Map.union letenv env'
-        e . Fix . NVSet $ newenv
+        rec
+          mergedEnv <- pure $ case recBind of
+            Rec    -> Fix $ NVSet $ evaledBinds `Map.union` env'
+            NonRec -> env
+          evaledBinds <- evalBinds True mergedEnv binds
+        pure mergedEnv
       _ -> error "invalid evaluation environment"
 
-    phi (NIf cond t f)  = \env -> do
+    phi (NLet binds e) = \env -> case env of
+      (Fix (NVSet env')) -> do
+        rec
+          mergedEnv   <- pure $ Fix $ NVSet $ evaledBinds `Map.union` env'
+          evaledBinds <- evalBinds True mergedEnv binds
+        e mergedEnv
+      _ -> error "invalid evaluation environment"
+
+    phi (NIf cond t f) = \env -> do
       (Fix cval) <- cond env
       case cval of
         NVConstant (NBool True) -> t env
@@ -87,7 +148,7 @@ evalExpr = cata phi
                 f arg'
             _ -> error "Attempt to call non-function"
 
-    phi (NAbs a b)    = \env -> do
+    phi (NAbs a b) = \env -> do
         -- jww (2014-06-28): arglists should not receive the current
         -- environment, but rather should recursively view their own arg
         -- set
@@ -125,9 +186,9 @@ evalBinds allowDynamic env xs = buildResult <$> sequence (concatMap go xs) where
   go (NamedVar x y) = [liftM2 (,) (evalSelector allowDynamic env x) (y env)]
   go _ = [] -- HACK! But who cares right now
 
-  evalSelector :: Monad m => Bool -> NValue m -> NSelector (NValue m -> m (NValue m)) -> m [Text]
-  evalSelector dyn e = mapM evalKeyName where
-    evalKeyName (StaticKey k) = return k
-    evalKeyName (DynamicKey k)
-      | dyn       = runAntiquoted (evalString e) (fmap valueText . ($ e)) k
-      | otherwise = error "dynamic attribute not allowed in this context"
+evalSelector :: Monad m => Bool -> NValue m -> NSelector (NValue m -> m (NValue m)) -> m [Text]
+evalSelector dyn env = mapM evalKeyName where
+  evalKeyName (StaticKey k) = return k
+  evalKeyName (DynamicKey k)
+    | dyn       = runAntiquoted (evalString env) (fmap valueText . ($ env)) k
+    | otherwise = error "dynamic attribute not allowed in this context"

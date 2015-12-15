@@ -151,7 +151,7 @@ instance IsString (NString r) where
   fromString "" = NString DoubleQuoted []
   fromString x = NString DoubleQuoted . (:[]) . Plain . pack $ x
 
--- | A 'KeyName' is something that can appear at the right side of an equals sign.
+-- | A 'KeyName' is something that can appear on the left side of an equals sign.
 -- For example, @a@ is a 'KeyName' in @{ a = 3; }@, @let a = 3; in ...@, @{}.a@ or @{} ? a@.
 --
 -- Nix supports both static keynames (just an identifier) and dynamic identifiers.
