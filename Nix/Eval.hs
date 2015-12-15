@@ -13,7 +13,7 @@ import           Data.Traversable as T
 import           Nix.Types
 import           Prelude hiding (mapM, sequence)
 
-buildArgument :: Formals NValue -> NValue -> NValue
+buildArgument :: Formals (NValue m) -> NValue m -> NValue m
 buildArgument paramSpec arg = either error (Fix . NVSet) $ case paramSpec of
     FormalName name -> return $ Map.singleton name arg
     FormalSet s Nothing -> lookupParamSet s
@@ -28,10 +28,9 @@ buildArgument paramSpec arg = either error (Fix . NVSet) $ case paramSpec of
         _               -> Left "Unexpected function environment"
       _ -> error "Can't yet handle variadic param sets"
 
-evalExpr :: NExpr -> NValue -> IO NValue
+evalExpr :: Monad m => NExpr -> NValue m -> m (NValue m)
 evalExpr = cata phi
   where
-    phi :: NExprF (NValue -> IO NValue) -> NValue -> IO NValue
     phi (NSym var) = \env -> case env of
       Fix (NVSet s) -> maybe err return $ Map.lookup var s
       _ -> error "invalid evaluation environment"
@@ -95,22 +94,22 @@ evalExpr = cata phi
         args <- traverse ($ env) a
         return $ Fix $ NVFunction args b
 
-evalString :: NValue -> NString (NValue -> IO NValue) -> IO Text
+evalString :: Monad m
+           => NValue m -> NString (NValue m -> m (NValue m)) -> m Text
 evalString env (NString _ parts)
   = Text.concat <$> mapM (runAntiquoted return (fmap valueText . ($ env))) parts
-evalString _ (NUri t) = return t
+evalString _env (NUri t) = return t
 
-evalBinds :: Bool -> NValue -> [Binding (NValue -> IO NValue)] ->
-  IO (Map.Map Text NValue)
+evalBinds :: Monad m => Bool -> NValue m -> [Binding (NValue m -> m (NValue m))] ->
+  m (Map.Map Text (NValue m))
 evalBinds allowDynamic env xs = buildResult <$> sequence (concatMap go xs) where
-  buildResult :: [([Text], NValue)] -> Map.Map Text NValue
+  buildResult :: [([Text], NValue m)] -> Map.Map Text (NValue m)
   buildResult = foldl' insert Map.empty . map (first reverse) where
     insert _ ([], _) = error "invalid selector with no components"
     insert m (p:ps, v) = modifyPath ps (insertIfNotMember p v) where
       alreadyDefinedErr = error $ "attribute " ++ attr ++ " already defined"
       attr = show $ Text.intercalate "." $ reverse (p:ps)
 
-      modifyPath :: [Text] -> (Map.Map Text NValue -> Map.Map Text NValue) -> Map.Map Text NValue
       modifyPath [] f = f m
       modifyPath (x:parts) f = modifyPath parts $ \m' -> case Map.lookup x m' of
         Nothing                -> Map.singleton x $ g Map.empty
@@ -123,11 +122,10 @@ evalBinds allowDynamic env xs = buildResult <$> sequence (concatMap go xs) where
         | otherwise = alreadyDefinedErr
 
   -- TODO: Inherit
-  go :: Binding (NValue -> IO NValue) -> [IO ([Text], NValue)]
   go (NamedVar x y) = [liftM2 (,) (evalSelector allowDynamic env x) (y env)]
   go _ = [] -- HACK! But who cares right now
 
-  evalSelector :: Bool -> NValue -> NSelector (NValue -> IO NValue) -> IO [Text]
+  evalSelector :: Monad m => Bool -> NValue m -> NSelector (NValue m -> m (NValue m)) -> m [Text]
   evalSelector dyn e = mapM evalKeyName where
     evalKeyName (StaticKey k) = return k
     evalKeyName (DynamicKey k)

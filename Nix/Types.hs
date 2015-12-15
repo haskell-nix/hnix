@@ -390,7 +390,7 @@ mkFunction params = Fix . NAbs params
 
 -- | Shorthand for producing a binding of a name to an expression.
 bindTo :: Text -> NExpr -> Binding NExpr
-bindTo name val = NamedVar (mkSelector name) val
+bindTo = NamedVar . mkSelector
 
 -- | Append a list of bindings to a set or let expression.
 -- For example, adding `[a = 1, b = 2]` to `let c = 3; in 4` produces
@@ -409,15 +409,15 @@ modifyFunctionBody f (Fix e) = case e of
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.
-data NValueF r
+data NValueF m r
     = NVConstant NAtom
     | NVStr Text
     | NVList [r]
     | NVSet (Map Text r)
-    | NVFunction (Formals r) (NValue -> IO r)
+    | NVFunction (Formals r) (NValue m -> m r)
     deriving (Generic, Typeable, Functor)
 
-instance Show f => Show (NValueF f) where
+instance Show f => Show (NValueF m f) where
     showsPrec = flip go where
       go (NVConstant atom) = showsCon1 "NVConstant" atom
       go (NVStr      text) = showsCon1 "NVStr"      text
@@ -428,9 +428,9 @@ instance Show f => Show (NValueF f) where
       showsCon1 :: Show a => String -> a -> Int -> String -> String
       showsCon1 con a d = showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a
 
-type NValue = Fix NValueF
+type NValue m = Fix (NValueF m)
 
-valueText :: NValue -> Text
+valueText :: Functor m => NValue m -> Text
 valueText = cata phi where
     phi (NVConstant a)   = atomText a
     phi (NVStr t)        = t
