@@ -102,9 +102,9 @@ evalExpr = cata phi
     phi (NSet recBind binds) = \env -> case env of
       (Fix (NVSet env')) -> do
         rec
-          mergedEnv <- pure $ case recBind of
-            Rec    -> Fix $ NVSet $ evaledBinds `Map.union` env'
-            NonRec -> env
+          mergedEnv <- case recBind of
+            Rec    -> pure $ Fix $ NVSet $ evaledBinds `Map.union` env'
+            NonRec -> fmap (Fix . NVSet) $ evalBinds True env binds
           evaledBinds <- evalBinds True mergedEnv binds
         pure mergedEnv
       _ -> error "invalid evaluation environment"
