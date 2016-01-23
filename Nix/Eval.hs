@@ -20,43 +20,38 @@ import           Nix.StringOperations (runAntiquoted)
 import           Nix.Expr
 import           Prelude hiding (mapM, sequence)
 
-<<<<<<< f60f12f9a023dac427afc7194baf610b149f3ea0
-buildArgument :: Formals (NValue m) -> NValue m -> NValue m
-=======
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.
-data NValueF r
-  = NVConstant NAtom
-  | NVStr Text
-  | NVList [r]
-  | NVSet (Map.Map Text r)
-  | NVFunction (Formals r) (NValue -> IO r)
-  deriving (Generic, Typeable, Functor)
+data NValueF m r
+    = NVConstant NAtom
+    | NVStr Text
+    | NVList [r]
+    | NVSet (Map.Map Text r)
+    | NVFunction (Formals r) (NValue m -> m r)
+    deriving (Generic, Typeable, Functor)
 
-instance Show f => Show (NValueF f) where
-  showsPrec = flip go where
-    go (NVConstant atom) = showsCon1 "NVConstant" atom
-    go (NVStr      text) = showsCon1 "NVStr"      text
-    go (NVList     list) = showsCon1 "NVList"     list
-    go (NVSet     attrs) = showsCon1 "NVSet"      attrs
-    go (NVFunction r _)  = showsCon1 "NVFunction" r
+instance Show f => Show (NValueF m f) where
+    showsPrec = flip go where
+      go (NVConstant atom) = showsCon1 "NVConstant" atom
+      go (NVStr      text) = showsCon1 "NVStr"      text
+      go (NVList     list) = showsCon1 "NVList"     list
+      go (NVSet     attrs) = showsCon1 "NVSet"      attrs
+      go (NVFunction r _)  = showsCon1 "NVFunction" r
 
-    showsCon1 :: Show a => String -> a -> Int -> String -> String
-    showsCon1 con a d = showParen (d > 10) $
-                          showString (con ++ " ") . showsPrec 11 a
+      showsCon1 :: Show a => String -> a -> Int -> String -> String
+      showsCon1 con a d = showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a
 
-type NValue = Fix NValueF
+type NValue m = Fix (NValueF m)
 
-valueText :: NValue -> Text
+valueText :: Functor m => NValue m -> Text
 valueText = cata phi where
-  phi (NVConstant a)   = atomText a
-  phi (NVStr t)        = t
-  phi (NVList _)       = error "Cannot coerce a list to a string"
-  phi (NVSet _)        = error "Cannot coerce a set to a string"
-  phi (NVFunction _ _) = error "Cannot coerce a function to a string"
+    phi (NVConstant a)   = atomText a
+    phi (NVStr t)        = t
+    phi (NVList _)       = error "Cannot coerce a list to a string"
+    phi (NVSet _)        = error "Cannot coerce a set to a string"
+    phi (NVFunction _ _) = error "Cannot coerce a function to a string"
 
-buildArgument :: Formals NValue -> NValue -> NValue
->>>>>>> split into more modules, rename some things, add docs
+buildArgument :: Formals (NValue m) -> NValue m -> NValue m
 buildArgument paramSpec arg = either error (Fix . NVSet) $ case paramSpec of
     FormalName name -> return $ Map.singleton name arg
     FormalSet s Nothing -> lookupParamSet s
@@ -80,10 +75,7 @@ evalExpr = cata phi
      where err = error ("Undefined variable: " ++ show var)
     phi (NConstant x) = const $ return $ Fix $ NVConstant x
     phi (NStr str) = fmap (Fix . NVStr) . flip evalString str
-    phi (NOper _x) = error "Operators are not yet defined"
     phi (NPath _ _) = error "Path expressions are not yet supported"
-    phi (NSelect _x _attr _or) = error "Select expressions are not yet supported"
-    phi (NHasAttr _x _attr) = error "Has attr expressions are not yet supported"
 
     phi (NOper x) = \env -> case x of
       NUnary op arg -> arg env >>= \case
@@ -205,8 +197,9 @@ evalString env (NString _ parts)
   = Text.concat <$> mapM (runAntiquoted return (fmap valueText . ($ env))) parts
 evalString _env (NUri t) = return t
 
-evalBinds :: Monad m => Bool -> NValue m -> [Binding (NValue m -> m (NValue m))] ->
-  m (Map.Map Text (NValue m))
+evalBinds :: Monad m => Bool -> NValue m ->
+             [Binding (NValue m -> m (NValue m))] ->
+             m (Map.Map Text (NValue m))
 evalBinds allowDynamic env xs = buildResult <$> sequence (concatMap go xs) where
   buildResult :: [([Text], NValue m)] -> Map.Map Text (NValue m)
   buildResult = foldl' insert Map.empty . map (first reverse) where

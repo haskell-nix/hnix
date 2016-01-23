@@ -12,6 +12,9 @@ import qualified Data.Map as Map
 
 import Nix.Expr
 import Nix.Parser
+import Nix.StringOperations
+
+import Prelude
 
 case_constant_int :: Assertion
 case_constant_int = assertParseString "234" $ mkInt 234
