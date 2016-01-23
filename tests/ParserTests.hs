@@ -60,7 +60,7 @@ case_constant_uri = do
 
 case_simple_set :: Assertion
 case_simple_set = do
-  assertParseString "{ a = 23; b = 4; }" $ Fix $ NSet NonRec
+  assertParseString "{ a = 23; b = 4; }" $ Fix $ NSet
     [ NamedVar (mkSelector "a") $ mkInt 23
     , NamedVar (mkSelector "b") $ mkInt 4
     ]
@@ -68,49 +68,49 @@ case_simple_set = do
 
 case_set_inherit :: Assertion
 case_set_inherit = do
-  assertParseString "{ e = 3; inherit a b; }" $ Fix $ NSet NonRec
+  assertParseString "{ e = 3; inherit a b; }" $ Fix $ NSet
     [ NamedVar (mkSelector "e") $ mkInt 3
     , Inherit Nothing [mkSelector "a", mkSelector "b"]
     ]
-  assertParseString "{ inherit; }" $ Fix $ NSet NonRec [ Inherit Nothing [] ]
+  assertParseString "{ inherit; }" $ Fix $ NSet [ Inherit Nothing [] ]
 
 case_set_scoped_inherit :: Assertion
-case_set_scoped_inherit = assertParseString "{ inherit (a) b c; e = 4; inherit(a)b c; }" $ Fix $ NSet NonRec
+case_set_scoped_inherit = assertParseString "{ inherit (a) b c; e = 4; inherit(a)b c; }" $ Fix $ NSet
   [ Inherit (Just (mkSym "a")) [mkSelector "b", mkSelector "c"]
   , NamedVar (mkSelector "e") $ mkInt 4
   , Inherit (Just (mkSym "a")) [mkSelector "b", mkSelector "c"]
   ]
 
 case_set_rec :: Assertion
-case_set_rec = assertParseString "rec { a = 3; b = a; }" $ Fix $ NSet Rec
+case_set_rec = assertParseString "rec { a = 3; b = a; }" $ Fix $ NRecSet
   [ NamedVar (mkSelector "a") $ mkInt 3
   , NamedVar (mkSelector "b") $ mkSym "a"
   ]
 
 case_set_complex_keynames :: Assertion
 case_set_complex_keynames = do
-  assertParseString "{ \"\" = null; }" $ Fix $ NSet NonRec
+  assertParseString "{ \"\" = null; }" $ Fix $ NSet
     [ NamedVar [DynamicKey (Plain "")] mkNull ]
-  assertParseString "{ a.b = 3; a.c = 4; }" $ Fix $ NSet NonRec
+  assertParseString "{ a.b = 3; a.c = 4; }" $ Fix $ NSet
     [ NamedVar [StaticKey "a", StaticKey "b"] $ mkInt 3
     , NamedVar [StaticKey "a", StaticKey "c"] $ mkInt 4
     ]
-  assertParseString "{ ${let a = \"b\"; in a} = 4; }" $ Fix $ NSet NonRec
+  assertParseString "{ ${let a = \"b\"; in a} = 4; }" $ Fix $ NSet
     [ NamedVar [DynamicKey (Antiquoted letExpr)] $ mkInt 4 ]
-  assertParseString "{ \"a${let a = \"b\"; in a}c\".e = 4; }" $ Fix $ NSet NonRec
+  assertParseString "{ \"a${let a = \"b\"; in a}c\".e = 4; }" $ Fix $ NSet
     [ NamedVar [DynamicKey (Plain str), StaticKey "e"] $ mkInt 4 ]
  where
-  letExpr = Fix $ NLet [ NamedVar (mkSelector "a") (mkStr DoubleQuoted "b") ] (mkSym "a")
-  str = NString DoubleQuoted [Plain "a", Antiquoted letExpr, Plain "c"]
+  letExpr = Fix $ NLet [ NamedVar (mkSelector "a") (mkStr "b") ] (mkSym "a")
+  str = DoubleQuoted [Plain "a", Antiquoted letExpr, Plain "c"]
 
 case_set_inherit_direct :: Assertion
-case_set_inherit_direct = assertParseString "{ inherit ({a = 3;}); }" $ Fix $ NSet NonRec
-  [ flip Inherit [] $ Just $ Fix $ NSet NonRec [NamedVar (mkSelector "a") $ mkInt 3]
+case_set_inherit_direct = assertParseString "{ inherit ({a = 3;}); }" $ Fix $ NSet
+  [ flip Inherit [] $ Just $ Fix $ NSet [NamedVar (mkSelector "a") $ mkInt 3]
   ]
 
 case_inherit_selector :: Assertion
 case_inherit_selector = do
-  assertParseString "{ inherit \"a\"; }" $ Fix $ NSet NonRec
+  assertParseString "{ inherit \"a\"; }" $ Fix $ NSet
     [ Inherit Nothing [ [DynamicKey (Plain "a")] ] ]
   assertParseFail "{ inherit a.x; }"
 
@@ -124,7 +124,7 @@ case_int_null_list = assertParseString "[1 2 3 null 4]" $ Fix (NList (map (Fix .
 case_mixed_list :: Assertion
 case_mixed_list = do
   assertParseString "[{a = 3;}.a (if true then null else false) null false 4 [] c.d or null]" $ Fix $ NList
-    [ Fix (NSelect (Fix (NSet NonRec [NamedVar (mkSelector "a") (mkInt 3)])) (mkSelector "a") Nothing)
+    [ Fix (NSelect (Fix (NSet [NamedVar (mkSelector "a") (mkInt 3)])) (mkSelector "a") Nothing)
     , Fix (NIf (mkBool True) mkNull (mkBool False))
     , mkNull, mkBool False, mkInt 4, Fix (NList [])
     , Fix (NSelect (mkSym "c") (mkSelector "d") (Just mkNull))
@@ -135,43 +135,43 @@ case_mixed_list = do
   assertParseFail "[${\"test\")]"
 
 case_simple_lambda :: Assertion
-case_simple_lambda = assertParseString "a: a" $ Fix $ NAbs (FormalName "a") (mkSym "a")
+case_simple_lambda = assertParseString "a: a" $ Fix $ NAbs (Param "a") (mkSym "a")
 
 case_lambda_or_uri :: Assertion
 case_lambda_or_uri = do
-  assertParseString "a :b" $ Fix $ NAbs (FormalName "a") (mkSym "b")
+  assertParseString "a :b" $ Fix $ NAbs (Param "a") (mkSym "b")
   assertParseString "a c:def" $ Fix $ NApp (mkSym "a") (mkUri "c:def")
   assertParseString "c:def: c" $ Fix $ NApp (mkUri "c:def:") (mkSym "c")
-  assertParseString "a:{}" $ Fix $ NAbs (FormalName "a") $ Fix $ NSet NonRec []
-  assertParseString "a:[a]" $ Fix $ NAbs (FormalName "a") $ Fix $ NList [mkSym "a"]
+  assertParseString "a:{}" $ Fix $ NAbs (Param "a") $ Fix $ NSet []
+  assertParseString "a:[a]" $ Fix $ NAbs (Param "a") $ Fix $ NList [mkSym "a"]
   assertParseFail "def:"
 
 case_lambda_pattern :: Assertion
 case_lambda_pattern = do
   assertParseString "{b, c ? 1}: b" $
-    Fix $ NAbs (FormalSet args Nothing) (mkSym "b")
+    Fix $ NAbs (FixedParamSet args Nothing) (mkSym "b")
   assertParseString "{ b ? x: x  }: b" $
-    Fix $ NAbs (FormalSet args2 Nothing) (mkSym "b")
+    Fix $ NAbs (FixedParamSet args2 Nothing) (mkSym "b")
   assertParseString "a@{b,c ? 1}: b" $
-    Fix $ NAbs (FormalSet args (Just "a")) (mkSym "b")
+    Fix $ NAbs (FixedParamSet args (Just "a")) (mkSym "b")
   assertParseString "{b,c?1}@a: c" $
-    Fix $ NAbs (FormalSet args (Just "a")) (mkSym "c")
+    Fix $ NAbs (FixedParamSet args (Just "a")) (mkSym "c")
   assertParseString "{b,c?1,...}@a: c" $
-    Fix $ NAbs (FormalSet vargs (Just "a")) (mkSym "c")
+    Fix $ NAbs (VariadicParamSet vargs (Just "a")) (mkSym "c")
   assertParseString "{...}: 1" $
-    Fix $ NAbs (FormalSet (VariadicParamSet mempty) Nothing) (mkInt 1)
+    Fix $ NAbs (VariadicParamSet mempty Nothing) (mkInt 1)
   assertParseFail "a@b: a"
   assertParseFail "{a}@{b}: a"
  where
-  args = FixedParamSet $ Map.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
-  vargs = VariadicParamSet $ Map.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
-  args2 = FixedParamSet $ Map.fromList [("b", Just lam)]
-  lam = Fix $ NAbs (FormalName "x") (mkSym "x")
+  args = Map.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
+  vargs = Map.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
+  args2 = Map.fromList [("b", Just lam)]
+  lam = Fix $ NAbs (Param "x") (mkSym "x")
 
 case_lambda_app_int :: Assertion
 case_lambda_app_int = assertParseString "(a: a) 3" $ Fix (NApp lam int) where
   int = mkInt 3
-  lam = Fix (NAbs (FormalName "a") asym)
+  lam = Fix (NAbs (Param "a") asym)
   asym = mkSym "a"
 
 case_simple_let :: Assertion
@@ -217,7 +217,7 @@ case_identifier_special_chars = do
   assertParseFail "'a"
 
 makeStringParseTest :: String -> Assertion
-makeStringParseTest str = assertParseString ("\"" ++ str ++ "\"") $ mkStr DoubleQuoted $ pack str
+makeStringParseTest str = assertParseString ("\"" ++ str ++ "\"") $ mkStr $ pack str
 
 case_simple_string :: Assertion
 case_simple_string = mapM_ makeStringParseTest ["abcdef", "a", "A", "   a a  ", ""]
@@ -227,18 +227,18 @@ case_string_dollar = mapM_ makeStringParseTest ["a$b", "a$$b", "$cdef", "gh$i"]
 
 case_string_escape :: Assertion
 case_string_escape = do
-  assertParseString "\"\\$\\n\\t\\r\\\\\"" $ mkStr DoubleQuoted "$\n\t\r\\"
-  assertParseString "\" \\\" \\' \"" $ mkStr DoubleQuoted " \" ' "
+  assertParseString "\"\\$\\n\\t\\r\\\\\"" $ mkStr "$\n\t\r\\"
+  assertParseString "\" \\\" \\' \"" $ mkStr " \" ' "
 
 case_string_antiquote :: Assertion
 case_string_antiquote = do
   assertParseString "\"abc${  if true then \"def\" else \"abc\"  } g\"" $
-    Fix $ NStr $ NString DoubleQuoted
+    Fix $ NStr $ DoubleQuoted
       [ Plain "abc"
-      , Antiquoted $ Fix $ NIf (mkBool True) (mkStr DoubleQuoted "def") (mkStr DoubleQuoted "abc")
+      , Antiquoted $ Fix $ NIf (mkBool True) (mkStr "def") (mkStr "abc")
       , Plain " g"
       ]
-  assertParseString "\"\\${a}\"" $ mkStr DoubleQuoted "${a}"
+  assertParseString "\"\\${a}\"" $ mkStr "${a}"
   assertParseFail "\"a"
   assertParseFail "${true}"
   assertParseFail "\"${true\""
@@ -251,16 +251,16 @@ case_select = do
   assertParseString "a.e . d    or null" $ Fix $ NSelect (mkSym "a")
     [ StaticKey "e", StaticKey "d" ]
     (Just mkNull)
-  assertParseString "{}.\"\"or null" $ Fix $ NSelect (Fix (NSet NonRec []))
+  assertParseString "{}.\"\"or null" $ Fix $ NSelect (Fix (NSet []))
     [ DynamicKey (Plain "") ] (Just mkNull)
 
 case_select_path :: Assertion
 case_select_path = do
   assertParseString "f ./." $ Fix $ NApp (mkSym "f") (mkPath False "./.")
   assertParseString "f.b ../a" $ Fix $ NApp select (mkPath False "../a")
-  assertParseString "{}./def" $ Fix $ NApp (Fix (NSet NonRec [])) (mkPath False "./def")
+  assertParseString "{}./def" $ Fix $ NApp (Fix (NSet [])) (mkPath False "./def")
   assertParseString "{}.\"\"./def" $ Fix $ NApp
-    (Fix $ NSelect (Fix (NSet NonRec [])) [DynamicKey (Plain "")] Nothing)
+    (Fix $ NSelect (Fix (NSet [])) [DynamicKey (Plain "")] Nothing)
     (mkPath False "./def")
  where select = Fix $ NSelect (mkSym "f") (mkSelector "b") Nothing
 
@@ -273,11 +273,11 @@ case_fun_app = do
 
 case_indented_string :: Assertion
 case_indented_string = do
-  assertParseString "''a''" $ mkStr Indented "a"
-  assertParseString "''\n  foo\n  bar''" $ mkStr Indented "foo\nbar"
-  assertParseString "''        ''" $ mkStr Indented ""
-  assertParseString "'''''''" $ mkStr Indented "''"
-  assertParseString "''   ${null}\n   a${null}''" $ Fix $ NStr $ NString Indented
+  assertParseString "''a''" $ mkIndentedStr "a"
+  assertParseString "''\n  foo\n  bar''" $ mkIndentedStr "foo\nbar"
+  assertParseString "''        ''" $ mkIndentedStr ""
+  assertParseString "'''''''" $ mkIndentedStr "''"
+  assertParseString "''   ${null}\n   a${null}''" $ Fix $ NStr $ Indented
     [ Antiquoted mkNull
     , Plain "\na"
     , Antiquoted mkNull
@@ -288,7 +288,7 @@ case_indented_string = do
 case_indented_string_escape :: Assertion
 case_indented_string_escape = assertParseString
   "'' ''\\n ''\\t ''\\\\ ''${ \\ \\n ' ''' ''" $
-  mkStr Indented  "\n \t \\ ${ \\ \\n ' '' "
+  mkIndentedStr  "\n \t \\ ${ \\ \\n ' '' "
 
 case_operator_fun_app :: Assertion
 case_operator_fun_app = do
@@ -304,8 +304,8 @@ case_operators = do
   assertParseString "1 + (if true then 2 else 3)" $ mkOper2 NPlus (mkInt 1) $ Fix $ NIf
    (mkBool True) (mkInt 2) (mkInt 3)
   assertParseString "{ a = 3; } // rec { b = 4; }" $ mkOper2 NUpdate
-    (Fix $ NSet NonRec [NamedVar (mkSelector "a") (mkInt 3)])
-    (Fix $ NSet Rec    [NamedVar (mkSelector "b") (mkInt 4)])
+    (Fix $ NSet [NamedVar (mkSelector "a") (mkInt 3)])
+    (Fix $ NRecSet [NamedVar (mkSelector "b") (mkInt 4)])
   assertParseString "--a" $ mkOper NNeg $ mkOper NNeg $ mkSym "a"
   assertParseString "a - b - c" $ mkOper2 NMinus
     (mkOper2 NMinus (mkSym "a") (mkSym "b")) $

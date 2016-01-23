@@ -23,6 +23,58 @@ import           GHC.Generics
 import           Prelude hiding (readFile, concat, concatMap, elem, mapM,
                                  sequence, minimum, foldr)
 
+-- | The main nix expression type. This is polymorphic so that it can be made
+-- a functor, which allows us to traverse expressions and map functions over
+-- them. The actual 'NExpr' type is a fixed point of this functor, defined
+-- below.
+data NExprF r
+  = NConstant NAtom
+  -- ^ Constants: ints, bools, URIs, and null.
+  | NStr (NString r)
+  -- ^ A string, with interpolated expressions.
+  | NSym Text
+  -- ^ A variable. For example, in the expression @f a@, @f@ is represented
+  -- as @NSym "f"@ and @a@ as @NSym "a"@.
+  | NList [r]
+  -- ^ A list literal.
+  | NSet [Binding r]
+  -- ^ An attribute set literal, not recursive.
+  | NRecSet [Binding r]
+  -- ^ An attribute set literal, recursive.
+  | NLiteralPath FilePath
+  -- ^ A path expression, which is evaluated to a store path. The path here
+  -- can be relative, in which case it's evaluated relative to the file in
+  -- which it appears.
+  | NEnvPath FilePath
+  -- ^ A path which refers to something in the Nix search path (the NIX_PATH
+  -- environment variable. For example, @<nixpkgs/pkgs>@.
+  | NUnary NUnaryOp r
+  -- ^ Application of a unary operator to an expression.
+  | NBinary NBinaryOp r r
+  -- ^ Application of a binary operator to two expressions.
+  | NSelect r (NAttrPath r) (Maybe r)
+  -- ^ Dot-reference into an attribute set, optionally providing an
+  -- alternative if the key doesn't exist.
+  | NHasAttr r (NAttrPath r)
+  -- ^ Ask if a set contains a given attribute path.
+  | NAbs (Params r) r
+  -- ^ A function literal (lambda abstraction).
+  | NApp r r
+  -- ^ Apply a function to an argument.
+  | NLet [Binding r] r
+  -- ^ Evaluate the second argument after introducing the bindings.
+  | NIf r r r
+  -- ^ If-then-else statement.
+  | NWith r r
+  -- ^ Evaluate an attribute set, bring its bindings into scope, and
+  -- evaluate the second argument.
+  | NAssert r r
+  -- ^ Assert that the first returns true before evaluating the second.
+  deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show)
+
+-- | The monomorphic expression type is a fixed point of the polymorphic one.
+type NExpr = Fix NExprF
+
 -- | Atoms are values that evaluate to themselves. This means that
 -- they appear in both the parsed AST (in the form of literals) and
 -- the evaluated form.
@@ -34,53 +86,57 @@ data NAtom
   | NBool Bool
   -- | Null values. There's only one of this variant.
   | NNull
+  -- | URIs, which are just string literals, but do not need quotes.
+  | NUri Text
   deriving (Eq, Ord, Generic, Typeable, Data, Show)
 
-data NSetBind = Rec | NonRec
-  deriving (Ord, Eq, Generic, Typeable, Data, Show)
-
--- | A single line of the bindings section of a let expression or of
--- a set.
+-- | A single line of the bindings section of a let expression or of a set.
 data Binding r
   = NamedVar (NAttrPath r) r
+  -- ^ An explicit naming, such as @x = y@ or @x.y = z@.
   | Inherit (Maybe r) [NAttrPath r]
+  -- ^ Using a name already in scope, such as @inherit x;@ which is shorthand
+  -- for @x = x;@ or @inherit (x) y;@ which means @y = x.y;@.
   deriving (Typeable, Data, Ord, Eq, Functor, Show)
 
--- | For functions which are called with a set as an argument.
-data FormalParamSet r
-  = FixedParamSet (Map Text (Maybe r))
-    -- ^ Parameters for a function that expects an attribute set. The values
+-- | @Params@ represents all the ways the formal parameters to a
+-- function can be represented.
+data Params r
+  = Param Text
+  -- ^ For functions with a single named argument, such as @x: x + 1@.
+  | FixedParamSet (Map Text (Maybe r)) (Maybe Text)
+  -- ^ Parameters for a function that expects an attribute set. The values
   -- are @Just@ if they specify a default argument. For a fixed set, no
   -- arguments beyond what is specified in the map may be given.
-  | VariadicParamSet (Map Text (Maybe r))
+  | VariadicParamSet (Map Text (Maybe r)) (Maybe Text)
   -- ^ Same as the 'FixedParamSet', but extra arguments are allowed.
-  deriving (Eq, Ord, Generic, Typeable, Data, Functor, Show,
-            Foldable, Traversable)
-
--- | @Formals@ represents all the ways the formal parameters to a
--- function can be represented.
-data Formals r
-  = FormalName Text
-  -- ^ For functions with a single named argument, such as @x: x + 1@.
-  | FormalSet (FormalParamSet r) (Maybe Text)
-  -- ^ For functions that expect an attribute set argument, and unpack values
-  -- from it. For example, @{x, y}: x + y@.
   deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show,
             Foldable, Traversable)
 
--- | For the two different kinds of strings.
-data StringKind = DoubleQuoted | Indented
-  deriving (Eq, Ord, Generic, Typeable, Data, Show)
+-- | 'Antiquoted' represents an expression that is either
+-- antiquoted (surrounded by ${...}) or plain (not antiquoted).
+data Antiquoted v r = Plain v | Antiquoted r
+  deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show)
 
 -- | An 'NString' is a list of things that are either a plain string
 -- or an antiquoted expression. After the antiquotes have been evaluated,
 -- the final string is constructed by concating all the parts.
-data NString r = NString StringKind [Antiquoted Text r] | NUri Text
+data NString r
+  = DoubleQuoted [Antiquoted Text r]
+  -- ^ Strings wrapped with double-quotes (") are not allowed to contain
+  -- literal newline characters.
+  | Indented [Antiquoted Text r]
+  -- ^ Strings wrapped with two single quotes ('') can contain newlines,
+  -- and their indentation will be stripped.
   deriving (Eq, Ord, Generic, Typeable, Data, Functor, Show)
 
+-- | For the the 'IsString' instance, we use a plain doublequoted string.
+instance IsString (NString r) where
+  fromString "" = DoubleQuoted []
+  fromString string = DoubleQuoted [Plain $ pack string]
+
 -- | A 'KeyName' is something that can appear at the right side of an
--- equals sign.
--- For example, @a@ is a 'KeyName' in @{ a = 3; }@, @let a = 3;
+-- equals sign. For example, @a@ is a 'KeyName' in @{ a = 3; }@, @let a = 3;
 -- in ...@, @{}.a@ or @{} ? a@.
 --
 -- Nix supports both static keynames (just an identifier) and dynamic
@@ -114,71 +170,11 @@ instance Functor NKeyName where
 -- of strung-together key names.
 type NAttrPath r = [NKeyName r]
 
--- | A functor-ized nix expression type, which lets us do things like traverse
--- expressions and map functions over them. The actual 'NExpr' type is defined
--- below.
-data NExprF r
-  = NConstant NAtom
-  -- ^ Constants: ints, bools, and null.
-  | NStr (NString r)
-  -- ^ A string, with interpolated expressions.
-  | NList [r]
-  -- ^ A list literal.
-  | NSet NSetBind [Binding r]
-  -- ^ An attribute set literal, possibly recursive.
-  | NAbs (Formals r) r
-  -- ^ A lambda abstraction.
-  | NPath Bool FilePath
-  -- ^ A path expression, which is evaluated to a store path. The boolean
-  -- argument of 'NPath' is 'True' if the path refers to something in the
-  -- Nix search path. For example, @<nixpkgs/pkgs>@ is represented by
-  -- @NPath True "nixpkgs/pkgs"@, while @foo/bar@ is represented by @NPath
-  -- False "foo/bar@.
-  | NOper (NOperF r)
-  -- ^ Binary or unary operators.
-  | NSelect r (NAttrPath r) (Maybe r)
-  -- ^ Dot-reference into an attribute set, optionally providing an
-  -- alternative if the key doesn't exist.
-  | NHasAttr r (NAttrPath r)
-  -- ^ Ask if a set contains a given attribute path.
-  | NApp r r
-  -- ^ Apply a function to an argument.
-  | NSym Text
-  -- ^ A variable. For example, in the expression @f a@, @f@ is represented
-  -- as @NSym "f"@ and @a@ as @NSym "a"@.
-  | NLet [Binding r] r
-  -- ^ Evaluate the second argument after introducing the bindings.
-  | NIf r r r
-  -- ^ If-then-else statement.
-  | NWith r r
-  -- ^ Evaluate an attribute set, bring its bindings into scope, and
-  -- evaluate the second argument.
-  | NAssert r r
-  -- ^ Assert that the first returns true before evaluating the second.
-  deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show)
-
-type NExpr = Fix NExprF
-
--- | 'Antiquoted' represents an expression that is either
--- antiquoted (surrounded by ${...}) or plain (not antiquoted).
-data Antiquoted v r = Plain v | Antiquoted r
-  deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show)
-
--- | For the the 'IsString' instance, we use a plain doublequoted string.
-instance IsString (NString r) where
-  fromString "" = NString DoubleQuoted []
-  fromString x = NString DoubleQuoted . (:[]) . Plain . pack $ x
-
--- | Operator expressions are unary or binary.
-data NOperF r
-  = NUnary NUnaryOp r
-  | NBinary NBinaryOp r r
-  deriving (Eq, Ord, Generic, Typeable, Data, Functor, Show)
-
 -- | There are two unary operations: logical not and integer negation.
 data NUnaryOp = NNeg | NNot
   deriving (Eq, Ord, Generic, Typeable, Data, Show)
 
+-- | Binary operators expressible in the nix language.
 data NBinaryOp
   = NEq -- ^ Equality (==)
   | NNEq -- ^ Inequality (!=)
@@ -197,19 +193,36 @@ data NBinaryOp
   | NConcat -- ^ List concatenation (++)
   deriving (Eq, Ord, Generic, Typeable, Data, Show)
 
+-- | Get the name out of the parameter (there might be none).
+paramName :: Params r -> Maybe Text
+paramName (Param n) = Just n
+paramName (FixedParamSet _ n) = n
+paramName (VariadicParamSet _ n) = n
+
+-- | Make an integer literal expression.
 mkInt :: Integer -> NExpr
 mkInt = Fix . NConstant . NInt
 
-mkStr :: StringKind -> Text -> NExpr
-mkStr kind x = Fix . NStr . NString kind $ if x == ""
-  then []
-  else [Plain x]
+-- | Make a regular (double-quoted) string.
+mkStr :: Text -> NExpr
+mkStr = Fix . NStr . DoubleQuoted . \case
+  "" -> []
+  x -> [Plain x]
 
+mkIndentedStr :: Text -> NExpr
+mkIndentedStr = Fix . NStr . Indented . \case
+  "" -> []
+  x -> [Plain x]
+
+-- | Make a literal URI expression.
 mkUri :: Text -> NExpr
-mkUri = Fix . NStr . NUri
+mkUri = Fix . NConstant . NUri
 
+-- | Make a path. Use 'True' if the path should be read from the
+-- environment, else 'False'.
 mkPath :: Bool -> FilePath -> NExpr
-mkPath b = Fix . NPath b
+mkPath False = Fix . NLiteralPath
+mkPath True = Fix . NEnvPath
 
 -- | Make a path expression which pulls from the NIX_PATH env variable.
 mkEnvPath :: FilePath -> NExpr
@@ -219,6 +232,7 @@ mkEnvPath = mkPath True
 mkRelPath :: FilePath -> NExpr
 mkRelPath = mkPath False
 
+-- | Make a variable (symbol)
 mkSym :: Text -> NExpr
 mkSym = Fix . NSym
 
@@ -232,28 +246,28 @@ mkNull :: NExpr
 mkNull = Fix (NConstant NNull)
 
 mkOper :: NUnaryOp -> NExpr -> NExpr
-mkOper op = Fix . NOper . NUnary op
+mkOper op = Fix . NUnary op
 
 mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
-mkOper2 op a = Fix . NOper . NBinary op a
+mkOper2 op a = Fix . NBinary op a
 
-mkFormalSet :: [(Text, Maybe NExpr)] -> Formals NExpr
-mkFormalSet = mkFixedParamSet
+mkParamset :: [(Text, Maybe NExpr)] -> Params NExpr
+mkParamset = mkFixedParamSet
 
-mkFixedParamSet :: [(Text, Maybe NExpr)] -> Formals NExpr
-mkFixedParamSet ps = FormalSet (FixedParamSet $ Map.fromList ps) Nothing
+mkFixedParamSet :: [(Text, Maybe NExpr)] -> Params NExpr
+mkFixedParamSet ps = FixedParamSet (Map.fromList ps) Nothing
 
-mkVariadicParamSet :: [(Text, Maybe NExpr)] -> Formals NExpr
-mkVariadicParamSet ps = FormalSet (VariadicParamSet $ Map.fromList ps) Nothing
+mkVariadicParamSet :: [(Text, Maybe NExpr)] -> Params NExpr
+mkVariadicParamSet ps = VariadicParamSet (Map.fromList ps) Nothing
 
 mkApp :: NExpr -> NExpr -> NExpr
 mkApp e = Fix . NApp e
 
 mkRecSet :: [Binding NExpr] -> NExpr
-mkRecSet = Fix . NSet Rec
+mkRecSet = Fix . NRecSet
 
 mkNonRecSet :: [Binding NExpr] -> NExpr
-mkNonRecSet = Fix . NSet NonRec
+mkNonRecSet = Fix . NSet
 
 mkLet :: [Binding NExpr] -> NExpr -> NExpr
 mkLet bs = Fix . NLet bs
@@ -270,7 +284,7 @@ mkAssert e = Fix . NWith e
 mkIf :: NExpr -> NExpr -> NExpr -> NExpr
 mkIf e1 e2 = Fix . NIf e1 e2
 
-mkFunction :: Formals NExpr -> NExpr -> NExpr
+mkFunction :: Params NExpr -> NExpr -> NExpr
 mkFunction params = Fix . NAbs params
 
 -- | Shorthand for producing a binding of a name to an expression.
@@ -283,7 +297,8 @@ bindTo name val = NamedVar (mkSelector name) val
 appendBindings :: [Binding NExpr] -> NExpr -> NExpr
 appendBindings newBindings (Fix e) = case e of
   NLet bindings e' -> Fix $ NLet (bindings <> newBindings) e'
-  NSet bindType bindings -> Fix $ NSet bindType (bindings <> newBindings)
+  NSet bindings -> Fix $ NSet (bindings <> newBindings)
+  NRecSet bindings -> Fix $ NRecSet (bindings <> newBindings)
   _ -> error "Can only append bindings to a set or a let"
 
 -- | Applies a transformation to the body of a nix function.

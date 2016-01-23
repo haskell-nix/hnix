@@ -61,7 +61,7 @@ Library
     Build-depends: parsec
   else
     Build-depends: trifecta
-  ghc-options: -Wall
+  ghc-options: -Wall -fno-warn-name-shadowing
 
 Executable hnix
   Default-language: Haskell2010

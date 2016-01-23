@@ -56,12 +56,12 @@ wrapParens op sub
   | otherwise = parens $ withoutParens sub
 
 prettyString :: NString NixDoc -> Doc
-prettyString (NString DoubleQuoted parts) = dquotes . hcat . map prettyPart $ parts
+prettyString (DoubleQuoted parts) = dquotes . hcat . map prettyPart $ parts
   where prettyPart (Plain t)      = text . concatMap escape . unpack $ t
         prettyPart (Antiquoted r) = text "$" <> braces (withoutParens r)
         escape '"' = "\\\""
         escape x = maybe [x] (('\\':) . (:[])) $ toEscapeCode x
-prettyString (NString Indented parts)
+prettyString (Indented parts)
   = group $ nest 2 (squote <> squote <$$> content) <$$> squote <> squote
  where
   content = vsep . map prettyLine . stripLastIfEmpty . splitLines $ parts
@@ -72,22 +72,24 @@ prettyString (NString Indented parts)
   prettyPart (Plain t) = text . unpack . replace "$" "''$" . replace "''" "'''" $ t
   prettyPart (Antiquoted r) = text "$" <> braces (withoutParens r)
 
-prettyString (NUri uri) = text (unpack uri)
-
-prettyFormals :: Formals NixDoc -> Doc
-prettyFormals (FormalName n) = text $ unpack n
-prettyFormals (FormalSet s mname) = prettyParamSet s <> case mname of
-  Nothing -> empty
-  Just name -> text "@" <> text (unpack name)
-
-prettyParamSet :: FormalParamSet NixDoc -> Doc
-prettyParamSet params = lbrace <+> middle <+> rbrace
-  where
-    prettyArgs = case params of
-      FixedParamSet args -> map prettySetArg (toList args)
-
-      VariadicParamSet args -> map prettySetArg (toList args) ++ [text "..."]
-    middle = hcat $ punctuate (comma <> space) prettyArgs
+prettyParams :: Params NixDoc -> Doc
+prettyParams (Param n) = text $ unpack n
+prettyParams paramSet = prettyParamSet <> argName where
+  prettyParamSet = lbrace <+> middle <+> rbrace
+  middle = hcat $ punctuate (comma <> space) prettyArgs
+  prettyArgs = case isVariadic of
+    False -> map prettySetArg (toList args)
+    True -> map prettySetArg (toList args) ++ [text "..."]
+  (isVariadic, args) = case paramSet of
+    VariadicParamSet args _ -> (True, args)
+    FixedParamSet args _ -> (False, args)
+    _ -> (False, mempty)
+  prettySetArg (n, maybeDef) = case maybeDef of
+    Nothing -> text (unpack n)
+    Just v -> text (unpack n) <+> text "?" <+> withoutParens v
+  argName = case paramName paramSet of
+    Nothing -> empty
+    Just name -> text "@" <> text (unpack name)
 
 prettyBind :: Binding NixDoc -> Doc
 prettyBind (NamedVar n v) = prettySelector n <+> equals <+> withoutParens v <> semi
@@ -104,30 +106,12 @@ prettyKeyName (DynamicKey key) = runAntiquoted prettyString withoutParens key
 prettySelector :: NAttrPath NixDoc -> Doc
 prettySelector = hcat . punctuate dot . map prettyKeyName
 
-prettySetArg :: (Text, Maybe NixDoc) -> Doc
-prettySetArg (n, Nothing) = text (unpack n)
-prettySetArg (n, Just v) = text (unpack n) <+> text "?" <+> withoutParens v
-
-prettyOper :: NOperF NixDoc -> NixDoc
-prettyOper (NBinary op r1 r2) = flip NixDoc opInfo $ hsep
-  [ wrapParens (f NAssocLeft) r1
-  , text $ operatorName opInfo
-  , wrapParens (f NAssocRight) r2
-  ]
- where
-  opInfo = getBinaryOperator op
-  f x
-    | associativity opInfo /= x = opInfo { associativity = NAssocNone }
-    | otherwise = opInfo
-prettyOper (NUnary op r1) =
-  NixDoc (text (operatorName opInfo) <> wrapParens opInfo r1) opInfo
- where opInfo = getUnaryOperator op
-
 -- | Translate an atom into its nix representation.
 atomText :: NAtom -> Text
-atomText (NInt i)  = pack (show i)
-atomText (NBool b) = if b then "true" else "false"
-atomText NNull     = "null"
+atomText (NInt i)   = pack (show i)
+atomText (NBool b)  = if b then "true" else "false"
+atomText NNull      = "null"
+atomText (NUri uri) = uri
 
 prettyAtom :: NAtom -> NixDoc
 prettyAtom atom = simpleExpr $ text $ unpack $ atomText atom
@@ -140,12 +124,27 @@ prettyNix = withoutParens . cata phi where
   phi (NList []) = simpleExpr $ lbracket <> rbracket
   phi (NList xs) = simpleExpr $ group $
     nest 2 (vsep $ lbracket : map (wrapParens appOpNonAssoc) xs) <$> rbracket
-  phi (NSet rec []) = simpleExpr $ recPrefix rec <> lbrace <> rbrace
-  phi (NSet rec xs) = simpleExpr $ group $
-    nest 2 (vsep $ recPrefix rec <> lbrace : map prettyBind xs) <$> rbrace
+  phi (NSet []) = simpleExpr $ lbrace <> rbrace
+  phi (NSet xs) = simpleExpr $ group $
+    nest 2 (vsep $ lbrace : map prettyBind xs) <$> rbrace
+  phi (NRecSet []) = simpleExpr $ recPrefix <> lbrace <> rbrace
+  phi (NRecSet xs) = simpleExpr $ group $
+    nest 2 (vsep $ recPrefix <> lbrace : map prettyBind xs) <$> rbrace
   phi (NAbs args body) = leastPrecedence $
-    (prettyFormals args <> colon) </> (nest 2 $ withoutParens body)
-  phi (NOper oper) = prettyOper oper
+    (prettyParams args <> colon) </> (nest 2 $ withoutParens body)
+  phi (NBinary op r1 r2) = flip NixDoc opInfo $ hsep
+    [ wrapParens (f NAssocLeft) r1
+    , text $ operatorName opInfo
+    , wrapParens (f NAssocRight) r2
+    ]
+    where
+      opInfo = getBinaryOperator op
+      f x
+        | associativity opInfo /= x = opInfo { associativity = NAssocNone }
+        | otherwise = opInfo
+  phi (NUnary op r1) =
+    NixDoc (text (operatorName opInfo) <> wrapParens opInfo r1) opInfo
+    where opInfo = getUnaryOperator op
   phi (NSelect r attr o) = (if isJust o then leastPrecedence else flip NixDoc selectOp) $
      wrapParens selectOp r <> dot <> prettySelector attr <> ordoc
     where ordoc = maybe empty (((space <> text "or") <+>) . withoutParens) o
@@ -153,17 +152,15 @@ prettyNix = withoutParens . cata phi where
     = NixDoc (wrapParens hasAttrOp r <+> text "?" <+> prettySelector attr) hasAttrOp
   phi (NApp fun arg)
     = NixDoc (wrapParens appOp fun <+> wrapParens appOpNonAssoc arg) appOp
-  phi (NPath isFromEnv p)
-    | isFromEnv = simpleExpr $ text ("<" ++ p ++ ">")
-    -- If it's not an absolute path, we need to prefix with ./
-    | otherwise = simpleExpr $ text $ case p of
-      "./" -> "./."
-      "../" -> "../."
-      ".." -> "../."
-      txt | "/" `isPrefixOf` txt -> txt
-          | "./" `isPrefixOf` txt -> txt
-          | "../" `isPrefixOf` txt -> txt
-          | otherwise -> "./" ++ txt
+  phi (NEnvPath p) = simpleExpr $ text ("<" ++ p ++ ">")
+  phi (NLiteralPath p) = simpleExpr $ text $ case p of
+    "./" -> "./."
+    "../" -> "../."
+    ".." -> "../."
+    txt | "/" `isPrefixOf` txt -> txt
+        | "./" `isPrefixOf` txt -> txt
+        | "../" `isPrefixOf` txt -> txt
+        | otherwise -> "./" ++ txt
   phi (NSym name) = simpleExpr $ text (unpack name)
   phi (NLet binds body) = leastPrecedence $ group $ nest 2 $
         vsep (text "let" : map prettyBind binds) <$> text "in" <+> withoutParens body
@@ -177,5 +174,4 @@ prettyNix = withoutParens . cata phi where
   phi (NAssert cond body) = leastPrecedence $
     text "assert" <+> withoutParens cond <> semi <+> withoutParens body
 
-  recPrefix Rec = text "rec" <> space
-  recPrefix NonRec = empty
+  recPrefix = text "rec" <> space

@@ -44,9 +44,9 @@ unsplitLines = intercalate [Plain "\n"]
 
 -- | Form an indented string by stripping spaces equal to the minimal indent.
 stripIndent :: [Antiquoted Text r] -> NString r
-stripIndent [] = NString Indented []
+stripIndent [] = Indented []
 stripIndent xs =
-  NString Indented . removePlainEmpty . mergePlain . unsplitLines $ ls'
+  Indented . removePlainEmpty . mergePlain . unsplitLines $ ls'
   where
     ls = stripEmptyOpening $ splitLines xs
     ls' = map (dropSpaces minIndent) ls
