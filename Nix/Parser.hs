@@ -16,7 +16,9 @@ import           Data.Foldable hiding (concat)
 import qualified Data.Map as Map
 import           Data.Text hiding (head, map, foldl1', foldl', concat)
 import           Nix.Parser.Library
-import           Nix.Types
+import           Nix.Parser.Operators
+import           Nix.Expr
+import           Nix.StringOperations
 import           Prelude hiding (elem)
 
 -- | The lexer for this parser is defined in 'Nix.Parser.Library'.
@@ -45,7 +47,7 @@ selDot :: Parser ()
 selDot = try (char '.' *> notFollowedBy (("path" :: String) <$ nixPath)) *> whiteSpace
       <?> "."
 
-nixSelector :: Parser (NSelector NExpr)
+nixSelector :: Parser (NAttrPath NExpr)
 nixSelector = keyName `sepBy1` selDot where
 
 nixSelect :: Parser NExpr -> Parser NExpr

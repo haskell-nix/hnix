@@ -5,9 +5,12 @@ import Prelude hiding ((<$>))
 import Data.Fix
 import Data.Map (toList)
 import Data.Maybe (isJust)
-import Data.Text (Text, unpack, replace, strip)
-import Nix.Types
+import Data.Text (Text, pack, unpack, replace, strip)
+import Data.List (isPrefixOf)
+import Nix.Expr
 import Nix.Parser.Library (reservedNames)
+import Nix.Parser.Operators
+import Nix.StringOperations
 import Text.PrettyPrint.ANSI.Leijen
 
 import qualified Data.Text as Text
@@ -98,7 +101,7 @@ prettyKeyName (StaticKey key)
 prettyKeyName (StaticKey key) = text . unpack $ key
 prettyKeyName (DynamicKey key) = runAntiquoted prettyString withoutParens key
 
-prettySelector :: NSelector NixDoc -> Doc
+prettySelector :: NAttrPath NixDoc -> Doc
 prettySelector = hcat . punctuate dot . map prettyKeyName
 
 prettySetArg :: (Text, Maybe NixDoc) -> Doc
@@ -119,6 +122,12 @@ prettyOper (NBinary op r1 r2) = flip NixDoc opInfo $ hsep
 prettyOper (NUnary op r1) =
   NixDoc (text (operatorName opInfo) <> wrapParens opInfo r1) opInfo
  where opInfo = getUnaryOperator op
+
+-- | Translate an atom into its nix representation.
+atomText :: NAtom -> Text
+atomText (NInt i)  = pack (show i)
+atomText (NBool b) = if b then "true" else "false"
+atomText NNull     = "null"
 
 prettyAtom :: NAtom -> NixDoc
 prettyAtom atom = simpleExpr $ text $ unpack $ atomText atom
@@ -144,7 +153,17 @@ prettyNix = withoutParens . cata phi where
     = NixDoc (wrapParens hasAttrOp r <+> text "?" <+> prettySelector attr) hasAttrOp
   phi (NApp fun arg)
     = NixDoc (wrapParens appOp fun <+> wrapParens appOpNonAssoc arg) appOp
-
+  phi (NPath isFromEnv p)
+    | isFromEnv = simpleExpr $ text ("<" ++ p ++ ">")
+    -- If it's not an absolute path, we need to prefix with ./
+    | otherwise = simpleExpr $ text $ case p of
+      "./" -> "./."
+      "../" -> "../."
+      ".." -> "../."
+      txt | "/" `isPrefixOf` txt -> txt
+          | "./" `isPrefixOf` txt -> txt
+          | "../" `isPrefixOf` txt -> txt
+          | otherwise -> "./" ++ txt
   phi (NSym name) = simpleExpr $ text (unpack name)
   phi (NLet binds body) = leastPrecedence $ group $ nest 2 $
         vsep (text "let" : map prettyBind binds) <$> text "in" <+> withoutParens body

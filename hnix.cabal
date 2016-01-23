@@ -24,7 +24,7 @@ Library
   Exposed-modules:
     Nix.Eval
     Nix.Parser
-    Nix.Types
+    Nix.Expr
     Nix.Pretty
   Other-modules:
     Nix.Parser.Library
@@ -52,6 +52,7 @@ Library
     , parsers >= 0.10
     , unordered-containers
     , data-fix
+    , deepseq
   if flag(parsec)
     Cpp-options: -DUSE_PARSEC
     Build-depends: parsec
@@ -84,6 +85,7 @@ Executable hnix
     , containers
     , ansi-wl-pprint
     , data-fix
+    , deepseq
   Ghc-options: -Wall
 
 Test-suite hnix-tests

@@ -10,7 +10,7 @@ import Test.Tasty.TH
 
 import qualified Data.Map as Map
 
-import Nix.Types
+import Nix.Expr
 import Nix.Parser
 
 case_constant_int :: Assertion
