@@ -104,11 +104,18 @@ data Binding r
 data Params r
   = Param Text
   -- ^ For functions with a single named argument, such as @x: x + 1@.
-  | FixedParamSet (Map Text (Maybe r)) (Maybe Text)
-  -- ^ Parameters for a function that expects an attribute set. The values
-  -- are @Just@ if they specify a default argument. For a fixed set, no
-  -- arguments beyond what is specified in the map may be given.
-  | VariadicParamSet (Map Text (Maybe r)) (Maybe Text)
+  | ParamSet (ParamSet r) (Maybe Text)
+  -- ^ Explicit parameters (argument must be a set). Might specify a name
+  -- to bind to the set in the function body.
+  deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show,
+            Foldable, Traversable)
+
+-- | An explicit parameter set; provides a shorthand for unpacking arguments.
+data ParamSet r
+  = FixedParamSet (Map Text (Maybe r))
+  -- ^ A fixed set, where no arguments beyond what is specified in the map
+  -- may be given. The map might contain defaults for arguments not passed.
+  | VariadicParamSet (Map Text (Maybe r))
   -- ^ Same as the 'FixedParamSet', but extra arguments are allowed.
   deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show,
             Foldable, Traversable)
@@ -196,8 +203,7 @@ data NBinaryOp
 -- | Get the name out of the parameter (there might be none).
 paramName :: Params r -> Maybe Text
 paramName (Param n) = Just n
-paramName (FixedParamSet _ n) = n
-paramName (VariadicParamSet _ n) = n
+paramName (ParamSet _ n) = n
 
 -- | Make an integer literal expression.
 mkInt :: Integer -> NExpr
@@ -252,13 +258,13 @@ mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkOper2 op a = Fix . NBinary op a
 
 mkParamset :: [(Text, Maybe NExpr)] -> Params NExpr
-mkParamset = mkFixedParamSet
+mkParamset params = ParamSet (mkFixedParamSet params) Nothing
 
-mkFixedParamSet :: [(Text, Maybe NExpr)] -> Params NExpr
-mkFixedParamSet ps = FixedParamSet (Map.fromList ps) Nothing
+mkFixedParamSet :: [(Text, Maybe NExpr)] -> ParamSet NExpr
+mkFixedParamSet ps = FixedParamSet (Map.fromList ps)
 
-mkVariadicParamSet :: [(Text, Maybe NExpr)] -> Params NExpr
-mkVariadicParamSet ps = VariadicParamSet (Map.fromList ps) Nothing
+mkVariadicParamSet :: [(Text, Maybe NExpr)] -> ParamSet NExpr
+mkVariadicParamSet ps = VariadicParamSet (Map.fromList ps)
 
 mkApp :: NExpr -> NExpr -> NExpr
 mkApp e = Fix . NApp e

@@ -54,10 +54,10 @@ valueText = cata phi where
 buildArgument :: Params (NValue m) -> NValue m -> NValue m
 buildArgument paramSpec arg = either error (Fix . NVSet) $ case paramSpec of
     Param name -> return $ Map.singleton name arg
-    FixedParamSet s Nothing -> lookupParamSet s
-    FixedParamSet s (Just name) -> Map.insert name arg <$> lookupParamSet s
-    VariadicParamSet _ _ ->
-      error "Can't yet handle variadic param sets"
+    ParamSet (FixedParamSet s) Nothing -> lookupParamSet s
+    ParamSet (FixedParamSet s) (Just name) ->
+      Map.insert name arg <$> lookupParamSet s
+    ParamSet _ _ -> error "Can't yet handle variadic param sets"
   where
     go env k def = maybe (Left err) return $ Map.lookup k env <|> def
       where err = "Could not find " ++ show k

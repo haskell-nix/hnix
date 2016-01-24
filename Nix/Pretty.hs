@@ -74,22 +74,21 @@ prettyString (Indented parts)
 
 prettyParams :: Params NixDoc -> Doc
 prettyParams (Param n) = text $ unpack n
-prettyParams paramSet = prettyParamSet <> argName where
-  prettyParamSet = lbrace <+> middle <+> rbrace
-  middle = hcat $ punctuate (comma <> space) prettyArgs
-  prettyArgs = case isVariadic of
-    False -> map prettySetArg (toList args)
-    True -> map prettySetArg (toList args) ++ [text "..."]
-  (isVariadic, args) = case paramSet of
-    VariadicParamSet args _ -> (True, args)
-    FixedParamSet args _ -> (False, args)
-    _ -> (False, mempty)
-  prettySetArg (n, maybeDef) = case maybeDef of
-    Nothing -> text (unpack n)
-    Just v -> text (unpack n) <+> text "?" <+> withoutParens v
-  argName = case paramName paramSet of
-    Nothing -> empty
-    Just name -> text "@" <> text (unpack name)
+prettyParams (ParamSet s mname) = prettyParamSet s <> case mname of
+  Nothing -> empty
+  Just name -> text "@" <> text (unpack name)
+
+prettyParamSet :: ParamSet NixDoc -> Doc
+prettyParamSet params = lbrace <+> middle <+> rbrace
+  where
+    prettyArgs = case params of
+      FixedParamSet args -> map prettySetArg (toList args)
+
+      VariadicParamSet args -> map prettySetArg (toList args) ++ [text "..."]
+    middle = hcat $ punctuate (comma <> space) prettyArgs
+    prettySetArg (n, maybeDef) = case maybeDef of
+      Nothing -> text (unpack n)
+      Just v -> text (unpack n) <+> text "?" <+> withoutParens v
 
 prettyBind :: Binding NixDoc -> Doc
 prettyBind (NamedVar n v) = prettySelector n <+> equals <+> withoutParens v <> semi

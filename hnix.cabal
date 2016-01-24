@@ -1,5 +1,5 @@
 Name:                hnix
-Version:             0.2.3
+Version:             0.3.0
 Synopsis:            Haskell implementation of the Nix language
 Description:
   Haskell implementation of the Nix language.

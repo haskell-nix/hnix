@@ -197,13 +197,13 @@ argExpr = choice [atLeft, onlyname, atRight] <* symbolic ':' where
   atLeft = try $ do
     name <- identifier <* symbolic '@'
     (constructor, params) <- params
-    return $ constructor params (Just name)
+    return $ ParamSet (constructor params) (Just name)
 
   -- Parameters named by an identifier on the right, or none (`{x, y} @ args`)
   atRight = do
     (constructor, params) <- params
     name <- optional $ symbolic '@' *> identifier
-    return $ constructor params name
+    return $ ParamSet (constructor params) name
 
   -- Return the parameters set.
   params = do
