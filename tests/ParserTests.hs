@@ -10,6 +10,7 @@ import Test.Tasty.TH
 
 import qualified Data.Map as Map
 
+import Nix.Atoms
 import Nix.Expr
 import Nix.Parser
 import Nix.StringOperations

@@ -7,6 +7,7 @@ import Data.Map (toList)
 import Data.Maybe (isJust)
 import Data.Text (Text, pack, unpack, replace, strip)
 import Data.List (isPrefixOf)
+import Nix.Atoms
 import Nix.Expr
 import Nix.Parser.Library (reservedNames)
 import Nix.Parser.Operators

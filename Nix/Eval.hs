@@ -17,6 +17,7 @@ import           Data.Typeable (Typeable)
 import           GHC.Generics
 import           Nix.Pretty (atomText)
 import           Nix.StringOperations (runAntiquoted)
+import           Nix.Atoms
 import           Nix.Expr
 import           Prelude hiding (mapM, sequence)
 
