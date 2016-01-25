@@ -70,15 +70,15 @@ case_set_inherit :: Assertion
 case_set_inherit = do
   assertParseString "{ e = 3; inherit a b; }" $ Fix $ NSet
     [ NamedVar (mkSelector "e") $ mkInt 3
-    , Inherit Nothing [mkSelector "a", mkSelector "b"]
+    , Inherit Nothing $ StaticKey <$> ["a", "b"]
     ]
   assertParseString "{ inherit; }" $ Fix $ NSet [ Inherit Nothing [] ]
 
 case_set_scoped_inherit :: Assertion
 case_set_scoped_inherit = assertParseString "{ inherit (a) b c; e = 4; inherit(a)b c; }" $ Fix $ NSet
-  [ Inherit (Just (mkSym "a")) [mkSelector "b", mkSelector "c"]
+  [ Inherit (Just (mkSym "a")) $ StaticKey <$> ["b", "c"]
   , NamedVar (mkSelector "e") $ mkInt 4
-  , Inherit (Just (mkSym "a")) [mkSelector "b", mkSelector "c"]
+  , Inherit (Just (mkSym "a")) $ StaticKey <$> ["b", "c"]
   ]
 
 case_set_rec :: Assertion
@@ -111,7 +111,7 @@ case_set_inherit_direct = assertParseString "{ inherit ({a = 3;}); }" $ Fix $ NS
 case_inherit_selector :: Assertion
 case_inherit_selector = do
   assertParseString "{ inherit \"a\"; }" $ Fix $ NSet
-    [ Inherit Nothing [ [DynamicKey (Plain "a")] ] ]
+    [Inherit Nothing [DynamicKey (Plain "a")]]
   assertParseFail "{ inherit a.x; }"
 
 case_int_list :: Assertion
@@ -193,7 +193,8 @@ case_nested_let = do
 case_let_scoped_inherit :: Assertion
 case_let_scoped_inherit = do
   assertParseString "let a = null; inherit (b) c; in c" $ Fix $ NLet
-    [ NamedVar (mkSelector "a") mkNull, Inherit (Just $ mkSym "b") [mkSelector "c"] ]
+    [ NamedVar (mkSelector "a") mkNull
+    , Inherit (Just $ mkSym "b") [StaticKey "c"] ]
     (mkSym "c")
   assertParseFail "let inherit (b) c in c"
 

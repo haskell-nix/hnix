@@ -230,8 +230,9 @@ argExpr = choice [atLeft, onlyname, atRight] <* symbolic ':' where
 
 nixBinders :: Parser [Binding NExpr]
 nixBinders = (inherit <|> namedVar) `endBy` symbolic ';' where
-  inherit = Inherit <$> (reserved "inherit" *> optional scope) <*> many ((:[]) <$> keyName)
-         <?> "inherited binding"
+  inherit = Inherit <$> (reserved "inherit" *> optional scope)
+                    <*> many (keyName)
+                    <?> "inherited binding"
   namedVar = NamedVar <$> nixSelector <*> (symbolic '=' *> nixExpr)
           <?> "variable binding"
   scope = parens nixExpr <?> "inherit scope"
