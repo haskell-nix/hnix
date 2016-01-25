@@ -22,6 +22,7 @@ Flag Parsec
 Library
   Default-language: Haskell2010
   Exposed-modules:
+    Nix.Atoms
     Nix.Eval
     Nix.Parser
     Nix.Expr
@@ -30,6 +31,8 @@ Library
     Nix.StringOperations
   Other-modules:
     Nix.Parser.Library
+    Nix.Expr.Types
+    Nix.Expr.Shorthands
   Default-extensions:
     DataKinds
     DeriveDataTypeable

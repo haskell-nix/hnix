@@ -7,6 +7,7 @@ import Data.Map (toList)
 import Data.Maybe (isJust)
 import Data.Text (Text, pack, unpack, replace, strip)
 import Data.List (isPrefixOf)
+import Nix.Atoms
 import Nix.Expr
 import Nix.Parser.Library (reservedNames)
 import Nix.Parser.Operators
@@ -93,7 +94,7 @@ prettyParamSet params = lbrace <+> middle <+> rbrace
 prettyBind :: Binding NixDoc -> Doc
 prettyBind (NamedVar n v) = prettySelector n <+> equals <+> withoutParens v <> semi
 prettyBind (Inherit s ns)
-  = text "inherit" <+> scope <> fillSep (map prettySelector ns) <> semi
+  = text "inherit" <+> scope <> fillSep (map prettyKeyName ns) <> semi
  where scope = maybe empty ((<> space) . parens . withoutParens) s
 
 prettyKeyName :: NKeyName NixDoc -> Doc
