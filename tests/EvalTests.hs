@@ -10,7 +10,10 @@ import Test.Tasty.TH
 
 import Nix.Eval
 import Nix.Parser
-import Nix.Types
+import Nix.Expr
+
+import Data.Monoid (Monoid(..))
+import Prelude (String)
 
 case_basic_sum :: Assertion
 case_basic_sum = constantEqualStr "2" "1 + 1"

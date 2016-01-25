@@ -1,5 +1,5 @@
 Name:                hnix
-Version:             0.2.3
+Version:             0.3.0
 Synopsis:            Haskell implementation of the Nix language
 Description:
   Haskell implementation of the Nix language.
@@ -24,8 +24,10 @@ Library
   Exposed-modules:
     Nix.Eval
     Nix.Parser
-    Nix.Types
+    Nix.Expr
     Nix.Pretty
+    Nix.Parser.Operators
+    Nix.StringOperations
   Other-modules:
     Nix.Parser.Library
   Default-extensions:
@@ -39,6 +41,7 @@ Library
     KindSignatures
     LambdaCase
     MultiWayIf
+    NoImplicitPrelude
     OverloadedStrings
     PatternGuards
     RankNTypes
@@ -52,12 +55,13 @@ Library
     , parsers >= 0.10
     , unordered-containers
     , data-fix
+    , deepseq
   if flag(parsec)
     Cpp-options: -DUSE_PARSEC
     Build-depends: parsec
   else
     Build-depends: trifecta
-  ghc-options: -Wall
+  ghc-options: -Wall -fno-warn-name-shadowing
 
 Executable hnix
   Default-language: Haskell2010
@@ -84,6 +88,7 @@ Executable hnix
     , containers
     , ansi-wl-pprint
     , data-fix
+    , deepseq
   Ghc-options: -Wall
 
 Test-suite hnix-tests

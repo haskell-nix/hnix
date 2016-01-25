@@ -16,7 +16,9 @@ import           Data.Foldable hiding (concat)
 import qualified Data.Map as Map
 import           Data.Text hiding (head, map, foldl1', foldl', concat)
 import           Nix.Parser.Library
-import           Nix.Types
+import           Nix.Parser.Operators
+import           Nix.Expr
+import           Nix.StringOperations
 import           Prelude hiding (elem)
 
 -- | The lexer for this parser is defined in 'Nix.Parser.Library'.
@@ -45,7 +47,7 @@ selDot :: Parser ()
 selDot = try (char '.' *> notFollowedBy (("path" :: String) <$ nixPath)) *> whiteSpace
       <?> "."
 
-nixSelector :: Parser (NSelector NExpr)
+nixSelector :: Parser (NAttrPath NExpr)
 nixSelector = keyName `sepBy1` selDot where
 
 nixSelect :: Parser NExpr -> Parser NExpr
@@ -154,7 +156,7 @@ nixUri = token $ fmap (mkUri . pack) $ (++)
 nixString :: Parser (NString NExpr)
 nixString = doubleQuoted <|> indented <?> "string"
   where
-    doubleQuoted = NString DoubleQuoted . removePlainEmpty . mergePlain
+    doubleQuoted = DoubleQuoted . removePlainEmpty . mergePlain
                 <$> (doubleQ *> many (stringChar doubleQ (void $ char '\\') doubleEscape)
                              <* token doubleQ)
                 <?> "double quoted string"
@@ -182,32 +184,32 @@ nixString = doubleQuoted <|> indented <?> "string"
     escapeCode = choice [ c <$ char e | (c,e) <- escapeCodes ] <|> anyChar
 
 -- | Gets all of the arguments for a function.
-argExpr :: Parser (Formals NExpr)
+argExpr :: Parser (Params NExpr)
 argExpr = choice [atLeft, onlyname, atRight] <* symbolic ':' where
   -- An argument not in curly braces. There's some potential ambiguity
   -- in the case of, for example `x:y`. Is it a lambda function `x: y`, or
   -- a URI `x:y`? Nix syntax says it's the latter. So we need to fail if
   -- there's a valid URI parse here.
   onlyname = choice [nixUri >> unexpected "valid uri",
-                     FormalName <$> identifier]
+                     Param <$> identifier]
 
   -- Parameters named by an identifier on the left (`args @ {x, y}`)
   atLeft = try $ do
     name <- identifier <* symbolic '@'
-    ps <- params
-    return $ FormalSet ps (Just name)
+    (constructor, params) <- params
+    return $ ParamSet (constructor params) (Just name)
 
   -- Parameters named by an identifier on the right, or none (`{x, y} @ args`)
   atRight = do
-    ps <- params
+    (constructor, params) <- params
     name <- optional $ symbolic '@' *> identifier
-    return $ FormalSet ps name
+    return $ ParamSet (constructor params) name
 
   -- Return the parameters set.
   params = do
     (args, dotdots) <- braces getParams
-    let pset = if dotdots then VariadicParamSet else FixedParamSet
-    return $ pset $ Map.fromList args
+    let constructor = if dotdots then VariadicParamSet else FixedParamSet
+    return (constructor, Map.fromList args)
 
   -- Collects the parameters within curly braces. Returns the parameters and
   -- a boolean indicating if the parameters are variadic.
@@ -240,9 +242,9 @@ keyName = dynamicKey <|> staticKey where
   dynamicKey = DynamicKey <$> nixAntiquoted nixString
 
 nixSet :: Parser NExpr
-nixSet = Fix <$> (NSet <$> isRec <*> braces nixBinders) <?> "set" where
-  isRec = (try (reserved "rec" *> pure Rec) <?> "recursive set")
-       <|> pure NonRec
+nixSet = Fix <$> (isRec <*> braces nixBinders) <?> "set" where
+  isRec = (try (reserved "rec" *> pure NRecSet) <?> "recursive set")
+       <|> pure NSet
 
 parseNixFile :: MonadIO m => FilePath -> m (Result NExpr)
 parseNixFile = parseFromFileEx $ nixExpr <* eof

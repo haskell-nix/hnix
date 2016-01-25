@@ -13,23 +13,57 @@ import qualified Data.Map as Map
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Traversable as T
-import           Nix.Types
+import           Data.Typeable (Typeable)
+import           GHC.Generics
+import           Nix.Pretty (atomText)
+import           Nix.StringOperations (runAntiquoted)
+import           Nix.Expr
 import           Prelude hiding (mapM, sequence)
 
-buildArgument :: Formals (NValue m) -> NValue m -> NValue m
+-- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
+-- is completed.
+data NValueF m r
+    = NVConstant NAtom
+    | NVStr Text
+    | NVList [r]
+    | NVSet (Map.Map Text r)
+    | NVFunction (Params r) (NValue m -> m r)
+    deriving (Generic, Typeable, Functor)
+
+instance Show f => Show (NValueF m f) where
+    showsPrec = flip go where
+      go (NVConstant atom) = showsCon1 "NVConstant" atom
+      go (NVStr      text) = showsCon1 "NVStr"      text
+      go (NVList     list) = showsCon1 "NVList"     list
+      go (NVSet     attrs) = showsCon1 "NVSet"      attrs
+      go (NVFunction r _)  = showsCon1 "NVFunction" r
+
+      showsCon1 :: Show a => String -> a -> Int -> String -> String
+      showsCon1 con a d = showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a
+
+type NValue m = Fix (NValueF m)
+
+valueText :: Functor m => NValue m -> Text
+valueText = cata phi where
+    phi (NVConstant a)   = atomText a
+    phi (NVStr t)        = t
+    phi (NVList _)       = error "Cannot coerce a list to a string"
+    phi (NVSet _)        = error "Cannot coerce a set to a string"
+    phi (NVFunction _ _) = error "Cannot coerce a function to a string"
+
+buildArgument :: Params (NValue m) -> NValue m -> NValue m
 buildArgument paramSpec arg = either error (Fix . NVSet) $ case paramSpec of
-    FormalName name -> return $ Map.singleton name arg
-    FormalSet s Nothing -> lookupParamSet s
-    FormalSet s (Just name) -> Map.insert name arg <$> lookupParamSet s
+    Param name -> return $ Map.singleton name arg
+    ParamSet (FixedParamSet s) Nothing -> lookupParamSet s
+    ParamSet (FixedParamSet s) (Just name) ->
+      Map.insert name arg <$> lookupParamSet s
+    ParamSet _ _ -> error "Can't yet handle variadic param sets"
   where
     go env k def = maybe (Left err) return $ Map.lookup k env <|> def
       where err = "Could not find " ++ show k
-
-    lookupParamSet fps = case fps of
-      FixedParamSet s -> case arg of
+    lookupParamSet s = case arg of
         Fix (NVSet env) -> Map.traverseWithKey (go env) s
         _               -> Left "Unexpected function environment"
-      _ -> error "Can't yet handle variadic param sets"
 
 evalExpr :: MonadFix m => NExpr -> NValue m -> m (NValue m)
 evalExpr = cata phi
@@ -40,40 +74,41 @@ evalExpr = cata phi
      where err = error ("Undefined variable: " ++ show var)
     phi (NConstant x) = const $ return $ Fix $ NVConstant x
     phi (NStr str) = fmap (Fix . NVStr) . flip evalString str
+    phi (NLiteralPath _) = error "Path expressions are not yet supported"
+    phi (NEnvPath _) = error "Path expressions are not yet supported"
 
-    phi (NOper x) = \env -> case x of
-      NUnary op arg -> arg env >>= \case
-        Fix (NVConstant c) -> pure $ Fix $ NVConstant $ case (op, c) of
-          (NNeg, NInt  i) -> NInt  (-i)
-          (NNot, NBool b) -> NBool (not b)
-          _               -> error $ "unsupported argument type for unary operator " ++ show op
-        _ -> error "argument to unary operator must evaluate to an atomic type"
-      NBinary op larg rarg -> do
-        lval <- larg env
-        rval <- rarg env
-        case (lval, rval) of
-         (Fix (NVConstant lc), Fix (NVConstant rc)) -> pure $ Fix $ NVConstant $ case (op, lc, rc) of
-           (NEq,  l, r) -> NBool $ l == r
-           (NNEq, l, r) -> NBool $ l /= r
-           (NLt,  l, r) -> NBool $ l <  r
-           (NLte, l, r) -> NBool $ l <= r
-           (NGt,  l, r) -> NBool $ l >  r
-           (NGte, l, r) -> NBool $ l >= r
-           (NAnd,  NBool l, NBool r) -> NBool $ l && r
-           (NOr,   NBool l, NBool r) -> NBool $ l || r
-           (NImpl, NBool l, NBool r) -> NBool $ not l || r
-           (NPlus,  NInt l, NInt r) -> NInt $ l + r
-           (NMinus, NInt l, NInt r) -> NInt $ l - r
-           (NMult,  NInt l, NInt r) -> NInt $ l * r
-           (NDiv,   NInt l, NInt r) -> NInt $ l `div` r
-           _ -> error $ "unsupported argument types for binary operator " ++ show op
-         (Fix (NVStr ls), Fix (NVStr rs)) -> case op of
-           NConcat -> pure $ Fix $ NVStr $ ls `mappend` rs
-           _ -> error $ "unsupported argument types for binary operator " ++ show op
-         (Fix (NVSet ls), Fix (NVSet rs)) -> case op of
-           NUpdate -> pure $ Fix $ NVSet $ rs `Map.union` ls
-           _ -> error $ "unsupported argument types for binary operator " ++ show op
+    phi (NUnary op arg) = \env -> arg env >>= \case
+      Fix (NVConstant c) -> pure $ Fix $ NVConstant $ case (op, c) of
+        (NNeg, NInt  i) -> NInt  (-i)
+        (NNot, NBool b) -> NBool (not b)
+        _               -> error $ "unsupported argument type for unary operator " ++ show op
+      _ -> error "argument to unary operator must evaluate to an atomic type"
+    phi (NBinary op larg rarg) = \env -> do
+      lval <- larg env
+      rval <- rarg env
+      case (lval, rval) of
+       (Fix (NVConstant lc), Fix (NVConstant rc)) -> pure $ Fix $ NVConstant $ case (op, lc, rc) of
+         (NEq,  l, r) -> NBool $ l == r
+         (NNEq, l, r) -> NBool $ l /= r
+         (NLt,  l, r) -> NBool $ l <  r
+         (NLte, l, r) -> NBool $ l <= r
+         (NGt,  l, r) -> NBool $ l >  r
+         (NGte, l, r) -> NBool $ l >= r
+         (NAnd,  NBool l, NBool r) -> NBool $ l && r
+         (NOr,   NBool l, NBool r) -> NBool $ l || r
+         (NImpl, NBool l, NBool r) -> NBool $ not l || r
+         (NPlus,  NInt l, NInt r) -> NInt $ l + r
+         (NMinus, NInt l, NInt r) -> NInt $ l - r
+         (NMult,  NInt l, NInt r) -> NInt $ l * r
+         (NDiv,   NInt l, NInt r) -> NInt $ l `div` r
          _ -> error $ "unsupported argument types for binary operator " ++ show op
+       (Fix (NVStr ls), Fix (NVStr rs)) -> case op of
+         NConcat -> pure $ Fix $ NVStr $ ls `mappend` rs
+         _ -> error $ "unsupported argument types for binary operator " ++ show op
+       (Fix (NVSet ls), Fix (NVSet rs)) -> case op of
+         NUpdate -> pure $ Fix $ NVSet $ rs `Map.union` ls
+         _ -> error $ "unsupported argument types for binary operator " ++ show op
+       _ -> error $ "unsupported argument types for binary operator " ++ show op
 
     phi (NSelect aset attr alternative) = go where
       go env = do
@@ -99,12 +134,12 @@ evalExpr = cata phi
     phi (NList l) = \env ->
         Fix . NVList <$> mapM ($ env) l
 
-    phi (NSet recBind binds) = \env -> case env of
+    phi (NSet binds) = \env -> Fix . NVSet <$> evalBinds True env binds
+
+    phi (NRecSet binds) = \env -> case env of
       (Fix (NVSet env')) -> do
         rec
-          mergedEnv <- case recBind of
-            Rec    -> pure $ Fix $ NVSet $ evaledBinds `Map.union` env'
-            NonRec -> fmap (Fix . NVSet) $ evalBinds True env binds
+          mergedEnv <- pure $ Fix $ NVSet $ evaledBinds `Map.union` env'
           evaledBinds <- evalBinds True mergedEnv binds
         pure mergedEnv
       _ -> error "invalid evaluation environment"
@@ -157,12 +192,16 @@ evalExpr = cata phi
 
 evalString :: Monad m
            => NValue m -> NString (NValue m -> m (NValue m)) -> m Text
-evalString env (NString _ parts)
-  = Text.concat <$> mapM (runAntiquoted return (fmap valueText . ($ env))) parts
-evalString _env (NUri t) = return t
+evalString env nstr = do
+  let fromParts parts = Text.concat <$>
+        mapM (runAntiquoted return (fmap valueText . ($ env))) parts
+  case nstr of
+    Indented parts -> fromParts parts
+    DoubleQuoted parts -> fromParts parts
 
-evalBinds :: Monad m => Bool -> NValue m -> [Binding (NValue m -> m (NValue m))] ->
-  m (Map.Map Text (NValue m))
+evalBinds :: Monad m => Bool -> NValue m ->
+             [Binding (NValue m -> m (NValue m))] ->
+             m (Map.Map Text (NValue m))
 evalBinds allowDynamic env xs = buildResult <$> sequence (concatMap go xs) where
   buildResult :: [([Text], NValue m)] -> Map.Map Text (NValue m)
   buildResult = foldl' insert Map.empty . map (first reverse) where
@@ -186,7 +225,7 @@ evalBinds allowDynamic env xs = buildResult <$> sequence (concatMap go xs) where
   go (NamedVar x y) = [liftM2 (,) (evalSelector allowDynamic env x) (y env)]
   go _ = [] -- HACK! But who cares right now
 
-evalSelector :: Monad m => Bool -> NValue m -> NSelector (NValue m -> m (NValue m)) -> m [Text]
+evalSelector :: Monad m => Bool -> NValue m -> NAttrPath (NValue m -> m (NValue m)) -> m [Text]
 evalSelector dyn env = mapM evalKeyName where
   evalKeyName (StaticKey k) = return k
   evalKeyName (DynamicKey k)
