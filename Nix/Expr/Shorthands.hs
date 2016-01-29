@@ -100,9 +100,23 @@ mkFunction params = Fix . NAbs params
 mkDot :: NExpr -> Text -> NExpr
 mkDot e key = Fix $ NSelect e [StaticKey key] Nothing
 
+-- | An `inherit` clause without an expression to pull from.
+inherit :: [NKeyName e] -> Binding e
+inherit = Inherit Nothing
+
+-- | An `inherit` clause with an expression to pull from.
+inheritFrom :: e -> [NKeyName e] -> Binding e
+inheritFrom expr = Inherit (Just expr)
+
 -- | Shorthand for producing a binding of a name to an expression.
 bindTo :: Text -> NExpr -> Binding NExpr
 bindTo name val = NamedVar (mkSelector name) val
+
+-- | Infix version of bindTo.
+($=) :: Text -> NExpr -> Binding NExpr
+name $= value = bindTo name value
+
+infixr 2 $=
 
 -- | Append a list of bindings to a set or let expression.
 -- For example, adding `[a = 1, b = 2]` to `let c = 3; in 4` produces

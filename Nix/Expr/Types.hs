@@ -71,6 +71,11 @@ data NExprF r
   -- ^ Assert that the first returns true before evaluating the second.
   deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show)
 
+-- | We make an `IsString` for expressions, where the string is interpreted
+-- as an identifier. This is the most common use-case...
+instance IsString NExpr where
+  fromString = Fix . NSym . fromString
+
 -- | The monomorphic expression type is a fixed point of the polymorphic one.
 type NExpr = Fix NExprF
 
@@ -152,6 +157,10 @@ data NKeyName r
   = DynamicKey !(Antiquoted (NString r) r)
   | StaticKey !Text
   deriving (Eq, Ord, Generic, Typeable, Data, Show)
+
+-- | Most key names are just static text, so this instance is convenient.
+instance IsString (NKeyName r) where
+  fromString = StaticKey . fromString
 
 -- | Deriving this instance automatically is not possible because @r@
 -- occurs not only as last argument in @Antiquoted (NString r) r@
