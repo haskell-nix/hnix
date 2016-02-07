@@ -1,6 +1,6 @@
 { mkDerivation, ansi-wl-pprint, base, containers, data-fix, parsers
 , stdenv, tasty, tasty-hunit, tasty-th, text, transformers
-, trifecta, unordered-containers, cabal-install, pkgs
+, trifecta, unordered-containers, cabal-install, criterion, pkgs
 }:
 
 let
@@ -18,7 +18,7 @@ mkDerivation {
   isExecutable = true;
   buildDepends = [
     ansi-wl-pprint base containers data-fix parsers text transformers
-    trifecta unordered-containers cabal-install
+    trifecta unordered-containers cabal-install criterion
   ];
   testDepends = [
     base containers data-fix tasty tasty-hunit tasty-th text
