@@ -19,6 +19,7 @@ mkStr = Fix . NStr . DoubleQuoted . \case
   "" -> []
   x -> [Plain x]
 
+-- | Make an indented string.
 mkIndentedStr :: Text -> NExpr
 mkIndentedStr = Fix . NStr . Indented . \case
   "" -> []
@@ -99,6 +100,9 @@ mkFunction params = Fix . NAbs params
 
 mkDot :: NExpr -> Text -> NExpr
 mkDot e key = Fix $ NSelect e [StaticKey key] Nothing
+
+mkDots :: NExpr -> [Text] -> NExpr
+mkDots e keys = Fix $ NSelect e (StaticKey <$> keys) Nothing
 
 -- | An `inherit` clause without an expression to pull from.
 inherit :: [NKeyName e] -> Binding e
