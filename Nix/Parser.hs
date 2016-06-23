@@ -12,11 +12,9 @@ module Nix.Parser (
 import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.IO.Class
-import           Data.Fix
 import           Data.Foldable hiding (concat)
 import qualified Data.Map as Map
 import           Data.Text hiding (head, map, foldl1', foldl', concat)
-import           Data.Functor.Compose
 import           Nix.Parser.Library
 import           Nix.Parser.Operators
 import           Nix.Expr
