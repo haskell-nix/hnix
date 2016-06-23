@@ -10,8 +10,8 @@ import Nix.Atoms
 import Nix.Expr.Types
 
 -- | Make an integer literal expression.
-mkInt :: Integer -> NExpr
-mkInt = Fix . NConstant . NInt
+mkInt :: Integer -> NExprF a
+mkInt = NConstant . NInt
 
 -- | Make a regular (double-quoted) string.
 mkStr :: Text -> NExpr
@@ -26,35 +26,35 @@ mkIndentedStr = Fix . NStr . Indented . \case
   x -> [Plain x]
 
 -- | Make a literal URI expression.
-mkUri :: Text -> NExpr
-mkUri = Fix . NConstant . NUri
+mkUri :: Text -> NExprF a
+mkUri = NConstant . NUri
 
 -- | Make a path. Use 'True' if the path should be read from the
 -- environment, else 'False'.
-mkPath :: Bool -> FilePath -> NExpr
-mkPath False = Fix . NLiteralPath
-mkPath True = Fix . NEnvPath
+mkPath :: Bool -> FilePath -> NExprF a
+mkPath False = NLiteralPath
+mkPath True = NEnvPath
 
 -- | Make a path expression which pulls from the NIX_PATH env variable.
-mkEnvPath :: FilePath -> NExpr
+mkEnvPath :: FilePath -> NExprF a
 mkEnvPath = mkPath True
 
 -- | Make a path expression which references a relative path.
-mkRelPath :: FilePath -> NExpr
+mkRelPath :: FilePath -> NExprF a
 mkRelPath = mkPath False
 
 -- | Make a variable (symbol)
-mkSym :: Text -> NExpr
-mkSym = Fix . NSym
+mkSym :: Text -> NExprF a
+mkSym = NSym
 
 mkSelector :: Text -> NAttrPath NExpr
 mkSelector = (:[]) . StaticKey
 
-mkBool :: Bool -> NExpr
-mkBool = Fix . NConstant . NBool
+mkBool :: Bool -> NExprF a
+mkBool = NConstant . NBool
 
-mkNull :: NExpr
-mkNull = Fix (NConstant NNull)
+mkNull :: NExprF a
+mkNull = NConstant NNull
 
 mkOper :: NUnaryOp -> NExpr -> NExpr
 mkOper op = Fix . NUnary op
