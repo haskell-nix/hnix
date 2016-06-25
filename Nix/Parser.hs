@@ -27,7 +27,6 @@ import           Prelude hiding (elem)
 
 annotateLocation :: Parser a -> Parser (Ann SrcSpan a)
 annotateLocation p = do
-  whiteSpace
   begin <- position
   res   <- p
   end   <- position
