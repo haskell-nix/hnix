@@ -1,4 +1,7 @@
 -- | A bunch of shorthands for making nix expressions.
+--
+-- Functions with an @F@ suffix return a more general type without the outer
+-- 'Fix' wrapper.
 module Nix.Expr.Shorthands where
 
 import Prelude
@@ -10,8 +13,11 @@ import Nix.Atoms
 import Nix.Expr.Types
 
 -- | Make an integer literal expression.
-mkInt :: Integer -> NExprF a
-mkInt = NConstant . NInt
+mkInt :: Integer -> NExpr
+mkInt = Fix . mkIntF
+
+mkIntF :: Integer -> NExprF a
+mkIntF = NConstant . NInt
 
 -- | Make a regular (double-quoted) string.
 mkStr :: Text -> NExpr
@@ -26,35 +32,56 @@ mkIndentedStr = Fix . NStr . Indented . \case
   x -> [Plain x]
 
 -- | Make a literal URI expression.
-mkUri :: Text -> NExprF a
-mkUri = NConstant . NUri
+mkUri :: Text -> NExpr
+mkUri = Fix . mkUriF
+
+mkUriF :: Text -> NExprF a
+mkUriF = NConstant . NUri
 
 -- | Make a path. Use 'True' if the path should be read from the
 -- environment, else 'False'.
-mkPath :: Bool -> FilePath -> NExprF a
-mkPath False = NLiteralPath
-mkPath True = NEnvPath
+mkPath :: Bool -> FilePath -> NExpr
+mkPath b = Fix . mkPathF b
+
+mkPathF :: Bool -> FilePath -> NExprF a
+mkPathF False = NLiteralPath
+mkPathF True = NEnvPath
 
 -- | Make a path expression which pulls from the NIX_PATH env variable.
-mkEnvPath :: FilePath -> NExprF a
-mkEnvPath = mkPath True
+mkEnvPath :: FilePath -> NExpr
+mkEnvPath = Fix . mkEnvPathF
+
+mkEnvPathF :: FilePath -> NExprF a
+mkEnvPathF = mkPathF True
 
 -- | Make a path expression which references a relative path.
-mkRelPath :: FilePath -> NExprF a
-mkRelPath = mkPath False
+mkRelPath :: FilePath -> NExpr
+mkRelPath = Fix . mkRelPathF
+
+mkRelPathF :: FilePath -> NExprF a
+mkRelPathF = mkPathF False
 
 -- | Make a variable (symbol)
-mkSym :: Text -> NExprF a
-mkSym = NSym
+mkSym :: Text -> NExpr
+mkSym = Fix . mkSymF
+
+mkSymF :: Text -> NExprF a
+mkSymF = NSym
 
 mkSelector :: Text -> NAttrPath NExpr
 mkSelector = (:[]) . StaticKey
 
-mkBool :: Bool -> NExprF a
-mkBool = NConstant . NBool
+mkBool :: Bool -> NExpr
+mkBool = Fix . mkBoolF
 
-mkNull :: NExprF a
-mkNull = NConstant NNull
+mkBoolF :: Bool -> NExprF a
+mkBoolF = NConstant . NBool
+
+mkNull :: NExpr
+mkNull = Fix mkNullF
+
+mkNullF :: NExprF a
+mkNullF = NConstant NNull
 
 mkOper :: NUnaryOp -> NExpr -> NExpr
 mkOper op = Fix . NUnary op

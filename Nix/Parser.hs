@@ -99,18 +99,18 @@ nixToplevelForm :: Parser NExprLoc
 nixToplevelForm = choice [nixLambda, nixLet, nixIf, nixAssert, nixWith]
 
 nixSym :: Parser NExprLoc
-nixSym = annotateLocation1 $ mkSym <$> identifier
+nixSym = annotateLocation1 $ mkSymF <$> identifier
 
 nixInt :: Parser NExprLoc
-nixInt = annotateLocation1 $ mkInt <$> token decimal <?> "integer"
+nixInt = annotateLocation1 $ mkIntF <$> token decimal <?> "integer"
 
 nixBool :: Parser NExprLoc
 nixBool = annotateLocation1 $ try (true <|> false) <?> "bool" where
-  true = mkBool True <$ symbol "true"
-  false = mkBool False <$ symbol "false"
+  true = mkBoolF True <$ symbol "true"
+  false = mkBoolF False <$ symbol "false"
 
 nixNull :: Parser NExprLoc
-nixNull = annotateLocation1 $ mkNull <$ try (symbol "null") <?> "null"
+nixNull = annotateLocation1 $ mkNullF <$ try (symbol "null") <?> "null"
 
 nixParens :: Parser NExprLoc
 nixParens = parens nixExprLoc <?> "parens"
@@ -127,11 +127,11 @@ slash = try (char '/' <* notFollowedBy (char '/')) <?> "slash"
 -- | A path surrounded by angle brackets, indicating that it should be
 -- looked up in the NIX_PATH environment variable at evaluation.
 nixSPath :: Parser NExprLoc
-nixSPath = annotateLocation1 $ mkPath True <$> try (char '<' *> some (oneOf pathChars <|> slash) <* symbolic '>')
+nixSPath = annotateLocation1 $ mkPathF True <$> try (char '<' *> some (oneOf pathChars <|> slash) <* symbolic '>')
         <?> "spath"
 
 nixPath :: Parser NExprLoc
-nixPath = annotateLocation1 $ token $ fmap (mkPath False) $ ((++)
+nixPath = annotateLocation1 $ token $ fmap (mkPathF False) $ ((++)
     <$> (try ((++) <$> many (oneOf pathChars) <*> fmap (:[]) slash) <?> "path")
     <*> fmap concat
       (  some (some (oneOf pathChars)
@@ -173,7 +173,7 @@ uriAfterColonC :: Parser Char
 uriAfterColonC = alphaNum <|> oneOf "%/?:@&=+$,-_.!~*'"
 
 nixUri :: Parser NExprLoc
-nixUri = annotateLocation1 $ token $ fmap (mkUri . pack) $ (++)
+nixUri = annotateLocation1 $ token $ fmap (mkUriF . pack) $ (++)
   <$> try ((++) <$> (scheme <* char ':') <*> fmap (\x -> [':',x]) uriAfterColonC)
   <*> many uriAfterColonC
  where
