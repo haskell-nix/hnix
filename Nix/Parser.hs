@@ -23,11 +23,17 @@ import           Prelude hiding (elem)
 
 --------------------------------------------------------------------------------
 
-annotateLocation :: Parser a -> Parser (Ann SrcLoc a)
-annotateLocation = undefined
+annotateLocation :: Parser a -> Parser (Ann SrcSpan a)
+annotateLocation p = do
+  whiteSpace
+  begin <- position
+  res   <- p
+  end   <- position
+  let span = SrcSpan begin end
+  pure $ Ann span res
 
 annotateLocation1 :: Parser (NExprF NExprLoc) -> Parser NExprLoc
-annotateLocation1 = undefined
+annotateLocation1 = fmap annToAnnF . annotateLocation
 
 --------------------------------------------------------------------------------
 
@@ -44,7 +50,7 @@ nixExprLoc = whiteSpace *> (nixToplevelForm <|> foldl' makeParser nixTerm nixOpe
   makeParser term (Left NHasAttrOp) = nixHasAttr term
   makeParser term (Right (NUnaryDef name op))
     = build <$> many (annotateLocation (void $ symbol name)) <*> term
-    where build :: [Ann SrcLoc ()] -> NExprLoc -> NExprLoc
+    where build :: [Ann SrcSpan ()] -> NExprLoc -> NExprLoc
           build = flip $ foldl' (\t' (Ann s ()) -> nUnary (Ann s op) t')
   makeParser term (Right (NBinaryDef assoc ops)) = case assoc of
     NAssocLeft  -> chainl1 term op
@@ -63,7 +69,7 @@ selDot :: Parser ()
 selDot = try (char '.' *> notFollowedBy (("path" :: String) <$ nixPath)) *> whiteSpace
       <?> "."
 
-nixSelector :: Parser (Ann SrcLoc (NAttrPath NExprLoc))
+nixSelector :: Parser (Ann SrcSpan (NAttrPath NExprLoc))
 nixSelector = annotateLocation $ keyName `sepBy1` selDot
 
 nixSelect :: Parser NExprLoc -> Parser NExprLoc
@@ -71,13 +77,13 @@ nixSelect term = build
   <$> term
   <*> optional ((,) <$> (selDot *> nixSelector) <*> optional (reserved "or" *> nixExprLoc))
  where
-  build :: NExprLoc -> Maybe (Ann SrcLoc (NAttrPath NExprLoc), Maybe NExprLoc) -> NExprLoc
+  build :: NExprLoc -> Maybe (Ann SrcSpan (NAttrPath NExprLoc), Maybe NExprLoc) -> NExprLoc
   build t Nothing = t
   build t (Just (s,o)) = nSelectLoc t s o
 
 nixHasAttr :: Parser NExprLoc -> Parser NExprLoc
 nixHasAttr term = build <$> term <*> optional (reservedOp "?" *> nixSelector) where
-  build :: NExprLoc -> Maybe (Ann SrcLoc (NAttrPath NExprLoc)) -> NExprLoc
+  build :: NExprLoc -> Maybe (Ann SrcSpan (NAttrPath NExprLoc)) -> NExprLoc
   build t Nothing = t
   build t (Just s) = nHasAttr t s
 
@@ -159,7 +165,7 @@ nixLambda :: Parser NExprLoc
 nixLambda = (nAbs <$> annotateLocation (try argExpr <?> "lambda arguments") <*> nixExprLoc) <?> "lambda"
 
 nixStringExpr :: Parser NExprLoc
-nixStringExpr = nStr <$> nixString
+nixStringExpr = nStr <$> annotateLocation nixString
 
 uriAfterColonC :: Parser Char
 uriAfterColonC = alphaNum <|> oneOf "%/?:@&=+$,-_.!~*'"
@@ -251,7 +257,7 @@ argExpr = choice [atLeft, onlyname, atRight] <* symbolic ':' where
 nixBinders :: Parser [Binding NExprLoc]
 nixBinders = (inherit <|> namedVar) `endBy` symbolic ';' where
   inherit = Inherit <$> (reserved "inherit" *> optional scope)
-                    <*> many (keyName)
+                    <*> many keyName
                     <?> "inherited binding"
   namedVar = NamedVar <$> (annotated <$> nixSelector) <*> (symbolic '=' *> nixExprLoc)
           <?> "variable binding"
