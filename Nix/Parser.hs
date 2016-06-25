@@ -5,7 +5,9 @@ module Nix.Parser (
   parseNixFile,
   parseNixFileLoc,
   parseNixString,
+  parseNixStringLoc,
   parseNixText,
+  parseNixTextLoc,
   Result(..)
   ) where
 
@@ -282,5 +284,11 @@ parseNixFileLoc = parseFromFileEx $ nixExprLoc <* eof
 parseNixString :: String -> Result NExpr
 parseNixString = parseFromString $ nixExpr <* eof
 
+parseNixStringLoc :: String -> Result NExprLoc
+parseNixStringLoc = parseFromString $ nixExprLoc <* eof
+
 parseNixText :: Text -> Result NExpr
 parseNixText = parseNixString . unpack
+
+parseNixTextLoc :: Text -> Result NExprLoc
+parseNixTextLoc = parseNixStringLoc . unpack
