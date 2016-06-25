@@ -7,7 +7,10 @@
 {-# LANGUAGE OverloadedStrings  #-}
 -- | The source location annotated nix expression type and supporting types.
 --
-module Nix.Expr.Types.Annotated where
+module Nix.Expr.Types.Annotated
+  ( module Nix.Expr.Types.Annotated
+  , Delta(..)
+  )where
 
 import           Control.Monad        hiding (forM_, mapM, sequence)
 import           Data.Data
@@ -18,7 +21,7 @@ import           Data.Functor.Compose
 import           Data.Semigroup
 import           GHC.Generics
 import           Nix.Expr.Types
-import           Nix.Parser.Library   (Delta)
+import           Nix.Parser.Library   (Delta(..))
 import           Prelude              hiding (concat, concatMap, elem, foldr,
                                        mapM, minimum, readFile, sequence)
 

@@ -4,7 +4,7 @@
 module Nix.Parser.Library
   ( module Nix.Parser.Library
   , module X
-  , Trifecta.Delta
+  , Trifecta.Delta(..)
   ) where
 
 import Prelude
