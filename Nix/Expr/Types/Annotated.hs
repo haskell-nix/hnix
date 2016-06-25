@@ -36,27 +36,24 @@ data Ann ann a = Ann{ annotation :: ann
                     }
   deriving (Ord, Eq, Data, Generic, Functor, Read, Show)
 
+instance Semigroup SrcSpan where
+  s1 <> s2 = SrcSpan ((min `on` spanBegin) s1 s2)
+                     ((max `on` spanEnd) s1 s2)
+
 type AnnF ann f = Compose (Ann ann) f
 
-annFToAnn :: Fix (AnnF ann f) -> Ann ann (Fix (AnnF ann f))
-annFToAnn = undefined
-
 annToAnnF :: Ann ann (f (Fix (AnnF ann f))) -> Fix (AnnF ann f)
-annToAnnF (Ann ann a) = Fix (Compose (Ann ann a))
+annToAnnF (Ann ann a) = AnnE ann a
 
 type NExprLocF = AnnF SrcSpan NExprF
 
 -- | A nix expression with source location at each subexpression.
 type NExprLoc = Fix NExprLocF
 
-pattern AnnE span exp = Fix (Compose (Ann span exp))
+pattern AnnE ann a = Fix (Compose (Ann ann a))
 
 stripAnnotation :: Functor f => Fix (AnnF ann f) -> Fix f
 stripAnnotation = ana (annotated . getCompose . unFix)
-
-instance Semigroup SrcSpan where
-  s1 <> s2 = SrcSpan ((min `on` spanBegin) s1 s2)
-                     ((max `on` spanEnd) s1 s2)
 
 nApp :: NExprLoc -> NExprLoc -> NExprLoc
 nApp e1@(AnnE s1 _) e2@(AnnE s2 _) = AnnE (s1 <> s2) (NApp e1 e2)
