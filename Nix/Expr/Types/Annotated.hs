@@ -13,6 +13,7 @@ import           Control.Monad        hiding (forM_, mapM, sequence)
 import           Data.Data
 import           Data.Fix
 import           Data.Function        (on)
+import           Data.Functor.Classes (Show1(..))
 import           Data.Functor.Compose
 import           Data.Semigroup
 import           GHC.Generics
@@ -35,6 +36,9 @@ data Ann ann a = Ann{ annotation :: ann
                     , annotated  :: a
                     }
   deriving (Ord, Eq, Data, Generic, Functor, Read, Show)
+
+instance Show ann => Show1 (Ann ann) where
+  showsPrec1 = showsPrec
 
 instance Semigroup SrcSpan where
   s1 <> s2 = SrcSpan ((min `on` spanBegin) s1 s2)
