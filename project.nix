@@ -1,5 +1,5 @@
-{ mkDerivation, ansi-wl-pprint, base, containers, data-fix, parsers
-, stdenv, tasty, tasty-hunit, tasty-th, text, transformers
+{ mkDerivation, ansi-wl-pprint, base, containers, data-fix, deepseq
+, parsers, stdenv, tasty, tasty-hunit, tasty-th, text, transformers
 , trifecta, unordered-containers, cabal-install, criterion, pkgs
 }:
 
@@ -10,17 +10,20 @@ in
 
 mkDerivation {
   pname = "hnix";
-  version = "0.3.0";
+  version = "0.3.1";
   src = let
     notNamed = list: name: !(elem (baseNameOf name) list);
   in filterSource (n: _: notNamed [".git" "dist" "benchmarks"] n) ./.;
   isLibrary = true;
   isExecutable = true;
-  buildDepends = [
-    ansi-wl-pprint base containers data-fix parsers text transformers
-    trifecta unordered-containers cabal-install criterion
+  libraryHaskellDepends = [
+    ansi-wl-pprint base containers data-fix deepseq parsers text
+    transformers trifecta unordered-containers cabal-install criterion
   ];
-  testDepends = [
+  executableHaskellDepends = [
+    ansi-wl-pprint base containers data-fix deepseq
+  ];
+  testHaskellDepends = [
     base containers data-fix tasty tasty-hunit tasty-th text
   ];
   homepage = "http://github.com/jwiegley/hnix";
