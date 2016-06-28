@@ -70,7 +70,7 @@ data NExprF r
   -- evaluate the second argument.
   | NAssert !r !r
   -- ^ Assert that the first returns true before evaluating the second.
-  deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show)
+  deriving (Ord, Eq, Generic, Typeable, Data, Functor, Foldable, Traversable, Show)
 
 instance Show1 NExprF where
   showsPrec1 = showsPrec
@@ -90,7 +90,7 @@ data Binding r
   | Inherit !(Maybe r) ![NKeyName r]
   -- ^ Using a name already in scope, such as @inherit x;@ which is shorthand
   -- for @x = x;@ or @inherit (x) y;@ which means @y = x.y;@.
-  deriving (Typeable, Data, Ord, Eq, Functor, Show)
+  deriving (Typeable, Data, Ord, Eq, Functor, Foldable, Traversable, Show)
 
 -- | @Params@ represents all the ways the formal parameters to a
 -- function can be represented.
@@ -119,7 +119,7 @@ data ParamSet r
 -- | 'Antiquoted' represents an expression that is either
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
 data Antiquoted v r = Plain !v | Antiquoted !r
-  deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show)
+  deriving (Ord, Eq, Generic, Typeable, Data, Functor, Foldable, Traversable, Show)
 
 -- | An 'NString' is a list of things that are either a plain string
 -- or an antiquoted expression. After the antiquotes have been evaluated,
@@ -131,7 +131,7 @@ data NString r
   | Indented ![Antiquoted Text r]
   -- ^ Strings wrapped with two single quotes ('') can contain newlines,
   -- and their indentation will be stripped.
-  deriving (Eq, Ord, Generic, Typeable, Data, Functor, Show)
+  deriving (Eq, Ord, Generic, Typeable, Data, Functor, Foldable, Traversable, Show)
 
 -- | For the the 'IsString' instance, we use a plain doublequoted string.
 instance IsString (NString r) where
@@ -172,6 +172,18 @@ instance Functor NKeyName where
   fmap f (DynamicKey (Plain str)) = DynamicKey . Plain $ fmap f str
   fmap f (DynamicKey (Antiquoted e)) = DynamicKey . Antiquoted $ f e
   fmap _ (StaticKey key) = StaticKey key
+
+instance Foldable NKeyName where
+  foldMap f = \case
+    DynamicKey (Plain str) -> foldMap f str
+    DynamicKey (Antiquoted e) -> f e
+    StaticKey _ -> mempty
+
+instance Traversable NKeyName where
+  sequenceA = \case
+    DynamicKey (Plain str) -> DynamicKey . Plain <$> sequenceA str
+    DynamicKey (Antiquoted e) -> DynamicKey . Antiquoted <$> e
+    StaticKey key -> pure (StaticKey key)
 
 -- | A selector (for example in a @let@ or an attribute set) is made up
 -- of strung-together key names.

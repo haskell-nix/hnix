@@ -1,5 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFunctor      #-}
+{-# LANGUAGE DeriveFoldable     #-}
+{-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE PatternSynonyms    #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE FlexibleInstances  #-}
@@ -38,7 +40,7 @@ data SrcSpan = SrcSpan{ spanBegin :: Delta
 data Ann ann a = Ann{ annotation :: ann
                     , annotated  :: a
                     }
-  deriving (Ord, Eq, Data, Generic, Typeable, Functor, Read, Show)
+  deriving (Ord, Eq, Data, Generic, Typeable, Functor, Foldable, Traversable, Read, Show)
 
 instance Show ann => Show1 (Ann ann) where
   showsPrec1 = showsPrec
