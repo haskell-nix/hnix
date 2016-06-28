@@ -1,5 +1,5 @@
 Name:                hnix
-Version:             0.3.0
+Version:             0.3.1
 Synopsis:            Haskell implementation of the Nix language
 Description:
   Haskell implementation of the Nix language.
@@ -32,6 +32,7 @@ Library
   Other-modules:
     Nix.Parser.Library
     Nix.Expr.Types
+    Nix.Expr.Types.Annotated
     Nix.Expr.Shorthands
   Default-extensions:
     DataKinds
@@ -59,6 +60,7 @@ Library
     , unordered-containers
     , data-fix
     , deepseq
+    , semigroups >= 0.18 && < 0.19
   if flag(parsec)
     Cpp-options: -DUSE_PARSEC
     Build-depends: parsec

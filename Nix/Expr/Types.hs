@@ -13,6 +13,7 @@ import           Control.Monad hiding (forM_, mapM, sequence)
 import           Data.Data
 import           Data.Fix
 import           Data.Foldable
+import           Data.Functor.Classes (Show1(..))
 import           Data.Map (Map)
 import           Data.Text (Text, pack)
 import           Data.Traversable
@@ -70,6 +71,9 @@ data NExprF r
   | NAssert !r !r
   -- ^ Assert that the first returns true before evaluating the second.
   deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show)
+
+instance Show1 NExprF where
+  showsPrec1 = showsPrec
 
 -- | We make an `IsString` for expressions, where the string is interpreted
 -- as an identifier. This is the most common use-case...

@@ -1,7 +1,11 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Nix.Parser.Library ( module Nix.Parser.Library, module X) where
+module Nix.Parser.Library
+  ( module Nix.Parser.Library
+  , module X
+  , Trifecta.Delta(..)
+  ) where
 
 import Prelude
 import Control.Applicative
@@ -31,7 +35,7 @@ import Text.Trifecta as X (Result(..))
 #endif
 
 newtype NixParser p a = NixParser { runNixParser :: p a }
-  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, Parsing, CharParsing, LookAheadParsing)
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, Parsing, CharParsing, LookAheadParsing, Trifecta.DeltaParsing)
 
 instance TokenParsing p => TokenParsing (NixParser p) where
   someSpace = NixParser $ buildSomeSpaceParser someSpace commentStyle
@@ -104,6 +108,7 @@ someTill p end = go
 --------------------------------------------------------------------------------
 parseFromFileEx :: MonadIO m => Parser a -> FilePath -> m (Result a)
 parseFromString :: Parser a -> String -> Result a
+position :: Parser Trifecta.Delta
 
 #if USE_PARSEC
 data Result a = Success a
@@ -118,6 +123,8 @@ parseFromFileEx p path =
 
 parseFromString p = either (Failure . text . show) Success . Parsec.parse (runNixParser p) "<string>" . pack
 
+position = error "position not implemented for Parsec parser"
+
 #else
 
 type Parser = NixParser Trifecta.Parser
@@ -125,4 +132,7 @@ type Parser = NixParser Trifecta.Parser
 parseFromFileEx p = Trifecta.parseFromFileEx (runNixParser p)
 
 parseFromString p = Trifecta.parseString (runNixParser p) (Trifecta.Directed "<string>" 0 0 0 0)
+
+position = Trifecta.position
+
 #endif
