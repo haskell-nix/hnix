@@ -89,6 +89,7 @@ reservedNames = HashSet.fromList
     , "rec"
     , "inherit"
     , "or"
+    , "true", "false", "null"
     ]
 
 stopWords :: (TokenParsing m, Monad m) => m ()

@@ -217,6 +217,8 @@ case_identifier_special_chars = do
   assertParseString "a-b" $ mkSym "a-b"
   assertParseString "a--b" $ mkSym "a--b"
   assertParseString "a12a" $ mkSym "a12a"
+  assertParseString "null-check" $ mkSym "null-check"
+  assertParseString "true-foo" $ mkSym "true-foo"
   assertParseFail ".a"
   assertParseFail "'a"
 
