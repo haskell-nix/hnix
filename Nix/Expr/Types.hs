@@ -169,20 +169,19 @@ instance IsString (NKeyName r) where
 -- | Deriving this instance automatically is not possible because @r@
 -- occurs not only as last argument in @Antiquoted (NString r) r@
 instance Functor NKeyName where
-  fmap f (DynamicKey (Plain str)) = DynamicKey . Plain $ fmap f str
-  fmap f (DynamicKey (Antiquoted e)) = DynamicKey . Antiquoted $ f e
-  fmap _ (StaticKey key) = StaticKey key
+  fmap = fmapDefault
 
+-- Deriving this instance automatically is not possible because @r@
+-- occurs not only as last argument in @Antiquoted (NString r) r@
 instance Foldable NKeyName where
-  foldMap f = \case
-    DynamicKey (Plain str) -> foldMap f str
-    DynamicKey (Antiquoted e) -> f e
-    StaticKey _ -> mempty
+  foldMap = foldMapDefault
 
+-- Deriving this instance automatically is not possible because @r@
+-- occurs not only as last argument in @Antiquoted (NString r) r@
 instance Traversable NKeyName where
-  sequenceA = \case
-    DynamicKey (Plain str) -> DynamicKey . Plain <$> sequenceA str
-    DynamicKey (Antiquoted e) -> DynamicKey . Antiquoted <$> e
+  traverse f = \case
+    DynamicKey (Plain str)    -> DynamicKey . Plain <$> traverse f str
+    DynamicKey (Antiquoted e) -> DynamicKey . Antiquoted <$> f e
     StaticKey key -> pure (StaticKey key)
 
 -- | A selector (for example in a @let@ or an attribute set) is made up
