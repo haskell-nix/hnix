@@ -51,9 +51,10 @@ Library
     RankNTypes
     TupleSections
   Build-depends:
-      base                     >= 4.6          && < 5
+      base                     >= 4.9          && < 5
     , ansi-wl-pprint
     , containers
+    , deriving-compat >= 0.3 && < 0.4
     , text
     , transformers
     , parsers >= 0.10

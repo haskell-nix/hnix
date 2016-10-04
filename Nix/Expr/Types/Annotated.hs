@@ -7,6 +7,8 @@
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE TemplateHaskell    #-}
+
 -- | The source location annotated nix expression type and supporting types.
 --
 module Nix.Expr.Types.Annotated
@@ -18,7 +20,6 @@ import           Control.Monad        hiding (forM_, mapM, sequence)
 import           Data.Data
 import           Data.Fix
 import           Data.Function        (on)
-import           Data.Functor.Classes (Show1(..))
 import           Data.Functor.Compose
 import           Data.Semigroup
 import           GHC.Generics
@@ -26,6 +27,7 @@ import           Nix.Expr.Types
 import           Nix.Parser.Library   (Delta(..))
 import           Prelude              hiding (concat, concatMap, elem, foldr,
                                        mapM, minimum, readFile, sequence)
+import           Text.Show.Deriving
 
 -- | A location in a source file
 data SrcSpan = SrcSpan{ spanBegin :: Delta
@@ -42,8 +44,7 @@ data Ann ann a = Ann{ annotation :: ann
                     }
   deriving (Ord, Eq, Data, Generic, Typeable, Functor, Foldable, Traversable, Read, Show)
 
-instance Show ann => Show1 (Ann ann) where
-  showsPrec1 = showsPrec
+$(deriveShow1 ''Ann)
 
 instance Semigroup SrcSpan where
   s1 <> s2 = SrcSpan ((min `on` spanBegin) s1 s2)

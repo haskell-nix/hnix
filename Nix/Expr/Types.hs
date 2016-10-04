@@ -6,6 +6,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TemplateHaskell #-}
 -- | The nix expression type and supporting types.
 module Nix.Expr.Types where
 
@@ -13,8 +14,8 @@ import           Control.Monad hiding (forM_, mapM, sequence)
 import           Data.Data
 import           Data.Fix
 import           Data.Foldable
-import           Data.Functor.Classes (Show1(..))
-import           Data.Map (Map)
+import           Data.Functor.Classes (Show1(..), showsUnaryWith, liftShowsPrec2)
+import           Data.Map (Map, toList)
 import           Data.Text (Text, pack)
 import           Data.Traversable
 import           GHC.Exts
@@ -22,6 +23,7 @@ import           GHC.Generics
 import           Nix.Atoms
 import           Prelude hiding (readFile, concat, concatMap, elem, mapM,
                                  sequence, minimum, foldr)
+import           Text.Show.Deriving
 
 -- | The main nix expression type. This is polymorphic so that it can be made
 -- a functor, which allows us to traverse expressions and map functions over
@@ -72,13 +74,11 @@ data NExprF r
   -- ^ Assert that the first returns true before evaluating the second.
   deriving (Ord, Eq, Generic, Typeable, Data, Functor, Foldable, Traversable, Show)
 
-instance Show1 NExprF where
-  showsPrec1 = showsPrec
-
 -- | We make an `IsString` for expressions, where the string is interpreted
 -- as an identifier. This is the most common use-case...
 instance IsString NExpr where
   fromString = Fix . NSym . fromString
+
 
 -- | The monomorphic expression type is a fixed point of the polymorphic one.
 type NExpr = Fix NExprF
@@ -115,6 +115,27 @@ data ParamSet r
   -- ^ Same as the 'FixedParamSet', but extra arguments are allowed.
   deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show,
             Foldable, Traversable)
+
+-- It's not possible to derive this automatically as there is no Show1 instance
+-- for Map. We define one locally here.
+instance Show1 ParamSet where
+  liftShowsPrec sp sl p =
+    let liftShowsPrecMap :: (Int -> a -> ShowS)
+                         -> ([a] -> ShowS)
+                         -> Int
+                         -> Map Text a
+                         -> ShowS
+        liftShowsPrecMap spMap slMap pMap m =
+          showsUnaryWith (liftShowsPrec (liftShowsPrec spMap slMap)
+                                        (liftShowList spMap slMap))
+                         "fromList" pMap (Data.Map.toList m)
+        showNamedMap s =
+          showsUnaryWith (liftShowsPrecMap (liftShowsPrec sp sl)
+                                           (liftShowList sp sl))
+                         s p
+    in \case
+      FixedParamSet m    -> showNamedMap "FixedParamSet" m
+      VariadicParamSet m -> showNamedMap "VariadicParamSet" m
 
 -- | 'Antiquoted' represents an expression that is either
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
@@ -166,7 +187,14 @@ data NKeyName r
 instance IsString (NKeyName r) where
   fromString = StaticKey . fromString
 
--- | Deriving this instance automatically is not possible because @r@
+-- Deriving this instance automatically is not possible because @r@
+-- occurs not only as last argument in @Antiquoted (NString r) r@
+instance Show1 NKeyName where
+  liftShowsPrec sp sl p = \case
+    DynamicKey a -> showsUnaryWith (liftShowsPrec2 (liftShowsPrec sp sl) (liftShowList sp sl) sp sl) "DynamicKey" p a
+    StaticKey t  -> showsUnaryWith showsPrec "StaticKey" p t
+
+-- Deriving this instance automatically is not possible because @r@
 -- occurs not only as last argument in @Antiquoted (NString r) r@
 instance Functor NKeyName where
   fmap = fmapDefault
@@ -215,3 +243,10 @@ data NBinaryOp
 paramName :: Params r -> Maybe Text
 paramName (Param n) = Just n
 paramName (ParamSet _ n) = n
+
+$(deriveShow1 ''NExprF)
+$(deriveShow1 ''NString)
+$(deriveShow1 ''Params)
+$(deriveShow1 ''Binding)
+$(deriveShow1 ''Antiquoted)
+$(deriveShow2 ''Antiquoted)
