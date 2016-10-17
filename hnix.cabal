@@ -104,6 +104,7 @@ Test-suite hnix-tests
   Main-is: Main.hs
   Other-modules:
     ParserTests
+    EvalTests
   Build-depends:
       base >= 4.3 && < 5
     , containers
