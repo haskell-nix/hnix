@@ -29,6 +29,7 @@ data NValueF m r
     | NVList [r]
     | NVSet (Map.Map Text r)
     | NVFunction (Params r) (NValue m -> m r)
+    | NVLiteralPath FilePath
     deriving (Generic, Typeable, Functor)
 
 instance Show f => Show (NValueF m f) where
@@ -38,6 +39,7 @@ instance Show f => Show (NValueF m f) where
       go (NVList     list) = showsCon1 "NVList"     list
       go (NVSet     attrs) = showsCon1 "NVSet"      attrs
       go (NVFunction r _)  = showsCon1 "NVFunction" r
+      go (NVLiteralPath p) = showsCon1 "NVLiteralPath" p
 
       showsCon1 :: Show a => String -> a -> Int -> String -> String
       showsCon1 con a d = showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a
@@ -46,11 +48,12 @@ type NValue m = Fix (NValueF m)
 
 valueText :: Functor m => NValue m -> Text
 valueText = cata phi where
-    phi (NVConstant a)   = atomText a
-    phi (NVStr t)        = t
-    phi (NVList _)       = error "Cannot coerce a list to a string"
-    phi (NVSet _)        = error "Cannot coerce a set to a string"
-    phi (NVFunction _ _) = error "Cannot coerce a function to a string"
+    phi (NVConstant a)    = atomText a
+    phi (NVStr t)         = t
+    phi (NVList _)        = error "Cannot coerce a list to a string"
+    phi (NVSet _)         = error "Cannot coerce a set to a string"
+    phi (NVFunction _ _)  = error "Cannot coerce a function to a string"
+    phi (NVLiteralPath p) = Text.pack p
 
 buildArgument :: Params (NValue m) -> NValue m -> NValue m
 buildArgument paramSpec arg = either error (Fix . NVSet) $ case paramSpec of
@@ -75,7 +78,7 @@ evalExpr = cata phi
      where err = error ("Undefined variable: " ++ show var)
     phi (NConstant x) = const $ return $ Fix $ NVConstant x
     phi (NStr str) = fmap (Fix . NVStr) . flip evalString str
-    phi (NLiteralPath _) = error "Path expressions are not yet supported"
+    phi (NLiteralPath p) = const $ return $ Fix $ NVLiteralPath p
     phi (NEnvPath _) = error "Path expressions are not yet supported"
 
     phi (NUnary op arg) = \env -> arg env >>= \case
