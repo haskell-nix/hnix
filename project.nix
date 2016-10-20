@@ -10,7 +10,7 @@ in
 
 mkDerivation {
   pname = "hnix";
-  version = "0.3.3";
+  version = "0.3.4";
   src = let
     notNamed = list: name: !(elem (baseNameOf name) list);
   in filterSource (n: _: notNamed [".git" "dist" "benchmarks"] n) ./.;
