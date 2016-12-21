@@ -10,7 +10,7 @@ Tested with Nix v1.10.
 ## Getting Started
 
 ```bash
-$ git clone git://github.com:jwiegley/hnix.git
+$ git clone https://github.com/jwiegley/hnix.git
 ...
 $ cd hnix
 $ nix-shell
