@@ -220,6 +220,14 @@ case_identifier_special_chars = do
   assertParseFail ".a"
   assertParseFail "'a"
 
+case_identifier_keyword_prefix :: Assertion
+case_identifier_keyword_prefix = do
+  assertParseString "true-name" $ mkSym "true-name"
+  assertParseString "trueName" $ mkSym "trueName"
+  assertParseString "null-name" $ mkSym "null-name"
+  assertParseString "nullName" $ mkSym "nullName"
+  assertParseString "[ null-name ]" $ mkList [ mkSym "null-name" ]
+
 makeStringParseTest :: String -> Assertion
 makeStringParseTest str = assertParseString ("\"" ++ str ++ "\"") $ mkStr $ pack str
 

@@ -105,11 +105,11 @@ nixInt = annotateLocation1 $ mkIntF <$> token decimal <?> "integer"
 
 nixBool :: Parser NExprLoc
 nixBool = annotateLocation1 $ try (true <|> false) <?> "bool" where
-  true = mkBoolF True <$ symbol "true"
-  false = mkBoolF False <$ symbol "false"
+  true = mkBoolF True <$ reserved "true"
+  false = mkBoolF False <$ reserved "false"
 
 nixNull :: Parser NExprLoc
-nixNull = annotateLocation1 $ mkNullF <$ try (symbol "null") <?> "null"
+nixNull = annotateLocation1 $ mkNullF <$ try (reserved "null") <?> "null"
 
 nixParens :: Parser NExprLoc
 nixParens = parens nixExprLoc <?> "parens"
