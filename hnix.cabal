@@ -62,6 +62,8 @@ Library
     , data-fix
     , deepseq
     , semigroups >= 0.18 && < 0.19
+    , regex-tdfa
+    , regex-tdfa-text
   if flag(parsec)
     Cpp-options: -DUSE_PARSEC
     Build-depends: parsec

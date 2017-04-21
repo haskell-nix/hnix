@@ -11,6 +11,8 @@ import Data.Fix
 import qualified Data.Map as Map
 import Nix.Atoms
 import Nix.Expr.Types
+import Text.Regex.TDFA.Text ()
+import Text.Regex.TDFA ((=~))
 
 -- | Make an integer literal expression.
 mkInt :: Integer -> NExpr
@@ -126,10 +128,21 @@ mkFunction :: Params NExpr -> NExpr -> NExpr
 mkFunction params = Fix . NAbs params
 
 mkDot :: NExpr -> Text -> NExpr
-mkDot e key = Fix $ NSelect e [StaticKey key] Nothing
+mkDot e key = mkDots e [key]
 
 mkDots :: NExpr -> [Text] -> NExpr
-mkDots e keys = Fix $ NSelect e (StaticKey <$> keys) Nothing
+mkDots e keys = Fix $ NSelect e (toKey <$> keys) Nothing
+  where
+    toKey :: Text -> NKeyName NExpr
+    toKey k = (if isPlainSymbol k then StaticKey else dynamicKey) k
+    -- | Make a dynamic key name that is only enclosed in double quotes
+    -- (no antiquotes).
+    dynamicKey :: Text -> NKeyName NExpr
+    dynamicKey k = DynamicKey $ Plain $ DoubleQuoted [Plain k]
+    -- | Check if it’s a valid nix symbol
+    -- the nix lexer regex for IDs (symbols) is [a-zA-Z\_][a-zA-Z0-9\_\'\-]*
+    isPlainSymbol :: Text -> Bool
+    isPlainSymbol s = s =~ ("^[a-zA-Z_][a-zA-Z0-9_'-]*$" :: Text)
 
 -- | An `inherit` clause without an expression to pull from.
 inherit :: [NKeyName e] -> Binding e
