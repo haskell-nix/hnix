@@ -1,6 +1,9 @@
-{ nixpkgs ? import <nixpkgs> {}, compiler ? "ghc801" }:
+{ nixpkgs ? import <nixpkgs> {}, compiler ? null }:
 let
-  haskellPackages = nixpkgs.pkgs.haskell.packages.${compiler};
+  haskellPackages = if compiler == null
+                    # use the current default version
+                    then nixpkgs.pkgs.haskellPackages
+                    else nixpkgs.pkgs.haskell.packages.${compiler};
 in
 
 haskellPackages.callPackage ./project.nix {

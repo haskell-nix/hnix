@@ -1,6 +1,7 @@
 { mkDerivation, ansi-wl-pprint, base, containers, data-fix, deepseq
 , parsers, stdenv, tasty, tasty-hunit, tasty-th, text, transformers
 , trifecta, unordered-containers, criterion, pkgs, deriving-compat
+, regex-tdfa, regex-tdfa-text
 }:
 
 let
@@ -19,6 +20,7 @@ mkDerivation {
   libraryHaskellDepends = [
     ansi-wl-pprint base containers data-fix deepseq parsers text
     transformers trifecta unordered-containers criterion deriving-compat
+    regex-tdfa regex-tdfa-text
   ];
   executableHaskellDepends = [
     ansi-wl-pprint base containers data-fix deepseq
