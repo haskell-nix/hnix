@@ -107,6 +107,7 @@ Test-suite hnix-tests
   Other-modules:
     ParserTests
     EvalTests
+    ShorthandTests
   Build-depends:
       base >= 4.3 && < 5
     , containers
