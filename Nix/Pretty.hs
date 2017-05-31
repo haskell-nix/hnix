@@ -70,7 +70,7 @@ prettyString (Indented parts)
     f ([Plain t] : xs) | Text.null (strip t) = xs
     f xs = xs
   prettyLine = hcat . map prettyPart
-  prettyPart (Plain t) = text . unpack . replace "$" "''$" . replace "''" "'''" $ t
+  prettyPart (Plain t) = text . unpack . replace "${" "''${" . replace "''" "'''" $ t
   prettyPart (Antiquoted r) = text "$" <> braces (withoutParens r)
 
 prettyParams :: Params NixDoc -> Doc
