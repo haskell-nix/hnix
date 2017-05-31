@@ -108,6 +108,7 @@ Test-suite hnix-tests
     ParserTests
     EvalTests
     ShorthandTests
+    PrettyTests
   Build-depends:
       base >= 4.3 && < 5
     , containers
