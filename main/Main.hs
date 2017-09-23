@@ -9,15 +9,13 @@ import System.IO
 import Text.PrettyPrint.ANSI.Leijen
 
 nix :: FilePath -> IO ()
-nix path = do
-  res <- parseNixFile path
-  case res of
-    Failure e -> hPutStrLn stderr $ "Parse failed: " ++ show e
-    Success n -> do
-      displayIO stdout $ renderPretty 0.4 80 (prettyNix n)
+nix path = parseNixFile path >>= displayNExpr
 
 nixString :: String -> IO ()
-nixString s = case parseNixString s of
+nixString = displayNExpr . parseNixString
+
+displayNExpr :: Result NExpr -> IO ()
+displayNExpr = \case
   Success n -> displayIO stdout $ renderPretty 0.4 80 (prettyNix n)
   Failure e -> hPutStrLn stderr $ "Parse failed: " ++ show e
 
