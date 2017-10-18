@@ -30,6 +30,7 @@ data NValueF m r
     | NVSet (Map.Map Text r)
     | NVFunction (Params r) (NValue m -> m r)
     | NVLiteralPath FilePath
+    | NVEnvPath FilePath
     deriving (Generic, Typeable, Functor)
 
 instance Show f => Show (NValueF m f) where
@@ -40,6 +41,7 @@ instance Show f => Show (NValueF m f) where
       go (NVSet     attrs) = showsCon1 "NVSet"      attrs
       go (NVFunction r _)  = showsCon1 "NVFunction" r
       go (NVLiteralPath p) = showsCon1 "NVLiteralPath" p
+      go (NVEnvPath p)     = showsCon1 "NVEnvPath" p
 
       showsCon1 :: Show a => String -> a -> Int -> String -> String
       showsCon1 con a d = showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a
@@ -54,6 +56,7 @@ valueText = cata phi where
     phi (NVSet _)         = error "Cannot coerce a set to a string"
     phi (NVFunction _ _)  = error "Cannot coerce a function to a string"
     phi (NVLiteralPath p) = Text.pack p
+    phi (NVEnvPath p)     = Text.pack p
 
 buildArgument :: Params (NValue m) -> NValue m -> NValue m
 buildArgument paramSpec arg = either error (Fix . NVSet) $ case paramSpec of
@@ -79,7 +82,7 @@ evalExpr = cata phi
     phi (NConstant x) = const $ return $ Fix $ NVConstant x
     phi (NStr str) = fmap (Fix . NVStr) . flip evalString str
     phi (NLiteralPath p) = const $ return $ Fix $ NVLiteralPath p
-    phi (NEnvPath _) = error "Path expressions are not yet supported"
+    phi (NEnvPath p) = const $ return $ Fix $ NVEnvPath p
 
     phi (NUnary op arg) = \env -> arg env >>= \case
       Fix (NVConstant c) -> pure $ Fix $ NVConstant $ case (op, c) of
