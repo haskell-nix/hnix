@@ -3,6 +3,7 @@ module Main where
 
 import Nix.Parser
 import Nix.Pretty
+import Nix.Expr
 
 import System.Environment
 import System.IO
