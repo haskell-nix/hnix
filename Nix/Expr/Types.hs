@@ -12,9 +12,10 @@ module Nix.Expr.Types where
 
 import           Control.Monad hiding (forM_, mapM, sequence)
 import           Data.Data
+import           Data.Eq.Deriving
 import           Data.Fix
 import           Data.Foldable
-import           Data.Functor.Classes (Show1(..), showsUnaryWith, liftShowsPrec2)
+import           Data.Functor.Classes (Eq1(..), Eq2(..), Show1(..), showsUnaryWith, liftShowsPrec2)
 import           Data.Map (Map, toList)
 import           Data.Text (Text, pack)
 import           Data.Traversable
@@ -116,6 +117,13 @@ data ParamSet r
   deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show,
             Foldable, Traversable)
 
+instance Eq1 ParamSet where
+  liftEq eq (FixedParamSet a) (FixedParamSet b) =
+    liftEq (liftEq (liftEq eq)) (Data.Map.toList a) (Data.Map.toList b)
+  liftEq eq (VariadicParamSet a) (VariadicParamSet b) =
+    liftEq (liftEq (liftEq eq)) (Data.Map.toList a) (Data.Map.toList b)
+  liftEq _ _ _ = False
+
 -- It's not possible to derive this automatically as there is no Show1 instance
 -- for Map. We define one locally here.
 instance Show1 ParamSet where
@@ -187,6 +195,11 @@ data NKeyName r
 instance IsString (NKeyName r) where
   fromString = StaticKey . fromString
 
+instance Eq1 NKeyName where
+  liftEq eq (DynamicKey a) (DynamicKey b) = liftEq2 (liftEq eq) eq a b
+  liftEq _ (StaticKey a) (StaticKey b) = a == b
+  liftEq _ _ _ = False
+
 -- Deriving this instance automatically is not possible because @r@
 -- occurs not only as last argument in @Antiquoted (NString r) r@
 instance Show1 NKeyName where
@@ -243,6 +256,13 @@ data NBinaryOp
 paramName :: Params r -> Maybe Text
 paramName (Param n) = Just n
 paramName (ParamSet _ n) = n
+
+$(deriveEq1 ''NExprF)
+$(deriveEq1 ''NString)
+$(deriveEq1 ''Binding)
+$(deriveEq1 ''Params)
+$(deriveEq1 ''Antiquoted)
+$(deriveEq2 ''Antiquoted)
 
 $(deriveShow1 ''NExprF)
 $(deriveShow1 ''NString)
