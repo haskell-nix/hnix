@@ -13,6 +13,7 @@ Tested with Nix v1.10.
 $ git clone https://github.com/jwiegley/hnix.git
 ...
 $ cd hnix
+$ cabal2nix --shell . > shell.nix
 $ nix-shell
 ...
 $ cabal test
