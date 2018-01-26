@@ -148,7 +148,7 @@ evalExpr = cata phi
         rec
           mergedEnv <- pure $ Fix $ NVSet $ evaledBinds `Map.union` env'
           evaledBinds <- evalBinds True mergedEnv binds
-        pure mergedEnv
+        pure . Fix . NVSet $ evaledBinds
       _ -> error "invalid evaluation environment"
 
     phi (NLet binds e) = \env -> case env of
