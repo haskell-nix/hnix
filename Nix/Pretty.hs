@@ -80,16 +80,16 @@ prettyParams (ParamSet s mname) = prettyParamSet s <> case mname of
   Just name -> text "@" <> text (unpack name)
 
 prettyParamSet :: ParamSet NixDoc -> Doc
-prettyParamSet params = lbrace <+> middle <+> rbrace
+prettyParamSet params = encloseSep (lbrace <> space) (align rbrace) sep prettyArgs
   where
+    prettySetArg (n, maybeDef) = case maybeDef of
+      Nothing -> text (unpack n)
+      Just v -> text (unpack n) <+> text "?" <+> withoutParens v
     prettyArgs = case params of
       FixedParamSet args -> map prettySetArg (toList args)
 
       VariadicParamSet args -> map prettySetArg (toList args) ++ [text "..."]
-    middle = hcat $ punctuate (comma <> space) prettyArgs
-    prettySetArg (n, maybeDef) = case maybeDef of
-      Nothing -> text (unpack n)
-      Just v -> text (unpack n) <+> text "?" <+> withoutParens v
+    sep = align (comma <> space)
 
 prettyBind :: Binding NixDoc -> Doc
 prettyBind (NamedVar n v) = prettySelector n <+> equals <+> withoutParens v <> semi
