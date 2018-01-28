@@ -81,16 +81,16 @@ prettyParams (ParamSet s mname) = prettyParamSet s <> case mname of
   Just name -> text "@" <> text (unpack name)
 
 prettyParamSet :: ParamSet NixDoc -> Doc
-prettyParamSet params = lbrace <+> middle <+> rbrace
+prettyParamSet params = encloseSep (lbrace <> space) (align rbrace) sep prettyArgs
   where
+    prettySetArg (n, maybeDef) = case maybeDef of
+      Nothing -> text (unpack n)
+      Just v -> text (unpack n) <+> text "?" <+> withoutParens v
     prettyArgs = case params of
       FixedParamSet args -> map prettySetArg (toList args)
 
       VariadicParamSet args -> map prettySetArg (toList args) ++ [text "..."]
-    middle = hcat $ punctuate (comma <> space) prettyArgs
-    prettySetArg (n, maybeDef) = case maybeDef of
-      Nothing -> text (unpack n)
-      Just v -> text (unpack n) <+> text "?" <+> withoutParens v
+    sep = align (comma <> space)
 
 prettyBind :: Binding NixDoc -> Doc
 prettyBind (NamedVar n v) = prettySelector n <+> equals <+> withoutParens v <> semi
@@ -125,7 +125,7 @@ prettyNix = withoutParens . cata phi where
   phi (NRecSet xs) = simpleExpr $ group $
     nest 2 (vsep $ recPrefix <> lbrace : map prettyBind xs) <$> rbrace
   phi (NAbs args body) = leastPrecedence $
-    (prettyParams args <> colon) </> (nest 2 $ withoutParens body)
+   (prettyParams args <> colon) </> (indent 2 (withoutParens body))
   phi (NBinary op r1 r2) = flip NixDoc opInfo $ hsep
     [ wrapParens (f NAssocLeft) r1
     , text $ operatorName opInfo
@@ -156,17 +156,17 @@ prettyNix = withoutParens . cata phi where
         | "../" `isPrefixOf` txt -> txt
         | otherwise -> "./" ++ txt
   phi (NSym name) = simpleExpr $ text (unpack name)
-  phi (NLet binds body) = leastPrecedence $ group $ nest 2 $
-        vsep (text "let" : map prettyBind binds) <$> text "in" <+> withoutParens body
+  phi (NLet binds body) = leastPrecedence $ group $ text "let" <$> indent 2 (
+        vsep (map prettyBind binds)) <$> text "in" <+> withoutParens body
   phi (NIf cond trueBody falseBody) = leastPrecedence $
     group $ nest 2 $ (text "if" <+> withoutParens cond) <$>
       (  align (text "then" <+> withoutParens trueBody)
      <$> align (text "else" <+> withoutParens falseBody)
       )
   phi (NWith scope body) = leastPrecedence $
-    text "with"  <+> withoutParens scope <> semi <+> withoutParens body
+   text "with"  <+> withoutParens scope <> semi <$> align (withoutParens body)
   phi (NAssert cond body) = leastPrecedence $
-    text "assert" <+> withoutParens cond <> semi <+> withoutParens body
+   text "assert" <+> withoutParens cond <> semi <$> align (withoutParens body)
 
   recPrefix = text "rec" <> space
 
