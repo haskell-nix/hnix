@@ -95,7 +95,7 @@ prettyParamSet params = encloseSep (lbrace <> space) (align rbrace) sep prettyAr
 prettyBind :: Binding NixDoc -> Doc
 prettyBind (NamedVar n v) = prettySelector n <+> equals <+> withoutParens v <> semi
 prettyBind (Inherit s ns)
-  = text "inherit" <+> scope <> fillSep (map prettyKeyName ns) <> semi
+  = text "inherit" <+> scope <> align (fillSep (map prettyKeyName ns)) <> semi
  where scope = maybe empty ((<> space) . parens . withoutParens) s
 
 prettyKeyName :: NKeyName NixDoc -> Doc
