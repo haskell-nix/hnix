@@ -27,7 +27,7 @@ data NValueF m r
     | NVStr Text
     | NVList [r]
     | NVSet (Map.Map Text r)
-    | NVFunction (Params r) (ValueSet m -> m r)
+    | NVFunction (Params (ValueSet m -> m r)) (ValueSet m -> m r)
     | NVLiteralPath FilePath
     | NVEnvPath FilePath
     deriving (Generic, Typeable, Functor)
@@ -38,7 +38,7 @@ instance Show f => Show (NValueF m f) where
       go (NVStr      text) = showsCon1 "NVStr"      text
       go (NVList     list) = showsCon1 "NVList"     list
       go (NVSet     attrs) = showsCon1 "NVSet"      attrs
-      go (NVFunction r _)  = showsCon1 "NVFunction" r
+      go (NVFunction r _)  = showsCon1 "NVFunction" (() <$ r)
       go (NVLiteralPath p) = showsCon1 "NVLiteralPath" p
       go (NVEnvPath p)     = showsCon1 "NVEnvPath" p
 

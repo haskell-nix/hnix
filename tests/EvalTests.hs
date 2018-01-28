@@ -30,8 +30,13 @@ case_function_set_arg = constantEqualStr "2" "({ a }: 2) { a = 1; }"
 case_function_set_two_arg :: Assertion
 case_function_set_two_arg = constantEqualStr "2" "({ a, b ? 3 }: b - a) { a = 1; }"
 
--- case_function_set_two_arg_default_scope :: Assertion
--- case_function_set_two_arg_default_scope = constantEqualStr "2" "({ a, b ? a * 3 }: b - a) { a = 1; }"
+case_function_set_two_arg_default_scope :: Assertion
+case_function_set_two_arg_default_scope = constantEqualStr "2" "({ a ? 1, b ? a * 3 }: b - a) {}"
+
+case_function_default_env :: Assertion
+case_function_default_env = constantEqualStr "2" "let default = 2; in ({ a ? default }: a) {}"
+
+
 
 tests :: TestTree
 tests = $testGroupGenerator
