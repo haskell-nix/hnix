@@ -27,7 +27,7 @@ data NValueF m r
     | NVStr Text
     | NVList [r]
     | NVSet (Map.Map Text r)
-    | NVFunction (Params r) (NValue m -> m r)
+    | NVFunction (Params r) (ValueSet m -> m r)
     | NVLiteralPath FilePath
     | NVEnvPath FilePath
     deriving (Generic, Typeable, Functor)
@@ -47,6 +47,8 @@ instance Show f => Show (NValueF m f) where
 
 type NValue m = Fix (NValueF m)
 
+type ValueSet m = Map.Map Text (NValue m)
+
 valueText :: Functor m => NValue m -> Text
 valueText = cata phi where
     phi (NVConstant a)    = atomText a
@@ -64,8 +66,8 @@ atomText (NBool b)  = if b then "true" else "false"
 atomText NNull      = "null"
 atomText (NUri uri) = uri
 
-buildArgument :: Params (NValue m) -> NValue m -> NValue m
-buildArgument paramSpec arg = either error (Fix . NVSet) $ case paramSpec of
+buildArgument :: Params (NValue m) -> NValue m -> ValueSet m
+buildArgument paramSpec arg = either error id $ case paramSpec of
     Param name -> return $ Map.singleton name arg
     ParamSet (FixedParamSet s) Nothing -> lookupParamSet s
     ParamSet (FixedParamSet s) (Just name) ->
@@ -78,12 +80,11 @@ buildArgument paramSpec arg = either error (Fix . NVSet) $ case paramSpec of
         Fix (NVSet env) -> Map.traverseWithKey (go env) s
         _               -> Left "Unexpected function environment"
 
-evalExpr :: MonadFix m => NExpr -> NValue m -> m (NValue m)
+-- | Evaluate an nix expression, with a given ValueSet as environment
+evalExpr :: MonadFix m => NExpr -> ValueSet m -> m (NValue m)
 evalExpr = cata phi
   where
-    phi (NSym var) = \env -> case env of
-      Fix (NVSet s) -> maybe err return $ Map.lookup var s
-      _ -> error "invalid evaluation environment"
+    phi (NSym var) = \env -> maybe err return $ Map.lookup var env
      where err = error ("Undefined variable: " ++ show var)
     phi (NConstant x) = const $ return $ Fix $ NVConstant x
     phi (NStr str) = fmap (Fix . NVStr) . flip evalString str
@@ -149,21 +150,17 @@ evalExpr = cata phi
 
     phi (NSet binds) = \env -> Fix . NVSet <$> evalBinds True env binds
 
-    phi (NRecSet binds) = \env -> case env of
-      (Fix (NVSet env')) -> do
-        rec
-          mergedEnv <- pure $ Fix $ NVSet $ evaledBinds `Map.union` env'
-          evaledBinds <- evalBinds True mergedEnv binds
-        pure . Fix . NVSet $ evaledBinds
-      _ -> error "invalid evaluation environment"
+    phi (NRecSet binds) = \env -> do
+      rec
+        let mergedEnv = evaledBinds `Map.union` env
+        evaledBinds <- evalBinds True mergedEnv binds
+      pure . Fix . NVSet $ evaledBinds
 
-    phi (NLet binds e) = \env -> case env of
-      (Fix (NVSet env')) -> do
+    phi (NLet binds e) = \env -> do
         rec
-          mergedEnv   <- pure $ Fix $ NVSet $ evaledBinds `Map.union` env'
+          let mergedEnv = evaledBinds `Map.union` env
           evaledBinds <- evalBinds True mergedEnv binds
         e mergedEnv
-      _ -> error "invalid evaluation environment"
 
     phi (NIf cond t f) = \env -> do
       (Fix cval) <- cond env
@@ -172,13 +169,11 @@ evalExpr = cata phi
         NVConstant (NBool False) -> f env
         _ -> error "condition must be a boolean"
 
-    phi (NWith scope e) = \env -> case env of
-      (Fix (NVSet env')) -> do
-        s <- scope env
-        case s of
-          (Fix (NVSet scope')) -> e . Fix . NVSet $ Map.union scope' env'
-          _ -> error "scope must be a set in with statement"
-      _ -> error "invalid evaluation environment"
+    phi (NWith scope e) = \env -> do
+      s <- scope env
+      case s of
+        (Fix (NVSet scope')) -> e $ Map.union scope' env
+        _ -> error "scope must be a set in with statement"
 
     phi (NAssert cond e) = \env -> do
       (Fix cond') <- cond env
@@ -204,7 +199,7 @@ evalExpr = cata phi
         return $ Fix $ NVFunction args b
 
 evalString :: Monad m
-           => NValue m -> NString (NValue m -> m (NValue m)) -> m Text
+           => ValueSet m -> NString (ValueSet m -> m (NValue m)) -> m Text
 evalString env nstr = do
   let fromParts parts = Text.concat <$>
         mapM (runAntiquoted return (fmap valueText . ($ env))) parts
@@ -212,9 +207,9 @@ evalString env nstr = do
     Indented parts -> fromParts parts
     DoubleQuoted parts -> fromParts parts
 
-evalBinds :: Monad m => Bool -> NValue m ->
-             [Binding (NValue m -> m (NValue m))] ->
-             m (Map.Map Text (NValue m))
+evalBinds :: Monad m => Bool -> ValueSet m ->
+             [Binding (ValueSet m -> m (NValue m))] ->
+             m (ValueSet m)
 evalBinds allowDynamic env xs = buildResult <$> sequence (concatMap go xs) where
   buildResult :: [([Text], NValue m)] -> Map.Map Text (NValue m)
   buildResult = foldl' insert Map.empty . map (first reverse) where
@@ -238,7 +233,7 @@ evalBinds allowDynamic env xs = buildResult <$> sequence (concatMap go xs) where
   go (NamedVar x y) = [liftM2 (,) (evalSelector allowDynamic env x) (y env)]
   go _ = [] -- HACK! But who cares right now
 
-evalSelector :: Monad m => Bool -> NValue m -> NAttrPath (NValue m -> m (NValue m)) -> m [Text]
+evalSelector :: Monad m => Bool -> ValueSet m -> NAttrPath (ValueSet m -> m (NValue m)) -> m [Text]
 evalSelector dyn env = mapM evalKeyName where
   evalKeyName (StaticKey k) = return k
   evalKeyName (DynamicKey k)

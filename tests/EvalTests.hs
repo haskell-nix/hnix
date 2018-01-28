@@ -40,8 +40,8 @@ tests = $testGroupGenerator
 
 constantEqual :: NExpr -> NExpr -> Assertion
 constantEqual a b = do
-    Fix (NVConstant a') <- evalExpr a (Fix (NVSet mempty))
-    Fix (NVConstant b') <- evalExpr b (Fix (NVSet mempty))
+    Fix (NVConstant a') <- evalExpr a mempty
+    Fix (NVConstant b') <- evalExpr b mempty
     assertEqual "" a' b'
 
 constantEqualStr :: String -> String -> Assertion
