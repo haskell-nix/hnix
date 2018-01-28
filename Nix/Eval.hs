@@ -15,7 +15,6 @@ import qualified Data.Text as Text
 import           Data.Traversable as T
 import           Data.Typeable (Typeable)
 import           GHC.Generics
-import           Nix.Pretty (atomText)
 import           Nix.StringOperations (runAntiquoted)
 import           Nix.Atoms
 import           Nix.Expr
@@ -57,6 +56,13 @@ valueText = cata phi where
     phi (NVFunction _ _)  = error "Cannot coerce a function to a string"
     phi (NVLiteralPath p) = Text.pack p
     phi (NVEnvPath p)     = Text.pack p
+
+-- | Translate an atom into its nix representation.
+atomText :: NAtom -> Text
+atomText (NInt i)   = Text.pack (show i)
+atomText (NBool b)  = if b then "true" else "false"
+atomText NNull      = "null"
+atomText (NUri uri) = uri
 
 buildArgument :: Params (NValue m) -> NValue m -> NValue m
 buildArgument paramSpec arg = either error (Fix . NVSet) $ case paramSpec of

@@ -8,6 +8,7 @@ import Data.Maybe (isJust)
 import Data.Text (Text, pack, unpack, replace, strip)
 import Data.List (isPrefixOf)
 import Nix.Atoms
+import Nix.Eval (NValue, NValueF (..), atomText)
 import Nix.Expr
 import Nix.Parser.Library (reservedNames)
 import Nix.Parser.Operators
@@ -106,13 +107,6 @@ prettyKeyName (DynamicKey key) = runAntiquoted prettyString withoutParens key
 prettySelector :: NAttrPath NixDoc -> Doc
 prettySelector = hcat . punctuate dot . map prettyKeyName
 
--- | Translate an atom into its nix representation.
-atomText :: NAtom -> Text
-atomText (NInt i)   = pack (show i)
-atomText (NBool b)  = if b then "true" else "false"
-atomText NNull      = "null"
-atomText (NUri uri) = uri
-
 prettyAtom :: NAtom -> NixDoc
 prettyAtom atom = simpleExpr $ text $ unpack $ atomText atom
 
@@ -175,3 +169,20 @@ prettyNix = withoutParens . cata phi where
     text "assert" <+> withoutParens cond <> semi <+> withoutParens body
 
   recPrefix = text "rec" <> space
+
+prettyNixValue :: Functor m => NValue m -> Doc
+prettyNixValue = prettyNix . valueToExpr
+  where valueToExpr :: Functor m => NValue m -> NExpr
+        valueToExpr = hmap go
+        -- hmap does the recursive conversion from NValue to NExpr
+        -- fun fact: it is not defined in data-fixed, but I was certain it should exists so I found it in unification-fd by hoogling its type
+        hmap :: (Functor f, Functor g) => (forall a. f a -> g a) -> Fix f -> Fix g
+        hmap eps = ana (eps . unFix)
+        go (NVConstant a) = NConstant a
+        go (NVStr t) = NStr (DoubleQuoted [Plain t])
+        go (NVList l) = NList l
+        go (NVSet s) = NSet [NamedVar [StaticKey k] v | (k, v) <- toList s]
+        go (NVFunction p _) = NSym . pack $ ("<function with " ++ show (() <$ p)  ++ ">")
+        go (NVLiteralPath fp) = NLiteralPath fp
+        go (NVEnvPath p) = NEnvPath p
+
