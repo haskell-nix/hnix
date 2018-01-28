@@ -131,7 +131,7 @@ prettyNix = withoutParens . cata phi where
   phi (NRecSet xs) = simpleExpr $ group $
     nest 2 (vsep $ recPrefix <> lbrace : map prettyBind xs) <$> rbrace
   phi (NAbs args body) = leastPrecedence $
-    (prettyParams args <> colon) </> (nest 2 $ withoutParens body)
+   (prettyParams args <> colon) </> (indent 2 (withoutParens body))
   phi (NBinary op r1 r2) = flip NixDoc opInfo $ hsep
     [ wrapParens (f NAssocLeft) r1
     , text $ operatorName opInfo
