@@ -170,8 +170,8 @@ prettyNix = withoutParens . cata phi where
      <$> align (text "else" <+> withoutParens falseBody)
       )
   phi (NWith scope body) = leastPrecedence $
-    text "with"  <+> withoutParens scope <> semi <+> withoutParens body
+   text "with"  <+> withoutParens scope <> semi <$> align (withoutParens body)
   phi (NAssert cond body) = leastPrecedence $
-    text "assert" <+> withoutParens cond <> semi <+> withoutParens body
+   text "assert" <+> withoutParens cond <> semi <$> align (withoutParens body)
 
   recPrefix = text "rec" <> space
