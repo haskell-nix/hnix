@@ -162,8 +162,8 @@ prettyNix = withoutParens . cata phi where
         | "../" `isPrefixOf` txt -> txt
         | otherwise -> "./" ++ txt
   phi (NSym name) = simpleExpr $ text (unpack name)
-  phi (NLet binds body) = leastPrecedence $ group $ nest 2 $
-        vsep (text "let" : map prettyBind binds) <$> text "in" <+> withoutParens body
+  phi (NLet binds body) = leastPrecedence $ group $ text "let" <$> indent 2 (
+        vsep (map prettyBind binds)) <$> text "in" <+> withoutParens body
   phi (NIf cond trueBody falseBody) = leastPrecedence $
     group $ nest 2 $ (text "if" <+> withoutParens cond) <$>
       (  align (text "then" <+> withoutParens trueBody)
