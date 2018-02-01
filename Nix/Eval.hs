@@ -10,6 +10,7 @@ import           Control.Monad.Fix
 import           Data.Fix
 import           Data.Foldable (foldl')
 import qualified Data.Map as Map
+import qualified Data.Map.Lazy as LMap
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Traversable as T
@@ -19,6 +20,8 @@ import           Nix.StringOperations (runAntiquoted)
 import           Nix.Atoms
 import           Nix.Expr
 import           Prelude hiding (mapM, sequence)
+
+import Debug.Trace
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.
@@ -68,19 +71,24 @@ atomText (NUri uri) = uri
 
 buildArgument :: MonadFix m => Params (ValueSet m -> m (NValue m)) -> NValue m -> m (ValueSet m)
 buildArgument paramSpec arg = case paramSpec of
-    Param name -> return $ Map.singleton name arg
-    ParamSet (FixedParamSet s) Nothing -> lookupParamSet s
-    ParamSet (FixedParamSet s) (Just name) ->
-      Map.insert name arg <$> lookupParamSet s
-    ParamSet _ _ -> error "Can't yet handle variadic param sets"
+  Param name -> return $ Map.singleton name arg
+  ParamSet (FixedParamSet s) Nothing -> lookupParamSet s
+  ParamSet (FixedParamSet s) (Just name) ->
+    Map.insert name arg <$> lookupParamSet s
+  ParamSet _ _ -> error "Can't yet handle variadic param sets"
   where
-    go env k def = maybe (error err) id $ mvalueFromEnv <|> mvalueFromDef
+    go env envAndArgs k def = maybe (error err) id $ mvalueFromEnv <|> mvalueFromDef
       where
         mvalueFromEnv = return <$> Map.lookup k env
-        mvalueFromDef = ($ env)<$> def
+        mvalueFromDef = ($ Map.delete k envAndArgs) <$> def
         err = "Could not find " ++ show k
-    lookupParamSet s = case arg of
-        Fix (NVSet env) -> Map.traverseWithKey (go env) s
+    lookupParamSet s =
+      case arg of
+        Fix (NVSet env) -> do
+          rec
+            evaledArgs <- Map.traverseWithKey (go env envAndArgs) s
+            let envAndArgs = env `Map.union` evaledArgs
+          return evaledArgs
         _               -> error "Unexpected function environment"
 
 -- | Evaluate an nix expression, with a given ValueSet as environment
