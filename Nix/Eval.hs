@@ -86,7 +86,7 @@ buildArgument paramSpec arg = case paramSpec of
       case arg of
         Fix (NVSet env) -> do
           rec
-            evaledArgs <- Map.traverseWithKey (go env envAndArgs) s
+            evaledArgs <- Map.traverseWithKey (\k v -> traceShow k $ go env envAndArgs k v) s
             let envAndArgs = env `Map.union` evaledArgs
           return evaledArgs
         _               -> error "Unexpected function environment"
