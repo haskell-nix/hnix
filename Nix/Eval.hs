@@ -27,7 +27,7 @@ data NValueF m r
     | NVStr Text
     | NVList [r]
     | NVSet (Map.Map Text r)
-    | NVFunction (Params r) (ValueSet m -> m r)
+    | NVFunction (Params (ValueSet m -> m r)) (ValueSet m -> m r)
     | NVLiteralPath FilePath
     | NVEnvPath FilePath
     deriving (Generic, Typeable, Functor)
@@ -66,19 +66,21 @@ atomText (NBool b)  = if b then "true" else "false"
 atomText NNull      = "null"
 atomText (NUri uri) = uri
 
-buildArgument :: Params (NValue m) -> NValue m -> ValueSet m
-buildArgument paramSpec arg = either error id $ case paramSpec of
+buildArgument :: MonadFix m => Params (ValueSet m -> m (NValue m)) -> NValue m -> m (ValueSet m)
+buildArgument paramSpec arg = case paramSpec of
     Param name -> return $ Map.singleton name arg
     ParamSet (FixedParamSet s) Nothing -> lookupParamSet s
     ParamSet (FixedParamSet s) (Just name) ->
       Map.insert name arg <$> lookupParamSet s
     ParamSet _ _ -> error "Can't yet handle variadic param sets"
   where
-    go env k def = maybe (Left err) return $ Map.lookup k env <|> def
+    go :: ValueSet m -> Text -> (Maybe (ValueSet m -> m (NValue m)) -> m (NValue m))
+    go env k def = maybe (error err) id $ Map.lookup k env <|> def
       where err = "Could not find " ++ show k
+    lookupParamSet :: Map.Map Text (Maybe (ValueSet m -> m (NValue m))) -> m (ValueSet m)
     lookupParamSet s = case arg of
         Fix (NVSet env) -> Map.traverseWithKey (go env) s
-        _               -> Left "Unexpected function environment"
+        _               -> error "Unexpected function environment"
 
 -- | Evaluate an nix expression, with a given ValueSet as environment
 evalExpr :: MonadFix m => NExpr -> ValueSet m -> m (NValue m)
@@ -187,16 +189,14 @@ evalExpr = cata phi
         case fun' of
             Fix (NVFunction argset f) -> do
                 arg <- x env
-                let arg' = buildArgument argset arg
+                arg' <- buildArgument argset arg
                 f arg'
             _ -> error "Attempt to call non-function"
 
     phi (NAbs a b) = \env -> do
-        -- jww (2014-06-28): arglists should not receive the current
-        -- environment, but rather should recursively view their own arg
-        -- set
-        args <- traverse ($ env) a
-        return $ Fix $ NVFunction args b
+        -- TODO capture env
+        --args <- traverse ($ env) a, in both args and body
+        return $ Fix $ NVFunction a b
 
 evalString :: Monad m
            => ValueSet m -> NString (ValueSet m -> m (NValue m)) -> m Text
