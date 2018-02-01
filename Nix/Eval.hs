@@ -38,7 +38,7 @@ instance Show f => Show (NValueF m f) where
       go (NVStr      text) = showsCon1 "NVStr"      text
       go (NVList     list) = showsCon1 "NVList"     list
       go (NVSet     attrs) = showsCon1 "NVSet"      attrs
-      go (NVFunction r _)  = showsCon1 "NVFunction" r
+      go (NVFunction r _)  = showsCon1 "NVFunction" (() <$ r)
       go (NVLiteralPath p) = showsCon1 "NVLiteralPath" p
       go (NVEnvPath p)     = showsCon1 "NVEnvPath" p
 
@@ -74,10 +74,11 @@ buildArgument paramSpec arg = case paramSpec of
       Map.insert name arg <$> lookupParamSet s
     ParamSet _ _ -> error "Can't yet handle variadic param sets"
   where
-    go :: ValueSet m -> Text -> (Maybe (ValueSet m -> m (NValue m)) -> m (NValue m))
-    go env k def = maybe (error err) id $ Map.lookup k env <|> def
-      where err = "Could not find " ++ show k
-    lookupParamSet :: Map.Map Text (Maybe (ValueSet m -> m (NValue m))) -> m (ValueSet m)
+    go env k def = maybe (error err) id $ mvalueFromEnv <|> mvalueFromDef
+      where
+        mvalueFromEnv = return <$> Map.lookup k env
+        mvalueFromDef = ($ env)<$> def
+        err = "Could not find " ++ show k
     lookupParamSet s = case arg of
         Fix (NVSet env) -> Map.traverseWithKey (go env) s
         _               -> error "Unexpected function environment"
@@ -194,9 +195,10 @@ evalExpr = cata phi
             _ -> error "Attempt to call non-function"
 
     phi (NAbs a b) = \env -> do
-        -- TODO capture env
-        --args <- traverse ($ env) a, in both args and body
-        return $ Fix $ NVFunction a b
+        -- It is the environment at the definition site, not the call site, that needs to be
+        -- used when evaluation the body and the default arguments
+        let injectEnv f args = f (env `Map.union` args)
+        return $ Fix $ NVFunction (fmap injectEnv a) (injectEnv b)
 
 evalString :: Monad m
            => ValueSet m -> NString (ValueSet m -> m (NValue m)) -> m Text
