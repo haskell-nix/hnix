@@ -20,8 +20,6 @@ import           Nix.Atoms
 import           Nix.Expr
 import           Prelude hiding (mapM, sequence)
 
-import Debug.Trace
-
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.
 data NValueF m r
@@ -29,7 +27,7 @@ data NValueF m r
     | NVStr Text
     | NVList [r]
     | NVSet (Map.Map Text r)
-    | NVFunction (Params (ValueSet m -> m r)) (ValueSet m -> m r)
+    | NVFunction (Params r) (ValueSet m -> m r)
     | NVLiteralPath FilePath
     | NVEnvPath FilePath
     deriving (Generic, Typeable, Functor)
@@ -40,7 +38,7 @@ instance Show f => Show (NValueF m f) where
       go (NVStr      text) = showsCon1 "NVStr"      text
       go (NVList     list) = showsCon1 "NVList"     list
       go (NVSet     attrs) = showsCon1 "NVSet"      attrs
-      go (NVFunction r _)  = showsCon1 "NVFunction" (() <$ r)  -- Discard the default value, that we don't care about displaying
+      go (NVFunction r _)  = showsCon1 "NVFunction" r
       go (NVLiteralPath p) = showsCon1 "NVLiteralPath" p
       go (NVEnvPath p)     = showsCon1 "NVEnvPath" p
 
@@ -68,23 +66,19 @@ atomText (NBool b)  = if b then "true" else "false"
 atomText NNull      = "null"
 atomText (NUri uri) = uri
 
-buildArgument :: ValueSet m -> Params (ValueSet m -> NValue m) -> NValue m -> ValueSet m
-buildArgument env paramSpec arg = do
-    let envAndArgs = env `Map.union` result
-        params = fmap ($ envAndArgs) paramSpec
-        result = case params of
-          Param name -> Map.singleton name arg
-          ParamSet (FixedParamSet s) Nothing -> lookupParamSet s
-          --ParamSet (FixedParamSet s) (Just name) ->
-          --  Map.insert name arg <$> lookupParamSet s
-          ParamSet _ _ -> error "Can't yet handle variadic param sets"
-      in result
+buildArgument :: Params (NValue m) -> NValue m -> ValueSet m
+buildArgument paramSpec arg = either error id $ case paramSpec of
+    Param name -> return $ Map.singleton name arg
+    ParamSet (FixedParamSet s) Nothing -> lookupParamSet s
+    ParamSet (FixedParamSet s) (Just name) ->
+      Map.insert name arg <$> lookupParamSet s
+    ParamSet _ _ -> error "Can't yet handle variadic param sets"
   where
-    go env k def = maybe (error err) id $ (Map.lookup k env) <|> def
+    go env k def = maybe (Left err) return $ Map.lookup k env <|> def
       where err = "Could not find " ++ show k
     lookupParamSet s = case arg of
-        Fix (NVSet env) -> Map.mapWithKey (go env) s
-        _               -> error "Unexpected function environment"
+        Fix (NVSet env) -> Map.traverseWithKey (go env) s
+        _               -> Left "Unexpected function environment"
 
 -- | Evaluate an nix expression, with a given ValueSet as environment
 evalExpr :: MonadFix m => NExpr -> ValueSet m -> m (NValue m)
@@ -193,13 +187,16 @@ evalExpr = cata phi
         case fun' of
             Fix (NVFunction argset f) -> do
                 arg <- x env
-                arg' <- buildArgument env argset arg
+                let arg' = buildArgument argset arg
                 f arg'
             _ -> error "Attempt to call non-function"
 
     phi (NAbs a b) = \env -> do
-      -- TODO wrong anyway. The abs still captures then env when it is defined
-        return $ Fix $ NVFunction a b
+        -- jww (2014-06-28): arglists should not receive the current
+        -- environment, but rather should recursively view their own arg
+        -- set
+        args <- traverse ($ env) a
+        return $ Fix $ NVFunction args b
 
 evalString :: Monad m
            => ValueSet m -> NString (ValueSet m -> m (NValue m)) -> m Text
