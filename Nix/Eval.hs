@@ -30,6 +30,8 @@ data NValueF m r
     | NVFunction (Params r) (ValueSet m -> m r)
     | NVLiteralPath FilePath
     | NVEnvPath FilePath
+    | NVBuiltin1 String (NValue m -> m r)
+    | NVBuiltin2 String [r] (NValue m -> NValue m -> m r)
     deriving (Generic, Typeable, Functor)
 
 instance Show f => Show (NValueF m f) where
@@ -41,6 +43,8 @@ instance Show f => Show (NValueF m f) where
       go (NVFunction r _)  = showsCon1 "NVFunction" r
       go (NVLiteralPath p) = showsCon1 "NVLiteralPath" p
       go (NVEnvPath p)     = showsCon1 "NVEnvPath" p
+      go (NVBuiltin1 name _) = showsCon1 "NVBuiltin1" name
+      go (NVBuiltin2 name _ _) = showsCon1 "NVBuiltin2" name
 
       showsCon1 :: Show a => String -> a -> Int -> String -> String
       showsCon1 con a d = showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a
@@ -58,6 +62,8 @@ valueText = cata phi where
     phi (NVFunction _ _)  = error "Cannot coerce a function to a string"
     phi (NVLiteralPath p) = Text.pack p
     phi (NVEnvPath p)     = Text.pack p
+    phi (NVBuiltin1 _ _)    = error "Cannot coerce a function to a string"
+    phi (NVBuiltin2 _ _ _)  = error "Cannot coerce a function to a string"
 
 -- | Translate an atom into its nix representation.
 atomText :: NAtom -> Text
@@ -189,6 +195,15 @@ evalExpr = cata phi
                 arg <- x env
                 let arg' = buildArgument argset arg
                 f arg'
+            Fix (NVBuiltin1 _ f) -> do
+                arg <- x env
+                f arg
+            Fix (NVBuiltin2 name [] f) -> do
+                arg <- x env
+                pure $ Fix $ NVBuiltin2 name [arg] f
+            Fix (NVBuiltin2 _ [arg1] f) -> do
+                arg2 <- x env
+                f arg1 arg2
             _ -> error "Attempt to call non-function"
 
     phi (NAbs a b) = \env -> do

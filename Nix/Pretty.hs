@@ -185,4 +185,6 @@ prettyNixValue = prettyNix . valueToExpr
         go (NVFunction p _) = NSym . pack $ ("<function with " ++ show (() <$ p)  ++ ">")
         go (NVLiteralPath fp) = NLiteralPath fp
         go (NVEnvPath p) = NEnvPath p
+        go (NVBuiltin1 name _) = NSym $ Text.pack $ "builtins." ++ name
+        go (NVBuiltin2 name _ _) = NSym $ Text.pack $ "builtins." ++ name
 

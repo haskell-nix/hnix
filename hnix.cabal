@@ -24,6 +24,7 @@ Library
   Exposed-modules:
     Nix.Atoms
     Nix.Eval
+    Nix.Builtins
     Nix.Parser
     Nix.Expr
     Nix.Pretty
