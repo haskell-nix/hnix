@@ -110,6 +110,7 @@ Test-suite hnix-tests
     EvalTests
     ShorthandTests
     PrettyTests
+    NixLanguageTests
   Build-depends:
       base >= 4.3 && < 5
     , containers
@@ -119,6 +120,10 @@ Test-suite hnix-tests
     , tasty
     , tasty-th
     , tasty-hunit
+    , directory
+    , Glob
+    , filepath
+    , split
 
 Benchmark hnix-benchmarks
   Type: exitcode-stdio-1.0
