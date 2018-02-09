@@ -140,10 +140,20 @@ nixPath = annotateLocation1 $ token $ fmap (mkPathF False) $ ((++)
     <?> "path"
 
 nixLet :: Parser NExprLoc
-nixLet = annotateLocation1 $ NLet
-      <$> (reserved "let" *> nixBinders)
-      <*> (whiteSpace *> reserved "in" *> nixExprLoc)
-      <?> "let"
+nixLet = annotateLocation1 $ reserved "let"
+    *> whiteSpace
+    *> (letBody <|> letBinders)
+    <?> "let block"
+  where
+    letBinders = NLet
+        <$> nixBinders
+        <*> (whiteSpace *> reserved "in" *> nixExprLoc)
+    -- Let expressions `let {..., body = ...}' are just desugared
+    -- into `(rec {..., body = ...}).body'.
+    letBody = (\x -> NSelect x ([StaticKey "body"]) Nothing) <$> aset
+    aset = annotateLocation1 $ NRecSet
+        <$> (braces nixBinders)
+
 
 nixIf :: Parser NExprLoc
 nixIf = annotateLocation1 $ NIf
