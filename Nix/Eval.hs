@@ -9,6 +9,7 @@ import           Control.Monad hiding (mapM, sequence)
 import           Control.Monad.Fix
 import           Data.Fix
 import           Data.Foldable (foldl')
+import           Data.List (intercalate)
 import qualified Data.Map as Map
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -132,7 +133,7 @@ evalExpr = cata phi
          Just v  -> pure v
          Nothing -> case alternative of
            Just v  -> v env
-           Nothing -> error "could not look up attribute in value"
+           Nothing -> error $ "could not look up attribute '" ++ (intercalate "." $ map show ks) ++ "' in value " ++ (show aset')
       extract (Fix (NVSet s)) (k:ks) = case Map.lookup k s of
                                         Just v  -> extract v ks
                                         Nothing -> Nothing
