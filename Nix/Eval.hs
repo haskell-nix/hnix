@@ -21,6 +21,8 @@ import           Nix.Atoms
 import           Nix.Expr
 import           Prelude hiding (mapM, sequence)
 
+import Nix.Parser
+import Data.Maybe (isJust)
 import Debug.Trace
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
@@ -69,6 +71,12 @@ atomText (NBool b)  = if b then "true" else "false"
 atomText NNull      = "null"
 atomText (NUri uri) = uri
 
+expr = let Success x = parseNixString "({ x ? 1, y ? x * 3 }: y - x) {}"
+       in x
+goeval :: MonadFix m => m (NValue m)
+goeval = evalExpr expr mempty
+
+
 buildArgument :: MonadFix m => Params (ValueSet m -> m (NValue m)) -> NValue m -> m (ValueSet m)
 buildArgument paramSpec arg = case paramSpec of
   Param name -> return $ Map.singleton name arg
@@ -77,17 +85,16 @@ buildArgument paramSpec arg = case paramSpec of
     Map.insert name arg <$> lookupParamSet s
   ParamSet _ _ -> error "Can't yet handle variadic param sets"
   where
-    go env envAndArgs k def = maybe (error err) id $ mvalueFromEnv <|> mvalueFromDef
+    go env evaledArgs k def = maybe (error err) id $ (mvalueFromEnv <|> mvalueFromDef)
       where
         mvalueFromEnv = return <$> Map.lookup k env
-        mvalueFromDef = ($ Map.delete k envAndArgs) <$> def
+        mvalueFromDef = ($ evaledArgs) <$> def
         err = "Could not find " ++ show k
     lookupParamSet s =
       case arg of
         Fix (NVSet env) -> do
           rec
-            evaledArgs <- Map.traverseWithKey (\k v -> traceShow k $ go env envAndArgs k v) s
-            let envAndArgs = env `Map.union` evaledArgs
+            evaledArgs <- Map.traverseWithKey (go env evaledArgs) s
           return evaledArgs
         _               -> error "Unexpected function environment"
 
