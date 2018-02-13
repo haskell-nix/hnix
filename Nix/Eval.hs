@@ -133,7 +133,8 @@ evalExpr = cata phi
          Just v  -> pure v
          Nothing -> case alternative of
            Just v  -> v env
-           Nothing -> error $ "could not look up attribute '" ++ (intercalate "." $ map show ks) ++ "' in value " ++ (show aset')
+           Nothing -> error $ "could not look up attribute '"
+               ++ intercalate "." (map show ks) ++ "' in value " ++ show aset'
       extract (Fix (NVSet s)) (k:ks) = case Map.lookup k s of
                                         Just v  -> extract v ks
                                         Nothing -> Nothing
