@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE TypeApplications #-}
 module Nix.Eval where
 
 import           Control.Applicative
@@ -24,6 +25,7 @@ import           Prelude hiding (mapM, sequence)
 import Nix.Parser
 import Data.Maybe (isJust)
 import Debug.Trace
+import Data.Functor.Identity
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.
@@ -76,6 +78,9 @@ expr = let Success x = parseNixString "({ x ? 1, y ? x * 3 }: y - x) {}"
 goeval :: MonadFix m => m (NValue m)
 goeval = evalExpr expr mempty
 
+goevalIO = goeval @ IO
+goevalId = goeval @ Identity
+
 
 buildArgument :: MonadFix m => Params (ValueSet m -> m (NValue m)) -> NValue m -> m (ValueSet m)
 buildArgument paramSpec arg = case paramSpec of
@@ -102,7 +107,7 @@ buildArgument paramSpec arg = case paramSpec of
 evalExpr :: MonadFix m => NExpr -> ValueSet m -> m (NValue m)
 evalExpr = cata phi
   where
-    phi (NSym var) = \env -> maybe err return $ Map.lookup var env
+    phi (NSym var) = traceShow var $ \env -> maybe err return $ Map.lookup var env
      where err = error ("Undefined variable: " ++ show var)
     phi (NConstant x) = const $ return $ Fix $ NVConstant x
     phi (NStr str) = fmap (Fix . NVStr) . flip evalString str
@@ -212,7 +217,7 @@ evalExpr = cata phi
     phi (NAbs a b) = \env -> do
         -- It is the environment at the definition site, not the call site, that needs to be
         -- used when evaluation the body and the default arguments
-        let injectEnv f args = f (env `Map.union` args)
+        let injectEnv f args = f (args `Map.union` env)
         return $ Fix $ NVFunction (fmap injectEnv a) (injectEnv b)
 
 evalString :: Monad m
