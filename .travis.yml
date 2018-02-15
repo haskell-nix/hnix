@@ -4,4 +4,4 @@ env:
 
 language: nix
 
-script: nix-build build.nix --argstr compiler "$GHCVERSION"
+script: nix-build --argstr compiler "$GHCVERSION"
