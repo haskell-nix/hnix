@@ -67,7 +67,9 @@ valueText = cata phi where
     phi (NVConstant a)    = (atomText a, mempty)
     phi (NVStr t c)       = (t, c)
     phi (NVList _)        = error "Cannot coerce a list to a string"
-    phi (NVSet _)         = error "Cannot coerce a set to a string"
+    phi (NVSet set)
+      | Just asString <- Map.lookup "__asString" set = asString
+      | otherwise = error "Cannot coerce a set to a string"
     phi (NVFunction _ _)  = error "Cannot coerce a function to a string"
     phi (NVLiteralPath p) = (Text.pack p, mempty)
     phi (NVEnvPath p)     = (Text.pack p, mempty)
