@@ -184,6 +184,13 @@ case_simple_let = do
  where
   binds = [NamedVar (mkSelector "a") $ mkInt 4]
 
+case_let_body :: Assertion
+case_let_body = do
+  assertParseString "let { body = 1; }" letBody
+  where
+    letBody = Fix $ NSelect aset (mkSelector "body") Nothing
+    aset = Fix $ NRecSet [NamedVar (mkSelector "body") (mkInt 1)]
+
 case_nested_let :: Assertion
 case_nested_let = do
   assertParseString "let a = 4; in let b = 5; in a" $ Fix $ NLet
