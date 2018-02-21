@@ -99,10 +99,11 @@ evalExpr = cata phi
         _               -> error $ "unsupported argument type for unary operator " ++ show op
       _ -> error "argument to unary operator must evaluate to an atomic type"
     phi (NBinary op larg rarg) = \env -> do
-      lval <- larg env
-      rval <- rarg env
+      Fix lval <- larg env
+      Fix rval <- rarg env
+      let unsupportedTypes = "unsupported argument types for binary operator " ++ show (lval, op, rval)
       case (lval, rval) of
-       (Fix (NVConstant lc), Fix (NVConstant rc)) -> pure $ Fix $ NVConstant $ case (op, lc, rc) of
+       (NVConstant lc, NVConstant rc) -> pure $ Fix $ NVConstant $ case (op, lc, rc) of
          (NEq,  l, r) -> NBool $ l == r
          (NNEq, l, r) -> NBool $ l /= r
          (NLt,  l, r) -> NBool $ l <  r
@@ -116,14 +117,23 @@ evalExpr = cata phi
          (NMinus, NInt l, NInt r) -> NInt $ l - r
          (NMult,  NInt l, NInt r) -> NInt $ l * r
          (NDiv,   NInt l, NInt r) -> NInt $ l `div` r
-         _ -> error $ "unsupported argument types for binary operator " ++ show op
-       (Fix (NVStr ls), Fix (NVStr rs)) -> case op of
-         NConcat -> pure $ Fix $ NVStr $ ls `mappend` rs
-         _ -> error $ "unsupported argument types for binary operator " ++ show op
-       (Fix (NVSet ls), Fix (NVSet rs)) -> case op of
+         _ -> error unsupportedTypes
+       (NVStr ls, NVStr rs) -> case op of
+         NPlus -> pure $ Fix $ NVStr $ ls `mappend` rs
+         _ -> error unsupportedTypes
+       (NVSet ls, NVSet rs) -> case op of
          NUpdate -> pure $ Fix $ NVSet $ rs `Map.union` ls
-         _ -> error $ "unsupported argument types for binary operator " ++ show op
-       _ -> error $ "unsupported argument types for binary operator " ++ show op
+         _ -> error unsupportedTypes
+       (NVList ls, NVList rs) -> case op of
+         NConcat -> pure $ Fix $ NVList $ ls ++ rs
+         _ -> error unsupportedTypes
+       (NVLiteralPath ls, NVLiteralPath rs) -> case op of
+         NPlus -> pure $ Fix $ NVLiteralPath $ ls ++ rs -- TODO: Canonicalise path
+         _ -> error unsupportedTypes
+       (NVLiteralPath ls, NVStr rs) -> case op of
+         NPlus -> pure $ Fix $ NVLiteralPath $ ls ++ (Text.unpack rs) -- TODO: Canonicalise path
+         _ -> error unsupportedTypes
+       _ -> error unsupportedTypes
 
     phi (NSelect aset attr alternative) = go where
       go env = do
