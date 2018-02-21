@@ -11,6 +11,7 @@ import           Data.Fix
 import           Data.Foldable (foldl')
 import           Data.List (intercalate)
 import qualified Data.Map as Map
+import           Data.Monoid (appEndo, Endo)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Traversable as T
@@ -21,11 +22,15 @@ import           Nix.Atoms
 import           Nix.Expr
 import           Prelude hiding (mapM, sequence)
 
+type DList a = Endo [a]
+
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.
 data NValueF m r
     = NVConstant NAtom
-    | NVStr Text
+     -- | A string has a value and a context, which can be used to record what a
+     -- string has been build from
+    | NVStr Text (DList Text)
     | NVList [r]
     | NVSet (Map.Map Text r)
     | NVFunction (Params r) (ValueSet m -> m r)
@@ -38,7 +43,7 @@ data NValueF m r
 instance Show f => Show (NValueF m f) where
     showsPrec = flip go where
       go (NVConstant atom) = showsCon1 "NVConstant" atom
-      go (NVStr      text) = showsCon1 "NVStr"      text
+      go (NVStr      text context) = showsCon2 "NVStr"    text (appEndo context [])
       go (NVList     list) = showsCon1 "NVList"     list
       go (NVSet     attrs) = showsCon1 "NVSet"      attrs
       go (NVFunction r _)  = showsCon1 "NVFunction" r
@@ -50,21 +55,27 @@ instance Show f => Show (NValueF m f) where
       showsCon1 :: Show a => String -> a -> Int -> String -> String
       showsCon1 con a d = showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a
 
+      showsCon2 :: (Show a, Show b) => String -> a -> b -> Int -> String -> String
+      showsCon2 con a b d = showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a . showString " " . showsPrec 11 b
+
 type NValue m = Fix (NValueF m)
 
 type ValueSet m = Map.Map Text (NValue m)
 
-valueText :: Functor m => NValue m -> Text
+valueText :: Functor m => NValue m -> (Text, DList Text)
 valueText = cata phi where
-    phi (NVConstant a)    = atomText a
-    phi (NVStr t)         = t
+    phi (NVConstant a)    = (atomText a, mempty)
+    phi (NVStr t c)       = (t, c)
     phi (NVList _)        = error "Cannot coerce a list to a string"
     phi (NVSet _)         = error "Cannot coerce a set to a string"
     phi (NVFunction _ _)  = error "Cannot coerce a function to a string"
-    phi (NVLiteralPath p) = Text.pack p
-    phi (NVEnvPath p)     = Text.pack p
+    phi (NVLiteralPath p) = (Text.pack p, mempty)
+    phi (NVEnvPath p)     = (Text.pack p, mempty)
     phi (NVBuiltin1 _ _)    = error "Cannot coerce a function to a string"
     phi (NVBuiltin2 _ _ _)  = error "Cannot coerce a function to a string"
+
+valueTextNoContext :: Functor m => NValue m -> Text
+valueTextNoContext = fst . valueText
 
 -- | Translate an atom into its nix representation.
 atomText :: NAtom -> Text
@@ -94,7 +105,7 @@ evalExpr = cata phi
     phi (NSym var) = \env -> maybe err return $ Map.lookup var env
      where err = error ("Undefined variable: " ++ show var)
     phi (NConstant x) = const $ return $ Fix $ NVConstant x
-    phi (NStr str) = fmap (Fix . NVStr) . flip evalString str
+    phi (NStr str) = flip evalString str
     phi (NLiteralPath p) = const $ return $ Fix $ NVLiteralPath p
     phi (NEnvPath p) = const $ return $ Fix $ NVEnvPath p
 
@@ -124,8 +135,8 @@ evalExpr = cata phi
          (NMult,  NInt l, NInt r) -> NInt $ l * r
          (NDiv,   NInt l, NInt r) -> NInt $ l `div` r
          _ -> error unsupportedTypes
-       (NVStr ls, NVStr rs) -> case op of
-         NPlus -> pure $ Fix $ NVStr $ ls `mappend` rs
+       (NVStr ls lc, NVStr rs rc) -> case op of
+         NPlus -> pure $ Fix $ NVStr (ls `mappend` rs) (lc `mappend` rc)
          _ -> error unsupportedTypes
        (NVSet ls, NVSet rs) -> case op of
          NUpdate -> pure $ Fix $ NVSet $ rs `Map.union` ls
@@ -136,8 +147,8 @@ evalExpr = cata phi
        (NVLiteralPath ls, NVLiteralPath rs) -> case op of
          NPlus -> pure $ Fix $ NVLiteralPath $ ls ++ rs -- TODO: Canonicalise path
          _ -> error unsupportedTypes
-       (NVLiteralPath ls, NVStr rs) -> case op of
-         NPlus -> pure $ Fix $ NVLiteralPath $ ls ++ (Text.unpack rs) -- TODO: Canonicalise path
+       (NVLiteralPath ls, NVStr rs rc) -> case op of
+         NPlus -> pure $ Fix $ NVStr (Text.pack ls `mappend` rs) rc -- TODO: Canonicalise path
          _ -> error unsupportedTypes
        _ -> error unsupportedTypes
 
@@ -226,10 +237,15 @@ evalExpr = cata phi
         return $ Fix $ NVFunction args b
 
 evalString :: Monad m
-           => ValueSet m -> NString (ValueSet m -> m (NValue m)) -> m Text
+           => ValueSet m -> NString (ValueSet m -> m (NValue m)) -> m (NValue m)
 evalString env nstr = do
-  let fromParts parts = Text.concat <$>
-        mapM (runAntiquoted return (fmap valueText . ($ env))) parts
+  let fromParts parts = do
+        (t, c) <-
+          mconcat <$>
+          mapM
+            (runAntiquoted (return . (, mempty)) (fmap valueText . ($ env)))
+            parts
+        return (Fix (NVStr t c))
   case nstr of
     Indented parts -> fromParts parts
     DoubleQuoted parts -> fromParts parts
@@ -264,5 +280,5 @@ evalSelector :: Monad m => Bool -> ValueSet m -> NAttrPath (ValueSet m -> m (NVa
 evalSelector dyn env = mapM evalKeyName where
   evalKeyName (StaticKey k) = return k
   evalKeyName (DynamicKey k)
-    | dyn       = runAntiquoted (evalString env) (fmap valueText . ($ env)) k
+    | dyn       = fmap valueTextNoContext . runAntiquoted (evalString env) ($ env) $ k
     | otherwise = error "dynamic attribute not allowed in this context"

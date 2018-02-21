@@ -67,18 +67,18 @@ evalPred pred = error $ "Trying to call a " ++ show pred
 prim_toString :: MonadFix m => Functor m => NValue m
 prim_toString = Fix $ NVBuiltin1 "toString" $ toString
 toString :: MonadFix m => NValue m -> m (NValue m)
-toString s = return $ Fix $ NVStr $ valueText s
+toString s = return $ Fix $ uncurry NVStr $ valueText s
 
 prim_hasAttr :: MonadFix m => NValue m
 prim_hasAttr = Fix $ NVBuiltin2 "hasAttr" [] hasAttr
 hasAttr :: MonadFix m => NValue m -> NValue m -> m (NValue m)
-hasAttr (Fix (NVStr key)) (Fix (NVSet aset)) = return $ Fix $ NVConstant $ NBool $ Map.member key aset
+hasAttr (Fix (NVStr key _)) (Fix (NVSet aset)) = return $ Fix $ NVConstant $ NBool $ Map.member key aset
 hasAttr key aset = error $ "Invalid types for builtin.hasAttr: " ++ show (key, aset)
 
 prim_getAttr :: MonadFix m => NValue m
 prim_getAttr = Fix $ NVBuiltin2 "getAttr" [] getAttr
 getAttr :: MonadFix m => NValue m -> NValue m -> m (NValue m)
-getAttr (Fix (NVStr key)) (Fix (NVSet aset)) = return $ Map.findWithDefault _err key aset
+getAttr (Fix (NVStr key _)) (Fix (NVSet aset)) = return $ Map.findWithDefault _err key aset
   where _err = error ("Field does not exist " ++ Text.unpack key)
 getAttr key aset = error $ "Invalid types for builtin.getAttr: " ++ show (key, aset)
 

@@ -179,7 +179,7 @@ prettyNixValue = prettyNix . valueToExpr
         hmap :: (Functor f, Functor g) => (forall a. f a -> g a) -> Fix f -> Fix g
         hmap eps = ana (eps . unFix)
         go (NVConstant a) = NConstant a
-        go (NVStr t) = NStr (DoubleQuoted [Plain t])
+        go (NVStr t _) = NStr (DoubleQuoted [Plain t])
         go (NVList l) = NList l
         go (NVSet s) = NSet [NamedVar [StaticKey k] v | (k, v) <- toList s]
         go (NVFunction p _) = NSym . pack $ ("<function with " ++ show (() <$ p)  ++ ">")
@@ -193,7 +193,7 @@ printNix :: Functor m => NValue m -> String
 printNix = cata phi
   where phi :: NValueF m String -> String
         phi (NVConstant a) = unpack $ atomText a
-        phi (NVStr t) = unpack t
+        phi (NVStr t _) = unpack t
         phi (NVList l) = "[ " ++ (intercalate " " l) ++ " ]"
         phi (NVSet s) = intercalate ", " $ [ unpack k ++ ":" ++ v | (k, v) <- toList s]
         phi (NVFunction p _) = error "Cannot print a thunk"
