@@ -6,7 +6,7 @@ import Data.Fix
 import Data.Map (toList)
 import Data.Maybe (isJust)
 import Data.Text (Text, pack, unpack, replace, strip)
-import Data.List (isPrefixOf)
+import Data.List (isPrefixOf, intercalate)
 import Nix.Atoms
 import Nix.Eval (NValue, NValueF (..), atomText)
 import Nix.Expr
@@ -185,4 +185,19 @@ prettyNixValue = prettyNix . valueToExpr
         go (NVFunction p _) = NSym . pack $ ("<function with " ++ show (() <$ p)  ++ ">")
         go (NVLiteralPath fp) = NLiteralPath fp
         go (NVEnvPath p) = NEnvPath p
+        go (NVBuiltin1 name _) = NSym $ Text.pack $ "builtins." ++ name
+        go (NVBuiltin2 name _ _) = NSym $ Text.pack $ "builtins." ++ name
 
+
+printNix :: Functor m => NValue m -> String
+printNix = cata phi
+  where phi :: NValueF m String -> String
+        phi (NVConstant a) = unpack $ atomText a
+        phi (NVStr t) = unpack t
+        phi (NVList l) = "[ " ++ (intercalate " " l) ++ " ]"
+        phi (NVSet s) = intercalate ", " $ [ unpack k ++ ":" ++ v | (k, v) <- toList s]
+        phi (NVFunction p _) = error "Cannot print a thunk"
+        phi (NVLiteralPath fp) = fp
+        phi (NVEnvPath p) = p
+        phi (NVBuiltin1 name _) = error "Cannot print a thunk"
+        phi (NVBuiltin2 name _ _) = error "Cannot print a thunk"

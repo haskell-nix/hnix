@@ -1,0 +1,3 @@
+[submodule "data/nix"]
+	path = data/nix
+	url = https://github.com/NixOS/nix
