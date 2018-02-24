@@ -5,7 +5,7 @@ import Prelude hiding ((<$>))
 import Data.Fix
 import Data.Map (toList)
 import Data.Maybe (isJust)
-import Data.Text (Text, pack, unpack, replace, strip)
+import Data.Text (pack, unpack, replace, strip)
 import Data.List (isPrefixOf, intercalate)
 import Nix.Atoms
 import Nix.Eval (NValue, NValueF (..), atomText)
@@ -99,6 +99,7 @@ prettyBind (Inherit s ns)
  where scope = maybe empty ((<> space) . parens . withoutParens) s
 
 prettyKeyName :: NKeyName NixDoc -> Doc
+prettyKeyName (StaticKey "") = dquotes $ text ""
 prettyKeyName (StaticKey key)
   | HashSet.member (unpack key) reservedNames = dquotes $ text $ unpack key
 prettyKeyName (StaticKey key) = text . unpack $ key
@@ -139,6 +140,7 @@ prettyNix = withoutParens . cata phi where
   phi (NUnary op r1) =
     NixDoc (text (operatorName opInfo) <> wrapParens opInfo r1) opInfo
     where opInfo = getUnaryOperator op
+  phi (NSelect r [] _) = r
   phi (NSelect r attr o) = (if isJust o then leastPrecedence else flip NixDoc selectOp) $
      wrapParens selectOp r <> dot <> prettySelector attr <> ordoc
     where ordoc = maybe empty (((space <> text "or") <+>) . withoutParens) o
@@ -196,8 +198,8 @@ printNix = cata phi
         phi (NVStr t _) = unpack t
         phi (NVList l) = "[ " ++ (intercalate " " l) ++ " ]"
         phi (NVSet s) = intercalate ", " $ [ unpack k ++ ":" ++ v | (k, v) <- toList s]
-        phi (NVFunction p _) = error "Cannot print a thunk"
+        phi (NVFunction _ _) = "<<lambda>>"
         phi (NVLiteralPath fp) = fp
         phi (NVEnvPath p) = p
-        phi (NVBuiltin1 name _) = error "Cannot print a thunk"
-        phi (NVBuiltin2 name _ _) = error "Cannot print a thunk"
+        phi (NVBuiltin1 name _) = "<<builtin " ++ name ++ ">>"
+        phi (NVBuiltin2 name _ _) = "<<builtin " ++ name ++ ">>"
