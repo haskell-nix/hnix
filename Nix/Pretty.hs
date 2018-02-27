@@ -187,8 +187,7 @@ prettyNixValue = prettyNix . valueToExpr
         go (NVFunction p _) = NSym . pack $ ("<function with " ++ show (() <$ p)  ++ ">")
         go (NVLiteralPath fp) = NLiteralPath fp
         go (NVEnvPath p) = NEnvPath p
-        go (NVBuiltin1 name _) = NSym $ Text.pack $ "builtins." ++ name
-        go (NVBuiltin2 name _ _) = NSym $ Text.pack $ "builtins." ++ name
+        go (NVBuiltin name _) = NSym $ Text.pack $ "builtins." ++ name
 
 
 printNix :: Functor m => NValue m -> String
@@ -201,5 +200,4 @@ printNix = cata phi
         phi (NVFunction _ _) = "<<lambda>>"
         phi (NVLiteralPath fp) = fp
         phi (NVEnvPath p) = p
-        phi (NVBuiltin1 name _) = "<<builtin " ++ name ++ ">>"
-        phi (NVBuiltin2 name _ _) = "<<builtin " ++ name ++ ">>"
+        phi (NVBuiltin name _) = "<<builtin " ++ name ++ ">>"
