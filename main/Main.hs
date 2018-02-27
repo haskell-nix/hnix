@@ -4,21 +4,30 @@ module Main where
 import Nix.Parser
 import Nix.Pretty
 import Nix.Expr
+import Nix.Eval (evalExpr)
+import Nix.Builtins (baseEnv)
 
 import System.Environment
 import System.IO
 import Text.PrettyPrint.ANSI.Leijen
 
 nix :: FilePath -> IO ()
-nix path = parseNixFile path >>= displayNExpr
+nix path = parseNixFile path >>= displayAndEval
 
 nixString :: String -> IO ()
-nixString = displayNExpr . parseNixString
+nixString = displayAndEval . parseNixString
 
-displayNExpr :: Result NExpr -> IO ()
-displayNExpr = \case
-  Success n -> displayIO stdout $ renderPretty 0.4 80 (prettyNix n)
+displayAndEval :: Result NExpr -> IO ()
+displayAndEval = \case
   Failure e -> hPutStrLn stderr $ "Parse failed: " ++ show e
+  Success expr -> do
+    display (prettyNix expr)
+    putStrLn ""
+    value <- evalExpr expr baseEnv
+    display (prettyNixValue value)
+
+display :: Doc -> IO ()
+display = displayIO stdout . renderPretty 0.4 80
 
 main :: IO ()
 main = do
