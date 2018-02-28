@@ -108,7 +108,6 @@ Test-suite hnix-tests
   Other-modules:
     ParserTests
     EvalTests
-    ShorthandTests
     PrettyTests
     NixLanguageTests
   Build-depends:

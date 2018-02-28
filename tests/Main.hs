@@ -4,7 +4,6 @@ import Test.Tasty
 
 import qualified ParserTests
 import qualified EvalTests
-import qualified ShorthandTests
 import qualified PrettyTests
 import qualified NixLanguageTests
 
@@ -16,7 +15,6 @@ main = do
   defaultMain $ testGroup "hnix"
     [ ParserTests.tests
     , EvalTests.tests
-    , ShorthandTests.tests
     , PrettyTests.tests
     , nixLanguageTests
     ]
