@@ -6,14 +6,11 @@ module Nix.Expr.Shorthands where
 
 import Prelude
 import Data.Monoid
-import Data.Text (Text, unpack)
+import Data.Text (Text)
 import Data.Fix
 import qualified Data.Map as Map
 import Nix.Atoms
-import Nix.Parser.Library (reservedNames)
 import Nix.Expr.Types
-import Text.Regex.TDFA.Text ()
-import Text.Regex.TDFA ((=~))
 
 -- | Make an integer literal expression.
 mkInt :: Integer -> NExpr
