@@ -234,7 +234,10 @@ evalExpr = cata phi
         -- environment, but rather should recursively view their own arg
         -- set
         args <- traverse ($ env) a
-        return $ Fix $ NVFunction args b
+        -- The body of a function first looks into the arguments, then into the
+        -- env in the evaluation point.
+        let function x = b (x `Map.union` env)
+        return $ Fix $ NVFunction args function
 
 evalString :: Monad m
            => ValueSet m -> NString (ValueSet m -> m (NValue m)) -> m (NValue m)
