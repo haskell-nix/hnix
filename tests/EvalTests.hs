@@ -33,6 +33,9 @@ case_function_set_two_arg = constantEqualStr "2" "({ a, b ? 3 }: b - a) { a = 1;
 -- case_function_set_two_arg_default_scope :: Assertion
 -- case_function_set_two_arg_default_scope = constantEqualStr "2" "({ a, b ? a * 3 }: b - a) { a = 1; }"
 
+case_function_definition_uses_environment :: Assertion
+case_function_definition_uses_environment = constantEqualStr "3" "let f = (let a=1; in x: x+a); in f 2"
+
 tests :: TestTree
 tests = $testGroupGenerator
 
