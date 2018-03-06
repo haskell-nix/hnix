@@ -25,6 +25,11 @@ case_constant_bool = do
   assertParseString "true" $ mkBool True
   assertParseString "false" $ mkBool False
 
+case_constant_bool_respects_attributes :: Assertion
+case_constant_bool_respects_attributes = do
+  assertParseString "true-foo"  $ mkSym "true-foo"
+  assertParseString "false-bar" $ mkSym "false-bar"
+
 case_constant_path :: Assertion
 case_constant_path = do
   assertParseString "./." $ mkPath False "./."
