@@ -93,10 +93,15 @@ atomText (NUri uri) = uri
 buildArgument :: Params (NValue m) -> NValue m -> ValueSet m
 buildArgument paramSpec arg = either error id $ case paramSpec of
     Param name -> return $ Map.singleton name arg
-    ParamSet (FixedParamSet s) Nothing -> lookupParamSet s
-    ParamSet (FixedParamSet s) (Just name) ->
-      Map.insert name arg <$> lookupParamSet s
-    ParamSet _ _ -> error "Can't yet handle variadic param sets"
+    -- TODO FixedParamSet should check that no extra args are passed
+    ParamSet paramSet setName ->
+      let actualParamSet = case paramSet of
+            FixedParamSet s -> s
+            VariadicParamSet s -> s
+          maybeAddSet = case setName of
+            Just name -> Map.insert name arg
+            Nothing -> id
+      in maybeAddSet <$> lookupParamSet actualParamSet
   where
     go env k def = maybe (Left err) return $ Map.lookup k env <|> def
       where err = "Could not find " ++ show k
