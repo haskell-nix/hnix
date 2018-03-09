@@ -36,6 +36,12 @@ case_function_set_two_arg = constantEqualStr "2" "({ a, b ? 3 }: b - a) { a = 1;
 case_function_definition_uses_environment :: Assertion
 case_function_definition_uses_environment = constantEqualStr "3" "let f = (let a=1; in x: x+a); in f 2"
 
+case_function_atpattern :: Assertion
+case_function_atpattern = constantEqualStr "2" "(({a}@attrs:attrs) {a=2;}).a"
+
+case_function_ellipsis :: Assertion
+case_function_ellipsis = constantEqualStr "2" "(({a, ...}@attrs:attrs) {a=0; b=2;}).b"
+
 tests :: TestTree
 tests = $testGroupGenerator
 
