@@ -98,9 +98,10 @@ buildArgument paramSpec arg = either error id $ case paramSpec of
       let actualParamSet = case paramSet of
             FixedParamSet s -> s
             VariadicParamSet s -> s
-          maybeAddSet = case setName of
-            Just name -> Map.insert name arg
-            Nothing -> id
+          maybeAddSet attrsSet = case setName of
+            Just name -> let Fix (NVSet argSet) = arg
+                         in Map.insert name (Fix (NVSet (argSet `Map.union` attrsSet))) attrsSet
+            Nothing -> attrsSet
       in maybeAddSet <$> lookupParamSet actualParamSet
   where
     go env k def = maybe (Left err) return $ Map.lookup k env <|> def

@@ -42,6 +42,9 @@ case_function_atpattern = constantEqualStr "2" "(({a}@attrs:attrs) {a=2;}).a"
 case_function_ellipsis :: Assertion
 case_function_ellipsis = constantEqualStr "2" "(({a, ...}@attrs:attrs) {a=0; b=2;}).b"
 
+case_function_default_value_in_atpattern :: Assertion
+case_function_default_value_in_atpattern = constantEqualStr "2" "({a ? 2}@attrs:attrs.a) {}"
+
 tests :: TestTree
 tests = $testGroupGenerator
 
