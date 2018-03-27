@@ -25,6 +25,11 @@ case_constant_bool = do
   assertParseString "true" $ mkBool True
   assertParseString "false" $ mkBool False
 
+case_constant_bool_respects_attributes :: Assertion
+case_constant_bool_respects_attributes = do
+  assertParseString "true-foo"  $ mkSym "true-foo"
+  assertParseString "false-bar" $ mkSym "false-bar"
+
 case_constant_path :: Assertion
 case_constant_path = do
   assertParseString "./." $ mkPath False "./."
@@ -183,6 +188,13 @@ case_simple_let = do
   assertParseFail "let a = 4 in a"
  where
   binds = [NamedVar (mkSelector "a") $ mkInt 4]
+
+case_let_body :: Assertion
+case_let_body = do
+  assertParseString "let { body = 1; }" letBody
+  where
+    letBody = Fix $ NSelect aset (mkSelector "body") Nothing
+    aset = Fix $ NRecSet [NamedVar (mkSelector "body") (mkInt 1)]
 
 case_nested_let :: Assertion
 case_nested_let = do

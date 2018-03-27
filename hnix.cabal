@@ -24,6 +24,7 @@ Library
   Exposed-modules:
     Nix.Atoms
     Nix.Eval
+    Nix.Builtins
     Nix.Parser
     Nix.Expr
     Nix.Pretty
@@ -54,7 +55,7 @@ Library
       base                     >= 4.9          && < 5
     , ansi-wl-pprint
     , containers
-    , deriving-compat >= 0.3 && < 0.4
+    , deriving-compat >= 0.3 && < 0.5
     , text
     , transformers
     , parsers >= 0.10
@@ -107,8 +108,8 @@ Test-suite hnix-tests
   Other-modules:
     ParserTests
     EvalTests
-    ShorthandTests
     PrettyTests
+    NixLanguageTests
   Build-depends:
       base >= 4.3 && < 5
     , containers
@@ -118,6 +119,10 @@ Test-suite hnix-tests
     , tasty
     , tasty-th
     , tasty-hunit
+    , directory
+    , Glob
+    , filepath
+    , split
 
 Benchmark hnix-benchmarks
   Type: exitcode-stdio-1.0

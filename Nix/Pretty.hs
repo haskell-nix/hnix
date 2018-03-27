@@ -5,8 +5,8 @@ import Prelude hiding ((<$>))
 import Data.Fix
 import Data.Map (toList)
 import Data.Maybe (isJust)
-import Data.Text (Text, pack, unpack, replace, strip)
-import Data.List (isPrefixOf)
+import Data.Text (pack, unpack, replace, strip)
+import Data.List (isPrefixOf, intercalate)
 import Nix.Atoms
 import Nix.Eval (NValue, NValueF (..), atomText)
 import Nix.Expr
@@ -99,6 +99,7 @@ prettyBind (Inherit s ns)
  where scope = maybe empty ((<> space) . parens . withoutParens) s
 
 prettyKeyName :: NKeyName NixDoc -> Doc
+prettyKeyName (StaticKey "") = dquotes $ text ""
 prettyKeyName (StaticKey key)
   | HashSet.member (unpack key) reservedNames = dquotes $ text $ unpack key
 prettyKeyName (StaticKey key) = text . unpack $ key
@@ -139,6 +140,7 @@ prettyNix = withoutParens . cata phi where
   phi (NUnary op r1) =
     NixDoc (text (operatorName opInfo) <> wrapParens opInfo r1) opInfo
     where opInfo = getUnaryOperator op
+  phi (NSelect r [] _) = r
   phi (NSelect r attr o) = (if isJust o then leastPrecedence else flip NixDoc selectOp) $
      wrapParens selectOp r <> dot <> prettySelector attr <> ordoc
     where ordoc = maybe empty (((space <> text "or") <+>) . withoutParens) o
@@ -179,10 +181,23 @@ prettyNixValue = prettyNix . valueToExpr
         hmap :: (Functor f, Functor g) => (forall a. f a -> g a) -> Fix f -> Fix g
         hmap eps = ana (eps . unFix)
         go (NVConstant a) = NConstant a
-        go (NVStr t) = NStr (DoubleQuoted [Plain t])
+        go (NVStr t _) = NStr (DoubleQuoted [Plain t])
         go (NVList l) = NList l
         go (NVSet s) = NSet [NamedVar [StaticKey k] v | (k, v) <- toList s]
         go (NVFunction p _) = NSym . pack $ ("<function with " ++ show (() <$ p)  ++ ">")
         go (NVLiteralPath fp) = NLiteralPath fp
         go (NVEnvPath p) = NEnvPath p
+        go (NVBuiltin name _) = NSym $ Text.pack $ "builtins." ++ name
 
+
+printNix :: Functor m => NValue m -> String
+printNix = cata phi
+  where phi :: NValueF m String -> String
+        phi (NVConstant a) = unpack $ atomText a
+        phi (NVStr t _) = unpack t
+        phi (NVList l) = "[ " ++ (intercalate " " l) ++ " ]"
+        phi (NVSet s) = intercalate ", " $ [ unpack k ++ ":" ++ v | (k, v) <- toList s]
+        phi (NVFunction _ _) = "<<lambda>>"
+        phi (NVLiteralPath fp) = fp
+        phi (NVEnvPath p) = p
+        phi (NVBuiltin name _) = "<<builtin " ++ name ++ ">>"
