@@ -55,7 +55,7 @@ Library
       base                     >= 4.9          && < 5
     , ansi-wl-pprint
     , containers
-    , deriving-compat >= 0.3 && < 0.4
+    , deriving-compat >= 0.3 && < 0.5
     , text
     , transformers
     , parsers >= 0.10
