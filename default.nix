@@ -1,13 +1,14 @@
-{ nixpkgs ? import <nixpkgs> {}, compiler ? "default" }:
+{ nixpkgs ? import <nixpkgs> {}, compiler ? "default", doBenchmark ? false }:
 
 let
 
   inherit (nixpkgs) pkgs;
 
   f = { mkDerivation, ansi-wl-pprint, base, containers, criterion
-      , data-fix, deepseq, deriving-compat, parsers, regex-tdfa
-      , regex-tdfa-text, semigroups, stdenv, tasty, tasty-hunit, tasty-th
-      , text, transformers, trifecta, unordered-containers
+      , data-fix, deepseq, deriving-compat, directory, filepath, Glob
+      , parsers, regex-tdfa, regex-tdfa-text, semigroups, split, stdenv
+      , tasty, tasty-hunit, tasty-th, text, transformers, trifecta
+      , unordered-containers
       }:
       mkDerivation {
         pname = "hnix";
@@ -24,7 +25,8 @@ let
           ansi-wl-pprint base containers data-fix deepseq
         ];
         testHaskellDepends = [
-          base containers data-fix tasty tasty-hunit tasty-th text
+          base containers data-fix directory filepath Glob split tasty
+          tasty-hunit tasty-th text
         ];
         benchmarkHaskellDepends = [ base containers criterion text ];
         homepage = "http://github.com/jwiegley/hnix";
@@ -36,7 +38,9 @@ let
                        then pkgs.haskellPackages
                        else pkgs.haskell.packages.${compiler};
 
-  drv = haskellPackages.callPackage f {};
+  variant = if doBenchmark then pkgs.haskell.lib.doBenchmark else pkgs.lib.id;
+
+  drv = variant (haskellPackages.callPackage f {});
 
 in
 
