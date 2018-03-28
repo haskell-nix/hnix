@@ -101,6 +101,7 @@ Executable hnix
     , deepseq
     , optparse-applicative
     , text
+    , transformers
   Ghc-options: -Wall -threaded
 
 Test-suite hnix-tests
@@ -127,6 +128,7 @@ Test-suite hnix-tests
     , Glob
     , filepath
     , split
+    , transformers
 
 Benchmark hnix-benchmarks
   Type: exitcode-stdio-1.0

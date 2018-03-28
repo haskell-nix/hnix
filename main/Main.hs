@@ -1,5 +1,6 @@
 module Main where
 
+import Control.Monad.Trans.State
 import Nix.Builtins
 import Nix.Eval
 import Nix.Parser
@@ -54,8 +55,10 @@ main = do
         Success expr ->
             if evaluate opts
             then if debug opts
-                 then print =<< tracingExprEval expr <*> pure baseEnv
-                 else print $ evalExpr expr baseEnv
+                 then do
+                     expr' <- tracingExprEval expr
+                     print =<< evalStateT (runCyclic expr') baseEnv
+                 else print =<< evalTopLevelExprIO expr
             else displayIO stdout $ renderPretty 0.4 80 (prettyNix expr)
   where
     optsDef :: ParserInfo Options

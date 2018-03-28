@@ -1,16 +1,18 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
+
 module EvalTests (tests) where
 
-import Data.Fix
-import Data.Monoid (Monoid(..))
-import Nix.Builtins
-import Nix.Eval
-import Nix.Expr
-import Nix.Parser
-import Test.Tasty
-import Test.Tasty.HUnit
-import Test.Tasty.TH
+import           Control.Monad.Trans.State
+import           Data.Fix
+import qualified Data.Map as Map
+import           Nix.Builtins
+import           Nix.Eval
+import           Nix.Expr
+import           Nix.Parser
+import           Test.Tasty
+import           Test.Tasty.HUnit
+import           Test.Tasty.TH
 
 case_basic_sum :: Assertion
 case_basic_sum = constantEqualStr "2" "1 + 1"
@@ -57,8 +59,10 @@ tests = $testGroupGenerator
 
 constantEqual :: NExpr -> NExpr -> Assertion
 constantEqual a b = do
-    Fix (NVConstant a') <- tracingExprEval a <*> pure baseEnv
-    Fix (NVConstant b') <- tracingExprEval b <*> pure baseEnv
+    a' <- tracingExprEval a
+    Fix (NVConstant a') <- evalStateT (runCyclic a') Map.empty
+    b' <- tracingExprEval b
+    Fix (NVConstant b') <- evalStateT (runCyclic b') Map.empty
     assertEqual "" a' b'
 
 constantEqualStr :: String -> String -> Assertion

@@ -17,11 +17,11 @@ mkDerivation {
   ];
   executableHaskellDepends = [
     ansi-wl-pprint base containers data-fix deepseq optparse-applicative
-    text
+    text transformers
   ];
   testHaskellDepends = [
     base containers data-fix directory filepath Glob split tasty
-    tasty-hunit tasty-th text
+    tasty-hunit tasty-th text transformers
   ];
   benchmarkHaskellDepends = [ base containers criterion text ];
   homepage = "http://github.com/jwiegley/hnix";

@@ -14,8 +14,8 @@ import           Nix.Expr
 import           Nix.Parser.Library (reservedNames)
 import           Nix.Parser.Operators
 import           Nix.StringOperations
-import           Prelude hiding ((<$>))
 import           Text.PrettyPrint.ANSI.Leijen
+import           Prelude hiding ((<$>))
 
 -- | This type represents a pretty printed nix expression
 -- together with some information about the expression.
@@ -171,9 +171,9 @@ prettyNix = withoutParens . cata phi where
 
   recPrefix = text "rec" <> space
 
-prettyNixValue :: NValue -> Doc
+prettyNixValue :: Functor m => NValue m -> Doc
 prettyNixValue = prettyNix . valueToExpr
-  where valueToExpr :: NValue -> NExpr
+  where valueToExpr :: Functor m => NValue m -> NExpr
         valueToExpr = hmap go
         -- hmap does the recursive conversion from NValue to NExpr
         -- fun fact: it is not defined in data-fixed, but I was certain it should exists so I found it in unification-fd by hoogling its type
@@ -189,13 +189,13 @@ prettyNixValue = prettyNix . valueToExpr
         go (NVBuiltin name _) = NSym $ Text.pack $ "builtins." ++ name
 
 
-printNix :: NValue -> String
+printNix :: Functor m => NValue m -> String
 printNix = cata phi
-  where phi :: NValueF String -> String
+  where phi :: NValueF m String -> String
         phi (NVConstant a) = unpack $ atomText a
         phi (NVStr t _) = unpack t
-        phi (NVList l) = "[ " ++ unwords l ++ " ]"
-        phi (NVSet s) = intercalate ", " [ unpack k ++ ":" ++ v | (k, v) <- toList s]
+        phi (NVList l) = "[ " ++ (intercalate " " l) ++ " ]"
+        phi (NVSet s) = intercalate ", " $ [ unpack k ++ ":" ++ v | (k, v) <- toList s]
         phi (NVFunction _ _) = "<<lambda>>"
         phi (NVLiteralPath fp) = fp
         phi (NVEnvPath p) = p

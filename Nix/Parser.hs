@@ -42,22 +42,28 @@ nixExpr = stripAnnotation <$> nixExprLoc
 
 -- | The lexer for this parser is defined in 'Nix.Parser.Library'.
 nixExprLoc :: Parser NExprLoc
-nixExprLoc = whiteSpace *> (nixToplevelForm <|> foldl' makeParser nixTerm nixOperators)
+nixExprLoc =
+    whiteSpace *> (nixToplevelForm <|> foldl' makeParser nixTerm nixOperators)
  where
-  makeParser :: Parser NExprLoc -> Either NSpecialOp NOperatorDef -> Parser NExprLoc
-  makeParser term (Left NSelectOp) = nixSelect term
-  makeParser term (Left NAppOp) = chainl1 term $ pure $ \a b -> (nApp a b)
-  makeParser term (Left NHasAttrOp) = nixHasAttr term
-  makeParser term (Right (NUnaryDef name op))
-    = build <$> many (annotateLocation (void $ symbol name)) <*> term
-    where build :: [Ann SrcSpan ()] -> NExprLoc -> NExprLoc
-          build = flip $ foldl' (\t' (Ann s ()) -> nUnary (Ann s op) t')
-  makeParser term (Right (NBinaryDef assoc ops)) = case assoc of
-    NAssocLeft  -> chainl1 term op
-    NAssocRight -> chainr1 term op
-    NAssocNone  -> term <**> (flip <$> op <*> term <|> pure id)
-   where op :: Parser (NExprLoc -> NExprLoc -> NExprLoc)
-         op = choice . map (\(n,o) -> (\(Ann a ()) -> nBinary (Ann a o)) <$> annotateLocation (reservedOp n)) $ ops
+    makeParser :: Parser NExprLoc -> Either NSpecialOp NOperatorDef
+               -> Parser NExprLoc
+    makeParser term (Left NSelectOp) = nixSelect term
+    makeParser term (Left NAppOp) = chainl1 term (pure nApp)
+    makeParser term (Left NHasAttrOp) = nixHasAttr term
+    makeParser term (Right (NUnaryDef name op)) =
+        build <$> many (annotateLocation (void $ symbol name)) <*> term
+      where
+        build :: [Ann SrcSpan ()] -> NExprLoc -> NExprLoc
+        build = flip $ foldl' (\t' (Ann s ()) -> nUnary (Ann s op) t')
+
+    makeParser term (Right (NBinaryDef assoc ops)) = case assoc of
+        NAssocLeft  -> chainl1 term op
+        NAssocRight -> chainr1 term op
+        NAssocNone  -> term <**> (flip <$> op <*> term <|> pure id)
+      where
+        op :: Parser (NExprLoc -> NExprLoc -> NExprLoc)
+        op = choice . map (\(n,o) -> (\(Ann a ()) -> nBinary (Ann a o))
+                              <$> annotateLocation (reservedOp n)) $ ops
 
 antiStart :: Parser String
 antiStart = try (string "${") <?> show ("${" :: String)

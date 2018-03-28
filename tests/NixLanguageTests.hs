@@ -6,6 +6,9 @@ module NixLanguageTests (genTests) where
 import           Control.Arrow ((&&&))
 import           Control.Exception
 import           Control.Monad (filterM)
+import           Control.Monad.Fix
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.State
 import           Data.Fix
 import           Data.Functor.Identity
 import           Data.List (delete, intercalate, sort)
@@ -106,9 +109,9 @@ assertEvalFail file = catch eval (\(ErrorCall _) -> return ())
       evalResult <- printNix <$> nixEvalFile file
       evalResult `seq` assertFailure $ file ++ " should not evaluate.\nThe evaluation result was `" ++ evalResult ++ "`."
 
-nixEvalFile :: FilePath -> IO NValue
+nixEvalFile :: FilePath -> IO (NValue (Cyclic IO))
 nixEvalFile file =  do
   parseResult <- parseNixFile file
   case parseResult of
     Failure err        -> error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
-    Success expression -> return $ evalTopLevelExpr expression
+    Success expression -> evalTopLevelExprIO expression
