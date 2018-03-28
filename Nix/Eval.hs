@@ -5,7 +5,6 @@
 module Nix.Eval where
 
 import           Control.Arrow
-import           Control.Monad
 import           Data.Align.Key
 import           Data.Fix
 import           Data.Foldable (foldl')
@@ -22,6 +21,7 @@ import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr
 import           Nix.StringOperations (runAntiquoted)
+import           Nix.Utils
 
 type DList a = Endo [a]
 
@@ -108,9 +108,6 @@ atomText (NBool b)  = if b then "true" else "false"
 atomText NNull      = "null"
 atomText (NUri uri) = uri
 
-loeb :: Functor f => f (f a -> a) -> f a
-loeb x = go where go = fmap ($ go) x
-
 buildArgument :: Params PendingEval -> NValue -> ValueSet
 buildArgument params arg = case params of
     Param name -> Map.singleton name arg
@@ -130,32 +127,6 @@ buildArgument params arg = case params of
         That (Just f) -> f
         This x -> const x
         These x _ -> const x
-
-(&) :: a -> (a -> c) -> c
-(&) = flip ($)
-
--- | adi is Abstracting Definitional Interpreters:
---
---     https://arxiv.org/abs/1707.04755
---
---   Essentially, it does for evaluation what recursion schemes do for
---   representation: allows threading layers through existing structure, only
---   in this case through behavior.
-adi :: (Monoid b, Applicative s, Traversable t)
-    => (t a -> a)
-    -> ((Fix t -> (b, s a)) -> Fix t -> (b, s a))
-    -> Fix t -> (b, s a)
-adi f g = g (go . traverse (adi f g) . unFix)
-  where
-    go = fmap (fmap f . sequenceA)
-
-adiM :: (Monoid b, Applicative s, Traversable s, Traversable t, Monad m)
-     => (t a -> m a)
-     -> ((Fix t -> m (b, s a)) -> Fix t -> m (b, s a))
-     -> Fix t -> m (b, s a)
-adiM f g = g ((go <=< traverse (adiM f g)) . unFix)
-  where
-    go = traverse (traverse f . sequenceA) . sequenceA
 
 -- | Evaluate an nix expression, with a given ValueSet as environment
 evalExpr :: NExpr -> PendingEval

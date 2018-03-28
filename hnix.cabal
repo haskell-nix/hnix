@@ -35,6 +35,7 @@ Library
     Nix.Expr.Types
     Nix.Expr.Types.Annotated
     Nix.Expr.Shorthands
+    Nix.Utils
   Default-extensions:
     DataKinds
     DeriveDataTypeable

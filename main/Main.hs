@@ -1,13 +1,12 @@
 module Main where
 
-import qualified Data.Map.Lazy as Map
-import           Nix.Builtins
-import           Nix.Eval
-import           Nix.Parser
-import           Nix.Pretty
-import           Options.Applicative hiding (ParserResult(..))
-import           System.IO
-import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
+import Nix.Builtins
+import Nix.Eval
+import Nix.Parser
+import Nix.Pretty
+import Options.Applicative hiding (ParserResult(..))
+import System.IO
+import Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 data Options = Options
     { verbose    :: Bool
