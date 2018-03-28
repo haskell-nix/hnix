@@ -45,19 +45,10 @@ instance MonadNix (Cyclic Identity) where
         _ -> error $ "Unexpected argument to import: " ++ show path
 
 instance MonadNix (Cyclic IO) where
-    currentScope = Cyclic $ do
-        liftIO $ putStrLn "Getting env..."
-        res <- get
-        liftIO $ putStrLn "Getting env...done"
-        return res
-    newScope s k = Cyclic $ do
-        liftIO $ putStrLn "Setting env..."
-        put s
-        liftIO $ putStrLn "Setting env...done"
-        runCyclic k
+    currentScope = Cyclic get
+    newScope s k = Cyclic $ put s >> runCyclic k
     importFile path = Cyclic $ case path of
         Fix (NVLiteralPath path) -> do
-            liftIO $ putStrLn $ "Importing file: " ++ path
             eres <- parseNixFile path
             case eres of
                 Failure err  -> error $ "Parse failed: " ++ show err
