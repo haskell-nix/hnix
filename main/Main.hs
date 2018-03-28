@@ -52,14 +52,16 @@ main = do
 
     case eres of
         Failure err -> hPutStrLn stderr $ "Parse failed: " ++ show err
-        Success expr ->
-            if evaluate opts
-            then if debug opts
-                 then do
-                     expr' <- tracingExprEval expr
-                     print =<< evalStateT (runCyclic expr') baseEnv
-                 else print =<< evalTopLevelExprIO expr
-            else displayIO stdout $ renderPretty 0.4 80 (prettyNix expr)
+        Success expr
+            | evaluate opts, debug opts -> do
+                  expr' <- tracingExprEval expr
+                  print =<< evalStateT (runCyclic expr') baseEnv
+            | evaluate opts ->
+                  print =<< evalTopLevelExprIO expr
+            | debug opts ->
+                  print expr
+            | otherwise ->
+                  displayIO stdout $ renderPretty 0.4 80 (prettyNix expr)
   where
     optsDef :: ParserInfo Options
     optsDef = info (helper <*> mainOptions)
