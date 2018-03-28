@@ -302,30 +302,6 @@ tracingExprEval =
         putStrLn $ "Evaluating: " ++ show x
         k v
 
-{-
-exprEvalIO :: NExpr -> IO (Context NValue)
-exprEvalIO =
-    fmap (runIdentity . snd) . adiM @() (pure <$> eval) psi
-  where
-    psi :: (Fix NExprF -> IO ((), Identity (Context NValue)))
-        -> Fix NExprF -> IO ((), Identity (Context NValue))
-    psi k v@(Fix (NApp fun x)) = do
-        ((), Identity fun) <- k fun
-        ((), Identity arg) <- k x
-        case (fun, arg) of
-            (Fix (NVBuiltin "import" g), Fix (NVLiteralPath path)) -> do
-                eres <- parseNixFile path
-                case eres of
-                    Failure err ->
-                        error $ "Import of " ++ path ++ " failed: " ++ show err
-                    Success expr -> k expr
-            (Fix (NVFunction params f), _) ->
-                return $ f (buildArgument params arg)
-            (Fix (NVBuiltin _ f), _) -> return $ f arg
-            (_, _) -> error "Attempt to call non-function"
-    psi k v = k v
--}
-
 evalString :: Monad m => NString (m (NValue m)) -> m (NValue m)
 evalString nstr = do
   let fromParts parts = do
