@@ -1,6 +1,7 @@
 module Main where
 
 import qualified Data.Map.Lazy as Map
+import           Nix.Builtins
 import           Nix.Eval
 import           Nix.Parser
 import           Nix.Pretty
@@ -54,8 +55,8 @@ main = do
         Success expr ->
             if evaluate opts
             then if debug opts
-                 then print =<< tracingExprEval expr <*> pure Map.empty
-                 else print $ evalExpr expr Map.empty
+                 then print =<< tracingExprEval expr <*> pure baseEnv
+                 else print $ evalExpr expr baseEnv
             else displayIO stdout $ renderPretty 0.4 80 (prettyNix expr)
   where
     optsDef :: ParserInfo Options

@@ -4,7 +4,6 @@
 
 module Nix.Eval where
 
-import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad
 import           Data.Align.Key
@@ -50,20 +49,27 @@ data NValueF r
 
 instance Show f => Show (NValueF f) where
     showsPrec = flip go where
-      go (NVConstant atom) = showsCon1 "NVConstant" atom
-      go (NVStr      text context) = showsCon2 "NVStr"    text (appEndo context [])
-      go (NVList     list) = showsCon1 "NVList"     list
-      go (NVSet     attrs) = showsCon1 "NVSet"      attrs
-      go (NVFunction r _)  = showsCon1 "NVFunction" (() <$ r)
-      go (NVLiteralPath p) = showsCon1 "NVLiteralPath" p
-      go (NVEnvPath p)     = showsCon1 "NVEnvPath" p
-      go (NVBuiltin name _) = showsCon1 "NVBuiltin" name
+      go (NVConstant atom)    = showsCon1 "NVConstant" atom
+      go (NVStr text context) = showsCon2 "NVStr"      text (appEndo context [])
+      go (NVList     list)    = showsCon1 "NVList"     list
+      go (NVSet     attrs)    = showsCon1 "NVSet"      attrs
+      go (NVFunction r _)     = showsCon1 "NVFunction" (() <$ r)
+      go (NVLiteralPath p)    = showsCon1 "NVLiteralPath" p
+      go (NVEnvPath p)        = showsCon1 "NVEnvPath" p
+      go (NVBuiltin name _)   = showsCon1 "NVBuiltin" name
 
       showsCon1 :: Show a => String -> a -> Int -> String -> String
-      showsCon1 con a d = showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a
+      showsCon1 con a d =
+          showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a
 
-      showsCon2 :: (Show a, Show b) => String -> a -> b -> Int -> String -> String
-      showsCon2 con a b d = showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a . showString " " . showsPrec 11 b
+      showsCon2 :: (Show a, Show b)
+                => String -> a -> b -> Int -> String -> String
+      showsCon2 con a b d =
+          showParen (d > 10)
+              $ showString (con ++ " ")
+              . showsPrec 11 a
+              . showString " "
+              . showsPrec 11 b
 
 type NValue = Fix NValueF
 
@@ -78,7 +84,6 @@ builtin name f = Fix (NVBuiltin name f)
 
 builtin2 :: String -> (NValue -> NValue -> NValue) -> NValue
 builtin2 name f = builtin name (builtin name . f)
-
 
 valueText :: NValue -> (Text, DList Text)
 valueText = cata phi where
