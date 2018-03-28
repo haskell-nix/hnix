@@ -2,7 +2,7 @@
 , data-fix, deepseq, deriving-compat, directory, filepath, Glob
 , parsers, regex-tdfa, regex-tdfa-text, semigroups, split, stdenv
 , tasty, tasty-hunit, tasty-th, text, transformers, trifecta
-, unordered-containers, these
+, unordered-containers, these, optparse-applicative
 }:
 mkDerivation {
   pname = "hnix";
@@ -16,7 +16,8 @@ mkDerivation {
     trifecta unordered-containers these
   ];
   executableHaskellDepends = [
-    ansi-wl-pprint base containers data-fix deepseq
+    ansi-wl-pprint base containers data-fix deepseq optparse-applicative
+    text
   ];
   testHaskellDepends = [
     base containers data-fix directory filepath Glob split tasty
