@@ -122,7 +122,7 @@ buildArgument params arg = case params of
         Fix (NVSet args) ->
             let res = loeb (alignWithKey assemble args s) in
             maybe res (\n -> Map.insert n arg res) m
-        _ -> error $ "Expected set in function call, received: " ++ show arg
+        _ -> error $ "Function call expected set, got: " ++ show arg
 
     assemble k = \case
         That Nothing ->
