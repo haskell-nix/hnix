@@ -1,7 +1,6 @@
 env:
   - GHCVERSION="ghc802"
   - GHCVERSION="ghc822"
-  - LANGUAGE_TESTS="no"
 
 language: nix
 
