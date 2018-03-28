@@ -4,6 +4,7 @@ module EvalTests (tests) where
 
 import Data.Fix
 import Data.Monoid (Monoid(..))
+import Nix.Builtins
 import Nix.Eval
 import Nix.Expr
 import Nix.Parser
@@ -56,8 +57,8 @@ tests = $testGroupGenerator
 
 constantEqual :: NExpr -> NExpr -> Assertion
 constantEqual a b = do
-    let Fix (NVConstant a') = evalExpr a mempty
-        Fix (NVConstant b') = evalExpr b mempty
+    Fix (NVConstant a') <- tracingExprEval a <*> pure baseEnv
+    Fix (NVConstant b') <- tracingExprEval b <*> pure baseEnv
     assertEqual "" a' b'
 
 constantEqualStr :: String -> String -> Assertion

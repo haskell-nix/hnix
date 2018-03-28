@@ -18,6 +18,7 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.These
 import           Data.Typeable (Typeable)
+import           Debug.Trace
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr
@@ -118,8 +119,8 @@ buildArgument params arg = case params of
     go :: Map.Map Text (Maybe PendingEval) -> Maybe Text -> ValueSet
     go s m = case arg of
         Fix (NVSet args) ->
-            let res = loeb (alignWithKey assemble args s) in
-            maybe res (\n -> Map.insert n arg res) m
+            let res = loeb (alignWithKey assemble args s)
+            in maybe res (\n -> Map.insert n (Fix (NVSet res)) res) m
         _ -> error $ "Function call expected set, got: " ++ show arg
 
     assemble k = \case
@@ -186,27 +187,27 @@ phi (NBinary op larg rarg) = \env ->
      _ -> error unsupportedTypes
    _ -> error unsupportedTypes
 
-phi (NSelect aset attr alternative) = go where
-  go env =
-    let aset' = aset env
+phi (NSelect aset attr alternative) = \env ->
+    let aset' = trace ("env = " ++ show env) $ aset env
         ks    = evalSelector True attr env
     in case extract aset' ks of
-     Just v  -> v
-     Nothing -> case alternative of
-       Just v  -> v env
-       Nothing -> error $ "could not look up attribute '"
-           ++ intercalate "." (map show ks) ++ "' in value " ++ show aset'
-  extract (Fix (NVSet s)) (k:ks) = case Map.lookup k s of
-                                    Just v  -> extract v ks
-                                    Nothing -> Nothing
-  extract               _  (_:_) = Nothing
-  extract               v     [] = Just v
+        Just v  -> v
+        Nothing -> case alternative of
+            Just v  -> v env
+            Nothing -> error $ "could not look up attribute "
+                ++ intercalate "." (map show ks) ++ " in " ++ show aset'
+  where
+    extract (Fix (NVSet s)) (k:ks) = case Map.lookup k s of
+                                      Just v  -> extract v ks
+                                      Nothing -> Nothing
+    extract               _  (_:_) = Nothing
+    extract               v     [] = Just v
 
 phi (NHasAttr aset attr) = \env -> aset env & \case
-  Fix (NVSet s) -> evalSelector True attr env & \case
-    [keyName] -> Fix $ NVConstant $ NBool $ keyName `Map.member` s
-    _ -> error "attribute name argument to hasAttr is not a single-part name"
-  _ -> error "argument to hasAttr has wrong type"
+    Fix (NVSet s) -> evalSelector True attr env & \case
+        [keyName] -> Fix $ NVConstant $ NBool $ keyName `Map.member` s
+        _ -> error "attr name argument to hasAttr is not a single-part name"
+    _ -> error "argument to hasAttr has wrong type"
 
 phi (NList l) = \env ->
     Fix . NVList $ map ($ env) l
@@ -247,9 +248,8 @@ phi (NAssert cond e) = \env ->
 phi (NApp fun x) = \env ->
     let fun' = fun env
     in case fun' of
-        Fix (NVFunction params f) ->
-            f (buildArgument params (x env))
-        Fix (NVBuiltin _ f) -> f (x env)
+        Fix (NVFunction params f) -> f (buildArgument params (x env))
+        Fix (NVBuiltin _ f)       -> f (x env)
         _ -> error "Attempt to call non-function"
 
 phi (NAbs a b) = \env ->
@@ -279,28 +279,36 @@ evalString nstr env =
     DoubleQuoted parts -> fromParts parts
 
 evalBinds :: Bool -> [Binding PendingEval] -> ValueSet -> ValueSet
-evalBinds allowDynamic xs env = buildResult (concatMap go xs) where
-  buildResult :: [([Text], NValue)] -> Map.Map Text NValue
-  buildResult = foldl' insert Map.empty . map (first reverse) where
-    insert _ ([], _) = error "invalid selector with no components"
-    insert m (p:ps, v) = modifyPath ps (insertIfNotMember p v) where
-      alreadyDefinedErr = error $ "attribute " ++ attr ++ " already defined"
-      attr = show $ Text.intercalate "." $ reverse (p:ps)
+evalBinds allowDynamic xs env =
+    buildResult (concatMap go xs)
+  where
+    buildResult :: [([Text], NValue)] -> Map.Map Text NValue
+    buildResult = foldl' insert Map.empty . map (first reverse)
+      where
+        insert _ ([], _) = error "invalid selector with no components"
+        insert m (p:ps, v) = modifyPath ps (insertIfNotMember p v)
+          where
+            alreadyDefinedErr =
+                error $ "attribute " ++ attr ++ " already defined"
 
-      modifyPath [] f = f m
-      modifyPath (x:parts) f = modifyPath parts $ \m' -> case Map.lookup x m' of
-        Nothing                -> Map.singleton x $ g Map.empty
-        Just (Fix (NVSet m'')) -> Map.insert x (g m'') m'
-        Just _                 -> alreadyDefinedErr
-       where g = Fix . NVSet . f
+            attr = show $ Text.intercalate "." $ reverse (p:ps)
 
-      insertIfNotMember k x m'
-        | Map.notMember k m' = Map.insert k x m'
-        | otherwise = alreadyDefinedErr
+            modifyPath [] f = f m
+            modifyPath (x:parts) f = modifyPath parts $ \m' ->
+                case Map.lookup x m' of
+                    Nothing                -> Map.singleton x $ g Map.empty
+                    Just (Fix (NVSet m'')) -> Map.insert x (g m'') m'
+                    Just _                 -> alreadyDefinedErr
+              where
+                g = Fix . NVSet . f
 
-  -- TODO: Inherit
-  go (NamedVar x y) = [(evalSelector allowDynamic x env, y env)]
-  go _ = [] -- HACK! But who cares right now
+            insertIfNotMember k x m'
+              | Map.notMember k m' = Map.insert k x m'
+              | otherwise = alreadyDefinedErr
+
+    -- TODO: Inherit
+    go (NamedVar x y) = [(evalSelector allowDynamic x env, y env)]
+    go _ = [] -- HACK! But who cares right now
 
 evalSelector :: Bool -> NAttrPath PendingEval -> ValueSet -> [Text]
 evalSelector dyn x env = map evalKeyName x where
