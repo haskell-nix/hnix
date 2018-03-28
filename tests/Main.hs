@@ -1,13 +1,10 @@
 module Main where
 
-import Test.Tasty
-
-import qualified ParserTests
 import qualified EvalTests
-import qualified PrettyTests
 import qualified NixLanguageTests
-
-import Prelude (IO, ($))
+import qualified ParserTests
+import qualified PrettyTests
+import           Test.Tasty
 
 main :: IO ()
 main = do

@@ -10,21 +10,17 @@
 -- | The nix expression type and supporting types.
 module Nix.Expr.Types where
 
-import           Control.Monad hiding (forM_, mapM, sequence)
-import           Data.Data
-import           Data.Eq.Deriving
-import           Data.Fix
-import           Data.Foldable
-import           Data.Functor.Classes (Eq1(..), Eq2(..), Show1(..), showsUnaryWith, liftShowsPrec2)
-import           Data.Map (Map, toList)
-import           Data.Text (Text, pack)
-import           Data.Traversable
-import           GHC.Exts
-import           GHC.Generics
-import           Nix.Atoms
-import           Prelude hiding (readFile, concat, concatMap, elem, mapM,
-                                 sequence, minimum, foldr)
-import           Text.Show.Deriving
+import Data.Data
+import Data.Eq.Deriving
+import Data.Fix
+import Data.Functor.Classes
+import Data.Map (Map, toList)
+import Data.Text (Text, pack)
+import Data.Traversable
+import GHC.Exts
+import GHC.Generics
+import Nix.Atoms
+import Text.Show.Deriving
 
 -- | The main nix expression type. This is polymorphic so that it can be made
 -- a functor, which allows us to traverse expressions and map functions over

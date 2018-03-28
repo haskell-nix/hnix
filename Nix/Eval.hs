@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Nix.Eval where
 
@@ -9,6 +10,7 @@ import           Control.Monad
 import           Data.Align.Key
 import           Data.Fix
 import           Data.Foldable (foldl')
+import           Data.Functor.Identity
 import           Data.List (intercalate)
 import qualified Data.Map.Lazy as Map
 import           Data.Maybe (fromMaybe)
@@ -21,7 +23,6 @@ import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr
 import           Nix.StringOperations (runAntiquoted)
-import           Prelude
 
 type DList a = Endo [a]
 
@@ -128,135 +129,166 @@ buildArgument params arg = case params of
 (&) :: a -> (a -> c) -> c
 (&) = flip ($)
 
+-- | adi is Abstracting Definitional Interpreters:
+--
+--     https://arxiv.org/abs/1707.04755
+--
+--   Essentially, it does for evaluation what recursion schemes do for
+--   representation: allows threading layers through existing structure, only
+--   in this case through behavior.
+adi :: (Monoid b, Applicative s, Traversable t)
+    => (t a -> a)
+    -> ((Fix t -> (b, s a)) -> Fix t -> (b, s a))
+    -> Fix t -> (b, s a)
+adi f g = g (go . traverse (adi f g) . unFix)
+  where
+    go = fmap (fmap f . sequenceA)
+
+adiM :: (Monoid b, Applicative s, Traversable s, Traversable t, Monad m)
+     => (t a -> m a)
+     -> ((Fix t -> m (b, s a)) -> Fix t -> m (b, s a))
+     -> Fix t -> m (b, s a)
+adiM f g = g ((go <=< traverse (adiM f g)) . unFix)
+  where
+    go = traverse (traverse f . sequenceA) . sequenceA
+
 -- | Evaluate an nix expression, with a given ValueSet as environment
 evalExpr :: NExpr -> PendingEval
 evalExpr = cata phi
+
+phi :: NExprF PendingEval -> PendingEval
+phi (NSym var) = fromMaybe err . Map.lookup var
+  where err = error ("Undefined variable: " ++ show var)
+phi (NConstant x) = const $ Fix $ NVConstant x
+phi (NStr str) = evalString str
+phi (NLiteralPath p) = const $ Fix $ NVLiteralPath p
+phi (NEnvPath p) = const $ Fix $ NVEnvPath p
+
+phi (NUnary op arg) = \env -> arg env & \case
+  Fix (NVConstant c) -> Fix $ NVConstant $ case (op, c) of
+    (NNeg, NInt  i) -> NInt  (-i)
+    (NNot, NBool b) -> NBool (not b)
+    _ -> error $ "unsupported argument type for unary operator " ++ show op
+  _ -> error "argument to unary operator must evaluate to an atomic type"
+phi (NBinary op larg rarg) = \env ->
+  let Fix lval = larg env
+      Fix rval = rarg env
+      unsupportedTypes =
+          "unsupported argument types for binary operator "
+              ++ show (lval, op, rval)
+  in case (lval, rval) of
+   (NVConstant lc, NVConstant rc) -> Fix $ NVConstant $ case (op, lc, rc) of
+     (NEq,  l, r) -> NBool $ l == r
+     (NNEq, l, r) -> NBool $ l /= r
+     (NLt,  l, r) -> NBool $ l <  r
+     (NLte, l, r) -> NBool $ l <= r
+     (NGt,  l, r) -> NBool $ l >  r
+     (NGte, l, r) -> NBool $ l >= r
+     (NAnd,  NBool l, NBool r) -> NBool $ l && r
+     (NOr,   NBool l, NBool r) -> NBool $ l || r
+     (NImpl, NBool l, NBool r) -> NBool $ not l || r
+     (NPlus,  NInt l, NInt r) -> NInt $ l + r
+     (NMinus, NInt l, NInt r) -> NInt $ l - r
+     (NMult,  NInt l, NInt r) -> NInt $ l * r
+     (NDiv,   NInt l, NInt r) -> NInt $ l `div` r
+     _ -> error unsupportedTypes
+   (NVStr ls lc, NVStr rs rc) -> case op of
+     NPlus -> Fix $ NVStr (ls `mappend` rs) (lc `mappend` rc)
+     _ -> error unsupportedTypes
+   (NVSet ls, NVSet rs) -> case op of
+     NUpdate -> Fix $ NVSet $ rs `Map.union` ls
+     _ -> error unsupportedTypes
+   (NVList ls, NVList rs) -> case op of
+     NConcat -> Fix $ NVList $ ls ++ rs
+     _ -> error unsupportedTypes
+   (NVLiteralPath ls, NVLiteralPath rs) -> case op of
+     NPlus -> Fix $ NVLiteralPath $ ls ++ rs -- TODO: Canonicalise path
+     _ -> error unsupportedTypes
+   (NVLiteralPath ls, NVStr rs rc) -> case op of
+     NPlus -> Fix $ NVStr (Text.pack ls `mappend` rs) rc -- TODO: Canonicalise path
+     _ -> error unsupportedTypes
+   _ -> error unsupportedTypes
+
+phi (NSelect aset attr alternative) = go where
+  go env =
+    let aset' = aset env
+        ks    = evalSelector True attr env
+    in case extract aset' ks of
+     Just v  -> v
+     Nothing -> case alternative of
+       Just v  -> v env
+       Nothing -> error $ "could not look up attribute '"
+           ++ intercalate "." (map show ks) ++ "' in value " ++ show aset'
+  extract (Fix (NVSet s)) (k:ks) = case Map.lookup k s of
+                                    Just v  -> extract v ks
+                                    Nothing -> Nothing
+  extract               _  (_:_) = Nothing
+  extract               v     [] = Just v
+
+phi (NHasAttr aset attr) = \env -> aset env & \case
+  Fix (NVSet s) -> evalSelector True attr env & \case
+    [keyName] -> Fix $ NVConstant $ NBool $ keyName `Map.member` s
+    _ -> error "attribute name argument to hasAttr is not a single-part name"
+  _ -> error "argument to hasAttr has wrong type"
+
+phi (NList l) = \env ->
+    Fix . NVList $ map ($ env) l
+
+phi (NSet binds) =
+  Fix . NVSet . evalBinds True binds
+
+phi (NRecSet binds) = \env ->
+    let mergedEnv   = evaledBinds `Map.union` env
+        evaledBinds = evalBinds True binds mergedEnv
+    in Fix . NVSet $ evaledBinds
+
+phi (NLet binds e) = \env ->
+    let mergedEnv   = evaledBinds `Map.union` env
+        evaledBinds = evalBinds True binds mergedEnv
+    in e mergedEnv
+
+phi (NIf cond t f) = \env ->
+    let Fix cval = cond env
+    in case cval of
+        NVConstant (NBool True) -> t env
+        NVConstant (NBool False) -> f env
+        _ -> error "condition must be a boolean"
+
+phi (NWith scope e) = \env ->
+  let s = scope env
+  in case s of
+      (Fix (NVSet scope')) -> e $ Map.union scope' env
+      _ -> error "scope must be a set in with statement"
+
+phi (NAssert cond e) = \env ->
+  let Fix cond' = cond env
+  in case cond' of
+      (NVConstant (NBool True)) -> e env
+      (NVConstant (NBool False)) -> error "assertion failed"
+      _ -> error "assertion condition must be boolean"
+
+phi (NApp fun x) = \env ->
+    let fun' = fun env
+    in case fun' of
+        Fix (NVFunction params f) ->
+            f (buildArgument params (x env))
+        Fix (NVBuiltin _ f) -> f (x env)
+        _ -> error "Attempt to call non-function"
+
+phi (NAbs a b) = \env ->
+    -- It is the environment at the definition site, not the call site,
+    -- that needs to be used when evaluation the body and the default
+    -- arguments
+    let extend f env' = f (env' `Map.union` env)
+    in Fix $ NVFunction (fmap extend a) (extend b)
+
+tracingExprEval :: NExpr -> IO PendingEval
+tracingExprEval =
+    fmap (runIdentity . snd) . adiM @() (pure <$> phi) psi
   where
-    phi :: NExprF PendingEval -> PendingEval
-    phi (NSym var) = fromMaybe err . Map.lookup var
-      where err = error ("Undefined variable: " ++ show var)
-    phi (NConstant x) = const $ Fix $ NVConstant x
-    phi (NStr str) = evalString str
-    phi (NLiteralPath p) = const $ Fix $ NVLiteralPath p
-    phi (NEnvPath p) = const $ Fix $ NVEnvPath p
-
-    phi (NUnary op arg) = \env -> arg env & \case
-      Fix (NVConstant c) -> Fix $ NVConstant $ case (op, c) of
-        (NNeg, NInt  i) -> NInt  (-i)
-        (NNot, NBool b) -> NBool (not b)
-        _ -> error $ "unsupported argument type for unary operator " ++ show op
-      _ -> error "argument to unary operator must evaluate to an atomic type"
-    phi (NBinary op larg rarg) = \env ->
-      let Fix lval = larg env
-          Fix rval = rarg env
-          unsupportedTypes =
-              "unsupported argument types for binary operator "
-                  ++ show (lval, op, rval)
-      in case (lval, rval) of
-       (NVConstant lc, NVConstant rc) -> Fix $ NVConstant $ case (op, lc, rc) of
-         (NEq,  l, r) -> NBool $ l == r
-         (NNEq, l, r) -> NBool $ l /= r
-         (NLt,  l, r) -> NBool $ l <  r
-         (NLte, l, r) -> NBool $ l <= r
-         (NGt,  l, r) -> NBool $ l >  r
-         (NGte, l, r) -> NBool $ l >= r
-         (NAnd,  NBool l, NBool r) -> NBool $ l && r
-         (NOr,   NBool l, NBool r) -> NBool $ l || r
-         (NImpl, NBool l, NBool r) -> NBool $ not l || r
-         (NPlus,  NInt l, NInt r) -> NInt $ l + r
-         (NMinus, NInt l, NInt r) -> NInt $ l - r
-         (NMult,  NInt l, NInt r) -> NInt $ l * r
-         (NDiv,   NInt l, NInt r) -> NInt $ l `div` r
-         _ -> error unsupportedTypes
-       (NVStr ls lc, NVStr rs rc) -> case op of
-         NPlus -> Fix $ NVStr (ls `mappend` rs) (lc `mappend` rc)
-         _ -> error unsupportedTypes
-       (NVSet ls, NVSet rs) -> case op of
-         NUpdate -> Fix $ NVSet $ rs `Map.union` ls
-         _ -> error unsupportedTypes
-       (NVList ls, NVList rs) -> case op of
-         NConcat -> Fix $ NVList $ ls ++ rs
-         _ -> error unsupportedTypes
-       (NVLiteralPath ls, NVLiteralPath rs) -> case op of
-         NPlus -> Fix $ NVLiteralPath $ ls ++ rs -- TODO: Canonicalise path
-         _ -> error unsupportedTypes
-       (NVLiteralPath ls, NVStr rs rc) -> case op of
-         NPlus -> Fix $ NVStr (Text.pack ls `mappend` rs) rc -- TODO: Canonicalise path
-         _ -> error unsupportedTypes
-       _ -> error unsupportedTypes
-
-    phi (NSelect aset attr alternative) = go where
-      go env =
-        let aset' = aset env
-            ks    = evalSelector True attr env
-        in case extract aset' ks of
-         Just v  -> v
-         Nothing -> case alternative of
-           Just v  -> v env
-           Nothing -> error $ "could not look up attribute '"
-               ++ intercalate "." (map show ks) ++ "' in value " ++ show aset'
-      extract (Fix (NVSet s)) (k:ks) = case Map.lookup k s of
-                                        Just v  -> extract v ks
-                                        Nothing -> Nothing
-      extract               _  (_:_) = Nothing
-      extract               v     [] = Just v
-
-    phi (NHasAttr aset attr) = \env -> aset env & \case
-      Fix (NVSet s) -> evalSelector True attr env & \case
-        [keyName] -> Fix $ NVConstant $ NBool $ keyName `Map.member` s
-        _ -> error "attribute name argument to hasAttr is not a single-part name"
-      _ -> error "argument to hasAttr has wrong type"
-
-    phi (NList l) = \env ->
-        Fix . NVList $ map ($ env) l
-
-    phi (NSet binds) =
-      Fix . NVSet . evalBinds True binds
-
-    phi (NRecSet binds) = \env ->
-        let mergedEnv   = evaledBinds `Map.union` env
-            evaledBinds = evalBinds True binds mergedEnv
-        in Fix . NVSet $ evaledBinds
-
-    phi (NLet binds e) = \env ->
-        let mergedEnv   = evaledBinds `Map.union` env
-            evaledBinds = evalBinds True binds mergedEnv
-        in e mergedEnv
-
-    phi (NIf cond t f) = \env ->
-        let Fix cval = cond env
-        in case cval of
-            NVConstant (NBool True) -> t env
-            NVConstant (NBool False) -> f env
-            _ -> error "condition must be a boolean"
-
-    phi (NWith scope e) = \env ->
-      let s = scope env
-      in case s of
-          (Fix (NVSet scope')) -> e $ Map.union scope' env
-          _ -> error "scope must be a set in with statement"
-
-    phi (NAssert cond e) = \env ->
-      let Fix cond' = cond env
-      in case cond' of
-          (NVConstant (NBool True)) -> e env
-          (NVConstant (NBool False)) -> error "assertion failed"
-          _ -> error "assertion condition must be boolean"
-
-    phi (NApp fun x) = \env ->
-        let fun' = fun env
-        in case fun' of
-            Fix (NVFunction params f) ->
-                f (buildArgument params (x env))
-            Fix (NVBuiltin _ f) -> f (x env)
-            _ -> error "Attempt to call non-function"
-
-    phi (NAbs a b) = \env ->
-        -- It is the environment at the definition site, not the call site,
-        -- that needs to be used when evaluation the body and the default
-        -- arguments
-        let extend f env' = f (env' `Map.union` env)
-        in Fix $ NVFunction (fmap extend a) (extend b)
+    psi k v@(Fix x) = do
+        putStrLn $ "Evaluating: " ++ show x
+        k v
 
 evalString :: NString PendingEval -> PendingEval
 evalString nstr env =

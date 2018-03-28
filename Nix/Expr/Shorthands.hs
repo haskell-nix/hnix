@@ -4,13 +4,12 @@
 -- 'Fix' wrapper.
 module Nix.Expr.Shorthands where
 
-import Prelude
-import Data.Monoid
-import Data.Text (Text)
-import Data.Fix
+import           Data.Fix
 import qualified Data.Map as Map
-import Nix.Atoms
-import Nix.Expr.Types
+import           Data.Monoid
+import           Data.Text (Text)
+import           Nix.Atoms
+import           Nix.Expr.Types
 
 -- | Make an integer literal expression.
 mkInt :: Integer -> NExpr

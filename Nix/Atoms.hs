@@ -1,10 +1,9 @@
 module Nix.Atoms where
 
-import Prelude
-import Data.Text (Text, pack)
-import GHC.Generics
 import Data.Data
 import Data.HashMap.Strict (HashMap)
+import Data.Text (Text, pack)
+import GHC.Generics
 
 -- | Atoms are values that evaluate to themselves. This means that
 -- they appear in both the parsed AST (in the form of literals) and

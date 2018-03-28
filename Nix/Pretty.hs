@@ -1,22 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Nix.Pretty where
 
-import Prelude hiding ((<$>))
-import Data.Fix
-import Data.Map (toList)
-import Data.Maybe (isJust)
-import Data.Text (pack, unpack, replace, strip)
-import Data.List (isPrefixOf, intercalate)
-import Nix.Atoms
-import Nix.Eval (NValue, NValueF (..), atomText)
-import Nix.Expr
-import Nix.Parser.Library (reservedNames)
-import Nix.Parser.Operators
-import Nix.StringOperations
-import Text.PrettyPrint.ANSI.Leijen
-
-import qualified Data.Text as Text
+import           Data.Fix
 import qualified Data.HashSet as HashSet
+import           Data.List (isPrefixOf, intercalate)
+import           Data.Map (toList)
+import           Data.Maybe (isJust)
+import           Data.Text (pack, unpack, replace, strip)
+import qualified Data.Text as Text
+import           Nix.Atoms
+import           Nix.Eval (NValue, NValueF (..), atomText)
+import           Nix.Expr
+import           Nix.Parser.Library (reservedNames)
+import           Nix.Parser.Operators
+import           Nix.StringOperations
+import           Prelude hiding ((<$>))
+import           Text.PrettyPrint.ANSI.Leijen
 
 -- | This type represents a pretty printed nix expression
 -- together with some information about the expression.

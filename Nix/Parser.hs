@@ -17,11 +17,10 @@ import           Control.Monad.IO.Class
 import           Data.Foldable hiding (concat)
 import qualified Data.Map as Map
 import           Data.Text hiding (head, map, foldl1', foldl', concat)
+import           Nix.Expr
 import           Nix.Parser.Library
 import           Nix.Parser.Operators
-import           Nix.Expr
 import           Nix.StringOperations
-import           Prelude hiding (elem)
 
 --------------------------------------------------------------------------------
 

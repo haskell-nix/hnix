@@ -3,17 +3,13 @@
 module EvalTests (tests) where
 
 import Data.Fix
-
+import Data.Monoid (Monoid(..))
+import Nix.Eval
+import Nix.Expr
+import Nix.Parser
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.TH
-
-import Nix.Eval
-import Nix.Parser
-import Nix.Expr
-
-import Data.Monoid (Monoid(..))
-import Prelude (String)
 
 case_basic_sum :: Assertion
 case_basic_sum = constantEqualStr "2" "1 + 1"

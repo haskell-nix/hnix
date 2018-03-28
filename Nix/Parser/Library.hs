@@ -7,22 +7,19 @@ module Nix.Parser.Library
   , Trifecta.Delta(..)
   ) where
 
-import Prelude
-import Control.Applicative
-import Control.Monad
-import Control.Monad.IO.Class
-import Data.Text hiding (map)
-import Text.Parser.Expression as X
-import Text.Parser.LookAhead as X
-import Text.Parser.Token as X
-import Text.Parser.Char as X hiding (text)
-import Text.Parser.Combinators as X
-import Text.PrettyPrint.ANSI.Leijen as X (Doc, text)
-import Text.Parser.Token.Highlight
-import Text.Parser.Token.Style
-
+import           Control.Applicative
+import           Control.Monad
+import           Control.Monad.IO.Class
 import qualified Data.HashSet as HashSet
-
+import           Data.Text hiding (map)
+import           Text.Parser.Char as X hiding (text)
+import           Text.Parser.Combinators as X
+import           Text.Parser.Expression as X
+import           Text.Parser.LookAhead as X
+import           Text.Parser.Token as X
+import           Text.Parser.Token.Highlight
+import           Text.Parser.Token.Style
+import           Text.PrettyPrint.ANSI.Leijen as X (Doc, text)
 #if USE_PARSEC
 import qualified Text.Parsec as Parsec
 import qualified Text.Parsec.Text as Parsec
@@ -31,7 +28,7 @@ import qualified Data.Text.IO as T
 import qualified Text.Trifecta as Trifecta
 import qualified Text.Trifecta.Delta as Trifecta
 
-import Text.Trifecta as X (Result(..))
+import           Text.Trifecta as X (Result(..))
 #endif
 
 newtype NixParser p a = NixParser { runNixParser :: p a }

@@ -3,36 +3,29 @@
 
 module NixLanguageTests (genTests) where
 
-import Data.Fix
-import Data.Text.IO (readFile)
-import qualified Data.Text as Text
+import           Control.Arrow ((&&&))
+import           Control.Exception
+import           Control.Monad (filterM)
+import           Data.Fix
+import           Data.Functor.Identity
+import           Data.List (delete, intercalate, sort)
+import           Data.List.Split (splitOn)
+import           Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Map (Map)
-import Data.List (delete, intercalate, sort)
-import Data.List.Split (splitOn)
-
-import Test.Tasty
-import Test.Tasty.HUnit
-import Test.Tasty.TH
-
-import Nix.Eval
-import Nix.Builtins
-import Nix.Expr
-import Nix.Parser
-import Nix.Pretty
-
-import System.Directory (listDirectory, doesFileExist)
-import System.FilePath.Glob (compile, globDir1)
-import System.FilePath.Posix
-
-import Control.Monad (filterM)
-import Control.Exception
-import Control.Arrow ((&&&))
-import Data.Functor.Identity
-
-import GHC.Exts
-
-import Prelude hiding (readFile)
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
+import           GHC.Exts
+import           Nix.Builtins
+import           Nix.Eval
+import           Nix.Expr
+import           Nix.Parser
+import           Nix.Pretty
+import           System.Directory (listDirectory, doesFileExist)
+import           System.FilePath.Glob (compile, globDir1)
+import           System.FilePath.Posix
+import           Test.Tasty
+import           Test.Tasty.HUnit
+import           Test.Tasty.TH
 
 {-
 From (git://nix)/tests/lang.sh we see that
@@ -88,7 +81,7 @@ assertParseFail file = parseNixFile file >>= (\x -> case x of
 assertLangOk :: FilePath -> Assertion
 assertLangOk file = do
   actual <- printNix <$> nixEvalFile (file ++ ".nix")
-  expected <- readFile $ file ++ ".exp"
+  expected <- Text.readFile $ file ++ ".exp"
   seq actual $ seq expected $
       assertEqual "" expected $ Text.pack (actual ++ "\n")
 

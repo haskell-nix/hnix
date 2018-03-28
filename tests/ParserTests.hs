@@ -2,20 +2,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 module ParserTests (tests) where
 
-import Data.Fix
-import Data.Text (pack)
-import Test.Tasty
-import Test.Tasty.HUnit
-import Test.Tasty.TH
-
+import           Data.Fix
 import qualified Data.Map as Map
-
-import Nix.Atoms
-import Nix.Expr
-import Nix.Parser
-import Nix.StringOperations
-
-import Prelude
+import           Data.Text (pack)
+import           Nix.Atoms
+import           Nix.Expr
+import           Nix.Parser
+import           Nix.StringOperations
+import           Test.Tasty
+import           Test.Tasty.HUnit
+import           Test.Tasty.TH
 
 case_constant_int :: Assertion
 case_constant_int = assertParseString "234" $ mkInt 234

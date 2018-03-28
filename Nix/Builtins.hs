@@ -7,7 +7,6 @@ import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Eval
 import           Nix.Expr (NExpr)
-import           Prelude
 
 -- | Evaluate a nix expression in the default context
 evalTopLevelExpr :: NExpr -> NValue

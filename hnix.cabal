@@ -46,7 +46,6 @@ Library
     KindSignatures
     LambdaCase
     MultiWayIf
-    NoImplicitPrelude
     OverloadedStrings
     PatternGuards
     RankNTypes
@@ -99,6 +98,8 @@ Executable hnix
     , ansi-wl-pprint
     , data-fix
     , deepseq
+    , optparse-applicative
+    , text
   Ghc-options: -Wall -threaded
 
 Test-suite hnix-tests

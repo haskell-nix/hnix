@@ -1,38 +1,63 @@
-{-# LANGUAGE LambdaCase #-}
 module Main where
 
-import Nix.Parser
-import Nix.Pretty
-import Nix.Expr
+import qualified Data.Map.Lazy as Map
+import           Nix.Eval
+import           Nix.Parser
+import           Nix.Pretty
+import           Options.Applicative hiding (ParserResult(..))
+import           System.IO
+import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
-import System.Environment
-import System.IO
-import Text.PrettyPrint.ANSI.Leijen
+data Options = Options
+    { verbose    :: Bool
+    , debug      :: Bool
+    , evaluate   :: Bool
+    , filePath   :: Maybe FilePath
+    , expression :: Maybe String
+    }
 
-nix :: FilePath -> IO ()
-nix path = parseNixFile path >>= displayNExpr
-
-nixString :: String -> IO ()
-nixString = displayNExpr . parseNixString
-
-displayNExpr :: Result NExpr -> IO ()
-displayNExpr = \case
-  Success n -> displayIO stdout $ renderPretty 0.4 80 (prettyNix n)
-  Failure e -> hPutStrLn stderr $ "Parse failed: " ++ show e
+mainOptions :: Parser Options
+mainOptions = Options
+    <$> switch
+        (   short 'v'
+         <> long "verbose"
+         <> help "Verbose output")
+    <*> switch
+        (   short 'd'
+         <> long "debug"
+         <> help "Debug output")
+    <*> switch
+        (   long "eval"
+         <> help "Whether to evaluate, or just pretty-print")
+    <*> optional (strOption
+        (   short 'f'
+         <> long "file"
+         <> help "File to parse or evaluate"))
+    <*> optional (strOption
+        (   short 'e'
+         <> long "expr"
+         <> help "Expression to parse or evaluate"))
 
 main :: IO ()
 main = do
-  let usageStr = "Parses a nix file and prints to stdout.\n\
-                 \\n\
-                 \Usage:\n\
-                 \  hnix --help\n\
-                 \  hnix <path>\n\
-                 \  hnix --expr <expr>\n"
-  let argErr msg = error $ "Invalid arguments: " ++ msg ++ "\n" ++ usageStr
-  getArgs >>= \case
-    "--help":_ -> putStrLn usageStr
-    "--expr":expr:_ -> nixString expr
-    "--expr":_ -> argErr "Provide an expression."
-    ('-':_):_ -> argErr "Provide a path to a nix file."
-    path:_ -> nix path
-    _ -> argErr "Provide a path to a nix file."
+    opts <- execParser optsDef
+
+    eres <- case expression opts of
+        Just s -> return $ parseNixString s
+        Nothing  -> case filePath opts of
+            Just "-"  -> parseNixString <$> getContents
+            Nothing   -> parseNixString <$> getContents
+            Just path -> parseNixFile path
+
+    case eres of
+        Failure err -> hPutStrLn stderr $ "Parse failed: " ++ show err
+        Success expr ->
+            if evaluate opts
+            then if debug opts
+                 then print =<< tracingExprEval expr <*> pure Map.empty
+                 else print $ evalExpr expr Map.empty
+            else displayIO stdout $ renderPretty 0.4 80 (prettyNix expr)
+  where
+    optsDef :: ParserInfo Options
+    optsDef = info (helper <*> mainOptions)
+                   (fullDesc <> progDesc "" <> header "hnix")

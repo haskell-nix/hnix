@@ -1,14 +1,12 @@
 -- | Functions for manipulating nix strings.
 module Nix.StringOperations where
 
-import Nix.Expr
 import           Data.List (intercalate)
 import           Data.Monoid ((<>))
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Prelude hiding (elem)
 import           Data.Tuple (swap)
-
+import           Nix.Expr
 
 -- | Merge adjacent 'Plain' values with 'mappend'.
 mergePlain :: Monoid v => [Antiquoted v r] -> [Antiquoted v r]

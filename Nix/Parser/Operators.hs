@@ -5,11 +5,8 @@ import           Data.Foldable (concat)
 import qualified Data.Map as Map
 import           Data.Maybe (catMaybes)
 import           Data.Typeable (Typeable)
-import           GHC.Exts
 import           GHC.Generics
 import           Nix.Expr
-import           Prelude hiding (readFile, concat, concatMap, elem, mapM,
-                                 sequence, minimum, foldr)
 
 data NSpecialOp = NHasAttrOp | NSelectOp | NAppOp
   deriving (Eq, Ord, Generic, Typeable, Data, Show)
