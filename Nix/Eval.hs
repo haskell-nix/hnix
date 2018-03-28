@@ -18,7 +18,6 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.These
 import           Data.Typeable (Typeable)
-import           Debug.Trace
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr
@@ -188,7 +187,7 @@ phi (NBinary op larg rarg) = \env ->
    _ -> error unsupportedTypes
 
 phi (NSelect aset attr alternative) = \env ->
-    let aset' = trace ("env = " ++ show env) $ aset env
+    let aset' = aset env
         ks    = evalSelector True attr env
     in case extract aset' ks of
         Just v  -> v
