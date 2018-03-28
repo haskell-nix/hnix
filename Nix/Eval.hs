@@ -35,13 +35,13 @@ data NValueF r
     | NVList [r]
     | NVSet (Map.Map Text r)
     | NVFunction (Params (ValueSet -> r)) (ValueSet -> r)
-      -- ^ A function is a closed set of terms representing the "call
-      --   signature", used at application time to check the type of arguments
-      --   passed to the function. Since it supports default values which may
-      --   depend on other values within the final argument set, this
-      --   dependency is represented as a set of pending evaluations. The
-      --   arguments are finally normalized into a set which is passed to the
-      --   function.
+      -- ^ A function's parameters is a closed set of terms representing the
+      --   "call signature", used at application time to check the type of
+      --   arguments passed to the function. Since it may contain default
+      --   values that can depend on other values within the final argument
+      --   set, this dependency is represented as a set of pending
+      --   evaluations. The arguments are normalized into a set when the
+      --   function is finally called.
     | NVLiteralPath FilePath
     | NVEnvPath FilePath
     | NVBuiltin String (NValue -> r)
