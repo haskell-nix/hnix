@@ -5,11 +5,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Nix.Eval (NValue, NValueF(..), ValueSet,
-                 MonadNix(..),
-                 evalExpr, tracingExprEval,
-                 builtin, builtin2,
-                 atomText, valueText,
+module Nix.Eval (NValue, NValueF(..), ValueSet, MonadNix(..),
+                 evalExpr, tracingExprEval, checkExpr,
+                 builtin, builtin2, atomText, valueText,
                  buildArgument) where
 
 import           Control.Arrow
@@ -346,3 +344,57 @@ evalSelector dyn = mapM evalKeyName where
   evalKeyName (DynamicKey k)
     | dyn       = fmap valueTextNoContext . runAntiquoted evalString id $ k
     | otherwise = error "dynamic attribute not allowed in this context"
+
+nullVal :: MonadNix m => m (NValue m)
+nullVal = return (Fix (NVConstant NNull) :: NValue m)
+
+-- | Evaluate an nix expression, with a given ValueSet as environment
+checkExpr :: MonadNix m => NExpr -> m ()
+checkExpr = cata check
+
+check :: forall m. MonadNix m => NExprF (m ()) -> m ()
+
+check (NSym var) = do
+    env <- currentScope
+    case Map.lookup var env of
+        Nothing -> error $ "Undefined variable: " ++ show var
+        Just _ -> return ()
+
+check (NRecSet binds) = do
+    env <- currentScope
+    rec evaledBinds <-
+            newScope ((nullVal <$ evaledBinds) `Map.union` env)
+                     (evalBinds True (fmap (fmap (const nullVal)) binds))
+    return ()
+
+check (NLet binds e) = do
+    env <- currentScope
+    rec evaledBinds <-
+            newScope ((nullVal <$ evaledBinds) `Map.union` env)
+                     (evalBinds True (fmap (fmap (const nullVal)) binds))
+    newScope ((nullVal <$ evaledBinds) `Map.union` env) e
+
+-- check (NWith scope e) = do
+--   env <- currentScope
+--   newScope ((nullVal <$ scope) `Map.union` env) e
+
+check (NAbs a b) = do
+    env <- currentScope
+    let extend f = do
+            env' <- currentScope
+            newScope (env' `Map.union` env) f
+    case fmap extend a of
+        Param name ->
+            newScope (Map.singleton name nullVal) (extend b)
+        ParamSet (FixedParamSet s) Nothing ->
+            newScope (nullVal <$ s) (extend b)
+        ParamSet (FixedParamSet s) (Just m) ->
+            newScope (Map.insert m nullVal (nullVal <$ s)) (extend b)
+        ParamSet (VariadicParamSet s) Nothing ->
+            newScope (nullVal <$ s) (extend b)
+        ParamSet (VariadicParamSet s) (Just m) ->
+            newScope (Map.insert m nullVal (nullVal <$ s)) (extend b)
+
+-- In order to check some of the other operations properly, we'd need static
+-- typing
+check _ = return ()

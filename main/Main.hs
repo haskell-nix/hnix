@@ -1,5 +1,6 @@
 module Main where
 
+import Control.Monad
 import Control.Monad.Trans.State
 import Nix.Builtins
 import Nix.Eval
@@ -13,6 +14,7 @@ data Options = Options
     { verbose    :: Bool
     , debug      :: Bool
     , evaluate   :: Bool
+    , check      :: Bool
     , filePath   :: Maybe FilePath
     , expression :: Maybe String
     }
@@ -30,6 +32,9 @@ mainOptions = Options
     <*> switch
         (   long "eval"
          <> help "Whether to evaluate, or just pretty-print")
+    <*> switch
+        (   long "check"
+         <> help "Whether to check for syntax errors after parsing")
     <*> optional (strOption
         (   short 'f'
          <> long "file"
@@ -52,16 +57,19 @@ main = do
 
     case eres of
         Failure err -> hPutStrLn stderr $ "Parse failed: " ++ show err
-        Success expr
-            | evaluate opts, debug opts -> do
-                  expr' <- tracingExprEval expr
-                  print =<< evalStateT (runCyclic expr') baseEnv
-            | evaluate opts ->
-                  print =<< evalTopLevelExprIO expr
-            | debug opts ->
-                  print expr
-            | otherwise ->
-                  displayIO stdout $ renderPretty 0.4 80 (prettyNix expr)
+        Success expr -> do
+            when (check opts) $
+                evalStateT (runCyclic (checkExpr expr)) baseEnv
+            case () of
+                () | evaluate opts, debug opts -> do
+                         expr' <- tracingExprEval expr
+                         print =<< evalStateT (runCyclic expr') baseEnv
+                   | evaluate opts ->
+                         print =<< evalTopLevelExprIO expr
+                   | debug opts ->
+                         print expr
+                   | otherwise ->
+                         displayIO stdout $ renderPretty 0.4 80 (prettyNix expr)
   where
     optsDef :: ParserInfo Options
     optsDef = info (helper <*> mainOptions)

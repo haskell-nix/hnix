@@ -1,17 +1,13 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module NixLanguageTests (genTests) where
 
 import           Control.Arrow ((&&&))
 import           Control.Exception
-import           Control.Monad (filterM)
-import           Control.Monad.Fix
-import           Control.Monad.IO.Class
 import           Control.Monad.Trans.State
-import           Data.Fix
-import           Data.Functor.Identity
-import           Data.List (delete, intercalate, sort)
+import           Data.List (delete, sort)
 import           Data.List.Split (splitOn)
 import           Data.Map (Map)
 import qualified Data.Map as Map
@@ -20,15 +16,12 @@ import qualified Data.Text.IO as Text
 import           GHC.Exts
 import           Nix.Builtins
 import           Nix.Eval
-import           Nix.Expr
 import           Nix.Parser
 import           Nix.Pretty
-import           System.Directory (listDirectory, doesFileExist)
 import           System.FilePath.Glob (compile, globDir1)
 import           System.FilePath.Posix
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           Test.Tasty.TH
 
 {-
 From (git://nix)/tests/lang.sh we see that
@@ -55,31 +48,39 @@ groupBy key = Map.fromListWith (++) . map (key &&& pure)
 
 genTests :: IO TestTree
 genTests = do
-  testFiles <- sort . filter ((/= ".xml") . takeExtension) <$> globDir1 (compile "*-*-*.*") "data/nix/tests/lang"
+  testFiles <- sort . filter ((/= ".xml") . takeExtension)
+      <$> globDir1 (compile "*-*-*.*") "data/nix/tests/lang"
   let testsByName = groupBy takeBaseName testFiles
   let testsByType = groupBy testType (Map.toList testsByName)
   let testGroups  = map mkTestGroup (Map.toList testsByType)
-  return $ localOption (mkTimeout 100000) $ testGroup "Nix (upstream) language tests" $ testGroups
+  return $ localOption (mkTimeout 100000)
+         $ testGroup "Nix (upstream) language tests" testGroups
   where
-    testType (fullpath, files) = take 2 $ splitOn "-" $ takeFileName fullpath
-    mkTestGroup (kind, tests) = testGroup (intercalate " " kind) $ map (mkTestCase kind) tests
-    mkTestCase kind (basename, files) = testCase (takeFileName basename) $ case kind of
-      ["parse", "okay"] -> assertParse $ the files
-      ["parse", "fail"] -> assertParseFail $ the files
-      ["eval", "okay"] -> assertEval files
-      ["eval", "fail"] -> assertEvalFail $ the files
+    testType (fullpath, _files) = take 2 $ splitOn "-" $ takeFileName fullpath
+    mkTestGroup (kind, tests) =
+        testGroup (unwords kind) $ map (mkTestCase kind) tests
+    mkTestCase kind (basename, files) =
+        testCase (takeFileName basename) $ case kind of
+            ["parse", "okay"] -> assertParse $ the files
+            ["parse", "fail"] -> assertParseFail $ the files
+            ["eval", "okay"] -> assertEval files
+            ["eval", "fail"] -> assertEvalFail $ the files
 
 assertParse :: FilePath -> Assertion
-assertParse file = parseNixFile file >>= (\x -> case x of
-  Success _ -> return ()
+assertParse file = parseNixFile file >>= \case
+  Success expr -> evalStateT (runCyclic (checkExpr expr)) baseEnv
   Failure err -> assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
-  )
 
 assertParseFail :: FilePath -> Assertion
-assertParseFail file = parseNixFile file >>= (\x -> case x of
-  Success r -> assertFailure $ "Unexpected success parsing `" ++ file ++ ":\nParsed value: " ++ show r
-  Failure _ -> return ()
-  )
+assertParseFail file = do
+    eres <- parseNixFile file
+    catch (case eres of
+               Success expr -> do
+                   evalStateT (runCyclic (checkExpr expr)) baseEnv
+                   assertFailure $ "Unexpected success parsing `"
+                       ++ file ++ ":\nParsed value: " ++ show expr
+               Failure _ -> return ()) $ \(_ :: SomeException) ->
+        return ()
 
 assertLangOk :: FilePath -> Assertion
 assertLangOk file = do
@@ -89,7 +90,7 @@ assertLangOk file = do
       assertEqual "" expected $ Text.pack (actual ++ "\n")
 
 assertLangOkXml :: FilePath -> Assertion
-assertLangOkXml name = assertFailure $ "Not implemented"
+assertLangOkXml name = assertFailure $ "Not implemented: " ++ name
 
 assertEval :: [FilePath] -> Assertion
 assertEval files =
@@ -98,9 +99,9 @@ assertEval files =
     [".exp"] -> assertLangOk name
     [".exp-disabled"] -> return ()
     [".exp", ".flags"] -> assertFailure $ "Support for flags not implemented (needed by " ++ name ++ ".nix)."
-    otherwise -> assertFailure $ "Unknown test type " ++ show files
+    _ -> assertFailure $ "Unknown test type " ++ show files
   where
-    name = "data/nix/tests/lang/" ++ (the $ map takeBaseName files)
+    name = "data/nix/tests/lang/" ++ the (map takeBaseName files)
 
 assertEvalFail :: FilePath -> Assertion
 assertEvalFail file = catch eval (\(ErrorCall _) -> return ())
