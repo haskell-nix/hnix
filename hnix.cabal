@@ -65,12 +65,13 @@ Library
     , semigroups >= 0.18 && < 0.19
     , regex-tdfa
     , regex-tdfa-text
+    , these
   if flag(parsec)
     Cpp-options: -DUSE_PARSEC
     Build-depends: parsec
   else
     Build-depends: trifecta
-  ghc-options: -Wall -fno-warn-name-shadowing
+  ghc-options: -Wall -fno-warn-name-shadowing -threaded
 
 Executable hnix
   Default-language: Haskell2010
@@ -98,13 +99,14 @@ Executable hnix
     , ansi-wl-pprint
     , data-fix
     , deepseq
-  Ghc-options: -Wall
+  Ghc-options: -Wall -threaded
 
 Test-suite hnix-tests
   Type: exitcode-stdio-1.0
   Hs-source-dirs: tests
   Default-language: Haskell2010
   Main-is: Main.hs
+  Ghc-options: -threaded
   Other-modules:
     ParserTests
     EvalTests
@@ -129,6 +131,7 @@ Benchmark hnix-benchmarks
   Hs-source-dirs: benchmarks
   Default-language: Haskell2010
   Main-is: Main.hs
+  Ghc-options: -threaded
   Other-modules:
     ParserBench
   Build-depends:

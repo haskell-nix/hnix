@@ -1,4 +1,3 @@
-
 module Nix.Builtins (baseEnv, builtins, evalTopLevelExpr) where
 
 import           Control.Applicative
@@ -57,8 +56,8 @@ extractBool :: NValue m -> Bool
 extractBool (Fix (NVConstant (NBool b))) = b
 extractBool _                            = error "Not a bool constant"
 
-evalPred :: NValue m -> NValue m -> m (NValue m)
-evalPred (Fix (NVFunction argset pred)) = pred . buildArgument argset
+evalPred :: MonadFix m => NValue m -> NValue m -> m (NValue m)
+evalPred (Fix (NVFunction params pred)) = pred <=< buildArgument params
 evalPred pred = error $ "Trying to call a " ++ show pred
 
 
@@ -94,4 +93,3 @@ prim_all = builtin2 "all" _all
 _all :: MonadFix m => NValue m -> NValue m -> m (NValue m)
 _all pred (Fix (NVList l)) = mkBool . all extractBool <$> mapM (evalPred pred) l
 _all _ list = error $ "builtins.all takes a list as second argument, not a " ++ show list
-

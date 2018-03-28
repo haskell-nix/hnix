@@ -50,6 +50,9 @@ case_function_ellipsis = constantEqualStr "2" "(({a, ...}@attrs:attrs) {a=0; b=2
 case_function_default_value_in_atpattern :: Assertion
 case_function_default_value_in_atpattern = constantEqualStr "2" "({a ? 2}@attrs:attrs.a) {}"
 
+case_function_recursive_args :: Assertion
+case_function_recursive_args = constantEqualStr "2" "({ x ? 1, y ? x * 3}: y - x) {}"
+
 tests :: TestTree
 tests = $testGroupGenerator
 
