@@ -113,10 +113,9 @@ assertEvalFail file = catch eval (\(ErrorCall _) -> return ())
       evalResult <- printNix <$> nixEvalFile file
       evalResult `seq` assertFailure $ file ++ " should not evaluate.\nThe evaluation result was `" ++ evalResult ++ "`."
 
-nixEvalFile :: FilePath -> IO (NValue IO)
+nixEvalFile :: FilePath -> IO NValue
 nixEvalFile file =  do
   parseResult <- parseNixFile file
   case parseResult of
     Failure err        -> error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
-    Success expression -> evalTopLevelExpr expression
-
+    Success expression -> return $ evalTopLevelExpr expression

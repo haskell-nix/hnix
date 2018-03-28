@@ -1,47 +1,40 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE RecursiveDo #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
+
 module Nix.Eval where
 
 import           Control.Applicative
 import           Control.Arrow
-import           Control.Monad hiding (mapM, sequence)
-import           Control.Monad.Fix
+import           Control.Monad
 import           Data.Align.Key
 import           Data.Fix
 import           Data.Foldable (foldl')
-import           Data.Functor.Identity
-import           Data.Functor.Compose
 import           Data.List (intercalate)
 import qualified Data.Map.Lazy as Map
+import           Data.Maybe (fromMaybe)
 import           Data.Monoid (appEndo, Endo)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.These
-import           Data.Traversable as T
 import           Data.Typeable (Typeable)
-import           Debug.Trace
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr
-import           Nix.Parser
 import           Nix.StringOperations (runAntiquoted)
-import           Prelude hiding (mapM, sequence)
+import           Prelude
 
 type DList a = Endo [a]
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.
-data NValueF m r
+data NValueF r
     = NVConstant NAtom
      -- | A string has a value and a context, which can be used to record what a
      -- string has been build from
     | NVStr Text (DList Text)
     | NVList [r]
     | NVSet (Map.Map Text r)
-    | NVFunction (Params (ValueSet m -> m r)) (ValueSet m -> m r)
+    | NVFunction (Params (ValueSet -> r)) (ValueSet -> r)
       -- ^ A function is a closed set of terms representing the "call
       --   signature", used at application time to check the type of arguments
       --   passed to the function. Since it supports default values which may
@@ -51,10 +44,10 @@ data NValueF m r
       --   function.
     | NVLiteralPath FilePath
     | NVEnvPath FilePath
-    | NVBuiltin String (NValue m -> m r)
+    | NVBuiltin String (NValue -> r)
     deriving (Generic, Typeable, Functor)
 
-instance Show f => Show (NValueF m f) where
+instance Show f => Show (NValueF f) where
     showsPrec = flip go where
       go (NVConstant atom) = showsCon1 "NVConstant" atom
       go (NVStr      text context) = showsCon2 "NVStr"    text (appEndo context [])
@@ -71,22 +64,22 @@ instance Show f => Show (NValueF m f) where
       showsCon2 :: (Show a, Show b) => String -> a -> b -> Int -> String -> String
       showsCon2 con a b d = showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a . showString " " . showsPrec 11 b
 
-type NValue m = Fix (NValueF m)
+type NValue = Fix NValueF
 
-type ValueSet m = Map.Map Text (NValue m)
+type ValueSet = Map.Map Text NValue
 
 -- | A pending evaluation awaits an attribute environment, and a monadic
 --   context, in order to finally evaluate to the resulting value.
-type PendingEval m = ValueSet m -> m (NValue m)
+type PendingEval = ValueSet -> NValue
 
-builtin :: String -> (NValue m -> m (NValue m)) -> NValue m
+builtin :: String -> (NValue -> NValue) -> NValue
 builtin name f = Fix (NVBuiltin name f)
 
-builtin2 :: Monad m => String -> (NValue m -> NValue m -> m (NValue m)) -> NValue m
-builtin2 name f = builtin name (\arg -> return (builtin name (f arg)))
+builtin2 :: String -> (NValue -> NValue -> NValue) -> NValue
+builtin2 name f = builtin name (builtin name . f)
 
 
-valueText :: Functor m => NValue m -> (Text, DList Text)
+valueText :: NValue -> (Text, DList Text)
 valueText = cata phi where
     phi (NVConstant a)    = (atomText a, mempty)
     phi (NVStr t c)       = (t, c)
@@ -99,7 +92,7 @@ valueText = cata phi where
     phi (NVEnvPath p)     = (Text.pack p, mempty)
     phi (NVBuiltin _ _)    = error "Cannot coerce a function to a string"
 
-valueTextNoContext :: Functor m => NValue m -> Text
+valueTextNoContext :: NValue -> Text
 valueTextNoContext = fst . valueText
 
 -- | Translate an atom into its nix representation.
@@ -109,72 +102,58 @@ atomText (NBool b)  = if b then "true" else "false"
 atomText NNull      = "null"
 atomText (NUri uri) = uri
 
-expr = let Success x = parseNixString "({ x ? 1, y ? x * 3 }: y - x) { x = 10; }"
-       in x
-goeval :: MonadFix m => m (NValue m)
-goeval = evalExpr expr mempty
+loeb :: Functor f => f (f a -> a) -> f a
+loeb x = go where go = fmap ($ go) x
 
-goevalIO = goeval @IO
-goevalId = goeval @Identity
-
-loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
-loebM f = mfix $ \a -> mapM ($ a) f
-
-buildArgument :: forall m. MonadFix m
-              => Params (PendingEval m) -> NValue m -> m (ValueSet m)
+buildArgument :: Params PendingEval -> NValue -> ValueSet
 buildArgument params arg = case params of
-    Param name -> return $ Map.singleton name arg
+    Param name -> Map.singleton name arg
     ParamSet (FixedParamSet s) m -> go s m
     ParamSet (VariadicParamSet s) m -> go s m
   where
-    go :: Map.Map Text (Maybe (PendingEval m)) -> Maybe Text -> m (ValueSet m)
+    go :: Map.Map Text (Maybe PendingEval) -> Maybe Text -> ValueSet
     go s m = case arg of
-        Fix (NVSet args) -> do
-            res <- loebM (alignWithKey assemble args s)
-            return $ maybe res (\n -> Map.insert n arg res) m
+        Fix (NVSet args) ->
+            let res = loeb (alignWithKey assemble args s) in
+            maybe res (\n -> Map.insert n arg res) m
         _ -> error $ "Expected set in function call, received: " ++ show arg
 
     assemble k = \case
         That Nothing ->
             error $ "Missing value for parameter: " ++ Text.unpack k
-        That (Just f) -> \env -> trace ("ref.1 " ++ show k) $ f env
-        This x -> \_ -> trace ("ref.2 " ++ show k) $ pure x
-        These x _ -> \_ -> trace ("ref.3 " ++ show k) $ pure x
+        That (Just f) -> f
+        This x -> const x
+        These x _ -> const x
+
+(&) :: a -> (a -> c) -> c
+(&) = flip ($)
 
 -- | Evaluate an nix expression, with a given ValueSet as environment
-evalExpr :: forall m. MonadFix m => NExpr -> PendingEval m
-evalExpr = cata (\x -> do traceM ("evalExpr mk " ++ show (() <$ x))
-                          let f = phi x
-                          \env -> do
-                              traceM ("evalExpr do " ++ show (() <$ x))
-                              f env)
+evalExpr :: NExpr -> PendingEval
+evalExpr = cata phi
   where
-    phi :: NExprF (PendingEval m) -> PendingEval m
-    phi (NSym var) =
-        trace ("NSym mk " ++ show var) $ \env -> do
-            traceM ("NSym ref " ++ show var ++ "...")
-            traceM $ "NSym env = " ++ show env
-            res <- maybe err return $ Map.lookup var env
-            traceM ("NSym ref " ++ show var ++ "...done: " ++ show res)
-            return res
+    phi :: NExprF PendingEval -> PendingEval
+    phi (NSym var) = fromMaybe err . Map.lookup var
       where err = error ("Undefined variable: " ++ show var)
-    phi (NConstant x) = const $ return $ Fix $ NVConstant x
+    phi (NConstant x) = const $ Fix $ NVConstant x
     phi (NStr str) = evalString str
-    phi (NLiteralPath p) = const $ return $ Fix $ NVLiteralPath p
-    phi (NEnvPath p) = const $ return $ Fix $ NVEnvPath p
+    phi (NLiteralPath p) = const $ Fix $ NVLiteralPath p
+    phi (NEnvPath p) = const $ Fix $ NVEnvPath p
 
-    phi (NUnary op arg) = \env -> arg env >>= \case
-      Fix (NVConstant c) -> pure $ Fix $ NVConstant $ case (op, c) of
+    phi (NUnary op arg) = \env -> arg env & \case
+      Fix (NVConstant c) -> Fix $ NVConstant $ case (op, c) of
         (NNeg, NInt  i) -> NInt  (-i)
         (NNot, NBool b) -> NBool (not b)
-        _               -> error $ "unsupported argument type for unary operator " ++ show op
+        _ -> error $ "unsupported argument type for unary operator " ++ show op
       _ -> error "argument to unary operator must evaluate to an atomic type"
-    phi (NBinary op larg rarg) = \env -> do
-      Fix lval <- larg env
-      Fix rval <- rarg env
-      let unsupportedTypes = "unsupported argument types for binary operator " ++ show (lval, op, rval)
-      case (lval, rval) of
-       (NVConstant lc, NVConstant rc) -> pure $ Fix $ NVConstant $ case (op, lc, rc) of
+    phi (NBinary op larg rarg) = \env ->
+      let Fix lval = larg env
+          Fix rval = rarg env
+          unsupportedTypes =
+              "unsupported argument types for binary operator "
+                  ++ show (lval, op, rval)
+      in case (lval, rval) of
+       (NVConstant lc, NVConstant rc) -> Fix $ NVConstant $ case (op, lc, rc) of
          (NEq,  l, r) -> NBool $ l == r
          (NNEq, l, r) -> NBool $ l /= r
          (NLt,  l, r) -> NBool $ l <  r
@@ -190,28 +169,28 @@ evalExpr = cata (\x -> do traceM ("evalExpr mk " ++ show (() <$ x))
          (NDiv,   NInt l, NInt r) -> NInt $ l `div` r
          _ -> error unsupportedTypes
        (NVStr ls lc, NVStr rs rc) -> case op of
-         NPlus -> pure $ Fix $ NVStr (ls `mappend` rs) (lc `mappend` rc)
+         NPlus -> Fix $ NVStr (ls `mappend` rs) (lc `mappend` rc)
          _ -> error unsupportedTypes
        (NVSet ls, NVSet rs) -> case op of
-         NUpdate -> pure $ Fix $ NVSet $ rs `Map.union` ls
+         NUpdate -> Fix $ NVSet $ rs `Map.union` ls
          _ -> error unsupportedTypes
        (NVList ls, NVList rs) -> case op of
-         NConcat -> pure $ Fix $ NVList $ ls ++ rs
+         NConcat -> Fix $ NVList $ ls ++ rs
          _ -> error unsupportedTypes
        (NVLiteralPath ls, NVLiteralPath rs) -> case op of
-         NPlus -> pure $ Fix $ NVLiteralPath $ ls ++ rs -- TODO: Canonicalise path
+         NPlus -> Fix $ NVLiteralPath $ ls ++ rs -- TODO: Canonicalise path
          _ -> error unsupportedTypes
        (NVLiteralPath ls, NVStr rs rc) -> case op of
-         NPlus -> pure $ Fix $ NVStr (Text.pack ls `mappend` rs) rc -- TODO: Canonicalise path
+         NPlus -> Fix $ NVStr (Text.pack ls `mappend` rs) rc -- TODO: Canonicalise path
          _ -> error unsupportedTypes
        _ -> error unsupportedTypes
 
     phi (NSelect aset attr alternative) = go where
-      go env = do
-        aset' <- aset env
-        ks    <- evalSelector True attr env
-        case extract aset' ks of
-         Just v  -> pure v
+      go env =
+        let aset' = aset env
+            ks    = evalSelector True attr env
+        in case extract aset' ks of
+         Just v  -> v
          Nothing -> case alternative of
            Just v  -> v env
            Nothing -> error $ "could not look up attribute '"
@@ -222,93 +201,77 @@ evalExpr = cata (\x -> do traceM ("evalExpr mk " ++ show (() <$ x))
       extract               _  (_:_) = Nothing
       extract               v     [] = Just v
 
-    phi (NHasAttr aset attr) = \env -> aset env >>= \case
-      Fix (NVSet s) -> evalSelector True attr env >>= \case
-        [keyName] -> pure $ Fix $ NVConstant $ NBool $ keyName `Map.member` s
+    phi (NHasAttr aset attr) = \env -> aset env & \case
+      Fix (NVSet s) -> evalSelector True attr env & \case
+        [keyName] -> Fix $ NVConstant $ NBool $ keyName `Map.member` s
         _ -> error "attribute name argument to hasAttr is not a single-part name"
       _ -> error "argument to hasAttr has wrong type"
 
     phi (NList l) = \env ->
-        Fix . NVList <$> mapM ($ env) l
+        Fix . NVList $ map ($ env) l
 
-    phi (NSet binds) = \env -> do
-      evaledBinds <- evalBinds True binds env
-      pure . Fix . NVSet $ evaledBinds
+    phi (NSet binds) =
+      Fix . NVSet . evalBinds True binds
 
-    phi (NRecSet binds) = \env -> do
-      rec
-        let mergedEnv = evaledBinds `Map.union` env
-        evaledBinds <- evalBinds True binds mergedEnv
-      pure . Fix . NVSet $ evaledBinds
+    phi (NRecSet binds) = \env ->
+        let mergedEnv   = evaledBinds `Map.union` env
+            evaledBinds = evalBinds True binds mergedEnv
+        in Fix . NVSet $ evaledBinds
 
-    phi (NLet binds e) = \env -> do
-        rec
-          let mergedEnv = evaledBinds `Map.union` env
-          evaledBinds <- evalBinds True binds mergedEnv
-        e mergedEnv
+    phi (NLet binds e) = \env ->
+        let mergedEnv   = evaledBinds `Map.union` env
+            evaledBinds = evalBinds True binds mergedEnv
+        in e mergedEnv
 
-    phi (NIf cond t f) = \env -> do
-      (Fix cval) <- cond env
-      case cval of
-        NVConstant (NBool True) -> t env
-        NVConstant (NBool False) -> f env
-        _ -> error "condition must be a boolean"
+    phi (NIf cond t f) = \env ->
+        let Fix cval = cond env
+        in case cval of
+            NVConstant (NBool True) -> t env
+            NVConstant (NBool False) -> f env
+            _ -> error "condition must be a boolean"
 
-    phi (NWith scope e) = \env -> do
-      s <- scope env
-      case s of
-        (Fix (NVSet scope')) -> e $ Map.union scope' env
-        _ -> error "scope must be a set in with statement"
+    phi (NWith scope e) = \env ->
+      let s = scope env
+      in case s of
+          (Fix (NVSet scope')) -> e $ Map.union scope' env
+          _ -> error "scope must be a set in with statement"
 
-    phi (NAssert cond e) = \env -> do
-      (Fix cond') <- cond env
-      case cond' of
-        (NVConstant (NBool True)) -> e env
-        (NVConstant (NBool False)) -> error "assertion failed"
-        _ -> error "assertion condition must be boolean"
+    phi (NAssert cond e) = \env ->
+      let Fix cond' = cond env
+      in case cond' of
+          (NVConstant (NBool True)) -> e env
+          (NVConstant (NBool False)) -> error "assertion failed"
+          _ -> error "assertion condition must be boolean"
 
-    phi (NApp fun x) = \env -> do
-        fun' <- fun env
-        case fun' of
-            Fix (NVFunction params f) -> do
-                traceM "phi NApp..1"
-                arg <- x env
-                traceM "phi NApp..2"
-                args <- buildArgument params arg
-                traceM "phi NApp..3"
-                res <- f args
-                traceM "phi NApp..4"
-                return res
-            Fix (NVBuiltin _ f) -> do
-                arg <- x env
-                f arg
+    phi (NApp fun x) = \env ->
+        let fun' = fun env
+        in case fun' of
+            Fix (NVFunction params f) ->
+                f (buildArgument params (x env))
+            Fix (NVBuiltin _ f) -> f (x env)
             _ -> error "Attempt to call non-function"
 
-    phi (NAbs a b) = \env -> do
+    phi (NAbs a b) = \env ->
         -- It is the environment at the definition site, not the call site,
         -- that needs to be used when evaluation the body and the default
         -- arguments
         let extend f env' = f (env' `Map.union` env)
-        traceM "phi NAbs.."
-        return $ Fix $ NVFunction (fmap extend a) (extend b)
+        in Fix $ NVFunction (fmap extend a) (extend b)
 
-evalString :: Monad m => NString (PendingEval m) -> PendingEval m
-evalString nstr env = do
-  let fromParts parts = do
-        (t, c) <-
-          mconcat <$>
-          mapM
-            (runAntiquoted (return . (, mempty)) (fmap valueText . ($ env)))
-            parts
-        return (Fix (NVStr t c))
-  case nstr of
+evalString :: NString PendingEval -> PendingEval
+evalString nstr env =
+  let fromParts parts =
+        let (t, c) = mconcat $ map
+                (runAntiquoted (, mempty) (valueText . ($ env)))
+                parts
+        in Fix (NVStr t c)
+  in case nstr of
     Indented parts -> fromParts parts
     DoubleQuoted parts -> fromParts parts
 
-evalBinds :: Monad m
-          => Bool -> [Binding (PendingEval m)] -> ValueSet m -> m (ValueSet m)
-evalBinds allowDynamic xs env = buildResult <$> sequence (concatMap go xs) where
-  buildResult :: [([Text], NValue m)] -> Map.Map Text (NValue m)
+evalBinds :: Bool -> [Binding PendingEval] -> ValueSet -> ValueSet
+evalBinds allowDynamic xs env = buildResult (concatMap go xs) where
+  buildResult :: [([Text], NValue)] -> Map.Map Text NValue
   buildResult = foldl' insert Map.empty . map (first reverse) where
     insert _ ([], _) = error "invalid selector with no components"
     insert m (p:ps, v) = modifyPath ps (insertIfNotMember p v) where
@@ -327,12 +290,12 @@ evalBinds allowDynamic xs env = buildResult <$> sequence (concatMap go xs) where
         | otherwise = alreadyDefinedErr
 
   -- TODO: Inherit
-  go (NamedVar x y) = [liftM2 (,) (evalSelector allowDynamic x env) (y env)]
+  go (NamedVar x y) = [(evalSelector allowDynamic x env, y env)]
   go _ = [] -- HACK! But who cares right now
 
-evalSelector :: Monad m => Bool -> NAttrPath (PendingEval m) -> ValueSet m -> m [Text]
-evalSelector dyn x env = mapM evalKeyName x where
-  evalKeyName (StaticKey k) = return k
+evalSelector :: Bool -> NAttrPath PendingEval -> ValueSet -> [Text]
+evalSelector dyn x env = map evalKeyName x where
+  evalKeyName (StaticKey k) = k
   evalKeyName (DynamicKey k)
-    | dyn       = fmap valueTextNoContext . runAntiquoted (flip evalString env) ($ env) $ k
+    | dyn       = valueTextNoContext . runAntiquoted (`evalString` env) ($ env) $ k
     | otherwise = error "dynamic attribute not allowed in this context"

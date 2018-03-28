@@ -172,9 +172,9 @@ prettyNix = withoutParens . cata phi where
 
   recPrefix = text "rec" <> space
 
-prettyNixValue :: Functor m => NValue m -> Doc
+prettyNixValue :: NValue -> Doc
 prettyNixValue = prettyNix . valueToExpr
-  where valueToExpr :: Functor m => NValue m -> NExpr
+  where valueToExpr :: NValue -> NExpr
         valueToExpr = hmap go
         -- hmap does the recursive conversion from NValue to NExpr
         -- fun fact: it is not defined in data-fixed, but I was certain it should exists so I found it in unification-fd by hoogling its type
@@ -190,13 +190,13 @@ prettyNixValue = prettyNix . valueToExpr
         go (NVBuiltin name _) = NSym $ Text.pack $ "builtins." ++ name
 
 
-printNix :: Functor m => NValue m -> String
+printNix :: NValue -> String
 printNix = cata phi
-  where phi :: NValueF m String -> String
+  where phi :: NValueF String -> String
         phi (NVConstant a) = unpack $ atomText a
         phi (NVStr t _) = unpack t
-        phi (NVList l) = "[ " ++ (intercalate " " l) ++ " ]"
-        phi (NVSet s) = intercalate ", " $ [ unpack k ++ ":" ++ v | (k, v) <- toList s]
+        phi (NVList l) = "[ " ++ unwords l ++ " ]"
+        phi (NVSet s) = intercalate ", " [ unpack k ++ ":" ++ v | (k, v) <- toList s]
         phi (NVFunction _ _) = "<<lambda>>"
         phi (NVLiteralPath fp) = fp
         phi (NVEnvPath p) = p
