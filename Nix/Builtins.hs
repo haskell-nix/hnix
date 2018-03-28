@@ -4,7 +4,6 @@ module Nix.Builtins (baseEnv, builtins,
                      Cyclic(..), evalTopLevelExpr, evalTopLevelExprIO) where
 
 import           Control.Monad.Fix
-import           Control.Monad.IO.Class
 import           Control.Monad.Trans.State
 import           Data.Fix
 import           Data.Functor.Identity
