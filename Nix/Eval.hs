@@ -2,7 +2,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Nix.Eval where
+module Nix.Eval (NValue, NValueF(..), ValueSet, evalExpr, tracingExprEval,
+                 builtin, builtin2, atomText, valueText, buildArgument) where
 
 import           Control.Arrow
 import           Data.Align.Key
