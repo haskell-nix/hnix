@@ -63,7 +63,10 @@ main = do
             case () of
                 () | evaluate opts, debug opts -> do
                          expr' <- tracingExprEval expr
-                         print =<< evalStateT (runCyclic expr') baseEnv
+                         thnk <- evalStateT (runCyclic expr') baseEnv
+                         val  <- evalStateT (runCyclic (normalForm thnk))
+                                            baseEnv
+                         print val
                    | evaluate opts ->
                          putStrLn . printNix =<< evalTopLevelExprIO expr
                    | debug opts ->
