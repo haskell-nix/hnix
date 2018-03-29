@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -118,6 +119,7 @@ atomText (NUri uri) = uri
 
 class MonadFix m => MonadNix m where
     data NThunk m :: *
+    currentScope  :: m (ValueSet m)
     pushScope  :: ValueSet m -> m r -> m r
     lookupVar  :: Text -> m (Maybe (NThunk m))
     importFile :: NThunk m -> m (NThunk m)
@@ -154,7 +156,8 @@ buildArgument params arg = case params of
   where
     go s m = forceThunk arg >>= \case
         NVSet args -> do
-            res <- loebM (alignWithKey assemble args s)
+            env <- currentScope
+            res <- loebM (alignWithKey (assemble env) args s)
             maybe (pure res) (selfInject res) m
         x -> error $ "Expected set in function call, received: "
                 ++ show (() <$ x)
@@ -164,13 +167,18 @@ buildArgument params arg = case params of
         ref <- valueRef (NVSet res)
         return $ Map.insert n ref res
 
-    assemble :: Text
+    assemble :: ValueSet m
+             -> Text
              -> These (NThunk m) (Maybe (m (NThunk m)))
              -> Map.Map Text (NThunk m)
              -> m (NThunk m)
-    assemble k = \case
+    assemble env k = \case
         That Nothing  -> error $ "Missing value for parameter: " ++ show k
-        That (Just f) -> \env -> defer $ pushScope env f
+        That (Just f) -> \args ->
+            -- Make sure the "scope at definition" (currentScope) is present
+            -- when we evaluate the default action, plus the argument scope
+            -- (env).
+            defer $ pushScope env $ pushScope args f
         This x        -> const (pure x)
         These x _     -> const (pure x)
 
@@ -340,30 +348,26 @@ normalForm x = forceThunk x >>= \case
 
 attrSetAlter :: MonadNix m
              => [Text]
-             -> ValueSet m
-             -> (Maybe (NThunk m) -> m (Maybe (NThunk m)))
-             -> m (ValueSet m, Maybe (NThunk m))
+             -> Map.Map Text (m (NThunk m))
+             -> m (NThunk m)
+             -> m (Map.Map Text (m (NThunk m)))
 attrSetAlter [] _ _ = error "invalid selector with no components"
-attrSetAlter (p:ps) m f = case Map.lookup p m of
-    Nothing | null ps -> trace "attrSetAlter..Nothing/null" $ go Nothing
-            | otherwise -> trace "attrSetAlter..Nothing/otherwise" $ recurse Map.empty
-    Just v  | null ps -> trace "attrSetAlter..Just/null" $ go (Just v)
-            | otherwise -> trace "attrSetAlter..Just/otherwise" $ forceThunk v >>= \case
-                  NVSet s -> recurse s
+attrSetAlter (p:ps) m val = case Map.lookup p m of
+    Nothing | null ps   -> go
+            | otherwise -> recurse Map.empty
+    Just v  | null ps   -> go
+            | otherwise -> v >>= forceThunk >>= \case
+                  NVSet s -> recurse (fmap pure s)
                   _ -> error $ "attribute " ++ attr ++ " is not a set"
   where
     attr = show (Text.intercalate "." (p:ps))
 
-    go = f >=> \case
-        Nothing -> return (m, Nothing)
-        Just v' -> return (Map.insert p v' m, Just v')
+    go = return $ Map.insert p val m
 
-    recurse s = attrSetAlter ps s f >>= \case
-        (m', mres)
-            | Map.null m' -> return (m, mres)
-            | otherwise -> do
-                  ref <- valueRef (NVSet m')
-                  return (Map.insert p ref m, mres)
+    recurse s = attrSetAlter ps s val >>= \m' ->
+        if | Map.null m' -> return m
+           | otherwise   ->
+             return $ Map.insert p (buildThunk $ NVSet <$> sequence m') m
 
 evalBinds :: forall m. MonadNix m
           => Bool
@@ -385,19 +389,16 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
         traceM "buildResult..2"
         if recursive
             then do
-                traceM "buildResult..loebM..."
-                res <- loebM (encapsulate <$> s)
-                traceM "buildResult..loebM...done"
-                return res
-            else trace "buildResult..pure" $ pure s
+                env <- currentScope
+                loebM (encapsulate env <$> s)
+            else sequence s
 
-    encapsulate f env = defer $ pushScope env (pure f)
+    encapsulate env f attrs =
+        -- Make sure the "scope at definition" (env') is present when we
+        -- evaluate the attr value, plus the enclosing attr scope (env).
+        defer $ pushScope env $ pushScope attrs f
 
-    insert m (path, value) = do
-        traceM $ "insert: " ++ show path
-        res <- fst <$> attrSetAlter path m (const (Just <$> defer value))
-        traceM $ "inserted: " ++ show path
-        return res
+    insert m (path, value) = attrSetAlter path m value
 
 evalString :: MonadNix m => NString (m (NThunk m)) -> m (NThunk m)
 evalString nstr = do

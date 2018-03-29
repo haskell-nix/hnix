@@ -53,7 +53,13 @@ instance MonadNix (Cyclic IO) where
     -- than constantly merging maps. The number of scope levels will usually
     -- be manageable, but the number of attributes within scopes can be
     -- enormous, making this one of the worst implementations.
-    pushScope s k = Cyclic $ modify (s `Map.union`) >> runCyclic k
+    pushScope s k = Cyclic $ do
+        traceM $ "pushScope: s = " ++ show (() <$ s)
+        res <- modify (s `Map.union`) >> runCyclic k
+        traceM "pushScope done"
+        return res
+
+    currentScope = Cyclic get
 
     lookupVar k = Cyclic $ do
         s <- get
