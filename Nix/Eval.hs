@@ -10,12 +10,10 @@ module Nix.Eval (NValue, NValueF(..), ValueSet, MonadNix(..),
                  builtin, builtin2, atomText, valueText,
                  buildArgument) where
 
-import           Control.Arrow
 import           Control.Monad hiding (mapM, sequence)
 import           Control.Monad.Fix
 import           Data.Align.Key
 import           Data.Fix
-import           Data.Foldable (foldl')
 import           Data.Functor.Identity
 import           Data.List (intercalate)
 import qualified Data.Map.Lazy as Map
@@ -25,6 +23,7 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.These
 import           Data.Typeable (Typeable)
+import           Debug.Trace
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr
@@ -149,6 +148,7 @@ evalExpr = cata eval
 eval :: MonadNix m => NExprF (m (NValue m)) -> m (NValue m)
 
 eval (NSym var) = do
+    traceM $ "Lookup up " ++ show var
     env <- currentScope
     fromMaybe (error $ "Undefined variable: " ++ show var)
               (Map.lookup var env)
@@ -231,21 +231,24 @@ eval (NHasAttr aset attr) = aset >>= \case
 
 eval (NList l) = Fix . NVList <$> sequence l
 
-eval (NSet binds) = Fix . NVSet <$> evalBinds True binds
+eval (NSet binds) = do
+    s <- sequence =<< evalBinds True binds
+    return $ Fix $ NVSet s
 
 eval (NRecSet binds) = do
     env <- currentScope
     rec evaledBinds <-
-            newScope (fmap pure evaledBinds `Map.union` env)
+            newScope (evaledBinds `Map.union` env)
                      (evalBinds True binds)
-    return $ Fix . NVSet $ evaledBinds
+    s <- sequence evaledBinds
+    return $ Fix . NVSet $ s
 
 eval (NLet binds e) = do
     env <- currentScope
     rec evaledBinds <-
-            newScope (fmap pure evaledBinds `Map.union` env)
+            newScope (evaledBinds `Map.union` env)
                      (evalBinds True binds)
-    newScope (fmap pure evaledBinds `Map.union` env) e
+    newScope (evaledBinds `Map.union` env) e
 
 eval (NIf cond t f) = do
     Fix cval <- cond
@@ -313,30 +316,48 @@ evalString nstr = do
     Indented parts -> fromParts parts
     DoubleQuoted parts -> fromParts parts
 
-evalBinds :: Monad m
-          => Bool -> [Binding (m (NValue m))] -> m (Map.Map Text (NValue m))
-evalBinds allowDynamic xs = buildResult <$> sequence (concatMap go xs) where
-  buildResult :: [([Text], NValue m)] -> Map.Map Text (NValue m)
-  buildResult = foldl' insert Map.empty . map (first reverse) where
-    insert _ ([], _) = error "invalid selector with no components"
-    insert m (p:ps, v) = modifyPath ps (insertIfNotMember p v) where
-      alreadyDefinedErr = error $ "attribute " ++ attr ++ " already defined"
-      attr = show $ Text.intercalate "." $ reverse (p:ps)
+evalBinds :: forall m. Monad m
+          => Bool -> [Binding (m (NValue m))] -> m (ValueSet m)
+evalBinds allowDynamic xs =
+    buildResult =<< sequence (concatMap go xs)
+  where
+    -- TODO: Inherit
+    go (NamedVar x y) =
+        [liftM2 (,) (evalSelector allowDynamic x) (pure y)]
+    go _ = [] -- HACK! But who cares right now
 
-      modifyPath [] f = f m
-      modifyPath (x:parts) f = modifyPath parts $ \m' -> case Map.lookup x m' of
-        Nothing                -> Map.singleton x $ g Map.empty
-        Just (Fix (NVSet m'')) -> Map.insert x (g m'') m'
-        Just _                 -> alreadyDefinedErr
-       where g = Fix . NVSet . f
+    buildResult :: [([Text], m (NValue m))] -> m (ValueSet m)
+    buildResult =
+        foldM (\acc (path, value) -> insert acc (reverse path) value)
+              Map.empty
+      where
+        insert :: ValueSet m -> [Text] -> m (NValue m) -> m (ValueSet m)
+        insert _ [] _ = error "invalid selector with no components"
+        insert m (p:ps) v =
+            modifyPath ps (return . insertIfNotMember p v)
+          where
+            attr = show $ Text.intercalate "." $ reverse (p:ps)
 
-      insertIfNotMember k x m'
-        | Map.notMember k m' = Map.insert k x m'
-        | otherwise = alreadyDefinedErr
+            modifyPath :: [Text] -> (ValueSet m -> m (ValueSet m))
+                       -> m (ValueSet m)
+            modifyPath [] f = f m
+            modifyPath (x:parts) f = modifyPath parts $ \m' ->
+                case Map.lookup x m' of
+                    Nothing -> return $ Map.singleton x (g Map.empty)
+                    Just s -> s >>= \case
+                        Fix (NVSet m'') ->
+                            return $ Map.insert x (g (fmap pure m'')) m'
+                        _ -> error $ "attribute " ++ attr ++ " already defined"
+              where
+                g m = do
+                    s <- sequence =<< f m
+                    return . Fix . NVSet $ s
 
-  -- TODO: Inherit
-  go (NamedVar x y) = [liftM2 (,) (evalSelector allowDynamic x) y]
-  go _ = [] -- HACK! But who cares right now
+            insertIfNotMember :: Text -> m (NValue m) -> ValueSet m
+                              -> ValueSet m
+            insertIfNotMember k x m'
+              | Map.notMember k m' = Map.insert k x m'
+              | otherwise = error $ "attribute " ++ attr ++ " already defined"
 
 evalSelector :: Monad m => Bool -> NAttrPath (m (NValue m)) -> m [Text]
 evalSelector dyn = mapM evalKeyName where
