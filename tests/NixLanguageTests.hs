@@ -68,19 +68,26 @@ genTests = do
 
 assertParse :: FilePath -> Assertion
 assertParse file = parseNixFile file >>= \case
-  Success expr -> evalStateT (runCyclic (checkExpr expr)) baseEnv
+  Success expr -> do
+      base <- run baseEnv Map.empty
+      run (checkExpr expr) base
   Failure err -> assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
+  where
+    run expr = evalStateT (runCyclic expr)
 
 assertParseFail :: FilePath -> Assertion
 assertParseFail file = do
     eres <- parseNixFile file
     catch (case eres of
                Success expr -> do
-                   evalStateT (runCyclic (checkExpr expr)) baseEnv
+                   base <- run baseEnv Map.empty
+                   run (checkExpr expr) base
                    assertFailure $ "Unexpected success parsing `"
                        ++ file ++ ":\nParsed value: " ++ show expr
                Failure _ -> return ()) $ \(_ :: SomeException) ->
         return ()
+  where
+    run expr = evalStateT (runCyclic expr)
 
 assertLangOk :: FilePath -> Assertion
 assertLangOk file = do
@@ -110,7 +117,7 @@ assertEvalFail file = catch eval (\(ErrorCall _) -> return ())
       evalResult <- printNix <$> nixEvalFile file
       evalResult `seq` assertFailure $ file ++ " should not evaluate.\nThe evaluation result was `" ++ evalResult ++ "`."
 
-nixEvalFile :: FilePath -> IO (NValue (Cyclic IO))
+nixEvalFile :: FilePath -> IO (NValueNF (Cyclic IO))
 nixEvalFile file =  do
   parseResult <- parseNixFile file
   case parseResult of

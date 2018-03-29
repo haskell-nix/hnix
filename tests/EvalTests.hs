@@ -79,11 +79,17 @@ instance (Show r, Eq r) => Eq (NValueF m r) where
 
 constantEqual :: NExpr -> NExpr -> Assertion
 constantEqual a b = do
-    a' <- tracingExprEval a
-    Fix a' <- evalStateT (runCyclic a') Map.empty
-    b' <- tracingExprEval b
-    Fix b' <- evalStateT (runCyclic b') Map.empty
+    a' <- evaluate a
+    b' <- evaluate b
     assertEqual "" a' b'
+  where
+    run expr = evalStateT (runCyclic expr)
+
+    evaluate expr = do
+        base  <- run baseEnv Map.empty
+        expr' <- tracingExprEval expr
+        thnk  <- run expr' base
+        run (normalForm thnk) base
 
 constantEqualStr :: String -> String -> Assertion
 constantEqualStr a b =

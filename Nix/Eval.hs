@@ -12,6 +12,9 @@ module Nix.Eval (NValue, NValueNF, NValueF(..), ValueSet, MonadNix(..),
                  buildArgument) where
 
 import           Control.Monad hiding (mapM, sequence)
+import           Control.Monad.Fix
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Reader
 import           Data.Align.Key
 import           Data.Fix
 import           Data.Functor.Identity
@@ -28,7 +31,6 @@ import           Nix.Atoms
 import           Nix.Expr
 import           Nix.StringOperations (runAntiquoted)
 import           Nix.Utils
-import           Debug.Trace
 
 type DList a = Endo [a]
 
@@ -41,8 +43,8 @@ data NValueF m r
     | NVStr Text (DList Text)
     | NVList [r]
     | NVSet (Map.Map Text r)
-    | NVFunction (Params r) r
-      -- ^ A function is a closed set of terms representing the "call
+    | NVFunction (Params (m r)) (m r)
+      -- ^ A function is a closed set of parameters representing the "call
       --   signature", used at application time to check the type of arguments
       --   passed to the function. Since it supports default values which may
       --   depend on other values within the final argument set, this
@@ -52,11 +54,11 @@ data NValueF m r
     | NVLiteralPath FilePath
     | NVEnvPath FilePath
     | NVBuiltin String (NThunk m -> m (NThunk m))
-      -- ^ A builtin function can never be normalized beyond this.
+      -- ^ A builtin function is itself already in normal form.
     deriving (Generic, Typeable, Functor)
 
-type NValueNF m  = Fix (NValueF m)   -- normal form
-type NValue m = NValueF m (NThunk m) -- head normal form
+type NValueNF m = Fix (NValueF m)      -- normal form
+type NValue m   = NValueF m (NThunk m) -- head normal form
 
 instance Show f => Show (NValueF m f) where
     showsPrec = flip go where
@@ -114,34 +116,45 @@ atomText (NBool b)  = if b then "true" else "false"
 atomText NNull      = "null"
 atomText (NUri uri) = uri
 
-class Monad m => MonadNix m where
+class MonadFix m => MonadNix m where
     data NThunk m :: *
     pushScope  :: ValueSet m -> m r -> m r
     lookupVar  :: Text -> m (Maybe (NThunk m))
     importFile :: NThunk m -> m (NThunk m)
 
     buildThunk :: m (NValue m) -> m (NThunk m)
+    defer :: m (NThunk m) -> m (NThunk m)
     forceThunk :: NThunk m -> m (NValue m)
 
     valueRef :: NValue m -> m (NThunk m)
     valueRef = buildThunk . return
 
-wrap :: MonadNix m => NValueNF m -> m (NValue m)
+wrap :: forall m. MonadNix m => NValueNF m -> m (NThunk m)
 wrap = cata phi
-  where
-    phi :: NValueF m (m (NValue m)) -> m (NValue m)
-    phi = undefined
+   where
+    phi :: NValueF m (m (NThunk m)) -> m (NThunk m)
+    phi = \case
+        NVConstant a     -> valueRef $ NVConstant a
+        NVStr t s        -> valueRef $ NVStr t s
+        NVList l         -> valueRef . NVList =<< sequence l
+        NVSet s          -> valueRef . NVSet =<< sequence s
+        NVFunction p f   -> do
+            p' <- sequence p
+            valueRef . NVFunction p' =<< f
+        NVLiteralPath fp -> valueRef $ NVLiteralPath fp
+        NVEnvPath p      -> valueRef $ NVEnvPath p
+        NVBuiltin name f -> valueRef $ NVBuiltin name f
 
 buildArgument :: forall m. MonadNix m
               => Params (m (NThunk m)) -> NThunk m -> m (ValueSet m)
 buildArgument params arg = case params of
     Param name -> return $ Map.singleton name arg
-    ParamSet (FixedParamSet s) m -> go s m
+    ParamSet (FixedParamSet s)    m -> go s m
     ParamSet (VariadicParamSet s) m -> go s m
   where
     go s m = forceThunk arg >>= \case
         NVSet args -> do
-            let res = loeb (alignWithKey assemble args s)
+            res <- loebM (alignWithKey assemble args s)
             maybe (pure res) (selfInject res) m
         x -> error $ "Expected set in function call, received: "
                 ++ show (() <$ x)
@@ -152,12 +165,12 @@ buildArgument params arg = case params of
         return $ Map.insert n ref res
 
     assemble :: Text
-             -> These (NThunk m) (Maybe (NThunk m))
-             -> Map.Map Text (m (NThunk m))
+             -> These (NThunk m) (Maybe (m (NThunk m)))
+             -> Map.Map Text (NThunk m)
              -> m (NThunk m)
     assemble k = \case
         That Nothing  -> error $ "Missing value for parameter: " ++ show k
-        That (Just f) -> \env -> buildThunk $ pushScope env f
+        That (Just f) -> \env -> defer $ pushScope env f
         This x        -> const (pure x)
         These x _     -> const (pure x)
 
@@ -167,7 +180,8 @@ evalExpr = cata eval
 
 eval :: MonadNix m => NExprF (m (NThunk m)) -> m (NThunk m)
 
-eval (NSym var) =
+eval (NSym var) = do
+    traceM $ "NSym..1: var = " ++ show var
     fromMaybe (error $ "Undefined variable: " ++ show var) <$> lookupVar var
 
 eval (NConstant x)    = valueRef $ NVConstant x
@@ -228,7 +242,9 @@ eval (NSelect aset attr alternative) = do
     aset' <- normalForm =<< aset
     ks <- evalSelector True attr
     case extract aset' ks of
-        Just v  -> valueRef =<< wrap v
+        Just v  -> do
+            traceM $ "Wrapping a selector: " ++ show v
+            wrap v
         Nothing -> case alternative of
             Just v  -> v
             Nothing -> error $ "could not look up attribute "
@@ -247,16 +263,24 @@ eval (NHasAttr aset attr) = aset >>= forceThunk >>= \case
         _ -> error "attr name argument to hasAttr is not a single-part name"
     _ -> error "argument to hasAttr has wrong type"
 
-eval (NList l) = valueRef $ NVList l
+eval (NList l) = valueRef . NVList =<< sequence l
 
-eval (NSet binds) =
-    valueRef . NVSet =<< evalBinds True False binds
+eval (NSet binds) = do
+    traceM "NSet..1"
+    s <- evalBinds True False binds
+    traceM $ "NSet..2: s = " ++ show (() <$ s)
+    valueRef $ NVSet s
 
-eval (NRecSet binds) =
-    valueRef . NVSet =<< evalBinds True True binds
+eval (NRecSet binds) = do
+    traceM "NRecSet..1"
+    s <- evalBinds True True binds
+    traceM $ "NRecSet..2: s = " ++ show (() <$ s)
+    valueRef $ NVSet s
 
 eval (NLet binds e) = do
+    traceM "Let..1"
     s <- evalBinds True True binds
+    traceM $ "Let..2: s = " ++ show (() <$ s)
     pushScope s e
 
 eval (NIf cond t f) = cond >>= forceThunk >>= \case
@@ -276,7 +300,6 @@ eval (NAssert cond e) = cond >>= forceThunk >>= \case
 eval (NApp fun arg) = fun >>= forceThunk >>= \case
     NVFunction params f -> do
         args <- buildArgument params =<< arg
-        traceM $ "args = " ++ show (() <$ args)
         pushScope args f
     NVBuiltin _ f -> f =<< arg
     _ -> error "Attempt to call non-function"
@@ -288,11 +311,16 @@ eval (NAbs a b) =
 
 tracingExprEval :: MonadNix m => NExpr -> IO (m (NThunk m))
 tracingExprEval =
-    fmap (runIdentity . snd) . adiM @() (pure <$> eval) psi
+    flip runReaderT (0 :: Int)
+        . fmap (runIdentity . snd)
+        . adiM @() (pure <$> eval) psi
   where
     psi k v@(Fix x) = do
-        putStrLn $ "Evaluating: " ++ show x
-        k v
+        depth <- ask
+        liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' ' ++ show x
+        res <- local succ $ k v
+        liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' ' ++ "."
+        return res
 
 exprNormalForm :: MonadNix m => NExpr -> m (NValueNF m)
 exprNormalForm = normalForm <=< evalExpr
@@ -301,12 +329,11 @@ normalForm :: MonadNix m => NThunk m -> m (NValueNF m)
 normalForm x = forceThunk x >>= \case
     NVConstant a     -> return $ Fix $ NVConstant a
     NVStr t s        -> return $ Fix $ NVStr t s
-    NVList l         -> Fix . NVList <$> (traverse normalForm =<< sequence l)
-    NVSet s          -> Fix . NVSet <$> (traverse normalForm =<< sequence s)
+    NVList l         -> Fix . NVList <$> traverse normalForm l
+    NVSet s          -> Fix . NVSet <$> traverse normalForm s
     NVFunction p f   -> do
-        p' <- traverse normalForm =<< sequence p
-        f' <- normalForm =<< f
-        return $ Fix $ NVFunction p' f'
+        p' <- traverse (fmap normalForm) p
+        return $ Fix $ NVFunction p' (normalForm =<< f)
     NVLiteralPath fp -> return $ Fix $ NVLiteralPath fp
     NVEnvPath p      -> return $ Fix $ NVEnvPath p
     NVBuiltin name f -> return $ Fix $ NVBuiltin name f
@@ -318,24 +345,25 @@ attrSetAlter :: MonadNix m
              -> m (ValueSet m, Maybe (NThunk m))
 attrSetAlter [] _ _ = error "invalid selector with no components"
 attrSetAlter (p:ps) m f = case Map.lookup p m of
-    Nothing | null ps -> go Nothing
-            | otherwise -> recurse Map.empty
-    Just v  | null ps -> go . Just =<< v
-            | otherwise -> v >>= forceThunk >>= \case
+    Nothing | null ps -> trace "attrSetAlter..Nothing/null" $ go Nothing
+            | otherwise -> trace "attrSetAlter..Nothing/otherwise" $ recurse Map.empty
+    Just v  | null ps -> trace "attrSetAlter..Just/null" $ go (Just v)
+            | otherwise -> trace "attrSetAlter..Just/otherwise" $ forceThunk v >>= \case
                   NVSet s -> recurse s
                   _ -> error $ "attribute " ++ attr ++ " is not a set"
   where
     attr = show (Text.intercalate "." (p:ps))
 
-    go mx = f mx >>= \case
+    go = f >=> \case
         Nothing -> return (m, Nothing)
-        Just v' -> return (Map.insert p (pure v') m, Just v')
+        Just v' -> return (Map.insert p v' m, Just v')
 
     recurse s = attrSetAlter ps s f >>= \case
         (m', mres)
             | Map.null m' -> return (m, mres)
-            | otherwise ->
-                  return (Map.insert p (valueRef (NVSet m')) m, mres)
+            | otherwise -> do
+                  ref <- valueRef (NVSet m')
+                  return (Map.insert p ref m, mres)
 
 evalBinds :: forall m. MonadNix m
           => Bool
@@ -352,13 +380,24 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
 
     buildResult :: [([Text], m (NThunk m))] -> m (ValueSet m)
     buildResult bindings = do
+        traceM "buildResult..1"
         s <- foldM insert Map.empty bindings
-        return $ if recursive
-                 then loeb (flip pushScope <$> s)
-                 else s
+        traceM "buildResult..2"
+        if recursive
+            then do
+                traceM "buildResult..loebM..."
+                res <- loebM (encapsulate <$> s)
+                traceM "buildResult..loebM...done"
+                return res
+            else trace "buildResult..pure" $ pure s
 
-    insert m (path, value) =
-        fst <$> attrSetAlter path m (const (Just <$> value))
+    encapsulate f env = defer $ pushScope env (pure f)
+
+    insert m (path, value) = do
+        traceM $ "insert: " ++ show path
+        res <- fst <$> attrSetAlter path m (const (Just <$> defer value))
+        traceM $ "inserted: " ++ show path
+        return res
 
 evalString :: MonadNix m => NString (m (NThunk m)) -> m (NThunk m)
 evalString nstr = do
@@ -402,17 +441,19 @@ check (NRecSet binds) =
 check (NLet binds e) =
     (`pushScope` e) =<< evalBinds True True (fmap (fmap (const nullVal)) binds)
 
-check (NAbs a b) = case a of
-    Param name ->
-        pushScope (Map.singleton name nullVal) b
-    ParamSet (FixedParamSet s) Nothing ->
-        pushScope (nullVal <$ s) b
-    ParamSet (FixedParamSet s) (Just m) ->
-        pushScope (Map.insert m nullVal (nullVal <$ s)) b
-    ParamSet (VariadicParamSet s) Nothing ->
-        pushScope (nullVal <$ s) b
-    ParamSet (VariadicParamSet s) (Just m) ->
-        pushScope (Map.insert m nullVal (nullVal <$ s)) b
+check (NAbs a b) = do
+    nv <- nullVal
+    case a of
+        Param name ->
+            pushScope (Map.singleton name nv) b
+        ParamSet (FixedParamSet s) Nothing ->
+            pushScope (nv <$ s) b
+        ParamSet (FixedParamSet s) (Just m) ->
+            pushScope (Map.insert m nv (nv <$ s)) b
+        ParamSet (VariadicParamSet s) Nothing ->
+            pushScope (nv <$ s) b
+        ParamSet (VariadicParamSet s) (Just m) ->
+            pushScope (Map.insert m nv (nv <$ s)) b
 
 -- In order to check some of the other operations properly, we'd need static
 -- typing

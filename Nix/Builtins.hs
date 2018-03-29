@@ -8,10 +8,9 @@ module Nix.Builtins
     where
 
 import           Control.Monad
+import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.State
--- import           Data.Fix
--- import           Data.Functor.Identity
 import           Data.IORef
 import qualified Data.Map as Map
 import           Data.Text (Text)
@@ -21,24 +20,33 @@ import           Nix.Atoms
 import           Nix.Eval
 import           Nix.Expr (NExpr)
 import           Nix.Parser
--- import           System.IO.Unsafe
+import           Nix.Utils
 
 -- | Evaluate a nix expression in the default context
 evalTopLevelExpr :: MonadNix m => NExpr -> m (NValueNF m)
-evalTopLevelExpr = normalForm <=< pushScope baseEnv . evalExpr
+evalTopLevelExpr expr = do
+    base <- baseEnv
+    normalForm =<< pushScope base (evalExpr expr)
 
 evalTopLevelExprIO :: NExpr -> IO (NValueNF (Cyclic IO))
 evalTopLevelExprIO expr =
     evalStateT (runCyclic (evalTopLevelExpr expr)) Map.empty
 
-baseEnv :: MonadNix m => ValueSet m
-baseEnv = Map.fromList
-    $ ("builtins", valueRef $ NVSet builtins) : topLevelBuiltins
+baseEnv :: MonadNix m => m (ValueSet m)
+baseEnv = do
+    ref <- valueRef . NVSet =<< builtins
+    lst <- (("builtins", ref) :) <$> topLevelBuiltins
+    return $ Map.fromList lst
   where
-    topLevelBuiltins = map mapping (filter isTopLevel builtinsList)
+    topLevelBuiltins = map mapping . filter isTopLevel <$> builtinsList
 
 newtype Cyclic m a = Cyclic { runCyclic :: StateT (ValueSet (Cyclic m)) m a }
-    deriving (Functor, Applicative, Monad, MonadIO)
+    deriving (Functor, Applicative, Monad, MonadFix, MonadIO)
+
+data Deferred m
+    = DeferredValue (m (NValue m))
+    | DeferredThunk (m (NThunk m))
+    | ComputedValue (NValue m)
 
 instance MonadNix (Cyclic IO) where
     -- jww (2018-03-29): We should use actually stacked scopes here, rather
@@ -51,12 +59,12 @@ instance MonadNix (Cyclic IO) where
         s <- get
         case Map.lookup k s of
             Nothing -> return Nothing
-            Just v -> Just <$> runCyclic v
+            Just v -> return $ Just v
 
     -- jww (2018-03-29): Cache which files have been read in.
     importFile path = forceThunk path >>= \case
         NVLiteralPath path -> Cyclic $ do
-            liftIO $ putStrLn $ "Importing file " ++ path
+            traceM $ "Importing file " ++ path
             eres <- parseNixFile path
             case eres of
                 Failure err  -> error $ "Parse failed: " ++ show err
@@ -64,35 +72,55 @@ instance MonadNix (Cyclic IO) where
         p -> error $ "Unexpected argument to import: " ++ show (() <$ p)
 
     data NThunk (Cyclic IO) =
-        NThunkIO (IORef (Either (Cyclic IO (NValue (Cyclic IO)))
-                                (NValue (Cyclic IO))))
+        NThunkIO (Either (NValue (Cyclic IO)) (IORef (Deferred (Cyclic IO))))
 
-    buildThunk action = liftIO $ NThunkIO <$> newIORef (Left action)
-    valueRef   value  = liftIO $ NThunkIO <$> newIORef (Right value)
+    valueRef = return . NThunkIO . Left
 
-    forceThunk (NThunkIO ref) = do
+    buildThunk action = do
+        traceM "Building a thunk"
+        liftIO $ NThunkIO . Right <$> newIORef (DeferredValue action)
+
+    defer action = do
+        traceM "Deferring an action"
+        liftIO $ NThunkIO . Right <$> newIORef (DeferredThunk action)
+
+    forceThunk (NThunkIO (Left value)) = return value
+    forceThunk (NThunkIO (Right ref)) = do
+        traceM "Forcing a thunk"
         eres <- liftIO $ readIORef ref
         case eres of
-            Right value -> return value
-            Left action -> do
+            ComputedValue value -> do
+                traceM "Already forced, returning value"
+                return value
+            DeferredValue action -> do
+                traceM "Executing action..."
                 value <- action
-                liftIO $ writeIORef ref (Right value)
+                traceM "Executing action...done, storing..."
+                liftIO $ writeIORef ref (ComputedValue value)
+                traceM "Executing action...done, storing...done"
+                return value
+            DeferredThunk action -> do
+                traceM "Executing thunk..."
+                value <- forceThunk =<< action
+                traceM "Executing thunk...done, storing..."
+                liftIO $ writeIORef ref (ComputedValue value)
+                traceM "Executing thunk...done, storing...done"
                 return value
 
-builtins :: MonadNix m => ValueSet m
-builtins = Map.fromList $ map mapping builtinsList
+builtins :: MonadNix m => m (ValueSet m)
+builtins = Map.fromList . map mapping <$> builtinsList
 
 data BuiltinType = Normal | TopLevel
 data Builtin m = Builtin
     { kind    :: BuiltinType
-    , mapping :: (Text, m (NThunk m))
+    , mapping :: (Text, NThunk m)
     }
 
 isTopLevel :: Builtin m -> Bool
 isTopLevel b = case kind b of Normal -> False; TopLevel -> True
 
-builtinsList :: MonadNix m => [ Builtin m ]
-builtinsList = [
+builtinsList :: MonadNix m => m [ Builtin m ]
+builtinsList = sequence [
       add  TopLevel "toString" toString
     , add  TopLevel "import"   import_
     , add2 Normal   "hasAttr"  hasAttr
@@ -101,8 +129,8 @@ builtinsList = [
     , add2 Normal   "all"      all_
   ]
   where
-    add  t n v = Builtin t (n, builtin  (Text.unpack n) v)
-    add2 t n v = Builtin t (n, builtin2 (Text.unpack n) v)
+    add  t n v = (\f -> Builtin t (n, f)) <$> builtin (Text.unpack n) v
+    add2 t n v = (\f -> Builtin t (n, f)) <$> builtin2 (Text.unpack n) v
 
 -- Helpers
 
@@ -138,7 +166,7 @@ hasAttr x y = (,) <$> forceThunk x <*> forceThunk y >>= \case
 getAttr :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
 getAttr x y = (,) <$> forceThunk x <*> forceThunk y >>= \case
     (NVStr key _, NVSet aset) ->
-        Map.findWithDefault _err key aset
+        return $ Map.findWithDefault _err key aset
           where _err = error ("Field does not exist " ++ Text.unpack key)
     (x, y) -> error $ "Invalid types for builtin.hasAttr: "
                  ++ show (() <$ x, () <$ y)
@@ -153,7 +181,7 @@ anyM p (x:xs)   = do
 any_ :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
 any_ pred arg = forceThunk arg >>= \case
     NVList l ->
-        mkBool =<< anyM extractBool =<< mapM (evalPred pred) =<< sequence l
+        mkBool =<< anyM extractBool =<< mapM (evalPred pred) l
     arg -> error $ "builtins.any takes a list as second argument, not a "
               ++ show (() <$ arg)
 
@@ -167,6 +195,6 @@ allM p (x:xs)   = do
 all_ :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
 all_ pred arg = forceThunk arg >>= \case
     NVList l ->
-        mkBool =<< allM extractBool =<< mapM (evalPred pred) =<< sequence l
+        mkBool =<< allM extractBool =<< mapM (evalPred pred) l
     arg -> error $ "builtins.all takes a list as second argument, not a "
               ++ show (() <$ arg)

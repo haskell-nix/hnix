@@ -1,13 +1,30 @@
-module Nix.Utils where
+{-# LANGUAGE CPP #-}
+
+module Nix.Utils (module Nix.Utils, module X) where
 
 import Control.Monad
+import Control.Monad.Fix
 import Data.Fix
+
+-- #define ENABLE_TRACING 1
+#if ENABLE_TRACING
+import Debug.Trace as X
+#else
+import Prelude as X
+trace :: String -> a -> a
+trace = const id
+traceM :: Monad m => String -> m ()
+traceM = const (return ())
+#endif
 
 (&) :: a -> (a -> c) -> c
 (&) = flip ($)
 
 loeb :: Functor f => f (f a -> a) -> f a
 loeb x = go where go = fmap ($ go) x
+
+loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
+loebM f = mfix $ \a -> mapM ($ a) f
 
 -- | adi is Abstracting Definitional Interpreters:
 --

@@ -1,14 +1,17 @@
+{-# LANGUAGE MultiWayIf #-}
+
 module Main where
 
-import Control.Monad
-import Control.Monad.Trans.State
-import Nix.Builtins
-import Nix.Eval
-import Nix.Parser
-import Nix.Pretty
-import Options.Applicative hiding (ParserResult(..))
-import System.IO
-import Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
+import           Control.Monad
+import           Control.Monad.Trans.State
+import qualified Data.Map as Map
+import           Nix.Builtins
+import           Nix.Eval
+import           Nix.Parser
+import           Nix.Pretty
+import           Options.Applicative hiding (ParserResult(..))
+import           System.IO
+import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 data Options = Options
     { verbose    :: Bool
@@ -47,33 +50,33 @@ mainOptions = Options
 main :: IO ()
 main = do
     opts <- execParser optsDef
-
     eres <- case expression opts of
         Just s -> return $ parseNixString s
         Nothing  -> case filePath opts of
-            Just "-"  -> parseNixString <$> getContents
             Nothing   -> parseNixString <$> getContents
+            Just "-"  -> parseNixString <$> getContents
             Just path -> parseNixFile path
 
     case eres of
         Failure err -> hPutStrLn stderr $ "Parse failed: " ++ show err
         Success expr -> do
+            base <- run baseEnv Map.empty
             when (check opts) $
-                evalStateT (runCyclic (checkExpr expr)) baseEnv
-            case () of
-                () | evaluate opts, debug opts -> do
-                         expr' <- tracingExprEval expr
-                         thnk <- evalStateT (runCyclic expr') baseEnv
-                         val  <- evalStateT (runCyclic (normalForm thnk))
-                                            baseEnv
-                         print val
-                   | evaluate opts ->
-                         putStrLn . printNix =<< evalTopLevelExprIO expr
-                   | debug opts ->
-                         print expr
-                   | otherwise ->
-                         displayIO stdout $ renderPretty 0.4 80 (prettyNix expr)
+                run (checkExpr expr) base
+            if | evaluate opts, debug opts -> do
+                     expr' <- tracingExprEval expr
+                     thnk  <- run expr' base
+                     val   <- run (normalForm thnk) base
+                     print val
+               | evaluate opts ->
+                     putStrLn . printNix =<< evalTopLevelExprIO expr
+               | debug opts ->
+                     print expr
+               | otherwise ->
+                     displayIO stdout $ renderPretty 0.4 80 (prettyNix expr)
   where
+    run expr = evalStateT (runCyclic expr)
+
     optsDef :: ParserInfo Options
     optsDef = info (helper <*> mainOptions)
                    (fullDesc <> progDesc "" <> header "hnix")
