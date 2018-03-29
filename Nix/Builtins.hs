@@ -3,7 +3,6 @@
 module Nix.Builtins (baseEnv, builtins,
                      Cyclic(..), evalTopLevelExpr, evalTopLevelExprIO) where
 
-import           Control.Monad.Fix
 import           Control.Monad.Trans.State
 import           Data.Fix
 import           Data.Functor.Identity
@@ -19,22 +18,27 @@ import           System.IO.Unsafe
 
 -- | Evaluate a nix expression in the default context
 evalTopLevelExpr :: MonadNix m => NExpr -> m (NValue m)
-evalTopLevelExpr val = newScope baseEnv (evalExpr val)
+evalTopLevelExpr = pushScope baseEnv . evalExpr
 
 baseEnv :: MonadNix m => ValueSet m
-baseEnv = fmap pure . Map.fromList $
-    ("builtins", Fix $ NVSet builtins) : topLevelBuiltins
+baseEnv = fmap pure
+        . Map.fromList
+        $ ("builtins", Fix $ NVSet builtins) : topLevelBuiltins
   where
-    topLevelBuiltins = map mapping $ filter isTopLevel builtinsList
-    -- builtins = Map.fromList $ map mapping $ builtinsList
-
+    topLevelBuiltins = map mapping (filter isTopLevel builtinsList)
 
 newtype Cyclic m a = Cyclic { runCyclic :: StateT (ValueSet (Cyclic m)) m a }
-    deriving (Functor, Applicative, Monad, MonadFix)
+    deriving (Functor, Applicative, Monad)
 
 instance MonadNix (Cyclic Identity) where
-    currentScope = Cyclic get
-    newScope s k = Cyclic $ put s >> runCyclic k
+    -- currentScope = Cyclic get
+    -- newScope s k = Cyclic $ put s >> runCyclic k
+    pushScope s k = Cyclic $ modify (s `Map.union`) >> runCyclic k
+    lookupVar k = Cyclic $ do
+        s <- get
+        case Map.lookup k s of
+            Nothing -> return Nothing
+            Just v -> Just <$> runCyclic v
     importFile path = Cyclic $ case path of
         Fix (NVLiteralPath path) ->
             let eres = unsafePerformIO $ parseNixFile path
@@ -44,8 +48,14 @@ instance MonadNix (Cyclic Identity) where
         _ -> error $ "Unexpected argument to import: " ++ show path
 
 instance MonadNix (Cyclic IO) where
-    currentScope = Cyclic get
-    newScope s k = Cyclic $ put s >> runCyclic k
+    -- currentScope = Cyclic get
+    -- newScope s k = Cyclic $ put s >> runCyclic k
+    pushScope s k = Cyclic $ modify (s `Map.union`) >> runCyclic k
+    lookupVar k = Cyclic $ do
+        s <- get
+        case Map.lookup k s of
+            Nothing -> return Nothing
+            Just v -> Just <$> runCyclic v
     importFile path = Cyclic $ case path of
         Fix (NVLiteralPath path) -> do
             eres <- parseNixFile path
@@ -82,7 +92,6 @@ builtinsList = [
     basic = Builtin Normal
     topLevel = Builtin TopLevel
 
-
 -- Helpers
 
 mkBool :: Bool -> NValue m
@@ -93,11 +102,9 @@ extractBool (Fix (NVConstant (NBool b))) = b
 extractBool _                            = error "Not a bool constant"
 
 evalPred :: MonadNix m => NValue m -> NValue m -> m (NValue m)
-evalPred (Fix (NVFunction params pred)) arg = do
-    args <- buildArgument params arg
-    newScope args pred
+evalPred (Fix (NVFunction params pred)) arg =
+    (`pushScope` pred) =<< buildArgument params arg
 evalPred pred _ = error $ "Trying to call a " ++ show pred
-
 
 -- Primops
 
@@ -114,25 +121,32 @@ import_ = importFile
 prim_hasAttr :: MonadNix m => NValue m
 prim_hasAttr = builtin2 "hasAttr" hasAttr
 hasAttr :: MonadNix m => NValue m -> NValue m -> m (NValue m)
-hasAttr (Fix (NVStr key _)) (Fix (NVSet aset)) = return $ Fix $ NVConstant $ NBool $ Map.member key aset
-hasAttr key aset = error $ "Invalid types for builtin.hasAttr: " ++ show (key, aset)
+hasAttr (Fix (NVStr key _)) (Fix (NVSet aset)) =
+    return $ Fix $ NVConstant $ NBool $ Map.member key aset
+hasAttr key aset =
+    error $ "Invalid types for builtin.hasAttr: " ++ show (key, aset)
 
 prim_getAttr :: MonadNix m => NValue m
 prim_getAttr = builtin2 "getAttr" getAttr
 getAttr :: MonadNix m => NValue m -> NValue m -> m (NValue m)
-getAttr (Fix (NVStr key _)) (Fix (NVSet aset)) = return $ Map.findWithDefault _err key aset
+getAttr (Fix (NVStr key _)) (Fix (NVSet aset)) =
+    return $ Map.findWithDefault _err key aset
   where _err = error ("Field does not exist " ++ Text.unpack key)
-getAttr key aset = error $ "Invalid types for builtin.getAttr: " ++ show (key, aset)
-
+getAttr key aset =
+    error $ "Invalid types for builtin.getAttr: " ++ show (key, aset)
 
 prim_any :: MonadNix m => NValue m
 prim_any = builtin2 "any" _any
 _any :: MonadNix m => NValue m -> NValue m -> m (NValue m)
-_any pred (Fix (NVList l)) = mkBool . any extractBool <$> mapM (evalPred pred) l
-_any _ list = error $ "builtins.any takes a list as second argument, not a " ++ show list
+_any pred (Fix (NVList l)) =
+    mkBool . any extractBool <$> mapM (evalPred pred) l
+_any _ list =
+    error $ "builtins.any takes a list as second argument, not a " ++ show list
 
 prim_all :: MonadNix m => NValue m
 prim_all = builtin2 "all" _all
 _all :: MonadNix m => NValue m -> NValue m -> m (NValue m)
-_all pred (Fix (NVList l)) = mkBool . all extractBool <$> mapM (evalPred pred) l
-_all _ list = error $ "builtins.all takes a list as second argument, not a " ++ show list
+_all pred (Fix (NVList l)) =
+    mkBool . all extractBool <$> mapM (evalPred pred) l
+_all _ list =
+    error $ "builtins.all takes a list as second argument, not a " ++ show list

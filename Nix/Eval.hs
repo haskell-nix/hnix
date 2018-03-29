@@ -1,7 +1,6 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -11,7 +10,6 @@ module Nix.Eval (NValue, NValueF(..), ValueSet, MonadNix(..),
                  buildArgument) where
 
 import           Control.Monad hiding (mapM, sequence)
-import           Control.Monad.Fix
 import           Data.Align.Key
 import           Data.Fix
 import           Data.Functor.Identity
@@ -23,12 +21,12 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.These
 import           Data.Typeable (Typeable)
-import           Debug.Trace
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr
 import           Nix.StringOperations (runAntiquoted)
 import           Nix.Utils
+import           Debug.Trace
 
 type DList a = Endo [a]
 
@@ -112,9 +110,9 @@ atomText (NBool b)  = if b then "true" else "false"
 atomText NNull      = "null"
 atomText (NUri uri) = uri
 
-class MonadFix m => MonadNix m where
-    currentScope :: m (ValueSet m)
-    newScope :: ValueSet m -> m r -> m r
+class Monad m => MonadNix m where
+    pushScope  :: ValueSet m -> m r -> m r
+    lookupVar  :: Text -> m (Maybe (NValue m))
     importFile :: NValue m -> m (NValue m)
 
 buildArgument :: forall m. MonadNix m
@@ -137,7 +135,7 @@ buildArgument params arg = case params of
              -> m (NValue m)
     assemble k = \case
         That Nothing  -> error $ "Missing value for parameter: " ++ show k
-        That (Just f) -> (`newScope` f)
+        That (Just f) -> (`pushScope` f)
         This x        -> const (pure x)
         These x _     -> const (pure x)
 
@@ -147,11 +145,8 @@ evalExpr = cata eval
 
 eval :: MonadNix m => NExprF (m (NValue m)) -> m (NValue m)
 
-eval (NSym var) = do
-    traceM $ "Lookup up " ++ show var
-    env <- currentScope
-    fromMaybe (error $ "Undefined variable: " ++ show var)
-              (Map.lookup var env)
+eval (NSym var) =
+    fromMaybe (error $ "Undefined variable: " ++ show var) <$> lookupVar var
 
 eval (NConstant x)    = return $ Fix $ NVConstant x
 eval (NStr str)       = evalString str
@@ -215,7 +210,8 @@ eval (NSelect aset attr alternative) = do
         Nothing -> case alternative of
             Just v  -> v
             Nothing -> error $ "could not look up attribute "
-                ++ intercalate "." (map show ks) ++ " in " ++ show aset'
+                ++ intercalate "." (map Text.unpack ks)
+                ++ " in " ++ show aset'
   where
     extract (Fix (NVSet s)) (k:ks) = case Map.lookup k s of
         Just v  -> extract v ks
@@ -231,24 +227,15 @@ eval (NHasAttr aset attr) = aset >>= \case
 
 eval (NList l) = Fix . NVList <$> sequence l
 
-eval (NSet binds) = do
-    s <- sequence =<< evalBinds True binds
-    return $ Fix $ NVSet s
+eval (NSet binds) =
+    -- sequence here means evaluation must be resolved at this point
+    Fix . NVSet <$> (sequence =<< evalBinds True False binds)
 
-eval (NRecSet binds) = do
-    env <- currentScope
-    rec evaledBinds <-
-            newScope (evaledBinds `Map.union` env)
-                     (evalBinds True binds)
-    s <- sequence evaledBinds
-    return $ Fix . NVSet $ s
+eval (NRecSet binds) =
+    Fix . NVSet <$> (sequence =<< evalBinds True True binds)
 
-eval (NLet binds e) = do
-    env <- currentScope
-    rec evaledBinds <-
-            newScope (evaledBinds `Map.union` env)
-                     (evalBinds True binds)
-    newScope (evaledBinds `Map.union` env) e
+eval (NLet binds e) =
+    (`pushScope` e) =<< evalBinds True True binds
 
 eval (NIf cond t f) = do
     Fix cval <- cond
@@ -257,19 +244,16 @@ eval (NIf cond t f) = do
         NVConstant (NBool False) -> f
         _ -> error "condition must be a boolean"
 
-eval (NWith scope e) = do
-  env <- currentScope
-  s <- scope
-  case s of
-      Fix (NVSet scope') -> newScope (fmap pure scope' `Map.union` env) e
-      _ -> error "scope must be a set in with statement"
+eval (NWith scope e) = scope >>= \case
+    Fix (NVSet scope') -> pushScope (fmap pure scope') e
+    _ -> error "scope must be a set in with statement"
 
 eval (NAssert cond e) = do
-  Fix cond' <- cond
-  case cond' of
-      (NVConstant (NBool True)) -> e
-      (NVConstant (NBool False)) -> error "assertion failed"
-      _ -> error "assertion condition must be boolean"
+    Fix cond' <- cond
+    case cond' of
+        (NVConstant (NBool True)) -> e
+        (NVConstant (NBool False)) -> error "assertion failed"
+        _ -> error "assertion condition must be boolean"
 
 eval (NApp fun x) = do
     fun' <- fun
@@ -277,23 +261,17 @@ eval (NApp fun x) = do
         Fix (NVFunction params f) -> do
             arg <- x
             args <- buildArgument params arg
-            newScope args f
+            traceM $ "args = " ++ show (() <$ args)
+            pushScope args f
         Fix (NVBuiltin _ f) -> do
             arg <- x
             f arg
         _ -> error "Attempt to call non-function"
 
-eval (NAbs a b) = do
-    env <- currentScope
-
-    -- It is the environment at the definition site, not the call site,
-    -- that needs to be used when evaluation the body and the default
-    -- arguments
-    let extend f = do
-            env' <- currentScope
-            newScope (env' `Map.union` env) f
-
-    return $ Fix $ NVFunction (fmap extend a) (extend b)
+eval (NAbs a b) =
+    -- It is the environment at the definition site, not the call site, that
+    -- needs to be used when evaluation the body and the default arguments
+    return $ Fix $ NVFunction a b
 
 tracingExprEval :: MonadNix m => NExpr -> IO (m (NValue m))
 tracingExprEval =
@@ -316,48 +294,53 @@ evalString nstr = do
     Indented parts -> fromParts parts
     DoubleQuoted parts -> fromParts parts
 
-evalBinds :: forall m. Monad m
-          => Bool -> [Binding (m (NValue m))] -> m (ValueSet m)
-evalBinds allowDynamic xs =
-    buildResult =<< sequence (concatMap go xs)
+attrSetAlter :: Monad m
+             => [Text]
+             -> ValueSet m
+             -> (Maybe (m (NValue m)) -> Maybe (m (NValue m)))
+             -> m (ValueSet m, Maybe (m (NValue m)))
+attrSetAlter [] _ _ = error "invalid selector with no components"
+attrSetAlter (p:ps) m f = case Map.lookup p m of
+    Nothing | null ps -> go Nothing
+            | otherwise -> recurse Map.empty
+    Just v  | null ps -> go (Just v)
+            | otherwise -> v >>= \case
+                  Fix (NVSet s) -> recurse (fmap pure s)
+                  _ -> error $ "attribute " ++ attr ++ " is not a set"
+  where
+    attr = show (Text.intercalate "." (p:ps))
+
+    go mx = return $ case f mx of
+        Nothing -> (m, Nothing)
+        Just v' -> (Map.insert p v' m, Just v')
+
+    recurse s = do
+        (m', mres) <- attrSetAlter ps s f
+        if Map.null m'
+            then return (m, mres)
+            else do
+                m'' <- sequence m'
+                return (Map.insert p (return . Fix . NVSet $ m'') m, mres)
+
+evalBinds :: forall m. MonadNix m
+          => Bool
+          -> Bool
+          -> [Binding (m (NValue m))]
+          -> m (ValueSet m)
+evalBinds allowDynamic recursive = buildResult <=< sequence . concatMap go
   where
     -- TODO: Inherit
-    go (NamedVar x y) =
-        [liftM2 (,) (evalSelector allowDynamic x) (pure y)]
+    go (NamedVar x y) = [liftM2 (,) (evalSelector allowDynamic x) (pure y)]
     go _ = [] -- HACK! But who cares right now
 
     buildResult :: [([Text], m (NValue m))] -> m (ValueSet m)
-    buildResult =
-        foldM (\acc (path, value) -> insert acc (reverse path) value)
-              Map.empty
-      where
-        insert :: ValueSet m -> [Text] -> m (NValue m) -> m (ValueSet m)
-        insert _ [] _ = error "invalid selector with no components"
-        insert m (p:ps) v =
-            modifyPath ps (return . insertIfNotMember p v)
-          where
-            attr = show $ Text.intercalate "." $ reverse (p:ps)
+    buildResult bindings = do
+        s <- foldM insert Map.empty bindings
+        return $ if recursive
+                 then loeb (flip pushScope <$> s)
+                 else s
 
-            modifyPath :: [Text] -> (ValueSet m -> m (ValueSet m))
-                       -> m (ValueSet m)
-            modifyPath [] f = f m
-            modifyPath (x:parts) f = modifyPath parts $ \m' ->
-                case Map.lookup x m' of
-                    Nothing -> return $ Map.singleton x (g Map.empty)
-                    Just s -> s >>= \case
-                        Fix (NVSet m'') ->
-                            return $ Map.insert x (g (fmap pure m'')) m'
-                        _ -> error $ "attribute " ++ attr ++ " already defined"
-              where
-                g m = do
-                    s <- sequence =<< f m
-                    return . Fix . NVSet $ s
-
-            insertIfNotMember :: Text -> m (NValue m) -> ValueSet m
-                              -> ValueSet m
-            insertIfNotMember k x m'
-              | Map.notMember k m' = Map.insert k x m'
-              | otherwise = error $ "attribute " ++ attr ++ " already defined"
+    insert m (path, value) = fst <$> attrSetAlter path m (const (Just value))
 
 evalSelector :: Monad m => Bool -> NAttrPath (m (NValue m)) -> m [Text]
 evalSelector dyn = mapM evalKeyName where
@@ -373,48 +356,32 @@ nullVal = return (Fix (NVConstant NNull) :: NValue m)
 checkExpr :: MonadNix m => NExpr -> m ()
 checkExpr = cata check
 
-check :: forall m. MonadNix m => NExprF (m ()) -> m ()
+check :: MonadNix m => NExprF (m ()) -> m ()
 
-check (NSym var) = do
-    env <- currentScope
-    case Map.lookup var env of
-        Nothing -> error $ "Undefined variable: " ++ show var
-        Just _ -> return ()
+check (NSym var) = lookupVar var >>= \case
+    Nothing -> error $ "Undefined variable: " ++ show var
+    Just _ -> return ()
 
-check (NRecSet binds) = do
-    env <- currentScope
-    rec evaledBinds <-
-            newScope ((nullVal <$ evaledBinds) `Map.union` env)
-                     (evalBinds True (fmap (fmap (const nullVal)) binds))
-    return ()
+check (NSet binds) =
+    sequence_ =<< evalBinds True False (fmap (fmap (const nullVal)) binds)
 
-check (NLet binds e) = do
-    env <- currentScope
-    rec evaledBinds <-
-            newScope ((nullVal <$ evaledBinds) `Map.union` env)
-                     (evalBinds True (fmap (fmap (const nullVal)) binds))
-    newScope ((nullVal <$ evaledBinds) `Map.union` env) e
+check (NRecSet binds) =
+    sequence_ =<< evalBinds True True (fmap (fmap (const nullVal)) binds)
 
--- check (NWith scope e) = do
---   env <- currentScope
---   newScope ((nullVal <$ scope) `Map.union` env) e
+check (NLet binds e) =
+    (`pushScope` e) =<< evalBinds True True (fmap (fmap (const nullVal)) binds)
 
-check (NAbs a b) = do
-    env <- currentScope
-    let extend f = do
-            env' <- currentScope
-            newScope (env' `Map.union` env) f
-    case fmap extend a of
-        Param name ->
-            newScope (Map.singleton name nullVal) (extend b)
-        ParamSet (FixedParamSet s) Nothing ->
-            newScope (nullVal <$ s) (extend b)
-        ParamSet (FixedParamSet s) (Just m) ->
-            newScope (Map.insert m nullVal (nullVal <$ s)) (extend b)
-        ParamSet (VariadicParamSet s) Nothing ->
-            newScope (nullVal <$ s) (extend b)
-        ParamSet (VariadicParamSet s) (Just m) ->
-            newScope (Map.insert m nullVal (nullVal <$ s)) (extend b)
+check (NAbs a b) = case a of
+    Param name ->
+        pushScope (Map.singleton name nullVal) b
+    ParamSet (FixedParamSet s) Nothing ->
+        pushScope (nullVal <$ s) b
+    ParamSet (FixedParamSet s) (Just m) ->
+        pushScope (Map.insert m nullVal (nullVal <$ s)) b
+    ParamSet (VariadicParamSet s) Nothing ->
+        pushScope (nullVal <$ s) b
+    ParamSet (VariadicParamSet s) (Just m) ->
+        pushScope (Map.insert m nullVal (nullVal <$ s)) b
 
 -- In order to check some of the other operations properly, we'd need static
 -- typing

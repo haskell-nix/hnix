@@ -129,6 +129,7 @@ Test-suite hnix-tests
     , filepath
     , split
     , transformers
+    , interpolate
 
 Benchmark hnix-benchmarks
   Type: exitcode-stdio-1.0

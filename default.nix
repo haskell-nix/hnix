@@ -8,7 +8,7 @@ let
       , data-fix, deepseq, deriving-compat, directory, filepath, Glob
       , parsers, regex-tdfa, regex-tdfa-text, semigroups, split, stdenv
       , tasty, tasty-hunit, tasty-th, text, transformers, trifecta
-      , unordered-containers, these, optparse-applicative
+      , unordered-containers, these, optparse-applicative, interpolate
       }:
       mkDerivation {
         pname = "hnix";
@@ -27,7 +27,7 @@ let
         ];
         testHaskellDepends = [
           base containers data-fix directory filepath Glob split tasty
-          tasty-hunit tasty-th text transformers
+          tasty-hunit tasty-th text transformers interpolate
         ];
         benchmarkHaskellDepends = [ base containers criterion text ];
         homepage = "http://github.com/jwiegley/hnix";

@@ -65,7 +65,7 @@ main = do
                          expr' <- tracingExprEval expr
                          print =<< evalStateT (runCyclic expr') baseEnv
                    | evaluate opts ->
-                         print =<< evalTopLevelExprIO expr
+                         putStrLn . printNix =<< evalTopLevelExprIO expr
                    | debug opts ->
                          print expr
                    | otherwise ->
