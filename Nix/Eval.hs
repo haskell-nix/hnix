@@ -55,8 +55,8 @@ data NValueF m r
       -- ^ A builtin function can never be normalized beyond this.
     deriving (Generic, Typeable, Functor)
 
-type NValueNF m  = Fix (NValueF m)       -- normal form
-type NValue m = NValueF m (m (NThunk m)) -- head normal form
+type NValueNF m  = Fix (NValueF m)   -- normal form
+type NValue m = NValueF m (NThunk m) -- head normal form
 
 instance Show f => Show (NValueF m f) where
     showsPrec = flip go where
@@ -82,7 +82,7 @@ instance Show f => Show (NValueF m f) where
               . showString " "
               . showsPrec 11 b
 
-type ValueSet m = Map.Map Text (m (NThunk m))
+type ValueSet m = Map.Map Text (NThunk m)
 
 builtin :: MonadNix m => String -> (NThunk m -> m (NThunk m)) -> m (NThunk m)
 builtin name f = valueRef $ NVBuiltin name f
@@ -135,7 +135,7 @@ wrap = cata phi
 buildArgument :: forall m. MonadNix m
               => Params (m (NThunk m)) -> NThunk m -> m (ValueSet m)
 buildArgument params arg = case params of
-    Param name -> return $ Map.singleton name (pure arg)
+    Param name -> return $ Map.singleton name arg
     ParamSet (FixedParamSet s) m -> go s m
     ParamSet (VariadicParamSet s) m -> go s m
   where
@@ -147,18 +147,19 @@ buildArgument params arg = case params of
                 ++ show (() <$ x)
 
     selfInject :: ValueSet m -> Text -> m (ValueSet m)
-    selfInject res n =
-        return $ Map.insert n (valueRef (NVSet res)) res
+    selfInject res n = do
+        ref <- valueRef (NVSet res)
+        return $ Map.insert n ref res
 
     assemble :: Text
-             -> These (m (NThunk m)) (Maybe (m (NThunk m)))
-             -> ValueSet m
+             -> These (NThunk m) (Maybe (NThunk m))
+             -> Map.Map Text (m (NThunk m))
              -> m (NThunk m)
     assemble k = \case
         That Nothing  -> error $ "Missing value for parameter: " ++ show k
-        That (Just f) -> (`pushScope` f)
-        This x        -> const x
-        These x _     -> const x
+        That (Just f) -> \env -> buildThunk $ pushScope env f
+        This x        -> const (pure x)
+        These x _     -> const (pure x)
 
 -- | Evaluate an nix expression, with a given ValueSet as environment
 evalExpr :: MonadNix m => NExpr -> m (NThunk m)
