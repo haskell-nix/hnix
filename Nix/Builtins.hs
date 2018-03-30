@@ -192,7 +192,7 @@ builtinsList = sequence [
     , add2 Normal   "getAttr"         getAttr
     , add2 Normal   "any"             any_
     , add2 Normal   "all"             all_
-    -- , add3 Normal   "foldl'"          foldl'_
+    , add3 Normal   "foldl'"          foldl'_
     , add  Normal   "head"            head_
     , add  Normal   "tail"            tail_
     , add  Normal   "splitVersion"    splitVersion_
@@ -280,15 +280,16 @@ all_ pred = forceThunk >=> \case
     arg -> error $ "builtins.all takes a list as second argument, not a "
               ++ show (() <$ arg)
 
-{-
 --TODO: Strictness
 foldl'_ :: MonadNix m => NThunk m -> NThunk m -> NThunk m -> m (NValue m)
 foldl'_ f z = forceThunk >=> \case
-    NVList vals ->
-        foldlM (\b a -> (f `apply` b) >>= (`apply` a)) z vals
+    NVList vals -> forceThunk =<< foldlM go z vals
     arg -> error $ "builtins.foldl' takes a list as third argument, not a "
               ++ show (() <$ arg)
--}
+  where
+    go b a = do
+        f' <- buildThunk $ apply f b
+        buildThunk $ apply f' a
 
 head_ :: MonadNix m => NThunk m -> m (NValue m)
 head_ = forceThunk >=> \case
@@ -317,7 +318,7 @@ versionComponentToString = \case
   VersionComponent_Number n -> Text.pack $ show n
 
 -- | Based on https://github.com/NixOS/nix/blob/4ee4fda521137fed6af0446948b3877e0c5db803/src/libexpr/names.cc#L44
-versionComponentSeparators :: [Char]
+versionComponentSeparators :: String
 versionComponentSeparators = ".-"
 
 splitVersion :: Text -> [VersionComponent]
@@ -344,16 +345,18 @@ splitVersion_ = forceThunk >=> \case
     _ -> error "builtins.splitVersion: not a string"
 
 compareVersions :: Text -> Text -> Ordering
-compareVersions s1 s2 = mconcat $ alignWith f (splitVersion s1) (splitVersion s2)
-  where z = VersionComponent_String ""
-        f = uncurry compare . fromThese z z
+compareVersions s1 s2 =
+    mconcat $ alignWith f (splitVersion s1) (splitVersion s2)
+  where
+    z = VersionComponent_String ""
+    f = uncurry compare . fromThese z z
 
 compareVersions_ :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
 compareVersions_ t1 t2 = do
     v1 <- forceThunk t1
     v2 <- forceThunk t2
     case (v1, v2) of
-        (NVStr s1 _, NVStr s2 _) -> do
+        (NVStr s1 _, NVStr s2 _) ->
             return $ NVConstant $ NInt $ case compareVersions s1 s2 of
                 LT -> -1
                 EQ -> 0
@@ -365,7 +368,7 @@ sub_ t1 t2 = do
     v1 <- forceThunk t1
     v2 <- forceThunk t2
     case (v1, v2) of
-        (NVConstant (NInt n1), NVConstant (NInt n2)) -> do
+        (NVConstant (NInt n1), NVConstant (NInt n2)) ->
             return $ NVConstant $ NInt $ n1 - n2
         _ -> error "builtins.splitVersion: not a number"
 
