@@ -246,7 +246,7 @@ buildArgument params arg = case params of
             buildThunk $ clearScopes $ do
                 traceM $ "Evaluating default argument with args: "
                     ++ show (newScope args)
-                pushScope args $ pushScopes scope $ forceThunk =<< f
+                pushScopes scope $ pushScope args $ forceThunk =<< f
         This x | isVariadic -> const (pure x)
                | otherwise  -> error $ "Unexpected parameter: " ++ show k
         These x _ -> const (pure x)
@@ -311,7 +311,7 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
             else traverse (deferInScope scope) s
 
     encapsulate scope f attrs =
-        buildThunk . clearScopes . pushScope attrs . pushScopes scope $ f
+        buildThunk . clearScopes . pushScopes scope . pushScope attrs $ f
 
     insert m (path, value) = attrSetAlter path m value
 
