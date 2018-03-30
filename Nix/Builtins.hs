@@ -194,6 +194,7 @@ builtinsList = sequence [
     , add2 Normal   "all"      all_
     , add3 Normal   "foldl'"   foldl'_
     , add  Normal   "head"     head_
+    , add  Normal   "tail"     tail_
   ]
   where
     add  t n v = (\f -> Builtin t (n, f)) <$> builtin (Text.unpack n) v
@@ -284,3 +285,10 @@ head_ arg = forceThunk arg >>= \case
         [] -> error "builtins.head: empty list"
         h:_ -> return h
     _ -> error "builtins.head: not a list"
+
+tail_ :: MonadNix m => NThunk m -> m (NThunk m)
+tail_ arg = forceThunk arg >>= \case
+    NVList vals -> case vals of
+        [] -> error "builtins.tail: empty list"
+        _:t -> buildThunk $ NVList t
+    _ -> error "builtins.tail: not a list"
