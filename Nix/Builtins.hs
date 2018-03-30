@@ -60,6 +60,7 @@ builtinsList = sequence [
     , add2 Normal   "compareVersions" compareVersions_
     , add' Normal   "sub"             (arity2 ((-) @Integer))
     , add' Normal   "parseDrvName"    parseDrvName
+    , add' Normal   "substring"       substring
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -248,6 +249,12 @@ parseDrvName :: Applicative m => Text -> Prim m (Map Text Text)
 parseDrvName s = Prim $ pure $ Map.fromList [("name", name), ("version", version)]
     where (name, version) = splitDrvName s
 
+substring :: Applicative m => Int -> Int -> Text -> Prim m Text
+substring start len =
+  if start < 0 --NOTE: negative values of 'len' are OK
+  then error $ "builtins.substring: negative start position: " ++ show start
+  else Prim . pure . Text.take len . Text.drop start
+
 newtype Prim m a = Prim { runPrim :: m a }
 
 class ToNix a where
@@ -280,6 +287,9 @@ instance FromNix Text where
     fromThunk = forceThunk >=> \case
         NVStr s _ -> pure s
         v -> error $ "fromThunk: Expected string, got " ++ show (void v)
+
+instance FromNix Int where
+    fromThunk = fmap fromInteger . fromThunk
 
 instance FromNix Integer where
     fromThunk = forceThunk >=> \case
