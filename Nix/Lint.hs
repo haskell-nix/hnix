@@ -3,11 +3,9 @@
 module Nix.Lint (checkExpr) where
 
 import           Control.Monad
-import           Control.Monad.Trans.Reader
 import           Data.Fix
 import qualified Data.Map.Lazy as Map
 import           Nix.Atoms
-import           Nix.Builtins
 import           Nix.Eval
 import           Nix.Expr
 import           Nix.Monad

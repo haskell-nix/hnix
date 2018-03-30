@@ -14,8 +14,9 @@ import           Data.IORef
 import qualified Data.Map.Lazy as Map
 import qualified Data.Text as Text
 import           Nix.Eval
-import           Nix.Scope
+import           Nix.Monad
 import           Nix.Parser
+import           Nix.Scope
 import           Nix.Utils
 import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
@@ -51,6 +52,34 @@ instance MonadNix (Cyclic IO) where
             Nothing -> return Nothing
             Just v  -> runCyclic $ Just <$> forceThunk v
 
+    addPath path = liftIO $ do
+        (exitCode, out, _) <-
+            readProcessWithExitCode "nix-store" ["--add", path] ""
+        case exitCode of
+          ExitSuccess -> return $ StorePath out
+          _ -> error $ "No such file or directory: " ++ show path
+
+    data NThunk (Cyclic IO) = NThunkIO (IORef (Deferred (Cyclic IO)))
+
+    valueRef value =
+        liftIO $ NThunkIO <$> newIORef (ComputedValue value)
+
+    buildThunk action =
+        liftIO $ NThunkIO <$> newIORef (DeferredAction action)
+
+    forceThunk (NThunkIO ref) = do
+        eres <- liftIO $ readIORef ref
+        case eres of
+            ComputedValue value -> return value
+            DeferredAction action -> do
+                scope <- currentScope
+                traceM $ "Forcing thunk in scope: " ++ show scope
+                value <- action
+                traceM $ "Forcing thunk computed: " ++ show (() <$ value)
+                liftIO $ writeIORef ref (ComputedValue value)
+                return value
+
+instance MonadNixEnv (Cyclic IO) where
     -- jww (2018-03-29): Cache which files have been read in.
     importFile = forceThunk >=> \case
         NVLiteralPath path -> do
@@ -79,13 +108,6 @@ instance MonadNix (Cyclic IO) where
                               (evalExpr expr)
         p -> error $ "Unexpected argument to import: " ++ show (() <$ p)
 
-    addPath path = liftIO $ do
-        (exitCode, out, _) <-
-            readProcessWithExitCode "nix-store" ["--add", path] ""
-        case exitCode of
-          ExitSuccess -> return $ StorePath out
-          _ -> error $ "No such file or directory: " ++ show path
-
     getEnvVar = forceThunk >=> \case
         NVStr s _ -> do
             mres <- liftIO $ lookupEnv (Text.unpack s)
@@ -93,23 +115,3 @@ instance MonadNix (Cyclic IO) where
                 Nothing -> NVStr "" mempty
                 Just v  -> NVStr (Text.pack v) mempty
         p -> error $ "Unexpected argument to getEnv: " ++ show (() <$ p)
-
-    data NThunk (Cyclic IO) = NThunkIO (IORef (Deferred (Cyclic IO)))
-
-    valueRef value =
-        liftIO $ NThunkIO <$> newIORef (ComputedValue value)
-
-    buildThunk action =
-        liftIO $ NThunkIO <$> newIORef (DeferredAction action)
-
-    forceThunk (NThunkIO ref) = do
-        eres <- liftIO $ readIORef ref
-        case eres of
-            ComputedValue value -> return value
-            DeferredAction action -> do
-                scope <- currentScope
-                traceM $ "Forcing thunk in scope: " ++ show scope
-                value <- action
-                traceM $ "Forcing thunk computed: " ++ show (() <$ value)
-                liftIO $ writeIORef ref (ComputedValue value)
-                return value

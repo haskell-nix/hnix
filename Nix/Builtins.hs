@@ -16,7 +16,7 @@ import           Nix.Monad
 import           Nix.Eval
 import           Nix.Scope
 
-baseEnv :: MonadNix m => m (NestedScopes (NThunk m))
+baseEnv :: MonadNixEnv m => m (NestedScopes (NThunk m))
 baseEnv = do
     ref <- buildThunk $ NVSet <$> builtins
     lst <- (("builtins", ref) :) <$> topLevelBuiltins
@@ -24,7 +24,7 @@ baseEnv = do
   where
     topLevelBuiltins = map mapping . filter isTopLevel <$> builtinsList
 
-builtins :: MonadNix m => m (ValueSet m)
+builtins :: MonadNixEnv m => m (ValueSet m)
 builtins = Map.fromList . map mapping <$> builtinsList
 
 data BuiltinType = Normal | TopLevel
@@ -36,7 +36,7 @@ data Builtin m = Builtin
 isTopLevel :: Builtin m -> Bool
 isTopLevel b = case kind b of Normal -> False; TopLevel -> True
 
-builtinsList :: MonadNix m => m [ Builtin m ]
+builtinsList :: MonadNixEnv m => m [ Builtin m ]
 builtinsList = sequence [
       add  TopLevel "toString" toString
     , add  TopLevel "import"   import_
@@ -85,10 +85,10 @@ toString str = do
     (s, d) <- valueText =<< normalForm =<< forceThunk str
     return $ NVStr s d
 
-import_ :: MonadNix m => NThunk m -> m (NValue m)
+import_ :: MonadNixEnv m => NThunk m -> m (NValue m)
 import_ = importFile
 
-getEnv_ :: MonadNix m => NThunk m -> m (NValue m)
+getEnv_ :: MonadNixEnv m => NThunk m -> m (NValue m)
 getEnv_ = getEnvVar
 
 hasAttr :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)

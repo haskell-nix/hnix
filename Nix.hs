@@ -6,12 +6,13 @@ import           Nix.Builtins
 import           Nix.Eval
 import           Nix.Expr (NExpr)
 import           Nix.Lint
+import           Nix.Monad
 import           Nix.Monad.Instance
 import           Nix.Scope
 import           Nix.Utils
 
 -- | Evaluate a nix expression in the default context
-evalTopLevelExpr :: MonadNix m => Maybe FilePath -> NExpr -> m (NValueNF m)
+evalTopLevelExpr :: MonadNixEnv m => Maybe FilePath -> NExpr -> m (NValueNF m)
 evalTopLevelExpr mdir expr = do
     base <- do
         base <- baseEnv

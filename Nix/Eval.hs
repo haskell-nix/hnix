@@ -7,8 +7,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Nix.Eval
-    (NValue, NValueNF, NValueF(..), ValueSet, MonadNix(..), StorePath (..),
-     evalExpr, tracingExprEval, evalBinds, exprNormalForm, normalForm,
+    (evalExpr, tracingExprEval, evalBinds, exprNormalForm, normalForm,
      builtin, builtin2, builtin3, atomText, valueText, buildArgument) where
 
 import           Control.Monad hiding (mapM, sequence)

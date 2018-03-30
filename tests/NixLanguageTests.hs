@@ -14,7 +14,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           GHC.Exts
 import           Nix
-import           Nix.Eval
+import           Nix.Monad
 import           Nix.Monad.Instance
 import           Nix.Parser
 import           Nix.Pretty

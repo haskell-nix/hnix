@@ -139,9 +139,14 @@ class MonadFix m => MonadNix m where
     -- | Import a path into the nix store, and return the resulting path
     addPath :: FilePath -> m StorePath
 
-    importFile :: NThunk m -> m (NValue m)
-    getEnvVar :: NThunk m -> m (NValue m)
-
 deferInScope :: MonadNix m
              => NestedScopes (NThunk m) -> m (NValue m) -> m (NThunk m)
 deferInScope scope = buildThunk . clearScopes . pushScopes scope
+
+-- | MonadNixEnv represents all of the effects needed by builtin functions in
+--   order to interact with the environment where Nix expressions are being
+--   evaluated. They are only used by the functions defined in Builtins.hs.
+
+class MonadNix m => MonadNixEnv m where
+    importFile :: NThunk m -> m (NValue m)
+    getEnvVar :: NThunk m -> m (NValue m)

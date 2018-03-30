@@ -8,8 +8,8 @@ module EvalTests (tests) where
 
 import Data.String.Interpolate
 import Nix
-import Nix.Eval
 import Nix.Expr
+import Nix.Monad
 import Nix.Parser
 import Test.Tasty
 import Test.Tasty.HUnit

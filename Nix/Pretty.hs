@@ -9,13 +9,13 @@ import           Data.Maybe (isJust)
 import           Data.Text (pack, unpack, replace, strip)
 import qualified Data.Text as Text
 import           Nix.Atoms
-import           Nix.Eval (NValueNF, NValueF (..), atomText)
 import           Nix.Expr
+import           Nix.Monad
 import           Nix.Parser.Library (reservedNames)
 import           Nix.Parser.Operators
 import           Nix.StringOperations
-import           Text.PrettyPrint.ANSI.Leijen
 import           Prelude hiding ((<$>))
+import           Text.PrettyPrint.ANSI.Leijen
 
 -- | This type represents a pretty printed nix expression
 -- together with some information about the expression.
