@@ -13,9 +13,9 @@ import qualified Data.Map as Map
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           GHC.Exts
-import           Nix.Builtins
+import           Nix
 import           Nix.Eval
-import           Nix.Lint
+import           Nix.Monad.Instance
 import           Nix.Parser
 import           Nix.Pretty
 import           System.Environment
@@ -39,7 +39,8 @@ From (git://nix)/tests/lang.sh we see that
         plain text output should be the same as the .exp,
         pass the extra flags to nix-instantiate
 
-    NIX_PATH=lang/dir3:lang/dir4 should be in the environment of all eval-okay-*.nix evaluations
+    NIX_PATH=lang/dir3:lang/dir4 should be in the environment of all
+        eval-okay-*.nix evaluations
     TEST_VAR=foo should be in all the environments # for eval-okay-getenv.nix
 -}
 

@@ -1,26 +1,15 @@
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 
-module Nix.Builtins
-    (baseEnv, builtins, Cyclic(..), NestedScopes(..),
-     evalTopLevelExpr, evalTopLevelExprIO,
-     tracingEvalTopLevelExprIO)
-    where
+module Nix.Builtins (baseEnv) where
 
 import           Control.Monad
-import           Control.Monad.Fix
-import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Reader
 import           Data.Align (alignWith)
 import           Data.Char (isDigit)
-import           Data.Fix
-import           Data.IORef
 import           Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
 import           Data.Text (Text)
@@ -30,49 +19,9 @@ import           Data.Foldable (foldlM)
 import           Data.Traversable (mapM)
 import           GHC.Stack.Types (HasCallStack)
 import           Nix.Atoms
+import           Nix.Monad
 import           Nix.Eval
-import           Nix.Expr (NExpr)
-import           Nix.Parser
-import           Nix.Utils
-import           System.Environment
-import           System.Exit (ExitCode (ExitSuccess))
-import           System.FilePath
-import           System.Process (readProcessWithExitCode)
-
--- | Evaluate a nix expression in the default context
-evalTopLevelExpr :: MonadNix m => Maybe FilePath -> NExpr -> m (NValueNF m)
-evalTopLevelExpr mdir expr = do
-    base <- do
-        base <- baseEnv
-        case mdir of
-            Nothing -> return base
-            Just dir -> do
-                ref <- buildThunk $ return $ NVLiteralPath dir
-                let m = Map.singleton "__cwd" ref
-                traceM $ "Setting __cwd = " ++ show dir
-                return $ extendScope m base
-    normalForm =<< pushScopes base (evalExpr expr)
-
-evalTopLevelExprIO :: Maybe FilePath -> NExpr -> IO (NValueNF (Cyclic IO))
-evalTopLevelExprIO mdir expr =
-    runReaderT (runCyclic (evalTopLevelExpr mdir expr)) emptyScopes
-
-tracingEvalTopLevelExprIO :: Maybe FilePath -> NExpr
-                          -> IO (NValueNF (Cyclic IO))
-tracingEvalTopLevelExprIO mdir expr = do
-    base <- case mdir of
-        Nothing -> run baseEnv emptyScopes
-        Just dir -> do
-            ref   <- run (buildThunk $ return $ NVLiteralPath dir) emptyScopes
-            let m = Map.singleton "__cwd" ref
-            traceM $ "Setting __cwd = " ++ show dir
-            base <- run baseEnv emptyScopes
-            return $ extendScope m base
-    expr' <- tracingExprEval expr
-    thnk  <- run expr' base
-    run (normalForm thnk) base
-  where
-    run = runReaderT . runCyclic
+import           Nix.Scope
 
 baseEnv :: MonadNix m => m (NestedScopes (NThunk m))
 baseEnv = do
@@ -81,95 +30,6 @@ baseEnv = do
     return . NestedScopes . (:[]) . newScope $ Map.fromList lst
   where
     topLevelBuiltins = map mapping . filter isTopLevel <$> builtinsList
-
-newtype Cyclic m a = Cyclic
-    { runCyclic :: ReaderT (NestedScopes (NThunk (Cyclic m))) m a }
-    deriving (Functor, Applicative, Monad, MonadFix, MonadIO)
-
-data Deferred m
-    = DeferredAction (m (NValue m))
-    -- ^ This is closure over the environment where it was created.
-    | ComputedValue (NValue m)
-
-instance MonadNix (Cyclic IO) where
-    -- jww (2018-03-29): We should use actually stacked scopes here, rather
-    -- than constantly merging maps. The number of scope levels will usually
-    -- be manageable, but the number of attributes within scopes can be
-    -- enormous, making this one of the worst implementations.
-    pushScopes s k = Cyclic $ local (combineScopes s) $ do
-        scope <- runCyclic currentScope
-        traceM $ "scope: " ++ show (() <$ scope)
-        runCyclic k
-
-    clearScopes  = Cyclic . local (const (NestedScopes [])) . runCyclic
-    currentScope = Cyclic ask
-
-    -- If a variable is being asked for, it's needed in head normal form.
-    lookupVar k  = Cyclic $ do
-        scope <- ask
-        case scopeLookup k scope of
-            Nothing -> return Nothing
-            Just v  -> runCyclic $ Just <$> forceThunk v
-
-    -- jww (2018-03-29): Cache which files have been read in.
-    importFile = forceThunk >=> \case
-        NVLiteralPath path -> do
-            mres <- lookupVar "__cwd"
-            path' <- case mres of
-                Nothing  -> do
-                    traceM "No known current directory"
-                    return path
-                Just dir -> normalForm dir >>= \case
-                    Fix (NVLiteralPath dir') -> do
-                        traceM $ "Current directory for import is: "
-                            ++ show dir'
-                        return $ dir' </> path
-                    x -> error $ "How can the current directory be: " ++ show x
-            traceM $ "Importing file " ++ path'
-            eres <- Cyclic $ parseNixFile path'
-            case eres of
-                Failure err  -> error $ "Parse failed: " ++ show err
-                Success expr -> do
-                    ref <- buildThunk $ return $
-                        NVLiteralPath $ takeDirectory path'
-                    -- Use this cookie so that when we evaluate the next
-                    -- import, we'll remember which directory its containing
-                    -- file was in.
-                    pushScope (newScope (Map.singleton "__cwd" ref))
-                              (evalExpr expr)
-        p -> error $ "Unexpected argument to import: " ++ show (() <$ p)
-
-    addPath path = liftIO $ do
-        (exitCode, out, _) <-
-            readProcessWithExitCode "nix-store" ["--add", path] ""
-        case exitCode of
-          ExitSuccess -> return $ StorePath out
-          _ -> error $ "No such file or directory: " ++ show path
-
-    getEnvVar = forceThunk >=> \case
-        NVStr s _ -> do
-            mres <- liftIO $ lookupEnv (Text.unpack s)
-            return $ case mres of
-                Nothing -> NVStr "" mempty
-                Just v  -> NVStr (Text.pack v) mempty
-        p -> error $ "Unexpected argument to getEnv: " ++ show (() <$ p)
-
-    data NThunk (Cyclic IO) = NThunkIO (IORef (Deferred (Cyclic IO)))
-
-    buildThunk action =
-        liftIO $ NThunkIO <$> newIORef (DeferredAction action)
-
-    forceThunk (NThunkIO ref) = do
-        eres <- liftIO $ readIORef ref
-        case eres of
-            ComputedValue value -> return value
-            DeferredAction action -> do
-                scope <- currentScope
-                traceM $ "Forcing thunk in scope: " ++ show scope
-                value <- action
-                traceM $ "Forcing thunk computed: " ++ show (() <$ value)
-                liftIO $ writeIORef ref (ComputedValue value)
-                return value
 
 builtins :: MonadNix m => m (ValueSet m)
 builtins = Map.fromList . map mapping <$> builtinsList
@@ -344,7 +204,7 @@ splitVersion_ :: MonadNix m => NThunk m -> m (NValue m)
 splitVersion_ = forceThunk >=> \case
     NVStr s _ -> do
         vals <- forM (splitVersion s) $ \c ->
-            buildThunk $ return $ NVStr (versionComponentToString c) mempty
+            valueRef $ NVStr (versionComponentToString c) mempty
         return $ NVList vals
     _ -> error "builtins.splitVersion: not a string"
 
@@ -425,6 +285,6 @@ class FromNix a where
     fromThunk :: (HasCallStack, MonadNix m) => NThunk m -> m a
 
 instance FromNix Text where
-    fromThunk arg = forceThunk arg >>= \case
+    fromThunk = forceThunk >=> \case
         NVStr s _ -> pure s
         v -> error $ "fromThunk: Expected string, got " ++ show (void v)

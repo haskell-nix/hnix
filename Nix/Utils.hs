@@ -6,6 +6,7 @@ module Nix.Utils (module Nix.Utils, module X) where
 import Control.Monad
 import Control.Monad.Fix
 import Data.Fix
+import Data.Monoid (Endo)
 
 #define ENABLE_TRACING 1
 #if ENABLE_TRACING
@@ -17,6 +18,8 @@ trace = const id
 traceM :: Monad m => String -> m ()
 traceM = const (return ())
 #endif
+
+type DList a = Endo [a]
 
 (&) :: a -> (a -> c) -> c
 (&) = flip ($)

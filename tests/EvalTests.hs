@@ -2,10 +2,12 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+{-# OPTIONS_GHC -Wno-missing-signatures -Wno-orphans #-}
+
 module EvalTests (tests) where
 
 import Data.String.Interpolate
-import Nix.Builtins
+import Nix
 import Nix.Eval
 import Nix.Expr
 import Nix.Parser
