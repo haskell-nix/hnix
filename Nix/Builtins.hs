@@ -13,13 +13,14 @@ import           Control.Monad
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
+import           Data.Align (alignWith)
 import           Data.Char (isDigit)
 import           Data.Fix
 import           Data.IORef
 import qualified Data.Map.Lazy as Map
-import           Data.Ord (comparing)
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import           Data.These (fromThese)
 import           Data.Foldable (foldlM)
 import           Data.Traversable (mapM)
 import           Nix.Atoms
@@ -339,13 +340,18 @@ splitVersion_ arg = forceThunk arg >>= \case
         buildThunk $ NVList vals
     _ -> error "builtins.splitVersion: not a string"
 
+compareVersions :: Text -> Text -> Ordering
+compareVersions s1 s2 = mconcat $ alignWith f (splitVersion s1) (splitVersion s2)
+  where z = VersionComponent_String ""
+        f = uncurry compare . fromThese z z
+
 compareVersions_ :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
 compareVersions_ t1 t2 = do
     v1 <- forceThunk t1
     v2 <- forceThunk t2
     case (v1, v2) of
         (NVStr s1 _, NVStr s2 _) -> do
-            buildThunk $ NVConstant $ NInt $ case comparing splitVersion s1 s2 of
+            buildThunk $ NVConstant $ NInt $ case compareVersions s1 s2 of
                 LT -> -1
                 EQ -> 0
                 GT -> 1
