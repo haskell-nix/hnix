@@ -150,6 +150,7 @@ class MonadFix m => MonadNix m where
 
     data NThunk m :: *
 
+    valueRef   :: NValue m -> m (NThunk m)
     buildThunk :: m (NValue m) -> m (NThunk m)
     forceThunk :: NThunk m -> m (NValue m)
 
@@ -182,7 +183,7 @@ buildArgument params arg = case params of
 
     selfInject :: ValueSet m -> Text -> m (ValueSet m)
     selfInject res n = do
-        ref <- buildThunk $ pure $ NVSet res
+        ref <- valueRef $ NVSet res
         return $ Map.insert n ref res
 
     assemble :: Bool

@@ -151,6 +151,9 @@ instance MonadNix (Cyclic IO) where
 
     data NThunk (Cyclic IO) = NThunkIO (IORef (Deferred (Cyclic IO)))
 
+    valueRef value =
+        liftIO $ NThunkIO <$> newIORef (ComputedValue value)
+
     buildThunk action =
         liftIO $ NThunkIO <$> newIORef (DeferredAction action)
 
