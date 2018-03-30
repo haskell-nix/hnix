@@ -253,9 +253,9 @@ parseDrvName s = Prim $ pure $ Map.fromList [("name", name), ("version", version
 
 substring :: Applicative m => Int -> Int -> Text -> Prim m Text
 substring start len =
-  if start < 0 --NOTE: negative values of 'len' are OK
-  then error $ "builtins.substring: negative start position: " ++ show start
-  else Prim . pure . Text.take len . Text.drop start
+    if start < 0 --NOTE: negative values of 'len' are OK
+    then error $ "builtins.substring: negative start position: " ++ show start
+    else Prim . pure . Text.take len . Text.drop start
 
 attrNames :: MonadNix m => NThunk m -> m (NValue m)
 attrNames = forceThunk >=> \case
