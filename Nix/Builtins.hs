@@ -45,9 +45,8 @@ isTopLevel b = case kind b of Normal -> False; TopLevel -> True
 
 builtinsList :: forall m. MonadNixEnv m => m [ Builtin m ]
 builtinsList = sequence [
-      add  TopLevel "toString" toString
-    , add  TopLevel "import"   importFile
-
+      add  TopLevel "toString"        toString
+    , add  TopLevel "import"          importFile
     , add  Normal   "getEnv"          getEnvVar
     , add2 Normal   "hasAttr"         hasAttr
     , add2 Normal   "getAttr"         getAttr
