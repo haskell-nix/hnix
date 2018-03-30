@@ -13,7 +13,6 @@ import           Data.Typeable (Typeable)
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr.Types
-import           Nix.Scope
 import           Nix.Utils
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
@@ -121,14 +120,15 @@ builtin3 name f =
 -- | A path into the nix store
 newtype StorePath = StorePath { unStorePath :: FilePath }
 
-class MonadFix m => MonadNix m where
-    currentScope :: m (NestedScopes (NThunk m))
-    clearScopes  :: m r -> m r
-    pushScopes   :: NestedScopes (NThunk m) -> m r -> m r
-    lookupVar    :: Text -> m (Maybe (NValue m))
+class (Show (NScopes m), MonadFix m) => MonadNix m where
+    data NScopes m :: *
 
-    pushScope :: Scope (NThunk m) -> m r -> m r
-    pushScope = pushScopes . NestedScopes . (:[])
+    currentScope  :: m (NScopes m)
+    clearScopes   :: m r -> m r
+    pushScope     :: ValueSet m -> m r -> m r
+    pushWeakScope :: ValueSet m -> m r -> m r
+    pushScopes    :: NScopes m  -> m r -> m r
+    lookupVar     :: Text -> m (Maybe (NValue m))
 
     data NThunk m :: *
 
@@ -140,7 +140,7 @@ class MonadFix m => MonadNix m where
     addPath :: FilePath -> m StorePath
 
 deferInScope :: MonadNix m
-             => NestedScopes (NThunk m) -> m (NValue m) -> m (NThunk m)
+             => NScopes m -> m (NValue m) -> m (NThunk m)
 deferInScope scope = buildThunk . clearScopes . pushScopes scope
 
 -- | MonadNixEnv represents all of the effects needed by builtin functions in

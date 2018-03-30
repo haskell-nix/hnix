@@ -21,13 +21,12 @@ import           GHC.Stack.Types (HasCallStack)
 import           Nix.Atoms
 import           Nix.Monad
 import           Nix.Eval
-import           Nix.Scope
 
-baseEnv :: MonadNixEnv m => m (NestedScopes (NThunk m))
+baseEnv :: MonadNixEnv m => m (NScopes m)
 baseEnv = do
     ref <- buildThunk $ NVSet <$> builtins
     lst <- (("builtins", ref) :) <$> topLevelBuiltins
-    return . NestedScopes . (:[]) . newScope $ Map.fromList lst
+    pushScope (Map.fromList lst) currentScope
   where
     topLevelBuiltins = map mapping . filter isTopLevel <$> builtinsList
 
@@ -83,7 +82,7 @@ extractBool = \case
 apply :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
 apply f arg = forceThunk f >>= \case
     NVFunction params pred ->
-        (`pushScope` (forceThunk =<< pred)) . newScope
+        (`pushScope` (forceThunk =<< pred))
             =<< buildArgument params arg
     x -> error $ "Trying to call a " ++ show (() <$ x)
 

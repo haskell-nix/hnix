@@ -154,7 +154,7 @@ eval (NLet binds e) = do
     traceM "Let..1"
     s <- evalBinds True True binds
     traceM $ "Let..2: s = " ++ show (() <$ s)
-    pushScope (newScope s) e
+    pushScope s e
 
 eval (NIf cond t f) = cond >>= \case
     NVConstant (NBool True) -> t
@@ -162,7 +162,7 @@ eval (NIf cond t f) = cond >>= \case
     _ -> error "condition must be a boolean"
 
 eval (NWith scope e) = scope >>= \case
-    NVSet s -> pushScope (newWeakScope s) e
+    NVSet s -> pushWeakScope s e
     _ -> error "scope must be a set in with statement"
 
 eval (NAssert cond e) = cond >>= \case
@@ -175,7 +175,7 @@ eval (NApp fun arg) = fun >>= \case
         args <- buildArgument params =<< buildThunk arg
         traceM $ "Evaluating function application with args: "
             ++ show (newScope args)
-        clearScopes (pushScope (newScope args) (forceThunk =<< f))
+        clearScopes (pushScope args (forceThunk =<< f))
     NVBuiltin _ f -> f =<< buildThunk arg
     _ -> error "Attempt to call non-function"
 
@@ -246,7 +246,7 @@ buildArgument params arg = case params of
             buildThunk $ clearScopes $ do
                 traceM $ "Evaluating default argument with args: "
                     ++ show (newScope args)
-                pushScopes (extendScope args scope) (forceThunk =<< f)
+                pushScope args $ pushScopes scope $ forceThunk =<< f
         This x | isVariadic -> const (pure x)
                | otherwise  -> error $ "Unexpected parameter: " ++ show k
         These x _ -> const (pure x)
@@ -293,7 +293,7 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
             mv <- case ms of
                 Nothing -> lookupVar key
                 Just s -> s >>= \case
-                    NVSet s -> pushScope (newScope s) (lookupVar key)
+                    NVSet s -> pushScope s (lookupVar key)
                     x -> error
                         $ "First argument to inherit should be a set, saw: "
                         ++ show (() <$ x)
@@ -310,7 +310,8 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
             then loebM (encapsulate scope <$> s)
             else traverse (deferInScope scope) s
 
-    encapsulate scope f attrs = deferInScope (extendScope attrs scope) f
+    encapsulate scope f attrs =
+        buildThunk . clearScopes . pushScope attrs . pushScopes scope $ f
 
     insert m (path, value) = attrSetAlter path m value
 

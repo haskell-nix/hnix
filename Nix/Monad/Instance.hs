@@ -24,7 +24,7 @@ import           System.FilePath
 import           System.Process (readProcessWithExitCode)
 
 newtype Cyclic m a = Cyclic
-    { runCyclic :: ReaderT (NestedScopes (NThunk (Cyclic m))) m a }
+    { runCyclic :: ReaderT [Scope (NThunk (Cyclic m))] m a }
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO)
 
 data Deferred m
@@ -32,18 +32,19 @@ data Deferred m
     -- ^ This is closure over the environment where it was created.
     | ComputedValue (NValue m)
 
-instance MonadNix (Cyclic IO) where
-    -- jww (2018-03-29): We should use actually stacked scopes here, rather
-    -- than constantly merging maps. The number of scope levels will usually
-    -- be manageable, but the number of attributes within scopes can be
-    -- enormous, making this one of the worst implementations.
-    pushScopes s k = Cyclic $ local (combineScopes s) $ do
-        scope <- runCyclic currentScope
-        traceM $ "scope: " ++ show (() <$ scope)
-        runCyclic k
+instance Show (NScopes (Cyclic IO)) where
+    show (NestedScopes xs) = show xs
 
-    clearScopes  = Cyclic . local (const (NestedScopes [])) . runCyclic
-    currentScope = Cyclic ask
+instance MonadNix (Cyclic IO) where
+    newtype NScopes (Cyclic IO) = NestedScopes [Scope (NThunk (Cyclic IO))]
+
+    pushScopes (NestedScopes s) = Cyclic . local (s ++) . runCyclic
+
+    pushScope     s = Cyclic . local (Scope s False:) . runCyclic
+    pushWeakScope s = Cyclic . local (Scope s True:) . runCyclic
+
+    clearScopes  = Cyclic . local (const []) . runCyclic
+    currentScope = Cyclic $ NestedScopes <$> ask
 
     -- If a variable is being asked for, it's needed in head normal form.
     lookupVar k  = Cyclic $ do
@@ -104,8 +105,7 @@ instance MonadNixEnv (Cyclic IO) where
                     -- Use this cookie so that when we evaluate the next
                     -- import, we'll remember which directory its containing
                     -- file was in.
-                    pushScope (newScope (Map.singleton "__cwd" ref))
-                              (evalExpr expr)
+                    pushScope (Map.singleton "__cwd" ref) (evalExpr expr)
         p -> error $ "Unexpected argument to import: " ++ show (() <$ p)
 
     getEnvVar = forceThunk >=> \case
@@ -115,3 +115,6 @@ instance MonadNixEnv (Cyclic IO) where
                 Nothing -> NVStr "" mempty
                 Just v  -> NVStr (Text.pack v) mempty
         p -> error $ "Unexpected argument to getEnv: " ++ show (() <$ p)
+
+runCyclicIO :: Cyclic IO a -> IO a
+runCyclicIO = flip runReaderT [] . runCyclic

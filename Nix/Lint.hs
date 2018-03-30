@@ -9,7 +9,6 @@ import           Nix.Atoms
 import           Nix.Eval
 import           Nix.Expr
 import           Nix.Monad
-import           Nix.Scope
 
 nullVal :: MonadNix m => m (NValue m)
 nullVal = return $ NVConstant NNull
@@ -31,7 +30,7 @@ check (NRecSet binds) =
     void $ evalBinds True True (fmap (fmap (const nullVal)) binds)
 
 check (NLet binds e) =
-    (`pushScope` e) . newScope
+    (`pushScope` e)
         =<< evalBinds True True (fmap (fmap (const nullVal)) binds)
 
 -- check (NWith _scope e) = do
@@ -42,15 +41,15 @@ check (NAbs a b) = do
     nv <- buildThunk nullVal
     case a of
         Param name ->
-            pushScope (newScope (Map.singleton name nv)) b
+            pushScope (Map.singleton name nv) b
         ParamSet (FixedParamSet s) Nothing ->
-            pushScope (newScope (nv <$ s)) b
+            pushScope (nv <$ s) b
         ParamSet (FixedParamSet s) (Just m) ->
-            pushScope (newScope (Map.insert m nv (nv <$ s))) b
+            pushScope (Map.insert m nv (nv <$ s)) b
         ParamSet (VariadicParamSet s) Nothing ->
-            pushScope (newScope (nv <$ s)) b
+            pushScope (nv <$ s) b
         ParamSet (VariadicParamSet s) (Just m) ->
-            pushScope (newScope (Map.insert m nv (nv <$ s))) b
+            pushScope (Map.insert m nv (nv <$ s)) b
 
 -- In order to check some of the other operations properly, we'd need static
 -- typing
