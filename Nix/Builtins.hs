@@ -201,6 +201,7 @@ builtinsList = sequence [
     , add2 Normal   "compareVersions" compareVersions_
     , add2 Normal   "compareVersions" compareVersions_
     , add2 Normal   "sub"      sub_
+    , add  Normal   "parseDrvName" parseDrvName_
   ]
   where
     add  t n v = (\f -> Builtin t (n, f)) <$> builtin (Text.unpack n) v
@@ -358,3 +359,32 @@ sub_ t1 t2 = do
         (NVConstant (NInt n1), NVConstant (NInt n2)) -> do
             buildThunk $ NVConstant $ NInt $ n1 - n2
         _ -> error "builtins.splitVersion: not a number"
+
+parseDrvName :: Text -> (Text, Text)
+parseDrvName s =
+    let sep = "-"
+        pieces = Text.splitOn sep s
+        isFirstVersionPiece p = case Text.uncons p of
+            Just (h, _) | isDigit h -> True
+            _ -> False
+        -- Like 'break', but always puts the first item into the first result list
+        breakAfterFirstItem :: (a -> Bool) -> [a] -> ([a], [a])
+        breakAfterFirstItem f = \case
+            h : t ->
+                let (a, b) = break f t
+                in (h : a, b)
+            [] -> ([], [])
+        (namePieces, versionPieces) =
+          breakAfterFirstItem isFirstVersionPiece pieces
+    in (Text.intercalate sep namePieces, Text.intercalate sep versionPieces)
+
+parseDrvName_ :: MonadNix m => NThunk m -> m (NThunk m)
+parseDrvName_ arg = forceThunk arg >>= \case
+    NVStr s _ -> do
+        let (name, version) = parseDrvName s
+        vals <- sequence $ Map.fromList
+          [ ("name", buildThunk $ NVStr name mempty)
+          , ("version", buildThunk $ NVStr version mempty)
+          ]
+        buildThunk $ NVSet vals
+    _ -> error "builtins.splitVersion: not a string"
