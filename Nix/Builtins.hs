@@ -47,6 +47,7 @@ builtinsList :: forall m. MonadNixEnv m => m [ Builtin m ]
 builtinsList = sequence [
       add  TopLevel "toString"        toString
     , add  TopLevel "import"          importFile
+    , add2 TopLevel "map"             map_
     , add  Normal   "getEnv"          getEnvVar
     , add2 Normal   "hasAttr"         hasAttr
     , add2 Normal   "getAttr"         getAttr
@@ -261,6 +262,11 @@ attrNames :: MonadNix m => NThunk m -> m (NValue m)
 attrNames = forceThunk >=> \case
     NVSet m -> toValue $ Map.keys m
     v -> error $ "builtins.attrNames: Expected attribute set, got " ++ show (void v)
+
+map_ :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
+map_ f = forceThunk >=> \case
+    NVList l -> NVList <$> traverse (valueRef <=< apply f) l
+    v -> error $ "map: Expected list, got " ++ show (void v)
 
 newtype Prim m a = Prim { runPrim :: m a }
 
