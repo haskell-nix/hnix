@@ -1,6 +1,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
@@ -45,9 +46,9 @@ isTopLevel b = case kind b of Normal -> False; TopLevel -> True
 builtinsList :: forall m. MonadNixEnv m => m [ Builtin m ]
 builtinsList = sequence [
       add  TopLevel "toString" toString
-    , add  TopLevel "import"   import_
+    , add  TopLevel "import"   importFile
 
-    , add  Normal   "getEnv"          getEnv_
+    , add  Normal   "getEnv"          getEnvVar
     , add2 Normal   "hasAttr"         hasAttr
     , add2 Normal   "getAttr"         getAttr
     , add2 Normal   "any"             any_
@@ -58,14 +59,19 @@ builtinsList = sequence [
     , add  Normal   "splitVersion"    splitVersion_
     , add2 Normal   "compareVersions" compareVersions_
     , add2 Normal   "compareVersions" compareVersions_
-    , add' Normal   "sub"             (\a b -> Prim $ pure (a - b :: Integer))
+    , add' Normal   "sub"             (arity2 ((-) @Integer))
     , add' Normal   "parseDrvName"    parseDrvName
   ]
   where
     wrap t n f = Builtin t (n, f)
+
+    -- arity1 f = Prim . pure . f
+    arity2 f = ((Prim . pure) .) . f
+
     add  t n v = wrap t n <$> buildThunk (builtin  (Text.unpack n) v)
     add2 t n v = wrap t n <$> buildThunk (builtin2 (Text.unpack n) v)
     add3 t n v = wrap t n <$> buildThunk (builtin3 (Text.unpack n) v)
+
     add' :: ToBuiltin m a => BuiltinType -> Text -> a -> m (Builtin m)
     add' t n v = wrap t n <$> buildThunk (toBuiltin (Text.unpack n) v)
 
@@ -92,12 +98,6 @@ toString :: MonadNix m => NThunk m -> m (NValue m)
 toString str = do
     (s, d) <- valueText =<< normalForm =<< forceThunk str
     return $ NVStr s d
-
-import_ :: MonadNixEnv m => NThunk m -> m (NValue m)
-import_ = importFile
-
-getEnv_ :: MonadNixEnv m => NThunk m -> m (NValue m)
-getEnv_ = getEnvVar
 
 hasAttr :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
 hasAttr x y = (,) <$> forceThunk x <*> forceThunk y >>= \case
