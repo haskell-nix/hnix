@@ -13,9 +13,11 @@ import           Control.Monad
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
+import           Data.Char (isDigit)
 import           Data.Fix
 import           Data.IORef
 import qualified Data.Map.Lazy as Map
+import           Data.Ord (comparing)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Foldable (foldlM)
@@ -195,6 +197,8 @@ builtinsList = sequence [
     , add3 Normal   "foldl'"   foldl'_
     , add  Normal   "head"     head_
     , add  Normal   "tail"     tail_
+    , add  Normal   "splitVersion" splitVersion_
+    , add2 Normal   "compareVersions" compareVersions_
   ]
   where
     add  t n v = (\f -> Builtin t (n, f)) <$> builtin (Text.unpack n) v
@@ -292,3 +296,54 @@ tail_ arg = forceThunk arg >>= \case
         [] -> error "builtins.tail: empty list"
         _:t -> buildThunk $ NVList t
     _ -> error "builtins.tail: not a list"
+
+data VersionComponent
+   = VersionComponent_Pre -- ^ The string "pre"
+   | VersionComponent_String Text -- ^ A string other than "pre"
+   | VersionComponent_Number Integer -- ^ A number
+   deriving (Show, Read, Eq, Ord)
+
+versionComponentToString :: VersionComponent -> Text
+versionComponentToString = \case
+  VersionComponent_Pre -> "pre"
+  VersionComponent_String s -> s
+  VersionComponent_Number n -> Text.pack $ show n
+
+-- | Based on https://github.com/NixOS/nix/blob/4ee4fda521137fed6af0446948b3877e0c5db803/src/libexpr/names.cc#L44
+versionComponentSeparators :: [Char]
+versionComponentSeparators = ".-"
+
+splitVersion :: Text -> [VersionComponent]
+splitVersion s = case Text.uncons s of
+    Nothing -> []
+    Just (h, t)
+      | h `elem` versionComponentSeparators -> splitVersion t
+      | isDigit h ->
+          let (digits, rest) = Text.span isDigit s
+          in VersionComponent_Number (read $ Text.unpack digits) : splitVersion rest
+      | otherwise ->
+          let (chars, rest) = Text.span (\c -> not $ isDigit c || c `elem` versionComponentSeparators) s
+              thisComponent = case chars of
+                  "pre" -> VersionComponent_Pre
+                  x -> VersionComponent_String x
+          in thisComponent : splitVersion rest
+
+splitVersion_ :: MonadNix m => NThunk m -> m (NThunk m)
+splitVersion_ arg = forceThunk arg >>= \case
+    NVStr s _ -> do
+        vals <- forM (splitVersion s) $ \c -> do
+            buildThunk $ NVStr (versionComponentToString c) mempty
+        buildThunk $ NVList vals
+    _ -> error "builtins.splitVersion: not a string"
+
+compareVersions_ :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
+compareVersions_ t1 t2 = do
+    v1 <- forceThunk t1
+    v2 <- forceThunk t2
+    case (v1, v2) of
+        (NVStr s1 _, NVStr s2 _) -> do
+            buildThunk $ NVConstant $ NInt $ case comparing splitVersion s1 s2 of
+                LT -> -1
+                EQ -> 0
+                GT -> 1
+        _ -> error "builtins.splitVersion: not a string"
