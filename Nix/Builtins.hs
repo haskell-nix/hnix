@@ -61,11 +61,12 @@ builtinsList = sequence [
     , add' Normal   "sub"             (arity2 ((-) @Integer))
     , add' Normal   "parseDrvName"    parseDrvName
     , add' Normal   "substring"       substring
+    , add' Normal   "stringLength"    (arity1 Text.length)
   ]
   where
     wrap t n f = Builtin t (n, f)
 
-    -- arity1 f = Prim . pure . f
+    arity1 f = Prim . pure . f
     arity2 f = ((Prim . pure) .) . f
 
     add  t n v = wrap t n <$> buildThunk (builtin  (Text.unpack n) v)
@@ -262,6 +263,9 @@ class ToNix a where
 
 instance ToNix Text where
     toValue s = return $ NVStr s mempty
+
+instance ToNix Int where
+    toValue = toValue . toInteger
 
 instance ToNix Integer where
     toValue = return . NVConstant . NInt
