@@ -21,6 +21,8 @@ import           Nix.Eval
 import           Nix.Expr (NExpr)
 import           Nix.Parser
 import           Nix.Utils
+import           System.Process (readProcessWithExitCode)
+import           System.Exit (ExitCode (ExitSuccess))
 
 -- | Evaluate a nix expression in the default context
 evalTopLevelExpr :: MonadNix m => NExpr -> m (NValueNF m)
@@ -76,6 +78,12 @@ instance MonadNix (Cyclic IO) where
                 Failure err  -> error $ "Parse failed: " ++ show err
                 Success expr -> runCyclic $ evalExpr expr
         p -> error $ "Unexpected argument to import: " ++ show (() <$ p)
+
+    addPath path = liftIO $ do
+        (exitCode, out, _) <- readProcessWithExitCode "nix-store" ["--add", path] ""
+        case exitCode of
+          ExitSuccess -> return $ StorePath out
+          _ -> error $ "No such file or directory: " ++ show path
 
     data NThunk (Cyclic IO) =
         NThunkIO (Either (NValue (Cyclic IO)) (IORef (Deferred (Cyclic IO))))
@@ -157,7 +165,7 @@ evalPred f arg = forceThunk f >>= \case
 -- Primops
 
 toString :: MonadNix m => NThunk m -> m (NThunk m)
-toString = valueRef . uncurry NVStr . valueText <=< normalForm
+toString = valueRef . uncurry NVStr <=< valueText <=< normalForm
 
 import_ :: MonadNix m => NThunk m -> m (NThunk m)
 import_ = importFile

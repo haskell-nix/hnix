@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
@@ -7,6 +8,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Nix.Eval (NValue, NValueNF, NValueF(..), ValueSet, MonadNix(..),
+                 StorePath (..),
                  evalExpr, tracingExprEval, checkExpr,
                  exprNormalForm, normalForm,
                  builtin, builtin2, atomText, valueText,
@@ -94,21 +96,24 @@ builtin2 :: MonadNix m
          => String -> (NThunk m -> NThunk m -> m (NThunk m)) -> m (NThunk m)
 builtin2 name f = builtin name (builtin name . f)
 
-valueText :: Functor m => NValueNF m -> (Text, DList Text)
+valueText :: forall m. MonadNix m => NValueNF m -> m (Text, DList Text)
 valueText = cata phi where
-    phi (NVConstant a)    = (atomText a, mempty)
-    phi (NVStr t c)       = (t, c)
+    phi :: NValueF m (m (Text, DList Text)) -> m (Text, DList Text)
+    phi (NVConstant a)    = pure (atomText a, mempty)
+    phi (NVStr t c)       = pure (t, c)
     phi (NVList _)        = error "Cannot coerce a list to a string"
     phi (NVSet set)
-      | Just asString <- Map.lookup "__asString" set = asString
+      | Just asString <- Map.lookup "__asString" set = asString --TODO: Should this be run through valueText recursively?
       | otherwise = error "Cannot coerce a set to a string"
     phi (NVFunction _ _)  = error "Cannot coerce a function to a string"
-    phi (NVLiteralPath p) = (Text.pack p, mempty)
-    phi (NVEnvPath p)     = (Text.pack p, mempty)
+    phi (NVLiteralPath originalPath) = do --TODO: Capture and use the path of the file being processed as the base path
+      storePath <- addPath originalPath
+      pure (Text.pack $ unStorePath storePath, mempty)
+    phi (NVEnvPath p)     = pure (Text.pack p, mempty) --TODO: Ensure this is a store path
     phi (NVBuiltin _ _)    = error "Cannot coerce a function to a string"
 
-valueTextNoContext :: Functor m => NValueNF m -> Text
-valueTextNoContext = fst . valueText
+valueTextNoContext :: MonadNix m => NValueNF m -> m Text
+valueTextNoContext = fmap fst . valueText
 
 -- | Translate an atom into its nix representation.
 atomText :: NAtom -> Text
@@ -117,12 +122,18 @@ atomText (NBool b)  = if b then "true" else "false"
 atomText NNull      = "null"
 atomText (NUri uri) = uri
 
+-- | A path into the nix store
+newtype StorePath = StorePath { unStorePath :: FilePath }
+
 class MonadFix m => MonadNix m where
     data NThunk m :: *
     currentScope  :: m (ValueSet m)
     pushScope  :: ValueSet m -> m r -> m r
     lookupVar  :: Text -> m (Maybe (NThunk m))
     importFile :: NThunk m -> m (NThunk m)
+
+    -- | Import a path into the nix store, and return the resulting path
+    addPath :: FilePath -> m StorePath
 
     buildThunk :: m (NValue m) -> m (NThunk m)
     defer :: m (NThunk m) -> m (NThunk m)
@@ -415,7 +426,7 @@ evalString nstr = do
       Indented     parts -> fromParts parts
       DoubleQuoted parts -> fromParts parts
   where
-    go = runAntiquoted (return . (, mempty)) (fmap valueText . (normalForm =<<))
+    go = runAntiquoted (return . (, mempty)) (valueText <=< (normalForm =<<))
 
 evalSelector :: MonadNix m => Bool -> NAttrPath (m (NThunk m)) -> m [Text]
 evalSelector dyn = mapM evalKeyName where
@@ -423,7 +434,7 @@ evalSelector dyn = mapM evalKeyName where
   evalKeyName (DynamicKey k)
     | dyn       = do
           v  <- runAntiquoted evalString id k
-          valueTextNoContext <$> normalForm v
+          valueTextNoContext =<< normalForm v
     | otherwise = error "dynamic attribute not allowed in this context"
 
 nullVal :: MonadNix m => m (NThunk m)

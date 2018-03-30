@@ -62,6 +62,7 @@ Library
     , unordered-containers
     , data-fix
     , deepseq
+    , process
     , semigroups >= 0.18 && < 0.19
     , regex-tdfa
     , regex-tdfa-text
