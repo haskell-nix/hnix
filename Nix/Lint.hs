@@ -31,7 +31,8 @@ check (NRecSet binds) =
     void $ evalBinds True True (fmap (fmap (const nullVal)) binds)
 
 check (NLet binds e) =
-    (`pushScope` e) =<< evalBinds True True (fmap (fmap (const nullVal)) binds)
+    (`pushScope` e) . newScope
+        =<< evalBinds True True (fmap (fmap (const nullVal)) binds)
 
 -- check (NWith _scope e) = do
 --     env <- currentScope
@@ -41,21 +42,21 @@ check (NAbs a b) = do
     nv <- buildThunk nullVal
     case a of
         Param name ->
-            pushScope (Map.singleton name nv) b
+            pushScope (newScope (Map.singleton name nv)) b
         ParamSet (FixedParamSet s) Nothing ->
-            pushScope (nv <$ s) b
+            pushScope (newScope (nv <$ s)) b
         ParamSet (FixedParamSet s) (Just m) ->
-            pushScope (Map.insert m nv (nv <$ s)) b
+            pushScope (newScope (Map.insert m nv (nv <$ s))) b
         ParamSet (VariadicParamSet s) Nothing ->
-            pushScope (nv <$ s) b
+            pushScope (newScope (nv <$ s)) b
         ParamSet (VariadicParamSet s) (Just m) ->
-            pushScope (Map.insert m nv (nv <$ s)) b
+            pushScope (newScope (Map.insert m nv (nv <$ s))) b
 
 -- In order to check some of the other operations properly, we'd need static
 -- typing
 check _ = return ()
 
 lintExpr :: NExpr -> IO ()
-lintExpr expr = run (checkExpr expr) =<< run baseEnv emptyMap
+lintExpr expr = run (checkExpr expr) =<< run baseEnv emptyScopes
   where
     run = runReaderT . runCyclic

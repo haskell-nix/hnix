@@ -7,7 +7,7 @@ import Control.Monad
 import Control.Monad.Fix
 import Data.Fix
 
--- #define ENABLE_TRACING 1
+#define ENABLE_TRACING 1
 #if ENABLE_TRACING
 import Debug.Trace as X
 #else
@@ -26,6 +26,11 @@ loeb x = go where go = fmap ($ go) x
 
 loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
 loebM f = mfix $ \a -> mapM ($ a) f
+
+para :: (a -> [a] -> b -> b) -> b -> [a] -> b
+para f base = h where
+    h []     = base
+    h (x:xs) = f x xs (h xs)
 
 -- | adi is Abstracting Definitional Interpreters:
 --

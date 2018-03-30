@@ -7,11 +7,12 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Nix.Eval (NValue, NValueNF, NValueF(..), ValueSet, MonadNix(..),
-                 StorePath (..), NestedMap(..), nestedLookup, combineMaps,
-                 extendMap, emptyMap, evalExpr, tracingExprEval, evalBinds,
-                 exprNormalForm, normalForm, builtin, builtin2, builtin3,
-                 atomText, valueText, buildArgument) where
+module Nix.Eval
+    (NValue, NValueNF, NValueF(..), ValueSet, MonadNix(..),
+     StorePath (..), NestedScopes(..), scopeLookup, combineScopes,
+     extendScope, emptyScopes, newScope, newWeakScope,
+     evalExpr, tracingExprEval, evalBinds, exprNormalForm, normalForm,
+     builtin, builtin2, builtin3, atomText, valueText, buildArgument) where
 
 import           Control.Applicative
 import           Control.Monad hiding (mapM, sequence)
@@ -150,33 +151,58 @@ atomText (NUri uri) = uri
 -- | A path into the nix store
 newtype StorePath = StorePath { unStorePath :: FilePath }
 
-newtype NestedMap a = NestedMap { getNestedMap :: [Map.Map Text a] }
+data Scope a = Scope
+    { _scopeMap  :: Map.Map Text a
+    , scopeWeak :: Bool
+    }
     deriving Functor
 
-instance Show (NestedMap a) where
-    show (NestedMap xs) = show $ map Map.keys xs
+instance Show (Scope a) where
+    show (Scope xs _) = show $ Map.keys xs
 
-emptyMap :: NestedMap a
-emptyMap = NestedMap []
+newScope :: Map.Map Text a -> Scope a
+newScope m = Scope m False
 
-nestedLookup :: Text -> NestedMap a -> Maybe a
-nestedLookup key =
-    foldr (\m rest -> Map.lookup key m <|> rest) Nothing . getNestedMap
+newWeakScope :: Map.Map Text a -> Scope a
+newWeakScope m = Scope m True
 
-combineMaps :: NestedMap a -> NestedMap a -> NestedMap a
-combineMaps (NestedMap xs) (NestedMap ys) = NestedMap (xs ++ ys)
+newtype NestedScopes a = NestedScopes { getNestedScopes :: [Scope a] }
+    deriving Functor
 
-extendMap :: Map.Map Text a -> NestedMap a -> NestedMap a
-extendMap x (NestedMap xs) = NestedMap (x:xs)
+instance Show (NestedScopes a) where
+    show (NestedScopes xs) = show xs
+
+emptyScopes :: NestedScopes a
+emptyScopes = NestedScopes []
+
+scopeLookup :: Text -> NestedScopes a -> Maybe a
+scopeLookup key = para go Nothing . getNestedScopes
+  where
+    go (Scope m True)  ms rest =
+        -- If the symbol lookup is in a weak scope, first see if there are any
+        -- matching symbols from the *non-weak* scopes after this one. If so,
+        -- prefer that, otherwise perform the lookup here. This way, if there
+        -- are several weaks scopes in a row, followed by non-weak scopes,
+        -- we'll first prefer the symbol from the non-weak scopes, and then
+        -- prefer it from the first weak scope that matched.
+        scopeLookup key (NestedScopes (filter (not . scopeWeak) ms))
+            <|> Map.lookup key m <|> rest
+    go (Scope m False) _ rest = Map.lookup key m <|> rest
+
+combineScopes :: NestedScopes a -> NestedScopes a -> NestedScopes a
+combineScopes (NestedScopes xs) (NestedScopes ys) = NestedScopes (xs ++ ys)
+
+extendScope :: Map.Map Text a -> NestedScopes a -> NestedScopes a
+extendScope x (NestedScopes xs) = NestedScopes (newScope x:xs)
 
 class MonadFix m => MonadNix m where
-    currentScope :: m (NestedMap (NThunk m))
+    currentScope :: m (NestedScopes (NThunk m))
     clearScopes  :: m r -> m r
-    pushScopes   :: NestedMap (NThunk m) -> m r -> m r
+    pushScopes   :: NestedScopes (NThunk m) -> m r -> m r
     lookupVar    :: Text -> m (Maybe (NValue m))
 
-    pushScope :: ValueSet m -> m r -> m r
-    pushScope = pushScopes . NestedMap . (:[])
+    pushScope :: Scope (NThunk m) -> m r -> m r
+    pushScope = pushScopes . NestedScopes . (:[])
 
     data NThunk m :: *
 
@@ -190,7 +216,7 @@ class MonadFix m => MonadNix m where
     getEnvVar :: NThunk m -> m (NValue m)
 
 deferInScope :: MonadNix m
-             => NestedMap (NThunk m) -> m (NValue m) -> m (NThunk m)
+             => NestedScopes (NThunk m) -> m (NValue m) -> m (NThunk m)
 deferInScope scope = buildThunk . clearScopes . pushScopes scope
 
 buildArgument :: forall m. MonadNix m
@@ -227,8 +253,8 @@ buildArgument params arg = case params of
             traceM $ "Deferring default argument in scope: " ++ show scope
             buildThunk $ clearScopes $ do
                 traceM $ "Evaluating default argument with args: "
-                    ++ show (NestedMap [args])
-                pushScopes (extendMap args scope) (forceThunk =<< f)
+                    ++ show (newScope args)
+                pushScopes (extendScope args scope) (forceThunk =<< f)
         This x | isVariadic -> const (pure x)
                | otherwise  -> error $ "Unexpected parameter: " ++ show k
         These x _ -> const (pure x)
@@ -358,7 +384,7 @@ eval (NLet binds e) = do
     traceM "Let..1"
     s <- evalBinds True True binds
     traceM $ "Let..2: s = " ++ show (() <$ s)
-    pushScope s e
+    pushScope (newScope s) e
 
 eval (NIf cond t f) = cond >>= \case
     NVConstant (NBool True) -> t
@@ -366,9 +392,7 @@ eval (NIf cond t f) = cond >>= \case
     _ -> error "condition must be a boolean"
 
 eval (NWith scope e) = scope >>= \case
-    NVSet scope' -> do
-        env <- currentScope
-        pushScopes (combineMaps env (NestedMap [scope'])) e
+    NVSet s -> pushScope (newWeakScope s) e
     _ -> error "scope must be a set in with statement"
 
 eval (NAssert cond e) = cond >>= \case
@@ -380,8 +404,8 @@ eval (NApp fun arg) = fun >>= \case
     NVFunction params f -> do
         args <- buildArgument params =<< buildThunk arg
         traceM $ "Evaluating function application with args: "
-            ++ show (NestedMap [args])
-        clearScopes (pushScope args (forceThunk =<< f))
+            ++ show (newScope args)
+        clearScopes (pushScope (newScope args) (forceThunk =<< f))
     NVBuiltin _ f -> f =<< buildThunk arg
     _ -> error "Attempt to call non-function"
 
@@ -488,8 +512,7 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
             mv <- case ms of
                 Nothing -> lookupVar key
                 Just s -> s >>= \case
-                    NVSet scope ->
-                        pushScope scope (lookupVar key)
+                    NVSet s -> pushScope (newScope s) (lookupVar key)
                     x -> error
                         $ "First argument to inherit should be a set, saw: "
                         ++ show (() <$ x)
@@ -506,7 +529,7 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
             then loebM (encapsulate scope <$> s)
             else traverse (deferInScope scope) s
 
-    encapsulate scope f attrs = deferInScope (extendMap attrs scope) f
+    encapsulate scope f attrs = deferInScope (extendScope attrs scope) f
 
     insert m (path, value) = attrSetAlter path m value
 

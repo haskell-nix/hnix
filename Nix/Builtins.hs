@@ -4,7 +4,7 @@
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 
 module Nix.Builtins
-    (baseEnv, builtins, Cyclic(..), NestedMap(..),
+    (baseEnv, builtins, Cyclic(..), NestedScopes(..),
      evalTopLevelExpr, evalTopLevelExprIO,
      tracingEvalTopLevelExprIO)
     where
@@ -44,40 +44,40 @@ evalTopLevelExpr mdir expr = do
                 ref <- buildThunk $ return $ NVLiteralPath dir
                 let m = Map.singleton "__cwd" ref
                 traceM $ "Setting __cwd = " ++ show dir
-                return $ extendMap m base
+                return $ extendScope m base
     normalForm =<< pushScopes base (evalExpr expr)
 
 evalTopLevelExprIO :: Maybe FilePath -> NExpr -> IO (NValueNF (Cyclic IO))
 evalTopLevelExprIO mdir expr =
-    runReaderT (runCyclic (evalTopLevelExpr mdir expr)) emptyMap
+    runReaderT (runCyclic (evalTopLevelExpr mdir expr)) emptyScopes
 
 tracingEvalTopLevelExprIO :: Maybe FilePath -> NExpr
                           -> IO (NValueNF (Cyclic IO))
 tracingEvalTopLevelExprIO mdir expr = do
     base <- case mdir of
-        Nothing -> run baseEnv emptyMap
+        Nothing -> run baseEnv emptyScopes
         Just dir -> do
-            ref   <- run (buildThunk $ return $ NVLiteralPath dir) emptyMap
+            ref   <- run (buildThunk $ return $ NVLiteralPath dir) emptyScopes
             let m = Map.singleton "__cwd" ref
             traceM $ "Setting __cwd = " ++ show dir
-            base <- run baseEnv emptyMap
-            return $ extendMap m base
+            base <- run baseEnv emptyScopes
+            return $ extendScope m base
     expr' <- tracingExprEval expr
     thnk  <- run expr' base
     run (normalForm thnk) base
   where
     run = runReaderT . runCyclic
 
-baseEnv :: MonadNix m => m (NestedMap (NThunk m))
+baseEnv :: MonadNix m => m (NestedScopes (NThunk m))
 baseEnv = do
     ref <- buildThunk $ NVSet <$> builtins
     lst <- (("builtins", ref) :) <$> topLevelBuiltins
-    return . NestedMap . (:[]) $ Map.fromList lst
+    return . NestedScopes . (:[]) . newScope $ Map.fromList lst
   where
     topLevelBuiltins = map mapping . filter isTopLevel <$> builtinsList
 
 newtype Cyclic m a = Cyclic
-    { runCyclic :: ReaderT (NestedMap (NThunk (Cyclic m))) m a }
+    { runCyclic :: ReaderT (NestedScopes (NThunk (Cyclic m))) m a }
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO)
 
 data Deferred m
@@ -90,18 +90,18 @@ instance MonadNix (Cyclic IO) where
     -- than constantly merging maps. The number of scope levels will usually
     -- be manageable, but the number of attributes within scopes can be
     -- enormous, making this one of the worst implementations.
-    pushScopes s k = Cyclic $ local (combineMaps s) $ do
+    pushScopes s k = Cyclic $ local (combineScopes s) $ do
         scope <- runCyclic currentScope
         traceM $ "scope: " ++ show (() <$ scope)
         runCyclic k
 
-    clearScopes  = Cyclic . local (const (NestedMap [])) . runCyclic
+    clearScopes  = Cyclic . local (const (NestedScopes [])) . runCyclic
     currentScope = Cyclic ask
 
     -- If a variable is being asked for, it's needed in head normal form.
     lookupVar k  = Cyclic $ do
         scope <- ask
-        case nestedLookup k scope of
+        case scopeLookup k scope of
             Nothing -> return Nothing
             Just v  -> runCyclic $ Just <$> forceThunk v
 
@@ -129,7 +129,7 @@ instance MonadNix (Cyclic IO) where
                     -- Use this cookie so that when we evaluate the next
                     -- import, we'll remember which directory its containing
                     -- file was in.
-                    pushScope (Map.singleton "__cwd" ref)
+                    pushScope (newScope (Map.singleton "__cwd" ref))
                               (evalExpr expr)
         p -> error $ "Unexpected argument to import: " ++ show (() <$ p)
 
@@ -215,7 +215,8 @@ extractBool = \case
 apply :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
 apply f arg = forceThunk f >>= \case
     NVFunction params pred ->
-        (`pushScope` (forceThunk =<< pred)) =<< buildArgument params arg
+        (`pushScope` (forceThunk =<< pred)) . newScope
+            =<< buildArgument params arg
     x -> error $ "Trying to call a " ++ show (() <$ x)
 
 -- Primops
