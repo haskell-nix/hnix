@@ -151,13 +151,15 @@ buildArgument :: forall m. MonadNix m
               => Params (m (NThunk m)) -> NThunk m -> m (ValueSet m)
 buildArgument params arg = case params of
     Param name -> return $ Map.singleton name arg
-    ParamSet (FixedParamSet s)    m -> go s m
-    ParamSet (VariadicParamSet s) m -> go s m
+    ParamSet ps m -> go ps m
   where
-    go s m = forceThunk arg >>= \case
+    go ps m = forceThunk arg >>= \case
         NVSet args -> do
+            let (s, isVariadic) = case ps of
+                  FixedParamSet s' -> (s', False)
+                  VariadicParamSet s' -> (s', True)
             env <- currentScope
-            res <- loebM (alignWithKey (assemble env) args s)
+            res <- loebM (alignWithKey (assemble env isVariadic) args s)
             maybe (pure res) (selfInject res) m
         x -> error $ "Expected set in function call, received: "
                 ++ show (() <$ x)
@@ -168,18 +170,22 @@ buildArgument params arg = case params of
         return $ Map.insert n ref res
 
     assemble :: ValueSet m
+             -> Bool
              -> Text
              -> These (NThunk m) (Maybe (m (NThunk m)))
              -> Map.Map Text (NThunk m)
              -> m (NThunk m)
-    assemble env k = \case
+    assemble env isVariadic k = \case
         That Nothing  -> error $ "Missing value for parameter: " ++ show k
         That (Just f) -> \args ->
             -- Make sure the "scope at definition" (currentScope) is present
             -- when we evaluate the default action, plus the argument scope
             -- (env).
             defer $ pushScope env $ pushScope args f
-        This x        -> const (pure x)
+        This x        ->
+            if isVariadic
+            then const (pure x)
+            else error $ "Unexpected parameter: " ++ show k
         These x _     -> const (pure x)
 
 -- | Evaluate an nix expression, with a given ValueSet as environment
