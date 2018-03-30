@@ -199,6 +199,8 @@ builtinsList = sequence [
     , add  Normal   "tail"     tail_
     , add  Normal   "splitVersion" splitVersion_
     , add2 Normal   "compareVersions" compareVersions_
+    , add2 Normal   "compareVersions" compareVersions_
+    , add2 Normal   "sub"      sub_
   ]
   where
     add  t n v = (\f -> Builtin t (n, f)) <$> builtin (Text.unpack n) v
@@ -347,3 +349,12 @@ compareVersions_ t1 t2 = do
                 EQ -> 0
                 GT -> 1
         _ -> error "builtins.splitVersion: not a string"
+
+sub_ :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
+sub_ t1 t2 = do
+    v1 <- forceThunk t1
+    v2 <- forceThunk t2
+    case (v1, v2) of
+        (NVConstant (NInt n1), NVConstant (NInt n2)) -> do
+            buildThunk $ NVConstant $ NInt $ n1 - n2
+        _ -> error "builtins.splitVersion: not a number"
