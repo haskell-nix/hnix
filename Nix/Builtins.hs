@@ -24,6 +24,7 @@ import           Nix.Eval
 import           Nix.Expr (NExpr)
 import           Nix.Parser
 import           Nix.Utils
+import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
 import           System.FilePath
 import           System.Process (readProcessWithExitCode)
@@ -133,6 +134,14 @@ instance MonadNix (Cyclic IO) where
           ExitSuccess -> return $ StorePath out
           _ -> error $ "No such file or directory: " ++ show path
 
+    getEnvVar name = normalForm name >>= \case
+        Fix (NVStr s _) -> do
+            mres <- liftIO $ lookupEnv (Text.unpack s)
+            case mres of
+                Nothing -> valueRef $ Fix $ NVStr "" mempty
+                Just v  -> valueRef $ Fix $ NVStr (Text.pack v) mempty
+        p -> error $ "Unexpected argument to getEnv: " ++ show p
+
     data NThunk (Cyclic IO) =
         NThunkIO (Either (NValueNF (Cyclic IO))
                          (IORef (Deferred (Cyclic IO))))
@@ -176,6 +185,8 @@ builtinsList :: MonadNix m => m [ Builtin m ]
 builtinsList = sequence [
       add  TopLevel "toString" toString
     , add  TopLevel "import"   import_
+
+    , add  Normal   "getEnv"   getEnv_
     , add2 Normal   "hasAttr"  hasAttr
     , add2 Normal   "getAttr"  getAttr
     , add2 Normal   "any"      any_
@@ -208,6 +219,9 @@ toString = valueRef . uncurry ((Fix .) . NVStr) <=< valueText <=< normalForm
 
 import_ :: MonadNix m => NThunk m -> m (NThunk m)
 import_ = importFile
+
+getEnv_ :: MonadNix m => NThunk m -> m (NThunk m)
+getEnv_ = getEnvVar
 
 hasAttr :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
 hasAttr x y = (,) <$> forceThunk x <*> forceThunk y >>= \case

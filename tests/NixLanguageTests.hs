@@ -17,6 +17,7 @@ import           Nix.Builtins
 import           Nix.Eval
 import           Nix.Parser
 import           Nix.Pretty
+import           System.Environment
 import           System.FilePath
 import           System.FilePath.Glob (compile, globDir1)
 import           Test.Tasty
@@ -116,5 +117,6 @@ nixEvalFile file =  do
   case parseResult of
     Failure err        ->
         error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
-    Success expression ->
+    Success expression -> do
+        setEnv "TEST_VAR" "foo"
         evalTopLevelExprIO (Just (takeDirectory file)) expression

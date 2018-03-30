@@ -163,6 +163,7 @@ class MonadFix m => MonadNix m where
     -- | Import a path into the nix store, and return the resulting path
     addPath :: FilePath -> m StorePath
     importFile :: NThunk m -> m (NThunk m)
+    getEnvVar :: NThunk m -> m (NThunk m)
 
 deferInScope :: MonadNix m
              => NestedMap (NThunk m) -> m (NThunk m) -> m (NThunk m)
@@ -256,6 +257,8 @@ eval (NBinary op larg rarg) = do
      _ -> error unsupportedTypes
    (NVStr ls lc, NVStr rs rc) -> case op of
      NPlus -> valueRef $ Fix $ NVStr (ls `mappend` rs) (lc `mappend` rc)
+     NEq -> valueRef $ Fix $ NVConstant $ NBool $ ls == rs
+     NNEq -> valueRef $ Fix $ NVConstant $ NBool $ ls /= rs
      _ -> error unsupportedTypes
    (NVSet ls, NVSet rs) -> case op of
      NUpdate -> buildThunk $ NVSet $ rs `Map.union` ls
