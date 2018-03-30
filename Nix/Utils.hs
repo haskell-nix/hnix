@@ -7,7 +7,7 @@ import Control.Monad
 import Control.Monad.Fix
 import Data.Fix
 
--- #define ENABLE_TRACING 1
+#define ENABLE_TRACING 1
 #if ENABLE_TRACING
 import Debug.Trace as X
 #else

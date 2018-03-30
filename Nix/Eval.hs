@@ -479,11 +479,24 @@ evalBinds :: forall m. MonadNix m
           -> m (ValueSet m)
 evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
   where
-    -- TODO: Inherit
     go :: Binding (m (NValue m)) -> m [([Text], m (NValue m))]
     go (NamedVar x y) =
         sequence [liftM2 (,) (evalSelector allowDynamic x) (pure y)]
-    go _ = pure [] -- HACK! But who cares right now
+    go (Inherit ms names) = forM names $ \name -> do
+        key <- evalKeyName allowDynamic name
+        return ([key], do
+            mv <- case ms of
+                Nothing -> lookupVar key
+                Just s -> s >>= \case
+                    NVSet scope ->
+                        pushScope scope (lookupVar key)
+                    x -> error
+                        $ "First argument to inherit should be a set, saw: "
+                        ++ show (() <$ x)
+            case mv of
+                Nothing -> error $ "Inheriting unknown attribute: "
+                    ++ show (() <$ name)
+                Just v -> return v)
 
     buildResult :: [([Text], m (NValue m))] -> m (ValueSet m)
     buildResult bindings = do
@@ -509,10 +522,12 @@ evalString nstr = do
     go = runAntiquoted (return . (, mempty)) (valueText <=< (normalForm =<<))
 
 evalSelector :: MonadNix m => Bool -> NAttrPath (m (NValue m)) -> m [Text]
-evalSelector dyn = mapM evalKeyName where
-  evalKeyName (StaticKey k) = return k
-  evalKeyName (DynamicKey k)
-    | dyn       = do
+evalSelector = mapM . evalKeyName
+
+evalKeyName :: MonadNix m => Bool -> NKeyName (m (NValue m)) -> m Text
+evalKeyName _ (StaticKey k) = return k
+evalKeyName dyn (DynamicKey k)
+    | dyn = do
           v <- runAntiquoted evalString id k
           valueTextNoContext =<< normalForm v
     | otherwise = error "dynamic attribute not allowed in this context"
