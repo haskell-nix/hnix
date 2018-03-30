@@ -1,5 +1,9 @@
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 
@@ -17,12 +21,14 @@ import           Data.Align (alignWith)
 import           Data.Char (isDigit)
 import           Data.Fix
 import           Data.IORef
+import           Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.These (fromThese)
 import           Data.Foldable (foldlM)
 import           Data.Traversable (mapM)
+import           GHC.Stack.Types (HasCallStack)
 import           Nix.Atoms
 import           Nix.Eval
 import           Nix.Expr (NExpr)
@@ -177,7 +183,7 @@ data Builtin m = Builtin
 isTopLevel :: Builtin m -> Bool
 isTopLevel b = case kind b of Normal -> False; TopLevel -> True
 
-builtinsList :: MonadNix m => m [ Builtin m ]
+builtinsList :: forall m. MonadNix m => m [ Builtin m ]
 builtinsList = sequence [
       add  TopLevel "toString" toString
     , add  TopLevel "import"   import_
@@ -194,13 +200,15 @@ builtinsList = sequence [
     , add2 Normal   "compareVersions" compareVersions_
     , add2 Normal   "compareVersions" compareVersions_
     , add2 Normal   "sub"             sub_
-    , add  Normal   "parseDrvName"    parseDrvName_
+    , add' Normal   "parseDrvName"    parseDrvName
   ]
   where
     wrap t n f = Builtin t (n, f)
     add  t n v = wrap t n <$> buildThunk (builtin  (Text.unpack n) v)
     add2 t n v = wrap t n <$> buildThunk (builtin2 (Text.unpack n) v)
     add3 t n v = wrap t n <$> buildThunk (builtin3 (Text.unpack n) v)
+    add' :: ToBuiltin m a => BuiltinType -> Text -> a -> m (Builtin m)
+    add' t n v = wrap t n <$> buildThunk (toBuiltin (Text.unpack n) v)
 
 -- Helpers
 
@@ -368,8 +376,8 @@ sub_ t1 t2 = do
             return $ NVConstant $ NInt $ n1 - n2
         _ -> error "builtins.splitVersion: not a number"
 
-parseDrvName :: Text -> (Text, Text)
-parseDrvName s =
+splitDrvName :: Text -> (Text, Text)
+splitDrvName s =
     let sep = "-"
         pieces = Text.splitOn sep s
         isFirstVersionPiece p = case Text.uncons p of
@@ -387,13 +395,36 @@ parseDrvName s =
           breakAfterFirstItem isFirstVersionPiece pieces
     in (Text.intercalate sep namePieces, Text.intercalate sep versionPieces)
 
-parseDrvName_ :: MonadNix m => NThunk m -> m (NValue m)
-parseDrvName_ = forceThunk >=> \case
-    NVStr s _ -> do
-        let (name, version) = parseDrvName s
-        vals <- sequence $ Map.fromList
-          [ ("name", buildThunk $ return $ NVStr name mempty)
-          , ("version", buildThunk $ return $ NVStr version mempty)
-          ]
-        return $ NVSet vals
-    _ -> error "builtins.splitVersion: not a string"
+parseDrvName :: Applicative m => Text -> Prim m (Map Text Text)
+parseDrvName s = Prim $ pure $ Map.fromList [("name", name), ("version", version)]
+    where (name, version) = splitDrvName s
+
+newtype Prim m a = Prim { runPrim :: m a }
+
+class ToNix a where
+    toValue :: MonadNix m => a -> m (NValue m)
+
+instance ToNix Text where
+    toValue s = return $ NVStr s mempty
+
+instance ToNix a => ToNix (Map Text a) where
+    toValue m = NVSet <$> traverse (buildThunk . toValue) m
+
+-- | Types that support conversion to nix in a particular monad
+class ToBuiltin m a | a -> m where
+    toBuiltin :: String -> a -> m (NValue m)
+
+instance (MonadNix m, ToNix a) => ToBuiltin m (Prim m a) where
+    toBuiltin _ p = toValue =<< runPrim p
+
+instance (MonadNix m, FromNix a, ToBuiltin m b) => ToBuiltin m (a -> b) where
+    toBuiltin name f = return $ NVBuiltin name $ \a -> toBuiltin name . f =<< fromThunk a
+
+class FromNix a where
+    --TODO: Get rid of the HasCallStack - it should be captured by whatever error reporting mechanism we add
+    fromThunk :: (HasCallStack, MonadNix m) => NThunk m -> m a
+
+instance FromNix Text where
+    fromThunk arg = forceThunk arg >>= \case
+        NVStr s _ -> pure s
+        v -> error $ "fromThunk: Expected string, got " ++ show (void v)
