@@ -6,7 +6,7 @@
 module Nix.Builtins
     (baseEnv, builtins, Cyclic(..), NestedMap(..),
      evalTopLevelExpr, evalTopLevelExprIO,
-     tracingEvalTopLevelExprIO, lintExpr)
+     tracingEvalTopLevelExprIO)
     where
 
 import           Control.Monad
@@ -65,11 +65,6 @@ tracingEvalTopLevelExprIO mdir expr = do
     expr' <- tracingExprEval expr
     thnk  <- run expr' base
     run (normalForm thnk) base
-  where
-    run = runReaderT . runCyclic
-
-lintExpr :: NExpr -> IO ()
-lintExpr expr = run (checkExpr expr) =<< run baseEnv emptyMap
   where
     run = runReaderT . runCyclic
 
