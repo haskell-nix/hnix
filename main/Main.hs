@@ -7,6 +7,7 @@ import Control.Monad
 import Nix.Builtins
 import Nix.Parser
 import Nix.Pretty
+import Nix.Lint
 import Options.Applicative hiding (ParserResult(..))
 import System.FilePath
 import System.IO
