@@ -158,11 +158,15 @@ class MonadFix m => MonadNix m where
     valueRef   :: NValueNF m -> m (NThunk m)
     buildThunk :: NValue m -> m (NThunk m)
     forceThunk :: NThunk m -> m (NValue m)
-    defer      :: NestedMap (NThunk m) -> m (NThunk m) -> m (NThunk m)
+    defer      :: m (NThunk m) -> m (NThunk m)
 
     -- | Import a path into the nix store, and return the resulting path
     addPath :: FilePath -> m StorePath
     importFile :: NThunk m -> m (NThunk m)
+
+deferInScope :: MonadNix m
+             => NestedMap (NThunk m) -> m (NThunk m) -> m (NThunk m)
+deferInScope scope = defer . clearScopes . pushScopes scope
 
 buildArgument :: forall m. MonadNix m
               => Params (m (NThunk m)) -> NThunk m -> m (ValueSet m)
@@ -196,10 +200,10 @@ buildArgument params arg = case params of
         That (Just f) -> \args -> do
             scope <- currentScope
             traceM $ "Deferring default argument in scope: " ++ show scope
-            defer scope $ do
+            defer $ clearScopes $ do
                 traceM $ "Evaluating default argument with args: "
                     ++ show (NestedMap [args])
-                pushScope args f
+                pushScopes (extendMap args scope) f
         This x | isVariadic -> const (pure x)
                | otherwise  -> error $ "Unexpected parameter: " ++ show k
         These x _ -> const (pure x)
@@ -299,7 +303,7 @@ eval (NHasAttr aset attr) = aset >>= forceThunk >>= \case
 
 eval (NList l) = do
     scope <- currentScope
-    buildThunk . NVList =<< traverse (defer scope) l
+    buildThunk . NVList =<< traverse (deferInScope scope) l
 
 eval (NSet binds) = do
     traceM "NSet..1"
@@ -354,7 +358,8 @@ eval (NAbs params body) = do
     -- body are forced during application.
     scope <- currentScope
     traceM $ "Creating lambda abstraction in scope: " ++ show scope
-    buildThunk $ NVFunction (defer scope <$> params) (defer scope body)
+    buildThunk $ NVFunction (deferInScope scope <$> params)
+                            (deferInScope scope body)
 
 tracingExprEval :: MonadNix m => NExpr -> IO (m (NThunk m))
 tracingExprEval =
@@ -409,7 +414,7 @@ attrSetAlter (p:ps) m val = case Map.lookup p m of
              scope <- currentScope
              return $ Map.insert p (embed scope m') m
       where
-        embed scope m' = buildThunk . NVSet =<< traverse (defer scope) m'
+        embed scope m' = buildThunk . NVSet =<< traverse (deferInScope scope) m'
 
 evalBinds :: forall m. MonadNix m
           => Bool
@@ -430,9 +435,9 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
         scope <- currentScope
         if recursive
             then loebM (encapsulate scope <$> s)
-            else traverse (defer scope) s
+            else traverse (deferInScope scope) s
 
-    encapsulate scope f attrs = defer scope $ pushScope attrs f
+    encapsulate scope f attrs = deferInScope (extendMap attrs scope) f
 
     insert m (path, value) = attrSetAlter path m value
 

@@ -24,22 +24,39 @@ import           Nix.Eval
 import           Nix.Expr (NExpr)
 import           Nix.Parser
 import           Nix.Utils
-import           System.Process (readProcessWithExitCode)
 import           System.Exit (ExitCode (ExitSuccess))
+import           System.FilePath
+import           System.Process (readProcessWithExitCode)
 
 -- | Evaluate a nix expression in the default context
-evalTopLevelExpr :: MonadNix m => NExpr -> m (NValueNF m)
-evalTopLevelExpr expr = do
-    base <- baseEnv
+evalTopLevelExpr :: MonadNix m => Maybe FilePath -> NExpr -> m (NValueNF m)
+evalTopLevelExpr mdir expr = do
+    base <- do
+        base <- baseEnv
+        case mdir of
+            Nothing -> return base
+            Just dir -> do
+                ref <- valueRef $ Fix $ NVLiteralPath dir
+                let m = Map.singleton "__cwd" ref
+                traceM $ "Setting __cwd = " ++ show dir
+                return $ extendMap m base
     normalForm =<< pushScopes base (evalExpr expr)
 
-evalTopLevelExprIO :: NExpr -> IO (NValueNF (Cyclic IO))
-evalTopLevelExprIO expr =
-    runReaderT (runCyclic (evalTopLevelExpr expr)) emptyMap
+evalTopLevelExprIO :: Maybe FilePath -> NExpr -> IO (NValueNF (Cyclic IO))
+evalTopLevelExprIO mdir expr =
+    runReaderT (runCyclic (evalTopLevelExpr mdir expr)) emptyMap
 
-tracingEvalTopLevelExprIO :: NExpr -> IO (NValueNF (Cyclic IO))
-tracingEvalTopLevelExprIO expr = do
-    base <- run baseEnv emptyMap
+tracingEvalTopLevelExprIO :: Maybe FilePath -> NExpr
+                          -> IO (NValueNF (Cyclic IO))
+tracingEvalTopLevelExprIO mdir expr = do
+    base <- case mdir of
+        Nothing -> run baseEnv emptyMap
+        Just dir -> do
+            ref   <- run (valueRef $ Fix $ NVLiteralPath dir) emptyMap
+            let m = Map.singleton "__cwd" ref
+            traceM $ "Setting __cwd = " ++ show dir
+            base <- run baseEnv emptyMap
+            return $ extendMap m base
     expr' <- tracingExprEval expr
     thnk  <- run expr' base
     run (normalForm thnk) base
@@ -64,7 +81,7 @@ newtype Cyclic m a = Cyclic
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO)
 
 data Deferred m
-    = DeferredAction (NestedMap (NThunk m)) (m (NThunk m))
+    = DeferredAction (m (NThunk m))
     -- ^ This is closure over the environment where it was created.
     | ComputedValue (NValue m)
 
@@ -83,14 +100,31 @@ instance MonadNix (Cyclic IO) where
     lookupVar k  = Cyclic $ nestedLookup k <$> ask
 
     -- jww (2018-03-29): Cache which files have been read in.
-    importFile path = forceThunk path >>= \case
-        NVLiteralPath path -> Cyclic $ do
-            traceM $ "Importing file " ++ path
-            eres <- parseNixFile path
+    importFile path = normalForm path >>= \case
+        Fix (NVLiteralPath path) -> do
+            mres <- lookupVar "__cwd"
+            path' <- case mres of
+                Nothing  -> do
+                    traceM "No known current directory"
+                    return path
+                Just dir -> normalForm dir >>= \case
+                    Fix (NVLiteralPath dir') -> do
+                        traceM $ "Current directory for import is: "
+                            ++ show dir'
+                        return $ dir' </> path
+                    x -> error $ "How can the current directory be: " ++ show x
+            traceM $ "Importing file " ++ path'
+            eres <- Cyclic $ parseNixFile path'
             case eres of
                 Failure err  -> error $ "Parse failed: " ++ show err
-                Success expr -> runCyclic $ evalExpr expr
-        p -> error $ "Unexpected argument to import: " ++ show (() <$ p)
+                Success expr -> do
+                    ref <- valueRef $ Fix $ NVLiteralPath $ takeDirectory path'
+                    -- Use this cookie so that when we evaluate the next
+                    -- import, we'll remember which directory its containing
+                    -- file was in.
+                    pushScope (Map.singleton "__cwd" ref)
+                              (evalExpr expr)
+        p -> error $ "Unexpected argument to import: " ++ show p
 
     addPath path = liftIO $ do
         (exitCode, out, _) <-
@@ -108,9 +142,8 @@ instance MonadNix (Cyclic IO) where
     buildThunk action =
         liftIO $ NThunkIO . Right <$> newIORef (ComputedValue action)
 
-    defer scope action = do
-        traceM $ "Deferring action in scope: " ++ show (() <$ scope)
-        liftIO $ NThunkIO . Right <$> newIORef (DeferredAction scope action)
+    defer action =
+        liftIO $ NThunkIO . Right <$> newIORef (DeferredAction action)
 
     forceThunk (NThunkIO (Left value)) =
         return $ NThunkIO . Left <$> unFix value
@@ -119,12 +152,10 @@ instance MonadNix (Cyclic IO) where
         eres <- liftIO $ readIORef ref
         case eres of
             ComputedValue value -> return value
-            DeferredAction scope action -> do
+            DeferredAction action -> do
+                scope <- currentScope
                 traceM $ "Forcing thunk in scope: " ++ show scope
-                value <- Cyclic
-                    $ local (`combineMaps` scope)
-                    $ runCyclic
-                    $ forceThunk =<< action
+                value <- forceThunk =<< action
                 traceM $ "Forcing thunk computed: " ++ show (() <$ value)
                 liftIO $ writeIORef ref (ComputedValue value)
                 return value

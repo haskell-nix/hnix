@@ -63,6 +63,8 @@ Library
     , data-fix
     , deepseq
     , process
+    , directory
+    , filepath
     , semigroups >= 0.18 && < 0.19
     , regex-tdfa
     , regex-tdfa-text
@@ -103,6 +105,7 @@ Executable hnix
     , optparse-applicative
     , text
     , transformers
+    , filepath
   Ghc-options: -Wall -threaded
 
 Test-suite hnix-tests

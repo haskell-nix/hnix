@@ -1,4 +1,5 @@
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE TupleSections #-}
 
 module Main where
 
@@ -7,6 +8,7 @@ import Nix.Builtins
 import Nix.Parser
 import Nix.Pretty
 import Options.Applicative hiding (ParserResult(..))
+import System.FilePath
 import System.IO
 import Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
@@ -47,21 +49,21 @@ mainOptions = Options
 main :: IO ()
 main = do
     opts <- execParser optsDef
-    eres <- case expression opts of
-        Just s -> return $ parseNixString s
+    (eres, mdir) <- case expression opts of
+        Just s -> return (parseNixString s, Nothing)
         Nothing  -> case filePath opts of
-            Nothing   -> parseNixString <$> getContents
-            Just "-"  -> parseNixString <$> getContents
-            Just path -> parseNixFile path
+            Nothing   -> (, Nothing) . parseNixString <$> getContents
+            Just "-"  -> (, Nothing) . parseNixString <$> getContents
+            Just path -> (, Just (takeDirectory path)) <$> parseNixFile path
 
     case eres of
         Failure err -> hPutStrLn stderr $ "Parse failed: " ++ show err
         Success expr -> do
             when (check opts) $ lintExpr expr
             if | evaluate opts, debug opts ->
-                     print =<< tracingEvalTopLevelExprIO expr
+                     print =<< tracingEvalTopLevelExprIO mdir expr
                | evaluate opts ->
-                     putStrLn . printNix =<< evalTopLevelExprIO expr
+                     putStrLn . printNix =<< evalTopLevelExprIO mdir expr
                | debug opts ->
                      print expr
                | otherwise ->

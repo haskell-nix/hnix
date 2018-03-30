@@ -20,7 +20,7 @@ let
         libraryHaskellDepends = [
           ansi-wl-pprint base containers data-fix deepseq deriving-compat
           parsers regex-tdfa regex-tdfa-text semigroups text transformers
-          trifecta unordered-containers these process
+          trifecta unordered-containers these process directory filepath
         ];
         executableHaskellDepends = [
           ansi-wl-pprint base containers data-fix deepseq optparse-applicative
