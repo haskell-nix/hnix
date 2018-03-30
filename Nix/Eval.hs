@@ -246,32 +246,32 @@ eval (NBinary op larg rarg) = do
           "unsupported argument types for binary operator "
               ++ show (() <$ lval, op, () <$ rval)
   case (lval, rval) of
-   (NVConstant lc, NVConstant rc) ->
-       valueRef $ Fix $ NVConstant $ case (op, lc, rc) of
-     (NEq,  l, r) -> NBool $ l == r
-     (NNEq, l, r) -> NBool $ l /= r
-     (NLt,  l, r) -> NBool $ l <  r
-     (NLte, l, r) -> NBool $ l <= r
-     (NGt,  l, r) -> NBool $ l >  r
-     (NGte, l, r) -> NBool $ l >= r
-     (NAnd,  NBool l, NBool r) -> NBool $ l && r
-     (NOr,   NBool l, NBool r) -> NBool $ l || r
-     (NImpl, NBool l, NBool r) -> NBool $ not l || r
-     (NPlus,  NInt l, NInt r) -> NInt $ l + r
-     (NMinus, NInt l, NInt r) -> NInt $ l - r
-     (NMult,  NInt l, NInt r) -> NInt $ l * r
-     (NDiv,   NInt l, NInt r) -> NInt $ l `div` r
+   (NVConstant lc, NVConstant rc) -> case (op, lc, rc) of
+     (NEq,  _, _) -> valueRefBool =<< valueEq lval rval --TODO: Refactor so that eval (NBinary ..) dispatches based on operator first
+     (NNEq, _, _) -> valueRefBool . not =<< valueEq lval rval
+     (NLt,  l, r) -> valueRefBool $ l <  r
+     (NLte, l, r) -> valueRefBool $ l <= r
+     (NGt,  l, r) -> valueRefBool $ l >  r
+     (NGte, l, r) -> valueRefBool $ l >= r
+     (NAnd,  NBool l, NBool r) -> valueRefBool $ l && r
+     (NOr,   NBool l, NBool r) -> valueRefBool $ l || r
+     (NImpl, NBool l, NBool r) -> valueRefBool $ not l || r
+     (NPlus,  NInt l, NInt r) -> valueRefInt $ l + r
+     (NMinus, NInt l, NInt r) -> valueRefInt $ l - r
+     (NMult,  NInt l, NInt r) -> valueRefInt $ l * r
+     (NDiv,   NInt l, NInt r) -> valueRefInt $ l `div` r
      _ -> error unsupportedTypes
    (NVStr ls lc, NVStr rs rc) -> case op of
      NPlus -> valueRef $ Fix $ NVStr (ls `mappend` rs) (lc `mappend` rc)
-     NEq -> valueRef $ Fix $ NVConstant $ NBool $ ls == rs
-     NNEq -> valueRef $ Fix $ NVConstant $ NBool $ ls /= rs
+     NEq -> valueRefBool =<< valueEq lval rval
+     NNEq -> valueRefBool . not =<< valueEq lval rval
      _ -> error unsupportedTypes
    (NVSet ls, NVSet rs) -> case op of
      NUpdate -> buildThunk $ NVSet $ rs `Map.union` ls
      _ -> error unsupportedTypes
    (NVList ls, NVList rs) -> case op of
      NConcat -> buildThunk $ NVList $ ls ++ rs
+     NEq -> valueRefBool =<< valueEq lval rval
      _ -> error unsupportedTypes
    (NVLiteralPath ls, NVLiteralPath rs) -> case op of
      NPlus -> valueRef $ Fix $ NVLiteralPath $ ls ++ rs -- TODO: Canonicalise path
@@ -367,6 +367,28 @@ eval (NAbs params body) = do
     traceM $ "Creating lambda abstraction in scope: " ++ show scope
     buildThunk $ NVFunction (pushScopes scope <$> params)
                             (pushScopes scope body)
+
+valueRefBool :: MonadNix m => Bool -> m (NThunk m)
+valueRefBool = valueRef . Fix . NVConstant . NBool
+
+valueRefInt :: MonadNix m => Integer -> m (NThunk m)
+valueRefInt = valueRef . Fix . NVConstant . NInt
+
+valueEq :: MonadNix m => NValue m -> NValue m -> m Bool
+valueEq l r = case (l, r) of
+    (NVConstant lc, NVConstant rc) -> pure $ lc == rc
+    (NVStr ls _, NVStr rs _) -> pure $ ls == rs
+    (NVList ls, NVList rs) -> go ls rs
+        where
+            go (hl:tl) (hr:tr) = do
+                hlv <- forceThunk hl
+                hrv <- forceThunk hr
+                valueEq hlv hrv >>= \case
+                    False -> pure False
+                    True -> go tl tr
+            go [] [] = pure True
+            go _ _ = pure False
+    _ -> pure False
 
 tracingExprEval :: MonadNix m => NExpr -> IO (m (NThunk m))
 tracingExprEval =
