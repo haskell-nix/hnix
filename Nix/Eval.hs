@@ -314,7 +314,9 @@ eval (NIf cond t f) = cond >>= forceThunk >>= \case
     _ -> error "condition must be a boolean"
 
 eval (NWith scope e) = scope >>= forceThunk >>= \case
-    NVSet scope' -> pushScope scope' e
+    NVSet scope' -> do
+        env <- currentScope
+        pushScope scope' $ pushScope env e
     _ -> error "scope must be a set in with statement"
 
 eval (NAssert cond e) = cond >>= forceThunk >>= \case
