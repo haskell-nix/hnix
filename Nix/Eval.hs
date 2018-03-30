@@ -10,8 +10,8 @@
 module Nix.Eval (NValue, NValueNF, NValueF(..), ValueSet, MonadNix(..),
                  StorePath (..), NestedMap(..), nestedLookup, combineMaps,
                  extendMap, emptyMap, evalExpr, tracingExprEval, checkExpr,
-                 exprNormalForm, normalForm, builtin, builtin2, atomText,
-                 valueText, buildArgument) where
+                 exprNormalForm, normalForm, builtin, builtin2, builtin3,
+                 atomText, valueText, buildArgument) where
 
 import           Control.Applicative
 import           Control.Monad hiding (mapM, sequence)
@@ -95,6 +95,13 @@ builtin name f = valueRef $ Fix $ NVBuiltin name f
 builtin2 :: MonadNix m
          => String -> (NThunk m -> NThunk m -> m (NThunk m)) -> m (NThunk m)
 builtin2 name f = builtin name (builtin name . f)
+
+builtin3
+  :: MonadNix m
+  => String
+  -> (NThunk m -> NThunk m -> NThunk m -> m (NThunk m))
+  -> m (NThunk m)
+builtin3 name f = builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
 
 valueText :: forall m. MonadNix m => NValueNF m -> m (Text, DList Text)
 valueText = cata phi where

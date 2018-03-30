@@ -18,6 +18,7 @@ import           Data.IORef
 import qualified Data.Map.Lazy as Map
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import           Data.Foldable (foldlM)
 import           Data.Traversable (mapM)
 import           Nix.Atoms
 import           Nix.Eval
@@ -191,10 +192,12 @@ builtinsList = sequence [
     , add2 Normal   "getAttr"  getAttr
     , add2 Normal   "any"      any_
     , add2 Normal   "all"      all_
+    , add3 Normal   "foldl'"   foldl'_
   ]
   where
     add  t n v = (\f -> Builtin t (n, f)) <$> builtin (Text.unpack n) v
     add2 t n v = (\f -> Builtin t (n, f)) <$> builtin2 (Text.unpack n) v
+    add3 t n v = (\f -> Builtin t (n, f)) <$> builtin3 (Text.unpack n) v
 
 -- Helpers
 
@@ -206,8 +209,8 @@ extractBool arg = forceThunk arg >>= \case
     NVConstant (NBool b) -> return b
     _ -> error "Not a boolean constant"
 
-evalPred :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
-evalPred f arg = forceThunk f >>= \case
+apply :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
+apply f arg = forceThunk f >>= \case
     NVFunction params pred ->
         (`pushScope` pred) =<< buildArgument params arg
     x -> error $ "Trying to call a " ++ show (() <$ x)
@@ -248,7 +251,7 @@ anyM p (x:xs)   = do
 any_ :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
 any_ pred arg = forceThunk arg >>= \case
     NVList l ->
-        mkBool =<< anyM extractBool =<< mapM (evalPred pred) l
+        mkBool =<< anyM extractBool =<< mapM (apply pred) l
     arg -> error $ "builtins.any takes a list as second argument, not a "
               ++ show (() <$ arg)
 
@@ -262,6 +265,14 @@ allM p (x:xs)   = do
 all_ :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
 all_ pred arg = forceThunk arg >>= \case
     NVList l ->
-        mkBool =<< allM extractBool =<< mapM (evalPred pred) l
+        mkBool =<< allM extractBool =<< mapM (apply pred) l
     arg -> error $ "builtins.all takes a list as second argument, not a "
+              ++ show (() <$ arg)
+
+--TODO: Strictness
+foldl'_ :: MonadNix m => NThunk m -> NThunk m -> NThunk m -> m (NThunk m)
+foldl'_ f z l = forceThunk l >>= \case
+    NVList vals ->
+        foldlM (\b a -> (f `apply` b) >>= (`apply` a)) z vals
+    arg -> error $ "builtins.foldl' takes a list as third argument, not a "
               ++ show (() <$ arg)
