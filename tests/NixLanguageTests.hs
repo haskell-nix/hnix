@@ -6,7 +6,6 @@ module NixLanguageTests (genTests) where
 
 import           Control.Arrow ((&&&))
 import           Control.Exception
-import           Control.Monad.Trans.State
 import           Data.List (delete, sort)
 import           Data.List.Split (splitOn)
 import           Data.Map (Map)
@@ -68,26 +67,19 @@ genTests = do
 
 assertParse :: FilePath -> Assertion
 assertParse file = parseNixFile file >>= \case
-  Success expr -> do
-      base <- run baseEnv Map.empty
-      run (checkExpr expr) base
-  Failure err -> assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
-  where
-    run expr = evalStateT (runCyclic expr)
+  Success expr -> lintExpr expr
+  Failure err  -> assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
 
 assertParseFail :: FilePath -> Assertion
 assertParseFail file = do
     eres <- parseNixFile file
     catch (case eres of
                Success expr -> do
-                   base <- run baseEnv Map.empty
-                   run (checkExpr expr) base
+                   lintExpr expr
                    assertFailure $ "Unexpected success parsing `"
                        ++ file ++ ":\nParsed value: " ++ show expr
                Failure _ -> return ()) $ \(_ :: SomeException) ->
         return ()
-  where
-    run expr = evalStateT (runCyclic expr)
 
 assertLangOk :: FilePath -> Assertion
 assertLangOk file = do

@@ -4,15 +4,18 @@
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 
 module Nix.Builtins
-    (baseEnv, builtins, Cyclic(..), evalTopLevelExpr, evalTopLevelExprIO)
+    (baseEnv, builtins, Cyclic(..), NestedMap(..),
+     evalTopLevelExpr, evalTopLevelExprIO,
+     tracingEvalTopLevelExprIO, lintExpr)
     where
 
 import           Control.Monad
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.State
+import           Control.Monad.Trans.Reader
+import           Data.Fix
 import           Data.IORef
-import qualified Data.Map as Map
+import qualified Data.Map.Lazy as Map
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Traversable (mapM)
@@ -28,26 +31,41 @@ import           System.Exit (ExitCode (ExitSuccess))
 evalTopLevelExpr :: MonadNix m => NExpr -> m (NValueNF m)
 evalTopLevelExpr expr = do
     base <- baseEnv
-    normalForm =<< pushScope base (evalExpr expr)
+    normalForm =<< pushScopes base (evalExpr expr)
 
 evalTopLevelExprIO :: NExpr -> IO (NValueNF (Cyclic IO))
 evalTopLevelExprIO expr =
-    evalStateT (runCyclic (evalTopLevelExpr expr)) Map.empty
+    runReaderT (runCyclic (evalTopLevelExpr expr)) emptyMap
 
-baseEnv :: MonadNix m => m (ValueSet m)
+tracingEvalTopLevelExprIO :: NExpr -> IO (NValueNF (Cyclic IO))
+tracingEvalTopLevelExprIO expr = do
+    base <- run baseEnv emptyMap
+    expr' <- tracingExprEval expr
+    thnk  <- run expr' base
+    run (normalForm thnk) base
+  where
+    run = runReaderT . runCyclic
+
+lintExpr :: NExpr -> IO ()
+lintExpr expr = run (checkExpr expr) =<< run baseEnv emptyMap
+  where
+    run = runReaderT . runCyclic
+
+baseEnv :: MonadNix m => m (NestedMap (NThunk m))
 baseEnv = do
-    ref <- valueRef . NVSet =<< builtins
+    ref <- buildThunk . NVSet =<< builtins
     lst <- (("builtins", ref) :) <$> topLevelBuiltins
-    return $ Map.fromList lst
+    return . NestedMap . (:[]) $ Map.fromList lst
   where
     topLevelBuiltins = map mapping . filter isTopLevel <$> builtinsList
 
-newtype Cyclic m a = Cyclic { runCyclic :: StateT (ValueSet (Cyclic m)) m a }
+newtype Cyclic m a = Cyclic
+    { runCyclic :: ReaderT (NestedMap (NThunk (Cyclic m))) m a }
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO)
 
 data Deferred m
-    = DeferredValue (m (NValue m))
-    | DeferredThunk (m (NThunk m))
+    = DeferredAction (NestedMap (NThunk m)) (m (NThunk m))
+    -- ^ This is closure over the environment where it was created.
     | ComputedValue (NValue m)
 
 instance MonadNix (Cyclic IO) where
@@ -55,19 +73,14 @@ instance MonadNix (Cyclic IO) where
     -- than constantly merging maps. The number of scope levels will usually
     -- be manageable, but the number of attributes within scopes can be
     -- enormous, making this one of the worst implementations.
-    pushScope s k = Cyclic $ do
-        traceM $ "pushScope: s = " ++ show (() <$ s)
-        res <- modify (s `Map.union`) >> runCyclic k
-        traceM "pushScope done"
-        return res
+    pushScopes s k = Cyclic $ local (combineMaps s) $ do
+        scope <- runCyclic currentScope
+        traceM $ "scope: " ++ show (() <$ scope)
+        runCyclic k
 
-    currentScope = Cyclic get
-
-    lookupVar k = Cyclic $ do
-        s <- get
-        case Map.lookup k s of
-            Nothing -> return Nothing
-            Just v -> return $ Just v
+    clearScopes  = Cyclic . local (const (NestedMap [])) . runCyclic
+    currentScope = Cyclic ask
+    lookupVar k  = Cyclic $ nestedLookup k <$> ask
 
     -- jww (2018-03-29): Cache which files have been read in.
     importFile path = forceThunk path >>= \case
@@ -80,45 +93,40 @@ instance MonadNix (Cyclic IO) where
         p -> error $ "Unexpected argument to import: " ++ show (() <$ p)
 
     addPath path = liftIO $ do
-        (exitCode, out, _) <- readProcessWithExitCode "nix-store" ["--add", path] ""
+        (exitCode, out, _) <-
+            readProcessWithExitCode "nix-store" ["--add", path] ""
         case exitCode of
           ExitSuccess -> return $ StorePath out
           _ -> error $ "No such file or directory: " ++ show path
 
     data NThunk (Cyclic IO) =
-        NThunkIO (Either (NValue (Cyclic IO)) (IORef (Deferred (Cyclic IO))))
+        NThunkIO (Either (NValueNF (Cyclic IO))
+                         (IORef (Deferred (Cyclic IO))))
 
     valueRef = return . NThunkIO . Left
 
-    buildThunk action = do
-        traceM "Building a thunk"
-        liftIO $ NThunkIO . Right <$> newIORef (DeferredValue action)
+    buildThunk action =
+        liftIO $ NThunkIO . Right <$> newIORef (ComputedValue action)
 
-    defer action = do
-        traceM "Deferring an action"
-        liftIO $ NThunkIO . Right <$> newIORef (DeferredThunk action)
+    defer scope action = do
+        traceM $ "Deferring action in scope: " ++ show (() <$ scope)
+        liftIO $ NThunkIO . Right <$> newIORef (DeferredAction scope action)
 
-    forceThunk (NThunkIO (Left value)) = return value
+    forceThunk (NThunkIO (Left value)) =
+        return $ NThunkIO . Left <$> unFix value
+
     forceThunk (NThunkIO (Right ref)) = do
-        traceM "Forcing a thunk"
         eres <- liftIO $ readIORef ref
         case eres of
-            ComputedValue value -> do
-                traceM "Already forced, returning value"
-                return value
-            DeferredValue action -> do
-                traceM "Executing action..."
-                value <- action
-                traceM "Executing action...done, storing..."
+            ComputedValue value -> return value
+            DeferredAction scope action -> do
+                traceM $ "Forcing thunk in scope: " ++ show scope
+                value <- Cyclic
+                    $ local (`combineMaps` scope)
+                    $ runCyclic
+                    $ forceThunk =<< action
+                traceM $ "Forcing thunk computed: " ++ show (() <$ value)
                 liftIO $ writeIORef ref (ComputedValue value)
-                traceM "Executing action...done, storing...done"
-                return value
-            DeferredThunk action -> do
-                traceM "Executing thunk..."
-                value <- forceThunk =<< action
-                traceM "Executing thunk...done, storing..."
-                liftIO $ writeIORef ref (ComputedValue value)
-                traceM "Executing thunk...done, storing...done"
                 return value
 
 builtins :: MonadNix m => m (ValueSet m)
@@ -149,7 +157,7 @@ builtinsList = sequence [
 -- Helpers
 
 mkBool :: MonadNix m => Bool -> m (NThunk m)
-mkBool = valueRef . NVConstant . NBool
+mkBool = valueRef . Fix . NVConstant . NBool
 
 extractBool :: MonadNix m => NThunk m -> m Bool
 extractBool arg = forceThunk arg >>= \case
@@ -165,7 +173,7 @@ evalPred f arg = forceThunk f >>= \case
 -- Primops
 
 toString :: MonadNix m => NThunk m -> m (NThunk m)
-toString = valueRef . uncurry NVStr <=< valueText <=< normalForm
+toString = valueRef . uncurry ((Fix .) . NVStr) <=< valueText <=< normalForm
 
 import_ :: MonadNix m => NThunk m -> m (NThunk m)
 import_ = importFile
@@ -173,7 +181,7 @@ import_ = importFile
 hasAttr :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
 hasAttr x y = (,) <$> forceThunk x <*> forceThunk y >>= \case
     (NVStr key _, NVSet aset) ->
-        valueRef $ NVConstant . NBool $ Map.member key aset
+        valueRef $ Fix . NVConstant . NBool $ Map.member key aset
     (x, y) -> error $ "Invalid types for builtin.hasAttr: "
                  ++ show (() <$ x, () <$ y)
 

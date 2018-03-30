@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Nix.Utils (module Nix.Utils, module X) where
 
@@ -48,3 +49,12 @@ adiM :: (Monoid b, Applicative s, Traversable s, Traversable t, Monad m)
 adiM f g = g ((go <=< traverse (adiM f g)) . unFix)
   where
     go = traverse (traverse f . sequenceA) . sequenceA
+
+adiT :: forall s t m a. (Traversable t, Monad m, Monad s)
+     => (t a -> m a)
+     -> ((Fix t -> s (m a)) -> Fix t -> s (m a))
+     -> Fix t -> s (m a)
+adiT f g = g (go . fmap (adiT f g) . unFix)
+  where
+    go :: t (s (m a)) -> s (m a)
+    go = fmap ((f =<<) . sequenceA) . sequenceA

@@ -2,16 +2,13 @@
 
 module Main where
 
-import           Control.Monad
-import           Control.Monad.Trans.State
-import qualified Data.Map as Map
-import           Nix.Builtins
-import           Nix.Eval
-import           Nix.Parser
-import           Nix.Pretty
-import           Options.Applicative hiding (ParserResult(..))
-import           System.IO
-import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
+import Control.Monad
+import Nix.Builtins
+import Nix.Parser
+import Nix.Pretty
+import Options.Applicative hiding (ParserResult(..))
+import System.IO
+import Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 data Options = Options
     { verbose    :: Bool
@@ -60,14 +57,9 @@ main = do
     case eres of
         Failure err -> hPutStrLn stderr $ "Parse failed: " ++ show err
         Success expr -> do
-            base <- run baseEnv Map.empty
-            when (check opts) $
-                run (checkExpr expr) base
-            if | evaluate opts, debug opts -> do
-                     expr' <- tracingExprEval expr
-                     thnk  <- run expr' base
-                     val   <- run (normalForm thnk) base
-                     print val
+            when (check opts) $ lintExpr expr
+            if | evaluate opts, debug opts ->
+                     print =<< tracingEvalTopLevelExprIO expr
                | evaluate opts ->
                      putStrLn . printNix =<< evalTopLevelExprIO expr
                | debug opts ->
@@ -75,8 +67,6 @@ main = do
                | otherwise ->
                      displayIO stdout $ renderPretty 0.4 80 (prettyNix expr)
   where
-    run expr = evalStateT (runCyclic expr)
-
     optsDef :: ParserInfo Options
     optsDef = info (helper <*> mainOptions)
                    (fullDesc <> progDesc "" <> header "hnix")

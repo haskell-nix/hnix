@@ -8,12 +8,12 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Nix.Eval (NValue, NValueNF, NValueF(..), ValueSet, MonadNix(..),
-                 StorePath (..),
-                 evalExpr, tracingExprEval, checkExpr,
-                 exprNormalForm, normalForm,
-                 builtin, builtin2, atomText, valueText,
-                 buildArgument) where
+                 StorePath (..), NestedMap(..), nestedLookup, combineMaps,
+                 extendMap, emptyMap, evalExpr, tracingExprEval, checkExpr,
+                 exprNormalForm, normalForm, builtin, builtin2, atomText,
+                 valueText, buildArgument) where
 
+import           Control.Applicative
 import           Control.Monad hiding (mapM, sequence)
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
@@ -90,7 +90,7 @@ instance Show f => Show (NValueF m f) where
 type ValueSet m = Map.Map Text (NThunk m)
 
 builtin :: MonadNix m => String -> (NThunk m -> m (NThunk m)) -> m (NThunk m)
-builtin name f = valueRef $ NVBuiltin name f
+builtin name f = valueRef $ Fix $ NVBuiltin name f
 
 builtin2 :: MonadNix m
          => String -> (NThunk m -> NThunk m -> m (NThunk m)) -> m (NThunk m)
@@ -125,38 +125,44 @@ atomText (NUri uri) = uri
 -- | A path into the nix store
 newtype StorePath = StorePath { unStorePath :: FilePath }
 
+newtype NestedMap a = NestedMap { getNestedMap :: [Map.Map Text a] }
+    deriving Functor
+
+instance Show (NestedMap a) where
+    show (NestedMap xs) = show $ map Map.keys xs
+
+emptyMap :: NestedMap a
+emptyMap = NestedMap []
+
+nestedLookup :: Text -> NestedMap a -> Maybe a
+nestedLookup key =
+    foldr (\m rest -> Map.lookup key m <|> rest) Nothing . getNestedMap
+
+combineMaps :: NestedMap a -> NestedMap a -> NestedMap a
+combineMaps (NestedMap xs) (NestedMap ys) = NestedMap (xs ++ ys)
+
+extendMap :: Map.Map Text a -> NestedMap a -> NestedMap a
+extendMap x (NestedMap xs) = NestedMap (x:xs)
+
 class MonadFix m => MonadNix m where
+    currentScope :: m (NestedMap (NThunk m))
+    clearScopes  :: m r -> m r
+    pushScopes   :: NestedMap (NThunk m) -> m r -> m r
+    lookupVar    :: Text -> m (Maybe (NThunk m))
+
+    pushScope :: ValueSet m -> m r -> m r
+    pushScope = pushScopes . NestedMap . (:[])
+
     data NThunk m :: *
-    currentScope  :: m (ValueSet m)
-    pushScope  :: ValueSet m -> m r -> m r
-    lookupVar  :: Text -> m (Maybe (NThunk m))
-    importFile :: NThunk m -> m (NThunk m)
+
+    valueRef   :: NValueNF m -> m (NThunk m)
+    buildThunk :: NValue m -> m (NThunk m)
+    forceThunk :: NThunk m -> m (NValue m)
+    defer      :: NestedMap (NThunk m) -> m (NThunk m) -> m (NThunk m)
 
     -- | Import a path into the nix store, and return the resulting path
     addPath :: FilePath -> m StorePath
-
-    buildThunk :: m (NValue m) -> m (NThunk m)
-    defer :: m (NThunk m) -> m (NThunk m)
-    forceThunk :: NThunk m -> m (NValue m)
-
-    valueRef :: NValue m -> m (NThunk m)
-    valueRef = buildThunk . return
-
-wrap :: forall m. MonadNix m => NValueNF m -> m (NThunk m)
-wrap = cata phi
-   where
-    phi :: NValueF m (m (NThunk m)) -> m (NThunk m)
-    phi = \case
-        NVConstant a     -> valueRef $ NVConstant a
-        NVStr t s        -> valueRef $ NVStr t s
-        NVList l         -> valueRef . NVList =<< sequence l
-        NVSet s          -> valueRef . NVSet =<< sequence s
-        NVFunction p f   -> do
-            p' <- sequence p
-            valueRef . NVFunction p' =<< f
-        NVLiteralPath fp -> valueRef $ NVLiteralPath fp
-        NVEnvPath p      -> valueRef $ NVEnvPath p
-        NVBuiltin name f -> valueRef $ NVBuiltin name f
+    importFile :: NThunk m -> m (NThunk m)
 
 buildArgument :: forall m. MonadNix m
               => Params (m (NThunk m)) -> NThunk m -> m (ValueSet m)
@@ -167,37 +173,36 @@ buildArgument params arg = case params of
     go ps m = forceThunk arg >>= \case
         NVSet args -> do
             let (s, isVariadic) = case ps of
-                  FixedParamSet s' -> (s', False)
+                  FixedParamSet    s' -> (s', False)
                   VariadicParamSet s' -> (s', True)
-            env <- currentScope
-            res <- loebM (alignWithKey (assemble env isVariadic) args s)
+            res <- loebM (alignWithKey (assemble isVariadic) args s)
             maybe (pure res) (selfInject res) m
+
         x -> error $ "Expected set in function call, received: "
                 ++ show (() <$ x)
 
     selfInject :: ValueSet m -> Text -> m (ValueSet m)
     selfInject res n = do
-        ref <- valueRef (NVSet res)
+        ref <- buildThunk $ NVSet res
         return $ Map.insert n ref res
 
-    assemble :: ValueSet m
-             -> Bool
+    assemble :: Bool
              -> Text
              -> These (NThunk m) (Maybe (m (NThunk m)))
              -> Map.Map Text (NThunk m)
              -> m (NThunk m)
-    assemble env isVariadic k = \case
+    assemble isVariadic k = \case
         That Nothing  -> error $ "Missing value for parameter: " ++ show k
-        That (Just f) -> \args ->
-            -- Make sure the "scope at definition" (currentScope) is present
-            -- when we evaluate the default action, plus the argument scope
-            -- (env).
-            defer $ pushScope env $ pushScope args f
-        This x        ->
-            if isVariadic
-            then const (pure x)
-            else error $ "Unexpected parameter: " ++ show k
-        These x _     -> const (pure x)
+        That (Just f) -> \args -> do
+            scope <- currentScope
+            traceM $ "Deferring default argument in scope: " ++ show scope
+            defer scope $ do
+                traceM $ "Evaluating default argument with args: "
+                    ++ show (NestedMap [args])
+                pushScope args f
+        This x | isVariadic -> const (pure x)
+               | otherwise  -> error $ "Unexpected parameter: " ++ show k
+        These x _ -> const (pure x)
 
 -- | Evaluate an nix expression, with a given ValueSet as environment
 evalExpr :: MonadNix m => NExpr -> m (NThunk m)
@@ -209,13 +214,13 @@ eval (NSym var) = do
     traceM $ "NSym..1: var = " ++ show var
     fromMaybe (error $ "Undefined variable: " ++ show var) <$> lookupVar var
 
-eval (NConstant x)    = valueRef $ NVConstant x
+eval (NConstant x)    = valueRef $ Fix $ NVConstant x
 eval (NStr str)       = evalString str
-eval (NLiteralPath p) = valueRef $ NVLiteralPath p
-eval (NEnvPath p)     = valueRef $ NVEnvPath p
+eval (NLiteralPath p) = valueRef $ Fix $ NVLiteralPath p
+eval (NEnvPath p)     = valueRef $ Fix $ NVEnvPath p
 
 eval (NUnary op arg) = arg >>= forceThunk >>= \case
-    NVConstant c -> valueRef $ NVConstant $ case (op, c) of
+    NVConstant c -> valueRef $ Fix $ NVConstant $ case (op, c) of
         (NNeg, NInt  i) -> NInt  (-i)
         (NNot, NBool b) -> NBool (not b)
         _ -> error $ "unsupported argument type for unary operator "
@@ -230,7 +235,7 @@ eval (NBinary op larg rarg) = do
               ++ show (() <$ lval, op, () <$ rval)
   case (lval, rval) of
    (NVConstant lc, NVConstant rc) ->
-       valueRef $ NVConstant $ case (op, lc, rc) of
+       valueRef $ Fix $ NVConstant $ case (op, lc, rc) of
      (NEq,  l, r) -> NBool $ l == r
      (NNEq, l, r) -> NBool $ l /= r
      (NLt,  l, r) -> NBool $ l <  r
@@ -246,61 +251,67 @@ eval (NBinary op larg rarg) = do
      (NDiv,   NInt l, NInt r) -> NInt $ l `div` r
      _ -> error unsupportedTypes
    (NVStr ls lc, NVStr rs rc) -> case op of
-     NPlus -> valueRef $ NVStr (ls `mappend` rs) (lc `mappend` rc)
+     NPlus -> valueRef $ Fix $ NVStr (ls `mappend` rs) (lc `mappend` rc)
      _ -> error unsupportedTypes
    (NVSet ls, NVSet rs) -> case op of
-     NUpdate -> valueRef $ NVSet $ rs `Map.union` ls
+     NUpdate -> buildThunk $ NVSet $ rs `Map.union` ls
      _ -> error unsupportedTypes
    (NVList ls, NVList rs) -> case op of
-     NConcat -> valueRef $ NVList $ ls ++ rs
+     NConcat -> buildThunk $ NVList $ ls ++ rs
      _ -> error unsupportedTypes
    (NVLiteralPath ls, NVLiteralPath rs) -> case op of
-     NPlus -> valueRef $ NVLiteralPath $ ls ++ rs -- TODO: Canonicalise path
+     NPlus -> valueRef $ Fix $ NVLiteralPath $ ls ++ rs -- TODO: Canonicalise path
      _ -> error unsupportedTypes
    (NVLiteralPath ls, NVStr rs rc) -> case op of
      -- TODO: Canonicalise path
-     NPlus -> valueRef $ NVStr (Text.pack ls `mappend` rs) rc
+     NPlus -> valueRef $ Fix $ NVStr (Text.pack ls `mappend` rs) rc
      _ -> error unsupportedTypes
    _ -> error unsupportedTypes
 
 eval (NSelect aset attr alternative) = do
-    aset' <- normalForm =<< aset
-    ks <- evalSelector True attr
-    case extract aset' ks of
-        Just v  -> do
-            traceM $ "Wrapping a selector: " ++ show v
-            wrap v
+    aset' <- forceThunk =<< aset
+    ks    <- evalSelector True attr
+    mres  <- extract aset' ks
+    case mres of
+        Just v -> do
+            traceM $ "Wrapping a selector: " ++ show (() <$ v)
+            buildThunk v
         Nothing -> case alternative of
             Just v  -> v
             Nothing -> error $ "could not look up attribute "
                 ++ intercalate "." (map Text.unpack ks)
-                ++ " in " ++ show aset'
+                ++ " in " ++ show (() <$ aset')
   where
-    extract (Fix (NVSet s)) (k:ks) = case Map.lookup k s of
-        Just v  -> extract v ks
-        Nothing -> Nothing
-    extract _  (_:_) = Nothing
-    extract v     [] = Just v
+    extract (NVSet s) (k:ks) = case Map.lookup k s of
+        Just v  -> do
+            s' <- forceThunk v
+            extract s' ks
+        Nothing -> return Nothing
+    extract _ (_:_) = return Nothing
+    extract v [] = return $ Just v
 
 eval (NHasAttr aset attr) = aset >>= forceThunk >>= \case
     NVSet s -> evalSelector True attr >>= \case
-        [keyName] -> valueRef $ NVConstant $ NBool $ keyName `Map.member` s
+        [keyName] ->
+            valueRef $ Fix $ NVConstant $ NBool $ keyName `Map.member` s
         _ -> error "attr name argument to hasAttr is not a single-part name"
     _ -> error "argument to hasAttr has wrong type"
 
-eval (NList l) = valueRef . NVList =<< sequence l
+eval (NList l) = do
+    scope <- currentScope
+    buildThunk . NVList =<< traverse (defer scope) l
 
 eval (NSet binds) = do
     traceM "NSet..1"
     s <- evalBinds True False binds
     traceM $ "NSet..2: s = " ++ show (() <$ s)
-    valueRef $ NVSet s
+    buildThunk $ NVSet s
 
 eval (NRecSet binds) = do
     traceM "NRecSet..1"
     s <- evalBinds True True binds
     traceM $ "NRecSet..2: s = " ++ show (() <$ s)
-    valueRef $ NVSet s
+    buildThunk $ NVSet s
 
 eval (NLet binds e) = do
     traceM "Let..1"
@@ -316,7 +327,7 @@ eval (NIf cond t f) = cond >>= forceThunk >>= \case
 eval (NWith scope e) = scope >>= forceThunk >>= \case
     NVSet scope' -> do
         env <- currentScope
-        pushScope scope' $ pushScope env e
+        pushScopes (combineMaps env (NestedMap [scope'])) e
     _ -> error "scope must be a set in with statement"
 
 eval (NAssert cond e) = cond >>= forceThunk >>= \case
@@ -327,14 +338,23 @@ eval (NAssert cond e) = cond >>= forceThunk >>= \case
 eval (NApp fun arg) = fun >>= forceThunk >>= \case
     NVFunction params f -> do
         args <- buildArgument params =<< arg
-        pushScope args f
+        traceM $ "Evaluating function application with args: "
+            ++ show (NestedMap [args])
+        scope <- currentScope
+        traceM $ "Building function result thunk in scope: "
+            ++ show scope
+        buildThunk =<< clearScopes (pushScope args (forceThunk =<< f))
     NVBuiltin _ f -> f =<< arg
     _ -> error "Attempt to call non-function"
 
-eval (NAbs a b) =
+eval (NAbs params body) = do
     -- It is the environment at the definition site, not the call site, that
-    -- needs to be used when evaluation the body and the default arguments
-    valueRef $ NVFunction a b
+    -- needs to be used when evaluating the body and default arguments, hence
+    -- we defer here so the present scope is restored when the parameters and
+    -- body are forced during application.
+    scope <- currentScope
+    traceM $ "Creating lambda abstraction in scope: " ++ show scope
+    buildThunk $ NVFunction (defer scope <$> params) (defer scope body)
 
 tracingExprEval :: MonadNix m => NExpr -> IO (m (NThunk m))
 tracingExprEval =
@@ -372,10 +392,10 @@ attrSetAlter :: MonadNix m
              -> m (Map.Map Text (m (NThunk m)))
 attrSetAlter [] _ _ = error "invalid selector with no components"
 attrSetAlter (p:ps) m val = case Map.lookup p m of
-    Nothing | null ps   -> go
-            | otherwise -> recurse Map.empty
-    Just v  | null ps   -> go
-            | otherwise -> v >>= forceThunk >>= \case
+    Nothing | null ps   -> trace ("alter..1") $ go
+            | otherwise -> trace ("alter..2") $ recurse Map.empty
+    Just v  | null ps   -> trace ("alter..3") $ go
+            | otherwise -> trace ("alter..4") $ v >>= forceThunk >>= \case
                   NVSet s -> recurse (fmap pure s)
                   _ -> error $ "attribute " ++ attr ++ " is not a set"
   where
@@ -385,8 +405,11 @@ attrSetAlter (p:ps) m val = case Map.lookup p m of
 
     recurse s = attrSetAlter ps s val >>= \m' ->
         if | Map.null m' -> return m
-           | otherwise   ->
-             return $ Map.insert p (buildThunk $ NVSet <$> sequence m') m
+           | otherwise   -> do
+             scope <- currentScope
+             return $ Map.insert p (embed scope m') m
+      where
+        embed scope m' = buildThunk . NVSet =<< traverse (defer scope) m'
 
 evalBinds :: forall m. MonadNix m
           => Bool
@@ -403,19 +426,13 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
 
     buildResult :: [([Text], m (NThunk m))] -> m (ValueSet m)
     buildResult bindings = do
-        traceM "buildResult..1"
         s <- foldM insert Map.empty bindings
-        traceM "buildResult..2"
+        scope <- currentScope
         if recursive
-            then do
-                env <- currentScope
-                loebM (encapsulate env <$> s)
-            else sequence s
+            then loebM (encapsulate scope <$> s)
+            else traverse (defer scope) s
 
-    encapsulate env f attrs =
-        -- Make sure the "scope at definition" (env') is present when we
-        -- evaluate the attr value, plus the enclosing attr scope (env).
-        defer $ pushScope env $ pushScope attrs f
+    encapsulate scope f attrs = defer scope $ pushScope attrs f
 
     insert m (path, value) = attrSetAlter path m value
 
@@ -423,7 +440,7 @@ evalString :: MonadNix m => NString (m (NThunk m)) -> m (NThunk m)
 evalString nstr = do
     let fromParts parts = do
           (t, c) <- mconcat <$> mapM go parts
-          valueRef $ NVStr t c
+          valueRef $ Fix $ NVStr t c
     case nstr of
       Indented     parts -> fromParts parts
       DoubleQuoted parts -> fromParts parts
@@ -440,7 +457,7 @@ evalSelector dyn = mapM evalKeyName where
     | otherwise = error "dynamic attribute not allowed in this context"
 
 nullVal :: MonadNix m => m (NThunk m)
-nullVal = valueRef (NVConstant NNull)
+nullVal = valueRef $ Fix $ NVConstant NNull
 
 -- | Evaluate an nix expression, with a given ValueSet as environment
 checkExpr :: MonadNix m => NExpr -> m ()
@@ -460,6 +477,10 @@ check (NRecSet binds) =
 
 check (NLet binds e) =
     (`pushScope` e) =<< evalBinds True True (fmap (fmap (const nullVal)) binds)
+
+-- check (NWith _scope e) = do
+--     env <- currentScope
+--     pushScope env e
 
 check (NAbs a b) = do
     nv <- nullVal
