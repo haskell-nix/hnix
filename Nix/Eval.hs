@@ -344,10 +344,7 @@ eval (NApp fun arg) = fun >>= forceThunk >>= \case
         args <- buildArgument params =<< arg
         traceM $ "Evaluating function application with args: "
             ++ show (NestedMap [args])
-        scope <- currentScope
-        traceM $ "Building function result thunk in scope: "
-            ++ show scope
-        buildThunk =<< clearScopes (pushScope args (forceThunk =<< f))
+        clearScopes (pushScope args f)
     NVBuiltin _ f -> f =<< arg
     _ -> error "Attempt to call non-function"
 
@@ -358,8 +355,8 @@ eval (NAbs params body) = do
     -- body are forced during application.
     scope <- currentScope
     traceM $ "Creating lambda abstraction in scope: " ++ show scope
-    buildThunk $ NVFunction (deferInScope scope <$> params)
-                            (deferInScope scope body)
+    buildThunk $ NVFunction (pushScopes scope <$> params)
+                            (pushScopes scope body)
 
 tracingExprEval :: MonadNix m => NExpr -> IO (m (NThunk m))
 tracingExprEval =

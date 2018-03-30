@@ -17,8 +17,8 @@ import           Nix.Builtins
 import           Nix.Eval
 import           Nix.Parser
 import           Nix.Pretty
+import           System.FilePath
 import           System.FilePath.Glob (compile, globDir1)
-import           System.FilePath.Posix
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -107,11 +107,15 @@ assertEvalFail file = catch eval (\(ErrorCall _) -> return ())
   where
     eval = do
       evalResult <- printNix <$> nixEvalFile file
-      evalResult `seq` assertFailure $ file ++ " should not evaluate.\nThe evaluation result was `" ++ evalResult ++ "`."
+      evalResult `seq` assertFailure $
+          file ++ " should not evaluate.\nThe evaluation result was `"
+               ++ evalResult ++ "`."
 
 nixEvalFile :: FilePath -> IO (NValueNF (Cyclic IO))
 nixEvalFile file =  do
   parseResult <- parseNixFile file
   case parseResult of
-    Failure err        -> error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
-    Success expression -> evalTopLevelExprIO expression
+    Failure err        ->
+        error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
+    Success expression ->
+        evalTopLevelExprIO (Just (takeDirectory file)) expression

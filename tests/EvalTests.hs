@@ -4,17 +4,14 @@
 
 module EvalTests (tests) where
 
-import           Control.Monad.Trans.State
-import           Data.Fix
-import qualified Data.Map as Map
-import           Data.String.Interpolate
-import           Nix.Builtins
-import           Nix.Eval
-import           Nix.Expr
-import           Nix.Parser
-import           Test.Tasty
-import           Test.Tasty.HUnit
-import           Test.Tasty.TH
+import Data.String.Interpolate
+import Nix.Builtins
+import Nix.Eval
+import Nix.Expr
+import Nix.Parser
+import Test.Tasty
+import Test.Tasty.HUnit
+import Test.Tasty.TH
 
 case_basic_sum =
     constantEqualStr "2" "1 + 1"
@@ -79,8 +76,8 @@ instance (Show r, Eq r) => Eq (NValueF m r) where
 
 constantEqual :: NExpr -> NExpr -> Assertion
 constantEqual a b = do
-    a' <- tracingEvalTopLevelExprIO a
-    b' <- tracingEvalTopLevelExprIO b
+    a' <- tracingEvalTopLevelExprIO Nothing a
+    b' <- tracingEvalTopLevelExprIO Nothing b
     assertEqual "" a' b'
 
 constantEqualStr :: String -> String -> Assertion
