@@ -340,7 +340,7 @@ splitVersion_ :: MonadNix m => NThunk m -> m (NValue m)
 splitVersion_ = forceThunk >=> \case
     NVStr s _ -> do
         vals <- forM (splitVersion s) $ \c ->
-            buildThunk $ return $ NVStr (versionComponentToString c) mempty
+            valueRef $ NVStr (versionComponentToString c) mempty
         return $ NVList vals
     _ -> error "builtins.splitVersion: not a string"
 
@@ -396,8 +396,8 @@ parseDrvName_ = forceThunk >=> \case
     NVStr s _ -> do
         let (name, version) = parseDrvName s
         vals <- sequence $ Map.fromList
-          [ ("name", buildThunk $ return $ NVStr name mempty)
-          , ("version", buildThunk $ return $ NVStr version mempty)
+          [ ("name", valueRef $ NVStr name mempty)
+          , ("version", valueRef $ NVStr version mempty)
           ]
         return $ NVSet vals
     _ -> error "builtins.splitVersion: not a string"
