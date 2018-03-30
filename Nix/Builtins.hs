@@ -260,7 +260,7 @@ substring start len =
 attrNames :: MonadNix m => NThunk m -> m (NValue m)
 attrNames = forceThunk >=> \case
     NVSet m -> toValue $ Map.keys m
-    v -> error $ "fromThunk: Expected number, got " ++ show (void v)
+    v -> error $ "builtins.attrNames: Expected attribute set, got " ++ show (void v)
 
 newtype Prim m a = Prim { runPrim :: m a }
 
