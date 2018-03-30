@@ -41,7 +41,7 @@ evalTopLevelExpr mdir expr = do
         case mdir of
             Nothing -> return base
             Just dir -> do
-                ref <- valueRef $ Fix $ NVLiteralPath dir
+                ref <- buildThunk $ return $ NVLiteralPath dir
                 let m = Map.singleton "__cwd" ref
                 traceM $ "Setting __cwd = " ++ show dir
                 return $ extendMap m base
@@ -57,7 +57,7 @@ tracingEvalTopLevelExprIO mdir expr = do
     base <- case mdir of
         Nothing -> run baseEnv emptyMap
         Just dir -> do
-            ref   <- run (valueRef $ Fix $ NVLiteralPath dir) emptyMap
+            ref   <- run (buildThunk $ return $ NVLiteralPath dir) emptyMap
             let m = Map.singleton "__cwd" ref
             traceM $ "Setting __cwd = " ++ show dir
             base <- run baseEnv emptyMap
@@ -75,7 +75,7 @@ lintExpr expr = run (checkExpr expr) =<< run baseEnv emptyMap
 
 baseEnv :: MonadNix m => m (NestedMap (NThunk m))
 baseEnv = do
-    ref <- buildThunk . NVSet =<< builtins
+    ref <- buildThunk $ NVSet <$> builtins
     lst <- (("builtins", ref) :) <$> topLevelBuiltins
     return . NestedMap . (:[]) $ Map.fromList lst
   where
@@ -86,7 +86,7 @@ newtype Cyclic m a = Cyclic
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO)
 
 data Deferred m
-    = DeferredAction (m (NThunk m))
+    = DeferredAction (m (NValue m))
     -- ^ This is closure over the environment where it was created.
     | ComputedValue (NValue m)
 
@@ -102,11 +102,17 @@ instance MonadNix (Cyclic IO) where
 
     clearScopes  = Cyclic . local (const (NestedMap [])) . runCyclic
     currentScope = Cyclic ask
-    lookupVar k  = Cyclic $ nestedLookup k <$> ask
+
+    -- If a variable is being asked for, it's needed in head normal form.
+    lookupVar k  = Cyclic $ do
+        scope <- ask
+        case nestedLookup k scope of
+            Nothing -> return Nothing
+            Just v  -> runCyclic $ Just <$> forceThunk v
 
     -- jww (2018-03-29): Cache which files have been read in.
-    importFile path = normalForm path >>= \case
-        Fix (NVLiteralPath path) -> do
+    importFile = forceThunk >=> \case
+        NVLiteralPath path -> do
             mres <- lookupVar "__cwd"
             path' <- case mres of
                 Nothing  -> do
@@ -123,13 +129,14 @@ instance MonadNix (Cyclic IO) where
             case eres of
                 Failure err  -> error $ "Parse failed: " ++ show err
                 Success expr -> do
-                    ref <- valueRef $ Fix $ NVLiteralPath $ takeDirectory path'
+                    ref <- buildThunk $ return $
+                        NVLiteralPath $ takeDirectory path'
                     -- Use this cookie so that when we evaluate the next
                     -- import, we'll remember which directory its containing
                     -- file was in.
                     pushScope (Map.singleton "__cwd" ref)
                               (evalExpr expr)
-        p -> error $ "Unexpected argument to import: " ++ show p
+        p -> error $ "Unexpected argument to import: " ++ show (() <$ p)
 
     addPath path = liftIO $ do
         (exitCode, out, _) <-
@@ -138,37 +145,27 @@ instance MonadNix (Cyclic IO) where
           ExitSuccess -> return $ StorePath out
           _ -> error $ "No such file or directory: " ++ show path
 
-    getEnvVar name = normalForm name >>= \case
-        Fix (NVStr s _) -> do
+    getEnvVar = forceThunk >=> \case
+        NVStr s _ -> do
             mres <- liftIO $ lookupEnv (Text.unpack s)
-            case mres of
-                Nothing -> valueRef $ Fix $ NVStr "" mempty
-                Just v  -> valueRef $ Fix $ NVStr (Text.pack v) mempty
-        p -> error $ "Unexpected argument to getEnv: " ++ show p
+            return $ case mres of
+                Nothing -> NVStr "" mempty
+                Just v  -> NVStr (Text.pack v) mempty
+        p -> error $ "Unexpected argument to getEnv: " ++ show (() <$ p)
 
-    data NThunk (Cyclic IO) =
-        NThunkIO (Either (NValueNF (Cyclic IO))
-                         (IORef (Deferred (Cyclic IO))))
-
-    valueRef = return . NThunkIO . Left
+    data NThunk (Cyclic IO) = NThunkIO (IORef (Deferred (Cyclic IO)))
 
     buildThunk action =
-        liftIO $ NThunkIO . Right <$> newIORef (ComputedValue action)
+        liftIO $ NThunkIO <$> newIORef (DeferredAction action)
 
-    defer action =
-        liftIO $ NThunkIO . Right <$> newIORef (DeferredAction action)
-
-    forceThunk (NThunkIO (Left value)) =
-        return $ NThunkIO . Left <$> unFix value
-
-    forceThunk (NThunkIO (Right ref)) = do
+    forceThunk (NThunkIO ref) = do
         eres <- liftIO $ readIORef ref
         case eres of
             ComputedValue value -> return value
             DeferredAction action -> do
                 scope <- currentScope
                 traceM $ "Forcing thunk in scope: " ++ show scope
-                value <- forceThunk =<< action
+                value <- action
                 traceM $ "Forcing thunk computed: " ++ show (() <$ value)
                 liftIO $ writeIORef ref (ComputedValue value)
                 return value
@@ -190,64 +187,68 @@ builtinsList = sequence [
       add  TopLevel "toString" toString
     , add  TopLevel "import"   import_
 
-    , add  Normal   "getEnv"   getEnv_
-    , add2 Normal   "hasAttr"  hasAttr
-    , add2 Normal   "getAttr"  getAttr
-    , add2 Normal   "any"      any_
-    , add2 Normal   "all"      all_
-    , add3 Normal   "foldl'"   foldl'_
-    , add  Normal   "head"     head_
-    , add  Normal   "tail"     tail_
-    , add  Normal   "splitVersion" splitVersion_
+    , add  Normal   "getEnv"          getEnv_
+    , add2 Normal   "hasAttr"         hasAttr
+    , add2 Normal   "getAttr"         getAttr
+    , add2 Normal   "any"             any_
+    , add2 Normal   "all"             all_
+    -- , add3 Normal   "foldl'"          foldl'_
+    , add  Normal   "head"            head_
+    , add  Normal   "tail"            tail_
+    , add  Normal   "splitVersion"    splitVersion_
     , add2 Normal   "compareVersions" compareVersions_
     , add2 Normal   "compareVersions" compareVersions_
-    , add2 Normal   "sub"      sub_
-    , add  Normal   "parseDrvName" parseDrvName_
+    , add2 Normal   "sub"             sub_
+    , add  Normal   "parseDrvName"    parseDrvName_
   ]
   where
-    add  t n v = (\f -> Builtin t (n, f)) <$> builtin (Text.unpack n) v
-    add2 t n v = (\f -> Builtin t (n, f)) <$> builtin2 (Text.unpack n) v
-    add3 t n v = (\f -> Builtin t (n, f)) <$> builtin3 (Text.unpack n) v
+    wrap t n f = Builtin t (n, f)
+    add  t n v = wrap t n <$> buildThunk (builtin  (Text.unpack n) v)
+    add2 t n v = wrap t n <$> buildThunk (builtin2 (Text.unpack n) v)
+    add3 t n v = wrap t n <$> buildThunk (builtin3 (Text.unpack n) v)
 
 -- Helpers
 
-mkBool :: MonadNix m => Bool -> m (NThunk m)
-mkBool = valueRef . Fix . NVConstant . NBool
+mkBool :: MonadNix m => Bool -> m (NValue m)
+mkBool = return . NVConstant . NBool
 
-extractBool :: MonadNix m => NThunk m -> m Bool
-extractBool arg = forceThunk arg >>= \case
+extractBool :: MonadNix m => NValue m -> m Bool
+extractBool = \case
     NVConstant (NBool b) -> return b
     _ -> error "Not a boolean constant"
 
-apply :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
+apply :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
 apply f arg = forceThunk f >>= \case
     NVFunction params pred ->
-        (`pushScope` pred) =<< buildArgument params arg
+        (`pushScope` (forceThunk =<< pred)) =<< buildArgument params arg
     x -> error $ "Trying to call a " ++ show (() <$ x)
 
 -- Primops
 
-toString :: MonadNix m => NThunk m -> m (NThunk m)
-toString = valueRef . uncurry ((Fix .) . NVStr) <=< valueText <=< normalForm
+toString :: MonadNix m => NThunk m -> m (NValue m)
+toString str = do
+    (s, d) <- valueText =<< normalForm =<< forceThunk str
+    return $ NVStr s d
 
-import_ :: MonadNix m => NThunk m -> m (NThunk m)
+import_ :: MonadNix m => NThunk m -> m (NValue m)
 import_ = importFile
 
-getEnv_ :: MonadNix m => NThunk m -> m (NThunk m)
+getEnv_ :: MonadNix m => NThunk m -> m (NValue m)
 getEnv_ = getEnvVar
 
-hasAttr :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
+hasAttr :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
 hasAttr x y = (,) <$> forceThunk x <*> forceThunk y >>= \case
     (NVStr key _, NVSet aset) ->
-        valueRef $ Fix . NVConstant . NBool $ Map.member key aset
+        return . NVConstant . NBool $ Map.member key aset
     (x, y) -> error $ "Invalid types for builtin.hasAttr: "
                  ++ show (() <$ x, () <$ y)
 
-getAttr :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
+getAttr :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
 getAttr x y = (,) <$> forceThunk x <*> forceThunk y >>= \case
     (NVStr key _, NVSet aset) ->
-        return $ Map.findWithDefault _err key aset
-          where _err = error ("Field does not exist " ++ Text.unpack key)
+        forceThunk (Map.findWithDefault _err key aset)
+          where _err = error $ "hasAttr: field does not exist: "
+                           ++ Text.unpack key
     (x, y) -> error $ "Invalid types for builtin.hasAttr: "
                  ++ show (() <$ x, () <$ y)
 
@@ -258,8 +259,8 @@ anyM p (x:xs)   = do
         if q then return True
              else anyM p xs
 
-any_ :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
-any_ pred arg = forceThunk arg >>= \case
+any_ :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
+any_ pred = forceThunk >=> \case
     NVList l ->
         mkBool =<< anyM extractBool =<< mapM (apply pred) l
     arg -> error $ "builtins.any takes a list as second argument, not a "
@@ -272,33 +273,35 @@ allM p (x:xs)   = do
         if q then allM p xs
              else return False
 
-all_ :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
-all_ pred arg = forceThunk arg >>= \case
+all_ :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
+all_ pred = forceThunk >=> \case
     NVList l ->
         mkBool =<< allM extractBool =<< mapM (apply pred) l
     arg -> error $ "builtins.all takes a list as second argument, not a "
               ++ show (() <$ arg)
 
+{-
 --TODO: Strictness
-foldl'_ :: MonadNix m => NThunk m -> NThunk m -> NThunk m -> m (NThunk m)
-foldl'_ f z l = forceThunk l >>= \case
+foldl'_ :: MonadNix m => NThunk m -> NThunk m -> NThunk m -> m (NValue m)
+foldl'_ f z = forceThunk >=> \case
     NVList vals ->
         foldlM (\b a -> (f `apply` b) >>= (`apply` a)) z vals
     arg -> error $ "builtins.foldl' takes a list as third argument, not a "
               ++ show (() <$ arg)
+-}
 
-head_ :: MonadNix m => NThunk m -> m (NThunk m)
-head_ arg = forceThunk arg >>= \case
+head_ :: MonadNix m => NThunk m -> m (NValue m)
+head_ = forceThunk >=> \case
     NVList vals -> case vals of
         [] -> error "builtins.head: empty list"
-        h:_ -> return h
+        h:_ -> forceThunk h
     _ -> error "builtins.head: not a list"
 
-tail_ :: MonadNix m => NThunk m -> m (NThunk m)
-tail_ arg = forceThunk arg >>= \case
+tail_ :: MonadNix m => NThunk m -> m (NValue m)
+tail_ = forceThunk >=> \case
     NVList vals -> case vals of
         [] -> error "builtins.tail: empty list"
-        _:t -> buildThunk $ NVList t
+        _:t -> return $ NVList t
     _ -> error "builtins.tail: not a list"
 
 data VersionComponent
@@ -332,12 +335,12 @@ splitVersion s = case Text.uncons s of
                   x -> VersionComponent_String x
           in thisComponent : splitVersion rest
 
-splitVersion_ :: MonadNix m => NThunk m -> m (NThunk m)
-splitVersion_ arg = forceThunk arg >>= \case
+splitVersion_ :: MonadNix m => NThunk m -> m (NValue m)
+splitVersion_ = forceThunk >=> \case
     NVStr s _ -> do
-        vals <- forM (splitVersion s) $ \c -> do
-            buildThunk $ NVStr (versionComponentToString c) mempty
-        buildThunk $ NVList vals
+        vals <- forM (splitVersion s) $ \c ->
+            buildThunk $ return $ NVStr (versionComponentToString c) mempty
+        return $ NVList vals
     _ -> error "builtins.splitVersion: not a string"
 
 compareVersions :: Text -> Text -> Ordering
@@ -345,25 +348,25 @@ compareVersions s1 s2 = mconcat $ alignWith f (splitVersion s1) (splitVersion s2
   where z = VersionComponent_String ""
         f = uncurry compare . fromThese z z
 
-compareVersions_ :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
+compareVersions_ :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
 compareVersions_ t1 t2 = do
     v1 <- forceThunk t1
     v2 <- forceThunk t2
     case (v1, v2) of
         (NVStr s1 _, NVStr s2 _) -> do
-            buildThunk $ NVConstant $ NInt $ case compareVersions s1 s2 of
+            return $ NVConstant $ NInt $ case compareVersions s1 s2 of
                 LT -> -1
                 EQ -> 0
                 GT -> 1
         _ -> error "builtins.splitVersion: not a string"
 
-sub_ :: MonadNix m => NThunk m -> NThunk m -> m (NThunk m)
+sub_ :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
 sub_ t1 t2 = do
     v1 <- forceThunk t1
     v2 <- forceThunk t2
     case (v1, v2) of
         (NVConstant (NInt n1), NVConstant (NInt n2)) -> do
-            buildThunk $ NVConstant $ NInt $ n1 - n2
+            return $ NVConstant $ NInt $ n1 - n2
         _ -> error "builtins.splitVersion: not a number"
 
 parseDrvName :: Text -> (Text, Text)
@@ -373,7 +376,8 @@ parseDrvName s =
         isFirstVersionPiece p = case Text.uncons p of
             Just (h, _) | isDigit h -> True
             _ -> False
-        -- Like 'break', but always puts the first item into the first result list
+        -- Like 'break', but always puts the first item into the first result
+        -- list
         breakAfterFirstItem :: (a -> Bool) -> [a] -> ([a], [a])
         breakAfterFirstItem f = \case
             h : t ->
@@ -384,13 +388,13 @@ parseDrvName s =
           breakAfterFirstItem isFirstVersionPiece pieces
     in (Text.intercalate sep namePieces, Text.intercalate sep versionPieces)
 
-parseDrvName_ :: MonadNix m => NThunk m -> m (NThunk m)
-parseDrvName_ arg = forceThunk arg >>= \case
+parseDrvName_ :: MonadNix m => NThunk m -> m (NValue m)
+parseDrvName_ = forceThunk >=> \case
     NVStr s _ -> do
         let (name, version) = parseDrvName s
         vals <- sequence $ Map.fromList
-          [ ("name", buildThunk $ NVStr name mempty)
-          , ("version", buildThunk $ NVStr version mempty)
+          [ ("name", buildThunk $ return $ NVStr name mempty)
+          , ("version", buildThunk $ return $ NVStr version mempty)
           ]
-        buildThunk $ NVSet vals
+        return $ NVSet vals
     _ -> error "builtins.splitVersion: not a string"
