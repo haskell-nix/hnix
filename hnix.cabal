@@ -23,6 +23,7 @@ Library
   Default-language: Haskell2010
   Exposed-modules:
     Nix.Atoms
+    Nix.Scope
     Nix.Eval
     Nix.Lint
     Nix.Builtins

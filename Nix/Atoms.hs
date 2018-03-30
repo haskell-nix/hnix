@@ -45,3 +45,10 @@ atomToEnvString = \case
   NBool False -> ""
   NNull -> ""
   NUri uri -> uri
+
+-- | Translate an atom into its nix representation.
+atomText :: NAtom -> Text
+atomText (NInt i)   = pack (show i)
+atomText (NBool b)  = if b then "true" else "false"
+atomText NNull      = "null"
+atomText (NUri uri) = uri

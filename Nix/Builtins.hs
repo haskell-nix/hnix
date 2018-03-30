@@ -25,6 +25,7 @@ import           Data.Foldable (foldlM)
 import           Data.Traversable (mapM)
 import           Nix.Atoms
 import           Nix.Eval
+import           Nix.Scope
 import           Nix.Expr (NExpr)
 import           Nix.Parser
 import           Nix.Utils

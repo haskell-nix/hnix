@@ -10,6 +10,7 @@ import           Nix.Atoms
 import           Nix.Builtins
 import           Nix.Eval
 import           Nix.Expr
+import           Nix.Scope
 
 nullVal :: MonadNix m => m (NValue m)
 nullVal = return $ NVConstant NNull
