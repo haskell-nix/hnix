@@ -62,6 +62,7 @@ builtinsList = sequence [
     , add' Normal   "parseDrvName"    parseDrvName
     , add' Normal   "substring"       substring
     , add' Normal   "stringLength"    (arity1 Text.length)
+    , add  Normal   "attrNames"       attrNames
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -256,6 +257,11 @@ substring start len =
   then error $ "builtins.substring: negative start position: " ++ show start
   else Prim . pure . Text.take len . Text.drop start
 
+attrNames :: MonadNix m => NThunk m -> m (NValue m)
+attrNames = forceThunk >=> \case
+    NVSet m -> toValue $ Map.keys m
+    v -> error $ "fromThunk: Expected number, got " ++ show (void v)
+
 newtype Prim m a = Prim { runPrim :: m a }
 
 class ToNix a where
@@ -272,6 +278,9 @@ instance ToNix Integer where
 
 instance ToNix a => ToNix (Map Text a) where
     toValue m = NVSet <$> traverse (buildThunk . toValue) m
+
+instance ToNix a => ToNix [a] where
+    toValue m = NVList <$> traverse (buildThunk . toValue) m
 
 -- | Types that support conversion to nix in a particular monad
 class ToBuiltin m a | a -> m where
