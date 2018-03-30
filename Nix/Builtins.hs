@@ -59,7 +59,7 @@ builtinsList = sequence [
     , add  Normal   "splitVersion"    splitVersion_
     , add2 Normal   "compareVersions" compareVersions_
     , add2 Normal   "compareVersions" compareVersions_
-    , add2 Normal   "sub"             sub_
+    , add' Normal   "sub"             (\a b -> Prim $ pure (a - b :: Integer))
     , add' Normal   "parseDrvName"    parseDrvName
   ]
   where
@@ -227,15 +227,6 @@ compareVersions_ t1 t2 = do
                 GT -> 1
         _ -> error "builtins.splitVersion: not a string"
 
-sub_ :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
-sub_ t1 t2 = do
-    v1 <- forceThunk t1
-    v2 <- forceThunk t2
-    case (v1, v2) of
-        (NVConstant (NInt n1), NVConstant (NInt n2)) ->
-            return $ NVConstant $ NInt $ n1 - n2
-        _ -> error "builtins.splitVersion: not a number"
-
 splitDrvName :: Text -> (Text, Text)
 splitDrvName s =
     let sep = "-"
@@ -267,6 +258,9 @@ class ToNix a where
 instance ToNix Text where
     toValue s = return $ NVStr s mempty
 
+instance ToNix Integer where
+    toValue = return . NVConstant . NInt
+
 instance ToNix a => ToNix (Map Text a) where
     toValue m = NVSet <$> traverse (buildThunk . toValue) m
 
@@ -288,3 +282,8 @@ instance FromNix Text where
     fromThunk = forceThunk >=> \case
         NVStr s _ -> pure s
         v -> error $ "fromThunk: Expected string, got " ++ show (void v)
+
+instance FromNix Integer where
+    fromThunk = forceThunk >=> \case
+        NVConstant (NInt n) -> pure n
+        v -> error $ "fromThunk: Expected number, got " ++ show (void v)
