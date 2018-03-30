@@ -85,8 +85,7 @@ assertLangOk :: FilePath -> Assertion
 assertLangOk file = do
   actual <- printNix <$> nixEvalFile (file ++ ".nix")
   expected <- Text.readFile $ file ++ ".exp"
-  seq actual $ seq expected $
-      assertEqual "" expected $ Text.pack (actual ++ "\n")
+  assertEqual "" expected $ Text.pack (actual ++ "\n")
 
 assertLangOkXml :: FilePath -> Assertion
 assertLangOkXml name = assertFailure $ "Not implemented: " ++ name
