@@ -22,10 +22,13 @@ Flag Parsec
 Library
   Default-language: Haskell2010
   Exposed-modules:
+    Nix
     Nix.Atoms
     Nix.Scope
     Nix.Eval
     Nix.Lint
+    Nix.Monad
+    Nix.Monad.Instance
     Nix.Builtins
     Nix.Parser
     Nix.Expr

@@ -6,7 +6,7 @@ module Nix.Utils (module Nix.Utils, module X) where
 import Control.Monad
 import Control.Monad.Fix
 import Data.Fix
-import Data.Monoid (appEndo, Endo)
+import Data.Monoid (Endo)
 
 #define ENABLE_TRACING 1
 #if ENABLE_TRACING

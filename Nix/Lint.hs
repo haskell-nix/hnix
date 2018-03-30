@@ -1,6 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Nix.Lint (checkExpr, lintExpr) where
+module Nix.Lint (checkExpr) where
 
 import           Control.Monad
 import           Control.Monad.Trans.Reader
@@ -10,6 +10,7 @@ import           Nix.Atoms
 import           Nix.Builtins
 import           Nix.Eval
 import           Nix.Expr
+import           Nix.Monad
 import           Nix.Scope
 
 nullVal :: MonadNix m => m (NValue m)
@@ -56,8 +57,3 @@ check (NAbs a b) = do
 -- In order to check some of the other operations properly, we'd need static
 -- typing
 check _ = return ()
-
-lintExpr :: NExpr -> IO ()
-lintExpr expr = run (checkExpr expr) =<< run baseEnv emptyScopes
-  where
-    run = runReaderT . runCyclic
