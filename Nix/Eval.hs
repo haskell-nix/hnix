@@ -14,7 +14,10 @@ module Nix.Eval
 
 import           Control.Monad hiding (mapM, sequence)
 import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Reader
+import           Data.Align
 import           Data.Align.Key
 import           Data.Fix
 import           Data.Functor.Compose
@@ -200,20 +203,31 @@ valueRefBool = return . NVConstant . NBool
 valueRefInt :: MonadNix m => Integer -> m (NValue m)
 valueRefInt = return . NVConstant . NInt
 
+thunkEq :: MonadNix m => NThunk m -> NThunk m -> m Bool
+thunkEq lt rt = do
+    lv <- forceThunk lt
+    rv <- forceThunk rt
+    valueEq lv rv
+
+--TODO: Should we do two passes, so that we can avoid ever calling `eq` if the container structures aren't the same shape?
+-- | Checks whether two containers are equal, using the given item equality predicate.  If there are any item slots that don't match between the two containers, the result will be False.
+alignEqM
+    :: (Align f, Traversable f, Monad m)
+    => (a -> b -> m Bool)
+    -> f a
+    -> f b
+    -> m Bool
+alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
+    forM_ (align fa fb) $ \case
+        These a b -> guard =<< lift (a `eq` b)
+        _ -> throwE ()
+
 valueEq :: MonadNix m => NValue m -> NValue m -> m Bool
 valueEq l r = case (l, r) of
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
     (NVStr ls _, NVStr rs _) -> pure $ ls == rs
-    (NVList ls, NVList rs) -> go ls rs
-        where
-            go (hl:tl) (hr:tr) = do
-                hlv <- forceThunk hl
-                hrv <- forceThunk hr
-                valueEq hlv hrv >>= \case
-                    False -> pure False
-                    True -> go tl tr
-            go [] [] = pure True
-            go _ _ = pure False
+    (NVList ls, NVList rs) -> alignEqM thunkEq ls rs
+    (NVSet lm, NVSet rm) -> alignEqM thunkEq lm rm
     _ -> pure False
 
 buildArgument :: forall m. MonadNix m
