@@ -364,7 +364,7 @@ evalString nstr = do
       Indented     parts -> fromParts parts
       DoubleQuoted parts -> fromParts parts
   where
-    go = runAntiquoted (return . (, mempty)) (valueText <=< (normalForm =<<))
+    go = runAntiquoted (return . (, mempty)) (valueText True <=< (normalForm =<<))
 
 evalSelector :: (Framed e m, MonadNix m)
              => Bool -> NAttrPath (m (NValue m)) -> m [Text]
@@ -375,8 +375,9 @@ evalKeyName :: (Framed e m, MonadNix m)
 evalKeyName _ (StaticKey k) = return k
 evalKeyName dyn (DynamicKey k)
     | dyn = do
-          v <- runAntiquoted evalString id k
-          valueTextNoContext =<< normalForm v
+          runAntiquoted evalString id k >>= \case
+              NVStr s _ -> pure s
+              bad -> throwError $ "evaluating key name: expected string, got " ++ show (void bad)
     | otherwise =
       throwError "dynamic attribute not allowed in this context"
 

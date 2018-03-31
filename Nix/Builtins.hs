@@ -115,7 +115,7 @@ apply f arg = forceThunk f >>= \case
 
 toString :: MonadBuiltins e m => NThunk m -> m (NValue m)
 toString str = do
-    (s, d) <- valueText =<< normalForm =<< forceThunk str
+    (s, d) <- valueText False =<< normalForm =<< forceThunk str
     return $ NVStr s d
 
 hasAttr :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)

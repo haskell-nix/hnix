@@ -85,8 +85,8 @@ instance Show f => Show (NValueF m f) where
               . showsPrec 11 b
 
 valueText :: forall e m. (Framed e m, MonadNix m)
-          => NValueNF m -> m (Text, DList Text)
-valueText = cata phi where
+          => Bool -> NValueNF m -> m (Text, DList Text)
+valueText addPathsToStore = cata phi where
     phi :: NValueF m (m (Text, DList Text)) -> m (Text, DList Text)
     phi (NVConstant a)    = pure (atomText a, mempty)
     phi (NVStr t c)       = pure (t, c)
@@ -97,18 +97,20 @@ valueText = cata phi where
         M.lookup "__asString" set = asString
       | otherwise = throwError "Cannot coerce a set to a string"
     phi (NVFunction _ _)  = throwError "Cannot coerce a function to a string"
-    phi (NVLiteralPath originalPath) = do
-        -- TODO: Capture and use the path of the file being processed as the
-        -- base path
-        storePath <- addPath originalPath
-        pure (Text.pack $ unStorePath storePath, mempty)
+    phi (NVLiteralPath originalPath) = case addPathsToStore of
+        True -> do
+            -- TODO: Capture and use the path of the file being processed as the
+            -- base path
+            storePath <- addPath originalPath
+            pure (Text.pack $ unStorePath storePath, mempty)
+        False -> pure (Text.pack originalPath, mempty)
     phi (NVEnvPath p)     =
         -- TODO: Ensure this is a store path
         pure (Text.pack p, mempty)
     phi (NVBuiltin _ _)    = throwError "Cannot coerce a function to a string"
 
-valueTextNoContext :: (Framed e m, MonadNix m) => NValueNF m -> m Text
-valueTextNoContext = fmap fst . valueText
+valueTextNoContext :: (Framed e m, MonadNix m) => Bool -> NValueNF m -> m Text
+valueTextNoContext addPathsToStore = fmap fst . valueText addPathsToStore
 
 builtin :: MonadNix m => String -> (NThunk m -> m (NValue m)) -> m (NValue m)
 builtin name f = return $ NVBuiltin name f
