@@ -9,7 +9,7 @@ let
       , parsers, regex-tdfa, regex-tdfa-text, semigroups, split, stdenv
       , tasty, tasty-hunit, tasty-th, text, transformers, trifecta
       , unordered-containers, these, optparse-applicative, interpolate
-      , process, exceptions, bytestring
+      , process, exceptions, bytestring, mtl
       }:
       mkDerivation {
         pname = "hnix";
@@ -21,7 +21,7 @@ let
           ansi-wl-pprint base containers data-fix deepseq deriving-compat
           parsers regex-tdfa regex-tdfa-text semigroups text transformers
           trifecta unordered-containers these process directory filepath
-          exceptions bytestring
+          exceptions bytestring mtl
         ];
         executableHaskellDepends = [
           ansi-wl-pprint base containers data-fix deepseq optparse-applicative
