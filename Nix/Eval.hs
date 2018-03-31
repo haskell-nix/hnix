@@ -216,7 +216,6 @@ thunkEq lt rt = do
     rv <- forceThunk rt
     valueEq lv rv
 
---TODO: Should we do two passes, so that we can avoid ever calling `eq` if the container structures aren't the same shape?
 -- | Checks whether two containers are equal, using the given item equality predicate.  If there are any item slots that don't match between the two containers, the result will be False.
 alignEqM
     :: (Align f, Traversable f, Monad m)
@@ -225,9 +224,10 @@ alignEqM
     -> f b
     -> m Bool
 alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
-    forM_ (align fa fb) $ \case
-        These a b -> guard =<< lift (a `eq` b)
+    pairs <- forM (align fa fb) $ \case
+        These a b -> return (a, b)
         _ -> throwE ()
+    forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
 
 valueEq :: MonadNix m => NValue m -> NValue m -> m Bool
 valueEq l r = case (l, r) of
