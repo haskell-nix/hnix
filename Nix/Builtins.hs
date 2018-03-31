@@ -327,7 +327,7 @@ elem_ x xs = forceThunk xs >>= \case
     NVList l -> toValue =<< anyM (thunkEq x) l
     v -> throwError $ "builtins.elem: Expected a list, got " ++ show (void v)
 
-genList :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
+genList :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 genList generator length = forceThunk length >>= \case
     NVConstant (NInt n) | n >= 0 -> fmap NVList $ forM [0 .. n - 1] $ \i -> do
         buildThunk $ apply generator =<< valueRef =<< toValue i
