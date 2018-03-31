@@ -284,10 +284,11 @@ attrSetAlter (p:ps) m val = case Map.lookup p m of
     Just v  | null ps   -> go
             | otherwise -> v >>= \case
                   NVSet s -> recurse (fmap forceThunk s)
-                  _ -> throwError $ "attribute " ++ attr ++ " is not a set"
+                  --TODO: Keep a stack of attributes we've already traversed, so
+                  --that we can report that to the user
+                  x -> throwError $ "attribute " ++ show p
+                    ++ " is not a set; its value is " ++ show (void x)
   where
-    attr = show (Text.intercalate "." (p:ps))
-
     go = return $ Map.insert p val m
 
     recurse s = attrSetAlter ps s val >>= \m' ->
