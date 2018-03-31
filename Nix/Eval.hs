@@ -350,21 +350,21 @@ evalKeyName dyn (DynamicKey k)
 
 contextualExprEval :: forall m. MonadNix m => NExprLoc -> m (NValue m)
 contextualExprEval =
-    runIdentity . snd . adi @() (eval . annotated . getCompose) psi
+    adi (eval . annotated . getCompose) psi
   where
-    psi k v@(Fix x) = fmap (fmap (withExprContext (() <$ x))) (k v)
+    psi k v@(Fix x) = withExprContext (() <$ x) (k v)
 
 tracingExprEval :: MonadNix m => NExprLoc -> IO (m (NValue m))
-tracingExprEval = flip runReaderT (0 :: Int)
-                . fmap (runIdentity . snd)
-                . adiM @() (pure <$> eval . annotated . getCompose) psi
+tracingExprEval =
+    flip runReaderT (0 :: Int)
+        . adiM (pure <$> eval . annotated . getCompose) psi
   where
     psi k v@(Fix x) = do
         depth <- ask
         liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' '
             ++ show (stripAnnotation v)
         res <- local succ $
-            fmap (fmap (fmap (withExprContext (() <$ x)))) (k v)
+            fmap (withExprContext (() <$ x)) (k v)
         liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' ' ++ "."
         return res
 
