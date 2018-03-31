@@ -9,7 +9,7 @@
 module Nix.Eval
     (evalExpr, tracingExprEval, evalBinds, exprNormalForm, normalForm,
      builtin, builtin2, builtin3, atomText, valueText, buildArgument,
-     contextualExprEval
+     contextualExprEval, thunkEq
     ) where
 
 import           Control.Monad hiding (mapM, sequence)

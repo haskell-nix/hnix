@@ -73,6 +73,7 @@ builtinsList = sequence [
     , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
     , add2 Normal   "seq"                        seq_
     , add2 Normal   "deepSeq"                    deepSeq
+    , add2 Normal   "elem"                       elem_
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -309,10 +310,18 @@ deepSeq a b = do
     _ <- normalForm =<< forceThunk a
     forceThunk b
 
+elem_ :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
+elem_ x xs = forceThunk xs >>= \case
+    NVList l -> toValue =<< anyM (thunkEq x) l
+    v -> throwError $ "builtins.elem: Expected a list, got " ++ show (void v)
+
 newtype Prim m a = Prim { runPrim :: m a }
 
 class ToNix a where
     toValue :: MonadNix m => a -> m (NValue m)
+
+instance ToNix Bool where
+    toValue = return . NVConstant . NBool
 
 instance ToNix Text where
     toValue s = return $ NVStr s mempty
