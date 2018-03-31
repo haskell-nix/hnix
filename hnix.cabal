@@ -66,7 +66,7 @@ Library
     , mtl
     , transformers
     , parsers >= 0.10
-    , unordered-containers
+    , unordered-containers >= 0.2.9 && < 0.3
     , data-fix
     , deepseq
     , exceptions
