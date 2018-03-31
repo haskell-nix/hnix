@@ -78,6 +78,7 @@ builtinsList = sequence [
     , add2 Normal   "seq"                        seq_
     , add2 Normal   "deepSeq"                    deepSeq
     , add2 Normal   "elem"                       elem_
+    , add2 Normal   "genList"                    genList
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -325,6 +326,12 @@ elem_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 elem_ x xs = forceThunk xs >>= \case
     NVList l -> toValue =<< anyM (thunkEq x) l
     v -> throwError $ "builtins.elem: Expected a list, got " ++ show (void v)
+
+genList :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
+genList generator length = forceThunk length >>= \case
+    NVConstant (NInt n) | n >= 0 -> fmap NVList $ forM [0 .. n - 1] $ \i -> do
+        buildThunk $ apply generator =<< valueRef =<< toValue i
+    v -> throwError $ "builtins.genList: Expected a non-negative number, got " ++ show (void v)
 
 newtype Prim m a = Prim { runPrim :: m a }
 
