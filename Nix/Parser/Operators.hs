@@ -57,7 +57,7 @@ getBinaryOperator = (m Map.!) where
   m = Map.fromList . concat . zipWith buildEntry [1..] . reverse $
         nixOperators
   buildEntry i = \case
-    Right (NBinaryDef assoc ops) -> do
+    Right (NBinaryDef assoc ops) ->
       [(op, OperatorInfo i assoc name) | (name,op) <- ops]
     _ -> []
 

@@ -1,6 +1,8 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
@@ -10,12 +12,13 @@ module Nix.Monad.Instance where
 import           Control.Monad
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
+import           Control.Monad.Reader (MonadReader)
 import           Control.Monad.Trans.Reader
 import qualified Data.ByteString as BS
 import           Data.Fix
 import           Data.Functor.Compose
 import           Data.IORef
-import qualified Data.Map.Lazy as Map
+import qualified Data.HashMap.Lazy as M
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import           Nix.Eval
@@ -35,16 +38,9 @@ import           Text.Trifecta.Rendering
 import           Text.Trifecta.Result
 
 data Context m = Context
-    { scopes :: NScopes m
-    , frames :: [Either String (NExprLocF ())]
+    { scopes :: Scopes (NThunk m)
+    , frames :: Frames
     }
-
-mapScopes :: (NScopes m -> NScopes m) -> Context m -> Context m
-mapScopes f (Context scopes frames) = Context (f scopes) frames
-
-mapFrames :: ([Either String (NExprLocF ())] -> [Either String (NExprLocF ())])
-          -> Context m -> Context m
-mapFrames f (Context scopes frames) = Context scopes (f frames)
 
 renderLocation :: MonadIO m => SrcSpan -> Doc -> m Doc
 renderLocation (SrcSpan beg@(Directed path _ _ _ _) end) msg = do
@@ -63,52 +59,15 @@ renderFrame (Right (Compose (Ann ann expr))) =
 
 newtype Cyclic m a = Cyclic
     { runCyclic :: ReaderT (Context (Cyclic m)) m a }
-    deriving (Functor, Applicative, Monad, MonadFix, MonadIO)
+    deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
+              MonadReader (Context (Cyclic m)))
 
 data Deferred m
     = DeferredAction (m (NValue m))
     -- ^ This is closure over the environment where it was created.
     | ComputedValue (NValue m)
 
-instance Show (NScopes (Cyclic IO)) where
-    show (Scopes xs) = show xs
-
 instance MonadNix (Cyclic IO) where
-    newtype NScopes (Cyclic IO) =
-        Scopes { getS :: [Scope (NThunk (Cyclic IO))] }
-
-    pushScopes (Scopes s) =
-        Cyclic . local (mapScopes (Scopes . (s ++) . getS))
-               . runCyclic
-
-    pushScope s =
-        Cyclic . local (mapScopes (Scopes . (Scope s False:) . getS))
-               . runCyclic
-    pushWeakScope s =
-        Cyclic . local (mapScopes (Scopes . (Scope s True:) . getS))
-               . runCyclic
-
-    clearScopes  =
-        Cyclic . local (mapScopes (Scopes . const [] . getS)) . runCyclic
-    currentScope = Cyclic $ scopes <$> ask
-
-    withExprContext expr =
-        Cyclic . local (mapFrames (Right expr :)) . runCyclic
-    withStringContext str =
-        Cyclic . local (mapFrames (Left str :)) . runCyclic
-
-    throwError str = Cyclic $ do
-        context <- reverse . frames <$> ask
-        infos   <- liftIO $ mapM renderFrame context
-        error $ unlines (infos ++ ["hnix: "++ str])
-
-    -- If a variable is being asked for, it's needed in head normal form.
-    lookupVar k  = Cyclic $ do
-        env <- ask
-        case scopeLookup k (getS (scopes env)) of
-            Nothing -> return Nothing
-            Just v  -> runCyclic $ Just <$> forceThunk v
-
     addPath path = liftIO $ do
         (exitCode, out, _) <-
             readProcessWithExitCode "nix-store" ["--add", path] ""
@@ -119,10 +78,15 @@ instance MonadNix (Cyclic IO) where
           _ -> error $ "No such file or directory: " ++ show path
 
     makeAbsolutePath p = if isAbsolute p then pure p else do
-        cwd <- lookupVar "__cwd" >>= \case
-            Nothing -> liftIO getCurrentDirectory
-            Just (NVLiteralPath s) -> return s
-            Just v -> throwError $ "when resolving relative path, __cwd is in scope, but is not a path; it is: " ++ show (void v)
+        cwd <- do
+            mres <- lookupVar @_ @(NThunk (Cyclic IO)) "__cwd"
+            case mres of
+                Nothing -> liftIO getCurrentDirectory
+                Just v -> forceThunk v >>= \case
+                    NVLiteralPath s -> return s
+                    v -> throwError $ "when resolving relative path,"
+                            ++ " __cwd is in scope,"
+                            ++ " but is not a path; it is: " ++ show (void v)
         liftIO $ canonicalizePath $ cwd </> p
 
     data NThunk (Cyclic IO) = NThunkIO (IORef (Deferred (Cyclic IO)))
@@ -138,23 +102,34 @@ instance MonadNix (Cyclic IO) where
         case eres of
             ComputedValue value -> return value
             DeferredAction action -> do
-                scope <- currentScope
+                scope <- currentScopes @_ @(NThunk (Cyclic IO))
                 traceM $ "Forcing thunk in scope: " ++ show scope
                 value <- action
-                traceM $ "Forcing thunk computed: " ++ show (() <$ value)
+                traceM $ "Forcing thunk computed: " ++ show (void value)
                 liftIO $ writeIORef ref (ComputedValue value)
                 return value
+
+    throwError str = Cyclic $ do
+        context <- reverse . frames <$> ask
+        infos   <- liftIO $ mapM renderFrame context
+        error $ unlines (infos ++ ["hnix: "++ str])
+
+instance Has (Context m) (Scopes (NThunk m)) where
+    hasLens f (Context x y) = flip Context y <$> f x
+
+instance Has (Context m) Frames where
+    hasLens f (Context x y) = Context x <$> f y
 
 instance MonadNixEnv (Cyclic IO) where
     -- jww (2018-03-29): Cache which files have been read in.
     importFile = forceThunk >=> \case
         NVLiteralPath path -> do
-            mres <- lookupVar "__cwd"
+            mres <- lookupVar @(Context (Cyclic IO)) "__cwd"
             path' <- case mres of
                 Nothing  -> do
                     traceM "No known current directory"
                     return path
-                Just dir -> normalForm dir >>= \case
+                Just dir -> forceThunk dir >>= normalForm >>= \case
                     Fix (NVLiteralPath dir') -> do
                         traceM $ "Current directory for import is: "
                             ++ show dir'
@@ -171,8 +146,8 @@ instance MonadNixEnv (Cyclic IO) where
                         -- Use this cookie so that when we evaluate the next
                         -- import, we'll remember which directory its containing
                         -- file was in.
-                        pushScope (Map.singleton "__cwd" ref) (evalExpr expr)
-        p -> error $ "Unexpected argument to import: " ++ show (() <$ p)
+                        pushScope (M.singleton "__cwd" ref) (evalExpr expr)
+        p -> error $ "Unexpected argument to import: " ++ show (void p)
 
     getEnvVar = forceThunk >=> \case
         NVStr s _ -> do
@@ -180,7 +155,7 @@ instance MonadNixEnv (Cyclic IO) where
             return $ case mres of
                 Nothing -> NVStr "" mempty
                 Just v  -> NVStr (Text.pack v) mempty
-        p -> error $ "Unexpected argument to getEnv: " ++ show (() <$ p)
+        p -> error $ "Unexpected argument to getEnv: " ++ show (void p)
 
 runCyclicIO :: Cyclic IO a -> IO a
-runCyclicIO = flip runReaderT (Context (Scopes []) []) . runCyclic
+runCyclicIO = flip runReaderT (Context emptyScopes []) . runCyclic

@@ -1,16 +1,18 @@
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Nix.Eval
-    (evalExpr, tracingExprEval, evalBinds, exprNormalForm, normalForm,
-     builtin, builtin2, builtin3, atomText, valueText, buildArgument,
-     contextualExprEval, thunkEq
-    ) where
+    (MonadNixEval, evalExpr, tracingExprEval, evalBinds,
+     exprNormalForm, normalForm, builtin, builtin2, builtin3,
+     atomText, valueText, buildArgument, contextualExprEval,
+     thunkEq) where
 
 import           Control.Monad hiding (mapM, sequence)
 import           Control.Monad.IO.Class
@@ -21,12 +23,14 @@ import           Data.Align
 import           Data.Align.Key
 import           Data.Fix
 import           Data.Functor.Compose
+import           Data.HashMap.Lazy (HashMap)
+import qualified Data.HashMap.Lazy as M
 import           Data.List (intercalate)
-import qualified Data.Map.Lazy as Map
 import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.These
+import           Data.Traversable (for)
 import           Nix.Atoms
 import           Nix.Expr
 import           Nix.Monad
@@ -34,18 +38,20 @@ import           Nix.Scope
 import           Nix.StringOperations (runAntiquoted)
 import           Nix.Utils
 
+type MonadNixEval e m = (Scoped e (NThunk m) m, Framed e m, MonadNix m)
+
 -- | Evaluate an nix expression, with a given ValueSet as environment
-evalExpr :: MonadNix m => NExpr -> m (NValue m)
+evalExpr :: MonadNixEval e m => NExpr -> m (NValue m)
 evalExpr = cata eval
 
-eval :: MonadNix m => NExprF (m (NValue m)) -> m (NValue m)
+eval :: forall e m. MonadNixEval e m => NExprF (m (NValue m)) -> m (NValue m)
 
 eval (NSym var) = do
     traceM $ "NSym..1: var = " ++ show var
     mres <- lookupVar var
     case mres of
         Nothing -> throwError $ "Undefined variable: " ++ show var
-        Just v -> return v
+        Just v -> forceThunk v
 
 eval (NConstant x)    = return $ NVConstant x
 eval (NStr str)       = evalString str
@@ -93,7 +99,7 @@ eval (NBinary op larg rarg) = do
             _    -> throwError unsupportedTypes
 
         (NVSet ls, NVSet rs) -> case op of
-            NUpdate -> return $ NVSet $ rs `Map.union` ls
+            NUpdate -> return $ NVSet $ rs `M.union` ls
             _ -> throwError unsupportedTypes
 
         (NVList ls, NVList rs) -> case op of
@@ -127,7 +133,7 @@ eval (NSelect aset attr alternative) = do
                 ++ intercalate "." (map Text.unpack ks)
                 ++ " in " ++ show (() <$ aset')
   where
-    extract (NVSet s) (k:ks) = case Map.lookup k s of
+    extract (NVSet s) (k:ks) = case M.lookup k s of
         Just v  -> do
             s' <- forceThunk v
             extract s' ks
@@ -138,13 +144,13 @@ eval (NSelect aset attr alternative) = do
 eval (NHasAttr aset attr) = aset >>= \case
     NVSet s -> evalSelector True attr >>= \case
         [keyName] ->
-            return $ NVConstant $ NBool $ keyName `Map.member` s
+            return $ NVConstant $ NBool $ keyName `M.member` s
         _ -> throwError "attr name argument to hasAttr is not a single-part name"
     _ -> throwError "argument to hasAttr has wrong type"
 
 eval (NList l) = do
-    scope <- currentScope
-    NVList <$> traverse (deferInScope scope) l
+    scope <- currentScopes
+    NVList <$> for l (buildThunk . withScopes @(NThunk m) scope)
 
 eval (NSet binds) = do
     traceM "NSet..1"
@@ -185,22 +191,23 @@ eval (NAbs params body) = do
     -- needs to be used when evaluating the body and default arguments, hence
     -- we defer here so the present scope is restored when the parameters and
     -- body are forced during application.
-    scope <- currentScope
+    scope <- currentScopes @_ @(NThunk m)
     traceM $ "Creating lambda abstraction in scope: " ++ show scope
     return $ NVFunction (buildThunk . pushScopes scope <$> params)
                         (buildThunk (pushScopes scope body))
 
 infixl 1 `evalApp`
-evalApp :: MonadNix m => m (NValue m) -> m (NValue m) -> m (NValue m)
+evalApp :: forall e m. MonadNixEval e m
+        => m (NValue m) -> m (NValue m) -> m (NValue m)
 evalApp fun arg = fun >>= \case
     NVFunction params f -> do
         args <- buildArgument params =<< buildThunk arg
         traceM $ "Evaluating function application with args: "
             ++ show (newScope args)
-        clearScopes (pushScope args (forceThunk =<< f))
+        clearScopes @(NThunk m) (pushScope args (forceThunk =<< f))
     NVBuiltin _ f -> f =<< buildThunk arg
     NVSet m
-        | Just f <- Map.lookup "__functor" m
+        | Just f <- M.lookup "__functor" m
             -> forceThunk f `evalApp` fun `evalApp` arg
     x -> throwError $ "Attempt to call non-function: " ++ show (() <$ x)
 
@@ -216,7 +223,9 @@ thunkEq lt rt = do
     rv <- forceThunk rt
     valueEq lv rv
 
--- | Checks whether two containers are equal, using the given item equality predicate.  If there are any item slots that don't match between the two containers, the result will be False.
+-- | Checks whether two containers are equal, using the given item equality
+--   predicate. If there are any item slots that don't match between the two
+--   containers, the result will be False.
 alignEqM
     :: (Align f, Traversable f, Monad m)
     => (a -> b -> m Bool)
@@ -237,10 +246,10 @@ valueEq l r = case (l, r) of
     (NVSet lm, NVSet rm) -> alignEqM thunkEq lm rm
     _ -> pure False
 
-buildArgument :: forall m. MonadNix m
+buildArgument :: forall e m. MonadNixEval e m
               => Params (m (NThunk m)) -> NThunk m -> m (ValueSet m)
 buildArgument params arg = case params of
-    Param name -> return $ Map.singleton name arg
+    Param name -> return $ M.singleton name arg
     ParamSet ps m -> go ps m
   where
     go ps m = forceThunk arg >>= \case
@@ -257,7 +266,7 @@ buildArgument params arg = case params of
     selfInject :: ValueSet m -> Text -> m (ValueSet m)
     selfInject res n = do
         ref <- valueRef $ NVSet res
-        return $ Map.insert n ref res
+        return $ M.insert n ref res
 
     assemble :: Bool
              -> Text
@@ -268,9 +277,9 @@ buildArgument params arg = case params of
         That Nothing  ->
             const $ throwError $ "Missing value for parameter: " ++ show k
         That (Just f) -> \args -> do
-            scope <- currentScope
+            scope <- currentScopes @_ @(NThunk m)
             traceM $ "Deferring default argument in scope: " ++ show scope
-            buildThunk $ clearScopes $ do
+            buildThunk $ clearScopes @(NThunk m) $ do
                 traceM $ "Evaluating default argument with args: "
                     ++ show (newScope args)
                 pushScopes scope $ pushScope args $ forceThunk =<< f
@@ -279,15 +288,15 @@ buildArgument params arg = case params of
                  const $ throwError $ "Unexpected parameter: " ++ show k
         These x _ -> const (pure x)
 
-attrSetAlter :: MonadNix m
+attrSetAlter :: forall e m. MonadNixEval e m
              => [Text]
-             -> Map.Map Text (m (NValue m))
+             -> HashMap Text (m (NValue m))
              -> m (NValue m)
-             -> m (Map.Map Text (m (NValue m)))
+             -> m (HashMap Text (m (NValue m)))
 attrSetAlter [] _ _ = throwError "invalid selector with no components"
-attrSetAlter (p:ps) m val = case Map.lookup p m of
+attrSetAlter (p:ps) m val = case M.lookup p m of
     Nothing | null ps   -> go
-            | otherwise -> recurse Map.empty
+            | otherwise -> recurse M.empty
     Just v  | null ps   -> go
             | otherwise -> v >>= \case
                   NVSet s -> recurse (fmap forceThunk s)
@@ -296,17 +305,18 @@ attrSetAlter (p:ps) m val = case Map.lookup p m of
                   x -> throwError $ "attribute " ++ show p
                     ++ " is not a set; its value is " ++ show (void x)
   where
-    go = return $ Map.insert p val m
+    go = return $ M.insert p val m
 
     recurse s = attrSetAlter ps s val >>= \m' ->
-        if | Map.null m' -> return m
+        if | M.null m' -> return m
            | otherwise   -> do
-             scope <- currentScope
-             return $ Map.insert p (embed scope m') m
+             scope <- currentScopes @_ @(NThunk m)
+             return $ M.insert p (embed scope m') m
       where
-        embed scope m' = NVSet <$> traverse (deferInScope scope) m'
+        embed scope m' =
+            NVSet <$> traverse (buildThunk . withScopes scope) m'
 
-evalBinds :: forall m. MonadNix m
+evalBinds :: forall e m. MonadNixEval e m
           => Bool
           -> Bool
           -> [Binding (m (NValue m))]
@@ -329,22 +339,23 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
             case mv of
                 Nothing -> throwError $ "Inheriting unknown attribute: "
                     ++ show (() <$ name)
-                Just v -> return v)
+                Just v -> forceThunk v)
 
     buildResult :: [([Text], m (NValue m))] -> m (ValueSet m)
     buildResult bindings = do
-        s <- foldM insert Map.empty bindings
-        scope <- currentScope
+        s <- foldM insert M.empty bindings
+        scope <- currentScopes @_ @(NThunk m)
         if recursive
             then loebM (encapsulate scope <$> s)
-            else traverse (deferInScope scope) s
+            else traverse (buildThunk . withScopes scope) s
 
     encapsulate scope f attrs =
-        buildThunk . clearScopes . pushScopes scope . pushScope attrs $ f
+        buildThunk . withScopes scope . pushScope attrs $ f
 
     insert m (path, value) = attrSetAlter path m value
 
-evalString :: MonadNix m => NString (m (NValue m)) -> m (NValue m)
+evalString :: (Framed e m, MonadNix m)
+           => NString (m (NValue m)) -> m (NValue m)
 evalString nstr = do
     let fromParts parts = do
           (t, c) <- mconcat <$> mapM go parts
@@ -355,10 +366,12 @@ evalString nstr = do
   where
     go = runAntiquoted (return . (, mempty)) (valueText <=< (normalForm =<<))
 
-evalSelector :: MonadNix m => Bool -> NAttrPath (m (NValue m)) -> m [Text]
+evalSelector :: (Framed e m, MonadNix m)
+             => Bool -> NAttrPath (m (NValue m)) -> m [Text]
 evalSelector = mapM . evalKeyName
 
-evalKeyName :: MonadNix m => Bool -> NKeyName (m (NValue m)) -> m Text
+evalKeyName :: (Framed e m, MonadNix m)
+            => Bool -> NKeyName (m (NValue m)) -> m Text
 evalKeyName _ (StaticKey k) = return k
 evalKeyName dyn (DynamicKey k)
     | dyn = do
@@ -367,13 +380,12 @@ evalKeyName dyn (DynamicKey k)
     | otherwise =
       throwError "dynamic attribute not allowed in this context"
 
-contextualExprEval :: forall m. MonadNix m => NExprLoc -> m (NValue m)
-contextualExprEval =
-    adi (eval . annotated . getCompose) psi
+contextualExprEval :: MonadNixEval e m => NExprLoc -> m (NValue m)
+contextualExprEval = adi (eval . annotated . getCompose) psi
   where
     psi k v@(Fix x) = withExprContext (() <$ x) (k v)
 
-tracingExprEval :: MonadNix m => NExprLoc -> IO (m (NValue m))
+tracingExprEval :: MonadNixEval e m => NExprLoc -> IO (m (NValue m))
 tracingExprEval =
     flip runReaderT (0 :: Int)
         . adiM (pure <$> eval . annotated . getCompose) psi
@@ -387,7 +399,7 @@ tracingExprEval =
         liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' ' ++ "."
         return res
 
-exprNormalForm :: MonadNix m => NExpr -> m (NValueNF m)
+exprNormalForm :: MonadNixEval e m => NExpr -> m (NValueNF m)
 exprNormalForm = normalForm <=< evalExpr
 
 normalForm :: MonadNix m => NValue m -> m (NValueNF m)

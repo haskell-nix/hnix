@@ -1,16 +1,17 @@
 module Nix where
 
-import qualified Data.Map.Lazy as Map
+import qualified Data.HashMap.Lazy as M
 import           Nix.Builtins
 import           Nix.Eval
 import           Nix.Expr.Types.Annotated (NExprLoc, stripAnnotation)
 import           Nix.Lint
 import           Nix.Monad
 import           Nix.Monad.Instance
+import           Nix.Scope
 import           Nix.Utils
 
 -- | Evaluate a nix expression in the default context
-evalTopLevelExpr :: MonadNixEnv m
+evalTopLevelExpr :: MonadBuiltins e m
                  => Maybe FilePath -> NExprLoc -> m (NValueNF m)
 evalTopLevelExpr mdir expr = do
     base <- baseEnv
@@ -19,7 +20,7 @@ evalTopLevelExpr mdir expr = do
         Just dir -> do
             traceM $ "Setting __cwd = " ++ show dir
             ref <- valueRef $ NVLiteralPath dir
-            pushScope (Map.singleton "__cwd" ref) (contextualExprEval expr)
+            pushScope (M.singleton "__cwd" ref) (contextualExprEval expr)
 
 evalTopLevelExprIO :: Maybe FilePath -> NExprLoc -> IO (NValueNF (Cyclic IO))
 evalTopLevelExprIO mdir = runCyclicIO . evalTopLevelExpr mdir
@@ -39,7 +40,7 @@ tracingEvalTopLevelExprIO mdir expr = do
         Just dir -> do
             traceM $ "Setting __cwd = " ++ show dir
             ref <- runCyclicIO (valueRef $ NVLiteralPath dir)
-            let m = Map.singleton "__cwd" ref
+            let m = M.singleton "__cwd" ref
             runCyclicIO (baseEnv >>= (`pushScopes` pushScope m traced)
                                  >>= normalForm)
 

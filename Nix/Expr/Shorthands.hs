@@ -5,7 +5,7 @@
 module Nix.Expr.Shorthands where
 
 import           Data.Fix
-import qualified Data.Map as Map
+import qualified Data.HashMap.Lazy as M
 import           Data.Monoid
 import           Data.Text (Text)
 import           Nix.Atoms
@@ -92,10 +92,10 @@ mkParamset :: [(Text, Maybe NExpr)] -> Params NExpr
 mkParamset params = ParamSet (mkFixedParamSet params) Nothing
 
 mkFixedParamSet :: [(Text, Maybe NExpr)] -> ParamSet NExpr
-mkFixedParamSet ps = FixedParamSet (Map.fromList ps)
+mkFixedParamSet ps = FixedParamSet (M.fromList ps)
 
 mkVariadicParamSet :: [(Text, Maybe NExpr)] -> ParamSet NExpr
-mkVariadicParamSet ps = VariadicParamSet (Map.fromList ps)
+mkVariadicParamSet ps = VariadicParamSet (M.fromList ps)
 
 mkApp :: NExpr -> NExpr -> NExpr
 mkApp e = Fix . NApp e

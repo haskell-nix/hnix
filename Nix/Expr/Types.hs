@@ -10,17 +10,18 @@
 -- | The nix expression type and supporting types.
 module Nix.Expr.Types where
 
-import Data.Data
-import Data.Eq.Deriving
-import Data.Fix
-import Data.Functor.Classes
-import Data.Map (Map, toList)
-import Data.Text (Text, pack)
-import Data.Traversable
-import GHC.Exts
-import GHC.Generics
-import Nix.Atoms
-import Text.Show.Deriving
+import           Data.Data
+import           Data.Eq.Deriving
+import           Data.Fix
+import           Data.Functor.Classes
+import           Data.HashMap.Lazy (HashMap)
+import qualified Data.HashMap.Lazy as M
+import           Data.Text (Text, pack)
+import           Data.Traversable
+import           GHC.Exts
+import           GHC.Generics
+import           Nix.Atoms
+import           Text.Show.Deriving
 
 -- | The main nix expression type. This is polymorphic so that it can be made
 -- a functor, which allows us to traverse expressions and map functions over
@@ -106,19 +107,19 @@ instance IsString (Params r) where
 
 -- | An explicit parameter set; provides a shorthand for unpacking arguments.
 data ParamSet r
-  = FixedParamSet !(Map Text (Maybe r))
+  = FixedParamSet !(HashMap Text (Maybe r))
   -- ^ A fixed set, where no arguments beyond what is specified in the map
   -- may be given. The map might contain defaults for arguments not passed.
-  | VariadicParamSet !(Map Text (Maybe r))
+  | VariadicParamSet !(HashMap Text (Maybe r))
   -- ^ Same as the 'FixedParamSet', but extra arguments are allowed.
   deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show,
             Foldable, Traversable)
 
 instance Eq1 ParamSet where
   liftEq eq (FixedParamSet a) (FixedParamSet b) =
-    liftEq (liftEq (liftEq eq)) (Data.Map.toList a) (Data.Map.toList b)
+    liftEq (liftEq (liftEq eq)) (M.toList a) (M.toList b)
   liftEq eq (VariadicParamSet a) (VariadicParamSet b) =
-    liftEq (liftEq (liftEq eq)) (Data.Map.toList a) (Data.Map.toList b)
+    liftEq (liftEq (liftEq eq)) (M.toList a) (M.toList b)
   liftEq _ _ _ = False
 
 -- It's not possible to derive this automatically as there is no Show1 instance
@@ -128,12 +129,12 @@ instance Show1 ParamSet where
     let liftShowsPrecMap :: (Int -> a -> ShowS)
                          -> ([a] -> ShowS)
                          -> Int
-                         -> Map Text a
+                         -> HashMap Text a
                          -> ShowS
         liftShowsPrecMap spMap slMap pMap m =
           showsUnaryWith (liftShowsPrec (liftShowsPrec spMap slMap)
                                         (liftShowList spMap slMap))
-                         "fromList" pMap (Data.Map.toList m)
+                         "fromList" pMap (M.toList m)
         showNamedMap s =
           showsUnaryWith (liftShowsPrecMap (liftShowsPrec sp sl)
                                            (liftShowList sp sl))

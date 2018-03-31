@@ -3,12 +3,11 @@
 module ParserTests (tests) where
 
 import           Data.Fix
-import qualified Data.Map as Map
+import qualified Data.HashMap.Lazy as M
 import           Data.Text (pack)
 import           Nix.Atoms
 import           Nix.Expr
 import           Nix.Parser
-import           Nix.StringOperations
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.TH
@@ -167,9 +166,9 @@ case_lambda_pattern = do
  where
   fixed args mname = ParamSet (FixedParamSet args) mname
   variadic args mname = ParamSet (VariadicParamSet args) mname
-  args = Map.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
-  vargs = Map.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
-  args2 = Map.fromList [("b", Just lam)]
+  args = M.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
+  vargs = M.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
+  args2 = M.fromList [("b", Just lam)]
   lam = Fix $ NAbs (Param "x") (mkSym "x")
 
 case_lambda_app_int :: Assertion

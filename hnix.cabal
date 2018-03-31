@@ -63,6 +63,7 @@ Library
     , deriving-compat >= 0.3 && < 0.5
     , text
     , bytestring
+    , mtl
     , transformers
     , parsers >= 0.10
     , unordered-containers
@@ -140,6 +141,7 @@ Test-suite hnix-tests
     , split
     , transformers
     , interpolate
+    , unordered-containers
 
 Benchmark hnix-benchmarks
   Type: exitcode-stdio-1.0

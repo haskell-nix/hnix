@@ -2,9 +2,9 @@
 module Nix.Pretty where
 
 import           Data.Fix
+import           Data.HashMap.Lazy (toList)
 import qualified Data.HashSet as HashSet
 import           Data.List (isPrefixOf, intercalate)
-import           Data.Map (toList)
 import           Data.Maybe (isJust)
 import           Data.Text (pack, unpack, replace, strip)
 import qualified Data.Text as Text

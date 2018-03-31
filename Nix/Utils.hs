@@ -1,11 +1,14 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Nix.Utils (module Nix.Utils, module X) where
 
+import Control.Applicative
 import Control.Monad
 import Control.Monad.Fix
 import Data.Fix
+import Data.Functor.Identity
 import Data.Monoid (Endo)
 
 -- #define ENABLE_TRACING 1
@@ -53,3 +56,17 @@ adiM :: (Traversable t, Monad m)
      -> ((Fix t -> m a) -> Fix t -> m a)
      -> Fix t -> m a
 adiM f g = g ((f <=< traverse (adiM f g)) . unFix)
+
+type MonoLens a b = forall f. Functor f => (b -> f b) -> a -> f a
+
+view :: MonoLens a b -> a -> b
+view l = getConst . l Const
+
+set :: MonoLens a b -> b -> a -> a
+set l b = runIdentity . l (\_ -> Identity b)
+
+over :: MonoLens a b -> (b -> b) -> a -> a
+over l f = runIdentity . l (Identity . f)
+
+class Has a b where
+    hasLens :: MonoLens a b

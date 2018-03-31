@@ -1,11 +1,15 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Nix.Monad where
 
 import           Control.Monad.Fix
+import           Control.Monad.Reader
 import           Data.Fix
-import qualified Data.Map.Lazy as Map
+import           Data.HashMap.Lazy (HashMap)
+import qualified Data.HashMap.Lazy as M
 import           Data.Monoid (appEndo)
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -24,7 +28,7 @@ data NValueF m r
      -- string has been build from
     | NVStr Text (DList Text)
     | NVList [r]
-    | NVSet (Map.Map Text r)
+    | NVSet (HashMap Text r)
     | NVFunction (Params (m r)) (m r)
       -- ^ A function is a closed set of parameters representing the "call
       --   signature", used at application time to check the type of arguments
@@ -54,7 +58,7 @@ data NValueF m r
 
 type NValueNF m = Fix (NValueF m)      -- normal form
 type NValue m   = NValueF m (NThunk m) -- head normal form
-type ValueSet m = Map.Map Text (NThunk m)
+type ValueSet m = HashMap Text (NThunk m)
 
 instance Show f => Show (NValueF m f) where
     showsPrec = flip go where
@@ -80,7 +84,8 @@ instance Show f => Show (NValueF m f) where
               . showString " "
               . showsPrec 11 b
 
-valueText :: forall m. MonadNix m => NValueNF m -> m (Text, DList Text)
+valueText :: forall e m. (Framed e m, MonadNix m)
+          => NValueNF m -> m (Text, DList Text)
 valueText = cata phi where
     phi :: NValueF m (m (Text, DList Text)) -> m (Text, DList Text)
     phi (NVConstant a)    = pure (atomText a, mempty)
@@ -89,7 +94,7 @@ valueText = cata phi where
     phi (NVSet set)
       | Just asString <-
         -- TODO: Should this be run through valueText recursively?
-        Map.lookup "__asString" set = asString
+        M.lookup "__asString" set = asString
       | otherwise = throwError "Cannot coerce a set to a string"
     phi (NVFunction _ _)  = throwError "Cannot coerce a function to a string"
     phi (NVLiteralPath originalPath) = do
@@ -102,7 +107,7 @@ valueText = cata phi where
         pure (Text.pack p, mempty)
     phi (NVBuiltin _ _)    = throwError "Cannot coerce a function to a string"
 
-valueTextNoContext :: MonadNix m => NValueNF m -> m Text
+valueTextNoContext :: (Framed e m, MonadNix m) => NValueNF m -> m Text
 valueTextNoContext = fmap fst . valueText
 
 builtin :: MonadNix m => String -> (NThunk m -> m (NValue m)) -> m (NValue m)
@@ -121,20 +126,17 @@ builtin3 name f =
 -- | A path into the nix store
 newtype StorePath = StorePath { unStorePath :: FilePath }
 
-class (Show (NScopes m), MonadFix m) => MonadNix m where
-    data NScopes m :: *
+type Frames = [Either String (NExprLocF ())]
 
-    withExprContext :: NExprLocF () -> m r -> m r
-    withStringContext :: String -> m r -> m r
-    throwError :: String -> m a
+type Framed e m = (MonadReader e m, Has e Frames)
 
-    currentScope  :: m (NScopes m)
-    clearScopes   :: m r -> m r
-    pushScope     :: ValueSet m -> m r -> m r
-    pushWeakScope :: ValueSet m -> m r -> m r
-    pushScopes    :: NScopes m  -> m r -> m r
-    lookupVar     :: Text -> m (Maybe (NValue m))
+withExprContext :: Framed e m => NExprLocF () -> m r -> m r
+withExprContext expr = local (over hasLens (Right @String expr :))
 
+withStringContext :: Framed e m => String -> m r -> m r
+withStringContext str = local (over hasLens (Left @_ @(NExprLocF ()) str :))
+
+class MonadFix m => MonadNix m where
     data NThunk m :: *
 
     valueRef   :: NValue m -> m (NThunk m)
@@ -147,9 +149,7 @@ class (Show (NScopes m), MonadFix m) => MonadNix m where
     -- | Determine the absolute path of relative path in the current context
     makeAbsolutePath :: FilePath -> m FilePath
 
-deferInScope :: MonadNix m
-             => NScopes m -> m (NValue m) -> m (NThunk m)
-deferInScope scope = buildThunk . clearScopes . pushScopes scope
+    throwError :: Framed e m => String -> m a
 
 -- | MonadNixEnv represents all of the effects needed by builtin functions in
 --   order to interact with the environment where Nix expressions are being

@@ -15,9 +15,10 @@ import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Foldable hiding (concat)
-import qualified Data.Map as Map
-import           Data.Text hiding (head, map, foldl1', foldl', concat)
-import           Nix.Expr
+import           Data.Functor
+import qualified Data.HashMap.Lazy as M
+import           Data.Text hiding (map, foldl', concat)
+import           Nix.Expr hiding (($>))
 import           Nix.Parser.Library
 import           Nix.Parser.Operators
 import           Nix.StringOperations
@@ -251,7 +252,7 @@ argExpr = choice [atLeft, onlyname, atRight] <* symbolic ':' where
   params = do
     (args, dotdots) <- braces getParams
     let constructor = if dotdots then VariadicParamSet else FixedParamSet
-    return (constructor, Map.fromList args)
+    return (constructor, M.fromList args)
 
   -- Collects the parameters within curly braces. Returns the parameters and
   -- a boolean indicating if the parameters are variadic.
@@ -286,7 +287,7 @@ keyName = dynamicKey <|> staticKey where
 
 nixSet :: Parser NExprLoc
 nixSet = annotateLocation1 $ (isRec <*> braces nixBinders) <?> "set" where
-  isRec = (try (reserved "rec" *> pure NRecSet) <?> "recursive set")
+  isRec = (try (reserved "rec" $> NRecSet) <?> "recursive set")
        <|> pure NSet
 
 parseNixFile :: MonadIO m => FilePath -> m (Result NExpr)
