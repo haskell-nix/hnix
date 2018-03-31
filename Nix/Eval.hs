@@ -178,14 +178,7 @@ eval (NAssert cond e) = cond >>= \case
     NVConstant (NBool False) -> throwError "assertion failed"
     _ -> throwError "assertion condition must be boolean"
 
-eval (NApp fun arg) = fun >>= \case
-    NVFunction params f -> do
-        args <- buildArgument params =<< buildThunk arg
-        traceM $ "Evaluating function application with args: "
-            ++ show (newScope args)
-        clearScopes (pushScope args (forceThunk =<< f))
-    NVBuiltin _ f -> f =<< buildThunk arg
-    x -> throwError $ "Attempt to call non-function: " ++ show (() <$ x)
+eval (NApp fun arg) = evalApp fun arg
 
 eval (NAbs params body) = do
     -- It is the environment at the definition site, not the call site, that
@@ -196,6 +189,20 @@ eval (NAbs params body) = do
     traceM $ "Creating lambda abstraction in scope: " ++ show scope
     return $ NVFunction (buildThunk . pushScopes scope <$> params)
                         (buildThunk (pushScopes scope body))
+
+infixl 1 `evalApp`
+evalApp :: MonadNix m => m (NValue m) -> m (NValue m) -> m (NValue m)
+evalApp fun arg = fun >>= \case
+    NVFunction params f -> do
+        args <- buildArgument params =<< buildThunk arg
+        traceM $ "Evaluating function application with args: "
+            ++ show (newScope args)
+        clearScopes (pushScope args (forceThunk =<< f))
+    NVBuiltin _ f -> f =<< buildThunk arg
+    NVSet m
+        | Just f <- Map.lookup "__functor" m
+            -> forceThunk f `evalApp` fun `evalApp` arg
+    x -> throwError $ "Attempt to call non-function: " ++ show (() <$ x)
 
 valueRefBool :: MonadNix m => Bool -> m (NValue m)
 valueRefBool = return . NVConstant . NBool
