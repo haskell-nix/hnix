@@ -46,27 +46,28 @@ isTopLevel b = case kind b of Normal -> False; TopLevel -> True
 
 builtinsList :: forall m. MonadNixEnv m => m [ Builtin m ]
 builtinsList = sequence [
-      add  TopLevel "toString"        toString
-    , add  TopLevel "import"          importFile
-    , add2 TopLevel "map"             map_
-    , add  Normal   "getEnv"          getEnvVar
-    , add2 Normal   "hasAttr"         hasAttr
-    , add2 Normal   "getAttr"         getAttr
-    , add2 Normal   "any"             any_
-    , add2 Normal   "all"             all_
-    , add3 Normal   "foldl'"          foldl'_
-    , add  Normal   "head"            head_
-    , add  Normal   "tail"            tail_
-    , add  Normal   "splitVersion"    splitVersion_
-    , add2 Normal   "compareVersions" compareVersions_
-    , add2 Normal   "compareVersions" compareVersions_
-    , add' Normal   "sub"             (arity2 ((-) @Integer))
-    , add' Normal   "parseDrvName"    parseDrvName
-    , add' Normal   "substring"       substring
-    , add' Normal   "stringLength"    (arity1 Text.length)
-    , add  Normal   "attrNames"       attrNames
-    , add  Normal   "attrValues"      attrValues
-    , add2 Normal   "catAttrs"        catAttrs
+      add  TopLevel "toString"         toString
+    , add  TopLevel "import"           importFile
+    , add2 TopLevel "map"              map_
+    , add  Normal   "getEnv"           getEnvVar
+    , add2 Normal   "hasAttr"          hasAttr
+    , add2 Normal   "getAttr"          getAttr
+    , add2 Normal   "any"              any_
+    , add2 Normal   "all"              all_
+    , add3 Normal   "foldl'"           foldl'_
+    , add  Normal   "head"             head_
+    , add  Normal   "tail"             tail_
+    , add  Normal   "splitVersion"     splitVersion_
+    , add2 Normal   "compareVersions"  compareVersions_
+    , add2 Normal   "compareVersions"  compareVersions_
+    , add' Normal   "sub"              (arity2 ((-) @Integer))
+    , add' Normal   "parseDrvName"     parseDrvName
+    , add' Normal   "substring"        substring
+    , add' Normal   "stringLength"     (arity1 Text.length)
+    , add  Normal   "attrNames"        attrNames
+    , add  Normal   "attrValues"       attrValues
+    , add2 Normal   "catAttrs"         catAttrs
+    , add' Normal   "concatStringsSep" (arity2 Text.intercalate)
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -333,3 +334,8 @@ instance FromNix Integer where
     fromThunk = forceThunk >=> \case
         NVConstant (NInt n) -> pure n
         v -> throwError $ "fromThunk: Expected number, got " ++ show (void v)
+
+instance FromNix a => FromNix [a] where
+    fromThunk = forceThunk >=> \case
+        NVList l -> traverse fromThunk l
+        v -> throwError $ "fromThunk: Expected list, got " ++ show (void v)
