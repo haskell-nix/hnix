@@ -151,16 +151,17 @@ instance MonadNixEnv (Cyclic IO) where
                         return $ dir' </> path
                     x -> error $ "How can the current directory be: " ++ show x
             traceM $ "Importing file " ++ path'
-            eres <- Cyclic $ parseNixFile path'
-            case eres of
-                Failure err  -> error $ "Parse failed: " ++ show err
-                Success expr -> do
-                    ref <- buildThunk $ return $
-                        NVLiteralPath $ takeDirectory path'
-                    -- Use this cookie so that when we evaluate the next
-                    -- import, we'll remember which directory its containing
-                    -- file was in.
-                    pushScope (Map.singleton "__cwd" ref) (evalExpr expr)
+            withStringContext ("While importing file " ++ show path') $ do
+                eres <- Cyclic $ parseNixFile path'
+                case eres of
+                    Failure err  -> error $ "Parse failed: " ++ show err
+                    Success expr -> do
+                        ref <- buildThunk $ return $
+                            NVLiteralPath $ takeDirectory path'
+                        -- Use this cookie so that when we evaluate the next
+                        -- import, we'll remember which directory its containing
+                        -- file was in.
+                        pushScope (Map.singleton "__cwd" ref) (evalExpr expr)
         p -> error $ "Unexpected argument to import: " ++ show (() <$ p)
 
     getEnvVar = forceThunk >=> \case

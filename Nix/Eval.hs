@@ -185,7 +185,7 @@ eval (NApp fun arg) = fun >>= \case
             ++ show (newScope args)
         clearScopes (pushScope args (forceThunk =<< f))
     NVBuiltin _ f -> f =<< buildThunk arg
-    _ -> throwError "Attempt to call non-function"
+    x -> throwError $ "Attempt to call non-function: " ++ show (() <$ x)
 
 eval (NAbs params body) = do
     -- It is the environment at the definition site, not the call site, that
