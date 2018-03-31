@@ -2,19 +2,24 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Nix.Eval
     (evalExpr, tracingExprEval, evalBinds, exprNormalForm, normalForm,
-     builtin, builtin2, builtin3, atomText, valueText, buildArgument) where
+     builtin, builtin2, builtin3, atomText, valueText, buildArgument,
+     contextualExprEval
+    ) where
 
 import           Control.Monad hiding (mapM, sequence)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
 import           Data.Align.Key
 import           Data.Fix
+import           Data.Functor.Compose
 import           Data.Functor.Identity
 import           Data.List (intercalate)
 import qualified Data.Map.Lazy as Map
@@ -37,7 +42,10 @@ eval :: MonadNix m => NExprF (m (NValue m)) -> m (NValue m)
 
 eval (NSym var) = do
     traceM $ "NSym..1: var = " ++ show var
-    fromMaybe (error $ "Undefined variable: " ++ show var) <$> lookupVar var
+    mres <- lookupVar var
+    case mres of
+        Nothing -> throwError $ "Undefined variable: " ++ show var
+        Just v -> return v
 
 eval (NConstant x)    = return $ NVConstant x
 eval (NStr str)       = evalString str
@@ -45,12 +53,12 @@ eval (NLiteralPath p) = return $ NVLiteralPath p
 eval (NEnvPath p)     = return $ NVEnvPath p
 
 eval (NUnary op arg) = arg >>= \case
-    NVConstant c -> return $ NVConstant $ case (op, c) of
-        (NNeg, NInt  i) -> NInt  (-i)
-        (NNot, NBool b) -> NBool (not b)
-        _ -> error $ "unsupported argument type for unary operator "
+    NVConstant c -> case (op, c) of
+        (NNeg, NInt  i) -> return $ NVConstant $ NInt  (-i)
+        (NNot, NBool b) -> return $ NVConstant $ NBool (not b)
+        _ -> throwError $ "unsupported argument type for unary operator "
                  ++ show op
-    _ -> error "argument to unary operator must evaluate to an atomic type"
+    _ -> throwError "argument to unary operator must evaluate to an atomic type"
 
 eval (NBinary op larg rarg) = do
     lval <- larg
@@ -76,34 +84,34 @@ eval (NBinary op larg rarg) = do
             (NMinus, NInt l, NInt r) -> valueRefInt $ l - r
             (NMult,  NInt l, NInt r) -> valueRefInt $ l * r
             (NDiv,   NInt l, NInt r) -> valueRefInt $ l `div` r
-            _ -> error unsupportedTypes
+            _ -> throwError unsupportedTypes
 
         (NVStr ls lc, NVStr rs rc) -> case op of
             NPlus -> return $ NVStr (ls `mappend` rs) (lc `mappend` rc)
             NEq  -> valueRefBool =<< valueEq lval rval
             NNEq -> valueRefBool . not =<< valueEq lval rval
-            _    -> error unsupportedTypes
+            _    -> throwError unsupportedTypes
 
         (NVSet ls, NVSet rs) -> case op of
             NUpdate -> return $ NVSet $ rs `Map.union` ls
-            _ -> error unsupportedTypes
+            _ -> throwError unsupportedTypes
 
         (NVList ls, NVList rs) -> case op of
             NConcat -> return $ NVList $ ls ++ rs
             NEq -> valueRefBool =<< valueEq lval rval
-            _ -> error unsupportedTypes
+            _ -> throwError unsupportedTypes
 
         (NVLiteralPath ls, NVLiteralPath rs) -> case op of
             -- TODO: Canonicalise path
             NPlus -> return $ NVLiteralPath $ ls ++ rs
-            _ -> error unsupportedTypes
+            _ -> throwError unsupportedTypes
 
         (NVLiteralPath ls, NVStr rs rc) -> case op of
             -- TODO: Canonicalise path
             NPlus -> return $ NVStr (Text.pack ls `mappend` rs) rc
-            _ -> error unsupportedTypes
+            _ -> throwError unsupportedTypes
 
-        _ -> error unsupportedTypes
+        _ -> throwError unsupportedTypes
 
 eval (NSelect aset attr alternative) = do
     aset' <- aset
@@ -115,7 +123,7 @@ eval (NSelect aset attr alternative) = do
             pure v
         Nothing -> fromMaybe err alternative
           where
-            err = error $ "could not look up attribute "
+            err = throwError $ "could not look up attribute "
                 ++ intercalate "." (map Text.unpack ks)
                 ++ " in " ++ show (() <$ aset')
   where
@@ -131,8 +139,8 @@ eval (NHasAttr aset attr) = aset >>= \case
     NVSet s -> evalSelector True attr >>= \case
         [keyName] ->
             return $ NVConstant $ NBool $ keyName `Map.member` s
-        _ -> error "attr name argument to hasAttr is not a single-part name"
-    _ -> error "argument to hasAttr has wrong type"
+        _ -> throwError "attr name argument to hasAttr is not a single-part name"
+    _ -> throwError "argument to hasAttr has wrong type"
 
 eval (NList l) = do
     scope <- currentScope
@@ -159,16 +167,16 @@ eval (NLet binds e) = do
 eval (NIf cond t f) = cond >>= \case
     NVConstant (NBool True) -> t
     NVConstant (NBool False) -> f
-    _ -> error "condition must be a boolean"
+    _ -> throwError "condition must be a boolean"
 
 eval (NWith scope e) = scope >>= \case
     NVSet s -> pushWeakScope s e
-    _ -> error "scope must be a set in with statement"
+    _ -> throwError "scope must be a set in with statement"
 
 eval (NAssert cond e) = cond >>= \case
     NVConstant (NBool True) -> e
-    NVConstant (NBool False) -> error "assertion failed"
-    _ -> error "assertion condition must be boolean"
+    NVConstant (NBool False) -> throwError "assertion failed"
+    _ -> throwError "assertion condition must be boolean"
 
 eval (NApp fun arg) = fun >>= \case
     NVFunction params f -> do
@@ -177,7 +185,7 @@ eval (NApp fun arg) = fun >>= \case
             ++ show (newScope args)
         clearScopes (pushScope args (forceThunk =<< f))
     NVBuiltin _ f -> f =<< buildThunk arg
-    _ -> error "Attempt to call non-function"
+    _ -> throwError "Attempt to call non-function"
 
 eval (NAbs params body) = do
     -- It is the environment at the definition site, not the call site, that
@@ -225,7 +233,7 @@ buildArgument params arg = case params of
             res <- loebM (alignWithKey (assemble isVariadic) args s)
             maybe (pure res) (selfInject res) m
 
-        x -> error $ "Expected set in function call, received: "
+        x -> throwError $ "Expected set in function call, received: "
                 ++ show (() <$ x)
 
     selfInject :: ValueSet m -> Text -> m (ValueSet m)
@@ -239,7 +247,8 @@ buildArgument params arg = case params of
              -> ValueSet m
              -> m (NThunk m)
     assemble isVariadic k = \case
-        That Nothing  -> error $ "Missing value for parameter: " ++ show k
+        That Nothing  ->
+            const $ throwError $ "Missing value for parameter: " ++ show k
         That (Just f) -> \args -> do
             scope <- currentScope
             traceM $ "Deferring default argument in scope: " ++ show scope
@@ -248,7 +257,8 @@ buildArgument params arg = case params of
                     ++ show (newScope args)
                 pushScopes scope $ pushScope args $ forceThunk =<< f
         This x | isVariadic -> const (pure x)
-               | otherwise  -> error $ "Unexpected parameter: " ++ show k
+               | otherwise  ->
+                 const $ throwError $ "Unexpected parameter: " ++ show k
         These x _ -> const (pure x)
 
 attrSetAlter :: MonadNix m
@@ -256,14 +266,14 @@ attrSetAlter :: MonadNix m
              -> Map.Map Text (m (NValue m))
              -> m (NValue m)
              -> m (Map.Map Text (m (NValue m)))
-attrSetAlter [] _ _ = error "invalid selector with no components"
+attrSetAlter [] _ _ = throwError "invalid selector with no components"
 attrSetAlter (p:ps) m val = case Map.lookup p m of
     Nothing | null ps   -> go
             | otherwise -> recurse Map.empty
     Just v  | null ps   -> go
             | otherwise -> v >>= \case
                   NVSet s -> recurse (fmap forceThunk s)
-                  _ -> error $ "attribute " ++ attr ++ " is not a set"
+                  _ -> throwError $ "attribute " ++ attr ++ " is not a set"
   where
     attr = show (Text.intercalate "." (p:ps))
 
@@ -294,11 +304,11 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
                 Nothing -> lookupVar key
                 Just s -> s >>= \case
                     NVSet s -> pushScope s (lookupVar key)
-                    x -> error
+                    x -> throwError
                         $ "First argument to inherit should be a set, saw: "
                         ++ show (() <$ x)
             case mv of
-                Nothing -> error $ "Inheriting unknown attribute: "
+                Nothing -> throwError $ "Inheriting unknown attribute: "
                     ++ show (() <$ name)
                 Just v -> return v)
 
@@ -335,18 +345,26 @@ evalKeyName dyn (DynamicKey k)
     | dyn = do
           v <- runAntiquoted evalString id k
           valueTextNoContext =<< normalForm v
-    | otherwise = error "dynamic attribute not allowed in this context"
+    | otherwise =
+      throwError "dynamic attribute not allowed in this context"
 
-tracingExprEval :: MonadNix m => NExpr -> IO (m (NValue m))
-tracingExprEval =
-    flip runReaderT (0 :: Int)
-        . fmap (runIdentity . snd)
-        . adiM @() (pure <$> eval) psi
+contextualExprEval :: forall m. MonadNix m => NExprLoc -> m (NValue m)
+contextualExprEval =
+    runIdentity . snd . adi @() (eval . annotated . getCompose) psi
+  where
+    psi k v@(Fix x) = fmap (fmap (withExprContext (() <$ x))) (k v)
+
+tracingExprEval :: MonadNix m => NExprLoc -> IO (m (NValue m))
+tracingExprEval = flip runReaderT (0 :: Int)
+                . fmap (runIdentity . snd)
+                . adiM @() (pure <$> eval . annotated . getCompose) psi
   where
     psi k v@(Fix x) = do
         depth <- ask
-        liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' ' ++ show x
-        res <- local succ $ k v
+        liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' '
+            ++ show (stripAnnotation v)
+        res <- local succ $
+            fmap (fmap (fmap (withExprContext (() <$ x)))) (k v)
         liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' ' ++ "."
         return res
 

@@ -20,7 +20,7 @@ checkExpr = cata check
 check :: MonadNix m => NExprF (m ()) -> m ()
 
 check (NSym var) = lookupVar var >>= \case
-    Nothing -> error $ "Undefined variable: " ++ show var
+    Nothing -> error $ "lint: Undefined variable: " ++ show var
     Just _ -> return ()
 
 check (NSet binds) =

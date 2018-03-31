@@ -35,10 +35,10 @@ Library
     Nix.Pretty
     Nix.Parser.Operators
     Nix.StringOperations
-  Other-modules:
-    Nix.Parser.Library
     Nix.Expr.Types
     Nix.Expr.Types.Annotated
+  Other-modules:
+    Nix.Parser.Library
     Nix.Expr.Shorthands
     Nix.Utils
   Default-extensions:
@@ -62,11 +62,13 @@ Library
     , containers
     , deriving-compat >= 0.3 && < 0.5
     , text
+    , bytestring
     , transformers
     , parsers >= 0.10
     , unordered-containers
     , data-fix
     , deepseq
+    , exceptions
     , process
     , directory
     , filepath

@@ -13,6 +13,7 @@ import           Data.Typeable (Typeable)
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr.Types
+import           Nix.Expr.Types.Annotated
 import           Nix.Utils
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
@@ -84,13 +85,13 @@ valueText = cata phi where
     phi :: NValueF m (m (Text, DList Text)) -> m (Text, DList Text)
     phi (NVConstant a)    = pure (atomText a, mempty)
     phi (NVStr t c)       = pure (t, c)
-    phi (NVList _)        = error "Cannot coerce a list to a string"
+    phi (NVList _)        = throwError "Cannot coerce a list to a string"
     phi (NVSet set)
       | Just asString <-
         -- TODO: Should this be run through valueText recursively?
         Map.lookup "__asString" set = asString
-      | otherwise = error "Cannot coerce a set to a string"
-    phi (NVFunction _ _)  = error "Cannot coerce a function to a string"
+      | otherwise = throwError "Cannot coerce a set to a string"
+    phi (NVFunction _ _)  = throwError "Cannot coerce a function to a string"
     phi (NVLiteralPath originalPath) = do
         -- TODO: Capture and use the path of the file being processed as the
         -- base path
@@ -99,7 +100,7 @@ valueText = cata phi where
     phi (NVEnvPath p)     =
         -- TODO: Ensure this is a store path
         pure (Text.pack p, mempty)
-    phi (NVBuiltin _ _)    = error "Cannot coerce a function to a string"
+    phi (NVBuiltin _ _)    = throwError "Cannot coerce a function to a string"
 
 valueTextNoContext :: MonadNix m => NValueNF m -> m Text
 valueTextNoContext = fmap fst . valueText
@@ -122,6 +123,10 @@ newtype StorePath = StorePath { unStorePath :: FilePath }
 
 class (Show (NScopes m), MonadFix m) => MonadNix m where
     data NScopes m :: *
+
+    withExprContext :: NExprLocF () -> m r -> m r
+    withStringContext :: String -> m r -> m r
+    throwError :: String -> m a
 
     currentScope  :: m (NScopes m)
     clearScopes   :: m r -> m r

@@ -85,14 +85,14 @@ mkBool = return . NVConstant . NBool
 extractBool :: MonadNix m => NValue m -> m Bool
 extractBool = \case
     NVConstant (NBool b) -> return b
-    _ -> error "Not a boolean constant"
+    _ -> throwError "Not a boolean constant"
 
 apply :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
 apply f arg = forceThunk f >>= \case
     NVFunction params pred ->
         (`pushScope` (forceThunk =<< pred))
             =<< buildArgument params arg
-    x -> error $ "Trying to call a " ++ show (() <$ x)
+    x -> throwError $ "Trying to call a " ++ show (() <$ x)
 
 -- Primops
 
@@ -105,16 +105,16 @@ hasAttr :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
 hasAttr x y = (,) <$> forceThunk x <*> forceThunk y >>= \case
     (NVStr key _, NVSet aset) ->
         return . NVConstant . NBool $ Map.member key aset
-    (x, y) -> error $ "Invalid types for builtin.hasAttr: "
+    (x, y) -> throwError $ "Invalid types for builtin.hasAttr: "
                  ++ show (() <$ x, () <$ y)
 
 getAttr :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
 getAttr x y = (,) <$> forceThunk x <*> forceThunk y >>= \case
-    (NVStr key _, NVSet aset) ->
-        forceThunk (Map.findWithDefault _err key aset)
-          where _err = error $ "hasAttr: field does not exist: "
-                           ++ Text.unpack key
-    (x, y) -> error $ "Invalid types for builtin.hasAttr: "
+    (NVStr key _, NVSet aset) -> case Map.lookup key aset of
+        Nothing -> throwError $ "hasAttr: field does not exist: "
+                      ++ Text.unpack key
+        Just action -> forceThunk action
+    (x, y) -> throwError $ "Invalid types for builtin.hasAttr: "
                  ++ show (() <$ x, () <$ y)
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
@@ -128,7 +128,7 @@ any_ :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
 any_ pred = forceThunk >=> \case
     NVList l ->
         mkBool =<< anyM extractBool =<< mapM (apply pred) l
-    arg -> error $ "builtins.any takes a list as second argument, not a "
+    arg -> throwError $ "builtins.any takes a list as second argument, not a "
               ++ show (() <$ arg)
 
 allM :: Monad m => (a -> m Bool) -> [a] -> m Bool
@@ -142,14 +142,14 @@ all_ :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
 all_ pred = forceThunk >=> \case
     NVList l ->
         mkBool =<< allM extractBool =<< mapM (apply pred) l
-    arg -> error $ "builtins.all takes a list as second argument, not a "
+    arg -> throwError $ "builtins.all takes a list as second argument, not a "
               ++ show (() <$ arg)
 
 --TODO: Strictness
 foldl'_ :: MonadNix m => NThunk m -> NThunk m -> NThunk m -> m (NValue m)
 foldl'_ f z = forceThunk >=> \case
     NVList vals -> forceThunk =<< foldlM go z vals
-    arg -> error $ "builtins.foldl' takes a list as third argument, not a "
+    arg -> throwError $ "builtins.foldl' takes a list as third argument, not a "
               ++ show (() <$ arg)
   where
     go b a = do
@@ -159,16 +159,16 @@ foldl'_ f z = forceThunk >=> \case
 head_ :: MonadNix m => NThunk m -> m (NValue m)
 head_ = forceThunk >=> \case
     NVList vals -> case vals of
-        [] -> error "builtins.head: empty list"
+        [] -> throwError "builtins.head: empty list"
         h:_ -> forceThunk h
-    _ -> error "builtins.head: not a list"
+    _ -> throwError "builtins.head: not a list"
 
 tail_ :: MonadNix m => NThunk m -> m (NValue m)
 tail_ = forceThunk >=> \case
     NVList vals -> case vals of
-        [] -> error "builtins.tail: empty list"
+        [] -> throwError "builtins.tail: empty list"
         _:t -> return $ NVList t
-    _ -> error "builtins.tail: not a list"
+    _ -> throwError "builtins.tail: not a list"
 
 data VersionComponent
    = VersionComponent_Pre -- ^ The string "pre"
@@ -207,7 +207,7 @@ splitVersion_ = forceThunk >=> \case
         vals <- forM (splitVersion s) $ \c ->
             valueRef $ NVStr (versionComponentToString c) mempty
         return $ NVList vals
-    _ -> error "builtins.splitVersion: not a string"
+    _ -> throwError "builtins.splitVersion: not a string"
 
 compareVersions :: Text -> Text -> Ordering
 compareVersions s1 s2 =
@@ -226,7 +226,7 @@ compareVersions_ t1 t2 = do
                 LT -> -1
                 EQ -> 0
                 GT -> 1
-        _ -> error "builtins.splitVersion: not a string"
+        _ -> throwError "builtins.splitVersion: not a string"
 
 splitDrvName :: Text -> (Text, Text)
 splitDrvName s =
@@ -290,16 +290,18 @@ instance (MonadNix m, ToNix a) => ToBuiltin m (Prim m a) where
     toBuiltin _ p = toValue =<< runPrim p
 
 instance (MonadNix m, FromNix a, ToBuiltin m b) => ToBuiltin m (a -> b) where
-    toBuiltin name f = return $ NVBuiltin name $ \a -> toBuiltin name . f =<< fromThunk a
+    toBuiltin name f =
+        return $ NVBuiltin name $ \a -> toBuiltin name . f =<< fromThunk a
 
 class FromNix a where
-    --TODO: Get rid of the HasCallStack - it should be captured by whatever error reporting mechanism we add
+    --TODO: Get rid of the HasCallStack - it should be captured by whatever
+    --error reporting mechanism we add
     fromThunk :: (HasCallStack, MonadNix m) => NThunk m -> m a
 
 instance FromNix Text where
     fromThunk = forceThunk >=> \case
         NVStr s _ -> pure s
-        v -> error $ "fromThunk: Expected string, got " ++ show (void v)
+        v -> throwError $ "fromThunk: Expected string, got " ++ show (void v)
 
 instance FromNix Int where
     fromThunk = fmap fromInteger . fromThunk
@@ -307,4 +309,4 @@ instance FromNix Int where
 instance FromNix Integer where
     fromThunk = forceThunk >=> \case
         NVConstant (NInt n) -> pure n
-        v -> error $ "fromThunk: Expected number, got " ++ show (void v)
+        v -> throwError $ "fromThunk: Expected number, got " ++ show (void v)
