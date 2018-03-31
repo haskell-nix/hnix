@@ -25,6 +25,7 @@ import           Nix.Parser
 import           Nix.Pretty
 import           Nix.Scope
 import           Nix.Utils
+import           System.Directory
 import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
 import           System.FilePath
@@ -116,6 +117,13 @@ instance MonadNix (Cyclic IO) where
             let dropTrailingLinefeed p = take (length p - 1) p
             return $ StorePath $ dropTrailingLinefeed out
           _ -> error $ "No such file or directory: " ++ show path
+
+    makeAbsolutePath p = if isAbsolute p then pure p else do
+        cwd <- lookupVar "__cwd" >>= \case
+            Nothing -> liftIO getCurrentDirectory
+            Just (NVLiteralPath s) -> return s
+            Just v -> throwError $ "when resolving relative path, __cwd is in scope, but is not a path; it is: " ++ show (void v)
+        liftIO $ canonicalizePath $ cwd </> p
 
     data NThunk (Cyclic IO) = NThunkIO (IORef (Deferred (Cyclic IO)))
 

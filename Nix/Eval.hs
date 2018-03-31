@@ -49,7 +49,7 @@ eval (NSym var) = do
 
 eval (NConstant x)    = return $ NVConstant x
 eval (NStr str)       = evalString str
-eval (NLiteralPath p) = return $ NVLiteralPath p
+eval (NLiteralPath p) = NVLiteralPath <$> makeAbsolutePath p
 eval (NEnvPath p)     = return $ NVEnvPath p
 
 eval (NUnary op arg) = arg >>= \case

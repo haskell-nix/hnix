@@ -144,6 +144,9 @@ class (Show (NScopes m), MonadFix m) => MonadNix m where
     -- | Import a path into the nix store, and return the resulting path
     addPath :: FilePath -> m StorePath
 
+    -- | Determine the absolute path of relative path in the current context
+    makeAbsolutePath :: FilePath -> m FilePath
+
 deferInScope :: MonadNix m
              => NScopes m -> m (NValue m) -> m (NThunk m)
 deferInScope scope = buildThunk . clearScopes . pushScopes scope
