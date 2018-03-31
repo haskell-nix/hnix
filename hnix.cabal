@@ -79,7 +79,7 @@ Library
     Build-depends: parsec
   else
     Build-depends: trifecta
-  ghc-options: -Wall -fno-warn-name-shadowing -threaded
+  ghc-options: -Wall -fno-warn-name-shadowing
 
 Executable hnix
   Default-language: Haskell2010
@@ -111,14 +111,13 @@ Executable hnix
     , text
     , transformers
     , filepath
-  Ghc-options: -Wall -threaded
+  Ghc-options: -Wall
 
 Test-suite hnix-tests
   Type: exitcode-stdio-1.0
   Hs-source-dirs: tests
   Default-language: Haskell2010
   Main-is: Main.hs
-  Ghc-options: -threaded
   Other-modules:
     ParserTests
     EvalTests
@@ -145,7 +144,6 @@ Benchmark hnix-benchmarks
   Hs-source-dirs: benchmarks
   Default-language: Haskell2010
   Main-is: Main.hs
-  Ghc-options: -threaded
   Other-modules:
     ParserBench
   Build-depends:
