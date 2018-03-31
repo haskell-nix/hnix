@@ -71,6 +71,8 @@ builtinsList = sequence [
     , add2 Normal   "catAttrs"                   catAttrs
     , add' Normal   "concatStringsSep"           (arity2 Text.intercalate)
     , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
+    , add2 Normal   "seq"                        seq_
+    , add2 Normal   "deepSeq"                    deepSeq
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -296,6 +298,16 @@ unsafeDiscardStringContext :: MonadNix m => NThunk m -> m (NValue m)
 unsafeDiscardStringContext = forceThunk >=> \case
     NVStr s _ -> pure $ NVStr s mempty
     v -> throwError $ "builtins.unsafeDiscardStringContext: Expected a string, got " ++ show (void v)
+
+seq_ :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
+seq_ a b = do
+    _ <- forceThunk a
+    forceThunk b
+
+deepSeq :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
+deepSeq a b = do
+    _ <- normalForm =<< forceThunk a
+    forceThunk b
 
 newtype Prim m a = Prim { runPrim :: m a }
 
