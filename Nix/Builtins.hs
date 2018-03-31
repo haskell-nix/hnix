@@ -47,29 +47,30 @@ isTopLevel b = case kind b of Normal -> False; TopLevel -> True
 
 builtinsList :: forall m. MonadNixEnv m => m [ Builtin m ]
 builtinsList = sequence [
-      add  TopLevel "toString"         toString
-    , add  TopLevel "import"           importFile
-    , add2 TopLevel "map"              map_
-    , add' TopLevel "baseNameOf"       (arity1 baseNameOf)
-    , add  Normal   "getEnv"           getEnvVar
-    , add2 Normal   "hasAttr"          hasAttr
-    , add2 Normal   "getAttr"          getAttr
-    , add2 Normal   "any"              any_
-    , add2 Normal   "all"              all_
-    , add3 Normal   "foldl'"           foldl'_
-    , add  Normal   "head"             head_
-    , add  Normal   "tail"             tail_
-    , add  Normal   "splitVersion"     splitVersion_
-    , add2 Normal   "compareVersions"  compareVersions_
-    , add2 Normal   "compareVersions"  compareVersions_
-    , add' Normal   "sub"              (arity2 ((-) @Integer))
-    , add' Normal   "parseDrvName"     parseDrvName
-    , add' Normal   "substring"        substring
-    , add' Normal   "stringLength"     (arity1 Text.length)
-    , add  Normal   "attrNames"        attrNames
-    , add  Normal   "attrValues"       attrValues
-    , add2 Normal   "catAttrs"         catAttrs
-    , add' Normal   "concatStringsSep" (arity2 Text.intercalate)
+      add  TopLevel "toString"                   toString
+    , add  TopLevel "import"                     importFile
+    , add2 TopLevel "map"                        map_
+    , add' TopLevel "baseNameOf"                 (arity1 baseNameOf)
+    , add  Normal   "getEnv"                     getEnvVar
+    , add2 Normal   "hasAttr"                    hasAttr
+    , add2 Normal   "getAttr"                    getAttr
+    , add2 Normal   "any"                        any_
+    , add2 Normal   "all"                        all_
+    , add3 Normal   "foldl'"                     foldl'_
+    , add  Normal   "head"                       head_
+    , add  Normal   "tail"                       tail_
+    , add  Normal   "splitVersion"               splitVersion_
+    , add2 Normal   "compareVersions"            compareVersions_
+    , add2 Normal   "compareVersions"            compareVersions_
+    , add' Normal   "sub"                        (arity2 ((-) @Integer))
+    , add' Normal   "parseDrvName"               parseDrvName
+    , add' Normal   "substring"                  substring
+    , add' Normal   "stringLength"               (arity1 Text.length)
+    , add  Normal   "attrNames"                  attrNames
+    , add  Normal   "attrValues"                 attrValues
+    , add2 Normal   "catAttrs"                   catAttrs
+    , add' Normal   "concatStringsSep"           (arity2 Text.intercalate)
+    , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -290,6 +291,11 @@ catAttrs attrName lt = forceThunk lt >>= \case
 
 baseNameOf :: Text -> Text
 baseNameOf = Text.pack . takeFileName . Text.unpack
+
+unsafeDiscardStringContext :: MonadNix m => NThunk m -> m (NValue m)
+unsafeDiscardStringContext = forceThunk >=> \case
+    NVStr s _ -> pure $ NVStr s mempty
+    v -> throwError $ "builtins.unsafeDiscardStringContext: Expected a string, got " ++ show (void v)
 
 newtype Prim m a = Prim { runPrim :: m a }
 
