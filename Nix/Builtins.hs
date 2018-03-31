@@ -23,6 +23,7 @@ import           GHC.Stack.Types (HasCallStack)
 import           Nix.Atoms
 import           Nix.Monad
 import           Nix.Eval
+import           System.FilePath.Posix
 
 baseEnv :: MonadNixEnv m => m (NScopes m)
 baseEnv = do
@@ -49,6 +50,7 @@ builtinsList = sequence [
       add  TopLevel "toString"         toString
     , add  TopLevel "import"           importFile
     , add2 TopLevel "map"              map_
+    , add' TopLevel "baseNameOf"       (arity1 baseNameOf)
     , add  Normal   "getEnv"           getEnvVar
     , add2 Normal   "hasAttr"          hasAttr
     , add2 Normal   "getAttr"          getAttr
@@ -285,6 +287,9 @@ catAttrs attrName lt = forceThunk lt >>= \case
             v -> throwError $ "builtins.catAttrs: Expected a string, got " ++ show (void v)
         v -> throwError $ "builtins.catAttrs: Expected a set, got " ++ show (void v)
     v -> throwError $ "builtins.catAttrs: Expected a list, got " ++ show (void v)
+
+baseNameOf :: Text -> Text
+baseNameOf = Text.pack . takeFileName . Text.unpack
 
 newtype Prim m a = Prim { runPrim :: m a }
 
