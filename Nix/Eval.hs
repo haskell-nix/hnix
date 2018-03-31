@@ -4,9 +4,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ViewPatterns #-}
 
 module Nix.Eval
     (evalExpr, tracingExprEval, evalBinds, exprNormalForm, normalForm,
@@ -20,7 +18,6 @@ import           Control.Monad.Trans.Reader
 import           Data.Align.Key
 import           Data.Fix
 import           Data.Functor.Compose
-import           Data.Functor.Identity
 import           Data.List (intercalate)
 import qualified Data.Map.Lazy as Map
 import           Data.Maybe (fromMaybe)
