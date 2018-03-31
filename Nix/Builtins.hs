@@ -13,6 +13,7 @@ import           Data.Align (alignWith)
 import           Data.Char (isDigit)
 import           Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
+import           Data.Maybe
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.These (fromThese)
@@ -65,6 +66,7 @@ builtinsList = sequence [
     , add' Normal   "stringLength"    (arity1 Text.length)
     , add  Normal   "attrNames"       attrNames
     , add  Normal   "attrValues"      attrValues
+    , add2 Normal   "catAttrs"        catAttrs
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -273,6 +275,15 @@ map_ :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
 map_ f = forceThunk >=> \case
     NVList l -> NVList <$> traverse (valueRef <=< apply f) l
     v -> error $ "map: Expected list, got " ++ show (void v)
+
+catAttrs :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
+catAttrs attrName lt = forceThunk lt >>= \case
+    NVList l -> fmap (NVList . catMaybes) $ forM l $ forceThunk >=> \case
+        NVSet m -> forceThunk attrName >>= \case
+            NVStr n _ -> return $ Map.lookup n m
+            v -> throwError $ "builtins.catAttrs: Expected a string, got " ++ show (void v)
+        v -> throwError $ "builtins.catAttrs: Expected a set, got " ++ show (void v)
+    v -> throwError $ "builtins.catAttrs: Expected a list, got " ++ show (void v)
 
 newtype Prim m a = Prim { runPrim :: m a }
 
