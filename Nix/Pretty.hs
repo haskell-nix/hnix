@@ -193,7 +193,7 @@ printNix :: Functor m => NValueNF m -> String
 printNix = cata phi
   where phi :: NValueF m String -> String
         phi (NVConstant a) = unpack $ atomText a
-        phi (NVStr t _) = '"' : unpack t ++ ['"']
+        phi (NVStr t _) = show t
         phi (NVList l) = "[ " ++ unwords l ++ " ]"
         phi (NVSet s) = intercalate ", " [ unpack k ++ ":" ++ v | (k, v) <- toList s]
         phi (NVFunction _ _) = "<<lambda>>"
