@@ -42,27 +42,14 @@ para f base = h where
 --   Essentially, it does for evaluation what recursion schemes do for
 --   representation: allows threading layers through existing structure, only
 --   in this case through behavior.
-adi :: (Monoid b, Applicative s, Traversable t)
+adi :: Traversable t
     => (t a -> a)
-    -> ((Fix t -> (b, s a)) -> Fix t -> (b, s a))
-    -> Fix t -> (b, s a)
-adi f g = g (go . traverse (adi f g) . unFix)
-  where
-    go = fmap (fmap f . sequenceA)
+    -> ((Fix t -> a) -> Fix t -> a)
+    -> Fix t -> a
+adi f g = g (f . fmap (adi f g) . unFix)
 
-adiM :: (Monoid b, Applicative s, Traversable s, Traversable t, Monad m)
+adiM :: (Traversable t, Monad m)
      => (t a -> m a)
-     -> ((Fix t -> m (b, s a)) -> Fix t -> m (b, s a))
-     -> Fix t -> m (b, s a)
-adiM f g = g ((go <=< traverse (adiM f g)) . unFix)
-  where
-    go = traverse (traverse f . sequenceA) . sequenceA
-
-adiT :: forall s t m a. (Traversable t, Monad m, Monad s)
-     => (t a -> m a)
-     -> ((Fix t -> s (m a)) -> Fix t -> s (m a))
-     -> Fix t -> s (m a)
-adiT f g = g (go . fmap (adiT f g) . unFix)
-  where
-    go :: t (s (m a)) -> s (m a)
-    go = fmap ((f =<<) . sequenceA) . sequenceA
+     -> ((Fix t -> m a) -> Fix t -> m a)
+     -> Fix t -> m a
+adiM f g = g ((f <=< traverse (adiM f g)) . unFix)

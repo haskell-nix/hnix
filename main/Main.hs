@@ -3,8 +3,8 @@
 
 module Main where
 
-import Control.Monad
 import Nix
+import Nix.Expr.Types.Annotated (stripAnnotation)
 import Nix.Parser
 import Nix.Pretty
 import Options.Applicative hiding (ParserResult(..))
@@ -50,16 +50,16 @@ main :: IO ()
 main = do
     opts <- execParser optsDef
     (eres, mdir) <- case expression opts of
-        Just s -> return (parseNixString s, Nothing)
+        Just s -> return (parseNixStringLoc s, Nothing)
         Nothing  -> case filePath opts of
-            Nothing   -> (, Nothing) . parseNixString <$> getContents
-            Just "-"  -> (, Nothing) . parseNixString <$> getContents
-            Just path -> (, Just (takeDirectory path)) <$> parseNixFile path
+            Nothing   -> (, Nothing) . parseNixStringLoc <$> getContents
+            Just "-"  -> (, Nothing) . parseNixStringLoc <$> getContents
+            Just path -> (, Just (takeDirectory path)) <$> parseNixFileLoc path
 
     case eres of
         Failure err -> hPutStrLn stderr $ "Parse failed: " ++ show err
         Success expr -> do
-            when (check opts) $ lintExpr expr
+            -- when (check opts) $ lintExpr expr
             if | evaluate opts, debug opts ->
                      print =<< tracingEvalTopLevelExprIO mdir expr
                | evaluate opts ->
@@ -67,7 +67,10 @@ main = do
                | debug opts ->
                      print expr
                | otherwise ->
-                     displayIO stdout $ renderPretty 0.4 80 (prettyNix expr)
+                     displayIO stdout
+                         . renderPretty 0.4 80
+                         . prettyNix
+                         . stripAnnotation $ expr
   where
     optsDef :: ParserInfo Options
     optsDef = info (helper <*> mainOptions)

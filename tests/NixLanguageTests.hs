@@ -67,15 +67,16 @@ genTests = do
             ["parse", "fail"] -> assertParseFail $ the files
             ["eval", "okay"] -> assertEval files
             ["eval", "fail"] -> assertEvalFail $ the files
+            _ -> error $ "Unexpected: " ++ show kind
 
 assertParse :: FilePath -> Assertion
-assertParse file = parseNixFile file >>= \case
+assertParse file = parseNixFileLoc file >>= \case
   Success expr -> lintExpr expr
   Failure err  -> assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
 
 assertParseFail :: FilePath -> Assertion
 assertParseFail file = do
-    eres <- parseNixFile file
+    eres <- parseNixFileLoc file
     catch (case eres of
                Success expr -> do
                    lintExpr expr
@@ -115,7 +116,7 @@ assertEvalFail file = catch eval (\(ErrorCall _) -> return ())
 
 nixEvalFile :: FilePath -> IO (NValueNF (Cyclic IO))
 nixEvalFile file =  do
-  parseResult <- parseNixFile file
+  parseResult <- parseNixFileLoc file
   case parseResult of
     Failure err        ->
         error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err

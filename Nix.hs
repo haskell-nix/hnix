@@ -1,31 +1,35 @@
 module Nix where
 
-import           Control.Monad.Trans.Reader
 import qualified Data.Map.Lazy as Map
 import           Nix.Builtins
 import           Nix.Eval
-import           Nix.Expr (NExpr)
+import           Nix.Expr.Types.Annotated (NExprLoc, stripAnnotation)
 import           Nix.Lint
 import           Nix.Monad
 import           Nix.Monad.Instance
 import           Nix.Utils
 
 -- | Evaluate a nix expression in the default context
-evalTopLevelExpr :: MonadNixEnv m => Maybe FilePath -> NExpr -> m (NValueNF m)
+evalTopLevelExpr :: MonadNixEnv m
+                 => Maybe FilePath -> NExprLoc -> m (NValueNF m)
 evalTopLevelExpr mdir expr = do
     base <- baseEnv
     (normalForm =<<) $ pushScopes base $ case mdir of
-        Nothing -> evalExpr expr
+        Nothing -> contextualExprEval expr
         Just dir -> do
             traceM $ "Setting __cwd = " ++ show dir
             ref <- valueRef $ NVLiteralPath dir
-            pushScope (Map.singleton "__cwd" ref) (evalExpr expr)
+            pushScope (Map.singleton "__cwd" ref) (contextualExprEval expr)
 
-evalTopLevelExprIO :: Maybe FilePath -> NExpr -> IO (NValueNF (Cyclic IO))
-evalTopLevelExprIO mdir expr =
-    runReaderT (runCyclic (evalTopLevelExpr mdir expr)) []
+evalTopLevelExprIO :: Maybe FilePath -> NExprLoc -> IO (NValueNF (Cyclic IO))
+evalTopLevelExprIO mdir = runCyclicIO . evalTopLevelExpr mdir
 
-tracingEvalTopLevelExprIO :: Maybe FilePath -> NExpr
+-- informativeEvalTopLevelExprIO :: Maybe FilePath -> NExpr
+--                               -> IO (NValueNF (Cyclic IO))
+-- informativeEvalTopLevelExprIO mdir expr =
+--     runReaderT (runCyclic (evalTopLevelExpr mdir expr)) []
+
+tracingEvalTopLevelExprIO :: Maybe FilePath -> NExprLoc
                           -> IO (NValueNF (Cyclic IO))
 tracingEvalTopLevelExprIO mdir expr = do
     traced <- tracingExprEval expr
@@ -39,5 +43,6 @@ tracingEvalTopLevelExprIO mdir expr = do
             runCyclicIO (baseEnv >>= (`pushScopes` pushScope m traced)
                                  >>= normalForm)
 
-lintExpr :: NExpr -> IO ()
-lintExpr expr = runCyclicIO (baseEnv >>= (`pushScopes` checkExpr expr))
+lintExpr :: NExprLoc -> IO ()
+lintExpr expr =
+    runCyclicIO (baseEnv >>= (`pushScopes` checkExpr (stripAnnotation expr)))

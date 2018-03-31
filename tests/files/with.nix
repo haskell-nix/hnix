@@ -1,1 +1,1 @@
-with { x = 1; }; with { x = 2; }; x
+with { x = 1; }; with { x = 2; }; y

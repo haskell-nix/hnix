@@ -65,6 +65,9 @@ case_function_recursive_sets =
         }; s = 100; in [ x.v.t x.z.w ]
     |]
 
+case_nested_with =
+    constantEqualStr "2" "with { x = 1; }; with { x = 2; }; x"
+
 -----------------------
 
 tests :: TestTree
@@ -76,7 +79,7 @@ instance (Show r, Eq r) => Eq (NValueF m r) where
     x == y = error $ "Need to add comparison for values: "
                  ++ show x ++ " == " ++ show y
 
-constantEqual :: NExpr -> NExpr -> Assertion
+constantEqual :: NExprLoc -> NExprLoc -> Assertion
 constantEqual a b = do
     a' <- tracingEvalTopLevelExprIO Nothing a
     b' <- tracingEvalTopLevelExprIO Nothing b
@@ -84,6 +87,6 @@ constantEqual a b = do
 
 constantEqualStr :: String -> String -> Assertion
 constantEqualStr a b =
-  let Success a' = parseNixString a
-      Success b' = parseNixString b
+  let Success a' = parseNixStringLoc a
+      Success b' = parseNixStringLoc b
   in constantEqual a' b'

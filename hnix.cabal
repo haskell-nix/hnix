@@ -35,10 +35,10 @@ Library
     Nix.Pretty
     Nix.Parser.Operators
     Nix.StringOperations
-  Other-modules:
-    Nix.Parser.Library
     Nix.Expr.Types
     Nix.Expr.Types.Annotated
+  Other-modules:
+    Nix.Parser.Library
     Nix.Expr.Shorthands
     Nix.Utils
   Default-extensions:
@@ -62,11 +62,13 @@ Library
     , containers
     , deriving-compat >= 0.3 && < 0.5
     , text
+    , bytestring
     , transformers
     , parsers >= 0.10
     , unordered-containers
     , data-fix
     , deepseq
+    , exceptions
     , process
     , directory
     , filepath
@@ -79,7 +81,7 @@ Library
     Build-depends: parsec
   else
     Build-depends: trifecta
-  ghc-options: -Wall -fno-warn-name-shadowing -threaded
+  ghc-options: -Wall -fno-warn-name-shadowing
 
 Executable hnix
   Default-language: Haskell2010
@@ -111,14 +113,13 @@ Executable hnix
     , text
     , transformers
     , filepath
-  Ghc-options: -Wall -threaded
+  Ghc-options: -Wall
 
 Test-suite hnix-tests
   Type: exitcode-stdio-1.0
   Hs-source-dirs: tests
   Default-language: Haskell2010
   Main-is: Main.hs
-  Ghc-options: -threaded
   Other-modules:
     ParserTests
     EvalTests
@@ -145,7 +146,6 @@ Benchmark hnix-benchmarks
   Hs-source-dirs: benchmarks
   Default-language: Haskell2010
   Main-is: Main.hs
-  Ghc-options: -threaded
   Other-modules:
     ParserBench
   Build-depends:
