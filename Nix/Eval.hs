@@ -109,12 +109,12 @@ eval (NBinary op larg rarg) = do
 
         (NVLiteralPath ls, NVLiteralPath rs) -> case op of
             -- TODO: Canonicalise path
-            NPlus -> return $ NVLiteralPath $ ls ++ rs
+            NPlus -> NVLiteralPath <$> makeAbsolutePath (ls ++ rs)
             _ -> throwError unsupportedTypes
 
-        (NVLiteralPath ls, NVStr rs rc) -> case op of
+        (NVLiteralPath ls, NVStr rs _) -> case op of
             -- TODO: Canonicalise path
-            NPlus -> return $ NVStr (Text.pack ls `mappend` rs) rc
+            NPlus -> NVLiteralPath <$> makeAbsolutePath (ls `mappend` Text.unpack rs)
             _ -> throwError unsupportedTypes
 
         _ -> throwError unsupportedTypes

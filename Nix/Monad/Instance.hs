@@ -19,6 +19,8 @@ import           Data.Fix
 import           Data.Functor.Compose
 import           Data.IORef
 import qualified Data.HashMap.Lazy as M
+import           Data.List
+import           Data.List.Split
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import           Nix.Eval
@@ -77,17 +79,20 @@ instance MonadNix (Cyclic IO) where
             return $ StorePath $ dropTrailingLinefeed out
           _ -> error $ "No such file or directory: " ++ show path
 
-    makeAbsolutePath p = if isAbsolute p then pure p else do
-        cwd <- do
-            mres <- lookupVar @_ @(NThunk (Cyclic IO)) "__cwd"
-            case mres of
-                Nothing -> liftIO getCurrentDirectory
-                Just v -> forceThunk v >>= \case
-                    NVLiteralPath s -> return s
-                    v -> throwError $ "when resolving relative path,"
-                            ++ " __cwd is in scope,"
-                            ++ " but is not a path; it is: " ++ show (void v)
-        liftIO $ canonicalizePath $ cwd </> p
+    makeAbsolutePath origPath = do
+        absPath <- if isAbsolute origPath then pure origPath else do
+            cwd <- do
+                mres <- lookupVar @_ @(NThunk (Cyclic IO)) "__cwd"
+                case mres of
+                    Nothing -> liftIO getCurrentDirectory
+                    Just v -> forceThunk v >>= \case
+                        NVLiteralPath s -> return s
+                        v -> throwError $ "when resolving relative path,"
+                                ++ " __cwd is in scope,"
+                                ++ " but is not a path; it is: "
+                                ++ show (void v)
+            pure $ cwd </> origPath
+        liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
 
     data NThunk (Cyclic IO) = NThunkIO (IORef (Deferred (Cyclic IO)))
 
@@ -113,6 +118,16 @@ instance MonadNix (Cyclic IO) where
         context <- reverse . frames <$> ask
         infos   <- liftIO $ mapM renderFrame context
         error $ unlines (infos ++ ["hnix: "++ str])
+
+-- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
+-- This is incorrect on POSIX systems, because if @b@ is a symlink, its parent
+-- may be a different directory from @a@.  See the discussion at
+-- https://hackage.haskell.org/package/directory-1.3.1.5/docs/System-Directory.html#v:canonicalizePath
+removeDotDotIndirections :: FilePath -> FilePath
+removeDotDotIndirections = intercalate "/" . go [] . splitOn "/"
+    where go s [] = reverse s
+          go (_:s) ("..":rest) = go s rest
+          go s (this:rest) = go (this:s) rest
 
 instance Has (Context m) (Scopes (NThunk m)) where
     hasLens f (Context x y) = flip Context y <$> f x

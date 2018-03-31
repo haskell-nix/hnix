@@ -74,6 +74,7 @@ Library
     , directory
     , filepath
     , semigroups >= 0.18 && < 0.19
+    , split
     , regex-tdfa
     , regex-tdfa-text
     , these
