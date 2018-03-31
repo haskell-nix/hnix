@@ -112,7 +112,9 @@ instance MonadNix (Cyclic IO) where
         (exitCode, out, _) <-
             readProcessWithExitCode "nix-store" ["--add", path] ""
         case exitCode of
-          ExitSuccess -> return $ StorePath out
+          ExitSuccess -> do
+            let dropTrailingLinefeed p = take (length p - 1) p
+            return $ StorePath $ dropTrailingLinefeed out
           _ -> error $ "No such file or directory: " ++ show path
 
     data NThunk (Cyclic IO) = NThunkIO (IORef (Deferred (Cyclic IO)))
