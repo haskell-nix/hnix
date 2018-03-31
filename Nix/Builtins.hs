@@ -64,6 +64,7 @@ builtinsList = sequence [
     , add' Normal   "substring"       substring
     , add' Normal   "stringLength"    (arity1 Text.length)
     , add  Normal   "attrNames"       attrNames
+    , add  Normal   "attrValues"      attrValues
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -262,6 +263,11 @@ attrNames :: MonadNix m => NThunk m -> m (NValue m)
 attrNames = forceThunk >=> \case
     NVSet m -> toValue $ Map.keys m
     v -> error $ "builtins.attrNames: Expected attribute set, got " ++ show (void v)
+
+attrValues :: MonadNix m => NThunk m -> m (NValue m)
+attrValues = forceThunk >=> \case
+    NVSet m -> return $ NVList $ Map.elems m
+    v -> error $ "builtins.attrValues: Expected attribute set, got " ++ show (void v)
 
 map_ :: MonadNix m => NThunk m -> NThunk m -> m (NValue m)
 map_ f = forceThunk >=> \case
