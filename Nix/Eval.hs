@@ -12,7 +12,7 @@ module Nix.Eval
     (MonadNixEval, evalExpr, tracingExprEval, evalBinds,
      exprNormalForm, normalForm, builtin, builtin2, builtin3,
      atomText, valueText, buildArgument, contextualExprEval,
-     thunkEq) where
+     thunkEq, evalApp) where
 
 import           Control.Monad hiding (mapM, sequence)
 import           Control.Monad.IO.Class

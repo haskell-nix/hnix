@@ -10,6 +10,7 @@
 module Nix.Builtins (MonadBuiltins, baseEnv) where
 
 import           Control.Monad
+import           Control.Monad.ListM (sortByM)
 import           Data.Align (alignWith)
 import           Data.Char (isDigit)
 import           Data.Foldable (foldlM)
@@ -93,6 +94,7 @@ builtinsList = sequence [
     , add  Normal   "isInt"                      isInt
     , add  Normal   "isFloat"                    isFloat
     , add  Normal   "isBool"                     isBool
+    , add2 Normal   "sort"                       sort_
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -418,6 +420,16 @@ isNull = forceThunk >=> \case
     NVConstant NNull -> toValue True
     _ -> toValue False
 
+sort_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
+sort_ comparator list = forceThunk list >>= \case
+    NVList l -> NVList <$> sortByM cmp l
+        where cmp a b = do
+                  isLessThan <- forceThunk comparator `evalApp` forceThunk a `evalApp` forceThunk b
+                  fromValue isLessThan >>= \case
+                      True -> pure LT
+                      False -> pure GT
+    v -> throwError $ "builtins.sort: expected list, got " ++ show (void v)
+
 newtype Prim m a = Prim { runPrim :: m a }
 
 class ToNix a where
@@ -455,22 +467,30 @@ instance (MonadBuiltins e m, FromNix a, ToBuiltin m b) => ToBuiltin m (a -> b) w
 class FromNix a where
     --TODO: Get rid of the HasCallStack - it should be captured by whatever
     --error reporting mechanism we add
-    fromThunk :: (HasCallStack, MonadBuiltins e m) => NThunk m -> m a
+    fromValue :: (HasCallStack, MonadBuiltins e m) => NValue m -> m a
+
+fromThunk :: forall a e m. (FromNix a, HasCallStack, MonadBuiltins e m) => NThunk m -> m a
+fromThunk = fromValue <=< forceThunk
+
+instance FromNix Bool where
+    fromValue = \case
+        NVConstant (NBool b) -> pure b
+        v -> throwError $ "fromValue: Expected bool, got " ++ show (void v)
 
 instance FromNix Text where
-    fromThunk = forceThunk >=> \case
+    fromValue = \case
         NVStr s _ -> pure s
-        v -> throwError $ "fromThunk: Expected string, got " ++ show (void v)
+        v -> throwError $ "fromValue: Expected string, got " ++ show (void v)
 
 instance FromNix Int where
-    fromThunk = fmap fromInteger . fromThunk
+    fromValue = fmap fromInteger . fromValue
 
 instance FromNix Integer where
-    fromThunk = forceThunk >=> \case
+    fromValue = \case
         NVConstant (NInt n) -> pure n
-        v -> throwError $ "fromThunk: Expected number, got " ++ show (void v)
+        v -> throwError $ "fromValue: Expected number, got " ++ show (void v)
 
 instance FromNix a => FromNix [a] where
-    fromThunk = forceThunk >=> \case
+    fromValue = \case
         NVList l -> traverse fromThunk l
-        v -> throwError $ "fromThunk: Expected list, got " ++ show (void v)
+        v -> throwError $ "fromValue: Expected list, got " ++ show (void v)

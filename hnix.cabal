@@ -63,6 +63,7 @@ Library
     , deriving-compat >= 0.3 && < 0.5
     , text
     , bytestring
+    , monadlist
     , mtl
     , transformers
     , parsers >= 0.10
