@@ -121,11 +121,7 @@ extractBool = \case
 
 apply :: (Scoped e (NThunk m) m, Framed e m, MonadNix m)
       => NThunk m -> NThunk m -> m (NValue m)
-apply f arg = forceThunk f >>= \case
-    NVFunction params pred ->
-        (`pushScope` (forceThunk =<< pred))
-            =<< buildArgument params arg
-    x -> throwError $ "Trying to call a " ++ show (() <$ x)
+apply f arg = evalApp (forceThunk f) (forceThunk arg)
 
 -- Primops
 
