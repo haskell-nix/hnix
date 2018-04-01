@@ -29,6 +29,7 @@ import           Nix.Atoms
 import           Nix.Eval
 import           Nix.Monad
 import           Nix.Scope
+import           Nix.Stack
 import           System.FilePath.Posix
 
 type MonadBuiltins e m = (MonadNixEval e m, MonadNixEnv m)
@@ -112,13 +113,12 @@ builtinsList = sequence [
 mkBool :: MonadNix m => Bool -> m (NValue m)
 mkBool = return . NVConstant . NBool
 
-extractBool :: (Framed e m, MonadNix m) => NValue m -> m Bool
+extractBool :: MonadBuiltins e m => NValue m -> m Bool
 extractBool = \case
     NVConstant (NBool b) -> return b
     _ -> throwError "Not a boolean constant"
 
-apply :: (Scoped e (NThunk m) m, Framed e m, MonadNix m)
-      => NThunk m -> NThunk m -> m (NValue m)
+apply :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 apply f arg = forceThunk f >>= \case
     NVFunction params pred ->
         (`pushScope` (forceThunk =<< pred))

@@ -1,5 +1,12 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeApplications #-}
+
 module Nix where
 
+import           Control.Monad.Fix
+import           Control.Monad.IO.Class
+import           Control.Monad.Reader (MonadReader)
+import           Control.Monad.Trans.Reader
 import qualified Data.HashMap.Lazy as M
 import           Nix.Builtins
 import           Nix.Eval
@@ -22,28 +29,40 @@ evalTopLevelExpr mdir expr = do
             ref <- valueRef $ NVLiteralPath dir
             pushScope (M.singleton "__cwd" ref) (contextualExprEval expr)
 
-evalTopLevelExprIO :: Maybe FilePath -> NExprLoc -> IO (NValueNF (Cyclic IO))
-evalTopLevelExprIO mdir = runCyclicIO . evalTopLevelExpr mdir
+evalTopLevelExprIO :: Maybe FilePath -> NExprLoc -> IO (NValueNF (Lazy IO))
+evalTopLevelExprIO mdir = runLazyIO . evalTopLevelExpr mdir
 
 -- informativeEvalTopLevelExprIO :: Maybe FilePath -> NExpr
---                               -> IO (NValueNF (Cyclic IO))
+--                               -> IO (NValueNF (Lazy IO))
 -- informativeEvalTopLevelExprIO mdir expr =
---     runReaderT (runCyclic (evalTopLevelExpr mdir expr)) []
+--     runReaderT (runLazy (evalTopLevelExpr mdir expr)) []
 
 tracingEvalTopLevelExprIO :: Maybe FilePath -> NExprLoc
-                          -> IO (NValueNF (Cyclic IO))
+                          -> IO (NValueNF (Lazy IO))
 tracingEvalTopLevelExprIO mdir expr = do
     traced <- tracingExprEval expr
     case mdir of
         Nothing ->
-            runCyclicIO (normalForm =<< (`pushScopes` traced) =<< baseEnv)
+            runLazyIO (normalForm =<< (`pushScopes` traced) =<< baseEnv)
         Just dir -> do
             traceM $ "Setting __cwd = " ++ show dir
-            ref <- runCyclicIO (valueRef $ NVLiteralPath dir)
+            ref <- runLazyIO (valueRef $ NVLiteralPath dir)
             let m = M.singleton "__cwd" ref
-            runCyclicIO (baseEnv >>= (`pushScopes` pushScope m traced)
+            runLazyIO (baseEnv >>= (`pushScopes` pushScope m traced)
                                  >>= normalForm)
 
-lintExpr :: NExprLoc -> IO ()
-lintExpr expr =
-    runCyclicIO (baseEnv >>= (`pushScopes` checkExpr (stripAnnotation expr)))
+newtype Lint m a = Lint
+    { runLint :: ReaderT (Context Symbolic) m a }
+    deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
+              MonadReader (Context Symbolic))
+
+runLintIO :: Lint IO a -> IO a
+runLintIO = flip runReaderT (Context emptyScopes []) . runLint
+
+symbolicBaseEnv :: Monad m => m (Scopes Symbolic)
+symbolicBaseEnv = return [Scope M.empty False]
+
+lintExprIO :: NExprLoc -> IO Symbolic
+lintExprIO expr =
+    runLintIO (symbolicBaseEnv
+                   >>= (`pushScopes` lintExpr (stripAnnotation expr)))

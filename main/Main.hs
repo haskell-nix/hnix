@@ -3,8 +3,10 @@
 
 module Main where
 
+import Control.Monad
 import Nix
 import Nix.Expr.Types.Annotated (stripAnnotation)
+import Nix.Lint
 import Nix.Parser
 import Nix.Pretty
 import Options.Applicative hiding (ParserResult(..))
@@ -59,7 +61,9 @@ main = do
     case eres of
         Failure err -> hPutStrLn stderr $ "Parse failed: " ++ show err
         Success expr -> do
-            -- when (check opts) $ lintExpr expr
+            when (check opts) $ do
+                sym <- lintExprIO expr
+                print =<< renderSymbolic sym
             if | evaluate opts, debug opts ->
                      print =<< tracingEvalTopLevelExprIO mdir expr
                | evaluate opts ->

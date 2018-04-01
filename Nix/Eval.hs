@@ -11,8 +11,8 @@
 module Nix.Eval
     (MonadNixEval, evalExpr, tracingExprEval, evalBinds,
      exprNormalForm, normalForm, builtin, builtin2, builtin3,
-     atomText, valueText, buildArgument, contextualExprEval,
-     thunkEq) where
+     atomText, valueText, valueTextNoContext, buildArgument,
+     contextualExprEval, thunkEq) where
 
 import           Control.Monad hiding (mapM, sequence)
 import           Control.Monad.IO.Class
@@ -35,10 +35,12 @@ import           Nix.Atoms
 import           Nix.Expr
 import           Nix.Monad
 import           Nix.Scope
+import           Nix.Stack
 import           Nix.StringOperations (runAntiquoted)
 import           Nix.Utils
 
-type MonadNixEval e m = (Scoped e (NThunk m) m, Framed e m, MonadNix m)
+type MonadNixEval e m =
+    (Scoped e (NThunk m) m, Framed e m, MonadNix m, MonadIO m )
 
 -- | Evaluate an nix expression, with a given ValueSet as environment
 evalExpr :: MonadNixEval e m => NExpr -> m (NValue m)
@@ -370,7 +372,7 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
 
     insert m (path, value) = attrSetAlter path m value
 
-evalString :: (Framed e m, MonadNix m)
+evalString :: MonadNixEval e m
            => NString (m (NValue m)) -> m (NValue m)
 evalString nstr = do
     let fromParts parts = do
@@ -380,20 +382,21 @@ evalString nstr = do
       Indented     parts -> fromParts parts
       DoubleQuoted parts -> fromParts parts
   where
-    go = runAntiquoted (return . (, mempty)) (valueText True <=< (normalForm =<<))
+    go = runAntiquoted (return . (, mempty))
+                       (valueText True <=< (normalForm =<<))
 
-evalSelector :: (Framed e m, MonadNix m)
+evalSelector :: MonadNixEval e m
              => Bool -> NAttrPath (m (NValue m)) -> m [Text]
 evalSelector = mapM . evalKeyName
 
-evalKeyName :: (Framed e m, MonadNix m)
+evalKeyName :: MonadNixEval e m
             => Bool -> NKeyName (m (NValue m)) -> m Text
 evalKeyName _ (StaticKey k) = return k
 evalKeyName dyn (DynamicKey k)
-    | dyn = do
-          runAntiquoted evalString id k >>= \case
-              NVStr s _ -> pure s
-              bad -> throwError $ "evaluating key name: expected string, got " ++ show (void bad)
+    | dyn = runAntiquoted evalString id k >>= \case
+          NVStr s _ -> pure s
+          bad -> throwError $ "evaluating key name: expected string, got "
+                    ++ show (void bad)
     | otherwise =
       throwError "dynamic attribute not allowed in this context"
 
@@ -431,3 +434,31 @@ normalForm = \case
     NVLiteralPath fp -> return $ Fix $ NVLiteralPath fp
     NVEnvPath p      -> return $ Fix $ NVEnvPath p
     NVBuiltin name f -> return $ Fix $ NVBuiltin name f
+
+valueText :: forall e m. MonadNixEval e m
+          => Bool -> NValueNF m -> m (Text, DList Text)
+valueText addPathsToStore = cata phi where
+    phi :: NValueF m (m (Text, DList Text)) -> m (Text, DList Text)
+    phi (NVConstant a)    = pure (atomText a, mempty)
+    phi (NVStr t c)       = pure (t, c)
+    phi (NVList _)        = throwError "Cannot coerce a list to a string"
+    phi (NVSet set)
+      | Just asString <-
+        -- TODO: Should this be run through valueText recursively?
+        M.lookup "__asString" set = asString
+      | otherwise = throwError "Cannot coerce a set to a string"
+    phi (NVFunction _ _)  = throwError "Cannot coerce a function to a string"
+    phi (NVLiteralPath originalPath)
+        | addPathsToStore = do
+            -- TODO: Capture and use the path of the file being processed as the
+            -- base path
+            storePath <- addPath originalPath
+            pure (Text.pack $ unStorePath storePath, mempty)
+        | otherwise = pure (Text.pack originalPath, mempty)
+    phi (NVEnvPath p)     =
+        -- TODO: Ensure this is a store path
+        pure (Text.pack p, mempty)
+    phi (NVBuiltin _ _)    = throwError "Cannot coerce a function to a string"
+
+valueTextNoContext :: MonadNixEval e m => Bool -> NValueNF m -> m Text
+valueTextNoContext addPathsToStore = fmap fst . valueText addPathsToStore
