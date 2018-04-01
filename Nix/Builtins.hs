@@ -59,6 +59,7 @@ builtinsList = sequence [
     , add  TopLevel "import"                     importFile
     , add2 TopLevel "map"                        map_
     , add' TopLevel "baseNameOf"                 (arity1 baseNameOf)
+    , add2 TopLevel "removeAttrs"                removeAttrs
     , add  Normal   "getEnv"                     getEnvVar
     , add2 Normal   "hasAttr"                    hasAttr
     , add2 Normal   "getAttr"                    getAttr
@@ -361,6 +362,13 @@ replaceStrings from to s = Prim $ do
                         ]
                 _ -> go rest $ result <> Builder.fromText replacement
     return $ go s mempty
+
+removeAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
+removeAttrs set list = do
+    toRemove <- fromThunk @[Text] list
+    forceThunk set >>= \case
+        NVSet m -> return $ NVSet $ foldl' (flip M.delete) m toRemove
+        v -> throwError $ "removeAttrs: expected set, got " ++ show (void v)
 
 newtype Prim m a = Prim { runPrim :: m a }
 
