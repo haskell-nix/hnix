@@ -189,7 +189,7 @@ lint (NSym var) = do
     mres <- lookupVar var
     case mres of
         Nothing -> throwError $ "Undefined variable: " ++ show var
-        Just v  -> v
+        Just v  -> return v
 
 lint v@(NConstant c)    = mkSymbolic [TConstant [t]]
   where
@@ -283,8 +283,8 @@ lint (NSelect aset attr alternative) = do
     extract v [] = return $ Just v
 -}
 
-lint (NHasAttr aset attr) = aset >>= unpackSymbolic >>= \case
-    NMany [TSet s] -> lintSelector True attr >>= \case
+lint e@(NHasAttr aset attr) = aset >>= unpackSymbolic >>= \case
+    NMany [TSet s] -> lintSelector (void e) True attr >>= \case
         [keyName] -> mkSymbolic [TConstant [TBool]]
         _ -> throwError $ "attr name argument to hasAttr"
                 ++ " is not a single-part name"
@@ -296,31 +296,30 @@ lint e@(NList l) = do
     y <- everyPossible
     (\t -> mkSymbolic [TList t]) =<< foldM (unify (void e)) y l'
 
-lint (NSet binds) = do
-    s <- lintBinds True False binds
+lint e@(NSet binds) = do
+    s <- lintBinds (void e) True False binds
     mkSymbolic [TSet s]
 
-lint (NRecSet binds) = do
-    s <- lintBinds True True binds
+lint e@(NRecSet binds) = do
+    s <- lintBinds (void e) True True binds
     mkSymbolic [TSet s]
 
-lint (NLet binds e) = do
-    s <- lintBinds True True binds
-    pushScope s e
+lint e@(NLet binds body) = do
+    s <- lintBinds (void e) True True binds
+    pushScope s body
 
 lint e@(NIf cond t f) = do
     c <- cond
     unify (void e) c =<< mkSymbolic [TConstant [TBool]]
     join $ unify (void e) <$> t <*> f
 
-lint (NWith scope e) = scope >>= unpackSymbolic >>= \case
-    NMany [TSet s'] -> pushWeakScope s' e
+lint (NWith scope body) = scope >>= unpackSymbolic >>= \case
+    NMany [TSet s'] -> pushWeakScope s' body
     _ -> throwError "scope must be a set in with statement"
 
-lint (NAssert cond e) = do
-    c <- cond
-    unify (void e) c =<< mkSymbolic [TConstant [TBool]]
-    e
+lint e@(NAssert cond body) = do
+    join $ unify (void e) <$> cond <*> mkSymbolic [TConstant [TBool]]
+    body
 
 {-
 lint (NApp fun arg) = fun >>= \case
@@ -386,17 +385,22 @@ buildArgument params arg = case params of
         These x _ -> const (pure x)
 
 attrSetAlter :: forall e m. MonadNixLint e m
-             => [Text]
+             => [Maybe Text]
              -> HashMap Text (m Symbolic)
              -> m Symbolic
              -> m (HashMap Text (m Symbolic))
 attrSetAlter [] _ _ = throwError "invalid selector with no components"
-attrSetAlter (p:ps) m val = case M.lookup p m of
+attrSetAlter (Nothing:ps) m val =
+    -- In the case where the only thing we know about a dynamic key is that it
+    -- must unify with a string, we have to consider the possibility that it
+    -- might select any one of the members of 'm'.
+    undefined
+attrSetAlter (Just p:ps) m val = case M.lookup p m of
     Nothing | null ps   -> go
             | otherwise -> recurse M.empty
     Just v  | null ps   -> go
             | otherwise -> v >>= unpackSymbolic >>= \case
-                  NMany [TSet s] -> recurse s
+                  NMany [TSet s] -> recurse (pure <$> s)
                   --TODO: Keep a stack of attributes we've already traversed, so
                   --that we can report that to the user
                   x -> throwError $ "attribute " ++ show p
@@ -414,31 +418,35 @@ attrSetAlter (p:ps) m val = case M.lookup p m of
             (\t -> mkSymbolic [TSet t]) =<< traverse (withScopes scope) m'
 
 lintBinds :: forall e m. MonadNixLint e m
-          => Bool
+          => NExprF ()
+          -> Bool
           -> Bool
           -> [Binding (m Symbolic)]
           -> m (HashMap Text Symbolic)
-lintBinds allowDynamic recursive = buildResult . concat <=< mapM go
+lintBinds context allowDynamic recursive = buildResult . concat <=< mapM go
   where
-    go :: Binding (m Symbolic) -> m [([Text], m Symbolic)]
+    go :: Binding (m Symbolic) -> m [([Maybe Text], m Symbolic)]
     go (NamedVar x y) =
-        sequence [liftM2 (,) (lintSelector allowDynamic x) (pure y)]
+        sequence [liftM2 (,) (lintSelector context allowDynamic x) (pure y)]
     go (Inherit ms names) = forM names $ \name -> do
-        key <- lintKeyName allowDynamic name
-        return ([key], do
-            mv <- case ms of
-                Nothing -> lookupVar key
-                Just s -> s >>= unpackSymbolic >>= \case
-                    NMany [TSet s] -> pushScope s (lookupVar key)
-                    x -> throwError
-                        $ "First argument to inherit should be a set, saw: "
-                        ++ show (() <$ x)
-            case mv of
-                Nothing -> throwError $ "Inheriting unknown attribute: "
-                    ++ show (() <$ name)
-                Just v -> v)
+        mkey <- lintKeyName context allowDynamic name
+        return ([mkey], case mkey of
+            Nothing -> return undefined
+            Just key -> do
+                mv <- case ms of
+                    Nothing -> lookupVar key
+                    Just s -> s >>= unpackSymbolic >>= \case
+                        NMany [TSet s] -> pushScope s (lookupVar key)
+                        x -> throwError
+                            $ "First argument to inherit should be a set, saw: "
+                            ++ show (() <$ x)
+                case mv of
+                    Nothing -> throwError $ "Inheriting unknown attribute: "
+                        ++ show (() <$ name)
+                    Just v -> return v)
 
-    buildResult :: [([Text], m Symbolic)] -> m (HashMap Text Symbolic)
+    buildResult :: [([Maybe Text], m Symbolic)]
+                -> m (HashMap Text Symbolic)
     buildResult bindings = do
         s <- foldM insert M.empty bindings
         scope <- currentScopes @_ @Symbolic
@@ -454,16 +462,24 @@ lintBinds allowDynamic recursive = buildResult . concat <=< mapM go
 lintString :: MonadNixLint e m => NString (m Symbolic) -> m Symbolic
 lintString _nstr = mkSymbolic [TStr]
 
-lintSelector :: (Framed e m, MonadNix m)
-             => Bool -> NAttrPath (m Symbolic) -> m [Text]
-lintSelector = mapM . lintKeyName
+lintSelector :: MonadNixLint e m
+             => NExprF () -> Bool -> NAttrPath (m Symbolic)
+             -> m [Maybe Text]
+lintSelector context = mapM . lintKeyName context
 
-lintKeyName :: (Framed e m, MonadNix m)
-            => Bool -> NKeyName (m Symbolic) -> m Text
-lintKeyName _ (StaticKey k) = return k
-lintKeyName dyn (DynamicKey k)
+-- We know keys must be result in strings, but we can't know which member in
+-- the set they'll reference. Since sets have heterogenous membership, when we
+-- see a reference such as 'a.b.c', we can only know there's an error if we've
+-- inferred that no member of 'a' is a set.
+lintKeyName :: MonadNixLint e m
+            => NExprF () -> Bool -> NKeyName (m Symbolic)
+            -> m (Maybe Text)
+lintKeyName _ _ (StaticKey k) = return $ Just k
+lintKeyName context dyn (DynamicKey k)
     | dyn = do
-          v <- runAntiquoted lintString id k
-          valueTextNoContext =<< normalForm v
+          -- This is done only as a check.
+          runAntiquoted lintString
+              (\x -> join $ unify context <$> x <*> mkSymbolic [TStr]) k
+          return Nothing
     | otherwise =
       throwError "dynamic attribute not allowed in this context"
