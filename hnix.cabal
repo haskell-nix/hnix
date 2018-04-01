@@ -25,6 +25,7 @@ Library
     Nix
     Nix.Atoms
     Nix.Scope
+    Nix.Stack
     Nix.Eval
     Nix.Lint
     Nix.Monad

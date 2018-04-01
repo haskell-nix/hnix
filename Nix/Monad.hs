@@ -5,20 +5,16 @@
 
 module Nix.Monad where
 
-import           Control.Monad.Fix
-import           Control.Monad.Reader
-import           Data.Fix
-import           Data.HashMap.Lazy (HashMap)
-import qualified Data.HashMap.Lazy as M
-import           Data.Monoid (appEndo)
-import           Data.Text (Text)
-import qualified Data.Text as Text
-import           Data.Typeable (Typeable)
-import           GHC.Generics
-import           Nix.Atoms
-import           Nix.Expr.Types
-import           Nix.Expr.Types.Annotated
-import           Nix.Utils
+import Control.Monad.Fix
+import Data.Fix
+import Data.HashMap.Lazy (HashMap)
+import Data.Monoid (appEndo)
+import Data.Text (Text)
+import Data.Typeable (Typeable)
+import GHC.Generics
+import Nix.Atoms
+import Nix.Expr.Types
+import Nix.Utils
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.
@@ -84,34 +80,6 @@ instance Show f => Show (NValueF m f) where
               . showString " "
               . showsPrec 11 b
 
-valueText :: forall e m. (Framed e m, MonadNix m)
-          => Bool -> NValueNF m -> m (Text, DList Text)
-valueText addPathsToStore = cata phi where
-    phi :: NValueF m (m (Text, DList Text)) -> m (Text, DList Text)
-    phi (NVConstant a)    = pure (atomText a, mempty)
-    phi (NVStr t c)       = pure (t, c)
-    phi (NVList _)        = throwError "Cannot coerce a list to a string"
-    phi (NVSet set)
-      | Just asString <-
-        -- TODO: Should this be run through valueText recursively?
-        M.lookup "__asString" set = asString
-      | otherwise = throwError "Cannot coerce a set to a string"
-    phi (NVFunction _ _)  = throwError "Cannot coerce a function to a string"
-    phi (NVLiteralPath originalPath) = case addPathsToStore of
-        True -> do
-            -- TODO: Capture and use the path of the file being processed as the
-            -- base path
-            storePath <- addPath originalPath
-            pure (Text.pack $ unStorePath storePath, mempty)
-        False -> pure (Text.pack originalPath, mempty)
-    phi (NVEnvPath p)     =
-        -- TODO: Ensure this is a store path
-        pure (Text.pack p, mempty)
-    phi (NVBuiltin _ _)    = throwError "Cannot coerce a function to a string"
-
-valueTextNoContext :: (Framed e m, MonadNix m) => Bool -> NValueNF m -> m Text
-valueTextNoContext addPathsToStore = fmap fst . valueText addPathsToStore
-
 builtin :: MonadNix m => String -> (NThunk m -> m (NValue m)) -> m (NValue m)
 builtin name f = return $ NVBuiltin name f
 
@@ -128,16 +96,6 @@ builtin3 name f =
 -- | A path into the nix store
 newtype StorePath = StorePath { unStorePath :: FilePath }
 
-type Frames = [Either String (NExprLocF ())]
-
-type Framed e m = (MonadReader e m, Has e Frames)
-
-withExprContext :: Framed e m => NExprLocF () -> m r -> m r
-withExprContext expr = local (over hasLens (Right @String expr :))
-
-withStringContext :: Framed e m => String -> m r -> m r
-withStringContext str = local (over hasLens (Left @_ @(NExprLocF ()) str :))
-
 class MonadFix m => MonadNix m where
     data NThunk m :: *
 
@@ -150,8 +108,6 @@ class MonadFix m => MonadNix m where
 
     -- | Determine the absolute path of relative path in the current context
     makeAbsolutePath :: FilePath -> m FilePath
-
-    throwError :: Framed e m => String -> m a
 
 -- | MonadNixEnv represents all of the effects needed by builtin functions in
 --   order to interact with the environment where Nix expressions are being
