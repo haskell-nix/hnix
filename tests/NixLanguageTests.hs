@@ -6,6 +6,7 @@ module NixLanguageTests (genTests) where
 
 import           Control.Arrow ((&&&))
 import           Control.Exception
+import           Control.Monad
 import           Data.List (delete, sort)
 import           Data.List.Split (splitOn)
 import           Data.Map (Map)
@@ -71,7 +72,7 @@ genTests = do
 
 assertParse :: FilePath -> Assertion
 assertParse file = parseNixFileLoc file >>= \case
-  Success expr -> lintExpr expr
+  Success expr -> void $ lintExprIO expr
   Failure err  -> assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
 
 assertParseFail :: FilePath -> Assertion
@@ -79,7 +80,7 @@ assertParseFail file = do
     eres <- parseNixFileLoc file
     catch (case eres of
                Success expr -> do
-                   lintExpr expr
+                   _ <- lintExprIO expr
                    assertFailure $ "Unexpected success parsing `"
                        ++ file ++ ":\nParsed value: " ++ show expr
                Failure _ -> return ()) $ \(_ :: SomeException) ->
@@ -114,7 +115,7 @@ assertEvalFail file = catch eval (\(ErrorCall _) -> return ())
           file ++ " should not evaluate.\nThe evaluation result was `"
                ++ evalResult ++ "`."
 
-nixEvalFile :: FilePath -> IO (NValueNF (Cyclic IO))
+nixEvalFile :: FilePath -> IO (NValueNF (Lazy IO))
 nixEvalFile file =  do
   parseResult <- parseNixFileLoc file
   case parseResult of
