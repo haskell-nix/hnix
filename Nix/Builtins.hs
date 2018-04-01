@@ -95,6 +95,7 @@ builtinsList = sequence [
     , add  Normal   "isFloat"                    isFloat
     , add  Normal   "isBool"                     isBool
     , add2 Normal   "sort"                       sort_
+    , add2 Normal   "lessThan"                   lessThan
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -425,6 +426,22 @@ sort_ comparator list = forceThunk list >>= \case
                       True -> pure LT
                       False -> pure GT
     v -> throwError $ "builtins.sort: expected list, got " ++ show (void v)
+
+lessThan :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
+lessThan ta tb = do
+    va <- forceThunk ta
+    vb <- forceThunk tb
+    let badType = throwError $ "builtins.lessThan: expected two numbers or two strings, "
+            ++ "got " ++ show (void va) ++ " and " ++ show (void vb)
+    NVConstant . NBool <$> case (va, vb) of
+        (NVConstant ca, NVConstant cb) -> case (ca, cb) of
+            (NInt   a, NInt   b) -> pure $ a < b
+            (NFloat a, NInt   b) -> pure $ a < fromInteger b
+            (NInt   a, NFloat b) -> pure $ fromInteger a < b
+            (NFloat a, NFloat b) -> pure $ a < b
+            _ -> badType
+        (NVStr a _, NVStr b _) -> pure $ a < b
+        _ -> badType
 
 newtype Prim m a = Prim { runPrim :: m a }
 
