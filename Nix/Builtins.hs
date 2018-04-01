@@ -60,6 +60,7 @@ builtinsList = sequence [
     , add2 TopLevel "map"                        map_
     , add' TopLevel "baseNameOf"                 (arity1 baseNameOf)
     , add2 TopLevel "removeAttrs"                removeAttrs
+    , add  TopLevel "isNull"                     isNull
     , add  Normal   "getEnv"                     getEnvVar
     , add2 Normal   "hasAttr"                    hasAttr
     , add2 Normal   "getAttr"                    getAttr
@@ -85,6 +86,12 @@ builtinsList = sequence [
     , add2 Normal   "elem"                       elem_
     , add2 Normal   "genList"                    genList
     , add' Normal   "replaceStrings"             replaceStrings
+    , add  Normal   "isAttrs"                    isAttrs
+    , add  Normal   "isList"                     isList
+    , add  Normal   "isFunction"                 isFunction
+    , add  Normal   "isString"                   isString
+    , add  Normal   "isInt"                      isInt
+    , add  Normal   "isBool"                     isBool
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -369,6 +376,41 @@ removeAttrs set list = do
     forceThunk set >>= \case
         NVSet m -> return $ NVSet $ foldl' (flip M.delete) m toRemove
         v -> throwError $ "removeAttrs: expected set, got " ++ show (void v)
+
+isAttrs :: MonadBuiltins e m => NThunk m -> m (NValue m)
+isAttrs = forceThunk >=> \case
+    NVSet _ -> toValue True
+    _ -> toValue False
+
+isList :: MonadBuiltins e m => NThunk m -> m (NValue m)
+isList = forceThunk >=> \case
+    NVList _ -> toValue True
+    _ -> toValue False
+
+isFunction :: MonadBuiltins e m => NThunk m -> m (NValue m)
+isFunction = forceThunk >=> \case
+    NVFunction _ _ -> toValue True
+    _ -> toValue False
+
+isString :: MonadBuiltins e m => NThunk m -> m (NValue m)
+isString = forceThunk >=> \case
+    NVStr _ _ -> toValue True
+    _ -> toValue False
+
+isInt :: MonadBuiltins e m => NThunk m -> m (NValue m)
+isInt = forceThunk >=> \case
+    NVConstant (NInt _) -> toValue True
+    _ -> toValue False
+
+isBool :: MonadBuiltins e m => NThunk m -> m (NValue m)
+isBool = forceThunk >=> \case
+    NVConstant (NBool _) -> toValue True
+    _ -> toValue False
+
+isNull :: MonadBuiltins e m => NThunk m -> m (NValue m)
+isNull = forceThunk >=> \case
+    NVConstant NNull -> toValue True
+    _ -> toValue False
 
 newtype Prim m a = Prim { runPrim :: m a }
 
