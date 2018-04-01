@@ -15,9 +15,13 @@ import           Data.Char (isDigit)
 import           Data.Foldable (foldlM)
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
+import           Data.List
 import           Data.Maybe
+import           Data.Semigroup
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Data.Text.Lazy as LazyText
+import qualified Data.Text.Lazy.Builder as Builder
 import           Data.These (fromThese)
 import           Data.Traversable (mapM)
 import           GHC.Stack.Types (HasCallStack)
@@ -79,6 +83,7 @@ builtinsList = sequence [
     , add2 Normal   "deepSeq"                    deepSeq
     , add2 Normal   "elem"                       elem_
     , add2 Normal   "genList"                    genList
+    , add' Normal   "replaceStrings"             replaceStrings
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -332,6 +337,30 @@ genList generator length = forceThunk length >>= \case
     NVConstant (NInt n) | n >= 0 -> fmap NVList $ forM [0 .. n - 1] $ \i -> do
         buildThunk $ apply generator =<< valueRef =<< toValue i
     v -> throwError $ "builtins.genList: Expected a non-negative number, got " ++ show (void v)
+
+--TODO: Preserve string context
+replaceStrings :: MonadBuiltins e m => [Text] -> [Text] -> Text -> Prim m Text
+replaceStrings from to s = Prim $ do
+    when (length from /= length to) $ throwError "'from' and 'to' arguments to 'replaceStrings' have different lengths"
+    let lookupPrefix s = do
+            (prefix, replacement) <- find ((`Text.isPrefixOf` s) . fst) $ zip from to
+            let rest = Text.drop (Text.length prefix) s
+            return $ (prefix, replacement, rest)
+        finish = LazyText.toStrict . Builder.toLazyText
+        go orig result = case lookupPrefix orig of
+            Nothing -> case Text.uncons orig of
+                Nothing -> finish result
+                Just (h, t) -> go t $ result <> Builder.singleton h
+            Just (prefix, replacement, rest) -> case prefix of
+                "" -> case Text.uncons rest of
+                    Nothing -> finish $ result <> Builder.fromText replacement
+                    Just (h, t) -> go t $ mconcat
+                        [ result
+                        , Builder.fromText replacement
+                        , Builder.singleton h
+                        ]
+                _ -> go rest $ result <> Builder.fromText replacement
+    return $ go s mempty
 
 newtype Prim m a = Prim { runPrim :: m a }
 
