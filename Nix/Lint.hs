@@ -192,9 +192,11 @@ unify context l@(Fix (Compose x)) r@(Fix (Compose y)) = do
         (NMany xs, NMany ys) -> do
             m <- merge context xs ys
             if null m
-                then
+                then do
+                    l' <- renderSymbolic l
+                    r' <- renderSymbolic r
                     throwError $ "Cannot unify "
-                         ++ show (void xs) ++ " with " ++ show (void ys)
+                        ++ show l' ++ " with " ++ show r'
                          ++ " in context: " ++ show context
                 else do
                     r <- liftIO $ newIORef $ Compose (NMany m)
@@ -320,17 +322,17 @@ lint e@(NAssert cond body) = do
     _ <- join $ unify (void e) <$> cond <*> mkSymbolic [TConstant [TBool]]
     body
 
-{-
-lint (NApp fun arg) = fun >>= \case
-    TFunction params f -> do
-        args <- buildArgument params =<< buildThunk arg
-        clearScopes @Symbolic (pushScope args (forceThunk =<< f))
-    TBuiltin _ f -> f =<< buildThunk arg
-    TSet m
-        | Just f <- M.lookup "__functor" m
-            -> forceThunk f `lintApp` fun `lintApp` arg
+lint (NApp fun arg) = fun >>= unpackSymbolic >>= \case
+    NMany xs -> (mkSymbolic =<<) $ forM xs $ \case
+        TFunction params f -> do
+            error "NYI: NApp TFunction"
+            -- args <- buildArgument params =<< arg
+            -- return f
+        TBuiltin name f ->
+            -- jww (2018-04-01): Lookup the builtin's type by name
+            error "NYI: NApp TBuiltin"
+        TSet m -> error "NYI: NApp TSet"
     x -> throwError $ "Attempt to call non-function: " ++ show (() <$ x)
--}
 
 lint (NAbs params body) = do
     -- It is the environment at the definition site, not the call site, that
@@ -341,6 +343,9 @@ lint (NAbs params body) = do
     p <- sequence params
     -- jww (2018-03-31): Need to establish function parameters here, so that
     -- when we symbolically evaluate body it will see them.
+    -- jww (2018-04-01): -- This needs to be deferred, just as in Eval.hs,
+    -- since the parameters may -- take on various types at different call
+    -- sites.
     b <- body
     mkSymbolic [TFunction p b]
 
