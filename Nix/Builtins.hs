@@ -97,6 +97,7 @@ builtinsList = sequence [
     , add  Normal   "isBool"                     isBool
     , add2 Normal   "sort"                       sort_
     , add2 Normal   "lessThan"                   lessThan
+    , add  Normal   "concatLists"                concatLists
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -451,6 +452,13 @@ lessThan ta tb = do
             _ -> badType
         (NVStr a _, NVStr b _) -> pure $ a < b
         _ -> badType
+
+concatLists :: MonadBuiltins e m => NThunk m -> m (NValue m)
+concatLists = forceThunk >=> \case
+    NVList l -> fmap (NVList . concat) $ forM l $ forceThunk >=> \case
+        NVList i -> pure i
+        v -> throwError $ "builtins.concatLists: expected list, got " ++ show (void v)
+    v -> throwError $ "builtins.concatLists: expected list, got " ++ show (void v)
 
 newtype Prim m a = Prim { runPrim :: m a }
 
