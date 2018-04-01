@@ -4,7 +4,7 @@ module Nix.Pretty where
 import           Data.Fix
 import           Data.HashMap.Lazy (toList)
 import qualified Data.HashSet as HashSet
-import           Data.List (isPrefixOf, intercalate)
+import           Data.List (isPrefixOf, sort)
 import           Data.Maybe (isJust)
 import           Data.Text (pack, unpack, replace, strip)
 import qualified Data.Text as Text
@@ -195,7 +195,7 @@ printNix = cata phi
         phi (NVConstant a) = unpack $ atomText a
         phi (NVStr t _) = show t
         phi (NVList l) = "[ " ++ unwords l ++ " ]"
-        phi (NVSet s) = intercalate ", " [ unpack k ++ ":" ++ v | (k, v) <- toList s]
+        phi (NVSet s) = "{ " ++ concat [ unpack k ++ " = " ++ v ++ "; " | (k, v) <- sort $ toList s ] ++ "}"
         phi (NVFunction _ _) = "<<lambda>>"
         phi (NVLiteralPath fp) = fp
         phi (NVEnvPath p) = p
