@@ -421,10 +421,18 @@ sort_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 sort_ comparator list = forceThunk list >>= \case
     NVList l -> NVList <$> sortByM cmp l
         where cmp a b = do
-                  isLessThan <- forceThunk comparator `evalApp` forceThunk a `evalApp` forceThunk b
+                  isLessThan <- forceThunk comparator
+                      `evalApp` forceThunk a
+                      `evalApp` forceThunk b
                   fromValue isLessThan >>= \case
                       True -> pure LT
-                      False -> pure GT
+                      False -> do
+                          isGreaterThan <- forceThunk comparator
+                              `evalApp` forceThunk b
+                              `evalApp` forceThunk a
+                          fromValue isGreaterThan >>= \case
+                              True -> pure GT
+                              False -> pure EQ
     v -> throwError $ "builtins.sort: expected list, got " ++ show (void v)
 
 lessThan :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
