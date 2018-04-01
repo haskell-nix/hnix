@@ -12,6 +12,8 @@ data NAtom
   -- | An integer. The c nix implementation currently only supports
   -- integers that fit in the range of 'Int64'.
   = NInt !Integer
+  -- | A floating point number
+  | NFloat !Float
   -- | Booleans.
   | NBool !Bool
   -- | Null values. There's only one of this variant.
@@ -41,6 +43,7 @@ convert = fromAtom . toAtom
 atomToEnvString :: NAtom -> Text
 atomToEnvString = \case
   NInt i -> pack $ show i
+  NFloat f -> pack $ show f
   NBool True -> "1"
   NBool False -> ""
   NNull -> ""
@@ -49,6 +52,7 @@ atomToEnvString = \case
 -- | Translate an atom into its nix representation.
 atomText :: NAtom -> Text
 atomText (NInt i)   = pack (show i)
+atomText (NFloat f) = pack (show f)
 atomText (NBool b)  = if b then "true" else "false"
 atomText NNull      = "null"
 atomText (NUri uri) = uri

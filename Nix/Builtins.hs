@@ -91,6 +91,7 @@ builtinsList = sequence [
     , add  Normal   "isFunction"                 isFunction
     , add  Normal   "isString"                   isString
     , add  Normal   "isInt"                      isInt
+    , add  Normal   "isFloat"                    isFloat
     , add  Normal   "isBool"                     isBool
   ]
   where
@@ -400,6 +401,11 @@ isString = forceThunk >=> \case
 isInt :: MonadBuiltins e m => NThunk m -> m (NValue m)
 isInt = forceThunk >=> \case
     NVConstant (NInt _) -> toValue True
+    _ -> toValue False
+
+isFloat :: MonadBuiltins e m => NThunk m -> m (NValue m)
+isFloat = forceThunk >=> \case
+    NVConstant (NFloat _) -> toValue True
     _ -> toValue False
 
 isBool :: MonadBuiltins e m => NThunk m -> m (NValue m)

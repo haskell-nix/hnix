@@ -60,8 +60,9 @@ eval (NEnvPath p)     = return $ NVEnvPath p
 
 eval (NUnary op arg) = arg >>= \case
     NVConstant c -> case (op, c) of
-        (NNeg, NInt  i) -> return $ NVConstant $ NInt  (-i)
-        (NNot, NBool b) -> return $ NVConstant $ NBool (not b)
+        (NNeg, NInt   i) -> return $ NVConstant $ NInt   (-i)
+        (NNeg, NFloat f) -> return $ NVConstant $ NFloat (-f)
+        (NNot, NBool  b) -> return $ NVConstant $ NBool  (not b)
         _ -> throwError $ "unsupported argument type for unary operator "
                  ++ show op
     _ -> throwError "argument to unary operator must evaluate to an atomic type"
@@ -72,6 +73,18 @@ eval (NBinary op larg rarg) = do
     let unsupportedTypes =
             "unsupported argument types for binary operator "
                 ++ show (() <$ lval, op, () <$ rval)
+        numBinOp :: (forall a. Num a => a -> a -> a) -> NAtom -> NAtom -> m (NValue m)
+        numBinOp f = numBinOp' f f
+        numBinOp'
+            :: (Integer -> Integer -> Integer)
+            -> (Float -> Float -> Float)
+            -> NAtom -> NAtom -> m (NValue m)
+        numBinOp' intF floatF l r = case (l, r) of
+            (NInt   li, NInt   ri) -> valueRefInt   $             li `intF`               ri
+            (NInt   li, NFloat rf) -> valueRefFloat $ fromInteger li `floatF`             rf
+            (NFloat lf, NInt   ri) -> valueRefFloat $             lf `floatF` fromInteger ri
+            (NFloat lf, NFloat rf) -> valueRefFloat $             lf `floatF`             rf
+            _ -> throwError unsupportedTypes
     case (lval, rval) of
         (NVConstant lc, NVConstant rc) -> case (op, lc, rc) of
             (NEq,  _, _) ->
@@ -86,10 +99,10 @@ eval (NBinary op larg rarg) = do
             (NAnd,  NBool l, NBool r) -> valueRefBool $ l && r
             (NOr,   NBool l, NBool r) -> valueRefBool $ l || r
             (NImpl, NBool l, NBool r) -> valueRefBool $ not l || r
-            (NPlus,  NInt l, NInt r) -> valueRefInt $ l + r
-            (NMinus, NInt l, NInt r) -> valueRefInt $ l - r
-            (NMult,  NInt l, NInt r) -> valueRefInt $ l * r
-            (NDiv,   NInt l, NInt r) -> valueRefInt $ l `div` r
+            (NPlus,  l, r) -> numBinOp (+) l r
+            (NMinus, l, r) -> numBinOp (-) l r
+            (NMult,  l, r) -> numBinOp (*) l r
+            (NDiv,   l, r) -> numBinOp' div (/) l r
             _ -> throwError unsupportedTypes
 
         (NVStr ls lc, NVStr rs rc) -> case op of
@@ -216,6 +229,9 @@ valueRefBool = return . NVConstant . NBool
 
 valueRefInt :: MonadNix m => Integer -> m (NValue m)
 valueRefInt = return . NVConstant . NInt
+
+valueRefFloat :: MonadNix m => Float -> m (NValue m)
+valueRefFloat = return . NVConstant . NFloat
 
 thunkEq :: MonadNix m => NThunk m -> NThunk m -> m Bool
 thunkEq lt rt = do
