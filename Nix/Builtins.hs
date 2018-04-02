@@ -48,7 +48,8 @@ import           System.Directory (listDirectory)
 import           System.FilePath.Posix
 import           System.Posix.Files
 
-type MonadBuiltins e m = (MonadNixEval e m, MonadNixEnv m)
+type MonadBuiltins e m =
+    (MonadNixEval e m, MonadEval (NThunk m) (NValue m) m, MonadNixEnv m)
 
 baseEnv :: MonadBuiltins e m => m (Scopes (NThunk m))
 baseEnv = do
