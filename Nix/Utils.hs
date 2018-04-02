@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Nix.Utils (module Nix.Utils, module X) where
@@ -11,7 +12,7 @@ import Data.Fix
 import Data.Functor.Identity
 import Data.Monoid (Endo)
 
--- #define ENABLE_TRACING 1
+#define ENABLE_TRACING 1
 #if ENABLE_TRACING
 import Debug.Trace as X
 #else

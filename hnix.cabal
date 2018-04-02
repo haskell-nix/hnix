@@ -42,21 +42,6 @@ Library
     Nix.Parser.Library
     Nix.Expr.Shorthands
     Nix.Utils
-  Default-extensions:
-    DataKinds
-    DeriveDataTypeable
-    DeriveFunctor
-    DeriveGeneric
-    FlexibleContexts
-    FlexibleInstances
-    GADTs
-    KindSignatures
-    LambdaCase
-    MultiWayIf
-    OverloadedStrings
-    PatternGuards
-    RankNTypes
-    TupleSections
   Build-depends:
       base                     >= 4.9          && < 5
     , ansi-wl-pprint

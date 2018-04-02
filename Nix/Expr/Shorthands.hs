@@ -1,3 +1,6 @@
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 -- | A bunch of shorthands for making nix expressions.
 --
 -- Functions with an @F@ suffix return a more general type without the outer

@@ -63,7 +63,7 @@ main = do
         Success expr -> do
             when (check opts) $ do
                 sym <- lintExprIO expr
-                print =<< renderSymbolic sym
+                putStrLn =<< runLintIO (renderSymbolic sym)
             if | evaluate opts, debug opts ->
                      print =<< tracingEvalTopLevelExprIO mdir expr
                | evaluate opts ->
