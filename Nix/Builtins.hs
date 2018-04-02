@@ -39,7 +39,9 @@ import           Nix.Eval
 import           Nix.Monad
 import           Nix.Scope
 import           Nix.Stack
+import           System.Directory (listDirectory)
 import           System.FilePath.Posix
+import           System.Posix.Files
 
 type MonadBuiltins e m = (MonadNixEval e m, MonadNixEnv m)
 
@@ -108,6 +110,7 @@ builtinsList = sequence [
     , add  Normal   "concatLists"                concatLists
     , add' Normal   "hashString"                 hashString
     , add  Normal   "readFile"                   readFile_
+    , add  Normal   "readDir"                    readDir_
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -481,18 +484,50 @@ hashString algo s = Prim $ do
             ++ "expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got " ++ show algo
     pure $ decodeUtf8 $ Base16.encode $ hash $ encodeUtf8 s
 
+absolutePathFromValue :: MonadBuiltins e m => NValue m -> m FilePath
+absolutePathFromValue = \case
+    NVStr pathText _ -> do
+        let path = Text.unpack pathText
+        when (not $ isAbsolute path) $
+            throwError $ "string " ++ show path ++ " doesn't represent an absolute path"
+        pure path
+    NVLiteralPath path -> pure path
+    NVEnvPath path -> pure path
+    v -> throwError $ "expected a path, got " ++ show (void v)
+
+--TODO: Move all liftIO things into MonadNixEnv or similar
 readFile_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 readFile_ pathThunk = do
-    path <- forceThunk pathThunk >>= \case
-        NVStr pathText _ -> do
-            let path = Text.unpack pathText
-            when (not $ isAbsolute path) $
-                throwError $ "string " ++ show path ++ " doesn't represent an absolute path"
-            pure path
-        NVLiteralPath path -> pure path
-        NVEnvPath path -> pure path
-        v -> throwError $ "expected a path, got " ++ show (void v)
+    path <- absolutePathFromValue =<< forceThunk pathThunk
     toValue =<< liftIO (Text.readFile path)
+
+data FileType
+   = FileType_Regular
+   | FileType_Directory
+   | FileType_Symlink
+   | FileType_Unknown
+   deriving (Show, Read, Eq, Ord)
+
+instance ToNix FileType where
+    toValue = toValue . \case
+        FileType_Regular -> "regular" :: Text
+        FileType_Directory -> "directory"
+        FileType_Symlink -> "symlink"
+        FileType_Unknown -> "unknown"
+
+readDir_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
+readDir_ pathThunk = do
+    path <- absolutePathFromValue =<< forceThunk pathThunk
+    items <- liftIO $ listDirectory path
+    itemsWithTypes <- liftIO $ forM items $ \item -> do
+        s <- getSymbolicLinkStatus $ path </> item
+        let t = if
+                | isRegularFile s -> FileType_Regular
+                | isDirectory s -> FileType_Directory
+                | isSymbolicLink s -> FileType_Symlink
+                | otherwise -> FileType_Unknown
+        pure (Text.pack item, t)
+    toValue $ M.fromList itemsWithTypes
 
 newtype Prim m a = Prim { runPrim :: m a }
 

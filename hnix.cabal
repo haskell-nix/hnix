@@ -82,6 +82,7 @@ Library
     , regex-tdfa
     , regex-tdfa-text
     , these
+    , unix
   if flag(parsec)
     Cpp-options: -DUSE_PARSEC
     Build-depends: parsec
