@@ -7,6 +7,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Nix.Lint where
@@ -99,7 +100,8 @@ unpackSymbolic :: MonadIO m
                => Symbolic m -> m (NSymbolicF (NTypeF m (SThunk m)))
 unpackSymbolic = liftIO . readIORef
 
-renderSymbolic :: MonadIO m => Symbolic m -> m String
+renderSymbolic :: MonadNixLint e m
+               => Symbolic m -> m String
 renderSymbolic = unpackSymbolic >=> \case
     NAny -> return "<any>"
     NMany xs -> fmap (intercalate ", ") $ forM xs $ \case
@@ -117,7 +119,12 @@ renderSymbolic = unpackSymbolic >=> \case
         TSet (Just s)   -> do
             x <- traverse (renderSymbolic <=< sforce) s
             return $ "{" ++ show x ++ "}"
-        TFunction _p _f   -> return "<function>"
+        f@(TFunction p _) -> do
+            (args, sym) <-
+                lintApp (NAbs (void p) ()) (mkSymbolic [f]) everyPossible
+            args' <- traverse renderSymbolic args
+            sym'  <- renderSymbolic sym
+            return $ "(" ++ show args' ++ " -> " ++ sym' ++ ")"
         TPath           -> return "path"
         TBuiltin _n _f    -> return "<builtin function>"
 
@@ -178,7 +185,8 @@ merge context = go
 -}
 
 type MonadNixLint e m =
-    (Scoped e (SThunk m) m, Framed e m, MonadFix m, MonadIO m)
+    (Scoped e (SThunk m) m, Framed e m, MonadFix m, MonadIO m,
+     MonadEval (SThunk m) (Symbolic m) m)
 
 -- | unify raises an error if the result is would be 'NMany []'.
 unify :: MonadNixLint e m
@@ -187,8 +195,12 @@ unify context x y = do
     x' <- liftIO $ readIORef x
     y' <- liftIO $ readIORef y
     case (x', y') of
-        (NAny, _) -> return y
-        (_, NAny) -> return x
+        (NAny, _) -> do
+            liftIO $ writeIORef x y'
+            return y
+        (_, NAny) -> do
+            liftIO $ writeIORef y x'
+            return x
         (NMany xs, NMany ys) -> do
             m <- merge context xs ys
             if null m
@@ -198,14 +210,16 @@ unify context x y = do
                     throwError $ "Cannot unify "
                         ++ show x' ++ " with " ++ show y'
                          ++ " in context: " ++ show context
-                else
+                else do
+                    liftIO $ writeIORef x (NMany m)
+                    liftIO $ writeIORef y (NMany m)
                     packSymbolic (NMany m)
 
-lintExpr :: (MonadNixLint e m, MonadEval (SThunk m) (Symbolic m) m)
+lintExpr :: MonadNixLint e m
          => NExpr -> m (Symbolic m)
 lintExpr = cata lint
 
-lint :: forall e m. (MonadNixLint e m, MonadEval (SThunk m) (Symbolic m) m)
+lint :: forall e m. MonadNixLint e m
      => NExprF (m (Symbolic m)) -> m (Symbolic m)
 
 lint (NSym var) = do
@@ -262,8 +276,10 @@ lint e@(NBinary op larg rarg) = do
         NConcat -> check lsym rsym [ TList y ]
   where
     check lsym rsym xs = do
-        m <- unify (void e) lsym rsym
-        unify (void e) m =<< mkSymbolic xs
+        m <- mkSymbolic xs
+        _ <- unify (void e) lsym m
+        _ <- unify (void e) rsym m
+        unify (void e) lsym rsym
 
 lint (NSelect aset attr alternative) = do
     aset' <- unpackSymbolic =<< aset
@@ -325,7 +341,7 @@ lint e@(NAssert cond body) = do
     _ <- join $ unify (void e) <$> cond <*> mkSymbolic [TConstant [TBool]]
     body
 
-lint e@(NApp fun arg) = lintApp (void e) fun arg
+lint e@(NApp fun arg) = snd <$> lintApp (void e) fun arg
 
 lint (NAbs params body) = do
     scope <- currentScopes @_ @(SThunk m)
@@ -333,17 +349,39 @@ lint (NAbs params body) = do
                           (sthunk (pushScopes scope body))]
 
 infixl 1 `lintApp`
-lintApp :: forall e m. (MonadNixLint e m, MonadEval (SThunk m) (Symbolic m) m)
-        => NExprF () -> m (Symbolic m) -> m (Symbolic m) -> m (Symbolic m)
+lintApp :: forall e m. MonadNixLint e m
+        => NExprF () -> m (Symbolic m) -> m (Symbolic m)
+        -> m (HashMap Text (Symbolic m), Symbolic m)
 lintApp context fun arg = fun >>= unpackSymbolic >>= \case
     NAny -> throwError "Cannot apply something not known to be a function"
     NMany xs -> do
-        ys <- forM xs $ \case
-            TFunction params f -> do
-                args <- buildArgument params =<< sthunk arg
-                clearScopes @(SThunk m) (pushScope args (sforce =<< f))
-            TBuiltin _ _f -> error "NYI: lintApp builtin"
-            TSet _m -> error "NYI: lintApp Set"
+        (args:_, ys) <- fmap unzip $ forM xs $ \case
+            TFunction params f -> arg >>= unpackSymbolic >>= \case
+                NAny -> do
+                    pset <- case params of
+                       Param name ->
+                           M.singleton name <$> everyPossible
+                       ParamSet _s _ (Just _) -> error "NYI"
+                       ParamSet s _ Nothing ->
+                           traverse (const everyPossible) s
+                    pset' <- traverse (sthunk . pure) pset
+                    arg'  <- sthunk $ mkSymbolic [TSet (Just pset')]
+                    args  <- buildArgument params arg'
+                    res   <- clearScopes @(SThunk m) $
+                        pushScope args $ sforce =<< f
+                    return (pset, res)
+
+                NMany [TSet (Just _)] -> do
+                    args <- buildArgument params =<< sthunk arg
+                    res <- clearScopes @(SThunk m) $
+                        pushScope args $ sforce =<< f
+                    args' <- traverse sforce args
+                    return (args', res)
+
+                NMany _ -> throwError "NYI: lintApp NMany not set"
+            TBuiltin _ _f -> throwError "NYI: lintApp builtin"
+            TSet _m -> throwError "NYI: lintApp Set"
             _x -> throwError "Attempt to call non-function"
+
         y <- everyPossible
-        foldM (unify context) y ys
+        (args,) <$> foldM (unify context) y ys
