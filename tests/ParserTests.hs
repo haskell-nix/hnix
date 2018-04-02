@@ -164,8 +164,8 @@ case_lambda_pattern = do
   assertParseFail "a@b: a"
   assertParseFail "{a}@{b}: a"
  where
-  fixed args mname = ParamSet (FixedParamSet args) mname
-  variadic args mname = ParamSet (VariadicParamSet args) mname
+  fixed args = ParamSet args False
+  variadic args = ParamSet args True
   args = M.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
   vargs = M.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
   args2 = M.fromList [("b", Just lam)]
@@ -185,8 +185,7 @@ case_simple_let = do
   binds = [NamedVar (mkSelector "a") $ mkInt 4]
 
 case_let_body :: Assertion
-case_let_body = do
-  assertParseString "let { body = 1; }" letBody
+case_let_body = assertParseString "let { body = 1; }" letBody
   where
     letBody = Fix $ NSelect aset (mkSelector "body") Nothing
     aset = Fix $ NRecSet [NamedVar (mkSelector "body") (mkInt 1)]

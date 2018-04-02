@@ -143,12 +143,12 @@ merge context = go
             | otherwise -> do
                   g <- unify context fl fr
                   (TFunction (Param pl) g :) <$> go xs ys
-        (TFunction (ParamSet (FixedParamSet pl) nl) fl,
-         TFunction (ParamSet (FixedParamSet pr) nr) fr)
+        (TFunction (ParamSet pl False nl) fl,
+         TFunction (ParamSet pr False nr) fr)
             | nl /= nr -> go xs ys
             | otherwise -> mergeFunctions pl nl fl pr fr xs ys
-        (TFunction (ParamSet (VariadicParamSet pl) nl) fl,
-         TFunction (ParamSet (VariadicParamSet pr) nr) fr)
+        (TFunction (ParamSet pl True nl) fl,
+         TFunction (ParamSet pr True nr) fr)
             | nl /= nr -> go xs ys
             | otherwise -> mergeFunctions pl nl fl pr fr xs ys
         (TBuiltin pl fl, TBuiltin pr fr)
@@ -175,7 +175,7 @@ merge context = go
             then go xs ys
             else do
                 g <- unify context fl fr
-                (TFunction (ParamSet (FixedParamSet m') nl) g :)
+                (TFunction (ParamSet m' False nl) g :)
                     <$> go xs ys
 
 type MonadNixLint e m =
@@ -353,20 +353,15 @@ buildArgument :: forall e m. MonadNixLint e m
               => Params (m Symbolic) -> Symbolic -> m (HashMap Text Symbolic)
 buildArgument params arg = case params of
     Param name -> return $ M.singleton name arg
-    ParamSet ps m -> go ps m
-  where
-    go ps m = unpackSymbolic arg >>= \case
+    ParamSet s isVariadic m -> unpackSymbolic arg >>= \case
         NMany [TSet Nothing] -> error "NYI"
         NMany [TSet (Just args)] -> do
-            let (s, isVariadic) = case ps of
-                  FixedParamSet    s' -> (s', False)
-                  VariadicParamSet s' -> (s', True)
             res <- loebM (alignWithKey (assemble isVariadic) args s)
             maybe (pure res) (selfInject res) m
 
         x -> throwError $ "Expected set in function call, received: "
                 ++ show (() <$ x)
-
+  where
     selfInject :: HashMap Text Symbolic -> Text -> m (HashMap Text Symbolic)
     selfInject res n = do
         ref <- mkSymbolic [TSet (Just res)]

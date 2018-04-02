@@ -268,19 +268,14 @@ buildArgument :: forall e m. MonadNixEval e m
               => Params (m (NThunk m)) -> NThunk m -> m (ValueSet m)
 buildArgument params arg = case params of
     Param name -> return $ M.singleton name arg
-    ParamSet ps m -> go ps m
-  where
-    go ps m = forceThunk arg >>= \case
+    ParamSet s isVariadic m -> forceThunk arg >>= \case
         NVSet args -> do
-            let (s, isVariadic) = case ps of
-                  FixedParamSet    s' -> (s', False)
-                  VariadicParamSet s' -> (s', True)
             res <- loebM (alignWithKey (assemble isVariadic) args s)
             maybe (pure res) (selfInject res) m
 
         x -> throwError $ "Expected set in function call, received: "
                 ++ show (() <$ x)
-
+  where
     selfInject :: ValueSet m -> Text -> m (ValueSet m)
     selfInject res n = do
         ref <- valueRef $ NVSet res

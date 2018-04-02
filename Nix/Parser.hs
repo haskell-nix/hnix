@@ -156,9 +156,8 @@ nixLet = annotateLocation1 $ reserved "let"
         <*> (whiteSpace *> reserved "in" *> nixExprLoc)
     -- Let expressions `let {..., body = ...}' are just desugared
     -- into `(rec {..., body = ...}).body'.
-    letBody = (\x -> NSelect x ([StaticKey "body"]) Nothing) <$> aset
-    aset = annotateLocation1 $ NRecSet
-        <$> (braces nixBinders)
+    letBody = (\x -> NSelect x [StaticKey "body"] Nothing) <$> aset
+    aset = annotateLocation1 $ NRecSet <$> braces nixBinders
 
 
 nixIf :: Parser NExprLoc
@@ -239,20 +238,19 @@ argExpr = choice [atLeft, onlyname, atRight] <* symbolic ':' where
   -- Parameters named by an identifier on the left (`args @ {x, y}`)
   atLeft = try $ do
     name <- identifier <* symbolic '@'
-    (constructor, params) <- params
-    return $ ParamSet (constructor params) (Just name)
+    (variadic, params) <- params
+    return $ ParamSet params variadic (Just name)
 
   -- Parameters named by an identifier on the right, or none (`{x, y} @ args`)
   atRight = do
-    (constructor, params) <- params
+    (variadic, params) <- params
     name <- optional $ symbolic '@' *> identifier
-    return $ ParamSet (constructor params) name
+    return $ ParamSet params variadic name
 
   -- Return the parameters set.
   params = do
     (args, dotdots) <- braces getParams
-    let constructor = if dotdots then VariadicParamSet else FixedParamSet
-    return (constructor, M.fromList args)
+    return (dotdots, M.fromList args)
 
   -- Collects the parameters within curly braces. Returns the parameters and
   -- a boolean indicating if the parameters are variadic.
@@ -276,8 +274,9 @@ nixBinders = (inherit <|> namedVar) `endBy` symbolic ';' where
   inherit = Inherit <$> (reserved "inherit" *> optional scope)
                     <*> many keyName
                     <?> "inherited binding"
-  namedVar = NamedVar <$> (annotated <$> nixSelector) <*> (symbolic '=' *> nixExprLoc)
-          <?> "variable binding"
+  namedVar = NamedVar <$> (annotated <$> nixSelector)
+                      <*> (symbolic '=' *> nixExprLoc)
+                      <?> "variable binding"
   scope = parens nixExprLoc <?> "inherit scope"
 
 keyName :: Parser (NKeyName NExprLoc)
