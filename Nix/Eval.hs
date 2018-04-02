@@ -40,7 +40,6 @@ import           Nix.Monad
 import           Nix.Scope
 import           Nix.Stack
 import           Nix.StringOperations (runAntiquoted)
-import           Nix.Thunk
 import           Nix.Utils
 
 type MonadNixEval e m =
@@ -283,7 +282,7 @@ buildArgument params arg = case params of
   where
     selfInject :: ValueSet m -> Text -> m (ValueSet m)
     selfInject res n = do
-        ref <- fmap NThunk $ valueRef $ NVSet res
+        ref <- valueThunk $ NVSet res
         return $ M.insert n ref res
 
     assemble :: Bool

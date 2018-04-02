@@ -53,14 +53,14 @@ tracingEvalTopLevelExprIO mdir expr = do
                                  >>= normalForm)
 
 newtype Lint m a = Lint
-    { runLint :: ReaderT (Context (Symbolic (Lint m))) m a }
+    { runLint :: ReaderT (Context (SThunk (Lint m))) m a }
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
-              MonadReader (Context (Symbolic (Lint m))))
+              MonadReader (Context (SThunk (Lint m))))
 
 runLintIO :: Lint IO a -> IO a
 runLintIO = flip runReaderT (Context emptyScopes []) . runLint
 
-symbolicBaseEnv :: Monad m => m (Scopes (Symbolic m))
+symbolicBaseEnv :: Monad m => m (Scopes (SThunk m))
 symbolicBaseEnv = return [Scope M.empty False]
 
 lintExprIO :: NExprLoc -> IO (Symbolic (Lint IO))
@@ -71,6 +71,6 @@ lintExprIO expr =
 tracingLintExprIO :: NExprLoc -> IO (Symbolic (Lint IO))
 tracingLintExprIO expr = do
     traced <- tracingExprLint expr
-    ref <- runLintIO $ mkSymbolic [TPath]
+    ref <- runLintIO $ sthunk $ mkSymbolic [TPath]
     let m = M.singleton "__cwd" ref
     runLintIO (symbolicBaseEnv >>= (`pushScopes` pushScope m traced))

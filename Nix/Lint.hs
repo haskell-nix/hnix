@@ -9,9 +9,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Nix.Lint (Symbolic, NTypeF(..), TAtom(..),
+module Nix.Lint (Symbolic, SThunk(..), NTypeF(..), TAtom(..),
                  lintExpr, tracingExprLint, mkSymbolic,
-                 packSymbolic, unpackSymbolic, renderSymbolic) where
+                 packSymbolic, unpackSymbolic, renderSymbolic,
+                 sforce, sthunk, svalueThunk) where
 
 import           Control.Monad
 import           Control.Monad.Fix
@@ -32,6 +33,7 @@ import           Nix.Expr
 import           Nix.Scope
 import           Nix.Stack
 import           Nix.StringOperations (runAntiquoted)
+import           Nix.Thunk
 import           Nix.Utils
 
 data TAtom
@@ -78,48 +80,63 @@ data NSymbolicF r
     | NMany [r]
     deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
-type Symbolic m = Fix (Compose IORef (Compose NSymbolicF (NTypeF m)))
+newtype SThunk m = SThunk { getSThunk :: Thunk m (Symbolic m) }
+
+sthunk :: MonadIO m => m (Symbolic m) -> m (SThunk m)
+sthunk = fmap SThunk . buildThunk
+
+sforce :: MonadIO m => SThunk m -> m (Symbolic m)
+sforce = forceThunk . getSThunk
+
+svalueThunk :: MonadIO m => Symbolic m -> m (SThunk m)
+svalueThunk = fmap SThunk . valueRef
+
+type Symbolic m = IORef (NSymbolicF (NTypeF m (SThunk m)))
 
 everyPossible :: MonadIO m => m (Symbolic m)
-everyPossible = Fix . Compose <$> liftIO (newIORef (Compose NAny))
+everyPossible = packSymbolic NAny
 
-mkSymbolic :: MonadIO m => [NTypeF m (Symbolic m)] -> m (Symbolic m)
-mkSymbolic xs = do
-    r <- liftIO $ newIORef $ Compose (NMany xs)
-    return $ Fix $ Compose r
+mkSymbolic :: MonadIO m => [NTypeF m (SThunk m)] -> m (Symbolic m)
+mkSymbolic xs = packSymbolic (NMany xs)
 
 packSymbolic :: MonadIO m
-             => NSymbolicF (NTypeF m (Symbolic m)) -> m (Symbolic m)
-packSymbolic = fmap (Fix . Compose) . liftIO . newIORef . Compose
+             => NSymbolicF (NTypeF m (SThunk m)) -> m (Symbolic m)
+packSymbolic = liftIO . newIORef
 
 unpackSymbolic :: MonadIO m
-               => Symbolic m -> m (NSymbolicF (NTypeF m (Symbolic m)))
-unpackSymbolic (Fix (Compose x)) = getCompose <$> liftIO (readIORef x)
+               => Symbolic m -> m (NSymbolicF (NTypeF m (SThunk m)))
+unpackSymbolic = liftIO . readIORef
 
 renderSymbolic :: MonadIO m => Symbolic m -> m String
 renderSymbolic = unpackSymbolic >=> \case
     NAny -> return "<any>"
     NMany xs -> fmap (intercalate ", ") $ forM xs $ \case
         TConstant ys  -> fmap (intercalate ", ") $ forM ys $ \case
-            TInt  -> return "int"
-            TBool -> return "bool"
-            TNull -> return "null"
-            TUri  -> return "uri"
+            TInt   -> return "int"
+            TFloat -> return "float"
+            TBool  -> return "bool"
+            TNull  -> return "null"
+            TUri   -> return "uri"
         TStr            -> return "string"
-        TList r         -> (\x -> "[" ++ x ++ "]") <$> renderSymbolic r
+        TList r         -> do
+            x <- renderSymbolic =<< sforce r
+            return $ "[" ++ x ++ "]"
         TSet Nothing    -> return "<any set>"
-        TSet (Just s)   -> (\x -> "{" ++ show x ++ "}")
-            <$> traverse renderSymbolic s
-        TFunction p f   -> return "<function>"
+        TSet (Just s)   -> do
+            x <- traverse (renderSymbolic <=< sforce) s
+            return $ "{" ++ show x ++ "}"
+        TFunction _p _f   -> return "<function>"
         TPath           -> return "path"
-        TBuiltin n f    -> return "<builtin function>"
+        TBuiltin _n _f    -> return "<builtin function>"
 
 -- This function is order and uniqueness preserving (of types).
-merge :: MonadNixLint e m
-      => NExprF () -> [NTypeF m (Symbolic m)] -> [NTypeF m (Symbolic m)]
-      -> m [NTypeF m (Symbolic m)]
+merge :: forall e m. MonadNixLint e m
+      => NExprF () -> [NTypeF m (SThunk m)] -> [NTypeF m (SThunk m)]
+      -> m [NTypeF m (SThunk m)]
 merge context = go
   where
+    go :: [NTypeF m (SThunk m)] -> [NTypeF m (SThunk m)]
+       -> m [NTypeF m (SThunk m)]
     go [] _ = return []
     go _ [] = return []
     go (x:xs) (y:ys) = case (x, y) of
@@ -128,13 +145,15 @@ merge context = go
         (TConstant ls, TConstant rs) ->
             (TConstant (ls `intersect` rs) :) <$> go xs ys
         (TList l, TList r) -> do
-            m <- unify context l r
+            m <- sthunk $ join $ unify context <$> sforce l <*> sforce r
             (TList m :) <$> go xs ys
         (TSet x, TSet Nothing) -> (TSet x :) <$> go xs ys
         (TSet Nothing, TSet x) -> (TSet x :) <$> go xs ys
         (TSet (Just l), TSet (Just r)) -> do
             m <- sequenceA $ M.intersectionWith
-                (\i j -> i >>= \i' -> j >>= \j' -> unify context i' j')
+                (\i j -> i >>= \i' -> j >>= \j' ->
+                        sthunk $ join $
+                            unify context <$> sforce i' <*> sforce j')
                 (return <$> l) (return <$> r)
             if M.null m
                 then go xs ys
@@ -167,29 +186,28 @@ merge context = go
 -}
 
 type MonadNixLint e m =
-    (Scoped e (Symbolic m) m, Framed e m, MonadFix m, MonadIO m)
+    (Scoped e (SThunk m) m, Framed e m, MonadFix m, MonadIO m)
 
 -- | unify raises an error if the result is would be 'NMany []'.
 unify :: MonadNixLint e m
       => NExprF () -> Symbolic m -> Symbolic m -> m (Symbolic m)
-unify context l@(Fix (Compose x)) r@(Fix (Compose y)) = do
-    Compose x' <- liftIO $ readIORef x
-    Compose y' <- liftIO $ readIORef y
+unify context x y = do
+    x' <- liftIO $ readIORef x
+    y' <- liftIO $ readIORef y
     case (x', y') of
-        (NAny, _) -> return r
-        (_, NAny) -> return l
+        (NAny, _) -> return y
+        (_, NAny) -> return x
         (NMany xs, NMany ys) -> do
             m <- merge context xs ys
             if null m
                 then do
-                    l' <- renderSymbolic l
-                    r' <- renderSymbolic r
+                    x' <- renderSymbolic x
+                    y' <- renderSymbolic y
                     throwError $ "Cannot unify "
-                        ++ show l' ++ " with " ++ show r'
+                        ++ show x' ++ " with " ++ show y'
                          ++ " in context: " ++ show context
-                else do
-                    r <- liftIO $ newIORef $ Compose (NMany m)
-                    return $ Fix $ Compose r
+                else
+                    packSymbolic (NMany m)
 
 lintExpr :: MonadNixLint e m => NExpr -> m (Symbolic m)
 lintExpr = cata lint
@@ -198,34 +216,31 @@ lint :: forall e m. MonadNixLint e m
      => NExprF (m (Symbolic m)) -> m (Symbolic m)
 
 lint (NSym var) = do
-    traceM $ "NSym: " ++ show var
     mres <- lookupVar var
-    traceM $ "NSym: " ++ show var ++ "...done"
     case mres of
         Nothing -> throwError $ "Undefined variable: " ++ show var
-        Just v  -> return v
+        Just v  -> sforce v
 
 lint (NConstant c) = mkSymbolic [TConstant [t]]
   where
       t = case c of
-          NInt _  -> TInt
-          NBool _ -> TBool
-          NNull   -> TNull
-          NUri _  -> TUri
+          NInt _   -> TInt
+          NFloat _ -> TFloat
+          NBool _  -> TBool
+          NNull    -> TNull
+          NUri _   -> TUri
 
 lint (NStr _)         = mkSymbolic [TStr]
 lint (NLiteralPath _) = mkSymbolic [TPath]
 lint (NEnvPath _)     = mkSymbolic [TPath]
 
-lint e@(NUnary _op arg) = do
-    traceM "NUnary"
+lint e@(NUnary _op arg) =
     join $ unify (void e) <$> arg <*> mkSymbolic [TConstant [TInt, TBool]]
 
 lint e@(NBinary op larg rarg) = do
-    traceM "NBinary"
     lsym <- larg
     rsym <- rarg
-    y <- everyPossible
+    y <- sthunk everyPossible
     case op of
         NEq    -> check lsym rsym [ TConstant [TInt, TBool, TNull, TUri]
                                  , TStr
@@ -258,7 +273,6 @@ lint e@(NBinary op larg rarg) = do
         unify (void e) m =<< mkSymbolic xs
 
 lint e@(NSelect aset attr alternative) = do
-    traceM "NSelect"
     aset' <- unpackSymbolic =<< aset
     ks    <- lintSelector (void e) True attr
     mres  <- extract aset' ks
@@ -270,12 +284,12 @@ lint e@(NSelect aset attr alternative) = do
                 ++ intercalate "." (map show ks)
                 ++ " in " ++ show (void aset')
   where
-    extract (NMany [TSet s]) (Nothing:ks) =
+    extract (NMany [TSet _s]) (Nothing:_ks) =
         error "NYI: Dynamic selection"
-    extract (NMany [TSet Nothing]) (_:ks) =
+    extract (NMany [TSet Nothing]) (_:_ks) =
         error "NYI: Selection in unknown set"
     extract (NMany [TSet (Just s)]) (Just k:ks) = case M.lookup k s of
-        Just v  -> unpackSymbolic v >>= flip extract ks
+        Just v  -> sforce v >>= unpackSymbolic >>= flip extract ks
         Nothing -> return Nothing
     extract _ (_:_) = return Nothing
     extract v [] = Just <$> packSymbolic v
@@ -288,30 +302,26 @@ lint e@(NHasAttr aset attr) = aset >>= unpackSymbolic >>= \case
     _ -> throwError "argument to hasAttr has wrong type"
 
 lint e@(NList l) = do
-    traceM "NList"
     scope <- currentScopes
     y <- everyPossible
-    traverse (withScopes @(Symbolic m) scope) l
+    traverse (withScopes @(SThunk m) scope) l
         >>= foldM (unify (void e)) y
+        >>= svalueThunk
         >>= (\t -> mkSymbolic [TList t])
 
 lint e@(NSet binds) = do
-    traceM "NSet"
     s <- lintBinds (void e) True False binds
     mkSymbolic [TSet (Just s)]
 
 lint e@(NRecSet binds) = do
-    traceM "NRecSet"
     s <- lintBinds (void e) True True binds
     mkSymbolic [TSet (Just s)]
 
 lint e@(NLet binds body) = do
-    traceM "NLet"
     s <- lintBinds (void e) True True binds
     pushScope s body
 
 lint e@(NIf cond t f) = do
-    traceM "NIf"
     _ <- join $ unify (void e) <$> cond <*> mkSymbolic [TConstant [TBool]]
     join $ unify (void e) <$> t <*> f
 
@@ -321,17 +331,15 @@ lint (NWith scope body) = scope >>= unpackSymbolic >>= \case
     _ -> throwError "scope must be a set in with statement"
 
 lint e@(NAssert cond body) = do
-    traceM "NAssert"
     _ <- join $ unify (void e) <$> cond <*> mkSymbolic [TConstant [TBool]]
     body
 
-lint e@(NApp fun arg) = traceM "NApp" >> lintApp (void e) fun arg
+lint e@(NApp fun arg) = lintApp (void e) fun arg
 
 lint (NAbs params body) = do
-    traceM "NAbs"
-    scope <- currentScopes @_ @(Symbolic m)
-    mkSymbolic [TFunction (pushScopes scope <$> params)
-                          (pushScopes scope body)]
+    scope <- currentScopes @_ @(SThunk m)
+    mkSymbolic [TFunction (sthunk . pushScopes scope <$> params)
+                          (sthunk (pushScopes scope body))]
 
 infixl 1 `lintApp`
 lintApp :: forall e m. MonadNixLint e m
@@ -341,54 +349,46 @@ lintApp context fun arg = fun >>= unpackSymbolic >>= \case
     NMany xs -> do
         ys <- forM xs $ \case
             TFunction params f -> do
-                traceM "Building arguments..."
-                args <- buildArgument params =<< arg
-                traceM "Building arguments...done"
-                traceM $ "Linting function application with args: "
-                    ++ show (newScope args)
-                clearScopes @(Symbolic m) (pushScope args f)
-            TBuiltin _ f -> error "NYI: lintApp builtin"
-            TSet m -> error "NYI: lintApp Set"
-            x -> throwError "Attempt to call non-function"
+                args <- buildArgument params =<< sthunk arg
+                clearScopes @(SThunk m) (pushScope args (sforce =<< f))
+            TBuiltin _ _f -> error "NYI: lintApp builtin"
+            TSet _m -> error "NYI: lintApp Set"
+            _x -> throwError "Attempt to call non-function"
         y <- everyPossible
         foldM (unify context) y ys
 
 buildArgument :: forall e m. MonadNixLint e m
-              => Params (m (Symbolic m)) -> Symbolic m
-              -> m (HashMap Text (Symbolic m))
+              => Params (m (SThunk m)) -> SThunk m
+              -> m (HashMap Text (SThunk m))
 buildArgument params arg = case params of
     Param name -> return $ M.singleton name arg
-    ParamSet s isVariadic m -> unpackSymbolic arg >>= \case
+    ParamSet s isVariadic m -> sforce arg >>= unpackSymbolic >>= \case
         NMany [TSet Nothing] -> error "NYI"
         NMany [TSet (Just args)] -> do
-            traceM "buildArgument..1"
             res <- loebM (alignWithKey (assemble isVariadic) args s)
-            traceM "buildArgument..2"
             maybe (pure res) (selfInject res) m
 
         x -> throwError $ "Expected set in function call, received: "
                 ++ show (() <$ x)
   where
-    selfInject :: HashMap Text (Symbolic m) -> Text
-               -> m (HashMap Text (Symbolic m))
+    selfInject :: HashMap Text (SThunk m) -> Text
+               -> m (HashMap Text (SThunk m))
     selfInject res n = do
-        traceM "buildArgument..3"
-        ref <- mkSymbolic [TSet (Just res)]
+        ref <- sthunk $ mkSymbolic [TSet (Just res)]
         return $ M.insert n ref res
 
     assemble :: Bool
              -> Text
-             -> These (Symbolic m) (Maybe (m (Symbolic m)))
-             -> HashMap Text (Symbolic m)
-             -> m (Symbolic m)
+             -> These (SThunk m) (Maybe (m (SThunk m)))
+             -> HashMap Text (SThunk m)
+             -> m (SThunk m)
     assemble isVariadic k = \case
         That Nothing  ->
             const $ throwError $ "Missing value for parameter: " ++ show k
         That (Just f) -> \args -> do
-            traceM "buildArgument..4"
-            res <- pushScope args f
-            traceM "buildArgument..5"
-            return res
+            scope <- currentScopes @_ @(SThunk m)
+            sthunk $ clearScopes @(SThunk m) $
+                pushScopes scope $ pushScope args $ sforce =<< f
         This x | isVariadic -> const (pure x)
                | otherwise  ->
                  const $ throwError $ "Unexpected parameter: " ++ show k
@@ -400,7 +400,7 @@ attrSetAlter :: forall e m. MonadNixLint e m
              -> m (Symbolic m)
              -> m (HashMap Text (m (Symbolic m)))
 attrSetAlter [] _ _ = throwError "invalid selector with no components"
-attrSetAlter (Nothing:ps) m val =
+attrSetAlter (Nothing:_ps) _m _val =
     -- In the case where the only thing we know about a dynamic key is that it
     -- must unify with a string, we have to consider the possibility that it
     -- might select any one of the members of 'm'.
@@ -411,7 +411,7 @@ attrSetAlter (Just p:ps) m val = case M.lookup p m of
     Just v  | null ps   -> go
             | otherwise -> v >>= unpackSymbolic >>= \case
                   NMany [TSet Nothing] -> error "NYI"
-                  NMany [TSet (Just s)] -> recurse (pure <$> s)
+                  NMany [TSet (Just s)] -> recurse (sforce <$> s)
                   --TODO: Keep a stack of attributes we've already traversed, so
                   --that we can report that to the user
                   x -> throwError $ "attribute " ++ show p
@@ -422,10 +422,10 @@ attrSetAlter (Just p:ps) m val = case M.lookup p m of
     recurse s = attrSetAlter ps s val >>= \m' ->
         if | M.null m' -> return m
            | otherwise -> do
-             scope <- currentScopes @_ @(Symbolic m)
+             scope <- currentScopes @_ @(SThunk m)
              return $ M.insert p (embed scope m') m
       where
-        embed scope m' = traverse (withScopes scope) m'
+        embed scope m' = traverse (sthunk . withScopes scope) m'
             >>= (\t -> mkSymbolic [TSet (Just t)])
 
 lintBinds :: forall e m. MonadNixLint e m
@@ -433,7 +433,7 @@ lintBinds :: forall e m. MonadNixLint e m
           -> Bool
           -> Bool
           -> [Binding (m (Symbolic m))]
-          -> m (HashMap Text (Symbolic m))
+          -> m (HashMap Text (SThunk m))
 lintBinds context allowDynamic recursive = buildResult . concat <=< mapM go
   where
     go :: Binding (m (Symbolic m)) -> m [([Maybe Text], m (Symbolic m))]
@@ -455,19 +455,19 @@ lintBinds context allowDynamic recursive = buildResult . concat <=< mapM go
                 case mv of
                     Nothing -> throwError $ "Inheriting unknown attribute: "
                         ++ show (() <$ name)
-                    Just v -> return v)
+                    Just v -> sforce v)
 
     buildResult :: [([Maybe Text], m (Symbolic m))]
-                -> m (HashMap Text (Symbolic m))
+                -> m (HashMap Text (SThunk m))
     buildResult bindings = do
         s <- foldM insert M.empty bindings
-        scope <- currentScopes @_ @(Symbolic m)
+        scope <- currentScopes @_ @(SThunk m)
         if recursive
             then loebM (encapsulate scope <$> s)
-            else traverse (withScopes scope) s
+            else traverse (sthunk . withScopes scope) s
 
     encapsulate scope f attrs =
-        withScopes scope . pushScope attrs $ f
+        sthunk . withScopes scope . pushScope attrs $ f
 
     insert m (path, value) = attrSetAlter path m value
 
