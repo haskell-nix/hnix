@@ -10,6 +10,7 @@
 module Nix.Builtins (MonadBuiltins, baseEnv) where
 
 import           Control.Monad
+import           Control.Monad.IO.Class
 import           Control.Monad.ListM (sortByM)
 import qualified Crypto.Hash.MD5 as MD5
 import qualified Crypto.Hash.SHA1 as SHA1
@@ -26,6 +27,7 @@ import           Data.Maybe
 import           Data.Semigroup
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
 import           Data.Text.Encoding
 import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Lazy.Builder as Builder
@@ -105,6 +107,7 @@ builtinsList = sequence [
     , add2 Normal   "lessThan"                   lessThan
     , add  Normal   "concatLists"                concatLists
     , add' Normal   "hashString"                 hashString
+    , add  Normal   "readFile"                   readFile_
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -477,6 +480,19 @@ hashString algo s = Prim $ do
         _ -> throwError $ "builtins.hashString: "
             ++ "expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got " ++ show algo
     pure $ decodeUtf8 $ Base16.encode $ hash $ encodeUtf8 s
+
+readFile_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
+readFile_ pathThunk = do
+    path <- forceThunk pathThunk >>= \case
+        NVStr pathText _ -> do
+            let path = Text.unpack pathText
+            when (not $ isAbsolute path) $
+                throwError $ "string " ++ show path ++ " doesn't represent an absolute path"
+            pure path
+        NVLiteralPath path -> pure path
+        NVEnvPath path -> pure path
+        v -> throwError $ "expected a path, got " ++ show (void v)
+    toValue =<< liftIO (Text.readFile path)
 
 newtype Prim m a = Prim { runPrim :: m a }
 
