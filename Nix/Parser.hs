@@ -97,7 +97,7 @@ nixHasAttr term = build <$> term <*> optional (reservedOp "?" *> nixSelector) wh
 -- | A self-contained unit.
 nixTerm :: Parser NExprLoc
 nixTerm = nixSelect $ choice
-  [ nixInt, nixBool, nixNull, nixParens, nixList, nixPath, nixSPath, nixUri
+  [ nixPath, nixSPath, nixInt, nixBool, nixNull, nixParens, nixList, nixUri
   , nixStringExpr, nixSet, nixSym ]
 
 nixToplevelForm :: Parser NExprLoc

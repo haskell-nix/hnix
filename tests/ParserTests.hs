@@ -40,6 +40,8 @@ case_constant_path = do
       (mkPath False "c/def") (mkPath True "g"))
     (mkPath False "def/d")
   assertParseString "a'b/c" $ Fix $ NApp (mkSym "a'b") (mkPath False "/c")
+  assertParseString "a/b" $ mkPath False "a/b"
+  assertParseString "4/2" $ mkPath False "4/2"
   assertParseFail "."
   assertParseFail ".."
   assertParseFail "/"
