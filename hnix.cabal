@@ -60,7 +60,9 @@ Library
   Build-depends:
       base                     >= 4.9          && < 5
     , ansi-wl-pprint
+    , base16-bytestring
     , containers
+    , cryptohash
     , deriving-compat >= 0.3 && < 0.5
     , text
     , bytestring

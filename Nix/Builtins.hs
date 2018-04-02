@@ -11,7 +11,12 @@ module Nix.Builtins (MonadBuiltins, baseEnv) where
 
 import           Control.Monad
 import           Control.Monad.ListM (sortByM)
+import qualified Crypto.Hash.MD5 as MD5
+import qualified Crypto.Hash.SHA1 as SHA1
+import qualified Crypto.Hash.SHA256 as SHA256
+import qualified Crypto.Hash.SHA512 as SHA512
 import           Data.Align (alignWith)
+import           Data.ByteString.Base16 as Base16
 import           Data.Char (isDigit)
 import           Data.Foldable (foldlM)
 import           Data.HashMap.Lazy (HashMap)
@@ -21,6 +26,7 @@ import           Data.Maybe
 import           Data.Semigroup
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import           Data.Text.Encoding
 import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Lazy.Builder as Builder
 import           Data.These (fromThese)
@@ -98,6 +104,7 @@ builtinsList = sequence [
     , add2 Normal   "sort"                       sort_
     , add2 Normal   "lessThan"                   lessThan
     , add  Normal   "concatLists"                concatLists
+    , add' Normal   "hashString"                 hashString
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -459,6 +466,17 @@ concatLists = forceThunk >=> \case
         NVList i -> pure i
         v -> throwError $ "builtins.concatLists: expected list, got " ++ show (void v)
     v -> throwError $ "builtins.concatLists: expected list, got " ++ show (void v)
+
+hashString :: MonadBuiltins e m => Text -> Text -> Prim m Text
+hashString algo s = Prim $ do
+    hash <- case algo of
+        "md5" -> pure MD5.hash
+        "sha1" -> pure SHA1.hash
+        "sha256" -> pure SHA256.hash
+        "sha512" -> pure SHA512.hash
+        _ -> throwError $ "builtins.hashString: "
+            ++ "expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got " ++ show algo
+    pure $ decodeUtf8 $ Base16.encode $ hash $ encodeUtf8 s
 
 newtype Prim m a = Prim { runPrim :: m a }
 
