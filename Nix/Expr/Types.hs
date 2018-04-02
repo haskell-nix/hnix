@@ -10,18 +10,17 @@
 -- | The nix expression type and supporting types.
 module Nix.Expr.Types where
 
-import           Data.Data
-import           Data.Eq.Deriving
-import           Data.Fix
-import           Data.Functor.Classes
-import           Data.HashMap.Lazy (HashMap)
-import qualified Data.HashMap.Lazy as M
-import           Data.Text (Text, pack)
-import           Data.Traversable
-import           GHC.Exts
-import           GHC.Generics
-import           Nix.Atoms
-import           Text.Show.Deriving
+import Data.Data
+import Data.Eq.Deriving
+import Data.Fix
+import Data.Functor.Classes
+import Data.HashMap.Lazy (HashMap)
+import Data.Text (Text, pack)
+import Data.Traversable
+import GHC.Exts
+import GHC.Generics
+import Nix.Atoms
+import Text.Show.Deriving
 
 -- | The main nix expression type. This is polymorphic so that it can be made
 -- a functor, which allows us to traverse expressions and map functions over
@@ -96,52 +95,17 @@ data Binding r
 data Params r
   = Param !Text
   -- ^ For functions with a single named argument, such as @x: x + 1@.
-  | ParamSet !(ParamSet r) !(Maybe Text)
-  -- ^ Explicit parameters (argument must be a set). Might specify a name
-  -- to bind to the set in the function body.
+  | ParamSet !(ParamSet r) !Bool !(Maybe Text)
+  -- ^ Explicit parameters (argument must be a set). Might specify a name to
+  -- bind to the set in the function body. The bool indicates whether it is
+  -- variadic or not.
   deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show,
             Foldable, Traversable)
+
+type ParamSet r = HashMap Text (Maybe r)
 
 instance IsString (Params r) where
   fromString = Param . fromString
-
--- | An explicit parameter set; provides a shorthand for unpacking arguments.
-data ParamSet r
-  = FixedParamSet !(HashMap Text (Maybe r))
-  -- ^ A fixed set, where no arguments beyond what is specified in the map
-  -- may be given. The map might contain defaults for arguments not passed.
-  | VariadicParamSet !(HashMap Text (Maybe r))
-  -- ^ Same as the 'FixedParamSet', but extra arguments are allowed.
-  deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show,
-            Foldable, Traversable)
-
-instance Eq1 ParamSet where
-  liftEq eq (FixedParamSet a) (FixedParamSet b) =
-    liftEq (liftEq (liftEq eq)) (M.toList a) (M.toList b)
-  liftEq eq (VariadicParamSet a) (VariadicParamSet b) =
-    liftEq (liftEq (liftEq eq)) (M.toList a) (M.toList b)
-  liftEq _ _ _ = False
-
--- It's not possible to derive this automatically as there is no Show1 instance
--- for Map. We define one locally here.
-instance Show1 ParamSet where
-  liftShowsPrec sp sl p =
-    let liftShowsPrecMap :: (Int -> a -> ShowS)
-                         -> ([a] -> ShowS)
-                         -> Int
-                         -> HashMap Text a
-                         -> ShowS
-        liftShowsPrecMap spMap slMap pMap m =
-          showsUnaryWith (liftShowsPrec (liftShowsPrec spMap slMap)
-                                        (liftShowList spMap slMap))
-                         "fromList" pMap (M.toList m)
-        showNamedMap s =
-          showsUnaryWith (liftShowsPrecMap (liftShowsPrec sp sl)
-                                           (liftShowList sp sl))
-                         s p
-    in \case
-      FixedParamSet m    -> showNamedMap "FixedParamSet" m
-      VariadicParamSet m -> showNamedMap "VariadicParamSet" m
 
 -- | 'Antiquoted' represents an expression that is either
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
@@ -253,7 +217,7 @@ data NBinaryOp
 -- | Get the name out of the parameter (there might be none).
 paramName :: Params r -> Maybe Text
 paramName (Param n) = Just n
-paramName (ParamSet _ n) = n
+paramName (ParamSet _ _ n) = n
 
 $(deriveEq1 ''NExprF)
 $(deriveEq1 ''NString)

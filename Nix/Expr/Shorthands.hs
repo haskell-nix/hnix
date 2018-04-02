@@ -1,3 +1,6 @@
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 -- | A bunch of shorthands for making nix expressions.
 --
 -- Functions with an @F@ suffix return a more general type without the outer
@@ -88,14 +91,8 @@ mkOper op = Fix . NUnary op
 mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkOper2 op a = Fix . NBinary op a
 
-mkParamset :: [(Text, Maybe NExpr)] -> Params NExpr
-mkParamset params = ParamSet (mkFixedParamSet params) Nothing
-
-mkFixedParamSet :: [(Text, Maybe NExpr)] -> ParamSet NExpr
-mkFixedParamSet ps = FixedParamSet (M.fromList ps)
-
-mkVariadicParamSet :: [(Text, Maybe NExpr)] -> ParamSet NExpr
-mkVariadicParamSet ps = VariadicParamSet (M.fromList ps)
+mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
+mkParamset params variadic = ParamSet (M.fromList params) variadic Nothing
 
 mkApp :: NExpr -> NExpr -> NExpr
 mkApp e = Fix . NApp e
@@ -146,11 +143,11 @@ inheritFrom expr = Inherit (Just expr)
 
 -- | Shorthand for producing a binding of a name to an expression.
 bindTo :: Text -> NExpr -> Binding NExpr
-bindTo name val = NamedVar (mkSelector name) val
+bindTo name = NamedVar (mkSelector name)
 
 -- | Infix version of bindTo.
 ($=) :: Text -> NExpr -> Binding NExpr
-name $= value = bindTo name value
+($=) = bindTo
 
 infixr 2 $=
 

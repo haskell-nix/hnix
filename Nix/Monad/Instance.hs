@@ -1,6 +1,9 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -15,7 +18,6 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Reader (MonadReader)
 import           Control.Monad.Trans.Reader
 import           Data.Fix
-import           Data.IORef
 import qualified Data.HashMap.Lazy as M
 import           Data.List
 import           Data.List.Split
@@ -25,6 +27,7 @@ import           Nix.Monad
 import           Nix.Parser
 import           Nix.Scope
 import           Nix.Stack
+import           Nix.Thunk
 import           Nix.Utils
 import           System.Directory
 import           System.Environment
@@ -42,11 +45,6 @@ newtype Lazy m a = Lazy
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
               MonadReader (Context (NThunk (Lazy m))))
 
-data Deferred m
-    = DeferredAction (m (NValue m))
-    -- ^ This is closure over the environment where it was created.
-    | ComputedValue (NValue m)
-
 instance MonadNix (Lazy IO) where
     addPath path = liftIO $ do
         (exitCode, out, _) <-
@@ -63,7 +61,7 @@ instance MonadNix (Lazy IO) where
                 mres <- lookupVar @_ @(NThunk (Lazy IO)) "__cwd"
                 case mres of
                     Nothing -> liftIO getCurrentDirectory
-                    Just v -> forceThunk v >>= \case
+                    Just (NThunk v) -> forceThunk v >>= \case
                         NVLiteralPath s -> return s
                         v -> throwError $ "when resolving relative path,"
                                 ++ " __cwd is in scope,"
@@ -71,23 +69,6 @@ instance MonadNix (Lazy IO) where
                                 ++ show (void v)
             pure $ cwd </> origPath
         liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
-
-    data NThunk (Lazy IO) = NThunkIO (IORef (Deferred (Lazy IO)))
-
-    valueRef   value  = liftIO $ NThunkIO <$> newIORef (ComputedValue value)
-    buildThunk action = liftIO $ NThunkIO <$> newIORef (DeferredAction action)
-
-    forceThunk (NThunkIO ref) = do
-        eres <- liftIO $ readIORef ref
-        case eres of
-            ComputedValue value -> return value
-            DeferredAction action -> do
-                scope <- currentScopes @_ @(NThunk (Lazy IO))
-                traceM $ "Forcing thunk in scope: " ++ show scope
-                value <- action
-                traceM $ "Forcing thunk computed: " ++ show (void value)
-                liftIO $ writeIORef ref (ComputedValue value)
-                return value
 
 -- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
 -- This is incorrect on POSIX systems, because if @b@ is a symlink, its parent
@@ -107,14 +88,14 @@ instance Has (Context v) Frames where
 
 instance MonadNixEnv (Lazy IO) where
     -- jww (2018-03-29): Cache which files have been read in.
-    importFile = forceThunk >=> \case
+    importFile = forceThunk . getNThunk >=> \case
         NVLiteralPath path -> do
             mres <- lookupVar @(Context (NThunk (Lazy IO))) "__cwd"
             path' <- case mres of
                 Nothing  -> do
                     traceM "No known current directory"
                     return path
-                Just dir -> forceThunk dir >>= normalForm >>= \case
+                Just (NThunk dir) -> forceThunk dir >>= normalForm >>= \case
                     Fix (NVLiteralPath dir') -> do
                         traceM $ "Current directory for import is: "
                             ++ show dir'
@@ -126,7 +107,7 @@ instance MonadNixEnv (Lazy IO) where
                 case eres of
                     Failure err  -> error $ "Parse failed: " ++ show err
                     Success expr -> do
-                        ref <- buildThunk $ return $
+                        ref <- fmap NThunk $ buildThunk $ return $
                             NVLiteralPath $ takeDirectory path'
                         -- Use this cookie so that when we evaluate the next
                         -- import, we'll remember which directory its containing
@@ -134,7 +115,7 @@ instance MonadNixEnv (Lazy IO) where
                         pushScope (M.singleton "__cwd" ref) (evalExpr expr)
         p -> error $ "Unexpected argument to import: " ++ show (void p)
 
-    getEnvVar = forceThunk >=> \case
+    getEnvVar = forceThunk . getNThunk >=> \case
         NVStr s _ -> do
             mres <- liftIO $ lookupEnv (Text.unpack s)
             return $ case mres of

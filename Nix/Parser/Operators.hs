@@ -1,3 +1,7 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE LambdaCase #-}
+
 module Nix.Parser.Operators where
 
 import           Data.Data (Data(..))

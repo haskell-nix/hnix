@@ -1,5 +1,6 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Nix where
 
@@ -26,7 +27,7 @@ evalTopLevelExpr mdir expr = do
         Nothing -> contextualExprEval expr
         Just dir -> do
             traceM $ "Setting __cwd = " ++ show dir
-            ref <- valueRef $ NVLiteralPath dir
+            ref <- valueThunk $ NVLiteralPath dir
             pushScope (M.singleton "__cwd" ref) (contextualExprEval expr)
 
 evalTopLevelExprIO :: Maybe FilePath -> NExprLoc -> IO (NValueNF (Lazy IO))
@@ -46,23 +47,30 @@ tracingEvalTopLevelExprIO mdir expr = do
             runLazyIO (normalForm =<< (`pushScopes` traced) =<< baseEnv)
         Just dir -> do
             traceM $ "Setting __cwd = " ++ show dir
-            ref <- runLazyIO (valueRef $ NVLiteralPath dir)
+            ref <- runLazyIO (valueThunk $ NVLiteralPath dir)
             let m = M.singleton "__cwd" ref
             runLazyIO (baseEnv >>= (`pushScopes` pushScope m traced)
                                  >>= normalForm)
 
 newtype Lint m a = Lint
-    { runLint :: ReaderT (Context Symbolic) m a }
+    { runLint :: ReaderT (Context (SThunk (Lint m))) m a }
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
-              MonadReader (Context Symbolic))
+              MonadReader (Context (SThunk (Lint m))))
 
 runLintIO :: Lint IO a -> IO a
 runLintIO = flip runReaderT (Context emptyScopes []) . runLint
 
-symbolicBaseEnv :: Monad m => m (Scopes Symbolic)
+symbolicBaseEnv :: Monad m => m (Scopes (SThunk m))
 symbolicBaseEnv = return [Scope M.empty False]
 
-lintExprIO :: NExprLoc -> IO Symbolic
+lintExprIO :: NExprLoc -> IO (Symbolic (Lint IO))
 lintExprIO expr =
     runLintIO (symbolicBaseEnv
                    >>= (`pushScopes` lintExpr (stripAnnotation expr)))
+
+tracingLintExprIO :: NExprLoc -> IO (Symbolic (Lint IO))
+tracingLintExprIO expr = do
+    traced <- tracingExprLint expr
+    ref <- runLintIO $ sthunk $ mkSymbolic [TPath]
+    let m = M.singleton "__cwd" ref
+    runLintIO (symbolicBaseEnv >>= (`pushScopes` pushScope m traced))

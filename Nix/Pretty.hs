@@ -1,4 +1,6 @@
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
+
 module Nix.Pretty where
 
 import           Data.Fix
@@ -75,24 +77,25 @@ prettyString (Indented parts)
 
 prettyParams :: Params NixDoc -> Doc
 prettyParams (Param n) = text $ unpack n
-prettyParams (ParamSet s mname) = prettyParamSet s <> case mname of
+prettyParams (ParamSet s v mname) = prettyParamSet s v <> case mname of
   Nothing -> empty
   Just name -> text "@" <> text (unpack name)
 
-prettyParamSet :: ParamSet NixDoc -> Doc
-prettyParamSet params = encloseSep (lbrace <> space) (align rbrace) sep prettyArgs
+prettyParamSet :: ParamSet NixDoc -> Bool -> Doc
+prettyParamSet args var =
+    encloseSep (lbrace <> space) (align rbrace) sep prettyArgs
   where
     prettySetArg (n, maybeDef) = case maybeDef of
       Nothing -> text (unpack n)
       Just v -> text (unpack n) <+> text "?" <+> withoutParens v
-    prettyArgs = case params of
-      FixedParamSet args -> map prettySetArg (toList args)
-
-      VariadicParamSet args -> map prettySetArg (toList args) ++ [text "..."]
+    prettyArgs
+        | var = map prettySetArg (toList args)
+        | otherwise = map prettySetArg (toList args) ++ [text "..."]
     sep = align (comma <> space)
 
 prettyBind :: Binding NixDoc -> Doc
-prettyBind (NamedVar n v) = prettySelector n <+> equals <+> withoutParens v <> semi
+prettyBind (NamedVar n v) =
+    prettySelector n <+> equals <+> withoutParens v <> semi
 prettyBind (Inherit s ns)
   = text "inherit" <+> scope <> align (fillSep (map prettyKeyName ns)) <> semi
  where scope = maybe empty ((<> space) . parens . withoutParens) s
