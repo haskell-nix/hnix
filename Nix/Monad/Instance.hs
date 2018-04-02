@@ -1,10 +1,12 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -21,7 +23,9 @@ import           Data.Fix
 import qualified Data.HashMap.Lazy as M
 import           Data.List
 import           Data.List.Split
+import           Data.Text (Text)
 import qualified Data.Text as Text
+import           Nix.Atoms
 import           Nix.Eval
 import           Nix.Monad
 import           Nix.Parser
@@ -44,6 +48,26 @@ newtype Lazy m a = Lazy
     { runLazy :: ReaderT (Context (NThunk (Lazy m))) m a }
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
               MonadReader (Context (NThunk (Lazy m))))
+
+instance (MonadFix m, MonadNix (Lazy m), MonadIO m)
+      => MonadEval (NThunk (Lazy m)) (NValue (Lazy m)) (Lazy m) where
+    wrapThunk   = NThunk
+    unwrapThunk = getNThunk
+
+    embedSet    = return . NVSet
+    projectSet  = \case
+        NVSet s -> return $ Just s
+        _ -> return Nothing
+
+    type MText (Lazy m) = (Text, DList Text)
+
+    wrapText   = return . (, mempty)
+    unwrapText = return . fst
+
+    embedText   = return . uncurry NVStr
+    projectText = \case
+        NVConstant NNull -> return $ Just Nothing
+        v -> fmap (Just . Just) . valueText True =<< normalForm v
 
 instance MonadNix (Lazy IO) where
     addPath path = liftIO $ do

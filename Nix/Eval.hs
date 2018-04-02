@@ -1,23 +1,22 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Nix.Eval
-    (MonadNixEval, evalExpr, tracingExprEval, evalBinds,
-     exprNormalForm, normalForm, builtin, builtin2, builtin3,
-     atomText, valueText, valueTextNoContext, buildArgument,
-     contextualExprEval, thunkEq, evalApp) where
+module Nix.Eval where
 
-import           Control.Monad hiding (mapM, sequence)
+import           Control.Monad
+import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
@@ -40,16 +39,19 @@ import           Nix.Monad
 import           Nix.Scope
 import           Nix.Stack
 import           Nix.StringOperations (runAntiquoted)
+import           Nix.Thunk
 import           Nix.Utils
 
 type MonadNixEval e m =
     (Scoped e (NThunk m) m, Framed e m, MonadNix m, MonadIO m )
 
 -- | Evaluate an nix expression, with a given ValueSet as environment
-evalExpr :: MonadNixEval e m => NExpr -> m (NValue m)
+evalExpr :: (MonadNixEval e m, MonadEval (NThunk m) (NValue m) m)
+         => NExpr -> m (NValue m)
 evalExpr = cata eval
 
-eval :: forall e m. MonadNixEval e m => NExprF (m (NValue m)) -> m (NValue m)
+eval :: forall e m. (MonadNixEval e m, MonadEval (NThunk m) (NValue m) m)
+     => NExprF (m (NValue m)) -> m (NValue m)
 
 eval (NSym var) = do
     traceM $ "NSym..1: var = " ++ show var
@@ -218,7 +220,7 @@ eval (NAbs params body) = do
         (thunk (pushScopes scope body))
 
 infixl 1 `evalApp`
-evalApp :: forall e m. MonadNixEval e m
+evalApp :: forall e m. (MonadNixEval e m, MonadEval (NThunk m) (NValue m) m)
         => m (NValue m) -> m (NValue m) -> m (NValue m)
 evalApp fun arg = fun >>= \case
     NVFunction params f -> do
@@ -231,6 +233,8 @@ evalApp fun arg = fun >>= \case
         | Just f <- M.lookup "__functor" m
             -> force f `evalApp` fun `evalApp` arg
     x -> throwError $ "Attempt to call non-function: " ++ show (() <$ x)
+
+-----
 
 valueRefBool :: MonadNix m => Bool -> m (NValue m)
 valueRefBool = return . NVConstant . NBool
@@ -270,194 +274,7 @@ valueEq l r = case (l, r) of
     (NVSet lm, NVSet rm) -> alignEqM thunkEq lm rm
     _ -> pure False
 
-buildArgument :: forall e m. MonadNixEval e m
-              => Params (m (NThunk m)) -> NThunk m -> m (ValueSet m)
-buildArgument params arg = case params of
-    Param name -> return $ M.singleton name arg
-    ParamSet s isVariadic m -> force arg >>= \case
-        NVSet args -> do
-            res <- loebM (alignWithKey (assemble isVariadic) args s)
-            maybe (pure res) (selfInject res) m
-
-        x -> throwError $ "Expected set in function call, received: "
-                ++ show (() <$ x)
-  where
-    selfInject :: ValueSet m -> Text -> m (ValueSet m)
-    selfInject res n = do
-        ref <- valueThunk $ NVSet res
-        return $ M.insert n ref res
-
-    assemble :: Bool
-             -> Text
-             -> These (NThunk m) (Maybe (m (NThunk m)))
-             -> ValueSet m
-             -> m (NThunk m)
-    assemble isVariadic k = \case
-        That Nothing  ->
-            const $ throwError $ "Missing value for parameter: " ++ show k
-        That (Just f) -> \args -> do
-            scope <- currentScopes @_ @(NThunk m)
-            traceM $ "Deferring default argument in scope: " ++ show scope
-            thunk $ clearScopes @(NThunk m) $ do
-                traceM $ "Evaluating default argument with args: "
-                    ++ show (newScope args)
-                pushScopes scope $ pushScope args $
-                    force =<< f
-        This x | isVariadic -> const (pure x)
-               | otherwise  ->
-                 const $ throwError $ "Unexpected parameter: " ++ show k
-        These x _ -> const (pure x)
-
-attrSetAlter :: forall e m. MonadNixEval e m
-             => [Text]
-             -> HashMap Text (m (NValue m))
-             -> m (NValue m)
-             -> m (HashMap Text (m (NValue m)))
-attrSetAlter [] _ _ = throwError "invalid selector with no components"
-attrSetAlter (p:ps) m val = case M.lookup p m of
-    Nothing | null ps   -> go
-            | otherwise -> recurse M.empty
-    Just v  | null ps   -> go
-            | otherwise -> v >>= \case
-                  NVSet s -> recurse (force <$> s)
-                  --TODO: Keep a stack of attributes we've already traversed, so
-                  --that we can report that to the user
-                  x -> throwError $ "attribute " ++ show p
-                    ++ " is not a set; its value is " ++ show (void x)
-  where
-    go = return $ M.insert p val m
-
-    recurse s = attrSetAlter ps s val >>= \m' ->
-        if | M.null m' -> return m
-           | otherwise   -> do
-             scope <- currentScopes @_ @(NThunk m)
-             return $ M.insert p (embed scope m') m
-      where
-        embed scope m' =
-            NVSet <$> traverse (thunk . withScopes scope) m'
-
-evalBinds :: forall e m. MonadNixEval e m
-          => Bool
-          -> Bool
-          -> [Binding (m (NValue m))]
-          -> m (ValueSet m)
-evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
-  where
-    go :: Binding (m (NValue m)) -> m [([Text], m (NValue m))]
-    go (NamedVar pathExpr finalValue) = do
-        let go = \case
-                [] -> pure ([], finalValue)
-                h : t -> evalSetterKeyName allowDynamic h >>= \case
-                    Nothing -> pure ([], pure $ NVSet mempty)
-                    Just k -> do
-                        (restOfPath, v) <- go t
-                        pure (k : restOfPath, v)
-        go pathExpr >>= \case
-            -- When there are no path segments, e.g. `${null} = 5;`, we don't
-            -- bind anything
-            ([], _) -> pure []
-            result -> pure [result]
-    go (Inherit ms names) = fmap catMaybes $ forM names $ \name -> do
-        evalSetterKeyName allowDynamic name >>= \case
-            Nothing -> return Nothing
-            Just key -> return $ Just ([key], do
-                mv <- case ms of
-                    Nothing -> lookupVar key
-                    Just s -> s >>= \case
-                        NVSet s -> pushScope s (lookupVar key)
-                        x -> throwError
-                            $ "First argument to inherit should be a set, saw: "
-                            ++ show (() <$ x)
-                case mv of
-                    Nothing -> throwError $ "Inheriting unknown attribute: "
-                        ++ show (() <$ name)
-                    Just v -> force v)
-
-    buildResult :: [([Text], m (NValue m))] -> m (ValueSet m)
-    buildResult bindings = do
-        s <- foldM insert M.empty bindings
-        scope <- currentScopes @_ @(NThunk m)
-        if recursive
-            then loebM (encapsulate scope <$> s)
-            else traverse (thunk . withScopes scope) s
-
-    encapsulate scope f attrs =
-        thunk . withScopes scope . pushScope attrs $ f
-
-    insert m (path, value) = attrSetAlter path m value
-
-evalString :: MonadNixEval e m
-           => NString (m (NValue m)) -> m (NValue m)
-evalString nstr = do
-    let fromParts parts = do
-          (t, c) <- mconcat <$> mapM go parts
-          return $ NVStr t c
-    case nstr of
-      Indented     parts -> fromParts parts
-      DoubleQuoted parts -> fromParts parts
-  where
-    go = runAntiquoted (return . (, mempty))
-                       (valueText True <=< (normalForm =<<))
-
-evalSelector :: MonadNixEval e m
-             => Bool -> NAttrPath (m (NValue m)) -> m [Text]
-evalSelector allowDynamic = mapM $ evalGetterKeyName allowDynamic
-
-evalKeyNameStatic :: MonadNixEval e m => NKeyName (m (NValue m)) -> m Text
-evalKeyNameStatic = \case
-    StaticKey k -> pure k
-    DynamicKey _ -> throwError "dynamic attribute not allowed in this context"
-
--- | Returns Nothing iff the key value is null
-evalKeyNameDynamicNullable :: MonadNixEval e m => NKeyName (m (NValue m)) -> m (Maybe Text)
-evalKeyNameDynamicNullable = \case
-    StaticKey k -> pure $ Just k
-    DynamicKey k -> runAntiquoted evalString id k >>= \case
-        NVStr s _ -> pure $ Just s
-        NVConstant NNull -> pure Nothing
-        bad -> throwError $ "evaluating key name: expected string, got "
-                  ++ show (void bad)
-
-evalKeyNameDynamicNotNull :: MonadNixEval e m => NKeyName (m (NValue m)) -> m Text
-evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
-    Nothing -> throwError "value is null while a string was expected"
-    Just k -> pure k
-
--- | Evaluate a component of an attribute path in a context where we are
--- *binding* a value
-evalSetterKeyName :: MonadNixEval e m => Bool -> NKeyName (m (NValue m)) -> m (Maybe Text)
-evalSetterKeyName canBeDynamic = case canBeDynamic of
-    False -> fmap Just . evalKeyNameStatic
-    True -> evalKeyNameDynamicNullable
-
--- | Evaluate a component of an attribute path in a context where we are
--- *retrieving* a value
-evalGetterKeyName :: MonadNixEval e m => Bool -> NKeyName (m (NValue m)) -> m Text
-evalGetterKeyName canBeDynamic = case canBeDynamic of
-    False -> evalKeyNameStatic
-    True -> evalKeyNameDynamicNotNull
-
-contextualExprEval :: MonadNixEval e m => NExprLoc -> m (NValue m)
-contextualExprEval = adi (eval . annotated . getCompose) psi
-  where
-    psi k v@(Fix x) = withExprContext (() <$ x) (k v)
-
-tracingExprEval :: MonadNixEval e m => NExprLoc -> IO (m (NValue m))
-tracingExprEval =
-    flip runReaderT (0 :: Int)
-        . adiM (pure <$> eval . annotated . getCompose) psi
-  where
-    psi k v@(Fix x) = do
-        depth <- ask
-        liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' '
-            ++ show (stripAnnotation v)
-        res <- local succ $
-            fmap (withExprContext (() <$ x)) (k v)
-        liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' ' ++ "."
-        return res
-
-exprNormalForm :: MonadNixEval e m => NExpr -> m (NValueNF m)
-exprNormalForm = normalForm <=< evalExpr
+-----
 
 normalForm :: (MonadNix m, MonadIO m) => NValue m -> m (NValueNF m)
 normalForm = \case
@@ -502,3 +319,230 @@ valueText addPathsToStore = cata phi where
 
 valueTextNoContext :: MonadNixEval e m => Bool -> NValueNF m -> m Text
 valueTextNoContext addPathsToStore = fmap fst . valueText addPathsToStore
+
+----
+
+-- | The following functions are generalized so that they can be used by other
+--   evaluators which do not differ in the core aspects of the lambda calculus
+--   that Nix represents.
+--
+--   jww (2018-04-02): This "subset" of the language should be called out more
+--   directly, as a separate data type, to avoid abstracting it in this ad hoc
+--   way.
+
+class (Monoid (MText m), MonadFix m) => MonadEval t v m | m -> t, m -> v where
+    wrapThunk   :: Thunk m v -> t
+    unwrapThunk :: t -> Thunk m v
+
+    embedSet   :: HashMap Text t -> m v
+    projectSet :: v -> m (Maybe (HashMap Text t))
+
+    type MText m :: *
+
+    wrapText   :: Text -> m (MText m)
+    unwrapText :: MText m -> m Text
+
+    embedText   :: MText m  -> m v
+    projectText :: v -> m (Maybe (Maybe (MText m)))
+
+buildArgument :: forall e t v m. (MonadEval t v m, Scoped e t m, Framed e m, MonadIO m)
+              => Params (m t) -> t -> m (HashMap Text t)
+buildArgument params arg = case params of
+    Param name -> return $ M.singleton name arg
+    ParamSet s isVariadic m ->
+        forceThunk (unwrapThunk @t @v @m arg) >>= projectSet @t @v @m >>= \case
+            Just args -> do
+                res <- loebM (alignWithKey (assemble isVariadic) args s)
+                maybe (pure res) (selfInject res) m
+
+            x -> throwError $ "Expected set in function call, received: "
+                    ++ show (() <$ x)
+  where
+    selfInject :: HashMap Text t -> Text -> m (HashMap Text t)
+    selfInject res n = do
+        ref <- valueRef =<< embedSet @t @v @m res
+        return $ M.insert n (wrapThunk @t @v @m ref) res
+
+    assemble :: Bool
+             -> Text
+             -> These t (Maybe (m t))
+             -> HashMap Text t
+             -> m t
+    assemble isVariadic k = \case
+        That Nothing  ->
+            const $ throwError $ "Missing value for parameter: " ++ show k
+        That (Just f) -> \args -> do
+            scope <- currentScopes @_ @t
+            traceM $ "Deferring default argument in scope: " ++ show scope
+            fmap (wrapThunk @t @v @m) $ buildThunk $ clearScopes @t $ do
+                traceM $ "Evaluating default argument with args: "
+                    ++ show (newScope args)
+                pushScopes scope $ pushScope args $
+                    forceThunk . unwrapThunk @t @v @m =<< f
+        This x | isVariadic -> const (pure x)
+               | otherwise  ->
+                 const $ throwError $ "Unexpected parameter: " ++ show k
+        These x _ -> const (pure x)
+
+attrSetAlter
+    :: forall e t v m. (MonadEval t v m, Scoped e t m, Framed e m, MonadIO m)
+    => [Text]
+    -> HashMap Text (m v)
+    -> m v
+    -> m (HashMap Text (m v))
+attrSetAlter [] _ _ = throwError "invalid selector with no components"
+attrSetAlter (p:ps) m val = case M.lookup p m of
+    Nothing | null ps   -> go
+            | otherwise -> recurse M.empty
+    Just v  | null ps   -> go
+            | otherwise -> v >>= projectSet @t @v @m >>= \case
+                  Just s -> recurse (forceThunk . unwrapThunk <$> s)
+                  --TODO: Keep a stack of attributes we've already traversed, so
+                  --that we can report that to the user
+                  x -> throwError $ "attribute " ++ show p ++ " is not a set, but a "
+                          ++ show (void x)
+  where
+    go = return $ M.insert p val m
+
+    recurse s = attrSetAlter ps s val >>= \m' ->
+        if | M.null m' -> return m
+           | otherwise   -> do
+             scope <- currentScopes @_ @t
+             return $ M.insert p (embed scope m') m
+      where
+        embed scope m' = embedSet @t @v @m
+            =<< traverse (fmap (wrapThunk @t @v @m) . buildThunk . withScopes scope) m'
+
+evalBinds
+    :: forall e t v m. (MonadEval t v m, Scoped e t m, Framed e m, MonadIO m)
+    => Bool
+    -> Bool
+    -> [Binding (m v)]
+    -> m (HashMap Text t)
+evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
+  where
+    go :: Binding (m v) -> m [([Text], m v)]
+    go (NamedVar pathExpr finalValue) = do
+        let go = \case
+                [] -> pure ([], finalValue)
+                h : t -> evalSetterKeyName allowDynamic h >>= \case
+                    Nothing -> do
+                        s <- embedSet mempty
+                        pure ([], pure s)
+                    Just k -> do
+                        (restOfPath, v) <- go t
+                        pure (k : restOfPath, v)
+        go pathExpr >>= \case
+            -- When there are no path segments, e.g. `${null} = 5;`, we don't
+            -- bind anything
+            ([], _) -> pure []
+            result -> pure [result]
+    go (Inherit ms names) = fmap catMaybes $ forM names $ \name ->
+        evalSetterKeyName allowDynamic name >>= \case
+            Nothing -> return Nothing
+            Just key -> return $ Just ([key], do
+                mv <- case ms of
+                    Nothing -> lookupVar key
+                    Just s -> s >>= projectSet >>= \case
+                        Just s -> pushScope s (lookupVar key)
+                        x -> throwError
+                            $ "First argument to inherit should be a set, saw: "
+                            ++ show (() <$ x)
+                case mv of
+                    Nothing -> throwError $ "Inheriting unknown attribute: "
+                        ++ show (() <$ name)
+                    Just v -> forceThunk (unwrapThunk v))
+
+    buildResult :: [([Text], m v)] -> m (HashMap Text t)
+    buildResult bindings = do
+        s <- foldM insert M.empty bindings
+        scope <- currentScopes @_ @t
+        if recursive
+            then loebM (encapsulate scope <$> s)
+            else traverse (fmap wrapThunk . buildThunk . withScopes scope) s
+
+    encapsulate scope f attrs =
+        fmap wrapThunk . buildThunk . withScopes scope . pushScope attrs $ f
+
+    insert m (path, value) = attrSetAlter path m value
+
+evalSelector :: (Framed e m, MonadEval t v m, MonadIO m)
+             => Bool -> NAttrPath (m v) -> m [Text]
+evalSelector allowDynamic = mapM $ evalGetterKeyName allowDynamic
+
+evalKeyNameStatic :: (Framed e m, MonadEval t v m, MonadIO m)
+                  => NKeyName (m v) -> m Text
+evalKeyNameStatic = \case
+    StaticKey k -> pure k
+    DynamicKey _ -> throwError "dynamic attribute not allowed in this context"
+
+-- | Returns Nothing iff the key value is null
+evalKeyNameDynamicNullable :: (Framed e m, MonadEval t v m, MonadIO m)
+                           => NKeyName (m v) -> m (Maybe Text)
+evalKeyNameDynamicNullable = \case
+    StaticKey k -> pure $ Just k
+    DynamicKey k -> runAntiquoted evalString id k >>= projectText >>= \case
+        Just (Just s) -> Just <$> unwrapText s
+        Just Nothing -> return Nothing
+        bad -> throwError $ "evaluating key name: expected string, got "
+                  ++ show (void bad)
+
+evalKeyNameDynamicNotNull :: (Framed e m, MonadEval t v m, MonadIO m)
+                          => NKeyName (m v) -> m Text
+evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
+    Nothing -> throwError "value is null while a string was expected"
+    Just k -> pure k
+
+-- | Evaluate a component of an attribute path in a context where we are
+-- *binding* a value
+evalSetterKeyName :: (Framed e m, MonadEval t v m, MonadIO m)
+                  => Bool -> NKeyName (m v) -> m (Maybe Text)
+evalSetterKeyName canBeDynamic
+    | canBeDynamic = evalKeyNameDynamicNullable
+    | otherwise    = fmap Just . evalKeyNameStatic
+
+-- | Evaluate a component of an attribute path in a context where we are
+-- *retrieving* a value
+evalGetterKeyName :: (Framed e m, MonadEval t v m, MonadIO m)
+                  => Bool -> NKeyName (m v) -> m Text
+evalGetterKeyName canBeDynamic
+    | canBeDynamic = evalKeyNameDynamicNotNull
+    | otherwise    = evalKeyNameStatic
+
+evalString :: forall e t v m. (Framed e m, MonadEval t v m, MonadIO m)
+           => NString (m v) -> m v
+evalString = \case
+    Indented     parts -> fromParts parts
+    DoubleQuoted parts -> fromParts parts
+  where
+    go = runAntiquoted (wrapText @t @v @m) $ \x -> do
+        x' <- x
+        projectText @t @v @m x' >>= \case
+            Nothing         -> throwError "Value cannot be rendered as text"
+            Just Nothing    -> throwError "Value cannot be rendered as text"
+            Just (Just txt) -> return txt
+
+    fromParts parts = embedText @t @v @m . mconcat =<< mapM go parts
+
+-----
+
+tracingEvalExpr :: (Framed e m, MonadIO m)
+                => (NExprF (m v) -> m v) -> NExprLoc -> IO (m v)
+tracingEvalExpr eval =
+    flip runReaderT (0 :: Int)
+        . adiM (pure <$> eval . annotated . getCompose) psi
+  where
+    psi k v@(Fix x) = do
+        depth <- ask
+        liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' '
+            ++ show (stripAnnotation v)
+        res <- local succ $
+            fmap (withExprContext (() <$ x)) (k v)
+        liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' ' ++ "."
+        return res
+
+framedEvalExpr :: (Framed e m, MonadIO m)
+               => (NExprF (m v) -> m v) -> NExprLoc -> m v
+framedEvalExpr eval = adi (eval . annotated . getCompose) psi
+  where
+    psi k v@(Fix x) = withExprContext (() <$ x) (k v)
