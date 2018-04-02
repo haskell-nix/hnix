@@ -89,10 +89,9 @@ eval (NBinary op larg rarg) = do
             _ -> throwError unsupportedTypes
     case (lval, rval) of
         (NVConstant lc, NVConstant rc) -> case (op, lc, rc) of
-            (NEq,  _, _) ->
-                -- TODO: Refactor so that eval (NBinary ..) dispatches based
-                -- on operator first
-                valueRefBool =<< valueEq lval rval
+            -- TODO: Refactor so that eval (NBinary ..) dispatches based on
+            -- operator first
+            (NEq,  _, _) -> valueRefBool =<< valueEq lval rval
             (NNEq, _, _) -> valueRefBool . not =<< valueEq lval rval
             (NLt,  l, r) -> valueRefBool $ l <  r
             (NLte, l, r) -> valueRefBool $ l <= r
@@ -115,11 +114,14 @@ eval (NBinary op larg rarg) = do
 
         (NVSet ls, NVSet rs) -> case op of
             NUpdate -> return $ NVSet $ rs `M.union` ls
+            NEq -> valueRefBool =<< valueEq lval rval
+            NNEq -> valueRefBool . not =<< valueEq lval rval
             _ -> throwError unsupportedTypes
 
         (NVList ls, NVList rs) -> case op of
             NConcat -> return $ NVList $ ls ++ rs
             NEq -> valueRefBool =<< valueEq lval rval
+            NNEq -> valueRefBool . not =<< valueEq lval rval
             _ -> throwError unsupportedTypes
 
         (NVLiteralPath ls, NVLiteralPath rs) -> case op of
