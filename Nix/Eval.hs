@@ -26,7 +26,7 @@ import           Data.Functor.Compose
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.List (intercalate)
-import           Data.Maybe (fromMaybe)
+import           Data.Maybe (fromMaybe, catMaybes)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.These
@@ -342,22 +342,35 @@ evalBinds :: forall e m. MonadNixEval e m
 evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
   where
     go :: Binding (m (NValue m)) -> m [([Text], m (NValue m))]
-    go (NamedVar x y) =
-        sequence [liftM2 (,) (evalSelector allowDynamic x) (pure y)]
-    go (Inherit ms names) = forM names $ \name -> do
-        key <- evalKeyName allowDynamic name
-        return ([key], do
-            mv <- case ms of
-                Nothing -> lookupVar key
-                Just s -> s >>= \case
-                    NVSet s -> pushScope s (lookupVar key)
-                    x -> throwError
-                        $ "First argument to inherit should be a set, saw: "
-                        ++ show (() <$ x)
-            case mv of
-                Nothing -> throwError $ "Inheriting unknown attribute: "
-                    ++ show (() <$ name)
-                Just v -> forceThunk v)
+    go (NamedVar pathExpr finalValue) = do
+        let go = \case
+                [] -> pure ([], finalValue)
+                h : t -> evalSetterKeyName allowDynamic h >>= \case
+                    Nothing -> pure ([], pure $ NVSet mempty)
+                    Just k -> do
+                        (restOfPath, v) <- go t
+                        pure (k : restOfPath, v)
+        go pathExpr >>= \case
+            -- When there are no path segments, e.g. `${null} = 5;`, we don't
+            -- bind anything
+            ([], _) -> pure []
+            result -> pure [result]
+    go (Inherit ms names) = fmap catMaybes $ forM names $ \name -> do
+        evalSetterKeyName allowDynamic name >>= \case
+            Just key -> do
+                return $ Just ([key], do
+                    mv <- case ms of
+                        Nothing -> lookupVar key
+                        Just s -> s >>= \case
+                            NVSet s -> pushScope s (lookupVar key)
+                            x -> throwError
+                                $ "First argument to inherit should be a set, saw: "
+                                ++ show (() <$ x)
+                    case mv of
+                        Nothing -> throwError $ "Inheriting unknown attribute: "
+                            ++ show (() <$ name)
+                        Just v -> forceThunk v)
+            Nothing -> return Nothing
 
     buildResult :: [([Text], m (NValue m))] -> m (ValueSet m)
     buildResult bindings = do
@@ -387,18 +400,41 @@ evalString nstr = do
 
 evalSelector :: MonadNixEval e m
              => Bool -> NAttrPath (m (NValue m)) -> m [Text]
-evalSelector = mapM . evalKeyName
+evalSelector allowDynamic = mapM $ evalGetterKeyName allowDynamic
 
-evalKeyName :: MonadNixEval e m
-            => Bool -> NKeyName (m (NValue m)) -> m Text
-evalKeyName _ (StaticKey k) = return k
-evalKeyName dyn (DynamicKey k)
-    | dyn = runAntiquoted evalString id k >>= \case
-          NVStr s _ -> pure s
-          bad -> throwError $ "evaluating key name: expected string, got "
-                    ++ show (void bad)
-    | otherwise =
-      throwError "dynamic attribute not allowed in this context"
+evalKeyNameStatic :: MonadNixEval e m => NKeyName (m (NValue m)) -> m Text
+evalKeyNameStatic = \case
+    StaticKey k -> pure k
+    DynamicKey _ -> throwError "dynamic attribute not allowed in this context"
+
+-- | Returns Nothing iff the key value is null
+evalKeyNameDynamicNullable :: MonadNixEval e m => NKeyName (m (NValue m)) -> m (Maybe Text)
+evalKeyNameDynamicNullable = \case
+    StaticKey k -> pure $ Just k
+    DynamicKey k -> runAntiquoted evalString id k >>= \case
+        NVStr s _ -> pure $ Just s
+        NVConstant NNull -> pure Nothing
+        bad -> throwError $ "evaluating key name: expected string, got "
+                  ++ show (void bad)
+
+evalKeyNameDynamicNotNull :: MonadNixEval e m => NKeyName (m (NValue m)) -> m Text
+evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
+    Nothing -> throwError "value is null while a string was expected"
+    Just k -> pure k
+
+-- | Evaluate a component of an attribute path in a context where we are
+-- *binding* a value
+evalSetterKeyName :: MonadNixEval e m => Bool -> NKeyName (m (NValue m)) -> m (Maybe Text)
+evalSetterKeyName canBeDynamic = case canBeDynamic of
+    False -> fmap Just . evalKeyNameStatic
+    True -> evalKeyNameDynamicNullable
+
+-- | Evaluate a component of an attribute path in a context where we are
+-- *retrieving* a value
+evalGetterKeyName :: MonadNixEval e m => Bool -> NKeyName (m (NValue m)) -> m Text
+evalGetterKeyName canBeDynamic = case canBeDynamic of
+    False -> evalKeyNameStatic
+    True -> evalKeyNameDynamicNotNull
 
 contextualExprEval :: MonadNixEval e m => NExprLoc -> m (NValue m)
 contextualExprEval = adi (eval . annotated . getCompose) psi
