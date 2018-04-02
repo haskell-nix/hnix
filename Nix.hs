@@ -27,7 +27,7 @@ evalTopLevelExpr mdir expr = do
         Nothing -> contextualExprEval expr
         Just dir -> do
             traceM $ "Setting __cwd = " ++ show dir
-            ref <- valueRef $ NVLiteralPath dir
+            ref <- valueThunk $ NVLiteralPath dir
             pushScope (M.singleton "__cwd" ref) (contextualExprEval expr)
 
 evalTopLevelExprIO :: Maybe FilePath -> NExprLoc -> IO (NValueNF (Lazy IO))
@@ -47,7 +47,7 @@ tracingEvalTopLevelExprIO mdir expr = do
             runLazyIO (normalForm =<< (`pushScopes` traced) =<< baseEnv)
         Just dir -> do
             traceM $ "Setting __cwd = " ++ show dir
-            ref <- runLazyIO (valueRef $ NVLiteralPath dir)
+            ref <- runLazyIO (valueThunk $ NVLiteralPath dir)
             let m = M.singleton "__cwd" ref
             runLazyIO (baseEnv >>= (`pushScopes` pushScope m traced)
                                  >>= normalForm)

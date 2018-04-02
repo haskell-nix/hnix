@@ -17,20 +17,15 @@ import           Control.Monad
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
--- import           Data.Align
 import           Data.Align.Key
 import           Data.Fix
-import           Data.Functor.Identity
 import           Data.Functor.Compose
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.IORef
 import           Data.List
 import           Data.Maybe
--- import           Data.Set (Set)
--- import qualified Data.Set as Set
 import           Data.Text (Text)
--- import qualified Data.Text as Text
 import           Data.These
 import           Nix.Atoms
 import           Nix.Expr
@@ -38,7 +33,6 @@ import           Nix.Scope
 import           Nix.Stack
 import           Nix.StringOperations (runAntiquoted)
 import           Nix.Utils
-import           Text.Show.Deriving
 
 data TAtom
   = TInt
@@ -88,11 +82,6 @@ type Symbolic m = Fix (Compose IORef (Compose NSymbolicF (NTypeF m)))
 
 everyPossible :: MonadIO m => m (Symbolic m)
 everyPossible = Fix . Compose <$> liftIO (newIORef (Compose NAny))
-
-isEmpty :: MonadIO m => Symbolic m -> m Bool
-isEmpty (Fix (Compose v)) = liftIO (readIORef v) <&> \case
-    Compose (NMany []) -> True
-    _ -> False
 
 mkSymbolic :: MonadIO m => [NTypeF m (Symbolic m)] -> m (Symbolic m)
 mkSymbolic xs = do
@@ -209,8 +198,9 @@ lint :: forall e m. MonadNixLint e m
      => NExprF (m (Symbolic m)) -> m (Symbolic m)
 
 lint (NSym var) = do
-    traceM "NSym"
+    traceM $ "NSym: " ++ show var
     mres <- lookupVar var
+    traceM $ "NSym: " ++ show var ++ "...done"
     case mres of
         Nothing -> throwError $ "Undefined variable: " ++ show var
         Just v  -> return v
@@ -351,9 +341,9 @@ lintApp context fun arg = fun >>= unpackSymbolic >>= \case
     NMany xs -> do
         ys <- forM xs $ \case
             TFunction params f -> do
-                traceM $ "Building arguments..."
+                traceM "Building arguments..."
                 args <- buildArgument params =<< arg
-                traceM $ "Building arguments...done"
+                traceM "Building arguments...done"
                 traceM $ "Linting function application with args: "
                     ++ show (newScope args)
                 clearScopes @(Symbolic m) (pushScope args f)
@@ -396,7 +386,9 @@ buildArgument params arg = case params of
             const $ throwError $ "Missing value for parameter: " ++ show k
         That (Just f) -> \args -> do
             traceM "buildArgument..4"
-            pushScope args f
+            res <- pushScope args f
+            traceM "buildArgument..5"
+            return res
         This x | isVariadic -> const (pure x)
                | otherwise  ->
                  const $ throwError $ "Unexpected parameter: " ++ show k

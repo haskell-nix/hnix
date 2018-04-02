@@ -8,6 +8,7 @@
 module Nix.Monad where
 
 import Control.Monad.Fix
+import Control.Monad.IO.Class
 import Data.Fix
 import Data.HashMap.Lazy (HashMap)
 import Data.Monoid (appEndo)
@@ -16,7 +17,19 @@ import Data.Typeable (Typeable)
 import GHC.Generics
 import Nix.Atoms
 import Nix.Expr.Types
+import Nix.Thunk
 import Nix.Utils
+
+newtype NThunk m = NThunk { getNThunk :: Thunk m (NValue m) }
+
+thunk :: MonadIO m => m (NValue m) -> m (NThunk m)
+thunk = fmap NThunk . buildThunk
+
+force :: MonadIO m => NThunk m -> m (NValue m)
+force = forceThunk . getNThunk
+
+valueThunk :: MonadIO m => NValue m -> m (NThunk m)
+valueThunk = fmap NThunk . valueRef
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.
@@ -99,12 +112,6 @@ builtin3 name f =
 newtype StorePath = StorePath { unStorePath :: FilePath }
 
 class MonadFix m => MonadNix m where
-    data NThunk m :: *
-
-    valueRef   :: NValue m -> m (NThunk m)
-    buildThunk :: m (NValue m) -> m (NThunk m)
-    forceThunk :: NThunk m -> m (NValue m)
-
     -- | Import a path into the nix store, and return the resulting path
     addPath :: FilePath -> m StorePath
 

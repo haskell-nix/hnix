@@ -27,6 +27,7 @@ Library
     Nix.Scope
     Nix.Stack
     Nix.Eval
+    Nix.Thunk
     Nix.Lint
     Nix.Monad
     Nix.Monad.Instance

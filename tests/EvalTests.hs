@@ -82,19 +82,12 @@ instance (Show r, Eq r) => Eq (NValueF m r) where
 
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
 constantEqual a b = do
-    putStrLn "constantEqual..1"
-    asym <- lintExprIO a
-    putStrLn "constantEqual..2"
-    putStrLn =<< runLintIO (renderSymbolic asym)
-    putStrLn "constantEqual..3"
+    -- asym <- lintExprIO a
+    -- putStrLn =<< runLintIO (renderSymbolic asym)
     a' <- tracingEvalTopLevelExprIO Nothing a
-    putStrLn "constantEqual..4"
-    bsym <- lintExprIO b
-    putStrLn "constantEqual..5"
-    putStrLn =<< runLintIO (renderSymbolic bsym)
-    putStrLn "constantEqual..6"
+    -- bsym <- lintExprIO b
+    -- putStrLn =<< runLintIO (renderSymbolic bsym)
     b' <- tracingEvalTopLevelExprIO Nothing b
-    putStrLn "constantEqual..7"
     assertEqual "" a' b'
 
 constantEqualStr :: String -> String -> Assertion
