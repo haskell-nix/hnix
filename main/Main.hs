@@ -55,11 +55,11 @@ main = do
     (eres, mpath) <- case expression opts of
         Just s -> return (parseNixStringLoc s, Nothing)
         Nothing  -> case filePath opts of
-            Nothing   -> (, Nothing) . parseNixStringLoc <$> System.IO.getContents
-            Just "-"  -> (, Nothing) . parseNixStringLoc <$> System.IO.getContents
+            Nothing   -> (, Nothing) . parseNixStringLoc <$> getContents
+            Just "-"  -> (, Nothing) . parseNixStringLoc <$> getContents
             Just path -> (, Just path) <$> parseNixFileLoc path
 
-    print . printNix =<< Nix.eval [nix|1 + 3|]
+    -- print . printNix =<< Nix.eval [nix|1 + 3|]
 
     case eres of
         Failure err -> hPutStrLn stderr $ "Parse failed: " ++ show err
