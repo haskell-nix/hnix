@@ -48,6 +48,9 @@ case_function_ellipsis =
 case_function_default_value_in_atpattern =
     constantEqualStr "2" "({a ? 2}@attrs:attrs.a) {}"
 
+case_function_arg_shadowing =
+    constantEqualStr "6" "(y: y: x: x: x + y) 1 2 3 4"
+
 case_function_recursive_args =
     constantEqualStr "2" "({ x ? 1, y ? x * 3}: y - x) {}"
 
