@@ -15,6 +15,7 @@
 
 module Nix.Eval where
 
+import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
@@ -556,8 +557,8 @@ evalString = \case
 
 -----
 
-tracingEvalExpr :: (Framed e m, MonadIO m)
-                => (NExprF (m v) -> m v) -> NExprLoc -> IO (m v)
+tracingEvalExpr :: (Framed e m, MonadIO m, MonadIO n, Alternative n)
+                => (NExprF (m v) -> m v) -> NExprLoc -> n (m v)
 tracingEvalExpr eval =
     flip runReaderT (0 :: Int)
         . adiM (pure <$> eval . annotated . getCompose) psi
