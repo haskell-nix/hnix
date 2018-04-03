@@ -61,22 +61,26 @@ eval (NSym var) = do
         Just v -> force v
 
 eval (NConstant x)    = return $ NVConstant x
-eval (NStr str)       = evalString str
-eval (NLiteralPath p) = NVLiteralPath <$> makeAbsolutePath p
+eval (NStr str)       = traceM "NStr" >> evalString str
+eval (NLiteralPath p) =
+    traceM "NLiteralPath" >> NVLiteralPath <$> makeAbsolutePath p
 eval (NEnvPath p)     = return $ NVEnvPath p
 
-eval (NUnary op arg) = arg >>= \case
-    NVConstant c -> case (op, c) of
-        (NNeg, NInt   i) -> return $ NVConstant $ NInt   (-i)
-        (NNeg, NFloat f) -> return $ NVConstant $ NFloat (-f)
-        (NNot, NBool  b) -> return $ NVConstant $ NBool  (not b)
-        _ -> throwError $ "unsupported argument type for unary operator "
-                 ++ show op
-    _ -> throwError "argument to unary operator must evaluate to an atomic type"
+eval (NUnary op arg) = do
+    traceM "NUnary"
+    arg >>= \case
+        NVConstant c -> case (op, c) of
+            (NNeg, NInt   i) -> return $ NVConstant $ NInt   (-i)
+            (NNeg, NFloat f) -> return $ NVConstant $ NFloat (-f)
+            (NNot, NBool  b) -> return $ NVConstant $ NBool  (not b)
+            _ -> throwError $ "unsupported argument type for unary operator "
+                     ++ show op
+        _ -> throwError $ "argument to unary operator"
+                ++ " must evaluate to an atomic type"
 
 eval (NBinary op larg rarg) = do
-    lval <- larg
-    rval <- rarg
+    lval <- traceM "NBinary:left" >> larg
+    rval <- traceM "NBinary:right" >> rarg
     let unsupportedTypes =
             "unsupported argument types for binary operator "
                 ++ show (() <$ lval, op, () <$ rval)
@@ -148,6 +152,7 @@ eval (NBinary op larg rarg) = do
         _ -> throwError unsupportedTypes
 
 eval (NSelect aset attr alternative) = do
+    traceM "NSelect"
     aset' <- aset
     ks    <- evalSelector True attr
     mres  <- extract aset' ks
@@ -167,15 +172,20 @@ eval (NSelect aset attr alternative) = do
     extract _ (_:_) = return Nothing
     extract v [] = return $ Just v
 
-eval (NHasAttr aset attr) = aset >>= \case
-    NVSet s -> evalSelector True attr >>= \case
-        [keyName] ->
-            return $ NVConstant $ NBool $ keyName `M.member` s
-        _ -> throwError $ "attr name argument to hasAttr"
-                ++ " is not a single-part name"
-    _ -> throwError "argument to hasAttr has wrong type"
+eval (NHasAttr aset attr) = do
+    traceM "NHasAttr"
+    aset >>= \case
+        NVSet s -> do
+            traceM "NHasAttr..2"
+            evalSelector True attr >>= \case
+                [keyName] ->
+                    return $ NVConstant $ NBool $ keyName `M.member` s
+                _ -> throwError $ "attr name argument to hasAttr"
+                        ++ " is not a single-part name"
+        _ -> throwError "argument to hasAttr has wrong type"
 
 eval (NList l) = do
+    traceM "NList"
     scope <- currentScopes
     NVList <$> for l (thunk . withScopes @(NThunk m) scope)
 
@@ -197,25 +207,33 @@ eval (NLet binds e) = do
     traceM $ "Let..2: s = " ++ show (() <$ s)
     pushScope s e
 
-eval (NIf cond t f) = cond >>= \case
-    NVConstant (NBool True) -> t
-    NVConstant (NBool False) -> f
-    _ -> throwError "condition must be a boolean"
+eval (NIf cond t f) = do
+    traceM "NIf"
+    cond >>= \case
+        NVConstant (NBool True) -> t
+        NVConstant (NBool False) -> f
+        _ -> throwError "condition must be a boolean"
 
 eval (NWith scope body) = do
+    traceM "NWith"
     s <- thunk scope
     pushWeakScope s ?? body $ force >=> \case
         NVSet s -> return s
         _ -> throwError "scope must be a set in with statement"
 
-eval (NAssert cond body) = cond >>= \case
-    NVConstant (NBool True) -> body
-    NVConstant (NBool False) -> throwError "assertion failed"
-    _ -> throwError "assertion condition must be boolean"
+eval (NAssert cond body) = do
+    traceM "NAssert"
+    cond >>= \case
+        NVConstant (NBool True) -> body
+        NVConstant (NBool False) -> throwError "assertion failed"
+        _ -> throwError "assertion condition must be boolean"
 
-eval (NApp fun arg) = evalApp fun arg
+eval (NApp fun arg) = do
+    traceM "NApp"
+    evalApp fun arg
 
 eval (NAbs params body) = do
+    traceM "NAbs"
     -- It is the environment at the definition site, not the call site, that
     -- needs to be used when evaluating the body and default arguments, hence
     -- we defer here so the present scope is restored when the parameters and
@@ -231,14 +249,17 @@ evalApp :: forall e m. (MonadNixEval e m, MonadEval (NThunk m) (NValue m) m)
         => m (NValue m) -> m (NValue m) -> m (NValue m)
 evalApp fun arg = fun >>= \case
     NVFunction params f -> do
+        traceM "evalApp:NVFunction"
         args <- buildArgument params =<< thunk arg
         traceM $ "Evaluating function application with args: "
             ++ show (newScope args)
         clearScopes @(NThunk m) (pushScope args (force =<< f))
-    NVBuiltin _ f -> f =<< thunk arg
-    NVSet m
-        | Just f <- M.lookup "__functor" m
-            -> force f `evalApp` fun `evalApp` arg
+    NVBuiltin name f -> do
+        traceM $ "evalApp:NVBuiltin " ++ name
+        f =<< valueThunk =<< arg
+    NVSet m | Just f <- M.lookup "__functor" m -> do
+        traceM "evalApp:__functor"
+        force f `evalApp` fun `evalApp` arg
     x -> throwError $ "Attempt to call non-function: " ++ show (() <$ x)
 
 -----
@@ -352,8 +373,9 @@ class (Monoid (MText m), MonadFix m) => MonadEval t v m | m -> t, m -> v where
     embedText   :: MText m  -> m v
     projectText :: v -> m (Maybe (Maybe (MText m)))
 
-buildArgument :: forall e t v m. (MonadEval t v m, Scoped e t m, Framed e m, MonadIO m)
-              => Params (m t) -> t -> m (HashMap Text t)
+buildArgument
+    :: forall e t v m. (MonadEval t v m, Scoped e t m, Framed e m, MonadIO m)
+    => Params (m t) -> t -> m (HashMap Text t)
 buildArgument params arg = case params of
     Param name -> return $ M.singleton name arg
     ParamSet s isVariadic m ->
@@ -399,15 +421,17 @@ attrSetAlter
     -> m (HashMap Text (m v))
 attrSetAlter [] _ _ = throwError "invalid selector with no components"
 attrSetAlter (p:ps) m val = case M.lookup p m of
-    Nothing | null ps   -> go
-            | otherwise -> recurse M.empty
-    Just v  | null ps   -> go
-            | otherwise -> v >>= projectSet @t @v @m >>= \case
-                  Just s -> recurse (forceThunk . unwrapThunk <$> s)
-                  --TODO: Keep a stack of attributes we've already traversed, so
-                  --that we can report that to the user
-                  x -> throwError $ "attribute " ++ show p ++ " is not a set, but a "
-                          ++ show (void x)
+    Nothing
+        | null ps   -> go
+        | otherwise -> recurse M.empty
+    Just v
+        | null ps   -> go
+        | otherwise -> v >>= projectSet @t @v @m >>= \case
+              Just s -> recurse (forceThunk . unwrapThunk <$> s)
+              -- TODO: Keep a stack of attributes we've already traversed, so
+              -- that we can report that to the user
+              x -> throwError $ "attribute " ++ show p
+                      ++ " is not a set, but a " ++ show (void x)
   where
     go = return $ M.insert p val m
 
@@ -418,7 +442,8 @@ attrSetAlter (p:ps) m val = case M.lookup p m of
              return $ M.insert p (embed scope m') m
       where
         embed scope m' = embedSet @t @v @m
-            =<< traverse (fmap (wrapThunk @t @v @m) . buildThunk . withScopes scope) m'
+            =<< traverse (fmap (wrapThunk @t @v @m)
+                              . buildThunk . withScopes scope) m'
 
 evalBinds
     :: forall e t v m. (MonadEval t v m, Scoped e t m, Framed e m, MonadIO m)
@@ -541,6 +566,7 @@ tracingEvalExpr eval =
   where
     psi k v@(Fix x) = do
         depth <- ask
+        guard (depth < 200)
         liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' '
             ++ show (stripAnnotation v)
         res <- local succ $
