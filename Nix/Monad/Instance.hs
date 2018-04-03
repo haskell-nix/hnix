@@ -41,6 +41,7 @@ import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
 import           System.FilePath
 import           System.Process (readProcessWithExitCode)
+import           System.Posix.Files
 
 data Context m v = Context
     { scopes :: Scopes m v
@@ -156,6 +157,9 @@ instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
                 Nothing -> NVStr "" mempty
                 Just v  -> NVStr (Text.pack v) mempty
         p -> error $ "Unexpected argument to getEnv: " ++ show (void p)
+
+    listDirectory         = liftIO . System.Directory.listDirectory
+    getSymbolicLinkStatus = liftIO . System.Posix.Files.getSymbolicLinkStatus
 
 runLazyM :: MonadIO m => Lazy m a -> m a
 runLazyM = flip runReaderT (Context emptyScopes []) . runLazy

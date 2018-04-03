@@ -23,7 +23,6 @@ import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Crypto.Hash.SHA512 as SHA512
 import           Data.Align (alignWith)
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
 import           Data.ByteString.Base16 as Base16
 import           Data.Char (isDigit)
 import           Data.Foldable (foldlM)
@@ -35,7 +34,6 @@ import           Data.Semigroup
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Text.Encoding
-import qualified Data.Text.IO as Text
 import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Lazy.Builder as Builder
 import           Data.These (fromThese)
@@ -47,8 +45,7 @@ import           Nix.Monad
 import           Nix.Scope
 import           Nix.Stack
 import           Nix.Thunk
-import           System.Directory (listDirectory)
-import           System.FilePath.Posix
+import           System.FilePath
 import           System.Posix.Files
 
 type MonadBuiltins e m =
@@ -511,7 +508,7 @@ absolutePathFromValue :: MonadBuiltins e m => NValue m -> m FilePath
 absolutePathFromValue = \case
     NVStr pathText _ -> do
         let path = Text.unpack pathText
-        when (not $ isAbsolute path) $
+        unless (isAbsolute path) $
             throwError $ "string " ++ show path ++ " doesn't represent an absolute path"
         pure path
     NVLiteralPath path -> pure path
@@ -539,18 +536,18 @@ instance ToNix FileType where
         FileType_Unknown -> "unknown"
 
 readDir_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
-readDir_ pathThunk = undefined -- do
-    -- path <- absolutePathFromValue =<< force pathThunk
-    -- items <- liftIO $ listDirectory path
-    -- itemsWithTypes <- liftIO $ forM items $ \item -> do
-    --     s <- getSymbolicLinkStatus $ path </> item
-    --     let t = if
-    --             | isRegularFile s -> FileType_Regular
-    --             | isDirectory s -> FileType_Directory
-    --             | isSymbolicLink s -> FileType_Symlink
-    --             | otherwise -> FileType_Unknown
-    --     pure (Text.pack item, t)
-    -- toValue $ M.fromList itemsWithTypes
+readDir_ pathThunk = do
+    path <- absolutePathFromValue =<< force pathThunk
+    items <- listDirectory path
+    itemsWithTypes <- forM items $ \item -> do
+        s <- Nix.Monad.getSymbolicLinkStatus $ path </> item
+        let t = if
+                | isRegularFile s -> FileType_Regular
+                | isDirectory s -> FileType_Directory
+                | isSymbolicLink s -> FileType_Symlink
+                | otherwise -> FileType_Unknown
+        pure (Text.pack item, t)
+    toValue $ M.fromList itemsWithTypes
 
 newtype Prim m a = Prim { runPrim :: m a }
 

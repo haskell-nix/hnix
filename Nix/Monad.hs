@@ -16,9 +16,10 @@ import Data.Typeable (Typeable)
 import GHC.Generics
 import Nix.Atoms
 import Nix.Expr.Types
+import Nix.Scope
 import Nix.Thunk
 import Nix.Utils
-import Nix.Scope
+import System.Posix.Files
 
 newtype NThunk m = NThunk (Thunk m (NValue m))
 
@@ -120,3 +121,6 @@ class Monad m => MonadNix m where
 
     importFile :: NThunk m -> m (NValue m)
     getEnvVar :: NThunk m -> m (NValue m)
+
+    listDirectory :: FilePath -> m [FilePath]
+    getSymbolicLinkStatus :: FilePath -> m FileStatus
