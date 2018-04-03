@@ -39,15 +39,15 @@ import           System.Exit (ExitCode (ExitSuccess))
 import           System.FilePath
 import           System.Process (readProcessWithExitCode)
 
-data Context v = Context
-    { scopes :: Scopes v
+data Context m v = Context
+    { scopes :: Scopes m v
     , frames :: Frames
     }
 
 newtype Lazy m a = Lazy
-    { runLazy :: ReaderT (Context (NThunk (Lazy m))) m a }
+    { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m))) m a }
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
-              MonadReader (Context (NThunk (Lazy m))))
+              MonadReader (Context (Lazy m) (NThunk (Lazy m))))
 
 instance (MonadFix m, MonadNix (Lazy m), MonadIO m)
       => MonadEval (NThunk (Lazy m)) (NValue (Lazy m)) (Lazy m) where
@@ -104,17 +104,18 @@ removeDotDotIndirections = intercalate "/" . go [] . splitOn "/"
           go (_:s) ("..":rest) = go s rest
           go s (this:rest) = go (this:s) rest
 
-instance Has (Context v) (Scopes v) where
+instance Has (Context m v) (Scopes m v) where
     hasLens f (Context x y) = flip Context y <$> f x
 
-instance Has (Context v) Frames where
+instance Has (Context m v) Frames where
     hasLens f (Context x y) = Context x <$> f y
 
 instance MonadNixEnv (Lazy IO) where
     -- jww (2018-03-29): Cache which files have been read in.
     importFile = forceThunk . getNThunk >=> \case
         NVLiteralPath path -> do
-            mres <- lookupVar @(Context (NThunk (Lazy IO))) "__cur_file"
+            mres <- lookupVar @(Context (Lazy IO) (NThunk (Lazy IO)))
+                             "__cur_file"
             path' <- case mres of
                 Nothing  -> do
                     traceM "No known current directory"

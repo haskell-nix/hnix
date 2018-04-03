@@ -1,6 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -14,59 +13,68 @@ import qualified Data.HashMap.Lazy as M
 import           Data.Text (Text)
 import           Nix.Utils
 
-data Scope a = Scope
-    { _scopeMap  :: HashMap Text a
-    , scopeWeak :: Bool
-    }
-    deriving Functor
+data Scope m a
+    = Scope (HashMap Text a)
+    | WeakScope a (a -> m (HashMap Text a))
+      -- ^ Weak scopes (used by 'with') are delayed until first needed.
 
-instance Show (Scope a) where
-    show (Scope xs _) = show $ M.keys xs
+instance Show (Scope m a) where
+    show (Scope m) = show (M.keys m)
+    show (WeakScope _ _) = "<weak scope>"
 
-newScope :: HashMap Text a -> Scope a
-newScope m = Scope m False
+newScope :: HashMap Text a -> Scope m a
+newScope = Scope
 
-newWeakScope :: HashMap Text a -> Scope a
-newWeakScope m = Scope m True
+newWeakScope :: a -> (a -> m (HashMap Text a)) -> Scope m a
+newWeakScope = WeakScope
 
-scopeLookup :: Text -> [Scope v] -> Maybe v
-scopeLookup key = para go Nothing
+isWeakScope :: Scope m a -> Bool
+isWeakScope (WeakScope _ _) = True
+isWeakScope _ = False
+
+scopeLookup :: MonadIO m => Text -> [Scope m v] -> m (Maybe v)
+scopeLookup key = paraM go Nothing
   where
-    go (Scope m False) _  rest = M.lookup key m <|> rest
-    go (Scope m True)  ms rest =
+    go (Scope m) _ rest = return $ M.lookup key m <|> rest
+    go (WeakScope m f) ms rest = do
         -- If the symbol lookup is in a weak scope, first see if there are any
         -- matching symbols from the *non-weak* scopes after this one. If so,
         -- prefer that, otherwise perform the lookup here. This way, if there
         -- are several weaks scopes in a row, followed by non-weak scopes,
         -- we'll first prefer the symbol from the non-weak scopes, and then
         -- prefer it from the first weak scope that matched.
-        scopeLookup key (filter (not . scopeWeak) ms)
-            <|> M.lookup key m <|> rest
+        mres <- scopeLookup key (filter (not . isWeakScope) ms)
+        case mres of
+            Nothing ->
+                f m >>= \m' ->
+                    return $ M.lookup key m' <|> rest
+            _ -> return mres
 
-type Scopes v = [Scope v]
+type Scopes m v = [Scope m v]
 
-type Scoped e v m = (MonadReader e m, Has e (Scopes v))
+type Scoped e v m = (MonadReader e m, Has e (Scopes m v))
 
-emptyScopes :: Scopes v
+emptyScopes :: Scopes m v
 emptyScopes = []
 
-currentScopes :: Scoped e v m => m (Scopes v)
+currentScopes :: Scoped e v m => m (Scopes m v)
 currentScopes = asks (view hasLens)
 
 clearScopes :: forall v m e r. Scoped e v m => m r -> m r
-clearScopes = local (set hasLens ([] :: [Scope v]))
+clearScopes = local (set hasLens ([] :: [Scope m v]))
 
 pushScope :: forall v m e r. Scoped e v m => HashMap Text v -> m r -> m r
-pushScope s = local (over hasLens (Scope s False :))
+pushScope s = local (over hasLens (Scope @m s :))
 
-pushWeakScope :: Scoped e v m => HashMap Text v -> m r -> m r
-pushWeakScope s = local (over hasLens (Scope s True :))
+pushWeakScope :: forall v m e r. Scoped e v m
+              => v -> (v -> m (HashMap Text v)) -> m r -> m r
+pushWeakScope s f = local (over hasLens (WeakScope s f :))
 
-pushScopes :: Scoped e v m => Scopes v -> m r -> m r
+pushScopes :: Scoped e v m => Scopes m v -> m r -> m r
 pushScopes s = local (over hasLens (s ++))
 
-lookupVar :: Scoped e v m => Text -> m (Maybe v)
-lookupVar k = asks (scopeLookup k . view hasLens)
+lookupVar :: forall e v m. (Scoped e v m, MonadIO m) => Text -> m (Maybe v)
+lookupVar k = join $ asks (scopeLookup @m k . view hasLens)
 
-withScopes :: forall v m e a. Scoped e v m => Scopes v -> m a -> m a
+withScopes :: forall v m e a. Scoped e v m => Scopes m v -> m a -> m a
 withScopes scope = clearScopes @v . pushScopes scope

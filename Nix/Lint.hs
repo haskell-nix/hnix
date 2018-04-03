@@ -332,10 +332,12 @@ lint e@(NIf cond t f) = do
     _ <- join $ unify (void e) <$> cond <*> mkSymbolic [TConstant [TBool]]
     join $ unify (void e) <$> t <*> f
 
-lint (NWith scope body) = scope >>= unpackSymbolic >>= \case
-    NMany [TSet (Just s')] -> pushWeakScope s' body
-    NMany [TSet Nothing] -> error "with unknown set"
-    _ -> throwError "scope must be a set in with statement"
+lint (NWith scope body) = do
+    s <- sthunk scope
+    flip (pushWeakScope s) body $ sforce >=> unpackSymbolic >=> \case
+        NMany [TSet (Just s')] -> return s'
+        NMany [TSet Nothing] -> error "with unknown set"
+        _ -> throwError "scope must be a set in with statement"
 
 lint e@(NAssert cond body) = do
     _ <- join $ unify (void e) <$> cond <*> mkSymbolic [TConstant [TBool]]

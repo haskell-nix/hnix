@@ -56,9 +56,9 @@ tracingEvalTopLevelExprIO mpath expr = do
                                  >>= normalForm)
 
 newtype Lint m a = Lint
-    { runLint :: ReaderT (Context (SThunk (Lint m))) m a }
+    { runLint :: ReaderT (Context (Lint m) (SThunk (Lint m))) m a }
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
-              MonadReader (Context (SThunk (Lint m))))
+              MonadReader (Context (Lint m) (SThunk (Lint m))))
 
 instance (MonadFix m, MonadIO m)
       => MonadEval (SThunk (Lint m)) (Symbolic (Lint m)) (Lint m) where
@@ -81,8 +81,8 @@ instance (MonadFix m, MonadIO m)
 runLintIO :: Lint IO a -> IO a
 runLintIO = flip runReaderT (Context emptyScopes []) . runLint
 
-symbolicBaseEnv :: Monad m => m (Scopes (SThunk m))
-symbolicBaseEnv = return [Scope M.empty False]
+symbolicBaseEnv :: Monad m => m (Scopes m (SThunk m))
+symbolicBaseEnv = return []     -- jww (2018-04-02): TODO
 
 lintExprIO :: NExprLoc -> IO (Symbolic (Lint IO))
 lintExprIO expr =

@@ -42,6 +42,11 @@ para f base = h where
     h []     = base
     h (x:xs) = f x xs (h xs)
 
+paraM :: Monad m => (a -> [a] -> b -> m b) -> b -> [a] -> m b
+paraM f base = h where
+    h []     = return base
+    h (x:xs) = f x xs =<< h xs
+
 -- | adi is Abstracting Definitional Interpreters:
 --
 --     https://arxiv.org/abs/1707.04755

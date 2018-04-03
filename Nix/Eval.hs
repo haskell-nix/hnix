@@ -197,12 +197,14 @@ eval (NIf cond t f) = cond >>= \case
     NVConstant (NBool False) -> f
     _ -> throwError "condition must be a boolean"
 
-eval (NWith scope e) = scope >>= \case
-    NVSet s -> pushWeakScope s e
-    _ -> throwError "scope must be a set in with statement"
+eval (NWith scope body) = do
+    s <- thunk scope
+    flip (pushWeakScope s) body $ force >=> \case
+        NVSet s -> return s
+        _ -> throwError "scope must be a set in with statement"
 
-eval (NAssert cond e) = cond >>= \case
-    NVConstant (NBool True) -> e
+eval (NAssert cond body) = cond >>= \case
+    NVConstant (NBool True) -> body
     NVConstant (NBool False) -> throwError "assertion failed"
     _ -> throwError "assertion condition must be boolean"
 
