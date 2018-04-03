@@ -22,6 +22,8 @@ import GHC.Generics
 import Nix.Atoms
 import Text.Show.Deriving
 
+type VarName = Text
+
 -- | The main nix expression type. This is polymorphic so that it can be made
 -- a functor, which allows us to traverse expressions and map functions over
 -- them. The actual 'NExpr' type is a fixed point of this functor, defined
@@ -31,7 +33,7 @@ data NExprF r
   -- ^ Constants: ints, bools, URIs, and null.
   | NStr !(NString r)
   -- ^ A string, with interpolated expressions.
-  | NSym !Text
+  | NSym !VarName
   -- ^ A variable. For example, in the expression @f a@, @f@ is represented
   -- as @NSym "f"@ and @a@ as @NSym "a"@.
   | NList ![r]
@@ -93,16 +95,16 @@ data Binding r
 -- | @Params@ represents all the ways the formal parameters to a
 -- function can be represented.
 data Params r
-  = Param !Text
+  = Param !VarName
   -- ^ For functions with a single named argument, such as @x: x + 1@.
-  | ParamSet !(ParamSet r) !Bool !(Maybe Text)
+  | ParamSet !(ParamSet r) !Bool !(Maybe VarName)
   -- ^ Explicit parameters (argument must be a set). Might specify a name to
   -- bind to the set in the function body. The bool indicates whether it is
   -- variadic or not.
   deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show,
             Foldable, Traversable)
 
-type ParamSet r = HashMap Text (Maybe r)
+type ParamSet r = HashMap VarName (Maybe r)
 
 instance IsString (Params r) where
   fromString = Param . fromString
@@ -150,7 +152,7 @@ instance IsString (NString r) where
 -- parser still considers it a 'DynamicKey' for simplicity.
 data NKeyName r
   = DynamicKey !(Antiquoted (NString r) r)
-  | StaticKey !Text
+  | StaticKey !VarName
   deriving (Eq, Ord, Generic, Typeable, Data, Show)
 
 -- | Most key names are just static text, so this instance is convenient.
@@ -215,7 +217,7 @@ data NBinaryOp
   deriving (Eq, Ord, Generic, Typeable, Data, Show)
 
 -- | Get the name out of the parameter (there might be none).
-paramName :: Params r -> Maybe Text
+paramName :: Params r -> Maybe VarName
 paramName (Param n) = Just n
 paramName (ParamSet _ _ n) = n
 
