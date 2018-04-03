@@ -30,7 +30,7 @@ force :: MonadVar m => NThunk m -> m (NValue m)
 force = forceThunk . coerce
 
 valueThunk :: MonadVar m => NValue m -> m (NThunk m)
-valueThunk = fmap NThunk . valueRef
+valueThunk = fmap coerce . valueRef
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.
