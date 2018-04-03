@@ -420,7 +420,7 @@ isList = force >=> \case
 
 isFunction :: MonadBuiltins e m => NThunk m -> m (NValue m)
 isFunction = force >=> \case
-    NVFunction _ _ -> toValue True
+    NVClosure {} -> toValue True
     _ -> toValue False
 
 isString :: MonadBuiltins e m => NThunk m -> m (NValue m)

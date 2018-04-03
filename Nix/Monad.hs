@@ -20,6 +20,7 @@ import Nix.Atoms
 import Nix.Expr.Types
 import Nix.Thunk
 import Nix.Utils
+import Nix.Scope
 
 newtype NThunk m = NThunk (Thunk m (NValue m))
 
@@ -41,7 +42,7 @@ data NValueF m r
     | NVStr Text (DList Text)
     | NVList [r]
     | NVSet (HashMap Text r)
-    | NVFunction (Params (m r)) (m r)
+    | NVClosure (Scopes m r) (Params (m r)) (m r)
       -- ^ A function is a closed set of parameters representing the "call
       --   signature", used at application time to check the type of arguments
       --   passed to the function. Since it supports default values which may
@@ -78,7 +79,7 @@ instance Show f => Show (NValueF m f) where
       go (NVStr text context) = showsCon2 "NVStr"      text (appEndo context [])
       go (NVList     list)    = showsCon1 "NVList"     list
       go (NVSet     attrs)    = showsCon1 "NVSet"      attrs
-      go (NVFunction r _)     = showsCon1 "NVFunction" (() <$ r)
+      go (NVClosure s r _)    = showsCon2 "NVClosure"  s (() <$ r)
       go (NVLiteralPath p)    = showsCon1 "NVLiteralPath" p
       go (NVEnvPath p)        = showsCon1 "NVEnvPath" p
       go (NVBuiltin name _)   = showsCon1 "NVBuiltin" name

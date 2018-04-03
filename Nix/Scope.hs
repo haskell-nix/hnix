@@ -1,5 +1,8 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -15,28 +18,29 @@ import           Nix.Utils
 
 data Scope m a
     = Scope (HashMap Text a)
-    | WeakScope a (a -> m (HashMap Text a))
+    | WeakScope (m (HashMap Text a))
       -- ^ Weak scopes (used by 'with') are delayed until first needed.
+    deriving (Functor, Foldable, Traversable)
 
 instance Show (Scope m a) where
     show (Scope m) = show (M.keys m)
-    show (WeakScope _ _) = "<weak scope>"
+    show (WeakScope _) = "<weak scope>"
 
 newScope :: HashMap Text a -> Scope m a
 newScope = Scope
 
-newWeakScope :: a -> (a -> m (HashMap Text a)) -> Scope m a
+newWeakScope :: m (HashMap Text a) -> Scope m a
 newWeakScope = WeakScope
 
 isWeakScope :: Scope m a -> Bool
-isWeakScope (WeakScope _ _) = True
+isWeakScope (WeakScope _) = True
 isWeakScope _ = False
 
 scopeLookup :: MonadIO m => Text -> [Scope m v] -> m (Maybe v)
 scopeLookup key = paraM go Nothing
   where
     go (Scope m) _ rest = return $ M.lookup key m <|> rest
-    go (WeakScope m f) ms rest = do
+    go (WeakScope m) ms rest = do
         -- If the symbol lookup is in a weak scope, first see if there are any
         -- matching symbols from the *non-weak* scopes after this one. If so,
         -- prefer that, otherwise perform the lookup here. This way, if there
@@ -45,9 +49,8 @@ scopeLookup key = paraM go Nothing
         -- prefer it from the first weak scope that matched.
         mres <- scopeLookup key (filter (not . isWeakScope) ms)
         case mres of
-            Nothing ->
-                f m >>= \m' ->
-                    return $ M.lookup key m' <|> rest
+            Nothing -> m >>= \m' ->
+                return $ M.lookup key m' <|> rest
             _ -> return mres
 
 type Scopes m v = [Scope m v]
@@ -67,8 +70,8 @@ pushScope :: forall v m e r. Scoped e v m => HashMap Text v -> m r -> m r
 pushScope s = local (over hasLens (Scope @m s :))
 
 pushWeakScope :: forall v m e r. Scoped e v m
-              => v -> (v -> m (HashMap Text v)) -> m r -> m r
-pushWeakScope s f = local (over hasLens (WeakScope s f :))
+              => m (HashMap Text v) -> m r -> m r
+pushWeakScope s = local (over hasLens (WeakScope s :))
 
 pushScopes :: Scoped e v m => Scopes m v -> m r -> m r
 pushScopes s = local (over hasLens (s ++))

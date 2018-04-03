@@ -10,7 +10,7 @@ import           Nix.Expr.Types.Annotated (stripAnnotation)
 import           Nix.Lint
 import           Nix.Parser
 import           Nix.Pretty
-import           Nix.TH
+-- import           Nix.TH
 import           Options.Applicative hiding (ParserResult(..))
 import           System.IO
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))

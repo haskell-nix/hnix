@@ -128,7 +128,7 @@ prettyNix = withoutParens . cata phi where
   phi (NRecSet xs) = simpleExpr $ group $
     nest 2 (vsep $ recPrefix <> lbrace : map prettyBind xs) <$> rbrace
   phi (NAbs args body) = leastPrecedence $
-   (prettyParams args <> colon) </> (indent 2 (withoutParens body))
+   (prettyParams args <> colon) </> indent 2 (withoutParens body)
   phi (NBinary op r1 r2) = flip NixDoc opInfo $ hsep
     [ wrapParens (f NAssocLeft) r1
     , text $ operatorName opInfo
@@ -178,15 +178,19 @@ prettyNixValue :: Functor m => NValueNF m -> Doc
 prettyNixValue = prettyNix . valueToExpr
   where valueToExpr :: Functor m => NValueNF m -> NExpr
         valueToExpr = hmap go
-        -- hmap does the recursive conversion from NValue to NExpr
-        -- fun fact: it is not defined in data-fixed, but I was certain it should exists so I found it in unification-fd by hoogling its type
-        hmap :: (Functor f, Functor g) => (forall a. f a -> g a) -> Fix f -> Fix g
+        -- hmap does the recursive conversion from NValue to NExpr.
+        -- fun fact: it is not defined in data-fixed, but I was certain it
+        -- should exists so I found it in unification-fd by hoogling its type
+        hmap :: (Functor f, Functor g) => (forall a. f a -> g a)
+             -> Fix f -> Fix g
         hmap eps = ana (eps . unFix)
         go (NVConstant a) = NConstant a
         go (NVStr t _) = NStr (DoubleQuoted [Plain t])
         go (NVList l) = NList l
         go (NVSet s) = NSet [NamedVar [StaticKey k] v | (k, v) <- toList s]
-        go (NVFunction p _) = NSym . pack $ ("<function with " ++ show (() <$ p)  ++ ">")
+        go (NVClosure s p _) =
+            NSym . pack $ "<closure in " ++ show s
+                ++ " with " ++ show (() <$ p)  ++ ">"
         go (NVLiteralPath fp) = NLiteralPath fp
         go (NVEnvPath p) = NEnvPath p
         go (NVBuiltin name _) = NSym $ Text.pack $ "builtins." ++ name
@@ -198,8 +202,10 @@ printNix = cata phi
         phi (NVConstant a) = unpack $ atomText a
         phi (NVStr t _) = show t
         phi (NVList l) = "[ " ++ unwords l ++ " ]"
-        phi (NVSet s) = "{ " ++ concat [ unpack k ++ " = " ++ v ++ "; " | (k, v) <- sort $ toList s ] ++ "}"
-        phi (NVFunction _ _) = "<<lambda>>"
+        phi (NVSet s) =
+            "{ " ++ concat [ unpack k ++ " = " ++ v ++ "; "
+                           | (k, v) <- sort $ toList s ] ++ "}"
+        phi NVClosure {} = "<<lambda>>"
         phi (NVLiteralPath fp) = fp
         phi (NVEnvPath p) = p
         phi (NVBuiltin name _) = "<<builtin " ++ name ++ ">>"

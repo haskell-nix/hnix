@@ -219,7 +219,7 @@ eval (NIf cond t f) = do
 eval (NWith scope body) = do
     traceM "NWith"
     s <- thunk scope
-    pushWeakScope s ?? body $ force >=> \case
+    pushWeakScope ?? body $ force s >>= \case
         NVSet s -> return s
         _ -> throwError "scope must be a set in with statement"
 
@@ -242,20 +242,18 @@ eval (NAbs params body) = do
     -- body are forced during application.
     scope <- currentScopes @_ @(NThunk m)
     traceM $ "Creating lambda abstraction in scope: " ++ show scope
-    return $ NVFunction
-        (thunk . pushScopes scope <$> params)
-        (thunk (pushScopes scope body))
+    return $ NVClosure scope (thunk <$> params) (thunk body)
 
 infixl 1 `evalApp`
 evalApp :: forall e m. (MonadNixEval e m, MonadEval (NThunk m) (NValue m) m)
         => m (NValue m) -> m (NValue m) -> m (NValue m)
 evalApp fun arg = fun >>= \case
-    NVFunction params f -> do
+    NVClosure scope params f -> do
         traceM "evalApp:NVFunction"
         args <- buildArgument params =<< valueThunk =<< arg
         traceM $ "Evaluating function application with args: "
             ++ show (newScope args)
-        clearScopes @(NThunk m) (pushScope args (force =<< f))
+        withScopes @(NThunk m) scope $ pushScope args $ force =<< f
     NVBuiltin name f -> do
         traceM $ "evalApp:NVBuiltin " ++ name
         f =<< valueThunk =<< arg
@@ -306,7 +304,7 @@ valueEq l r = case (l, r) of
 
 -----
 
-normalForm :: (MonadNix m, MonadIO m) => NValue m -> m (NValueNF m)
+normalForm :: forall e m. MonadNixEval e m => NValue m -> m (NValueNF m)
 normalForm = \case
     NVConstant a     -> return $ Fix $ NVConstant a
     NVStr t s        -> return $ Fix $ NVStr t s
@@ -314,10 +312,10 @@ normalForm = \case
         Fix . NVList <$> traverse (normalForm <=< force) l
     NVSet s          ->
         Fix . NVSet <$> traverse (normalForm <=< force) s
-    NVFunction p f   -> do
+    NVClosure s p f   -> withScopes @(NThunk m) s $ do
         p' <- traverse (fmap (normalForm <=< force)) p
         return $ Fix $
-            NVFunction p' (normalForm =<< force =<< f)
+            NVClosure emptyScopes p' (normalForm =<< force =<< f)
     NVLiteralPath fp -> return $ Fix $ NVLiteralPath fp
     NVEnvPath p      -> return $ Fix $ NVEnvPath p
     NVBuiltin name f -> return $ Fix $ NVBuiltin name f
@@ -334,7 +332,7 @@ valueText addPathsToStore = cata phi where
         -- TODO: Should this be run through valueText recursively?
         M.lookup "__asString" set = asString
       | otherwise = throwError "Cannot coerce a set to a string"
-    phi (NVFunction _ _)  = throwError "Cannot coerce a function to a string"
+    phi NVClosure {} = throwError "Cannot coerce a function to a string"
     phi (NVLiteralPath originalPath)
         | addPathsToStore = do
             -- TODO: Capture and use the path of the file being processed as the

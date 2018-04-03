@@ -43,7 +43,7 @@ data NTypeF (m :: * -> *) r
     | TStr
     | TList r
     | TSet (Maybe (HashMap Text r))
-    | TFunction (Params (m r)) (m r)
+    | TClosure (Scopes m r) (Params (m r)) (m r)
     | TPath
     | TBuiltin String (Symbolic m -> m r)
     deriving Functor
@@ -61,9 +61,9 @@ compareTypes _               (TList _)       = GT
 compareTypes (TSet _)        (TSet _)        = EQ
 compareTypes (TSet _)        _               = LT
 compareTypes _               (TSet _)        = GT
-compareTypes (TFunction _ _) (TFunction _ _) = EQ
-compareTypes (TFunction _ _) _               = LT
-compareTypes _               (TFunction _ _) = GT
+compareTypes TClosure {}     TClosure {}     = EQ
+compareTypes TClosure {}     _               = LT
+compareTypes _               TClosure {}     = GT
 compareTypes TPath           TPath           = EQ
 compareTypes TPath            _              = LT
 compareTypes _               TPath           = GT
@@ -120,12 +120,13 @@ renderSymbolic = unpackSymbolic >=> \case
         TSet (Just s)   -> do
             x <- traverse (renderSymbolic <=< sforce) s
             return $ "{" ++ show x ++ "}"
-        f@(TFunction p _) -> do
+        f@(TClosure s p _) -> do
             (args, sym) <-
                 lintApp (NAbs (void p) ()) (mkSymbolic [f]) everyPossible
             args' <- traverse renderSymbolic args
             sym'  <- renderSymbolic sym
-            return $ "(" ++ show args' ++ " -> " ++ sym' ++ ")"
+            return $ "(" ++ show s ++ " over " ++ show args'
+                ++ " -> " ++ sym' ++ ")"
         TPath           -> return "path"
         TBuiltin _n _f    -> return "<builtin function>"
 
@@ -158,7 +159,7 @@ merge context = go
             if M.null m
                 then go xs ys
                 else (TSet (Just m) :) <$> go xs ys
-        (TFunction _ _, TFunction _ _) ->
+        (TClosure {}, TClosure {}) ->
             throwError "Cannot unify functions"
         (TBuiltin _ _, TBuiltin _ _) ->
             throwError "Cannot unify builtin functions"
@@ -181,7 +182,7 @@ merge context = go
             then go xs ys
             else do
                 g <- unify context fl fr
-                (TFunction (ParamSet m' False nl) g :)
+                (TClosure (ParamSet m' False nl) g :)
                     <$> go xs ys
 -}
 
@@ -336,7 +337,7 @@ lint e@(NIf cond t f) = do
 
 lint (NWith scope body) = do
     s <- sthunk scope
-    pushWeakScope s ?? body $ sforce >=> unpackSymbolic >=> \case
+    pushWeakScope ?? body $ sforce s >>= unpackSymbolic >>= \case
         NMany [TSet (Just s')] -> return s'
         NMany [TSet Nothing] -> error "with unknown set"
         _ -> throwError "scope must be a set in with statement"
@@ -349,8 +350,7 @@ lint e@(NApp fun arg) = snd <$> lintApp (void e) fun arg
 
 lint (NAbs params body) = do
     scope <- currentScopes @_ @(SThunk m)
-    mkSymbolic [TFunction (sthunk . pushScopes scope <$> params)
-                          (sthunk (pushScopes scope body))]
+    mkSymbolic [TClosure scope (sthunk <$> params) (sthunk body)]
 
 infixl 1 `lintApp`
 lintApp :: forall e m. MonadNixLint e m
@@ -360,7 +360,7 @@ lintApp context fun arg = fun >>= unpackSymbolic >>= \case
     NAny -> throwError "Cannot apply something not known to be a function"
     NMany xs -> do
         (args:_, ys) <- fmap unzip $ forM xs $ \case
-            TFunction params f -> arg >>= unpackSymbolic >>= \case
+            TClosure scope params f -> arg >>= unpackSymbolic >>= \case
                 NAny -> do
                     pset <- case params of
                        Param name ->
@@ -371,7 +371,7 @@ lintApp context fun arg = fun >>= unpackSymbolic >>= \case
                     pset' <- traverse (sthunk . pure) pset
                     arg'  <- sthunk $ mkSymbolic [TSet (Just pset')]
                     args  <- buildArgument params arg'
-                    res   <- clearScopes @(SThunk m) $
+                    res   <- withScopes @(SThunk m) scope $
                         pushScope args $ sforce =<< f
                     return (pset, res)
 
