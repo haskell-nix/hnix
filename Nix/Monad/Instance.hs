@@ -31,7 +31,6 @@ import           Nix.Monad
 import           Nix.Parser
 import           Nix.Scope
 import           Nix.Stack
-import           Nix.Thunk
 import           Nix.Utils
 import           System.Directory
 import           System.Environment
@@ -51,9 +50,6 @@ newtype Lazy m a = Lazy
 
 instance (MonadFix m, MonadNix (Lazy m), MonadIO m)
       => MonadEval (NThunk (Lazy m)) (NValue (Lazy m)) (Lazy m) where
-    wrapThunk   = NThunk
-    unwrapThunk = getNThunk
-
     embedSet    = return . NVSet
     projectSet  = \case
         NVSet s -> return $ Just s
@@ -85,7 +81,7 @@ instance MonadNix (Lazy IO) where
                 mres <- lookupVar @_ @(NThunk (Lazy IO)) "__cur_file"
                 case mres of
                     Nothing -> liftIO getCurrentDirectory
-                    Just (NThunk v) -> forceThunk v >>= \case
+                    Just v -> force v >>= \case
                         NVLiteralPath s -> return $ takeDirectory s
                         v -> throwError $ "when resolving relative path,"
                                 ++ " __cur_file is in scope,"
@@ -112,7 +108,7 @@ instance Has (Context m v) Frames where
 
 instance MonadNixEnv (Lazy IO) where
     -- jww (2018-03-29): Cache which files have been read in.
-    importFile = forceThunk . getNThunk >=> \case
+    importFile = force >=> \case
         NVLiteralPath path -> do
             mres <- lookupVar @(Context (Lazy IO) (NThunk (Lazy IO)))
                              "__cur_file"
@@ -120,7 +116,7 @@ instance MonadNixEnv (Lazy IO) where
                 Nothing  -> do
                     traceM "No known current directory"
                     return path
-                Just (NThunk p) -> forceThunk p >>= normalForm >>= \case
+                Just p -> force p >>= normalForm >>= \case
                     Fix (NVLiteralPath p') -> do
                         traceM $ "Current file being evaluated is: "
                             ++ show p'
@@ -132,7 +128,7 @@ instance MonadNixEnv (Lazy IO) where
                 case eres of
                     Failure err  -> error $ "Parse failed: " ++ show err
                     Success expr -> do
-                        ref <- NThunk <$> valueRef (NVLiteralPath path')
+                        ref <- valueThunk (NVLiteralPath path')
                         -- Use this cookie so that when we evaluate the next
                         -- import, we'll remember which directory its containing
                         -- file was in.
@@ -140,7 +136,7 @@ instance MonadNixEnv (Lazy IO) where
                                   (framedEvalExpr eval expr)
         p -> error $ "Unexpected argument to import: " ++ show (void p)
 
-    getEnvVar = forceThunk . getNThunk >=> \case
+    getEnvVar = force >=> \case
         NVStr s _ -> do
             mres <- liftIO $ lookupEnv (Text.unpack s)
             return $ case mres of

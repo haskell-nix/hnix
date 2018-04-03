@@ -23,6 +23,7 @@ import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Reader
 import           Data.Align
 import           Data.Align.Key
+import           Data.Coerce
 import           Data.Fix
 import           Data.Functor.Compose
 import           Data.HashMap.Lazy (HashMap)
@@ -358,10 +359,8 @@ valueTextNoContext addPathsToStore = fmap fst . valueText addPathsToStore
 --   directly, as a separate data type, to avoid abstracting it in this ad hoc
 --   way.
 
-class (Monoid (MText m), MonadFix m) => MonadEval t v m | m -> t, m -> v where
-    wrapThunk   :: Thunk m v -> t
-    unwrapThunk :: t -> Thunk m v
-
+class (Monoid (MText m), MonadFix m, Coercible (Thunk m v) t)
+      => MonadEval t v m | m -> t, m -> v where
     embedSet   :: HashMap Text t -> m v
     projectSet :: v -> m (Maybe (HashMap Text t))
 
@@ -379,7 +378,7 @@ buildArgument
 buildArgument params arg = case params of
     Param name -> return $ M.singleton name arg
     ParamSet s isVariadic m ->
-        forceThunk (unwrapThunk @t @v @m arg) >>= projectSet @t @v @m >>= \case
+        forceThunk (coerce arg) >>= projectSet @t @v @m >>= \case
             Just args -> do
                 res <- loebM (alignWithKey (assemble isVariadic) args s)
                 maybe (pure res) (selfInject res) m
@@ -390,7 +389,7 @@ buildArgument params arg = case params of
     selfInject :: HashMap Text t -> Text -> m (HashMap Text t)
     selfInject res n = do
         ref <- valueRef =<< embedSet @t @v @m res
-        return $ M.insert n (wrapThunk @t @v @m ref) res
+        return $ M.insert n (coerce ref) res
 
     assemble :: Bool
              -> Text
@@ -403,11 +402,11 @@ buildArgument params arg = case params of
         That (Just f) -> \args -> do
             scope <- currentScopes @_ @t
             traceM $ "Deferring default argument in scope: " ++ show scope
-            fmap (wrapThunk @t @v @m) $ buildThunk $ clearScopes @t $ do
+            fmap coerce $ buildThunk $ clearScopes @t $ do
                 traceM $ "Evaluating default argument with args: "
                     ++ show (newScope args)
                 pushScopes scope $ pushScope args $
-                    forceThunk . unwrapThunk @t @v @m =<< f
+                    forceThunk . coerce =<< f
         This x | isVariadic -> const (pure x)
                | otherwise  ->
                  const $ throwError $ "Unexpected parameter: " ++ show k
@@ -427,7 +426,7 @@ attrSetAlter (p:ps) m val = case M.lookup p m of
     Just v
         | null ps   -> go
         | otherwise -> v >>= projectSet @t @v @m >>= \case
-              Just s -> recurse (forceThunk . unwrapThunk <$> s)
+              Just s -> recurse (forceThunk . coerce <$> s)
               -- TODO: Keep a stack of attributes we've already traversed, so
               -- that we can report that to the user
               x -> throwError $ "attribute " ++ show p
@@ -442,8 +441,7 @@ attrSetAlter (p:ps) m val = case M.lookup p m of
              return $ M.insert p (embed scope m') m
       where
         embed scope m' = embedSet @t @v @m
-            =<< traverse (fmap (wrapThunk @t @v @m)
-                              . buildThunk . withScopes scope) m'
+            =<< traverse (fmap coerce . buildThunk . withScopes scope) m'
 
 evalBinds
     :: forall e t v m. (MonadEval t v m, Scoped e t m, Framed e m, MonadIO m)
@@ -476,14 +474,14 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
                 mv <- case ms of
                     Nothing -> lookupVar key
                     Just s -> s >>= projectSet >>= \case
-                        Just s -> pushScope s (lookupVar key)
+                        Just s -> pushScope s (lookupVar @_ @t key)
                         x -> throwError
                             $ "First argument to inherit should be a set, saw: "
                             ++ show (() <$ x)
                 case mv of
                     Nothing -> throwError $ "Inheriting unknown attribute: "
                         ++ show (() <$ name)
-                    Just v -> forceThunk (unwrapThunk v))
+                    Just v -> forceThunk (coerce v))
 
     buildResult :: [([Text], m v)] -> m (HashMap Text t)
     buildResult bindings = do
@@ -491,10 +489,10 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
         scope <- currentScopes @_ @t
         if recursive
             then loebM (encapsulate scope <$> s)
-            else traverse (fmap wrapThunk . buildThunk . withScopes scope) s
+            else traverse (fmap coerce . buildThunk . withScopes scope) s
 
     encapsulate scope f attrs =
-        fmap wrapThunk . buildThunk . withScopes scope . pushScope attrs $ f
+        fmap coerce . buildThunk . withScopes scope . pushScope attrs $ f
 
     insert m (path, value) = attrSetAlter path m value
 

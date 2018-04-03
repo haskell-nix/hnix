@@ -62,9 +62,6 @@ newtype Lint m a = Lint
 
 instance (MonadFix m, MonadIO m)
       => MonadEval (SThunk (Lint m)) (Symbolic (Lint m)) (Lint m) where
-    wrapThunk   = SThunk
-    unwrapThunk = getSThunk
-
     embedSet s = mkSymbolic [TSet (Just s)]
     projectSet = unpackSymbolic >=> \case
         NMany [TSet s] -> return s

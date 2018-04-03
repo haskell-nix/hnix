@@ -9,6 +9,7 @@ module Nix.Monad where
 
 import Control.Monad.Fix
 import Control.Monad.IO.Class
+import Data.Coerce
 import Data.Fix
 import Data.HashMap.Lazy (HashMap)
 import Data.Monoid (appEndo)
@@ -20,13 +21,13 @@ import Nix.Expr.Types
 import Nix.Thunk
 import Nix.Utils
 
-newtype NThunk m = NThunk { getNThunk :: Thunk m (NValue m) }
+newtype NThunk m = NThunk (Thunk m (NValue m))
 
 thunk :: MonadIO m => m (NValue m) -> m (NThunk m)
-thunk = fmap NThunk . buildThunk
+thunk = fmap coerce . buildThunk
 
 force :: MonadIO m => NThunk m -> m (NValue m)
-force = forceThunk . getNThunk
+force = forceThunk . coerce
 
 valueThunk :: MonadIO m => NValue m -> m (NThunk m)
 valueThunk = fmap NThunk . valueRef
