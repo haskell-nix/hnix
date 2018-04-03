@@ -14,11 +14,9 @@ module Nix.Lint where
 
 import           Control.Monad
 import           Control.Monad.Fix
-import           Control.Monad.IO.Class
 import           Data.Fix
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
-import           Data.IORef
 import           Data.List
 import           Data.Maybe
 import           Data.Text (Text)
@@ -76,32 +74,32 @@ data NSymbolicF r
 
 newtype SThunk m = SThunk { getSThunk :: Thunk m (Symbolic m) }
 
-sthunk :: MonadIO m => m (Symbolic m) -> m (SThunk m)
+sthunk :: MonadVar m => m (Symbolic m) -> m (SThunk m)
 sthunk = fmap SThunk . buildThunk
 
-sforce :: MonadIO m => SThunk m -> m (Symbolic m)
+sforce :: MonadVar m => SThunk m -> m (Symbolic m)
 sforce = forceThunk . getSThunk
 
-svalueThunk :: MonadIO m => Symbolic m -> m (SThunk m)
+svalueThunk :: MonadVar m => Symbolic m -> m (SThunk m)
 svalueThunk = fmap SThunk . valueRef
 
-type Symbolic m = IORef (NSymbolicF (NTypeF m (SThunk m)))
+type Symbolic m = Var m (NSymbolicF (NTypeF m (SThunk m)))
 
-everyPossible :: MonadIO m => m (Symbolic m)
+everyPossible :: MonadVar m => m (Symbolic m)
 everyPossible = packSymbolic NAny
 
-mkSymbolic :: MonadIO m => [NTypeF m (SThunk m)] -> m (Symbolic m)
+mkSymbolic :: MonadVar m => [NTypeF m (SThunk m)] -> m (Symbolic m)
 mkSymbolic xs = packSymbolic (NMany xs)
 
-packSymbolic :: MonadIO m
+packSymbolic :: MonadVar m
              => NSymbolicF (NTypeF m (SThunk m)) -> m (Symbolic m)
-packSymbolic = liftIO . newIORef
+packSymbolic = newVar
 
-unpackSymbolic :: MonadIO m
+unpackSymbolic :: MonadVar m
                => Symbolic m -> m (NSymbolicF (NTypeF m (SThunk m)))
-unpackSymbolic = liftIO . readIORef
+unpackSymbolic = readVar
 
-renderSymbolic :: MonadNixLint e m
+renderSymbolic :: MonadLint e m
                => Symbolic m -> m String
 renderSymbolic = unpackSymbolic >=> \case
     NAny -> return "<any>"
@@ -131,7 +129,7 @@ renderSymbolic = unpackSymbolic >=> \case
         TBuiltin _n _f    -> return "<builtin function>"
 
 -- This function is order and uniqueness preserving (of types).
-merge :: forall e m. MonadNixLint e m
+merge :: forall e m. MonadLint e m
       => NExprF () -> [NTypeF m (SThunk m)] -> [NTypeF m (SThunk m)]
       -> m [NTypeF m (SThunk m)]
 merge context = go
@@ -186,22 +184,27 @@ merge context = go
                     <$> go xs ys
 -}
 
-type MonadNixLint e m =
-    (Scoped e (SThunk m) m, Framed e m, MonadFix m, MonadIO m,
-     MonadEval (SThunk m) (Symbolic m) m)
+type MonadLint e m =
+    ( Scoped e (SThunk m) m
+    , Framed e m
+    , MonadExpr (SThunk m) (Symbolic m) m
+    , MonadFix m
+    , MonadFile m
+    , MonadVar m
+    )
 
 -- | unify raises an error if the result is would be 'NMany []'.
-unify :: MonadNixLint e m
+unify :: MonadLint e m
       => NExprF () -> Symbolic m -> Symbolic m -> m (Symbolic m)
 unify context x y = do
-    x' <- liftIO $ readIORef x
-    y' <- liftIO $ readIORef y
+    x' <- readVar x
+    y' <- readVar y
     case (x', y') of
         (NAny, _) -> do
-            liftIO $ writeIORef x y'
+            writeVar x y'
             return y
         (_, NAny) -> do
-            liftIO $ writeIORef y x'
+            writeVar y x'
             return x
         (NMany xs, NMany ys) -> do
             m <- merge context xs ys
@@ -213,15 +216,15 @@ unify context x y = do
                         ++ show x' ++ " with " ++ show y'
                          ++ " in context: " ++ show context
                 else do
-                    liftIO $ writeIORef x (NMany m)
-                    liftIO $ writeIORef y (NMany m)
+                    writeVar x (NMany m)
+                    writeVar y (NMany m)
                     packSymbolic (NMany m)
 
-lintExpr :: MonadNixLint e m
+lintExpr :: MonadLint e m
          => NExpr -> m (Symbolic m)
 lintExpr = cata lint
 
-lint :: forall e m. MonadNixLint e m
+lint :: forall e m. MonadLint e m
      => NExprF (m (Symbolic m)) -> m (Symbolic m)
 
 lint (NSym var) = do
@@ -353,7 +356,7 @@ lint (NAbs params body) = do
     mkSymbolic [TClosure scope (sthunk <$> params) (sthunk body)]
 
 infixl 1 `lintApp`
-lintApp :: forall e m. MonadNixLint e m
+lintApp :: forall e m. MonadLint e m
         => NExprF () -> m (Symbolic m) -> m (Symbolic m)
         -> m (HashMap Text (Symbolic m), Symbolic m)
 lintApp context fun arg = fun >>= unpackSymbolic >>= \case

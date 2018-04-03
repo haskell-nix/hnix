@@ -8,7 +8,7 @@
 module Nix.Stack where
 
 import           Control.Monad.Reader
-import qualified Data.ByteString as BS
+import           Data.ByteString (ByteString)
 import           Data.Fix
 import           Data.Functor.Compose
 import qualified Data.Text as Text
@@ -31,26 +31,29 @@ withExprContext expr = local (over hasLens (Right @String expr :))
 withStringContext :: Framed e m => String -> m r -> m r
 withStringContext str = local (over hasLens (Left @_ @(NExprLocF ()) str :))
 
-renderLocation :: MonadIO m => SrcSpan -> Doc -> m Doc
+class Monad m => MonadFile m where
+    readFile :: FilePath -> m ByteString
+
+renderLocation :: MonadFile m => SrcSpan -> Doc -> m Doc
 renderLocation (SrcSpan beg@(Directed "<string>" _ _ _ _) end) msg =
     return $ explain (addSpan beg end emptyRendering)
                      (Err (Just msg) [] mempty [])
 renderLocation (SrcSpan beg@(Directed path _ _ _ _) end) msg = do
-    contents <- liftIO $ BS.readFile (Text.unpack (Text.decodeUtf8 path))
+    contents <- Nix.Stack.readFile (Text.unpack (Text.decodeUtf8 path))
     return $ explain (addSpan beg end (rendered beg contents))
                      (Err (Just msg) [] mempty [])
 renderLocation (SrcSpan beg end) msg =
     return $ explain (addSpan beg end emptyRendering)
                      (Err (Just msg) [] mempty [])
 
-renderFrame :: MonadIO m => Either String (NExprLocF ()) -> m String
+renderFrame :: MonadFile m => Either String (NExprLocF ()) -> m String
 renderFrame (Left str) = return str
 renderFrame (Right (Compose (Ann ann expr))) =
     show <$> renderLocation ann
         (prettyNix (Fix (const (Fix (NSym "<?>")) <$> expr)))
 
-throwError :: (Framed e m, MonadIO m) => String -> m a
+throwError :: (Framed e m, MonadFile m) => String -> m a
 throwError str = do
     context <- asks (reverse . view hasLens)
-    infos   <- liftIO $ mapM renderFrame context
+    infos   <- mapM renderFrame context
     error $ unlines (infos ++ ["hnix: "++ str])

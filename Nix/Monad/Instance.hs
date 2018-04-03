@@ -20,8 +20,10 @@ import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader (MonadReader)
 import           Control.Monad.Trans.Reader
+import qualified Data.ByteString as BS
 import           Data.Fix
 import qualified Data.HashMap.Lazy as M
+import           Data.IORef
 import           Data.List
 import           Data.List.Split
 import           Data.Text (Text)
@@ -32,6 +34,7 @@ import           Nix.Monad
 import           Nix.Parser
 import           Nix.Scope
 import           Nix.Stack
+import           Nix.Thunk
 import           Nix.Utils
 import           System.Directory
 import           System.Environment
@@ -49,8 +52,24 @@ newtype Lazy m a = Lazy
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
               MonadReader (Context (Lazy m) (NThunk (Lazy m))))
 
+instance Has (Context m v) (Scopes m v) where
+    hasLens f (Context x y) = flip Context y <$> f x
+
+instance Has (Context m v) Frames where
+    hasLens f (Context x y) = Context x <$> f y
+
+-- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
+-- This is incorrect on POSIX systems, because if @b@ is a symlink, its parent
+-- may be a different directory from @a@.  See the discussion at
+-- https://hackage.haskell.org/package/directory-1.3.1.5/docs/System-Directory.html#v:canonicalizePath
+removeDotDotIndirections :: FilePath -> FilePath
+removeDotDotIndirections = intercalate "/" . go [] . splitOn "/"
+    where go s [] = reverse s
+          go (_:s) ("..":rest) = go s rest
+          go s (this:rest) = go (this:s) rest
+
 instance (MonadFix m, MonadNix (Lazy m), MonadIO m)
-      => MonadEval (NThunk (Lazy m)) (NValue (Lazy m)) (Lazy m) where
+      => MonadExpr (NThunk (Lazy m)) (NValue (Lazy m)) (Lazy m) where
     embedSet    = return . NVSet
     projectSet  = \case
         NVSet s -> return $ Just s
@@ -65,6 +84,16 @@ instance (MonadFix m, MonadNix (Lazy m), MonadIO m)
     projectText = \case
         NVConstant NNull -> return $ Just Nothing
         v -> fmap (Just . Just) . valueText True =<< normalForm v
+
+instance MonadIO m => MonadVar (Lazy m) where
+    type Var (Lazy m) = IORef
+
+    newVar   = liftIO . newIORef
+    readVar  = liftIO . readIORef
+    writeVar = (liftIO .) . writeIORef
+
+instance MonadIO m => MonadFile (Lazy m) where
+    readFile = liftIO . BS.readFile
 
 instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
     addPath path = liftIO $ do
@@ -91,23 +120,6 @@ instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
             pure $ cwd </> origPath
         liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
 
--- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
--- This is incorrect on POSIX systems, because if @b@ is a symlink, its parent
--- may be a different directory from @a@.  See the discussion at
--- https://hackage.haskell.org/package/directory-1.3.1.5/docs/System-Directory.html#v:canonicalizePath
-removeDotDotIndirections :: FilePath -> FilePath
-removeDotDotIndirections = intercalate "/" . go [] . splitOn "/"
-    where go s [] = reverse s
-          go (_:s) ("..":rest) = go s rest
-          go s (this:rest) = go (this:s) rest
-
-instance Has (Context m v) (Scopes m v) where
-    hasLens f (Context x y) = flip Context y <$> f x
-
-instance Has (Context m v) Frames where
-    hasLens f (Context x y) = Context x <$> f y
-
-instance (MonadFix m, MonadIO m) => MonadNixEnv (Lazy m) where
     -- jww (2018-03-29): Cache which files have been read in.
     importFile = force >=> \case
         NVLiteralPath path -> do

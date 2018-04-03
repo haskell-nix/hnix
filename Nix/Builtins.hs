@@ -15,13 +15,15 @@
 module Nix.Builtins (MonadBuiltins, baseEnv) where
 
 import           Control.Monad
-import           Control.Monad.IO.Class
+import           Control.Monad.Fix
 import           Control.Monad.ListM (sortByM)
 import qualified Crypto.Hash.MD5 as MD5
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Crypto.Hash.SHA512 as SHA512
 import           Data.Align (alignWith)
+import           Data.ByteString (ByteString)
+import qualified Data.ByteString as BS
 import           Data.ByteString.Base16 as Base16
 import           Data.Char (isDigit)
 import           Data.Foldable (foldlM)
@@ -32,8 +34,8 @@ import           Data.Maybe
 import           Data.Semigroup
 import           Data.Text (Text)
 import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
 import           Data.Text.Encoding
+import qualified Data.Text.IO as Text
 import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Lazy.Builder as Builder
 import           Data.These (fromThese)
@@ -44,12 +46,13 @@ import           Nix.Eval
 import           Nix.Monad
 import           Nix.Scope
 import           Nix.Stack
+import           Nix.Thunk
 import           System.Directory (listDirectory)
 import           System.FilePath.Posix
 import           System.Posix.Files
 
 type MonadBuiltins e m =
-    (MonadNixEval e m, MonadEval (NThunk m) (NValue m) m, MonadNixEnv m)
+    (MonadEval e m, MonadNix m, MonadFix m, MonadFile m, MonadVar m)
 
 baseEnv :: MonadBuiltins e m => m (Scopes m (NThunk m))
 baseEnv = do
@@ -134,7 +137,7 @@ builtinsList = sequence [
 
 -- Helpers
 
-mkBool :: MonadNix m => Bool -> m (NValue m)
+mkBool :: Monad m => Bool -> m (NValue m)
 mkBool = return . NVConstant . NBool
 
 extractBool :: MonadBuiltins e m => NValue m -> m Bool
@@ -373,18 +376,22 @@ elem_ x xs = force xs >>= \case
 
 genList :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 genList generator length = force length >>= \case
-    NVConstant (NInt n) | n >= 0 -> fmap NVList $ forM [0 .. n - 1] $ \i -> do
+    NVConstant (NInt n) | n >= 0 -> fmap NVList $ forM [0 .. n - 1] $ \i ->
         thunk $ apply generator =<< valueThunk =<< toValue i
-    v -> throwError $ "builtins.genList: Expected a non-negative number, got " ++ show (void v)
+    v -> throwError $ "builtins.genList: Expected a non-negative number, got "
+            ++ show (void v)
 
 --TODO: Preserve string context
 replaceStrings :: MonadBuiltins e m => [Text] -> [Text] -> Text -> Prim m Text
 replaceStrings from to s = Prim $ do
-    when (length from /= length to) $ throwError "'from' and 'to' arguments to 'replaceStrings' have different lengths"
+    when (length from /= length to) $
+        throwError $ "'from' and 'to' arguments to 'replaceStrings'"
+            ++ " have different lengths"
     let lookupPrefix s = do
-            (prefix, replacement) <- find ((`Text.isPrefixOf` s) . fst) $ zip from to
+            (prefix, replacement) <-
+                find ((`Text.isPrefixOf` s) . fst) $ zip from to
             let rest = Text.drop (Text.length prefix) s
-            return $ (prefix, replacement, rest)
+            return (prefix, replacement, rest)
         finish = LazyText.toStrict . Builder.toLazyText
         go orig result = case lookupPrefix orig of
             Nothing -> case Text.uncons orig of
@@ -515,7 +522,7 @@ absolutePathFromValue = \case
 readFile_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 readFile_ pathThunk = do
     path <- absolutePathFromValue =<< force pathThunk
-    toValue =<< liftIO (Text.readFile path)
+    toValue =<< Nix.Stack.readFile path
 
 data FileType
    = FileType_Regular
@@ -532,18 +539,18 @@ instance ToNix FileType where
         FileType_Unknown -> "unknown"
 
 readDir_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
-readDir_ pathThunk = do
-    path <- absolutePathFromValue =<< force pathThunk
-    items <- liftIO $ listDirectory path
-    itemsWithTypes <- liftIO $ forM items $ \item -> do
-        s <- getSymbolicLinkStatus $ path </> item
-        let t = if
-                | isRegularFile s -> FileType_Regular
-                | isDirectory s -> FileType_Directory
-                | isSymbolicLink s -> FileType_Symlink
-                | otherwise -> FileType_Unknown
-        pure (Text.pack item, t)
-    toValue $ M.fromList itemsWithTypes
+readDir_ pathThunk = undefined -- do
+    -- path <- absolutePathFromValue =<< force pathThunk
+    -- items <- liftIO $ listDirectory path
+    -- itemsWithTypes <- liftIO $ forM items $ \item -> do
+    --     s <- getSymbolicLinkStatus $ path </> item
+    --     let t = if
+    --             | isRegularFile s -> FileType_Regular
+    --             | isDirectory s -> FileType_Directory
+    --             | isSymbolicLink s -> FileType_Symlink
+    --             | otherwise -> FileType_Unknown
+    --     pure (Text.pack item, t)
+    -- toValue $ M.fromList itemsWithTypes
 
 newtype Prim m a = Prim { runPrim :: m a }
 
@@ -555,6 +562,9 @@ instance ToNix Bool where
 
 instance ToNix Text where
     toValue s = return $ NVStr s mempty
+
+instance ToNix ByteString where
+    toValue s = return $ NVStr (decodeUtf8 s) mempty
 
 instance ToNix Int where
     toValue = toValue . toInteger

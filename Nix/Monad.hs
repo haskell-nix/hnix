@@ -7,8 +7,6 @@
 
 module Nix.Monad where
 
-import Control.Monad.Fix
-import Control.Monad.IO.Class
 import Data.Coerce
 import Data.Fix
 import Data.HashMap.Lazy (HashMap)
@@ -24,13 +22,13 @@ import Nix.Scope
 
 newtype NThunk m = NThunk (Thunk m (NValue m))
 
-thunk :: MonadIO m => m (NValue m) -> m (NThunk m)
+thunk :: MonadVar m => m (NValue m) -> m (NThunk m)
 thunk = fmap coerce . buildThunk
 
-force :: MonadIO m => NThunk m -> m (NValue m)
+force :: MonadVar m => NThunk m -> m (NValue m)
 force = forceThunk . coerce
 
-valueThunk :: MonadIO m => NValue m -> m (NThunk m)
+valueThunk :: MonadVar m => NValue m -> m (NThunk m)
 valueThunk = fmap NThunk . valueRef
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
@@ -113,17 +111,12 @@ builtin3 name f =
 -- | A path into the nix store
 newtype StorePath = StorePath { unStorePath :: FilePath }
 
-class MonadFix m => MonadNix m where
+class Monad m => MonadNix m where
     -- | Import a path into the nix store, and return the resulting path
     addPath :: FilePath -> m StorePath
 
     -- | Determine the absolute path of relative path in the current context
     makeAbsolutePath :: FilePath -> m FilePath
 
--- | MonadNixEnv represents all of the effects needed by builtin functions in
---   order to interact with the environment where Nix expressions are being
---   evaluated. They are only used by the functions defined in Builtins.hs.
-
-class MonadNix m => MonadNixEnv m where
     importFile :: NThunk m -> m (NValue m)
     getEnvVar :: NThunk m -> m (NValue m)

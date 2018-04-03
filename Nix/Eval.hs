@@ -44,15 +44,19 @@ import           Nix.StringOperations (runAntiquoted)
 import           Nix.Thunk
 import           Nix.Utils
 
-type MonadNixEval e m =
-    (Scoped e (NThunk m) m, Framed e m, MonadNix m, MonadIO m)
+type MonadEval e m =
+    ( Scoped e (NThunk m) m
+    , Framed e m
+    , MonadExpr (NThunk m) (NValue m) m
+    , MonadVar m
+    , MonadFile m
+    )
 
 -- | Evaluate an nix expression, with a given ValueSet as environment
-evalExpr :: (MonadNixEval e m, MonadEval (NThunk m) (NValue m) m)
-         => NExpr -> m (NValue m)
+evalExpr :: (MonadEval e m, MonadFix m, MonadNix m) => NExpr -> m (NValue m)
 evalExpr = cata eval
 
-eval :: forall e m. (MonadNixEval e m, MonadEval (NThunk m) (NValue m) m)
+eval :: forall e m. (MonadEval e m, MonadFix m, MonadNix m)
      => NExprF (m (NValue m)) -> m (NValue m)
 
 eval (NSym var) = do
@@ -245,7 +249,7 @@ eval (NAbs params body) = do
     return $ NVClosure scope (thunk <$> params) (thunk body)
 
 infixl 1 `evalApp`
-evalApp :: forall e m. (MonadNixEval e m, MonadEval (NThunk m) (NValue m) m)
+evalApp :: forall e m. (MonadEval e m, MonadFix m)
         => m (NValue m) -> m (NValue m) -> m (NValue m)
 evalApp fun arg = fun >>= \case
     NVClosure scope params f -> do
@@ -273,7 +277,7 @@ valueRefInt = return . NVConstant . NInt
 valueRefFloat :: MonadNix m => Float -> m (NValue m)
 valueRefFloat = return . NVConstant . NFloat
 
-thunkEq :: (MonadNix m, MonadIO m) => NThunk m -> NThunk m -> m Bool
+thunkEq :: (MonadNix m, MonadVar m) => NThunk m -> NThunk m -> m Bool
 thunkEq lt rt = do
     lv <- force lt
     rv <- force rt
@@ -294,7 +298,7 @@ alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
         _ -> throwE ()
     forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
 
-valueEq :: (MonadNix m, MonadIO m) => NValue m -> NValue m -> m Bool
+valueEq :: (MonadNix m, MonadVar m) => NValue m -> NValue m -> m Bool
 valueEq l r = case (l, r) of
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
     (NVStr ls _, NVStr rs _) -> pure $ ls == rs
@@ -304,7 +308,7 @@ valueEq l r = case (l, r) of
 
 -----
 
-normalForm :: forall e m. MonadNixEval e m => NValue m -> m (NValueNF m)
+normalForm :: forall e m. MonadEval e m => NValue m -> m (NValueNF m)
 normalForm = \case
     NVConstant a     -> return $ Fix $ NVConstant a
     NVStr t s        -> return $ Fix $ NVStr t s
@@ -320,7 +324,7 @@ normalForm = \case
     NVEnvPath p      -> return $ Fix $ NVEnvPath p
     NVBuiltin name f -> return $ Fix $ NVBuiltin name f
 
-valueText :: forall e m. MonadNixEval e m
+valueText :: forall e m. (MonadEval e m, MonadNix m)
           => Bool -> NValueNF m -> m (Text, DList Text)
 valueText addPathsToStore = cata phi where
     phi :: NValueF m (m (Text, DList Text)) -> m (Text, DList Text)
@@ -345,7 +349,8 @@ valueText addPathsToStore = cata phi where
         pure (Text.pack p, mempty)
     phi (NVBuiltin _ _)    = throwError "Cannot coerce a function to a string"
 
-valueTextNoContext :: MonadNixEval e m => Bool -> NValueNF m -> m Text
+valueTextNoContext :: (MonadEval e m, MonadNix m)
+                   => Bool -> NValueNF m -> m Text
 valueTextNoContext addPathsToStore = fmap fst . valueText addPathsToStore
 
 ----
@@ -358,8 +363,8 @@ valueTextNoContext addPathsToStore = fmap fst . valueText addPathsToStore
 --   directly, as a separate data type, to avoid abstracting it in this ad hoc
 --   way.
 
-class (Monoid (MText m), MonadFix m, Coercible (Thunk m v) t)
-      => MonadEval t v m | m -> t, m -> v where
+class (Monoid (MText m), Coercible (Thunk m v) t)
+      => MonadExpr t v m | m -> t, m -> v where
     embedSet   :: HashMap Text t -> m v
     projectSet :: v -> m (Maybe (HashMap Text t))
 
@@ -372,7 +377,8 @@ class (Monoid (MText m), MonadFix m, Coercible (Thunk m v) t)
     projectText :: v -> m (Maybe (Maybe (MText m)))
 
 buildArgument
-    :: forall e t v m. (MonadEval t v m, Scoped e t m, Framed e m, MonadIO m)
+    :: forall e t v m. (MonadExpr t v m, Scoped e t m, Framed e m,
+                  MonadVar m, MonadFix m, MonadFile m)
     => Params (m t) -> t -> m (HashMap Text t)
 buildArgument params arg = case params of
     Param name -> return $ M.singleton name arg
@@ -401,7 +407,7 @@ buildArgument params arg = case params of
         That (Just f) -> \args -> do
             scope <- currentScopes @_ @t
             traceM $ "Deferring default argument in scope: " ++ show scope
-            fmap coerce $ buildThunk $ clearScopes @t $ do
+            fmap (coerce @(Thunk m v) @t) $ buildThunk $ clearScopes @t $ do
                 traceM $ "Evaluating default argument with args: "
                     ++ show (newScope args)
                 pushScopes scope $ pushScope args $
@@ -412,7 +418,8 @@ buildArgument params arg = case params of
         These x _ -> const (pure x)
 
 attrSetAlter
-    :: forall e t v m. (MonadEval t v m, Scoped e t m, Framed e m, MonadIO m)
+    :: forall e t v m. (MonadExpr t v m, Scoped e t m, Framed e m,
+                  MonadVar m, MonadFile m)
     => [Text]
     -> HashMap Text (m v)
     -> m v
@@ -443,7 +450,8 @@ attrSetAlter (p:ps) m val = case M.lookup p m of
             =<< traverse (fmap coerce . buildThunk . withScopes scope) m'
 
 evalBinds
-    :: forall e t v m. (MonadEval t v m, Scoped e t m, Framed e m, MonadIO m)
+    :: forall e t v m. (MonadExpr t v m, Scoped e t m, Framed e m,
+                  MonadVar m, MonadFix m, MonadFile m)
     => Bool
     -> Bool
     -> [Binding (m v)]
@@ -495,18 +503,18 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
 
     insert m (path, value) = attrSetAlter path m value
 
-evalSelector :: (Framed e m, MonadEval t v m, MonadIO m)
+evalSelector :: (Framed e m, MonadExpr t v m, MonadFile m)
              => Bool -> NAttrPath (m v) -> m [Text]
 evalSelector allowDynamic = mapM $ evalGetterKeyName allowDynamic
 
-evalKeyNameStatic :: (Framed e m, MonadEval t v m, MonadIO m)
+evalKeyNameStatic :: (Framed e m, MonadExpr t v m, MonadFile m)
                   => NKeyName (m v) -> m Text
 evalKeyNameStatic = \case
     StaticKey k -> pure k
     DynamicKey _ -> throwError "dynamic attribute not allowed in this context"
 
 -- | Returns Nothing iff the key value is null
-evalKeyNameDynamicNullable :: (Framed e m, MonadEval t v m, MonadIO m)
+evalKeyNameDynamicNullable :: (Framed e m, MonadExpr t v m, MonadFile m)
                            => NKeyName (m v) -> m (Maybe Text)
 evalKeyNameDynamicNullable = \case
     StaticKey k -> pure $ Just k
@@ -516,7 +524,7 @@ evalKeyNameDynamicNullable = \case
         bad -> throwError $ "evaluating key name: expected string, got "
                   ++ show (void bad)
 
-evalKeyNameDynamicNotNull :: (Framed e m, MonadEval t v m, MonadIO m)
+evalKeyNameDynamicNotNull :: (Framed e m, MonadExpr t v m, MonadFile m)
                           => NKeyName (m v) -> m Text
 evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
     Nothing -> throwError "value is null while a string was expected"
@@ -524,7 +532,7 @@ evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *binding* a value
-evalSetterKeyName :: (Framed e m, MonadEval t v m, MonadIO m)
+evalSetterKeyName :: (Framed e m, MonadExpr t v m, MonadFile m)
                   => Bool -> NKeyName (m v) -> m (Maybe Text)
 evalSetterKeyName canBeDynamic
     | canBeDynamic = evalKeyNameDynamicNullable
@@ -532,13 +540,13 @@ evalSetterKeyName canBeDynamic
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value
-evalGetterKeyName :: (Framed e m, MonadEval t v m, MonadIO m)
+evalGetterKeyName :: (Framed e m, MonadExpr t v m, MonadFile m)
                   => Bool -> NKeyName (m v) -> m Text
 evalGetterKeyName canBeDynamic
     | canBeDynamic = evalKeyNameDynamicNotNull
     | otherwise    = evalKeyNameStatic
 
-evalString :: forall e t v m. (Framed e m, MonadEval t v m, MonadIO m)
+evalString :: forall e t v m. (Framed e m, MonadExpr t v m, MonadFile m)
            => NString (m v) -> m v
 evalString = \case
     Indented     parts -> fromParts parts
@@ -555,7 +563,7 @@ evalString = \case
 
 -----
 
-tracingEvalExpr :: (Framed e m, MonadIO m, MonadIO n, Alternative n)
+tracingEvalExpr :: (Framed e m, MonadIO n, Alternative n)
                 => (NExprF (m v) -> m v) -> NExprLoc -> n (m v)
 tracingEvalExpr eval =
     flip runReaderT (0 :: Int)
@@ -571,7 +579,7 @@ tracingEvalExpr eval =
         liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' ' ++ "."
         return res
 
-framedEvalExpr :: (Framed e m, MonadIO m)
+framedEvalExpr :: Framed e m
                => (NExprF (m v) -> m v) -> NExprLoc -> m v
 framedEvalExpr eval = adi (eval . annotated . getCompose) psi
   where

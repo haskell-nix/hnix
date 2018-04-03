@@ -5,7 +5,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 
 module Nix (eval, evalLoc, tracingEvalLoc, lint, runLintM) where
 
@@ -15,7 +14,9 @@ import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader (MonadReader)
 import           Control.Monad.Trans.Reader
+import qualified Data.ByteString as BS
 import qualified Data.HashMap.Lazy as M
+import           Data.IORef
 import           Data.Text (Text)
 import           Nix.Builtins
 import qualified Nix.Eval as Eval
@@ -27,6 +28,8 @@ import           Nix.Lint hiding (lint)
 import           Nix.Monad
 import           Nix.Monad.Instance
 import           Nix.Scope
+import           Nix.Stack
+import           Nix.Thunk
 import           Nix.Utils
 
 -- | Evaluate a nix expression in the default context
@@ -76,8 +79,20 @@ newtype Lint m a = Lint
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
               MonadReader (Context (Lint m) (SThunk (Lint m))))
 
-instance (MonadFix m, MonadIO m)
-      => Eval.MonadEval (SThunk (Lint m)) (Symbolic (Lint m)) (Lint m) where
+instance MonadIO m => MonadVar (Lint m) where
+    type Var (Lint m) = IORef
+
+    newVar   = liftIO . newIORef
+    readVar  = liftIO . readIORef
+    writeVar = (liftIO .) . writeIORef
+
+instance MonadIO m => MonadFile (Lint m) where
+    readFile = liftIO . BS.readFile
+
+instance MonadIO m =>
+      Eval.MonadExpr (SThunk (Lint m))
+          (IORef (NSymbolicF (NTypeF (Lint m) (SThunk (Lint m)))))
+          (Lint m) where
     embedSet s = mkSymbolic [TSet (Just s)]
     projectSet = unpackSymbolic >=> \case
         NMany [TSet s] -> return s

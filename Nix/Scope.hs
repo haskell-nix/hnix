@@ -36,7 +36,7 @@ isWeakScope :: Scope m a -> Bool
 isWeakScope (WeakScope _) = True
 isWeakScope _ = False
 
-scopeLookup :: MonadIO m => Text -> [Scope m v] -> m (Maybe v)
+scopeLookup :: Monad m => Text -> [Scope m v] -> m (Maybe v)
 scopeLookup key = paraM go Nothing
   where
     go (Scope m) _ rest = return $ M.lookup key m <|> rest
@@ -76,7 +76,7 @@ pushWeakScope s = local (over hasLens (WeakScope s :))
 pushScopes :: Scoped e v m => Scopes m v -> m r -> m r
 pushScopes s = local (over hasLens (s ++))
 
-lookupVar :: forall e v m. (Scoped e v m, MonadIO m) => Text -> m (Maybe v)
+lookupVar :: forall e v m. (Scoped e v m, Monad m) => Text -> m (Maybe v)
 lookupVar k = join $ asks (scopeLookup @m k . view hasLens)
 
 withScopes :: forall v m e a. Scoped e v m => Scopes m v -> m a -> m a
