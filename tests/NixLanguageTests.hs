@@ -71,16 +71,16 @@ genTests = do
             _ -> error $ "Unexpected: " ++ show kind
 
 assertParse :: FilePath -> Assertion
-assertParse file = parseNixFileLoc file >>= \case
-  Success expr -> void $ lintExprIO expr
+assertParse file = parseNixFile file >>= \case
+  Success expr -> void $ lint expr
   Failure err  -> assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
 
 assertParseFail :: FilePath -> Assertion
 assertParseFail file = do
-    eres <- parseNixFileLoc file
+    eres <- parseNixFile file
     catch (case eres of
                Success expr -> do
-                   _ <- lintExprIO expr
+                   _ <- lint expr
                    assertFailure $ "Unexpected success parsing `"
                        ++ file ++ ":\nParsed value: " ++ show expr
                Failure _ -> return ()) $ \(_ :: SomeException) ->
@@ -123,4 +123,4 @@ nixEvalFile file =  do
         error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
     Success expression -> do
         setEnv "TEST_VAR" "foo"
-        evalTopLevelExprIO (Just file) expression
+        evalLoc (Just file) expression

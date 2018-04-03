@@ -37,6 +37,7 @@ Library
     Nix.Pretty
     Nix.Parser.Operators
     Nix.StringOperations
+    Nix.TH
     Nix.Expr.Types
     Nix.Expr.Types.Annotated
   Other-modules:
@@ -65,10 +66,12 @@ Library
     , filepath
     , semigroups >= 0.18 && < 0.19
     , split
+    , template-haskell
     , regex-tdfa
     , regex-tdfa-text
     , these
     , unix
+    , syb
   if flag(parsec)
     Cpp-options: -DUSE_PARSEC
     Build-depends: parsec
@@ -104,6 +107,7 @@ Executable hnix
     , deepseq
     , optparse-applicative
     , text
+    , template-haskell
     , transformers
     , filepath
   Ghc-options: -Wall

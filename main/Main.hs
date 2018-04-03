@@ -1,17 +1,19 @@
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TupleSections #-}
 
 module Main where
 
-import Control.Monad
-import Nix
-import Nix.Expr.Types.Annotated (stripAnnotation)
-import Nix.Lint
-import Nix.Parser
-import Nix.Pretty
-import Options.Applicative hiding (ParserResult(..))
-import System.IO
-import Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
+import           Control.Monad
+import qualified Nix
+import           Nix.Expr.Types.Annotated (stripAnnotation)
+import           Nix.Lint
+import           Nix.Parser
+import           Nix.Pretty
+import           Nix.TH
+import           Options.Applicative hiding (ParserResult(..))
+import           System.IO
+import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 data Options = Options
     { verbose    :: Bool
@@ -53,20 +55,22 @@ main = do
     (eres, mpath) <- case expression opts of
         Just s -> return (parseNixStringLoc s, Nothing)
         Nothing  -> case filePath opts of
-            Nothing   -> (, Nothing) . parseNixStringLoc <$> getContents
-            Just "-"  -> (, Nothing) . parseNixStringLoc <$> getContents
+            Nothing   -> (, Nothing) . parseNixStringLoc <$> System.IO.getContents
+            Just "-"  -> (, Nothing) . parseNixStringLoc <$> System.IO.getContents
             Just path -> (, Just path) <$> parseNixFileLoc path
+
+    print . printNix =<< Nix.eval [nix|1 + 3|]
 
     case eres of
         Failure err -> hPutStrLn stderr $ "Parse failed: " ++ show err
         Success expr -> do
-            when (check opts) $ do
-                sym <- lintExprIO expr
-                putStrLn =<< runLintIO (renderSymbolic sym)
+            when (check opts) $
+                putStrLn =<< Nix.runLintM . renderSymbolic
+                         =<< Nix.lint (stripAnnotation expr)
             if | evaluate opts, debug opts ->
-                     print =<< tracingEvalTopLevelExprIO mpath expr
+                     print =<< Nix.tracingEvalLoc mpath expr
                | evaluate opts ->
-                     putStrLn . printNix =<< evalTopLevelExprIO mpath expr
+                     putStrLn . printNix =<< Nix.evalLoc mpath expr
                | debug opts ->
                      print expr
                | otherwise ->

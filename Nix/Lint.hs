@@ -294,6 +294,7 @@ lint (NSelect aset attr alternative) = do
                 ++ intercalate "." (map show ks)
                 ++ " in " ++ show (void aset')
   where
+    extract NAny (_:_) = Just <$> everyPossible
     extract (NMany [TSet Nothing]) (_:_ks) =
         error "NYI: Selection in unknown set"
     extract (NMany [TSet (Just s)]) (k:ks) = case M.lookup k s of

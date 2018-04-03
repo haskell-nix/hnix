@@ -9,7 +9,6 @@ module EvalTests (tests) where
 import Data.String.Interpolate
 import Nix
 import Nix.Expr
-import Nix.Lint
 import Nix.Monad
 import Nix.Parser
 import Test.Tasty
@@ -82,12 +81,10 @@ instance (Show r, Eq r) => Eq (NValueF m r) where
 
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
 constantEqual a b = do
-    -- asym <- lintExprIO a
-    -- putStrLn =<< runLintIO (renderSymbolic asym)
-    a' <- tracingEvalTopLevelExprIO Nothing a
-    -- bsym <- lintExprIO b
-    -- putStrLn =<< runLintIO (renderSymbolic bsym)
-    b' <- tracingEvalTopLevelExprIO Nothing b
+    -- putStrLn =<< lint (stripAnnotation a)
+    a' <- tracingEvalLoc Nothing a
+    -- putStrLn =<< lint (stripAnnotation b)
+    b' <- tracingEvalLoc Nothing b
     assertEqual "" a' b'
 
 constantEqualStr :: String -> String -> Assertion

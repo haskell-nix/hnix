@@ -6,6 +6,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -65,7 +66,7 @@ instance (MonadFix m, MonadNix (Lazy m), MonadIO m)
         NVConstant NNull -> return $ Just Nothing
         v -> fmap (Just . Just) . valueText True =<< normalForm v
 
-instance MonadNix (Lazy IO) where
+instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
     addPath path = liftIO $ do
         (exitCode, out, _) <-
             readProcessWithExitCode "nix-store" ["--add", path] ""
@@ -78,7 +79,7 @@ instance MonadNix (Lazy IO) where
     makeAbsolutePath origPath = do
         absPath <- if isAbsolute origPath then pure origPath else do
             cwd <- do
-                mres <- lookupVar @_ @(NThunk (Lazy IO)) "__cur_file"
+                mres <- lookupVar @_ @(NThunk (Lazy m)) "__cur_file"
                 case mres of
                     Nothing -> liftIO getCurrentDirectory
                     Just v -> force v >>= \case
@@ -106,11 +107,11 @@ instance Has (Context m v) (Scopes m v) where
 instance Has (Context m v) Frames where
     hasLens f (Context x y) = Context x <$> f y
 
-instance MonadNixEnv (Lazy IO) where
+instance (MonadFix m, MonadIO m) => MonadNixEnv (Lazy m) where
     -- jww (2018-03-29): Cache which files have been read in.
     importFile = force >=> \case
         NVLiteralPath path -> do
-            mres <- lookupVar @(Context (Lazy IO) (NThunk (Lazy IO)))
+            mres <- lookupVar @(Context (Lazy m) (NThunk (Lazy m)))
                              "__cur_file"
             path' <- case mres of
                 Nothing  -> do
@@ -144,5 +145,5 @@ instance MonadNixEnv (Lazy IO) where
                 Just v  -> NVStr (Text.pack v) mempty
         p -> error $ "Unexpected argument to getEnv: " ++ show (void p)
 
-runLazyIO :: Lazy IO a -> IO a
-runLazyIO = flip runReaderT (Context emptyScopes []) . runLazy
+runLazyM :: MonadIO m => Lazy m a -> m a
+runLazyM = flip runReaderT (Context emptyScopes []) . runLazy
