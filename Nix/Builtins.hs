@@ -51,7 +51,7 @@ import           System.Posix.Files
 type MonadBuiltins e m =
     (MonadNixEval e m, MonadEval (NThunk m) (NValue m) m, MonadNixEnv m)
 
-baseEnv :: MonadBuiltins e m => m (Scopes (NThunk m))
+baseEnv :: MonadBuiltins e m => m (Scopes m (NThunk m))
 baseEnv = do
     ref <- thunk $ NVSet <$> builtins
     lst <- (("builtins", ref) :) <$> topLevelBuiltins

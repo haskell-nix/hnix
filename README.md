@@ -1,11 +1,10 @@
 # hnix
 
-Haskell parser for Nix expression language.
+Haskell parser, evaluator and type checker for the Nix language.
 
 ## Prerequisites
 
 Nix is installed and in your `$PATH`.
-Tested with Nix v1.10.
 
 ## Getting Started
 
@@ -19,5 +18,7 @@ $ nix-shell
 $ cabal test
 ...
 $ cabal bench
+...
+$ ./dist/build/hnix/hnix --help
 ```
 

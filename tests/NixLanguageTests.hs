@@ -123,4 +123,4 @@ nixEvalFile file =  do
         error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
     Success expression -> do
         setEnv "TEST_VAR" "foo"
-        evalTopLevelExprIO (Just (takeDirectory file)) expression
+        evalTopLevelExprIO (Just file) expression

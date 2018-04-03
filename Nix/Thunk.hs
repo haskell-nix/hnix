@@ -8,16 +8,18 @@ data Deferred m v
     -- ^ This is closure over the environment where it was created.
     | ComputedValue v
 
-newtype Thunk m v = Thunk { getThunk :: IORef (Deferred m v) }
+newtype Thunk m v = Thunk { getThunk :: Either v (IORef (Deferred m v)) }
 
 valueRef :: MonadIO m => v -> m (Thunk m v)
-valueRef value  = liftIO $ Thunk <$> newIORef (ComputedValue value)
+valueRef  = pure . Thunk . Left
 
 buildThunk :: MonadIO m => m v -> m (Thunk m v)
-buildThunk action = liftIO $ Thunk <$> newIORef (DeferredAction action)
+buildThunk action =
+    liftIO $ Thunk . Right <$> newIORef (DeferredAction action)
 
 forceThunk :: MonadIO m => Thunk m v -> m v
-forceThunk (Thunk ref) = do
+forceThunk (Thunk (Left ref)) = pure ref
+forceThunk (Thunk (Right ref)) = do
     eres <- liftIO $ readIORef ref
     case eres of
         ComputedValue value -> return value

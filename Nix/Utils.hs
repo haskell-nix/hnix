@@ -31,6 +31,9 @@ type DList a = Endo [a]
 (<&>) :: Functor f => f a -> (a -> c) -> f c
 (<&>) = flip (<$>)
 
+(??) :: Functor f => f (a -> b) -> a -> f b
+fab ?? a = fmap ($ a) fab
+
 loeb :: Functor f => f (f a -> a) -> f a
 loeb x = go where go = fmap ($ go) x
 
@@ -41,6 +44,11 @@ para :: (a -> [a] -> b -> b) -> b -> [a] -> b
 para f base = h where
     h []     = base
     h (x:xs) = f x xs (h xs)
+
+paraM :: Monad m => (a -> [a] -> b -> m b) -> b -> [a] -> m b
+paraM f base = h where
+    h []     = return base
+    h (x:xs) = f x xs =<< h xs
 
 -- | adi is Abstracting Definitional Interpreters:
 --

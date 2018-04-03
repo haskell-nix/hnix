@@ -28,6 +28,7 @@ import           Nix.Expr
 import           Nix.Scope
 import           Nix.Stack
 import           Nix.Thunk
+import           Nix.Utils
 
 data TAtom
   = TInt
@@ -296,7 +297,7 @@ lint (NSelect aset attr alternative) = do
     extract (NMany [TSet Nothing]) (_:_ks) =
         error "NYI: Selection in unknown set"
     extract (NMany [TSet (Just s)]) (k:ks) = case M.lookup k s of
-        Just v  -> sforce v >>= unpackSymbolic >>= flip extract ks
+        Just v  -> sforce v >>= unpackSymbolic >>= extract ?? ks
         Nothing -> return Nothing
     extract _ (_:_) = return Nothing
     extract v [] = Just <$> packSymbolic v
@@ -332,10 +333,12 @@ lint e@(NIf cond t f) = do
     _ <- join $ unify (void e) <$> cond <*> mkSymbolic [TConstant [TBool]]
     join $ unify (void e) <$> t <*> f
 
-lint (NWith scope body) = scope >>= unpackSymbolic >>= \case
-    NMany [TSet (Just s')] -> pushWeakScope s' body
-    NMany [TSet Nothing] -> error "with unknown set"
-    _ -> throwError "scope must be a set in with statement"
+lint (NWith scope body) = do
+    s <- sthunk scope
+    pushWeakScope s ?? body $ sforce >=> unpackSymbolic >=> \case
+        NMany [TSet (Just s')] -> return s'
+        NMany [TSet Nothing] -> error "with unknown set"
+        _ -> throwError "scope must be a set in with statement"
 
 lint e@(NAssert cond body) = do
     _ <- join $ unify (void e) <$> cond <*> mkSymbolic [TConstant [TBool]]
