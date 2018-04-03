@@ -32,6 +32,9 @@ withStringContext :: Framed e m => String -> m r -> m r
 withStringContext str = local (over hasLens (Left @_ @(NExprLocF ()) str :))
 
 renderLocation :: MonadIO m => SrcSpan -> Doc -> m Doc
+renderLocation (SrcSpan beg@(Directed "<string>" _ _ _ _) end) msg =
+    return $ explain (addSpan beg end emptyRendering)
+                     (Err (Just msg) [] mempty [])
 renderLocation (SrcSpan beg@(Directed path _ _ _ _) end) msg = do
     contents <- liftIO $ BS.readFile (Text.unpack (Text.decodeUtf8 path))
     return $ explain (addSpan beg end (rendered beg contents))
