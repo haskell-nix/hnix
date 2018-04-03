@@ -127,7 +127,7 @@ instance MonadNixEnv (Lazy IO) where
                     x -> error $ "How can the current directory be: " ++ show x
             traceM $ "Importing file " ++ path'
             withStringContext ("While importing file " ++ show path') $ do
-                eres <- Lazy $ parseNixFile path'
+                eres <- Lazy $ parseNixFileLoc path'
                 case eres of
                     Failure err  -> error $ "Parse failed: " ++ show err
                     Success expr -> do
@@ -136,7 +136,8 @@ instance MonadNixEnv (Lazy IO) where
                         -- Use this cookie so that when we evaluate the next
                         -- import, we'll remember which directory its containing
                         -- file was in.
-                        pushScope (M.singleton "__cwd" ref) (evalExpr expr)
+                        pushScope (M.singleton "__cwd" ref)
+                                  (framedEvalExpr eval expr)
         p -> error $ "Unexpected argument to import: " ++ show (void p)
 
     getEnvVar = forceThunk . getNThunk >=> \case
