@@ -10,7 +10,6 @@ import Nix.Lint
 import Nix.Parser
 import Nix.Pretty
 import Options.Applicative hiding (ParserResult(..))
-import System.FilePath
 import System.IO
 import Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
@@ -51,12 +50,12 @@ mainOptions = Options
 main :: IO ()
 main = do
     opts <- execParser optsDef
-    (eres, mdir) <- case expression opts of
+    (eres, mpath) <- case expression opts of
         Just s -> return (parseNixStringLoc s, Nothing)
         Nothing  -> case filePath opts of
             Nothing   -> (, Nothing) . parseNixStringLoc <$> getContents
             Just "-"  -> (, Nothing) . parseNixStringLoc <$> getContents
-            Just path -> (, Just (takeDirectory path)) <$> parseNixFileLoc path
+            Just path -> (, Just path) <$> parseNixFileLoc path
 
     case eres of
         Failure err -> hPutStrLn stderr $ "Parse failed: " ++ show err
@@ -65,9 +64,9 @@ main = do
                 sym <- lintExprIO expr
                 putStrLn =<< runLintIO (renderSymbolic sym)
             if | evaluate opts, debug opts ->
-                     print =<< tracingEvalTopLevelExprIO mdir expr
+                     print =<< tracingEvalTopLevelExprIO mpath expr
                | evaluate opts ->
-                     putStrLn . printNix =<< evalTopLevelExprIO mdir expr
+                     putStrLn . printNix =<< evalTopLevelExprIO mpath expr
                | debug opts ->
                      print expr
                | otherwise ->

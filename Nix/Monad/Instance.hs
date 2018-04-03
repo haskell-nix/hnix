@@ -82,13 +82,13 @@ instance MonadNix (Lazy IO) where
     makeAbsolutePath origPath = do
         absPath <- if isAbsolute origPath then pure origPath else do
             cwd <- do
-                mres <- lookupVar @_ @(NThunk (Lazy IO)) "__cwd"
+                mres <- lookupVar @_ @(NThunk (Lazy IO)) "__cur_file"
                 case mres of
                     Nothing -> liftIO getCurrentDirectory
                     Just (NThunk v) -> forceThunk v >>= \case
-                        NVLiteralPath s -> return s
+                        NVLiteralPath s -> return $ takeDirectory s
                         v -> throwError $ "when resolving relative path,"
-                                ++ " __cwd is in scope,"
+                                ++ " __cur_file is in scope,"
                                 ++ " but is not a path; it is: "
                                 ++ show (void v)
             pure $ cwd </> origPath
@@ -114,16 +114,16 @@ instance MonadNixEnv (Lazy IO) where
     -- jww (2018-03-29): Cache which files have been read in.
     importFile = forceThunk . getNThunk >=> \case
         NVLiteralPath path -> do
-            mres <- lookupVar @(Context (NThunk (Lazy IO))) "__cwd"
+            mres <- lookupVar @(Context (NThunk (Lazy IO))) "__cur_file"
             path' <- case mres of
                 Nothing  -> do
                     traceM "No known current directory"
                     return path
-                Just (NThunk dir) -> forceThunk dir >>= normalForm >>= \case
-                    Fix (NVLiteralPath dir') -> do
-                        traceM $ "Current directory for import is: "
-                            ++ show dir'
-                        return $ dir' </> path
+                Just (NThunk p) -> forceThunk p >>= normalForm >>= \case
+                    Fix (NVLiteralPath p') -> do
+                        traceM $ "Current file being evaluated is: "
+                            ++ show p'
+                        return $ takeDirectory p' </> path
                     x -> error $ "How can the current directory be: " ++ show x
             traceM $ "Importing file " ++ path'
             withStringContext ("While importing file " ++ show path') $ do
@@ -131,12 +131,11 @@ instance MonadNixEnv (Lazy IO) where
                 case eres of
                     Failure err  -> error $ "Parse failed: " ++ show err
                     Success expr -> do
-                        ref <- fmap NThunk $ buildThunk $ return $
-                            NVLiteralPath $ takeDirectory path'
+                        ref <- NThunk <$> valueRef (NVLiteralPath path')
                         -- Use this cookie so that when we evaluate the next
                         -- import, we'll remember which directory its containing
                         -- file was in.
-                        pushScope (M.singleton "__cwd" ref)
+                        pushScope (M.singleton "__cur_file" ref)
                                   (framedEvalExpr eval expr)
         p -> error $ "Unexpected argument to import: " ++ show (void p)
 
