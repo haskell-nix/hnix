@@ -250,7 +250,7 @@ evalApp :: forall e m. (MonadNixEval e m, MonadEval (NThunk m) (NValue m) m)
 evalApp fun arg = fun >>= \case
     NVFunction params f -> do
         traceM "evalApp:NVFunction"
-        args <- buildArgument params =<< thunk arg
+        args <- buildArgument params =<< valueThunk =<< arg
         traceM $ "Evaluating function application with args: "
             ++ show (newScope args)
         clearScopes @(NThunk m) (pushScope args (force =<< f))
