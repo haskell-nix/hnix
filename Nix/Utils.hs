@@ -31,6 +31,9 @@ type DList a = Endo [a]
 (<&>) :: Functor f => f a -> (a -> c) -> f c
 (<&>) = flip (<$>)
 
+(??) :: Functor f => f (a -> b) -> a -> f b
+fab ?? a = fmap ($ a) fab
+
 loeb :: Functor f => f (f a -> a) -> f a
 loeb x = go where go = fmap ($ go) x
 

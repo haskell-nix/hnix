@@ -43,7 +43,7 @@ import           Nix.Thunk
 import           Nix.Utils
 
 type MonadNixEval e m =
-    (Scoped e (NThunk m) m, Framed e m, MonadNix m, MonadIO m )
+    (Scoped e (NThunk m) m, Framed e m, MonadNix m, MonadIO m)
 
 -- | Evaluate an nix expression, with a given ValueSet as environment
 evalExpr :: (MonadNixEval e m, MonadEval (NThunk m) (NValue m) m)
@@ -54,7 +54,7 @@ eval :: forall e m. (MonadNixEval e m, MonadEval (NThunk m) (NValue m) m)
      => NExprF (m (NValue m)) -> m (NValue m)
 
 eval (NSym var) = do
-    traceM $ "NSym..1: var = " ++ show var
+    traceM $ "NSym: var = " ++ show var
     mres <- lookupVar var
     case mres of
         Nothing -> throwError $ "Undefined variable: " ++ show var
@@ -80,17 +80,22 @@ eval (NBinary op larg rarg) = do
     let unsupportedTypes =
             "unsupported argument types for binary operator "
                 ++ show (() <$ lval, op, () <$ rval)
-        numBinOp :: (forall a. Num a => a -> a -> a) -> NAtom -> NAtom -> m (NValue m)
+        numBinOp :: (forall a. Num a => a -> a -> a) -> NAtom -> NAtom
+                 -> m (NValue m)
         numBinOp f = numBinOp' f f
         numBinOp'
             :: (Integer -> Integer -> Integer)
             -> (Float -> Float -> Float)
             -> NAtom -> NAtom -> m (NValue m)
         numBinOp' intF floatF l r = case (l, r) of
-            (NInt   li, NInt   ri) -> valueRefInt   $             li `intF`               ri
-            (NInt   li, NFloat rf) -> valueRefFloat $ fromInteger li `floatF`             rf
-            (NFloat lf, NInt   ri) -> valueRefFloat $             lf `floatF` fromInteger ri
-            (NFloat lf, NFloat rf) -> valueRefFloat $             lf `floatF`             rf
+            (NInt   li, NInt   ri) ->
+                valueRefInt   $             li `intF`               ri
+            (NInt   li, NFloat rf) ->
+                valueRefFloat $ fromInteger li `floatF`             rf
+            (NFloat lf, NInt   ri) ->
+                valueRefFloat $             lf `floatF` fromInteger ri
+            (NFloat lf, NFloat rf) ->
+                valueRefFloat $             lf `floatF`             rf
             _ -> throwError unsupportedTypes
     case (lval, rval) of
         (NVConstant lc, NVConstant rc) -> case (op, lc, rc) of
@@ -136,7 +141,8 @@ eval (NBinary op larg rarg) = do
 
         (NVLiteralPath ls, NVStr rs _) -> case op of
             -- TODO: Canonicalise path
-            NPlus -> NVLiteralPath <$> makeAbsolutePath (ls `mappend` Text.unpack rs)
+            NPlus -> NVLiteralPath
+                <$> makeAbsolutePath (ls `mappend` Text.unpack rs)
             _ -> throwError unsupportedTypes
 
         _ -> throwError unsupportedTypes
@@ -156,9 +162,7 @@ eval (NSelect aset attr alternative) = do
                 ++ " in " ++ show (() <$ aset')
   where
     extract (NVSet s) (k:ks) = case M.lookup k s of
-        Just v -> do
-            s' <- force v
-            extract s' ks
+        Just v  -> force v >>= extract ?? ks
         Nothing -> return Nothing
     extract _ (_:_) = return Nothing
     extract v [] = return $ Just v
@@ -167,7 +171,8 @@ eval (NHasAttr aset attr) = aset >>= \case
     NVSet s -> evalSelector True attr >>= \case
         [keyName] ->
             return $ NVConstant $ NBool $ keyName `M.member` s
-        _ -> throwError "attr name argument to hasAttr is not a single-part name"
+        _ -> throwError $ "attr name argument to hasAttr"
+                ++ " is not a single-part name"
     _ -> throwError "argument to hasAttr has wrong type"
 
 eval (NList l) = do
@@ -199,7 +204,7 @@ eval (NIf cond t f) = cond >>= \case
 
 eval (NWith scope body) = do
     s <- thunk scope
-    flip (pushWeakScope s) body $ force >=> \case
+    pushWeakScope s ?? body $ force >=> \case
         NVSet s -> return s
         _ -> throwError "scope must be a set in with statement"
 
