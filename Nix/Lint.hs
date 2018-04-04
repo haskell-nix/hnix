@@ -82,8 +82,8 @@ sforce :: Applicative m => SThunk m -> m (Symbolic m)
 sforce = forceThunk . getSThunk
 
 -- TODO: Remove pure
-svalueThunk :: Applicative m => Symbolic m -> m (SThunk m)
-svalueThunk = pure . SThunk . valueRef
+svalueThunk :: Applicative m => Symbolic m -> SThunk m
+svalueThunk = SThunk . valueRef
 
 class Monad m => MonadVar m where
     type Var m :: * -> *
@@ -329,8 +329,7 @@ lint e@(NList l) = do
     y <- everyPossible
     traverse (withScopes @(SThunk m) scope) l
         >>= foldM (unify (void e)) y
-        >>= svalueThunk
-        >>= (\t -> mkSymbolic [TList t])
+        >>= (\t -> mkSymbolic [TList (svalueThunk t)])
 
 lint (NSet binds) = do
     s <- evalBinds True False binds

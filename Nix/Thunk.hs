@@ -25,16 +25,17 @@ import           System.IO.Unsafe (unsafeInterleaveIO)
 class MonadInterleave m where
     unsafeInterleave :: m a -> m (m a)
 
-type Thunk m v = m v
+data Thunk m v = Pure v | Effect (m v)
 
 valueRef :: Applicative m => v -> Thunk m v
-valueRef = pure
+valueRef = Pure
 
-buildThunk :: MonadInterleave m => m v -> m (Thunk m v)
-buildThunk = unsafeInterleave
+buildThunk :: (Functor m, MonadInterleave m) => m v -> m (Thunk m v)
+buildThunk = fmap Effect . unsafeInterleave
 
 forceThunk :: Applicative m => Thunk m v -> m v
-forceThunk = id
+forceThunk (Pure v) = pure v
+forceThunk (Effect m) = m
 
 instance MonadInterleave IO where
     unsafeInterleave = evaluate <$> unsafeInterleaveIO

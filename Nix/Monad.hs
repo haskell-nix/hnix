@@ -30,9 +30,8 @@ thunk = fmap coerce . buildThunk
 force :: Applicative m => NThunk m -> m (NValue m)
 force = forceThunk . coerce
 
--- TODO: Remove pure
-valueThunk :: forall m. Applicative m => NValue m -> m (NThunk m)
-valueThunk = pure . coerce . valueRef @m
+valueThunk :: forall m. Applicative m => NValue m -> NThunk m
+valueThunk = coerce . valueRef @m
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.

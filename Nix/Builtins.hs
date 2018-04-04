@@ -1,7 +1,4 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -268,8 +265,8 @@ splitVersion s = case Text.uncons s of
 splitVersion_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 splitVersion_ = force >=> \case
     NVStr s _ -> do
-        vals <- forM (splitVersion s) $ \c ->
-            valueThunk $ NVStr (versionComponentToString c) mempty
+        let vals = flip map (splitVersion s) $ \c ->
+                valueThunk $ NVStr (versionComponentToString c) mempty
         return $ NVList vals
     _ -> throwError "builtins.splitVersion: not a string"
 
@@ -335,7 +332,7 @@ attrValues = force >=> \case
 
 map_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 map_ f = force >=> \case
-    NVList l -> NVList <$> traverse (valueThunk <=< apply f) l
+    NVList l -> NVList <$> traverse (fmap valueThunk . apply f) l
     v -> error $ "map: Expected list, got " ++ show (void v)
 
 catAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
@@ -386,7 +383,7 @@ elem_ x xs = force xs >>= \case
 genList :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 genList generator length = force length >>= \case
     NVConstant (NInt n) | n >= 0 -> fmap NVList $ forM [0 .. n - 1] $ \i ->
-        thunk $ apply generator =<< valueThunk =<< toValue i
+        thunk $ apply generator =<< valueThunk <$> toValue i
     v -> throwError $ "builtins.genList: Expected a non-negative number, got "
             ++ show (void v)
 
@@ -581,7 +578,7 @@ typeOf t = do
         NVStr _ _ -> "string"
         NVList _ -> "list"
         NVSet _ -> "set"
-        NVClosure _ _ _ -> "lambda"
+        NVClosure {} -> "lambda"
         NVLiteralPath _ -> "path"
         NVEnvPath _ -> "path"
         NVBuiltin _ _ -> "lambda"
@@ -633,7 +630,7 @@ instance (MonadBuiltins e m, ToNix a) => ToBuiltin m (Prim m a) where
 instance (MonadBuiltins e m, FromNix a, ToBuiltin m b)
       => ToBuiltin m (a -> b) where
     toBuiltin name f =
-        return $ NVBuiltin name $ \a -> toBuiltin name . f =<< fromThunk a
+        return $ NVBuiltin name $ toBuiltin name . f <=< fromThunk
 
 class FromNix a where
     --TODO: Get rid of the HasCallStack - it should be captured by whatever

@@ -141,7 +141,7 @@ instance (MonadFix m, MonadIO m, MonadInterleave (Lazy m))
                 case eres of
                     Failure err  -> error $ "Parse failed: " ++ show err
                     Success expr -> do
-                        ref <- valueThunk (NVLiteralPath path')
+                        let ref = valueThunk @(Lazy m) (NVLiteralPath path')
                         -- Use this cookie so that when we evaluate the next
                         -- import, we'll remember which directory its containing
                         -- file was in.

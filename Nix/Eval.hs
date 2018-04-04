@@ -258,13 +258,13 @@ evalApp :: forall e m. (MonadEval e m, MonadFix m)
 evalApp fun arg = fun >>= \case
     NVClosure scope params f -> do
         traceM "evalApp:NVFunction"
-        args <- buildArgument params =<< valueThunk =<< arg
+        args <- buildArgument params =<< valueThunk <$> arg
         traceM $ "Evaluating function application with args: "
             ++ show (newScope args)
         withScopes @(NThunk m) scope $ pushScope args $ force =<< f
     NVBuiltin name f -> do
         traceM $ "evalApp:NVBuiltin " ++ name
-        f =<< valueThunk =<< arg
+        f =<< valueThunk <$> arg
     NVSet m | Just f <- M.lookup "__functor" m -> do
         traceM "evalApp:__functor"
         force f `evalApp` fun `evalApp` arg
