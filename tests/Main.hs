@@ -1,19 +1,28 @@
 module Main where
 
+import           Control.Monad
 import qualified EvalTests
 import qualified NixLanguageTests
 import qualified ParserTests
 import qualified PrettyTests
+import           System.Directory
 import           System.Environment
 import           Test.Tasty
 
 main :: IO ()
 main = do
   nixLanguageTests <- NixLanguageTests.genTests
-  runLangTests <- lookupEnv "LANGUAGE_TESTS"
+  langTestsEnv <- lookupEnv "LANGUAGE_TESTS"
+  let runLangTests = langTestsEnv == Just "yes"
+  when runLangTests $ do
+    files <- listDirectory "data/nix"
+    when (null files) $ error $ unlines
+      [ "Directory data/nix does not have any files."
+      , "Did you forget to run \"git submodule update --init --recursive\"?"
+      ]
   defaultMain $ testGroup "hnix" $
     [ ParserTests.tests
     , EvalTests.tests
     , PrettyTests.tests
     ] ++
-    [ nixLanguageTests | runLangTests == Just "yes"  ]
+    [ nixLanguageTests | runLangTests ]
