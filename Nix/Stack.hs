@@ -56,4 +56,4 @@ throwError :: (Framed e m, MonadFile m) => String -> m a
 throwError str = do
     context <- asks (reverse . view hasLens)
     infos   <- mapM renderFrame context
-    error $ unlines (infos ++ ["hnix: "++ str])
+    errorWithoutStackTrace $ unlines (infos ++ ["hnix: "++ str])
