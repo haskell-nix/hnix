@@ -128,9 +128,13 @@ eval (NBinary op larg rarg) = do
 
         (NVStr ls lc, NVStr rs rc) -> case op of
             NPlus -> return $ NVStr (ls `mappend` rs) (lc `mappend` rc)
-            NEq  -> valueRefBool =<< valueEq lval rval
-            NNEq -> valueRefBool . not =<< valueEq lval rval
-            _    -> throwError unsupportedTypes
+            NEq   -> valueRefBool =<< valueEq lval rval
+            NNEq  -> valueRefBool . not =<< valueEq lval rval
+            NLt   -> valueRefBool $ ls <  rs
+            NLte  -> valueRefBool $ ls <= rs
+            NGt   -> valueRefBool $ ls >  rs
+            NGte  -> valueRefBool $ ls >= rs
+            _     -> throwError unsupportedTypes
 
         (NVSet ls, NVSet rs) -> case op of
             NUpdate -> return $ NVSet $ rs `M.union` ls
