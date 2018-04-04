@@ -125,6 +125,7 @@ builtinsList = sequence [
     , add  Normal   "readDir"                    readDir_
     , add' Normal   "toJSON"                     (arity1 $ decodeUtf8 . LBS.toStrict . A.encode @A.Value)
     , add  Normal   "fromJSON"                   fromJSON
+    , add  Normal   "typeOf"                     typeOf
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -562,6 +563,24 @@ fromJSON t = do
     case A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded of
         Left jsonError -> throwError $ "builtins.fromJSON: " ++ jsonError
         Right v -> toValue v
+
+typeOf :: MonadBuiltins e m => NThunk m -> m (NValue m)
+typeOf t = do
+    v <- force t
+    toValue @Text $ case v of
+        NVConstant a -> case a of
+            NInt _ -> "int"
+            NFloat _ -> "float"
+            NBool _ -> "bool"
+            NNull -> "null"
+            NUri _ -> "string" --TODO: Should we get rid of NUri?
+        NVStr _ _ -> "string"
+        NVList _ -> "list"
+        NVSet _ -> "set"
+        NVClosure _ _ _ -> "lambda"
+        NVLiteralPath _ -> "path"
+        NVEnvPath _ -> "path"
+        NVBuiltin _ _ -> "lambda"
 
 newtype Prim m a = Prim { runPrim :: m a }
 
