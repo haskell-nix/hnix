@@ -85,9 +85,9 @@ instance (Show r, Eq r) => Eq (NValueF m r) where
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
 constantEqual a b = do
     -- putStrLn =<< lint (stripAnnotation a)
-    a' <- tracingEvalLoc Nothing a
+    a' <- evalLoc Nothing a
     -- putStrLn =<< lint (stripAnnotation b)
-    b' <- tracingEvalLoc Nothing b
+    b' <- evalLoc Nothing b
     assertEqual "" a' b'
 
 constantEqualStr :: String -> String -> Assertion
