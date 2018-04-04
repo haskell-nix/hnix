@@ -15,10 +15,12 @@ import           Control.Monad
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader (MonadReader)
+import           Control.Monad.ST
+import           Control.Monad.ST.Unsafe
 import           Control.Monad.Trans.Reader
 import qualified Data.ByteString as BS
 import qualified Data.HashMap.Lazy as M
-import           Data.IORef
+import           Data.STRef
 import           Data.Text (Text)
 import           Nix.Builtins
 import qualified Nix.Eval as Eval
@@ -82,31 +84,30 @@ tracingEvalLoc mpath expr = do
             runLazyM (baseEnv >>= (`pushScopes` pushScope m traced)
                                  >>= normalForm)
 
-newtype Lint m a = Lint
-    { runLint :: ReaderT (Context (Lint m) (SThunk (Lint m))) m a }
-    deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
-              MonadReader (Context (Lint m) (SThunk (Lint m))))
+newtype Lint s a = Lint
+    { runLint :: ReaderT (Context (Lint s) (SThunk (Lint s))) (ST s) a }
+    deriving (Functor, Applicative, Monad, MonadFix,
+              MonadReader (Context (Lint s) (SThunk (Lint s))))
 
-instance MonadIO m => MonadVar (Lint m) where
-    type Var (Lint m) = IORef
+instance MonadVar (Lint s) where
+    type Var (Lint s) = STRef s
 
-    newVar   = liftIO . newIORef
-    readVar  = liftIO . readIORef
-    writeVar = (liftIO .) . writeIORef
+    newVar x     = Lint $ ReaderT $ \_ -> newSTRef x
+    readVar x    = Lint $ ReaderT $ \_ -> readSTRef x
+    writeVar x y = Lint $ ReaderT $ \_ -> writeSTRef x y
 
-instance MonadIO m => MonadFile (Lint m) where
-    readFile = liftIO . BS.readFile
+instance MonadFile (Lint s) where
+    readFile x = Lint $ ReaderT $ \_ -> unsafeIOToST $ BS.readFile x
 
-instance MonadIO m =>
-      Eval.MonadExpr (SThunk (Lint m))
-          (IORef (NSymbolicF (NTypeF (Lint m) (SThunk (Lint m)))))
-          (Lint m) where
+instance Eval.MonadExpr (SThunk (Lint s))
+             (STRef s (NSymbolicF (NTypeF (Lint s) (SThunk (Lint s)))))
+             (Lint s) where
     embedSet s = mkSymbolic [TSet (Just s)]
     projectSet = unpackSymbolic >=> \case
         NMany [TSet s] -> return s
         _ -> return Nothing
 
-    type MText (Lint m) = Text
+    type MText (Lint s) = Text
 
     wrapText   = return
     unwrapText = return
@@ -114,12 +115,12 @@ instance MonadIO m =>
     embedText   = const $ mkSymbolic [TStr]
     projectText = const $ return Nothing
 
-runLintM :: Lint m a -> m a
+runLintM :: Lint s a -> ST s a
 runLintM = flip runReaderT (Context emptyScopes []) . runLint
 
 symbolicBaseEnv :: Monad m => m (Scopes m (SThunk m))
 symbolicBaseEnv = return []     -- jww (2018-04-02): TODO
 
-lint :: (MonadFix m, MonadIO m) => NExpr -> m (Symbolic (Lint m))
+lint :: NExpr -> ST s (Symbolic (Lint s))
 lint expr = runLintM $ symbolicBaseEnv
     >>= (`pushScopes` Lint.lintExpr expr)

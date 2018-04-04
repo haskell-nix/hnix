@@ -7,6 +7,7 @@ module NixLanguageTests (genTests) where
 import           Control.Arrow ((&&&))
 import           Control.Exception
 import           Control.Monad
+import           Control.Monad.ST
 import           Data.List (delete, sort)
 import           Data.List.Split (splitOn)
 import           Data.Map (Map)
@@ -72,7 +73,7 @@ genTests = do
 
 assertParse :: FilePath -> Assertion
 assertParse file = parseNixFile file >>= \case
-  Success expr -> void $ lint expr
+  Success expr -> pure $! runST $ void $ lint expr
   Failure err  -> assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
 
 assertParseFail :: FilePath -> Assertion
@@ -80,7 +81,7 @@ assertParseFail file = do
     eres <- parseNixFile file
     catch (case eres of
                Success expr -> do
-                   _ <- lint expr
+                   _ <- pure $! runST $ void $ lint expr
                    assertFailure $ "Unexpected success parsing `"
                        ++ file ++ ":\nParsed value: " ++ show expr
                Failure _ -> return ()) $ \(_ :: SomeException) ->

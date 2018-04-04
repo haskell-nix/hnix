@@ -593,3 +593,14 @@ framedEvalExpr :: Framed e m
 framedEvalExpr eval = adi (eval . annotated . getCompose) psi
   where
     psi k v@(Fix x) = withExprContext (() <$ x) (k v)
+
+-----
+
+{-
+streamValues :: MonadVar m => NValue m -> Stream (NValueF m) m ()
+streamValues = void . yields . fmap go
+  where
+    go (NThunk (Left v)) = streamValues v
+    go (NThunk v) = effect (streamValues <$> forceThunk v)
+-}
+
