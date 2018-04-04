@@ -73,6 +73,10 @@ type NValueNF m = Fix (NValueF m)      -- normal form
 type NValue m   = NValueF m (NThunk m) -- head normal form
 type ValueSet m = HashMap Text (NThunk m)
 
+instance Show (NThunk m) where
+    show (NThunk (Left v)) = show v
+    show (NThunk (Right _)) = "<thunk>"
+
 instance Show f => Show (NValueF m f) where
     showsPrec = flip go where
       go (NVConstant atom)    = showsCon1 "NVConstant" atom
