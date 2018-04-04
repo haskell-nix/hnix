@@ -53,7 +53,7 @@ genTests :: IO TestTree
 genTests = do
   testFiles <- sort . filter ((/= ".xml") . takeExtension)
       <$> globDir1 (compile "*-*-*.*") "data/nix/tests/lang"
-  let testsByName = groupBy takeBaseName testFiles
+  let testsByName = groupBy (takeFileName . dropExtensions) testFiles
   let testsByType = groupBy testType (Map.toList testsByName)
   let testGroups  = map mkTestGroup (Map.toList testsByType)
   return $ localOption (mkTimeout 100000)
@@ -97,14 +97,15 @@ assertLangOkXml name = assertFailure $ "Not implemented: " ++ name
 
 assertEval :: [FilePath] -> Assertion
 assertEval files =
-  case delete ".nix" $ sort $ map takeExtension files of
+  case delete ".nix" $ sort $ map takeExtensions files of
     [] -> assertLangOkXml name
     [".exp"] -> assertLangOk name
+    [".exp.disabled"] -> return ()
     [".exp-disabled"] -> return ()
     [".exp", ".flags"] -> assertFailure $ "Support for flags not implemented (needed by " ++ name ++ ".nix)."
     _ -> assertFailure $ "Unknown test type " ++ show files
   where
-    name = "data/nix/tests/lang/" ++ the (map takeBaseName files)
+    name = "data/nix/tests/lang/" ++ the (map (takeFileName . dropExtensions) files)
 
 assertEvalFail :: FilePath -> Assertion
 assertEvalFail file = catch eval (\(ErrorCall _) -> return ())
