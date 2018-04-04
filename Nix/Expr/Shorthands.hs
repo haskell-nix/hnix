@@ -21,6 +21,13 @@ mkInt = Fix . mkIntF
 mkIntF :: Integer -> NExprF a
 mkIntF = NConstant . NInt
 
+-- | Make an floating point literal expression.
+mkFloat :: Float -> NExpr
+mkFloat = Fix . mkFloatF
+
+mkFloatF :: Float -> NExprF a
+mkFloatF = NConstant . NFloat
+
 -- | Make a regular (double-quoted) string.
 mkStr :: Text -> NExpr
 mkStr = Fix . NStr . DoubleQuoted . \case

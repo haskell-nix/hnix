@@ -97,7 +97,7 @@ nixHasAttr term = build <$> term <*> optional (reservedOp "?" *> nixSelector) wh
 -- | A self-contained unit.
 nixTerm :: Parser NExprLoc
 nixTerm = nixSelect $ choice
-  [ nixPath, nixSPath, nixInt, nixBool, nixNull, nixParens, nixList, nixUri
+  [ nixPath, nixSPath, nixFloat, nixInt, nixBool, nixNull, nixParens, nixList, nixUri
   , nixStringExpr, nixSet, nixSym ]
 
 nixToplevelForm :: Parser NExprLoc
@@ -108,6 +108,9 @@ nixSym = annotateLocation1 $ mkSymF <$> identifier
 
 nixInt :: Parser NExprLoc
 nixInt = annotateLocation1 $ mkIntF <$> token decimal <?> "integer"
+
+nixFloat :: Parser NExprLoc
+nixFloat = annotateLocation1 $ try (mkFloatF . realToFrac <$> token double) <?> "float"
 
 nixBool :: Parser NExprLoc
 nixBool = annotateLocation1 $ try (true <|> false) <?> "bool" where
