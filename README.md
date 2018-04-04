@@ -4,7 +4,8 @@ Haskell parser, evaluator and type checker for the Nix language.
 
 ## Prerequisites
 
-Nix is installed and in your `$PATH`.
+Nix is installed and in your `$PATH`. This is so that `nix-store` can be used
+for interacting with store paths, until `hnix-store` is ready.
 
 ## Getting Started
 
