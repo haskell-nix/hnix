@@ -195,7 +195,6 @@ prettyNixValue = prettyNix . valueToExpr
         go (NVEnvPath p) = NEnvPath p
         go (NVBuiltin name _) = NSym $ Text.pack $ "builtins." ++ name
 
-
 printNix :: Functor m => NValueNF m -> String
 printNix = cata phi
   where phi :: NValueF m String -> String
@@ -209,3 +208,12 @@ printNix = cata phi
         phi (NVLiteralPath fp) = fp
         phi (NVEnvPath p) = p
         phi (NVBuiltin name _) = "<<builtin " ++ name ++ ">>"
+
+removeEffects :: Functor m => NValue m -> NValueNF m
+removeEffects = Fix . fmap dethunk
+  where
+    dethunk (NThunk (Left v)) = removeEffects v
+    dethunk (NThunk (Right _)) = Fix $ NVStr "<thunk>" mempty
+
+showValue :: Functor m => NValue m -> String
+showValue = show . prettyNixValue . removeEffects

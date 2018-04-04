@@ -38,6 +38,7 @@ import           Data.Traversable (for)
 import           Nix.Atoms
 import           Nix.Expr
 import           Nix.Monad
+import           Nix.Pretty
 import           Nix.Scope
 import           Nix.Stack
 import           Nix.StringOperations (runAntiquoted)
@@ -63,7 +64,8 @@ eval (NSym var) = do
     traceM $ "NSym: var = " ++ show var
     mres <- lookupVar var
     case mres of
-        Nothing -> throwError $ "Undefined variable: " ++ show var
+        Nothing ->
+            throwError $ "Undefined variable '" ++ Text.unpack var ++ "'"
         Just v -> force v
 
 eval (NConstant x)    = return $ NVConstant x
@@ -81,15 +83,15 @@ eval (NUnary op arg) = do
             (NNot, NBool  b) -> return $ NVConstant $ NBool  (not b)
             _ -> throwError $ "unsupported argument type for unary operator "
                      ++ show op
-        _ -> throwError $ "argument to unary operator"
-                ++ " must evaluate to an atomic type"
+        x -> throwError $ "argument to unary operator"
+                ++ " must evaluate to an atomic type: " ++ showValue x
 
 eval (NBinary op larg rarg) = do
     lval <- traceM "NBinary:left" >> larg
     rval <- traceM "NBinary:right" >> rarg
     let unsupportedTypes =
             "unsupported argument types for binary operator "
-                ++ show (() <$ lval, op, () <$ rval)
+                ++ showValue lval ++ " " ++ show op ++ " " ++ showValue rval
         numBinOp :: (forall a. Num a => a -> a -> a) -> NAtom -> NAtom
                  -> m (NValue m)
         numBinOp f = numBinOp' f f
@@ -174,7 +176,7 @@ eval (NSelect aset attr alternative) = do
           where
             err = throwError $ "could not look up attribute "
                 ++ intercalate "." (map Text.unpack ks)
-                ++ " in " ++ show (() <$ aset')
+                ++ " in " ++ showValue aset'
   where
     extract (NVSet s) (k:ks) = case M.lookup k s of
         Just v  -> force v >>= extract ?? ks
@@ -190,9 +192,10 @@ eval (NHasAttr aset attr) = do
             evalSelector True attr >>= \case
                 [keyName] ->
                     return $ NVConstant $ NBool $ keyName `M.member` s
-                _ -> throwError $ "attr name argument to hasAttr"
-                        ++ " is not a single-part name"
-        _ -> throwError "argument to hasAttr has wrong type"
+                x -> throwError $ "attr name argument to hasAttr"
+                        ++ " is not a single-part name: " ++ show x
+        x -> throwError $ "argument to hasAttr has wrong type: "
+                ++ showValue x
 
 eval (NList l) = do
     traceM "NList"
@@ -222,21 +225,23 @@ eval (NIf cond t f) = do
     cond >>= \case
         NVConstant (NBool True) -> t
         NVConstant (NBool False) -> f
-        _ -> throwError "condition must be a boolean"
+        x -> throwError $ "condition must be a boolean: "++ showValue x
 
 eval (NWith scope body) = do
     traceM "NWith"
     s <- thunk scope
     pushWeakScope ?? body $ force s >>= \case
         NVSet s -> return s
-        _ -> throwError "scope must be a set in with statement"
+        x -> throwError $ "scope must be a set in with statement, but saw: "
+                ++ showValue x
 
 eval (NAssert cond body) = do
     traceM "NAssert"
     cond >>= \case
         NVConstant (NBool True) -> body
         NVConstant (NBool False) -> throwError "assertion failed"
-        _ -> throwError "assertion condition must be boolean"
+        x -> throwError $ "assertion condition must be boolean, but saw: "
+                ++ showValue x
 
 eval (NApp fun arg) = do
     traceM "NApp"
@@ -268,7 +273,7 @@ evalApp fun arg = fun >>= \case
     NVSet m | Just f <- M.lookup "__functor" m -> do
         traceM "evalApp:__functor"
         force f `evalApp` fun `evalApp` arg
-    x -> throwError $ "Attempt to call non-function: " ++ show (() <$ x)
+    x -> throwError $ "Attempt to call non-function: " ++ showValue x
 
 -----
 
@@ -399,7 +404,7 @@ buildArgument params arg = case params of
                 loebM (inject $ alignWithKey (assemble isVariadic) args s)
 
             x -> throwError $ "Expected set in function call, received: "
-                    ++ show (() <$ x)
+                    ++ show (void x)
   where
     assemble :: Bool
              -> Text
@@ -489,10 +494,10 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
                         Just s -> pushScope s (lookupVar @_ @t key)
                         x -> throwError
                             $ "First argument to inherit should be a set, saw: "
-                            ++ show (() <$ x)
+                            ++ show (void x)
                 case mv of
                     Nothing -> throwError $ "Inheriting unknown attribute: "
-                        ++ show (() <$ name)
+                        ++ show (void name)
                     Just v -> forceThunk (coerce v))
 
     buildResult :: [([Text], m v)] -> m (HashMap Text t)
@@ -560,9 +565,8 @@ evalString = \case
     go = runAntiquoted (wrapText @t @v @m) $ \x -> do
         x' <- x
         projectText @t @v @m x' >>= \case
-            Nothing         -> throwError "Value cannot be rendered as text"
-            Just Nothing    -> throwError "Value cannot be rendered as text"
             Just (Just txt) -> return txt
+            _ -> throwError "Value cannot be rendered as text"
 
     fromParts parts = embedText @t @v @m . mconcat =<< mapM go parts
 
