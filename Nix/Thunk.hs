@@ -25,7 +25,7 @@ import           System.IO.Unsafe (unsafeInterleaveIO)
 class MonadInterleave m where
     unsafeInterleave :: m a -> m (m a)
 
-data Thunk m v = Pure v | Effect (m v)
+data Thunk m v = Pure !v | Effect (m v)
 
 valueRef :: Applicative m => v -> Thunk m v
 valueRef = Pure
