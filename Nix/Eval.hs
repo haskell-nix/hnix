@@ -396,7 +396,7 @@ buildArgument params arg = case params of
                 let inject = case m of
                         Nothing -> id
                         Just n -> M.insert n $ const $ pure arg
-                loebM (inject $ alignWithKey (\k t -> assemble isVariadic k t) args s)
+                loebM (inject $ alignWithKey (assemble isVariadic) args s)
 
             x -> throwError $ "Expected set in function call, received: "
                     ++ show (() <$ x)
