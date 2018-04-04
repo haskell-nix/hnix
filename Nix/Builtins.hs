@@ -128,6 +128,7 @@ builtinsList = sequence [
     , add' Normal   "toJSON"                     (arity1 $ decodeUtf8 . LBS.toStrict . A.encodingToLazyByteString . toEncodingSorted)
     , add  Normal   "fromJSON"                   fromJSON
     , add  Normal   "typeOf"                     typeOf
+    , add2 Normal   "partition"                  partition_
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -583,6 +584,18 @@ typeOf t = do
         NVLiteralPath _ -> "path"
         NVEnvPath _ -> "path"
         NVBuiltin _ _ -> "lambda"
+
+partition_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
+partition_ f = force >=> \case
+    NVList l -> do
+      let match t = apply f t >>= \case
+            NVConstant (NBool b) -> return (b, t)
+            v -> error $ "partition: Expected boolean, got " ++ show (void v)
+      selection <- traverse match l
+      let (right, wrong) = partition fst selection
+      let makeSide = valueThunk . NVList . map snd
+      return $ NVSet $ M.fromList [("right", makeSide right), ("wrong", makeSide wrong)]
+    v -> error $ "partition: Expected list, got " ++ show (void v)
 
 newtype Prim m a = Prim { runPrim :: m a }
 
