@@ -40,7 +40,6 @@ import           System.Directory
 import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
 import           System.FilePath
-import           System.IO.Unsafe
 import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
 
@@ -90,7 +89,7 @@ instance (MonadFix m, MonadNix (Lazy m), MonadIO m,
 
 instance MonadInterleave (Lazy IO) where
     unsafeInterleave (Lazy (ReaderT f)) = Lazy $ ReaderT $ \e ->
-        liftIO $ unsafeInterleaveIO (f e)
+        liftIO $ liftIO <$> unsafeInterleave (f e)
 
 instance MonadIO m => MonadFile (Lazy m) where
     readFile = liftIO . BS.readFile

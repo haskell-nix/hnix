@@ -31,7 +31,6 @@ import           Nix.Scope
 import           Nix.Stack
 import           Nix.Thunk
 import           Nix.Utils
-import           System.IO.Unsafe
 
 -- | Evaluate a nix expression in the default context
 evalTopLevelExpr :: MonadBuiltins e m
@@ -99,7 +98,7 @@ instance MonadIO m => MonadFile (Lint m) where
 
 instance MonadInterleave (Lint IO) where
     unsafeInterleave (Lint (ReaderT f)) = Lint $ ReaderT $ \e ->
-        liftIO $ unsafeInterleaveIO (f e)
+        liftIO $ liftIO <$> unsafeInterleave (f e)
 
 instance MonadIO m =>
       Eval.MonadExpr (SThunk (Lint m))
