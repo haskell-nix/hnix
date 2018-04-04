@@ -1,4 +1,12 @@
-{ nixpkgs ? import <nixpkgs> {}, compiler ? "default", doBenchmark ? false }:
+let
+  hostPkgs = import <nixpkgs> {};
+  pinnedPkgs = hostPkgs.fetchFromGitHub {
+    owner = "NixOS";
+    repo = "nixpkgs-channels";
+    rev = "ee28e35ba37ab285fc29e4a09f26235ffe4123e2";
+    sha256 = "0a6xrqjj2ihkz1bizhy5r843n38xgimzw5s2mfc42kk2rgc95gw5";
+  };
+in { nixpkgs ? import pinnedPkgs {}, compiler ? "default", doBenchmark ? false }:
 
 let
 
