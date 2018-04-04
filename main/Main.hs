@@ -5,6 +5,7 @@
 module Main where
 
 import           Control.Monad
+import           Control.Monad.ST
 import qualified Nix
 import           Nix.Expr.Types.Annotated (stripAnnotation)
 import           Nix.Lint
@@ -65,8 +66,9 @@ main = do
         Failure err -> hPutStrLn stderr $ "Parse failed: " ++ show err
         Success expr -> do
             when (check opts) $
-                putStrLn =<< Nix.runLintM . renderSymbolic
-                         =<< Nix.lint (stripAnnotation expr)
+                putStrLn $ runST $ Nix.runLintM . renderSymbolic
+                    =<< Nix.lint (stripAnnotation expr)
+
             if | evaluate opts, debug opts ->
                      print =<< Nix.tracingEvalLoc mpath expr
                | evaluate opts ->
