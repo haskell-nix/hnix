@@ -323,13 +323,13 @@ substring start len =
 
 attrNames :: MonadBuiltins e m => NThunk m -> m (NValue m)
 attrNames = force >=> \case
-    NVSet m -> toValue $ M.keys m
+    NVSet m -> toValue $ sort $ M.keys m
     v -> error $ "builtins.attrNames: Expected attribute set, got "
             ++ show (void v)
 
 attrValues :: MonadBuiltins e m => NThunk m -> m (NValue m)
 attrValues = force >=> \case
-    NVSet m -> return $ NVList $ M.elems m
+    NVSet m -> return $ NVList $ fmap snd $ sortOn fst $ M.toList m
     v -> error $ "builtins.attrValues: Expected attribute set, got "
             ++ show (void v)
 
