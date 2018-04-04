@@ -11,6 +11,9 @@ module Nix.Thunk where
 --   existing implementation of thunks, rather than duplicating it here.
 --
 --   See issue #75
+--
+--   Many thanks to Theo Giannakopolous (@tgiannak) for clarifying this
+--   situation, and suggesting the use of MonadInterleave.
 
 class MonadInterleave m where
     unsafeInterleave :: m a -> m a
