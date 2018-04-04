@@ -14,6 +14,7 @@ module Nix.Lint where
 
 import           Control.Monad
 import           Control.Monad.Fix
+import           Data.Coerce
 import           Data.Fix
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
@@ -75,13 +76,13 @@ data NSymbolicF r
 newtype SThunk m = SThunk { getSThunk :: Thunk m (Symbolic m) }
 
 sthunk :: MonadVar m => m (Symbolic m) -> m (SThunk m)
-sthunk = fmap SThunk . buildThunk
+sthunk = fmap coerce . buildThunk
 
 sforce :: MonadVar m => SThunk m -> m (Symbolic m)
-sforce = forceThunk . getSThunk
+sforce = forceThunk . coerce
 
-svalueThunk :: MonadVar m => Symbolic m -> m (SThunk m)
-svalueThunk = fmap SThunk . valueRef
+svalueThunk :: forall m. Symbolic m -> SThunk m
+svalueThunk = coerce . valueRef @_ @m
 
 type Symbolic m = Var m (NSymbolicF (NTypeF m (SThunk m)))
 
@@ -319,8 +320,7 @@ lint e@(NList l) = do
     y <- everyPossible
     traverse (withScopes @(SThunk m) scope) l
         >>= foldM (unify (void e)) y
-        >>= svalueThunk
-        >>= (\t -> mkSymbolic [TList t])
+        >>= (\t -> mkSymbolic [TList (svalueThunk t)])
 
 lint (NSet binds) = do
     s <- evalBinds True False binds

@@ -266,7 +266,7 @@ splitVersion s = case Text.uncons s of
 splitVersion_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 splitVersion_ = force >=> \case
     NVStr s _ -> do
-        vals <- forM (splitVersion s) $ \c ->
+        let vals = flip map (splitVersion s) $ \c ->
                 valueThunk $ NVStr (versionComponentToString c) mempty
         return $ NVList vals
     _ -> throwError "builtins.splitVersion: not a string"
@@ -333,7 +333,7 @@ attrValues = force >=> \case
 
 map_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 map_ f = force >=> \case
-    NVList l -> NVList <$> traverse (valueThunk <=< apply f) l
+    NVList l -> NVList <$> traverse (fmap valueThunk . apply f) l
     v -> error $ "map: Expected list, got " ++ show (void v)
 
 catAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
@@ -384,7 +384,7 @@ elem_ x xs = force xs >>= \case
 genList :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 genList generator length = force length >>= \case
     NVConstant (NInt n) | n >= 0 -> fmap NVList $ forM [0 .. n - 1] $ \i ->
-        thunk $ apply generator =<< valueThunk =<< toValue i
+        thunk $ apply generator =<< valueThunk <$> toValue i
     v -> throwError $ "builtins.genList: Expected a non-negative number, got "
             ++ show (void v)
 
@@ -682,7 +682,7 @@ instance FromNix A.Value where
         NVStr s _ -> pure $ toJSON s
         NVList l -> A.Array . V.fromList <$> traverse fromThunk l
         NVSet m -> A.Object <$> traverse fromThunk m
-        NVClosure _ _ _ -> throwError "cannot convert a function to JSON"
+        NVClosure {} -> throwError "cannot convert a function to JSON"
         NVLiteralPath p -> toJSON . unStorePath <$> addPath p
         NVEnvPath p -> toJSON . unStorePath <$> addPath p
         NVBuiltin _ _ -> throwError "cannot convert a built-in function to JSON"

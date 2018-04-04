@@ -4,7 +4,6 @@ module Nix.Thunk where
 
 data Deferred m v
     = DeferredAction (m v)
-    -- ^ This is closure over the environment where it was created.
     | ComputedValue v
 
 class Monad m => MonadVar m where
@@ -14,11 +13,10 @@ class Monad m => MonadVar m where
     readVar :: Var m a -> m a
     writeVar :: Var m a -> a -> m ()
 
-newtype MonadVar m => Thunk m v =
-    Thunk { getThunk :: Either v (Var m (Deferred m v)) }
+newtype Thunk m v = Thunk (Either v (Var m (Deferred m v)))
 
-valueRef :: MonadVar m => v -> m (Thunk m v)
-valueRef  = pure . Thunk . Left
+valueRef :: v -> Thunk m v
+valueRef  = Thunk . Left
 
 buildThunk :: MonadVar m => m v -> m (Thunk m v)
 buildThunk action =

@@ -4,6 +4,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Nix (eval, evalLoc, tracingEvalLoc, lint, runLintM) where
@@ -33,7 +35,7 @@ import           Nix.Thunk
 import           Nix.Utils
 
 -- | Evaluate a nix expression in the default context
-evalTopLevelExpr :: MonadBuiltins e m
+evalTopLevelExpr :: forall e m. MonadBuiltins e m
                  => Maybe FilePath -> NExpr -> m (NValueNF m)
 evalTopLevelExpr mpath expr = do
     base <- baseEnv
@@ -41,7 +43,7 @@ evalTopLevelExpr mpath expr = do
         Nothing -> Eval.evalExpr expr
         Just path -> do
             traceM $ "Setting __cur_file = " ++ show path
-            ref <- valueThunk $ NVLiteralPath path
+            let ref = valueThunk @m $ NVLiteralPath path
             pushScope (M.singleton "__cur_file" ref)
                       (Eval.evalExpr expr)
 
@@ -50,7 +52,7 @@ eval :: (MonadFix m, MonadIO m)
 eval mpath = runLazyM . evalTopLevelExpr mpath
 
 -- | Evaluate a nix expression in the default context
-evalTopLevelExprLoc :: MonadBuiltins e m
+evalTopLevelExprLoc :: forall e m. MonadBuiltins e m
                     => Maybe FilePath -> NExprLoc -> m (NValueNF m)
 evalTopLevelExprLoc mpath expr = do
     base <- baseEnv
@@ -58,7 +60,7 @@ evalTopLevelExprLoc mpath expr = do
         Nothing -> framedEvalExpr Eval.eval expr
         Just path -> do
             traceM $ "Setting __cur_file = " ++ show path
-            ref <- valueThunk $ NVLiteralPath path
+            let ref = valueThunk @m $ NVLiteralPath path
             pushScope (M.singleton "__cur_file" ref)
                       (framedEvalExpr Eval.eval expr)
 
@@ -66,7 +68,7 @@ evalLoc :: (MonadFix m, MonadIO m)
         => Maybe FilePath -> NExprLoc -> m (NValueNF (Lazy m))
 evalLoc mpath = runLazyM . evalTopLevelExprLoc mpath
 
-tracingEvalLoc :: (MonadFix m, MonadIO m, Alternative m)
+tracingEvalLoc :: forall m. (MonadFix m, MonadIO m, Alternative m)
     => Maybe FilePath -> NExprLoc -> m (NValueNF (Lazy m))
 tracingEvalLoc mpath expr = do
     traced <- tracingEvalExpr Eval.eval expr
@@ -75,7 +77,7 @@ tracingEvalLoc mpath expr = do
             runLazyM (normalForm =<< (`pushScopes` traced) =<< baseEnv)
         Just path -> do
             traceM $ "Setting __cur_file = " ++ show path
-            ref <- runLazyM (valueThunk $ NVLiteralPath path)
+            let ref = valueThunk @(Lazy m) $ NVLiteralPath path
             let m = M.singleton "__cur_file" ref
             runLazyM (baseEnv >>= (`pushScopes` pushScope m traced)
                                  >>= normalForm)
