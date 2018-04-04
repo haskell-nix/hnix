@@ -48,7 +48,7 @@ type MonadEval e m =
     ( Scoped e (NThunk m) m
     , Framed e m
     , MonadExpr (NThunk m) (NValue m) m
-    , MonadInterleave m
+    , MonadVar m
     , MonadFile m
     )
 
@@ -258,13 +258,13 @@ evalApp :: forall e m. (MonadEval e m, MonadFix m)
 evalApp fun arg = fun >>= \case
     NVClosure scope params f -> do
         traceM "evalApp:NVFunction"
-        args <- buildArgument params =<< valueThunk <$> arg
+        args <- buildArgument params =<< valueThunk =<< arg
         traceM $ "Evaluating function application with args: "
             ++ show (newScope args)
         withScopes @(NThunk m) scope $ pushScope args $ force =<< f
     NVBuiltin name f -> do
         traceM $ "evalApp:NVBuiltin " ++ name
-        f =<< valueThunk <$> arg
+        f =<< valueThunk =<< arg
     NVSet m | Just f <- M.lookup "__functor" m -> do
         traceM "evalApp:__functor"
         force f `evalApp` fun `evalApp` arg
@@ -281,7 +281,7 @@ valueRefInt = return . NVConstant . NInt
 valueRefFloat :: MonadNix m => Float -> m (NValue m)
 valueRefFloat = return . NVConstant . NFloat
 
-thunkEq :: MonadNix m => NThunk m -> NThunk m -> m Bool
+thunkEq :: (MonadNix m, MonadVar m) => NThunk m -> NThunk m -> m Bool
 thunkEq lt rt = do
     lv <- force lt
     rv <- force rt
@@ -302,7 +302,7 @@ alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
         _ -> throwE ()
     forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
 
-valueEq :: MonadNix m => NValue m -> NValue m -> m Bool
+valueEq :: (MonadNix m, MonadVar m) => NValue m -> NValue m -> m Bool
 valueEq l r = case (l, r) of
     (NVStr ls _, NVConstant (NUri ru)) -> pure $ ls == ru
     (NVConstant (NUri lu), NVStr rs _) -> pure $ lu == rs
@@ -386,7 +386,7 @@ class (Monoid (MText m), Coercible (Thunk m v) t)
 
 buildArgument
     :: forall e t v m. (MonadExpr t v m, Scoped e t m, Framed e m,
-                  MonadFix m, MonadFile m, MonadInterleave m)
+                  MonadVar m, MonadFix m, MonadFile m)
     => Params (m t) -> t -> m (HashMap Text t)
 buildArgument params arg = case params of
     Param name -> return $ M.singleton name arg
@@ -423,9 +423,8 @@ buildArgument params arg = case params of
         These x _ -> const (pure x)
 
 attrSetAlter
-    :: forall e t v m.
-        (MonadExpr t v m, Scoped e t m, Framed e m,
-         MonadFile m, MonadInterleave m)
+    :: forall e t v m. (MonadExpr t v m, Scoped e t m, Framed e m,
+                  MonadVar m, MonadFile m)
     => [Text]
     -> HashMap Text (m v)
     -> m v
@@ -456,9 +455,8 @@ attrSetAlter (p:ps) m val = case M.lookup p m of
             =<< traverse (fmap coerce . buildThunk . withScopes scope) m'
 
 evalBinds
-    :: forall e t v m.
-        (MonadExpr t v m, Scoped e t m, Framed e m,
-         MonadFix m, MonadFile m, MonadInterleave m)
+    :: forall e t v m. (MonadExpr t v m, Scoped e t m, Framed e m,
+                  MonadVar m, MonadFix m, MonadFile m)
     => Bool
     -> Bool
     -> [Binding (m v)]

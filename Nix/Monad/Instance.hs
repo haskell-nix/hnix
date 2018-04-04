@@ -10,7 +10,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 
@@ -24,6 +23,7 @@ import           Control.Monad.Trans.Reader
 import qualified Data.ByteString as BS
 import           Data.Fix
 import qualified Data.HashMap.Lazy as M
+import           Data.IORef
 import           Data.List
 import           Data.List.Split
 import           Data.Text (Text)
@@ -40,8 +40,8 @@ import           System.Directory
 import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
 import           System.FilePath
-import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
+import           System.Posix.Files
 
 data Context m v = Context
     { scopes :: Scopes m v
@@ -69,8 +69,7 @@ removeDotDotIndirections = intercalate "/" . go [] . splitOn "/"
           go (_:s) ("..":rest) = go s rest
           go s (this:rest) = go (this:s) rest
 
-instance (MonadFix m, MonadNix (Lazy m), MonadIO m,
-          MonadInterleave (Lazy m))
+instance (MonadFix m, MonadNix (Lazy m), MonadIO m)
       => MonadExpr (NThunk (Lazy m)) (NValue (Lazy m)) (Lazy m) where
     embedSet    = return . NVSet
     projectSet  = \case
@@ -87,15 +86,17 @@ instance (MonadFix m, MonadNix (Lazy m), MonadIO m,
         NVConstant NNull -> return $ Just Nothing
         v -> fmap (Just . Just) . valueText True =<< normalForm v
 
-instance MonadInterleave (Lazy IO) where
-    unsafeInterleave (Lazy (ReaderT f)) = Lazy $ ReaderT $ \e ->
-        liftIO $ liftIO <$> unsafeInterleave (f e)
+instance MonadIO m => MonadVar (Lazy m) where
+    type Var (Lazy m) = IORef
+
+    newVar   = liftIO . newIORef
+    readVar  = liftIO . readIORef
+    writeVar = (liftIO .) . writeIORef
 
 instance MonadIO m => MonadFile (Lazy m) where
     readFile = liftIO . BS.readFile
 
-instance (MonadFix m, MonadIO m, MonadInterleave (Lazy m))
-      => MonadNix (Lazy m) where
+instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
     addPath path = liftIO $ do
         (exitCode, out, _) <-
             readProcessWithExitCode "nix-store" ["--add", path] ""
@@ -141,7 +142,7 @@ instance (MonadFix m, MonadIO m, MonadInterleave (Lazy m))
                 case eres of
                     Failure err  -> error $ "Parse failed: " ++ show err
                     Success expr -> do
-                        let ref = valueThunk @(Lazy m) (NVLiteralPath path')
+                        ref <- valueThunk (NVLiteralPath path')
                         -- Use this cookie so that when we evaluate the next
                         -- import, we'll remember which directory its containing
                         -- file was in.

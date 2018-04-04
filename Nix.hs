@@ -4,8 +4,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Nix (eval, evalLoc, tracingEvalLoc, lint, runLintM) where
@@ -35,7 +33,7 @@ import           Nix.Thunk
 import           Nix.Utils
 
 -- | Evaluate a nix expression in the default context
-evalTopLevelExpr :: forall e m. MonadBuiltins e m
+evalTopLevelExpr :: MonadBuiltins e m
                  => Maybe FilePath -> NExpr -> m (NValueNF m)
 evalTopLevelExpr mpath expr = do
     base <- baseEnv
@@ -43,16 +41,16 @@ evalTopLevelExpr mpath expr = do
         Nothing -> Eval.evalExpr expr
         Just path -> do
             traceM $ "Setting __cur_file = " ++ show path
-            let ref = valueThunk @m $ NVLiteralPath path
+            ref <- valueThunk $ NVLiteralPath path
             pushScope (M.singleton "__cur_file" ref)
                       (Eval.evalExpr expr)
 
-eval :: (MonadFix m, MonadIO m, MonadInterleave (Lazy m))
+eval :: (MonadFix m, MonadIO m)
      => Maybe FilePath -> NExpr -> m (NValueNF (Lazy m))
 eval mpath = runLazyM . evalTopLevelExpr mpath
 
 -- | Evaluate a nix expression in the default context
-evalTopLevelExprLoc :: forall e m. MonadBuiltins e m
+evalTopLevelExprLoc :: MonadBuiltins e m
                     => Maybe FilePath -> NExprLoc -> m (NValueNF m)
 evalTopLevelExprLoc mpath expr = do
     base <- baseEnv
@@ -60,17 +58,15 @@ evalTopLevelExprLoc mpath expr = do
         Nothing -> framedEvalExpr Eval.eval expr
         Just path -> do
             traceM $ "Setting __cur_file = " ++ show path
-            let ref = valueThunk @m $ NVLiteralPath path
+            ref <- valueThunk $ NVLiteralPath path
             pushScope (M.singleton "__cur_file" ref)
                       (framedEvalExpr Eval.eval expr)
 
-evalLoc :: (MonadFix m, MonadIO m, MonadInterleave (Lazy m))
+evalLoc :: (MonadFix m, MonadIO m)
         => Maybe FilePath -> NExprLoc -> m (NValueNF (Lazy m))
 evalLoc mpath = runLazyM . evalTopLevelExprLoc mpath
 
-tracingEvalLoc
-    :: forall m. (MonadFix m, MonadIO m, Alternative m,
-            MonadInterleave (Lazy m))
+tracingEvalLoc :: (MonadFix m, MonadIO m, Alternative m)
     => Maybe FilePath -> NExprLoc -> m (NValueNF (Lazy m))
 tracingEvalLoc mpath expr = do
     traced <- tracingEvalExpr Eval.eval expr
@@ -79,7 +75,7 @@ tracingEvalLoc mpath expr = do
             runLazyM (normalForm =<< (`pushScopes` traced) =<< baseEnv)
         Just path -> do
             traceM $ "Setting __cur_file = " ++ show path
-            let ref = valueThunk @(Lazy m) $ NVLiteralPath path
+            ref <- runLazyM (valueThunk $ NVLiteralPath path)
             let m = M.singleton "__cur_file" ref
             runLazyM (baseEnv >>= (`pushScopes` pushScope m traced)
                                  >>= normalForm)
@@ -98,10 +94,6 @@ instance MonadIO m => MonadVar (Lint m) where
 
 instance MonadIO m => MonadFile (Lint m) where
     readFile = liftIO . BS.readFile
-
-instance MonadInterleave (Lint IO) where
-    unsafeInterleave (Lint (ReaderT f)) = Lint $ ReaderT $ \e ->
-        liftIO $ liftIO <$> unsafeInterleave (f e)
 
 instance MonadIO m =>
       Eval.MonadExpr (SThunk (Lint m))
@@ -126,6 +118,6 @@ runLintM = flip runReaderT (Context emptyScopes []) . runLint
 symbolicBaseEnv :: Monad m => m (Scopes m (SThunk m))
 symbolicBaseEnv = return []     -- jww (2018-04-02): TODO
 
-lint :: (MonadFix m, MonadIO m, MonadInterleave (Lint m))
-     => NExpr -> m (Symbolic (Lint m))
-lint expr = runLintM $ symbolicBaseEnv >>= (`pushScopes` Lint.lintExpr expr)
+lint :: (MonadFix m, MonadIO m) => NExpr -> m (Symbolic (Lint m))
+lint expr = runLintM $ symbolicBaseEnv
+    >>= (`pushScopes` Lint.lintExpr expr)

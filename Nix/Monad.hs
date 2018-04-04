@@ -3,7 +3,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Nix.Monad where
@@ -24,14 +23,14 @@ import System.Posix.Files
 
 newtype NThunk m = NThunk (Thunk m (NValue m))
 
-thunk :: (Functor m, MonadInterleave m) => m (NValue m) -> m (NThunk m)
+thunk :: MonadVar m => m (NValue m) -> m (NThunk m)
 thunk = fmap coerce . buildThunk
 
-force :: Applicative m => NThunk m -> m (NValue m)
+force :: MonadVar m => NThunk m -> m (NValue m)
 force = forceThunk . coerce
 
-valueThunk :: forall m. Applicative m => NValue m -> NThunk m
-valueThunk = coerce . valueRef @m
+valueThunk :: MonadVar m => NValue m -> m (NThunk m)
+valueThunk = fmap coerce . valueRef
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.
