@@ -45,8 +45,8 @@ case_function_atpattern =
 case_function_ellipsis =
     constantEqualStr "2" "(({a, ...}@attrs:attrs) {a=0; b=2;}).b"
 
-case_function_default_value_in_atpattern =
-    constantEqualStr "2" "({a ? 2}@attrs:attrs.a) {}"
+case_function_default_value_not_in_atpattern =
+    constantEqualStr "false" "({a ? 2}@attrs: attrs ? a) {}"
 
 case_function_arg_shadowing =
     constantEqualStr "6" "(y: y: x: x: x + y) 1 2 3 4"
