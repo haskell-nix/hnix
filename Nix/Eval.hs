@@ -389,17 +389,14 @@ buildArgument params arg = case params of
     ParamSet s isVariadic m ->
         forceThunk (coerce arg) >>= projectSet @t @v @m >>= \case
             Just args -> do
-                res <- loebM (alignWithKey (assemble isVariadic) args s)
-                maybe (pure res) (selfInject res) m
+                let inject = case m of
+                        Nothing -> id
+                        Just n -> M.insert n $ const $ pure arg
+                loebM (inject $ alignWithKey (\k t -> assemble isVariadic k t) args s)
 
             x -> throwError $ "Expected set in function call, received: "
                     ++ show (() <$ x)
   where
-    selfInject :: HashMap Text t -> Text -> m (HashMap Text t)
-    selfInject res n = do
-        ref <- valueRef =<< embedSet @t @v @m res
-        return $ M.insert n (coerce ref) res
-
     assemble :: Bool
              -> Text
              -> These t (Maybe (m t))
