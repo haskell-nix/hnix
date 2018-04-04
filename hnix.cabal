@@ -46,6 +46,7 @@ Library
     Nix.Utils
   Build-depends:
       base                     >= 4.9          && < 5
+    , aeson
     , ansi-wl-pprint
     , base16-bytestring
     , containers
@@ -64,6 +65,7 @@ Library
     , process
     , directory
     , filepath
+    , scientific
     , semigroups >= 0.18 && < 0.19
     , split
     , template-haskell
@@ -72,6 +74,7 @@ Library
     , these
     , unix
     , syb
+    , vector
   if flag(parsec)
     Cpp-options: -DUSE_PARSEC
     Build-depends: parsec

@@ -21,15 +21,19 @@ import qualified Crypto.Hash.MD5 as MD5
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Crypto.Hash.SHA512 as SHA512
+import           Data.Aeson (toJSON)
+import qualified Data.Aeson as A
 import           Data.Align (alignWith)
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Base16 as Base16
+import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
 import           Data.Foldable (foldlM)
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.List
 import           Data.Maybe
+import           Data.Scientific
 import           Data.Semigroup
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -38,6 +42,7 @@ import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Lazy.Builder as Builder
 import           Data.These (fromThese)
 import           Data.Traversable (mapM)
+import qualified Data.Vector as V
 import           GHC.Stack.Types (HasCallStack)
 import           Nix.Atoms
 import           Nix.Eval
@@ -118,6 +123,8 @@ builtinsList = sequence [
     , add' Normal   "hashString"                 hashString
     , add  Normal   "readFile"                   readFile_
     , add  Normal   "readDir"                    readDir_
+    , add' Normal   "toJSON"                     (arity1 $ decodeUtf8 . LBS.toStrict . A.encode @A.Value)
+    , add  Normal   "fromJSON"                   fromJSON
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -549,6 +556,13 @@ readDir_ pathThunk = do
         pure (Text.pack item, t)
     toValue $ M.fromList itemsWithTypes
 
+fromJSON :: MonadBuiltins e m => NThunk m -> m (NValue m)
+fromJSON t = do
+    encoded <- fromThunk t
+    case A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded of
+        Left jsonError -> throwError $ "builtins.fromJSON: " ++ jsonError
+        Right v -> toValue v
+
 newtype Prim m a = Prim { runPrim :: m a }
 
 class ToNix a where
@@ -574,6 +588,17 @@ instance ToNix a => ToNix (HashMap Text a) where
 
 instance ToNix a => ToNix [a] where
     toValue m = NVList <$> traverse (thunk . toValue) m
+
+instance ToNix A.Value where
+    toValue = \case
+        A.Object m -> NVSet <$> traverse (thunk . toValue) m
+        A.Array l -> NVList <$> traverse (thunk . toValue) (V.toList l)
+        A.String s -> pure $ NVStr s mempty
+        A.Number n -> pure $ NVConstant $ case floatingOrInteger n of
+            Left r -> NFloat r
+            Right i -> NInt i
+        A.Bool b -> pure $ NVConstant $ NBool b
+        A.Null -> pure $ NVConstant NNull
 
 -- | Types that support conversion to nix in a particular monad
 class ToBuiltin m a | a -> m where
@@ -618,3 +643,19 @@ instance FromNix a => FromNix [a] where
     fromValue = \case
         NVList l -> traverse fromThunk l
         v -> throwError $ "fromValue: Expected list, got " ++ show (void v)
+
+instance FromNix A.Value where
+    fromValue = \case
+        NVConstant a -> pure $ case a of
+            NInt n -> toJSON n
+            NFloat n -> toJSON n
+            NBool b -> toJSON b
+            NNull -> A.Null
+            NUri u -> toJSON u
+        NVStr s _ -> pure $ toJSON s
+        NVList l -> A.Array . V.fromList <$> traverse fromThunk l
+        NVSet m -> A.Object <$> traverse fromThunk m
+        NVClosure _ _ _ -> throwError "cannot convert a function to JSON"
+        NVLiteralPath p -> toJSON . unStorePath <$> addPath p
+        NVEnvPath p -> toJSON . unStorePath <$> addPath p
+        NVBuiltin _ _ -> throwError "cannot convert a built-in function to JSON"
