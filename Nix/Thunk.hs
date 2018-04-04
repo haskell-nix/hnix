@@ -2,6 +2,9 @@
 
 module Nix.Thunk where
 
+import           Control.Exception.Base (evaluate)
+import           System.IO.Unsafe (unsafeInterleaveIO)
+
 -- | Rather than encoding laziness ourselves, using a datatype containing
 --   deferred actions or computed values in an IORef, we can leverage
 --   Haskell's own laziness by deferring actions until forced. For monads that
@@ -12,19 +15,26 @@ module Nix.Thunk where
 --
 --   See issue #75
 --
+--   Unlike 'unsafeInterleaveIO', we have a "doubly-monadic" return type so that
+--   no effects happen during the forcing of pure-seeming values. They instead
+--   happen with the binding of the inner monad action.
+--
 --   Many thanks to Theo Giannakopolous (@tgiannak) for clarifying this
 --   situation, and suggesting the use of MonadInterleave.
 
 class MonadInterleave m where
-    unsafeInterleave :: m a -> m a
+    unsafeInterleave :: m a -> m (m a)
 
-type Thunk (m :: * -> *) v = v
+type Thunk m v = m v
 
-valueRef :: Applicative m => v -> m (Thunk m v)
+valueRef :: Applicative m => v -> Thunk m v
 valueRef = pure
 
 buildThunk :: MonadInterleave m => m v -> m (Thunk m v)
 buildThunk = unsafeInterleave
 
 forceThunk :: Applicative m => Thunk m v -> m v
-forceThunk x = pure $! x
+forceThunk = id
+
+instance MonadInterleave IO where
+    unsafeInterleave = evaluate <$> unsafeInterleaveIO

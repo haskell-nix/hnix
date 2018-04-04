@@ -81,8 +81,9 @@ sthunk = fmap SThunk . buildThunk
 sforce :: Applicative m => SThunk m -> m (Symbolic m)
 sforce = forceThunk . getSThunk
 
+-- TODO: Remove pure
 svalueThunk :: Applicative m => Symbolic m -> m (SThunk m)
-svalueThunk = fmap SThunk . valueRef
+svalueThunk = pure . SThunk . valueRef
 
 class Monad m => MonadVar m where
     type Var m :: * -> *

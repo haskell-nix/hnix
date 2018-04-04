@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Nix.Monad where
@@ -29,8 +30,9 @@ thunk = fmap coerce . buildThunk
 force :: Applicative m => NThunk m -> m (NValue m)
 force = forceThunk . coerce
 
-valueThunk :: Applicative m => NValue m -> m (NThunk m)
-valueThunk = fmap coerce . valueRef
+-- TODO: Remove pure
+valueThunk :: forall m. Applicative m => NValue m -> m (NThunk m)
+valueThunk = pure . coerce . valueRef @m
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.
