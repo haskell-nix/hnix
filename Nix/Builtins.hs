@@ -1,4 +1,7 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -23,6 +26,7 @@ import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Crypto.Hash.SHA512 as SHA512
 import           Data.Aeson (toJSON)
 import qualified Data.Aeson as A
+import qualified Data.Aeson.Encoding as A
 import           Data.Align (alignWith)
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Base16 as Base16
@@ -123,7 +127,7 @@ builtinsList = sequence [
     , add' Normal   "hashString"                 hashString
     , add  Normal   "readFile"                   readFile_
     , add  Normal   "readDir"                    readDir_
-    , add' Normal   "toJSON"                     (arity1 $ decodeUtf8 . LBS.toStrict . A.encode @A.Value)
+    , add' Normal   "toJSON"                     (arity1 $ decodeUtf8 . LBS.toStrict . A.encodingToLazyByteString . toEncodingSorted)
     , add  Normal   "fromJSON"                   fromJSON
     , add  Normal   "typeOf"                     typeOf
   ]
@@ -662,6 +666,12 @@ instance FromNix a => FromNix [a] where
     fromValue = \case
         NVList l -> traverse fromThunk l
         v -> throwError $ "fromValue: Expected list, got " ++ show (void v)
+
+toEncodingSorted :: A.Value -> A.Encoding
+toEncodingSorted = \case
+    A.Object m -> A.pairs $ mconcat $ fmap (\(k, v) -> A.pair k $ toEncodingSorted v) $ sortOn fst $ M.toList m
+    A.Array l -> A.list toEncodingSorted $ V.toList l
+    v -> A.toEncoding v
 
 instance FromNix A.Value where
     fromValue = \case
