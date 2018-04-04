@@ -15,11 +15,12 @@ main = do
   langTestsEnv <- lookupEnv "LANGUAGE_TESTS"
   let runLangTests = langTestsEnv == Just "yes"
   when runLangTests $ do
-    files <- listDirectory "data/nix"
-    when (null files) $ error $ unlines
-      [ "Directory data/nix does not have any files."
-      , "Did you forget to run \"git submodule update --init --recursive\"?"
-      ]
+    exist <- doesDirectoryExist "data/nix"
+    unless exist $
+        errorWithoutStackTrace $ unlines
+            [ "Directory data/nix does not have any files."
+            , "Did you forget to run \"git submodule update --init --recursive\"?"
+            ]
   defaultMain $ testGroup "hnix" $
     [ ParserTests.tests
     , EvalTests.tests
