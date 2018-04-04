@@ -35,14 +35,20 @@ import           System.IO.Unsafe
 
 -- | Evaluate a nix expression in the default context
 evalTopLevelExpr :: MonadBuiltins e m
-                 => NExpr -> m (NValueNF m)
-evalTopLevelExpr expr = do
+                 => Maybe FilePath -> NExpr -> m (NValueNF m)
+evalTopLevelExpr mpath expr = do
     base <- baseEnv
-    normalForm =<< pushScopes base (Eval.evalExpr expr)
+    (normalForm =<<) $ pushScopes base $ case mpath of
+        Nothing -> Eval.evalExpr expr
+        Just path -> do
+            traceM $ "Setting __cur_file = " ++ show path
+            ref <- valueThunk $ NVLiteralPath path
+            pushScope (M.singleton "__cur_file" ref)
+                      (Eval.evalExpr expr)
 
 eval :: (MonadFix m, MonadIO m, MonadInterleave (Lazy m))
-     => NExpr -> m (NValueNF (Lazy m))
-eval = runLazyM . evalTopLevelExpr
+     => Maybe FilePath -> NExpr -> m (NValueNF (Lazy m))
+eval mpath = runLazyM . evalTopLevelExpr mpath
 
 -- | Evaluate a nix expression in the default context
 evalTopLevelExprLoc :: MonadBuiltins e m
@@ -120,5 +126,4 @@ symbolicBaseEnv = return []     -- jww (2018-04-02): TODO
 
 lint :: (MonadFix m, MonadIO m, MonadInterleave (Lint m))
      => NExpr -> m (Symbolic (Lint m))
-lint expr = runLintM $ symbolicBaseEnv
-    >>= (`pushScopes` Lint.lintExpr expr)
+lint expr = runLintM $ symbolicBaseEnv >>= (`pushScopes` Lint.lintExpr expr)
