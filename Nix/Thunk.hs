@@ -13,18 +13,18 @@ class Monad m => MonadVar m where
     readVar :: Var m a -> m a
     writeVar :: Var m a -> a -> m ()
 
-newtype Thunk m v = Thunk (Either v (Var m (Deferred m v)))
+type Thunk m v = Either v (Var m (Deferred m v))
 
 valueRef :: v -> Thunk m v
-valueRef  = Thunk . Left
+valueRef  = Left
 
 buildThunk :: MonadVar m => m v -> m (Thunk m v)
 buildThunk action =
-    Thunk . Right <$> newVar (DeferredAction action)
+    Right <$> newVar (DeferredAction action)
 
 forceThunk :: MonadVar m => Thunk m v -> m v
-forceThunk (Thunk (Left ref)) = pure ref
-forceThunk (Thunk (Right ref)) = do
+forceThunk (Left ref) = pure ref
+forceThunk (Right ref) = do
     eres <- readVar ref
     case eres of
         ComputedValue value -> return value
