@@ -28,6 +28,7 @@ If you're looking for a way to help out, try taking a look [here](https://github
 
 When you're ready to submit a pull request, test it with:
 ```
+git submodule update --init --recursive
 nix-shell --run "LANGUAGE_TESTS=yes cabal test"
 ```
 
