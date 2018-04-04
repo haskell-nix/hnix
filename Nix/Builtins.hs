@@ -89,7 +89,8 @@ builtinsList = sequence [
     , add  Normal   "tail"                       tail_
     , add  Normal   "splitVersion"               splitVersion_
     , add2 Normal   "compareVersions"            compareVersions_
-    , add2 Normal   "compareVersions"            compareVersions_
+    --TODO: Support floats for `add` and `sub`
+    , add' Normal   "add"                        (arity2 ((+) @Integer))
     , add' Normal   "sub"                        (arity2 ((-) @Integer))
     , add' Normal   "parseDrvName"               parseDrvName
     , add' Normal   "substring"                  substring
