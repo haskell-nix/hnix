@@ -48,7 +48,7 @@ type MonadEval e m =
     ( Scoped e (NThunk m) m
     , Framed e m
     , MonadExpr (NThunk m) (NValue m) m
-    , MonadVar m
+    , MonadInterleave m
     , MonadFile m
     )
 
@@ -277,7 +277,7 @@ valueRefInt = return . NVConstant . NInt
 valueRefFloat :: MonadNix m => Float -> m (NValue m)
 valueRefFloat = return . NVConstant . NFloat
 
-thunkEq :: (MonadNix m, MonadVar m) => NThunk m -> NThunk m -> m Bool
+thunkEq :: MonadNix m => NThunk m -> NThunk m -> m Bool
 thunkEq lt rt = do
     lv <- force lt
     rv <- force rt
@@ -298,7 +298,7 @@ alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
         _ -> throwE ()
     forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
 
-valueEq :: (MonadNix m, MonadVar m) => NValue m -> NValue m -> m Bool
+valueEq :: MonadNix m => NValue m -> NValue m -> m Bool
 valueEq l r = case (l, r) of
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
     (NVStr ls _, NVStr rs _) -> pure $ ls == rs
@@ -378,7 +378,7 @@ class (Monoid (MText m), Coercible (Thunk m v) t)
 
 buildArgument
     :: forall e t v m. (MonadExpr t v m, Scoped e t m, Framed e m,
-                  MonadVar m, MonadFix m, MonadFile m)
+                  MonadFix m, MonadFile m, MonadInterleave m)
     => Params (m t) -> t -> m (HashMap Text t)
 buildArgument params arg = case params of
     Param name -> return $ M.singleton name arg
@@ -418,8 +418,9 @@ buildArgument params arg = case params of
         These x _ -> const (pure x)
 
 attrSetAlter
-    :: forall e t v m. (MonadExpr t v m, Scoped e t m, Framed e m,
-                  MonadVar m, MonadFile m)
+    :: forall e t v m.
+        (MonadExpr t v m, Scoped e t m, Framed e m,
+         MonadFile m, MonadInterleave m)
     => [Text]
     -> HashMap Text (m v)
     -> m v
@@ -450,8 +451,9 @@ attrSetAlter (p:ps) m val = case M.lookup p m of
             =<< traverse (fmap coerce . buildThunk . withScopes scope) m'
 
 evalBinds
-    :: forall e t v m. (MonadExpr t v m, Scoped e t m, Framed e m,
-                  MonadVar m, MonadFix m, MonadFile m)
+    :: forall e t v m.
+        (MonadExpr t v m, Scoped e t m, Framed e m,
+         MonadFix m, MonadFile m, MonadInterleave m)
     => Bool
     -> Bool
     -> [Binding (m v)]

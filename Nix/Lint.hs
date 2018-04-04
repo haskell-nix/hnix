@@ -9,6 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Nix.Lint where
 
@@ -74,14 +75,21 @@ data NSymbolicF r
 
 newtype SThunk m = SThunk { getSThunk :: Thunk m (Symbolic m) }
 
-sthunk :: MonadVar m => m (Symbolic m) -> m (SThunk m)
+sthunk :: (Functor m, MonadInterleave m) => m (Symbolic m) -> m (SThunk m)
 sthunk = fmap SThunk . buildThunk
 
-sforce :: MonadVar m => SThunk m -> m (Symbolic m)
+sforce :: Applicative m => SThunk m -> m (Symbolic m)
 sforce = forceThunk . getSThunk
 
-svalueThunk :: MonadVar m => Symbolic m -> m (SThunk m)
+svalueThunk :: Applicative m => Symbolic m -> m (SThunk m)
 svalueThunk = fmap SThunk . valueRef
+
+class Monad m => MonadVar m where
+    type Var m :: * -> *
+
+    newVar :: a -> m (Var m a)
+    readVar :: Var m a -> m a
+    writeVar :: Var m a -> a -> m ()
 
 type Symbolic m = Var m (NSymbolicF (NTypeF m (SThunk m)))
 
@@ -188,6 +196,7 @@ type MonadLint e m =
     ( Scoped e (SThunk m) m
     , Framed e m
     , MonadExpr (SThunk m) (Symbolic m) m
+    , MonadInterleave m
     , MonadFix m
     , MonadFile m
     , MonadVar m

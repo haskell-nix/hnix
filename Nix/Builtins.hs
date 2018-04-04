@@ -44,12 +44,11 @@ import           Nix.Eval
 import           Nix.Monad
 import           Nix.Scope
 import           Nix.Stack
-import           Nix.Thunk
 import           System.FilePath
 import           System.Posix.Files
 
 type MonadBuiltins e m =
-    (MonadEval e m, MonadNix m, MonadFix m, MonadFile m, MonadVar m)
+    (MonadEval e m, MonadNix m, MonadFix m, MonadFile m)
 
 baseEnv :: MonadBuiltins e m => m (Scopes m (NThunk m))
 baseEnv = do

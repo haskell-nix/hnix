@@ -31,6 +31,7 @@ import           Nix.Scope
 import           Nix.Stack
 import           Nix.Thunk
 import           Nix.Utils
+import           System.IO.Unsafe
 
 -- | Evaluate a nix expression in the default context
 evalTopLevelExpr :: MonadBuiltins e m
@@ -39,7 +40,7 @@ evalTopLevelExpr expr = do
     base <- baseEnv
     normalForm =<< pushScopes base (Eval.evalExpr expr)
 
-eval :: (MonadFix m, MonadIO m)
+eval :: (MonadFix m, MonadIO m, MonadInterleave (Lazy m))
      => NExpr -> m (NValueNF (Lazy m))
 eval = runLazyM . evalTopLevelExpr
 
@@ -56,12 +57,13 @@ evalTopLevelExprLoc mpath expr = do
             pushScope (M.singleton "__cur_file" ref)
                       (framedEvalExpr Eval.eval expr)
 
-evalLoc :: (MonadFix m, MonadIO m)
+evalLoc :: (MonadFix m, MonadIO m, MonadInterleave (Lazy m))
         => Maybe FilePath -> NExprLoc -> m (NValueNF (Lazy m))
 evalLoc mpath = runLazyM . evalTopLevelExprLoc mpath
 
-tracingEvalLoc :: (MonadFix m, MonadIO m, Alternative m)
-               => Maybe FilePath -> NExprLoc -> m (NValueNF (Lazy m))
+tracingEvalLoc
+    :: (MonadFix m, MonadIO m, Alternative m, MonadInterleave (Lazy m))
+    => Maybe FilePath -> NExprLoc -> m (NValueNF (Lazy m))
 tracingEvalLoc mpath expr = do
     traced <- tracingEvalExpr Eval.eval expr
     case mpath of
@@ -89,6 +91,10 @@ instance MonadIO m => MonadVar (Lint m) where
 instance MonadIO m => MonadFile (Lint m) where
     readFile = liftIO . BS.readFile
 
+instance MonadInterleave (Lint IO) where
+    unsafeInterleave (Lint (ReaderT f)) = Lint $ ReaderT $ \e ->
+        liftIO $ unsafeInterleaveIO (f e)
+
 instance MonadIO m =>
       Eval.MonadExpr (SThunk (Lint m))
           (IORef (NSymbolicF (NTypeF (Lint m) (SThunk (Lint m)))))
@@ -112,6 +118,7 @@ runLintM = flip runReaderT (Context emptyScopes []) . runLint
 symbolicBaseEnv :: Monad m => m (Scopes m (SThunk m))
 symbolicBaseEnv = return []     -- jww (2018-04-02): TODO
 
-lint :: (MonadFix m, MonadIO m) => NExpr -> m (Symbolic (Lint m))
+lint :: (MonadFix m, MonadIO m, MonadInterleave (Lint m))
+     => NExpr -> m (Symbolic (Lint m))
 lint expr = runLintM $ symbolicBaseEnv
     >>= (`pushScopes` Lint.lintExpr expr)

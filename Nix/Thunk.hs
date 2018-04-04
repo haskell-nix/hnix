@@ -2,35 +2,26 @@
 
 module Nix.Thunk where
 
-data Deferred m v
-    = DeferredAction (m v)
-    -- ^ This is closure over the environment where it was created.
-    | ComputedValue v
+-- | Rather than encoding laziness ourselves, using a datatype containing
+--   deferred actions or computed values in an IORef, we can leverage
+--   Haskell's own laziness by deferring actions until forced. For monads that
+--   are already non-strict in their binds, this type class is just the
+--   identity; but for monads like IO, we need support from the runtime such
+--   as 'unsafeInterleaveIO'. So what we're doing is making use of an already
+--   existing implementation of thunks, rather than duplicating it here.
+--
+--   See issue #75
 
-class Monad m => MonadVar m where
-    type Var m :: * -> *
+class MonadInterleave m where
+    unsafeInterleave :: m a -> m a
 
-    newVar :: a -> m (Var m a)
-    readVar :: Var m a -> m a
-    writeVar :: Var m a -> a -> m ()
+type Thunk (m :: * -> *) v = v
 
-newtype MonadVar m => Thunk m v =
-    Thunk { getThunk :: Either v (Var m (Deferred m v)) }
+valueRef :: Applicative m => v -> m (Thunk m v)
+valueRef = pure
 
-valueRef :: MonadVar m => v -> m (Thunk m v)
-valueRef  = pure . Thunk . Left
+buildThunk :: MonadInterleave m => m v -> m (Thunk m v)
+buildThunk = unsafeInterleave
 
-buildThunk :: MonadVar m => m v -> m (Thunk m v)
-buildThunk action =
-    Thunk . Right <$> newVar (DeferredAction action)
-
-forceThunk :: MonadVar m => Thunk m v -> m v
-forceThunk (Thunk (Left ref)) = pure ref
-forceThunk (Thunk (Right ref)) = do
-    eres <- readVar ref
-    case eres of
-        ComputedValue value -> return value
-        DeferredAction action -> do
-            value <- action
-            writeVar ref (ComputedValue value)
-            return value
+forceThunk :: Applicative m => Thunk m v -> m v
+forceThunk x = pure $! x

@@ -1,5 +1,5 @@
 {-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE QuasiQuotes #-}
+-- {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TupleSections #-}
 
 module Main where
