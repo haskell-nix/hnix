@@ -300,10 +300,14 @@ alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
 
 valueEq :: MonadNix m => NValue m -> NValue m -> m Bool
 valueEq l r = case (l, r) of
+    (NVStr ls _, NVConstant (NUri ru)) -> pure $ ls == ru
+    (NVConstant (NUri lu), NVStr rs _) -> pure $ lu == rs
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
     (NVStr ls _, NVStr rs _) -> pure $ ls == rs
     (NVList ls, NVList rs) -> alignEqM thunkEq ls rs
     (NVSet lm, NVSet rm) -> alignEqM thunkEq lm rm
+    (NVLiteralPath lp, NVLiteralPath rp) -> pure $ lp == rp
+    (NVEnvPath lp, NVEnvPath rp) -> pure $ lp == rp
     _ -> pure False
 
 -----
