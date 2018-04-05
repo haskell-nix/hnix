@@ -95,6 +95,7 @@ builtinsList = sequence [
     , add  TopLevel "dirOf"                      dirOf
     , add2 TopLevel "removeAttrs"                removeAttrs
     , add  TopLevel "isNull"                     isNull
+    , add  TopLevel "throw"                      throw_
     , add  Normal   "getEnv"                     getEnvVar
     , add2 Normal   "hasAttr"                    hasAttr
     , add2 Normal   "getAttr"                    getAttr
@@ -494,6 +495,11 @@ isNull :: MonadBuiltins e m => NThunk m -> m (NValue m)
 isNull = force >=> \case
     NVConstant NNull -> toValue True
     _ -> toValue False
+
+throw_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
+throw_ = force >=> \case
+    NVStr t _ -> throwError (Text.unpack t)
+    v -> throwError $ "builtins.throw: expected string, got " ++ showValue v
 
 sort_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 sort_ comparator list = force list >>= \case
