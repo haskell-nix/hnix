@@ -9,7 +9,6 @@ let
 
 in { nixpkgs ? import pinnedPkgs {}
    , compiler ? "ghc822"
-   , doProfiling ? false
    , doBenchmark ? false }:
 
 let
@@ -31,11 +30,8 @@ let
     };
   };
 
-  variant =
-    if doBenchmark
-    then pkgs.haskell.lib.doBenchmark
-    else if doProfiling
-         then pkgs.haskell.lib.doProfiling
-         else pkgs.lib.id;
+  variant = if doBenchmark
+            then pkgs.haskell.lib.doBenchmark
+            else pkgs.lib.id;
 
 in variant pkg
