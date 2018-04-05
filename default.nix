@@ -18,7 +18,7 @@ let
 
   haskellPackages = pkgs.haskell.packages.${compiler};
 
-  f = haskellPackages.developPackage {
+  pkg = haskellPackages.developPackage {
     root = ./.;
     source-overrides = {
       # Use a particular commit from github
@@ -38,8 +38,4 @@ let
          then pkgs.haskell.lib.doProfiling
          else pkgs.lib.id;
 
-  drv = variant f;
-
-in
-
-  drv
+in variant pkg
