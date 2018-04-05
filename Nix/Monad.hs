@@ -129,6 +129,8 @@ class Monad m => MonadNix m where
 
     importFile :: NThunk m -> m (NValue m)
     getEnvVar :: NThunk m -> m (NValue m)
+    getCurrentSystemOS :: m Text
+    getCurrentSystemArch :: m Text
 
     listDirectory :: FilePath -> m [FilePath]
     getSymbolicLinkStatus :: FilePath -> m FileStatus

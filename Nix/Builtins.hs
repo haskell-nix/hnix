@@ -136,6 +136,7 @@ builtinsList = sequence [
     , add  Normal   "fromJSON"                   fromJSON
     , add  Normal   "typeOf"                     typeOf
     , add2 Normal   "partition"                  partition_
+    , add0 Normal   "currentSystem"              currentSystem
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -143,6 +144,7 @@ builtinsList = sequence [
     arity1 f = Prim . pure . f
     arity2 f = ((Prim . pure) .) . f
 
+    add0 t n v = wrap t n <$> thunk v
     add  t n v = wrap t n <$> thunk (builtin  (Text.unpack n) v)
     add2 t n v = wrap t n <$> thunk (builtin2 (Text.unpack n) v)
     add3 t n v = wrap t n <$> thunk (builtin3 (Text.unpack n) v)
@@ -620,6 +622,12 @@ partition_ f = force >=> \case
       let makeSide = valueThunk . NVList . map snd
       return $ NVSet $ M.fromList [("right", makeSide right), ("wrong", makeSide wrong)]
     v -> error $ "partition: Expected list, got " ++ show (void v)
+
+currentSystem :: MonadNix m => m (NValue m)
+currentSystem = do
+  os <- getCurrentSystemOS
+  arch <- getCurrentSystemArch
+  return $ NVStr (os <> "-" <> arch) mempty
 
 newtype Prim m a = Prim { runPrim :: m a }
 

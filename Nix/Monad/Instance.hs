@@ -40,6 +40,7 @@ import           System.Directory
 import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
 import           System.FilePath
+import qualified System.Info
 import           System.Process (readProcessWithExitCode)
 import           System.Posix.Files
 
@@ -157,6 +158,13 @@ instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
                 Nothing -> NVStr "" mempty
                 Just v  -> NVStr (Text.pack v) mempty
         p -> error $ "Unexpected argument to getEnv: " ++ show (void p)
+
+    getCurrentSystemOS = return $ Text.pack System.Info.os
+
+    -- Invert the conversion done by GHC_CONVERT_CPU in GHC's aclocal.m4
+    getCurrentSystemArch = return $ Text.pack $ case System.Info.arch of
+      "i386" -> "i686"
+      arch -> arch
 
     listDirectory         = liftIO . System.Directory.listDirectory
     getSymbolicLinkStatus = liftIO . System.Posix.Files.getSymbolicLinkStatus
