@@ -21,8 +21,8 @@ data Options = Options
     , debug      :: Bool
     , evaluate   :: Bool
     , check      :: Bool
-    , filePath   :: Maybe FilePath
     , expression :: Maybe String
+    , filePaths  :: [FilePath]
     }
 
 mainOptions :: Parser Options
@@ -42,23 +42,21 @@ mainOptions = Options
         (   long "check"
          <> help "Whether to check for syntax errors after parsing")
     <*> optional (strOption
-        (   short 'f'
-         <> long "file"
-         <> help "File to parse or evaluate"))
-    <*> optional (strOption
         (   short 'e'
          <> long "expr"
          <> help "Expression to parse or evaluate"))
+    <*> many (strArgument (metavar "FILE" <> help "Path of file to parse"))
 
 main :: IO ()
 main = do
     opts <- execParser optsDef
     (eres, mpath) <- case expression opts of
         Just s -> return (parseNixStringLoc s, Nothing)
-        Nothing  -> case filePath opts of
-            Nothing   -> (, Nothing) . parseNixStringLoc <$> getContents
-            Just "-"  -> (, Nothing) . parseNixStringLoc <$> getContents
-            Just path -> (, Just path) <$> parseNixFileLoc path
+        Nothing  -> case filePaths opts of
+            []     -> (, Nothing) . parseNixStringLoc <$> getContents
+            ["-"]  -> (, Nothing) . parseNixStringLoc <$> getContents
+            [path] -> (, Just path) <$> parseNixFileLoc path
+            _      -> error "hnix doesn't support multiple path arguments yet"
 
     -- print . printNix =<< Nix.eval [nix|1 + 3|]
 
