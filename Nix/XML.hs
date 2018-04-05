@@ -6,6 +6,7 @@ import           Data.Fix
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Text as Text
 import           Nix.Atoms
+import           Nix.Expr.Types
 import           Nix.Monad
 import           Text.XML.Light
 
@@ -17,13 +18,13 @@ toXML = (.) ((++ "\n") .
         $ cata
         $ \case
     NVConstant a -> case a of
-        NInt n   -> elem "int" "value" (show n)
-        NFloat f -> elem "float" "value" (show f)
-        NBool b  -> elem "bool" "value" (if b then "true" else "false")
+        NInt n   -> mkElem "int" "value" (show n)
+        NFloat f -> mkElem "float" "value" (show f)
+        NBool b  -> mkElem "bool" "value" (if b then "true" else "false")
         NNull    -> Element (unqual "null") [] [] Nothing
-        NUri u   -> elem "uri" "value" (Text.unpack u)
+        NUri u   -> mkElem "uri" "value" (Text.unpack u)
 
-    NVStr t _ -> elem "string" "value" (Text.unpack t)
+    NVStr t _ -> mkElem "string" "value" (Text.unpack t)
     NVList l  -> Element (unqual "list") [] (Elem <$> l) Nothing
 
     NVSet s   -> Element (unqual "attrs") []
@@ -32,11 +33,23 @@ toXML = (.) ((++ "\n") .
                                       [Elem v] Nothing))
              (M.toList s)) Nothing
 
-    NVClosure _ _p _  ->
-        Element (unqual "function") []
-                (error "NYI: XML function param attrset") Nothing
-    NVLiteralPath fp -> elem "path" "value" fp
-    NVEnvPath p      -> elem "path" "value" p
-    NVBuiltin name _ -> elem "function" "name" name
+    NVClosure _ p _  ->
+        Element (unqual "function") [] (paramsXML p) Nothing
+    NVLiteralPath fp -> mkElem "path" "value" fp
+    NVEnvPath p      -> mkElem "path" "value" p
+    NVBuiltin name _ -> mkElem "function" "name" name
+
+mkElem :: String -> String -> String -> Element
+mkElem n a v = Element (unqual n) [Attr (unqual a) v] [] Nothing
+
+paramsXML :: Params r -> [Content]
+paramsXML (Param name) =
+    [Elem $ mkElem "varpat" "name" (Text.unpack name)]
+paramsXML (ParamSet s b mname) =
+    [Elem $ Element (unqual "attrspat") (battr ++ nattr) (paramSetXML s) Nothing]
   where
-    elem n a v = Element (unqual n) [Attr (unqual a) v] [] Nothing
+    battr = if b then [Attr (unqual "ellipsis") "1"] else []
+    nattr = maybe [] ((:[]) . Attr (unqual "name") . Text.unpack) (mname)
+
+paramSetXML :: ParamSet r -> [Content]
+paramSetXML m = map (\(k,_) -> Elem $ mkElem "attr" "name" (Text.unpack k)) $ M.toList m
