@@ -86,82 +86,97 @@ eval (NUnary op arg) = do
         x -> throwError $ "argument to unary operator"
                 ++ " must evaluate to an atomic type: " ++ showValue x
 
-eval (NBinary op larg rarg) = do
-    lval <- traceM "NBinary:left" >> larg
-    rval <- traceM "NBinary:right" >> rarg
-    let unsupportedTypes =
-            "unsupported argument types for binary operator "
-                ++ showValue lval ++ " " ++ show op ++ " " ++ showValue rval
-        numBinOp :: (forall a. Num a => a -> a -> a) -> NAtom -> NAtom
-                 -> m (NValue m)
-        numBinOp f = numBinOp' f f
-        numBinOp'
-            :: (Integer -> Integer -> Integer)
-            -> (Float -> Float -> Float)
-            -> NAtom -> NAtom -> m (NValue m)
-        numBinOp' intF floatF l r = case (l, r) of
-            (NInt   li, NInt   ri) ->
-                valueRefInt   $             li `intF`               ri
-            (NInt   li, NFloat rf) ->
-                valueRefFloat $ fromInteger li `floatF`             rf
-            (NFloat lf, NInt   ri) ->
-                valueRefFloat $             lf `floatF` fromInteger ri
-            (NFloat lf, NFloat rf) ->
-                valueRefFloat $             lf `floatF`             rf
-            _ -> throwError unsupportedTypes
-    case (lval, rval) of
-        (NVConstant lc, NVConstant rc) -> case (op, lc, rc) of
-            -- TODO: Refactor so that eval (NBinary ..) dispatches based on
-            -- operator first
-            (NEq,  _, _) -> valueRefBool =<< valueEq lval rval
-            (NNEq, _, _) -> valueRefBool . not =<< valueEq lval rval
-            (NLt,  l, r) -> valueRefBool $ l <  r
-            (NLte, l, r) -> valueRefBool $ l <= r
-            (NGt,  l, r) -> valueRefBool $ l >  r
-            (NGte, l, r) -> valueRefBool $ l >= r
-            (NAnd,  NBool l, NBool r) -> valueRefBool $ l && r
-            (NOr,   NBool l, NBool r) -> valueRefBool $ l || r
-            (NImpl, NBool l, NBool r) -> valueRefBool $ not l || r
-            (NPlus,  l, r) -> numBinOp (+) l r
-            (NMinus, l, r) -> numBinOp (-) l r
-            (NMult,  l, r) -> numBinOp (*) l r
-            (NDiv,   l, r) -> numBinOp' div (/) l r
-            _ -> throwError unsupportedTypes
+eval (NBinary op larg rarg) = case op of
+    NOr -> larg >>= \case
+        NVConstant (NBool l) -> if l
+            then valueRefBool True
+            else rarg >>= \case
+                NVConstant (NBool r) -> valueRefBool r
+                v -> throwError $ "operator `||`: left argument: boolean expected, got " ++ show (void v)
+        v -> throwError $ "operator `||`: right argument: boolean expected, got " ++ show (void v)
+    NAnd -> larg >>= \case
+        NVConstant (NBool l) -> if l
+            then rarg >>= \case
+                NVConstant (NBool r) -> valueRefBool r
+                v -> throwError $ "operator `&&`: left argument: boolean expected, got " ++ show (void v)
+            else valueRefBool False
+        v -> throwError $ "operator `&&`: right argument: boolean expected, got " ++ show (void v)
+    -- TODO: Refactor so that eval (NBinary ..) *always* dispatches based on
+    -- operator first
+    _ -> do
+        lval <- traceM "NBinary:left" >> larg
+        rval <- traceM "NBinary:right" >> rarg
+        let unsupportedTypes =
+                "unsupported argument types for binary operator "
+                    ++ showValue lval ++ " " ++ show op ++ " " ++ showValue rval
+            numBinOp :: (forall a. Num a => a -> a -> a) -> NAtom -> NAtom
+                     -> m (NValue m)
+            numBinOp f = numBinOp' f f
+            numBinOp'
+                :: (Integer -> Integer -> Integer)
+                -> (Float -> Float -> Float)
+                -> NAtom -> NAtom -> m (NValue m)
+            numBinOp' intF floatF l r = case (l, r) of
+                (NInt   li, NInt   ri) ->
+                    valueRefInt   $             li `intF`               ri
+                (NInt   li, NFloat rf) ->
+                    valueRefFloat $ fromInteger li `floatF`             rf
+                (NFloat lf, NInt   ri) ->
+                    valueRefFloat $             lf `floatF` fromInteger ri
+                (NFloat lf, NFloat rf) ->
+                    valueRefFloat $             lf `floatF`             rf
+                _ -> throwError unsupportedTypes
+        case (lval, rval) of
+            (NVConstant lc, NVConstant rc) -> case (op, lc, rc) of
+                (NEq,  _, _) -> valueRefBool =<< valueEq lval rval
+                (NNEq, _, _) -> valueRefBool . not =<< valueEq lval rval
+                (NLt,  l, r) -> valueRefBool $ l <  r
+                (NLte, l, r) -> valueRefBool $ l <= r
+                (NGt,  l, r) -> valueRefBool $ l >  r
+                (NGte, l, r) -> valueRefBool $ l >= r
+                (NAnd,  NBool l, NBool r) -> valueRefBool $ l && r
+                (NOr,   NBool l, NBool r) -> valueRefBool $ l || r
+                (NImpl, NBool l, NBool r) -> valueRefBool $ not l || r
+                (NPlus,  l, r) -> numBinOp (+) l r
+                (NMinus, l, r) -> numBinOp (-) l r
+                (NMult,  l, r) -> numBinOp (*) l r
+                (NDiv,   l, r) -> numBinOp' div (/) l r
+                _ -> throwError unsupportedTypes
 
-        (NVStr ls lc, NVStr rs rc) -> case op of
-            NPlus -> return $ NVStr (ls `mappend` rs) (lc `mappend` rc)
-            NEq   -> valueRefBool =<< valueEq lval rval
-            NNEq  -> valueRefBool . not =<< valueEq lval rval
-            NLt   -> valueRefBool $ ls <  rs
-            NLte  -> valueRefBool $ ls <= rs
-            NGt   -> valueRefBool $ ls >  rs
-            NGte  -> valueRefBool $ ls >= rs
-            _     -> throwError unsupportedTypes
+            (NVStr ls lc, NVStr rs rc) -> case op of
+                NPlus -> return $ NVStr (ls `mappend` rs) (lc `mappend` rc)
+                NEq   -> valueRefBool =<< valueEq lval rval
+                NNEq  -> valueRefBool . not =<< valueEq lval rval
+                NLt   -> valueRefBool $ ls <  rs
+                NLte  -> valueRefBool $ ls <= rs
+                NGt   -> valueRefBool $ ls >  rs
+                NGte  -> valueRefBool $ ls >= rs
+                _     -> throwError unsupportedTypes
 
-        (NVSet ls, NVSet rs) -> case op of
-            NUpdate -> return $ NVSet $ rs `M.union` ls
-            NEq -> valueRefBool =<< valueEq lval rval
-            NNEq -> valueRefBool . not =<< valueEq lval rval
+            (NVSet ls, NVSet rs) -> case op of
+                NUpdate -> return $ NVSet $ rs `M.union` ls
+                NEq -> valueRefBool =<< valueEq lval rval
+                NNEq -> valueRefBool . not =<< valueEq lval rval
+                _ -> throwError unsupportedTypes
+
+            (NVList ls, NVList rs) -> case op of
+                NConcat -> return $ NVList $ ls ++ rs
+                NEq -> valueRefBool =<< valueEq lval rval
+                NNEq -> valueRefBool . not =<< valueEq lval rval
+                _ -> throwError unsupportedTypes
+
+            (NVLiteralPath ls, NVLiteralPath rs) -> case op of
+                -- TODO: Canonicalise path
+                NPlus -> NVLiteralPath <$> makeAbsolutePath (ls ++ rs)
+                _ -> throwError unsupportedTypes
+
+            (NVLiteralPath ls, NVStr rs _) -> case op of
+                -- TODO: Canonicalise path
+                NPlus -> NVLiteralPath
+                    <$> makeAbsolutePath (ls `mappend` Text.unpack rs)
+                _ -> throwError unsupportedTypes
+
             _ -> throwError unsupportedTypes
-
-        (NVList ls, NVList rs) -> case op of
-            NConcat -> return $ NVList $ ls ++ rs
-            NEq -> valueRefBool =<< valueEq lval rval
-            NNEq -> valueRefBool . not =<< valueEq lval rval
-            _ -> throwError unsupportedTypes
-
-        (NVLiteralPath ls, NVLiteralPath rs) -> case op of
-            -- TODO: Canonicalise path
-            NPlus -> NVLiteralPath <$> makeAbsolutePath (ls ++ rs)
-            _ -> throwError unsupportedTypes
-
-        (NVLiteralPath ls, NVStr rs _) -> case op of
-            -- TODO: Canonicalise path
-            NPlus -> NVLiteralPath
-                <$> makeAbsolutePath (ls `mappend` Text.unpack rs)
-            _ -> throwError unsupportedTypes
-
-        _ -> throwError unsupportedTypes
 
 eval (NSelect aset attr alternative) = do
     traceM "NSelect"
