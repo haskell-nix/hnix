@@ -165,37 +165,21 @@ eval (NBinary op larg rarg) = do
 
 eval (NSelect aset attr alternative) = do
     traceM "NSelect"
-    aset' <- aset
-    ks    <- evalSelector True attr
-    mres  <- extract aset' ks
+    mres <- evalSelect aset attr
     case mres of
-        Just v -> do
+        Right v -> do
             traceM $ "Wrapping a selector: " ++ show (() <$ v)
             pure v
-        Nothing -> fromMaybe err alternative
+        Left (s, ks) -> fromMaybe err alternative
           where
             err = throwError $ "could not look up attribute "
                 ++ intercalate "." (map Text.unpack ks)
-                ++ " in " ++ showValue aset'
-  where
-    extract (NVSet s) (k:ks) = case M.lookup k s of
-        Just v  -> force v >>= extract ?? ks
-        Nothing -> return Nothing
-    extract _ (_:_) = return Nothing
-    extract v [] = return $ Just v
+                ++ " in " ++ showValue s
 
 eval (NHasAttr aset attr) = do
     traceM "NHasAttr"
-    aset >>= \case
-        NVSet s -> do
-            traceM "NHasAttr..2"
-            evalSelector True attr >>= \case
-                [keyName] ->
-                    return $ NVConstant $ NBool $ keyName `M.member` s
-                x -> throwError $ "attr name argument to hasAttr"
-                        ++ " is not a single-part name: " ++ show x
-        x -> throwError $ "argument to hasAttr has wrong type: "
-                ++ showValue x
+    NVConstant . NBool . either (const False) (const True)
+        <$> evalSelect aset attr
 
 eval (NList l) = do
     traceM "NList"
@@ -514,6 +498,20 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
         fmap coerce . buildThunk . withScopes scope . pushScope attrs $ f
 
     insert m (path, value) = attrSetAlter path m value
+
+evalSelect
+    :: (MonadExpr t v m, Framed e m, MonadVar m, MonadFile m)
+    => m (NValue m)
+    -> NAttrPath (m v)
+    -> m (Either (NValueF m (NThunk m), [Text]) (NValueF m (NThunk m)))
+evalSelect aset attr =
+    join $ extract <$> aset <*> evalSelector True attr
+  where
+    extract (NVSet s) (k:ks) = case M.lookup k s of
+        Just v  -> force v >>= extract ?? ks
+        Nothing -> return $ Left (NVSet s, k:ks)
+    extract x (k:ks) = return $ Left (x, k:ks)
+    extract v [] = return $ Right v
 
 evalSelector :: (Framed e m, MonadExpr t v m, MonadFile m)
              => Bool -> NAttrPath (m v) -> m [Text]

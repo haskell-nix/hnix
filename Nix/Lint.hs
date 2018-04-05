@@ -311,7 +311,8 @@ lint (NSelect aset attr alternative) = do
 lint (NHasAttr aset attr) = aset >>= unpackSymbolic >>= \case
     NMany [TSet _] -> evalSelector True attr >>= \case
         [_] -> mkSymbolic [TConstant [TBool]]
-        _ -> throwError $ "attr name argument to hasAttr"
+        _ -> -- jww (2018-04-05): Need to repeat the logic above
+            throwError $ "attr name argument to hasAttr"
                 ++ " is not a single-part name"
     _ -> throwError "argument to hasAttr has wrong type"
 
