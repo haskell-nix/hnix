@@ -82,7 +82,7 @@ nixSelector = annotateLocation $ keyName `sepBy1` selDot
 nixSelect :: Parser NExprLoc -> Parser NExprLoc
 nixSelect term = build
   <$> term
-  <*> optional ((,) <$> (selDot *> nixSelector) <*> optional (reserved "or" *> nixExprLoc))
+  <*> optional ((,) <$> (selDot *> nixSelector) <*> optional (reserved "or" *> nixTerm))
  where
   build :: NExprLoc -> Maybe (Ann SrcSpan (NAttrPath NExprLoc), Maybe NExprLoc) -> NExprLoc
   build t Nothing = t

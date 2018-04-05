@@ -125,7 +125,6 @@ reservedNames = HashSet.fromList
     , "with"
     , "rec"
     , "inherit"
-    , "or"
     , "true"
     , "false"
     ]
