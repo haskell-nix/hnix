@@ -41,8 +41,8 @@ forceThunk (Thunk active ref) k = do
     case eres of
         Computed value -> k value
         Deferred action -> do
-            active <- atomicModifyVar active (True,)
-            if active
+            nowActive <- atomicModifyVar active (True,)
+            if nowActive
                 then throwError "<<loop>>"
                 else do
                     value <- action
