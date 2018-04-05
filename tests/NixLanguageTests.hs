@@ -119,10 +119,10 @@ assertEvalFail file = catch eval (\(ErrorCall _) -> return ())
 
 nixEvalFile :: FilePath -> IO (NValueNF (Lazy IO))
 nixEvalFile file =  do
-  parseResult <- parseNixFile file
+  parseResult <- parseNixFileLoc file
   case parseResult of
     Failure err        ->
         error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
     Success expression -> do
         setEnv "TEST_VAR" "foo"
-        eval (Just file) expression
+        evalLoc (Just file) expression

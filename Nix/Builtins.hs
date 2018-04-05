@@ -170,20 +170,20 @@ apply f arg = evalApp (force f) (force arg)
 
 curPos :: forall e m. Framed e m => m (NValue m)
 curPos = do
-    Compose (Ann (SrcSpan (line -> (file, line, col)) _) _):_ <-
+    Compose (Ann (SrcSpan (line -> (f, l, c)) _) _):_ <-
         asks (mapMaybe (either (const Nothing) Just)
               . view @_ @Frames hasLens)
     return $ NVSet $ M.fromList
-        [ ("file", valueThunk $ NVStr (decodeUtf8 file) mempty)
-        , ("line", valueThunk $ NVConstant (NInt (fromIntegral line)))
-        , ("column", valueThunk $ NVConstant (NInt (fromIntegral col)))
+        [ ("file", valueThunk $ NVStr f mempty)
+        , ("line", valueThunk $ NVConstant (NInt (fromIntegral l)))
+        , ("column", valueThunk $ NVConstant (NInt (fromIntegral c)))
         ]
   where
     line = \case
-        Columns c _ -> ("<string>", 1, c)
+        Columns c _ -> ("<string>", 1, c + 1)
         Tab {} -> ("<string>", 1, 1)
-        Lines l _ _ _ -> ("<string>", l, 1)
-        Directed fn l c _ _ -> (fn, l, c)
+        Lines l _ _ _ -> ("<string>", l + 1, 1)
+        Directed fn l c _ _ -> (decodeUtf8 fn, l + 1, c + 1)
 
 toString :: MonadBuiltins e m => NThunk m -> m (NValue m)
 toString str = do
