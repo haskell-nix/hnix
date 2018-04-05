@@ -16,57 +16,18 @@ let
 
   inherit (nixpkgs) pkgs;
 
-  f = { mkDerivation, ansi-wl-pprint, base, containers, criterion
-      , data-fix, deepseq, deriving-compat, directory, filepath, Glob
-      , parsers, regex-tdfa, regex-tdfa-text, semigroups, split, stdenv
-      , tasty, tasty-hunit, tasty-th, text, transformers, trifecta
-      , unordered-containers, these, optparse-applicative, interpolate
-      , process, exceptions, bytestring, mtl, monadlist, base16-bytestring
-      , cryptohash, template-haskell, syb, xml, insert-ordered-containers
-      }:
-      mkDerivation {
-        pname = "hnix";
-        version = "0.4.0";
-        src = ./.;
-        isLibrary = true;
-        isExecutable = true;
-        libraryHaskellDepends = [
-          ansi-wl-pprint base containers data-fix deepseq deriving-compat
-          parsers regex-tdfa regex-tdfa-text semigroups text transformers
-          trifecta unordered-containers these process directory filepath
-          exceptions bytestring mtl monadlist base16-bytestring cryptohash
-          template-haskell syb xml insert-ordered-containers
-        ];
-        executableHaskellDepends = [
-          ansi-wl-pprint base containers data-fix deepseq optparse-applicative
-          text transformers template-haskell
-        ];
-        testHaskellDepends = [
-          base containers data-fix directory filepath Glob split tasty
-          tasty-hunit tasty-th text transformers interpolate
-        ];
-        benchmarkHaskellDepends = [ base containers criterion text ];
-        homepage = "http://github.com/jwiegley/hnix";
-        description = "Haskell implementation of the Nix language";
-        license = stdenv.lib.licenses.bsd3;
+  haskellPackages = pkgs.haskell.packages.${compiler};
+
+  f = haskellPackages.developPackage {
+    root = ./.;
+    source-overrides = {
+      # Use a particular commit from github
+      insert-ordered-containers = pkgs.fetchFromGitHub {
+        owner = "mightybyte";
+        repo = "insert-ordered-containers";
+        rev = "2a15aea6a9733259ee494eb379dd4df206d215c5";
+        sha256 = "1pjg9lwahm767mf88r6cb0dcaga84l8p08zd7mxjz322ll07q1ja";
       };
-
-  insert-ordered-containers_0_2_2_0 = hpkgs:
-    hpkgs.insert-ordered-containers.overrideDerivation (attrs: {
-      name = "insert-ordered-containers-0.2.2.0";
-      version = "0.2.2.0";
-      src = pkgs.fetchFromGitHub {
-         owner = "mightybyte";
-         repo = "insert-ordered-containers";
-         rev = "842b32c012e01ba1930c34c367dab9a9412c332d";
-         sha256 = "182y5ffc68dgdrdkfq7w3zsj8xmig6hdnhv5wm866qcks49i2kn4";
-       };
-    });
-
-  haskellPackages = pkgs.haskell.packages.${compiler}.override {
-    overrides = self: super: {
-      insert-ordered-containers = insert-ordered-containers_0_2_2_0 super;
-      recurseForDerivations = true;
     };
   };
 
@@ -77,8 +38,8 @@ let
          then pkgs.haskell.lib.doProfiling
          else pkgs.lib.id;
 
-  drv = variant (haskellPackages.callPackage f {});
+  drv = variant f;
 
 in
 
-  if pkgs.lib.inNixShell then drv.env else drv
+  drv
