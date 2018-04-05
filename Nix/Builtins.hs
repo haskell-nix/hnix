@@ -50,6 +50,7 @@ import qualified Data.Vector as V
 import           GHC.Stack.Types (HasCallStack)
 import           Nix.Atoms
 import           Nix.Eval
+import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Monad
 import           Nix.Pretty
@@ -134,6 +135,7 @@ builtinsList = sequence [
     , add  Normal   "concatLists"                concatLists
     , add  Normal   "listToAttrs"                listToAttrs
     , add2 Normal   "intersectAttrs"             intersectAttrs
+    , add  Normal   "functionArgs"               functionArgs
     , add' Normal   "hashString"                 hashString
     , add  Normal   "readFile"                   readFile_
     , add  Normal   "readDir"                    readDir_
@@ -455,6 +457,15 @@ intersectAttrs set1 set2 = force set1 $ \set1' -> force set2 $ \set2' ->
         (v1, v2) ->
             throwError $ "removeAttrs: expected two sets, got "
                 ++ showValue v1 ++ " and " ++ showValue v2
+
+functionArgs :: MonadBuiltins e m => NThunk m -> m (NValue m)
+functionArgs fun = force fun $ \case
+    NVClosure _ p _ ->
+        return $ NVSet $ valueThunk . NVConstant . NBool <$>
+            case p of
+                Param name -> M.singleton name False
+                ParamSet s _ _ -> isJust <$> s
+    v -> throwError $ "removeAttrs: expected function, got " ++ showValue v
 
 isAttrs :: MonadBuiltins e m => NThunk m -> m (NValue m)
 isAttrs = flip force $ \case
