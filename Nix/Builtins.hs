@@ -94,6 +94,7 @@ builtinsList = sequence [
     , add' TopLevel "baseNameOf"                 (arity1 baseNameOf)
     , add  TopLevel "dirOf"                      dirOf
     , add2 TopLevel "removeAttrs"                removeAttrs
+    , add2 TopLevel "intersectAttrs"             intersectAttrs
     , add  TopLevel "isNull"                     isNull
     , add  TopLevel "throw"                      throw_
     , add  Normal   "getEnv"                     getEnvVar
@@ -445,6 +446,15 @@ removeAttrs set list = fromThunk @[Text] list $ \toRemove ->
     force set $ \case
         NVSet m -> return $ NVSet $ foldl' (flip M.delete) m toRemove
         v -> throwError $ "removeAttrs: expected set, got " ++ showValue v
+
+intersectAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
+intersectAttrs set1 set2 = force set1 $ \set1' -> force set2 $ \set2' ->
+    case (set1', set2') of
+        (NVSet s1, NVSet s2) ->
+            return $ NVSet $ s2 `M.intersection` s1
+        (v1, v2) ->
+            throwError $ "removeAttrs: expected two sets, got "
+                ++ showValue v1 ++ " and " ++ showValue v2
 
 isAttrs :: MonadBuiltins e m => NThunk m -> m (NValue m)
 isAttrs = flip force $ \case
