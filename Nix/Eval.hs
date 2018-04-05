@@ -134,8 +134,8 @@ eval (NBinary op larg rarg) = case op of
                 (NLte, l, r) -> valueRefBool $ l <= r
                 (NGt,  l, r) -> valueRefBool $ l >  r
                 (NGte, l, r) -> valueRefBool $ l >= r
-                (NAnd,  NBool l, NBool r) -> valueRefBool $ l && r
-                (NOr,   NBool l, NBool r) -> valueRefBool $ l || r
+                (NAnd,  _, _) -> error "should be impossible: && is handled above"
+                (NOr,   _, _) -> error "should be impossible: || is handled above"
                 (NImpl, NBool l, NBool r) -> valueRefBool $ not l || r
                 (NPlus,  l, r) -> numBinOp (+) l r
                 (NMinus, l, r) -> numBinOp (-) l r
