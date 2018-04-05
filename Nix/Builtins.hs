@@ -94,7 +94,6 @@ builtinsList = sequence [
     , add' TopLevel "baseNameOf"                 (arity1 baseNameOf)
     , add  TopLevel "dirOf"                      dirOf
     , add2 TopLevel "removeAttrs"                removeAttrs
-    , add2 TopLevel "intersectAttrs"             intersectAttrs
     , add  TopLevel "isNull"                     isNull
     , add  TopLevel "throw"                      throw_
     , add  Normal   "getEnv"                     getEnvVar
@@ -134,6 +133,7 @@ builtinsList = sequence [
     , add2 Normal   "lessThan"                   lessThan
     , add  Normal   "concatLists"                concatLists
     , add  Normal   "listToAttrs"                listToAttrs
+    , add2 Normal   "intersectAttrs"             intersectAttrs
     , add' Normal   "hashString"                 hashString
     , add  Normal   "readFile"                   readFile_
     , add  Normal   "readDir"                    readDir_
