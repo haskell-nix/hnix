@@ -544,7 +544,7 @@ concatLists = force >=> \case
 
 listToAttrs :: MonadBuiltins e m => NThunk m -> m (NValue m)
 listToAttrs = force >=> \case
-    NVList l -> fmap (NVSet . M.fromList) $ forM l $ force >=> \case
+    NVList l -> fmap (NVSet . M.fromList . reverse) $ forM l $ force >=> \case
         NVSet s -> case (M.lookup "name" s, M.lookup "value" s) of
             (Just name, Just value) -> force name >>= \case
                 NVStr n _ -> return (n, value)
