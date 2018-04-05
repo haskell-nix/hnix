@@ -9,13 +9,20 @@ let
 
 in { nixpkgs ? import pinnedPkgs {}
    , compiler ? "ghc822"
+   , doProfiling ? false
    , doBenchmark ? false }:
 
 let
 
   inherit (nixpkgs) pkgs;
 
-  haskellPackages = pkgs.haskell.packages.${compiler};
+  haskellPackages = let hpkgs = pkgs.haskell.packages.${compiler}; in
+    hpkgs // {
+      mkDerivation = args: hpkgs.mkDerivation (args // {
+        enableLibraryProfiling = doProfiling;
+        enableExecutableProfiling = doProfiling;
+      });
+    };
 
   pkg = haskellPackages.developPackage {
     root = ./.;
