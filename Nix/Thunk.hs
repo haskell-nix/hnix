@@ -46,3 +46,23 @@ forceThunk (Thunk avail ref) = do
                     value <- action
                     writeVar ref (Computed value)
                     return value
+
+forceThunkCont :: (Framed e m, MonadFile m, MonadVar m)
+               => Thunk m v -> (v -> m r) -> m r
+forceThunkCont (Value ref) k = k ref
+forceThunkCont (Action ref) k = k =<< ref
+forceThunkCont (Thunk avail ref) k = do
+    active <- atomicModifyVar avail (True,)
+    if active
+        then throwError "Cycle detected"
+        else do
+            eres <- readVar ref
+            value <- case eres of
+                Computed value -> return value
+                Deferred action -> do
+                    value <- action
+                    writeVar ref (Computed value)
+                    return value
+            res <- k value
+            _ <- atomicModifyVar avail (False,)
+            return res
