@@ -96,6 +96,7 @@ builtinsList = sequence [
     , add  TopLevel "dirOf"                      dirOf
     , add2 TopLevel "removeAttrs"                removeAttrs
     , add  TopLevel "isNull"                     isNull
+    , add  TopLevel "abort"                      throw_ -- for now
     , add  TopLevel "throw"                      throw_
     , add  Normal   "getEnv"                     getEnvVar
     , add2 Normal   "hasAttr"                    hasAttr
