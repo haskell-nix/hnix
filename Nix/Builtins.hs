@@ -441,8 +441,7 @@ replaceStrings from to s = Prim $ do
     return $ go s mempty
 
 removeAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-removeAttrs set list = do
-    toRemove <- fromThunk @[Text] list
+removeAttrs set list = fromThunk @[Text] list $ \toRemove ->
     force set $ \case
         NVSet m -> return $ NVSet $ foldl' (flip M.delete) m toRemove
         v -> throwError $ "removeAttrs: expected set, got " ++ showValue v
@@ -600,8 +599,7 @@ readDir_ pathThunk = do
     toValue $ M.fromList itemsWithTypes
 
 fromJSON :: MonadBuiltins e m => NThunk m -> m (NValue m)
-fromJSON t = do
-    encoded <- fromThunk t
+fromJSON t = fromThunk t $ \encoded ->
     case A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded of
         Left jsonError -> throwError $ "builtins.fromJSON: " ++ jsonError
         Right v -> toValue v
@@ -691,16 +689,16 @@ instance (MonadBuiltins e m, ToNix a) => ToBuiltin m (Prim m a) where
 instance (MonadBuiltins e m, FromNix a, ToBuiltin m b)
       => ToBuiltin m (a -> b) where
     toBuiltin name f =
-        return $ NVBuiltin name $ toBuiltin name . f <=< fromThunk
+        return $ NVBuiltin name $ fromThunk ?? (toBuiltin name . f)
 
 class FromNix a where
     --TODO: Get rid of the HasCallStack - it should be captured by whatever
     --error reporting mechanism we add
     fromValue :: (HasCallStack, MonadBuiltins e m) => NValue m -> m a
 
-fromThunk :: forall a e m. (FromNix a, HasCallStack, MonadBuiltins e m)
-          => NThunk m -> m a
-fromThunk = flip force fromValue
+fromThunk :: (FromNix a, HasCallStack, MonadBuiltins e m)
+          => NThunk m -> (a -> m r) -> m r
+fromThunk t f = force t (f <=< fromValue)
 
 instance FromNix Bool where
     fromValue = \case
@@ -722,7 +720,7 @@ instance FromNix Integer where
 
 instance FromNix a => FromNix [a] where
     fromValue = \case
-        NVList l -> traverse fromThunk l
+        NVList l -> traverse (`force` fromValue) l
         v -> throwError $ "fromValue: Expected list, got " ++ showValue v
 
 toEncodingSorted :: A.Value -> A.Encoding
@@ -740,8 +738,8 @@ instance FromNix A.Value where
             NNull -> A.Null
             NUri u -> toJSON u
         NVStr s _ -> pure $ toJSON s
-        NVList l -> A.Array . V.fromList <$> traverse fromThunk l
-        NVSet m -> A.Object <$> traverse fromThunk m
+        NVList l -> A.Array . V.fromList <$> traverse (`force` fromValue) l
+        NVSet m -> A.Object <$> traverse (`force` fromValue) m
         NVClosure {} -> throwError "cannot convert a function to JSON"
         NVLiteralPath p -> toJSON . unStorePath <$> addPath p
         NVEnvPath p -> toJSON . unStorePath <$> addPath p
