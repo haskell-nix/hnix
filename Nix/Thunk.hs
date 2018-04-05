@@ -63,4 +63,6 @@ forceThunkCont (Thunk avail ref) k = do
                     value <- action
                     writeVar ref (Computed value)
                     return value
-            k value <* atomicModifyVar avail (False,)
+            res <- k value
+            _ <- atomicModifyVar avail (False,)
+            return res

@@ -329,7 +329,7 @@ forceCont :: (Framed e m, MonadFile m, MonadVar m)
 forceCont = forceThunkCont . coerce
 
 normalForm :: forall e m. MonadEval e m => NValue m -> m (NValueNF m)
-normalForm v = trace ("v = " ++ showValue v) $ case v of
+normalForm = \case
     NVConstant a     -> return $ Fix $ NVConstant a
     NVStr t s        -> return $ Fix $ NVStr t s
     NVList l         ->
