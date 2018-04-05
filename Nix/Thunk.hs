@@ -36,16 +36,16 @@ forceThunk :: (Framed e m, MonadFile m, MonadVar m)
            => Thunk m v -> (v -> m r) -> m r
 forceThunk (Value ref) k = k ref
 forceThunk (Action ref) k = k =<< ref
-forceThunk (Thunk avail ref) k = do
+forceThunk (Thunk active ref) k = do
     eres <- readVar ref
     case eres of
         Computed value -> k value
         Deferred action -> do
-            active <- atomicModifyVar avail (True,)
+            active <- atomicModifyVar active (True,)
             if active
                 then throwError "<<loop>>"
                 else do
                     value <- action
                     writeVar ref (Computed value)
-                    _ <- atomicModifyVar avail (False,)
+                    _ <- atomicModifyVar active (False,)
                     k value
