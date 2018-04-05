@@ -4,6 +4,9 @@ module Nix.XML where
 
 import           Data.Fix
 import qualified Data.HashMap.Lazy as M
+import qualified Data.HashMap.Strict.InsOrd as OM
+import           Data.List
+import           Data.Ord
 import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Expr.Types
@@ -31,7 +34,7 @@ toXML = (.) ((++ "\n") .
         (map (\(k, v) -> Elem (Element (unqual "attr")
                                       [Attr (unqual "name") (Text.unpack k)]
                                       [Elem v] Nothing))
-             (M.toList s)) Nothing
+             (sortBy (comparing fst) $ M.toList s)) Nothing
 
     NVClosure _ p _  ->
         Element (unqual "function") [] (paramsXML p) Nothing
@@ -52,4 +55,4 @@ paramsXML (ParamSet s b mname) =
     nattr = maybe [] ((:[]) . Attr (unqual "name") . Text.unpack) (mname)
 
 paramSetXML :: ParamSet r -> [Content]
-paramSetXML m = map (\(k,_) -> Elem $ mkElem "attr" "name" (Text.unpack k)) $ M.toList m
+paramSetXML m = map (\(k,_) -> Elem $ mkElem "attr" "name" (Text.unpack k)) $ OM.toList m

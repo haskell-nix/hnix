@@ -14,7 +14,7 @@ import Data.Data
 import Data.Eq.Deriving
 import Data.Fix
 import Data.Functor.Classes
-import Data.HashMap.Lazy (HashMap)
+import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Text (Text, pack)
 import Data.Traversable
 import GHC.Exts
@@ -104,7 +104,13 @@ data Params r
   deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show,
             Foldable, Traversable)
 
-type ParamSet r = HashMap VarName (Maybe r)
+--instance Show1 Params where
+--  liftShowsPrec sp sl p = undefined
+--  liftShowsPrec sp sl p = \case
+--    Param n -> show n
+--    ParamSet s b mn  -> showsUnaryWith showsPrec "StaticKey" p t
+
+type ParamSet r = InsOrdHashMap VarName (Maybe r)
 
 instance IsString (Params r) where
   fromString = Param . fromString
@@ -159,17 +165,17 @@ data NKeyName r
 instance IsString (NKeyName r) where
   fromString = StaticKey . fromString
 
-instance Eq1 NKeyName where
-  liftEq eq (DynamicKey a) (DynamicKey b) = liftEq2 (liftEq eq) eq a b
-  liftEq _ (StaticKey a) (StaticKey b) = a == b
-  liftEq _ _ _ = False
-
--- Deriving this instance automatically is not possible because @r@
--- occurs not only as last argument in @Antiquoted (NString r) r@
-instance Show1 NKeyName where
-  liftShowsPrec sp sl p = \case
-    DynamicKey a -> showsUnaryWith (liftShowsPrec2 (liftShowsPrec sp sl) (liftShowList sp sl) sp sl) "DynamicKey" p a
-    StaticKey t  -> showsUnaryWith showsPrec "StaticKey" p t
+-- instance Eq1 NKeyName where
+--   liftEq eq (DynamicKey a) (DynamicKey b) = liftEq2 (liftEq eq) eq a b
+--   liftEq _ (StaticKey a) (StaticKey b) = a == b
+--   liftEq _ _ _ = False
+-- 
+-- -- Deriving this instance automatically is not possible because @r@
+-- -- occurs not only as last argument in @Antiquoted (NString r) r@
+-- instance Show1 NKeyName where
+--   liftShowsPrec sp sl p = \case
+--     DynamicKey a -> showsUnaryWith (liftShowsPrec2 (liftShowsPrec sp sl) (liftShowList sp sl) sp sl) "DynamicKey" p a
+--     StaticKey t  -> showsUnaryWith showsPrec "StaticKey" p t
 
 -- Deriving this instance automatically is not possible because @r@
 -- occurs not only as last argument in @Antiquoted (NString r) r@
@@ -221,16 +227,16 @@ paramName :: Params r -> Maybe VarName
 paramName (Param n) = Just n
 paramName (ParamSet _ _ n) = n
 
-$(deriveEq1 ''NExprF)
-$(deriveEq1 ''NString)
-$(deriveEq1 ''Binding)
-$(deriveEq1 ''Params)
-$(deriveEq1 ''Antiquoted)
-$(deriveEq2 ''Antiquoted)
-
-$(deriveShow1 ''NExprF)
-$(deriveShow1 ''NString)
-$(deriveShow1 ''Params)
-$(deriveShow1 ''Binding)
-$(deriveShow1 ''Antiquoted)
-$(deriveShow2 ''Antiquoted)
+-- $(deriveEq1 ''NExprF)
+-- $(deriveEq1 ''NString)
+-- $(deriveEq1 ''Binding)
+-- $(deriveEq1 ''Params)
+-- $(deriveEq1 ''Antiquoted)
+-- $(deriveEq2 ''Antiquoted)
+-- 
+-- $(deriveShow1 ''NExprF)
+-- $(deriveShow1 ''NString)
+-- $(deriveShow1 ''Params)
+-- $(deriveShow1 ''Binding)
+-- $(deriveShow1 ''Antiquoted)
+-- $(deriveShow2 ''Antiquoted)
