@@ -324,18 +324,22 @@ valueEq l r = case (l, r) of
 
 -----
 
+forceCont :: (Framed e m, MonadFile m, MonadVar m)
+          => NThunk m -> (NValue m -> m r) -> m r
+forceCont = forceThunkCont . coerce
+
 normalForm :: forall e m. MonadEval e m => NValue m -> m (NValueNF m)
 normalForm = \case
     NVConstant a     -> return $ Fix $ NVConstant a
     NVStr t s        -> return $ Fix $ NVStr t s
     NVList l         ->
-        Fix . NVList <$> traverse (normalForm <=< force) l
+        Fix . NVList <$> traverse (`forceCont` normalForm) l
     NVSet s          ->
-        Fix . NVSet <$> traverse (normalForm <=< force) s
+        Fix . NVSet <$> traverse (`forceCont` normalForm) s
     NVClosure s p f   -> withScopes @(NThunk m) s $ do
-        p' <- traverse (fmap (normalForm <=< force)) p
+        p' <- traverse (fmap (`forceCont` normalForm)) p
         return $ Fix $
-            NVClosure emptyScopes p' (normalForm =<< force =<< f)
+            NVClosure emptyScopes p' ((`forceCont` normalForm) =<< f)
     NVLiteralPath fp -> return $ Fix $ NVLiteralPath fp
     NVEnvPath p      -> return $ Fix $ NVEnvPath p
     NVBuiltin name f -> return $ Fix $ NVBuiltin name f
