@@ -31,18 +31,20 @@ buildRepeatingThunk = Action
 buildThunk :: MonadVar m => m v -> m (Thunk m v)
 buildThunk action = Thunk <$> newVar False <*> newVar (Deferred action)
 
-forceThunk :: (Framed e m, MonadFile m, MonadVar m) => Thunk m v -> m v
-forceThunk (Value ref) = pure ref
-forceThunk (Action ref) = ref
-forceThunk (Thunk avail ref) = do
-    eres <- readVar ref
-    case eres of
-        Computed value -> return value
-        Deferred action -> do
-            active <- atomicModifyVar avail (True,)
-            if active
-                then throwError "Cycle detected"
-                else do
+forceThunk :: (Framed e m, MonadFile m, MonadVar m)
+           => Thunk m v -> (v -> m r) -> m r
+forceThunk (Value ref) k = k ref
+forceThunk (Action ref) k = k =<< ref
+forceThunk (Thunk avail ref) k = do
+    active <- atomicModifyVar avail (True,)
+    if active
+        then throwError "Cycle detected"
+        else do
+            eres <- readVar ref
+            value <- case eres of
+                Computed value -> return value
+                Deferred action -> do
                     value <- action
                     writeVar ref (Computed value)
                     return value
+            k value <* atomicModifyVar avail (False,)
