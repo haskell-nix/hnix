@@ -59,6 +59,7 @@ Library
     , mtl
     , transformers
     , parsers >= 0.10
+    , insert-ordered-containers >= 0.2.2
     , unordered-containers >= 0.2.9 && < 0.3
     , data-fix
     , deepseq
