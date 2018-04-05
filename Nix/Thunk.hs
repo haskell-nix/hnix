@@ -4,6 +4,7 @@ module Nix.Thunk where
 
 data Deferred m v
     = DeferredAction (m v)
+    | RepeatingAction (m v)
     | ComputedValue v
 
 class Monad m => MonadVar m where
@@ -22,6 +23,10 @@ buildThunk :: MonadVar m => m v -> m (Thunk m v)
 buildThunk action =
     Right <$> newVar (DeferredAction action)
 
+buildRepeatingThunk :: MonadVar m => m v -> m (Thunk m v)
+buildRepeatingThunk action =
+    Right <$> newVar (RepeatingAction action)
+
 forceThunk :: MonadVar m => Thunk m v -> m v
 forceThunk (Left ref) = pure ref
 forceThunk (Right ref) = do
@@ -32,3 +37,4 @@ forceThunk (Right ref) = do
             value <- action
             writeVar ref (ComputedValue value)
             return value
+        RepeatingAction action -> action

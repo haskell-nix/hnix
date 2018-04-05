@@ -9,6 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 
@@ -17,6 +18,7 @@ module Nix.Builtins (MonadBuiltins, baseEnv) where
 import           Control.Monad
 import           Control.Monad.Fix
 import           Control.Monad.ListM (sortByM)
+import           Control.Monad.Reader
 import qualified Crypto.Hash.MD5 as MD5
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.SHA256 as SHA256
@@ -30,6 +32,7 @@ import           Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
 import           Data.Foldable (foldlM)
+import           Data.Functor.Compose
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.List
@@ -47,10 +50,12 @@ import qualified Data.Vector as V
 import           GHC.Stack.Types (HasCallStack)
 import           Nix.Atoms
 import           Nix.Eval
+import           Nix.Expr.Types.Annotated
 import           Nix.Monad
 import           Nix.Scope
 import           Nix.Stack
 import           Nix.Thunk
+import           Nix.Utils
 import           System.FilePath
 import           System.Posix.Files
 
@@ -60,7 +65,9 @@ type MonadBuiltins e m =
 baseEnv :: MonadBuiltins e m => m (Scopes m (NThunk m))
 baseEnv = do
     ref <- thunk $ NVSet <$> builtins
-    lst <- (("builtins", ref) :) <$> topLevelBuiltins
+    pos <- repeatingThunk curPos -- re-evaluate each time it's reference
+    lst <- ([("builtins", ref), ("__curPos", pos)] ++)
+        <$> topLevelBuiltins
     pushScope (M.fromList lst) currentScopes
   where
     topLevelBuiltins = map mapping . filter isTopLevel <$> builtinsList
@@ -158,6 +165,23 @@ apply :: MonadBuiltins e m
 apply f arg = evalApp (force f) (force arg)
 
 -- Primops
+
+curPos :: forall e m. Framed e m => m (NValue m)
+curPos = do
+    Compose (Ann (SrcSpan (line -> (file, line, col)) _) _):_ <-
+        asks (mapMaybe (either (const Nothing) Just)
+              . view @_ @Frames hasLens)
+    return $ NVSet $ M.fromList
+        [ ("file", valueThunk $ NVStr (decodeUtf8 file) mempty)
+        , ("line", valueThunk $ NVConstant (NInt (fromIntegral line)))
+        , ("column", valueThunk $ NVConstant (NInt (fromIntegral col)))
+        ]
+  where
+    line = \case
+        Columns c _ -> ("<string>", 1, c)
+        Tab {} -> ("<string>", 1, 1)
+        Lines l _ _ _ -> ("<string>", l, 1)
+        Directed fn l c _ _ -> (fn, l, c)
 
 toString :: MonadBuiltins e m => NThunk m -> m (NValue m)
 toString str = do

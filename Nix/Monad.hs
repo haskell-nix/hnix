@@ -27,6 +27,9 @@ newtype NThunk m = NThunk (Thunk m (NValue m))
 thunk :: MonadVar m => m (NValue m) -> m (NThunk m)
 thunk = fmap coerce . buildThunk
 
+repeatingThunk :: MonadVar m => m (NValue m) -> m (NThunk m)
+repeatingThunk = fmap coerce . buildRepeatingThunk
+
 force :: MonadVar m => NThunk m -> m (NValue m)
 force = forceThunk . coerce
 
