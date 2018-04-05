@@ -47,4 +47,5 @@ forceThunk (Thunk avail ref) k = do
                 else do
                     value <- action
                     writeVar ref (Computed value)
-                    k value <* atomicModifyVar avail (False,)
+                    _ <- atomicModifyVar avail (False,)
+                    k value
