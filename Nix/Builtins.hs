@@ -455,7 +455,7 @@ intersectAttrs set1 set2 = force set1 $ \set1' -> force set2 $ \set2' ->
         (NVSet s1, NVSet s2) ->
             return $ NVSet $ s2 `M.intersection` s1
         (v1, v2) ->
-            throwError $ "removeAttrs: expected two sets, got "
+            throwError $ "builtins.intersectAttrs: expected two sets, got "
                 ++ showValue v1 ++ " and " ++ showValue v2
 
 functionArgs :: MonadBuiltins e m => NThunk m -> m (NValue m)
@@ -465,7 +465,8 @@ functionArgs fun = force fun $ \case
             case p of
                 Param name -> M.singleton name False
                 ParamSet s _ _ -> isJust <$> s
-    v -> throwError $ "removeAttrs: expected function, got " ++ showValue v
+    v -> throwError $ "builtins.functionArgs: expected function, got "
+            ++ showValue v
 
 isAttrs :: MonadBuiltins e m => NThunk m -> m (NValue m)
 isAttrs = flip force $ \case
