@@ -6,7 +6,11 @@ let
     rev = "ee28e35ba37ab285fc29e4a09f26235ffe4123e2";
     sha256 = "0a6xrqjj2ihkz1bizhy5r843n38xgimzw5s2mfc42kk2rgc95gw5";
   };
-in { nixpkgs ? import pinnedPkgs {}, compiler ? "ghc822", doBenchmark ? false }:
+
+in { nixpkgs ? import pinnedPkgs {}
+   , compiler ? "ghc822"
+   , doProfiling ? false
+   , doBenchmark ? false }:
 
 let
 
@@ -47,7 +51,7 @@ let
         license = stdenv.lib.licenses.bsd3;
       };
 
-  insert-ordered-containers = hpkgs:
+  insert-ordered-containers_0_2_2_0 = hpkgs:
     hpkgs.insert-ordered-containers.overrideDerivation (attrs: {
       name = "insert-ordered-containers-0.2.2.0";
       version = "0.2.2.0";
@@ -61,12 +65,17 @@ let
 
   haskellPackages = pkgs.haskell.packages.${compiler}.override {
     overrides = self: super: {
-      insert-ordered-containers = insert-ordered-containers super;
+      insert-ordered-containers = insert-ordered-containers_0_2_2_0 super;
       recurseForDerivations = true;
     };
   };
 
-  variant = if doBenchmark then pkgs.haskell.lib.doBenchmark else pkgs.lib.id;
+  variant =
+    if doBenchmark
+    then pkgs.haskell.lib.doBenchmark
+    else if doProfiling
+         then pkgs.haskell.lib.doProfiling
+         else pkgs.lib.id;
 
   drv = variant (haskellPackages.callPackage f {});
 
