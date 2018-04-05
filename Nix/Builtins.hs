@@ -466,7 +466,7 @@ functionArgs fun = force fun $ \case
         return $ NVSet $ valueThunk . NVConstant . NBool <$>
             case p of
                 Param name -> M.singleton name False
-                ParamSet s _ _ -> isJust <$> (OM.toHashMap s)
+                ParamSet s _ _ -> isJust <$> OM.toHashMap s
     v -> throwError $ "builtins.functionArgs: expected function, got "
             ++ showValue v
 
