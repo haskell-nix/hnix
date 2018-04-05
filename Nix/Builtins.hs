@@ -70,7 +70,9 @@ baseEnv :: MonadBuiltins e m => m (Scopes m (NThunk m))
 baseEnv = do
     ref <- thunk $ NVSet <$> builtins
     let pos = repeatingThunk curPos -- re-evaluate each time it's forced
-    lst <- ([("builtins", ref), ("__curPos", pos)] ++)
+    lst <- ([ ("builtins", ref)
+           , ("__curPos", pos)
+           ] ++)
         <$> topLevelBuiltins
     pushScope (M.fromList lst) currentScopes
   where
@@ -90,7 +92,9 @@ isTopLevel b = case kind b of Normal -> False; TopLevel -> True
 
 builtinsList :: forall e m. MonadBuiltins e m => m [ Builtin m ]
 builtinsList = sequence [
-      add  TopLevel "toString"                   toString
+      pure $ Builtin Normal ("nixVersion", valueThunk $ NVStr "2.0" mempty)
+
+    , add  TopLevel "toString"                   toString
     , add  TopLevel "import"                     importFile
     , add2 TopLevel "map"                        map_
     , add' TopLevel "baseNameOf"                 (arity1 baseNameOf)
