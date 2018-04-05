@@ -330,7 +330,7 @@ lint (NSet binds) = do
     mkSymbolic [TSet (Just s)]
 
 lint (NRecSet binds) = do
-    s <- evalBinds True True binds
+    s <- evalBindsWithAlter (attrSetAlterWithOverride sforce) True True binds
     mkSymbolic [TSet (Just s)]
 
 lint (NLet binds body) = do

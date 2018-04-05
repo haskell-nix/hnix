@@ -210,7 +210,7 @@ eval (NSet binds) = do
 
 eval (NRecSet binds) = do
     traceM "NRecSet..1"
-    s <- evalBinds True True binds
+    s <- evalBindsWithAlter (attrSetAlterWithOverride force) True True binds
     traceM $ "NRecSet..2: s = " ++ show (() <$ s)
     return $ NVSet s
 
@@ -432,12 +432,13 @@ buildArgument params arg = case params of
 attrSetAlter
     :: forall e t v m. (MonadExpr t v m, Scoped e t m, Framed e m,
                   MonadVar m, MonadFile m)
-    => [Text]
+    => Bool
+    -> [Text]
     -> HashMap Text (m v)
     -> m v
     -> m (HashMap Text (m v))
-attrSetAlter [] _ _ = throwError "invalid selector with no components"
-attrSetAlter (p:ps) m val = case M.lookup p m of
+attrSetAlter _ [] _ _ = throwError "invalid selector with no components"
+attrSetAlter overwrite (p:ps) m val = case M.lookup p m of
     Nothing
         | null ps   -> go
         | otherwise -> recurse M.empty
@@ -450,9 +451,12 @@ attrSetAlter (p:ps) m val = case M.lookup p m of
               x -> throwError $ "attribute " ++ show p
                       ++ " is not a set, but a " ++ show (void x)
   where
-    go = return $ M.insert p val m
+    go = return $ M.insertWith handleCollision p val m
+    handleCollision = if overwrite
+      then \new _   -> new
+      else \_   old -> old
 
-    recurse s = attrSetAlter ps s val >>= \m' ->
+    recurse s = attrSetAlter overwrite ps s val >>= \m' ->
         if | M.null m' -> return m
            | otherwise   -> do
              scope <- currentScopes @_ @t
@@ -461,6 +465,24 @@ attrSetAlter (p:ps) m val = case M.lookup p m of
         embed scope m' = embedSet @t @v @m
             =<< traverse (fmap coerce . buildThunk . withScopes scope) m'
 
+attrSetAlterWithOverride
+    :: forall e t v m. (MonadExpr t v m, Scoped e t m, Framed e m,
+                  MonadVar m, MonadFix m, MonadFile m)
+    => (t -> (v -> m v) -> m v)
+    -> [Text]
+    -> HashMap Text (m v)
+    -> m v
+    -> m (HashMap Text (m v))
+attrSetAlterWithOverride forceT = \case
+  path@["__overrides"] -> \m -> (=<<) $ \v -> projectSet v >>= \case
+    Just overrides -> do
+      initial <- attrSetAlter False path m $ return v
+      let update :: HashMap Text (m v) -> (Text, t) -> m (HashMap Text (m v))
+          update m (name, t) = attrSetAlter True [name] m $ forceT t pure
+      foldM update initial $ M.toList overrides
+    Nothing -> throwError "__overrides must be a set"
+  path -> attrSetAlter False path
+
 evalBinds
     :: forall e t v m. (MonadExpr t v m, Scoped e t m, Framed e m,
                   MonadVar m, MonadFix m, MonadFile m)
@@ -468,7 +490,17 @@ evalBinds
     -> Bool
     -> [Binding (m v)]
     -> m (HashMap Text t)
-evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
+evalBinds = evalBindsWithAlter $ attrSetAlter False
+
+evalBindsWithAlter
+    :: forall e t v m. (MonadExpr t v m, Scoped e t m, Framed e m,
+                  MonadVar m, MonadFix m, MonadFile m)
+    => ([Text] -> HashMap Text (m v) -> m v -> m (HashMap Text (m v)))
+    -> Bool
+    -> Bool
+    -> [Binding (m v)]
+    -> m (HashMap Text t)
+evalBindsWithAlter alter allowDynamic recursive = buildResult . concat <=< mapM go
   where
     go :: Binding (m v) -> m [([Text], m v)]
     go (NamedVar pathExpr finalValue) = do
@@ -513,7 +545,7 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
     encapsulate scope f attrs =
         fmap coerce . buildThunk . withScopes scope . pushScope attrs $ f
 
-    insert m (path, value) = attrSetAlter path m value
+    insert m (path, value) = alter path m value
 
 evalSelect
     :: (MonadExpr t v m, Framed e m, MonadVar m, MonadFile m)
