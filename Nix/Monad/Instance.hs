@@ -114,7 +114,7 @@ instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
                 mres <- lookupVar @_ @(NThunk (Lazy m)) "__cur_file"
                 case mres of
                     Nothing -> liftIO getCurrentDirectory
-                    Just v -> force v >>= \case
+                    Just v -> force v $ \case
                         NVLiteralPath s -> return $ takeDirectory s
                         v -> throwError $ "when resolving relative path,"
                                 ++ " __cur_file is in scope,"
@@ -124,7 +124,7 @@ instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
         liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
 
     -- jww (2018-03-29): Cache which files have been read in.
-    importFile = force >=> \case
+    importFile = flip force $ \case
         NVLiteralPath path -> do
             mres <- lookupVar @(Context (Lazy m) (NThunk (Lazy m)))
                              "__cur_file"
@@ -132,7 +132,7 @@ instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
                 Nothing  -> do
                     traceM "No known current directory"
                     return path
-                Just p -> force p >>= normalForm >>= \case
+                Just p -> force p $ normalForm >=> \case
                     Fix (NVLiteralPath p') -> do
                         traceM $ "Current file being evaluated is: "
                             ++ show p'
@@ -152,7 +152,7 @@ instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
                                   (framedEvalExpr eval expr)
         p -> error $ "Unexpected argument to import: " ++ show (void p)
 
-    getEnvVar = force >=> \case
+    getEnvVar = flip force $ \case
         NVStr s _ -> do
             mres <- liftIO $ lookupEnv (Text.unpack s)
             return $ case mres of

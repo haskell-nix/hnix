@@ -66,7 +66,7 @@ eval (NSym var) = do
     case mres of
         Nothing ->
             throwError $ "Undefined variable '" ++ Text.unpack var ++ "'"
-        Just v -> force v
+        Just v -> force v pure
 
 eval (NConstant x)    = return $ NVConstant x
 eval (NStr str)       = traceM "NStr" >> evalString str
@@ -229,7 +229,7 @@ eval (NIf cond t f) = do
 eval (NWith scope body) = do
     traceM "NWith"
     s <- thunk scope
-    pushWeakScope ?? body $ force s >>= \case
+    pushWeakScope ?? body $ force s $ \case
         NVSet s -> return s
         x -> throwError $ "scope must be a set in with statement, but saw: "
                 ++ showValue x
@@ -244,7 +244,7 @@ eval (NAssert cond body) = do
 
 eval (NApp fun arg) = do
     traceM "NApp"
-    evalApp fun arg
+    evalApp fun =<< thunk arg
 
 eval (NAbs params body) = do
     traceM "NAbs"
@@ -258,22 +258,23 @@ eval (NAbs params body) = do
 
 infixl 1 `evalApp`
 evalApp :: forall e m. (MonadEval e m, MonadFix m)
-        => m (NValue m) -> m (NValue m) -> m (NValue m)
+        => m (NValue m) -> NThunk m -> m (NValue m)
 evalApp fun arg = fun >>= \case
     NVClosure scope params f -> do
         traceM "evalApp:NVFunction"
         env <- currentScopes @_ @(NThunk m)
-        args <- buildArgument params =<< thunk (withScopes env arg)
+        args <- buildArgument params =<< thunk (withScopes env (force arg pure))
         traceM $ "Evaluating function application with args: "
             ++ show (newScope args)
-        withScopes @(NThunk m) scope $ pushScope args $ force =<< f
+        withScopes @(NThunk m) scope $ pushScope args $
+            force ?? pure =<< f
     NVBuiltin name f -> do
         traceM $ "evalApp:NVBuiltin " ++ name
         env <- currentScopes @_ @(NThunk m)
-        f =<< thunk (withScopes env arg)
-    NVSet m | Just f <- M.lookup "__functor" m -> do
+        f =<< thunk (withScopes env (force arg pure))
+    s@(NVSet m) | Just f <- M.lookup "__functor" m -> do
         traceM "evalApp:__functor"
-        force f `evalApp` fun `evalApp` arg
+        force f $ \f' -> pure f' `evalApp` valueThunk s `evalApp` arg
     x -> throwError $ "Attempt to call non-function: " ++ showValue x
 
 -----
@@ -289,10 +290,7 @@ valueRefFloat = return . NVConstant . NFloat
 
 thunkEq :: (MonadNix m, Framed e m, MonadFile m, MonadVar m)
         => NThunk m -> NThunk m -> m Bool
-thunkEq lt rt = do
-    lv <- force lt
-    rv <- force rt
-    valueEq lv rv
+thunkEq lt rt = force lt $ \lv -> force rt $ \rv -> valueEq lv rv
 
 -- | Checks whether two containers are equal, using the given item equality
 --   predicate. If there are any item slots that don't match between the two
@@ -324,22 +322,18 @@ valueEq l r = case (l, r) of
 
 -----
 
-forceCont :: (Framed e m, MonadFile m, MonadVar m)
-          => NThunk m -> (NValue m -> m r) -> m r
-forceCont = forceThunkCont . coerce
-
 normalForm :: forall e m. MonadEval e m => NValue m -> m (NValueNF m)
-normalForm = \case
+normalForm v = trace ("v = " ++ showValue v) $ case v of
     NVConstant a     -> return $ Fix $ NVConstant a
     NVStr t s        -> return $ Fix $ NVStr t s
     NVList l         ->
-        Fix . NVList <$> traverse (`forceCont` normalForm) l
+        Fix . NVList <$> traverse (`force` normalForm) l
     NVSet s          ->
-        Fix . NVSet <$> traverse (`forceCont` normalForm) s
+        Fix . NVSet <$> traverse (`force` normalForm) s
     NVClosure s p f   -> withScopes @(NThunk m) s $ do
-        p' <- traverse (fmap (`forceCont` normalForm)) p
+        p' <- traverse (fmap (`force` normalForm)) p
         return $ Fix $
-            NVClosure emptyScopes p' ((`forceCont` normalForm) =<< f)
+            NVClosure emptyScopes p' ((`force` normalForm) =<< f)
     NVLiteralPath fp -> return $ Fix $ NVLiteralPath fp
     NVEnvPath p      -> return $ Fix $ NVEnvPath p
     NVBuiltin name f -> return $ Fix $ NVBuiltin name f
@@ -403,7 +397,7 @@ buildArgument
 buildArgument params arg = case params of
     Param name -> return $ M.singleton name arg
     ParamSet s isVariadic m ->
-        forceThunk (coerce arg) >>= projectSet @t @v @m >>= \case
+        forceThunk (coerce arg) $ projectSet @t @v @m >=> \case
             Just args -> do
                 let inject = case m of
                         Nothing -> id
@@ -428,7 +422,7 @@ buildArgument params arg = case params of
                 traceM $ "Evaluating default argument with args: "
                     ++ show (newScope args)
                 pushScopes scope $ pushScope args $
-                    forceThunk . coerce =<< f
+                    (\x -> forceThunk (coerce x) pure) =<< f
         This x | isVariadic -> const (pure x)
                | otherwise  ->
                  const $ throwError $ "Unexpected parameter: " ++ show k
@@ -449,7 +443,7 @@ attrSetAlter (p:ps) m val = case M.lookup p m of
     Just v
         | null ps   -> go
         | otherwise -> v >>= projectSet @t @v @m >>= \case
-              Just s -> recurse (forceThunk . coerce <$> s)
+              Just s -> recurse ((\x -> forceThunk (coerce x) pure) <$> s)
               -- TODO: Keep a stack of attributes we've already traversed, so
               -- that we can report that to the user
               x -> throwError $ "attribute " ++ show p
@@ -505,7 +499,7 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
                 case mv of
                     Nothing -> throwError $ "Inheriting unknown attribute: "
                         ++ show (void name)
-                    Just v -> forceThunk (coerce v))
+                    Just v -> forceThunk (coerce v) pure)
 
     buildResult :: [([Text], m v)] -> m (HashMap Text t)
     buildResult bindings = do
@@ -529,7 +523,7 @@ evalSelect aset attr =
     join $ extract <$> aset <*> evalSelector True attr
   where
     extract (NVSet s) (k:ks) = case M.lookup k s of
-        Just v  -> force v >>= extract ?? ks
+        Just v  -> force v $ extract ?? ks
         Nothing -> return $ Left (NVSet s, k:ks)
     extract x (k:ks) = return $ Left (x, k:ks)
     extract v [] = return $ Right v

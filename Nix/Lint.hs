@@ -78,7 +78,8 @@ newtype SThunk m = SThunk { getSThunk :: Thunk m (Symbolic m) }
 sthunk :: MonadVar m => m (Symbolic m) -> m (SThunk m)
 sthunk = fmap coerce . buildThunk
 
-sforce :: (Framed e m, MonadFile m, MonadVar m) => SThunk m -> m (Symbolic m)
+sforce :: (Framed e m, MonadFile m, MonadVar m)
+       => SThunk m -> (Symbolic m -> m r) -> m r
 sforce = forceThunk . coerce
 
 svalueThunk :: forall m. Symbolic m -> SThunk m
@@ -113,11 +114,11 @@ renderSymbolic = unpackSymbolic >=> \case
             TUri   -> return "uri"
         TStr            -> return "string"
         TList r         -> do
-            x <- renderSymbolic =<< sforce r
+            x <- sforce r renderSymbolic
             return $ "[" ++ x ++ "]"
         TSet Nothing    -> return "<any set>"
         TSet (Just s)   -> do
-            x <- traverse (renderSymbolic <=< sforce) s
+            x <- traverse (`sforce` renderSymbolic) s
             return $ "{" ++ show x ++ "}"
         f@(TClosure s p _) -> do
             (args, sym) <-
@@ -144,16 +145,16 @@ merge context = go
         (TPath, TPath) -> (TPath :) <$> go xs ys
         (TConstant ls, TConstant rs) ->
             (TConstant (ls `intersect` rs) :) <$> go xs ys
-        (TList l, TList r) -> do
-            m <- sthunk $ join $ unify context <$> sforce l <*> sforce r
+        (TList l, TList r) -> sforce l $ \l' -> sforce r $ \r' -> do
+            m <- sthunk $ unify context l' r'
             (TList m :) <$> go xs ys
         (TSet x, TSet Nothing) -> (TSet x :) <$> go xs ys
         (TSet Nothing, TSet x) -> (TSet x :) <$> go xs ys
         (TSet (Just l), TSet (Just r)) -> do
             m <- sequenceA $ M.intersectionWith
                 (\i j -> i >>= \i' -> j >>= \j' ->
-                        sthunk $ join $
-                            unify context <$> sforce i' <*> sforce j')
+                        sforce i' $ \i'' -> sforce j' $ \j'' ->
+                            sthunk $ unify context i'' j'')
                 (return <$> l) (return <$> r)
             if M.null m
                 then go xs ys
@@ -232,7 +233,7 @@ lint (NSym var) = do
     mres <- lookupVar var
     case mres of
         Nothing -> throwError $ "Undefined variable: " ++ show var
-        Just v  -> sforce v
+        Just v  -> sforce v pure
 
 lint (NConstant c) = mkSymbolic [TConstant [t]]
   where
@@ -303,7 +304,7 @@ lint (NSelect aset attr alternative) = do
     extract (NMany [TSet Nothing]) (_:_ks) =
         error "NYI: Selection in unknown set"
     extract (NMany [TSet (Just s)]) (k:ks) = case M.lookup k s of
-        Just v  -> sforce v >>= unpackSymbolic >>= extract ?? ks
+        Just v  -> sforce v $ unpackSymbolic >=> extract ?? ks
         Nothing -> return Nothing
     extract _ (_:_) = return Nothing
     extract v [] = Just <$> packSymbolic v
@@ -341,7 +342,7 @@ lint e@(NIf cond t f) = do
 
 lint (NWith scope body) = do
     s <- sthunk scope
-    pushWeakScope ?? body $ sforce s >>= unpackSymbolic >>= \case
+    pushWeakScope ?? body $ sforce s $ unpackSymbolic >=> \case
         NMany [TSet (Just s')] -> return s'
         NMany [TSet Nothing] -> error "with unknown set"
         _ -> throwError "scope must be a set in with statement"
@@ -376,14 +377,14 @@ lintApp context fun arg = fun >>= unpackSymbolic >>= \case
                     arg'  <- sthunk $ mkSymbolic [TSet (Just pset')]
                     args  <- buildArgument params arg'
                     res   <- withScopes @(SThunk m) scope $
-                        pushScope args $ sforce =<< f
+                        pushScope args $ sforce ?? pure =<< f
                     return (pset, res)
 
                 NMany [TSet (Just _)] -> do
                     args <- buildArgument params =<< sthunk arg
                     res <- clearScopes @(SThunk m) $
-                        pushScope args $ sforce =<< f
-                    args' <- traverse sforce args
+                        pushScope args $ sforce ?? pure =<< f
+                    args' <- traverse (sforce ?? pure) args
                     return (args', res)
 
                 NMany _ -> throwError "NYI: lintApp NMany not set"

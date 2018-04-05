@@ -32,7 +32,8 @@ thunk = fmap coerce . buildThunk
 repeatingThunk :: MonadVar m => m (NValue m) -> NThunk m
 repeatingThunk = coerce . buildRepeatingThunk
 
-force :: (Framed e m, MonadFile m, MonadVar m) => NThunk m -> m (NValue m)
+force :: (Framed e m, MonadFile m, MonadVar m)
+      => NThunk m -> (NValue m -> m r) -> m r
 force = forceThunk . coerce
 
 valueThunk :: forall m. NValue m -> NThunk m
