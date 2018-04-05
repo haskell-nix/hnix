@@ -6,7 +6,7 @@ let
     rev = "ee28e35ba37ab285fc29e4a09f26235ffe4123e2";
     sha256 = "0a6xrqjj2ihkz1bizhy5r843n38xgimzw5s2mfc42kk2rgc95gw5";
   };
-in { nixpkgs ? import pinnedPkgs {}, compiler ? "default", doBenchmark ? false }:
+in { nixpkgs ? import pinnedPkgs {}, compiler ? "ghc822", doBenchmark ? false }:
 
 let
 
@@ -47,20 +47,28 @@ let
         license = stdenv.lib.licenses.bsd3;
       };
 
-  haskellPackages = if compiler == "default"
-                       then pkgs.haskellPackages
-                       else pkgs.haskell.packages.${compiler};
+  insert-ordered-containers = hpkgs:
+    hpkgs.insert-ordered-containers.overrideDerivation (attrs: {
+      name = "insert-ordered-containers-0.2.2.0";
+      version = "0.2.2.0";
+      src = pkgs.fetchFromGitHub {
+         owner = "mightybyte";
+         repo = "insert-ordered-containers";
+         rev = "842b32c012e01ba1930c34c367dab9a9412c332d";
+         sha256 = "182y5ffc68dgdrdkfq7w3zsj8xmig6hdnhv5wm866qcks49i2kn4";
+       };
+    });
+
+  haskellPackages = pkgs.haskell.packages.${compiler}.override {
+    overrides = self: super: {
+      insert-ordered-containers = insert-ordered-containers super;
+      recurseForDerivations = true;
+    };
+  };
 
   variant = if doBenchmark then pkgs.haskell.lib.doBenchmark else pkgs.lib.id;
 
-  drv = variant (haskellPackages.callPackage f {
-    insert-ordered-containers = pkgs.fetchFromGitHub {
-      owner = "mightybyte";
-      repo = "insert-ordered-containers";
-      rev = "842b32c012e01ba1930c34c367dab9a9412c332d";
-      sha256 = "182y5ffc68dgdrdkfq7w3zsj8xmig6hdnhv5wm866qcks49i2kn4";
-    };
-  });
+  drv = variant (haskellPackages.callPackage f {});
 
 in
 
