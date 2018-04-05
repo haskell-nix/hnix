@@ -399,9 +399,7 @@ seq_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 seq_ a b = force a (const (force b pure))
 
 deepSeq :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-deepSeq a b = do
-    _ <- force a normalForm
-    force b pure
+deepSeq a b = force a normalForm >> force b pure
 
 elem_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 elem_ x xs = force xs $ \case
