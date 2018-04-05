@@ -64,6 +64,7 @@ Library
     , data-fix
     , deepseq
     , exceptions
+    , insert-ordered-containers >= 0.2.2 && < 0.3
     , process
     , directory
     , filepath
@@ -143,6 +144,7 @@ Test-suite hnix-tests
     , split
     , transformers
     , interpolate
+    , insert-ordered-containers
     , unordered-containers
 
 Benchmark hnix-benchmarks

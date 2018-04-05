@@ -14,7 +14,7 @@ import Data.Data
 import Data.Eq.Deriving
 import Data.Fix
 import Data.Functor.Classes
-import Data.HashMap.Lazy (HashMap)
+import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import Data.Text (Text, pack)
 import Data.Traversable
 import GHC.Exts
@@ -104,7 +104,9 @@ data Params r
   deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show,
             Foldable, Traversable)
 
-type ParamSet r = HashMap VarName (Maybe r)
+-- This uses InsOrdHashMap because nix XML serialization preserves the order of
+-- the param set.
+type ParamSet r = InsOrdHashMap VarName (Maybe r)
 
 instance IsString (Params r) where
   fromString = Param . fromString

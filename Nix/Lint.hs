@@ -18,6 +18,7 @@ import           Data.Coerce
 import           Data.Fix
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
+import qualified Data.HashMap.Strict.InsOrd as OM
 import           Data.List
 import           Data.Maybe
 import           Data.Text (Text)
@@ -372,7 +373,7 @@ lintApp context fun arg = fun >>= unpackSymbolic >>= \case
                            M.singleton name <$> everyPossible
                        ParamSet _s _ (Just _) -> error "NYI"
                        ParamSet s _ Nothing ->
-                           traverse (const everyPossible) s
+                           traverse (const everyPossible) (OM.toHashMap s)
                     pset' <- traverse (sthunk . pure) pset
                     arg'  <- sthunk $ mkSymbolic [TSet (Just pset')]
                     args  <- buildArgument params arg'

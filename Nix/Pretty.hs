@@ -5,6 +5,7 @@ module Nix.Pretty where
 
 import           Data.Fix
 import           Data.HashMap.Lazy (toList)
+import qualified Data.HashMap.Strict.InsOrd as OM
 import qualified Data.HashSet as HashSet
 import           Data.List (isPrefixOf, sort)
 import           Data.Maybe (isJust)
@@ -90,8 +91,8 @@ prettyParamSet args var =
       Nothing -> text (unpack n)
       Just v -> text (unpack n) <+> text "?" <+> withoutParens v
     prettyArgs
-        | var = map prettySetArg (toList args)
-        | otherwise = map prettySetArg (toList args) ++ [text "..."]
+        | var = map prettySetArg (OM.toList args)
+        | otherwise = map prettySetArg (OM.toList args) ++ [text "..."]
     sep = align (comma <> space)
 
 prettyBind :: Binding NixDoc -> Doc

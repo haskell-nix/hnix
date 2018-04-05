@@ -29,6 +29,7 @@ import           Data.Fix
 import           Data.Functor.Compose
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
+import           Data.HashMap.Strict.InsOrd (toHashMap)
 import           Data.List (intercalate)
 import           Data.Maybe (fromMaybe, catMaybes)
 import           Data.Text (Text)
@@ -402,7 +403,7 @@ buildArgument params arg = case params of
                 let inject = case m of
                         Nothing -> id
                         Just n -> M.insert n $ const $ pure arg
-                loebM (inject $ alignWithKey (assemble isVariadic) args s)
+                loebM (inject $ alignWithKey (assemble isVariadic) args (toHashMap s))
 
             x -> throwError $ "Expected set in function call, received: "
                     ++ show (void x)

@@ -31,8 +31,8 @@ let
       insert-ordered-containers = pkgs.fetchFromGitHub {
         owner = "mightybyte";
         repo = "insert-ordered-containers";
-        rev = "2a15aea6a9733259ee494eb379dd4df206d215c5";
-        sha256 = "1pjg9lwahm767mf88r6cb0dcaga84l8p08zd7mxjz322ll07q1ja";
+        rev = "87054c519b969b62131bcf7a183470d422cbb535";
+        sha256 = "0l0g6ns5bcrcaij0wbdgc04qyl9h0vk1kx9lkzdkwj9v51l26azm";
       };
     };
   };

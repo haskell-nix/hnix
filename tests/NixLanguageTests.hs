@@ -20,6 +20,7 @@ import           Nix.Monad
 import           Nix.Monad.Instance
 import           Nix.Parser
 import           Nix.Pretty
+import           Nix.XML
 import           System.Environment
 import           System.FilePath
 import           System.FilePath.Glob (compile, globDir1)
@@ -94,7 +95,10 @@ assertLangOk file = do
   assertEqual "" expected $ Text.pack (actual ++ "\n")
 
 assertLangOkXml :: FilePath -> Assertion
-assertLangOkXml name = assertFailure $ "Not implemented: " ++ name
+assertLangOkXml file = do
+  actual <- toXML <$> nixEvalFile (file ++ ".nix")
+  expected <- Text.readFile $ file ++ ".exp.xml"
+  assertEqual "" expected $ Text.pack actual
 
 assertEval :: [FilePath] -> Assertion
 assertEval files =

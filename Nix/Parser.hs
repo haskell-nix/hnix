@@ -16,7 +16,7 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Foldable hiding (concat)
 import           Data.Functor
-import qualified Data.HashMap.Lazy as M
+import qualified Data.HashMap.Strict.InsOrd as M
 import           Data.Text hiding (map, foldl', concat)
 import           Nix.Expr hiding (($>))
 import           Nix.Parser.Library

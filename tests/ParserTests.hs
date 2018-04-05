@@ -4,6 +4,7 @@ module ParserTests (tests) where
 
 import           Data.Fix
 import qualified Data.HashMap.Lazy as M
+import qualified Data.HashMap.Strict.InsOrd as OM
 import           Data.Text (pack)
 import           Nix.Atoms
 import           Nix.Expr
@@ -168,9 +169,9 @@ case_lambda_pattern = do
  where
   fixed args = ParamSet args False
   variadic args = ParamSet args True
-  args = M.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
-  vargs = M.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
-  args2 = M.fromList [("b", Just lam)]
+  args = OM.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
+  vargs = OM.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
+  args2 = OM.fromList [("b", Just lam)]
   lam = Fix $ NAbs (Param "x") (mkSym "x")
 
 case_lambda_app_int :: Assertion

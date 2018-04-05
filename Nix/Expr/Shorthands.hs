@@ -8,7 +8,7 @@
 module Nix.Expr.Shorthands where
 
 import           Data.Fix
-import qualified Data.HashMap.Lazy as M
+import qualified Data.HashMap.Strict.InsOrd as M
 import           Data.Monoid
 import           Data.Text (Text)
 import           Nix.Atoms
