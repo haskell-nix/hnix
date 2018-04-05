@@ -95,7 +95,7 @@ assertLangOk file = do
   assertEqual "" expected $ Text.pack (actual ++ "\n")
 
 assertLangOkXml :: FilePath -> Assertion
-assertLangOkXml file = do --assertFailure $ "Not implemented: " ++ file
+assertLangOkXml file = do
   actual <- toXML <$> nixEvalFile (file ++ ".nix")
   expected <- Text.readFile $ file ++ ".exp.xml"
   assertEqual "" expected $ Text.pack actual
