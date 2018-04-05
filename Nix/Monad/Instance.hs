@@ -90,9 +90,10 @@ instance (MonadFix m, MonadNix (Lazy m), MonadIO m)
 instance MonadIO m => MonadVar (Lazy m) where
     type Var (Lazy m) = IORef
 
-    newVar   = liftIO . newIORef
-    readVar  = liftIO . readIORef
+    newVar = liftIO . newIORef
+    readVar = liftIO . readIORef
     writeVar = (liftIO .) . writeIORef
+    atomicModifyVar = (liftIO .) . atomicModifyIORef
 
 instance MonadIO m => MonadFile (Lazy m) where
     readFile = liftIO . BS.readFile

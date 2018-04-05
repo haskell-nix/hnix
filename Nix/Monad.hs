@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -18,6 +19,7 @@ import GHC.Generics
 import Nix.Atoms
 import Nix.Expr.Types
 import Nix.Scope
+import {-# SOURCE #-} Nix.Stack
 import Nix.Thunk
 import Nix.Utils
 import System.Posix.Files
@@ -27,10 +29,10 @@ newtype NThunk m = NThunk (Thunk m (NValue m))
 thunk :: MonadVar m => m (NValue m) -> m (NThunk m)
 thunk = fmap coerce . buildThunk
 
-repeatingThunk :: MonadVar m => m (NValue m) -> m (NThunk m)
-repeatingThunk = fmap coerce . buildRepeatingThunk
+repeatingThunk :: MonadVar m => m (NValue m) -> NThunk m
+repeatingThunk = coerce . buildRepeatingThunk
 
-force :: MonadVar m => NThunk m -> m (NValue m)
+force :: (Framed e m, MonadFile m, MonadVar m) => NThunk m -> m (NValue m)
 force = forceThunk . coerce
 
 valueThunk :: forall m. NValue m -> NThunk m
@@ -77,8 +79,8 @@ type NValue m   = NValueF m (NThunk m) -- head normal form
 type ValueSet m = HashMap Text (NThunk m)
 
 instance Show (NThunk m) where
-    show (NThunk (Left v)) = show v
-    show (NThunk (Right _)) = "<thunk>"
+    show (NThunk (Value v)) = show v
+    show (NThunk _) = "<thunk>"
 
 instance Show f => Show (NValueF m f) where
     showsPrec = flip go where

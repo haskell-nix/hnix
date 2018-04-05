@@ -286,7 +286,8 @@ valueRefInt = return . NVConstant . NInt
 valueRefFloat :: MonadNix m => Float -> m (NValue m)
 valueRefFloat = return . NVConstant . NFloat
 
-thunkEq :: (MonadNix m, MonadVar m) => NThunk m -> NThunk m -> m Bool
+thunkEq :: (MonadNix m, Framed e m, MonadFile m, MonadVar m)
+        => NThunk m -> NThunk m -> m Bool
 thunkEq lt rt = do
     lv <- force lt
     rv <- force rt
@@ -307,7 +308,8 @@ alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
         _ -> throwE ()
     forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
 
-valueEq :: (MonadNix m, MonadVar m) => NValue m -> NValue m -> m Bool
+valueEq :: (MonadNix m, Framed e m, MonadFile m, MonadVar m)
+        => NValue m -> NValue m -> m Bool
 valueEq l r = case (l, r) of
     (NVStr ls _, NVConstant (NUri ru)) -> pure $ ls == ru
     (NVConstant (NUri lu), NVStr rs _) -> pure $ lu == rs

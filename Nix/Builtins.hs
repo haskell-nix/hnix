@@ -65,7 +65,7 @@ type MonadBuiltins e m =
 baseEnv :: MonadBuiltins e m => m (Scopes m (NThunk m))
 baseEnv = do
     ref <- thunk $ NVSet <$> builtins
-    pos <- repeatingThunk curPos -- re-evaluate each time it's reference
+    let pos = repeatingThunk curPos -- re-evaluate each time it's forced
     lst <- ([("builtins", ref), ("__curPos", pos)] ++)
         <$> topLevelBuiltins
     pushScope (M.fromList lst) currentScopes

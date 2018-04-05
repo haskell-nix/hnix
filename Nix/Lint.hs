@@ -78,7 +78,7 @@ newtype SThunk m = SThunk { getSThunk :: Thunk m (Symbolic m) }
 sthunk :: MonadVar m => m (Symbolic m) -> m (SThunk m)
 sthunk = fmap coerce . buildThunk
 
-sforce :: MonadVar m => SThunk m -> m (Symbolic m)
+sforce :: (Framed e m, MonadFile m, MonadVar m) => SThunk m -> m (Symbolic m)
 sforce = forceThunk . coerce
 
 svalueThunk :: forall m. Symbolic m -> SThunk m

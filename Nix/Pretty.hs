@@ -13,6 +13,7 @@ import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Expr
 import           Nix.Monad
+import           Nix.Thunk
 import           Nix.Parser.Library (reservedNames)
 import           Nix.Parser.Operators
 import           Nix.StringOperations
@@ -212,8 +213,8 @@ printNix = cata phi
 removeEffects :: Functor m => NValue m -> NValueNF m
 removeEffects = Fix . fmap dethunk
   where
-    dethunk (NThunk (Left v)) = removeEffects v
-    dethunk (NThunk (Right _)) = Fix $ NVStr "<thunk>" mempty
+    dethunk (NThunk (Value v)) = removeEffects v
+    dethunk (NThunk _) = Fix $ NVStr "<thunk>" mempty
 
 showValue :: Functor m => NValue m -> String
 showValue = show . prettyNixValue . removeEffects

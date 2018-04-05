@@ -95,6 +95,10 @@ instance MonadVar (Lint s) where
     newVar x     = Lint $ ReaderT $ \_ -> newSTRef x
     readVar x    = Lint $ ReaderT $ \_ -> readSTRef x
     writeVar x y = Lint $ ReaderT $ \_ -> writeSTRef x y
+    atomicModifyVar x f = Lint $ ReaderT $ \_ -> do
+        res <- snd . f <$> readSTRef x
+        _ <- modifySTRef x (fst . f)
+        return res
 
 instance MonadFile (Lint s) where
     readFile x = Lint $ ReaderT $ \_ -> unsafeIOToST $ BS.readFile x
