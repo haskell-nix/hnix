@@ -18,7 +18,7 @@ let
       , tasty, tasty-hunit, tasty-th, text, transformers, trifecta
       , unordered-containers, these, optparse-applicative, free
       , interpolate, process, exceptions, bytestring, mtl, monadlist
-      , base16-bytestring, cryptohash, template-haskell, syb
+      , base16-bytestring, cryptohash, template-haskell, syb, xml
       }:
       mkDerivation {
         pname = "hnix";
@@ -31,7 +31,7 @@ let
           parsers regex-tdfa regex-tdfa-text semigroups text transformers
           trifecta unordered-containers these free process directory
           filepath exceptions bytestring mtl monadlist base16-bytestring
-          cryptohash template-haskell syb
+          cryptohash template-haskell syb xml
         ];
         executableHaskellDepends = [
           ansi-wl-pprint base containers data-fix deepseq optparse-applicative

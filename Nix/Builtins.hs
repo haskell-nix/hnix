@@ -56,6 +56,7 @@ import           Nix.Scope
 import           Nix.Stack
 import           Nix.Thunk
 import           Nix.Utils
+import           Nix.XML
 import           System.FilePath
 import           System.Posix.Files
 
@@ -132,8 +133,11 @@ builtinsList = sequence [
     , add' Normal   "hashString"                 hashString
     , add  Normal   "readFile"                   readFile_
     , add  Normal   "readDir"                    readDir_
-    , add' Normal   "toJSON"                     (arity1 $ decodeUtf8 . LBS.toStrict . A.encodingToLazyByteString . toEncodingSorted)
+    , add' Normal   "toJSON"
+      (arity1 $ decodeUtf8 . LBS.toStrict . A.encodingToLazyByteString
+                           . toEncodingSorted)
     , add  Normal   "fromJSON"                   fromJSON
+    , add  Normal   "toXML"                      toXML_
     , add  Normal   "typeOf"                     typeOf
     , add2 Normal   "partition"                  partition_
     , add0 Normal   "currentSystem"              currentSystem
@@ -592,6 +596,10 @@ fromJSON t = do
     case A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded of
         Left jsonError -> throwError $ "builtins.fromJSON: " ++ jsonError
         Right v -> toValue v
+
+toXML_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
+toXML_ = force >=> normalForm >=> \x ->
+    pure $ NVStr (Text.pack (toXML x)) mempty
 
 typeOf :: MonadBuiltins e m => NThunk m -> m (NValue m)
 typeOf t = do

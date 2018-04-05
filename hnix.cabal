@@ -27,6 +27,7 @@ Library
     Nix.Scope
     Nix.Stack
     Nix.Eval
+    Nix.XML
     Nix.Thunk
     Nix.Lint
     Nix.Monad
@@ -75,6 +76,7 @@ Library
     , unix
     , syb
     , vector
+    , xml
   if flag(parsec)
     Cpp-options: -DUSE_PARSEC
     Build-depends: parsec
