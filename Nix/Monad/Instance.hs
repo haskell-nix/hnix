@@ -130,41 +130,35 @@ instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
     pathExists = liftIO . fileExist
 
     -- jww (2018-03-29): Cache which files have been read in.
-    importFile = flip force $ \case
-        NVLiteralPath path -> do
-            mres <- lookupVar @(Context (Lazy m) (NThunk (Lazy m)))
-                             "__cur_file"
-            path' <- case mres of
-                Nothing  -> do
-                    traceM "No known current directory"
-                    return path
-                Just p -> force p $ normalForm >=> \case
-                    Fix (NVLiteralPath p') -> do
-                        traceM $ "Current file being evaluated is: "
-                            ++ show p'
-                        return $ takeDirectory p' </> path
-                    x -> error $ "How can the current directory be: " ++ show x
-            traceM $ "Importing file " ++ path'
-            withStringContext ("While importing file " ++ show path') $ do
-                eres <- Lazy $ parseNixFileLoc path'
-                case eres of
-                    Failure err  -> error $ "Parse failed: " ++ show err
-                    Success expr -> do
-                        let ref = valueThunk @(Lazy m) (NVLiteralPath path')
-                        -- Use this cookie so that when we evaluate the next
-                        -- import, we'll remember which directory its containing
-                        -- file was in.
-                        pushScope (M.singleton "__cur_file" ref)
-                                  (framedEvalExpr eval expr)
-        p -> error $ "Unexpected argument to import: " ++ show (void p)
+    importFile scope path = do
+        mres <- lookupVar @(Context (Lazy m) (NThunk (Lazy m)))
+                         "__cur_file"
+        path' <- case mres of
+            Nothing  -> do
+                traceM "No known current directory"
+                return path
+            Just p -> force p $ normalForm >=> \case
+                Fix (NVLiteralPath p') -> do
+                    traceM $ "Current file being evaluated is: "
+                        ++ show p'
+                    return $ takeDirectory p' </> path
+                x -> error $ "How can the current directory be: " ++ show x
 
-    getEnvVar = flip force $ \case
-        NVStr s _ -> do
-            mres <- liftIO $ lookupEnv (Text.unpack s)
-            return $ case mres of
-                Nothing -> NVStr "" mempty
-                Just v  -> NVStr (Text.pack v) mempty
-        p -> error $ "Unexpected argument to getEnv: " ++ show (void p)
+        traceM $ "Importing file " ++ path'
+
+        withStringContext ("While importing file " ++ show path') $ do
+            eres <- Lazy $ parseNixFileLoc path'
+            case eres of
+                Failure err  -> error $ "Parse failed: " ++ show err
+                Success expr -> do
+                    let ref = valueThunk @(Lazy m) (NVLiteralPath path')
+                    -- Use this cookie so that when we evaluate the next
+                    -- import, we'll remember which directory its containing
+                    -- file was in.
+                    pushScope (M.singleton "__cur_file" ref)
+                        (pushScope scope (framedEvalExpr eval expr))
+
+    getEnvVar = liftIO . lookupEnv
 
     getCurrentSystemOS = return $ Text.pack System.Info.os
 

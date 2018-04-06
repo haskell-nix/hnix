@@ -132,8 +132,8 @@ class Monad m => MonadNix m where
     makeAbsolutePath :: FilePath -> m FilePath
 
     pathExists :: FilePath -> m Bool
-    importFile :: NThunk m -> m (NValue m)
-    getEnvVar :: NThunk m -> m (NValue m)
+    importFile :: ValueSet m -> FilePath -> m (NValue m)
+    getEnvVar :: String -> m (Maybe String)
     getCurrentSystemOS :: m Text
     getCurrentSystemArch :: m Text
 

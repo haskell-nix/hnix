@@ -99,7 +99,7 @@ builtinsList = sequence [
       pure $ Builtin Normal ("nixVersion", valueThunk $ NVStr "2.0" mempty)
 
     , add  TopLevel "toString"                   toString
-    , add  TopLevel "import"                     importFile
+    , add  TopLevel "import"                     import_
     , add2 TopLevel "map"                        map_
     , add' TopLevel "baseNameOf"                 (arity1 baseNameOf)
     , add  TopLevel "dirOf"                      dirOf
@@ -107,7 +107,8 @@ builtinsList = sequence [
     , add  TopLevel "isNull"                     isNull
     , add  TopLevel "abort"                      throw_ -- for now
     , add  TopLevel "throw"                      throw_
-    , add  Normal   "getEnv"                     getEnvVar
+    , add2 TopLevel "scopedImport"               scopedImport
+    , add  Normal   "getEnv"                     getEnv_
     , add2 Normal   "hasAttr"                    hasAttr
     , add2 Normal   "getAttr"                    getAttr
     , add2 Normal   "unsafeGetAttrPos"           unsafeGetAttrPos
@@ -611,6 +612,29 @@ throw_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 throw_ = flip force $ \case
     NVStr t _ -> throwError (Text.unpack t)
     v -> throwError $ "builtins.throw: expected string, got " ++ showValue v
+
+import_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
+import_ = flip force $ \case
+    NVLiteralPath p -> importFile M.empty p
+    NVEnvPath p     -> importFile M.empty p -- jww (2018-04-06): is this right?
+    v -> throwError $ "import: expected path, got " ++ showValue v
+
+scopedImport :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
+scopedImport aset path = force aset $ \aset' -> force path $ \path' ->
+    case (aset', path') of
+        (NVSet s _, NVLiteralPath p) -> importFile s p
+        (NVSet s _, NVEnvPath p)     -> importFile s p
+        (s, p) -> throwError $ "scopedImport: expected a set and a path, got "
+                     ++ showValue s ++ " and " ++ showValue p
+
+getEnv_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
+getEnv_ = flip force $ \case
+    NVStr s _ -> do
+        mres <- getEnvVar (Text.unpack s)
+        return $ case mres of
+            Nothing -> NVStr "" mempty
+            Just v  -> NVStr (Text.pack v) mempty
+    p -> error $ "Unexpected argument to getEnv: " ++ show (void p)
 
 sort_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 sort_ comparator list = force list $ \case
