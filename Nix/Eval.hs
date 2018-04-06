@@ -157,6 +157,16 @@ eval (NBinary op larg rarg) = case op of
                 NGte  -> valueRefBool $ ls >= rs
                 _     -> throwError unsupportedTypes
 
+            (NVStr _ _, NVConstant NNull) -> case op of
+                NEq   -> valueRefBool =<< valueEq lval (NVStr "" mempty)
+                NNEq  -> valueRefBool . not =<< valueEq lval (NVStr "" mempty)
+                _     -> throwError unsupportedTypes
+
+            (NVConstant NNull, NVStr _ _) -> case op of
+                NEq   -> valueRefBool =<< valueEq (NVStr "" mempty) rval
+                NNEq  -> valueRefBool . not =<< valueEq (NVStr "" mempty) rval
+                _     -> throwError unsupportedTypes
+
             (NVSet ls lp, NVSet rs rp) -> case op of
                 NUpdate -> return $ NVSet (rs `M.union` ls) (rp `M.union` lp)
                 NEq -> valueRefBool =<< valueEq lval rval
@@ -167,6 +177,18 @@ eval (NBinary op larg rarg) = case op of
                 NConcat -> return $ NVList $ ls ++ rs
                 NEq -> valueRefBool =<< valueEq lval rval
                 NNEq -> valueRefBool . not =<< valueEq lval rval
+                _ -> throwError unsupportedTypes
+
+            (NVList ls, NVConstant NNull) -> case op of
+                NConcat -> return $ NVList ls
+                NEq -> valueRefBool =<< valueEq lval (NVList [])
+                NNEq -> valueRefBool . not =<< valueEq lval (NVList [])
+                _ -> throwError unsupportedTypes
+
+            (NVConstant NNull, NVList rs) -> case op of
+                NConcat -> return $ NVList rs
+                NEq -> valueRefBool =<< valueEq (NVList []) rval
+                NNEq -> valueRefBool . not =<< valueEq (NVList []) rval
                 _ -> throwError unsupportedTypes
 
             (NVLiteralPath ls, NVLiteralPath rs) -> case op of
@@ -320,6 +342,8 @@ valueEq l r = case (l, r) of
     (NVConstant (NUri lu), NVStr rs _) -> pure $ lu == rs
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
     (NVStr ls _, NVStr rs _) -> pure $ ls == rs
+    (NVStr ls _, NVConstant NNull) -> pure $ ls == ""
+    (NVConstant NNull, NVStr rs _) -> pure $ "" == rs
     (NVList ls, NVList rs) -> alignEqM thunkEq ls rs
     (NVSet lm _, NVSet rm _) -> alignEqM thunkEq lm rm
     (NVLiteralPath lp, NVLiteralPath rp) -> pure $ lp == rp
