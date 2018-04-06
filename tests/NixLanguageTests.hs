@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module NixLanguageTests where --(genTests) where
+module NixLanguageTests (genTests) where
 
 import           Control.Arrow ((&&&))
 import           Control.Exception
