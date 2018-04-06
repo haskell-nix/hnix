@@ -50,7 +50,7 @@ paraM f base = h where
     h []     = return base
     h (x:xs) = f x xs =<< h xs
 
-transport :: Functor f => (forall x. f x -> f x) -> Fix f -> Fix f
+transport :: Functor g => (forall x. f x -> g x) -> Fix f -> Fix g
 transport f (Fix x) = Fix $ fmap (transport f) (f x)
 
 -- | adi is Abstracting Definitional Interpreters:
