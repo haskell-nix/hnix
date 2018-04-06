@@ -128,6 +128,7 @@ builtinsList = sequence [
     , add2 Normal   "seq"                        seq_
     , add2 Normal   "deepSeq"                    deepSeq
     , add2 Normal   "elem"                       elem_
+    , add2 Normal   "elemAt"                     elemAt
     , add2 Normal   "genList"                    genList
     , add' Normal   "replaceStrings"             replaceStrings
     , add  Normal   "isAttrs"                    isAttrs
@@ -423,6 +424,18 @@ elem_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 elem_ x xs = force xs $ \case
     NVList l -> toValue =<< anyM (thunkEq x) l
     v -> throwError $ "builtins.elem: Expected a list, got " ++ showValue v
+
+elemAt :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
+elemAt xs n = force xs >>= \case
+    NVList l -> do
+      force n >>= \case
+          NVConstant (NInt index) -> do
+            let i = fromIntegral index
+            if i > (length l - 1) || i < 0
+            then throwError $ "builtins.elemAt: fatal error, index out of bounds"
+            else force (l !! i)
+          v -> throwError $ "builtins.elemAt: Expected an Integer, got " ++ show (void v)
+    v -> throwError $ "builtins.elemAt: Expected a list, got " ++ show (void v)
 
 genList :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 genList generator length = force length $ \case
