@@ -123,8 +123,8 @@ data Antiquoted v r = Plain !v | Antiquoted !r
 -- the final string is constructed by concating all the parts.
 data NString r
   = DoubleQuoted ![Antiquoted Text r]
-  -- ^ Strings wrapped with double-quotes (") are not allowed to contain
-  -- literal newline characters.
+  -- ^ Strings wrapped with double-quotes (") can contain literal newline
+  -- characters, but the newlines are preserved and no indentation is stripped.
   | Indented ![Antiquoted Text r]
   -- ^ Strings wrapped with two single quotes ('') can contain newlines,
   -- and their indentation will be stripped.

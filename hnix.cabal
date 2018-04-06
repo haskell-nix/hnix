@@ -49,6 +49,7 @@ Library
       base                     >= 4.9          && < 5
     , aeson
     , ansi-wl-pprint
+    , array >= 0.4 && < 0.6
     , base16-bytestring
     , containers
     , cryptohash
@@ -79,7 +80,6 @@ Library
     , syb
     , vector
     , xml
-    , pcre-light
   if flag(parsec)
     Cpp-options: -DUSE_PARSEC
     Build-depends: parsec

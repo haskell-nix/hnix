@@ -14,7 +14,7 @@
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
-module Nix.Builtins (MonadBuiltins, baseEnv) where
+module Nix.Builtins where --(MonadBuiltins, baseEnv) where
 
 import           Control.Monad
 import           Control.Monad.Fix
@@ -28,6 +28,7 @@ import           Data.Aeson (toJSON)
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Encoding as A
 import           Data.Align (alignWith)
+import           Data.Array
 import           Data.ByteString (ByteString)
 import           Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy as LBS
@@ -62,9 +63,9 @@ import           Nix.Stack
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.XML
+import           Text.Regex.TDFA
 import           System.FilePath
 import           System.Posix.Files
-import           Text.Regex.PCRE.Light
 
 type MonadBuiltins e m =
     (MonadEval e m, MonadNix m, MonadFix m, MonadFile m, MonadVar m)
@@ -394,12 +395,12 @@ match_ pat str = force pat $ \pat' -> force str $ \str' ->
         -- jww (2018-04-05): We should create a fundamental type for compiled
         -- regular expressions if it turns out they get used often.
         (NVStr p _, NVStr s _) -> return $ NVList $
-            let re = compile (encodeUtf8 p <> "$") []
-            in case match re (encodeUtf8 s) [exec_anchored] of
-                Nothing -> []
-                Just s  ->
+            let re = makeRegex (encodeUtf8 p) :: Regex
+            in case matchOnceText re (encodeUtf8 s) of
+                Just ("", sarr, "") -> let s = map fst (elems sarr) in
                     map (valueThunk @m . flip NVStr mempty . decodeUtf8)
-                        (if captureCount re > 0 then tail s else s)
+                        (if length s > 1 then tail s else s)
+                _ -> []
         (p, s) ->
             throwError $ "builtins.match: expected a regex"
                 ++ " and a string, but got: " ++ show (p, s)
