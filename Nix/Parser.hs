@@ -130,7 +130,10 @@ pathChars :: String
 pathChars = ['A'..'Z'] ++ ['a'..'z'] ++ "._-+" ++ ['0'..'9']
 
 slash :: Parser Char
-slash = try (char '/' <* notFollowedBy (void (char '/') <|> someSpace)) <?> "slash"
+slash = try (char '/' <* notFollowedBy (void (char '/') <|>
+                                        void (char '*') <|>
+                                        someSpace))
+    <?> "slash"
 
 -- | A path surrounded by angle brackets, indicating that it should be
 -- looked up in the NIX_PATH environment variable at evaluation.
