@@ -16,6 +16,7 @@
 module Nix.Eval where
 
 import           Control.Applicative
+import           Control.Arrow (first)
 import           Control.Monad
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
@@ -477,6 +478,18 @@ evalBinds
 evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
   where
     go :: Binding (m v) -> m [([Text], m v)]
+    -- jww (2018-04-05): This needs to always happen last, so that it, you
+    -- know, overrides. It works if __overrides occurs as the last attribute.
+    go (NamedVar [StaticKey "__overrides"] finalValue) =
+        finalValue >>= projectSet >>= \case
+            Just o' -> do
+                traceM $ "evalBinds..3: o = " ++ show (() <$ o')
+                return $ map (first (:[])) $
+                    fmap (fmap (\x -> forceThunk (coerce x) pure))
+                               (M.toList o')
+            x -> throwError $ "__overrides must be a set, but saw: "
+                        ++ show (void x)
+
     go (NamedVar pathExpr finalValue) = do
         let go = \case
                 [] -> pure ([], finalValue)
@@ -492,6 +505,7 @@ evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
             -- bind anything
             ([], _) -> pure []
             result -> pure [result]
+
     go (Inherit ms names) = fmap catMaybes $ forM names $ \name ->
         evalSetterKeyName allowDynamic name >>= \case
             Nothing -> return Nothing
