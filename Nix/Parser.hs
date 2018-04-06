@@ -1,6 +1,8 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+
 module Nix.Parser (
   parseNixFile,
   parseNixFileLoc,

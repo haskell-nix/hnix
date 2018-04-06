@@ -1,6 +1,6 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 -- {-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TupleSections #-}
 
 module Main where
 

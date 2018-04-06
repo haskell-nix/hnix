@@ -84,27 +84,12 @@ Library
     Build-depends: parsec
   else
     Build-depends: trifecta
-  ghc-options: -Wall -fno-warn-name-shadowing
+  ghc-options: -Wall
 
 Executable hnix
   Default-language: Haskell2010
   Main-is: Main.hs
   Hs-source-dirs: main
-  Default-extensions:
-    DataKinds
-    DeriveDataTypeable
-    DeriveFunctor
-    DeriveGeneric
-    FlexibleContexts
-    FlexibleInstances
-    GADTs
-    KindSignatures
-    LambdaCase
-    MultiWayIf
-    OverloadedStrings
-    PatternGuards
-    RankNTypes
-    TupleSections
   Build-depends:
       base                     >= 4.3          && < 5
     , hnix
