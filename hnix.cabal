@@ -111,6 +111,7 @@ Test-suite hnix-tests
   Default-language: Haskell2010
   Main-is: Main.hs
   Other-modules:
+    TestCommon
     ParserTests
     EvalTests
     PrettyTests
@@ -127,10 +128,12 @@ Test-suite hnix-tests
     , directory
     , Glob
     , filepath
+    , process
     , split
     , transformers
     , interpolate
     , insert-ordered-containers
+    , unix
     , unordered-containers
 
 Benchmark hnix-benchmarks
