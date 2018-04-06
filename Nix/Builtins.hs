@@ -120,6 +120,7 @@ builtinsList = sequence [
     , add' Normal   "parseDrvName"               parseDrvName
     , add' Normal   "substring"                  substring
     , add' Normal   "stringLength"               (arity1 Text.length)
+    , add' Normal   "length"                     length_
     , add  Normal   "attrNames"                  attrNames
     , add  Normal   "attrValues"                 attrValues
     , add2 Normal   "catAttrs"                   catAttrs
@@ -231,6 +232,12 @@ getAttr x y = force x $ \x' -> force y $ \y' -> case (x', y') of
         Just action -> force action pure
     (x, y) -> throwError $ "Invalid types for builtin.hasAttr: "
                  ++ show (() <$ x, () <$ y)
+
+length_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
+length_ pred = flip force $ \case
+    NVList l -> return $ NVConstant $ NInt (fromIntegral (length l))
+    arg -> throwError $ "builtins.length takes a list, not a "
+              ++ show (() <$ arg)
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 anyM _ []       = return False
