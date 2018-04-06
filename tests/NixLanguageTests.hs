@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module NixLanguageTests (genTests) where
+module NixLanguageTests where --(genTests) where
 
 import           Control.Arrow ((&&&))
 import           Control.Exception
@@ -23,11 +23,17 @@ import           Nix.Utils
 import           Nix.Stack
 import           Nix.Value
 import           Nix.XML
+import           System.Directory
 import           System.Environment
 import           System.FilePath
 import           System.FilePath.Glob (compile, globDir1)
+import           System.IO
+import           System.Posix.Temp
+import           System.Process
 import           Test.Tasty
 import           Test.Tasty.HUnit
+import           Text.Printf
+import           TestCommon
 
 {-
 From (git://nix)/tests/lang.sh we see that
@@ -48,7 +54,6 @@ From (git://nix)/tests/lang.sh we see that
         eval-okay-*.nix evaluations
     TEST_VAR=foo should be in all the environments # for eval-okay-getenv.nix
 -}
-
 
 groupBy :: Ord k => (v -> k) -> [v] -> Map k [v]
 groupBy key = Map.fromListWith (++) . map (key &&& pure)
@@ -94,13 +99,13 @@ assertParseFail file = do
 
 assertLangOk :: FilePath -> Assertion
 assertLangOk file = do
-  actual <- printNix <$> nixEvalFile (file ++ ".nix")
+  actual <- printNix <$> hnixEvalFile (file ++ ".nix")
   expected <- Text.readFile $ file ++ ".exp"
   assertEqual "" expected $ Text.pack (actual ++ "\n")
 
 assertLangOkXml :: FilePath -> Assertion
 assertLangOkXml file = do
-  actual <- toXML <$> nixEvalFile (file ++ ".nix")
+  actual <- toXML <$> hnixEvalFile (file ++ ".nix")
   expected <- Text.readFile $ file ++ ".exp.xml"
   assertEqual "" expected $ Text.pack actual
 
@@ -127,13 +132,3 @@ assertEvalFail file = catch ?? (\(_ :: SomeException) -> return ()) $ do
   evalResult `seq` assertFailure $
       file ++ " should not evaluate.\nThe evaluation result was `"
            ++ evalResult ++ "`."
-
-nixEvalFile :: FilePath -> IO (NValueNF (Lazy IO))
-nixEvalFile file = do
-  parseResult <- parseNixFileLoc file
-  case parseResult of
-    Failure err        ->
-        error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
-    Success expression -> do
-        setEnv "TEST_VAR" "foo"
-        evalLoc (Just file) expression
