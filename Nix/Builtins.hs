@@ -132,6 +132,8 @@ builtinsList = sequence [
     , add2 Normal   "genList"                    genList
     , add2 Normal   "filter"                     filter_
     , add' Normal   "replaceStrings"             replaceStrings
+    , add  Normal   "pathExists"                 pathExists_
+    , add  Normal   "toPath"                     toPath
     , add  Normal   "isAttrs"                    isAttrs
     , add  Normal   "isList"                     isList
     , add  Normal   "isFunction"                 isFunction
@@ -502,6 +504,20 @@ functionArgs fun = force fun $ \case
                 ParamSet s _ _ -> isJust <$> OM.toHashMap s
     v -> throwError $ "builtins.functionArgs: expected function, got "
             ++ showValue v
+
+toPath :: MonadBuiltins e m => NThunk m -> m (NValue m)
+toPath = flip force $ \case
+    NVStr p@(Text.uncons -> Just ('/', _)) _ ->
+        return $ NVLiteralPath (Text.unpack p)
+    v@(NVLiteralPath _) -> return v
+    v@(NVEnvPath _) -> return v
+    v -> throwError $ "builtins.toPath: expected string, got " ++ showValue v
+
+pathExists_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
+pathExists_ = flip force $ \case
+    NVLiteralPath p -> mkBool =<< pathExists p
+    NVEnvPath p -> mkBool =<< pathExists p
+    v -> throwError $ "builtins.pathExists: expected path, got " ++ showValue v
 
 isAttrs :: MonadBuiltins e m => NThunk m -> m (NValue m)
 isAttrs = flip force $ \case
