@@ -130,6 +130,7 @@ builtinsList = sequence [
     , add2 Normal   "elem"                       elem_
     , add2 Normal   "elemAt"                     elemAt_
     , add2 Normal   "genList"                    genList
+    , add2 Normal   "filter"                     filter_
     , add' Normal   "replaceStrings"             replaceStrings
     , add  Normal   "isAttrs"                    isAttrs
     , add  Normal   "isList"                     isList
@@ -379,6 +380,11 @@ attrValues = flip force $ \case
 map_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 map_ f = flip force $ \case
     NVList l -> NVList <$> traverse (fmap valueThunk . apply f) l
+    v -> error $ "map: Expected list, got " ++ showValue v
+
+filter_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
+filter_ f = flip force $ \case
+    NVList l -> NVList <$> filterM (extractBool <=< apply f) l
     v -> error $ "map: Expected list, got " ++ showValue v
 
 catAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
