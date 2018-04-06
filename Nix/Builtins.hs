@@ -14,7 +14,7 @@
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
-module Nix.Builtins where --(MonadBuiltins, baseEnv) where
+module Nix.Builtins (MonadBuiltins, baseEnv) where
 
 import           Control.Monad
 import           Control.Monad.Fix
