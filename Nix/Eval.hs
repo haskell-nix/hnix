@@ -31,7 +31,7 @@ import           Data.Functor.Compose
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.HashMap.Strict.InsOrd (toHashMap)
-import           Data.List (intercalate)
+import           Data.List (intercalate, partition)
 import           Data.Maybe (fromMaybe, catMaybes)
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -475,18 +475,19 @@ evalBinds
     -> Bool
     -> [Binding (m v)]
     -> m (HashMap Text t)
-evalBinds allowDynamic recursive = buildResult . concat <=< mapM go
+evalBinds allowDynamic recursive =
+    buildResult . concat <=< mapM go . moveOverridesLast
   where
+    moveOverridesLast = (\(x, y) -> y ++ x) .
+        partition (\case NamedVar [StaticKey "__overrides"] _ -> True
+                         _ -> False)
+
     go :: Binding (m v) -> m [([Text], m v)]
-    -- jww (2018-04-05): This needs to always happen last, so that it, you
-    -- know, overrides. It works if __overrides occurs as the last attribute.
     go (NamedVar [StaticKey "__overrides"] finalValue) =
         finalValue >>= projectSet >>= \case
-            Just o' -> do
-                traceM $ "evalBinds..3: o = " ++ show (() <$ o')
-                return $ map (first (:[])) $
-                    fmap (fmap (\x -> forceThunk (coerce x) pure))
-                               (M.toList o')
+            Just o' -> return $ map (first (:[])) $
+                fmap (fmap (\x -> forceThunk (coerce x) pure))
+                           (M.toList o')
             x -> throwError $ "__overrides must be a set, but saw: "
                         ++ show (void x)
 
