@@ -130,6 +130,7 @@ class Monad m => MonadNix m where
     -- | Determine the absolute path of relative path in the current context
     makeAbsolutePath :: FilePath -> m FilePath
 
+    pathExists :: FilePath -> m Bool
     importFile :: NThunk m -> m (NValue m)
     getEnvVar :: NThunk m -> m (NValue m)
     getCurrentSystemOS :: m Text

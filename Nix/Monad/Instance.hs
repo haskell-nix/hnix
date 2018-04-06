@@ -123,6 +123,8 @@ instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
             pure $ cwd </> origPath
         liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
 
+    pathExists = liftIO . fileExist
+
     -- jww (2018-03-29): Cache which files have been read in.
     importFile = flip force $ \case
         NVLiteralPath path -> do
