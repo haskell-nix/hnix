@@ -70,7 +70,7 @@ type MonadBuiltins e m =
 
 baseEnv :: MonadBuiltins e m => m (Scopes m (NThunk m))
 baseEnv = do
-    ref <- thunk $ NVSet <$> builtins
+    ref <- thunk $ flip NVSet M.empty <$> builtins
     let pos = repeatingThunk curPos -- re-evaluate each time it's forced
     lst <- ([ ("builtins", ref)
            , ("__curPos", pos)
@@ -108,6 +108,7 @@ builtinsList = sequence [
     , add  Normal   "getEnv"                     getEnvVar
     , add2 Normal   "hasAttr"                    hasAttr
     , add2 Normal   "getAttr"                    getAttr
+    , add2 Normal   "unsafeGetAttrPos"           unsafeGetAttrPos
     , add2 Normal   "any"                        any_
     , add2 Normal   "all"                        all_
     , add3 Normal   "foldl'"                     foldl'_
@@ -196,22 +197,28 @@ apply f arg = force f $ \f' -> pure f' `evalApp` arg
 
 -- Primops
 
-curPos :: forall e m. Framed e m => m (NValue m)
-curPos = do
-    Compose (Ann (SrcSpan (line -> (f, l, c)) _) _):_ <-
-        asks (mapMaybe (either (const Nothing) Just)
-              . view @_ @Frames hasLens)
-    return $ NVSet $ M.fromList
+deltaInfo :: Delta -> (Text, Int, Int)
+deltaInfo = \case
+    Columns c _         -> ("<string>", 1, fromIntegral c + 1)
+    Tab {}              -> ("<string>", 1, 1)
+    Lines l _ _ _       -> ("<string>", fromIntegral l + 1, 1)
+    Directed fn l c _ _ -> (decodeUtf8 fn,
+                           fromIntegral l + 1, fromIntegral c + 1)
+
+posFromDelta :: Delta -> NValue m
+posFromDelta (deltaInfo -> (f, l, c)) =
+    flip NVSet M.empty $ M.fromList
         [ ("file", valueThunk $ NVStr f mempty)
         , ("line", valueThunk $ NVConstant (NInt (fromIntegral l)))
         , ("column", valueThunk $ NVConstant (NInt (fromIntegral c)))
         ]
-  where
-    line = \case
-        Columns c _ -> ("<string>", 1, c + 1)
-        Tab {} -> ("<string>", 1, 1)
-        Lines l _ _ _ -> ("<string>", l + 1, 1)
-        Directed fn l c _ _ -> (decodeUtf8 fn, l + 1, c + 1)
+
+curPos :: forall e m. Framed e m => m (NValue m)
+curPos = do
+    Compose (Ann (SrcSpan delta _) _):_ <-
+        asks (mapMaybe (either (const Nothing) Just)
+              . view @_ @Frames hasLens)
+    return $ posFromDelta delta
 
 toString :: MonadBuiltins e m => NThunk m -> m (NValue m)
 toString str = do
@@ -220,25 +227,35 @@ toString str = do
 
 hasAttr :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 hasAttr x y = force x $ \x' -> force y $ \y' -> case (x', y') of
-    (NVStr key _, NVSet aset) ->
+    (NVStr key _, NVSet aset _) ->
         return . NVConstant . NBool $ M.member key aset
     (x, y) -> throwError $ "Invalid types for builtin.hasAttr: "
-                 ++ show (() <$ x, () <$ y)
+                 ++ show (void x, void y)
 
 getAttr :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 getAttr x y = force x $ \x' -> force y $ \y' -> case (x', y') of
-    (NVStr key _, NVSet aset) -> case M.lookup key aset of
-        Nothing -> throwError $ "hasAttr: field does not exist: "
+    (NVStr key _, NVSet aset _) -> case M.lookup key aset of
+        Nothing -> throwError $ "getAttr: field does not exist: "
                       ++ Text.unpack key
         Just action -> force action pure
-    (x, y) -> throwError $ "Invalid types for builtin.hasAttr: "
-                 ++ show (() <$ x, () <$ y)
+    (x, y) -> throwError $ "Invalid types for builtin.getAttr: "
+                 ++ show (void x, void y)
+
+unsafeGetAttrPos :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
+unsafeGetAttrPos x y = force x $ \x' -> force y $ \y' -> case (x', y') of
+    (NVStr key _, NVSet _ apos) -> case M.lookup key apos of
+        Nothing ->
+            throwError $ "unsafeGetAttrPos: field '" ++ Text.unpack key
+                ++ "' does not exist in attr set: " ++ show apos
+        Just delta -> return $ posFromDelta delta
+    (x, y) -> throwError $ "Invalid types for builtin.unsafeGetAttrPos: "
+                 ++ show (void x, void y)
 
 length_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 length_ = flip force $ \case
     NVList l -> return $ NVConstant $ NInt (fromIntegral (length l))
     arg -> throwError $ "builtins.length takes a list, not a "
-              ++ show (() <$ arg)
+              ++ show (void arg)
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 anyM _ []       = return False
@@ -252,7 +269,7 @@ any_ pred = flip force $ \case
     NVList l ->
         mkBool =<< anyM extractBool =<< mapM (apply pred) l
     arg -> throwError $ "builtins.any takes a list as second argument, not a "
-              ++ show (() <$ arg)
+              ++ show (void arg)
 
 allM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 allM _ []       = return True
@@ -266,14 +283,14 @@ all_ pred = flip force $ \case
     NVList l ->
         mkBool =<< allM extractBool =<< mapM (apply pred) l
     arg -> throwError $ "builtins.all takes a list as second argument, not a "
-              ++ show (() <$ arg)
+              ++ show (void arg)
 
 --TODO: Strictness
 foldl'_ :: MonadBuiltins e m => NThunk m -> NThunk m -> NThunk m -> m (NValue m)
 foldl'_ f z = flip force $ \case
     NVList vals -> (`force` pure) =<< foldlM go z vals
     arg -> throwError $ "builtins.foldl' takes a list as third argument, not a "
-              ++ show (() <$ arg)
+              ++ show (void arg)
   where
     go b a = thunk $ f `apply` a `evalApp` b
 
@@ -377,13 +394,13 @@ substring start len =
 
 attrNames :: MonadBuiltins e m => NThunk m -> m (NValue m)
 attrNames = flip force $ \case
-    NVSet m -> toValue $ sort $ M.keys m
+    NVSet m _ -> toValue $ sort $ M.keys m
     v -> error $ "builtins.attrNames: Expected attribute set, got "
             ++ showValue v
 
 attrValues :: MonadBuiltins e m => NThunk m -> m (NValue m)
 attrValues = flip force $ \case
-    NVSet m -> return $ NVList $ fmap snd $ sortOn fst $ M.toList m
+    NVSet m _ -> return $ NVList $ fmap snd $ sortOn fst $ M.toList m
     v -> error $ "builtins.attrValues: Expected attribute set, got "
             ++ showValue v
 
@@ -400,7 +417,7 @@ filter_ f = flip force $ \case
 catAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 catAttrs attrName lt = force lt $ \case
     NVList l -> fmap (NVList . catMaybes) $ forM l $ flip force $ \case
-        NVSet m -> force attrName $ \case
+        NVSet m _ -> force attrName $ \case
             NVStr n _ -> return $ M.lookup n m
             v -> throwError $ "builtins.catAttrs: Expected a string, got "
                     ++ showValue v
@@ -491,14 +508,16 @@ replaceStrings from to s = Prim $ do
 removeAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 removeAttrs set list = fromThunk @[Text] list $ \toRemove ->
     force set $ \case
-        NVSet m -> return $ NVSet $ foldl' (flip M.delete) m toRemove
+        NVSet m p -> return $ NVSet (go m toRemove) (go p toRemove)
         v -> throwError $ "removeAttrs: expected set, got " ++ showValue v
+  where
+    go = foldl' (flip M.delete)
 
 intersectAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 intersectAttrs set1 set2 = force set1 $ \set1' -> force set2 $ \set2' ->
     case (set1', set2') of
-        (NVSet s1, NVSet s2) ->
-            return $ NVSet $ s2 `M.intersection` s1
+        (NVSet s1 p1, NVSet s2 p2) ->
+            return $ NVSet (s2 `M.intersection` s1) (p2 `M.intersection` p1)
         (v1, v2) ->
             throwError $ "builtins.intersectAttrs: expected two sets, got "
                 ++ showValue v1 ++ " and " ++ showValue v2
@@ -506,7 +525,9 @@ intersectAttrs set1 set2 = force set1 $ \set1' -> force set2 $ \set2' ->
 functionArgs :: MonadBuiltins e m => NThunk m -> m (NValue m)
 functionArgs fun = force fun $ \case
     NVClosure _ p _ ->
-        return $ NVSet $ valueThunk . NVConstant . NBool <$>
+        -- jww (2018-04-05): Should we preserve the location where the
+        -- function arguments were declared for __unsafeGetAttrPos?
+        return $ flip NVSet M.empty $ valueThunk . NVConstant . NBool <$>
             case p of
                 Param name -> M.singleton name False
                 ParamSet s _ _ -> isJust <$> OM.toHashMap s
@@ -529,7 +550,7 @@ pathExists_ = flip force $ \case
 
 isAttrs :: MonadBuiltins e m => NThunk m -> m (NValue m)
 isAttrs = flip force $ \case
-    NVSet _ -> toValue True
+    NVSet _ _ -> toValue True
     _ -> toValue False
 
 isList :: MonadBuiltins e m => NThunk m -> m (NValue m)
@@ -610,17 +631,18 @@ concatLists = flip force $ \case
 
 listToAttrs :: MonadBuiltins e m => NThunk m -> m (NValue m)
 listToAttrs = flip force $ \case
-    NVList l -> fmap (NVSet . M.fromList . reverse) $ forM l $ flip force $ \case
-        NVSet s -> case (M.lookup "name" s, M.lookup "value" s) of
-            (Just name, Just value) -> force name $ \case
-                NVStr n _ -> return (n, value)
-                v -> throwError $
-                        "builtins.listToAttrs: expected name to be a string, got "
-                        ++ showValue v
-            _ -> throwError $
-                "builtins.listToAttrs: expected set with name and value, got"
-                    ++ show s
-        v -> throwError $ "builtins.listToAttrs: expected set, got " ++ showValue v
+    NVList l -> fmap (flip NVSet M.empty . M.fromList . reverse) $
+        forM l $ flip force $ \case
+            NVSet s _ -> case (M.lookup "name" s, M.lookup "value" s) of
+                (Just name, Just value) -> force name $ \case
+                    NVStr n _ -> return (n, value)
+                    v -> throwError $
+                            "builtins.listToAttrs: expected name to be a string, got "
+                            ++ showValue v
+                _ -> throwError $
+                    "builtins.listToAttrs: expected set with name and value, got"
+                        ++ show s
+            v -> throwError $ "builtins.listToAttrs: expected set, got " ++ showValue v
     v -> throwError $ "builtins.listToAttrs: expected list, got " ++ showValue v
 
 hashString :: MonadBuiltins e m => Text -> Text -> Prim m Text
@@ -699,7 +721,7 @@ typeOf t = force t $ \v -> toValue @Text $ case v of
         NUri _ -> "string" --TODO: Should we get rid of NUri?
     NVStr _ _ -> "string"
     NVList _ -> "list"
-    NVSet _ -> "set"
+    NVSet _ _ -> "set"
     NVClosure {} -> "lambda"
     NVLiteralPath _ -> "path"
     NVEnvPath _ -> "path"
@@ -714,7 +736,8 @@ partition_ f = flip force $ \case
       selection <- traverse match l
       let (right, wrong) = partition fst selection
       let makeSide = valueThunk . NVList . map snd
-      return $ NVSet $ M.fromList [("right", makeSide right), ("wrong", makeSide wrong)]
+      return $ flip NVSet M.empty $
+          M.fromList [("right", makeSide right), ("wrong", makeSide wrong)]
     v -> error $ "partition: Expected list, got " ++ showValue v
 
 currentSystem :: MonadNix m => m (NValue m)
@@ -744,14 +767,14 @@ instance ToNix Integer where
     toValue = return . NVConstant . NInt
 
 instance ToNix a => ToNix (HashMap Text a) where
-    toValue m = NVSet <$> traverse (thunk . toValue) m
+    toValue m = flip NVSet M.empty <$> traverse (thunk . toValue) m
 
 instance ToNix a => ToNix [a] where
     toValue m = NVList <$> traverse (thunk . toValue) m
 
 instance ToNix A.Value where
     toValue = \case
-        A.Object m -> NVSet <$> traverse (thunk . toValue) m
+        A.Object m -> flip NVSet M.empty <$> traverse (thunk . toValue) m
         A.Array l -> NVList <$> traverse (thunk . toValue) (V.toList l)
         A.String s -> pure $ NVStr s mempty
         A.Number n -> pure $ NVConstant $ case floatingOrInteger n of
@@ -820,7 +843,7 @@ instance FromNix A.Value where
             NUri u -> toJSON u
         NVStr s _ -> pure $ toJSON s
         NVList l -> A.Array . V.fromList <$> traverse (`force` fromValue) l
-        NVSet m -> A.Object <$> traverse (`force` fromValue) m
+        NVSet m _ -> A.Object <$> traverse (`force` fromValue) m
         NVClosure {} -> throwError "cannot convert a function to JSON"
         NVLiteralPath p -> toJSON . unStorePath <$> addPath p
         NVEnvPath p -> toJSON . unStorePath <$> addPath p

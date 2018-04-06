@@ -73,9 +73,12 @@ removeDotDotIndirections = intercalate "/" . go [] . splitOn "/"
 
 instance (MonadFix m, MonadNix (Lazy m), MonadIO m)
       => MonadExpr (NThunk (Lazy m)) (NValue (Lazy m)) (Lazy m) where
-    embedSet    = return . NVSet
+    embedSet    = return . flip NVSet M.empty
     projectSet  = \case
-        NVSet s -> return $ Just s
+        NVSet s _ -> return $ Just s
+        _ -> return Nothing
+    projectSetWithPos = \case
+        NVSet s p -> return $ Just (s, p)
         _ -> return Nothing
 
     type MText (Lazy m) = (Text, DList Text)

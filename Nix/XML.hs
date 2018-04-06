@@ -30,7 +30,7 @@ toXML = (.) ((++ "\n") .
     NVStr t _ -> mkElem "string" "value" (Text.unpack t)
     NVList l  -> Element (unqual "list") [] (Elem <$> l) Nothing
 
-    NVSet s   -> Element (unqual "attrs") []
+    NVSet s _ -> Element (unqual "attrs") []
         (map (\(k, v) -> Elem (Element (unqual "attr")
                                       [Attr (unqual "name") (Text.unpack k)]
                                       [Elem v] Nothing))
@@ -51,7 +51,7 @@ paramsXML (Param name) =
 paramsXML (ParamSet s b mname) =
     [Elem $ Element (unqual "attrspat") (battr ++ nattr) (paramSetXML s) Nothing]
   where
-    battr = if b then [Attr (unqual "ellipsis") "1"] else []
+    battr = [ Attr (unqual "ellipsis") "1" | b ]
     nattr = maybe [] ((:[]) . Attr (unqual "name") . Text.unpack) (mname)
 
 paramSetXML :: ParamSet r -> [Content]

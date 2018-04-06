@@ -18,6 +18,7 @@ import Data.Typeable (Typeable)
 import GHC.Generics
 import Nix.Atoms
 import Nix.Expr.Types
+import Nix.Parser.Library (Delta(..))
 import Nix.Scope
 import {-# SOURCE #-} Nix.Stack
 import Nix.Thunk
@@ -47,7 +48,7 @@ data NValueF m r
      -- string has been build from
     | NVStr Text (DList Text)
     | NVList [r]
-    | NVSet (HashMap Text r)
+    | NVSet (HashMap Text r) (HashMap Text Delta)
     | NVClosure (Scopes m r) (Params (m r)) (m r)
       -- ^ A function is a closed set of parameters representing the "call
       --   signature", used at application time to check the type of arguments
@@ -88,7 +89,7 @@ instance Show f => Show (NValueF m f) where
       go (NVConstant atom)    = showsCon1 "NVConstant" atom
       go (NVStr text context) = showsCon2 "NVStr"      text (appEndo context [])
       go (NVList     list)    = showsCon1 "NVList"     list
-      go (NVSet     attrs)    = showsCon1 "NVSet"      attrs
+      go (NVSet attrs _)      = showsCon1 "NVSet"      attrs
       go (NVClosure s r _)    = showsCon2 "NVClosure"  s (() <$ r)
       go (NVLiteralPath p)    = showsCon1 "NVLiteralPath" p
       go (NVEnvPath p)        = showsCon1 "NVEnvPath" p

@@ -33,7 +33,7 @@ import           Data.Functor.Compose
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.HashMap.Strict.InsOrd (toHashMap)
-import           Data.List (intercalate, partition)
+import           Data.List (intercalate, partition, foldl')
 import           Data.Maybe (fromMaybe, catMaybes)
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -157,8 +157,8 @@ eval (NBinary op larg rarg) = case op of
                 NGte  -> valueRefBool $ ls >= rs
                 _     -> throwError unsupportedTypes
 
-            (NVSet ls, NVSet rs) -> case op of
-                NUpdate -> return $ NVSet $ rs `M.union` ls
+            (NVSet ls lp, NVSet rs rp) -> case op of
+                NUpdate -> return $ NVSet (rs `M.union` ls) (rp `M.union` lp)
                 NEq -> valueRefBool =<< valueEq lval rval
                 NNEq -> valueRefBool . not =<< valueEq lval rval
                 _ -> throwError unsupportedTypes
@@ -187,7 +187,7 @@ eval (NSelect aset attr alternative) = do
     mres <- evalSelect aset attr
     case mres of
         Right v -> do
-            traceM $ "Wrapping a selector: " ++ show (() <$ v)
+            traceM $ "Wrapping a selector: " ++ show (void v)
             pure v
         Left (s, ks) -> fromMaybe err alternative
           where
@@ -207,20 +207,22 @@ eval (NList l) = do
 
 eval (NSet binds) = do
     traceM "NSet..1"
-    s <- evalBinds True False binds
-    traceM $ "NSet..2: s = " ++ show (() <$ s)
-    return $ NVSet s
+    (s, p) <- evalBinds True False binds
+    traceM $ "NSet..2: s = " ++ show (void s)
+    traceM $ "NSet..2: p = " ++ show (void p)
+    return $ NVSet s p
 
 eval (NRecSet binds) = do
     traceM "NRecSet..1"
-    s <- evalBinds True True binds
-    traceM $ "NRecSet..2: s = " ++ show (() <$ s)
-    return $ NVSet s
+    (s, p) <- evalBinds True True binds
+    traceM $ "NRecSet..2: s = " ++ show (void s)
+    traceM $ "NRecSet..2: p = " ++ show (void p)
+    return $ NVSet s p
 
 eval (NLet binds e) = do
     traceM "Let..1"
-    s <- evalBinds True True binds
-    traceM $ "Let..2: s = " ++ show (() <$ s)
+    (s, _) <- evalBinds True True binds
+    traceM $ "Let..2: s = " ++ show (void s)
     pushScope s e
 
 eval (NIf cond t f) = do
@@ -234,7 +236,7 @@ eval (NWith scope body) = do
     traceM "NWith"
     s <- thunk scope
     pushWeakScope ?? body $ force s $ \case
-        NVSet s -> return s
+        NVSet s _ -> return s
         x -> throwError $ "scope must be a set in with statement, but saw: "
                 ++ showValue x
 
@@ -276,7 +278,7 @@ evalApp fun arg = fun >>= \case
         traceM $ "evalApp:NVBuiltin " ++ name
         env <- currentScopes @_ @(NThunk m)
         f =<< thunk (withScopes env (force arg pure))
-    s@(NVSet m) | Just f <- M.lookup "__functor" m -> do
+    s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
         traceM "evalApp:__functor"
         force f $ \f' -> pure f' `evalApp` valueThunk s `evalApp` arg
     x -> throwError $ "Attempt to call non-function: " ++ showValue x
@@ -319,7 +321,7 @@ valueEq l r = case (l, r) of
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
     (NVStr ls _, NVStr rs _) -> pure $ ls == rs
     (NVList ls, NVList rs) -> alignEqM thunkEq ls rs
-    (NVSet lm, NVSet rm) -> alignEqM thunkEq lm rm
+    (NVSet lm _, NVSet rm _) -> alignEqM thunkEq lm rm
     (NVLiteralPath lp, NVLiteralPath rp) -> pure $ lp == rp
     (NVEnvPath lp, NVEnvPath rp) -> pure $ lp == rp
     _ -> pure False
@@ -335,8 +337,8 @@ normalFormBy k = \case
     NVStr t s        -> return $ Fix $ NVStr t s
     NVList l         ->
         Fix . NVList <$> traverse (`k` normalFormBy k) l
-    NVSet s          ->
-        Fix . NVSet <$> traverse (`k` normalFormBy k) s
+    NVSet s p        ->
+        Fix . flip NVSet p <$> traverse (`k` normalFormBy k) s
     NVClosure s p f   -> withScopes @(NThunk m) s $ do
         p' <- traverse (fmap (`k` normalFormBy k)) p
         return $ Fix $
@@ -355,7 +357,7 @@ valueText addPathsToStore = cata phi where
     phi (NVConstant a)    = pure (atomText a, mempty)
     phi (NVStr t c)       = pure (t, c)
     phi (NVList _)        = throwError "Cannot coerce a list to a string"
-    phi (NVSet set)
+    phi (NVSet set _)
       | Just asString <-
         -- TODO: Should this be run through valueText recursively?
         M.lookup "__asString" set = asString
@@ -391,6 +393,7 @@ class (Monoid (MText m), Coercible (Thunk m v) t)
       => MonadExpr t v m | m -> t, m -> v where
     embedSet   :: HashMap Text t -> m v
     projectSet :: v -> m (Maybe (HashMap Text t))
+    projectSetWithPos :: v -> m (Maybe (HashMap Text t, HashMap Text Delta))
 
     type MText m :: *
 
@@ -476,43 +479,44 @@ evalBinds
     => Bool
     -> Bool
     -> [Binding (m v)]
-    -> m (HashMap Text t)
+    -> m (HashMap Text t, HashMap Text Delta)
 evalBinds allowDynamic recursive =
     buildResult . concat <=< mapM go . moveOverridesLast
   where
     moveOverridesLast = (\(x, y) -> y ++ x) .
-        partition (\case NamedVar [StaticKey "__overrides"] _ -> True
+        partition (\case NamedVar [StaticKey "__overrides" _] _ -> True
                          _ -> False)
 
-    go :: Binding (m v) -> m [([Text], m v)]
-    go (NamedVar [StaticKey "__overrides"] finalValue) =
-        finalValue >>= projectSet >>= \case
-            Just o' -> return $ map (first (:[])) $
-                fmap (fmap (\x -> forceThunk (coerce x) pure))
-                           (M.toList o')
+    go :: Binding (m v) -> m [([Text], Maybe Delta, m v)]
+    go (NamedVar [StaticKey "__overrides" _] finalValue) =
+        finalValue >>= projectSetWithPos >>= \case
+            Just (o', p') -> return $
+                map (\(k, v) -> ([k], M.lookup k p',
+                                forceThunk (coerce v) pure))
+                    (M.toList o')
             x -> throwError $ "__overrides must be a set, but saw: "
                         ++ show (void x)
 
     go (NamedVar pathExpr finalValue) = do
-        let go = \case
-                [] -> pure ([], finalValue)
+        let go :: NAttrPath (m v) -> m ([Text], Maybe Delta, m v)
+            go = \case
+                [] -> pure ([], Nothing, finalValue)
                 h : t -> evalSetterKeyName allowDynamic h >>= \case
-                    Nothing -> do
-                        s <- embedSet mempty
-                        pure ([], pure s)
-                    Just k -> do
-                        (restOfPath, v) <- go t
-                        pure (k : restOfPath, v)
-        go pathExpr >>= \case
+                    (Nothing, _) ->
+                        pure ([], Nothing, embedSet mempty)
+                    (Just k, pos) -> do
+                        (restOfPath, _, v) <- go t
+                        pure (k : restOfPath, pos, v)
+        go pathExpr <&> \case
             -- When there are no path segments, e.g. `${null} = 5;`, we don't
             -- bind anything
-            ([], _) -> pure []
-            result -> pure [result]
+            ([], _, _) -> []
+            result -> [result]
 
     go (Inherit ms names) = fmap catMaybes $ forM names $ \name ->
         evalSetterKeyName allowDynamic name >>= \case
-            Nothing -> return Nothing
-            Just key -> return $ Just ([key], do
+            (Nothing, _) -> return Nothing
+            (Just key, pos) -> return $ Just ([key], pos, do
                 mv <- case ms of
                     Nothing -> lookupVar key
                     Just s -> s >>= projectSet >>= \case
@@ -525,18 +529,24 @@ evalBinds allowDynamic recursive =
                         ++ show (void name)
                     Just v -> forceThunk (coerce v) pure)
 
-    buildResult :: [([Text], m v)] -> m (HashMap Text t)
+    buildResult :: [([Text], Maybe Delta, m v)]
+                -> m (HashMap Text t, HashMap Text Delta)
     buildResult bindings = do
         s <- foldM insert M.empty bindings
         scope <- currentScopes @_ @t
-        if recursive
-            then loebM (encapsulate scope <$> s)
-            else traverse (fmap coerce . buildThunk . withScopes scope) s
+        res <- if recursive
+               then loebM (encapsulate scope <$> s)
+               else traverse (fmap coerce . buildThunk . withScopes scope) s
+        traceM $ "buildResult: " ++ show (map (\(k, v, _) -> (k, v)) bindings)
+        return (res, foldl' go M.empty bindings)
+      where
+        go m ([k], Just pos, _) = M.insert k pos m
+        go m _ = m
 
     encapsulate scope f attrs =
         fmap coerce . buildThunk . withScopes scope . pushScope attrs $ f
 
-    insert m (path, value) = attrSetAlter path m value
+    insert m (path, _, value) = attrSetAlter path m value
 
 evalSelect
     :: (MonadExpr t v m, Framed e m, MonadVar m, MonadFile m)
@@ -546,51 +556,52 @@ evalSelect
 evalSelect aset attr =
     join $ extract <$> aset <*> evalSelector True attr
   where
-    extract (NVSet s) (k:ks) = case M.lookup k s of
+    extract (NVSet s p) (k:ks) = case M.lookup k s of
         Just v  -> force v $ extract ?? ks
-        Nothing -> return $ Left (NVSet s, k:ks)
+        Nothing -> return $ Left (NVSet s p, k:ks)
     extract x (k:ks) = return $ Left (x, k:ks)
     extract v [] = return $ Right v
 
 evalSelector :: (Framed e m, MonadExpr t v m, MonadFile m)
              => Bool -> NAttrPath (m v) -> m [Text]
-evalSelector allowDynamic = mapM $ evalGetterKeyName allowDynamic
+evalSelector allowDynamic =
+    fmap (map fst) <$> mapM (evalGetterKeyName allowDynamic)
 
 evalKeyNameStatic :: (Framed e m, MonadExpr t v m, MonadFile m)
-                  => NKeyName (m v) -> m Text
+                  => NKeyName (m v) -> m (Text, Maybe Delta)
 evalKeyNameStatic = \case
-    StaticKey k -> pure k
+    StaticKey k p -> pure (k, p)
     DynamicKey _ -> throwError "dynamic attribute not allowed in this context"
 
 -- | Returns Nothing iff the key value is null
 evalKeyNameDynamicNullable :: (Framed e m, MonadExpr t v m, MonadFile m)
-                           => NKeyName (m v) -> m (Maybe Text)
+                           => NKeyName (m v) -> m (Maybe Text, Maybe Delta)
 evalKeyNameDynamicNullable = \case
-    StaticKey k -> pure $ Just k
+    StaticKey k p -> pure (Just k, p)
     DynamicKey k -> runAntiquoted evalString id k >>= projectText >>= \case
-        Just (Just s) -> Just <$> unwrapText s
-        Just Nothing -> return Nothing
+        Just (Just s) -> (\x -> (Just x, Nothing)) <$> unwrapText s
+        Just Nothing -> return (Nothing, Nothing)
         bad -> throwError $ "evaluating key name: expected string, got "
                   ++ show (void bad)
 
 evalKeyNameDynamicNotNull :: (Framed e m, MonadExpr t v m, MonadFile m)
-                          => NKeyName (m v) -> m Text
+                          => NKeyName (m v) -> m (Text, Maybe Delta)
 evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
-    Nothing -> throwError "value is null while a string was expected"
-    Just k -> pure k
+    (Nothing, _) -> throwError "value is null while a string was expected"
+    (Just k, p) -> pure (k, p)
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *binding* a value
 evalSetterKeyName :: (Framed e m, MonadExpr t v m, MonadFile m)
-                  => Bool -> NKeyName (m v) -> m (Maybe Text)
+                  => Bool -> NKeyName (m v) -> m (Maybe Text, Maybe Delta)
 evalSetterKeyName canBeDynamic
     | canBeDynamic = evalKeyNameDynamicNullable
-    | otherwise    = fmap Just . evalKeyNameStatic
+    | otherwise    = fmap (first Just) . evalKeyNameStatic
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value
 evalGetterKeyName :: (Framed e m, MonadExpr t v m, MonadFile m)
-                  => Bool -> NKeyName (m v) -> m Text
+                  => Bool -> NKeyName (m v) -> m (Text, Maybe Delta)
 evalGetterKeyName canBeDynamic
     | canBeDynamic = evalKeyNameDynamicNotNull
     | otherwise    = evalKeyNameStatic
@@ -623,7 +634,7 @@ tracingEvalExpr eval =
         liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' '
             ++ show (stripAnnotation v)
         res <- local succ $
-            fmap (withExprContext (() <$ x)) (k v)
+            fmap (withExprContext (void x)) (k v)
         liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' ' ++ "."
         return res
 
@@ -631,7 +642,7 @@ framedEvalExpr :: Framed e m
                => (NExprF (m v) -> m v) -> NExprLoc -> m v
 framedEvalExpr eval = adi (eval . annotated . getCompose) psi
   where
-    psi k v@(Fix x) = withExprContext (() <$ x) (k v)
+    psi k v@(Fix x) = withExprContext (void x) (k v)
 
 -----
 
@@ -642,4 +653,3 @@ streamValues = void . yields . fmap go
     go (NThunk (Left v)) = streamValues v
     go (NThunk v) = effect (streamValues <$> forceThunk v)
 -}
-

@@ -5,6 +5,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -109,6 +110,9 @@ instance Eval.MonadExpr (SThunk (Lint s))
     embedSet s = mkSymbolic [TSet (Just s)]
     projectSet = unpackSymbolic >=> \case
         NMany [TSet s] -> return s
+        _ -> return Nothing
+    projectSetWithPos = unpackSymbolic >=> \case
+        NMany [TSet s] -> return $ (, M.empty) <$> s
         _ -> return Nothing
 
     type MText (Lint s) = Text

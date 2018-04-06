@@ -328,15 +328,15 @@ lint e@(NList l) = do
         >>= (\t -> mkSymbolic [TList (svalueThunk t)])
 
 lint (NSet binds) = do
-    s <- evalBinds True False binds
+    (s, _) <- evalBinds True False binds
     mkSymbolic [TSet (Just s)]
 
 lint (NRecSet binds) = do
-    s <- evalBinds True True binds
+    (s, _) <- evalBinds True True binds
     mkSymbolic [TSet (Just s)]
 
 lint (NLet binds body) = do
-    s <- evalBinds True True binds
+    (s, _) <- evalBinds True True binds
     pushScope s body
 
 lint e@(NIf cond t f) = do

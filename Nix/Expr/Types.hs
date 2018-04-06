@@ -20,6 +20,8 @@ import Data.Traversable
 import GHC.Exts
 import GHC.Generics
 import Nix.Atoms
+import Nix.Parser.Library (Delta(..))
+import Nix.Utils
 import Text.Show.Deriving
 
 type VarName = Text
@@ -87,7 +89,7 @@ type NExpr = Fix NExprF
 data Binding r
   = NamedVar !(NAttrPath r) !r
   -- ^ An explicit naming, such as @x = y@ or @x.y = z@.
-  | Inherit !(Maybe r) ![NKeyName r]
+  | Inherit !(Maybe r) !(NAttrPath r)
   -- ^ Using a name already in scope, such as @inherit x;@ which is shorthand
   -- for @x = x;@ or @inherit (x) y;@ which means @y = x.y;@.
   deriving (Typeable, Data, Ord, Eq, Functor, Foldable, Traversable, Show)
@@ -154,16 +156,16 @@ instance IsString (NString r) where
 -- parser still considers it a 'DynamicKey' for simplicity.
 data NKeyName r
   = DynamicKey !(Antiquoted (NString r) r)
-  | StaticKey !VarName
+  | StaticKey !VarName !(Maybe Delta)
   deriving (Eq, Ord, Generic, Typeable, Data, Show)
 
 -- | Most key names are just static text, so this instance is convenient.
 instance IsString (NKeyName r) where
-  fromString = StaticKey . fromString
+  fromString = flip StaticKey Nothing . fromString
 
 instance Eq1 NKeyName where
   liftEq eq (DynamicKey a) (DynamicKey b) = liftEq2 (liftEq eq) eq a b
-  liftEq _ (StaticKey a) (StaticKey b) = a == b
+  liftEq _ (StaticKey a _) (StaticKey b _) = a == b
   liftEq _ _ _ = False
 
 -- Deriving this instance automatically is not possible because @r@
@@ -171,7 +173,7 @@ instance Eq1 NKeyName where
 instance Show1 NKeyName where
   liftShowsPrec sp sl p = \case
     DynamicKey a -> showsUnaryWith (liftShowsPrec2 (liftShowsPrec sp sl) (liftShowList sp sl) sp sl) "DynamicKey" p a
-    StaticKey t  -> showsUnaryWith showsPrec "StaticKey" p t
+    StaticKey t _  -> showsUnaryWith showsPrec "StaticKey" p t
 
 -- Deriving this instance automatically is not possible because @r@
 -- occurs not only as last argument in @Antiquoted (NString r) r@
@@ -189,7 +191,7 @@ instance Traversable NKeyName where
   traverse f = \case
     DynamicKey (Plain str)    -> DynamicKey . Plain <$> traverse f str
     DynamicKey (Antiquoted e) -> DynamicKey . Antiquoted <$> f e
-    StaticKey key -> pure (StaticKey key)
+    StaticKey key pos -> pure (StaticKey key pos)
 
 -- | A selector (for example in a @let@ or an attribute set) is made up
 -- of strung-together key names.
@@ -236,3 +238,18 @@ $(deriveShow1 ''Params)
 $(deriveShow1 ''Binding)
 $(deriveShow1 ''Antiquoted)
 $(deriveShow2 ''Antiquoted)
+
+stripPositionInfo :: NExpr -> NExpr
+stripPositionInfo = transport phi
+  where
+    phi (NSet binds)         = NSet (map go binds)
+    phi (NRecSet binds)      = NRecSet (map go binds)
+    phi (NLet binds body)    = NLet (map go binds) body
+    phi (NSelect s attr alt) = NSelect s (map clear attr) alt
+    phi x = x
+
+    go (NamedVar path r)  = NamedVar (map clear path) r
+    go (Inherit ms names) = Inherit ms (map clear names)
+
+    clear (StaticKey name _) = StaticKey name Nothing
+    clear k = k
