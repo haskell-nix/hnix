@@ -128,6 +128,7 @@ builtinsList = sequence [
     , add2 Normal   "seq"                        seq_
     , add2 Normal   "deepSeq"                    deepSeq
     , add2 Normal   "elem"                       elem_
+    , add2 Normal   "elemAt"                     elemAt_
     , add2 Normal   "genList"                    genList
     , add' Normal   "replaceStrings"             replaceStrings
     , add  Normal   "isAttrs"                    isAttrs
@@ -178,6 +179,11 @@ extractBool :: MonadBuiltins e m => NValue m -> m Bool
 extractBool = \case
     NVConstant (NBool b) -> return b
     _ -> throwError "Not a boolean constant"
+
+extractInt :: MonadBuiltins e m => NValue m -> m Int
+extractInt = \case
+    NVConstant (NInt b) -> return $ fromIntegral b
+    _ -> throwError "Not an integer constant"
 
 apply :: MonadBuiltins e m
       => NThunk m -> NThunk m -> m (NValue m)
@@ -422,6 +428,14 @@ deepSeq a b = do
 elem_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 elem_ x xs = force xs $ \case
     NVList l -> toValue =<< anyM (thunkEq x) l
+    v -> throwError $ "builtins.elem: Expected a list, got " ++ showValue v
+
+elemAt_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
+elemAt_ xs n = force n $ extractInt >=> \n' -> force xs $ \case
+    NVList l | n' < length l -> force (l !! n') pure
+             | otherwise ->
+        throwError $ "builtins.elem: Index " ++ show n'
+            ++ " too large for list of length " ++ show (length l)
     v -> throwError $ "builtins.elem: Expected a list, got " ++ showValue v
 
 genList :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
