@@ -102,14 +102,15 @@ reserved :: (TokenParsing m, Monad m) => String -> m ()
 reserved = reserve identStyle
 
 reservedOp :: TokenParsing m => String -> m ()
-reservedOp o = token $ try $ () <$
-  highlight ReservedOperator (string o) <* (notFollowedBy opLetter <?> "end of " ++ o)
+reservedOp o = token $ try $ void $
+  highlight ReservedOperator (string o)
+      <* (notFollowedBy opLetter <?> "end of " ++ o)
 
 opStart :: CharParsing m => m Char
 opStart = oneOf ".+-*/=<>&|!?"
 
 opLetter :: CharParsing m => m Char
-opLetter = oneOf ">-+/&|="
+opLetter = oneOf ">+/&|="
 
 identStart :: CharParsing m => m Char
 identStart = letter <|> char '_'
