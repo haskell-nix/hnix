@@ -323,21 +323,27 @@ valueEq l r = case (l, r) of
 
 -----
 
-normalForm :: forall e m. MonadEval e m => NValue m -> m (NValueNF m)
-normalForm v = trace ("v = " ++ showValue v) $ case v of
+normalFormBy :: forall e m. MonadEval e m
+             => (forall r. NThunk m -> (NValue m -> m r) -> m r)
+             -> NValue m
+             -> m (NValueNF m)
+normalFormBy k = \case
     NVConstant a     -> return $ Fix $ NVConstant a
     NVStr t s        -> return $ Fix $ NVStr t s
     NVList l         ->
-        Fix . NVList <$> traverse (`force` normalForm) l
+        Fix . NVList <$> traverse (`k` normalFormBy k) l
     NVSet s          ->
-        Fix . NVSet <$> traverse (`force` normalForm) s
+        Fix . NVSet <$> traverse (`k` normalFormBy k) s
     NVClosure s p f   -> withScopes @(NThunk m) s $ do
-        p' <- traverse (fmap (`force` normalForm)) p
+        p' <- traverse (fmap (`k` normalFormBy k)) p
         return $ Fix $
-            NVClosure emptyScopes p' ((`force` normalForm) =<< f)
+            NVClosure emptyScopes p' ((`k` normalFormBy k) =<< f)
     NVLiteralPath fp -> return $ Fix $ NVLiteralPath fp
     NVEnvPath p      -> return $ Fix $ NVEnvPath p
     NVBuiltin name f -> return $ Fix $ NVBuiltin name f
+
+normalForm :: forall e m. MonadEval e m => NValue m -> m (NValueNF m)
+normalForm = normalFormBy force
 
 valueText :: forall e m. (MonadEval e m, MonadNix m)
           => Bool -> NValueNF m -> m (Text, DList Text)

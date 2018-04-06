@@ -31,6 +31,7 @@ import           Data.ByteString (ByteString)
 import           Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
+import           Data.Coerce
 import           Data.Foldable (foldlM)
 import           Data.Functor.Compose
 import           Data.HashMap.Lazy (HashMap)
@@ -408,7 +409,15 @@ seq_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 seq_ a b = force a (const (force b pure))
 
 deepSeq :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-deepSeq a b = force a normalForm >> force b pure
+deepSeq a b = do
+    -- We evaluate 'a' only for its effects, so data cycles are ignored.
+    _ <- forceEffects (coerce a) $ \a' ->
+        normalFormBy (forceEffects . coerce) a'
+
+    -- Then we evaluate the other argument to deepseq, thus this function
+    -- should always produce a result (unlike applying 'deepseq' on infinitely
+    -- recursive data structures in Haskell).
+    force b pure
 
 elem_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 elem_ x xs = force xs $ \case

@@ -49,3 +49,21 @@ forceThunk (Thunk active ref) k = do
                     writeVar ref (Computed value)
                     _ <- atomicModifyVar active (False,)
                     k value
+
+forceEffects :: (Framed e m, MonadFile m, MonadVar m)
+             => Thunk m v -> (v -> m r) -> m r
+forceEffects (Value ref) k = k ref
+forceEffects (Action ref) k = k =<< ref
+forceEffects (Thunk active ref) k = do
+    nowActive <- atomicModifyVar active (True,)
+    if nowActive
+        then return $ error "forceEffects: a value was expected"
+        else do
+            eres <- readVar ref
+            case eres of
+                Computed value -> k value
+                Deferred action -> do
+                    value <- action
+                    writeVar ref (Computed value)
+                    _ <- atomicModifyVar active (False,)
+                    k value
