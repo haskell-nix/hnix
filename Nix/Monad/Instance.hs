@@ -12,6 +12,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 module Nix.Monad.Instance where
 

@@ -12,6 +12,7 @@
 {-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 module Nix.Builtins (MonadBuiltins, baseEnv) where
 
