@@ -64,6 +64,7 @@ import           Nix.Utils
 import           Nix.XML
 import           System.FilePath
 import           System.Posix.Files
+import           Text.Regex.PCRE.Light
 
 type MonadBuiltins e m =
     (MonadEval e m, MonadNix m, MonadFix m, MonadFile m, MonadVar m)
@@ -116,6 +117,7 @@ builtinsList = sequence [
     , add  Normal   "tail"                       tail_
     , add  Normal   "splitVersion"               splitVersion_
     , add2 Normal   "compareVersions"            compareVersions_
+    , add2 Normal   "match"                      match_
     --TODO: Support floats for `add` and `sub`
     , add' Normal   "add"                        (arity2 ((+) @Integer))
     , add' Normal   "sub"                        (arity2 ((-) @Integer))
@@ -385,6 +387,22 @@ splitDrvName s =
 parseDrvName :: Applicative m => Text -> Prim m (HashMap Text Text)
 parseDrvName s = Prim $ pure $ M.fromList [("name", name), ("version", version)]
     where (name, version) = splitDrvName s
+
+match_ :: forall e m. MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
+match_ pat str = force pat $ \pat' -> force str $ \str' ->
+    case (pat', str') of
+        -- jww (2018-04-05): We should create a fundamental type for compiled
+        -- regular expressions if it turns out they get used often.
+        (NVStr p _, NVStr s _) -> return $ NVList $
+            let re = compile (encodeUtf8 p <> "$") []
+            in case match re (encodeUtf8 s) [exec_anchored] of
+                Nothing -> []
+                Just s  ->
+                    map (valueThunk @m . flip NVStr mempty . decodeUtf8)
+                        (if captureCount re > 0 then tail s else s)
+        (p, s) ->
+            throwError $ "builtins.match: expected a regex"
+                ++ " and a string, but got: " ++ show (p, s)
 
 substring :: Applicative m => Int -> Int -> Text -> Prim m Text
 substring start len =

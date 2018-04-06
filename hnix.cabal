@@ -79,6 +79,7 @@ Library
     , syb
     , vector
     , xml
+    , pcre-light
   if flag(parsec)
     Cpp-options: -DUSE_PARSEC
     Build-depends: parsec
