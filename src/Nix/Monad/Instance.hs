@@ -17,6 +17,7 @@
 module Nix.Monad.Instance where
 
 import           Control.Monad
+import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader (MonadReader)
@@ -72,7 +73,7 @@ removeDotDotIndirections = intercalate "/" . go [] . splitOn "/"
           go (_:s) ("..":rest) = go s rest
           go s (this:rest) = go (this:s) rest
 
-instance (MonadFix m, MonadNix (Lazy m), MonadIO m)
+instance (MonadFix m, MonadNix (Lazy m), MonadThrow m, MonadIO m)
       => MonadExpr (NThunk (Lazy m)) (NValue (Lazy m)) (Lazy m) where
     embedSet    = return . flip NVSet M.empty
     projectSet  = \case
@@ -103,7 +104,14 @@ instance MonadIO m => MonadVar (Lazy m) where
 instance MonadIO m => MonadFile (Lazy m) where
     readFile = liftIO . BS.readFile
 
-instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
+instance MonadCatch m => MonadCatch (Lazy m) where
+    catch (Lazy (ReaderT m)) f = Lazy $ ReaderT $ \e ->
+        catch (m e) ((`runReaderT` e) . runLazy . f)
+
+instance MonadThrow m => MonadThrow (Lazy m) where
+    throwM = Lazy . throwM
+
+instance (MonadFix m, MonadThrow m, MonadIO m) => MonadNix (Lazy m) where
     addPath path = liftIO $ do
         (exitCode, out, _) <-
             readProcessWithExitCode "nix-store" ["--add", path] ""

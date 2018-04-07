@@ -24,7 +24,7 @@ dependencies:
   - ansi-wl-pprint
   - containers
   - data-fix
-  # - exceptions
+  - exceptions
   - insert-ordered-containers   >= 0.2.2 && < 0.3
   - mtl
   - template-haskell

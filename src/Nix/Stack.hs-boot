@@ -3,6 +3,7 @@
 
 module Nix.Stack where
 
+import Control.Monad.Catch
 import Control.Monad.Reader
 import Data.ByteString (ByteString)
 import Nix.Expr.Types.Annotated
@@ -11,7 +12,7 @@ import Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 type Frames = [Either String (NExprLocF ())]
 
-type Framed e m = (MonadReader e m, Has e Frames)
+type Framed e m = (MonadReader e m, Has e Frames, MonadThrow m)
 
 withExprContext :: Framed e m => NExprLocF () -> m r -> m r
 
@@ -24,4 +25,4 @@ renderLocation :: MonadFile m => SrcSpan -> Doc -> m Doc
 
 renderFrame :: MonadFile m => Either String (NExprLocF ()) -> m String
 
-throwError :: (Framed e m, MonadFile m) => String -> m a
+throwError :: (Framed e m, MonadFile m, MonadThrow m) => String -> m a

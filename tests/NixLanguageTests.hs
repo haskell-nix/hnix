@@ -20,6 +20,7 @@ import           Nix.Monad.Instance
 import           Nix.Parser
 import           Nix.Pretty
 import           Nix.Utils
+import           Nix.Stack
 import           Nix.Value
 import           Nix.XML
 import           System.Environment
@@ -104,22 +105,24 @@ assertLangOkXml file = do
   assertEqual "" expected $ Text.pack actual
 
 assertEval :: [FilePath] -> Assertion
-assertEval files =
-  case delete ".nix" $ sort $ map takeExtensions files of
-    [] -> assertLangOkXml name
-    [".exp"] -> assertLangOk name
-    [".exp.disabled"] -> return ()
-    [".exp-disabled"] -> return ()
-    [".exp", ".flags"] ->
-        assertFailure $ "Support for flags not implemented (needed by "
-            ++ name ++ ".nix)."
-    _ -> assertFailure $ "Unknown test type " ++ show files
+assertEval files = catch go $ \case
+    NixEvalException str -> error $ "Evaluation error: " ++ str
   where
-    name = "data/nix/tests/lang/"
-        ++ the (map (takeFileName . dropExtensions) files)
+    go = case delete ".nix" $ sort $ map takeExtensions files of
+        [] -> assertLangOkXml name
+        [".exp"] -> assertLangOk name
+        [".exp.disabled"] -> return ()
+        [".exp-disabled"] -> return ()
+        [".exp", ".flags"] ->
+            assertFailure $ "Support for flags not implemented (needed by "
+                ++ name ++ ".nix)."
+        _ -> assertFailure $ "Unknown test type " ++ show files
+      where
+        name = "data/nix/tests/lang/"
+            ++ the (map (takeFileName . dropExtensions) files)
 
 assertEvalFail :: FilePath -> Assertion
-assertEvalFail file = catch ?? (\(ErrorCall _) -> return ()) $ do
+assertEvalFail file = catch ?? (\(_ :: SomeException) -> return ()) $ do
   evalResult <- printNix <$> nixEvalFile file
   evalResult `seq` assertFailure $
       file ++ " should not evaluate.\nThe evaluation result was `"

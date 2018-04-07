@@ -12,7 +12,9 @@
 module Nix (eval, evalLoc, tracingEvalLoc, lint, runLintM) where
 
 import           Control.Applicative
+import           Control.Exception
 import           Control.Monad
+import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader (MonadReader)
@@ -50,7 +52,7 @@ evalTopLevelExpr mpath expr = do
             pushScope (M.singleton "__cur_file" ref)
                       (Eval.evalExpr expr)
 
-eval :: (MonadFix m, MonadIO m)
+eval :: (MonadFix m, MonadThrow m, MonadCatch m, MonadIO m)
      => Maybe FilePath -> NExpr -> m (NValueNF (Lazy m))
 eval mpath = runLazyM . evalTopLevelExpr mpath
 
@@ -67,11 +69,12 @@ evalTopLevelExprLoc mpath expr = do
             pushScope (M.singleton "__cur_file" ref)
                       (framedEvalExpr Eval.eval expr)
 
-evalLoc :: (MonadFix m, MonadIO m)
+evalLoc :: (MonadFix m, MonadThrow m, MonadCatch m, MonadIO m)
         => Maybe FilePath -> NExprLoc -> m (NValueNF (Lazy m))
 evalLoc mpath = runLazyM . evalTopLevelExprLoc mpath
 
-tracingEvalLoc :: forall m. (MonadFix m, MonadIO m, Alternative m)
+tracingEvalLoc
+    :: forall m. (MonadFix m, MonadThrow m, MonadCatch m, MonadIO m, Alternative m)
     => Maybe FilePath -> NExprLoc -> m (NValueNF (Lazy m))
 tracingEvalLoc mpath expr = do
     traced <- tracingEvalExpr Eval.eval expr
@@ -103,6 +106,9 @@ instance MonadVar (Lint s) where
 
 instance MonadFile (Lint s) where
     readFile x = Lint $ ReaderT $ \_ -> unsafeIOToST $ BS.readFile x
+
+instance MonadThrow (Lint s) where
+    throwM e = Lint $ ReaderT $ \_ -> unsafeIOToST $ throw e
 
 instance Eval.MonadExpr (SThunk (Lint s))
              (STRef s (NSymbolicF (NTypeF (Lint s) (SThunk (Lint s)))))

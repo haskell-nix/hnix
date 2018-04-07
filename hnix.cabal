@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 75114131aa7bcf0c3bfa2a43f01bf0942b2c922ce7caa94d7103bc24aee13b61
+-- hash: 429fc2370bb078161c283b1238eb797ca1c03c46e4c1a2f68ac80937a901bb79
 
 name:           hnix
 version:        0.5.0
@@ -73,6 +73,7 @@ library
     , deepseq
     , deriving-compat >=0.3 && <0.5
     , directory
+    , exceptions
     , filepath
     , insert-ordered-containers >=0.2.2 && <0.3
     , monadlist
@@ -115,6 +116,7 @@ executable hnix
     , containers
     , data-fix
     , deepseq
+    , exceptions
     , hnix
     , insert-ordered-containers >=0.2.2 && <0.3
     , mtl
@@ -143,6 +145,7 @@ test-suite hnix-tests
     , base >=4.9 && <5
     , containers
     , data-fix
+    , exceptions
     , filepath
     , hnix
     , insert-ordered-containers >=0.2.2 && <0.3
@@ -175,6 +178,7 @@ benchmark hnix-benchmarks
     , containers
     , criterion
     , data-fix
+    , exceptions
     , hnix
     , insert-ordered-containers >=0.2.2 && <0.3
     , mtl
