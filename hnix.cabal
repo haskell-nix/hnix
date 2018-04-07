@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2a22f1191905e2b66f2d356247a272e923144902c5ad6026fe72d137f8127a77
+-- hash: be12dac5d928aede61ee60f110e3709264a3f0808bdc59fb7eff808c64bb6fcb
 
 name:           hnix
 version:        0.5.0
@@ -43,6 +43,7 @@ library
       Nix.Lint
       Nix.Monad
       Nix.Monad.Instance
+      Nix.Normal
       Nix.Parser
       Nix.Parser.Library
       Nix.Parser.Operators

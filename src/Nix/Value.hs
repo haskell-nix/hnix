@@ -3,26 +3,27 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Nix.Value where
 
-import Data.Coerce
-import Data.Fix
-import Data.HashMap.Lazy (HashMap)
-import Data.Monoid (appEndo)
-import Data.Text (Text)
-import Data.Typeable (Typeable)
-import GHC.Generics
-import Nix.Atoms
-import Nix.Expr.Types
-import Nix.Parser.Library (Delta(..))
-import Nix.Scope
+import           Data.Coerce
+import           Data.Fix
+import           Data.HashMap.Lazy (HashMap)
+import           Data.Monoid (appEndo)
+import           Data.Text (Text)
+import           Data.Typeable (Typeable)
+import           GHC.Generics
+import           Nix.Atoms
+import           Nix.Expr.Types
+import           Nix.Parser.Library (Delta(..))
+import           Nix.Scope
+import           Nix.Thunk
+import           Nix.Utils
 import {-# SOURCE #-} Nix.Stack
-import Nix.Thunk
-import Nix.Utils
 
 newtype NThunk m = NThunk (Thunk m (NValue m))
 
@@ -104,3 +105,17 @@ instance Show f => Show (NValueF m f) where
               . showsPrec 11 a
               . showString " "
               . showsPrec 11 b
+
+
+builtin :: Monad m => String -> (NThunk m -> m (NValue m)) -> m (NValue m)
+builtin name f = return $ NVBuiltin name f
+
+builtin2 :: Monad m
+         => String -> (NThunk m -> NThunk m -> m (NValue m)) -> m (NValue m)
+builtin2 name f = builtin name (builtin name . f)
+
+builtin3 :: Monad m
+         => String -> (NThunk m -> NThunk m -> NThunk m -> m (NValue m))
+         -> m (NValue m)
+builtin3 name f =
+    builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c

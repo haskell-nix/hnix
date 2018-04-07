@@ -32,16 +32,3 @@ class Monad m => MonadNix m where
 
     listDirectory :: FilePath -> m [FilePath]
     getSymbolicLinkStatus :: FilePath -> m FileStatus
-
-builtin :: MonadNix m => String -> (NThunk m -> m (NValue m)) -> m (NValue m)
-builtin name f = return $ NVBuiltin name f
-
-builtin2 :: MonadNix m
-         => String -> (NThunk m -> NThunk m -> m (NValue m)) -> m (NValue m)
-builtin2 name f = builtin name (builtin name . f)
-
-builtin3 :: MonadNix m
-         => String -> (NThunk m -> NThunk m -> NThunk m -> m (NValue m))
-         -> m (NValue m)
-builtin3 name f =
-    builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
