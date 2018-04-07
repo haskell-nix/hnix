@@ -395,13 +395,13 @@ match_ pat str = force pat $ \pat' -> force str $ \str' ->
     case (pat', str') of
         -- jww (2018-04-05): We should create a fundamental type for compiled
         -- regular expressions if it turns out they get used often.
-        (NVStr p _, NVStr s _) -> return $ NVList $
+        (NVStr p _, NVStr s _) -> return $
             let re = makeRegex (encodeUtf8 p) :: Regex
             in case matchOnceText re (encodeUtf8 s) of
                 Just ("", sarr, "") -> let s = map fst (elems sarr) in
-                    map (valueThunk @m . flip NVStr mempty . decodeUtf8)
+                    NVList $ map (valueThunk @m . flip NVStr mempty . decodeUtf8)
                         (if length s > 1 then tail s else s)
-                _ -> []
+                _ -> NVConstant NNull
         (p, s) ->
             throwError $ "builtins.match: expected a regex"
                 ++ " and a string, but got: " ++ show (p, s)

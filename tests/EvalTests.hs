@@ -14,6 +14,7 @@ import Nix.Parser
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.TH
+import TestCommon
 
 case_basic_sum =
     constantEqualStr "2" "1 + 1"
@@ -70,6 +71,8 @@ case_function_recursive_sets =
 
 case_nested_with =
     constantEqualStr "2" "with { x = 1; }; with { x = 2; }; x"
+
+case_match_failure_null = assertEvalMatchesNix "builtins.match \"ab\" \"abc\""
 
 -----------------------
 
