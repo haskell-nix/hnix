@@ -112,14 +112,14 @@ instance MonadThrow m => MonadThrow (Lazy m) where
     throwM = Lazy . throwM
 
 instance (MonadFix m, MonadThrow m, MonadIO m) => MonadNix (Lazy m) where
-    addPath path = liftIO $ do
+    addPath path = do
         (exitCode, out, _) <-
-            readProcessWithExitCode "nix-store" ["--add", path] ""
+            liftIO $ readProcessWithExitCode "nix-store" ["--add", path] ""
         case exitCode of
           ExitSuccess -> do
             let dropTrailingLinefeed p = take (length p - 1) p
             return $ StorePath $ dropTrailingLinefeed out
-          _ -> error $ "No such file or directory: " ++ show path
+          _ -> throwError $ "No such file or directory: " ++ show path
 
     makeAbsolutePath origPath = do
         absPath <- if isAbsolute origPath then pure origPath else do
@@ -135,6 +135,13 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadNix (Lazy m) where
                                 ++ show (void v)
             pure $ cwd </> origPath
         liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
+
+    findEnvPath name = getEnvVar name >>= \case
+        Nothing ->
+            throwError $ "file '" ++ name
+                ++ "' was not found in the Nix search path"
+                ++ " (add it using $NIX_PATH or -I)"
+        Just path -> makeAbsolutePath path
 
     pathExists = liftIO . fileExist
 

@@ -22,6 +22,7 @@ class Monad m => MonadNix m where
 
     -- | Determine the absolute path of relative path in the current context
     makeAbsolutePath :: FilePath -> m FilePath
+    findEnvPath :: String -> m FilePath
 
     pathExists :: FilePath -> m Bool
     importFile :: ValueSet m -> FilePath -> m (NValue m)

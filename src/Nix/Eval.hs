@@ -76,10 +76,7 @@ eval (NSym var) = do
 eval (NConstant x)    = return $ NVConstant x
 eval (NStr str)       = traceM "NStr" >> evalString str
 eval (NLiteralPath p) = traceM "NLiteralPath" >> NVPath <$> makeAbsolutePath p
-eval (NEnvPath p)     = do
-    traceM "NEnvPath"
-    -- jww (2018-04-07): TODO: Look up this path in $NIX_PATH
-    return $ NVPath p
+eval (NEnvPath p)     = traceM "NLiteralPath" >> NVPath <$> findEnvPath p
 
 eval (NUnary op arg) = do
     traceM "NUnary"
