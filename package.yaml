@@ -1,0 +1,109 @@
+name:       hnix
+version:    0.5.0
+synopsis:   Haskell implementation of the Nix language
+github:     jwiegley/hnix
+author:     John Wiegley
+maintainer: johnw@newartisans.com
+category:   System, Data, Nix
+license:    BSD3
+
+description:
+  Haskell implementation of the Nix language.
+
+extra-source-files:
+  - README.md
+
+flags:
+  parsec:
+    description: Use parsec instead of Trifecta
+    manual: True
+    default: False
+
+dependencies:
+  - base                        >= 4.9 && < 5
+  - ansi-wl-pprint
+  - containers
+  - data-fix
+  - insert-ordered-containers   >= 0.2.2 && < 0.3
+  - mtl
+  - template-haskell
+  - text
+  - transformers
+  - unordered-containers        >= 0.2.9 && < 0.3
+
+ghc-options:
+  - -Wall
+
+library:
+  source-dirs: src
+  dependencies:
+    - aeson
+    - ansi-wl-pprint
+    - array                     >= 0.4 && < 0.6
+    - base16-bytestring
+    - bytestring
+    - cryptohash
+    - deepseq
+    - deriving-compat           >= 0.3 && < 0.5
+    - directory
+    - exceptions
+    - filepath
+    - monadlist
+    - parsers                   >= 0.10
+    - process
+    - regex-tdfa
+    - regex-tdfa-text
+    - scientific
+    - semigroups                >= 0.18 && < 0.19
+    - split
+    - syb
+    - these
+    - unix
+    - vector
+    - xml
+  when:
+    - condition: flag(parsec)
+      then:
+        cpp-options: -DUSE_PARSEC
+        dependencies: parsec
+      else:
+        dependencies: trifecta
+
+executables:
+  hnix:
+    source-dirs: main
+    main: Main.hs
+    dependencies:
+      - hnix
+      - deepseq
+      - optparse-applicative
+
+tests:
+  hnix-tests:
+    source-dirs: tests
+    main: Main.hs
+    other-modules:
+      - ParserTests
+      - EvalTests
+      - PrettyTests
+      - NixLanguageTests
+    dependencies:
+      - hnix
+      - Glob
+      - filepath
+      - interpolate
+      - split
+      - tasty
+      - tasty-hunit
+      - tasty-th
+      - unix
+
+benchmarks:
+  hnix-benchmarks:
+    source-dirs: benchmarks
+    main: Main.hs
+    other-modules:
+      - ParserBench
+    dependencies:
+      - hnix
+      - criterion

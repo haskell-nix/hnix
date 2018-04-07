@@ -5,8 +5,8 @@ import qualified EvalTests
 import qualified NixLanguageTests
 import qualified ParserTests
 import qualified PrettyTests
-import           System.Directory
 import           System.Environment
+import           System.Posix.Files
 import           Test.Tasty
 
 main :: IO ()
@@ -15,7 +15,7 @@ main = do
   langTestsEnv <- lookupEnv "LANGUAGE_TESTS"
   let runLangTests = langTestsEnv == Just "yes"
   when runLangTests $ do
-    exist <- doesDirectoryExist "data/nix/tests"
+    exist <- fileExist "data/nix/tests/local.mk"
     unless exist $
         errorWithoutStackTrace $ unlines
             [ "Directory data/nix does not have any files."
