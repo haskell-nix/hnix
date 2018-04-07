@@ -21,6 +21,7 @@ import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader (MonadReader)
 import           Control.Monad.Trans.Reader
+import qualified Data.Aeson as A
 import qualified Data.ByteString as BS
 import           Data.Fix
 import qualified Data.HashMap.Lazy as M
@@ -29,10 +30,12 @@ import           Data.List
 import           Data.List.Split
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import           Data.Text.Encoding
 import           Nix.Atoms
 import           Nix.Eval
 import           Nix.Monad
 import           Nix.Parser
+import           Nix.Pretty
 import           Nix.Scope
 import           Nix.Stack
 import           Nix.Thunk
@@ -111,7 +114,7 @@ instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
           ExitSuccess -> do
             let dropTrailingLinefeed p = take (length p - 1) p
             return $ StorePath $ dropTrailingLinefeed out
-          _ -> error $ "No such file or directory: " ++ show path
+          _ -> error $ "addPath: failed: nix-store --add " ++ show path
 
     makeAbsolutePath origPath = do
         absPath <- if isAbsolute origPath then pure origPath else do
@@ -170,6 +173,20 @@ instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
 
     listDirectory         = liftIO . System.Directory.listDirectory
     getSymbolicLinkStatus = liftIO . System.Posix.Files.getSymbolicLinkStatus
+
+    derivationStrict v = liftIO $ do
+        (exitCode, out, _) <-
+            readProcessWithExitCode "nix-instantiate"
+              [ "--eval"
+              , "--json"
+              , "-E", "derivationStrict " ++ show (prettyNixValue v) --TODO: use prettyNix to generate this
+              ] ""
+        case exitCode of
+            ExitSuccess -> do
+                case A.eitherDecodeStrict $ encodeUtf8 $ Text.pack out of
+                    Left e -> error $ "derivationStrict: error parsing JSON output of nix-instantiate: " ++ show e
+                    Right v -> pure v
+            _ -> error "derivationStrict: nix-instantiate failed"
 
 runLazyM :: MonadIO m => Lazy m a -> m a
 runLazyM = flip runReaderT (Context emptyScopes []) . runLazy

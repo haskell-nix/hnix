@@ -7,6 +7,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -52,11 +53,13 @@ import           Data.These (fromThese)
 import           Data.Traversable (mapM)
 import qualified Data.Vector as V
 import           GHC.Stack.Types (HasCallStack)
+import           Language.Haskell.TH.Syntax (addDependentFile, runIO)
 import           Nix.Atoms
 import           Nix.Eval
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Monad
+import           Nix.Parser
 import           Nix.Pretty
 import           Nix.Scope
 import           Nix.Stack
@@ -109,6 +112,13 @@ builtinsList = sequence [
     , add  TopLevel "abort"                      throw_ -- for now
     , add  TopLevel "throw"                      throw_
     , add2 TopLevel "scopedImport"               scopedImport
+    , add  TopLevel "derivationStrict"           derivationStrict_
+    , add0 TopLevel "derivation"                 $(do
+          let f = "data/nix/corepkgs/derivation.nix"
+          addDependentFile f
+          Success expr <- runIO $ parseNixFile f
+          [| evalExpr expr |]
+      )
     , add  Normal   "getEnv"                     getEnv_
     , add2 Normal   "hasAttr"                    hasAttr
     , add2 Normal   "getAttr"                    getAttr
@@ -207,7 +217,7 @@ deltaInfo = \case
     Columns c _         -> ("<string>", 1, fromIntegral c + 1)
     Tab {}              -> ("<string>", 1, 1)
     Lines l _ _ _       -> ("<string>", fromIntegral l + 1, 1)
-    Directed fn l c _ _ -> (decodeUtf8 fn,
+    Directed fn l c _ _ -> (Text.pack fn,
                            fromIntegral l + 1, fromIntegral c + 1)
 
 posFromDelta :: Delta -> NValue m
@@ -789,6 +799,11 @@ currentSystem = do
   os <- getCurrentSystemOS
   arch <- getCurrentSystemArch
   return $ NVStr (os <> "-" <> arch) mempty
+
+derivationStrict_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
+derivationStrict_ t = do
+    v <- force t normalForm
+    toValue =<< derivationStrict v
 
 newtype Prim m a = Prim { runPrim :: m a }
 

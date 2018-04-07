@@ -10,6 +10,7 @@
 module Nix.Monad where
 
 import Data.Text (Text)
+import Data.HashMap.Strict (HashMap)
 import Nix.Value
 import System.Posix.Files
 
@@ -31,6 +32,8 @@ class Monad m => MonadNix m where
 
     listDirectory :: FilePath -> m [FilePath]
     getSymbolicLinkStatus :: FilePath -> m FileStatus
+
+    derivationStrict :: NValueNF m -> m (HashMap Text Text)
 
 builtin :: MonadNix m => String -> (NThunk m -> m (NValue m)) -> m (NValue m)
 builtin name f = return $ NVBuiltin name f

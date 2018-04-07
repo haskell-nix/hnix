@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -7,6 +8,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 -- | The nix expression type and supporting types.
 module Nix.Expr.Types where
 
@@ -15,14 +17,17 @@ import Data.Eq.Deriving
 import Data.Fix
 import Data.Functor.Classes
 import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
-import Data.Text (Text, pack)
+import Data.Text (Text, pack, unpack)
 import Data.Traversable
 import GHC.Exts
 import GHC.Generics
+import Language.Haskell.TH.Syntax
 import Nix.Atoms
 import Nix.Parser.Library (Delta(..))
 import Nix.Utils
 import Text.Show.Deriving
+import Type.Reflection (eqTypeRep)
+import qualified Type.Reflection as Reflection
 
 type VarName = Text
 
@@ -80,6 +85,12 @@ data NExprF r
 -- as an identifier. This is the most common use-case...
 instance IsString NExpr where
   fromString = Fix . NSym . fromString
+
+instance Lift (Fix NExprF) where
+    lift = dataToExpQ $ \b ->
+        case Reflection.typeOf b `eqTypeRep` Reflection.typeRep @Text of
+            Just HRefl -> Just [| pack $(liftString $ unpack b) |]
+            Nothing -> Nothing
 
 
 -- | The monomorphic expression type is a fixed point of the polymorphic one.

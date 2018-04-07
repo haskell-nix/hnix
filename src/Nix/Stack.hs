@@ -11,13 +11,11 @@ import           Control.Monad.Reader
 import           Data.ByteString (ByteString)
 import           Data.Fix
 import           Data.Functor.Compose
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
+import           Nix.Parser.Library
 import           Nix.Pretty
 import           Nix.Utils
-import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 import           Text.Trifecta.Rendering
 import           Text.Trifecta.Result
 
@@ -36,14 +34,14 @@ class Monad m => MonadFile m where
 
 renderLocation :: MonadFile m => SrcSpan -> Doc -> m Doc
 renderLocation (SrcSpan beg@(Directed "<string>" _ _ _ _) end) msg =
-    return $ explain (addSpan beg end emptyRendering)
+    return $ explain (addSpan (deltaToTrifecta beg) (deltaToTrifecta end) emptyRendering)
                      (Err (Just msg) [] mempty [])
 renderLocation (SrcSpan beg@(Directed path _ _ _ _) end) msg = do
-    contents <- Nix.Stack.readFile (Text.unpack (Text.decodeUtf8 path))
-    return $ explain (addSpan beg end (rendered beg contents))
+    contents <- Nix.Stack.readFile path
+    return $ explain (addSpan (deltaToTrifecta beg) (deltaToTrifecta end) (rendered (deltaToTrifecta beg) contents))
                      (Err (Just msg) [] mempty [])
 renderLocation (SrcSpan beg end) msg =
-    return $ explain (addSpan beg end emptyRendering)
+    return $ explain (addSpan (deltaToTrifecta beg) (deltaToTrifecta end) emptyRendering)
                      (Err (Just msg) [] mempty [])
 
 renderFrame :: MonadFile m => Either String (NExprLocF ()) -> m String

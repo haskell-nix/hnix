@@ -1,21 +1,27 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Nix.Parser.Library
   ( module Nix.Parser.Library
   , module X
-  , Trifecta.Delta(..)
   ) where
 
 import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.IO.Class
+import           Data.Data
 import           Data.Functor
 import qualified Data.HashSet as HashSet
+import           Data.Int (Int64)
 import           Data.List (nub)
 import           Data.Text
+import           Data.Text.Encoding
+import           GHC.Generics
 import           Text.Parser.Char as X hiding (text)
 import           Text.Parser.Combinators as X
 import           Text.Parser.Expression as X
@@ -141,9 +147,31 @@ someTill p end = go
     scan = (end $> []) <|>  go
 
 --------------------------------------------------------------------------------
+-- | Like Text.Trifecta.Delta.Delta, but with FilePath instead of ByteString
+data Delta
+   = Columns !Int64 !Int64
+   | Tab !Int64 !Int64 !Int64
+   | Lines !Int64 !Int64 !Int64 !Int64
+   | Directed !FilePath !Int64 !Int64 !Int64 !Int64
+   deriving (Generic, Data, Eq, Ord, Show, Read)
+
+deltaFromTrifecta :: Trifecta.Delta -> Delta
+deltaFromTrifecta = \case
+  Trifecta.Columns a b -> Columns a b
+  Trifecta.Tab a b c -> Tab a b c
+  Trifecta.Lines a b c d -> Lines a b c d
+  Trifecta.Directed a b c d e -> Directed (unpack $ decodeUtf8 a) b c d e
+
+deltaToTrifecta :: Delta -> Trifecta.Delta
+deltaToTrifecta = \case
+  Columns a b -> Trifecta.Columns a b
+  Tab a b c -> Trifecta.Tab a b c
+  Lines a b c d -> Trifecta.Lines a b c d
+  Directed a b c d e -> Trifecta.Directed (encodeUtf8 $ pack a) b c d e
+
 parseFromFileEx :: MonadIO m => Parser a -> FilePath -> m (Result a)
 parseFromString :: Parser a -> String -> Result a
-position :: Parser Trifecta.Delta
+position :: Parser Delta
 
 #if USE_PARSEC
 data Result a = Success a
@@ -168,6 +196,6 @@ parseFromFileEx p = Trifecta.parseFromFileEx (runNixParser p)
 
 parseFromString p = Trifecta.parseString (runNixParser p) (Trifecta.Directed "<string>" 0 0 0 0)
 
-position = Trifecta.position
+position = deltaFromTrifecta <$> Trifecta.position
 
 #endif
