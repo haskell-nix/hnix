@@ -1,16 +1,16 @@
 module TestCommon where
 
-import           Nix
-import           Nix.Monad
-import           Nix.Monad.Instance
-import           Nix.Parser
-import           Nix.Pretty
-import           System.Directory
-import           System.Environment
-import           System.IO
-import           System.Posix.Temp
-import           System.Process
-import           Test.Tasty.HUnit
+import Nix
+import Nix.Monad.Instance
+import Nix.Parser
+import Nix.Pretty
+import Nix.Value
+import System.Environment
+import System.IO
+import System.Posix.Files
+import System.Posix.Temp
+import System.Process
+import Test.Tasty.HUnit
 
 hnixEvalFile :: FilePath -> IO (NValueNF (Lazy IO))
 hnixEvalFile file =  do
@@ -23,8 +23,7 @@ hnixEvalFile file =  do
         evalLoc (Just file) expression
 
 hnixEvalString :: String -> IO (NValueNF (Lazy IO))
-hnixEvalString expr =  do
-  case parseNixString expr of
+hnixEvalString expr = case parseNixString expr of
     Failure err        ->
         error $ "Parsing failed for expressien `" ++ expr ++ "`.\n" ++ show err
     Success expression -> eval Nothing expression
@@ -35,13 +34,11 @@ nixEvalString expr = do
   hPutStr h expr
   hClose h
   res <- nixEvalFile fp
-  removeFile fp
+  removeLink fp
   return res
 
 nixEvalFile :: FilePath -> IO String
-nixEvalFile fp = do
-  readProcess "nix-instantiate" ["--eval", fp] ""
-
+nixEvalFile fp = readProcess "nix-instantiate" ["--eval", fp] ""
 
 assertEvalMatchesNix :: String -> Assertion
 assertEvalMatchesNix expr = do

@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 429fc2370bb078161c283b1238eb797ca1c03c46e4c1a2f68ac80937a901bb79
+-- hash: 2a22f1191905e2b66f2d356247a272e923144902c5ad6026fe72d137f8127a77
 
 name:           hnix
 version:        0.5.0
@@ -135,6 +135,7 @@ test-suite hnix-tests
       NixLanguageTests
       ParserTests
       PrettyTests
+      TestCommon
       Paths_hnix
   hs-source-dirs:
       tests

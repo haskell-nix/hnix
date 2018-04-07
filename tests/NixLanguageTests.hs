@@ -23,7 +23,6 @@ import           Nix.Utils
 import           Nix.Stack
 import           Nix.Value
 import           Nix.XML
-import           System.Directory
 import           System.Environment
 import           System.FilePath
 import           System.FilePath.Glob (compile, globDir1)
@@ -128,7 +127,7 @@ assertEval files = catch go $ \case
 
 assertEvalFail :: FilePath -> Assertion
 assertEvalFail file = catch ?? (\(_ :: SomeException) -> return ()) $ do
-  evalResult <- printNix <$> nixEvalFile file
+  evalResult <- printNix <$> hnixEvalFile file
   evalResult `seq` assertFailure $
       file ++ " should not evaluate.\nThe evaluation result was `"
            ++ evalResult ++ "`."
