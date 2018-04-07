@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 8c80fff28bf8b849356b24ecd1f538e7702a8937b3c1dac50da271a01d5ac263
+-- hash: 75114131aa7bcf0c3bfa2a43f01bf0942b2c922ce7caa94d7103bc24aee13b61
 
 name:           hnix
 version:        0.5.0
@@ -73,7 +73,6 @@ library
     , deepseq
     , deriving-compat >=0.3 && <0.5
     , directory
-    , exceptions
     , filepath
     , insert-ordered-containers >=0.2.2 && <0.3
     , monadlist
@@ -130,10 +129,11 @@ test-suite hnix-tests
   type: exitcode-stdio-1.0
   main-is: Main.hs
   other-modules:
-      ParserTests
       EvalTests
-      PrettyTests
       NixLanguageTests
+      ParserTests
+      PrettyTests
+      Paths_hnix
   hs-source-dirs:
       tests
   ghc-options: -Wall
@@ -165,6 +165,7 @@ benchmark hnix-benchmarks
   main-is: Main.hs
   other-modules:
       ParserBench
+      Paths_hnix
   hs-source-dirs:
       benchmarks
   ghc-options: -Wall

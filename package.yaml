@@ -24,6 +24,7 @@ dependencies:
   - ansi-wl-pprint
   - containers
   - data-fix
+  # - exceptions
   - insert-ordered-containers   >= 0.2.2 && < 0.3
   - mtl
   - template-haskell
@@ -46,7 +47,6 @@ library:
     - deepseq
     - deriving-compat           >= 0.3 && < 0.5
     - directory
-    - exceptions
     - filepath
     - monadlist
     - parsers                   >= 0.10
@@ -82,11 +82,6 @@ tests:
   hnix-tests:
     source-dirs: tests
     main: Main.hs
-    other-modules:
-      - ParserTests
-      - EvalTests
-      - PrettyTests
-      - NixLanguageTests
     dependencies:
       - hnix
       - Glob
@@ -103,8 +98,6 @@ benchmarks:
   hnix-benchmarks:
     source-dirs: benchmarks
     main: Main.hs
-    other-modules:
-      - ParserBench
     dependencies:
       - hnix
       - criterion
