@@ -48,6 +48,7 @@ import           Nix.Stack
 import           Nix.StringOperations (runAntiquoted)
 import           Nix.Thunk
 import           Nix.Utils
+import           Nix.Value
 
 type MonadEval e m =
     ( Scoped e (NThunk m) m

@@ -10,7 +10,7 @@ import           Data.Ord
 import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Expr.Types
-import           Nix.Monad
+import           Nix.Value
 import           Text.XML.Light
 
 toXML :: Functor m => NValueNF m -> String
@@ -52,7 +52,7 @@ paramsXML (ParamSet s b mname) =
     [Elem $ Element (unqual "attrspat") (battr ++ nattr) (paramSetXML s) Nothing]
   where
     battr = [ Attr (unqual "ellipsis") "1" | b ]
-    nattr = maybe [] ((:[]) . Attr (unqual "name") . Text.unpack) (mname)
+    nattr = maybe [] ((:[]) . Attr (unqual "name") . Text.unpack) mname
 
 paramSetXML :: ParamSet r -> [Content]
 paramSetXML m = map (\(k,_) -> Elem $ mkElem "attr" "name" (Text.unpack k)) $ OM.toList m

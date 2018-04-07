@@ -30,12 +30,12 @@ import           Nix.Expr.Types (NExpr)
 import           Nix.Expr.Types.Annotated (NExprLoc)
 import qualified Nix.Lint as Lint
 import           Nix.Lint hiding (lint)
-import           Nix.Monad
 import           Nix.Monad.Instance
 import           Nix.Scope
 import           Nix.Stack
 import           Nix.Thunk
 import           Nix.Utils
+import           Nix.Value
 
 -- | Evaluate a nix expression in the default context
 evalTopLevelExpr :: forall e m. MonadBuiltins e m

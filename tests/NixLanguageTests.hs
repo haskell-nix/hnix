@@ -16,10 +16,11 @@ import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           GHC.Exts
 import           Nix
-import           Nix.Monad
 import           Nix.Monad.Instance
 import           Nix.Parser
 import           Nix.Pretty
+import           Nix.Utils
+import           Nix.Value
 import           Nix.XML
 import           System.Environment
 import           System.FilePath
@@ -61,7 +62,8 @@ genTests = do
   return $ localOption (mkTimeout 100000)
          $ testGroup "Nix (upstream) language tests" testGroups
   where
-    testType (fullpath, _files) = take 2 $ splitOn "-" $ takeFileName fullpath
+    testType (fullpath, _files) =
+        take 2 $ splitOn "-" $ takeFileName fullpath
     mkTestGroup (kind, tests) =
         testGroup (unwords kind) $ map (mkTestCase kind) tests
     mkTestCase kind (basename, files) =
@@ -75,7 +77,8 @@ genTests = do
 assertParse :: FilePath -> Assertion
 assertParse file = parseNixFile file >>= \case
   Success expr -> pure $! runST $ void $ lint expr
-  Failure err  -> assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
+  Failure err  ->
+      assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
 
 assertParseFail :: FilePath -> Assertion
 assertParseFail file = do
@@ -107,22 +110,23 @@ assertEval files =
     [".exp"] -> assertLangOk name
     [".exp.disabled"] -> return ()
     [".exp-disabled"] -> return ()
-    [".exp", ".flags"] -> assertFailure $ "Support for flags not implemented (needed by " ++ name ++ ".nix)."
+    [".exp", ".flags"] ->
+        assertFailure $ "Support for flags not implemented (needed by "
+            ++ name ++ ".nix)."
     _ -> assertFailure $ "Unknown test type " ++ show files
   where
-    name = "data/nix/tests/lang/" ++ the (map (takeFileName . dropExtensions) files)
+    name = "data/nix/tests/lang/"
+        ++ the (map (takeFileName . dropExtensions) files)
 
 assertEvalFail :: FilePath -> Assertion
-assertEvalFail file = catch eval (\(ErrorCall _) -> return ())
-  where
-    eval = do
-      evalResult <- printNix <$> nixEvalFile file
-      evalResult `seq` assertFailure $
-          file ++ " should not evaluate.\nThe evaluation result was `"
-               ++ evalResult ++ "`."
+assertEvalFail file = catch ?? (\(ErrorCall _) -> return ()) $ do
+  evalResult <- printNix <$> nixEvalFile file
+  evalResult `seq` assertFailure $
+      file ++ " should not evaluate.\nThe evaluation result was `"
+           ++ evalResult ++ "`."
 
 nixEvalFile :: FilePath -> IO (NValueNF (Lazy IO))
-nixEvalFile file =  do
+nixEvalFile file = do
   parseResult <- parseNixFileLoc file
   case parseResult of
     Failure err        ->

@@ -24,27 +24,28 @@ Library
   Exposed-modules:
     Nix
     Nix.Atoms
-    Nix.Scope
-    Nix.Stack
+    Nix.Builtins
     Nix.Eval
-    Nix.XML
-    Nix.Thunk
+    Nix.Expr
+    Nix.Expr.Types
+    Nix.Expr.Types.Annotated
     Nix.Lint
     Nix.Monad
     Nix.Monad.Instance
-    Nix.Builtins
     Nix.Parser
-    Nix.Expr
-    Nix.Pretty
     Nix.Parser.Operators
+    Nix.Pretty
+    Nix.Scope
+    Nix.Stack
     Nix.StringOperations
     Nix.TH
-    Nix.Expr.Types
-    Nix.Expr.Types.Annotated
-  Other-modules:
-    Nix.Parser.Library
-    Nix.Expr.Shorthands
+    Nix.Thunk
     Nix.Utils
+    Nix.Value
+    Nix.XML
+  Other-modules:
+    Nix.Expr.Shorthands
+    Nix.Parser.Library
   Build-depends:
       base                     >= 4.9          && < 5
     , aeson

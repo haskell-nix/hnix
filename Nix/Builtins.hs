@@ -62,10 +62,11 @@ import           Nix.Scope
 import           Nix.Stack
 import           Nix.Thunk
 import           Nix.Utils
+import           Nix.Value
 import           Nix.XML
-import           Text.Regex.TDFA
 import           System.FilePath
 import           System.Posix.Files
+import           Text.Regex.TDFA
 
 type MonadBuiltins e m =
     (MonadEval e m, MonadNix m, MonadFix m, MonadFile m, MonadVar m)

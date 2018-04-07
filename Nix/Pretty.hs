@@ -16,7 +16,7 @@ import           Data.Text (pack, unpack, replace, strip)
 import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Expr
-import           Nix.Monad
+import           Nix.Value
 import           Nix.Parser.Library (reservedNames)
 import           Nix.Parser.Operators
 import           Nix.StringOperations

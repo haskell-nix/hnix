@@ -37,13 +37,14 @@ import           Nix.Scope
 import           Nix.Stack
 import           Nix.Thunk
 import           Nix.Utils
+import           Nix.Value
 import           System.Directory
 import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
 import           System.FilePath
 import qualified System.Info
-import           System.Process (readProcessWithExitCode)
 import           System.Posix.Files
+import           System.Process (readProcessWithExitCode)
 
 data Context m v = Context
     { scopes :: Scopes m v
