@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e53f006b5a943cc09b8c3e9aa5619e2f36b25a9df96c157b6ab0e46c170fde0f
+-- hash: 8c80fff28bf8b849356b24ecd1f538e7702a8937b3c1dac50da271a01d5ac263
 
 name:           hnix
 version:        0.5.0
@@ -148,6 +148,7 @@ test-suite hnix-tests
     , insert-ordered-containers >=0.2.2 && <0.3
     , interpolate
     , mtl
+    , process
     , split
     , tasty
     , tasty-hunit

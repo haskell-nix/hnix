@@ -92,6 +92,7 @@ tests:
       - Glob
       - filepath
       - interpolate
+      - process
       - split
       - tasty
       - tasty-hunit
