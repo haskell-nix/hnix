@@ -7,6 +7,8 @@
 
 module Nix.Stack where
 
+import           Control.Exception
+import           Control.Monad.Catch
 import           Control.Monad.Reader
 import           Data.ByteString (ByteString)
 import           Data.Fix
@@ -19,9 +21,14 @@ import           Nix.Utils
 import           Text.Trifecta.Rendering
 import           Text.Trifecta.Result
 
+data NixException = NixEvalException String
+    deriving Show
+
+instance Exception NixException
+
 type Frames = [Either String (NExprLocF ())]
 
-type Framed e m = (MonadReader e m, Has e Frames)
+type Framed e m = (MonadReader e m, Has e Frames, MonadThrow m)
 
 withExprContext :: Framed e m => NExprLocF () -> m r -> m r
 withExprContext expr = local (over hasLens (Right @String expr :))
@@ -48,10 +55,10 @@ renderFrame :: MonadFile m => Either String (NExprLocF ()) -> m String
 renderFrame (Left str) = return str
 renderFrame (Right (Compose (Ann ann expr))) =
     show <$> renderLocation ann
-        (prettyNix (Fix (const (Fix (NSym "<?>")) <$> expr)))
+        (prettyNix (Fix (Fix (NSym "<?>") <$ expr)))
 
-throwError :: (Framed e m, MonadFile m) => String -> m a
+throwError :: (Framed e m, MonadFile m, MonadThrow m) => String -> m a
 throwError str = do
     context <- asks (reverse . view hasLens)
     infos   <- mapM renderFrame context
-    errorWithoutStackTrace $ unlines (infos ++ ["hnix: "++ str])
+    throwM $ NixEvalException $ unlines $ infos ++ [str]

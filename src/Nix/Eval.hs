@@ -75,9 +75,8 @@ eval (NSym var) = do
 
 eval (NConstant x)    = return $ NVConstant x
 eval (NStr str)       = traceM "NStr" >> evalString str
-eval (NLiteralPath p) =
-    traceM "NLiteralPath" >> NVLiteralPath <$> makeAbsolutePath p
-eval (NEnvPath p)     = return $ NVEnvPath p
+eval (NLiteralPath p) = traceM "NLiteralPath" >> NVPath <$> makeAbsolutePath p
+eval (NEnvPath p)     = traceM "NLiteralPath" >> NVPath <$> findEnvPath p
 
 eval (NUnary op arg) = do
     traceM "NUnary"
@@ -192,15 +191,12 @@ eval (NBinary op larg rarg) = case op of
                 NNEq -> valueRefBool . not =<< valueEq (NVList []) rval
                 _ -> throwError unsupportedTypes
 
-            (NVLiteralPath ls, NVLiteralPath rs) -> case op of
-                -- TODO: Canonicalise path
-                NPlus -> NVLiteralPath <$> makeAbsolutePath (ls ++ rs)
+            (NVPath ls, NVStr rs _) -> case op of
+                NPlus -> NVPath <$> makeAbsolutePath (ls `mappend` Text.unpack rs)
                 _ -> throwError unsupportedTypes
 
-            (NVLiteralPath ls, NVStr rs _) -> case op of
-                -- TODO: Canonicalise path
-                NPlus -> NVLiteralPath
-                    <$> makeAbsolutePath (ls `mappend` Text.unpack rs)
+            (NVPath ls, NVPath rs) -> case op of
+                NPlus -> NVPath <$> makeAbsolutePath (ls ++ rs)
                 _ -> throwError unsupportedTypes
 
             _ -> throwError unsupportedTypes
@@ -347,8 +343,7 @@ valueEq l r = case (l, r) of
     (NVConstant NNull, NVStr rs _) -> pure $ "" == rs
     (NVList ls, NVList rs) -> alignEqM thunkEq ls rs
     (NVSet lm _, NVSet rm _) -> alignEqM thunkEq lm rm
-    (NVLiteralPath lp, NVLiteralPath rp) -> pure $ lp == rp
-    (NVEnvPath lp, NVEnvPath rp) -> pure $ lp == rp
+    (NVPath lp, NVPath rp) -> pure $ lp == rp
     _ -> pure False
 
 -----
@@ -368,8 +363,7 @@ normalFormBy k = \case
         p' <- traverse (fmap (`k` normalFormBy k)) p
         return $ Fix $
             NVClosure emptyScopes p' ((`k` normalFormBy k) =<< f)
-    NVLiteralPath fp -> return $ Fix $ NVLiteralPath fp
-    NVEnvPath p      -> return $ Fix $ NVEnvPath p
+    NVPath fp -> return $ Fix $ NVPath fp
     NVBuiltin name f -> return $ Fix $ NVBuiltin name f
 
 normalForm :: forall e m. MonadEval e m => NValue m -> m (NValueNF m)
@@ -388,16 +382,13 @@ valueText addPathsToStore = cata phi where
         M.lookup "__asString" set = asString
       | otherwise = throwError "Cannot coerce a set to a string"
     phi NVClosure {} = throwError "Cannot coerce a function to a string"
-    phi (NVLiteralPath originalPath)
+    phi (NVPath originalPath)
         | addPathsToStore = do
             -- TODO: Capture and use the path of the file being processed as the
             -- base path
             storePath <- addPath originalPath
             pure (Text.pack $ unStorePath storePath, mempty)
         | otherwise = pure (Text.pack originalPath, mempty)
-    phi (NVEnvPath p)     =
-        -- TODO: Ensure this is a store path
-        pure (Text.pack p, mempty)
     phi (NVBuiltin _ _)    = throwError "Cannot coerce a function to a string"
 
 valueTextNoContext :: (MonadEval e m, MonadNix m)

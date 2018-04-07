@@ -23,6 +23,7 @@ class Monad m => MonadNix m where
 
     -- | Determine the absolute path of relative path in the current context
     makeAbsolutePath :: FilePath -> m FilePath
+    findEnvPath :: String -> m FilePath
 
     pathExists :: FilePath -> m Bool
     importFile :: ValueSet m -> FilePath -> m (NValue m)
@@ -34,16 +35,3 @@ class Monad m => MonadNix m where
     getSymbolicLinkStatus :: FilePath -> m FileStatus
 
     derivationStrict :: NValueNF m -> m (HashMap Text Text)
-
-builtin :: MonadNix m => String -> (NThunk m -> m (NValue m)) -> m (NValue m)
-builtin name f = return $ NVBuiltin name f
-
-builtin2 :: MonadNix m
-         => String -> (NThunk m -> NThunk m -> m (NValue m)) -> m (NValue m)
-builtin2 name f = builtin name (builtin name . f)
-
-builtin3 :: MonadNix m
-         => String -> (NThunk m -> NThunk m -> NThunk m -> m (NValue m))
-         -> m (NValue m)
-builtin3 name f =
-    builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c

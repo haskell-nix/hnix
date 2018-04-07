@@ -17,6 +17,7 @@
 module Nix.Monad.Instance where
 
 import           Control.Monad
+import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader (MonadReader)
@@ -75,7 +76,7 @@ removeDotDotIndirections = intercalate "/" . go [] . splitOn "/"
           go (_:s) ("..":rest) = go s rest
           go s (this:rest) = go (this:s) rest
 
-instance (MonadFix m, MonadNix (Lazy m), MonadIO m)
+instance (MonadFix m, MonadNix (Lazy m), MonadThrow m, MonadIO m)
       => MonadExpr (NThunk (Lazy m)) (NValue (Lazy m)) (Lazy m) where
     embedSet    = return . flip NVSet M.empty
     projectSet  = \case
@@ -106,15 +107,22 @@ instance MonadIO m => MonadVar (Lazy m) where
 instance MonadIO m => MonadFile (Lazy m) where
     readFile = liftIO . BS.readFile
 
-instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
-    addPath path = liftIO $ do
+instance MonadCatch m => MonadCatch (Lazy m) where
+    catch (Lazy (ReaderT m)) f = Lazy $ ReaderT $ \e ->
+        catch (m e) ((`runReaderT` e) . runLazy . f)
+
+instance MonadThrow m => MonadThrow (Lazy m) where
+    throwM = Lazy . throwM
+
+instance (MonadFix m, MonadThrow m, MonadIO m) => MonadNix (Lazy m) where
+    addPath path = do
         (exitCode, out, _) <-
-            readProcessWithExitCode "nix-store" ["--add", path] ""
+            liftIO $ readProcessWithExitCode "nix-store" ["--add", path] ""
         case exitCode of
           ExitSuccess -> do
             let dropTrailingLinefeed p = take (length p - 1) p
             return $ StorePath $ dropTrailingLinefeed out
-          _ -> error $ "addPath: failed: nix-store --add " ++ show path
+          _ -> throwError $ "addPath: failed: nix-store --add " ++ show path
 
     makeAbsolutePath origPath = do
         absPath <- if isAbsolute origPath then pure origPath else do
@@ -123,13 +131,20 @@ instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
                 case mres of
                     Nothing -> liftIO getCurrentDirectory
                     Just v -> force v $ \case
-                        NVLiteralPath s -> return $ takeDirectory s
+                        NVPath s -> return $ takeDirectory s
                         v -> throwError $ "when resolving relative path,"
                                 ++ " __cur_file is in scope,"
                                 ++ " but is not a path; it is: "
                                 ++ show (void v)
             pure $ cwd </> origPath
         liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
+
+    findEnvPath name = getEnvVar name >>= \case
+        Nothing ->
+            throwError $ "file '" ++ name
+                ++ "' was not found in the Nix search path"
+                ++ " (add it using $NIX_PATH or -I)"
+        Just path -> makeAbsolutePath path
 
     pathExists = liftIO . fileExist
 
@@ -142,7 +157,7 @@ instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
                 traceM "No known current directory"
                 return path
             Just p -> force p $ normalForm >=> \case
-                Fix (NVLiteralPath p') -> do
+                Fix (NVPath p') -> do
                     traceM $ "Current file being evaluated is: "
                         ++ show p'
                     return $ takeDirectory p' </> path
@@ -155,7 +170,7 @@ instance (MonadFix m, MonadIO m) => MonadNix (Lazy m) where
             case eres of
                 Failure err  -> error $ "Parse failed: " ++ show err
                 Success expr -> do
-                    let ref = valueThunk @(Lazy m) (NVLiteralPath path')
+                    let ref = valueThunk @(Lazy m) (NVPath path')
                     -- Use this cookie so that when we evaluate the next
                     -- import, we'll remember which directory its containing
                     -- file was in.

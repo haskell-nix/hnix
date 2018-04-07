@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e53f006b5a943cc09b8c3e9aa5619e2f36b25a9df96c157b6ab0e46c170fde0f
+-- hash: be12dac5d928aede61ee60f110e3709264a3f0808bdc59fb7eff808c64bb6fcb
 
 name:           hnix
 version:        0.5.0
@@ -43,6 +43,7 @@ library
       Nix.Lint
       Nix.Monad
       Nix.Monad.Instance
+      Nix.Normal
       Nix.Parser
       Nix.Parser.Library
       Nix.Parser.Operators
@@ -116,6 +117,7 @@ executable hnix
     , containers
     , data-fix
     , deepseq
+    , exceptions
     , hnix
     , insert-ordered-containers >=0.2.2 && <0.3
     , mtl
@@ -130,10 +132,12 @@ test-suite hnix-tests
   type: exitcode-stdio-1.0
   main-is: Main.hs
   other-modules:
-      ParserTests
       EvalTests
-      PrettyTests
       NixLanguageTests
+      ParserTests
+      PrettyTests
+      TestCommon
+      Paths_hnix
   hs-source-dirs:
       tests
   ghc-options: -Wall
@@ -143,11 +147,13 @@ test-suite hnix-tests
     , base >=4.9 && <5
     , containers
     , data-fix
+    , exceptions
     , filepath
     , hnix
     , insert-ordered-containers >=0.2.2 && <0.3
     , interpolate
     , mtl
+    , process
     , split
     , tasty
     , tasty-hunit
@@ -164,6 +170,7 @@ benchmark hnix-benchmarks
   main-is: Main.hs
   other-modules:
       ParserBench
+      Paths_hnix
   hs-source-dirs:
       benchmarks
   ghc-options: -Wall
@@ -173,6 +180,7 @@ benchmark hnix-benchmarks
     , containers
     , criterion
     , data-fix
+    , exceptions
     , hnix
     , insert-ordered-containers >=0.2.2 && <0.3
     , mtl

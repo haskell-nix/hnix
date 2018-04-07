@@ -197,8 +197,7 @@ prettyNixValue = prettyNix . valueToExpr
         go (NVClosure s p _) =
             NSym . pack $ "<closure in " ++ show s
                 ++ " with " ++ show (() <$ p)  ++ ">"
-        go (NVLiteralPath fp) = NLiteralPath fp
-        go (NVEnvPath p) = NEnvPath p
+        go (NVPath p) = NLiteralPath p
         go (NVBuiltin name _) = NSym $ Text.pack $ "builtins." ++ name
 
 printNix :: Functor m => NValueNF m -> String
@@ -211,8 +210,7 @@ printNix = cata phi
             "{ " ++ concat [ unpack k ++ " = " ++ v ++ "; "
                            | (k, v) <- sort $ toList s ] ++ "}"
         phi NVClosure {} = "<<lambda>>"
-        phi (NVLiteralPath fp) = fp
-        phi (NVEnvPath p) = p
+        phi (NVPath fp) = fp
         phi (NVBuiltin name _) = "<<builtin " ++ name ++ ">>"
 
 removeEffects :: Functor m => NValue m -> NValueNF m

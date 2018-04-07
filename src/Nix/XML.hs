@@ -38,8 +38,7 @@ toXML = (.) ((++ "\n") .
 
     NVClosure _ p _  ->
         Element (unqual "function") [] (paramsXML p) Nothing
-    NVLiteralPath fp -> mkElem "path" "value" fp
-    NVEnvPath p      -> mkElem "path" "value" p
+    NVPath fp -> mkElem "path" "value" fp
     NVBuiltin name _ -> mkElem "function" "name" name
 
 mkElem :: String -> String -> String -> Element

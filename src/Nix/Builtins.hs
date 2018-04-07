@@ -18,6 +18,7 @@
 module Nix.Builtins (MonadBuiltins, baseEnv) where
 
 import           Control.Monad
+import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.ListM (sortByM)
 import           Control.Monad.Reader
@@ -72,7 +73,8 @@ import           System.Posix.Files
 import           Text.Regex.TDFA
 
 type MonadBuiltins e m =
-    (MonadEval e m, MonadNix m, MonadFix m, MonadFile m, MonadVar m)
+    (MonadEval e m, MonadNix m, MonadFix m, MonadCatch m,
+     MonadFile m, MonadVar m)
 
 baseEnv :: MonadBuiltins e m => m (Scopes m (NThunk m))
 baseEnv = do
@@ -176,6 +178,7 @@ builtinsList = sequence [
     , add  Normal   "typeOf"                     typeOf
     , add2 Normal   "partition"                  partition_
     , add0 Normal   "currentSystem"              currentSystem
+    , add  Normal   "tryEval"                    tryEval
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -406,44 +409,44 @@ match_ pat str = force pat $ \pat' -> force str $ \str' ->
     case (pat', str') of
         -- jww (2018-04-05): We should create a fundamental type for compiled
         -- regular expressions if it turns out they get used often.
-        (NVStr p _, NVStr s _) -> return $ NVList $
+        (NVStr p _, NVStr s _) -> return $
             let re = makeRegex (encodeUtf8 p) :: Regex
             in case matchOnceText re (encodeUtf8 s) of
                 Just ("", sarr, "") -> let s = map fst (elems sarr) in
-                    map (valueThunk @m . flip NVStr mempty . decodeUtf8)
+                    NVList $ map (valueThunk @m . flip NVStr mempty . decodeUtf8)
                         (if length s > 1 then tail s else s)
-                _ -> []
+                _ -> NVConstant NNull
         (p, s) ->
             throwError $ "builtins.match: expected a regex"
                 ++ " and a string, but got: " ++ show (p, s)
 
-substring :: Applicative m => Int -> Int -> Text -> Prim m Text
-substring start len =
+substring :: MonadBuiltins e m => Int -> Int -> Text -> Prim m Text
+substring start len str = Prim $
     if start < 0 --NOTE: negative values of 'len' are OK
-    then error $ "builtins.substring: negative start position: " ++ show start
-    else Prim . pure . Text.take len . Text.drop start
+    then throwError $ "builtins.substring: negative start position: " ++ show start
+    else pure $ Text.take len $ Text.drop start str
 
 attrNames :: MonadBuiltins e m => NThunk m -> m (NValue m)
 attrNames = flip force $ \case
     NVSet m _ -> toValue $ sort $ M.keys m
-    v -> error $ "builtins.attrNames: Expected attribute set, got "
+    v -> throwError $ "builtins.attrNames: Expected attribute set, got "
             ++ showValue v
 
 attrValues :: MonadBuiltins e m => NThunk m -> m (NValue m)
 attrValues = flip force $ \case
     NVSet m _ -> return $ NVList $ fmap snd $ sortOn fst $ M.toList m
-    v -> error $ "builtins.attrValues: Expected attribute set, got "
+    v -> throwError $ "builtins.attrValues: Expected attribute set, got "
             ++ showValue v
 
 map_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 map_ f = flip force $ \case
     NVList l -> NVList <$> traverse (fmap valueThunk . apply f) l
-    v -> error $ "map: Expected list, got " ++ showValue v
+    v -> throwError $ "map: Expected list, got " ++ showValue v
 
 filter_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 filter_ f = flip force $ \case
     NVList l -> NVList <$> filterM (extractBool <=< apply f) l
-    v -> error $ "map: Expected list, got " ++ showValue v
+    v -> throwError $ "map: Expected list, got " ++ showValue v
 
 catAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 catAttrs attrName lt = force lt $ \case
@@ -465,7 +468,7 @@ dirOf :: MonadBuiltins e m => NThunk m -> m (NValue m)
 dirOf = flip force $ \case
     --TODO: Only allow strings that represent absolute paths
     NVStr path ctx -> pure $ NVStr (Text.pack $ takeDirectory $ Text.unpack path) ctx
-    NVLiteralPath path -> pure $ NVLiteralPath $ takeDirectory path
+    NVPath path -> pure $ NVPath $ takeDirectory path
     --TODO: NVEnvPath
     v -> throwError $ "dirOf: expected string or path, got " ++ showValue v
 
@@ -568,15 +571,13 @@ functionArgs fun = force fun $ \case
 toPath :: MonadBuiltins e m => NThunk m -> m (NValue m)
 toPath = flip force $ \case
     NVStr p@(Text.uncons -> Just ('/', _)) _ ->
-        return $ NVLiteralPath (Text.unpack p)
-    v@(NVLiteralPath _) -> return v
-    v@(NVEnvPath _) -> return v
+        return $ NVPath (Text.unpack p)
+    v@(NVPath _) -> return v
     v -> throwError $ "builtins.toPath: expected string, got " ++ showValue v
 
 pathExists_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 pathExists_ = flip force $ \case
-    NVLiteralPath p -> mkBool =<< pathExists p
-    NVEnvPath p -> mkBool =<< pathExists p
+    NVPath p -> mkBool =<< pathExists p
     v -> throwError $ "builtins.pathExists: expected path, got " ++ showValue v
 
 isAttrs :: MonadBuiltins e m => NThunk m -> m (NValue m)
@@ -626,15 +627,13 @@ throw_ = flip force $ \case
 
 import_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 import_ = flip force $ \case
-    NVLiteralPath p -> importFile M.empty p
-    NVEnvPath p     -> importFile M.empty p -- jww (2018-04-06): is this right?
+    NVPath p -> importFile M.empty p
     v -> throwError $ "import: expected path, got " ++ showValue v
 
 scopedImport :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 scopedImport aset path = force aset $ \aset' -> force path $ \path' ->
     case (aset', path') of
-        (NVSet s _, NVLiteralPath p) -> importFile s p
-        (NVSet s _, NVEnvPath p)     -> importFile s p
+        (NVSet s _, NVPath p) -> importFile s p
         (s, p) -> throwError $ "scopedImport: expected a set and a path, got "
                      ++ showValue s ++ " and " ++ showValue p
 
@@ -645,7 +644,7 @@ getEnv_ = flip force $ \case
         return $ case mres of
             Nothing -> NVStr "" mempty
             Just v  -> NVStr (Text.pack v) mempty
-    p -> error $ "Unexpected argument to getEnv: " ++ show (void p)
+    p -> throwError $ "Unexpected argument to getEnv: " ++ show (void p)
 
 sort_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 sort_ comparator list = force list $ \case
@@ -717,8 +716,7 @@ absolutePathFromValue = \case
         unless (isAbsolute path) $
             throwError $ "string " ++ show path ++ " doesn't represent an absolute path"
         pure path
-    NVLiteralPath path -> pure path
-    NVEnvPath path -> pure path
+    NVPath path -> pure path
     v -> throwError $ "expected a path, got " ++ showValue v
 
 --TODO: Move all liftIO things into MonadNixEnv or similar
@@ -777,22 +775,35 @@ typeOf t = force t $ \v -> toValue @Text $ case v of
     NVList _ -> "list"
     NVSet _ _ -> "set"
     NVClosure {} -> "lambda"
-    NVLiteralPath _ -> "path"
-    NVEnvPath _ -> "path"
+    NVPath _ -> "path"
     NVBuiltin _ _ -> "lambda"
+
+tryEval :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+tryEval e = catch (force e (pure . onSuccess)) (pure . onError)
+  where
+    onSuccess v = flip NVSet M.empty $ M.fromList
+        [ ("success", valueThunk (NVConstant (NBool True)))
+        , ("value", valueThunk v)
+        ]
+
+    onError :: SomeException -> NValue m
+    onError _ = flip NVSet M.empty $ M.fromList
+        [ ("success", valueThunk (NVConstant (NBool False)))
+        , ("value", valueThunk (NVConstant (NBool False)))
+        ]
 
 partition_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 partition_ f = flip force $ \case
     NVList l -> do
       let match t = apply f t >>= \case
             NVConstant (NBool b) -> return (b, t)
-            v -> error $ "partition: Expected boolean, got " ++ showValue v
+            v -> throwError $ "partition: Expected boolean, got " ++ showValue v
       selection <- traverse match l
       let (right, wrong) = partition fst selection
       let makeSide = valueThunk . NVList . map snd
       return $ flip NVSet M.empty $
           M.fromList [("right", makeSide right), ("wrong", makeSide wrong)]
-    v -> error $ "partition: Expected list, got " ++ showValue v
+    v -> throwError $ "partition: Expected list, got " ++ showValue v
 
 currentSystem :: MonadNix m => m (NValue m)
 currentSystem = do
@@ -904,6 +915,5 @@ instance FromNix A.Value where
         NVList l -> A.Array . V.fromList <$> traverse (`force` fromValue) l
         NVSet m _ -> A.Object <$> traverse (`force` fromValue) m
         NVClosure {} -> throwError "cannot convert a function to JSON"
-        NVLiteralPath p -> toJSON . unStorePath <$> addPath p
-        NVEnvPath p -> toJSON . unStorePath <$> addPath p
+        NVPath p -> toJSON . unStorePath <$> addPath p
         NVBuiltin _ _ -> throwError "cannot convert a built-in function to JSON"
