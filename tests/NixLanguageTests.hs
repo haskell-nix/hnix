@@ -16,22 +16,15 @@ import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           GHC.Exts
 import           Nix
-import           Nix.Monad.Instance
 import           Nix.Parser
 import           Nix.Pretty
 import           Nix.Utils
 import           Nix.Stack
-import           Nix.Value
 import           Nix.XML
-import           System.Environment
 import           System.FilePath
 import           System.FilePath.Glob (compile, globDir1)
-import           System.IO
-import           System.Posix.Temp
-import           System.Process
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           Text.Printf
 import           TestCommon
 
 {-
