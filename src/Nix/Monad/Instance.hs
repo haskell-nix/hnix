@@ -128,7 +128,7 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadNix (Lazy m) where
                 case mres of
                     Nothing -> liftIO getCurrentDirectory
                     Just v -> force v $ \case
-                        NVLiteralPath s -> return $ takeDirectory s
+                        NVPath s -> return $ takeDirectory s
                         v -> throwError $ "when resolving relative path,"
                                 ++ " __cur_file is in scope,"
                                 ++ " but is not a path; it is: "
@@ -147,7 +147,7 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadNix (Lazy m) where
                 traceM "No known current directory"
                 return path
             Just p -> force p $ normalForm >=> \case
-                Fix (NVLiteralPath p') -> do
+                Fix (NVPath p') -> do
                     traceM $ "Current file being evaluated is: "
                         ++ show p'
                     return $ takeDirectory p' </> path
@@ -160,7 +160,7 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadNix (Lazy m) where
             case eres of
                 Failure err  -> error $ "Parse failed: " ++ show err
                 Success expr -> do
-                    let ref = valueThunk @(Lazy m) (NVLiteralPath path')
+                    let ref = valueThunk @(Lazy m) (NVPath path')
                     -- Use this cookie so that when we evaluate the next
                     -- import, we'll remember which directory its containing
                     -- file was in.

@@ -48,7 +48,7 @@ evalTopLevelExpr mpath expr = do
         Nothing -> Eval.evalExpr expr
         Just path -> do
             traceM $ "Setting __cur_file = " ++ show path
-            let ref = valueThunk @m $ NVLiteralPath path
+            let ref = valueThunk @m $ NVPath path
             pushScope (M.singleton "__cur_file" ref)
                       (Eval.evalExpr expr)
 
@@ -65,7 +65,7 @@ evalTopLevelExprLoc mpath expr = do
         Nothing -> framedEvalExpr Eval.eval expr
         Just path -> do
             traceM $ "Setting __cur_file = " ++ show path
-            let ref = valueThunk @m $ NVLiteralPath path
+            let ref = valueThunk @m $ NVPath path
             pushScope (M.singleton "__cur_file" ref)
                       (framedEvalExpr Eval.eval expr)
 
@@ -83,7 +83,7 @@ tracingEvalLoc mpath expr = do
             runLazyM (normalForm =<< (`pushScopes` traced) =<< baseEnv)
         Just path -> do
             traceM $ "Setting __cur_file = " ++ show path
-            let ref = valueThunk @(Lazy m) $ NVLiteralPath path
+            let ref = valueThunk @(Lazy m) $ NVPath path
             let m = M.singleton "__cur_file" ref
             runLazyM (baseEnv >>= (`pushScopes` pushScope m traced)
                                  >>= normalForm)

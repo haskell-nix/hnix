@@ -458,7 +458,7 @@ dirOf :: MonadBuiltins e m => NThunk m -> m (NValue m)
 dirOf = flip force $ \case
     --TODO: Only allow strings that represent absolute paths
     NVStr path ctx -> pure $ NVStr (Text.pack $ takeDirectory $ Text.unpack path) ctx
-    NVLiteralPath path -> pure $ NVLiteralPath $ takeDirectory path
+    NVPath path -> pure $ NVPath $ takeDirectory path
     --TODO: NVEnvPath
     v -> throwError $ "dirOf: expected string or path, got " ++ showValue v
 
@@ -561,15 +561,13 @@ functionArgs fun = force fun $ \case
 toPath :: MonadBuiltins e m => NThunk m -> m (NValue m)
 toPath = flip force $ \case
     NVStr p@(Text.uncons -> Just ('/', _)) _ ->
-        return $ NVLiteralPath (Text.unpack p)
-    v@(NVLiteralPath _) -> return v
-    v@(NVEnvPath _) -> return v
+        return $ NVPath (Text.unpack p)
+    v@(NVPath _) -> return v
     v -> throwError $ "builtins.toPath: expected string, got " ++ showValue v
 
 pathExists_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 pathExists_ = flip force $ \case
-    NVLiteralPath p -> mkBool =<< pathExists p
-    NVEnvPath p -> mkBool =<< pathExists p
+    NVPath p -> mkBool =<< pathExists p
     v -> throwError $ "builtins.pathExists: expected path, got " ++ showValue v
 
 isAttrs :: MonadBuiltins e m => NThunk m -> m (NValue m)
@@ -619,15 +617,13 @@ throw_ = flip force $ \case
 
 import_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 import_ = flip force $ \case
-    NVLiteralPath p -> importFile M.empty p
-    NVEnvPath p     -> importFile M.empty p -- jww (2018-04-06): is this right?
+    NVPath p -> importFile M.empty p
     v -> throwError $ "import: expected path, got " ++ showValue v
 
 scopedImport :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 scopedImport aset path = force aset $ \aset' -> force path $ \path' ->
     case (aset', path') of
-        (NVSet s _, NVLiteralPath p) -> importFile s p
-        (NVSet s _, NVEnvPath p)     -> importFile s p
+        (NVSet s _, NVPath p) -> importFile s p
         (s, p) -> throwError $ "scopedImport: expected a set and a path, got "
                      ++ showValue s ++ " and " ++ showValue p
 
@@ -710,8 +706,7 @@ absolutePathFromValue = \case
         unless (isAbsolute path) $
             throwError $ "string " ++ show path ++ " doesn't represent an absolute path"
         pure path
-    NVLiteralPath path -> pure path
-    NVEnvPath path -> pure path
+    NVPath path -> pure path
     v -> throwError $ "expected a path, got " ++ showValue v
 
 --TODO: Move all liftIO things into MonadNixEnv or similar
@@ -770,8 +765,7 @@ typeOf t = force t $ \v -> toValue @Text $ case v of
     NVList _ -> "list"
     NVSet _ _ -> "set"
     NVClosure {} -> "lambda"
-    NVLiteralPath _ -> "path"
-    NVEnvPath _ -> "path"
+    NVPath _ -> "path"
     NVBuiltin _ _ -> "lambda"
 
 tryEval :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
@@ -906,6 +900,5 @@ instance FromNix A.Value where
         NVList l -> A.Array . V.fromList <$> traverse (`force` fromValue) l
         NVSet m _ -> A.Object <$> traverse (`force` fromValue) m
         NVClosure {} -> throwError "cannot convert a function to JSON"
-        NVLiteralPath p -> toJSON . unStorePath <$> addPath p
-        NVEnvPath p -> toJSON . unStorePath <$> addPath p
+        NVPath p -> toJSON . unStorePath <$> addPath p
         NVBuiltin _ _ -> throwError "cannot convert a built-in function to JSON"
