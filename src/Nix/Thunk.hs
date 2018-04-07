@@ -19,14 +19,10 @@ class Monad m => MonadVar m where
 
 data Thunk m v
     = Value v
-    | Action (m v)
     | Thunk (Var m Bool) (Var m (Deferred m v))
 
 valueRef :: v -> Thunk m v
 valueRef = Value
-
-buildRepeatingThunk :: m v -> Thunk m v
-buildRepeatingThunk = Action
 
 buildThunk :: MonadVar m => m v -> m (Thunk m v)
 buildThunk action =
@@ -35,7 +31,6 @@ buildThunk action =
 forceThunk :: (Framed e m, MonadFile m, MonadVar m)
            => Thunk m v -> (v -> m r) -> m r
 forceThunk (Value ref) k = k ref
-forceThunk (Action ref) k = k =<< ref
 forceThunk (Thunk active ref) k = do
     eres <- readVar ref
     case eres of
@@ -53,7 +48,6 @@ forceThunk (Thunk active ref) k = do
 forceEffects :: (Framed e m, MonadFile m, MonadVar m)
              => Thunk m v -> (v -> m r) -> m r
 forceEffects (Value ref) k = k ref
-forceEffects (Action ref) k = k =<< ref
 forceEffects (Thunk active ref) k = do
     nowActive <- atomicModifyVar active (True,)
     if nowActive

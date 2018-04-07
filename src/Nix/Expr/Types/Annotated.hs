@@ -23,6 +23,7 @@ import Data.Fix
 import Data.Function (on)
 import Data.Functor.Compose
 import Data.Semigroup
+import Data.Text (Text, pack)
 import GHC.Generics
 import Nix.Expr.Types
 import Nix.Parser.Library (Delta(..))
@@ -98,3 +99,10 @@ nAbs _ _ = error "nAbs: unexpected"
 
 nStr :: Ann SrcSpan (NString NExprLoc) -> NExprLoc
 nStr (Ann s1 s) = AnnE s1 (NStr s)
+
+deltaInfo :: Delta -> (Text, Int, Int)
+deltaInfo = \case
+    Columns c _         -> ("<string>", 1, fromIntegral c + 1)
+    Tab {}              -> ("<string>", 1, 1)
+    Lines l _ _ _       -> ("<string>", fromIntegral l + 1, 1)
+    Directed fn l c _ _ -> (pack fn, fromIntegral l + 1, fromIntegral c + 1)

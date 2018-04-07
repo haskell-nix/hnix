@@ -3,22 +3,26 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Nix.Value where
 
 import           Data.Coerce
 import           Data.Fix
 import           Data.HashMap.Lazy (HashMap)
+import qualified Data.HashMap.Lazy as M
 import           Data.Monoid (appEndo)
 import           Data.Text (Text)
 import           Data.Typeable (Typeable)
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr.Types
+import           Nix.Expr.Types.Annotated (deltaInfo)
 import           Nix.Parser.Library (Delta(..))
 import           Nix.Scope
 import           Nix.Thunk
@@ -29,9 +33,6 @@ newtype NThunk m = NThunk (Thunk m (NValue m))
 
 thunk :: MonadVar m => m (NValue m) -> m (NThunk m)
 thunk = fmap coerce . buildThunk
-
-repeatingThunk :: MonadVar m => m (NValue m) -> NThunk m
-repeatingThunk = coerce . buildRepeatingThunk
 
 force :: (Framed e m, MonadFile m, MonadVar m)
       => NThunk m -> (NValue m -> m r) -> m r
@@ -119,3 +120,11 @@ builtin3 :: Monad m
          -> m (NValue m)
 builtin3 name f =
     builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
+
+posFromDelta :: Delta -> NValue m
+posFromDelta (deltaInfo -> (f, l, c)) =
+    flip NVSet M.empty $ M.fromList
+        [ ("file", valueThunk $ NVStr f mempty)
+        , ("line", valueThunk $ NVConstant (NInt (fromIntegral l)))
+        , ("column", valueThunk $ NVConstant (NInt (fromIntegral c)))
+        ]

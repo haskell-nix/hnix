@@ -24,7 +24,8 @@ import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
-import           Control.Monad.Trans.Reader
+import           Control.Monad.Reader (asks)
+import           Control.Monad.Trans.Reader hiding (asks)
 import           Data.Align
 import           Data.Align.Key
 import           Data.Coerce
@@ -34,7 +35,7 @@ import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.HashMap.Strict.InsOrd (toHashMap)
 import           Data.List (intercalate, partition, foldl')
-import           Data.Maybe (fromMaybe, catMaybes)
+import           Data.Maybe (fromMaybe, catMaybes, mapMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.These
@@ -64,6 +65,12 @@ evalExpr = cata eval
 
 eval :: forall e m. (MonadEval e m, MonadFix m, MonadNix m)
      => NExprF (m (NValue m)) -> m (NValue m)
+
+eval (NSym "__curPos") = do
+    Compose (Ann (SrcSpan delta _) _):_ <-
+        asks (mapMaybe (either (const Nothing) Just)
+              . view @_ @Frames hasLens)
+    return $ posFromDelta delta
 
 eval (NSym var) = do
     traceM $ "NSym: var = " ++ show var

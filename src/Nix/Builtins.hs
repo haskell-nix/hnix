@@ -21,7 +21,6 @@ import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.ListM (sortByM)
-import           Control.Monad.Reader
 import qualified Crypto.Hash.MD5 as MD5
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.SHA256 as SHA256
@@ -37,7 +36,6 @@ import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
 import           Data.Coerce
 import           Data.Foldable (foldlM)
-import           Data.Functor.Compose
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import qualified Data.HashMap.Strict.InsOrd as OM
@@ -58,7 +56,6 @@ import           Language.Haskell.TH.Syntax (addDependentFile, runIO)
 import           Nix.Atoms
 import           Nix.Eval
 import           Nix.Expr.Types
-import           Nix.Expr.Types.Annotated
 import           Nix.Monad
 import           Nix.Parser
 import           Nix.Pretty
@@ -79,11 +76,7 @@ type MonadBuiltins e m =
 baseEnv :: MonadBuiltins e m => m (Scopes m (NThunk m))
 baseEnv = do
     ref <- thunk $ flip NVSet M.empty <$> builtins
-    let pos = repeatingThunk curPos -- re-evaluate each time it's forced
-    lst <- ([ ("builtins", ref)
-           , ("__curPos", pos)
-           ] ++)
-        <$> topLevelBuiltins
+    lst <- ([("builtins", ref)] ++) <$> topLevelBuiltins
     pushScope (M.fromList lst) currentScopes
   where
     topLevelBuiltins = map mapping . filter isTopLevel <$> builtinsList
@@ -214,29 +207,6 @@ apply :: MonadBuiltins e m
 apply f arg = force f $ \f' -> pure f' `evalApp` arg
 
 -- Primops
-
-deltaInfo :: Delta -> (Text, Int, Int)
-deltaInfo = \case
-    Columns c _         -> ("<string>", 1, fromIntegral c + 1)
-    Tab {}              -> ("<string>", 1, 1)
-    Lines l _ _ _       -> ("<string>", fromIntegral l + 1, 1)
-    Directed fn l c _ _ -> (Text.pack fn,
-                           fromIntegral l + 1, fromIntegral c + 1)
-
-posFromDelta :: Delta -> NValue m
-posFromDelta (deltaInfo -> (f, l, c)) =
-    flip NVSet M.empty $ M.fromList
-        [ ("file", valueThunk $ NVStr f mempty)
-        , ("line", valueThunk $ NVConstant (NInt (fromIntegral l)))
-        , ("column", valueThunk $ NVConstant (NInt (fromIntegral c)))
-        ]
-
-curPos :: forall e m. Framed e m => m (NValue m)
-curPos = do
-    Compose (Ann (SrcSpan delta _) _):_ <-
-        asks (mapMaybe (either (const Nothing) Just)
-              . view @_ @Frames hasLens)
-    return $ posFromDelta delta
 
 toString :: MonadBuiltins e m => NThunk m -> m (NValue m)
 toString str = do
