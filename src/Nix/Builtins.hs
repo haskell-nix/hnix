@@ -440,7 +440,7 @@ attrValues = flip force $ \case
 
 map_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 map_ f = flip force $ \case
-    NVList l -> NVList <$> traverse (fmap valueThunk . apply f) l
+    NVList l -> NVList <$> traverse (thunk . apply f) l
     v -> throwError $ "map: Expected list, got " ++ showValue v
 
 filter_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
