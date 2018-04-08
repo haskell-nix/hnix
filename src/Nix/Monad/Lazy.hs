@@ -14,7 +14,7 @@
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
-module Nix.Monad.Instance where
+module Nix.Monad.Lazy where
 
 import           Control.Monad
 import           Control.Monad.Catch
@@ -35,6 +35,7 @@ import           Data.Text.Encoding
 import           Nix.Atoms
 import           Nix.Eval
 import           Nix.Monad
+import           Nix.Monad.Context
 import           Nix.Normal
 import           Nix.Parser
 import           Nix.Pretty
@@ -51,31 +52,10 @@ import qualified System.Info
 import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
 
-data Context m v = Context
-    { scopes :: Scopes m v
-    , frames :: Frames
-    }
-
 newtype Lazy m a = Lazy
     { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m))) m a }
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
               MonadReader (Context (Lazy m) (NThunk (Lazy m))))
-
-instance Has (Context m v) (Scopes m v) where
-    hasLens f (Context x y) = flip Context y <$> f x
-
-instance Has (Context m v) Frames where
-    hasLens f (Context x y) = Context x <$> f y
-
--- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
--- This is incorrect on POSIX systems, because if @b@ is a symlink, its parent
--- may be a different directory from @a@.  See the discussion at
--- https://hackage.haskell.org/package/directory-1.3.1.5/docs/System-Directory.html#v:canonicalizePath
-removeDotDotIndirections :: FilePath -> FilePath
-removeDotDotIndirections = intercalate "/" . go [] . splitOn "/"
-    where go s [] = reverse s
-          go (_:s) ("..":rest) = go s rest
-          go s (this:rest) = go (this:s) rest
 
 instance (MonadFix m, MonadNix (Lazy m), MonadThrow m, MonadIO m)
       => MonadExpr (NThunk (Lazy m)) (NValue (Lazy m)) (Lazy m) where
@@ -207,3 +187,13 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadNix (Lazy m) where
 
 runLazyM :: MonadIO m => Lazy m a -> m a
 runLazyM = flip runReaderT (Context emptyScopes []) . runLazy
+
+-- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
+--   This is incorrect on POSIX systems, because if @b@ is a symlink, its
+--   parent may be a different directory from @a@. See the discussion at
+--   https://hackage.haskell.org/package/directory-1.3.1.5/docs/System-Directory.html#v:canonicalizePath
+removeDotDotIndirections :: FilePath -> FilePath
+removeDotDotIndirections = intercalate "/" . go [] . splitOn "/"
+    where go s [] = reverse s
+          go (_:s) ("..":rest) = go s rest
+          go s (this:rest) = go (this:s) rest

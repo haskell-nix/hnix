@@ -1,7 +1,7 @@
 module TestCommon where
 
 import Nix
-import Nix.Monad.Instance
+import Nix.Monad.Lazy
 import Nix.Parser
 import Nix.Pretty
 import Nix.Value
