@@ -57,6 +57,7 @@ import           Nix.Atoms
 import           Nix.Eval
 import           Nix.Expr.Types
 import           Nix.Monad
+import           Nix.Normal
 import           Nix.Parser
 import           Nix.Pretty
 import           Nix.Scope

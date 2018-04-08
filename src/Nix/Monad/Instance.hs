@@ -35,6 +35,7 @@ import           Data.Text.Encoding
 import           Nix.Atoms
 import           Nix.Eval
 import           Nix.Monad
+import           Nix.Normal
 import           Nix.Parser
 import           Nix.Pretty
 import           Nix.Scope
@@ -197,7 +198,7 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadNix (Lazy m) where
               , "-E", "derivationStrict " ++ show (prettyNixValue v) --TODO: use prettyNix to generate this
               ] ""
         case exitCode of
-            ExitSuccess -> do
+            ExitSuccess ->
                 case A.eitherDecodeStrict $ encodeUtf8 $ Text.pack out of
                     Left e -> error $ "derivationStrict: error parsing JSON output of nix-instantiate: " ++ show e
                     Right v -> pure v

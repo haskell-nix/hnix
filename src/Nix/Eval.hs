@@ -22,11 +22,8 @@ import           Control.Arrow (first)
 import           Control.Monad
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Except
 import           Control.Monad.Reader (asks)
 import           Control.Monad.Trans.Reader hiding (asks)
-import           Data.Align
 import           Data.Align.Key
 import           Data.Coerce
 import           Data.Fix
@@ -308,113 +305,6 @@ evalApp fun arg = fun >>= \case
         traceM "evalApp:__functor"
         force f $ \f' -> pure f' `evalApp` valueThunk s `evalApp` arg
     x -> throwError $ "Attempt to call non-function: " ++ showValue x
-
------
-
-valueRefBool :: MonadNix m => Bool -> m (NValue m)
-valueRefBool = return . NVConstant . NBool
-
-valueRefInt :: MonadNix m => Integer -> m (NValue m)
-valueRefInt = return . NVConstant . NInt
-
-valueRefFloat :: MonadNix m => Float -> m (NValue m)
-valueRefFloat = return . NVConstant . NFloat
-
-thunkEq :: (MonadNix m, Framed e m, MonadFile m, MonadVar m)
-        => NThunk m -> NThunk m -> m Bool
-thunkEq lt rt = force lt $ \lv -> force rt $ \rv -> valueEq lv rv
-
--- | Checks whether two containers are equal, using the given item equality
---   predicate. If there are any item slots that don't match between the two
---   containers, the result will be False.
-alignEqM
-    :: (Align f, Traversable f, Monad m)
-    => (a -> b -> m Bool)
-    -> f a
-    -> f b
-    -> m Bool
-alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
-    pairs <- forM (align fa fb) $ \case
-        These a b -> return (a, b)
-        _ -> throwE ()
-    forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
-
-isDerivation :: (MonadNix m, Framed e m, MonadFile m, MonadVar m)
-             => HashMap Text (NThunk m) -> m Bool
-isDerivation m = case M.lookup "type" m of
-    Nothing -> pure False
-    Just t -> force t $ valueEq (NVStr "derivation" mempty)
-
-valueEq :: (MonadNix m, Framed e m, MonadFile m, MonadVar m)
-        => NValue m -> NValue m -> m Bool
-valueEq l r = case (l, r) of
-    (NVStr ls _, NVConstant (NUri ru)) -> pure $ ls == ru
-    (NVConstant (NUri lu), NVStr rs _) -> pure $ lu == rs
-    (NVConstant lc, NVConstant rc) -> pure $ lc == rc
-    (NVStr ls _, NVStr rs _) -> pure $ ls == rs
-    (NVStr ls _, NVConstant NNull) -> pure $ ls == ""
-    (NVConstant NNull, NVStr rs _) -> pure $ "" == rs
-    (NVList ls, NVList rs) -> alignEqM thunkEq ls rs
-    (NVSet lm _, NVSet rm _) -> do
-        let compareAttrs = alignEqM thunkEq lm rm
-        isDerivation lm >>= \case
-            True -> isDerivation rm >>= \case
-                True | Just lp <- M.lookup "outPath" lm
-                     , Just rp <- M.lookup "outPath" rm
-                       -> thunkEq lp rp
-                _ -> compareAttrs
-            _ -> compareAttrs
-    (NVPath lp, NVPath rp) -> pure $ lp == rp
-    _ -> pure False
-
------
-
-normalFormBy :: forall e m. MonadEval e m
-             => (forall r. NThunk m -> (NValue m -> m r) -> m r)
-             -> NValue m
-             -> m (NValueNF m)
-normalFormBy k = \case
-    NVConstant a     -> return $ Fix $ NVConstant a
-    NVStr t s        -> return $ Fix $ NVStr t s
-    NVList l         ->
-        Fix . NVList <$> traverse (`k` normalFormBy k) l
-    NVSet s p        ->
-        Fix . flip NVSet p <$> traverse (`k` normalFormBy k) s
-    NVClosure s p f   -> withScopes @(NThunk m) s $ do
-        p' <- traverse (fmap (`k` normalFormBy k)) p
-        return $ Fix $
-            NVClosure emptyScopes p' ((`k` normalFormBy k) =<< f)
-    NVPath fp -> return $ Fix $ NVPath fp
-    NVBuiltin name f -> return $ Fix $ NVBuiltin name f
-
-normalForm :: forall e m. MonadEval e m => NValue m -> m (NValueNF m)
-normalForm = normalFormBy force
-
-valueText :: forall e m. (MonadEval e m, MonadNix m)
-          => Bool -> NValueNF m -> m (Text, DList Text)
-valueText addPathsToStore = cata phi where
-    phi :: NValueF m (m (Text, DList Text)) -> m (Text, DList Text)
-    phi (NVConstant a)    = pure (atomText a, mempty)
-    phi (NVStr t c)       = pure (t, c)
-    phi (NVList _)        = throwError "Cannot coerce a list to a string"
-    phi (NVSet set _)
-      | Just asString <-
-        -- TODO: Should this be run through valueText recursively?
-        M.lookup "__asString" set = asString
-      | otherwise = throwError "Cannot coerce a set to a string"
-    phi NVClosure {} = throwError "Cannot coerce a function to a string"
-    phi (NVPath originalPath)
-        | addPathsToStore = do
-            -- TODO: Capture and use the path of the file being processed as the
-            -- base path
-            storePath <- addPath originalPath
-            pure (Text.pack $ unStorePath storePath, mempty)
-        | otherwise = pure (Text.pack originalPath, mempty)
-    phi (NVBuiltin _ _)    = throwError "Cannot coerce a function to a string"
-
-valueTextNoContext :: (MonadEval e m, MonadNix m)
-                   => Bool -> NValueNF m -> m Text
-valueTextNoContext addPathsToStore = fmap fst . valueText addPathsToStore
 
 ----
 

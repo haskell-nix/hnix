@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -12,12 +13,17 @@
 
 module Nix.Value where
 
+import           Control.Monad
+import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.Except
+import           Data.Align
 import           Data.Coerce
 import           Data.Fix
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.Monoid (appEndo)
 import           Data.Text (Text)
+import           Data.These
 import           Data.Typeable (Typeable)
 import           GHC.Generics
 import           Nix.Atoms
@@ -128,3 +134,59 @@ posFromDelta (deltaInfo -> (f, l, c)) =
         , ("line", valueThunk $ NVConstant (NInt (fromIntegral l)))
         , ("column", valueThunk $ NVConstant (NInt (fromIntegral c)))
         ]
+
+valueRefBool :: Monad m => Bool -> m (NValue m)
+valueRefBool = return . NVConstant . NBool
+
+valueRefInt :: Monad m => Integer -> m (NValue m)
+valueRefInt = return . NVConstant . NInt
+
+valueRefFloat :: Monad m => Float -> m (NValue m)
+valueRefFloat = return . NVConstant . NFloat
+
+thunkEq :: (Framed e m, MonadFile m, MonadVar m)
+        => NThunk m -> NThunk m -> m Bool
+thunkEq lt rt = force lt $ \lv -> force rt $ \rv -> valueEq lv rv
+
+-- | Checks whether two containers are equal, using the given item equality
+--   predicate. If there are any item slots that don't match between the two
+--   containers, the result will be False.
+alignEqM
+    :: (Align f, Traversable f, Monad m)
+    => (a -> b -> m Bool)
+    -> f a
+    -> f b
+    -> m Bool
+alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
+    pairs <- forM (align fa fb) $ \case
+        These a b -> return (a, b)
+        _ -> throwE ()
+    forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
+
+isDerivation :: (Monad m, Framed e m, MonadFile m, MonadVar m)
+             => HashMap Text (NThunk m) -> m Bool
+isDerivation m = case M.lookup "type" m of
+    Nothing -> pure False
+    Just t -> force t $ valueEq (NVStr "derivation" mempty)
+
+valueEq :: (Monad m, Framed e m, MonadFile m, MonadVar m)
+        => NValue m -> NValue m -> m Bool
+valueEq l r = case (l, r) of
+    (NVStr ls _, NVConstant (NUri ru)) -> pure $ ls == ru
+    (NVConstant (NUri lu), NVStr rs _) -> pure $ lu == rs
+    (NVConstant lc, NVConstant rc) -> pure $ lc == rc
+    (NVStr ls _, NVStr rs _) -> pure $ ls == rs
+    (NVStr ls _, NVConstant NNull) -> pure $ ls == ""
+    (NVConstant NNull, NVStr rs _) -> pure $ "" == rs
+    (NVList ls, NVList rs) -> alignEqM thunkEq ls rs
+    (NVSet lm _, NVSet rm _) -> do
+        let compareAttrs = alignEqM thunkEq lm rm
+        isDerivation lm >>= \case
+            True -> isDerivation rm >>= \case
+                True | Just lp <- M.lookup "outPath" lm
+                     , Just rp <- M.lookup "outPath" rm
+                       -> thunkEq lp rp
+                _ -> compareAttrs
+            _ -> compareAttrs
+    (NVPath lp, NVPath rp) -> pure $ lp == rp
+    _ -> pure False

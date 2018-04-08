@@ -33,6 +33,7 @@ import           Nix.Expr.Types.Annotated (NExprLoc)
 import qualified Nix.Lint as Lint
 import           Nix.Lint hiding (lint)
 import           Nix.Monad.Instance
+import           Nix.Normal
 import           Nix.Scope
 import           Nix.Stack
 import           Nix.Thunk
