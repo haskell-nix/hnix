@@ -150,7 +150,8 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadNix (Lazy m) where
     pathExists = liftIO . fileExist
 
     -- jww (2018-03-29): Cache which files have been read in.
-    importFile scope path = do
+    importPath scope origPath = do
+        path <- liftIO $ pathToDefaultNixFile origPath
         mres <- lookupVar @(Context (Lazy m) (NThunk (Lazy m)))
                          "__cur_file"
         path' <- case mres of

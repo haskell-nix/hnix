@@ -12,6 +12,8 @@ module Nix.Monad where
 import Data.Text (Text)
 import Data.HashMap.Strict (HashMap)
 import Nix.Value
+import System.Directory
+import System.FilePath.Posix
 import System.Posix.Files
 
 -- | A path into the nix store
@@ -26,7 +28,8 @@ class Monad m => MonadNix m where
     findEnvPath :: String -> m FilePath
 
     pathExists :: FilePath -> m Bool
-    importFile :: ValueSet m -> FilePath -> m (NValue m)
+    importPath :: ValueSet m -> FilePath -> m (NValue m)
+
     getEnvVar :: String -> m (Maybe String)
     getCurrentSystemOS :: m Text
     getCurrentSystemArch :: m Text
@@ -35,3 +38,11 @@ class Monad m => MonadNix m where
     getSymbolicLinkStatus :: FilePath -> m FileStatus
 
     derivationStrict :: NValueNF m -> m (HashMap Text Text)
+
+-- Given a path, determine the nix file to load
+pathToDefaultNixFile :: FilePath -> IO FilePath
+pathToDefaultNixFile p = do
+    isDir <- doesDirectoryExist p
+    pure $ if isDir
+        then p </> "default.nix"
+        else p

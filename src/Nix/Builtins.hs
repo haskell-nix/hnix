@@ -598,13 +598,13 @@ throw_ = flip force $ \case
 
 import_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 import_ = flip force $ \case
-    NVPath p -> importFile M.empty p
+    NVPath p -> importPath M.empty p
     v -> throwError $ "import: expected path, got " ++ showValue v
 
 scopedImport :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 scopedImport aset path = force aset $ \aset' -> force path $ \path' ->
     case (aset', path') of
-        (NVSet s _, NVPath p) -> importFile s p
+        (NVSet s _, NVPath p) -> importPath s p
         (s, p) -> throwError $ "scopedImport: expected a set and a path, got "
                      ++ showValue s ++ " and " ++ showValue p
 
