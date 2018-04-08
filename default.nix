@@ -2,9 +2,9 @@ let
   hostPkgs = import <nixpkgs> {};
   pinnedPkgs = hostPkgs.fetchFromGitHub {
     owner = "NixOS";
-    repo = "nixpkgs-channels";
-    rev = "ee28e35ba37ab285fc29e4a09f26235ffe4123e2";
-    sha256 = "0a6xrqjj2ihkz1bizhy5r843n38xgimzw5s2mfc42kk2rgc95gw5";
+    repo = "nixpkgs";
+    rev = "b0482248fefbf3b6cdd9c92053cfb49778a3a3a8";
+    sha256 = "0qdgzdxkdl77381ifmzpikxr2gi5jcmflg9syvbi1h2pjfsi2424";
   };
 
 in { nixpkgs ? import pinnedPkgs {}
