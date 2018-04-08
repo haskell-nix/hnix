@@ -339,6 +339,12 @@ alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
         _ -> throwE ()
     forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
 
+isDerivation :: (MonadNix m, Framed e m, MonadFile m, MonadVar m)
+             => HashMap Text (NThunk m) -> m Bool
+isDerivation m = case M.lookup "type" m of
+    Nothing -> pure False
+    Just t -> force t $ valueEq (NVStr "derivation" mempty)
+
 valueEq :: (MonadNix m, Framed e m, MonadFile m, MonadVar m)
         => NValue m -> NValue m -> m Bool
 valueEq l r = case (l, r) of
@@ -349,7 +355,15 @@ valueEq l r = case (l, r) of
     (NVStr ls _, NVConstant NNull) -> pure $ ls == ""
     (NVConstant NNull, NVStr rs _) -> pure $ "" == rs
     (NVList ls, NVList rs) -> alignEqM thunkEq ls rs
-    (NVSet lm _, NVSet rm _) -> alignEqM thunkEq lm rm
+    (NVSet lm _, NVSet rm _) -> do
+        let compareAttrs = alignEqM thunkEq lm rm
+        isDerivation lm >>= \case
+            True -> isDerivation rm >>= \case
+                True | Just lp <- M.lookup "outPath" lm
+                     , Just rp <- M.lookup "outPath" rm
+                       -> thunkEq lp rp
+                _ -> compareAttrs
+            _ -> compareAttrs
     (NVPath lp, NVPath rp) -> pure $ lp == rp
     _ -> pure False
 
