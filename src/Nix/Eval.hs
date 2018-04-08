@@ -283,20 +283,17 @@ eval (NAbs params body) = do
     -- body are forced during application.
     scope <- currentScopes @_ @(NThunk m)
     traceM $ "Creating lambda abstraction in scope: " ++ show scope
-    return $ NVClosure scope (thunk <$> params) (thunk body)
+    return $ NVClosure (thunk <$> params) $ \args ->
+        withScopes @(NThunk m) scope $ pushScope args body
 
 infixl 1 `evalApp`
 evalApp :: forall e m. (MonadEval e m, MonadFix m)
         => m (NValue m) -> NThunk m -> m (NValue m)
 evalApp fun arg = fun >>= \case
-    NVClosure scope params f -> do
+    NVClosure params f -> do
         traceM "evalApp:NVFunction"
         env <- currentScopes @_ @(NThunk m)
-        args <- buildArgument params =<< thunk (withScopes env (force arg pure))
-        traceM $ "Evaluating function application with args: "
-            ++ show (newScope args)
-        withScopes @(NThunk m) scope $ pushScope args $
-            force ?? pure =<< f
+        f =<< buildArgument params =<< thunk (withScopes env (force arg pure))
     NVBuiltin name f -> do
         traceM $ "evalApp:NVBuiltin " ++ name
         env <- currentScopes @_ @(NThunk m)

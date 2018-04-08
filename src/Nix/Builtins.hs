@@ -529,7 +529,7 @@ intersectAttrs set1 set2 = force set1 $ \set1' -> force set2 $ \set2' ->
 
 functionArgs :: MonadBuiltins e m => NThunk m -> m (NValue m)
 functionArgs fun = force fun $ \case
-    NVClosure _ p _ ->
+    NVClosure p _ ->
         -- jww (2018-04-05): Should we preserve the location where the
         -- function arguments were declared for __unsafeGetAttrPos?
         return $ flip NVSet M.empty $ valueThunk . NVConstant . NBool <$>

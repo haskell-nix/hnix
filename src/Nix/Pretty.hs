@@ -5,6 +5,7 @@
 
 module Nix.Pretty where
 
+import           Control.Monad
 import           Data.Fix
 import           Data.HashMap.Lazy (toList)
 import qualified Data.HashMap.Lazy as M
@@ -21,6 +22,7 @@ import           Nix.Parser.Library (reservedNames)
 import           Nix.Parser.Operators
 import           Nix.StringOperations
 import           Nix.Thunk
+import           Nix.Utils hiding ((<$>))
 import           Prelude hiding ((<$>))
 import           Text.PrettyPrint.ANSI.Leijen
 
@@ -182,21 +184,14 @@ prettyNix = withoutParens . cata phi where
 prettyNixValue :: Functor m => NValueNF m -> Doc
 prettyNixValue = prettyNix . valueToExpr
   where valueToExpr :: Functor m => NValueNF m -> NExpr
-        valueToExpr = hmap go
-        -- hmap does the recursive conversion from NValue to NExpr.
-        -- fun fact: it is not defined in data-fixed, but I was certain it
-        -- should exists so I found it in unification-fd by hoogling its type
-        hmap :: (Functor f, Functor g) => (forall a. f a -> g a)
-             -> Fix f -> Fix g
-        hmap eps = ana (eps . unFix)
+        valueToExpr = transport go
+
         go (NVConstant a) = NConstant a
         go (NVStr t _) = NStr (DoubleQuoted [Plain t])
         go (NVList l) = NList l
         go (NVSet s p) = NSet [ NamedVar [StaticKey k (M.lookup k p)] v
                               | (k, v) <- toList s ]
-        go (NVClosure s p _) =
-            NSym . pack $ "<closure in " ++ show s
-                ++ " with " ++ show (() <$ p)  ++ ">"
+        go (NVClosure p _) = NSym . pack $ "<closure " ++ show (void p) ++ ">"
         go (NVPath p) = NLiteralPath p
         go (NVBuiltin name _) = NSym $ Text.pack $ "builtins." ++ name
 

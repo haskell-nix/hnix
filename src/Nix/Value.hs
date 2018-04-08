@@ -30,7 +30,6 @@ import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated (deltaInfo)
 import           Nix.Parser.Library (Delta(..))
-import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Utils
 import {-# SOURCE #-} Nix.Stack
@@ -54,9 +53,10 @@ data NValueF m r
      -- | A string has a value and a context, which can be used to record what a
      -- string has been build from
     | NVStr Text (DList Text)
+    | NVPath FilePath
     | NVList [r]
     | NVSet (HashMap Text r) (HashMap Text Delta)
-    | NVClosure (Scopes m r) (Params (m r)) (m r)
+    | NVClosure (Params (m r)) (ValueSet m -> m (NValue m))
       -- ^ A function is a closed set of parameters representing the "call
       --   signature", used at application time to check the type of arguments
       --   passed to the function. Since it supports default values which may
@@ -68,7 +68,6 @@ data NValueF m r
       --   Note that 'm r' is being used here because effectively a function
       --   and its set of default arguments is "never fully evaluated". This
       --   enforces in the type that it must be re-evaluated for each call.
-    | NVPath FilePath
     | NVBuiltin String (NThunk m -> m (NValue m))
       -- ^ A builtin function is itself already in normal form. Also, it may
       --   or may not choose to evaluate its argument in the production of a
@@ -96,7 +95,7 @@ instance Show f => Show (NValueF m f) where
       go (NVStr text context) = showsCon2 "NVStr"      text (appEndo context [])
       go (NVList     list)    = showsCon1 "NVList"     list
       go (NVSet attrs _)      = showsCon1 "NVSet"      attrs
-      go (NVClosure s r _)    = showsCon2 "NVClosure"  s (() <$ r)
+      go (NVClosure r _)      = showsCon1 "NVClosure"  (void r)
       go (NVPath p)           = showsCon1 "NVPath" p
       go (NVBuiltin name _)   = showsCon1 "NVBuiltin" name
 

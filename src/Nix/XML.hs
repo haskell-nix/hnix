@@ -36,8 +36,7 @@ toXML = (.) ((++ "\n") .
                                       [Elem v] Nothing))
              (sortBy (comparing fst) $ M.toList s)) Nothing
 
-    NVClosure _ p _  ->
-        Element (unqual "function") [] (paramsXML p) Nothing
+    NVClosure p _  -> Element (unqual "function") [] (paramsXML p) Nothing
     NVPath fp -> mkElem "path" "value" fp
     NVBuiltin name _ -> mkElem "function" "name" name
 

@@ -4,7 +4,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Nix.Normal where
@@ -32,10 +31,9 @@ normalFormBy k = \case
         Fix . NVList <$> traverse (`k` normalFormBy k) l
     NVSet s p        ->
         Fix . flip NVSet p <$> traverse (`k` normalFormBy k) s
-    NVClosure s p f   -> withScopes @(NThunk m) s $ do
+    NVClosure p f    -> do
         p' <- traverse (fmap (`k` normalFormBy k)) p
-        return $ Fix $
-            NVClosure emptyScopes p' ((`k` normalFormBy k) =<< f)
+        return $ Fix $ NVClosure p' f
     NVPath fp -> return $ Fix $ NVPath fp
     NVBuiltin name f -> return $ Fix $ NVBuiltin name f
 
