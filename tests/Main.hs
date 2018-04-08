@@ -40,6 +40,7 @@ ensureNixpkgsCanParse = do
 main :: IO ()
 main = do
   nixLanguageTests <- NixLanguageTests.genTests
+  evalComparisonTests <- EvalTests.genEvalCompareTests
   langTestsEnv <- lookupEnv "LANGUAGE_TESTS"
   nixpkgsTestsEnv <- lookupEnv "NIXPKGS_TESTS"
   let runLangTests = langTestsEnv == Just "yes"
@@ -49,6 +50,7 @@ main = do
     [ ParserTests.tests
     , EvalTests.tests
     , PrettyTests.tests
+    , evalComparisonTests
     ] ++
     [ testCase "Nix languarge tests present" ensureLangTestsPresent | runLangTests ] ++
     [ nixLanguageTests | runLangTests ] ++

@@ -31,6 +31,7 @@ import qualified Data.Aeson.Encoding as A
 import           Data.Align (alignWith)
 import           Data.Array
 import           Data.ByteString (ByteString)
+import qualified Data.ByteString as B
 import           Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
@@ -132,6 +133,7 @@ builtinsList = sequence [
     , add2 Normal   "compareVersions"            compareVersions_
     , add2 Normal   "match"                      match_
     -- jww (2018-04-09): Support floats for `add` and `sub`
+    , add2 Normal   "split"                      split_
     , add' Normal   "add"                        (arity2 ((+) @Integer))
     , add' Normal   "sub"                        (arity2 ((-) @Integer))
     , add' Normal   "parseDrvName"               parseDrvName
@@ -401,6 +403,34 @@ match_ pat str = force pat $ \pat' -> force str $ \str' ->
         (p, s) ->
             throwError $ "builtins.match: expected a regex"
                 ++ " and a string, but got: " ++ show (p, s)
+
+split_ :: forall e m. MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
+split_ pat str = force pat $ \pat' -> force str $ \str' ->
+    case (pat', str') of
+        (NVStr p _, NVStr s _) ->
+          let re = makeRegex (encodeUtf8 p) :: Regex
+              haystack = encodeUtf8 s
+           in return $ NVList $ splitMatches 0 (map elems $ matchAllText re haystack) haystack
+        (p, s) ->
+            throwError $ "builtins.match: expected a regex"
+                ++ " and a string, but got: " ++ show (p, s)
+
+splitMatches
+  :: forall e m. MonadBuiltins e m
+  => Int
+  -> [[(ByteString, (Int, Int))]]
+  -> ByteString
+  -> [NThunk m]
+splitMatches _ [] haystack = [thunkStr haystack]
+splitMatches _ ([]:_) _ = error "Error in splitMatches: this should never happen!"
+splitMatches numDropped (((_,(start,len)):captures):mts) haystack =
+    thunkStr before : caps : splitMatches (numDropped + len) mts (B.drop len rest)
+  where
+    (before,rest) = B.splitAt (max 0 start - numDropped) haystack
+    caps = valueThunk $ NVList (map f captures)
+    f (a,(s,_)) = if s < 0 then valueThunk (NVConstant NNull) else thunkStr a
+
+thunkStr s = valueThunk (NVStr (decodeUtf8 s) mempty)
 
 substring :: MonadBuiltins e m => Int -> Int -> Text -> Prim m Text
 substring start len str = Prim $
