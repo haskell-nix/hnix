@@ -40,6 +40,12 @@ nixEvalString expr = do
 nixEvalFile :: FilePath -> IO String
 nixEvalFile fp = readProcess "nix-instantiate" ["--eval", fp] ""
 
+assertEvalFileMatchesNix :: FilePath -> Assertion
+assertEvalFileMatchesNix fp = do
+  hnixVal <- (++"\n") . printNix <$> hnixEvalFile fp
+  nixVal <- nixEvalFile fp
+  assertEqual fp nixVal hnixVal
+
 assertEvalMatchesNix :: String -> Assertion
 assertEvalMatchesNix expr = do
   hnixVal <- (++"\n") . printNix <$> hnixEvalString expr

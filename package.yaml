@@ -83,6 +83,7 @@ tests:
     source-dirs: tests
     main: Main.hs
     dependencies:
+      - directory
       - hnix
       - Glob
       - filepath

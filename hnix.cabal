@@ -1,8 +1,8 @@
--- This file has been generated from package.yaml by hpack version 0.27.0.
+-- This file has been generated from package.yaml by hpack version 0.21.2.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7bd3ecd0e17663cfdc155c446846dd0270cb21d441e2832279b7e178741e0c1d
+-- hash: 4c9c65b3b14e76a8f1bffdea0d959fe009d4e7da5f875c13454c400b40f6107b
 
 name:           hnix
 version:        0.5.0
@@ -149,6 +149,7 @@ test-suite hnix-tests
     , base >=4.9 && <5
     , containers
     , data-fix
+    , directory
     , exceptions
     , filepath
     , hnix
