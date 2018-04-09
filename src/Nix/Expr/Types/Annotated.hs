@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFoldable     #-}
 {-# LANGUAGE DeriveFunctor      #-}
@@ -18,6 +19,7 @@ module Nix.Expr.Types.Annotated
   , Delta(..)
   )where
 
+import Control.DeepSeq
 import Data.Data
 import Data.Fix
 import Data.Function (on)
@@ -33,7 +35,7 @@ import Text.Show.Deriving
 data SrcSpan = SrcSpan{ spanBegin :: Delta
                       , spanEnd   :: Delta
                       }
-  deriving (Ord, Eq, Generic, Typeable, Data, Show)
+  deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData)
 
 -- | A type constructor applied to a type along with an annotation
 --
@@ -42,8 +44,8 @@ data SrcSpan = SrcSpan{ spanBegin :: Delta
 data Ann ann a = Ann{ annotation :: ann
                     , annotated  :: a
                     }
-  deriving (Ord, Eq, Data, Generic, Typeable, Functor,
-            Foldable, Traversable, Read, Show)
+  deriving (Ord, Eq, Data, Generic, Generic1, Typeable, Functor,
+            Foldable, Traversable, Read, Show, NFData, NFData1)
 
 $(deriveShow1 ''Ann)
 
@@ -60,6 +62,8 @@ type NExprLocF = AnnF SrcSpan NExprF
 
 -- | A nix expression with source location at each subexpression.
 type NExprLoc = Fix NExprLocF
+
+instance NFData NExprLoc
 
 pattern AnnE :: forall ann (g :: * -> *). ann
              -> g (Fix (Compose (Ann ann) g)) -> Fix (Compose (Ann ann) g)

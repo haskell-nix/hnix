@@ -5,6 +5,7 @@
 
 module Nix.Atoms where
 
+import Control.DeepSeq
 import Data.Data
 import Data.HashMap.Strict (HashMap)
 import Data.Text (Text, pack)
@@ -16,16 +17,18 @@ import GHC.Generics
 data NAtom
   -- | An integer. The c nix implementation currently only supports
   -- integers that fit in the range of 'Int64'.
-  = NInt !Integer
+  = NInt Integer
   -- | A floating point number
-  | NFloat !Float
+  | NFloat Float
   -- | Booleans.
-  | NBool !Bool
+  | NBool Bool
   -- | Null values. There's only one of this variant.
   | NNull
   -- | URIs, which are just string literals, but do not need quotes.
-  | NUri !Text
+  | NUri Text
   deriving (Eq, Ord, Generic, Typeable, Data, Show)
+
+instance NFData NAtom
 
 class ToAtom t where
   toAtom :: t -> NAtom

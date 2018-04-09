@@ -34,6 +34,8 @@ dependencies:
 
 ghc-options:
   - -Wall
+  # - -fexpose-all-unfoldings
+  # - -O2
 
 library:
   source-dirs: src

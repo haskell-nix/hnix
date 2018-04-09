@@ -1,4 +1,7 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -17,6 +20,11 @@ class Monad m => MonadVar m where
     writeVar :: Var m a -> a -> m ()
     atomicModifyVar :: Var m a -> (a -> (a, b)) -> m b
 
+class Monad m => MonadThunk v t m | m -> v, v -> t where
+    thunk :: m v -> m t
+    force :: t -> (v -> m r) -> m r
+    value :: v -> t
+
 data Thunk m v
     = Value v
     | Thunk (Var m Bool) (Var m (Deferred m v))
@@ -34,16 +42,16 @@ forceThunk (Value ref) k = k ref
 forceThunk (Thunk active ref) k = do
     eres <- readVar ref
     case eres of
-        Computed value -> k value
+        Computed v -> k v
         Deferred action -> do
             nowActive <- atomicModifyVar active (True,)
             if nowActive
                 then throwError "<<loop>>"
                 else do
-                    value <- action
-                    writeVar ref (Computed value)
+                    v <- action
+                    writeVar ref (Computed v)
                     _ <- atomicModifyVar active (False,)
-                    k value
+                    k v
 
 forceEffects :: (Framed e m, MonadFile m, MonadVar m)
              => Thunk m v -> (v -> m r) -> m r
@@ -55,9 +63,9 @@ forceEffects (Thunk active ref) k = do
         else do
             eres <- readVar ref
             case eres of
-                Computed value -> k value
+                Computed v -> k v
                 Deferred action -> do
-                    value <- action
-                    writeVar ref (Computed value)
+                    v <- action
+                    writeVar ref (Computed v)
                     _ <- atomicModifyVar active (False,)
-                    k value
+                    k v

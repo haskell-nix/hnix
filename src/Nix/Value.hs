@@ -1,9 +1,11 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -17,9 +19,7 @@ import           Control.Monad
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import           Data.Align
-import           Data.Coerce
 import           Data.Fix
-import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.Monoid (appEndo)
 import           Data.Text (Text)
@@ -32,19 +32,6 @@ import           Nix.Expr.Types.Annotated (deltaInfo)
 import           Nix.Parser.Library (Delta(..))
 import           Nix.Thunk
 import           Nix.Utils
-import {-# SOURCE #-} Nix.Stack
-
-newtype NThunk m = NThunk (Thunk m (NValue m))
-
-thunk :: MonadVar m => m (NValue m) -> m (NThunk m)
-thunk = fmap coerce . buildThunk
-
-force :: (Framed e m, MonadFile m, MonadVar m)
-      => NThunk m -> (NValue m -> m r) -> m r
-force = forceThunk . coerce
-
-valueThunk :: forall m. NValue m -> NThunk m
-valueThunk = coerce . valueRef @_ @m
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.
@@ -55,8 +42,8 @@ data NValueF m r
     | NVStr Text (DList Text)
     | NVPath FilePath
     | NVList [r]
-    | NVSet (HashMap Text r) (HashMap Text Delta)
-    | NVClosure (Params (m r)) (ValueSet m -> m (NValue m))
+    | NVSet (AttrSet r) (AttrSet Delta)
+    | NVClosure (Params ()) (m (NValue m) -> m (NValue m))
       -- ^ A function is a closed set of parameters representing the "call
       --   signature", used at application time to check the type of arguments
       --   passed to the function. Since it supports default values which may
@@ -78,12 +65,13 @@ data NValueF m r
 --   a value in head normal form, where only the "top layer" has been
 --   evaluated. An action of type 'm (NValue m)' is a pending evualation that
 --   has yet to be performed. An 'NThunk m' is either a pending evaluation, or
---   a value in head normal form. A 'ValueSet' is a set of mappings from keys
+--   a value in head normal form. A 'NThunkSet' is a set of mappings from keys
 --   to thunks.
 
-type NValueNF m = Fix (NValueF m)      -- normal form
-type NValue m   = NValueF m (NThunk m) -- head normal form
-type ValueSet m = HashMap Text (NThunk m)
+type    NValueNF m = Fix (NValueF m)      -- normal form
+newtype NThunk m   = NThunk (Thunk m (NValue m))
+type    NValue m   = NValueF m (NThunk m) -- head normal form
+type    ValueSet m = AttrSet (NThunk m)
 
 instance Show (NThunk m) where
     show (NThunk (Value v)) = show v
@@ -95,9 +83,9 @@ instance Show f => Show (NValueF m f) where
       go (NVStr text context) = showsCon2 "NVStr"      text (appEndo context [])
       go (NVList     list)    = showsCon1 "NVList"     list
       go (NVSet attrs _)      = showsCon1 "NVSet"      attrs
-      go (NVClosure r _)      = showsCon1 "NVClosure"  (void r)
-      go (NVPath p)           = showsCon1 "NVPath" p
-      go (NVBuiltin name _)   = showsCon1 "NVBuiltin" name
+      go (NVClosure p _)      = showsCon1 "NVClosure"  p
+      go (NVPath p)           = showsCon1 "NVPath"     p
+      go (NVBuiltin name _)   = showsCon1 "NVBuiltin"  name
 
       showsCon1 :: Show a => String -> a -> Int -> String -> String
       showsCon1 con a d =
@@ -112,7 +100,6 @@ instance Show f => Show (NValueF m f) where
               . showString " "
               . showsPrec 11 b
 
-
 builtin :: Monad m => String -> (NThunk m -> m (NValue m)) -> m (NValue m)
 builtin name f = return $ NVBuiltin name f
 
@@ -126,12 +113,12 @@ builtin3 :: Monad m
 builtin3 name f =
     builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
 
-posFromDelta :: Delta -> NValue m
+posFromDelta :: forall m v t. (MonadThunk v t m, Convertible v t) => Delta -> v
 posFromDelta (deltaInfo -> (f, l, c)) =
-    flip NVSet M.empty $ M.fromList
-        [ ("file", valueThunk $ NVStr f mempty)
-        , ("line", valueThunk $ NVConstant (NInt (fromIntegral l)))
-        , ("column", valueThunk $ NVConstant (NInt (fromIntegral c)))
+    ofVal $ M.fromList
+        [ ("file" :: Text, value @_ @_ @m $ ofVal f)
+        , ("line",        value @_ @_ @m $ ofVal l)
+        , ("column",      value @_ @_ @m $ ofVal c)
         ]
 
 valueRefBool :: Monad m => Bool -> m (NValue m)
@@ -143,7 +130,7 @@ valueRefInt = return . NVConstant . NInt
 valueRefFloat :: Monad m => Float -> m (NValue m)
 valueRefFloat = return . NVConstant . NFloat
 
-thunkEq :: (Framed e m, MonadFile m, MonadVar m)
+thunkEq :: MonadThunk (NValue m) (NThunk m) m
         => NThunk m -> NThunk m -> m Bool
 thunkEq lt rt = force lt $ \lv -> force rt $ \rv -> valueEq lv rv
 
@@ -162,13 +149,13 @@ alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
         _ -> throwE ()
     forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
 
-isDerivation :: (Monad m, Framed e m, MonadFile m, MonadVar m)
-             => HashMap Text (NThunk m) -> m Bool
+isDerivation :: MonadThunk (NValue m) (NThunk m) m
+             => AttrSet (NThunk m) -> m Bool
 isDerivation m = case M.lookup "type" m of
     Nothing -> pure False
     Just t -> force t $ valueEq (NVStr "derivation" mempty)
 
-valueEq :: (Monad m, Framed e m, MonadFile m, MonadVar m)
+valueEq :: MonadThunk (NValue m) (NThunk m) m
         => NValue m -> NValue m -> m Bool
 valueEq l r = case (l, r) of
     (NVStr ls _, NVConstant (NUri ru)) -> pure $ ls == ru

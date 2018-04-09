@@ -57,7 +57,7 @@ genTests = do
   let testsByName = groupBy (takeFileName . dropExtensions) testFiles
   let testsByType = groupBy testType (Map.toList testsByName)
   let testGroups  = map mkTestGroup (Map.toList testsByType)
-  return $ localOption (mkTimeout 200000)
+  return $ localOption (mkTimeout 2000000)
          $ testGroup "Nix (upstream) language tests" testGroups
   where
     testType (fullpath, _files) =

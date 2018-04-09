@@ -11,14 +11,13 @@ module Nix.Scope where
 
 import           Control.Applicative
 import           Control.Monad.Reader
-import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.Text (Text)
 import           Nix.Utils
 
 data Scope m a
-    = Scope (HashMap Text a)
-    | WeakScope (m (HashMap Text a))
+    = Scope (AttrSet a)
+    | WeakScope (m (AttrSet a))
       -- ^ Weak scopes (used by 'with') are delayed until first needed.
     deriving (Functor, Foldable, Traversable)
 
@@ -26,10 +25,10 @@ instance Show (Scope m a) where
     show (Scope m) = show (M.keys m)
     show (WeakScope _) = "<weak scope>"
 
-newScope :: HashMap Text a -> Scope m a
+newScope :: AttrSet a -> Scope m a
 newScope = Scope
 
-newWeakScope :: m (HashMap Text a) -> Scope m a
+newWeakScope :: m (AttrSet a) -> Scope m a
 newWeakScope = WeakScope
 
 isWeakScope :: Scope m a -> Bool
@@ -66,11 +65,11 @@ currentScopes = asks (view hasLens)
 clearScopes :: forall v m e r. Scoped e v m => m r -> m r
 clearScopes = local (set hasLens ([] :: [Scope m v]))
 
-pushScope :: forall v m e r. Scoped e v m => HashMap Text v -> m r -> m r
+pushScope :: forall v m e r. Scoped e v m => AttrSet v -> m r -> m r
 pushScope s = local (over hasLens (Scope @m s :))
 
 pushWeakScope :: forall v m e r. Scoped e v m
-              => m (HashMap Text v) -> m r -> m r
+              => m (AttrSet v) -> m r -> m r
 pushWeakScope s = local (over hasLens (WeakScope s :))
 
 pushScopes :: Scoped e v m => Scopes m v -> m r -> m r

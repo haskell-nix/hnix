@@ -10,7 +10,9 @@ import Control.Monad
 import Control.Monad.Fix
 import Data.Fix
 import Data.Functor.Identity
+import Data.HashMap.Lazy (HashMap)
 import Data.Monoid (Endo)
+import Data.Text (Text)
 
 -- #define ENABLE_TRACING 1
 #if ENABLE_TRACING
@@ -25,6 +27,9 @@ traceM = const (return ())
 
 type DList a = Endo [a]
 
+type AttrSet = HashMap Text
+
+infixr 0 &
 (&) :: a -> (a -> c) -> c
 (&) = flip ($)
 

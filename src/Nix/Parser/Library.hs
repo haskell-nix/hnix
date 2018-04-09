@@ -20,7 +20,6 @@ import qualified Data.HashSet as HashSet
 import           Data.Int (Int64)
 import           Data.List (nub)
 import           Data.Text
-import           Data.Text.Encoding
 import           GHC.Generics
 import           Text.Parser.Char as X hiding (text)
 import           Text.Parser.Combinators as X
@@ -35,6 +34,7 @@ import qualified Text.Parsec as Parsec
 import qualified Text.Parsec.Text as Parsec
 import qualified Data.Text.IO as T
 #else
+import           Data.Text.Encoding
 import qualified Text.Trifecta as Trifecta
 import qualified Text.Trifecta.Delta as Trifecta
 
@@ -42,7 +42,12 @@ import           Text.Trifecta as X (Result(..))
 #endif
 
 newtype NixParser p a = NixParser { runNixParser :: p a }
-  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, Parsing, CharParsing, LookAheadParsing, Trifecta.DeltaParsing)
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, Parsing,
+            CharParsing, LookAheadParsing
+#ifndef USE_PARSEC
+            , Trifecta.DeltaParsing
+#endif
+            )
 
 instance TokenParsing p => TokenParsing (NixParser p) where
   someSpace = NixParser $ buildSomeSpaceParser' someSpace commentStyle
@@ -155,20 +160,6 @@ data Delta
    | Directed !FilePath !Int64 !Int64 !Int64 !Int64
    deriving (Generic, Data, Eq, Ord, Show, Read)
 
-deltaFromTrifecta :: Trifecta.Delta -> Delta
-deltaFromTrifecta = \case
-  Trifecta.Columns a b -> Columns a b
-  Trifecta.Tab a b c -> Tab a b c
-  Trifecta.Lines a b c d -> Lines a b c d
-  Trifecta.Directed a b c d e -> Directed (unpack $ decodeUtf8 a) b c d e
-
-deltaToTrifecta :: Delta -> Trifecta.Delta
-deltaToTrifecta = \case
-  Columns a b -> Trifecta.Columns a b
-  Tab a b c -> Trifecta.Tab a b c
-  Lines a b c d -> Trifecta.Lines a b c d
-  Directed a b c d e -> Trifecta.Directed (encodeUtf8 $ pack a) b c d e
-
 parseFromFileEx :: MonadIO m => Parser a -> FilePath -> m (Result a)
 parseFromString :: Parser a -> String -> Result a
 position :: Parser Delta
@@ -186,7 +177,7 @@ parseFromFileEx p path =
 
 parseFromString p = either (Failure . text . show) Success . Parsec.parse (runNixParser p) "<string>" . pack
 
-position = error "position not implemented for Parsec parser"
+position = return $ Columns 0 0
 
 #else
 
@@ -197,5 +188,19 @@ parseFromFileEx p = Trifecta.parseFromFileEx (runNixParser p)
 parseFromString p = Trifecta.parseString (runNixParser p) (Trifecta.Directed "<string>" 0 0 0 0)
 
 position = deltaFromTrifecta <$> Trifecta.position
+
+deltaFromTrifecta :: Trifecta.Delta -> Delta
+deltaFromTrifecta = \case
+  Trifecta.Columns a b -> Columns a b
+  Trifecta.Tab a b c -> Tab a b c
+  Trifecta.Lines a b c d -> Lines a b c d
+  Trifecta.Directed a b c d e -> Directed (unpack $ decodeUtf8 a) b c d e
+
+deltaToTrifecta :: Delta -> Trifecta.Delta
+deltaToTrifecta = \case
+  Columns a b -> Trifecta.Columns a b
+  Tab a b c -> Trifecta.Tab a b c
+  Lines a b c d -> Trifecta.Lines a b c d
+  Directed a b c d e -> Trifecta.Directed (encodeUtf8 $ pack a) b c d e
 
 #endif

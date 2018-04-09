@@ -4,6 +4,8 @@
 
 module Main where
 
+-- import           Control.DeepSeq
+-- import qualified Control.Exception as Exc
 import           Control.Monad
 import           Control.Monad.ST
 import qualified Nix
@@ -77,6 +79,7 @@ main = do
                    (fullDesc <> progDesc "" <> header "hnix")
 
     processFile opts path = do
+        -- putStrLn "Parsing file..."
         eres <- parseNixFileLoc path
         handleResult opts (Just path) eres
 
@@ -85,6 +88,9 @@ main = do
     handleResult opts mpath = \case
         Failure err -> hPutStrLn stderr $ "Parse failed: " ++ show err
         Success expr -> do
+            -- expr <- Exc.evaluate $ force expr
+            -- putStrLn "Parsing file...done"
+
             when (check opts) $
                 putStrLn $ runST $ Nix.runLintM . renderSymbolic
                     =<< Nix.lint (stripAnnotation expr)
