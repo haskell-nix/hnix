@@ -1,3 +1,5 @@
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DeriveTraversable #-}
@@ -7,8 +9,10 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
+
 -- | The nix expression type and supporting types.
 module Nix.Expr.Types where
 
@@ -264,3 +268,18 @@ stripPositionInfo = transport phi
 
     clear (StaticKey name _) = StaticKey name Nothing
     clear k = k
+
+class ConvertValue v a where
+    ofVal   :: a -> v
+    wantVal :: v -> Maybe a
+
+type Convertible v t =
+    (ConvertValue v Bool,
+     ConvertValue v Int,
+     ConvertValue v Integer,
+     ConvertValue v Float,
+     ConvertValue v Text,
+     ConvertValue v (Maybe Text),  -- text or null
+     ConvertValue v [t],
+     ConvertValue v (AttrSet t, AttrSet Delta),
+     ConvertValue v (AttrSet t))

@@ -7,7 +7,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -29,11 +28,10 @@ import qualified Data.HashMap.Lazy as M
 import           Data.IORef
 import           Data.List
 import           Data.List.Split
-import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Text.Encoding
-import           Nix.Atoms
 import           Nix.Eval
+import           Nix.Exec ()
 import           Nix.Monad
 import           Nix.Monad.Context
 import           Nix.Normal
@@ -57,26 +55,6 @@ newtype Lazy m a = Lazy
     deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
               MonadReader (Context (Lazy m) (NThunk (Lazy m))))
 
-instance (MonadFix m, MonadNix (Lazy m), MonadThrow m, MonadIO m)
-      => MonadExpr (NThunk (Lazy m)) (NValue (Lazy m)) (Lazy m) where
-    embedSet    = return . flip NVSet M.empty
-    projectSet  = \case
-        NVSet s _ -> return $ Just s
-        _ -> return Nothing
-    projectSetWithPos = \case
-        NVSet s p -> return $ Just (s, p)
-        _ -> return Nothing
-
-    type MText (Lazy m) = (Text, DList Text)
-
-    wrapText   = return . (, mempty)
-    unwrapText = return . fst
-
-    embedText   = return . uncurry NVStr
-    projectText = \case
-        NVConstant NNull -> return $ Just Nothing
-        v -> fmap (Just . Just) . valueText True =<< normalForm v
-
 instance MonadIO m => MonadVar (Lazy m) where
     type Var (Lazy m) = IORef
 
@@ -95,7 +73,7 @@ instance MonadCatch m => MonadCatch (Lazy m) where
 instance MonadThrow m => MonadThrow (Lazy m) where
     throwM = Lazy . throwM
 
-instance (MonadFix m, MonadThrow m, MonadIO m) => MonadNix (Lazy m) where
+instance (MonadFix m, MonadThrow m, MonadIO m) => MonadEffects (Lazy m) where
     addPath path = do
         (exitCode, out, _) <-
             liftIO $ readProcessWithExitCode "nix-store" ["--add", path] ""
@@ -152,7 +130,7 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadNix (Lazy m) where
             case eres of
                 Failure err  -> error $ "Parse failed: " ++ show err
                 Success expr -> do
-                    let ref = valueThunk @(Lazy m) (NVPath path')
+                    let ref = value @_ @_ @(Lazy m) (NVPath path')
                     -- Use this cookie so that when we evaluate the next
                     -- import, we'll remember which directory its containing
                     -- file was in.
@@ -171,12 +149,13 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadNix (Lazy m) where
     listDirectory         = liftIO . System.Directory.listDirectory
     getSymbolicLinkStatus = liftIO . System.Posix.Files.getSymbolicLinkStatus
 
-    derivationStrict v = liftIO $ do
+    derivationStrict v = do
+        v' <- normalForm v
         (exitCode, out, _) <-
-            readProcessWithExitCode "nix-instantiate"
+            liftIO $ readProcessWithExitCode "nix-instantiate"
               [ "--eval"
               , "--json"
-              , "-E", "derivationStrict " ++ show (prettyNixValue v) --TODO: use prettyNix to generate this
+              , "-E", "derivationStrict " ++ show (prettyNixValue v') --TODO: use prettyNix to generate this
               ] ""
         case exitCode of
             ExitSuccess ->
@@ -197,3 +176,11 @@ removeDotDotIndirections = intercalate "/" . go [] . splitOn "/"
     where go s [] = reverse s
           go (_:s) ("..":rest) = go s rest
           go s (this:rest) = go (this:s) rest
+
+-- Given a path, determine the nix file to load
+pathToDefaultNixFile :: FilePath -> IO FilePath
+pathToDefaultNixFile p = do
+    isDir <- doesDirectoryExist p
+    pure $ if isDir
+        then p </> "default.nix"
+        else p

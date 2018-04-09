@@ -51,6 +51,7 @@ instance MonadFile (Lint s) where
 instance MonadThrow (Lint s) where
     throwM e = Lint $ ReaderT $ \_ -> unsafeIOToST $ throw e
 
+{-
 instance Eval.MonadExpr (SThunk (Lint s))
              (STRef s (NSymbolicF (NTypeF (Lint s) (SThunk (Lint s)))))
              (Lint s) where
@@ -69,6 +70,7 @@ instance Eval.MonadExpr (SThunk (Lint s))
 
     embedText   = const $ mkSymbolic [TStr]
     projectText = const $ return Nothing
+-}
 
 runLintM :: Lint s a -> ST s a
 runLintM = flip runReaderT (Context emptyScopes []) . runLint

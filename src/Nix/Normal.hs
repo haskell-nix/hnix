@@ -14,36 +14,31 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Monad
-import           Nix.Scope
 import           Nix.Stack
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 
-normalFormBy :: forall e m. Scoped e (NThunk m) m
-             => (forall r. NThunk m -> (NValue m -> m r) -> m r)
-             -> NValue m
+normalFormBy :: Monad m
+             => (forall r. NThunk m -> (NValue m -> m r) -> m r) -> NValue m
              -> m (NValueNF m)
 normalFormBy k = \case
     NVConstant a     -> return $ Fix $ NVConstant a
     NVStr t s        -> return $ Fix $ NVStr t s
-    NVList l         ->
-        Fix . NVList <$> traverse (`k` normalFormBy k) l
-    NVSet s p        ->
-        Fix . flip NVSet p <$> traverse (`k` normalFormBy k) s
-    NVClosure p f    -> do
-        p' <- traverse (fmap (`k` normalFormBy k)) p
-        return $ Fix $ NVClosure p' f
-    NVPath fp -> return $ Fix $ NVPath fp
+    NVList l         -> Fix . NVList <$> traverse (`k` normalFormBy k) l
+    NVSet s p        -> Fix . flip NVSet p <$> traverse (`k` normalFormBy k) s
+    NVClosure p f    -> return $ Fix $ NVClosure p f
+    NVPath fp        -> return $ Fix $ NVPath fp
     NVBuiltin name f -> return $ Fix $ NVBuiltin name f
 
-normalForm :: (Framed e m, Scoped e (NThunk m) m, MonadVar m, MonadFile m)
+normalForm :: (MonadThunk (NValue m) (NThunk m) m)
            => NValue m -> m (NValueNF m)
 normalForm = normalFormBy force
 
-valueText :: forall e m. (Framed e m, MonadVar m, MonadFile m, MonadNix m)
+valueText :: forall e m. (Framed e m, MonadFile m, MonadEffects m)
           => Bool -> NValueNF m -> m (Text, DList Text)
-valueText addPathsToStore = cata phi where
+valueText addPathsToStore = cata phi
+  where
     phi :: NValueF m (m (Text, DList Text)) -> m (Text, DList Text)
     phi (NVConstant a)    = pure (atomText a, mempty)
     phi (NVStr t c)       = pure (t, c)
@@ -63,6 +58,6 @@ valueText addPathsToStore = cata phi where
         | otherwise = pure (Text.pack originalPath, mempty)
     phi (NVBuiltin _ _)    = throwError "Cannot coerce a function to a string"
 
-valueTextNoContext :: (Framed e m, MonadVar m, MonadFile m, MonadNix m)
+valueTextNoContext :: (Framed e m, MonadFile m, MonadEffects m)
                    => Bool -> NValueNF m -> m Text
 valueTextNoContext addPathsToStore = fmap fst . valueText addPathsToStore

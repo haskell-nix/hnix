@@ -191,7 +191,7 @@ prettyNixValue = prettyNix . valueToExpr
         go (NVList l) = NList l
         go (NVSet s p) = NSet [ NamedVar [StaticKey k (M.lookup k p)] v
                               | (k, v) <- toList s ]
-        go (NVClosure p _) = NSym . pack $ "<closure " ++ show (void p) ++ ">"
+        go (NVClosure _ _) = NSym . pack $ "<closure>"
         go (NVPath p) = NLiteralPath p
         go (NVBuiltin name _) = NSym $ Text.pack $ "builtins." ++ name
 
