@@ -1,10 +1,14 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
 
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+
 module Nix.Pretty where
 
+import           Control.Monad
 import           Data.Fix
 import           Data.HashMap.Lazy (toList)
+import qualified Data.HashMap.Lazy as M
 import qualified Data.HashMap.Strict.InsOrd as OM
 import qualified Data.HashSet as HashSet
 import           Data.List (isPrefixOf, sort)
@@ -13,11 +17,12 @@ import           Data.Text (pack, unpack, replace, strip)
 import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Expr
-import           Nix.Monad
-import           Nix.Thunk
+import           Nix.Value
 import           Nix.Parser.Library (reservedNames)
 import           Nix.Parser.Operators
 import           Nix.StringOperations
+import           Nix.Thunk
+import           Nix.Utils hiding ((<$>))
 import           Prelude hiding ((<$>))
 import           Text.PrettyPrint.ANSI.Leijen
 
@@ -103,10 +108,10 @@ prettyBind (Inherit s ns)
  where scope = maybe empty ((<> space) . parens . withoutParens) s
 
 prettyKeyName :: NKeyName NixDoc -> Doc
-prettyKeyName (StaticKey "") = dquotes $ text ""
-prettyKeyName (StaticKey key)
+prettyKeyName (StaticKey "" _) = dquotes $ text ""
+prettyKeyName (StaticKey key _)
   | HashSet.member (unpack key) reservedNames = dquotes $ text $ unpack key
-prettyKeyName (StaticKey key) = text . unpack $ key
+prettyKeyName (StaticKey key _) = text . unpack $ key
 prettyKeyName (DynamicKey key) = runAntiquoted prettyString withoutParens key
 
 prettySelector :: NAttrPath NixDoc -> Doc
@@ -179,22 +184,15 @@ prettyNix = withoutParens . cata phi where
 prettyNixValue :: Functor m => NValueNF m -> Doc
 prettyNixValue = prettyNix . valueToExpr
   where valueToExpr :: Functor m => NValueNF m -> NExpr
-        valueToExpr = hmap go
-        -- hmap does the recursive conversion from NValue to NExpr.
-        -- fun fact: it is not defined in data-fixed, but I was certain it
-        -- should exists so I found it in unification-fd by hoogling its type
-        hmap :: (Functor f, Functor g) => (forall a. f a -> g a)
-             -> Fix f -> Fix g
-        hmap eps = ana (eps . unFix)
+        valueToExpr = transport go
+
         go (NVConstant a) = NConstant a
         go (NVStr t _) = NStr (DoubleQuoted [Plain t])
         go (NVList l) = NList l
-        go (NVSet s) = NSet [NamedVar [StaticKey k] v | (k, v) <- toList s]
-        go (NVClosure s p _) =
-            NSym . pack $ "<closure in " ++ show s
-                ++ " with " ++ show (() <$ p)  ++ ">"
-        go (NVLiteralPath fp) = NLiteralPath fp
-        go (NVEnvPath p) = NEnvPath p
+        go (NVSet s p) = NSet [ NamedVar [StaticKey k (M.lookup k p)] v
+                              | (k, v) <- toList s ]
+        go (NVClosure _ _) = NSym . pack $ "<closure>"
+        go (NVPath p) = NLiteralPath p
         go (NVBuiltin name _) = NSym $ Text.pack $ "builtins." ++ name
 
 printNix :: Functor m => NValueNF m -> String
@@ -203,12 +201,11 @@ printNix = cata phi
         phi (NVConstant a) = unpack $ atomText a
         phi (NVStr t _) = show t
         phi (NVList l) = "[ " ++ unwords l ++ " ]"
-        phi (NVSet s) =
+        phi (NVSet s _) =
             "{ " ++ concat [ unpack k ++ " = " ++ v ++ "; "
                            | (k, v) <- sort $ toList s ] ++ "}"
         phi NVClosure {} = "<<lambda>>"
-        phi (NVLiteralPath fp) = fp
-        phi (NVEnvPath p) = p
+        phi (NVPath fp) = fp
         phi (NVBuiltin name _) = "<<builtin " ++ name ++ ">>"
 
 removeEffects :: Functor m => NValue m -> NValueNF m

@@ -1,9 +1,12 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+
 module ParserTests (tests) where
 
 import           Data.Fix
-import qualified Data.HashMap.Lazy as M
 import qualified Data.HashMap.Strict.InsOrd as OM
 import           Data.Text (pack)
 import           Nix.Atoms
@@ -74,15 +77,15 @@ case_set_inherit :: Assertion
 case_set_inherit = do
   assertParseString "{ e = 3; inherit a b; }" $ Fix $ NSet
     [ NamedVar (mkSelector "e") $ mkInt 3
-    , Inherit Nothing $ StaticKey <$> ["a", "b"]
+    , Inherit Nothing $ flip StaticKey Nothing <$> ["a", "b"]
     ]
   assertParseString "{ inherit; }" $ Fix $ NSet [ Inherit Nothing [] ]
 
 case_set_scoped_inherit :: Assertion
 case_set_scoped_inherit = assertParseString "{ inherit (a) b c; e = 4; inherit(a)b c; }" $ Fix $ NSet
-  [ Inherit (Just (mkSym "a")) $ StaticKey <$> ["b", "c"]
+  [ Inherit (Just (mkSym "a")) $ flip StaticKey Nothing <$> ["b", "c"]
   , NamedVar (mkSelector "e") $ mkInt 4
-  , Inherit (Just (mkSym "a")) $ StaticKey <$> ["b", "c"]
+  , Inherit (Just (mkSym "a")) $ flip StaticKey Nothing <$> ["b", "c"]
   ]
 
 case_set_rec :: Assertion
@@ -96,13 +99,13 @@ case_set_complex_keynames = do
   assertParseString "{ \"\" = null; }" $ Fix $ NSet
     [ NamedVar [DynamicKey (Plain "")] mkNull ]
   assertParseString "{ a.b = 3; a.c = 4; }" $ Fix $ NSet
-    [ NamedVar [StaticKey "a", StaticKey "b"] $ mkInt 3
-    , NamedVar [StaticKey "a", StaticKey "c"] $ mkInt 4
+    [ NamedVar [StaticKey "a" Nothing, StaticKey "b" Nothing] $ mkInt 3
+    , NamedVar [StaticKey "a" Nothing, StaticKey "c" Nothing] $ mkInt 4
     ]
   assertParseString "{ ${let a = \"b\"; in a} = 4; }" $ Fix $ NSet
     [ NamedVar [DynamicKey (Antiquoted letExpr)] $ mkInt 4 ]
   assertParseString "{ \"a${let a = \"b\"; in a}c\".e = 4; }" $ Fix $ NSet
-    [ NamedVar [DynamicKey (Plain str), StaticKey "e"] $ mkInt 4 ]
+    [ NamedVar [DynamicKey (Plain str), StaticKey "e" Nothing] $ mkInt 4 ]
  where
   letExpr = Fix $ NLet [ NamedVar (mkSelector "a") (mkStr "b") ] (mkSym "a")
   str = DoubleQuoted [Plain "a", Antiquoted letExpr, Plain "c"]
@@ -204,7 +207,7 @@ case_let_scoped_inherit :: Assertion
 case_let_scoped_inherit = do
   assertParseString "let a = null; inherit (b) c; in c" $ Fix $ NLet
     [ NamedVar (mkSelector "a") mkNull
-    , Inherit (Just $ mkSym "b") [StaticKey "c"] ]
+    , Inherit (Just $ mkSym "b") [StaticKey "c" Nothing] ]
     (mkSym "c")
   assertParseFail "let inherit (b) c in c"
 
@@ -267,10 +270,10 @@ case_string_antiquote = do
 case_select :: Assertion
 case_select = do
   assertParseString "a .  e .di. f" $ Fix $ NSelect (mkSym "a")
-    [ StaticKey "e", StaticKey "di", StaticKey "f" ]
+    [ StaticKey "e" Nothing, StaticKey "di" Nothing, StaticKey "f" Nothing ]
     Nothing
   assertParseString "a.e . d    or null" $ Fix $ NSelect (mkSym "a")
-    [ StaticKey "e", StaticKey "d" ]
+    [ StaticKey "e" Nothing, StaticKey "d" Nothing ]
     (Just mkNull)
   assertParseString "{}.\"\"or null" $ Fix $ NSelect (Fix (NSet []))
     [ DynamicKey (Plain "") ] (Just mkNull)
@@ -345,19 +348,28 @@ tests :: TestTree
 tests = $testGroupGenerator
 
 --------------------------------------------------------------------------------
+
 assertParseString :: String -> NExpr -> Assertion
 assertParseString str expected = case parseNixString str of
-  Success actual -> assertEqual ("When parsing " ++ str) expected actual
-  Failure err    -> assertFailure $ "Unexpected error parsing `" ++ str ++ "':\n" ++ show err
+  Success actual ->
+      assertEqual ("When parsing " ++ str)
+          (stripPositionInfo expected) (stripPositionInfo actual)
+  Failure err    ->
+      assertFailure $ "Unexpected error parsing `" ++ str ++ "':\n" ++ show err
 
 assertParseFile :: FilePath -> NExpr -> Assertion
 assertParseFile file expected = do
   res <- parseNixFile $ "data/" ++ file
   case res of
-    Success actual -> assertEqual ("Parsing data file " ++ file) expected actual
-    Failure err    -> assertFailure $ "Unexpected error parsing data file `" ++ file ++ "':\n" ++ show err
+    Success actual -> assertEqual ("Parsing data file " ++ file)
+          (stripPositionInfo expected) (stripPositionInfo actual)
+    Failure err    ->
+        assertFailure $ "Unexpected error parsing data file `"
+            ++ file ++ "':\n" ++ show err
 
 assertParseFail :: String -> Assertion
 assertParseFail str = case parseNixString str of
   Failure _ -> return ()
-  Success r -> assertFailure $ "Unexpected success parsing `" ++ str ++ ":\nParsed value: " ++ show r
+  Success r ->
+      assertFailure $ "Unexpected success parsing `"
+          ++ str ++ ":\nParsed value: " ++ show r

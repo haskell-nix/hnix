@@ -10,7 +10,7 @@ import           Data.Ord
 import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Expr.Types
-import           Nix.Monad
+import           Nix.Value
 import           Text.XML.Light
 
 toXML :: Functor m => NValueNF m -> String
@@ -30,16 +30,14 @@ toXML = (.) ((++ "\n") .
     NVStr t _ -> mkElem "string" "value" (Text.unpack t)
     NVList l  -> Element (unqual "list") [] (Elem <$> l) Nothing
 
-    NVSet s   -> Element (unqual "attrs") []
+    NVSet s _ -> Element (unqual "attrs") []
         (map (\(k, v) -> Elem (Element (unqual "attr")
                                       [Attr (unqual "name") (Text.unpack k)]
                                       [Elem v] Nothing))
              (sortBy (comparing fst) $ M.toList s)) Nothing
 
-    NVClosure _ p _  ->
-        Element (unqual "function") [] (paramsXML p) Nothing
-    NVLiteralPath fp -> mkElem "path" "value" fp
-    NVEnvPath p      -> mkElem "path" "value" p
+    NVClosure p _  -> Element (unqual "function") [] (paramsXML p) Nothing
+    NVPath fp -> mkElem "path" "value" fp
     NVBuiltin name _ -> mkElem "function" "name" name
 
 mkElem :: String -> String -> String -> Element
@@ -51,8 +49,8 @@ paramsXML (Param name) =
 paramsXML (ParamSet s b mname) =
     [Elem $ Element (unqual "attrspat") (battr ++ nattr) (paramSetXML s) Nothing]
   where
-    battr = if b then [Attr (unqual "ellipsis") "1"] else []
-    nattr = maybe [] ((:[]) . Attr (unqual "name") . Text.unpack) (mname)
+    battr = [ Attr (unqual "ellipsis") "1" | b ]
+    nattr = maybe [] ((:[]) . Attr (unqual "name") . Text.unpack) mname
 
 paramSetXML :: ParamSet r -> [Content]
 paramSetXML m = map (\(k,_) -> Elem $ mkElem "attr" "name" (Text.unpack k)) $ OM.toList m

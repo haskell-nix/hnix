@@ -1,166 +1,194 @@
-Name:                hnix
-Version:             0.5.0
-Synopsis:            Haskell implementation of the Nix language
-Description:
-  Haskell implementation of the Nix language.
+-- This file has been generated from package.yaml by hpack version 0.27.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 819d3fde54888c3fb579814cede8ab0826428e189c75f0d361d0938f4e7d4511
 
-License:             BSD3
-License-file:        LICENSE
-Author:              John Wiegley
-Maintainer:          johnw@newartisans.com
-Category:            Data, Nix
-Build-type:          Simple
-Cabal-version:       >=1.10
-Homepage:            http://github.com/jwiegley/hnix
+name:           hnix
+version:        0.5.0
+synopsis:       Haskell implementation of the Nix language
+description:    Haskell implementation of the Nix language.
+category:       System, Data, Nix
+homepage:       https://github.com/jwiegley/hnix#readme
+bug-reports:    https://github.com/jwiegley/hnix/issues
+author:         John Wiegley
+maintainer:     johnw@newartisans.com
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+cabal-version:  >= 1.10
 
-Extra-source-files: data/*.nix
+extra-source-files:
+    README.md
 
-Flag Parsec
-  Description: Use parsec instead of Trifecta
-  Default: False
+source-repository head
+  type: git
+  location: https://github.com/jwiegley/hnix
 
-Library
-  Default-language: Haskell2010
-  Exposed-modules:
-    Nix
-    Nix.Atoms
-    Nix.Scope
-    Nix.Stack
-    Nix.Eval
-    Nix.XML
-    Nix.Thunk
-    Nix.Lint
-    Nix.Monad
-    Nix.Monad.Instance
-    Nix.Builtins
-    Nix.Parser
-    Nix.Expr
-    Nix.Pretty
-    Nix.Parser.Operators
-    Nix.StringOperations
-    Nix.TH
-    Nix.Expr.Types
-    Nix.Expr.Types.Annotated
-  Other-modules:
-    Nix.Parser.Library
-    Nix.Expr.Shorthands
-    Nix.Utils
-  Build-depends:
-      base                     >= 4.9          && < 5
-    , aeson
+flag parsec
+  description: Use parsec instead of Trifecta
+  manual: True
+  default: False
+
+library
+  exposed-modules:
+      Nix
+      Nix.Atoms
+      Nix.Builtins
+      Nix.Eval
+      Nix.Exec
+      Nix.Expr
+      Nix.Expr.Shorthands
+      Nix.Expr.Types
+      Nix.Expr.Types.Annotated
+      Nix.Lint
+      Nix.Monad
+      Nix.Monad.Context
+      Nix.Monad.Lazy
+      Nix.Monad.Lint
+      Nix.Normal
+      Nix.Parser
+      Nix.Parser.Library
+      Nix.Parser.Operators
+      Nix.Pretty
+      Nix.Scope
+      Nix.Stack
+      Nix.StringOperations
+      Nix.TH
+      Nix.Thunk
+      Nix.Utils
+      Nix.Value
+      Nix.XML
+  other-modules:
+      Paths_hnix
+  hs-source-dirs:
+      src
+  ghc-options: -Wall
+  build-depends:
+      aeson
     , ansi-wl-pprint
+    , array >=0.4 && <0.6
+    , base >=4.9 && <5
     , base16-bytestring
+    , bytestring
     , containers
     , cryptohash
-    , deriving-compat >= 0.3 && < 0.5
-    , text
-    , bytestring
-    , monadlist
-    , mtl
-    , transformers
-    , parsers >= 0.10
-    , insert-ordered-containers >= 0.2.2
-    , unordered-containers >= 0.2.9 && < 0.3
     , data-fix
     , deepseq
-    , exceptions
-    , insert-ordered-containers >= 0.2.2 && < 0.3
-    , process
+    , deriving-compat >=0.3 && <0.5
     , directory
+    , exceptions
     , filepath
-    , scientific
-    , semigroups >= 0.18 && < 0.19
-    , split
-    , template-haskell
+    , insert-ordered-containers >=0.2.2 && <0.3
+    , monadlist
+    , mtl
+    , parsers >=0.10
+    , process
     , regex-tdfa
     , regex-tdfa-text
-    , these
-    , unix
+    , scientific
+    , semigroups >=0.18 && <0.19
+    , split
     , syb
+    , template-haskell
+    , text
+    , these
+    , transformers
+    , unix
+    , unordered-containers >=0.2.9 && <0.3
     , vector
     , xml
   if flag(parsec)
-    Cpp-options: -DUSE_PARSEC
-    Build-depends: parsec
+    cpp-options: -DUSE_PARSEC
+    build-depends:
+        parsec
   else
-    Build-depends: trifecta
-  ghc-options: -Wall -fno-warn-name-shadowing
+    build-depends:
+        trifecta
+  default-language: Haskell2010
 
-Executable hnix
-  Default-language: Haskell2010
-  Main-is: Main.hs
-  Hs-source-dirs: main
-  Default-extensions:
-    DataKinds
-    DeriveDataTypeable
-    DeriveFunctor
-    DeriveGeneric
-    FlexibleContexts
-    FlexibleInstances
-    GADTs
-    KindSignatures
-    LambdaCase
-    MultiWayIf
-    OverloadedStrings
-    PatternGuards
-    RankNTypes
-    TupleSections
-  Build-depends:
-      base                     >= 4.3          && < 5
-    , hnix
+executable hnix
+  main-is: Main.hs
+  other-modules:
+      Paths_hnix
+  hs-source-dirs:
+      main
+  ghc-options: -Wall
+  build-depends:
+      ansi-wl-pprint
+    , base >=4.9 && <5
     , containers
-    , ansi-wl-pprint
     , data-fix
     , deepseq
+    , exceptions
+    , hnix
+    , insert-ordered-containers >=0.2.2 && <0.3
+    , mtl
     , optparse-applicative
-    , text
     , template-haskell
-    , transformers
-    , filepath
-  Ghc-options: -Wall
-
-Test-suite hnix-tests
-  Type: exitcode-stdio-1.0
-  Hs-source-dirs: tests
-  Default-language: Haskell2010
-  Main-is: Main.hs
-  Other-modules:
-    ParserTests
-    EvalTests
-    PrettyTests
-    NixLanguageTests
-  Build-depends:
-      base >= 4.3 && < 5
-    , containers
     , text
+    , transformers
+    , unordered-containers >=0.2.9 && <0.3
+  default-language: Haskell2010
+
+test-suite hnix-tests
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  other-modules:
+      EvalTests
+      NixLanguageTests
+      ParserTests
+      PrettyTests
+      TestCommon
+      Paths_hnix
+  hs-source-dirs:
+      tests
+  ghc-options: -Wall
+  build-depends:
+      Glob
+    , ansi-wl-pprint
+    , base >=4.9 && <5
+    , containers
     , data-fix
-    , hnix
-    , tasty
-    , tasty-th
-    , tasty-hunit
-    , directory
-    , Glob
+    , exceptions
     , filepath
-    , split
-    , transformers
-    , interpolate
-    , insert-ordered-containers
-    , unordered-containers
-
-Benchmark hnix-benchmarks
-  Type: exitcode-stdio-1.0
-  Hs-source-dirs: benchmarks
-  Default-language: Haskell2010
-  Main-is: Main.hs
-  Other-modules:
-    ParserBench
-  Build-depends:
-      base >= 4.3 && < 5
-    , containers
-    , text
     , hnix
-    , criterion
+    , insert-ordered-containers >=0.2.2 && <0.3
+    , interpolate
+    , mtl
+    , process
+    , split
+    , tasty
+    , tasty-hunit
+    , tasty-th
+    , template-haskell
+    , text
+    , transformers
+    , unix
+    , unordered-containers >=0.2.9 && <0.3
+  default-language: Haskell2010
 
-source-repository head
-  type:     git
-  location: git://github.com/jwiegley/hnix.git
+benchmark hnix-benchmarks
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  other-modules:
+      ParserBench
+      Paths_hnix
+  hs-source-dirs:
+      benchmarks
+  ghc-options: -Wall
+  build-depends:
+      ansi-wl-pprint
+    , base >=4.9 && <5
+    , containers
+    , criterion
+    , data-fix
+    , exceptions
+    , hnix
+    , insert-ordered-containers >=0.2.2 && <0.3
+    , mtl
+    , template-haskell
+    , text
+    , transformers
+    , unordered-containers >=0.2.9 && <0.3
+  default-language: Haskell2010

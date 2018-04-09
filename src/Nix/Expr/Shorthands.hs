@@ -13,6 +13,7 @@ import           Data.Monoid
 import           Data.Text (Text)
 import           Nix.Atoms
 import           Nix.Expr.Types
+import           Nix.Utils
 
 -- | Make an integer literal expression.
 mkInt :: Integer -> NExpr
@@ -78,7 +79,7 @@ mkSymF :: Text -> NExprF a
 mkSymF = NSym
 
 mkSelector :: Text -> NAttrPath NExpr
-mkSelector = (:[]) . StaticKey
+mkSelector = (:[]) . flip StaticKey Nothing
 
 mkBool :: Bool -> NExpr
 mkBool = Fix . mkBoolF
@@ -137,8 +138,8 @@ mkDots e [] = e
 mkDots (Fix (NSelect e keys' x)) keys =
   -- Special case: if the expression in the first argument is already
   -- a dotted expression, just extend it.
-  Fix (NSelect e (keys' <> map StaticKey keys) x)
-mkDots e keys = Fix $ NSelect e (map StaticKey keys) Nothing
+  Fix (NSelect e (keys' <> map (StaticKey ?? Nothing) keys) x)
+mkDots e keys = Fix $ NSelect e (map (StaticKey ?? Nothing) keys) Nothing
 
 -- | An `inherit` clause without an expression to pull from.
 inherit :: [NKeyName e] -> Binding e

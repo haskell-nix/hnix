@@ -1,6 +1,8 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+
 module Nix.Parser (
   parseNixFile,
   parseNixFileLoc,
@@ -130,7 +132,10 @@ pathChars :: String
 pathChars = ['A'..'Z'] ++ ['a'..'z'] ++ "._-+" ++ ['0'..'9']
 
 slash :: Parser Char
-slash = try (char '/' <* notFollowedBy (void (char '/') <|> someSpace)) <?> "slash"
+slash = try (char '/' <* notFollowedBy (void (char '/') <|>
+                                        void (char '*') <|>
+                                        someSpace))
+    <?> "slash"
 
 -- | A path surrounded by angle brackets, indicating that it should be
 -- looked up in the NIX_PATH environment variable at evaluation.
@@ -159,7 +164,8 @@ nixLet = annotateLocation1 $ reserved "let"
         <*> (whiteSpace *> reserved "in" *> nixExprLoc)
     -- Let expressions `let {..., body = ...}' are just desugared
     -- into `(rec {..., body = ...}).body'.
-    letBody = (\x -> NSelect x [StaticKey "body"] Nothing) <$> aset
+    letBody = (\x pos -> NSelect x [StaticKey "body" (Just pos)] Nothing)
+        <$> aset <*> position
     aset = annotateLocation1 $ NRecSet <$> braces nixBinders
 
 
@@ -284,7 +290,9 @@ nixBinders = (inherit <|> namedVar) `endBy` symbolic ';' where
 
 keyName :: Parser (NKeyName NExprLoc)
 keyName = dynamicKey <|> staticKey where
-  staticKey = StaticKey <$> identifier
+  staticKey = do
+      beg <- position
+      StaticKey <$> identifier <*> pure (Just beg)
   dynamicKey = DynamicKey <$> nixAntiquoted nixString
 
 nixSet :: Parser NExprLoc

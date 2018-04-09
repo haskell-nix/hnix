@@ -10,6 +10,8 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 
+{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+
 module Nix.Lint where
 
 import           Control.Monad
@@ -190,7 +192,6 @@ merge context = go
 type MonadLint e m =
     ( Scoped e (SThunk m) m
     , Framed e m
-    , MonadExpr (SThunk m) (Symbolic m) m
     , MonadFix m
     , MonadFile m
     , MonadVar m
@@ -230,6 +231,9 @@ lintExpr = cata lint
 lint :: forall e m. MonadLint e m
      => NExprF (m (Symbolic m)) -> m (Symbolic m)
 
+lint = undefined
+
+{-
 lint (NSym var) = do
     mres <- lookupVar var
     case mres of
@@ -326,15 +330,15 @@ lint e@(NList l) = do
         >>= (\t -> mkSymbolic [TList (svalueThunk t)])
 
 lint (NSet binds) = do
-    s <- evalBinds True False binds
+    (s, _) <- evalBinds True False binds
     mkSymbolic [TSet (Just s)]
 
 lint (NRecSet binds) = do
-    s <- evalBinds True True binds
+    (s, _) <- evalBinds True True binds
     mkSymbolic [TSet (Just s)]
 
 lint (NLet binds body) = do
-    s <- evalBinds True True binds
+    (s, _) <- evalBinds True True binds
     pushScope s body
 
 lint e@(NIf cond t f) = do
@@ -357,41 +361,42 @@ lint e@(NApp fun arg) = snd <$> lintApp (void e) fun arg
 lint (NAbs params body) = do
     scope <- currentScopes @_ @(SThunk m)
     mkSymbolic [TClosure scope (sthunk <$> params) (sthunk body)]
+-}
 
 infixl 1 `lintApp`
 lintApp :: forall e m. MonadLint e m
         => NExprF () -> m (Symbolic m) -> m (Symbolic m)
         -> m (HashMap Text (Symbolic m), Symbolic m)
-lintApp context fun arg = fun >>= unpackSymbolic >>= \case
-    NAny -> throwError "Cannot apply something not known to be a function"
-    NMany xs -> do
-        (args:_, ys) <- fmap unzip $ forM xs $ \case
-            TClosure scope params f -> arg >>= unpackSymbolic >>= \case
-                NAny -> do
-                    pset <- case params of
-                       Param name ->
-                           M.singleton name <$> everyPossible
-                       ParamSet _s _ (Just _) -> error "NYI"
-                       ParamSet s _ Nothing ->
-                           traverse (const everyPossible) (OM.toHashMap s)
-                    pset' <- traverse (sthunk . pure) pset
-                    arg'  <- sthunk $ mkSymbolic [TSet (Just pset')]
-                    args  <- buildArgument params arg'
-                    res   <- withScopes @(SThunk m) scope $
-                        pushScope args $ sforce ?? pure =<< f
-                    return (pset, res)
+lintApp context fun arg = undefined -- fun >>= unpackSymbolic >>= \case
+    -- NAny -> throwError "Cannot apply something not known to be a function"
+    -- NMany xs -> do
+    --     (args:_, ys) <- fmap unzip $ forM xs $ \case
+    --         TClosure scope params f -> arg >>= unpackSymbolic >>= \case
+    --             NAny -> do
+    --                 pset <- case params of
+    --                    Param name ->
+    --                        M.singleton name <$> everyPossible
+    --                    ParamSet _s _ (Just _) -> error "NYI"
+    --                    ParamSet s _ Nothing ->
+    --                        traverse (const everyPossible) (OM.toHashMap s)
+    --                 pset' <- traverse (sthunk . pure) pset
+    --                 arg'  <- sthunk $ mkSymbolic [TSet (Just pset')]
+    --                 args  <- buildArgument params arg'
+    --                 res   <- withScopes @(SThunk m) scope $
+    --                     pushScope args $ sforce ?? pure =<< f
+    --                 return (pset, res)
 
-                NMany [TSet (Just _)] -> do
-                    args <- buildArgument params =<< sthunk arg
-                    res <- clearScopes @(SThunk m) $
-                        pushScope args $ sforce ?? pure =<< f
-                    args' <- traverse (sforce ?? pure) args
-                    return (args', res)
+    --             NMany [TSet (Just _)] -> do
+    --                 args <- buildArgument params =<< sthunk arg
+    --                 res <- clearScopes @(SThunk m) $
+    --                     pushScope args $ sforce ?? pure =<< f
+    --                 args' <- traverse (sforce ?? pure) args
+    --                 return (args', res)
 
-                NMany _ -> throwError "NYI: lintApp NMany not set"
-            TBuiltin _ _f -> throwError "NYI: lintApp builtin"
-            TSet _m -> throwError "NYI: lintApp Set"
-            _x -> throwError "Attempt to call non-function"
+    --             NMany _ -> throwError "NYI: lintApp NMany not set"
+    --         TBuiltin _ _f -> throwError "NYI: lintApp builtin"
+    --         TSet _m -> throwError "NYI: lintApp Set"
+    --         _x -> throwError "Attempt to call non-function"
 
-        y <- everyPossible
-        (args,) <$> foldM (unify context) y ys
+    --     y <- everyPossible
+    --     (args,) <$> foldM (unify context) y ys

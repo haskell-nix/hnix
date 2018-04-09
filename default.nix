@@ -35,6 +35,10 @@ let
         sha256 = "0l0g6ns5bcrcaij0wbdgc04qyl9h0vk1kx9lkzdkwj9v51l26azm";
       };
     };
+    modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
+      testHaskellDepends = attrs.testHaskellDepends ++
+        [ pkgs.nix haskellPackages.hpack ];
+    });
   };
 
   variant = if doBenchmark

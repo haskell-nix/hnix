@@ -16,16 +16,16 @@ import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           GHC.Exts
 import           Nix
-import           Nix.Monad
-import           Nix.Monad.Instance
 import           Nix.Parser
 import           Nix.Pretty
+import           Nix.Utils
+import           Nix.Stack
 import           Nix.XML
-import           System.Environment
 import           System.FilePath
 import           System.FilePath.Glob (compile, globDir1)
 import           Test.Tasty
 import           Test.Tasty.HUnit
+import           TestCommon
 
 {-
 From (git://nix)/tests/lang.sh we see that
@@ -47,7 +47,6 @@ From (git://nix)/tests/lang.sh we see that
     TEST_VAR=foo should be in all the environments # for eval-okay-getenv.nix
 -}
 
-
 groupBy :: Ord k => (v -> k) -> [v] -> Map k [v]
 groupBy key = Map.fromListWith (++) . map (key &&& pure)
 
@@ -58,10 +57,11 @@ genTests = do
   let testsByName = groupBy (takeFileName . dropExtensions) testFiles
   let testsByType = groupBy testType (Map.toList testsByName)
   let testGroups  = map mkTestGroup (Map.toList testsByType)
-  return $ localOption (mkTimeout 100000)
+  return $ localOption (mkTimeout 2000000)
          $ testGroup "Nix (upstream) language tests" testGroups
   where
-    testType (fullpath, _files) = take 2 $ splitOn "-" $ takeFileName fullpath
+    testType (fullpath, _files) =
+        take 2 $ splitOn "-" $ takeFileName fullpath
     mkTestGroup (kind, tests) =
         testGroup (unwords kind) $ map (mkTestCase kind) tests
     mkTestCase kind (basename, files) =
@@ -75,7 +75,8 @@ genTests = do
 assertParse :: FilePath -> Assertion
 assertParse file = parseNixFile file >>= \case
   Success expr -> pure $! runST $ void $ lint expr
-  Failure err  -> assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
+  Failure err  ->
+      assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
 
 assertParseFail :: FilePath -> Assertion
 assertParseFail file = do
@@ -90,43 +91,36 @@ assertParseFail file = do
 
 assertLangOk :: FilePath -> Assertion
 assertLangOk file = do
-  actual <- printNix <$> nixEvalFile (file ++ ".nix")
+  actual <- printNix <$> hnixEvalFile (file ++ ".nix")
   expected <- Text.readFile $ file ++ ".exp"
   assertEqual "" expected $ Text.pack (actual ++ "\n")
 
 assertLangOkXml :: FilePath -> Assertion
 assertLangOkXml file = do
-  actual <- toXML <$> nixEvalFile (file ++ ".nix")
+  actual <- toXML <$> hnixEvalFile (file ++ ".nix")
   expected <- Text.readFile $ file ++ ".exp.xml"
   assertEqual "" expected $ Text.pack actual
 
 assertEval :: [FilePath] -> Assertion
-assertEval files =
-  case delete ".nix" $ sort $ map takeExtensions files of
-    [] -> assertLangOkXml name
-    [".exp"] -> assertLangOk name
-    [".exp.disabled"] -> return ()
-    [".exp-disabled"] -> return ()
-    [".exp", ".flags"] -> assertFailure $ "Support for flags not implemented (needed by " ++ name ++ ".nix)."
-    _ -> assertFailure $ "Unknown test type " ++ show files
+assertEval files = catch go $ \case
+    NixEvalException str -> error $ "Evaluation error: " ++ str
   where
-    name = "data/nix/tests/lang/" ++ the (map (takeFileName . dropExtensions) files)
+    go = case delete ".nix" $ sort $ map takeExtensions files of
+        [] -> assertLangOkXml name
+        [".exp"] -> assertLangOk name
+        [".exp.disabled"] -> return ()
+        [".exp-disabled"] -> return ()
+        [".exp", ".flags"] ->
+            assertFailure $ "Support for flags not implemented (needed by "
+                ++ name ++ ".nix)."
+        _ -> assertFailure $ "Unknown test type " ++ show files
+      where
+        name = "data/nix/tests/lang/"
+            ++ the (map (takeFileName . dropExtensions) files)
 
 assertEvalFail :: FilePath -> Assertion
-assertEvalFail file = catch eval (\(ErrorCall _) -> return ())
-  where
-    eval = do
-      evalResult <- printNix <$> nixEvalFile file
-      evalResult `seq` assertFailure $
-          file ++ " should not evaluate.\nThe evaluation result was `"
-               ++ evalResult ++ "`."
-
-nixEvalFile :: FilePath -> IO (NValueNF (Lazy IO))
-nixEvalFile file =  do
-  parseResult <- parseNixFileLoc file
-  case parseResult of
-    Failure err        ->
-        error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
-    Success expression -> do
-        setEnv "TEST_VAR" "foo"
-        evalLoc (Just file) expression
+assertEvalFail file = catch ?? (\(_ :: SomeException) -> return ()) $ do
+  evalResult <- printNix <$> hnixEvalFile file
+  evalResult `seq` assertFailure $
+      file ++ " should not evaluate.\nThe evaluation result was `"
+           ++ evalResult ++ "`."

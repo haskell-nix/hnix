@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFoldable     #-}
 {-# LANGUAGE DeriveFunctor      #-}
@@ -18,11 +19,13 @@ module Nix.Expr.Types.Annotated
   , Delta(..)
   )where
 
+import Control.DeepSeq
 import Data.Data
 import Data.Fix
 import Data.Function (on)
 import Data.Functor.Compose
 import Data.Semigroup
+import Data.Text (Text, pack)
 import GHC.Generics
 import Nix.Expr.Types
 import Nix.Parser.Library (Delta(..))
@@ -32,7 +35,7 @@ import Text.Show.Deriving
 data SrcSpan = SrcSpan{ spanBegin :: Delta
                       , spanEnd   :: Delta
                       }
-  deriving (Ord, Eq, Generic, Typeable, Data, Show)
+  deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData)
 
 -- | A type constructor applied to a type along with an annotation
 --
@@ -41,8 +44,8 @@ data SrcSpan = SrcSpan{ spanBegin :: Delta
 data Ann ann a = Ann{ annotation :: ann
                     , annotated  :: a
                     }
-  deriving (Ord, Eq, Data, Generic, Typeable, Functor,
-            Foldable, Traversable, Read, Show)
+  deriving (Ord, Eq, Data, Generic, Generic1, Typeable, Functor,
+            Foldable, Traversable, Read, Show, NFData, NFData1)
 
 $(deriveShow1 ''Ann)
 
@@ -59,6 +62,8 @@ type NExprLocF = AnnF SrcSpan NExprF
 
 -- | A nix expression with source location at each subexpression.
 type NExprLoc = Fix NExprLocF
+
+instance NFData NExprLoc
 
 pattern AnnE :: forall ann (g :: * -> *). ann
              -> g (Fix (Compose (Ann ann) g)) -> Fix (Compose (Ann ann) g)
@@ -98,3 +103,10 @@ nAbs _ _ = error "nAbs: unexpected"
 
 nStr :: Ann SrcSpan (NString NExprLoc) -> NExprLoc
 nStr (Ann s1 s) = AnnE s1 (NStr s)
+
+deltaInfo :: Delta -> (Text, Int, Int)
+deltaInfo = \case
+    Columns c _         -> ("<string>", 1, fromIntegral c + 1)
+    Tab {}              -> ("<string>", 1, 1)
+    Lines l _ _ _       -> ("<string>", fromIntegral l + 1, 1)
+    Directed fn l c _ _ -> (pack fn, fromIntegral l + 1, fromIntegral c + 1)

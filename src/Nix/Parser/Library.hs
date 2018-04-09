@@ -1,21 +1,26 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Nix.Parser.Library
   ( module Nix.Parser.Library
   , module X
-  , Trifecta.Delta(..)
   ) where
 
 import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.IO.Class
+import           Data.Data
 import           Data.Functor
 import qualified Data.HashSet as HashSet
+import           Data.Int (Int64)
 import           Data.List (nub)
 import           Data.Text
+import           GHC.Generics
 import           Text.Parser.Char as X hiding (text)
 import           Text.Parser.Combinators as X
 import           Text.Parser.Expression as X
@@ -29,6 +34,7 @@ import qualified Text.Parsec as Parsec
 import qualified Text.Parsec.Text as Parsec
 import qualified Data.Text.IO as T
 #else
+import           Data.Text.Encoding
 import qualified Text.Trifecta as Trifecta
 import qualified Text.Trifecta.Delta as Trifecta
 
@@ -36,7 +42,12 @@ import           Text.Trifecta as X (Result(..))
 #endif
 
 newtype NixParser p a = NixParser { runNixParser :: p a }
-  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, Parsing, CharParsing, LookAheadParsing, Trifecta.DeltaParsing)
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, Parsing,
+            CharParsing, LookAheadParsing
+#ifndef USE_PARSEC
+            , Trifecta.DeltaParsing
+#endif
+            )
 
 instance TokenParsing p => TokenParsing (NixParser p) where
   someSpace = NixParser $ buildSomeSpaceParser' someSpace commentStyle
@@ -82,7 +93,7 @@ commentStyle = CommentStyle
   { _commentStart = "/*"
   , _commentEnd   = "*/"
   , _commentLine  = "#"
-  , _commentNesting = True
+  , _commentNesting = False
   }
 
 identStyle :: CharParsing m => IdentifierStyle m
@@ -102,14 +113,15 @@ reserved :: (TokenParsing m, Monad m) => String -> m ()
 reserved = reserve identStyle
 
 reservedOp :: TokenParsing m => String -> m ()
-reservedOp o = token $ try $ () <$
-  highlight ReservedOperator (string o) <* (notFollowedBy opLetter <?> "end of " ++ o)
+reservedOp o = token $ try $ void $
+  highlight ReservedOperator (string o)
+      <* (notFollowedBy opLetter <?> "end of " ++ o)
 
 opStart :: CharParsing m => m Char
 opStart = oneOf ".+-*/=<>&|!?"
 
 opLetter :: CharParsing m => m Char
-opLetter = oneOf ">-+/&|="
+opLetter = oneOf ">+/&|="
 
 identStart :: CharParsing m => m Char
 identStart = letter <|> char '_'
@@ -140,9 +152,17 @@ someTill p end = go
     scan = (end $> []) <|>  go
 
 --------------------------------------------------------------------------------
+-- | Like Text.Trifecta.Delta.Delta, but with FilePath instead of ByteString
+data Delta
+   = Columns !Int64 !Int64
+   | Tab !Int64 !Int64 !Int64
+   | Lines !Int64 !Int64 !Int64 !Int64
+   | Directed !FilePath !Int64 !Int64 !Int64 !Int64
+   deriving (Generic, Data, Eq, Ord, Show, Read)
+
 parseFromFileEx :: MonadIO m => Parser a -> FilePath -> m (Result a)
 parseFromString :: Parser a -> String -> Result a
-position :: Parser Trifecta.Delta
+position :: Parser Delta
 
 #if USE_PARSEC
 data Result a = Success a
@@ -157,7 +177,7 @@ parseFromFileEx p path =
 
 parseFromString p = either (Failure . text . show) Success . Parsec.parse (runNixParser p) "<string>" . pack
 
-position = error "position not implemented for Parsec parser"
+position = return $ Columns 0 0
 
 #else
 
@@ -167,6 +187,20 @@ parseFromFileEx p = Trifecta.parseFromFileEx (runNixParser p)
 
 parseFromString p = Trifecta.parseString (runNixParser p) (Trifecta.Directed "<string>" 0 0 0 0)
 
-position = Trifecta.position
+position = deltaFromTrifecta <$> Trifecta.position
+
+deltaFromTrifecta :: Trifecta.Delta -> Delta
+deltaFromTrifecta = \case
+  Trifecta.Columns a b -> Columns a b
+  Trifecta.Tab a b c -> Tab a b c
+  Trifecta.Lines a b c d -> Lines a b c d
+  Trifecta.Directed a b c d e -> Directed (unpack $ decodeUtf8 a) b c d e
+
+deltaToTrifecta :: Delta -> Trifecta.Delta
+deltaToTrifecta = \case
+  Columns a b -> Trifecta.Columns a b
+  Tab a b c -> Trifecta.Tab a b c
+  Lines a b c d -> Trifecta.Lines a b c d
+  Directed a b c d e -> Trifecta.Directed (encodeUtf8 $ pack a) b c d e
 
 #endif

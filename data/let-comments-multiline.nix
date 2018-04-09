@@ -4,7 +4,6 @@ let
    /* we can also nest these comments
     */ /*
    */
-  */
   b.c = { e = {}; };
   /* just some more comments
    */
