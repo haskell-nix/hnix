@@ -36,14 +36,14 @@ import           Nix.Utils
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.
 data NValueF m r
-    = NVConstant !NAtom
+    = NVConstant NAtom
      -- | A string has a value and a context, which can be used to record what a
      -- string has been build from
-    | NVStr !Text !(DList Text)
-    | NVPath !FilePath
+    | NVStr Text (DList Text)
+    | NVPath FilePath
     | NVList [r]
-    | NVSet !(AttrSet r) !(AttrSet Delta)
-    | NVClosure !(Params ()) (m (NValue m) -> m (NValue m))
+    | NVSet (AttrSet r) (AttrSet Delta)
+    | NVClosure (Params ()) (m (NValue m) -> m (NValue m))
       -- ^ A function is a closed set of parameters representing the "call
       --   signature", used at application time to check the type of arguments
       --   passed to the function. Since it supports default values which may
@@ -55,7 +55,7 @@ data NValueF m r
       --   Note that 'm r' is being used here because effectively a function
       --   and its set of default arguments is "never fully evaluated". This
       --   enforces in the type that it must be re-evaluated for each call.
-    | NVBuiltin !String (NThunk m -> m (NValue m))
+    | NVBuiltin String (NThunk m -> m (NValue m))
       -- ^ A builtin function is itself already in normal form. Also, it may
       --   or may not choose to evaluate its argument in the production of a
       --   result.
