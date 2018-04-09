@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 819d3fde54888c3fb579814cede8ab0826428e189c75f0d361d0938f4e7d4511
+-- hash: 59b163436955fe71d606be041b46cadfa36f494fb45ea40526c82b5dae8cafc8
 
 name:           hnix
 version:        0.5.0
@@ -24,11 +24,6 @@ extra-source-files:
 source-repository head
   type: git
   location: https://github.com/jwiegley/hnix
-
-flag parsec
-  description: Use parsec instead of Trifecta
-  manual: True
-  default: False
 
 library
   exposed-modules:
@@ -63,7 +58,7 @@ library
       Paths_hnix
   hs-source-dirs:
       src
-  ghc-options: -Wall
+  ghc-options: -Wall -fexpose-all-unfoldings
   build-depends:
       aeson
     , ansi-wl-pprint
@@ -80,9 +75,9 @@ library
     , exceptions
     , filepath
     , insert-ordered-containers >=0.2.2 && <0.3
+    , megaparsec
     , monadlist
     , mtl
-    , parsers >=0.10
     , process
     , regex-tdfa
     , regex-tdfa-text
@@ -98,13 +93,6 @@ library
     , unordered-containers >=0.2.9 && <0.3
     , vector
     , xml
-  if flag(parsec)
-    cpp-options: -DUSE_PARSEC
-    build-depends:
-        parsec
-  else
-    build-depends:
-        trifecta
   default-language: Haskell2010
 
 executable hnix
@@ -113,7 +101,7 @@ executable hnix
       Paths_hnix
   hs-source-dirs:
       main
-  ghc-options: -Wall
+  ghc-options: -Wall -fexpose-all-unfoldings
   build-depends:
       ansi-wl-pprint
     , base >=4.9 && <5
@@ -143,13 +131,14 @@ test-suite hnix-tests
       Paths_hnix
   hs-source-dirs:
       tests
-  ghc-options: -Wall
+  ghc-options: -Wall -fexpose-all-unfoldings
   build-depends:
       Glob
     , ansi-wl-pprint
     , base >=4.9 && <5
     , containers
     , data-fix
+    , deepseq
     , exceptions
     , filepath
     , hnix
@@ -176,13 +165,14 @@ benchmark hnix-benchmarks
       Paths_hnix
   hs-source-dirs:
       benchmarks
-  ghc-options: -Wall
+  ghc-options: -Wall -fexpose-all-unfoldings
   build-depends:
       ansi-wl-pprint
     , base >=4.9 && <5
     , containers
     , criterion
     , data-fix
+    , deepseq
     , exceptions
     , hnix
     , insert-ordered-containers >=0.2.2 && <0.3

@@ -11,44 +11,24 @@ module Nix.Parser.Library
   , module X
   ) where
 
-import           Control.Applicative
+import           Control.Applicative hiding (many, some)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Data
 import           Data.Functor
+import           Data.Functor.Identity
 import qualified Data.HashSet as HashSet
 import           Data.Int (Int64)
 import           Data.List (nub)
 import           Data.Text
-import           GHC.Generics
-import           Text.Parser.Char as X hiding (text)
-import           Text.Parser.Combinators as X
-import           Text.Parser.Expression as X
-import           Text.Parser.LookAhead as X
-import           Text.Parser.Token as X
-import           Text.Parser.Token.Highlight
-import           Text.Parser.Token.Style
-import           Text.PrettyPrint.ANSI.Leijen as X (Doc, text)
-#if USE_PARSEC
-import qualified Text.Parsec as Parsec
-import qualified Text.Parsec.Text as Parsec
 import qualified Data.Text.IO as T
-#else
-import           Data.Text.Encoding
-import qualified Text.Trifecta as Trifecta
-import qualified Text.Trifecta.Delta as Trifecta
+import           GHC.Generics
+import           Text.Megaparsec as X
+import           Text.Megaparsec.Char as X
+import qualified Text.Megaparsec.Char.Lexer as L
+import           Text.PrettyPrint.ANSI.Leijen as X (Doc, text)
 
-import           Text.Trifecta as X (Result(..))
-#endif
-
-newtype NixParser p a = NixParser { runNixParser :: p a }
-  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, Parsing,
-            CharParsing, LookAheadParsing
-#ifndef USE_PARSEC
-            , Trifecta.DeltaParsing
-#endif
-            )
-
+{-
 instance TokenParsing p => TokenParsing (NixParser p) where
   someSpace = NixParser $ buildSomeSpaceParser' someSpace commentStyle
   nesting = NixParser . nesting . runNixParser
@@ -87,7 +67,9 @@ buildSomeSpaceParser' simpleSpace
       <|> skipSome (noneOf startEnd) *> inCommentSingle
       <|> oneOf startEnd *> inCommentSingle
       <?> "end of comment"
+-}
 
+{-
 commentStyle :: CommentStyle
 commentStyle = CommentStyle
   { _commentStart = "/*"
@@ -122,15 +104,44 @@ opStart = oneOf ".+-*/=<>&|!?"
 
 opLetter :: CharParsing m => m Char
 opLetter = oneOf ">+/&|="
+-}
 
-identStart :: CharParsing m => m Char
-identStart = letter <|> char '_'
+identStart :: Parser Char
+identStart = letterChar <|> char '_'
 
-identLetter :: CharParsing m => m Char
-identLetter = alphaNum <|> oneOf "_'-"
+identLetter :: Parser Char
+identLetter = alphaNumChar
+    <|> satisfy (\x -> x == '"' || x == '_' || x == '\'' || x == '-')
 
-reservedNames :: HashSet.HashSet String
-reservedNames = HashSet.fromList
+symbol    = L.symbol whiteSpace
+lexeme    = L.lexeme whiteSpace
+reservedOp = symbol
+identifier :: Parser Text
+identifier = pack <$> ((:) <$> identStart <*> many identLetter)
+reserved  = symbol
+
+parens    = between (symbol "(") (symbol ")")
+braces    = between (symbol "{") (symbol "}")
+angles    = between (symbol "<") (symbol ">")
+brackets  = between (symbol "[") (symbol "]")
+semi      = symbol ";"
+comma     = symbol ","
+colon     = symbol ":"
+dot       = symbol "."
+equals    = symbol "="
+question  = symbol "?"
+
+integer :: Parser Integer
+integer = lexeme L.decimal
+
+float :: Parser Double
+float = lexeme L.float
+
+-- number :: Parser Scientific
+-- number = lexeme L.scientific -- similar to ‘naturalOrFloat’ in Parsec
+
+reservedNames :: [String]
+reservedNames =
     [ "let", "in"
     , "if", "then", "else"
     , "assert"
@@ -141,18 +152,18 @@ reservedNames = HashSet.fromList
     , "false"
     ]
 
+{-
 stopWords :: (TokenParsing m, Monad m) => m ()
 stopWords = () <$
     (whiteSpace *> (reserved "in" <|> reserved "then" <|> reserved "else"))
+-}
 
-someTill :: Alternative f => f a -> f end -> f [a]
-someTill p end = go
+whiteSpace :: Parser ()
+whiteSpace = L.space space1 lineCmnt blockCmnt
   where
-    go   = (:) <$> p <*> scan
-    scan = (end $> []) <|>  go
+    lineCmnt  = L.skipLineComment "//"
+    blockCmnt = L.skipBlockComment "/*" "*/"
 
---------------------------------------------------------------------------------
--- | Like Text.Trifecta.Delta.Delta, but with FilePath instead of ByteString
 data Delta
    = Columns !Int64 !Int64
    | Tab !Int64 !Int64 !Int64
@@ -160,47 +171,19 @@ data Delta
    | Directed !FilePath !Int64 !Int64 !Int64 !Int64
    deriving (Generic, Data, Eq, Ord, Show, Read)
 
+type Parser = ParsecT () Text Identity
+
 parseFromFileEx :: MonadIO m => Parser a -> FilePath -> m (Result a)
 parseFromString :: Parser a -> String -> Result a
 position :: Parser Delta
 
-#if USE_PARSEC
-data Result a = Success a
-              | Failure Doc
-  deriving Show
-
-type Parser = NixParser Parsec.Parser
+data Result a = Success a | Failure Doc deriving Show
 
 parseFromFileEx p path =
-    (either (Failure . text . show) Success . Parsec.parse (runNixParser p) path)
+    (either (Failure . text . show) Success . parse p path)
         `liftM` liftIO (T.readFile path)
 
-parseFromString p = either (Failure . text . show) Success . Parsec.parse (runNixParser p) "<string>" . pack
+parseFromString p =
+    either (Failure . text . show) Success . parse p "<string>" . pack
 
 position = return $ Columns 0 0
-
-#else
-
-type Parser = NixParser Trifecta.Parser
-
-parseFromFileEx p = Trifecta.parseFromFileEx (runNixParser p)
-
-parseFromString p = Trifecta.parseString (runNixParser p) (Trifecta.Directed "<string>" 0 0 0 0)
-
-position = deltaFromTrifecta <$> Trifecta.position
-
-deltaFromTrifecta :: Trifecta.Delta -> Delta
-deltaFromTrifecta = \case
-  Trifecta.Columns a b -> Columns a b
-  Trifecta.Tab a b c -> Tab a b c
-  Trifecta.Lines a b c d -> Lines a b c d
-  Trifecta.Directed a b c d e -> Directed (unpack $ decodeUtf8 a) b c d e
-
-deltaToTrifecta :: Delta -> Trifecta.Delta
-deltaToTrifecta = \case
-  Columns a b -> Trifecta.Columns a b
-  Tab a b c -> Trifecta.Tab a b c
-  Lines a b c d -> Trifecta.Lines a b c d
-  Directed a b c d e -> Trifecta.Directed (encodeUtf8 $ pack a) b c d e
-
-#endif
