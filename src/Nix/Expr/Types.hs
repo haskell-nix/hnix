@@ -1,36 +1,45 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
+
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | The nix expression type and supporting types.
 module Nix.Expr.Types where
 
-import Data.Data
-import Data.Eq.Deriving
-import Data.Fix
-import Data.Functor.Classes
-import Data.HashMap.Strict.InsOrd (InsOrdHashMap)
-import Data.Text (Text, pack, unpack)
-import Data.Traversable
-import GHC.Exts
-import GHC.Generics
-import Language.Haskell.TH.Syntax
-import Nix.Atoms
-import Nix.Parser.Library (Delta(..))
-import Nix.Utils
-import Text.Show.Deriving
-import Type.Reflection (eqTypeRep)
+import           Control.DeepSeq
+import           Data.Data
+import           Data.Eq.Deriving
+import           Data.Fix
+import           Data.Functor.Classes
+import qualified Data.HashMap.Strict.InsOrd as InsOrd
+import           Data.HashMap.Strict.InsOrd (InsOrdHashMap)
+import           Data.Text (Text, pack, unpack)
+import           Data.Traversable
+import           GHC.Exts
+import           GHC.Generics
+import           Language.Haskell.TH.Syntax
+import           Nix.Atoms
+import           Nix.Parser.Library (Delta(..))
+import           Nix.Utils
+import           Text.Show.Deriving
+import           Type.Reflection (eqTypeRep)
 import qualified Type.Reflection as Reflection
 
 type VarName = Text
@@ -82,8 +91,8 @@ data NExprF r
   -- evaluate the second argument.
   | NAssert r r
   -- ^ Assert that the first returns true before evaluating the second.
-  deriving (Ord, Eq, Generic, Typeable, Data, Functor,
-            Foldable, Traversable, Show)
+  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
+            Foldable, Traversable, Show, NFData, NFData1)
 
 -- | We make an `IsString` for expressions, where the string is interpreted
 -- as an identifier. This is the most common use-case...
@@ -107,7 +116,8 @@ data Binding r
   | Inherit (Maybe r) (NAttrPath r)
   -- ^ Using a name already in scope, such as @inherit x;@ which is shorthand
   -- for @x = x;@ or @inherit (x) y;@ which means @y = x.y;@.
-  deriving (Typeable, Data, Ord, Eq, Functor, Foldable, Traversable, Show)
+  deriving (Generic, Generic1, Typeable, Data, Ord, Eq, Functor,
+            Foldable, Traversable, Show, NFData, NFData1)
 
 -- | @Params@ represents all the ways the formal parameters to a
 -- function can be represented.
@@ -118,8 +128,16 @@ data Params r
   -- ^ Explicit parameters (argument must be a set). Might specify a name to
   -- bind to the set in the function body. The bool indicates whether it is
   -- variadic or not.
-  deriving (Ord, Eq, Generic, Typeable, Data, Functor, Show,
+  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Show,
             Foldable, Traversable)
+
+instance NFData a => NFData (Params a) where
+    rnf (Param !_) = ()
+    rnf (ParamSet !s !_ !_) = InsOrd.size s `seq` ()
+
+instance NFData1 Params where
+    liftRnf _ (Param !_) = ()
+    liftRnf _ (ParamSet !s !_ !_) = InsOrd.size s `seq` ()
 
 -- This uses InsOrdHashMap because nix XML serialization preserves the order of
 -- the param set.
@@ -130,8 +148,9 @@ instance IsString (Params r) where
 
 -- | 'Antiquoted' represents an expression that is either
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
-data Antiquoted v r = Plain v | Antiquoted r
-  deriving (Ord, Eq, Generic, Typeable, Data, Functor, Foldable, Traversable, Show)
+data Antiquoted (v :: *) (r :: *) = Plain v | Antiquoted r
+  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
+            Foldable, Traversable, Show, NFData, NFData1)
 
 -- | An 'NString' is a list of things that are either a plain string
 -- or an antiquoted expression. After the antiquotes have been evaluated,
@@ -143,7 +162,8 @@ data NString r
   | Indented [Antiquoted Text r]
   -- ^ Strings wrapped with two single quotes ('') can contain newlines,
   -- and their indentation will be stripped.
-  deriving (Eq, Ord, Generic, Typeable, Data, Functor, Foldable, Traversable, Show)
+  deriving (Eq, Ord, Generic, Generic1, Typeable, Data, Functor,
+            Foldable, Traversable, Show, NFData, NFData1)
 
 -- | For the the 'IsString' instance, we use a plain doublequoted string.
 instance IsString (NString r) where
@@ -172,7 +192,17 @@ instance IsString (NString r) where
 data NKeyName r
   = DynamicKey (Antiquoted (NString r) r)
   | StaticKey VarName (Maybe Delta)
-  deriving (Eq, Ord, Generic, Typeable, Data, Show)
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
+
+instance Generic1 NKeyName where
+  type Rep1 NKeyName = NKeyName -- jww (2018-04-09): wrong
+  from1 = id
+  to1   = id
+instance NFData1 NKeyName where
+    liftRnf _ (StaticKey !_ !_) = ()
+    liftRnf _ (DynamicKey (Plain !_)) = ()
+    liftRnf k (DynamicKey (Antiquoted r)) = k r
+instance NFData Delta
 
 -- | Most key names are just static text, so this instance is convenient.
 instance IsString (NKeyName r) where
@@ -214,7 +244,7 @@ type NAttrPath r = [NKeyName r]
 
 -- | There are two unary operations: logical not and integer negation.
 data NUnaryOp = NNeg | NNot
-  deriving (Eq, Ord, Generic, Typeable, Data, Show)
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 -- | Binary operators expressible in the nix language.
 data NBinaryOp
@@ -233,7 +263,7 @@ data NBinaryOp
   | NMult -- ^ Multiplication (*)
   | NDiv -- ^ Division (/)
   | NConcat -- ^ List concatenation (++)
-  deriving (Eq, Ord, Generic, Typeable, Data, Show)
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 -- | Get the name out of the parameter (there might be none).
 paramName :: Params r -> Maybe VarName
