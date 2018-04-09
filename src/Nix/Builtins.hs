@@ -413,7 +413,7 @@ splitMatches
 splitMatches _ [] haystack = [thunkStr haystack]
 splitMatches _ ([]:_) _ = error "Error in splitMatches: this should never happen!"
 splitMatches numDropped (((_,(start,len)):captures):mts) haystack =
-    thunkStr before : caps : splitMatches (numDropped + len) mts (B.drop len rest)
+    thunkStr before : caps : splitMatches (numDropped + max 0 start + len) mts (B.drop len rest)
   where
     (before,rest) = B.splitAt (max 0 start - numDropped) haystack
     caps = valueThunk $ NVList (map f captures)
