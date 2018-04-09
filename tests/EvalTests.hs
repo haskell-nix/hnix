@@ -4,13 +4,15 @@
 
 {-# OPTIONS_GHC -Wno-missing-signatures -Wno-orphans #-}
 
-module EvalTests (tests) where
+module EvalTests (tests, genEvalCompareTests) where
 
 import Data.String.Interpolate
 import Nix
 import Nix.Expr
 import Nix.Parser
 import Nix.Value
+import qualified System.Directory as D
+import System.FilePath
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.TH
@@ -78,6 +80,13 @@ case_match_failure_null = assertEvalMatchesNix "builtins.match \"ab\" \"abc\""
 
 tests :: TestTree
 tests = $testGroupGenerator
+
+genEvalCompareTests = do
+    files <- D.listDirectory testDir
+    return $ testGroup "eval comparison tests" $ map mkTestCase files
+  where
+    testDir = "tests/eval-compare"
+    mkTestCase f = testCase f $ assertEvalFileMatchesNix (testDir </> f)
 
 instance (Show r, Eq r) => Eq (NValueF m r) where
     NVConstant x == NVConstant y = x == y

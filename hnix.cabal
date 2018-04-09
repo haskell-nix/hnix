@@ -1,4 +1,4 @@
--- This file has been generated from package.yaml by hpack version 0.27.0.
+-- This file has been generated from package.yaml by hpack version 0.21.2.
 --
 -- see: https://github.com/sol/hpack
 --
@@ -150,6 +150,7 @@ test-suite hnix-tests
     , base >=4.9 && <5
     , containers
     , data-fix
+    , directory
     , exceptions
     , filepath
     , hnix
