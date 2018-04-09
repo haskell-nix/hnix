@@ -141,7 +141,12 @@ eval (NIf cond t f) = do
 
 eval (NWith scope body) = do
     traceM "NWith"
-    pushWeakScope ?? body $ scope >>= \v -> case wantVal v of
+    -- The scope is deliberately wrapped in a thunk here, since the WeakScope
+    -- constructor argument is evaluated each time a name is looked up within
+    -- the weak scope, and we want to be sure the action it evaluates is to
+    -- force a thunk, so its value is only computed once.
+    s <- thunk scope
+    pushWeakScope ?? body $ force s $ \v -> case wantVal v of
         Just (s :: AttrSet t) -> pure s
         _ -> evalError @v $ "scope must be a set in with statement, but saw: "
                 ++ show v
