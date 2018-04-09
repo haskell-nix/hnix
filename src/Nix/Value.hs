@@ -29,7 +29,6 @@ import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated (deltaInfo)
-import           Nix.Parser.Library (Delta(..))
 import           Nix.Thunk
 import           Nix.Utils
 
@@ -42,7 +41,7 @@ data NValueF m r
     | NVStr Text (DList Text)
     | NVPath FilePath
     | NVList [r]
-    | NVSet (AttrSet r) (AttrSet Delta)
+    | NVSet (AttrSet r) (AttrSet SourcePos)
     | NVClosure (Params ()) (m (NValue m) -> m (NValue m))
       -- ^ A function is a closed set of parameters representing the "call
       --   signature", used at application time to check the type of arguments
@@ -113,8 +112,9 @@ builtin3 :: Monad m
 builtin3 name f =
     builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
 
-posFromDelta :: forall m v t. (MonadThunk v t m, Convertible v t) => Delta -> v
-posFromDelta (deltaInfo -> (f, l, c)) =
+posFromSourcePos :: forall m v t. (MonadThunk v t m, Convertible v t)
+                 => SourcePos -> v
+posFromSourcePos (SourcePos f l c) =
     ofVal $ M.fromList
         [ ("file" :: Text, value @_ @_ @m $ ofVal f)
         , ("line",        value @_ @_ @m $ ofVal l)

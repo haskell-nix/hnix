@@ -13,7 +13,7 @@ import           Data.Monoid
 import           Data.Text (Text)
 import           Nix.Atoms
 import           Nix.Expr.Types
-import           Nix.Utils
+-- import           Nix.Utils
 
 -- | Make an integer literal expression.
 mkInt :: Integer -> NExpr
@@ -102,9 +102,6 @@ mkOper2 op a = Fix . NBinary op a
 mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
 mkParamset params variadic = ParamSet (M.fromList params) variadic Nothing
 
-mkApp :: NExpr -> NExpr -> NExpr
-mkApp e = Fix . NApp e
-
 mkRecSet :: [Binding NExpr] -> NExpr
 mkRecSet = Fix . NRecSet
 
@@ -129,6 +126,7 @@ mkIf e1 e2 = Fix . NIf e1 e2
 mkFunction :: Params NExpr -> NExpr -> NExpr
 mkFunction params = Fix . NAbs params
 
+{-
 mkDot :: NExpr -> Text -> NExpr
 mkDot e key = mkDots e [key]
 
@@ -140,6 +138,7 @@ mkDots (Fix (NSelect e keys' x)) keys =
   -- a dotted expression, just extend it.
   Fix (NSelect e (keys' <> map (StaticKey ?? Nothing) keys) x)
 mkDots e keys = Fix $ NSelect e (map (StaticKey ?? Nothing) keys) Nothing
+-}
 
 -- | An `inherit` clause without an expression to pull from.
 inherit :: [NKeyName e] -> Binding e
@@ -195,10 +194,10 @@ recAttrsE pairs = Fix $ NRecSet (map (uncurry bindTo) pairs)
 mkNot :: NExpr -> NExpr
 mkNot = Fix . NUnary NNot
 
--- | Dot-reference into an attribute set.
-(!.) :: NExpr -> Text -> NExpr
-(!.) = mkDot
-infixl 8 !.
+-- -- | Dot-reference into an attribute set.
+-- (!.) :: NExpr -> Text -> NExpr
+-- (!.) = mkDot
+-- infixl 8 !.
 
 mkBinop :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkBinop op e1 e2 = Fix (NBinary op e1 e2)
@@ -225,7 +224,7 @@ e1 $++ e2 = mkBinop NConcat e1 e2
 
 -- | Function application expression.
 (@@) :: NExpr -> NExpr -> NExpr
-(@@) = mkApp
+f @@ arg = mkBinop NApp f arg
 infixl 1 @@
 
 -- | Lambda shorthand.
@@ -233,3 +232,7 @@ infixl 1 @@
 (==>) = mkFunction
 
 infixr 1 ==>
+
+(@.) :: NExpr -> Text -> NExpr
+obj @. name = mkBinop NSelect obj (mkSym name)
+infixl 2 @.

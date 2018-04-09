@@ -28,15 +28,15 @@ import           Data.Data
 import           Data.Eq.Deriving
 import           Data.Fix
 import           Data.Functor.Classes
-import qualified Data.HashMap.Strict.InsOrd as InsOrd
 import           Data.HashMap.Strict.InsOrd (InsOrdHashMap)
+import qualified Data.HashMap.Strict.InsOrd as InsOrd
 import           Data.Text (Text, pack, unpack)
 import           Data.Traversable
 import           GHC.Exts
 import           GHC.Generics
 import           Language.Haskell.TH.Syntax
 import           Nix.Atoms
-import           Nix.Parser.Library (Delta(..))
+import           Nix.Parser.Library (SourcePos(..))
 import           Nix.Utils
 import           Text.Show.Deriving
 import           Type.Reflection (eqTypeRep)
@@ -73,15 +73,8 @@ data NExprF r
   -- ^ Application of a unary operator to an expression.
   | NBinary NBinaryOp r r
   -- ^ Application of a binary operator to two expressions.
-  | NSelect r (NAttrPath r) (Maybe r)
-  -- ^ Dot-reference into an attribute set, optionally providing an
-  -- alternative if the key doesn't exist.
-  | NHasAttr r (NAttrPath r)
-  -- ^ Ask if a set contains a given attribute path.
   | NAbs (Params r) r
   -- ^ A function literal (lambda abstraction).
-  | NApp r r
-  -- ^ Apply a function to an argument.
   | NLet [Binding r] r
   -- ^ Evaluate the second argument after introducing the bindings.
   | NIf r r r
@@ -170,7 +163,7 @@ instance IsString (NString r) where
   fromString "" = DoubleQuoted []
   fromString string = DoubleQuoted [Plain $ pack string]
 
--- | A 'KeyName' is something that can appear at the right side of an
+-- | A 'KeyName' is something that can appear on the left side of an
 -- equals sign. For example, @a@ is a 'KeyName' in @{ a = 3; }@, @let a = 3;
 -- in ...@, @{}.a@ or @{} ? a@.
 --
@@ -191,7 +184,7 @@ instance IsString (NString r) where
 -- parser still considers it a 'DynamicKey' for simplicity.
 data NKeyName r
   = DynamicKey (Antiquoted (NString r) r)
-  | StaticKey VarName (Maybe Delta)
+  | StaticKey VarName (Maybe SourcePos)
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 instance Generic1 NKeyName where
@@ -202,7 +195,6 @@ instance NFData1 NKeyName where
     liftRnf _ (StaticKey !_ !_) = ()
     liftRnf _ (DynamicKey (Plain !_)) = ()
     liftRnf k (DynamicKey (Antiquoted r)) = k r
-instance NFData Delta
 
 -- | Most key names are just static text, so this instance is convenient.
 instance IsString (NKeyName r) where
@@ -248,21 +240,25 @@ data NUnaryOp = NNeg | NNot
 
 -- | Binary operators expressible in the nix language.
 data NBinaryOp
-  = NEq -- ^ Equality (==)
-  | NNEq -- ^ Inequality (!=)
-  | NLt -- ^ Less than (<)
-  | NLte -- ^ Less than or equal (<=)
-  | NGt -- ^ Greater than (>)
-  | NGte -- ^ Greater than or equal (>=)
-  | NAnd -- ^ Logical and (&&)
-  | NOr -- ^ Logical or (||)
-  | NImpl -- ^ Logical implication (->)
-  | NUpdate -- ^ Joining two attribut sets (//)
-  | NPlus -- ^ Addition (+)
-  | NMinus -- ^ Subtraction (-)
-  | NMult -- ^ Multiplication (*)
-  | NDiv -- ^ Division (/)
-  | NConcat -- ^ List concatenation (++)
+  = NEq      -- ^ Equality (==)
+  | NNEq     -- ^ Inequality (!=)
+  | NLt      -- ^ Less than (<)
+  | NLte     -- ^ Less than or equal (<=)
+  | NGt      -- ^ Greater than (>)
+  | NGte     -- ^ Greater than or equal (>=)
+  | NAnd     -- ^ Logical and (&&)
+  | NOr      -- ^ Logical or (||)
+  | NImpl    -- ^ Logical implication (->)
+  | NUpdate  -- ^ Joining two attribut sets (//)
+  | NPlus    -- ^ Addition (+)
+  | NMinus   -- ^ Subtraction (-)
+  | NMult    -- ^ Multiplication (*)
+  | NDiv     -- ^ Division (/)
+  | NConcat  -- ^ List concatenation (++)
+  | NApp     -- ^ Apply a function to an argument.
+  | NSelect  -- ^ Dot-reference into an attribute set, optionally providing an
+             --   alternative if the key doesn't exist.
+  | NHasAttr -- ^ Ask if a set contains a given attribute path.
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 -- | Get the name out of the parameter (there might be none).
@@ -290,7 +286,6 @@ stripPositionInfo = transport phi
     phi (NSet binds)         = NSet (map go binds)
     phi (NRecSet binds)      = NRecSet (map go binds)
     phi (NLet binds body)    = NLet (map go binds) body
-    phi (NSelect s attr alt) = NSelect s (map clear attr) alt
     phi x = x
 
     go (NamedVar path r)  = NamedVar (map clear path) r
@@ -311,5 +306,5 @@ type Convertible v t =
      ConvertValue v Text,
      ConvertValue v (Maybe Text),  -- text or null
      ConvertValue v [t],
-     ConvertValue v (AttrSet t, AttrSet Delta),
+     ConvertValue v (AttrSet t, AttrSet SourcePos),
      ConvertValue v (AttrSet t))

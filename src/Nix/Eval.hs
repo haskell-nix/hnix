@@ -208,7 +208,7 @@ evalBinds :: forall e v t m. MonadNixEval e v t m
           => Bool
           -> Bool
           -> [Binding (m v)]
-          -> m (AttrSet t, AttrSet Delta)
+          -> m (AttrSet t, AttrSet SourcePos)
 evalBinds allowDynamic recursive =
     buildResult . concat <=< mapM go . moveOverridesLast
   where
@@ -216,7 +216,7 @@ evalBinds allowDynamic recursive =
         partition (\case NamedVar [StaticKey "__overrides" _] _ -> True
                          _ -> False)
 
-    go :: Binding (m v) -> m [([Text], Maybe Delta, m v)]
+    go :: Binding (m v) -> m [([Text], Maybe SourcePos, m v)]
     go (NamedVar [StaticKey "__overrides" _] finalValue) =
         finalValue >>= \v -> case wantVal v of
             Just (o', p') ->
@@ -226,7 +226,7 @@ evalBinds allowDynamic recursive =
                     ++ show v
 
     go (NamedVar pathExpr finalValue) = do
-        let go :: NAttrPath (m v) -> m ([Text], Maybe Delta, m v)
+        let go :: NAttrPath (m v) -> m ([Text], Maybe SourcePos, m v)
             go = \case
                 [] -> pure ([], Nothing, finalValue)
                 h : t -> evalSetterKeyName allowDynamic h >>= \case
@@ -257,8 +257,8 @@ evalBinds allowDynamic recursive =
                         ++ show (void name)
                     Just v -> force v pure)
 
-    buildResult :: [([Text], Maybe Delta, m v)]
-                -> m (AttrSet t, AttrSet Delta)
+    buildResult :: [([Text], Maybe SourcePos, m v)]
+                -> m (AttrSet t, AttrSet SourcePos)
     buildResult bindings = do
         s <- foldM insert M.empty bindings
         scope <- currentScopes @_ @t
@@ -285,7 +285,7 @@ evalSelect aset attr =
   where
     extract v [] = return $ Right v
     extract x (k:ks) =
-        case wantVal @_ @(AttrSet t, AttrSet Delta) x of
+        case wantVal @_ @(AttrSet t, AttrSet SourcePos) x of
             Just (s, p) -> case M.lookup k s of
                 Just v  -> force v $ extract ?? ks
                 Nothing -> return $ Left (ofVal (s, p), k:ks)
@@ -299,20 +299,20 @@ evalSelector allowDynamic =
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value
 evalGetterKeyName :: MonadEval v m
-                  => Bool -> NKeyName (m v) -> m (Text, Maybe Delta)
+                  => Bool -> NKeyName (m v) -> m (Text, Maybe SourcePos)
 evalGetterKeyName canBeDynamic
     | canBeDynamic = evalKeyNameDynamicNotNull
     | otherwise    = evalKeyNameStatic
 
 evalKeyNameStatic :: forall v m. MonadEval v m
-                  => NKeyName (m v) -> m (Text, Maybe Delta)
+                  => NKeyName (m v) -> m (Text, Maybe SourcePos)
 evalKeyNameStatic = \case
     StaticKey k p -> pure (k, p)
     DynamicKey _ ->
         evalError @v "dynamic attribute not allowed in this context"
 
 evalKeyNameDynamicNotNull :: forall v m. MonadEval v m
-                          => NKeyName (m v) -> m (Text, Maybe Delta)
+                          => NKeyName (m v) -> m (Text, Maybe SourcePos)
 evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
     (Nothing, _) ->
         evalError @v "value is null while a string was expected"
@@ -321,14 +321,15 @@ evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
 -- | Evaluate a component of an attribute path in a context where we are
 -- *binding* a value
 evalSetterKeyName :: MonadEval v m
-                  => Bool -> NKeyName (m v) -> m (Maybe Text, Maybe Delta)
+                  => Bool -> NKeyName (m v) -> m (Maybe Text, Maybe SourcePos)
 evalSetterKeyName canBeDynamic
     | canBeDynamic = evalKeyNameDynamicNullable
     | otherwise    = fmap (first Just) . evalKeyNameStatic
 
 -- | Returns Nothing iff the key value is null
 evalKeyNameDynamicNullable :: forall v m. MonadEval v m
-                           => NKeyName (m v) -> m (Maybe Text, Maybe Delta)
+                           => NKeyName (m v)
+                           -> m (Maybe Text, Maybe SourcePos)
 evalKeyNameDynamicNullable = \case
     StaticKey k p -> pure (Just k, p)
     DynamicKey k -> runAntiquoted (embedMText <=< assembleString) id k

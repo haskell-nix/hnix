@@ -90,7 +90,7 @@ instance ConvertValue (NValue m) [NThunk m] where
     wantVal = \case NVList l -> Just l; _ -> Nothing
 
 instance ConvertValue (NValue m)
-      (AttrSet (NThunk m), AttrSet Delta) where
+      (AttrSet (NThunk m), AttrSet SourcePos) where
     ofVal (s, p) = NVSet s p
     wantVal = \case NVSet s p -> Just (s, p); _ -> Nothing
 
@@ -111,7 +111,7 @@ instance MonadExec e m => MonadEval (NValue m) m where
         Compose (Ann (SrcSpan delta _) _):_ <-
             asks (mapMaybe (either (const Nothing) Just)
                   . view @_ @Frames hasLens)
-        return $ posFromDelta delta
+        return $ posFromSourcePos delta
 
     evalConstant    = pure . NVConstant
     evalString      = pure . uncurry NVStr

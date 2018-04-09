@@ -1,28 +1,19 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+
+{-# OPTIONS_GHC -Wno-missing-signatures #-}
 
 module Nix.Parser.Library
   ( module Nix.Parser.Library
   , module X
   ) where
 
-import           Control.Applicative hiding (many, some)
+import           Control.Applicative hiding (many)
 import           Control.Monad
 import           Control.Monad.IO.Class
-import           Data.Data
-import           Data.Functor
 import           Data.Functor.Identity
-import qualified Data.HashSet as HashSet
-import           Data.Int (Int64)
-import           Data.List (nub)
 import           Data.Text
 import qualified Data.Text.IO as T
-import           GHC.Generics
 import           Text.Megaparsec as X
 import           Text.Megaparsec.Char as X
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -164,18 +155,10 @@ whiteSpace = L.space space1 lineCmnt blockCmnt
     lineCmnt  = L.skipLineComment "//"
     blockCmnt = L.skipBlockComment "/*" "*/"
 
-data Delta
-   = Columns !Int64 !Int64
-   | Tab !Int64 !Int64 !Int64
-   | Lines !Int64 !Int64 !Int64 !Int64
-   | Directed !FilePath !Int64 !Int64 !Int64 !Int64
-   deriving (Generic, Data, Eq, Ord, Show, Read)
-
 type Parser = ParsecT () Text Identity
 
 parseFromFileEx :: MonadIO m => Parser a -> FilePath -> m (Result a)
-parseFromString :: Parser a -> String -> Result a
-position :: Parser Delta
+parseFromText :: Parser a -> Text -> Result a
 
 data Result a = Success a | Failure Doc deriving Show
 
@@ -183,7 +166,5 @@ parseFromFileEx p path =
     (either (Failure . text . show) Success . parse p path)
         `liftM` liftIO (T.readFile path)
 
-parseFromString p =
-    either (Failure . text . show) Success . parse p "<string>" . pack
-
-position = return $ Columns 0 0
+parseFromText p =
+    either (Failure . text . show) Success . parse p "<string>"

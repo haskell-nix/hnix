@@ -248,7 +248,7 @@ unsafeGetAttrPos x y = force x $ \x' -> force y $ \y' -> case (x', y') of
         Nothing ->
             throwError $ "unsafeGetAttrPos: field '" ++ Text.unpack key
                 ++ "' does not exist in attr set: " ++ show apos
-        Just delta -> return $ posFromDelta @m delta
+        Just delta -> return $ posFromSourcePos @m delta
     (x, y) -> throwError $ "Invalid types for builtin.unsafeGetAttrPos: "
                  ++ show (void x, void y)
 
