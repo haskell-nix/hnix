@@ -1,5 +1,4 @@
 env:
-  - GHCVERSION="ghc802"
   - GHCVERSION="ghc822"
 
 language: nix
