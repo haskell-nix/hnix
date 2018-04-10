@@ -35,8 +35,7 @@ nixExprLoc :: Parser NExprLoc
 nixExprLoc = whiteSpace *> (nixToplevelForm <|> exprParser)
 
 exprParser :: Parser NExprLoc
-exprParser = makeExprParser (try nixTerm) $
-    map (map snd) (nixOperators nixSelector)
+exprParser = makeExprParser nixTerm $ map (map snd) (nixOperators nixSelector)
 
 antiStart :: Parser Text
 antiStart = try (symbol "${") <?> show ("${" :: String)
