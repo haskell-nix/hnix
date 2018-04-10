@@ -299,7 +299,7 @@ nixBinders = (inherit <|> namedVar) `endBy` semi where
   scope = parens nixExprLoc <?> "inherit scope"
 
 keyName :: Parser (NKeyName NExprLoc)
-keyName = (dynamicKey <|> staticKey) where
+keyName = dynamicKey <|> staticKey where
   staticKey = do
       beg <- getPosition
       StaticKey <$> identifier <*> pure (Just beg)
