@@ -56,46 +56,6 @@ nixSelect term = build
 nixSelector :: Parser (Ann SrcSpan (NAttrPath NExprLoc))
 nixSelector = annotateLocation $ keyName `sepBy1` selDot
 
--- #define DEBUG_PARSER 1
-#if DEBUG_PARSER
-nixTerm :: Parser NExprLoc
-nixTerm = nixSelect $ do
-    c <- dbg "lookAhead" $ try $ lookAhead $ satisfy $ \x ->
-        pathChar x ||
-        x == '(' ||
-        x == '{' ||
-        x == '[' ||
-        x == '<' ||
-        x == '"' ||
-        x == '\''
-    case c of
-        '('  -> dbg "Parens"     nixParens
-        '{'  -> dbg "Set"     nixSet
-        '['  -> dbg "List"     nixList
-        '<'  -> dbg "SPath"     nixSPath
-        '"'  -> dbg "StringExpr"     nixStringExpr
-        '\'' -> dbg "StringExpr"     nixStringExpr
-        _    -> choice $
-            [ dbg "Path" nixPath | pathChar c ] ++
-            [ dbg "Uri" nixUri | isAlpha c ] ++
-            (if isDigit c then [ dbg "Float" nixFloat
-                               , dbg "Int" nixInt ] else []) ++
-            [ dbg "Bool" nixBool | c == 'b' ] ++
-            [ dbg "Null" nixNull | c == 'n' ] ++
-            [ dbg "Sym" nixSym ]
-
-nixToplevelForm :: Parser NExprLoc
-nixToplevelForm = keywords <|> dbg "Lambda" nixLambda <|> nixExprLoc
-  where
-    keywords = do
-        word <- dbg "keywords" $ try $ lookAhead $ some letterChar <* satisfy reservedEnd
-        case word of
-            "let"    -> dbg "Let" nixLet
-            "if"     -> dbg "If" nixIf
-            "assert" -> dbg "Assert" nixAssert
-            "with"   -> dbg "With" nixWith
-            _        -> empty
-#else
 nixTerm :: Parser NExprLoc
 nixTerm = nixSelect $ do
     c <- try $ lookAhead $ satisfy $ \x ->
@@ -136,7 +96,6 @@ nixToplevelForm = keywords <|> nixLambda <|> nixExprLoc
             "assert" -> nixAssert
             "with"   -> nixWith
             _        -> empty
-#endif
 
 nixSym :: Parser NExprLoc
 nixSym = annotateLocation1 $ mkSymF <$> identifier
