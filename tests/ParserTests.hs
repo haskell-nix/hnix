@@ -278,6 +278,13 @@ case_select = do
     (Just mkNull)
   assertParseText "{}.\"\"or null" $ Fix $ NSelect (Fix (NSet []))
     [ DynamicKey (Plain "") ] (Just mkNull)
+  assertParseText "{ a = [1]; }.a or [2] ++ [3]" $ Fix $ NBinary NConcat
+      (Fix (NSelect
+                (Fix (NSet [NamedVar [StaticKey "a" Nothing]
+                                     (Fix (NList [Fix (NConstant (NInt 1))]))]))
+                [StaticKey "a" Nothing]
+                (Just (Fix (NList [Fix (NConstant (NInt 2))])))))
+      (Fix (NList [Fix (NConstant (NInt 3))]))
 
 case_select_path :: Assertion
 case_select_path = do
