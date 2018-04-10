@@ -17,7 +17,7 @@ import           Nix.Parser
 
 quoteExprExp :: String -> ExpQ
 quoteExprExp s = do
-    expr <- case parseNixString s of
+    expr <- case parseNixText (Text.pack s) of
         Failure err -> fail $ show err
         Success e   -> return e
     dataToExpQ (const Nothing `extQ` metaExp (freeVars expr)) expr

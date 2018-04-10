@@ -73,6 +73,11 @@ data NExprF r
   -- ^ Application of a unary operator to an expression.
   | NBinary NBinaryOp r r
   -- ^ Application of a binary operator to two expressions.
+  | NSelect r (NAttrPath r) (Maybe r)
+  -- ^ Dot-reference into an attribute set, optionally providing an
+  -- alternative if the key doesn't exist.
+  | NHasAttr r (NAttrPath r)
+  -- ^ Ask if a set contains a given attribute path.
   | NAbs (Params r) r
   -- ^ A function literal (lambda abstraction).
   | NLet [Binding r] r
@@ -256,9 +261,6 @@ data NBinaryOp
   | NDiv     -- ^ Division (/)
   | NConcat  -- ^ List concatenation (++)
   | NApp     -- ^ Apply a function to an argument.
-  | NSelect  -- ^ Dot-reference into an attribute set, optionally providing an
-             --   alternative if the key doesn't exist.
-  | NHasAttr -- ^ Ask if a set contains a given attribute path.
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 -- | Get the name out of the parameter (there might be none).
@@ -286,6 +288,7 @@ stripPositionInfo = transport phi
     phi (NSet binds)         = NSet (map go binds)
     phi (NRecSet binds)      = NRecSet (map go binds)
     phi (NLet binds body)    = NLet (map go binds) body
+    phi (NSelect s attr alt) = NSelect s (map clear attr) alt
     phi x = x
 
     go (NamedVar path r)  = NamedVar (map clear path) r

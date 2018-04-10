@@ -6,7 +6,8 @@
 
 module EvalTests (tests) where
 
-import Data.String.Interpolate
+import Data.String.Interpolate.IsString
+import Data.Text (Text)
 import Nix
 import Nix.Expr
 import Nix.Parser
@@ -17,46 +18,46 @@ import Test.Tasty.TH
 import TestCommon
 
 case_basic_sum =
-    constantEqualStr "2" "1 + 1"
+    constantEqualText "2" "1 + 1"
 
 case_basic_function =
-    constantEqualStr "2" "(a: a) 2"
+    constantEqualText "2" "(a: a) 2"
 
 case_set_attr =
-    constantEqualStr "2" "{ a = 2; }.a"
+    constantEqualText "2" "{ a = 2; }.a"
 
 case_function_set_arg =
-    constantEqualStr "2" "({ a }: 2) { a = 1; }"
+    constantEqualText "2" "({ a }: 2) { a = 1; }"
 
 case_function_set_two_arg =
-    constantEqualStr "2" "({ a, b ? 3 }: b - a) { a = 1; }"
+    constantEqualText "2" "({ a, b ? 3 }: b - a) { a = 1; }"
 
 case_function_set_two_arg_default_scope =
-    constantEqualStr "2" "({ x ? 1, y ? x * 3 }: y - x) {}"
+    constantEqualText "2" "({ x ? 1, y ? x * 3 }: y - x) {}"
 
 case_function_default_env =
-    constantEqualStr "2" "let default = 2; in ({ a ? default }: a) {}"
+    constantEqualText "2" "let default = 2; in ({ a ? default }: a) {}"
 
 case_function_definition_uses_environment =
-    constantEqualStr "3" "let f = (let a=1; in x: x+a); in f 2"
+    constantEqualText "3" "let f = (let a=1; in x: x+a); in f 2"
 
 case_function_atpattern =
-    constantEqualStr "2" "(({a}@attrs:attrs) {a=2;}).a"
+    constantEqualText "2" "(({a}@attrs:attrs) {a=2;}).a"
 
 case_function_ellipsis =
-    constantEqualStr "2" "(({a, ...}@attrs:attrs) {a=0; b=2;}).b"
+    constantEqualText "2" "(({a, ...}@attrs:attrs) {a=0; b=2;}).b"
 
 case_function_default_value_not_in_atpattern =
-    constantEqualStr "false" "({a ? 2}@attrs: attrs ? a) {}"
+    constantEqualText "false" "({a ? 2}@attrs: attrs ? a) {}"
 
 case_function_arg_shadowing =
-    constantEqualStr "6" "(y: y: x: x: x + y) 1 2 3 4"
+    constantEqualText "6" "(y: y: x: x: x + y) 1 2 3 4"
 
 case_function_recursive_args =
-    constantEqualStr "2" "({ x ? 1, y ? x * 3}: y - x) {}"
+    constantEqualText "2" "({ x ? 1, y ? x * 3}: y - x) {}"
 
 case_function_recursive_sets =
-    constantEqualStr "[ [ 6 4 100 ] 4 ]" [i|
+    constantEqualText "[ [ 6 4 100 ] 4 ]" [i|
         let x = rec {
 
           y = 2;
@@ -70,7 +71,7 @@ case_function_recursive_sets =
     |]
 
 case_nested_with =
-    constantEqualStr "2" "with { x = 1; }; with { x = 2; }; x"
+    constantEqualText "2" "with { x = 1; }; with { x = 2; }; x"
 
 case_match_failure_null = assertEvalMatchesNix "builtins.match \"ab\" \"abc\""
 
@@ -93,8 +94,8 @@ constantEqual a b = do
     b' <- evalLoc Nothing b
     assertEqual "" a' b'
 
-constantEqualStr :: String -> String -> Assertion
-constantEqualStr a b =
-  let Success a' = parseNixStringLoc a
-      Success b' = parseNixStringLoc b
+constantEqualText :: Text -> Text -> Assertion
+constantEqualText a b =
+  let Success a' = parseNixTextLoc a
+      Success b' = parseNixTextLoc b
   in constantEqual a' b'

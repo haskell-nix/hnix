@@ -22,13 +22,13 @@ import           Data.Align
 import           Data.Fix
 import qualified Data.HashMap.Lazy as M
 import           Data.Monoid (appEndo)
-import           Data.Text (Text)
+import           Data.Text (Text, pack)
 import           Data.These
 import           Data.Typeable (Typeable)
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr.Types
-import           Nix.Expr.Types.Annotated (deltaInfo)
+import           Nix.Expr.Types.Annotated (SourcePos(..), unPos)
 import           Nix.Thunk
 import           Nix.Utils
 
@@ -116,9 +116,9 @@ posFromSourcePos :: forall m v t. (MonadThunk v t m, Convertible v t)
                  => SourcePos -> v
 posFromSourcePos (SourcePos f l c) =
     ofVal $ M.fromList
-        [ ("file" :: Text, value @_ @_ @m $ ofVal f)
-        , ("line",        value @_ @_ @m $ ofVal l)
-        , ("column",      value @_ @_ @m $ ofVal c)
+        [ ("file" :: Text, value @_ @_ @m $ ofVal (pack f))
+        , ("line",        value @_ @_ @m $ ofVal (unPos l))
+        , ("column",      value @_ @_ @m $ ofVal (unPos c))
         ]
 
 valueRefBool :: Monad m => Bool -> m (NValue m)

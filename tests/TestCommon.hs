@@ -1,5 +1,6 @@
 module TestCommon where
 
+import Data.Text (Text, unpack)
 import Nix
 import Nix.Monad.Lazy
 import Nix.Parser
@@ -22,10 +23,11 @@ hnixEvalFile file =  do
         setEnv "TEST_VAR" "foo"
         evalLoc (Just file) expression
 
-hnixEvalString :: String -> IO (NValueNF (Lazy IO))
-hnixEvalString expr = case parseNixString expr of
+hnixEvalText :: Text -> IO (NValueNF (Lazy IO))
+hnixEvalText expr = case parseNixText expr of
     Failure err        ->
-        error $ "Parsing failed for expressien `" ++ expr ++ "`.\n" ++ show err
+        error $ "Parsing failed for expressien `"
+            ++ unpack expr ++ "`.\n" ++ show err
     Success expression -> eval Nothing expression
 
 nixEvalString :: String -> IO String
@@ -40,8 +42,10 @@ nixEvalString expr = do
 nixEvalFile :: FilePath -> IO String
 nixEvalFile fp = readProcess "nix-instantiate" ["--eval", fp] ""
 
-assertEvalMatchesNix :: String -> Assertion
+assertEvalMatchesNix :: Text -> Assertion
 assertEvalMatchesNix expr = do
-  hnixVal <- (++"\n") . printNix <$> hnixEvalString expr
-  nixVal <- nixEvalString expr
-  assertEqual expr nixVal hnixVal
+  hnixVal <- (++"\n") . printNix <$> hnixEvalText expr
+  nixVal <- nixEvalString expr'
+  assertEqual expr' nixVal hnixVal
+ where
+  expr' = unpack expr

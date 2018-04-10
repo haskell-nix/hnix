@@ -113,12 +113,12 @@ builtinsList = sequence [
     , add  TopLevel "throw"                      throw_
     , add2 TopLevel "scopedImport"               scopedImport
     , add  TopLevel "derivationStrict"           derivationStrict_
-    , add0 TopLevel "derivation"                 $(do
-          let f = "data/nix/corepkgs/derivation.nix"
-          addDependentFile f
-          Success expr <- runIO $ parseNixFile f
-          [| evalExpr expr |]
-      )
+    -- , add0 TopLevel "derivation"                 $(do
+    --       let f = "data/nix/corepkgs/derivation.nix"
+    --       addDependentFile f
+    --       Success expr <- runIO $ parseNixFile f
+    --       [| evalExpr expr |]
+    --   )
 
     , add  Normal   "getEnv"                     getEnv_
     , add2 Normal   "hasAttr"                    hasAttr

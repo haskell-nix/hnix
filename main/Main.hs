@@ -8,6 +8,8 @@ module Main where
 -- import qualified Control.Exception as Exc
 import           Control.Monad
 import           Control.Monad.ST
+import           Data.Text (Text)
+import qualified Data.Text.IO as Text
 import qualified Nix
 import           Nix.Expr.Types.Annotated (stripAnnotation)
 import           Nix.Lint
@@ -23,7 +25,7 @@ data Options = Options
     , debug      :: Bool
     , evaluate   :: Bool
     , check      :: Bool
-    , expression :: Maybe String
+    , expression :: Maybe Text
     , fromFile   :: Maybe FilePath
     , filePaths  :: [FilePath]
     }
@@ -58,7 +60,7 @@ main :: IO ()
 main = do
     opts <- execParser optsDef
     case expression opts of
-        Just s -> handleResult opts Nothing (parseNixStringLoc s)
+        Just s -> handleResult opts Nothing (parseNixTextLoc s)
         Nothing  -> case fromFile opts of
             Just "-" ->
                 mapM_ (processFile opts) =<< (lines <$> getContents)
@@ -66,11 +68,11 @@ main = do
                 mapM_ (processFile opts) =<< (lines <$> readFile path)
             Nothing -> case filePaths opts of
                 [] ->
-                    handleResult opts Nothing . parseNixStringLoc
-                        =<< getContents
+                    handleResult opts Nothing . parseNixTextLoc
+                        =<< Text.getContents
                 ["-"] ->
-                    handleResult opts Nothing . parseNixStringLoc
-                        =<< getContents
+                    handleResult opts Nothing . parseNixTextLoc
+                        =<< Text.getContents
                 paths ->
                     mapM_ (processFile opts) paths
   where
@@ -86,7 +88,7 @@ main = do
     -- print . printNix =<< Nix.eval [nix|1 + 3|]
 
     handleResult opts mpath = \case
-        Failure err -> hPutStrLn stderr $ "Parse failed: " ++ show err
+        Failure err -> hPutStr stderr $ "Parse failed: " ++ show err
         Success expr -> do
             -- expr <- Exc.evaluate $ force expr
             -- putStrLn "Parsing file...done"
@@ -100,7 +102,7 @@ main = do
                | evaluate opts ->
                      putStrLn . printNix =<< Nix.evalLoc mpath expr
                | debug opts ->
-                     print expr
+                     print $ stripAnnotation expr
                | otherwise ->
                      displayIO stdout
                          . renderPretty 0.4 80

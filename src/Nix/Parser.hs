@@ -33,7 +33,8 @@ nixExprLoc :: Parser NExprLoc
 nixExprLoc = whiteSpace *> (nixToplevelForm <|> exprParser)
 
 exprParser :: Parser NExprLoc
-exprParser = makeExprParser nixTerm (map (map (\(_,_,x) -> x)) nixOperators)
+exprParser = makeExprParser nixTerm $
+    map (map snd) (nixOperators nixTerm nixSelector selDot)
 
 antiStart :: Parser Text
 antiStart = try (symbol "${") <?> show ("${" :: String)
@@ -117,10 +118,9 @@ nixLet = annotateLocation1 (reserved "let"
         <*> (whiteSpace *> reserved "in" *> nixExprLoc)
     -- Let expressions `let {..., body = ...}' are just desugared
     -- into `(rec {..., body = ...}).body'.
-    letBody = liftM2 (NBinary NSelect) aset
-                     (annotateLocation1 (pure (mkSymF "body")))
+    letBody = (\x pos -> NSelect x [StaticKey "body" (Just pos)] Nothing)
+        <$> aset <*> getPosition
     aset = annotateLocation1 $ NRecSet <$> braces nixBinders
-
 
 nixIf :: Parser NExprLoc
 nixIf = annotateLocation1 (NIf
@@ -142,7 +142,8 @@ nixWith = annotateLocation1 (NWith
   <?> "with")
 
 nixLambda :: Parser NExprLoc
-nixLambda = (nAbs <$> annotateLocation (try argExpr <?> "lambda arguments") <*> nixExprLoc) <?> "lambda"
+nixLambda = (nAbs <$> annotateLocation (try argExpr <?> "lambda arguments")
+                  <*> nixExprLoc) <?> "lambda"
 
 nixStringExpr :: Parser NExprLoc
 nixStringExpr = nStr <$> annotateLocation nixString

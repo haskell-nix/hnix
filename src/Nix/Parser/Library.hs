@@ -12,8 +12,11 @@ import           Control.Applicative hiding (many)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Functor.Identity
+import           Data.HashSet (HashSet)
+import qualified Data.HashSet as HashSet
 import           Data.Text
 import qualified Data.Text.IO as T
+import           Data.Void
 import           Text.Megaparsec as X
 import           Text.Megaparsec.Char as X
 import qualified Text.Megaparsec.Char.Lexer as L
@@ -131,8 +134,8 @@ float = lexeme L.float
 -- number :: Parser Scientific
 -- number = lexeme L.scientific -- similar to ‘naturalOrFloat’ in Parsec
 
-reservedNames :: [String]
-reservedNames =
+reservedNames :: HashSet Text
+reservedNames = HashSet.fromList
     [ "let", "in"
     , "if", "then", "else"
     , "assert"
@@ -155,16 +158,15 @@ whiteSpace = L.space space1 lineCmnt blockCmnt
     lineCmnt  = L.skipLineComment "//"
     blockCmnt = L.skipBlockComment "/*" "*/"
 
-type Parser = ParsecT () Text Identity
-
-parseFromFileEx :: MonadIO m => Parser a -> FilePath -> m (Result a)
-parseFromText :: Parser a -> Text -> Result a
+type Parser = ParsecT Void Text Identity
 
 data Result a = Success a | Failure Doc deriving Show
 
+parseFromFileEx :: MonadIO m => Parser a -> FilePath -> m (Result a)
 parseFromFileEx p path =
-    (either (Failure . text . show) Success . parse p path)
+    (either (Failure . text . parseErrorPretty) Success . parse p path)
         `liftM` liftIO (T.readFile path)
 
+parseFromText :: Parser a -> Text -> Result a
 parseFromText p =
-    either (Failure . text . show) Success . parse p "<string>"
+    either (Failure . text . parseErrorPretty) Success . parse p "<string>"

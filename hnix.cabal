@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 59b163436955fe71d606be041b46cadfa36f494fb45ea40526c82b5dae8cafc8
+-- hash: b4bb539502138611081a4bd9bf0a38f573101647309db931461e50f536595869
 
 name:           hnix
 version:        0.5.0
@@ -111,6 +111,7 @@ executable hnix
     , exceptions
     , hnix
     , insert-ordered-containers >=0.2.2 && <0.3
+    , megaparsec
     , mtl
     , optparse-applicative
     , template-haskell

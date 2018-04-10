@@ -90,6 +90,12 @@ eval (NStr str)             = evalString =<< assembleString str
 eval (NLiteralPath p)       = evalLiteralPath p
 eval (NEnvPath p)           = evalEnvPath p
 eval (NUnary op arg)        = evalUnary op =<< arg
+
+eval (NBinary NApp fun arg) = do
+    traceM "NApp"
+    scope <- currentScopes @_ @t
+    evalApp ?? withScopes scope arg =<< fun
+
 eval (NBinary op larg rarg) = join $ evalBinary op <$> larg <*> pure rarg
 
 eval (NSelect aset attr alt) = do
@@ -157,11 +163,6 @@ eval (NAssert cond body) = do
         Just b -> if b then body else evalError @v "assertion failed"
         _ -> evalError @v $ "assertion condition must be boolean, but saw: "
                 ++ show v
-
-eval (NApp fun arg) = do
-    traceM "NApp"
-    scope <- currentScopes @_ @t
-    evalApp ?? withScopes scope arg =<< fun
 
 eval (NAbs params body) = do
     -- It is the environment at the definition site, not the call site, that

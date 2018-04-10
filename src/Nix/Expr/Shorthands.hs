@@ -234,5 +234,5 @@ infixl 1 @@
 infixr 1 ==>
 
 (@.) :: NExpr -> Text -> NExpr
-obj @. name = mkBinop NSelect obj (mkSym name)
+obj @. name = Fix (NSelect obj [StaticKey name Nothing] Nothing)
 infixl 2 @.
