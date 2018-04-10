@@ -69,49 +69,49 @@ nixSelector = annotateLocation $ keyName `sepBy1` selDot
 -- | A self-contained unit.
 nixTerm :: Parser NExprLoc
 nixTerm = nixSelect $ choice
-    [ dbg "Path"       nixPath
+    [ dbg "Parens"     nixParens
+    , dbg "Set"        nixSet
+    , dbg "List"       nixList
     , dbg "SPath"      nixSPath
+    , dbg "StringExpr" nixStringExpr
+    , dbg "Path"       nixPath
+    , dbg "Uri"        nixUri
     , dbg "Float"      nixFloat
     , dbg "Int"        nixInt
     , dbg "Bool"       nixBool
     , dbg "Null"       nixNull
-    , dbg "Parens"     nixParens
-    , dbg "List"       nixList
-    , dbg "Uri"        nixUri
-    , dbg "StringExpr" nixStringExpr
-    , dbg "Set"        nixSet
     , dbg "Sym"        nixSym ]
 
 nixToplevelForm :: Parser NExprLoc
 nixToplevelForm = choice
-    [ dbg "Lambda" nixLambda
-    , dbg "Let"    nixLet
+    [ dbg "Let"    nixLet
     , dbg "If"     nixIf
     , dbg "Assert" nixAssert
-    , dbg "With"   nixWith ]
+    , dbg "With"   nixWith
+    , dbg "Lambda" nixLambda ]
 #else
 nixTerm :: Parser NExprLoc
 nixTerm = nixSelect $ choice
-    [ nixPath
+    [ nixParens
+    , nixSet
+    , nixList
     , nixSPath
+    , nixStringExpr
+    , nixPath
+    , nixUri
     , nixFloat
     , nixInt
     , nixBool
     , nixNull
-    , nixParens
-    , nixList
-    , nixUri
-    , nixStringExpr
-    , nixSet
     , nixSym ]
 
 nixToplevelForm :: Parser NExprLoc
 nixToplevelForm = choice
-    [ nixLambda
-    , nixLet
+    [ nixLet
     , nixIf
     , nixAssert
-    , nixWith ]
+    , nixWith
+    , nixLambda ]
 #endif
 
 nixSym :: Parser NExprLoc

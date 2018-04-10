@@ -12,7 +12,7 @@ import           Control.DeepSeq
 import           Data.Data (Data(..))
 import           Data.Foldable (concat)
 import qualified Data.Map as Map
-import           Data.Text (Text, unpack)
+import           Data.Text (Text)
 import           Data.Typeable (Typeable)
 import           GHC.Generics hiding (Prefix)
 import           Nix.Expr
@@ -45,6 +45,8 @@ manyUnaryOp f = foldr1 (.) <$> some f
 
 operator "-" = lexeme . try $ string "-" <* notFollowedBy (char '>')
 operator "/" = lexeme . try $ string "/" <* notFollowedBy (char '/')
+operator "<" = lexeme . try $ string "<" <* notFollowedBy (char '=')
+operator ">" = lexeme . try $ string ">" <* notFollowedBy (char '=')
 operator n   = symbol n
 
 opWithLoc :: Text -> o -> (Ann SrcSpan o -> a) -> Parser a
