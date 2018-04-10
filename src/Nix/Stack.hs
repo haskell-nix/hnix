@@ -38,7 +38,7 @@ class Monad m => MonadFile m where
     readFile :: FilePath -> m ByteString
 
 renderLocation :: MonadFile m => SrcSpan -> Doc -> m Doc
-renderLocation = error "NYI: renderLocation"
+renderLocation = error "NYI: renderLocation" -- jww (2018-04-09): NYI
 {-
 renderLocation (SrcSpan beg@(SourcePos "<string>" _ _) end) msg =
     return $ explain (addSpan (deltaToTrifecta beg) (deltaToTrifecta end)

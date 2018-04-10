@@ -11,6 +11,7 @@ module Nix.Parser.Library
 import           Control.Applicative hiding (many)
 import           Control.Monad
 import           Control.Monad.IO.Class
+import           Data.Char (isAlpha, isDigit)
 import           Data.Functor.Identity
 import           Data.HashSet (HashSet)
 import qualified Data.HashSet as HashSet
@@ -93,26 +94,25 @@ reservedOp o = token $ try $ void $
   highlight ReservedOperator (string o)
       <* (notFollowedBy opLetter <?> "end of " ++ o)
 
-opStart :: CharParsing m => m Char
-opStart = oneOf ".+-*/=<>&|!?"
-
 opLetter :: CharParsing m => m Char
 opLetter = oneOf ">+/&|="
 -}
+
+opStart :: Parser Char
+opStart = satisfy $ \x -> x `elem` (".+-*/=<>&|!?" :: String)
 
 identStart :: Parser Char
 identStart = letterChar <|> char '_'
 
 identLetter :: Parser Char
-identLetter = alphaNumChar
-    <|> satisfy (\x -> x == '"' || x == '_' || x == '\'' || x == '-')
+identLetter = satisfy $ \x ->
+    isAlpha x || isDigit x || x == '"' || x == '_' || x == '\'' || x == '-'
 
-symbol    = L.symbol whiteSpace
-lexeme    = L.lexeme whiteSpace
+symbol     = L.symbol whiteSpace
+lexeme     = L.lexeme whiteSpace
 reservedOp = symbol
-identifier :: Parser Text
 identifier = pack <$> ((:) <$> identStart <*> many identLetter)
-reserved  = symbol
+reserved   = symbol
 
 parens    = between (symbol "(") (symbol ")")
 braces    = between (symbol "{") (symbol "}")
@@ -155,7 +155,7 @@ stopWords = () <$
 whiteSpace :: Parser ()
 whiteSpace = L.space space1 lineCmnt blockCmnt
   where
-    lineCmnt  = L.skipLineComment "//"
+    lineCmnt  = L.skipLineComment "#"
     blockCmnt = L.skipBlockComment "/*" "*/"
 
 type Parser = ParsecT Void Text Identity

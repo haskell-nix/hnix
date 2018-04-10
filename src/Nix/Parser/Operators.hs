@@ -41,9 +41,11 @@ annotateLocation p = do
 annotateLocation1 :: Parser (NExprF NExprLoc) -> Parser NExprLoc
 annotateLocation1 = fmap annToAnnF . annotateLocation
 
+operator n = (lexeme . try) (string n <* notFollowedBy opStart)
+
 opWithLoc :: Text -> o -> (Ann SrcSpan o -> a) -> Parser a
 opWithLoc name op f = do
-    Ann ann _ <- annotateLocation (symbol name)
+    Ann ann _ <- annotateLocation (whiteSpace *> operator name)
     return $ f (Ann ann op)
 
 binaryN name op = (NBinaryDef name op NAssocNone,
@@ -66,7 +68,9 @@ nixOperators term selector seldot =
                        sel <- seldot *> selector
                        mor <- optional (reserved "or" *> term)
                        return $ \x -> nSelectLoc x sel mor) ]
-  , {-  2 -} [ binaryL " "  NApp ]
+  , {-  2 -} [ (NBinaryDef " " NApp NAssocLeft,
+                -- Thanks to Brent Yorgey for showing me this trick!
+                InfixL $ nApp <$ symbol "") ]
   , {-  3 -} [ prefix  "-"  NNeg ]
   , {-  4 -} [ (NSpecialDef "?" NHasAttrOp NAssocLeft,
                 Postfix $ symbol "?" *> (flip nHasAttr <$> selector)) ]

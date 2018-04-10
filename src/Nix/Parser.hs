@@ -13,10 +13,11 @@ module Nix.Parser (
 import           Control.Applicative hiding (many, some)
 import           Control.Monad
 import           Control.Monad.IO.Class
+import           Data.Char (isAlpha, isDigit, isSpace)
 import           Data.Functor
 import qualified Data.List.NonEmpty as NE
 import qualified Data.HashMap.Strict.InsOrd as M
-import           Data.Text hiding (map, concat)
+import           Data.Text hiding (map)
 import           Nix.Expr hiding (($>))
 import           Nix.Parser.Library
 import           Nix.Parser.Operators
@@ -33,18 +34,21 @@ nixExprLoc :: Parser NExprLoc
 nixExprLoc = whiteSpace *> (nixToplevelForm <|> exprParser)
 
 exprParser :: Parser NExprLoc
-exprParser = makeExprParser nixTerm $
-    map (map snd) (nixOperators nixTerm nixSelector selDot)
+exprParser = makeExprParser (nixTerm <* whiteSpace) $
+    map (map snd) (nixOperators (nixTerm <* whiteSpace) nixSelector selDot)
 
 antiStart :: Parser Text
 antiStart = try (symbol "${") <?> show ("${" :: String)
 
 nixAntiquoted :: Parser a -> Parser (Antiquoted a NExprLoc)
-nixAntiquoted p = Antiquoted <$> (antiStart *> nixExprLoc <* symbol "}") <|> Plain <$> p
+nixAntiquoted p =
+        Antiquoted <$> (antiStart *> nixExprLoc <* symbol "}")
+    <|> Plain <$> p
 
 selDot :: Parser ()
-selDot = try (char '.' *> notFollowedBy (("path" :: String) <$ nixPath)) *> whiteSpace
-      <?> "."
+selDot = try (char '.' *> notFollowedBy (("path" :: String) <$ nixPath))
+    *> whiteSpace
+    <?> "."
 
 nixSelector :: Parser (Ann SrcSpan (NAttrPath NExprLoc))
 nixSelector = annotateLocation $ keyName `sepBy1` selDot
@@ -52,11 +56,26 @@ nixSelector = annotateLocation $ keyName `sepBy1` selDot
 -- | A self-contained unit.
 nixTerm :: Parser NExprLoc
 nixTerm = choice
-  [ nixPath, nixSPath, nixFloat, nixInt, nixBool, nixNull, nixParens, nixList, nixUri
-  , nixStringExpr, nixSet, nixSym ]
+    [ {-dbg "Path"       -} nixPath
+    , {-dbg "SPath"      -} nixSPath
+    , {-dbg "Float"      -} nixFloat
+    , {-dbg "Int"        -} nixInt
+    , {-dbg "Bool" $     -} try (nixBool <* notFollowedBy (char '-'))
+    , {-dbg "Null" $     -} try (nixNull <* notFollowedBy (char '-'))
+    , {-dbg "Parens"     -} nixParens
+    , {-dbg "List"       -} nixList
+    , {-dbg "Uri"        -} nixUri
+    , {-dbg "StringExpr" -} nixStringExpr
+    , {-dbg "Set"        -} nixSet
+    , {-dbg "Path"       -} nixSym ]
 
 nixToplevelForm :: Parser NExprLoc
-nixToplevelForm = choice [nixLambda, nixLet, nixIf, nixAssert, nixWith]
+nixToplevelForm = choice
+    [ {-dbg "Lambda" -} nixLambda
+    , {-dbg "Let"    -} nixLet
+    , {-dbg "If"     -} nixIf
+    , {-dbg "Assert" -} nixAssert
+    , {-dbg "Lambda" -} nixWith ]
 
 nixSym :: Parser NExprLoc
 nixSym = annotateLocation1 $ mkSymF <$> identifier
@@ -81,31 +100,29 @@ nixParens = parens nixExprLoc <?> "parens"
 nixList :: Parser NExprLoc
 nixList = annotateLocation1 (brackets (NList <$> many nixTerm) <?> "list")
 
-pathChars :: String
-pathChars = ['A'..'Z'] ++ ['a'..'z'] ++ "._-+" ++ ['0'..'9']
+pathChar :: Bool -> Parser Char
+pathChar allowSlash = satisfy $ \x ->
+    isAlpha x || isDigit x || x == '.' || x == '_' || x == '-' || x == '+'
+        || (allowSlash && x == '/')
 
 slash :: Parser Char
-slash = try (char '/' <* notFollowedBy (void (char '/') <|>
-                                        void (char '*') <|>
-                                        whiteSpace))
+slash = try (char '/' <* notFollowedBy (satisfy (\x -> x == '/' || x == '*' || isSpace x)))
     <?> "slash"
 
 -- | A path surrounded by angle brackets, indicating that it should be
 -- looked up in the NIX_PATH environment variable at evaluation.
 nixSPath :: Parser NExprLoc
-nixSPath = annotateLocation1 (mkPathF True <$> try (char '<' *> some (oneOf pathChars <|> slash) <* symbol ">")
-        <?> "spath")
+nixSPath = annotateLocation1
+    (mkPathF True <$> try (char '<' *> some (pathChar True) <* symbol ">")
+         <?> "spath")
 
 nixPath :: Parser NExprLoc
-nixPath = annotateLocation1 (parseToken (fmap (mkPathF False) (((++)
-    <$> (try ((++) <$> many (oneOf pathChars) <*> fmap (:[]) slash) <?> "path")
-    <*> fmap concat
-      (  some (some (oneOf pathChars)
-     <|> liftA2 (:) slash (some (oneOf pathChars)))
-      ))
-    <?> "path")))
-  where
-    parseToken p = p <* whiteSpace
+nixPath = annotateLocation1 $ try $ do
+    start  <- many (pathChar False)
+    middle <- some slash
+    finish <- some (pathChar True)
+    whiteSpace
+    return $ mkPathF False $ start ++ middle ++ finish
 
 nixLet :: Parser NExprLoc
 nixLet = annotateLocation1 (reserved "let"
@@ -235,7 +252,8 @@ argExpr = choice [atLeft, onlyname, atRight] <* symbol ":" where
       -- Could be nothing, in which just return what we have so far.
       option (acc, False) $ do
         -- Get an argument name and an optional default.
-        pair <- liftA2 (,) identifier (optional $ question *> nixExprLoc)
+        pair <- liftA2 (,) (identifier <* whiteSpace)
+                          (optional $ question *> nixExprLoc)
         -- Either return this, or attempt to get a comma and restart.
         option (acc ++ [pair], False) $ comma >> go (acc ++ [pair])
 
@@ -250,7 +268,7 @@ nixBinders = (inherit <|> namedVar) `endBy` semi where
   scope = parens nixExprLoc <?> "inherit scope"
 
 keyName :: Parser (NKeyName NExprLoc)
-keyName = dynamicKey <|> staticKey where
+keyName = (dynamicKey <|> staticKey) <* whiteSpace where
   staticKey = do
       beg <- getPosition
       StaticKey <$> identifier <*> pure (Just beg)

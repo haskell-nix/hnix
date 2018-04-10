@@ -94,6 +94,10 @@ nHasAttr :: NExprLoc -> Ann SrcSpan (NAttrPath NExprLoc) -> NExprLoc
 nHasAttr e1@(AnnE s1 _) (Ann s2 ats) = AnnE (s1 <> s2) (NHasAttr e1 ats)
 nHasAttr _ _ = error "nHasAttr: unexpected"
 
+nApp :: NExprLoc -> NExprLoc -> NExprLoc
+nApp e1@(AnnE s1 _) e2@(AnnE s2 _) = AnnE (s1 <> s2) (NBinary NApp e1 e2)
+nApp _ _ = error "nApp: unexpected"
+
 nAbs :: Ann SrcSpan (Params NExprLoc) -> NExprLoc -> NExprLoc
 nAbs (Ann s1 ps) e1@(AnnE s2 _) = AnnE (s1 <> s2) (NAbs ps e1)
 nAbs _ _ = error "nAbs: unexpected"

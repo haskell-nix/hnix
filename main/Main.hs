@@ -88,7 +88,9 @@ main = do
     -- print . printNix =<< Nix.eval [nix|1 + 3|]
 
     handleResult opts mpath = \case
-        Failure err -> hPutStr stderr $ "Parse failed: " ++ show err
+        Failure err ->
+            errorWithoutStackTrace $ "Parse failed: " ++ show err
+
         Success expr -> do
             -- expr <- Exc.evaluate $ force expr
             -- putStrLn "Parsing file...done"

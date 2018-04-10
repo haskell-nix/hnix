@@ -113,6 +113,7 @@ builtinsList = sequence [
     , add  TopLevel "throw"                      throw_
     , add2 TopLevel "scopedImport"               scopedImport
     , add  TopLevel "derivationStrict"           derivationStrict_
+    -- jww (2018-04-09): NYI
     -- , add0 TopLevel "derivation"                 $(do
     --       let f = "data/nix/corepkgs/derivation.nix"
     --       addDependentFile f
@@ -132,7 +133,7 @@ builtinsList = sequence [
     , add  Normal   "splitVersion"               splitVersion_
     , add2 Normal   "compareVersions"            compareVersions_
     , add2 Normal   "match"                      match_
-    --TODO: Support floats for `add` and `sub`
+    -- jww (2018-04-09): Support floats for `add` and `sub`
     , add' Normal   "add"                        (arity2 ((+) @Integer))
     , add' Normal   "sub"                        (arity2 ((-) @Integer))
     , add' Normal   "parseDrvName"               parseDrvName
