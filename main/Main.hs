@@ -21,14 +21,15 @@ import           System.IO
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 data Options = Options
-    { verbose    :: Bool
-    , debug      :: Bool
-    , evaluate   :: Bool
-    , check      :: Bool
-    , parseOnly  :: Bool
-    , expression :: Maybe Text
-    , fromFile   :: Maybe FilePath
-    , filePaths  :: [FilePath]
+    { verbose      :: Bool
+    , debug        :: Bool
+    , evaluate     :: Bool
+    , check        :: Bool
+    , parseOnly    :: Bool
+    , ignoreErrors :: Bool
+    , expression   :: Maybe Text
+    , fromFile     :: Maybe FilePath
+    , filePaths    :: [FilePath]
     }
 
 mainOptions :: Parser Options
@@ -50,6 +51,9 @@ mainOptions = Options
     <*> switch
         (   long "parse-only"
          <> help "Whether to parse only, no pretty printing or checking")
+    <*> switch
+        (   long "ignore-errors"
+         <> help "Continue parsing files, even if there are errors")
     <*> optional (strOption
         (   short 'e'
          <> long "expr"
@@ -93,7 +97,9 @@ main = do
 
     handleResult opts mpath = \case
         Failure err ->
-            errorWithoutStackTrace $ "Parse failed: " ++ show err
+            (if ignoreErrors opts
+             then hPutStrLn stderr
+             else errorWithoutStackTrace) $ "Parse failed: " ++ show err
 
         Success expr -> do
             -- expr <- Exc.evaluate $ force expr
