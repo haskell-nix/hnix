@@ -6,18 +6,18 @@
 
 module EvalTests (tests, genEvalCompareTests) where
 
-import Data.String.Interpolate.IsString
-import Data.Text (Text)
-import Nix
-import Nix.Expr
-import Nix.Parser
-import Nix.Value
+import           Data.String.Interpolate.IsString
+import           Data.Text (Text)
+import           Nix
+import           Nix.Expr
+import           Nix.Parser
+import           Nix.Value
 import qualified System.Directory as D
-import System.FilePath
-import Test.Tasty
-import Test.Tasty.HUnit
-import Test.Tasty.TH
-import TestCommon
+import           System.FilePath
+import           Test.Tasty
+import           Test.Tasty.HUnit
+import           Test.Tasty.TH
+import           TestCommon
 
 case_basic_sum =
     constantEqualText "2" "1 + 1"

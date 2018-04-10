@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b04b1cb6b8d8f2cbb85b7de0ab313e31b2c8e74120b41f5930894323ae11da2e
+-- hash: eed66122f2daeb0845bd275988ae03be47bacd6cf6c52192042ce2e08df1a13b
 
 name:           hnix
 version:        0.5.0
@@ -137,6 +137,7 @@ test-suite hnix-tests
     , containers
     , data-fix
     , deepseq
+    , directory
     , exceptions
     , filepath
     , hnix
