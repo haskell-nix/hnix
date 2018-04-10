@@ -23,83 +23,29 @@ import           Text.Megaparsec.Char as X
 import qualified Text.Megaparsec.Char.Lexer as L
 import           Text.PrettyPrint.ANSI.Leijen as X (Doc, text)
 
-{-
-instance TokenParsing p => TokenParsing (NixParser p) where
-  someSpace = NixParser $ buildSomeSpaceParser' someSpace commentStyle
-  nesting = NixParser . nesting . runNixParser
-  highlight h = NixParser . highlight h . runNixParser
-  semi = token $ char ';' <?> ";"
-  token p = p <* whiteSpace
-
-buildSomeSpaceParser' :: forall m. CharParsing m => m () -> CommentStyle -> m ()
-buildSomeSpaceParser' simpleSpace
-    (CommentStyle startStyle endStyle lineStyle nestingStyle)
-  | noLine && noMulti = skipSome (simpleSpace <?> "")
-  | noLine           = skipSome (simpleSpace <|> multiLineComment <?> "")
-  | noMulti          = skipSome (simpleSpace <|> oneLineComment <?> "")
-  | otherwise =
-    skipSome (simpleSpace <|> oneLineComment <|> multiLineComment <?> "")
+whiteSpace :: Parser ()
+whiteSpace = L.space space1 lineCmnt blockCmnt
   where
-    noLine  = Prelude.null lineStyle
-    noMulti = Prelude.null startStyle
+    lineCmnt  = L.skipLineComment "#"
+    blockCmnt = L.skipBlockComment "/*" "*/"
 
-    oneLineComment, multiLineComment, inComment, inCommentMulti :: m ()
-    oneLineComment = try (string lineStyle) *> skipMany (satisfy (\x -> x `notElem` ['\r', '\n']))
-    multiLineComment = try (string startStyle) *> inComment
-    inComment = if nestingStyle then inCommentMulti else inCommentSingle
-    inCommentMulti
-      =   () <$ try (string endStyle)
-      <|> multiLineComment *> inCommentMulti
-      <|> skipSome (noneOf startEnd) *> inCommentMulti
-      <|> oneOf startEnd *> inCommentMulti
-      <?> "end of comment"
+lexeme :: Parser a -> Parser a
+lexeme p = p <* whiteSpace
+{-# INLINEABLE lexeme #-}
 
-    startEnd = nub (endStyle ++ startStyle)
+symbol     = lexeme . string
+reservedOp = symbol
+reserved   = symbol
 
-    inCommentSingle :: m ()
-    inCommentSingle
-      =   () <$ try (string endStyle)
-      <|> skipSome (noneOf startEnd) *> inCommentSingle
-      <|> oneOf startEnd *> inCommentSingle
-      <?> "end of comment"
--}
+opStart :: Parser Char
+opStart = satisfy $ \x ->
+    -- jww (2018-04-09): Could this be faster?
+    x `elem` (".+-*/=<>&|!?" :: String)
 
 {-
-commentStyle :: CommentStyle
-commentStyle = CommentStyle
-  { _commentStart = "/*"
-  , _commentEnd   = "*/"
-  , _commentLine  = "#"
-  , _commentNesting = False
-  }
-
-identStyle :: CharParsing m => IdentifierStyle m
-identStyle = IdentifierStyle
-  { _styleName = "identifier"
-  , _styleStart = identStart
-  , _styleLetter = identLetter
-  , _styleReserved = reservedNames
-  , _styleHighlight = Identifier
-  , _styleReservedHighlight = ReservedIdentifier
-  }
-
-identifier :: (TokenParsing m, Monad m) => m Text
-identifier = ident identStyle <?> "identifier"
-
-reserved :: (TokenParsing m, Monad m) => String -> m ()
-reserved = reserve identStyle
-
-reservedOp :: TokenParsing m => String -> m ()
-reservedOp o = token $ try $ void $
-  highlight ReservedOperator (string o)
-      <* (notFollowedBy opLetter <?> "end of " ++ o)
-
 opLetter :: CharParsing m => m Char
 opLetter = oneOf ">+/&|="
 -}
-
-opStart :: Parser Char
-opStart = satisfy $ \x -> x `elem` (".+-*/=<>&|!?" :: String)
 
 identStart :: Parser Char
 identStart = letterChar <|> char '_'
@@ -108,11 +54,10 @@ identLetter :: Parser Char
 identLetter = satisfy $ \x ->
     isAlpha x || isDigit x || x == '"' || x == '_' || x == '\'' || x == '-'
 
-symbol     = L.symbol whiteSpace
-lexeme     = L.lexeme whiteSpace
-reservedOp = symbol
-identifier = pack <$> ((:) <$> identStart <*> many identLetter)
-reserved   = symbol
+identifier = lexeme $ try $ do
+    ident <- pack <$> ((:) <$> identStart <*> many identLetter)
+    guard (not (ident `HashSet.member` reservedNames))
+    return ident
 
 parens    = between (symbol "(") (symbol ")")
 braces    = between (symbol "{") (symbol "}")
@@ -131,9 +76,6 @@ integer = lexeme L.decimal
 float :: Parser Double
 float = lexeme L.float
 
--- number :: Parser Scientific
--- number = lexeme L.scientific -- similar to ‘naturalOrFloat’ in Parsec
-
 reservedNames :: HashSet Text
 reservedNames = HashSet.fromList
     [ "let", "in"
@@ -142,21 +84,7 @@ reservedNames = HashSet.fromList
     , "with"
     , "rec"
     , "inherit"
-    , "true"
-    , "false"
-    ]
-
-{-
-stopWords :: (TokenParsing m, Monad m) => m ()
-stopWords = () <$
-    (whiteSpace *> (reserved "in" <|> reserved "then" <|> reserved "else"))
--}
-
-whiteSpace :: Parser ()
-whiteSpace = L.space space1 lineCmnt blockCmnt
-  where
-    lineCmnt  = L.skipLineComment "#"
-    blockCmnt = L.skipBlockComment "/*" "*/"
+    , "true", "false" ]
 
 type Parser = ParsecT Void Text Identity
 

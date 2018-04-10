@@ -34,8 +34,8 @@ nixExprLoc :: Parser NExprLoc
 nixExprLoc = whiteSpace *> (nixToplevelForm <|> exprParser)
 
 exprParser :: Parser NExprLoc
-exprParser = makeExprParser (nixTerm <* whiteSpace) $
-    map (map snd) (nixOperators (nixTerm <* whiteSpace) nixSelector selDot)
+exprParser = makeExprParser (try nixTerm) $
+    map (map snd) (nixOperators nixSelector)
 
 antiStart :: Parser Text
 antiStart = try (symbol "${") <?> show ("${" :: String)
@@ -44,38 +44,74 @@ nixAntiquoted :: Parser a -> Parser (Antiquoted a NExprLoc)
 nixAntiquoted p =
         Antiquoted <$> (antiStart *> nixExprLoc <* symbol "}")
     <|> Plain <$> p
+    <?> "anti-quotation"
 
 selDot :: Parser ()
-selDot = try (char '.' *> notFollowedBy (("path" :: String) <$ nixPath))
-    *> whiteSpace
-    <?> "."
+selDot = try (symbol "." *> notFollowedBy nixPath) <?> "."
+
+nixSelect :: Parser NExprLoc -> Parser NExprLoc
+nixSelect term = build
+  <$> term
+  <*> optional ((,) <$> (selDot *> nixSelector)
+                    <*> optional (reserved "or" *> nixTerm))
+ where
+  build :: NExprLoc
+        -> Maybe (Ann SrcSpan (NAttrPath NExprLoc), Maybe NExprLoc)
+        -> NExprLoc
+  build t Nothing = t
+  build t (Just (s,o)) = nSelectLoc t s o
 
 nixSelector :: Parser (Ann SrcSpan (NAttrPath NExprLoc))
 nixSelector = annotateLocation $ keyName `sepBy1` selDot
 
+{-
 -- | A self-contained unit.
 nixTerm :: Parser NExprLoc
 nixTerm = choice
-    [ {-dbg "Path"       -} nixPath
-    , {-dbg "SPath"      -} nixSPath
-    , {-dbg "Float"      -} nixFloat
-    , {-dbg "Int"        -} nixInt
-    , {-dbg "Bool" $     -} try (nixBool <* notFollowedBy (char '-'))
-    , {-dbg "Null" $     -} try (nixNull <* notFollowedBy (char '-'))
-    , {-dbg "Parens"     -} nixParens
-    , {-dbg "List"       -} nixList
-    , {-dbg "Uri"        -} nixUri
-    , {-dbg "StringExpr" -} nixStringExpr
-    , {-dbg "Set"        -} nixSet
-    , {-dbg "Path"       -} nixSym ]
+    [ dbg "Path"       nixPath
+    , dbg "SPath"      nixSPath
+    , dbg "Float"      nixFloat
+    , dbg "Int"        nixInt
+    , dbg "Bool"       nixBool
+    , dbg "Null"       nixNull
+    , dbg "Parens"     nixParens
+    , dbg "List"       nixList
+    , dbg "Uri"        nixUri
+    , dbg "StringExpr" nixStringExpr
+    , dbg "Set"        nixSet
+    , dbg "Sym"        nixSym ]
 
 nixToplevelForm :: Parser NExprLoc
 nixToplevelForm = choice
-    [ {-dbg "Lambda" -} nixLambda
-    , {-dbg "Let"    -} nixLet
-    , {-dbg "If"     -} nixIf
-    , {-dbg "Assert" -} nixAssert
-    , {-dbg "Lambda" -} nixWith ]
+    [ dbg "Lambda" nixLambda
+    , dbg "Let"    nixLet
+    , dbg "If"     nixIf
+    , dbg "Assert" nixAssert
+    , dbg "Lambda" nixWith ]
+-}
+
+nixTerm :: Parser NExprLoc
+nixTerm = nixSelect $ choice
+    [ nixPath
+    , nixSPath
+    , nixFloat
+    , nixInt
+    , nixBool
+    , nixNull
+    , nixParens
+    , nixList
+    , nixUri
+    , nixStringExpr
+    , nixSet
+    , nixSym ]
+
+nixToplevelForm :: Parser NExprLoc
+nixToplevelForm = choice
+    [ nixLambda
+    , nixLet
+    , nixIf
+    , nixAssert
+    , nixWith ]
 
 nixSym :: Parser NExprLoc
 nixSym = annotateLocation1 $ mkSymF <$> identifier
@@ -87,12 +123,14 @@ nixFloat :: Parser NExprLoc
 nixFloat = annotateLocation1 (try (mkFloatF . realToFrac <$> float) <?> "float")
 
 nixBool :: Parser NExprLoc
-nixBool = annotateLocation1 (try (true <|> false) <?> "bool") where
-  true = mkBoolF True <$ reserved "true"
-  false = mkBoolF False <$ reserved "false"
+nixBool = annotateLocation1 (try (bool "true" True <|>
+                                  bool "false" False) <?> "bool") where
+  bool str b = mkBoolF b <$ lexeme (string str <* notFollowedBy pathChar)
 
 nixNull :: Parser NExprLoc
-nixNull = annotateLocation1 (mkNullF <$ try (reserved "null") <?> "null")
+nixNull = annotateLocation1
+    (mkNullF <$ try (lexeme (string "null" <* notFollowedBy pathChar))
+         <?> "null")
 
 nixParens :: Parser NExprLoc
 nixParens = parens nixExprLoc <?> "parens"
@@ -100,10 +138,9 @@ nixParens = parens nixExprLoc <?> "parens"
 nixList :: Parser NExprLoc
 nixList = annotateLocation1 (brackets (NList <$> many nixTerm) <?> "list")
 
-pathChar :: Bool -> Parser Char
-pathChar allowSlash = satisfy $ \x ->
+pathChar :: Parser Char
+pathChar = satisfy $ \x ->
     isAlpha x || isDigit x || x == '.' || x == '_' || x == '-' || x == '+'
-        || (allowSlash && x == '/')
 
 slash :: Parser Char
 slash = try (char '/' <* notFollowedBy (satisfy (\x -> x == '/' || x == '*' || isSpace x)))
@@ -113,26 +150,24 @@ slash = try (char '/' <* notFollowedBy (satisfy (\x -> x == '/' || x == '*' || i
 -- looked up in the NIX_PATH environment variable at evaluation.
 nixSPath :: Parser NExprLoc
 nixSPath = annotateLocation1
-    (mkPathF True <$> try (char '<' *> some (pathChar True) <* symbol ">")
+    (mkPathF True <$> try (char '<' *> many (pathChar <|> slash) <* symbol ">")
          <?> "spath")
 
+pathStr :: Parser FilePath
+pathStr = liftM2 (++) (many pathChar)
+    (Prelude.concat <$> some (liftM2 (:) slash (some pathChar)))
+
 nixPath :: Parser NExprLoc
-nixPath = annotateLocation1 $ try $ do
-    start  <- many (pathChar False)
-    middle <- some slash
-    finish <- some (pathChar True)
-    whiteSpace
-    return $ mkPathF False $ start ++ middle ++ finish
+nixPath = annotateLocation1 $ try $ mkPathF False <$> pathStr
 
 nixLet :: Parser NExprLoc
 nixLet = annotateLocation1 (reserved "let"
-    *> whiteSpace
     *> (letBody <|> letBinders)
     <?> "let block")
   where
     letBinders = NLet
         <$> nixBinders
-        <*> (whiteSpace *> reserved "in" *> nixExprLoc)
+        <*> (reserved "in" *> nixExprLoc)
     -- Let expressions `let {..., body = ...}' are just desugared
     -- into `(rec {..., body = ...}).body'.
     letBody = (\x pos -> NSelect x [StaticKey "body" (Just pos)] Nothing)
@@ -142,8 +177,8 @@ nixLet = annotateLocation1 (reserved "let"
 nixIf :: Parser NExprLoc
 nixIf = annotateLocation1 (NIf
      <$> (reserved "if" *> nixExprLoc)
-     <*> (whiteSpace *> reserved "then" *> nixExprLoc)
-     <*> (whiteSpace *> reserved "else" *> nixExprLoc)
+     <*> (reserved "then" *> nixExprLoc)
+     <*> (reserved "else" *> nixExprLoc)
      <?> "if")
 
 nixAssert :: Parser NExprLoc
@@ -170,16 +205,15 @@ uriAfterColonC = alphaNumChar <|>
     satisfy (\x -> x `elem` ("%/?:@&=+$,-_.!~*'" :: String))
 
 nixUri :: Parser NExprLoc
-nixUri = annotateLocation1 $ parseToken $ fmap (mkUriF . pack) $ (++)
+nixUri = annotateLocation1 $ fmap (mkUriF . pack) $ (++)
   <$> try ((++) <$> (scheme <* char ':') <*> fmap (\x -> [':',x]) uriAfterColonC)
   <*> many uriAfterColonC
  where
   scheme = (:) <$> letterChar
                <*> many (alphaNumChar <|> satisfy (\x -> x `elem` ("+-." :: String)))
-  parseToken p = p <* whiteSpace
 
 nixString :: Parser (NString NExprLoc)
-nixString = doubleQuoted <|> indented <?> "string"
+nixString = lexeme (doubleQuoted <|> indented <?> "string")
   where
     doubleQuoted :: Parser (NString NExprLoc)
     doubleQuoted = DoubleQuoted . removePlainEmpty . mergePlain
@@ -187,7 +221,7 @@ nixString = doubleQuoted <|> indented <?> "string"
                              <* doubleQ)
                 <?> "double quoted string"
 
-    doubleQ = void $ char '"'
+    doubleQ = void (char '"')
     doubleEscape = Plain . singleton <$> (char '\\' *> escapeCode)
 
     indented :: Parser (NString NExprLoc)
@@ -252,8 +286,7 @@ argExpr = choice [atLeft, onlyname, atRight] <* symbol ":" where
       -- Could be nothing, in which just return what we have so far.
       option (acc, False) $ do
         -- Get an argument name and an optional default.
-        pair <- liftA2 (,) (identifier <* whiteSpace)
-                          (optional $ question *> nixExprLoc)
+        pair <- liftA2 (,) identifier (optional $ question *> nixExprLoc)
         -- Either return this, or attempt to get a comma and restart.
         option (acc ++ [pair], False) $ comma >> go (acc ++ [pair])
 
@@ -268,7 +301,7 @@ nixBinders = (inherit <|> namedVar) `endBy` semi where
   scope = parens nixExprLoc <?> "inherit scope"
 
 keyName :: Parser (NKeyName NExprLoc)
-keyName = (dynamicKey <|> staticKey) <* whiteSpace where
+keyName = (dynamicKey <|> staticKey) where
   staticKey = do
       beg <- getPosition
       StaticKey <$> identifier <*> pure (Just beg)

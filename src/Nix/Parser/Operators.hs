@@ -41,11 +41,14 @@ annotateLocation p = do
 annotateLocation1 :: Parser (NExprF NExprLoc) -> Parser NExprLoc
 annotateLocation1 = fmap annToAnnF . annotateLocation
 
-operator n = (lexeme . try) (string n <* notFollowedBy opStart)
+manyUnaryOp f = foldr1 (.) <$> some f
+
+operator "/" = lexeme . try $ string "/" <* notFollowedBy (char '/')
+operator n   = symbol n
 
 opWithLoc :: Text -> o -> (Ann SrcSpan o -> a) -> Parser a
 opWithLoc name op f = do
-    Ann ann _ <- annotateLocation (whiteSpace *> operator name)
+    Ann ann _ <- annotateLocation $ operator name
     return $ f (Ann ann op)
 
 binaryN name op = (NBinaryDef name op NAssocNone,
@@ -54,21 +57,28 @@ binaryL name op = (NBinaryDef name op NAssocLeft,
                    InfixL  (opWithLoc name op nBinary))
 binaryR name op = (NBinaryDef name op NAssocRight,
                    InfixR  (opWithLoc name op nBinary))
-prefix  name op = (NUnaryDef name op, Prefix  (opWithLoc name op nUnary))
-postfix name op = (NUnaryDef name op, Postfix (opWithLoc name op nUnary))
+prefix  name op = (NUnaryDef name op,
+                   Prefix  (manyUnaryOp (opWithLoc name op nUnary)))
+postfix name op = (NUnaryDef name op,
+                   Postfix (opWithLoc name op nUnary))
 
 nixOperators
-    :: Parser NExprLoc
-    -> Parser (Ann SrcSpan (NAttrPath NExprLoc))
-    -> Parser ()
+    :: Parser (Ann SrcSpan (NAttrPath NExprLoc))
     -> [[(NOperatorDef, Operator Parser NExprLoc)]]
-nixOperators term selector seldot =
-  [ {-  1 -} [ (NSpecialDef "." NSelectOp NAssocLeft,
-                Postfix $ do
-                       sel <- seldot *> selector
-                       mor <- optional (reserved "or" *> term)
-                       return $ \x -> nSelectLoc x sel mor) ]
-  , {-  2 -} [ (NBinaryDef " " NApp NAssocLeft,
+nixOperators selector =
+  [ -- This is not parsed here, even though technically it's part of the
+    -- expression table. The problem is that in same cases, such as list
+    -- membership, it's also a term. And since terms are effectively the
+    -- highest precedence entities parsed by the expression parser, it ends up
+    -- working out that we parse them as a kind of "meta-term".
+
+    -- {-  1 -} [ (NSpecialDef "." NSelectOp NAssocLeft,
+    --             Postfix $ do
+    --                    sel <- seldot *> selector
+    --                    mor <- optional (reserved "or" *> term)
+    --                    return $ \x -> nSelectLoc x sel mor) ]
+
+    {-  2 -} [ (NBinaryDef " " NApp NAssocLeft,
                 -- Thanks to Brent Yorgey for showing me this trick!
                 InfixL $ nApp <$ symbol "") ]
   , {-  3 -} [ prefix  "-"  NNeg ]
@@ -101,7 +111,7 @@ data OperatorInfo = OperatorInfo
 getUnaryOperator :: NUnaryOp -> OperatorInfo
 getUnaryOperator = (m Map.!) where
   m = Map.fromList $ concat $ zipWith buildEntry [1..]
-          (nixOperators (error "unused") (error "unused") (error "unused"))
+          (nixOperators (error "unused"))
   buildEntry i = concatMap $ \case
     (NUnaryDef name op, _) -> [(op, OperatorInfo i NAssocNone name)]
     _ -> []
@@ -109,7 +119,7 @@ getUnaryOperator = (m Map.!) where
 getBinaryOperator :: NBinaryOp -> OperatorInfo
 getBinaryOperator = (m Map.!) where
   m = Map.fromList $ concat $ zipWith buildEntry [1..]
-          (nixOperators (error "unused") (error "unused") (error "unused"))
+          (nixOperators (error "unused"))
   buildEntry i = concatMap $ \case
     (NBinaryDef name op assoc, _) -> [(op, OperatorInfo i assoc name)]
     _ -> []
@@ -117,7 +127,7 @@ getBinaryOperator = (m Map.!) where
 getSpecialOperator :: NSpecialOp -> OperatorInfo
 getSpecialOperator = (m Map.!) where
   m = Map.fromList $ concat $ zipWith buildEntry [1..]
-          (nixOperators (error "unused") (error "unused") (error "unused"))
+          (nixOperators (error "unused"))
   buildEntry i = concatMap $ \case
     (NSpecialDef name op assoc, _) -> [(op, OperatorInfo i assoc name)]
     _ -> []
