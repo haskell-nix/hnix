@@ -41,7 +41,7 @@ main :: IO ()
 main = do
   nixLanguageTests <- NixLanguageTests.genTests
   langTestsEnv <- lookupEnv "LANGUAGE_TESTS"
-  nixpkgsTestsEnv <- lookupEnv "NIXPKGS_PARSE_DISABLE"
+  nixpkgsTestsEnv <- lookupEnv "NIXPKGS_TESTS"
   let runLangTests = langTestsEnv == Just "yes"
   let runNixpkgsTests = nixpkgsTestsEnv == Just "yes"
   defaultMain $ testGroup "hnix" $
@@ -52,4 +52,4 @@ main = do
     ] ++
     [ testCase "Nix languarge tests present" ensureLangTestsPresent | runLangTests ] ++
     [ nixLanguageTests | runLangTests ] ++
-    [ testCase "Nixpkgs parses without errors" ensureNixpkgsCanParse | not runNixpkgsTests ]
+    [ testCase "Nixpkgs parses without errors" ensureNixpkgsCanParse | runNixpkgsTests ]
