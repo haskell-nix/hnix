@@ -34,7 +34,7 @@ ensureNixpkgsCanParse :: Assertion
 ensureNixpkgsCanParse = do
   -- jww (2018-04-10): Use hnix to parse default.nix and pull this data from there!
   path <- readCreateProcess (shell "nix-instantiate --eval --expr '\"${let hostPkgs = import <nixpkgs> {}; in hostPkgs.fetchFromGitHub { owner = \"NixOS\"; repo = \"nixpkgs-channels\"; rev = \"ee28e35ba37ab285fc29e4a09f26235ffe4123e2\"; sha256 = \"0a6xrqjj2ihkz1bizhy5r843n38xgimzw5s2mfc42kk2rgc95gw5\"; }}\"'") ""
-  (exit, _, errs) <- readCreateProcessWithExitCode (shell $ "find " ++ init path ++ " -name '*.nix' | ./dist/build/hnix/hnix --ignore-errors --parse-only -f - > /dev/null") ""
+  (exit, _, errs) <- readCreateProcessWithExitCode (shell $ "find " ++ init path ++ " -name '*.nix' | ./dist/build/hnix/hnix --parse-only -f - > /dev/null") ""
   unless (exit == ExitSuccess) $ errorWithoutStackTrace errs
 
 main :: IO ()
