@@ -43,6 +43,7 @@ annotateLocation1 = fmap annToAnnF . annotateLocation
 
 manyUnaryOp f = foldr1 (.) <$> some f
 
+operator "-" = lexeme . try $ string "-" <* notFollowedBy (char '>')
 operator "/" = lexeme . try $ string "/" <* notFollowedBy (char '/')
 operator n   = symbol n
 
