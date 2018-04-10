@@ -67,7 +67,7 @@ nixSelector = annotateLocation $ keyName `sepBy1` selDot
 {-
 -- | A self-contained unit.
 nixTerm :: Parser NExprLoc
-nixTerm = choice
+nixTerm = nixSelect $ choice
     [ dbg "Path"       nixPath
     , dbg "SPath"      nixSPath
     , dbg "Float"      nixFloat
@@ -87,7 +87,7 @@ nixToplevelForm = choice
     , dbg "Let"    nixLet
     , dbg "If"     nixIf
     , dbg "Assert" nixAssert
-    , dbg "Lambda" nixWith ]
+    , dbg "With"   nixWith ]
 -}
 
 nixTerm :: Parser NExprLoc
@@ -154,11 +154,11 @@ nixSPath = annotateLocation1
          <?> "spath")
 
 pathStr :: Parser FilePath
-pathStr = liftM2 (++) (many pathChar)
+pathStr = lexeme $ liftM2 (++) (many pathChar)
     (Prelude.concat <$> some (liftM2 (:) slash (some pathChar)))
 
 nixPath :: Parser NExprLoc
-nixPath = annotateLocation1 $ try $ mkPathF False <$> pathStr
+nixPath = annotateLocation1 (try (mkPathF False <$> pathStr) <?> "path")
 
 nixLet :: Parser NExprLoc
 nixLet = annotateLocation1 (reserved "let"
@@ -194,8 +194,7 @@ nixWith = annotateLocation1 (NWith
   <?> "with")
 
 nixLambda :: Parser NExprLoc
-nixLambda = (nAbs <$> annotateLocation (try argExpr <?> "lambda arguments")
-                  <*> nixExprLoc) <?> "lambda"
+nixLambda = nAbs <$> annotateLocation (try argExpr) <*> nixExprLoc
 
 nixStringExpr :: Parser NExprLoc
 nixStringExpr = nStr <$> annotateLocation nixString
@@ -205,9 +204,10 @@ uriAfterColonC = alphaNumChar <|>
     satisfy (\x -> x `elem` ("%/?:@&=+$,-_.!~*'" :: String))
 
 nixUri :: Parser NExprLoc
-nixUri = annotateLocation1 $ fmap (mkUriF . pack) $ (++)
+nixUri = annotateLocation1 (fmap (mkUriF . pack) ((++)
   <$> try ((++) <$> (scheme <* char ':') <*> fmap (\x -> [':',x]) uriAfterColonC)
   <*> many uriAfterColonC
+  <?> "uri"))
  where
   scheme = (:) <$> letterChar
                <*> many (alphaNumChar <|> satisfy (\x -> x `elem` ("+-." :: String)))

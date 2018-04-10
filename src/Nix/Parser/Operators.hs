@@ -12,7 +12,7 @@ import           Control.DeepSeq
 import           Data.Data (Data(..))
 import           Data.Foldable (concat)
 import qualified Data.Map as Map
-import           Data.Text (Text)
+import           Data.Text (Text, unpack)
 import           Data.Typeable (Typeable)
 import           GHC.Generics hiding (Prefix)
 import           Nix.Expr
@@ -48,7 +48,7 @@ operator n   = symbol n
 
 opWithLoc :: Text -> o -> (Ann SrcSpan o -> a) -> Parser a
 opWithLoc name op f = do
-    Ann ann _ <- annotateLocation $ operator name
+    Ann ann _ <- annotateLocation $ {- dbg (unpack name) $ -} operator name
     return $ f (Ann ann op)
 
 binaryN name op = (NBinaryDef name op NAssocNone,
@@ -125,7 +125,8 @@ getBinaryOperator = (m Map.!) where
     _ -> []
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
-getSpecialOperator = (m Map.!) where
+getSpecialOperator NSelectOp = OperatorInfo 1 NAssocLeft "."
+getSpecialOperator o = m Map.! o where
   m = Map.fromList $ concat $ zipWith buildEntry [1..]
           (nixOperators (error "unused"))
   buildEntry i = concatMap $ \case

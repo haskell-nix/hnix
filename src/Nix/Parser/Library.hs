@@ -11,7 +11,7 @@ module Nix.Parser.Library
 import           Control.Applicative hiding (many)
 import           Control.Monad
 import           Control.Monad.IO.Class
-import           Data.Char (isAlpha, isDigit)
+import           Data.Char (isAlpha, isDigit, isSpace)
 import           Data.Functor.Identity
 import           Data.HashSet (HashSet)
 import qualified Data.HashSet as HashSet
@@ -33,9 +33,13 @@ lexeme :: Parser a -> Parser a
 lexeme p = p <* whiteSpace
 {-# INLINEABLE lexeme #-}
 
-symbol     = lexeme . string
-reservedOp = symbol
-reserved   = symbol
+symbol = lexeme . string
+
+reserved :: Text -> Parser ()
+reserved n = lexeme $ do
+    _ <- string n <*
+        lookAhead (satisfy (\x -> isSpace x || x == '{' || x == '(' || x == ';'))
+    return ()
 
 opStart :: Parser Char
 opStart = satisfy $ \x ->
@@ -91,10 +95,12 @@ type Parser = ParsecT Void Text Identity
 data Result a = Success a | Failure Doc deriving Show
 
 parseFromFileEx :: MonadIO m => Parser a -> FilePath -> m (Result a)
-parseFromFileEx p path =
-    (either (Failure . text . parseErrorPretty) Success . parse p path)
-        `liftM` liftIO (T.readFile path)
+parseFromFileEx p path = do
+    txt <- liftIO (T.readFile path)
+    return $ either (Failure . text . parseErrorPretty' txt) Success
+           $ parse p path txt
 
 parseFromText :: Parser a -> Text -> Result a
-parseFromText p =
-    either (Failure . text . parseErrorPretty) Success . parse p "<string>"
+parseFromText p txt =
+    either (Failure . text . parseErrorPretty' txt) Success $
+        parse p "<string>" txt

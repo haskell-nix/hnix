@@ -113,7 +113,7 @@ builtinsList = sequence [
     , add  TopLevel "throw"                      throw_
     , add2 TopLevel "scopedImport"               scopedImport
     , add  TopLevel "derivationStrict"           derivationStrict_
-    -- jww (2018-04-09): NYI
+    -- jww (2018-04-10): TODO
     -- , add0 TopLevel "derivation"                 $(do
     --       let f = "data/nix/corepkgs/derivation.nix"
     --       addDependentFile f
