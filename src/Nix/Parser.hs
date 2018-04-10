@@ -18,7 +18,7 @@ import           Data.Char (isAlpha, isDigit, isSpace)
 import           Data.Functor
 import qualified Data.List.NonEmpty as NE
 import qualified Data.HashMap.Strict.InsOrd as M
-import           Data.Text hiding (map)
+import           Data.Text hiding (map, empty)
 import           Nix.Expr hiding (($>))
 import           Nix.Parser.Library
 import           Nix.Parser.Operators
@@ -27,22 +27,15 @@ import           Text.Megaparsec.Expr
 
 --------------------------------------------------------------------------------
 
-nixExpr :: Parser NExpr
-nixExpr = stripAnnotation <$> nixExprLoc
-
--- | The lexer for this parser is defined in 'Nix.Parser.Library'.
 nixExprLoc :: Parser NExprLoc
-nixExprLoc = whiteSpace *> (nixToplevelForm <|> exprParser)
-
-exprParser :: Parser NExprLoc
-exprParser = makeExprParser nixTerm $ map (map snd) (nixOperators nixSelector)
+nixExprLoc = makeExprParser nixTerm $ map (map snd) (nixOperators nixSelector)
 
 antiStart :: Parser Text
 antiStart = try (symbol "${") <?> show ("${" :: String)
 
 nixAntiquoted :: Parser a -> Parser (Antiquoted a NExprLoc)
 nixAntiquoted p =
-        Antiquoted <$> (antiStart *> nixExprLoc <* symbol "}")
+        Antiquoted <$> (antiStart *> nixToplevelForm <* symbol "}")
     <|> Plain <$> p
     <?> "anti-quotation"
 
@@ -66,52 +59,84 @@ nixSelector = annotateLocation $ keyName `sepBy1` selDot
 
 -- #define DEBUG_PARSER 1
 #if DEBUG_PARSER
--- | A self-contained unit.
 nixTerm :: Parser NExprLoc
-nixTerm = nixSelect $ choice
-    [ dbg "Parens"     nixParens
-    , dbg "Set"        nixSet
-    , dbg "List"       nixList
-    , dbg "SPath"      nixSPath
-    , dbg "StringExpr" nixStringExpr
-    , dbg "Path"       nixPath
-    , dbg "Uri"        nixUri
-    , dbg "Float"      nixFloat
-    , dbg "Int"        nixInt
-    , dbg "Bool"       nixBool
-    , dbg "Null"       nixNull
-    , dbg "Sym"        nixSym ]
+nixTerm = nixSelect $ do
+    c <- dbg "lookAhead" $ try $ lookAhead $ satisfy $ \x ->
+        pathChar x ||
+        x == '(' ||
+        x == '{' ||
+        x == '[' ||
+        x == '<' ||
+        x == '"' ||
+        x == '\''
+    case c of
+        '('  -> dbg "Parens"     nixParens
+        '{'  -> dbg "Set"     nixSet
+        '['  -> dbg "List"     nixList
+        '<'  -> dbg "SPath"     nixSPath
+        '"'  -> dbg "StringExpr"     nixStringExpr
+        '\'' -> dbg "StringExpr"     nixStringExpr
+        _    -> choice $
+            [ dbg "Path" nixPath | pathChar c ] ++
+            [ dbg "Uri" nixUri | isAlpha c ] ++
+            (if isDigit c then [ dbg "Float" nixFloat
+                               , dbg "Int" nixInt ] else []) ++
+            [ dbg "Bool" nixBool | c == 'b' ] ++
+            [ dbg "Null" nixNull | c == 'n' ] ++
+            [ dbg "Sym" nixSym ]
 
 nixToplevelForm :: Parser NExprLoc
-nixToplevelForm = choice
-    [ dbg "Let"    nixLet
-    , dbg "If"     nixIf
-    , dbg "Assert" nixAssert
-    , dbg "With"   nixWith
-    , dbg "Lambda" nixLambda ]
+nixToplevelForm = keywords <|> dbg "Lambda" nixLambda <|> nixExprLoc
+  where
+    keywords = do
+        word <- dbg "keywords" $ try $ lookAhead $ some letterChar <* satisfy reservedEnd
+        case word of
+            "let"    -> dbg "Let" nixLet
+            "if"     -> dbg "If" nixIf
+            "assert" -> dbg "Assert" nixAssert
+            "with"   -> dbg "With" nixWith
+            _        -> empty
 #else
 nixTerm :: Parser NExprLoc
-nixTerm = nixSelect $ choice
-    [ nixParens
-    , nixSet
-    , nixList
-    , nixSPath
-    , nixStringExpr
-    , nixPath
-    , nixUri
-    , nixFloat
-    , nixInt
-    , nixBool
-    , nixNull
-    , nixSym ]
+nixTerm = nixSelect $ do
+    c <- try $ lookAhead $ satisfy $ \x ->
+        pathChar x ||
+        x == '(' ||
+        x == '{' ||
+        x == '[' ||
+        x == '<' ||
+        x == '/' ||
+        x == '"' ||
+        x == '\''
+    case c of
+        '('  -> nixParens
+        '{'  -> nixSet
+        '['  -> nixList
+        '<'  -> nixSPath
+        '/'  -> nixPath
+        '"'  -> nixStringExpr
+        '\'' -> nixStringExpr
+        _    -> choice $
+            [ nixSet | c == 'r' ] ++
+            [ nixPath | pathChar c ] ++
+            [ nixUri | isAlpha c ] ++
+            (if isDigit c then [ nixFloat
+                               , nixInt ] else []) ++
+            [ nixBool | c == 't' || c == 'f' ] ++
+            [ nixNull | c == 'n' ] ++
+            [ nixSym ]
 
 nixToplevelForm :: Parser NExprLoc
-nixToplevelForm = choice
-    [ nixLet
-    , nixIf
-    , nixAssert
-    , nixWith
-    , nixLambda ]
+nixToplevelForm = keywords <|> nixLambda <|> nixExprLoc
+  where
+    keywords = do
+        word <- try $ lookAhead $ some letterChar <* satisfy reservedEnd
+        case word of
+            "let"    -> nixLet
+            "if"     -> nixIf
+            "assert" -> nixAssert
+            "with"   -> nixWith
+            _        -> empty
 #endif
 
 nixSym :: Parser NExprLoc
@@ -134,7 +159,7 @@ nixNull = annotateLocation1
          <?> "null")
 
 nixParens :: Parser NExprLoc
-nixParens = parens nixExprLoc <?> "parens"
+nixParens = parens nixToplevelForm <?> "parens"
 
 nixList :: Parser NExprLoc
 nixList = annotateLocation1 (brackets (NList <$> many nixTerm) <?> "list")
@@ -167,7 +192,7 @@ nixLet = annotateLocation1 (reserved "let"
   where
     letBinders = NLet
         <$> nixBinders
-        <*> (reserved "in" *> nixExprLoc)
+        <*> (reserved "in" *> nixToplevelForm)
     -- Let expressions `let {..., body = ...}' are just desugared
     -- into `(rec {..., body = ...}).body'.
     letBody = (\x pos -> NSelect x [StaticKey "body" (Just pos)] Nothing)
@@ -177,24 +202,24 @@ nixLet = annotateLocation1 (reserved "let"
 nixIf :: Parser NExprLoc
 nixIf = annotateLocation1 (NIf
      <$> (reserved "if" *> nixExprLoc)
-     <*> (reserved "then" *> nixExprLoc)
-     <*> (reserved "else" *> nixExprLoc)
+     <*> (reserved "then" *> nixToplevelForm)
+     <*> (reserved "else" *> nixToplevelForm)
      <?> "if")
 
 nixAssert :: Parser NExprLoc
 nixAssert = annotateLocation1 (NAssert
   <$> (reserved "assert" *> nixExprLoc)
-  <*> (semi *> nixExprLoc)
+  <*> (semi *> nixToplevelForm)
   <?> "assert")
 
 nixWith :: Parser NExprLoc
 nixWith = annotateLocation1 (NWith
-  <$> (reserved "with" *> nixExprLoc)
-  <*> (semi *> nixExprLoc)
+  <$> (reserved "with" *> nixToplevelForm)
+  <*> (semi *> nixToplevelForm)
   <?> "with")
 
 nixLambda :: Parser NExprLoc
-nixLambda = nAbs <$> annotateLocation (try argExpr) <*> nixExprLoc
+nixLambda = nAbs <$> annotateLocation (try argExpr) <*> nixToplevelForm
 
 nixStringExpr :: Parser NExprLoc
 nixStringExpr = nStr <$> annotateLocation nixString
@@ -233,7 +258,7 @@ nixString = lexeme (doubleQuoted <|> indented <?> "string")
              <|> try (indentedQ *> ("''" <$ char '\'' <|> "$"  <$ char '$'))
 
     stringChar end escStart esc = esc
-        <|> Antiquoted <$> (antiStart *> nixExprLoc <* char '}')
+        <|> Antiquoted <$> (antiStart *> nixToplevelForm <* char '}')
             -- ^ don't skip trailing space
         <|> Plain . singleton <$> char '$'
         <|> Plain . pack <$> some plainChar
@@ -283,7 +308,7 @@ argExpr = choice [atLeft, onlyname, atRight] <* symbol ":" where
       -- Could be nothing, in which just return what we have so far.
       option (acc, False) $ do
         -- Get an argument name and an optional default.
-        pair <- liftA2 (,) identifier (optional $ question *> nixExprLoc)
+        pair <- liftA2 (,) identifier (optional $ question *> nixToplevelForm)
         -- Either return this, or attempt to get a comma and restart.
         option (acc ++ [pair], False) $ comma >> go (acc ++ [pair])
 
@@ -293,9 +318,9 @@ nixBinders = (inherit <|> namedVar) `endBy` semi where
                     <*> many keyName
                     <?> "inherited binding"
   namedVar = NamedVar <$> (annotated <$> nixSelector)
-                      <*> (equals *> nixExprLoc)
+                      <*> (equals *> nixToplevelForm)
                       <?> "variable binding"
-  scope = parens nixExprLoc <?> "inherit scope"
+  scope = parens nixToplevelForm <?> "inherit scope"
 
 keyName :: Parser (NKeyName NExprLoc)
 keyName = dynamicKey <|> staticKey where
@@ -310,13 +335,15 @@ nixSet = annotateLocation1 ((isRec <*> braces nixBinders) <?> "set") where
        <|> pure NSet
 
 parseNixFile :: MonadIO m => FilePath -> m (Result NExpr)
-parseNixFile = parseFromFileEx $ nixExpr <* eof
+parseNixFile =
+    parseFromFileEx $ stripAnnotation <$> (whiteSpace *> nixToplevelForm <* eof)
 
 parseNixFileLoc :: MonadIO m => FilePath -> m (Result NExprLoc)
-parseNixFileLoc = parseFromFileEx $ nixExprLoc <* eof
+parseNixFileLoc = parseFromFileEx (whiteSpace *> nixToplevelForm <* eof)
 
 parseNixText :: Text -> Result NExpr
-parseNixText = parseFromText $ nixExpr <* eof
+parseNixText =
+    parseFromText $ stripAnnotation <$> (whiteSpace *> nixToplevelForm <* eof)
 
 parseNixTextLoc :: Text -> Result NExprLoc
-parseNixTextLoc = parseFromText $ nixExprLoc <* eof
+parseNixTextLoc = parseFromText (whiteSpace *> nixToplevelForm <* eof)

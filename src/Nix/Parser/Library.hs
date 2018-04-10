@@ -35,15 +35,15 @@ lexeme p = p <* whiteSpace
 
 symbol = lexeme . string
 
+reservedEnd :: Char -> Bool
+reservedEnd x = isSpace x || x == '{' || x == '(' ||
+                x == ';' || x == ':' ||
+                x == '"' || x == '\''
+
 reserved :: Text -> Parser ()
 reserved n = lexeme $ try $ do
-    _ <- string n <* lookAhead (satisfy endMarker)
+    _ <- string n <* lookAhead (satisfy reservedEnd)
     return ()
-  where
-    endMarker x =
-        isSpace x || x == '{' || x == '(' ||
-        x == ';' || x == ':' ||
-        x == '"' || x == '\''
 
 opStart :: Parser Char
 opStart = satisfy $ \x ->
