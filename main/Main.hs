@@ -4,8 +4,8 @@
 
 module Main where
 
--- import           Control.DeepSeq
--- import qualified Control.Exception as Exc
+import           Control.DeepSeq
+import qualified Control.Exception as Exc
 import           Control.Monad
 import           Control.Monad.ST
 import           Data.Text (Text)
@@ -25,6 +25,7 @@ data Options = Options
     , debug      :: Bool
     , evaluate   :: Bool
     , check      :: Bool
+    , parseOnly  :: Bool
     , expression :: Maybe Text
     , fromFile   :: Maybe FilePath
     , filePaths  :: [FilePath]
@@ -46,6 +47,9 @@ mainOptions = Options
     <*> switch
         (   long "check"
          <> help "Whether to check for syntax errors after parsing")
+    <*> switch
+        (   long "parse-only"
+         <> help "Whether to parse only, no pretty printing or checking")
     <*> optional (strOption
         (   short 'e'
          <> long "expr"
@@ -105,6 +109,8 @@ main = do
                      putStrLn . printNix =<< Nix.evalLoc mpath expr
                | debug opts ->
                      print $ stripAnnotation expr
+               | parseOnly opts ->
+                     void $ Exc.evaluate $ force expr
                | otherwise ->
                      displayIO stdout
                          . renderPretty 0.4 80

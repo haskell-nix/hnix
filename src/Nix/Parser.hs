@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
@@ -64,7 +65,8 @@ nixSelect term = build
 nixSelector :: Parser (Ann SrcSpan (NAttrPath NExprLoc))
 nixSelector = annotateLocation $ keyName `sepBy1` selDot
 
-{-
+-- #define DEBUG_PARSER 1
+#if DEBUG_PARSER
 -- | A self-contained unit.
 nixTerm :: Parser NExprLoc
 nixTerm = nixSelect $ choice
@@ -88,8 +90,7 @@ nixToplevelForm = choice
     , dbg "If"     nixIf
     , dbg "Assert" nixAssert
     , dbg "With"   nixWith ]
--}
-
+#else
 nixTerm :: Parser NExprLoc
 nixTerm = nixSelect $ choice
     [ nixPath
@@ -112,6 +113,7 @@ nixToplevelForm = choice
     , nixIf
     , nixAssert
     , nixWith ]
+#endif
 
 nixSym :: Parser NExprLoc
 nixSym = annotateLocation1 $ mkSymF <$> identifier
@@ -199,18 +201,15 @@ nixLambda = nAbs <$> annotateLocation (try argExpr) <*> nixExprLoc
 nixStringExpr :: Parser NExprLoc
 nixStringExpr = nStr <$> annotateLocation nixString
 
-uriAfterColonC :: Parser Char
-uriAfterColonC = alphaNumChar <|>
-    satisfy (\x -> x `elem` ("%/?:@&=+$,-_.!~*'" :: String))
-
 nixUri :: Parser NExprLoc
-nixUri = annotateLocation1 (fmap (mkUriF . pack) ((++)
-  <$> try ((++) <$> (scheme <* char ':') <*> fmap (\x -> [':',x]) uriAfterColonC)
-  <*> many uriAfterColonC
-  <?> "uri"))
- where
-  scheme = (:) <$> letterChar
-               <*> many (alphaNumChar <|> satisfy (\x -> x `elem` ("+-." :: String)))
+nixUri = annotateLocation1 $ lexeme $ try $ do
+    start <- letterChar
+    protocol <- many $ satisfy $ \x ->
+        isAlpha x || isDigit x || x `elem` ("+-." :: String)
+    _ <- string ":"
+    address  <- some $ satisfy $ \x ->
+        isAlpha x || isDigit x || x `elem` ("%/?:@&=+$,-_.!~*'" :: String)
+    return $ mkUriF $ pack $ start : protocol ++ ':' : address
 
 nixString :: Parser (NString NExprLoc)
 nixString = lexeme (doubleQuoted <|> indented <?> "string")

@@ -36,10 +36,11 @@ lexeme p = p <* whiteSpace
 symbol = lexeme . string
 
 reserved :: Text -> Parser ()
-reserved n = lexeme $ do
-    _ <- string n <*
-        lookAhead (satisfy (\x -> isSpace x || x == '{' || x == '(' || x == ';'))
+reserved n = lexeme $ try $ do
+    _ <- string n <* lookAhead (satisfy endMarker)
     return ()
+  where
+    endMarker x = isSpace x || x == '{' || x == '(' || x == ';'
 
 opStart :: Parser Char
 opStart = satisfy $ \x ->
