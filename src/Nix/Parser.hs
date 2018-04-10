@@ -259,7 +259,6 @@ nixString = lexeme (doubleQuoted <|> indented <?> "string")
 
     stringChar end escStart esc = esc
         <|> Antiquoted <$> (antiStart *> nixToplevelForm <* char '}')
-            -- ^ don't skip trailing space
         <|> Plain . singleton <$> char '$'
         <|> Plain . pack <$> some plainChar
      where
