@@ -41,7 +41,9 @@ reserved n = lexeme $ try $ do
     return ()
   where
     endMarker x =
-        isSpace x || x == '{' || x == '(' || x == ';' || x == '"' || x == '\''
+        isSpace x || x == '{' || x == '(' ||
+        x == ';' || x == ':' ||
+        x == '"' || x == '\''
 
 opStart :: Parser Char
 opStart = satisfy $ \x ->
@@ -58,7 +60,7 @@ identStart = letterChar <|> char '_'
 
 identLetter :: Parser Char
 identLetter = satisfy $ \x ->
-    isAlpha x || isDigit x || x == '"' || x == '_' || x == '\'' || x == '-'
+    isAlpha x || isDigit x || x == '_' || x == '\'' || x == '-'
 
 identifier = lexeme $ try $ do
     ident <- pack <$> ((:) <$> identStart <*> many identLetter)
