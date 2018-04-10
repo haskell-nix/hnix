@@ -1,16 +1,11 @@
-let
-  hostPkgs = import <nixpkgs> {};
-  pinnedPkgs = hostPkgs.fetchFromGitHub {
-    owner = "NixOS";
-    repo = "nixpkgs-channels";
-    rev = "ee28e35ba37ab285fc29e4a09f26235ffe4123e2";
+{ rev ? "ee28e35ba37ab285fc29e4a09f26235ffe4123e2"
+, nixpkgs ? import (builtins.fetchTarball {
+    url    = "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz";
     sha256 = "0a6xrqjj2ihkz1bizhy5r843n38xgimzw5s2mfc42kk2rgc95gw5";
-  };
-
-in { nixpkgs ? import pinnedPkgs {}
-   , compiler ? "ghc822"
-   , doProfiling ? false
-   , doBenchmark ? false }:
+  }) {}
+, compiler ? "ghc822"
+, doProfiling ? false
+, doBenchmark ? false }:
 
 let
 

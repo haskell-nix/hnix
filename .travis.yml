@@ -1,5 +1,5 @@
 env:
-  - GHCVERSION="ghc822"
+  - GHCVERSION="ghc822" NIXPKGS_TESTS="yes"
 
 language: nix
 
