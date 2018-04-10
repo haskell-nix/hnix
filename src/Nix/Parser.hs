@@ -126,11 +126,11 @@ nixFloat = annotateLocation1 (try (mkFloatF . realToFrac <$> float) <?> "float")
 nixBool :: Parser NExprLoc
 nixBool = annotateLocation1 (try (bool "true" True <|>
                                   bool "false" False) <?> "bool") where
-  bool str b = mkBoolF b <$ lexeme (string str <* notFollowedBy pathChar)
+  bool str b = mkBoolF b <$ lexeme (string str <* notFollowedBy (satisfy pathChar))
 
 nixNull :: Parser NExprLoc
 nixNull = annotateLocation1
-    (mkNullF <$ try (lexeme (string "null" <* notFollowedBy pathChar))
+    (mkNullF <$ try (lexeme (string "null" <* notFollowedBy (satisfy pathChar)))
          <?> "null")
 
 nixParens :: Parser NExprLoc
@@ -139,9 +139,8 @@ nixParens = parens nixExprLoc <?> "parens"
 nixList :: Parser NExprLoc
 nixList = annotateLocation1 (brackets (NList <$> many nixTerm) <?> "list")
 
-pathChar :: Parser Char
-pathChar = satisfy $ \x ->
-    isAlpha x || isDigit x || x == '.' || x == '_' || x == '-' || x == '+'
+pathChar :: Char -> Bool
+pathChar x = isAlpha x || isDigit x || x == '.' || x == '_' || x == '-' || x == '+'
 
 slash :: Parser Char
 slash = try (char '/' <* notFollowedBy (satisfy (\x -> x == '/' || x == '*' || isSpace x)))
@@ -151,12 +150,12 @@ slash = try (char '/' <* notFollowedBy (satisfy (\x -> x == '/' || x == '*' || i
 -- looked up in the NIX_PATH environment variable at evaluation.
 nixSPath :: Parser NExprLoc
 nixSPath = annotateLocation1
-    (mkPathF True <$> try (char '<' *> many (pathChar <|> slash) <* symbol ">")
+    (mkPathF True <$> try (char '<' *> many (satisfy pathChar <|> slash) <* symbol ">")
          <?> "spath")
 
 pathStr :: Parser FilePath
-pathStr = lexeme $ liftM2 (++) (many pathChar)
-    (Prelude.concat <$> some (liftM2 (:) slash (some pathChar)))
+pathStr = lexeme $ liftM2 (++) (many (satisfy pathChar))
+    (Prelude.concat <$> some (liftM2 (:) slash (some (satisfy pathChar))))
 
 nixPath :: Parser NExprLoc
 nixPath = annotateLocation1 (try (mkPathF False <$> pathStr) <?> "path")
