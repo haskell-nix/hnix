@@ -15,6 +15,7 @@ import           Nix.Expr.Types.Annotated (stripAnnotation)
 import           Nix.Lint
 import           Nix.Parser
 import           Nix.Pretty
+import           Nix.Stack (NixException(..))
 -- import           Nix.TH
 import           Options.Applicative hiding (ParserResult(..))
 import           System.IO
@@ -101,7 +102,10 @@ main = do
              then hPutStrLn stderr
              else errorWithoutStackTrace) $ "Parse failed: " ++ show err
 
-        Success expr -> do
+        Success expr -> Exc.catch (process expr) $ \case
+            NixEvalException msg -> errorWithoutStackTrace msg
+      where
+        process expr = do
             -- expr <- Exc.evaluate $ force expr
             -- putStrLn "Parsing file...done"
 
