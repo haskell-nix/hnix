@@ -26,7 +26,6 @@ import           Data.Align.Key
 import           Data.Fix
 import           Data.Functor.Compose
 import qualified Data.HashMap.Lazy as M
-import           Data.HashMap.Strict.InsOrd (toHashMap)
 import           Data.List (intercalate, partition, foldl')
 import           Data.Maybe (fromMaybe, catMaybes)
 import           Data.Text (Text)
@@ -363,7 +362,7 @@ buildArgument params arg = case params of
                         Nothing -> id
                         Just n -> M.insert n $ const $ thunk arg
                 loebM (inject $ alignWithKey (assemble isVariadic)
-                                             args (toHashMap s))
+                                             args (M.fromList s))
             _ -> evalError @v $ "Argument to function must be a set, but saw: "
                     ++ show v
   where

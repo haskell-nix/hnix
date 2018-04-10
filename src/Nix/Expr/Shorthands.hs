@@ -7,13 +7,12 @@
 -- 'Fix' wrapper.
 module Nix.Expr.Shorthands where
 
-import           Data.Fix
-import qualified Data.HashMap.Strict.InsOrd as M
-import           Data.Monoid
-import           Data.Text (Text)
-import           Nix.Atoms
-import           Nix.Expr.Types
--- import           Nix.Utils
+import Data.Fix
+import Data.Monoid
+import Data.Text (Text)
+import Nix.Atoms
+import Nix.Expr.Types
+-- import Nix.Utils
 
 -- | Make an integer literal expression.
 mkInt :: Integer -> NExpr
@@ -100,7 +99,7 @@ mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkOper2 op a = Fix . NBinary op a
 
 mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
-mkParamset params variadic = ParamSet (M.fromList params) variadic Nothing
+mkParamset params variadic = ParamSet params variadic Nothing
 
 mkRecSet :: [Binding NExpr] -> NExpr
 mkRecSet = Fix . NRecSet

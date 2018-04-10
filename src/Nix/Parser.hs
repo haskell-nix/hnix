@@ -17,7 +17,6 @@ import           Control.Monad.IO.Class
 import           Data.Char (isAlpha, isDigit, isSpace)
 import           Data.Functor
 import qualified Data.List.NonEmpty as NE
-import qualified Data.HashMap.Strict.InsOrd as M
 import           Data.Text hiding (map, empty)
 import           Nix.Expr hiding (($>))
 import           Nix.Parser.Library
@@ -292,7 +291,7 @@ argExpr = choice [atLeft, onlyname, atRight] <* symbol ":" where
   -- Return the parameters set.
   params = do
     (args, dotdots) <- braces getParams
-    return (dotdots, M.fromList args)
+    return (dotdots, args)
 
   -- Collects the parameters within curly braces. Returns the parameters and
   -- a boolean indicating if the parameters are variadic.

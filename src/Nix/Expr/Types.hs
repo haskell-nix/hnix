@@ -28,8 +28,6 @@ import           Data.Data
 import           Data.Eq.Deriving
 import           Data.Fix
 import           Data.Functor.Classes
-import           Data.HashMap.Strict.InsOrd (InsOrdHashMap)
-import qualified Data.HashMap.Strict.InsOrd as InsOrd
 import           Data.Text (Text, pack, unpack)
 import           Data.Traversable
 import           GHC.Exts
@@ -127,19 +125,11 @@ data Params r
   -- bind to the set in the function body. The bool indicates whether it is
   -- variadic or not.
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Show,
-            Foldable, Traversable)
+            Foldable, Traversable, NFData, NFData1)
 
-instance NFData a => NFData (Params a) where
-    rnf (Param !_) = ()
-    rnf (ParamSet !s !_ !_) = InsOrd.size s `seq` ()
-
-instance NFData1 Params where
-    liftRnf _ (Param !_) = ()
-    liftRnf _ (ParamSet !s !_ !_) = InsOrd.size s `seq` ()
-
--- This uses InsOrdHashMap because nix XML serialization preserves the order of
--- the param set.
-type ParamSet r = InsOrdHashMap VarName (Maybe r)
+-- This uses an association list because nix XML serialization preserves the
+-- order of the param set.
+type ParamSet r = [(VarName, Maybe r)]
 
 instance IsString (Params r) where
   fromString = Param . fromString

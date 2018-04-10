@@ -20,7 +20,6 @@ import           Data.Coerce
 import           Data.Fix
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
-import qualified Data.HashMap.Strict.InsOrd as OM
 import           Data.List
 import           Data.Maybe
 import           Data.Text (Text)

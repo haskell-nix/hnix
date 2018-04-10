@@ -37,7 +37,6 @@ import           Data.Char (isDigit)
 import           Data.Coerce
 import           Data.Foldable (foldlM)
 import qualified Data.HashMap.Lazy as M
-import qualified Data.HashMap.Strict.InsOrd as OM
 import           Data.List
 import           Data.Maybe
 import           Data.Scientific
@@ -547,7 +546,7 @@ functionArgs fun = force fun $ \case
         return $ flip NVSet M.empty $ valueThunk . NVConstant . NBool <$>
             case p of
                 Param name -> M.singleton name False
-                ParamSet s _ _ -> isJust <$> OM.toHashMap s
+                ParamSet s _ _ -> isJust <$> M.fromList s
     v -> throwError $ "builtins.functionArgs: expected function, got "
             ++ show v
 

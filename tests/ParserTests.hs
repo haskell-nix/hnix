@@ -6,16 +6,15 @@
 
 module ParserTests (tests) where
 
-import           Data.Fix
-import qualified Data.HashMap.Strict.InsOrd as OM
-import           Data.Text (Text, unpack)
-import           Data.Semigroup
-import           Nix.Atoms
-import           Nix.Expr
-import           Nix.Parser
-import           Test.Tasty
-import           Test.Tasty.HUnit
-import           Test.Tasty.TH
+import Data.Fix
+import Data.Semigroup
+import Data.Text (Text, unpack)
+import Nix.Atoms
+import Nix.Expr
+import Nix.Parser
+import Test.Tasty
+import Test.Tasty.HUnit
+import Test.Tasty.TH
 
 case_constant_int :: Assertion
 case_constant_int = assertParseText "234" $ mkInt 234
@@ -173,9 +172,9 @@ case_lambda_pattern = do
  where
   fixed args = ParamSet args False
   variadic args = ParamSet args True
-  args = OM.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
-  vargs = OM.fromList [("b", Nothing), ("c", Just $ mkInt 1)]
-  args2 = OM.fromList [("b", Just lam)]
+  args = [("b", Nothing), ("c", Just $ mkInt 1)]
+  vargs = [("b", Nothing), ("c", Just $ mkInt 1)]
+  args2 = [("b", Just lam)]
   lam = Fix $ NAbs (Param "x") (mkSym "x")
 
 case_lambda_app_int :: Assertion
