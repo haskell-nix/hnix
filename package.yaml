@@ -29,7 +29,7 @@ dependencies:
 
 ghc-options:
   - -Wall
-  - -fexpose-all-unfoldings
+  # - -fexpose-all-unfoldings
   # - -O2
 
 library:
