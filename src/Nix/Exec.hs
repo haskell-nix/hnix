@@ -66,7 +66,8 @@ import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
 
 type MonadExec e m =
-    (Framed e m, MonadVar m, MonadFile m, MonadEffects m)
+    (Scoped e (NThunk m) m, Framed e m, MonadVar m, MonadFile m,
+     MonadEffects m)
 
 nverr :: forall e m a. MonadExec e m => String -> m a
 nverr = evalError @(NValue m)
@@ -129,8 +130,8 @@ instance MonadExec e m => MonadThunk (NValue m) (NThunk m) m where
     value = coerce . valueRef
 
 instance MonadExec e m => MonadEval (NValue m) m where
-    freeVariable var = nverr $
-        "Undefined variable '" ++ Text.unpack var ++ "'"
+    freeVariable var =
+        nverr $ "Undefined variable '" ++ Text.unpack var ++ "'"
 
     evalCurPos = do
         Compose (Ann (SrcSpan delta _) _):_ <-
@@ -144,6 +145,20 @@ instance MonadExec e m => MonadEval (NValue m) m where
     evalEnvPath     = fmap NVPath . findEnvPath
     evalUnary       = execUnaryOp
     evalBinary      = execBinaryOp
+
+    evalWith scope body = do
+        -- The scope is deliberately wrapped in a thunk here, since it is
+        -- evaluated each time a name is looked up within the weak scope, and
+        -- we want to be sure the action it evaluates is to force a thunk, so
+        -- its value is only computed once.
+        traceM "Evaluating with scope"
+        s <- thunk scope
+        pushWeakScope ?? body $ force s $ \v -> case wantVal v of
+            Just (s :: AttrSet (NThunk m)) -> do
+                traceM $ "Scope is: " ++ show (void s)
+                pure s
+            _ -> nverr $ "scope must be a set in with statement, but saw: "
+                    ++ show v
 
     evalIf c t f = case wantVal c of
         Just b -> if b then t else f
@@ -199,9 +214,7 @@ execUnaryOp op arg = do
                 ++ " must evaluate to an atomic type: " ++ showValue x
 
 execBinaryOp
-    :: forall e m.
-        (Framed e m, MonadVar m, MonadFile m,
-         MonadEval (NValue m) m, MonadEffects m)
+    :: forall e m. (MonadExec e m, MonadEval (NValue m) m)
     => NBinaryOp -> NValue m -> m (NValue m) -> m (NValue m)
 
 execBinaryOp NOr larg rarg = case larg of
@@ -435,7 +448,7 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadEffects (Lazy m) where
             _ -> error "derivationStrict: nix-instantiate failed"
 
 runLazyM :: MonadIO m => Lazy m a -> m a
-runLazyM = flip runReaderT (Context emptyScopes []) . runLazy
+runLazyM = flip runReaderT newContext . runLazy
 
 -- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
 --   This is incorrect on POSIX systems, because if @b@ is a symlink, its

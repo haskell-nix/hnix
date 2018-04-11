@@ -56,6 +56,7 @@ class (Show v, Monoid (MText v),
     evalBinary      :: NBinaryOp -> v -> m v -> m v
     -- ^ The second argument is an action because operators such as boolean &&
     -- and || may not evaluate the second argument.
+    evalWith        :: m v -> m v -> m v
     evalIf          :: v -> m v -> m v -> m v
     evalAssert      :: v -> m v -> m v
     evalApp         :: v -> m v -> m v
@@ -143,17 +144,7 @@ eval (NLet binds e) = do
 
 eval (NIf cond t f) = cond >>= \v -> evalIf v t f
 
-eval (NWith scope body) = do
-    traceM "NWith"
-    -- The scope is deliberately wrapped in a thunk here, since the WeakScope
-    -- constructor argument is evaluated each time a name is looked up within
-    -- the weak scope, and we want to be sure the action it evaluates is to
-    -- force a thunk, so its value is only computed once.
-    s <- thunk scope
-    pushWeakScope ?? body $ force s $ \v -> case wantVal v of
-        Just (s :: AttrSet t) -> pure s
-        _ -> evalError @v $ "scope must be a set in with statement, but saw: "
-                ++ show v
+eval (NWith scope body) = evalWith scope body
 
 eval (NAssert cond body) = cond >>= \v -> evalAssert v body
 

@@ -70,8 +70,9 @@ import           System.Posix.Files
 import           Text.Regex.TDFA
 
 type MonadBuiltins e m =
-    (Scoped e (NThunk m) m, MonadCatch m, MonadEffects m,
-     Framed e m, MonadVar m, MonadFile m, MonadFix m)
+    (Scoped e (NThunk m) m,
+     Framed e m, MonadVar m, MonadFile m, MonadCatch m,
+     MonadEffects m, MonadFix m)
 
 baseEnv :: (MonadBuiltins e m, Scoped e (NThunk m) m)
         => m (Scopes m (NThunk m))

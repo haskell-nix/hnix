@@ -122,6 +122,12 @@ unpackSymbolic :: MonadVar m
                => Symbolic m -> m (NSymbolicF (NTypeF m (SThunk m)))
 unpackSymbolic = readVar . coerce
 
+type MonadLint e m =
+    (Scoped e (SThunk m) m, Framed e m, MonadVar m, MonadFile m)
+
+symerr :: forall e m a. MonadLint e m => String -> m a
+symerr = evalError @(Symbolic m)
+
 renderSymbolic :: MonadLint e m => Symbolic m -> m String
 renderSymbolic = unpackSymbolic >=> \case
     NAny -> return "<any>"
@@ -233,12 +239,6 @@ unify context (Symbolic x) (Symbolic y) = do
                     writeVar y (NMany m)
                     packSymbolic (NMany m)
 
-type MonadLint e m =
-    (Framed e m, MonadVar m, MonadFile m)
-
-symerr :: forall e m a. MonadLint e m => String -> m a
-symerr = evalError @(Symbolic m)
-
 instance MonadLint e m => ConvertValue (Symbolic m) Bool where
     ofVal = const $ error "Should never need to make symbolic from bool"
     wantVal = const $ error "Should never need bool value of a symbolic"
@@ -323,6 +323,17 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
 
     evalBinary = lintBinaryOp
 
+    evalWith scope body = do
+        -- The scope is deliberately wrapped in a thunk here, since it is
+        -- evaluated each time a name is looked up within the weak scope, and
+        -- we want to be sure the action it evaluates is to force a thunk, so
+        -- its value is only computed once.
+        s <- thunk scope
+        pushWeakScope ?? body $ force s $ \v -> case wantVal v of
+            Just (s :: AttrSet (SThunk m)) -> pure s
+            _ -> symerr $ "scope must be a set in with statement, but saw: "
+                    ++ show v
+
     evalIf cond t f = do
         t' <- t
         f' <- f
@@ -350,9 +361,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
     projectMText = const $ return Nothing -- jww (2018-04-10): TODO
 
 lintBinaryOp
-    :: forall e m.
-        (Framed e m, MonadVar m, MonadFile m,
-         MonadEval (Symbolic m) m)
+    :: forall e m. (MonadLint e m, MonadEval (Symbolic m) m)
     => NBinaryOp -> Symbolic m -> m (Symbolic m) -> m (Symbolic m)
 lintBinaryOp op lsym rarg = do
     rsym <- rarg
@@ -438,10 +447,10 @@ instance MonadThrow (Lint s) where
     throwM e = Lint $ ReaderT $ \_ -> unsafeIOToST $ throw e
 
 runLintM :: Lint s a -> ST s a
-runLintM = flip runReaderT (Context emptyScopes []) . runLint
+runLintM = flip runReaderT newContext . runLint
 
 symbolicBaseEnv :: Monad m => m (Scopes m (SThunk m))
-symbolicBaseEnv = return []     -- jww (2018-04-02): TODO
+symbolicBaseEnv = return emptyScopes
 
 lint :: NExprLoc -> ST s (Symbolic (Lint s))
 lint expr = runLintM $
