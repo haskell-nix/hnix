@@ -176,6 +176,7 @@ builtinsList = sequence [
     , add2 Normal   "partition"                  partition_
     , add0 Normal   "currentSystem"              currentSystem
     , add  Normal   "tryEval"                    tryEval
+    , add  Normal   "fetchTarball"               fetchTarball
     , add  Normal   "fromJSON"                   fromJSON
     , add' Normal   "toJSON"
       (arity1 $ decodeUtf8 . LBS.toStrict . A.encodingToLazyByteString
@@ -806,6 +807,47 @@ tryEval e = catch (force e (pure . onSuccess)) (pure . onError)
         , ("value", valueThunk (NVConstant (NBool False)))
         ]
 
+fetchTarball :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+fetchTarball = flip force $ \case
+    NVSet s _ -> case M.lookup "url" s of
+        Nothing -> throwError "builtins.fetchTarball: Missing url attribute"
+        Just url -> force url (go (M.lookup "sha256" s))
+    v@NVStr {} -> go Nothing v
+    v@(NVConstant (NUri _)) -> go Nothing v
+    v -> throwError $ "builtins.fetchTarball: Expected URI or set, got "
+            ++ show v
+ where
+    go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
+    go msha = \case
+        NVStr uri _ -> fetch uri msha
+        NVConstant (NUri uri) -> fetch uri msha
+        v -> throwError $ "builtins.fetchTarball: Expected URI or string, got "
+                ++ show v
+
+{- jww (2018-04-11): This should be written using pipes in another module
+    fetch :: Text -> Maybe (NThunk m) -> m (NValue m)
+    fetch uri msha = case takeExtension (Text.unpack uri) of
+        ".tgz" -> undefined
+        ".gz"  -> undefined
+        ".bz2" -> undefined
+        ".xz"  -> undefined
+        ".tar" -> undefined
+        ext -> throwError $ "builtins.fetchTarball: Unsupported extension '"
+                  ++ ext ++ "'"
+-}
+
+    fetch :: Text -> Maybe (NThunk m) -> m (NValue m)
+    fetch uri Nothing =
+        nixInstantiateExpr $ "builtins.fetchTarball \"" ++
+            Text.unpack uri ++ "\""
+    fetch url (Just m) = force m $ \case
+        NVStr sha _ ->
+            nixInstantiateExpr $ "builtins.fetchTarball { "
+              ++ "url    = \"" ++ Text.unpack url ++ "\"; "
+              ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"
+        v -> throwError $ "builtins.fetchTarball: sha256 must be a string, got "
+                ++ show v
+
 partition_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 partition_ f = flip force $ \case
     NVList l -> do
@@ -826,7 +868,7 @@ currentSystem = do
   return $ NVStr (os <> "-" <> arch) mempty
 
 derivationStrict_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
-derivationStrict_ t = force t (toValue <=< derivationStrict)
+derivationStrict_ = force ?? derivationStrict
 
 newtype Prim m a = Prim { runPrim :: m a }
 

@@ -30,7 +30,6 @@ import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader (MonadReader, asks)
 import           Control.Monad.Trans.Reader hiding (asks)
-import qualified Data.Aeson as A
 import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.Fix
@@ -42,7 +41,6 @@ import           Data.List.Split
 import           Data.Maybe (mapMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as Text
-import           Data.Text.Encoding
 import           Nix.Atoms
 import           Nix.Context
 import           Nix.Effects
@@ -434,18 +432,20 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadEffects (Lazy m) where
 
     derivationStrict v = do
         v' <- normalForm v
+        nixInstantiateExpr $ "derivationStrict " ++ show (prettyNixValue v')
+
+    nixInstantiateExpr expr = do
         (exitCode, out, _) <-
             liftIO $ readProcessWithExitCode "nix-instantiate"
-              [ "--eval"
-              , "--json"
-              , "-E", "derivationStrict " ++ show (prettyNixValue v') --TODO: use prettyNix to generate this
-              ] ""
+                [ "--eval", "--expr", expr] ""
         case exitCode of
             ExitSuccess ->
-                case A.eitherDecodeStrict $ encodeUtf8 $ Text.pack out of
-                    Left e -> error $ "derivationStrict: error parsing JSON output of nix-instantiate: " ++ show e
-                    Right v -> pure v
-            _ -> error "derivationStrict: nix-instantiate failed"
+                case parseNixTextLoc (Text.pack out) of
+                    Failure err ->
+                        throwError $ "Error parsing output of nix-instantiate: "
+                            ++ show err
+                    Success v -> framedEvalExpr eval v
+            err -> throwError $ "nix-instantiate failed: " ++ show err
 
 runLazyM :: MonadIO m => Lazy m a -> m a
 runLazyM = flip runReaderT newContext . runLazy

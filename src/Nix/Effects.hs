@@ -26,4 +26,6 @@ class MonadEffects m where
     listDirectory :: FilePath -> m [FilePath]
     getSymbolicLinkStatus :: FilePath -> m FileStatus
 
-    derivationStrict :: NValue m -> m (AttrSet Text)
+    derivationStrict :: NValue m -> m (NValue m)
+
+    nixInstantiateExpr :: String -> m (NValue m)
