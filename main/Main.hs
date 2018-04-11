@@ -26,6 +26,7 @@ data Options = Options
     , debug        :: Bool
     , evaluate     :: Bool
     , check        :: Bool
+    , parse        :: Bool
     , parseOnly    :: Bool
     , ignoreErrors :: Bool
     , expression   :: Maybe Text
@@ -50,13 +51,16 @@ mainOptions = Options
         (   long "check"
          <> help "Whether to check for syntax errors after parsing")
     <*> switch
+        (   long "parse"
+         <> help "Whether to parse the file (also the default right now)")
+    <*> switch
         (   long "parse-only"
          <> help "Whether to parse only, no pretty printing or checking")
     <*> switch
         (   long "ignore-errors"
          <> help "Continue parsing files, even if there are errors")
     <*> optional (strOption
-        (   short 'e'
+        (   short 'E'
          <> long "expr"
          <> help "Expression to parse or evaluate"))
     <*> optional (strOption
