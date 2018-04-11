@@ -23,10 +23,15 @@ import           Text.Megaparsec.Char as X
 import qualified Text.Megaparsec.Char.Lexer as L
 import           Text.PrettyPrint.ANSI.Leijen as X (Doc, text)
 
+skipLineComment' :: Tokens Text -> Parser ()
+skipLineComment' prefix =
+  string prefix
+      *> void (takeWhileP (Just "character") (\x -> x /= '\n' && x /= '\r'))
+
 whiteSpace :: Parser ()
 whiteSpace = L.space space1 lineCmnt blockCmnt
   where
-    lineCmnt  = L.skipLineComment "#"
+    lineCmnt  = skipLineComment' "#"
     blockCmnt = L.skipBlockComment "/*" "*/"
 
 lexeme :: Parser a -> Parser a
