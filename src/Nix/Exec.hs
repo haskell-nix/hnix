@@ -119,6 +119,12 @@ instance MonadExec e m => MonadEval (NValue m) m where
     evalEnvPath     = fmap NVPath . findEnvPath
     evalUnary       = execUnaryOp
     evalBinary      = execBinaryOp
+
+    evalIf c t f = case wantVal c of
+        Just b -> if b then t else f
+        _ -> evalError @(NValue m) $
+                "condition must be a boolean: "++ show c
+
     evalApp         = callFunc
     evalAbs         = (pure .) . NVClosure
 

@@ -55,6 +55,7 @@ class (Show v, Monoid (MText m),
     evalBinary      :: NBinaryOp -> v -> m v -> m v
     -- ^ The second argument is an action because operators such as boolean &&
     -- and || may not evaluate the second argument.
+    evalIf          :: v -> m v -> m v -> m v
     evalApp         :: v -> m v -> m v
     evalAbs         :: Params () -> (m v -> m v) -> m v
 
@@ -138,11 +139,7 @@ eval (NLet binds e) = do
     traceM $ "Let..2: s = " ++ show (void s)
     pushScope s e
 
-eval (NIf cond t f) = do
-    traceM "NIf"
-    cond >>= \v -> case wantVal v of
-        Just b -> if b then t else f
-        _ -> evalError @v $ "condition must be a boolean: "++ show v
+eval (NIf cond t f) = cond >>= \v -> evalIf v t f
 
 eval (NWith scope body) = do
     traceM "NWith"
