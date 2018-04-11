@@ -84,7 +84,7 @@ tests = $testGroupGenerator
 
 genEvalCompareTests = do
     files <- D.listDirectory testDir
-    return $ testGroup "eval comparison tests" $ map mkTestCase files
+    return $ testGroup "Eval comparison tests" $ map mkTestCase files
   where
     testDir = "tests/eval-compare"
     mkTestCase f = testCase f $ assertEvalFileMatchesNix (testDir </> f)
