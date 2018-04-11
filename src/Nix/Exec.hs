@@ -209,16 +209,16 @@ execBinaryOp NOr larg rarg = case larg of
         then valueRefBool True
         else rarg >>= \case
             NVConstant (NBool r) -> valueRefBool r
-            v -> throwError $ "operator `||`: left argument: boolean expected, got " ++ show (void v)
-    v -> throwError $ "operator `||`: right argument: boolean expected, got " ++ show (void v)
+            v -> throwError $ "operator `||`: left argument: boolean expected, got " ++ show v
+    v -> throwError $ "operator `||`: right argument: boolean expected, got " ++ show v
 
 execBinaryOp NAnd larg rarg = case larg of
     NVConstant (NBool l) -> if l
         then rarg >>= \case
             NVConstant (NBool r) -> valueRefBool r
-            v -> throwError $ "operator `&&`: left argument: boolean expected, got " ++ show (void v)
+            v -> throwError $ "operator `&&`: left argument: boolean expected, got " ++ show v
         else valueRefBool False
-    v -> throwError $ "operator `&&`: right argument: boolean expected, got " ++ show (void v)
+    v -> throwError $ "operator `&&`: right argument: boolean expected, got " ++ show v
 
 -- jww (2018-04-08): Refactor so that eval (NBinary ..) *always* dispatches
 -- based on operator first
@@ -364,7 +364,7 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadEffects (Lazy m) where
                         v -> throwError $ "when resolving relative path,"
                                 ++ " __cur_file is in scope,"
                                 ++ " but is not a path; it is: "
-                                ++ show (void v)
+                                ++ show v
             pure $ cwd </> origPath
         liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
 

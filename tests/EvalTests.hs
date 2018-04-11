@@ -1,6 +1,8 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures -Wno-orphans #-}
 
@@ -89,7 +91,7 @@ genEvalCompareTests = do
     testDir = "tests/eval-compare"
     mkTestCase f = testCase f $ assertEvalFileMatchesNix (testDir </> f)
 
-instance (Show r, Eq r) => Eq (NValueF m r) where
+instance (Show r, Show (NValueF m r), Eq r) => Eq (NValueF m r) where
     NVConstant x == NVConstant y = x == y
     NVList x == NVList y = and (zipWith (==) x y)
     x == y = error $ "Need to add comparison for values: "

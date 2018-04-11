@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -72,11 +73,7 @@ newtype NThunk m   = NThunk (Thunk m (NValue m))
 type    NValue m   = NValueF m (NThunk m) -- head normal form
 type    ValueSet m = AttrSet (NThunk m)
 
-instance Show (NThunk m) where
-    show (NThunk (Value v)) = show v
-    show (NThunk _) = "<thunk>"
-
-instance Show f => Show (NValueF m f) where
+instance Show (NValueF m (Fix (NValueF m))) where
     showsPrec = flip go where
       go (NVConstant atom)    = showsCon1 "NVConstant" atom
       go (NVStr text context) = showsCon2 "NVStr"      text (appEndo context [])

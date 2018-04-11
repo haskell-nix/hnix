@@ -231,7 +231,7 @@ hasAttr x y = force x $ \x' -> force y $ \y' -> case (x', y') of
     (NVStr key _, NVSet aset _) ->
         return . NVConstant . NBool $ M.member key aset
     (x, y) -> throwError $ "Invalid types for builtin.hasAttr: "
-                 ++ show (void x, void y)
+                 ++ show (x, y)
 
 getAttr :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 getAttr x y = force x $ \x' -> force y $ \y' -> case (x', y') of
@@ -240,7 +240,7 @@ getAttr x y = force x $ \x' -> force y $ \y' -> case (x', y') of
                       ++ Text.unpack key
         Just action -> force action pure
     (x, y) -> throwError $ "Invalid types for builtin.getAttr: "
-                 ++ show (void x, void y)
+                 ++ show (x, y)
 
 unsafeGetAttrPos :: forall e m. MonadBuiltins e m
                  => NThunk m -> NThunk m -> m (NValue m)
@@ -251,13 +251,13 @@ unsafeGetAttrPos x y = force x $ \x' -> force y $ \y' -> case (x', y') of
                 ++ "' does not exist in attr set: " ++ show apos
         Just delta -> return $ posFromSourcePos @m delta
     (x, y) -> throwError $ "Invalid types for builtin.unsafeGetAttrPos: "
-                 ++ show (void x, void y)
+                 ++ show (x, y)
 
 length_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 length_ = flip force $ \case
     NVList l -> return $ NVConstant $ NInt (fromIntegral (length l))
     arg -> throwError $ "builtins.length takes a list, not a "
-              ++ show (void arg)
+              ++ show arg
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 anyM _ []       = return False
@@ -271,7 +271,7 @@ any_ pred = flip force $ \case
     NVList l ->
         mkBool =<< anyM extractBool =<< mapM (call1 pred) l
     arg -> throwError $ "builtins.any takes a list as second argument, not a "
-              ++ show (void arg)
+              ++ show arg
 
 allM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 allM _ []       = return True
@@ -285,14 +285,14 @@ all_ pred = flip force $ \case
     NVList l ->
         mkBool =<< allM extractBool =<< mapM (call1 pred) l
     arg -> throwError $ "builtins.all takes a list as second argument, not a "
-              ++ show (void arg)
+              ++ show arg
 
 --TODO: Strictness
 foldl'_ :: MonadBuiltins e m => NThunk m -> NThunk m -> NThunk m -> m (NValue m)
 foldl'_ f z = flip force $ \case
     NVList vals -> (`force` pure) =<< foldlM go z vals
     arg -> throwError $ "builtins.foldl' takes a list as third argument, not a "
-              ++ show (void arg)
+              ++ show arg
   where
     go b a = thunk $ call2 f a b
 
@@ -656,7 +656,7 @@ getEnv_ = flip force $ \case
         return $ case mres of
             Nothing -> NVStr "" mempty
             Just v  -> NVStr (Text.pack v) mempty
-    p -> throwError $ "Unexpected argument to getEnv: " ++ show (void p)
+    p -> throwError $ "Unexpected argument to getEnv: " ++ show p
 
 sort_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 sort_ comparator list = force list $ \case

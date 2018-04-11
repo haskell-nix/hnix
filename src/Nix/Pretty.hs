@@ -1,7 +1,10 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Nix.Pretty where
 
@@ -227,3 +230,10 @@ removeEffects = Fix . fmap dethunk
 
 showValue :: Functor m => NValue m -> String
 showValue = show . prettyNixValue . removeEffects
+
+instance Functor m => Show (NValue m) where
+    show = showValue
+
+instance Functor m => Show (NThunk m) where
+    show (NThunk (Value v)) = show v
+    show (NThunk _) = "<thunk>"
