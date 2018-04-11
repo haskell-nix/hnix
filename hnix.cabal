@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 16b0a7df9cb73f35c797a337ab9d30fef20ff0d3cf726f6b6db7579dd5a2d6da
+-- hash: e2b843b190938c1ecc26a31d9183394071007a6bb3508ae3d0736ed26bcc8c93
 
 name:           hnix
 version:        0.5.0
@@ -128,7 +128,7 @@ test-suite hnix-tests
       Paths_hnix
   hs-source-dirs:
       tests
-  ghc-options: -Wall
+  ghc-options: -Wall -threaded
   build-depends:
       Glob
     , ansi-wl-pprint

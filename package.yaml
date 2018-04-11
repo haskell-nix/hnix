@@ -70,6 +70,7 @@ tests:
   hnix-tests:
     source-dirs: tests
     main: Main.hs
+    ghc-options: -threaded
     dependencies:
       - hnix
       - Glob
