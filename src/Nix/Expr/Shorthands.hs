@@ -7,13 +7,12 @@
 -- 'Fix' wrapper.
 module Nix.Expr.Shorthands where
 
-import           Data.Fix
-import qualified Data.HashMap.Strict.InsOrd as M
-import           Data.Monoid
-import           Data.Text (Text)
-import           Nix.Atoms
-import           Nix.Expr.Types
-import           Nix.Utils
+import Data.Fix
+import Data.Monoid
+import Data.Text (Text)
+import Nix.Atoms
+import Nix.Expr.Types
+-- import Nix.Utils
 
 -- | Make an integer literal expression.
 mkInt :: Integer -> NExpr
@@ -36,8 +35,8 @@ mkStr = Fix . NStr . DoubleQuoted . \case
   x -> [Plain x]
 
 -- | Make an indented string.
-mkIndentedStr :: Text -> NExpr
-mkIndentedStr = Fix . NStr . Indented . \case
+mkIndentedStr :: Int -> Text -> NExpr
+mkIndentedStr w = Fix . NStr . Indented w . \case
   "" -> []
   x -> [Plain x]
 
@@ -100,10 +99,7 @@ mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkOper2 op a = Fix . NBinary op a
 
 mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
-mkParamset params variadic = ParamSet (M.fromList params) variadic Nothing
-
-mkApp :: NExpr -> NExpr -> NExpr
-mkApp e = Fix . NApp e
+mkParamset params variadic = ParamSet params variadic Nothing
 
 mkRecSet :: [Binding NExpr] -> NExpr
 mkRecSet = Fix . NRecSet
@@ -129,6 +125,7 @@ mkIf e1 e2 = Fix . NIf e1 e2
 mkFunction :: Params NExpr -> NExpr -> NExpr
 mkFunction params = Fix . NAbs params
 
+{-
 mkDot :: NExpr -> Text -> NExpr
 mkDot e key = mkDots e [key]
 
@@ -140,6 +137,7 @@ mkDots (Fix (NSelect e keys' x)) keys =
   -- a dotted expression, just extend it.
   Fix (NSelect e (keys' <> map (StaticKey ?? Nothing) keys) x)
 mkDots e keys = Fix $ NSelect e (map (StaticKey ?? Nothing) keys) Nothing
+-}
 
 -- | An `inherit` clause without an expression to pull from.
 inherit :: [NKeyName e] -> Binding e
@@ -195,10 +193,10 @@ recAttrsE pairs = Fix $ NRecSet (map (uncurry bindTo) pairs)
 mkNot :: NExpr -> NExpr
 mkNot = Fix . NUnary NNot
 
--- | Dot-reference into an attribute set.
-(!.) :: NExpr -> Text -> NExpr
-(!.) = mkDot
-infixl 8 !.
+-- -- | Dot-reference into an attribute set.
+-- (!.) :: NExpr -> Text -> NExpr
+-- (!.) = mkDot
+-- infixl 8 !.
 
 mkBinop :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkBinop op e1 e2 = Fix (NBinary op e1 e2)
@@ -225,7 +223,7 @@ e1 $++ e2 = mkBinop NConcat e1 e2
 
 -- | Function application expression.
 (@@) :: NExpr -> NExpr -> NExpr
-(@@) = mkApp
+f @@ arg = mkBinop NApp f arg
 infixl 1 @@
 
 -- | Lambda shorthand.
@@ -233,3 +231,7 @@ infixl 1 @@
 (==>) = mkFunction
 
 infixr 1 ==>
+
+(@.) :: NExpr -> Text -> NExpr
+obj @. name = Fix (NSelect obj [StaticKey name Nothing] Nothing)
+infixl 2 @.

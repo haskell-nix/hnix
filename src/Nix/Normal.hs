@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Nix.Normal where
@@ -13,7 +14,7 @@ import qualified Data.HashMap.Lazy as M
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Nix.Atoms
-import           Nix.Monad
+import           Nix.Effects
 import           Nix.Stack
 import           Nix.Thunk
 import           Nix.Utils
@@ -34,6 +35,19 @@ normalFormBy k = \case
 normalForm :: (MonadThunk (NValue m) (NThunk m) m)
            => NValue m -> m (NValueNF m)
 normalForm = normalFormBy force
+
+embed :: forall m. (MonadThunk (NValue m) (NThunk m) m)
+      => NValueNF m -> m (NValue m)
+embed (Fix x) = case x of
+    NVConstant a     -> return $ NVConstant a
+    NVStr t s        -> return $ NVStr t s
+    NVList l         -> NVList . fmap (value @_ @_ @m)
+        <$> traverse embed l
+    NVSet s p        -> flip NVSet p . fmap (value @_ @_ @m)
+        <$> traverse embed s
+    NVClosure p f    -> return $ NVClosure p f
+    NVPath fp        -> return $ NVPath fp
+    NVBuiltin name f -> return $ NVBuiltin name f
 
 valueText :: forall e m. (Framed e m, MonadFile m, MonadEffects m)
           => Bool -> NValueNF m -> m (Text, DList Text)

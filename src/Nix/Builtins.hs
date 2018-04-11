@@ -31,13 +31,13 @@ import qualified Data.Aeson.Encoding as A
 import           Data.Align (alignWith)
 import           Data.Array
 import           Data.ByteString (ByteString)
+import qualified Data.ByteString as B
 import           Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
 import           Data.Coerce
 import           Data.Foldable (foldlM)
 import qualified Data.HashMap.Lazy as M
-import qualified Data.HashMap.Strict.InsOrd as OM
 import           Data.List
 import           Data.Maybe
 import           Data.Scientific
@@ -53,10 +53,10 @@ import qualified Data.Vector as V
 import           GHC.Stack.Types (HasCallStack)
 import           Language.Haskell.TH.Syntax (addDependentFile, runIO)
 import           Nix.Atoms
+import           Nix.Effects
 import           Nix.Eval
 import           Nix.Exec
 import           Nix.Expr.Types
-import           Nix.Monad
 import           Nix.Normal
 import           Nix.Parser
 import           Nix.Scope
@@ -70,8 +70,9 @@ import           System.Posix.Files
 import           Text.Regex.TDFA
 
 type MonadBuiltins e m =
-    (Scoped e (NThunk m) m, MonadCatch m, MonadEffects m,
-     Framed e m, MonadVar m, MonadFile m, MonadFix m)
+    (Scoped e (NThunk m) m,
+     Framed e m, MonadVar m, MonadFile m, MonadCatch m,
+     MonadEffects m, MonadFix m)
 
 baseEnv :: (MonadBuiltins e m, Scoped e (NThunk m) m)
         => m (Scopes m (NThunk m))
@@ -132,7 +133,8 @@ builtinsList = sequence [
     , add  Normal   "splitVersion"               splitVersion_
     , add2 Normal   "compareVersions"            compareVersions_
     , add2 Normal   "match"                      match_
-    --TODO: Support floats for `add` and `sub`
+    -- jww (2018-04-09): Support floats for `add` and `sub`
+    , add2 Normal   "split"                      split_
     , add' Normal   "add"                        (arity2 ((+) @Integer))
     , add' Normal   "sub"                        (arity2 ((-) @Integer))
     , add' Normal   "parseDrvName"               parseDrvName
@@ -230,7 +232,7 @@ hasAttr x y = force x $ \x' -> force y $ \y' -> case (x', y') of
     (NVStr key _, NVSet aset _) ->
         return . NVConstant . NBool $ M.member key aset
     (x, y) -> throwError $ "Invalid types for builtin.hasAttr: "
-                 ++ show (void x, void y)
+                 ++ show (x, y)
 
 getAttr :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 getAttr x y = force x $ \x' -> force y $ \y' -> case (x', y') of
@@ -239,7 +241,7 @@ getAttr x y = force x $ \x' -> force y $ \y' -> case (x', y') of
                       ++ Text.unpack key
         Just action -> force action pure
     (x, y) -> throwError $ "Invalid types for builtin.getAttr: "
-                 ++ show (void x, void y)
+                 ++ show (x, y)
 
 unsafeGetAttrPos :: forall e m. MonadBuiltins e m
                  => NThunk m -> NThunk m -> m (NValue m)
@@ -248,15 +250,15 @@ unsafeGetAttrPos x y = force x $ \x' -> force y $ \y' -> case (x', y') of
         Nothing ->
             throwError $ "unsafeGetAttrPos: field '" ++ Text.unpack key
                 ++ "' does not exist in attr set: " ++ show apos
-        Just delta -> return $ posFromDelta @m delta
+        Just delta -> return $ posFromSourcePos @m delta
     (x, y) -> throwError $ "Invalid types for builtin.unsafeGetAttrPos: "
-                 ++ show (void x, void y)
+                 ++ show (x, y)
 
 length_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 length_ = flip force $ \case
     NVList l -> return $ NVConstant $ NInt (fromIntegral (length l))
     arg -> throwError $ "builtins.length takes a list, not a "
-              ++ show (void arg)
+              ++ show arg
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 anyM _ []       = return False
@@ -270,7 +272,7 @@ any_ pred = flip force $ \case
     NVList l ->
         mkBool =<< anyM extractBool =<< mapM (call1 pred) l
     arg -> throwError $ "builtins.any takes a list as second argument, not a "
-              ++ show (void arg)
+              ++ show arg
 
 allM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 allM _ []       = return True
@@ -284,14 +286,14 @@ all_ pred = flip force $ \case
     NVList l ->
         mkBool =<< allM extractBool =<< mapM (call1 pred) l
     arg -> throwError $ "builtins.all takes a list as second argument, not a "
-              ++ show (void arg)
+              ++ show arg
 
 --TODO: Strictness
 foldl'_ :: MonadBuiltins e m => NThunk m -> NThunk m -> NThunk m -> m (NValue m)
 foldl'_ f z = flip force $ \case
     NVList vals -> (`force` pure) =<< foldlM go z vals
     arg -> throwError $ "builtins.foldl' takes a list as third argument, not a "
-              ++ show (void arg)
+              ++ show arg
   where
     go b a = thunk $ call2 f a b
 
@@ -402,6 +404,35 @@ match_ pat str = force pat $ \pat' -> force str $ \str' ->
         (p, s) ->
             throwError $ "builtins.match: expected a regex"
                 ++ " and a string, but got: " ++ show (p, s)
+
+split_ :: forall e m. MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
+split_ pat str = force pat $ \pat' -> force str $ \str' ->
+    case (pat', str') of
+        (NVStr p _, NVStr s _) ->
+          let re = makeRegex (encodeUtf8 p) :: Regex
+              haystack = encodeUtf8 s
+           in return $ NVList $ splitMatches 0 (map elems $ matchAllText re haystack) haystack
+        (p, s) ->
+            throwError $ "builtins.match: expected a regex"
+                ++ " and a string, but got: " ++ show (p, s)
+
+splitMatches
+  :: forall e m. MonadBuiltins e m
+  => Int
+  -> [[(ByteString, (Int, Int))]]
+  -> ByteString
+  -> [NThunk m]
+splitMatches _ [] haystack = [thunkStr haystack]
+splitMatches _ ([]:_) _ = error "Error in splitMatches: this should never happen!"
+splitMatches numDropped (((_,(start,len)):captures):mts) haystack =
+    thunkStr before : caps : splitMatches (numDropped + relStart + len) mts (B.drop len rest)
+  where
+    relStart = max 0 start - numDropped
+    (before,rest) = B.splitAt relStart haystack
+    caps = valueThunk $ NVList (map f captures)
+    f (a,(s,_)) = if s < 0 then valueThunk (NVConstant NNull) else thunkStr a
+
+thunkStr s = valueThunk (NVStr (decodeUtf8 s) mempty)
 
 substring :: MonadBuiltins e m => Int -> Int -> Text -> Prim m Text
 substring start len str = Prim $
@@ -547,7 +578,7 @@ functionArgs fun = force fun $ \case
         return $ flip NVSet M.empty $ valueThunk . NVConstant . NBool <$>
             case p of
                 Param name -> M.singleton name False
-                ParamSet s _ _ -> isJust <$> OM.toHashMap s
+                ParamSet s _ _ -> isJust <$> M.fromList s
     v -> throwError $ "builtins.functionArgs: expected function, got "
             ++ show v
 
@@ -627,7 +658,7 @@ getEnv_ = flip force $ \case
         return $ case mres of
             Nothing -> NVStr "" mempty
             Just v  -> NVStr (Text.pack v) mempty
-    p -> throwError $ "Unexpected argument to getEnv: " ++ show (void p)
+    p -> throwError $ "Unexpected argument to getEnv: " ++ show p
 
 sort_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 sort_ comparator list = force list $ \case
@@ -727,7 +758,7 @@ readDir_ pathThunk = do
     path <- force pathThunk absolutePathFromValue
     items <- listDirectory path
     itemsWithTypes <- forM items $ \item -> do
-        s <- Nix.Monad.getSymbolicLinkStatus $ path </> item
+        s <- Nix.Effects.getSymbolicLinkStatus $ path </> item
         let t = if
                 | isRegularFile s -> FileType_Regular
                 | isDirectory s -> FileType_Directory

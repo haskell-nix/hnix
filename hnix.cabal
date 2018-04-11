@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 819d3fde54888c3fb579814cede8ab0826428e189c75f0d361d0938f4e7d4511
+-- hash: 16b0a7df9cb73f35c797a337ab9d30fef20ff0d3cf726f6b6db7579dd5a2d6da
 
 name:           hnix
 version:        0.5.0
@@ -25,16 +25,13 @@ source-repository head
   type: git
   location: https://github.com/jwiegley/hnix
 
-flag parsec
-  description: Use parsec instead of Trifecta
-  manual: True
-  default: False
-
 library
   exposed-modules:
       Nix
       Nix.Atoms
       Nix.Builtins
+      Nix.Context
+      Nix.Effects
       Nix.Eval
       Nix.Exec
       Nix.Expr
@@ -42,10 +39,6 @@ library
       Nix.Expr.Types
       Nix.Expr.Types.Annotated
       Nix.Lint
-      Nix.Monad
-      Nix.Monad.Context
-      Nix.Monad.Lazy
-      Nix.Monad.Lint
       Nix.Normal
       Nix.Parser
       Nix.Parser.Library
@@ -70,6 +63,7 @@ library
     , array >=0.4 && <0.6
     , base >=4.9 && <5
     , base16-bytestring
+    , binary
     , bytestring
     , containers
     , cryptohash
@@ -79,10 +73,9 @@ library
     , directory
     , exceptions
     , filepath
-    , insert-ordered-containers >=0.2.2 && <0.3
+    , megaparsec
     , monadlist
     , mtl
-    , parsers >=0.10
     , process
     , regex-tdfa
     , regex-tdfa-text
@@ -98,13 +91,6 @@ library
     , unordered-containers >=0.2.9 && <0.3
     , vector
     , xml
-  if flag(parsec)
-    cpp-options: -DUSE_PARSEC
-    build-depends:
-        parsec
-  else
-    build-depends:
-        trifecta
   default-language: Haskell2010
 
 executable hnix
@@ -122,7 +108,6 @@ executable hnix
     , deepseq
     , exceptions
     , hnix
-    , insert-ordered-containers >=0.2.2 && <0.3
     , mtl
     , optparse-applicative
     , template-haskell
@@ -150,10 +135,11 @@ test-suite hnix-tests
     , base >=4.9 && <5
     , containers
     , data-fix
+    , deepseq
+    , directory
     , exceptions
     , filepath
     , hnix
-    , insert-ordered-containers >=0.2.2 && <0.3
     , interpolate
     , mtl
     , process
@@ -183,9 +169,9 @@ benchmark hnix-benchmarks
     , containers
     , criterion
     , data-fix
+    , deepseq
     , exceptions
     , hnix
-    , insert-ordered-containers >=0.2.2 && <0.3
     , mtl
     , template-haskell
     , text

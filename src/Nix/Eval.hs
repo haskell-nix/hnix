@@ -2,6 +2,7 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -26,7 +27,6 @@ import           Data.Align.Key
 import           Data.Fix
 import           Data.Functor.Compose
 import qualified Data.HashMap.Lazy as M
-import           Data.HashMap.Strict.InsOrd (toHashMap)
 import           Data.List (intercalate, partition, foldl')
 import           Data.Maybe (fromMaybe, catMaybes)
 import           Data.Text (Text)
@@ -41,33 +41,36 @@ import           Nix.StringOperations (runAntiquoted)
 import           Nix.Thunk
 import           Nix.Utils
 
-class (Show v, Monoid (MText m),
-       ConvertValue v (MText m),
-       ConvertValue v (Maybe (MText m)), Monad m)
-      => MonadEval v m where
+class (Show v, Monoid (MText v),
+       ConvertValue v (MText v),
+       ConvertValue v (Maybe (MText v)), Monad m)
+      => MonadEval v m | v -> m where
     freeVariable :: Text -> m v
 
     evalCurPos      :: m v
     evalConstant    :: NAtom -> m v
-    evalString      :: MText m -> m v
+    evalString      :: MText v -> m v
     evalLiteralPath :: FilePath -> m v
     evalEnvPath     :: FilePath -> m v
     evalUnary       :: NUnaryOp -> v -> m v
     evalBinary      :: NBinaryOp -> v -> m v -> m v
     -- ^ The second argument is an action because operators such as boolean &&
     -- and || may not evaluate the second argument.
+    evalWith        :: m v -> m v -> m v
+    evalIf          :: v -> m v -> m v -> m v
+    evalAssert      :: v -> m v -> m v
     evalApp         :: v -> m v -> m v
     evalAbs         :: Params () -> (m v -> m v) -> m v
 
     evalError :: String -> m a
 
-    type MText m :: *
+    type MText v :: *
 
-    wrapMText   :: Text -> m (MText m)
-    unwrapMText :: MText m -> m Text
+    wrapMText   :: Text -> m (MText v)
+    unwrapMText :: MText v -> m Text
 
-    embedMText   :: MText m -> m v
-    projectMText :: v -> m (Maybe (Maybe (MText m)))
+    embedMText   :: MText v -> m v
+    projectMText :: v -> m (Maybe (Maybe (MText v)))
 
 type MonadNixEval e v t m
     = (MonadEval v m, Scoped e t m, Convertible v t, MonadThunk v t m,
@@ -90,6 +93,12 @@ eval (NStr str)             = evalString =<< assembleString str
 eval (NLiteralPath p)       = evalLiteralPath p
 eval (NEnvPath p)           = evalEnvPath p
 eval (NUnary op arg)        = evalUnary op =<< arg
+
+eval (NBinary NApp fun arg) = do
+    traceM "NApp"
+    scope <- currentScopes @_ @t
+    evalApp ?? withScopes scope arg =<< fun
+
 eval (NBinary op larg rarg) = join $ evalBinary op <$> larg <*> pure rarg
 
 eval (NSelect aset attr alt) = do
@@ -99,7 +108,7 @@ eval (NSelect aset attr alt) = do
         Right v -> pure v
         Left (s, ks) -> fromMaybe err alt
           where
-            err = evalError @v $ "could not look up attribute "
+            err = evalError @v $ "Could not look up attribute "
                 ++ intercalate "." (map Text.unpack ks)
                 ++ " in " ++ show @v s
 
@@ -133,35 +142,11 @@ eval (NLet binds e) = do
     traceM $ "Let..2: s = " ++ show (void s)
     pushScope s e
 
-eval (NIf cond t f) = do
-    traceM "NIf"
-    cond >>= \v -> case wantVal v of
-        Just b -> if b then t else f
-        _ -> evalError @v $ "condition must be a boolean: "++ show v
+eval (NIf cond t f) = cond >>= \v -> evalIf v t f
 
-eval (NWith scope body) = do
-    traceM "NWith"
-    -- The scope is deliberately wrapped in a thunk here, since the WeakScope
-    -- constructor argument is evaluated each time a name is looked up within
-    -- the weak scope, and we want to be sure the action it evaluates is to
-    -- force a thunk, so its value is only computed once.
-    s <- thunk scope
-    pushWeakScope ?? body $ force s $ \v -> case wantVal v of
-        Just (s :: AttrSet t) -> pure s
-        _ -> evalError @v $ "scope must be a set in with statement, but saw: "
-                ++ show v
+eval (NWith scope body) = evalWith scope body
 
-eval (NAssert cond body) = do
-    traceM "NAssert"
-    cond >>= \v -> case wantVal v of
-        Just b -> if b then body else evalError @v "assertion failed"
-        _ -> evalError @v $ "assertion condition must be boolean, but saw: "
-                ++ show v
-
-eval (NApp fun arg) = do
-    traceM "NApp"
-    scope <- currentScopes @_ @t
-    evalApp ?? withScopes scope arg =<< fun
+eval (NAssert cond body) = cond >>= \v -> evalAssert v body
 
 eval (NAbs params body) = do
     -- It is the environment at the definition site, not the call site, that
@@ -208,7 +193,7 @@ evalBinds :: forall e v t m. MonadNixEval e v t m
           => Bool
           -> Bool
           -> [Binding (m v)]
-          -> m (AttrSet t, AttrSet Delta)
+          -> m (AttrSet t, AttrSet SourcePos)
 evalBinds allowDynamic recursive =
     buildResult . concat <=< mapM go . moveOverridesLast
   where
@@ -216,7 +201,7 @@ evalBinds allowDynamic recursive =
         partition (\case NamedVar [StaticKey "__overrides" _] _ -> True
                          _ -> False)
 
-    go :: Binding (m v) -> m [([Text], Maybe Delta, m v)]
+    go :: Binding (m v) -> m [([Text], Maybe SourcePos, m v)]
     go (NamedVar [StaticKey "__overrides" _] finalValue) =
         finalValue >>= \v -> case wantVal v of
             Just (o', p') ->
@@ -226,7 +211,7 @@ evalBinds allowDynamic recursive =
                     ++ show v
 
     go (NamedVar pathExpr finalValue) = do
-        let go :: NAttrPath (m v) -> m ([Text], Maybe Delta, m v)
+        let go :: NAttrPath (m v) -> m ([Text], Maybe SourcePos, m v)
             go = \case
                 [] -> pure ([], Nothing, finalValue)
                 h : t -> evalSetterKeyName allowDynamic h >>= \case
@@ -257,8 +242,8 @@ evalBinds allowDynamic recursive =
                         ++ show (void name)
                     Just v -> force v pure)
 
-    buildResult :: [([Text], Maybe Delta, m v)]
-                -> m (AttrSet t, AttrSet Delta)
+    buildResult :: [([Text], Maybe SourcePos, m v)]
+                -> m (AttrSet t, AttrSet SourcePos)
     buildResult bindings = do
         s <- foldM insert M.empty bindings
         scope <- currentScopes @_ @t
@@ -285,7 +270,7 @@ evalSelect aset attr =
   where
     extract v [] = return $ Right v
     extract x (k:ks) =
-        case wantVal @_ @(AttrSet t, AttrSet Delta) x of
+        case wantVal @_ @(AttrSet t, AttrSet SourcePos) x of
             Just (s, p) -> case M.lookup k s of
                 Just v  -> force v $ extract ?? ks
                 Nothing -> return $ Left (ofVal (s, p), k:ks)
@@ -299,20 +284,20 @@ evalSelector allowDynamic =
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value
 evalGetterKeyName :: MonadEval v m
-                  => Bool -> NKeyName (m v) -> m (Text, Maybe Delta)
+                  => Bool -> NKeyName (m v) -> m (Text, Maybe SourcePos)
 evalGetterKeyName canBeDynamic
     | canBeDynamic = evalKeyNameDynamicNotNull
     | otherwise    = evalKeyNameStatic
 
 evalKeyNameStatic :: forall v m. MonadEval v m
-                  => NKeyName (m v) -> m (Text, Maybe Delta)
+                  => NKeyName (m v) -> m (Text, Maybe SourcePos)
 evalKeyNameStatic = \case
     StaticKey k p -> pure (k, p)
     DynamicKey _ ->
         evalError @v "dynamic attribute not allowed in this context"
 
 evalKeyNameDynamicNotNull :: forall v m. MonadEval v m
-                          => NKeyName (m v) -> m (Text, Maybe Delta)
+                          => NKeyName (m v) -> m (Text, Maybe SourcePos)
 evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
     (Nothing, _) ->
         evalError @v "value is null while a string was expected"
@@ -321,28 +306,29 @@ evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
 -- | Evaluate a component of an attribute path in a context where we are
 -- *binding* a value
 evalSetterKeyName :: MonadEval v m
-                  => Bool -> NKeyName (m v) -> m (Maybe Text, Maybe Delta)
+                  => Bool -> NKeyName (m v) -> m (Maybe Text, Maybe SourcePos)
 evalSetterKeyName canBeDynamic
     | canBeDynamic = evalKeyNameDynamicNullable
     | otherwise    = fmap (first Just) . evalKeyNameStatic
 
 -- | Returns Nothing iff the key value is null
 evalKeyNameDynamicNullable :: forall v m. MonadEval v m
-                           => NKeyName (m v) -> m (Maybe Text, Maybe Delta)
+                           => NKeyName (m v)
+                           -> m (Maybe Text, Maybe SourcePos)
 evalKeyNameDynamicNullable = \case
     StaticKey k p -> pure (Just k, p)
-    DynamicKey k -> runAntiquoted (embedMText <=< assembleString) id k
+    DynamicKey k -> runAntiquoted "\n" (embedMText <=< assembleString) id k
         >>= \v -> case wantVal v of
-            Just (s :: MText m) ->
+            Just (s :: MText v) ->
                 (\x -> (Just x, Nothing)) <$> unwrapMText @v s
             _ -> return (Nothing, Nothing)
 
-assembleString :: forall v m. MonadEval v m => NString (m v) -> m (MText m)
+assembleString :: forall v m. MonadEval v m => NString (m v) -> m (MText v)
 assembleString = \case
-    Indented     parts -> fromParts parts
+    Indented _   parts -> fromParts parts
     DoubleQuoted parts -> fromParts parts
   where
-    go = runAntiquoted (wrapMText @v @m) $ \x -> do
+    go = runAntiquoted "\n" (wrapMText @v @m) $ \x -> do
         x' <- x
         projectMText @v @m x' >>= \case
             Just (Just txt) -> return txt
@@ -361,7 +347,7 @@ buildArgument params arg = case params of
                         Nothing -> id
                         Just n -> M.insert n $ const $ thunk arg
                 loebM (inject $ alignWithKey (assemble isVariadic)
-                                             args (toHashMap s))
+                                             args (M.fromList s))
             _ -> evalError @v $ "Argument to function must be a set, but saw: "
                     ++ show v
   where

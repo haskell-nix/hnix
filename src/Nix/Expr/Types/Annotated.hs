@@ -16,7 +16,7 @@
 --
 module Nix.Expr.Types.Annotated
   ( module Nix.Expr.Types.Annotated
-  , Delta(..)
+  , SourcePos(..), unPos
   )where
 
 import Control.DeepSeq
@@ -28,12 +28,13 @@ import Data.Semigroup
 import Data.Text (Text, pack)
 import GHC.Generics
 import Nix.Expr.Types
-import Nix.Parser.Library (Delta(..))
+import Nix.Parser.Library (SourcePos(..))
 import Text.Show.Deriving
+import Text.Megaparsec (unPos)
 
 -- | A location in a source file
-data SrcSpan = SrcSpan{ spanBegin :: Delta
-                      , spanEnd   :: Delta
+data SrcSpan = SrcSpan{ spanBegin :: SourcePos
+                      , spanEnd   :: SourcePos
                       }
   deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData)
 
@@ -72,10 +73,6 @@ pattern AnnE ann a = Fix (Compose (Ann ann a))
 stripAnnotation :: Functor f => Fix (AnnF ann f) -> Fix f
 stripAnnotation = ana (annotated . getCompose . unFix)
 
-nApp :: NExprLoc -> NExprLoc -> NExprLoc
-nApp e1@(AnnE s1 _) e2@(AnnE s2 _) = AnnE (s1 <> s2) (NApp e1 e2)
-nApp _ _ = error "nApp: unexpected"
-
 nUnary :: Ann SrcSpan NUnaryOp -> NExprLoc -> NExprLoc
 nUnary (Ann s1 u) e1@(AnnE s2 _) = AnnE (s1 <> s2) (NUnary u e1)
 nUnary _ _ = error "nUnary: unexpected"
@@ -97,6 +94,10 @@ nHasAttr :: NExprLoc -> Ann SrcSpan (NAttrPath NExprLoc) -> NExprLoc
 nHasAttr e1@(AnnE s1 _) (Ann s2 ats) = AnnE (s1 <> s2) (NHasAttr e1 ats)
 nHasAttr _ _ = error "nHasAttr: unexpected"
 
+nApp :: NExprLoc -> NExprLoc -> NExprLoc
+nApp e1@(AnnE s1 _) e2@(AnnE s2 _) = AnnE (s1 <> s2) (NBinary NApp e1 e2)
+nApp _ _ = error "nApp: unexpected"
+
 nAbs :: Ann SrcSpan (Params NExprLoc) -> NExprLoc -> NExprLoc
 nAbs (Ann s1 ps) e1@(AnnE s2 _) = AnnE (s1 <> s2) (NAbs ps e1)
 nAbs _ _ = error "nAbs: unexpected"
@@ -104,9 +105,5 @@ nAbs _ _ = error "nAbs: unexpected"
 nStr :: Ann SrcSpan (NString NExprLoc) -> NExprLoc
 nStr (Ann s1 s) = AnnE s1 (NStr s)
 
-deltaInfo :: Delta -> (Text, Int, Int)
-deltaInfo = \case
-    Columns c _         -> ("<string>", 1, fromIntegral c + 1)
-    Tab {}              -> ("<string>", 1, 1)
-    Lines l _ _ _       -> ("<string>", fromIntegral l + 1, 1)
-    Directed fn l c _ _ -> (pack fn, fromIntegral l + 1, fromIntegral c + 1)
+deltaInfo :: SourcePos -> (Text, Int, Int)
+deltaInfo (SourcePos fp l c) = (pack fp, unPos l, unPos c)

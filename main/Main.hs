@@ -4,28 +4,36 @@
 
 module Main where
 
--- import           Control.DeepSeq
--- import qualified Control.Exception as Exc
+import           Control.DeepSeq
+import qualified Control.Exception as Exc
 import           Control.Monad
 import           Control.Monad.ST
+import           Data.Text (Text, pack)
+import qualified Data.Text.IO as Text
 import qualified Nix
-import           Nix.Expr.Types.Annotated (stripAnnotation)
+import           Nix.Expr
 import           Nix.Lint
 import           Nix.Parser
 import           Nix.Pretty
+import           Nix.Stack (NixException(..))
 -- import           Nix.TH
 import           Options.Applicative hiding (ParserResult(..))
 import           System.IO
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 data Options = Options
-    { verbose    :: Bool
-    , debug      :: Bool
-    , evaluate   :: Bool
-    , check      :: Bool
-    , expression :: Maybe String
-    , fromFile   :: Maybe FilePath
-    , filePaths  :: [FilePath]
+    { verbose      :: Bool
+    , debug        :: Bool
+    , evaluate     :: Bool
+    , check        :: Bool
+    , parse        :: Bool
+    , parseOnly    :: Bool
+    , ignoreErrors :: Bool
+    , expression   :: Maybe Text
+    , arg          :: [NExpr]
+    , argstr       :: [Text]
+    , fromFile     :: Maybe FilePath
+    , filePaths    :: [FilePath]
     }
 
 mainOptions :: Parser Options
@@ -44,21 +52,41 @@ mainOptions = Options
     <*> switch
         (   long "check"
          <> help "Whether to check for syntax errors after parsing")
+    <*> switch
+        (   long "parse"
+         <> help "Whether to parse the file (also the default right now)")
+    <*> switch
+        (   long "parse-only"
+         <> help "Whether to parse only, no pretty printing or checking")
+    <*> switch
+        (   long "ignore-errors"
+         <> help "Continue parsing files, even if there are errors")
     <*> optional (strOption
-        (   short 'e'
+        (   short 'E'
          <> long "expr"
          <> help "Expression to parse or evaluate"))
+    <*> multiString
+            (\s -> case parseNixText (pack s) of
+                      Success x -> pure x
+                      Failure err -> errorWithoutStackTrace (show err))
+        (   long "arg"
+         <> help "Argument to pass to an evaluated lambda")
+    <*> multiString (pure . pack)
+        (   long "argstr"
+         <> help "Argument string to pass to an evaluated lambda")
     <*> optional (strOption
         (   short 'f'
          <> long "file"
          <> help "Parse all of the files given in FILE; - means stdin"))
     <*> many (strArgument (metavar "FILE" <> help "Path of file to parse"))
+  where
+    multiString f desc = many (option (str >>= f) desc)
 
 main :: IO ()
 main = do
     opts <- execParser optsDef
     case expression opts of
-        Just s -> handleResult opts Nothing (parseNixStringLoc s)
+        Just s -> handleResult opts Nothing (parseNixTextLoc s)
         Nothing  -> case fromFile opts of
             Just "-" ->
                 mapM_ (processFile opts) =<< (lines <$> getContents)
@@ -66,11 +94,11 @@ main = do
                 mapM_ (processFile opts) =<< (lines <$> readFile path)
             Nothing -> case filePaths opts of
                 [] ->
-                    handleResult opts Nothing . parseNixStringLoc
-                        =<< getContents
+                    handleResult opts Nothing . parseNixTextLoc
+                        =<< Text.getContents
                 ["-"] ->
-                    handleResult opts Nothing . parseNixStringLoc
-                        =<< getContents
+                    handleResult opts Nothing . parseNixTextLoc
+                        =<< Text.getContents
                 paths ->
                     mapM_ (processFile opts) paths
   where
@@ -86,21 +114,32 @@ main = do
     -- print . printNix =<< Nix.eval [nix|1 + 3|]
 
     handleResult opts mpath = \case
-        Failure err -> hPutStrLn stderr $ "Parse failed: " ++ show err
-        Success expr -> do
+        Failure err ->
+            (if ignoreErrors opts
+             then hPutStrLn stderr
+             else errorWithoutStackTrace) $ "Parse failed: " ++ show err
+
+        Success expr -> Exc.catch (process expr) $ \case
+            NixEvalException msg -> errorWithoutStackTrace msg
+      where
+        process expr = do
             -- expr <- Exc.evaluate $ force expr
             -- putStrLn "Parsing file...done"
 
             when (check opts) $
                 putStrLn $ runST $ Nix.runLintM . renderSymbolic
-                    =<< Nix.lint (stripAnnotation expr)
+                    =<< Nix.lint expr
+
+            let _args = arg opts ++ map mkStr (argstr opts)
 
             if | evaluate opts, debug opts ->
                      print =<< Nix.tracingEvalLoc mpath expr
                | evaluate opts ->
                      putStrLn . printNix =<< Nix.evalLoc mpath expr
                | debug opts ->
-                     print expr
+                     print $ stripAnnotation expr
+               | parseOnly opts ->
+                     void $ Exc.evaluate $ force expr
                | otherwise ->
                      displayIO stdout
                          . renderPretty 0.4 80

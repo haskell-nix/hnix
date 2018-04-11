@@ -1,7 +1,10 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Nix.Pretty where
 
@@ -9,7 +12,6 @@ import           Control.Monad
 import           Data.Fix
 import           Data.HashMap.Lazy (toList)
 import qualified Data.HashMap.Lazy as M
-import qualified Data.HashMap.Strict.InsOrd as OM
 import qualified Data.HashSet as HashSet
 import           Data.List (isPrefixOf, sort)
 import           Data.Maybe (isJust)
@@ -54,8 +56,17 @@ simpleExpr = flip NixDoc $ OperatorInfo maxBound NAssocNone "simple expr"
 leastPrecedence :: Doc -> NixDoc
 leastPrecedence = flip NixDoc $ OperatorInfo minBound NAssocNone "least precedence"
 
+appOp :: OperatorInfo
+appOp = getBinaryOperator NApp
+
 appOpNonAssoc :: OperatorInfo
-appOpNonAssoc = appOp { associativity = NAssocNone }
+appOpNonAssoc = (getBinaryOperator NApp) { associativity = NAssocNone }
+
+selectOp :: OperatorInfo
+selectOp = getSpecialOperator NSelectOp
+
+hasAttrOp :: OperatorInfo
+hasAttrOp = getSpecialOperator NHasAttrOp
 
 wrapParens :: OperatorInfo -> NixDoc -> Doc
 wrapParens op sub
@@ -68,10 +79,11 @@ wrapParens op sub
 prettyString :: NString NixDoc -> Doc
 prettyString (DoubleQuoted parts) = dquotes . hcat . map prettyPart $ parts
   where prettyPart (Plain t)      = text . concatMap escape . unpack $ t
+        prettyPart EscapedNewline = text "\n"
         prettyPart (Antiquoted r) = text "$" <> braces (withoutParens r)
         escape '"' = "\\\""
         escape x = maybe [x] (('\\':) . (:[])) $ toEscapeCode x
-prettyString (Indented parts)
+prettyString (Indented _ parts)
   = group $ nest 2 (squote <> squote <$$> content) <$$> squote <> squote
  where
   content = vsep . map prettyLine . stripLastIfEmpty . splitLines $ parts
@@ -80,6 +92,7 @@ prettyString (Indented parts)
     f xs = xs
   prettyLine = hcat . map prettyPart
   prettyPart (Plain t) = text . unpack . replace "${" "''${" . replace "''" "'''" $ t
+  prettyPart EscapedNewline = text "\n"
   prettyPart (Antiquoted r) = text "$" <> braces (withoutParens r)
 
 prettyParams :: Params NixDoc -> Doc
@@ -96,8 +109,8 @@ prettyParamSet args var =
       Nothing -> text (unpack n)
       Just v -> text (unpack n) <+> text "?" <+> withoutParens v
     prettyArgs
-        | var = map prettySetArg (OM.toList args)
-        | otherwise = map prettySetArg (OM.toList args) ++ [text "..."]
+        | var = map prettySetArg args
+        | otherwise = map prettySetArg args ++ [text "..."]
     sep = align (comma <> space)
 
 prettyBind :: Binding NixDoc -> Doc
@@ -110,9 +123,10 @@ prettyBind (Inherit s ns)
 prettyKeyName :: NKeyName NixDoc -> Doc
 prettyKeyName (StaticKey "" _) = dquotes $ text ""
 prettyKeyName (StaticKey key _)
-  | HashSet.member (unpack key) reservedNames = dquotes $ text $ unpack key
+  | HashSet.member key reservedNames = dquotes $ text $ unpack key
 prettyKeyName (StaticKey key _) = text . unpack $ key
-prettyKeyName (DynamicKey key) = runAntiquoted prettyString withoutParens key
+prettyKeyName (DynamicKey key) =
+    runAntiquoted (DoubleQuoted [Plain "\n"]) prettyString withoutParens key
 
 prettySelector :: NAttrPath NixDoc -> Doc
 prettySelector = hcat . punctuate dot . map prettyKeyName
@@ -136,9 +150,11 @@ prettyNix = withoutParens . cata phi where
     nest 2 (vsep $ recPrefix <> lbrace : map prettyBind xs) <$> rbrace
   phi (NAbs args body) = leastPrecedence $
    (prettyParams args <> colon) </> indent 2 (withoutParens body)
+  phi (NBinary NApp fun arg)
+    = NixDoc (wrapParens appOp fun <+> wrapParens appOpNonAssoc arg) appOp
   phi (NBinary op r1 r2) = flip NixDoc opInfo $ hsep
     [ wrapParens (f NAssocLeft) r1
-    , text $ operatorName opInfo
+    , text $ unpack $ operatorName opInfo
     , wrapParens (f NAssocRight) r2
     ]
     where
@@ -147,7 +163,7 @@ prettyNix = withoutParens . cata phi where
         | associativity opInfo /= x = opInfo { associativity = NAssocNone }
         | otherwise = opInfo
   phi (NUnary op r1) =
-    NixDoc (text (operatorName opInfo) <> wrapParens opInfo r1) opInfo
+    NixDoc (text (unpack (operatorName opInfo)) <> wrapParens opInfo r1) opInfo
     where opInfo = getUnaryOperator op
   phi (NSelect r [] _) = r
   phi (NSelect r attr o) = (if isJust o then leastPrecedence else flip NixDoc selectOp) $
@@ -155,8 +171,6 @@ prettyNix = withoutParens . cata phi where
     where ordoc = maybe empty (((space <> text "or") <+>) . withoutParens) o
   phi (NHasAttr r attr)
     = NixDoc (wrapParens hasAttrOp r <+> text "?" <+> prettySelector attr) hasAttrOp
-  phi (NApp fun arg)
-    = NixDoc (wrapParens appOp fun <+> wrapParens appOpNonAssoc arg) appOp
   phi (NEnvPath p) = simpleExpr $ text ("<" ++ p ++ ">")
   phi (NLiteralPath p) = simpleExpr $ text $ case p of
     "./" -> "./."
@@ -216,3 +230,10 @@ removeEffects = Fix . fmap dethunk
 
 showValue :: Functor m => NValue m -> String
 showValue = show . prettyNixValue . removeEffects
+
+instance Functor m => Show (NValue m) where
+    show = showValue
+
+instance Functor m => Show (NThunk m) where
+    show (NThunk (Value v)) = show v
+    show (NThunk _) = "<thunk>"

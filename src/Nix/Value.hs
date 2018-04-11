@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -22,14 +23,13 @@ import           Data.Align
 import           Data.Fix
 import qualified Data.HashMap.Lazy as M
 import           Data.Monoid (appEndo)
-import           Data.Text (Text)
+import           Data.Text (Text, pack)
 import           Data.These
 import           Data.Typeable (Typeable)
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr.Types
-import           Nix.Expr.Types.Annotated (deltaInfo)
-import           Nix.Parser.Library (Delta(..))
+import           Nix.Expr.Types.Annotated (SourcePos(..), unPos)
 import           Nix.Thunk
 import           Nix.Utils
 
@@ -42,7 +42,7 @@ data NValueF m r
     | NVStr Text (DList Text)
     | NVPath FilePath
     | NVList [r]
-    | NVSet (AttrSet r) (AttrSet Delta)
+    | NVSet (AttrSet r) (AttrSet SourcePos)
     | NVClosure (Params ()) (m (NValue m) -> m (NValue m))
       -- ^ A function is a closed set of parameters representing the "call
       --   signature", used at application time to check the type of arguments
@@ -73,11 +73,7 @@ newtype NThunk m   = NThunk (Thunk m (NValue m))
 type    NValue m   = NValueF m (NThunk m) -- head normal form
 type    ValueSet m = AttrSet (NThunk m)
 
-instance Show (NThunk m) where
-    show (NThunk (Value v)) = show v
-    show (NThunk _) = "<thunk>"
-
-instance Show f => Show (NValueF m f) where
+instance Show (NValueF m (Fix (NValueF m))) where
     showsPrec = flip go where
       go (NVConstant atom)    = showsCon1 "NVConstant" atom
       go (NVStr text context) = showsCon2 "NVStr"      text (appEndo context [])
@@ -113,12 +109,13 @@ builtin3 :: Monad m
 builtin3 name f =
     builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
 
-posFromDelta :: forall m v t. (MonadThunk v t m, Convertible v t) => Delta -> v
-posFromDelta (deltaInfo -> (f, l, c)) =
+posFromSourcePos :: forall m v t. (MonadThunk v t m, Convertible v t)
+                 => SourcePos -> v
+posFromSourcePos (SourcePos f l c) =
     ofVal $ M.fromList
-        [ ("file" :: Text, value @_ @_ @m $ ofVal f)
-        , ("line",        value @_ @_ @m $ ofVal l)
-        , ("column",      value @_ @_ @m $ ofVal c)
+        [ ("file" :: Text, value @_ @_ @m $ ofVal (pack f))
+        , ("line",        value @_ @_ @m $ ofVal (unPos l))
+        , ("column",      value @_ @_ @m $ ofVal (unPos c))
         ]
 
 valueRefBool :: Monad m => Bool -> m (NValue m)

@@ -4,7 +4,6 @@ module Nix.XML where
 
 import           Data.Fix
 import qualified Data.HashMap.Lazy as M
-import qualified Data.HashMap.Strict.InsOrd as OM
 import           Data.List
 import           Data.Ord
 import qualified Data.Text as Text
@@ -53,4 +52,4 @@ paramsXML (ParamSet s b mname) =
     nattr = maybe [] ((:[]) . Attr (unqual "name") . Text.unpack) mname
 
 paramSetXML :: ParamSet r -> [Content]
-paramSetXML m = map (\(k,_) -> Elem $ mkElem "attr" "name" (Text.unpack k)) $ OM.toList m
+paramSetXML = map (\(k,_) -> Elem $ mkElem "attr" "name" (Text.unpack k))

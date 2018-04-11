@@ -13,19 +13,13 @@ description:
 extra-source-files:
   - README.md
 
-flags:
-  parsec:
-    description: Use parsec instead of Trifecta
-    manual: True
-    default: False
-
 dependencies:
   - base                        >= 4.9 && < 5
   - ansi-wl-pprint
   - containers
   - data-fix
+  - deepseq
   - exceptions
-  - insert-ordered-containers   >= 0.2.2 && < 0.3
   - mtl
   - template-haskell
   - text
@@ -44,14 +38,14 @@ library:
     - ansi-wl-pprint
     - array                     >= 0.4 && < 0.6
     - base16-bytestring
+    - binary
     - bytestring
     - cryptohash
-    - deepseq
     - deriving-compat           >= 0.3 && < 0.5
     - directory
     - filepath
+    - megaparsec
     - monadlist
-    - parsers                   >= 0.10
     - process
     - regex-tdfa
     - regex-tdfa-text
@@ -63,13 +57,6 @@ library:
     - unix
     - vector
     - xml
-  when:
-    - condition: flag(parsec)
-      then:
-        cpp-options: -DUSE_PARSEC
-        dependencies: parsec
-      else:
-        dependencies: trifecta
 
 executables:
   hnix:
@@ -77,7 +64,6 @@ executables:
     main: Main.hs
     dependencies:
       - hnix
-      - deepseq
       - optparse-applicative
 
 tests:
@@ -87,6 +73,7 @@ tests:
     dependencies:
       - hnix
       - Glob
+      - directory
       - filepath
       - interpolate
       - process

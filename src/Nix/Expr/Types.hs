@@ -24,21 +24,21 @@
 module Nix.Expr.Types where
 
 import           Control.DeepSeq
+import           Data.Binary
 import           Data.Data
 import           Data.Eq.Deriving
 import           Data.Fix
 import           Data.Functor.Classes
-import qualified Data.HashMap.Strict.InsOrd as InsOrd
-import           Data.HashMap.Strict.InsOrd (InsOrdHashMap)
 import           Data.Text (Text, pack, unpack)
 import           Data.Traversable
 import           GHC.Exts
 import           GHC.Generics
 import           Language.Haskell.TH.Syntax
 import           Nix.Atoms
-import           Nix.Parser.Library (Delta(..))
+import           Nix.Parser.Library (SourcePos(..))
 import           Nix.Utils
 import           Text.Show.Deriving
+import           Text.Megaparsec.Pos
 import           Type.Reflection (eqTypeRep)
 import qualified Type.Reflection as Reflection
 
@@ -49,47 +49,45 @@ type VarName = Text
 -- them. The actual 'NExpr' type is a fixed point of this functor, defined
 -- below.
 data NExprF r
-  = NConstant NAtom
+  = NConstant !NAtom
   -- ^ Constants: ints, bools, URIs, and null.
-  | NStr (NString r)
+  | NStr !(NString r)
   -- ^ A string, with interpolated expressions.
-  | NSym VarName
+  | NSym !VarName
   -- ^ A variable. For example, in the expression @f a@, @f@ is represented
   -- as @NSym "f"@ and @a@ as @NSym "a"@.
-  | NList [r]
+  | NList ![r]
   -- ^ A list literal.
-  | NSet [Binding r]
+  | NSet ![Binding r]
   -- ^ An attribute set literal, not recursive.
-  | NRecSet [Binding r]
+  | NRecSet ![Binding r]
   -- ^ An attribute set literal, recursive.
-  | NLiteralPath FilePath
+  | NLiteralPath !FilePath
   -- ^ A path expression, which is evaluated to a store path. The path here
   -- can be relative, in which case it's evaluated relative to the file in
   -- which it appears.
-  | NEnvPath FilePath
+  | NEnvPath !FilePath
   -- ^ A path which refers to something in the Nix search path (the NIX_PATH
   -- environment variable. For example, @<nixpkgs/pkgs>@.
-  | NUnary NUnaryOp r
+  | NUnary !NUnaryOp !r
   -- ^ Application of a unary operator to an expression.
-  | NBinary NBinaryOp r r
+  | NBinary !NBinaryOp !r !r
   -- ^ Application of a binary operator to two expressions.
-  | NSelect r (NAttrPath r) (Maybe r)
+  | NSelect !r !(NAttrPath r) !(Maybe r)
   -- ^ Dot-reference into an attribute set, optionally providing an
   -- alternative if the key doesn't exist.
-  | NHasAttr r (NAttrPath r)
+  | NHasAttr !r !(NAttrPath r)
   -- ^ Ask if a set contains a given attribute path.
-  | NAbs (Params r) r
+  | NAbs !(Params r) !r
   -- ^ A function literal (lambda abstraction).
-  | NApp r r
-  -- ^ Apply a function to an argument.
-  | NLet [Binding r] r
+  | NLet ![Binding r] !r
   -- ^ Evaluate the second argument after introducing the bindings.
-  | NIf r r r
+  | NIf !r !r !r
   -- ^ If-then-else statement.
-  | NWith r r
+  | NWith !r !r
   -- ^ Evaluate an attribute set, bring its bindings into scope, and
   -- evaluate the second argument.
-  | NAssert r r
+  | NAssert !r !r
   -- ^ Assert that the first returns true before evaluating the second.
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
             Foldable, Traversable, Show, NFData, NFData1)
@@ -111,9 +109,9 @@ type NExpr = Fix NExprF
 
 -- | A single line of the bindings section of a let expression or of a set.
 data Binding r
-  = NamedVar (NAttrPath r) r
+  = NamedVar !(NAttrPath r) !r
   -- ^ An explicit naming, such as @x = y@ or @x.y = z@.
-  | Inherit (Maybe r) (NAttrPath r)
+  | Inherit !(Maybe r) !(NAttrPath r)
   -- ^ Using a name already in scope, such as @inherit x;@ which is shorthand
   -- for @x = x;@ or @inherit (x) y;@ which means @y = x.y;@.
   deriving (Generic, Generic1, Typeable, Data, Ord, Eq, Functor,
@@ -122,33 +120,25 @@ data Binding r
 -- | @Params@ represents all the ways the formal parameters to a
 -- function can be represented.
 data Params r
-  = Param VarName
+  = Param !VarName
   -- ^ For functions with a single named argument, such as @x: x + 1@.
-  | ParamSet (ParamSet r) Bool (Maybe VarName)
+  | ParamSet !(ParamSet r) !Bool !(Maybe VarName)
   -- ^ Explicit parameters (argument must be a set). Might specify a name to
   -- bind to the set in the function body. The bool indicates whether it is
   -- variadic or not.
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Show,
-            Foldable, Traversable)
+            Foldable, Traversable, NFData, NFData1)
 
-instance NFData a => NFData (Params a) where
-    rnf (Param !_) = ()
-    rnf (ParamSet !s !_ !_) = InsOrd.size s `seq` ()
-
-instance NFData1 Params where
-    liftRnf _ (Param !_) = ()
-    liftRnf _ (ParamSet !s !_ !_) = InsOrd.size s `seq` ()
-
--- This uses InsOrdHashMap because nix XML serialization preserves the order of
--- the param set.
-type ParamSet r = InsOrdHashMap VarName (Maybe r)
+-- This uses an association list because nix XML serialization preserves the
+-- order of the param set.
+type ParamSet r = [(VarName, Maybe r)]
 
 instance IsString (Params r) where
   fromString = Param . fromString
 
 -- | 'Antiquoted' represents an expression that is either
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
-data Antiquoted (v :: *) (r :: *) = Plain v | Antiquoted r
+data Antiquoted (v :: *) (r :: *) = Plain !v | EscapedNewline | Antiquoted !r
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
             Foldable, Traversable, Show, NFData, NFData1)
 
@@ -156,12 +146,13 @@ data Antiquoted (v :: *) (r :: *) = Plain v | Antiquoted r
 -- or an antiquoted expression. After the antiquotes have been evaluated,
 -- the final string is constructed by concating all the parts.
 data NString r
-  = DoubleQuoted [Antiquoted Text r]
+  = DoubleQuoted ![Antiquoted Text r]
   -- ^ Strings wrapped with double-quotes (") can contain literal newline
   -- characters, but the newlines are preserved and no indentation is stripped.
-  | Indented [Antiquoted Text r]
-  -- ^ Strings wrapped with two single quotes ('') can contain newlines,
-  -- and their indentation will be stripped.
+  | Indented !Int ![Antiquoted Text r]
+  -- ^ Strings wrapped with two single quotes ('') can contain newlines, and
+  --   their indentation will be stripped, but the amount stripped is
+  --   remembered.
   deriving (Eq, Ord, Generic, Generic1, Typeable, Data, Functor,
             Foldable, Traversable, Show, NFData, NFData1)
 
@@ -170,7 +161,7 @@ instance IsString (NString r) where
   fromString "" = DoubleQuoted []
   fromString string = DoubleQuoted [Plain $ pack string]
 
--- | A 'KeyName' is something that can appear at the right side of an
+-- | A 'KeyName' is something that can appear on the left side of an
 -- equals sign. For example, @a@ is a 'KeyName' in @{ a = 3; }@, @let a = 3;
 -- in ...@, @{}.a@ or @{} ? a@.
 --
@@ -190,8 +181,8 @@ instance IsString (NString r) where
 -- allowed even if the context requires a static keyname, but the
 -- parser still considers it a 'DynamicKey' for simplicity.
 data NKeyName r
-  = DynamicKey (Antiquoted (NString r) r)
-  | StaticKey VarName (Maybe Delta)
+  = DynamicKey !(Antiquoted (NString r) r)
+  | StaticKey !VarName !(Maybe SourcePos)
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 instance Generic1 NKeyName where
@@ -201,8 +192,8 @@ instance Generic1 NKeyName where
 instance NFData1 NKeyName where
     liftRnf _ (StaticKey !_ !_) = ()
     liftRnf _ (DynamicKey (Plain !_)) = ()
+    liftRnf _ (DynamicKey EscapedNewline) = ()
     liftRnf k (DynamicKey (Antiquoted r)) = k r
-instance NFData Delta
 
 -- | Most key names are just static text, so this instance is convenient.
 instance IsString (NKeyName r) where
@@ -235,6 +226,7 @@ instance Foldable NKeyName where
 instance Traversable NKeyName where
   traverse f = \case
     DynamicKey (Plain str)    -> DynamicKey . Plain <$> traverse f str
+    DynamicKey EscapedNewline -> pure $ DynamicKey EscapedNewline
     DynamicKey (Antiquoted e) -> DynamicKey . Antiquoted <$> f e
     StaticKey key pos -> pure (StaticKey key pos)
 
@@ -248,21 +240,22 @@ data NUnaryOp = NNeg | NNot
 
 -- | Binary operators expressible in the nix language.
 data NBinaryOp
-  = NEq -- ^ Equality (==)
-  | NNEq -- ^ Inequality (!=)
-  | NLt -- ^ Less than (<)
-  | NLte -- ^ Less than or equal (<=)
-  | NGt -- ^ Greater than (>)
-  | NGte -- ^ Greater than or equal (>=)
-  | NAnd -- ^ Logical and (&&)
-  | NOr -- ^ Logical or (||)
-  | NImpl -- ^ Logical implication (->)
-  | NUpdate -- ^ Joining two attribut sets (//)
-  | NPlus -- ^ Addition (+)
-  | NMinus -- ^ Subtraction (-)
-  | NMult -- ^ Multiplication (*)
-  | NDiv -- ^ Division (/)
-  | NConcat -- ^ List concatenation (++)
+  = NEq      -- ^ Equality (==)
+  | NNEq     -- ^ Inequality (!=)
+  | NLt      -- ^ Less than (<)
+  | NLte     -- ^ Less than or equal (<=)
+  | NGt      -- ^ Greater than (>)
+  | NGte     -- ^ Greater than or equal (>=)
+  | NAnd     -- ^ Logical and (&&)
+  | NOr      -- ^ Logical or (||)
+  | NImpl    -- ^ Logical implication (->)
+  | NUpdate  -- ^ Joining two attribut sets (//)
+  | NPlus    -- ^ Addition (+)
+  | NMinus   -- ^ Subtraction (-)
+  | NMult    -- ^ Multiplication (*)
+  | NDiv     -- ^ Division (/)
+  | NConcat  -- ^ List concatenation (++)
+  | NApp     -- ^ Apply a function to an argument.
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 -- | Get the name out of the parameter (there might be none).
@@ -283,6 +276,20 @@ $(deriveShow1 ''Params)
 $(deriveShow1 ''Binding)
 $(deriveShow1 ''Antiquoted)
 $(deriveShow2 ''Antiquoted)
+
+instance (Binary v, Binary a) => Binary (Antiquoted v a)
+instance Binary a => Binary (NString a)
+instance Binary a => Binary (Binding a)
+instance Binary Pos where
+    put x = put (unPos x)
+    get = mkPos <$> get
+instance Binary SourcePos
+instance Binary a => Binary (NKeyName a)
+instance Binary a => Binary (Params a)
+instance Binary NAtom
+instance Binary NUnaryOp
+instance Binary NBinaryOp
+instance Binary a => Binary (NExprF a)
 
 stripPositionInfo :: NExpr -> NExpr
 stripPositionInfo = transport phi
@@ -311,5 +318,5 @@ type Convertible v t =
      ConvertValue v Text,
      ConvertValue v (Maybe Text),  -- text or null
      ConvertValue v [t],
-     ConvertValue v (AttrSet t, AttrSet Delta),
+     ConvertValue v (AttrSet t, AttrSet SourcePos),
      ConvertValue v (AttrSet t))
