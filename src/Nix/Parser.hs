@@ -42,10 +42,15 @@ selDot :: Parser ()
 selDot = try (symbol "." *> notFollowedBy nixPath) <?> "."
 
 nixSelect :: Parser NExprLoc -> Parser NExprLoc
-nixSelect term = build
-  <$> term
-  <*> optional ((,) <$> (selDot *> nixSelector)
-                    <*> optional (reserved "or" *> nixTerm))
+nixSelect term = do
+    res <- build
+        <$> term
+        <*> optional ((,) <$> (selDot *> nixSelector)
+                          <*> optional (reserved "or" *> nixTerm))
+    continues <- optional $ lookAhead selDot
+    case continues of
+        Nothing -> pure res
+        Just _  -> nixSelect (pure res)
  where
   build :: NExprLoc
         -> Maybe (Ann SrcSpan (NAttrPath NExprLoc), Maybe NExprLoc)
@@ -57,7 +62,7 @@ nixSelector :: Parser (Ann SrcSpan (NAttrPath NExprLoc))
 nixSelector = annotateLocation $ keyName `sepBy1` selDot
 
 nixTerm :: Parser NExprLoc
-nixTerm = nixSelect $ do
+nixTerm = do
     c <- try $ lookAhead $ satisfy $ \x ->
         pathChar x ||
         x == '(' ||
@@ -68,22 +73,22 @@ nixTerm = nixSelect $ do
         x == '"' ||
         x == '\''
     case c of
-        '('  -> nixParens
-        '{'  -> nixSet
+        '('  -> nixSelect nixParens
+        '{'  -> nixSelect nixSet
         '['  -> nixList
         '<'  -> nixSPath
         '/'  -> nixPath
         '"'  -> nixStringExpr
         '\'' -> nixStringExpr
         _    -> choice $
-            [ nixSet | c == 'r' ] ++
+            [ nixSelect nixSet | c == 'r' ] ++
             [ nixPath | pathChar c ] ++
             [ nixUri | isAlpha c ] ++
             (if isDigit c then [ nixFloat
                                , nixInt ] else []) ++
             [ nixBool | c == 't' || c == 'f' ] ++
             [ nixNull | c == 'n' ] ++
-            [ nixSym ]
+            [ nixSelect nixSym ]
 
 nixToplevelForm :: Parser NExprLoc
 nixToplevelForm = keywords <|> nixLambda <|> nixExprLoc
@@ -109,12 +114,10 @@ nixFloat = annotateLocation1 (try (mkFloatF . realToFrac <$> float) <?> "float")
 nixBool :: Parser NExprLoc
 nixBool = annotateLocation1 (try (bool "true" True <|>
                                   bool "false" False) <?> "bool") where
-  bool str b = mkBoolF b <$ lexeme (string str <* notFollowedBy (satisfy pathChar))
+  bool str b = mkBoolF b <$ reserved str
 
 nixNull :: Parser NExprLoc
-nixNull = annotateLocation1
-    (mkNullF <$ try (lexeme (string "null" <* notFollowedBy (satisfy pathChar)))
-         <?> "null")
+nixNull = annotateLocation1 (mkNullF <$ reserved "null" <?> "null")
 
 nixParens :: Parser NExprLoc
 nixParens = parens nixToplevelForm <?> "parens"

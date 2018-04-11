@@ -31,18 +31,19 @@ whiteSpace = L.space space1 lineCmnt blockCmnt
 
 lexeme :: Parser a -> Parser a
 lexeme p = p <* whiteSpace
-{-# INLINEABLE lexeme #-}
 
 symbol = lexeme . string
 
 reservedEnd :: Char -> Bool
-reservedEnd x = isSpace x || x == '{' || x == '(' ||
-                x == ';' || x == ':' ||
-                x == '"' || x == '\''
+reservedEnd x = isSpace x ||
+    x == '{' || x == '(' || x == '[' ||
+    x == '}' || x == ')' || x == ']' ||
+    x == ';' || x == ':' || x == '.' ||
+    x == '"' || x == '\'' || x == ','
 
 reserved :: Text -> Parser ()
 reserved n = lexeme $ try $ do
-    _ <- string n <* lookAhead (satisfy reservedEnd)
+    _ <- string n <* lookAhead (void (satisfy reservedEnd) <|> eof)
     return ()
 
 opStart :: Parser Char
