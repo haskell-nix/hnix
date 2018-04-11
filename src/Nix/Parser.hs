@@ -200,7 +200,8 @@ nixString = lexeme (doubleQuoted <|> indented <?> "string")
   where
     doubleQuoted :: Parser (NString NExprLoc)
     doubleQuoted = DoubleQuoted . removePlainEmpty . mergePlain
-                <$> (doubleQ *> many (stringChar doubleQ (void $ char '\\') doubleEscape)
+                <$> (doubleQ *> many (stringChar doubleQ (void $ char '\\')
+                                                 doubleEscape)
                              <* doubleQ)
                 <?> "double quoted string"
 
@@ -209,11 +210,12 @@ nixString = lexeme (doubleQuoted <|> indented <?> "string")
 
     indented :: Parser (NString NExprLoc)
     indented = stripIndent
-            <$> (indentedQ *> many (stringChar indentedQ indentedQ indentedEscape)
+            <$> (indentedQ *> many (stringChar indentedQ indentedQ
+                                               indentedEscape)
                            <* indentedQ)
             <?> "indented string"
 
-    indentedQ = void (try (string "''") <?> "\"''\"")
+    indentedQ = void (string "''" <?> "\"''\"")
     indentedEscape = try $ do
         indentedQ
         (Plain <$> ("''" <$ char '\'' <|> "$"  <$ char '$')) <|> do
@@ -223,9 +225,10 @@ nixString = lexeme (doubleQuoted <|> indented <?> "string")
                    then EscapedNewline
                    else Plain $ singleton c
 
-    stringChar end escStart esc = esc
-        <|> Antiquoted <$> (antiStart *> nixToplevelForm <* char '}')
+    stringChar end escStart esc =
+            Antiquoted <$> (antiStart *> nixToplevelForm <* char '}')
         <|> Plain . singleton <$> char '$'
+        <|> esc
         <|> Plain . pack <$> some plainChar
      where
        plainChar =
