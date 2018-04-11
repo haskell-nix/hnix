@@ -24,6 +24,7 @@
 module Nix.Expr.Types where
 
 import           Control.DeepSeq
+import           Data.Binary
 import           Data.Data
 import           Data.Eq.Deriving
 import           Data.Fix
@@ -37,6 +38,7 @@ import           Nix.Atoms
 import           Nix.Parser.Library (SourcePos(..))
 import           Nix.Utils
 import           Text.Show.Deriving
+import           Text.Megaparsec.Pos
 import           Type.Reflection (eqTypeRep)
 import qualified Type.Reflection as Reflection
 
@@ -273,6 +275,20 @@ $(deriveShow1 ''Params)
 $(deriveShow1 ''Binding)
 $(deriveShow1 ''Antiquoted)
 $(deriveShow2 ''Antiquoted)
+
+instance (Binary v, Binary a) => Binary (Antiquoted v a)
+instance Binary a => Binary (NString a)
+instance Binary a => Binary (Binding a)
+instance Binary Pos where
+    put x = put (unPos x)
+    get = mkPos <$> get
+instance Binary SourcePos
+instance Binary a => Binary (NKeyName a)
+instance Binary a => Binary (Params a)
+instance Binary NAtom
+instance Binary NUnaryOp
+instance Binary NBinaryOp
+instance Binary a => Binary (NExprF a)
 
 stripPositionInfo :: NExpr -> NExpr
 stripPositionInfo = transport phi

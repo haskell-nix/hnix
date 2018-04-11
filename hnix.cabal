@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: eed66122f2daeb0845bd275988ae03be47bacd6cf6c52192042ce2e08df1a13b
+-- hash: 985df29672fa05a428e45dc2a5348e68020387d40ad14caa1764387f2522ceb2
 
 name:           hnix
 version:        0.5.0
@@ -65,6 +65,7 @@ library
     , array >=0.4 && <0.6
     , base >=4.9 && <5
     , base16-bytestring
+    , binary
     , bytestring
     , containers
     , cryptohash
