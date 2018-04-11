@@ -30,7 +30,7 @@ nixExprLoc :: Parser NExprLoc
 nixExprLoc = makeExprParser nixTerm $ map (map snd) (nixOperators nixSelector)
 
 antiStart :: Parser Text
-antiStart = try (symbol "${") <?> show ("${" :: String)
+antiStart = symbol "${" <?> show ("${" :: String)
 
 nixAntiquoted :: Parser a -> Parser (Antiquoted a NExprLoc)
 nixAntiquoted p =
@@ -112,8 +112,8 @@ nixFloat :: Parser NExprLoc
 nixFloat = annotateLocation1 (try (mkFloatF . realToFrac <$> float) <?> "float")
 
 nixBool :: Parser NExprLoc
-nixBool = annotateLocation1 (try (bool "true" True <|>
-                                  bool "false" False) <?> "bool") where
+nixBool = annotateLocation1 (bool "true" True <|>
+                             bool "false" False) <?> "bool" where
   bool str b = mkBoolF b <$ reserved str
 
 nixNull :: Parser NExprLoc
@@ -299,7 +299,7 @@ keyName = dynamicKey <|> staticKey where
 
 nixSet :: Parser NExprLoc
 nixSet = annotateLocation1 ((isRec <*> braces nixBinders) <?> "set") where
-  isRec = (try (reserved "rec" $> NRecSet) <?> "recursive set")
+  isRec = (reserved "rec" $> NRecSet <?> "recursive set")
        <|> pure NSet
 
 parseNixFile :: MonadIO m => FilePath -> m (Result NExpr)
