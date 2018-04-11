@@ -8,10 +8,10 @@ import           Control.DeepSeq
 import qualified Control.Exception as Exc
 import           Control.Monad
 import           Control.Monad.ST
-import           Data.Text (Text)
+import           Data.Text (Text, pack)
 import qualified Data.Text.IO as Text
 import qualified Nix
-import           Nix.Expr.Types.Annotated (stripAnnotation)
+import           Nix.Expr
 import           Nix.Lint
 import           Nix.Parser
 import           Nix.Pretty
@@ -30,6 +30,8 @@ data Options = Options
     , parseOnly    :: Bool
     , ignoreErrors :: Bool
     , expression   :: Maybe Text
+    , arg          :: [NExpr]
+    , argstr       :: [Text]
     , fromFile     :: Maybe FilePath
     , filePaths    :: [FilePath]
     }
@@ -63,11 +65,22 @@ mainOptions = Options
         (   short 'E'
          <> long "expr"
          <> help "Expression to parse or evaluate"))
+    <*> multiString
+            (\s -> case parseNixText (pack s) of
+                      Success x -> pure x
+                      Failure err -> errorWithoutStackTrace (show err))
+        (   long "arg"
+         <> help "Argument to pass to an evaluated lambda")
+    <*> multiString (pure . pack)
+        (   long "argstr"
+         <> help "Argument string to pass to an evaluated lambda")
     <*> optional (strOption
         (   short 'f'
          <> long "file"
          <> help "Parse all of the files given in FILE; - means stdin"))
     <*> many (strArgument (metavar "FILE" <> help "Path of file to parse"))
+  where
+    multiString f desc = many (option (str >>= f) desc)
 
 main :: IO ()
 main = do
@@ -116,6 +129,8 @@ main = do
             when (check opts) $
                 putStrLn $ runST $ Nix.runLintM . renderSymbolic
                     =<< Nix.lint expr
+
+            let _args = arg opts ++ map mkStr (argstr opts)
 
             if | evaluate opts, debug opts ->
                      print =<< Nix.tracingEvalLoc mpath expr
