@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e2b843b190938c1ecc26a31d9183394071007a6bb3508ae3d0736ed26bcc8c93
+-- hash: e96c99f7855d271377ef923e541a2cbb9968e1e1a6349e317c85985118ba94ad
 
 name:           hnix
 version:        0.5.0
@@ -65,6 +65,7 @@ library
     , base16-bytestring
     , binary
     , bytestring
+    , compact
     , containers
     , cryptohash
     , data-fix
@@ -103,10 +104,12 @@ executable hnix
   build-depends:
       ansi-wl-pprint
     , base >=4.9 && <5
+    , compact
     , containers
     , data-fix
     , deepseq
     , exceptions
+    , filepath
     , hnix
     , mtl
     , optparse-applicative
@@ -133,6 +136,7 @@ test-suite hnix-tests
       Glob
     , ansi-wl-pprint
     , base >=4.9 && <5
+    , compact
     , containers
     , data-fix
     , deepseq
@@ -166,11 +170,13 @@ benchmark hnix-benchmarks
   build-depends:
       ansi-wl-pprint
     , base >=4.9 && <5
+    , compact
     , containers
     , criterion
     , data-fix
     , deepseq
     , exceptions
+    , filepath
     , hnix
     , mtl
     , template-haskell

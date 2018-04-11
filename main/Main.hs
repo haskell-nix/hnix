@@ -8,6 +8,8 @@ import           Control.DeepSeq
 import qualified Control.Exception as Exc
 import           Control.Monad
 import           Control.Monad.ST
+import qualified Data.Compact as C
+import qualified Data.Compact.Serialize as C
 import           Data.Text (Text, pack)
 import qualified Data.Text.IO as Text
 import qualified Nix
@@ -19,6 +21,7 @@ import           Nix.Stack (NixException(..))
 -- import           Nix.TH
 import           Options.Applicative hiding (ParserResult(..))
 import           System.IO
+import           System.FilePath
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 data Options = Options
@@ -26,6 +29,8 @@ data Options = Options
     , debug        :: Bool
     , evaluate     :: Bool
     , check        :: Bool
+    , readFrom     :: Maybe FilePath
+    , compact      :: Bool
     , parse        :: Bool
     , parseOnly    :: Bool
     , ignoreErrors :: Bool
@@ -52,6 +57,12 @@ mainOptions = Options
     <*> switch
         (   long "check"
          <> help "Whether to check for syntax errors after parsing")
+    <*> optional (strOption
+        (   long "read"
+         <> help "Read in an expression tree from a compacted file"))
+    <*> switch
+        (   long "compact"
+         <> help "Write out the expression tree as a compact region")
     <*> switch
         (   long "parse"
          <> help "Whether to parse the file (also the default right now)")
@@ -85,22 +96,30 @@ mainOptions = Options
 main :: IO ()
 main = do
     opts <- execParser optsDef
-    case expression opts of
-        Just s -> handleResult opts Nothing (parseNixTextLoc s)
-        Nothing  -> case fromFile opts of
-            Just "-" ->
-                mapM_ (processFile opts) =<< (lines <$> getContents)
-            Just path ->
-                mapM_ (processFile opts) =<< (lines <$> readFile path)
-            Nothing -> case filePaths opts of
-                [] ->
-                    handleResult opts Nothing . parseNixTextLoc
-                        =<< Text.getContents
-                ["-"] ->
-                    handleResult opts Nothing . parseNixTextLoc
-                        =<< Text.getContents
-                paths ->
-                    mapM_ (processFile opts) paths
+    case readFrom opts of
+        Just path -> do
+            eres <- C.unsafeReadCompact path
+            case eres of
+                Left err -> error $ "Error reading compact file: " ++ err
+                Right expr -> do
+                    let file = addExtension (dropExtension path) "nix"
+                    process opts (Just file) (C.getCompact expr)
+        Nothing -> case expression opts of
+            Just s -> handleResult opts Nothing (parseNixTextLoc s)
+            Nothing  -> case fromFile opts of
+                Just "-" ->
+                    mapM_ (processFile opts) =<< (lines <$> getContents)
+                Just path ->
+                    mapM_ (processFile opts) =<< (lines <$> readFile path)
+                Nothing -> case filePaths opts of
+                    [] ->
+                        handleResult opts Nothing . parseNixTextLoc
+                            =<< Text.getContents
+                    ["-"] ->
+                        handleResult opts Nothing . parseNixTextLoc
+                            =<< Text.getContents
+                    paths ->
+                        mapM_ (processFile opts) paths
   where
     optsDef :: ParserInfo Options
     optsDef = info (helper <*> mainOptions)
@@ -119,29 +138,36 @@ main = do
              then hPutStrLn stderr
              else errorWithoutStackTrace) $ "Parse failed: " ++ show err
 
-        Success expr -> Exc.catch (process expr) $ \case
+        Success expr -> Exc.catch (process opts mpath expr) $ \case
             NixEvalException msg -> errorWithoutStackTrace msg
-      where
-        process expr = do
-            -- expr <- Exc.evaluate $ force expr
-            -- putStrLn "Parsing file...done"
 
-            when (check opts) $
-                putStrLn $ runST $ Nix.runLintM . renderSymbolic
-                    =<< Nix.lint expr
+    process opts mpath expr = do
+        -- expr <- Exc.evaluate $ force expr
+        -- putStrLn "Parsing file...done"
 
-            let _args = arg opts ++ map mkStr (argstr opts)
+        when (check opts) $
+            putStrLn $ runST $ Nix.runLintM . renderSymbolic
+                =<< Nix.lint expr
 
-            if | evaluate opts, debug opts ->
-                     print =<< Nix.tracingEvalLoc mpath expr
-               | evaluate opts ->
-                     putStrLn . printNix =<< Nix.evalLoc mpath expr
-               | debug opts ->
-                     print $ stripAnnotation expr
-               | parseOnly opts ->
-                     void $ Exc.evaluate $ force expr
-               | otherwise ->
-                     displayIO stdout
-                         . renderPretty 0.4 80
-                         . prettyNix
-                         . stripAnnotation $ expr
+        let _args = arg opts ++ map mkStr (argstr opts)
+
+        if | evaluate opts, debug opts ->
+                 print =<< Nix.tracingEvalLoc mpath expr
+           | evaluate opts ->
+                 putStrLn . printNix =<< Nix.evalLoc mpath expr
+           | debug opts ->
+                 print $ stripAnnotation expr
+           | compact opts -> do
+                 cx <- C.compact expr
+                 case mpath of
+                     Nothing -> return ()
+                     Just path -> do
+                         let file = addExtension (dropExtension path) "nixc"
+                         C.writeCompact file cx
+           | parseOnly opts ->
+                 void $ Exc.evaluate $ force expr
+           | otherwise ->
+                 displayIO stdout
+                     . renderPretty 0.4 80
+                     . prettyNix
+                     . stripAnnotation $ expr

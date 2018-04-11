@@ -16,10 +16,12 @@ extra-source-files:
 dependencies:
   - base                        >= 4.9 && < 5
   - ansi-wl-pprint
+  - compact
   - containers
   - data-fix
   - deepseq
   - exceptions
+  - filepath
   - mtl
   - template-haskell
   - text
@@ -43,7 +45,6 @@ library:
     - cryptohash
     - deriving-compat           >= 0.3 && < 0.5
     - directory
-    - filepath
     - megaparsec
     - monadlist
     - process
@@ -75,7 +76,6 @@ tests:
       - hnix
       - Glob
       - directory
-      - filepath
       - interpolate
       - process
       - split
