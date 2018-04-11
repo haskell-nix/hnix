@@ -2,7 +2,7 @@ module TestCommon where
 
 import Data.Text (Text, unpack)
 import Nix
-import Nix.Monad.Lazy
+import Nix.Exec
 import Nix.Parser
 import Nix.Pretty
 import Nix.Value

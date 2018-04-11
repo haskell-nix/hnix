@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Nix.Monad.Context where
+module Nix.Context where
 
 import Nix.Scope
 import Nix.Stack

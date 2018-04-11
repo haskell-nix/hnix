@@ -2,6 +2,7 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -40,15 +41,15 @@ import           Nix.StringOperations (runAntiquoted)
 import           Nix.Thunk
 import           Nix.Utils
 
-class (Show v, Monoid (MText m),
-       ConvertValue v (MText m),
-       ConvertValue v (Maybe (MText m)), Monad m)
-      => MonadEval v m where
+class (Show v, Monoid (MText v),
+       ConvertValue v (MText v),
+       ConvertValue v (Maybe (MText v)), Monad m)
+      => MonadEval v m | v -> m where
     freeVariable :: Text -> m v
 
     evalCurPos      :: m v
     evalConstant    :: NAtom -> m v
-    evalString      :: MText m -> m v
+    evalString      :: MText v -> m v
     evalLiteralPath :: FilePath -> m v
     evalEnvPath     :: FilePath -> m v
     evalUnary       :: NUnaryOp -> v -> m v
@@ -56,18 +57,19 @@ class (Show v, Monoid (MText m),
     -- ^ The second argument is an action because operators such as boolean &&
     -- and || may not evaluate the second argument.
     evalIf          :: v -> m v -> m v -> m v
+    evalAssert      :: v -> m v -> m v
     evalApp         :: v -> m v -> m v
     evalAbs         :: Params () -> (m v -> m v) -> m v
 
     evalError :: String -> m a
 
-    type MText m :: *
+    type MText v :: *
 
-    wrapMText   :: Text -> m (MText m)
-    unwrapMText :: MText m -> m Text
+    wrapMText   :: Text -> m (MText v)
+    unwrapMText :: MText v -> m Text
 
-    embedMText   :: MText m -> m v
-    projectMText :: v -> m (Maybe (Maybe (MText m)))
+    embedMText   :: MText v -> m v
+    projectMText :: v -> m (Maybe (Maybe (MText v)))
 
 type MonadNixEval e v t m
     = (MonadEval v m, Scoped e t m, Convertible v t, MonadThunk v t m,
@@ -153,12 +155,7 @@ eval (NWith scope body) = do
         _ -> evalError @v $ "scope must be a set in with statement, but saw: "
                 ++ show v
 
-eval (NAssert cond body) = do
-    traceM "NAssert"
-    cond >>= \v -> case wantVal v of
-        Just b -> if b then body else evalError @v "assertion failed"
-        _ -> evalError @v $ "assertion condition must be boolean, but saw: "
-                ++ show v
+eval (NAssert cond body) = cond >>= \v -> evalAssert v body
 
 eval (NAbs params body) = do
     -- It is the environment at the definition site, not the call site, that
@@ -331,11 +328,11 @@ evalKeyNameDynamicNullable = \case
     StaticKey k p -> pure (Just k, p)
     DynamicKey k -> runAntiquoted "\n" (embedMText <=< assembleString) id k
         >>= \v -> case wantVal v of
-            Just (s :: MText m) ->
+            Just (s :: MText v) ->
                 (\x -> (Just x, Nothing)) <$> unwrapMText @v s
             _ -> return (Nothing, Nothing)
 
-assembleString :: forall v m. MonadEval v m => NString (m v) -> m (MText m)
+assembleString :: forall v m. MonadEval v m => NString (m v) -> m (MText v)
 assembleString = \case
     Indented     parts -> fromParts parts
     DoubleQuoted parts -> fromParts parts

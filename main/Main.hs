@@ -115,7 +115,7 @@ main = do
 
             when (check opts) $
                 putStrLn $ runST $ Nix.runLintM . renderSymbolic
-                    =<< Nix.lint (stripAnnotation expr)
+                    =<< Nix.lint expr
 
             if | evaluate opts, debug opts ->
                      print =<< Nix.tracingEvalLoc mpath expr

@@ -13,7 +13,7 @@ import qualified Data.HashMap.Lazy as M
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Nix.Atoms
-import           Nix.Monad
+import           Nix.Effects
 import           Nix.Stack
 import           Nix.Thunk
 import           Nix.Utils

@@ -53,10 +53,10 @@ import qualified Data.Vector as V
 import           GHC.Stack.Types (HasCallStack)
 import           Language.Haskell.TH.Syntax (addDependentFile, runIO)
 import           Nix.Atoms
+import           Nix.Effects
 import           Nix.Eval
 import           Nix.Exec
 import           Nix.Expr.Types
-import           Nix.Monad
 import           Nix.Normal
 import           Nix.Parser
 import           Nix.Scope
@@ -756,7 +756,7 @@ readDir_ pathThunk = do
     path <- force pathThunk absolutePathFromValue
     items <- listDirectory path
     itemsWithTypes <- forM items $ \item -> do
-        s <- Nix.Monad.getSymbolicLinkStatus $ path </> item
+        s <- Nix.Effects.getSymbolicLinkStatus $ path </> item
         let t = if
                 | isRegularFile s -> FileType_Regular
                 | isDirectory s -> FileType_Directory

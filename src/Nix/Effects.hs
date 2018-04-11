@@ -1,4 +1,4 @@
-module Nix.Monad where
+module Nix.Effects where
 
 import Data.Text (Text)
 import System.Posix.Files
