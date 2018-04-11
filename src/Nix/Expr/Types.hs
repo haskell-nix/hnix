@@ -309,14 +309,3 @@ stripPositionInfo = transport phi
 class ConvertValue v a where
     ofVal   :: a -> v
     wantVal :: v -> Maybe a
-
-type Convertible v t =
-    (ConvertValue v Bool,
-     ConvertValue v Int,
-     ConvertValue v Integer,
-     ConvertValue v Float,
-     ConvertValue v Text,
-     ConvertValue v (Maybe Text),  -- text or null
-     ConvertValue v [t],
-     ConvertValue v (AttrSet t, AttrSet SourcePos),
-     ConvertValue v (AttrSet t))

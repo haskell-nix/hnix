@@ -72,9 +72,12 @@ class (Show v, Monoid (MText v),
     embedMText   :: MText v -> m v
     projectMText :: v -> m (Maybe (Maybe (MText v)))
 
-type MonadNixEval e v t m
-    = (MonadEval v m, Scoped e t m, Convertible v t, MonadThunk v t m,
-       MonadFix m)
+type MonadNixEval e v t m =
+    (MonadEval v m, Scoped e t m, MonadThunk v t m, MonadFix m,
+     ConvertValue v Bool,
+     ConvertValue v [t],
+     ConvertValue v (AttrSet t),
+     ConvertValue v (AttrSet t, AttrSet SourcePos))
 
 -- | Evaluate an nix expression, with a given NThunkSet as environment
 evalExpr :: MonadNixEval e v t m => NExpr -> m v

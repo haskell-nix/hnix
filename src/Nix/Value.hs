@@ -109,8 +109,11 @@ builtin3 :: Monad m
 builtin3 name f =
     builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
 
-posFromSourcePos :: forall m v t. (MonadThunk v t m, Convertible v t)
-                 => SourcePos -> v
+posFromSourcePos
+    :: forall m v t.
+        (MonadThunk v t m, ConvertValue v Int, ConvertValue v Text,
+         ConvertValue v (AttrSet t))
+    => SourcePos -> v
 posFromSourcePos (SourcePos f l c) =
     ofVal $ M.fromList
         [ ("file" :: Text, value @_ @_ @m $ ofVal (pack f))
