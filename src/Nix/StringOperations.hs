@@ -4,7 +4,7 @@
 -- | Functions for manipulating nix strings.
 module Nix.StringOperations where
 
-import           Data.List (intercalate)
+import           Data.List (intercalate, dropWhileEnd, inits)
 import           Data.Monoid ((<>))
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -19,10 +19,16 @@ mergePlain (x:xs) = x : mergePlain xs
 
 -- | Remove 'Plain' values equal to 'mempty', as they don't have any
 -- informational content.
-removePlainEmpty :: (Eq v, Monoid v) => [Antiquoted v r] -> [Antiquoted v r]
+removePlainEmpty :: [Antiquoted Text r] -> [Antiquoted Text r]
 removePlainEmpty = filter f where
   f (Plain x) = x /= mempty
   f _ = True
+
+  -- trimEnd xs
+  --     | null xs = xs
+  --     | otherwise = case last xs of
+  --           Plain x -> init xs ++ [Plain (T.dropWhileEnd (== ' ') x)]
+  --           _ -> xs
 
 -- | Equivalent to case splitting on 'Antiquoted' strings.
 runAntiquoted :: (v -> a) -> (r -> a) -> Antiquoted v r -> a
@@ -47,7 +53,14 @@ unsplitLines = intercalate [Plain "\n"]
 stripIndent :: [Antiquoted Text r] -> NString r
 stripIndent [] = Indented []
 stripIndent xs =
-  Indented . removePlainEmpty . mergePlain . unsplitLines $ ls'
+  Indented . removePlainEmpty
+           . mergePlain
+           . map snd
+           . dropWhileEnd cleanup
+           . (\ys -> zip (map (\case [] -> Nothing
+                                     x -> Just (last x))
+                             (inits ys)) ys)
+           . unsplitLines $ ls'
   where
     ls = stripEmptyOpening $ splitLines xs
     ls' = map (dropSpaces minIndent) ls
@@ -70,6 +83,11 @@ stripIndent xs =
     dropSpaces 0 x = x
     dropSpaces n (Plain t : cs) = Plain (T.drop n t) : cs
     dropSpaces _ _ = error "stripIndent: impossible"
+
+    cleanup (Nothing, Plain y) = T.all (== ' ') y
+    cleanup (Just (Plain x), Plain y)
+        | "\n" `T.isSuffixOf` x = T.all (== ' ') y
+    cleanup _ = False
 
 escapeCodes :: [(Char, Char)]
 escapeCodes =
