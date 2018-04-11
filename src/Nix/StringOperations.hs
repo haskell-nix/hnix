@@ -12,8 +12,10 @@ import           Data.Tuple (swap)
 import           Nix.Expr
 
 -- | Merge adjacent 'Plain' values with 'mappend'.
-mergePlain :: Monoid v => [Antiquoted v r] -> [Antiquoted v r]
+mergePlain :: [Antiquoted Text r] -> [Antiquoted Text r]
 mergePlain [] = []
+mergePlain (Plain a: EscapedNewline : Plain b: xs) =
+    mergePlain (Plain (a <> "\n" <> b) : xs)
 mergePlain (Plain a: Plain b: xs) = mergePlain (Plain (a <> b) : xs)
 mergePlain (x:xs) = x : mergePlain xs
 
@@ -31,9 +33,10 @@ removePlainEmpty = filter f where
   --           _ -> xs
 
 -- | Equivalent to case splitting on 'Antiquoted' strings.
-runAntiquoted :: (v -> a) -> (r -> a) -> Antiquoted v r -> a
-runAntiquoted f _ (Plain v) = f v
-runAntiquoted _ f (Antiquoted r) = f r
+runAntiquoted :: v -> (v -> a) -> (r -> a) -> Antiquoted v r -> a
+runAntiquoted _ f _ (Plain v) = f v
+runAntiquoted nl f _ EscapedNewline = f nl
+runAntiquoted _ _ f (Antiquoted r) = f r
 
 -- | Split a stream representing a string with antiquotes on line breaks.
 splitLines :: [Antiquoted Text r] -> [[Antiquoted Text r]]
@@ -42,6 +45,7 @@ splitLines = uncurry (flip (:)) . go where
     (l : ls) = T.split (=='\n') t
     f prefix (finished, current) = ((Plain prefix : current) : finished, [])
   go (Antiquoted a : xs) = (Antiquoted a :) <$> go xs
+  go (EscapedNewline : xs) = (EscapedNewline :) <$> go xs
   go [] = ([],[])
 
 -- | Join a stream of strings containing antiquotes again. This is the inverse
@@ -77,6 +81,7 @@ stripIndent xs =
     stripEmptyOpening ts = ts
 
     countSpaces (Antiquoted _:_) = 0
+    countSpaces (EscapedNewline:_) = 0
     countSpaces (Plain t : _) = T.length . T.takeWhile (== ' ') $ t
     countSpaces [] = 0
 

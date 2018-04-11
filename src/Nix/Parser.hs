@@ -214,9 +214,14 @@ nixString = lexeme (doubleQuoted <|> indented <?> "string")
             <?> "indented string"
 
     indentedQ = void (try (string "''") <?> "\"''\"")
-    indentedEscape = fmap Plain
-              $  try (indentedQ *> char '\\') *> fmap singleton escapeCode
-             <|> try (indentedQ *> ("''" <$ char '\'' <|> "$"  <$ char '$'))
+    indentedEscape = try $ do
+        indentedQ
+        (Plain <$> ("''" <$ char '\'' <|> "$"  <$ char '$')) <|> do
+            _ <- char '\\'
+            c <- escapeCode
+            pure $ if c == '\n'
+                   then EscapedNewline
+                   else Plain $ singleton c
 
     stringChar end escStart esc = esc
         <|> Antiquoted <$> (antiStart *> nixToplevelForm <* char '}')

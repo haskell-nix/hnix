@@ -136,7 +136,7 @@ instance IsString (Params r) where
 
 -- | 'Antiquoted' represents an expression that is either
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
-data Antiquoted (v :: *) (r :: *) = Plain v | Antiquoted r
+data Antiquoted (v :: *) (r :: *) = Plain v | EscapedNewline | Antiquoted r
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
             Foldable, Traversable, Show, NFData, NFData1)
 
@@ -189,6 +189,7 @@ instance Generic1 NKeyName where
 instance NFData1 NKeyName where
     liftRnf _ (StaticKey !_ !_) = ()
     liftRnf _ (DynamicKey (Plain !_)) = ()
+    liftRnf _ (DynamicKey EscapedNewline) = ()
     liftRnf k (DynamicKey (Antiquoted r)) = k r
 
 -- | Most key names are just static text, so this instance is convenient.
@@ -222,6 +223,7 @@ instance Foldable NKeyName where
 instance Traversable NKeyName where
   traverse f = \case
     DynamicKey (Plain str)    -> DynamicKey . Plain <$> traverse f str
+    DynamicKey EscapedNewline -> pure $ DynamicKey EscapedNewline
     DynamicKey (Antiquoted e) -> DynamicKey . Antiquoted <$> f e
     StaticKey key pos -> pure (StaticKey key pos)
 

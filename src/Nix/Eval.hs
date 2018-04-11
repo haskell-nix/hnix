@@ -329,7 +329,7 @@ evalKeyNameDynamicNullable :: forall v m. MonadEval v m
                            -> m (Maybe Text, Maybe SourcePos)
 evalKeyNameDynamicNullable = \case
     StaticKey k p -> pure (Just k, p)
-    DynamicKey k -> runAntiquoted (embedMText <=< assembleString) id k
+    DynamicKey k -> runAntiquoted "\n" (embedMText <=< assembleString) id k
         >>= \v -> case wantVal v of
             Just (s :: MText m) ->
                 (\x -> (Just x, Nothing)) <$> unwrapMText @v s
@@ -340,7 +340,7 @@ assembleString = \case
     Indented     parts -> fromParts parts
     DoubleQuoted parts -> fromParts parts
   where
-    go = runAntiquoted (wrapMText @v @m) $ \x -> do
+    go = runAntiquoted "\n" (wrapMText @v @m) $ \x -> do
         x' <- x
         projectMText @v @m x' >>= \case
             Just (Just txt) -> return txt

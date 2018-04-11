@@ -76,6 +76,7 @@ wrapParens op sub
 prettyString :: NString NixDoc -> Doc
 prettyString (DoubleQuoted parts) = dquotes . hcat . map prettyPart $ parts
   where prettyPart (Plain t)      = text . concatMap escape . unpack $ t
+        prettyPart EscapedNewline = text "\n"
         prettyPart (Antiquoted r) = text "$" <> braces (withoutParens r)
         escape '"' = "\\\""
         escape x = maybe [x] (('\\':) . (:[])) $ toEscapeCode x
@@ -88,6 +89,7 @@ prettyString (Indented parts)
     f xs = xs
   prettyLine = hcat . map prettyPart
   prettyPart (Plain t) = text . unpack . replace "${" "''${" . replace "''" "'''" $ t
+  prettyPart EscapedNewline = text "\n"
   prettyPart (Antiquoted r) = text "$" <> braces (withoutParens r)
 
 prettyParams :: Params NixDoc -> Doc
@@ -120,7 +122,8 @@ prettyKeyName (StaticKey "" _) = dquotes $ text ""
 prettyKeyName (StaticKey key _)
   | HashSet.member key reservedNames = dquotes $ text $ unpack key
 prettyKeyName (StaticKey key _) = text . unpack $ key
-prettyKeyName (DynamicKey key) = runAntiquoted prettyString withoutParens key
+prettyKeyName (DynamicKey key) =
+    runAntiquoted (DoubleQuoted [Plain "\n"]) prettyString withoutParens key
 
 prettySelector :: NAttrPath NixDoc -> Doc
 prettySelector = hcat . punctuate dot . map prettyKeyName
