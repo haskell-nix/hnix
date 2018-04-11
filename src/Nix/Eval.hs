@@ -108,7 +108,7 @@ eval (NSelect aset attr alt) = do
         Right v -> pure v
         Left (s, ks) -> fromMaybe err alt
           where
-            err = evalError @v $ "could not look up attribute "
+            err = evalError @v $ "Could not look up attribute "
                 ++ intercalate "." (map Text.unpack ks)
                 ++ " in " ++ show @v s
 
