@@ -11,8 +11,8 @@ import Nix.Pretty
 
 case_indented_antiquotation :: Assertion
 case_indented_antiquotation = do
-    assertPretty (mkIndentedStr "echo $foo") "''echo $foo''"
-    assertPretty (mkIndentedStr "echo ${foo}") "''echo ''${foo}''"
+    assertPretty (mkIndentedStr 0 "echo $foo") "''echo $foo''"
+    assertPretty (mkIndentedStr 0 "echo ${foo}") "''echo ''${foo}''"
 
 case_string_antiquotation :: Assertion
 case_string_antiquotation = do

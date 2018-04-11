@@ -304,11 +304,11 @@ case_fun_app = do
 
 case_indented_string :: Assertion
 case_indented_string = do
-  assertParseText "''a''" $ mkIndentedStr "a"
-  assertParseText "''\n  foo\n  bar''" $ mkIndentedStr "foo\nbar"
-  assertParseText "''        ''" $ mkIndentedStr ""
-  assertParseText "'''''''" $ mkIndentedStr "''"
-  assertParseText "''   ${null}\n   a${null}''" $ Fix $ NStr $ Indented
+  assertParseText "''a''" $ mkIndentedStr 0 "a"
+  assertParseText "''\n  foo\n  bar''" $ mkIndentedStr 2 "foo\nbar"
+  assertParseText "''        ''" $ mkIndentedStr 0 ""
+  assertParseText "'''''''" $ mkIndentedStr 0 "''"
+  assertParseText "''   ${null}\n   a${null}''" $ Fix $ NStr $ Indented 3
     [ Antiquoted mkNull
     , Plain "\na"
     , Antiquoted mkNull
@@ -319,7 +319,7 @@ case_indented_string = do
 case_indented_string_escape :: Assertion
 case_indented_string_escape = assertParseText
   "'' ''\\n ''\\t ''\\\\ ''${ \\ \\n ' ''' ''" $
-  mkIndentedStr  "\n \t \\ ${ \\ \\n ' '' "
+  mkIndentedStr 1 "\n \t \\ ${ \\ \\n ' '' "
 
 case_operator_fun_app :: Assertion
 case_operator_fun_app = do

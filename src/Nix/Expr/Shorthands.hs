@@ -35,8 +35,8 @@ mkStr = Fix . NStr . DoubleQuoted . \case
   x -> [Plain x]
 
 -- | Make an indented string.
-mkIndentedStr :: Text -> NExpr
-mkIndentedStr = Fix . NStr . Indented . \case
+mkIndentedStr :: Int -> Text -> NExpr
+mkIndentedStr w = Fix . NStr . Indented w . \case
   "" -> []
   x -> [Plain x]
 

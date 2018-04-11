@@ -325,7 +325,7 @@ evalKeyNameDynamicNullable = \case
 
 assembleString :: forall v m. MonadEval v m => NString (m v) -> m (MText v)
 assembleString = \case
-    Indented     parts -> fromParts parts
+    Indented _   parts -> fromParts parts
     DoubleQuoted parts -> fromParts parts
   where
     go = runAntiquoted "\n" (wrapMText @v @m) $ \x -> do

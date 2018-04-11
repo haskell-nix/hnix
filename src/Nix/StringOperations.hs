@@ -34,9 +34,9 @@ removePlainEmpty = filter f where
 
 -- | Equivalent to case splitting on 'Antiquoted' strings.
 runAntiquoted :: v -> (v -> a) -> (r -> a) -> Antiquoted v r -> a
-runAntiquoted _ f _ (Plain v) = f v
+runAntiquoted _  f _ (Plain v)      = f v
 runAntiquoted nl f _ EscapedNewline = f nl
-runAntiquoted _ _ f (Antiquoted r) = f r
+runAntiquoted _  _ k (Antiquoted r) = k r
 
 -- | Split a stream representing a string with antiquotes on line breaks.
 splitLines :: [Antiquoted Text r] -> [[Antiquoted Text r]]
@@ -55,16 +55,17 @@ unsplitLines = intercalate [Plain "\n"]
 
 -- | Form an indented string by stripping spaces equal to the minimal indent.
 stripIndent :: [Antiquoted Text r] -> NString r
-stripIndent [] = Indented []
+stripIndent [] = Indented 0 []
 stripIndent xs =
-  Indented . removePlainEmpty
-           . mergePlain
-           . map snd
-           . dropWhileEnd cleanup
-           . (\ys -> zip (map (\case [] -> Nothing
-                                     x -> Just (last x))
-                             (inits ys)) ys)
-           . unsplitLines $ ls'
+  Indented minIndent
+      . removePlainEmpty
+      . mergePlain
+      . map snd
+      . dropWhileEnd cleanup
+      . (\ys -> zip (map (\case [] -> Nothing
+                                x -> Just (last x))
+                        (inits ys)) ys)
+      . unsplitLines $ ls'
   where
     ls = stripEmptyOpening $ splitLines xs
     ls' = map (dropSpaces minIndent) ls

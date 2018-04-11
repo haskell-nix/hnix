@@ -149,9 +149,10 @@ data NString r
   = DoubleQuoted ![Antiquoted Text r]
   -- ^ Strings wrapped with double-quotes (") can contain literal newline
   -- characters, but the newlines are preserved and no indentation is stripped.
-  | Indented ![Antiquoted Text r]
-  -- ^ Strings wrapped with two single quotes ('') can contain newlines,
-  -- and their indentation will be stripped.
+  | Indented !Int ![Antiquoted Text r]
+  -- ^ Strings wrapped with two single quotes ('') can contain newlines, and
+  --   their indentation will be stripped, but the amount stripped is
+  --   remembered.
   deriving (Eq, Ord, Generic, Generic1, Typeable, Data, Functor,
             Foldable, Traversable, Show, NFData, NFData1)
 

@@ -83,7 +83,7 @@ prettyString (DoubleQuoted parts) = dquotes . hcat . map prettyPart $ parts
         prettyPart (Antiquoted r) = text "$" <> braces (withoutParens r)
         escape '"' = "\\\""
         escape x = maybe [x] (('\\':) . (:[])) $ toEscapeCode x
-prettyString (Indented parts)
+prettyString (Indented _ parts)
   = group $ nest 2 (squote <> squote <$$> content) <$$> squote <> squote
  where
   content = vsep . map prettyLine . stripLastIfEmpty . splitLines $ parts
