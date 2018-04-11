@@ -62,8 +62,10 @@ renderFrame (Right (Compose (Ann ann expr))) =
 throwError :: (Framed e m, MonadFile m, MonadThrow m) => String -> m a
 throwError str = do
     context <- asks (reverse . view hasLens)
-    infos   <- mapM renderFrame $
-        filter noAsserts (init context) ++ [last context]
+    infos   <- case context of
+        [] -> return []
+        _ -> mapM renderFrame $
+                filter noAsserts (init context) ++ [last context]
     throwM $ NixEvalException $ unlines $ infos ++ [str]
   where
     noAsserts (Right (Compose (Ann _ (NAssert _ _)))) = False
