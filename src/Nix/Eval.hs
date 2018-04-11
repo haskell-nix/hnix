@@ -41,10 +41,7 @@ import           Nix.StringOperations (runAntiquoted)
 import           Nix.Thunk
 import           Nix.Utils
 
-class (Show v, Monoid (MText v),
-       ConvertValue v (MText v),
-       ConvertValue v (Maybe (MText v)), Monad m)
-      => MonadEval v m | v -> m where
+class (Show v, Monoid (MText v), Monad m) => MonadEval v m | v -> m where
     freeVariable :: Text -> m v
 
     evalCurPos      :: m v
@@ -321,8 +318,8 @@ evalKeyNameDynamicNullable :: forall v m. MonadEval v m
 evalKeyNameDynamicNullable = \case
     StaticKey k p -> pure (Just k, p)
     DynamicKey k -> runAntiquoted "\n" (embedMText <=< assembleString) id k
-        >>= \v -> case wantVal v of
-            Just (s :: MText v) ->
+        >>= projectMText >>= \case
+            Just (Just (s :: MText v)) ->
                 (\x -> (Just x, Nothing)) <$> unwrapMText @v s
             _ -> return (Nothing, Nothing)
 
