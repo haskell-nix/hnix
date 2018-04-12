@@ -13,13 +13,11 @@ for interacting with store paths, until `hnix-store` is ready.
 $ git clone https://github.com/jwiegley/hnix.git
 ...
 $ cd hnix
-$ cabal2nix --shell . > default.nix
 $ nix-shell
-...
+$ cabal configure --enable-tests
+$ cabal build
 $ cabal test
-...
 $ cabal bench
-...
 $ ./dist/build/hnix/hnix --help
 ```
 
@@ -30,6 +28,7 @@ To build `hnix` with profiling enabled:
 ```
 $ nix-shell --arg doProfiling true
 $ cabal configure --enable-tests --enable-profiling
+$ cabal build
 $ ./dist/build/hnix/hnix <args> +RTS -p
 ```
 
