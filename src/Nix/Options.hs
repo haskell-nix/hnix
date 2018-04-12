@@ -9,12 +9,18 @@ import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 data Options = Options
     { verbose      :: Bool
     , debug        :: Bool
+    , parse        :: Bool
+    , parseOnly    :: Bool
+    , findFile     :: Maybe FilePath
+    , strict       :: Bool
     , evaluate     :: Bool
+    -- , json         :: Bool
+    -- , xml          :: Bool
+    , attr         :: Maybe Text
+    , include      :: Maybe FilePath
     , check        :: Bool
     , readFrom     :: Maybe FilePath
     , cache        :: Bool
-    , parse        :: Bool
-    , parseOnly    :: Bool
     , ignoreErrors :: Bool
     , expression   :: Maybe Text
     , arg          :: [(Text, Text)]
@@ -41,8 +47,34 @@ nixOptions = Options
          <> long "debug"
          <> help "Debug output")
     <*> switch
+        (   long "parse"
+         <> help "Whether to parse the file (also the default right now)")
+    <*> switch
+        (   long "parse-only"
+         <> help "Whether to parse only, no pretty printing or checking")
+    <*> optional (strOption
+        (   long "find-file"
+         <> help "Look up the given files in Nix's search path"))
+    <*> switch
+        (   long "strict"
+         <> help "When used with --eval, recursively evaluate list elements and attributes")
+    <*> switch
         (   long "eval"
          <> help "Whether to evaluate, or just pretty-print")
+    -- <*> switch
+    --     (   long "json"
+    --      <> help "Print the resulting value as an JSON representation of the abstract syntax tree")
+    -- <*> switch
+    --     (   long "xml"
+    --      <> help "Print the resulting value as an XML representation of the abstract syntax tree")
+    <*> optional (strOption
+        (   short 'A'
+         <> long "attr"
+         <> help "Select an attribute from the top-level Nix expression being evaluated"))
+    <*> optional (strOption
+        (   short 'I'
+         <> long "include"
+         <> help "Add a path to the Nix expression search path"))
     <*> switch
         (   long "check"
          <> help "Whether to check for syntax errors after parsing")
@@ -52,12 +84,6 @@ nixOptions = Options
     <*> switch
         (   long "cache"
          <> help "Write out the parsed expression tree to a binary cache")
-    <*> switch
-        (   long "parse"
-         <> help "Whether to parse the file (also the default right now)")
-    <*> switch
-        (   long "parse-only"
-         <> help "Whether to parse only, no pretty printing or checking")
     <*> switch
         (   long "ignore-errors"
          <> help "Continue parsing files, even if there are errors")

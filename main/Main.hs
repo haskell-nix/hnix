@@ -1,6 +1,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 -- {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Main where
 
@@ -11,7 +13,9 @@ import           Control.Monad
 import           Control.Monad.ST
 import           Data.Fix
 import qualified Data.HashMap.Lazy as M
+import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
+import qualified Data.Text.Read as Text
 import qualified Nix
 import           Nix.Cache
 import           Nix.Exec (Lazy, runLazyM)
@@ -91,19 +95,49 @@ main = do
                          runLazyM $ normalForm =<< g argmap
                      _ -> pure f
 
+            result h = case attr opts of
+                Nothing -> h
+                Just (Text.splitOn "." -> keys) -> go keys
+              where
+                go [] v = h v
+                go ((Text.decimal -> Right (n,_)):ks) v = case v of
+                    Fix (V.NVList xs) -> case ks of
+                        [] -> h (xs !! n)
+                        _  -> go ks (xs !! n)
+                    _ -> errorWithoutStackTrace $
+                            "Expected a list for selector '" ++ show n
+                                ++ "', but got: " ++ show v
+                go (k:ks) v = case v of
+                    Fix (V.NVSet xs _) ->
+                        case M.lookup k xs of
+                            Nothing ->
+                                errorWithoutStackTrace $
+                                    "Set does not contain key '"
+                                        ++ Text.unpack k ++ "'"
+                            Just v' -> case ks of
+                                [] -> h v'
+                                _  -> go ks v'
+                    _ -> errorWithoutStackTrace $
+                        "Expected a set for selector '" ++ Text.unpack k
+                            ++ "', but got: " ++ show v
+
         if | evaluate opts, debug opts ->
-                 compute Nix.tracingEvalLoc expr print
+                 compute Nix.tracingEvalLoc expr (result print)
+
            | evaluate opts, not (null args) ->
-                 compute Nix.evalLoc expr (putStrLn . printNix)
+                 compute Nix.evalLoc expr (result (putStrLn . printNix))
+
            | evaluate opts ->
-                 putStrLn . printNix =<< Nix.evalLoc mpath expr
-           | debug opts ->
-                 print $ stripAnnotation expr
+                 result (putStrLn . printNix) =<< Nix.evalLoc mpath expr
+
+           | debug opts -> print $ stripAnnotation expr
+
            | cache opts, Just path <- mpath -> do
                 let file = addExtension (dropExtension path) "nixc"
                 writeCache file expr
-           | parseOnly opts ->
-                 void $ Exc.evaluate $ force expr
+
+           | parseOnly opts -> void $ Exc.evaluate $ force expr
+
            | otherwise ->
                  displayIO stdout
                      . renderPretty 0.4 80
