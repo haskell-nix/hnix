@@ -1,11 +1,12 @@
-{ rev ? "ee28e35ba37ab285fc29e4a09f26235ffe4123e2"
-, sha256 ? "0a6xrqjj2ihkz1bizhy5r843n38xgimzw5s2mfc42kk2rgc95gw5"
-, nixpkgs ? import (builtins.fetchTarball {
+{ rev         ? "ee28e35ba37ab285fc29e4a09f26235ffe4123e2"
+, sha256      ? "0a6xrqjj2ihkz1bizhy5r843n38xgimzw5s2mfc42kk2rgc95gw5"
+, compiler    ? "ghc822"
+, doProfiling ? false
+, doBenchmark ? false
+, nixpkgs     ? import (builtins.fetchTarball {
     url    = "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz";
     sha256 = sha256; }) { config.allowBroken = false; }
-, compiler ? "ghc822"
-, doProfiling ? false
-, doBenchmark ? false }:
+}:
 
 let
 
