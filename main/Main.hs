@@ -1,21 +1,31 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 -- {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Main where
 
+import           Control.Arrow (second)
 import           Control.DeepSeq
 import qualified Control.Exception as Exc
 import           Control.Monad
 import           Control.Monad.ST
-import           Data.Text (Text, pack)
+import           Data.Fix
+import qualified Data.HashMap.Lazy as M
+import           Data.Text (Text)
+import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import qualified Nix
+import           Nix.Cache
+import           Nix.Eval
+import           Nix.Exec (Lazy, runLazyM, callFunc)
 import           Nix.Expr
 import           Nix.Lint
+import           Nix.Normal
 import           Nix.Parser
 import           Nix.Pretty
 import           Nix.Stack (NixException(..))
+import qualified Nix.Value as V
 -- import           Nix.TH
 import           Options.Applicative hiding (ParserResult(..))
 import           System.IO
@@ -33,11 +43,18 @@ data Options = Options
     , parseOnly    :: Bool
     , ignoreErrors :: Bool
     , expression   :: Maybe Text
-    , arg          :: [NExpr]
-    , argstr       :: [Text]
+    , arg          :: [(Text, Text)]
+    , argstr       :: [(Text, Text)]
     , fromFile     :: Maybe FilePath
     , filePaths    :: [FilePath]
     }
+
+argPair :: Mod OptionFields (Text, Text) -> Parser (Text, Text)
+argPair = option $ str >>= \s ->
+    case Text.findIndex (== '=') s of
+        Nothing -> errorWithoutStackTrace
+            "Format of --arg/--argstr in hnix is: name=expr"
+        Just i -> return $ second Text.tail $ Text.splitAt i s
 
 mainOptions :: Parser Options
 mainOptions = Options
@@ -74,22 +91,17 @@ mainOptions = Options
         (   short 'E'
          <> long "expr"
          <> help "Expression to parse or evaluate"))
-    <*> multiString
-            (\s -> case parseNixText (pack s) of
-                      Success x -> pure x
-                      Failure err -> errorWithoutStackTrace (show err))
+    <*> many (argPair
         (   long "arg"
-         <> help "Argument to pass to an evaluated lambda")
-    <*> multiString (pure . pack)
+         <> help "Argument to pass to an evaluated lambda"))
+    <*> many (argPair
         (   long "argstr"
-         <> help "Argument string to pass to an evaluated lambda")
+         <> help "Argument string to pass to an evaluated lambda"))
     <*> optional (strOption
         (   short 'f'
          <> long "file"
          <> help "Parse all of the files given in FILE; - means stdin"))
     <*> many (strArgument (metavar "FILE" <> help "Path of file to parse"))
-  where
-    multiString f desc = many (option (str >>= f) desc)
 
 main :: IO ()
 main = do
@@ -143,10 +155,28 @@ main = do
             putStrLn $ runST $ Nix.runLintM . renderSymbolic
                 =<< Nix.lint expr
 
-        let _args = arg opts ++ map mkStr (argstr opts)
+        let parseArg s = case parseNixText s of
+                Success x -> x
+                Failure err -> errorWithoutStackTrace (show err)
+
+        args <- traverse (traverse (Nix.eval Nothing)) $
+            map (second parseArg) (arg opts) ++
+            map (second mkStr) (argstr opts)
+
+        let argmap :: Lazy IO (V.NValue (Lazy IO))
+            argmap = embed $ Fix $ V.NVSet (M.fromList args) mempty
+
+            compute ev x p = do
+                 f <- ev mpath x
+                 p =<< case f of
+                     Fix (V.NVClosure _ g) ->
+                         runLazyM $ normalForm =<< g argmap
+                     _ -> pure f
 
         if | evaluate opts, debug opts ->
-                 print =<< Nix.tracingEvalLoc mpath expr
+                 compute Nix.tracingEvalLoc expr print
+           | evaluate opts, not (null args) ->
+                 compute Nix.evalLoc expr (putStrLn . printNix)
            | evaluate opts ->
                  putStrLn . printNix =<< Nix.evalLoc mpath expr
            | debug opts ->
