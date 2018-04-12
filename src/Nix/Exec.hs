@@ -435,8 +435,8 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadEffects (Lazy m) where
         --     takes precedence over NIX_PATH.
         go p@(Just _) _ = pure p
         go Nothing x = case Text.splitOn "=" x of
-            [p] -> return Nothing
-            [_n, p] -> return Nothing
+            [_p] -> return Nothing
+            [_n, _p] -> return Nothing
                 -- Just <$> makeAbsolutePath (Text.unpack p)
             _ -> throwError $ "Unexpected entry in NIX_PATH/-I: "
                     ++ Text.unpack x
