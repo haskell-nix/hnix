@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2c49222c1eda4bbca80475f682dd4cfaccf99ed3d4143ee2ad25f91171f21898
+-- hash: d8e569439f4d52d30cbcfda7126f2175566ff4b9550032b2b7f91eabacf8c04a
 
 name:           hnix
 version:        0.5.0
@@ -51,6 +51,10 @@ library
       Nix.StringOperations
       Nix.TH
       Nix.Thunk
+      Nix.Type.Assumption
+      Nix.Type.Env
+      Nix.Type.Infer
+      Nix.Type.Type
       Nix.Utils
       Nix.Value
       Nix.XML
@@ -101,6 +105,7 @@ library
 executable hnix
   main-is: Main.hs
   other-modules:
+      Repl
       Paths_hnix
   hs-source-dirs:
       main
@@ -118,6 +123,7 @@ executable hnix
     , hnix
     , mtl
     , optparse-applicative
+    , repline
     , serialise
     , template-haskell
     , text

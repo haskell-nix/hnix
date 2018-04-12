@@ -67,6 +67,7 @@ executables:
     main: Main.hs
     dependencies:
       - hnix
+      - repline
 
 tests:
   hnix-tests:

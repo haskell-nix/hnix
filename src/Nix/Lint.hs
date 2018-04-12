@@ -44,6 +44,7 @@ import           Nix.Expr
 import           Nix.Scope
 import           Nix.Stack
 import           Nix.Thunk
+-- import           Nix.Type.Infer
 import           Nix.Utils
 
 data TAtom
