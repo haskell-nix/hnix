@@ -16,11 +16,13 @@ import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           GHC.Exts
 import           Nix
+import           Nix.Options
 import           Nix.Parser
 import           Nix.Pretty
-import           Nix.Utils
 import           Nix.Stack
+import           Nix.Utils
 import           Nix.XML
+import qualified Options.Applicative as Opts
 import           System.FilePath
 import           System.FilePath.Glob (compile, globDir1)
 import           Test.Tasty
@@ -111,9 +113,20 @@ assertEval files = catch go $ \case
         [".exp"] -> assertLangOk name
         [".exp.disabled"] -> return ()
         [".exp-disabled"] -> return ()
-        [".exp", ".flags"] ->
-            assertFailure $ "Support for flags not implemented (needed by "
-                ++ name ++ ".nix)."
+        [".exp", ".flags"] -> do
+            flags <- Text.readFile (name ++ ".flags")
+            case Opts.execParserPure Opts.defaultPrefs nixOptionsInfo
+                     (map Text.unpack (Text.splitOn " " flags)) of
+                Opts.Failure err -> errorWithoutStackTrace $
+                    "Error parsing flags from " ++ name ++ ".flags: "
+                        ++ show err
+                Opts.Success _opts ->
+                    -- jww (2018-04-11): If --arg or --argstr was used, then
+                    -- apply those arguments after evaluation (see Main.hs).
+                    -- If -A or -I is used, add processing for those by adding
+                    -- information to the Context.
+                    assertLangOk name
+                Opts.CompletionInvoked _ -> error "unused"
         _ -> assertFailure $ "Unknown test type " ++ show files
       where
         name = "data/nix/tests/lang/"
