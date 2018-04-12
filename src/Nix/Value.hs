@@ -120,14 +120,14 @@ posFromSourcePos (SourcePos f l c) =
         , ("column",      value @_ @_ @m $ ofVal (unPos c))
         ]
 
-valueRefBool :: Monad m => Bool -> m (NValue m)
-valueRefBool = return . NVConstant . NBool
+mkBoolV :: Monad m => Bool -> m (NValue m)
+mkBoolV = return . NVConstant . NBool
 
-valueRefInt :: Monad m => Integer -> m (NValue m)
-valueRefInt = return . NVConstant . NInt
+mkIntV :: Monad m => Integer -> m (NValue m)
+mkIntV = return . NVConstant . NInt
 
-valueRefFloat :: Monad m => Float -> m (NValue m)
-valueRefFloat = return . NVConstant . NFloat
+mkFloatV :: Monad m => Float -> m (NValue m)
+mkFloatV = return . NVConstant . NFloat
 
 thunkEq :: MonadThunk (NValue m) (NThunk m) m
         => NThunk m -> NThunk m -> m Bool

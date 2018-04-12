@@ -217,18 +217,18 @@ execBinaryOp
 
 execBinaryOp NOr larg rarg = case larg of
     NVConstant (NBool l) -> if l
-        then valueRefBool True
+        then mkBoolV True
         else rarg >>= \case
-            NVConstant (NBool r) -> valueRefBool r
+            NVConstant (NBool r) -> mkBoolV r
             v -> throwError $ "operator `||`: left argument: boolean expected, got " ++ show v
     v -> throwError $ "operator `||`: right argument: boolean expected, got " ++ show v
 
 execBinaryOp NAnd larg rarg = case larg of
     NVConstant (NBool l) -> if l
         then rarg >>= \case
-            NVConstant (NBool r) -> valueRefBool r
+            NVConstant (NBool r) -> mkBoolV r
             v -> throwError $ "operator `&&`: left argument: boolean expected, got " ++ show v
-        else valueRefBool False
+        else mkBoolV False
     v -> throwError $ "operator `&&`: right argument: boolean expected, got " ++ show v
 
 -- jww (2018-04-08): Refactor so that eval (NBinary ..) *always* dispatches
