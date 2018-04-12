@@ -194,7 +194,7 @@ callFunc fun arg = case fun of
     s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
         traceM "callFunc:__functor"
         force f $ \f' -> f' `callFunc` pure s >>= \g' -> g' `callFunc` arg
-    x -> throwError $ "Attempt to call non-function: " ++ showValue x
+    x -> throwError $ "Attempt to call non-function: " ++ show x
 
 execUnaryOp
     :: (Framed e m, MonadVar m, MonadFile m)
@@ -209,7 +209,7 @@ execUnaryOp op arg = do
             _ -> throwError $ "unsupported argument type for unary operator "
                      ++ show op
         x -> throwError $ "argument to unary operator"
-                ++ " must evaluate to an atomic type: " ++ showValue x
+                ++ " must evaluate to an atomic type: " ++ show x
 
 execBinaryOp
     :: forall e m. (MonadExec e m, MonadEval (NValue m) m)
@@ -238,8 +238,8 @@ execBinaryOp op larg rarg = do
     rval <- traceM "NBinary:right" >> rarg
 
     let unsupportedTypes =
-            "unsupported argument types for binary operator "
-                ++ showValue lval ++ " " ++ show op ++ " " ++ showValue rval
+            "Unsupported argument types for binary operator "
+                ++ show op ++ ": " ++ show lval ++ ", " ++ show rval
         numBinOp :: (forall a. Num a => a -> a -> a) -> NAtom -> NAtom
                  -> m (NValue m)
         numBinOp f = numBinOp' f f
