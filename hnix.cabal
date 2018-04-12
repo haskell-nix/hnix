@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 00ae617f664cd9dc67f4a6551a0e3c0eee19899f21b44c6dda24e17618a8fb5d
+-- hash: 2c49222c1eda4bbca80475f682dd4cfaccf99ed3d4143ee2ad25f91171f21898
 
 name:           hnix
 version:        0.5.0
@@ -41,6 +41,7 @@ library
       Nix.Expr.Types.Annotated
       Nix.Lint
       Nix.Normal
+      Nix.Options
       Nix.Parser
       Nix.Parser.Library
       Nix.Parser.Operators
@@ -78,6 +79,7 @@ library
     , megaparsec
     , monadlist
     , mtl
+    , optparse-applicative
     , process
     , regex-tdfa
     , regex-tdfa-text
@@ -140,6 +142,7 @@ test-suite hnix-tests
       Glob
     , ansi-wl-pprint
     , base >=4.9 && <5
+    , bytestring
     , compact
     , containers
     , data-fix
@@ -150,6 +153,7 @@ test-suite hnix-tests
     , hnix
     , interpolate
     , mtl
+    , optparse-applicative
     , process
     , serialise
     , split
@@ -175,6 +179,7 @@ benchmark hnix-benchmarks
   build-depends:
       ansi-wl-pprint
     , base >=4.9 && <5
+    , bytestring
     , compact
     , containers
     , criterion
@@ -184,6 +189,7 @@ benchmark hnix-benchmarks
     , filepath
     , hnix
     , mtl
+    , optparse-applicative
     , serialise
     , template-haskell
     , text

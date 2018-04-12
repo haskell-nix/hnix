@@ -1,7 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 -- {-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Main where
 
@@ -12,16 +11,14 @@ import           Control.Monad
 import           Control.Monad.ST
 import           Data.Fix
 import qualified Data.HashMap.Lazy as M
-import           Data.Text (Text)
-import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import qualified Nix
 import           Nix.Cache
-import           Nix.Eval
-import           Nix.Exec (Lazy, runLazyM, callFunc)
+import           Nix.Exec (Lazy, runLazyM)
 import           Nix.Expr
 import           Nix.Lint
 import           Nix.Normal
+import           Nix.Options
 import           Nix.Parser
 import           Nix.Pretty
 import           Nix.Stack (NixException(..))
@@ -32,80 +29,9 @@ import           System.IO
 import           System.FilePath
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
-data Options = Options
-    { verbose      :: Bool
-    , debug        :: Bool
-    , evaluate     :: Bool
-    , check        :: Bool
-    , readFrom     :: Maybe FilePath
-    , cache        :: Bool
-    , parse        :: Bool
-    , parseOnly    :: Bool
-    , ignoreErrors :: Bool
-    , expression   :: Maybe Text
-    , arg          :: [(Text, Text)]
-    , argstr       :: [(Text, Text)]
-    , fromFile     :: Maybe FilePath
-    , filePaths    :: [FilePath]
-    }
-
-argPair :: Mod OptionFields (Text, Text) -> Parser (Text, Text)
-argPair = option $ str >>= \s ->
-    case Text.findIndex (== '=') s of
-        Nothing -> errorWithoutStackTrace
-            "Format of --arg/--argstr in hnix is: name=expr"
-        Just i -> return $ second Text.tail $ Text.splitAt i s
-
-mainOptions :: Parser Options
-mainOptions = Options
-    <$> switch
-        (   short 'v'
-         <> long "verbose"
-         <> help "Verbose output")
-    <*> switch
-        (   short 'd'
-         <> long "debug"
-         <> help "Debug output")
-    <*> switch
-        (   long "eval"
-         <> help "Whether to evaluate, or just pretty-print")
-    <*> switch
-        (   long "check"
-         <> help "Whether to check for syntax errors after parsing")
-    <*> optional (strOption
-        (   long "read"
-         <> help "Read in an expression tree from a binary cache"))
-    <*> switch
-        (   long "cache"
-         <> help "Write out the parsed expression tree to a binary cache")
-    <*> switch
-        (   long "parse"
-         <> help "Whether to parse the file (also the default right now)")
-    <*> switch
-        (   long "parse-only"
-         <> help "Whether to parse only, no pretty printing or checking")
-    <*> switch
-        (   long "ignore-errors"
-         <> help "Continue parsing files, even if there are errors")
-    <*> optional (strOption
-        (   short 'E'
-         <> long "expr"
-         <> help "Expression to parse or evaluate"))
-    <*> many (argPair
-        (   long "arg"
-         <> help "Argument to pass to an evaluated lambda"))
-    <*> many (argPair
-        (   long "argstr"
-         <> help "Argument string to pass to an evaluated lambda"))
-    <*> optional (strOption
-        (   short 'f'
-         <> long "file"
-         <> help "Parse all of the files given in FILE; - means stdin"))
-    <*> many (strArgument (metavar "FILE" <> help "Path of file to parse"))
-
 main :: IO ()
 main = do
-    opts <- execParser optsDef
+    opts <- execParser nixOptionsInfo
     case readFrom opts of
         Just path -> do
             let file = addExtension (dropExtension path) "nix"
@@ -127,12 +53,7 @@ main = do
                     paths ->
                         mapM_ (processFile opts) paths
   where
-    optsDef :: ParserInfo Options
-    optsDef = info (helper <*> mainOptions)
-                   (fullDesc <> progDesc "" <> header "hnix")
-
     processFile opts path = do
-        -- putStrLn "Parsing file..."
         eres <- parseNixFileLoc path
         handleResult opts (Just path) eres
 
@@ -148,9 +69,6 @@ main = do
             NixEvalException msg -> errorWithoutStackTrace msg
 
     process opts mpath expr = do
-        -- expr <- Exc.evaluate $ force expr
-        -- putStrLn "Parsing file...done"
-
         when (check opts) $
             putStrLn $ runST $ Nix.runLintM . renderSymbolic
                 =<< Nix.lint expr

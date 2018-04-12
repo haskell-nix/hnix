@@ -16,6 +16,7 @@ extra-source-files:
 dependencies:
   - base                        >= 4.9 && < 5
   - ansi-wl-pprint
+  - bytestring
   - compact
   - containers
   - data-fix
@@ -23,6 +24,7 @@ dependencies:
   - exceptions
   - filepath
   - mtl
+  - optparse-applicative
   - serialise
   - template-haskell
   - text
@@ -42,7 +44,6 @@ library:
     - array                     >= 0.4 && < 0.6
     - base16-bytestring
     - binary
-    - bytestring
     - cryptohash
     - deriving-compat           >= 0.3 && < 0.5
     - directory
@@ -66,8 +67,6 @@ executables:
     main: Main.hs
     dependencies:
       - hnix
-      - bytestring
-      - optparse-applicative
 
 tests:
   hnix-tests:
