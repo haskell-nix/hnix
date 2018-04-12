@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LambdaCase #-}
@@ -5,6 +6,7 @@
 
 module Nix.Atoms where
 
+import Codec.Serialise
 import Control.DeepSeq
 import Data.Data
 import Data.HashMap.Strict (HashMap)
@@ -26,9 +28,7 @@ data NAtom
   | NNull
   -- | URIs, which are just string literals, but do not need quotes.
   | NUri Text
-  deriving (Eq, Ord, Generic, Typeable, Data, Show)
-
-instance NFData NAtom
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise)
 
 class ToAtom t where
   toAtom :: t -> NAtom

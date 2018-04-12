@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e96c99f7855d271377ef923e541a2cbb9968e1e1a6349e317c85985118ba94ad
+-- hash: 13b58b4fb9f715dd28ba6e47cb5feeb0da553ac1b16b356677c580f8b71f70e6
 
 name:           hnix
 version:        0.5.0
@@ -82,6 +82,7 @@ library
     , regex-tdfa-text
     , scientific
     , semigroups >=0.18 && <0.19
+    , serialise
     , split
     , syb
     , template-haskell
@@ -104,6 +105,7 @@ executable hnix
   build-depends:
       ansi-wl-pprint
     , base >=4.9 && <5
+    , bytestring
     , compact
     , containers
     , data-fix
@@ -113,6 +115,7 @@ executable hnix
     , hnix
     , mtl
     , optparse-applicative
+    , serialise
     , template-haskell
     , text
     , transformers
@@ -147,6 +150,7 @@ test-suite hnix-tests
     , interpolate
     , mtl
     , process
+    , serialise
     , split
     , tasty
     , tasty-hunit
@@ -179,6 +183,7 @@ benchmark hnix-benchmarks
     , filepath
     , hnix
     , mtl
+    , serialise
     , template-haskell
     , text
     , transformers

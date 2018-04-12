@@ -23,6 +23,7 @@ dependencies:
   - exceptions
   - filepath
   - mtl
+  - serialise
   - template-haskell
   - text
   - transformers
@@ -65,6 +66,7 @@ executables:
     main: Main.hs
     dependencies:
       - hnix
+      - bytestring
       - optparse-applicative
 
 tests:

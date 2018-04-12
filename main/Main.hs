@@ -1,6 +1,11 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 -- {-# LANGUAGE QuasiQuotes #-}
+
+#ifdef __linux__
+#define USE_COMPACT 1
+#endif
 
 module Main where
 
@@ -8,8 +13,7 @@ import           Control.DeepSeq
 import qualified Control.Exception as Exc
 import           Control.Monad
 import           Control.Monad.ST
-import qualified Data.Compact as C
-import qualified Data.Compact.Serialize as C
+import qualified Data.ByteString.Lazy as BS
 import           Data.Text (Text, pack)
 import qualified Data.Text.IO as Text
 import qualified Nix
@@ -24,13 +28,20 @@ import           System.IO
 import           System.FilePath
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
+#ifdef USE_COMPACT
+import qualified Data.Compact as C
+import qualified Data.Compact.Serialize as C
+#else
+import qualified Codec.Serialise as S
+#endif
+
 data Options = Options
     { verbose      :: Bool
     , debug        :: Bool
     , evaluate     :: Bool
     , check        :: Bool
     , readFrom     :: Maybe FilePath
-    , compact      :: Bool
+    , cache        :: Bool
     , parse        :: Bool
     , parseOnly    :: Bool
     , ignoreErrors :: Bool
@@ -59,10 +70,10 @@ mainOptions = Options
          <> help "Whether to check for syntax errors after parsing")
     <*> optional (strOption
         (   long "read"
-         <> help "Read in an expression tree from a compacted file"))
+         <> help "Read in an expression tree from a binary cache"))
     <*> switch
-        (   long "compact"
-         <> help "Write out the expression tree as a compact region")
+        (   long "cache"
+         <> help "Write out the parsed expression tree to a binary cache")
     <*> switch
         (   long "parse"
          <> help "Whether to parse the file (also the default right now)")
@@ -98,12 +109,21 @@ main = do
     opts <- execParser optsDef
     case readFrom opts of
         Just path -> do
+#ifdef USE_COMPACT
             eres <- C.unsafeReadCompact path
             case eres of
-                Left err -> error $ "Error reading compact file: " ++ err
+                Left err -> error $ "Error reading cache file: " ++ err
                 Right expr -> do
                     let file = addExtension (dropExtension path) "nix"
                     process opts (Just file) (C.getCompact expr)
+#else
+            eres <- S.deserialiseOrFail <$> BS.readFile path
+            case eres of
+                Left err -> error $ "Error reading cache file: " ++ show err
+                Right expr -> do
+                    let file = addExtension (dropExtension path) "nix"
+                    process opts (Just file) expr
+#endif
         Nothing -> case expression opts of
             Just s -> handleResult opts Nothing (parseNixTextLoc s)
             Nothing  -> case fromFile opts of
@@ -157,13 +177,21 @@ main = do
                  putStrLn . printNix =<< Nix.evalLoc mpath expr
            | debug opts ->
                  print $ stripAnnotation expr
-           | compact opts -> do
-                 cx <- C.compact expr
+           | cache opts ->
+#ifdef USE_COMPACT
+                 do cx <- C.compact expr
+                    case mpath of
+                        Nothing -> return ()
+                        Just path -> do
+                            let file = addExtension (dropExtension path) "nixc"
+                            C.writeCompact file cx
+#else
                  case mpath of
                      Nothing -> return ()
                      Just path -> do
                          let file = addExtension (dropExtension path) "nixc"
-                         C.writeCompact file cx
+                         BS.writeFile file (S.serialise expr)
+#endif
            | parseOnly opts ->
                  void $ Exc.evaluate $ force expr
            | otherwise ->

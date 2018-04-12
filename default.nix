@@ -21,6 +21,9 @@ let
 
   pkg = haskellPackages.developPackage {
     root = ./.;
+    overrides = self: super: {
+      serialise = pkgs.haskell.lib.dontCheck super.serialise;
+    };
     source-overrides = {
       # Use a particular commit from github
       insert-ordered-containers = pkgs.fetchFromGitHub {

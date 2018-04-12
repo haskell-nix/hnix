@@ -19,6 +19,7 @@ module Nix.Expr.Types.Annotated
   , SourcePos(..), unPos
   )where
 
+import Codec.Serialise
 import Control.DeepSeq
 import Data.Data
 import Data.Fix
@@ -36,7 +37,7 @@ import Text.Megaparsec (unPos)
 data SrcSpan = SrcSpan{ spanBegin :: SourcePos
                       , spanEnd   :: SourcePos
                       }
-  deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData)
+  deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData, Serialise)
 
 -- | A type constructor applied to a type along with an annotation
 --
@@ -46,7 +47,7 @@ data Ann ann a = Ann{ annotation :: ann
                     , annotated  :: a
                     }
   deriving (Ord, Eq, Data, Generic, Generic1, Typeable, Functor,
-            Foldable, Traversable, Read, Show, NFData, NFData1)
+            Foldable, Traversable, Read, Show, NFData, NFData1, Serialise)
 
 $(deriveShow1 ''Ann)
 
@@ -65,6 +66,11 @@ type NExprLocF = AnnF SrcSpan NExprF
 type NExprLoc = Fix NExprLocF
 
 instance NFData NExprLoc
+instance Serialise NExprLoc
+
+instance Serialise r => Serialise (Compose (Ann SrcSpan) NExprF r) where
+    encode (Compose (Ann ann a)) = encode ann <> encode a
+    decode = (Compose .) . Ann <$> decode <*> decode
 
 pattern AnnE :: forall ann (g :: * -> *). ann
              -> g (Fix (Compose (Ann ann) g)) -> Fix (Compose (Ann ann) g)
