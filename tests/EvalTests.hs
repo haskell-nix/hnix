@@ -100,9 +100,9 @@ instance (Show r, Show (NValueF m r), Eq r) => Eq (NValueF m r) where
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
 constantEqual a b = do
     -- putStrLn =<< lint (stripAnnotation a)
-    a' <- evalLoc Nothing a
+    a' <- evalLoc Nothing [] a
     -- putStrLn =<< lint (stripAnnotation b)
-    b' <- evalLoc Nothing b
+    b' <- evalLoc Nothing [] b
     assertEqual "" a' b'
 
 constantEqualText :: Text -> Text -> Assertion

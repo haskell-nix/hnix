@@ -54,7 +54,7 @@ ensureNixpkgsCanParse =
           url    = "https://github.com/NixOS/nixpkgs/archive/#{rev}.tar.gz";
           sha256 = "#{sha256}";
         }|]) $ \expr -> do
-        Fix (NVStr dir _) <- Nix.evalLoc Nothing expr
+        Fix (NVStr dir _) <- Nix.evalLoc Nothing [] expr
         files <- globDir1 (compile "**/*.nix") (unpack dir)
         forM_ files $ \file ->
           -- Parse and deepseq the resulting expression tree, to ensure the

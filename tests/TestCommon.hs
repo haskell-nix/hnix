@@ -21,14 +21,14 @@ hnixEvalFile file =  do
         error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
     Success expression -> do
         setEnv "TEST_VAR" "foo"
-        evalLoc (Just file) expression
+        evalLoc (Just file) [] expression
 
 hnixEvalText :: Text -> IO (NValueNF (Lazy IO))
 hnixEvalText expr = case parseNixText expr of
     Failure err        ->
         error $ "Parsing failed for expressien `"
             ++ unpack expr ++ "`.\n" ++ show err
-    Success expression -> eval Nothing expression
+    Success expression -> eval Nothing [] expression
 
 nixEvalString :: String -> IO String
 nixEvalString expr = do

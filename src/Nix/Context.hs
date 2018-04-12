@@ -9,8 +9,8 @@ import Nix.Stack
 import Nix.Utils
 
 data Context m v = Context
-    { scopes     :: Scopes m v
-    , frames     :: Frames
+    { scopes :: Scopes m v
+    , frames :: Frames
     }
 
 instance Has (Context m v) (Scopes m v) where

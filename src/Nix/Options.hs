@@ -17,7 +17,7 @@ data Options = Options
     -- , json         :: Bool
     -- , xml          :: Bool
     , attr         :: Maybe Text
-    , include      :: Maybe FilePath
+    , include      :: [FilePath]
     , check        :: Bool
     , readFrom     :: Maybe FilePath
     , cache        :: Bool
@@ -71,7 +71,7 @@ nixOptions = Options
         (   short 'A'
          <> long "attr"
          <> help "Select an attribute from the top-level Nix expression being evaluated"))
-    <*> optional (strOption
+    <*> many (strOption
         (   short 'I'
          <> long "include"
          <> help "Add a path to the Nix expression search path"))

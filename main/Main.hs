@@ -81,7 +81,7 @@ main = do
                 Success x -> x
                 Failure err -> errorWithoutStackTrace (show err)
 
-        args <- traverse (traverse (Nix.eval Nothing)) $
+        args <- traverse (traverse (Nix.eval Nothing (include opts))) $
             map (second parseArg) (arg opts) ++
             map (second mkStr) (argstr opts)
 
@@ -89,7 +89,7 @@ main = do
             argmap = embed $ Fix $ V.NVSet (M.fromList args) mempty
 
             compute ev x p = do
-                 f <- ev mpath x
+                 f <- ev mpath (include opts) x
                  p =<< case f of
                      Fix (V.NVClosure _ g) ->
                          runLazyM $ normalForm =<< g argmap
@@ -128,7 +128,8 @@ main = do
                  compute Nix.evalLoc expr (result (putStrLn . printNix))
 
            | evaluate opts ->
-                 result (putStrLn . printNix) =<< Nix.evalLoc mpath expr
+                 result (putStrLn . printNix)
+                     =<< Nix.evalLoc mpath (include opts) expr
 
            | debug opts -> print $ stripAnnotation expr
 
