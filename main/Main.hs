@@ -1,11 +1,6 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 -- {-# LANGUAGE QuasiQuotes #-}
-
-#ifdef __linux__
-#define USE_COMPACT 1
-#endif
 
 module Main where
 
@@ -13,7 +8,6 @@ import           Control.DeepSeq
 import qualified Control.Exception as Exc
 import           Control.Monad
 import           Control.Monad.ST
-import qualified Data.ByteString.Lazy as BS
 import           Data.Text (Text, pack)
 import qualified Data.Text.IO as Text
 import qualified Nix
@@ -27,13 +21,6 @@ import           Options.Applicative hiding (ParserResult(..))
 import           System.IO
 import           System.FilePath
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
-
-#ifdef USE_COMPACT
-import qualified Data.Compact as C
-import qualified Data.Compact.Serialize as C
-#else
-import qualified Codec.Serialise as S
-#endif
 
 data Options = Options
     { verbose      :: Bool
@@ -109,21 +96,8 @@ main = do
     opts <- execParser optsDef
     case readFrom opts of
         Just path -> do
-#ifdef USE_COMPACT
-            eres <- C.unsafeReadCompact path
-            case eres of
-                Left err -> error $ "Error reading cache file: " ++ err
-                Right expr -> do
-                    let file = addExtension (dropExtension path) "nix"
-                    process opts (Just file) (C.getCompact expr)
-#else
-            eres <- S.deserialiseOrFail <$> BS.readFile path
-            case eres of
-                Left err -> error $ "Error reading cache file: " ++ show err
-                Right expr -> do
-                    let file = addExtension (dropExtension path) "nix"
-                    process opts (Just file) expr
-#endif
+            let file = addExtension (dropExtension path) "nix"
+            process opts (Just file) =<< readCache path
         Nothing -> case expression opts of
             Just s -> handleResult opts Nothing (parseNixTextLoc s)
             Nothing  -> case fromFile opts of
@@ -177,21 +151,9 @@ main = do
                  putStrLn . printNix =<< Nix.evalLoc mpath expr
            | debug opts ->
                  print $ stripAnnotation expr
-           | cache opts ->
-#ifdef USE_COMPACT
-                 do cx <- C.compact expr
-                    case mpath of
-                        Nothing -> return ()
-                        Just path -> do
-                            let file = addExtension (dropExtension path) "nixc"
-                            C.writeCompact file cx
-#else
-                 case mpath of
-                     Nothing -> return ()
-                     Just path -> do
-                         let file = addExtension (dropExtension path) "nixc"
-                         BS.writeFile file (S.serialise expr)
-#endif
+           | cache opts, Just path <- mpath -> do
+                let file = addExtension (dropExtension path) "nixc"
+                writeCache file expr
            | parseOnly opts ->
                  void $ Exc.evaluate $ force expr
            | otherwise ->

@@ -111,6 +111,8 @@ instance Lift (Fix NExprF) where
 -- | The monomorphic expression type is a fixed point of the polymorphic one.
 type NExpr = Fix NExprF
 
+instance Serialise NExpr
+
 -- | A single line of the bindings section of a let expression or of a set.
 data Binding r
   = NamedVar !(NAttrPath r) !r
