@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d8e569439f4d52d30cbcfda7126f2175566ff4b9550032b2b7f91eabacf8c04a
+-- hash: aadafd05c71b074e10eb082201d88f7358d995ee842fc8308b3222482f43971c
 
 name:           hnix
 version:        0.5.0
@@ -121,6 +121,7 @@ executable hnix
     , exceptions
     , filepath
     , hnix
+    , megaparsec
     , mtl
     , optparse-applicative
     , repline

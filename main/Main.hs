@@ -27,6 +27,7 @@ import           Nix.Parser
 import           Nix.Pretty
 import           Nix.Stack (NixException(..))
 import qualified Nix.Value as V
+import qualified Repl
 -- import           Nix.TH
 import           Options.Applicative hiding (ParserResult(..))
 import           System.IO
@@ -48,9 +49,7 @@ main = do
                 Just path ->
                     mapM_ (processFile opts) =<< (lines <$> readFile path)
                 Nothing -> case filePaths opts of
-                    [] ->
-                        handleResult opts Nothing . parseNixTextLoc
-                            =<< Text.getContents
+                    [] -> Repl.shell (pure ())
                     ["-"] ->
                         handleResult opts Nothing . parseNixTextLoc
                             =<< Text.getContents
@@ -74,8 +73,7 @@ main = do
 
     process opts mpath expr = do
         when (check opts) $
-            putStrLn $ runST $ Nix.runLintM . renderSymbolic
-                =<< Nix.lint expr
+            putStrLn $ runST $ runLintM . renderSymbolic =<< lint expr
 
         let parseArg s = case parseNixText s of
                 Success x -> x
@@ -144,3 +142,6 @@ main = do
                      . renderPretty 0.4 80
                      . prettyNix
                      . stripAnnotation $ expr
+
+        when (repl opts) $
+            Repl.shell (pure ())

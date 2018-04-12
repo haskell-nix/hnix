@@ -68,6 +68,7 @@ executables:
     dependencies:
       - hnix
       - repline
+      - megaparsec
 
 tests:
   hnix-tests:

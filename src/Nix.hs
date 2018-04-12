@@ -5,7 +5,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Nix (eval, evalLoc, tracingEvalLoc, lint, runLintM) where
+module Nix where
 
 import           Control.Applicative
 import           Control.Monad.Catch
@@ -15,11 +15,9 @@ import qualified Data.HashMap.Lazy as M
 import qualified Data.Text as Text
 import           Nix.Builtins
 import qualified Nix.Eval as Eval
-import           Nix.Eval hiding (eval)
 import           Nix.Exec
 import           Nix.Expr.Types (NExpr)
 import           Nix.Expr.Types.Annotated (NExprLoc)
-import           Nix.Lint (lint, runLintM)
 import           Nix.Normal
 import           Nix.Scope
 import           Nix.Thunk
@@ -58,7 +56,7 @@ eval mpath incls = runLazyM . evalTopLevelExpr mpath incls
 evalTopLevelExprLoc :: forall e m. MonadBuiltins e m
                     => Maybe FilePath -> [String] -> NExprLoc -> m (NValueNF m)
 evalTopLevelExprLoc = evalTopLevelExprGen $
-    framedEvalExpr (Eval.eval @_ @(NValue m) @(NThunk m) @m)
+    Eval.framedEvalExpr (Eval.eval @_ @(NValue m) @(NThunk m) @m)
 
 evalLoc :: (MonadFix m, MonadThrow m, MonadCatch m, MonadIO m)
         => Maybe FilePath -> [String] -> NExprLoc -> m (NValueNF (Lazy m))
@@ -70,6 +68,6 @@ tracingEvalLoc
     => Maybe FilePath -> [String] -> NExprLoc -> m (NValueNF (Lazy m))
 tracingEvalLoc mpath incls expr =
     runLazyM . evalTopLevelExprGen id mpath incls
-        =<< tracingEvalExpr @_ @(Lazy m) @_ @(NValue (Lazy m))
+        =<< Eval.tracingEvalExpr @_ @(Lazy m) @_ @(NValue (Lazy m))
                 (Eval.eval @_ @(NValue (Lazy m))
                            @(NThunk (Lazy m)) @(Lazy m)) expr

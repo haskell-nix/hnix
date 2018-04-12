@@ -21,6 +21,7 @@ data Options = Options
     , check        :: Bool
     , readFrom     :: Maybe FilePath
     , cache        :: Bool
+    , repl         :: Bool
     , ignoreErrors :: Bool
     , expression   :: Maybe Text
     , arg          :: [(Text, Text)]
@@ -84,6 +85,9 @@ nixOptions = Options
     <*> switch
         (   long "cache"
          <> help "Write out the parsed expression tree to a binary cache")
+    <*> switch
+        (   long "repl"
+         <> help "After performing any indicated actions, enter the REPL")
     <*> switch
         (   long "ignore-errors"
          <> help "Continue parsing files, even if there are errors")

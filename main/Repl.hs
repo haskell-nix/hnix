@@ -10,6 +10,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
 {-# OPTIONS_GHC -Wno-unused-matches #-}
@@ -17,13 +18,23 @@
 
 module Repl where
 
-import           Nix.Type.Infer
+import qualified Nix
+import qualified Nix.Eval as Eval
+import           Nix.Exec (Lazy)
+import qualified Nix.Exec as Exec
+import           Nix.Normal
+import           Nix.Parser
+import           Nix.Pretty
+import           Nix.Scope
 import qualified Nix.Type.Env as Env
+import           Nix.Type.Infer
+import           Nix.Value
 
+import qualified Data.HashMap.Lazy as M
 import qualified Data.Map as Map
 import           Data.Monoid
-import qualified Data.Text.Lazy as L
-import qualified Data.Text.Lazy.IO as L
+import qualified Data.Text as Text
+import qualified Data.Text.IO as Text
 
 import           Control.Monad.Identity
 import           Control.Monad.State.Strict
@@ -43,17 +54,18 @@ import           System.Console.Repline
 data TermEnv
 
 data IState = IState
-  { tyctx :: Env.Env  -- Type environment
-  , tmctx :: TermEnv  -- Value environment
+  { -- tyctx :: Env.Env  -- Type environment
+  -- ,
+    tmctx :: TermEnv  -- Value environment
   }
 
 initState :: IState
-initState = IState Env.empty undefined
+initState = IState {-Env.empty-} undefined
 
 type Repl a = HaskelineT (StateT IState IO) a
-hoistErr :: Show e => Either e a -> Repl a
-hoistErr (Right val) = return val
-hoistErr (Left err) = do
+hoistErr :: Result a -> Repl a
+hoistErr (Success val) = return val
+hoistErr (Failure err) = do
   liftIO $ print err
   abort
 
@@ -61,42 +73,39 @@ hoistErr (Left err) = do
 -- Execution
 -------------------------------------------------------------------------------
 
-exec :: Bool -> L.Text -> Repl ()
+exec :: Bool -> Text.Text -> Repl ()
 exec update source = do
   -- Get the current interpreter state
   st <- get
 
   -- Parser ( returns AST )
-  -- mod <- hoistErr $ parseModule "<stdin>" source
+  expr <- hoistErr $ parseNixTextLoc source
 
   -- Type Inference ( returns Typing Environment )
-  -- tyctx' <- hoistErr $ inferTop (tyctx st) mod
+  -- tyctx' <- hoistErr $ inferTop (tyctx st) expr
 
   -- Create the new environment
-  -- let st' = st { tmctx = foldl' evalDef (tmctx st) mod
-  --              , tyctx = tyctx' <> tyctx st
-  --              }
+  let st' = st { tmctx = tmctx st -- foldl' evalDef (tmctx st) expr
+               -- , tyctx = tyctx' <> tyctx st
+               }
 
   -- Update the interpreter state
-  -- when update (put st')
+  when update (put st')
 
   -- If a value is entered, print it.
-  -- case lookup "it" mod of
-  --   Nothing -> return ()
-  --   Just ex -> do
-  --     let (val, _) = runEval (tmctx st') "it"  ex
-  --     showOutput (show val) st'
-
-  undefined
-
-showOutput :: String -> IState -> Repl ()
-showOutput arg st =
-  case Env.lookup "it" (tyctx st)  of
-    Just val -> liftIO $ putStrLn $ undefined -- ppsignature (arg, val)
-    Nothing -> return ()
+  val <- liftIO $ Exec.runLazyM $
+      Nix.evalTopLevelExprGen
+          -- jww (2018-04-12): Once the user is able to establish definitions
+          -- in the repl, they should be passed here.
+          (pushScope @(NThunk (Lazy IO)) M.empty
+               . Eval.framedEvalExpr
+                     (Eval.eval @_ @(NValue (Lazy IO))
+                                @(NThunk (Lazy IO)) @(Lazy IO)))
+          Nothing [] expr
+  liftIO $ putStrLn $ printNix val
 
 cmd :: String -> Repl ()
-cmd source = exec True (L.pack source)
+cmd source = exec True (Text.pack source)
 
 -------------------------------------------------------------------------------
 -- Commands
@@ -112,21 +121,21 @@ browse _ = do
 -- :load command
 load :: [String] -> Repl ()
 load args = do
-  contents <- liftIO $ L.readFile (unwords args)
+  contents <- liftIO $ Text.readFile (unwords args)
   exec True contents
 
 -- :type command
-typeof :: [String] -> Repl ()
-typeof args = do
-  st <- get
-  let arg = unwords args
-  case Env.lookup (pack arg) (tyctx st) of
-    Just val -> liftIO $ putStrLn $ undefined -- ppsignature (arg, val)
-    Nothing -> exec False (L.pack arg)
+-- typeof :: [String] -> Repl ()
+-- typeof args = do
+--   st <- get
+--   let arg = unwords args
+--   case Env.lookup (pack arg) (tyctx st) of
+--     Just val -> liftIO $ putStrLn $ undefined -- ppsignature (arg, val)
+--     Nothing -> exec False (Text.pack arg)
 
 -- :quit command
 quit :: a -> Repl ()
-quit _ = liftIO $ exitSuccess
+quit _ = liftIO exitSuccess
 
 -------------------------------------------------------------------------------
 -- Interactive Shell
@@ -143,16 +152,16 @@ defaultMatcher = [
 comp :: (Monad m, MonadState IState m) => WordCompleter m
 comp n = do
   let cmds = [":load", ":type", ":browse", ":quit"]
-  Env.TypeEnv ctx <- gets tyctx
-  let defs = map unpack $ Map.keys ctx
-  return $ filter (isPrefixOf n) (cmds ++ defs)
+  -- Env.TypeEnv ctx <- gets tyctx
+  -- let defs = map unpack $ Map.keys ctx
+  return $ filter (isPrefixOf n) (cmds {-++ defs-})
 
 options :: [(String, [String] -> Repl ())]
 options = [
     ("load"   , load)
   , ("browse" , browse)
   , ("quit"   , quit)
-  , ("type"   , Repl.typeof)
+  -- , ("type"   , Repl.typeof)
   ]
 
 -------------------------------------------------------------------------------
@@ -163,18 +172,18 @@ completer :: CompleterStyle (StateT IState IO)
 completer = Prefix (wordCompleter comp) defaultMatcher
 
 shell :: Repl a -> IO ()
-shell pre = flip evalStateT initState
-     $ evalRepl "Poly> " cmd options completer pre
+shell pre = flip evalStateT initState $
+    evalRepl "hnix> " cmd options completer pre
 
 -------------------------------------------------------------------------------
 -- Toplevel
 -------------------------------------------------------------------------------
 
-main :: IO ()
-main = do
-  args <- getArgs
-  case args of
-    []      -> shell (return ())
-    [fname] -> shell (load [fname])
-    ["test", fname] -> shell (load [fname] >> browse [] >> quit ())
-    _ -> putStrLn "invalid arguments"
+-- main :: IO ()
+-- main = do
+--   args <- getArgs
+--   case args of
+--     []      -> shell (return ())
+--     [fname] -> shell (load [fname])
+--     ["test", fname] -> shell (load [fname] >> browse [] >> quit ())
+--     _ -> putStrLn "invalid arguments"
