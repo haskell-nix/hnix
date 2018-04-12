@@ -17,6 +17,8 @@ $ nix-shell
 $ cabal configure --enable-tests
 $ cabal build
 $ cabal test
+# To run all of the tests, which takes up to a minute:
+$ LANGUAGE_TESTS=yes NIXPKGS_TESTS=yes cabal test
 $ cabal bench
 $ ./dist/build/hnix/hnix --help
 ```
