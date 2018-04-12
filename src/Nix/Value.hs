@@ -129,6 +129,10 @@ mkIntV = return . NVConstant . NInt
 mkFloatV :: Monad m => Float -> m (NValue m)
 mkFloatV = return . NVConstant . NFloat
 
+isClosureNF :: Monad m => NValueNF m -> Bool
+isClosureNF (Fix NVClosure {}) = True
+isClosureNF _ = False
+
 thunkEq :: MonadThunk (NValue m) (NThunk m) m
         => NThunk m -> NThunk m -> m Bool
 thunkEq lt rt = force lt $ \lv -> force rt $ \rv -> valueEq lv rv
