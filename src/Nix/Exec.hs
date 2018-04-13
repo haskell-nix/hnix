@@ -436,20 +436,27 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadEffects (Lazy m) where
                 traceM $ "[p] = " ++ Text.unpack p
                 traceM $ "name = " ++ name
                 traceM $ "cand = " ++ Text.unpack p </> name
-                path <- makeAbsolutePath $ Text.unpack p </> name
-                traceM $ "path = " ++ path
-                exists <- liftIO $ fileExist path
-                return $ if exists then Just path else Nothing
+                checkFile $ Text.unpack p </> name
             [n, p] | n':ns <- splitDirectories name, Text.unpack n == n' -> do
                 traceM $ "[n, p] = " ++ Text.unpack n ++ ", " ++ Text.unpack p
                 traceM $ "name = " ++ name
                 traceM $ "cand = " ++ Text.unpack p </> joinPath ns
-                path <- makeAbsolutePath $ Text.unpack p </> joinPath ns
-                traceM $ "path = " ++ path
-                exists <- liftIO $ fileExist path
-                return $ if exists then Just path else Nothing
-            _ -> throwError $ "Unexpected entry in NIX_PATH/-I: "
-                    ++ Text.unpack x
+                checkFile $ Text.unpack p </> joinPath ns
+            _ -> return Nothing
+
+        checkFile path = do
+            path <- makeAbsolutePath path
+            traceM $ "path = " ++ path
+            exists <- liftIO $ doesDirectoryExist path
+            traceM $ "exists = " ++ show exists
+            path' <-
+                if exists
+                then makeAbsolutePath $ path </> "default.nix"
+                else return path
+            traceM $ "path' = " ++ path'
+            exists <- liftIO $ doesFileExist path'
+            traceM $ "exists = " ++ show exists
+            return $ if exists then Just path' else Nothing
 
     pathExists = liftIO . fileExist
 

@@ -122,11 +122,11 @@ assertEval files = catch go $ \case
                         ++ show err
                 Opts.Success opts -> do
                     traceM $ "opts = " ++ show opts
-                    -- jww (2018-04-11): If --arg or --argstr was used, then
-                    -- apply those arguments after evaluation (see Main.hs).
-                    -- If -A or -I is used, add processing for those by adding
-                    -- information to the Context.
-                    assertLangOk name (include opts)
+                    -- jww (2018-04-11): If --arg, --attr or --argstr was
+                    -- used, then apply those arguments after evaluation (see
+                    -- Main.hs).
+                    assertLangOk name
+                        ("nix=../../../../data/nix/corepkgs" : include opts)
                 Opts.CompletionInvoked _ -> error "unused"
         _ -> assertFailure $ "Unknown test type " ++ show files
       where
