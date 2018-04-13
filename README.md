@@ -19,9 +19,19 @@ $ runhaskell Setup.hs build
 $ runhaskell Setup.hs test
 # To run all of the tests, which takes up to a minute:
 $ LANGUAGE_TESTS=yes NIXPKGS_TESTS=yes runhaskell Setup.hs test
-$ runhaskell Setup.hs bench
 $ ./dist/build/hnix/hnix --help
 ```
+## Building with benchmarks enabled
+
+To build `hnix` with benchmarks enabled:
+
+```
+$ nix-shell --arg doBenchmarks true
+$ runhaskell Setup.hs configure --enable-tests --enable-benchmarks
+$ runhaskell Setup.hs build
+$ runhaskell Setup.hs bench
+```
+
 
 ## Building with profiling enabled
 
