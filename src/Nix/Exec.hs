@@ -383,10 +383,9 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadEffects (Lazy m) where
         liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
 
     findEnvPath name = foldNixPath Nothing go >>= \case
-        Nothing ->
-            throwError $ "file '" ++ name
-                ++ "' was not found in the Nix search path"
-                ++ " (add it using $NIX_PATH or -I)"
+        Nothing   -> throwError $ "file '" ++ name
+                        ++ "' was not found in the Nix search path"
+                        ++ " (add it using $NIX_PATH or -I)"
         Just path -> return path
       where
         go p@(Just _) _ _ = pure p
@@ -394,28 +393,14 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadEffects (Lazy m) where
             traceM $ "[p] = " ++ p
             traceM $ "name = " ++ name
             traceM $ "cand = " ++ p </> name
-            checkFile $ p </> name
+            nixFilePath $ p </> name
         go Nothing p (Just n)
             | n':ns <- splitDirectories name, n == n' = do
             traceM $ "[n, p] = " ++ n ++ ", " ++ p
             traceM $ "name = " ++ name
             traceM $ "cand = " ++ p </> joinPath ns
-            checkFile $ p </> joinPath ns
+            nixFilePath $ p </> joinPath ns
         go _ _ _ = return Nothing
-
-        checkFile path = do
-            path <- makeAbsolutePath path
-            traceM $ "path = " ++ path
-            exists <- liftIO $ doesDirectoryExist path
-            traceM $ "exists = " ++ show exists
-            path' <-
-                if exists
-                then makeAbsolutePath $ path </> "default.nix"
-                else return path
-            traceM $ "path' = " ++ path'
-            exists <- liftIO $ doesFileExist path'
-            traceM $ "exists = " ++ show exists
-            return $ if exists then Just path' else Nothing
 
     pathExists = liftIO . fileExist
 
@@ -498,6 +483,21 @@ pathToDefaultNixFile p = do
     pure $ if isDir
         then p </> "default.nix"
         else p
+
+nixFilePath :: (MonadEffects m, MonadIO m) => FilePath -> m (Maybe FilePath)
+nixFilePath path = do
+    path <- makeAbsolutePath path
+    traceM $ "path = " ++ path
+    exists <- liftIO $ doesDirectoryExist path
+    traceM $ "exists = " ++ show exists
+    path' <-
+        if exists
+        then makeAbsolutePath $ path </> "default.nix"
+        else return path
+    traceM $ "path' = " ++ path'
+    exists <- liftIO $ doesFileExist path'
+    traceM $ "exists = " ++ show exists
+    return $ if exists then Just path' else Nothing
 
 foldNixPath :: forall e m r.
                 (Scoped e (NThunk m) m, MonadEffects m,
