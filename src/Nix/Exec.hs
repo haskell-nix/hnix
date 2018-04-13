@@ -321,8 +321,11 @@ execBinaryOp op larg rarg = do
             NNEq    -> ofVal . not <$> valueEq (NVList []) rval
             _ -> nverr unsupportedTypes
 
-        (NVPath ls, NVStr rs _) -> case op of
-            NPlus -> NVPath <$> makeAbsolutePath (ls `mappend` Text.unpack rs)
+        (NVPath p, NVStr s _) -> case op of
+            -- jww (2018-04-13): Do we need to make the path absolute here?
+            NEq   -> pure $ ofVal $ p == Text.unpack s
+            NNEq  -> pure $ ofVal $ p /= Text.unpack s
+            NPlus -> NVPath <$> makeAbsolutePath (p `mappend` Text.unpack s)
             _ -> nverr unsupportedTypes
 
         (NVPath ls, NVPath rs) -> case op of
