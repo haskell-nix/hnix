@@ -400,9 +400,6 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadEffects (Lazy m) where
                     ++ " (add it using $NIX_PATH or -I)"
             Just path -> return path
       where
-        -- jww (2018-04-11): This function needs to be finished based on this
-        -- documentation:
-        --
         -- NIX_PATH
         --     A colon-separated list of directories used to look up Nix
         --     expressions enclosed in angle brackets (i.e., <path>). For
@@ -435,9 +432,22 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadEffects (Lazy m) where
         --     takes precedence over NIX_PATH.
         go p@(Just _) _ = pure p
         go Nothing x = case Text.splitOn "=" x of
-            [_p] -> return Nothing
-            [_n, _p] -> return Nothing
-                -- Just <$> makeAbsolutePath (Text.unpack p)
+            [p] -> do
+                traceM $ "[p] = " ++ Text.unpack p
+                traceM $ "name = " ++ name
+                traceM $ "cand = " ++ Text.unpack p </> name
+                path <- makeAbsolutePath $ Text.unpack p </> name
+                traceM $ "path = " ++ path
+                exists <- liftIO $ fileExist path
+                return $ if exists then Just path else Nothing
+            [n, p] | n':ns <- splitDirectories name, Text.unpack n == n' -> do
+                traceM $ "[n, p] = " ++ Text.unpack n ++ ", " ++ Text.unpack p
+                traceM $ "name = " ++ name
+                traceM $ "cand = " ++ Text.unpack p </> joinPath ns
+                path <- makeAbsolutePath $ Text.unpack p </> joinPath ns
+                traceM $ "path = " ++ path
+                exists <- liftIO $ fileExist path
+                return $ if exists then Just path else Nothing
             _ -> throwError $ "Unexpected entry in NIX_PATH/-I: "
                     ++ Text.unpack x
 

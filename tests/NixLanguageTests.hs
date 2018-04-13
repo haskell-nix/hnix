@@ -92,15 +92,15 @@ assertParseFail file = do
                Failure _ -> return ()) $ \(_ :: SomeException) ->
         return ()
 
-assertLangOk :: FilePath -> Assertion
-assertLangOk file = do
-  actual <- printNix <$> hnixEvalFile (file ++ ".nix")
+assertLangOk :: FilePath -> [String] -> Assertion
+assertLangOk file incls = do
+  actual <- printNix <$> hnixEvalFile (file ++ ".nix") incls
   expected <- Text.readFile $ file ++ ".exp"
   assertEqual "" expected $ Text.pack (actual ++ "\n")
 
-assertLangOkXml :: FilePath -> Assertion
-assertLangOkXml file = do
-  actual <- toXML <$> hnixEvalFile (file ++ ".nix")
+assertLangOkXml :: FilePath -> [String] -> Assertion
+assertLangOkXml file incls = do
+  actual <- toXML <$> hnixEvalFile (file ++ ".nix") incls
   expected <- Text.readFile $ file ++ ".exp.xml"
   assertEqual "" expected $ Text.pack actual
 
@@ -109,8 +109,8 @@ assertEval files = catch go $ \case
     NixEvalException str -> error $ "Evaluation error: " ++ str
   where
     go = case delete ".nix" $ sort $ map takeExtensions files of
-        [] -> assertLangOkXml name
-        [".exp"] -> assertLangOk name
+        [] -> assertLangOkXml name []
+        [".exp"] -> assertLangOk name []
         [".exp.disabled"] -> return ()
         [".exp-disabled"] -> return ()
         [".exp", ".flags"] -> do
@@ -120,12 +120,13 @@ assertEval files = catch go $ \case
                 Opts.Failure err -> errorWithoutStackTrace $
                     "Error parsing flags from " ++ name ++ ".flags: "
                         ++ show err
-                Opts.Success _opts ->
+                Opts.Success opts -> do
+                    traceM $ "opts = " ++ show opts
                     -- jww (2018-04-11): If --arg or --argstr was used, then
                     -- apply those arguments after evaluation (see Main.hs).
                     -- If -A or -I is used, add processing for those by adding
                     -- information to the Context.
-                    assertLangOk name
+                    assertLangOk name (include opts)
                 Opts.CompletionInvoked _ -> error "unused"
         _ -> assertFailure $ "Unknown test type " ++ show files
       where
@@ -134,7 +135,7 @@ assertEval files = catch go $ \case
 
 assertEvalFail :: FilePath -> Assertion
 assertEvalFail file = catch ?? (\(_ :: SomeException) -> return ()) $ do
-  evalResult <- printNix <$> hnixEvalFile file
+  evalResult <- printNix <$> hnixEvalFile file []
   evalResult `seq` assertFailure $
       file ++ " should not evaluate.\nThe evaluation result was `"
            ++ evalResult ++ "`."

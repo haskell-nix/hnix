@@ -29,6 +29,7 @@ data Options = Options
     , fromFile     :: Maybe FilePath
     , filePaths    :: [FilePath]
     }
+    deriving Show
 
 argPair :: Mod OptionFields (Text, Text) -> Parser (Text, Text)
 argPair = option $ str >>= \s ->
