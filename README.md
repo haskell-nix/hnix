@@ -14,12 +14,12 @@ $ git clone https://github.com/jwiegley/hnix.git
 ...
 $ cd hnix
 $ nix-shell
-$ cabal configure --enable-tests
-$ cabal build
-$ cabal test
+$ runhaskell Setup.hs configure --enable-tests
+$ runhaskell Setup.hs build
+$ runhaskell Setup.hs test
 # To run all of the tests, which takes up to a minute:
-$ LANGUAGE_TESTS=yes NIXPKGS_TESTS=yes cabal test
-$ cabal bench
+$ LANGUAGE_TESTS=yes NIXPKGS_TESTS=yes runhaskell Setup.hs test
+$ runhaskell Setup.hs bench
 $ ./dist/build/hnix/hnix --help
 ```
 
@@ -29,8 +29,8 @@ To build `hnix` with profiling enabled:
 
 ```
 $ nix-shell --arg doProfiling true
-$ cabal configure --enable-tests --enable-profiling
-$ cabal build
+$ runhaskell Setup.hs configure --enable-tests --enable-profiling
+$ runhaskell Setup.hs build
 $ ./dist/build/hnix/hnix <args> +RTS -p
 ```
 
@@ -41,7 +41,7 @@ If you're looking for a way to help out, try taking a look [here](https://github
 When you're ready to submit a pull request, test it with:
 ```
 git submodule update --init --recursive
-nix-shell --run "LANGUAGE_TESTS=yes cabal test"
+nix-shell --run "LANGUAGE_TESTS=yes runhaskell Setup.hs test"
 ```
 
 Make sure that all the tests that were passing prior to your PR are still passing afterwards; it's OK if no new tests are passing.
