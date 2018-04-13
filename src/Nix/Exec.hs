@@ -382,70 +382,26 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadEffects (Lazy m) where
             pure $ cwd </> origPath
         liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
 
-    findEnvPath name = do
-        mres <- lookupVar @_ @(NThunk (Lazy m)) "__includes"
-        dirs <- case mres of
-            Nothing -> return []
-            Just v -> force v $ \case
-                NVList xs -> forM xs $ \x ->
-                    force x $ \case
-                        NVStr s _ -> pure s
-                        _ -> error "impossible"
-                _ -> error "impossible"
-        menv <- getEnvVar "NIX_PATH"
-        mres <- foldM go Nothing $ dirs ++ case menv of
-            Nothing -> []
-            Just str -> Text.splitOn ":" (Text.pack str)
-        case mres of
-            Nothing ->
-                throwError $ "file '" ++ name
-                    ++ "' was not found in the Nix search path"
-                    ++ " (add it using $NIX_PATH or -I)"
-            Just path -> return path
+    findEnvPath name = foldNixPath Nothing go >>= \case
+        Nothing ->
+            throwError $ "file '" ++ name
+                ++ "' was not found in the Nix search path"
+                ++ " (add it using $NIX_PATH or -I)"
+        Just path -> return path
       where
-        -- NIX_PATH
-        --     A colon-separated list of directories used to look up Nix
-        --     expressions enclosed in angle brackets (i.e., <path>). For
-        --     instance, the value
-        --
-        --         /home/eelco/Dev:/etc/nixos
-        --
-        --     will cause Nix to look for paths relative to /home/eelco/Dev
-        --     and /etc/nixos, in that order. It is also possible to match
-        --     paths against a prefix. For example, the value
-        --
-        --         nixpkgs=/home/eelco/Dev/nixpkgs-branch:/etc/nixos
-        --
-        --     will cause Nix to search for <nixpkgs/path> in
-        --     /home/eelco/Dev/nixpkgs-branch/path and
-        --     /etc/nixos/nixpkgs/path.
-        --
-        --     If a path in the Nix search path starts with http:// or
-        --     https://, it is interpreted as the URL of a tarball that will
-        --     be downloaded and unpacked to a temporary location. The tarball
-        --     must consist of a single top-level directory. For example,
-        --     setting NIX_PATH to
-        --
-        --         nixpkgs=https://github.com/NixOS/nixpkgs-channels/archive/nixos-14.12.tar.gz
-        --
-        --     tells Nix to download the latest revision in the Nixpkgs/NixOS
-        --     14.12 channel.
-        --
-        --     The search path can be extended using the -I option, which
-        --     takes precedence over NIX_PATH.
-        go p@(Just _) _ = pure p
-        go Nothing x = case Text.splitOn "=" x of
-            [p] -> do
-                traceM $ "[p] = " ++ Text.unpack p
-                traceM $ "name = " ++ name
-                traceM $ "cand = " ++ Text.unpack p </> name
-                checkFile $ Text.unpack p </> name
-            [n, p] | n':ns <- splitDirectories name, Text.unpack n == n' -> do
-                traceM $ "[n, p] = " ++ Text.unpack n ++ ", " ++ Text.unpack p
-                traceM $ "name = " ++ name
-                traceM $ "cand = " ++ Text.unpack p </> joinPath ns
-                checkFile $ Text.unpack p </> joinPath ns
-            _ -> return Nothing
+        go p@(Just _) _ _ = pure p
+        go Nothing p Nothing = do
+            traceM $ "[p] = " ++ p
+            traceM $ "name = " ++ name
+            traceM $ "cand = " ++ p </> name
+            checkFile $ p </> name
+        go Nothing p (Just n)
+            | n':ns <- splitDirectories name, n == n' = do
+            traceM $ "[n, p] = " ++ n ++ ", " ++ p
+            traceM $ "name = " ++ name
+            traceM $ "cand = " ++ p </> joinPath ns
+            checkFile $ p </> joinPath ns
+        go _ _ _ = return Nothing
 
         checkFile path = do
             path <- makeAbsolutePath path
@@ -542,3 +498,26 @@ pathToDefaultNixFile p = do
     pure $ if isDir
         then p </> "default.nix"
         else p
+
+foldNixPath :: forall e m r.
+                (Scoped e (NThunk m) m, MonadEffects m,
+                 Framed e m, MonadThrow m, MonadVar m, MonadFile m)
+            => r -> (r -> FilePath -> Maybe String -> m r) -> m r
+foldNixPath z f = do
+    mres <- lookupVar @_ @(NThunk m) "__includes"
+    dirs <- case mres of
+        Nothing -> return []
+        Just v -> force v $ \case
+            NVList xs -> forM xs $ flip force $ \case
+                NVStr s _ -> pure s
+                _ -> error "impossible"
+            _ -> error "impossible"
+    menv <- getEnvVar "NIX_PATH"
+    foldM go z $ dirs ++ case menv of
+        Nothing -> []
+        Just str -> Text.splitOn ":" (Text.pack str)
+  where
+    go acc x = case Text.splitOn "=" x of
+        [p]    -> f acc (Text.unpack p) Nothing
+        [n, p] -> f acc (Text.unpack p) (Just (Text.unpack n))
+        _ -> throwError $ "Unexpected entry in NIX_PATH: " ++ show x

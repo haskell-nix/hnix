@@ -225,30 +225,12 @@ call2 f arg1 arg2 = force f $ \f' ->
 -- Primops
 
 nixPath :: MonadBuiltins e m => m (NValue m)
-nixPath = do
-    mres <- lookupVar "__includes"
-    dirs <- case mres of
-        Nothing -> return []
-        Just v -> force v $ \case
-            NVList xs -> forM xs $ \x ->
-                force x $ \case
-                    NVStr s _ -> pure s
-                    _ -> error "impossible"
-            _ -> error "impossible"
-    paths <- getEnvVar "NIX_PATH"
-    fmap NVList
-        $ forM (Text.splitOn ":" (Text.pack (fromMaybe "" paths)) ++ dirs)
-        $ \path -> valueThunk . flip NVSet M.empty . M.fromList <$>
-            case Text.splitOn "=" path of
-                [p]   ->
-                    return [ ("path", valueThunk $ NVPath (Text.unpack p))
-                           , ("prefix", valueThunk $ NVStr "" mempty) ]
-                [n,p] ->
-                    return [ ("path", valueThunk $ NVPath (Text.unpack p))
-                           , ("prefix", valueThunk $ NVStr n mempty) ]
-                _ ->
-                    throwError $ "Unexpected entry in NIX_PATH: "
-                        ++ Text.unpack path
+nixPath = fmap NVList $ foldNixPath [] $ \acc p mn -> pure $
+    (valueThunk . flip NVSet M.empty . M.fromList $
+         [ ("path", valueThunk $ NVPath p)
+         , ("prefix", valueThunk $
+               NVStr (Text.pack (fromMaybe "" mn)) mempty) ])
+         : acc
 
 toString :: MonadBuiltins e m => NThunk m -> m (NValue m)
 toString str = do
