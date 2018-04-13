@@ -47,31 +47,16 @@ reservedEnd x = isSpace x ||
     x == '"' || x == '\'' || x == ','
 
 reserved :: Text -> Parser ()
-reserved n = lexeme $ try $ do
-    _ <- string n <* lookAhead (void (satisfy reservedEnd) <|> eof)
-    return ()
-
-opStart :: Parser Char
-opStart = satisfy $ \x ->
-    -- jww (2018-04-09): Could this be faster?
-    x `elem` (".+-*/=<>&|!?" :: String)
-
-{-
-opLetter :: CharParsing m => m Char
-opLetter = oneOf ">+/&|="
--}
-
-identStart :: Parser Char
-identStart = letterChar <|> char '_'
-
-identLetter :: Parser Char
-identLetter = satisfy $ \x ->
-    isAlpha x || isDigit x || x == '_' || x == '\'' || x == '-'
+reserved n = lexeme $ try $
+    string n *> lookAhead (void (satisfy reservedEnd) <|> eof)
 
 identifier = lexeme $ try $ do
-    ident <- pack <$> ((:) <$> identStart <*> many identLetter)
+    ident <- cons <$> satisfy (\x -> isAlpha x || x == '_')
+                 <*> takeWhileP Nothing identLetter
     guard (not (ident `HashSet.member` reservedNames))
     return ident
+  where
+    identLetter x = isAlpha x || isDigit x || x == '_' || x == '\'' || x == '-'
 
 parens    = between (symbol "(") (symbol ")")
 braces    = between (symbol "{") (symbol "}")

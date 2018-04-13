@@ -93,14 +93,7 @@ nixTerm = do
 nixToplevelForm :: Parser NExprLoc
 nixToplevelForm = keywords <|> nixLambda <|> nixExprLoc
   where
-    keywords = do
-        word <- try $ lookAhead $ some letterChar <* satisfy reservedEnd
-        case word of
-            "let"    -> nixLet
-            "if"     -> nixIf
-            "assert" -> nixAssert
-            "with"   -> nixWith
-            _        -> empty
+    keywords = nixLet <|> nixIf <|> nixAssert <|> nixWith
 
 nixSym :: Parser NExprLoc
 nixSym = annotateLocation1 $ mkSymF <$> identifier
