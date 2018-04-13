@@ -103,6 +103,7 @@ builtinsList = sequence [
       pure $ Builtin Normal
           ("nixVersion", valueThunk $ ofVal @(NValue m) ("2.0" :: Text))
 
+    , add0 TopLevel "__nixPath"                  nixPath
     , add  TopLevel "toString"                   toString
     , add  TopLevel "import"                     import_
     , add2 TopLevel "map"                        map_
@@ -222,6 +223,32 @@ call2 f arg1 arg2 = force f $ \f' ->
         callFunc g (force arg2 pure)
 
 -- Primops
+
+nixPath :: MonadBuiltins e m => m (NValue m)
+nixPath = do
+    mres <- lookupVar "__includes"
+    dirs <- case mres of
+        Nothing -> return []
+        Just v -> force v $ \case
+            NVList xs -> forM xs $ \x ->
+                force x $ \case
+                    NVStr s _ -> pure s
+                    _ -> error "impossible"
+            _ -> error "impossible"
+    paths <- getEnvVar "NIX_PATH"
+    fmap NVList
+        $ forM (Text.splitOn ":" (Text.pack (fromMaybe "" paths)) ++ dirs)
+        $ \path -> valueThunk . flip NVSet M.empty . M.fromList <$>
+            case Text.splitOn "=" path of
+                [p]   ->
+                    return [ ("path", valueThunk $ NVPath (Text.unpack p))
+                           , ("prefix", valueThunk $ NVStr "" mempty) ]
+                [n,p] ->
+                    return [ ("path", valueThunk $ NVPath (Text.unpack p))
+                           , ("prefix", valueThunk $ NVStr n mempty) ]
+                _ ->
+                    throwError $ "Unexpected entry in NIX_PATH: "
+                        ++ Text.unpack path
 
 toString :: MonadBuiltins e m => NThunk m -> m (NValue m)
 toString str = do
