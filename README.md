@@ -10,7 +10,7 @@ for interacting with store paths, until `hnix-store` is ready.
 ## Getting Started
 
 ```bash
-$ git clone https://github.com/jwiegley/hnix.git
+$ git clone --recursive https://github.com/jwiegley/hnix.git
 ...
 $ cd hnix
 $ nix-shell
