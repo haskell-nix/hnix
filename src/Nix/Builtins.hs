@@ -36,7 +36,7 @@ import           Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
 import           Data.Coerce
-import           Data.Foldable (foldlM)
+import           Data.Foldable (foldlM, foldrM)
 import qualified Data.HashMap.Lazy as M
 import           Data.List
 import           Data.Maybe
@@ -224,13 +224,35 @@ call2 f arg1 arg2 = force f $ \f' ->
 
 -- Primops
 
+foldNixPath :: forall e m r.
+                (Scoped e (NThunk m) m, MonadEffects m,
+                 Framed e m, MonadThrow m, MonadVar m, MonadFile m)
+            => (FilePath -> Maybe String -> r -> m r) -> r -> m r
+foldNixPath f z = do
+    mres <- lookupVar @_ @(NThunk m) "__includes"
+    dirs <- case mres of
+        Nothing -> return []
+        Just v -> force v $ \case
+            NVList xs -> forM xs $ flip force $ \case
+                NVStr s _ -> pure s
+                _ -> error "impossible"
+            _ -> error "impossible"
+    menv <- getEnvVar "NIX_PATH"
+    foldrM go z $ dirs ++ case menv of
+        Nothing -> []
+        Just str -> Text.splitOn ":" (Text.pack str)
+  where
+    go x rest = case Text.splitOn "=" x of
+        [p]    -> f (Text.unpack p) Nothing rest
+        [n, p] -> f (Text.unpack p) (Just (Text.unpack n)) rest
+        _ -> throwError $ "Unexpected entry in NIX_PATH: " ++ show x
+
 nixPath :: MonadBuiltins e m => m (NValue m)
-nixPath = fmap NVList $ foldNixPath [] $ \acc p mn -> pure $
+nixPath = fmap NVList $ flip foldNixPath [] $ \p mn rest -> pure $
     (valueThunk . flip NVSet M.empty . M.fromList $
-         [ ("path", valueThunk $ NVPath p)
-         , ("prefix", valueThunk $
-               NVStr (Text.pack (fromMaybe "" mn)) mempty) ])
-         : acc
+        [ ("path",   valueThunk $ NVPath p)
+        , ("prefix", valueThunk $
+              NVStr (Text.pack (fromMaybe "" mn)) mempty) ]) : rest
 
 toString :: MonadBuiltins e m => NThunk m -> m (NValue m)
 toString str = do

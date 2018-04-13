@@ -125,8 +125,9 @@ assertEval files = catch go $ \case
                     -- used, then apply those arguments after evaluation (see
                     -- Main.hs).
                     assertLangOk name
-                        ("nix=../../../../data/nix/corepkgs" :
-                         "dir4" : include opts)
+                        (include opts ++
+                         [ "nix=../../../../data/nix/corepkgs"
+                         , "lang/dir4" ])
                 Opts.CompletionInvoked _ -> error "unused"
         _ -> assertFailure $ "Unknown test type " ++ show files
       where

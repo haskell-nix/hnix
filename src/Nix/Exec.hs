@@ -17,6 +17,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -88,12 +89,16 @@ instance ConvertValue (NValue m) Float where
 
 instance ConvertValue (NValue m) Text where
     ofVal = flip NVStr mempty
-    wantVal = \case NVStr t _ -> Just t; _ -> Nothing
+    wantVal = \case
+        NVStr t _ -> Just t
+        NVPath p -> Just (Text.pack p)
+        _ -> Nothing
 
 instance ConvertValue (NValue m) (Maybe Text) where
     ofVal (Just s) = NVStr s mempty
     ofVal Nothing = NVConstant NNull
     wantVal (NVStr s _) = Just (Just s)
+    wantVal (NVPath s) = Just (Just (Text.pack s))
     wantVal (NVConstant NNull) = Just Nothing
     wantVal _ = Nothing
 
@@ -379,28 +384,51 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadEffects (Lazy m) where
                                 ++ " __cur_file is in scope,"
                                 ++ " but is not a path; it is: "
                                 ++ show v
-            pure $ cwd </> origPath
+            pure $ cwd <///> origPath
         liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
 
-    findEnvPath name = foldNixPath Nothing go >>= \case
-        Nothing   -> throwError $ "file '" ++ name
-                        ++ "' was not found in the Nix search path"
-                        ++ " (add it using $NIX_PATH or -I)"
-        Just path -> return path
+    findEnvPath name = do
+        mres <- lookupVar @_ @(NThunk (Lazy m)) "__nixPath"
+        mpath <- case mres of
+            Nothing -> error "impossible"
+            Just x -> force x $ \case
+                NVList l -> foldM go Nothing l
+                v -> throwError $
+                    "__nixPath must be a list of attr sets, but saw: "
+                    ++ show v
+        case mpath of
+            Nothing ->
+                throwError $ "file '" ++ name
+                    ++ "' was not found in the Nix search path"
+                    ++ " (add it using $NIX_PATH or -I)"
+            Just path -> return path
       where
-        go p@(Just _) _ _ = pure p
-        go Nothing p Nothing = do
-            traceM $ "[p] = " ++ p
-            traceM $ "name = " ++ name
-            traceM $ "cand = " ++ p </> name
-            nixFilePath $ p </> name
-        go Nothing p (Just n)
-            | n':ns <- splitDirectories name, n == n' = do
-            traceM $ "[n, p] = " ++ n ++ ", " ++ p
-            traceM $ "name = " ++ name
-            traceM $ "cand = " ++ p </> joinPath ns
-            nixFilePath $ p </> joinPath ns
-        go _ _ _ = return Nothing
+        -- jww (2018-04-13): Introduce abstractions to make working with Nix
+        -- values like this within Haskell much easier!
+        go :: Maybe FilePath -> NThunk (Lazy m) -> Lazy m (Maybe FilePath)
+        go p@(Just _) _ = pure p
+        go Nothing l = force l $ \case
+            v@(NVSet s _) -> case M.lookup "path" s of
+                Just p -> force p $ \p' -> case wantVal p' of
+                    Just (path :: Text) -> case M.lookup "prefix" s of
+                        Nothing -> tryPath (Text.unpack path) Nothing
+                        Just pf -> force pf $ \pf' -> case wantVal pf' of
+                            Just (pfx :: Text) | not (Text.null pfx) ->
+                                tryPath (Text.unpack path)
+                                        (Just (Text.unpack pfx))
+                            _ -> tryPath (Text.unpack path) Nothing
+                    _ -> throwError $ "__nixPath must be a list of attr sets"
+                        ++ " with textual 'path' elements, but saw: " ++ show v
+                Nothing ->
+                    throwError $ "__nixPath must be a list of attr sets"
+                        ++ " with 'path' elements, but saw: "
+                        ++ show v
+            v -> throwError $ "__nixPath must be a list of attr sets"
+                ++ " with textual 'path' elements, but saw: " ++ show v
+
+        tryPath p (Just n) | n':ns <- splitDirectories name, n == n' =
+            nixFilePath $ p <///> joinPath ns
+        tryPath p _ = nixFilePath $ p <///> name
 
     pathExists = liftIO . fileExist
 
@@ -480,44 +508,23 @@ removeDotDotIndirections = intercalate "/" . go [] . splitOn "/"
 pathToDefaultNixFile :: FilePath -> IO FilePath
 pathToDefaultNixFile p = do
     isDir <- doesDirectoryExist p
-    pure $ if isDir
-        then p </> "default.nix"
-        else p
+    pure $ if isDir then p </> "default.nix" else p
+
+infixr 9 <///>
+(<///>) :: FilePath -> FilePath -> FilePath
+x <///> y | isAbsolute y || "." `isPrefixOf` y = x </> y
+          | otherwise = joinByLargestOverlap x y
+  where
+    joinByLargestOverlap (splitDirectories -> xs) (splitDirectories -> ys) =
+        joinPath $ head [ xs ++ drop (length tx) ys
+                        | tx <- tails xs, tx `elem` inits ys ]
 
 nixFilePath :: (MonadEffects m, MonadIO m) => FilePath -> m (Maybe FilePath)
 nixFilePath path = do
     path <- makeAbsolutePath path
-    traceM $ "path = " ++ path
     exists <- liftIO $ doesDirectoryExist path
-    traceM $ "exists = " ++ show exists
-    path' <-
-        if exists
-        then makeAbsolutePath $ path </> "default.nix"
-        else return path
-    traceM $ "path' = " ++ path'
+    path' <- if exists
+            then makeAbsolutePath $ path </> "default.nix"
+            else return path
     exists <- liftIO $ doesFileExist path'
-    traceM $ "exists = " ++ show exists
     return $ if exists then Just path' else Nothing
-
-foldNixPath :: forall e m r.
-                (Scoped e (NThunk m) m, MonadEffects m,
-                 Framed e m, MonadThrow m, MonadVar m, MonadFile m)
-            => r -> (r -> FilePath -> Maybe String -> m r) -> m r
-foldNixPath z f = do
-    mres <- lookupVar @_ @(NThunk m) "__includes"
-    dirs <- case mres of
-        Nothing -> return []
-        Just v -> force v $ \case
-            NVList xs -> forM xs $ flip force $ \case
-                NVStr s _ -> pure s
-                _ -> error "impossible"
-            _ -> error "impossible"
-    menv <- getEnvVar "NIX_PATH"
-    foldM go z $ dirs ++ case menv of
-        Nothing -> []
-        Just str -> Text.splitOn ":" (Text.pack str)
-  where
-    go acc x = case Text.splitOn "=" x of
-        [p]    -> f acc (Text.unpack p) Nothing
-        [n, p] -> f acc (Text.unpack p) (Just (Text.unpack n))
-        _ -> throwError $ "Unexpected entry in NIX_PATH: " ++ show x
