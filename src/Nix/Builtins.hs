@@ -107,7 +107,7 @@ builtinsList = sequence [
     , add  TopLevel "toString"                   toString
     , add  TopLevel "import"                     import_
     , add2 TopLevel "map"                        map_
-    , add' TopLevel "baseNameOf"                 (arity1 baseNameOf)
+    , add  TopLevel "baseNameOf"                 baseNameOf
     , add  TopLevel "dirOf"                      dirOf
     , add2 TopLevel "removeAttrs"                removeAttrs
     , add  TopLevel "isNull"                     isNull
@@ -502,16 +502,18 @@ catAttrs attrName lt = force lt $ \case
     v -> throwError $ "builtins.catAttrs: Expected a list, got "
             ++ show v
 
---TODO: Make this have similar logic to dirOf
-baseNameOf :: Text -> Text
-baseNameOf = Text.pack . takeFileName . Text.unpack
+baseNameOf :: MonadBuiltins e m => NThunk m -> m (NValue m)
+baseNameOf = flip force $ \case
+    --TODO: Only allow strings that represent absolute paths
+    NVStr path ctx -> pure $ NVStr (Text.pack $ takeFileName $ Text.unpack path) ctx
+    NVPath path -> pure $ NVPath $ takeFileName path
+    v -> throwError $ "dirOf: expected string or path, got " ++ show v
 
 dirOf :: MonadBuiltins e m => NThunk m -> m (NValue m)
 dirOf = flip force $ \case
     --TODO: Only allow strings that represent absolute paths
     NVStr path ctx -> pure $ NVStr (Text.pack $ takeDirectory $ Text.unpack path) ctx
     NVPath path -> pure $ NVPath $ takeDirectory path
-    --TODO: NVEnvPath
     v -> throwError $ "dirOf: expected string or path, got " ++ show v
 
 unsafeDiscardStringContext :: MonadBuiltins e m => NThunk m -> m (NValue m)
