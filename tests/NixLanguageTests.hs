@@ -120,13 +120,13 @@ assertEval files = catch go $ \case
                 Opts.Failure err -> errorWithoutStackTrace $
                     "Error parsing flags from " ++ name ++ ".flags: "
                         ++ show err
-                Opts.Success opts -> do
-                    traceM $ "opts = " ++ show opts
+                Opts.Success opts ->
                     -- jww (2018-04-11): If --arg, --attr or --argstr was
                     -- used, then apply those arguments after evaluation (see
                     -- Main.hs).
                     assertLangOk name
-                        ("nix=../../../../data/nix/corepkgs" : include opts)
+                        ("nix=../../../../data/nix/corepkgs" :
+                         "dir4" : include opts)
                 Opts.CompletionInvoked _ -> error "unused"
         _ -> assertFailure $ "Unknown test type " ++ show files
       where
