@@ -37,7 +37,7 @@ let
     modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
       testHaskellDepends = attrs.testHaskellDepends ++
         [ pkgs.nix haskellPackages.hpack ];
-      doBenchmark = doBenchmark;
+      inherit doBenchmark;
     });
   };
 
