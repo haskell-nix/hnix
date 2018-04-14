@@ -195,15 +195,16 @@ evalBinds :: forall e v t m. MonadNixEval e v t m
           -> Bool
           -> [Binding (m v)]
           -> m (AttrSet t, AttrSet SourcePos)
-evalBinds allowDynamic recursive =
-    buildResult . concat <=< mapM go . moveOverridesLast
+evalBinds allowDynamic recursive binds = do
+    outsideScope <- currentScopes @_ @t
+    buildResult . concat =<< mapM (go outsideScope) (moveOverridesLast binds)
   where
     moveOverridesLast = (\(x, y) -> y ++ x) .
         partition (\case NamedVar [StaticKey "__overrides" _] _ -> True
                          _ -> False)
 
-    go :: Binding (m v) -> m [([Text], Maybe SourcePos, m v)]
-    go (NamedVar [StaticKey "__overrides" _] finalValue) =
+    go :: Scopes m t -> Binding (m v) -> m [([Text], Maybe SourcePos, m v)]
+    go _ (NamedVar [StaticKey "__overrides" _] finalValue) =
         finalValue >>= \v -> case wantVal v of
             Just (o', p') ->
                 return $ map (\(k, v) -> ([k], M.lookup k p', force v pure))
@@ -211,7 +212,7 @@ evalBinds allowDynamic recursive =
             _ -> evalError @v $ "__overrides must be a set, but saw: "
                     ++ show v
 
-    go (NamedVar pathExpr finalValue) = do
+    go _ (NamedVar pathExpr finalValue) = do
         let go :: NAttrPath (m v) -> m ([Text], Maybe SourcePos, m v)
             go = \case
                 [] -> pure ([], Nothing, finalValue)
@@ -228,15 +229,17 @@ evalBinds allowDynamic recursive =
             ([], _, _) -> []
             result -> [result]
 
-    go (Inherit ms names) = fmap catMaybes $ forM names $ \name ->
+    go outsideScope (Inherit ms names) = fmap catMaybes $ forM names $ \name ->
         evalSetterKeyName allowDynamic name >>= \case
             (Nothing, _) -> return Nothing
             (Just key, pos) -> return $ Just ([key], pos, do
                 mv <- case ms of
-                    Nothing -> lookupVar key
+                    Nothing -> withScopes outsideScope $ lookupVar key
                     Just s -> s >>= \v -> case wantVal v of
-                        Just (s :: AttrSet t) ->
-                            pushScope s (lookupVar @_ @t key)
+                        Just (s :: AttrSet t) -> case M.lookup key s of
+                            Just x -> pure $ Just x
+                            Nothing -> evalError @v $
+                                "No key " ++ show key ++ " in set " ++ show v
                         _ -> evalError @v $ "Wanted a set, but saw: " ++ show v
                 case mv of
                     Nothing -> evalError @v $ "Inheriting unknown attribute: "
