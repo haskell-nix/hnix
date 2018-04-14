@@ -9,6 +9,7 @@ import qualified Control.Exception as Exc
 import           Control.Monad
 import           Data.Fix
 import           Data.List (isInfixOf)
+import           Data.Maybe (isJust)
 import           Data.String.Interpolate.IsString
 import           Data.Text (unpack)
 import qualified EvalTests
@@ -79,8 +80,8 @@ main = do
   evalComparisonTests <- EvalTests.genEvalCompareTests
   langTestsEnv        <- lookupEnv "LANGUAGE_TESTS"
   nixpkgsTestsEnv     <- lookupEnv "NIXPKGS_TESTS"
-  let runLangTests    = langTestsEnv    == Just "yes"
-  let runNixpkgsTests = nixpkgsTestsEnv == Just "yes"
+  let runLangTests    = isJust langTestsEnv
+  let runNixpkgsTests = isJust nixpkgsTestsEnv
 
   defaultMain $ testGroup "hnix" $
     [ testCase "hnix.cabal correctly generated" cabalCorrectlyGenerated ] ++

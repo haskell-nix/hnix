@@ -8,6 +8,9 @@
 
 module EvalTests (tests, genEvalCompareTests) where
 
+import           Control.Monad (when)
+import           Control.Monad.IO.Class
+import           Data.Maybe (isJust)
 import           Data.String.Interpolate.IsString
 import           Data.Text (Text)
 import           Nix
@@ -17,6 +20,7 @@ import           Nix.Normal
 import           Nix.Parser
 import           Nix.Value
 import qualified System.Directory as D
+import           System.Environment
 import           System.FilePath
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -48,10 +52,10 @@ case_function_definition_uses_environment =
     constantEqualText "3" "let f = (let a=1; in x: x+a); in f 2"
 
 case_function_atpattern =
-    constantEqualText "2" "(({a}@attrs:attrs) {a=2;}).a"
+    constantEqualText' "2" "(({a}@attrs:attrs) {a=2;}).a"
 
 case_function_ellipsis =
-    constantEqualText "2" "(({a, ...}@attrs:attrs) {a=0; b=2;}).b"
+    constantEqualText' "2" "(({a, ...}@attrs:attrs) {a=0; b=2;}).b"
 
 case_function_default_value_not_in_atpattern =
     constantEqualText "false" "({a ? 2}@attrs: attrs ? a) {}"
@@ -63,7 +67,7 @@ case_function_recursive_args =
     constantEqualText "2" "({ x ? 1, y ? x * 3}: y - x) {}"
 
 case_function_recursive_sets =
-    constantEqualText "[ [ 6 4 100 ] 4 ]" [i|
+    constantEqualText' "[ [ 6 4 100 ] 4 ]" [i|
         let x = rec {
 
           y = 2;
@@ -79,19 +83,28 @@ case_function_recursive_sets =
 case_nested_with =
     constantEqualText "2" "with { x = 1; }; with { x = 2; }; x"
 
-case_match_failure_null = assertEvalMatchesNix "builtins.match \"ab\" \"abc\""
+case_match_failure_null =
+    constantEqualText "null" "builtins.match \"ab\" \"abc\""
 
 case_inherit_in_rec_set =
-  assertEvalMatchesNix "let x = 1; in (rec { inherit x; }).x"
+    constantEqualText "1" "let x = 1; in (rec { inherit x; }).x"
+
+case_rec_set_attr_path_simpl =
+    constantEqualText "123" [i|
+      let x = rec {
+        foo.number = 123;
+        foo.function = y: foo.number;
+      }; in x.foo.function 1
+    |]
 
 case_inherit_from_set_has_no_scope =
-  constantEqualText "false" [i|
-    (builtins.tryEval (
-      let x = 1;
-          y = { z = 2; };
-      in { inherit (y) x; }.x
-    )).success
-  |]
+    constantEqualText' "false" [i|
+      (builtins.tryEval (
+        let x = 1;
+            y = { z = 2; };
+        in { inherit (y) x; }.x
+      )).success
+    |]
 
 -----------------------
 
@@ -119,8 +132,15 @@ constantEqual a b = do
     b' <- runLazyM $ normalForm =<< evalLoc Nothing [] b
     assertEqual "" a' b'
 
-constantEqualText :: Text -> Text -> Assertion
-constantEqualText a b =
+constantEqualText' :: Text -> Text -> Assertion
+constantEqualText' a b = do
   let Success a' = parseNixTextLoc a
       Success b' = parseNixTextLoc b
-  in constantEqual a' b'
+  constantEqual a' b'
+
+constantEqualText :: Text -> Text -> Assertion
+constantEqualText a b = do
+  constantEqualText' a b
+  mres <- liftIO $ lookupEnv "MATCHING_TESTS"
+  when (isJust mres) $
+      assertEvalMatchesNix b
