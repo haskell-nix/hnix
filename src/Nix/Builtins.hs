@@ -623,7 +623,9 @@ toPath = flip force $ \case
 
 pathExists_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 pathExists_ = flip force $ \case
-    NVPath p -> mkBool =<< pathExists p
+    NVPath p  -> mkBool =<< pathExists p
+    -- jww (2018-04-13): Should this ever be a string?
+    NVStr s _ -> mkBool =<< pathExists (Text.unpack s)
     v -> throwError $ "builtins.pathExists: expected path, got " ++ show v
 
 isAttrs :: MonadBuiltins e m => NThunk m -> m (NValue m)
