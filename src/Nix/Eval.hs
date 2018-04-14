@@ -156,9 +156,10 @@ eval (NAbs params body) = do
     traceM "NAbs"
     scope <- currentScopes @_ @t
     traceM $ "Creating lambda abstraction in scope: " ++ show scope
-    evalAbs (void params) $ \arg -> do
-        args <- buildArgument params arg
-        withScopes @t scope $ pushScope args body
+    evalAbs (void params) $ \arg ->
+        withScopes @t scope $ do
+            args <- buildArgument params arg
+            pushScope args body
 
 attrSetAlter :: forall e v t m. MonadNixEval e v t m
              => [Text]
