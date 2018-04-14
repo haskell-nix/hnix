@@ -224,9 +224,7 @@ call2 f arg1 arg2 = force f $ \f' ->
 
 -- Primops
 
-foldNixPath :: forall e m r.
-                (Scoped e (NThunk m) m, MonadEffects m,
-                 Framed e m, MonadThrow m, MonadVar m, MonadFile m)
+foldNixPath :: forall e m r. MonadBuiltins e m
             => (FilePath -> Maybe String -> r -> m r) -> r -> m r
 foldNixPath f z = do
     mres <- lookupVar @_ @(NThunk m) "__includes"

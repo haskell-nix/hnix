@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: aadafd05c71b074e10eb082201d88f7358d995ee842fc8308b3222482f43971c
+-- hash: 73ce99ca34076fded0b4f77fcb56f2aaa62f1c4e59e575ebae3a44a793fc3a0f
 
 name:           hnix
 version:        0.5.0
@@ -32,7 +32,9 @@ library
       Nix.Builtins
       Nix.Cache
       Nix.Context
+      Nix.Convert
       Nix.Effects
+      Nix.Entry
       Nix.Eval
       Nix.Exec
       Nix.Expr

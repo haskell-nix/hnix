@@ -35,6 +35,7 @@ import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.Fix
 import           Data.Functor.Compose
+import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.IORef
 import           Data.List
@@ -44,6 +45,7 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Context
+import           Nix.Convert
 import           Nix.Effects
 import           Nix.Eval
 import qualified Nix.Eval as Eval
@@ -63,15 +65,12 @@ import           System.FilePath
 import qualified System.Info
 import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
+import {-# SOURCE #-} Nix.Entry
 
-type MonadExec e m =
-    (Scoped e (NThunk m) m, Framed e m, MonadVar m, MonadFile m,
-     MonadEffects m)
-
-nverr :: forall e m a. MonadExec e m => String -> m a
+nverr :: forall e m a. MonadNix e m => String -> m a
 nverr = evalError @(NValue m)
 
-instance MonadExec e m => ConvertValue (NValue m) Bool where
+instance MonadNix e m => ConvertValue (NValue m) Bool where
     ofVal = NVConstant . NBool
     wantVal = \case NVConstant (NBool b) -> Just b; _ -> Nothing
 
@@ -127,12 +126,12 @@ instance ConvertValue (NValue m) (AttrSet (NThunk m)) where
     ofVal = flip NVSet M.empty
     wantVal = \case NVSet s _ -> Just s; _ -> Nothing
 
-instance MonadExec e m => MonadThunk (NValue m) (NThunk m) m where
+instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
     thunk = fmap coerce . buildThunk
     force = forceThunk . coerce
     value = coerce . valueRef
 
-instance MonadExec e m => MonadEval (NValue m) m where
+instance MonadNix e m => MonadEval (NValue m) m where
     freeVariable var =
         nverr $ "Undefined variable '" ++ Text.unpack var ++ "'"
 
@@ -188,7 +187,7 @@ instance MonadExec e m => MonadEval (NValue m) m where
         v -> fmap (Just . Just) . valueText True =<< normalForm v
 
 infixl 1 `callFunc`
-callFunc :: MonadExec e m => NValue m -> m (NValue m) -> m (NValue m)
+callFunc :: MonadNix e m => NValue m -> m (NValue m) -> m (NValue m)
 callFunc fun arg = case fun of
     NVClosure _ f -> do
         traceM "callFunc:NVFunction"
@@ -217,7 +216,7 @@ execUnaryOp op arg = do
                 ++ " must evaluate to an atomic type: " ++ show x
 
 execBinaryOp
-    :: forall e m. (MonadExec e m, MonadEval (NValue m) m)
+    :: forall e m. (MonadNix e m, MonadEval (NValue m) m)
     => NBinaryOp -> NValue m -> m (NValue m) -> m (NValue m)
 
 execBinaryOp NOr larg rarg = case larg of
@@ -362,7 +361,8 @@ instance MonadCatch m => MonadCatch (Lazy m) where
 instance MonadThrow m => MonadThrow (Lazy m) where
     throwM = Lazy . throwM
 
-instance (MonadFix m, MonadThrow m, MonadIO m) => MonadEffects (Lazy m) where
+instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
+      => MonadEffects (Lazy m) where
     addPath path = do
         (exitCode, out, _) <-
             liftIO $ readProcessWithExitCode "nix-store" ["--add", path] ""
@@ -387,48 +387,7 @@ instance (MonadFix m, MonadThrow m, MonadIO m) => MonadEffects (Lazy m) where
             pure $ cwd <///> origPath
         liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
 
-    findEnvPath name = do
-        mres <- lookupVar @_ @(NThunk (Lazy m)) "__nixPath"
-        mpath <- case mres of
-            Nothing -> error "impossible"
-            Just x -> force x $ \case
-                NVList l -> foldM go Nothing l
-                v -> throwError $
-                    "__nixPath must be a list of attr sets, but saw: "
-                    ++ show v
-        case mpath of
-            Nothing ->
-                throwError $ "file '" ++ name
-                    ++ "' was not found in the Nix search path"
-                    ++ " (add it using $NIX_PATH or -I)"
-            Just path -> return path
-      where
-        -- jww (2018-04-13): Introduce abstractions to make working with Nix
-        -- values like this within Haskell much easier!
-        go :: Maybe FilePath -> NThunk (Lazy m) -> Lazy m (Maybe FilePath)
-        go p@(Just _) _ = pure p
-        go Nothing l = force l $ \case
-            v@(NVSet s _) -> case M.lookup "path" s of
-                Just p -> force p $ \p' -> case wantVal p' of
-                    Just (path :: Text) -> case M.lookup "prefix" s of
-                        Nothing -> tryPath (Text.unpack path) Nothing
-                        Just pf -> force pf $ \pf' -> case wantVal pf' of
-                            Just (pfx :: Text) | not (Text.null pfx) ->
-                                tryPath (Text.unpack path)
-                                        (Just (Text.unpack pfx))
-                            _ -> tryPath (Text.unpack path) Nothing
-                    _ -> throwError $ "__nixPath must be a list of attr sets"
-                        ++ " with textual 'path' elements, but saw: " ++ show v
-                Nothing ->
-                    throwError $ "__nixPath must be a list of attr sets"
-                        ++ " with 'path' elements, but saw: "
-                        ++ show v
-            v -> throwError $ "__nixPath must be a list of attr sets"
-                ++ " with textual 'path' elements, but saw: " ++ show v
-
-        tryPath p (Just n) | n':ns <- splitDirectories name, n == n' =
-            nixFilePath $ p <///> joinPath ns
-        tryPath p _ = nixFilePath $ p <///> name
+    findEnvPath = findEnvPathM
 
     pathExists = liftIO . fileExist
 
@@ -528,3 +487,36 @@ nixFilePath path = do
             else return path
     exists <- liftIO $ doesFileExist path'
     return $ if exists then Just path' else Nothing
+
+findEnvPathM :: forall e m. (MonadNix e m, MonadIO m)
+             => FilePath -> m FilePath
+findEnvPathM name = do
+    mres <- lookupVar @_ @(NThunk m) "__nixPath"
+    mpath <- case mres of
+        Nothing -> error "impossible"
+        Just x -> fromNix x >>= \(l :: [NThunk m]) -> foldM go Nothing l
+    case mpath of
+        Nothing ->
+            throwError $ "file '" ++ name
+                ++ "' was not found in the Nix search path"
+                ++ " (add it using $NIX_PATH or -I)"
+        Just path -> return path
+  where
+    go :: Maybe FilePath -> NThunk m -> m (Maybe FilePath)
+    go p@(Just _) _ = pure p
+    go Nothing l = fromNix l >>= \(s :: HashMap Text (NThunk m)) ->
+        case M.lookup "path" s of
+            Just p -> fromNix p >>= \(Path path) ->
+                case M.lookup "prefix" s of
+                    Nothing -> tryPath path Nothing
+                    Just pf -> fromNixMay pf >>= \case
+                        Just (pfx :: Text) | not (Text.null pfx) ->
+                            tryPath path (Just (Text.unpack pfx))
+                        _ -> tryPath path Nothing
+            Nothing ->
+                throwError $ "__nixPath must be a list of attr sets"
+                    ++ " with 'path' elements, but saw: " ++ show s
+
+    tryPath p (Just n) | n':ns <- splitDirectories name, n == n' =
+        nixFilePath $ p <///> joinPath ns
+    tryPath p _ = nixFilePath $ p <///> name
