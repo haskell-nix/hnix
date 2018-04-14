@@ -236,10 +236,8 @@ evalBinds allowDynamic recursive binds = do
                 mv <- case ms of
                     Nothing -> withScopes outsideScope $ lookupVar key
                     Just s -> s >>= \v -> case wantVal v of
-                        Just (s :: AttrSet t) -> case M.lookup key s of
-                            Just x -> pure $ Just x
-                            Nothing -> evalError @v $
-                                "No key " ++ show key ++ " in set " ++ show v
+                        Just (s :: AttrSet t) ->
+                            clearScopes @t $ pushScope s $ lookupVar key
                         _ -> evalError @v $ "Wanted a set, but saw: " ++ show v
                 case mv of
                     Nothing -> evalError @v $ "Inheriting unknown attribute: "
