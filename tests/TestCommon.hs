@@ -2,11 +2,6 @@ module TestCommon where
 
 import Data.Text (Text, unpack)
 import Nix
-import Nix.Exec
-import Nix.Normal
-import Nix.Parser
-import Nix.Pretty
-import Nix.Value
 import System.Environment
 import System.IO
 import System.Posix.Files
@@ -20,17 +15,17 @@ hnixEvalFile file incls =  do
   case parseResult of
     Failure err        ->
         error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
-    Success expression -> do
+    Success expr -> do
         setEnv "TEST_VAR" "foo"
-        runLazyM $ normalForm =<< evalLoc (Just file) incls expression
+        runLazyM $ normalForm =<< evalLoc (Just file) incls expr
 
 hnixEvalText :: Text -> [String] -> IO (NValueNF (Lazy IO))
-hnixEvalText expr incls = case parseNixText expr of
+hnixEvalText src incls = case parseNixText src of
     Failure err        ->
         error $ "Parsing failed for expressien `"
-            ++ unpack expr ++ "`.\n" ++ show err
-    Success expression ->
-        runLazyM $ normalForm =<< eval Nothing incls expression
+            ++ unpack src ++ "`.\n" ++ show err
+    Success expr ->
+        runLazyM $ normalForm =<< eval Nothing incls expr
 
 nixEvalString :: String -> IO String
 nixEvalString expr = do

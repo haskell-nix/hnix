@@ -14,11 +14,6 @@ import           Data.Maybe (isJust)
 import           Data.String.Interpolate.IsString
 import           Data.Text (Text)
 import           Nix
-import           Nix.Exec
-import           Nix.Expr
-import           Nix.Normal
-import           Nix.Parser
-import           Nix.Value
 import qualified System.Directory as D
 import           System.Environment
 import           System.FilePath
