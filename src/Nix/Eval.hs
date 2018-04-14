@@ -181,14 +181,9 @@ attrSetAlter (p:ps) m val = case M.lookup p m of
   where
     go = return $ M.insert p val m
 
-    recurse s = attrSetAlter ps s val >>= \m' ->
-        if | M.null m' -> return m
-           | otherwise   -> do
-             scope <- currentScopes @_ @t
-             return $ M.insert p (embed scope m') m
-      where
-        embed scope m' =
-            ofVal <$> traverse (thunk . withScopes scope) m'
+    -- jww (2018-04-13): Need to record positions for attr paths as well
+    recurse s = attrSetAlter ps s val <&> \m' ->
+        M.insert p (ofVal . fmap (value @_ @_ @m) <$> sequence m') m
 
 evalBinds :: forall e v t m. MonadNixEval e v t m
           => Bool
@@ -255,6 +250,7 @@ evalBinds allowDynamic recursive binds = do
         traceM $ "buildResult: " ++ show (map (\(k, v, _) -> (k, v)) bindings)
         return (res, foldl' go M.empty bindings)
       where
+        -- jww (2018-04-13): Need to record positions for attr paths as well
         go m ([k], Just pos, _) = M.insert k pos m
         go m _ = m
 
