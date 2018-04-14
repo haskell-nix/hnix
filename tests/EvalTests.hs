@@ -81,6 +81,18 @@ case_nested_with =
 
 case_match_failure_null = assertEvalMatchesNix "builtins.match \"ab\" \"abc\""
 
+case_inherit_in_rec_set =
+  assertEvalMatchesNix "let x = 1; in (rec { inherit x; }).x"
+
+case_inherit_from_set_has_no_scope =
+  constantEqualText "false" [i|
+    (builtins.tryEval (
+      let x = 1;
+          y = { z = 2; };
+      in { inherit (y) x; }.x
+    )).success
+  |]
+
 -----------------------
 
 tests :: TestTree
