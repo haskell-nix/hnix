@@ -676,6 +676,7 @@ throw_ = flip force $ \case
 import_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 import_ = flip force $ \case
     NVPath p -> importPath M.empty p
+    NVStr p _ -> importPath M.empty $ Text.unpack p
     v -> throwError $ "import: expected path, got " ++ show v
 
 scopedImport :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
