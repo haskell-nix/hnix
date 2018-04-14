@@ -10,7 +10,7 @@
 module Main where
 
 import           Control.Arrow (second)
-import           Control.DeepSeq
+import qualified Control.DeepSeq as Deep
 import qualified Control.Exception as Exc
 import           Control.Monad
 import           Control.Monad.IO.Class
@@ -20,18 +20,7 @@ import qualified Data.HashMap.Lazy as M
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import qualified Data.Text.Read as Text
-import qualified Nix
-import           Nix.Cache
-import           Nix.Exec (Lazy, runLazyM)
-import           Nix.Expr
-import           Nix.Lint
-import           Nix.Normal
-import           Nix.Options
-import           Nix.Parser
-import           Nix.Pretty
-import           Nix.Stack (NixException(..))
-import qualified Nix.Thunk as T
-import qualified Nix.Value as V
+import           Nix
 import qualified Repl
 -- import           Nix.TH
 import           Options.Applicative hiding (ParserResult(..))
@@ -83,46 +72,46 @@ main = do
         let parseArg s = case parseNixText s of
                 Success x -> x
                 Failure err -> errorWithoutStackTrace (show err)
-            eval = runLazyM . (normalForm =<<)
-                            . Nix.eval Nothing (include opts)
+            eval' = runLazyM . (normalForm =<<)
+                             . Nix.eval Nothing (include opts)
 
-        args <- traverse (traverse eval) $
+        args <- traverse (traverse eval') $
             map (second parseArg) (arg opts) ++
             map (second mkStr) (argstr opts)
 
-        let argmap :: Lazy IO (V.NValue (Lazy IO))
-            argmap = embed $ Fix $ V.NVSet (M.fromList args) mempty
+        let argmap :: Lazy IO (NValue (Lazy IO))
+            argmap = embed $ Fix $ NVSet (M.fromList args) mempty
 
             compute ev x p = do
                  f <- ev mpath (include opts) x
                  p =<< case f of
-                     V.NVClosure _ g -> g argmap
+                     NVClosure _ g -> g argmap
                      _ -> pure f
 
             result :: forall e m. Nix.MonadNix e m
-                   => (V.NValue m -> m ()) -> V.NValue m -> m ()
+                   => (NValue m -> m ()) -> NValue m -> m ()
             result h = case attr opts of
                 Nothing -> h
                 Just (Text.splitOn "." -> keys) -> go keys
               where
-                go :: [Text.Text] -> V.NValue m -> m ()
+                go :: [Text.Text] -> NValue m -> m ()
                 go [] v = h v
                 go ((Text.decimal -> Right (n,"")):ks) v = case v of
-                    V.NVList xs -> case ks of
-                        [] -> T.force @(V.NValue m) @(V.NThunk m) (xs !! n) h
-                        _  -> T.force (xs !! n) (go ks)
+                    NVList xs -> case ks of
+                        [] -> force @(NValue m) @(NThunk m) (xs !! n) h
+                        _  -> force (xs !! n) (go ks)
                     _ -> errorWithoutStackTrace $
                             "Expected a list for selector '" ++ show n
                                 ++ "', but got: " ++ show v
                 go (k:ks) v = case v of
-                    V.NVSet xs _ -> case M.lookup k xs of
+                    NVSet xs _ -> case M.lookup k xs of
                         Nothing ->
                             errorWithoutStackTrace $
                                 "Set does not contain key '"
                                     ++ Text.unpack k ++ "'"
                         Just v' -> case ks of
-                            [] -> T.force v' h
-                            _  -> T.force v' (go ks)
+                            [] -> force v' h
+                            _  -> force v' (go ks)
                     _ -> errorWithoutStackTrace $
                         "Expected a set for selector '" ++ Text.unpack k
                             ++ "', but got: " ++ show v
@@ -145,7 +134,7 @@ main = do
                 let file = addExtension (dropExtension path) "nixc"
                 writeCache file expr
 
-           | parseOnly opts -> void $ Exc.evaluate $ force expr
+           | parseOnly opts -> void $ Exc.evaluate $ Deep.force expr
 
            | otherwise ->
                  displayIO stdout

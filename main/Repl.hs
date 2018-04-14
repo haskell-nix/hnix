@@ -18,17 +18,11 @@
 
 module Repl where
 
-import qualified Nix
-import qualified Nix.Eval as Eval
-import           Nix.Exec (Lazy)
-import qualified Nix.Exec as Exec
-import           Nix.Normal
-import           Nix.Parser
-import           Nix.Pretty
+import           Nix
+import           Nix.Eval
 import           Nix.Scope
 import qualified Nix.Type.Env as Env
 import           Nix.Type.Infer
-import           Nix.Value
 
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Map as Map
@@ -93,14 +87,14 @@ exec update source = do
   when update (put st')
 
   -- If a value is entered, print it.
-  val <- liftIO $ Exec.runLazyM $
-      Nix.evalTopLevelExprGen
+  val <- liftIO $ runLazyM $
+      evalTopLevelExprGen
           -- jww (2018-04-12): Once the user is able to establish definitions
           -- in the repl, they should be passed here.
           (pushScope @(NThunk (Lazy IO)) M.empty
-               . Eval.framedEvalExpr
-                     (Eval.eval @_ @(NValue (Lazy IO))
-                                @(NThunk (Lazy IO)) @(Lazy IO)))
+               . framedEvalExpr
+                     (Nix.Eval.eval @_ @(NValue (Lazy IO))
+                                    @(NThunk (Lazy IO)) @(Lazy IO)))
           Nothing [] expr
   liftIO $ print val
 
