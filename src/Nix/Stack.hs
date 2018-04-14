@@ -66,6 +66,7 @@ throwError str = do
         [] -> return []
         _ -> mapM renderFrame $
                 filter noAsserts (init context) ++ [last context]
+    traceM "throwing error"
     throwM $ NixEvalException $ unlines $ infos ++ [str]
   where
     noAsserts (Right (Compose (Ann _ (NAssert _ _)))) = False

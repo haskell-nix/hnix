@@ -25,6 +25,7 @@
 
 module Nix.Exec where
 
+import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.Fix
@@ -65,7 +66,7 @@ import           System.FilePath
 import qualified System.Info
 import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
-import {-# SOURCE #-} Nix.Entry
+import {-# SOURCE #-} Nix.Entry as Entry
 
 nverr :: forall e m a. MonadNix e m => String -> m a
 nverr = evalError @(NValue m)
@@ -340,7 +341,8 @@ execBinaryOp op larg rarg = do
 
 newtype Lazy m a = Lazy
     { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m))) m a }
-    deriving (Functor, Applicative, Monad, MonadFix, MonadIO,
+    deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
+              MonadFix, MonadIO,
               MonadReader (Context (Lazy m) (NThunk (Lazy m))))
 
 instance MonadIO m => MonadVar (Lazy m) where
@@ -447,7 +449,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
                     Failure err ->
                         throwError $ "Error parsing output of nix-instantiate: "
                             ++ show err
-                    Success v -> framedEvalExpr eval v
+                    Success v -> framedEvalExpr Eval.eval v
             err -> throwError $ "nix-instantiate failed: " ++ show err
 
 runLazyM :: MonadIO m => Lazy m a -> m a

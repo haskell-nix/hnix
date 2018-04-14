@@ -13,6 +13,7 @@ import           Data.String.Interpolate.IsString
 import           Data.Text (unpack)
 import qualified EvalTests
 import qualified Nix
+import           Nix.Exec
 import           Nix.Expr.Types
 import           Nix.Parser
 import           Nix.Stack
@@ -54,7 +55,7 @@ ensureNixpkgsCanParse =
           url    = "https://github.com/NixOS/nixpkgs/archive/#{rev}.tar.gz";
           sha256 = "#{sha256}";
         }|]) $ \expr -> do
-        Fix (NVStr dir _) <- Nix.evalLoc Nothing [] expr
+        NVStr dir _ <- runLazyM $ Nix.evalLoc Nothing [] expr
         files <- globDir1 (compile "**/*.nix") (unpack dir)
         forM_ files $ \file ->
           -- Parse and deepseq the resulting expression tree, to ensure the

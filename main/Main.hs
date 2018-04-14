@@ -1,7 +1,10 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 -- {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Main where
@@ -10,6 +13,7 @@ import           Control.Arrow (second)
 import           Control.DeepSeq
 import qualified Control.Exception as Exc
 import           Control.Monad
+import           Control.Monad.IO.Class
 import           Control.Monad.ST
 import           Data.Fix
 import qualified Data.HashMap.Lazy as M
@@ -26,6 +30,7 @@ import           Nix.Options
 import           Nix.Parser
 import           Nix.Pretty
 import           Nix.Stack (NixException(..))
+import qualified Nix.Thunk as T
 import qualified Nix.Value as V
 import qualified Repl
 -- import           Nix.TH
@@ -78,8 +83,10 @@ main = do
         let parseArg s = case parseNixText s of
                 Success x -> x
                 Failure err -> errorWithoutStackTrace (show err)
+            eval = runLazyM . (normalForm =<<)
+                            . Nix.eval Nothing (include opts)
 
-        args <- traverse (traverse (Nix.eval Nothing (include opts))) $
+        args <- traverse (traverse eval) $
             map (second parseArg) (arg opts) ++
             map (second mkStr) (argstr opts)
 
@@ -89,44 +96,47 @@ main = do
             compute ev x p = do
                  f <- ev mpath (include opts) x
                  p =<< case f of
-                     Fix (V.NVClosure _ g) ->
-                         runLazyM $ normalForm =<< g argmap
+                     V.NVClosure _ g -> g argmap
                      _ -> pure f
 
+            result :: forall e m. Nix.MonadNix e m
+                   => (V.NValue m -> m ()) -> V.NValue m -> m ()
             result h = case attr opts of
                 Nothing -> h
                 Just (Text.splitOn "." -> keys) -> go keys
               where
+                go :: [Text.Text] -> V.NValue m -> m ()
                 go [] v = h v
-                go ((Text.decimal -> Right (n,_)):ks) v = case v of
-                    Fix (V.NVList xs) -> case ks of
-                        [] -> h (xs !! n)
-                        _  -> go ks (xs !! n)
+                go ((Text.decimal -> Right (n,"")):ks) v = case v of
+                    V.NVList xs -> case ks of
+                        [] -> T.force @(V.NValue m) @(V.NThunk m) (xs !! n) h
+                        _  -> T.force (xs !! n) (go ks)
                     _ -> errorWithoutStackTrace $
                             "Expected a list for selector '" ++ show n
                                 ++ "', but got: " ++ show v
                 go (k:ks) v = case v of
-                    Fix (V.NVSet xs _) ->
-                        case M.lookup k xs of
-                            Nothing ->
-                                errorWithoutStackTrace $
-                                    "Set does not contain key '"
-                                        ++ Text.unpack k ++ "'"
-                            Just v' -> case ks of
-                                [] -> h v'
-                                _  -> go ks v'
+                    V.NVSet xs _ -> case M.lookup k xs of
+                        Nothing ->
+                            errorWithoutStackTrace $
+                                "Set does not contain key '"
+                                    ++ Text.unpack k ++ "'"
+                        Just v' -> case ks of
+                            [] -> T.force v' h
+                            _  -> T.force v' (go ks)
                     _ -> errorWithoutStackTrace $
                         "Expected a set for selector '" ++ Text.unpack k
                             ++ "', but got: " ++ show v
 
         if | evaluate opts, debug opts ->
-                 compute Nix.tracingEvalLoc expr (result print)
+                 runLazyM $ compute Nix.tracingEvalLoc expr $
+                     result (liftIO . print)
 
            | evaluate opts, not (null args) ->
-                 compute Nix.evalLoc expr (result (putStrLn . printNix))
+                 runLazyM $ compute Nix.evalLoc expr $
+                     result (liftIO . print)
 
-           | evaluate opts ->
-                 result (putStrLn . printNix)
+           | evaluate opts -> runLazyM $
+                 result (liftIO . print)
                      =<< Nix.evalLoc mpath (include opts) expr
 
            | debug opts -> print $ stripAnnotation expr

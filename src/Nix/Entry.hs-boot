@@ -6,8 +6,10 @@
 
 module Nix.Entry where
 
+import Control.Applicative (Alternative)
 import Control.Monad.Catch (MonadCatch)
 import Control.Monad.Fix (MonadFix)
+import Control.Monad.IO.Class (MonadIO)
 import Nix.Effects (MonadEffects)
 import Nix.Expr.Types (NExpr)
 import Nix.Expr.Types.Annotated (NExprLoc)
@@ -23,11 +25,14 @@ type MonadNix e m =
 evalTopLevelExprGen
     :: forall e m a. MonadNix e m
     => (a -> m (NValue m)) -> Maybe FilePath -> [String] -> a
-    -> m (NValueNF m)
+    -> m (NValue m)
 
--- | Evaluate a nix expression in the default context
-evalTopLevelExpr :: forall e m. MonadNix e m
-                 => Maybe FilePath -> [String] -> NExpr -> m (NValueNF m)
+eval :: forall e m. MonadNix e m
+     => Maybe FilePath -> [String] -> NExpr -> m (NValue m)
 
-evalTopLevelExprLoc :: forall e m. MonadNix e m
-                    => Maybe FilePath -> [String] -> NExprLoc -> m (NValueNF m)
+evalLoc :: forall e m. MonadNix e m
+                    => Maybe FilePath -> [String] -> NExprLoc -> m (NValue m)
+
+tracingEvalLoc
+    :: forall e m. (MonadNix e m, Alternative m, MonadIO m)
+    => Maybe FilePath -> [String] -> NExprLoc -> m (NValue m)

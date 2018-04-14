@@ -11,7 +11,9 @@ module EvalTests (tests, genEvalCompareTests) where
 import           Data.String.Interpolate.IsString
 import           Data.Text (Text)
 import           Nix
+import           Nix.Exec
 import           Nix.Expr
+import           Nix.Normal
 import           Nix.Parser
 import           Nix.Value
 import qualified System.Directory as D
@@ -100,9 +102,9 @@ instance (Show r, Show (NValueF m r), Eq r) => Eq (NValueF m r) where
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
 constantEqual a b = do
     -- putStrLn =<< lint (stripAnnotation a)
-    a' <- evalLoc Nothing [] a
+    a' <- runLazyM $ normalForm =<< evalLoc Nothing [] a
     -- putStrLn =<< lint (stripAnnotation b)
-    b' <- evalLoc Nothing [] b
+    b' <- runLazyM $ normalForm =<< evalLoc Nothing [] b
     assertEqual "" a' b'
 
 constantEqualText :: Text -> Text -> Assertion

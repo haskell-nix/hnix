@@ -102,7 +102,7 @@ exec update source = do
                      (Eval.eval @_ @(NValue (Lazy IO))
                                 @(NThunk (Lazy IO)) @(Lazy IO)))
           Nothing [] expr
-  liftIO $ putStrLn $ printNix val
+  liftIO $ print val
 
 cmd :: String -> Repl ()
 cmd source = exec True (Text.pack source)

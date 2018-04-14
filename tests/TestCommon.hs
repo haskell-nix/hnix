@@ -3,6 +3,7 @@ module TestCommon where
 import Data.Text (Text, unpack)
 import Nix
 import Nix.Exec
+import Nix.Normal
 import Nix.Parser
 import Nix.Pretty
 import Nix.Value
@@ -21,14 +22,15 @@ hnixEvalFile file incls =  do
         error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
     Success expression -> do
         setEnv "TEST_VAR" "foo"
-        evalLoc (Just file) incls expression
+        runLazyM $ normalForm =<< evalLoc (Just file) incls expression
 
 hnixEvalText :: Text -> [String] -> IO (NValueNF (Lazy IO))
 hnixEvalText expr incls = case parseNixText expr of
     Failure err        ->
         error $ "Parsing failed for expressien `"
             ++ unpack expr ++ "`.\n" ++ show err
-    Success expression -> eval Nothing incls expression
+    Success expression ->
+        runLazyM $ normalForm =<< eval Nothing incls expression
 
 nixEvalString :: String -> IO String
 nixEvalString expr = do

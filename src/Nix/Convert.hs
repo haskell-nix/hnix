@@ -190,14 +190,14 @@ instance (MonadThunk (NValue m) (NThunk m) m,
     fromNixMay v = v >>= fromNixMay
 
 instance (MonadCatch m, MonadFix m, MonadIO m,
-          FromNix a m (NValueNF m)) => FromNix a m NExprLoc where
-    fromNix    = evalTopLevelExprLoc Nothing [] >=> fromNix
-    fromNixMay = evalTopLevelExprLoc Nothing [] >=> fromNixMay
+          FromNix a m (NValue m)) => FromNix a m NExprLoc where
+    fromNix    = evalLoc Nothing [] >=> fromNix
+    fromNixMay = evalLoc Nothing [] >=> fromNixMay
 
 instance (MonadCatch m, MonadFix m, MonadIO m,
-          FromNix a m (NValueNF m)) => FromNix a m NExpr where
-    fromNix    = evalTopLevelExpr Nothing [] >=> fromNix
-    fromNixMay = evalTopLevelExpr Nothing [] >=> fromNixMay
+          FromNix a m (NValue m)) => FromNix a m NExpr where
+    fromNix    = eval Nothing [] >=> fromNix
+    fromNixMay = eval Nothing [] >=> fromNixMay
 
 toEncodingSorted :: A.Value -> A.Encoding
 toEncodingSorted = \case
