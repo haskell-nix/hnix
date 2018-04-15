@@ -38,6 +38,7 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Context
+import           Nix.Convert
 import           Nix.Eval
 import qualified Nix.Eval as Eval
 import           Nix.Expr
@@ -240,50 +241,17 @@ unify context (Symbolic x) (Symbolic y) = do
                     writeVar y (NMany m)
                     packSymbolic (NMany m)
 
-instance MonadLint e m => ConvertValue (Symbolic m) Bool where
-    ofVal = const $ error "Should never need to make symbolic from bool"
-    wantVal = const $ error "Should never need bool value of a symbolic"
+instance FromNix (AttrSet (SThunk m)) m (Symbolic m) where
 
-instance ConvertValue (Symbolic m) Int where
-    ofVal = const $ error "Should never need to make symbolic from int"
-    wantVal = const $ error "Should never need int value of a symbolic"
+instance FromNix (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
 
-instance ConvertValue (Symbolic m) Integer where
-    ofVal = const $ error "Should never need to make symbolic from integer"
-    wantVal = const $ error "Should never need integer value of a symbolic"
+instance ToNix (AttrSet (SThunk m)) (Symbolic m) where
 
-instance ConvertValue (Symbolic m) Float where
-    ofVal = const $ error "Should never need to make symbolic from float"
-    wantVal = const $ error "Should never need float value of a symbolic"
+instance ToNix (AttrSet (SThunk m), AttrSet SourcePos) (Symbolic m) where
 
-instance ConvertValue (Symbolic m) Text where
-    ofVal = const $ error "Should never need to make symbolic from text"
-    wantVal = const $ error "Should never need text value of a symbolic"
+instance ToNix [SThunk m] (Symbolic m) where
 
-instance ConvertValue (Symbolic m) (Maybe Text) where
-    ofVal = const $ error "Should never need to make symbolic from maybe text"
-    wantVal = const $ error "Should never need maybe text value of a symbolic"
-
-instance ConvertValue (Symbolic m) [SThunk m] where
-    ofVal = const $ error "NYI"
-    wantVal = const $ error "NYI"
-
-instance ConvertValue (Symbolic m)
-      (AttrSet (SThunk m), AttrSet SourcePos) where
-    ofVal = const $ error "Should never need to make symbolic from set pair"
-    wantVal = const Nothing
-
-instance ConvertValue (Symbolic m) (AttrSet (SThunk m)) where
-    ofVal = const $ error "Should never need to make symbolic from attrset"
-    wantVal = const Nothing
-
-instance ConvertValue (Symbolic m) () where
-    ofVal = const $ error "Should never need to make symbolic from unit"
-    wantVal = const $ error "Should never need unit value of a symbolic"
-
-instance ConvertValue (Symbolic m) (Maybe ()) where
-    ofVal = const $ error "Should never need to make symbolic from maybe unit"
-    wantVal = const $ error "Should never need maybe unit value of a symbolic"
+instance ToNix Bool (Symbolic m) where
 
 instance MonadLint e m => MonadThunk (Symbolic m) (SThunk m) m where
     thunk = fmap coerce . buildThunk

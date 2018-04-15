@@ -319,7 +319,3 @@ stripPositionInfo = transport phi
 
     clear (StaticKey name _) = StaticKey name Nothing
     clear k = k
-
-class ConvertValue v a where
-    ofVal   :: a -> v
-    wantVal :: v -> Maybe a
