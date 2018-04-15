@@ -98,6 +98,13 @@ assertLangOk file incls = do
   expected <- Text.readFile $ file ++ ".exp"
   assertEqual "" expected $ Text.pack (actual ++ "\n")
 
+-- jww (2018-04-15): Remove this duplication
+assertLangOkOpts :: Options -> FilePath -> Assertion
+assertLangOkOpts opts file = do
+  actual <- printNix <$> hnixEvalFileOpts opts (file ++ ".nix")
+  expected <- Text.readFile $ file ++ ".exp"
+  assertEqual "" expected $ Text.pack (actual ++ "\n")
+
 assertLangOkXml :: FilePath -> [String] -> Assertion
 assertLangOkXml file incls = do
   actual <- toXML <$> hnixEvalFile (file ++ ".nix") incls
@@ -116,23 +123,26 @@ assertEval files = catch go $ \case
         [".exp", ".flags"] -> do
             flags <- Text.readFile (name ++ ".flags")
             case Opts.execParserPure Opts.defaultPrefs nixOptionsInfo
-                     (map Text.unpack (Text.splitOn " " flags)) of
+                     (fixup (map Text.unpack (Text.splitOn " " flags))) of
                 Opts.Failure err -> errorWithoutStackTrace $
                     "Error parsing flags from " ++ name ++ ".flags: "
                         ++ show err
                 Opts.Success opts ->
-                    -- jww (2018-04-11): If --arg, --attr or --argstr was
-                    -- used, then apply those arguments after evaluation (see
-                    -- Main.hs).
-                    assertLangOk name
-                        (include opts ++
-                         [ "nix=../../../../data/nix/corepkgs"
-                         , "lang/dir4" ])
+                    assertLangOkOpts
+                        (opts { include = include opts ++
+                                  [ "nix=../../../../data/nix/corepkgs"
+                                  , "lang/dir4" ] })
+                        name
                 Opts.CompletionInvoked _ -> error "unused"
         _ -> assertFailure $ "Unknown test type " ++ show files
       where
         name = "data/nix/tests/lang/"
             ++ the (map (takeFileName . dropExtensions) files)
+
+        fixup ("--arg":x:y:rest) = "--arg":(x ++ "=" ++ y):fixup rest
+        fixup ("--argstr":x:y:rest) = "--argstr":(x ++ "=" ++ y):fixup rest
+        fixup (x:rest) = x:fixup rest
+        fixup [] = []
 
 assertEvalFail :: FilePath -> Assertion
 assertEvalFail file = catch ?? (\(_ :: SomeException) -> return ()) $ do

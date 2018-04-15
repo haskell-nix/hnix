@@ -19,6 +19,16 @@ hnixEvalFile file incls =  do
         setEnv "TEST_VAR" "foo"
         runLazyM $ normalForm =<< evalLoc (Just file) incls expr
 
+hnixEvalFileOpts :: Options -> FilePath -> IO (NValueNF (Lazy IO))
+hnixEvalFileOpts opts file = do
+  parseResult <- parseNixFileLoc file
+  case parseResult of
+    Failure err        ->
+        error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
+    Success expr -> do
+        setEnv "TEST_VAR" "foo"
+        runLazyM $ evaluateExpression opts (Just file) evalLoc normalForm expr
+
 hnixEvalText :: Text -> [String] -> IO (NValueNF (Lazy IO))
 hnixEvalText src incls = case parseNixText src of
     Failure err        ->
