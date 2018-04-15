@@ -496,7 +496,8 @@ findEnvPathM name = do
     mres <- lookupVar @_ @(NThunk m) "__nixPath"
     mpath <- case mres of
         Nothing -> error "impossible"
-        Just x -> fromNix x >>= \(l :: [NThunk m]) -> foldM go Nothing l
+        Just x -> force x $ fromNix >=> \(l :: [NThunk m]) ->
+            foldM go Nothing l
     case mpath of
         Nothing ->
             throwError $ "file '" ++ name
@@ -506,12 +507,12 @@ findEnvPathM name = do
   where
     go :: Maybe FilePath -> NThunk m -> m (Maybe FilePath)
     go p@(Just _) _ = pure p
-    go Nothing l = fromNix l >>= \(s :: HashMap Text (NThunk m)) ->
+    go Nothing l = force l $ fromNix >=> \(s :: HashMap Text (NThunk m)) ->
         case M.lookup "path" s of
-            Just p -> fromNix p >>= \(Path path) ->
+            Just p -> force p $ fromNix >=> \(Path path) ->
                 case M.lookup "prefix" s of
                     Nothing -> tryPath path Nothing
-                    Just pf -> fromNixMay pf >>= \case
+                    Just pf -> force pf $ fromNixMay >=> \case
                         Just (pfx :: Text) | not (Text.null pfx) ->
                             tryPath path (Just (Text.unpack pfx))
                         _ -> tryPath path Nothing

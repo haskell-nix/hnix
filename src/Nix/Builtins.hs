@@ -585,7 +585,7 @@ replaceStrings from to s = Prim $ do
     return $ go s mempty
 
 removeAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-removeAttrs set list = fromNix list >>= \(toRemove :: [Text]) ->
+removeAttrs set list = force list $ fromNix >=> \(toRemove :: [Text]) ->
     force set $ \case
         NVSet m p -> return $ NVSet (go m toRemove) (go p toRemove)
         v -> throwError $ "removeAttrs: expected set, got " ++ show v
@@ -802,7 +802,7 @@ readDir_ pathThunk = do
     toNix $ M.fromList itemsWithTypes
 
 fromJSON :: MonadBuiltins e m => NThunk m -> m (NValue m)
-fromJSON t = fromNix t >>= \encoded ->
+fromJSON t = force t $ fromNix >=> \encoded ->
     case A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded of
         Left jsonError -> throwError $ "builtins.fromJSON: " ++ jsonError
         Right v -> toNix v
@@ -915,7 +915,8 @@ instance (MonadBuiltins e m, ToNix a m (NValue m)) => ToBuiltin m (Prim m a) whe
 instance (MonadBuiltins e m, FromNix a m (NValue m), ToBuiltin m b)
       => ToBuiltin m (a -> b) where
     toBuiltin name f =
-        return $ NVBuiltin name $ fromNix >=> toBuiltin name . f
+        return $ NVBuiltin name $
+            force ?? (fromNix >=> toBuiltin name . f)
 
 toEncodingSorted :: A.Value -> A.Encoding
 toEncodingSorted = \case
