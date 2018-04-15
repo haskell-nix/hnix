@@ -55,7 +55,7 @@ eval = evalTopLevelExprGen $
 
 -- | Evaluate a nix expression in the default context
 evalLoc :: forall e m. MonadNix e m
-                    => Maybe FilePath -> [String] -> NExprLoc -> m (NValue m)
+        => Maybe FilePath -> [String] -> NExprLoc -> m (NValue m)
 evalLoc = evalTopLevelExprGen $
     Eval.framedEvalExpr (Eval.eval @_ @(NValue m) @(NThunk m) @m)
 
