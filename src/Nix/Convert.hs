@@ -20,17 +20,17 @@ import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Data.Aeson (toJSON)
 import qualified Data.Aeson as A
-import qualified Data.Aeson.Encoding as A
+import           Data.ByteString
 import           Data.Fix
 import           Data.Functor.Compose
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
-import           Data.List (sortOn)
+import           Data.Scientific
 import           Data.Text (Text)
+import           Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import qualified Data.Vector as V
 import           Nix.Atoms
 import           Nix.Effects
-import {-# SOURCE #-} Nix.Entry
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Normal
@@ -39,6 +39,7 @@ import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 import           Text.Megaparsec.Pos
+import {-# SOURCE #-} Nix.Entry
 
 class FromNix a m v where
     fromNix    :: MonadNix e m => v -> m a
@@ -124,6 +125,22 @@ instance FromNix Text m (NValue m) where
         Just b -> pure b
         v -> throwError $ "Expected a string, but saw: " ++ show v
 
+instance FromNix ByteString m (NValueNF m) where
+    fromNixMay = \case
+        Fix (NVStr t _) -> pure $ Just (encodeUtf8 t)
+        _ -> pure Nothing
+    fromNix = fromNixMay >=> \case
+        Just b -> pure b
+        v -> throwError $ "Expected a string, but saw: " ++ show v
+
+instance FromNix ByteString m (NValue m) where
+    fromNixMay = \case
+        NVStr t _ -> pure $ Just (encodeUtf8 t)
+        _ -> pure Nothing
+    fromNix = fromNixMay >=> \case
+        Just b -> pure b
+        v -> throwError $ "Expected a string, but saw: " ++ show v
+
 newtype Path = Path { getPath :: FilePath }
     deriving Show
 
@@ -143,21 +160,24 @@ instance FromNix Path m (NValue m) where
         Just b -> pure b
         v -> throwError $ "Expected a path, but saw: " ++ show v
 
-instance FromNix [NValueNF m] m (NValueNF m) where
+instance (FromNix a m (NValueNF m), Show a)
+      => FromNix [a] m (NValueNF m) where
     fromNixMay = \case
-        Fix (NVList l) -> pure $ Just l
+        Fix (NVList l) -> fmap sequence $ traverse fromNixMay l
         _ -> pure Nothing
     fromNix = fromNixMay >=> \case
         Just b -> pure b
-        v -> throwError $ "Expected a list, but saw: " ++ show v
+        v -> throwError $ "Expected an attrset, but saw: " ++ show v
 
-instance FromNix [NThunk m] m (NValue m) where
+instance (MonadThunk (NValue m) (NThunk m) m,
+          FromNix a m (NValue m), Show a)
+      => FromNix [a] m (NValue m) where
     fromNixMay = \case
-        NVList l -> pure $ Just l
+        NVList l -> fmap sequence $ traverse fromNixMay l
         _ -> pure Nothing
     fromNix = fromNixMay >=> \case
         Just b -> pure b
-        v -> throwError $ "Expected a list, but saw: " ++ show v
+        v -> throwError $ "Expected an attrset, but saw: " ++ show v
 
 instance FromNix (HashMap Text (NValueNF m)) m (NValueNF m) where
     fromNixMay = \case
@@ -174,6 +194,13 @@ instance FromNix (HashMap Text (NThunk m)) m (NValue m) where
     fromNix = fromNixMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected an attrset, but saw: " ++ show v
+
+instance (MonadThunk (NValue m) (NThunk m) m)
+      => FromNix (NThunk m) m (NValue m) where
+    fromNixMay = pure . Just . value @_ @_ @m
+    fromNix = fromNixMay >=> \case
+        Just b -> pure b
+        v -> throwError $ "Expected a thunk, but saw: " ++ show v
 
 instance FromNix a m (NValue m) => FromNix a m (m (NValue m)) where
     fromNix    v = v >>= fromNix
@@ -198,16 +225,6 @@ instance (MonadCatch m, MonadFix m, MonadIO m,
           FromNix a m (NValue m)) => FromNix a m NExpr where
     fromNix    = eval Nothing [] >=> fromNix
     fromNixMay = eval Nothing [] >=> fromNixMay
-
-toEncodingSorted :: A.Value -> A.Encoding
-toEncodingSorted = \case
-    A.Object m ->
-        A.pairs . mconcat
-                . fmap (\(k, v) -> A.pair k $ toEncodingSorted v)
-                . sortOn fst
-                $ M.toList m
-    A.Array l -> A.list toEncodingSorted $ V.toList l
-    v -> A.toEncoding v
 
 instance FromNix A.Value m (NValueNF m) where
     fromNixMay = \case
@@ -266,6 +283,12 @@ instance ToNix Text m (NValueNF m) where
 instance ToNix Text m (NValue m) where
     toNix = pure . flip NVStr mempty
 
+instance ToNix ByteString m (NValueNF m) where
+    toNix = pure . Fix . flip NVStr mempty . decodeUtf8
+
+instance ToNix ByteString m (NValue m) where
+    toNix = pure . flip NVStr mempty . decodeUtf8
+
 instance ToNix Path m (NValueNF m) where
     toNix = pure . Fix . NVPath . getPath
 
@@ -309,3 +332,15 @@ instance ToNix a m (NExprF (Fix (Compose (Ann SrcSpan) NExprF)))
     toNix = fmap (Fix . Compose . Ann (SrcSpan blankSpan blankSpan)) . toNix
       where
         blankSpan = SourcePos "<unknown>" (mkPos 1) (mkPos 1)
+
+instance MonadThunk (NValue m) (NThunk m) m
+      => ToNix A.Value m (NValue m) where
+    toNix = \case
+        A.Object m -> flip NVSet M.empty <$> traverse (thunk . toNix @_ @_ @(NValue m)) m
+        A.Array l -> NVList <$> traverse (thunk . toNix) (V.toList l)
+        A.String s -> pure $ NVStr s mempty
+        A.Number n -> pure $ NVConstant $ case floatingOrInteger n of
+            Left r -> NFloat r
+            Right i -> NInt i
+        A.Bool b -> pure $ NVConstant $ NBool b
+        A.Null -> pure $ NVConstant NNull
