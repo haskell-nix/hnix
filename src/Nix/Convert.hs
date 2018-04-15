@@ -163,6 +163,11 @@ instance (FromNix a m (NValueNF m), Show a)
         Just b -> pure b
         v -> throwError $ "Expected an attrset, but saw: " ++ show v
 
+-- jww (2018-04-15): This instance does not work, because when the desired
+-- conversion is FromNix [NThunk m] m (NValue m), we then use traverse with
+-- FromNix (NThunk m) m (NValue m), and this use of 'traverse' causes the
+-- monadic effects to be sequence'd too early.
+
 -- instance (MonadThunk (NValue m) (NThunk m) m,
 --           FromNix a m (NValue m), Show a) => FromNix [a] m (NValue m) where
 --     fromNixMay = \case
