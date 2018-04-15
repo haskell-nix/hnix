@@ -15,9 +15,9 @@
 module Nix.Convert where
 
 import           Control.Monad
-import           Control.Monad.Catch
-import           Control.Monad.Fix
-import           Control.Monad.IO.Class
+-- import           Control.Monad.Catch
+-- import           Control.Monad.Fix
+-- import           Control.Monad.IO.Class
 import           Data.Aeson (toJSON)
 import qualified Data.Aeson as A
 import           Data.ByteString
@@ -27,6 +27,7 @@ import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.Scientific
 import           Data.Text (Text)
+import qualified Data.Text as Text
 import           Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import qualified Data.Vector as V
 import           Nix.Atoms
@@ -34,16 +35,17 @@ import           Nix.Effects
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Normal
+-- import           Nix.Scope
 import           Nix.Stack
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 import           Text.Megaparsec.Pos
-import {-# SOURCE #-} Nix.Entry
+-- import {-# SOURCE #-} Nix.Entry
 
 class FromNix a m v where
-    fromNix    :: MonadNix e m => v -> m a
-    fromNixMay :: MonadNix e m => v -> m (Maybe a)
+    fromNix    :: (Framed e m, MonadVar m, MonadFile m) => v -> m a
+    fromNixMay :: (Framed e m, MonadVar m, MonadFile m) => v -> m (Maybe a)
 
 instance FromNix Bool m (NValueNF m) where
     fromNixMay = \case
@@ -195,6 +197,24 @@ instance FromNix (HashMap Text (NThunk m)) m (NValue m) where
         Just b -> pure b
         v -> throwError $ "Expected an attrset, but saw: " ++ show v
 
+instance FromNix (HashMap Text (NValueNF m),
+                  HashMap Text SourcePos) m (NValueNF m) where
+    fromNixMay = \case
+        Fix (NVSet s p) -> pure $ Just (s, p)
+        _ -> pure Nothing
+    fromNix = fromNixMay >=> \case
+        Just b -> pure b
+        v -> throwError $ "Expected an attrset, but saw: " ++ show v
+
+instance FromNix (HashMap Text (NThunk m),
+                  HashMap Text SourcePos) m (NValue m) where
+    fromNixMay = \case
+        NVSet s p -> pure $ Just (s, p)
+        _ -> pure Nothing
+    fromNix = fromNixMay >=> \case
+        Just b -> pure b
+        v -> throwError $ "Expected an attrset, but saw: " ++ show v
+
 instance (MonadThunk (NValue m) (NThunk m) m)
       => FromNix (NThunk m) m (NValue m) where
     fromNixMay = pure . Just . value @_ @_ @m
@@ -216,17 +236,19 @@ instance (MonadThunk (NValue m) (NThunk m) m,
     fromNix    v = v >>= fromNix
     fromNixMay v = v >>= fromNixMay
 
-instance (MonadCatch m, MonadFix m, MonadIO m,
-          FromNix a m (NValue m)) => FromNix a m NExprLoc where
+{-
+instance (MonadNix e m, FromNix a m (NValue m))
+      => FromNix a m NExprLoc where
     fromNix    = evalLoc Nothing [] >=> fromNix
     fromNixMay = evalLoc Nothing [] >=> fromNixMay
 
-instance (MonadCatch m, MonadFix m, MonadIO m,
+instance (MonadCatch m, MonadFix m, MonadIO m, MonadEffects m,
           FromNix a m (NValue m)) => FromNix a m NExpr where
     fromNix    = eval Nothing [] >=> fromNix
     fromNixMay = eval Nothing [] >=> fromNixMay
+-}
 
-instance FromNix A.Value m (NValueNF m) where
+instance MonadEffects m => FromNix A.Value m (NValueNF m) where
     fromNixMay = \case
         Fix (NVConstant a) -> pure $ Just $ case a of
             NInt n   -> toJSON n
@@ -245,13 +267,13 @@ instance FromNix A.Value m (NValueNF m) where
         Just b -> pure b
         v -> throwError $ "Cannot convert value to JSON: " ++ show v
 
-instance MonadThunk (NValue m) (NThunk m) m
+instance (MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
       => FromNix A.Value m (NValue m) where
     fromNixMay = normalForm >=> fromNixMay
     fromNix    = normalForm >=> fromNix
 
 class ToNix a m v where
-    toNix :: MonadNix e m => a -> m v
+    toNix :: Monad m => a -> m v
 
 instance ToNix Bool m (NValueNF m) where
     toNix = pure . Fix . NVConstant . NBool
@@ -295,6 +317,16 @@ instance ToNix Path m (NValueNF m) where
 instance ToNix Path m (NValue m) where
     toNix = pure . NVPath . getPath
 
+instance MonadThunk (NValue m) (NThunk m) m
+      => ToNix SourcePos m (NValue m) where
+    toNix (SourcePos f l c) = do
+        f' <- toNix @_ @_ @(NValue m) (Text.pack f)
+        l' <- toNix (unPos l)
+        c' <- toNix (unPos c)
+        toNix $ M.fromList [ ("file" :: Text, value @_ @_ @m f')
+                           , ("line",        value @_ @_ @m l')
+                           , ("column",      value @_ @_ @m c') ]
+
 instance ToNix a m (NValueNF m) => ToNix [a] m (NValueNF m) where
     toNix = fmap (Fix . NVList) . traverse toNix
 
@@ -309,6 +341,18 @@ instance (MonadThunk (NValue m) (NThunk m) m, ToNix a m (NValueNF m))
 instance (MonadThunk (NValue m) (NThunk m) m, ToNix a m (NValue m))
       => ToNix (HashMap Text a) m (NValue m) where
     toNix = fmap (flip NVSet M.empty) . traverse toNix
+
+instance (MonadThunk (NValue m) (NThunk m) m, ToNix a m (NValueNF m))
+      => ToNix (HashMap Text a, HashMap Text SourcePos) m (NValueNF m) where
+    toNix (s, p) = Fix . flip NVSet p <$> traverse toNix s
+
+instance (MonadThunk (NValue m) (NThunk m) m, ToNix a m (NValue m))
+      => ToNix (HashMap Text a, HashMap Text SourcePos) m (NValue m) where
+    toNix (s, p) = flip NVSet p <$> traverse toNix s
+
+instance (MonadThunk (NValue m) (NThunk m) m)
+      => ToNix (NThunk m) m (NValue m) where
+    toNix = force ?? pure
 
 instance ToNix a m (NValue m) => ToNix a m (m (NValue m)) where
     toNix = pure . toNix
