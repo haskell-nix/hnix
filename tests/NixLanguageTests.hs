@@ -122,8 +122,10 @@ assertEval files = catch go $ \case
         [".exp-disabled"] -> return ()
         [".exp", ".flags"] -> do
             flags <- Text.readFile (name ++ ".flags")
+            let flags' | Text.last flags == '\n' = Text.init flags
+                       | otherwise = flags
             case Opts.execParserPure Opts.defaultPrefs nixOptionsInfo
-                     (fixup (map Text.unpack (Text.splitOn " " flags))) of
+                     (fixup (map Text.unpack (Text.splitOn " " flags'))) of
                 Opts.Failure err -> errorWithoutStackTrace $
                     "Error parsing flags from " ++ name ++ ".flags: "
                         ++ show err

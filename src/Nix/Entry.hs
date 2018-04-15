@@ -95,7 +95,7 @@ evaluateExpression opts mpath evaluator handler expr = do
         Success x -> x
         Failure err -> errorWithoutStackTrace (show err)
 
-    eval' = (normalForm =<<) . eval Nothing (include opts)
+    eval' = (normalForm =<<) . eval mpath (include opts)
 
     argmap args = embed $ Fix $ NVSet (M.fromList args) mempty
 
