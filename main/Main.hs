@@ -69,63 +69,16 @@ main = do
         when (check opts) $
             putStrLn $ runST $ runLintM . renderSymbolic =<< lint expr
 
-        let parseArg s = case parseNixText s of
-                Success x -> x
-                Failure err -> errorWithoutStackTrace (show err)
-            eval' = runLazyM . (normalForm =<<)
-                             . Nix.eval Nothing (include opts)
-
-        args <- traverse (traverse eval') $
-            map (second parseArg) (arg opts) ++
-            map (second mkStr) (argstr opts)
-
-        let argmap :: Lazy IO (NValue (Lazy IO))
-            argmap = embed $ Fix $ NVSet (M.fromList args) mempty
-
-            compute ev x p = do
-                 f <- ev mpath (include opts) x
-                 p =<< case f of
-                     NVClosure _ g -> g argmap
-                     _ -> pure f
-
-            result :: forall e m. Nix.MonadNix e m
-                   => (NValue m -> m ()) -> NValue m -> m ()
-            result h = case attr opts of
-                Nothing -> h
-                Just (Text.splitOn "." -> keys) -> go keys
-              where
-                go :: [Text.Text] -> NValue m -> m ()
-                go [] v = h v
-                go ((Text.decimal -> Right (n,"")):ks) v = case v of
-                    NVList xs -> case ks of
-                        [] -> force @(NValue m) @(NThunk m) (xs !! n) h
-                        _  -> force (xs !! n) (go ks)
-                    _ -> errorWithoutStackTrace $
-                            "Expected a list for selector '" ++ show n
-                                ++ "', but got: " ++ show v
-                go (k:ks) v = case v of
-                    NVSet xs _ -> case M.lookup k xs of
-                        Nothing ->
-                            errorWithoutStackTrace $
-                                "Set does not contain key '"
-                                    ++ Text.unpack k ++ "'"
-                        Just v' -> case ks of
-                            [] -> force v' h
-                            _  -> force v' (go ks)
-                    _ -> errorWithoutStackTrace $
-                        "Expected a set for selector '" ++ Text.unpack k
-                            ++ "', but got: " ++ show v
-
         if | evaluate opts, debug opts ->
-                 runLazyM $ compute Nix.tracingEvalLoc expr $
-                     result (liftIO . print)
+                 runLazyM $ evaluateExpression opts mpath
+                     Nix.tracingEvalLoc (liftIO . print) expr
 
-           | evaluate opts, not (null args) ->
-                 runLazyM $ compute Nix.evalLoc expr $
-                     result (liftIO . print)
+           | evaluate opts, not (null (arg opts) && null (argstr opts)) ->
+                 runLazyM $ evaluateExpression opts mpath
+                     Nix.evalLoc (liftIO . print) expr
 
            | evaluate opts -> runLazyM $
-                 result (liftIO . print)
+                 processResult opts (liftIO . print)
                      =<< Nix.evalLoc mpath (include opts) expr
 
            | debug opts -> print $ stripAnnotation expr
@@ -142,5 +95,4 @@ main = do
                      . prettyNix
                      . stripAnnotation $ expr
 
-        when (repl opts) $
-            Repl.shell (pure ())
+        when (repl opts) $ Repl.shell (pure ())
