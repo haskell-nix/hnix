@@ -98,8 +98,8 @@ valueThunk = value @_ @_ @m
 
 builtinsList :: forall e m. MonadBuiltins e m => m [ Builtin m ]
 builtinsList = sequence [
-      pure $ Builtin Normal
-          ("nixVersion", valueThunk $ ofVal @(NValue m) ("2.0" :: Text))
+      do version <- toNix ("2.0" :: Text)
+         pure $ Builtin Normal ("nixVersion", valueThunk version)
 
     , add0 TopLevel "__nixPath"                  nixPath
     , add  TopLevel "toString"                   toString
@@ -278,7 +278,7 @@ unsafeGetAttrPos x y = force x $ \x' -> force y $ \y' -> case (x', y') of
         Nothing ->
             throwError $ "unsafeGetAttrPos: field '" ++ Text.unpack key
                 ++ "' does not exist in attr set: " ++ show apos
-        Just delta -> return $ posFromSourcePos @m delta
+        Just delta -> toNix delta
     (x, y) -> throwError $ "Invalid types for builtin.unsafeGetAttrPos: "
                  ++ show (x, y)
 
@@ -422,13 +422,14 @@ match_ pat str = force pat $ \pat' -> force str $ \str' ->
     case (pat', str') of
         -- jww (2018-04-05): We should create a fundamental type for compiled
         -- regular expressions if it turns out they get used often.
-        (NVStr p _, NVStr s _) -> return $
+        (NVStr p _, NVStr s _) -> do
             let re = makeRegex (encodeUtf8 p) :: Regex
-            in case matchOnceText re (encodeUtf8 s) of
-                Just ("", sarr, "") -> let s = map fst (elems sarr) in
-                    NVList $ map (valueThunk . ofVal . decodeUtf8)
+            case matchOnceText re (encodeUtf8 s) of
+                Just ("", sarr, "") -> do
+                    let s = map fst (elems sarr)
+                    NVList <$> traverse (toNix . decodeUtf8)
                         (if length s > 1 then tail s else s)
-                _ -> NVConstant NNull
+                _ -> pure $ NVConstant NNull
         (p, s) ->
             throwError $ "builtins.match: expected a regex"
                 ++ " and a string, but got: " ++ show (p, s)
