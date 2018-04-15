@@ -140,7 +140,7 @@ instance MonadNix e m => MonadEval (NValue m) m where
         Compose (Ann (SrcSpan delta _) _):_ <-
             asks (mapMaybe (either (const Nothing) Just)
                  . view @_ @Frames hasLens)
-        return $ posFromSourcePos delta
+        toNix delta
 
     evalConstant    = pure . NVConstant
     evalString      = pure . uncurry NVStr

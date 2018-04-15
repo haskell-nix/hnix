@@ -22,13 +22,13 @@ import           Data.Align
 import           Data.Fix
 import qualified Data.HashMap.Lazy as M
 import           Data.Monoid (appEndo)
-import           Data.Text (Text, pack)
+import           Data.Text (Text)
 import           Data.These
 import           Data.Typeable (Typeable)
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr.Types
-import           Nix.Expr.Types.Annotated (SourcePos(..), unPos)
+import           Nix.Expr.Types.Annotated (SourcePos(..))
 import           Nix.Thunk
 import           Nix.Utils
 
@@ -107,18 +107,6 @@ builtin3 :: Monad m
          -> m (NValue m)
 builtin3 name f =
     builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
-
-posFromSourcePos
-    :: forall m v t.
-        (MonadThunk v t m, ConvertValue v Int, ConvertValue v Text,
-         ConvertValue v (AttrSet t))
-    => SourcePos -> v
-posFromSourcePos (SourcePos f l c) =
-    ofVal $ M.fromList
-        [ ("file" :: Text, value @_ @_ @m $ ofVal (pack f))
-        , ("line",        value @_ @_ @m $ ofVal (unPos l))
-        , ("column",      value @_ @_ @m $ ofVal (unPos c))
-        ]
 
 mkBoolV :: Monad m => Bool -> m (NValue m)
 mkBoolV = return . NVConstant . NBool
