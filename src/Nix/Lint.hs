@@ -245,13 +245,13 @@ instance FromNix (AttrSet (SThunk m)) m (Symbolic m) where
 
 instance FromNix (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
 
-instance ToNix (AttrSet (SThunk m)) (Symbolic m) where
+instance ToNix (AttrSet (SThunk m)) m (Symbolic m) where
 
-instance ToNix (AttrSet (SThunk m), AttrSet SourcePos) (Symbolic m) where
+instance ToNix (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
 
-instance ToNix [SThunk m] (Symbolic m) where
+instance ToNix [SThunk m] m (Symbolic m) where
 
-instance ToNix Bool (Symbolic m) where
+instance ToNix Bool m (Symbolic m) where
 
 instance MonadLint e m => MonadThunk (Symbolic m) (SThunk m) m where
     thunk = fmap coerce . buildThunk

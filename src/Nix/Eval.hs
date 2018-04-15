@@ -10,6 +10,7 @@
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -73,9 +74,9 @@ class (Show v, Monoid (MText v), Monad m) => MonadEval v m | v -> m where
 type MonadNixEval e v t m =
     (MonadEval v m, Scoped e t m, MonadThunk v t m, MonadFix m,
      Framed e m, MonadFile m, MonadVar m,
-     ToNix Bool v, ToNix [t] v,
-     ToNix (AttrSet t) v, FromNix (AttrSet t) m v,
-     ToNix (AttrSet t, AttrSet SourcePos) v,
+     ToNix Bool m v, ToNix [t] m v,
+     ToNix (AttrSet t) m v, FromNix (AttrSet t) m v,
+     ToNix (AttrSet t, AttrSet SourcePos) m v,
      FromNix (AttrSet t, AttrSet SourcePos) m v)
 
 -- | Evaluate an nix expression, with a given NThunkSet as environment
@@ -117,26 +118,26 @@ eval (NSelect aset attr alt) = do
 eval (NHasAttr aset attr) = do
     traceM "NHasAttr"
     toNix . either (const False) (const True)
-        <$> evalSelect aset attr
+        =<< evalSelect aset attr
 
 eval (NList l) = do
     traceM "NList"
     scope <- currentScopes
-    toNix <$> for l (thunk . withScopes @t scope)
+    toNix =<< for l (thunk . withScopes @t scope)
 
 eval (NSet binds) = do
     traceM "NSet..1"
     (s, p) <- evalBinds True False binds
     traceM $ "NSet..2: s = " ++ show (void s)
     traceM $ "NSet..2: p = " ++ show (void p)
-    return $ toNix (s, p)
+    toNix (s, p)
 
 eval (NRecSet binds) = do
     traceM "NRecSet..1"
     (s, p) <- evalBinds True True binds
     traceM $ "NRecSet..2: s = " ++ show (void s)
     traceM $ "NRecSet..2: p = " ++ show (void p)
-    return $ toNix (s, p)
+    toNix (s, p)
 
 eval (NLet binds e) = do
     traceM "Let..1"
@@ -184,7 +185,7 @@ attrSetAlter (p:ps) m val = case M.lookup p m of
 
     -- jww (2018-04-13): Need to record positions for attr paths as well
     recurse s = attrSetAlter ps s val <&> \m' ->
-        M.insert p (toNix . fmap (value @_ @_ @m) <$> sequence m') m
+        M.insert p (toNix =<< fmap (value @_ @_ @m) <$> sequence m') m
 
 evalBinds :: forall e v t m. MonadNixEval e v t m
           => Bool
@@ -215,7 +216,7 @@ evalBinds allowDynamic recursive binds = do
                 h : t -> evalSetterKeyName allowDynamic h >>= \case
                     (Nothing, _) ->
                         pure ([], Nothing,
-                              pure (toNix (mempty :: AttrSet t)))
+                              toNix (mempty :: AttrSet t))
                     (Just k, pos) -> do
                         (restOfPath, _, v) <- go t
                         pure (k : restOfPath, pos, v)
@@ -271,7 +272,7 @@ evalSelect aset attr =
     extract x (k:ks) = fromNixMay x >>= \case
         Just (s :: AttrSet t, p :: AttrSet SourcePos) -> case M.lookup k s of
             Just v  -> force v $ extract ?? ks
-            Nothing -> return $ Left (toNix (s, p), k:ks)
+            Nothing -> Left . (, k:ks) <$> toNix (s, p)
         Nothing -> return $ Left (x, k:ks)
 
 evalSelector :: MonadEval v m
