@@ -25,7 +25,6 @@ import qualified Crypto.Hash.MD5 as MD5
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Crypto.Hash.SHA512 as SHA512
-import           Data.Aeson (toJSON)
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Encoding as A
 import           Data.Align (alignWith)
@@ -40,7 +39,6 @@ import           Data.Foldable (foldlM, foldrM)
 import qualified Data.HashMap.Lazy as M
 import           Data.List
 import           Data.Maybe
-import           Data.Scientific
 import           Data.Semigroup
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -50,7 +48,6 @@ import qualified Data.Text.Lazy.Builder as Builder
 import           Data.These (fromThese)
 import           Data.Traversable (mapM)
 import qualified Data.Vector as V
-import           GHC.Stack.Types (HasCallStack)
 import           Language.Haskell.TH.Syntax (addDependentFile, runIO)
 import           Nix.Atoms
 import           Nix.Convert
