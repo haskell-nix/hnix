@@ -43,12 +43,12 @@ import           Nix.StringOperations (runAntiquoted)
 import           Nix.Thunk
 import           Nix.Utils
 
-class (Show v, Monoid (MText v), Monad m) => MonadEval v m | v -> m where
+class (Show v, Monad m) => MonadEval v m | v -> m where
     freeVariable :: Text -> m v
 
     evalCurPos      :: m v
     evalConstant    :: NAtom -> m v
-    evalString      :: MText v -> m v
+    evalString      :: Text -> DList Text -> m v
     evalLiteralPath :: FilePath -> m v
     evalEnvPath     :: FilePath -> m v
     evalUnary       :: NUnaryOp -> v -> m v
@@ -63,18 +63,11 @@ class (Show v, Monoid (MText v), Monad m) => MonadEval v m | v -> m where
 
     evalError :: String -> m a
 
-    type MText v :: *
-
-    wrapMText   :: Text -> m (MText v)
-    unwrapMText :: MText v -> m Text
-
-    embedMText   :: MText v -> m v
-    projectMText :: v -> m (Maybe (Maybe (MText v)))
-
 type MonadNixEval e v t m =
     (MonadEval v m, Scoped e t m, MonadThunk v t m, MonadFix m,
      Framed e m, MonadFile m, MonadVar m,
      ToValue Bool m v, ToValue [t] m v,
+     FromValue (Text, DList Text) m v,
      ToValue (AttrSet t) m v, FromValue (AttrSet t) m v,
      ToValue (AttrSet t, AttrSet SourcePos) m v,
      FromValue (AttrSet t, AttrSet SourcePos) m v)
@@ -92,7 +85,7 @@ eval (NSym var) = lookupVar var >>= \case
     Just v  -> force v pure
 
 eval (NConstant x)          = evalConstant x
-eval (NStr str)             = evalString =<< assembleString str
+eval (NStr str)             = uncurry evalString =<< assembleString str
 eval (NLiteralPath p)       = evalLiteralPath p
 eval (NEnvPath p)           = evalEnvPath p
 eval (NUnary op arg)        = evalUnary op =<< arg
@@ -287,14 +280,14 @@ evalSelect aset attr =
             Nothing -> Left . (, k:ks) <$> toValue (s, p)
         Nothing -> return $ Left (x, k:ks)
 
-evalSelector :: MonadEval v m
+evalSelector :: (MonadEval v m, FromValue (Text, DList Text) m v)
              => Bool -> NAttrPath (m v) -> m [Text]
 evalSelector allowDynamic =
     fmap (map fst) <$> mapM (evalGetterKeyName allowDynamic)
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value
-evalGetterKeyName :: MonadEval v m
+evalGetterKeyName :: (MonadEval v m, FromValue (Text, DList Text) m v)
                   => Bool -> NKeyName (m v) -> m (Text, Maybe SourcePos)
 evalGetterKeyName canBeDynamic
     | canBeDynamic = evalKeyNameDynamicNotNull
@@ -307,8 +300,9 @@ evalKeyNameStatic = \case
     DynamicKey _ ->
         evalError @v "dynamic attribute not allowed in this context"
 
-evalKeyNameDynamicNotNull :: forall v m. MonadEval v m
-                          => NKeyName (m v) -> m (Text, Maybe SourcePos)
+evalKeyNameDynamicNotNull
+    :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
+    => NKeyName (m v) -> m (Text, Maybe SourcePos)
 evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
     (Nothing, _) ->
         evalError @v "value is null while a string was expected"
@@ -316,34 +310,31 @@ evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *binding* a value
-evalSetterKeyName :: MonadEval v m
+evalSetterKeyName :: (MonadEval v m, FromValue (Text, DList Text) m v)
                   => Bool -> NKeyName (m v) -> m (Maybe Text, Maybe SourcePos)
 evalSetterKeyName canBeDynamic
     | canBeDynamic = evalKeyNameDynamicNullable
     | otherwise    = fmap (first Just) . evalKeyNameStatic
 
 -- | Returns Nothing iff the key value is null
-evalKeyNameDynamicNullable :: forall v m. MonadEval v m
-                           => NKeyName (m v)
-                           -> m (Maybe Text, Maybe SourcePos)
+evalKeyNameDynamicNullable
+    :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
+    => NKeyName (m v)
+    -> m (Maybe Text, Maybe SourcePos)
 evalKeyNameDynamicNullable = \case
     StaticKey k p -> pure (Just k, p)
-    DynamicKey k -> runAntiquoted "\n" (embedMText <=< assembleString) id k
-        >>= projectMText >>= \case
-            Just (Just (s :: MText v)) ->
-                (\x -> (Just x, Nothing)) <$> unwrapMText @v s
-            _ -> return (Nothing, Nothing)
+    DynamicKey k ->
+        runAntiquoted "\n" (fmap Just . assembleString) (>>= fromValueMay) k
+            <&> \case Just (t, _) -> (Just t, Nothing)
+                      _ -> (Nothing, Nothing)
 
-assembleString :: forall v m. MonadEval v m => NString (m v) -> m (MText v)
+assembleString :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
+               => NString (m v) -> m (Text, DList Text)
 assembleString = \case
     Indented _   parts -> fromParts parts
     DoubleQuoted parts -> fromParts parts
   where
-    go = runAntiquoted "\n" (wrapMText @v @m) $ \x -> do
-        x' <- x
-        projectMText @v @m x' >>= \case
-            Just (Just txt) -> return txt
-            _ -> evalError @v "Value cannot be rendered as text"
+    go = runAntiquoted "\n" (pure . (, mempty)) (>>= fromValue)
 
     fromParts parts = mconcat <$> mapM go parts
 

@@ -7,6 +7,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -152,6 +153,22 @@ instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m)
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
         _ -> throwError $ "Expected a string, but saw: " ++ show v
+
+instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m)
+      => FromValue (Text, DList Text) m (NValueNF m) where
+    fromValueMay = \case
+        Fix (NVStr t d) -> pure $ Just (t, d)
+        Fix (NVPath p) -> Just . (,mempty) . Text.pack . unStorePath <$> addPath p
+        _ -> pure Nothing
+    fromValue v = fromValueMay v >>= \case
+        Just b -> pure b
+        _ -> throwError $ "Expected a string, but saw: " ++ show v
+
+instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m)
+      => FromValue (Text, DList Text) m (NValue m) where
+    fromValueMay = \case
+        NVStr t d -> pure $ Just (t, d)
+        NVPath p -> Just . (,mempty) . Text.pack . unStorePath <$> addPath p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -328,6 +345,12 @@ instance Applicative m => ToValue Text m (NValueNF m) where
 instance Applicative m => ToValue Text m (NValue m) where
     toValue = pure . flip NVStr mempty
 
+instance Applicative m => ToValue (Text, DList Text) m (NValueNF m) where
+    toValue = pure . Fix . uncurry NVStr
+
+instance Applicative m => ToValue (Text, DList Text) m (NValue m) where
+    toValue = pure . uncurry NVStr
+
 instance Applicative m => ToValue ByteString m (NValueNF m) where
     toValue = pure . Fix . flip NVStr mempty . decodeUtf8
 
@@ -439,6 +462,8 @@ instance (Framed e m, MonadVar m, MonadFile m) => FromNix Float m (NValueNF m) w
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix Float m (NValue m) where
 instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m) => FromNix Text m (NValueNF m) where
 instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m) => FromNix Text m (NValue m) where
+instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m) => FromNix (Text, DList Text) m (NValueNF m) where
+instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m) => FromNix (Text, DList Text) m (NValue m) where
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix ByteString m (NValueNF m) where
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix ByteString m (NValue m) where
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix Path m (NValueNF m) where
@@ -481,6 +506,8 @@ instance Applicative m => ToNix Float m (NValueNF m) where
 instance Applicative m => ToNix Float m (NValue m) where
 instance Applicative m => ToNix Text m (NValueNF m) where
 instance Applicative m => ToNix Text m (NValue m) where
+instance Applicative m => ToNix (Text, DList Text) m (NValueNF m) where
+instance Applicative m => ToNix (Text, DList Text) m (NValue m) where
 instance Applicative m => ToNix ByteString m (NValueNF m) where
 instance Applicative m => ToNix ByteString m (NValue m) where
 instance Applicative m => ToNix Path m (NValueNF m) where

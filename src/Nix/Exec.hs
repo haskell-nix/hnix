@@ -87,7 +87,7 @@ instance MonadNix e m => MonadEval (NValue m) m where
         toValue delta
 
     evalConstant    = pure . NVConstant
-    evalString      = pure . uncurry NVStr
+    evalString      = (pure .) . NVStr
     evalLiteralPath = fmap NVPath . makeAbsolutePath
     evalEnvPath     = fmap NVPath . findEnvPath
     evalUnary       = execUnaryOp
@@ -103,16 +103,6 @@ instance MonadNix e m => MonadEval (NValue m) m where
     evalAbs = (pure .) . NVClosure
 
     evalError = throwError
-
-    type MText (NValue m) = (Text, DList Text)
-
-    wrapMText   = return . (, mempty)
-    unwrapMText = return . fst
-
-    embedMText   = return . uncurry NVStr
-    projectMText = \case
-        NVConstant NNull -> return $ Just Nothing
-        v -> fmap (Just . Just) . valueText True =<< normalForm v
 
 infixl 1 `callFunc`
 callFunc :: MonadNix e m => NValue m -> m (NValue m) -> m (NValue m)

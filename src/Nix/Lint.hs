@@ -246,6 +246,8 @@ unify context (Symbolic x) (Symbolic y) = do
 -- Hindley-Milner, we're not going to be managing Symbolic values this way
 -- anymore.
 
+instance FromValue (Text, DList Text) m (Symbolic m) where
+
 instance FromValue (AttrSet (SThunk m)) m (Symbolic m) where
 
 instance FromValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
@@ -287,7 +289,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
           NNull    -> TNull
           NUri _   -> TUri
 
-    evalString      = const $ mkSymbolic [TStr]
+    evalString      = const $ const $ mkSymbolic [TStr]
     evalLiteralPath = const $ mkSymbolic [TPath]
     evalEnvPath     = const $ mkSymbolic [TPath]
 
@@ -325,14 +327,6 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
     evalAbs params body = mkSymbolic [TClosure params body]
 
     evalError = throwError
-
-    type MText (Symbolic m) = ()
-
-    wrapMText   = const $ return ()
-    unwrapMText = const $ return ""
-
-    embedMText   = const $ mkSymbolic [TStr]
-    projectMText = const $ return Nothing -- jww (2018-04-10): TODO
 
 lintBinaryOp
     :: forall e m. (MonadLint e m, MonadEval (Symbolic m) m)
