@@ -140,7 +140,7 @@ builtinsList = sequence [
     , add' Normal   "substring"                  substring
     , add' Normal   "stringLength"               (arity1 Text.length)
     , add  Normal   "length"                     length_
-    , add' Normal   "attrNames"                  attrNames
+    , add' Normal   "attrNames"                  (arity1 attrNames)
     , add  Normal   "attrValues"                 attrValues
     , add2 Normal   "catAttrs"                   catAttrs
     , add2 Normal   "concatStringsSep"           concatStringsSep
@@ -196,19 +196,6 @@ builtinsList = sequence [
     add' t n v = wrap t n <$> thunk (toBuiltin (Text.unpack n) v)
 
 -- Helpers
-
-mkBool :: Monad m => Bool -> m (NValue m)
-mkBool = return . NVConstant . NBool
-
-extractBool :: MonadBuiltins e m => NValue m -> m Bool
-extractBool = \case
-    NVConstant (NBool b) -> return b
-    _ -> throwError "Not a boolean constant"
-
-extractInt :: MonadBuiltins e m => NValue m -> m Int
-extractInt = \case
-    NVConstant (NInt b) -> return $ fromIntegral b
-    _ -> throwError "Not an integer constant"
 
 call1 :: MonadBuiltins e m
       => NThunk m -> NThunk m -> m (NValue m)
@@ -282,11 +269,11 @@ unsafeGetAttrPos x y = force x $ \x' -> force y $ \y' -> case (x', y') of
     (x, y) -> throwError $ "Invalid types for builtin.unsafeGetAttrPos: "
                  ++ show (x, y)
 
-length_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
-length_ = flip force $ \case
-    NVList l -> return $ NVConstant $ NInt (fromIntegral (length l))
-    arg -> throwError $ "builtins.length takes a list, not a "
-              ++ show arg
+-- This function is a bit special in that it doesn't care about the contents
+-- of the list.
+length_ :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+length_ = flip force $
+    toValue . (length :: [NThunk m] -> Int) <=< fromValue
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 anyM _ []       = return False
@@ -298,7 +285,7 @@ anyM p (x:xs)   = do
 any_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 any_ pred = flip force $ \case
     NVList l ->
-        mkBool =<< anyM extractBool =<< mapM (call1 pred) l
+        toNix =<< anyM fromNix =<< mapM (call1 pred) l
     arg -> throwError $ "builtins.any takes a list as second argument, not a "
               ++ show arg
 
@@ -312,7 +299,7 @@ allM p (x:xs)   = do
 all_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 all_ pred = flip force $ \case
     NVList l ->
-        mkBool =<< allM extractBool =<< mapM (call1 pred) l
+        toNix =<< allM fromNix =<< mapM (call1 pred) l
     arg -> throwError $ "builtins.all takes a list as second argument, not a "
               ++ show arg
 
@@ -326,18 +313,14 @@ foldl'_ f z = flip force $ \case
     go b a = thunk $ call2 f a b
 
 head_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
-head_ = flip force $ \case
-    NVList vals -> case vals of
-        [] -> throwError "builtins.head: empty list"
-        h:_ -> force h pure
-    _ -> throwError "builtins.head: not a list"
+head_ = flip force $ fromValue >=> \case
+    [] -> throwError "builtins.head: empty list"
+    h:_ -> force h pure
 
 tail_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
-tail_ = flip force $ \case
-    NVList vals -> case vals of
-        [] -> throwError "builtins.tail: empty list"
-        _:t -> return $ NVList t
-    _ -> throwError "builtins.tail: not a list"
+tail_ = flip force $ fromValue >=> \case
+    [] -> throwError "builtins.tail: empty list"
+    _:t -> return $ NVList t
 
 data VersionComponent
    = VersionComponent_Pre -- ^ The string "pre"
@@ -473,14 +456,12 @@ substring start len str = Prim $
     then throwError $ "builtins.substring: negative start position: " ++ show start
     else pure $ Text.take len $ Text.drop start str
 
-attrNames :: Applicative m => AttrSet Text -> Prim m [Text]
-attrNames = Prim . pure . sort . M.keys
+attrNames :: AttrSet Text -> [Text]
+attrNames = sort . M.keys
 
-attrValues :: MonadBuiltins e m => NThunk m -> m (NValue m)
-attrValues = flip force $ \case
-    NVSet m _ -> return $ NVList $ fmap snd $ sortOn fst $ M.toList m
-    v -> throwError $ "builtins.attrValues: Expected attribute set, got "
-            ++ show v
+attrValues :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+attrValues = flip force $ fromValue >=>
+    toValue . (fmap snd . sortOn (fst @Text @(NThunk m)) . M.toList)
 
 map_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 map_ f = flip force $ \case
@@ -489,7 +470,7 @@ map_ f = flip force $ \case
 
 filter_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 filter_ f = flip force $ \case
-    NVList l -> NVList <$> filterM (extractBool <=< call1 f) l
+    NVList l -> NVList <$> filterM (fromNix <=< call1 f) l
     v -> throwError $ "map: Expected list, got " ++ show v
 
 catAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
@@ -549,7 +530,7 @@ elem_ x xs = force xs $ \case
     v -> throwError $ "builtins.elem: Expected a list, got " ++ show v
 
 elemAt_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-elemAt_ xs n = force n $ extractInt >=> \n' -> force xs $ \case
+elemAt_ xs n = force n $ fromNix >=> \n' -> force xs $ \case
     NVList l | n' < length l -> force (l !! n') pure
              | otherwise ->
         throwError $ "builtins.elem: Index " ++ show n'
@@ -632,9 +613,9 @@ toPath = flip force $ \case
 
 pathExists_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 pathExists_ = flip force $ \case
-    NVPath p  -> mkBool =<< pathExists p
+    NVPath p  -> toNix =<< pathExists p
     -- jww (2018-04-13): Should this ever be a string?
-    NVStr s _ -> mkBool =<< pathExists (Text.unpack s)
+    NVStr s _ -> toNix =<< pathExists (Text.unpack s)
     v -> throwError $ "builtins.pathExists: expected path, got " ++ show v
 
 isAttrs :: MonadBuiltins e m => NThunk m -> m (NValue m)
