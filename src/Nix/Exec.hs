@@ -92,29 +92,12 @@ instance MonadNix e m => MonadEval (NValue m) m where
     evalEnvPath     = fmap NVPath . findEnvPath
     evalUnary       = execUnaryOp
     evalBinary      = execBinaryOp
+    evalWith        = evalWithAttrSet
 
-    evalWith scope body = do
-        -- The scope is deliberately wrapped in a thunk here, since it is
-        -- evaluated each time a name is looked up within the weak scope, and
-        -- we want to be sure the action it evaluates is to force a thunk, so
-        -- its value is only computed once.
-        traceM "Evaluating with scope"
-        s <- thunk scope
-        pushWeakScope ?? body $ force s $ \v -> fromValueMay v >>= \case
-            Just (s :: AttrSet (NThunk m)) -> do
-                traceM $ "Scope is: " ++ show (void s)
-                pure s
-            _ -> nverr $ "scope must be a set in with statement, but saw: "
-                    ++ show v
+    evalIf c t f = fromValue c >>= \b -> if b then t else f
 
-    evalIf c t f = fromValueMay c >>= \case
-        Just b -> if b then t else f
-        _ -> nverr $ "condition must be a boolean: "++ show c
-
-    evalAssert c body =  fromValueMay c >>= \case
-        Just b -> if b then body else nverr "assertion failed"
-        _ -> nverr $ "assertion condition must be boolean, but saw: "
-                ++ show c
+    evalAssert c body = fromValue c >>= \b ->
+        if b then body else nverr "assertion failed"
 
     evalApp = callFunc
     evalAbs = (pure .) . NVClosure

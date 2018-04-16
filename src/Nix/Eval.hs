@@ -164,6 +164,18 @@ eval (NAbs params body) = do
             args <- buildArgument params arg
             pushScope args body
 
+-- | If you know that the 'scope' action will result in an 'AttrSet t', then
+--   this implementation may be used as an implementation for 'evalWith'.
+evalWithAttrSet :: forall e v t m. MonadNixEval e v t m => m v -> m v -> m v
+evalWithAttrSet scope body = do
+    -- The scope is deliberately wrapped in a thunk here, since it is
+    -- evaluated each time a name is looked up within the weak scope, and
+    -- we want to be sure the action it evaluates is to force a thunk, so
+    -- its value is only computed once.
+    traceM "Evaluating with scope"
+    s <- thunk scope
+    pushWeakScope ?? body $ force s $ fromValue @(AttrSet t)
+
 attrSetAlter :: forall e v t m. MonadNixEval e v t m
              => [Text]
              -> AttrSet (m v)
