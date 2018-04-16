@@ -174,6 +174,7 @@ instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue Path m (NValueNF m) where
     fromValueMay = \case
         Fix (NVPath p) -> pure $ Just (Path p)
+        Fix (NVStr s _) -> pure $ Just (Path (Text.unpack s))
         _ -> pure Nothing
     fromValue = fromValueMay >=> \case
         Just b -> pure b
