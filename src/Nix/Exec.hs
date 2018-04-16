@@ -12,7 +12,6 @@
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -115,7 +114,7 @@ callFunc fun arg = case fun of
         f =<< thunk arg
     s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
         traceM "callFunc:__functor"
-        force f $ \f' -> f' `callFunc` pure s >>= \g' -> g' `callFunc` arg
+        force f $ (`callFunc` pure s) >=> (`callFunc` arg)
     x -> throwError $ "Attempt to call non-function: " ++ show x
 
 execUnaryOp
