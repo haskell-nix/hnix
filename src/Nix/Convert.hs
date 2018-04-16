@@ -34,11 +34,30 @@ import           Nix.Expr.Types.Annotated
 import           Nix.Normal
 import           Nix.Stack
 import           Nix.Thunk
+import           Nix.Utils
 import           Nix.Value
 
 class FromValue a m v where
     fromValue    :: v -> m a
     fromValueMay :: v -> m (Maybe a)
+
+instance (Framed e m, MonadVar m, MonadFile m)
+      => FromValue () m (NValueNF m) where
+    fromValueMay = \case
+        Fix (NVConstant NNull) -> pure $ Just ()
+        _ -> pure Nothing
+    fromValue = fromValueMay >=> \case
+        Just b -> pure b
+        v -> throwError $ "Expected a null, but saw: " ++ show v
+
+instance (Framed e m, MonadVar m, MonadFile m)
+      => FromValue () m (NValue m) where
+    fromValueMay = \case
+        NVConstant NNull -> pure $ Just ()
+        _ -> pure Nothing
+    fromValue = fromValueMay >=> \case
+        Just b -> pure b
+        v -> throwError $ "Expected a null, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue Bool m (NValueNF m) where
@@ -164,6 +183,7 @@ instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue Path m (NValue m) where
     fromValueMay = \case
         NVPath p -> pure $ Just (Path p)
+        NVStr s _ -> pure $ Just (Path (Text.unpack s))
         _ -> pure Nothing
     fromValue = fromValueMay >=> \case
         Just b -> pure b
@@ -263,6 +283,12 @@ instance (Framed e m, MonadVar m, MonadFile m,
 class ToValue a m v where
     toValue :: a -> m v
 
+instance Applicative m => ToValue () m (NValueNF m) where
+    toValue _ = pure . Fix . NVConstant $ NNull
+
+instance Applicative m => ToValue () m (NValue m) where
+    toValue _ = pure . NVConstant $ NNull
+
 instance Applicative m => ToValue Bool m (NValueNF m) where
     toValue = pure . Fix . NVConstant . NBool
 
@@ -346,6 +372,9 @@ instance (MonadThunk (NValue m) (NThunk m) m, ToValue a m (NValue m))
 instance Applicative m => ToValue Bool m (NExprF r) where
     toValue = pure . NConstant . NBool
 
+instance Applicative m => ToValue () m (NExprF r) where
+    toValue _ = pure . NConstant $ NNull
+
 instance MonadThunk (NValue m) (NThunk m) m
       => ToValue A.Value m (NValue m) where
     toValue = \case
@@ -389,6 +418,8 @@ instance (Framed e m, MonadVar m, MonadFile m,
         Just b -> pure b
         v -> throwError $ "Expected an attrset, but saw: " ++ show v
 
+instance (Framed e m, MonadVar m, MonadFile m) => FromNix () m (NValueNF m) where
+instance (Framed e m, MonadVar m, MonadFile m) => FromNix () m (NValue m) where
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix Bool m (NValueNF m) where
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix Bool m (NValue m) where
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix Int m (NValueNF m) where
@@ -411,6 +442,11 @@ instance (Framed e m, MonadVar m, MonadFile m, MonadThunk (NValue m) (NThunk m) 
 instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m, MonadThunk (NValue m) (NThunk m) m) => FromNix A.Value m (NValueNF m) where
 instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m, MonadThunk (NValue m) (NThunk m) m) => FromNix A.Value m (NValue m) where
 
+instance (MonadThunk (NValue m) (NThunk m) m,
+          FromNix a m (NValue m)) => FromNix a m (NThunk m) where
+    fromNixMay = force ?? fromNixMay
+    fromNix    = force ?? fromNix
+
 class ToNix a m v where
     toNix :: a -> m v
     default toNix :: ToValue a m v => a -> m v
@@ -424,6 +460,8 @@ instance (MonadThunk (NValue m) (NThunk m) m, ToNix a m (NValue m))
       => ToNix (HashMap Text a) m (NValue m) where
     toNix = fmap (flip NVSet M.empty) . traverse (thunk . toNix)
 
+instance Applicative m => ToNix () m (NValueNF m) where
+instance Applicative m => ToNix () m (NValue m) where
 instance Applicative m => ToNix Bool m (NValueNF m) where
 instance Applicative m => ToNix Bool m (NValue m) where
 instance Applicative m => ToNix Int m (NValueNF m) where
@@ -445,4 +483,8 @@ instance Applicative m => ToNix (HashMap Text (NValueNF m), HashMap Text SourceP
 instance Applicative m => ToNix (HashMap Text (NThunk m), HashMap Text SourcePos) m (NValue m) where
 instance (MonadThunk (NValue m) (NThunk m) m, ToNix a m (NValue m), ToValue a m (NValue m)) => ToNix a m (NThunk m) where
 instance Applicative m => ToNix Bool m (NExprF r) where
+instance Applicative m => ToNix () m (NExprF r) where
 instance MonadThunk (NValue m) (NThunk m) m => ToNix A.Value m (NValue m) where
+
+instance MonadThunk (NValue m) (NThunk m) m => ToNix (NThunk m) m (NValue m) where
+    toNix = force ?? pure
