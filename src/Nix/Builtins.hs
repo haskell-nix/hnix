@@ -140,7 +140,7 @@ builtinsList = sequence [
     , add' Normal   "substring"                  substring
     , add' Normal   "stringLength"               (arity1 Text.length)
     , add  Normal   "length"                     length_
-    , add  Normal   "attrNames"                  attrNames
+    , add' Normal   "attrNames"                  attrNames
     , add  Normal   "attrValues"                 attrValues
     , add2 Normal   "catAttrs"                   catAttrs
     , add2 Normal   "concatStringsSep"           concatStringsSep
@@ -473,11 +473,8 @@ substring start len str = Prim $
     then throwError $ "builtins.substring: negative start position: " ++ show start
     else pure $ Text.take len $ Text.drop start str
 
-attrNames :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
-attrNames = flip force $ \case
-    NVSet m _ -> toValue =<< traverse (thunk . toValue) (sort (M.keys m))
-    v -> throwError $ "builtins.attrNames: Expected attribute set, got "
-            ++ show v
+attrNames :: Applicative m => AttrSet Text -> Prim m [Text]
+attrNames = Prim . pure . sort . M.keys
 
 attrValues :: MonadBuiltins e m => NThunk m -> m (NValue m)
 attrValues = flip force $ \case
@@ -921,14 +918,14 @@ newtype Prim m a = Prim { runPrim :: m a }
 class ToBuiltin m a | a -> m where
     toBuiltin :: String -> a -> m (NValue m)
 
-instance (MonadBuiltins e m, ToValue a m (NValue m)) => ToBuiltin m (Prim m a) where
-    toBuiltin _ p = toValue =<< runPrim p
+instance (MonadBuiltins e m, ToNix a m (NValue m)) => ToBuiltin m (Prim m a) where
+    toBuiltin _ p = toNix =<< runPrim p
 
-instance (MonadBuiltins e m, FromValue a m (NValue m), ToBuiltin m b)
+instance (MonadBuiltins e m, FromNix a m (NValue m), ToBuiltin m b)
       => ToBuiltin m (a -> b) where
     toBuiltin name f =
         return $ NVBuiltin name $
-            force ?? (fromValue >=> toBuiltin name . f)
+            force ?? (fromNix >=> toBuiltin name . f)
 
 toEncodingSorted :: A.Value -> A.Encoding
 toEncodingSorted = \case

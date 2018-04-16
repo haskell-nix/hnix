@@ -4,22 +4,15 @@
 -- {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ViewPatterns #-}
 
 module Main where
 
-import           Control.Arrow (second)
 import qualified Control.DeepSeq as Deep
 import qualified Control.Exception as Exc
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.ST
-import           Data.Fix
-import qualified Data.HashMap.Lazy as M
-import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-import qualified Data.Text.Read as Text
 import           Nix
 import qualified Repl
 -- import           Nix.TH
