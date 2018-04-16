@@ -117,6 +117,7 @@ instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue Float m (NValueNF m) where
     fromValueMay = \case
         Fix (NVConstant (NFloat b)) -> pure $ Just b
+        Fix (NVConstant (NInt i)) -> pure $ Just (fromInteger i)
         _ -> pure Nothing
     fromValue = fromValueMay >=> \case
         Just b -> pure b
@@ -126,6 +127,7 @@ instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue Float m (NValue m) where
     fromValueMay = \case
         NVConstant (NFloat b) -> pure $ Just b
+        NVConstant (NInt i) -> pure $ Just (fromInteger i)
         _ -> pure Nothing
     fromValue = fromValueMay >=> \case
         Just b -> pure b
