@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -6,6 +7,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
@@ -140,10 +142,10 @@ builtinsList = sequence [
     , add' Normal   "substring"                  substring
     , add' Normal   "stringLength"               (arity1 Text.length)
     , add  Normal   "length"                     length_
-    , add' Normal   "attrNames"                  (arity1 attrNames)
-    , add  Normal   "attrValues"                 attrValues
+    , add' Normal   "attrNames"                  (arity1 (attrNames @m))
+    , add' Normal   "attrValues"                 (arity1 (attrValues @m))
     , add2 Normal   "catAttrs"                   catAttrs
-    , add2 Normal   "concatStringsSep"           concatStringsSep
+    , add' Normal   "concatStringsSep"           (arity2 Text.intercalate)
     , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
     , add2 Normal   "seq"                        seq_
     , add2 Normal   "deepSeq"                    deepSeq
@@ -456,12 +458,11 @@ substring start len str = Prim $
     then throwError $ "builtins.substring: negative start position: " ++ show start
     else pure $ Text.take len $ Text.drop start str
 
-attrNames :: AttrSet Text -> [Text]
+attrNames :: ValueSet m -> [Text]
 attrNames = sort . M.keys
 
-attrValues :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
-attrValues = flip force $ fromValue >=>
-    toValue . (fmap snd . sortOn (fst @Text @(NThunk m)) . M.toList)
+attrValues :: forall m. ValueSet m -> [NThunk m]
+attrValues = fmap snd . sortOn (fst @Text @(NThunk m)) . M.toList
 
 map_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 map_ f = flip force $ \case
@@ -484,11 +485,6 @@ catAttrs attrName lt = force lt $ \case
                 ++ show v
     v -> throwError $ "builtins.catAttrs: Expected a list, got "
             ++ show v
-
-concatStringsSep :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-concatStringsSep s1 s2 =
-    force s1 $ fromNix >=> \(s1' :: Text) ->
-    force s2 $ fromNix >=> toNix . Text.intercalate s1'
 
 baseNameOf :: MonadBuiltins e m => NThunk m -> m (NValue m)
 baseNameOf = flip force $ \case
@@ -617,56 +613,41 @@ pathExists_ = flip force $ \case
     NVStr s _ -> toNix =<< pathExists (Text.unpack s)
     v -> throwError $ "builtins.pathExists: expected path, got " ++ show v
 
-isAttrs :: MonadBuiltins e m => NThunk m -> m (NValue m)
-isAttrs = flip force $ \case
-    NVSet _ _ -> toValue True
-    _ -> toValue False
+hasKind :: forall a e m. (MonadBuiltins e m, FromNix a m (NValue m))
+        => NThunk m -> m (NValue m)
+hasKind = fromNixMay >=> toNix . \case Just (_ :: a) -> True; _ -> False
 
-isList :: MonadBuiltins e m => NThunk m -> m (NValue m)
-isList = flip force $ \case
-    NVList _ -> toValue True
-    _ -> toValue False
+isAttrs :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+isAttrs = hasKind @(ValueSet m)
+
+isList :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+isList = hasKind @[NThunk m]
+
+isString :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+isString = hasKind @Text
+
+isInt :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+isInt = hasKind @Int
+
+isFloat :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+isFloat = hasKind @Float
+
+isBool :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+isBool = hasKind @Bool
+
+isNull :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+isNull = hasKind @()
 
 isFunction :: MonadBuiltins e m => NThunk m -> m (NValue m)
 isFunction = flip force $ \case
     NVClosure {} -> toValue True
     _ -> toValue False
 
-isString :: MonadBuiltins e m => NThunk m -> m (NValue m)
-isString = flip force $ \case
-    NVStr _ _ -> toValue True
-    _ -> toValue False
-
-isInt :: MonadBuiltins e m => NThunk m -> m (NValue m)
-isInt = flip force $ \case
-    NVConstant (NInt _) -> toValue True
-    _ -> toValue False
-
-isFloat :: MonadBuiltins e m => NThunk m -> m (NValue m)
-isFloat = flip force $ \case
-    NVConstant (NFloat _) -> toValue True
-    _ -> toValue False
-
-isBool :: MonadBuiltins e m => NThunk m -> m (NValue m)
-isBool = flip force $ \case
-    NVConstant (NBool _) -> toValue True
-    _ -> toValue False
-
-isNull :: MonadBuiltins e m => NThunk m -> m (NValue m)
-isNull = flip force $ \case
-    NVConstant NNull -> toValue True
-    _ -> toValue False
-
 throw_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
-throw_ = flip force $ \case
-    NVStr t _ -> throwError (Text.unpack t)
-    v -> throwError $ "builtins.throw: expected string, got " ++ show v
+throw_ = fromNix >=> throwError . Text.unpack
 
 import_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
-import_ = flip force $ \case
-    NVPath p -> importPath M.empty p
-    NVStr p _ -> importPath M.empty $ Text.unpack p
-    v -> throwError $ "import: expected path, got " ++ show v
+import_ = fromNix >=> importPath M.empty . getPath
 
 scopedImport :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 scopedImport aset path = force aset $ \aset' -> force path $ \path' ->
@@ -676,13 +657,11 @@ scopedImport aset path = force aset $ \aset' -> force path $ \path' ->
                      ++ show s ++ " and " ++ show p
 
 getEnv_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
-getEnv_ = flip force $ \case
-    NVStr s _ -> do
-        mres <- getEnvVar (Text.unpack s)
-        return $ case mres of
-            Nothing -> NVStr "" mempty
-            Just v  -> NVStr (Text.pack v) mempty
-    p -> throwError $ "Unexpected argument to getEnv: " ++ show p
+getEnv_ = fromNix >=> \s -> do
+    mres <- getEnvVar (Text.unpack s)
+    toNix $ case mres of
+        Nothing -> ""
+        Just v  -> Text.pack v
 
 sort_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 sort_ comparator list = force list $ \case
