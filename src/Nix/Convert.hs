@@ -133,19 +133,25 @@ instance (Framed e m, MonadVar m, MonadFile m)
         Just b -> pure b
         _ -> throwError $ "Expected a float, but saw: " ++ show v
 
-instance (Framed e m, MonadVar m, MonadFile m)
+instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m)
       => FromValue Text m (NValueNF m) where
     fromValueMay = \case
         Fix (NVStr t _) -> pure $ Just t
+        Fix (NVPath p) -> Just . Text.pack . unStorePath <$> addPath p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
         _ -> throwError $ "Expected a string, but saw: " ++ show v
 
-instance (Framed e m, MonadVar m, MonadFile m)
+instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m)
       => FromValue Text m (NValue m) where
     fromValueMay = \case
         NVStr t _ -> pure $ Just t
+        NVPath p -> Just . Text.pack . unStorePath <$> addPath p
+        _ -> pure Nothing
+    fromValue v = fromValueMay v >>= \case
+        Just b -> pure b
+        _ -> throwError $ "Expected a string, but saw: " ++ show v
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -431,8 +437,8 @@ instance (Framed e m, MonadVar m, MonadFile m) => FromNix Integer m (NValueNF m)
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix Integer m (NValue m) where
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix Float m (NValueNF m) where
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix Float m (NValue m) where
-instance (Framed e m, MonadVar m, MonadFile m) => FromNix Text m (NValueNF m) where
-instance (Framed e m, MonadVar m, MonadFile m) => FromNix Text m (NValue m) where
+instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m) => FromNix Text m (NValueNF m) where
+instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m) => FromNix Text m (NValue m) where
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix ByteString m (NValueNF m) where
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix ByteString m (NValue m) where
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix Path m (NValueNF m) where
