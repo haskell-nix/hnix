@@ -37,113 +37,113 @@ import           Nix.Value
 
 class FromValue a m v where
     fromValue    :: v -> m a
-    fromNixMay :: v -> m (Maybe a)
+    fromValueMay :: v -> m (Maybe a)
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue Bool m (NValueNF m) where
-    fromNixMay = \case
+    fromValueMay = \case
         Fix (NVConstant (NBool b)) -> pure $ Just b
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected a bool, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue Bool m (NValue m) where
-    fromNixMay = \case
+    fromValueMay = \case
         NVConstant (NBool b) -> pure $ Just b
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected a bool, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue Int m (NValueNF m) where
-    fromNixMay = \case
+    fromValueMay = \case
         Fix (NVConstant (NInt b)) -> pure $ Just (fromInteger b)
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected an integer, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue Int m (NValue m) where
-    fromNixMay = \case
+    fromValueMay = \case
         NVConstant (NInt b) -> pure $ Just (fromInteger b)
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected an integer, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue Integer m (NValueNF m) where
-    fromNixMay = \case
+    fromValueMay = \case
         Fix (NVConstant (NInt b)) -> pure $ Just b
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected an integer, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue Integer m (NValue m) where
-    fromNixMay = \case
+    fromValueMay = \case
         NVConstant (NInt b) -> pure $ Just b
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected an integer, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue Float m (NValueNF m) where
-    fromNixMay = \case
+    fromValueMay = \case
         Fix (NVConstant (NFloat b)) -> pure $ Just b
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected a float, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue Float m (NValue m) where
-    fromNixMay = \case
+    fromValueMay = \case
         NVConstant (NFloat b) -> pure $ Just b
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected a float, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue Text m (NValueNF m) where
-    fromNixMay = \case
+    fromValueMay = \case
         Fix (NVStr t _) -> pure $ Just t
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected a string, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue Text m (NValue m) where
-    fromNixMay = \case
+    fromValueMay = \case
         NVStr t _ -> pure $ Just t
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected a string, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue ByteString m (NValueNF m) where
-    fromNixMay = \case
+    fromValueMay = \case
         Fix (NVStr t _) -> pure $ Just (encodeUtf8 t)
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected a string, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue ByteString m (NValue m) where
-    fromNixMay = \case
+    fromValueMay = \case
         NVStr t _ -> pure $ Just (encodeUtf8 t)
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected a string, but saw: " ++ show v
 
@@ -152,29 +152,29 @@ newtype Path = Path { getPath :: FilePath }
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue Path m (NValueNF m) where
-    fromNixMay = \case
+    fromValueMay = \case
         Fix (NVPath p) -> pure $ Just (Path p)
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected a path, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue Path m (NValue m) where
-    fromNixMay = \case
+    fromValueMay = \case
         NVPath p -> pure $ Just (Path p)
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected a path, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m,
           FromValue a m (NValueNF m), Show a)
       => FromValue [a] m (NValueNF m) where
-    fromNixMay = \case
-        Fix (NVList l) -> sequence <$> traverse fromNixMay l
+    fromValueMay = \case
+        Fix (NVList l) -> sequence <$> traverse fromValueMay l
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected an attrset, but saw: " ++ show v
 
@@ -185,81 +185,81 @@ instance (Framed e m, MonadVar m, MonadFile m,
 
 -- instance (Framed e m, MonadVar m, MonadFile m) => (MonadThunk (NValue m) (NThunk m) m,
 --           FromValue a m (NValue m), Show a) => FromValue [a] m (NValue m) where
---     fromNixMay = \case
---         NVList l -> sequence <$> traverse (`force` fromNixMay) l
+--     fromValueMay = \case
+--         NVList l -> sequence <$> traverse (`force` fromValueMay) l
 --         _ -> pure Nothing
---     fromValue = fromNixMay >=> \case
+--     fromValue = fromValueMay >=> \case
 --         Just b -> pure b
 --         v -> throwError $ "Expected an attrset, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue [NThunk m] m (NValue m) where
-    fromNixMay = \case
+    fromValueMay = \case
         NVList l -> pure $ Just l
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected an attrset, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue (HashMap Text (NValueNF m)) m (NValueNF m) where
-    fromNixMay = \case
+    fromValueMay = \case
         Fix (NVSet s _) -> pure $ Just s
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected an attrset, but saw: " ++ show v
 
 -- instance (Framed e m, MonadVar m, MonadFile m) => (MonadThunk (NValue m) (NThunk m) m,
 --           FromValue a m (NValue m), Show a)
 --       => FromValue (HashMap Text a) m (NValue m) where
---     fromNixMay = \case
---         NVSet s _ -> sequence <$> traverse (`force` fromNixMay) s
+--     fromValueMay = \case
+--         NVSet s _ -> sequence <$> traverse (`force` fromValueMay) s
 --         _ -> pure Nothing
---     fromValue = fromNixMay >=> \case
+--     fromValue = fromValueMay >=> \case
 --         Just b -> pure b
 --         v -> throwError $ "Expected an attrset, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue (HashMap Text (NThunk m)) m (NValue m) where
-    fromNixMay = \case
+    fromValueMay = \case
         NVSet s _ -> pure $ Just s
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected an attrset, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue (HashMap Text (NValueNF m),
                  HashMap Text SourcePos) m (NValueNF m) where
-    fromNixMay = \case
+    fromValueMay = \case
         Fix (NVSet s p) -> pure $ Just (s, p)
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected an attrset, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m)
       => FromValue (HashMap Text (NThunk m),
                  HashMap Text SourcePos) m (NValue m) where
-    fromNixMay = \case
+    fromValueMay = \case
         NVSet s p -> pure $ Just (s, p)
         _ -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected an attrset, but saw: " ++ show v
 
 instance (MonadThunk (NValue m) (NThunk m) m,
           Framed e m, MonadVar m, MonadFile m)
       => FromValue (NThunk m) m (NValue m) where
-    fromNixMay = pure . Just . value @_ @_ @m
-    fromValue = fromNixMay >=> \case
+    fromValueMay = pure . Just . value @_ @_ @m
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Expected a thunk, but saw: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m)
       => FromValue A.Value m (NValueNF m) where
-    fromNixMay = \case
+    fromValueMay = \case
         Fix (NVConstant a) -> pure $ Just $ case a of
             NInt n   -> toJSON n
             NFloat n -> toJSON n
@@ -268,19 +268,19 @@ instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m)
             NUri u   -> toJSON u
         Fix (NVStr s _)     -> pure $ Just $ toJSON s
         Fix (NVList l)      -> fmap (A.Array . V.fromList) . sequence
-                                  <$> traverse fromNixMay l
-        Fix (NVSet m _)     -> fmap A.Object . sequence <$> traverse fromNixMay m
+                                  <$> traverse fromValueMay l
+        Fix (NVSet m _)     -> fmap A.Object . sequence <$> traverse fromValueMay m
         Fix NVClosure {}    -> pure Nothing
         Fix (NVPath p)      -> Just . toJSON . unStorePath <$> addPath p
         Fix (NVBuiltin _ _) -> pure Nothing
-    fromValue = fromNixMay >=> \case
+    fromValue = fromValueMay >=> \case
         Just b -> pure b
         v -> throwError $ "Cannot convert value to JSON: " ++ show v
 
 instance (Framed e m, MonadVar m, MonadFile m,
           MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
       => FromValue A.Value m (NValue m) where
-    fromNixMay = normalForm >=> fromNixMay
+    fromValueMay = normalForm >=> fromValueMay
     fromValue    = normalForm >=> fromValue
 
 class ToValue a m v where

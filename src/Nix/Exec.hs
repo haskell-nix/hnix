@@ -100,18 +100,18 @@ instance MonadNix e m => MonadEval (NValue m) m where
         -- its value is only computed once.
         traceM "Evaluating with scope"
         s <- thunk scope
-        pushWeakScope ?? body $ force s $ \v -> fromNixMay v >>= \case
+        pushWeakScope ?? body $ force s $ \v -> fromValueMay v >>= \case
             Just (s :: AttrSet (NThunk m)) -> do
                 traceM $ "Scope is: " ++ show (void s)
                 pure s
             _ -> nverr $ "scope must be a set in with statement, but saw: "
                     ++ show v
 
-    evalIf c t f = fromNixMay c >>= \case
+    evalIf c t f = fromValueMay c >>= \case
         Just b -> if b then t else f
         _ -> nverr $ "condition must be a boolean: "++ show c
 
-    evalAssert c body =  fromNixMay c >>= \case
+    evalAssert c body =  fromValueMay c >>= \case
         Just b -> if b then body else nverr "assertion failed"
         _ -> nverr $ "assertion condition must be boolean, but saw: "
                 ++ show c
@@ -456,7 +456,7 @@ findEnvPathM name = do
             Just p -> force p $ fromValue >=> \(Path path) ->
                 case M.lookup "prefix" s of
                     Nothing -> tryPath path Nothing
-                    Just pf -> force pf $ fromNixMay >=> \case
+                    Just pf -> force pf $ fromValueMay >=> \case
                         Just (pfx :: Text) | not (Text.null pfx) ->
                             tryPath path (Just (Text.unpack pfx))
                         _ -> tryPath path Nothing

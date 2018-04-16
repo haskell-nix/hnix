@@ -176,7 +176,7 @@ attrSetAlter (p:ps) m val = case M.lookup p m of
         | otherwise -> recurse M.empty
     Just x
         | null ps   -> go
-        | otherwise -> x >>= \v -> fromNixMay v >>= \case
+        | otherwise -> x >>= \v -> fromValueMay v >>= \case
               Just (s :: AttrSet t) -> recurse (force ?? pure <$> s)
               _ -> evalError @v $ "attribute " ++ show p
                       ++ " is not a set, but a " ++ show v
@@ -202,7 +202,7 @@ evalBinds allowDynamic recursive binds = do
 
     go :: Scopes m t -> Binding (m v) -> m [([Text], Maybe SourcePos, m v)]
     go _ (NamedVar [StaticKey "__overrides" _] finalValue) =
-        finalValue >>= \v -> fromNixMay v >>= \case
+        finalValue >>= \v -> fromValueMay v >>= \case
             Just (o', p') ->
                 return $ map (\(k, v) -> ([k], M.lookup k p', force v pure))
                              (M.toList o')
@@ -232,7 +232,7 @@ evalBinds allowDynamic recursive binds = do
             (Just key, pos) -> return $ Just ([key], pos, do
                 mv <- case ms of
                     Nothing -> withScopes outsideScope $ lookupVar key
-                    Just s -> s >>= \v -> fromNixMay v >>= \case
+                    Just s -> s >>= \v -> fromValueMay v >>= \case
                         Just (s :: AttrSet t) ->
                             clearScopes @t $ pushScope s $ lookupVar key
                         _ -> evalError @v $ "Wanted a set, but saw: " ++ show v
@@ -269,7 +269,7 @@ evalSelect aset attr =
     join $ extract <$> aset <*> evalSelector True attr
   where
     extract v [] = return $ Right v
-    extract x (k:ks) = fromNixMay x >>= \case
+    extract x (k:ks) = fromValueMay x >>= \case
         Just (s :: AttrSet t, p :: AttrSet SourcePos) -> case M.lookup k s of
             Just v  -> force v $ extract ?? ks
             Nothing -> Left . (, k:ks) <$> toValue (s, p)
@@ -340,7 +340,7 @@ buildArgument :: forall e v t m. MonadNixEval e v t m
 buildArgument params arg = case params of
     Param name -> M.singleton name <$> thunk arg
     ParamSet s isVariadic m ->
-        arg >>= \v -> fromNixMay v >>= \case
+        arg >>= \v -> fromValueMay v >>= \case
             Just args -> do
                 let inject = case m of
                         Nothing -> id
