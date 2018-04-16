@@ -241,17 +241,17 @@ unify context (Symbolic x) (Symbolic y) = do
                     writeVar y (NMany m)
                     packSymbolic (NMany m)
 
-instance FromNix (AttrSet (SThunk m)) m (Symbolic m) where
+instance FromValue (AttrSet (SThunk m)) m (Symbolic m) where
 
-instance FromNix (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
+instance FromValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
 
-instance ToNix (AttrSet (SThunk m)) m (Symbolic m) where
+instance ToValue (AttrSet (SThunk m)) m (Symbolic m) where
 
-instance ToNix (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
+instance ToValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
 
-instance ToNix [SThunk m] m (Symbolic m) where
+instance ToValue [SThunk m] m (Symbolic m) where
 
-instance ToNix Bool m (Symbolic m) where
+instance ToValue Bool m (Symbolic m) where
 
 instance MonadLint e m => MonadThunk (Symbolic m) (SThunk m) m where
     thunk = fmap coerce . buildThunk

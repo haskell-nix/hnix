@@ -98,7 +98,7 @@ valueThunk = value @_ @_ @m
 
 builtinsList :: forall e m. MonadBuiltins e m => m [ Builtin m ]
 builtinsList = sequence [
-      do version <- toNix ("2.0" :: Text)
+      do version <- toValue ("2.0" :: Text)
          pure $ Builtin Normal ("nixVersion", version)
 
     , add0 TopLevel "__nixPath"                  nixPath
@@ -278,7 +278,7 @@ unsafeGetAttrPos x y = force x $ \x' -> force y $ \y' -> case (x', y') of
         Nothing ->
             throwError $ "unsafeGetAttrPos: field '" ++ Text.unpack key
                 ++ "' does not exist in attr set: " ++ show apos
-        Just delta -> toNix delta
+        Just delta -> toValue delta
     (x, y) -> throwError $ "Invalid types for builtin.unsafeGetAttrPos: "
                  ++ show (x, y)
 
@@ -414,12 +414,12 @@ splitDrvName s =
     in (Text.intercalate sep namePieces, Text.intercalate sep versionPieces)
 
 parseDrvName :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
-parseDrvName = flip force $ fromNix >=> \(s :: Text) -> do
+parseDrvName = flip force $ fromValue >=> \(s :: Text) -> do
     let (name :: Text, version :: Text) = splitDrvName s
     -- jww (2018-04-15): There should be an easier way to write this.
-    (toNix =<<) $ sequence $ M.fromList
-        [ ("name" :: Text, thunk (toNix name))
-        , ("version",     thunk (toNix version)) ]
+    (toValue =<<) $ sequence $ M.fromList
+        [ ("name" :: Text, thunk (toValue name))
+        , ("version",     thunk (toValue version)) ]
 
 match_ :: forall e m. MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 match_ pat str = force pat $ \pat' -> force str $ \str' ->
@@ -431,7 +431,7 @@ match_ pat str = force pat $ \pat' -> force str $ \str' ->
             case matchOnceText re (encodeUtf8 s) of
                 Just ("", sarr, "") -> do
                     let s = map fst (elems sarr)
-                    NVList <$> traverse (toNix . decodeUtf8)
+                    NVList <$> traverse (toValue . decodeUtf8)
                         (if length s > 1 then tail s else s)
                 _ -> pure $ NVConstant NNull
         (p, s) ->
@@ -475,7 +475,7 @@ substring start len str = Prim $
 
 attrNames :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
 attrNames = flip force $ \case
-    NVSet m _ -> toNix =<< traverse (thunk . toNix) (sort (M.keys m))
+    NVSet m _ -> toValue =<< traverse (thunk . toValue) (sort (M.keys m))
     v -> throwError $ "builtins.attrNames: Expected attribute set, got "
             ++ show v
 
@@ -508,9 +508,9 @@ catAttrs attrName lt = force lt $ \case
             ++ show v
 
 concatStringsSep :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-concatStringsSep s1 s2 = force s1 $ fromNix >=> \(s1' :: Text) ->
-    force s2 $ fromNix >=> traverse (`force` fromNix) >=> \(s2' :: [Text]) ->
-        toNix $ Text.intercalate s1' s2'
+concatStringsSep s1 s2 = force s1 $ fromValue >=> \(s1' :: Text) ->
+    force s2 $ fromValue >=> traverse (`force` fromValue) >=> \(s2' :: [Text]) ->
+        toValue $ Text.intercalate s1' s2'
 
 baseNameOf :: MonadBuiltins e m => NThunk m -> m (NValue m)
 baseNameOf = flip force $ \case
@@ -548,7 +548,7 @@ deepSeq a b = do
 
 elem_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 elem_ x xs = force xs $ \case
-    NVList l -> toNix =<< anyM (thunkEq x) l
+    NVList l -> toValue =<< anyM (thunkEq x) l
     v -> throwError $ "builtins.elem: Expected a list, got " ++ show v
 
 elemAt_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
@@ -562,16 +562,16 @@ elemAt_ xs n = force n $ extractInt >=> \n' -> force xs $ \case
 genList :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 genList generator length = force length $ \case
     NVConstant (NInt n) | n >= 0 -> fmap NVList $ forM [0 .. n - 1] $ \i ->
-        thunk $ force generator (`callFunc` toNix i)
+        thunk $ force generator (`callFunc` toValue i)
     v -> throwError $ "builtins.genList: Expected a non-negative number, got "
             ++ show v
 
 --TODO: Preserve string context
 replaceStrings :: MonadBuiltins e m => NThunk m -> NThunk m -> NThunk m -> m (NValue m)
 replaceStrings tfrom tto ts =
-    force tfrom $ fromNix >=> traverse (`force` fromNix) >=> \(from :: [Text]) ->
-     force tto   $ fromNix >=> traverse (`force` fromNix) >=> \(to   :: [Text]) ->
-      force ts    $ fromNix >=> \(s :: Text) -> do
+    force tfrom $ fromValue >=> traverse (`force` fromValue) >=> \(from :: [Text]) ->
+     force tto   $ fromValue >=> traverse (`force` fromValue) >=> \(to   :: [Text]) ->
+      force ts    $ fromValue >=> \(s :: Text) -> do
         when (length from /= length to) $
             throwError $ "'from' and 'to' arguments to 'replaceStrings'"
                 ++ " have different lengths"
@@ -594,11 +594,11 @@ replaceStrings tfrom tto ts =
                             , Builder.singleton h
                             ]
                     _ -> go rest $ result <> Builder.fromText replacement
-        toNix $ go s mempty
+        toValue $ go s mempty
 
 removeAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 removeAttrs set list = force list $
-    fromNix >=> traverse (`force` fromNix) >=> \(toRemove :: [Text]) ->
+    fromValue >=> traverse (`force` fromValue) >=> \(toRemove :: [Text]) ->
         force set $ \case
             NVSet m p -> return $ NVSet (go m toRemove) (go p toRemove)
             v -> throwError $ "removeAttrs: expected set, got " ++ show v
@@ -642,43 +642,43 @@ pathExists_ = flip force $ \case
 
 isAttrs :: MonadBuiltins e m => NThunk m -> m (NValue m)
 isAttrs = flip force $ \case
-    NVSet _ _ -> toNix True
-    _ -> toNix False
+    NVSet _ _ -> toValue True
+    _ -> toValue False
 
 isList :: MonadBuiltins e m => NThunk m -> m (NValue m)
 isList = flip force $ \case
-    NVList _ -> toNix True
-    _ -> toNix False
+    NVList _ -> toValue True
+    _ -> toValue False
 
 isFunction :: MonadBuiltins e m => NThunk m -> m (NValue m)
 isFunction = flip force $ \case
-    NVClosure {} -> toNix True
-    _ -> toNix False
+    NVClosure {} -> toValue True
+    _ -> toValue False
 
 isString :: MonadBuiltins e m => NThunk m -> m (NValue m)
 isString = flip force $ \case
-    NVStr _ _ -> toNix True
-    _ -> toNix False
+    NVStr _ _ -> toValue True
+    _ -> toValue False
 
 isInt :: MonadBuiltins e m => NThunk m -> m (NValue m)
 isInt = flip force $ \case
-    NVConstant (NInt _) -> toNix True
-    _ -> toNix False
+    NVConstant (NInt _) -> toValue True
+    _ -> toValue False
 
 isFloat :: MonadBuiltins e m => NThunk m -> m (NValue m)
 isFloat = flip force $ \case
-    NVConstant (NFloat _) -> toNix True
-    _ -> toNix False
+    NVConstant (NFloat _) -> toValue True
+    _ -> toValue False
 
 isBool :: MonadBuiltins e m => NThunk m -> m (NValue m)
 isBool = flip force $ \case
-    NVConstant (NBool _) -> toNix True
-    _ -> toNix False
+    NVConstant (NBool _) -> toValue True
+    _ -> toValue False
 
 isNull :: MonadBuiltins e m => NThunk m -> m (NValue m)
 isNull = flip force $ \case
-    NVConstant NNull -> toNix True
-    _ -> toNix False
+    NVConstant NNull -> toValue True
+    _ -> toValue False
 
 throw_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 throw_ = flip force $ \case
@@ -713,11 +713,11 @@ sort_ comparator list = force list $ \case
         where
           cmp a b = do
               isLessThan <- call2 comparator a b
-              fromNix isLessThan >>= \case
+              fromValue isLessThan >>= \case
                   True -> pure LT
                   False -> do
                       isGreaterThan <- call2 comparator b a
-                      fromNix isGreaterThan >>= \case
+                      fromValue isGreaterThan >>= \case
                           True -> pure GT
                           False -> pure EQ
     v -> throwError $ "builtins.sort: expected list, got " ++ show v
@@ -783,7 +783,7 @@ absolutePathFromValue = \case
 --TODO: Move all liftIO things into MonadNixEnv or similar
 readFile_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 readFile_ path = force path $
-    toNix <=< Nix.Stack.readFile <=< absolutePathFromValue
+    toValue <=< Nix.Stack.readFile <=< absolutePathFromValue
 
 data FileType
    = FileType_Regular
@@ -792,8 +792,8 @@ data FileType
    | FileType_Unknown
    deriving (Show, Read, Eq, Ord)
 
-instance Applicative m => ToNix FileType m (NValue m) where
-    toNix = toNix . \case
+instance Applicative m => ToValue FileType m (NValue m) where
+    toValue = toValue . \case
         FileType_Regular   -> "regular" :: Text
         FileType_Directory -> "directory"
         FileType_Symlink   -> "symlink"
@@ -811,20 +811,20 @@ readDir_ pathThunk = do
                 | isSymbolicLink s -> FileType_Symlink
                 | otherwise -> FileType_Unknown
         pure (Text.pack item, t)
-    toNix =<< traverse (thunk . toNix) (M.fromList itemsWithTypes)
+    toValue =<< traverse (thunk . toValue) (M.fromList itemsWithTypes)
 
 fromJSON :: MonadBuiltins e m => NThunk m -> m (NValue m)
-fromJSON t = force t $ fromNix >=> \encoded ->
+fromJSON t = force t $ fromValue >=> \encoded ->
     case A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded of
         Left jsonError -> throwError $ "builtins.fromJSON: " ++ jsonError
-        Right v -> toNix v
+        Right v -> toValue v
 
 toXML_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
 toXML_ = flip force $ normalForm >=> \x ->
     pure $ NVStr (Text.pack (toXML x)) mempty
 
 typeOf :: MonadBuiltins e m => NThunk m -> m (NValue m)
-typeOf t = force t $ \v -> toNix @Text $ case v of
+typeOf t = force t $ \v -> toValue @Text $ case v of
     NVConstant a -> case a of
         NInt _ -> "int"
         NFloat _ -> "float"
@@ -921,14 +921,14 @@ newtype Prim m a = Prim { runPrim :: m a }
 class ToBuiltin m a | a -> m where
     toBuiltin :: String -> a -> m (NValue m)
 
-instance (MonadBuiltins e m, ToNix a m (NValue m)) => ToBuiltin m (Prim m a) where
-    toBuiltin _ p = toNix =<< runPrim p
+instance (MonadBuiltins e m, ToValue a m (NValue m)) => ToBuiltin m (Prim m a) where
+    toBuiltin _ p = toValue =<< runPrim p
 
-instance (MonadBuiltins e m, FromNix a m (NValue m), ToBuiltin m b)
+instance (MonadBuiltins e m, FromValue a m (NValue m), ToBuiltin m b)
       => ToBuiltin m (a -> b) where
     toBuiltin name f =
         return $ NVBuiltin name $
-            force ?? (fromNix >=> toBuiltin name . f)
+            force ?? (fromValue >=> toBuiltin name . f)
 
 toEncodingSorted :: A.Value -> A.Encoding
 toEncodingSorted = \case

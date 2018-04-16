@@ -84,7 +84,7 @@ instance MonadNix e m => MonadEval (NValue m) m where
         Compose (Ann (SrcSpan delta _) _):_ <-
             asks (mapMaybe (either (const Nothing) Just)
                  . view @_ @Frames hasLens)
-        toNix delta
+        toValue delta
 
     evalConstant    = pure . NVConstant
     evalString      = pure . uncurry NVStr
@@ -198,82 +198,82 @@ execBinaryOp op larg rarg = do
             -> NAtom -> NAtom -> m (NValue m)
         numBinOp' intF floatF l r = case (l, r) of
             (NInt   li, NInt   ri) ->
-                toNix $             li `intF`               ri
+                toValue $             li `intF`               ri
             (NInt   li, NFloat rf) ->
-                toNix $ fromInteger li `floatF`             rf
+                toValue $ fromInteger li `floatF`             rf
             (NFloat lf, NInt   ri) ->
-                toNix $             lf `floatF` fromInteger ri
+                toValue $             lf `floatF` fromInteger ri
             (NFloat lf, NFloat rf) ->
-                toNix $             lf `floatF`             rf
+                toValue $             lf `floatF`             rf
             _ -> nverr unsupportedTypes
 
         nverr = evalError @(NValue m)
 
     case (lval, rval) of
         (NVConstant lc, NVConstant rc) -> case (op, lc, rc) of
-            (NEq,  _, _)   -> toNix =<< valueEq lval rval
-            (NNEq, _, _)   -> toNix . not =<< valueEq lval rval
-            (NLt,  l, r)   -> toNix $ l <  r
-            (NLte, l, r)   -> toNix $ l <= r
-            (NGt,  l, r)   -> toNix $ l >  r
-            (NGte, l, r)   -> toNix $ l >= r
+            (NEq,  _, _)   -> toValue =<< valueEq lval rval
+            (NNEq, _, _)   -> toValue . not =<< valueEq lval rval
+            (NLt,  l, r)   -> toValue $ l <  r
+            (NLte, l, r)   -> toValue $ l <= r
+            (NGt,  l, r)   -> toValue $ l >  r
+            (NGte, l, r)   -> toValue $ l >= r
             (NAnd,  _, _)  -> nverr "should be impossible: && is handled above"
             (NOr,   _, _)  -> nverr "should be impossible: || is handled above"
             (NPlus,  l, r) -> numBinOp (+) l r
             (NMinus, l, r) -> numBinOp (-) l r
             (NMult,  l, r) -> numBinOp (*) l r
             (NDiv,   l, r) -> numBinOp' div (/) l r
-            (NImpl, NBool l, NBool r) -> toNix $ not l || r
+            (NImpl, NBool l, NBool r) -> toValue $ not l || r
             _ -> nverr unsupportedTypes
 
         (NVStr ls lc, NVStr rs rc) -> case op of
             NPlus -> pure $ NVStr (ls `mappend` rs) (lc `mappend` rc)
-            NEq   -> toNix =<< valueEq lval rval
-            NNEq  -> toNix . not =<< valueEq lval rval
-            NLt   -> toNix $ ls <  rs
-            NLte  -> toNix $ ls <= rs
-            NGt   -> toNix $ ls >  rs
-            NGte  -> toNix $ ls >= rs
+            NEq   -> toValue =<< valueEq lval rval
+            NNEq  -> toValue . not =<< valueEq lval rval
+            NLt   -> toValue $ ls <  rs
+            NLte  -> toValue $ ls <= rs
+            NGt   -> toValue $ ls >  rs
+            NGte  -> toValue $ ls >= rs
             _ -> nverr unsupportedTypes
 
         (NVStr _ _, NVConstant NNull) -> case op of
-            NEq   -> toNix =<< valueEq lval (NVStr "" mempty)
-            NNEq  -> toNix . not =<< valueEq lval (NVStr "" mempty)
+            NEq   -> toValue =<< valueEq lval (NVStr "" mempty)
+            NNEq  -> toValue . not =<< valueEq lval (NVStr "" mempty)
             _ -> nverr unsupportedTypes
 
         (NVConstant NNull, NVStr _ _) -> case op of
-            NEq   -> toNix =<< valueEq (NVStr "" mempty) rval
-            NNEq  -> toNix . not =<< valueEq (NVStr "" mempty) rval
+            NEq   -> toValue =<< valueEq (NVStr "" mempty) rval
+            NNEq  -> toValue . not =<< valueEq (NVStr "" mempty) rval
             _ -> nverr unsupportedTypes
 
         (NVSet ls lp, NVSet rs rp) -> case op of
             NUpdate -> pure $ NVSet (rs `M.union` ls) (rp `M.union` lp)
-            NEq     -> toNix =<< valueEq lval rval
-            NNEq    -> toNix . not =<< valueEq lval rval
+            NEq     -> toValue =<< valueEq lval rval
+            NNEq    -> toValue . not =<< valueEq lval rval
             _ -> nverr unsupportedTypes
 
         (NVList ls, NVList rs) -> case op of
             NConcat -> pure $ NVList $ ls ++ rs
-            NEq     -> toNix =<< valueEq lval rval
-            NNEq    -> toNix . not =<< valueEq lval rval
+            NEq     -> toValue =<< valueEq lval rval
+            NNEq    -> toValue . not =<< valueEq lval rval
             _ -> nverr unsupportedTypes
 
         (NVList ls, NVConstant NNull) -> case op of
             NConcat -> pure $ NVList ls
-            NEq     -> toNix =<< valueEq lval (NVList [])
-            NNEq    -> toNix . not =<< valueEq lval (NVList [])
+            NEq     -> toValue =<< valueEq lval (NVList [])
+            NNEq    -> toValue . not =<< valueEq lval (NVList [])
             _ -> nverr unsupportedTypes
 
         (NVConstant NNull, NVList rs) -> case op of
             NConcat -> pure $ NVList rs
-            NEq     -> toNix =<< valueEq (NVList []) rval
-            NNEq    -> toNix . not =<< valueEq (NVList []) rval
+            NEq     -> toValue =<< valueEq (NVList []) rval
+            NNEq    -> toValue . not =<< valueEq (NVList []) rval
             _ -> nverr unsupportedTypes
 
         (NVPath p, NVStr s _) -> case op of
             -- jww (2018-04-13): Do we need to make the path absolute here?
-            NEq   -> toNix $ p == Text.unpack s
-            NNEq  -> toNix $ p /= Text.unpack s
+            NEq   -> toValue $ p == Text.unpack s
+            NNEq  -> toValue $ p /= Text.unpack s
             NPlus -> NVPath <$> makeAbsolutePath (p `mappend` Text.unpack s)
             _ -> nverr unsupportedTypes
 
@@ -440,7 +440,7 @@ findEnvPathM name = do
     mres <- lookupVar @_ @(NThunk m) "__nixPath"
     mpath <- case mres of
         Nothing -> error "impossible"
-        Just x -> force x $ fromNix >=> \(l :: [NThunk m]) ->
+        Just x -> force x $ fromValue >=> \(l :: [NThunk m]) ->
             foldM go Nothing l
     case mpath of
         Nothing ->
@@ -451,9 +451,9 @@ findEnvPathM name = do
   where
     go :: Maybe FilePath -> NThunk m -> m (Maybe FilePath)
     go p@(Just _) _ = pure p
-    go Nothing l = force l $ fromNix >=> \(s :: HashMap Text (NThunk m)) ->
+    go Nothing l = force l $ fromValue >=> \(s :: HashMap Text (NThunk m)) ->
         case M.lookup "path" s of
-            Just p -> force p $ fromNix >=> \(Path path) ->
+            Just p -> force p $ fromValue >=> \(Path path) ->
                 case M.lookup "prefix" s of
                     Nothing -> tryPath path Nothing
                     Just pf -> force pf $ fromNixMay >=> \case
