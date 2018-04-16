@@ -486,9 +486,9 @@ catAttrs attrName lt = force lt $ \case
             ++ show v
 
 concatStringsSep :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-concatStringsSep s1 s2 = force s1 $ fromValue >=> \(s1' :: Text) ->
-    force s2 $ fromValue >=> traverse (`force` fromValue) >=> \(s2' :: [Text]) ->
-        toValue $ Text.intercalate s1' s2'
+concatStringsSep s1 s2 =
+    force s1 $ fromNix >=> \(s1' :: Text) ->
+    force s2 $ fromNix >=> toNix . Text.intercalate s1'
 
 baseNameOf :: MonadBuiltins e m => NThunk m -> m (NValue m)
 baseNameOf = flip force $ \case
@@ -547,9 +547,9 @@ genList generator length = force length $ \case
 --TODO: Preserve string context
 replaceStrings :: MonadBuiltins e m => NThunk m -> NThunk m -> NThunk m -> m (NValue m)
 replaceStrings tfrom tto ts =
-    force tfrom $ fromValue >=> traverse (`force` fromValue) >=> \(from :: [Text]) ->
-     force tto   $ fromValue >=> traverse (`force` fromValue) >=> \(to   :: [Text]) ->
-      force ts    $ fromValue >=> \(s :: Text) -> do
+    force tfrom $ fromNix >=> \(from :: [Text]) ->
+     force tto  $ fromNix >=> \(to   :: [Text]) ->
+      force ts  $ fromNix >=> \(s :: Text) -> do
         when (length from /= length to) $
             throwError $ "'from' and 'to' arguments to 'replaceStrings'"
                 ++ " have different lengths"
@@ -572,14 +572,13 @@ replaceStrings tfrom tto ts =
                             , Builder.singleton h
                             ]
                     _ -> go rest $ result <> Builder.fromText replacement
-        toValue $ go s mempty
+        toNix $ go s mempty
 
 removeAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-removeAttrs set list = force list $
-    fromValue >=> traverse (`force` fromValue) >=> \(toRemove :: [Text]) ->
-        force set $ \case
-            NVSet m p -> return $ NVSet (go m toRemove) (go p toRemove)
-            v -> throwError $ "removeAttrs: expected set, got " ++ show v
+removeAttrs set list = force list $ fromNix >=> \(toRemove :: [Text]) ->
+    force set $ \case
+        NVSet m p -> return $ NVSet (go m toRemove) (go p toRemove)
+        v -> throwError $ "removeAttrs: expected set, got " ++ show v
   where
     go = foldl' (flip M.delete)
 
@@ -770,8 +769,8 @@ data FileType
    | FileType_Unknown
    deriving (Show, Read, Eq, Ord)
 
-instance Applicative m => ToValue FileType m (NValue m) where
-    toValue = toValue . \case
+instance Applicative m => ToNix FileType m (NValue m) where
+    toNix = toNix . \case
         FileType_Regular   -> "regular" :: Text
         FileType_Directory -> "directory"
         FileType_Symlink   -> "symlink"
@@ -789,7 +788,7 @@ readDir_ pathThunk = do
                 | isSymbolicLink s -> FileType_Symlink
                 | otherwise -> FileType_Unknown
         pure (Text.pack item, t)
-    toValue =<< traverse (thunk . toValue) (M.fromList itemsWithTypes)
+    toNix (M.fromList itemsWithTypes)
 
 fromJSON :: MonadBuiltins e m => NThunk m -> m (NValue m)
 fromJSON t = force t $ fromValue >=> \encoded ->
@@ -802,18 +801,18 @@ toXML_ = flip force $ normalForm >=> \x ->
     pure $ NVStr (Text.pack (toXML x)) mempty
 
 typeOf :: MonadBuiltins e m => NThunk m -> m (NValue m)
-typeOf t = force t $ \v -> toValue @Text $ case v of
+typeOf = flip force $ toNix @Text . \case
     NVConstant a -> case a of
-        NInt _ -> "int"
+        NInt _   -> "int"
         NFloat _ -> "float"
-        NBool _ -> "bool"
-        NNull -> "null"
-        NUri _ -> "string" --TODO: Should we get rid of NUri?
-    NVStr _ _ -> "string"
-    NVList _ -> "list"
-    NVSet _ _ -> "set"
-    NVClosure {} -> "lambda"
-    NVPath _ -> "path"
+        NBool _  -> "bool"
+        NNull    -> "null"
+        NUri _   -> "string" --TODO: Should we get rid of NUri?
+    NVStr _ _     -> "string"
+    NVList _      -> "list"
+    NVSet _ _     -> "set"
+    NVClosure {}  -> "lambda"
+    NVPath _      -> "path"
     NVBuiltin _ _ -> "lambda"
 
 tryEval :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
