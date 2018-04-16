@@ -17,6 +17,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# OPTIONS_GHC -Wno-missing-methods #-}
 
 module Nix.Lint where
 
