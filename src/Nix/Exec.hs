@@ -138,21 +138,15 @@ execBinaryOp
     :: forall e m. (MonadNix e m, MonadEval (NValue m) m)
     => NBinaryOp -> NValue m -> m (NValue m) -> m (NValue m)
 
-execBinaryOp NOr larg rarg = case larg of
-    NVConstant (NBool l) -> if l
-        then mkBoolV True
-        else rarg >>= \case
-            NVConstant (NBool r) -> mkBoolV r
-            v -> throwError $ "operator `||`: left argument: boolean expected, got " ++ show v
-    v -> throwError $ "operator `||`: right argument: boolean expected, got " ++ show v
+execBinaryOp NOr larg rarg = fromNix larg >>= \l ->
+    if l
+    then toNix True
+    else rarg >>= fromNix @Bool >>= toNix
 
-execBinaryOp NAnd larg rarg = case larg of
-    NVConstant (NBool l) -> if l
-        then rarg >>= \case
-            NVConstant (NBool r) -> mkBoolV r
-            v -> throwError $ "operator `&&`: left argument: boolean expected, got " ++ show v
-        else mkBoolV False
-    v -> throwError $ "operator `&&`: right argument: boolean expected, got " ++ show v
+execBinaryOp NAnd larg rarg = fromNix larg >>= \l ->
+    if l
+    then rarg >>= fromNix @Bool >>= toNix
+    else toNix False
 
 -- jww (2018-04-08): Refactor so that eval (NBinary ..) *always* dispatches
 -- based on operator first

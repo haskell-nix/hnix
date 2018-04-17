@@ -107,15 +107,6 @@ builtin3 :: Monad m
 builtin3 name f =
     builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
 
-mkBoolV :: Monad m => Bool -> m (NValue m)
-mkBoolV = return . NVConstant . NBool
-
-mkIntV :: Monad m => Integer -> m (NValue m)
-mkIntV = return . NVConstant . NInt
-
-mkFloatV :: Monad m => Float -> m (NValue m)
-mkFloatV = return . NVConstant . NFloat
-
 isClosureNF :: Monad m => NValueNF m -> Bool
 isClosureNF (Fix NVClosure {}) = True
 isClosureNF _ = False
