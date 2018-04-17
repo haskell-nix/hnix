@@ -26,6 +26,7 @@ module Nix.Expr.Types where
 import           Codec.Serialise (Serialise)
 import qualified Codec.Serialise as Ser
 import           Control.DeepSeq
+import           Data.Aeson
 import           Data.Binary (Binary)
 import qualified Data.Binary as Bin
 import           Data.Data
@@ -329,6 +330,32 @@ instance Binary NAtom
 instance Binary NUnaryOp
 instance Binary NBinaryOp
 instance Binary a => Binary (NExprF a)
+
+instance (ToJSON v, ToJSON a) => ToJSON (Antiquoted v a)
+instance ToJSON a => ToJSON (NString a)
+instance ToJSON a => ToJSON (Binding a)
+instance ToJSON Pos where
+    toJSON x = toJSON (unPos x)
+instance ToJSON SourcePos
+instance ToJSON a => ToJSON (NKeyName a)
+instance ToJSON a => ToJSON (Params a)
+instance ToJSON NAtom
+instance ToJSON NUnaryOp
+instance ToJSON NBinaryOp
+instance ToJSON a => ToJSON (NExprF a)
+
+instance (FromJSON v, FromJSON a) => FromJSON (Antiquoted v a)
+instance FromJSON a => FromJSON (NString a)
+instance FromJSON a => FromJSON (Binding a)
+instance FromJSON Pos where
+    parseJSON = fmap mkPos . parseJSON
+instance FromJSON SourcePos
+instance FromJSON a => FromJSON (NKeyName a)
+instance FromJSON a => FromJSON (Params a)
+instance FromJSON NAtom
+instance FromJSON NUnaryOp
+instance FromJSON NBinaryOp
+instance FromJSON a => FromJSON (NExprF a)
 
 stripPositionInfo :: NExpr -> NExpr
 stripPositionInfo = transport phi
