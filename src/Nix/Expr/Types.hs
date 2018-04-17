@@ -36,6 +36,7 @@ import           Data.Hashable
 import           Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
 import           Data.Monoid
+import           Data.Ord.Deriving
 import           Data.Text (Text, pack, unpack)
 import           Data.Traversable
 import           GHC.Exts
@@ -45,6 +46,7 @@ import           Nix.Atoms
 import           Nix.Parser.Library (SourcePos(..))
 import           Nix.Utils
 import           Text.Megaparsec.Pos
+import           Text.Read.Deriving
 import           Text.Show.Deriving
 import           Type.Reflection (eqTypeRep)
 import qualified Type.Reflection as Reflection
@@ -148,8 +150,8 @@ instance IsString (Params r) where
 -- | 'Antiquoted' represents an expression that is either
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
 data Antiquoted (v :: *) (r :: *) = Plain !v | EscapedNewline | Antiquoted !r
-  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
-            Foldable, Traversable, Show, NFData, NFData1, Serialise, Hashable)
+  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Foldable,
+            Traversable, Show, Read, NFData, NFData1, Serialise, Hashable)
 
 -- | An 'NString' is a list of things that are either a plain string
 -- or an antiquoted expression. After the antiquotes have been evaluated,
@@ -162,8 +164,8 @@ data NString r
   -- ^ Strings wrapped with two single quotes ('') can contain newlines, and
   --   their indentation will be stripped, but the amount stripped is
   --   remembered.
-  deriving (Eq, Ord, Generic, Generic1, Typeable, Data, Functor,
-            Foldable, Traversable, Show, NFData, NFData1, Serialise, Hashable)
+  deriving (Eq, Ord, Generic, Generic1, Typeable, Data, Functor, Foldable,
+            Traversable, Show, Read, NFData, NFData1, Serialise, Hashable)
 
 -- | For the the 'IsString' instance, we use a plain doublequoted string.
 instance IsString (NString r) where
@@ -192,7 +194,8 @@ instance IsString (NString r) where
 data NKeyName r
   = DynamicKey !(Antiquoted (NString r) r)
   | StaticKey !VarName !(Maybe SourcePos)
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise, Hashable)
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
+            Serialise, Hashable)
 
 instance Serialise Pos where
     encode x = Ser.encode (unPos x)
@@ -260,7 +263,8 @@ type NAttrPath r = NonEmpty (NKeyName r)
 
 -- | There are two unary operations: logical not and integer negation.
 data NUnaryOp = NNeg | NNot
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise, Hashable)
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
+            Serialise, Hashable)
 
 -- | Binary operators expressible in the nix language.
 data NBinaryOp
@@ -280,7 +284,8 @@ data NBinaryOp
   | NDiv     -- ^ Division (/)
   | NConcat  -- ^ List concatenation (++)
   | NApp     -- ^ Apply a function to an argument.
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise, Hashable)
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
+            Serialise, Hashable)
 
 -- | Get the name out of the parameter (there might be none).
 paramName :: Params r -> Maybe VarName
@@ -293,6 +298,16 @@ $(deriveEq1 ''Binding)
 $(deriveEq1 ''Params)
 $(deriveEq1 ''Antiquoted)
 $(deriveEq2 ''Antiquoted)
+
+$(deriveOrd1 ''NString)
+$(deriveOrd1 ''Params)
+$(deriveOrd1 ''Antiquoted)
+$(deriveOrd2 ''Antiquoted)
+
+$(deriveRead1 ''NString)
+$(deriveRead1 ''Params)
+$(deriveRead1 ''Antiquoted)
+$(deriveRead2 ''Antiquoted)
 
 $(deriveShow1 ''NExprF)
 $(deriveShow1 ''NString)

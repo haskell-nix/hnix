@@ -27,7 +27,8 @@ data NAtom
   | NNull
   -- | URIs, which are just string literals, but do not need quotes.
   | NUri Text
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise, Hashable)
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
+            Serialise, Hashable)
 
 -- | Translate an atom into its nix representation.
 atomText :: NAtom -> Text
