@@ -83,12 +83,13 @@ nixTerm = do
         _    -> choice $
             [ nixSelect nixSet | c == 'r' ] ++
             [ nixPath | pathChar c ] ++
-            [ nixUri | isAlpha c ] ++
-            (if isDigit c then [ nixFloat
-                               , nixInt ] else []) ++
-            [ nixBool | c == 't' || c == 'f' ] ++
-            [ nixNull | c == 'n' ] ++
-            [ nixSelect nixSym ]
+            if isDigit c
+            then [ nixFloat
+                 , nixInt ]
+            else [ nixUri | isAlpha c ] ++
+                 [ nixBool | c == 't' || c == 'f' ] ++
+                 [ nixNull | c == 'n' ] ++
+                 [ nixSelect nixSym ]
 
 nixToplevelForm :: Parser NExprLoc
 nixToplevelForm = keywords <|> nixLambda <|> nixExprLoc
