@@ -32,6 +32,7 @@ import           Data.Data
 import           Data.Eq.Deriving
 import           Data.Fix
 import           Data.Functor.Classes
+import           Data.Hashable
 import           Data.Monoid
 import           Data.Text (Text, pack, unpack)
 import           Data.Traversable
@@ -146,7 +147,8 @@ instance IsString (Params r) where
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
 data Antiquoted (v :: *) (r :: *) = Plain !v | EscapedNewline | Antiquoted !r
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
-            Foldable, Traversable, Show, NFData, NFData1, Serialise)
+            Foldable, Traversable, Show, NFData, NFData1, Serialise,
+            Hashable)
 
 -- | An 'NString' is a list of things that are either a plain string
 -- or an antiquoted expression. After the antiquotes have been evaluated,
@@ -160,7 +162,8 @@ data NString r
   --   their indentation will be stripped, but the amount stripped is
   --   remembered.
   deriving (Eq, Ord, Generic, Generic1, Typeable, Data, Functor,
-            Foldable, Traversable, Show, NFData, NFData1, Serialise)
+            Foldable, Traversable, Show, NFData, NFData1, Serialise,
+            Hashable)
 
 -- | For the the 'IsString' instance, we use a plain doublequoted string.
 instance IsString (NString r) where
@@ -189,7 +192,8 @@ instance IsString (NString r) where
 data NKeyName r
   = DynamicKey !(Antiquoted (NString r) r)
   | StaticKey !VarName !(Maybe SourcePos)
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise)
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise,
+            Hashable)
 
 instance Serialise Pos where
     encode x = Ser.encode (unPos x)
@@ -198,6 +202,13 @@ instance Serialise Pos where
 instance Serialise SourcePos where
     encode (SourcePos f l c) = Ser.encode f <> Ser.encode l <> Ser.encode c
     decode = SourcePos <$> Ser.decode <*> Ser.decode <*> Ser.decode
+
+instance Hashable Pos where
+    hashWithSalt salt x = hashWithSalt salt (unPos x)
+
+instance Hashable SourcePos where
+    hashWithSalt salt (SourcePos f l c) =
+        salt `hashWithSalt` f `hashWithSalt` l `hashWithSalt` c
 
 instance Generic1 NKeyName where
   type Rep1 NKeyName = NKeyName -- jww (2018-04-09): wrong
