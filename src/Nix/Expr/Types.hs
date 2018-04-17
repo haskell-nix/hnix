@@ -364,6 +364,7 @@ instance ToJSON NAtom
 instance ToJSON NUnaryOp
 instance ToJSON NBinaryOp
 instance ToJSON a => ToJSON (NExprF a)
+instance ToJSON NExpr
 
 instance (FromJSON v, FromJSON a) => FromJSON (Antiquoted v a)
 instance FromJSON a => FromJSON (NString a)
@@ -377,6 +378,7 @@ instance FromJSON NAtom
 instance FromJSON NUnaryOp
 instance FromJSON NBinaryOp
 instance FromJSON a => FromJSON (NExprF a)
+instance FromJSON NExpr
 
 stripPositionInfo :: NExpr -> NExpr
 stripPositionInfo = transport phi
