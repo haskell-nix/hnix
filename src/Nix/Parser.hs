@@ -11,18 +11,21 @@ module Nix.Parser (
   Result(..)
   ) where
 
-import           Control.Applicative hiding (many, some)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Char (isAlpha, isDigit, isSpace)
 import           Data.Functor
 import qualified Data.List.NonEmpty as NE
-import           Data.Text hiding (map, empty)
+import           Data.Text hiding (map)
 import           Nix.Expr hiding (($>))
 import           Nix.Parser.Library
 import           Nix.Parser.Operators
 import           Nix.StringOperations
 import           Text.Megaparsec.Expr
+
+infixl 3 <+>
+(<+>) :: MonadPlus m => m a -> m a -> m a
+(<+>) = mplus
 
 --------------------------------------------------------------------------------
 
@@ -35,7 +38,7 @@ antiStart = symbol "${" <?> show ("${" :: String)
 nixAntiquoted :: Parser a -> Parser (Antiquoted a NExprLoc)
 nixAntiquoted p =
         Antiquoted <$> (antiStart *> nixToplevelForm <* symbol "}")
-    <|> Plain <$> p
+    <+> Plain <$> p
     <?> "anti-quotation"
 
 selDot :: Parser ()
@@ -80,7 +83,7 @@ nixTerm = do
         '/'  -> nixPath
         '"'  -> nixStringExpr
         '\'' -> nixStringExpr
-        _    -> choice $
+        _    -> msum $
             [ nixSelect nixSet | c == 'r' ] ++
             [ nixPath | pathChar c ] ++
             if isDigit c
@@ -92,9 +95,9 @@ nixTerm = do
                  [ nixSelect nixSym ]
 
 nixToplevelForm :: Parser NExprLoc
-nixToplevelForm = keywords <|> nixLambda <|> nixExprLoc
+nixToplevelForm = keywords <+> nixLambda <+> nixExprLoc
   where
-    keywords = nixLet <|> nixIf <|> nixAssert <|> nixWith
+    keywords = nixLet <+> nixIf <+> nixAssert <+> nixWith
 
 nixSym :: Parser NExprLoc
 nixSym = annotateLocation1 $ mkSymF <$> identifier
@@ -106,7 +109,7 @@ nixFloat :: Parser NExprLoc
 nixFloat = annotateLocation1 (try (mkFloatF . realToFrac <$> float) <?> "float")
 
 nixBool :: Parser NExprLoc
-nixBool = annotateLocation1 (bool "true" True <|>
+nixBool = annotateLocation1 (bool "true" True <+>
                              bool "false" False) <?> "bool" where
   bool str b = mkBoolF b <$ reserved str
 
@@ -130,7 +133,7 @@ slash = try (char '/' <* notFollowedBy (satisfy (\x -> x == '/' || x == '*' || i
 -- looked up in the NIX_PATH environment variable at evaluation.
 nixSPath :: Parser NExprLoc
 nixSPath = annotateLocation1
-    (mkPathF True <$> try (char '<' *> many (satisfy pathChar <|> slash) <* symbol ">")
+    (mkPathF True <$> try (char '<' *> many (satisfy pathChar <+> slash) <* symbol ">")
          <?> "spath")
 
 pathStr :: Parser FilePath
@@ -142,7 +145,7 @@ nixPath = annotateLocation1 (try (mkPathF False <$> pathStr) <?> "path")
 
 nixLet :: Parser NExprLoc
 nixLet = annotateLocation1 (reserved "let"
-    *> (letBody <|> letBinders)
+    *> (letBody <+> letBinders)
     <?> "let block")
   where
     letBinders = NLet
@@ -190,7 +193,7 @@ nixUri = annotateLocation1 $ lexeme $ try $ do
     return $ mkUriF $ pack $ start : protocol ++ ':' : address
 
 nixString :: Parser (NString NExprLoc)
-nixString = lexeme (doubleQuoted <|> indented <?> "string")
+nixString = lexeme (doubleQuoted <+> indented <?> "string")
   where
     doubleQuoted :: Parser (NString NExprLoc)
     doubleQuoted = DoubleQuoted . removePlainEmpty . mergePlain
@@ -212,7 +215,7 @@ nixString = lexeme (doubleQuoted <|> indented <?> "string")
     indentedQ = void (string "''" <?> "\"''\"")
     indentedEscape = try $ do
         indentedQ
-        (Plain <$> ("''" <$ char '\'' <|> "$"  <$ char '$')) <|> do
+        (Plain <$> ("''" <$ char '\'' <+> "$"  <$ char '$')) <+> do
             _ <- char '\\'
             c <- escapeCode
             pure $ if c == '\n'
@@ -221,23 +224,23 @@ nixString = lexeme (doubleQuoted <|> indented <?> "string")
 
     stringChar end escStart esc =
             Antiquoted <$> (antiStart *> nixToplevelForm <* char '}')
-        <|> Plain . singleton <$> char '$'
-        <|> esc
-        <|> Plain . pack <$> some plainChar
+        <+> Plain . singleton <$> char '$'
+        <+> esc
+        <+> Plain . pack <$> some plainChar
      where
        plainChar =
-           notFollowedBy (end <|> void (char '$') <|> escStart) *> anyChar
+           notFollowedBy (end <+> void (char '$') <+> escStart) *> anyChar
 
-    escapeCode = choice [ c <$ char e | (c,e) <- escapeCodes ] <|> anyChar
+    escapeCode = msum [ c <$ char e | (c,e) <- escapeCodes ] <+> anyChar
 
 -- | Gets all of the arguments for a function.
 argExpr :: Parser (Params NExprLoc)
-argExpr = choice [atLeft, onlyname, atRight] <* symbol ":" where
+argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
   -- An argument not in curly braces. There's some potential ambiguity
   -- in the case of, for example `x:y`. Is it a lambda function `x: y`, or
   -- a URI `x:y`? Nix syntax says it's the latter. So we need to fail if
   -- there's a valid URI parse here.
-  onlyname = choice [nixUri >> unexpected (Label ('v' NE.:| "alid uri")),
+  onlyname = msum [nixUri >> unexpected (Label ('v' NE.:| "alid uri")),
                      Param <$> identifier]
 
   -- Parameters named by an identifier on the left (`args @ {x, y}`)
@@ -265,17 +268,17 @@ argExpr = choice [atLeft, onlyname, atRight] <* symbol ":" where
     -- Otherwise, attempt to parse an argument, optionally with a
     -- default. If this fails, then return what has been accumulated
     -- so far.
-    go acc = ((acc, True) <$ symbol "...") <|> getMore acc
+    go acc = ((acc, True) <$ symbol "...") <+> getMore acc
     getMore acc =
       -- Could be nothing, in which just return what we have so far.
       option (acc, False) $ do
         -- Get an argument name and an optional default.
-        pair <- liftA2 (,) identifier (optional $ question *> nixToplevelForm)
+        pair <- liftM2 (,) identifier (optional $ question *> nixToplevelForm)
         -- Either return this, or attempt to get a comma and restart.
         option (acc ++ [pair], False) $ comma >> go (acc ++ [pair])
 
 nixBinders :: Parser [Binding NExprLoc]
-nixBinders = (inherit <|> namedVar) `endBy` semi where
+nixBinders = (inherit <+> namedVar) `endBy` semi where
   inherit = Inherit <$> (reserved "inherit" *> optional scope)
                     <*> many keyName
                     <?> "inherited binding"
@@ -285,7 +288,7 @@ nixBinders = (inherit <|> namedVar) `endBy` semi where
   scope = parens nixToplevelForm <?> "inherit scope"
 
 keyName :: Parser (NKeyName NExprLoc)
-keyName = dynamicKey <|> staticKey where
+keyName = dynamicKey <+> staticKey where
   staticKey = do
       beg <- getPosition
       StaticKey <$> identifier <*> pure (Just beg)
@@ -294,7 +297,7 @@ keyName = dynamicKey <|> staticKey where
 nixSet :: Parser NExprLoc
 nixSet = annotateLocation1 ((isRec <*> braces nixBinders) <?> "set") where
   isRec = (reserved "rec" $> NRecSet <?> "recursive set")
-       <|> pure NSet
+       <+> pure NSet
 
 parseNixFile :: MonadIO m => FilePath -> m (Result NExpr)
 parseNixFile =

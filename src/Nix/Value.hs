@@ -10,7 +10,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Nix.Value where
@@ -54,7 +53,7 @@ data NValueF m r
       --   Note that 'm r' is being used here because effectively a function
       --   and its set of default arguments is "never fully evaluated". This
       --   enforces in the type that it must be re-evaluated for each call.
-    | NVBuiltin String (NThunk m -> m (NValue m))
+    | NVBuiltin String (m (NValue m) -> m (NValue m))
       -- ^ A builtin function is itself already in normal form. Also, it may
       --   or may not choose to evaluate its argument in the production of a
       --   result.
@@ -95,15 +94,15 @@ instance Show (NValueF m (Fix (NValueF m))) where
               . showString " "
               . showsPrec 11 b
 
-builtin :: Monad m => String -> (NThunk m -> m (NValue m)) -> m (NValue m)
+builtin :: Monad m => String -> (m (NValue m) -> m (NValue m)) -> m (NValue m)
 builtin name f = return $ NVBuiltin name f
 
 builtin2 :: Monad m
-         => String -> (NThunk m -> NThunk m -> m (NValue m)) -> m (NValue m)
+         => String -> (m (NValue m) -> m (NValue m) -> m (NValue m)) -> m (NValue m)
 builtin2 name f = builtin name (builtin name . f)
 
 builtin3 :: Monad m
-         => String -> (NThunk m -> NThunk m -> NThunk m -> m (NValue m))
+         => String -> (m (NValue m) -> m (NValue m) -> m (NValue m) -> m (NValue m))
          -> m (NValue m)
 builtin3 name f =
     builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c

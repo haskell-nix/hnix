@@ -280,6 +280,16 @@ instance (MonadThunk (NValue m) (NThunk m) m,
         Just b -> pure b
         _ -> throwError $ "Expected a thunk, but saw: " ++ show v
 
+instance (Monad m, FromValue a m (NValue m))
+      => FromValue a m (m (NValue m)) where
+    fromValueMay = (>>= fromValueMay)
+    fromValue    = (>>= fromValue)
+
+instance (MonadThunk (NValue m) (NThunk m) m, FromValue a m (NValue m))
+      => FromValue a m (NThunk m) where
+    fromValueMay = force ?? fromValueMay
+    fromValue    = force ?? fromValue
+
 instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m)
       => FromValue A.Value m (NValueNF m) where
     fromValueMay = \case
@@ -475,6 +485,10 @@ instance (Framed e m, MonadVar m, MonadFile m) => FromNix (HashMap Text (NThunk 
 instance (Framed e m, MonadVar m, MonadFile m, MonadThunk (NValue m) (NThunk m) m) => FromNix (NThunk m) m (NValue m) where
 instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m, MonadThunk (NValue m) (NThunk m) m) => FromNix A.Value m (NValueNF m) where
 instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m, MonadThunk (NValue m) (NThunk m) m) => FromNix A.Value m (NValue m) where
+
+instance (Monad m, FromNix a m (NValue m)) => FromNix a m (m (NValue m)) where
+    fromNixMay = (>>= fromNixMay)
+    fromNix    = (>>= fromNix)
 
 instance (MonadThunk (NValue m) (NThunk m) m,
           FromNix a m (NValue m)) => FromNix a m (NThunk m) where

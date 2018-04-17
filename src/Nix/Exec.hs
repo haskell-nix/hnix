@@ -111,7 +111,7 @@ callFunc fun arg = case fun of
         f arg
     NVBuiltin name f -> do
         traceM $ "callFunc:NVBuiltin " ++ name
-        f =<< thunk arg
+        f arg
     s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
         traceM "callFunc:__functor"
         force f $ (`callFunc` pure s) >=> (`callFunc` arg)

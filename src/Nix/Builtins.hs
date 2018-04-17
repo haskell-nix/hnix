@@ -37,7 +37,8 @@ import           Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
 import           Data.Coerce
-import           Data.Foldable (foldlM, foldrM)
+import           Data.Foldable (foldrM)
+import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.List
 import           Data.Maybe
@@ -57,6 +58,7 @@ import           Nix.Effects
 import           Nix.Eval
 import           Nix.Exec
 import           Nix.Expr.Types
+import           Nix.Expr.Types.Annotated
 import           Nix.Normal
 import           Nix.Parser
 import           Nix.Scope
@@ -97,6 +99,9 @@ isTopLevel b = case kind b of Normal -> False; TopLevel -> True
 
 valueThunk :: forall e m. MonadBuiltins e m => NValue m -> NThunk m
 valueThunk = value @_ @_ @m
+
+force' :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+force' = force ?? pure
 
 builtinsList :: forall e m. MonadBuiltins e m => m [ Builtin m ]
 builtinsList = sequence [
@@ -200,14 +205,12 @@ builtinsList = sequence [
 -- Helpers
 
 call1 :: MonadBuiltins e m
-      => NThunk m -> NThunk m -> m (NValue m)
-call1 f arg = force f $ \f' -> force arg (callFunc f' . pure)
+      => m (NValue m) -> m (NValue m) -> m (NValue m)
+call1 f arg = f >>= callFunc ?? arg
 
 call2 :: MonadBuiltins e m
-      => NThunk m -> NThunk m -> NThunk m -> m (NValue m)
-call2 f arg1 arg2 = force f $ \f' ->
-    callFunc f' (force arg1 pure) >>= \g ->
-        callFunc g (force arg2 pure)
+      => m (NValue m) -> m (NValue m) -> m (NValue m) -> m (NValue m)
+call2 f arg1 arg2 = f >>= callFunc ?? arg1 >>= callFunc ?? arg2
 
 -- Primops
 
@@ -233,26 +236,27 @@ foldNixPath f z = do
         _ -> throwError $ "Unexpected entry in NIX_PATH: " ++ show x
 
 nixPath :: MonadBuiltins e m => m (NValue m)
-nixPath = fmap NVList $ flip foldNixPath [] $ \p mn rest -> pure $
-    (valueThunk . flip NVSet M.empty . M.fromList $
-        [ ("path",   valueThunk $ NVPath p)
-        , ("prefix", valueThunk $
-              NVStr (Text.pack (fromMaybe "" mn)) mempty) ]) : rest
+nixPath = fmap NVList $ flip foldNixPath [] $ \p mn rest ->
+    pure $ valueThunk
+        (flip NVSet mempty $ M.fromList
+            [ ("path",   valueThunk $ NVPath p)
+            , ("prefix", valueThunk $
+                   NVStr (Text.pack (fromMaybe "" mn)) mempty) ]) : rest
 
-toString :: MonadBuiltins e m => NThunk m -> m (NValue m)
+toString :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
 toString str = do
-    (s, d) <- force str $ normalForm >=> valueText False
+    (s, d) <- str >>= normalForm >>= valueText False
     return $ NVStr s d
 
-hasAttr :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-hasAttr x y = force x $ \x' -> force y $ \y' -> case (x', y') of
+hasAttr :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+hasAttr x y = x >>= \x' -> y >>= \y' -> case (x', y') of
     (NVStr key _, NVSet aset _) ->
         return . NVConstant . NBool $ M.member key aset
     (x, y) -> throwError $ "Invalid types for builtin.hasAttr: "
                  ++ show (x, y)
 
-getAttr :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-getAttr x y = force x $ \x' -> force y $ \y' -> case (x', y') of
+getAttr :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+getAttr x y = x >>= \x' -> y >>= \y' -> case (x', y') of
     (NVStr key _, NVSet aset _) -> case M.lookup key aset of
         Nothing -> throwError $ "getAttr: field does not exist: "
                       ++ Text.unpack key
@@ -261,8 +265,8 @@ getAttr x y = force x $ \x' -> force y $ \y' -> case (x', y') of
                  ++ show (x, y)
 
 unsafeGetAttrPos :: forall e m. MonadBuiltins e m
-                 => NThunk m -> NThunk m -> m (NValue m)
-unsafeGetAttrPos x y = force x $ \x' -> force y $ \y' -> case (x', y') of
+                 => m (NValue m) -> m (NValue m) -> m (NValue m)
+unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
     (NVStr key _, NVSet _ apos) -> case M.lookup key apos of
         Nothing ->
             throwError $ "unsafeGetAttrPos: field '" ++ Text.unpack key
@@ -273,9 +277,8 @@ unsafeGetAttrPos x y = force x $ \x' -> force y $ \y' -> case (x', y') of
 
 -- This function is a bit special in that it doesn't care about the contents
 -- of the list.
-length_ :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
-length_ = flip force $
-    toValue . (length :: [NThunk m] -> Int) <=< fromValue
+length_ :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
+length_ = toValue . (length :: [NThunk m] -> Int) <=< fromValue
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 anyM _ []       = return False
@@ -284,8 +287,9 @@ anyM p (x:xs)   = do
         if q then return True
              else anyM p xs
 
-any_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-any_ pred = flip force $ toNix <=< anyM fromValue <=< mapM (call1 pred) <=< fromValue
+any_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+any_ pred = fromValue >=>
+    toNix <=< anyM fromNix <=< mapM (call1 pred . force')
 
 allM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 allM _ []       = return True
@@ -294,22 +298,24 @@ allM p (x:xs)   = do
         if q then allM p xs
              else return False
 
-all_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-all_ pred = flip force $ toNix <=< allM fromValue <=< mapM (call1 pred) <=< fromValue
+all_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+all_ pred = fromValue >=>
+    toNix <=< allM fromNix <=< mapM (call1 pred . force')
 
---TODO: Strictness
-foldl'_ :: MonadBuiltins e m => NThunk m -> NThunk m -> NThunk m -> m (NValue m)
-foldl'_ f z = flip force $ (`force` pure) <=< foldlM @[] go z <=< fromValue
+foldl'_ :: forall e m. MonadBuiltins e m
+        => m (NValue m) -> m (NValue m) -> m (NValue m) -> m (NValue m)
+foldl'_ f z = fromValue @[NThunk m] >=> foldl' go z
   where
-    go b a = thunk $ call2 f a b
+    go :: m (NValue m) -> NThunk m -> m (NValue m)
+    go b a = force a $ \a' -> call2 f (pure a') b
 
-head_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
-head_ = flip force $ fromValue >=> \case
+head_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
+head_ = fromValue >=> \case
     [] -> throwError "builtins.head: empty list"
-    h:_ -> force h pure
+    h:_ -> force' h
 
-tail_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
-tail_ = flip force $ fromValue >=> \case
+tail_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
+tail_ = fromValue >=> \case
     [] -> throwError "builtins.tail: empty list"
     _:t -> return $ NVList t
 
@@ -344,13 +350,11 @@ splitVersion s = case Text.uncons s of
                   x -> VersionComponent_String x
           in thisComponent : splitVersion rest
 
-splitVersion_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
-splitVersion_ = flip force $ \case
-    NVStr s _ -> do
-        let vals = flip map (splitVersion s) $ \c ->
-                valueThunk $ NVStr (versionComponentToString c) mempty
-        return $ NVList vals
-    _ -> throwError "builtins.splitVersion: not a string"
+splitVersion_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
+splitVersion_ = fromNix >=> \s -> do
+    let vals = flip map (splitVersion s) $ \c ->
+            valueThunk $ NVStr (versionComponentToString c) mempty
+    return $ NVList vals
 
 compareVersions :: Text -> Text -> Ordering
 compareVersions s1 s2 =
@@ -359,14 +363,14 @@ compareVersions s1 s2 =
     z = VersionComponent_String ""
     f = uncurry compare . fromThese z z
 
-compareVersions_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-compareVersions_ t1 t2 = force t1 $ \v1 -> force t2 $ \v2 -> case (v1, v2) of
-    (NVStr s1 _, NVStr s2 _) ->
+compareVersions_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+compareVersions_ t1 t2 =
+    fromNix t1 >>= \s1 ->
+    fromNix t2 >>= \s2 ->
         return $ NVConstant $ NInt $ case compareVersions s1 s2 of
             LT -> -1
             EQ -> 0
             GT -> 1
-    _ -> throwError "builtins.splitVersion: not a string"
 
 splitDrvName :: Text -> (Text, Text)
 splitDrvName s =
@@ -387,41 +391,36 @@ splitDrvName s =
           breakAfterFirstItem isFirstVersionPiece pieces
     in (Text.intercalate sep namePieces, Text.intercalate sep versionPieces)
 
-parseDrvName :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
-parseDrvName = flip force $ fromValue >=> \(s :: Text) -> do
+parseDrvName :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
+parseDrvName = fromValue >=> \(s :: Text) -> do
     let (name :: Text, version :: Text) = splitDrvName s
     -- jww (2018-04-15): There should be an easier way to write this.
     (toValue =<<) $ sequence $ M.fromList
         [ ("name" :: Text, thunk (toValue name))
         , ("version",     thunk (toValue version)) ]
 
-match_ :: forall e m. MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-match_ pat str = force pat $ \pat' -> force str $ \str' ->
-    case (pat', str') of
+match_ :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+match_ pat str =
+    fromNix pat >>= \p ->
+    fromNix str >>= \s -> do
         -- jww (2018-04-05): We should create a fundamental type for compiled
         -- regular expressions if it turns out they get used often.
-        (NVStr p _, NVStr s _) -> do
-            let re = makeRegex (encodeUtf8 p) :: Regex
-            case matchOnceText re (encodeUtf8 s) of
-                Just ("", sarr, "") -> do
-                    let s = map fst (elems sarr)
-                    NVList <$> traverse (toValue . decodeUtf8)
-                        (if length s > 1 then tail s else s)
-                _ -> pure $ NVConstant NNull
-        (p, s) ->
-            throwError $ "builtins.match: expected a regex"
-                ++ " and a string, but got: " ++ show (p, s)
+        let re = makeRegex (encodeUtf8 p) :: Regex
+        case matchOnceText re (encodeUtf8 s) of
+            Just ("", sarr, "") -> do
+                let s = map fst (elems sarr)
+                NVList <$> traverse (toValue . decodeUtf8)
+                    (if length s > 1 then tail s else s)
+            _ -> pure $ NVConstant NNull
 
-split_ :: forall e m. MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-split_ pat str = force pat $ \pat' -> force str $ \str' ->
-    case (pat', str') of
-        (NVStr p _, NVStr s _) ->
-          let re = makeRegex (encodeUtf8 p) :: Regex
-              haystack = encodeUtf8 s
-           in return $ NVList $ splitMatches 0 (map elems $ matchAllText re haystack) haystack
-        (p, s) ->
-            throwError $ "builtins.match: expected a regex"
-                ++ " and a string, but got: " ++ show (p, s)
+split_ :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+split_ pat str =
+    fromNix pat >>= \p ->
+    fromNix str >>= \s -> do
+        let re = makeRegex (encodeUtf8 p) :: Regex
+            haystack = encodeUtf8 s
+        return $ NVList $
+            splitMatches 0 (map elems $ matchAllText re haystack) haystack
 
 splitMatches
   :: forall e m. MonadBuiltins e m
@@ -453,84 +452,83 @@ attrNames = sort . M.keys
 attrValues :: forall m. ValueSet m -> [NThunk m]
 attrValues = fmap snd . sortOn (fst @Text @(NThunk m)) . M.toList
 
-map_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-map_ f = flip force $ fmap NVList . traverse (thunk . call1 f) <=< fromValue
+map_ :: forall e m. MonadBuiltins e m
+     => m (NValue m) -> m (NValue m) -> m (NValue m)
+map_ f = toNix <=< traverse (thunk . call1 f . force')
+               <=< fromValue @[NThunk m]
 
-filter_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-filter_ f = flip force $ fmap NVList . filterM (fromValue <=< call1 f) <=< fromValue
+filter_ :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+filter_ f = toNix <=< filterM (fromValue <=< call1 f . force')
+                  <=< fromValue @[NThunk m]
 
-catAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-catAttrs attrName lt = force lt $ fromValue >=> \l ->
-    fmap (NVList . catMaybes) $ forM l $ flip force $ \case
-        NVSet m _ -> force attrName $ \case
-            NVStr n _ -> return $ M.lookup n m
-            v -> throwError $ "builtins.catAttrs: Expected a string, got "
-                    ++ show v
-        v -> throwError $ "builtins.catAttrs: Expected a set, got "
-                ++ show v
+catAttrs :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+catAttrs attrName xs =
+    fromNix @Text attrName >>= \n ->
+    fromValue @[NThunk m] xs >>= \l ->
+        fmap (NVList . catMaybes) $
+            forM l $ fmap (M.lookup n) . fromValue
 
-baseNameOf :: MonadBuiltins e m => NThunk m -> m (NValue m)
-baseNameOf = flip force $ \case
+baseNameOf :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
+baseNameOf x = x >>= \case
     --TODO: Only allow strings that represent absolute paths
     NVStr path ctx -> pure $ NVStr (Text.pack $ takeFileName $ Text.unpack path) ctx
     NVPath path -> pure $ NVPath $ takeFileName path
     v -> throwError $ "dirOf: expected string or path, got " ++ show v
 
-dirOf :: MonadBuiltins e m => NThunk m -> m (NValue m)
-dirOf = flip force $ \case
+dirOf :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
+dirOf x = x >>= \case
     --TODO: Only allow strings that represent absolute paths
     NVStr path ctx -> pure $ NVStr (Text.pack $ takeDirectory $ Text.unpack path) ctx
     NVPath path -> pure $ NVPath $ takeDirectory path
     v -> throwError $ "dirOf: expected string or path, got " ++ show v
 
-unsafeDiscardStringContext :: MonadBuiltins e m => NThunk m -> m (NValue m)
-unsafeDiscardStringContext = flip force $ \case
-    NVStr s _ -> pure $ NVStr s mempty
-    v -> throwError $ "builtins.unsafeDiscardStringContext: "
-            ++ "Expected a string, got " ++ show v
+unsafeDiscardStringContext :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
+unsafeDiscardStringContext = fromNix @Text >=> toNix
 
-seq_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-seq_ a b = force a (const (force b pure))
+seq_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+seq_ a b = a >> b
 
-deepSeq :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
+deepSeq :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 deepSeq a b = do
     -- We evaluate 'a' only for its effects, so data cycles are ignored.
-    _ <- forceEffects (coerce a) $ \a' ->
-        normalFormBy (forceEffects . coerce) a'
+    _ <- normalFormBy (forceEffects . coerce) =<< a
 
     -- Then we evaluate the other argument to deepseq, thus this function
     -- should always produce a result (unlike applying 'deepseq' on infinitely
     -- recursive data structures in Haskell).
-    force b pure
+    b
 
-elem_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-elem_ x xs = force xs $ toValue <=< anyM (thunkEq x) <=< fromValue
+elem_ :: forall e m. MonadBuiltins e m
+      => m (NValue m) -> m (NValue m) -> m (NValue m)
+elem_ x xs = x >>= \x' ->
+    toValue <=< anyM (valueEq x' <=< force') <=< fromValue @[NThunk m] $ xs
 
 elemAt :: [a] -> Int -> Maybe a
 elemAt ls i = case drop i ls of
    [] -> Nothing
    a:_ -> Just a
 
-elemAt_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-elemAt_ xs n = force n $ fromNix >=> \n' -> force xs $ fromValue >=> \xs' ->
+elemAt_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+elemAt_ xs n = fromNix n >>= \n' -> fromValue xs >>= \xs' ->
     case elemAt xs' n' of
-      Just a -> force a pure
+      Just a -> force' a
       Nothing -> throwError $ "builtins.elem: Index " ++ show n'
           ++ " too large for list of length " ++ show (length xs')
 
-genList :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-genList generator length = force length $ \case
-    NVConstant (NInt n) | n >= 0 -> fmap NVList $ forM [0 .. n - 1] $ \i ->
-        thunk $ force generator (`callFunc` toValue i)
-    v -> throwError $ "builtins.genList: Expected a non-negative number, got "
-            ++ show v
+genList :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+genList generator = fromNix @Integer >=> \n ->
+    if n >= 0
+    then generator >>= \f ->
+        toNix =<< forM [0 .. n - 1] (\i -> thunk $ f `callFunc` toNix i)
+    else throwError $ "builtins.genList: Expected a non-negative number, got "
+             ++ show n
 
 --TODO: Preserve string context
-replaceStrings :: MonadBuiltins e m => NThunk m -> NThunk m -> NThunk m -> m (NValue m)
+replaceStrings :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m) -> m (NValue m)
 replaceStrings tfrom tto ts =
-    force tfrom $ fromNix >=> \(from :: [Text]) ->
-     force tto  $ fromNix >=> \(to   :: [Text]) ->
-      force ts  $ fromNix >=> \(s :: Text) -> do
+    fromNix tfrom >>= \(from :: [Text]) ->
+    fromNix tto   >>= \(to   :: [Text]) ->
+    fromNix ts    >>= \(s    :: Text) -> do
         when (length from /= length to) $
             throwError $ "'from' and 'to' arguments to 'replaceStrings'"
                 ++ " have different lengths"
@@ -555,115 +553,115 @@ replaceStrings tfrom tto ts =
                     _ -> go rest $ result <> Builder.fromText replacement
         toNix $ go s mempty
 
-removeAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-removeAttrs set list = force list $ fromNix >=> \(toRemove :: [Text]) ->
-    force set $ \case
-        NVSet m p -> return $ NVSet (go m toRemove) (go p toRemove)
-        v -> throwError $ "removeAttrs: expected set, got " ++ show v
+removeAttrs :: forall e m. MonadBuiltins e m
+            => m (NValue m) -> m (NValue m) -> m (NValue m)
+removeAttrs set = fromNix >=> \(toRemove :: [Text]) ->
+    fromValue @(HashMap Text (NThunk m),
+                HashMap Text SourcePos) set >>= \(m, p) ->
+        toNix (go m toRemove, go p toRemove)
   where
     go = foldl' (flip M.delete)
 
-intersectAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-intersectAttrs set1 set2 = force set1 $ \set1' -> force set2 $ \set2' ->
-    case (set1', set2') of
-        (NVSet s1 p1, NVSet s2 p2) ->
-            return $ NVSet (s2 `M.intersection` s1) (p2 `M.intersection` p1)
-        (v1, v2) ->
-            throwError $ "builtins.intersectAttrs: expected two sets, got "
-                ++ show v1 ++ " and " ++ show v2
+intersectAttrs :: forall e m. MonadBuiltins e m
+               => m (NValue m) -> m (NValue m) -> m (NValue m)
+intersectAttrs set1 set2 =
+    fromValue @(HashMap Text (NThunk m),
+                HashMap Text SourcePos) set1 >>= \(s1, p1) ->
+    fromValue @(HashMap Text (NThunk m),
+                HashMap Text SourcePos) set2 >>= \(s2, p2) ->
+        return $ NVSet (s2 `M.intersection` s1) (p2 `M.intersection` p1)
 
-functionArgs :: MonadBuiltins e m => NThunk m -> m (NValue m)
-functionArgs fun = force fun $ \case
+functionArgs :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
+functionArgs fun = fun >>= \case
     NVClosure p _ ->
         -- jww (2018-04-05): Should we preserve the location where the
         -- function arguments were declared for __unsafeGetAttrPos?
-        return $ flip NVSet M.empty $ valueThunk . NVConstant . NBool <$>
-            case p of
-                Param name -> M.singleton name False
-                ParamSet s _ _ -> isJust <$> M.fromList s
+        toValue @(HashMap Text (NThunk m)) $
+            valueThunk . NVConstant . NBool <$>
+                case p of
+                    Param name -> M.singleton name False
+                    ParamSet s _ _ -> isJust <$> M.fromList s
     v -> throwError $ "builtins.functionArgs: expected function, got "
             ++ show v
 
-toPath :: MonadBuiltins e m => NThunk m -> m (NValue m)
-toPath = flip force $ \case
+toPath :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
+toPath path = path >>= \case
     NVStr p@(Text.uncons -> Just ('/', _)) _ ->
         return $ NVPath (Text.unpack p)
     v@(NVPath _) -> return v
     v -> throwError $ "builtins.toPath: expected string, got " ++ show v
 
-pathExists_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
-pathExists_ = flip force $ \case
+pathExists_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
+pathExists_ path = path >>= \case
     NVPath p  -> toNix =<< pathExists p
     -- jww (2018-04-13): Should this ever be a string?
     NVStr s _ -> toNix =<< pathExists (Text.unpack s)
     v -> throwError $ "builtins.pathExists: expected path, got " ++ show v
 
 hasKind :: forall a e m. (MonadBuiltins e m, FromNix a m (NValue m))
-        => NThunk m -> m (NValue m)
+        => m (NValue m) -> m (NValue m)
 hasKind = fromNixMay >=> toNix . \case Just (_ :: a) -> True; _ -> False
 
-isAttrs :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+isAttrs :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
 isAttrs = hasKind @(ValueSet m)
 
-isList :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+isList :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
 isList = hasKind @[NThunk m]
 
-isString :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+isString :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
 isString = hasKind @Text
 
-isInt :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+isInt :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
 isInt = hasKind @Int
 
-isFloat :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+isFloat :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
 isFloat = hasKind @Float
 
-isBool :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+isBool :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
 isBool = hasKind @Bool
 
-isNull :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+isNull :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
 isNull = hasKind @()
 
-isFunction :: MonadBuiltins e m => NThunk m -> m (NValue m)
-isFunction = flip force $ \case
+isFunction :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
+isFunction func = func >>= \case
     NVClosure {} -> toValue True
     _ -> toValue False
 
-throw_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
+throw_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
 throw_ = fromNix >=> throwError . Text.unpack
 
-import_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
+import_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
 import_ = fromNix >=> importPath M.empty . getPath
 
-scopedImport :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-scopedImport aset path = force aset $ \aset' -> force path $ \path' ->
-    case (aset', path') of
-        (NVSet s _, NVPath p) -> importPath s p
-        (s, p) -> throwError $ "scopedImport: expected a set and a path, got "
-                     ++ show s ++ " and " ++ show p
+scopedImport :: forall e m. MonadBuiltins e m
+             => m (NValue m) -> m (NValue m) -> m (NValue m)
+scopedImport aset path =
+    fromValue aset >>= \s ->
+    fromNix   path >>= \p -> importPath @m s (getPath p)
 
-getEnv_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
+getEnv_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
 getEnv_ = fromNix >=> \s -> do
     mres <- getEnvVar (Text.unpack s)
     toNix $ case mres of
         Nothing -> ""
         Just v  -> Text.pack v
 
-sort_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-sort_ comparator list = force list $ fromValue >=> \l ->
-    NVList <$> sortByM cmp l
-        where
-          cmp a b = do
-              isLessThan <- call2 comparator a b
-              fromValue isLessThan >>= \case
-                  True -> pure LT
-                  False -> do
-                      isGreaterThan <- call2 comparator b a
-                      fromValue isGreaterThan >>= \case
-                          True -> pure GT
-                          False -> pure EQ
+sort_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+sort_ comparator = fromValue >=> sortByM cmp >=> toValue
+    where
+      cmp a b = do
+          isLessThan <- call2 comparator (force' a) (force' b)
+          fromValue isLessThan >>= \case
+              True -> pure LT
+              False -> do
+                  isGreaterThan <- call2 comparator (force' b) (force' a)
+                  fromValue isGreaterThan <&> \case
+                      True  -> GT
+                      False -> EQ
 
-lessThan :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-lessThan ta tb = force ta $ \va -> force tb $ \vb -> do
+lessThan :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+lessThan ta tb = ta >>= \va -> tb >>= \vb -> do
     let badType = throwError $ "builtins.lessThan: expected two numbers or two strings, "
             ++ "got " ++ show va ++ " and " ++ show vb
     NVConstant . NBool <$> case (va, vb) of
@@ -676,18 +674,16 @@ lessThan ta tb = force ta $ \va -> force tb $ \vb -> do
         (NVStr a _, NVStr b _) -> pure $ a < b
         _ -> badType
 
-concatLists :: MonadBuiltins e m => NThunk m -> m (NValue m)
-concatLists = flip force $ \case
-    NVList l -> fmap (NVList . concat) $ forM l $ flip force $ \case
-        NVList i -> pure i
-        v -> throwError $ "builtins.concatLists: expected list, got " ++ show v
-    v -> throwError $ "builtins.concatLists: expected list, got " ++ show v
+concatLists :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
+concatLists = fromValue @[NThunk m]
+    >=> mapM (fromValue @[NThunk m] >=> pure)
+    >=> toValue . concat
 
-listToAttrs :: MonadBuiltins e m => NThunk m -> m (NValue m)
-listToAttrs = flip force $ \case
-    NVList l -> fmap (flip NVSet M.empty . M.fromList . reverse) $
-        forM l $ flip force $ \case
-            NVSet s _ -> case (M.lookup "name" s, M.lookup "value" s) of
+listToAttrs :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
+listToAttrs = fromValue @[NThunk m] >=> \l ->
+    fmap (flip NVSet M.empty . M.fromList . reverse) $
+        forM l $ fromValue @(HashMap Text (NThunk m)) >=> \s ->
+            case (M.lookup "name" s, M.lookup "value" s) of
                 (Just name, Just value) -> force name $ \case
                     NVStr n _ -> return (n, value)
                     v -> throwError $
@@ -696,8 +692,6 @@ listToAttrs = flip force $ \case
                 _ -> throwError $
                     "builtins.listToAttrs: expected set with name and value, got"
                         ++ show s
-            v -> throwError $ "builtins.listToAttrs: expected set, got " ++ show v
-    v -> throwError $ "builtins.listToAttrs: expected list, got " ++ show v
 
 hashString :: MonadBuiltins e m => Text -> Text -> Prim m Text
 hashString algo s = Prim $ do
@@ -721,9 +715,9 @@ absolutePathFromValue = \case
     v -> throwError $ "expected a path, got " ++ show v
 
 --TODO: Move all liftIO things into MonadNixEnv or similar
-readFile_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
-readFile_ path = force path $
-    toValue <=< Nix.Stack.readFile <=< absolutePathFromValue
+readFile_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
+readFile_ path =
+    path >>= absolutePathFromValue >>= Nix.Stack.readFile >>= toNix
 
 data FileType
    = FileType_Regular
@@ -739,9 +733,9 @@ instance Applicative m => ToNix FileType m (NValue m) where
         FileType_Symlink   -> "symlink"
         FileType_Unknown   -> "unknown"
 
-readDir_ :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
+readDir_ :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
 readDir_ pathThunk = do
-    path <- force pathThunk absolutePathFromValue
+    path  <- absolutePathFromValue =<< pathThunk
     items <- listDirectory path
     itemsWithTypes <- forM items $ \item -> do
         s <- Nix.Effects.getSymbolicLinkStatus $ path </> item
@@ -753,18 +747,18 @@ readDir_ pathThunk = do
         pure (Text.pack item, t)
     toNix (M.fromList itemsWithTypes)
 
-fromJSON :: MonadBuiltins e m => NThunk m -> m (NValue m)
-fromJSON t = force t $ fromValue >=> \encoded ->
+fromJSON :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
+fromJSON = fromValue >=> \encoded ->
     case A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded of
         Left jsonError -> throwError $ "builtins.fromJSON: " ++ jsonError
         Right v -> toValue v
 
-toXML_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
-toXML_ = flip force $ normalForm >=> \x ->
+toXML_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
+toXML_ v = v >>= normalForm >>= \x ->
     pure $ NVStr (Text.pack (toXML x)) mempty
 
-typeOf :: MonadBuiltins e m => NThunk m -> m (NValue m)
-typeOf = flip force $ toNix @Text . \case
+typeOf :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
+typeOf v = v >>= toNix @Text . \case
     NVConstant a -> case a of
         NInt _   -> "int"
         NFloat _ -> "float"
@@ -778,8 +772,8 @@ typeOf = flip force $ toNix @Text . \case
     NVPath _      -> "path"
     NVBuiltin _ _ -> "lambda"
 
-tryEval :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
-tryEval e = catch (force e (pure . onSuccess)) (pure . onError)
+tryEval :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
+tryEval e = catch (onSuccess <$> e) (pure . onError)
   where
     onSuccess v = flip NVSet M.empty $ M.fromList
         [ ("success", valueThunk (NVConstant (NBool True)))
@@ -792,8 +786,8 @@ tryEval e = catch (force e (pure . onSuccess)) (pure . onError)
         , ("value", valueThunk (NVConstant (NBool False)))
         ]
 
-fetchTarball :: forall e m. MonadBuiltins e m => NThunk m -> m (NValue m)
-fetchTarball = flip force $ \case
+fetchTarball :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
+fetchTarball v = v >>= \case
     NVSet s _ -> case M.lookup "url" s of
         Nothing -> throwError "builtins.fetchTarball: Missing url attribute"
         Just url -> force url (go (M.lookup "sha256" s))
@@ -833,18 +827,17 @@ fetchTarball = flip force $ \case
         v -> throwError $ "builtins.fetchTarball: sha256 must be a string, got "
                 ++ show v
 
-partition_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-partition_ f = flip force $ \case
-    NVList l -> do
-      let match t = call1 f t >>= \case
-            NVConstant (NBool b) -> return (b, t)
-            v -> throwError $ "partition: Expected boolean, got " ++ show v
-      selection <- traverse match l
-      let (right, wrong) = partition fst selection
-      let makeSide = valueThunk . NVList . map snd
-      return $ flip NVSet M.empty $
-          M.fromList [("right", makeSide right), ("wrong", makeSide wrong)]
-    v -> throwError $ "partition: Expected list, got " ++ show v
+partition_ :: forall e m. MonadBuiltins e m
+           => m (NValue m) -> m (NValue m) -> m (NValue m)
+partition_ f = fromValue @[NThunk m] >=> \l -> do
+    let match t = call1 f (force' t) >>= \case
+          NVConstant (NBool b) -> return (b, t)
+          v -> throwError $ "partition: Expected boolean, got " ++ show v
+    selection <- traverse match l
+    let (right, wrong) = partition fst selection
+    let makeSide = valueThunk . NVList . map snd
+    toValue @(HashMap Text (NThunk m)) $
+        M.fromList [("right", makeSide right), ("wrong", makeSide wrong)]
 
 currentSystem :: MonadBuiltins e m => m (NValue m)
 currentSystem = do
@@ -852,8 +845,8 @@ currentSystem = do
   arch <- getCurrentSystemArch
   return $ NVStr (os <> "-" <> arch) mempty
 
-derivationStrict_ :: MonadBuiltins e m => NThunk m -> m (NValue m)
-derivationStrict_ = force ?? derivationStrict
+derivationStrict_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
+derivationStrict_ = (>>= derivationStrict)
 
 newtype Prim m a = Prim { runPrim :: m a }
 
@@ -866,9 +859,7 @@ instance (MonadBuiltins e m, ToNix a m (NValue m)) => ToBuiltin m (Prim m a) whe
 
 instance (MonadBuiltins e m, FromNix a m (NValue m), ToBuiltin m b)
       => ToBuiltin m (a -> b) where
-    toBuiltin name f =
-        return $ NVBuiltin name $
-            force ?? (fromNix >=> toBuiltin name . f)
+    toBuiltin name f = return $ NVBuiltin name (fromNix >=> toBuiltin name . f)
 
 toEncodingSorted :: A.Value -> A.Encoding
 toEncodingSorted = \case
