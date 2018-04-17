@@ -285,11 +285,7 @@ anyM p (x:xs)   = do
              else anyM p xs
 
 any_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-any_ pred = flip force $ \case
-    NVList l ->
-        toNix =<< anyM fromNix =<< mapM (call1 pred) l
-    arg -> throwError $ "builtins.any takes a list as second argument, not a "
-              ++ show arg
+any_ pred = flip force $ toNix <=< anyM fromValue <=< mapM (call1 pred) <=< fromValue
 
 allM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 allM _ []       = return True
@@ -299,18 +295,11 @@ allM p (x:xs)   = do
              else return False
 
 all_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-all_ pred = flip force $ \case
-    NVList l ->
-        toNix =<< allM fromNix =<< mapM (call1 pred) l
-    arg -> throwError $ "builtins.all takes a list as second argument, not a "
-              ++ show arg
+all_ pred = flip force $ toNix <=< allM fromValue <=< mapM (call1 pred) <=< fromValue
 
 --TODO: Strictness
 foldl'_ :: MonadBuiltins e m => NThunk m -> NThunk m -> NThunk m -> m (NValue m)
-foldl'_ f z = flip force $ \case
-    NVList vals -> (`force` pure) =<< foldlM go z vals
-    arg -> throwError $ "builtins.foldl' takes a list as third argument, not a "
-              ++ show arg
+foldl'_ f z = flip force $ (`force` pure) <=< foldlM @[] go z <=< fromValue
   where
     go b a = thunk $ call2 f a b
 
@@ -465,26 +454,20 @@ attrValues :: forall m. ValueSet m -> [NThunk m]
 attrValues = fmap snd . sortOn (fst @Text @(NThunk m)) . M.toList
 
 map_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-map_ f = flip force $ \case
-    NVList l -> NVList <$> traverse (thunk . call1 f) l
-    v -> throwError $ "map: Expected list, got " ++ show v
+map_ f = flip force $ fmap NVList . traverse (thunk . call1 f) <=< fromValue
 
 filter_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-filter_ f = flip force $ \case
-    NVList l -> NVList <$> filterM (fromNix <=< call1 f) l
-    v -> throwError $ "map: Expected list, got " ++ show v
+filter_ f = flip force $ fmap NVList . filterM (fromValue <=< call1 f) <=< fromValue
 
 catAttrs :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-catAttrs attrName lt = force lt $ \case
-    NVList l -> fmap (NVList . catMaybes) $ forM l $ flip force $ \case
+catAttrs attrName lt = force lt $ fromValue >=> \l ->
+    fmap (NVList . catMaybes) $ forM l $ flip force $ \case
         NVSet m _ -> force attrName $ \case
             NVStr n _ -> return $ M.lookup n m
             v -> throwError $ "builtins.catAttrs: Expected a string, got "
                     ++ show v
         v -> throwError $ "builtins.catAttrs: Expected a set, got "
                 ++ show v
-    v -> throwError $ "builtins.catAttrs: Expected a list, got "
-            ++ show v
 
 baseNameOf :: MonadBuiltins e m => NThunk m -> m (NValue m)
 baseNameOf = flip force $ \case
@@ -521,17 +504,19 @@ deepSeq a b = do
     force b pure
 
 elem_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-elem_ x xs = force xs $ \case
-    NVList l -> toValue =<< anyM (thunkEq x) l
-    v -> throwError $ "builtins.elem: Expected a list, got " ++ show v
+elem_ x xs = force xs $ toValue <=< anyM (thunkEq x) <=< fromValue
+
+elemAt :: [a] -> Int -> Maybe a
+elemAt ls i = case drop i ls of
+   [] -> Nothing
+   a:_ -> Just a
 
 elemAt_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-elemAt_ xs n = force n $ fromNix >=> \n' -> force xs $ \case
-    NVList l | n' < length l -> force (l !! n') pure
-             | otherwise ->
-        throwError $ "builtins.elem: Index " ++ show n'
-            ++ " too large for list of length " ++ show (length l)
-    v -> throwError $ "builtins.elem: Expected a list, got " ++ show v
+elemAt_ xs n = force n $ fromNix >=> \n' -> force xs $ fromValue >=> \xs' ->
+    case elemAt xs' n' of
+      Just a -> force a pure
+      Nothing -> throwError $ "builtins.elem: Index " ++ show n'
+          ++ " too large for list of length " ++ show (length xs')
 
 genList :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 genList generator length = force length $ \case
@@ -664,8 +649,8 @@ getEnv_ = fromNix >=> \s -> do
         Just v  -> Text.pack v
 
 sort_ :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
-sort_ comparator list = force list $ \case
-    NVList l -> NVList <$> sortByM cmp l
+sort_ comparator list = force list $ fromValue >=> \l ->
+    NVList <$> sortByM cmp l
         where
           cmp a b = do
               isLessThan <- call2 comparator a b
@@ -676,7 +661,6 @@ sort_ comparator list = force list $ \case
                       fromValue isGreaterThan >>= \case
                           True -> pure GT
                           False -> pure EQ
-    v -> throwError $ "builtins.sort: expected list, got " ++ show v
 
 lessThan :: MonadBuiltins e m => NThunk m -> NThunk m -> m (NValue m)
 lessThan ta tb = force ta $ \va -> force tb $ \vb -> do
