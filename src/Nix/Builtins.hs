@@ -825,7 +825,7 @@ currentSystem :: MonadBuiltins e m => m (NValue m)
 currentSystem = do
   os <- getCurrentSystemOS
   arch <- getCurrentSystemArch
-  return $ NVStr (os <> "-" <> arch) mempty
+  return $ NVStr (arch <> "-" <> os) mempty
 
 derivationStrict_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
 derivationStrict_ = (>>= derivationStrict)
