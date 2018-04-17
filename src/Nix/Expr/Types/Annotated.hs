@@ -21,35 +21,53 @@ module Nix.Expr.Types.Annotated
 
 import Codec.Serialise
 import Control.DeepSeq
+import Data.Binary (Binary(..))
 import Data.Data
+import Data.Eq.Deriving
 import Data.Fix
 import Data.Function (on)
 import Data.Functor.Compose
+import Data.List.NonEmpty
+import Data.Hashable
+import Data.Hashable.Lifted
+import Data.Ord.Deriving
 import Data.Semigroup
 import Data.Text (Text, pack)
 import GHC.Generics
 import Nix.Expr.Types
 import Nix.Parser.Library (SourcePos(..))
-import Text.Show.Deriving
 import Text.Megaparsec (unPos)
+import Text.Read.Deriving
+import Text.Show.Deriving
 
 -- | A location in a source file
-data SrcSpan = SrcSpan{ spanBegin :: SourcePos
-                      , spanEnd   :: SourcePos
-                      }
-  deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData, Serialise)
+data SrcSpan = SrcSpan
+    { spanBegin :: SourcePos
+    , spanEnd   :: SourcePos
+    }
+    deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData, Serialise,
+              Hashable)
 
 -- | A type constructor applied to a type along with an annotation
 --
 -- Intended to be used with 'Fix':
 -- @type MyType = Fix (Compose (Ann Annotation) F)@
-data Ann ann a = Ann{ annotation :: ann
-                    , annotated  :: a
-                    }
-  deriving (Ord, Eq, Data, Generic, Generic1, Typeable, Functor,
-            Foldable, Traversable, Read, Show, NFData, NFData1, Serialise)
+data Ann ann a = Ann
+    { annotation :: ann
+    , annotated  :: a
+    }
+    deriving (Ord, Eq, Data, Generic, Generic1, Typeable, Functor, Foldable,
+              Traversable, Read, Show, NFData, NFData1, NFData2, Serialise,
+              Hashable, Hashable1, Hashable2)
 
+$(deriveEq1   ''Ann)
+$(deriveEq2   ''Ann)
+$(deriveOrd1  ''Ann)
+$(deriveOrd2  ''Ann)
+$(deriveRead1 ''Ann)
+$(deriveRead2 ''Ann)
 $(deriveShow1 ''Ann)
+$(deriveShow2 ''Ann)
 
 instance Semigroup SrcSpan where
   s1 <> s2 = SrcSpan ((min `on` spanBegin) s1 s2)
@@ -67,6 +85,12 @@ type NExprLoc = Fix NExprLocF
 
 instance NFData NExprLoc
 instance Serialise NExprLoc
+instance Hashable NExprLoc
+
+instance Binary SrcSpan
+instance (Binary ann, Binary a) => Binary (Ann ann a)
+instance Binary r => Binary (NExprLocF r)
+instance Binary NExprLoc
 
 instance Serialise r => Serialise (Compose (Ann SrcSpan) NExprF r) where
     encode (Compose (Ann ann a)) = encode ann <> encode a
