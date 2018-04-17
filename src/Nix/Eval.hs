@@ -23,10 +23,12 @@ import           Control.Arrow (first)
 import           Control.Monad
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
+import           Control.Monad.State
 import           Control.Monad.Trans.Reader
 import           Data.Align.Key
 import           Data.Fix
 import           Data.Functor.Compose
+import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.List (intercalate, partition, foldl')
 import           Data.Maybe (fromMaybe, catMaybes)
@@ -127,7 +129,7 @@ eval (NSet binds) = do
 
 eval (NRecSet binds) = do
     traceM "NRecSet..1"
-    (s, p) <- evalBinds True True binds
+    (s, p) <- evalBinds True True (desugarBinds (eval . NRecSet) binds)
     traceM $ "NRecSet..2: s = " ++ show (void s)
     traceM $ "NRecSet..2: p = " ++ show (void p)
     toValue (s, p)
@@ -191,6 +193,29 @@ attrSetAlter (p:ps) m val = case M.lookup p m of
     -- jww (2018-04-13): Need to record positions for attr paths as well
     recurse s = attrSetAlter ps s val <&> \m' ->
         M.insert p (toValue =<< fmap (value @_ @_ @m) <$> sequence m') m
+
+desugarBinds :: forall r. ([Binding r] -> r) -> [Binding r] -> [Binding r]
+desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
+  where
+    collect :: Binding r
+            -> State (HashMap VarName (Maybe SourcePos, [Binding r]))
+                     (Either VarName (Binding r))
+    collect (NamedVar (StaticKey x p:y:ys) val) = do
+        m <- get
+        let v = case M.lookup x m of
+                Nothing     -> (p, [NamedVar (y:ys) val])
+                Just (p, v) -> (p, NamedVar (y:ys) val : v)
+        put $ M.insert x v m
+        pure $ Left x
+    collect x = pure $ Right x
+
+    go :: Either VarName (Binding r)
+       -> State (HashMap VarName (Maybe SourcePos, [Binding r]))
+                (Binding r)
+    go (Right x) = pure x
+    go (Left x) = do
+        Just (p, v) <- gets $ M.lookup x
+        pure $ NamedVar [StaticKey x p] (embed v)
 
 evalBinds :: forall e v t m. MonadNixEval e v t m
           => Bool
