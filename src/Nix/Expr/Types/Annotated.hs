@@ -21,13 +21,14 @@ module Nix.Expr.Types.Annotated
 
 import Codec.Serialise
 import Control.DeepSeq
+import Data.Aeson (ToJSON(..), FromJSON(..))
+import Data.Aeson.TH
 import Data.Binary (Binary(..))
 import Data.Data
 import Data.Eq.Deriving
 import Data.Fix
 import Data.Function (on)
 import Data.Functor.Compose
-import Data.List.NonEmpty
 import Data.Hashable
 import Data.Hashable.Lifted
 import Data.Ord.Deriving
@@ -57,8 +58,8 @@ data Ann ann a = Ann
     , annotated  :: a
     }
     deriving (Ord, Eq, Data, Generic, Generic1, Typeable, Functor, Foldable,
-              Traversable, Read, Show, NFData, NFData1, NFData2, Serialise,
-              Hashable, Hashable1, Hashable2)
+              Traversable, Read, Show, NFData, NFData1, Serialise,
+              Hashable, Hashable1)
 
 $(deriveEq1   ''Ann)
 $(deriveEq2   ''Ann)
@@ -68,6 +69,8 @@ $(deriveRead1 ''Ann)
 $(deriveRead2 ''Ann)
 $(deriveShow1 ''Ann)
 $(deriveShow2 ''Ann)
+$(deriveJSON1 defaultOptions ''Ann)
+$(deriveJSON2 defaultOptions ''Ann)
 
 instance Semigroup SrcSpan where
   s1 <> s2 = SrcSpan ((min `on` spanBegin) s1 s2)
@@ -91,6 +94,9 @@ instance Binary SrcSpan
 instance (Binary ann, Binary a) => Binary (Ann ann a)
 instance Binary r => Binary (NExprLocF r)
 instance Binary NExprLoc
+
+instance ToJSON SrcSpan
+instance FromJSON SrcSpan
 
 instance Serialise r => Serialise (Compose (Ann SrcSpan) NExprF r) where
     encode (Compose (Ann ann a)) = encode ann <> encode a

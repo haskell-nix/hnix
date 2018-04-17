@@ -27,6 +27,7 @@ import           Codec.Serialise (Serialise)
 import qualified Codec.Serialise as Ser
 import           Control.DeepSeq
 import           Data.Aeson
+import           Data.Aeson.TH
 import           Data.Binary (Binary)
 import qualified Data.Binary as Bin
 import           Data.Data
@@ -232,6 +233,7 @@ instance Generic1 NKeyName where
   type Rep1 NKeyName = NKeyName -- jww (2018-04-09): wrong
   from1 = id
   to1   = id
+
 instance NFData1 NKeyName where
     liftRnf _ (StaticKey !_ !_) = ()
     liftRnf _ (DynamicKey (Plain !_)) = ()
@@ -337,6 +339,13 @@ $(deriveShow1 ''Params)
 $(deriveShow1 ''Binding)
 $(deriveShow1 ''Antiquoted)
 $(deriveShow2 ''Antiquoted)
+
+-- $(deriveJSON1 defaultOptions ''NExprF)
+$(deriveJSON1 defaultOptions ''NString)
+$(deriveJSON1 defaultOptions ''Params)
+-- $(deriveJSON1 defaultOptions ''Binding)
+$(deriveJSON1 defaultOptions ''Antiquoted)
+$(deriveJSON2 defaultOptions ''Antiquoted)
 
 instance (Binary v, Binary a) => Binary (Antiquoted v a)
 instance Binary a => Binary (NString a)
