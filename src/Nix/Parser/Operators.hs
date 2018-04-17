@@ -70,7 +70,7 @@ nixOperators
     -> [[(NOperatorDef, Operator Parser NExprLoc)]]
 nixOperators selector =
   [ -- This is not parsed here, even though technically it's part of the
-    -- expression table. The problem is that in same cases, such as list
+    -- expression table. The problem is that in some cases, such as list
     -- membership, it's also a term. And since terms are effectively the
     -- highest precedence entities parsed by the expression parser, it ends up
     -- working out that we parse them as a kind of "meta-term".
