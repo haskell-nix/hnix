@@ -68,8 +68,8 @@ executables:
     main: Main.hs
     dependencies:
       - hnix
+      - aeson
       - repline
-      - megaparsec
 
 tests:
   hnix-tests:

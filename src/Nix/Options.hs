@@ -14,8 +14,8 @@ data Options = Options
     , findFile     :: Maybe FilePath
     , strict       :: Bool
     , evaluate     :: Bool
-    -- , json         :: Bool
-    -- , xml          :: Bool
+    , json         :: Bool
+    , xml          :: Bool
     , attr         :: Maybe Text
     , include      :: [FilePath]
     , check        :: Bool
@@ -63,12 +63,12 @@ nixOptions = Options
     <*> switch
         (   long "eval"
          <> help "Whether to evaluate, or just pretty-print")
-    -- <*> switch
-    --     (   long "json"
-    --      <> help "Print the resulting value as an JSON representation of the abstract syntax tree")
-    -- <*> switch
-    --     (   long "xml"
-    --      <> help "Print the resulting value as an XML representation of the abstract syntax tree")
+    <*> switch
+        (   long "json"
+         <> help "Print the resulting value as an JSON representation")
+    <*> switch
+        (   long "xml"
+         <> help "Print the resulting value as an XML representation")
     <*> optional (strOption
         (   short 'A'
          <> long "attr"

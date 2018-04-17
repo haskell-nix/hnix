@@ -1,24 +1,30 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Nix.Utils (module Nix.Utils, module X) where
 
-import Control.Applicative
-import Control.Monad
-import Control.Monad.Fix
-import Data.Fix
-import Data.Functor.Identity
-import Data.HashMap.Lazy (HashMap)
-import Data.Monoid (Endo)
-import Data.Text (Text)
+import           Control.Applicative
+import           Control.Monad
+import           Control.Monad.Fix
+import qualified Data.Aeson as A
+import qualified Data.Aeson.Encoding as A
+import           Data.Fix
+import           Data.Functor.Identity
+import           Data.HashMap.Lazy (HashMap)
+import qualified Data.HashMap.Lazy as M
+import           Data.List (sortOn)
+import           Data.Monoid (Endo)
+import           Data.Text (Text)
+import qualified Data.Vector as V
 
 -- #define ENABLE_TRACING 1
 #if ENABLE_TRACING
-import Debug.Trace as X
+import           Debug.Trace as X
 #else
-import Prelude as X
+import           Prelude as X
 trace :: String -> a -> a
 trace = const id
 traceM :: Monad m => String -> m ()
@@ -90,3 +96,13 @@ over l f = runIdentity . l (Identity . f)
 
 class Has a b where
     hasLens :: MonoLens a b
+
+toEncodingSorted :: A.Value -> A.Encoding
+toEncodingSorted = \case
+    A.Object m ->
+        A.pairs . mconcat
+                . fmap (\(k, v) -> A.pair k $ toEncodingSorted v)
+                . sortOn fst
+                $ M.toList m
+    A.Array l -> A.list toEncodingSorted $ V.toList l
+    v -> A.toEncoding v

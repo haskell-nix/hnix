@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
--- {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -12,13 +11,18 @@ import qualified Control.Exception as Exc
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.ST
+import qualified Data.Aeson.Encoding as A
+import qualified Data.Aeson.Text as A
 import qualified Data.Text.IO as Text
+import qualified Data.Text.Lazy.Encoding as TL
+import qualified Data.Text.Lazy.IO as TL
 import           Nix
-import qualified Repl
--- import           Nix.TH
+import           Nix.Convert
+import           Nix.Utils
 import           Options.Applicative hiding (ParserResult(..))
-import           System.IO
+import qualified Repl
 import           System.FilePath
+import           System.IO
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 main :: IO ()
@@ -47,8 +51,6 @@ main = do
         eres <- parseNixFileLoc path
         handleResult opts (Just path) eres
 
-    -- print . printNix =<< Nix.eval [nix|1 + 3|]
-
     handleResult opts mpath = \case
         Failure err ->
             (if ignoreErrors opts
@@ -62,17 +64,34 @@ main = do
         when (check opts) $
             putStrLn $ runST $ runLintM . renderSymbolic =<< lint expr
 
+        let printer :: (MonadNix e m, MonadIO m) => NValue m -> m ()
+            printer | xml opts =
+                      liftIO . putStrLn . toXML <=< normalForm
+                    | json opts =
+                      liftIO . TL.putStrLn
+                             . TL.decodeUtf8
+                             . A.encodingToLazyByteString
+                             . toEncodingSorted
+                             <=< fromNix
+                    | otherwise = liftIO . print
+
         if | evaluate opts, debug opts ->
                  runLazyM $ evaluateExpression opts mpath
-                     Nix.tracingEvalLoc (liftIO . print) expr
+                     Nix.tracingEvalLoc printer expr
 
            | evaluate opts, not (null (arg opts) && null (argstr opts)) ->
                  runLazyM $ evaluateExpression opts mpath
-                     Nix.evalLoc (liftIO . print) expr
+                     Nix.evalLoc printer expr
 
            | evaluate opts -> runLazyM $
-                 processResult opts (liftIO . print)
+                 processResult opts printer
                      =<< Nix.evalLoc mpath (include opts) expr
+
+           | xml opts ->
+                 error "Rendering expression trees to XML is not yet implemented"
+
+           | json opts ->
+                 TL.putStrLn $ A.encodeToLazyText (stripAnnotation expr)
 
            | debug opts -> print $ stripAnnotation expr
 

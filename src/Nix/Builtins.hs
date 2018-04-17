@@ -51,7 +51,6 @@ import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Lazy.Builder as Builder
 import           Data.These (fromThese)
 import           Data.Traversable (mapM)
-import qualified Data.Vector as V
 import           Language.Haskell.TH.Syntax (addDependentFile, runIO)
 import           Nix.Atoms
 import           Nix.Convert
@@ -843,9 +842,3 @@ instance (MonadBuiltins e m, ToNix a m (NValue m)) => ToBuiltin m (Prim m a) whe
 instance (MonadBuiltins e m, FromNix a m (NValue m), ToBuiltin m b)
       => ToBuiltin m (a -> b) where
     toBuiltin name f = return $ NVBuiltin name (fromNix >=> toBuiltin name . f)
-
-toEncodingSorted :: A.Value -> A.Encoding
-toEncodingSorted = \case
-    A.Object m -> A.pairs $ mconcat $ fmap (\(k, v) -> A.pair k $ toEncodingSorted v) $ sortOn fst $ M.toList m
-    A.Array l -> A.list toEncodingSorted $ V.toList l
-    v -> A.toEncoding v
