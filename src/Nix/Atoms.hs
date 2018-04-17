@@ -8,6 +8,7 @@ module Nix.Atoms where
 import Codec.Serialise
 import Control.DeepSeq
 import Data.Data
+import Data.Hashable
 import Data.Text (Text, pack)
 import GHC.Generics
 
@@ -26,7 +27,7 @@ data NAtom
   | NNull
   -- | URIs, which are just string literals, but do not need quotes.
   | NUri Text
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise)
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise, Hashable)
 
 -- | Translate an atom into its nix representation.
 atomText :: NAtom -> Text

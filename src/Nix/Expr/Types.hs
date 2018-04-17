@@ -95,7 +95,7 @@ data NExprF r
   | NAssert !r !r
   -- ^ Assert that the first returns true before evaluating the second.
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
-            Foldable, Traversable, Show, NFData, NFData1, Serialise)
+            Foldable, Traversable, Show, NFData, NFData1, Serialise, Hashable)
 
 -- | We make an `IsString` for expressions, where the string is interpreted
 -- as an identifier. This is the most common use-case...
@@ -122,7 +122,7 @@ data Binding r
   -- ^ Using a name already in scope, such as @inherit x;@ which is shorthand
   -- for @x = x;@ or @inherit (x) y;@ which means @y = x.y;@.
   deriving (Generic, Generic1, Typeable, Data, Ord, Eq, Functor,
-            Foldable, Traversable, Show, NFData, NFData1, Serialise)
+            Foldable, Traversable, Show, NFData, NFData1, Serialise, Hashable)
 
 -- | @Params@ represents all the ways the formal parameters to a
 -- function can be represented.
@@ -134,7 +134,7 @@ data Params r
   -- bind to the set in the function body. The bool indicates whether it is
   -- variadic or not.
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Show,
-            Foldable, Traversable, NFData, NFData1, Serialise)
+            Foldable, Traversable, NFData, NFData1, Serialise, Hashable)
 
 -- This uses an association list because nix XML serialization preserves the
 -- order of the param set.
@@ -147,8 +147,7 @@ instance IsString (Params r) where
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
 data Antiquoted (v :: *) (r :: *) = Plain !v | EscapedNewline | Antiquoted !r
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
-            Foldable, Traversable, Show, NFData, NFData1, Serialise,
-            Hashable)
+            Foldable, Traversable, Show, NFData, NFData1, Serialise, Hashable)
 
 -- | An 'NString' is a list of things that are either a plain string
 -- or an antiquoted expression. After the antiquotes have been evaluated,
@@ -162,8 +161,7 @@ data NString r
   --   their indentation will be stripped, but the amount stripped is
   --   remembered.
   deriving (Eq, Ord, Generic, Generic1, Typeable, Data, Functor,
-            Foldable, Traversable, Show, NFData, NFData1, Serialise,
-            Hashable)
+            Foldable, Traversable, Show, NFData, NFData1, Serialise, Hashable)
 
 -- | For the the 'IsString' instance, we use a plain doublequoted string.
 instance IsString (NString r) where
@@ -192,8 +190,7 @@ instance IsString (NString r) where
 data NKeyName r
   = DynamicKey !(Antiquoted (NString r) r)
   | StaticKey !VarName !(Maybe SourcePos)
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise,
-            Hashable)
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise, Hashable)
 
 instance Serialise Pos where
     encode x = Ser.encode (unPos x)
@@ -261,7 +258,7 @@ type NAttrPath r = [NKeyName r]
 
 -- | There are two unary operations: logical not and integer negation.
 data NUnaryOp = NNeg | NNot
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise)
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise, Hashable)
 
 -- | Binary operators expressible in the nix language.
 data NBinaryOp
@@ -281,7 +278,7 @@ data NBinaryOp
   | NDiv     -- ^ Division (/)
   | NConcat  -- ^ List concatenation (++)
   | NApp     -- ^ Apply a function to an argument.
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise)
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise, Hashable)
 
 -- | Get the name out of the parameter (there might be none).
 paramName :: Params r -> Maybe VarName
