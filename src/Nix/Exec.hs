@@ -115,7 +115,9 @@ callFunc fun arg = case fun of
     s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
         traceM "callFunc:__functor"
         force f $ (`callFunc` pure s) >=> (`callFunc` arg)
-    x -> throwError $ "Attempt to call non-function: " ++ show x
+    x -> arg >>= \arg' ->
+        throwError $ "Attempt to call non-function '" ++ show x
+            ++ "' with arg: " ++ show arg'
 
 execUnaryOp
     :: (Framed e m, MonadVar m, MonadFile m)
