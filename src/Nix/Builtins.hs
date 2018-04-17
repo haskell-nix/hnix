@@ -10,6 +10,7 @@
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -220,11 +221,7 @@ foldNixPath f z = do
     mres <- lookupVar @_ @(NThunk m) "__includes"
     dirs <- case mres of
         Nothing -> return []
-        Just v -> force v $ \case
-            NVList xs -> forM xs $ flip force $ \case
-                NVStr s _ -> pure s
-                _ -> error "impossible"
-            _ -> error "impossible"
+        Just v  -> fromNix @[Text] v
     menv <- getEnvVar "NIX_PATH"
     foldrM go z $ dirs ++ case menv of
         Nothing -> []
@@ -260,7 +257,7 @@ getAttr x y = x >>= \x' -> y >>= \y' -> case (x', y') of
     (NVStr key _, NVSet aset _) -> case M.lookup key aset of
         Nothing -> throwError $ "getAttr: field does not exist: "
                       ++ Text.unpack key
-        Just action -> force action pure
+        Just action -> force' action
     (x, y) -> throwError $ "Invalid types for builtin.getAttr: "
                  ++ show (x, y)
 
@@ -288,8 +285,7 @@ anyM p (x:xs)   = do
              else anyM p xs
 
 any_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
-any_ pred = fromValue >=>
-    toNix <=< anyM fromNix <=< mapM (call1 pred . force')
+any_ p = toNix <=< anyM fromNix <=< mapM (call1 p . force') <=< fromValue
 
 allM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 allM _ []       = return True
@@ -299,15 +295,11 @@ allM p (x:xs)   = do
              else return False
 
 all_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
-all_ pred = fromValue >=>
-    toNix <=< allM fromNix <=< mapM (call1 pred . force')
+all_ p = toNix <=< allM fromNix <=< mapM (call1 p . force') <=< fromValue
 
 foldl'_ :: forall e m. MonadBuiltins e m
         => m (NValue m) -> m (NValue m) -> m (NValue m) -> m (NValue m)
-foldl'_ f z = fromValue @[NThunk m] >=> foldl' go z
-  where
-    go :: m (NValue m) -> NThunk m -> m (NValue m)
-    go b a = force a $ \a' -> call2 f (pure a') b
+foldl'_ f z = foldl' (\b a -> call2 f (force' a) b) z <=< fromValue @[NThunk m]
 
 head_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
 head_ = fromValue >=> \case
@@ -458,7 +450,7 @@ map_ f = toNix <=< traverse (thunk . call1 f . force')
                <=< fromValue @[NThunk m]
 
 filter_ :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
-filter_ f = toNix <=< filterM (fromValue <=< call1 f . force')
+filter_ f = toNix <=< filterM (fromNix <=< call1 f . force')
                   <=< fromValue @[NThunk m]
 
 catAttrs :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
@@ -684,11 +676,7 @@ listToAttrs = fromValue @[NThunk m] >=> \l ->
     fmap (flip NVSet M.empty . M.fromList . reverse) $
         forM l $ fromValue @(HashMap Text (NThunk m)) >=> \s ->
             case (M.lookup "name" s, M.lookup "value" s) of
-                (Just name, Just value) -> force name $ \case
-                    NVStr n _ -> return (n, value)
-                    v -> throwError $
-                            "builtins.listToAttrs: expected name to be a string, got "
-                            ++ show v
+                (Just name, Just value) -> fromNix name <&> (, value)
                 _ -> throwError $
                     "builtins.listToAttrs: expected set with name and value, got"
                         ++ show s
@@ -696,8 +684,8 @@ listToAttrs = fromValue @[NThunk m] >=> \l ->
 hashString :: MonadBuiltins e m => Text -> Text -> Prim m Text
 hashString algo s = Prim $ do
     hash <- case algo of
-        "md5" -> pure MD5.hash
-        "sha1" -> pure SHA1.hash
+        "md5"    -> pure MD5.hash
+        "sha1"   -> pure SHA1.hash
         "sha256" -> pure SHA256.hash
         "sha512" -> pure SHA512.hash
         _ -> throwError $ "builtins.hashString: "
@@ -790,7 +778,7 @@ fetchTarball :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
 fetchTarball v = v >>= \case
     NVSet s _ -> case M.lookup "url" s of
         Nothing -> throwError "builtins.fetchTarball: Missing url attribute"
-        Just url -> force url (go (M.lookup "sha256" s))
+        Just url -> force url $ go (M.lookup "sha256" s)
     v@NVStr {} -> go Nothing v
     v@(NVConstant (NUri _)) -> go Nothing v
     v -> throwError $ "builtins.fetchTarball: Expected URI or set, got "
@@ -819,20 +807,15 @@ fetchTarball v = v >>= \case
     fetch uri Nothing =
         nixInstantiateExpr $ "builtins.fetchTarball \"" ++
             Text.unpack uri ++ "\""
-    fetch url (Just m) = force m $ \case
-        NVStr sha _ ->
-            nixInstantiateExpr $ "builtins.fetchTarball { "
-              ++ "url    = \"" ++ Text.unpack url ++ "\"; "
-              ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"
-        v -> throwError $ "builtins.fetchTarball: sha256 must be a string, got "
-                ++ show v
+    fetch url (Just m) = fromNix m >>= \sha ->
+        nixInstantiateExpr $ "builtins.fetchTarball { "
+          ++ "url    = \"" ++ Text.unpack url ++ "\"; "
+          ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"
 
 partition_ :: forall e m. MonadBuiltins e m
            => m (NValue m) -> m (NValue m) -> m (NValue m)
 partition_ f = fromValue @[NThunk m] >=> \l -> do
-    let match t = call1 f (force' t) >>= \case
-          NVConstant (NBool b) -> return (b, t)
-          v -> throwError $ "partition: Expected boolean, got " ++ show v
+    let match t = call1 f (force' t) >>= fmap (, t) . fromNix
     selection <- traverse match l
     let (right, wrong) = partition fst selection
     let makeSide = valueThunk . NVList . map snd
