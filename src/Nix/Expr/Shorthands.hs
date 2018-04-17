@@ -7,12 +7,13 @@
 -- 'Fix' wrapper.
 module Nix.Expr.Shorthands where
 
-import Data.Fix
-import Data.Monoid
-import Data.Text (Text)
-import Nix.Atoms
-import Nix.Expr.Types
--- import Nix.Utils
+import           Data.Fix
+import           Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NE
+import           Data.Monoid
+import           Data.Text (Text)
+import           Nix.Atoms
+import           Nix.Expr.Types
 
 -- | Make an integer literal expression.
 mkInt :: Integer -> NExpr
@@ -78,7 +79,7 @@ mkSymF :: Text -> NExprF a
 mkSymF = NSym
 
 mkSelector :: Text -> NAttrPath NExpr
-mkSelector = (:[]) . flip StaticKey Nothing
+mkSelector = (:| []) . flip StaticKey Nothing
 
 mkBool :: Bool -> NExpr
 mkBool = Fix . mkBoolF
@@ -107,7 +108,7 @@ mkRecSet = Fix . NRecSet
 mkNonRecSet :: [Binding NExpr] -> NExpr
 mkNonRecSet = Fix . NSet
 
-mkLets :: [Binding NExpr] -> NExpr -> NExpr
+mkLets :: NonEmpty (Binding NExpr) -> NExpr -> NExpr
 mkLets bindings = Fix . NLet bindings
 
 mkList :: [NExpr] -> NExpr
@@ -162,7 +163,7 @@ infixr 2 $=
 -- `let a = 1; b = 2; c = 3; in 4`.
 appendBindings :: [Binding NExpr] -> NExpr -> NExpr
 appendBindings newBindings (Fix e) = case e of
-  NLet bindings e' -> Fix $ NLet (bindings <> newBindings) e'
+  NLet (h :| bindings) e' -> Fix $ NLet (h :| bindings <> newBindings) e'
   NSet bindings -> Fix $ NSet (bindings <> newBindings)
   NRecSet bindings -> Fix $ NRecSet (bindings <> newBindings)
   _ -> error "Can only append bindings to a set or a let"
@@ -174,12 +175,12 @@ modifyFunctionBody f (Fix e) = case e of
   _ -> error "Not a function"
 
 -- | A let statement with multiple assignments.
-letsE :: [(Text, NExpr)] -> NExpr -> NExpr
-letsE pairs = Fix . NLet (map (uncurry bindTo) pairs)
+letsE :: NonEmpty (Text, NExpr) -> NExpr -> NExpr
+letsE pairs = Fix . NLet (NE.map (uncurry bindTo) pairs)
 
 -- | Wrapper for a single-variable @let@.
 letE :: Text -> NExpr -> NExpr -> NExpr
-letE varName varExpr = letsE [(varName, varExpr)]
+letE varName varExpr = letsE ((varName, varExpr) :| [])
 
 -- | Make an attribute set (non-recursive).
 attrsE :: [(Text, NExpr)] -> NExpr
@@ -233,5 +234,5 @@ infixl 1 @@
 infixr 1 ==>
 
 (@.) :: NExpr -> Text -> NExpr
-obj @. name = Fix (NSelect obj [StaticKey name Nothing] Nothing)
+obj @. name = Fix (NSelect obj (StaticKey name Nothing :| []) Nothing)
 infixl 2 @.

@@ -33,6 +33,8 @@ import           Data.Eq.Deriving
 import           Data.Fix
 import           Data.Functor.Classes
 import           Data.Hashable
+import           Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NE
 import           Data.Monoid
 import           Data.Text (Text, pack, unpack)
 import           Data.Traversable
@@ -85,7 +87,7 @@ data NExprF r
   -- ^ Ask if a set contains a given attribute path.
   | NAbs !(Params r) !r
   -- ^ A function literal (lambda abstraction).
-  | NLet ![Binding r] !r
+  | NLet !(NonEmpty (Binding r)) !r
   -- ^ Evaluate the second argument after introducing the bindings.
   | NIf !r !r !r
   -- ^ If-then-else statement.
@@ -118,7 +120,7 @@ instance Serialise NExpr
 data Binding r
   = NamedVar !(NAttrPath r) !r
   -- ^ An explicit naming, such as @x = y@ or @x.y = z@.
-  | Inherit !(Maybe r) !(NAttrPath r)
+  | Inherit !(Maybe r) ![NKeyName r]
   -- ^ Using a name already in scope, such as @inherit x;@ which is shorthand
   -- for @x = x;@ or @inherit (x) y;@ which means @y = x.y;@.
   deriving (Generic, Generic1, Typeable, Data, Ord, Eq, Functor,
@@ -254,7 +256,7 @@ instance Traversable NKeyName where
 
 -- | A selector (for example in a @let@ or an attribute set) is made up
 -- of strung-together key names.
-type NAttrPath r = [NKeyName r]
+type NAttrPath r = NonEmpty (NKeyName r)
 
 -- | There are two unary operations: logical not and integer negation.
 data NUnaryOp = NNeg | NNot
@@ -318,11 +320,11 @@ stripPositionInfo = transport phi
   where
     phi (NSet binds)         = NSet (map go binds)
     phi (NRecSet binds)      = NRecSet (map go binds)
-    phi (NLet binds body)    = NLet (map go binds) body
-    phi (NSelect s attr alt) = NSelect s (map clear attr) alt
+    phi (NLet binds body)    = NLet (NE.map go binds) body
+    phi (NSelect s attr alt) = NSelect s (NE.map clear attr) alt
     phi x = x
 
-    go (NamedVar path r)  = NamedVar (map clear path) r
+    go (NamedVar path r)  = NamedVar (NE.map clear path) r
     go (Inherit ms names) = Inherit ms (map clear names)
 
     clear (StaticKey name _) = StaticKey name Nothing

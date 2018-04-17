@@ -31,6 +31,8 @@ import           Data.Functor.Compose
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.List (intercalate, partition, foldl')
+import           Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NE
 import           Data.Maybe (fromMaybe, catMaybes)
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -107,7 +109,7 @@ eval (NSelect aset attr alt) = do
         Left (s, ks) -> fromMaybe err alt
           where
             err = evalError @v $ "Could not look up attribute "
-                ++ intercalate "." (map Text.unpack ks)
+                ++ intercalate "." (map Text.unpack (NE.toList ks))
                 ++ " in " ++ show @v s
 
 eval (NHasAttr aset attr) = do
@@ -136,7 +138,7 @@ eval (NRecSet binds) = do
 
 eval (NLet binds e) = do
     traceM "Let..1"
-    (s, _) <- evalBinds True True binds
+    (s, _) <- evalBinds True True (NE.toList binds)
     traceM $ "Let..2: s = " ++ show (void s)
     pushScope s e
 
@@ -200,11 +202,11 @@ desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
     collect :: Binding r
             -> State (HashMap VarName (Maybe SourcePos, [Binding r]))
                      (Either VarName (Binding r))
-    collect (NamedVar (StaticKey x p:y:ys) val) = do
+    collect (NamedVar (StaticKey x p:|y:ys) val) = do
         m <- get
         let v = case M.lookup x m of
-                Nothing     -> (p, [NamedVar (y:ys) val])
-                Just (p, v) -> (p, NamedVar (y:ys) val : v)
+                Nothing     -> (p, [NamedVar (y:|ys) val])
+                Just (p, v) -> (p, NamedVar (y:|ys) val : v)
         put $ M.insert x v m
         pure $ Left x
     collect x = pure $ Right x
@@ -215,7 +217,7 @@ desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
     go (Right x) = pure x
     go (Left x) = do
         Just (p, v) <- gets $ M.lookup x
-        pure $ NamedVar [StaticKey x p] (embed v)
+        pure $ NamedVar (StaticKey x p :| []) (embed v)
 
 evalBinds :: forall e v t m. MonadNixEval e v t m
           => Bool
@@ -227,11 +229,11 @@ evalBinds allowDynamic recursive binds = do
     buildResult . concat =<< mapM (go outsideScope) (moveOverridesLast binds)
   where
     moveOverridesLast = (\(x, y) -> y ++ x) .
-        partition (\case NamedVar [StaticKey "__overrides" _] _ -> True
+        partition (\case NamedVar (StaticKey "__overrides" _ :| []) _ -> True
                          _ -> False)
 
     go :: Scopes m t -> Binding (m v) -> m [([Text], Maybe SourcePos, m v)]
-    go _ (NamedVar [StaticKey "__overrides" _] finalValue) =
+    go _ (NamedVar (StaticKey "__overrides" _ :| []) finalValue) =
         finalValue >>= \v -> fromValueMay v >>= \case
             Just (o', p') ->
                 return $ map (\(k, v) -> ([k], M.lookup k p', force v pure))
@@ -242,14 +244,15 @@ evalBinds allowDynamic recursive binds = do
     go _ (NamedVar pathExpr finalValue) = do
         let go :: NAttrPath (m v) -> m ([Text], Maybe SourcePos, m v)
             go = \case
-                [] -> pure ([], Nothing, finalValue)
-                h : t -> evalSetterKeyName allowDynamic h >>= \case
+                h :| t -> evalSetterKeyName allowDynamic h >>= \case
                     (Nothing, _) ->
                         pure ([], Nothing,
                               toValue (mempty :: AttrSet t))
-                    (Just k, pos) -> do
-                        (restOfPath, _, v) <- go t
-                        pure (k : restOfPath, pos, v)
+                    (Just k, pos) -> case t of
+                        [] -> pure ([k], pos, finalValue)
+                        x:xs -> do
+                            (restOfPath, _, v) <- go (x:|xs)
+                            pure (k : restOfPath, pos, v)
         go pathExpr <&> \case
             -- When there are no path segments, e.g. `${null} = 5;`, we don't
             -- bind anything
@@ -294,21 +297,22 @@ evalBinds allowDynamic recursive binds = do
 evalSelect :: forall e v t m. MonadNixEval e v t m
            => m v
            -> NAttrPath (m v)
-           -> m (Either (v, [Text]) v)
+           -> m (Either (v, NonEmpty Text) v)
 evalSelect aset attr =
     join $ extract <$> aset <*> evalSelector True attr
   where
-    extract v [] = return $ Right v
-    extract x (k:ks) = fromValueMay x >>= \case
+    extract x (k:|ks) = fromValueMay x >>= \case
         Just (s :: AttrSet t, p :: AttrSet SourcePos) -> case M.lookup k s of
-            Just v  -> force v $ extract ?? ks
-            Nothing -> Left . (, k:ks) <$> toValue (s, p)
-        Nothing -> return $ Left (x, k:ks)
+            Just v -> case ks of
+                [] -> force v $ pure . Right
+                y:ys -> force v $ extract ?? (y:|ys)
+            Nothing -> Left . (, k:|ks) <$> toValue (s, p)
+        Nothing -> return $ Left (x, k:|ks)
 
 evalSelector :: (MonadEval v m, FromValue (Text, DList Text) m v)
-             => Bool -> NAttrPath (m v) -> m [Text]
-evalSelector allowDynamic =
-    fmap (map fst) <$> mapM (evalGetterKeyName allowDynamic)
+             => Bool -> NAttrPath (m v) -> m (NonEmpty Text)
+evalSelector allowDynamic binds =
+    NE.map fst <$> traverse (evalGetterKeyName allowDynamic) binds
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value

@@ -14,17 +14,19 @@ import           Data.HashMap.Lazy (toList)
 import qualified Data.HashMap.Lazy as M
 import qualified Data.HashSet as HashSet
 import           Data.List (isPrefixOf, sort)
+import           Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NE
 import           Data.Maybe (isJust)
 import           Data.Text (pack, unpack, replace, strip)
 import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Expr
-import           Nix.Value
 import           Nix.Parser.Library (reservedNames)
 import           Nix.Parser.Operators
 import           Nix.StringOperations
 import           Nix.Thunk
 import           Nix.Utils hiding ((<$>))
+import           Nix.Value
 import           Prelude hiding ((<$>))
 import           Text.PrettyPrint.ANSI.Leijen
 
@@ -129,7 +131,7 @@ prettyKeyName (DynamicKey key) =
     runAntiquoted (DoubleQuoted [Plain "\n"]) prettyString withoutParens key
 
 prettySelector :: NAttrPath NixDoc -> Doc
-prettySelector = hcat . punctuate dot . map prettyKeyName
+prettySelector = hcat . punctuate dot . map prettyKeyName . NE.toList
 
 prettyAtom :: NAtom -> NixDoc
 prettyAtom atom = simpleExpr $ text $ unpack $ atomText atom
@@ -165,7 +167,6 @@ prettyNix = withoutParens . cata phi where
   phi (NUnary op r1) =
     NixDoc (text (unpack (operatorName opInfo)) <> wrapParens opInfo r1) opInfo
     where opInfo = getUnaryOperator op
-  phi (NSelect r [] _) = r
   phi (NSelect r attr o) = (if isJust o then leastPrecedence else flip NixDoc selectOp) $
      wrapParens selectOp r <> dot <> prettySelector attr <> ordoc
     where ordoc = maybe empty (((space <> text "or") <+>) . withoutParens) o
@@ -182,7 +183,7 @@ prettyNix = withoutParens . cata phi where
         | otherwise -> "./" ++ txt
   phi (NSym name) = simpleExpr $ text (unpack name)
   phi (NLet binds body) = leastPrecedence $ group $ text "let" <$> indent 2 (
-        vsep (map prettyBind binds)) <$> text "in" <+> withoutParens body
+        vsep (map prettyBind (NE.toList binds))) <$> text "in" <+> withoutParens body
   phi (NIf cond trueBody falseBody) = leastPrecedence $
     group $ nest 2 $ (text "if" <+> withoutParens cond) <$>
       (  align (text "then" <+> withoutParens trueBody)
@@ -203,8 +204,9 @@ prettyNixValue = prettyNix . valueToExpr
         go (NVConstant a) = NConstant a
         go (NVStr t _) = NStr (DoubleQuoted [Plain t])
         go (NVList l) = NList l
-        go (NVSet s p) = NSet [ NamedVar [StaticKey k (M.lookup k p)] v
-                              | (k, v) <- toList s ]
+        go (NVSet s p) = NSet
+            [ NamedVar (StaticKey k (M.lookup k p) :| []) v
+            | (k, v) <- toList s ]
         go (NVClosure _ _) = NSym . pack $ "<closure>"
         go (NVPath p) = NLiteralPath p
         go (NVBuiltin name _) = NSym $ Text.pack $ "builtins." ++ name

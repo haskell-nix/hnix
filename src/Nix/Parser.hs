@@ -15,6 +15,7 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Char (isAlpha, isDigit, isSpace)
 import           Data.Functor
+import           Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
 import           Data.Text hiding (map)
 import           Nix.Expr hiding (($>))
@@ -62,7 +63,9 @@ nixSelect term = do
   build t (Just (s,o)) = nSelectLoc t s o
 
 nixSelector :: Parser (Ann SrcSpan (NAttrPath NExprLoc))
-nixSelector = annotateLocation $ keyName `sepBy1` selDot
+nixSelector = annotateLocation $ do
+    (x:xs) <- keyName `sepBy1` selDot
+    return $ x :| xs
 
 nixTerm :: Parser NExprLoc
 nixTerm = do
@@ -148,12 +151,14 @@ nixLet = annotateLocation1 (reserved "let"
     *> (letBody <+> letBinders)
     <?> "let block")
   where
-    letBinders = NLet
-        <$> nixBinders
-        <*> (reserved "in" *> nixToplevelForm)
+    letBinders = do
+        binds <- nixBinders
+        case binds of
+            []   -> mzero
+            x:xs -> NLet (x :| xs) <$> (reserved "in" *> nixToplevelForm)
     -- Let expressions `let {..., body = ...}' are just desugared
     -- into `(rec {..., body = ...}).body'.
-    letBody = (\x pos -> NSelect x [StaticKey "body" (Just pos)] Nothing)
+    letBody = (\x pos -> NSelect x (StaticKey "body" (Just pos) :| []) Nothing)
         <$> aset <*> getPosition
     aset = annotateLocation1 $ NRecSet <$> braces nixBinders
 
