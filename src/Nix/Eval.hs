@@ -99,7 +99,7 @@ eval (NBinary NApp fun arg) = do
     scope <- currentScopes @_ @t
     evalApp ?? withScopes scope arg =<< fun
 
-eval (NBinary op larg rarg) = join $ evalBinary op <$> larg <*> pure rarg
+eval (NBinary op larg rarg) = larg >>= \lval -> evalBinary op lval rarg
 
 eval (NSelect aset attr alt) = do
     traceM "NSelect"
