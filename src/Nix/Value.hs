@@ -1,6 +1,8 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -24,6 +26,7 @@ import           Data.Monoid (appEndo)
 import           Data.Text (Text)
 import           Data.These
 import           Data.Typeable (Typeable)
+import           Data.Void
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr.Types
@@ -41,7 +44,7 @@ data NValueF m r
     | NVPath FilePath
     | NVList [r]
     | NVSet (AttrSet r) (AttrSet SourcePos)
-    | NVClosure (Params ()) (m (NValue m) -> m (NValue m))
+    | NVClosure (Params Void) (m (NValue m) -> m (NValue m))
       -- ^ A function is a closed set of parameters representing the "call
       --   signature", used at application time to check the type of arguments
       --   passed to the function. Since it supports default values which may
@@ -57,7 +60,7 @@ data NValueF m r
       -- ^ A builtin function is itself already in normal form. Also, it may
       --   or may not choose to evaluate its argument in the production of a
       --   result.
-    deriving (Generic, Typeable, Functor)
+    deriving (Generic, Typeable, Functor, Foldable, Traversable)
 
 -- | An 'NValueNF' is a fully evaluated value in normal form. An 'NValue m' is
 --   a value in head normal form, where only the "top layer" has been

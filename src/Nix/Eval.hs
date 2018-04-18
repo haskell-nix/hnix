@@ -38,6 +38,7 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.These
 import           Data.Traversable (for)
+import           Data.Void
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Expr
@@ -63,7 +64,7 @@ class (Show v, Monad m) => MonadEval v m | v -> m where
     evalIf          :: v -> m v -> m v -> m v
     evalAssert      :: v -> m v -> m v
     evalApp         :: v -> m v -> m v
-    evalAbs         :: Params () -> (m v -> m v) -> m v
+    evalAbs         :: Params Void -> (m v -> m v) -> m v
 
     evalError :: String -> m a
 
@@ -155,12 +156,16 @@ eval (NAbs params body) = do
     traceM "NAbs"
     scope <- currentScopes @_ @t
     traceM $ "Creating lambda abstraction in scope: " ++ show scope
-    evalAbs (void params) $ \arg ->
+    evalAbs (clearDefaults params) $ \arg ->
         -- jww (2018-04-17): We need to use the bound library here, so that
         -- the body is only evaluated once.
         withScopes @t scope $ do
             args <- buildArgument params arg
             pushScope args body
+  where
+    clearDefaults :: Params r -> Params Void
+    clearDefaults (Param name) = Param name
+    clearDefaults (ParamSet xs b mv) = ParamSet (map (Nothing <$) xs) b mv
 
 -- | If you know that the 'scope' action will result in an 'AttrSet t', then
 --   this implementation may be used as an implementation for 'evalWith'.

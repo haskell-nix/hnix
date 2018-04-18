@@ -37,6 +37,7 @@ import           Data.List
 import           Data.STRef
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import           Data.Void
 import           Nix.Atoms
 import           Nix.Context
 import           Nix.Convert
@@ -63,7 +64,7 @@ data NTypeF (m :: * -> *) r
     | TStr
     | TList r
     | TSet (Maybe (HashMap Text r))
-    | TClosure (Params ()) (m (Symbolic m) -> m (Symbolic m))
+    | TClosure (Params Void) (m (Symbolic m) -> m (Symbolic m))
     | TPath
     | TBuiltin String (SThunk m -> m (Symbolic m))
     deriving Functor
