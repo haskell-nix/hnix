@@ -483,7 +483,7 @@ seq_ a b = a >> b
 deepSeq :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 deepSeq a b = do
     -- We evaluate 'a' only for its effects, so data cycles are ignored.
-    _ <- normalFormBy (forceEffects . coerce) =<< a
+    _ <- normalFormBy (forceEffects . coerce) 0 =<< a
 
     -- Then we evaluate the other argument to deepseq, thus this function
     -- should always produce a result (unlike applying 'deepseq' on infinitely
