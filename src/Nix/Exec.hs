@@ -12,6 +12,7 @@
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -353,11 +354,51 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
     listDirectory         = liftIO . System.Directory.listDirectory
     getSymbolicLinkStatus = liftIO . System.Posix.Files.getSymbolicLinkStatus
 
-    derivationStrict v = do
-        v' <- normalForm v
+    derivationStrict = fromValue @(ValueSet (Lazy m)) >=> \s -> do
+        ignoreNulls <- case M.lookup "__ignoreNulls" s of
+            Nothing -> pure False
+            Just v  -> fromNix v
+        v' <- normalForm
+            =<< toNix @(ValueSet (Lazy m)) . M.fromList
+            =<< mapMaybeM
+                (\(k, v) -> fmap (k,) <$> case k of
+                    "args" -> fmap Just $ thunk $ toNix =<< fromNix @[Text] v
+                    "__ignoreNulls" -> pure Nothing
+                    _ -> force v $ \case
+                        NVConstant NNull | ignoreNulls -> pure Nothing
+                        v' -> fmap Just $ thunk $
+                            toNix =<< (Text.pack <$> specialToString v'))
+                (M.toList s)
         nixInstantiateExpr $ "derivationStrict " ++ show (prettyNixValue v')
+      where
+        mapMaybeM :: (a -> Lazy m (Maybe b)) -> [a] -> Lazy m [b]
+        mapMaybeM op = foldr f (return [])
+          where
+              f x xs = do
+                  x <- op x
+                  case x of
+                      Nothing -> xs
+                      Just x -> do
+                          xs <- xs
+                          return $ x:xs
+
+        specialToString :: NValue (Lazy m) -> Lazy m String
+        specialToString = \case
+            NVConstant (NBool b)
+                | b -> pure "1"
+                | otherwise -> pure ""
+            NVConstant (NInt n) -> pure $ show n
+            NVConstant (NFloat n) -> pure $ show n
+            NVConstant NNull -> pure ""
+            NVList l -> unwords <$> traverse (`force` specialToString) l
+            NVStr t _ -> pure $ Text.unpack t
+            NVPath p -> unStorePath <$> addPath p
+            NVSet s _ | Just p <- M.lookup "outPath" s -> force p specialToString
+            v -> throwError $ "Expected a string, but saw: " ++ show v
 
     nixInstantiateExpr expr = do
+        liftIO $ putStrLn $ "Executing: "
+            ++ show ["nix-instantiate", "--eval", "--expr ", expr]
         (exitCode, out, _) <-
             liftIO $ readProcessWithExitCode "nix-instantiate"
                 [ "--eval", "--expr", expr] ""
