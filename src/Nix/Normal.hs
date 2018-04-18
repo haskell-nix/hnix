@@ -1,6 +1,5 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -9,6 +8,7 @@
 
 module Nix.Normal where
 
+import           Control.Monad
 import           Data.Fix
 import qualified Data.HashMap.Lazy as M
 import           Data.Text (Text)
@@ -20,21 +20,33 @@ import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 
-normalFormBy :: Monad m
-             => (forall r. NThunk m -> (NValue m -> m r) -> m r) -> NValue m
+normalFormBy :: (Framed e m, MonadVar m, MonadFile m)
+             => (forall r. NThunk m -> (NValue m -> m r) -> m r)
+             -> Int
+             -> NValue m
              -> m (NValueNF m)
-normalFormBy k = \case
-    NVConstant a     -> return $ Fix $ NVConstant a
-    NVStr t s        -> return $ Fix $ NVStr t s
-    NVList l         -> Fix . NVList <$> traverse (`k` normalFormBy k) l
-    NVSet s p        -> Fix . flip NVSet p <$> traverse (`k` normalFormBy k) s
-    NVClosure p f    -> return $ Fix $ NVClosure p f
-    NVPath fp        -> return $ Fix $ NVPath fp
-    NVBuiltin name f -> return $ Fix $ NVBuiltin name f
+normalFormBy k n v = do
+    traceM $ replicate n ' ' ++ "normalFormBy: " ++ show v
+    when (n > 2000) $ throwError "<<loop during normalization>>"
+    case v of
+        NVConstant a     -> return $ Fix $ NVConstant a
+        NVStr t s        -> return $ Fix $ NVStr t s
+        NVList l         ->
+            fmap (Fix . NVList) $ forM (zip [0..] l) $ \(i :: Int, t) -> do
+                traceM $ replicate n ' ' ++ "normalFormBy: List[" ++ show i ++ "]"
+                t `k` normalFormBy k (succ n)
+        NVSet s p        ->
+            fmap (Fix . flip NVSet p) $ sequence $ flip M.mapWithKey s $ \key t -> do
+                traceM $ replicate n ' ' ++ "normalFormBy: Set{" ++ show key ++ "}"
+                t `k` normalFormBy k (succ n)
+        NVClosure p f    -> return $ Fix $ NVClosure p f
+        NVPath fp        -> return $ Fix $ NVPath fp
+        NVBuiltin name f -> return $ Fix $ NVBuiltin name f
 
-normalForm :: (MonadThunk (NValue m) (NThunk m) m)
+normalForm :: (Framed e m, MonadVar m, MonadFile m,
+               MonadThunk (NValue m) (NThunk m) m)
            => NValue m -> m (NValueNF m)
-normalForm = normalFormBy force
+normalForm = normalFormBy force 0
 
 embed :: forall m. (MonadThunk (NValue m) (NThunk m) m)
       => NValueNF m -> m (NValue m)
