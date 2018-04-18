@@ -20,7 +20,6 @@ import           Data.Monoid (Endo)
 import           Data.Text (Text)
 import qualified Data.Vector as V
 
--- #define ENABLE_TRACING 1
 #if ENABLE_TRACING
 import           Debug.Trace as X
 #else
