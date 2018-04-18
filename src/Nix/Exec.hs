@@ -323,12 +323,9 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
             Nothing  -> do
                 traceM "No known current directory"
                 return path
-            Just p -> force p $ normalForm >=> \case
-                Fix (NVPath p') -> do
-                    traceM $ "Current file being evaluated is: "
-                        ++ show p'
-                    return $ takeDirectory p' </> path
-                x -> error $ "How can the current directory be: " ++ show x
+            Just p -> fromValue @_ @_ @(NThunk (Lazy m)) p >>= \(Path p') -> do
+                traceM $ "Current file being evaluated is: " ++ show p'
+                return $ takeDirectory p' </> path
 
         traceM $ "Importing file " ++ path'
 
