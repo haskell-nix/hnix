@@ -186,10 +186,8 @@ attrSetAlter (p:ps) m val = case M.lookup p m of
         | otherwise -> recurse M.empty
     Just x
         | null ps   -> go
-        | otherwise -> x >>= \v -> fromValueMay v >>= \case
-              Just (s :: AttrSet t) -> recurse (force ?? pure <$> s)
-              _ -> evalError @v $ "attribute " ++ show p
-                      ++ " is not a set, but a " ++ show v
+        | otherwise ->
+          x >>= fromValue >>= \s -> recurse (force ?? pure <$> s)
   where
     go = return $ M.insert p val m
 
@@ -226,8 +224,8 @@ evalBinds :: forall e v t m. MonadNixEval e v t m
           -> [Binding (m v)]
           -> m (AttrSet t, AttrSet SourcePos)
 evalBinds allowDynamic recursive binds = do
-    outsideScope <- currentScopes @_ @t
-    buildResult . concat =<< mapM (go outsideScope) (moveOverridesLast binds)
+    scope <- currentScopes @_ @t
+    buildResult scope . concat =<< mapM (go scope) (moveOverridesLast binds)
   where
     moveOverridesLast = (\(x, y) -> y ++ x) .
         partition (\case NamedVar (StaticKey "__overrides" _ :| []) _ -> True
@@ -235,12 +233,9 @@ evalBinds allowDynamic recursive binds = do
 
     go :: Scopes m t -> Binding (m v) -> m [([Text], Maybe SourcePos, m v)]
     go _ (NamedVar (StaticKey "__overrides" _ :| []) finalValue) =
-        finalValue >>= \v -> fromValueMay v >>= \case
-            Just (o', p') ->
-                return $ map (\(k, v) -> ([k], M.lookup k p', force v pure))
-                             (M.toList o')
-            _ -> evalError @v $ "__overrides must be a set, but saw: "
-                    ++ show v
+        finalValue >>= fromValue >>= \(o', p') ->
+            return $ map (\(k, v) -> ([k], M.lookup k p', force v pure))
+                         (M.toList o')
 
     go _ (NamedVar pathExpr finalValue) = do
         let go :: NAttrPath (m v) -> m ([Text], Maybe SourcePos, m v)
@@ -260,12 +255,12 @@ evalBinds allowDynamic recursive binds = do
             ([], _, _) -> []
             result -> [result]
 
-    go outsideScope (Inherit ms names) = fmap catMaybes $ forM names $ \name ->
+    go scope (Inherit ms names) = fmap catMaybes $ forM names $ \name ->
         evalSetterKeyName allowDynamic name >>= \case
             (Nothing, _) -> return Nothing
             (Just key, pos) -> return $ Just ([key], pos, do
                 mv <- case ms of
-                    Nothing -> withScopes outsideScope $ lookupVar key
+                    Nothing -> withScopes scope $ lookupVar key
                     Just s -> s >>= fromValue @(AttrSet t) >>= \s ->
                         clearScopes @t $ pushScope s $ lookupVar key
                 case mv of
@@ -273,13 +268,13 @@ evalBinds allowDynamic recursive binds = do
                         ++ show (void name)
                     Just v -> force v pure)
 
-    buildResult :: [([Text], Maybe SourcePos, m v)]
+    buildResult :: Scopes m t
+                -> [([Text], Maybe SourcePos, m v)]
                 -> m (AttrSet t, AttrSet SourcePos)
-    buildResult bindings = do
+    buildResult scope bindings = do
         s <- foldM insert M.empty bindings
-        scope <- currentScopes @_ @t
         res <- if recursive
-               then loebM (encapsulate scope <$> s)
+               then loebM (encapsulate <$> s)
                else traverse (thunk . withScopes scope) s
         return (res, foldl' go M.empty bindings)
       where
@@ -287,10 +282,10 @@ evalBinds allowDynamic recursive binds = do
         go m ([k], Just pos, _) = M.insert k pos m
         go m _ = m
 
-    encapsulate scope f attrs =
-        thunk . withScopes scope . pushScope attrs $ f
+        encapsulate f attrs =
+            thunk . withScopes scope . pushScope attrs $ f
 
-    insert m (path, _, value) = attrSetAlter path m value
+        insert m (path, _, value) = attrSetAlter path m value
 
 evalSelect :: forall e v t m. MonadNixEval e v t m
            => m v
