@@ -21,6 +21,21 @@ $ cabal test
 $ LANGUAGE_TESTS=yes NIXPKGS_TESTS=yes cabal test
 $ ./dist/build/hnix/hnix --help
 ```
+## Building with full debug info
+
+To build `hnix` for debugging, and with full tracing output and stack traces,
+use:
+
+```
+$ nix-shell --arg doProfiling true
+$ cabal configure --enable-tests --enable-profiling --flags=tracing
+$ cabal build
+$ ./dist/build/hnix/hnix -v5 <args> +RTS -xc
+```
+
+Note that this will run quite slowly, but will give the most information as to
+what might potentially be going wrong during parsing or evaluation.
+
 ## Building with benchmarks enabled
 
 To build `hnix` with benchmarks enabled:
@@ -31,7 +46,6 @@ $ cabal configure --enable-tests --enable-benchmarks
 $ cabal build
 $ cabal bench
 ```
-
 
 ## Building with profiling enabled
 

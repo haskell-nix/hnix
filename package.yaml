@@ -36,6 +36,16 @@ ghc-options:
   # - -fexpose-all-unfoldings
   # - -O2
 
+flags:
+  tracing:
+    description: Enable full debug tracing
+    manual: True
+    default: False
+
+when:
+  - condition: flag(tracing)
+    cpp-options: -DENABLE_TRACING=1
+
 library:
   source-dirs: src
   dependencies:

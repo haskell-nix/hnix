@@ -55,7 +55,7 @@ valueRef = Value
 buildThunk :: MonadVar m => m v -> m (Thunk m v)
 buildThunk action =
 #if ENABLE_TRACING
-    let !x = unsafePerformIO (atomicModifyIORef' counter (\x -> (succ x, x))) in
+    let !x = unsafePerformIO (atomicModifyIORef' counter (\c -> (succ c, c))) in
     Thunk x
 #else
     Thunk

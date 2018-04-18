@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7880788afb8b7755b22c9bd91a3c47598fe26b9a643b2bb55816331ae179aa50
+-- hash: c030de7d44eabbd21ae044bd9108da5b34d7e3feaf8a8facbc9383c85e382186
 
 name:           hnix
 version:        0.5.0
@@ -24,6 +24,11 @@ extra-source-files:
 source-repository head
   type: git
   location: https://github.com/jwiegley/hnix
+
+flag tracing
+  description: Enable full debug tracing
+  manual: True
+  default: False
 
 library
   exposed-modules:
@@ -103,6 +108,8 @@ library
     , unordered-containers >=0.2.9 && <0.3
     , vector
     , xml
+  if flag(tracing)
+    cpp-options: -DENABLE_TRACING=1
   default-language: Haskell2010
 
 executable hnix
@@ -133,6 +140,8 @@ executable hnix
     , text
     , transformers
     , unordered-containers >=0.2.9 && <0.3
+  if flag(tracing)
+    cpp-options: -DENABLE_TRACING=1
   default-language: Haskell2010
 
 test-suite hnix-tests
@@ -175,6 +184,8 @@ test-suite hnix-tests
     , transformers
     , unix
     , unordered-containers >=0.2.9 && <0.3
+  if flag(tracing)
+    cpp-options: -DENABLE_TRACING=1
   default-language: Haskell2010
 
 benchmark hnix-benchmarks
@@ -205,4 +216,6 @@ benchmark hnix-benchmarks
     , text
     , transformers
     , unordered-containers >=0.2.9 && <0.3
+  if flag(tracing)
+    cpp-options: -DENABLE_TRACING=1
   default-language: Haskell2010

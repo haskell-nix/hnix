@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -25,7 +26,11 @@ import           Nix.Parser.Library (reservedNames)
 import           Nix.Parser.Operators
 import           Nix.StringOperations
 import           Nix.Thunk
+#if ENABLE_TRACING
+import           Nix.Utils
+#else
 import           Nix.Utils hiding ((<$>))
+#endif
 import           Nix.Value
 import           Prelude hiding ((<$>))
 import           Text.PrettyPrint.ANSI.Leijen
