@@ -292,9 +292,11 @@ all_ fun xs = fun >>= \f ->
 
 foldl'_ :: forall e m. MonadBuiltins e m
         => m (NValue m) -> m (NValue m) -> m (NValue m) -> m (NValue m)
-foldl'_ fun z xs = fun >>= \f ->
-    fromValue @[NThunk m] xs >>=
-        foldl' (\b a -> f `callFunc` force' a >>= (`callFunc` b)) z
+foldl'_ fun z xs =
+    fun >>= \f -> fromValue @[NThunk m] xs >>= foldl' (go f) z
+  where
+    go f b a = b >>= \b' ->
+        f `callFunc` pure b' >>= (`callFunc` force' a)
 
 head_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
 head_ = fromValue >=> \case

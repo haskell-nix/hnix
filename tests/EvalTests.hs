@@ -126,6 +126,18 @@ case_fixed_points =
     in [ (fix f) (fix (extends g f)) ]
 |]
 
+case_fixed_points_and_fold =
+    constantEqualText' [i|[ {} {} ]|] [i|
+let
+  extends = f: rattrs: self:
+    let super = rattrs self; in super // f self super;
+  flip = f: a: b: f b a;
+  toFixFold = builtins.foldl' (flip extends) (self: {}) ([(self: super: {})]);
+  toFix = extends (self: super: {}) (self: {});
+  fix = f: let x = f x; in x;
+in [ (fix toFixFold) (fix toFix) ]
+|]
+
 -----------------------
 
 tests :: TestTree
