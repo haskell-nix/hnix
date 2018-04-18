@@ -147,8 +147,8 @@ builtinsList = sequence [
     , add' Normal   "substring"                  substring
     , add' Normal   "stringLength"               (arity1 Text.length)
     , add  Normal   "length"                     length_
-    , add' Normal   "attrNames"                  (arity1 (attrNames @m))
-    , add' Normal   "attrValues"                 (arity1 (attrValues @m))
+    , add  Normal   "attrNames"                  attrNames
+    , add  Normal   "attrValues"                 attrValues
     , add2 Normal   "catAttrs"                   catAttrs
     , add' Normal   "concatStringsSep"           (arity2 Text.intercalate)
     , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
@@ -435,11 +435,12 @@ substring start len str = Prim $
     then throwError $ "builtins.substring: negative start position: " ++ show start
     else pure $ Text.take len $ Text.drop start str
 
-attrNames :: ValueSet m -> [Text]
-attrNames = sort . M.keys
+attrNames :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
+attrNames = fromValue @(ValueSet m) >=> toNix . sort . M.keys
 
-attrValues :: forall m. ValueSet m -> [NThunk m]
-attrValues = fmap snd . sortOn (fst @Text @(NThunk m)) . M.toList
+attrValues :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m)
+attrValues = fromValue @(ValueSet m) >=>
+    toValue . fmap snd . sortOn (fst @Text @(NThunk m)) . M.toList
 
 map_ :: forall e m. MonadBuiltins e m
      => m (NValue m) -> m (NValue m) -> m (NValue m)
