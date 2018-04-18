@@ -43,6 +43,7 @@ import           Nix.Convert
 import           Nix.Eval
 import qualified Nix.Eval as Eval
 import           Nix.Expr
+import           Nix.Options
 import           Nix.Scope
 import           Nix.Stack
 import           Nix.Thunk
@@ -414,12 +415,12 @@ instance MonadFile (Lint s) where
 instance MonadThrow (Lint s) where
     throwM e = Lint $ ReaderT $ \_ -> unsafeIOToST $ throw e
 
-runLintM :: Lint s a -> ST s a
-runLintM = flip runReaderT newContext . runLint
+runLintM :: Options -> Lint s a -> ST s a
+runLintM opts = flip runReaderT (newContext opts) . runLint
 
 symbolicBaseEnv :: Monad m => m (Scopes m (SThunk m))
 symbolicBaseEnv = return emptyScopes
 
-lint :: NExprLoc -> ST s (Symbolic (Lint s))
-lint expr = runLintM $
+lint :: Options -> NExprLoc -> ST s (Symbolic (Lint s))
+lint opts expr = runLintM opts $
     symbolicBaseEnv >>= (`pushScopes` Eval.framedEvalExpr Eval.eval expr)

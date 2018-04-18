@@ -62,7 +62,8 @@ main = do
 
     process opts mpath expr = do
         when (check opts) $
-            putStrLn $ runST $ runLintM . renderSymbolic =<< lint expr
+            putStrLn $ runST $
+                runLintM opts . renderSymbolic =<< lint opts expr
 
         let printer :: (MonadNix e m, MonadIO m) => NValue m -> m ()
             printer | xml opts =
@@ -75,17 +76,16 @@ main = do
                              <=< fromNix
                     | otherwise = liftIO . print
 
-        if | evaluate opts, debug opts ->
-                 runLazyM $ evaluateExpression opts mpath
+        if | evaluate opts, verbose opts >= Debug ->
+                 runLazyM opts $ evaluateExpression mpath
                      Nix.tracingEvalLoc printer expr
 
            | evaluate opts, not (null (arg opts) && null (argstr opts)) ->
-                 runLazyM $ evaluateExpression opts mpath
+                 runLazyM opts $ evaluateExpression mpath
                      Nix.evalLoc printer expr
 
-           | evaluate opts -> runLazyM $
-                 processResult opts printer
-                     =<< Nix.evalLoc mpath (include opts) expr
+           | evaluate opts -> runLazyM opts $
+                 processResult printer =<< Nix.evalLoc mpath expr
 
            | xml opts ->
                  error "Rendering expression trees to XML is not yet implemented"
@@ -93,7 +93,7 @@ main = do
            | json opts ->
                  TL.putStrLn $ A.encodeToLazyText (stripAnnotation expr)
 
-           | debug opts -> print $ stripAnnotation expr
+           | verbose opts >= Debug -> print $ stripAnnotation expr
 
            | cache opts, Just path <- mpath -> do
                 let file = addExtension (dropExtension path) "nixc"

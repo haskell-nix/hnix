@@ -68,46 +68,39 @@ genTests = do
         testGroup (unwords kind) $ map (mkTestCase kind) tests
     mkTestCase kind (basename, files) =
         testCase (takeFileName basename) $ case kind of
-            ["parse", "okay"] -> assertParse $ the files
-            ["parse", "fail"] -> assertParseFail $ the files
+            ["parse", "okay"] -> assertParse defaultOptions $ the files
+            ["parse", "fail"] -> assertParseFail defaultOptions $ the files
             ["eval", "okay"] -> assertEval files
             ["eval", "fail"] -> assertEvalFail $ the files
             _ -> error $ "Unexpected: " ++ show kind
 
-assertParse :: FilePath -> Assertion
-assertParse file = parseNixFileLoc file >>= \case
+assertParse :: Options -> FilePath -> Assertion
+assertParse _opts file = parseNixFileLoc file >>= \case
   -- jww (2018-04-10): TODO
-  Success _expr -> return () -- pure $! runST $ void $ lint expr
+  Success _expr -> return () -- pure $! runST $ void $ lint opts expr
   Failure err  ->
       assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
 
-assertParseFail :: FilePath -> Assertion
-assertParseFail file = do
+assertParseFail :: Options -> FilePath -> Assertion
+assertParseFail opts file = do
     eres <- parseNixFileLoc file
     catch (case eres of
                Success expr -> do
-                   _ <- pure $! runST $ void $ lint expr
+                   _ <- pure $! runST $ void $ lint opts expr
                    assertFailure $ "Unexpected success parsing `"
                        ++ file ++ ":\nParsed value: " ++ show expr
                Failure _ -> return ()) $ \(_ :: SomeException) ->
         return ()
 
-assertLangOk :: FilePath -> [String] -> Assertion
-assertLangOk file incls = do
-  actual <- printNix <$> hnixEvalFile (file ++ ".nix") incls
+assertLangOk :: Options -> FilePath -> Assertion
+assertLangOk opts file = do
+  actual <- printNix <$> hnixEvalFile opts (file ++ ".nix")
   expected <- Text.readFile $ file ++ ".exp"
   assertEqual "" expected $ Text.pack (actual ++ "\n")
 
--- jww (2018-04-15): Remove this duplication
-assertLangOkOpts :: Options -> FilePath -> Assertion
-assertLangOkOpts opts file = do
-  actual <- printNix <$> hnixEvalFileOpts opts (file ++ ".nix")
-  expected <- Text.readFile $ file ++ ".exp"
-  assertEqual "" expected $ Text.pack (actual ++ "\n")
-
-assertLangOkXml :: FilePath -> [String] -> Assertion
-assertLangOkXml file incls = do
-  actual <- toXML <$> hnixEvalFile (file ++ ".nix") incls
+assertLangOkXml :: Options -> FilePath -> Assertion
+assertLangOkXml opts file = do
+  actual <- toXML <$> hnixEvalFile opts (file ++ ".nix")
   expected <- Text.readFile $ file ++ ".exp.xml"
   assertEqual "" expected $ Text.pack actual
 
@@ -116,8 +109,8 @@ assertEval files = catch go $ \case
     NixEvalException str -> error $ "Evaluation error: " ++ str
   where
     go = case delete ".nix" $ sort $ map takeExtensions files of
-        [] -> assertLangOkXml name []
-        [".exp"] -> assertLangOk name []
+        [] -> assertLangOkXml defaultOptions name
+        [".exp"] -> assertLangOk defaultOptions name
         [".exp.disabled"] -> return ()
         [".exp-disabled"] -> return ()
         [".exp", ".flags"] -> do
@@ -130,7 +123,7 @@ assertEval files = catch go $ \case
                     "Error parsing flags from " ++ name ++ ".flags: "
                         ++ show err
                 Opts.Success opts ->
-                    assertLangOkOpts
+                    assertLangOk
                         (opts { include = include opts ++
                                   [ "nix=../../../../data/nix/corepkgs"
                                   , "lang/dir4" ] })
@@ -148,7 +141,7 @@ assertEval files = catch go $ \case
 
 assertEvalFail :: FilePath -> Assertion
 assertEvalFail file = catch ?? (\(_ :: SomeException) -> return ()) $ do
-  evalResult <- printNix <$> hnixEvalFile file []
+  evalResult <- printNix <$> hnixEvalFile defaultOptions file
   evalResult `seq` assertFailure $
       file ++ " should not evaluate.\nThe evaluation result was `"
            ++ evalResult ++ "`."

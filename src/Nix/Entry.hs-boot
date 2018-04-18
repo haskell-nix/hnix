@@ -24,15 +24,15 @@ type MonadNix e m =
 
 evalTopLevelExprGen
     :: forall e m a. MonadNix e m
-    => (a -> m (NValue m)) -> Maybe FilePath -> [String] -> a
+    => (a -> m (NValue m)) -> Maybe FilePath -> a
     -> m (NValue m)
 
 eval :: forall e m. MonadNix e m
-     => Maybe FilePath -> [String] -> NExpr -> m (NValue m)
+     => Maybe FilePath -> NExpr -> m (NValue m)
 
 evalLoc :: forall e m. MonadNix e m
-                    => Maybe FilePath -> [String] -> NExprLoc -> m (NValue m)
+        => Maybe FilePath -> NExprLoc -> m (NValue m)
 
 tracingEvalLoc
     :: forall e m. (MonadNix e m, Alternative m, MonadIO m)
-    => Maybe FilePath -> [String] -> NExprLoc -> m (NValue m)
+    => Maybe FilePath -> NExprLoc -> m (NValue m)

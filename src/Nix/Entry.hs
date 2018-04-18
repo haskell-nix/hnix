@@ -14,6 +14,7 @@ import           Control.Arrow (second)
 import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
+import           Control.Monad.Reader
 import           Data.Fix
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Text as Text
@@ -41,13 +42,14 @@ type MonadNix e m =
 -- | Evaluate a nix expression in the default context
 evalTopLevelExprGen
     :: forall e m a. MonadNix e m
-    => (a -> m (NValue m)) -> Maybe FilePath -> [String] -> a
+    => (a -> m (NValue m)) -> Maybe FilePath -> a
     -> m (NValue m)
-evalTopLevelExprGen cont mpath incls expr = do
+evalTopLevelExprGen cont mpath expr = do
     base <- baseEnv
+    opts :: Options <- asks (view hasLens)
     let i = value @(NValue m) @(NThunk m) @m $ NVList $
             map (value @(NValue m) @(NThunk m) @m
-                     . flip NVStr mempty . Text.pack) incls
+                     . flip NVStr mempty . Text.pack) (include opts)
     pushScope (M.singleton "__includes" i) $
         pushScopes base $ case mpath of
             Nothing -> cont expr
@@ -58,34 +60,34 @@ evalTopLevelExprGen cont mpath incls expr = do
 
 -- | Evaluate a nix expression in the default context
 eval :: forall e m. MonadNix e m
-     => Maybe FilePath -> [String] -> NExpr -> m (NValue m)
+     => Maybe FilePath -> NExpr -> m (NValue m)
 eval = evalTopLevelExprGen $
     Eval.evalExpr @_ @(NValue m) @(NThunk m) @m
 
 -- | Evaluate a nix expression in the default context
 evalLoc :: forall e m. MonadNix e m
-        => Maybe FilePath -> [String] -> NExprLoc -> m (NValue m)
+        => Maybe FilePath -> NExprLoc -> m (NValue m)
 evalLoc = evalTopLevelExprGen $
     Eval.framedEvalExpr (Eval.eval @_ @(NValue m) @(NThunk m) @m)
 
 tracingEvalLoc
     :: forall e m. (MonadNix e m, Alternative m, MonadIO m)
-    => Maybe FilePath -> [String] -> NExprLoc -> m (NValue m)
-tracingEvalLoc mpath incls expr =
-    evalTopLevelExprGen id mpath incls
+    => Maybe FilePath -> NExprLoc -> m (NValue m)
+tracingEvalLoc mpath expr =
+    evalTopLevelExprGen id mpath
         =<< Eval.tracingEvalExpr @_ @m @_ @(NValue m)
                 (Eval.eval @_ @(NValue m)
                            @(NThunk m) @m) expr
 
 evaluateExpression
     :: forall e m a. MonadNix e m
-    => Options
-    -> Maybe FilePath
-    -> (Maybe FilePath -> [String] -> NExprLoc -> m (NValue m))
+    => Maybe FilePath
+    -> (Maybe FilePath -> NExprLoc -> m (NValue m))
     -> (NValue m -> m a)
     -> NExprLoc
     -> m a
-evaluateExpression opts mpath evaluator handler expr = do
+evaluateExpression mpath evaluator handler expr = do
+    opts :: Options <- asks (view hasLens)
     args <- traverse (traverse eval') $
         map (second parseArg) (arg opts) ++
         map (second mkStr) (argstr opts)
@@ -95,21 +97,23 @@ evaluateExpression opts mpath evaluator handler expr = do
         Success x -> x
         Failure err -> errorWithoutStackTrace (show err)
 
-    eval' = (normalForm =<<) . eval mpath (include opts)
+    eval' = (normalForm =<<) . eval mpath
 
     argmap args = embed $ Fix $ NVSet (M.fromList args) mempty
 
     compute ev x args p = do
-         f <- ev mpath (include opts) x
-         processResult opts p =<< case f of
+         f <- ev mpath x
+         processResult p =<< case f of
              NVClosure _ g -> g args
              _ -> pure f
 
 processResult :: forall e m a. MonadNix e m
-              => Options -> (NValue m -> m a) -> NValue m -> m a
-processResult opts h = case attr opts of
-    Nothing -> h
-    Just (Text.splitOn "." -> keys) -> go keys
+              => (NValue m -> m a) -> NValue m -> m a
+processResult h val = do
+    opts :: Options <- asks (view hasLens)
+    case attr opts of
+        Nothing -> h val
+        Just (Text.splitOn "." -> keys) -> go keys val
   where
     go :: [Text.Text] -> NValue m -> m a
     go [] v = h v

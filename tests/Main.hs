@@ -16,6 +16,7 @@ import qualified EvalTests
 import qualified Nix
 import           Nix.Exec
 import           Nix.Expr.Types
+import           Nix.Options
 import           Nix.Parser
 import           Nix.Stack
 import           Nix.Value
@@ -56,7 +57,7 @@ ensureNixpkgsCanParse =
           url    = "https://github.com/NixOS/nixpkgs/archive/#{rev}.tar.gz";
           sha256 = "#{sha256}";
         }|]) $ \expr -> do
-        NVStr dir _ <- runLazyM $ Nix.evalLoc Nothing [] expr
+        NVStr dir _ <- runLazyM defaultOptions $ Nix.evalLoc Nothing expr
         files <- globDir1 (compile "**/*.nix") (unpack dir)
         forM_ files $ \file ->
           -- Parse and deepseq the resulting expression tree, to ensure the

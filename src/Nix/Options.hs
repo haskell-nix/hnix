@@ -1,14 +1,15 @@
 module Nix.Options where
 
 import           Control.Arrow (second)
+import           Data.Char (isDigit)
+import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Options.Applicative hiding (ParserResult(..))
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 data Options = Options
-    { verbose      :: Bool
-    , debug        :: Bool
+    { verbose      :: Verbosity
     , parse        :: Bool
     , parseOnly    :: Bool
     , findFile     :: Maybe FilePath
@@ -31,6 +32,47 @@ data Options = Options
     }
     deriving Show
 
+defaultOptions :: Options
+defaultOptions = Options
+    { verbose      = ErrorsOnly
+    , parse        = False
+    , parseOnly    = False
+    , findFile     = Nothing
+    , strict       = False
+    , evaluate     = False
+    , json         = False
+    , xml          = False
+    , attr         = Nothing
+    , include      = []
+    , check        = False
+    , readFrom     = Nothing
+    , cache        = False
+    , repl         = False
+    , ignoreErrors = False
+    , expression   = Nothing
+    , arg          = []
+    , argstr       = []
+    , fromFile     = Nothing
+    , filePaths    = []
+    }
+
+data Verbosity
+    = ErrorsOnly
+    | Informational
+    | Talkative
+    | Chatty
+    | Debug
+    | Vomit
+    deriving (Eq, Ord, Enum, Bounded, Show)
+
+decodeVerbosity :: Int -> Verbosity
+decodeVerbosity 0 = ErrorsOnly
+decodeVerbosity 1 = Informational
+decodeVerbosity 2 = Talkative
+decodeVerbosity 3 = Chatty
+decodeVerbosity 4 = Debug
+decodeVerbosity _ = Vomit
+
 argPair :: Mod OptionFields (Text, Text) -> Parser (Text, Text)
 argPair = option $ str >>= \s ->
     case Text.findIndex (== '=') s of
@@ -40,14 +82,15 @@ argPair = option $ str >>= \s ->
 
 nixOptions :: Parser Options
 nixOptions = Options
-    <$> switch
-        (   short 'v'
-         <> long "verbose"
-         <> help "Verbose output")
-    <*> switch
-        (   short 'd'
-         <> long "debug"
-         <> help "Debug output")
+    <$> (fromMaybe ErrorsOnly <$>
+         optional
+           (option (do a <- str
+                       if all isDigit a
+                       then pure $ decodeVerbosity (read a)
+                       else fail "Argument to -v/--verbose must be a number")
+            (   short 'v'
+             <> long "verbose"
+             <> help "Verbose output")))
     <*> switch
         (   long "parse"
          <> help "Whether to parse the file (also the default right now)")

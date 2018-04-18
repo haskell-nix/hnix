@@ -410,20 +410,20 @@ tracingEvalExpr eval =
     flip runReaderT (0 :: Int)
         . adiM (pure <$> eval . annotated . getCompose) psi
   where
-    psi k v@(Fix x) = do
+    psi k v = do
         depth <- ask
         guard (depth < 200)
         liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' '
             ++ show (stripAnnotation v)
         res <- local succ $
-            fmap (withExprContext (void x)) (k v)
+            fmap (withExprContext v) (k v)
         liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' ' ++ "."
         return res
 
 framedEvalExpr :: Framed e m => (NExprF (m v) -> m v) -> NExprLoc -> m v
 framedEvalExpr eval = adi (eval . annotated . getCompose) psi
   where
-    psi k v@(Fix x) = withExprContext (void x) (k v)
+    psi k v = withExprContext v (k v)
 
 -----
 

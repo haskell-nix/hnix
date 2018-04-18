@@ -51,6 +51,7 @@ import           Nix.Eval
 import qualified Nix.Eval as Eval
 import           Nix.Expr
 import           Nix.Normal
+import           Nix.Options
 import           Nix.Parser
 import           Nix.Pretty
 import           Nix.Scope
@@ -80,7 +81,7 @@ instance MonadNix e m => MonadEval (NValue m) m where
         nverr $ "Undefined variable '" ++ Text.unpack var ++ "'"
 
     evalCurPos = do
-        Compose (Ann (SrcSpan delta _) _):_ <-
+        Fix (Compose (Ann (SrcSpan delta _) _)) : _ <-
             asks (mapMaybe (either (const Nothing) Just)
                  . view @_ @Frames hasLens)
         toValue delta
@@ -106,8 +107,8 @@ instance MonadNix e m => MonadEval (NValue m) m where
 infixl 1 `callFunc`
 callFunc :: MonadNix e m => NValue m -> m (NValue m) -> m (NValue m)
 callFunc fun arg = case fun of
-    NVClosure _ f -> do
-        traceM "callFunc:NVFunction"
+    NVClosure params f -> do
+        traceM $ "callFunc:NVFunction taking " ++ show params
         f arg
     NVBuiltin name f -> do
         traceM $ "callFunc:NVBuiltin " ++ name
@@ -364,8 +365,8 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
                     Success v -> framedEvalExpr Eval.eval v
             err -> throwError $ "nix-instantiate failed: " ++ show err
 
-runLazyM :: MonadIO m => Lazy m a -> m a
-runLazyM = flip runReaderT newContext . runLazy
+runLazyM :: Options -> MonadIO m => Lazy m a -> m a
+runLazyM opts = flip runReaderT (newContext opts) . runLazy
 
 -- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
 --   This is incorrect on POSIX systems, because if @b@ is a symlink, its

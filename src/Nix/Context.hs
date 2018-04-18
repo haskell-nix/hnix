@@ -4,20 +4,25 @@
 
 module Nix.Context where
 
+import Nix.Options
 import Nix.Scope
 import Nix.Stack
 import Nix.Utils
 
 data Context m v = Context
-    { scopes :: Scopes m v
-    , frames :: Frames
+    { scopes  :: Scopes m v
+    , frames  :: Frames
+    , options :: Options
     }
 
 instance Has (Context m v) (Scopes m v) where
-    hasLens f (Context x y) = (\x' -> Context x' y) <$> f x
+    hasLens f (Context x y z) = (\x' -> Context x' y z) <$> f x
 
 instance Has (Context m v) Frames where
-    hasLens f (Context x y) = (\y' -> Context x y') <$> f y
+    hasLens f (Context x y z) = (\y' -> Context x y' z) <$> f y
 
-newContext :: Context m v
+instance Has (Context m v) Options where
+    hasLens f (Context x y z) = (\z' -> Context x y z') <$> f z
+
+newContext :: Options -> Context m v
 newContext = Context emptyScopes []

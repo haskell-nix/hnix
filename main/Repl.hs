@@ -87,7 +87,7 @@ exec update source = do
   when update (put st')
 
   -- If a value is entered, print it.
-  val <- liftIO $ runLazyM $
+  val <- liftIO $ runLazyM defaultOptions $
       evalTopLevelExprGen
           -- jww (2018-04-12): Once the user is able to establish definitions
           -- in the repl, they should be passed here.
@@ -95,7 +95,7 @@ exec update source = do
                . framedEvalExpr
                      (Nix.Eval.eval @_ @(NValue (Lazy IO))
                                     @(NThunk (Lazy IO)) @(Lazy IO)))
-          Nothing [] expr
+          Nothing expr
   liftIO $ print val
 
 cmd :: String -> Repl ()
