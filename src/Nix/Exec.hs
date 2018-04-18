@@ -395,7 +395,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
             v -> throwError $ "Expected a string, but saw: " ++ show v
 
     nixInstantiateExpr expr = do
-        liftIO $ putStrLn $ "Executing: "
+        traceM $ "Executing: "
             ++ show ["nix-instantiate", "--eval", "--expr ", expr]
         (exitCode, out, _) <-
             liftIO $ readProcessWithExitCode "nix-instantiate"
