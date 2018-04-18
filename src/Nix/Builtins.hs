@@ -202,16 +202,6 @@ builtinsList = sequence [
     add' :: ToBuiltin m a => BuiltinType -> Text -> a -> m (Builtin m)
     add' t n v = wrap t n <$> thunk (toBuiltin (Text.unpack n) v)
 
--- Helpers
-
-call1 :: MonadBuiltins e m
-      => m (NValue m) -> m (NValue m) -> m (NValue m)
-call1 f arg = f >>= callFunc ?? arg
-
-call2 :: MonadBuiltins e m
-      => m (NValue m) -> m (NValue m) -> m (NValue m) -> m (NValue m)
-call2 f arg1 arg2 = f >>= callFunc ?? arg1 >>= callFunc ?? arg2
-
 -- Primops
 
 foldNixPath :: forall e m r. MonadBuiltins e m
@@ -284,7 +274,9 @@ anyM p (x:xs)   = do
              else anyM p xs
 
 any_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
-any_ p = toNix <=< anyM fromNix <=< mapM (call1 p . force') <=< fromValue
+any_ fun xs = fun >>= \f ->
+    toNix <=< anyM fromNix <=< mapM ((f `callFunc`) . force')
+          <=< fromValue $ xs
 
 allM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 allM _ []       = return True
@@ -294,11 +286,15 @@ allM p (x:xs)   = do
              else return False
 
 all_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
-all_ p = toNix <=< allM fromNix <=< mapM (call1 p . force') <=< fromValue
+all_ fun xs = fun >>= \f ->
+    toNix <=< allM fromNix <=< mapM ((f `callFunc`) . force')
+          <=< fromValue $ xs
 
 foldl'_ :: forall e m. MonadBuiltins e m
         => m (NValue m) -> m (NValue m) -> m (NValue m) -> m (NValue m)
-foldl'_ f z = foldl' (\b a -> call2 f (force' a) b) z <=< fromValue @[NThunk m]
+foldl'_ fun z xs = fun >>= \f ->
+    fromValue @[NThunk m] xs >>=
+        foldl' (\b a -> f `callFunc` force' a >>= (`callFunc` b)) z
 
 head_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
 head_ = fromValue >=> \case
@@ -445,12 +441,14 @@ attrValues = fmap snd . sortOn (fst @Text @(NThunk m)) . M.toList
 
 map_ :: forall e m. MonadBuiltins e m
      => m (NValue m) -> m (NValue m) -> m (NValue m)
-map_ f = toNix <=< traverse (thunk . call1 f . force')
-               <=< fromValue @[NThunk m]
+map_ fun xs = fun >>= \f ->
+    toNix <=< traverse (thunk . (f `callFunc`) . force')
+          <=< fromValue @[NThunk m] $ xs
 
 filter_ :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
-filter_ f = toNix <=< filterM (fromNix <=< call1 f . force')
-                  <=< fromValue @[NThunk m]
+filter_ fun xs = fun >>= \f ->
+    toNix <=< filterM (fromNix <=< callFunc f . force')
+          <=< fromValue @[NThunk m] $ xs
 
 catAttrs :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 catAttrs attrName xs =
@@ -639,17 +637,18 @@ getEnv_ = fromNix >=> \s -> do
         Just v  -> Text.pack v
 
 sort_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
-sort_ comparator = fromValue >=> sortByM cmp >=> toValue
-    where
-      cmp a b = do
-          isLessThan <- call2 comparator (force' a) (force' b)
-          fromValue isLessThan >>= \case
-              True -> pure LT
-              False -> do
-                  isGreaterThan <- call2 comparator (force' b) (force' a)
-                  fromValue isGreaterThan <&> \case
-                      True  -> GT
-                      False -> EQ
+sort_ comparator xs = comparator >>= \comp ->
+    fromValue xs >>= sortByM (cmp comp) >>= toValue
+  where
+    cmp f a b = do
+        isLessThan <- f `callFunc` force' a >>= (`callFunc` force' b)
+        fromValue isLessThan >>= \case
+            True -> pure LT
+            False -> do
+                isGreaterThan <- f `callFunc` force' b >>= (`callFunc` force' a)
+                fromValue isGreaterThan <&> \case
+                    True  -> GT
+                    False -> EQ
 
 lessThan :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 lessThan ta tb = ta >>= \va -> tb >>= \vb -> do
@@ -813,13 +812,14 @@ fetchTarball v = v >>= \case
 
 partition_ :: forall e m. MonadBuiltins e m
            => m (NValue m) -> m (NValue m) -> m (NValue m)
-partition_ f = fromValue @[NThunk m] >=> \l -> do
-    let match t = call1 f (force' t) >>= fmap (, t) . fromNix
-    selection <- traverse match l
-    let (right, wrong) = partition fst selection
-    let makeSide = valueThunk . NVList . map snd
-    toValue @(HashMap Text (NThunk m)) $
-        M.fromList [("right", makeSide right), ("wrong", makeSide wrong)]
+partition_ fun xs = fun >>= \f ->
+    fromValue @[NThunk m] xs >>= \l -> do
+        let match t = f `callFunc` force' t >>= fmap (, t) . fromNix
+        selection <- traverse match l
+        let (right, wrong) = partition fst selection
+        let makeSide = valueThunk . NVList . map snd
+        toValue @(HashMap Text (NThunk m)) $
+            M.fromList [("right", makeSide right), ("wrong", makeSide wrong)]
 
 currentSystem :: MonadBuiltins e m => m (NValue m)
 currentSystem = do
