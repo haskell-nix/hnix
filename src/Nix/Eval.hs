@@ -316,15 +316,22 @@ evalSelect aset attr = do
     traceM $ "evalSelect..2: " ++ show s
     path <- evalSelector True attr
     traceM $ "evalSelect..3: " ++ show path
-    extract s path
+    res <- extract s path
+    traceM "evalSelect..4"
+    return res
   where
-    extract x (k:|ks) = fromValueMay x >>= \case
-        Just (s :: AttrSet t, p :: AttrSet SourcePos) -> case M.lookup k s of
-            Just v -> case ks of
-                [] -> force v $ pure . Right
-                y:ys -> force v $ extract ?? (y:|ys)
-            Nothing -> Left . (, k:|ks) <$> toValue (s, p)
-        Nothing -> return $ Left (x, k:|ks)
+    extract x path@(k:|ks) = fromValueMay x >>= \case
+        Just (s :: AttrSet t, p :: AttrSet SourcePos) ->
+            case M.lookup k s of
+                Just v -> do
+                    traceM $ "Forcing value at selector " ++ Text.unpack k
+                    force v $ case ks of
+                        []   -> pure . Right
+                        y:ys -> extract ?? (y:|ys)
+                Nothing ->
+                    Left . (, path) <$> toValue (s, p)
+        Nothing ->
+            return $ Left (x, path)
 
 evalSelector :: (MonadEval v m, FromValue (Text, DList Text) m v)
              => Bool -> NAttrPath (m v) -> m (NonEmpty Text)
