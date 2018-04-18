@@ -114,8 +114,7 @@ eval (NSelect aset attr alt) = do
 
 eval (NHasAttr aset attr) = do
     traceM "NHasAttr"
-    toValue . either (const False) (const True)
-        =<< evalSelect aset attr
+    toValue . either (const False) (const True) =<< evalSelect aset attr
 
 eval (NList l) = do
     traceM "NList"
@@ -157,6 +156,8 @@ eval (NAbs params body) = do
     scope <- currentScopes @_ @t
     traceM $ "Creating lambda abstraction in scope: " ++ show scope
     evalAbs (void params) $ \arg ->
+        -- jww (2018-04-17): We need to use the bound library here, so that
+        -- the body is only evaluated once.
         withScopes @t scope $ do
             args <- buildArgument params arg
             pushScope args body
@@ -393,7 +394,7 @@ buildArgument params arg = do
 
 -----
 
-tracingEvalExpr :: (Framed e m, MonadIO n, Alternative n)
+tracingEvalExpr :: (Framed e m, MonadIO m, MonadIO n, Alternative n)
                 => (NExprF (m v) -> m v) -> NExprLoc -> n (m v)
 tracingEvalExpr eval =
     flip runReaderT (0 :: Int)
@@ -402,11 +403,17 @@ tracingEvalExpr eval =
     psi k v = do
         depth <- ask
         guard (depth < 200)
-        liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' '
+        liftIO $ putStrLn $ "prep: " ++ replicate (depth * 2) ' '
             ++ show (stripAnnotation v)
-        res <- local succ $
-            fmap (withExprContext v) (k v)
-        liftIO $ putStrLn $ "eval: " ++ replicate (depth * 2) ' ' ++ "."
+        res <- local succ $ do
+            action <- k v
+            return $ withExprContext v $ do
+                traceM $ "eval: " ++ replicate (depth * 2) ' '
+                    ++ show (stripAnnotation v)
+                res <- action
+                traceM $ "eval: " ++ replicate (depth * 2) ' ' ++ "."
+                return res
+        liftIO $ putStrLn $ "prep: " ++ replicate (depth * 2) ' ' ++ "."
         return res
 
 framedEvalExpr :: Framed e m => (NExprF (m v) -> m v) -> NExprLoc -> m v
