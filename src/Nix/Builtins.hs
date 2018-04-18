@@ -577,11 +577,7 @@ functionArgs fun = fun >>= \case
             ++ show v
 
 toPath :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
-toPath path = path >>= \case
-    NVStr p@(Text.uncons -> Just ('/', _)) _ ->
-        return $ NVPath (Text.unpack p)
-    v@(NVPath _) -> return v
-    v -> throwError $ "builtins.toPath: expected string, got " ++ show v
+toPath = fromNix @Path >=> toNix @Path
 
 pathExists_ :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
 pathExists_ path = path >>= \case

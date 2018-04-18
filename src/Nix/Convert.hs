@@ -142,7 +142,7 @@ instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m)
         Fix (NVPath p) -> Just . Text.pack . unStorePath <$> addPath p
         Fix (NVSet s _) -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
-            Just p -> Just <$> fromNix @Text p
+            Just p -> fromValueMay @Text p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -157,7 +157,7 @@ instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m,
         NVPath p -> Just . Text.pack . unStorePath <$> addPath p
         NVSet s _ -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
-            Just p -> Just <$> fromNix @Text p
+            Just p -> fromValueMay @Text p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -171,7 +171,7 @@ instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m)
         Fix (NVPath p) -> Just . (,mempty) . Text.pack . unStorePath <$> addPath p
         Fix (NVSet s _) -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
-            Just p -> Just . (,mempty) <$> fromNix @Text p
+            Just p -> fmap (,mempty) <$> fromValueMay @Text p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -186,7 +186,7 @@ instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m,
         NVPath p -> Just . (,mempty) . Text.pack . unStorePath <$> addPath p
         NVSet s _ -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
-            Just p -> Just . (,mempty) <$> fromNix @Text p
+            Just p -> fmap (,mempty) <$> fromValueMay @Text p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -219,17 +219,24 @@ instance (Framed e m, MonadVar m, MonadFile m)
         Fix (NVConstant (NUri u)) -> pure $ Just (Path (Text.unpack u))
         Fix (NVPath p) -> pure $ Just (Path p)
         Fix (NVStr s _) -> pure $ Just (Path (Text.unpack s))
+        Fix (NVSet s _) -> case M.lookup "outPath" s of
+            Nothing -> pure Nothing
+            Just p -> fromValueMay @Path p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
         _ -> throwError $ "Expected a path, but saw: " ++ show v
 
-instance (Framed e m, MonadVar m, MonadFile m)
+instance (MonadThunk (NValue m) (NThunk m) m,
+          Framed e m, MonadVar m, MonadFile m)
       => FromValue Path m (NValue m) where
     fromValueMay = \case
         NVConstant (NUri u) -> pure $ Just (Path (Text.unpack u))
         NVPath p -> pure $ Just (Path p)
         NVStr s _ -> pure $ Just (Path (Text.unpack s))
+        NVSet s _ -> case M.lookup "outPath" s of
+            Nothing -> pure Nothing
+            Just p -> fromValueMay @Path p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -499,7 +506,8 @@ instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m,
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix ByteString m (NValueNF m) where
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix ByteString m (NValue m) where
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix Path m (NValueNF m) where
-instance (Framed e m, MonadVar m, MonadFile m) => FromNix Path m (NValue m) where
+instance (Framed e m, MonadVar m, MonadFile m,
+          MonadThunk (NValue m) (NThunk m) m) => FromNix Path m (NValue m) where
 instance (Framed e m, MonadVar m, MonadFile m, FromValue a m (NValueNF m), Show a) => FromNix [a] m (NValueNF m) where
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix (HashMap Text (NValueNF m)) m (NValueNF m) where
 instance (Framed e m, MonadVar m, MonadFile m) => FromNix (HashMap Text (NValueNF m), HashMap Text SourcePos) m (NValueNF m) where
