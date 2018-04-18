@@ -97,16 +97,6 @@ data NSymbolicF r
 
 newtype SThunk m = SThunk { getSThunk :: Thunk m (Symbolic m) }
 
-sthunk :: MonadVar m => m (Symbolic m) -> m (SThunk m)
-sthunk = fmap coerce . buildThunk
-
-sforce :: (Framed e m, MonadFile m, MonadVar m)
-       => SThunk m -> (Symbolic m -> m r) -> m r
-sforce = forceThunk . coerce
-
-svalueThunk :: forall m. Symbolic m -> SThunk m
-svalueThunk = coerce . valueRef @_ @m
-
 newtype Symbolic m =
     Symbolic { getSymbolic :: Var m (NSymbolicF (NTypeF m (SThunk m))) }
 
@@ -145,11 +135,11 @@ renderSymbolic = unpackSymbolic >=> \case
             TUri   -> return "uri"
         TStr            -> return "string"
         TList r         -> do
-            x <- sforce r renderSymbolic
+            x <- force r renderSymbolic
             return $ "[" ++ x ++ "]"
         TSet Nothing    -> return "<any set>"
         TSet (Just s)   -> do
-            x <- traverse (`sforce` renderSymbolic) s
+            x <- traverse (`force` renderSymbolic) s
             return $ "{" ++ show x ++ "}"
         f@(TClosure p _) -> do
             (args, sym) <- do
@@ -176,16 +166,16 @@ merge context = go
         (TPath, TPath) -> (TPath :) <$> go xs ys
         (TConstant ls, TConstant rs) ->
             (TConstant (ls `intersect` rs) :) <$> go xs ys
-        (TList l, TList r) -> sforce l $ \l' -> sforce r $ \r' -> do
-            m <- sthunk $ unify context l' r'
+        (TList l, TList r) -> force l $ \l' -> force r $ \r' -> do
+            m <- thunk $ unify context l' r'
             (TList m :) <$> go xs ys
         (TSet x, TSet Nothing) -> (TSet x :) <$> go xs ys
         (TSet Nothing, TSet x) -> (TSet x :) <$> go xs ys
         (TSet (Just l), TSet (Just r)) -> do
             m <- sequenceA $ M.intersectionWith
                 (\i j -> i >>= \i' -> j >>= \j' ->
-                        sforce i' $ \i'' -> sforce j' $ \j'' ->
-                            sthunk $ unify context i'' j'')
+                        force i' $ \i'' -> force j' $ \j'' ->
+                            thunk $ unify context i'' j'')
                 (return <$> l) (return <$> r)
             if M.null m
                 then go xs ys
@@ -306,8 +296,8 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
         -- evaluated each time a name is looked up within the weak scope, and
         -- we want to be sure the action it evaluates is to force a thunk, so
         -- its value is only computed once.
-        s <- sthunk scope
-        pushWeakScope ?? body $ sforce s $ unpackSymbolic >=> \case
+        s <- thunk scope
+        pushWeakScope ?? body $ force s $ unpackSymbolic >=> \case
             NMany [TSet (Just s')] -> return s'
             NMany [TSet Nothing] -> error "NYI: with unknown"
             _ -> throwError "scope must be a set in with statement"
@@ -335,7 +325,7 @@ lintBinaryOp
     => NBinaryOp -> Symbolic m -> m (Symbolic m) -> m (Symbolic m)
 lintBinaryOp op lsym rarg = do
     rsym <- rarg
-    y <- sthunk everyPossible
+    y <- thunk everyPossible
     case op of
         NApp   -> symerr "lintBinaryOp:NApp: should never get here"
         NEq    -> check lsym rsym [ TConstant [TInt, TBool, TNull, TUri]
