@@ -137,6 +137,7 @@ instance (Framed e m, MonadVar m, MonadFile m)
 instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m)
       => FromValue Text m (NValueNF m) where
     fromValueMay = \case
+        Fix (NVConstant (NUri u)) -> pure $ Just u
         Fix (NVStr t _) -> pure $ Just t
         Fix (NVPath p) -> Just . Text.pack . unStorePath <$> addPath p
         Fix (NVSet s _) -> case M.lookup "outPath" s of
@@ -151,6 +152,7 @@ instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m,
           MonadThunk (NValue m) (NThunk m) m)
       => FromValue Text m (NValue m) where
     fromValueMay = \case
+        NVConstant (NUri u) -> pure $ Just u
         NVStr t _ -> pure $ Just t
         NVPath p -> Just . Text.pack . unStorePath <$> addPath p
         NVSet s _ -> case M.lookup "outPath" s of
@@ -164,6 +166,7 @@ instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m,
 instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m)
       => FromValue (Text, DList Text) m (NValueNF m) where
     fromValueMay = \case
+        Fix (NVConstant (NUri u)) -> pure $ Just (u, mempty)
         Fix (NVStr t d) -> pure $ Just (t, d)
         Fix (NVPath p) -> Just . (,mempty) . Text.pack . unStorePath <$> addPath p
         Fix (NVSet s _) -> case M.lookup "outPath" s of
@@ -178,6 +181,7 @@ instance (Framed e m, MonadVar m, MonadFile m, MonadEffects m,
           MonadThunk (NValue m) (NThunk m) m)
       => FromValue (Text, DList Text) m (NValue m) where
     fromValueMay = \case
+        NVConstant (NUri u) -> pure $ Just (u, mempty)
         NVStr t d -> pure $ Just (t, d)
         NVPath p -> Just . (,mempty) . Text.pack . unStorePath <$> addPath p
         NVSet s _ -> case M.lookup "outPath" s of
