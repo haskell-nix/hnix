@@ -444,12 +444,14 @@ instance Applicative m => ToValue Bool m (NExprF r) where
 instance Applicative m => ToValue () m (NExprF r) where
     toValue _ = pure . NConstant $ NNull
 
-instance MonadThunk (NValue m) (NThunk m) m
+instance (Framed e m, MonadThunk (NValue m) (NThunk m) m)
       => ToValue A.Value m (NValue m) where
     toValue = \case
         A.Object m -> flip NVSet M.empty
             <$> traverse (thunk . toValue @_ @_ @(NValue m)) m
-        A.Array l -> NVList <$> traverse (thunk . toValue) (V.toList l)
+        A.Array l -> NVList <$>
+            traverse (thunk . withStringContext "While coercing to a JSON value"
+                            . toValue) (V.toList l)
         A.String s -> pure $ NVStr s mempty
         A.Number n -> pure $ NVConstant $ case floatingOrInteger n of
             Left r -> NFloat r
@@ -530,13 +532,15 @@ class ToNix a m v where
     default toNix :: ToValue a m v => a -> m v
     toNix = toValue
 
-instance (MonadThunk (NValue m) (NThunk m) m, ToNix a m (NValue m))
+instance (Framed e m, MonadThunk (NValue m) (NThunk m) m, ToNix a m (NValue m))
       => ToNix [a] m (NValue m) where
-    toNix = fmap NVList . traverse (thunk . toNix)
+    toNix = fmap NVList
+        . traverse (thunk . withStringContext "While coercing to a list" . toNix)
 
-instance (MonadThunk (NValue m) (NThunk m) m, ToNix a m (NValue m))
+instance (Framed e m, MonadThunk (NValue m) (NThunk m) m, ToNix a m (NValue m))
       => ToNix (HashMap Text a) m (NValue m) where
-    toNix = fmap (flip NVSet M.empty) . traverse (thunk . toNix)
+    toNix = fmap (flip NVSet M.empty)
+        . traverse (thunk . withStringContext "While coercing to a set" . toNix)
 
 instance Applicative m => ToNix () m (NValueNF m) where
 instance Applicative m => ToNix () m (NValue m) where
@@ -564,7 +568,7 @@ instance Applicative m => ToNix (HashMap Text (NThunk m), HashMap Text SourcePos
 instance (MonadThunk (NValue m) (NThunk m) m, ToNix a m (NValue m), ToValue a m (NValue m)) => ToNix a m (NThunk m) where
 instance Applicative m => ToNix Bool m (NExprF r) where
 instance Applicative m => ToNix () m (NExprF r) where
-instance MonadThunk (NValue m) (NThunk m) m => ToNix A.Value m (NValue m) where
+instance (Framed e m, MonadThunk (NValue m) (NThunk m) m) => ToNix A.Value m (NValue m) where
 
 instance MonadThunk (NValue m) (NThunk m) m => ToNix (NThunk m) m (NValue m) where
     toNix = force ?? pure

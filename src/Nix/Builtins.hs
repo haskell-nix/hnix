@@ -194,13 +194,16 @@ builtinsList = sequence [
     arity1 f = Prim . pure . f
     arity2 f = ((Prim . pure) .) . f
 
-    add0 t n v = wrap t n <$> thunk v
-    add  t n v = wrap t n <$> thunk (builtin  (Text.unpack n) v)
-    add2 t n v = wrap t n <$> thunk (builtin2 (Text.unpack n) v)
-    add3 t n v = wrap t n <$> thunk (builtin3 (Text.unpack n) v)
+    mkThunk n = thunk
+        . withStringContext ("While calling builtin " ++ Text.unpack n ++ "\n")
+
+    add0 t n v = wrap t n <$> mkThunk n v
+    add  t n v = wrap t n <$> mkThunk n (builtin  (Text.unpack n) v)
+    add2 t n v = wrap t n <$> mkThunk n (builtin2 (Text.unpack n) v)
+    add3 t n v = wrap t n <$> mkThunk n (builtin3 (Text.unpack n) v)
 
     add' :: ToBuiltin m a => BuiltinType -> Text -> a -> m (Builtin m)
-    add' t n v = wrap t n <$> thunk (toBuiltin (Text.unpack n) v)
+    add' t n v = wrap t n <$> mkThunk n (toBuiltin (Text.unpack n) v)
 
 -- Primops
 
@@ -444,7 +447,8 @@ attrValues = fromValue @(ValueSet m) >=>
 map_ :: forall e m. MonadBuiltins e m
      => m (NValue m) -> m (NValue m) -> m (NValue m)
 map_ fun xs = fun >>= \f ->
-    toNix <=< traverse (thunk . (f `callFunc`) . force')
+    toNix <=< traverse (thunk . withStringContext "While applying f in map:\n"
+                              . (f `callFunc`) . force')
           <=< fromValue @[NThunk m] $ xs
 
 filter_ :: forall e m. MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
