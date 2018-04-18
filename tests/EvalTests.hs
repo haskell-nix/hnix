@@ -102,6 +102,30 @@ case_inherit_from_set_has_no_scope =
       )).success
     |]
 
+case_fixed_points =
+    constantEqualText' [i|[
+  {
+    foobar = "foobar";
+    foo = "foo";
+    bar = "bar";
+  }
+  {
+    foobar = "foo + bar";
+    foo = "foo + ";
+    bar = "bar";
+  }
+]|] [i|
+    let
+      fix = f: let x = f x; in x;
+      extends = f: rattrs: self:
+        let super = rattrs self; in super // f self super;
+      f = self: { foo = "foo";
+                  bar = "bar";
+                  foobar = self.foo + self.bar; };
+      g = self: super: { foo = super.foo + " + "; };
+    in [ (fix f) (fix (extends g f)) ]
+|]
+
 -----------------------
 
 tests :: TestTree
