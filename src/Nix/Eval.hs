@@ -282,7 +282,6 @@ evalBinds allowDynamic recursive binds = do
         res <- if recursive
                then loebM (encapsulate scope <$> s)
                else traverse (thunk . withScopes scope) s
-        traceM $ "buildResult: " ++ show (map (\(k, v, _) -> (k, v)) bindings)
         return (res, foldl' go M.empty bindings)
       where
         -- jww (2018-04-13): Need to record positions for attr paths as well
