@@ -170,7 +170,8 @@ evalWithAttrSet scope body = do
     -- we want to be sure the action it evaluates is to force a thunk, so
     -- its value is only computed once.
     traceM "Evaluating with scope"
-    s <- thunk scope
+    cur <- currentScopes @_ @t
+    s <- thunk $ withScopes cur scope
     pushWeakScope ?? body $ force s $ fromValue @(AttrSet t)
 
 attrSetAlter :: forall e v t m. MonadNixEval e v t m
