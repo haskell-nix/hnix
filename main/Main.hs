@@ -74,7 +74,10 @@ main = do
                              . A.encodingToLazyByteString
                              . toEncodingSorted
                              <=< fromNix
-                    | otherwise = liftIO . print
+                    | normalize opts =
+                      liftIO . print . prettyNixValue <=< normalForm
+                    | otherwise  =
+                      liftIO . print
 
         if | evaluate opts, verbose opts >= Debug ->
                  runLazyM opts $ evaluateExpression mpath

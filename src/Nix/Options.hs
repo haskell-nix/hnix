@@ -14,6 +14,7 @@ data Options = Options
     , parseOnly    :: Bool
     , findFile     :: Maybe FilePath
     , strict       :: Bool
+    , normalize    :: Bool
     , evaluate     :: Bool
     , json         :: Bool
     , xml          :: Bool
@@ -39,6 +40,7 @@ defaultOptions = Options
     , parseOnly    = False
     , findFile     = Nothing
     , strict       = False
+    , normalize    = False
     , evaluate     = False
     , json         = False
     , xml          = False
@@ -103,6 +105,9 @@ nixOptions = Options
     <*> switch
         (   long "strict"
          <> help "When used with --eval, recursively evaluate list elements and attributes")
+    <*> switch
+        (   long "force"
+         <> help "Whether to force the results of evaluation to normal form")
     <*> switch
         (   long "eval"
          <> help "Whether to evaluate, or just pretty-print")
