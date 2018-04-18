@@ -169,6 +169,7 @@ builtinsList = sequence [
     , add  Normal   "listToAttrs"                listToAttrs
     , add2 Normal   "intersectAttrs"             intersectAttrs
     , add  Normal   "functionArgs"               functionArgs
+    , add  Normal   "genericClosure"             genericClosure
     , add' Normal   "hashString"                 hashString
     , add  Normal   "readFile"                   readFile_
     , add  Normal   "readDir"                    readDir_
@@ -598,6 +599,26 @@ functionArgs fun = force fun $ \case
                 ParamSet s _ _ -> isJust <$> M.fromList s
     v -> throwError $ "builtins.functionArgs: expected function, got "
             ++ show v
+
+genericClosure :: MonadBuiltins e m => NThunk m -> m (NValue m)
+genericClosure set = force set $ fromValue >=> \case
+    NVSet attrs sourcePos -> do
+      startSet <- fromMaybe (throwError $ "attribute 'startSet'' required") $ M.lookup "startSet" attrs
+      workSet <- force startSet $ \case
+        NVList a:as -> return (toNix a,toNix as)
+        v -> throwError $ "builtins.genericClosure: expected a list, got " ++ show v
+      operator <- fromMaybe (throwError $ "attribute 'operator' required") $ M.lookup "operator" attrs
+      return $ foldl'_ operator workSet startSet
+    v -> throwError $ "builtins.functionArgs: expected function, got " ++ show v
+
+   --      force set $ \case
+   --  NVSet attrs sourcePos -> do
+   --    startSet <- fromMaybe (throwError $ "attribute 'startSet'' required") $ M.lookup "startSet" attrs
+   --    workSet <- force startSet $ \case
+   --      NVList sSet -> return sSet
+   --      v -> throwError $ "builtins.genericClosure: expected a list, got " ++ show v
+   --    operator <- fromMaybe (throwError $ "attribute 'operator' required") $ M.lookup "operator" attrs
+   --    NVList <$> map_ operator workSet
 
 toPath :: MonadBuiltins e m => NThunk m -> m (NValue m)
 toPath = flip force $ \case
