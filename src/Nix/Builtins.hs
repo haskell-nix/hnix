@@ -230,9 +230,8 @@ nixPath = fmap NVList $ flip foldNixPath [] $ \p mn rest ->
                    NVStr (Text.pack (fromMaybe "" mn)) mempty) ]) : rest
 
 toString :: MonadBuiltins e m => m (NValue m) -> m (NValue m)
-toString str = do
-    (s, d) <- str >>= normalForm >>= valueText False
-    return $ NVStr s d
+toString str =
+    str >>= normalForm >>= valueText False >>= toNix @(Text, DList Text)
 
 hasAttr :: MonadBuiltins e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 hasAttr x y = x >>= \x' -> y >>= \y' -> case (x', y') of

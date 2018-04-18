@@ -384,9 +384,10 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
             NVConstant (NBool b)
                 | b -> pure "1"
                 | otherwise -> pure ""
-            NVConstant (NInt n) -> pure $ show n
+            NVConstant (NInt n)   -> pure $ show n
             NVConstant (NFloat n) -> pure $ show n
-            NVConstant NNull -> pure ""
+            NVConstant (NUri u)   -> pure $ show u
+            NVConstant NNull      -> pure ""
             NVList l -> unwords <$> traverse (`force` specialToString) l
             NVStr t _ -> pure $ Text.unpack t
             NVPath p -> unStorePath <$> addPath p
