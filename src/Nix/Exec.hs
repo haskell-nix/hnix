@@ -153,30 +153,12 @@ execBinaryOp NAnd larg rarg = fromNix larg >>= \l ->
 -- based on operator first
 execBinaryOp op larg rarg = do
     let lval = larg
-    rval <- traceM "NBinary:right" >> rarg
-
-    let unsupportedTypes =
-            "Unsupported argument types for binary operator "
-                ++ show op ++ ": " ++ show lval ++ ", " ++ show rval
-        numBinOp :: (forall a. Num a => a -> a -> a) -> NAtom -> NAtom
-                 -> m (NValue m)
-        numBinOp f = numBinOp' f f
-        numBinOp'
-            :: (Integer -> Integer -> Integer)
-            -> (Float -> Float -> Float)
-            -> NAtom -> NAtom -> m (NValue m)
-        numBinOp' intF floatF l r = case (l, r) of
-            (NInt   li, NInt   ri) ->
-                toValue $             li `intF`               ri
-            (NInt   li, NFloat rf) ->
-                toValue $ fromInteger li `floatF`             rf
-            (NFloat lf, NInt   ri) ->
-                toValue $             lf `floatF` fromInteger ri
-            (NFloat lf, NFloat rf) ->
-                toValue $             lf `floatF`             rf
-            _ -> nverr unsupportedTypes
-
-        nverr = evalError @(NValue m)
+    traceM $ "NBinary:left: " ++ show lval
+    rval <- do
+        traceM "NBinary:right..."
+        rval <- rarg
+        traceM $ "NBinary:right: " ++ show (rval :: NValue m)
+        return rval
 
     case (lval, rval) of
         (NVConstant lc, NVConstant rc) -> case (op, lc, rc) of
@@ -193,7 +175,7 @@ execBinaryOp op larg rarg = do
             (NMult,  l, r) -> numBinOp (*) l r
             (NDiv,   l, r) -> numBinOp' div (/) l r
             (NImpl, NBool l, NBool r) -> toValue $ not l || r
-            _ -> nverr unsupportedTypes
+            _ -> nverr $ unsupportedTypes lval rval
 
         (NVStr ls lc, NVStr rs rc) -> case op of
             NPlus -> pure $ NVStr (ls `mappend` rs) (lc `mappend` rc)
@@ -203,54 +185,80 @@ execBinaryOp op larg rarg = do
             NLte  -> toValue $ ls <= rs
             NGt   -> toValue $ ls >  rs
             NGte  -> toValue $ ls >= rs
-            _ -> nverr unsupportedTypes
+            _ -> nverr $ unsupportedTypes lval rval
 
         (NVStr _ _, NVConstant NNull) -> case op of
             NEq   -> toValue =<< valueEq lval (NVStr "" mempty)
             NNEq  -> toValue . not =<< valueEq lval (NVStr "" mempty)
-            _ -> nverr unsupportedTypes
+            _ -> nverr $ unsupportedTypes lval rval
 
         (NVConstant NNull, NVStr _ _) -> case op of
             NEq   -> toValue =<< valueEq (NVStr "" mempty) rval
             NNEq  -> toValue . not =<< valueEq (NVStr "" mempty) rval
-            _ -> nverr unsupportedTypes
+            _ -> nverr $ unsupportedTypes lval rval
 
         (NVSet ls lp, NVSet rs rp) -> case op of
             NUpdate -> pure $ NVSet (rs `M.union` ls) (rp `M.union` lp)
             NEq     -> toValue =<< valueEq lval rval
             NNEq    -> toValue . not =<< valueEq lval rval
-            _ -> nverr unsupportedTypes
+            _ -> nverr $ unsupportedTypes lval rval
 
         (NVList ls, NVList rs) -> case op of
             NConcat -> pure $ NVList $ ls ++ rs
             NEq     -> toValue =<< valueEq lval rval
             NNEq    -> toValue . not =<< valueEq lval rval
-            _ -> nverr unsupportedTypes
+            _ -> nverr $ unsupportedTypes lval rval
 
         (NVList ls, NVConstant NNull) -> case op of
             NConcat -> pure $ NVList ls
             NEq     -> toValue =<< valueEq lval (NVList [])
             NNEq    -> toValue . not =<< valueEq lval (NVList [])
-            _ -> nverr unsupportedTypes
+            _ -> nverr $ unsupportedTypes lval rval
 
         (NVConstant NNull, NVList rs) -> case op of
             NConcat -> pure $ NVList rs
             NEq     -> toValue =<< valueEq (NVList []) rval
             NNEq    -> toValue . not =<< valueEq (NVList []) rval
-            _ -> nverr unsupportedTypes
+            _ -> nverr $ unsupportedTypes lval rval
 
         (NVPath p, NVStr s _) -> case op of
             -- jww (2018-04-13): Do we need to make the path absolute here?
             NEq   -> toValue $ p == Text.unpack s
             NNEq  -> toValue $ p /= Text.unpack s
             NPlus -> NVPath <$> makeAbsolutePath (p `mappend` Text.unpack s)
-            _ -> nverr unsupportedTypes
+            _ -> nverr $ unsupportedTypes lval rval
 
         (NVPath ls, NVPath rs) -> case op of
             NPlus -> NVPath <$> makeAbsolutePath (ls ++ rs)
-            _ -> nverr unsupportedTypes
+            _ -> nverr $ unsupportedTypes lval rval
 
-        _ -> nverr unsupportedTypes
+        _ -> nverr $ unsupportedTypes lval rval
+  where
+    unsupportedTypes :: Show a => a -> a -> String
+    unsupportedTypes lval rval =
+        "Unsupported argument types for binary operator "
+            ++ show op ++ ": " ++ show lval ++ ", " ++ show rval
+
+    numBinOp :: (forall a. Num a => a -> a -> a) -> NAtom -> NAtom
+             -> m (NValue m)
+    numBinOp f = numBinOp' f f
+
+    numBinOp'
+        :: (Integer -> Integer -> Integer)
+        -> (Float -> Float -> Float)
+        -> NAtom -> NAtom -> m (NValue m)
+    numBinOp' intF floatF l r = case (l, r) of
+        (NInt   li, NInt   ri) ->
+            toValue $             li `intF`               ri
+        (NInt   li, NFloat rf) ->
+            toValue $ fromInteger li `floatF`             rf
+        (NFloat lf, NInt   ri) ->
+            toValue $             lf `floatF` fromInteger ri
+        (NFloat lf, NFloat rf) ->
+            toValue $             lf `floatF`             rf
+        _ -> nverr $ unsupportedTypes l r
+
+    nverr = evalError @(NValue m)
 
 newtype Lazy m a = Lazy
     { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m))) m a }
