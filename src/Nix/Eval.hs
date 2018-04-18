@@ -362,33 +362,29 @@ assembleString = \case
 
 buildArgument :: forall e v t m. MonadNixEval e v t m
               => Params (m v) -> m v -> m (AttrSet t)
-buildArgument params arg = case params of
-    Param name -> do
-        scope <- currentScopes @_ @t
-        M.singleton name <$> thunk (withScopes scope arg)
-    ParamSet s isVariadic m ->
-        arg >>= \v -> fromValueMay v >>= \case
-            Just args -> do
-                scope <- currentScopes @_ @t
+buildArgument params arg = do
+    scope <- currentScopes @_ @t
+    case params of
+        Param name -> M.singleton name <$> thunk (withScopes scope arg)
+        ParamSet s isVariadic m ->
+            arg >>= fromValue >>= \args -> do
                 let inject = case m of
                         Nothing -> id
                         Just n -> M.insert n $ const $
                             thunk (withScopes scope arg)
-                loebM (inject $ alignWithKey (assemble isVariadic)
+                loebM (inject $ alignWithKey (assemble scope isVariadic)
                                              args (M.fromList s))
-            _ -> evalError @v $ "Argument to function must be a set, but saw: "
-                    ++ show v
   where
-    assemble :: Bool
+    assemble :: Scopes m t
+             -> Bool
              -> Text
              -> These t (Maybe (m v))
              -> AttrSet t
              -> m t
-    assemble isVariadic k = \case
+    assemble scope isVariadic k = \case
         That Nothing  ->
             const $ evalError @v $ "Missing value for parameter: " ++ show k
-        That (Just f) -> \args -> do
-            scope <- currentScopes @_ @t
+        That (Just f) -> \args ->
             thunk $ withScopes scope $ pushScope args f
         This x | isVariadic -> const (pure x)
                | otherwise  ->
