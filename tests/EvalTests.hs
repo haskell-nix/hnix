@@ -10,6 +10,7 @@ module EvalTests (tests, genEvalCompareTests) where
 
 import           Control.Monad (when)
 import           Control.Monad.IO.Class
+import qualified Data.HashMap.Lazy as M
 import           Data.Maybe (isJust)
 import           Data.String.Interpolate.IsString
 import           Data.Text (Text)
@@ -115,7 +116,11 @@ genEvalCompareTests = do
 
 instance (Show r, Show (NValueF m r), Eq r) => Eq (NValueF m r) where
     NVConstant x == NVConstant y = x == y
+    NVStr x _ == NVStr y _ = x == y
     NVList x == NVList y = and (zipWith (==) x y)
+    NVSet x _ == NVSet y _ =
+        M.keys x == M.keys y &&
+        and (zipWith (==) (M.elems x) (M.elems y))
     x == y = error $ "Need to add comparison for values: "
                  ++ show x ++ " == " ++ show y
 
