@@ -105,6 +105,7 @@ eval (NBinary op larg rarg) = larg >>= \lval -> evalBinary op lval rarg
 eval (NSelect aset attr alt) = do
     traceM "NSelect"
     mres <- evalSelect aset attr
+    traceM "NSelect..2"
     case mres of
         Right v -> pure v
         Left (s, ks) -> fromMaybe err alt
@@ -297,8 +298,13 @@ evalSelect :: forall e v t m. MonadNixEval e v t m
            => m v
            -> NAttrPath (m v)
            -> m (Either (v, NonEmpty Text) v)
-evalSelect aset attr =
-    join $ extract <$> aset <*> evalSelector True attr
+evalSelect aset attr = do
+    traceM "evalSelect"
+    s <- aset
+    traceM $ "evalSelect..2: " ++ show s
+    path <- evalSelector True attr
+    traceM $ "evalSelect..3: " ++ show path
+    extract s path
   where
     extract x (k:|ks) = fromValueMay x >>= \case
         Just (s :: AttrSet t, p :: AttrSet SourcePos) -> case M.lookup k s of
