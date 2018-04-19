@@ -158,11 +158,6 @@ prettyNix = withoutParens . cata phi where
   phi (NAbs args body) = leastPrecedence $
    nest 2 ((prettyParams args <> colon) <$> withoutParens body)
   phi (NBinary NApp fun arg)
-    -- jww (2018-04-19): If 'arg' was a binary operator, it will not have
-    -- parens itself, and yet its precedence is very likely to be lower than
-    -- function application. However, we've lost the knowledge of whether it
-    -- should or shouldn't be surrounded by parens, so we do it always for
-    -- now.
     = NixDoc (wrapParens appOp fun <+> parens (withoutParens arg)) appOp
   phi (NBinary op r1 r2) = flip NixDoc opInfo $ hsep
     [ wrapParens (f NAssocLeft) r1
