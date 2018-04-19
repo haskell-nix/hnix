@@ -11,6 +11,7 @@ module Nix.Entry where
 
 import           Control.Applicative
 import           Control.Arrow (second)
+import           Control.Exception
 import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
@@ -22,7 +23,6 @@ import qualified Data.Text.Read as Text
 import           Nix.Builtins
 import           Nix.Effects
 import qualified Nix.Eval as Eval
-import qualified Nix.Trace as Trace
 import           Nix.Expr.Shorthands
 import           Nix.Expr.Types (NExpr)
 import           Nix.Expr.Types.Annotated (NExprLoc, stripAnnotation)
@@ -34,6 +34,7 @@ import           Nix.Pretty
 import           Nix.Scope
 import           Nix.Stack
 import           Nix.Thunk
+import qualified Nix.Trace as Trace
 import           Nix.Utils
 import           Nix.Value
 
@@ -74,18 +75,22 @@ tracingEvalLoc
     :: forall e m. (MonadNix e m, Alternative m, MonadIO m)
     => Maybe FilePath -> NExprLoc -> m (NValue m)
 tracingEvalLoc mpath expr = do
-    (expr', v) <- evalTopLevelExprGen id mpath
-        =<< Trace.tracingEvalExpr @_ @m @_ @(NValue m)
+    (expr', eres) <- evalTopLevelExprGen id mpath
+        =<< Trace.tracingEvalExpr @_ @m @SomeException @_ @(NValue m)
                 (Eval.eval @_ @(NValue m)
-                           @(NThunk m) @m) expr
+                           @(NThunk m) @m) mpath expr
     liftIO $ do
-        putStrLn "Evaluated expression tree:"
+        putStrLn "Expression tree before winnowing:"
         putStrLn "--------"
         print $ prettyNix (stripAnnotation expr)
         putStrLn "--------"
+        putStrLn "Expression tree after winnowing:"
+        putStrLn "--------"
         print $ prettyNix (stripAnnotation expr')
         putStrLn "--------"
-    return v
+    case eres of
+        Left err -> throwM err
+        Right v  -> return v
 
 evaluateExpression
     :: forall e m a. MonadNix e m
