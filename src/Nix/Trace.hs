@@ -178,7 +178,7 @@ pruneTree = cataM $ \(FlaggedF (b, Compose x)) -> do
     pruneKeyName (StaticKey n p) = StaticKey n p
     pruneKeyName (DynamicKey k)
         | Just k' <- pruneAntiquoted k = DynamicKey k'
-        | otherwise = StaticKey "unused" Nothing
+        | otherwise = StaticKey "<unused?>" Nothing
 
     pruneParams :: Params (Maybe NExprLoc) -> Params NExprLoc
     pruneParams (Param n) = Param n
