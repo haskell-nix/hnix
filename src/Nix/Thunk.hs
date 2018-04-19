@@ -78,7 +78,7 @@ forceThunk (Thunk active ref) k = do
             if nowActive
                 then
 #if ENABLE_TRACING
-                    throwError $ "<<loop in #" ++ show n ++ ">>"
+                    throwError $ "<<loop forcing thunk #" ++ show n ++ ">>"
 #else
                     throwError "<<loop>>"
 #endif

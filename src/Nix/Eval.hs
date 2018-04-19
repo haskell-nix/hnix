@@ -164,7 +164,6 @@ eval e@(NAbs params body) = do
     -- body are forced during application.
     traceM "NAbs"
     scope <- currentScopes @_ @t
-    traceM $ "Creating lambda abstraction in scope: " ++ show scope
     evalAbs (clearDefaults params) $ \arg ->
         -- jww (2018-04-17): We need to use the bound library here, so that
         -- the body is only evaluated once.
@@ -313,7 +312,7 @@ evalSelect :: forall e v t m. MonadNixEval e v t m
 evalSelect aset attr = do
     traceM "evalSelect"
     s <- aset
-    traceM $ "evalSelect..2: " ++ show s
+    traceM "evalSelect..2"
     path <- evalSelector True attr
     traceM $ "evalSelect..3: " ++ show path
     res <- extract s path
