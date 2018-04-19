@@ -32,7 +32,7 @@ import           Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
-import           Data.Maybe (maybe, fromMaybe, catMaybes, mapMaybe)
+import           Data.Maybe (maybe, fromMaybe, mapMaybe)
 import           Data.Text (Text)
 import           Nix.Atoms
 import           Nix.Exec
@@ -118,16 +118,10 @@ pruneTree = cataM $ \(FlaggedF (b, Compose x)) -> do
         NBinary op Nothing (Just rarg) -> Just $ NBinary op nNull rarg
         NBinary op (Just larg) Nothing -> Just $ NBinary op larg nNull
 
-        NList l -> case catMaybes l of
-            [] -> Nothing
-            xs -> Just $ NList xs
+        NList l -> Just $ NList (map (fromMaybe nNull) l)
 
-        NSet binds    -> case mapMaybe pruneBinding binds of
-            [] -> Nothing
-            xs -> Just $ NSet xs
-        NRecSet binds -> case mapMaybe pruneBinding binds of
-            [] -> Nothing
-            xs -> Just $ NRecSet xs
+        NSet binds    -> Just $ NSet (fmap (fmap (fromMaybe nNull)) binds)
+        NRecSet binds -> Just $ NRecSet (fmap (fmap (fromMaybe nNull)) binds)
 
         NLet binds (Just body@(Fix (Compose (Ann _ x)))) ->
             Just $ case mapMaybe pruneBinding binds of
@@ -188,7 +182,8 @@ pruneTree = cataM $ \(FlaggedF (b, Compose x)) -> do
 
     pruneParams :: Params (Maybe NExprLoc) -> Params NExprLoc
     pruneParams (Param n) = Param n
-    pruneParams (ParamSet xs b n) = ParamSet (map (second join) xs) b n
+    pruneParams (ParamSet xs b n) =
+        ParamSet (map (second (fmap (fromMaybe nNull))) xs) b n
 
     pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
     pruneBinding (NamedVar _ Nothing)  = Nothing
