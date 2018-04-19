@@ -50,18 +50,15 @@ processImports :: Maybe FilePath
 processImports mfile expr = do
     imports <- get
     flip cataM expr $ \case
-        Compose
-            (Ann _ (NBinary NApp
-                       (Fix (Compose (Ann _ (NSym "import"))))
-                       (Fix (Compose (Ann _ (NLiteralPath origPath))))))
+        Compose (Ann _ (NBinary NApp
+                        (Fix (Compose (Ann _ (NSym "import"))))
+                        (Fix (Compose (Ann _ (NLiteralPath origPath))))))
             | Just expr <- M.lookup origPath imports -> pure expr
             | otherwise -> do
-                traceM $ "Importing mfile " ++ show mfile
-                traceM $ "Importing origPath " ++ origPath
-                path <- liftIO $ pathToDefaultNixFile origPath
-                traceM $ "Importing path " ++ path
+                path  <- liftIO $ pathToDefaultNixFile origPath
                 path' <- liftIO $ pathToDefaultNixFile =<< canonicalizePath
                     (maybe path (\p -> takeDirectory p </> path) mfile)
+
                 traceM $ "Importing file " ++ path'
 
                 eres <- liftIO $ parseNixFileLoc path'
@@ -73,8 +70,7 @@ processImports mfile expr = do
                             cur  = NamedVar
                                 (StaticKey "__cur_file" (Just pos) :| [])
                                 (Fix (Compose (Ann span (NLiteralPath path'))))
-                            x'   = Fix (Compose
-                                        (Ann span (NLet [cur] x)))
+                            x'   = Fix (Compose (Ann span (NLet [cur] x)))
                         modify (M.insert origPath x')
                         processImports (Just path') x'
         x -> pure $ Fix x
@@ -115,13 +111,9 @@ pruneTree = cataM $ \(FlaggedF (b, Compose x)) -> do
         NHasAttr (Just aset) attr -> Just $ NHasAttr aset (NE.map pruneKeyName attr)
         NAbs params (Just body)   -> Just $ NAbs (pruneParams params) body
 
-        NBinary op Nothing (Just rarg) -> Just $ NBinary op nNull rarg
-        NBinary op (Just larg) Nothing -> Just $ NBinary op larg nNull
-
-        NList l -> Just $ NList (map (fromMaybe nNull) l)
-
-        NSet binds    -> Just $ NSet (fmap (fmap (fromMaybe nNull)) binds)
-        NRecSet binds -> Just $ NRecSet (fmap (fmap (fromMaybe nNull)) binds)
+        NList   l     -> Just $ NList   (map       (fromMaybe nNull)  l)
+        NSet    binds -> Just $ NSet    (map (fmap (fromMaybe nNull)) binds)
+        NRecSet binds -> Just $ NRecSet (map (fmap (fromMaybe nNull)) binds)
 
         NLet binds (Just body@(Fix (Compose (Ann _ x)))) ->
             Just $ case mapMaybe pruneBinding binds of
@@ -134,6 +126,17 @@ pruneTree = cataM $ \(FlaggedF (b, Compose x)) -> do
         -- These are the only short-circuiting binary operators
         NBinary NAnd (Just (Fix (Compose (Ann _ larg)))) _ -> Just larg
         NBinary NOr  (Just (Fix (Compose (Ann _ larg)))) _ -> Just larg
+
+        -- If the function was never called, it means its argument was in a
+        -- thunk that was forced elsewhere.
+        NBinary NApp Nothing (Just _) -> Nothing
+
+        -- The idea behind emitted a binary operator where one side may be
+        -- invalid is that we're trying to emit what will reproduce whatever
+        -- error the user encountered, which means providing all aspects of
+        -- the evaluation path they ultimately followed.
+        NBinary op Nothing (Just rarg) -> Just $ NBinary op nNull rarg
+        NBinary op (Just larg) Nothing -> Just $ NBinary op larg nNull
 
         -- If the scope of a with was never referenced, it's not needed
         NWith Nothing (Just (Fix (Compose (Ann _ body)))) -> Just body
