@@ -133,7 +133,8 @@ prettyKeyName (StaticKey key _)
   | HashSet.member key reservedNames = dquotes $ text $ unpack key
 prettyKeyName (StaticKey key _) = text . unpack $ key
 prettyKeyName (DynamicKey key) =
-    runAntiquoted (DoubleQuoted [Plain "\n"]) prettyString withoutParens key
+    runAntiquoted (DoubleQuoted [Plain "\n"])
+        prettyString ((text "$" <>) . braces . withoutParens) key
 
 prettySelector :: NAttrPath NixDoc -> Doc
 prettySelector = hcat . punctuate dot . map prettyKeyName . NE.toList
