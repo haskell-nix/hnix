@@ -94,7 +94,7 @@ data NExprF r
   -- ^ Ask if a set contains a given attribute path.
   | NAbs !(Params r) !r
   -- ^ A function literal (lambda abstraction).
-  | NLet !(NonEmpty (Binding r)) !r
+  | NLet ![Binding r] !r
   -- ^ Evaluate the second argument after introducing the bindings.
   | NIf !r !r !r
   -- ^ If-then-else statement.
@@ -394,7 +394,7 @@ stripPositionInfo = transport phi
   where
     phi (NSet binds)         = NSet (map go binds)
     phi (NRecSet binds)      = NRecSet (map go binds)
-    phi (NLet binds body)    = NLet (NE.map go binds) body
+    phi (NLet binds body)    = NLet (map go binds) body
     phi (NSelect s attr alt) = NSelect s (NE.map clear attr) alt
     phi x = x
 

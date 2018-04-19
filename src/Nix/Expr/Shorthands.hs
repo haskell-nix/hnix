@@ -7,13 +7,12 @@
 -- 'Fix' wrapper.
 module Nix.Expr.Shorthands where
 
-import           Data.Fix
-import           Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NE
-import           Data.Monoid
-import           Data.Text (Text)
-import           Nix.Atoms
-import           Nix.Expr.Types
+import Data.Fix
+import Data.List.NonEmpty (NonEmpty(..))
+import Data.Monoid
+import Data.Text (Text)
+import Nix.Atoms
+import Nix.Expr.Types
 
 -- | Make an integer literal expression.
 mkInt :: Integer -> NExpr
@@ -108,7 +107,7 @@ mkRecSet = Fix . NRecSet
 mkNonRecSet :: [Binding NExpr] -> NExpr
 mkNonRecSet = Fix . NSet
 
-mkLets :: NonEmpty (Binding NExpr) -> NExpr -> NExpr
+mkLets :: [Binding NExpr] -> NExpr -> NExpr
 mkLets bindings = Fix . NLet bindings
 
 mkList :: [NExpr] -> NExpr
@@ -163,7 +162,7 @@ infixr 2 $=
 -- `let a = 1; b = 2; c = 3; in 4`.
 appendBindings :: [Binding NExpr] -> NExpr -> NExpr
 appendBindings newBindings (Fix e) = case e of
-  NLet (h :| bindings) e' -> Fix $ NLet (h :| bindings <> newBindings) e'
+  NLet bindings e' -> Fix $ NLet (bindings <> newBindings) e'
   NSet bindings -> Fix $ NSet (bindings <> newBindings)
   NRecSet bindings -> Fix $ NRecSet (bindings <> newBindings)
   _ -> error "Can only append bindings to a set or a let"
@@ -175,12 +174,12 @@ modifyFunctionBody f (Fix e) = case e of
   _ -> error "Not a function"
 
 -- | A let statement with multiple assignments.
-letsE :: NonEmpty (Text, NExpr) -> NExpr -> NExpr
-letsE pairs = Fix . NLet (NE.map (uncurry bindTo) pairs)
+letsE :: [(Text, NExpr)] -> NExpr -> NExpr
+letsE pairs = Fix . NLet (map (uncurry bindTo) pairs)
 
 -- | Wrapper for a single-variable @let@.
 letE :: Text -> NExpr -> NExpr -> NExpr
-letE varName varExpr = letsE ((varName, varExpr) :| [])
+letE varName varExpr = letsE [(varName, varExpr)]
 
 -- | Make an attribute set (non-recursive).
 attrsE :: [(Text, NExpr)] -> NExpr

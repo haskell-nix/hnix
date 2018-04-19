@@ -151,11 +151,9 @@ nixLet = annotateLocation1 (reserved "let"
     *> (letBody <+> letBinders)
     <?> "let block")
   where
-    letBinders = do
-        binds <- nixBinders
-        case binds of
-            []   -> mzero
-            x:xs -> NLet (x :| xs) <$> (reserved "in" *> nixToplevelForm)
+    letBinders = NLet
+        <$> nixBinders
+        <*> (reserved "in" *> nixToplevelForm)
     -- Let expressions `let {..., body = ...}' are just desugared
     -- into `(rec {..., body = ...}).body'.
     letBody = (\x pos -> NSelect x (StaticKey "body" (Just pos) :| []) Nothing)

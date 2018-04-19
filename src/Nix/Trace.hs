@@ -74,7 +74,7 @@ processImports mfile expr = do
                                 (StaticKey "__cur_file" (Just pos) :| [])
                                 (Fix (Compose (Ann span (NLiteralPath path'))))
                             x'   = Fix (Compose
-                                        (Ann span (NLet (cur :| []) x)))
+                                        (Ann span (NLet [cur] x)))
                         modify (M.insert origPath x')
                         processImports (Just path') x'
         x -> pure $ Fix x
@@ -130,16 +130,16 @@ pruneTree = cataM $ \(FlaggedF (b, Compose x)) -> do
             xs -> Just $ NRecSet xs
 
         NLet binds (Just body@(Fix (Compose (Ann _ x)))) ->
-            Just $ case mapMaybe pruneBinding (NE.toList binds) of
-                []   -> x
-                b:bs -> NLet (b:|bs) body
+            Just $ case mapMaybe pruneBinding binds of
+                [] -> x
+                xs -> NLet xs body
 
         NSelect (Just aset) attr alt ->
             Just $ NSelect aset (NE.map pruneKeyName attr) (join alt)
 
         -- These are the only short-circuiting binary operators
-        NBinary NAnd (Just (Fix (Compose (Ann _ larg)))) Nothing -> Just larg
-        NBinary NOr  (Just (Fix (Compose (Ann _ larg)))) Nothing -> Just larg
+        NBinary NAnd (Just (Fix (Compose (Ann _ larg)))) _ -> Just larg
+        NBinary NOr  (Just (Fix (Compose (Ann _ larg)))) _ -> Just larg
 
         -- If the scope of a with was never referenced, it's not needed
         NWith Nothing (Just (Fix (Compose (Ann _ body)))) -> Just body

@@ -188,7 +188,7 @@ prettyNix = withoutParens . cata phi where
         | otherwise -> "./" ++ txt
   phi (NSym name) = simpleExpr $ text (unpack name)
   phi (NLet binds body) = leastPrecedence $ group $ text "let" <$> indent 2 (
-        vsep (map prettyBind (NE.toList binds))) <$> text "in" <+> withoutParens body
+        vsep (map prettyBind binds)) <$> text "in" <+> withoutParens body
   phi (NIf cond trueBody falseBody) = leastPrecedence $
     group $ nest 2 $ (text "if" <+> withoutParens cond) <$>
       (  align (text "then" <+> withoutParens trueBody)

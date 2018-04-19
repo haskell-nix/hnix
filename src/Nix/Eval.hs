@@ -142,7 +142,7 @@ eval e@(NRecSet binds) = do
 
 eval e@(NLet binds body) = do
     traceM "Let..1"
-    (s, _) <- evalBinds e True True (NE.toList binds)
+    (s, _) <- evalBinds e True True binds
     traceM $ "Let..2: s = " ++ show (void s)
     pushScope s body
 
