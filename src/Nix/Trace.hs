@@ -215,9 +215,9 @@ tracingEvalExpr eval mpath expr = do
         local succ $ do
             action <- k v
             return $ withExprContext (stripFlags v) $ do
-                traceM $ "eval: " ++ replicate depth ' '
+                liftIO $ putStrLn $ "eval: " ++ replicate depth ' '
                     ++ show (void (unFix (stripAnnotation (stripFlags v))))
                 liftIO $ writeIORef b True
                 res <- action
-                traceM $ "eval: " ++ replicate depth ' ' ++ "."
+                liftIO $ putStrLn $ "eval: " ++ replicate depth ' ' ++ "."
                 return res
