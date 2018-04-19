@@ -79,7 +79,7 @@ main = do
                     | otherwise  =
                       liftIO . print
 
-        if | evaluate opts, verbose opts >= Debug ->
+        if | evaluate opts, tracing opts ->
                  runLazyM opts $ evaluateExpression mpath
                      Nix.tracingEvalLoc printer expr
 

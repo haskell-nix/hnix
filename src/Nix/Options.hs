@@ -10,6 +10,7 @@ import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 data Options = Options
     { verbose      :: Verbosity
+    , tracing      :: Bool
     , parse        :: Bool
     , parseOnly    :: Bool
     , findFile     :: Maybe FilePath
@@ -36,6 +37,7 @@ data Options = Options
 defaultOptions :: Options
 defaultOptions = Options
     { verbose      = ErrorsOnly
+    , tracing      = False
     , parse        = False
     , parseOnly    = False
     , findFile     = Nothing
@@ -93,6 +95,9 @@ nixOptions = Options
             (   short 'v'
              <> long "verbose"
              <> help "Verbose output")))
+    <*> switch
+        (   long "trace"
+         <> help "Enable tracing code (more can be seen with --flags=tracing)")
     <*> switch
         (   long "parse"
          <> help "Whether to parse the file (also the default right now)")
