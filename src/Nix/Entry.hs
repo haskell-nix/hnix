@@ -22,6 +22,7 @@ import qualified Data.Text.Read as Text
 import           Nix.Builtins
 import           Nix.Effects
 import qualified Nix.Eval as Eval
+import qualified Nix.Trace as Trace
 import           Nix.Expr.Shorthands
 import           Nix.Expr.Types (NExpr)
 import           Nix.Expr.Types.Annotated (NExprLoc, stripAnnotation)
@@ -74,7 +75,7 @@ tracingEvalLoc
     => Maybe FilePath -> NExprLoc -> m (NValue m)
 tracingEvalLoc mpath expr = do
     (expr', v) <- evalTopLevelExprGen id mpath
-        =<< Eval.tracingEvalExpr @_ @m @_ @(NValue m)
+        =<< Trace.tracingEvalExpr @_ @m @_ @(NValue m)
                 (Eval.eval @_ @(NValue m)
                            @(NThunk m) @m) expr
     liftIO $ do
