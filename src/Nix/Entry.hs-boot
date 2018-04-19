@@ -23,9 +23,8 @@ type MonadNix e m =
      MonadEffects m, MonadFix m, MonadCatch m)
 
 evalTopLevelExprGen
-    :: forall e m a. MonadNix e m
-    => (a -> m (NValue m)) -> Maybe FilePath -> a
-    -> m (NValue m)
+    :: forall e m a r. MonadNix e m
+    => (a -> m r) -> Maybe FilePath -> a -> m r
 
 eval :: forall e m. MonadNix e m
      => Maybe FilePath -> NExpr -> m (NValue m)

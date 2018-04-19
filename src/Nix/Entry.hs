@@ -24,11 +24,12 @@ import           Nix.Effects
 import qualified Nix.Eval as Eval
 import           Nix.Expr.Shorthands
 import           Nix.Expr.Types (NExpr)
-import           Nix.Expr.Types.Annotated (NExprLoc)
+import           Nix.Expr.Types.Annotated (NExprLoc, stripAnnotation)
 import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser
 import           Nix.Parser.Library (Result(..))
+import           Nix.Pretty
 import           Nix.Scope
 import           Nix.Stack
 import           Nix.Thunk
@@ -40,10 +41,8 @@ type MonadNix e m =
      MonadEffects m, MonadFix m, MonadCatch m)
 
 -- | Evaluate a nix expression in the default context
-evalTopLevelExprGen
-    :: forall e m a. MonadNix e m
-    => (a -> m (NValue m)) -> Maybe FilePath -> a
-    -> m (NValue m)
+evalTopLevelExprGen :: forall e m a r. MonadNix e m
+                    => (a -> m r) -> Maybe FilePath -> a -> m r
 evalTopLevelExprGen cont mpath expr = do
     base <- baseEnv
     opts :: Options <- asks (view hasLens)
@@ -73,11 +72,19 @@ evalLoc = evalTopLevelExprGen $
 tracingEvalLoc
     :: forall e m. (MonadNix e m, Alternative m, MonadIO m)
     => Maybe FilePath -> NExprLoc -> m (NValue m)
-tracingEvalLoc mpath expr =
-    evalTopLevelExprGen id mpath
+tracingEvalLoc mpath expr = do
+    (expr', v) <- evalTopLevelExprGen id mpath
         =<< Eval.tracingEvalExpr @_ @m @_ @(NValue m)
                 (Eval.eval @_ @(NValue m)
                            @(NThunk m) @m) expr
+    liftIO $ do
+        putStrLn "Evaluated expression tree:"
+        putStrLn "--------"
+        print $ prettyNix (stripAnnotation expr)
+        putStrLn "--------"
+        print $ prettyNix (stripAnnotation expr')
+        putStrLn "--------"
+    return v
 
 evaluateExpression
     :: forall e m a. MonadNix e m
