@@ -81,13 +81,6 @@ newtype FlaggedF (f :: * -> *) r = FlaggedF { flagged :: (IORef Bool, f r) }
 instance Show (f r) => Show (FlaggedF f r) where
     show (FlaggedF (_, x)) = show x
 
--- instance Show (f r) => Show (FlaggedF f r) where
---     show (FlaggedF (b, x)) =
---         let !used = unsafePerformIO (readIORef b) in
---         if used
---         then show x
---         else "<<" ++ show x ++ ">>"
-
 type Flagged (f :: * -> *) = Fix (FlaggedF f)
 
 flagExprLoc :: MonadIO n => NExprLoc -> n (Flagged NExprLocF)
