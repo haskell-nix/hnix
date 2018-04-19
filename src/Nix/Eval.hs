@@ -102,7 +102,6 @@ eval (NEnvPath p)           = evalEnvPath p
 eval (NUnary op arg)        = evalUnary op =<< arg
 
 eval (NBinary NApp fun arg) = do
-    traceM "NApp"
     scope <- currentScopes @_ @t
     evalApp ?? withScopes scope arg =<< fun
 
@@ -120,12 +119,10 @@ eval (NSelect aset attr alt) = do
                 ++ intercalate "." (map Text.unpack (NE.toList ks))
                 ++ " in " ++ show @v s
 
-eval (NHasAttr aset attr) = do
-    traceM "NHasAttr"
+eval (NHasAttr aset attr) =
     toValue . either (const False) (const True) =<< evalSelect aset attr
 
 eval e@(NList l) = do
-    traceM "NList"
     scope <- currentScopes
     toValue =<< for l (thunk . exprFContext e . withScopes @t scope)
 
@@ -160,7 +157,6 @@ eval e@(NAbs params body) = do
     -- needs to be used when evaluating the body and default arguments, hence
     -- we defer here so the present scope is restored when the parameters and
     -- body are forced during application.
-    traceM "NAbs"
     scope <- currentScopes @_ @t
     evalAbs (clearDefaults params) $ \arg ->
         -- jww (2018-04-17): We need to use the bound library here, so that
@@ -181,7 +177,6 @@ evalWithAttrSet scope body = do
     -- evaluated each time a name is looked up within the weak scope, and
     -- we want to be sure the action it evaluates is to force a thunk, so
     -- its value is only computed once.
-    traceM "Evaluating with scope"
     cur <- currentScopes @_ @t
     s <- thunk $ exprFContext (NWith scope body)
               $ withScopes cur scope

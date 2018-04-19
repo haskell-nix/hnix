@@ -152,15 +152,8 @@ execBinaryOp NAnd larg rarg = fromNix larg >>= \l ->
 
 -- jww (2018-04-08): Refactor so that eval (NBinary ..) *always* dispatches
 -- based on operator first
-execBinaryOp op larg rarg = do
-    let lval = larg
-    traceM $ "NBinary:left: " ++ show lval
-    rval <- do
-        traceM "NBinary:right..."
-        rval <- rarg
-        traceM $ "NBinary:right: " ++ show (rval :: NValue m)
-        return rval
-
+execBinaryOp op lval rarg = do
+    rval <- rarg
     case (lval, rval) of
         (NVConstant lc, NVConstant rc) -> case (op, lc, rc) of
             (NEq,  _, _)       -> toValue =<< valueEq lval rval
