@@ -35,7 +35,6 @@ import           Nix.Atoms
 import           Nix.Expr
 import           Nix.Stack
 import           Nix.Utils
--- import           System.IO.Unsafe -- move this into a tracing module
 import           Text.Megaparsec.Pos
 
 newtype FlaggedF (f :: * -> *) r = FlaggedF { flagged :: (IORef Bool, f r) }
@@ -171,16 +170,6 @@ tracingEvalExpr eval expr = do
         guard (depth < 200)
         local succ $ do
             action <- k v
-            -- action <- k =<< case x of
-            --     Compose (Ann appAnn
-            --              (NBinary NApp
-            --               (Fix (FlaggedF
-            --                     (impBool,
-            --                      Compose (Ann impAnn
-            --                               (NSym "import")))))
-            --                  appArg)) -> do
-            --         pure $ Fix (FlaggedF (b, error "import detected"))
-            --     _ -> pure v
             return $ withExprContext (stripFlags v) $ do
                 traceM $ "eval: " ++ replicate (depth * 2) ' '
                     ++ show (stripAnnotation (stripFlags v))
