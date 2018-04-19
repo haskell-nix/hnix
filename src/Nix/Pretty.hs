@@ -49,19 +49,19 @@ data NixDoc = NixDoc
   }
 
 -- | A simple expression is never wrapped in parentheses. The expression
--- behaves as if its root operator had a precedence higher than all
--- other operators (including function application).
+--   behaves as if its root operator had a precedence higher than all
+--   other operators (including function application).
 simpleExpr :: Doc -> NixDoc
 simpleExpr = flip NixDoc $ OperatorInfo maxBound NAssocNone "simple expr"
 
--- | An expression that behaves as if its root operator
--- had a precedence lower than all other operators.
--- That ensures that the expression is wrapped in parantheses in
--- almost always, but it's still rendered without parentheses
--- in cases where parentheses are never required (such as in the LHS
--- of a binding).
+-- | An expression that behaves as if its root operator had a precedence lower
+--   than all other operators. That ensures that the expression is wrapped in
+--   parantheses in almost always, but it's still rendered without parentheses
+--   in cases where parentheses are never required (such as in the LHS of a
+--   binding).
 leastPrecedence :: Doc -> NixDoc
-leastPrecedence = flip NixDoc $ OperatorInfo minBound NAssocNone "least precedence"
+leastPrecedence =
+    flip NixDoc $ OperatorInfo minBound NAssocNone "least precedence"
 
 appOp :: OperatorInfo
 appOp = getBinaryOperator NApp
@@ -156,7 +156,7 @@ prettyNix = withoutParens . cata phi where
   phi (NRecSet xs) = simpleExpr $ group $
     nest 2 (vsep $ recPrefix <> lbrace : map prettyBind xs) <$> rbrace
   phi (NAbs args body) = leastPrecedence $
-   (prettyParams args <> colon) </> indent 2 (withoutParens body)
+   nest 2 ((prettyParams args <> colon) <$> withoutParens body)
   phi (NBinary NApp fun arg)
     = NixDoc (wrapParens appOp fun <+> wrapParens appOpNonAssoc arg) appOp
   phi (NBinary op r1 r2) = flip NixDoc opInfo $ hsep
@@ -172,9 +172,10 @@ prettyNix = withoutParens . cata phi where
   phi (NUnary op r1) =
     NixDoc (text (unpack (operatorName opInfo)) <> wrapParens opInfo r1) opInfo
     where opInfo = getUnaryOperator op
-  phi (NSelect r attr o) = (if isJust o then leastPrecedence else flip NixDoc selectOp) $
-     wrapParens selectOp r <> dot <> prettySelector attr <> ordoc
-    where ordoc = maybe empty (((space <> text "or") <+>) . withoutParens) o
+  phi (NSelect r attr o) =
+      (if isJust o then leastPrecedence else flip NixDoc selectOp) $
+          wrapParens selectOp r <> dot <> prettySelector attr <> ordoc
+    where ordoc = maybe empty (((space <> text "or") <+>) . wrapParens selectOp) o
   phi (NHasAttr r attr)
     = NixDoc (wrapParens hasAttrOp r <+> text "?" <+> prettySelector attr) hasAttrOp
   phi (NEnvPath p) = simpleExpr $ text ("<" ++ p ++ ">")

@@ -326,10 +326,12 @@ case_select_or_precedence =
                              case = builtins.head (builtins.attrNames v);
                            in (matcher.case or def case) (v.case);
 in null|] [i|let
-  matchDef = def:   matcher:
-                      v:   let
-                             case = builtins.head (builtins.attrNames v);
-                           in (matcher.case or def) case (v.case);
+  matchDef = def:
+    matcher:
+      v:
+        let
+          case = builtins.head (builtins.attrNames v);
+        in (matcher.case or def) case (v.case);
 in null|]
 
 case_select_or_precedence2 =
@@ -339,10 +341,12 @@ case_select_or_precedence2 =
                              case = builtins.head (builtins.attrNames v);
                            in (matcher.case or null.foo) (v.case);
 in null|] [i|let
-  matchDef = def:   matcher:
-                      v:   let
-                             case = builtins.head (builtins.attrNames v);
-                           in (matcher.case or null).foo (v.case);
+  matchDef = def:
+    matcher:
+      v:
+        let
+          case = builtins.head (builtins.attrNames v);
+        in (matcher.case or null).foo (v.case);
 in null|]
 
 tests :: TestTree
