@@ -52,7 +52,7 @@ data NixDoc = NixDoc
 --   behaves as if its root operator had a precedence higher than all
 --   other operators (including function application).
 simpleExpr :: Doc -> NixDoc
-simpleExpr = flip NixDoc $ OperatorInfo maxBound NAssocNone "simple expr"
+simpleExpr = flip NixDoc $ OperatorInfo minBound NAssocNone "simple expr"
 
 -- | An expression that behaves as if its root operator had a precedence lower
 --   than all other operators. That ensures that the expression is wrapped in
@@ -61,7 +61,7 @@ simpleExpr = flip NixDoc $ OperatorInfo maxBound NAssocNone "simple expr"
 --   binding).
 leastPrecedence :: Doc -> NixDoc
 leastPrecedence =
-    flip NixDoc $ OperatorInfo minBound NAssocNone "least precedence"
+    flip NixDoc $ OperatorInfo maxBound NAssocNone "least precedence"
 
 appOp :: OperatorInfo
 appOp = getBinaryOperator NApp
@@ -77,7 +77,7 @@ hasAttrOp = getSpecialOperator NHasAttrOp
 
 wrapParens :: OperatorInfo -> NixDoc -> Doc
 wrapParens op sub
-  | precedence (rootOp sub) > precedence op = withoutParens sub
+  | precedence (rootOp sub) < precedence op = withoutParens sub
   | precedence (rootOp sub) == precedence op
     && associativity (rootOp sub) == associativity op
     && associativity op /= NAssocNone = withoutParens sub
@@ -158,7 +158,7 @@ prettyNix = withoutParens . cata phi where
   phi (NAbs args body) = leastPrecedence $
    nest 2 ((prettyParams args <> colon) <$> withoutParens body)
   phi (NBinary NApp fun arg)
-    = NixDoc (wrapParens appOp fun <+> parens (withoutParens arg)) appOp
+    = NixDoc (wrapParens appOp fun <+> wrapParens appOpNonAssoc arg) appOp
   phi (NBinary op r1 r2) = flip NixDoc opInfo $ hsep
     [ wrapParens (f NAssocLeft) r1
     , text $ unpack $ operatorName opInfo
