@@ -20,6 +20,10 @@ case_string_antiquotation = do
     assertPretty (mkStr "echo $foo") "\"echo \\$foo\""
     assertPretty (mkStr "echo ${foo}") "\"echo \\${foo}\""
 
+case_function_params :: Assertion
+case_function_params =
+    assertPretty (mkFunction (mkParamset [] True) (mkInt 3)) "{ ... }:\n  3"
+
 tests :: TestTree
 tests = $testGroupGenerator
 
