@@ -110,14 +110,12 @@ prettyParams (ParamSet s v mname) = prettyParamSet s v <> case mname of
 
 prettyParamSet :: ParamSet NixDoc -> Bool -> Doc
 prettyParamSet args var =
-    encloseSep (lbrace <> space) (align rbrace) sep prettyArgs
+    encloseSep (lbrace <> space) (align (space <> rbrace)) sep (map prettySetArg args ++ prettyVariadic)
   where
     prettySetArg (n, maybeDef) = case maybeDef of
       Nothing -> text (unpack n)
       Just v -> text (unpack n) <+> text "?" <+> withoutParens v
-    prettyArgs
-        | var = map prettySetArg args
-        | otherwise = map prettySetArg args ++ [text "..."]
+    prettyVariadic = if var then [text "..."] else []
     sep = align (comma <> space)
 
 prettyBind :: Binding NixDoc -> Doc
