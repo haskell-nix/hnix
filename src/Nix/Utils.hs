@@ -70,16 +70,11 @@ transport f (Fix x) = Fix $ fmap (transport f) (f x)
 --   Essentially, it does for evaluation what recursion schemes do for
 --   representation: allows threading layers through existing structure, only
 --   in this case through behavior.
-adi :: Traversable t
-    => (t a -> a)
-    -> ((Fix t -> a) -> Fix t -> a)
-    -> Fix t -> a
+adi :: Functor f => (f a -> a) -> ((Fix f -> a) -> Fix f -> a) -> Fix f -> a
 adi f g = g (f . fmap (adi f g) . unFix)
 
 adiM :: (Traversable t, Monad m)
-     => (t a -> m a)
-     -> ((Fix t -> m a) -> Fix t -> m a)
-     -> Fix t -> m a
+     => (t a -> m a) -> ((Fix t -> m a) -> Fix t -> m a) -> Fix t -> m a
 adiM f g = g ((f <=< traverse (adiM f g)) . unFix)
 
 type MonoLens a b = forall f. Functor f => (b -> f b) -> a -> f a
