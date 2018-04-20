@@ -75,21 +75,22 @@ processImports mfile expr = do
                         processImports (Just path') x'
         x -> pure $ Fix x
 
-newtype FlaggedF (f :: * -> *) r = FlaggedF { flagged :: (IORef Bool, f r) }
+newtype FlaggedF f r = FlaggedF { flagged :: (IORef Bool, f r) }
     deriving (Functor, Foldable, Traversable)
 
 instance Show (f r) => Show (FlaggedF f r) where
     show (FlaggedF (_, x)) = show x
 
-type Flagged (f :: * -> *) = Fix (FlaggedF f)
+type Flagged f = Fix (FlaggedF f)
 
-flagExprLoc :: MonadIO n => NExprLoc -> n (Flagged NExprLocF)
+flagExprLoc :: (MonadIO n, Traversable f)
+            => Fix f -> n (Flagged f)
 flagExprLoc = cataM $ \x -> do
     flag <- liftIO $ newIORef False
     pure $ Fix $ FlaggedF (flag, x)
 
-stripFlags :: Flagged NExprLocF -> NExprLoc
-stripFlags = cata $ \(FlaggedF (_, x)) -> Fix x
+stripFlags :: Functor f => Flagged f -> Fix f
+stripFlags = cata $ Fix . snd . flagged
 
 pruneTree :: MonadIO n => Flagged NExprLocF -> n (Maybe NExprLoc)
 pruneTree = cataM $ \(FlaggedF (b, Compose x)) -> do
