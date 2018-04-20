@@ -24,56 +24,18 @@ import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Reader
-import           Control.Monad.Trans.State
 import           Data.Fix
 import           Data.Functor.Compose
 import           Data.IORef
-import           Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
-import           Data.HashMap.Lazy (HashMap)
-import qualified Data.HashMap.Lazy as M
-import           Data.Maybe (maybe, fromMaybe, mapMaybe)
+import           Data.Maybe (fromMaybe, mapMaybe)
 import           Data.Text (Text)
 import           Nix.Atoms
-import           Nix.Exec
 import           Nix.Expr
-import           Nix.Parser
+import           Nix.Reduce
 import           Nix.Stack
 import           Nix.Utils
-import           System.Directory
-import           System.FilePath
 import           Text.Megaparsec.Pos
-
-processImports :: Maybe FilePath
-               -> NExprLoc
-               -> StateT (HashMap FilePath NExprLoc) IO NExprLoc
-processImports mfile expr = do
-    imports <- get
-    flip cataM expr $ \case
-        Compose (Ann _ (NBinary NApp
-                        (Fix (Compose (Ann _ (NSym "import"))))
-                        (Fix (Compose (Ann _ (NLiteralPath origPath))))))
-            | Just expr <- M.lookup origPath imports -> pure expr
-            | otherwise -> do
-                path  <- liftIO $ pathToDefaultNixFile origPath
-                path' <- liftIO $ pathToDefaultNixFile =<< canonicalizePath
-                    (maybe path (\p -> takeDirectory p </> path) mfile)
-
-                traceM $ "Importing file " ++ path'
-
-                eres <- liftIO $ parseNixFileLoc path'
-                case eres of
-                    Failure err  -> error $ "Parse failed: " ++ show err
-                    Success x -> do
-                        let pos  = SourcePos "Trace.hs" (mkPos 1) (mkPos 1)
-                            span = SrcSpan pos pos
-                            cur  = NamedVar
-                                (StaticKey "__cur_file" (Just pos) :| [])
-                                (Fix (Compose (Ann span (NLiteralPath path'))))
-                            x'   = Fix (Compose (Ann span (NLet [cur] x)))
-                        modify (M.insert origPath x')
-                        processImports (Just path') x'
-        x -> pure $ Fix x
 
 newtype FlaggedF f r = FlaggedF { flagged :: (IORef Bool, f r) }
     deriving (Functor, Foldable, Traversable)
@@ -200,8 +162,7 @@ tracingEvalExpr :: (Framed e m, Exception r, MonadCatch m, MonadIO m,
                 => (NExprF (m v) -> m v) -> Maybe FilePath -> NExprLoc
                 -> n (m (NExprLoc, Either r v))
 tracingEvalExpr eval mpath expr = do
-    expr' <- flagExprLoc
-        =<< liftIO (evalStateT (processImports mpath expr) M.empty)
+    expr' <- flagExprLoc =<< liftIO (reduceExpr mpath expr)
     res <- flip runReaderT (0 :: Int) $
         adiM (pure <$> eval . annotated . getCompose . snd . flagged)
              psi expr'
@@ -215,10 +176,12 @@ tracingEvalExpr eval mpath expr = do
         guard (depth < 200)
         local succ $ do
             action <- k v
+            -- jww (2018-04-20): We should be able to compose this evaluator
+            -- with framedEvalExpr, rather than replicating its behavior here.
             return $ withExprContext (stripFlags v) $ do
-                liftIO $ putStrLn $ "eval: " ++ replicate depth ' '
-                    ++ show (void (unFix (stripAnnotation (stripFlags v))))
+                -- liftIO $ putStrLn $ "eval: " ++ replicate depth ' '
+                --     ++ show (void (unFix (stripAnnotation (stripFlags v))))
                 liftIO $ writeIORef b True
                 res <- action
-                liftIO $ putStrLn $ "eval: " ++ replicate depth ' ' ++ "."
+                -- liftIO $ putStrLn $ "eval: " ++ replicate depth ' ' ++ "."
                 return res
