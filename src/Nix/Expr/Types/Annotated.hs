@@ -35,6 +35,7 @@ import Data.Ord.Deriving
 import Data.Semigroup
 import Data.Text (Text, pack)
 import GHC.Generics
+import Nix.Atoms
 import Nix.Expr.Types
 import Nix.Parser.Library (SourcePos(..))
 import Text.Megaparsec (unPos)
@@ -143,3 +144,56 @@ nStr (Ann s1 s) = AnnE s1 (NStr s)
 
 deltaInfo :: SourcePos -> (Text, Int, Int)
 deltaInfo (SourcePos fp l c) = (pack fp, unPos l, unPos c)
+
+-- | Pattern systems for matching on NExprLocF constructions.
+
+pattern NSym_ :: SrcSpan -> VarName -> NExprLocF r
+pattern NSym_ ann x = Compose (Ann ann (NSym x))
+
+pattern NConstant_ :: SrcSpan -> NAtom -> NExprLocF r
+pattern NConstant_ ann x = Compose (Ann ann (NConstant x))
+
+pattern NStr_ :: SrcSpan -> NString r -> NExprLocF r
+pattern NStr_ ann x = Compose (Ann ann (NStr x))
+
+pattern NList_ :: SrcSpan -> [r] -> NExprLocF r
+pattern NList_ ann x = Compose (Ann ann (NList x))
+
+pattern NSet_ :: SrcSpan -> [Binding r] -> NExprLocF r
+pattern NSet_ ann x = Compose (Ann ann (NSet x))
+
+pattern NRecSet_ :: SrcSpan -> [Binding r] -> NExprLocF r
+pattern NRecSet_ ann x = Compose (Ann ann (NRecSet x))
+
+pattern NLiteralPath_ :: SrcSpan -> FilePath -> NExprLocF r
+pattern NLiteralPath_ ann x = Compose (Ann ann (NLiteralPath x))
+
+pattern NEnvPath_ :: SrcSpan -> FilePath -> NExprLocF r
+pattern NEnvPath_ ann x = Compose (Ann ann (NEnvPath x))
+
+pattern NSelect_ :: SrcSpan -> r -> NAttrPath r -> Maybe r -> NExprLocF r
+pattern NSelect_ ann x p v = Compose (Ann ann (NSelect x p v))
+
+pattern NHasAttr_ :: SrcSpan -> r -> NAttrPath r -> NExprLocF r
+pattern NHasAttr_ ann x p = Compose (Ann ann (NHasAttr x p))
+
+pattern NAbs_ :: SrcSpan -> Params r-> r -> NExprLocF r
+pattern NAbs_ ann x b = Compose (Ann ann (NAbs x b))
+
+pattern NLet_ :: SrcSpan -> [Binding r] -> r -> NExprLocF r
+pattern NLet_ ann x b = Compose (Ann ann (NLet x b))
+
+pattern NIf_ :: SrcSpan -> r -> r -> r -> NExprLocF r
+pattern NIf_ ann c t e = Compose (Ann ann (NIf c t e))
+
+pattern NWith_ :: SrcSpan -> r -> r -> NExprLocF r
+pattern NWith_ ann x y = Compose (Ann ann (NWith x y))
+
+pattern NAssert_ :: SrcSpan -> r -> r -> NExprLocF r
+pattern NAssert_ ann x y = Compose (Ann ann (NAssert x y))
+
+pattern NUnary_ :: SrcSpan -> NUnaryOp -> r -> NExprLocF r
+pattern NUnary_ ann op x = Compose (Ann ann (NUnary op x))
+
+pattern NBinary_ :: SrcSpan -> NBinaryOp -> r -> r -> NExprLocF r
+pattern NBinary_ ann op x y = Compose (Ann ann (NBinary op x y))
