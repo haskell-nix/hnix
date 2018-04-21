@@ -290,7 +290,8 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
           _ -> throwError $ "addPath: failed: nix-store --add " ++ show path
 
     makeAbsolutePath origPath = do
-        absPath <- if isAbsolute origPath then pure origPath else do
+        origPathExpanded <- liftIO $ expandHomePath origPath
+        absPath <- if isAbsolute origPathExpanded then pure origPathExpanded else do
             cwd <- do
                 mres <- lookupVar @_ @(NThunk (Lazy m)) "__cur_file"
                 case mres of
@@ -301,7 +302,8 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
                                 ++ " __cur_file is in scope,"
                                 ++ " but is not a path; it is: "
                                 ++ show v
-            pure $ cwd <///> origPath
+            pure $ cwd <///> origPathExpanded
+        _ <- liftIO $ putStrLn $ show absPath
         liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
 
     findEnvPath = findEnvPathM
@@ -417,6 +419,10 @@ removeDotDotIndirections = intercalate "/" . go [] . splitOn "/"
     where go s [] = reverse s
           go (_:s) ("..":rest) = go s rest
           go s (this:rest) = go (this:s) rest
+
+expandHomePath :: FilePath -> IO FilePath
+expandHomePath ('~' : xs) = flip (++) xs <$> getHomeDirectory
+expandHomePath p = return p
 
 -- Given a path, determine the nix file to load
 pathToDefaultNixFile :: FilePath -> IO FilePath
