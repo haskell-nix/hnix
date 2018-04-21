@@ -24,7 +24,6 @@ import           Control.Applicative
 import           Control.Arrow (second)
 import           Control.Monad.Reader
 -- import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Reader (ReaderT(..))
 import           Data.Fix
 import           Data.Functor.Compose
 import qualified Data.HashMap.Lazy as M
@@ -55,7 +54,7 @@ import           Nix.XML
 -- | Evaluate a nix expression in the default context
 withNixContext :: forall e m r. MonadNix e m => Maybe FilePath -> m r -> m r
 withNixContext mpath action = do
-    base <- baseEnv
+    base <- builtins
     opts :: Options <- asks (view hasLens)
     let i = value @(NValue m) @(NThunk m) @m $ NVList $
             map (value @(NValue m) @(NThunk m) @m
@@ -86,16 +85,14 @@ nixEvalExprLoc :: MonadNix e m
 nixEvalExprLoc mpath =
     nixEval mpath Eval.addStackFrames (Eval.eval . annotated . getCompose)
 
--- | Evaluate a nix expression with tracing in the default context
+-- | Evaluate a nix expression with tracing in the default context. Note that
+--   this function doesn't do any tracing itself, but 'evalExprLoc' will be
+--   'tracing' is set to 'True' in the Options structure (accessible through
+--   'MonadNix'). All this function does is provide the right type class
+--   context.
 nixTracingEvalExprLoc :: forall e m. (MonadNix e m, MonadIO m, Alternative m)
                       => Maybe FilePath -> NExprLoc -> m (NValue m)
-nixTracingEvalExprLoc mpath
-    = withNixContext mpath
-    . join . (`runReaderT` (0 :: Int))
-    . adi (addTracing (Eval.eval . annotated . getCompose))
-          (raise Eval.addStackFrames)
-  where
-    raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x
+nixTracingEvalExprLoc mpath = withNixContext mpath . evalExprLoc
 
 evaluateExpression
     :: MonadNix e m

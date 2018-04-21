@@ -70,7 +70,7 @@ import           Text.PrettyPrint.ANSI.Leijen (text)
 
 type MonadNix e m =
     (Scoped e (NThunk m) m, Framed e m, MonadVar m, MonadFile m,
-     MonadEffects m, MonadFix m, MonadCatch m)
+     MonadEffects m, MonadFix m, MonadCatch m, Alternative m)
 
 nverr :: forall e m a. MonadNix e m => String -> m a
 nverr = evalError @(NValue m)
@@ -278,7 +278,7 @@ instance MonadCatch m => MonadCatch (Lazy m) where
 instance MonadThrow m => MonadThrow (Lazy m) where
     throwM = Lazy . throwM
 
-instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
+instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m, Alternative m)
       => MonadEffects (Lazy m) where
     addPath path = do
         (exitCode, out, _) <-
@@ -334,7 +334,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
                     -- import, we'll remember which directory its containing
                     -- file was in.
                     pushScope (M.singleton "__cur_file" ref) $
-                        pushScope scope $ Eval.framedEvalExprLoc expr
+                        pushScope scope $ evalExprLoc expr
 
     getEnvVar = liftIO . lookupEnv
 
@@ -403,7 +403,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
                     Failure err ->
                         throwError $ "Error parsing output of nix-instantiate: "
                             ++ show err
-                    Success v -> Eval.framedEvalExprLoc v
+                    Success v -> evalExprLoc v
             err -> throwError $ "nix-instantiate failed: " ++ show err
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
@@ -502,3 +502,17 @@ addTracing k v = do
             res <- k v'
             liftIO $ putStrLn $ msg (rendered ++ " ...done")
             return res
+
+evalExprLoc :: forall e m. (MonadNix e m, MonadIO m, Alternative m)
+            => NExprLoc -> m (NValue m)
+evalExprLoc expr = do
+    opts :: Options <- asks (view hasLens)
+    if tracing opts
+        then join
+             . (`runReaderT` (0 :: Int))
+             . adi (addTracing (Eval.eval . annotated . getCompose))
+                   (raise addStackFrames)
+             $ expr
+        else adi (Eval.eval . annotated . getCompose) addStackFrames expr
+  where
+    raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x

@@ -211,7 +211,8 @@ reduce (NAbs_ ann params body) = do
 
 reduce v = Fix <$> sequence v
 
-newtype FlaggedF f r = FlaggedF { flagged :: (IORef Bool, f r) }
+-- newtype FlaggedF f r = FlaggedF { flagged :: (IORef Bool, f r) }
+newtype FlaggedF f r = FlaggedF (IORef Bool, f r)
     deriving (Functor, Foldable, Traversable)
 
 instance Show (f r) => Show (FlaggedF f r) where
@@ -225,8 +226,8 @@ flagExprLoc = cataM $ \x -> do
     flag <- liftIO $ newIORef False
     pure $ Fix $ FlaggedF (flag, x)
 
-stripFlags :: Functor f => Flagged f -> Fix f
-stripFlags = cata $ Fix . snd . flagged
+-- stripFlags :: Functor f => Flagged f -> Fix f
+-- stripFlags = cata $ Fix . snd . flagged
 
 pruneTree :: MonadIO n => Options -> Flagged NExprLocF -> n (Maybe NExprLoc)
 pruneTree opts = cataM $ \(FlaggedF (b, Compose x)) -> do
