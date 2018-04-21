@@ -140,13 +140,8 @@ reduce e@(NSet_ ann binds) = do
             Inherit _ _ -> True
             _ -> False
     if usesInherit
-        then do
-            -- mv <- lookupVar "callLibs"
-            clearScopes @NExprLoc $
-            --     (case mv of
-            --          Nothing -> id
-            --          Just v -> pushScope @NExprLoc (M.singleton "callLibs" v)) $
-                    Fix . NSet_ ann <$> traverse sequence binds
+        then clearScopes @NExprLoc $
+            Fix . NSet_ ann <$> traverse sequence binds
         else Fix <$> sequence e
 
 -- Encountering a 'rec set' construction eliminates any hope of inlining
@@ -157,12 +152,8 @@ reduce (NRecSet_ ann binds) =
 -- Encountering a 'with' construction eliminates any hope of inlining
 -- definitions.
 reduce (NWith_ ann scope body) = do
-    -- mv <- lookupVar "callLibs"
     clearScopes @NExprLoc $
-    --     (case mv of
-    --          Nothing -> id
-    --          Just v -> pushScope @NExprLoc (M.singleton "callLibs" v)) $
-            fmap Fix $ NWith_ ann <$> scope <*> body
+        fmap Fix $ NWith_ ann <$> scope <*> body
 
 reduce (NLet_ ann binds body) = do
     -- We only handle in order definitions...
