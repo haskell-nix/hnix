@@ -20,7 +20,6 @@ module Repl where
 
 import           Nix
 import           Nix.Eval
-import           Nix.Core
 import           Nix.Scope
 import qualified Nix.Type.Env as Env
 import           Nix.Type.Infer

@@ -55,8 +55,8 @@ import           Data.Traversable (mapM)
 import           Language.Haskell.TH.Syntax (addDependentFile, runIO)
 import           Nix.Atoms
 import           Nix.Convert
-import qualified Nix.Core as Core
 import           Nix.Effects
+import qualified Nix.Eval as Eval
 import           Nix.Exec
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
@@ -125,7 +125,7 @@ builtinsList = sequence [
           let f = "data/nix/corepkgs/derivation.nix"
           addDependentFile f
           Success expr <- runIO $ parseNixFile f
-          [| cata Core.eval expr |]
+          [| cata Eval.eval expr |]
       )
 
     , add  Normal   "getEnv"                     getEnv_

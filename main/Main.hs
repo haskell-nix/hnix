@@ -20,7 +20,7 @@ import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Text.Lazy.IO as TL
 import           Nix
 import           Nix.Convert
-import qualified Nix.Core as Core
+import qualified Nix.Eval as Eval
 -- import           Nix.Lint
 import           Nix.Utils
 import           Options.Applicative hiding (ParserResult(..))
@@ -121,7 +121,7 @@ main = do
 
     reduction path mp x = do
         eres <- Nix.withNixContext mp $
-            Nix.reducingEvalExpr (Core.eval . annotated . getCompose) mp x
+            Nix.reducingEvalExpr (Eval.eval . annotated . getCompose) mp x
         handleReduced path eres
 
     handleReduced :: (MonadThrow m, MonadIO m)

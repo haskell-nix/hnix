@@ -34,8 +34,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Read as Text
 import           Nix.Builtins
 import           Nix.Cache
-import qualified Nix.Core as Core
-import           Nix.Eval
+import qualified Nix.Eval as Eval
 import           Nix.Exec
 import           Nix.Expr
 -- import           Nix.Expr.Shorthands
@@ -81,13 +80,13 @@ nixEval mpath xform alg = withNixContext mpath . adi alg xform
 -- | Evaluate a nix expression in the default context
 nixEvalExpr :: forall e m. MonadNix e m
             => Maybe FilePath -> NExpr -> m (NValue m)
-nixEvalExpr mpath = nixEval mpath id Core.eval
+nixEvalExpr mpath = nixEval mpath id Eval.eval
 
 -- | Evaluate a nix expression in the default context
 nixEvalExprLoc :: MonadNix e m
                => Maybe FilePath -> NExprLoc -> m (NValue m)
 nixEvalExprLoc mpath =
-    nixEval mpath addStackFrames (Core.eval . annotated . getCompose)
+    nixEval mpath Eval.addStackFrames (Eval.eval . annotated . getCompose)
 
 -- | Evaluate a nix expression with tracing in the default context
 nixTracingEvalExprLoc :: forall e m. (MonadNix e m, MonadIO m, Alternative m)
@@ -95,8 +94,8 @@ nixTracingEvalExprLoc :: forall e m. (MonadNix e m, MonadIO m, Alternative m)
 nixTracingEvalExprLoc mpath
     = withNixContext mpath
     . join . (`runReaderT` (0 :: Int))
-    . adi (addTracing (Core.eval . annotated . getCompose))
-          (raise addStackFrames)
+    . adi (addTracing (Eval.eval . annotated . getCompose))
+          (raise Eval.addStackFrames)
   where
     raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x
 

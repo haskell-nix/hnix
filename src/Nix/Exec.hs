@@ -47,7 +47,6 @@ import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Context
 import           Nix.Convert
-import           Nix.Core (MonadEval(..), evalWithAttrSet)
 import           Nix.Effects
 import           Nix.Eval as Eval
 import           Nix.Expr
