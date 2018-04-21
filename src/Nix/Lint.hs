@@ -41,7 +41,7 @@ import           Data.Void
 import           Nix.Atoms
 import           Nix.Context
 import           Nix.Convert
-import           Nix.Eval
+import           Nix.Core (MonadEval(..))
 import qualified Nix.Eval as Eval
 import           Nix.Expr
 import           Nix.Options
@@ -414,4 +414,4 @@ symbolicBaseEnv = return emptyScopes
 
 lint :: Options -> NExprLoc -> ST s (Symbolic (Lint s))
 lint opts expr = runLintM opts $
-    symbolicBaseEnv >>= (`pushScopes` Eval.framedEvalExpr Eval.eval expr)
+    symbolicBaseEnv >>= (`pushScopes` Eval.framedEvalExpr expr)

@@ -38,6 +38,7 @@ import           Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
 import           Data.Coerce
+import           Data.Fix
 import           Data.Foldable (foldrM)
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
@@ -54,8 +55,8 @@ import           Data.Traversable (mapM)
 import           Language.Haskell.TH.Syntax (addDependentFile, runIO)
 import           Nix.Atoms
 import           Nix.Convert
+import qualified Nix.Core as Core
 import           Nix.Effects
-import           Nix.Eval
 import           Nix.Exec
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
@@ -124,7 +125,7 @@ builtinsList = sequence [
           let f = "data/nix/corepkgs/derivation.nix"
           addDependentFile f
           Success expr <- runIO $ parseNixFile f
-          [| evalExpr expr |]
+          [| cata Core.eval expr |]
       )
 
     , add  Normal   "getEnv"                     getEnv_

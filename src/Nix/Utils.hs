@@ -3,10 +3,12 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 
 module Nix.Utils (module Nix.Utils, module X) where
 
 import           Control.Applicative
+import           Control.Arrow ((&&&))
 import           Control.Monad
 import           Control.Monad.Fix
 import qualified Data.Aeson as A
@@ -34,6 +36,15 @@ type DList a = Endo [a]
 
 type AttrSet = HashMap Text
 
+-- | An f-algebra defines how to reduced the fixed-point of a functor to a
+--   value.
+type Alg f a = f a -> a
+
+type AlgM f m a = f a -> m a
+
+-- | An "transform" here is a modification of a catamorphism.
+type Transform f a = (Fix f -> a) -> Fix f -> a
+
 infixr 0 &
 (&) :: a -> (a -> c) -> c
 (&) = flip ($)
@@ -50,15 +61,17 @@ loeb x = go where go = fmap ($ go) x
 loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
 loebM f = mfix $ \a -> mapM ($ a) f
 
-para :: (a -> [a] -> b -> b) -> b -> [a] -> b
-para f base = h where
-    h []     = base
-    h (x:xs) = f x xs (h xs)
+para :: Functor f => (f (Fix f, a) -> a) -> Fix f -> a
+para f = f . fmap (id &&& para f) . unFix
 
-paraM :: Monad m => (a -> [a] -> b -> m b) -> b -> [a] -> m b
-paraM f base = h where
-    h []     = return base
-    h (x:xs) = f x xs =<< h xs
+paraM :: (Traversable f, Monad m) => (f (Fix f, a) -> m a) -> Fix f -> m a
+paraM f = f <=< traverse (\x -> (x,) <$> paraM f x) . unFix
+
+cataP :: Functor f => (Fix f -> f a -> a) -> Fix f -> a
+cataP f x = f x . fmap (cataP f) . unFix $ x
+
+cataPM :: (Traversable f, Monad m) => (Fix f -> f a -> m a) -> Fix f -> m a
+cataPM f x = f x <=< traverse (cataPM f) . unFix $ x
 
 transport :: Functor g => (forall x. f x -> g x) -> Fix f -> Fix g
 transport f (Fix x) = Fix $ fmap (transport f) (f x)

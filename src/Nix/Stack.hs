@@ -43,36 +43,34 @@ withStringContext str = local (over hasLens (Left @_ @NExprLoc str :))
 class Monad m => MonadFile m where
     readFile :: FilePath -> m ByteString
 
-posAndMsg :: Options -> SourcePos -> Doc -> ParseError t Void
-posAndMsg opts beg msg =
+posAndMsg :: SourcePos -> Doc -> ParseError t Void
+posAndMsg beg msg =
     FancyError (beg :| [])
-        (Set.fromList [ErrorFail
-                           (if verbose opts >= Chatty
-                            then "While evaluating:\n>>>>>>>>\n"
-                               ++ intercalate "  \n" (lines (show msg))
-                               ++ "\n<<<<<<<<"
-                            else "Expression: " ++ show msg)
-                           :: ErrorFancy Void])
+        (Set.fromList [ErrorFail (show msg) :: ErrorFancy Void])
 
 renderLocation :: (Framed e m, MonadFile m) => SrcSpan -> Doc -> m Doc
-renderLocation (SrcSpan beg@(SourcePos "<string>" _ _) _) msg = do
-    opts :: Options <- asks (view hasLens)
-    return $ text $ parseErrorPretty @Char (posAndMsg opts beg msg)
+renderLocation (SrcSpan beg@(SourcePos "<string>" _ _) _) msg =
+    return $ text $ parseErrorPretty @Char (posAndMsg beg msg)
 
 renderLocation (SrcSpan beg@(SourcePos path _ _) _) msg = do
-    opts :: Options <- asks (view hasLens)
     contents <- Nix.Stack.readFile path
-    return $ text $ parseErrorPretty' contents (posAndMsg opts beg msg)
+    return $ text $ parseErrorPretty' contents (posAndMsg beg msg)
 
 renderFrame :: (Framed e m, MonadFile m)
             => Either String NExprLoc -> m String
 renderFrame (Left str) = return str
 renderFrame (Right expr@(Fix (Compose (Ann ann x)))) = do
     opts :: Options <- asks (view hasLens)
-    fmap show $ renderLocation ann $ prettyNix $
-        if verbose opts >= Chatty
-        then stripAnnotation expr
-        else Fix (Fix (NSym "<?>") <$ x)
+    let rendered = show $ prettyNix $
+            if verbose opts >= Chatty
+            then stripAnnotation expr
+            else Fix (Fix (NSym "<?>") <$ x)
+        msg = if verbose opts >= Chatty
+              then "While evaluating:\n>>>>>>>>\n"
+                       ++ intercalate "  \n" (lines rendered)
+                       ++ "\n<<<<<<<<"
+              else "Expression: " ++ rendered
+    show <$> renderLocation ann (text msg)
 
 throwError :: (Framed e m, MonadFile m, MonadThrow m) => String -> m a
 throwError str = do

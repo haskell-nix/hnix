@@ -47,9 +47,9 @@ import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Context
 import           Nix.Convert
+import           Nix.Core (MonadEval(..), evalWithAttrSet)
 import           Nix.Effects
-import           Nix.Eval
-import qualified Nix.Eval as Eval
+import           Nix.Eval as Eval
 import           Nix.Expr
 import           Nix.Normal
 import           Nix.Options
@@ -67,7 +67,10 @@ import           System.FilePath
 import qualified System.Info
 import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
-import {-# SOURCE #-} Nix.Entry as Entry
+
+type MonadNix e m =
+    (Scoped e (NThunk m) m, Framed e m, MonadVar m, MonadFile m,
+     MonadEffects m, MonadFix m, MonadCatch m)
 
 nverr :: forall e m a. MonadNix e m => String -> m a
 nverr = evalError @(NValue m)
@@ -329,8 +332,8 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
                     -- Use this cookie so that when we evaluate the next
                     -- import, we'll remember which directory its containing
                     -- file was in.
-                    pushScope (M.singleton "__cur_file" ref)
-                        (pushScope scope (framedEvalExpr Eval.eval expr))
+                    pushScope (M.singleton "__cur_file" ref) $
+                        pushScope scope $ Eval.framedEvalExpr expr
 
     getEnvVar = liftIO . lookupEnv
 
@@ -399,7 +402,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
                     Failure err ->
                         throwError $ "Error parsing output of nix-instantiate: "
                             ++ show err
-                    Success v -> framedEvalExpr Eval.eval v
+                    Success v -> Eval.framedEvalExpr v
             err -> throwError $ "nix-instantiate failed: " ++ show err
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a

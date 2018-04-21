@@ -11,6 +11,9 @@ import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 data Options = Options
     { verbose      :: Verbosity
     , tracing      :: Bool
+    , reduce       :: Maybe FilePath
+    , reduceSets   :: Bool
+    , reduceLists  :: Bool
     , parse        :: Bool
     , parseOnly    :: Bool
     , findFile     :: Maybe FilePath
@@ -38,6 +41,9 @@ defaultOptions :: Options
 defaultOptions = Options
     { verbose      = ErrorsOnly
     , tracing      = False
+    , reduce       = Nothing
+    , reduceSets   = False
+    , reduceLists  = False
     , parse        = False
     , parseOnly    = False
     , findFile     = Nothing
@@ -97,7 +103,16 @@ nixOptions = Options
              <> help "Verbose output")))
     <*> switch
         (   long "trace"
-         <> help "Enable tracing code (more can be seen with --flags=tracing)")
+         <> help "Enable tracing code (even more can be seen if built with --flags=tracing)")
+    <*> optional (strOption
+        (   long "reduce"
+         <> help "When done evaluating, output the evaluated part of the expression to FILE"))
+    <*> switch
+        (   long "reduce-sets"
+         <> help "Reduce set members that aren't used; breaks if hasAttr is used")
+    <*> switch
+        (   long "reduce-lists"
+         <> help "Reduce list members that aren't used; breaks if elemAt is used")
     <*> switch
         (   long "parse"
          <> help "Whether to parse the file (also the default right now)")

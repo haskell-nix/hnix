@@ -20,6 +20,7 @@ module Repl where
 
 import           Nix
 import           Nix.Eval
+import           Nix.Core
 import           Nix.Scope
 import qualified Nix.Type.Env as Env
 import           Nix.Type.Infer
@@ -88,14 +89,10 @@ exec update source = do
 
   -- If a value is entered, print it.
   val <- liftIO $ runLazyM defaultOptions $
-      evalTopLevelExprGen
-          -- jww (2018-04-12): Once the user is able to establish definitions
-          -- in the repl, they should be passed here.
-          (pushScope @(NThunk (Lazy IO)) M.empty
-               . framedEvalExpr
-                     (Nix.Eval.eval @_ @(NValue (Lazy IO))
-                                    @(NThunk (Lazy IO)) @(Lazy IO)))
-          Nothing expr
+      -- jww (2018-04-12): Once the user is able to establish definitions
+      -- in the repl, they should be passed here.
+      pushScope @(NThunk (Lazy IO)) M.empty $
+          nixEvalExprLoc Nothing expr
   liftIO $ print val
 
 cmd :: String -> Repl ()

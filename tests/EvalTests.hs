@@ -163,9 +163,9 @@ instance (Show r, Show (NValueF m r), Eq r) => Eq (NValueF m r) where
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
 constantEqual a b = do
     -- putStrLn =<< lint (stripAnnotation a)
-    a' <- runLazyM defaultOptions $ normalForm =<< evalLoc Nothing a
+    a' <- runLazyM defaultOptions $ normalForm =<< nixEvalExprLoc Nothing a
     -- putStrLn =<< lint (stripAnnotation b)
-    b' <- runLazyM defaultOptions $ normalForm =<< evalLoc Nothing b
+    b' <- runLazyM defaultOptions $ normalForm =<< nixEvalExprLoc Nothing b
     assertEqual "" a' b'
 
 constantEqualText' :: Text -> Text -> Assertion

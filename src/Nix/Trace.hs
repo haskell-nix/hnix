@@ -23,7 +23,7 @@ import           Control.Arrow (second)
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Reader
+import           Control.Monad.Reader
 import           Data.Fix
 import           Data.Functor.Compose
 import           Data.IORef
@@ -31,11 +31,15 @@ import qualified Data.List.NonEmpty as NE
 import           Data.Maybe (fromMaybe, mapMaybe)
 import           Data.Text (Text)
 import           Nix.Atoms
+import           Nix.Exec (MonadNix)
 import           Nix.Expr
+import           Nix.Options
+import           Nix.Pretty (prettyNix)
 import           Nix.Reduce
 import           Nix.Stack
 import           Nix.Utils
 import           Text.Megaparsec.Pos
+import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 newtype FlaggedF f r = FlaggedF { flagged :: (IORef Bool, f r) }
     deriving (Functor, Foldable, Traversable)
@@ -154,34 +158,44 @@ pruneTree = cataM $ \(FlaggedF (b, Compose x)) -> do
 
 nNull :: NExprLoc
 nNull = Fix (Compose (Ann (SrcSpan nullPos nullPos) (NConstant NNull)))
-  where
-    nullPos = SourcePos "<unknown>" (mkPos 0) (mkPos 0)
 
-tracingEvalExpr :: (Framed e m, Exception r, MonadCatch m, MonadIO m,
-                   MonadCatch n, MonadIO n, Alternative n)
-                => (NExprF (m v) -> m v) -> Maybe FilePath -> NExprLoc
-                -> n (m (NExprLoc, Either r v))
-tracingEvalExpr eval mpath expr = do
-    expr' <- flagExprLoc =<< liftIO (reduceExpr mpath expr)
-    res <- flip runReaderT (0 :: Int) $
-        adiM (pure <$> eval . annotated . getCompose . snd . flagged)
-             psi expr'
-    return $ do
-        eres   <- catch (Right <$> res) (pure . Left)
-        expr'' <- pruneTree expr'
-        return (fromMaybe nNull expr'', eres)
+nullAnn :: SrcSpan
+nullAnn = SrcSpan nullPos nullPos
+
+nullPos :: SourcePos
+nullPos = SourcePos "<unknown>" (mkPos 0) (mkPos 0)
+
+addTracing :: (MonadNix e m, MonadIO m,
+              MonadReader Int n, Alternative n)
+           => Alg NExprLocF (m a) -> Alg NExprLocF (n (m a))
+addTracing k v = do
+    depth <- ask
+    guard (depth < 2000)
+    local succ $ do
+        v'@(Compose (Ann span x)) <- sequence v
+        return $ do
+            opts :: Options <- asks (view hasLens)
+            let rendered =
+                    if verbose opts >= Chatty
+                    then show (void x)
+                    else show (prettyNix (Fix (Fix (NSym "?") <$ x)))
+                msg x = "eval: " ++ replicate depth ' ' ++ x
+            loc <- renderLocation span (text (msg rendered ++ " ..."))
+            liftIO $ putStr $ show loc
+            res <- k v'
+            liftIO $ putStrLn $ msg (rendered ++ " ...done")
+            return res
+
+reducingEvalExpr
+    :: (Framed e m, Exception r, MonadCatch m, MonadIO m)
+    => (NExprLocF (m a) -> m a)
+    -> Maybe FilePath
+    -> NExprLoc
+    -> m (NExprLoc, Either r a)
+reducingEvalExpr eval mpath expr = do
+    expr'  <- flagExprLoc =<< liftIO (reduceExpr mpath expr)
+    eres   <- catch (Right <$> cata (addEvalFlags eval) expr') (pure . Left)
+    expr'' <- pruneTree expr'
+    return (fromMaybe nNull expr'', eres)
   where
-    psi k v@(Fix (FlaggedF (b, _x))) = do
-        depth <- ask
-        guard (depth < 200)
-        local succ $ do
-            action <- k v
-            -- jww (2018-04-20): We should be able to compose this evaluator
-            -- with framedEvalExpr, rather than replicating its behavior here.
-            return $ withExprContext (stripFlags v) $ do
-                -- liftIO $ putStrLn $ "eval: " ++ replicate depth ' '
-                --     ++ show (void (unFix (stripAnnotation (stripFlags v))))
-                liftIO $ writeIORef b True
-                res <- action
-                -- liftIO $ putStrLn $ "eval: " ++ replicate depth ' ' ++ "."
-                return res
+    addEvalFlags k (FlaggedF (b, x)) = liftIO (writeIORef b True) *> k x

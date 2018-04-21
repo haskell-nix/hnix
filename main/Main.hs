@@ -9,15 +9,19 @@ module Main where
 import qualified Control.DeepSeq as Deep
 import qualified Control.Exception as Exc
 import           Control.Monad
+import           Control.Monad.Catch
 import           Control.Monad.IO.Class
-import           Control.Monad.ST
+-- import           Control.Monad.ST
 import qualified Data.Aeson.Encoding as A
 import qualified Data.Aeson.Text as A
+import           Data.Functor.Compose
 import qualified Data.Text.IO as Text
 import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Text.Lazy.IO as TL
 import           Nix
 import           Nix.Convert
+import qualified Nix.Core as Core
+-- import           Nix.Lint
 import           Nix.Utils
 import           Options.Applicative hiding (ParserResult(..))
 import qualified Repl
@@ -61,9 +65,9 @@ main = do
             NixEvalException msg -> errorWithoutStackTrace msg
 
     process opts mpath expr = do
-        when (check opts) $
-            putStrLn $ runST $
-                runLintM opts . renderSymbolic =<< lint opts expr
+        -- when (check opts) $
+        --     putStrLn $ runST $
+        --         runLintM opts . renderSymbolic =<< lint opts expr
 
         let printer :: (MonadNix e m, MonadIO m) => NValue m -> m ()
             printer | xml opts =
@@ -81,14 +85,21 @@ main = do
 
         if | evaluate opts, tracing opts ->
                  runLazyM opts $ evaluateExpression mpath
-                     Nix.tracingEvalLoc printer expr
+                     Nix.nixTracingEvalExprLoc printer expr
+
+           | evaluate opts, Just path <- reduce opts ->
+                 runLazyM opts $ evaluateExpression mpath
+                     (\mp x -> handleReduced path
+                          =<< Nix.reducingEvalExpr
+                                  (Core.eval . annotated . getCompose) mp x)
+                     printer expr
 
            | evaluate opts, not (null (arg opts) && null (argstr opts)) ->
                  runLazyM opts $ evaluateExpression mpath
-                     Nix.evalLoc printer expr
+                     Nix.nixEvalExprLoc printer expr
 
            | evaluate opts -> runLazyM opts $
-                 processResult printer =<< Nix.evalLoc mpath expr
+                 processResult printer =<< Nix.nixEvalExprLoc mpath expr
 
            | xml opts ->
                  error "Rendering expression trees to XML is not yet implemented"
@@ -98,9 +109,8 @@ main = do
 
            | verbose opts >= Debug -> print $ stripAnnotation expr
 
-           | cache opts, Just path <- mpath -> do
-                let file = addExtension (dropExtension path) "nixc"
-                writeCache file expr
+           | cache opts, Just path <- mpath ->
+                writeCache (addExtension (dropExtension path) "nixc") expr
 
            | parseOnly opts -> void $ Exc.evaluate $ Deep.force expr
 
@@ -111,3 +121,15 @@ main = do
                      . stripAnnotation $ expr
 
         when (repl opts) $ Repl.shell (pure ())
+
+    handleReduced :: (MonadThrow m, MonadIO m)
+                  => FilePath
+                  -> (NExprLoc, Either SomeException (NValue m))
+                  -> m (NValue m)
+    handleReduced path (expr', eres) = do
+        liftIO $ do
+            putStrLn $ "Wrote winnowed expression tree to " ++ path
+            writeFile path $ show $ prettyNix (stripAnnotation expr')
+        case eres of
+            Left err -> throwM err
+            Right v  -> return v

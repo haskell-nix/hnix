@@ -18,7 +18,7 @@ hnixEvalFile opts file = do
     Success expr -> do
         setEnv "TEST_VAR" "foo"
         runLazyM opts $
-            evaluateExpression (Just file) evalLoc normalForm expr
+            evaluateExpression (Just file) nixEvalExprLoc normalForm expr
 
 hnixEvalText :: Options -> Text -> IO (NValueNF (Lazy IO))
 hnixEvalText opts src = case parseNixText src of
@@ -26,7 +26,7 @@ hnixEvalText opts src = case parseNixText src of
         error $ "Parsing failed for expressien `"
             ++ unpack src ++ "`.\n" ++ show err
     Success expr ->
-        runLazyM opts $ normalForm =<< eval Nothing expr
+        runLazyM opts $ normalForm =<< nixEvalExpr Nothing expr
 
 nixEvalString :: String -> IO String
 nixEvalString expr = do
