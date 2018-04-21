@@ -88,11 +88,8 @@ main = do
                      Nix.nixTracingEvalExprLoc printer expr
 
            | evaluate opts, Just path <- reduce opts ->
-                 runLazyM opts $ evaluateExpression mpath
-                     (\mp x -> handleReduced path
-                          =<< Nix.reducingEvalExpr
-                                  (Core.eval . annotated . getCompose) mp x)
-                     printer expr
+                 runLazyM opts $
+                 evaluateExpression mpath (reduction path) printer expr
 
            | evaluate opts, not (null (arg opts) && null (argstr opts)) ->
                  runLazyM opts $ evaluateExpression mpath
@@ -121,6 +118,11 @@ main = do
                      . stripAnnotation $ expr
 
         when (repl opts) $ Repl.shell (pure ())
+
+    reduction path mp x = do
+        eres <- Nix.withNixContext mp $
+            Nix.reducingEvalExpr (Core.eval . annotated . getCompose) mp x
+        handleReduced path eres
 
     handleReduced :: (MonadThrow m, MonadIO m)
                   => FilePath
