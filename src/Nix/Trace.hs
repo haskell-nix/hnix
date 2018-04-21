@@ -148,8 +148,12 @@ pruneTree opts = cataM $ \(FlaggedF (b, Compose x)) -> do
 
     pruneParams :: Params (Maybe NExprLoc) -> Params NExprLoc
     pruneParams (Param n) = Param n
-    pruneParams (ParamSet xs b n) =
-        ParamSet (map (second (fmap (fromMaybe nNull))) xs) b n
+    pruneParams (ParamSet xs b n)
+        | reduceSets opts =
+              ParamSet (map (second (maybe (Just nNull) Just
+                                     . fmap (fromMaybe nNull))) xs) b n
+        | otherwise =
+              ParamSet (map (second (fmap (fromMaybe nNull))) xs) b n
 
     pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
     pruneBinding (NamedVar _ Nothing)  = Nothing
