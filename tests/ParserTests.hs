@@ -53,6 +53,10 @@ case_constant_path = do
   assertParseFail "/"
   assertParseFail "a/"
   assertParseFail "a/def/"
+  assertParseFail "~"
+  assertParseFail "~/"
+  assertParseText "~/a" $ mkPath False "~/a"
+  assertParseText "~/a/b" $ mkPath False "~/a/b"
 
 case_constant_uri = do
   assertParseText "a:a" $ mkUri "a:a"

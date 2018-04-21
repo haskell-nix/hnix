@@ -126,7 +126,7 @@ nixList :: Parser NExprLoc
 nixList = annotateLocation1 (brackets (NList <$> many nixTerm) <?> "list")
 
 pathChar :: Char -> Bool
-pathChar x = isAlpha x || isDigit x || x == '.' || x == '_' || x == '-' || x == '+'
+pathChar x = isAlpha x || isDigit x || x == '.' || x == '_' || x == '-' || x == '+' || x == '~'
 
 slash :: Parser Char
 slash = try (char '/' <* notFollowedBy (satisfy (\x -> x == '/' || x == '*' || isSpace x)))
