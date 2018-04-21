@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Functions for manipulating nix strings.
-module Nix.StringOperations where
+module Nix.Strings where
 
 import           Data.List (intercalate, dropWhileEnd, inits)
 import           Data.Monoid ((<>))

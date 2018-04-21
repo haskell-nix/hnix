@@ -56,7 +56,7 @@ library
       Nix.Reduce
       Nix.Scope
       Nix.Stack
-      Nix.StringOperations
+      Nix.Strings
       Nix.TH
       Nix.Thunk
       Nix.Trace

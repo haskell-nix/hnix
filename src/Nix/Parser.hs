@@ -21,7 +21,7 @@ import           Data.Text hiding (map)
 import           Nix.Expr hiding (($>))
 import           Nix.Parser.Library
 import           Nix.Parser.Operators
-import           Nix.StringOperations
+import           Nix.Strings
 import           Text.Megaparsec.Expr
 
 infixl 3 <+>

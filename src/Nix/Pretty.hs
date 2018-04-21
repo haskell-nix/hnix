@@ -24,7 +24,7 @@ import           Nix.Atoms
 import           Nix.Expr
 import           Nix.Parser.Library (reservedNames)
 import           Nix.Parser.Operators
-import           Nix.StringOperations
+import           Nix.Strings
 import           Nix.Thunk
 #if ENABLE_TRACING
 import           Nix.Utils

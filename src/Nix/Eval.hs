@@ -42,7 +42,6 @@ import           Nix.Expr
 import           Nix.Pretty
 import           Nix.Scope
 import           Nix.Stack
-import           Nix.StringOperations (runAntiquoted)
 import           Nix.Thunk
 import           Nix.Utils
 -- import           System.IO.Unsafe -- move this into a tracing module
