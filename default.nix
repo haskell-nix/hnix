@@ -30,7 +30,7 @@ in haskellPackages.developPackage {
       [
         pkgs.nix
         haskellPackages.hpack
-        haskellPackages.cabal-install
+        # haskellPackages.cabal-install
       ];
 
     enableLibraryProfiling    = doProfiling;
