@@ -515,16 +515,14 @@ addTracing k v = do
             liftIO $ putStrLn $ msg (rendered ++ " ...done")
             return res
 
-evalExprLoc :: forall e m. (MonadNix e m, MonadIO m, Alternative m)
+evalExprLoc :: forall e m. (MonadNix e m, MonadIO m)
             => NExprLoc -> m (NValue m)
 evalExprLoc expr = do
     opts :: Options <- asks (view hasLens)
     if tracing opts
-        then join
-             . (`runReaderT` (0 :: Int))
-             . adi (addTracing (Eval.eval . annotated . getCompose))
-                   (raise addStackFrames)
-             $ expr
-        else adi (Eval.eval . annotated . getCompose) addStackFrames expr
+        then join . (`runReaderT` (0 :: Int)) $
+             adi (addTracing phi) (raise addStackFrames) expr
+        else adi phi addStackFrames expr
   where
+    phi = Eval.eval . annotated . getCompose
     raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x
