@@ -201,6 +201,18 @@ execBinaryOp op lval rarg = do
             NNEq    -> toValue . not =<< valueEq lval rval
             _       -> nverr $ unsupportedTypes lval rval
 
+        (NVSet ls lp, NVConstant NNull) -> case op of
+            NUpdate -> pure $ NVSet ls lp
+            NEq     -> toValue =<< valueEq lval (NVSet M.empty M.empty)
+            NNEq    -> toValue . not =<< valueEq lval (NVSet M.empty M.empty)
+            _       -> nverr $ unsupportedTypes lval rval
+
+        (NVConstant NNull, NVSet rs rp) -> case op of
+            NUpdate -> pure $ NVSet rs rp
+            NEq     -> toValue =<< valueEq (NVSet M.empty M.empty) rval
+            NNEq    -> toValue . not =<< valueEq (NVSet M.empty M.empty) rval
+            _       -> nverr $ unsupportedTypes lval rval
+
         (NVList ls, NVList rs) -> case op of
             NConcat -> pure $ NVList $ ls ++ rs
             NEq     -> toValue =<< valueEq lval rval
