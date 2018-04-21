@@ -414,4 +414,4 @@ symbolicBaseEnv = return emptyScopes
 
 lint :: Options -> NExprLoc -> ST s (Symbolic (Lint s))
 lint opts expr = runLintM opts $
-    symbolicBaseEnv >>= (`pushScopes` Eval.framedEvalExpr expr)
+    symbolicBaseEnv >>= (`pushScopes` Eval.framedEvalExprLoc expr)

@@ -86,9 +86,8 @@ eval :: forall e v t m. MonadNixEval e v t m => NExprF (m v) -> m v
 
 eval (NSym "__curPos") = evalCurPos
 
-eval (NSym var) = lookupVar var >>= \case
-    Nothing -> freeVariable var
-    Just v  -> force v pure
+eval (NSym var) =
+    maybe (freeVariable var) (force ?? pure) =<< lookupVar var
 
 eval (NConstant x)          = evalConstant x
 eval (NStr str)             = uncurry evalString =<< assembleString str
@@ -415,5 +414,5 @@ buildArgument e params arg = do
 addStackFrames :: Framed e m => Transform NExprLocF (m a)
 addStackFrames f v = withExprContext v (f v)
 
-framedEvalExpr :: MonadNixEval e v t m => NExprLoc -> m v
-framedEvalExpr = adi (eval . annotated . getCompose) addStackFrames
+framedEvalExprLoc :: MonadNixEval e v t m => NExprLoc -> m v
+framedEvalExprLoc = adi (eval . annotated . getCompose) addStackFrames

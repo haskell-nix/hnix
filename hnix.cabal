@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 56c36b358efbc2aa305346fe938ba2b0e71f68d456134e558c23f2959af02505
+-- hash: bd76dbaf4832c321feb19fe34a80e29c90cdbc150048dcee92038f96725c4f30
 
 name:           hnix
 version:        0.5.0
@@ -58,7 +58,6 @@ library
       Nix.Strings
       Nix.TH
       Nix.Thunk
-      Nix.Trace
       Nix.Type.Assumption
       Nix.Type.Env
       Nix.Type.Infer

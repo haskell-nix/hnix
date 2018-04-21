@@ -30,8 +30,8 @@ import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
-import           Control.Monad.Reader (MonadReader, asks)
-import           Control.Monad.Trans.Reader hiding (asks)
+import           Control.Monad.Reader
+import           Control.Monad.Trans.Reader (ReaderT(..))
 import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.Fix
@@ -66,6 +66,7 @@ import           System.FilePath
 import qualified System.Info
 import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
+import           Text.PrettyPrint.ANSI.Leijen (text)
 
 type MonadNix e m =
     (Scoped e (NThunk m) m, Framed e m, MonadVar m, MonadFile m,
@@ -302,7 +303,6 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
                                 ++ " but is not a path; it is: "
                                 ++ show v
             pure $ cwd <///> origPathExpanded
-        _ <- liftIO $ putStrLn $ show absPath
         liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
 
     findEnvPath = findEnvPathM
@@ -334,7 +334,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
                     -- import, we'll remember which directory its containing
                     -- file was in.
                     pushScope (M.singleton "__cur_file" ref) $
-                        pushScope scope $ Eval.framedEvalExpr expr
+                        pushScope scope $ Eval.framedEvalExprLoc expr
 
     getEnvVar = liftIO . lookupEnv
 
@@ -403,7 +403,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
                     Failure err ->
                         throwError $ "Error parsing output of nix-instantiate: "
                             ++ show err
-                    Success v -> Eval.framedEvalExpr v
+                    Success v -> Eval.framedEvalExprLoc v
             err -> throwError $ "nix-instantiate failed: " ++ show err
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
@@ -481,3 +481,24 @@ findEnvPathM name = do
     tryPath p (Just n) | n':ns <- splitDirectories name, n == n' =
         nixFilePath $ p <///> joinPath ns
     tryPath p _ = nixFilePath $ p <///> name
+
+addTracing :: (MonadNix e m, MonadIO m,
+              MonadReader Int n, Alternative n)
+           => Alg NExprLocF (m a) -> Alg NExprLocF (n (m a))
+addTracing k v = do
+    depth <- ask
+    guard (depth < 2000)
+    local succ $ do
+        v'@(Compose (Ann span x)) <- sequence v
+        return $ do
+            opts :: Options <- asks (view hasLens)
+            let rendered =
+                    if verbose opts >= Chatty
+                    then show (void x)
+                    else show (prettyNix (Fix (Fix (NSym "?") <$ x)))
+                msg x = "eval: " ++ replicate depth ' ' ++ x
+            loc <- renderLocation span (text (msg rendered ++ " ..."))
+            liftIO $ putStr $ show loc
+            res <- k v'
+            liftIO $ putStrLn $ msg (rendered ++ " ...done")
+            return res

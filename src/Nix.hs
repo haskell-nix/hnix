@@ -14,7 +14,6 @@ module Nix (module Nix.Cache,
             module Nix.Reduce,
             module Nix.Stack,
             module Nix.Thunk,
-            module Nix.Trace,
             module Nix.Value,
             module Nix.XML,
             withNixContext,
@@ -49,7 +48,6 @@ import           Nix.Reduce
 import           Nix.Scope
 import           Nix.Stack hiding (readFile)
 import           Nix.Thunk
-import           Nix.Trace
 import           Nix.Utils
 import           Nix.Value
 import           Nix.XML
