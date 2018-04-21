@@ -28,7 +28,7 @@ import           Data.Fix
 import           Data.Functor.Compose
 import           Data.IORef
 import qualified Data.List.NonEmpty as NE
-import           Data.Maybe (fromMaybe, mapMaybe)
+import           Data.Maybe (fromMaybe, mapMaybe, catMaybes)
 import           Data.Text (Text)
 import           Nix.Atoms
 import           Nix.Exec (MonadNix)
@@ -58,8 +58,8 @@ flagExprLoc = cataM $ \x -> do
 stripFlags :: Functor f => Flagged f -> Fix f
 stripFlags = cata $ Fix . snd . flagged
 
-pruneTree :: MonadIO n => Flagged NExprLocF -> n (Maybe NExprLoc)
-pruneTree = cataM $ \(FlaggedF (b, Compose x)) -> do
+pruneTree :: MonadIO n => Options -> Flagged NExprLocF -> n (Maybe NExprLoc)
+pruneTree opts = cataM $ \(FlaggedF (b, Compose x)) -> do
     used <- liftIO $ readIORef b
     pure $ if used
            then Fix . Compose <$> traverse prune x
@@ -71,9 +71,12 @@ pruneTree = cataM $ \(FlaggedF (b, Compose x)) -> do
         NHasAttr (Just aset) attr -> Just $ NHasAttr aset (NE.map pruneKeyName attr)
         NAbs params (Just body)   -> Just $ NAbs (pruneParams params) body
 
-        NList   l     -> Just $ NList   (map       (fromMaybe nNull)  l)
-        NSet    binds -> Just $ NSet    (map (fmap (fromMaybe nNull)) binds)
-        NRecSet binds -> Just $ NRecSet (map (fmap (fromMaybe nNull)) binds)
+        NList l       | reduceLists opts -> Just $ NList   (catMaybes l)
+                      | otherwise        -> Just $ NList   (map (fromMaybe nNull) l)
+        NSet binds    | reduceSets opts  -> Just $ NSet    (mapMaybe sequence binds)
+                      | otherwise        -> Just $ NSet    (map (fmap (fromMaybe nNull)) binds)
+        NRecSet binds | reduceSets opts  -> Just $ NRecSet (mapMaybe sequence binds)
+                      | otherwise        -> Just $ NRecSet (map (fmap (fromMaybe nNull)) binds)
 
         NLet binds (Just body@(Fix (Compose (Ann _ x)))) ->
             Just $ case mapMaybe pruneBinding binds of
@@ -195,7 +198,8 @@ reducingEvalExpr
 reducingEvalExpr eval mpath expr = do
     expr'  <- flagExprLoc =<< liftIO (reduceExpr mpath expr)
     eres   <- catch (Right <$> cata (addEvalFlags eval) expr') (pure . Left)
-    expr'' <- pruneTree expr'
+    opts :: Options <- asks (view hasLens)
+    expr'' <- pruneTree opts expr'
     return (fromMaybe nNull expr'', eres)
   where
     addEvalFlags k (FlaggedF (b, x)) = liftIO (writeIORef b True) *> k x
