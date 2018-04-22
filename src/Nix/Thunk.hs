@@ -40,7 +40,7 @@ class Monad m => MonadVar m where
     writeVar :: Var m a -> a -> m ()
     atomicModifyVar :: Var m a -> (a -> (a, b)) -> m b
 
-class Monad m => MonadThunk v t m | m -> v, v -> t where
+class Monad m => MonadThunk v t m | m -> v, v -> m, v -> t where
     thunk :: m v -> m t
     force :: t -> (v -> m r) -> m r
     value :: v -> t
