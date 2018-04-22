@@ -320,14 +320,6 @@ instance (MonadThunk (NValueF m r) (NThunk m) m, FromValue a m (NValueF m r))
     fromValueMay = force ?? fromValueMay
     fromValue    = force ?? fromValue
 
-{-
-instance (MonadThunk (NValueLoc m) (NThunkLoc m) m,
-          FromValue a m (NValueLoc m))
-      => FromValue a m (NValueLoc m) where
-    fromValueMay (NValueLoc _ x) = fromValueMay x
-    fromValue    (NValueLoc _ x) = fromValue x
--}
-
 instance (Convertible e m, MonadEffects m)
       => FromValue A.Value m (NValueNF m) where
     fromValueMay = \case
