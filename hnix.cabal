@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: bd76dbaf4832c321feb19fe34a80e29c90cdbc150048dcee92038f96725c4f30
+-- hash: 16beb8d29116e6049b925d6727fb8e104c6722c162db8fa745bc2ec17724da47
 
 name:           hnix
 version:        0.5.0
@@ -24,6 +24,11 @@ extra-source-files:
 source-repository head
   type: git
   location: https://github.com/jwiegley/hnix
+
+flag optimize
+  description: Enable all optimization flags
+  manual: True
+  default: False
 
 flag tracing
   description: Enable full debug tracing

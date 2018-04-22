@@ -33,14 +33,24 @@ dependencies:
 
 ghc-options:
   - -Wall
-  # - -fexpose-all-unfoldings
-  # - -O2
 
 flags:
   tracing:
     description: Enable full debug tracing
     manual: True
     default: False
+
+  optimize:
+    description: Enable all optimization flags
+    manual: True
+    default: False
+
+when:
+  - condition: flag(optimize)
+    ghc-options:
+      - -fexpose-all-unfoldings
+      - -fspecialise-aggressively
+      - -O2
 
 when:
   - condition: flag(tracing)
