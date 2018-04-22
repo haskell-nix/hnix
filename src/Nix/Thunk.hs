@@ -1,4 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE CPP #-}
 
 #if ENABLE_TRACING
@@ -28,6 +31,7 @@ counter = unsafePerformIO $ newIORef 0
 data Deferred m v
     = Deferred (m v)
     | Computed v
+    deriving (Functor, Foldable, Traversable)
 
 class Monad m => MonadVar m where
     type Var m :: * -> *
