@@ -183,6 +183,7 @@ prettyNix = withoutParens . cata phi where
     "../" -> "../."
     ".." -> "../."
     txt | "/" `isPrefixOf` txt -> txt
+        | "~/" `isPrefixOf` txt -> txt
         | "./" `isPrefixOf` txt -> txt
         | "../" `isPrefixOf` txt -> txt
         | otherwise -> "./" ++ txt

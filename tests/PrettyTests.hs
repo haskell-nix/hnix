@@ -24,6 +24,12 @@ case_function_params :: Assertion
 case_function_params =
     assertPretty (mkFunction (mkParamset [] True) (mkInt 3)) "{ ... }:\n  3"
 
+case_paths :: Assertion
+case_paths = do
+    assertPretty (mkPath False "~/test.nix") "~/test.nix"
+    assertPretty (mkPath False "/test.nix") "/test.nix"
+    assertPretty (mkPath False "./test.nix") "./test.nix"
+
 tests :: TestTree
 tests = $testGroupGenerator
 
