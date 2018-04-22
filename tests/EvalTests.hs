@@ -151,10 +151,10 @@ genEvalCompareTests = do
     mkTestCase f = testCase f $ assertEvalFileMatchesNix (testDir </> f)
 
 instance (Show r, Show (NValueF m r), Eq r) => Eq (NValueF m r) where
-    NVConstant x == NVConstant y = x == y
-    NVStr x _ == NVStr y _ = x == y
-    NVList x == NVList y = and (zipWith (==) x y)
-    NVSet x _ == NVSet y _ =
+    NVConstantF x == NVConstantF y = x == y
+    NVStrF x _ == NVStrF y _ = x == y
+    NVListF x == NVListF y = and (zipWith (==) x y)
+    NVSetF x _ == NVSetF y _ =
         M.keys x == M.keys y &&
         and (zipWith (==) (M.elems x) (M.elems y))
     x == y = error $ "Need to add comparison for values: "

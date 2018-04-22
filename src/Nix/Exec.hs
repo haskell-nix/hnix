@@ -80,31 +80,79 @@ instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
     force = forceThunk . coerce
     value = coerce . valueRef
 
+currentPos :: Framed e m => m SrcSpan
+currentPos = do
+    frames <- asks (view @_ @Frames hasLens)
+    let Fix (Compose (Ann span _)) : _ =
+            mapMaybe (either (const Nothing) Just) frames
+    return span
+
 instance MonadNix e m => MonadEval (NValue m) m where
     freeVariable var =
         nverr $ "Undefined variable '" ++ Text.unpack var ++ "'"
 
     evalCurPos = do
-        Fix (Compose (Ann (SrcSpan delta _) _)) : _ <-
-            asks (mapMaybe (either (const Nothing) Just)
-                 . view @_ @Frames hasLens)
+        SrcSpan delta _ <- currentPos
         toValue delta
 
-    evalConstant    = pure . NVConstant
-    evalString      = (pure .) . NVStr
-    evalLiteralPath = fmap NVPath . makeAbsolutePath
-    evalEnvPath     = fmap NVPath . findEnvPath
-    evalUnary       = execUnaryOp
-    evalBinary      = execBinaryOp
-    evalWith        = evalWithAttrSet
+    evalConstant c    = do
+        scope <- currentScopes
+        span  <- currentPos
+        pure $ nvConstantP (Provenance scope (NConstant_ span c)) c
 
-    evalIf c t f = fromValue c >>= \b -> if b then t else f
+    evalString s d = do
+        scope <- currentScopes
+        span  <- currentPos
+        -- jww (2018-04-22): Determine full provenance for the string?
+        pure $ nvStrP (Provenance scope (NStr_ span (DoubleQuoted [Plain s]))) s d
 
-    evalAssert c body = fromValue c >>= \b ->
-        if b then body else nverr "assertion failed"
+    evalLiteralPath p = do
+        scope <- currentScopes
+        span  <- currentPos
+        fmap (nvPathP (Provenance scope (NLiteralPath_ span p)))
+                      (makeAbsolutePath p)
+
+    evalEnvPath p = do
+        scope <- currentScopes
+        span  <- currentPos
+        fmap (nvPathP (Provenance scope (NEnvPath_ span p))) (findEnvPath p)
+
+    evalUnary op arg = do
+        scope <- currentScopes
+        span  <- currentPos
+        execUnaryOp scope span op arg
+
+    evalBinary op larg rarg = do
+        scope <- currentScopes
+        span  <- currentPos
+        execBinaryOp scope span op larg rarg
+
+    evalWith c b = do
+        _scope <- currentScopes @_ @(NThunk m)
+        _span  <- currentPos
+        -- jww (2018-04-22): This one needs more work.
+        -- addProvenance scope (\b -> NWith_ span (Just c) (Just (pure b))) <$>
+        evalWithAttrSet c b
+
+    evalIf c t f = do
+        scope <- currentScopes
+        span  <- currentPos
+        fromValue c >>= \b ->
+            if b
+            then addProvenance scope (\t -> NIf_ span (Just c) (Just t) Nothing) <$> t
+            else addProvenance scope (\f -> NIf_ span (Just c) Nothing (Just f)) <$> f
+
+    evalAssert c body = do
+        scope <- currentScopes
+        span  <- currentPos
+        fromValue c >>= \b ->
+            if b
+            then addProvenance scope (\b -> NAssert_ span (Just c) (Just b)) <$> body
+            else nverr $ "assertion failed, value provenance: "
+                     ++ show (provenance c)
 
     evalApp = callFunc
-    evalAbs = (pure .) . NVClosure
+    evalAbs = (pure .) . nvClosure -- jww (2018-04-22): NYI
 
     evalError = throwError
 
@@ -124,122 +172,144 @@ callFunc fun arg = case fun of
         throwError $ "Attempt to call non-function '" ++ show x
             ++ "' with arg: " ++ show arg'
 
-execUnaryOp
-    :: (Framed e m, MonadVar m, MonadFile m)
-    => NUnaryOp -> NValue m -> m (NValue m)
-execUnaryOp op arg = do
+execUnaryOp :: (Framed e m, MonadVar m, MonadFile m)
+            => Scopes m (NThunk m) -> SrcSpan -> NUnaryOp -> NValue m
+            -> m (NValue m)
+execUnaryOp scope span op arg = do
     traceM "NUnary"
     case arg of
         NVConstant c -> case (op, c) of
-            (NNeg, NInt   i) -> return $ NVConstant $ NInt   (-i)
-            (NNeg, NFloat f) -> return $ NVConstant $ NFloat (-f)
-            (NNot, NBool  b) -> return $ NVConstant $ NBool  (not b)
+            (NNeg, NInt   i) -> unaryOp $ NInt   (-i)
+            (NNeg, NFloat f) -> unaryOp $ NFloat (-f)
+            (NNot, NBool  b) -> unaryOp $ NBool  (not b)
             _ -> throwError $ "unsupported argument type for unary operator "
                      ++ show op
-        x -> throwError $ "argument to unary operator"
+        x ->
+            -- jww (2018-04-22): Improve error reporting so that instead of
+            -- using 'show' to paste the textual form of the value into a
+            -- string, we use smarter pattern with typed elements, allowing us
+            -- to render specially based on the output device and verbosity
+            -- selections.
+            throwError $ "argument to unary operator"
                 ++ " must evaluate to an atomic type: " ++ show x
+  where
+    unaryOp = pure . nvConstantP (Provenance scope (NUnary_ span op (Just arg)))
 
 execBinaryOp
     :: forall e m. (MonadNix e m, MonadEval (NValue m) m)
-    => NBinaryOp -> NValue m -> m (NValue m) -> m (NValue m)
+    => Scopes m (NThunk m)
+    -> SrcSpan
+    -> NBinaryOp
+    -> NValue m
+    -> m (NValue m)
+    -> m (NValue m)
 
-execBinaryOp NOr larg rarg = fromNix larg >>= \l ->
+execBinaryOp scope span NOr larg rarg = fromNix larg >>= \l ->
     if l
-    then toNix True
-    else rarg >>= fromNix @Bool >>= toNix
+    then orOp Nothing True
+    else rarg >>= \rval -> fromNix @Bool rval >>= orOp (Just rval)
+  where
+    orOp r b = pure $
+        nvConstantP (Provenance scope (NBinary_ span NOr (Just larg) r)) (NBool b)
 
-execBinaryOp NAnd larg rarg = fromNix larg >>= \l ->
+execBinaryOp scope span NAnd larg rarg = fromNix larg >>= \l ->
     if l
-    then rarg >>= fromNix @Bool >>= toNix
-    else toNix False
+    then rarg >>= \rval -> fromNix @Bool rval >>= andOp (Just rval)
+    else andOp Nothing False
+  where
+    andOp r b = pure $
+        nvConstantP (Provenance scope (NBinary_ span NAnd (Just larg) r)) (NBool b)
 
 -- jww (2018-04-08): Refactor so that eval (NBinary ..) *always* dispatches
 -- based on operator first
-execBinaryOp op lval rarg = do
+execBinaryOp scope span op lval rarg = do
     rval <- rarg
+    let bin :: (Provenance m -> a) -> a
+        bin f  = f (Provenance scope (NBinary_ span op (Just lval) (Just rval)))
+        toBool = pure . bin nvConstantP . NBool
     case (lval, rval) of
         (NVConstant lc, NVConstant rc) -> case (op, lc, rc) of
-            (NEq,  _, _)       -> toValue =<< valueEq lval rval
-            (NNEq, _, _)       -> toValue . not =<< valueEq lval rval
-            (NLt,  l, r)       -> toValue $ l <  r
-            (NLte, l, r)       -> toValue $ l <= r
-            (NGt,  l, r)       -> toValue $ l >  r
-            (NGte, l, r)       -> toValue $ l >= r
+            (NEq,  _, _)       -> toBool =<< valueEq lval rval
+            (NNEq, _, _)       -> toBool . not =<< valueEq lval rval
+            (NLt,  l, r)       -> toBool $ l <  r
+            (NLte, l, r)       -> toBool $ l <= r
+            (NGt,  l, r)       -> toBool $ l >  r
+            (NGte, l, r)       -> toBool $ l >= r
             (NAnd,  _, _)      -> nverr "should be impossible: && is handled above"
             (NOr,   _, _)      -> nverr "should be impossible: || is handled above"
-            (NPlus,  l, r)     -> numBinOp (+) l r
-            (NMinus, l, r)     -> numBinOp (-) l r
-            (NMult,  l, r)     -> numBinOp (*) l r
-            (NDiv,   l, r)     -> numBinOp' div (/) l r
+            (NPlus,  l, r)     -> numBinOp bin (+) l r
+            (NMinus, l, r)     -> numBinOp bin (-) l r
+            (NMult,  l, r)     -> numBinOp bin (*) l r
+            (NDiv,   l, r)     -> numBinOp' bin div (/) l r
             (NImpl,
-             NBool l, NBool r) -> toValue $ not l || r
+             NBool l, NBool r) -> toBool $ not l || r
             _                  -> nverr $ unsupportedTypes lval rval
 
         (NVStr ls lc, NVStr rs rc) -> case op of
-            NPlus -> pure $ NVStr (ls `mappend` rs) (lc `mappend` rc)
-            NEq   -> toValue =<< valueEq lval rval
-            NNEq  -> toValue . not =<< valueEq lval rval
-            NLt   -> toValue $ ls <  rs
-            NLte  -> toValue $ ls <= rs
-            NGt   -> toValue $ ls >  rs
-            NGte  -> toValue $ ls >= rs
+            NPlus -> pure $ bin nvStrP (ls `mappend` rs) (lc `mappend` rc)
+            NEq   -> toBool =<< valueEq lval rval
+            NNEq  -> toBool . not =<< valueEq lval rval
+            NLt   -> toBool $ ls <  rs
+            NLte  -> toBool $ ls <= rs
+            NGt   -> toBool $ ls >  rs
+            NGte  -> toBool $ ls >= rs
             _     -> nverr $ unsupportedTypes lval rval
 
         (NVStr _ _, NVConstant NNull) -> case op of
-            NEq  -> toValue =<< valueEq lval (NVStr "" mempty)
-            NNEq -> toValue . not =<< valueEq lval (NVStr "" mempty)
+            NEq  -> toBool =<< valueEq lval (nvStr "" mempty)
+            NNEq -> toBool . not =<< valueEq lval (nvStr "" mempty)
             _    -> nverr $ unsupportedTypes lval rval
 
         (NVConstant NNull, NVStr _ _) -> case op of
-            NEq  -> toValue =<< valueEq (NVStr "" mempty) rval
-            NNEq -> toValue . not =<< valueEq (NVStr "" mempty) rval
+            NEq  -> toBool =<< valueEq (nvStr "" mempty) rval
+            NNEq -> toBool . not =<< valueEq (nvStr "" mempty) rval
             _    -> nverr $ unsupportedTypes lval rval
 
         (NVSet ls lp, NVSet rs rp) -> case op of
-            NUpdate -> pure $ NVSet (rs `M.union` ls) (rp `M.union` lp)
-            NEq     -> toValue =<< valueEq lval rval
-            NNEq    -> toValue . not =<< valueEq lval rval
+            NUpdate -> pure $ bin nvSetP (rs `M.union` ls) (rp `M.union` lp)
+            NEq     -> toBool =<< valueEq lval rval
+            NNEq    -> toBool . not =<< valueEq lval rval
             _       -> nverr $ unsupportedTypes lval rval
 
         (NVSet ls lp, NVConstant NNull) -> case op of
-            NUpdate -> pure $ NVSet ls lp
-            NEq     -> toValue =<< valueEq lval (NVSet M.empty M.empty)
-            NNEq    -> toValue . not =<< valueEq lval (NVSet M.empty M.empty)
+            NUpdate -> pure $ bin nvSetP ls lp
+            NEq     -> toBool =<< valueEq lval (nvSet M.empty M.empty)
+            NNEq    -> toBool . not =<< valueEq lval (nvSet M.empty M.empty)
             _       -> nverr $ unsupportedTypes lval rval
 
         (NVConstant NNull, NVSet rs rp) -> case op of
-            NUpdate -> pure $ NVSet rs rp
-            NEq     -> toValue =<< valueEq (NVSet M.empty M.empty) rval
-            NNEq    -> toValue . not =<< valueEq (NVSet M.empty M.empty) rval
+            NUpdate -> pure $ bin nvSetP rs rp
+            NEq     -> toBool =<< valueEq (nvSet M.empty M.empty) rval
+            NNEq    -> toBool . not =<< valueEq (nvSet M.empty M.empty) rval
             _       -> nverr $ unsupportedTypes lval rval
 
         (NVList ls, NVList rs) -> case op of
-            NConcat -> pure $ NVList $ ls ++ rs
-            NEq     -> toValue =<< valueEq lval rval
-            NNEq    -> toValue . not =<< valueEq lval rval
+            NConcat -> pure $ bin nvListP $ ls ++ rs
+            NEq     -> toBool =<< valueEq lval rval
+            NNEq    -> toBool . not =<< valueEq lval rval
             _       -> nverr $ unsupportedTypes lval rval
 
         (NVList ls, NVConstant NNull) -> case op of
-            NConcat -> pure $ NVList ls
-            NEq     -> toValue =<< valueEq lval (NVList [])
-            NNEq    -> toValue . not =<< valueEq lval (NVList [])
+            NConcat -> pure $ bin nvListP ls
+            NEq     -> toBool =<< valueEq lval (nvList [])
+            NNEq    -> toBool . not =<< valueEq lval (nvList [])
             _       -> nverr $ unsupportedTypes lval rval
 
         (NVConstant NNull, NVList rs) -> case op of
-            NConcat -> pure $ NVList rs
-            NEq     -> toValue =<< valueEq (NVList []) rval
-            NNEq    -> toValue . not =<< valueEq (NVList []) rval
+            NConcat -> pure $ bin nvListP rs
+            NEq     -> toBool =<< valueEq (nvList []) rval
+            NNEq    -> toBool . not =<< valueEq (nvList []) rval
             _       -> nverr $ unsupportedTypes lval rval
 
         (NVPath p, NVStr s _) -> case op of
             -- jww (2018-04-13): Do we need to make the path absolute here?
-            NEq   -> toValue $ p == Text.unpack s
-            NNEq  -> toValue $ p /= Text.unpack s
-            NPlus -> NVPath <$> makeAbsolutePath (p `mappend` Text.unpack s)
+            NEq   -> toBool $ p == Text.unpack s
+            NNEq  -> toBool $ p /= Text.unpack s
+            NPlus -> bin nvPathP <$> makeAbsolutePath (p `mappend` Text.unpack s)
             _     -> nverr $ unsupportedTypes lval rval
 
         (NVPath ls, NVPath rs) -> case op of
-            NPlus -> NVPath <$> makeAbsolutePath (ls ++ rs)
+            NPlus -> bin nvPathP <$> makeAbsolutePath (ls ++ rs)
             _     -> nverr $ unsupportedTypes lval rval
 
         _ -> nverr $ unsupportedTypes lval rval
@@ -249,22 +319,23 @@ execBinaryOp op lval rarg = do
         "Unsupported argument types for binary operator "
             ++ show op ++ ": " ++ show lval ++ ", " ++ show rval
 
-    numBinOp :: (forall a. Num a => a -> a -> a) -> NAtom -> NAtom
-             -> m (NValue m)
-    numBinOp f = numBinOp' f f
+    numBinOp :: (forall r. (Provenance m -> r) -> r)
+             -> (forall a. Num a => a -> a -> a) -> NAtom -> NAtom -> m (NValue m)
+    numBinOp bin f = numBinOp' bin f f
 
-    numBinOp'
-        :: (Integer -> Integer -> Integer)
-        -> (Float -> Float -> Float)
-        -> NAtom -> NAtom -> m (NValue m)
-    numBinOp' intF floatF l r = case (l, r) of
-        (NInt   li, NInt   ri) -> toValue $             li `intF`               ri
-        (NInt   li, NFloat rf) -> toValue $ fromInteger li `floatF`             rf
-        (NFloat lf, NInt   ri) -> toValue $             lf `floatF` fromInteger ri
-        (NFloat lf, NFloat rf) -> toValue $             lf `floatF`             rf
+    numBinOp' :: (forall r. (Provenance m -> r) -> r)
+              -> (Integer -> Integer -> Integer)
+              -> (Float -> Float -> Float)
+              -> NAtom -> NAtom -> m (NValue m)
+    numBinOp' bin intF floatF l r = case (l, r) of
+        (NInt   li, NInt   ri) -> toInt   $             li `intF`               ri
+        (NInt   li, NFloat rf) -> toFloat $ fromInteger li `floatF`             rf
+        (NFloat lf, NInt   ri) -> toFloat $             lf `floatF` fromInteger ri
+        (NFloat lf, NFloat rf) -> toFloat $             lf `floatF`             rf
         _ -> nverr $ unsupportedTypes l r
-
-    nverr = evalError @(NValue m)
+      where
+        toInt   = pure . bin nvConstantP . NInt
+        toFloat = pure . bin nvConstantP . NFloat
 
 newtype Lazy m a = Lazy
     { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m))) m a }
@@ -341,7 +412,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m, Alternative m)
             case eres of
                 Failure err  -> error $ "Parse failed: " ++ show err
                 Success expr -> do
-                    let ref = value @_ @_ @(Lazy m) (NVPath path')
+                    let ref = value @_ @_ @(Lazy m) (nvPath path')
                     -- Use this cookie so that when we evaluate the next
                     -- import, we'll remember which directory its containing
                     -- file was in.
@@ -365,10 +436,11 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m, Alternative m)
             Nothing -> pure False
             Just v  -> fromNix v
         v' <- normalForm
-            =<< toNix @(ValueSet (Lazy m)) . M.fromList
+            =<< toValue @(ValueSet (Lazy m)) . M.fromList
             =<< mapMaybeM
                 (\(k, v) -> fmap (k,) <$> case k of
-                    "args" -> fmap Just $ thunk $ toNix =<< fromNix @[Text] v
+                    "args" -> fmap Just . thunk . fmap (NValue Nothing) $
+                        toNix =<< fromNix @[Text] v
                     "__ignoreNulls" -> pure Nothing
                     _ -> force v $ \case
                         NVConstant NNull | ignoreNulls -> pure Nothing
@@ -524,5 +596,5 @@ evalExprLoc expr = do
              adi (addTracing phi) (raise addStackFrames) expr
         else adi phi addStackFrames expr
   where
-    phi = Eval.eval . annotated . getCompose
+    phi = Eval.eval @_ @(NValue m) @(NThunk m) @m . annotated . getCompose
     raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x

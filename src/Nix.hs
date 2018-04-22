@@ -56,15 +56,15 @@ withNixContext :: forall e m r. MonadNix e m => Maybe FilePath -> m r -> m r
 withNixContext mpath action = do
     base <- builtins
     opts :: Options <- asks (view hasLens)
-    let i = value @(NValue m) @(NThunk m) @m $ NVList $
+    let i = value @(NValue m) @(NThunk m) @m $ nvList $
             map (value @(NValue m) @(NThunk m) @m
-                     . flip NVStr mempty . Text.pack) (include opts)
+                     . flip nvStr mempty . Text.pack) (include opts)
     pushScope (M.singleton "__includes" i) $
         pushScopes base $ case mpath of
             Nothing -> action
             Just path -> do
                 traceM $ "Setting __cur_file = " ++ show path
-                let ref = value @(NValue m) @(NThunk m) @m $ NVPath path
+                let ref = value @(NValue m) @(NThunk m) @m $ nvPath path
                 pushScope (M.singleton "__cur_file" ref) action
 
 -- | This is the entry point for all evaluations, whatever the expression tree
@@ -114,7 +114,7 @@ evaluateExpression mpath evaluator handler expr = do
 
     eval' = (normalForm =<<) . nixEvalExpr mpath
 
-    argmap args = embed $ Fix $ NVSet (M.fromList args) mempty
+    argmap args = embed $ Fix $ NVSetF (M.fromList args) mempty
 
     compute ev x args p = do
          f <- ev mpath x

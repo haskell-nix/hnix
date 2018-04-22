@@ -11,6 +11,7 @@ module Nix.Pretty where
 
 import           Control.Monad
 import           Data.Fix
+import           Data.Functor.Compose
 import           Data.HashMap.Lazy (toList)
 import qualified Data.HashMap.Lazy as M
 import qualified Data.HashSet as HashSet
@@ -207,41 +208,44 @@ prettyNixValue = prettyNix . valueToExpr
   where valueToExpr :: Functor m => NValueNF m -> NExpr
         valueToExpr = transport go
 
-        go (NVConstant a) = NConstant a
-        go (NVStr t _) = NStr (DoubleQuoted [Plain t])
-        go (NVList l) = NList l
-        go (NVSet s p) = NSet
+        go (NVConstantF a) = NConstant a
+        go (NVStrF t _) = NStr (DoubleQuoted [Plain t])
+        go (NVListF l) = NList l
+        go (NVSetF s p) = NSet
             [ NamedVar (StaticKey k (M.lookup k p) :| []) v
             | (k, v) <- toList s ]
-        go (NVClosure _ _) = NSym . pack $ "<closure>"
-        go (NVPath p) = NLiteralPath p
-        go (NVBuiltin name _) = NSym $ Text.pack $ "builtins." ++ name
+        go (NVClosureF _ _) = NSym . pack $ "<closure>"
+        go (NVPathF p) = NLiteralPath p
+        go (NVBuiltinF name _) = NSym $ Text.pack $ "builtins." ++ name
 
 printNix :: Functor m => NValueNF m -> String
 printNix = cata phi
   where phi :: NValueF m String -> String
-        phi (NVConstant a) = unpack $ atomText a
-        phi (NVStr t _) = show t
-        phi (NVList l) = "[ " ++ unwords l ++ " ]"
-        phi (NVSet s _) =
+        phi (NVConstantF a) = unpack $ atomText a
+        phi (NVStrF t _) = show t
+        phi (NVListF l) = "[ " ++ unwords l ++ " ]"
+        phi (NVSetF s _) =
             "{ " ++ concat [ unpack k ++ " = " ++ v ++ "; "
                            | (k, v) <- sort $ toList s ] ++ "}"
-        phi NVClosure {} = "<<lambda>>"
-        phi (NVPath fp) = fp
-        phi (NVBuiltin name _) = "<<builtin " ++ name ++ ">>"
+        phi NVClosureF {} = "<<lambda>>"
+        phi (NVPathF fp) = fp
+        phi (NVBuiltinF name _) = "<<builtin " ++ name ++ ">>"
 
 removeEffects :: Functor m => NValue m -> NValueNF m
-removeEffects = Fix . fmap dethunk
+removeEffects = Fix . fmap dethunk . baseValue
   where
     dethunk (NThunk (Value v)) = removeEffects v
-    dethunk (NThunk _) = Fix $ NVStr "<thunk>" mempty
+    dethunk (NThunk _) = Fix $ NVStrF "<thunk>" mempty
 
-showValue :: Functor m => NValue m -> String
-showValue = show . prettyNixValue . removeEffects
+instance Functor m => Show (NValueF m (NThunk m)) where
+    show = show . prettyNixValue . removeEffects . NValue Nothing
 
 instance Functor m => Show (NValue m) where
-    show = showValue
+    show (NValue p v) = "(" ++ show v ++ " from " ++ show p ++ ")"
 
 instance Functor m => Show (NThunk m) where
     show (NThunk (Value v)) = show v
     show (NThunk _) = "<thunk>"
+
+instance Functor m => Show (Provenance m) where
+    show (Provenance _ (Compose (Ann _ expr))) = show expr

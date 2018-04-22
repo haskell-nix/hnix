@@ -10,9 +10,13 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+
+{-# OPTIONS_GHC -Wno-missing-signatures #-}
+{-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
 
 module Nix.Value where
 
@@ -30,21 +34,22 @@ import           Data.Void
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr.Types
-import           Nix.Expr.Types.Annotated (SourcePos(..))
+import           Nix.Expr.Types.Annotated
+import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Utils
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
 -- is completed.
 data NValueF m r
-    = NVConstant NAtom
+    = NVConstantF NAtom
      -- | A string has a value and a context, which can be used to record what a
      -- string has been build from
-    | NVStr Text (DList Text)
-    | NVPath FilePath
-    | NVList [r]
-    | NVSet (AttrSet r) (AttrSet SourcePos)
-    | NVClosure (Params Void) (m (NValue m) -> m (NValue m))
+    | NVStrF Text (DList Text)
+    | NVPathF FilePath
+    | NVListF [r]
+    | NVSetF (AttrSet r) (AttrSet SourcePos)
+    | NVClosureF (Params Void) (m (NValue m) -> m (NValue m))
       -- ^ A function is a closed set of parameters representing the "call
       --   signature", used at application time to check the type of arguments
       --   passed to the function. Since it supports default values which may
@@ -56,7 +61,7 @@ data NValueF m r
       --   Note that 'm r' is being used here because effectively a function
       --   and its set of default arguments is "never fully evaluated". This
       --   enforces in the type that it must be re-evaluated for each call.
-    | NVBuiltin String (m (NValue m) -> m (NValue m))
+    | NVBuiltinF String (m (NValue m) -> m (NValue m))
       -- ^ A builtin function is itself already in normal form. Also, it may
       --   or may not choose to evaluate its argument in the production of a
       --   result.
@@ -71,18 +76,69 @@ data NValueF m r
 
 type    NValueNF m = Fix (NValueF m)      -- normal form
 newtype NThunk m   = NThunk (Thunk m (NValue m))
-type    NValue m   = NValueF m (NThunk m) -- head normal form
 type    ValueSet m = AttrSet (NThunk m)
+
+data Provenance m = Provenance
+    { lexicalScope :: Scopes m (NThunk m)
+    , originExpr   :: NExprLocF (Maybe (NValue m))
+    }
+
+-- jww (2018-04-22): Tracking value provenance may need to be a compile-time
+-- option.
+data NValue m = NValue
+    { provenance :: Maybe (Provenance m)
+    , baseValue  :: NValueF m (NThunk m)
+    }
+
+addProvenance :: Scopes m (NThunk m)
+              -> (NValue m -> NExprLocF (Maybe (NValue m)))
+              -> NValue m -> NValue m
+addProvenance s f l@(NValue _ v) = NValue (Just (Provenance s (f l))) v
+
+pattern NVConstant x <- NValue _ (NVConstantF x)
+
+nvConstant x = NValue Nothing (NVConstantF x)
+nvConstantP p x = NValue (Just p) (NVConstantF x)
+
+pattern NVStr s d <- NValue _ (NVStrF s d)
+
+nvStr s d = NValue Nothing (NVStrF s d)
+nvStrP p s d = NValue (Just p) (NVStrF s d)
+
+pattern NVPath x <- NValue _ (NVPathF x)
+
+nvPath x = NValue Nothing (NVPathF x)
+nvPathP p x = NValue (Just p) (NVPathF x)
+
+pattern NVList l <- NValue _ (NVListF l)
+
+nvList l = NValue Nothing (NVListF l)
+nvListP p l = NValue (Just p) (NVListF l)
+
+pattern NVSet s x <- NValue _ (NVSetF s x)
+
+nvSet s x = NValue Nothing (NVSetF s x)
+nvSetP p s x = NValue (Just p) (NVSetF s x)
+
+pattern NVClosure x f <- NValue _ (NVClosureF x f)
+
+nvClosure x f = NValue Nothing (NVClosureF x f)
+nvClosureP p x f = NValue (Just p) (NVClosureF x f)
+
+pattern NVBuiltin name f <- NValue _ (NVBuiltinF name f)
+
+nvBuiltin name f = NValue Nothing (NVBuiltinF name f)
+nvBuiltinP p name f = NValue (Just p) (NVBuiltinF name f)
 
 instance Show (NValueF m (Fix (NValueF m))) where
     showsPrec = flip go where
-      go (NVConstant atom)    = showsCon1 "NVConstant" atom
-      go (NVStr text context) = showsCon2 "NVStr"      text (appEndo context [])
-      go (NVList     list)    = showsCon1 "NVList"     list
-      go (NVSet attrs _)      = showsCon1 "NVSet"      attrs
-      go (NVClosure p _)      = showsCon1 "NVClosure"  p
-      go (NVPath p)           = showsCon1 "NVPath"     p
-      go (NVBuiltin name _)   = showsCon1 "NVBuiltin"  name
+      go (NVConstantF atom)    = showsCon1 "NVConstant" atom
+      go (NVStrF text context) = showsCon2 "NVStr"      text (appEndo context [])
+      go (NVListF     list)    = showsCon1 "NVList"     list
+      go (NVSetF attrs _)      = showsCon1 "NVSet"      attrs
+      go (NVClosureF p _)      = showsCon1 "NVClosure"  p
+      go (NVPathF p)           = showsCon1 "NVPath"     p
+      go (NVBuiltinF name _)   = showsCon1 "NVBuiltin"  name
 
       showsCon1 :: Show a => String -> a -> Int -> String -> String
       showsCon1 con a d =
@@ -98,7 +154,7 @@ instance Show (NValueF m (Fix (NValueF m))) where
               . showsPrec 11 b
 
 builtin :: Monad m => String -> (m (NValue m) -> m (NValue m)) -> m (NValue m)
-builtin name f = return $ NVBuiltin name f
+builtin name f = return $ nvBuiltin name f
 
 builtin2 :: Monad m
          => String -> (m (NValue m) -> m (NValue m) -> m (NValue m)) -> m (NValue m)
@@ -111,7 +167,7 @@ builtin3 name f =
     builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
 
 isClosureNF :: Monad m => NValueNF m -> Bool
-isClosureNF (Fix NVClosure {}) = True
+isClosureNF (Fix NVClosureF {}) = True
 isClosureNF _ = False
 
 thunkEq :: MonadThunk (NValue m) (NThunk m) m
@@ -137,7 +193,7 @@ isDerivation :: MonadThunk (NValue m) (NThunk m) m
              => AttrSet (NThunk m) -> m Bool
 isDerivation m = case M.lookup "type" m of
     Nothing -> pure False
-    Just t -> force t $ valueEq (NVStr "derivation" mempty)
+    Just t -> force t $ valueEq (nvStr "derivation" mempty)
 
 valueEq :: MonadThunk (NValue m) (NThunk m) m
         => NValue m -> NValue m -> m Bool
