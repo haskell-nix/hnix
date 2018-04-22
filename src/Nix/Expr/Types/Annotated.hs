@@ -38,7 +38,7 @@ import GHC.Generics
 import Nix.Atoms
 import Nix.Expr.Types
 import Nix.Parser.Library (SourcePos(..))
-import Text.Megaparsec (unPos)
+import Text.Megaparsec (unPos, mkPos)
 import Text.Read.Deriving
 import Text.Show.Deriving
 
@@ -110,6 +110,9 @@ pattern AnnE ann a = Fix (Compose (Ann ann a))
 stripAnnotation :: Functor f => Fix (AnnF ann f) -> Fix f
 stripAnnotation = ana (annotated . getCompose . unFix)
 
+stripAnn :: AnnF ann f r -> f r
+stripAnn = annotated . getCompose
+
 nUnary :: Ann SrcSpan NUnaryOp -> NExprLoc -> NExprLoc
 nUnary (Ann s1 u) e1@(AnnE s2 _) = AnnE (s1 <> s2) (NUnary u e1)
 nUnary _ _ = error "nUnary: unexpected"
@@ -144,6 +147,15 @@ nStr (Ann s1 s) = AnnE s1 (NStr s)
 
 deltaInfo :: SourcePos -> (Text, Int, Int)
 deltaInfo (SourcePos fp l c) = (pack fp, unPos l, unPos c)
+
+nNull :: NExprLoc
+nNull = Fix (Compose (Ann nullAnn (NConstant NNull)))
+
+nullAnn :: SrcSpan
+nullAnn = SrcSpan nullPos nullPos
+
+nullPos :: SourcePos
+nullPos = SourcePos "<unknown>" (mkPos 0) (mkPos 0)
 
 -- | Pattern systems for matching on NExprLocF constructions.
 

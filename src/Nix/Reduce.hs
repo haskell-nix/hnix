@@ -334,15 +334,6 @@ pruneTree opts = cataM $ \(FlaggedF (b, Compose x)) -> do
     pruneBinding (Inherit m xs)  =
         Just (Inherit (join m) (map pruneKeyName xs))
 
-nNull :: NExprLoc
-nNull = Fix (Compose (Ann nullAnn (NConstant NNull)))
-
-nullAnn :: SrcSpan
-nullAnn = SrcSpan nullPos nullPos
-
-nullPos :: SourcePos
-nullPos = SourcePos "<unknown>" (mkPos 0) (mkPos 0)
-
 reducingEvalExpr
     :: (Framed e m, Exception r, MonadCatch m, MonadIO m)
     => (NExprLocF (m a) -> m a)
