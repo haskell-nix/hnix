@@ -105,25 +105,25 @@ instance MonadNix e m => MonadEval (NValue m) m where
     evalConstant c = do
         scope <- currentScopes
         span  <- currentPos
-        pure $ nvConstantP (Provenance scope (NConstant_ span c) Nothing) c
+        pure $ nvConstantP (Provenance scope (NConstant_ span c) []) c
 
     evalString s d = do
         scope <- currentScopes
         span  <- currentPos
         -- jww (2018-04-22): Determine full provenance for the string?
         pure $ nvStrP (Provenance scope (NStr_ span (DoubleQuoted [Plain s]))
-                                  Nothing) s d
+                                  []) s d
 
     evalLiteralPath p = do
         scope <- currentScopes
         span  <- currentPos
-        fmap (nvPathP (Provenance scope (NLiteralPath_ span p) Nothing))
+        fmap (nvPathP (Provenance scope (NLiteralPath_ span p) []))
                       (makeAbsolutePath p)
 
     evalEnvPath p = do
         scope <- currentScopes
         span  <- currentPos
-        fmap (nvPathP (Provenance scope (NEnvPath_ span p) Nothing))
+        fmap (nvPathP (Provenance scope (NEnvPath_ span p) []))
              (findEnvPath p)
 
     evalUnary op arg = do
@@ -171,7 +171,7 @@ instance MonadNix e m => MonadEval (NValue m) m where
         scope <- currentScopes
         span  <- currentPos
         pure $ nvClosureP (Provenance scope (NAbs_ span (fmap absurd p) Nothing)
-                                      Nothing) p b
+                                      []) p b
 
     evalError = throwError
 
@@ -211,7 +211,7 @@ execUnaryOp scope span op arg = do
                 ++ " must evaluate to an atomic type: " ++ show x
   where
     unaryOp = pure . nvConstantP
-        (Provenance scope (NUnary_ span op (Just arg)) Nothing)
+        (Provenance scope (NUnary_ span op (Just arg)) [])
 
 execBinaryOp
     :: forall e m. (MonadNix e m, MonadEval (NValue m) m)
@@ -228,7 +228,7 @@ execBinaryOp scope span NOr larg rarg = fromNix larg >>= \l ->
     else rarg >>= \rval -> fromNix @Bool rval >>= orOp (Just rval)
   where
     orOp r b = pure $
-        nvConstantP (Provenance scope (NBinary_ span NOr (Just larg) r) Nothing)
+        nvConstantP (Provenance scope (NBinary_ span NOr (Just larg) r) [])
                     (NBool b)
 
 execBinaryOp scope span NAnd larg rarg = fromNix larg >>= \l ->
@@ -237,7 +237,7 @@ execBinaryOp scope span NAnd larg rarg = fromNix larg >>= \l ->
     else andOp Nothing False
   where
     andOp r b = pure $
-        nvConstantP (Provenance scope (NBinary_ span NAnd (Just larg) r) Nothing)
+        nvConstantP (Provenance scope (NBinary_ span NAnd (Just larg) r) [])
                     (NBool b)
 
 -- jww (2018-04-08): Refactor so that eval (NBinary ..) *always* dispatches
@@ -246,7 +246,7 @@ execBinaryOp scope span op lval rarg = do
     rval <- rarg
     let bin :: (Provenance m -> a) -> a
         bin f  = f (Provenance scope (NBinary_ span op (Just lval) (Just rval))
-                               Nothing)
+                               [])
         toBool = pure . bin nvConstantP . NBool
     case (lval, rval) of
         (NVConstant lc, NVConstant rc) -> case (op, lc, rc) of
