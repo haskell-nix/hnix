@@ -48,6 +48,7 @@ import           Nix.Utils
 
 class (Show v, Monad m) => MonadEval v m | v -> m where
     freeVariable :: Text -> m v
+    evaledSym    :: Text -> v -> m v
 
     evalCurPos      :: m v
     evalConstant    :: NAtom -> m v
@@ -63,6 +64,22 @@ class (Show v, Monad m) => MonadEval v m | v -> m where
     evalAssert      :: v -> m v -> m v
     evalApp         :: v -> m v -> m v
     evalAbs         :: Params Void -> (m v -> m v) -> m v
+
+{-
+    evalSelect     :: v -> NonEmpty Text -> Maybe (m v) -> m v
+    evalHasAttr    :: v -> NonEmpty Text -> m v
+
+    -- | This and the following methods are intended to allow things like
+    --   adding provenance information.
+    evalListElem   :: [m v] -> Int -> m v -> m v
+    evalList       :: [t] -> m v
+    evalSetElem    :: AttrSet (m v) -> Text -> m v -> m v
+    evalSet        :: AttrSet t -> AttrSet SourcePos -> m v
+    evalRecSetElem :: AttrSet (m v) -> Text -> m v -> m v
+    evalRecSet     :: AttrSet t -> AttrSet SourcePos -> m v
+    evalLetElem    :: Text -> m v -> m v
+    evalLet        :: m v -> m v
+-}
 
     evalError :: String -> m a
 
@@ -87,7 +104,7 @@ eval :: forall e v t m. MonadNixEval e v t m => NExprF (m v) -> m v
 eval (NSym "__curPos") = evalCurPos
 
 eval (NSym var) =
-    maybe (freeVariable var) (force ?? pure) =<< lookupVar var
+    lookupVar var >>= maybe (freeVariable var) (force ?? evaledSym var)
 
 eval (NConstant x)          = evalConstant x
 eval (NStr str)             = uncurry evalString =<< assembleString str
@@ -144,7 +161,7 @@ eval (NIf cond t f) = cond >>= \v -> evalIf v t f
 
 eval (NWith scope body) = evalWith scope body
 
-eval (NAssert cond body) = cond >>= \v -> evalAssert v body
+eval (NAssert cond body) = cond >>= evalAssert ?? body
 
 eval e@(NAbs params body) = do
     -- It is the environment at the definition site, not the call site, that

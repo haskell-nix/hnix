@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -142,66 +143,76 @@ prettyAtom :: NAtom -> NixDoc
 prettyAtom atom = simpleExpr $ text $ unpack $ atomText atom
 
 prettyNix :: NExpr -> Doc
-prettyNix = withoutParens . cata phi where
-  phi :: NExprF NixDoc -> NixDoc
-  phi (NConstant atom) = prettyAtom atom
-  phi (NStr str) = simpleExpr $ prettyString str
-  phi (NList []) = simpleExpr $ lbracket <> rbracket
-  phi (NList xs) = simpleExpr $ group $
-    nest 2 (vsep $ lbracket : map (wrapParens appOpNonAssoc) xs) <$> rbracket
-  phi (NSet []) = simpleExpr $ lbrace <> rbrace
-  phi (NSet xs) = simpleExpr $ group $
-    nest 2 (vsep $ lbrace : map prettyBind xs) <$> rbrace
-  phi (NRecSet []) = simpleExpr $ recPrefix <> lbrace <> rbrace
-  phi (NRecSet xs) = simpleExpr $ group $
-    nest 2 (vsep $ recPrefix <> lbrace : map prettyBind xs) <$> rbrace
-  phi (NAbs args body) = leastPrecedence $
-   nest 2 ((prettyParams args <> colon) <$> withoutParens body)
-  phi (NBinary NApp fun arg)
-    = NixDoc (wrapParens appOp fun <+> wrapParens appOpNonAssoc arg) appOp
-  phi (NBinary op r1 r2) = flip NixDoc opInfo $ hsep
-    [ wrapParens (f NAssocLeft) r1
-    , text $ unpack $ operatorName opInfo
-    , wrapParens (f NAssocRight) r2
-    ]
-    where
-      opInfo = getBinaryOperator op
-      f x
-        | associativity opInfo /= x = opInfo { associativity = NAssocNone }
-        | otherwise = opInfo
-  phi (NUnary op r1) =
-    NixDoc (text (unpack (operatorName opInfo)) <> wrapParens opInfo r1) opInfo
-    where opInfo = getUnaryOperator op
-  phi (NSelect r attr o) =
+prettyNix = withoutParens . cata exprFNixDoc
+
+prettyOriginExpr :: NExprLocF (Maybe (NValue m)) -> Doc
+prettyOriginExpr = withoutParens . go
+  where
+    go = exprFNixDoc . annotated . getCompose . fmap render
+
+    render Nothing                       = simpleExpr $ text "_"
+    render (Just (NValue Nothing _))     = simpleExpr $ text "?"
+    render (Just (NValue (Just expr) _)) = go (originExpr expr)
+
+exprFNixDoc :: NExprF NixDoc -> NixDoc
+exprFNixDoc = \case
+    NConstant atom -> prettyAtom atom
+    NStr str -> simpleExpr $ prettyString str
+    NList [] -> simpleExpr $ lbracket <> rbracket
+    NList xs -> simpleExpr $ group $
+        nest 2 (vsep $ lbracket : map (wrapParens appOpNonAssoc) xs) <$> rbracket
+    NSet [] -> simpleExpr $ lbrace <> rbrace
+    NSet xs -> simpleExpr $ group $
+        nest 2 (vsep $ lbrace : map prettyBind xs) <$> rbrace
+    NRecSet [] -> simpleExpr $ recPrefix <> lbrace <> rbrace
+    NRecSet xs -> simpleExpr $ group $
+        nest 2 (vsep $ recPrefix <> lbrace : map prettyBind xs) <$> rbrace
+    NAbs args body -> leastPrecedence $
+        nest 2 ((prettyParams args <> colon) <$> withoutParens body)
+    NBinary NApp fun arg ->
+        NixDoc (wrapParens appOp fun <+> wrapParens appOpNonAssoc arg) appOp
+    NBinary op r1 r2 -> flip NixDoc opInfo $ hsep
+        [ wrapParens (f NAssocLeft) r1
+        , text $ unpack $ operatorName opInfo
+        , wrapParens (f NAssocRight) r2
+        ]
+      where
+        opInfo = getBinaryOperator op
+        f x | associativity opInfo /= x = opInfo { associativity = NAssocNone }
+            | otherwise = opInfo
+    NUnary op r1 ->
+        NixDoc (text (unpack (operatorName opInfo)) <> wrapParens opInfo r1) opInfo
+      where opInfo = getUnaryOperator op
+    NSelect r attr o ->
       (if isJust o then leastPrecedence else flip NixDoc selectOp) $
           wrapParens selectOp r <> dot <> prettySelector attr <> ordoc
-    where ordoc = maybe empty (((space <> text "or") <+>) . wrapParens selectOp) o
-  phi (NHasAttr r attr)
-    = NixDoc (wrapParens hasAttrOp r <+> text "?" <+> prettySelector attr) hasAttrOp
-  phi (NEnvPath p) = simpleExpr $ text ("<" ++ p ++ ">")
-  phi (NLiteralPath p) = simpleExpr $ text $ case p of
-    "./" -> "./."
-    "../" -> "../."
-    ".." -> "../."
-    txt | "/" `isPrefixOf` txt -> txt
-        | "~/" `isPrefixOf` txt -> txt
-        | "./" `isPrefixOf` txt -> txt
-        | "../" `isPrefixOf` txt -> txt
-        | otherwise -> "./" ++ txt
-  phi (NSym name) = simpleExpr $ text (unpack name)
-  phi (NLet binds body) = leastPrecedence $ group $ text "let" <$> indent 2 (
+      where ordoc = maybe empty (((space <> text "or") <+>) . wrapParens selectOp) o
+    NHasAttr r attr ->
+        NixDoc (wrapParens hasAttrOp r <+> text "?" <+> prettySelector attr) hasAttrOp
+    NEnvPath p -> simpleExpr $ text ("<" ++ p ++ ">")
+    NLiteralPath p -> simpleExpr $ text $ case p of
+        "./" -> "./."
+        "../" -> "../."
+        ".." -> "../."
+        txt | "/" `isPrefixOf` txt -> txt
+            | "~/" `isPrefixOf` txt -> txt
+            | "./" `isPrefixOf` txt -> txt
+            | "../" `isPrefixOf` txt -> txt
+            | otherwise -> "./" ++ txt
+    NSym name -> simpleExpr $ text (unpack name)
+    NLet binds body -> leastPrecedence $ group $ text "let" <$> indent 2 (
         vsep (map prettyBind binds)) <$> text "in" <+> withoutParens body
-  phi (NIf cond trueBody falseBody) = leastPrecedence $
-    group $ nest 2 $ (text "if" <+> withoutParens cond) <$>
-      (  align (text "then" <+> withoutParens trueBody)
-     <$> align (text "else" <+> withoutParens falseBody)
-      )
-  phi (NWith scope body) = leastPrecedence $
-   text "with"  <+> withoutParens scope <> semi <$> align (withoutParens body)
-  phi (NAssert cond body) = leastPrecedence $
-   text "assert" <+> withoutParens cond <> semi <$> align (withoutParens body)
-
-  recPrefix = text "rec" <> space
+    NIf cond trueBody falseBody -> leastPrecedence $
+        group $ nest 2 $ (text "if" <+> withoutParens cond) <$>
+          (  align (text "then" <+> withoutParens trueBody)
+         <$> align (text "else" <+> withoutParens falseBody)
+          )
+    NWith scope body -> leastPrecedence $
+        text "with"  <+> withoutParens scope <> semi <$> align (withoutParens body)
+    NAssert cond body -> leastPrecedence $
+        text "assert" <+> withoutParens cond <> semi <$> align (withoutParens body)
+  where
+    recPrefix = text "rec" <> space
 
 prettyNixValue :: Functor m => NValueNF m -> Doc
 prettyNixValue = prettyNix . valueToExpr
@@ -237,15 +248,27 @@ removeEffects = Fix . fmap dethunk . baseValue
     dethunk (NThunk (Value v)) = removeEffects v
     dethunk (NThunk _) = Fix $ NVStrF "<thunk>" mempty
 
+removeEffectsIO :: MonadVar m => NValue m -> m (NValueNF m)
+removeEffectsIO = fmap Fix . traverse dethunk . baseValue
+  where
+    dethunk (NThunk (Value v)) = removeEffectsIO v
+    dethunk (NThunk (Thunk
+#if ENABLE_TRACING
+                     _
+#endif
+                     _ t)) = readVar t >>= \case
+        Computed v -> removeEffectsIO v
+        _ -> pure $ Fix $ NVStrF "<thunk>" mempty
+
 instance Functor m => Show (NValueF m (NThunk m)) where
     show = show . prettyNixValue . removeEffects . NValue Nothing
 
 instance Functor m => Show (NValue m) where
-    show (NValue p v) = "(" ++ show v ++ " from " ++ show p ++ ")"
+    show (NValue Nothing v) = show v
+    show (NValue (Just p) v) =
+        -- jww (2018-04-23): Need to display the contextExpr as well.
+        show v ++ " (from: " ++ show (prettyOriginExpr (originExpr p)) ++ ")"
 
 instance Functor m => Show (NThunk m) where
     show (NThunk (Value v)) = show v
     show (NThunk _) = "<thunk>"
-
-instance Functor m => Show (Provenance m) where
-    show (Provenance _ (Compose (Ann _ expr))) = show expr

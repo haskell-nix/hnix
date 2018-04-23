@@ -81,6 +81,11 @@ type    ValueSet m = AttrSet (NThunk m)
 data Provenance m = Provenance
     { lexicalScope :: Scopes m (NThunk m)
     , originExpr   :: NExprLocF (Maybe (NValue m))
+    , contextExpr  :: Maybe (NExprLocF (Maybe (NValue m)))
+      -- ^ When calling the function x: x + 2 with argument x = 3, the
+      --   'originExpr' for the resulting value will be 3 + 2, while the
+      --   'contextExpr' will be @(x: x + 2) 3@, preserving not only the
+      --   result of the call, but what was called and with what arguments.
     }
 
 -- jww (2018-04-22): Tracking value provenance may need to be a compile-time
@@ -90,10 +95,16 @@ data NValue m = NValue
     , baseValue  :: NValueF m (NThunk m)
     }
 
-addProvenance :: Scopes m (NThunk m)
-              -> (NValue m -> NExprLocF (Maybe (NValue m)))
-              -> NValue m -> NValue m
-addProvenance s f l@(NValue _ v) = NValue (Just (Provenance s (f l))) v
+changeProvenance :: Scopes m (NThunk m)
+                 -> (NValue m -> NExprLocF (Maybe (NValue m)))
+                 -> NValue m -> NValue m
+changeProvenance s f l@(NValue _ v) =
+    NValue (Just (Provenance s (f l) Nothing)) v
+
+provenanceContext :: NExprLocF (Maybe (NValue m))
+                 -> NValue m -> NValue m
+provenanceContext c (NValue p v) =
+    NValue (fmap (\x -> x { contextExpr = Just c }) p) v
 
 pattern NVConstant x <- NValue _ (NVConstantF x)
 
