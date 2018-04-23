@@ -102,84 +102,84 @@ builtinsList = sequence [
          pure $ Builtin Normal ("nixVersion", version)
 
     , add0 TopLevel "__nixPath"                  nixPath
-    , add  TopLevel "toString"                   toString
-    , add  TopLevel "import"                     import_
-    , add2 TopLevel "map"                        map_
-    , add  TopLevel "baseNameOf"                 baseNameOf
-    , add  TopLevel "dirOf"                      dirOf
-    , add2 TopLevel "removeAttrs"                removeAttrs
-    , add  TopLevel "isNull"                     isNull
     , add  TopLevel "abort"                      throw_ -- for now
-    , add  TopLevel "throw"                      throw_
-    , add2 TopLevel "scopedImport"               scopedImport
-    , add  TopLevel "derivationStrict"           derivationStrict_
+    -- jww (2018-04-09): Support floats for `add` and `sub`
+    , add' Normal   "add"                        (arity2 ((+) @Integer))
+    , add2 Normal   "all"                        all_
+    , add2 Normal   "any"                        any_
+    , add  Normal   "attrNames"                  attrNames
+    , add  Normal   "attrValues"                 attrValues
+    , add  TopLevel "baseNameOf"                 baseNameOf
+    , add2 Normal   "catAttrs"                   catAttrs
+    , add2 Normal   "compareVersions"            compareVersions_
+    , add  Normal   "concatLists"                concatLists
+    , add' Normal   "concatStringsSep"           (arity2 Text.intercalate)
+    , add0 Normal   "currentSystem"              currentSystem
+    , add2 Normal   "deepSeq"                    deepSeq
     , add0 TopLevel "derivation"                 $(do
           let f = "data/nix/corepkgs/derivation.nix"
           addDependentFile f
           Success expr <- runIO $ parseNixFile f
           [| cata Eval.eval expr |]
       )
-
-    , add  Normal   "getEnv"                     getEnv_
-    , add2 Normal   "hasAttr"                    hasAttr
-    , add2 Normal   "getAttr"                    getAttr
-    , add2 Normal   "unsafeGetAttrPos"           unsafeGetAttrPos
-    , add2 Normal   "any"                        any_
-    , add2 Normal   "all"                        all_
-    , add3 Normal   "foldl'"                     foldl'_
-    , add  Normal   "head"                       head_
-    , add  Normal   "tail"                       tail_
-    , add  Normal   "splitVersion"               splitVersion_
-    , add2 Normal   "compareVersions"            compareVersions_
-    , add2 Normal   "match"                      match_
-    -- jww (2018-04-09): Support floats for `add` and `sub`
-    , add2 Normal   "split"                      split_
-    , add' Normal   "add"                        (arity2 ((+) @Integer))
-    , add' Normal   "sub"                        (arity2 ((-) @Integer))
-    , add  Normal   "parseDrvName"               parseDrvName
-    , add' Normal   "substring"                  substring
-    , add' Normal   "stringLength"               (arity1 Text.length)
-    , add  Normal   "length"                     length_
-    , add  Normal   "attrNames"                  attrNames
-    , add  Normal   "attrValues"                 attrValues
-    , add2 Normal   "catAttrs"                   catAttrs
-    , add' Normal   "concatStringsSep"           (arity2 Text.intercalate)
-    , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
-    , add2 Normal   "seq"                        seq_
-    , add2 Normal   "deepSeq"                    deepSeq
+    , add  TopLevel "derivationStrict"           derivationStrict_
+    , add  TopLevel "dirOf"                      dirOf
     , add2 Normal   "elem"                       elem_
     , add2 Normal   "elemAt"                     elemAt_
-    , add2 Normal   "genList"                    genList
-    , add2 Normal   "filter"                     filter_
-    , add3 Normal   "replaceStrings"             replaceStrings
-    , add  Normal   "pathExists"                 pathExists_
-    , add  Normal   "toPath"                     toPath
-    , add  Normal   "isAttrs"                    isAttrs
-    , add  Normal   "isList"                     isList
-    , add  Normal   "isFunction"                 isFunction
-    , add  Normal   "isString"                   isString
-    , add  Normal   "isInt"                      isInt
-    , add  Normal   "isFloat"                    isFloat
-    , add  Normal   "isBool"                     isBool
-    , add2 Normal   "sort"                       sort_
-    , add2 Normal   "lessThan"                   lessThan
-    , add  Normal   "concatLists"                concatLists
-    , add  Normal   "listToAttrs"                listToAttrs
-    , add2 Normal   "intersectAttrs"             intersectAttrs
-    , add  Normal   "functionArgs"               functionArgs
-    , add' Normal   "hashString"                 hashString
-    , add  Normal   "readFile"                   readFile_
-    , add  Normal   "readDir"                    readDir_
-    , add  Normal   "toXML"                      toXML_
-    , add  Normal   "typeOf"                     typeOf
-    , add2 Normal   "partition"                  partition_
-    , add0 Normal   "currentSystem"              currentSystem
-    , add  Normal   "tryEval"                    tryEval
     , add  Normal   "fetchTarball"               fetchTarball
+    , add2 Normal   "filter"                     filter_
+    , add3 Normal   "foldl'"                     foldl'_
     , add  Normal   "fromJSON"                   fromJSON
+    , add  Normal   "functionArgs"               functionArgs
+    , add2 Normal   "genList"                    genList
+    , add2 Normal   "getAttr"                    getAttr
+    , add  Normal   "getEnv"                     getEnv_
+    , add2 Normal   "hasAttr"                    hasAttr
+    , add' Normal   "hashString"                 hashString
+    , add  Normal   "head"                       head_
+    , add  TopLevel "import"                     import_
+    , add2 Normal   "intersectAttrs"             intersectAttrs
+    , add  Normal   "isAttrs"                    isAttrs
+    , add  Normal   "isBool"                     isBool
+    , add  Normal   "isFloat"                    isFloat
+    , add  Normal   "isFunction"                 isFunction
+    , add  Normal   "isInt"                      isInt
+    , add  Normal   "isList"                     isList
+    , add  TopLevel "isNull"                     isNull
+    , add  Normal   "isString"                   isString
+    , add  Normal   "length"                     length_
+    , add2 Normal   "lessThan"                   lessThan
+    , add  Normal   "listToAttrs"                listToAttrs
+    , add2 TopLevel "map"                        map_
+    , add2 Normal   "match"                      match_
+    , add  Normal   "parseDrvName"               parseDrvName
+    , add2 Normal   "partition"                  partition_
+    , add  Normal   "pathExists"                 pathExists_
+    , add  Normal   "readDir"                    readDir_
+    , add  Normal   "readFile"                   readFile_
+    , add2 TopLevel "removeAttrs"                removeAttrs
+    , add3 Normal   "replaceStrings"             replaceStrings
+    , add2 TopLevel "scopedImport"               scopedImport
+    , add2 Normal   "seq"                        seq_
+    , add2 Normal   "sort"                       sort_
+    , add2 Normal   "split"                      split_
+    , add  Normal   "splitVersion"               splitVersion_
+    , add' Normal   "stringLength"               (arity1 Text.length)
+    , add' Normal   "sub"                        (arity2 ((-) @Integer))
+    , add' Normal   "substring"                  substring
+    , add  Normal   "tail"                       tail_
+    , add  TopLevel "throw"                      throw_
     , add' Normal   "toJSON"
       (arity1 $ decodeUtf8 . LBS.toStrict . A.encodingToLazyByteString
                            . toEncodingSorted)
+    , add  Normal   "toPath"                     toPath
+    , add  TopLevel "toString"                   toString
+    , add  Normal   "toXML"                      toXML_
+    , add  Normal   "tryEval"                    tryEval
+    , add  Normal   "typeOf"                     typeOf
+    , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
+    , add2 Normal   "unsafeGetAttrPos"           unsafeGetAttrPos
+
   ]
   where
     wrap t n f = Builtin t (n, f)
