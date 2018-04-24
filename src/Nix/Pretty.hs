@@ -260,6 +260,7 @@ removeEffectsIO = fmap Fix . traverse dethunk . baseValue
         Computed v -> removeEffectsIO v
         _ -> pure $ Fix $ NVStrF "<thunk>" mempty
 
+{-
 instance Functor m => Show (NValueF m (NThunk m)) where
     show = show . prettyNixValue . removeEffects . NValue Nothing
 
@@ -272,3 +273,4 @@ instance Functor m => Show (NValue m) where
 instance Functor m => Show (NThunk m) where
     show (NThunk (Value v)) = show v
     show (NThunk _) = "<thunk>"
+-}

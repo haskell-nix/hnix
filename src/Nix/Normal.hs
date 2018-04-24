@@ -25,6 +25,7 @@ import           Nix.Utils
 import           Nix.Value
 
 newtype NormalLoop m = NormalLoop (NValue m)
+    deriving Show
 
 instance Typeable m => Frame (NormalLoop m)
 
@@ -70,7 +71,7 @@ embed (Fix x) = case x of
     NVPathF fp        -> return $ nvPath fp
     NVBuiltinF name f -> return $ nvBuiltin name f
 
-valueText :: forall e m. (Framed e m, MonadEffects m)
+valueText :: forall e m. (Framed e m, MonadEffects m, Typeable m)
           => Bool -> NValueNF m -> m (Text, DList Text)
 valueText addPathsToStore = cata phi
   where
@@ -94,7 +95,8 @@ valueText addPathsToStore = cata phi
     phi v@(NVBuiltinF _ _) = coercionFailed v
 
     coercionFailed v =
-        throwError $ Coercion (valueType v) TString
+        throwError $ Coercion @m (valueType v) TString
 
-valueTextNoContext :: (Framed e m, MonadEffects m) => Bool -> NValueNF m -> m Text
+valueTextNoContext :: (Framed e m, MonadEffects m, Typeable m)
+                   => Bool -> NValueNF m -> m Text
 valueTextNoContext addPathsToStore = fmap fst . valueText addPathsToStore

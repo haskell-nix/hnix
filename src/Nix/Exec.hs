@@ -75,7 +75,12 @@ type MonadNix e m =
     (Scoped e (NThunk m) m, Framed e m, Typeable m, MonadVar m,
      MonadEffects m, MonadFix m, MonadCatch m, Alternative m)
 
-nverr :: forall e m a. MonadNix e m => String -> m a
+data ExecFrame m = Assertion (NValue m)
+    deriving (Show, Typeable)
+
+instance Typeable m => Frame (ExecFrame m)
+
+nverr :: forall s e m a. (MonadNix e m, Frame s) => s -> m a
 nverr = evalError @(NValue m)
 
 instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
@@ -162,7 +167,7 @@ instance MonadNix e m => MonadEval (NValue m) m where
             span  <- currentPos
             changeProvenance scope
                 (\b -> NAssert_ span (Just c) (Just b)) <$> body
-        else nverr $ "assertion failed: " ++ show c
+        else nverr $ Assertion c
 
     evalApp f x = do
         span <- currentPos
@@ -258,8 +263,10 @@ execBinaryOp scope span op lval rarg = do
             (NLte, l, r)       -> toBool $ l <= r
             (NGt,  l, r)       -> toBool $ l >  r
             (NGte, l, r)       -> toBool $ l >= r
-            (NAnd,  _, _)      -> nverr "should be impossible: && is handled above"
-            (NOr,   _, _)      -> nverr "should be impossible: || is handled above"
+            (NAnd,  _, _)      ->
+                nverr @String "should be impossible: && is handled above"
+            (NOr,   _, _)      ->
+                nverr @String "should be impossible: || is handled above"
             (NPlus,  l, r)     -> numBinOp bin (+) l r
             (NMinus, l, r)     -> numBinOp bin (-) l r
             (NMult,  l, r)     -> numBinOp bin (*) l r

@@ -5,7 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Nix.Frames (NixLevel(..), Frames, Framed, Frame(..), NixFrame(..),
-                   NixException(..), withFrame, throwError,
+                   NixException(..), SomeFrame(..), withFrame, throwError,
                    module Data.Typeable,
                    module Control.Exception) where
 
@@ -21,13 +21,17 @@ data NixLevel = Fatal | Error | Warning | Info | Debug
 
 data SomeFrame = forall e. Frame e => SomeFrame e
 
-class Typeable e => Frame e where
+instance Show SomeFrame where
+    show (SomeFrame f) = show f
+
+class (Typeable e, Show e) => Frame e where
     toFrame   :: e -> SomeFrame
     fromFrame :: SomeFrame -> Maybe e
 
     toFrame = SomeFrame
     fromFrame (SomeFrame e) = cast e
 
+-- jww (2018-04-24): These two are temporary instance for now.
 instance Frame [Char]
 instance Frame Doc
 
@@ -37,7 +41,8 @@ data NixFrame = NixFrame
     }
 
 instance Show NixFrame where
-    show (NixFrame level _) = "Nix frame at level " ++ show level
+    show (NixFrame level f) =
+        "Nix frame at level " ++ show level ++ ": "++ show f
 
 type Frames = [NixFrame]
 

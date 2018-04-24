@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
@@ -103,6 +104,9 @@ over l f = runIdentity . l (Identity . f)
 
 class Has a b where
     hasLens :: MonoLens a b
+
+instance Has a a where
+    hasLens f = f
 
 toEncodingSorted :: A.Value -> A.Encoding
 toEncodingSorted = \case

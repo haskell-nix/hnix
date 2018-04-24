@@ -81,7 +81,7 @@ class (Show v, Monad m) => MonadEval v m | v -> m where
     evalLet        :: m v -> m v
 -}
 
-    evalError :: String -> m a
+    evalError :: Frame s => s -> m a
 
 type MonadNixEval e v t m =
     (MonadEval v m, Scoped e t m, MonadThunk v t m, MonadFix m,
@@ -92,11 +92,12 @@ type MonadNixEval e v t m =
      ToValue (AttrSet t, AttrSet SourcePos) m v,
      FromValue (AttrSet t, AttrSet SourcePos) m v)
 
-newtype ExprContext = ExprContext NExpr
-newtype EvaluatingExpr = EvaluatingExpr NExprLoc
+data EvalFrame
+    = ExprContext NExpr
+    | EvaluatingExpr NExprLoc
+    deriving (Show, Typeable)
 
-instance Frame ExprContext
-instance Frame EvaluatingExpr
+instance Frame EvalFrame
 
 wrapExpr :: NExprF (m v) -> NExpr
 wrapExpr x = Fix (Fix (NSym "<?>") <$ x)
@@ -203,7 +204,8 @@ attrSetAlter :: forall e v t m. MonadNixEval e v t m
              -> AttrSet (m v)
              -> m v
              -> m (AttrSet (m v))
-attrSetAlter [] _ _ = evalError @v "invalid selector with no components"
+attrSetAlter [] _ _ =
+    evalError @v ("invalid selector with no components" :: String)
 attrSetAlter (p:ps) m val = case M.lookup p m of
     Nothing
         | null ps   -> go
@@ -359,14 +361,15 @@ evalKeyNameStatic :: forall v m. MonadEval v m
 evalKeyNameStatic = \case
     StaticKey k p -> pure (k, p)
     DynamicKey _ ->
-        evalError @v "dynamic attribute not allowed in this context"
+        evalError @v ("dynamic attribute not allowed in this context" :: String)
 
 evalKeyNameDynamicNotNull
     :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
     => NKeyName (m v) -> m (Text, Maybe SourcePos)
 evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
     (Nothing, _) ->
-        evalError @v "value is null while a string was expected"
+        -- jww (2018-04-24): This should be of Coercion ValueFrame type
+        evalError @v $ ("value is null while a string was expected" :: String)
     (Just k, p) -> pure (k, p)
 
 -- | Evaluate a component of an attribute path in a context where we are

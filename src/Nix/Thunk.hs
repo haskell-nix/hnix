@@ -27,9 +27,7 @@ counter = unsafePerformIO $ newIORef 0
 {-# NOINLINE counter #-}
 #endif
 
-data Deferred m v
-    = Deferred (m v)
-    | Computed v
+data Deferred m v = Deferred (m v) | Computed v
     deriving (Functor, Foldable, Traversable)
 
 class Monad m => MonadVar m where
@@ -39,7 +37,7 @@ class Monad m => MonadVar m where
     writeVar :: Var m a -> a -> m ()
     atomicModifyVar :: Var m a -> (a -> (a, b)) -> m b
 
-class Monad m => MonadThunk v t m | v -> m, v -> t, t -> v where
+class Monad m => MonadThunk v t m | v -> m, v -> t, t -> m, t -> v where
     thunk :: m v -> m t
     force :: t -> (v -> m r) -> m r
     value :: v -> t
@@ -53,6 +51,7 @@ data Thunk m v
           (Var m Bool) (Var m (Deferred m v))
 
 newtype ThunkLoop = ThunkLoop (Maybe Int)
+    deriving (Show, Typeable)
 
 instance Frame ThunkLoop
 

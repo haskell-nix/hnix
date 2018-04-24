@@ -279,18 +279,25 @@ describeValue = \case
     TPath    -> "a path"
     TBuiltin -> "a builtin function"
 
-data ForcingThunk       = ForcingThunk
-data ConcerningValue m  = ConcerningValue (NValue m)
-data Coercion           = Coercion ValueType ValueType
-data CoercionToJsonNF m = CoercionToJsonNF (NValueNF m)
-data CoercionFromJson   = CoercionFromJson A.Value
-data ExpectationNF m    = ExpectationNF ValueType (NValueNF m)
-data Expectation m      = Expectation ValueType (NValue m)
+instance Show (NValueF m (NThunk m)) where
+    show = show . describeValue . valueType
 
-instance Frame ForcingThunk
-instance Typeable m => Frame (ConcerningValue m)
-instance Frame Coercion
-instance Typeable m => Frame (CoercionToJsonNF m)
-instance Frame CoercionFromJson
-instance Typeable m => Frame (ExpectationNF m)
-instance Typeable m => Frame (Expectation m)
+instance Show (NValue m) where
+    show (NValue Nothing v)  = show v
+    show (NValue (Just _) v) = show v
+
+instance Show (NThunk m) where
+    show (NThunk (Value v)) = show v
+    show (NThunk _) = "<thunk>"
+
+data ValueFrame m
+    = ForcingThunk
+    | ConcerningValue (NValue m)
+    | Coercion ValueType ValueType
+    | CoercionToJsonNF (NValueNF m)
+    | CoercionFromJson A.Value
+    | ExpectationNF ValueType (NValueNF m)
+    | Expectation ValueType (NValue m)
+    deriving (Show, Typeable)
+
+instance Typeable m => Frame (ValueFrame m)

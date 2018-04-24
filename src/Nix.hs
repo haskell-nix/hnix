@@ -8,6 +8,7 @@ module Nix (module Nix.Cache,
             module Nix.Exec,
             module Nix.Expr,
             module Nix.Frames,
+            module Nix.Render.Frame,
             module Nix.Normal,
             module Nix.Options,
             module Nix.Parser,
@@ -23,11 +24,9 @@ module Nix (module Nix.Cache,
 import           Control.Applicative
 import           Control.Arrow (second)
 import           Control.Monad.Reader
--- import           Control.Monad.Trans.Class
 import           Data.Fix
 import           Data.Functor.Compose
 import qualified Data.HashMap.Lazy as M
--- import           Data.Monoid
 import qualified Data.Text as Text
 import qualified Data.Text.Read as Text
 import           Nix.Builtins
@@ -35,17 +34,15 @@ import           Nix.Cache
 import qualified Nix.Eval as Eval
 import           Nix.Exec
 import           Nix.Expr
--- import           Nix.Expr.Shorthands
--- import           Nix.Expr.Types
--- import           Nix.Expr.Types.Annotated
+import           Nix.Frames
 import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser
 import           Nix.Parser.Library (Result(..))
 import           Nix.Pretty
 import           Nix.Reduce
+import           Nix.Render.Frame
 import           Nix.Scope
-import           Nix.Frames
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value

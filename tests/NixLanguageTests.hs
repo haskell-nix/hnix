@@ -8,6 +8,7 @@ import           Control.Arrow ((&&&))
 import           Control.Exception
 import           Control.Monad
 import           Control.Monad.ST
+import           Control.Monad.Trans.Reader
 import           Data.List (delete, sort)
 import           Data.List.Split (splitOn)
 import           Data.Map (Map)
@@ -20,6 +21,7 @@ import           Nix.Lint
 import           Nix.Options
 import           Nix.Parser
 import           Nix.Pretty
+import           Nix.Render.Frame
 import           Nix.Utils
 import           Nix.XML
 import qualified Options.Applicative as Opts
@@ -70,8 +72,8 @@ genTests = do
         testCase (takeFileName basename) $ case kind of
             ["parse", "okay"] -> assertParse defaultOptions $ the files
             ["parse", "fail"] -> assertParseFail defaultOptions $ the files
-            ["eval", "okay"] -> assertEval files
-            ["eval", "fail"] -> assertEvalFail $ the files
+            ["eval", "okay"]  -> assertEval defaultOptions files
+            ["eval", "fail"]  -> assertEvalFail $ the files
             _ -> error $ "Unexpected: " ++ show kind
 
 assertParse :: Options -> FilePath -> Assertion
@@ -104,10 +106,11 @@ assertLangOkXml opts file = do
   expected <- Text.readFile $ file ++ ".exp.xml"
   assertEqual "" expected $ Text.pack actual
 
-assertEval :: [FilePath] -> Assertion
-assertEval files = catch go $ \case
-    NixException frames -> error $ "Evaluation error: NYI rendering NYI"
-    -- NixException frames -> error $ "Evaluation error: " ++ str
+assertEval :: Options -> [FilePath] -> Assertion
+assertEval opts files = catch go $ \case
+    NixException frames -> do
+        msg <- runReaderT (renderFrames frames) opts
+        error $ "Evaluation error: " ++ show msg
   where
     go = case delete ".nix" $ sort $ map takeExtensions files of
         [] -> assertLangOkXml defaultOptions name
@@ -123,11 +126,11 @@ assertEval files = catch go $ \case
                 Opts.Failure err -> errorWithoutStackTrace $
                     "Error parsing flags from " ++ name ++ ".flags: "
                         ++ show err
-                Opts.Success opts ->
+                Opts.Success opts' ->
                     assertLangOk
-                        (opts { include = include opts ++
-                                  [ "nix=../../../../data/nix/corepkgs"
-                                  , "lang/dir4" ] })
+                        (opts' { include = include opts' ++
+                                   [ "nix=../../../../data/nix/corepkgs"
+                                   , "lang/dir4" ] })
                         name
                 Opts.CompletionInvoked _ -> error "unused"
         _ -> assertFailure $ "Unknown test type " ++ show files

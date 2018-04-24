@@ -441,8 +441,10 @@ instance Applicative m => ToValue Bool m (NExprF r) where
 instance Applicative m => ToValue () m (NExprF r) where
     toValue _ = pure . NConstant $ NNull
 
-whileForcingThunk :: (Framed e m, Frame s) => s -> m r -> m r
-whileForcingThunk frame = withFrame Debug ForcingThunk . withFrame Debug frame
+whileForcingThunk :: forall s e m r. (Framed e m, Frame s, Typeable m)
+                  => s -> m r -> m r
+whileForcingThunk frame =
+    withFrame Debug (ForcingThunk @m) . withFrame Debug frame
 
 instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m)
       => ToValue A.Value m (NValue m) where
@@ -450,7 +452,7 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m)
         A.Object m -> flip nvSet M.empty
             <$> traverse (thunk . toValue @_ @_ @(NValue m)) m
         A.Array l -> nvList <$>
-            traverse (\x -> thunk . whileForcingThunk (CoercionFromJson x)
+            traverse (\x -> thunk . whileForcingThunk (CoercionFromJson @m x)
                                  . toValue $ x) (V.toList l)
         A.String s -> pure $ nvStr s mempty
         A.Number n -> pure $ nvConstant $ case floatingOrInteger n of

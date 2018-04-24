@@ -11,7 +11,8 @@ import qualified Control.Exception as Exc
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
--- import           Control.Monad.ST
+import           Control.Monad.ST
+import           Control.Monad.Trans.Reader
 import qualified Data.Aeson.Encoding as A
 import qualified Data.Aeson.Text as A
 import           Data.Functor.Compose
@@ -21,7 +22,7 @@ import qualified Data.Text.Lazy.IO as TL
 import           Nix
 import           Nix.Convert
 import qualified Nix.Eval as Eval
--- import           Nix.Lint
+import           Nix.Lint
 import           Nix.Utils
 import           Options.Applicative hiding (ParserResult(..))
 import qualified Repl
@@ -62,12 +63,14 @@ main = do
              else errorWithoutStackTrace) $ "Parse failed: " ++ show err
 
         Success expr -> Exc.catch (process opts mpath expr) $ \case
-            NixException msg -> errorWithoutStackTrace "error" -- jww (2018-04-24): NYI msg
+            NixException frames ->
+                errorWithoutStackTrace . show
+                    =<< runReaderT (renderFrames frames) opts
 
     process opts mpath expr = do
-        -- when (check opts) $
-        --     putStrLn $ runST $
-        --         runLintM opts . renderSymbolic =<< lint opts expr
+        when (check opts) $
+            putStrLn $ runST $
+                runLintM opts . renderSymbolic =<< lint opts expr
 
         let printer :: (MonadNix e m, MonadIO m) => NValue m -> m ()
             printer | xml opts =
