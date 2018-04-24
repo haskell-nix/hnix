@@ -109,8 +109,10 @@ assertLangOkXml opts file = do
 assertEval :: Options -> [FilePath] -> Assertion
 assertEval opts files = catch go $ \case
     NixException frames -> do
-        msg <- runReaderT (renderFrames frames) opts
-        error $ "Evaluation error: " ++ show msg
+        -- msg <- runReaderT (renderFrames frames) opts
+        -- error $ "Evaluation error: " ++ show msg
+        -- jww (2018-04-24): NYI
+        error "Evaluation error"
   where
     go = case delete ".nix" $ sort $ map takeExtensions files of
         [] -> assertLangOkXml defaultOptions name

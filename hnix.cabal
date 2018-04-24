@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 138c46bc62e1d1c2dd934c6ef0f57939f8d7926c09ea5e99d4591175823b5295
+-- hash: 8971769062ef2575a8d02f06309664739b8a0099e5ad7ddf7caa4cd5363d8a8b
 
 name:           hnix
 version:        0.5.0
@@ -94,7 +94,6 @@ library
     , directory
     , exceptions
     , filepath
-    , freer-simple
     , hashable
     , megaparsec
     , monadlist

@@ -242,35 +242,33 @@ printNix = cata phi
         phi (NVPathF fp) = fp
         phi (NVBuiltinF name _) = "<<builtin " ++ name ++ ">>"
 
-removeEffects :: Functor m => NValue m -> NValueNF m
-removeEffects = Fix . fmap dethunk . baseValue
+removeEffects :: Functor m => NValueF m (NThunk m) -> NValueNF m
+removeEffects = Fix . fmap dethunk
   where
-    dethunk (NThunk (Value v)) = removeEffects v
+    dethunk (NThunk (Value v)) = removeEffects (baseValue v)
     dethunk (NThunk _) = Fix $ NVStrF "<thunk>" mempty
 
-removeEffectsIO :: MonadVar m => NValue m -> m (NValueNF m)
-removeEffectsIO = fmap Fix . traverse dethunk . baseValue
-  where
-    dethunk (NThunk (Value v)) = removeEffectsIO v
-    dethunk (NThunk (Thunk
+removeEffectsM :: MonadVar m => NValueF m (NThunk m) -> m (NValueNF m)
+removeEffectsM = fmap Fix . traverse dethunk
+
+renderNValueF :: MonadVar m => NValueF m (NThunk m) -> m Doc
+renderNValueF = fmap prettyNixValue . removeEffectsM
+
+renderNValue :: MonadVar m => NValue m -> m Doc
+renderNValue = \case
+    NValue Nothing v -> renderNValueF v
+    NValue (Just p) v -> do
+        v' <- renderNValueF v
+        -- jww (2018-04-23): Need to display the contextExpr as well.
+        pure $ v' </> (text " (from: " <> prettyOriginExpr (originExpr p) <> text ")")
+
+dethunk :: MonadVar m => NThunk m -> m (NValueNF m)
+dethunk = \case
+    NThunk (Value v) -> removeEffectsM (baseValue v)
+    NThunk (Thunk
 #if ENABLE_TRACING
                      _
 #endif
-                     _ t)) = readVar t >>= \case
-        Computed v -> removeEffectsIO v
+                     _ t) -> readVar t >>= \case
+        Computed v -> removeEffectsM (baseValue v)
         _ -> pure $ Fix $ NVStrF "<thunk>" mempty
-
-{-
-instance Functor m => Show (NValueF m (NThunk m)) where
-    show = show . prettyNixValue . removeEffects . NValue Nothing
-
-instance Functor m => Show (NValue m) where
-    show (NValue Nothing v) = show v
-    show (NValue (Just p) v) =
-        -- jww (2018-04-23): Need to display the contextExpr as well.
-        show v ++ " (from: " ++ show (prettyOriginExpr (originExpr p)) ++ ")"
-
-instance Functor m => Show (NThunk m) where
-    show (NThunk (Value v)) = show v
-    show (NThunk _) = "<thunk>"
--}

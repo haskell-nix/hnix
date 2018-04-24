@@ -12,7 +12,6 @@ module Nix.Render.Frame where
 import Control.Monad.Reader
 import Data.Fix
 import Data.Functor.Compose
-import Data.List (intercalate)
 import Data.Typeable
 import Nix.Eval
 import Nix.Exec
@@ -28,12 +27,14 @@ import Nix.Utils
 import Nix.Value
 import Text.PrettyPrint.ANSI.Leijen as P
 
-renderFrames :: (MonadReader e m, Has e Options, MonadFile m, Typeable m)
+renderFrames :: (MonadReader e m, Has e Options,
+                MonadVar m, MonadFile m, Typeable m)
              => Frames -> m Doc
 renderFrames [] = pure mempty
 renderFrames xs = fmap (foldr1 (P.<$>)) $ mapM renderFrame $ reverse xs
 
-renderFrame :: forall e m. (MonadReader e m, Has e Options, MonadFile m, Typeable m)
+renderFrame :: forall e m. (MonadReader e m, Has e Options, MonadVar m,
+                      MonadFile m, Typeable m)
             => NixFrame -> m Doc
 renderFrame (NixFrame level f)
     | Just (e :: EvalFrame)    <- fromFrame f = renderEvalFrame level e
@@ -42,7 +43,7 @@ renderFrame (NixFrame level f)
     | Just (_ :: NormalLoop m) <- fromFrame f =
       pure $ text "<<loop during normalization>>"
     | Just (e :: ExecFrame m)  <- fromFrame f = renderExecFrame level e
-    | Just (e :: [Char])       <- fromFrame f = pure $ text e
+    | Just (e :: String)       <- fromFrame f = pure $ text e
     | Just (e :: Doc)          <- fromFrame f = pure e
     | otherwise = error $ "Unrecognized frame: " ++ show f
 
@@ -54,16 +55,16 @@ renderEvalFrame _level = \case
 
     EvaluatingExpr e@(Fix (Compose (Ann ann x))) -> do
         opts :: Options <- asks (view hasLens)
-        let rendered = show $ prettyNix $
+        let rendered = prettyNix $
                 if verbose opts >= Chatty
                 then stripAnnotation e
                 else Fix (Fix (NSym "<?>") <$ x)
             msg = if verbose opts >= Chatty
-                  then "While evaluating:\n>>>>>>>>\n"
-                           ++ intercalate "  \n" (lines rendered)
-                           ++ "\n<<<<<<<<"
-                  else "Expression: " ++ rendered
-        renderLocation ann (text msg)
+                  then text "While evaluating:\n>>>>>>>>"
+                           P.<$> indent 2 rendered
+                           P.<$> text "<<<<<<<<"
+                  else "Expression: " </> rendered
+        renderLocation ann msg
 
 renderValueFrame :: (MonadReader e m, Has e Options, MonadFile m)
                  => NixLevel -> ValueFrame m -> m Doc
@@ -83,12 +84,13 @@ renderValueFrame level = \case
     ExpectationNF _t _v -> pure $ text "ExpectationNF"
     Expectation _t _v   -> pure $ text "Expectation"
 
-renderExecFrame :: (MonadReader e m, Has e Options, MonadFile m)
+renderExecFrame :: (MonadReader e m, Has e Options, MonadVar m, MonadFile m)
                 => NixLevel -> ExecFrame m -> m Doc
 renderExecFrame _level = \case
-    Assertion v ->
+    Assertion v -> do
+        v' <- renderNValue v
         -- jww (2018-04-24): Render values nicely based on the verbosity.
-        pure $ text $ "Assertion failed: " ++ show v
+        pure $ text "Assertion failed: " </> v'
 
 renderThunkLoop :: (MonadReader e m, Has e Options, MonadFile m)
                 => NixLevel -> ThunkLoop -> m Doc

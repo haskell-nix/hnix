@@ -76,8 +76,10 @@ ensureNixpkgsCanParse =
       "Parsing " ++ path ++ " failed: " ++ show err
     Success expr -> Exc.catch (k expr) $ \case
       NixException frames ->
-          errorWithoutStackTrace . show
-              =<< runReaderT (renderFrames frames) defaultOptions
+          -- errorWithoutStackTrace . show
+          --     =<< runReaderT (renderFrames frames) defaultOptions
+          -- jww (2018-04-24):
+          errorWithoutStackTrace "FAILED"
 
 main :: IO ()
 main = do
