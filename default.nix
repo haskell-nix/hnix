@@ -1,4 +1,4 @@
-{ compiler    ? "ghc822" # "ghc841" also works
+{ compiler    ? "ghc822" # "ghc842" also works
 , doProfiling ? false
 , doBenchmark ? false
 , doTracing   ? false
@@ -18,7 +18,7 @@ let inherit (nixpkgs) pkgs;
 
   haskellPackages = pkgs.haskell.packages.${compiler}.override {
     overrides = with pkgs.haskell.lib; self: super: rec {
-      compact   = if compiler == "ghc841"
+      compact   = if compiler == "ghc842"
                   then doJailbreak super.compact
                   else super.compact;
       serialise = dontCheck super.serialise;
