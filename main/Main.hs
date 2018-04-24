@@ -62,7 +62,7 @@ main = do
              else errorWithoutStackTrace) $ "Parse failed: " ++ show err
 
         Success expr -> Exc.catch (process opts mpath expr) $ \case
-            NixEvalException msg -> errorWithoutStackTrace msg
+            NixException msg -> errorWithoutStackTrace "error" -- jww (2018-04-24): NYI msg
 
     process opts mpath expr = do
         -- when (check opts) $
@@ -104,7 +104,7 @@ main = do
            | json opts ->
                  TL.putStrLn $ A.encodeToLazyText (stripAnnotation expr)
 
-           | verbose opts >= Debug -> print $ stripAnnotation expr
+           | verbose opts >= DebugInfo -> print $ stripAnnotation expr
 
            | cache opts, Just path <- mpath ->
                 writeCache (addExtension (dropExtension path) "nixc") expr

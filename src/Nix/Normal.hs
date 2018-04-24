@@ -1,10 +1,14 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Nix.Normal where
 
@@ -15,19 +19,23 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Effects
-import           Nix.Stack
+import           Nix.Frames
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 
-normalFormBy :: (Framed e m, MonadVar m, MonadFile m)
-             => (forall r. NThunk m -> (NValue m -> m r) -> m r)
-             -> Int
-             -> NValue m
-             -> m (NValueNF m)
+newtype NormalLoop m = NormalLoop (NValue m)
+
+instance Typeable m => Frame (NormalLoop m)
+
+normalFormBy
+    :: forall e m. (Framed e m, MonadVar m, Typeable m)
+    => (forall r. NThunk m -> (NValue m -> m r) -> m r)
+    -> Int
+    -> NValue m
+    -> m (NValueNF m)
 normalFormBy k n v = do
-    traceM $ replicate n ' ' ++ "normalFormBy: " ++ show v
-    when (n > 2000) $ throwError "<<loop during normalization>>"
+    when (n > 2000) $ throwError $ NormalLoop v
     case v of
         NVConstant a     -> return $ Fix $ NVConstantF a
         NVStr t s        -> return $ Fix $ NVStrF t s
@@ -44,8 +52,8 @@ normalFormBy k n v = do
         NVBuiltin name f -> return $ Fix $ NVBuiltinF name f
         _ -> error "Pattern synonyms mask complete matches"
 
-normalForm :: (Framed e m, MonadVar m, MonadFile m,
-               MonadThunk (NValue m) (NThunk m) m)
+normalForm :: (Framed e m, MonadVar m, Typeable m,
+              MonadThunk (NValue m) (NThunk m) m)
            => NValue m -> m (NValueNF m)
 normalForm = normalFormBy force 0
 
@@ -62,20 +70,20 @@ embed (Fix x) = case x of
     NVPathF fp        -> return $ nvPath fp
     NVBuiltinF name f -> return $ nvBuiltin name f
 
-valueText :: forall e m. (Framed e m, MonadFile m, MonadEffects m)
+valueText :: forall e m. (Framed e m, MonadEffects m)
           => Bool -> NValueNF m -> m (Text, DList Text)
 valueText addPathsToStore = cata phi
   where
     phi :: NValueF m (m (Text, DList Text)) -> m (Text, DList Text)
-    phi (NVConstantF a)    = pure (atomText a, mempty)
-    phi (NVStrF t c)       = pure (t, c)
-    phi (NVListF _)        = throwError "Cannot coerce a list to a string"
-    phi (NVSetF s _)
+    phi (NVConstantF a) = pure (atomText a, mempty)
+    phi (NVStrF t c)    = pure (t, c)
+    phi v@(NVListF _)   = coercionFailed v
+    phi v@(NVSetF s _)
       | Just asString <-
         -- TODO: Should this be run through valueText recursively?
         M.lookup "__asString" s = asString
-      | otherwise = throwError "Cannot coerce a set to a string"
-    phi NVClosureF {} = throwError "Cannot coerce a function to a string"
+      | otherwise = coercionFailed v
+    phi v@NVClosureF {} = coercionFailed v
     phi (NVPathF originalPath)
         | addPathsToStore = do
             -- TODO: Capture and use the path of the file being processed as the
@@ -83,8 +91,10 @@ valueText addPathsToStore = cata phi
             storePath <- addPath originalPath
             pure (Text.pack $ unStorePath storePath, mempty)
         | otherwise = pure (Text.pack originalPath, mempty)
-    phi (NVBuiltinF _ _)    = throwError "Cannot coerce a function to a string"
+    phi v@(NVBuiltinF _ _) = coercionFailed v
 
-valueTextNoContext :: (Framed e m, MonadFile m, MonadEffects m)
-                   => Bool -> NValueNF m -> m Text
+    coercionFailed v =
+        throwError $ Coercion (valueType v) TString
+
+valueTextNoContext :: (Framed e m, MonadEffects m) => Bool -> NValueNF m -> m Text
 valueTextNoContext addPathsToStore = fmap fst . valueText addPathsToStore

@@ -53,10 +53,10 @@ import           Data.Text (Text)
 import           Nix.Atoms
 import           Nix.Exec
 import           Nix.Expr
+import           Nix.Frames
 import           Nix.Options (Options, reduceSets, reduceLists)
 import           Nix.Parser
 import           Nix.Scope
-import           Nix.Stack
 import           Nix.Utils
 import           System.Directory
 import           System.FilePath
@@ -335,7 +335,7 @@ pruneTree opts = cataM $ \(FlaggedF (b, Compose x)) -> do
         Just (Inherit (join m) (map pruneKeyName xs))
 
 reducingEvalExpr
-    :: (Framed e m, Exception r, MonadCatch m, MonadIO m)
+    :: (Framed e m, Has e Options, Exception r, MonadCatch m, MonadIO m)
     => (NExprLocF (m a) -> m a)
     -> Maybe FilePath
     -> NExprLoc

@@ -1,12 +1,14 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -14,6 +16,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
@@ -23,6 +26,7 @@ module Nix.Value where
 import           Control.Monad
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
+import qualified Data.Aeson as A
 import           Data.Align
 import           Data.Fix
 import qualified Data.HashMap.Lazy as M
@@ -35,12 +39,14 @@ import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
+import           Nix.Frames
 import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Utils
 
--- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation
--- is completed.
+-- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation is
+--   completed. 's' is related to the type of errors that might occur during
+--   construction or use of a value.
 data NValueF m r
     = NVConstantF NAtom
      -- | A string has a value and a context, which can be used to record what a
@@ -101,8 +107,8 @@ changeProvenance :: Scopes m (NThunk m)
 changeProvenance s f l@(NValue _ v) =
     NValue (Just (Provenance s (f l) [])) v
 
-provenanceContext :: NExprLocF (Maybe (NValue m))
-                 -> NValue m -> NValue m
+provenanceContext :: NExprLocF (Maybe (NValue m)) -> NValue m
+                  -> NValue m
 provenanceContext c (NValue p v) =
     NValue (fmap (\x -> x { contextExpr = c : contextExpr x }) p) v
 
@@ -143,13 +149,13 @@ nvBuiltinP p name f = NValue (Just p) (NVBuiltinF name f)
 
 instance Show (NValueF m (Fix (NValueF m))) where
     showsPrec = flip go where
-      go (NVConstantF atom)    = showsCon1 "NVConstant" atom
-      go (NVStrF text context) = showsCon2 "NVStr"      text (appEndo context [])
-      go (NVListF     list)    = showsCon1 "NVList"     list
-      go (NVSetF attrs _)      = showsCon1 "NVSet"      attrs
-      go (NVClosureF p _)      = showsCon1 "NVClosure"  p
-      go (NVPathF p)           = showsCon1 "NVPath"     p
-      go (NVBuiltinF name _)   = showsCon1 "NVBuiltin"  name
+      go (NVConstantF atom)  = showsCon1 "NVConstant" atom
+      go (NVStrF txt ctxt)   = showsCon2 "NVStr"      txt (appEndo ctxt [])
+      go (NVListF     lst)   = showsCon1 "NVList"     lst
+      go (NVSetF attrs _)    = showsCon1 "NVSet"      attrs
+      go (NVClosureF p _)    = showsCon1 "NVClosure"  p
+      go (NVPathF p)         = showsCon1 "NVPath"     p
+      go (NVBuiltinF name _) = showsCon1 "NVBuiltin"  name
 
       showsCon1 :: Show a => String -> a -> Int -> String -> String
       showsCon1 con a d =
@@ -164,15 +170,18 @@ instance Show (NValueF m (Fix (NValueF m))) where
               . showString " "
               . showsPrec 11 b
 
-builtin :: Monad m => String -> (m (NValue m) -> m (NValue m)) -> m (NValue m)
+builtin :: Monad m
+        => String -> (m (NValue m) -> m (NValue m)) -> m (NValue m)
 builtin name f = return $ nvBuiltin name f
 
 builtin2 :: Monad m
-         => String -> (m (NValue m) -> m (NValue m) -> m (NValue m)) -> m (NValue m)
+         => String -> (m (NValue m) -> m (NValue m) -> m (NValue m))
+         -> m (NValue m)
 builtin2 name f = builtin name (builtin name . f)
 
 builtin3 :: Monad m
-         => String -> (m (NValue m) -> m (NValue m) -> m (NValue m) -> m (NValue m))
+         => String
+         -> (m (NValue m) -> m (NValue m) -> m (NValue m) -> m (NValue m))
          -> m (NValue m)
 builtin3 name f =
     builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
@@ -195,7 +204,7 @@ alignEqM
     -> f b
     -> m Bool
 alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
-    pairs <- forM (align fa fb) $ \case
+    pairs <- forM (Data.Align.align fa fb) $ \case
         These a b -> return (a, b)
         _ -> throwE ()
     forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
@@ -227,3 +236,61 @@ valueEq l r = case (l, r) of
             _ -> compareAttrs
     (NVPath lp, NVPath rp) -> pure $ lp == rp
     _ -> pure False
+
+data ValueType
+    = TInt
+    | TFloat
+    | TBool
+    | TUri
+    | TNull
+    | TString
+    | TList
+    | TSet
+    | TClosure
+    | TPath
+    | TBuiltin
+    deriving Show
+
+valueType :: NValueF m r -> ValueType
+valueType = \case
+    NVConstantF (NInt _)   -> TInt
+    NVConstantF (NFloat _) -> TFloat
+    NVConstantF (NBool _)  -> TBool
+    NVConstantF (NUri _)   -> TUri
+    NVConstantF NNull      -> TNull
+    NVStrF {}              -> TString
+    NVListF {}             -> TList
+    NVSetF {}              -> TSet
+    NVClosureF {}          -> TClosure
+    NVPathF {}             -> TPath
+    NVBuiltinF {}          -> TBuiltin
+
+describeValue :: ValueType -> String
+describeValue = \case
+    TInt     -> "an integer"
+    TFloat   -> "a float"
+    TBool    -> "a boolean"
+    TUri     -> "a URI"
+    TNull    -> "a null"
+    TString  -> "a string"
+    TList    -> "a list"
+    TSet     -> "an attr set"
+    TClosure -> "a function"
+    TPath    -> "a path"
+    TBuiltin -> "a builtin function"
+
+data ForcingThunk       = ForcingThunk
+data ConcerningValue m  = ConcerningValue (NValue m)
+data Coercion           = Coercion ValueType ValueType
+data CoercionToJsonNF m = CoercionToJsonNF (NValueNF m)
+data CoercionFromJson   = CoercionFromJson A.Value
+data ExpectationNF m    = ExpectationNF ValueType (NValueNF m)
+data Expectation m      = Expectation ValueType (NValue m)
+
+instance Frame ForcingThunk
+instance Typeable m => Frame (ConcerningValue m)
+instance Frame Coercion
+instance Typeable m => Frame (CoercionToJsonNF m)
+instance Frame CoercionFromJson
+instance Typeable m => Frame (ExpectationNF m)
+instance Typeable m => Frame (Expectation m)

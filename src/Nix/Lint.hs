@@ -1,15 +1,17 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
@@ -29,7 +31,7 @@ import           Control.Monad.Reader (MonadReader)
 import           Control.Monad.ST
 import           Control.Monad.ST.Unsafe
 import           Control.Monad.Trans.Reader
-import qualified Data.ByteString as BS
+-- import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
@@ -44,9 +46,9 @@ import           Nix.Convert
 import           Nix.Eval (MonadEval(..))
 import qualified Nix.Eval as Eval
 import           Nix.Expr
+import           Nix.Frames
 import           Nix.Options
 import           Nix.Scope
-import           Nix.Stack
 import           Nix.Thunk
 -- import           Nix.Type.Infer
 import           Nix.Utils
@@ -117,8 +119,7 @@ unpackSymbolic :: MonadVar m
                => Symbolic m -> m (NSymbolicF (NTypeF m (SThunk m)))
 unpackSymbolic = readVar . coerce
 
-type MonadLint e m =
-    (Scoped e (SThunk m) m, Framed e m, MonadVar m, MonadFile m)
+type MonadLint e m = (Scoped e (SThunk m) m, Framed e m, MonadVar m)
 
 symerr :: forall e m a. MonadLint e m => String -> m a
 symerr = evalError @(Symbolic m)
@@ -208,7 +209,7 @@ merge context = go
 -}
 
 -- | unify raises an error if the result is would be 'NMany []'.
-unify :: MonadLint e m
+unify :: forall e m. MonadLint e m
       => NExprF () -> Symbolic m -> Symbolic m -> m (Symbolic m)
 unify context (Symbolic x) (Symbolic y) = do
     x' <- readVar x
@@ -224,11 +225,11 @@ unify context (Symbolic x) (Symbolic y) = do
             m <- merge context xs ys
             if null m
                 then do
-                    x' <- renderSymbolic (Symbolic x)
-                    y' <- renderSymbolic (Symbolic y)
-                    throwError $ "Cannot unify "
-                        ++ show x' ++ " with " ++ show y'
-                         ++ " in context: " ++ show context
+                    -- x' <- renderSymbolic (Symbolic x)
+                    -- y' <- renderSymbolic (Symbolic y)
+                    throwError "Cannot unify "
+                        -- ++ show x' ++ " with " ++ show y'
+                        --  ++ " in context: " ++ show context
                 else do
                     writeVar x (NMany m)
                     writeVar y (NMany m)
@@ -268,9 +269,9 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
         mkSymbolic [TSet (Just (M.fromList (go f l c)))]
       where
         go f l c =
-            [ ("file", f)
-            , ("line", l)
-            , ("col",  c) ]
+            [ (Text.pack "file", f)
+            , (Text.pack "line", l)
+            , (Text.pack "col",  c) ]
 
     evalConstant c  = mkSymbolic [TConstant [go c]]
       where
@@ -400,8 +401,8 @@ instance MonadVar (Lint s) where
         _ <- modifySTRef x (fst . f)
         return res
 
-instance MonadFile (Lint s) where
-    readFile x = Lint $ ReaderT $ \_ -> unsafeIOToST $ BS.readFile x
+-- instance MonadFile (Lint s) where
+--     readFile x = Lint $ ReaderT $ \_ -> unsafeIOToST $ BS.readFile x
 
 instance MonadThrow (Lint s) where
     throwM e = Lint $ ReaderT $ \_ -> unsafeIOToST $ throw e

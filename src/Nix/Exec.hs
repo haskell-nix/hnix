@@ -44,6 +44,7 @@ import           Data.List.Split
 import           Data.Maybe (mapMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import           Data.Typeable
 import           Data.Void
 import           Nix.Atoms
 import           Nix.Context
@@ -51,12 +52,13 @@ import           Nix.Convert
 import           Nix.Effects
 import           Nix.Eval as Eval
 import           Nix.Expr
+import           Nix.Frames
 import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser
 import           Nix.Pretty
+import           Nix.Render
 import           Nix.Scope
-import           Nix.Stack
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
@@ -70,7 +72,7 @@ import           System.Process (readProcessWithExitCode)
 import           Text.PrettyPrint.ANSI.Leijen (text)
 
 type MonadNix e m =
-    (Scoped e (NThunk m) m, Framed e m, MonadVar m, MonadFile m,
+    (Scoped e (NThunk m) m, Framed e m, Typeable m, MonadVar m,
      MonadEffects m, MonadFix m, MonadCatch m, Alternative m)
 
 nverr :: forall e m a. MonadNix e m => String -> m a
@@ -84,8 +86,8 @@ instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
 currentPos :: Framed e m => m SrcSpan
 currentPos = do
     frames <- asks (view @_ @Frames hasLens)
-    let Fix (Compose (Ann span _)) : _ =
-            mapMaybe (either (const Nothing) Just) frames
+    let EvaluatingExpr (Fix (Compose (Ann span _))) : _ =
+            mapMaybe (fromFrame . frame) frames
     return span
 
 instance MonadNix e m => MonadEval (NValue m) m where
@@ -189,7 +191,7 @@ callFunc fun arg = case fun of
         force f $ (`callFunc` pure s) >=> (`callFunc` arg)
     x -> throwError $ "Attempt to call non-function: " ++ show x
 
-execUnaryOp :: (Framed e m, MonadVar m, MonadFile m)
+execUnaryOp :: (Framed e m, MonadVar m)
             => Scopes m (NThunk m) -> SrcSpan -> NUnaryOp -> NValue m
             -> m (NValue m)
 execUnaryOp scope span op arg = do
@@ -372,7 +374,7 @@ instance MonadIO m => MonadVar (Lazy m) where
     writeVar = (liftIO .) . writeIORef
     atomicModifyVar = (liftIO .) . atomicModifyIORef
 
-instance MonadIO m => MonadFile (Lazy m) where
+instance (MonadIO m, Monad m) => MonadFile m where
     readFile = liftIO . BS.readFile
 
 instance MonadCatch m => MonadCatch (Lazy m) where
@@ -382,7 +384,8 @@ instance MonadCatch m => MonadCatch (Lazy m) where
 instance MonadThrow m => MonadThrow (Lazy m) where
     throwM = Lazy . throwM
 
-instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m, Alternative m)
+instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
+          Alternative m, Typeable m)
       => MonadEffects (Lazy m) where
     addPath path = do
         (exitCode, out, _) <-
@@ -428,7 +431,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m, Alternative m)
 
         traceM $ "Importing file " ++ path'
 
-        withStringContext ("While importing file " ++ show path') $ do
+        withFrame Info ("While importing file " ++ show path') $ do
             eres <- Lazy $ parseNixFileLoc path'
             case eres of
                 Failure err  -> error $ "Parse failed: " ++ show err
@@ -460,7 +463,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m, Alternative m)
             =<< toValue @(ValueSet (Lazy m)) . M.fromList
             =<< mapMaybeM
                 (\(k, v) -> fmap (k,) <$> case k of
-                    "args" -> fmap Just . thunk . fmap (NValue Nothing) $
+                    "args" -> fmap Just . thunk $
                         toNix =<< fromNix @[Text] v
                     "__ignoreNulls" -> pure Nothing
                     _ -> force v $ \case
@@ -587,7 +590,7 @@ findEnvPathM name = do
         nixFilePath $ p <///> joinPath ns
     tryPath p _ = nixFilePath $ p <///> name
 
-addTracing :: (MonadNix e m, MonadIO m,
+addTracing :: (MonadNix e m, Has e Options, MonadIO m,
               MonadReader Int n, Alternative n)
            => Alg NExprLocF (m a) -> Alg NExprLocF (n (m a))
 addTracing k v = do
@@ -608,7 +611,7 @@ addTracing k v = do
             liftIO $ putStrLn $ msg (rendered ++ " ...done")
             return res
 
-evalExprLoc :: forall e m. (MonadNix e m, MonadIO m)
+evalExprLoc :: forall e m. (MonadNix e m, Has e Options, MonadIO m)
             => NExprLoc -> m (NValue m)
 evalExprLoc expr = do
     opts :: Options <- asks (view hasLens)

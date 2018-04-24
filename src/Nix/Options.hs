@@ -71,7 +71,7 @@ data Verbosity
     | Informational
     | Talkative
     | Chatty
-    | Debug
+    | DebugInfo
     | Vomit
     deriving (Eq, Ord, Enum, Bounded, Show)
 
@@ -80,7 +80,7 @@ decodeVerbosity 0 = ErrorsOnly
 decodeVerbosity 1 = Informational
 decodeVerbosity 2 = Talkative
 decodeVerbosity 3 = Chatty
-decodeVerbosity 4 = Debug
+decodeVerbosity 4 = DebugInfo
 decodeVerbosity _ = Vomit
 
 argPair :: Mod OptionFields (Text, Text) -> Parser (Text, Text)

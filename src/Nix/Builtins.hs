@@ -59,10 +59,11 @@ import qualified Nix.Eval as Eval
 import           Nix.Exec
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
+import           Nix.Frames
 import           Nix.Normal
 import           Nix.Parser
+import           Nix.Render
 import           Nix.Scope
-import           Nix.Stack
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
@@ -187,8 +188,7 @@ builtinsList = sequence [
     arity1 f = Prim . pure . f
     arity2 f = ((Prim . pure) .) . f
 
-    mkThunk n = thunk
-        . withStringContext ("While calling builtin " ++ Text.unpack n ++ "\n")
+    mkThunk n = thunk . withFrame Info ("While calling builtin " ++ Text.unpack n ++ "\n")
 
     add0 t n v = wrap t n <$> mkThunk n v
     add  t n v = wrap t n <$> mkThunk n (builtin  (Text.unpack n) v)
@@ -215,7 +215,7 @@ foldNixPath f z = do
     go x rest = case Text.splitOn "=" x of
         [p]    -> f (Text.unpack p) Nothing rest
         [n, p] -> f (Text.unpack p) (Just (Text.unpack n)) rest
-        _ -> throwError $ "Unexpected entry in NIX_PATH: " ++ show x
+        _ -> throwError @String $ "Unexpected entry in NIX_PATH: " ++ show x
 
 nixPath :: MonadNix e m => m (NValue m)
 nixPath = fmap nvList $ flip foldNixPath [] $ \p mn rest ->
@@ -233,16 +233,16 @@ hasAttr :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 hasAttr x y = x >>= \x' -> y >>= \y' -> case (x', y') of
     (NVStr key _, NVSet aset _) ->
         return . nvConstant . NBool $ M.member key aset
-    (x, y) -> throwError $ "Invalid types for builtin.hasAttr: "
+    (x, y) -> throwError @String $ "Invalid types for builtin.hasAttr: "
                  ++ show (x, y)
 
 getAttr :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 getAttr x y = x >>= \x' -> y >>= \y' -> case (x', y') of
     (NVStr key _, NVSet aset _) -> case M.lookup key aset of
-        Nothing -> throwError $ "getAttr: field does not exist: "
+        Nothing -> throwError @String $ "getAttr: field does not exist: "
                       ++ Text.unpack key
         Just action -> force' action
-    (x, y) -> throwError $ "Invalid types for builtin.getAttr: "
+    (x, y) -> throwError @String $ "Invalid types for builtin.getAttr: "
                  ++ show (x, y)
 
 unsafeGetAttrPos :: forall e m. MonadNix e m
@@ -250,10 +250,10 @@ unsafeGetAttrPos :: forall e m. MonadNix e m
 unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
     (NVStr key _, NVSet _ apos) -> case M.lookup key apos of
         Nothing ->
-            throwError $ "unsafeGetAttrPos: field '" ++ Text.unpack key
+            throwError @String $ "unsafeGetAttrPos: field '" ++ Text.unpack key
                 ++ "' does not exist in attr set: " ++ show apos
         Just delta -> toValue delta
-    (x, y) -> throwError $ "Invalid types for builtin.unsafeGetAttrPos: "
+    (x, y) -> throwError @String $ "Invalid types for builtin.unsafeGetAttrPos: "
                  ++ show (x, y)
 
 -- This function is a bit special in that it doesn't care about the contents
@@ -295,12 +295,12 @@ foldl'_ fun z xs =
 
 head_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 head_ = fromValue >=> \case
-    [] -> throwError "builtins.head: empty list"
+    [] -> throwError @String "builtins.head: empty list"
     h:_ -> force' h
 
 tail_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 tail_ = fromValue >=> \case
-    [] -> throwError "builtins.tail: empty list"
+    [] -> throwError @String "builtins.tail: empty list"
     _:t -> return $ nvList t
 
 data VersionComponent
@@ -380,7 +380,7 @@ parseDrvName = fromValue >=> \(s :: Text) -> do
     let (name :: Text, version :: Text) = splitDrvName s
     -- jww (2018-04-15): There should be an easier way to write this.
     (toValue =<<) $ sequence $ M.fromList
-        [ ("name" :: Text, thunk (toValue name))
+        [ ("name" :: Text, thunk (toValue @_ @_ @(NValue m) name))
         , ("version",     thunk (toValue version)) ]
 
 match_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
@@ -427,7 +427,7 @@ thunkStr s = valueThunk (nvStr (decodeUtf8 s) mempty)
 substring :: MonadNix e m => Int -> Int -> Text -> Prim m Text
 substring start len str = Prim $
     if start < 0 --NOTE: negative values of 'len' are OK
-    then throwError $ "builtins.substring: negative start position: " ++ show start
+    then throwError @String $ "builtins.substring: negative start position: " ++ show start
     else pure $ Text.take len $ Text.drop start str
 
 attrNames :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
@@ -440,7 +440,7 @@ attrValues = fromValue @(ValueSet m) >=>
 map_ :: forall e m. MonadNix e m
      => m (NValue m) -> m (NValue m) -> m (NValue m)
 map_ fun xs = fun >>= \f ->
-    toNix <=< traverse (thunk . withStringContext "While applying f in map:\n"
+    toNix <=< traverse (thunk . withFrame @String Debug "While applying f in map:\n"
                               . (f `callFunc`) . force')
           <=< fromValue @[NThunk m] $ xs
 
@@ -461,14 +461,14 @@ baseNameOf x = x >>= \case
     --TODO: Only allow strings that represent absolute paths
     NVStr path ctx -> pure $ nvStr (Text.pack $ takeFileName $ Text.unpack path) ctx
     NVPath path -> pure $ nvPath $ takeFileName path
-    v -> throwError $ "dirOf: expected string or path, got " ++ show v
+    v -> throwError @String $ "dirOf: expected string or path, got " ++ show v
 
 dirOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 dirOf x = x >>= \case
     --TODO: Only allow strings that represent absolute paths
     NVStr path ctx -> pure $ nvStr (Text.pack $ takeDirectory $ Text.unpack path) ctx
     NVPath path -> pure $ nvPath $ takeDirectory path
-    v -> throwError $ "dirOf: expected string or path, got " ++ show v
+    v -> throwError @String $ "dirOf: expected string or path, got " ++ show v
 
 unsafeDiscardStringContext :: MonadNix e m => m (NValue m) -> m (NValue m)
 unsafeDiscardStringContext = fromNix @Text >=> toNix
@@ -500,7 +500,7 @@ elemAt_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 elemAt_ xs n = fromNix n >>= \n' -> fromValue xs >>= \xs' ->
     case elemAt xs' n' of
       Just a -> force' a
-      Nothing -> throwError $ "builtins.elem: Index " ++ show n'
+      Nothing -> throwError @String $ "builtins.elem: Index " ++ show n'
           ++ " too large for list of length " ++ show (length xs')
 
 genList :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
@@ -508,7 +508,7 @@ genList generator = fromNix @Integer >=> \n ->
     if n >= 0
     then generator >>= \f ->
         toNix =<< forM [0 .. n - 1] (\i -> thunk $ f `callFunc` toNix i)
-    else throwError $ "builtins.genList: Expected a non-negative number, got "
+    else throwError @String $ "builtins.genList: Expected a non-negative number, got "
              ++ show n
 
 --TODO: Preserve string context
@@ -518,7 +518,7 @@ replaceStrings tfrom tto ts =
     fromNix tto   >>= \(to   :: [Text]) ->
     fromNix ts    >>= \(s    :: Text) -> do
         when (length from /= length to) $
-            throwError $ "'from' and 'to' arguments to 'replaceStrings'"
+            throwError @String $ "'from' and 'to' arguments to 'replaceStrings'"
                 ++ " have different lengths"
         let lookupPrefix s = do
                 (prefix, replacement) <-
@@ -569,7 +569,7 @@ functionArgs fun = fun >>= \case
                 case p of
                     Param name -> M.singleton name False
                     ParamSet s _ _ -> isJust <$> M.fromList s
-    v -> throwError $ "builtins.functionArgs: expected function, got "
+    v -> throwError @String $ "builtins.functionArgs: expected function, got "
             ++ show v
 
 toPath :: MonadNix e m => m (NValue m) -> m (NValue m)
@@ -580,9 +580,9 @@ pathExists_ path = path >>= \case
     NVPath p  -> toNix =<< pathExists p
     -- jww (2018-04-13): Should this ever be a string?
     NVStr s _ -> toNix =<< pathExists (Text.unpack s)
-    v -> throwError $ "builtins.pathExists: expected path, got " ++ show v
+    v -> throwError @String $ "builtins.pathExists: expected path, got " ++ show v
 
-hasKind :: forall a e m. (MonadNix e m, FromNix a m (NValueF m (NThunk m)))
+hasKind :: forall a e m. (MonadNix e m, FromNix a m (NValue m))
         => m (NValue m) -> m (NValue m)
 hasKind = fromNixMay >=> toNix . \case Just (_ :: a) -> True; _ -> False
 
@@ -647,7 +647,7 @@ sort_ comparator xs = comparator >>= \comp ->
 
 lessThan :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 lessThan ta tb = ta >>= \va -> tb >>= \vb -> do
-    let badType = throwError $ "builtins.lessThan: expected two numbers or two strings, "
+    let badType = throwError @String $ "builtins.lessThan: expected two numbers or two strings, "
             ++ "got " ++ show va ++ " and " ++ show vb
     nvConstant . NBool <$> case (va, vb) of
         (NVConstant ca, NVConstant cb) -> case (ca, cb) of
@@ -681,7 +681,7 @@ hashString algo s = Prim $ do
         "sha1"   -> pure SHA1.hash
         "sha256" -> pure SHA256.hash
         "sha512" -> pure SHA512.hash
-        _ -> throwError $ "builtins.hashString: "
+        _ -> throwError @String $ "builtins.hashString: "
             ++ "expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got " ++ show algo
     pure $ decodeUtf8 $ Base16.encode $ hash $ encodeUtf8 s
 
@@ -690,15 +690,15 @@ absolutePathFromValue = \case
     NVStr pathText _ -> do
         let path = Text.unpack pathText
         unless (isAbsolute path) $
-            throwError $ "string " ++ show path ++ " doesn't represent an absolute path"
+            throwError @String $ "string " ++ show path ++ " doesn't represent an absolute path"
         pure path
     NVPath path -> pure path
-    v -> throwError $ "expected a path, got " ++ show v
+    v -> throwError @String $ "expected a path, got " ++ show v
 
 --TODO: Move all liftIO things into MonadNixEnv or similar
 readFile_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 readFile_ path =
-    path >>= absolutePathFromValue >>= Nix.Stack.readFile >>= toNix
+    path >>= absolutePathFromValue >>= Nix.Render.readFile >>= toNix
 
 data FileType
    = FileTypeRegular
@@ -707,7 +707,7 @@ data FileType
    | FileTypeUnknown
    deriving (Show, Read, Eq, Ord)
 
-instance Applicative m => ToNix FileType m (NValueF m r) where
+instance Applicative m => ToNix FileType m (NValue m) where
     toNix = toNix . \case
         FileTypeRegular   -> "regular" :: Text
         FileTypeDirectory -> "directory"
@@ -731,7 +731,7 @@ readDir_ pathThunk = do
 fromJSON :: MonadNix e m => m (NValue m) -> m (NValue m)
 fromJSON = fromValue >=> \encoded ->
     case A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded of
-        Left jsonError -> throwError $ "builtins.fromJSON: " ++ jsonError
+        Left jsonError -> throwError @String $ "builtins.fromJSON: " ++ jsonError
         Right v -> toValue v
 
 toXML_ :: MonadNix e m => m (NValue m) -> m (NValue m)
@@ -771,18 +771,18 @@ tryEval e = catch (onSuccess <$> e) (pure . onError)
 fetchTarball :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 fetchTarball v = v >>= \case
     NVSet s _ -> case M.lookup "url" s of
-        Nothing -> throwError "builtins.fetchTarball: Missing url attribute"
+        Nothing -> throwError @String "builtins.fetchTarball: Missing url attribute"
         Just url -> force url $ go (M.lookup "sha256" s)
     v@NVStr {} -> go Nothing v
     v@(NVConstant (NUri _)) -> go Nothing v
-    v -> throwError $ "builtins.fetchTarball: Expected URI or set, got "
+    v -> throwError @String $ "builtins.fetchTarball: Expected URI or set, got "
             ++ show v
  where
     go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
     go msha = \case
         NVStr uri _ -> fetch uri msha
         NVConstant (NUri uri) -> fetch uri msha
-        v -> throwError $ "builtins.fetchTarball: Expected URI or string, got "
+        v -> throwError @String $ "builtins.fetchTarball: Expected URI or string, got "
                 ++ show v
 
 {- jww (2018-04-11): This should be written using pipes in another module
@@ -793,7 +793,7 @@ fetchTarball v = v >>= \case
         ".bz2" -> undefined
         ".xz"  -> undefined
         ".tar" -> undefined
-        ext -> throwError $ "builtins.fetchTarball: Unsupported extension '"
+        ext -> throwError @String $ "builtins.fetchTarball: Unsupported extension '"
                   ++ ext ++ "'"
 -}
 
@@ -832,10 +832,10 @@ newtype Prim m a = Prim { runPrim :: m a }
 class ToBuiltin m a | a -> m where
     toBuiltin :: String -> a -> m (NValue m)
 
-instance (MonadNix e m, ToNix a m (NValueF m (NThunk m)))
+instance (MonadNix e m, ToNix a m (NValue m))
       => ToBuiltin m (Prim m a) where
     toBuiltin _ p = toNix =<< runPrim p
 
-instance (MonadNix e m, FromNix a m (NValueF m (NThunk m)), ToBuiltin m b)
+instance (MonadNix e m, FromNix a m (NValue m), ToBuiltin m b)
       => ToBuiltin m (a -> b) where
     toBuiltin name f = return $ nvBuiltin name (fromNix >=> toBuiltin name . f)

@@ -1,4 +1,3 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveTraversable #-}
@@ -16,7 +15,7 @@
 
 module Nix.Thunk where
 
-import {-# SOURCE #-} Nix.Stack
+import Nix.Frames
 
 #if ENABLE_TRACING
 import Data.IORef
@@ -40,7 +39,7 @@ class Monad m => MonadVar m where
     writeVar :: Var m a -> a -> m ()
     atomicModifyVar :: Var m a -> (a -> (a, b)) -> m b
 
-class Monad m => MonadThunk v t m | m -> v, v -> m, v -> t where
+class Monad m => MonadThunk v t m | v -> m, v -> t, t -> v where
     thunk :: m v -> m t
     force :: t -> (v -> m r) -> m r
     value :: v -> t
@@ -52,6 +51,10 @@ data Thunk m v
           !Int
 #endif
           (Var m Bool) (Var m (Deferred m v))
+
+newtype ThunkLoop = ThunkLoop (Maybe Int)
+
+instance Frame ThunkLoop
 
 valueRef :: v -> Thunk m v
 valueRef = Value
@@ -66,8 +69,7 @@ buildThunk action =
 #endif
         <$> newVar False <*> newVar (Deferred action)
 
-forceThunk :: (Framed e m, MonadFile m, MonadVar m)
-           => Thunk m v -> (v -> m r) -> m r
+forceThunk :: (Framed e m, MonadVar m) => Thunk m v -> (v -> m a) -> m a
 forceThunk (Value ref) k = k ref
 #if ENABLE_TRACING
 forceThunk (Thunk n active ref) k = do
@@ -82,9 +84,9 @@ forceThunk (Thunk active ref) k = do
             if nowActive
                 then
 #if ENABLE_TRACING
-                    throwError $ "<<loop forcing thunk #" ++ show n ++ ">>"
+                    throwError $ ThunkLoop (Just n)
 #else
-                    throwError "<<loop>>"
+                    throwError $ ThunkLoop Nothing
 #endif
                 else do
 #if ENABLE_TRACING
@@ -95,8 +97,7 @@ forceThunk (Thunk active ref) k = do
                     _ <- atomicModifyVar active (False,)
                     k v
 
-forceEffects :: (Framed e m, MonadFile m, MonadVar m)
-             => Thunk m v -> (v -> m r) -> m r
+forceEffects :: (Framed e m, MonadVar m) => Thunk m v -> (v -> m a) -> m a
 forceEffects (Value ref) k = k ref
 #if ENABLE_TRACING
 forceEffects (Thunk _ active ref) k = do

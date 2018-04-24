@@ -15,11 +15,11 @@ import qualified Data.Map as Map
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           GHC.Exts
+import           Nix.Frames
 import           Nix.Lint
 import           Nix.Options
 import           Nix.Parser
 import           Nix.Pretty
-import           Nix.Stack
 import           Nix.Utils
 import           Nix.XML
 import qualified Options.Applicative as Opts
@@ -106,7 +106,8 @@ assertLangOkXml opts file = do
 
 assertEval :: [FilePath] -> Assertion
 assertEval files = catch go $ \case
-    NixEvalException str -> error $ "Evaluation error: " ++ str
+    NixException frames -> error $ "Evaluation error: NYI rendering NYI"
+    -- NixException frames -> error $ "Evaluation error: " ++ str
   where
     go = case delete ".nix" $ sort $ map takeExtensions files of
         [] -> assertLangOkXml defaultOptions name

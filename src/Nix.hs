@@ -7,12 +7,12 @@
 module Nix (module Nix.Cache,
             module Nix.Exec,
             module Nix.Expr,
+            module Nix.Frames,
             module Nix.Normal,
             module Nix.Options,
             module Nix.Parser,
             module Nix.Pretty,
             module Nix.Reduce,
-            module Nix.Stack,
             module Nix.Thunk,
             module Nix.Value,
             module Nix.XML,
@@ -45,14 +45,15 @@ import           Nix.Parser.Library (Result(..))
 import           Nix.Pretty
 import           Nix.Reduce
 import           Nix.Scope
-import           Nix.Stack hiding (readFile)
+import           Nix.Frames
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 import           Nix.XML
 
 -- | Evaluate a nix expression in the default context
-withNixContext :: forall e m r. MonadNix e m => Maybe FilePath -> m r -> m r
+withNixContext :: forall e m r. (MonadNix e m, Has e Options)
+               => Maybe FilePath -> m r -> m r
 withNixContext mpath action = do
     base <- builtins
     opts :: Options <- asks (view hasLens)
@@ -70,17 +71,17 @@ withNixContext mpath action = do
 -- | This is the entry point for all evaluations, whatever the expression tree
 --   type. It sets up the common Nix environment and applies the
 --   transformations, allowing them to be easily composed.
-nixEval :: (MonadNix e m, Functor f)
+nixEval :: (MonadNix e m, Has e Options, Functor f)
         => Maybe FilePath -> Transform f (m a) -> Alg f (m a) -> Fix f -> m a
 nixEval mpath xform alg = withNixContext mpath . adi alg xform
 
 -- | Evaluate a nix expression in the default context
-nixEvalExpr :: forall e m. MonadNix e m
+nixEvalExpr :: forall e m. (MonadNix e m, Has e Options)
             => Maybe FilePath -> NExpr -> m (NValue m)
 nixEvalExpr mpath = nixEval mpath id Eval.eval
 
 -- | Evaluate a nix expression in the default context
-nixEvalExprLoc :: MonadNix e m
+nixEvalExprLoc :: (MonadNix e m, Has e Options)
                => Maybe FilePath -> NExprLoc -> m (NValue m)
 nixEvalExprLoc mpath =
     nixEval mpath Eval.addStackFrames (Eval.eval . annotated . getCompose)
@@ -90,12 +91,13 @@ nixEvalExprLoc mpath =
 --   'tracing' is set to 'True' in the Options structure (accessible through
 --   'MonadNix'). All this function does is provide the right type class
 --   context.
-nixTracingEvalExprLoc :: forall e m. (MonadNix e m, MonadIO m, Alternative m)
-                      => Maybe FilePath -> NExprLoc -> m (NValue m)
+nixTracingEvalExprLoc
+    :: forall e m. (MonadNix e m, Has e Options, MonadIO m, Alternative m)
+    => Maybe FilePath -> NExprLoc -> m (NValue m)
 nixTracingEvalExprLoc mpath = withNixContext mpath . evalExprLoc
 
 evaluateExpression
-    :: MonadNix e m
+    :: (MonadNix e m, Has e Options)
     => Maybe FilePath
     -> (Maybe FilePath -> NExprLoc -> m (NValue m))
     -> (NValue m -> m a)
@@ -122,7 +124,7 @@ evaluateExpression mpath evaluator handler expr = do
              NVClosure _ g -> g args
              _ -> pure f
 
-processResult :: forall e m a. MonadNix e m
+processResult :: forall e m a. (MonadNix e m, Has e Options)
               => (NValue m -> m a) -> NValue m -> m a
 processResult h val = do
     opts :: Options <- asks (view hasLens)

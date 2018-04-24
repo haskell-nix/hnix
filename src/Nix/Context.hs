@@ -6,7 +6,7 @@ module Nix.Context where
 
 import Nix.Options
 import Nix.Scope
-import Nix.Stack
+import Nix.Frames
 import Nix.Utils
 
 data Context m v = Context

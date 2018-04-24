@@ -3,6 +3,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -39,9 +40,8 @@ import           Data.Void
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Expr
-import           Nix.Pretty
+import           Nix.Frames
 import           Nix.Scope
-import           Nix.Stack
 import           Nix.Strings (runAntiquoted)
 import           Nix.Thunk
 import           Nix.Utils
@@ -85,19 +85,24 @@ class (Show v, Monad m) => MonadEval v m | v -> m where
 
 type MonadNixEval e v t m =
     (MonadEval v m, Scoped e t m, MonadThunk v t m, MonadFix m,
-     Framed e m, MonadFile m, MonadVar m,
+     Framed e m, MonadVar m,
      ToValue Bool m v, ToValue [t] m v,
      FromValue (Text, DList Text) m v,
      ToValue (AttrSet t) m v, FromValue (AttrSet t) m v,
      ToValue (AttrSet t, AttrSet SourcePos) m v,
      FromValue (AttrSet t, AttrSet SourcePos) m v)
 
+newtype ExprContext = ExprContext NExpr
+newtype EvaluatingExpr = EvaluatingExpr NExprLoc
+
+instance Frame ExprContext
+instance Frame EvaluatingExpr
+
 wrapExpr :: NExprF (m v) -> NExpr
 wrapExpr x = Fix (Fix (NSym "<?>") <$ x)
 
-exprFContext :: (Framed e m) => NExprF (m v) -> m r -> m r
-exprFContext e = withStringContext $
-    "While forcing thunk for: " ++ show (prettyNix (wrapExpr e)) ++ "\n"
+exprFContext :: Framed e m => NExprF (m v) -> m r -> m r
+exprFContext e = withFrame Debug (ExprContext (wrapExpr e))
 
 eval :: forall e v t m. MonadNixEval e v t m => NExprF (m v) -> m v
 
@@ -429,7 +434,7 @@ buildArgument e params arg = do
         These x _ -> const (pure x)
 
 addStackFrames :: Framed e m => Transform NExprLocF (m a)
-addStackFrames f v = withExprContext v (f v)
+addStackFrames f v = withFrame Info (EvaluatingExpr v) (f v)
 
-framedEvalExprLoc :: MonadNixEval e v t m => NExprLoc -> m v
+framedEvalExprLoc :: forall e v t m. MonadNixEval e v t m => NExprLoc -> m v
 framedEvalExprLoc = adi (eval . annotated . getCompose) addStackFrames

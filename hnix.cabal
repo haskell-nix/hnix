@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 16beb8d29116e6049b925d6727fb8e104c6722c162db8fa745bc2ec17724da47
+-- hash: 469fd512cc13754d0cd6b72f0c771fc90d48e89283e3308e564335e6b31e5e39
 
 name:           hnix
 version:        0.5.0
@@ -50,6 +50,7 @@ library
       Nix.Expr.Shorthands
       Nix.Expr.Types
       Nix.Expr.Types.Annotated
+      Nix.Frames
       Nix.Lint
       Nix.Normal
       Nix.Options
@@ -58,8 +59,8 @@ library
       Nix.Parser.Operators
       Nix.Pretty
       Nix.Reduce
+      Nix.Render
       Nix.Scope
-      Nix.Stack
       Nix.Strings
       Nix.TH
       Nix.Thunk
@@ -92,6 +93,7 @@ library
     , directory
     , exceptions
     , filepath
+    , freer-simple
     , hashable
     , megaparsec
     , monadlist
