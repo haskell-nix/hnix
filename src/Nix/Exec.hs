@@ -91,9 +91,13 @@ instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
         scope <- currentScopes
         span  <- currentPos
         frames <- asks (view @_ @Frames hasLens)
-        let ExprContext e : _ = mapMaybe (fromFrame . frame) frames
-            e' = Compose (Ann span (Nothing <$ e))
-        fmap (NThunk [Provenance scope e'] . coerce) . buildThunk $ mv
+        let p = case mapMaybe ((fromFrame :: SomeFrame -> Maybe EvalFrame)
+                                   . frame) frames of
+                ExprContext e : _ ->
+                    let e' = Compose (Ann span (Nothing <$ e))
+                    in [Provenance scope e']
+                _ -> []
+        fmap (NThunk p . coerce) . buildThunk $ mv
 
     force (NThunk ps t) f = do
         span <- currentPos
@@ -106,7 +110,8 @@ instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
 currentPos :: Framed e m => m SrcSpan
 currentPos = do
     frames <- asks (view @_ @Frames hasLens)
-    pure $ case mapMaybe (fromFrame . frame) frames of
+    pure $ case mapMaybe ((fromFrame :: SomeFrame -> Maybe EvalFrame)
+                              . frame) frames of
         EvaluatingExpr (Fix (Compose (Ann span _))) : _ -> span
         _ -> nullAnn
 

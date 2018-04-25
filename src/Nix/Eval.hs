@@ -99,7 +99,7 @@ data EvalFrame
 instance Frame EvalFrame
 
 exprFContext :: Framed e m => NExprF (m v) -> m r -> m r
-exprFContext e = withFrame Debug (ExprContext (void e))
+exprFContext = withFrame Debug . ExprContext . void
 
 eval :: forall e v t m. MonadNixEval e v t m => NExprF (m v) -> m v
 
@@ -137,7 +137,7 @@ eval (NHasAttr aset attr) =
 
 eval e@(NList l) = do
     scope <- currentScopes
-    toValue =<< for l (thunk . exprFContext e . withScopes @t scope)
+    toValue =<< for l (exprFContext e . thunk . withScopes @t scope)
 
 eval e@(NSet binds) = do
     traceM "NSet..1"
@@ -191,8 +191,9 @@ evalWithAttrSet scope body = do
     -- we want to be sure the action it evaluates is to force a thunk, so
     -- its value is only computed once.
     cur <- currentScopes @_ @t
-    s <- thunk $ exprFContext (NWith scope body)
-              $ withScopes cur scope
+    s <- exprFContext (NWith scope body)
+        $ thunk
+        $ withScopes cur scope
     pushWeakScope ?? body $ force s $ fromValue @(AttrSet t)
 
 attrSetAlter :: forall e v t m. MonadNixEval e v t m
@@ -298,7 +299,7 @@ evalBinds e allowDynamic recursive binds = do
         s <- foldM insert M.empty bindings
         res <- if recursive
                then loebM (encapsulate <$> s)
-               else traverse (thunk . exprFContext e . withScopes scope) s
+               else traverse (exprFContext e . thunk . withScopes scope) s
         return (res, foldl' go M.empty bindings)
       where
         -- jww (2018-04-13): Need to record positions for attr paths as well
@@ -306,9 +307,10 @@ evalBinds e allowDynamic recursive binds = do
         go m _ = m
 
         encapsulate f attrs =
-            thunk . exprFContext e
-                  . withScopes scope
-                  . pushScope attrs $ f
+            exprFContext e
+                . thunk
+                . withScopes scope
+                . pushScope attrs $ f
 
         insert m (path, _, value) = attrSetAlter path m value
 
@@ -365,7 +367,7 @@ evalKeyNameDynamicNotNull
 evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
     (Nothing, _) ->
         -- jww (2018-04-24): This should be of Coercion ValueFrame type
-        evalError @v $ ("value is null while a string was expected" :: String)
+        evalError @v ("value is null while a string was expected" :: String)
     (Just k, p) -> pure (k, p)
 
 -- | Evaluate a component of an attribute path in a context where we are
@@ -404,13 +406,13 @@ buildArgument e params arg = do
     scope <- currentScopes @_ @t
     case params of
         Param name -> M.singleton name
-            <$> thunk (exprFContext e (withScopes scope arg))
+            <$> exprFContext e (thunk (withScopes scope arg))
         ParamSet s isVariadic m ->
             arg >>= fromValue >>= \args -> do
                 let inject = case m of
                         Nothing -> id
                         Just n -> M.insert n $ const $
-                            thunk (exprFContext e (withScopes scope arg))
+                            exprFContext e (thunk (withScopes scope arg))
                 loebM (inject $ alignWithKey (assemble scope isVariadic)
                                              args (M.fromList s))
   where
@@ -424,9 +426,10 @@ buildArgument e params arg = do
         That Nothing  ->
             const $ evalError @v $ "Missing value for parameter: " ++ show k
         That (Just f) -> \args ->
-            thunk $ exprFContext e
-                  $ withScopes scope
-                  $ pushScope args f
+            exprFContext e
+                $ thunk
+                $ withScopes scope
+                $ pushScope args f
         This x | isVariadic -> const (pure x)
                | otherwise  ->
                  const $ evalError @v $ "Unexpected parameter: " ++ show k
