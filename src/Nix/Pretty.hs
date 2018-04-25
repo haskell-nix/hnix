@@ -150,9 +150,10 @@ prettyOriginExpr = withoutParens . go
   where
     go = exprFNixDoc . annotated . getCompose . fmap render
 
-    render Nothing                       = simpleExpr $ text "_"
-    render (Just (NValue Nothing _))     = simpleExpr $ text "?"
-    render (Just (NValue (Just expr) _)) = go (originExpr expr)
+    render Nothing              = simpleExpr $ text "_"
+    render (Just (NValue [] _)) = simpleExpr $ text "?"
+    -- jww (2018-04-24): Show full expression context...
+    render (Just (NValue (expr : _) _)) = go (originExpr expr)
 
 exprFNixDoc :: NExprF NixDoc -> NixDoc
 exprFNixDoc = \case
@@ -245,8 +246,8 @@ printNix = cata phi
 removeEffects :: Functor m => NValueF m (NThunk m) -> NValueNF m
 removeEffects = Fix . fmap dethunk
   where
-    dethunk (NThunk (Value v)) = removeEffects (baseValue v)
-    dethunk (NThunk _) = Fix $ NVStrF "<thunk>" mempty
+    dethunk (NThunk _ (Value v)) = removeEffects (baseValue v)
+    dethunk (NThunk _ _) = Fix $ NVStrF "<thunk>" mempty
 
 removeEffectsM :: MonadVar m => NValueF m (NThunk m) -> m (NValueNF m)
 removeEffectsM = fmap Fix . traverse dethunk
@@ -256,16 +257,16 @@ renderNValueF = fmap prettyNixValue . removeEffectsM
 
 renderNValue :: MonadVar m => NValue m -> m Doc
 renderNValue = \case
-    NValue Nothing v -> renderNValueF v
-    NValue (Just p) v -> do
+    NValue [] v -> renderNValueF v
+    -- jww (2018-04-23): Show full expression context.
+    NValue (p:_) v -> do
         v' <- renderNValueF v
-        -- jww (2018-04-23): Need to display the contextExpr as well.
         pure $ v' </> (text " (from: " <> prettyOriginExpr (originExpr p) <> text ")")
 
 dethunk :: MonadVar m => NThunk m -> m (NValueNF m)
 dethunk = \case
-    NThunk (Value v) -> removeEffectsM (baseValue v)
-    NThunk (Thunk
+    NThunk _ (Value v) -> removeEffectsM (baseValue v)
+    NThunk _ (Thunk
 #if ENABLE_TRACING
                      _
 #endif

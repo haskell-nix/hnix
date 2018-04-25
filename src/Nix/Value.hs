@@ -80,72 +80,67 @@ data NValueF m r
 --   a value in head normal form. A 'NThunkSet' is a set of mappings from keys
 --   to thunks.
 
-type    NValueNF m = Fix (NValueF m)      -- normal form
-newtype NThunk m   = NThunk (Thunk m (NValue m))
-type    ValueSet m = AttrSet (NThunk m)
+type NValueNF m = Fix (NValueF m)      -- normal form
+type ValueSet m = AttrSet (NThunk m)
 
 data Provenance m = Provenance
     { lexicalScope :: Scopes m (NThunk m)
     , originExpr   :: NExprLocF (Maybe (NValue m))
-    , contextExpr  :: [NExprLocF (Maybe (NValue m))]
       -- ^ When calling the function x: x + 2 with argument x = 3, the
       --   'originExpr' for the resulting value will be 3 + 2, while the
       --   'contextExpr' will be @(x: x + 2) 3@, preserving not only the
       --   result of the call, but what was called and with what arguments.
     }
 
+data NThunk m = NThunk
+    { thunkProvenance :: [Provenance m]
+    , baseThunk       :: Thunk m (NValue m)
+    }
+
 -- jww (2018-04-22): Tracking value provenance may need to be a compile-time
 -- option.
 data NValue m = NValue
-    { provenance :: Maybe (Provenance m)
-    , baseValue  :: NValueF m (NThunk m)
+    { valueProvenance :: [Provenance m]
+    , baseValue       :: NValueF m (NThunk m)
     }
 
-changeProvenance :: Scopes m (NThunk m)
-                 -> (NValue m -> NExprLocF (Maybe (NValue m)))
-                 -> NValue m -> NValue m
-changeProvenance s f l@(NValue _ v) =
-    NValue (Just (Provenance s (f l) [])) v
-
-provenanceContext :: NExprLocF (Maybe (NValue m)) -> NValue m
-                  -> NValue m
-provenanceContext c (NValue p v) =
-    NValue (fmap (\x -> x { contextExpr = c : contextExpr x }) p) v
+addProvenance :: (NValue m -> Provenance m) -> NValue m -> NValue m
+addProvenance f l@(NValue p v) = NValue (f l : p) v
 
 pattern NVConstant x <- NValue _ (NVConstantF x)
 
-nvConstant x = NValue Nothing (NVConstantF x)
-nvConstantP p x = NValue (Just p) (NVConstantF x)
+nvConstant x = NValue [] (NVConstantF x)
+nvConstantP p x = NValue [p] (NVConstantF x)
 
 pattern NVStr s d <- NValue _ (NVStrF s d)
 
-nvStr s d = NValue Nothing (NVStrF s d)
-nvStrP p s d = NValue (Just p) (NVStrF s d)
+nvStr s d = NValue [] (NVStrF s d)
+nvStrP p s d = NValue [p] (NVStrF s d)
 
 pattern NVPath x <- NValue _ (NVPathF x)
 
-nvPath x = NValue Nothing (NVPathF x)
-nvPathP p x = NValue (Just p) (NVPathF x)
+nvPath x = NValue [] (NVPathF x)
+nvPathP p x = NValue [p] (NVPathF x)
 
 pattern NVList l <- NValue _ (NVListF l)
 
-nvList l = NValue Nothing (NVListF l)
-nvListP p l = NValue (Just p) (NVListF l)
+nvList l = NValue [] (NVListF l)
+nvListP p l = NValue [p] (NVListF l)
 
 pattern NVSet s x <- NValue _ (NVSetF s x)
 
-nvSet s x = NValue Nothing (NVSetF s x)
-nvSetP p s x = NValue (Just p) (NVSetF s x)
+nvSet s x = NValue [] (NVSetF s x)
+nvSetP p s x = NValue [p] (NVSetF s x)
 
 pattern NVClosure x f <- NValue _ (NVClosureF x f)
 
-nvClosure x f = NValue Nothing (NVClosureF x f)
-nvClosureP p x f = NValue (Just p) (NVClosureF x f)
+nvClosure x f = NValue [] (NVClosureF x f)
+nvClosureP p x f = NValue [p] (NVClosureF x f)
 
 pattern NVBuiltin name f <- NValue _ (NVBuiltinF name f)
 
-nvBuiltin name f = NValue Nothing (NVBuiltinF name f)
-nvBuiltinP p name f = NValue (Just p) (NVBuiltinF name f)
+nvBuiltin name f = NValue [] (NVBuiltinF name f)
+nvBuiltinP p name f = NValue [p] (NVBuiltinF name f)
 
 instance Show (NValueF m (Fix (NValueF m))) where
     showsPrec = flip go where
@@ -253,17 +248,18 @@ data ValueType
 
 valueType :: NValueF m r -> ValueType
 valueType = \case
-    NVConstantF (NInt _)   -> TInt
-    NVConstantF (NFloat _) -> TFloat
-    NVConstantF (NBool _)  -> TBool
-    NVConstantF (NUri _)   -> TUri
-    NVConstantF NNull      -> TNull
-    NVStrF {}              -> TString
-    NVListF {}             -> TList
-    NVSetF {}              -> TSet
-    NVClosureF {}          -> TClosure
-    NVPathF {}             -> TPath
-    NVBuiltinF {}          -> TBuiltin
+    NVConstantF a -> case a of
+        NInt _    -> TInt
+        NFloat _  -> TFloat
+        NBool _   -> TBool
+        NUri _    -> TUri
+        NNull     -> TNull
+    NVStrF {}     -> TString
+    NVListF {}    -> TList
+    NVSetF {}     -> TSet
+    NVClosureF {} -> TClosure
+    NVPathF {}    -> TPath
+    NVBuiltinF {} -> TBuiltin
 
 describeValue :: ValueType -> String
 describeValue = \case
@@ -283,12 +279,11 @@ instance Show (NValueF m (NThunk m)) where
     show = show . describeValue . valueType
 
 instance Show (NValue m) where
-    show (NValue Nothing v)  = show v
-    show (NValue (Just _) v) = show v
+    show (NValue _ v)  = show v
 
 instance Show (NThunk m) where
-    show (NThunk (Value v)) = show v
-    show (NThunk _) = "<thunk>"
+    show (NThunk _ (Value v)) = show v
+    show (NThunk _ _) = "<thunk>"
 
 data ValueFrame m
     = ForcingThunk

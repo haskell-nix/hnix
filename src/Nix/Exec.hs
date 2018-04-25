@@ -84,9 +84,9 @@ nverr :: forall s e m a. (MonadNix e m, Frame s) => s -> m a
 nverr = evalError @(NValue m)
 
 instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
-    thunk = fmap coerce . buildThunk
-    force = forceThunk . coerce
-    value = coerce . valueRef
+    thunk = fmap (NThunk [] . coerce) . buildThunk
+    force = forceThunk . coerce . baseThunk
+    value = NThunk [] . coerce . valueRef
 
 currentPos :: Framed e m => m SrcSpan
 currentPos = do
@@ -103,35 +103,34 @@ instance MonadNix e m => MonadEval (NValue m) m where
         scope <- currentScopes
         span  <- currentPos
         SrcSpan delta _ <- currentPos
-        changeProvenance scope (\_ -> NSym_ span "__curPos") <$> toValue delta
+        addProvenance (\_ -> Provenance scope (NSym_ span "__curPos"))
+            <$> toValue delta
 
     evaledSym name val = do
+        scope <- currentScopes
         span <- currentPos
-        pure $ provenanceContext (NSym_ span name) val
+        pure $ addProvenance (const $ Provenance scope (NSym_ span name)) val
 
     evalConstant c = do
         scope <- currentScopes
         span  <- currentPos
-        pure $ nvConstantP (Provenance scope (NConstant_ span c) []) c
+        pure $ nvConstantP (Provenance scope (NConstant_ span c)) c
 
     evalString s d = do
         scope <- currentScopes
         span  <- currentPos
         -- jww (2018-04-22): Determine full provenance for the string?
-        pure $ nvStrP (Provenance scope (NStr_ span (DoubleQuoted [Plain s]))
-                                  []) s d
+        pure $ nvStrP (Provenance scope (NStr_ span (DoubleQuoted [Plain s]))) s d
 
     evalLiteralPath p = do
         scope <- currentScopes
         span  <- currentPos
-        fmap (nvPathP (Provenance scope (NLiteralPath_ span p) []))
-                      (makeAbsolutePath p)
+        nvPathP (Provenance scope (NLiteralPath_ span p)) <$> makeAbsolutePath p
 
     evalEnvPath p = do
         scope <- currentScopes
         span  <- currentPos
-        fmap (nvPathP (Provenance scope (NEnvPath_ span p) []))
-             (findEnvPath p)
+        nvPathP (Provenance scope (NEnvPath_ span p)) <$> findEnvPath p
 
     evalUnary op arg = do
         scope <- currentScopes
@@ -144,10 +143,11 @@ instance MonadNix e m => MonadEval (NValue m) m where
         execBinaryOp scope span op larg rarg
 
     evalWith c b = do
+        scope <- currentScopes
         span <- currentPos
         -- jww (2018-04-23): What about the arguments to with? All this
         -- preserves right now is the location.
-        provenanceContext (NWith_ span Nothing Nothing)
+        addProvenance (\b -> Provenance scope (NWith_ span Nothing (Just b)))
             <$> evalWithAttrSet c b
 
     evalIf c t f = do
@@ -155,30 +155,27 @@ instance MonadNix e m => MonadEval (NValue m) m where
         span  <- currentPos
         fromValue c >>= \b ->
             if b
-            then changeProvenance scope
-                (\t -> NIf_ span (Just c) (Just t) Nothing) <$> t
-            else changeProvenance scope
-                (\f -> NIf_ span (Just c) Nothing (Just f)) <$> f
+            then addProvenance (\t -> Provenance scope (NIf_ span (Just c) (Just t) Nothing)) <$> t
+            else addProvenance (\f -> Provenance scope (NIf_ span (Just c) Nothing (Just f))) <$> f
 
     evalAssert c body = fromValue c >>= \b ->
         if b
         then do
             scope <- currentScopes
             span  <- currentPos
-            changeProvenance scope
-                (\b -> NAssert_ span (Just c) (Just b)) <$> body
+            addProvenance (\b -> Provenance scope (NAssert_ span (Just c) (Just b))) <$> body
         else nverr $ Assertion c
 
     evalApp f x = do
+        scope <- currentScopes
         span <- currentPos
-        provenanceContext (NBinary_ span NApp (Just f) Nothing)
+        addProvenance (const $ Provenance scope (NBinary_ span NApp (Just f) Nothing))
             <$> callFunc f x
 
     evalAbs p b = do
         scope <- currentScopes
         span  <- currentPos
-        pure $ nvClosureP (Provenance scope (NAbs_ span (fmap absurd p) Nothing)
-                                      []) p b
+        pure $ nvClosureP (Provenance scope (NAbs_ span (fmap absurd p) Nothing)) p b
 
     evalError = throwError
 
@@ -217,8 +214,7 @@ execUnaryOp scope span op arg = do
             throwError $ "argument to unary operator"
                 ++ " must evaluate to an atomic type: " ++ show x
   where
-    unaryOp = pure . nvConstantP
-        (Provenance scope (NUnary_ span op (Just arg)) [])
+    unaryOp = pure . nvConstantP (Provenance scope (NUnary_ span op (Just arg)))
 
 execBinaryOp
     :: forall e m. (MonadNix e m, MonadEval (NValue m) m)
@@ -235,8 +231,7 @@ execBinaryOp scope span NOr larg rarg = fromNix larg >>= \l ->
     else rarg >>= \rval -> fromNix @Bool rval >>= orOp (Just rval)
   where
     orOp r b = pure $
-        nvConstantP (Provenance scope (NBinary_ span NOr (Just larg) r) [])
-                    (NBool b)
+        nvConstantP (Provenance scope (NBinary_ span NOr (Just larg) r)) (NBool b)
 
 execBinaryOp scope span NAnd larg rarg = fromNix larg >>= \l ->
     if l
@@ -244,16 +239,14 @@ execBinaryOp scope span NAnd larg rarg = fromNix larg >>= \l ->
     else andOp Nothing False
   where
     andOp r b = pure $
-        nvConstantP (Provenance scope (NBinary_ span NAnd (Just larg) r) [])
-                    (NBool b)
+        nvConstantP (Provenance scope (NBinary_ span NAnd (Just larg) r)) (NBool b)
 
 -- jww (2018-04-08): Refactor so that eval (NBinary ..) *always* dispatches
 -- based on operator first
 execBinaryOp scope span op lval rarg = do
     rval <- rarg
     let bin :: (Provenance m -> a) -> a
-        bin f  = f (Provenance scope (NBinary_ span op (Just lval) (Just rval))
-                               [])
+        bin f  = f (Provenance scope (NBinary_ span op (Just lval) (Just rval)))
         toBool = pure . bin nvConstantP . NBool
     case (lval, rval) of
         (NVConstant lc, NVConstant rc) -> case (op, lc, rc) of
