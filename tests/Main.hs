@@ -7,7 +7,6 @@ module Main where
 import           Control.DeepSeq
 import qualified Control.Exception as Exc
 import           Control.Monad
-import           Control.Monad.Trans.Reader
 import           Data.Fix
 import           Data.List (isInfixOf)
 import           Data.Maybe (isJust)

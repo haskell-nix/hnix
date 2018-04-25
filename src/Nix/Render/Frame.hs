@@ -9,23 +9,24 @@
 
 module Nix.Render.Frame where
 
-import Control.Monad.Reader
-import Data.Fix
-import Data.Functor.Compose
-import Data.Typeable
-import Nix.Eval
-import Nix.Exec
-import Nix.Expr
-import Nix.Frames
-import Nix.Normal
-import Nix.Options
-import Nix.Parser.Library
-import Nix.Pretty
-import Nix.Render
-import Nix.Thunk
-import Nix.Utils
-import Nix.Value
-import Text.PrettyPrint.ANSI.Leijen as P
+import           Control.Monad.Reader
+import           Data.Fix
+import           Data.Functor.Compose
+import           Data.Typeable
+import           Nix.Eval
+import           Nix.Exec
+import           Nix.Expr
+import           Nix.Frames
+import           Nix.Normal
+import           Nix.Options
+import           Nix.Parser.Library
+import           Nix.Pretty
+import           Nix.Render
+import           Nix.Thunk
+import           Nix.Utils
+import           Nix.Value
+import qualified Text.PrettyPrint.ANSI.Leijen as P
+import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 renderFrames :: (MonadReader e m, Has e Options,
                 MonadVar m, MonadFile m, Typeable m)
@@ -47,11 +48,14 @@ renderFrame (NixFrame level f)
     | Just (e :: Doc)          <- fromFrame f = pure e
     | otherwise = error $ "Unrecognized frame: " ++ show f
 
+wrapExpr :: NExprF r -> NExpr
+wrapExpr x = Fix (Fix (NSym "<?>") <$ x)
+
 renderEvalFrame :: (MonadReader e m, Has e Options, MonadFile m)
                 => NixLevel -> EvalFrame -> m Doc
 renderEvalFrame _level = \case
     ExprContext e ->
-        pure $ text "While forcing thunk for: " </> prettyNix e
+        pure $ text "While forcing thunk for: " </> prettyNix (wrapExpr e)
 
     EvaluatingExpr e@(Fix (Compose (Ann ann x))) -> do
         opts :: Options <- asks (view hasLens)
@@ -87,10 +91,9 @@ renderValueFrame level = \case
 renderExecFrame :: (MonadReader e m, Has e Options, MonadVar m, MonadFile m)
                 => NixLevel -> ExecFrame m -> m Doc
 renderExecFrame _level = \case
-    Assertion v -> do
-        v' <- renderNValue v
+    Assertion v ->
         -- jww (2018-04-24): Render values nicely based on the verbosity.
-        pure $ text "Assertion failed: " </> v'
+        (text "Assertion failed:" </>) <$> renderNValue v
 
 renderThunkLoop :: (MonadReader e m, Has e Options, MonadFile m)
                 => NixLevel -> ThunkLoop -> m Doc

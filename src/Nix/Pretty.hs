@@ -4,6 +4,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -117,7 +118,7 @@ prettyParamSet args var =
     prettySetArg (n, maybeDef) = case maybeDef of
       Nothing -> text (unpack n)
       Just v -> text (unpack n) <+> text "?" <+> withoutParens v
-    prettyVariadic = if var then [text "..."] else []
+    prettyVariadic = [text "..." | var]
     sep = align (comma <> space)
 
 prettyBind :: Binding NixDoc -> Doc
@@ -150,10 +151,13 @@ prettyOriginExpr = withoutParens . go
   where
     go = exprFNixDoc . annotated . getCompose . fmap render
 
-    render Nothing              = simpleExpr $ text "_"
-    render (Just (NValue [] _)) = simpleExpr $ text "?"
-    -- jww (2018-04-24): Show full expression context...
-    render (Just (NValue (expr : _) _)) = go (originExpr expr)
+    render Nothing = simpleExpr $ text "_"
+    render (Just (NValue (reverse -> p:_) _)) = go (originExpr p)
+    render (Just (NValue _ _)) = simpleExpr $ text "?"
+        -- jww (2018-04-24): Needs work
+        -- simpleExpr $ foldr ((<$>) . parens . indent 2 . withoutParens
+        --                           . go . originExpr)
+        --     mempty (reverse ps)
 
 exprFNixDoc :: NExprF NixDoc -> NixDoc
 exprFNixDoc = \case
@@ -258,10 +262,10 @@ renderNValueF = fmap prettyNixValue . removeEffectsM
 renderNValue :: MonadVar m => NValue m -> m Doc
 renderNValue = \case
     NValue [] v -> renderNValueF v
-    -- jww (2018-04-23): Show full expression context.
-    NValue (p:_) v -> do
+    NValue ps v -> do
         v' <- renderNValueF v
-        pure $ v' </> (text " (from: " <> prettyOriginExpr (originExpr p) <> text ")")
+        pure $ v' </> indent 2 (parens (mconcat
+            (text ("from: ") : map (prettyOriginExpr . originExpr) ps)))
 
 dethunk :: MonadVar m => NThunk m -> m (NValueNF m)
 dethunk = \case

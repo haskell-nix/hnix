@@ -83,17 +83,32 @@ instance Typeable m => Frame (ExecFrame m)
 nverr :: forall s e m a. (MonadNix e m, Frame s) => s -> m a
 nverr = evalError @(NValue m)
 
+wrapExprLoc :: SrcSpan -> NExprLocF r -> NExprLoc
+wrapExprLoc span x = Fix (Fix (NSym_ span "<?>") <$ x)
+
 instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
-    thunk = fmap (NThunk [] . coerce) . buildThunk
-    force = forceThunk . coerce . baseThunk
+    thunk mv = do
+        scope <- currentScopes
+        span  <- currentPos
+        frames <- asks (view @_ @Frames hasLens)
+        let ExprContext e : _ = mapMaybe (fromFrame . frame) frames
+            e' = Compose (Ann span (Nothing <$ e))
+        fmap (NThunk [Provenance scope e'] . coerce) . buildThunk $ mv
+
+    force (NThunk ps t) f = do
+        span <- currentPos
+        foldr (\(Provenance _scope e) ->
+                   withFrame Info (EvaluatingExpr (wrapExprLoc span e)))
+              (forceThunk t f) ps
+
     value = NThunk [] . coerce . valueRef
 
 currentPos :: Framed e m => m SrcSpan
 currentPos = do
     frames <- asks (view @_ @Frames hasLens)
-    let EvaluatingExpr (Fix (Compose (Ann span _))) : _ =
-            mapMaybe (fromFrame . frame) frames
-    return span
+    pure $ case mapMaybe (fromFrame . frame) frames of
+        EvaluatingExpr (Fix (Compose (Ann span _))) : _ -> span
+        _ -> nullAnn
 
 instance MonadNix e m => MonadEval (NValue m) m where
     freeVariable var =

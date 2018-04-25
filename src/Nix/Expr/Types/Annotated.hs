@@ -155,7 +155,7 @@ nullAnn :: SrcSpan
 nullAnn = SrcSpan nullPos nullPos
 
 nullPos :: SourcePos
-nullPos = SourcePos "<unknown>" (mkPos 0) (mkPos 0)
+nullPos = SourcePos "<unknown>" (mkPos 1) (mkPos 1)
 
 -- | Pattern systems for matching on NExprLocF constructions.
 

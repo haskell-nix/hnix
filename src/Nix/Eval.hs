@@ -24,7 +24,6 @@ import           Control.Monad
 import           Control.Monad.Fix
 import           Control.Monad.State
 import           Data.Align.Key
-import           Data.Fix
 import           Data.Functor.Compose
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
@@ -93,17 +92,14 @@ type MonadNixEval e v t m =
      FromValue (AttrSet t, AttrSet SourcePos) m v)
 
 data EvalFrame
-    = ExprContext NExpr
+    = ExprContext (NExprF ())
     | EvaluatingExpr NExprLoc
     deriving (Show, Typeable)
 
 instance Frame EvalFrame
 
-wrapExpr :: NExprF (m v) -> NExpr
-wrapExpr x = Fix (Fix (NSym "<?>") <$ x)
-
 exprFContext :: Framed e m => NExprF (m v) -> m r -> m r
-exprFContext e = withFrame Debug (ExprContext (wrapExpr e))
+exprFContext e = withFrame Debug (ExprContext (void e))
 
 eval :: forall e v t m. MonadNixEval e v t m => NExprF (m v) -> m v
 

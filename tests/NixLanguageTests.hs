@@ -8,7 +8,6 @@ import           Control.Arrow ((&&&))
 import           Control.Exception
 import           Control.Monad
 import           Control.Monad.ST
-import           Control.Monad.Trans.Reader
 import           Data.List (delete, sort)
 import           Data.List.Split (splitOn)
 import           Data.Map (Map)
