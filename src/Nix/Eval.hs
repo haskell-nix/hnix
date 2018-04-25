@@ -125,7 +125,7 @@ eval (NSelect aset attr alt) = do
     mres <- evalSelect aset attr
     traceM "NSelect..2"
     case mres of
-        Right v -> pure v
+        Right v -> v
         Left (s, ks) -> fromMaybe err alt
           where
             err = evalError @v $ "Could not look up attribute "
@@ -317,7 +317,7 @@ evalBinds e allowDynamic recursive binds = do
 evalSelect :: forall e v t m. MonadNixEval e v t m
            => m v
            -> NAttrPath (m v)
-           -> m (Either (v, NonEmpty Text) v)
+           -> m (Either (v, NonEmpty Text) (m v))
 evalSelect aset attr = do
     traceM "evalSelect"
     s <- aset
@@ -331,11 +331,11 @@ evalSelect aset attr = do
     extract x path@(k:|ks) = fromValueMay x >>= \case
         Just (s :: AttrSet t, p :: AttrSet SourcePos) ->
             case M.lookup k s of
-                Just v -> do
+                Just t -> do
                     traceM $ "Forcing value at selector " ++ Text.unpack k
-                    force v $ case ks of
-                        []   -> pure . Right
-                        y:ys -> extract ?? (y:|ys)
+                    case ks of
+                        []   -> pure $ Right $ force t pure
+                        y:ys -> force t $ extract ?? (y:|ys)
                 Nothing ->
                     Left . (, path) <$> toValue (s, p)
         Nothing ->
