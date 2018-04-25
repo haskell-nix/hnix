@@ -90,7 +90,7 @@ main = do
                     | normalize opts =
                       liftIO . print . prettyNixValue <=< normalForm
                     | otherwise  =
-                      liftIO . print
+                      liftIO . print <=< renderNValue
 
         if | evaluate opts, tracing opts ->
                  evaluateExpression mpath
