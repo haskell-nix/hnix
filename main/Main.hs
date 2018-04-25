@@ -3,6 +3,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Main where
 
@@ -14,7 +15,6 @@ import           Control.Monad.IO.Class
 import           Control.Monad.ST
 import qualified Data.Aeson.Encoding as A
 import qualified Data.Aeson.Text as A
-import           Data.Functor.Compose
 import qualified Data.Text.IO as Text
 import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Text.Lazy.IO as TL
@@ -71,7 +71,7 @@ main = do
             catch (process opts mpath expr) $ \case
                 NixException frames ->
                     errorWithoutStackTrace . show
-                        =<< renderFrames frames
+                        =<< renderFrames @(NThunk (Lazy IO)) frames
 
             -- jww (2018-04-24): This shouldn't be in IO, or else it can't
             -- share the environment with the evaluation done above.

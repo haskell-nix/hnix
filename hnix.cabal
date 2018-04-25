@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 8971769062ef2575a8d02f06309664739b8a0099e5ad7ddf7caa4cd5363d8a8b
+-- hash: f2849e05edde8ddd3f02ee010be0fa0e7ee673392948670ced6209113f5b5e7f
 
 name:           hnix
 version:        0.5.0
@@ -99,6 +99,7 @@ library
     , monadlist
     , mtl
     , optparse-applicative
+    , pretty-show
     , process
     , regex-tdfa
     , regex-tdfa-text

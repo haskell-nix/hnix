@@ -34,20 +34,6 @@ renderLocation (SrcSpan beg@(SourcePos path _ _) _) msg = do
     return $ text $ parseErrorPretty' contents (posAndMsg beg msg)
 
 {-
-renderFrame :: MonadFile m => Either String NExprLoc -> m String
-renderFrame (Left str) = return str
-renderFrame (Right expr@(Fix (Compose (Ann ann x)))) = do
-    opts :: Options <- asks (view hasLens)
-    let rendered = show $ prettyNix $
-            if verbose opts >= Chatty
-            then stripAnnotation expr
-            else Fix (Fix (NSym "<?>") <$ x)
-        msg = if verbose opts >= Chatty
-              then "While evaluating:\n>>>>>>>>\n"
-                       ++ intercalate "  \n" (lines rendered)
-                       ++ "\n<<<<<<<<"
-              else "Expression: " ++ rendered
-    show <$> renderLocation ann (text msg)
 -}
 
 {-
@@ -60,9 +46,6 @@ throwError str = do
         _ | verbose opts >= Talkative ->
             mapM renderFrame $
                 filter noAsserts (init context) ++ [last context]
-          | verbose opts >= Informational ->
-            return [sourcePosStackPretty
-                        (NE.fromList (concatMap justPos (reverse context)))]
           | otherwise ->
             return []
     traceM "throwing error"

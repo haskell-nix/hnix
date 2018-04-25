@@ -25,7 +25,6 @@ import           Control.Applicative
 import           Control.Arrow (second)
 import           Control.Monad.Reader
 import           Data.Fix
-import           Data.Functor.Compose
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Text as Text
 import qualified Data.Text.Read as Text
@@ -78,10 +77,11 @@ nixEvalExpr :: forall e m. (MonadNix e m, Has e Options)
 nixEvalExpr mpath = nixEval mpath id Eval.eval
 
 -- | Evaluate a nix expression in the default context
-nixEvalExprLoc :: (MonadNix e m, Has e Options)
+nixEvalExprLoc :: forall e m. (MonadNix e m, Has e Options)
                => Maybe FilePath -> NExprLoc -> m (NValue m)
 nixEvalExprLoc mpath =
-    nixEval mpath Eval.addStackFrames (Eval.eval . annotated . getCompose)
+    nixEval mpath (Eval.addStackFrames @(NThunk m) . Eval.addSourcePositions)
+            (Eval.eval . annotated . getCompose)
 
 -- | Evaluate a nix expression with tracing in the default context. Note that
 --   this function doesn't do any tracing itself, but 'evalExprLoc' will be

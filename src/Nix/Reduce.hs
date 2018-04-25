@@ -43,7 +43,6 @@ import           Control.Monad.State
 import           Control.Monad.Trans.Reader (ReaderT(..))
 import           Control.Monad.Trans.State (StateT(..))
 import           Data.Fix
-import           Data.Functor.Compose
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.IORef
@@ -61,7 +60,6 @@ import           Nix.Scope
 import           Nix.Utils
 import           System.Directory
 import           System.FilePath
-import           Text.Megaparsec.Pos
 
 newtype Reducer m a = Reducer
     { runReducer :: ReaderT (Maybe FilePath, Scopes (Reducer m) NExprLoc)

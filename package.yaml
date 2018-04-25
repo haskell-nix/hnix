@@ -70,6 +70,7 @@ library:
     - hashable
     - megaparsec
     - monadlist
+    - pretty-show
     - process
     - regex-tdfa
     - regex-tdfa-text

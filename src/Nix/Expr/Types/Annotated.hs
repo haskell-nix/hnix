@@ -16,7 +16,9 @@
 --
 module Nix.Expr.Types.Annotated
   ( module Nix.Expr.Types.Annotated
-  , SourcePos(..), unPos
+  , module Data.Functor.Compose
+  , module Nix.Parser.Library
+  , SourcePos(..), unPos, mkPos
   )where
 
 import Codec.Serialise
@@ -149,10 +151,10 @@ deltaInfo :: SourcePos -> (Text, Int, Int)
 deltaInfo (SourcePos fp l c) = (pack fp, unPos l, unPos c)
 
 nNull :: NExprLoc
-nNull = Fix (Compose (Ann nullAnn (NConstant NNull)))
+nNull = Fix (Compose (Ann nullSpan (NConstant NNull)))
 
-nullAnn :: SrcSpan
-nullAnn = SrcSpan nullPos nullPos
+nullSpan :: SrcSpan
+nullSpan = SrcSpan nullPos nullPos
 
 nullPos :: SourcePos
 nullPos = SourcePos "<string>" (mkPos 1) (mkPos 1)

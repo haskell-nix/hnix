@@ -22,9 +22,10 @@ module Nix.Eval where
 import           Control.Arrow (first)
 import           Control.Monad
 import           Control.Monad.Fix
+import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Align.Key
-import           Data.Functor.Compose
+import           Data.Fix
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.List (intercalate, partition, foldl')
@@ -83,23 +84,20 @@ class (Show v, Monad m) => MonadEval v m | v -> m where
     evalError :: Frame s => s -> m a
 
 type MonadNixEval e v t m =
-    (MonadEval v m, Scoped e t m, MonadThunk v t m, MonadFix m,
-     Framed e m, MonadVar m,
+    (MonadEval v m, Scoped e t m, MonadThunk v t m,
+     Framed e m, Has e SrcSpan, MonadVar m, MonadFix m,
      ToValue Bool m v, ToValue [t] m v,
      FromValue (Text, DList Text) m v,
      ToValue (AttrSet t) m v, FromValue (AttrSet t) m v,
      ToValue (AttrSet t, AttrSet SourcePos) m v,
      FromValue (AttrSet t, AttrSet SourcePos) m v)
 
-data EvalFrame
-    = ExprContext (NExprF ())
-    | EvaluatingExpr NExprLoc
+data EvalFrame m v
+    = EvaluatingExpr (Scopes m v) NExprLoc
+    | ForcingExpr (Scopes m v) NExprLoc
     deriving (Show, Typeable)
 
-instance Frame EvalFrame
-
-exprFContext :: Framed e m => NExprF (m v) -> m r -> m r
-exprFContext = withFrame Debug . ExprContext . void
+instance (Typeable m, Typeable v) => Frame (EvalFrame m v)
 
 eval :: forall e v t m. MonadNixEval e v t m => NExprF (m v) -> m v
 
@@ -135,27 +133,27 @@ eval (NSelect aset attr alt) = do
 eval (NHasAttr aset attr) =
     toValue . either (const False) (const True) =<< evalSelect aset attr
 
-eval e@(NList l) = do
+eval (NList l) = do
     scope <- currentScopes
-    toValue =<< for l (exprFContext e . thunk . withScopes @t scope)
+    toValue =<< for l (thunk . withScopes @t scope)
 
-eval e@(NSet binds) = do
+eval (NSet binds) = do
     traceM "NSet..1"
-    (s, p) <- evalBinds e True False binds
+    (s, p) <- evalBinds True False binds
     traceM $ "NSet..2: s = " ++ show (void s)
     traceM $ "NSet..2: p = " ++ show (void p)
     toValue (s, p)
 
-eval e@(NRecSet binds) = do
+eval (NRecSet binds) = do
     traceM "NRecSet..1"
-    (s, p) <- evalBinds e True True (desugarBinds (eval . NRecSet) binds)
+    (s, p) <- evalBinds True True (desugarBinds (eval . NRecSet) binds)
     traceM $ "NRecSet..2: s = " ++ show (void s)
     traceM $ "NRecSet..2: p = " ++ show (void p)
     toValue (s, p)
 
-eval e@(NLet binds body) = do
+eval (NLet binds body) = do
     traceM "Let..1"
-    (s, _) <- evalBinds e True True binds
+    (s, _) <- evalBinds True True binds
     traceM $ "Let..2: s = " ++ show (void s)
     pushScope s body
 
@@ -165,7 +163,7 @@ eval (NWith scope body) = evalWith scope body
 
 eval (NAssert cond body) = cond >>= evalAssert ?? body
 
-eval e@(NAbs params body) = do
+eval (NAbs params body) = do
     -- It is the environment at the definition site, not the call site, that
     -- needs to be used when evaluating the body and default arguments, hence
     -- we defer here so the present scope is restored when the parameters and
@@ -175,7 +173,7 @@ eval e@(NAbs params body) = do
         -- jww (2018-04-17): We need to use the bound library here, so that
         -- the body is only evaluated once.
         withScopes @t scope $ do
-            args <- buildArgument e params arg
+            args <- buildArgument params arg
             pushScope args body
   where
     clearDefaults :: Params r -> Params Void
@@ -191,9 +189,7 @@ evalWithAttrSet scope body = do
     -- we want to be sure the action it evaluates is to force a thunk, so
     -- its value is only computed once.
     cur <- currentScopes @_ @t
-    s <- exprFContext (NWith scope body)
-        $ thunk
-        $ withScopes cur scope
+    s <- thunk $ withScopes cur scope
     pushWeakScope ?? body $ force s $ fromValue @(AttrSet t)
 
 attrSetAlter :: forall e v t m. MonadNixEval e v t m
@@ -242,12 +238,11 @@ desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
         pure $ NamedVar (StaticKey x p :| []) (embed v)
 
 evalBinds :: forall e v t m. MonadNixEval e v t m
-          => NExprF (m v)
-          -> Bool
+          => Bool
           -> Bool
           -> [Binding (m v)]
           -> m (AttrSet t, AttrSet SourcePos)
-evalBinds e allowDynamic recursive binds = do
+evalBinds allowDynamic recursive binds = do
     scope <- currentScopes @_ @t
     buildResult scope . concat =<< mapM (go scope) (moveOverridesLast binds)
   where
@@ -299,7 +294,7 @@ evalBinds e allowDynamic recursive binds = do
         s <- foldM insert M.empty bindings
         res <- if recursive
                then loebM (encapsulate <$> s)
-               else traverse (exprFContext e . thunk . withScopes scope) s
+               else traverse (thunk . withScopes scope) s
         return (res, foldl' go M.empty bindings)
       where
         -- jww (2018-04-13): Need to record positions for attr paths as well
@@ -307,10 +302,7 @@ evalBinds e allowDynamic recursive binds = do
         go m _ = m
 
         encapsulate f attrs =
-            exprFContext e
-                . thunk
-                . withScopes scope
-                . pushScope attrs $ f
+            thunk . withScopes scope . pushScope attrs $ f
 
         insert m (path, _, value) = attrSetAlter path m value
 
@@ -401,18 +393,18 @@ assembleString = \case
     fromParts parts = mconcat <$> mapM go parts
 
 buildArgument :: forall e v t m. MonadNixEval e v t m
-              => NExprF (m v) -> Params (m v) -> m v -> m (AttrSet t)
-buildArgument e params arg = do
+              => Params (m v) -> m v -> m (AttrSet t)
+buildArgument params arg = do
     scope <- currentScopes @_ @t
     case params of
         Param name -> M.singleton name
-            <$> exprFContext e (thunk (withScopes scope arg))
+            <$> thunk (withScopes scope arg)
         ParamSet s isVariadic m ->
             arg >>= fromValue >>= \args -> do
                 let inject = case m of
                         Nothing -> id
                         Just n -> M.insert n $ const $
-                            exprFContext e (thunk (withScopes scope arg))
+                            thunk (withScopes scope arg)
                 loebM (inject $ alignWithKey (assemble scope isVariadic)
                                              args (M.fromList s))
   where
@@ -426,17 +418,24 @@ buildArgument e params arg = do
         That Nothing  ->
             const $ evalError @v $ "Missing value for parameter: " ++ show k
         That (Just f) -> \args ->
-            exprFContext e
-                $ thunk
-                $ withScopes scope
-                $ pushScope args f
+            thunk $ withScopes scope $ pushScope args f
         This x | isVariadic -> const (pure x)
                | otherwise  ->
                  const $ evalError @v $ "Unexpected parameter: " ++ show k
         These x _ -> const (pure x)
 
-addStackFrames :: Framed e m => Transform NExprLocF (m a)
-addStackFrames f v = withFrame Info (EvaluatingExpr v) (f v)
+addSourcePositions :: (MonadReader e m, Has e SrcSpan)
+                   => Transform NExprLocF (m a)
+addSourcePositions f v@(Fix (Compose (Ann ann _))) =
+    local (set hasLens ann) (f v)
 
-framedEvalExprLoc :: forall e v t m. MonadNixEval e v t m => NExprLoc -> m v
-framedEvalExprLoc = adi (eval . annotated . getCompose) addStackFrames
+addStackFrames :: forall t e m a. (Scoped e t m, Framed e m, Typeable t, Typeable m)
+               => Transform NExprLocF (m a)
+addStackFrames f v = do
+    scopes <- currentScopes @e @t
+    withFrame Info (EvaluatingExpr scopes v) (f v)
+
+framedEvalExprLoc :: forall t e v m. (MonadNixEval e v t m, Typeable t, Typeable m)
+                  => NExprLoc -> m v
+framedEvalExprLoc = adi (eval . annotated . getCompose)
+                        (addStackFrames @t . addSourcePositions)

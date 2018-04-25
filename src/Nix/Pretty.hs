@@ -13,7 +13,6 @@ module Nix.Pretty where
 
 import           Control.Monad
 import           Data.Fix
-import           Data.Functor.Compose
 import           Data.HashMap.Lazy (toList)
 import qualified Data.HashMap.Lazy as M
 import qualified Data.HashSet as HashSet
@@ -265,7 +264,14 @@ renderNValue = \case
     NValue ps v -> do
         v' <- renderNValueF v
         pure $ v' </> indent 2 (parens (mconcat
-            (text ("from: ") : map (prettyOriginExpr . originExpr) ps)))
+            (text "from: " : map (prettyOriginExpr . originExpr) ps)))
+
+renderNThunk :: MonadVar m => NThunk m -> m Doc
+renderNThunk = \case
+    t@(NThunk ps _) -> do
+        v' <- fmap prettyNixValue (dethunk t)
+        pure $ v' </> indent 2 (parens (mconcat
+            (text "thunk from: " : map (prettyOriginExpr . originExpr) ps)))
 
 dethunk :: MonadVar m => NThunk m -> m (NValueNF m)
 dethunk = \case

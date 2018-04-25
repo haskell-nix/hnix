@@ -439,7 +439,7 @@ in { localSystem ? builtins.intersectAttrs {
           let
             stdenvBootstappingAndPlatforms = self: super: { inherit stdenv; };
             allPackages = pkgs: super: {
-              inherit pkgs;
+              pkgs = pkgs;
               darwin = pkgs.darwin; # THUNK FORCE LOOPS: self-reference
               fetchzip = null;
               fetchurlBoot = null;

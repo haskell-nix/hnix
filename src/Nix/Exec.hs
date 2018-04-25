@@ -35,13 +35,11 @@ import           Control.Monad.Trans.Reader (ReaderT(..))
 import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.Fix
-import           Data.Functor.Compose
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.IORef
 import           Data.List
 import           Data.List.Split
-import           Data.Maybe (mapMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Typeable
@@ -72,8 +70,9 @@ import           System.Process (readProcessWithExitCode)
 import           Text.PrettyPrint.ANSI.Leijen (text)
 
 type MonadNix e m =
-    (Scoped e (NThunk m) m, Framed e m, Typeable m, MonadVar m,
-     MonadEffects m, MonadFix m, MonadCatch m, Alternative m)
+    (Scoped e (NThunk m) m, Framed e m, Has e SrcSpan,
+     Typeable m, MonadVar m, MonadEffects m, MonadFix m,
+     MonadCatch m, Alternative m)
 
 data ExecFrame m = Assertion (NValue m)
     deriving (Show, Typeable)
@@ -83,37 +82,35 @@ instance Typeable m => Frame (ExecFrame m)
 nverr :: forall s e m a. (MonadNix e m, Frame s) => s -> m a
 nverr = evalError @(NValue m)
 
+currentPos :: forall e m. (MonadReader e m, Has e SrcSpan) => m SrcSpan
+currentPos = asks (view @e @SrcSpan hasLens)
+
 wrapExprLoc :: SrcSpan -> NExprLocF r -> NExprLoc
 wrapExprLoc span x = Fix (Fix (NSym_ span "<?>") <$ x)
 
 instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
     thunk mv = do
-        scope <- currentScopes
-        span  <- currentPos
         frames <- asks (view @_ @Frames hasLens)
-        let p = case mapMaybe ((fromFrame :: SomeFrame -> Maybe EvalFrame)
-                                   . frame) frames of
-                ExprContext e : _ ->
-                    let e' = Compose (Ann span (Nothing <$ e))
-                    in [Provenance scope e']
-                _ -> []
-        fmap (NThunk p . coerce) . buildThunk $ mv
 
-    force (NThunk ps t) f = do
-        span <- currentPos
-        foldr (\(Provenance _scope e) ->
-                   withFrame Info (EvaluatingExpr (wrapExprLoc span e)))
-              (forceThunk t f) ps
+        -- Gather the current evaluation context at the time of thunk
+        -- creation, and record it along with the thunk.
+        let go (fromFrame -> Just (EvaluatingExpr scope
+                                     (Fix (Compose (Ann span e))))) =
+                let e' = Compose (Ann span (Nothing <$ e))
+                in [Provenance scope e']
+            go _ = []
+            ps = concatMap (go . frame) frames
+
+        fmap (NThunk ps . coerce) . buildThunk $ mv
+
+    force (NThunk ps t) f = case ps of
+        [] -> forceThunk t f
+        -- jww (2018-04-25): Only report the inner-most layer for now.
+        Provenance scope e@(Compose (Ann span _)):_ ->
+            withFrame Info (ForcingExpr scope (wrapExprLoc span e))
+                (forceThunk t f)
 
     value = NThunk [] . coerce . valueRef
-
-currentPos :: Framed e m => m SrcSpan
-currentPos = do
-    frames <- asks (view @_ @Frames hasLens)
-    pure $ case mapMaybe ((fromFrame :: SomeFrame -> Maybe EvalFrame)
-                              . frame) frames of
-        EvaluatingExpr (Fix (Compose (Ann span _))) : _ -> span
-        _ -> nullAnn
 
 instance MonadNix e m => MonadEval (NValue m) m where
     freeVariable var =
@@ -121,8 +118,7 @@ instance MonadNix e m => MonadEval (NValue m) m where
 
     evalCurPos = do
         scope <- currentScopes
-        span  <- currentPos
-        SrcSpan delta _ <- currentPos
+        span@(SrcSpan delta _) <- currentPos
         addProvenance (\_ -> Provenance scope (NSym_ span "__curPos"))
             <$> toValue delta
 
@@ -637,8 +633,10 @@ evalExprLoc expr = do
     opts :: Options <- asks (view hasLens)
     if tracing opts
         then join . (`runReaderT` (0 :: Int)) $
-             adi (addTracing phi) (raise addStackFrames) expr
-        else adi phi addStackFrames expr
+             adi (addTracing phi)
+                 (raise (addStackFrames @(NThunk m) . addSourcePositions))
+                 expr
+        else adi phi (addStackFrames @(NThunk m) . addSourcePositions) expr
   where
     phi = Eval.eval @_ @(NValue m) @(NThunk m) @m . annotated . getCompose
     raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x

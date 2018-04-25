@@ -11,6 +11,7 @@ import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 data Options = Options
     { verbose      :: Verbosity
     , tracing      :: Bool
+    , thunks       :: Bool
     , reduce       :: Maybe FilePath
     , reduceSets   :: Bool
     , reduceLists  :: Bool
@@ -41,6 +42,7 @@ defaultOptions :: Options
 defaultOptions = Options
     { verbose      = ErrorsOnly
     , tracing      = False
+    , thunks       = False
     , reduce       = Nothing
     , reduceSets   = False
     , reduceLists  = False
@@ -104,6 +106,9 @@ nixOptions = Options
     <*> switch
         (   long "trace"
          <> help "Enable tracing code (even more can be seen if built with --flags=tracing)")
+    <*> switch
+        (   long "thunks"
+         <> help "Enable reporting of thunk tracing as well as regular evaluation")
     <*> optional (strOption
         (   long "reduce"
          <> help "When done evaluating, output the evaluated part of the expression to FILE"))
