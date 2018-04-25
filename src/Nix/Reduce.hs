@@ -18,6 +18,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -249,6 +250,9 @@ pruneTree opts = cataM $ \(FlaggedF (b, Compose x)) -> do
         NRecSet binds | reduceSets opts  -> Just $ NRecSet (mapMaybe sequence binds)
                       | otherwise        -> Just $ NRecSet (map (fmap (fromMaybe nNull)) binds)
 
+        -- jww (2018-04-25): When we switch to a monadic NExpr, we can easily
+        -- determine which of the bindings of the let might be referred to.
+        -- Or, we could traverse and look for NSyms.
         NLet binds (Just body@(Fix (Compose (Ann _ x)))) ->
             Just $ case mapMaybe pruneBinding binds of
                 [] -> x
@@ -331,8 +335,9 @@ pruneTree opts = cataM $ \(FlaggedF (b, Compose x)) -> do
     pruneBinding (NamedVar xs (Just x)) =
         Just (NamedVar (NE.map pruneKeyName xs) x)
     pruneBinding (Inherit _ [])  = Nothing
-    pruneBinding (Inherit m xs)  =
-        Just (Inherit (join m) (map pruneKeyName xs))
+    pruneBinding (Inherit (join -> Nothing) _) = Nothing
+    pruneBinding (Inherit (join -> m) xs) =
+        Just (Inherit m (map pruneKeyName xs))
 
 reducingEvalExpr
     :: (Framed e m, Has e Options, Exception r, MonadCatch m, MonadIO m)
