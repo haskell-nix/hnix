@@ -290,8 +290,7 @@ foldl'_ :: forall e m. MonadNix e m
 foldl'_ fun z xs =
     fun >>= \f -> fromValue @[NThunk m] xs >>= foldl' (go f) z
   where
-    go f b a = b >>= \b' ->
-        f `callFunc` pure b' >>= (`callFunc` force' a)
+    go f b a = f `callFunc` b >>= (`callFunc` force' a)
 
 head_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 head_ = fromValue >=> \case
