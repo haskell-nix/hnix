@@ -43,8 +43,11 @@ import           Control.Monad.State
 import           Control.Monad.Trans.Reader (ReaderT(..))
 import           Control.Monad.Trans.State (StateT(..))
 import           Data.Fix
+import           Data.Foldable
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
+import           Data.HashSet (HashSet)
+import qualified Data.HashSet as S
 import           Data.IORef
 import           Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
@@ -71,6 +74,11 @@ newtype Reducer m a = Reducer
 
 instance Has (Maybe FilePath, Scopes m v) (Scopes m v) where
     hasLens f (x, y) = (x,) <$> f y
+
+gatherNames :: NExprLoc -> HashSet VarName
+gatherNames = cata $ \case
+    NSym_ _ var -> S.singleton var
+    Compose (Ann _ x) -> fold x
 
 reduceExpr :: MonadIO m => Maybe FilePath -> NExprLoc -> m NExprLoc
 reduceExpr mpath expr
@@ -181,7 +189,15 @@ reduce (NLet_ ann binds body) = do
             d@(Fix NStr_ {})      -> pure $ Just (name, d)
             _ -> pure Nothing
         _ -> pure Nothing
-    fmap Fix $ NLet_ ann <$> traverse sequence binds <*> pushScope s body
+    body' <- pushScope s body
+    binds' <- traverse sequence binds
+    -- jww (2018-04-25): Need to also gather names from the bindings.
+    -- let names = gatherNames body'
+    -- binds' <- traverse sequence binds <&> \b -> flip filter b $ \case
+    --     NamedVar (StaticKey name _ :| []) _ ->
+    --         name `S.member` names
+    --     _ -> True
+    pure $ Fix $ NLet_ ann binds' body'
   -- where
   --   go m [] = pure m
   --   go m (x:xs) = case x of
