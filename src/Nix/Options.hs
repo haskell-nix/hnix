@@ -12,6 +12,7 @@ data Options = Options
     { verbose      :: Verbosity
     , tracing      :: Bool
     , thunks       :: Bool
+    , values       :: Bool
     , reduce       :: Maybe FilePath
     , reduceSets   :: Bool
     , reduceLists  :: Bool
@@ -43,6 +44,7 @@ defaultOptions = Options
     { verbose      = ErrorsOnly
     , tracing      = False
     , thunks       = False
+    , values       = False
     , reduce       = Nothing
     , reduceSets   = False
     , reduceLists  = False
@@ -109,6 +111,9 @@ nixOptions = Options
     <*> switch
         (   long "thunks"
          <> help "Enable reporting of thunk tracing as well as regular evaluation")
+    <*> switch
+        (   long "values"
+         <> help "Enable reporting of value provenance in error messages")
     <*> optional (strOption
         (   long "reduce"
          <> help "When done evaluating, output the evaluated part of the expression to FILE"))

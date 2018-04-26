@@ -260,7 +260,10 @@ renderNValueF :: MonadVar m => NValueF m (NThunk m) -> m Doc
 renderNValueF = fmap prettyNixValue . removeEffectsM
 
 renderNValue :: MonadVar m => NValue m -> m Doc
-renderNValue = \case
+renderNValue (NValue _ v) = renderNValueF v
+
+renderNValueProv :: MonadVar m => NValue m -> m Doc
+renderNValueProv = \case
     NValue [] v -> renderNValueF v
     NValue ps v -> do
         v' <- renderNValueF v

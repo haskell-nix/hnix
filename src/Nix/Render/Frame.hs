@@ -137,10 +137,16 @@ renderValueFrame level = pure . (:[]) . \case
 
 renderExecFrame :: (MonadReader e m, Has e Options, MonadVar m, MonadFile m)
                 => NixLevel -> ExecFrame m -> m [Doc]
-renderExecFrame _level = fmap (:[]) . \case
-    Assertion v ->
-        -- jww (2018-04-24): Render values nicely based on the verbosity.
-        (text "Assertion failed:" </>) <$> renderNValue v
+renderExecFrame _level f = do
+    opts :: Options <- asks (view hasLens)
+    (:[]) <$> case f of
+        Assertion v
+            | values opts ->
+                  -- jww (2018-04-24): Render value provenance differently
+                  -- based on the verbosity.
+                  (text "Assertion failed:" </>) <$> renderNValueProv v
+            | otherwise ->
+                  pure $ text "Assertion failed"
 
 renderThunkLoop :: (MonadReader e m, Has e Options, MonadFile m)
                 => NixLevel -> ThunkLoop -> m [Doc]

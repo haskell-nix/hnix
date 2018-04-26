@@ -89,6 +89,8 @@ main = do
                              <=< fromNix
                     | normalize opts =
                       liftIO . print . prettyNixValue <=< normalForm
+                    | values opts  =
+                      liftIO . print <=< renderNValueProv
                     | otherwise  =
                       liftIO . print <=< renderNValue
 
