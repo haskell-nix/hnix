@@ -78,6 +78,8 @@ renderFrame (NixFrame level f)
     | Just (_ :: NormalLoop m)  <- fromFrame f =
       pure [text "<<loop during normalization>>"]
     | Just (e :: ExecFrame m)   <- fromFrame f = renderExecFrame level e
+      -- jww (2018-04-25): Only render the string if it's level matches the
+      -- verbosity level.
     | Just (e :: String)        <- fromFrame f = pure [text e]
     | Just (e :: Doc)           <- fromFrame f = pure [e]
     | otherwise = error $ "Unrecognized frame: " ++ show f
