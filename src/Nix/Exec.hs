@@ -31,7 +31,9 @@ import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
+import           Control.Monad.State
 import           Control.Monad.Trans.Reader (ReaderT(..))
+import           Control.Monad.Trans.State (StateT(..))
 import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.Fix
@@ -68,6 +70,7 @@ import qualified System.Info
 import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
 import           Text.PrettyPrint.ANSI.Leijen (text)
+import qualified Text.PrettyPrint.ANSI.Leijen as P
 
 type MonadNix e m =
     (Scoped e (NThunk m) m, Framed e m, Has e SrcSpan,
@@ -399,7 +402,8 @@ coerceToString = \case
     v -> throwError $ "Expected a string, but saw: " ++ show v
 
 newtype Lazy m a = Lazy
-    { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m))) m a }
+    { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m)))
+                        (StateT (HashMap FilePath NExprLoc) m) a }
     deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
               MonadFix, MonadIO,
               MonadReader (Context (Lazy m) (NThunk (Lazy m))))
@@ -423,7 +427,7 @@ instance MonadThrow m => MonadThrow (Lazy m) where
     throwM = Lazy . throwM
 
 instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
-          Alternative m, Typeable m)
+          Alternative m, MonadPlus m, Typeable m)
       => MonadEffects (Lazy m) where
     addPath path = do
         (exitCode, out, _) <-
@@ -468,18 +472,27 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
                 return $ takeDirectory p' </> path
 
         traceM $ "Importing file " ++ path'
-
         withFrame Info ("While importing file " ++ show path') $ do
-            eres <- Lazy $ parseNixFileLoc path'
-            case eres of
-                Failure err  -> error $ "Parse failed: " ++ show err
-                Success expr -> do
-                    let ref = value @_ @_ @(Lazy m) (nvPath path')
-                    -- Use this cookie so that when we evaluate the next
-                    -- import, we'll remember which directory its containing
-                    -- file was in.
-                    pushScope (M.singleton "__cur_file" ref) $
-                        pushScope scope $ evalExprLoc expr
+            imports <- Lazy $ ReaderT $ const get
+            expr <- case M.lookup path' imports of
+                Just expr -> pure expr
+                Nothing -> do
+                    eres <- Lazy $ parseNixFileLoc path'
+                    case eres of
+                        Failure err  ->
+                            throwError $ text "Parse during import failed:"
+                                P.</> err
+                        Success expr -> do
+                            Lazy $ ReaderT $ const $
+                                modify (M.insert origPath expr)
+                            pure expr
+
+            let ref = value @_ @_ @(Lazy m) (nvPath path')
+            -- Use this cookie so that when we evaluate the next
+            -- import, we'll remember which directory its containing
+            -- file was in.
+            pushScope (M.singleton "__cur_file" ref) $
+                pushScope scope $ evalExprLoc expr
 
     getEnvVar = liftIO . lookupEnv
 
@@ -529,7 +542,9 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
             err -> throwError $ "nix-instantiate failed: " ++ show err
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
-runLazyM opts = flip runReaderT (newContext opts) . runLazy
+runLazyM opts = (`evalStateT` M.empty)
+              . (`runReaderT` newContext opts)
+              . runLazy
 
 -- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
 --   This is incorrect on POSIX systems, because if @b@ is a symlink, its
