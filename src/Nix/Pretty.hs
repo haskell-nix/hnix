@@ -3,6 +3,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -280,6 +281,12 @@ dethunk = \case
 #if ENABLE_TRACING
                      _
 #endif
-                     _ t) -> readVar t >>= \case
-        Computed v -> removeEffectsM (baseValue v)
-        _ -> pure $ Fix $ NVStrF "<thunk>" mempty
+                     active ref) -> do
+        nowActive <- atomicModifyVar active (True,)
+        if nowActive
+            then pure $ Fix $ NVStrF "<thunk>" mempty
+            else do
+                eres <- readVar ref
+                case eres of
+                    Computed v -> removeEffectsM (baseValue v)
+                    _ -> pure $ Fix $ NVStrF "<thunk>" mempty
