@@ -270,7 +270,7 @@ anyM p (x:xs)   = do
 
 any_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 any_ fun xs = fun >>= \f ->
-    toNix <=< anyM fromNix <=< mapM ((f `callFunc`) . force')
+    toNix <=< anyM fromValue <=< mapM ((f `callFunc`) . force')
           <=< fromValue $ xs
 
 allM :: Monad m => (a -> m Bool) -> [a] -> m Bool
@@ -282,7 +282,7 @@ allM p (x:xs)   = do
 
 all_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 all_ fun xs = fun >>= \f ->
-    toNix <=< allM fromNix <=< mapM ((f `callFunc`) . force')
+    toNix <=< allM fromValue <=< mapM ((f `callFunc`) . force')
           <=< fromValue $ xs
 
 foldl'_ :: forall e m. MonadNix e m
@@ -334,7 +334,7 @@ splitVersion s = case Text.uncons s of
           in thisComponent : splitVersion rest
 
 splitVersion_ :: MonadNix e m => m (NValue m) -> m (NValue m)
-splitVersion_ = fromNix >=> \s -> do
+splitVersion_ = fromValue >=> \s -> do
     let vals = flip map (splitVersion s) $ \c ->
             valueThunk $ nvStr (versionComponentToString c) mempty
     return $ nvList vals
@@ -348,8 +348,8 @@ compareVersions s1 s2 =
 
 compareVersions_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 compareVersions_ t1 t2 =
-    fromNix t1 >>= \s1 ->
-    fromNix t2 >>= \s2 ->
+    fromValue t1 >>= \s1 ->
+    fromValue t2 >>= \s2 ->
         return $ nvConstant $ NInt $ case compareVersions s1 s2 of
             LT -> -1
             EQ -> 0
@@ -384,8 +384,8 @@ parseDrvName = fromValue >=> \(s :: Text) -> do
 
 match_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 match_ pat str =
-    fromNix pat >>= \p ->
-    fromNix str >>= \s -> do
+    fromValue pat >>= \p ->
+    fromValue str >>= \s -> do
         -- jww (2018-04-05): We should create a fundamental type for compiled
         -- regular expressions if it turns out they get used often.
         let re = makeRegex (encodeUtf8 p) :: Regex
@@ -398,8 +398,8 @@ match_ pat str =
 
 split_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 split_ pat str =
-    fromNix pat >>= \p ->
-    fromNix str >>= \s -> do
+    fromValue pat >>= \p ->
+    fromValue str >>= \s -> do
         let re = makeRegex (encodeUtf8 p) :: Regex
             haystack = encodeUtf8 s
         return $ nvList $
@@ -445,12 +445,12 @@ map_ fun xs = fun >>= \f ->
 
 filter_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 filter_ fun xs = fun >>= \f ->
-    toNix <=< filterM (fromNix <=< callFunc f . force')
+    toNix <=< filterM (fromValue <=< callFunc f . force')
           <=< fromValue @[NThunk m] $ xs
 
 catAttrs :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 catAttrs attrName xs =
-    fromNix @Text attrName >>= \n ->
+    fromValue @Text attrName >>= \n ->
     fromValue @[NThunk m] xs >>= \l ->
         fmap (nvList . catMaybes) $
             forM l $ fmap (M.lookup n) . fromValue
@@ -470,7 +470,7 @@ dirOf x = x >>= \case
     v -> throwError @String $ "dirOf: expected string or path, got " ++ show v
 
 unsafeDiscardStringContext :: MonadNix e m => m (NValue m) -> m (NValue m)
-unsafeDiscardStringContext = fromNix @Text >=> toNix
+unsafeDiscardStringContext = fromValue @Text >=> toNix
 
 seq_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 seq_ a b = a >> b
@@ -496,14 +496,14 @@ elemAt ls i = case drop i ls of
    a:_ -> Just a
 
 elemAt_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
-elemAt_ xs n = fromNix n >>= \n' -> fromValue xs >>= \xs' ->
+elemAt_ xs n = fromValue n >>= \n' -> fromValue xs >>= \xs' ->
     case elemAt xs' n' of
       Just a -> force' a
       Nothing -> throwError @String $ "builtins.elem: Index " ++ show n'
           ++ " too large for list of length " ++ show (length xs')
 
 genList :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
-genList generator = fromNix @Integer >=> \n ->
+genList generator = fromValue @Integer >=> \n ->
     if n >= 0
     then generator >>= \f ->
         toNix =<< forM [0 .. n - 1] (\i -> thunk $ f `callFunc` toNix i)
@@ -515,7 +515,7 @@ replaceStrings :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m) -
 replaceStrings tfrom tto ts =
     fromNix tfrom >>= \(from :: [Text]) ->
     fromNix tto   >>= \(to   :: [Text]) ->
-    fromNix ts    >>= \(s    :: Text) -> do
+    fromValue ts  >>= \(s    :: Text) -> do
         when (length from /= length to) $
             throwError @String $ "'from' and 'to' arguments to 'replaceStrings'"
                 ++ " have different lengths"
@@ -572,7 +572,7 @@ functionArgs fun = fun >>= \case
             ++ show v
 
 toPath :: MonadNix e m => m (NValue m) -> m (NValue m)
-toPath = fromNix @Path >=> toNix @Path
+toPath = fromValue @Path >=> toNix @Path
 
 pathExists_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 pathExists_ path = path >>= \case
@@ -612,19 +612,19 @@ isFunction func = func >>= \case
     _ -> toValue False
 
 throw_ :: MonadNix e m => m (NValue m) -> m (NValue m)
-throw_ = fromNix >=> throwError . Text.unpack
+throw_ = fromValue >=> throwError . Text.unpack
 
 import_ :: MonadNix e m => m (NValue m) -> m (NValue m)
-import_ = fromNix >=> importPath M.empty . getPath
+import_ = fromValue >=> importPath M.empty . getPath
 
 scopedImport :: forall e m. MonadNix e m
              => m (NValue m) -> m (NValue m) -> m (NValue m)
 scopedImport aset path =
     fromValue aset >>= \s ->
-    fromNix   path >>= \p -> importPath @m s (getPath p)
+    fromValue   path >>= \p -> importPath @m s (getPath p)
 
 getEnv_ :: MonadNix e m => m (NValue m) -> m (NValue m)
-getEnv_ = fromNix >=> \s -> do
+getEnv_ = fromValue >=> \s -> do
     mres <- getEnvVar (Text.unpack s)
     toNix $ case mres of
         Nothing -> ""
@@ -668,7 +668,7 @@ listToAttrs = fromValue @[NThunk m] >=> \l ->
     fmap (flip nvSet M.empty . M.fromList . reverse) $
         forM l $ fromValue @(HashMap Text (NThunk m)) >=> \s ->
             case (M.lookup "name" s, M.lookup "value" s) of
-                (Just name, Just value) -> fromNix name <&> (, value)
+                (Just name, Just value) -> fromValue name <&> (, value)
                 _ -> throwError $
                     "builtins.listToAttrs: expected set with name and value, got"
                         ++ show s
@@ -800,7 +800,7 @@ fetchTarball v = v >>= \case
     fetch uri Nothing =
         nixInstantiateExpr $ "builtins.fetchTarball \"" ++
             Text.unpack uri ++ "\""
-    fetch url (Just m) = fromNix m >>= \sha ->
+    fetch url (Just m) = fromValue m >>= \sha ->
         nixInstantiateExpr $ "builtins.fetchTarball { "
           ++ "url    = \"" ++ Text.unpack url ++ "\"; "
           ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"
@@ -809,7 +809,7 @@ partition_ :: forall e m. MonadNix e m
            => m (NValue m) -> m (NValue m) -> m (NValue m)
 partition_ fun xs = fun >>= \f ->
     fromValue @[NThunk m] xs >>= \l -> do
-        let match t = f `callFunc` force' t >>= fmap (, t) . fromNix
+        let match t = f `callFunc` force' t >>= fmap (, t) . fromValue
         selection <- traverse match l
         let (right, wrong) = partition fst selection
         let makeSide = valueThunk . nvList . map snd
