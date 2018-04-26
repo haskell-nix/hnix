@@ -581,9 +581,9 @@ pathExists_ path = path >>= \case
     NVStr s _ -> toNix =<< pathExists (Text.unpack s)
     v -> throwError @String $ "builtins.pathExists: expected path, got " ++ show v
 
-hasKind :: forall a e m. (MonadNix e m, FromNix a m (NValue m))
+hasKind :: forall a e m. (MonadNix e m, FromValue a m (NValue m))
         => m (NValue m) -> m (NValue m)
-hasKind = fromNixMay >=> toNix . \case Just (_ :: a) -> True; _ -> False
+hasKind = fromValueMay >=> toNix . \case Just (_ :: a) -> True; _ -> False
 
 isAttrs :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 isAttrs = hasKind @(ValueSet m)
