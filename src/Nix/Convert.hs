@@ -586,3 +586,6 @@ instance (Applicative m, ToNix a m (NValueNF m)) => ToNix [a] m (NValueNF m) whe
 
 instance MonadThunk (NValue m) (NThunk m) m => ToNix (NThunk m) m (NValue m) where
     toNix = force ?? pure
+
+convertNix :: forall a t m v. (FromNix a m t, ToNix a m v, Monad m) => t -> m v
+convertNix = fromNix @a >=> toNix
