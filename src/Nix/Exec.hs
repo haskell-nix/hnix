@@ -376,6 +376,28 @@ execBinaryOp scope span op lval rarg = do
         toInt   = pure . bin nvConstantP . NInt
         toFloat = pure . bin nvConstantP . NFloat
 
+coerceToString :: MonadNix e m => NValue m -> m String
+coerceToString = \case
+    NVConstant (NBool b)
+        | b               -> pure "1"
+        | otherwise       -> pure ""
+    NVConstant (NInt n)   -> pure $ show n
+    NVConstant (NFloat n) -> pure $ show n
+    NVConstant (NUri u)   -> pure $ show u
+    NVConstant NNull      -> pure ""
+
+    NVStr t _ -> pure $ Text.unpack t
+    NVPath p  -> unStorePath <$> addPath p
+    NVList l  -> unwords <$> traverse (`force` coerceToString) l
+
+    v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
+        force p $ (`callFunc` pure v) >=> coerceToString
+
+    NVSet s _ | Just p <- M.lookup "outPath" s ->
+        force p coerceToString
+
+    v -> throwError $ "Expected a string, but saw: " ++ show v
+
 newtype Lazy m a = Lazy
     { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m))) m a }
     deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
@@ -472,48 +494,25 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
     getSymbolicLinkStatus = liftIO . System.Posix.Files.getSymbolicLinkStatus
 
     derivationStrict = fromValue @(ValueSet (Lazy m)) >=> \s -> do
-        ignoreNulls <- case M.lookup "__ignoreNulls" s of
-            Nothing -> pure False
-            Just v  -> fromNix v
-        v' <- normalForm
-            =<< toValue @(ValueSet (Lazy m)) . M.fromList
-            =<< mapMaybeM
-                (\(k, v) -> fmap (k,) <$> case k of
-                    "args" -> fmap Just . thunk $
-                        toNix =<< fromNix @[Text] v
-                    "__ignoreNulls" -> pure Nothing
-                    _ -> force v $ \case
-                        NVConstant NNull | ignoreNulls -> pure Nothing
-                        v' -> fmap Just $ thunk $
-                            toNix =<< (Text.pack <$> specialToString v'))
-                (M.toList s)
+        nn <- maybe (pure False) fromNix (M.lookup "__ignoreNulls" s)
+        s' <- M.fromList <$> mapMaybeM (handleEntry nn) (M.toList s)
+        v' <- normalForm =<< toValue @(ValueSet (Lazy m)) s'
         nixInstantiateExpr $ "derivationStrict " ++ show (prettyNixValue v')
       where
         mapMaybeM :: (a -> Lazy m (Maybe b)) -> [a] -> Lazy m [b]
         mapMaybeM op = foldr f (return [])
-          where
-              f x xs = do
-                  x <- op x
-                  case x of
-                      Nothing -> xs
-                      Just x -> do
-                          xs <- xs
-                          return $ x:xs
+          where f x xs = op x >>= \case
+                    Nothing -> xs
+                    Just x  -> (x:) <$> xs
 
-        specialToString :: NValue (Lazy m) -> Lazy m String
-        specialToString = \case
-            NVConstant (NBool b)
-                | b -> pure "1"
-                | otherwise -> pure ""
-            NVConstant (NInt n)   -> pure $ show n
-            NVConstant (NFloat n) -> pure $ show n
-            NVConstant (NUri u)   -> pure $ show u
-            NVConstant NNull      -> pure ""
-            NVList l -> unwords <$> traverse (`force` specialToString) l
-            NVStr t _ -> pure $ Text.unpack t
-            NVPath p -> unStorePath <$> addPath p
-            NVSet s _ | Just p <- M.lookup "outPath" s -> force p specialToString
-            v -> throwError $ "Expected a string, but saw: " ++ show v
+        handleEntry ignoreNulls (k, v) = fmap (k,) <$> case k of
+            -- The `args' attribute is special: it supplies the command-line
+            -- arguments to the builder.
+            "args"          -> Just <$> convertNix @[Text] v
+            "__ignoreNulls" -> pure Nothing
+            _               -> force v $ \case
+                NVConstant NNull | ignoreNulls -> pure Nothing
+                v' -> Just <$> (toNix =<< Text.pack <$> coerceToString v')
 
     nixInstantiateExpr expr = do
         traceM $ "Executing: "
@@ -522,12 +521,11 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
             liftIO $ readProcessWithExitCode "nix-instantiate"
                 [ "--eval", "--expr", expr] ""
         case exitCode of
-            ExitSuccess ->
-                case parseNixTextLoc (Text.pack out) of
-                    Failure err ->
-                        throwError $ "Error parsing output of nix-instantiate: "
-                            ++ show err
-                    Success v -> evalExprLoc v
+            ExitSuccess -> case parseNixTextLoc (Text.pack out) of
+                Failure err ->
+                    throwError $ "Error parsing output of nix-instantiate: "
+                        ++ show err
+                Success v -> evalExprLoc v
             err -> throwError $ "nix-instantiate failed: " ++ show err
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
