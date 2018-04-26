@@ -248,8 +248,7 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m)
         Just b -> pure b
         _ -> throwError $ Expectation TPath v
 
-instance (Convertible e m,
-          FromValue a m (NValueNF m), Show a)
+instance (Convertible e m, FromValue a m (NValueNF m), Show a)
       => FromValue [a] m (NValueNF m) where
     fromValueMay = \case
         Fix (NVListF l) -> sequence <$> traverse fromValueMay l
