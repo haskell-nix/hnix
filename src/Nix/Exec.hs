@@ -73,9 +73,9 @@ import           Text.PrettyPrint.ANSI.Leijen (text)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
 
 type MonadNix e m =
-    (Scoped e (NThunk m) m, Framed e m, Has e SrcSpan,
-     Typeable m, MonadVar m, MonadEffects m, MonadFix m,
-     MonadCatch m, Alternative m)
+    (Scoped e (NThunk m) m, Framed e m, Has e SrcSpan, Has e Options,
+     Typeable m, MonadVar m, MonadEffects m, MonadFix m, MonadCatch m,
+     Alternative m)
 
 data ExecFrame m = Assertion (NValue m)
     deriving (Show, Typeable)
@@ -93,27 +93,44 @@ wrapExprLoc span x = Fix (Fix (NSym_ span "<?>") <$ x)
 
 instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
     thunk mv = do
-        frames <- asks (view @_ @Frames hasLens)
+        opts :: Options <- asks (view hasLens)
 
-        -- Gather the current evaluation context at the time of thunk
-        -- creation, and record it along with the thunk.
-        let go (fromFrame -> Just (EvaluatingExpr scope
-                                     (Fix (Compose (Ann span e))))) =
-                let e' = Compose (Ann span (Nothing <$ e))
-                in [Provenance scope e']
-            go _ = []
-            ps = concatMap (go . frame) frames
+        if thunks opts
+            then do
+                frames <- asks (view @_ @Frames hasLens)
 
-        fmap (NThunk ps . coerce) . buildThunk $ mv
+                -- Gather the current evaluation context at the time of thunk
+                -- creation, and record it along with the thunk.
+                let go (fromFrame -> Just (EvaluatingExpr scope
+                                             (Fix (Compose (Ann span e))))) =
+                        let e' = Compose (Ann span (Nothing <$ e))
+                        in [Provenance scope e']
+                    go _ = []
+                    ps = concatMap (go . frame) frames
+
+                fmap (NThunk ps . coerce) . buildThunk $ mv
+            else
+                fmap (NThunk [] . coerce) . buildThunk $ mv
 
     force (NThunk ps t) f = case ps of
         [] -> forceThunk t f
+
         -- jww (2018-04-25): Only report the inner-most layer for now.
         Provenance scope e@(Compose (Ann span _)):_ ->
             withFrame Info (ForcingExpr scope (wrapExprLoc span e))
                 (forceThunk t f)
 
     value = NThunk [] . coerce . valueRef
+
+{-
+prov :: MonadNix e m
+     => (NValue m -> Provenance m) -> NValue m -> m (NValue m)
+prov p v = do
+    opts :: Options <- asks (view hasLens)
+    pure $ if values opts
+           then addProvenance p v
+           else v
+-}
 
 instance MonadNix e m => MonadEval (NValue m) m where
     freeVariable var =
