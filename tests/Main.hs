@@ -77,7 +77,6 @@ ensureNixpkgsCanParse =
       NixException frames ->
           -- errorWithoutStackTrace . show
           --     =<< runReaderT (renderFrames frames) defaultOptions
-          -- jww (2018-04-24):
           errorWithoutStackTrace "FAILED"
 
 main :: IO ()

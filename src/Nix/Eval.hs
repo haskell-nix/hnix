@@ -170,8 +170,6 @@ eval (NAbs params body) = do
     -- body are forced during application.
     scope <- currentScopes @_ @t
     evalAbs (clearDefaults params) $ \arg ->
-        -- jww (2018-04-17): We need to use the bound library here, so that
-        -- the body is only evaluated once.
         withScopes @t scope $ do
             args <- buildArgument params arg
             pushScope args body
@@ -210,7 +208,6 @@ attrSetAlter (p:ps) m val = case M.lookup p m of
   where
     go = return $ M.insert p val m
 
-    -- jww (2018-04-13): Need to record positions for attr paths as well
     recurse s = attrSetAlter ps s val <&> \m' ->
         M.insert p (toValue =<< fmap (value @_ @_ @m) <$> sequence m') m
 
@@ -297,7 +294,6 @@ evalBinds allowDynamic recursive binds = do
                else traverse (thunk . withScopes scope) s
         return (res, foldl' go M.empty bindings)
       where
-        -- jww (2018-04-13): Need to record positions for attr paths as well
         go m ([k], Just pos, _) = M.insert k pos m
         go m _ = m
 
@@ -358,7 +354,6 @@ evalKeyNameDynamicNotNull
     => NKeyName (m v) -> m (Text, Maybe SourcePos)
 evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
     (Nothing, _) ->
-        -- jww (2018-04-24): This should be of Coercion ValueFrame type
         evalError @v ("value is null while a string was expected" :: String)
     (Just k, p) -> pure (k, p)
 

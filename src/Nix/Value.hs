@@ -97,8 +97,6 @@ data NThunk m = NThunk
     , baseThunk       :: Thunk m (NValue m)
     }
 
--- jww (2018-04-22): Tracking value provenance may need to be a compile-time
--- option.
 data NValue m = NValue
     { valueProvenance :: [Provenance m]
     , baseValue       :: NValueF m (NThunk m)

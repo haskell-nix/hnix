@@ -114,8 +114,6 @@ instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
 
     force (NThunk ps t) f = case ps of
         [] -> forceThunk t f
-
-        -- jww (2018-04-25): Only report the inner-most layer for now.
         Provenance scope e@(Compose (Ann span _)):_ ->
             withFrame Info (ForcingExpr scope (wrapExprLoc span e))
                 (forceThunk t f)
@@ -155,7 +153,6 @@ instance MonadNix e m => MonadEval (NValue m) m where
     evalString s d = do
         scope <- currentScopes
         span  <- currentPos
-        -- jww (2018-04-22): Determine full provenance for the string?
         pure $ nvStrP (Provenance scope (NStr_ span (DoubleQuoted [Plain s]))) s d
 
     evalLiteralPath p = do
@@ -181,8 +178,6 @@ instance MonadNix e m => MonadEval (NValue m) m where
     evalWith c b = do
         scope <- currentScopes
         span <- currentPos
-        -- jww (2018-04-23): What about the arguments to with? All this
-        -- preserves right now is the location.
         addProvenance (\b -> Provenance scope (NWith_ span Nothing (Just b)))
             <$> evalWithAttrSet c b
 
@@ -241,13 +236,7 @@ execUnaryOp scope span op arg = do
             (NNot, NBool  b) -> unaryOp $ NBool  (not b)
             _ -> throwError $ "unsupported argument type for unary operator "
                      ++ show op
-        x ->
-            -- jww (2018-04-22): Improve error reporting so that instead of
-            -- using 'show' to paste the textual form of the value into a
-            -- string, we use smarter pattern with typed elements, allowing us
-            -- to render specially based on the output device and verbosity
-            -- selections.
-            throwError $ "argument to unary operator"
+        x -> throwError $ "argument to unary operator"
                 ++ " must evaluate to an atomic type: " ++ show x
   where
     unaryOp = pure . nvConstantP (Provenance scope (NUnary_ span op (Just arg)))
@@ -277,8 +266,6 @@ execBinaryOp scope span NAnd larg rarg = fromNix larg >>= \l ->
     andOp r b = pure $
         nvConstantP (Provenance scope (NBinary_ span NAnd (Just larg) r)) (NBool b)
 
--- jww (2018-04-08): Refactor so that eval (NBinary ..) *always* dispatches
--- based on operator first
 execBinaryOp scope span op lval rarg = do
     rval <- rarg
     let bin :: (Provenance m -> a) -> a
@@ -361,7 +348,6 @@ execBinaryOp scope span op lval rarg = do
             _       -> nverr $ unsupportedTypes lval rval
 
         (NVPath p, NVStr s _) -> case op of
-            -- jww (2018-04-13): Do we need to make the path absolute here?
             NEq   -> toBool $ p == Text.unpack s
             NNEq  -> toBool $ p /= Text.unpack s
             NPlus -> bin nvPathP <$> makeAbsolutePath (p `mappend` Text.unpack s)
@@ -475,7 +461,6 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
 
     pathExists = liftIO . fileExist
 
-    -- jww (2018-03-29): Cache which files have been read in.
     importPath scope origPath = do
         path <- liftIO $ pathToDefaultNixFile origPath
         mres <- lookupVar @(Context (Lazy m) (NThunk (Lazy m)))

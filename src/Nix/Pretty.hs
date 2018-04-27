@@ -154,7 +154,6 @@ prettyOriginExpr = withoutParens . go
     render Nothing = simpleExpr $ text "_"
     render (Just (NValue (reverse -> p:_) _)) = go (originExpr p)
     render (Just (NValue _ _)) = simpleExpr $ text "?"
-        -- jww (2018-04-24): Needs work
         -- simpleExpr $ foldr ((<$>) . parens . indent 2 . withoutParens
         --                           . go . originExpr)
         --     mempty (reverse ps)

@@ -16,7 +16,6 @@ case_indented_antiquotation = do
 
 case_string_antiquotation :: Assertion
 case_string_antiquotation = do
-    -- TODO: plain $ doesn't need to be escaped here either
     assertPretty (mkStr "echo $foo") "\"echo \\$foo\""
     assertPretty (mkStr "echo ${foo}") "\"echo \\${foo}\""
 

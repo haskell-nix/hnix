@@ -140,11 +140,8 @@ reduce (NBinary_ bann NApp fun arg) = fun >>= \case
         x <- arg
         pushScope (M.singleton name x) (cata reduce body)
 
-    -- jww (2018-04-19): Reduce function application on sets
-
     f -> Fix . NBinary_ bann NApp f <$> arg
 
--- jww (2018-04-19): Reduce more binary operations on constants
 reduce (NBinary_ bann op larg rarg) = do
     lval <- larg
     rval <- rarg
@@ -153,11 +150,8 @@ reduce (NBinary_ bann op larg rarg) = do
             return $ Fix (NConstant_ ann (NInt (x + y)))
         _ -> pure $ Fix $ NBinary_ bann op lval rval
 
--- jww (2018-04-19): Reduce selection if we can see it all
 -- reduce (NSelect aset attr alt) = do
 
--- jww (2018-04-19): If aset is known to be a set, and attr is a static path,
--- see if we can do the lookup now.
 -- reduce (NHasAttr aset attr) =
 
 reduce e@(NSet_ ann binds) = do
@@ -180,8 +174,6 @@ reduce (NWith_ ann scope body) =
     clearScopes @NExprLoc $ fmap Fix $ NWith_ ann <$> scope <*> body
 
 reduce (NLet_ ann binds body) = do
-    -- We only handle in order definitions...
-    -- s <- go M.empty binds                -- jww (2018-04-20): too slow
     s <- fmap (M.fromList . catMaybes) $ forM binds $ \case
         NamedVar (StaticKey name _ :| []) def -> def >>= \case
             d@(Fix NAbs_ {})      -> pure $ Just (name, d)
@@ -191,7 +183,6 @@ reduce (NLet_ ann binds body) = do
         _ -> pure Nothing
     body' <- pushScope s body
     binds' <- traverse sequence binds
-    -- jww (2018-04-25): Need to also gather names from the bindings.
     -- let names = gatherNames body'
     -- binds' <- traverse sequence binds <&> \b -> flip filter b $ \case
     --     NamedVar (StaticKey name _ :| []) _ ->
@@ -264,9 +255,6 @@ pruneTree opts = cataM $ \(FlaggedF (b, Compose x)) -> do
         NRecSet binds | reduceSets opts  -> Just $ NRecSet (mapMaybe sequence binds)
                       | otherwise        -> Just $ NRecSet (map (fmap (fromMaybe nNull)) binds)
 
-        -- jww (2018-04-25): When we switch to a monadic NExpr, we can easily
-        -- determine which of the bindings of the let might be referred to.
-        -- Or, we could traverse and look for NSyms.
         NLet binds (Just body@(Fix (Compose (Ann _ x)))) ->
             Just $ case mapMaybe pruneBinding binds of
                 [] -> x

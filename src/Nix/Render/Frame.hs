@@ -78,8 +78,6 @@ renderFrame (NixFrame level f)
     | Just (_ :: NormalLoop m)  <- fromFrame f =
       pure [text "<<loop during normalization>>"]
     | Just (e :: ExecFrame m)   <- fromFrame f = renderExecFrame level e
-      -- jww (2018-04-25): Only render the string if it's level matches the
-      -- verbosity level.
     | Just (e :: String)        <- fromFrame f = pure [text e]
     | Just (e :: Doc)           <- fromFrame f = pure [e]
     | otherwise = error $ "Unrecognized frame: " ++ show f
@@ -142,8 +140,6 @@ renderExecFrame _level f = do
     (:[]) <$> case f of
         Assertion v
             | values opts ->
-                  -- jww (2018-04-24): Render value provenance differently
-                  -- based on the verbosity.
                   (text "Assertion failed:" </>) <$> renderNValueProv v
             | otherwise ->
                   pure $ text "Assertion failed"

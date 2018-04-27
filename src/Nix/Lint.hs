@@ -235,9 +235,8 @@ unify context (Symbolic x) (Symbolic y) = do
                     writeVar y (NMany m)
                     packSymbolic (NMany m)
 
--- jww (2018-04-15): These aren't worth defining yet, because once we move to
--- Hindley-Milner, we're not going to be managing Symbolic values this way
--- anymore.
+-- These aren't worth defining yet, because once we move to Hindley-Milner,
+-- we're not going to be managing Symbolic values this way anymore.
 
 instance FromValue (Text, DList Text) m (Symbolic m) where
 

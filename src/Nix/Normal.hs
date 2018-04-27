@@ -80,15 +80,11 @@ valueText addPathsToStore = cata phi
     phi (NVStrF t c)    = pure (t, c)
     phi v@(NVListF _)   = coercionFailed v
     phi v@(NVSetF s _)
-      | Just asString <-
-        -- TODO: Should this be run through valueText recursively?
-        M.lookup "__asString" s = asString
+      | Just asString <- M.lookup "__asString" s = asString
       | otherwise = coercionFailed v
     phi v@NVClosureF {} = coercionFailed v
     phi (NVPathF originalPath)
         | addPathsToStore = do
-            -- TODO: Capture and use the path of the file being processed as the
-            -- base path
             storePath <- addPath originalPath
             pure (Text.pack $ unStorePath storePath, mempty)
         | otherwise = pure (Text.pack originalPath, mempty)

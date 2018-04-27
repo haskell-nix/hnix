@@ -56,7 +56,7 @@ import qualified Type.Reflection as Reflection
 
 type VarName = Text
 
-instance Hashable1 NonEmpty     -- jww (2018-04-17): an unfortunate orphan
+instance Hashable1 NonEmpty     -- an unfortunate orphan
 
 -- | The main nix expression type. This is polymorphic so that it can be made
 -- a functor, which allows us to traverse expressions and map functions over
@@ -230,7 +230,7 @@ instance Hashable SourcePos where
         salt `hashWithSalt` f `hashWithSalt` l `hashWithSalt` c
 
 instance Generic1 NKeyName where
-  type Rep1 NKeyName = NKeyName -- jww (2018-04-09): wrong
+  type Rep1 NKeyName = NKeyName
   from1 = id
   to1   = id
 

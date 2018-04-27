@@ -31,7 +31,6 @@ class (Typeable e, Show e) => Frame e where
     toFrame = SomeFrame
     fromFrame (SomeFrame e) = cast e
 
--- jww (2018-04-24): These two are temporary instance for now.
 instance Frame [Char]
 instance Frame Doc
 

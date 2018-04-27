@@ -104,7 +104,6 @@ builtinsList = sequence [
 
     , add0 TopLevel "__nixPath"                  nixPath
     , add  TopLevel "abort"                      throw_ -- for now
-    -- jww (2018-04-09): Support floats for `add` and `sub`
     , add' Normal   "add"                        (arity2 ((+) @Integer))
     , add2 Normal   "all"                        all_
     , add2 Normal   "any"                        any_
@@ -386,8 +385,6 @@ match_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue 
 match_ pat str =
     fromValue pat >>= \p ->
     fromValue str >>= \s -> do
-        -- jww (2018-04-05): We should create a fundamental type for compiled
-        -- regular expressions if it turns out they get used often.
         let re = makeRegex (encodeUtf8 p) :: Regex
         case matchOnceText re (encodeUtf8 s) of
             Just ("", sarr, "") -> do
@@ -457,14 +454,12 @@ catAttrs attrName xs =
 
 baseNameOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 baseNameOf x = x >>= \case
-    --TODO: Only allow strings that represent absolute paths
     NVStr path ctx -> pure $ nvStr (Text.pack $ takeFileName $ Text.unpack path) ctx
     NVPath path -> pure $ nvPath $ takeFileName path
     v -> throwError @String $ "dirOf: expected string or path, got " ++ show v
 
 dirOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 dirOf x = x >>= \case
-    --TODO: Only allow strings that represent absolute paths
     NVStr path ctx -> pure $ nvStr (Text.pack $ takeDirectory $ Text.unpack path) ctx
     NVPath path -> pure $ nvPath $ takeDirectory path
     v -> throwError @String $ "dirOf: expected string or path, got " ++ show v
@@ -510,7 +505,6 @@ genList generator = fromValue @Integer >=> \n ->
     else throwError @String $ "builtins.genList: Expected a non-negative number, got "
              ++ show n
 
---TODO: Preserve string context
 replaceStrings :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m) -> m (NValue m)
 replaceStrings tfrom tto ts =
     fromNix tfrom >>= \(from :: [Text]) ->
@@ -543,8 +537,8 @@ replaceStrings tfrom tto ts =
 removeAttrs :: forall e m. MonadNix e m
             => m (NValue m) -> m (NValue m) -> m (NValue m)
 removeAttrs set = fromNix >=> \(toRemove :: [Text]) ->
-    fromValue @(HashMap Text (NThunk m),
-                HashMap Text SourcePos) set >>= \(m, p) ->
+    fromValue @(AttrSet (NThunk m),
+                AttrSet SourcePos) set >>= \(m, p) ->
         toNix (go m toRemove, go p toRemove)
   where
     go = foldl' (flip M.delete)
@@ -552,22 +546,19 @@ removeAttrs set = fromNix >=> \(toRemove :: [Text]) ->
 intersectAttrs :: forall e m. MonadNix e m
                => m (NValue m) -> m (NValue m) -> m (NValue m)
 intersectAttrs set1 set2 =
-    fromValue @(HashMap Text (NThunk m),
-                HashMap Text SourcePos) set1 >>= \(s1, p1) ->
-    fromValue @(HashMap Text (NThunk m),
-                HashMap Text SourcePos) set2 >>= \(s2, p2) ->
+    fromValue @(AttrSet (NThunk m),
+                AttrSet SourcePos) set1 >>= \(s1, p1) ->
+    fromValue @(AttrSet (NThunk m),
+                AttrSet SourcePos) set2 >>= \(s2, p2) ->
         return $ nvSet (s2 `M.intersection` s1) (p2 `M.intersection` p1)
 
 functionArgs :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 functionArgs fun = fun >>= \case
-    NVClosure p _ ->
-        -- jww (2018-04-05): Should we preserve the location where the
-        -- function arguments were declared for __unsafeGetAttrPos?
-        toValue @(HashMap Text (NThunk m)) $
-            valueThunk . nvConstant . NBool <$>
-                case p of
-                    Param name -> M.singleton name False
-                    ParamSet s _ _ -> isJust <$> M.fromList s
+    NVClosure p _ -> toValue @(AttrSet (NThunk m)) $
+        valueThunk . nvConstant . NBool <$>
+            case p of
+                Param name -> M.singleton name False
+                ParamSet s _ _ -> isJust <$> M.fromList s
     v -> throwError @String $ "builtins.functionArgs: expected function, got "
             ++ show v
 
@@ -577,7 +568,6 @@ toPath = fromValue @Path >=> toNix @Path
 pathExists_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 pathExists_ path = path >>= \case
     NVPath p  -> toNix =<< pathExists p
-    -- jww (2018-04-13): Should this ever be a string?
     NVStr s _ -> toNix =<< pathExists (Text.unpack s)
     v -> throwError @String $ "builtins.pathExists: expected path, got " ++ show v
 
@@ -666,7 +656,7 @@ concatLists = fromValue @[NThunk m]
 listToAttrs :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 listToAttrs = fromValue @[NThunk m] >=> \l ->
     fmap (flip nvSet M.empty . M.fromList . reverse) $
-        forM l $ fromValue @(HashMap Text (NThunk m)) >=> \s ->
+        forM l $ fromValue @(AttrSet (NThunk m)) >=> \s ->
             case (M.lookup "name" s, M.lookup "value" s) of
                 (Just name, Just value) -> fromValue name <&> (, value)
                 _ -> throwError $
@@ -694,7 +684,6 @@ absolutePathFromValue = \case
     NVPath path -> pure path
     v -> throwError @String $ "expected a path, got " ++ show v
 
---TODO: Move all liftIO things into MonadNixEnv or similar
 readFile_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 readFile_ path =
     path >>= absolutePathFromValue >>= Nix.Render.readFile >>= toNix
@@ -744,7 +733,7 @@ typeOf v = v >>= toNix @Text . \case
         NFloat _ -> "float"
         NBool _  -> "bool"
         NNull    -> "null"
-        NUri _   -> "string" --TODO: Should we get rid of NUri?
+        NUri _   -> "string"
     NVStr _ _     -> "string"
     NVList _      -> "list"
     NVSet _ _     -> "set"
@@ -813,7 +802,7 @@ partition_ fun xs = fun >>= \f ->
         selection <- traverse match l
         let (right, wrong) = partition fst selection
         let makeSide = valueThunk . nvList . map snd
-        toValue @(HashMap Text (NThunk m)) $
+        toValue @(AttrSet (NThunk m)) $
             M.fromList [("right", makeSide right), ("wrong", makeSide wrong)]
 
 currentSystem :: MonadNix e m => m (NValue m)

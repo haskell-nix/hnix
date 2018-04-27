@@ -73,8 +73,6 @@ main = do
                     errorWithoutStackTrace . show
                         =<< renderFrames @(NThunk (Lazy IO)) frames
 
-            -- jww (2018-04-24): This shouldn't be in IO, or else it can't
-            -- share the environment with the evaluation done above.
             when (repl opts) $ liftIO $ Repl.shell (pure ())
 
     process opts mpath expr = do
