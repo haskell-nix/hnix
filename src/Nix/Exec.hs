@@ -357,7 +357,10 @@ execBinaryOp scope span op lval rarg = do
             NPlus -> bin nvPathP <$> makeAbsolutePath (ls ++ rs)
             _     -> nverr $ unsupportedTypes lval rval
 
-        _ -> nverr $ unsupportedTypes lval rval
+        _ -> case op of
+            NEq   -> toBool False
+            NNEq  -> toBool True
+            _ -> nverr $ unsupportedTypes lval rval
   where
     unsupportedTypes :: Show a => a -> a -> String
     unsupportedTypes lval rval =
