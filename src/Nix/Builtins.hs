@@ -39,7 +39,6 @@ import           Data.Char (isDigit)
 import           Data.Coerce
 import           Data.Fix
 import           Data.Foldable (foldrM)
-import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.List
 import           Data.Maybe
