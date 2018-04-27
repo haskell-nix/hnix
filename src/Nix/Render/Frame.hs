@@ -138,11 +138,12 @@ renderExecFrame :: (MonadReader e m, Has e Options, MonadVar m, MonadFile m)
 renderExecFrame _level f = do
     opts :: Options <- asks (view hasLens)
     (:[]) <$> case f of
-        Assertion v
+        Assertion ann v
             | values opts ->
-                  (text "Assertion failed:" </>) <$> renderNValueProv v
+                  renderLocation ann =<<
+                      ((text "Assertion failed:" </>) <$> renderNValueProv v)
             | otherwise ->
-                  pure $ text "Assertion failed"
+                  renderLocation ann (text "Assertion failed")
 
 renderThunkLoop :: (MonadReader e m, Has e Options, MonadFile m)
                 => NixLevel -> ThunkLoop -> m [Doc]

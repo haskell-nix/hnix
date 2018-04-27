@@ -77,7 +77,7 @@ type MonadNix e m =
      Typeable m, MonadVar m, MonadEffects m, MonadFix m, MonadCatch m,
      Alternative m)
 
-data ExecFrame m = Assertion (NValue m)
+data ExecFrame m = Assertion SrcSpan (NValue m)
     deriving (Show, Typeable)
 
 instance Typeable m => Frame (ExecFrame m)
@@ -189,13 +189,13 @@ instance MonadNix e m => MonadEval (NValue m) m where
             then addProvenance (\t -> Provenance scope (NIf_ span (Just c) (Just t) Nothing)) <$> t
             else addProvenance (\f -> Provenance scope (NIf_ span (Just c) Nothing (Just f))) <$> f
 
-    evalAssert c body = fromValue c >>= \b ->
+    evalAssert c body = fromValue c >>= \b -> do
+        span  <- currentPos
         if b
         then do
             scope <- currentScopes
-            span  <- currentPos
             addProvenance (\b -> Provenance scope (NAssert_ span (Just c) (Just b))) <$> body
-        else nverr $ Assertion c
+        else nverr $ Assertion span c
 
     evalApp f x = do
         scope <- currentScopes

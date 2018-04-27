@@ -1,6 +1,5 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -27,11 +26,11 @@ posAndMsg beg msg =
 
 renderLocation :: MonadFile m => SrcSpan -> Doc -> m Doc
 renderLocation (SrcSpan beg@(SourcePos "<string>" _ _) _) msg =
-    return $ text $ parseErrorPretty @Char (posAndMsg beg msg)
+    return $ text $ init $ parseErrorPretty @Char (posAndMsg beg msg)
 
 renderLocation (SrcSpan beg@(SourcePos path _ _) _) msg = do
     contents <- Nix.Render.readFile path
-    return $ text $ parseErrorPretty' contents (posAndMsg beg msg)
+    return $ text $ init $ parseErrorPretty' contents (posAndMsg beg msg)
 
 {-
 -}
