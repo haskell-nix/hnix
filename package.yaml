@@ -125,6 +125,12 @@ tests:
       - tasty-hunit
       - tasty-th
       - unix
+      - QuickCheck
+      - quickcheck-instances
+      - generic-random
+      - Diff
+      - megaparsec
+      - tasty-quickcheck
 
 benchmarks:
   hnix-benchmarks:
