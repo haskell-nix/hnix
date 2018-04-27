@@ -7,6 +7,7 @@ module NixLanguageTests (genTests) where
 import           Control.Arrow ((&&&))
 import           Control.Exception
 import           Control.Monad
+import           Control.Monad.IO.Class
 import           Control.Monad.ST
 import           Data.List (delete, sort)
 import           Data.List.Split (splitOn)
@@ -24,6 +25,7 @@ import           Nix.Render.Frame
 import           Nix.Utils
 import           Nix.XML
 import qualified Options.Applicative as Opts
+import           System.Environment
 import           System.FilePath
 import           System.FilePath.Glob (compile, globDir1)
 import           Test.Tasty
@@ -117,6 +119,7 @@ assertEval opts files = catch go $ \case
         [".exp.disabled"] -> return ()
         [".exp-disabled"] -> return ()
         [".exp", ".flags"] -> do
+            liftIO $ unsetEnv "NIX_PATH"
             flags <- Text.readFile (name ++ ".flags")
             let flags' | Text.last flags == '\n' = Text.init flags
                        | otherwise = flags
@@ -129,7 +132,8 @@ assertEval opts files = catch go $ \case
                     assertLangOk
                         (opts' { include = include opts' ++
                                    [ "nix=../../../../data/nix/corepkgs"
-                                   , "lang/dir4" ] })
+                                   , "lang/dir4"
+                                   , "lang/dir5" ] })
                         name
                 Opts.CompletionInvoked _ -> error "unused"
         _ -> assertFailure $ "Unknown test type " ++ show files
