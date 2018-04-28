@@ -86,7 +86,7 @@ main = do
                              . toEncodingSorted
                              <=< fromNix
                     | normalize opts =
-                      liftIO . print . prettyNixValue <=< normalForm
+                      liftIO . print . prettyNValueNF <=< normalForm
                     | values opts  =
                       liftIO . print <=< renderNValueProv
                     | otherwise  =

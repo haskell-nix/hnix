@@ -141,7 +141,7 @@ renderExecFrame _level f = do
         Assertion ann v
             | values opts ->
                   renderLocation ann =<<
-                      ((text "Assertion failed:" </>) <$> renderNValueProv v)
+                      ((text "Assertion failed:" </>) <$> prettyNValueProv v)
             | otherwise ->
                   renderLocation ann (text "Assertion failed")
 

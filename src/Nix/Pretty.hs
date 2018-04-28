@@ -218,8 +218,8 @@ exprFNixDoc = \case
   where
     recPrefix = text "rec" <> space
 
-prettyNixValue :: Functor m => NValueNF m -> Doc
-prettyNixValue = prettyNix . valueToExpr
+prettyNValueNF :: Functor m => NValueNF m -> Doc
+prettyNValueNF = prettyNix . valueToExpr
   where valueToExpr :: Functor m => NValueNF m -> NExpr
         valueToExpr = transport go
 
@@ -255,24 +255,24 @@ removeEffects = Fix . fmap dethunk
 removeEffectsM :: MonadVar m => NValueF m (NThunk m) -> m (NValueNF m)
 removeEffectsM = fmap Fix . traverse dethunk
 
-renderNValueF :: MonadVar m => NValueF m (NThunk m) -> m Doc
-renderNValueF = fmap prettyNixValue . removeEffectsM
+prettyNValueF :: MonadVar m => NValueF m (NThunk m) -> m Doc
+prettyNValueF = fmap prettyNValueNF . removeEffectsM
 
-renderNValue :: MonadVar m => NValue m -> m Doc
-renderNValue (NValue _ v) = renderNValueF v
+prettyNValue :: MonadVar m => NValue m -> m Doc
+prettyNValue (NValue _ v) = prettyNValueF v
 
-renderNValueProv :: MonadVar m => NValue m -> m Doc
-renderNValueProv = \case
-    NValue [] v -> renderNValueF v
+prettyNValueProv :: MonadVar m => NValue m -> m Doc
+prettyNValueProv = \case
+    NValue [] v -> prettyNValueF v
     NValue ps v -> do
-        v' <- renderNValueF v
+        v' <- prettyNValueF v
         pure $ v' </> indent 2 (parens (mconcat
             (text "from: " : map (prettyOriginExpr . originExpr) ps)))
 
-renderNThunk :: MonadVar m => NThunk m -> m Doc
-renderNThunk = \case
+prettyNThunk :: MonadVar m => NThunk m -> m Doc
+prettyNThunk = \case
     t@(NThunk ps _) -> do
-        v' <- fmap prettyNixValue (dethunk t)
+        v' <- fmap prettyNValueNF (dethunk t)
         pure $ v' </> indent 2 (parens (mconcat
             (text "thunk from: " : map (prettyOriginExpr . originExpr) ps)))
 

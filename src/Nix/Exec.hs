@@ -515,7 +515,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
         nn <- maybe (pure False) fromNix (M.lookup "__ignoreNulls" s)
         s' <- M.fromList <$> mapMaybeM (handleEntry nn) (M.toList s)
         v' <- normalForm =<< toValue @(ValueSet (Lazy m)) s'
-        nixInstantiateExpr $ "derivationStrict " ++ show (prettyNixValue v')
+        nixInstantiateExpr $ "derivationStrict " ++ show (prettyNValueNF v')
       where
         mapMaybeM :: (a -> Lazy m (Maybe b)) -> [a] -> Lazy m [b]
         mapMaybeM op = foldr f (return [])
