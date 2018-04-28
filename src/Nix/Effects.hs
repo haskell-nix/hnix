@@ -32,3 +32,6 @@ class MonadFile m => MonadEffects m where
     nixInstantiateExpr :: String -> m (NValue m)
 
     traceEffect :: String -> m ()
+
+    exec :: [String] -> m (NValue m)
+

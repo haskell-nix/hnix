@@ -545,7 +545,21 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
                         ++ show err
                 Success v -> evalExprLoc v
             err -> throwError $ "nix-instantiate failed: " ++ show err
+
     traceEffect = liftIO . putStrLn
+
+    exec = \case
+              [] -> throwError @String "exec: missing program"
+              (prog:args) -> do
+                (exitCode, out, _) <- liftIO $ readProcessWithExitCode prog args ""
+                case exitCode of
+                  ExitSuccess -> do
+                    case parseNixTextLoc (Text.pack out) of
+                      Failure err ->
+                        throwError $ "Error parsing output of exec: " ++ show err
+                      Success v -> evalExprLoc v
+                  err -> throwError $ "exec  failed: " ++ show err ++ " program[" ++ prog ++ "] args " ++ show args
+                
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
 runLazyM opts = (`evalStateT` M.empty)
