@@ -78,8 +78,14 @@ builtins = do
     lst <- ([("builtins", ref)] ++) <$> topLevelBuiltins
     pushScope (M.fromList lst) currentScopes
   where
-    buildMap = M.fromList . map mapping <$> builtinsList
-    topLevelBuiltins = map mapping . filter isTopLevel <$> builtinsList
+    buildMap = M.fromList . map mapping <$> fullBuiltinsList
+    topLevelBuiltins = map mapping . filter isTopLevel <$> fullBuiltinsList
+
+    fullBuiltinsList = concatMap go <$> builtinsList
+      where
+        go b@(Builtin TopLevel _) = [b]
+        go b@(Builtin Normal (name, builtin)) =
+            [ b, Builtin TopLevel ("__" <> name, builtin) ]
 
 data BuiltinType = Normal | TopLevel
 data Builtin m = Builtin
@@ -104,7 +110,6 @@ builtinsList = sequence [
     , do version <- toValue (5 :: Int)
          pure $ Builtin Normal ("langVersion", version)
 
-    , add0 TopLevel "__nixPath"                  nixPath
     , add0 Normal   "nixPath"                    nixPath
     , add  TopLevel "abort"                      throw_ -- for now
     , add' Normal   "add"                        (arity2 ((+) @Integer))
