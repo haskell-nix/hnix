@@ -10,6 +10,7 @@ module EvalTests (tests, genEvalCompareTests) where
 
 import           Control.Monad (when)
 import           Control.Monad.IO.Class
+import qualified Data.HashMap.Lazy as M
 import           Data.Maybe (isJust)
 import           Data.String.Interpolate.IsString
 import           Data.Text (Text)
@@ -84,6 +85,9 @@ case_match_failure_null =
 case_inherit_in_rec_set =
     constantEqualText "1" "let x = 1; in (rec { inherit x; }).x"
 
+case_lang_version =
+    constantEqualText "5" "builtins.langVersion"
+
 case_rec_set_attr_path_simpl =
     constantEqualText "123" [i|
       let x = rec {
@@ -101,6 +105,42 @@ case_inherit_from_set_has_no_scope =
       )).success
     |]
 
+case_fixed_points =
+    constantEqualText' [i|[
+  {
+    foobar = "foobar";
+    foo = "foo";
+    bar = "bar";
+  }
+  {
+    foobar = "foo + bar";
+    foo = "foo + ";
+    bar = "bar";
+  }
+]|] [i|
+    let
+      fix = f: let x = f x; in x;
+      extends = f: rattrs: self:
+        let super = rattrs self; in super // f self super;
+      f = self: { foo = "foo";
+                  bar = "bar";
+                  foobar = self.foo + self.bar; };
+      g = self: super: { foo = super.foo + " + "; };
+    in [ (fix f) (fix (extends g f)) ]
+|]
+
+case_fixed_points_and_fold =
+    constantEqualText' [i|[ {} {} ]|] [i|
+let
+  extends = f: rattrs: self:
+    let super = rattrs self; in super // f self super;
+  flip = f: a: b: f b a;
+  toFixFold = builtins.foldl' (flip extends) (self: {}) ([(self: super: {})]);
+  toFix = extends (self: super: {}) (self: {});
+  fix = f: let x = f x; in x;
+in [ (fix toFixFold) (fix toFix) ]
+|]
+
 -----------------------
 
 tests :: TestTree
@@ -114,17 +154,21 @@ genEvalCompareTests = do
     mkTestCase f = testCase f $ assertEvalFileMatchesNix (testDir </> f)
 
 instance (Show r, Show (NValueF m r), Eq r) => Eq (NValueF m r) where
-    NVConstant x == NVConstant y = x == y
-    NVList x == NVList y = and (zipWith (==) x y)
+    NVConstantF x == NVConstantF y = x == y
+    NVStrF x _ == NVStrF y _ = x == y
+    NVListF x == NVListF y = and (zipWith (==) x y)
+    NVSetF x _ == NVSetF y _ =
+        M.keys x == M.keys y &&
+        and (zipWith (==) (M.elems x) (M.elems y))
     x == y = error $ "Need to add comparison for values: "
                  ++ show x ++ " == " ++ show y
 
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
 constantEqual a b = do
     -- putStrLn =<< lint (stripAnnotation a)
-    a' <- runLazyM $ normalForm =<< evalLoc Nothing [] a
+    a' <- runLazyM defaultOptions $ normalForm =<< nixEvalExprLoc Nothing a
     -- putStrLn =<< lint (stripAnnotation b)
-    b' <- runLazyM $ normalForm =<< evalLoc Nothing [] b
+    b' <- runLazyM defaultOptions $ normalForm =<< nixEvalExprLoc Nothing b
     assertEqual "" a' b'
 
 constantEqualText' :: Text -> Text -> Assertion

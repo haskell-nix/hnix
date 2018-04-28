@@ -8,11 +8,11 @@
 module Nix.Expr.Shorthands where
 
 import Data.Fix
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid
 import Data.Text (Text)
 import Nix.Atoms
 import Nix.Expr.Types
--- import Nix.Utils
 
 -- | Make an integer literal expression.
 mkInt :: Integer -> NExpr
@@ -78,7 +78,7 @@ mkSymF :: Text -> NExprF a
 mkSymF = NSym
 
 mkSelector :: Text -> NAttrPath NExpr
-mkSelector = (:[]) . flip StaticKey Nothing
+mkSelector = (:| []) . flip StaticKey Nothing
 
 mkBool :: Bool -> NExpr
 mkBool = Fix . mkBoolF
@@ -233,5 +233,5 @@ infixl 1 @@
 infixr 1 ==>
 
 (@.) :: NExpr -> Text -> NExpr
-obj @. name = Fix (NSelect obj [StaticKey name Nothing] Nothing)
+obj @. name = Fix (NSelect obj (StaticKey name Nothing :| []) Nothing)
 infixl 2 @.

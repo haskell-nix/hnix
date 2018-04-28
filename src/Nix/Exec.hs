@@ -12,6 +12,7 @@
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -29,32 +30,35 @@ import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
-import           Control.Monad.Reader (MonadReader, asks)
-import           Control.Monad.Trans.Reader hiding (asks)
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Control.Monad.Trans.Reader (ReaderT(..))
+import           Control.Monad.Trans.State (StateT(..))
 import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.Fix
-import           Data.Functor.Compose
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.IORef
 import           Data.List
 import           Data.List.Split
-import           Data.Maybe (mapMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import           Data.Typeable
+import           Data.Void
 import           Nix.Atoms
 import           Nix.Context
 import           Nix.Convert
 import           Nix.Effects
-import           Nix.Eval
-import qualified Nix.Eval as Eval
+import           Nix.Eval as Eval
 import           Nix.Expr
+import           Nix.Frames
 import           Nix.Normal
+import           Nix.Options
 import           Nix.Parser
 import           Nix.Pretty
+import           Nix.Render
 import           Nix.Scope
-import           Nix.Stack
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
@@ -65,198 +69,347 @@ import           System.FilePath
 import qualified System.Info
 import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
-import {-# SOURCE #-} Nix.Entry as Entry
+import           Text.PrettyPrint.ANSI.Leijen (text)
+import qualified Text.PrettyPrint.ANSI.Leijen as P
 
-nverr :: forall e m a. MonadNix e m => String -> m a
+type MonadNix e m =
+    (Scoped e (NThunk m) m, Framed e m, Has e SrcSpan, Has e Options,
+     Typeable m, MonadVar m, MonadEffects m, MonadFix m, MonadCatch m,
+     Alternative m)
+
+data ExecFrame m = Assertion SrcSpan (NValue m)
+    deriving (Show, Typeable)
+
+instance Typeable m => Frame (ExecFrame m)
+
+nverr :: forall s e m a. (MonadNix e m, Frame s) => s -> m a
 nverr = evalError @(NValue m)
 
+currentPos :: forall e m. (MonadReader e m, Has e SrcSpan) => m SrcSpan
+currentPos = asks (view @e @SrcSpan hasLens)
+
+wrapExprLoc :: SrcSpan -> NExprLocF r -> NExprLoc
+wrapExprLoc span x = Fix (Fix (NSym_ span "<?>") <$ x)
+
 instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
-    thunk = fmap coerce . buildThunk
-    force = forceThunk . coerce
-    value = coerce . valueRef
+    thunk mv = do
+        opts :: Options <- asks (view hasLens)
+
+        if thunks opts
+            then do
+                frames <- asks (view @_ @Frames hasLens)
+
+                -- Gather the current evaluation context at the time of thunk
+                -- creation, and record it along with the thunk.
+                let go (fromFrame -> Just (EvaluatingExpr scope
+                                             (Fix (Compose (Ann span e))))) =
+                        let e' = Compose (Ann span (Nothing <$ e))
+                        in [Provenance scope e']
+                    go _ = []
+                    ps = concatMap (go . frame) frames
+
+                fmap (NThunk ps . coerce) . buildThunk $ mv
+            else
+                fmap (NThunk [] . coerce) . buildThunk $ mv
+
+    force (NThunk ps t) f = case ps of
+        [] -> forceThunk t f
+        Provenance scope e@(Compose (Ann span _)):_ ->
+            withFrame Info (ForcingExpr scope (wrapExprLoc span e))
+                (forceThunk t f)
+
+    value = NThunk [] . coerce . valueRef
+
+{-
+prov :: MonadNix e m
+     => (NValue m -> Provenance m) -> NValue m -> m (NValue m)
+prov p v = do
+    opts :: Options <- asks (view hasLens)
+    pure $ if values opts
+           then addProvenance p v
+           else v
+-}
 
 instance MonadNix e m => MonadEval (NValue m) m where
     freeVariable var =
         nverr $ "Undefined variable '" ++ Text.unpack var ++ "'"
 
     evalCurPos = do
-        Compose (Ann (SrcSpan delta _) _):_ <-
-            asks (mapMaybe (either (const Nothing) Just)
-                 . view @_ @Frames hasLens)
-        toValue delta
+        scope <- currentScopes
+        span@(SrcSpan delta _) <- currentPos
+        addProvenance (\_ -> Provenance scope (NSym_ span "__curPos"))
+            <$> toValue delta
 
-    evalConstant    = pure . NVConstant
-    evalString      = (pure .) . NVStr
-    evalLiteralPath = fmap NVPath . makeAbsolutePath
-    evalEnvPath     = fmap NVPath . findEnvPath
-    evalUnary       = execUnaryOp
-    evalBinary      = execBinaryOp
-    evalWith        = evalWithAttrSet
+    evaledSym name val = do
+        scope <- currentScopes
+        span <- currentPos
+        pure $ addProvenance (const $ Provenance scope (NSym_ span name)) val
 
-    evalIf c t f = fromValue c >>= \b -> if b then t else f
+    evalConstant c = do
+        scope <- currentScopes
+        span  <- currentPos
+        pure $ nvConstantP (Provenance scope (NConstant_ span c)) c
 
-    evalAssert c body = fromValue c >>= \b ->
-        if b then body else nverr "assertion failed"
+    evalString s d = do
+        scope <- currentScopes
+        span  <- currentPos
+        pure $ nvStrP (Provenance scope (NStr_ span (DoubleQuoted [Plain s]))) s d
 
-    evalApp = callFunc
-    evalAbs = (pure .) . NVClosure
+    evalLiteralPath p = do
+        scope <- currentScopes
+        span  <- currentPos
+        nvPathP (Provenance scope (NLiteralPath_ span p)) <$> makeAbsolutePath p
+
+    evalEnvPath p = do
+        scope <- currentScopes
+        span  <- currentPos
+        nvPathP (Provenance scope (NEnvPath_ span p)) <$> findEnvPath p
+
+    evalUnary op arg = do
+        scope <- currentScopes
+        span  <- currentPos
+        execUnaryOp scope span op arg
+
+    evalBinary op larg rarg = do
+        scope <- currentScopes
+        span  <- currentPos
+        execBinaryOp scope span op larg rarg
+
+    evalWith c b = do
+        scope <- currentScopes
+        span <- currentPos
+        addProvenance (\b -> Provenance scope (NWith_ span Nothing (Just b)))
+            <$> evalWithAttrSet c b
+
+    evalIf c t f = do
+        scope <- currentScopes
+        span  <- currentPos
+        fromValue c >>= \b ->
+            if b
+            then addProvenance (\t -> Provenance scope (NIf_ span (Just c) (Just t) Nothing)) <$> t
+            else addProvenance (\f -> Provenance scope (NIf_ span (Just c) Nothing (Just f))) <$> f
+
+    evalAssert c body = fromValue c >>= \b -> do
+        span  <- currentPos
+        if b
+        then do
+            scope <- currentScopes
+            addProvenance (\b -> Provenance scope (NAssert_ span (Just c) (Just b))) <$> body
+        else nverr $ Assertion span c
+
+    evalApp f x = do
+        scope <- currentScopes
+        span <- currentPos
+        addProvenance (const $ Provenance scope (NBinary_ span NApp (Just f) Nothing))
+            <$> callFunc f x
+
+    evalAbs p b = do
+        scope <- currentScopes
+        span  <- currentPos
+        pure $ nvClosureP (Provenance scope (NAbs_ span (fmap absurd p) Nothing)) p b
 
     evalError = throwError
 
 infixl 1 `callFunc`
 callFunc :: MonadNix e m => NValue m -> m (NValue m) -> m (NValue m)
 callFunc fun arg = case fun of
-    NVClosure _ f -> do
-        traceM "callFunc:NVFunction"
+    NVClosure params f -> do
+        traceM $ "callFunc:NVFunction taking " ++ show params
         f arg
     NVBuiltin name f -> do
         traceM $ "callFunc:NVBuiltin " ++ name
-        f =<< thunk arg
+        f arg
     s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
         traceM "callFunc:__functor"
         force f $ (`callFunc` pure s) >=> (`callFunc` arg)
     x -> throwError $ "Attempt to call non-function: " ++ show x
 
-execUnaryOp
-    :: (Framed e m, MonadVar m, MonadFile m)
-    => NUnaryOp -> NValue m -> m (NValue m)
-execUnaryOp op arg = do
+execUnaryOp :: (Framed e m, MonadVar m)
+            => Scopes m (NThunk m) -> SrcSpan -> NUnaryOp -> NValue m
+            -> m (NValue m)
+execUnaryOp scope span op arg = do
     traceM "NUnary"
     case arg of
         NVConstant c -> case (op, c) of
-            (NNeg, NInt   i) -> return $ NVConstant $ NInt   (-i)
-            (NNeg, NFloat f) -> return $ NVConstant $ NFloat (-f)
-            (NNot, NBool  b) -> return $ NVConstant $ NBool  (not b)
+            (NNeg, NInt   i) -> unaryOp $ NInt   (-i)
+            (NNeg, NFloat f) -> unaryOp $ NFloat (-f)
+            (NNot, NBool  b) -> unaryOp $ NBool  (not b)
             _ -> throwError $ "unsupported argument type for unary operator "
                      ++ show op
         x -> throwError $ "argument to unary operator"
                 ++ " must evaluate to an atomic type: " ++ show x
+  where
+    unaryOp = pure . nvConstantP (Provenance scope (NUnary_ span op (Just arg)))
 
 execBinaryOp
     :: forall e m. (MonadNix e m, MonadEval (NValue m) m)
-    => NBinaryOp -> NValue m -> m (NValue m) -> m (NValue m)
+    => Scopes m (NThunk m)
+    -> SrcSpan
+    -> NBinaryOp
+    -> NValue m
+    -> m (NValue m)
+    -> m (NValue m)
 
-execBinaryOp NOr larg rarg = case larg of
-    NVConstant (NBool l) -> if l
-        then mkBoolV True
-        else rarg >>= \case
-            NVConstant (NBool r) -> mkBoolV r
-            v -> throwError $ "operator `||`: left argument: boolean expected, got " ++ show v
-    v -> throwError $ "operator `||`: right argument: boolean expected, got " ++ show v
+execBinaryOp scope span NOr larg rarg = fromNix larg >>= \l ->
+    if l
+    then orOp Nothing True
+    else rarg >>= \rval -> fromNix @Bool rval >>= orOp (Just rval)
+  where
+    orOp r b = pure $
+        nvConstantP (Provenance scope (NBinary_ span NOr (Just larg) r)) (NBool b)
 
-execBinaryOp NAnd larg rarg = case larg of
-    NVConstant (NBool l) -> if l
-        then rarg >>= \case
-            NVConstant (NBool r) -> mkBoolV r
-            v -> throwError $ "operator `&&`: left argument: boolean expected, got " ++ show v
-        else mkBoolV False
-    v -> throwError $ "operator `&&`: right argument: boolean expected, got " ++ show v
+execBinaryOp scope span NAnd larg rarg = fromNix larg >>= \l ->
+    if l
+    then rarg >>= \rval -> fromNix @Bool rval >>= andOp (Just rval)
+    else andOp Nothing False
+  where
+    andOp r b = pure $
+        nvConstantP (Provenance scope (NBinary_ span NAnd (Just larg) r)) (NBool b)
 
--- jww (2018-04-08): Refactor so that eval (NBinary ..) *always* dispatches
--- based on operator first
-execBinaryOp op larg rarg = do
-    let lval = larg
-    rval <- traceM "NBinary:right" >> rarg
-
-    let unsupportedTypes =
-            "Unsupported argument types for binary operator "
-                ++ show op ++ ": " ++ show lval ++ ", " ++ show rval
-        numBinOp :: (forall a. Num a => a -> a -> a) -> NAtom -> NAtom
-                 -> m (NValue m)
-        numBinOp f = numBinOp' f f
-        numBinOp'
-            :: (Integer -> Integer -> Integer)
-            -> (Float -> Float -> Float)
-            -> NAtom -> NAtom -> m (NValue m)
-        numBinOp' intF floatF l r = case (l, r) of
-            (NInt   li, NInt   ri) ->
-                toValue $             li `intF`               ri
-            (NInt   li, NFloat rf) ->
-                toValue $ fromInteger li `floatF`             rf
-            (NFloat lf, NInt   ri) ->
-                toValue $             lf `floatF` fromInteger ri
-            (NFloat lf, NFloat rf) ->
-                toValue $             lf `floatF`             rf
-            _ -> nverr unsupportedTypes
-
-        nverr = evalError @(NValue m)
-
+execBinaryOp scope span op lval rarg = do
+    rval <- rarg
+    let bin :: (Provenance m -> a) -> a
+        bin f  = f (Provenance scope (NBinary_ span op (Just lval) (Just rval)))
+        toBool = pure . bin nvConstantP . NBool
     case (lval, rval) of
         (NVConstant lc, NVConstant rc) -> case (op, lc, rc) of
-            (NEq,  _, _)   -> toValue =<< valueEq lval rval
-            (NNEq, _, _)   -> toValue . not =<< valueEq lval rval
-            (NLt,  l, r)   -> toValue $ l <  r
-            (NLte, l, r)   -> toValue $ l <= r
-            (NGt,  l, r)   -> toValue $ l >  r
-            (NGte, l, r)   -> toValue $ l >= r
-            (NAnd,  _, _)  -> nverr "should be impossible: && is handled above"
-            (NOr,   _, _)  -> nverr "should be impossible: || is handled above"
-            (NPlus,  l, r) -> numBinOp (+) l r
-            (NMinus, l, r) -> numBinOp (-) l r
-            (NMult,  l, r) -> numBinOp (*) l r
-            (NDiv,   l, r) -> numBinOp' div (/) l r
-            (NImpl, NBool l, NBool r) -> toValue $ not l || r
-            _ -> nverr unsupportedTypes
+            (NEq,  _, _)       -> toBool =<< valueEq lval rval
+            (NNEq, _, _)       -> toBool . not =<< valueEq lval rval
+            (NLt,  l, r)       -> toBool $ l <  r
+            (NLte, l, r)       -> toBool $ l <= r
+            (NGt,  l, r)       -> toBool $ l >  r
+            (NGte, l, r)       -> toBool $ l >= r
+            (NAnd,  _, _)      ->
+                nverr @String "should be impossible: && is handled above"
+            (NOr,   _, _)      ->
+                nverr @String "should be impossible: || is handled above"
+            (NPlus,  l, r)     -> numBinOp bin (+) l r
+            (NMinus, l, r)     -> numBinOp bin (-) l r
+            (NMult,  l, r)     -> numBinOp bin (*) l r
+            (NDiv,   l, r)     -> numBinOp' bin div (/) l r
+            (NImpl,
+             NBool l, NBool r) -> toBool $ not l || r
+            _                  -> nverr $ unsupportedTypes lval rval
 
         (NVStr ls lc, NVStr rs rc) -> case op of
-            NPlus -> pure $ NVStr (ls `mappend` rs) (lc `mappend` rc)
-            NEq   -> toValue =<< valueEq lval rval
-            NNEq  -> toValue . not =<< valueEq lval rval
-            NLt   -> toValue $ ls <  rs
-            NLte  -> toValue $ ls <= rs
-            NGt   -> toValue $ ls >  rs
-            NGte  -> toValue $ ls >= rs
-            _ -> nverr unsupportedTypes
+            NPlus -> pure $ bin nvStrP (ls `mappend` rs) (lc `mappend` rc)
+            NEq   -> toBool =<< valueEq lval rval
+            NNEq  -> toBool . not =<< valueEq lval rval
+            NLt   -> toBool $ ls <  rs
+            NLte  -> toBool $ ls <= rs
+            NGt   -> toBool $ ls >  rs
+            NGte  -> toBool $ ls >= rs
+            _     -> nverr $ unsupportedTypes lval rval
 
         (NVStr _ _, NVConstant NNull) -> case op of
-            NEq   -> toValue =<< valueEq lval (NVStr "" mempty)
-            NNEq  -> toValue . not =<< valueEq lval (NVStr "" mempty)
-            _ -> nverr unsupportedTypes
+            NEq  -> toBool =<< valueEq lval (nvStr "" mempty)
+            NNEq -> toBool . not =<< valueEq lval (nvStr "" mempty)
+            _    -> nverr $ unsupportedTypes lval rval
 
         (NVConstant NNull, NVStr _ _) -> case op of
-            NEq   -> toValue =<< valueEq (NVStr "" mempty) rval
-            NNEq  -> toValue . not =<< valueEq (NVStr "" mempty) rval
-            _ -> nverr unsupportedTypes
+            NEq  -> toBool =<< valueEq (nvStr "" mempty) rval
+            NNEq -> toBool . not =<< valueEq (nvStr "" mempty) rval
+            _    -> nverr $ unsupportedTypes lval rval
 
         (NVSet ls lp, NVSet rs rp) -> case op of
-            NUpdate -> pure $ NVSet (rs `M.union` ls) (rp `M.union` lp)
-            NEq     -> toValue =<< valueEq lval rval
-            NNEq    -> toValue . not =<< valueEq lval rval
-            _ -> nverr unsupportedTypes
+            NUpdate -> pure $ bin nvSetP (rs `M.union` ls) (rp `M.union` lp)
+            NEq     -> toBool =<< valueEq lval rval
+            NNEq    -> toBool . not =<< valueEq lval rval
+            _       -> nverr $ unsupportedTypes lval rval
+
+        (NVSet ls lp, NVConstant NNull) -> case op of
+            NUpdate -> pure $ bin nvSetP ls lp
+            NEq     -> toBool =<< valueEq lval (nvSet M.empty M.empty)
+            NNEq    -> toBool . not =<< valueEq lval (nvSet M.empty M.empty)
+            _       -> nverr $ unsupportedTypes lval rval
+
+        (NVConstant NNull, NVSet rs rp) -> case op of
+            NUpdate -> pure $ bin nvSetP rs rp
+            NEq     -> toBool =<< valueEq (nvSet M.empty M.empty) rval
+            NNEq    -> toBool . not =<< valueEq (nvSet M.empty M.empty) rval
+            _       -> nverr $ unsupportedTypes lval rval
 
         (NVList ls, NVList rs) -> case op of
-            NConcat -> pure $ NVList $ ls ++ rs
-            NEq     -> toValue =<< valueEq lval rval
-            NNEq    -> toValue . not =<< valueEq lval rval
-            _ -> nverr unsupportedTypes
+            NConcat -> pure $ bin nvListP $ ls ++ rs
+            NEq     -> toBool =<< valueEq lval rval
+            NNEq    -> toBool . not =<< valueEq lval rval
+            _       -> nverr $ unsupportedTypes lval rval
 
         (NVList ls, NVConstant NNull) -> case op of
-            NConcat -> pure $ NVList ls
-            NEq     -> toValue =<< valueEq lval (NVList [])
-            NNEq    -> toValue . not =<< valueEq lval (NVList [])
-            _ -> nverr unsupportedTypes
+            NConcat -> pure $ bin nvListP ls
+            NEq     -> toBool =<< valueEq lval (nvList [])
+            NNEq    -> toBool . not =<< valueEq lval (nvList [])
+            _       -> nverr $ unsupportedTypes lval rval
 
         (NVConstant NNull, NVList rs) -> case op of
-            NConcat -> pure $ NVList rs
-            NEq     -> toValue =<< valueEq (NVList []) rval
-            NNEq    -> toValue . not =<< valueEq (NVList []) rval
-            _ -> nverr unsupportedTypes
+            NConcat -> pure $ bin nvListP rs
+            NEq     -> toBool =<< valueEq (nvList []) rval
+            NNEq    -> toBool . not =<< valueEq (nvList []) rval
+            _       -> nverr $ unsupportedTypes lval rval
 
         (NVPath p, NVStr s _) -> case op of
-            -- jww (2018-04-13): Do we need to make the path absolute here?
-            NEq   -> toValue $ p == Text.unpack s
-            NNEq  -> toValue $ p /= Text.unpack s
-            NPlus -> NVPath <$> makeAbsolutePath (p `mappend` Text.unpack s)
-            _ -> nverr unsupportedTypes
+            NEq   -> toBool $ p == Text.unpack s
+            NNEq  -> toBool $ p /= Text.unpack s
+            NPlus -> bin nvPathP <$> makeAbsolutePath (p `mappend` Text.unpack s)
+            _     -> nverr $ unsupportedTypes lval rval
 
         (NVPath ls, NVPath rs) -> case op of
-            NPlus -> NVPath <$> makeAbsolutePath (ls ++ rs)
-            _ -> nverr unsupportedTypes
+            NPlus -> bin nvPathP <$> makeAbsolutePath (ls ++ rs)
+            _     -> nverr $ unsupportedTypes lval rval
 
-        _ -> nverr unsupportedTypes
+        _ -> case op of
+            NEq   -> toBool False
+            NNEq  -> toBool True
+            _ -> nverr $ unsupportedTypes lval rval
+  where
+    unsupportedTypes :: Show a => a -> a -> String
+    unsupportedTypes lval rval =
+        "Unsupported argument types for binary operator "
+            ++ show op ++ ": " ++ show lval ++ ", " ++ show rval
+
+    numBinOp :: (forall r. (Provenance m -> r) -> r)
+             -> (forall a. Num a => a -> a -> a) -> NAtom -> NAtom -> m (NValue m)
+    numBinOp bin f = numBinOp' bin f f
+
+    numBinOp' :: (forall r. (Provenance m -> r) -> r)
+              -> (Integer -> Integer -> Integer)
+              -> (Float -> Float -> Float)
+              -> NAtom -> NAtom -> m (NValue m)
+    numBinOp' bin intF floatF l r = case (l, r) of
+        (NInt   li, NInt   ri) -> toInt   $             li `intF`               ri
+        (NInt   li, NFloat rf) -> toFloat $ fromInteger li `floatF`             rf
+        (NFloat lf, NInt   ri) -> toFloat $             lf `floatF` fromInteger ri
+        (NFloat lf, NFloat rf) -> toFloat $             lf `floatF`             rf
+        _ -> nverr $ unsupportedTypes l r
+      where
+        toInt   = pure . bin nvConstantP . NInt
+        toFloat = pure . bin nvConstantP . NFloat
+
+coerceToString :: MonadNix e m => NValue m -> m String
+coerceToString = \case
+    NVConstant (NBool b)
+        | b               -> pure "1"
+        | otherwise       -> pure ""
+    NVConstant (NInt n)   -> pure $ show n
+    NVConstant (NFloat n) -> pure $ show n
+    NVConstant (NUri u)   -> pure $ show u
+    NVConstant NNull      -> pure ""
+
+    NVStr t _ -> pure $ Text.unpack t
+    NVPath p  -> unStorePath <$> addPath p
+    NVList l  -> unwords <$> traverse (`force` coerceToString) l
+
+    v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
+        force p $ (`callFunc` pure v) >=> coerceToString
+
+    NVSet s _ | Just p <- M.lookup "outPath" s ->
+        force p coerceToString
+
+    v -> throwError $ "Expected a string, but saw: " ++ show v
 
 newtype Lazy m a = Lazy
-    { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m))) m a }
+    { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m)))
+                        (StateT (HashMap FilePath NExprLoc) m) a }
     deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
               MonadFix, MonadIO,
               MonadReader (Context (Lazy m) (NThunk (Lazy m))))
@@ -269,7 +422,7 @@ instance MonadIO m => MonadVar (Lazy m) where
     writeVar = (liftIO .) . writeIORef
     atomicModifyVar = (liftIO .) . atomicModifyIORef
 
-instance MonadIO m => MonadFile (Lazy m) where
+instance (MonadIO m, Monad m) => MonadFile m where
     readFile = liftIO . BS.readFile
 
 instance MonadCatch m => MonadCatch (Lazy m) where
@@ -279,7 +432,8 @@ instance MonadCatch m => MonadCatch (Lazy m) where
 instance MonadThrow m => MonadThrow (Lazy m) where
     throwM = Lazy . throwM
 
-instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
+instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
+          Alternative m, MonadPlus m, Typeable m)
       => MonadEffects (Lazy m) where
     addPath path = do
         (exitCode, out, _) <-
@@ -291,7 +445,8 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
           _ -> throwError $ "addPath: failed: nix-store --add " ++ show path
 
     makeAbsolutePath origPath = do
-        absPath <- if isAbsolute origPath then pure origPath else do
+        origPathExpanded <- liftIO $ expandHomePath origPath
+        absPath <- if isAbsolute origPathExpanded then pure origPathExpanded else do
             cwd <- do
                 mres <- lookupVar @_ @(NThunk (Lazy m)) "__cur_file"
                 case mres of
@@ -302,14 +457,13 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
                                 ++ " __cur_file is in scope,"
                                 ++ " but is not a path; it is: "
                                 ++ show v
-            pure $ cwd <///> origPath
+            pure $ cwd <///> origPathExpanded
         liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
 
     findEnvPath = findEnvPathM
 
     pathExists = liftIO . fileExist
 
-    -- jww (2018-03-29): Cache which files have been read in.
     importPath scope origPath = do
         path <- liftIO $ pathToDefaultNixFile origPath
         mres <- lookupVar @(Context (Lazy m) (NThunk (Lazy m)))
@@ -318,26 +472,32 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
             Nothing  -> do
                 traceM "No known current directory"
                 return path
-            Just p -> force p $ normalForm >=> \case
-                Fix (NVPath p') -> do
-                    traceM $ "Current file being evaluated is: "
-                        ++ show p'
-                    return $ takeDirectory p' </> path
-                x -> error $ "How can the current directory be: " ++ show x
+            Just p -> fromValue @_ @_ @(NThunk (Lazy m)) p >>= \(Path p') -> do
+                traceM $ "Current file being evaluated is: " ++ show p'
+                return $ takeDirectory p' </> path
 
         traceM $ "Importing file " ++ path'
+        withFrame Info ("While importing file " ++ show path') $ do
+            imports <- Lazy $ ReaderT $ const get
+            expr <- case M.lookup path' imports of
+                Just expr -> pure expr
+                Nothing -> do
+                    eres <- Lazy $ parseNixFileLoc path'
+                    case eres of
+                        Failure err  ->
+                            throwError $ text "Parse during import failed:"
+                                P.</> err
+                        Success expr -> do
+                            Lazy $ ReaderT $ const $
+                                modify (M.insert origPath expr)
+                            pure expr
 
-        withStringContext ("While importing file " ++ show path') $ do
-            eres <- Lazy $ parseNixFileLoc path'
-            case eres of
-                Failure err  -> error $ "Parse failed: " ++ show err
-                Success expr -> do
-                    let ref = value @_ @_ @(Lazy m) (NVPath path')
-                    -- Use this cookie so that when we evaluate the next
-                    -- import, we'll remember which directory its containing
-                    -- file was in.
-                    pushScope (M.singleton "__cur_file" ref)
-                        (pushScope scope (framedEvalExpr Eval.eval expr))
+            let ref = value @_ @_ @(Lazy m) (nvPath path')
+            -- Use this cookie so that when we evaluate the next
+            -- import, we'll remember which directory its containing
+            -- file was in.
+            pushScope (M.singleton "__cur_file" ref) $
+                pushScope scope $ evalExprLoc expr
 
     getEnvVar = liftIO . lookupEnv
 
@@ -351,25 +511,45 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m)
     listDirectory         = liftIO . System.Directory.listDirectory
     getSymbolicLinkStatus = liftIO . System.Posix.Files.getSymbolicLinkStatus
 
-    derivationStrict v = do
-        v' <- normalForm v
-        nixInstantiateExpr $ "derivationStrict " ++ show (prettyNixValue v')
+    derivationStrict = fromValue @(ValueSet (Lazy m)) >=> \s -> do
+        nn <- maybe (pure False) fromNix (M.lookup "__ignoreNulls" s)
+        s' <- M.fromList <$> mapMaybeM (handleEntry nn) (M.toList s)
+        v' <- normalForm =<< toValue @(ValueSet (Lazy m)) s'
+        nixInstantiateExpr $ "derivationStrict " ++ show (prettyNValueNF v')
+      where
+        mapMaybeM :: (a -> Lazy m (Maybe b)) -> [a] -> Lazy m [b]
+        mapMaybeM op = foldr f (return [])
+          where f x xs = op x >>= \case
+                    Nothing -> xs
+                    Just x  -> (x:) <$> xs
+
+        handleEntry ignoreNulls (k, v) = fmap (k,) <$> case k of
+            -- The `args' attribute is special: it supplies the command-line
+            -- arguments to the builder.
+            "args"          -> Just <$> convertNix @[Text] v
+            "__ignoreNulls" -> pure Nothing
+            _               -> force v $ \case
+                NVConstant NNull | ignoreNulls -> pure Nothing
+                v' -> Just <$> (toNix =<< Text.pack <$> coerceToString v')
 
     nixInstantiateExpr expr = do
+        traceM $ "Executing: "
+            ++ show ["nix-instantiate", "--eval", "--expr ", expr]
         (exitCode, out, _) <-
             liftIO $ readProcessWithExitCode "nix-instantiate"
                 [ "--eval", "--expr", expr] ""
         case exitCode of
-            ExitSuccess ->
-                case parseNixTextLoc (Text.pack out) of
-                    Failure err ->
-                        throwError $ "Error parsing output of nix-instantiate: "
-                            ++ show err
-                    Success v -> framedEvalExpr Eval.eval v
+            ExitSuccess -> case parseNixTextLoc (Text.pack out) of
+                Failure err ->
+                    throwError $ "Error parsing output of nix-instantiate: "
+                        ++ show err
+                Success v -> evalExprLoc v
             err -> throwError $ "nix-instantiate failed: " ++ show err
 
-runLazyM :: MonadIO m => Lazy m a -> m a
-runLazyM = flip runReaderT newContext . runLazy
+runLazyM :: Options -> MonadIO m => Lazy m a -> m a
+runLazyM opts = (`evalStateT` M.empty)
+              . (`runReaderT` newContext opts)
+              . runLazy
 
 -- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
 --   This is incorrect on POSIX systems, because if @b@ is a symlink, its
@@ -380,6 +560,10 @@ removeDotDotIndirections = intercalate "/" . go [] . splitOn "/"
     where go s [] = reverse s
           go (_:s) ("..":rest) = go s rest
           go s (this:rest) = go (this:s) rest
+
+expandHomePath :: FilePath -> IO FilePath
+expandHomePath ('~' : xs) = flip (++) xs <$> getHomeDirectory
+expandHomePath p = return p
 
 -- Given a path, determine the nix file to load
 pathToDefaultNixFile :: FilePath -> IO FilePath
@@ -439,3 +623,38 @@ findEnvPathM name = do
     tryPath p (Just n) | n':ns <- splitDirectories name, n == n' =
         nixFilePath $ p <///> joinPath ns
     tryPath p _ = nixFilePath $ p <///> name
+
+addTracing :: (MonadNix e m, Has e Options, MonadIO m,
+              MonadReader Int n, Alternative n)
+           => Alg NExprLocF (m a) -> Alg NExprLocF (n (m a))
+addTracing k v = do
+    depth <- ask
+    guard (depth < 2000)
+    local succ $ do
+        v'@(Compose (Ann span x)) <- sequence v
+        return $ do
+            opts :: Options <- asks (view hasLens)
+            let rendered =
+                    if verbose opts >= Chatty
+                    then show (void x)
+                    else show (prettyNix (Fix (Fix (NSym "?") <$ x)))
+                msg x = "eval: " ++ replicate depth ' ' ++ x
+            loc <- renderLocation span (text (msg rendered ++ " ..."))
+            liftIO $ putStr $ show loc
+            res <- k v'
+            liftIO $ putStrLn $ msg (rendered ++ " ...done")
+            return res
+
+evalExprLoc :: forall e m. (MonadNix e m, Has e Options, MonadIO m)
+            => NExprLoc -> m (NValue m)
+evalExprLoc expr = do
+    opts :: Options <- asks (view hasLens)
+    if tracing opts
+        then join . (`runReaderT` (0 :: Int)) $
+             adi (addTracing phi)
+                 (raise (addStackFrames @(NThunk m) . addSourcePositions))
+                 expr
+        else adi phi (addStackFrames @(NThunk m) . addSourcePositions) expr
+  where
+    phi = Eval.eval @_ @(NValue m) @(NThunk m) @m . annotated . getCompose
+    raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x

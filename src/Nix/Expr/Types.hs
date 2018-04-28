@@ -26,13 +26,20 @@ module Nix.Expr.Types where
 import           Codec.Serialise (Serialise)
 import qualified Codec.Serialise as Ser
 import           Control.DeepSeq
+import           Data.Aeson
+import           Data.Aeson.TH
 import           Data.Binary (Binary)
 import qualified Data.Binary as Bin
 import           Data.Data
 import           Data.Eq.Deriving
 import           Data.Fix
 import           Data.Functor.Classes
+import           Data.Hashable
+import           Data.Hashable.Lifted
+import           Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NE
 import           Data.Monoid
+import           Data.Ord.Deriving
 import           Data.Text (Text, pack, unpack)
 import           Data.Traversable
 import           GHC.Exts
@@ -42,11 +49,14 @@ import           Nix.Atoms
 import           Nix.Parser.Library (SourcePos(..))
 import           Nix.Utils
 import           Text.Megaparsec.Pos
+import           Text.Read.Deriving
 import           Text.Show.Deriving
 import           Type.Reflection (eqTypeRep)
 import qualified Type.Reflection as Reflection
 
 type VarName = Text
+
+instance Hashable1 NonEmpty     -- an unfortunate orphan
 
 -- | The main nix expression type. This is polymorphic so that it can be made
 -- a functor, which allows us to traverse expressions and map functions over
@@ -94,7 +104,8 @@ data NExprF r
   | NAssert !r !r
   -- ^ Assert that the first returns true before evaluating the second.
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
-            Foldable, Traversable, Show, NFData, NFData1, Serialise)
+            Foldable, Traversable, Show, NFData, NFData1, Serialise,
+            Hashable, Hashable1)
 
 -- | We make an `IsString` for expressions, where the string is interpreted
 -- as an identifier. This is the most common use-case...
@@ -107,7 +118,6 @@ instance Lift (Fix NExprF) where
             Just HRefl -> Just [| pack $(liftString $ unpack b) |]
             Nothing -> Nothing
 
-
 -- | The monomorphic expression type is a fixed point of the polymorphic one.
 type NExpr = Fix NExprF
 
@@ -117,11 +127,12 @@ instance Serialise NExpr
 data Binding r
   = NamedVar !(NAttrPath r) !r
   -- ^ An explicit naming, such as @x = y@ or @x.y = z@.
-  | Inherit !(Maybe r) !(NAttrPath r)
+  | Inherit !(Maybe r) ![NKeyName r]
   -- ^ Using a name already in scope, such as @inherit x;@ which is shorthand
   -- for @x = x;@ or @inherit (x) y;@ which means @y = x.y;@.
   deriving (Generic, Generic1, Typeable, Data, Ord, Eq, Functor,
-            Foldable, Traversable, Show, NFData, NFData1, Serialise)
+            Foldable, Traversable, Show, NFData, NFData1, Serialise,
+            Hashable, Hashable1)
 
 -- | @Params@ represents all the ways the formal parameters to a
 -- function can be represented.
@@ -133,7 +144,8 @@ data Params r
   -- bind to the set in the function body. The bool indicates whether it is
   -- variadic or not.
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Show,
-            Foldable, Traversable, NFData, NFData1, Serialise)
+            Foldable, Traversable, NFData, NFData1, Serialise,
+            Hashable, Hashable1)
 
 -- This uses an association list because nix XML serialization preserves the
 -- order of the param set.
@@ -145,8 +157,17 @@ instance IsString (Params r) where
 -- | 'Antiquoted' represents an expression that is either
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
 data Antiquoted (v :: *) (r :: *) = Plain !v | EscapedNewline | Antiquoted !r
-  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
-            Foldable, Traversable, Show, NFData, NFData1, Serialise)
+  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Foldable,
+            Traversable, Show, Read, NFData, NFData1, Serialise,
+            Hashable, Hashable1)
+
+instance Hashable2 Antiquoted where
+    liftHashWithSalt2 ha _ salt (Plain a) =
+        ha (salt `hashWithSalt` (0 :: Int)) a
+    liftHashWithSalt2 _ _ salt EscapedNewline =
+        salt `hashWithSalt` (1 :: Int)
+    liftHashWithSalt2 _ hb salt (Antiquoted b) =
+        hb (salt `hashWithSalt` (2 :: Int)) b
 
 -- | An 'NString' is a list of things that are either a plain string
 -- or an antiquoted expression. After the antiquotes have been evaluated,
@@ -159,8 +180,9 @@ data NString r
   -- ^ Strings wrapped with two single quotes ('') can contain newlines, and
   --   their indentation will be stripped, but the amount stripped is
   --   remembered.
-  deriving (Eq, Ord, Generic, Generic1, Typeable, Data, Functor,
-            Foldable, Traversable, Show, NFData, NFData1, Serialise)
+  deriving (Eq, Ord, Generic, Generic1, Typeable, Data, Functor, Foldable,
+            Traversable, Show, Read, NFData, NFData1, Serialise,
+            Hashable, Hashable1)
 
 -- | For the the 'IsString' instance, we use a plain doublequoted string.
 instance IsString (NString r) where
@@ -189,7 +211,8 @@ instance IsString (NString r) where
 data NKeyName r
   = DynamicKey !(Antiquoted (NString r) r)
   | StaticKey !VarName !(Maybe SourcePos)
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise)
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
+            Serialise, Hashable)
 
 instance Serialise Pos where
     encode x = Ser.encode (unPos x)
@@ -199,10 +222,18 @@ instance Serialise SourcePos where
     encode (SourcePos f l c) = Ser.encode f <> Ser.encode l <> Ser.encode c
     decode = SourcePos <$> Ser.decode <*> Ser.decode <*> Ser.decode
 
+instance Hashable Pos where
+    hashWithSalt salt x = hashWithSalt salt (unPos x)
+
+instance Hashable SourcePos where
+    hashWithSalt salt (SourcePos f l c) =
+        salt `hashWithSalt` f `hashWithSalt` l `hashWithSalt` c
+
 instance Generic1 NKeyName where
-  type Rep1 NKeyName = NKeyName -- jww (2018-04-09): wrong
+  type Rep1 NKeyName = NKeyName
   from1 = id
   to1   = id
+
 instance NFData1 NKeyName where
     liftRnf _ (StaticKey !_ !_) = ()
     liftRnf _ (DynamicKey (Plain !_)) = ()
@@ -217,6 +248,12 @@ instance Eq1 NKeyName where
   liftEq eq (DynamicKey a) (DynamicKey b) = liftEq2 (liftEq eq) eq a b
   liftEq _ (StaticKey a _) (StaticKey b _) = a == b
   liftEq _ _ _ = False
+
+instance Hashable1 NKeyName where
+  liftHashWithSalt h salt (DynamicKey a) =
+      liftHashWithSalt2 (liftHashWithSalt h) h (salt `hashWithSalt` (0 :: Int)) a
+  liftHashWithSalt _ salt (StaticKey n p) =
+      salt `hashWithSalt` (1 :: Int) `hashWithSalt` n `hashWithSalt` p
 
 -- Deriving this instance automatically is not possible because @r@
 -- occurs not only as last argument in @Antiquoted (NString r) r@
@@ -246,11 +283,12 @@ instance Traversable NKeyName where
 
 -- | A selector (for example in a @let@ or an attribute set) is made up
 -- of strung-together key names.
-type NAttrPath r = [NKeyName r]
+type NAttrPath r = NonEmpty (NKeyName r)
 
 -- | There are two unary operations: logical not and integer negation.
 data NUnaryOp = NNeg | NNot
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise)
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
+            Serialise, Hashable)
 
 -- | Binary operators expressible in the nix language.
 data NBinaryOp
@@ -270,7 +308,8 @@ data NBinaryOp
   | NDiv     -- ^ Division (/)
   | NConcat  -- ^ List concatenation (++)
   | NApp     -- ^ Apply a function to an argument.
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData, Serialise)
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
+            Serialise, Hashable)
 
 -- | Get the name out of the parameter (there might be none).
 paramName :: Params r -> Maybe VarName
@@ -284,12 +323,29 @@ $(deriveEq1 ''Params)
 $(deriveEq1 ''Antiquoted)
 $(deriveEq2 ''Antiquoted)
 
+$(deriveOrd1 ''NString)
+$(deriveOrd1 ''Params)
+$(deriveOrd1 ''Antiquoted)
+$(deriveOrd2 ''Antiquoted)
+
+$(deriveRead1 ''NString)
+$(deriveRead1 ''Params)
+$(deriveRead1 ''Antiquoted)
+$(deriveRead2 ''Antiquoted)
+
 $(deriveShow1 ''NExprF)
 $(deriveShow1 ''NString)
 $(deriveShow1 ''Params)
 $(deriveShow1 ''Binding)
 $(deriveShow1 ''Antiquoted)
 $(deriveShow2 ''Antiquoted)
+
+-- $(deriveJSON1 defaultOptions ''NExprF)
+$(deriveJSON1 defaultOptions ''NString)
+$(deriveJSON1 defaultOptions ''Params)
+-- $(deriveJSON1 defaultOptions ''Binding)
+$(deriveJSON1 defaultOptions ''Antiquoted)
+$(deriveJSON2 defaultOptions ''Antiquoted)
 
 instance (Binary v, Binary a) => Binary (Antiquoted v a)
 instance Binary a => Binary (NString a)
@@ -305,16 +361,44 @@ instance Binary NUnaryOp
 instance Binary NBinaryOp
 instance Binary a => Binary (NExprF a)
 
+instance (ToJSON v, ToJSON a) => ToJSON (Antiquoted v a)
+instance ToJSON a => ToJSON (NString a)
+instance ToJSON a => ToJSON (Binding a)
+instance ToJSON Pos where
+    toJSON x = toJSON (unPos x)
+instance ToJSON SourcePos
+instance ToJSON a => ToJSON (NKeyName a)
+instance ToJSON a => ToJSON (Params a)
+instance ToJSON NAtom
+instance ToJSON NUnaryOp
+instance ToJSON NBinaryOp
+instance ToJSON a => ToJSON (NExprF a)
+instance ToJSON NExpr
+
+instance (FromJSON v, FromJSON a) => FromJSON (Antiquoted v a)
+instance FromJSON a => FromJSON (NString a)
+instance FromJSON a => FromJSON (Binding a)
+instance FromJSON Pos where
+    parseJSON = fmap mkPos . parseJSON
+instance FromJSON SourcePos
+instance FromJSON a => FromJSON (NKeyName a)
+instance FromJSON a => FromJSON (Params a)
+instance FromJSON NAtom
+instance FromJSON NUnaryOp
+instance FromJSON NBinaryOp
+instance FromJSON a => FromJSON (NExprF a)
+instance FromJSON NExpr
+
 stripPositionInfo :: NExpr -> NExpr
 stripPositionInfo = transport phi
   where
     phi (NSet binds)         = NSet (map go binds)
     phi (NRecSet binds)      = NRecSet (map go binds)
     phi (NLet binds body)    = NLet (map go binds) body
-    phi (NSelect s attr alt) = NSelect s (map clear attr) alt
+    phi (NSelect s attr alt) = NSelect s (NE.map clear attr) alt
     phi x = x
 
-    go (NamedVar path r)  = NamedVar (map clear path) r
+    go (NamedVar path r)  = NamedVar (NE.map clear path) r
     go (Inherit ms names) = Inherit ms (map clear names)
 
     clear (StaticKey name _) = StaticKey name Nothing

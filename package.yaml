@@ -33,8 +33,28 @@ dependencies:
 
 ghc-options:
   - -Wall
-  # - -fexpose-all-unfoldings
-  # - -O2
+
+flags:
+  tracing:
+    description: Enable full debug tracing
+    manual: True
+    default: False
+
+  optimize:
+    description: Enable all optimization flags
+    manual: True
+    default: False
+
+when:
+  - condition: flag(optimize)
+    ghc-options:
+      - -fexpose-all-unfoldings
+      - -fspecialise-aggressively
+      - -O2
+
+when:
+  - condition: flag(tracing)
+    cpp-options: -DENABLE_TRACING=1
 
 library:
   source-dirs: src
@@ -47,8 +67,10 @@ library:
     - cryptohash
     - deriving-compat           >= 0.3 && < 0.5
     - directory
+    - hashable
     - megaparsec
     - monadlist
+    - pretty-show
     - process
     - regex-tdfa
     - regex-tdfa-text
@@ -67,8 +89,8 @@ executables:
     main: Main.hs
     dependencies:
       - hnix
+      - aeson
       - repline
-      - megaparsec
 
 tests:
   hnix-tests:

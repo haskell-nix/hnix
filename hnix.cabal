@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 73ce99ca34076fded0b4f77fcb56f2aaa62f1c4e59e575ebae3a44a793fc3a0f
+-- hash: f2849e05edde8ddd3f02ee010be0fa0e7ee673392948670ced6209113f5b5e7f
 
 name:           hnix
 version:        0.5.0
@@ -25,6 +25,16 @@ source-repository head
   type: git
   location: https://github.com/jwiegley/hnix
 
+flag optimize
+  description: Enable all optimization flags
+  manual: True
+  default: False
+
+flag tracing
+  description: Enable full debug tracing
+  manual: True
+  default: False
+
 library
   exposed-modules:
       Nix
@@ -34,13 +44,13 @@ library
       Nix.Context
       Nix.Convert
       Nix.Effects
-      Nix.Entry
       Nix.Eval
       Nix.Exec
       Nix.Expr
       Nix.Expr.Shorthands
       Nix.Expr.Types
       Nix.Expr.Types.Annotated
+      Nix.Frames
       Nix.Lint
       Nix.Normal
       Nix.Options
@@ -48,9 +58,11 @@ library
       Nix.Parser.Library
       Nix.Parser.Operators
       Nix.Pretty
+      Nix.Reduce
+      Nix.Render
+      Nix.Render.Frame
       Nix.Scope
-      Nix.Stack
-      Nix.StringOperations
+      Nix.Strings
       Nix.TH
       Nix.Thunk
       Nix.Type.Assumption
@@ -82,10 +94,12 @@ library
     , directory
     , exceptions
     , filepath
+    , hashable
     , megaparsec
     , monadlist
     , mtl
     , optparse-applicative
+    , pretty-show
     , process
     , regex-tdfa
     , regex-tdfa-text
@@ -102,6 +116,8 @@ library
     , unordered-containers >=0.2.9 && <0.3
     , vector
     , xml
+  if flag(tracing)
+    cpp-options: -DENABLE_TRACING=1
   default-language: Haskell2010
 
 executable hnix
@@ -113,7 +129,8 @@ executable hnix
       main
   ghc-options: -Wall
   build-depends:
-      ansi-wl-pprint
+      aeson
+    , ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
     , compact
@@ -123,7 +140,6 @@ executable hnix
     , exceptions
     , filepath
     , hnix
-    , megaparsec
     , mtl
     , optparse-applicative
     , repline
@@ -132,6 +148,8 @@ executable hnix
     , text
     , transformers
     , unordered-containers >=0.2.9 && <0.3
+  if flag(tracing)
+    cpp-options: -DENABLE_TRACING=1
   default-language: Haskell2010
 
 test-suite hnix-tests
@@ -174,6 +192,8 @@ test-suite hnix-tests
     , transformers
     , unix
     , unordered-containers >=0.2.9 && <0.3
+  if flag(tracing)
+    cpp-options: -DENABLE_TRACING=1
   default-language: Haskell2010
 
 benchmark hnix-benchmarks
@@ -204,4 +224,6 @@ benchmark hnix-benchmarks
     , text
     , transformers
     , unordered-containers >=0.2.9 && <0.3
+  if flag(tracing)
+    cpp-options: -DENABLE_TRACING=1
   default-language: Haskell2010

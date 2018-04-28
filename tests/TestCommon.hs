@@ -9,33 +9,24 @@ import System.Posix.Temp
 import System.Process
 import Test.Tasty.HUnit
 
-hnixEvalFile :: FilePath -> [String] -> IO (NValueNF (Lazy IO))
-hnixEvalFile file incls =  do
+hnixEvalFile :: Options -> FilePath -> IO (NValueNF (Lazy IO))
+hnixEvalFile opts file = do
   parseResult <- parseNixFileLoc file
   case parseResult of
     Failure err        ->
         error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
     Success expr -> do
         setEnv "TEST_VAR" "foo"
-        runLazyM $ normalForm =<< evalLoc (Just file) incls expr
+        runLazyM opts $
+            evaluateExpression (Just file) nixEvalExprLoc normalForm expr
 
-hnixEvalFileOpts :: Options -> FilePath -> IO (NValueNF (Lazy IO))
-hnixEvalFileOpts opts file = do
-  parseResult <- parseNixFileLoc file
-  case parseResult of
-    Failure err        ->
-        error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
-    Success expr -> do
-        setEnv "TEST_VAR" "foo"
-        runLazyM $ evaluateExpression opts (Just file) evalLoc normalForm expr
-
-hnixEvalText :: Text -> [String] -> IO (NValueNF (Lazy IO))
-hnixEvalText src incls = case parseNixText src of
+hnixEvalText :: Options -> Text -> IO (NValueNF (Lazy IO))
+hnixEvalText opts src = case parseNixText src of
     Failure err        ->
         error $ "Parsing failed for expressien `"
             ++ unpack src ++ "`.\n" ++ show err
     Success expr ->
-        runLazyM $ normalForm =<< eval Nothing incls expr
+        runLazyM opts $ normalForm =<< nixEvalExpr Nothing expr
 
 nixEvalString :: String -> IO String
 nixEvalString expr = do
@@ -51,13 +42,13 @@ nixEvalFile fp = readProcess "nix-instantiate" ["--eval", fp] ""
 
 assertEvalFileMatchesNix :: FilePath -> Assertion
 assertEvalFileMatchesNix fp = do
-  hnixVal <- (++"\n") . printNix <$> hnixEvalFile fp []
+  hnixVal <- (++"\n") . printNix <$> hnixEvalFile defaultOptions fp
   nixVal <- nixEvalFile fp
   assertEqual fp nixVal hnixVal
 
 assertEvalMatchesNix :: Text -> Assertion
 assertEvalMatchesNix expr = do
-  hnixVal <- (++"\n") . printNix <$> hnixEvalText expr []
+  hnixVal <- (++"\n") . printNix <$> hnixEvalText defaultOptions expr
   nixVal <- nixEvalString expr'
   assertEqual expr' nixVal hnixVal
  where

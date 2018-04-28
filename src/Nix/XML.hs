@@ -19,25 +19,25 @@ toXML = (.) ((++ "\n") .
              (\e -> Element (unqual "expr") [] [Elem e] Nothing))
         $ cata
         $ \case
-    NVConstant a -> case a of
+    NVConstantF a -> case a of
         NInt n   -> mkElem "int" "value" (show n)
         NFloat f -> mkElem "float" "value" (show f)
         NBool b  -> mkElem "bool" "value" (if b then "true" else "false")
         NNull    -> Element (unqual "null") [] [] Nothing
         NUri u   -> mkElem "uri" "value" (Text.unpack u)
 
-    NVStr t _ -> mkElem "string" "value" (Text.unpack t)
-    NVList l  -> Element (unqual "list") [] (Elem <$> l) Nothing
+    NVStrF t _ -> mkElem "string" "value" (Text.unpack t)
+    NVListF l  -> Element (unqual "list") [] (Elem <$> l) Nothing
 
-    NVSet s _ -> Element (unqual "attrs") []
+    NVSetF s _ -> Element (unqual "attrs") []
         (map (\(k, v) -> Elem (Element (unqual "attr")
                                       [Attr (unqual "name") (Text.unpack k)]
                                       [Elem v] Nothing))
              (sortBy (comparing fst) $ M.toList s)) Nothing
 
-    NVClosure p _  -> Element (unqual "function") [] (paramsXML p) Nothing
-    NVPath fp -> mkElem "path" "value" fp
-    NVBuiltin name _ -> mkElem "function" "name" name
+    NVClosureF p _  -> Element (unqual "function") [] (paramsXML p) Nothing
+    NVPathF fp -> mkElem "path" "value" fp
+    NVBuiltinF name _ -> mkElem "function" "name" name
 
 mkElem :: String -> String -> String -> Element
 mkElem n a v = Element (unqual n) [Attr (unqual a) v] [] Nothing

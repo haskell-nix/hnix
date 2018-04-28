@@ -1,0 +1,190 @@
+#+TITLE: hnix Project Plan
+
+* Goals
+
+The purpose of hnix is provide a fully featured, compatible implementation of
+the Nix language, sufficient to evaluate and make use of the nixpkgs package
+repository definitions. The intent is to provide a convenient basis for
+creating new tooling in Haskell for the Nix ecosystem, and to provide an
+second implementation apart from the current C++ code base used by the Nix
+project.
+
+
+* Architecture
+
+#+name: dot-figure
+#+begin_src dot :file diagram4.svg :cmdline -Tsvg :results file
+digraph {
+  bgcolor=transparent;
+  rankdir=LR;
+
+  {
+    rank=same;
+    parser   [label="Parser",style=filled,fillcolor=yellow,shape=box,width=2];
+    value    [label="Values",style=filled,fillcolor=yellow,shape=box,width=2];
+    eval     [label="Core Evaluator",style=filled,fillcolor=yellow,shape=box,width=2];
+    expr     [label="Expressions",style=filled,fillcolor=yellow,shape=box,width=2];
+    pretty   [label="Pretty Printer",style=filled,fillcolor=yellow,shape=box,width=2];
+  }
+
+  {
+    rank=same;
+    exec     [label="Executing Evaluator",style=filled,fillcolor=yellow,shape=box,width=2];
+    builtins [label="Built-in Functions",style=filled,fillcolor=yellow,shape=box,width=2];
+  }
+
+  support  [label="Supporting Abstractions",style=filled,fillcolor=yellow,shape=box,width=2];
+  features [label="Other Features",style=filled,fillcolor=yellow,shape=box,width=2];
+  main     [label="Top-Level Driver",style=filled,fillcolor=green,shape=box,width=2];
+
+  expr -> {
+    "Atoms.hs"                [color=transparent]
+    "Expr.hs"                 [color=transparent]
+    "Expr/Shorthands.hs"      [color=transparent]
+    "Expr/Types.hs"           [color=transparent]
+    "Expr/Types/Annotated.hs" [color=transparent]
+    "Strings.hs"              [color=transparent]
+  };
+
+  pretty -> {
+    "Pretty.hs"               [color=transparent]
+    "Render.hs"               [color=transparent]
+    "Render/Frame.hs"         [color=transparent]
+  };
+
+  parser -> {
+    "Parser.hs"               [color=transparent]
+    "Parser/Library.hs"       [color=transparent]
+    "Parser/Operators.hs"     [color=transparent]
+  };
+
+  value -> {
+    "Convert.hs"              [color=transparent]
+    "Normal.hs"               [color=transparent]
+    "Value.hs"                [color=transparent]
+  };
+
+  builtins -> {
+    "Builtins.hs"             [color=transparent]
+    "XML.hs"                  [color=transparent]
+  };
+
+  support -> {
+    "Frames.hs"               [color=transparent]
+    "Scope.hs"                [color=transparent]
+    "Thunk.hs"                [color=transparent]
+    "Options.hs"              [color=transparent]
+    "Utils.hs"                [color=transparent]
+  };
+
+  features -> {
+    "Cache.hs"                [color=transparent]
+    "Lint.hs"                 [color=transparent]
+    "Reduce.hs"               [color=transparent]
+    "Type/..."                [color=transparent]
+    "TH.hs"                   [color=transparent]
+  };
+
+  "Cache.hs"  -> { expr parser };
+  "Lint.hs"   -> { expr eval };
+  "Reduce.hs" -> { expr parser };
+  "Type/..."  -> { expr eval };
+  "TH.hs"     -> { expr parser };
+
+  eval -> {
+    "Context.hs"              [color=transparent]
+    "Eval.hs"                 [color=transparent]
+  };
+
+  exec -> {
+    "Effects.hs"              [color=transparent]
+    "Exec.hs"                 [color=transparent]
+  };
+
+  { eval parser pretty value expr builtins exec } -> support;
+  { eval parser pretty value } -> expr;
+  exec -> { eval value builtins };
+  { pretty builtins } -> value;
+  main -> { parser pretty exec features };
+}
+#+end_src
+
+#+ATTR_LATEX: :height 3cm
+#+results: dot-figure
+[[file:diagram4.svg]]
+
+* What needs to be done
+
+** PROJECT Pass the Nix language tests
+:PROPERTIES:
+:ID:       BB4190F1-695D-454A-8E14-492651B4EC9F
+:CREATED:  [2018-04-23 Mon 17:12]
+:URL:      https://github.com/jwiegley/hnix/milestone/1
+:END:
+
+We currently have just two tests remaining that need to be fixed to pass the
+Nix language tests:
+
+*** TODO builtins.path:
+  https://github.com/jwiegley/hnix/issues/128
+*** TODO builtins.genericClosure:
+  https://github.com/jwiegley/hnix/issues/144
+
+** PROJECT Successfully evaluate all of nixpkgs
+:PROPERTIES:
+:ID:       E4A330E7-70C1-4E79-A94C-D63B2533EBE1
+:CREATED:  [2018-04-23 Mon 17:10]
+:URL:      https://github.com/jwiegley/hnix/milestone/2
+:END:
+
+There are still a few problems in the evaluator with process the contents of
+the nixpkgs repository:
+
+*** TODO https://github.com/jwiegley/hnix/issues/157
+*** TODO https://github.com/jwiegley/hnix/issues/193
+
+** PROJECT Increase test coverage
+:PROPERTIES:
+:ID:       5998F757-F30B-4987-89BE-4E44A1BE57BF
+:CREATED:  [2018-04-23 Mon 17:17]
+:END:
+
+*** TODO https://github.com/jwiegley/hnix/issues/158
+
+** PROJECT Improve the hnix REPL
+:PROPERTIES:
+:ID:       F824236D-7D7E-43D0-8DE6-AD66055B8935
+:CREATED:  [2018-04-23 Mon 17:17]
+:END:
+
+*** TODO https://github.com/jwiegley/hnix/issues/164
+
+** PROJECT Support concurrent evaluation
+:PROPERTIES:
+:ID:       AE9B3606-009D-43FF-A1E0-0E9A5494BFAC
+:CREATED:  [2018-04-23 Mon 17:18]
+:END:
+
+*** TODO https://github.com/jwiegley/hnix/issues/170
+
+** PROJECT Type checker
+:PROPERTIES:
+:ID:       F42B3AAB-3BA8-40DC-8B29-F534019F5832
+:CREATED:  [2018-04-23 Mon 17:16]
+:END:
+
+** PROJECT Haskell integration using a quasi-quoter
+:PROPERTIES:
+:ID:       7800EF09-5083-4819-ACD4-877B85E98C07
+:CREATED:  [2018-04-23 Mon 17:16]
+:END:
+
+
+* Colophon
+#+STARTUP: content fninline hidestars
+#+OPTIONS: ^:{}
+#+ARCHIVE: PLAN-archive.txt::
+#+SEQ_TODO: STARTED TODO APPT WAITING(@) DELEGATED(@) DEFERRED(@) SOMEDAY(@) PROJECT | DONE(@) CANCELED(@) NOTE
+#+TAGS: P1(1) P2(2) P3(3) Call(c) Errand(e) Home(h) Net(n) Reply(r) Waiting(w)
+#+DRAWERS: PROPERTIES LOGBOOK OUTPUT SCRIPT SOURCE DATA
+#+PROPERTY: OVERLAY (face (:background "#e8eff9"))

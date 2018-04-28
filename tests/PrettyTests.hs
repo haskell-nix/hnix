@@ -16,9 +16,18 @@ case_indented_antiquotation = do
 
 case_string_antiquotation :: Assertion
 case_string_antiquotation = do
-    -- TODO: plain $ doesn't need to be escaped here either
     assertPretty (mkStr "echo $foo") "\"echo \\$foo\""
     assertPretty (mkStr "echo ${foo}") "\"echo \\${foo}\""
+
+case_function_params :: Assertion
+case_function_params =
+    assertPretty (mkFunction (mkParamset [] True) (mkInt 3)) "{ ... }:\n  3"
+
+case_paths :: Assertion
+case_paths = do
+    assertPretty (mkPath False "~/test.nix") "~/test.nix"
+    assertPretty (mkPath False "/test.nix") "/test.nix"
+    assertPretty (mkPath False "./test.nix") "./test.nix"
 
 tests :: TestTree
 tests = $testGroupGenerator

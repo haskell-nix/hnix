@@ -7,6 +7,7 @@ module NixLanguageTests (genTests) where
 import           Control.Arrow ((&&&))
 import           Control.Exception
 import           Control.Monad
+import           Control.Monad.IO.Class
 import           Control.Monad.ST
 import           Data.List (delete, sort)
 import           Data.List.Split (splitOn)
@@ -15,14 +16,16 @@ import qualified Data.Map as Map
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           GHC.Exts
+import           Nix.Frames
 import           Nix.Lint
 import           Nix.Options
 import           Nix.Parser
 import           Nix.Pretty
-import           Nix.Stack
+import           Nix.Render.Frame
 import           Nix.Utils
 import           Nix.XML
 import qualified Options.Applicative as Opts
+import           System.Environment
 import           System.FilePath
 import           System.FilePath.Glob (compile, globDir1)
 import           Test.Tasty
@@ -68,59 +71,55 @@ genTests = do
         testGroup (unwords kind) $ map (mkTestCase kind) tests
     mkTestCase kind (basename, files) =
         testCase (takeFileName basename) $ case kind of
-            ["parse", "okay"] -> assertParse $ the files
-            ["parse", "fail"] -> assertParseFail $ the files
-            ["eval", "okay"] -> assertEval files
-            ["eval", "fail"] -> assertEvalFail $ the files
+            ["parse", "okay"] -> assertParse defaultOptions $ the files
+            ["parse", "fail"] -> assertParseFail defaultOptions $ the files
+            ["eval", "okay"]  -> assertEval defaultOptions files
+            ["eval", "fail"]  -> assertEvalFail $ the files
             _ -> error $ "Unexpected: " ++ show kind
 
-assertParse :: FilePath -> Assertion
-assertParse file = parseNixFileLoc file >>= \case
-  -- jww (2018-04-10): TODO
-  Success _expr -> return () -- pure $! runST $ void $ lint expr
+assertParse :: Options -> FilePath -> Assertion
+assertParse _opts file = parseNixFileLoc file >>= \case
+  Success _expr -> return () -- pure $! runST $ void $ lint opts expr
   Failure err  ->
       assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
 
-assertParseFail :: FilePath -> Assertion
-assertParseFail file = do
+assertParseFail :: Options -> FilePath -> Assertion
+assertParseFail opts file = do
     eres <- parseNixFileLoc file
     catch (case eres of
                Success expr -> do
-                   _ <- pure $! runST $ void $ lint expr
+                   _ <- pure $! runST $ void $ lint opts expr
                    assertFailure $ "Unexpected success parsing `"
                        ++ file ++ ":\nParsed value: " ++ show expr
                Failure _ -> return ()) $ \(_ :: SomeException) ->
         return ()
 
-assertLangOk :: FilePath -> [String] -> Assertion
-assertLangOk file incls = do
-  actual <- printNix <$> hnixEvalFile (file ++ ".nix") incls
+assertLangOk :: Options -> FilePath -> Assertion
+assertLangOk opts file = do
+  actual <- printNix <$> hnixEvalFile opts (file ++ ".nix")
   expected <- Text.readFile $ file ++ ".exp"
   assertEqual "" expected $ Text.pack (actual ++ "\n")
 
--- jww (2018-04-15): Remove this duplication
-assertLangOkOpts :: Options -> FilePath -> Assertion
-assertLangOkOpts opts file = do
-  actual <- printNix <$> hnixEvalFileOpts opts (file ++ ".nix")
-  expected <- Text.readFile $ file ++ ".exp"
-  assertEqual "" expected $ Text.pack (actual ++ "\n")
-
-assertLangOkXml :: FilePath -> [String] -> Assertion
-assertLangOkXml file incls = do
-  actual <- toXML <$> hnixEvalFile (file ++ ".nix") incls
+assertLangOkXml :: Options -> FilePath -> Assertion
+assertLangOkXml opts file = do
+  actual <- toXML <$> hnixEvalFile opts (file ++ ".nix")
   expected <- Text.readFile $ file ++ ".exp.xml"
   assertEqual "" expected $ Text.pack actual
 
-assertEval :: [FilePath] -> Assertion
-assertEval files = catch go $ \case
-    NixEvalException str -> error $ "Evaluation error: " ++ str
+assertEval :: Options -> [FilePath] -> Assertion
+assertEval opts files = catch go $ \case
+    NixException frames -> do
+        -- msg <- runReaderT (renderFrames frames) opts
+        -- error $ "Evaluation error: " ++ show msg
+        error "Evaluation error"
   where
     go = case delete ".nix" $ sort $ map takeExtensions files of
-        [] -> assertLangOkXml name []
-        [".exp"] -> assertLangOk name []
+        [] -> assertLangOkXml defaultOptions name
+        [".exp"] -> assertLangOk defaultOptions name
         [".exp.disabled"] -> return ()
         [".exp-disabled"] -> return ()
         [".exp", ".flags"] -> do
+            liftIO $ unsetEnv "NIX_PATH"
             flags <- Text.readFile (name ++ ".flags")
             let flags' | Text.last flags == '\n' = Text.init flags
                        | otherwise = flags
@@ -129,11 +128,12 @@ assertEval files = catch go $ \case
                 Opts.Failure err -> errorWithoutStackTrace $
                     "Error parsing flags from " ++ name ++ ".flags: "
                         ++ show err
-                Opts.Success opts ->
-                    assertLangOkOpts
-                        (opts { include = include opts ++
-                                  [ "nix=../../../../data/nix/corepkgs"
-                                  , "lang/dir4" ] })
+                Opts.Success opts' ->
+                    assertLangOk
+                        (opts' { include = include opts' ++
+                                   [ "nix=../../../../data/nix/corepkgs"
+                                   , "lang/dir4"
+                                   , "lang/dir5" ] })
                         name
                 Opts.CompletionInvoked _ -> error "unused"
         _ -> assertFailure $ "Unknown test type " ++ show files
@@ -148,7 +148,7 @@ assertEval files = catch go $ \case
 
 assertEvalFail :: FilePath -> Assertion
 assertEvalFail file = catch ?? (\(_ :: SomeException) -> return ()) $ do
-  evalResult <- printNix <$> hnixEvalFile file []
+  evalResult <- printNix <$> hnixEvalFile defaultOptions file
   evalResult `seq` assertFailure $
       file ++ " should not evaluate.\nThe evaluation result was `"
            ++ evalResult ++ "`."

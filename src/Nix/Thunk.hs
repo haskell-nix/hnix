@@ -1,4 +1,12 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE CPP #-}
+
+#if ENABLE_TRACING
+{-# LANGUAGE BangPatterns #-}
+#endif
+
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -7,11 +15,20 @@
 
 module Nix.Thunk where
 
-import {-# SOURCE #-} Nix.Stack
+import Nix.Frames
 
-data Deferred m v
-    = Deferred (m v)
-    | Computed v
+#if ENABLE_TRACING
+import Data.IORef
+import System.IO.Unsafe
+import Nix.Utils
+
+counter :: IORef Int
+counter = unsafePerformIO $ newIORef 0
+{-# NOINLINE counter #-}
+#endif
+
+data Deferred m v = Deferred (m v) | Computed v
+    deriving (Functor, Foldable, Traversable)
 
 class Monad m => MonadVar m where
     type Var m :: * -> *
@@ -20,43 +37,72 @@ class Monad m => MonadVar m where
     writeVar :: Var m a -> a -> m ()
     atomicModifyVar :: Var m a -> (a -> (a, b)) -> m b
 
-class Monad m => MonadThunk v t m | m -> v, v -> t where
+class Monad m => MonadThunk v t m | v -> m, v -> t, t -> m, t -> v where
     thunk :: m v -> m t
     force :: t -> (v -> m r) -> m r
     value :: v -> t
 
 data Thunk m v
     = Value v
-    | Thunk (Var m Bool) (Var m (Deferred m v))
+    | Thunk
+#if ENABLE_TRACING
+          !Int
+#endif
+          (Var m Bool) (Var m (Deferred m v))
+
+newtype ThunkLoop = ThunkLoop (Maybe Int)
+    deriving (Show, Typeable)
+
+instance Frame ThunkLoop
 
 valueRef :: v -> Thunk m v
 valueRef = Value
 
 buildThunk :: MonadVar m => m v -> m (Thunk m v)
 buildThunk action =
-    Thunk <$> newVar False <*> newVar (Deferred action)
+#if ENABLE_TRACING
+    let !x = unsafePerformIO (atomicModifyIORef' counter (\c -> (succ c, c))) in
+    Thunk x
+#else
+    Thunk
+#endif
+        <$> newVar False <*> newVar (Deferred action)
 
-forceThunk :: (Framed e m, MonadFile m, MonadVar m)
-           => Thunk m v -> (v -> m r) -> m r
+forceThunk :: (Framed e m, MonadVar m) => Thunk m v -> (v -> m a) -> m a
 forceThunk (Value ref) k = k ref
+#if ENABLE_TRACING
+forceThunk (Thunk n active ref) k = do
+#else
 forceThunk (Thunk active ref) k = do
+#endif
     eres <- readVar ref
     case eres of
         Computed v -> k v
         Deferred action -> do
             nowActive <- atomicModifyVar active (True,)
             if nowActive
-                then throwError "<<loop>>"
+                then
+#if ENABLE_TRACING
+                    throwError $ ThunkLoop (Just n)
+#else
+                    throwError $ ThunkLoop Nothing
+#endif
                 else do
+#if ENABLE_TRACING
+                    traceM $ "Forcing " ++ show n
+#endif
                     v <- action
                     writeVar ref (Computed v)
                     _ <- atomicModifyVar active (False,)
                     k v
 
-forceEffects :: (Framed e m, MonadFile m, MonadVar m)
-             => Thunk m v -> (v -> m r) -> m r
+forceEffects :: (Framed e m, MonadVar m) => Thunk m v -> (v -> m a) -> m a
 forceEffects (Value ref) k = k ref
+#if ENABLE_TRACING
+forceEffects (Thunk _ active ref) k = do
+#else
 forceEffects (Thunk active ref) k = do
+#endif
     nowActive <- atomicModifyVar active (True,)
     if nowActive
         then return $ error "forceEffects: a value was expected"

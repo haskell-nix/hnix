@@ -27,6 +27,7 @@ import           Data.Fix
 import           Data.List (delete, find, nub)
 import qualified Data.Map as Map
 import           Data.Maybe (fromJust)
+import           Data.Semigroup
 import qualified Data.Set as Set
 import           Data.Text (Text)
 
@@ -56,7 +57,7 @@ data Constraint = EqConst Type Type
                 deriving (Show, Eq, Ord)
 
 newtype Subst = Subst (Map.Map TVar Type)
-  deriving (Eq, Ord, Show, Monoid)
+  deriving (Eq, Ord, Show, Semigroup, Monoid)
 
 
 class Substitutable a where

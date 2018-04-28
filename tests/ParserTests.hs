@@ -9,6 +9,7 @@
 module ParserTests (tests) where
 
 import Data.Fix
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Semigroup
 import Data.String.Interpolate.IsString
 import Data.Text (Text, unpack, pack)
@@ -52,6 +53,10 @@ case_constant_path = do
   assertParseFail "/"
   assertParseFail "a/"
   assertParseFail "a/def/"
+  assertParseFail "~"
+  assertParseFail "~/"
+  assertParseText "~/a" $ mkPath False "~/a"
+  assertParseText "~/a/b" $ mkPath False "~/a/b"
 
 case_constant_uri = do
   assertParseText "a:a" $ mkUri "a:a"
@@ -92,17 +97,17 @@ case_set_rec = assertParseText "rec { a = 3; b = a; }" $ Fix $ NRecSet
 
 case_set_complex_keynames = do
   assertParseText "{ \"\" = null; }" $ Fix $ NSet
-    [ NamedVar [DynamicKey (Plain "")] mkNull ]
+    [ NamedVar (DynamicKey (Plain "") :| []) mkNull ]
   assertParseText "{ a.b = 3; a.c = 4; }" $ Fix $ NSet
-    [ NamedVar [StaticKey "a" Nothing, StaticKey "b" Nothing] $ mkInt 3
-    , NamedVar [StaticKey "a" Nothing, StaticKey "c" Nothing] $ mkInt 4
+    [ NamedVar (StaticKey "a" Nothing :| [StaticKey "b" Nothing]) $ mkInt 3
+    , NamedVar (StaticKey "a" Nothing :| [StaticKey "c" Nothing]) $ mkInt 4
     ]
   assertParseText "{ ${let a = \"b\"; in a} = 4; }" $ Fix $ NSet
-    [ NamedVar [DynamicKey (Antiquoted letExpr)] $ mkInt 4 ]
+    [ NamedVar (DynamicKey (Antiquoted letExpr) :| []) $ mkInt 4 ]
   assertParseText "{ \"a${let a = \"b\"; in a}c\".e = 4; }" $ Fix $ NSet
-    [ NamedVar [DynamicKey (Plain str), StaticKey "e" Nothing] $ mkInt 4 ]
+    [ NamedVar (DynamicKey (Plain str) :| [StaticKey "e" Nothing]) $ mkInt 4 ]
  where
-  letExpr = Fix $ NLet [ NamedVar (mkSelector "a") (mkStr "b") ] (mkSym "a")
+  letExpr = Fix $ NLet [NamedVar (mkSelector "a") (mkStr "b")] (mkSym "a")
   str = DoubleQuoted [Plain "a", Antiquoted letExpr, Plain "c"]
 
 case_set_inherit_direct = assertParseText "{ inherit ({a = 3;}); }" $ Fix $ NSet
@@ -182,8 +187,8 @@ case_let_body = assertParseText "let { body = 1; }" letBody
 
 case_nested_let = do
   assertParseText "let a = 4; in let b = 5; in a" $ Fix $ NLet
-    [ NamedVar (mkSelector "a") $ mkInt 4 ]
-    (Fix $ NLet [NamedVar (mkSelector "b") $ mkInt 5] $ mkSym "a")
+    [NamedVar (mkSelector "a") (mkInt 4)]
+    (Fix $ NLet [NamedVar (mkSelector "b") (mkInt 5)] $ mkSym "a")
   assertParseFail "let a = 4; let b = 3; in b"
 
 case_let_scoped_inherit = do
@@ -194,7 +199,8 @@ case_let_scoped_inherit = do
   assertParseFail "let inherit (b) c in c"
 
 case_if = do
-  assertParseText "if true then true else false" $ Fix $ NIf (mkBool True) (mkBool True) (mkBool False)
+  assertParseText "if true then true else false" $
+      Fix $ NIf (mkBool True) (mkBool True) (mkBool False)
   assertParseFail "if true then false"
   assertParseFail "else"
   assertParseFail "if true then false else"
@@ -243,18 +249,18 @@ case_string_antiquote = do
 
 case_select = do
   assertParseText "a .  e .di. f" $ Fix $ NSelect (mkSym "a")
-    [ StaticKey "e" Nothing, StaticKey "di" Nothing, StaticKey "f" Nothing ]
+    (StaticKey "e" Nothing :| [StaticKey "di" Nothing, StaticKey "f" Nothing])
     Nothing
   assertParseText "a.e . d    or null" $ Fix $ NSelect (mkSym "a")
-    [ StaticKey "e" Nothing, StaticKey "d" Nothing ]
+    (StaticKey "e" Nothing :| [StaticKey "d" Nothing])
     (Just mkNull)
   assertParseText "{}.\"\"or null" $ Fix $ NSelect (Fix (NSet []))
-    [ DynamicKey (Plain "") ] (Just mkNull)
+    (DynamicKey (Plain "") :| []) (Just mkNull)
   assertParseText "{ a = [1]; }.a or [2] ++ [3]" $ Fix $ NBinary NConcat
       (Fix (NSelect
-                (Fix (NSet [NamedVar [StaticKey "a" Nothing]
+                (Fix (NSet [NamedVar (StaticKey "a" Nothing :| [])
                                      (Fix (NList [Fix (NConstant (NInt 1))]))]))
-                [StaticKey "a" Nothing]
+                (StaticKey "a" Nothing :| [])
                 (Just (Fix (NList [Fix (NConstant (NInt 2))])))))
       (Fix (NList [Fix (NConstant (NInt 3))]))
 
@@ -263,7 +269,7 @@ case_select_path = do
   assertParseText "f.b ../a" $ Fix $ NBinary NApp select (mkPath False "../a")
   assertParseText "{}./def" $ Fix $ NBinary NApp (Fix (NSet [])) (mkPath False "./def")
   assertParseText "{}.\"\"./def" $ Fix $ NBinary NApp
-    (Fix $ NSelect (Fix (NSet [])) [DynamicKey (Plain "")] Nothing)
+    (Fix $ NSelect (Fix (NSet [])) (DynamicKey (Plain "") :| []) Nothing)
     (mkPath False "./def")
  where select = Fix $ NSelect (mkSym "f") (mkSelector "b") Nothing
 
@@ -324,10 +330,12 @@ case_select_or_precedence =
                              case = builtins.head (builtins.attrNames v);
                            in (matcher.case or def case) (v.case);
 in null|] [i|let
-  matchDef = def:   matcher:
-                      v:   let
-                             case = builtins.head (builtins.attrNames v);
-                           in (matcher.case or def) case (v.case);
+  matchDef = def:
+    matcher:
+      v:
+        let
+          case = builtins.head (builtins.attrNames v);
+        in (matcher.case or def) case (v.case);
 in null|]
 
 case_select_or_precedence2 =
@@ -337,10 +345,12 @@ case_select_or_precedence2 =
                              case = builtins.head (builtins.attrNames v);
                            in (matcher.case or null.foo) (v.case);
 in null|] [i|let
-  matchDef = def:   matcher:
-                      v:   let
-                             case = builtins.head (builtins.attrNames v);
-                           in (matcher.case or null).foo (v.case);
+  matchDef = def:
+    matcher:
+      v:
+        let
+          case = builtins.head (builtins.attrNames v);
+        in (matcher.case or null).foo (v.case);
 in null|]
 
 tests :: TestTree

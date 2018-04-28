@@ -13,12 +13,13 @@ module Nix.Type.Env (
   toList,
 ) where
 
-import Prelude hiding (lookup)
+import           Prelude hiding (lookup)
 
-import Nix.Type.Type
+import           Nix.Type.Type
 
-import Data.Foldable hiding (toList)
+import           Data.Foldable hiding (toList)
 import qualified Data.Map as Map
+import           Data.Semigroup
 
 -------------------------------------------------------------------------------
 -- Typing Environment
@@ -59,6 +60,9 @@ fromList xs = TypeEnv (Map.fromList xs)
 
 toList :: Env -> [(Name, Scheme)]
 toList (TypeEnv env) = Map.toList env
+
+instance Semigroup Env where
+  (<>) = merge
 
 instance Monoid Env where
   mempty = empty

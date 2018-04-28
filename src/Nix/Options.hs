@@ -1,21 +1,29 @@
 module Nix.Options where
 
 import           Control.Arrow (second)
+import           Data.Char (isDigit)
+import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Options.Applicative hiding (ParserResult(..))
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 data Options = Options
-    { verbose      :: Bool
-    , debug        :: Bool
+    { verbose      :: Verbosity
+    , tracing      :: Bool
+    , thunks       :: Bool
+    , values       :: Bool
+    , reduce       :: Maybe FilePath
+    , reduceSets   :: Bool
+    , reduceLists  :: Bool
     , parse        :: Bool
     , parseOnly    :: Bool
     , findFile     :: Maybe FilePath
     , strict       :: Bool
+    , normalize    :: Bool
     , evaluate     :: Bool
-    -- , json         :: Bool
-    -- , xml          :: Bool
+    , json         :: Bool
+    , xml          :: Bool
     , attr         :: Maybe Text
     , include      :: [FilePath]
     , check        :: Bool
@@ -31,6 +39,54 @@ data Options = Options
     }
     deriving Show
 
+defaultOptions :: Options
+defaultOptions = Options
+    { verbose      = ErrorsOnly
+    , tracing      = False
+    , thunks       = False
+    , values       = False
+    , reduce       = Nothing
+    , reduceSets   = False
+    , reduceLists  = False
+    , parse        = False
+    , parseOnly    = False
+    , findFile     = Nothing
+    , strict       = False
+    , normalize    = False
+    , evaluate     = False
+    , json         = False
+    , xml          = False
+    , attr         = Nothing
+    , include      = []
+    , check        = False
+    , readFrom     = Nothing
+    , cache        = False
+    , repl         = False
+    , ignoreErrors = False
+    , expression   = Nothing
+    , arg          = []
+    , argstr       = []
+    , fromFile     = Nothing
+    , filePaths    = []
+    }
+
+data Verbosity
+    = ErrorsOnly
+    | Informational
+    | Talkative
+    | Chatty
+    | DebugInfo
+    | Vomit
+    deriving (Eq, Ord, Enum, Bounded, Show)
+
+decodeVerbosity :: Int -> Verbosity
+decodeVerbosity 0 = ErrorsOnly
+decodeVerbosity 1 = Informational
+decodeVerbosity 2 = Talkative
+decodeVerbosity 3 = Chatty
+decodeVerbosity 4 = DebugInfo
+decodeVerbosity _ = Vomit
+
 argPair :: Mod OptionFields (Text, Text) -> Parser (Text, Text)
 argPair = option $ str >>= \s ->
     case Text.findIndex (== '=') s of
@@ -40,14 +96,33 @@ argPair = option $ str >>= \s ->
 
 nixOptions :: Parser Options
 nixOptions = Options
-    <$> switch
-        (   short 'v'
-         <> long "verbose"
-         <> help "Verbose output")
+    <$> (fromMaybe ErrorsOnly <$>
+         optional
+           (option (do a <- str
+                       if all isDigit a
+                       then pure $ decodeVerbosity (read a)
+                       else fail "Argument to -v/--verbose must be a number")
+            (   short 'v'
+             <> long "verbose"
+             <> help "Verbose output")))
     <*> switch
-        (   short 'd'
-         <> long "debug"
-         <> help "Debug output")
+        (   long "trace"
+         <> help "Enable tracing code (even more can be seen if built with --flags=tracing)")
+    <*> switch
+        (   long "thunks"
+         <> help "Enable reporting of thunk tracing as well as regular evaluation")
+    <*> switch
+        (   long "values"
+         <> help "Enable reporting of value provenance in error messages")
+    <*> optional (strOption
+        (   long "reduce"
+         <> help "When done evaluating, output the evaluated part of the expression to FILE"))
+    <*> switch
+        (   long "reduce-sets"
+         <> help "Reduce set members that aren't used; breaks if hasAttr is used")
+    <*> switch
+        (   long "reduce-lists"
+         <> help "Reduce list members that aren't used; breaks if elemAt is used")
     <*> switch
         (   long "parse"
          <> help "Whether to parse the file (also the default right now)")
@@ -61,14 +136,17 @@ nixOptions = Options
         (   long "strict"
          <> help "When used with --eval, recursively evaluate list elements and attributes")
     <*> switch
+        (   long "force"
+         <> help "Whether to force the results of evaluation to normal form")
+    <*> switch
         (   long "eval"
          <> help "Whether to evaluate, or just pretty-print")
-    -- <*> switch
-    --     (   long "json"
-    --      <> help "Print the resulting value as an JSON representation of the abstract syntax tree")
-    -- <*> switch
-    --     (   long "xml"
-    --      <> help "Print the resulting value as an XML representation of the abstract syntax tree")
+    <*> switch
+        (   long "json"
+         <> help "Print the resulting value as an JSON representation")
+    <*> switch
+        (   long "xml"
+         <> help "Print the resulting value as an XML representation")
     <*> optional (strOption
         (   short 'A'
          <> long "attr"

@@ -16,8 +16,10 @@ import qualified EvalTests
 import qualified Nix
 import           Nix.Exec
 import           Nix.Expr.Types
+import           Nix.Frames
+import           Nix.Options
 import           Nix.Parser
-import           Nix.Stack
+import           Nix.Render.Frame
 import           Nix.Value
 import qualified NixLanguageTests
 import qualified ParserTests
@@ -56,7 +58,7 @@ ensureNixpkgsCanParse =
           url    = "https://github.com/NixOS/nixpkgs/archive/#{rev}.tar.gz";
           sha256 = "#{sha256}";
         }|]) $ \expr -> do
-        NVStr dir _ <- runLazyM $ Nix.evalLoc Nothing [] expr
+        NVStr dir _ <- runLazyM defaultOptions $ Nix.nixEvalExprLoc Nothing expr
         files <- globDir1 (compile "**/*.nix") (unpack dir)
         forM_ files $ \file ->
           -- Parse and deepseq the resulting expression tree, to ensure the
@@ -72,7 +74,10 @@ ensureNixpkgsCanParse =
     Failure err -> errorWithoutStackTrace $
       "Parsing " ++ path ++ " failed: " ++ show err
     Success expr -> Exc.catch (k expr) $ \case
-      NixEvalException msg -> errorWithoutStackTrace msg
+      NixException frames ->
+          -- errorWithoutStackTrace . show
+          --     =<< runReaderT (renderFrames frames) defaultOptions
+          errorWithoutStackTrace "FAILED"
 
 main :: IO ()
 main = do

@@ -1,14 +1,15 @@
 module Nix.Effects where
 
 import Data.Text (Text)
-import System.Posix.Files
-import Nix.Value
+import Nix.Render
 import Nix.Utils
+import Nix.Value
+import System.Posix.Files
 
 -- | A path into the nix store
 newtype StorePath = StorePath { unStorePath :: FilePath }
 
-class MonadEffects m where
+class MonadFile m => MonadEffects m where
     -- | Import a path into the nix store, and return the resulting path
     addPath :: FilePath -> m StorePath
 
