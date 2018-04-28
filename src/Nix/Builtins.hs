@@ -546,23 +546,26 @@ genericClosure = fromValue @(AttrSet (NThunk m)) >=> \s ->
       (Just startSet, Just operator) ->
           fromValue @[NThunk m] startSet >>= \ss ->
           force operator $ \op ->
-              toValue @[NThunk m] =<< (ss ++) . snd <$> go op ss S.empty
+              toValue @[NThunk m] =<< snd <$> go op ss S.empty
   where
     go :: NValue m -> [NThunk m] -> Set (NValue m)
        -> m (Set (NValue m), [NThunk m])
     go _ [] ks = pure (ks, [])
-    go op (t:ts) ks = force t $ \v -> fromValue @(AttrSet (NThunk m)) t >>= \s ->
-        case M.lookup "key" s of
-            Nothing ->
-                throwError
-                    ("builtins.genericClosure: Attribute 'key' required" :: String)
-            Just k -> force k $ \k' ->
-                if S.member k' ks
-                    then go op ts ks
-                    else do
-                        ys <- fromValue @[NThunk m] =<< (op `callFunc` pure v)
-                        (ks'', zs) <- go op ts (S.insert k' ks)
-                        fmap ((zs ++) . (ys ++)) <$> go op ys ks''
+    go op (t:ts) ks =
+        force t $ \v -> fromValue @(AttrSet (NThunk m)) t >>= \s ->
+            case M.lookup "key" s of
+                Nothing ->
+                    throwError
+                        ("builtins.genericClosure: Attribute 'key' required" :: String)
+                Just k -> force k $ \k' ->
+                    if S.member k' ks
+                        then go op ts ks
+                        else do
+                            ys <- fromValue @[NThunk m] =<< (op `callFunc` pure v)
+                            case S.toList ks of
+                                []  -> checkComparable k' k'
+                                j:_ -> checkComparable k' j
+                            fmap (t:) <$> go op (ts ++ ys) (S.insert k' ks)
 
 replaceStrings :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m) -> m (NValue m)
 replaceStrings tfrom tto ts =
