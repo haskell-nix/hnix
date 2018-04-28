@@ -68,6 +68,9 @@ library:
     - deriving-compat           >= 0.3 && < 0.5
     - directory
     - hashable
+    - http-types
+    - http-client
+    - http-client-tls
     - megaparsec
     - monadlist
     - pretty-show

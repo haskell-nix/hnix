@@ -36,8 +36,6 @@ in haskellPackages.developPackage {
       [
         pkgs.nix
         haskellPackages.hpack
-        haskellPackages.http-client
-        haskellPackages.http-client-tls
         # haskellPackages.cabal-install
       ];
 
