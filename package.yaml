@@ -33,6 +33,7 @@ dependencies:
 
 ghc-options:
   - -Wall
+  - -Werror
 
 flags:
   tracing:
@@ -68,6 +69,7 @@ library:
     - deriving-compat           >= 0.3 && < 0.5
     - directory
     - hashable
+    - haskeline
     - megaparsec
     - monadlist
     - pretty-show
@@ -91,6 +93,7 @@ executables:
       - hnix
       - aeson
       - repline
+      - haskeline
 
 tests:
   hnix-tests:

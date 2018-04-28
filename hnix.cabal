@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f2849e05edde8ddd3f02ee010be0fa0e7ee673392948670ced6209113f5b5e7f
+-- hash: 760d308ea1a1df341e0191fee145518d3901d2eef3e8c4ee7c1f43a3de3acaad
 
 name:           hnix
 version:        0.5.0
@@ -76,7 +76,7 @@ library
       Paths_hnix
   hs-source-dirs:
       src
-  ghc-options: -Wall
+  ghc-options: -Wall -Werror
   build-depends:
       aeson
     , ansi-wl-pprint
@@ -95,6 +95,7 @@ library
     , exceptions
     , filepath
     , hashable
+    , haskeline
     , megaparsec
     , monadlist
     , mtl
@@ -127,7 +128,7 @@ executable hnix
       Paths_hnix
   hs-source-dirs:
       main
-  ghc-options: -Wall
+  ghc-options: -Wall -Werror
   build-depends:
       aeson
     , ansi-wl-pprint
@@ -139,6 +140,7 @@ executable hnix
     , deepseq
     , exceptions
     , filepath
+    , haskeline
     , hnix
     , mtl
     , optparse-applicative
@@ -164,7 +166,7 @@ test-suite hnix-tests
       Paths_hnix
   hs-source-dirs:
       tests
-  ghc-options: -Wall -threaded
+  ghc-options: -Wall -Werror -threaded
   build-depends:
       Glob
     , ansi-wl-pprint
@@ -204,7 +206,7 @@ benchmark hnix-benchmarks
       Paths_hnix
   hs-source-dirs:
       benchmarks
-  ghc-options: -Wall
+  ghc-options: -Wall -Werror
   build-depends:
       ansi-wl-pprint
     , base >=4.9 && <5

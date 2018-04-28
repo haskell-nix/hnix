@@ -39,15 +39,15 @@ import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
-import           Control.Monad.State
+import           Control.Monad.State.Strict
 import           Control.Monad.Trans.Reader (ReaderT(..))
-import           Control.Monad.Trans.State (StateT(..))
+import           Control.Monad.Trans.State.Strict (StateT(..))
 import           Data.Fix
-import           Data.Foldable
+-- import           Data.Foldable
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
-import           Data.HashSet (HashSet)
-import qualified Data.HashSet as S
+-- import           Data.HashSet (HashSet)
+-- import qualified Data.HashSet as S
 import           Data.IORef
 import           Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
@@ -75,10 +75,10 @@ newtype Reducer m a = Reducer
 instance Has (Maybe FilePath, Scopes m v) (Scopes m v) where
     hasLens f (x, y) = (x,) <$> f y
 
-gatherNames :: NExprLoc -> HashSet VarName
-gatherNames = cata $ \case
-    NSym_ _ var -> S.singleton var
-    Compose (Ann _ x) -> fold x
+-- gatherNames :: NExprLoc -> HashSet VarName
+-- gatherNames = cata $ \case
+--     NSym_ _ var -> S.singleton var
+--     Compose (Ann _ x) -> fold x
 
 reduceExpr :: MonadIO m => Maybe FilePath -> NExprLoc -> m NExprLoc
 reduceExpr mpath expr

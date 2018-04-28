@@ -31,9 +31,9 @@ import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
-import           Control.Monad.State
+import           Control.Monad.State.Strict
 import           Control.Monad.Trans.Reader (ReaderT(..))
-import           Control.Monad.Trans.State (StateT(..))
+import           Control.Monad.Trans.State.Strict (StateT(..))
 import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.Fix
@@ -62,6 +62,7 @@ import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
+import           System.Console.Haskeline.MonadException hiding (catch)
 import           System.Directory
 import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
@@ -431,6 +432,11 @@ instance MonadCatch m => MonadCatch (Lazy m) where
 
 instance MonadThrow m => MonadThrow (Lazy m) where
     throwM = Lazy . throwM
+
+instance MonadException m => MonadException (Lazy m) where
+  controlIO f = Lazy $ controlIO $ \(RunIO run) ->
+      let run' = RunIO (fmap Lazy . run . runLazy)
+      in fmap runLazy $ f run'
 
 instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
           Alternative m, MonadPlus m, Typeable m)

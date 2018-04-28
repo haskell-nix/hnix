@@ -46,7 +46,7 @@ main = do
                     mapM_ (processFile opts)
                         =<< (lines <$> liftIO (readFile path))
                 Nothing -> case filePaths opts of
-                    [] -> liftIO $ Repl.shell (pure ())
+                    [] -> Repl.shell (pure ())
                     ["-"] ->
                         handleResult opts Nothing . parseNixTextLoc
                             =<< liftIO Text.getContents
@@ -73,7 +73,7 @@ main = do
                     errorWithoutStackTrace . show
                         =<< renderFrames @(NThunk (Lazy IO)) frames
 
-            when (repl opts) $ liftIO $ Repl.shell (pure ())
+            when (repl opts) $ Repl.shell (pure ())
 
     process opts mpath expr = do
         let printer :: (MonadNix e m, MonadIO m) => NValue m -> m ()
