@@ -114,7 +114,7 @@ builtinsList = sequence [
 
     , add0 Normal   "nixPath"                    nixPath
     , add  TopLevel "abort"                      throw_ -- for now
-    , add' Normal   "add"                        (arity2 ((+) @Integer))
+    , add2  Normal  "add"                        add_
     , add2 Normal   "all"                        all_
     , add2 Normal   "any"                        any_
     , add  Normal   "attrNames"                  attrNames
@@ -272,6 +272,16 @@ unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
 -- of the list.
 length_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 length_ = toValue . (length :: [NThunk m] -> Int) <=< fromValue
+
+add_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+add_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
+    (NVConstant (NInt x),   NVConstant (NInt y))   ->
+        toNix ( x + y :: Integer)
+    (NVConstant (NFloat x), NVConstant (NInt y))   -> toNix (x + fromInteger y)
+    (NVConstant (NInt x),   NVConstant (NFloat y)) -> toNix (fromInteger x + y)
+    (NVConstant (NFloat x), NVConstant (NFloat y)) -> toNix (x + y)
+    (_, _) ->
+        throwError $ Addition x' y'
 
 div_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 div_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
@@ -547,23 +557,26 @@ genericClosure = fromValue @(AttrSet (NThunk m)) >=> \s ->
       (Just startSet, Just operator) ->
           fromValue @[NThunk m] startSet >>= \ss ->
           force operator $ \op ->
-              toValue @[NThunk m] =<< (ss ++) . snd <$> go op ss S.empty
+              toValue @[NThunk m] =<< snd <$> go op ss S.empty
   where
     go :: NValue m -> [NThunk m] -> Set (NValue m)
        -> m (Set (NValue m), [NThunk m])
     go _ [] ks = pure (ks, [])
-    go op (t:ts) ks = force t $ \v -> fromValue @(AttrSet (NThunk m)) t >>= \s ->
-        case M.lookup "key" s of
-            Nothing ->
-                throwError
-                    ("builtins.genericClosure: Attribute 'key' required" :: String)
-            Just k -> force k $ \k' ->
-                if S.member k' ks
-                    then go op ts ks
-                    else do
-                        ys <- fromValue @[NThunk m] =<< (op `callFunc` pure v)
-                        (ks'', zs) <- go op ts (S.insert k' ks)
-                        fmap ((zs ++) . (ys ++)) <$> go op ys ks''
+    go op (t:ts) ks =
+        force t $ \v -> fromValue @(AttrSet (NThunk m)) t >>= \s ->
+            case M.lookup "key" s of
+                Nothing ->
+                    throwError
+                        ("builtins.genericClosure: Attribute 'key' required" :: String)
+                Just k -> force k $ \k' ->
+                    if S.member k' ks
+                        then go op ts ks
+                        else do
+                            ys <- fromValue @[NThunk m] =<< (op `callFunc` pure v)
+                            case S.toList ks of
+                                []  -> checkComparable k' k'
+                                j:_ -> checkComparable k' j
+                            fmap (t:) <$> go op (ts ++ ys) (S.insert k' ks)
 
 replaceStrings :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m) -> m (NValue m)
 replaceStrings tfrom tto ts =
