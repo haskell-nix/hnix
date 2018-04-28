@@ -43,6 +43,8 @@ import qualified Data.HashMap.Lazy as M
 import           Data.List
 import           Data.Maybe
 import           Data.Semigroup
+import           Data.Set (Set)
+import qualified Data.Set as S
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Text.Encoding
@@ -78,7 +80,7 @@ builtins = do
     lst <- ([("builtins", ref)] ++) <$> topLevelBuiltins
     pushScope (M.fromList lst) currentScopes
   where
-    buildMap = M.fromList . map mapping <$> fullBuiltinsList
+    buildMap = M.fromList . map mapping <$> builtinsList
     topLevelBuiltins = map mapping . filter isTopLevel <$> fullBuiltinsList
 
     fullBuiltinsList = concatMap go <$> builtinsList
@@ -132,6 +134,7 @@ builtinsList = sequence [
       )
     , add  TopLevel "derivationStrict"           derivationStrict_
     , add  TopLevel "dirOf"                      dirOf
+    , add2 Normal   "div"                        div_
     , add2 Normal   "elem"                       elem_
     , add2 Normal   "elemAt"                     elemAt_
     , add  Normal   "fetchTarball"               fetchTarball
@@ -140,6 +143,7 @@ builtinsList = sequence [
     , add  Normal   "fromJSON"                   fromJSON
     , add  Normal   "functionArgs"               functionArgs
     , add2 Normal   "genList"                    genList
+    , add  Normal   "genericClosure"             genericClosure
     , add2 Normal   "getAttr"                    getAttr
     , add  Normal   "getEnv"                     getEnv_
     , add2 Normal   "hasAttr"                    hasAttr
@@ -267,6 +271,16 @@ unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
 -- of the list.
 length_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 length_ = toValue . (length :: [NThunk m] -> Int) <=< fromValue
+
+div_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+div_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
+    (NVConstant (NInt x),   NVConstant (NInt y))   ->
+        toNix (floor (fromInteger x / fromInteger y :: Double) :: Integer)
+    (NVConstant (NFloat x), NVConstant (NInt y))   -> toNix (x / fromInteger y)
+    (NVConstant (NInt x),   NVConstant (NFloat y)) -> toNix (fromInteger x / y)
+    (NVConstant (NFloat x), NVConstant (NFloat y)) -> toNix (x / y)
+    (_, _) ->
+        throwError $ Division x' y'
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 anyM _ []       = return False
@@ -472,6 +486,7 @@ dirOf x = x >>= \case
     NVPath path -> pure $ nvPath $ takeDirectory path
     v -> throwError @String $ "dirOf: expected string or path, got " ++ show v
 
+-- jww (2018-04-28): This should only be a string argument, and not coerced?
 unsafeDiscardStringContext :: MonadNix e m => m (NValue m) -> m (NValue m)
 unsafeDiscardStringContext = fromValue @Text >=> toNix
 
@@ -512,6 +527,45 @@ genList generator = fromValue @Integer >=> \n ->
         toNix =<< forM [0 .. n - 1] (\i -> thunk $ f `callFunc` toNix i)
     else throwError @String $ "builtins.genList: Expected a non-negative number, got "
              ++ show n
+
+genericClosure :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
+genericClosure = fromValue @(AttrSet (NThunk m)) >=> \s ->
+    case (M.lookup "startSet" s, M.lookup "operator" s) of
+      (Nothing, Nothing) ->
+          throwError
+              ("builtins.genericClosure: Attributes 'startSet' and 'operator' required"
+                   :: String)
+      (Nothing, Just _) ->
+          throwError
+              ("builtins.genericClosure: Attribute 'startSet' required"
+                   :: String)
+      (Just _, Nothing) ->
+          throwError
+              ("builtins.genericClosure: Attribute 'operator' required"
+                   :: String)
+      (Just startSet, Just operator) ->
+          fromValue @[NThunk m] startSet >>= \ss ->
+          force operator $ \op ->
+              toValue @[NThunk m] =<< snd <$> go op ss S.empty
+  where
+    go :: NValue m -> [NThunk m] -> Set (NValue m)
+       -> m (Set (NValue m), [NThunk m])
+    go _ [] ks = pure (ks, [])
+    go op (t:ts) ks =
+        force t $ \v -> fromValue @(AttrSet (NThunk m)) t >>= \s ->
+            case M.lookup "key" s of
+                Nothing ->
+                    throwError
+                        ("builtins.genericClosure: Attribute 'key' required" :: String)
+                Just k -> force k $ \k' ->
+                    if S.member k' ks
+                        then go op ts ks
+                        else do
+                            ys <- fromValue @[NThunk m] =<< (op `callFunc` pure v)
+                            case S.toList ks of
+                                []  -> checkComparable k' k'
+                                j:_ -> checkComparable k' j
+                            fmap (t:) <$> go op (ts ++ ys) (S.insert k' ks)
 
 replaceStrings :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m) -> m (NValue m)
 replaceStrings tfrom tto ts =

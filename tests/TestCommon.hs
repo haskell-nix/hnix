@@ -1,5 +1,9 @@
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TypeApplications #-}
+
 module TestCommon where
 
+import Control.Monad.Catch
 import Data.Text (Text, unpack)
 import Nix
 import System.Environment
@@ -18,7 +22,11 @@ hnixEvalFile opts file = do
     Success expr -> do
         setEnv "TEST_VAR" "foo"
         runLazyM opts $
-            evaluateExpression (Just file) nixEvalExprLoc normalForm expr
+            catch (evaluateExpression (Just file) nixEvalExprLoc
+                                      normalForm expr) $ \case
+                NixException frames ->
+                    errorWithoutStackTrace . show
+                        =<< renderFrames @(NThunk (Lazy IO)) frames
 
 hnixEvalText :: Options -> Text -> IO (NValueNF (Lazy IO))
 hnixEvalText opts src = case parseNixText src of
