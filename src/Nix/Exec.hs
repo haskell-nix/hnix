@@ -47,7 +47,8 @@ import qualified Data.Text as Text
 import           Data.Typeable
 import           Data.Void
 import           Network.HTTP.Client
-
+import           Network.HTTP.Client.TLS
+import           Network.HTTP.Types
 import           Nix.Atoms
 import           Nix.Context
 import           Nix.Convert
@@ -549,18 +550,24 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
             err -> throwError $ "nix-instantiate failed: " ++ show err
 
     getURL url = do
-        traceM $ "fetching HTTP URL: " ++ url
-        liftIO $ do
-          manager - newManager defaultManagerSettings
-          initialRequest <- parseRequest url
-          let request = initialRequest { method = "GET" }
-          response <- httpLbs request manager
-          print response
-
-          throwError $ "just for now" 
-        
-        
-
+        let urlstr = Text.unpack url
+        traceM $ "fetching HTTP URL: " ++ urlstr
+        response <- liftIO $ do
+          req <- parseRequest urlstr
+          manager <-
+            if secure req
+               then newTlsManager
+               else newManager defaultManagerSettings
+          -- print req
+          httpLbs (req { method = "GET" }) manager
+          -- return response
+        let status = statusCode (responseStatus response)
+        if  status /= 200
+          then throwError ("fail, got " ++ show status ++ " when fetching url:" ++ urlstr)
+          else do
+            let bstr = responseBody response
+            -- liftIO $ print bstr
+            throwError ("success in downloading but hnix store is not ready yet. so fail here. url is " ++ urlstr)
 
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a

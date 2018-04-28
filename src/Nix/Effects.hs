@@ -31,4 +31,4 @@ class MonadFile m => MonadEffects m where
 
     nixInstantiateExpr :: String -> m (NValue m)
 
-    getURL :: String -> m (NValue m)
+    getURL :: Text -> m (NValue m)

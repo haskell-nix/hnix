@@ -817,20 +817,10 @@ fetchurl v = v >>= \case
  where
     go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
     go msha = \case
-        NVStr uri _ -> fetch uri msha
-        NVConstant (NUri uri) -> fetch uri msha
+        NVStr uri _ -> getURL uri -- msha
+        NVConstant (NUri uri) -> getURL uri -- msha
         v -> throwError @String $ "builtins.fetchurl: Expected URI or string, got "
                 ++ show v
-
-    fetch :: Text -> Maybe (NThunk m) -> m (NValue m)
-    fetch uri Nothing =
-        nixInstantiateExpr $ "builtins.fetchurl \"" ++
-            Text.unpack uri ++ "\""
-    fetch url (Just m) = fromValue m >>= \sha ->
-        nixInstantiateExpr $ "builtins.fetchurl { "
-          ++ "url    = \"" ++ Text.unpack url ++ "\"; "
-          ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"
-
 
 partition_ :: forall e m. MonadNix e m
            => m (NValue m) -> m (NValue m) -> m (NValue m)
