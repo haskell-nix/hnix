@@ -44,6 +44,7 @@ import           Data.List
 import           Data.List.Split
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import qualified Data.Time as Time
 import           Data.Typeable
 import           Data.Void
 import           Nix.Atoms
@@ -502,6 +503,8 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
     getEnvVar = liftIO . lookupEnv
 
     getCurrentSystemOS = return $ Text.pack System.Info.os
+
+    getCurrentTime = liftIO $ Time.getCurrentTime
 
     -- Invert the conversion done by GHC_CONVERT_CPU in GHC's aclocal.m4
     getCurrentSystemArch = return $ Text.pack $ case System.Info.arch of

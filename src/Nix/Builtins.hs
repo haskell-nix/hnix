@@ -38,6 +38,7 @@ import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
 import           Data.Coerce
 import           Data.Fix
+import           Data.Fixed
 import           Data.Foldable (foldrM)
 import qualified Data.HashMap.Lazy as M
 import           Data.List
@@ -49,6 +50,7 @@ import           Data.Text.Encoding
 import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Lazy.Builder as Builder
 import           Data.These (fromThese)
+import           Data.Time (UTCTime, diffUTCTime)
 import           Data.Traversable (mapM)
 import           Language.Haskell.TH.Syntax (addDependentFile, runIO)
 import           Nix.Atoms
@@ -123,6 +125,7 @@ builtinsList = sequence [
     , add  Normal   "concatLists"                concatLists
     , add' Normal   "concatStringsSep"           (arity2 Text.intercalate)
     , add0 Normal   "currentSystem"              currentSystem
+    , add0 Normal   "currentTime"                currentTime
     , add2 Normal   "deepSeq"                    deepSeq
     , add0 TopLevel "derivation"                 $(do
           let f = "data/nix/corepkgs/derivation.nix"
@@ -818,6 +821,12 @@ currentSystem = do
   os <- getCurrentSystemOS
   arch <- getCurrentSystemArch
   return $ nvStr (arch <> "-" <> os) mempty
+
+currentTime :: MonadNix e m => m (NValue m)
+currentTime = do
+  let since = (read "1970-01-01 00:00:00.000000 UTC") :: UTCTime
+  ct <- getCurrentTime
+  return . nvConstant . NInt $ fromIntegral $ fromEnum $ diffUTCTime ct since
 
 derivationStrict_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 derivationStrict_ = (>>= derivationStrict)

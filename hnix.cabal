@@ -111,6 +111,7 @@ library
     , template-haskell
     , text
     , these
+    , time
     , transformers
     , unix
     , unordered-containers >=0.2.9 && <0.3
