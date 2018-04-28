@@ -124,6 +124,7 @@ renderValueFrame level = pure . (:[]) . \case
     ForcingThunk       -> text "ForcingThunk"
     ConcerningValue _v -> text "ConcerningValue"
     Comparison _ _     -> text "Comparing"
+    Addition _ _       -> text "Adding"
     Division _ _       -> text "Dividing"
 
     Coercion x y ->

@@ -317,6 +317,7 @@ data ValueFrame m
     = ForcingThunk
     | ConcerningValue (NValue m)
     | Comparison (NValue m) (NValue m)
+    | Addition (NValue m) (NValue m)
     | Division (NValue m) (NValue m)
     | Coercion ValueType ValueType
     | CoercionToJsonNF (NValueNF m)

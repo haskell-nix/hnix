@@ -114,7 +114,7 @@ builtinsList = sequence [
 
     , add0 Normal   "nixPath"                    nixPath
     , add  TopLevel "abort"                      throw_ -- for now
-    , add' Normal   "add"                        (arity2 ((+) @Integer))
+    , add2  Normal  "add"                        add_
     , add2 Normal   "all"                        all_
     , add2 Normal   "any"                        any_
     , add  Normal   "attrNames"                  attrNames
@@ -271,6 +271,16 @@ unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
 -- of the list.
 length_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 length_ = toValue . (length :: [NThunk m] -> Int) <=< fromValue
+
+add_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+add_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
+    (NVConstant (NInt x),   NVConstant (NInt y))   ->
+        toNix ( x + y :: Integer)
+    (NVConstant (NFloat x), NVConstant (NInt y))   -> toNix (x + fromInteger y)
+    (NVConstant (NInt x),   NVConstant (NFloat y)) -> toNix (fromInteger x + y)
+    (NVConstant (NFloat x), NVConstant (NFloat y)) -> toNix (x + y)
+    (_, _) ->
+        throwError $ Addition x' y'
 
 div_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 div_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
