@@ -75,10 +75,10 @@ newtype Reducer m a = Reducer
 instance Has (Maybe FilePath, Scopes m v) (Scopes m v) where
     hasLens f (x, y) = (x,) <$> f y
 
-gatherNames :: NExprLoc -> HashSet VarName
-gatherNames = cata $ \case
-    NSym_ _ var -> S.singleton var
-    Compose (Ann _ x) -> fold x
+-- gatherNames :: NExprLoc -> HashSet VarName
+-- gatherNames = cata $ \case
+--     NSym_ _ var -> S.singleton var
+--     Compose (Ann _ x) -> fold x
 
 reduceExpr :: MonadIO m => Maybe FilePath -> NExprLoc -> m NExprLoc
 reduceExpr mpath expr
