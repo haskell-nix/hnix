@@ -552,13 +552,16 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
               [] -> throwError @String "exec: missing program"
               (prog:args) -> do
                 (exitCode, out, _) <- liftIO $ readProcessWithExitCode prog args ""
+                let t = Text.strip (Text.pack out)
+                let emsg = "program[" ++ prog ++ "] args=" ++ show args
                 case exitCode of
                   ExitSuccess -> do
-                    case parseNixTextLoc (Text.pack out) of
+                    if Text.null t then throwError $ "exec has no output :" ++ emsg 
+                    else case parseNixTextLoc t of
                       Failure err ->
-                        throwError $ "Error parsing output of exec: " ++ show err
+                        throwError $ "Error parsing output of exec: " ++ show err ++ " " ++ emsg
                       Success v -> evalExprLoc v
-                  err -> throwError $ "exec  failed: " ++ show err ++ " program[" ++ prog ++ "] args " ++ show args
+                  err -> throwError $ "exec  failed: " ++ show err ++ " " ++ emsg
                 
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a

@@ -188,6 +188,7 @@ builtinsList = sequence [
     , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
     , add2 Normal   "unsafeGetAttrPos"           unsafeGetAttrPos
     , add2 TopLevel "trace"                      trace'
+    , add  Normal   "exec"                       exec' 
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -769,6 +770,13 @@ trace' msg ma = do
   z <- fromValue @Text msg
   traceEffect (Text.unpack z) 
   ma
+
+
+exec' :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
+exec' xs = do
+  ls <- fromValue @[NThunk m] xs
+  xs <- mapM (fromValue @Text . force') ls
+  exec (map Text.unpack xs)
 
 fetchTarball :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 fetchTarball v = v >>= \case
