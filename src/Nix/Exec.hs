@@ -46,6 +46,8 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Typeable
 import           Data.Void
+import           Network.HTTP.Client
+
 import           Nix.Atoms
 import           Nix.Context
 import           Nix.Convert
@@ -546,8 +548,17 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
                 Success v -> evalExprLoc v
             err -> throwError $ "nix-instantiate failed: " ++ show err
 
-    -- simpleHTTP expr = do
-    --         traceM $ "fetching HTTP URL: " ++ expr
+    getURL url = do
+        traceM $ "fetching HTTP URL: " ++ url
+        liftIO $ do
+          manager - newManager defaultManagerSettings
+          initialRequest <- parseRequest url
+          let request = initialRequest { method = "GET" }
+          response <- httpLbs request manager
+          print response
+
+          throwError $ "just for now" 
+        
         
 
 
