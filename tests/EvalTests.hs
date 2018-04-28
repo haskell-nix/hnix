@@ -85,6 +85,9 @@ case_match_failure_null =
 case_inherit_in_rec_set =
     constantEqualText "1" "let x = 1; in (rec { inherit x; }).x"
 
+case_lang_version =
+    constantEqualText "5" "builtins.langVersion"
+
 case_rec_set_attr_path_simpl =
     constantEqualText "123" [i|
       let x = rec {

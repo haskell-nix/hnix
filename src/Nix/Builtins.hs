@@ -101,6 +101,9 @@ builtinsList = sequence [
       do version <- toValue ("2.0" :: Text)
          pure $ Builtin Normal ("nixVersion", version)
 
+    , do version <- toValue (5 :: Int)
+         pure $ Builtin Normal ("langVersion", version)
+
     , add0 TopLevel "__nixPath"                  nixPath
     , add0 Normal   "nixPath"                    nixPath
     , add  TopLevel "abort"                      throw_ -- for now
