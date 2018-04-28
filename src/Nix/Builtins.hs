@@ -81,22 +81,19 @@ builtins = do
     pushScope (M.fromList lst) currentScopes
   where
     buildMap = M.fromList . map mapping <$> builtinsList
-    topLevelBuiltins = map mapping . filter isTopLevel <$> fullBuiltinsList
+    topLevelBuiltins = map mapping <$> fullBuiltinsList
 
-    fullBuiltinsList = concatMap go <$> builtinsList
+    fullBuiltinsList = map go <$> builtinsList
       where
-        go b@(Builtin TopLevel _) = [b]
-        go b@(Builtin Normal (name, builtin)) =
-            [ b, Builtin TopLevel ("__" <> name, builtin) ]
+        go b@(Builtin TopLevel _) = b
+        go (Builtin Normal (name, builtin)) =
+            Builtin TopLevel ("__" <> name, builtin)
 
 data BuiltinType = Normal | TopLevel
 data Builtin m = Builtin
-    { kind    :: BuiltinType
+    { _kind   :: BuiltinType
     , mapping :: (Text, NThunk m)
     }
-
-isTopLevel :: Builtin m -> Bool
-isTopLevel b = case kind b of Normal -> False; TopLevel -> True
 
 valueThunk :: forall e m. MonadNix e m => NValue m -> NThunk m
 valueThunk = value @_ @_ @m
