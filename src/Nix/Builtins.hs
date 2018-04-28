@@ -135,6 +135,7 @@ builtinsList = sequence [
     , add2 Normal   "elem"                       elem_
     , add2 Normal   "elemAt"                     elemAt_
     , add  Normal   "fetchTarball"               fetchTarball
+    , add  Normal   "fetchurl"                   fetchurl
     , add2 Normal   "filter"                     filter_
     , add3 Normal   "foldl'"                     foldl'_
     , add  Normal   "fromJSON"                   fromJSON
@@ -802,6 +803,33 @@ fetchTarball v = v >>= \case
         nixInstantiateExpr $ "builtins.fetchTarball { "
           ++ "url    = \"" ++ Text.unpack url ++ "\"; "
           ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"
+
+fetchurl :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
+fetchurl v = v >>= \case
+    NVSet s _ -> case M.lookup "url" s of
+        Nothing -> throwError @String "builtins.fetchurl: Missing url attribute"
+        Just url -> force url $ go (M.lookup "sha256" s)
+    v@NVStr {} -> go Nothing v
+    v@(NVConstant (NUri _)) -> go Nothing v
+    v -> throwError @String $ "builtins.fetchurl: Expected URI or set, got "
+            ++ show v
+ where
+    go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
+    go msha = \case
+        NVStr uri _ -> fetch uri msha
+        NVConstant (NUri uri) -> fetch uri msha
+        v -> throwError @String $ "builtins.fetchurl: Expected URI or string, got "
+                ++ show v
+
+    fetch :: Text -> Maybe (NThunk m) -> m (NValue m)
+    fetch uri Nothing =
+        nixInstantiateExpr $ "builtins.fetchurl \"" ++
+            Text.unpack uri ++ "\""
+    fetch url (Just m) = fromValue m >>= \sha ->
+        nixInstantiateExpr $ "builtins.fetchurl { "
+          ++ "url    = \"" ++ Text.unpack url ++ "\"; "
+          ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"
+
 
 partition_ :: forall e m. MonadNix e m
            => m (NValue m) -> m (NValue m) -> m (NValue m)
