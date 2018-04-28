@@ -134,7 +134,7 @@ builtinsList = sequence [
       )
     , add  TopLevel "derivationStrict"           derivationStrict_
     , add  TopLevel "dirOf"                      dirOf
-    , add' Normal   "div"                        (arity2 (div @Integer))
+    , add2 Normal   "div"                        div_
     , add2 Normal   "elem"                       elem_
     , add2 Normal   "elemAt"                     elemAt_
     , add  Normal   "fetchTarball"               fetchTarball
@@ -271,6 +271,16 @@ unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
 -- of the list.
 length_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 length_ = toValue . (length :: [NThunk m] -> Int) <=< fromValue
+
+div_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+div_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
+    (NVConstant (NInt x),   NVConstant (NInt y))   ->
+        toNix (floor (fromInteger x / fromInteger y :: Double) :: Integer)
+    (NVConstant (NFloat x), NVConstant (NInt y))   -> toNix (x / fromInteger y)
+    (NVConstant (NInt x),   NVConstant (NFloat y)) -> toNix (fromInteger x / y)
+    (NVConstant (NFloat x), NVConstant (NFloat y)) -> toNix (x / y)
+    (_, _) ->
+        throwError $ Division x' y'
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 anyM _ []       = return False
