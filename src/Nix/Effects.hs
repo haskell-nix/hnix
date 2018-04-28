@@ -34,3 +34,6 @@ class MonadFile m => MonadEffects m where
     getRecursiveSize :: a -> m (NValue m)
 
     traceEffect :: String -> m ()
+
+    exec :: [String] -> m (NValue m)
+
