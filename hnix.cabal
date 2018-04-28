@@ -95,6 +95,7 @@ library
     , exceptions
     , filepath
     , hashable
+    , HTTP
     , megaparsec
     , monadlist
     , mtl

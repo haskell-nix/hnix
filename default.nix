@@ -36,6 +36,7 @@ in haskellPackages.developPackage {
       [
         pkgs.nix
         haskellPackages.hpack
+        haskellPackages.HTTP
         # haskellPackages.cabal-install
       ];
 
