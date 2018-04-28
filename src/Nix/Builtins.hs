@@ -132,6 +132,7 @@ builtinsList = sequence [
       )
     , add  TopLevel "derivationStrict"           derivationStrict_
     , add  TopLevel "dirOf"                      dirOf
+    , add' Normal   "div"                        (arity2 (div @Integer))
     , add2 Normal   "elem"                       elem_
     , add2 Normal   "elemAt"                     elemAt_
     , add  Normal   "fetchTarball"               fetchTarball
