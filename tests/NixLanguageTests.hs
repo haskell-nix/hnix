@@ -107,13 +107,8 @@ assertLangOkXml opts file = do
   assertEqual "" expected $ Text.pack actual
 
 assertEval :: Options -> [FilePath] -> Assertion
-assertEval opts files = catch go $ \case
-    NixException frames -> do
-        -- msg <- runReaderT (renderFrames frames) opts
-        -- error $ "Evaluation error: " ++ show msg
-        error "Evaluation error"
-  where
-    go = case delete ".nix" $ sort $ map takeExtensions files of
+assertEval opts files =
+    case delete ".nix" $ sort $ map takeExtensions files of
         [] -> assertLangOkXml defaultOptions name
         [".exp"] -> assertLangOk defaultOptions name
         [".exp.disabled"] -> return ()
@@ -137,14 +132,14 @@ assertEval opts files = catch go $ \case
                         name
                 Opts.CompletionInvoked _ -> error "unused"
         _ -> assertFailure $ "Unknown test type " ++ show files
-      where
-        name = "data/nix/tests/lang/"
-            ++ the (map (takeFileName . dropExtensions) files)
+  where
+    name = "data/nix/tests/lang/"
+        ++ the (map (takeFileName . dropExtensions) files)
 
-        fixup ("--arg":x:y:rest) = "--arg":(x ++ "=" ++ y):fixup rest
-        fixup ("--argstr":x:y:rest) = "--argstr":(x ++ "=" ++ y):fixup rest
-        fixup (x:rest) = x:fixup rest
-        fixup [] = []
+    fixup ("--arg":x:y:rest) = "--arg":(x ++ "=" ++ y):fixup rest
+    fixup ("--argstr":x:y:rest) = "--argstr":(x ++ "=" ++ y):fixup rest
+    fixup (x:rest) = x:fixup rest
+    fixup [] = []
 
 assertEvalFail :: FilePath -> Assertion
 assertEvalFail file = catch ?? (\(_ :: SomeException) -> return ()) $ do
