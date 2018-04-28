@@ -546,6 +546,12 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
                 Success v -> evalExprLoc v
             err -> throwError $ "nix-instantiate failed: " ++ show err
 
+    -- simpleHTTP expr = do
+    --         traceM $ "fetching HTTP URL: " ++ expr
+        
+
+
+
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
 runLazyM opts = (`evalStateT` M.empty)
               . (`runReaderT` newContext opts)
