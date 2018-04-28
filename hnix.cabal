@@ -95,6 +95,7 @@ library
     , exceptions
     , filepath
     , hashable
+    , haskeline 
     , megaparsec
     , monadlist
     , mtl
@@ -139,6 +140,7 @@ executable hnix
     , deepseq
     , exceptions
     , filepath
+    , haskeline
     , hnix
     , mtl
     , optparse-applicative

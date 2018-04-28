@@ -62,6 +62,7 @@ import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
+import           System.Console.Haskeline.MonadException hiding (catch)
 import           System.Directory
 import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
@@ -545,6 +546,16 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
                         ++ show err
                 Success v -> evalExprLoc v
             err -> throwError $ "nix-instantiate failed: " ++ show err
+
+instance MonadException m => MonadException (StateT s m) where
+    controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
+                    run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
+                    in fmap (flip runStateT s) $ f run'
+
+instance (MonadException m) => MonadException (Lazy m) where
+  controlIO f = Lazy $ controlIO $ \(RunIO run) ->
+                    let run' = RunIO (fmap Lazy . run . runLazy)
+                    in fmap runLazy $ f run'
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
 runLazyM opts = (`evalStateT` M.empty)
