@@ -102,6 +102,7 @@ builtinsList = sequence [
          pure $ Builtin Normal ("nixVersion", version)
 
     , add0 TopLevel "__nixPath"                  nixPath
+    , add0 Normal   "nixPath"                    nixPath
     , add  TopLevel "abort"                      throw_ -- for now
     , add' Normal   "add"                        (arity2 ((+) @Integer))
     , add2 Normal   "all"                        all_
