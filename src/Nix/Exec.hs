@@ -545,6 +545,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
                         ++ show err
                 Success v -> evalExprLoc v
             err -> throwError $ "nix-instantiate failed: " ++ show err
+    traceEffect = liftIO . putStrLn
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
 runLazyM opts = (`evalStateT` M.empty)

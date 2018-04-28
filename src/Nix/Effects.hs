@@ -30,3 +30,5 @@ class MonadFile m => MonadEffects m where
     derivationStrict :: NValue m -> m (NValue m)
 
     nixInstantiateExpr :: String -> m (NValue m)
+
+    traceEffect :: String -> m ()
