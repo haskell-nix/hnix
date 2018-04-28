@@ -134,6 +134,7 @@ builtinsList = sequence [
     , add2 Normal   "div"                        div_
     , add2 Normal   "elem"                       elem_
     , add2 Normal   "elemAt"                     elemAt_
+    , add  Normal   "exec"                       exec_
     , add0 Normal   "false"                      (return $ nvConstant $ NBool False)
     , add  Normal   "fetchTarball"               fetchTarball
     , add2 Normal   "filter"                     filter_
@@ -189,11 +190,11 @@ builtinsList = sequence [
     , add  Normal   "toPath"                     toPath
     , add  TopLevel "toString"                   toString
     , add  Normal   "toXML"                      toXML_
+    , add2 TopLevel "trace"                      trace_
     , add  Normal   "tryEval"                    tryEval
     , add  Normal   "typeOf"                     typeOf
     , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
     , add2 Normal   "unsafeGetAttrPos"           unsafeGetAttrPos
-    , add2 TopLevel "trace"                      trace_
     , add  Normal   "valueSize"                  getRecursiveSize
   ]
   where
@@ -854,6 +855,12 @@ trace_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue 
 trace_ msg action = do
   traceEffect . Text.unpack =<< fromValue @Text msg
   action
+
+exec_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
+exec_ xs = do
+  ls <- fromValue @[NThunk m] xs
+  xs <- traverse (fromValue @Text . force') ls
+  exec (map Text.unpack xs)
 
 fetchTarball :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 fetchTarball v = v >>= \case

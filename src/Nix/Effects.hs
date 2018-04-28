@@ -36,4 +36,3 @@ class MonadFile m => MonadEffects m where
     traceEffect :: String -> m ()
 
     exec :: [String] -> m (NValue m)
-
