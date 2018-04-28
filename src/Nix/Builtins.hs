@@ -193,6 +193,7 @@ builtinsList = sequence [
     , add  Normal   "typeOf"                     typeOf
     , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
     , add2 Normal   "unsafeGetAttrPos"           unsafeGetAttrPos
+    , add2 TopLevel "trace"                      trace_
     , add  Normal   "valueSize"                  getRecursiveSize
   ]
   where
@@ -848,6 +849,11 @@ tryEval e = catch (onSuccess <$> e) (pure . onError)
         [ ("success", valueThunk (nvConstant (NBool False)))
         , ("value", valueThunk (nvConstant (NBool False)))
         ]
+
+trace_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+trace_ msg action = do
+  traceEffect . Text.unpack =<< fromValue @Text msg
+  action
 
 fetchTarball :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 fetchTarball v = v >>= \case

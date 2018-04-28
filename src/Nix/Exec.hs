@@ -582,6 +582,8 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
         const $ toNix (0 :: Integer)
 #endif
 
+    traceEffect = liftIO . putStrLn
+
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
 runLazyM opts = (`evalStateT` M.empty)
               . (`runReaderT` newContext opts)
