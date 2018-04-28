@@ -16,12 +16,10 @@ import qualified Data.Map as Map
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           GHC.Exts
-import           Nix.Frames
 import           Nix.Lint
 import           Nix.Options
 import           Nix.Parser
 import           Nix.Pretty
-import           Nix.Render.Frame
 import           Nix.Utils
 import           Nix.XML
 import qualified Options.Applicative as Opts
@@ -107,7 +105,7 @@ assertLangOkXml opts file = do
   assertEqual "" expected $ Text.pack actual
 
 assertEval :: Options -> [FilePath] -> Assertion
-assertEval opts files =
+assertEval _opts files =
     case delete ".nix" $ sort $ map takeExtensions files of
         [] -> assertLangOkXml defaultOptions name
         [".exp"] -> assertLangOk defaultOptions name

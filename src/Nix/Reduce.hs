@@ -43,11 +43,11 @@ import           Control.Monad.State.Strict
 import           Control.Monad.Trans.Reader (ReaderT(..))
 import           Control.Monad.Trans.State.Strict (StateT(..))
 import           Data.Fix
-import           Data.Foldable
+-- import           Data.Foldable
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
-import           Data.HashSet (HashSet)
-import qualified Data.HashSet as S
+-- import           Data.HashSet (HashSet)
+-- import qualified Data.HashSet as S
 import           Data.IORef
 import           Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
