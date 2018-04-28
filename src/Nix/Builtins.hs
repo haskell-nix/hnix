@@ -43,6 +43,8 @@ import qualified Data.HashMap.Lazy as M
 import           Data.List
 import           Data.Maybe
 import           Data.Semigroup
+import           Data.Set (Set)
+import qualified Data.Set as S
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Text.Encoding
@@ -141,6 +143,7 @@ builtinsList = sequence [
     , add  Normal   "fromJSON"                   fromJSON
     , add  Normal   "functionArgs"               functionArgs
     , add2 Normal   "genList"                    genList
+    , add  Normal   "genericClosure"             genericClosure
     , add2 Normal   "getAttr"                    getAttr
     , add  Normal   "getEnv"                     getEnv_
     , add2 Normal   "hasAttr"                    hasAttr
@@ -514,6 +517,42 @@ genList generator = fromValue @Integer >=> \n ->
         toNix =<< forM [0 .. n - 1] (\i -> thunk $ f `callFunc` toNix i)
     else throwError @String $ "builtins.genList: Expected a non-negative number, got "
              ++ show n
+
+genericClosure :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
+genericClosure = fromValue @(AttrSet (NThunk m)) >=> \s ->
+    case (M.lookup "startSet" s, M.lookup "operator" s) of
+      (Nothing, Nothing) ->
+          throwError
+              ("builtins.genericClosure: Attributes 'startSet' and 'operator' required"
+                   :: String)
+      (Nothing, Just _) ->
+          throwError
+              ("builtins.genericClosure: Attribute 'startSet' required"
+                   :: String)
+      (Just _, Nothing) ->
+          throwError
+              ("builtins.genericClosure: Attribute 'operator' required"
+                   :: String)
+      (Just startSet, Just operator) ->
+          fromValue @[NThunk m] startSet >>= \ss ->
+          force operator $ \op ->
+              toValue @[NThunk m] =<< (ss ++) . snd <$> go op ss S.empty
+  where
+    go :: NValue m -> [NThunk m] -> Set (NValue m)
+       -> m (Set (NValue m), [NThunk m])
+    go _ [] ks = pure (ks, [])
+    go op (t:ts) ks = force t $ \v -> fromValue @(AttrSet (NThunk m)) t >>= \s ->
+        case M.lookup "key" s of
+            Nothing ->
+                throwError
+                    ("builtins.genericClosure: Attribute 'key' required" :: String)
+            Just k -> force k $ \k' ->
+                if S.member k' ks
+                    then go op ts ks
+                    else do
+                        ys <- fromValue @[NThunk m] =<< (op `callFunc` pure v)
+                        (ks'', zs) <- go op ts (S.insert k' ks)
+                        fmap ((zs ++) . (ys ++)) <$> go op ys ks''
 
 replaceStrings :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m) -> m (NValue m)
 replaceStrings tfrom tto ts =
