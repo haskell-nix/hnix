@@ -88,9 +88,9 @@ main = do
                     | normalize opts =
                       liftIO . print . prettyNValueNF <=< normalForm
                     | values opts  =
-                      liftIO . print <=< renderNValueProv
+                      liftIO . print <=< prettyNValueProv
                     | otherwise  =
-                      liftIO . print <=< renderNValue
+                      liftIO . print <=< prettyNValue
 
         if | evaluate opts, tracing opts ->
                  evaluateExpression mpath
