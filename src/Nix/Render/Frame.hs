@@ -87,29 +87,32 @@ wrapExpr x = Fix (Fix (NSym "<?>") <$ x)
 
 renderEvalFrame :: (MonadReader e m, Has e Options, MonadFile m)
                 => NixLevel -> EvalFrame m v -> m [Doc]
-renderEvalFrame _level f = do
+renderEvalFrame level f = do
     opts :: Options <- asks (view hasLens)
     case f of
         EvaluatingExpr _scope e@(Fix (Compose (Ann ann _))) ->
-            (:[]) <$> renderLocation ann
-                (render opts "While evaluating" "Expression" e)
+            fmap (:[]) $ renderLocation ann
+                =<< renderExpr level "While evaluating" "Expression" e
 
         ForcingExpr _scope e@(Fix (Compose (Ann ann _)))
             | thunks opts ->
-                  (:[]) <$> renderLocation ann
-                      (render opts "While forcing thunk from"
-                                   "Forcing thunk" e)
+                  fmap (:[]) $ renderLocation ann
+                      =<< renderExpr level "While forcing thunk from"
+                                     "Forcing thunk" e
         _ -> pure []
-  where
-    render opts longLabel shortLabel e@(Fix (Compose (Ann _ x))) =
-        let rendered
-                | verbose opts >= DebugInfo =
-                  text (PS.ppShow (stripAnnotation e))
-                | verbose opts >= Chatty =
-                  prettyNix (stripAnnotation e)
-                | otherwise =
-                  prettyNix (Fix (Fix (NSym "<?>") <$ x))
-        in if verbose opts >= Chatty
+
+renderExpr :: (MonadReader e m, Has e Options, MonadFile m)
+           => NixLevel -> String -> String -> NExprLoc -> m Doc
+renderExpr _level longLabel shortLabel e@(Fix (Compose (Ann _ x))) = do
+    opts :: Options <- asks (view hasLens)
+    let rendered
+            | verbose opts >= DebugInfo =
+              text (PS.ppShow (stripAnnotation e))
+            | verbose opts >= Chatty =
+              prettyNix (stripAnnotation e)
+            | otherwise =
+              prettyNix (Fix (Fix (NSym "<?>") <$ x))
+    pure $ if verbose opts >= Chatty
            then text (longLabel ++ ":\n>>>>>>>>")
                     P.<$> indent 2 rendered
                     P.<$> text "<<<<<<<<"
@@ -133,17 +136,21 @@ renderValueFrame level = pure . (:[]) . \case
     ExpectationNF _t _v -> text "ExpectationNF"
     Expectation _t _v   -> text "Expectation"
 
+renderValue :: (MonadReader e m, Has e Options, MonadFile m, MonadVar m)
+            => NixLevel -> String -> String -> NValue m -> m Doc
+renderValue _level _longLabel _shortLabel v = do
+    opts :: Options <- asks (view hasLens)
+    if values opts
+        then prettyNValueProv v
+        else prettyNValue v
+
 renderExecFrame :: (MonadReader e m, Has e Options, MonadVar m, MonadFile m)
                 => NixLevel -> ExecFrame m -> m [Doc]
-renderExecFrame _level f = do
-    opts :: Options <- asks (view hasLens)
-    (:[]) <$> case f of
-        Assertion ann v
-            | values opts ->
-                  renderLocation ann =<<
-                      ((text "Assertion failed:" </>) <$> prettyNValueProv v)
-            | otherwise ->
-                  renderLocation ann (text "Assertion failed")
+renderExecFrame level = \case
+    Assertion ann v ->
+        fmap (:[]) $ renderLocation ann
+            =<< ((text "Assertion failed:" </>)
+                     <$> renderValue level "" "" v)
 
 renderThunkLoop :: (MonadReader e m, Has e Options, MonadFile m)
                 => NixLevel -> ThunkLoop -> m [Doc]
