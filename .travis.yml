@@ -1,14 +1,17 @@
 env:
-  - GHCVERSION="ghc822" NIXPKGS_TESTS="yes" MATCHING_TESTS="yes"
+  - GHCVERSION="ghc822" NIXPKGS_TESTS="yes" MATCHING_TESTS="yes" TRACING="true"
+  - GHCVERSION="ghc822" NIXPKGS_TESTS="yes" MATCHING_TESTS="yes" TRACING="false"
+  - GHCVERSION="ghc842" NIXPKGS_TESTS="yes" MATCHING_TESTS="yes" TRACING="true"
+  - GHCVERSION="ghc842" NIXPKGS_TESTS="yes" MATCHING_TESTS="yes" TRACING="false"
 
 language: nix
 
-script: nix-build --argstr compiler "$GHCVERSION"
+script: nix-build --argstr compiler "$GHCVERSION" --arg doTracing "$TRACING"
 
 notifications:
   webhooks:
     urls:
-      - https://webhooks.gitter.im/e/76ed871ff977c0ed653f
+      - https://webhooks.gitter.im/e/b0312b18473340459d3e
     on_success: change  # options: [always|never|change] default: always
     on_failure: always  # options: [always|never|change] default: always
     on_start: never     # options: [always|never|change] default: always
