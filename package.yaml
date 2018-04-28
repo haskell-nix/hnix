@@ -33,6 +33,7 @@ dependencies:
 
 ghc-options:
   - -Wall
+  - -Werror
 
 flags:
   tracing:
