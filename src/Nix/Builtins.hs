@@ -472,6 +472,7 @@ dirOf x = x >>= \case
     NVPath path -> pure $ nvPath $ takeDirectory path
     v -> throwError @String $ "dirOf: expected string or path, got " ++ show v
 
+-- jww (2018-04-28): This should only be a string argument, and not coerced?
 unsafeDiscardStringContext :: MonadNix e m => m (NValue m) -> m (NValue m)
 unsafeDiscardStringContext = fromValue @Text >=> toNix
 
