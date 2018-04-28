@@ -78,7 +78,7 @@ builtins = do
     lst <- ([("builtins", ref)] ++) <$> topLevelBuiltins
     pushScope (M.fromList lst) currentScopes
   where
-    buildMap = M.fromList . map mapping <$> fullBuiltinsList
+    buildMap = M.fromList . map mapping <$> builtinsList
     topLevelBuiltins = map mapping . filter isTopLevel <$> fullBuiltinsList
 
     fullBuiltinsList = concatMap go <$> builtinsList
