@@ -33,7 +33,6 @@ dependencies:
 
 ghc-options:
   - -Wall
-  - -Werror
 
 flags:
   tracing:
@@ -84,6 +83,10 @@ library:
     - unix
     - vector
     - xml
+  when:
+    - condition: impl(ghc < 8.4.0)
+      dependencies:
+        - ghc-datasize
 
 executables:
   hnix:
