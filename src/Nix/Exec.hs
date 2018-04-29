@@ -564,7 +564,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
 #if MIN_VERSION_ghc_datasize(0,2,0) && __GLASGOW_HASKELL__ >= 804
         toNix @Integer <=< fmap fromIntegral . liftIO . recursiveSize
 #else
-        toNix (0 :: Integer)
+        const $ toNix (0 :: Integer)
 #endif
 #else
         const $ toNix (0 :: Integer)
