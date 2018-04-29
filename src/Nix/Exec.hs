@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -72,6 +73,12 @@ import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
 import           Text.PrettyPrint.ANSI.Leijen (text)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
+
+#ifdef MIN_VERSION_ghc_datasize
+#if MIN_VERSION_ghc_datasize(0,2,0) && __GLASGOW_HASKELL__ >= 804
+import           GHC.DataSize
+#endif
+#endif
 
 type MonadNix e m =
     (Scoped e (NThunk m) m, Framed e m, Has e SrcSpan, Has e Options,
@@ -436,7 +443,7 @@ instance MonadThrow m => MonadThrow (Lazy m) where
 instance MonadException m => MonadException (Lazy m) where
   controlIO f = Lazy $ controlIO $ \(RunIO run) ->
       let run' = RunIO (fmap Lazy . run . runLazy)
-      in fmap runLazy $ f run'
+      in runLazy <$> f run'
 
 instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
           Alternative m, MonadPlus m, Typeable m)
@@ -551,6 +558,17 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
                         ++ show err
                 Success v -> evalExprLoc v
             err -> throwError $ "nix-instantiate failed: " ++ show err
+
+    getRecursiveSize =
+#ifdef MIN_VERSION_ghc_datasize
+#if MIN_VERSION_ghc_datasize(0,2,0) && __GLASGOW_HASKELL__ >= 804
+        toNix @Integer <=< fmap fromIntegral . liftIO . recursiveSize
+#else
+        const $ toNix (0 :: Integer)
+#endif
+#else
+        const $ toNix (0 :: Integer)
+#endif
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
 runLazyM opts = (`evalStateT` M.empty)

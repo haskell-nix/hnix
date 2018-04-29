@@ -9,6 +9,8 @@
 
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -20,10 +22,12 @@
 module Repl where
 
 import           Nix
+import           Nix.Convert
 import           Nix.Eval
 import           Nix.Scope
 import qualified Nix.Type.Env as Env
 import           Nix.Type.Infer
+import           Nix.Utils
 
 import qualified Data.HashMap.Lazy as M
 import           Data.List (isPrefixOf, foldl')
@@ -34,6 +38,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 
 import           Control.Monad.Identity
+import           Control.Monad.Reader
 import           Control.Monad.State.Strict
 
 import           System.Console.Haskeline.MonadException
@@ -67,7 +72,8 @@ hoistErr (Failure err) = do
 -- Execution
 -------------------------------------------------------------------------------
 
-exec :: forall e m. (MonadNix e m, MonadIO m) => Bool -> Text.Text -> Repl e m ()
+exec :: forall e m. (MonadNix e m, MonadIO m, MonadException m)
+     => Bool -> Text.Text -> Repl e m ()
 exec update source = do
   -- Get the current interpreter state
   st <- get
@@ -87,13 +93,24 @@ exec update source = do
   when update (put st')
 
   -- If a value is entered, print it.
-  val <-
-      -- jww (2018-04-12): Once the user is able to establish definitions
-      -- in the repl, they should be passed here.
-      lift $ lift $ pushScope @(NThunk m) M.empty $ evalExprLoc expr
-  liftIO $ print val
+  lift $ lift $ do
+    -- jww (2018-04-12): Once the user is able to establish definitions in
+    -- the repl, they should be passed here.
+    pushScope @(NThunk m) M.empty $ catch (go expr) $ \case
+      NixException frames -> do
+        liftIO . print =<< renderFrames @(NThunk m) frames
+ where
+  go expr = do
+    val <- evalExprLoc expr
+    opts :: Nix.Options <- asks (view hasLens)
+    if | normalize opts ->
+         liftIO . print . prettyNValueNF =<< normalForm val
+       | values opts ->
+         liftIO . print =<< prettyNValueProv val
+       | otherwise ->
+         liftIO . print =<< prettyNValue val
 
-cmd :: (MonadNix e m, MonadIO m) => String -> Repl e m ()
+cmd :: (MonadNix e m, MonadIO m, MonadException m) => String -> Repl e m ()
 cmd source = exec True (Text.pack source)
 
 -------------------------------------------------------------------------------
@@ -108,7 +125,7 @@ browse _ = do
   -- liftIO $ mapM_ putStrLn $ ppenv (tyctx st)
 
 -- :load command
-load :: (MonadNix e m, MonadIO m) => [String] -> Repl e m ()
+load :: (MonadNix e m, MonadIO m, MonadException m) => [String] -> Repl e m ()
 load args = do
   contents <- liftIO $ Text.readFile (unwords args)
   exec True contents
@@ -145,7 +162,8 @@ comp n = do
   -- let defs = map unpack $ Map.keys ctx
   return $ filter (isPrefixOf n) (cmds {-++ defs-})
 
-options :: (MonadNix e m, MonadIO m) => [(String, [String] -> Repl e m ())]
+options :: (MonadNix e m, MonadIO m, MonadException m)
+        => [(String, [String] -> Repl e m ())]
 options = [
     ("load"   , load)
   , ("browse" , browse)
