@@ -74,8 +74,10 @@ import           System.Process (readProcessWithExitCode)
 import           Text.PrettyPrint.ANSI.Leijen (text)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
 
+#ifdef MIN_VERSION_ghc_datasize
 #if MIN_VERSION_ghc_datasize(0,2,0) && __GLASGOW_HASKELL__ >= 804
 import           GHC.DataSize
+#endif
 #endif
 
 type MonadNix e m =
@@ -558,10 +560,14 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
             err -> throwError $ "nix-instantiate failed: " ++ show err
 
     getRecursiveSize =
+#ifdef MIN_VERSION_ghc_datasize
 #if MIN_VERSION_ghc_datasize(0,2,0) && __GLASGOW_HASKELL__ >= 804
         toNix @Integer <=< fmap fromIntegral . liftIO . recursiveSize
 #else
         toNix (0 :: Integer)
+#endif
+#else
+        const $ toNix (0 :: Integer)
 #endif
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
