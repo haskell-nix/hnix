@@ -4,6 +4,7 @@
 
 module Nix.Context where
 
+import Data.Time.Clock.POSIX (POSIXTime)
 import Nix.Options
 import Nix.Scope
 import Nix.Frames
@@ -15,19 +16,23 @@ data Context m v = Context
     , source  :: SrcSpan
     , frames  :: Frames
     , options :: Options
+    , currentTime :: POSIXTime
     }
 
 instance Has (Context m v) (Scopes m v) where
-    hasLens f (Context x y z w) = (\x' -> Context x' y z w) <$> f x
+    hasLens f (Context x y z w t) = (\x' -> Context x' y z w t) <$> f x
 
 instance Has (Context m v) SrcSpan where
-    hasLens f (Context x y z w) = (\y' -> Context x y' z w) <$> f y
+    hasLens f (Context x y z w t) = (\y' -> Context x y' z w t) <$> f y
 
 instance Has (Context m v) Frames where
-    hasLens f (Context x y z w) = (\z' -> Context x y z' w) <$> f z
+    hasLens f (Context x y z w t) = (\z' -> Context x y z' w t) <$> f z
 
 instance Has (Context m v) Options where
-    hasLens f (Context x y z w) = (\w' -> Context x y z w') <$> f w
+    hasLens f (Context x y z w t) = (\w' -> Context x y z w' t) <$> f w
 
-newContext :: Options -> Context m v
+instance Has (Context m v) POSIXTime where
+    hasLens f (Context x y z w t) = (\t' -> Context x y z w t') <$> f t
+
+newContext :: Options -> POSIXTime -> Context m v
 newContext = Context emptyScopes nullSpan []

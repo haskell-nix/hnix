@@ -45,7 +45,7 @@ import           Data.List
 import           Data.List.Split
 import           Data.Text (Text)
 import qualified Data.Text as Text
-import qualified Data.Time as Time
+import           Data.Time.Clock.POSIX
 import           Data.Typeable
 import           Data.Void
 import           Nix.Atoms
@@ -517,7 +517,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
 
     getCurrentSystemOS = return $ Text.pack System.Info.os
 
-    getCurrentTime = liftIO $ Time.getCurrentTime
+    getPosixTime = liftIO $ getPOSIXTime
 
     -- Invert the conversion done by GHC_CONVERT_CPU in GHC's aclocal.m4
     getCurrentSystemArch = return $ Text.pack $ case System.Info.arch of
@@ -573,10 +573,10 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
         const $ toNix (0 :: Integer)
 #endif
 
-runLazyM :: Options -> MonadIO m => Lazy m a -> m a
-runLazyM opts = (`evalStateT` M.empty)
-              . (`runReaderT` newContext opts)
-              . runLazy
+runLazyM :: Options -> POSIXTime -> MonadIO m => Lazy m a -> m a
+runLazyM opts t = (`evalStateT` M.empty)
+    . (`runReaderT` newContext opts t)
+    . runLazy
 
 -- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
 --   This is incorrect on POSIX systems, because if @b@ is a symlink, its

@@ -1,7 +1,7 @@
 module Nix.Effects where
 
 import Data.Text (Text)
-import Data.Time (UTCTime)
+import Data.Time.Clock.POSIX (POSIXTime)
 import Nix.Render
 import Nix.Utils
 import Nix.Value
@@ -25,7 +25,7 @@ class MonadFile m => MonadEffects m where
     getCurrentSystemOS :: m Text
     getCurrentSystemArch :: m Text
 
-    getCurrentTime :: m (UTCTime)
+    getPosixTime :: m (POSIXTime)
 
     listDirectory :: FilePath -> m [FilePath]
     getSymbolicLinkStatus :: FilePath -> m FileStatus
