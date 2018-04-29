@@ -24,6 +24,7 @@
 module Nix.Value where
 
 import           Control.Monad
+import           Control.Monad.Catch
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import qualified Data.Aeson as A
@@ -163,6 +164,35 @@ instance Show (NValueF m (Fix (NValueF m))) where
               . showString " "
               . showsPrec 11 b
 
+instance Eq (NValue m) where
+    NVConstant (NFloat x) == NVConstant (NInt y)   = x == fromInteger y
+    NVConstant (NInt x)   == NVConstant (NFloat y) = fromInteger x == y
+    NVConstant (NInt x)   == NVConstant (NInt y)   = x == y
+    NVConstant (NFloat x) == NVConstant (NFloat y) = x == y
+    NVStr x _ == NVStr y _ = x < y
+    NVPath x  == NVPath y  = x < y
+    _         == _         = False
+
+instance Ord (NValue m) where
+    NVConstant (NFloat x) <= NVConstant (NInt y)   = x <= fromInteger y
+    NVConstant (NInt x)   <= NVConstant (NFloat y) = fromInteger x <= y
+    NVConstant (NInt x)   <= NVConstant (NInt y)   = x <= y
+    NVConstant (NFloat x) <= NVConstant (NFloat y) = x <= y
+    NVStr x _ <= NVStr y _ = x < y
+    NVPath x  <= NVPath y  = x < y
+    _         <= _         = False
+
+checkComparable :: (Framed e m, MonadThrow m, Typeable m)
+                => NValue m -> NValue m -> m ()
+checkComparable x y = case (x, y) of
+    (NVConstant (NFloat _), NVConstant (NInt _))   -> pure ()
+    (NVConstant (NInt _),   NVConstant (NFloat _)) -> pure ()
+    (NVConstant (NInt _),   NVConstant (NInt _))   -> pure ()
+    (NVConstant (NFloat _), NVConstant (NFloat _)) -> pure ()
+    (NVStr _ _, NVStr _ _) -> pure ()
+    (NVPath _, NVPath _)   -> pure ()
+    _ -> throwError $ Comparison x y
+
 builtin :: Monad m
         => String -> (m (NValue m) -> m (NValue m)) -> m (NValue m)
 builtin name f = return $ nvBuiltin name f
@@ -286,6 +316,9 @@ instance Show (NThunk m) where
 data ValueFrame m
     = ForcingThunk
     | ConcerningValue (NValue m)
+    | Comparison (NValue m) (NValue m)
+    | Addition (NValue m) (NValue m)
+    | Division (NValue m) (NValue m)
     | Coercion ValueType ValueType
     | CoercionToJsonNF (NValueNF m)
     | CoercionFromJson A.Value

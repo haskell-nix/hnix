@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -16,10 +17,8 @@ import qualified EvalTests
 import qualified Nix
 import           Nix.Exec
 import           Nix.Expr.Types
-import           Nix.Frames
 import           Nix.Options
 import           Nix.Parser
-import           Nix.Render.Frame
 import           Nix.Value
 import qualified NixLanguageTests
 import qualified ParserTests
@@ -73,11 +72,7 @@ ensureNixpkgsCanParse =
   consider path action k = action >>= \case
     Failure err -> errorWithoutStackTrace $
       "Parsing " ++ path ++ " failed: " ++ show err
-    Success expr -> Exc.catch (k expr) $ \case
-      NixException frames ->
-          -- errorWithoutStackTrace . show
-          --     =<< runReaderT (renderFrames frames) defaultOptions
-          errorWithoutStackTrace "FAILED"
+    Success expr -> k expr
 
 main :: IO ()
 main = do

@@ -26,6 +26,9 @@ import           TestCommon
 case_basic_sum =
     constantEqualText "2" "1 + 1"
 
+case_basic_div =
+    constantEqualText "3" "builtins.div 6 2"
+
 case_basic_function =
     constantEqualText "2" "(a: a) 2"
 
