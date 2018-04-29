@@ -164,6 +164,7 @@ builtinsList = sequence [
     , add  Normal   "listToAttrs"                listToAttrs
     , add2 TopLevel "map"                        map_
     , add2 Normal   "match"                      match_
+    , add2 Normal   "mul"                        mul_
     , add  Normal   "parseDrvName"               parseDrvName
     , add2 Normal   "partition"                  partition_
     , add  Normal   "pathExists"                 pathExists_
@@ -281,6 +282,16 @@ add_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
     (NVConstant (NFloat x), NVConstant (NFloat y)) -> toNix (x + y)
     (_, _) ->
         throwError $ Addition x' y'
+
+mul_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+mul_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
+    (NVConstant (NInt x),   NVConstant (NInt y))   ->
+        toNix ( x * y :: Integer)
+    (NVConstant (NFloat x), NVConstant (NInt y))   -> toNix (x * fromInteger y)
+    (NVConstant (NInt x),   NVConstant (NFloat y)) -> toNix (fromInteger x * y)
+    (NVConstant (NFloat x), NVConstant (NFloat y)) -> toNix (x * y)
+    (_, _) ->
+        throwError $ Multiplication x' y'
 
 div_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 div_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
