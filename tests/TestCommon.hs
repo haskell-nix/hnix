@@ -5,6 +5,7 @@ module TestCommon where
 
 import Control.Monad.Catch
 import Data.Text (Text, unpack)
+import Data.Time.Clock.POSIX
 import Nix
 import System.Environment
 import System.IO
@@ -21,7 +22,8 @@ hnixEvalFile opts file = do
         error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
     Success expr -> do
         setEnv "TEST_VAR" "foo"
-        runLazyM opts $
+        t <- getPOSIXTime
+        runLazyM opts t $
             catch (evaluateExpression (Just file) nixEvalExprLoc
                                       normalForm expr) $ \case
                 NixException frames ->
@@ -33,8 +35,9 @@ hnixEvalText opts src = case parseNixText src of
     Failure err        ->
         error $ "Parsing failed for expressien `"
             ++ unpack src ++ "`.\n" ++ show err
-    Success expr ->
-        runLazyM opts $ normalForm =<< nixEvalExpr Nothing expr
+    Success expr -> do
+        t <- getPOSIXTime
+        runLazyM opts t $ normalForm =<< nixEvalExpr Nothing expr
 
 nixEvalString :: String -> IO String
 nixEvalString expr = do

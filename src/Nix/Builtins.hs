@@ -881,10 +881,10 @@ currentSystem = do
   arch <- getCurrentSystemArch
   return $ nvStr (arch <> "-" <> os) mempty
 
-currentTime :: (MonadEffects m, MonadNix e m) => m (NValue m)
+currentTime :: MonadNix e m => m (NValue m)
 currentTime = do
   t <- getPosixTime
-  return . nvConstant . NInt $ fromIntegral $ fromEnum $ t
+  return . nvConstant . NInt $ fromIntegral $ fromEnum  t
 
 derivationStrict_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 derivationStrict_ = (>>= derivationStrict)

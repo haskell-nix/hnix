@@ -14,6 +14,7 @@ import qualified Data.HashMap.Lazy as M
 import           Data.Maybe (isJust)
 import           Data.String.Interpolate.IsString
 import           Data.Text (Text)
+import           Data.Time.Clock.POSIX
 import           Nix
 import qualified System.Directory as D
 import           System.Environment
@@ -168,10 +169,11 @@ instance (Show r, Show (NValueF m r), Eq r) => Eq (NValueF m r) where
 
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
 constantEqual a b = do
+    t <- getPOSIXTime
     -- putStrLn =<< lint (stripAnnotation a)
-    a' <- runLazyM defaultOptions $ normalForm =<< nixEvalExprLoc Nothing a
+    a' <- runLazyM defaultOptions t $ normalForm =<< nixEvalExprLoc Nothing a
     -- putStrLn =<< lint (stripAnnotation b)
-    b' <- runLazyM defaultOptions $ normalForm =<< nixEvalExprLoc Nothing b
+    b' <- runLazyM defaultOptions t $ normalForm =<< nixEvalExprLoc Nothing b
     assertEqual "" a' b'
 
 constantEqualText' :: Text -> Text -> Assertion
