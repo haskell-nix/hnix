@@ -164,7 +164,7 @@ builtinsList = sequence [
     , add  Normal   "parseDrvName"               parseDrvName
     , add2 Normal   "partition"                  partition_
     , add  Normal   "pathExists"                 pathExists_
-    , add' TopLevel   "placeHolder"                placeHolder
+    , add  TopLevel "placeholder"                placeHolder
     , add  Normal   "readDir"                    readDir_
     , add  Normal   "readFile"                   readFile_
     , add2 TopLevel "removeAttrs"                removeAttrs
@@ -267,9 +267,9 @@ unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
                  ++ show (x, y)
 
 -- This function is a bit special in that it doesn't care about the contents
--- of the list.
+-- of the list.length_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 length_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
-length_ = toValue . (length :: [NThunk m] -> Int) <=< fromValue
+length_ =  toValue . (length :: [NThunk m] -> Int) <=< fromValue
 
 add_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 add_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
@@ -745,8 +745,10 @@ hashString algo s = Prim $ do
             ++ "expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got " ++ show algo
     pure $ decodeUtf8 $ Base16.encode $ hash $ encodeUtf8 s
 
-placeHolder:: MonadNix e m => Text -> Prim m Text
-placeHolder output = hashString "sha256" output
+placeHolder :: MonadNix e m => m (NValue m) -> m (NValue m)
+placeHolder = fromValue @Text >=> \_ -> hash $ Text.pack "fdasdfas"
+  where
+    hash x = (toBuiltin "") . hashString (Text.pack "sha256") $ x
 
 absolutePathFromValue :: MonadNix e m => NValue m -> m FilePath
 absolutePathFromValue = \case
