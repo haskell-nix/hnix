@@ -81,22 +81,19 @@ builtins = do
     pushScope (M.fromList lst) currentScopes
   where
     buildMap = M.fromList . map mapping <$> builtinsList
-    topLevelBuiltins = map mapping . filter isTopLevel <$> fullBuiltinsList
+    topLevelBuiltins = map mapping <$> fullBuiltinsList
 
-    fullBuiltinsList = concatMap go <$> builtinsList
+    fullBuiltinsList = map go <$> builtinsList
       where
-        go b@(Builtin TopLevel _) = [b]
-        go b@(Builtin Normal (name, builtin)) =
-            [ b, Builtin TopLevel ("__" <> name, builtin) ]
+        go b@(Builtin TopLevel _) = b
+        go (Builtin Normal (name, builtin)) =
+            Builtin TopLevel ("__" <> name, builtin)
 
 data BuiltinType = Normal | TopLevel
 data Builtin m = Builtin
-    { kind    :: BuiltinType
+    { _kind   :: BuiltinType
     , mapping :: (Text, NThunk m)
     }
-
-isTopLevel :: Builtin m -> Bool
-isTopLevel b = case kind b of Normal -> False; TopLevel -> True
 
 valueThunk :: forall e m. MonadNix e m => NValue m -> NThunk m
 valueThunk = value @_ @_ @m
@@ -114,7 +111,7 @@ builtinsList = sequence [
 
     , add0 Normal   "nixPath"                    nixPath
     , add  TopLevel "abort"                      throw_ -- for now
-    , add' Normal   "add"                        (arity2 ((+) @Integer))
+    , add2  Normal  "add"                        add_
     , add2 Normal   "all"                        all_
     , add2 Normal   "any"                        any_
     , add  Normal   "attrNames"                  attrNames
@@ -177,6 +174,7 @@ builtinsList = sequence [
     , add2 Normal   "sort"                       sort_
     , add2 Normal   "split"                      split_
     , add  Normal   "splitVersion"               splitVersion_
+    , add0 Normal   "storeDir"                   (return $ nvPath "/nix/store")
     , add' Normal   "stringLength"               (arity1 Text.length)
     , add' Normal   "sub"                        (arity2 ((-) @Integer))
     , add' Normal   "substring"                  substring
@@ -192,6 +190,7 @@ builtinsList = sequence [
     , add  Normal   "typeOf"                     typeOf
     , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
     , add2 Normal   "unsafeGetAttrPos"           unsafeGetAttrPos
+    , add  Normal   "valueSize"                  getRecursiveSize
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -271,6 +270,16 @@ unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
 -- of the list.
 length_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 length_ = toValue . (length :: [NThunk m] -> Int) <=< fromValue
+
+add_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+add_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
+    (NVConstant (NInt x),   NVConstant (NInt y))   ->
+        toNix ( x + y :: Integer)
+    (NVConstant (NFloat x), NVConstant (NInt y))   -> toNix (x + fromInteger y)
+    (NVConstant (NInt x),   NVConstant (NFloat y)) -> toNix (fromInteger x + y)
+    (NVConstant (NFloat x), NVConstant (NFloat y)) -> toNix (x + y)
+    (_, _) ->
+        throwError $ Addition x' y'
 
 div_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 div_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
