@@ -19,10 +19,11 @@ let inherit (nixpkgs) pkgs;
 
   haskellPackages = pkgs.haskell.packages.${compiler}.override {
     overrides = with pkgs.haskell.lib; self: super: rec {
-      compact   = if compiler == "ghc842"
-                  then doJailbreak super.compact
-                  else super.compact;
       serialise = dontCheck super.serialise;
+      compact =
+        if compiler == "ghc842"
+        then doJailbreak super.compact
+        else super.compact;
       ghc-datasize =
         pkgs.haskell.lib.overrideCabal super.ghc-datasize (attrs: {
           enableLibraryProfiling    = false;
@@ -57,6 +58,6 @@ in haskellPackages.developPackage {
 
     configureFlags =
          pkgs.stdenv.lib.optional doTracing "--flags=tracing"
-      ++ pkgs.stdenv.lib.optional doStrict  "--ghc-options=-Werror"
+      ++ pkgs.stdenv.lib.optional doStrict  "--ghc-options=-Werror";
   });
 }
