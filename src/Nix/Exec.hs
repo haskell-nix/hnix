@@ -441,7 +441,7 @@ instance MonadThrow m => MonadThrow (Lazy m) where
 instance MonadException m => MonadException (Lazy m) where
   controlIO f = Lazy $ controlIO $ \(RunIO run) ->
       let run' = RunIO (fmap Lazy . run . runLazy)
-      in fmap runLazy $ f run'
+      in runLazy <$> f run'
 
 instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
           Alternative m, MonadPlus m, Typeable m)
