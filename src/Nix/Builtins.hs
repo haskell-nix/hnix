@@ -146,6 +146,7 @@ builtinsList = sequence [
     , add2 Normal   "getAttr"                    getAttr
     , add  Normal   "getEnv"                     getEnv_
     , add2 Normal   "hasAttr"                    hasAttr
+    , add  Normal   "hasContext"                 hasContext
     , add' Normal   "hashString"                 hashString
     , add  Normal   "head"                       head_
     , add  TopLevel "import"                     import_
@@ -257,6 +258,10 @@ attrsetGet k s = case M.lookup k s of
     Just v -> pure v
     Nothing ->
         throwError $ ErrorCall $ "Attribute '" ++ Text.unpack k ++ "' required"
+
+hasContext :: MonadNix e m => m (NValue m) -> m (NValue m)
+hasContext =
+    toNix . not . null . (appEndo ?? []) . snd <=< fromValue @(Text, DList Text)
 
 getAttr :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 getAttr x y = x >>= \x' -> y >>= \y' -> case (x', y') of
@@ -770,9 +775,9 @@ hashString algo s = Prim $ do
     pure $ decodeUtf8 $ Base16.encode $ hash $ encodeUtf8 s
 
 placeHolder :: MonadNix e m => m (NValue m) -> m (NValue m)
-placeHolder = fromValue @Text >=> \_ -> hash $ Text.pack "fdasdfas"
-  where
-    hash x = (toBuiltin "") . hashString (Text.pack "sha256") $ x
+placeHolder = fromValue @Text >=> \_ -> do
+    h <- runPrim (hashString "sha256" "fdasdfas")
+    toNix h
 
 absolutePathFromValue :: MonadNix e m => NValue m -> m FilePath
 absolutePathFromValue = \case
