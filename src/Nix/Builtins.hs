@@ -173,6 +173,7 @@ builtinsList = sequence [
     , add2 Normal   "sort"                       sort_
     , add2 Normal   "split"                      split_
     , add  Normal   "splitVersion"               splitVersion_
+    , add0 Normal   "storeDir"                   (return $ nvPath "/nix/store")
     , add' Normal   "stringLength"               (arity1 Text.length)
     , add' Normal   "sub"                        (arity2 ((-) @Integer))
     , add' Normal   "substring"                  substring
