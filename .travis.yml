@@ -6,7 +6,7 @@ env:
 
 language: nix
 
-script: nix-build --argstr compiler "$GHCVERSION" --arg doTracing "$TRACING"
+script: nix-build --argstr compiler "$GHCVERSION" --arg doTracing "$TRACING" --arg doStrict true
 
 notifications:
   webhooks:

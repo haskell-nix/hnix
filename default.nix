@@ -2,6 +2,7 @@
 , doProfiling ? false
 , doBenchmark ? false
 , doTracing   ? false
+, doStrict    ? false
 , rev         ? "255a833e841628c0b834575664eae373e28cdc27"
 , sha256      ? "022xm1pf4fpjjy69g7qz6rpqnwpjcy1l0vj49m8xmgn553cs42ch"
 # , nixpkgs     ? import ((import <nixpkgs> {}).fetchFromGitHub {
@@ -54,8 +55,8 @@ in haskellPackages.developPackage {
 
     inherit doBenchmark;
 
-    configureFlags = if doTracing
-                     then [ "--flags=tracing" ]
-                     else [];
+    configureFlags =
+         pkgs.stdenv.lib.optional doTracing "--flags=tracing"
+      ++ pkgs.stdenv.lib.optional doStrict  "--ghc-options=-Werror"
   });
 }
