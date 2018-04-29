@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 760d308ea1a1df341e0191fee145518d3901d2eef3e8c4ee7c1f43a3de3acaad
+-- hash: 68d31ef3efbc6a780870d15ffe122839dbb3bde67177deb77de001d2e26af1b1
 
 name:           hnix
 version:        0.5.0
@@ -76,7 +76,7 @@ library
       Paths_hnix
   hs-source-dirs:
       src
-  ghc-options: -Wall -Werror
+  ghc-options: -Wall
   build-depends:
       aeson
     , ansi-wl-pprint
@@ -119,6 +119,9 @@ library
     , xml
   if flag(tracing)
     cpp-options: -DENABLE_TRACING=1
+  if impl(ghc < 8.4.0)
+    build-depends:
+        ghc-datasize
   default-language: Haskell2010
 
 executable hnix
@@ -128,7 +131,7 @@ executable hnix
       Paths_hnix
   hs-source-dirs:
       main
-  ghc-options: -Wall -Werror
+  ghc-options: -Wall
   build-depends:
       aeson
     , ansi-wl-pprint
@@ -166,7 +169,7 @@ test-suite hnix-tests
       Paths_hnix
   hs-source-dirs:
       tests
-  ghc-options: -Wall -Werror -threaded
+  ghc-options: -Wall -threaded
   build-depends:
       Glob
     , ansi-wl-pprint
@@ -206,7 +209,7 @@ benchmark hnix-benchmarks
       Paths_hnix
   hs-source-dirs:
       benchmarks
-  ghc-options: -Wall -Werror
+  ghc-options: -Wall
   build-depends:
       ansi-wl-pprint
     , base >=4.9 && <5
