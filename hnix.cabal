@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f2849e05edde8ddd3f02ee010be0fa0e7ee673392948670ced6209113f5b5e7f
+-- hash: 3928a85f453159f5a9ef8d10caa3a7df439c403f9f5abb658b1d1dc06b92fc25
 
 name:           hnix
 version:        0.5.0
@@ -95,6 +95,9 @@ library
     , exceptions
     , filepath
     , hashable
+    , http-client
+    , http-client-tls
+    , http-types
     , megaparsec
     , monadlist
     , mtl
