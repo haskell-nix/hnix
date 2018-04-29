@@ -269,7 +269,7 @@ unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
 -- This function is a bit special in that it doesn't care about the contents
 -- of the list.length_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 length_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
-length_ =  toValue . (length :: [NThunk m] -> Int) <=< fromValue
+length_ = toValue . (length :: [NThunk m] -> Int) <=< fromValue
 
 add_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 add_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
