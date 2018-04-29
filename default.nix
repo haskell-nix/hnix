@@ -22,6 +22,16 @@ let inherit (nixpkgs) pkgs;
                   then doJailbreak super.compact
                   else super.compact;
       serialise = dontCheck super.serialise;
+      ghc-datasize =
+        pkgs.haskell.lib.overrideCabal super.ghc-datasize (attrs: {
+          enableLibraryProfiling    = false;
+          enableExecutableProfiling = false;
+        });
+      ghc-heap-view =
+        pkgs.haskell.lib.overrideCabal super.ghc-heap-view (attrs: {
+          enableLibraryProfiling    = false;
+          enableExecutableProfiling = false;
+        });
     };
   };
 

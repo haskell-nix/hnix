@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -72,6 +73,10 @@ import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
 import           Text.PrettyPrint.ANSI.Leijen (text)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
+
+#if MIN_VERSION_ghc_datasize(0,2,0)
+import           GHC.DataSize
+#endif
 
 type MonadNix e m =
     (Scoped e (NThunk m) m, Framed e m, Has e SrcSpan, Has e Options,
@@ -551,6 +556,13 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
                         ++ show err
                 Success v -> evalExprLoc v
             err -> throwError $ "nix-instantiate failed: " ++ show err
+
+    getRecursiveSize =
+#if MIN_VERSION_ghc_datasize(0,2,0)
+        toNix @Integer <=< fmap fromIntegral . liftIO . recursiveSize
+#else
+        toNix (0 :: Integer)
+#endif
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
 runLazyM opts = (`evalStateT` M.empty)

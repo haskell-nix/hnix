@@ -191,7 +191,7 @@ builtinsList = sequence [
     , add  Normal   "typeOf"                     typeOf
     , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
     , add2 Normal   "unsafeGetAttrPos"           unsafeGetAttrPos
-
+    , add  TopLevel "__valueSize"                getRecursiveSize
   ]
   where
     wrap t n f = Builtin t (n, f)

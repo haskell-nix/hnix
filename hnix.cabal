@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 760d308ea1a1df341e0191fee145518d3901d2eef3e8c4ee7c1f43a3de3acaad
+-- hash: 0ae6db7ef792f86593ae6684bf7ab48b8e79cc147213ef6ab88475c142f9507a
 
 name:           hnix
 version:        0.5.0
@@ -94,6 +94,7 @@ library
     , directory
     , exceptions
     , filepath
+    , ghc-datasize
     , hashable
     , haskeline
     , megaparsec
