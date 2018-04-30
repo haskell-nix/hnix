@@ -44,11 +44,7 @@ class Monad m => MonadThunk v t m | v -> m, v -> t, t -> m, t -> v where
 
 data Thunk m v
     = Value v
-    | Thunk
-#if ENABLE_TRACING
-          !Int
-#endif
-          (Var m Bool) (Var m (Deferred m v))
+    | Thunk Int (Var m Bool) (Var m (Deferred m v))
 
 newtype ThunkLoop = ThunkLoop (Maybe Int)
     deriving (Show, Typeable)
@@ -64,7 +60,7 @@ buildThunk action =
     let !x = unsafePerformIO (atomicModifyIORef' counter (\c -> (succ c, c))) in
     Thunk x
 #else
-    Thunk
+    Thunk 0
 #endif
         <$> newVar False <*> newVar (Deferred action)
 
@@ -73,7 +69,7 @@ forceThunk (Value ref) k = k ref
 #if ENABLE_TRACING
 forceThunk (Thunk n active ref) k = do
 #else
-forceThunk (Thunk active ref) k = do
+forceThunk (Thunk _ active ref) k = do
 #endif
     eres <- readVar ref
     case eres of
@@ -98,11 +94,7 @@ forceThunk (Thunk active ref) k = do
 
 forceEffects :: (Framed e m, MonadVar m) => Thunk m v -> (v -> m a) -> m a
 forceEffects (Value ref) k = k ref
-#if ENABLE_TRACING
 forceEffects (Thunk _ active ref) k = do
-#else
-forceEffects (Thunk active ref) k = do
-#endif
     nowActive <- atomicModifyVar active (True,)
     if nowActive
         then return $ error "forceEffects: a value was expected"
