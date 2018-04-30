@@ -134,6 +134,7 @@ builtinsList = sequence [
     , add2 Normal   "div"                        div_
     , add2 Normal   "elem"                       elem_
     , add2 Normal   "elemAt"                     elemAt_
+    , add0 Normal   "false"                      (return $ nvConstant $ NBool False)
     , add  Normal   "fetchTarball"               fetchTarball
     , add2 Normal   "filter"                     filter_
     , add3 Normal   "foldl'"                     foldl'_
@@ -161,6 +162,7 @@ builtinsList = sequence [
     , add  Normal   "listToAttrs"                listToAttrs
     , add2 TopLevel "map"                        map_
     , add2 Normal   "match"                      match_
+    , add0 Normal   "null"                       (return $ nvConstant NNull)
     , add  Normal   "parseDrvName"               parseDrvName
     , add2 Normal   "partition"                  partition_
     , add  Normal   "pathExists"                 pathExists_
@@ -178,6 +180,7 @@ builtinsList = sequence [
     , add' Normal   "sub"                        (arity2 ((-) @Integer))
     , add' Normal   "substring"                  substring
     , add  Normal   "tail"                       tail_
+    , add0 Normal   "true"                       (return $ nvConstant $ NBool True)
     , add  TopLevel "throw"                      throw_
     , add' Normal   "toJSON"
       (arity1 $ decodeUtf8 . LBS.toStrict . A.encodingToLazyByteString
