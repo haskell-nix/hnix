@@ -318,6 +318,7 @@ data ValueFrame m
     | ConcerningValue (NValue m)
     | Comparison (NValue m) (NValue m)
     | Addition (NValue m) (NValue m)
+    | Multiplication (NValue m) (NValue m)
     | Division (NValue m) (NValue m)
     | Coercion ValueType ValueType
     | CoercionToJsonNF (NValueNF m)
