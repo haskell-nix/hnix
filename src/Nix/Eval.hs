@@ -52,7 +52,7 @@ class (Show v, Monad m) => MonadEval v m | v -> m where
 
     evalCurPos      :: m v
     evalConstant    :: NAtom -> m v
-    evalString      :: Text -> DList Text -> m v
+    evalString      :: NString (m v) -> m v
     evalLiteralPath :: FilePath -> m v
     evalEnvPath     :: FilePath -> m v
     evalUnary       :: NUnaryOp -> v -> m v
@@ -109,7 +109,7 @@ eval (NSym var) =
     lookupVar var >>= maybe (freeVariable var) (force ?? evaledSym var)
 
 eval (NConstant x)          = evalConstant x
-eval (NStr str)             = uncurry evalString =<< assembleString str
+eval (NStr str)             = evalString str
 eval (NLiteralPath p)       = evalLiteralPath p
 eval (NEnvPath p)           = evalEnvPath p
 eval (NUnary op arg)        = evalUnary op =<< arg
@@ -382,19 +382,19 @@ evalKeyNameDynamicNullable
 evalKeyNameDynamicNullable = \case
     StaticKey k p -> pure (Just k, p)
     DynamicKey k ->
-        runAntiquoted "\n" (fmap Just . assembleString) (>>= fromValueMay) k
+        runAntiquoted "\n" assembleString (>>= fromValueMay) k
             <&> \case Just (t, _) -> (Just t, Nothing)
                       _ -> (Nothing, Nothing)
 
 assembleString :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
-               => NString (m v) -> m (Text, DList Text)
+               => NString (m v) -> m (Maybe (Text, DList Text))
 assembleString = \case
     Indented _   parts -> fromParts parts
     DoubleQuoted parts -> fromParts parts
   where
-    go = runAntiquoted "\n" (pure . (, mempty)) (>>= fromValue)
+    go = runAntiquoted "\n" (pure . Just . (, mempty)) (>>= fromValueMay)
 
-    fromParts parts = mconcat <$> mapM go parts
+    fromParts parts = fmap mconcat . sequence <$> mapM go parts
 
 buildArgument :: forall e v t m. MonadNixEval e v t m
               => Params (m v) -> m v -> m (AttrSet t)

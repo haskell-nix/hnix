@@ -277,7 +277,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
           NNull    -> TNull
           NUri _   -> TUri
 
-    evalString      = const $ const $ mkSymbolic [TStr]
+    evalString      = const $ mkSymbolic [TStr]
     evalLiteralPath = const $ mkSymbolic [TPath]
     evalEnvPath     = const $ mkSymbolic [TPath]
 
