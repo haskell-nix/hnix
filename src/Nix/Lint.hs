@@ -238,19 +238,15 @@ unify context (Symbolic x) (Symbolic y) = do
 -- These aren't worth defining yet, because once we move to Hindley-Milner,
 -- we're not going to be managing Symbolic values this way anymore.
 
-instance FromValue (Text, DList Text) m (Symbolic m) where
-
-instance FromValue (AttrSet (SThunk m)) m (Symbolic m) where
-
-instance FromValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
-
-instance ToValue (AttrSet (SThunk m)) m (Symbolic m) where
-
-instance ToValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
+instance ToValue Bool m (Symbolic m) where
 
 instance ToValue [SThunk m] m (Symbolic m) where
 
-instance ToValue Bool m (Symbolic m) where
+instance FromValue (Text, DList Text) m (Symbolic m) where
+
+instance FromValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
+
+instance ToValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
 
 instance MonadLint e m => MonadThunk (Symbolic m) (SThunk m) m where
     thunk = fmap coerce . buildThunk
