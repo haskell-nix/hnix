@@ -548,7 +548,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
     nixInstantiateExpr expr = do
         traceM $ "Executing: "
             ++ show ["nix-instantiate", "--eval", "--expr ", expr]
-        (exitCode, out, _) <-
+        (exitCode, out, err) <-
             liftIO $ readProcessWithExitCode "nix-instantiate"
                 [ "--eval", "--expr", expr] ""
         case exitCode of
@@ -557,7 +557,9 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
                     throwError $ "Error parsing output of nix-instantiate: "
                         ++ show err
                 Success v -> evalExprLoc v
-            err -> throwError $ "nix-instantiate failed: " ++ show err
+            status ->
+                throwError $ "nix-instantiate failed: " ++ show status
+                    ++ ": " ++ err
 
     getRecursiveSize =
 #ifdef MIN_VERSION_ghc_datasize
