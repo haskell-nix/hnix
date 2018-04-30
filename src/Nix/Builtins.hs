@@ -81,22 +81,19 @@ builtins = do
     pushScope (M.fromList lst) currentScopes
   where
     buildMap = M.fromList . map mapping <$> builtinsList
-    topLevelBuiltins = map mapping . filter isTopLevel <$> fullBuiltinsList
+    topLevelBuiltins = map mapping <$> fullBuiltinsList
 
-    fullBuiltinsList = concatMap go <$> builtinsList
+    fullBuiltinsList = map go <$> builtinsList
       where
-        go b@(Builtin TopLevel _) = [b]
-        go b@(Builtin Normal (name, builtin)) =
-            [ b, Builtin TopLevel ("__" <> name, builtin) ]
+        go b@(Builtin TopLevel _) = b
+        go (Builtin Normal (name, builtin)) =
+            Builtin TopLevel ("__" <> name, builtin)
 
 data BuiltinType = Normal | TopLevel
 data Builtin m = Builtin
-    { kind    :: BuiltinType
+    { _kind   :: BuiltinType
     , mapping :: (Text, NThunk m)
     }
-
-isTopLevel :: Builtin m -> Bool
-isTopLevel b = case kind b of Normal -> False; TopLevel -> True
 
 valueThunk :: forall e m. MonadNix e m => NValue m -> NThunk m
 valueThunk = value @_ @_ @m
@@ -177,6 +174,7 @@ builtinsList = sequence [
     , add2 Normal   "sort"                       sort_
     , add2 Normal   "split"                      split_
     , add  Normal   "splitVersion"               splitVersion_
+    , add0 Normal   "storeDir"                   (return $ nvPath "/nix/store")
     , add' Normal   "stringLength"               (arity1 Text.length)
     , add' Normal   "sub"                        (arity2 ((-) @Integer))
     , add' Normal   "substring"                  substring
@@ -192,7 +190,7 @@ builtinsList = sequence [
     , add  Normal   "typeOf"                     typeOf
     , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
     , add2 Normal   "unsafeGetAttrPos"           unsafeGetAttrPos
-
+    , add  Normal   "valueSize"                  getRecursiveSize
   ]
   where
     wrap t n f = Builtin t (n, f)
