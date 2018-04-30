@@ -89,7 +89,7 @@ main = do
     , EvalTests.tests
     , PrettyTests.tests
     , evalComparisonTests ] ++
-    [ testCase "Nix languarge tests present" ensureLangTestsPresent
+    [ testCase "Nix language tests present" ensureLangTestsPresent
     | runLangTests ] ++
     [ nixLanguageTests | runLangTests ] ++
     [ testCase "Nixpkgs parses without errors" ensureNixpkgsCanParse
