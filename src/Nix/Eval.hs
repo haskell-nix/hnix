@@ -85,7 +85,7 @@ class (Show v, Monad m) => MonadEval v m | v -> m where
 
 type MonadNixEval e v t m =
     (MonadEval v m, Scoped e t m, MonadThunk v t m,
-     Framed e m, Has e SrcSpan, MonadVar m, MonadFix m,
+     Has e SrcSpan, MonadVar m, MonadFix m,
      ToValue Bool m v, ToValue [t] m v,
      FromValue (Text, DList Text) m v,
      ToValue (AttrSet t) m v, FromValue (AttrSet t) m v,
@@ -424,13 +424,15 @@ addSourcePositions :: (MonadReader e m, Has e SrcSpan)
 addSourcePositions f v@(Fix (Compose (Ann ann _))) =
     local (set hasLens ann) (f v)
 
-addStackFrames :: forall t e m a. (Scoped e t m, Framed e m, Typeable t, Typeable m)
-               => Transform NExprLocF (m a)
+addStackFrames
+    :: forall t e m a. (Scoped e t m, Framed e m, Typeable t, Typeable m)
+    => Transform NExprLocF (m a)
 addStackFrames f v = do
     scopes <- currentScopes @e @t
     withFrame Info (EvaluatingExpr scopes v) (f v)
 
-framedEvalExprLoc :: forall t e v m. (MonadNixEval e v t m, Typeable t, Typeable m)
-                  => NExprLoc -> m v
+framedEvalExprLoc
+    :: forall t e v m. (MonadNixEval e v t m, Framed e m, Typeable t, Typeable m)
+    => NExprLoc -> m v
 framedEvalExprLoc = adi (eval . annotated . getCompose)
                         (addStackFrames @t . addSourcePositions)
