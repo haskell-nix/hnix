@@ -108,6 +108,12 @@ class Has a b where
 instance Has a a where
     hasLens f = f
 
+instance Has (a, b) a where
+    hasLens f (x, y) = (, y) <$> f x
+
+instance Has (a, b) b where
+    hasLens f (x, y) = (x,) <$> f y
+
 toEncodingSorted :: A.Value -> A.Encoding
 toEncodingSorted = \case
     A.Object m ->
