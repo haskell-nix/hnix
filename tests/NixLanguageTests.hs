@@ -107,8 +107,9 @@ assertLangOkXml opts file = do
 assertEval :: Options -> [FilePath] -> Assertion
 assertEval _opts files =
     case delete ".nix" $ sort $ map takeExtensions files of
-        [] -> assertLangOkXml defaultOptions name
+        [] -> () <$ hnixEvalFile defaultOptions (name ++ ".nix")
         [".exp"] -> assertLangOk defaultOptions name
+        [".exp.xml"] -> assertLangOkXml defaultOptions name
         [".exp.disabled"] -> return ()
         [".exp-disabled"] -> return ()
         [".exp", ".flags"] -> do
