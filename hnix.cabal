@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c645369523720ac4958529bc3855a8407d647e54309528d27f5e1f90e596bbee
+-- hash: 07cd6a1b7913ff6635f99b4d896cdcbd096091580710fe2b350ebd5cedc52802
 
 name:           hnix
 version:        0.5.0
@@ -152,6 +152,7 @@ executable hnix
     , hnix
     , mtl
     , optparse-applicative
+    , pretty-show
     , repline
     , serialise
     , template-haskell

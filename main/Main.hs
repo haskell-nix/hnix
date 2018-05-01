@@ -25,12 +25,15 @@ import           Nix
 import           Nix.Convert
 import qualified Nix.Eval as Eval
 import           Nix.Lint
+import qualified Nix.Type.Env as Env
+import qualified Nix.Type.Infer as HM
 import           Nix.Utils
 import           Options.Applicative hiding (ParserResult(..))
 import qualified Repl
 import           System.FilePath
 import           System.IO
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
+import qualified Text.Show.Pretty as PS
 
 main :: IO ()
 main = do
@@ -67,7 +70,13 @@ main = do
              else errorWithoutStackTrace) $ "Parse failed: " ++ show err
 
         Success expr -> do
-            when (check opts) $
+            when (check opts) $ do
+                case HM.inferTop Env.empty [("it", stripAnnotation expr)] of
+                    Left err ->
+                        errorWithoutStackTrace $ "Type error: " ++ show err
+                    Right ty ->
+                        liftIO $ putStrLn $ "Type of expression: " ++ PS.ppShow ty
+
                 liftIO $ putStrLn $ runST $
                     runLintM opts . renderSymbolic =<< lint opts expr
 
