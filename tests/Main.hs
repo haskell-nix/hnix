@@ -13,7 +13,6 @@ import           Data.List (isInfixOf)
 import           Data.Maybe (isJust)
 import           Data.String.Interpolate.IsString
 import           Data.Text (unpack)
-import           Data.Time.Clock.POSIX
 import qualified EvalTests
 import qualified Nix
 import           Nix.Exec
@@ -58,8 +57,7 @@ ensureNixpkgsCanParse =
           url    = "https://github.com/NixOS/nixpkgs/archive/#{rev}.tar.gz";
           sha256 = "#{sha256}";
         }|]) $ \expr -> do
-        t <- getPOSIXTime
-        NVStr dir _ <- runLazyM defaultOptions t $ Nix.nixEvalExprLoc Nothing expr
+        NVStr dir _ <- runLazyM defaultOptions $ Nix.nixEvalExprLoc Nothing expr
         files <- globDir1 (compile "**/*.nix") (unpack dir)
         forM_ files $ \file ->
           -- Parse and deepseq the resulting expression tree, to ensure the

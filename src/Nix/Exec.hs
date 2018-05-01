@@ -573,9 +573,9 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
         const $ toNix (0 :: Integer)
 #endif
 
-runLazyM :: Options -> POSIXTime -> MonadIO m => Lazy m a -> m a
-runLazyM opts t = (`evalStateT` M.empty)
-    . (`runReaderT` newContext opts t)
+runLazyM :: Options -> MonadIO m => Lazy m a -> m a
+runLazyM opts = (`evalStateT` M.empty)
+    . (`runReaderT` newContext opts)
     . runLazy
 
 -- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.

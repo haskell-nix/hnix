@@ -15,7 +15,6 @@ import           Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-import           Data.Time.Clock.POSIX
 import           GHC.Exts
 import           Nix.Lint
 import           Nix.Options
@@ -87,8 +86,7 @@ assertParseFail opts file = do
     eres <- parseNixFileLoc file
     catch (case eres of
                Success expr -> do
-                   t <- getPOSIXTime
-                   _ <- pure $! runST $ void $ lint opts expr t
+                   _ <- pure $! runST $ void $ lint opts expr
                    assertFailure $ "Unexpected success parsing `"
                        ++ file ++ ":\nParsed value: " ++ show expr
                Failure _ -> return ()) $ \(_ :: SomeException) ->
