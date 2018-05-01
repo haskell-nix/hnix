@@ -253,12 +253,15 @@ hasAttr x y = x >>= \x' -> y >>= \y' -> case (x', y') of
     (x, y) -> throwError @String $ "Invalid types for builtin.hasAttr: "
                  ++ show (x, y)
 
+attrsetGet :: MonadNix e m => Text -> AttrSet t -> m t
+attrsetGet k s = case M.lookup k s of
+    Just v -> pure v
+    Nothing ->
+        throwError ("Attribute '" ++ Text.unpack k ++ "' required" :: String)
+
 getAttr :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 getAttr x y = x >>= \x' -> y >>= \y' -> case (x', y') of
-    (NVStr key _, NVSet aset _) -> case M.lookup key aset of
-        Nothing -> throwError @String $ "getAttr: field does not exist: "
-                      ++ Text.unpack key
-        Just action -> force' action
+    (NVStr key _, NVSet aset _) -> attrsetGet key aset >>= force'
     (x, y) -> throwError @String $ "Invalid types for builtin.getAttr: "
                  ++ show (x, y)
 

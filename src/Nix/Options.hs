@@ -20,6 +20,7 @@ data Options = Options
     , reduceLists  :: Bool
     , parse        :: Bool
     , parseOnly    :: Bool
+    , finder       :: Bool
     , findFile     :: Maybe FilePath
     , strict       :: Bool
     , normalize    :: Bool
@@ -53,6 +54,7 @@ defaultOptions = Options
     , reduceLists  = False
     , parse        = False
     , parseOnly    = False
+    , finder       = False
     , findFile     = Nothing
     , strict       = False
     , normalize    = False
@@ -133,6 +135,9 @@ nixOptions = Options
     <*> switch
         (   long "parse-only"
          <> help "Whether to parse only, no pretty printing or checking")
+    <*> switch
+        (   long "find"
+         <> help "If selected, find paths within attr trees")
     <*> optional (strOption
         (   long "find-file"
          <> help "Look up the given files in Nix's search path"))

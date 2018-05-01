@@ -52,7 +52,7 @@ class (Show v, Monad m) => MonadEval v m | v -> m where
 
     evalCurPos      :: m v
     evalConstant    :: NAtom -> m v
-    evalString      :: Text -> DList Text -> m v
+    evalString      :: NString (m v) -> m v
     evalLiteralPath :: FilePath -> m v
     evalEnvPath     :: FilePath -> m v
     evalUnary       :: NUnaryOp -> v -> m v
@@ -84,11 +84,13 @@ class (Show v, Monad m) => MonadEval v m | v -> m where
     evalError :: Frame s => s -> m a
 
 type MonadNixEval e v t m =
-    (MonadEval v m, Scoped e t m, MonadThunk v t m,
-     Framed e m, Has e SrcSpan, MonadVar m, MonadFix m,
-     ToValue Bool m v, ToValue [t] m v,
+    (MonadEval v m,
+     Scoped e t m,
+     MonadThunk v t m,
+     MonadFix m,
+     ToValue Bool m v,
+     ToValue [t] m v,
      FromValue (Text, DList Text) m v,
-     ToValue (AttrSet t) m v, FromValue (AttrSet t) m v,
      ToValue (AttrSet t, AttrSet SourcePos) m v,
      FromValue (AttrSet t, AttrSet SourcePos) m v)
 
@@ -107,7 +109,7 @@ eval (NSym var) =
     lookupVar var >>= maybe (freeVariable var) (force ?? evaledSym var)
 
 eval (NConstant x)          = evalConstant x
-eval (NStr str)             = uncurry evalString =<< assembleString str
+eval (NStr str)             = evalString str
 eval (NLiteralPath p)       = evalLiteralPath p
 eval (NEnvPath p)           = evalEnvPath p
 eval (NUnary op arg)        = evalUnary op =<< arg
@@ -188,7 +190,8 @@ evalWithAttrSet scope body = do
     -- its value is only computed once.
     cur <- currentScopes @_ @t
     s <- thunk $ withScopes cur scope
-    pushWeakScope ?? body $ force s $ fromValue @(AttrSet t)
+    pushWeakScope ?? body $ force s $
+        fmap fst . fromValue @(AttrSet t, AttrSet SourcePos)
 
 attrSetAlter :: forall e v t m. MonadNixEval e v t m
              => [Text]
@@ -204,12 +207,15 @@ attrSetAlter (p:ps) m val = case M.lookup p m of
     Just x
         | null ps   -> go
         | otherwise ->
-          x >>= fromValue >>= \s -> recurse (force ?? pure <$> s)
+          x >>= fromValue @(AttrSet t, AttrSet SourcePos)
+              >>= \(s, _) -> recurse (force ?? pure <$> s)
   where
     go = return $ M.insert p val m
 
     recurse s = attrSetAlter ps s val <&> \m' ->
-        M.insert p (toValue =<< fmap (value @_ @_ @m) <$> sequence m') m
+        M.insert p (toValue @(AttrSet t, AttrSet SourcePos)
+                        =<< fmap (, mempty)
+                                 (fmap (value @_ @_ @m) <$> sequence m')) m
 
 desugarBinds :: forall r. ([Binding r] -> r) -> [Binding r] -> [Binding r]
 desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
@@ -259,7 +265,8 @@ evalBinds allowDynamic recursive binds = do
                 h :| t -> evalSetterKeyName allowDynamic h >>= \case
                     (Nothing, _) ->
                         pure ([], Nothing,
-                              toValue (mempty :: AttrSet t))
+                              toValue @(AttrSet t, AttrSet SourcePos)
+                                  (mempty, mempty))
                     (Just k, pos) -> case t of
                         [] -> pure ([k], pos, finalValue)
                         x:xs -> do
@@ -277,8 +284,10 @@ evalBinds allowDynamic recursive binds = do
             (Just key, pos) -> return $ Just ([key], pos, do
                 mv <- case ms of
                     Nothing -> withScopes scope $ lookupVar key
-                    Just s -> s >>= fromValue @(AttrSet t) >>= \s ->
-                        clearScopes @t $ pushScope s $ lookupVar key
+                    Just s -> s
+                        >>= fromValue @(AttrSet t, AttrSet SourcePos)
+                        >>= \(s, _) ->
+                            clearScopes @t $ pushScope s $ lookupVar key
                 case mv of
                     Nothing -> evalError @v $ "Inheriting unknown attribute: "
                         ++ show (void name)
@@ -373,19 +382,19 @@ evalKeyNameDynamicNullable
 evalKeyNameDynamicNullable = \case
     StaticKey k p -> pure (Just k, p)
     DynamicKey k ->
-        runAntiquoted "\n" (fmap Just . assembleString) (>>= fromValueMay) k
+        runAntiquoted "\n" assembleString (>>= fromValueMay) k
             <&> \case Just (t, _) -> (Just t, Nothing)
                       _ -> (Nothing, Nothing)
 
 assembleString :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
-               => NString (m v) -> m (Text, DList Text)
+               => NString (m v) -> m (Maybe (Text, DList Text))
 assembleString = \case
     Indented _   parts -> fromParts parts
     DoubleQuoted parts -> fromParts parts
   where
-    go = runAntiquoted "\n" (pure . (, mempty)) (>>= fromValue)
+    go = runAntiquoted "\n" (pure . Just . (, mempty)) (>>= fromValueMay)
 
-    fromParts parts = mconcat <$> mapM go parts
+    fromParts parts = fmap mconcat . sequence <$> mapM go parts
 
 buildArgument :: forall e v t m. MonadNixEval e v t m
               => Params (m v) -> m v -> m (AttrSet t)
@@ -395,7 +404,8 @@ buildArgument params arg = do
         Param name -> M.singleton name
             <$> thunk (withScopes scope arg)
         ParamSet s isVariadic m ->
-            arg >>= fromValue >>= \args -> do
+            arg >>= fromValue @(AttrSet t, AttrSet SourcePos)
+                >>= \(args, _) -> do
                 let inject = case m of
                         Nothing -> id
                         Just n -> M.insert n $ const $
@@ -424,13 +434,17 @@ addSourcePositions :: (MonadReader e m, Has e SrcSpan)
 addSourcePositions f v@(Fix (Compose (Ann ann _))) =
     local (set hasLens ann) (f v)
 
-addStackFrames :: forall t e m a. (Scoped e t m, Framed e m, Typeable t, Typeable m)
-               => Transform NExprLocF (m a)
+addStackFrames
+    :: forall t e m a. (Scoped e t m, Framed e m, Typeable t, Typeable m)
+    => Transform NExprLocF (m a)
 addStackFrames f v = do
     scopes <- currentScopes @e @t
     withFrame Info (EvaluatingExpr scopes v) (f v)
 
-framedEvalExprLoc :: forall t e v m. (MonadNixEval e v t m, Typeable t, Typeable m)
-                  => NExprLoc -> m v
+framedEvalExprLoc
+    :: forall t e v m.
+      (MonadNixEval e v t m, Framed e m, Has e SrcSpan,
+       Typeable t, Typeable m)
+    => NExprLoc -> m v
 framedEvalExprLoc = adi (eval . annotated . getCompose)
                         (addStackFrames @t . addSourcePositions)
