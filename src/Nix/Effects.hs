@@ -25,8 +25,6 @@ class MonadFile m => MonadEffects m where
     getCurrentSystemOS :: m Text
     getCurrentSystemArch :: m Text
 
-    getCurrentTime :: m (UTCTime)
-
     listDirectory :: FilePath -> m [FilePath]
     getSymbolicLinkStatus :: FilePath -> m FileStatus
 
