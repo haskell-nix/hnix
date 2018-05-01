@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 68d31ef3efbc6a780870d15ffe122839dbb3bde67177deb77de001d2e26af1b1
+-- hash: c645369523720ac4958529bc3855a8407d647e54309528d27f5e1f90e596bbee
 
 name:           hnix
 version:        0.5.0
@@ -27,6 +27,11 @@ source-repository head
 
 flag optimize
   description: Enable all optimization flags
+  manual: True
+  default: False
+
+flag profiling
+  description: Enable profiling
   manual: True
   default: False
 
@@ -119,7 +124,7 @@ library
     , xml
   if flag(tracing)
     cpp-options: -DENABLE_TRACING=1
-  if impl(ghc < 8.4.0)
+  if impl(ghc < 8.4.0) && !flag(profiling)
     build-depends:
         ghc-datasize
   default-language: Haskell2010
