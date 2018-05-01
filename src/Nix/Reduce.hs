@@ -15,7 +15,6 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -71,9 +70,6 @@ newtype Reducer m a = Reducer
               MonadFix, MonadIO,
               MonadReader (Maybe FilePath, Scopes (Reducer m) NExprLoc),
               MonadState (HashMap FilePath NExprLoc))
-
-instance Has (Maybe FilePath, Scopes m v) (Scopes m v) where
-    hasLens f (x, y) = (x,) <$> f y
 
 -- gatherNames :: NExprLoc -> HashSet VarName
 -- gatherNames = cata $ \case
