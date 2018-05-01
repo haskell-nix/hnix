@@ -126,6 +126,7 @@ renderValueFrame level = pure . (:[]) . \case
     Comparison _ _     -> text "Comparing"
     Addition _ _       -> text "Adding"
     Division _ _       -> text "Dividing"
+    Multiplication _ _ -> text "Multiplying"
 
     Coercion x y ->
         text desc <> text (describeValue x)
