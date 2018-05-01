@@ -7,6 +7,7 @@ import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Time.Clock
+import           Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import           Options.Applicative hiding (ParserResult(..))
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
@@ -72,7 +73,7 @@ defaultOptions = Options
     , arg          = []
     , argstr       = []
     , fromFile     = Nothing
-    , currentTime  = Nothing
+    , currentTime  = Just (posixSecondsToUTCTime 0)
     , filePaths    = []
     }
 
@@ -194,7 +195,7 @@ nixOptions = Options
          <> long "file"
          <> help "Parse all of the files given in FILE; - means stdin"))
     <*> (fmap (decode =<<) $ optional $ strOption
-        (   long "setTime"
+        (   long "now"
          <> help "Set current time for testing purposes"))
     <*> many (strArgument (metavar "FILE" <> help "Path of file to parse"))
 
