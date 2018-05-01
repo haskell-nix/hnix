@@ -403,12 +403,12 @@ instance MonadThrow (Lint s) where
     throwM e = Lint $ ReaderT $ \_ -> unsafeIOToST $ throw e
 
 runLintM :: Options -> Lint s a -> ST s a
-runLintM opts = flip runReaderT (newContext opts ) . runLint
+runLintM opts = flip runReaderT (newContext opts) . runLint
 
 symbolicBaseEnv :: Monad m => m (Scopes m (SThunk m))
 symbolicBaseEnv = return emptyScopes
 
-lint :: Options -> NExprLoc ->  ST s (Symbolic (Lint s))
+lint :: Options -> NExprLoc -> ST s (Symbolic (Lint s))
 lint opts expr = runLintM opts $
     symbolicBaseEnv
         >>= (`pushScopes`

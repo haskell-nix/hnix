@@ -1,7 +1,6 @@
 module Nix.Effects where
 
 import Data.Text (Text)
-import Data.Time.Clock
 import Nix.Render
 import Nix.Utils
 import Nix.Value

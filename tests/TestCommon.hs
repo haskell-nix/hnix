@@ -33,7 +33,7 @@ hnixEvalText opts src = case parseNixText src of
     Failure err        ->
         error $ "Parsing failed for expressien `"
             ++ unpack src ++ "`.\n" ++ show err
-    Success expr -> do
+    Success expr ->
         runLazyM opts $ normalForm =<< nixEvalExpr Nothing expr
 
 nixEvalString :: String -> IO String

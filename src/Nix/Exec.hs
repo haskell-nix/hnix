@@ -45,7 +45,6 @@ import           Data.List
 import           Data.List.Split
 import           Data.Text (Text)
 import qualified Data.Text as Text
-import qualified Data.Time.Clock as Time
 import           Data.Typeable
 import           Data.Void
 import           Nix.Atoms
