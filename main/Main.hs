@@ -1,8 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Main where
@@ -15,6 +15,9 @@ import           Control.Monad.IO.Class
 import           Control.Monad.ST
 import qualified Data.Aeson.Encoding as A
 import qualified Data.Aeson.Text as A
+import qualified Data.HashMap.Lazy as M
+import           Data.List (sortOn)
+import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Text.Lazy.IO as TL
@@ -22,12 +25,15 @@ import           Nix
 import           Nix.Convert
 import qualified Nix.Eval as Eval
 import           Nix.Lint
+import qualified Nix.Type.Env as Env
+import qualified Nix.Type.Infer as HM
 import           Nix.Utils
 import           Options.Applicative hiding (ParserResult(..))
 import qualified Repl
 import           System.FilePath
 import           System.IO
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
+import qualified Text.Show.Pretty as PS
 
 main :: IO ()
 main = do
@@ -46,7 +52,7 @@ main = do
                     mapM_ (processFile opts)
                         =<< (lines <$> liftIO (readFile path))
                 Nothing -> case filePaths opts of
-                    [] -> liftIO $ Repl.shell (pure ())
+                    [] -> Repl.shell (pure ())
                     ["-"] ->
                         handleResult opts Nothing . parseNixTextLoc
                             =<< liftIO Text.getContents
@@ -64,7 +70,13 @@ main = do
              else errorWithoutStackTrace) $ "Parse failed: " ++ show err
 
         Success expr -> do
-            when (check opts) $
+            when (check opts) $ do
+                case HM.inferTop Env.empty [("it", stripAnnotation expr)] of
+                    Left err ->
+                        errorWithoutStackTrace $ "Type error: " ++ show err
+                    Right ty ->
+                        liftIO $ putStrLn $ "Type of expression: " ++ PS.ppShow ty
+
                 liftIO $ putStrLn $ runST $
                     runLintM opts . renderSymbolic =<< lint opts expr
 
@@ -73,60 +85,116 @@ main = do
                     errorWithoutStackTrace . show
                         =<< renderFrames @(NThunk (Lazy IO)) frames
 
-            when (repl opts) $ liftIO $ Repl.shell (pure ())
+            when (repl opts) $ Repl.shell (pure ())
 
-    process opts mpath expr = do
-        let printer :: (MonadNix e m, MonadIO m) => NValue m -> m ()
-            printer | xml opts =
-                      liftIO . putStrLn . toXML <=< normalForm
-                    | json opts =
-                      liftIO . TL.putStrLn
-                             . TL.decodeUtf8
-                             . A.encodingToLazyByteString
-                             . toEncodingSorted
-                             <=< fromNix
-                    | normalize opts =
-                      liftIO . print . prettyNValueNF <=< normalForm
-                    | values opts  =
-                      liftIO . print <=< prettyNValueProv
-                    | otherwise  =
-                      liftIO . print <=< prettyNValue
+    process opts mpath expr
+        | evaluate opts, tracing opts =
+              evaluateExpression mpath
+                  Nix.nixTracingEvalExprLoc printer expr
 
-        if | evaluate opts, tracing opts ->
-                 evaluateExpression mpath
-                     Nix.nixTracingEvalExprLoc printer expr
+        | evaluate opts, Just path <- reduce opts =
+              evaluateExpression mpath (reduction path) printer expr
 
-           | evaluate opts, Just path <- reduce opts ->
-                 evaluateExpression mpath (reduction path) printer expr
+        | evaluate opts, not (null (arg opts) && null (argstr opts)) =
+              evaluateExpression mpath
+                  Nix.nixEvalExprLoc printer expr
 
-           | evaluate opts, not (null (arg opts) && null (argstr opts)) ->
-                 evaluateExpression mpath
-                     Nix.nixEvalExprLoc printer expr
+        | evaluate opts =
+              processResult printer =<< Nix.nixEvalExprLoc mpath expr
 
-           | evaluate opts ->
-                 processResult printer =<< Nix.nixEvalExprLoc mpath expr
+        | xml opts =
+              error "Rendering expression trees to XML is not yet implemented"
 
-           | xml opts ->
-                 error "Rendering expression trees to XML is not yet implemented"
+        | json opts =
+              liftIO $ TL.putStrLn $
+                  A.encodeToLazyText (stripAnnotation expr)
 
-           | json opts ->
-                 liftIO $ TL.putStrLn $
-                     A.encodeToLazyText (stripAnnotation expr)
+        | verbose opts >= DebugInfo =
+              liftIO $ print $ stripAnnotation expr
 
-           | verbose opts >= DebugInfo ->
-                 liftIO $ print $ stripAnnotation expr
+        | cache opts, Just path <- mpath =
+              liftIO $ writeCache (addExtension (dropExtension path) "nixc") expr
 
-           | cache opts, Just path <- mpath ->
-                 liftIO $ writeCache (addExtension (dropExtension path) "nixc") expr
+        | parseOnly opts =
+              void $ liftIO $ Exc.evaluate $ Deep.force expr
 
-           | parseOnly opts ->
-                 void $ liftIO $ Exc.evaluate $ Deep.force expr
+        | otherwise =
+              liftIO $ displayIO stdout
+                  . renderPretty 0.4 80
+                  . prettyNix
+                  . stripAnnotation $ expr
+      where
+        printer :: forall e m. (MonadNix e m, MonadIO m, Typeable m)
+                => NValue m -> m ()
+        printer
+            | finder opts =
+              fromValue @(AttrSet (NThunk m)) >=> findAttrs
+            | xml opts =
+              liftIO . putStrLn . toXML <=< normalForm
+            | json opts =
+              liftIO . TL.putStrLn
+                     . TL.decodeUtf8
+                     . A.encodingToLazyByteString
+                     . toEncodingSorted
+                     <=< fromNix
+            | normalize opts =
+              liftIO . print . prettyNValueNF <=< normalForm
+            | values opts  =
+              liftIO . print <=< prettyNValueProv
+            | otherwise  =
+              liftIO . print <=< prettyNValue
+          where
+            findAttrs = go ""
+              where
+                go prefix s = do
+                    xs <- forM (sortOn fst (M.toList s))
+                        $ \(k, nv@(NThunk _ t)) -> case t of
+                            Value v -> pure (k, Just v)
+                            Thunk _ _ ref -> do
+                                let path = prefix ++ Text.unpack k
+                                    (_, descend) = filterEntry path k
+                                val <- readVar ref
+                                case val of
+                                    Computed _ -> pure (k, Nothing)
+                                    _ | descend   -> (k,) <$> forceEntry path nv
+                                      | otherwise -> pure (k, Nothing)
 
-           | otherwise ->
-                 liftIO $ displayIO stdout
-                     . renderPretty 0.4 80
-                     . prettyNix
-                     . stripAnnotation $ expr
+                    forM_ xs $ \(k, mv) -> do
+                        let path = prefix ++ Text.unpack k
+                            (report, descend) = filterEntry path k
+                        when report $ do
+                            liftIO $ putStrLn path
+                            when descend $ case mv of
+                                Nothing -> return ()
+                                Just v -> case v of
+                                    NVSet s' _ -> go (path ++ ".") s'
+                                    _ -> return ()
+                  where
+                    filterEntry path k = case (path, k) of
+                        ("stdenv", "stdenv")           -> (True,  True)
+                        (_,        "stdenv")           -> (False, False)
+                        (_,        "out")              -> (True,  False)
+                        (_,        "src")              -> (True,  False)
+                        (_,        "mirrorsFile")      -> (True,  False)
+                        (_,        "buildPhase")       -> (True,  False)
+                        (_,        "builder")          -> (False,  False)
+                        (_,        "drvPath")          -> (False,  False)
+                        (_,        "outPath")          -> (False,  False)
+                        (_,        "__impureHostDeps") -> (False,  False)
+                        (_,        "__sandboxProfile") -> (False,  False)
+                        ("pkgs",   "pkgs")             -> (True,  True)
+                        (_,        "pkgs")             -> (False, False)
+                        (_,        "drvAttrs")         -> (False, False)
+                        _ -> (True, True)
+
+                    forceEntry k v = catch (Just <$> force v pure)
+                        $ \(NixException frames) -> do
+                              liftIO . putStrLn
+                                     . ("Exception forcing " ++)
+                                     . (k ++)
+                                     . (": " ++) . show
+                                  =<< renderFrames @(NThunk (Lazy IO)) frames
+                              return Nothing
 
     reduction path mp x = do
         eres <- Nix.withNixContext mp $

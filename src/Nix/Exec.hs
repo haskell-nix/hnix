@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -31,9 +32,9 @@ import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
-import           Control.Monad.State
+import           Control.Monad.State.Strict
 import           Control.Monad.Trans.Reader (ReaderT(..))
-import           Control.Monad.Trans.State (StateT(..))
+import           Control.Monad.Trans.State.Strict (StateT(..))
 import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.Fix
@@ -62,6 +63,7 @@ import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
+import           System.Console.Haskeline.MonadException hiding (catch)
 import           System.Directory
 import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
@@ -71,6 +73,12 @@ import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
 import           Text.PrettyPrint.ANSI.Leijen (text)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
+
+#ifdef MIN_VERSION_ghc_datasize
+#if MIN_VERSION_ghc_datasize(0,2,0) && __GLASGOW_HASKELL__ >= 804
+import           GHC.DataSize
+#endif
+#endif
 
 type MonadNix e m =
     (Scoped e (NThunk m) m, Framed e m, Has e SrcSpan, Has e Options,
@@ -150,10 +158,13 @@ instance MonadNix e m => MonadEval (NValue m) m where
         span  <- currentPos
         pure $ nvConstantP (Provenance scope (NConstant_ span c)) c
 
-    evalString s d = do
-        scope <- currentScopes
-        span  <- currentPos
-        pure $ nvStrP (Provenance scope (NStr_ span (DoubleQuoted [Plain s]))) s d
+    evalString = assembleString >=> \case
+        Just (s, c) -> do
+            scope <- currentScopes
+            span  <- currentPos
+            pure $ nvStrP (Provenance scope
+                           (NStr_ span (DoubleQuoted [Plain s]))) s c
+        Nothing -> nverr ("Failed to assemble string" :: String)
 
     evalLiteralPath p = do
         scope <- currentScopes
@@ -432,6 +443,11 @@ instance MonadCatch m => MonadCatch (Lazy m) where
 instance MonadThrow m => MonadThrow (Lazy m) where
     throwM = Lazy . throwM
 
+instance MonadException m => MonadException (Lazy m) where
+  controlIO f = Lazy $ controlIO $ \(RunIO run) ->
+      let run' = RunIO (fmap Lazy . run . runLazy)
+      in runLazy <$> f run'
+
 instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
           Alternative m, MonadPlus m, Typeable m)
       => MonadEffects (Lazy m) where
@@ -535,7 +551,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
     nixInstantiateExpr expr = do
         traceM $ "Executing: "
             ++ show ["nix-instantiate", "--eval", "--expr ", expr]
-        (exitCode, out, _) <-
+        (exitCode, out, err) <-
             liftIO $ readProcessWithExitCode "nix-instantiate"
                 [ "--eval", "--expr", expr] ""
         case exitCode of
@@ -544,7 +560,20 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
                     throwError $ "Error parsing output of nix-instantiate: "
                         ++ show err
                 Success v -> evalExprLoc v
-            err -> throwError $ "nix-instantiate failed: " ++ show err
+            status ->
+                throwError $ "nix-instantiate failed: " ++ show status
+                    ++ ": " ++ err
+
+    getRecursiveSize =
+#ifdef MIN_VERSION_ghc_datasize
+#if MIN_VERSION_ghc_datasize(0,2,0) && __GLASGOW_HASKELL__ >= 804
+        toNix @Integer <=< fmap fromIntegral . liftIO . recursiveSize
+#else
+        const $ toNix (0 :: Integer)
+#endif
+#else
+        const $ toNix (0 :: Integer)
+#endif
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
 runLazyM opts = (`evalStateT` M.empty)

@@ -26,6 +26,9 @@ import           TestCommon
 case_basic_sum =
     constantEqualText "2" "1 + 1"
 
+case_basic_div =
+    constantEqualText "3" "builtins.div 6 2"
+
 case_basic_function =
     constantEqualText "2" "(a: a) 2"
 
@@ -147,7 +150,7 @@ tests :: TestTree
 tests = $testGroupGenerator
 
 genEvalCompareTests = do
-    files <- filter (\x -> takeExtension x == "nix") <$> D.listDirectory testDir
+    files <- filter ((==".nix") . takeExtension) <$> D.listDirectory testDir
     return $ testGroup "Eval comparison tests" $ map mkTestCase files
   where
     testDir = "tests/eval-compare"

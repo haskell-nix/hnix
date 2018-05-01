@@ -279,11 +279,7 @@ prettyNThunk = \case
 dethunk :: MonadVar m => NThunk m -> m (NValueNF m)
 dethunk = \case
     NThunk _ (Value v) -> removeEffectsM (baseValue v)
-    NThunk _ (Thunk
-#if ENABLE_TRACING
-                     _
-#endif
-                     active ref) -> do
+    NThunk _ (Thunk _ active ref) -> do
         nowActive <- atomicModifyVar active (True,)
         if nowActive
             then pure $ Fix $ NVStrF "<thunk>" mempty
