@@ -45,7 +45,7 @@ import           Data.List
 import           Data.List.Split
 import           Data.Text (Text)
 import qualified Data.Text as Text
-import           Data.Time.Clock.POSIX
+import qualified Data.Time.Clock as Time
 import           Data.Typeable
 import           Data.Void
 import           Nix.Atoms
@@ -517,7 +517,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
 
     getCurrentSystemOS = return $ Text.pack System.Info.os
 
-    getPosixTime = liftIO $ getPOSIXTime
+    getCurrentTime = liftIO Time.getCurrentTime
 
     -- Invert the conversion done by GHC_CONVERT_CPU in GHC's aclocal.m4
     getCurrentSystemArch = return $ Text.pack $ case System.Info.arch of

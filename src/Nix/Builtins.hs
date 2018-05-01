@@ -51,6 +51,7 @@ import           Data.Text.Encoding
 import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Lazy.Builder as Builder
 import           Data.These (fromThese)
+import qualified Data.Time.Clock.POSIX as Time
 import           Data.Traversable (mapM)
 import           Language.Haskell.TH.Syntax (addDependentFile, runIO)
 import           Nix.Atoms
@@ -898,8 +899,8 @@ currentSystem = do
 
 currentTime :: MonadNix e m => m (NValue m)
 currentTime = do
-  t <- getPosixTime
-  return . nvConstant . NInt $ fromIntegral $ fromEnum  t
+  t <- getCurrentTime
+  return . nvConstant . NInt $ fromIntegral $ fromEnum $ Time.utcTimeToPOSIXSeconds t
 
 derivationStrict_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 derivationStrict_ = (>>= derivationStrict)
