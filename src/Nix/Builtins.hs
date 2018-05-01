@@ -23,6 +23,7 @@ module Nix.Builtins (builtins) where
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.ListM (sortByM)
+import           Control.Monad.Reader (asks)
 import qualified Crypto.Hash.MD5 as MD5
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.SHA256 as SHA256
@@ -63,6 +64,7 @@ import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Normal
+import qualified Nix.Options as NOpts
 import           Nix.Parser
 import           Nix.Render
 import           Nix.Scope
@@ -899,8 +901,9 @@ currentSystem = do
 
 currentTime :: MonadNix e m => m (NValue m)
 currentTime = do
-  t <- getCurrentTime
-  return . nvConstant . NInt $ fromIntegral $ fromEnum $ Time.utcTimeToPOSIXSeconds t
+  opts :: NOpts.Options <- asks (view hasLens)
+  let t = fromMaybe (Time.posixSecondsToUTCTime 0) $ NOpts.currentTime opts
+  return . nvConstant . NInt $ fromIntegral $ round $ realToFrac $ Time.utcTimeToPOSIXSeconds t
 
 derivationStrict_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 derivationStrict_ = (>>= derivationStrict)
