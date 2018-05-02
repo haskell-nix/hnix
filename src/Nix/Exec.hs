@@ -47,7 +47,6 @@ import           Data.List.Split
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Typeable
-import           Data.Void
 import           Network.HTTP.Client
 import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
@@ -615,7 +614,7 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
           then throwError $ ErrorCall $ 
                  "fail, got " ++ show status ++ " when fetching url:" ++ urlstr
           else do
-            let bstr = responseBody response
+            -- let bstr = responseBody response
             -- liftIO $ print bstr
             throwError $ ErrorCall $ 
               "success in downloading but hnix-store is not yet ready; url = " ++ urlstr
