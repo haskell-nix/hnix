@@ -213,10 +213,10 @@ instance MonadNix e m => MonadEval (NValue m) m where
     evalAssert c body = fromValue c >>= \b -> do
         span  <- currentPos
         if b
-        then do
-            scope <- currentScopes
-            addProvenance (\b -> Provenance scope (NAssert_ span (Just c) (Just b))) <$> body
-        else nverr $ Assertion span c
+            then do
+                scope <- currentScopes
+                addProvenance (\b -> Provenance scope (NAssert_ span (Just c) (Just b))) <$> body
+            else nverr $ Assertion span c
 
     evalApp f x = do
         scope <- currentScopes
@@ -224,10 +224,11 @@ instance MonadNix e m => MonadEval (NValue m) m where
         addProvenance (const $ Provenance scope (NBinary_ span NApp (Just f) Nothing))
             <$> callFunc f x
 
-    evalAbs p b = do
+    evalAbs p k = do
         scope <- currentScopes
         span  <- currentPos
-        pure $ nvClosureP (Provenance scope (NAbs_ span (Nothing <$ p) Nothing)) (void p) b
+        pure $ nvClosureP (Provenance scope (NAbs_ span (Nothing <$ p) Nothing))
+            (void p) (\arg -> snd <$> k arg (\_ b -> ((),) <$> b))
 
     evalError = throwError
 
