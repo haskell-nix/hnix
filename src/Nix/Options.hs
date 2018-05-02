@@ -1,10 +1,13 @@
 module Nix.Options where
 
 import           Control.Arrow (second)
+import           Data.Aeson (decode)
 import           Data.Char (isDigit)
 import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import           Data.Time.Clock
+import           Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import           Options.Applicative hiding (ParserResult(..))
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
@@ -36,6 +39,7 @@ data Options = Options
     , arg          :: [(Text, Text)]
     , argstr       :: [(Text, Text)]
     , fromFile     :: Maybe FilePath
+    , currentTime  :: Maybe UTCTime
     , filePaths    :: [FilePath]
     }
     deriving Show
@@ -69,6 +73,7 @@ defaultOptions = Options
     , arg          = []
     , argstr       = []
     , fromFile     = Nothing
+    , currentTime  = Just (posixSecondsToUTCTime 0)
     , filePaths    = []
     }
 
@@ -189,6 +194,9 @@ nixOptions = Options
         (   short 'f'
          <> long "file"
          <> help "Parse all of the files given in FILE; - means stdin"))
+    <*> (fmap (decode =<<) $ optional $ strOption
+        (   long "now"
+         <> help "Set current time for testing purposes"))
     <*> many (strArgument (metavar "FILE" <> help "Path of file to parse"))
 
 nixOptionsInfo :: ParserInfo Options

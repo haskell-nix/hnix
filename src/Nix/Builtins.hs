@@ -23,6 +23,7 @@ module Nix.Builtins (builtins) where
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.ListM (sortByM)
+import           Control.Monad.Reader (asks)
 import qualified Crypto.Hash.MD5 as MD5
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.SHA256 as SHA256
@@ -51,6 +52,7 @@ import           Data.Text.Encoding
 import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Lazy.Builder as Builder
 import           Data.These (fromThese)
+import qualified Data.Time.Clock.POSIX as Time
 import           Data.Traversable (mapM)
 import           Language.Haskell.TH.Syntax (addDependentFile, runIO)
 import           Nix.Atoms
@@ -62,6 +64,7 @@ import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Normal
+import qualified Nix.Options as NOpts
 import           Nix.Parser
 import           Nix.Render
 import           Nix.Scope
@@ -122,6 +125,7 @@ builtinsList = sequence [
     , add  Normal   "concatLists"                concatLists
     , add' Normal   "concatStringsSep"           (arity2 Text.intercalate)
     , add0 Normal   "currentSystem"              currentSystem
+    , add0 Normal   "currentTime"                currentTime
     , add2 Normal   "deepSeq"                    deepSeq
     , add0 TopLevel "derivation"                 $(do
           let f = "data/nix/corepkgs/derivation.nix"
@@ -923,6 +927,13 @@ currentSystem = do
   os <- getCurrentSystemOS
   arch <- getCurrentSystemArch
   return $ nvStr (arch <> "-" <> os) mempty
+
+currentTime :: MonadNix e m => m (NValue m)
+currentTime = do
+  opts :: NOpts.Options <- asks (view hasLens)
+  case NOpts.currentTime opts of
+      Just t -> toNix @Integer $ fromIntegral $ fromEnum $ Time.utcTimeToPOSIXSeconds t
+      Nothing -> throwError $ ErrorCall $ "builtins.currentTime: invalid UTC time value"
 
 derivationStrict_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 derivationStrict_ = (>>= derivationStrict)

@@ -617,8 +617,8 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
 runLazyM opts = (`evalStateT` M.empty)
-              . (`runReaderT` newContext opts)
-              . runLazy
+    . (`runReaderT` newContext opts)
+    . runLazy
 
 -- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
 --   This is incorrect on POSIX systems, because if @b@ is a symlink, its
