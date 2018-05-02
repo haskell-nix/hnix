@@ -75,6 +75,7 @@ library:
     - directory
     - hashable
     - haskeline
+    - logict
     - megaparsec
     - monadlist
     - pretty-show
