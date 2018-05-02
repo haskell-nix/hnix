@@ -38,7 +38,6 @@ import           Data.List
 import           Data.STRef
 import           Data.Text (Text)
 import qualified Data.Text as Text
-import           Data.Void
 import           Nix.Atoms
 import           Nix.Context
 import           Nix.Convert
@@ -65,7 +64,7 @@ data NTypeF (m :: * -> *) r
     | TStr
     | TList r
     | TSet (Maybe (HashMap Text r))
-    | TClosure (Params Void) (m (Symbolic m) -> m (Symbolic m))
+    | TClosure (Params ()) (m (Symbolic m) -> m (Symbolic m))
     | TPath
     | TBuiltin String (SThunk m -> m (Symbolic m))
     deriving Functor
@@ -311,7 +310,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
         pure body'
 
     evalApp = (fmap snd .) . lintApp (NBinary NApp () ())
-    evalAbs params body = mkSymbolic [TClosure params body]
+    evalAbs params body = mkSymbolic [TClosure (void params) body]
 
     evalError = throwError
 

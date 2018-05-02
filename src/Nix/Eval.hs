@@ -36,7 +36,6 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.These
 import           Data.Traversable (for)
-import           Data.Void
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Expr
@@ -63,7 +62,7 @@ class (Show v, Monad m) => MonadEval v m | v -> m where
     evalIf          :: v -> m v -> m v -> m v
     evalAssert      :: v -> m v -> m v
     evalApp         :: v -> m v -> m v
-    evalAbs         :: Params Void -> (m v -> m v) -> m v
+    evalAbs         :: Params (m v) -> (m v -> m v) -> m v
 
 {-
     evalSelect     :: v -> NonEmpty Text -> Maybe (m v) -> m v
@@ -171,14 +170,10 @@ eval (NAbs params body) = do
     -- we defer here so the present scope is restored when the parameters and
     -- body are forced during application.
     scope <- currentScopes @_ @t
-    evalAbs (clearDefaults params) $ \arg ->
+    evalAbs params $ \arg ->
         withScopes @t scope $ do
             args <- buildArgument params arg
             pushScope args body
-  where
-    clearDefaults :: Params r -> Params Void
-    clearDefaults (Param name) = Param name
-    clearDefaults (ParamSet xs b mv) = ParamSet (map (Nothing <$) xs) b mv
 
 -- | If you know that the 'scope' action will result in an 'AttrSet t', then
 --   this implementation may be used as an implementation for 'evalWith'.

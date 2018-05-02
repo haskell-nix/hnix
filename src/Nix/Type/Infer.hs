@@ -396,7 +396,26 @@ instance MonadEval (Judgment s) (Infer s) where
             (cs ++ [EqConst t' tv | t' <- As.lookup x as])
             (tv `TArr` t)
 
-    evalAbs (ParamSet p variadic mname) e = undefined
+    evalAbs (ParamSet ps _variadic _mname) e = do
+        js <- fmap concat $ forM ps $ \(name, mdef) -> case mdef of
+            Just _ -> pure []
+            Nothing -> do
+                tv <- fresh
+                pure [(name, tv)]
+        let (env, tys) = (\f -> foldl' f (As.empty, M.empty) js)
+                $ \(as1, t1) (k, t) ->
+                    (as1 `As.merge` As.singleton k t, M.insert k t t1)
+            names = map fst js
+        Judgment as cs t <-
+            (\f -> foldr f (e (pure (Judgment env [] (TSet True tys)))) js)
+                $ \(_, TVar a) rest -> extendMSet a rest
+        return $ Judgment
+            (foldl' As.remove as names)
+            (cs ++ [ EqConst t' (tys M.! x)
+                   | x  <- names
+                   , t' <- As.lookup x as])
+            -- jww (2018-05-01): How do we recover the actual args used?
+            (t `TArr` t)
 
     evalError = throwError . EvaluationError
 

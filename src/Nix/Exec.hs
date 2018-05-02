@@ -46,7 +46,6 @@ import           Data.List.Split
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Typeable
-import           Data.Void
 import           Nix.Atoms
 import           Nix.Context
 import           Nix.Convert
@@ -224,7 +223,7 @@ instance MonadNix e m => MonadEval (NValue m) m where
     evalAbs p b = do
         scope <- currentScopes
         span  <- currentPos
-        pure $ nvClosureP (Provenance scope (NAbs_ span (fmap absurd p) Nothing)) p b
+        pure $ nvClosureP (Provenance scope (NAbs_ span (Nothing <$ p) Nothing)) (void p) b
 
     evalError = throwError
 

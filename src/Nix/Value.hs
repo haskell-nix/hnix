@@ -35,7 +35,6 @@ import           Data.Monoid (appEndo)
 import           Data.Text (Text)
 import           Data.These
 import           Data.Typeable (Typeable)
-import           Data.Void
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr.Types
@@ -56,7 +55,7 @@ data NValueF m r
     | NVPathF FilePath
     | NVListF [r]
     | NVSetF (AttrSet r) (AttrSet SourcePos)
-    | NVClosureF (Params Void) (m (NValue m) -> m (NValue m))
+    | NVClosureF (Params ()) (m (NValue m) -> m (NValue m))
       -- ^ A function is a closed set of parameters representing the "call
       --   signature", used at application time to check the type of arguments
       --   passed to the function. Since it supports default values which may
