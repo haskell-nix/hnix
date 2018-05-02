@@ -932,8 +932,8 @@ currentTime :: MonadNix e m => m (NValue m)
 currentTime = do
   opts :: NOpts.Options <- asks (view hasLens)
   case NOpts.currentTime opts of
-      Just t -> return . nvConstant . NInt $ fromIntegral $ fromEnum $ Time.utcTimeToPOSIXSeconds t
-      Nothing -> throwError @String $ "builtins.currentTime: invalid UTC time value"
+      Just t -> toNix @Integer $ fromIntegral $ fromEnum $ Time.utcTimeToPOSIXSeconds t
+      Nothing -> throwError $ ErrorCall $ "builtins.currentTime: invalid UTC time value"
 
 derivationStrict_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 derivationStrict_ = (>>= derivationStrict)
