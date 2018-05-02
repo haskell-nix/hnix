@@ -260,10 +260,9 @@ attrsetGet k s = case M.lookup k s of
         throwError $ ErrorCall $ "Attribute '" ++ Text.unpack k ++ "' required"
 
 hasContext :: MonadNix e m => m (NValue m) -> m (NValue m)
-hasContext x = x >>= \x' -> case x' of
-    NVStr _ ctx ->
-        return . nvConstant . NBool . not . null $ appEndo ctx []
-    x -> throwError @String $ "Invalid type for builtin.hasContext: "
+hasContext x = fromValue @(Text, DList Text) >>= \(_, ctx) ->
+        toNix . not . null $ appEndo ctx []
+    x -> throwError $ ErrorCall $ "Invalid type for builtin.hasContext: "
                  ++ show x
 
 getAttr :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
