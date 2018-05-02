@@ -64,7 +64,7 @@ data NTypeF (m :: * -> *) r
     | TStr
     | TList r
     | TSet (Maybe (HashMap Text r))
-    | TClosure (Params ()) (m (Symbolic m) -> m (Symbolic m))
+    | TClosure (Params ())
     | TPath
     | TBuiltin String (SThunk m -> m (Symbolic m))
     deriving Functor
@@ -140,7 +140,7 @@ renderSymbolic = unpackSymbolic >=> \case
         TSet (Just s)   -> do
             x <- traverse (`force` renderSymbolic) s
             return $ "{" ++ show x ++ "}"
-        f@(TClosure p _) -> do
+        f@(TClosure p) -> do
             (args, sym) <- do
                 f' <- mkSymbolic [f]
                 lintApp (NAbs (void p) ()) f' everyPossible
@@ -310,7 +310,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
         pure body'
 
     evalApp = (fmap snd .) . lintApp (NBinary NApp () ())
-    evalAbs params body = mkSymbolic [TClosure (void params) body]
+    evalAbs params _ = mkSymbolic [TClosure (void params)]
 
     evalError = throwError
 
@@ -364,7 +364,7 @@ lintApp context fun arg = unpackSymbolic fun >>= \case
         "Cannot apply something not known to be a function"
     NMany xs -> do
         (args:_, ys) <- fmap unzip $ forM xs $ \case
-            TClosure _params _f -> arg >>= unpackSymbolic >>= \case
+            TClosure _params -> arg >>= unpackSymbolic >>= \case
                 NAny -> do
                     error "NYI"
 
