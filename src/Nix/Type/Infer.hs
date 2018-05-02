@@ -78,9 +78,6 @@ initInfer = InferState { count = 0 }
 
 data Constraint
     = EqConst Type Type
-    | EqConstOneOf Type [Type]
-      -- ^ The first type must unify with the second. For example, integer
-      -- could unify with integer, or a type variable.
     | ExpInstConst Type Scheme
     | ImpInstConst Type (Set.Set TVar) Type
     deriving (Show, Eq, Ord)
@@ -102,6 +99,7 @@ instance Substitutable Type where
   apply s (TList a)          = TList (map (apply s) a)
   apply (Subst s) t@(TVar a) = Map.findWithDefault t a s
   apply s (t1 `TArr` t2)     = apply s t1 `TArr` apply s t2
+  apply s (TMany ts)         = TMany (map (apply s) ts)
 
 instance Substitutable Scheme where
   apply (Subst s) (Forall as t) = Forall as $ apply s' t
@@ -109,7 +107,6 @@ instance Substitutable Scheme where
 
 instance Substitutable Constraint where
    apply s (EqConst t1 t2)         = EqConst (apply s t1) (apply s t2)
-   apply s (EqConstOneOf t1 t2)    = EqConstOneOf (apply s t1) (apply s t2)
    apply s (ExpInstConst t sc)     = ExpInstConst (apply s t) (apply s sc)
    apply s (ImpInstConst t1 ms t2) = ImpInstConst (apply s t1) (apply s ms) (apply s t2)
 
@@ -129,6 +126,7 @@ instance FreeTypeVars Type where
   ftv (TSet _ a)     = Set.unions (map ftv (M.elems a))
   ftv (TList a)      = Set.unions (map ftv a)
   ftv (t1 `TArr` t2) = ftv t1 `Set.union` ftv t2
+  ftv (TMany ts)     = Set.unions (map ftv ts)
 
 instance FreeTypeVars TVar where
   ftv = Set.singleton
@@ -148,7 +146,6 @@ class ActiveTypeVars a where
 
 instance ActiveTypeVars Constraint where
   atv (EqConst t1 t2)         = ftv t1 `Set.union` ftv t2
-  atv (EqConstOneOf t1 t2)    = ftv t1 `Set.union` ftv t2
   atv (ImpInstConst t1 ms t2) = ftv t1 `Set.union` (ftv ms `Set.intersection` ftv t2)
   atv (ExpInstConst t s)      = ftv t `Set.union` ftv s
 
@@ -248,9 +245,9 @@ generalize free t  = Forall as t
 
 unops :: Type -> NUnaryOp -> [Constraint]
 unops u1 = \case
-    NNot -> [ EqConst      u1 ( typeFun [typeBool, typeBool] ) ]
-    NNeg -> [ EqConstOneOf u1 [ typeFun [typeInt,   typeInt]
-                             , typeFun [typeFloat, typeFloat] ] ]
+    NNot -> [ EqConst u1 (typeFun [typeBool, typeBool]) ]
+    NNeg -> [ EqConst u1 (TMany [ typeFun [typeInt,   typeInt]
+                               , typeFun [typeFloat, typeFloat] ]) ]
 
 binops :: Type -> NBinaryOp -> [Constraint]
 binops u1 = \case
@@ -266,45 +263,45 @@ binops u1 = \case
     NLt     -> inequality
     NLte    -> inequality
 
-    NAnd    -> [ EqConst      u1 ( typeFun [typeBool,   typeBool,   typeBool]) ]
-    NOr     -> [ EqConst      u1 ( typeFun [typeBool,   typeBool,   typeBool]) ]
-    NImpl   -> [ EqConst      u1 ( typeFun [typeBool,   typeBool,   typeBool]) ]
+    NAnd    -> [ EqConst u1 (typeFun [typeBool, typeBool, typeBool]) ]
+    NOr     -> [ EqConst u1 (typeFun [typeBool, typeBool, typeBool]) ]
+    NImpl   -> [ EqConst u1 (typeFun [typeBool, typeBool, typeBool]) ]
 
-    NConcat -> [ EqConstOneOf u1 [ typeFun [typeList,   typeList,   typeList]
-                                , typeFun [typeList,   typeNull,   typeList]
-                                , typeFun [typeNull,   typeList,   typeList]
-                                ] ]
+    NConcat -> [ EqConst u1 (TMany [ typeFun [typeList,   typeList,   typeList]
+                                  , typeFun [typeList,   typeNull,   typeList]
+                                  , typeFun [typeNull,   typeList,   typeList]
+                                  ]) ]
 
-    NUpdate -> [ EqConstOneOf u1 [ typeFun [typeSet,    typeSet,    typeSet]
-                                , typeFun [typeSet,    typeNull,   typeSet]
-                                , typeFun [typeNull,   typeSet,    typeSet]
-                                ] ]
+    NUpdate -> [ EqConst u1 (TMany [ typeFun [typeSet,    typeSet,    typeSet]
+                                  , typeFun [typeSet,    typeNull,   typeSet]
+                                  , typeFun [typeNull,   typeSet,    typeSet]
+                                  ]) ]
 
-    NPlus   -> [ EqConstOneOf u1 [ typeFun [typeInt,    typeInt,    typeInt]
-                                , typeFun [typeFloat,  typeFloat,  typeFloat]
-                                , typeFun [typeInt,    typeFloat,  typeFloat]
-                                , typeFun [typeFloat,  typeInt,    typeFloat]
-                                , typeFun [typeString, typeString, typeString]
-                                , typeFun [typePath,   typePath,   typePath]
-                                , typeFun [typeString, typeString, typePath]
-                                ] ]
+    NPlus   -> [ EqConst u1 (TMany [ typeFun [typeInt,    typeInt,    typeInt]
+                                  , typeFun [typeFloat,  typeFloat,  typeFloat]
+                                  , typeFun [typeInt,    typeFloat,  typeFloat]
+                                  , typeFun [typeFloat,  typeInt,    typeFloat]
+                                  , typeFun [typeString, typeString, typeString]
+                                  , typeFun [typePath,   typePath,   typePath]
+                                  , typeFun [typeString, typeString, typePath]
+                                  ]) ]
     NMinus  -> arithmetic
     NMult   -> arithmetic
     NDiv    -> arithmetic
   where
     inequality =
-        [ EqConstOneOf u1 [ typeFun [typeInt,    typeInt,    typeBool]
-                          , typeFun [typeFloat,  typeFloat,  typeBool]
-                          , typeFun [typeInt,    typeFloat,  typeBool]
-                          , typeFun [typeFloat,  typeInt,    typeBool]
-                          ] ]
+        [ EqConst u1 (TMany [ typeFun [typeInt,    typeInt,    typeBool]
+                            , typeFun [typeFloat,  typeFloat,  typeBool]
+                            , typeFun [typeInt,    typeFloat,  typeBool]
+                            , typeFun [typeFloat,  typeInt,    typeBool]
+                            ]) ]
 
     arithmetic =
-        [ EqConstOneOf u1 [ typeFun [typeInt,    typeInt,    typeInt]
-                          , typeFun [typeFloat,  typeFloat,  typeFloat]
-                          , typeFun [typeInt,    typeFloat,  typeFloat]
-                          , typeFun [typeFloat,  typeInt,    typeFloat]
-                          ] ]
+        [ EqConst u1 (TMany [ typeFun [typeInt,    typeInt,    typeInt]
+                            , typeFun [typeFloat,  typeFloat,  typeFloat]
+                            , typeFun [typeInt,    typeFloat,  typeFloat]
+                            , typeFun [typeFloat,  typeInt,    typeFloat]
+                            ]) ]
 
 instance MonadVar (Infer s) where
     type Var (Infer s) = STRef s
@@ -399,7 +396,7 @@ instance MonadEval (Judgment s) (Infer s) where
             (cs ++ [EqConst t' tv | t' <- As.lookup x as])
             (tv `TArr` t)
 
-    evalAbs (ParamSet _x _variadic _mname) _e = undefined
+    evalAbs (ParamSet p variadic mname) e = undefined
 
     evalError = throwError . EvaluationError
 
@@ -415,7 +412,6 @@ instance FromValue (Text, DList Text) (Infer s) (Judgment s) where
     fromValue _ = error "Unused"
 
 instance FromValue (AttrSet (JThunk s), AttrSet SourcePos) (Infer s) (Judgment s) where
-    -- jww (2018-04-30): How can we do this? TSet doesn't record enough information
     fromValueMay (Judgment _ _ (TSet _ xs)) = do
         let sing _ = Judgment As.empty []
         pure $ Just (M.mapWithKey (\k v -> value (sing k v)) xs, M.empty)
@@ -462,11 +458,13 @@ normalize (Forall _ body) = Forall (map snd ord) (normtype body)
     fv (TCon _)    = []
     fv (TSet _ a)  = concatMap fv (M.elems a)
     fv (TList a)   = concatMap fv a
+    fv (TMany ts)  = concatMap fv ts
 
     normtype (TArr a b)  = TArr (normtype a) (normtype b)
     normtype (TCon a)    = TCon a
     normtype (TSet b a)  = TSet b (M.map normtype a)
     normtype (TList a)   = TList (map normtype a)
+    normtype (TMany ts)  = TMany (map normtype ts)
     normtype (TVar a)    =
       case Prelude.lookup a ord of
         Just x -> TVar x
@@ -536,6 +534,8 @@ unifies (TSet True s) (TSet False b)
 unifies (TSet False s) (TSet False b)
     | null (M.keys b \\ M.keys s) = return emptySubst
 unifies (TArr t1 t2) (TArr t3 t4) = unifyMany [t1, t2] [t3, t4]
+unifies (TMany t1s) t2 = considering t1s >>- unifies ?? t2
+unifies t1 (TMany t2s) = considering t2s >>- unifies t1
 unifies t1 t2 = throwError $ UnificationFail t1 t2
 
 bind :: Monad m => TVar -> Type -> Solver m Subst
@@ -552,7 +552,6 @@ nextSolvable xs = fromJust (find solvable (chooseOne xs))
     chooseOne xs = [(x, ys) | x <- xs, let ys = delete x xs]
 
     solvable (EqConst{}, _)      = True
-    solvable (EqConstOneOf{}, _) = True
     solvable (ExpInstConst{}, _) = True
     solvable (ImpInstConst _t1 ms t2, cs) =
         Set.null ((ftv t2 `Set.difference` ms) `Set.intersection` atv cs)
@@ -564,10 +563,10 @@ solve :: MonadState InferState m => [Constraint] -> Solver m Subst
 solve [] = return emptySubst
 solve cs = solve' (nextSolvable cs)
   where
-    solve' (EqConst t1 t2, cs) = simple t1 t2 cs
-
-    solve' (EqConstOneOf t1 t2s, cs) =
-      considering t2s >>- simple t1 ?? cs
+    solve' (EqConst t1 t2, cs) =
+      unifies t1 t2 >>- \su1 ->
+      solve (apply su1 cs) >>- \su2 ->
+          return (su2 `compose` su1)
 
     solve' (ImpInstConst t1 ms t2, cs) =
       solve (ExpInstConst t1 (generalize ms t2) : cs)
@@ -575,8 +574,3 @@ solve cs = solve' (nextSolvable cs)
     solve' (ExpInstConst t s, cs) = do
       s' <- lift $ instantiate s
       solve (EqConst t s' : cs)
-
-    simple t1 t2 cs =
-      unifies t1 t2 >>- \su1 ->
-      solve (apply su1 cs) >>- \su2 ->
-          return (su2 `compose` su1)

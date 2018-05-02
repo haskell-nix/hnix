@@ -13,6 +13,7 @@ data Type
   | TSet Bool (AttrSet Type) -- heterogenous map, bool if variadic
   | TList [Type]             -- heterogenous list
   | TArr Type Type           -- type -> type
+  | TMany [Type]             -- variant type
   deriving (Show, Eq, Ord)
 
 data Scheme = Forall [TVar] Type -- forall a b. a -> b
