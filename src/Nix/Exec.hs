@@ -42,6 +42,7 @@ import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.IORef
 import           Data.List
+import qualified Data.List.NonEmpty as NE
 import           Data.List.Split
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -151,6 +152,16 @@ prov p v = do
 instance MonadNix e m => MonadEval (NValue m) m where
     freeVariable var =
         nverr $ ErrorCall $ "Undefined variable '" ++ Text.unpack var ++ "'"
+
+    attrMissing ks Nothing =
+        evalError @(NValue m) $ ErrorCall $
+            "Inheriting unknown attribute: "
+                ++ intercalate "." (map Text.unpack (NE.toList ks))
+
+    attrMissing ks (Just s) =
+        evalError @(NValue m) $ ErrorCall $ "Could not look up attribute "
+            ++ intercalate "." (map Text.unpack (NE.toList ks))
+            ++ " in " ++ show s
 
     evalCurPos = do
         scope <- currentScopes

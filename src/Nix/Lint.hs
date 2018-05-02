@@ -30,11 +30,11 @@ import           Control.Monad.Fix
 import           Control.Monad.Reader (MonadReader)
 import           Control.Monad.ST
 import           Control.Monad.Trans.Reader
--- import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.List
+import qualified Data.List.NonEmpty as NE
 import           Data.STRef
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -48,7 +48,6 @@ import           Nix.Frames
 import           Nix.Options
 import           Nix.Scope
 import           Nix.Thunk
--- import           Nix.Type.Infer
 import           Nix.Utils
 
 data TAtom
@@ -255,6 +254,16 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
     freeVariable var = symerr $
         "Undefined variable '" ++ Text.unpack var ++ "'"
 
+    attrMissing ks Nothing =
+        evalError @(Symbolic m) $ ErrorCall $
+            "Inheriting unknown attribute: "
+                ++ intercalate "." (map Text.unpack (NE.toList ks))
+
+    attrMissing ks (Just s) =
+        evalError @(Symbolic m) $ ErrorCall $ "Could not look up attribute "
+            ++ intercalate "." (map Text.unpack (NE.toList ks))
+            ++ " in " ++ show s
+
     evalCurPos = do
         f <- value <$> mkSymbolic [TPath]
         l <- value <$> mkSymbolic [TConstant [TInt]]
@@ -394,9 +403,6 @@ instance MonadVar (Lint s) where
         res <- snd . f <$> readSTRef x
         _ <- modifySTRef x (fst . f)
         return res
-
--- instance MonadFile (Lint s) where
---     readFile x = Lint $ ReaderT $ \_ -> unsafeIOToST $ BS.readFile x
 
 instance MonadThrow (Lint s) where
     throwM e = Lint $ ReaderT $ \_ -> throw e
