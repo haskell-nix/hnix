@@ -594,18 +594,20 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
           req <- parseRequest urlstr
           manager <-
             if secure req
-               then newTlsManager
-               else newManager defaultManagerSettings
+            then newTlsManager
+            else newManager defaultManagerSettings
           -- print req
           httpLbs (req { method = "GET" }) manager
           -- return response
         let status = statusCode (responseStatus response)
         if  status /= 200
-          then throwError ("fail, got " ++ show status ++ " when fetching url:" ++ urlstr)
+          then throwError $ ErrorCall $ 
+                 "fail, got " ++ show status ++ " when fetching url:" ++ urlstr
           else do
             let bstr = responseBody response
             -- liftIO $ print bstr
-            throwError ("success in downloading but hnix store is not ready yet. so fail here. url is " ++ urlstr)
+            throwError $ ErrorCall $ 
+              "success in downloading but hnix-store is not yet ready; url = " ++ urlstr
 
     traceEffect = liftIO . putStrLn
 
