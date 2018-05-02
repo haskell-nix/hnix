@@ -910,20 +910,18 @@ fetchTarball v = v >>= \case
 
 fetchurl :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 fetchurl v = v >>= \case
-    NVSet s _ -> case M.lookup "url" s of
-        Nothing -> throwError @String "builtins.fetchurl: Missing url attribute"
-        Just url -> force url $ go (M.lookup "sha256" s)
+    NVSet s _ -> attrsetGet "url" s >>= force ?? (go (M.lookup "sha256" s))
     v@NVStr {} -> go Nothing v
     v@(NVConstant (NUri _)) -> go Nothing v
-    v -> throwError @String $ "builtins.fetchurl: Expected URI or set, got "
+    v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI or set, got "
             ++ show v
  where
     go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
     go msha = \case
         NVStr uri _ -> getURL uri -- msha
         NVConstant (NUri uri) -> getURL uri -- msha
-        v -> throwError @String $ "builtins.fetchurl: Expected URI or string, got "
-                ++ show v
+        v -> throwError $ ErrorCall $ 
+                 "builtins.fetchurl: Expected URI or string, got " ++ show v
 
 partition_ :: forall e m. MonadNix e m
            => m (NValue m) -> m (NValue m) -> m (NValue m)
