@@ -30,7 +30,6 @@ import           Control.Monad.Logic
 import           Control.Monad.Reader
 import           Control.Monad.ST
 import           Control.Monad.State
-import           Data.Coerce
 import           Data.Fix
 import           Data.Foldable
 import qualified Data.HashMap.Lazy as M
@@ -320,15 +319,29 @@ newtype JThunk s = JThunk (Thunk (Infer s) (Judgment s))
 instance MonadThrow (Infer s) where
     throwM = throwError . EvaluationError
 
+instance MonadCatch (Infer s) where
+    catch m h = catchError m $ \case
+        EvaluationError e ->
+            maybe (error $ "Exception was not an exception: " ++ show e) h
+                  (fromException (toException e))
+        err -> error $ "Unexpected error: " ++ show err
+
 instance MonadThunk (Judgment s) (JThunk s) (Infer s) where
     thunk = fmap JThunk . buildThunk
-    force = forceThunk . coerce
+
+    force (JThunk t) f = catch (forceThunk t f) $ \(_ :: ThunkLoop) ->
+        -- If we have a thunk loop, we just don't know the type.
+        f =<< Judgment As.empty [] <$> fresh
+
     value = JThunk . valueRef
 
 instance MonadEval (Judgment s) (Infer s) where
     freeVariable var = do
         tv <- fresh
         return $ Judgment (As.singleton var tv) [] tv
+
+    -- If we fail to look up an attribute, we just don't know the type.
+    attrMissing _ _ = Judgment As.empty [] <$> fresh
 
     evaledSym _ = pure
 
@@ -363,7 +376,7 @@ instance MonadEval (Judgment s) (Infer s) where
             (cs1 ++ cs2 ++ binops (t1 `TArr` (t2 `TArr` tv)) op)
             tv
 
-    evalWith _scope _body = undefined-- pushWeakScope undefined body
+    evalWith = Eval.evalWithAttrSet
 
     evalIf (Judgment as1 cs1 t1) t f = do
         Judgment as2 cs2 t2 <- t

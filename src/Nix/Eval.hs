@@ -28,7 +28,7 @@ import           Data.Align.Key
 import           Data.Fix
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
-import           Data.List (intercalate, partition, foldl')
+import           Data.List (partition, foldl')
 import           Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
 import           Data.Maybe (fromMaybe, catMaybes)
@@ -47,6 +47,7 @@ import           Nix.Utils
 
 class (Show v, Monad m) => MonadEval v m | v -> m where
     freeVariable :: Text -> m v
+    attrMissing  :: NonEmpty Text -> Maybe v -> m v
     evaledSym    :: Text -> v -> m v
 
     evalCurPos      :: m v
@@ -127,11 +128,7 @@ eval (NSelect aset attr alt) = do
     traceM "NSelect..2"
     case mres of
         Right v -> v
-        Left (s, ks) -> fromMaybe err alt
-          where
-            err = evalError @v $ ErrorCall $ "Could not look up attribute "
-                ++ intercalate "." (map Text.unpack (NE.toList ks))
-                ++ " in " ++ show @v s
+        Left (s, ks) -> fromMaybe (attrMissing ks (Just s)) alt
 
 eval (NHasAttr aset attr) =
     toValue . either (const False) (const True) =<< evalSelect aset attr
@@ -286,8 +283,7 @@ evalBinds allowDynamic recursive binds = do
                         >>= \(s, _) ->
                             clearScopes @t $ pushScope s $ lookupVar key
                 case mv of
-                    Nothing -> evalError @v $ ErrorCall $
-                        "Inheriting unknown attribute: " ++ show (void name)
+                    Nothing -> attrMissing (key :| []) Nothing
                     Just v -> force v pure)
 
     buildResult :: Scopes m t
