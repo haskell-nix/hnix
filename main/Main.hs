@@ -73,7 +73,7 @@ main = do
             when (check opts) $ do
                 case HM.inferTop Env.empty [("it", stripAnnotation expr)] of
                     Left err ->
-                        errorWithoutStackTrace $ "Type error: " ++ show err
+                        errorWithoutStackTrace $ "Type error: " ++ PS.ppShow err
                     Right ty ->
                         liftIO $ putStrLn $ "Type of expression: " ++ PS.ppShow ty
 
