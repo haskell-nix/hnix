@@ -29,7 +29,6 @@ import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.Reader (MonadReader)
 import           Control.Monad.ST
-import           Control.Monad.ST.Unsafe
 import           Control.Monad.Trans.Reader
 -- import qualified Data.ByteString as BS
 import           Data.Coerce
@@ -401,7 +400,7 @@ instance MonadVar (Lint s) where
 --     readFile x = Lint $ ReaderT $ \_ -> unsafeIOToST $ BS.readFile x
 
 instance MonadThrow (Lint s) where
-    throwM e = Lint $ ReaderT $ \_ -> unsafeIOToST $ throw e
+    throwM e = Lint $ ReaderT $ \_ -> throw e
 
 runLintM :: Options -> Lint s a -> ST s a
 runLintM opts = flip runReaderT (newContext opts) . runLint
