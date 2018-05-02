@@ -168,6 +168,7 @@ builtinsList = sequence [
     , add  Normal   "parseDrvName"               parseDrvName
     , add2 Normal   "partition"                  partition_
     , add  Normal   "pathExists"                 pathExists_
+    , add  TopLevel "placeholder"                placeHolder
     , add  Normal   "readDir"                    readDir_
     , add  Normal   "readFile"                   readFile_
     , add2 TopLevel "removeAttrs"                removeAttrs
@@ -767,6 +768,11 @@ hashString algo s = Prim $ do
         _ -> throwError $ ErrorCall $ "builtins.hashString: "
             ++ "expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got " ++ show algo
     pure $ decodeUtf8 $ Base16.encode $ hash $ encodeUtf8 s
+
+placeHolder :: MonadNix e m => m (NValue m) -> m (NValue m)
+placeHolder = fromValue @Text >=> \_ -> hash $ Text.pack "fdasdfas"
+  where
+    hash x = (toBuiltin "") . hashString (Text.pack "sha256") $ x
 
 absolutePathFromValue :: MonadNix e m => NValue m -> m FilePath
 absolutePathFromValue = \case
