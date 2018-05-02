@@ -62,7 +62,9 @@ class (Show v, Monad m) => MonadEval v m | v -> m where
     evalIf          :: v -> m v -> m v -> m v
     evalAssert      :: v -> m v -> m v
     evalApp         :: v -> m v -> m v
-    evalAbs         :: Params (m v) -> (m v -> m v) -> m v
+    evalAbs         :: Params (m v)
+                    -> (forall a. m v -> (AttrSet (m v) -> m v -> m (a, v)) -> m (a, v))
+                    -> m v
 
 {-
     evalSelect     :: v -> NonEmpty Text -> Maybe (m v) -> m v
@@ -170,10 +172,10 @@ eval (NAbs params body) = do
     -- we defer here so the present scope is restored when the parameters and
     -- body are forced during application.
     scope <- currentScopes @_ @t
-    evalAbs params $ \arg ->
+    evalAbs params $ \arg k ->
         withScopes @t scope $ do
             args <- buildArgument params arg
-            pushScope args body
+            pushScope args (k (M.map (`force` pure) args) body)
 
 -- | If you know that the 'scope' action will result in an 'AttrSet t', then
 --   this implementation may be used as an implementation for 'evalWith'.
