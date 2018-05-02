@@ -146,6 +146,7 @@ builtinsList = sequence [
     , add2 Normal   "getAttr"                    getAttr
     , add  Normal   "getEnv"                     getEnv_
     , add2 Normal   "hasAttr"                    hasAttr
+    , add  Normal   "hasContext"                 hasContext
     , add' Normal   "hashString"                 hashString
     , add  Normal   "head"                       head_
     , add  TopLevel "import"                     import_
@@ -257,6 +258,10 @@ attrsetGet k s = case M.lookup k s of
     Just v -> pure v
     Nothing ->
         throwError $ ErrorCall $ "Attribute '" ++ Text.unpack k ++ "' required"
+
+hasContext :: MonadNix e m => m (NValue m) -> m (NValue m)
+hasContext x = fromValue @(Text, DList Text) >>= \(_, ctx) ->
+    toNix . not . null $ appEndo ctx []
 
 getAttr :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 getAttr x y = x >>= \x' -> y >>= \y' -> case (x', y') of
