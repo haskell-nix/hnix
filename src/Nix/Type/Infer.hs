@@ -8,6 +8,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
@@ -387,35 +388,39 @@ instance MonadEval (Judgment s) (Infer s) where
             (cs1 ++ cs2 ++ [EqConst t1 (t2 `TArr` tv)])
             tv
 
-    evalAbs (Param x) e = do
+    evalAbs (Param x) k = do
         tv@(TVar a) <- fresh
-        Judgment as cs t <-
-            extendMSet a (e (pure (Judgment (As.singleton x tv) [] tv)))
+        ((), Judgment as cs t) <-
+            extendMSet a (k (pure (Judgment (As.singleton x tv) [] tv))
+                            (\_ b -> ((),) <$> b))
         return $ Judgment
             (as `As.remove` x)
             (cs ++ [EqConst t' tv | t' <- As.lookup x as])
             (tv `TArr` t)
 
-    evalAbs (ParamSet ps _variadic _mname) e = do
-        js <- fmap concat $ forM ps $ \(name, mdef) -> case mdef of
-            Just _ -> pure []
-            Nothing -> do
+    evalAbs (ParamSet ps variadic _mname) k = do
+        js <- fmap concat $ forM ps $ \(name, _) -> do
                 tv <- fresh
                 pure [(name, tv)]
+
         let (env, tys) = (\f -> foldl' f (As.empty, M.empty) js)
                 $ \(as1, t1) (k, t) ->
                     (as1 `As.merge` As.singleton k t, M.insert k t t1)
+            arg   = pure $ Judgment env [] (TSet True tys)
+            call  = k arg $ \args b -> (args,) <$> b
             names = map fst js
-        Judgment as cs t <-
-            (\f -> foldr f (e (pure (Judgment env [] (TSet True tys)))) js)
-                $ \(_, TVar a) rest -> extendMSet a rest
+
+        (args, Judgment as cs t) <-
+            foldr (\(_, TVar a) -> extendMSet a) call js
+
+        ty <- TSet variadic <$> traverse (inferredType <$>) args
+
         return $ Judgment
             (foldl' As.remove as names)
             (cs ++ [ EqConst t' (tys M.! x)
                    | x  <- names
                    , t' <- As.lookup x as])
-            -- jww (2018-05-01): How do we recover the actual args used?
-            (t `TArr` t)
+            (ty `TArr` t)
 
     evalError = throwError . EvaluationError
 
