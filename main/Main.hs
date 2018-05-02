@@ -12,11 +12,13 @@ import qualified Control.Exception as Exc
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
-import           Control.Monad.ST
+-- import           Control.Monad.ST
 import qualified Data.Aeson.Encoding as A
 import qualified Data.Aeson.Text as A
 import qualified Data.HashMap.Lazy as M
+import qualified Data.Map as Map
 import           Data.List (sortOn)
+import           Data.Maybe (fromJust)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import qualified Data.Text.Lazy.Encoding as TL
@@ -24,7 +26,7 @@ import qualified Data.Text.Lazy.IO as TL
 import           Nix
 import           Nix.Convert
 import qualified Nix.Eval as Eval
-import           Nix.Lint
+-- import           Nix.Lint
 import qualified Nix.Type.Env as Env
 import qualified Nix.Type.Infer as HM
 import           Nix.Utils
@@ -73,12 +75,13 @@ main = do
             when (check opts) $ do
                 case HM.inferTop Env.empty [("it", stripAnnotation expr)] of
                     Left err ->
-                        errorWithoutStackTrace $ "Type error: " ++ show err
+                        errorWithoutStackTrace $ "Type error: " ++ PS.ppShow err
                     Right ty ->
-                        liftIO $ putStrLn $ "Type of expression: " ++ PS.ppShow ty
+                        liftIO $ putStrLn $ "Type of expression: "
+                            ++ PS.ppShow (fromJust (Map.lookup "it" (Env.types ty)))
 
-                liftIO $ putStrLn $ runST $
-                    runLintM opts . renderSymbolic =<< lint opts expr
+                -- liftIO $ putStrLn $ runST $
+                --     runLintM opts . renderSymbolic =<< lint opts expr
 
             catch (process opts mpath expr) $ \case
                 NixException frames ->

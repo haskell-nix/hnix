@@ -27,7 +27,7 @@ import           Nix.Value
 newtype NormalLoop m = NormalLoop (NValue m)
     deriving Show
 
-instance Typeable m => Frame (NormalLoop m)
+instance Typeable m => Exception (NormalLoop m)
 
 normalFormBy
     :: forall e m. (Framed e m, MonadVar m, Typeable m)

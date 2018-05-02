@@ -36,7 +36,6 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.These
 import           Data.Traversable (for)
-import           Data.Void
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Expr
@@ -63,7 +62,7 @@ class (Show v, Monad m) => MonadEval v m | v -> m where
     evalIf          :: v -> m v -> m v -> m v
     evalAssert      :: v -> m v -> m v
     evalApp         :: v -> m v -> m v
-    evalAbs         :: Params Void -> (m v -> m v) -> m v
+    evalAbs         :: Params (m v) -> (m v -> m v) -> m v
 
 {-
     evalSelect     :: v -> NonEmpty Text -> Maybe (m v) -> m v
@@ -81,7 +80,7 @@ class (Show v, Monad m) => MonadEval v m | v -> m where
     evalLet        :: m v -> m v
 -}
 
-    evalError :: Frame s => s -> m a
+    evalError :: Exception s => s -> m a
 
 type MonadNixEval e v t m =
     (MonadEval v m,
@@ -99,7 +98,7 @@ data EvalFrame m v
     | ForcingExpr (Scopes m v) NExprLoc
     deriving (Show, Typeable)
 
-instance (Typeable m, Typeable v) => Frame (EvalFrame m v)
+instance (Typeable m, Typeable v) => Exception (EvalFrame m v)
 
 eval :: forall e v t m. MonadNixEval e v t m => NExprF (m v) -> m v
 
@@ -128,7 +127,7 @@ eval (NSelect aset attr alt) = do
         Right v -> v
         Left (s, ks) -> fromMaybe err alt
           where
-            err = evalError @v $ "Could not look up attribute "
+            err = evalError @v $ ErrorCall $ "Could not look up attribute "
                 ++ intercalate "." (map Text.unpack (NE.toList ks))
                 ++ " in " ++ show @v s
 
@@ -171,14 +170,10 @@ eval (NAbs params body) = do
     -- we defer here so the present scope is restored when the parameters and
     -- body are forced during application.
     scope <- currentScopes @_ @t
-    evalAbs (clearDefaults params) $ \arg ->
+    evalAbs params $ \arg ->
         withScopes @t scope $ do
             args <- buildArgument params arg
             pushScope args body
-  where
-    clearDefaults :: Params r -> Params Void
-    clearDefaults (Param name) = Param name
-    clearDefaults (ParamSet xs b mv) = ParamSet (map (Nothing <$) xs) b mv
 
 -- | If you know that the 'scope' action will result in an 'AttrSet t', then
 --   this implementation may be used as an implementation for 'evalWith'.
@@ -199,7 +194,7 @@ attrSetAlter :: forall e v t m. MonadNixEval e v t m
              -> m v
              -> m (AttrSet (m v))
 attrSetAlter [] _ _ =
-    evalError @v ("invalid selector with no components" :: String)
+    evalError @v $ ErrorCall "invalid selector with no components"
 attrSetAlter (p:ps) m val = case M.lookup p m of
     Nothing
         | null ps   -> go
@@ -289,8 +284,8 @@ evalBinds allowDynamic recursive binds = do
                         >>= \(s, _) ->
                             clearScopes @t $ pushScope s $ lookupVar key
                 case mv of
-                    Nothing -> evalError @v $ "Inheriting unknown attribute: "
-                        ++ show (void name)
+                    Nothing -> evalError @v $ ErrorCall $
+                        "Inheriting unknown attribute: " ++ show (void name)
                     Just v -> force v pure)
 
     buildResult :: Scopes m t
@@ -356,14 +351,14 @@ evalKeyNameStatic :: forall v m. MonadEval v m
 evalKeyNameStatic = \case
     StaticKey k p -> pure (k, p)
     DynamicKey _ ->
-        evalError @v ("dynamic attribute not allowed in this context" :: String)
+        evalError @v $ ErrorCall "dynamic attribute not allowed in this context"
 
 evalKeyNameDynamicNotNull
     :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
     => NKeyName (m v) -> m (Text, Maybe SourcePos)
 evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
     (Nothing, _) ->
-        evalError @v ("value is null while a string was expected" :: String)
+        evalError @v $ ErrorCall "value is null while a string was expected"
     (Just k, p) -> pure (k, p)
 
 -- | Evaluate a component of an attribute path in a context where we are
@@ -421,12 +416,14 @@ buildArgument params arg = do
              -> m t
     assemble scope isVariadic k = \case
         That Nothing  ->
-            const $ evalError @v $ "Missing value for parameter: " ++ show k
+            const $ evalError @v $ ErrorCall $
+                "Missing value for parameter: " ++ show k
         That (Just f) -> \args ->
             thunk $ withScopes scope $ pushScope args f
         This x | isVariadic -> const (pure x)
                | otherwise  ->
-                 const $ evalError @v $ "Unexpected parameter: " ++ show k
+                 const $ evalError @v $ ErrorCall $
+                     "Unexpected parameter: " ++ show k
         These x _ -> const (pure x)
 
 addSourcePositions :: (MonadReader e m, Has e SrcSpan)
