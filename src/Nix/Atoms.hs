@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP            #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -5,7 +6,9 @@
 
 module Nix.Atoms where
 
+#if !defined(ghcjs_HOST_OS)
 import Codec.Serialise
+#endif
 import Control.DeepSeq
 import Data.Data
 import Data.Hashable
@@ -28,7 +31,11 @@ data NAtom
   -- | URIs, which are just string literals, but do not need quotes.
   | NUri Text
   deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
-            Serialise, Hashable)
+            Hashable)
+
+#if !defined(ghcjs_HOST_OS)
+instance Serialise NAtom
+#endif
 
 -- | Translate an atom into its nix representation.
 atomText :: NAtom -> Text

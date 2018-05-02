@@ -111,24 +111,8 @@ assertEval _opts files =
         [".exp"] -> assertLangOk defaultOptions name
         [".exp.disabled"] -> return ()
         [".exp-disabled"] -> return ()
-        [".exp", ".flags"] -> do
-            liftIO $ unsetEnv "NIX_PATH"
-            flags <- Text.readFile (name ++ ".flags")
-            let flags' | Text.last flags == '\n' = Text.init flags
-                       | otherwise = flags
-            case Opts.execParserPure Opts.defaultPrefs nixOptionsInfo
-                     (fixup (map Text.unpack (Text.splitOn " " flags'))) of
-                Opts.Failure err -> errorWithoutStackTrace $
-                    "Error parsing flags from " ++ name ++ ".flags: "
-                        ++ show err
-                Opts.Success opts' ->
-                    assertLangOk
-                        (opts' { include = include opts' ++
-                                   [ "nix=../../../../data/nix/corepkgs"
-                                   , "lang/dir4"
-                                   , "lang/dir5" ] })
-                        name
-                Opts.CompletionInvoked _ -> error "unused"
+        [".exp", ".flags"] ->
+          return () -- Tested by hnix-repl
         _ -> assertFailure $ "Unknown test type " ++ show files
   where
     name = "data/nix/tests/lang/"

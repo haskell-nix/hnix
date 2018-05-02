@@ -17,19 +17,16 @@ dependencies:
   - base                        >= 4.9 && < 5
   - ansi-wl-pprint
   - bytestring
-  - compact
   - containers
   - data-fix
-  - deepseq
   - exceptions
   - filepath
   - mtl
   - optparse-applicative
-  - serialise
   - template-haskell
   - text
   - transformers
-  - unordered-containers        >= 0.2.9 && < 0.3
+  - unordered-containers        >= 0.2.7 && < 0.3
 
 ghc-options:
   - -Wall
@@ -56,27 +53,43 @@ when:
   - condition: flag(tracing)
     cpp-options: -DENABLE_TRACING=1
 
+when:
+  - condition: "os(linux) && impl(ghc < 8.2)"
+    dependencies:
+      - compact
+
+when:
+  - condition: impl(ghcjs)
+    then:
+      dependencies:
+        - deepseq >= 1.4.2 && < 1.5
+        - hashing
+    else:
+      dependencies:
+        - cryptohash-md5
+        - cryptohash-sha1
+        - cryptohash-sha256
+        - cryptohash-sha512
+        - deepseq >= 1.4.3 && < 1.5
+        - serialise
+
 library:
   source-dirs: src
   dependencies:
     - aeson
     - ansi-wl-pprint
-    - array                     >= 0.4 && < 0.6
+    - array                     >= 0.4   && < 0.6
     - base16-bytestring
     - binary
-    - cryptohash
-    - deriving-compat           >= 0.3 && < 0.5
+    - deriving-compat           >= 0.3   && < 0.5
     - directory
-    - hashable
-    - haskeline
-    - megaparsec
+    - megaparsec                >= 6.0   && < 6.6
     - monadlist
-    - pretty-show
     - process
     - regex-tdfa
     - regex-tdfa-text
     - scientific
-    - semigroups                >= 0.18 && < 0.19
+    - semigroups                >= 0.18  && < 0.19
     - split
     - syb
     - these
@@ -87,16 +100,16 @@ library:
     - condition: impl(ghc < 8.4.0)
       dependencies:
         - ghc-datasize
-
-executables:
-  hnix:
-    source-dirs: main
-    main: Main.hs
-    dependencies:
-      - hnix
-      - aeson
-      - repline
-      - haskeline
+  when:
+    - condition: "impl(ghcjs)"
+      then:
+        dependencies:
+          - hashable >= 1.2.4 && < 1.3
+      else:
+        dependencies:
+          - hashable >= 1.2.5 && < 1.3
+          - haskeline
+          - pretty-show
 
 tests:
   hnix-tests:

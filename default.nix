@@ -18,23 +18,29 @@
 let inherit (nixpkgs) pkgs;
 
   haskellPackages = pkgs.haskell.packages.${compiler}.override {
-    overrides = with pkgs.haskell.lib; self: super: rec {
-      serialise = dontCheck super.serialise;
-      compact =
-        if compiler == "ghc842"
-        then doJailbreak super.compact
-        else super.compact;
-      ghc-datasize =
-        pkgs.haskell.lib.overrideCabal super.ghc-datasize (attrs: {
-          enableLibraryProfiling    = false;
-          enableExecutableProfiling = false;
-        });
-      ghc-heap-view =
-        pkgs.haskell.lib.overrideCabal super.ghc-heap-view (attrs: {
-          enableLibraryProfiling    = false;
-          enableExecutableProfiling = false;
-        });
-    };
+    overrides = with pkgs.haskell.lib; self: super:
+      if compiler == "ghcjs" then {} else
+      rec {
+        cryptohash-md5 = doJailbreak super.cryptohash-md5;
+        cryptohash-sha1 = doJailbreak super.cryptohash-sha1;
+        cryptohash-sha256 = doJailbreak super.cryptohash-sha256;
+        cryptohash-sha512 = doJailbreak super.cryptohash-sha512;
+        serialise = dontCheck super.serialise;
+        compact =
+          if compiler == "ghc842"
+          then doJailbreak super.compact
+          else super.compact;
+        ghc-datasize =
+          pkgs.haskell.lib.overrideCabal super.ghc-datasize (attrs: {
+            enableLibraryProfiling    = false;
+            enableExecutableProfiling = false;
+          });
+        ghc-heap-view =
+          pkgs.haskell.lib.overrideCabal super.ghc-heap-view (attrs: {
+            enableLibraryProfiling    = false;
+            enableExecutableProfiling = false;
+          });
+      };
   };
 
 in haskellPackages.developPackage {

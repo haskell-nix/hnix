@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -29,7 +30,9 @@ import           Nix.Utils
 import           Nix.Value
 import qualified Text.PrettyPrint.ANSI.Leijen as P
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
+#if !defined(ghcjs_HOST_OS)
 import qualified Text.Show.Pretty as PS
+#endif
 
 renderFrames :: forall v e m.
                (MonadReader e m, Has e Options,
@@ -107,7 +110,11 @@ renderExpr _level longLabel shortLabel e@(Fix (Compose (Ann _ x))) = do
     opts :: Options <- asks (view hasLens)
     let rendered
             | verbose opts >= DebugInfo =
+#if !defined(ghcjs_HOST_OS)
               text (PS.ppShow (stripAnnotation e))
+#else
+              text (show (stripAnnotation e))
+#endif
             | verbose opts >= Chatty =
               prettyNix (stripAnnotation e)
             | otherwise =
