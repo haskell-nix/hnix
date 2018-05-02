@@ -8,12 +8,11 @@ newtype TVar = TV String
   deriving (Show, Eq, Ord)
 
 data Type
-  = TVar TVar               -- type variable
-  | TCon String             -- known type
-  | TSet (AttrSet Type)     -- heterogenous map: { a = b; }
-  | TSubSet (AttrSet Type)  -- subset of heterogenous map: { a = b; ... }
-  | TList [Type]            -- heterogenous list
-  | TArr Type Type          -- type -> type
+  = TVar TVar                -- type variable
+  | TCon String              -- known type
+  | TSet Bool (AttrSet Type) -- heterogenous map, bool if variadic
+  | TList [Type]             -- heterogenous list
+  | TArr Type Type           -- type -> type
   deriving (Show, Eq, Ord)
 
 data Scheme = Forall [TVar] Type -- forall a b. a -> b
@@ -21,7 +20,7 @@ data Scheme = Forall [TVar] Type -- forall a b. a -> b
 
 -- This models a set that unifies with any other set.
 typeSet :: Type
-typeSet = TSubSet M.empty
+typeSet = TSet True M.empty
 
 typeList :: Type
 typeList = TList []
