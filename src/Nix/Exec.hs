@@ -607,6 +607,26 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
             -- liftIO $ print bstr
             throwError ("success in downloading but hnix store is not ready yet. so fail here. url is " ++ urlstr)
 
+    traceEffect = liftIO . putStrLn
+
+    exec = \case
+      [] -> throwError $ ErrorCall "exec: missing program"
+      (prog:args) -> do
+        (exitCode, out, _) <-
+            liftIO $ readProcessWithExitCode prog args ""
+        let t = Text.strip (Text.pack out)
+        let emsg = "program[" ++ prog ++ "] args=" ++ show args
+        case exitCode of
+          ExitSuccess ->
+            if Text.null t
+            then throwError $ ErrorCall $ "exec has no output :" ++ emsg
+            else case parseNixTextLoc t of
+              Failure err ->
+                throwError $ ErrorCall $
+                    "Error parsing output of exec: " ++ show err ++ " " ++ emsg
+              Success v -> evalExprLoc v
+          err -> throwError $ ErrorCall $
+                    "exec  failed: " ++ show err ++ " " ++ emsg
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
 runLazyM opts = (`evalStateT` M.empty)
