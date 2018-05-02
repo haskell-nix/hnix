@@ -46,7 +46,6 @@ import           Data.List.Split
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Typeable
-import           Data.Void
 import           Nix.Atoms
 import           Nix.Context
 import           Nix.Convert
@@ -88,9 +87,9 @@ type MonadNix e m =
 data ExecFrame m = Assertion SrcSpan (NValue m)
     deriving (Show, Typeable)
 
-instance Typeable m => Frame (ExecFrame m)
+instance Typeable m => Exception (ExecFrame m)
 
-nverr :: forall s e m a. (MonadNix e m, Frame s) => s -> m a
+nverr :: forall s e m a. (MonadNix e m, Exception s) => s -> m a
 nverr = evalError @(NValue m)
 
 currentPos :: forall e m. (MonadReader e m, Has e SrcSpan) => m SrcSpan
@@ -109,8 +108,9 @@ instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
 
                 -- Gather the current evaluation context at the time of thunk
                 -- creation, and record it along with the thunk.
-                let go (fromFrame -> Just (EvaluatingExpr scope
-                                             (Fix (Compose (Ann span e))))) =
+                let go (fromException ->
+                            Just (EvaluatingExpr scope
+                                     (Fix (Compose (Ann span e))))) =
                         let e' = Compose (Ann span (Nothing <$ e))
                         in [Provenance scope e']
                     go _ = []
@@ -120,11 +120,17 @@ instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
             else
                 fmap (NThunk [] . coerce) . buildThunk $ mv
 
-    force (NThunk ps t) f = case ps of
-        [] -> forceThunk t f
-        Provenance scope e@(Compose (Ann span _)):_ ->
-            withFrame Info (ForcingExpr scope (wrapExprLoc span e))
-                (forceThunk t f)
+    -- The ThunkLoop exception is thrown as an exception with MonadThrow,
+    -- which does not capture the current stack frame information to provide
+    -- it in a NixException, so we catch and re-throw it here using
+    -- 'throwError' from Frames.hs.
+    force (NThunk ps t) f = catch go (throwError @ThunkLoop)
+      where
+        go = case ps of
+            [] -> forceThunk t f
+            Provenance scope e@(Compose (Ann span _)):_ ->
+                withFrame Info (ForcingExpr scope (wrapExprLoc span e))
+                    (forceThunk t f)
 
     value = NThunk [] . coerce . valueRef
 
@@ -140,7 +146,7 @@ prov p v = do
 
 instance MonadNix e m => MonadEval (NValue m) m where
     freeVariable var =
-        nverr $ "Undefined variable '" ++ Text.unpack var ++ "'"
+        nverr $ ErrorCall $ "Undefined variable '" ++ Text.unpack var ++ "'"
 
     evalCurPos = do
         scope <- currentScopes
@@ -158,10 +164,13 @@ instance MonadNix e m => MonadEval (NValue m) m where
         span  <- currentPos
         pure $ nvConstantP (Provenance scope (NConstant_ span c)) c
 
-    evalString s d = do
-        scope <- currentScopes
-        span  <- currentPos
-        pure $ nvStrP (Provenance scope (NStr_ span (DoubleQuoted [Plain s]))) s d
+    evalString = assembleString >=> \case
+        Just (s, c) -> do
+            scope <- currentScopes
+            span  <- currentPos
+            pure $ nvStrP (Provenance scope
+                           (NStr_ span (DoubleQuoted [Plain s]))) s c
+        Nothing -> nverr $ ErrorCall $ "Failed to assemble string"
 
     evalLiteralPath p = do
         scope <- currentScopes
@@ -214,7 +223,7 @@ instance MonadNix e m => MonadEval (NValue m) m where
     evalAbs p b = do
         scope <- currentScopes
         span  <- currentPos
-        pure $ nvClosureP (Provenance scope (NAbs_ span (fmap absurd p) Nothing)) p b
+        pure $ nvClosureP (Provenance scope (NAbs_ span (Nothing <$ p) Nothing)) (void p) b
 
     evalError = throwError
 
@@ -230,7 +239,7 @@ callFunc fun arg = case fun of
     s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
         traceM "callFunc:__functor"
         force f $ (`callFunc` pure s) >=> (`callFunc` arg)
-    x -> throwError $ "Attempt to call non-function: " ++ show x
+    x -> throwError $ ErrorCall $ "Attempt to call non-function: " ++ show x
 
 execUnaryOp :: (Framed e m, MonadVar m)
             => Scopes m (NThunk m) -> SrcSpan -> NUnaryOp -> NValue m
@@ -242,9 +251,9 @@ execUnaryOp scope span op arg = do
             (NNeg, NInt   i) -> unaryOp $ NInt   (-i)
             (NNeg, NFloat f) -> unaryOp $ NFloat (-f)
             (NNot, NBool  b) -> unaryOp $ NBool  (not b)
-            _ -> throwError $ "unsupported argument type for unary operator "
-                     ++ show op
-        x -> throwError $ "argument to unary operator"
+            _ -> throwError $ ErrorCall $
+                "unsupported argument type for unary operator " ++ show op
+        x -> throwError $ ErrorCall $ "argument to unary operator"
                 ++ " must evaluate to an atomic type: " ++ show x
   where
     unaryOp = pure . nvConstantP (Provenance scope (NUnary_ span op (Just arg)))
@@ -288,16 +297,16 @@ execBinaryOp scope span op lval rarg = do
             (NGt,  l, r)       -> toBool $ l >  r
             (NGte, l, r)       -> toBool $ l >= r
             (NAnd,  _, _)      ->
-                nverr @String "should be impossible: && is handled above"
+                nverr $ ErrorCall "should be impossible: && is handled above"
             (NOr,   _, _)      ->
-                nverr @String "should be impossible: || is handled above"
+                nverr $ ErrorCall "should be impossible: || is handled above"
             (NPlus,  l, r)     -> numBinOp bin (+) l r
             (NMinus, l, r)     -> numBinOp bin (-) l r
             (NMult,  l, r)     -> numBinOp bin (*) l r
             (NDiv,   l, r)     -> numBinOp' bin div (/) l r
             (NImpl,
              NBool l, NBool r) -> toBool $ not l || r
-            _                  -> nverr $ unsupportedTypes lval rval
+            _                  -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVStr ls lc, NVStr rs rc) -> case op of
             NPlus -> pure $ bin nvStrP (ls `mappend` rs) (lc `mappend` rc)
@@ -307,68 +316,68 @@ execBinaryOp scope span op lval rarg = do
             NLte  -> toBool $ ls <= rs
             NGt   -> toBool $ ls >  rs
             NGte  -> toBool $ ls >= rs
-            _     -> nverr $ unsupportedTypes lval rval
+            _     -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVStr _ _, NVConstant NNull) -> case op of
             NEq  -> toBool =<< valueEq lval (nvStr "" mempty)
             NNEq -> toBool . not =<< valueEq lval (nvStr "" mempty)
-            _    -> nverr $ unsupportedTypes lval rval
+            _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVConstant NNull, NVStr _ _) -> case op of
             NEq  -> toBool =<< valueEq (nvStr "" mempty) rval
             NNEq -> toBool . not =<< valueEq (nvStr "" mempty) rval
-            _    -> nverr $ unsupportedTypes lval rval
+            _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVSet ls lp, NVSet rs rp) -> case op of
             NUpdate -> pure $ bin nvSetP (rs `M.union` ls) (rp `M.union` lp)
             NEq     -> toBool =<< valueEq lval rval
             NNEq    -> toBool . not =<< valueEq lval rval
-            _       -> nverr $ unsupportedTypes lval rval
+            _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVSet ls lp, NVConstant NNull) -> case op of
             NUpdate -> pure $ bin nvSetP ls lp
             NEq     -> toBool =<< valueEq lval (nvSet M.empty M.empty)
             NNEq    -> toBool . not =<< valueEq lval (nvSet M.empty M.empty)
-            _       -> nverr $ unsupportedTypes lval rval
+            _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVConstant NNull, NVSet rs rp) -> case op of
             NUpdate -> pure $ bin nvSetP rs rp
             NEq     -> toBool =<< valueEq (nvSet M.empty M.empty) rval
             NNEq    -> toBool . not =<< valueEq (nvSet M.empty M.empty) rval
-            _       -> nverr $ unsupportedTypes lval rval
+            _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVList ls, NVList rs) -> case op of
             NConcat -> pure $ bin nvListP $ ls ++ rs
             NEq     -> toBool =<< valueEq lval rval
             NNEq    -> toBool . not =<< valueEq lval rval
-            _       -> nverr $ unsupportedTypes lval rval
+            _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVList ls, NVConstant NNull) -> case op of
             NConcat -> pure $ bin nvListP ls
             NEq     -> toBool =<< valueEq lval (nvList [])
             NNEq    -> toBool . not =<< valueEq lval (nvList [])
-            _       -> nverr $ unsupportedTypes lval rval
+            _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVConstant NNull, NVList rs) -> case op of
             NConcat -> pure $ bin nvListP rs
             NEq     -> toBool =<< valueEq (nvList []) rval
             NNEq    -> toBool . not =<< valueEq (nvList []) rval
-            _       -> nverr $ unsupportedTypes lval rval
+            _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVPath p, NVStr s _) -> case op of
             NEq   -> toBool $ p == Text.unpack s
             NNEq  -> toBool $ p /= Text.unpack s
             NPlus -> bin nvPathP <$> makeAbsolutePath (p `mappend` Text.unpack s)
-            _     -> nverr $ unsupportedTypes lval rval
+            _     -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVPath ls, NVPath rs) -> case op of
             NPlus -> bin nvPathP <$> makeAbsolutePath (ls ++ rs)
-            _     -> nverr $ unsupportedTypes lval rval
+            _     -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         _ -> case op of
             NEq   -> toBool False
             NNEq  -> toBool True
-            _ -> nverr $ unsupportedTypes lval rval
+            _ -> nverr $ ErrorCall $ unsupportedTypes lval rval
   where
     unsupportedTypes :: Show a => a -> a -> String
     unsupportedTypes lval rval =
@@ -388,7 +397,7 @@ execBinaryOp scope span op lval rarg = do
         (NInt   li, NFloat rf) -> toFloat $ fromInteger li `floatF`             rf
         (NFloat lf, NInt   ri) -> toFloat $             lf `floatF` fromInteger ri
         (NFloat lf, NFloat rf) -> toFloat $             lf `floatF`             rf
-        _ -> nverr $ unsupportedTypes l r
+        _ -> nverr $ ErrorCall $ unsupportedTypes l r
       where
         toInt   = pure . bin nvConstantP . NInt
         toFloat = pure . bin nvConstantP . NFloat
@@ -413,7 +422,7 @@ coerceToString = \case
     NVSet s _ | Just p <- M.lookup "outPath" s ->
         force p coerceToString
 
-    v -> throwError $ "Expected a string, but saw: " ++ show v
+    v -> throwError $ ErrorCall $ "Expected a string, but saw: " ++ show v
 
 newtype Lazy m a = Lazy
     { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m)))
@@ -445,8 +454,8 @@ instance MonadException m => MonadException (Lazy m) where
       let run' = RunIO (fmap Lazy . run . runLazy)
       in runLazy <$> f run'
 
-instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
-          Alternative m, MonadPlus m, Typeable m)
+instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
+          MonadPlus m, Typeable m)
       => MonadEffects (Lazy m) where
     addPath path = do
         (exitCode, out, _) <-
@@ -455,7 +464,8 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
           ExitSuccess -> do
             let dropTrailingLinefeed p = take (length p - 1) p
             return $ StorePath $ dropTrailingLinefeed out
-          _ -> throwError $ "addPath: failed: nix-store --add " ++ show path
+          _ -> throwError $ ErrorCall $
+                  "addPath: failed: nix-store --add " ++ show path
 
     makeAbsolutePath origPath = do
         origPathExpanded <- liftIO $ expandHomePath origPath
@@ -466,7 +476,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
                     Nothing -> liftIO getCurrentDirectory
                     Just v -> force v $ \case
                         NVPath s -> return $ takeDirectory s
-                        v -> throwError $ "when resolving relative path,"
+                        v -> throwError $ ErrorCall $ "when resolving relative path,"
                                 ++ " __cur_file is in scope,"
                                 ++ " but is not a path; it is: "
                                 ++ show v
@@ -490,7 +500,7 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
                 return $ takeDirectory p' </> path
 
         traceM $ "Importing file " ++ path'
-        withFrame Info ("While importing file " ++ show path') $ do
+        withFrame Info (ErrorCall $ "While importing file " ++ show path') $ do
             imports <- Lazy $ ReaderT $ const get
             expr <- case M.lookup path' imports of
                 Just expr -> pure expr
@@ -498,8 +508,8 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
                     eres <- Lazy $ parseNixFileLoc path'
                     case eres of
                         Failure err  ->
-                            throwError $ text "Parse during import failed:"
-                                P.</> err
+                            throwError $ ErrorCall . show $
+                                text "Parse during import failed:" P.</> err
                         Success expr -> do
                             Lazy $ ReaderT $ const $
                                 modify (M.insert origPath expr)
@@ -548,16 +558,18 @@ instance (MonadFix m, MonadCatch m, MonadThrow m, MonadIO m,
     nixInstantiateExpr expr = do
         traceM $ "Executing: "
             ++ show ["nix-instantiate", "--eval", "--expr ", expr]
-        (exitCode, out, _) <-
+        (exitCode, out, err) <-
             liftIO $ readProcessWithExitCode "nix-instantiate"
                 [ "--eval", "--expr", expr] ""
         case exitCode of
             ExitSuccess -> case parseNixTextLoc (Text.pack out) of
                 Failure err ->
-                    throwError $ "Error parsing output of nix-instantiate: "
-                        ++ show err
+                    throwError $ ErrorCall $
+                        "Error parsing output of nix-instantiate: " ++ show err
                 Success v -> evalExprLoc v
-            err -> throwError $ "nix-instantiate failed: " ++ show err
+            status ->
+                throwError $ ErrorCall $ "nix-instantiate failed: " ++ show status
+                    ++ ": " ++ err
 
     getRecursiveSize =
 #ifdef MIN_VERSION_ghc_datasize
@@ -624,7 +636,7 @@ findEnvPathM name = do
             foldM go Nothing l
     case mpath of
         Nothing ->
-            throwError $ "file '" ++ name
+            throwError $ ErrorCall $ "file '" ++ name
                 ++ "' was not found in the Nix search path"
                 ++ " (add it using $NIX_PATH or -I)"
         Just path -> return path
@@ -641,7 +653,7 @@ findEnvPathM name = do
                             tryPath path (Just (Text.unpack pfx))
                         _ -> tryPath path Nothing
             Nothing ->
-                throwError $ "__nixPath must be a list of attr sets"
+                throwError $ ErrorCall $ "__nixPath must be a list of attr sets"
                     ++ " with 'path' elements, but saw: " ++ show s
 
     tryPath p (Just n) | n':ns <- splitDirectories name, n == n' =
