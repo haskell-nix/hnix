@@ -122,7 +122,7 @@ unpackSymbolic = readVar . coerce
 type MonadLint e m = (Scoped e (SThunk m) m, Framed e m, MonadVar m)
 
 symerr :: forall e m a. MonadLint e m => String -> m a
-symerr = evalError @(Symbolic m)
+symerr = evalError @(Symbolic m) . ErrorCall
 
 renderSymbolic :: MonadLint e m => Symbolic m -> m String
 renderSymbolic = unpackSymbolic >=> \case
@@ -182,9 +182,9 @@ merge context = go
                 then go xs ys
                 else (TSet (Just m) :) <$> go xs ys
         (TClosure {}, TClosure {}) ->
-            throwError "Cannot unify functions"
+            throwError $ ErrorCall "Cannot unify functions"
         (TBuiltin _ _, TBuiltin _ _) ->
-            throwError "Cannot unify builtin functions"
+            throwError $ ErrorCall "Cannot unify builtin functions"
         _ | compareTypes x y == LT -> go xs (y:ys)
           | compareTypes x y == GT -> go (x:xs) ys
           | otherwise              -> error "impossible"
@@ -227,7 +227,7 @@ unify context (Symbolic x) (Symbolic y) = do
                 then do
                     -- x' <- renderSymbolic (Symbolic x)
                     -- y' <- renderSymbolic (Symbolic y)
-                    throwError "Cannot unify "
+                    throwError $ ErrorCall "Cannot unify "
                         -- ++ show x' ++ " with " ++ show y'
                         --  ++ " in context: " ++ show context
                 else do
@@ -296,7 +296,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
         pushWeakScope ?? body $ force s $ unpackSymbolic >=> \case
             NMany [TSet (Just s')] -> return s'
             NMany [TSet Nothing] -> error "NYI: with unknown"
-            _ -> throwError "scope must be a set in with statement"
+            _ -> throwError $ ErrorCall "scope must be a set in with statement"
 
     evalIf cond t f = do
         t' <- t
@@ -362,7 +362,8 @@ lintApp :: forall e m. MonadLint e m
         => NExprF () -> Symbolic m -> m (Symbolic m)
         -> m (HashMap VarName (Symbolic m), Symbolic m)
 lintApp context fun arg = unpackSymbolic fun >>= \case
-    NAny -> throwError "Cannot apply something not known to be a function"
+    NAny -> throwError $ ErrorCall
+        "Cannot apply something not known to be a function"
     NMany xs -> do
         (args:_, ys) <- fmap unzip $ forM xs $ \case
             TClosure _params _f -> arg >>= unpackSymbolic >>= \case
@@ -372,10 +373,10 @@ lintApp context fun arg = unpackSymbolic fun >>= \case
                 NMany [TSet (Just _)] -> do
                     error "NYI"
 
-                NMany _ -> throwError "NYI: lintApp NMany not set"
-            TBuiltin _ _f -> throwError "NYI: lintApp builtin"
-            TSet _m -> throwError "NYI: lintApp Set"
-            _x -> throwError "Attempt to call non-function"
+                NMany _ -> throwError $ ErrorCall "NYI: lintApp NMany not set"
+            TBuiltin _ _f -> throwError $ ErrorCall "NYI: lintApp builtin"
+            TSet _m -> throwError $ ErrorCall "NYI: lintApp Set"
+            _x -> throwError $ ErrorCall "Attempt to call non-function"
 
         y <- everyPossible
         (args,) <$> foldM (unify context) y ys

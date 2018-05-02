@@ -182,8 +182,7 @@ instance Ord (NValue m) where
     NVPath x  <= NVPath y  = x < y
     _         <= _         = False
 
-checkComparable :: (Framed e m, MonadThrow m, Typeable m)
-                => NValue m -> NValue m -> m ()
+checkComparable :: (Framed e m, Typeable m) => NValue m -> NValue m -> m ()
 checkComparable x y = case (x, y) of
     (NVConstant (NFloat _), NVConstant (NInt _))   -> pure ()
     (NVConstant (NInt _),   NVConstant (NFloat _)) -> pure ()
@@ -327,4 +326,4 @@ data ValueFrame m
     | Expectation ValueType (NValue m)
     deriving (Show, Typeable)
 
-instance Typeable m => Frame (ValueFrame m)
+instance Typeable m => Exception (ValueFrame m)
