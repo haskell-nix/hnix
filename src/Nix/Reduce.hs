@@ -71,6 +71,43 @@ newtype Reducer m a = Reducer
               MonadReader (Maybe FilePath, Scopes (Reducer m) NExprLoc),
               MonadState (HashMap FilePath NExprLoc))
 
+staticImport
+    :: forall e m.
+      (MonadIO m, Scoped e NExprLoc m,
+       MonadReader (Maybe FilePath, Scopes m NExprLoc) m,
+       MonadState (HashMap FilePath NExprLoc) m)
+    => SrcSpan -> FilePath -> m NExprLoc
+staticImport pann path = do
+    imports <- get
+    case M.lookup path imports of
+        Just expr -> pure expr
+        Nothing -> go
+  where
+    go = do
+        mfile <- asks fst
+        path  <- liftIO $ pathToDefaultNixFile path
+        path' <- liftIO $ pathToDefaultNixFile =<< canonicalizePath
+            (maybe path (\p -> takeDirectory p </> path) mfile)
+
+        liftIO $ putStrLn $ "Importing file " ++ path'
+
+        eres <- liftIO $ parseNixFileLoc path'
+        case eres of
+            Failure err  -> error $ "Parse failed: " ++ show err
+            Success x -> do
+                let pos  = SourcePos "Reduce.hs" (mkPos 1) (mkPos 1)
+                    span = SrcSpan pos pos
+                    cur  = NamedVar
+                        (StaticKey "__cur_file" (Just pos) :| [])
+                        (Fix (NLiteralPath_ pann path'))
+                    x'   = Fix (NLet_ span [cur] x)
+                modify (M.insert path x')
+                local (const (Just path',
+                              emptyScopes @m @NExprLoc)) $ do
+                    x'' <- cata reduce x'
+                    modify (M.insert path x'')
+                    return x''
+
 -- gatherNames :: NExprLoc -> HashSet VarName
 -- gatherNames = cata $ \case
 --     NSym_ _ var -> S.singleton var
@@ -101,36 +138,10 @@ reduce (NUnary_ uann op arg) = arg >>= \x -> case (op, x) of
     _ -> return $ Fix $ NUnary_ uann op x
 
 reduce (NBinary_ bann NApp fun arg) = fun >>= \case
-    f@(Fix (NSym_ _ "import")) -> do
-        mfile   <- asks fst
-        imports <- get
-        arg >>= \case
-            Fix (NLiteralPath_ pann origPath)
-                | Just expr <- M.lookup origPath imports -> pure expr
-                | otherwise -> do
-                    path  <- liftIO $ pathToDefaultNixFile origPath
-                    path' <- liftIO $ pathToDefaultNixFile =<< canonicalizePath
-                        (maybe path (\p -> takeDirectory p </> path) mfile)
-
-                    liftIO $ putStrLn $ "Importing file " ++ path'
-
-                    eres <- liftIO $ parseNixFileLoc path'
-                    case eres of
-                        Failure err  -> error $ "Parse failed: " ++ show err
-                        Success x -> do
-                            let pos  = SourcePos "Reduce.hs" (mkPos 1) (mkPos 1)
-                                span = SrcSpan pos pos
-                                cur  = NamedVar
-                                    (StaticKey "__cur_file" (Just pos) :| [])
-                                    (Fix (NLiteralPath_ pann path'))
-                                x'   = Fix (NLet_ span [cur] x)
-                            modify (M.insert origPath x')
-                            local (const (Just path',
-                                          emptyScopes @m @NExprLoc)) $ do
-                                x'' <- cata reduce x'
-                                modify (M.insert origPath x'')
-                                return x''
-            v -> return $ Fix $ NBinary_ bann NApp f v
+    f@(Fix (NSym_ _ "import")) -> arg >>= \case
+        -- Fix (NEnvPath_     pann origPath) -> staticImport pann origPath
+        Fix (NLiteralPath_ pann origPath) -> staticImport pann origPath
+        v -> return $ Fix $ NBinary_ bann NApp f v
 
     Fix (NAbs_ _ (Param name) body) -> do
         x <- arg
