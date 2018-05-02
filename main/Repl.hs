@@ -9,7 +9,10 @@
 
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
@@ -19,27 +22,29 @@
 module Repl where
 
 import           Nix
+import           Nix.Convert
 import           Nix.Eval
 import           Nix.Scope
 import qualified Nix.Type.Env as Env
 import           Nix.Type.Infer
+import           Nix.Utils
 
 import qualified Data.HashMap.Lazy as M
+import           Data.List (isPrefixOf, foldl')
 import qualified Data.Map as Map
 import           Data.Monoid
+import           Data.Text (unpack, pack)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 
 import           Control.Monad.Identity
+import           Control.Monad.Reader
 import           Control.Monad.State.Strict
 
-import           Data.List (isPrefixOf, foldl')
-import           Data.Text (unpack, pack)
-import qualified Data.Text as Text
-
-import           System.Exit
-import           System.Environment
+import           System.Console.Haskeline.MonadException
 import           System.Console.Repline
+import           System.Environment
+import           System.Exit
 
 -------------------------------------------------------------------------------
 -- Types
@@ -56,8 +61,8 @@ data IState = IState
 initState :: IState
 initState = IState {-Env.empty-} undefined
 
-type Repl a = HaskelineT (StateT IState IO) a
-hoistErr :: Result a -> Repl a
+type Repl e m a = HaskelineT (StateT IState m) a
+hoistErr :: MonadIO m => Result a -> Repl e m a
 hoistErr (Success val) = return val
 hoistErr (Failure err) = do
   liftIO $ print err
@@ -67,7 +72,8 @@ hoistErr (Failure err) = do
 -- Execution
 -------------------------------------------------------------------------------
 
-exec :: Bool -> Text.Text -> Repl ()
+exec :: forall e m. (MonadNix e m, MonadIO m, MonadException m)
+     => Bool -> Text.Text -> Repl e m ()
 exec update source = do
   -- Get the current interpreter state
   st <- get
@@ -87,14 +93,24 @@ exec update source = do
   when update (put st')
 
   -- If a value is entered, print it.
-  val <- liftIO $ runLazyM defaultOptions $
-      -- jww (2018-04-12): Once the user is able to establish definitions
-      -- in the repl, they should be passed here.
-      pushScope @(NThunk (Lazy IO)) M.empty $
-          nixEvalExprLoc Nothing expr
-  liftIO $ print val
+  lift $ lift $ do
+    -- jww (2018-04-12): Once the user is able to establish definitions in
+    -- the repl, they should be passed here.
+    pushScope @(NThunk m) M.empty $ catch (go expr) $ \case
+      NixException frames -> do
+        liftIO . print =<< renderFrames @(NThunk m) frames
+ where
+  go expr = do
+    val <- evalExprLoc expr
+    opts :: Nix.Options <- asks (view hasLens)
+    if | normalize opts ->
+         liftIO . print . prettyNValueNF =<< normalForm val
+       | values opts ->
+         liftIO . print =<< prettyNValueProv val
+       | otherwise ->
+         liftIO . print =<< prettyNValue val
 
-cmd :: String -> Repl ()
+cmd :: (MonadNix e m, MonadIO m, MonadException m) => String -> Repl e m ()
 cmd source = exec True (Text.pack source)
 
 -------------------------------------------------------------------------------
@@ -102,20 +118,20 @@ cmd source = exec True (Text.pack source)
 -------------------------------------------------------------------------------
 
 -- :browse command
-browse :: [String] -> Repl ()
+browse :: MonadNix e m => [String] -> Repl e m ()
 browse _ = do
   st <- get
   undefined
   -- liftIO $ mapM_ putStrLn $ ppenv (tyctx st)
 
 -- :load command
-load :: [String] -> Repl ()
+load :: (MonadNix e m, MonadIO m, MonadException m) => [String] -> Repl e m ()
 load args = do
   contents <- liftIO $ Text.readFile (unwords args)
   exec True contents
 
 -- :type command
--- typeof :: [String] -> Repl ()
+-- typeof :: [String] -> Repl e m ()
 -- typeof args = do
 --   st <- get
 --   let arg = unwords args
@@ -124,7 +140,7 @@ load args = do
 --     Nothing -> exec False (Text.pack arg)
 
 -- :quit command
-quit :: a -> Repl ()
+quit :: (MonadNix e m, MonadIO m) => a -> Repl e m ()
 quit _ = liftIO exitSuccess
 
 -------------------------------------------------------------------------------
@@ -146,7 +162,8 @@ comp n = do
   -- let defs = map unpack $ Map.keys ctx
   return $ filter (isPrefixOf n) (cmds {-++ defs-})
 
-options :: [(String, [String] -> Repl ())]
+options :: (MonadNix e m, MonadIO m, MonadException m)
+        => [(String, [String] -> Repl e m ())]
 options = [
     ("load"   , load)
   , ("browse" , browse)
@@ -158,10 +175,10 @@ options = [
 -- Entry Point
 -------------------------------------------------------------------------------
 
-completer :: CompleterStyle (StateT IState IO)
+completer :: (MonadNix e m, MonadIO m) => CompleterStyle (StateT IState m)
 completer = Prefix (wordCompleter comp) defaultMatcher
 
-shell :: Repl a -> IO ()
+shell :: (MonadNix e m, MonadIO m, MonadException m) => Repl e m a -> m ()
 shell pre = flip evalStateT initState $
     evalRepl "hnix> " cmd options completer pre
 

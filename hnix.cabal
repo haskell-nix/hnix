@@ -30,6 +30,11 @@ flag optimize
   manual: True
   default: False
 
+flag profiling
+  description: Enable profiling
+  manual: True
+  default: False
+
 flag tracing
   description: Enable full debug tracing
   manual: True
@@ -98,6 +103,8 @@ library
     , http-client
     , http-client-tls
     , http-types
+    , haskeline
+    , logict
     , megaparsec
     , monadlist
     , mtl
@@ -121,6 +128,9 @@ library
     , xml
   if flag(tracing)
     cpp-options: -DENABLE_TRACING=1
+  if impl(ghc < 8.4.0) && !flag(profiling)
+    build-depends:
+        ghc-datasize
   default-language: Haskell2010
 
 executable hnix
@@ -142,9 +152,11 @@ executable hnix
     , deepseq
     , exceptions
     , filepath
+    , haskeline
     , hnix
     , mtl
     , optparse-applicative
+    , pretty-show
     , repline
     , serialise
     , template-haskell

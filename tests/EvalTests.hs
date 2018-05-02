@@ -144,13 +144,16 @@ let
 in [ (fix toFixFold) (fix toFix) ]
 |]
 
+case_placeholder =
+  constantEqualText "\"ed0d01fb5aba979d0beeffb3c2bdffb5cfda021955b776cce0a47058708b3157\"" "builtins.placeholder \"out\""
+
 -----------------------
 
 tests :: TestTree
 tests = $testGroupGenerator
 
 genEvalCompareTests = do
-    files <- filter (\x -> takeExtension x == "nix") <$> D.listDirectory testDir
+    files <- filter ((==".nix") . takeExtension) <$> D.listDirectory testDir
     return $ testGroup "Eval comparison tests" $ map mkTestCase files
   where
     testDir = "tests/eval-compare"

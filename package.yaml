@@ -40,6 +40,11 @@ flags:
     manual: True
     default: False
 
+  profiling:
+    description: Enable profiling
+    manual: True
+    default: False
+
   optimize:
     description: Enable all optimization flags
     manual: True
@@ -71,6 +76,8 @@ library:
     - http-types
     - http-client
     - http-client-tls
+    - haskeline
+    - logict
     - megaparsec
     - monadlist
     - pretty-show
@@ -85,6 +92,10 @@ library:
     - unix
     - vector
     - xml
+  when:
+    - condition: impl(ghc < 8.4.0) && !flag(profiling)
+      dependencies:
+        - ghc-datasize
 
 executables:
   hnix:
@@ -93,7 +104,9 @@ executables:
     dependencies:
       - hnix
       - aeson
+      - pretty-show
       - repline
+      - haskeline
 
 tests:
   hnix-tests:

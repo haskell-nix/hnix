@@ -24,6 +24,7 @@
 module Nix.Value where
 
 import           Control.Monad
+import           Control.Monad.Catch
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import qualified Data.Aeson as A
@@ -34,7 +35,6 @@ import           Data.Monoid (appEndo)
 import           Data.Text (Text)
 import           Data.These
 import           Data.Typeable (Typeable)
-import           Data.Void
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr.Types
@@ -55,7 +55,7 @@ data NValueF m r
     | NVPathF FilePath
     | NVListF [r]
     | NVSetF (AttrSet r) (AttrSet SourcePos)
-    | NVClosureF (Params Void) (m (NValue m) -> m (NValue m))
+    | NVClosureF (Params ()) (m (NValue m) -> m (NValue m))
       -- ^ A function is a closed set of parameters representing the "call
       --   signature", used at application time to check the type of arguments
       --   passed to the function. Since it supports default values which may
@@ -162,6 +162,34 @@ instance Show (NValueF m (Fix (NValueF m))) where
               . showsPrec 11 a
               . showString " "
               . showsPrec 11 b
+
+instance Eq (NValue m) where
+    NVConstant (NFloat x) == NVConstant (NInt y)   = x == fromInteger y
+    NVConstant (NInt x)   == NVConstant (NFloat y) = fromInteger x == y
+    NVConstant (NInt x)   == NVConstant (NInt y)   = x == y
+    NVConstant (NFloat x) == NVConstant (NFloat y) = x == y
+    NVStr x _ == NVStr y _ = x < y
+    NVPath x  == NVPath y  = x < y
+    _         == _         = False
+
+instance Ord (NValue m) where
+    NVConstant (NFloat x) <= NVConstant (NInt y)   = x <= fromInteger y
+    NVConstant (NInt x)   <= NVConstant (NFloat y) = fromInteger x <= y
+    NVConstant (NInt x)   <= NVConstant (NInt y)   = x <= y
+    NVConstant (NFloat x) <= NVConstant (NFloat y) = x <= y
+    NVStr x _ <= NVStr y _ = x < y
+    NVPath x  <= NVPath y  = x < y
+    _         <= _         = False
+
+checkComparable :: (Framed e m, Typeable m) => NValue m -> NValue m -> m ()
+checkComparable x y = case (x, y) of
+    (NVConstant (NFloat _), NVConstant (NInt _))   -> pure ()
+    (NVConstant (NInt _),   NVConstant (NFloat _)) -> pure ()
+    (NVConstant (NInt _),   NVConstant (NInt _))   -> pure ()
+    (NVConstant (NFloat _), NVConstant (NFloat _)) -> pure ()
+    (NVStr _ _, NVStr _ _) -> pure ()
+    (NVPath _, NVPath _)   -> pure ()
+    _ -> throwError $ Comparison x y
 
 builtin :: Monad m
         => String -> (m (NValue m) -> m (NValue m)) -> m (NValue m)
@@ -286,6 +314,10 @@ instance Show (NThunk m) where
 data ValueFrame m
     = ForcingThunk
     | ConcerningValue (NValue m)
+    | Comparison (NValue m) (NValue m)
+    | Addition (NValue m) (NValue m)
+    | Multiplication (NValue m) (NValue m)
+    | Division (NValue m) (NValue m)
     | Coercion ValueType ValueType
     | CoercionToJsonNF (NValueNF m)
     | CoercionFromJson A.Value
@@ -293,4 +325,4 @@ data ValueFrame m
     | Expectation ValueType (NValue m)
     deriving (Show, Typeable)
 
-instance Typeable m => Frame (ValueFrame m)
+instance Typeable m => Exception (ValueFrame m)

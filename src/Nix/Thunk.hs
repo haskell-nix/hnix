@@ -15,7 +15,9 @@
 
 module Nix.Thunk where
 
-import Nix.Frames
+import Control.Exception
+import Control.Monad.Catch
+import Data.Typeable
 
 #if ENABLE_TRACING
 import Data.IORef
@@ -44,16 +46,12 @@ class Monad m => MonadThunk v t m | v -> m, v -> t, t -> m, t -> v where
 
 data Thunk m v
     = Value v
-    | Thunk
-#if ENABLE_TRACING
-          !Int
-#endif
-          (Var m Bool) (Var m (Deferred m v))
+    | Thunk Int (Var m Bool) (Var m (Deferred m v))
 
 newtype ThunkLoop = ThunkLoop (Maybe Int)
     deriving (Show, Typeable)
 
-instance Frame ThunkLoop
+instance Exception ThunkLoop
 
 valueRef :: v -> Thunk m v
 valueRef = Value
@@ -64,16 +62,16 @@ buildThunk action =
     let !x = unsafePerformIO (atomicModifyIORef' counter (\c -> (succ c, c))) in
     Thunk x
 #else
-    Thunk
+    Thunk 0
 #endif
         <$> newVar False <*> newVar (Deferred action)
 
-forceThunk :: (Framed e m, MonadVar m) => Thunk m v -> (v -> m a) -> m a
+forceThunk :: (MonadVar m, MonadThrow m) => Thunk m v -> (v -> m a) -> m a
 forceThunk (Value ref) k = k ref
 #if ENABLE_TRACING
 forceThunk (Thunk n active ref) k = do
 #else
-forceThunk (Thunk active ref) k = do
+forceThunk (Thunk _ active ref) k = do
 #endif
     eres <- readVar ref
     case eres of
@@ -83,9 +81,9 @@ forceThunk (Thunk active ref) k = do
             if nowActive
                 then
 #if ENABLE_TRACING
-                    throwError $ ThunkLoop (Just n)
+                    throwM $ ThunkLoop (Just n)
 #else
-                    throwError $ ThunkLoop Nothing
+                    throwM $ ThunkLoop Nothing
 #endif
                 else do
 #if ENABLE_TRACING
@@ -96,13 +94,9 @@ forceThunk (Thunk active ref) k = do
                     _ <- atomicModifyVar active (False,)
                     k v
 
-forceEffects :: (Framed e m, MonadVar m) => Thunk m v -> (v -> m a) -> m a
+forceEffects :: MonadVar m => Thunk m v -> (v -> m a) -> m a
 forceEffects (Value ref) k = k ref
-#if ENABLE_TRACING
 forceEffects (Thunk _ active ref) k = do
-#else
-forceEffects (Thunk active ref) k = do
-#endif
     nowActive <- atomicModifyVar active (True,)
     if nowActive
         then return $ error "forceEffects: a value was expected"
