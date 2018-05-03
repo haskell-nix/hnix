@@ -926,10 +926,10 @@ fetchurl v = v >>= \case
             ++ show v
  where
     go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
-    go msha = \case
+    go _msha = \case
         NVStr uri _ -> getURL uri -- msha
         NVConstant (NUri uri) -> getURL uri -- msha
-        v -> throwError $ ErrorCall $ 
+        v -> throwError $ ErrorCall $
                  "builtins.fetchurl: Expected URI or string, got " ++ show v
 
 partition_ :: forall e m. MonadNix e m
