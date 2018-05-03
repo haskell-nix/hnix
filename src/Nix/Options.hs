@@ -5,6 +5,7 @@ import           Data.Char (isDigit)
 import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import           Data.Time
 import           Options.Applicative hiding (ParserResult(..))
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
@@ -36,12 +37,13 @@ data Options = Options
     , arg          :: [(Text, Text)]
     , argstr       :: [(Text, Text)]
     , fromFile     :: Maybe FilePath
+    , currentTime  :: UTCTime
     , filePaths    :: [FilePath]
     }
     deriving Show
 
-defaultOptions :: Options
-defaultOptions = Options
+defaultOptions :: UTCTime -> Options
+defaultOptions current = Options
     { verbose      = ErrorsOnly
     , tracing      = False
     , thunks       = False
@@ -69,6 +71,7 @@ defaultOptions = Options
     , arg          = []
     , argstr       = []
     , fromFile     = Nothing
+    , currentTime  = current
     , filePaths    = []
     }
 
@@ -96,8 +99,8 @@ argPair = option $ str >>= \s ->
             "Format of --arg/--argstr in hnix is: name=expr"
         Just i -> return $ second Text.tail $ Text.splitAt i s
 
-nixOptions :: Parser Options
-nixOptions = Options
+nixOptions :: UTCTime -> Parser Options
+nixOptions current = Options
     <$> (fromMaybe ErrorsOnly <$>
          optional
            (option (do a <- str
@@ -189,8 +192,13 @@ nixOptions = Options
         (   short 'f'
          <> long "file"
          <> help "Parse all of the files given in FILE; - means stdin"))
+    <*> option (parseTimeOrError True defaultTimeLocale "%Y/%m/%d %H:%M:%S" <$> str)
+        (   long "now"
+         <> value current
+         <> help "Set current time for testing purposes")
     <*> many (strArgument (metavar "FILE" <> help "Path of file to parse"))
 
-nixOptionsInfo :: ParserInfo Options
-nixOptionsInfo = info (helper <*> nixOptions)
-                      (fullDesc <> progDesc "" <> header "hnix")
+nixOptionsInfo :: UTCTime -> ParserInfo Options
+nixOptionsInfo current =
+    info (helper <*> nixOptions current)
+         (fullDesc <> progDesc "" <> header "hnix")

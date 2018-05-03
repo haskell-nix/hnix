@@ -23,6 +23,7 @@ module Nix.Builtins (builtins) where
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.ListM (sortByM)
+import           Control.Monad.Reader (asks)
 import qualified Crypto.Hash.MD5 as MD5
 import qualified Crypto.Hash.SHA1 as SHA1
 import qualified Crypto.Hash.SHA256 as SHA256
@@ -51,6 +52,7 @@ import           Data.Text.Encoding
 import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Lazy.Builder as Builder
 import           Data.These (fromThese)
+import qualified Data.Time.Clock.POSIX as Time
 import           Data.Traversable (mapM)
 import           Language.Haskell.TH.Syntax (addDependentFile, runIO)
 import           Nix.Atoms
@@ -62,6 +64,7 @@ import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Normal
+import           Nix.Options
 import           Nix.Parser
 import           Nix.Render
 import           Nix.Scope
@@ -122,6 +125,7 @@ builtinsList = sequence [
     , add  Normal   "concatLists"                concatLists
     , add' Normal   "concatStringsSep"           (arity2 Text.intercalate)
     , add0 Normal   "currentSystem"              currentSystem
+    , add0 Normal   "currentTime"                currentTime_
     , add2 Normal   "deepSeq"                    deepSeq
     , add0 TopLevel "derivation"                 $(do
           let f = "data/nix/corepkgs/derivation.nix"
@@ -137,6 +141,7 @@ builtinsList = sequence [
     , add  Normal   "exec"                       exec_
     , add0 Normal   "false"                      (return $ nvConstant $ NBool False)
     , add  Normal   "fetchTarball"               fetchTarball
+    , add  Normal   "fetchurl"                   fetchurl
     , add2 Normal   "filter"                     filter_
     , add3 Normal   "foldl'"                     foldl'_
     , add  Normal   "fromJSON"                   fromJSON
@@ -146,6 +151,7 @@ builtinsList = sequence [
     , add2 Normal   "getAttr"                    getAttr
     , add  Normal   "getEnv"                     getEnv_
     , add2 Normal   "hasAttr"                    hasAttr
+    , add  Normal   "hasContext"                 hasContext
     , add' Normal   "hashString"                 hashString
     , add  Normal   "head"                       head_
     , add  TopLevel "import"                     import_
@@ -257,6 +263,10 @@ attrsetGet k s = case M.lookup k s of
     Just v -> pure v
     Nothing ->
         throwError $ ErrorCall $ "Attribute '" ++ Text.unpack k ++ "' required"
+
+hasContext :: MonadNix e m => m (NValue m) -> m (NValue m)
+hasContext =
+    toNix . not . null . (appEndo ?? []) . snd <=< fromValue @(Text, DList Text)
 
 getAttr :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 getAttr x y = x >>= \x' -> y >>= \y' -> case (x', y') of
@@ -770,9 +780,9 @@ hashString algo s = Prim $ do
     pure $ decodeUtf8 $ Base16.encode $ hash $ encodeUtf8 s
 
 placeHolder :: MonadNix e m => m (NValue m) -> m (NValue m)
-placeHolder = fromValue @Text >=> \_ -> hash $ Text.pack "fdasdfas"
-  where
-    hash x = (toBuiltin "") . hashString (Text.pack "sha256") $ x
+placeHolder = fromValue @Text >=> \_ -> do
+    h <- runPrim (hashString "sha256" "fdasdfas")
+    toNix h
 
 absolutePathFromValue :: MonadNix e m => NValue m -> m FilePath
 absolutePathFromValue = \case
@@ -907,6 +917,21 @@ fetchTarball v = v >>= \case
           ++ "url    = \"" ++ Text.unpack url ++ "\"; "
           ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"
 
+fetchurl :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
+fetchurl v = v >>= \case
+    NVSet s _ -> attrsetGet "url" s >>= force ?? (go (M.lookup "sha256" s))
+    v@NVStr {} -> go Nothing v
+    v@(NVConstant (NUri _)) -> go Nothing v
+    v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI or set, got "
+            ++ show v
+ where
+    go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
+    go _msha = \case
+        NVStr uri _ -> getURL uri -- msha
+        NVConstant (NUri uri) -> getURL uri -- msha
+        v -> throwError $ ErrorCall $
+                 "builtins.fetchurl: Expected URI or string, got " ++ show v
+
 partition_ :: forall e m. MonadNix e m
            => m (NValue m) -> m (NValue m) -> m (NValue m)
 partition_ fun xs = fun >>= \f ->
@@ -923,6 +948,11 @@ currentSystem = do
   os <- getCurrentSystemOS
   arch <- getCurrentSystemArch
   return $ nvStr (arch <> "-" <> os) mempty
+
+currentTime_ :: MonadNix e m => m (NValue m)
+currentTime_ = do
+    opts :: Options <- asks (view hasLens)
+    toNix @Integer $ round $ Time.utcTimeToPOSIXSeconds (currentTime opts)
 
 derivationStrict_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 derivationStrict_ = (>>= derivationStrict)
