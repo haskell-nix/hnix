@@ -19,6 +19,7 @@ import qualified Data.HashMap.Lazy as M
 import qualified Data.Map as Map
 import           Data.List (sortOn)
 import           Data.Maybe (fromJust)
+import           Data.Time
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import qualified Data.Text.Lazy.Encoding as TL
@@ -39,7 +40,8 @@ import qualified Text.Show.Pretty as PS
 
 main :: IO ()
 main = do
-    opts <- execParser nixOptionsInfo
+    time <- liftIO getCurrentTime
+    opts <- execParser (nixOptionsInfo time)
     runLazyM opts $ case readFrom opts of
         Just path -> do
             let file = addExtension (dropExtension path) "nix"

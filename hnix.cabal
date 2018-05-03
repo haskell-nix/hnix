@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 495fbcc0ec91c76bd2a6f9a571bca3014f7dd68489dc137eb17528a4dfde7a00
+-- hash: 3939e6333d509e27377d1de951e2b57efc80952e134d6666a530407b9aa32b3d
 
 name:           hnix
 version:        0.5.0
@@ -118,6 +118,7 @@ library
     , template-haskell
     , text
     , these
+    , time
     , transformers
     , unix
     , unordered-containers >=0.2.9 && <0.3
@@ -158,6 +159,7 @@ executable hnix
     , serialise
     , template-haskell
     , text
+    , time
     , transformers
     , unordered-containers >=0.2.9 && <0.3
   if flag(tracing)
@@ -201,6 +203,7 @@ test-suite hnix-tests
     , tasty-th
     , template-haskell
     , text
+    , time
     , transformers
     , unix
     , unordered-containers >=0.2.9 && <0.3
@@ -234,6 +237,7 @@ benchmark hnix-benchmarks
     , serialise
     , template-haskell
     , text
+    , time
     , transformers
     , unordered-containers >=0.2.9 && <0.3
   if flag(tracing)
