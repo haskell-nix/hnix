@@ -44,6 +44,7 @@ import           Nix.Scope
 import           Nix.Strings (runAntiquoted)
 import           Nix.Thunk
 import           Nix.Utils
+import           Nix.Value (NixString(..))
 
 class (Show v, Monad m) => MonadEval v m | v -> m where
     freeVariable :: Text -> m v
@@ -52,7 +53,7 @@ class (Show v, Monad m) => MonadEval v m | v -> m where
 
     evalCurPos      :: m v
     evalConstant    :: NAtom -> m v
-    evalString      :: NString (m v) -> m v
+    evalString      :: NixString -> m v
     evalLiteralPath :: FilePath -> m v
     evalEnvPath     :: FilePath -> m v
     evalUnary       :: NUnaryOp -> v -> m v
@@ -92,7 +93,7 @@ type MonadNixEval e v t m =
      MonadFix m,
      ToValue Bool m v,
      ToValue [t] m v,
-     FromValue (Text, DList Text) m v,
+     FromValue NixString m v,
      ToValue (AttrSet t, AttrSet SourcePos) m v,
      FromValue (AttrSet t, AttrSet SourcePos) m v)
 
@@ -111,7 +112,9 @@ eval (NSym var) =
     lookupVar var >>= maybe (freeVariable var) (force ?? evaledSym var)
 
 eval (NConstant x)          = evalConstant x
-eval (NStr str)             = evalString str
+eval (NStr str)             = assembleString str >>= \case
+                                Nothing -> evalError @v $ ErrorCall ("failed to evaluate string" :: String)
+                                Just e -> evalString e
 eval (NLiteralPath p)       = evalLiteralPath p
 eval (NEnvPath p)           = evalEnvPath p
 eval (NUnary op arg)        = evalUnary op =<< arg
@@ -331,14 +334,14 @@ evalSelect aset attr = do
         Nothing ->
             return $ Left (x, path)
 
-evalSelector :: (MonadEval v m, FromValue (Text, DList Text) m v)
+evalSelector :: (MonadEval v m, FromValue NixString m v)
              => Bool -> NAttrPath (m v) -> m (NonEmpty Text)
 evalSelector allowDynamic binds =
     NE.map fst <$> traverse (evalGetterKeyName allowDynamic) binds
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value
-evalGetterKeyName :: (MonadEval v m, FromValue (Text, DList Text) m v)
+evalGetterKeyName :: (MonadEval v m, FromValue NixString m v)
                   => Bool -> NKeyName (m v) -> m (Text, Maybe SourcePos)
 evalGetterKeyName canBeDynamic
     | canBeDynamic = evalKeyNameDynamicNotNull
@@ -352,7 +355,7 @@ evalKeyNameStatic = \case
         evalError @v $ ErrorCall "dynamic attribute not allowed in this context"
 
 evalKeyNameDynamicNotNull
-    :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
+    :: forall v m. (MonadEval v m, FromValue NixString m v)
     => NKeyName (m v) -> m (Text, Maybe SourcePos)
 evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
     (Nothing, _) ->
@@ -361,7 +364,7 @@ evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *binding* a value
-evalSetterKeyName :: (MonadEval v m, FromValue (Text, DList Text) m v)
+evalSetterKeyName :: (MonadEval v m, FromValue NixString m v)
                   => Bool -> NKeyName (m v) -> m (Maybe Text, Maybe SourcePos)
 evalSetterKeyName canBeDynamic
     | canBeDynamic = evalKeyNameDynamicNullable
@@ -369,23 +372,23 @@ evalSetterKeyName canBeDynamic
 
 -- | Returns Nothing iff the key value is null
 evalKeyNameDynamicNullable
-    :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
+    :: forall v m. (MonadEval v m, FromValue NixString m v)
     => NKeyName (m v)
     -> m (Maybe Text, Maybe SourcePos)
 evalKeyNameDynamicNullable = \case
     StaticKey k p -> pure (Just k, p)
     DynamicKey k ->
         runAntiquoted "\n" assembleString (>>= fromValueMay) k
-            <&> \case Just (t, _) -> (Just t, Nothing)
+            <&> \case Just (NixString t _) -> (Just t, Nothing)
                       _ -> (Nothing, Nothing)
 
-assembleString :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
-               => NString (m v) -> m (Maybe (Text, DList Text))
+assembleString :: forall v m. (MonadEval v m, FromValue NixString m v)
+               => NString (m v) -> m (Maybe NixString)
 assembleString = \case
     Indented _   parts -> fromParts parts
     DoubleQuoted parts -> fromParts parts
   where
-    go = runAntiquoted "\n" (pure . Just . (, mempty)) (>>= fromValueMay)
+    go = runAntiquoted "\n" (pure . Just . (flip NixString mempty)) (>>= fromValueMay)
 
     fromParts parts = fmap mconcat . sequence <$> mapM go parts
 

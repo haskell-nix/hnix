@@ -178,13 +178,11 @@ instance MonadNix e m => MonadEval (NValue m) m where
         span  <- currentPos
         pure $ nvConstantP (Provenance scope (NConstant_ span c)) c
 
-    evalString = assembleString >=> \case
-        Just (s, c) -> do
-            scope <- currentScopes
-            span  <- currentPos
-            pure $ nvStrP (Provenance scope
-                           (NStr_ span (DoubleQuoted [Plain s]))) s c
-        Nothing -> nverr $ ErrorCall $ "Failed to assemble string"
+    evalString ns@(NixString s _) = do
+        scope <- currentScopes
+        span  <- currentPos
+        pure $ nvStrPNS (Provenance scope
+                           (NStr_ span (DoubleQuoted [Plain s]))) ns
 
     evalLiteralPath p = do
         scope <- currentScopes

@@ -31,7 +31,8 @@ import qualified Data.Aeson as A
 import           Data.Align
 import           Data.Fix
 import qualified Data.HashMap.Lazy as M
-import           Data.Monoid (appEndo)
+import qualified Data.HashSet as S
+import           Data.Hashable
 import           Data.Text (Text)
 import           Data.These
 import           Data.Typeable (Typeable)
@@ -43,6 +44,38 @@ import           Nix.Frames
 import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Utils
+import           Data.Semigroup
+
+-- | A 'ContextFlavor' describes the sum of possible derivations for string contexts
+data ContextFlavor = 
+    DirectPath
+  | DerivationOutput
+  | AllDerivationOutput
+  deriving (Bounded, Show, Eq, Generic)
+
+instance Hashable ContextFlavor
+
+-- | A 'StringContext' ...
+data StringContext = 
+  StringContext { scPath :: !Text
+                , scFlavor :: !ContextFlavor
+                } deriving (Eq, Show, Generic) 
+
+instance Hashable StringContext
+
+data NixString = NixString 
+  { nsContents :: !Text
+  , nsContext :: !(S.HashSet StringContext)
+  } deriving (Eq, Show, Generic) 
+
+instance Hashable NixString
+
+instance Semigroup NixString where
+  NixString s1 t1 <> NixString s2 t2 = NixString (s1 <> s2) (t1 <> t2)
+
+instance Monoid NixString where
+  mempty = NixString mempty mempty
+  mappend = (<>)
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation is
 --   completed. 's' is related to the type of errors that might occur during
@@ -51,7 +84,7 @@ data NValueF m r
     = NVConstantF NAtom
      -- | A string has a value and a context, which can be used to record what a
      -- string has been build from
-    | NVStrF Text (DList Text)
+    | NVStrF NixString
     | NVPathF FilePath
     | NVListF [r]
     | NVSetF (AttrSet r) (AttrSet SourcePos)
@@ -110,10 +143,13 @@ pattern NVConstant x <- NValue _ (NVConstantF x)
 nvConstant x = NValue [] (NVConstantF x)
 nvConstantP p x = NValue [p] (NVConstantF x)
 
-pattern NVStr s d <- NValue _ (NVStrF s d)
+pattern NVStr s d <- NValue _ (NVStrF (NixString s d))
 
-nvStr s d = NValue [] (NVStrF s d)
-nvStrP p s d = NValue [p] (NVStrF s d)
+nvStr = (nvStrNS .) . NixString
+nvStrNS ns = NValue [] (NVStrF ns)
+
+nvStrP p = (nvStrPNS p .) . NixString
+nvStrPNS p ns = NValue [p] (NVStrF ns)
 
 pattern NVPath x <- NValue _ (NVPathF x)
 
@@ -143,7 +179,7 @@ nvBuiltinP p name f = NValue [p] (NVBuiltinF name f)
 instance Show (NValueF m (Fix (NValueF m))) where
     showsPrec = flip go where
       go (NVConstantF atom)  = showsCon1 "NVConstant" atom
-      go (NVStrF txt ctxt)   = showsCon2 "NVStr"      txt (appEndo ctxt [])
+      go (NVStrF (NixString txt ctxt))   = showsCon2 "NVStr"      txt ctxt
       go (NVListF     lst)   = showsCon1 "NVList"     lst
       go (NVSetF attrs _)    = showsCon1 "NVSet"      attrs
       go (NVClosureF p _)    = showsCon1 "NVClosure"  p
@@ -239,12 +275,12 @@ isDerivation m = case M.lookup "type" m of
 valueEq :: MonadThunk (NValue m) (NThunk m) m
         => NValue m -> NValue m -> m Bool
 valueEq l r = case (l, r) of
-    (NVStr ls _, NVConstant (NUri ru)) -> pure $ ls == ru
-    (NVConstant (NUri lu), NVStr rs _) -> pure $ lu == rs
+    (NVStr ls ct, NVConstant (NUri ru)) -> pure (ls == ru && S.null ct)
+    (NVConstant (NUri lu), NVStr rs ct) -> pure (lu == rs && S.null ct)
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
-    (NVStr ls _, NVStr rs _) -> pure $ ls == rs
-    (NVStr ls _, NVConstant NNull) -> pure $ ls == ""
-    (NVConstant NNull, NVStr rs _) -> pure $ "" == rs
+    (NVStr ls lc, NVStr rs rc) -> pure (ls == rs && lc == rc) 
+    (NVStr ls ct, NVConstant NNull) -> pure (ls == "" && S.null ct)
+    (NVConstant NNull, NVStr rs ct) -> pure ("" == rs && S.null ct)
     (NVList ls, NVList rs) -> alignEqM thunkEq ls rs
     (NVSet lm _, NVSet rm _) -> do
         let compareAttrs = alignEqM thunkEq lm rm

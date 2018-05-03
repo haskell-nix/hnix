@@ -224,7 +224,7 @@ prettyNValueNF = prettyNix . valueToExpr
         valueToExpr = transport go
 
         go (NVConstantF a) = NConstant a
-        go (NVStrF t _) = NStr (DoubleQuoted [Plain t])
+        go (NVStrF (NixString t _)) = NStr (DoubleQuoted [Plain t])
         go (NVListF l) = NList l
         go (NVSetF s p) = NSet
             [ NamedVar (StaticKey k (M.lookup k p) :| []) v
@@ -237,7 +237,7 @@ printNix :: Functor m => NValueNF m -> String
 printNix = cata phi
   where phi :: NValueF m String -> String
         phi (NVConstantF a) = unpack $ atomText a
-        phi (NVStrF t _) = show t
+        phi (NVStrF (NixString t _)) = show t
         phi (NVListF l) = "[ " ++ unwords l ++ " ]"
         phi (NVSetF s _) =
             "{ " ++ concat [ unpack k ++ " = " ++ v ++ "; "
@@ -250,7 +250,7 @@ removeEffects :: Functor m => NValueF m (NThunk m) -> NValueNF m
 removeEffects = Fix . fmap dethunk
   where
     dethunk (NThunk _ (Value v)) = removeEffects (baseValue v)
-    dethunk (NThunk _ _) = Fix $ NVStrF "<thunk>" mempty
+    dethunk (NThunk _ _) = Fix $ NVStrF (NixString "<thunk>" mempty)
 
 removeEffectsM :: MonadVar m => NValueF m (NThunk m) -> m (NValueNF m)
 removeEffectsM = fmap Fix . traverse dethunk
@@ -282,9 +282,9 @@ dethunk = \case
     NThunk _ (Thunk _ active ref) -> do
         nowActive <- atomicModifyVar active (True,)
         if nowActive
-            then pure $ Fix $ NVStrF "<thunk>" mempty
+            then pure $ Fix $ NVStrF (NixString "<thunk>" mempty)
             else do
                 eres <- readVar ref
                 case eres of
                     Computed v -> removeEffectsM (baseValue v)
-                    _ -> pure $ Fix $ NVStrF "<thunk>" mempty
+                    _ -> pure $ Fix $ NVStrF (NixString "<thunk>" mempty)

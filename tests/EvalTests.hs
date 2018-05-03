@@ -165,7 +165,7 @@ genEvalCompareTests = do
 
 instance (Show r, Show (NValueF m r), Eq r) => Eq (NValueF m r) where
     NVConstantF x == NVConstantF y = x == y
-    NVStrF x _ == NVStrF y _ = x == y
+    NVStrF (NixString x1 y1) == NVStrF (NixString x2 y2) = x1 == x2 && y1 == y2
     NVListF x == NVListF y = and (zipWith (==) x y)
     NVSetF x _ == NVSetF y _ =
         M.keys x == M.keys y &&

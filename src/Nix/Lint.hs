@@ -49,6 +49,7 @@ import           Nix.Options
 import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Utils
+import           Nix.Value (NixString(..))
 
 data TAtom
   = TInt
@@ -239,7 +240,7 @@ instance ToValue Bool m (Symbolic m) where
 
 instance ToValue [SThunk m] m (Symbolic m) where
 
-instance FromValue (Text, DList Text) m (Symbolic m) where
+instance FromValue NixString m (Symbolic m) where
 
 instance FromValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
 

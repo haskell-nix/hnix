@@ -41,6 +41,7 @@ import           Data.Coerce
 import           Data.Fix
 import           Data.Foldable (foldrM)
 import qualified Data.HashMap.Lazy as M
+import qualified Data.HashSet as HS
 import           Data.List
 import           Data.Maybe
 import           Data.Semigroup
@@ -250,7 +251,7 @@ nixPath = fmap nvList $ flip foldNixPath [] $ \p mn rest ->
 
 toString :: MonadNix e m => m (NValue m) -> m (NValue m)
 toString str =
-    str >>= normalForm >>= valueText False >>= toNix @(Text, DList Text)
+    str >>= normalForm >>= valueText False >>= toNix @NixString
 
 hasAttr :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 hasAttr x y =
@@ -266,7 +267,7 @@ attrsetGet k s = case M.lookup k s of
 
 hasContext :: MonadNix e m => m (NValue m) -> m (NValue m)
 hasContext =
-    toNix . not . null . (appEndo ?? []) . snd <=< fromValue @(Text, DList Text)
+    toNix . not . HS.null . nsContext <=< fromValue
 
 getAttr :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 getAttr x y = x >>= \x' -> y >>= \y' -> case (x', y') of

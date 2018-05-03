@@ -22,6 +22,7 @@ module Nix.Type.Infer (
   inferTop
 ) where
 
+import           Nix.Value (NixString)
 import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad.Catch
@@ -444,7 +445,7 @@ data Judgment s = Judgment
     }
     deriving Show
 
-instance FromValue (Text, DList Text) (Infer s) (Judgment s) where
+instance FromValue NixString (Infer s) (Judgment s) where
     fromValueMay _ = return Nothing
     fromValue _ = error "Unused"
 

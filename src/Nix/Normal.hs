@@ -39,7 +39,7 @@ normalFormBy k n v = do
     when (n > 2000) $ throwError $ NormalLoop v
     case v of
         NVConstant a     -> return $ Fix $ NVConstantF a
-        NVStr t s        -> return $ Fix $ NVStrF t s
+        NVStr t s        -> return $ Fix $ NVStrF $ NixString t s
         NVList l         ->
             fmap (Fix . NVListF) $ forM (zip [0..] l) $ \(i :: Int, t) -> do
                 traceM $ replicate n ' ' ++ "normalFormBy: List[" ++ show i ++ "]"
@@ -62,7 +62,7 @@ embed :: forall m. (MonadThunk (NValue m) (NThunk m) m)
       => NValueNF m -> m (NValue m)
 embed (Fix x) = case x of
     NVConstantF a     -> return $ nvConstant a
-    NVStrF t s        -> return $ nvStr t s
+    NVStrF (NixString t s)  -> return $ nvStr t s
     NVListF l         -> nvList . fmap (value @_ @_ @m)
         <$> traverse embed l
     NVSetF s p        -> flip nvSet p . fmap (value @_ @_ @m)
@@ -72,12 +72,12 @@ embed (Fix x) = case x of
     NVBuiltinF name f -> return $ nvBuiltin name f
 
 valueText :: forall e m. (Framed e m, MonadEffects m, Typeable m)
-          => Bool -> NValueNF m -> m (Text, DList Text)
+          => Bool -> NValueNF m -> m NixString
 valueText addPathsToStore = cata phi
   where
-    phi :: NValueF m (m (Text, DList Text)) -> m (Text, DList Text)
-    phi (NVConstantF a) = pure (atomText a, mempty)
-    phi (NVStrF t c)    = pure (t, c)
+    --phi :: () --  NValueF m (m ns) -> m ns
+    phi (NVConstantF a) = pure (NixString (atomText a) mempty)
+    phi (NVStrF ns) = pure ns
     phi v@(NVListF _)   = coercionFailed v
     phi v@(NVSetF s _)
       | Just asString <- M.lookup "__asString" s = asString
@@ -86,8 +86,8 @@ valueText addPathsToStore = cata phi
     phi (NVPathF originalPath)
         | addPathsToStore = do
             storePath <- addPath originalPath
-            pure (Text.pack $ unStorePath storePath, mempty)
-        | otherwise = pure (Text.pack originalPath, mempty)
+            pure (NixString (Text.pack $ unStorePath storePath) mempty)
+        | otherwise = pure (NixString (Text.pack originalPath) mempty)
     phi v@(NVBuiltinF _ _) = coercionFailed v
 
     coercionFailed v =
@@ -95,4 +95,4 @@ valueText addPathsToStore = cata phi
 
 valueTextNoContext :: (Framed e m, MonadEffects m, Typeable m)
                    => Bool -> NValueNF m -> m Text
-valueTextNoContext addPathsToStore = fmap fst . valueText addPathsToStore
+valueTextNoContext addPathsToStore = fmap nsContents . valueText addPathsToStore
