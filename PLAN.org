@@ -119,29 +119,29 @@ digraph {
 :PROPERTIES:
 :ID:       BB4190F1-695D-454A-8E14-492651B4EC9F
 :CREATED:  [2018-04-23 Mon 17:12]
-:URL:      https://github.com/jwiegley/hnix/milestone/1
+:URL:      https://github.com/haskell-nix/hnix/milestone/1
 :END:
 
 We currently have just two tests remaining that need to be fixed to pass the
 Nix language tests:
 
 *** TODO builtins.path:
-  https://github.com/jwiegley/hnix/issues/128
+  https://github.com/haskell-nix/hnix/issues/128
 *** TODO builtins.genericClosure:
-  https://github.com/jwiegley/hnix/issues/144
+  https://github.com/haskell-nix/hnix/issues/144
 
 ** PROJECT Successfully evaluate all of nixpkgs
 :PROPERTIES:
 :ID:       E4A330E7-70C1-4E79-A94C-D63B2533EBE1
 :CREATED:  [2018-04-23 Mon 17:10]
-:URL:      https://github.com/jwiegley/hnix/milestone/2
+:URL:      https://github.com/haskell-nix/hnix/milestone/2
 :END:
 
 There are still a few problems in the evaluator with process the contents of
 the nixpkgs repository:
 
-*** TODO https://github.com/jwiegley/hnix/issues/157
-*** TODO https://github.com/jwiegley/hnix/issues/193
+*** TODO https://github.com/haskell-nix/hnix/issues/157
+*** TODO https://github.com/haskell-nix/hnix/issues/193
 
 ** PROJECT Increase test coverage
 :PROPERTIES:
@@ -149,7 +149,7 @@ the nixpkgs repository:
 :CREATED:  [2018-04-23 Mon 17:17]
 :END:
 
-*** TODO https://github.com/jwiegley/hnix/issues/158
+*** TODO https://github.com/haskell-nix/hnix/issues/158
 
 ** PROJECT Improve the hnix REPL
 :PROPERTIES:
@@ -157,7 +157,7 @@ the nixpkgs repository:
 :CREATED:  [2018-04-23 Mon 17:17]
 :END:
 
-*** TODO https://github.com/jwiegley/hnix/issues/164
+*** TODO https://github.com/haskell-nix/hnix/issues/164
 
 ** PROJECT Support concurrent evaluation
 :PROPERTIES:
@@ -165,7 +165,7 @@ the nixpkgs repository:
 :CREATED:  [2018-04-23 Mon 17:18]
 :END:
 
-*** TODO https://github.com/jwiegley/hnix/issues/170
+*** TODO https://github.com/haskell-nix/hnix/issues/170
 
 ** PROJECT Type checker
 :PROPERTIES:
