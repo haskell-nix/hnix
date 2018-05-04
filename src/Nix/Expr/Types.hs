@@ -224,7 +224,7 @@ data Antiquoted (v :: *) (r :: *) = Plain !v | EscapedNewline | Antiquoted !r
             Traversable, Show, Read, NFData, Hashable)
 
 #if MIN_VERSION_hashable(1, 2, 5)
-instance Hashable1 (Antiquoted v)
+instance Hashable v => Hashable1 (Antiquoted v)
 
 instance Hashable2 Antiquoted where
     liftHashWithSalt2 ha _ salt (Plain a) =

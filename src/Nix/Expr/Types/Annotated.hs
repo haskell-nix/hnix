@@ -73,7 +73,7 @@ data Ann ann a = Ann
               Traversable, Read, Show, NFData, Hashable)
 
 #if MIN_VERSION_hashable(1, 2, 5)
-instance Hashable1 Ann
+instance Hashable ann => Hashable1 (Ann ann)
 #endif
 
 #if !defined(ghcjs_HOST_OS)
@@ -106,7 +106,8 @@ type NExprLocF = AnnF SrcSpan NExprF
 -- | A nix expression with source location at each subexpression.
 type NExprLoc = Fix NExprLocF
 
-#if MIN_VERSION_hashable(1, 2, 5)
+#if MIN_VERSION_hashable(1, 2, 5) && MIN_VERSION_deepseq(1, 4, 3)
+-- Needs deepseq-1.4.3 because Compose requires NFData1
 instance NFData NExprLoc
 #endif
 

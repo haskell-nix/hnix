@@ -21,6 +21,7 @@ dependencies:
   - data-fix
   - exceptions
   - filepath
+  - hashing
   - mtl
   - optparse-applicative
   - template-haskell
@@ -63,7 +64,6 @@ when:
     then:
       dependencies:
         - deepseq >= 1.4.2 && < 1.5
-        - hashing
     else:
       dependencies:
         - cryptohash-md5

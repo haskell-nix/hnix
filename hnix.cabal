@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 17c14f1ce49c0f39195e8e98ea015fec65211bd958ed27ab475655b8ab17c639
+-- hash: 3ded14a4256c6991def314c22f4faeb594f8f6251ba789b409b45148fe998409
 
 name:           hnix
 version:        0.5.0
@@ -91,6 +91,7 @@ library
     , directory
     , exceptions
     , filepath
+    , hashing
     , megaparsec >=6.0 && <6.6
     , monadlist
     , mtl
@@ -113,7 +114,6 @@ library
   if impl(ghcjs)
     build-depends:
         deepseq >=1.4.2 && <1.5
-      , hashing
   else
     build-depends:
         cryptohash-md5
@@ -155,6 +155,7 @@ test-suite hnix-tests
     , directory
     , exceptions
     , filepath
+    , hashing
     , hnix
     , interpolate
     , mtl
@@ -172,7 +173,6 @@ test-suite hnix-tests
   if impl(ghcjs)
     build-depends:
         deepseq >=1.4.2 && <1.5
-      , hashing
   else
     build-depends:
         cryptohash-md5
@@ -201,6 +201,7 @@ benchmark hnix-benchmarks
     , data-fix
     , exceptions
     , filepath
+    , hashing
     , hnix
     , mtl
     , optparse-applicative
@@ -211,7 +212,6 @@ benchmark hnix-benchmarks
   if impl(ghcjs)
     build-depends:
         deepseq >=1.4.2 && <1.5
-      , hashing
   else
     build-depends:
         cryptohash-md5
