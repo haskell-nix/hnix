@@ -1,7 +1,7 @@
 # hnix
 
 [![Build Status](https://api.travis-ci.org/haskell-nix/hnix.svg)](https://travis-ci.org/haskell-nix/hnix)
-[![Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/haskell-nix/hnix)
+[![Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/haskell-nix/Lobby)
 
 Haskell parser, evaluator and type checker for the Nix language.
 
@@ -68,7 +68,7 @@ If you're looking for a way to help out, try taking a look
 When you find an issue that looks interesting to you, comment on the ticket to
 let others know you're working on it; look for others who might have done the
 same. You can talk with everyone live on
-[Gitter](https://gitter.im/haskell-nix/hnix).
+[Gitter](https://gitter.im/haskell-nix/Lobby).
 
 When you're ready to submit a pull request, test it with:
 ```
