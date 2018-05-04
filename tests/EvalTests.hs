@@ -14,6 +14,7 @@ import qualified Data.HashMap.Lazy as M
 import           Data.Maybe (isJust)
 import           Data.String.Interpolate.IsString
 import           Data.Text (Text)
+import           Data.Time
 import           Nix
 import qualified System.Directory as D
 import           System.Environment
@@ -144,6 +145,12 @@ let
 in [ (fix toFixFold) (fix toFix) ]
 |]
 
+-- jww (2018-05-02): This constantly changes!
+-- case_placeholder =
+--   constantEqualText
+--       "\"/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9\""
+--       "builtins.placeholder \"out\""
+
 -----------------------
 
 tests :: TestTree
@@ -168,10 +175,12 @@ instance (Show r, Show (NValueF m r), Eq r) => Eq (NValueF m r) where
 
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
 constantEqual a b = do
+    time <- liftIO getCurrentTime
+    let opts = defaultOptions time
     -- putStrLn =<< lint (stripAnnotation a)
-    a' <- runLazyM defaultOptions $ normalForm =<< nixEvalExprLoc Nothing a
+    a' <- runLazyM opts $ normalForm =<< nixEvalExprLoc Nothing a
     -- putStrLn =<< lint (stripAnnotation b)
-    b' <- runLazyM defaultOptions $ normalForm =<< nixEvalExprLoc Nothing b
+    b' <- runLazyM opts $ normalForm =<< nixEvalExprLoc Nothing b
     assertEqual "" a' b'
 
 constantEqualText' :: Text -> Text -> Assertion

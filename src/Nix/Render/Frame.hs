@@ -61,7 +61,7 @@ renderFrames (x:xs) = do
 framePos :: forall v (m :: * -> *). (Typeable m, Typeable v) => NixFrame
          -> Maybe SourcePos
 framePos (NixFrame _ f)
-    | Just (e :: EvalFrame m v) <- fromFrame f = case e of
+    | Just (e :: EvalFrame m v) <- fromException f = case e of
           EvaluatingExpr _ (Fix (Compose (Ann (SrcSpan beg _) _))) ->
               Just beg
           _ -> Nothing
@@ -72,14 +72,13 @@ renderFrame :: forall v e m.
                MonadFile m, Typeable m, Typeable v)
             => NixFrame -> m [Doc]
 renderFrame (NixFrame level f)
-    | Just (e :: EvalFrame m v) <- fromFrame f = renderEvalFrame level e
-    | Just (e :: ThunkLoop)     <- fromFrame f = renderThunkLoop level e
-    | Just (e :: ValueFrame m)  <- fromFrame f = renderValueFrame level e
-    | Just (_ :: NormalLoop m)  <- fromFrame f =
+    | Just (e :: EvalFrame m v) <- fromException f = renderEvalFrame level e
+    | Just (e :: ThunkLoop)     <- fromException f = renderThunkLoop level e
+    | Just (e :: ValueFrame m)  <- fromException f = renderValueFrame level e
+    | Just (_ :: NormalLoop m)  <- fromException f =
       pure [text "<<loop during normalization>>"]
-    | Just (e :: ExecFrame m)   <- fromFrame f = renderExecFrame level e
-    | Just (e :: String)        <- fromFrame f = pure [text e]
-    | Just (e :: Doc)           <- fromFrame f = pure [e]
+    | Just (e :: ExecFrame m)   <- fromException f = renderExecFrame level e
+    | Just (e :: ErrorCall)     <- fromException f = pure [text (show e)]
     | otherwise = error $ "Unrecognized frame: " ++ show f
 
 wrapExpr :: NExprF r -> NExpr

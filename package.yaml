@@ -28,6 +28,7 @@ dependencies:
   - serialise
   - template-haskell
   - text
+  - time
   - transformers
   - unordered-containers        >= 0.2.9 && < 0.3
 
@@ -73,7 +74,11 @@ library:
     - deriving-compat           >= 0.3 && < 0.5
     - directory
     - hashable
+    - http-types
+    - http-client
+    - http-client-tls
     - haskeline
+    - logict
     - megaparsec
     - monadlist
     - pretty-show

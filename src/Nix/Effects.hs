@@ -31,4 +31,10 @@ class MonadFile m => MonadEffects m where
 
     nixInstantiateExpr :: String -> m (NValue m)
 
+    getURL :: Text -> m (NValue m)
+
     getRecursiveSize :: a -> m (NValue m)
+
+    traceEffect :: String -> m ()
+
+    exec :: [String] -> m (NValue m)

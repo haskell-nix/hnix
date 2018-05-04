@@ -15,7 +15,9 @@
 
 module Nix.Thunk where
 
-import Nix.Frames
+import Control.Exception
+import Control.Monad.Catch
+import Data.Typeable
 
 #if ENABLE_TRACING
 import Data.IORef
@@ -49,7 +51,7 @@ data Thunk m v
 newtype ThunkLoop = ThunkLoop (Maybe Int)
     deriving (Show, Typeable)
 
-instance Frame ThunkLoop
+instance Exception ThunkLoop
 
 valueRef :: v -> Thunk m v
 valueRef = Value
@@ -64,7 +66,7 @@ buildThunk action =
 #endif
         <$> newVar False <*> newVar (Deferred action)
 
-forceThunk :: (Framed e m, MonadVar m) => Thunk m v -> (v -> m a) -> m a
+forceThunk :: (MonadVar m, MonadThrow m) => Thunk m v -> (v -> m a) -> m a
 forceThunk (Value ref) k = k ref
 #if ENABLE_TRACING
 forceThunk (Thunk n active ref) k = do
@@ -79,9 +81,9 @@ forceThunk (Thunk _ active ref) k = do
             if nowActive
                 then
 #if ENABLE_TRACING
-                    throwError $ ThunkLoop (Just n)
+                    throwM $ ThunkLoop (Just n)
 #else
-                    throwError $ ThunkLoop Nothing
+                    throwM $ ThunkLoop Nothing
 #endif
                 else do
 #if ENABLE_TRACING
@@ -92,7 +94,7 @@ forceThunk (Thunk _ active ref) k = do
                     _ <- atomicModifyVar active (False,)
                     k v
 
-forceEffects :: (Framed e m, MonadVar m) => Thunk m v -> (v -> m a) -> m a
+forceEffects :: MonadVar m => Thunk m v -> (v -> m a) -> m a
 forceEffects (Value ref) k = k ref
 forceEffects (Thunk _ active ref) k = do
     nowActive <- atomicModifyVar active (True,)
