@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -118,6 +119,7 @@ assertEval _opts files = do
         [".exp.xml"] -> assertLangOkXml opts name
         [".exp.disabled"] -> return ()
         [".exp-disabled"] -> return ()
+#if !defined(ghcjs_HOST_OS)
         [".exp", ".flags"] -> do
             liftIO $ unsetEnv "NIX_PATH"
             flags <- Text.readFile (name ++ ".flags")
@@ -136,6 +138,9 @@ assertEval _opts files = do
                                    , "lang/dir5" ] })
                         name
                 Opts.CompletionInvoked _ -> error "unused"
+#else
+          return () -- Tested by hnix-repl
+#endif
         _ -> assertFailure $ "Unknown test type " ++ show files
   where
     name = "data/nix/tests/lang/"

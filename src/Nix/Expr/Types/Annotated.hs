@@ -78,6 +78,9 @@ instance Hashable ann => Hashable1 (Ann ann)
 
 #if !defined(ghcjs_HOST_OS)
 instance (Serialise ann, Serialise a) => Serialise (Ann ann a)
+#endif
+
+#if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData ann => NFData1 (Ann ann)
 #endif
 

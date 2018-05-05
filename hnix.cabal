@@ -92,6 +92,7 @@ library
     , bytestring
     , containers
     , data-fix
+    , deepseq >=1.4.2 && <1.5
     , deriving-compat >=0.3 && <0.5
     , directory
     , exceptions
@@ -121,16 +122,12 @@ library
     , unordered-containers >=0.2.7 && <0.3
     , vector
     , xml
-  if impl(ghcjs)
-    build-depends:
-        deepseq >=1.4.2 && <1.5
-  else
+  if !impl(ghcjs)
     build-depends:
         cryptohash-md5
       , cryptohash-sha1
       , cryptohash-sha256
       , cryptohash-sha512
-      , deepseq >=1.4.3 && <1.5
       , serialise
   if impl(ghcjs)
     build-depends:
@@ -203,6 +200,7 @@ test-suite hnix-tests
     , bytestring
     , containers
     , data-fix
+    , deepseq >=1.4.2 && <1.5
     , directory
     , exceptions
     , filepath
@@ -222,16 +220,12 @@ test-suite hnix-tests
     , transformers
     , unix
     , unordered-containers >=0.2.7 && <0.3
-  if impl(ghcjs)
-    build-depends:
-        deepseq >=1.4.2 && <1.5
-  else
+  if !impl(ghcjs)
     build-depends:
         cryptohash-md5
       , cryptohash-sha1
       , cryptohash-sha256
       , cryptohash-sha512
-      , deepseq >=1.4.3 && <1.5
       , serialise
   default-language: Haskell2010
 
@@ -251,6 +245,7 @@ benchmark hnix-benchmarks
     , containers
     , criterion
     , data-fix
+    , deepseq >=1.4.2 && <1.5
     , exceptions
     , filepath
     , hashing
@@ -262,15 +257,11 @@ benchmark hnix-benchmarks
     , time
     , transformers
     , unordered-containers >=0.2.7 && <0.3
-  if impl(ghcjs)
-    build-depends:
-        deepseq >=1.4.2 && <1.5
-  else
+  if !impl(ghcjs)
     build-depends:
         cryptohash-md5
       , cryptohash-sha1
       , cryptohash-sha256
       , cryptohash-sha512
-      , deepseq >=1.4.3 && <1.5
       , serialise
   default-language: Haskell2010

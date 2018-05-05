@@ -1,10 +1,18 @@
+{-# LANGUAGE CPP #-}
 module Nix.Options where
 
+#if !defined(ghcjs_HOST_OS)
+import           Control.Arrow (second)
+import           Data.Char (isDigit)
+import           Data.Maybe (fromMaybe)
+#endif
 import           Data.Text (Text)
+#if !defined(ghcjs_HOST_OS)
 import qualified Data.Text as Text
 import           Data.Time
 import           Options.Applicative hiding (ParserResult(..))
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
+#endif
 
 data Options = Options
     { verbose      :: Verbosity
@@ -81,6 +89,7 @@ data Verbosity
     | Vomit
     deriving (Eq, Ord, Enum, Bounded, Show)
 
+#if !defined(ghcjs_HOST_OS)
 decodeVerbosity :: Int -> Verbosity
 decodeVerbosity 0 = ErrorsOnly
 decodeVerbosity 1 = Informational
@@ -199,3 +208,4 @@ nixOptionsInfo :: UTCTime -> ParserInfo Options
 nixOptionsInfo current =
     info (helper <*> nixOptions current)
          (fullDesc <> progDesc "" <> header "hnix")
+#endif

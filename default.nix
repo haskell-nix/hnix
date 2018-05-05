@@ -20,7 +20,7 @@ let inherit (nixpkgs) pkgs;
   haskellPackages = pkgs.haskell.packages.${compiler}.override {
     overrides = with pkgs.haskell.lib; self: super:
       if compiler == "ghcjs" then {} else
-      rec {
+      {
         cryptohash-md5 = doJailbreak super.cryptohash-md5;
         cryptohash-sha1 = doJailbreak super.cryptohash-sha1;
         cryptohash-sha256 = doJailbreak super.cryptohash-sha256;

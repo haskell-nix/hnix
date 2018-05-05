@@ -8,6 +8,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PackageImports #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -25,13 +26,24 @@ import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.ListM (sortByM)
 import           Control.Monad.Reader (asks)
+
+-- Using package imports here because there is a bug in cabal2nix that forces
+-- us to put the hashing package in the unconditional dependency list.  If we
+-- put it in an impl(ghcjs) condition where it belongs, cabal2nix does not
+-- include it in the output.
+-- See https://github.com/NixOS/cabal2nix/issues/348 for more info
 #if defined(ghcjs_HOST_OS)
 import           Crypto.Hash
+import qualified "hashing" Crypto.Hash.MD5 as MD5
+import qualified "hashing" Crypto.Hash.SHA1 as SHA1
+import qualified "hashing" Crypto.Hash.SHA256 as SHA256
+import qualified "hashing" Crypto.Hash.SHA512 as SHA512
+#else
+import qualified "cryptohash-md5" Crypto.Hash.MD5 as MD5
+import qualified "cryptohash-sha1" Crypto.Hash.SHA1 as SHA1
+import qualified "cryptohash-sha256" Crypto.Hash.SHA256 as SHA256
+import qualified "cryptohash-sha512" Crypto.Hash.SHA512 as SHA512
 #endif
-import qualified Crypto.Hash.MD5 as MD5
-import qualified Crypto.Hash.SHA1 as SHA1
-import qualified Crypto.Hash.SHA256 as SHA256
-import qualified Crypto.Hash.SHA512 as SHA512
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Encoding as A
 import           Data.Align (alignWith)

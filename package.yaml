@@ -19,6 +19,7 @@ dependencies:
   - bytestring
   - containers
   - data-fix
+  - deepseq                     >= 1.4.2 && < 1.5
   - exceptions
   - filepath
   - hashing
@@ -66,18 +67,13 @@ when:
       - compact
 
 when:
-  - condition: impl(ghcjs)
-    then:
-      dependencies:
-        - deepseq >= 1.4.2 && < 1.5
-    else:
-      dependencies:
-        - cryptohash-md5
-        - cryptohash-sha1
-        - cryptohash-sha256
-        - cryptohash-sha512
-        - deepseq >= 1.4.3 && < 1.5
-        - serialise
+  - condition: "!impl(ghcjs)"
+    dependencies:
+      - cryptohash-md5
+      - cryptohash-sha1
+      - cryptohash-sha256
+      - cryptohash-sha512
+      - serialise
 
 library:
   source-dirs: src
