@@ -1,15 +1,13 @@
 {-# LANGUAGE CPP #-}
 module Nix.Options where
 
+import           Data.Text (Text)
+import           Data.Time
 #if !defined(ghcjs_HOST_OS)
 import           Control.Arrow (second)
 import           Data.Char (isDigit)
 import           Data.Maybe (fromMaybe)
-#endif
-import           Data.Text (Text)
-#if !defined(ghcjs_HOST_OS)
 import qualified Data.Text as Text
-import           Data.Time
 import           Options.Applicative hiding (ParserResult(..))
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 #endif

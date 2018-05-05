@@ -29,7 +29,7 @@ dependencies:
   - text
   - time
   - transformers
-  - unordered-containers        >= 0.2.7 && < 0.3
+  - unordered-containers        >= 0.2.9 && < 0.3
 
 ghc-options:
   - -Wall
@@ -121,34 +121,40 @@ executables:
   hnix:
     source-dirs: main
     main: Main.hs
-    dependencies:
-      - hnix
-      - aeson
-      - pretty-show
-      - repline
-      - haskeline
+    when:
+      - condition: "!impl(ghcjs)"
+        dependencies:
+          - hnix
+          - aeson
+          - pretty-show
+          - repline
+          - haskeline
 
 tests:
   hnix-tests:
     source-dirs: tests
     main: Main.hs
     ghc-options: -threaded
-    dependencies:
-      - hnix
-      - Glob
-      - directory
-      - interpolate
-      - process
-      - split
-      - tasty
-      - tasty-hunit
-      - tasty-th
-      - unix
+    when:
+      - condition: "!impl(ghcjs)"
+        dependencies:
+          - hnix
+          - Glob
+          - directory
+          - interpolate
+          - process
+          - split
+          - tasty
+          - tasty-hunit
+          - tasty-th
+          - unix
 
 benchmarks:
   hnix-benchmarks:
     source-dirs: benchmarks
     main: Main.hs
-    dependencies:
-      - hnix
-      - criterion
+    when:
+      - condition: "!impl(ghcjs)"
+        dependencies:
+          - hnix
+          - criterion

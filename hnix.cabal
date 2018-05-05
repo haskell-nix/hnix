@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 363b99f0037333120239b0e02ee0a811fbf56c4e4c2ef932d4dbe5282603fd96
+-- hash: a99914bfff4a7f1e0b7df961ffff40da5d87fb72d6fc51024169825770b14676
 
 name:           hnix
 version:        0.5.0
@@ -148,8 +148,7 @@ executable hnix
       main
   ghc-options: -Wall
   build-depends:
-      aeson
-    , ansi-wl-pprint
+      ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
     , containers
@@ -158,12 +157,8 @@ executable hnix
     , exceptions
     , filepath
     , hashing
-    , haskeline
-    , hnix
     , mtl
     , optparse-applicative
-    , pretty-show
-    , repline
     , template-haskell
     , text
     , time
@@ -176,6 +171,13 @@ executable hnix
       , cryptohash-sha256
       , cryptohash-sha512
       , serialise
+  if !impl(ghcjs)
+    build-depends:
+        aeson
+      , haskeline
+      , hnix
+      , pretty-show
+      , repline
   default-language: Haskell2010
 
 test-suite hnix-tests
@@ -192,31 +194,21 @@ test-suite hnix-tests
       tests
   ghc-options: -Wall -threaded
   build-depends:
-      Glob
-    , ansi-wl-pprint
+      ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
     , containers
     , data-fix
     , deepseq >=1.4.2 && <1.5
-    , directory
     , exceptions
     , filepath
     , hashing
-    , hnix
-    , interpolate
     , mtl
     , optparse-applicative
-    , process
-    , split
-    , tasty
-    , tasty-hunit
-    , tasty-th
     , template-haskell
     , text
     , time
     , transformers
-    , unix
     , unordered-containers >=0.2.7 && <0.3
   if !impl(ghcjs)
     build-depends:
@@ -225,6 +217,18 @@ test-suite hnix-tests
       , cryptohash-sha256
       , cryptohash-sha512
       , serialise
+  if !impl(ghcjs)
+    build-depends:
+        Glob
+      , directory
+      , hnix
+      , interpolate
+      , process
+      , split
+      , tasty
+      , tasty-hunit
+      , tasty-th
+      , unix
   default-language: Haskell2010
 
 benchmark hnix-benchmarks
@@ -241,13 +245,11 @@ benchmark hnix-benchmarks
     , base >=4.9 && <5
     , bytestring
     , containers
-    , criterion
     , data-fix
     , deepseq >=1.4.2 && <1.5
     , exceptions
     , filepath
     , hashing
-    , hnix
     , mtl
     , optparse-applicative
     , template-haskell
@@ -262,4 +264,8 @@ benchmark hnix-benchmarks
       , cryptohash-sha256
       , cryptohash-sha512
       , serialise
+  if !impl(ghcjs)
+    build-depends:
+        criterion
+      , hnix
   default-language: Haskell2010
