@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: a7a401d2636335c960484c253712dd042a3fe8f9fda48dc33ed6d4fa24c50c5f
+-- hash: 363b99f0037333120239b0e02ee0a811fbf56c4e4c2ef932d4dbe5282603fd96
 
 name:           hnix
 version:        0.5.0
@@ -142,6 +142,7 @@ library
 executable hnix
   main-is: Main.hs
   other-modules:
+      Repl
       Paths_hnix
   hs-source-dirs:
       main
@@ -153,6 +154,7 @@ executable hnix
     , bytestring
     , containers
     , data-fix
+    , deepseq >=1.4.2 && <1.5
     , exceptions
     , filepath
     , hashing
@@ -167,16 +169,12 @@ executable hnix
     , time
     , transformers
     , unordered-containers >=0.2.7 && <0.3
-  if impl(ghcjs)
-    build-depends:
-        deepseq >=1.4.2 && <1.5
-  else
+  if !impl(ghcjs)
     build-depends:
         cryptohash-md5
       , cryptohash-sha1
       , cryptohash-sha256
       , cryptohash-sha512
-      , deepseq >=1.4.3 && <1.5
       , serialise
   default-language: Haskell2010
 
