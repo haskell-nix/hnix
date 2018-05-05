@@ -26,20 +26,27 @@ let inherit (nixpkgs) pkgs;
         cryptohash-sha256 = doJailbreak super.cryptohash-sha256;
         cryptohash-sha512 = doJailbreak super.cryptohash-sha512;
         serialise = dontCheck super.serialise;
+
         compact =
           if compiler == "ghc842"
           then doJailbreak super.compact
           else super.compact;
+
         ghc-datasize =
-          pkgs.haskell.lib.overrideCabal super.ghc-datasize (attrs: {
-            enableLibraryProfiling    = false;
-            enableExecutableProfiling = false;
-          });
+          if doProfiling
+          then null
+          else pkgs.haskell.lib.overrideCabal super.ghc-datasize (attrs: {
+                 enableLibraryProfiling    = false;
+                 enableExecutableProfiling = false;
+               });
+
         ghc-heap-view =
-          pkgs.haskell.lib.overrideCabal super.ghc-heap-view (attrs: {
-            enableLibraryProfiling    = false;
-            enableExecutableProfiling = false;
-          });
+          if doProfiling
+          then null
+          else pkgs.haskell.lib.overrideCabal super.ghc-heap-view (attrs: {
+                 enableLibraryProfiling    = false;
+                 enableExecutableProfiling = false;
+               });
       };
   };
 
@@ -63,7 +70,8 @@ in haskellPackages.developPackage {
     inherit doBenchmark;
 
     configureFlags =
-         pkgs.stdenv.lib.optional doTracing "--flags=tracing"
-      ++ pkgs.stdenv.lib.optional doStrict  "--ghc-options=-Werror";
+         pkgs.stdenv.lib.optional doTracing   "--flags=tracing"
+      ++ pkgs.stdenv.lib.optional doProfiling "--flags=profiling"
+      ++ pkgs.stdenv.lib.optional doStrict    "--ghc-options=-Werror";
   });
 }

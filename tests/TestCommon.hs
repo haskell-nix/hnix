@@ -4,7 +4,9 @@
 module TestCommon where
 
 import Control.Monad.Catch
+import Control.Monad.IO.Class
 import Data.Text (Text, unpack)
+import Data.Time
 import Nix
 import System.Environment
 import System.IO
@@ -50,13 +52,15 @@ nixEvalFile fp = readProcess "nix-instantiate" ["--eval", fp] ""
 
 assertEvalFileMatchesNix :: FilePath -> Assertion
 assertEvalFileMatchesNix fp = do
-  hnixVal <- (++"\n") . printNix <$> hnixEvalFile defaultOptions fp
+  time <- liftIO getCurrentTime
+  hnixVal <- (++"\n") . printNix <$> hnixEvalFile (defaultOptions time) fp
   nixVal <- nixEvalFile fp
   assertEqual fp nixVal hnixVal
 
 assertEvalMatchesNix :: Text -> Assertion
 assertEvalMatchesNix expr = do
-  hnixVal <- (++"\n") . printNix <$> hnixEvalText defaultOptions expr
+  time <- liftIO getCurrentTime
+  hnixVal <- (++"\n") . printNix <$> hnixEvalText (defaultOptions time) expr
   nixVal <- nixEvalString expr'
   assertEqual expr' nixVal hnixVal
  where

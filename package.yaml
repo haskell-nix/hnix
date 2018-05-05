@@ -26,6 +26,7 @@ dependencies:
   - optparse-applicative
   - template-haskell
   - text
+  - time
   - transformers
   - unordered-containers        >= 0.2.7 && < 0.3
 
@@ -35,6 +36,11 @@ ghc-options:
 flags:
   tracing:
     description: Enable full debug tracing
+    manual: True
+    default: False
+
+  profiling:
+    description: Enable profiling
     manual: True
     default: False
 
@@ -83,6 +89,10 @@ library:
     - binary
     - deriving-compat           >= 0.3   && < 0.5
     - directory
+    - http-types
+    - http-client
+    - http-client-tls
+    - logict
     - megaparsec                >= 6.0   && < 6.6
     - monadlist
     - process
@@ -97,7 +107,7 @@ library:
     - vector
     - xml
   when:
-    - condition: impl(ghc < 8.4.0)
+    - condition: impl(ghc < 8.4.0) && !flag(profiling)
       dependencies:
         - ghc-datasize
   when:
@@ -110,6 +120,17 @@ library:
           - hashable >= 1.2.5 && < 1.3
           - haskeline
           - pretty-show
+
+executables:
+  hnix:
+    source-dirs: main
+    main: Main.hs
+    dependencies:
+      - hnix
+      - aeson
+      - pretty-show
+      - repline
+      - haskeline
 
 tests:
   hnix-tests:

@@ -440,7 +440,7 @@ instance Applicative m => ToValue Bool m (NExprF r) where
 instance Applicative m => ToValue () m (NExprF r) where
     toValue _ = pure . NConstant $ NNull
 
-whileForcingThunk :: forall s e m r. (Framed e m, Frame s, Typeable m)
+whileForcingThunk :: forall s e m r. (Framed e m, Exception s, Typeable m)
                   => s -> m r -> m r
 whileForcingThunk frame =
     withFrame Debug (ForcingThunk @m) . withFrame Debug frame

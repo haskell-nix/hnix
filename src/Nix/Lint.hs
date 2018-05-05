@@ -29,17 +29,15 @@ import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.Reader (MonadReader)
 import           Control.Monad.ST
-import           Control.Monad.ST.Unsafe
 import           Control.Monad.Trans.Reader
--- import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.List
+import qualified Data.List.NonEmpty as NE
 import           Data.STRef
 import           Data.Text (Text)
 import qualified Data.Text as Text
-import           Data.Void
 import           Nix.Atoms
 import           Nix.Context
 import           Nix.Convert
@@ -50,7 +48,6 @@ import           Nix.Frames
 import           Nix.Options
 import           Nix.Scope
 import           Nix.Thunk
--- import           Nix.Type.Infer
 import           Nix.Utils
 
 data TAtom
@@ -66,7 +63,7 @@ data NTypeF (m :: * -> *) r
     | TStr
     | TList r
     | TSet (Maybe (HashMap Text r))
-    | TClosure (Params Void) (m (Symbolic m) -> m (Symbolic m))
+    | TClosure (Params ())
     | TPath
     | TBuiltin String (SThunk m -> m (Symbolic m))
     deriving Functor
@@ -122,7 +119,7 @@ unpackSymbolic = readVar . coerce
 type MonadLint e m = (Scoped e (SThunk m) m, Framed e m, MonadVar m)
 
 symerr :: forall e m a. MonadLint e m => String -> m a
-symerr = evalError @(Symbolic m)
+symerr = evalError @(Symbolic m) . ErrorCall
 
 renderSymbolic :: MonadLint e m => Symbolic m -> m String
 renderSymbolic = unpackSymbolic >=> \case
@@ -142,7 +139,7 @@ renderSymbolic = unpackSymbolic >=> \case
         TSet (Just s)   -> do
             x <- traverse (`force` renderSymbolic) s
             return $ "{" ++ show x ++ "}"
-        f@(TClosure p _) -> do
+        f@(TClosure p) -> do
             (args, sym) <- do
                 f' <- mkSymbolic [f]
                 lintApp (NAbs (void p) ()) f' everyPossible
@@ -182,9 +179,9 @@ merge context = go
                 then go xs ys
                 else (TSet (Just m) :) <$> go xs ys
         (TClosure {}, TClosure {}) ->
-            throwError "Cannot unify functions"
+            throwError $ ErrorCall "Cannot unify functions"
         (TBuiltin _ _, TBuiltin _ _) ->
-            throwError "Cannot unify builtin functions"
+            throwError $ ErrorCall "Cannot unify builtin functions"
         _ | compareTypes x y == LT -> go xs (y:ys)
           | compareTypes x y == GT -> go (x:xs) ys
           | otherwise              -> error "impossible"
@@ -227,7 +224,7 @@ unify context (Symbolic x) (Symbolic y) = do
                 then do
                     -- x' <- renderSymbolic (Symbolic x)
                     -- y' <- renderSymbolic (Symbolic y)
-                    throwError "Cannot unify "
+                    throwError $ ErrorCall "Cannot unify "
                         -- ++ show x' ++ " with " ++ show y'
                         --  ++ " in context: " ++ show context
                 else do
@@ -238,19 +235,15 @@ unify context (Symbolic x) (Symbolic y) = do
 -- These aren't worth defining yet, because once we move to Hindley-Milner,
 -- we're not going to be managing Symbolic values this way anymore.
 
-instance FromValue (Text, DList Text) m (Symbolic m) where
-
-instance FromValue (AttrSet (SThunk m)) m (Symbolic m) where
-
-instance FromValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
-
-instance ToValue (AttrSet (SThunk m)) m (Symbolic m) where
-
-instance ToValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
+instance ToValue Bool m (Symbolic m) where
 
 instance ToValue [SThunk m] m (Symbolic m) where
 
-instance ToValue Bool m (Symbolic m) where
+instance FromValue (Text, DList Text) m (Symbolic m) where
+
+instance FromValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
+
+instance ToValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
 
 instance MonadLint e m => MonadThunk (Symbolic m) (SThunk m) m where
     thunk = fmap coerce . buildThunk
@@ -260,6 +253,16 @@ instance MonadLint e m => MonadThunk (Symbolic m) (SThunk m) m where
 instance MonadLint e m => MonadEval (Symbolic m) m where
     freeVariable var = symerr $
         "Undefined variable '" ++ Text.unpack var ++ "'"
+
+    attrMissing ks Nothing =
+        evalError @(Symbolic m) $ ErrorCall $
+            "Inheriting unknown attribute: "
+                ++ intercalate "." (map Text.unpack (NE.toList ks))
+
+    attrMissing ks (Just s) =
+        evalError @(Symbolic m) $ ErrorCall $ "Could not look up attribute "
+            ++ intercalate "." (map Text.unpack (NE.toList ks))
+            ++ " in " ++ show s
 
     evalCurPos = do
         f <- value <$> mkSymbolic [TPath]
@@ -281,7 +284,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
           NNull    -> TNull
           NUri _   -> TUri
 
-    evalString      = const $ const $ mkSymbolic [TStr]
+    evalString      = const $ mkSymbolic [TStr]
     evalLiteralPath = const $ mkSymbolic [TPath]
     evalEnvPath     = const $ mkSymbolic [TPath]
 
@@ -300,7 +303,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
         pushWeakScope ?? body $ force s $ unpackSymbolic >=> \case
             NMany [TSet (Just s')] -> return s'
             NMany [TSet Nothing] -> error "NYI: with unknown"
-            _ -> throwError "scope must be a set in with statement"
+            _ -> throwError $ ErrorCall "scope must be a set in with statement"
 
     evalIf cond t f = do
         t' <- t
@@ -316,7 +319,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
         pure body'
 
     evalApp = (fmap snd .) . lintApp (NBinary NApp () ())
-    evalAbs params body = mkSymbolic [TClosure params body]
+    evalAbs params _ = mkSymbolic [TClosure (void params)]
 
     evalError = throwError
 
@@ -366,20 +369,21 @@ lintApp :: forall e m. MonadLint e m
         => NExprF () -> Symbolic m -> m (Symbolic m)
         -> m (HashMap VarName (Symbolic m), Symbolic m)
 lintApp context fun arg = unpackSymbolic fun >>= \case
-    NAny -> throwError "Cannot apply something not known to be a function"
+    NAny -> throwError $ ErrorCall
+        "Cannot apply something not known to be a function"
     NMany xs -> do
         (args:_, ys) <- fmap unzip $ forM xs $ \case
-            TClosure _params _f -> arg >>= unpackSymbolic >>= \case
+            TClosure _params -> arg >>= unpackSymbolic >>= \case
                 NAny -> do
                     error "NYI"
 
                 NMany [TSet (Just _)] -> do
                     error "NYI"
 
-                NMany _ -> throwError "NYI: lintApp NMany not set"
-            TBuiltin _ _f -> throwError "NYI: lintApp builtin"
-            TSet _m -> throwError "NYI: lintApp Set"
-            _x -> throwError "Attempt to call non-function"
+                NMany _ -> throwError $ ErrorCall "NYI: lintApp NMany not set"
+            TBuiltin _ _f -> throwError $ ErrorCall "NYI: lintApp builtin"
+            TSet _m -> throwError $ ErrorCall "NYI: lintApp Set"
+            _x -> throwError $ ErrorCall "Attempt to call non-function"
 
         y <- everyPossible
         (args,) <$> foldM (unify context) y ys
@@ -400,11 +404,8 @@ instance MonadVar (Lint s) where
         _ <- modifySTRef x (fst . f)
         return res
 
--- instance MonadFile (Lint s) where
---     readFile x = Lint $ ReaderT $ \_ -> unsafeIOToST $ BS.readFile x
-
 instance MonadThrow (Lint s) where
-    throwM e = Lint $ ReaderT $ \_ -> unsafeIOToST $ throw e
+    throwM e = Lint $ ReaderT $ \_ -> throw e
 
 runLintM :: Options -> Lint s a -> ST s a
 runLintM opts = flip runReaderT (newContext opts) . runLint

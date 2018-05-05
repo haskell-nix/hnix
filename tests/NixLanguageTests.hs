@@ -15,6 +15,7 @@ import           Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
+import           Data.Time
 import           GHC.Exts
 import           Nix.Lint
 import           Nix.Options
@@ -68,12 +69,15 @@ genTests = do
     mkTestGroup (kind, tests) =
         testGroup (unwords kind) $ map (mkTestCase kind) tests
     mkTestCase kind (basename, files) =
-        testCase (takeFileName basename) $ case kind of
-            ["parse", "okay"] -> assertParse defaultOptions $ the files
-            ["parse", "fail"] -> assertParseFail defaultOptions $ the files
-            ["eval", "okay"]  -> assertEval defaultOptions files
-            ["eval", "fail"]  -> assertEvalFail $ the files
-            _ -> error $ "Unexpected: " ++ show kind
+        testCase (takeFileName basename) $ do
+            time <- liftIO getCurrentTime
+            let opts = defaultOptions time
+            case kind of
+                ["parse", "okay"] -> assertParse opts $ the files
+                ["parse", "fail"] -> assertParseFail opts $ the files
+                ["eval", "okay"]  -> assertEval opts files
+                ["eval", "fail"]  -> assertEvalFail $ the files
+                _ -> error $ "Unexpected: " ++ show kind
 
 assertParse :: Options -> FilePath -> Assertion
 assertParse _opts file = parseNixFileLoc file >>= \case
@@ -105,14 +109,33 @@ assertLangOkXml opts file = do
   assertEqual "" expected $ Text.pack actual
 
 assertEval :: Options -> [FilePath] -> Assertion
-assertEval _opts files =
+assertEval _opts files = do
+    time <- liftIO getCurrentTime
+    let opts = defaultOptions time
     case delete ".nix" $ sort $ map takeExtensions files of
-        [] -> assertLangOkXml defaultOptions name
-        [".exp"] -> assertLangOk defaultOptions name
+        [] -> () <$ hnixEvalFile opts (name ++ ".nix")
+        [".exp"] -> assertLangOk opts name
+        [".exp.xml"] -> assertLangOkXml opts name
         [".exp.disabled"] -> return ()
         [".exp-disabled"] -> return ()
-        [".exp", ".flags"] ->
-          return () -- Tested by hnix-repl
+        [".exp", ".flags"] -> do
+            liftIO $ unsetEnv "NIX_PATH"
+            flags <- Text.readFile (name ++ ".flags")
+            let flags' | Text.last flags == '\n' = Text.init flags
+                       | otherwise = flags
+            case Opts.execParserPure Opts.defaultPrefs (nixOptionsInfo time)
+                     (fixup (map Text.unpack (Text.splitOn " " flags'))) of
+                Opts.Failure err -> errorWithoutStackTrace $
+                    "Error parsing flags from " ++ name ++ ".flags: "
+                        ++ show err
+                Opts.Success opts' ->
+                    assertLangOk
+                        (opts' { include = include opts' ++
+                                   [ "nix=../../../../data/nix/corepkgs"
+                                   , "lang/dir4"
+                                   , "lang/dir5" ] })
+                        name
+                Opts.CompletionInvoked _ -> error "unused"
         _ -> assertFailure $ "Unknown test type " ++ show files
   where
     name = "data/nix/tests/lang/"
@@ -125,7 +148,8 @@ assertEval _opts files =
 
 assertEvalFail :: FilePath -> Assertion
 assertEvalFail file = catch ?? (\(_ :: SomeException) -> return ()) $ do
-  evalResult <- printNix <$> hnixEvalFile defaultOptions file
+  time <- liftIO getCurrentTime
+  evalResult <- printNix <$> hnixEvalFile (defaultOptions time) file
   evalResult `seq` assertFailure $
       file ++ " should not evaluate.\nThe evaluation result was `"
            ++ evalResult ++ "`."

@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3ded14a4256c6991def314c22f4faeb594f8f6251ba789b409b45148fe998409
+-- hash: a7a401d2636335c960484c253712dd042a3fe8f9fda48dc33ed6d4fa24c50c5f
 
 name:           hnix
 version:        0.5.0
@@ -27,6 +27,11 @@ source-repository head
 
 flag optimize
   description: Enable all optimization flags
+  manual: True
+  default: False
+
+flag profiling
+  description: Enable profiling
   manual: True
   default: False
 
@@ -92,6 +97,10 @@ library
     , exceptions
     , filepath
     , hashing
+    , http-client
+    , http-client-tls
+    , http-types
+    , logict
     , megaparsec >=6.0 && <6.6
     , monadlist
     , mtl
@@ -106,6 +115,7 @@ library
     , template-haskell
     , text
     , these
+    , time
     , transformers
     , unix
     , unordered-containers >=0.2.7 && <0.3
@@ -130,6 +140,47 @@ library
         hashable >=1.2.5 && <1.3
       , haskeline
       , pretty-show
+  default-language: Haskell2010
+
+executable hnix
+  main-is: Main.hs
+  other-modules:
+      Paths_hnix
+  hs-source-dirs:
+      main
+  ghc-options: -Wall
+  build-depends:
+      aeson
+    , ansi-wl-pprint
+    , base >=4.9 && <5
+    , bytestring
+    , containers
+    , data-fix
+    , exceptions
+    , filepath
+    , hashing
+    , haskeline
+    , hnix
+    , mtl
+    , optparse-applicative
+    , pretty-show
+    , repline
+    , template-haskell
+    , text
+    , time
+    , transformers
+    , unordered-containers >=0.2.7 && <0.3
+  if impl(ghcjs)
+    build-depends:
+        deepseq >=1.4.2 && <1.5
+  else
+    build-depends:
+        cryptohash-md5
+      , cryptohash-sha1
+      , cryptohash-sha256
+      , cryptohash-sha512
+      , deepseq >=1.4.3 && <1.5
+      , serialise
   default-language: Haskell2010
 
 test-suite hnix-tests
@@ -167,6 +218,7 @@ test-suite hnix-tests
     , tasty-th
     , template-haskell
     , text
+    , time
     , transformers
     , unix
     , unordered-containers >=0.2.7 && <0.3
@@ -207,6 +259,7 @@ benchmark hnix-benchmarks
     , optparse-applicative
     , template-haskell
     , text
+    , time
     , transformers
     , unordered-containers >=0.2.7 && <0.3
   if impl(ghcjs)
