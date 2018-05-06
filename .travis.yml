@@ -1,6 +1,6 @@
 language: nix
 
-sudo: true
+sudo: false
 
 cache:
   directories:
