@@ -44,6 +44,7 @@ import           Data.IORef
 import           Data.List
 import qualified Data.List.NonEmpty as NE
 import           Data.List.Split
+import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Typeable
@@ -149,6 +150,8 @@ prov p v = do
 -}
 
 instance MonadNix e m => MonadEval (NValue m) m where
+    coerceToString = Nix.Exec.coerceToStringMay True False
+
     freeVariable var =
         nverr $ ErrorCall $ "Undefined variable '" ++ Text.unpack var ++ "'"
 
@@ -418,27 +421,58 @@ execBinaryOp scope span op lval rarg = do
         toInt   = pure . bin nvConstantP . NInt
         toFloat = pure . bin nvConstantP . NFloat
 
-coerceToString :: MonadNix e m => NValue m -> m String
-coerceToString = \case
-    NVConstant (NBool b)
-        | b               -> pure "1"
-        | otherwise       -> pure ""
-    NVConstant (NInt n)   -> pure $ show n
-    NVConstant (NFloat n) -> pure $ show n
-    NVConstant (NUri u)   -> pure $ show u
-    NVConstant NNull      -> pure ""
+coerceToString' :: MonadNix e m => NValue m -> m (Text, DList Text)
+coerceToString' = Nix.Exec.coerceToString False False
 
-    NVStr t _ -> pure $ Text.unpack t
-    NVPath p  -> unStorePath <$> addPath p
-    NVList l  -> unwords <$> traverse (`force` coerceToString) l
+coerceToString'' :: MonadNix e m => NValue m -> m Text
+coerceToString'' = fmap fst . Nix.Exec.coerceToString False False
 
-    v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
-        force p $ (`callFunc` pure v) >=> coerceToString
+coerceToString :: MonadNix e m
+               => Bool -> Bool -> NValue m -> m (Text, DList Text)
+coerceToString coerceMore copyToStore value =
+    coerceToStringMay coerceMore copyToStore value >>= \case
+        Just res -> pure res
+        Nothing ->
+            throwError $ ErrorCall $
+                "Cannot coerce " ++ show value ++ " to a string"
 
-    NVSet s _ | Just p <- M.lookup "outPath" s ->
-        force p coerceToString
+coerceToStringMay :: MonadNix e m
+                  => Bool -> Bool -> NValue m -> m (Maybe (Text, DList Text))
+coerceToStringMay coerceMore copyToStore = go
+  where
+    go = \case
+        -- if (v.type == tString) {
+        NVStr t c -> pure $ Just (t, c)
 
-    v -> throwError $ ErrorCall $ "Expected a string, but saw: " ++ show v
+        -- if (v.type == tPath) {
+        NVPath p ->
+            (\t -> Just (t, Endo ([t] ++))) . Text.pack <$>
+                if copyToStore
+                then unStorePath <$> addPath p
+                else pure p
+
+        -- if (v.type == tAttrs) {
+        v@(NVSet s _)
+            | Just p <- M.lookup "__toString" s ->
+                  force p $ (`callFunc` pure v) >=> go
+            | Just p <- M.lookup "outPath" s ->
+                  force p go
+
+        -- jww (2018-05-02): What is this?
+        -- if (v.type == tExternal)
+
+        NVConstant (NBool b)  | coerceMore && b -> pure $ Just ("1", mempty)
+                              | coerceMore     -> pure $ Just ("", mempty)
+        NVConstant (NInt n)   | coerceMore     -> pure $ Just (Text.pack $ show n, mempty)
+        NVConstant (NFloat n) | coerceMore     -> pure $ Just (Text.pack $ show n, mempty)
+        NVConstant (NUri u)   | coerceMore     -> pure $ Just (Text.pack $ show u, mempty)
+        NVConstant NNull      | coerceMore     -> pure $ Just ("", mempty)
+
+        NVList l | coerceMore ->
+            fmap ((, mempty) . Text.unwords . fmap fst) . sequence
+                <$> traverse (`force` go) l
+
+        _ -> pure Nothing
 
 newtype Lazy m a = Lazy
     { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m)))
@@ -569,7 +603,7 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
             "__ignoreNulls" -> pure Nothing
             _               -> force v $ \case
                 NVConstant NNull | ignoreNulls -> pure Nothing
-                v' -> Just <$> (toNix =<< Text.pack <$> coerceToString v')
+                v' -> Just <$> (toNix =<< Nix.Exec.coerceToString True True v')
 
     nixInstantiateExpr expr = do
         traceM $ "Executing: "

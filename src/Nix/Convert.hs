@@ -9,7 +9,6 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -147,12 +146,7 @@ instance Convertible e m
 instance (Convertible e m, MonadEffects m)
       => FromValue Text m (NValueNF m) where
     fromValueMay = \case
-        Fix (NVConstantF (NUri u)) -> pure $ Just u
         Fix (NVStrF t _) -> pure $ Just t
-        Fix (NVPathF p) -> Just . Text.pack . unStorePath <$> addPath p
-        Fix (NVSetF s _) -> case M.lookup "outPath" s of
-            Nothing -> pure Nothing
-            Just p -> fromValueMay @Text p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -161,12 +155,7 @@ instance (Convertible e m, MonadEffects m)
 instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
       => FromValue Text m (NValue m) where
     fromValueMay = \case
-        NVConstant (NUri u) -> pure $ Just u
         NVStr t _ -> pure $ Just t
-        NVPath p -> Just . Text.pack . unStorePath <$> addPath p
-        NVSet s _ -> case M.lookup "outPath" s of
-            Nothing -> pure Nothing
-            Just p -> fromValueMay @Text p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -175,12 +164,7 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
 instance (Convertible e m, MonadEffects m)
       => FromValue (Text, DList Text) m (NValueNF m) where
     fromValueMay = \case
-        Fix (NVConstantF (NUri u)) -> pure $ Just (u, mempty)
         Fix (NVStrF t d) -> pure $ Just (t, d)
-        Fix (NVPathF p) -> Just . (,mempty) . Text.pack . unStorePath <$> addPath p
-        Fix (NVSetF s _) -> case M.lookup "outPath" s of
-            Nothing -> pure Nothing
-            Just p -> fmap (,mempty) <$> fromValueMay @Text p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -189,12 +173,7 @@ instance (Convertible e m, MonadEffects m)
 instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
       => FromValue (Text, DList Text) m (NValue m) where
     fromValueMay = \case
-        NVConstant (NUri u) -> pure $ Just (u, mempty)
         NVStr t d -> pure $ Just (t, d)
-        NVPath p -> Just . (,mempty) . Text.pack . unStorePath <$> addPath p
-        NVSet s _ -> case M.lookup "outPath" s of
-            Nothing -> pure Nothing
-            Just p -> fmap (,mempty) <$> fromValueMay @Text p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -223,12 +202,7 @@ newtype Path = Path { getPath :: FilePath }
 
 instance Convertible e m => FromValue Path m (NValueNF m) where
     fromValueMay = \case
-        Fix (NVConstantF (NUri u)) -> pure $ Just (Path (Text.unpack u))
         Fix (NVPathF p) -> pure $ Just (Path p)
-        Fix (NVStrF s _) -> pure $ Just (Path (Text.unpack s))
-        Fix (NVSetF s _) -> case M.lookup "outPath" s of
-            Nothing -> pure Nothing
-            Just p -> fromValueMay @Path p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -237,12 +211,7 @@ instance Convertible e m => FromValue Path m (NValueNF m) where
 instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m)
       => FromValue Path m (NValue m) where
     fromValueMay = \case
-        NVConstant (NUri u) -> pure $ Just (Path (Text.unpack u))
         NVPath p -> pure $ Just (Path p)
-        NVStr s _ -> pure $ Just (Path (Text.unpack s))
-        NVSet s _ -> case M.lookup "outPath" s of
-            Nothing -> pure Nothing
-            Just p -> fromValueMay @Path p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
