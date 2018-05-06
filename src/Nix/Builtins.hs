@@ -758,15 +758,10 @@ concatLists = fromValue @[NThunk m]
 listToAttrs :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 listToAttrs = fromValue @[NThunk m] >=> \l ->
     fmap (flip nvSet M.empty . M.fromList . reverse) $
-        forM l $ fromValue @(AttrSet (NThunk m)) >=> \s ->
-            case (M.lookup "name" s, M.lookup "value" s) of
-                (Just name, Just value) -> fromValue name <&> (, value)
-                _ -> throwError $ ErrorCall $
-                    -- jww (2018-05-01): Rather than include the function name
-                    -- in the message like this, we should add it as a frame
-                    -- in `callFunc' before calling each builtin.
-                    "builtins.listToAttrs: expected set with name and value, got"
-                        ++ show s
+        forM l $ fromValue @(AttrSet (NThunk m)) >=> \s -> do
+            name <- attrsetGet "name" s
+            val  <- attrsetGet "value" s
+            fromValue name <&> (, val)
 
 hashString :: MonadNix e m => Text -> Text -> Prim m Text
 hashString algo s = Prim $ do
