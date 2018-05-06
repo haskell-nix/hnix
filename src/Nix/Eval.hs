@@ -99,6 +99,7 @@ type MonadNixEval e v t m =
 data EvalFrame m v
     = EvaluatingExpr (Scopes m v) NExprLoc
     | ForcingExpr (Scopes m v) NExprLoc
+    | Calling String SrcSpan
     deriving (Show, Typeable)
 
 instance (Typeable m, Typeable v) => Exception (EvalFrame m v)

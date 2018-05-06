@@ -243,14 +243,15 @@ instance MonadNix e m => MonadEval (NValue m) m where
     evalError = throwError
 
 infixl 1 `callFunc`
-callFunc :: MonadNix e m => NValue m -> m (NValue m) -> m (NValue m)
+callFunc :: forall e m. (MonadNix e m, Typeable m)
+         => NValue m -> m (NValue m) -> m (NValue m)
 callFunc fun arg = case fun of
     NVClosure params f -> do
         traceM $ "callFunc:NVFunction taking " ++ show params
         f arg
     NVBuiltin name f -> do
-        traceM $ "callFunc:NVBuiltin " ++ name
-        f arg
+        span <- currentPos
+        withFrame Info (Calling @m @(NThunk m) name span) $ f arg
     s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
         traceM "callFunc:__functor"
         force f $ (`callFunc` pure s) >=> (`callFunc` arg)
