@@ -278,9 +278,7 @@ unsafeGetAttrPos :: forall e m. MonadNix e m
                  => m (NValue m) -> m (NValue m) -> m (NValue m)
 unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
     (NVStr key _, NVSet _ apos) -> case M.lookup key apos of
-        Nothing ->
-            throwError $ ErrorCall $ "unsafeGetAttrPos: field '" ++ Text.unpack key
-                ++ "' does not exist in attr set: " ++ show apos
+        Nothing -> pure $ nvConstant NNull
         Just delta -> toValue delta
     (x, y) -> throwError $ ErrorCall $ "Invalid types for builtin.unsafeGetAttrPos: "
                  ++ show (x, y)
