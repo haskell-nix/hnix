@@ -5,8 +5,6 @@ sudo: true
 cache:
   directories:
     - /nix
-
-cache:
   timeout: 10000
 
 env:
