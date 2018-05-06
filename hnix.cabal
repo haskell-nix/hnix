@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ee27a667ebb4b2c1f121147d9491a677c0d0979c0d6547120ded75758329207a
+-- hash: 5eba5b1b4e2ae5297dcad048052e5bc02fc2f42aa37016fbea866ecbf3f4a380
 
 name:           hnix
 version:        0.5.0
