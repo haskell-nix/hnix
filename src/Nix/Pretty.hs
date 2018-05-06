@@ -167,7 +167,7 @@ prettyOriginExpr = withoutParens . go
     go = exprFNixDoc . annotated . getCompose . fmap render
 
     render Nothing = simpleExpr $ text "_"
-    render (Just (NValue (reverse -> p:_) _)) = go (originExpr p)
+    render (Just (NValue (reverse -> p:_) _)) = go (_originExpr p)
     render (Just (NValue _ _)) = simpleExpr $ text "?"
         -- simpleExpr $ foldr ((<$>) . parens . indent 2 . withoutParens
         --                           . go . originExpr)
@@ -264,7 +264,7 @@ printNix = cata phi
 removeEffects :: Functor m => NValueF m (NThunk m) -> NValueNF m
 removeEffects = Fix . fmap dethunk
   where
-    dethunk (NThunk _ (Value v)) = removeEffects (baseValue v)
+    dethunk (NThunk _ (Value v)) = removeEffects (_baseValue v)
     dethunk (NThunk _ _) = Fix $ NVStrF "<thunk>" mempty
 
 removeEffectsM :: MonadVar m => NValueF m (NThunk m) -> m (NValueNF m)
@@ -282,18 +282,18 @@ prettyNValueProv = \case
     NValue ps v -> do
         v' <- prettyNValueF v
         pure $ v' </> indent 2 (parens (mconcat
-            (text "from: " : map (prettyOriginExpr . originExpr) ps)))
+            (text "from: " : map (prettyOriginExpr . _originExpr) ps)))
 
 prettyNThunk :: MonadVar m => NThunk m -> m Doc
 prettyNThunk = \case
     t@(NThunk ps _) -> do
         v' <- fmap prettyNValueNF (dethunk t)
         pure $ v' </> indent 2 (parens (mconcat
-            (text "thunk from: " : map (prettyOriginExpr . originExpr) ps)))
+            (text "thunk from: " : map (prettyOriginExpr . _originExpr) ps)))
 
 dethunk :: MonadVar m => NThunk m -> m (NValueNF m)
 dethunk = \case
-    NThunk _ (Value v) -> removeEffectsM (baseValue v)
+    NThunk _ (Value v) -> removeEffectsM (_baseValue v)
     NThunk _ (Thunk _ active ref) -> do
         nowActive <- atomicModifyVar active (True,)
         if nowActive
@@ -301,5 +301,5 @@ dethunk = \case
             else do
                 eres <- readVar ref
                 case eres of
-                    Computed v -> removeEffectsM (baseValue v)
+                    Computed v -> removeEffectsM (_baseValue v)
                     _ -> pure $ Fix $ NVStrF "<thunk>" mempty
