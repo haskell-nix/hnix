@@ -46,9 +46,11 @@ import           Nix.Thunk
 import           Nix.Utils
 
 class (Show v, Monad m) => MonadEval v m | v -> m where
-    freeVariable :: Text -> m v
-    attrMissing  :: NonEmpty Text -> Maybe v -> m v
-    evaledSym    :: Text -> v -> m v
+    freeVariable   :: Text -> m v
+    attrMissing    :: NonEmpty Text -> Maybe v -> m v
+    evaledSym      :: Text -> v -> m v
+
+    coerceToString :: v -> m (Maybe (Text, DList Text))
 
     evalCurPos      :: m v
     evalConstant    :: NAtom -> m v
@@ -92,7 +94,6 @@ type MonadNixEval e v t m =
      MonadFix m,
      ToValue Bool m v,
      ToValue [t] m v,
-     FromValue (Text, DList Text) m v,
      ToValue (AttrSet t, AttrSet SourcePos) m v,
      FromValue (AttrSet t, AttrSet SourcePos) m v)
 
@@ -332,14 +333,13 @@ evalSelect aset attr = do
         Nothing ->
             return $ Left (x, path)
 
-evalSelector :: (MonadEval v m, FromValue (Text, DList Text) m v)
-             => Bool -> NAttrPath (m v) -> m (NonEmpty Text)
+evalSelector :: MonadEval v m => Bool -> NAttrPath (m v) -> m (NonEmpty Text)
 evalSelector allowDynamic binds =
     NE.map fst <$> traverse (evalGetterKeyName allowDynamic) binds
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value
-evalGetterKeyName :: (MonadEval v m, FromValue (Text, DList Text) m v)
+evalGetterKeyName :: MonadEval v m
                   => Bool -> NKeyName (m v) -> m (Text, Maybe SourcePos)
 evalGetterKeyName canBeDynamic
     | canBeDynamic = evalKeyNameDynamicNotNull
@@ -352,9 +352,8 @@ evalKeyNameStatic = \case
     DynamicKey _ ->
         evalError @v $ ErrorCall "dynamic attribute not allowed in this context"
 
-evalKeyNameDynamicNotNull
-    :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
-    => NKeyName (m v) -> m (Text, Maybe SourcePos)
+evalKeyNameDynamicNotNull :: forall v m. MonadEval v m
+                          => NKeyName (m v) -> m (Text, Maybe SourcePos)
 evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
     (Nothing, _) ->
         evalError @v $ ErrorCall "value is null while a string was expected"
@@ -362,7 +361,7 @@ evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *binding* a value
-evalSetterKeyName :: (MonadEval v m, FromValue (Text, DList Text) m v)
+evalSetterKeyName :: MonadEval v m
                   => Bool -> NKeyName (m v) -> m (Maybe Text, Maybe SourcePos)
 evalSetterKeyName canBeDynamic
     | canBeDynamic = evalKeyNameDynamicNullable
@@ -370,23 +369,21 @@ evalSetterKeyName canBeDynamic
 
 -- | Returns Nothing iff the key value is null
 evalKeyNameDynamicNullable
-    :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
-    => NKeyName (m v)
-    -> m (Maybe Text, Maybe SourcePos)
+    :: forall v m. MonadEval v m => NKeyName (m v) -> m (Maybe Text, Maybe SourcePos)
 evalKeyNameDynamicNullable = \case
     StaticKey k p -> pure (Just k, p)
     DynamicKey k ->
-        runAntiquoted "\n" assembleString (>>= fromValueMay) k
+        runAntiquoted "\n" assembleString (>>= coerceToString) k
             <&> \case Just (t, _) -> (Just t, Nothing)
                       _ -> (Nothing, Nothing)
 
-assembleString :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
+assembleString :: forall v m. MonadEval v m
                => NString (m v) -> m (Maybe (Text, DList Text))
 assembleString = \case
     Indented _   parts -> fromParts parts
     DoubleQuoted parts -> fromParts parts
   where
-    go = runAntiquoted "\n" (pure . Just . (, mempty)) (>>= fromValueMay)
+    go = runAntiquoted "\n" (pure . Just . (, mempty)) (>>= coerceToString)
 
     fromParts parts = fmap mconcat . sequence <$> mapM go parts
 
