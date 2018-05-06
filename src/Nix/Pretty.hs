@@ -89,7 +89,7 @@ wrapParens op sub
 prettyString :: NString NixDoc -> Doc
 prettyString (DoubleQuoted parts) = dquotes . hcat . map prettyPart $ parts
   where prettyPart (Plain t)      = text . concatMap escape . unpack $ t
-        prettyPart EscapedNewline = text "\n"
+        prettyPart EscapedNewline = text "''\\n"
         prettyPart (Antiquoted r) = text "$" <> braces (withoutParens r)
         escape '"' = "\\\""
         escape x = maybe [x] (('\\':) . (:[])) $ toEscapeCode x
@@ -102,7 +102,7 @@ prettyString (Indented _ parts)
     f xs = xs
   prettyLine = hcat . map prettyPart
   prettyPart (Plain t) = text . unpack . replace "${" "''${" . replace "''" "'''" $ t
-  prettyPart EscapedNewline = text "\n"
+  prettyPart EscapedNewline = text "\\n"
   prettyPart (Antiquoted r) = text "$" <> braces (withoutParens r)
 
 prettyParams :: Params NixDoc -> Doc
