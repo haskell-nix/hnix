@@ -45,8 +45,8 @@ normalFormBy k n v = do
                 traceM $ replicate n ' ' ++ "normalFormBy: List[" ++ show i ++ "]"
                 t `k` normalFormBy k (succ n)
         NVSet s p        ->
-            fmap (Fix . flip NVSetF p) $ sequence $ flip M.mapWithKey s $ \key t -> do
-                traceM $ replicate n ' ' ++ "normalFormBy: Set{" ++ show key ++ "}"
+            fmap (Fix . flip NVSetF p) $ sequence $ flip M.mapWithKey s $ \ky t -> do
+                traceM $ replicate n ' ' ++ "normalFormBy: Set{" ++ show ky ++ "}"
                 t `k` normalFormBy k (succ n)
         NVClosure p f    -> return $ Fix $ NVClosureF p f
         NVPath fp        -> return $ Fix $ NVPathF fp

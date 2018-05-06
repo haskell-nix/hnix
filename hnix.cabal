@@ -104,6 +104,9 @@ library
     , http-client
     , http-client-tls
     , http-types
+    , lens-family
+    , lens-family-core
+    , lens-family-th
     , logict
     , megaparsec
     , monadlist
