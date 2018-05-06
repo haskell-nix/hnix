@@ -25,7 +25,7 @@ import           Nix.Value
 import qualified NixLanguageTests
 import qualified ParserTests
 import qualified PrettyTests
-import qualified PrettyParseTests
+-- import qualified PrettyParseTests
 import           System.Environment
 import           System.FilePath.Glob
 import           System.Posix.Files
