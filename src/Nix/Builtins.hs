@@ -279,9 +279,7 @@ unsafeGetAttrPos :: forall e m. MonadNix e m
                  => m (NValue m) -> m (NValue m) -> m (NValue m)
 unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
     (NVStr key _, NVSet _ apos) -> case M.lookup key apos of
-        Nothing ->
-            throwError $ ErrorCall $ "unsafeGetAttrPos: field '" ++ Text.unpack key
-                ++ "' does not exist in attr set: " ++ show apos
+        Nothing -> pure $ nvConstant NNull
         Just delta -> toValue delta
     (x, y) -> throwError $ ErrorCall $ "Invalid types for builtin.unsafeGetAttrPos: "
                  ++ show (x, y)
@@ -536,7 +534,7 @@ seq_ a b = a >> b
 deepSeq :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 deepSeq a b = do
     -- We evaluate 'a' only for its effects, so data cycles are ignored.
-    _ <- normalFormBy (forceEffects . coerce . baseThunk) 0 =<< a
+    _ <- normalFormBy (forceEffects . coerce . _baseThunk) 0 =<< a
 
     -- Then we evaluate the other argument to deepseq, thus this function
     -- should always produce a result (unlike applying 'deepseq' on infinitely
@@ -759,15 +757,10 @@ concatLists = fromValue @[NThunk m]
 listToAttrs :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 listToAttrs = fromValue @[NThunk m] >=> \l ->
     fmap (flip nvSet M.empty . M.fromList . reverse) $
-        forM l $ fromValue @(AttrSet (NThunk m)) >=> \s ->
-            case (M.lookup "name" s, M.lookup "value" s) of
-                (Just name, Just value) -> fromValue name <&> (, value)
-                _ -> throwError $ ErrorCall $
-                    -- jww (2018-05-01): Rather than include the function name
-                    -- in the message like this, we should add it as a frame
-                    -- in `callFunc' before calling each builtin.
-                    "builtins.listToAttrs: expected set with name and value, got"
-                        ++ show s
+        forM l $ fromValue @(AttrSet (NThunk m)) >=> \s -> do
+            name <- attrsetGet "name" s
+            val  <- attrsetGet "value" s
+            fromValue name <&> (, val)
 
 hashString :: MonadNix e m => Text -> Text -> Prim m Text
 hashString algo s = Prim $ do

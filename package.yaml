@@ -78,6 +78,9 @@ library:
     - http-client
     - http-client-tls
     - haskeline
+    - lens-family
+    - lens-family-core
+    - lens-family-th
     - logict
     - megaparsec
     - monadlist
@@ -125,6 +128,12 @@ tests:
       - tasty-hunit
       - tasty-th
       - unix
+      - QuickCheck
+      - quickcheck-instances
+      - generic-random
+      - Diff
+      - megaparsec
+      - tasty-quickcheck
 
 benchmarks:
   hnix-benchmarks:

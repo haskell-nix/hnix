@@ -25,6 +25,7 @@ import           Nix.Value
 import qualified NixLanguageTests
 import qualified ParserTests
 import qualified PrettyTests
+import qualified PrettyParseTests
 import           System.Environment
 import           System.FilePath.Glob
 import           System.Posix.Files
@@ -92,9 +93,11 @@ main = do
     [ ParserTests.tests
     , EvalTests.tests
     , PrettyTests.tests
+    , PrettyParseTests.tests
     , evalComparisonTests ] ++
     [ testCase "Nix language tests present" ensureLangTestsPresent
     | runLangTests ] ++
     [ nixLanguageTests | runLangTests ] ++
     [ testCase "Nixpkgs parses without errors" ensureNixpkgsCanParse
     | runNixpkgsTests ]
+
