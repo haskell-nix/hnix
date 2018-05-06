@@ -4,7 +4,7 @@ sudo: true
 
 cache:
   directories:
-    - /nix/store
+    - /nix
 
 cache:
   timeout: 10000
