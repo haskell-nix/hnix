@@ -1,11 +1,21 @@
+language: nix
+
+sudo: true
+
+cache:
+  directories:
+    - /nix/store
+
+cache:
+  timeout: 10000
+
 env:
   - GHCVERSION=ghc822 NIXPKGS_TESTS=yes MATCHING_TESTS=yes TRACING=true  STRICT=true
   - GHCVERSION=ghc822 NIXPKGS_TESTS=yes MATCHING_TESTS=yes TRACING=false STRICT=true
   - GHCVERSION=ghc842 NIXPKGS_TESTS=yes MATCHING_TESTS=yes TRACING=false STRICT=false"
 
-language: nix
-
-script: nix-build --argstr compiler $GHCVERSION --arg doTracing $TRACING --arg doStrict $STRICT
+script:
+  - nix-build --argstr compiler $GHCVERSION --arg doTracing $TRACING --arg doStrict $STRICT
 
 notifications:
   webhooks:
