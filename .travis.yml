@@ -10,12 +10,12 @@ cache:
   timeout: 10000
 
 env:
-  - GHCVERSION=ghc822 NIXPKGS_TESTS=yes MATCHING_TESTS=yes TRACING=true  STRICT=true
-  - GHCVERSION=ghc822 NIXPKGS_TESTS=yes MATCHING_TESTS=yes TRACING=false STRICT=true
-  - GHCVERSION=ghc842 NIXPKGS_TESTS=yes MATCHING_TESTS=yes TRACING=false STRICT=false"
+  - GHCVERSION=ghc822 NIXPKGS_TESTS=yes MATCHING_TESTS=yes TRACING=true  STRICT=true  PROFILING=false
+  - GHCVERSION=ghc822 NIXPKGS_TESTS=yes MATCHING_TESTS=yes TRACING=false STRICT=true  PROFILING=true
+  - GHCVERSION=ghc842 NIXPKGS_TESTS=yes MATCHING_TESTS=yes TRACING=false STRICT=false PROFILING=false
 
 script:
-  - nix-build --argstr compiler $GHCVERSION --arg doTracing $TRACING --arg doStrict $STRICT
+  - nix-build --argstr compiler $GHCVERSION --arg doProfiling $PROFILING --arg doTracing $TRACING --arg doStrict $STRICT
 
 notifications:
   webhooks:
