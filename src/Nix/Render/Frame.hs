@@ -101,6 +101,11 @@ renderEvalFrame level f = do
                   fmap (:[]) $ renderLocation ann
                       =<< renderExpr level "While forcing thunk from"
                                      "Forcing thunk" e
+
+        Calling name ann ->
+            fmap (:[]) $ renderLocation ann $
+                text "While calling builtins." <> text name
+
         _ -> pure []
 
 renderExpr :: (MonadReader e m, Has e Options, MonadFile m)
