@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b50a1c4cf11872cb711f0ed200482f16620ea7754fe7bf8cf8892413d0231746
+-- hash: ee27a667ebb4b2c1f121147d9491a677c0d0979c0d6547120ded75758329207a
 
 name:           hnix
 version:        0.5.0
@@ -176,6 +176,7 @@ test-suite hnix-tests
       EvalTests
       NixLanguageTests
       ParserTests
+      PrettyParseTests
       PrettyTests
       TestCommon
       Paths_hnix
@@ -183,7 +184,9 @@ test-suite hnix-tests
       tests
   ghc-options: -Wall -threaded
   build-depends:
-      Glob
+      Diff
+    , Glob
+    , QuickCheck
     , ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
@@ -194,15 +197,19 @@ test-suite hnix-tests
     , directory
     , exceptions
     , filepath
+    , generic-random
     , hnix
     , interpolate
+    , megaparsec
     , mtl
     , optparse-applicative
     , process
+    , quickcheck-instances
     , serialise
     , split
     , tasty
     , tasty-hunit
+    , tasty-quickcheck
     , tasty-th
     , template-haskell
     , text

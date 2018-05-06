@@ -49,13 +49,21 @@ data NixDoc = NixDoc
     -- operator. It is needed to determine if we need to wrap the expression in
     -- parentheses.
   , rootOp :: OperatorInfo
+  , wasPath :: Bool -- This is needed so that when a path is used in a selector path
+                    -- we can add brackets appropiately
   }
+
+mkNixDoc :: Doc -> OperatorInfo -> NixDoc
+mkNixDoc d o = NixDoc { withoutParens = d, rootOp = o, wasPath = False }
 
 -- | A simple expression is never wrapped in parentheses. The expression
 --   behaves as if its root operator had a precedence higher than all
 --   other operators (including function application).
 simpleExpr :: Doc -> NixDoc
-simpleExpr = flip NixDoc $ OperatorInfo minBound NAssocNone "simple expr"
+simpleExpr d = mkNixDoc d (OperatorInfo minBound NAssocNone "simple expr")
+
+pathExpr :: Doc -> NixDoc
+pathExpr d = (simpleExpr d) { wasPath = True }
 
 -- | An expression that behaves as if its root operator had a precedence lower
 --   than all other operators. That ensures that the expression is wrapped in
@@ -64,7 +72,7 @@ simpleExpr = flip NixDoc $ OperatorInfo minBound NAssocNone "simple expr"
 --   binding).
 leastPrecedence :: Doc -> NixDoc
 leastPrecedence =
-    flip NixDoc $ OperatorInfo maxBound NAssocNone "least precedence"
+    flip mkNixDoc $ OperatorInfo maxBound NAssocNone "least precedence"
 
 appOp :: OperatorInfo
 appOp = getBinaryOperator NApp
@@ -86,10 +94,17 @@ wrapParens op sub
     && associativity op /= NAssocNone = withoutParens sub
   | otherwise = parens $ withoutParens sub
 
+-- Used in the selector case to print a path in a selector as
+-- "${./abc}"
+wrapPath :: OperatorInfo -> NixDoc -> Doc
+wrapPath op sub =
+  if wasPath sub then dquotes (text "$" <> braces (withoutParens sub))
+                else wrapParens op sub
+
 prettyString :: NString NixDoc -> Doc
 prettyString (DoubleQuoted parts) = dquotes . hcat . map prettyPart $ parts
   where prettyPart (Plain t)      = text . concatMap escape . unpack $ t
-        prettyPart EscapedNewline = text "\n"
+        prettyPart EscapedNewline = text "''\\n"
         prettyPart (Antiquoted r) = text "$" <> braces (withoutParens r)
         escape '"' = "\\\""
         escape x = maybe [x] (('\\':) . (:[])) $ toEscapeCode x
@@ -102,7 +117,7 @@ prettyString (Indented _ parts)
     f xs = xs
   prettyLine = hcat . map prettyPart
   prettyPart (Plain t) = text . unpack . replace "${" "''${" . replace "''" "'''" $ t
-  prettyPart EscapedNewline = text "\n"
+  prettyPart EscapedNewline = text "\\n"
   prettyPart (Antiquoted r) = text "$" <> braces (withoutParens r)
 
 prettyParams :: Params NixDoc -> Doc
@@ -174,8 +189,8 @@ exprFNixDoc = \case
     NAbs args body -> leastPrecedence $
         nest 2 ((prettyParams args <> colon) <$> withoutParens body)
     NBinary NApp fun arg ->
-        NixDoc (wrapParens appOp fun <+> wrapParens appOpNonAssoc arg) appOp
-    NBinary op r1 r2 -> flip NixDoc opInfo $ hsep
+        mkNixDoc (wrapParens appOp fun <+> wrapParens appOpNonAssoc arg) appOp
+    NBinary op r1 r2 -> flip mkNixDoc opInfo $ hsep
         [ wrapParens (f NAssocLeft) r1
         , text $ unpack $ operatorName opInfo
         , wrapParens (f NAssocRight) r2
@@ -185,16 +200,16 @@ exprFNixDoc = \case
         f x | associativity opInfo /= x = opInfo { associativity = NAssocNone }
             | otherwise = opInfo
     NUnary op r1 ->
-        NixDoc (text (unpack (operatorName opInfo)) <> wrapParens opInfo r1) opInfo
+        mkNixDoc (text (unpack (operatorName opInfo)) <> wrapParens opInfo r1) opInfo
       where opInfo = getUnaryOperator op
     NSelect r attr o ->
-      (if isJust o then leastPrecedence else flip NixDoc selectOp) $
-          wrapParens selectOp r <> dot <> prettySelector attr <> ordoc
+      (if isJust o then leastPrecedence else flip mkNixDoc selectOp) $
+          wrapPath selectOp r <> dot <> prettySelector attr <> ordoc
       where ordoc = maybe empty (((space <> text "or") <+>) . wrapParens selectOp) o
     NHasAttr r attr ->
-        NixDoc (wrapParens hasAttrOp r <+> text "?" <+> prettySelector attr) hasAttrOp
+        mkNixDoc (wrapParens hasAttrOp r <+> text "?" <+> prettySelector attr) hasAttrOp
     NEnvPath p -> simpleExpr $ text ("<" ++ p ++ ">")
-    NLiteralPath p -> simpleExpr $ text $ case p of
+    NLiteralPath p -> pathExpr $ text $ case p of
         "./" -> "./."
         "../" -> "../."
         ".." -> "../."
