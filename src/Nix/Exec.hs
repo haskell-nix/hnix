@@ -99,7 +99,7 @@ nverr :: forall s e m a. (MonadNix e m, Exception s) => s -> m a
 nverr = evalError @(NValue m)
 
 currentPos :: forall e m. (MonadReader e m, Has e SrcSpan) => m SrcSpan
-currentPos = asks (view @e @SrcSpan hasLens)
+currentPos = asks (view hasLens)
 
 wrapExprLoc :: SrcSpan -> NExprLocF r -> NExprLoc
 wrapExprLoc span x = Fix (Fix (NSym_ span "<?>") <$ x)

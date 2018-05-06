@@ -15,6 +15,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -30,12 +31,17 @@ import           Control.Monad.Trans.Except
 import qualified Data.Aeson as A
 import           Data.Align
 import           Data.Fix
+import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
+import           Data.Hashable
 import           Data.Monoid (appEndo)
 import           Data.Text (Text)
 import           Data.These
 import           Data.Typeable (Typeable)
 import           GHC.Generics
+import           Lens.Family2
+import           Lens.Family2.Stock
+import           Lens.Family2.TH
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
@@ -84,8 +90,8 @@ type NValueNF m = Fix (NValueF m)      -- normal form
 type ValueSet m = AttrSet (NThunk m)
 
 data Provenance m = Provenance
-    { lexicalScope :: Scopes m (NThunk m)
-    , originExpr   :: NExprLocF (Maybe (NValue m))
+    { _lexicalScope :: Scopes m (NThunk m)
+    , _originExpr   :: NExprLocF (Maybe (NValue m))
       -- ^ When calling the function x: x + 2 with argument x = 3, the
       --   'originExpr' for the resulting value will be 3 + 2, while the
       --   'contextExpr' will be @(x: x + 2) 3@, preserving not only the
@@ -93,13 +99,13 @@ data Provenance m = Provenance
     }
 
 data NThunk m = NThunk
-    { thunkProvenance :: [Provenance m]
-    , baseThunk       :: Thunk m (NValue m)
+    { _thunkProvenance :: [Provenance m]
+    , _baseThunk       :: Thunk m (NValue m)
     }
 
 data NValue m = NValue
-    { valueProvenance :: [Provenance m]
-    , baseValue       :: NValueF m (NThunk m)
+    { _valueProvenance :: [Provenance m]
+    , _baseValue       :: NValueF m (NThunk m)
     }
 
 addProvenance :: (NValue m -> Provenance m) -> NValue m -> NValue m
@@ -326,3 +332,20 @@ data ValueFrame m
     deriving (Show, Typeable)
 
 instance Typeable m => Exception (ValueFrame m)
+
+$(makeTraversals ''NValueF)
+$(makeLenses ''Provenance)
+$(makeLenses ''NThunk)
+$(makeLenses ''NValue)
+
+alterF :: (Eq k, Hashable k, Functor f)
+       => (Maybe v -> f (Maybe v)) -> k -> HashMap k v -> f (HashMap k v)
+alterF f k m = f (M.lookup k m) <&> \case
+    Nothing -> M.delete k m
+    Just v  -> M.insert k v m
+
+hashAt :: VarName -> Lens' (AttrSet v) (Maybe v)
+hashAt = flip alterF
+
+key :: Applicative f => VarName -> LensLike' f (NValue m) (Maybe (NThunk m))
+key k = baseValue._NVSetF._1.hashAt k
