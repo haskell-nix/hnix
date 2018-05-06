@@ -8,20 +8,20 @@
 
 module Nix.Utils (module Nix.Utils, module X) where
 
-import           Control.Applicative
 import           Control.Arrow ((&&&))
 import           Control.Monad
 import           Control.Monad.Fix
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Encoding as A
 import           Data.Fix
-import           Data.Functor.Identity
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.List (sortOn)
 import           Data.Monoid (Endo)
 import           Data.Text (Text)
 import qualified Data.Vector as V
+import           Lens.Family2 as X
+import           Lens.Family2.Stock (_1, _2)
 
 #if ENABLE_TRACING
 import           Debug.Trace as X
@@ -45,10 +45,6 @@ type AlgM f m a = f a -> m a
 
 -- | An "transform" here is a modification of a catamorphism.
 type Transform f a = (Fix f -> a) -> Fix f -> a
-
-infixr 0 &
-(&) :: a -> (a -> c) -> c
-(&) = flip ($)
 
 (<&>) :: Functor f => f a -> (a -> c) -> f c
 (<&>) = flip (<$>)
@@ -91,28 +87,17 @@ adiM :: (Traversable t, Monad m)
      => (t a -> m a) -> ((Fix t -> m a) -> Fix t -> m a) -> Fix t -> m a
 adiM f g = g ((f <=< traverse (adiM f g)) . unFix)
 
-type MonoLens a b = forall f. Functor f => (b -> f b) -> a -> f a
-
-view :: MonoLens a b -> a -> b
-view l = getConst . l Const
-
-set :: MonoLens a b -> b -> a -> a
-set l b = runIdentity . l (\_ -> Identity b)
-
-over :: MonoLens a b -> (b -> b) -> a -> a
-over l f = runIdentity . l (Identity . f)
-
 class Has a b where
-    hasLens :: MonoLens a b
+    hasLens :: Lens' a b
 
 instance Has a a where
     hasLens f = f
 
 instance Has (a, b) a where
-    hasLens f (x, y) = (, y) <$> f x
+    hasLens = _1
 
 instance Has (a, b) b where
-    hasLens f (x, y) = (x,) <$> f y
+    hasLens = _2
 
 toEncodingSorted :: A.Value -> A.Encoding
 toEncodingSorted = \case
