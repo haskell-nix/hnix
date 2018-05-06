@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: a99914bfff4a7f1e0b7df961ffff40da5d87fb72d6fc51024169825770b14676
+-- hash: 399cbbd1064174d0607b409186a24543147b8bced388d3a01acf01bb4f2dcbce
 
 name:           hnix
 version:        0.5.0
@@ -119,7 +119,7 @@ library
     , time
     , transformers
     , unix
-    , unordered-containers >=0.2.7 && <0.3
+    , unordered-containers >=0.2.9 && <0.3
     , vector
     , xml
   if !impl(ghcjs)
@@ -163,7 +163,7 @@ executable hnix
     , text
     , time
     , transformers
-    , unordered-containers >=0.2.7 && <0.3
+    , unordered-containers >=0.2.9 && <0.3
   if !impl(ghcjs)
     build-depends:
         cryptohash-md5
@@ -209,7 +209,7 @@ test-suite hnix-tests
     , text
     , time
     , transformers
-    , unordered-containers >=0.2.7 && <0.3
+    , unordered-containers >=0.2.9 && <0.3
   if !impl(ghcjs)
     build-depends:
         cryptohash-md5
@@ -256,7 +256,7 @@ benchmark hnix-benchmarks
     , text
     , time
     , transformers
-    , unordered-containers >=0.2.7 && <0.3
+    , unordered-containers >=0.2.9 && <0.3
   if !impl(ghcjs)
     build-depends:
         cryptohash-md5
