@@ -78,6 +78,9 @@ library:
     - http-client
     - http-client-tls
     - haskeline
+    - lens-family
+    - lens-family-core
+    - lens-family-th
     - logict
     - megaparsec
     - monadlist

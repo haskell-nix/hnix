@@ -8,24 +8,29 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-missing-signatures #-}
 
 -- | The nix expression type and supporting types.
 module Nix.Expr.Types where
 
 import           Codec.Serialise (Serialise)
 import qualified Codec.Serialise as Ser
+import           Control.Applicative
 import           Control.DeepSeq
+import           Control.Monad
 import           Data.Aeson
 import           Data.Aeson.TH
 import           Data.Binary (Binary)
@@ -36,8 +41,10 @@ import           Data.Fix
 import           Data.Functor.Classes
 import           Data.Hashable
 import           Data.Hashable.Lifted
-import           Data.List.NonEmpty (NonEmpty)
+import           Data.List (inits, tails)
+import           Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
+import           Data.Maybe (fromMaybe)
 import           Data.Monoid
 import           Data.Ord.Deriving
 import           Data.Text (Text, pack, unpack)
@@ -45,6 +52,9 @@ import           Data.Traversable
 import           GHC.Exts
 import           GHC.Generics
 import           Language.Haskell.TH.Syntax
+import           Lens.Family2
+import           Lens.Family2.Stock (_1)
+import           Lens.Family2.TH
 import           Nix.Atoms
 import           Nix.Parser.Library (SourcePos(..))
 import           Nix.Utils
@@ -388,6 +398,47 @@ instance FromJSON NUnaryOp
 instance FromJSON NBinaryOp
 instance FromJSON a => FromJSON (NExprF a)
 instance FromJSON NExpr
+
+$(makeTraversals ''NExprF)
+$(makeTraversals ''Binding)
+$(makeTraversals ''Params)
+$(makeTraversals ''Antiquoted)
+$(makeTraversals ''NString)
+$(makeTraversals ''NKeyName)
+$(makeTraversals ''NUnaryOp)
+$(makeTraversals ''NBinaryOp)
+
+-- $(makeLenses ''Fix)
+
+class NExprAnn ann g | g -> ann where
+    fromNExpr :: g r -> (NExprF r, ann)
+    toNExpr :: (NExprF r, ann) -> g r
+
+ekey :: NExprAnn ann g
+     => NonEmpty Text
+     -> Lens' (Fix g) (Maybe (Fix g))
+ekey keys f e@(Fix x) | (NSet xs, ann) <- fromNExpr x =
+    case go xs of
+        ((v, []):_) -> fromMaybe e <$> f (Just v)
+        ((v, r:rest):_) -> ekey (r :| rest) f v
+
+        _ -> f Nothing <&> \case
+            Nothing -> e
+            Just v  ->
+                let entry = NamedVar (NE.map (StaticKey ?? Nothing) keys) v
+                in Fix (toNExpr (NSet (entry : xs), ann))
+  where
+    go xs = do
+        let keys' = NE.toList keys
+        (ks, rest) <- zip (inits keys') (tails keys')
+        case ks of
+            [] -> empty
+            j:js -> do
+                NamedVar ns v <- xs
+                guard $ (j:js) == (NE.toList ns ^.. traverse._StaticKey._1)
+                return (v, rest)
+
+ekey _ f e = fromMaybe e <$> f Nothing
 
 stripPositionInfo :: NExpr -> NExpr
 stripPositionInfo = transport phi

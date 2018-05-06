@@ -15,6 +15,7 @@ import           Control.Monad.Reader
 import qualified Data.HashMap.Lazy as M
 import           Data.Semigroup
 import           Data.Text (Text)
+import           Lens.Family2
 import           Nix.Utils
 
 newtype Scope a = Scope { getScope :: AttrSet a }

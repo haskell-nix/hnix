@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b50a1c4cf11872cb711f0ed200482f16620ea7754fe7bf8cf8892413d0231746
+-- hash: 75c240c321a86ae1fa4ca96cba96de708d7da7e30f316389ddb2a528d3888f69
 
 name:           hnix
 version:        0.5.0
@@ -104,6 +104,9 @@ library
     , http-client
     , http-client-tls
     , http-types
+    , lens-family
+    , lens-family-core
+    , lens-family-th
     , logict
     , megaparsec
     , monadlist
