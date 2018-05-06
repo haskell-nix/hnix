@@ -8,7 +8,6 @@
 
 module Nix.Utils (module Nix.Utils, module X) where
 
-import           Control.Applicative
 import           Control.Arrow ((&&&))
 import           Control.Monad
 import           Control.Monad.Fix
