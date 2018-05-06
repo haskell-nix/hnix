@@ -221,7 +221,7 @@ nixString = lexeme (doubleQuoted <+> indented <?> "string")
         (Plain <$> ("''" <$ char '\'' <+> "$"  <$ char '$')) <+> do
             _ <- char '\\'
             c <- escapeCode
-            pure $ if c == '\n'
+            pure $ if c == 'n'
                    then EscapedNewline
                    else Plain $ singleton c
 
