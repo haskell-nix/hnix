@@ -108,7 +108,7 @@ instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
 
         if thunks opts
             then do
-                frames <- asks (view @_ @Frames hasLens)
+                frames :: Frames <- asks (view hasLens)
 
                 -- Gather the current evaluation context at the time of thunk
                 -- creation, and record it along with the thunk.
@@ -184,7 +184,7 @@ instance MonadNix e m => MonadEval (NValue m) m where
             span  <- currentPos
             pure $ nvStrP (Provenance scope
                            (NStr_ span (DoubleQuoted [Plain s]))) s c
-        Nothing -> nverr $ ErrorCall $ "Failed to assemble string"
+        Nothing -> nverr $ ErrorCall "Failed to assemble string"
 
     evalLiteralPath p = do
         scope <- currentScopes
@@ -613,7 +613,7 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
         if  status /= 200
           then throwError $ ErrorCall $ 
                  "fail, got " ++ show status ++ " when fetching url:" ++ urlstr
-          else do
+          else -- do
             -- let bstr = responseBody response
             -- liftIO $ print bstr
             throwError $ ErrorCall $ 
