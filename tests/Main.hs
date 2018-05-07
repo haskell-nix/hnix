@@ -11,7 +11,7 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Fix
 import           Data.List (isInfixOf)
-import           Data.Maybe (isJust)
+import           Data.Maybe (isJust, fromMaybe)
 import           Data.String.Interpolate.IsString
 import           Data.Text (unpack)
 import           Data.Time
@@ -25,7 +25,7 @@ import           Nix.Value
 import qualified NixLanguageTests
 import qualified ParserTests
 import qualified PrettyTests
--- import qualified PrettyParseTests
+import qualified PrettyParseTests
 import           System.Environment
 import           System.FilePath.Glob
 import           System.Posix.Files
@@ -85,19 +85,18 @@ main = do
   evalComparisonTests <- EvalTests.genEvalCompareTests
   langTestsEnv        <- lookupEnv "LANGUAGE_TESTS"
   nixpkgsTestsEnv     <- lookupEnv "NIXPKGS_TESTS"
-  let runLangTests    = isJust langTestsEnv
-  let runNixpkgsTests = isJust nixpkgsTestsEnv
+  prettyTestsEnv      <- lookupEnv "PRETTY_TESTS"
 
   defaultMain $ testGroup "hnix" $
     [ testCase "hnix.cabal correctly generated" cabalCorrectlyGenerated ] ++
     [ ParserTests.tests
     , EvalTests.tests
-    , PrettyTests.tests
-    -- , PrettyParseTests.tests
-    , evalComparisonTests ] ++
+    , PrettyTests.tests ] ++
+    [ PrettyParseTests.tests (read (fromMaybe "0" prettyTestsEnv)) ] ++
+    [ evalComparisonTests ] ++
     [ testCase "Nix language tests present" ensureLangTestsPresent
-    | runLangTests ] ++
-    [ nixLanguageTests | runLangTests ] ++
+      | isJust langTestsEnv ] ++
+    [ nixLanguageTests | isJust langTestsEnv ] ++
     [ testCase "Nixpkgs parses without errors" ensureNixpkgsCanParse
-    | runNixpkgsTests ]
+      | isJust nixpkgsTestsEnv ]
 

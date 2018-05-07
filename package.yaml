@@ -134,6 +134,7 @@ tests:
       - Diff
       - megaparsec
       - tasty-quickcheck
+      - pretty-show
 
 benchmarks:
   hnix-benchmarks:
