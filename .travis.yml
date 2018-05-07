@@ -7,6 +7,9 @@ language: nix
 #     - /nix
 #   timeout: 100000
 
+git:
+  depth: 1
+
 install:
   - nix-shell --argstr compiler ghc822 --run true
   - nix-shell --argstr compiler ghc842 --run true
@@ -15,6 +18,7 @@ env:
   global:
     - NIXPKGS_TESTS=yes
     - MATCHING_TESTS=yes
+    - LANGUAGE_TESTS=yes
   matrix:
     - GHCVERSION=ghc822 STRICT=true  TRACING=false PROFILING=false
     - GHCVERSION=ghc822 STRICT=true  TRACING=true  PROFILING=false
