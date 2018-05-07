@@ -17,15 +17,14 @@ dependencies:
   - base                        >= 4.9 && < 5
   - ansi-wl-pprint
   - bytestring
-  - compact
   - containers
   - data-fix
-  - deepseq
+  - deepseq                     >= 1.4.2 && < 1.5
   - exceptions
   - filepath
+  - hashing
   - mtl
   - optparse-applicative
-  - serialise
   - template-haskell
   - text
   - time
@@ -62,34 +61,44 @@ when:
   - condition: flag(tracing)
     cpp-options: -DENABLE_TRACING=1
 
+when:
+  - condition: "os(linux) && impl(ghc < 8.2)"
+    dependencies:
+      - compact
+
+when:
+  - condition: "!impl(ghcjs)"
+    dependencies:
+      - cryptohash-md5
+      - cryptohash-sha1
+      - cryptohash-sha256
+      - cryptohash-sha512
+      - serialise
+
 library:
   source-dirs: src
   dependencies:
     - aeson
     - ansi-wl-pprint
-    - array                     >= 0.4 && < 0.6
+    - array                     >= 0.4   && < 0.6
     - base16-bytestring
     - binary
-    - cryptohash
-    - deriving-compat           >= 0.3 && < 0.5
+    - deriving-compat           >= 0.3   && < 0.5
     - directory
-    - hashable
     - http-types
     - http-client
     - http-client-tls
-    - haskeline
     - lens-family
     - lens-family-core
     - lens-family-th
     - logict
-    - megaparsec
+    - megaparsec                >= 6.0   && < 6.6
     - monadlist
-    - pretty-show
     - process
     - regex-tdfa
     - regex-tdfa-text
     - scientific
-    - semigroups                >= 0.18 && < 0.19
+    - semigroups                >= 0.18  && < 0.19
     - split
     - syb
     - these
@@ -100,45 +109,61 @@ library:
     - condition: impl(ghc < 8.4.0) && !flag(profiling)
       dependencies:
         - ghc-datasize
+  when:
+    - condition: "impl(ghcjs)"
+      then:
+        dependencies:
+          - hashable >= 1.2.4 && < 1.3
+      else:
+        dependencies:
+          - hashable >= 1.2.5 && < 1.3
+          - haskeline
+          - pretty-show
 
 executables:
   hnix:
     source-dirs: main
     main: Main.hs
-    dependencies:
-      - hnix
-      - aeson
-      - pretty-show
-      - repline
-      - haskeline
+    when:
+      - condition: "!impl(ghcjs)"
+        dependencies:
+          - hnix
+          - aeson
+          - pretty-show
+          - repline
+          - haskeline
 
 tests:
   hnix-tests:
     source-dirs: tests
     main: Main.hs
     ghc-options: -threaded
-    dependencies:
-      - hnix
-      - Glob
-      - directory
-      - interpolate
-      - process
-      - split
-      - tasty
-      - tasty-hunit
-      - tasty-th
-      - unix
-      - QuickCheck
-      - quickcheck-instances
-      - generic-random
-      - Diff
-      - megaparsec
-      - tasty-quickcheck
+    when:
+      - condition: "!impl(ghcjs)"
+        dependencies:
+          - hnix
+          - Glob
+          - directory
+          - interpolate
+          - process
+          - split
+          - tasty
+          - tasty-hunit
+          - tasty-th
+          - unix
+          - QuickCheck
+          - quickcheck-instances
+          - generic-random
+          - Diff
+          - megaparsec
+          - tasty-quickcheck
 
 benchmarks:
   hnix-benchmarks:
     source-dirs: benchmarks
     main: Main.hs
-    dependencies:
-      - hnix
-      - criterion
+    when:
+      - condition: "!impl(ghcjs)"
+        dependencies:
+          - hnix
+          - criterion

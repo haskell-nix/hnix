@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -5,6 +6,7 @@
 
 module Main where
 
+#if !defined(ghcjs_HOST_OS)
 import           Control.DeepSeq
 import qualified Control.Exception as Exc
 import           Control.Monad
@@ -32,6 +34,32 @@ import           System.Posix.Files
 import           System.Process
 import           Test.Tasty
 import           Test.Tasty.HUnit
+#endif
+
+main :: IO ()
+main = do
+#if defined(ghcjs_HOST_OS)
+    putStrLn "Main cannot be built with GHCJS"
+#else
+  nixLanguageTests    <- NixLanguageTests.genTests
+  evalComparisonTests <- EvalTests.genEvalCompareTests
+  langTestsEnv        <- lookupEnv "LANGUAGE_TESTS"
+  nixpkgsTestsEnv     <- lookupEnv "NIXPKGS_TESTS"
+  let runLangTests    = isJust langTestsEnv
+  let runNixpkgsTests = isJust nixpkgsTestsEnv
+
+  defaultMain $ testGroup "hnix" $
+    [ testCase "hnix.cabal correctly generated" cabalCorrectlyGenerated ] ++
+    [ ParserTests.tests
+    , EvalTests.tests
+    , PrettyTests.tests
+    -- , PrettyParseTests.tests
+    , evalComparisonTests ] ++
+    [ testCase "Nix language tests present" ensureLangTestsPresent
+    | runLangTests ] ++
+    [ nixLanguageTests | runLangTests ] ++
+    [ testCase "Nixpkgs parses without errors" ensureNixpkgsCanParse
+    | runNixpkgsTests ]
 
 cabalCorrectlyGenerated :: Assertion
 cabalCorrectlyGenerated = do
@@ -78,26 +106,4 @@ ensureNixpkgsCanParse =
     Failure err -> errorWithoutStackTrace $
       "Parsing " ++ path ++ " failed: " ++ show err
     Success expr -> k expr
-
-main :: IO ()
-main = do
-  nixLanguageTests    <- NixLanguageTests.genTests
-  evalComparisonTests <- EvalTests.genEvalCompareTests
-  langTestsEnv        <- lookupEnv "LANGUAGE_TESTS"
-  nixpkgsTestsEnv     <- lookupEnv "NIXPKGS_TESTS"
-  let runLangTests    = isJust langTestsEnv
-  let runNixpkgsTests = isJust nixpkgsTestsEnv
-
-  defaultMain $ testGroup "hnix" $
-    [ testCase "hnix.cabal correctly generated" cabalCorrectlyGenerated ] ++
-    [ ParserTests.tests
-    , EvalTests.tests
-    , PrettyTests.tests
-    -- , PrettyParseTests.tests
-    , evalComparisonTests ] ++
-    [ testCase "Nix language tests present" ensureLangTestsPresent
-    | runLangTests ] ++
-    [ nixLanguageTests | runLangTests ] ++
-    [ testCase "Nixpkgs parses without errors" ensureNixpkgsCanParse
-    | runNixpkgsTests ]
-
+#endif

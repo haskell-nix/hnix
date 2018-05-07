@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -7,6 +8,7 @@
 
 module Main where
 
+#if !defined(ghcjs_HOST_OS)
 import qualified Control.DeepSeq as Deep
 import qualified Control.Exception as Exc
 import           Control.Monad
@@ -37,9 +39,13 @@ import           System.FilePath
 import           System.IO
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 import qualified Text.Show.Pretty as PS
+#endif
 
 main :: IO ()
 main = do
+#if defined(ghcjs_HOST_OS)
+    putStrLn "Main cannot be built with GHCJS"
+#else
     time <- liftIO getCurrentTime
     opts <- execParser (nixOptionsInfo time)
     runLazyM opts $ case readFrom opts of
@@ -218,3 +224,4 @@ main = do
         case eres of
             Left err -> throwM err
             Right v  -> return v
+#endif

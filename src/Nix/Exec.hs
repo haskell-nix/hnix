@@ -66,7 +66,9 @@ import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
+#if !defined(ghcjs_HOST_OS)
 import           System.Console.Haskeline.MonadException hiding (catch)
+#endif
 import           System.Directory
 import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
@@ -465,10 +467,12 @@ instance MonadCatch m => MonadCatch (Lazy m) where
 instance MonadThrow m => MonadThrow (Lazy m) where
     throwM = Lazy . throwM
 
+#if !defined(ghcjs_HOST_OS)
 instance MonadException m => MonadException (Lazy m) where
   controlIO f = Lazy $ controlIO $ \(RunIO run) ->
       let run' = RunIO (fmap Lazy . run . runLazy)
       in runLazy <$> f run'
+#endif
 
 instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
           MonadPlus m, Typeable m)

@@ -90,17 +90,14 @@ library
     , base16-bytestring
     , binary
     , bytestring
-    , compact
     , containers
-    , cryptohash
     , data-fix
-    , deepseq
+    , deepseq >=1.4.2 && <1.5
     , deriving-compat >=0.3 && <0.5
     , directory
     , exceptions
     , filepath
-    , hashable
-    , haskeline
+    , hashing
     , http-client
     , http-client-tls
     , http-types
@@ -108,17 +105,15 @@ library
     , lens-family-core
     , lens-family-th
     , logict
-    , megaparsec
+    , megaparsec >=6.0 && <6.6
     , monadlist
     , mtl
     , optparse-applicative
-    , pretty-show
     , process
     , regex-tdfa
     , regex-tdfa-text
     , scientific
     , semigroups >=0.18 && <0.19
-    , serialise
     , split
     , syb
     , template-haskell
@@ -130,11 +125,21 @@ library
     , unordered-containers >=0.2.9 && <0.3
     , vector
     , xml
-  if flag(tracing)
-    cpp-options: -DENABLE_TRACING=1
-  if impl(ghc < 8.4.0) && !flag(profiling)
+  if !impl(ghcjs)
     build-depends:
-        ghc-datasize
+        cryptohash-md5
+      , cryptohash-sha1
+      , cryptohash-sha256
+      , cryptohash-sha512
+      , serialise
+  if impl(ghcjs)
+    build-depends:
+        hashable >=1.2.4 && <1.3
+  else
+    build-depends:
+        hashable >=1.2.5 && <1.3
+      , haskeline
+      , pretty-show
   default-language: Haskell2010
 
 executable hnix
@@ -146,30 +151,36 @@ executable hnix
       main
   ghc-options: -Wall
   build-depends:
-      aeson
-    , ansi-wl-pprint
+      ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
-    , compact
     , containers
     , data-fix
-    , deepseq
+    , deepseq >=1.4.2 && <1.5
     , exceptions
     , filepath
-    , haskeline
-    , hnix
+    , hashing
     , mtl
     , optparse-applicative
-    , pretty-show
-    , repline
-    , serialise
     , template-haskell
     , text
     , time
     , transformers
     , unordered-containers >=0.2.9 && <0.3
-  if flag(tracing)
-    cpp-options: -DENABLE_TRACING=1
+  if !impl(ghcjs)
+    build-depends:
+        cryptohash-md5
+      , cryptohash-sha1
+      , cryptohash-sha256
+      , cryptohash-sha512
+      , serialise
+  if !impl(ghcjs)
+    build-depends:
+        aeson
+      , haskeline
+      , hnix
+      , pretty-show
+      , repline
   default-language: Haskell2010
 
 test-suite hnix-tests
@@ -193,11 +204,9 @@ test-suite hnix-tests
     , ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
-    , compact
     , containers
     , data-fix
-    , deepseq
-    , directory
+    , deepseq >=1.4.2 && <1.5
     , exceptions
     , filepath
     , generic-random
@@ -218,10 +227,26 @@ test-suite hnix-tests
     , text
     , time
     , transformers
-    , unix
     , unordered-containers >=0.2.9 && <0.3
-  if flag(tracing)
-    cpp-options: -DENABLE_TRACING=1
+  if !impl(ghcjs)
+    build-depends:
+        cryptohash-md5
+      , cryptohash-sha1
+      , cryptohash-sha256
+      , cryptohash-sha512
+      , serialise
+  if !impl(ghcjs)
+    build-depends:
+        Glob
+      , directory
+      , hnix
+      , interpolate
+      , process
+      , split
+      , tasty
+      , tasty-hunit
+      , tasty-th
+      , unix
   default-language: Haskell2010
 
 benchmark hnix-benchmarks
@@ -237,22 +262,28 @@ benchmark hnix-benchmarks
       ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
-    , compact
     , containers
-    , criterion
     , data-fix
-    , deepseq
+    , deepseq >=1.4.2 && <1.5
     , exceptions
     , filepath
-    , hnix
+    , hashing
     , mtl
     , optparse-applicative
-    , serialise
     , template-haskell
     , text
     , time
     , transformers
     , unordered-containers >=0.2.9 && <0.3
-  if flag(tracing)
-    cpp-options: -DENABLE_TRACING=1
+  if !impl(ghcjs)
+    build-depends:
+        cryptohash-md5
+      , cryptohash-sha1
+      , cryptohash-sha256
+      , cryptohash-sha512
+      , serialise
+  if !impl(ghcjs)
+    build-depends:
+        criterion
+      , hnix
   default-language: Haskell2010

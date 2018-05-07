@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -7,6 +8,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PackageImports #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -24,17 +26,33 @@ import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.ListM (sortByM)
 import           Control.Monad.Reader (asks)
-import qualified Crypto.Hash.MD5 as MD5
-import qualified Crypto.Hash.SHA1 as SHA1
-import qualified Crypto.Hash.SHA256 as SHA256
-import qualified Crypto.Hash.SHA512 as SHA512
+
+-- Using package imports here because there is a bug in cabal2nix that forces
+-- us to put the hashing package in the unconditional dependency list.  If we
+-- put it in an impl(ghcjs) condition where it belongs, cabal2nix does not
+-- include it in the output.
+-- See https://github.com/NixOS/cabal2nix/issues/348 for more info
+#if defined(ghcjs_HOST_OS)
+import           Crypto.Hash
+import qualified "hashing" Crypto.Hash.MD5 as MD5
+import qualified "hashing" Crypto.Hash.SHA1 as SHA1
+import qualified "hashing" Crypto.Hash.SHA256 as SHA256
+import qualified "hashing" Crypto.Hash.SHA512 as SHA512
+#else
+import qualified "cryptohash-md5" Crypto.Hash.MD5 as MD5
+import qualified "cryptohash-sha1" Crypto.Hash.SHA1 as SHA1
+import qualified "cryptohash-sha256" Crypto.Hash.SHA256 as SHA256
+import qualified "cryptohash-sha512" Crypto.Hash.SHA512 as SHA512
+#endif
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Encoding as A
 import           Data.Align (alignWith)
 import           Data.Array
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+#if !defined(ghcjs_HOST_OS)
 import           Data.ByteString.Base16 as Base16
+#endif
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
 import           Data.Coerce
@@ -127,12 +145,15 @@ builtinsList = sequence [
     , add0 Normal   "currentSystem"              currentSystem
     , add0 Normal   "currentTime"                currentTime_
     , add2 Normal   "deepSeq"                    deepSeq
+#if MIN_VERSION_base(4, 10, 0)
+    -- TODO Remove this CPP after the Lift instance for NExpr works with GHC 8.0
     , add0 TopLevel "derivation"                 $(do
           let f = "data/nix/corepkgs/derivation.nix"
           addDependentFile f
           Success expr <- runIO $ parseNixFile f
           [| cata Eval.eval expr |]
       )
+#endif
     , add  TopLevel "derivationStrict"           derivationStrict_
     , add  TopLevel "dirOf"                      dirOf
     , add2 Normal   "div"                        div_
@@ -763,14 +784,33 @@ listToAttrs = fromValue @[NThunk m] >=> \l ->
 
 hashString :: MonadNix e m => Text -> Text -> Prim m Text
 hashString algo s = Prim $ do
-    hash <- case algo of
-        "md5"    -> pure MD5.hash
-        "sha1"   -> pure SHA1.hash
-        "sha256" -> pure SHA256.hash
-        "sha512" -> pure SHA512.hash
+    case algo of
+        "md5"    -> pure $
+#if defined(ghcjs_HOST_OS)
+          Text.pack $ show (hash (encodeUtf8 s) :: MD5.MD5)
+#else
+          decodeUtf8 $ Base16.encode $ MD5.hash $ encodeUtf8 s
+#endif
+        "sha1"   -> pure $
+#if defined(ghcjs_HOST_OS)
+          Text.pack $ show (hash (encodeUtf8 s) :: SHA1.SHA1)
+#else
+          decodeUtf8 $ Base16.encode $ SHA1.hash $ encodeUtf8 s
+#endif
+        "sha256" -> pure $
+#if defined(ghcjs_HOST_OS)
+          Text.pack $ show (hash (encodeUtf8 s) :: SHA256.SHA256)
+#else
+          decodeUtf8 $ Base16.encode $ SHA256.hash $ encodeUtf8 s
+#endif
+        "sha512" -> pure $
+#if defined(ghcjs_HOST_OS)
+          Text.pack $ show (hash (encodeUtf8 s) :: SHA512.SHA512)
+#else
+          decodeUtf8 $ Base16.encode $ SHA512.hash $ encodeUtf8 s
+#endif
         _ -> throwError $ ErrorCall $ "builtins.hashString: "
             ++ "expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got " ++ show algo
-    pure $ decodeUtf8 $ Base16.encode $ hash $ encodeUtf8 s
 
 placeHolder :: MonadNix e m => m (NValue m) -> m (NValue m)
 placeHolder = fromValue @Text >=> \_ -> do

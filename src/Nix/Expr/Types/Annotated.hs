@@ -1,4 +1,5 @@
-{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE CPP                #-}
+{-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFoldable     #-}
 {-# LANGUAGE DeriveFunctor      #-}
@@ -21,7 +22,9 @@ module Nix.Expr.Types.Annotated
   , SourcePos(..), unPos, mkPos
   )where
 
+#if !defined(ghcjs_HOST_OS)
 import Codec.Serialise
+#endif
 import Control.DeepSeq
 import Data.Aeson (ToJSON(..), FromJSON(..))
 import Data.Aeson.TH
@@ -32,7 +35,9 @@ import Data.Fix
 import Data.Function (on)
 import Data.Functor.Compose
 import Data.Hashable
+#if MIN_VERSION_hashable(1, 2, 5)
 import Data.Hashable.Lifted
+#endif
 import Data.Ord.Deriving
 import Data.Semigroup
 import Data.Text (Text, pack)
@@ -49,8 +54,12 @@ data SrcSpan = SrcSpan
     { spanBegin :: SourcePos
     , spanEnd   :: SourcePos
     }
-    deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData, Serialise,
+    deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData,
               Hashable)
+
+#if !defined(ghcjs_HOST_OS)
+instance Serialise SrcSpan
+#endif
 
 -- | A type constructor applied to a type along with an annotation
 --
@@ -61,8 +70,19 @@ data Ann ann a = Ann
     , annotated  :: a
     }
     deriving (Ord, Eq, Data, Generic, Generic1, Typeable, Functor, Foldable,
-              Traversable, Read, Show, NFData, NFData1, Serialise,
-              Hashable, Hashable1)
+              Traversable, Read, Show, NFData, Hashable)
+
+#if MIN_VERSION_hashable(1, 2, 5)
+instance Hashable ann => Hashable1 (Ann ann)
+#endif
+
+#if !defined(ghcjs_HOST_OS)
+instance (Serialise ann, Serialise a) => Serialise (Ann ann a)
+#endif
+
+#if MIN_VERSION_deepseq(1, 4, 3)
+instance NFData ann => NFData1 (Ann ann)
+#endif
 
 $(deriveEq1   ''Ann)
 $(deriveEq2   ''Ann)
@@ -89,9 +109,18 @@ type NExprLocF = AnnF SrcSpan NExprF
 -- | A nix expression with source location at each subexpression.
 type NExprLoc = Fix NExprLocF
 
+#if MIN_VERSION_hashable(1, 2, 5) && MIN_VERSION_deepseq(1, 4, 3)
+-- Needs deepseq-1.4.3 because Compose requires NFData1
 instance NFData NExprLoc
+#endif
+
+#if !defined(ghcjs_HOST_OS)
 instance Serialise NExprLoc
+#endif
+
+#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable NExprLoc
+#endif
 
 instance Binary SrcSpan
 instance (Binary ann, Binary a) => Binary (Ann ann a)
@@ -101,9 +130,11 @@ instance Binary NExprLoc
 instance ToJSON SrcSpan
 instance FromJSON SrcSpan
 
+#if !defined(ghcjs_HOST_OS)
 instance Serialise r => Serialise (Compose (Ann SrcSpan) NExprF r) where
     encode (Compose (Ann ann a)) = encode ann <> encode a
     decode = (Compose .) . Ann <$> decode <*> decode
+#endif
 
 pattern AnnE :: forall ann (g :: * -> *). ann
              -> g (Fix (Compose (Ann ann) g)) -> Fix (Compose (Ann ann) g)
