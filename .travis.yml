@@ -18,7 +18,6 @@ env:
   global:
     - NIXPKGS_TESTS=yes
     - MATCHING_TESTS=yes
-    - LANGUAGE_TESTS=yes
   matrix:
     - GHCVERSION=ghc822 STRICT=true  TRACING=false PROFILING=false
     - GHCVERSION=ghc822 STRICT=true  TRACING=true  PROFILING=false
