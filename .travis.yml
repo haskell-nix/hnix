@@ -16,14 +16,18 @@ env:
     - NIXPKGS_TESTS=yes
     - MATCHING_TESTS=yes
   matrix:
-    - GHCVERSION=ghc822
-    - GHCVERSION=ghc842
-    - TRACING=true
-    - TRACING=false
-    - STRICT=true
-    - STRICT=false
-    - PROFILING=true
-    - PROFILING=false
+    - GHCVERSION=ghc822 TRACING=true
+    - GHCVERSION=ghc822 TRACING=false
+    - GHCVERSION=ghc822 STRICT=true
+    - GHCVERSION=ghc822 STRICT=false
+    - GHCVERSION=ghc822 PROFILING=true
+    - GHCVERSION=ghc822 PROFILING=false
+    - GHCVERSION=ghc842 TRACING=true
+    - GHCVERSION=ghc842 TRACING=false
+    - GHCVERSION=ghc842 STRICT=true
+    - GHCVERSION=ghc842 STRICT=false
+    - GHCVERSION=ghc842 PROFILING=true
+    - GHCVERSION=ghc842 PROFILING=false
 
 matrix:
   allow_failures:
