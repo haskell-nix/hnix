@@ -25,8 +25,7 @@ import           Data.Text (pack, unpack, replace, strip)
 import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Expr
-import           Nix.Parser.Library (reservedNames)
-import           Nix.Parser.Operators
+import           Nix.Parser
 import           Nix.Strings
 import           Nix.Thunk
 #if ENABLE_TRACING

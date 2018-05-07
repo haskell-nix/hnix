@@ -17,7 +17,6 @@
 module Nix.Expr.Types.Annotated
   ( module Nix.Expr.Types.Annotated
   , module Data.Functor.Compose
-  , module Nix.Parser.Library
   , SourcePos(..), unPos, mkPos
   )where
 
@@ -39,8 +38,8 @@ import Data.Text (Text, pack)
 import GHC.Generics
 import Nix.Atoms
 import Nix.Expr.Types
-import Nix.Parser.Library (SourcePos(..))
 import Text.Megaparsec (unPos, mkPos)
+import Text.Megaparsec.Pos (SourcePos(..))
 import Text.Read.Deriving
 import Text.Show.Deriving
 
