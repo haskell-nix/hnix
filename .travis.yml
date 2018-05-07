@@ -37,6 +37,7 @@ script:
 branches:
   only:
     - master
+    - pending
 
 notifications:
   webhooks:
