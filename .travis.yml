@@ -8,8 +8,8 @@ cache:
   timeout: 10000
 
 install:
-  - nix-env --argstr compiler ghc822 --run true
-  - nix-env --argstr compiler ghc842 --run true
+  - nix-shell --argstr compiler ghc822 --run true
+  - nix-shell --argstr compiler ghc842 --run true
 
 env:
   global:
