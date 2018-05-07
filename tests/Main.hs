@@ -83,7 +83,6 @@ main :: IO ()
 main = do
   nixLanguageTests    <- NixLanguageTests.genTests
   evalComparisonTests <- EvalTests.genEvalCompareTests
-  langTestsEnv        <- lookupEnv "LANGUAGE_TESTS"
   nixpkgsTestsEnv     <- lookupEnv "NIXPKGS_TESTS"
   prettyTestsEnv      <- lookupEnv "PRETTY_TESTS"
 
@@ -95,8 +94,7 @@ main = do
     [ PrettyParseTests.tests (read (fromMaybe "0" prettyTestsEnv)) ] ++
     [ evalComparisonTests ] ++
     [ testCase "Nix language tests present" ensureLangTestsPresent
-      | isJust langTestsEnv ] ++
-    [ nixLanguageTests | isJust langTestsEnv ] ++
+    , nixLanguageTests ] ++
     [ testCase "Nixpkgs parses without errors" ensureNixpkgsCanParse
       | isJust nixpkgsTestsEnv ]
 
