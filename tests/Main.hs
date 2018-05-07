@@ -86,6 +86,8 @@ main = do
   nixpkgsTestsEnv     <- lookupEnv "NIXPKGS_TESTS"
   prettyTestsEnv      <- lookupEnv "PRETTY_TESTS"
 
+  setEnv "NIX_REMOTE" "local?root=/tmp"
+
   defaultMain $ testGroup "hnix" $
     [ testCase "hnix.cabal correctly generated" cabalCorrectlyGenerated ] ++
     [ ParserTests.tests
