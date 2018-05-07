@@ -124,7 +124,8 @@ prettyParams :: Params NixDoc -> Doc
 prettyParams (Param n) = text $ unpack n
 prettyParams (ParamSet s v mname) = prettyParamSet s v <> case mname of
   Nothing -> empty
-  Just name -> text "@" <> text (unpack name)
+  Just name | Text.null name -> empty
+            | otherwise -> text "@" <> text (unpack name)
 
 prettyParamSet :: ParamSet NixDoc -> Bool -> Doc
 prettyParamSet args var =
