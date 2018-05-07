@@ -2,10 +2,10 @@ language: nix
 
 sudo: false
 
-cache:
-  directories:
-    - /nix
-  timeout: 100000
+# cache:
+#   directories:
+#     - /nix
+#   timeout: 100000
 
 install:
   - nix-shell --argstr compiler ghc822 --run true
