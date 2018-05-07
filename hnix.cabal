@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5eba5b1b4e2ae5297dcad048052e5bc02fc2f42aa37016fbea866ecbf3f4a380
+-- hash: cbc369801227ccd516b691c3f08a9aae9b5ac8723619706b83703a805d570972
 
 name:           hnix
 version:        0.5.0
@@ -206,6 +206,7 @@ test-suite hnix-tests
     , megaparsec
     , mtl
     , optparse-applicative
+    , pretty-show
     , process
     , quickcheck-instances
     , serialise
