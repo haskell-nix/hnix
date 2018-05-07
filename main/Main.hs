@@ -116,7 +116,7 @@ main = do
                   A.encodeToLazyText (stripAnnotation expr)
 
         | verbose opts >= DebugInfo =
-              liftIO $ print $ stripAnnotation expr
+              liftIO $ putStr $ PS.ppShow $ stripAnnotation expr
 
         | cache opts, Just path <- mpath =
               liftIO $ writeCache (addExtension (dropExtension path) "nixc") expr
