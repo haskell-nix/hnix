@@ -26,6 +26,7 @@ import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Expr
 import           Nix.Parser
+import           Nix.NixString
 import           Nix.Strings
 import           Nix.Thunk
 #if ENABLE_TRACING
@@ -239,7 +240,7 @@ prettyNValueNF = prettyNix . valueToExpr
         valueToExpr = transport go
 
         go (NVConstantF a) = NConstant a
-        go (NVStrF (NixString t _)) = NStr (DoubleQuoted [Plain t])
+        go (NVStrF ns) = NStr (DoubleQuoted [Plain (stringIntentionallyDropContext ns)])
         go (NVListF l) = NList l
         go (NVSetF s p) = NSet
             [ NamedVar (StaticKey k (M.lookup k p) :| []) v
@@ -252,7 +253,7 @@ printNix :: Functor m => NValueNF m -> String
 printNix = cata phi
   where phi :: NValueF m String -> String
         phi (NVConstantF a) = unpack $ atomText a
-        phi (NVStrF (NixString t _)) = show t
+        phi (NVStrF ns) = show $ stringIntentionallyDropContext ns
         phi (NVListF l) = "[ " ++ unwords l ++ " ]"
         phi (NVSetF s _) =
             "{ " ++ concat [ unpack k ++ " = " ++ v ++ "; "
@@ -265,7 +266,7 @@ removeEffects :: Functor m => NValueF m (NThunk m) -> NValueNF m
 removeEffects = Fix . fmap dethunk
   where
     dethunk (NThunk _ (Value v)) = removeEffects (_baseValue v)
-    dethunk (NThunk _ _) = Fix $ NVStrF (NixString "<thunk>" mempty)
+    dethunk (NThunk _ _) = Fix $ NVStrF (makeNixStringWithoutContext "<thunk>")
 
 removeEffectsM :: MonadVar m => NValueF m (NThunk m) -> m (NValueNF m)
 removeEffectsM = fmap Fix . traverse dethunk
@@ -297,9 +298,9 @@ dethunk = \case
     NThunk _ (Thunk _ active ref) -> do
         nowActive <- atomicModifyVar active (True,)
         if nowActive
-            then pure $ Fix $ NVStrF (NixString "<thunk>" mempty)
+            then pure $ Fix $ NVStrF (makeNixStringWithoutContext "<thunk>")
             else do
                 eres <- readVar ref
                 case eres of
                     Computed v -> removeEffectsM (_baseValue v)
-                    _ -> pure $ Fix $ NVStrF (NixString "<thunk>" mempty)
+                    _ -> pure $ Fix $ NVStrF (makeNixStringWithoutContext "<thunk>")

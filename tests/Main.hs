@@ -19,6 +19,7 @@ import qualified EvalTests
 import qualified Nix
 import           Nix.Exec
 import           Nix.Expr.Types
+import           Nix.NixString
 import           Nix.Options
 import           Nix.Parser
 import           Nix.Value
@@ -60,10 +61,10 @@ ensureNixpkgsCanParse =
           url    = "https://github.com/NixOS/nixpkgs/archive/#{rev}.tar.gz";
           sha256 = "#{sha256}";
         }|]) $ \expr -> do
-        NVStr dir _ <- do
+        NVStr ns <- do
             time <- liftIO getCurrentTime
             runLazyM (defaultOptions time) $ Nix.nixEvalExprLoc Nothing expr
-        files <- globDir1 (compile "**/*.nix") (unpack dir)
+        files <- globDir1 (compile "**/*.nix") (unpack $ stringIntentionallyDropContext ns)
         forM_ files $ \file ->
           -- Parse and deepseq the resulting expression tree, to ensure the
           -- parser is fully executed.

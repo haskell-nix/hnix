@@ -9,6 +9,7 @@ import           Data.Ord
 import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Expr.Types
+import           Nix.NixString
 import           Nix.Value
 import           Text.XML.Light
 
@@ -26,7 +27,7 @@ toXML = (.) ((++ "\n") .
         NNull    -> Element (unqual "null") [] [] Nothing
         NUri u   -> mkElem "uri" "value" (Text.unpack u)
 
-    NVStrF (NixString t _) -> mkElem "string" "value" (Text.unpack t)
+    NVStrF ns -> mkElem "string" "value" (Text.unpack $ stringIntentionallyDropContext ns)
     NVListF l  -> Element (unqual "list") [] (Elem <$> l) Nothing
 
     NVSetF s _ -> Element (unqual "attrs") []

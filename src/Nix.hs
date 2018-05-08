@@ -34,6 +34,7 @@ import qualified Nix.Eval as Eval
 import           Nix.Exec
 import           Nix.Expr
 import           Nix.Frames
+import           Nix.NixString
 import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser
@@ -54,7 +55,7 @@ withNixContext mpath action = do
     opts :: Options <- asks (view hasLens)
     let i = value @(NValue m) @(NThunk m) @m $ nvList $
             map (value @(NValue m) @(NThunk m) @m
-                     . flip nvStr mempty . Text.pack) (include opts)
+                     . nvStr . makeNixStringWithoutContext . Text.pack) (include opts)
     pushScope (M.singleton "__includes" i) $
         pushScopes base $ case mpath of
             Nothing -> action

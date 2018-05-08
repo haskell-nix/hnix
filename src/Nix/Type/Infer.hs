@@ -22,7 +22,6 @@ module Nix.Type.Infer (
   inferTop
 ) where
 
-import           Nix.Value (NixString)
 import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad.Catch
@@ -48,6 +47,7 @@ import           Nix.Eval (MonadEval(..))
 import qualified Nix.Eval as Eval
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
+import           Nix.NixString
 import           Nix.Scope
 import           Nix.Thunk
 import qualified Nix.Type.Assumption as As

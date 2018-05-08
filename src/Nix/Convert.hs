@@ -42,6 +42,7 @@ import           Nix.Effects
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
+import           Nix.NixString
 import           Nix.Normal
 import           Nix.Thunk
 import           Nix.Utils
@@ -148,7 +149,7 @@ instance (Convertible e m, MonadEffects m)
       => FromValue Text m (NValueNF m) where
     fromValueMay = \case
         Fix (NVConstantF (NUri u)) -> pure $ Just u
-        Fix (NVStrF (NixString t _)) -> pure $ Just t
+        Fix (NVStrF ns) -> pure $ stringNoContext ns
         Fix (NVPathF p) -> Just . Text.pack . unStorePath <$> addPath p
         Fix (NVSetF s _) -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
@@ -162,7 +163,7 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
       => FromValue Text m (NValue m) where
     fromValueMay = \case
         NVConstant (NUri u) -> pure $ Just u
-        NVStr t _ -> pure $ Just t
+        NVStr ns -> pure $ stringNoContext ns
         NVPath p -> Just . Text.pack . unStorePath <$> addPath p
         NVSet s _ -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
@@ -175,12 +176,12 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
 instance (Convertible e m, MonadEffects m)
       => FromValue NixString m (NValueNF m) where
     fromValueMay = \case
-        Fix (NVConstantF (NUri u)) -> pure $ Just (NixString u mempty)
-        Fix (NVStrF (NixString t d)) -> pure $ Just (NixString t d)
-        Fix (NVPathF p) -> Just . (flip NixString mempty) . Text.pack . unStorePath <$> addPath p
+        Fix (NVConstantF (NUri u)) -> pure $ Just (makeNixStringWithoutContext u)
+        Fix (NVStrF ns) -> pure $ Just ns
+        Fix (NVPathF p) -> Just . makeNixStringWithoutContext . Text.pack . unStorePath <$> addPath p
         Fix (NVSetF s _) -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
-            Just p -> fmap (flip NixString mempty) <$> fromValueMay @Text p
+            Just p -> fmap makeNixStringWithoutContext <$> fromValueMay @Text p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -189,12 +190,12 @@ instance (Convertible e m, MonadEffects m)
 instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
       => FromValue NixString m (NValue m) where
     fromValueMay = \case
-        NVConstant (NUri u) -> pure $ Just (NixString u mempty)
-        NVStr t d -> pure $ Just (NixString t d)
-        NVPath p -> Just . (flip NixString mempty) . Text.pack . unStorePath <$> addPath p
+        NVConstant (NUri u) -> pure $ Just (makeNixStringWithoutContext u)
+        NVStr ns -> pure $ Just ns
+        NVPath p -> Just . makeNixStringWithoutContext . Text.pack . unStorePath <$> addPath p
         NVSet s _ -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
-            Just p -> fmap (flip NixString mempty) <$> fromValueMay @Text p
+            Just p -> fmap makeNixStringWithoutContext <$> fromValueMay @Text p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -203,7 +204,7 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
 instance Convertible e m
       => FromValue ByteString m (NValueNF m) where
     fromValueMay = \case
-        Fix (NVStrF (NixString t _)) -> pure $ Just (encodeUtf8 t)
+        Fix (NVStrF ns) -> pure $ encodeUtf8 <$> stringNoContext ns
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -212,7 +213,7 @@ instance Convertible e m
 instance Convertible e m
       => FromValue ByteString m (NValue m) where
     fromValueMay = \case
-        NVStr t _ -> pure $ Just (encodeUtf8 t)
+        NVStr ns -> pure $ encodeUtf8 <$> stringNoContext ns
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -225,7 +226,7 @@ instance Convertible e m => FromValue Path m (NValueNF m) where
     fromValueMay = \case
         Fix (NVConstantF (NUri u)) -> pure $ Just (Path (Text.unpack u))
         Fix (NVPathF p) -> pure $ Just (Path p)
-        Fix (NVStrF (NixString s _)) -> pure $ Just (Path (Text.unpack s))
+        Fix (NVStrF ns) -> pure $ Path . Text.unpack <$> stringNoContext ns
         Fix (NVSetF s _) -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
             Just p -> fromValueMay @Path p
@@ -239,7 +240,7 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m)
     fromValueMay = \case
         NVConstant (NUri u) -> pure $ Just (Path (Text.unpack u))
         NVPath p -> pure $ Just (Path p)
-        NVStr s _ -> pure $ Just (Path (Text.unpack s))
+        NVStr ns -> pure $ Path . Text.unpack <$> stringNoContext ns
         NVSet s _ -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
             Just p -> fromValueMay @Path p
@@ -328,7 +329,7 @@ instance (Convertible e m, MonadEffects m)
             NBool b  -> toJSON b
             NNull    -> A.Null
             NUri u   -> toJSON u
-        Fix (NVStrF (NixString s _))     -> pure $ Just $ toJSON s
+        Fix (NVStrF ns)      -> pure $ toJSON <$> stringNoContext ns
         Fix (NVListF l)      -> fmap (A.Array . V.fromList) . sequence
                                   <$> traverse fromValueMay l
         Fix (NVSetF m _)     -> fmap A.Object . sequence <$> traverse fromValueMay m
@@ -373,22 +374,22 @@ instance Applicative m => ToValue Float m (NValue m) where
     toValue = pure . nvConstant . NFloat
 
 instance Applicative m => ToValue Text m (NValueNF m) where
-    toValue = pure . Fix . NVStrF . flip NixString mempty
+    toValue = pure . Fix . NVStrF . makeNixStringWithoutContext
 
 instance Applicative m => ToValue Text m (NValue m) where
-    toValue = pure . flip nvStr mempty
+    toValue = pure . nvStr . makeNixStringWithoutContext
 
 instance Applicative m => ToValue NixString m (NValueNF m) where
     toValue = pure . Fix . NVStrF
 
 instance Applicative m => ToValue NixString m (NValue m) where
-    toValue = pure . nvStrNS
+    toValue = pure . nvStr
 
 instance Applicative m => ToValue ByteString m (NValueNF m) where
-    toValue = pure . Fix . NVStrF . flip NixString mempty . decodeUtf8
+    toValue = pure . Fix . NVStrF . makeNixStringWithoutContext . decodeUtf8
 
 instance Applicative m => ToValue ByteString m (NValue m) where
-    toValue = pure . flip nvStr mempty . decodeUtf8
+    toValue = pure . nvStr . makeNixStringWithoutContext . decodeUtf8
 
 instance Applicative m => ToValue Path m (NValueNF m) where
     toValue = pure . Fix . NVPathF . getPath
@@ -453,7 +454,7 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m)
         A.Array l -> nvList <$>
             traverse (\x -> thunk . whileForcingThunk (CoercionFromJson @m x)
                                  . toValue $ x) (V.toList l)
-        A.String s -> pure $ nvStr s mempty
+        A.String s -> pure $ nvStr $ makeNixStringWithoutContext s 
         A.Number n -> pure $ nvConstant $ case floatingOrInteger n of
             Left r -> NFloat r
             Right i -> NInt i

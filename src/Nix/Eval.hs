@@ -40,11 +40,11 @@ import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Expr
 import           Nix.Frames
+import           Nix.NixString
 import           Nix.Scope
 import           Nix.Strings (runAntiquoted)
 import           Nix.Thunk
 import           Nix.Utils
-import           Nix.Value (NixString(..))
 
 class (Show v, Monad m) => MonadEval v m | v -> m where
     freeVariable :: Text -> m v
@@ -114,7 +114,7 @@ eval (NSym var) =
 
 eval (NConstant x)          = evalConstant x
 eval (NStr str)             = assembleString str >>= \case
-                                Nothing -> evalError @v $ ErrorCall ("failed to evaluate string" :: String)
+                                Nothing -> evalError @v $ ErrorCall "failed to evaluate string"
                                 Just e -> evalString e
 eval (NLiteralPath p)       = evalLiteralPath p
 eval (NEnvPath p)           = evalEnvPath p
@@ -380,7 +380,7 @@ evalKeyNameDynamicNullable = \case
     StaticKey k p -> pure (Just k, p)
     DynamicKey k ->
         runAntiquoted "\n" assembleString (>>= fromValueMay) k
-            <&> \case Just (NixString t _) -> (Just t, Nothing)
+            <&> \case Just ns -> (stringNoContext ns, Nothing)
                       _ -> (Nothing, Nothing)
 
 assembleString :: forall v m. (MonadEval v m, FromValue NixString m v)
@@ -389,7 +389,7 @@ assembleString = \case
     Indented _   parts -> fromParts parts
     DoubleQuoted parts -> fromParts parts
   where
-    go = runAntiquoted "\n" (pure . Just . (flip NixString mempty)) (>>= fromValueMay)
+    go = runAntiquoted "\n" (pure . Just . makeNixStringWithoutContext) (>>= fromValueMay)
 
     fromParts parts = fmap mconcat . sequence <$> mapM go parts
 

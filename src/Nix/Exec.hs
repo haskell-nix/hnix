@@ -57,6 +57,7 @@ import           Nix.Effects
 import           Nix.Eval as Eval
 import           Nix.Expr
 import           Nix.Frames
+import           Nix.NixString
 import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser
@@ -178,11 +179,11 @@ instance MonadNix e m => MonadEval (NValue m) m where
         span  <- currentPos
         pure $ nvConstantP (Provenance scope (NConstant_ span c)) c
 
-    evalString ns@(NixString s _) = do
+    evalString ns = do
         scope <- currentScopes
         span  <- currentPos
-        pure $ nvStrPNS (Provenance scope
-                           (NStr_ span (DoubleQuoted [Plain s]))) ns
+        pure $ nvStrP (Provenance scope
+                           (NStr_ span (DoubleQuoted [Plain (stringIntentionallyDropContext ns)]))) ns
 
     evalLiteralPath p = do
         scope <- currentScopes
@@ -322,8 +323,8 @@ execBinaryOp scope span op lval rarg = do
              NBool l, NBool r) -> toBool $ not l || r
             _                  -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
-        (NVStr ls lc, NVStr rs rc) -> case op of
-            NPlus -> pure $ bin nvStrP (ls `mappend` rs) (lc `mappend` rc)
+        (NVStr ls, NVStr rs) -> case op of
+            NPlus -> pure $ bin nvStrP (ls `mappend` rs)
             NEq   -> toBool =<< valueEq lval rval
             NNEq  -> toBool . not =<< valueEq lval rval
             NLt   -> toBool $ ls <  rs
@@ -332,14 +333,14 @@ execBinaryOp scope span op lval rarg = do
             NGte  -> toBool $ ls >= rs
             _     -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
-        (NVStr _ _, NVConstant NNull) -> case op of
-            NEq  -> toBool =<< valueEq lval (nvStr "" mempty)
-            NNEq -> toBool . not =<< valueEq lval (nvStr "" mempty)
+        (NVStr _, NVConstant NNull) -> case op of
+            NEq  -> toBool =<< valueEq lval (nvStr (makeNixStringWithoutContext ""))
+            NNEq -> toBool . not =<< valueEq lval (nvStr (makeNixStringWithoutContext ""))
             _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
-        (NVConstant NNull, NVStr _ _) -> case op of
-            NEq  -> toBool =<< valueEq (nvStr "" mempty) rval
-            NNEq -> toBool . not =<< valueEq (nvStr "" mempty) rval
+        (NVConstant NNull, NVStr _) -> case op of
+            NEq  -> toBool =<< valueEq (nvStr (makeNixStringWithoutContext "")) rval
+            NNEq -> toBool . not =<< valueEq (nvStr (makeNixStringWithoutContext "")) rval
             _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVSet ls lp, NVSet rs rp) -> case op of
@@ -378,10 +379,12 @@ execBinaryOp scope span op lval rarg = do
             NNEq    -> toBool . not =<< valueEq (nvList []) rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
-        (NVPath p, NVStr s _) -> case op of
-            NEq   -> toBool $ p == Text.unpack s
-            NNEq  -> toBool $ p /= Text.unpack s
-            NPlus -> bin nvPathP <$> makeAbsolutePath (p `mappend` Text.unpack s)
+        (NVPath p, NVStr ns) -> case op of
+            NEq   -> toBool $ Just p == fmap Text.unpack (stringNoContext ns)
+            NNEq  -> toBool $ Just p /= fmap Text.unpack (stringNoContext ns)
+            NPlus -> case stringNoContext ns of 
+                       Just s -> bin nvPathP <$> makeAbsolutePath (p `mappend` Text.unpack s)
+                       Nothing -> nverr $ ErrorCall $ unsupportedTypes lval rval 
             _     -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVPath ls, NVPath rs) -> case op of
@@ -426,7 +429,7 @@ coerceToString = \case
     NVConstant (NUri u)   -> pure $ show u
     NVConstant NNull      -> pure ""
 
-    NVStr t _ -> pure $ Text.unpack t
+    NVStr ns -> pure $ Text.unpack $ stringIntentionallyDropContext ns
     NVPath p  -> unStorePath <$> addPath p
     NVList l  -> unwords <$> traverse (`force` coerceToString) l
 

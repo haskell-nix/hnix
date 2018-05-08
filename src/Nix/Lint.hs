@@ -45,11 +45,11 @@ import           Nix.Eval (MonadEval(..))
 import qualified Nix.Eval as Eval
 import           Nix.Expr
 import           Nix.Frames
+import           Nix.NixString
 import           Nix.Options
 import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Utils
-import           Nix.Value (NixString(..))
 
 data TAtom
   = TInt

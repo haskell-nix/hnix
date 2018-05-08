@@ -41,7 +41,6 @@ import           Data.Coerce
 import           Data.Fix
 import           Data.Foldable (foldrM)
 import qualified Data.HashMap.Lazy as M
-import qualified Data.HashSet as HS
 import           Data.List
 import           Data.Maybe
 import           Data.Semigroup
@@ -64,6 +63,7 @@ import           Nix.Exec
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
+import           Nix.NixString
 import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser
@@ -247,7 +247,7 @@ nixPath = fmap nvList $ flip foldNixPath [] $ \p mn rest ->
         (flip nvSet mempty $ M.fromList
             [ ("path",   valueThunk $ nvPath p)
             , ("prefix", valueThunk $
-                   nvStr (Text.pack (fromMaybe "" mn)) mempty) ]) : rest
+                   nvStr (makeNixStringWithoutContext $ Text.pack (fromMaybe "" mn))) ]) : rest
 
 toString :: MonadNix e m => m (NValue m) -> m (NValue m)
 toString str =
@@ -267,20 +267,27 @@ attrsetGet k s = case M.lookup k s of
 
 hasContext :: MonadNix e m => m (NValue m) -> m (NValue m)
 hasContext =
-    toNix . not . HS.null . nsContext <=< fromValue
+    toNix . not . null . stringContextOnly  <=< fromValue
 
 getAttr :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 getAttr x y = x >>= \x' -> y >>= \y' -> case (x', y') of
-    (NVStr key _, NVSet aset _) -> attrsetGet key aset >>= force'
+    (NVStr ns, NVSet aset _) -> 
+       case stringNoContext ns of
+        Just key -> attrsetGet key aset >>= force'
+        Nothing -> throwError $ ErrorCall $ "Invalid NixString for builtin.getAttr: "
+                 ++ show (ns, aset) 
     (x, y) -> throwError $ ErrorCall $ "Invalid types for builtin.getAttr: "
                  ++ show (x, y)
 
 unsafeGetAttrPos :: forall e m. MonadNix e m
                  => m (NValue m) -> m (NValue m) -> m (NValue m)
 unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
-    (NVStr key _, NVSet _ apos) -> case M.lookup key apos of
-        Nothing -> pure $ nvConstant NNull
-        Just delta -> toValue delta
+    (NVStr ns, NVSet _ apos) -> 
+       case stringNoContext ns of
+         Just key -> case M.lookup key apos of
+                       Nothing -> pure $ nvConstant NNull
+                       Just delta -> toValue delta
+         Nothing -> throwError $ ErrorCall $ "Invalid NixString for unsafeGetAttrPos " ++ show apos
     (x, y) -> throwError $ ErrorCall $ "Invalid types for builtin.unsafeGetAttrPos: "
                  ++ show (x, y)
 
@@ -394,7 +401,7 @@ splitVersion s = case Text.uncons s of
 splitVersion_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 splitVersion_ = fromValue >=> \s -> do
     let vals = flip map (splitVersion s) $ \c ->
-            valueThunk $ nvStr (versionComponentToString c) mempty
+            valueThunk $ nvStr $ makeNixStringWithoutContext $ versionComponentToString c
     return $ nvList vals
 
 compareVersions :: Text -> Text -> Ordering
@@ -477,7 +484,7 @@ splitMatches numDropped (((_,(start,len)):captures):mts) haystack =
     caps = valueThunk $ nvList (map f captures)
     f (a,(s,_)) = if s < 0 then valueThunk (nvConstant NNull) else thunkStr a
 
-thunkStr s = valueThunk (nvStr (decodeUtf8 s) mempty)
+thunkStr s = valueThunk (nvStr (makeNixStringWithoutContext (decodeUtf8 s)))
 
 substring :: MonadNix e m => Int -> Int -> Text -> Prim m Text
 substring start len str = Prim $
@@ -514,13 +521,13 @@ catAttrs attrName xs =
 
 baseNameOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 baseNameOf x = x >>= \case
-    NVStr path ctx -> pure $ nvStr (Text.pack $ takeFileName $ Text.unpack path) ctx
+    NVStr ns -> pure $ nvStr (modifyNixContents (Text.pack . takeFileName . Text.unpack) ns)
     NVPath path -> pure $ nvPath $ takeFileName path
     v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
 
 dirOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 dirOf x = x >>= \case
-    NVStr path ctx -> pure $ nvStr (Text.pack $ takeDirectory $ Text.unpack path) ctx
+    NVStr ns -> pure $ nvStr (modifyNixContents (Text.pack . takeDirectory . Text.unpack) ns)
     NVPath path -> pure $ nvPath $ takeDirectory path
     v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
 
@@ -667,7 +674,7 @@ toPath = fromValue @Path >=> toNix @Path
 pathExists_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 pathExists_ path = path >>= \case
     NVPath p  -> toNix =<< pathExists p
-    NVStr s _ -> toNix =<< pathExists (Text.unpack s)
+    NVStr ns -> toNix =<< pathExists (Text.unpack (stringIntentionallyDropContext ns))
     v -> throwError $ ErrorCall $
             "builtins.pathExists: expected path, got " ++ show v
 
@@ -746,7 +753,7 @@ lessThan ta tb = ta >>= \va -> tb >>= \vb -> do
             (NInt   a, NFloat b) -> pure $ fromInteger a < b
             (NFloat a, NFloat b) -> pure $ a < b
             _ -> badType
-        (NVStr a _, NVStr b _) -> pure $ a < b
+        (NVStr a, NVStr b) -> pure $ a < b
         _ -> badType
 
 concatLists :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
@@ -780,8 +787,8 @@ placeHolder = fromValue @Text >=> \_ -> do
 
 absolutePathFromValue :: MonadNix e m => NValue m -> m FilePath
 absolutePathFromValue = \case
-    NVStr pathText _ -> do
-        let path = Text.unpack pathText
+    NVStr ns -> do
+        let path = Text.unpack $ stringIntentionallyDropContext ns
         unless (isAbsolute path) $
             throwError $ ErrorCall $ "string " ++ show path ++ " doesn't represent an absolute path"
         pure path
@@ -829,7 +836,7 @@ fromJSON = fromValue >=> \encoded ->
 
 toXML_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 toXML_ v = v >>= normalForm >>= \x ->
-    pure $ nvStr (Text.pack (toXML x)) mempty
+    pure $ nvStr $ makeNixStringWithoutContext $ Text.pack (toXML x)
 
 typeOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 typeOf v = v >>= toNix @Text . \case
@@ -839,7 +846,7 @@ typeOf v = v >>= toNix @Text . \case
         NBool _  -> "bool"
         NNull    -> "null"
         NUri _   -> "string"
-    NVStr _ _     -> "string"
+    NVStr _       -> "string"
     NVList _      -> "list"
     NVSet _ _     -> "set"
     NVClosure {}  -> "lambda"
@@ -885,7 +892,7 @@ fetchTarball v = v >>= \case
  where
     go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
     go msha = \case
-        NVStr uri _ -> fetch uri msha
+        NVStr ns -> fetch (stringIntentionallyDropContext ns) msha
         NVConstant (NUri uri) -> fetch uri msha
         v -> throwError $ ErrorCall $
                 "builtins.fetchTarball: Expected URI or string, got " ++ show v
@@ -921,7 +928,7 @@ fetchurl v = v >>= \case
  where
     go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
     go _msha = \case
-        NVStr uri _ -> getURL uri -- msha
+        NVStr ns -> getURL (stringIntentionallyDropContext ns) -- msha
         NVConstant (NUri uri) -> getURL uri -- msha
         v -> throwError $ ErrorCall $
                  "builtins.fetchurl: Expected URI or string, got " ++ show v
@@ -941,7 +948,7 @@ currentSystem :: MonadNix e m => m (NValue m)
 currentSystem = do
   os <- getCurrentSystemOS
   arch <- getCurrentSystemArch
-  return $ nvStr (arch <> "-" <> os) mempty
+  return $ nvStr $ makeNixStringWithoutContext (arch <> "-" <> os)
 
 currentTime_ :: MonadNix e m => m (NValue m)
 currentTime_ = do
