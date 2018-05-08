@@ -34,6 +34,7 @@ import           Data.Fix
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import qualified Data.HashSet as S
+import           Data.Hashable
 import           Data.Text (Text)
 import           Data.These
 import           Data.Typeable (Typeable)
