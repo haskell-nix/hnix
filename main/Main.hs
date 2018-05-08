@@ -28,6 +28,7 @@ import           Nix
 import           Nix.Convert
 import qualified Nix.Eval as Eval
 -- import           Nix.Lint
+import           Nix.Options.Parser
 import qualified Nix.Type.Env as Env
 import qualified Nix.Type.Infer as HM
 import           Nix.Utils

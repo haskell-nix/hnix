@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5dd7aaae46b28fedd3791ab641dc5093bf7e2bca549578aea96ec23ed791ed22
+-- hash: 98a178891c03317cef1e5f7a984b3d7156bb38b0ca183bea91bab9acdaff4fb3
 
 name:           hnix
 version:        0.5.0
@@ -85,20 +85,16 @@ library
     , ansi-wl-pprint
     , array >=0.4 && <0.6
     , base >=4.9 && <5
-    , base16-bytestring
     , binary
     , bytestring
-    , compact
     , containers
-    , cryptohash
     , data-fix
-    , deepseq
+    , deepseq >=1.4.2 && <1.5
     , deriving-compat >=0.3 && <0.5
     , directory
     , exceptions
     , filepath
-    , hashable
-    , haskeline
+    , hashing
     , http-client
     , http-client-tls
     , http-types
@@ -106,17 +102,15 @@ library
     , lens-family-core
     , lens-family-th
     , logict
-    , megaparsec
+    , megaparsec >=6.0 && <6.6
     , monadlist
     , mtl
     , optparse-applicative
-    , pretty-show
     , process
     , regex-tdfa
     , regex-tdfa-text
     , scientific
     , semigroups >=0.18 && <0.19
-    , serialise
     , split
     , syb
     , template-haskell
@@ -128,11 +122,24 @@ library
     , unordered-containers >=0.2.9 && <0.3
     , vector
     , xml
-  if flag(tracing)
-    cpp-options: -DENABLE_TRACING=1
-  if impl(ghc < 8.4.0) && !flag(profiling)
+  if !impl(ghcjs)
     build-depends:
-        ghc-datasize
+        base16-bytestring
+      , cryptohash-md5
+      , cryptohash-sha1
+      , cryptohash-sha256
+      , cryptohash-sha512
+      , serialise
+  if impl(ghcjs)
+    build-depends:
+        hashable >=1.2.4 && <1.3
+  else
+    exposed-modules:
+        Nix.Options.Parser
+    build-depends:
+        hashable >=1.2.5 && <1.3
+      , haskeline
+      , pretty-show
   default-language: Haskell2010
 
 executable hnix
@@ -148,26 +155,35 @@ executable hnix
     , ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
-    , compact
     , containers
     , data-fix
-    , deepseq
+    , deepseq >=1.4.2 && <1.5
     , exceptions
     , filepath
+    , hashing
     , haskeline
     , hnix
     , mtl
     , optparse-applicative
     , pretty-show
     , repline
-    , serialise
     , template-haskell
     , text
     , time
     , transformers
     , unordered-containers >=0.2.9 && <0.3
-  if flag(tracing)
-    cpp-options: -DENABLE_TRACING=1
+  if !impl(ghcjs)
+    build-depends:
+        base16-bytestring
+      , cryptohash-md5
+      , cryptohash-sha1
+      , cryptohash-sha256
+      , cryptohash-sha512
+      , serialise
+  if impl(ghcjs)
+    buildable: False
+  else
+    buildable: True
   default-language: Haskell2010
 
 test-suite hnix-tests
@@ -191,14 +207,14 @@ test-suite hnix-tests
     , ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
-    , compact
     , containers
     , data-fix
-    , deepseq
+    , deepseq >=1.4.2 && <1.5
     , directory
     , exceptions
     , filepath
     , generic-random
+    , hashing
     , hnix
     , interpolate
     , megaparsec
@@ -207,7 +223,6 @@ test-suite hnix-tests
     , pretty-show
     , process
     , quickcheck-instances
-    , serialise
     , split
     , tasty
     , tasty-hunit
@@ -219,8 +234,18 @@ test-suite hnix-tests
     , transformers
     , unix
     , unordered-containers >=0.2.9 && <0.3
-  if flag(tracing)
-    cpp-options: -DENABLE_TRACING=1
+  if !impl(ghcjs)
+    build-depends:
+        base16-bytestring
+      , cryptohash-md5
+      , cryptohash-sha1
+      , cryptohash-sha256
+      , cryptohash-sha512
+      , serialise
+  if impl(ghcjs)
+    buildable: False
+  else
+    buildable: True
   default-language: Haskell2010
 
 benchmark hnix-benchmarks
@@ -236,22 +261,31 @@ benchmark hnix-benchmarks
       ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
-    , compact
     , containers
     , criterion
     , data-fix
-    , deepseq
+    , deepseq >=1.4.2 && <1.5
     , exceptions
     , filepath
+    , hashing
     , hnix
     , mtl
     , optparse-applicative
-    , serialise
     , template-haskell
     , text
     , time
     , transformers
     , unordered-containers >=0.2.9 && <0.3
-  if flag(tracing)
-    cpp-options: -DENABLE_TRACING=1
+  if !impl(ghcjs)
+    build-depends:
+        base16-bytestring
+      , cryptohash-md5
+      , cryptohash-sha1
+      , cryptohash-sha256
+      , cryptohash-sha512
+      , serialise
+  if impl(ghcjs)
+    buildable: False
+  else
+    buildable: True
   default-language: Haskell2010

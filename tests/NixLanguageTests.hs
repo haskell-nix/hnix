@@ -19,6 +19,7 @@ import           Data.Time
 import           GHC.Exts
 import           Nix.Lint
 import           Nix.Options
+import           Nix.Options.Parser
 import           Nix.Parser
 import           Nix.Pretty
 import           Nix.Utils
