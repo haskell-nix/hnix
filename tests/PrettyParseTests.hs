@@ -18,7 +18,6 @@ import           Data.Char
 import           Data.Fix
 import qualified Data.List.NonEmpty as NE
 import           Data.Text (Text, pack)
-import qualified Data.Text as Text
 import           Generic.Random
 import           Nix.Atoms
 import           Nix.Expr
