@@ -40,13 +40,6 @@ mkIndentedStr w = Fix . NStr . Indented w . \case
   "" -> []
   x -> [Plain x]
 
--- | Make a literal URI expression.
-mkUri :: Text -> NExpr
-mkUri = Fix . mkUriF
-
-mkUriF :: Text -> NExprF a
-mkUriF = NConstant . NUri
-
 -- | Make a path. Use 'True' if the path should be read from the
 -- environment, else 'False'.
 mkPath :: Bool -> FilePath -> NExpr

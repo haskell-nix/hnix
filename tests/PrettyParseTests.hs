@@ -89,8 +89,7 @@ instance Arbitrary NAtom where
       oneof [ NInt   <$> arbitrary `suchThat` (>= 0)
             , NFloat <$> arbitrary `suchThat` (>= 0)
             , NBool  <$> arbitrary
-            , pure NNull
-            , NUri   <$> asciiText `suchThat` (\x -> Text.length x > 0) ]
+            , pure NNull ]
 
 instance Arbitrary NUnaryOp where
   arbitrary = genArb

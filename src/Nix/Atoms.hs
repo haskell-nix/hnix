@@ -25,8 +25,6 @@ data NAtom
   | NBool Bool
   -- | Null values. There's only one of this variant.
   | NNull
-  -- | URIs, which are just string literals, but do not need quotes.
-  | NUri Text
   deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
             Serialise, Hashable)
 
@@ -36,4 +34,3 @@ atomText (NInt i)   = pack (show i)
 atomText (NFloat f) = pack (show f)
 atomText (NBool b)  = if b then "true" else "false"
 atomText NNull      = "null"
-atomText (NUri uri) = uri

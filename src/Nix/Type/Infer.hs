@@ -358,7 +358,6 @@ instance MonadEval (Judgment s) (Infer s) where
           NFloat _ -> typeFloat
           NBool _  -> typeBool
           NNull    -> typeNull
-          NUri _   -> typeUri
 
     evalString      = const $ return $ Judgment As.empty [] typeString
     evalLiteralPath = const $ return $ Judgment As.empty [] typePath

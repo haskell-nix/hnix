@@ -29,13 +29,12 @@ typeList = TList []
 typeFun :: [Type] -> Type
 typeFun = foldr1 TArr
 
-typeInt, typeFloat, typeBool, typeString, typePath, typeUri, typeNull :: Type
+typeInt, typeFloat, typeBool, typeString, typePath, typeNull :: Type
 typeInt    = TCon "integer"
 typeFloat  = TCon "float"
 typeBool   = TCon "boolean"
 typeString = TCon "string"
 typePath   = TCon "path"
-typeUri    = TCon "uri"
 typeNull   = TCon "null"
 
 type Name = Text

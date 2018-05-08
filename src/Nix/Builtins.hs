@@ -837,7 +837,6 @@ typeOf v = v >>= toNix @Text . \case
         NFloat _ -> "float"
         NBool _  -> "bool"
         NNull    -> "null"
-        NUri _   -> "string"
     NVStr _ _     -> "string"
     NVList _      -> "list"
     NVSet _ _     -> "set"
@@ -878,14 +877,12 @@ fetchTarball v = v >>= \case
                       "builtins.fetchTarball: Missing url attribute"
         Just url -> force url $ go (M.lookup "sha256" s)
     v@NVStr {} -> go Nothing v
-    v@(NVConstant (NUri _)) -> go Nothing v
     v -> throwError $ ErrorCall $
             "builtins.fetchTarball: Expected URI or set, got " ++ show v
  where
     go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
     go msha = \case
         NVStr uri _ -> fetch uri msha
-        NVConstant (NUri uri) -> fetch uri msha
         v -> throwError $ ErrorCall $
                 "builtins.fetchTarball: Expected URI or string, got " ++ show v
 
@@ -914,14 +911,12 @@ fetchurl :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 fetchurl v = v >>= \case
     NVSet s _ -> attrsetGet "url" s >>= force ?? (go (M.lookup "sha256" s))
     v@NVStr {} -> go Nothing v
-    v@(NVConstant (NUri _)) -> go Nothing v
     v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI or set, got "
             ++ show v
  where
     go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
     go _msha = \case
         NVStr uri _ -> getURL uri -- msha
-        NVConstant (NUri uri) -> getURL uri -- msha
         v -> throwError $ ErrorCall $
                  "builtins.fetchurl: Expected URI or string, got " ++ show v
 

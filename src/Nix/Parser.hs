@@ -223,7 +223,8 @@ nixUri = annotateLocation1 $ lexeme $ try $ do
     _ <- string ":"
     address  <- some $ satisfy $ \x ->
         isAlpha x || isDigit x || x `elem` ("%/?:@&=+$,-_.!~*'" :: String)
-    return $ mkUriF $ pack $ start : protocol ++ ':' : address
+    return $ NStr $
+        DoubleQuoted [Plain $ pack $ start : protocol ++ ':' : address]
 
 nixString :: Parser (NString NExprLoc)
 nixString = lexeme (doubleQuoted <+> indented <?> "string")

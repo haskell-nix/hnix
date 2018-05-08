@@ -425,7 +425,6 @@ coerceToString = \case
         | otherwise       -> pure ""
     NVConstant (NInt n)   -> pure $ show n
     NVConstant (NFloat n) -> pure $ show n
-    NVConstant (NUri u)   -> pure $ show u
     NVConstant NNull      -> pure ""
 
     NVStr t _ -> pure $ Text.unpack t

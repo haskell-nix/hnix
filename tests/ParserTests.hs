@@ -59,11 +59,11 @@ case_constant_path = do
   assertParseText "~/a/b" $ mkPath False "~/a/b"
 
 case_constant_uri = do
-  assertParseText "a:a" $ mkUri "a:a"
-  assertParseText "http://foo.bar" $ mkUri "http://foo.bar"
-  assertParseText "a+de+.adA+-:%%%ads%5asdk&/" $ mkUri "a+de+.adA+-:%%%ads%5asdk&/"
-  assertParseText "rec+def:c" $ mkUri "rec+def:c"
-  assertParseText "f.foo:bar" $ mkUri "f.foo:bar"
+  assertParseText "a:a" $ mkStr "a:a"
+  assertParseText "http://foo.bar" $ mkStr "http://foo.bar"
+  assertParseText "a+de+.adA+-:%%%ads%5asdk&/" $ mkStr "a+de+.adA+-:%%%ads%5asdk&/"
+  assertParseText "rec+def:c" $ mkStr "rec+def:c"
+  assertParseText "f.foo:bar" $ mkStr "f.foo:bar"
   assertParseFail "http://foo${\"bar\"}"
   assertParseFail ":bcdef"
   assertParseFail "a%20:asda"
@@ -140,8 +140,8 @@ case_simple_lambda = assertParseText "a: a" $ Fix $ NAbs (Param "a") (mkSym "a")
 
 case_lambda_or_uri = do
   assertParseText "a :b" $ Fix $ NAbs (Param "a") (mkSym "b")
-  assertParseText "a c:def" $ Fix $ NBinary NApp (mkSym "a") (mkUri "c:def")
-  assertParseText "c:def: c" $ Fix $ NBinary NApp (mkUri "c:def:") (mkSym "c")
+  assertParseText "a c:def" $ Fix $ NBinary NApp (mkSym "a") (mkStr "c:def")
+  assertParseText "c:def: c" $ Fix $ NBinary NApp (mkStr "c:def:") (mkSym "c")
   assertParseText "a:{}" $ Fix $ NAbs (Param "a") $ Fix $ NSet []
   assertParseText "a:[a]" $ Fix $ NAbs (Param "a") $ Fix $ NList [mkSym "a"]
   assertParseFail "def:"
