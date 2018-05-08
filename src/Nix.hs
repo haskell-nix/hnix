@@ -37,7 +37,6 @@ import           Nix.Frames
 import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser
-import           Nix.Parser.Library (Result(..))
 import           Nix.Pretty
 import           Nix.Reduce
 import           Nix.Render.Frame

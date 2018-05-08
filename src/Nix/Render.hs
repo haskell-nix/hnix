@@ -14,7 +14,9 @@ import           Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Set as Set
 import           Data.Void
 import           Nix.Expr.Types.Annotated
-import           Nix.Parser.Library
+import           Text.Megaparsec.Error
+import           Text.Megaparsec.Pos (SourcePos(..))
+import           Text.PrettyPrint.ANSI.Leijen
 
 class Monad m => MonadFile m where
     readFile :: FilePath -> m ByteString

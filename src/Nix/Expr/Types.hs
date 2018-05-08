@@ -56,7 +56,6 @@ import           Lens.Family2
 import           Lens.Family2.Stock (_1)
 import           Lens.Family2.TH
 import           Nix.Atoms
-import           Nix.Parser.Library (SourcePos(..))
 import           Nix.Utils
 import           Text.Megaparsec.Pos
 import           Text.Read.Deriving

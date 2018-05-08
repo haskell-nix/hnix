@@ -21,12 +21,12 @@ import           Nix.Expr
 import           Nix.Frames
 import           Nix.Normal
 import           Nix.Options
-import           Nix.Parser.Library hiding (colon)
 import           Nix.Pretty
 import           Nix.Render
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
+import           Text.Megaparsec.Pos
 import qualified Text.PrettyPrint.ANSI.Leijen as P
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 import qualified Text.Show.Pretty as PS

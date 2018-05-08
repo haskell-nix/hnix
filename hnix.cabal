@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5eba5b1b4e2ae5297dcad048052e5bc02fc2f42aa37016fbea866ecbf3f4a380
+-- hash: 5dd7aaae46b28fedd3791ab641dc5093bf7e2bca549578aea96ec23ed791ed22
 
 name:           hnix
 version:        0.5.0
@@ -60,8 +60,6 @@ library
       Nix.Normal
       Nix.Options
       Nix.Parser
-      Nix.Parser.Library
-      Nix.Parser.Operators
       Nix.Pretty
       Nix.Reduce
       Nix.Render
@@ -206,6 +204,7 @@ test-suite hnix-tests
     , megaparsec
     , mtl
     , optparse-applicative
+    , pretty-show
     , process
     , quickcheck-instances
     , serialise
