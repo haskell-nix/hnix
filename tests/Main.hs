@@ -26,6 +26,7 @@ import qualified NixLanguageTests
 import qualified ParserTests
 import qualified PrettyTests
 import qualified PrettyParseTests
+import           System.Directory
 import           System.Environment
 import           System.FilePath.Glob
 import           System.Posix.Files
@@ -86,7 +87,8 @@ main = do
   nixpkgsTestsEnv     <- lookupEnv "NIXPKGS_TESTS"
   prettyTestsEnv      <- lookupEnv "PRETTY_TESTS"
 
-  setEnv "NIX_REMOTE" "local?root=/tmp"
+  pwd <- getCurrentDirectory
+  setEnv "NIX_REMOTE" ("local?root=" ++ pwd ++ "/")
 
   defaultMain $ testGroup "hnix" $
     [ testCase "hnix.cabal correctly generated" cabalCorrectlyGenerated ] ++
