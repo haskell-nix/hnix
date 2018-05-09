@@ -111,6 +111,98 @@ case_inherit_from_set_has_no_scope =
       )).success
     |]
 
+case_unsafegetattrpos1 =
+    constantEqualText "[ 6 21 ]" [i|
+      let e = 1;
+          f = 1;
+          t = {};
+          s = {
+            inherit t e f;
+            a = 1;
+            "b" = 2;
+            c.d = 3;
+          };
+          p = builtins.unsafeGetAttrPos "e" s; in
+      [ p.line p.column ]
+    |]
+
+case_unsafegetattrpos2 =
+    constantEqualText "[ 6 21 ]" [i|
+      let e = 1;
+          f = 1;
+          t = {};
+          s = {
+            inherit t e f;
+            a = 1;
+            "b" = 2;
+            c.d = 3;
+          };
+          p = builtins.unsafeGetAttrPos "f" s; in
+      [ p.line p.column ]
+    |]
+
+case_unsafegetattrpos3 =
+    constantEqualText "[ 7 13 ]" [i|
+      let e = 1;
+          f = 1;
+          t = {};
+          s = {
+            inherit t e f;
+            a = 1;
+            "b" = 2;
+            c.d = 3;
+          };
+          p = builtins.unsafeGetAttrPos "a" s; in
+      [ p.line p.column ]
+    |]
+
+case_unsafegetattrpos4 =
+    constantEqualText "[ 8 13 ]" [i|
+      let e = 1;
+          f = 1;
+          t = {};
+          s = {
+            inherit t e f;
+            a = 1;
+            "b" = 2;
+            c.d = 3;
+          };
+          p = builtins.unsafeGetAttrPos "b" s; in
+      [ p.line p.column ]
+    |]
+
+-- jww (2018-05-09): These two are failing but they shouldn't be
+
+-- case_unsafegetattrpos5 =
+--     constantEqualText "[ 7 13 ]" [i|
+--       let e = 1;
+--           f = 1;
+--           t = {};
+--           s = {
+--             inherit t e f;
+--             a = 1;
+--             "b" = 2;
+--             c.d = 3;
+--           };
+--           p = builtins.unsafeGetAttrPos "c.d" s; in
+--       [ p.line p.column ]
+--     |]
+
+-- case_unsafegetattrpos6 =
+--     constantEqualText "[ 7 13 ]" [i|
+--       let e = 1;
+--           f = 1;
+--           t = {};
+--           s = {
+--             inherit t e f;
+--             a = 1;
+--             "b" = 2;
+--             c.d = 3;
+--           };
+--           p = builtins.unsafeGetAttrPos "d" s; in
+--       [ p.line p.column ]
+--     |]
+
 case_fixed_points =
     constantEqualText [i|[
   {
