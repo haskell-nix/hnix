@@ -70,9 +70,6 @@ nixOptions current = Options
         (   long "strict"
          <> help "When used with --eval, recursively evaluate list elements and attributes")
     <*> switch
-        (   long "force"
-         <> help "Whether to force the results of evaluation to normal form")
-    <*> switch
         (   long "eval"
          <> help "Whether to evaluate, or just pretty-print")
     <*> switch

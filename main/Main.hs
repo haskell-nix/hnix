@@ -144,7 +144,7 @@ main = do
                      . A.encodingToLazyByteString
                      . toEncodingSorted
                      <=< fromNix
-            | normalize opts =
+            | strict opts =
               liftIO . print . prettyNValueNF <=< normalForm
             | values opts  =
               liftIO . print <=< prettyNValueProv

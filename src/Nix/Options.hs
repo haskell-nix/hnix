@@ -16,7 +16,6 @@ data Options = Options
     , finder       :: Bool
     , findFile     :: Maybe FilePath
     , strict       :: Bool
-    , normalize    :: Bool
     , evaluate     :: Bool
     , json         :: Bool
     , xml          :: Bool
@@ -50,7 +49,6 @@ defaultOptions current = Options
     , finder       = False
     , findFile     = Nothing
     , strict       = False
-    , normalize    = False
     , evaluate     = False
     , json         = False
     , xml          = False
