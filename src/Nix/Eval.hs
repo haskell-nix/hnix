@@ -218,10 +218,9 @@ desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
                      (Either VarName (Binding r))
     collect (NamedVar (StaticKey x :| y:ys) val p) = do
         m <- get
-        let v = case M.lookup x m of
-                Nothing     -> (p, [NamedVar (y:|ys) val p])
-                Just (p, v) -> (p, NamedVar (y:|ys) val p : v)
-        put $ M.insert x v m
+        put $ M.insert x ?? m $ case M.lookup x m of
+            Nothing     -> (p, [NamedVar (y:|ys) val p])
+            Just (p, v) -> (p, NamedVar (y:|ys) val p : v)
         pure $ Left x
     collect x = pure $ Right x
 
