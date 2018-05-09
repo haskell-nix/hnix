@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ab12d82cd2b7f18cbbd6794124b5003ee3e7f69b014c25ad7bd0197e17560b93
+-- hash: 4fcbb40c5cce579b650040f74a0c3536bfcbeed20237041c20a91aac50e82808
 
 name:           hnix
 version:        0.5.1
@@ -19,6 +19,9 @@ build-type:     Simple
 cabal-version:  >= 1.10
 
 extra-source-files:
+    data/let-comments-multiline.nix
+    data/let-comments.nix
+    data/let.nix
     data/nix/bootstrap.sh
     data/nix/config/config.guess
     data/nix/config/config.sub
@@ -393,7 +396,12 @@ extra-source-files:
     data/nix/tests/user-envs.nix
     data/nix/tests/user-envs.sh
     data/nix/version
+    data/nixpkgs-all-packages-pretty.nix
+    data/nixpkgs-all-packages.nix
+    data/simple-pretty.nix
+    data/simple.nix
     LICENSE
+    package.yaml
     README.md
     tests/eval-compare/builtins.split-01.nix
     tests/eval-compare/builtins.split-02.nix

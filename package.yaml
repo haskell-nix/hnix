@@ -13,6 +13,8 @@ description:
 extra-source-files:
   - LICENSE
   - README.md
+  - package.yaml
+  - data/*
   - data/nix/*
   - data/nix/corepkgs/*
   - data/nix/config/*
