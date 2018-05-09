@@ -239,6 +239,14 @@ let
 in [ (fix toFixFold) (fix toFix) ]
 |]
 
+-- jww (2018-05-09): Uncomment when #310 is fixed
+-- case_fixed_points_attrsets =
+--     constantEqualText "{ x = { y = { z = 100; }; z = { y = 100; }; }; }" [i|
+--       let fix = f: let x = f x; in x;
+--           f = self: { x.z.y = 100; x.y.z = self.x.z.y; };
+--       in fix f
+--     |]
+
 -- jww (2018-05-02): This constantly changes!
 -- case_placeholder =
 --   constantEqualText
