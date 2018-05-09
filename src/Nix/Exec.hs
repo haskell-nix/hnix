@@ -422,26 +422,29 @@ execBinaryOp scope span op lval rarg = do
         toInt   = pure . bin nvConstantP . NInt
         toFloat = pure . bin nvConstantP . NFloat
 
-coerceToString :: MonadNix e m => NValue m -> m String
-coerceToString = \case
-    NVConstant (NBool b)
-        | b               -> pure "1"
-        | otherwise       -> pure ""
-    NVConstant (NInt n)   -> pure $ show n
-    NVConstant (NFloat n) -> pure $ show n
-    NVConstant NNull      -> pure ""
+coerceToString :: MonadNix e m => Bool -> NValue m -> m String
+coerceToString copyToStore = go
+  where
+    go = \case
+        NVConstant (NBool b)
+            | b               -> pure "1"
+            | otherwise       -> pure ""
+        NVConstant (NInt n)   -> pure $ show n
+        NVConstant (NFloat n) -> pure $ show n
+        NVConstant NNull      -> pure ""
 
-    NVStr t _ -> pure $ Text.unpack t
-    NVPath p  -> unStorePath <$> addPath p
-    NVList l  -> unwords <$> traverse (`force` coerceToString) l
+        NVStr t _ -> pure $ Text.unpack t
+        NVPath p  | copyToStore -> unStorePath <$> addPath p
+                  | otherwise   -> pure p
+        NVList l  -> unwords <$> traverse (`force` go) l
 
-    v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
-        force p $ (`callFunc` pure v) >=> coerceToString
+        v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
+            force p $ (`callFunc` pure v) >=> go
 
-    NVSet s _ | Just p <- M.lookup "outPath" s ->
-        force p coerceToString
+        NVSet s _ | Just p <- M.lookup "outPath" s ->
+            force p go
 
-    v -> throwError $ ErrorCall $ "Expected a string, but saw: " ++ show v
+        v -> throwError $ ErrorCall $ "Expected a string, but saw: " ++ show v
 
 newtype Lazy m a = Lazy
     { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m)))
@@ -574,7 +577,7 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
             "__ignoreNulls" -> pure Nothing
             _               -> force v $ \case
                 NVConstant NNull | ignoreNulls -> pure Nothing
-                v' -> Just <$> (toNix =<< Text.pack <$> coerceToString v')
+                v' -> Just <$> (toNix =<< Text.pack <$> coerceToString True v')
 
     nixInstantiateExpr expr = do
         traceM $ "Executing: "
