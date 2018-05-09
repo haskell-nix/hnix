@@ -7,3 +7,4 @@ TAGS
 ctags
 dist-newstyle
 /.history
+/nix/
