@@ -1,5 +1,5 @@
 name:       hnix
-version:    0.5.0
+version:    0.5.1
 synopsis:   Haskell implementation of the Nix language
 github:     jwiegley/hnix
 author:     John Wiegley
@@ -11,7 +11,26 @@ description:
   Haskell implementation of the Nix language.
 
 extra-source-files:
+  - LICENSE
   - README.md
+  - data/nix/*
+  - data/nix/corepkgs/*
+  - data/nix/config/*
+  - data/nix/perl/*
+  - data/nix/perl/lib/Nix/*
+  - data/nix/tests/*
+  - data/nix/tests/plugins/*
+  - data/nix/tests/lang/*
+  - data/nix/tests/lang/readDir/*
+  - data/nix/tests/lang/readDir/foo/*
+  - data/nix/tests/lang/dir2/*
+  - data/nix/tests/lang/dir4/*
+  - data/nix/tests/lang/dir3/*
+  - data/nix/tests/lang/dir1/*
+  - data/nix/maintainers/*
+  - data/nix/mk/*
+  - data/nix/scripts/*
+  - tests/eval-compare/*
 
 flags:
   tracing:
