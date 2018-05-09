@@ -138,21 +138,21 @@ eval (NList l) = do
 
 eval (NSet binds) = do
     traceM "NSet..1"
-    (s, p) <- evalBinds True False binds
+    (s, p) <- evalBinds False (desugarBinds (eval . NSet) binds)
     traceM $ "NSet..2: s = " ++ show (void s)
     traceM $ "NSet..2: p = " ++ show (void p)
     toValue (s, p)
 
 eval (NRecSet binds) = do
     traceM "NRecSet..1"
-    (s, p) <- evalBinds True True (desugarBinds (eval . NRecSet) binds)
+    (s, p) <- evalBinds True (desugarBinds (eval . NRecSet) binds)
     traceM $ "NRecSet..2: s = " ++ show (void s)
     traceM $ "NRecSet..2: p = " ++ show (void p)
     toValue (s, p)
 
 eval (NLet binds body) = do
     traceM "Let..1"
-    (s, _) <- evalBinds True True binds
+    (s, _) <- evalBinds True binds
     traceM $ "Let..2: s = " ++ show (void s)
     pushScope s body
 
@@ -234,10 +234,9 @@ desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
 
 evalBinds :: forall e v t m. MonadNixEval e v t m
           => Bool
-          -> Bool
           -> [Binding (m v)]
           -> m (AttrSet t, AttrSet SourcePos)
-evalBinds allowDynamic recursive binds = do
+evalBinds recursive binds = do
     scope <- currentScopes @_ @t
     buildResult scope . concat =<< mapM (go scope) (moveOverridesLast binds)
   where
@@ -256,7 +255,7 @@ evalBinds allowDynamic recursive binds = do
     go _ (NamedVar pathExpr finalValue pos) = do
         let go :: NAttrPath (m v) -> m ([Text], SourcePos, m v)
             go = \case
-                h :| t -> evalSetterKeyName allowDynamic h >>= \case
+                h :| t -> evalSetterKeyName h >>= \case
                     Nothing ->
                         pure ([], nullPos,
                               toValue @(AttrSet t, AttrSet SourcePos)
@@ -273,7 +272,7 @@ evalBinds allowDynamic recursive binds = do
             result -> [result]
 
     go scope (Inherit ms names pos) = fmap catMaybes $ forM names $
-        evalSetterKeyName allowDynamic >=> \case
+        evalSetterKeyName >=> \case
             Nothing -> return Nothing
             Just key -> return $ Just ([key], pos, do
                 mv <- case ms of
@@ -312,7 +311,7 @@ evalSelect aset attr = do
     traceM "evalSelect"
     s <- aset
     traceM "evalSelect..2"
-    path <- evalSelector True attr
+    path <- traverse evalGetterKeyName attr
     traceM $ "evalSelect..3: " ++ show path
     res <- extract s path
     traceM "evalSelect..4"
@@ -331,49 +330,23 @@ evalSelect aset attr = do
         Nothing ->
             return $ Left (x, path)
 
-evalSelector :: (MonadEval v m, FromValue (Text, DList Text) m v)
-             => Bool -> NAttrPath (m v) -> m (NonEmpty Text)
-evalSelector = traverse . evalGetterKeyName
-
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value
-evalGetterKeyName :: (MonadEval v m, FromValue (Text, DList Text) m v)
-                  => Bool -> NKeyName (m v) -> m Text
-evalGetterKeyName canBeDynamic
-    | canBeDynamic = evalKeyNameDynamicNotNull
-    | otherwise    = evalKeyNameStatic
-
-evalKeyNameStatic :: forall v m. MonadEval v m => NKeyName (m v) -> m Text
-evalKeyNameStatic = \case
-    StaticKey k -> pure k
-    _ -> evalError @v $ ErrorCall "dynamic attribute not allowed in this context"
-
-evalKeyNameDynamicNotNull
-    :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
-    => NKeyName (m v) -> m Text
-evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
+evalGetterKeyName :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
+                  => NKeyName (m v) -> m Text
+evalGetterKeyName = evalSetterKeyName >=> \case
     Just k -> pure k
     Nothing -> evalError @v $ ErrorCall "value is null while a string was expected"
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *binding* a value
 evalSetterKeyName :: (MonadEval v m, FromValue (Text, DList Text) m v)
-                  => Bool -> NKeyName (m v) -> m (Maybe Text)
-evalSetterKeyName canBeDynamic
-    | canBeDynamic = evalKeyNameDynamicNullable
-    | otherwise    = fmap Just . evalKeyNameStatic
-
--- | Returns Nothing iff the key value is null
-evalKeyNameDynamicNullable
-    :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
-    => NKeyName (m v)
-    -> m (Maybe Text)
-evalKeyNameDynamicNullable = \case
+                  => NKeyName (m v) -> m (Maybe Text)
+evalSetterKeyName = \case
     StaticKey k -> pure (Just k)
-    DynamicKey k ->
-        runAntiquoted "\n" assembleString (>>= fromValueMay) k
-            <&> \case Just (t, _) -> Just t
-                      _ -> Nothing
+    DynamicKey k -> runAntiquoted "\n" assembleString (>>= fromValueMay) k
+        <&> \case Just (t, _) -> Just t
+                  _ -> Nothing
 
 assembleString :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
                => NString (m v) -> m (Maybe (Text, DList Text))
