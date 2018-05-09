@@ -44,6 +44,7 @@ import           Data.IORef
 import           Data.List
 import qualified Data.List.NonEmpty as NE
 import           Data.List.Split
+import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Typeable
@@ -78,6 +79,7 @@ import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
 import           Text.PrettyPrint.ANSI.Leijen (text)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
+import qualified Text.Show.Pretty as PS
 
 #ifdef MIN_VERSION_ghc_datasize
 #if MIN_VERSION_ghc_datasize(0,2,0) && __GLASGOW_HASKELL__ >= 804
@@ -734,13 +736,13 @@ addTracing k v = do
             opts :: Options <- asks (view hasLens)
             let rendered =
                     if verbose opts >= Chatty
-                    then show (void x)
-                    else show (prettyNix (Fix (Fix (NSym "?") <$ x)))
-                msg x = "eval: " ++ replicate depth ' ' ++ x
-            loc <- renderLocation span (text (msg rendered ++ " ..."))
+                    then text $ PS.ppShow (void x)
+                    else prettyNix (Fix (Fix (NSym "?") <$ x))
+                msg x = text ("eval: " ++ replicate depth ' ') <> x
+            loc <- renderLocation span (msg rendered <> text " ...\n")
             liftIO $ putStr $ show loc
             res <- k v'
-            liftIO $ putStrLn $ msg (rendered ++ " ...done")
+            liftIO $ print $ msg rendered <> text " ...done"
             return res
 
 evalExprLoc :: forall e m. (MonadNix e m, Has e Options, MonadIO m)
