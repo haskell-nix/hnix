@@ -78,31 +78,30 @@ staticImport
        MonadState (HashMap FilePath NExprLoc) m)
     => SrcSpan -> FilePath -> m NExprLoc
 staticImport pann path = do
+    mfile <- asks fst
+    path  <- liftIO $ pathToDefaultNixFile path
+    path' <- liftIO $ pathToDefaultNixFile =<< canonicalizePath
+        (maybe path (\p -> takeDirectory p </> path) mfile)
+
     imports <- get
-    case M.lookup path imports of
+    case M.lookup path' imports of
         Just expr -> pure expr
-        Nothing -> go
+        Nothing -> go path'
   where
-    go = do
-        mfile <- asks fst
-        path  <- liftIO $ pathToDefaultNixFile path
-        path' <- liftIO $ pathToDefaultNixFile =<< canonicalizePath
-            (maybe path (\p -> takeDirectory p </> path) mfile)
+    go path = do
+        liftIO $ putStrLn $ "Importing file " ++ path
 
-        liftIO $ putStrLn $ "Importing file " ++ path'
-
-        eres <- liftIO $ parseNixFileLoc path'
+        eres <- liftIO $ parseNixFileLoc path
         case eres of
             Failure err  -> error $ "Parse failed: " ++ show err
             Success x -> do
                 let pos  = SourcePos "Reduce.hs" (mkPos 1) (mkPos 1)
                     span = SrcSpan pos pos
                     cur  = NamedVar (StaticKey "__cur_file" :| [])
-                        (Fix (NLiteralPath_ pann path')) pos
+                        (Fix (NLiteralPath_ pann path)) pos
                     x'   = Fix (NLet_ span [cur] x)
                 modify (M.insert path x')
-                local (const (Just path',
-                              emptyScopes @m @NExprLoc)) $ do
+                local (const (Just path, emptyScopes @m @NExprLoc)) $ do
                     x'' <- cata reduce x'
                     modify (M.insert path x'')
                     return x''
