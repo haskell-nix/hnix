@@ -245,8 +245,6 @@ isDerivation m = case M.lookup "type" m of
 valueEq :: MonadThunk (NValue m) (NThunk m) m
         => NValue m -> NValue m -> m Bool
 valueEq l r = case (l, r) of
-    (NVStr ls _, NVConstant (NUri ru)) -> pure $ ls == ru
-    (NVConstant (NUri lu), NVStr rs _) -> pure $ lu == rs
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
     (NVStr ls _, NVStr rs _) -> pure $ ls == rs
     (NVStr ls _, NVConstant NNull) -> pure $ ls == ""
@@ -268,7 +266,6 @@ data ValueType
     = TInt
     | TFloat
     | TBool
-    | TUri
     | TNull
     | TString
     | TList
@@ -284,7 +281,6 @@ valueType = \case
         NInt _    -> TInt
         NFloat _  -> TFloat
         NBool _   -> TBool
-        NUri _    -> TUri
         NNull     -> TNull
     NVStrF {}     -> TString
     NVListF {}    -> TList
@@ -298,7 +294,6 @@ describeValue = \case
     TInt     -> "an integer"
     TFloat   -> "a float"
     TBool    -> "a boolean"
-    TUri     -> "a URI"
     TNull    -> "a null"
     TString  -> "a string"
     TList    -> "a list"

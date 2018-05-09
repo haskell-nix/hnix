@@ -19,7 +19,6 @@
 
 module Nix.Eval where
 
-import           Control.Arrow (first)
 import           Control.Monad
 import           Control.Monad.Fix
 import           Control.Monad.Reader
@@ -30,7 +29,6 @@ import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.List (partition, foldl')
 import           Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NE
 import           Data.Maybe (fromMaybe, catMaybes)
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -217,24 +215,24 @@ desugarBinds :: forall r. ([Binding r] -> r) -> [Binding r] -> [Binding r]
 desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
   where
     collect :: Binding r
-            -> State (HashMap VarName (Maybe SourcePos, [Binding r]))
+            -> State (HashMap VarName (SourcePos, [Binding r]))
                      (Either VarName (Binding r))
-    collect (NamedVar (StaticKey x p:|y:ys) val) = do
+    collect (NamedVar (StaticKey x :| y:ys) val p) = do
         m <- get
         let v = case M.lookup x m of
-                Nothing     -> (p, [NamedVar (y:|ys) val])
-                Just (p, v) -> (p, NamedVar (y:|ys) val : v)
+                Nothing     -> (p, [NamedVar (y:|ys) val p])
+                Just (p, v) -> (p, NamedVar (y:|ys) val p : v)
         put $ M.insert x v m
         pure $ Left x
     collect x = pure $ Right x
 
     go :: Either VarName (Binding r)
-       -> State (HashMap VarName (Maybe SourcePos, [Binding r]))
+       -> State (HashMap VarName (SourcePos, [Binding r]))
                 (Binding r)
     go (Right x) = pure x
     go (Left x) = do
         Just (p, v) <- gets $ M.lookup x
-        pure $ NamedVar (StaticKey x p :| []) (embed v)
+        pure $ NamedVar (StaticKey x :| []) (embed v) p
 
 evalBinds :: forall e v t m. MonadNixEval e v t m
           => Bool
@@ -246,24 +244,26 @@ evalBinds allowDynamic recursive binds = do
     buildResult scope . concat =<< mapM (go scope) (moveOverridesLast binds)
   where
     moveOverridesLast = (\(x, y) -> y ++ x) .
-        partition (\case NamedVar (StaticKey "__overrides" _ :| []) _ -> True
+        partition (\case NamedVar (StaticKey "__overrides" :| []) _ _pos -> True
                          _ -> False)
 
-    go :: Scopes m t -> Binding (m v) -> m [([Text], Maybe SourcePos, m v)]
-    go _ (NamedVar (StaticKey "__overrides" _ :| []) finalValue) =
+    go :: Scopes m t -> Binding (m v) -> m [([Text], SourcePos, m v)]
+    go _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
         finalValue >>= fromValue >>= \(o', p') ->
-            return $ map (\(k, v) -> ([k], M.lookup k p', force v pure))
+            -- jww (2018-05-09): What to do with the key position here?
+            return $ map (\(k, v) -> ([k], fromMaybe pos (M.lookup k p'),
+                                     force v pure))
                          (M.toList o')
 
-    go _ (NamedVar pathExpr finalValue) = do
-        let go :: NAttrPath (m v) -> m ([Text], Maybe SourcePos, m v)
+    go _ (NamedVar pathExpr finalValue pos) = do
+        let go :: NAttrPath (m v) -> m ([Text], SourcePos, m v)
             go = \case
                 h :| t -> evalSetterKeyName allowDynamic h >>= \case
-                    (Nothing, _) ->
-                        pure ([], Nothing,
+                    Nothing ->
+                        pure ([], nullPos,
                               toValue @(AttrSet t, AttrSet SourcePos)
                                   (mempty, mempty))
-                    (Just k, pos) -> case t of
+                    Just k -> case t of
                         [] -> pure ([k], pos, finalValue)
                         x:xs -> do
                             (restOfPath, _, v) <- go (x:|xs)
@@ -274,10 +274,10 @@ evalBinds allowDynamic recursive binds = do
             ([], _, _) -> []
             result -> [result]
 
-    go scope (Inherit ms names) = fmap catMaybes $ forM names $ \name ->
-        evalSetterKeyName allowDynamic name >>= \case
-            (Nothing, _) -> return Nothing
-            (Just key, pos) -> return $ Just ([key], pos, do
+    go scope (Inherit ms names pos) = fmap catMaybes $ forM names $
+        evalSetterKeyName allowDynamic >=> \case
+            Nothing -> return Nothing
+            Just key -> return $ Just ([key], pos, do
                 mv <- case ms of
                     Nothing -> withScopes scope $ lookupVar key
                     Just s -> s
@@ -289,7 +289,7 @@ evalBinds allowDynamic recursive binds = do
                     Just v -> force v pure)
 
     buildResult :: Scopes m t
-                -> [([Text], Maybe SourcePos, m v)]
+                -> [([Text], SourcePos, m v)]
                 -> m (AttrSet t, AttrSet SourcePos)
     buildResult scope bindings = do
         s <- foldM insert M.empty bindings
@@ -298,7 +298,7 @@ evalBinds allowDynamic recursive binds = do
                else traverse (thunk . withScopes scope) s
         return (res, foldl' go M.empty bindings)
       where
-        go m ([k], Just pos, _) = M.insert k pos m
+        go m ([k], pos, _) = M.insert k pos m
         go m _ = m
 
         encapsulate f attrs =
@@ -334,48 +334,41 @@ evalSelect aset attr = do
             return $ Left (x, path)
 
 evalSelector :: MonadEval v m => Bool -> NAttrPath (m v) -> m (NonEmpty Text)
-evalSelector allowDynamic binds =
-    NE.map fst <$> traverse (evalGetterKeyName allowDynamic) binds
+evalSelector = traverse . evalGetterKeyName
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value
-evalGetterKeyName :: MonadEval v m
-                  => Bool -> NKeyName (m v) -> m (Text, Maybe SourcePos)
+evalGetterKeyName :: MonadEval v m => Bool -> NKeyName (m v) -> m Text
 evalGetterKeyName canBeDynamic
     | canBeDynamic = evalKeyNameDynamicNotNull
     | otherwise    = evalKeyNameStatic
 
-evalKeyNameStatic :: forall v m. MonadEval v m
-                  => NKeyName (m v) -> m (Text, Maybe SourcePos)
+evalKeyNameStatic :: forall v m. MonadEval v m => NKeyName (m v) -> m Text
 evalKeyNameStatic = \case
-    StaticKey k p -> pure (k, p)
-    DynamicKey _ ->
-        evalError @v $ ErrorCall "dynamic attribute not allowed in this context"
+    StaticKey k -> pure k
+    _ -> evalError @v $ ErrorCall "dynamic attribute not allowed in this context"
 
-evalKeyNameDynamicNotNull :: forall v m. MonadEval v m
-                          => NKeyName (m v) -> m (Text, Maybe SourcePos)
+evalKeyNameDynamicNotNull :: forall v m. MonadEval v m => NKeyName (m v) -> m Text
 evalKeyNameDynamicNotNull = evalKeyNameDynamicNullable >=> \case
-    (Nothing, _) ->
-        evalError @v $ ErrorCall "value is null while a string was expected"
-    (Just k, p) -> pure (k, p)
+    Just k -> pure k
+    Nothing -> evalError @v $ ErrorCall "value is null while a string was expected"
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *binding* a value
-evalSetterKeyName :: MonadEval v m
-                  => Bool -> NKeyName (m v) -> m (Maybe Text, Maybe SourcePos)
+evalSetterKeyName :: MonadEval v m => Bool -> NKeyName (m v) -> m (Maybe Text)
 evalSetterKeyName canBeDynamic
     | canBeDynamic = evalKeyNameDynamicNullable
-    | otherwise    = fmap (first Just) . evalKeyNameStatic
+    | otherwise    = fmap Just . evalKeyNameStatic
 
 -- | Returns Nothing iff the key value is null
 evalKeyNameDynamicNullable
-    :: forall v m. MonadEval v m => NKeyName (m v) -> m (Maybe Text, Maybe SourcePos)
+    :: forall v m. MonadEval v m => NKeyName (m v) -> m (Maybe Text)
 evalKeyNameDynamicNullable = \case
-    StaticKey k p -> pure (Just k, p)
+    StaticKey k -> pure (Just k)
     DynamicKey k ->
         runAntiquoted "\n" assembleString (>>= coerceToString) k
-            <&> \case Just (t, _) -> (Just t, Nothing)
-                      _ -> (Nothing, Nothing)
+            <&> \case Just (t, _) -> Just t
+                      _ -> Nothing
 
 assembleString :: forall v m. MonadEval v m
                => NString (m v) -> m (Maybe (Text, DList Text))

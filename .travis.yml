@@ -1,21 +1,44 @@
 language: nix
 
-sudo: true
+# sudo: false
 
-cache:
-  directories:
-    - /nix/store
+# cache:
+#   directories:
+#     - /nix
+#   timeout: 100000
 
-cache:
-  timeout: 10000
+git:
+  depth: 1
+
+install:
+  - nix-shell --argstr compiler ghc822 --run true
+  - nix-shell --argstr compiler ghc842 --run true
 
 env:
-  - GHCVERSION=ghc822 NIXPKGS_TESTS=yes MATCHING_TESTS=yes TRACING=true  STRICT=true  PROFILING=false
-  - GHCVERSION=ghc822 NIXPKGS_TESTS=yes MATCHING_TESTS=yes TRACING=false STRICT=true  PROFILING=true
-  - GHCVERSION=ghc842 NIXPKGS_TESTS=yes MATCHING_TESTS=yes TRACING=false STRICT=false PROFILING=false
+  global:
+    - NIXPKGS_TESTS=yes
+    - MATCHING_TESTS=yes
+  matrix:
+    - GHCVERSION=ghc822 STRICT=true  TRACING=false PROFILING=false
+    - GHCVERSION=ghc822 STRICT=true  TRACING=true  PROFILING=false
+    - GHCVERSION=ghc822 STRICT=true  TRACING=true  PROFILING=true
+    - GHCVERSION=ghc842 STRICT=false TRACING=false PROFILING=false
+    - GHCVERSION=ghc842 STRICT=false TRACING=true  PROFILING=false
+    - GHCVERSION=ghc842 STRICT=false TRACING=true  PROFILING=true
+
+matrix:
+  allow_failures:
+    - env: GHCVERSION=ghc842 STRICT=true
+  exclude:
+    - env: GHCVERSION=ghc822 STRICT=false
 
 script:
   - nix-build --argstr compiler $GHCVERSION --arg doProfiling $PROFILING --arg doTracing $TRACING --arg doStrict $STRICT
+
+branches:
+  only:
+    - master
+    - pending
 
 notifications:
   webhooks:

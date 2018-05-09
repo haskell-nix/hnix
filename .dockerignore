@@ -1,0 +1,8 @@
+.git
+Dockerfile
+Makefile
+README.md
+cabal.sandbox.config
+.cabal-sandbox/
+hnix.cabal
+dist/

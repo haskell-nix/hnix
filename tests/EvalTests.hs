@@ -52,9 +52,11 @@ case_function_definition_uses_environment =
     constantEqualText "3" "let f = (let a=1; in x: x+a); in f 2"
 
 case_function_atpattern =
+    -- jww (2018-05-09): This should be constantEqualText
     constantEqualText' "2" "(({a}@attrs:attrs) {a=2;}).a"
 
 case_function_ellipsis =
+    -- jww (2018-05-09): This should be constantEqualText
     constantEqualText' "2" "(({a, ...}@attrs:attrs) {a=0; b=2;}).b"
 
 case_function_default_value_not_in_atpattern =
@@ -67,7 +69,7 @@ case_function_recursive_args =
     constantEqualText "2" "({ x ? 1, y ? x * 3}: y - x) {}"
 
 case_function_recursive_sets =
-    constantEqualText' "[ [ 6 4 100 ] 4 ]" [i|
+    constantEqualText "[ [ 6 4 100 ] 4 ]" [i|
         let x = rec {
 
           y = 2;
@@ -109,8 +111,100 @@ case_inherit_from_set_has_no_scope =
       )).success
     |]
 
+case_unsafegetattrpos1 =
+    constantEqualText "[ 6 21 ]" [i|
+      let e = 1;
+          f = 1;
+          t = {};
+          s = {
+            inherit t e f;
+            a = 1;
+            "b" = 2;
+            c.d = 3;
+          };
+          p = builtins.unsafeGetAttrPos "e" s; in
+      [ p.line p.column ]
+    |]
+
+case_unsafegetattrpos2 =
+    constantEqualText "[ 6 21 ]" [i|
+      let e = 1;
+          f = 1;
+          t = {};
+          s = {
+            inherit t e f;
+            a = 1;
+            "b" = 2;
+            c.d = 3;
+          };
+          p = builtins.unsafeGetAttrPos "f" s; in
+      [ p.line p.column ]
+    |]
+
+case_unsafegetattrpos3 =
+    constantEqualText "[ 7 13 ]" [i|
+      let e = 1;
+          f = 1;
+          t = {};
+          s = {
+            inherit t e f;
+            a = 1;
+            "b" = 2;
+            c.d = 3;
+          };
+          p = builtins.unsafeGetAttrPos "a" s; in
+      [ p.line p.column ]
+    |]
+
+case_unsafegetattrpos4 =
+    constantEqualText "[ 8 13 ]" [i|
+      let e = 1;
+          f = 1;
+          t = {};
+          s = {
+            inherit t e f;
+            a = 1;
+            "b" = 2;
+            c.d = 3;
+          };
+          p = builtins.unsafeGetAttrPos "b" s; in
+      [ p.line p.column ]
+    |]
+
+-- jww (2018-05-09): These two are failing but they shouldn't be
+
+-- case_unsafegetattrpos5 =
+--     constantEqualText "[ 7 13 ]" [i|
+--       let e = 1;
+--           f = 1;
+--           t = {};
+--           s = {
+--             inherit t e f;
+--             a = 1;
+--             "b" = 2;
+--             c.d = 3;
+--           };
+--           p = builtins.unsafeGetAttrPos "c.d" s; in
+--       [ p.line p.column ]
+--     |]
+
+-- case_unsafegetattrpos6 =
+--     constantEqualText "[ 7 13 ]" [i|
+--       let e = 1;
+--           f = 1;
+--           t = {};
+--           s = {
+--             inherit t e f;
+--             a = 1;
+--             "b" = 2;
+--             c.d = 3;
+--           };
+--           p = builtins.unsafeGetAttrPos "d" s; in
+--       [ p.line p.column ]
+--     |]
+
 case_fixed_points =
-    constantEqualText' [i|[
+    constantEqualText [i|[
   {
     foobar = "foobar";
     foo = "foo";
@@ -134,7 +228,7 @@ case_fixed_points =
 |]
 
 case_fixed_points_and_fold =
-    constantEqualText' [i|[ {} {} ]|] [i|
+    constantEqualText [i|[ {} {} ]|] [i|
 let
   extends = f: rattrs: self:
     let super = rattrs self; in super // f self super;

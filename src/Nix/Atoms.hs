@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP            #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -5,7 +6,9 @@
 
 module Nix.Atoms where
 
+#if MIN_VERSION_serialise(0, 2, 0)
 import Codec.Serialise
+#endif
 import Control.DeepSeq
 import Data.Data
 import Data.Hashable
@@ -25,10 +28,12 @@ data NAtom
   | NBool Bool
   -- | Null values. There's only one of this variant.
   | NNull
-  -- | URIs, which are just string literals, but do not need quotes.
-  | NUri Text
   deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
-            Serialise, Hashable)
+            Hashable)
+
+#if MIN_VERSION_serialise(0, 2, 0)
+instance Serialise NAtom
+#endif
 
 -- | Translate an atom into its nix representation.
 atomText :: NAtom -> Text
@@ -36,4 +41,3 @@ atomText (NInt i)   = pack (show i)
 atomText (NFloat f) = pack (show f)
 atomText (NBool b)  = if b then "true" else "false"
 atomText NNull      = "null"
-atomText (NUri uri) = uri

@@ -296,7 +296,6 @@ instance (Convertible e m, MonadEffects m)
             NFloat n -> toJSON n
             NBool b  -> toJSON b
             NNull    -> A.Null
-            NUri u   -> toJSON u
         Fix (NVStrF s _)     -> pure $ Just $ toJSON s
         Fix (NVListF l)      -> fmap (A.Array . V.fromList) . sequence
                                   <$> traverse fromValueMay l

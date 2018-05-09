@@ -28,6 +28,7 @@ import           Nix
 import           Nix.Convert
 import qualified Nix.Eval as Eval
 -- import           Nix.Lint
+import           Nix.Options.Parser
 import qualified Nix.Type.Env as Env
 import qualified Nix.Type.Infer as HM
 import           Nix.Utils
@@ -116,7 +117,7 @@ main = do
                   A.encodeToLazyText (stripAnnotation expr)
 
         | verbose opts >= DebugInfo =
-              liftIO $ print $ stripAnnotation expr
+              liftIO $ putStr $ PS.ppShow $ stripAnnotation expr
 
         | cache opts, Just path <- mpath =
               liftIO $ writeCache (addExtension (dropExtension path) "nixc") expr

@@ -24,7 +24,6 @@ toXML = (.) ((++ "\n") .
         NFloat f -> mkElem "float" "value" (show f)
         NBool b  -> mkElem "bool" "value" (if b then "true" else "false")
         NNull    -> Element (unqual "null") [] [] Nothing
-        NUri u   -> mkElem "uri" "value" (Text.unpack u)
 
     NVStrF t _ -> mkElem "string" "value" (Text.unpack t)
     NVListF l  -> Element (unqual "list") [] (Elem <$> l) Nothing
