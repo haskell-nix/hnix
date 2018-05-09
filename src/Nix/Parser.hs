@@ -186,8 +186,7 @@ nixLet = annotateLocation1 (reserved "let"
         <*> (reserved "in" *> nixToplevelForm)
     -- Let expressions `let {..., body = ...}' are just desugared
     -- into `(rec {..., body = ...}).body'.
-    letBody = (\x pos -> NSelect x (StaticKey "body" (Just pos) :| []) Nothing)
-        <$> aset <*> getPosition
+    letBody = (\x -> NSelect x (StaticKey "body" :| []) Nothing) <$> aset
     aset = annotateLocation1 $ NRecSet <$> braces nixBinders
 
 nixIf :: Parser NExprLoc
@@ -313,19 +312,21 @@ argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
 
 nixBinders :: Parser [Binding NExprLoc]
 nixBinders = (inherit <+> namedVar) `endBy` semi where
-  inherit = Inherit <$> (reserved "inherit" *> optional scope)
-                    <*> many keyName
-                    <?> "inherited binding"
-  namedVar = NamedVar <$> (annotated <$> nixSelector)
-                      <*> (equals *> nixToplevelForm)
-                      <?> "variable binding"
+  inherit = do
+      x <- reserved "inherit" *> optional scope
+      p <- getPosition
+      Inherit x <$> many keyName <*> pure p <?> "inherited binding"
+  namedVar = do
+      p <- getPosition
+      NamedVar <$> (annotated <$> nixSelector)
+               <*> (equals *> nixToplevelForm)
+               <*> pure p
+               <?> "variable binding"
   scope = parens nixToplevelForm <?> "inherit scope"
 
 keyName :: Parser (NKeyName NExprLoc)
 keyName = dynamicKey <+> staticKey where
-  staticKey = do
-      beg <- getPosition
-      StaticKey <$> identifier <*> pure (Just beg)
+  staticKey = StaticKey <$> identifier
   dynamicKey = DynamicKey <$> nixAntiquoted nixString
 
 nixSet :: Parser NExprLoc

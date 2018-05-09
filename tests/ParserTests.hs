@@ -72,51 +72,51 @@ case_constant_uri = do
 
 case_simple_set = do
   assertParseText "{ a = 23; b = 4; }" $ Fix $ NSet
-    [ NamedVar (mkSelector "a") $ mkInt 23
-    , NamedVar (mkSelector "b") $ mkInt 4
+    [ NamedVar (mkSelector "a") (mkInt 23) nullPos
+    , NamedVar (mkSelector "b") (mkInt 4) nullPos
     ]
   assertParseFail "{ a = 23 }"
 
 case_set_inherit = do
   assertParseText "{ e = 3; inherit a b; }" $ Fix $ NSet
-    [ NamedVar (mkSelector "e") $ mkInt 3
-    , Inherit Nothing $ flip StaticKey Nothing <$> ["a", "b"]
+    [ NamedVar (mkSelector "e") (mkInt 3) nullPos
+    , Inherit Nothing (StaticKey <$> ["a", "b"]) nullPos
     ]
-  assertParseText "{ inherit; }" $ Fix $ NSet [ Inherit Nothing [] ]
+  assertParseText "{ inherit; }" $ Fix $ NSet [ Inherit Nothing [] nullPos ]
 
 case_set_scoped_inherit = assertParseText "{ inherit (a) b c; e = 4; inherit(a)b c; }" $ Fix $ NSet
-  [ Inherit (Just (mkSym "a")) $ flip StaticKey Nothing <$> ["b", "c"]
-  , NamedVar (mkSelector "e") $ mkInt 4
-  , Inherit (Just (mkSym "a")) $ flip StaticKey Nothing <$> ["b", "c"]
+  [ Inherit (Just (mkSym "a")) (StaticKey <$> ["b", "c"]) nullPos
+  , NamedVar (mkSelector "e") (mkInt 4) nullPos
+  , Inherit (Just (mkSym "a")) (StaticKey <$> ["b", "c"]) nullPos
   ]
 
 case_set_rec = assertParseText "rec { a = 3; b = a; }" $ Fix $ NRecSet
-  [ NamedVar (mkSelector "a") $ mkInt 3
-  , NamedVar (mkSelector "b") $ mkSym "a"
+  [ NamedVar (mkSelector "a") (mkInt 3) nullPos
+  , NamedVar (mkSelector "b") (mkSym "a") nullPos
   ]
 
 case_set_complex_keynames = do
   assertParseText "{ \"\" = null; }" $ Fix $ NSet
-    [ NamedVar (DynamicKey (Plain "") :| []) mkNull ]
+    [ NamedVar (DynamicKey (Plain (DoubleQuoted [])) :| []) mkNull nullPos ]
   assertParseText "{ a.b = 3; a.c = 4; }" $ Fix $ NSet
-    [ NamedVar (StaticKey "a" Nothing :| [StaticKey "b" Nothing]) $ mkInt 3
-    , NamedVar (StaticKey "a" Nothing :| [StaticKey "c" Nothing]) $ mkInt 4
+    [ NamedVar (StaticKey "a" :| [StaticKey "b"]) (mkInt 3) nullPos
+    , NamedVar (StaticKey "a" :| [StaticKey "c"]) (mkInt 4) nullPos
     ]
   assertParseText "{ ${let a = \"b\"; in a} = 4; }" $ Fix $ NSet
-    [ NamedVar (DynamicKey (Antiquoted letExpr) :| []) $ mkInt 4 ]
+    [ NamedVar (DynamicKey (Antiquoted letExpr) :| []) (mkInt 4) nullPos ]
   assertParseText "{ \"a${let a = \"b\"; in a}c\".e = 4; }" $ Fix $ NSet
-    [ NamedVar (DynamicKey (Plain str) :| [StaticKey "e" Nothing]) $ mkInt 4 ]
+    [ NamedVar (DynamicKey (Plain str) :| [StaticKey "e"]) (mkInt 4) nullPos ]
  where
-  letExpr = Fix $ NLet [NamedVar (mkSelector "a") (mkStr "b")] (mkSym "a")
+  letExpr = Fix $ NLet [NamedVar (mkSelector "a") (mkStr "b") nullPos] (mkSym "a")
   str = DoubleQuoted [Plain "a", Antiquoted letExpr, Plain "c"]
 
 case_set_inherit_direct = assertParseText "{ inherit ({a = 3;}); }" $ Fix $ NSet
-  [ flip Inherit [] $ Just $ Fix $ NSet [NamedVar (mkSelector "a") $ mkInt 3]
+  [ Inherit (Just $ Fix $ NSet [NamedVar (mkSelector "a") (mkInt 3) nullPos]) [] nullPos
   ]
 
 case_inherit_selector = do
   assertParseText "{ inherit \"a\"; }" $ Fix $ NSet
-    [Inherit Nothing [DynamicKey (Plain "a")]]
+    [Inherit Nothing [DynamicKey (Plain (DoubleQuoted [Plain "a"]))] nullPos]
   assertParseFail "{ inherit a.x; }"
 
 case_int_list = assertParseText "[1 2 3]" $ Fix $ NList
@@ -126,7 +126,8 @@ case_int_null_list = assertParseText "[1 2 3 null 4]" $ Fix (NList (map (Fix . N
 
 case_mixed_list = do
   assertParseText "[{a = 3;}.a (if true then null else false) null false 4 [] c.d or null]" $ Fix $ NList
-    [ Fix (NSelect (Fix (NSet [NamedVar (mkSelector "a") (mkInt 3)])) (mkSelector "a") Nothing)
+    [ Fix (NSelect (Fix (NSet [NamedVar (mkSelector "a") (mkInt 3) nullPos]))
+                   (mkSelector "a") Nothing)
     , Fix (NIf (mkBool True) mkNull (mkBool False))
     , mkNull, mkBool False, mkInt 4, Fix (NList [])
     , Fix (NSelect (mkSym "c") (mkSelector "d") (Just mkNull))
@@ -178,23 +179,23 @@ case_simple_let = do
   assertParseText "let a = 4; in a" $ Fix (NLet binds $ mkSym "a")
   assertParseFail "let a = 4 in a"
  where
-  binds = [NamedVar (mkSelector "a") $ mkInt 4]
+  binds = [NamedVar (mkSelector "a") (mkInt 4) nullPos]
 
 case_let_body = assertParseText "let { body = 1; }" letBody
   where
     letBody = Fix $ NSelect aset (mkSelector "body") Nothing
-    aset = Fix $ NRecSet [NamedVar (mkSelector "body") (mkInt 1)]
+    aset = Fix $ NRecSet [NamedVar (mkSelector "body") (mkInt 1) nullPos]
 
 case_nested_let = do
   assertParseText "let a = 4; in let b = 5; in a" $ Fix $ NLet
-    [NamedVar (mkSelector "a") (mkInt 4)]
-    (Fix $ NLet [NamedVar (mkSelector "b") (mkInt 5)] $ mkSym "a")
+    [NamedVar (mkSelector "a") (mkInt 4) nullPos]
+    (Fix $ NLet [NamedVar (mkSelector "b") (mkInt 5) nullPos] $ mkSym "a")
   assertParseFail "let a = 4; let b = 3; in b"
 
 case_let_scoped_inherit = do
   assertParseText "let a = null; inherit (b) c; in c" $ Fix $ NLet
-    [ NamedVar (mkSelector "a") mkNull
-    , Inherit (Just $ mkSym "b") [StaticKey "c" Nothing] ]
+    [ NamedVar (mkSelector "a") mkNull nullPos
+    , Inherit (Just $ mkSym "b") [StaticKey "c"] nullPos ]
     (mkSym "c")
   assertParseFail "let inherit (b) c in c"
 
@@ -249,18 +250,19 @@ case_string_antiquote = do
 
 case_select = do
   assertParseText "a .  e .di. f" $ Fix $ NSelect (mkSym "a")
-    (StaticKey "e" Nothing :| [StaticKey "di" Nothing, StaticKey "f" Nothing])
+    (StaticKey "e" :| [StaticKey "di", StaticKey "f"])
     Nothing
   assertParseText "a.e . d    or null" $ Fix $ NSelect (mkSym "a")
-    (StaticKey "e" Nothing :| [StaticKey "d" Nothing])
+    (StaticKey "e" :| [StaticKey "d"])
     (Just mkNull)
   assertParseText "{}.\"\"or null" $ Fix $ NSelect (Fix (NSet []))
-    (DynamicKey (Plain "") :| []) (Just mkNull)
+    (DynamicKey (Plain (DoubleQuoted [])) :| []) (Just mkNull)
   assertParseText "{ a = [1]; }.a or [2] ++ [3]" $ Fix $ NBinary NConcat
       (Fix (NSelect
-                (Fix (NSet [NamedVar (StaticKey "a" Nothing :| [])
-                                     (Fix (NList [Fix (NConstant (NInt 1))]))]))
-                (StaticKey "a" Nothing :| [])
+                (Fix (NSet [NamedVar (StaticKey "a" :| [])
+                                     (Fix (NList [Fix (NConstant (NInt 1))]))
+                                     nullPos]))
+                (StaticKey "a" :| [])
                 (Just (Fix (NList [Fix (NConstant (NInt 2))])))))
       (Fix (NList [Fix (NConstant (NInt 3))]))
 
@@ -269,7 +271,7 @@ case_select_path = do
   assertParseText "f.b ../a" $ Fix $ NBinary NApp select (mkPath False "../a")
   assertParseText "{}./def" $ Fix $ NBinary NApp (Fix (NSet [])) (mkPath False "./def")
   assertParseText "{}.\"\"./def" $ Fix $ NBinary NApp
-    (Fix $ NSelect (Fix (NSet [])) (DynamicKey (Plain "") :| []) Nothing)
+    (Fix $ NSelect (Fix (NSet [])) (DynamicKey (Plain (DoubleQuoted [])) :| []) Nothing)
     (mkPath False "./def")
  where select = Fix $ NSelect (mkSym "f") (mkSelector "b") Nothing
 
@@ -308,8 +310,8 @@ case_operators = do
   assertParseText "1 + (if true then 2 else 3)" $ mkOper2 NPlus (mkInt 1) $ Fix $ NIf
    (mkBool True) (mkInt 2) (mkInt 3)
   assertParseText "{ a = 3; } // rec { b = 4; }" $ mkOper2 NUpdate
-    (Fix $ NSet [NamedVar (mkSelector "a") (mkInt 3)])
-    (Fix $ NRecSet [NamedVar (mkSelector "b") (mkInt 4)])
+    (Fix $ NSet [NamedVar (mkSelector "a") (mkInt 3) nullPos])
+    (Fix $ NRecSet [NamedVar (mkSelector "b") (mkInt 4) nullPos])
   assertParseText "--a" $ mkOper NNeg $ mkOper NNeg $ mkSym "a"
   assertParseText "a - b - c" $ mkOper2 NMinus
     (mkOper2 NMinus (mkSym "a") (mkSym "b")) $

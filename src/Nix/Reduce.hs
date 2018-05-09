@@ -97,9 +97,8 @@ staticImport pann path = do
             Success x -> do
                 let pos  = SourcePos "Reduce.hs" (mkPos 1) (mkPos 1)
                     span = SrcSpan pos pos
-                    cur  = NamedVar
-                        (StaticKey "__cur_file" (Just pos) :| [])
-                        (Fix (NLiteralPath_ pann path'))
+                    cur  = NamedVar (StaticKey "__cur_file" :| [])
+                        (Fix (NLiteralPath_ pann path')) pos
                     x'   = Fix (NLet_ span [cur] x)
                 modify (M.insert path x')
                 local (const (Just path',
@@ -163,7 +162,7 @@ reduce (NBinary_ bann op larg rarg) = do
 
 reduce e@(NSet_ ann binds) = do
     let usesInherit = flip any binds $ \case
-            Inherit _ _ -> True
+            Inherit {} -> True
             _ -> False
     if usesInherit
         then clearScopes @NExprLoc $
@@ -182,7 +181,7 @@ reduce (NWith_ ann scope body) =
 
 reduce (NLet_ ann binds body) = do
     s <- fmap (M.fromList . catMaybes) $ forM binds $ \case
-        NamedVar (StaticKey name _ :| []) def -> def >>= \case
+        NamedVar (StaticKey name :| []) def _pos -> def >>= \case
             d@(Fix NAbs_ {})      -> pure $ Just (name, d)
             d@(Fix NConstant_ {}) -> pure $ Just (name, d)
             d@(Fix NStr_ {})      -> pure $ Just (name, d)
@@ -325,10 +324,10 @@ pruneTree opts = cataM $ \(FlaggedF (b, Compose x)) -> do
     pruneAntiquoted (Antiquoted (Just k)) = Just (Antiquoted k)
 
     pruneKeyName :: NKeyName (Maybe NExprLoc) -> NKeyName NExprLoc
-    pruneKeyName (StaticKey n p) = StaticKey n p
+    pruneKeyName (StaticKey n) = StaticKey n
     pruneKeyName (DynamicKey k)
         | Just k' <- pruneAntiquoted k = DynamicKey k'
-        | otherwise = StaticKey "<unused?>" Nothing
+        | otherwise = StaticKey "<unused?>"
 
     pruneParams :: Params (Maybe NExprLoc) -> Params NExprLoc
     pruneParams (Param n) = Param n
@@ -340,13 +339,13 @@ pruneTree opts = cataM $ \(FlaggedF (b, Compose x)) -> do
               ParamSet (map (second (fmap (fromMaybe nNull))) xs) b n
 
     pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
-    pruneBinding (NamedVar _ Nothing)  = Nothing
-    pruneBinding (NamedVar xs (Just x)) =
-        Just (NamedVar (NE.map pruneKeyName xs) x)
-    pruneBinding (Inherit _ [])  = Nothing
-    pruneBinding (Inherit (join -> Nothing) _) = Nothing
-    pruneBinding (Inherit (join -> m) xs) =
-        Just (Inherit m (map pruneKeyName xs))
+    pruneBinding (NamedVar _ Nothing _)  = Nothing
+    pruneBinding (NamedVar xs (Just x) pos) =
+        Just (NamedVar (NE.map pruneKeyName xs) x pos)
+    pruneBinding (Inherit _ [] _)  = Nothing
+    pruneBinding (Inherit (join -> Nothing) _ _) = Nothing
+    pruneBinding (Inherit (join -> m) xs pos) =
+        Just (Inherit m (map pruneKeyName xs) pos)
 
 reducingEvalExpr
     :: (Framed e m, Has e Options, Exception r, MonadCatch m, MonadIO m)

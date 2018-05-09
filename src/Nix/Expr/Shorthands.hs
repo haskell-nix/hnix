@@ -13,6 +13,7 @@ import Data.Monoid
 import Data.Text (Text)
 import Nix.Atoms
 import Nix.Expr.Types
+import Text.Megaparsec.Pos (SourcePos)
 
 -- | Make an integer literal expression.
 mkInt :: Integer -> NExpr
@@ -71,7 +72,7 @@ mkSymF :: Text -> NExprF a
 mkSymF = NSym
 
 mkSelector :: Text -> NAttrPath NExpr
-mkSelector = (:| []) . flip StaticKey Nothing
+mkSelector = (:| []) . StaticKey
 
 mkBool :: Bool -> NExpr
 mkBool = Fix . mkBoolF
@@ -133,16 +134,16 @@ mkDots e keys = Fix $ NSelect e (map (StaticKey ?? Nothing) keys) Nothing
 -}
 
 -- | An `inherit` clause without an expression to pull from.
-inherit :: [NKeyName e] -> Binding e
+inherit :: [NKeyName e] -> SourcePos -> Binding e
 inherit = Inherit Nothing
 
 -- | An `inherit` clause with an expression to pull from.
-inheritFrom :: e -> [NKeyName e] -> Binding e
+inheritFrom :: e -> [NKeyName e] -> SourcePos -> Binding e
 inheritFrom expr = Inherit (Just expr)
 
 -- | Shorthand for producing a binding of a name to an expression.
 bindTo :: Text -> NExpr -> Binding NExpr
-bindTo name = NamedVar (mkSelector name)
+bindTo name x = NamedVar (mkSelector name) x nullPos
 
 -- | Infix version of bindTo.
 ($=) :: Text -> NExpr -> Binding NExpr
@@ -226,5 +227,5 @@ infixl 1 @@
 infixr 1 ==>
 
 (@.) :: NExpr -> Text -> NExpr
-obj @. name = Fix (NSelect obj (StaticKey name Nothing :| []) Nothing)
+obj @. name = Fix (NSelect obj (StaticKey name :| []) Nothing)
 infixl 2 @.

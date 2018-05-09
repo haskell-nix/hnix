@@ -74,7 +74,7 @@ instance Arbitrary f => Arbitrary (Binding f) where
 
 instance Arbitrary f => Arbitrary (NKeyName f) where
   arbitrary = oneof [ DynamicKey <$> arbitrary
-                    , StaticKey <$> asciiText <*> arbitrary ]
+                    , StaticKey <$> asciiText ]
 
 instance Arbitrary f => Arbitrary (Params f) where
   arbitrary =
@@ -172,11 +172,11 @@ normalize = cata $ \case
   r               -> Fix r
 
  where
-  normBinding (NamedVar path r) = NamedVar (NE.map normKey path) r
-  normBinding (Inherit mr names) = Inherit mr (map normKey names)
+  normBinding (NamedVar path r pos) = NamedVar (NE.map normKey path) r pos
+  normBinding (Inherit mr names pos) = Inherit mr (map normKey names) pos
 
   normKey (DynamicKey quoted) = DynamicKey (normAntiquotedString quoted)
-  normKey (StaticKey name _)  = StaticKey name Nothing
+  normKey (StaticKey name) = StaticKey name
 
   normAntiquotedString :: Antiquoted (NString NExpr) NExpr
                        -> Antiquoted (NString NExpr) NExpr

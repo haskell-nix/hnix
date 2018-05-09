@@ -20,7 +20,7 @@ import qualified Data.HashSet as HashSet
 import           Data.List (isPrefixOf, sort)
 import           Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
-import           Data.Maybe (isJust)
+import           Data.Maybe (isJust, fromMaybe)
 import           Data.Text (pack, unpack, replace, strip)
 import qualified Data.Text as Text
 import           Nix.Atoms
@@ -137,17 +137,17 @@ prettyParamSet args var =
     sep = align (comma <> space)
 
 prettyBind :: Binding NixDoc -> Doc
-prettyBind (NamedVar n v) =
+prettyBind (NamedVar n v _p) =
     prettySelector n <+> equals <+> withoutParens v <> semi
-prettyBind (Inherit s ns)
+prettyBind (Inherit s ns _p)
   = text "inherit" <+> scope <> align (fillSep (map prettyKeyName ns)) <> semi
  where scope = maybe empty ((<> space) . parens . withoutParens) s
 
 prettyKeyName :: NKeyName NixDoc -> Doc
-prettyKeyName (StaticKey "" _) = dquotes $ text ""
-prettyKeyName (StaticKey key _)
+prettyKeyName (StaticKey "") = dquotes $ text ""
+prettyKeyName (StaticKey key)
   | HashSet.member key reservedNames = dquotes $ text $ unpack key
-prettyKeyName (StaticKey key _) = text . unpack $ key
+prettyKeyName (StaticKey key) = text . unpack $ key
 prettyKeyName (DynamicKey key) =
     runAntiquoted (DoubleQuoted [Plain "\n"])
         prettyString ((text "$" <>) . braces . withoutParens) key
@@ -242,7 +242,7 @@ prettyNValueNF = prettyNix . valueToExpr
         go (NVStrF t _) = NStr (DoubleQuoted [Plain t])
         go (NVListF l) = NList l
         go (NVSetF s p) = NSet
-            [ NamedVar (StaticKey k (M.lookup k p) :| []) v
+            [ NamedVar (StaticKey k :| []) v (fromMaybe nullPos (M.lookup k p))
             | (k, v) <- toList s ]
         go (NVClosureF _ _) = NSym . pack $ "<closure>"
         go (NVPathF p) = NLiteralPath p

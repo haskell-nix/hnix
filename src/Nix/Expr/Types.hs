@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP          #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFoldable #-}
@@ -58,7 +58,6 @@ import           GHC.Exts
 import           GHC.Generics
 import           Language.Haskell.TH.Syntax
 import           Lens.Family2
-import           Lens.Family2.Stock (_1)
 import           Lens.Family2.TH
 import           Nix.Atoms
 import           Nix.Utils
@@ -174,11 +173,14 @@ instance Serialise NExpr
 
 -- | A single line of the bindings section of a let expression or of a set.
 data Binding r
-  = NamedVar !(NAttrPath r) !r
+  = NamedVar !(NAttrPath r) !r !SourcePos
   -- ^ An explicit naming, such as @x = y@ or @x.y = z@.
-  | Inherit !(Maybe r) ![NKeyName r]
+  | Inherit !(Maybe r) ![NKeyName r] !SourcePos
   -- ^ Using a name already in scope, such as @inherit x;@ which is shorthand
-  -- for @x = x;@ or @inherit (x) y;@ which means @y = x.y;@.
+  --   for @x = x;@ or @inherit (x) y;@ which means @y = x.y;@. The
+  --   unsafeGetAttrPos for every name so inherited is the position of the
+  --   first name, whether that be the first argument to this constructor, or
+  --   the first member of the list in the second argument.
   deriving (Generic, Generic1, Typeable, Data, Ord, Eq, Functor,
             Foldable, Traversable, Show, NFData,
             Hashable)
@@ -304,7 +306,7 @@ instance IsString (NString r) where
 -- parser still considers it a 'DynamicKey' for simplicity.
 data NKeyName r
   = DynamicKey !(Antiquoted (NString r) r)
-  | StaticKey !VarName !(Maybe SourcePos)
+  | StaticKey !VarName
   deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
             Hashable)
 
@@ -334,7 +336,7 @@ instance Generic1 NKeyName where
 
 #if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData1 NKeyName where
-    liftRnf _ (StaticKey !_ !_) = ()
+    liftRnf _ (StaticKey !_) = ()
     liftRnf _ (DynamicKey (Plain !_)) = ()
     liftRnf _ (DynamicKey EscapedNewline) = ()
     liftRnf k (DynamicKey (Antiquoted r)) = k r
@@ -342,19 +344,19 @@ instance NFData1 NKeyName where
 
 -- | Most key names are just static text, so this instance is convenient.
 instance IsString (NKeyName r) where
-  fromString = flip StaticKey Nothing . fromString
+  fromString = StaticKey . fromString
 
 instance Eq1 NKeyName where
   liftEq eq (DynamicKey a) (DynamicKey b) = liftEq2 (liftEq eq) eq a b
-  liftEq _ (StaticKey a _) (StaticKey b _) = a == b
+  liftEq _ (StaticKey a) (StaticKey b) = a == b
   liftEq _ _ _ = False
 
 #if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 NKeyName where
   liftHashWithSalt h salt (DynamicKey a) =
       liftHashWithSalt2 (liftHashWithSalt h) h (salt `hashWithSalt` (0 :: Int)) a
-  liftHashWithSalt _ salt (StaticKey n p) =
-      salt `hashWithSalt` (1 :: Int) `hashWithSalt` n `hashWithSalt` p
+  liftHashWithSalt _ salt (StaticKey n) =
+      salt `hashWithSalt` (1 :: Int) `hashWithSalt` n
 #endif
 
 -- Deriving this instance automatically is not possible because @r@
@@ -362,7 +364,7 @@ instance Hashable1 NKeyName where
 instance Show1 NKeyName where
   liftShowsPrec sp sl p = \case
     DynamicKey a -> showsUnaryWith (liftShowsPrec2 (liftShowsPrec sp sl) (liftShowList sp sl) sp sl) "DynamicKey" p a
-    StaticKey t _  -> showsUnaryWith showsPrec "StaticKey" p t
+    StaticKey t -> showsUnaryWith showsPrec "StaticKey" p t
 
 -- Deriving this instance automatically is not possible because @r@
 -- occurs not only as last argument in @Antiquoted (NString r) r@
@@ -379,9 +381,9 @@ instance Foldable NKeyName where
 instance Traversable NKeyName where
   traverse f = \case
     DynamicKey (Plain str)    -> DynamicKey . Plain <$> traverse f str
-    DynamicKey EscapedNewline -> pure $ DynamicKey EscapedNewline
     DynamicKey (Antiquoted e) -> DynamicKey . Antiquoted <$> f e
-    StaticKey key pos -> pure (StaticKey key pos)
+    DynamicKey EscapedNewline -> pure $ DynamicKey EscapedNewline
+    StaticKey key -> pure (StaticKey key)
 
 -- | A selector (for example in a @let@ or an attribute set) is made up
 -- of strung-together key names.
@@ -516,16 +518,17 @@ class NExprAnn ann g | g -> ann where
 
 ekey :: NExprAnn ann g
      => NonEmpty Text
+     -> SourcePos
      -> Lens' (Fix g) (Maybe (Fix g))
-ekey keys f e@(Fix x) | (NSet xs, ann) <- fromNExpr x =
+ekey keys pos f e@(Fix x) | (NSet xs, ann) <- fromNExpr x =
     case go xs of
         ((v, []):_) -> fromMaybe e <$> f (Just v)
-        ((v, r:rest):_) -> ekey (r :| rest) f v
+        ((v, r:rest):_) -> ekey (r :| rest) pos f v
 
         _ -> f Nothing <&> \case
             Nothing -> e
             Just v  ->
-                let entry = NamedVar (NE.map (StaticKey ?? Nothing) keys) v
+                let entry = NamedVar (NE.map StaticKey keys) v pos
                 in Fix (toNExpr (NSet (entry : xs), ann))
   where
     go xs = do
@@ -534,11 +537,11 @@ ekey keys f e@(Fix x) | (NSet xs, ann) <- fromNExpr x =
         case ks of
             [] -> empty
             j:js -> do
-                NamedVar ns v <- xs
-                guard $ (j:js) == (NE.toList ns ^.. traverse._StaticKey._1)
+                NamedVar ns v _p <- xs
+                guard $ (j:js) == (NE.toList ns ^.. traverse._StaticKey)
                 return (v, rest)
 
-ekey _ f e = fromMaybe e <$> f Nothing
+ekey _ _ f e = fromMaybe e <$> f Nothing
 
 stripPositionInfo :: NExpr -> NExpr
 stripPositionInfo = transport phi
@@ -546,11 +549,10 @@ stripPositionInfo = transport phi
     phi (NSet binds)         = NSet (map go binds)
     phi (NRecSet binds)      = NRecSet (map go binds)
     phi (NLet binds body)    = NLet (map go binds) body
-    phi (NSelect s attr alt) = NSelect s (NE.map clear attr) alt
     phi x = x
 
-    go (NamedVar path r)  = NamedVar (NE.map clear path) r
-    go (Inherit ms names) = Inherit ms (map clear names)
+    go (NamedVar path r _pos)  = NamedVar path r nullPos
+    go (Inherit ms names _pos) = Inherit ms names nullPos
 
-    clear (StaticKey name _) = StaticKey name Nothing
-    clear k = k
+nullPos :: SourcePos
+nullPos = SourcePos "<string>" (mkPos 1) (mkPos 1)

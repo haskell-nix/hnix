@@ -186,9 +186,6 @@ nNull = Fix (Compose (Ann nullSpan (NConstant NNull)))
 nullSpan :: SrcSpan
 nullSpan = SrcSpan nullPos nullPos
 
-nullPos :: SourcePos
-nullPos = SourcePos "<string>" (mkPos 1) (mkPos 1)
-
 -- | Pattern systems for matching on NExprLocF constructions.
 
 pattern NSym_ :: SrcSpan -> VarName -> NExprLocF r
