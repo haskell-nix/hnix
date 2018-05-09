@@ -8,3 +8,4 @@ ctags
 dist-newstyle
 /.history
 /nix/
+/nix-test-eval*
