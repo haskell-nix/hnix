@@ -366,6 +366,20 @@ execBinaryOp scope span op lval rarg = do
             NNEq    -> toBool . not =<< valueEq (nvSet M.empty M.empty) rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
+        (ls@NVSet {}, NVStr rs rc) -> case op of
+            NPlus   -> (\ls -> bin nvStrP (Text.pack ls `mappend` rs) rc)
+                <$> coerceToString False ls
+            NEq     -> toBool =<< valueEq lval rval
+            NNEq    -> toBool . not =<< valueEq lval rval
+            _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
+
+        (NVStr ls lc, rs@NVSet {}) -> case op of
+            NPlus   -> (\rs -> bin nvStrP (ls `mappend` Text.pack rs) lc)
+                <$> coerceToString False rs
+            NEq     -> toBool =<< valueEq lval rval
+            NNEq    -> toBool . not =<< valueEq lval rval
+            _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
+
         (NVList ls, NVList rs) -> case op of
             NConcat -> pure $ bin nvListP $ ls ++ rs
             NEq     -> toBool =<< valueEq lval rval
