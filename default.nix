@@ -32,6 +32,11 @@ let inherit (nixpkgs) pkgs;
           then doJailbreak super.compact
           else super.compact;
 
+        ghc-compact =
+          if compiler == "ghc802"
+          then super.ghc-compact_0_1_0_0
+          else null;
+
         ghc-datasize =
           if doProfiling
           then null
