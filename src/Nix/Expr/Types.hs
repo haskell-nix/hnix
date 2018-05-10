@@ -162,6 +162,11 @@ instance Lift (Fix NExprF) where
         case Reflection.typeOf b `eqTypeRep` Reflection.typeRep @Text of
             Just HRefl -> Just [| pack $(liftString $ unpack b) |]
             Nothing -> Nothing
+#else
+instance Lift (Fix NExprF) where
+    lift = dataToExpQ $ \b -> case cast b of
+        Just t -> Just [| pack $(liftString $ unpack t) |]
+        Nothing -> Nothing
 #endif
 
 -- | The monomorphic expression type is a fixed point of the polymorphic one.

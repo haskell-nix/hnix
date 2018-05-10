@@ -144,8 +144,6 @@ builtinsList = sequence [
     , add0 Normal   "currentTime"                currentTime_
     , add2 Normal   "deepSeq"                    deepSeq
 
-#if MIN_VERSION_base(4, 10, 0)
-    -- TODO Remove this CPP after the Lift instance for NExpr works with GHC 8.0
     , add0 TopLevel "derivation" $(do
           -- This is compiled in so that we only parse and evaluate it once,
           -- at compile-time.
@@ -179,7 +177,6 @@ builtinsList = sequence [
     in (builtins.head outputsList).value|]
           [| cata Eval.eval expr |]
       )
-#endif
 
     , add  TopLevel "derivationStrict"           derivationStrict_
     , add  TopLevel "dirOf"                      dirOf
