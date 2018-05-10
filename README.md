@@ -2,6 +2,7 @@
 
 [![Build Status](https://api.travis-ci.org/haskell-nix/hnix.svg)](https://travis-ci.org/haskell-nix/hnix)
 [![Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/haskell-nix/Lobby)
+<sup>([Hackage Matrix Builder](https://matrix.hackage.haskell.org/package/hnix))</sup>
 
 Haskell parser, evaluator and type checker for the Nix language.
 
