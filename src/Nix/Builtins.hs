@@ -284,11 +284,11 @@ hasContext :: MonadNix e m => m (NValue m) -> m (NValue m)
 hasContext =
     toNix . not . null . (appEndo ?? []) . snd <=< fromValue @(Text, DList Text)
 
-getAttr :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
-getAttr x y = x >>= \x' -> y >>= \y' -> case (x', y') of
-    (NVStr key _, NVSet aset _) -> attrsetGet key aset >>= force'
-    (x, y) -> throwError $ ErrorCall $ "Invalid types for builtin.getAttr: "
-                 ++ show (x, y)
+getAttr :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+getAttr x y =
+    fromValue @Text x >>= \key ->
+    fromValue @(AttrSet (NThunk m), AttrSet SourcePos) y >>= \(aset, _) ->
+        attrsetGet key aset >>= force'
 
 unsafeGetAttrPos :: forall e m. MonadNix e m
                  => m (NValue m) -> m (NValue m) -> m (NValue m)
