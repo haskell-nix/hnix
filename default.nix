@@ -53,8 +53,13 @@ let inherit (nixpkgs) pkgs;
 in haskellPackages.developPackage {
   root = ./.;
 
-  source-overrides = {
-  };
+  source-overrides =
+    if compiler == "ghc802"
+    then {
+      lens-family-core = "1.2.1";
+      lens-family = "1.2.1";
+    }
+    else {};
 
   modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
     testHaskellDepends = attrs.testHaskellDepends ++
