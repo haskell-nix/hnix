@@ -313,8 +313,9 @@ argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
 nixBinders :: Parser [Binding NExprLoc]
 nixBinders = (inherit <+> namedVar) `endBy` semi where
   inherit = do
-      x <- reserved "inherit" *> optional scope
+      _ <- string "inherit"
       p <- getPosition
+      x <- whiteSpace *> optional scope
       Inherit x <$> many keyName <*> pure p <?> "inherited binding"
   namedVar = do
       p <- getPosition

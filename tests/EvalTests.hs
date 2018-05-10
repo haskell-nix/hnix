@@ -112,7 +112,7 @@ case_inherit_from_set_has_no_scope =
     |]
 
 case_unsafegetattrpos1 =
-    constantEqualText "[ 6 21 ]" [i|
+    constantEqualText "[ 6 20 ]" [i|
       let e = 1;
           f = 1;
           t = {};
@@ -127,7 +127,7 @@ case_unsafegetattrpos1 =
     |]
 
 case_unsafegetattrpos2 =
-    constantEqualText "[ 6 21 ]" [i|
+    constantEqualText "[ 6 20 ]" [i|
       let e = 1;
           f = 1;
           t = {};

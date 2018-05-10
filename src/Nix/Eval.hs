@@ -27,7 +27,7 @@ import           Data.Align.Key
 import           Data.Fix
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
-import           Data.List (partition, foldl')
+import           Data.List (partition)
 import           Data.List.NonEmpty (NonEmpty(..))
 import           Data.Maybe (fromMaybe, catMaybes)
 import           Data.Text (Text)
@@ -188,27 +188,29 @@ evalWithAttrSet scope body = do
 
 attrSetAlter :: forall e v t m. MonadNixEval e v t m
              => [Text]
+             -> SourcePos
              -> AttrSet (m v)
+             -> AttrSet SourcePos
              -> m v
-             -> m (AttrSet (m v))
-attrSetAlter [] _ _ =
+             -> m (AttrSet (m v), AttrSet SourcePos)
+attrSetAlter [] _ _ _ _ =
     evalError @v $ ErrorCall "invalid selector with no components"
-attrSetAlter (p:ps) m val = case M.lookup p m of
+attrSetAlter (k:ks) pos m p val = case M.lookup k m of
     Nothing
-        | null ps   -> go
-        | otherwise -> recurse M.empty
+        | null ks   -> go
+        | otherwise -> recurse M.empty M.empty
     Just x
-        | null ps   -> go
+        | null ks   -> go
         | otherwise ->
           x >>= fromValue @(AttrSet t, AttrSet SourcePos)
-              >>= \(s, _) -> recurse (force ?? pure <$> s)
+            >>= \(st, sp) -> recurse (force ?? pure <$> st) sp
   where
-    go = return $ M.insert p val m
+    go = return (M.insert k val m, M.insert k pos p)
 
-    recurse s = attrSetAlter ps s val <&> \m' ->
-        M.insert p (toValue @(AttrSet t, AttrSet SourcePos)
-                        =<< fmap (, mempty)
-                                 (fmap (value @_ @_ @m) <$> sequence m')) m
+    recurse st sp = attrSetAlter ks pos st sp val <&> \(st', _) ->
+        ( M.insert k (toValue @(AttrSet t, AttrSet SourcePos)
+                         =<< (, mempty) . fmap value <$> sequence st') st
+        , M.insert k pos sp )
 
 desugarBinds :: forall r. ([Binding r] -> r) -> [Binding r] -> [Binding r]
 desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
@@ -289,19 +291,15 @@ evalBinds recursive binds = do
                 -> [([Text], SourcePos, m v)]
                 -> m (AttrSet t, AttrSet SourcePos)
     buildResult scope bindings = do
-        s <- foldM insert M.empty bindings
+        (s, p) <- foldM insert (M.empty, M.empty) bindings
         res <- if recursive
                then loebM (encapsulate <$> s)
                else traverse (thunk . withScopes scope) s
-        return (res, foldl' go M.empty bindings)
+        return (res, p)
       where
-        go m ([k], pos, _) = M.insert k pos m
-        go m _ = m
+        encapsulate f attrs = thunk . withScopes scope . pushScope attrs $ f
 
-        encapsulate f attrs =
-            thunk . withScopes scope . pushScope attrs $ f
-
-        insert m (path, _, value) = attrSetAlter path m value
+        insert (m, p) (path, pos, value) = attrSetAlter path pos m p value
 
 evalSelect :: forall e v t m. MonadNixEval e v t m
            => m v
