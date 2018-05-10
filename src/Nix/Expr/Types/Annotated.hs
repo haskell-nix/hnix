@@ -108,10 +108,11 @@ type NExprLocF = AnnF SrcSpan NExprF
 -- | A nix expression with source location at each subexpression.
 type NExprLoc = Fix NExprLocF
 
-#if MIN_VERSION_hashable(1, 2, 5) && MIN_VERSION_deepseq(1, 4, 3)
--- Needs deepseq-1.4.3 because Compose requires NFData1
-instance NFData NExprLoc
+#if !MIN_VERSION_deepseq(1, 4, 3)
+instance (NFData (f (g a)), NFData (g a)) => NFData (Compose f g a)
 #endif
+
+instance NFData NExprLoc
 
 #if MIN_VERSION_serialise(0, 2, 0)
 instance Serialise NExprLoc

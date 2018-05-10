@@ -428,6 +428,10 @@ paramName :: Params r -> Maybe VarName
 paramName (Param n) = Just n
 paramName (ParamSet _ _ n) = n
 
+#if !MIN_VERSION_deepseq(1, 4, 3)
+instance NFData NExpr
+#endif
+
 $(deriveEq1 ''NExprF)
 $(deriveEq1 ''NString)
 $(deriveEq1 ''Binding)
