@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 31f435d94958c0e380e53a0138b53ae04ca4c40bce738ee2522300be68e15ea3
+-- hash: 339a47c09afbfb01628bdac8a438e325c3abeec0f6abe983c634c15eafe94fc3
 
 name:           hnix
 version:        0.5.1
@@ -529,7 +529,7 @@ library
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
   if flag(tracing)
     cpp-options: -DENABLE_TRACING=1
-  if os(linux) && impl(ghc < 8.2)
+  if os(linux)
     build-depends:
         compact
   if !impl(ghcjs)
@@ -597,7 +597,7 @@ executable hnix
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
   if flag(tracing)
     cpp-options: -DENABLE_TRACING=1
-  if os(linux) && impl(ghc < 8.2)
+  if os(linux)
     build-depends:
         compact
   if !impl(ghcjs)
@@ -666,7 +666,7 @@ test-suite hnix-tests
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
   if flag(tracing)
     cpp-options: -DENABLE_TRACING=1
-  if os(linux) && impl(ghc < 8.2)
+  if os(linux)
     build-depends:
         compact
   if !impl(ghcjs)
@@ -715,7 +715,7 @@ benchmark hnix-benchmarks
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
   if flag(tracing)
     cpp-options: -DENABLE_TRACING=1
-  if os(linux) && impl(ghc < 8.2)
+  if os(linux)
     build-depends:
         compact
   if !impl(ghcjs)
