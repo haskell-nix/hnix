@@ -58,7 +58,7 @@ in haskellPackages.developPackage {
 
   modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
     testHaskellDepends = attrs.testHaskellDepends ++
-      [ pkgs.nix haskellPackages_8_2.hpack ];
+      [ pkgs.nix pkgs.haskell.packages.ghc822.hpack ];
 
     enableLibraryProfiling    = doProfiling;
     enableExecutableProfiling = doProfiling;
