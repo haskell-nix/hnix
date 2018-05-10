@@ -109,6 +109,7 @@ library:
     - http-types
     - http-client
     - http-client-tls
+    - interpolate
     - lens-family
     - lens-family-core
     - lens-family-th

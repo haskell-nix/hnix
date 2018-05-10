@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4fcbb40c5cce579b650040f74a0c3536bfcbeed20237041c20a91aac50e82808
+-- hash: b51a4059aa4687700b4434028bbd96da4ce1802a1afa094d39510f0afc0324a8
 
 name:           hnix
 version:        0.5.1
@@ -502,6 +502,7 @@ library
     , http-client
     , http-client-tls
     , http-types
+    , interpolate
     , lens-family
     , lens-family-core
     , lens-family-th

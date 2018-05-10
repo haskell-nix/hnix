@@ -10,6 +10,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
@@ -43,6 +44,7 @@ import qualified "cryptohash-sha1" Crypto.Hash.SHA1 as SHA1
 import qualified "cryptohash-sha256" Crypto.Hash.SHA256 as SHA256
 import qualified "cryptohash-sha512" Crypto.Hash.SHA512 as SHA512
 #endif
+
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Encoding as A
 import           Data.Align (alignWith)
@@ -60,6 +62,7 @@ import           Data.Maybe
 import           Data.Semigroup
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Data.String.Interpolate.IsString
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Text.Encoding
@@ -68,7 +71,6 @@ import qualified Data.Text.Lazy.Builder as Builder
 import           Data.These (fromThese)
 import qualified Data.Time.Clock.POSIX as Time
 import           Data.Traversable (mapM)
-import           Language.Haskell.TH.Syntax (addDependentFile, runIO)
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Effects
@@ -141,15 +143,44 @@ builtinsList = sequence [
     , add0 Normal   "currentSystem"              currentSystem
     , add0 Normal   "currentTime"                currentTime_
     , add2 Normal   "deepSeq"                    deepSeq
+
 #if MIN_VERSION_base(4, 10, 0)
     -- TODO Remove this CPP after the Lift instance for NExpr works with GHC 8.0
-    , add0 TopLevel "derivation"                 $(do
-          let f = "data/nix/corepkgs/derivation.nix"
-          addDependentFile f
-          Success expr <- runIO $ parseNixFile f
+    , add0 TopLevel "derivation" $(do
+          -- This is compiled in so that we only parse and evaluate it once,
+          -- at compile-time.
+          let Success expr = parseNixText [i|
+    /* This is the implementation of the ‘derivation’ builtin function.
+       It's actually a wrapper around the ‘derivationStrict’ primop. */
+
+    drvAttrs @ { outputs ? [ "out" ], ... }:
+
+    let
+
+      strict = derivationStrict drvAttrs;
+
+      commonAttrs = drvAttrs // (builtins.listToAttrs outputsList) //
+        { all = map (x: x.value) outputsList;
+          inherit drvAttrs;
+        };
+
+      outputToAttrListElement = outputName:
+        { name = outputName;
+          value = commonAttrs // {
+            outPath = builtins.getAttr outputName strict;
+            drvPath = strict.drvPath;
+            type = "derivation";
+            inherit outputName;
+          };
+        };
+
+      outputsList = map outputToAttrListElement outputs;
+
+    in (builtins.head outputsList).value|]
           [| cata Eval.eval expr |]
       )
 #endif
+
     , add  TopLevel "derivationStrict"           derivationStrict_
     , add  TopLevel "dirOf"                      dirOf
     , add2 Normal   "div"                        div_
