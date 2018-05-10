@@ -11,6 +11,7 @@ git:
   depth: 1
 
 install:
+  - nix-shell --argstr compiler ghc802 --run true
   - nix-shell --argstr compiler ghc822 --run true
   - nix-shell --argstr compiler ghc842 --run true
 
@@ -19,6 +20,9 @@ env:
     - NIXPKGS_TESTS=yes
     - MATCHING_TESTS=yes
   matrix:
+    - GHCVERSION=ghc802 STRICT=false TRACING=false PROFILING=false
+    - GHCVERSION=ghc802 STRICT=false TRACING=true  PROFILING=false
+    - GHCVERSION=ghc802 STRICT=false TRACING=true  PROFILING=true
     - GHCVERSION=ghc822 STRICT=true  TRACING=false PROFILING=false
     - GHCVERSION=ghc822 STRICT=true  TRACING=true  PROFILING=false
     - GHCVERSION=ghc822 STRICT=true  TRACING=true  PROFILING=true
@@ -28,6 +32,7 @@ env:
 
 matrix:
   allow_failures:
+    - env: GHCVERSION=ghc802 STRICT=true
     - env: GHCVERSION=ghc842 STRICT=true
   exclude:
     - env: GHCVERSION=ghc822 STRICT=false
