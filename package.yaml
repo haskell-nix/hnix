@@ -81,7 +81,7 @@ when:
   - condition: flag(tracing)
     cpp-options: -DENABLE_TRACING=1
 
-  - condition: os(linux)
+  - condition: "os(linux) && impl(ghc >= 8.2) && impl(ghc < 8.3)"
     dependencies:
       - compact
 
