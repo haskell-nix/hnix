@@ -1,4 +1,4 @@
-{ compiler    ? "ghc822" # "ghc842" also works
+{ compiler    ? "ghc822"
 , doProfiling ? false
 , doBenchmark ? false
 , doTracing   ? false
@@ -11,8 +11,6 @@
     config.allowUnfree = true;
     config.allowBroken = false;
   }
-# , nixpkgs     ? import ((import <nixpkgs> {}).fetchFromGitHub {
-#     owner = "NixOS"; repo = "nixpkgs"; inherit rev sha256; }) {
 }:
 
 let inherit (nixpkgs) pkgs;
@@ -26,16 +24,6 @@ let inherit (nixpkgs) pkgs;
         cryptohash-sha256 = doJailbreak super.cryptohash-sha256;
         cryptohash-sha512 = doJailbreak super.cryptohash-sha512;
         serialise         = dontCheck super.serialise;
-
-        compact =
-          if compiler == "ghc842"
-          then doJailbreak super.compact
-          else super.compact;
-
-        ghc-compact =
-          if compiler == "ghc802"
-          then super.ghc-compact_0_1_0_0
-          else null;
 
         ghc-datasize =
           if doProfiling
