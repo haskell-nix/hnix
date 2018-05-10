@@ -2,15 +2,15 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b51a4059aa4687700b4434028bbd96da4ce1802a1afa094d39510f0afc0324a8
+-- hash: c96b1d1f4cba42487a9e22b578ff0d761b8bbee4f2efc4da245e5fdbbe7bc718
 
 name:           hnix
 version:        0.5.1
 synopsis:       Haskell implementation of the Nix language
 description:    Haskell implementation of the Nix language.
 category:       System, Data, Nix
-homepage:       https://github.com/jwiegley/hnix#readme
-bug-reports:    https://github.com/jwiegley/hnix/issues
+homepage:       https://github.com/haskell-nix/hnix#readme
+bug-reports:    https://github.com/haskell-nix/hnix/issues
 author:         John Wiegley
 maintainer:     johnw@newartisans.com
 license:        BSD3
@@ -427,7 +427,7 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/jwiegley/hnix
+  location: https://github.com/haskell-nix/hnix
 
 flag optimize
   description: Enable all optimization flags

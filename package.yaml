@@ -1,7 +1,7 @@
 name:       hnix
 version:    0.5.1
 synopsis:   Haskell implementation of the Nix language
-github:     jwiegley/hnix
+github:     haskell-nix/hnix
 author:     John Wiegley
 maintainer: johnw@newartisans.com
 category:   System, Data, Nix
