@@ -483,6 +483,12 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
           _ -> throwError $ ErrorCall $
                   "addPath: failed: nix-store --add " ++ show path
 
+    toFile_ filepath content = do
+      liftIO $ writeFile filepath content
+      storepath <- addPath filepath
+      liftIO $ removeFile filepath
+      return storepath
+
     makeAbsolutePath origPath = do
         origPathExpanded <- liftIO $ expandHomePath origPath
         absPath <- if isAbsolute origPathExpanded then pure origPathExpanded else do
