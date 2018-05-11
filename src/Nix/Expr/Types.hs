@@ -27,7 +27,7 @@
 -- | The nix expression type and supporting types.
 module Nix.Expr.Types where
 
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 import           Codec.Serialise (Serialise)
 import qualified Codec.Serialise as Ser
 #endif
@@ -147,7 +147,7 @@ instance Hashable1 NExprF
 instance NFData1 NExprF
 #endif
 
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (NExprF r)
 #endif
 
@@ -172,7 +172,7 @@ instance Lift (Fix NExprF) where
 -- | The monomorphic expression type is a fixed point of the polymorphic one.
 type NExpr = Fix NExprF
 
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 instance Serialise NExpr
 #endif
 
@@ -198,7 +198,7 @@ instance Hashable1 Binding
 instance NFData1 Binding
 #endif
 
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (Binding r)
 #endif
 
@@ -222,7 +222,7 @@ instance Hashable1 Params
 instance NFData1 Params
 #endif
 
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (Params r)
 #endif
 
@@ -255,7 +255,7 @@ instance Hashable2 Antiquoted where
 instance NFData v => NFData1 (Antiquoted v)
 #endif
 
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 instance (Serialise v, Serialise r) => Serialise (Antiquoted v r)
 #endif
 
@@ -281,7 +281,7 @@ instance Hashable1 NString
 instance NFData1 NString
 #endif
 
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (NString r)
 #endif
 
@@ -315,7 +315,7 @@ data NKeyName r
   deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
             Hashable)
 
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (NKeyName r)
 
 instance Serialise Pos where
@@ -399,7 +399,7 @@ data NUnaryOp = NNeg | NNot
   deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
             Hashable)
 
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 instance Serialise NUnaryOp
 #endif
 
@@ -424,7 +424,7 @@ data NBinaryOp
   deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
             Hashable)
 
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 instance Serialise NBinaryOp
 #endif
 

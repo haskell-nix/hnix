@@ -21,7 +21,7 @@ module Nix.Expr.Types.Annotated
   , SourcePos(..), unPos, mkPos
   )where
 
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 import Codec.Serialise
 #endif
 import Control.DeepSeq
@@ -56,7 +56,7 @@ data SrcSpan = SrcSpan
     deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData,
               Hashable)
 
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 instance Serialise SrcSpan
 #endif
 
@@ -75,7 +75,7 @@ data Ann ann a = Ann
 instance Hashable ann => Hashable1 (Ann ann)
 #endif
 
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 instance (Serialise ann, Serialise a) => Serialise (Ann ann a)
 #endif
 
@@ -114,7 +114,7 @@ instance (NFData (f (g a)), NFData (g a)) => NFData (Compose f g a)
 
 instance NFData NExprLoc
 
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 instance Serialise NExprLoc
 #endif
 
@@ -130,7 +130,7 @@ instance Binary NExprLoc
 instance ToJSON SrcSpan
 instance FromJSON SrcSpan
 
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (Compose (Ann SrcSpan) NExprF r) where
     encode (Compose (Ann ann a)) = encode ann <> encode a
     decode = (Compose .) . Ann <$> decode <*> decode

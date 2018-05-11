@@ -13,7 +13,7 @@ import           Nix.Expr.Types.Annotated
 import qualified Data.Compact as C
 import qualified Data.Compact.Serialize as C
 #endif
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 import qualified Codec.Serialise as S
 #endif
 
@@ -25,7 +25,7 @@ readCache path = do
         Left err -> error $ "Error reading cache file: " ++ err
         Right expr -> return $ C.getCompact expr
 #else
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
     eres <- S.deserialiseOrFail <$> BS.readFile path
     case eres of
         Left err -> error $ "Error reading cache file: " ++ show err
@@ -40,7 +40,7 @@ writeCache path expr =
 #ifdef USE_COMPACT
     C.writeCompact path =<< C.compact expr
 #else
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
     BS.writeFile path (S.serialise expr)
 #else
     error "writeCache not implemented for this platform"

@@ -6,7 +6,7 @@
 
 module Nix.Atoms where
 
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 import Codec.Serialise
 #endif
 import Control.DeepSeq
@@ -31,7 +31,7 @@ data NAtom
   deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
             Hashable)
 
-#if MIN_VERSION_serialise(0, 2, 0)
+#ifdef MIN_VERSION_serialise
 instance Serialise NAtom
 #endif
 
