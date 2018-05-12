@@ -67,7 +67,7 @@ import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
-#if MIN_VERSION_haskeline(0, 4, 7)
+#ifdef MIN_VERSION_haskeline
 import           System.Console.Haskeline.MonadException hiding (catch)
 #endif
 import           System.Directory
@@ -79,7 +79,9 @@ import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
 import           Text.PrettyPrint.ANSI.Leijen (text)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
+#ifdef MIN_VERSION_pretty_show
 import qualified Text.Show.Pretty as PS
+#endif
 
 #ifdef MIN_VERSION_ghc_datasize
 #if MIN_VERSION_ghc_datasize(0,2,0) && __GLASGOW_HASKELL__ >= 804
@@ -485,7 +487,7 @@ instance MonadCatch m => MonadCatch (Lazy m) where
 instance MonadThrow m => MonadThrow (Lazy m) where
     throwM = Lazy . throwM
 
-#if MIN_VERSION_haskeline(0, 4, 7)
+#ifdef MIN_VERSION_haskeline
 instance MonadException m => MonadException (Lazy m) where
   controlIO f = Lazy $ controlIO $ \(RunIO run) ->
       let run' = RunIO (fmap Lazy . run . runLazy)
@@ -753,7 +755,11 @@ addTracing k v = do
             opts :: Options <- asks (view hasLens)
             let rendered =
                     if verbose opts >= Chatty
+#ifdef MIN_VERSION_pretty_show
                     then text $ PS.ppShow (void x)
+#else
+                    then text $ show (void x)
+#endif
                     else prettyNix (Fix (Fix (NSym "?") <$ x))
                 msg x = text ("eval: " ++ replicate depth ' ') <> x
             loc <- renderLocation span (msg rendered <> text " ...\n")

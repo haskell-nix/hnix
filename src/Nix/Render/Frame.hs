@@ -30,7 +30,7 @@ import           Nix.Value
 import           Text.Megaparsec.Pos
 import qualified Text.PrettyPrint.ANSI.Leijen as P
 import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
-#if MIN_VERSION_pretty_show(1, 6, 16)
+#ifdef MIN_VERSION_pretty_show
 import qualified Text.Show.Pretty as PS
 #endif
 
@@ -114,7 +114,7 @@ renderExpr _level longLabel shortLabel e@(Fix (Compose (Ann _ x))) = do
     opts :: Options <- asks (view hasLens)
     let rendered
             | verbose opts >= DebugInfo =
-#if MIN_VERSION_pretty_show(1, 6, 16)
+#ifdef MIN_VERSION_pretty_show
               text (PS.ppShow (stripAnnotation e))
 #else
               text (show (stripAnnotation e))

@@ -156,7 +156,6 @@ executables:
     dependencies:
       - hnix
       - aeson
-      - pretty-show
       - repline
       - haskeline
     when:
@@ -165,6 +164,7 @@ executables:
           buildable: false
         else:
           buildable: true
+          dependencies: pretty-show
 
 tests:
   hnix-tests:
@@ -188,13 +188,13 @@ tests:
       - Diff
       - megaparsec
       - tasty-quickcheck
-      - pretty-show
     when:
       - condition: "impl(ghcjs)"
         then:
           buildable: false
         else:
           buildable: true
+          dependencies: pretty-show
 
 benchmarks:
   hnix-benchmarks:
