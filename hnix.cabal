@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 811d6e9cc2046442e375ad2773d8a96490f8f823e10ef44e726aec59374287bf
+-- hash: dbafa03cbffef6052cbc754e8e9c1bcc6b214acc725cc17e140f329a22961f02
 
 name:           hnix
 version:        0.5.1
@@ -586,7 +586,6 @@ executable hnix
     , hnix
     , mtl
     , optparse-applicative
-    , pretty-show
     , repline
     , template-haskell
     , text
@@ -611,6 +610,8 @@ executable hnix
   if impl(ghcjs)
     buildable: False
   else
+    build-depends:
+        pretty-show
     buildable: True
   default-language: Haskell2010
 
@@ -648,7 +649,6 @@ test-suite hnix-tests
     , megaparsec
     , mtl
     , optparse-applicative
-    , pretty-show
     , process
     , quickcheck-instances
     , split
@@ -680,6 +680,8 @@ test-suite hnix-tests
   if impl(ghcjs)
     buildable: False
   else
+    build-depends:
+        pretty-show
     buildable: True
   default-language: Haskell2010
 
