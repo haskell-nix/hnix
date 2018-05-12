@@ -76,6 +76,14 @@ $ cabal build
 $ ./dist/build/hnix/hnix <args> +RTS -p
 ```
 
+## Building with GHCJS
+
+From the project root directory, run:
+
+```
+$ NIX_CONF_DIR=`pwd`/ghcjs-infra nix-build ghcjs.nix
+```
+
 ## How you can help
 
 If you're looking for a way to help out, try taking a look
