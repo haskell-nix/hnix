@@ -313,7 +313,9 @@ argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
 nixBinders :: Parser [Binding NExprLoc]
 nixBinders = (inherit <+> namedVar) `endBy` semi where
   inherit = do
-      _ <- string "inherit"
+      -- We can't use 'reserved' here because it would consume the whitespace
+      -- after the keyword, which is not exactly the semantics of C++ Nix.
+      try $ string "inherit" *> lookAhead (void (satisfy reservedEnd))
       p <- getPosition
       x <- whiteSpace *> optional scope
       Inherit x <$> many keyName <*> pure p <?> "inherited binding"
