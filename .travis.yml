@@ -21,13 +21,13 @@ env:
     - MATCHING_TESTS=yes
   matrix:
     - GHCVERSION=ghc802 STRICT=false TRACING=false PROFILING=false
-    - GHCVERSION=ghc802 STRICT=false TRACING=true  PROFILING=false
+    # - GHCVERSION=ghc802 STRICT=false TRACING=true  PROFILING=false
     - GHCVERSION=ghc802 STRICT=false TRACING=true  PROFILING=true
     - GHCVERSION=ghc822 STRICT=true  TRACING=false PROFILING=false
     - GHCVERSION=ghc822 STRICT=true  TRACING=true  PROFILING=false
     - GHCVERSION=ghc822 STRICT=true  TRACING=true  PROFILING=true
     - GHCVERSION=ghc842 STRICT=false TRACING=false PROFILING=false
-    - GHCVERSION=ghc842 STRICT=false TRACING=true  PROFILING=false
+    # - GHCVERSION=ghc842 STRICT=false TRACING=true  PROFILING=false
     - GHCVERSION=ghc842 STRICT=false TRACING=true  PROFILING=true
 
 matrix:
