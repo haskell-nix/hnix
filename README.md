@@ -76,6 +76,17 @@ $ cabal build
 $ ./dist/build/hnix/hnix <args> +RTS -p
 ```
 
+## Building with GHCJS
+
+From the project root directory, run:
+
+```
+$ NIX_CONF_DIR=$PWD/ghcjs nix-build ghcjs
+```
+
+This will build an `hnix` library that can be linked to your GHCJS
+application.
+
 ## How you can help
 
 If you're looking for a way to help out, try taking a look
