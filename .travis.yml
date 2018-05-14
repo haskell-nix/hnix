@@ -26,8 +26,7 @@ env:
 
 matrix:
   allow_failures:
-    - env: GHCVERSION=ghc802 STRICT=true
-    - env: GHCVERSION=ghc842 STRICT=true
+    - env: GHCVERSION=ghcjs
   exclude:
     - env: GHCVERSION=ghc822 STRICT=false
 
