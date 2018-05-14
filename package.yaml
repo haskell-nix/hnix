@@ -179,11 +179,11 @@ tests:
       - process
       - split
       - tasty
+      - tasty-hedgehog
       - tasty-hunit
       - tasty-th
       - unix
-      - QuickCheck
-      - quickcheck-instances
+      - hedgehog
       - generic-random
       - Diff
       - megaparsec

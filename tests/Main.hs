@@ -100,7 +100,8 @@ main = do
     [ ParserTests.tests
     , EvalTests.tests
     , PrettyTests.tests ] ++
-    [ PrettyParseTests.tests (read (fromMaybe "0" prettyTestsEnv)) ] ++
+    [ PrettyParseTests.tests
+        (fromIntegral (read (fromMaybe "0" prettyTestsEnv) :: Int)) ] ++
     [ evalComparisonTests ] ++
     [ testCase "Nix language tests present" ensureLangTestsPresent
     , nixLanguageTests ] ++
