@@ -86,12 +86,14 @@ main = do
   evalComparisonTests <- EvalTests.genEvalCompareTests
   nixpkgsTestsEnv     <- lookupEnv "NIXPKGS_TESTS"
   prettyTestsEnv      <- lookupEnv "PRETTY_TESTS"
+  hpackTestsEnv       <- lookupEnv "HPACK_TESTS"
 
   pwd <- getCurrentDirectory
   setEnv "NIX_REMOTE" ("local?root=" ++ pwd ++ "/")
 
   defaultMain $ testGroup "hnix" $
-    [ testCase "hnix.cabal correctly generated" cabalCorrectlyGenerated ] ++
+    [ testCase "hnix.cabal correctly generated" cabalCorrectlyGenerated
+      | isJust hpackTestsEnv ] ++
     [ ParserTests.tests
     , EvalTests.tests
     , PrettyTests.tests ] ++
