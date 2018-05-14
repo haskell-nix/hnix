@@ -22,7 +22,9 @@ $ cabal configure --enable-tests
 $ cabal build
 $ cabal test
 # To run all of the tests, which takes up to a minute:
-$ LANGUAGE_TESTS=yes NIXPKGS_TESTS=yes cabal test
+$ env ALL_TESTS=yes cabal test
+# To run only specific tests (see `tests/Main.hs` for a list)
+$ env NIXPKGS_TESTS=yes PRETTY_TESTS=yes cabal test
 $ ./dist/build/hnix/hnix --help
 ```
 
