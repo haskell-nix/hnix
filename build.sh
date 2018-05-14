@@ -9,7 +9,7 @@ TRACING=${TRACING:-false}
 PROFILING=${PROFILING:-false}
 
 if [ "$GHCVERSION" = "ghcjs" ]; then
-    exec nix-build ghcjs
+    exec NIX_CONF_DIR=$PWD/ghcjs nix-build ghcjs
 else
     exec nix-build                              \
         --argstr compiler $GHCVERSION           \
