@@ -396,8 +396,8 @@ type NAttrPath r = NonEmpty (NKeyName r)
 
 -- | There are two unary operations: logical not and integer negation.
 data NUnaryOp = NNeg | NNot
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
-            Hashable)
+  deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
+            NFData, Hashable)
 
 #ifdef MIN_VERSION_serialise
 instance Serialise NUnaryOp
@@ -421,8 +421,8 @@ data NBinaryOp
   | NDiv     -- ^ Division (/)
   | NConcat  -- ^ List concatenation (++)
   | NApp     -- ^ Apply a function to an argument.
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
-            Hashable)
+  deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
+            NFData, Hashable)
 
 #ifdef MIN_VERSION_serialise
 instance Serialise NBinaryOp
