@@ -7,6 +7,7 @@ module Main where
 
 import           Control.DeepSeq
 import qualified Control.Exception as Exc
+import           Control.Applicative ((<|>))
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Fix
@@ -84,14 +85,18 @@ main :: IO ()
 main = do
   nixLanguageTests    <- NixLanguageTests.genTests
   evalComparisonTests <- EvalTests.genEvalCompareTests
-  nixpkgsTestsEnv     <- lookupEnv "NIXPKGS_TESTS"
-  prettyTestsEnv      <- lookupEnv "PRETTY_TESTS"
+  let allOrLookup = \var ->
+        lookupEnv "ALL_TESTS" <|> lookupEnv var
+  nixpkgsTestsEnv     <- allOrLookup "NIXPKGS_TESTS"
+  prettyTestsEnv      <- allOrLookup "PRETTY_TESTS"
+  hpackTestsEnv       <- allOrLookup "HPACK_TESTS"
 
   pwd <- getCurrentDirectory
   setEnv "NIX_REMOTE" ("local?root=" ++ pwd ++ "/")
 
   defaultMain $ testGroup "hnix" $
-    [ testCase "hnix.cabal correctly generated" cabalCorrectlyGenerated ] ++
+    [ testCase "hnix.cabal correctly generated" cabalCorrectlyGenerated
+      | isJust hpackTestsEnv ] ++
     [ ParserTests.tests
     , EvalTests.tests
     , PrettyTests.tests ] ++
