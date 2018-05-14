@@ -9,7 +9,7 @@ TRACING=${TRACING:-false}
 PROFILING=${PROFILING:-false}
 
 if [ "$GHCVERSION" = "ghcjs" ]; then
-    NIX_CONF_DIR=$PWD/ghcjs nix-build ghcjs
+    nix-build --substituters 'https://nixcache.reflex-frp.org?trusted=1' ghcjs
 else
     nix-build                                   \
         --argstr compiler $GHCVERSION           \

@@ -27,7 +27,7 @@ env:
     - GHCVERSION=ghc822 STRICT=true  TRACING=true  PROFILING=true
     - GHCVERSION=ghc842 STRICT=false TRACING=false PROFILING=false
     - GHCVERSION=ghc842 STRICT=false TRACING=true  PROFILING=true
-    # - GHCVERSION=ghcjs
+    - GHCVERSION=ghcjs
 
 matrix:
   allow_failures:
