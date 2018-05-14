@@ -3,8 +3,8 @@
 , doBenchmark ? false
 , doTracing   ? false
 , doStrict    ? false
-, rev         ? "a2981671523416ad5c9a49de8c16ac8fccb2306b"
-, sha256      ? "1cgp63hdzfs836ynvfsknp43dkgq0dfny1bb79c97rzh1alqx0kz"
+, rev         ? "9d0b6b9dfc92a2704e2111aa836f5bdbf8c9ba42"
+, sha256      ? "096r7ylnwz4nshrfkh127dg8nhrcvgpr69l4xrdgy3kbq049r3nb"
 , nixpkgs     ? if builtins.compareVersions builtins.nixVersion "2.0" < 0
                 then abort "hnix requires nix 2.0"
                 else import (builtins.fetchTarball {
