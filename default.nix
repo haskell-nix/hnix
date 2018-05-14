@@ -58,7 +58,16 @@ in haskellPackages.developPackage {
 
   modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
     testHaskellDepends = attrs.testHaskellDepends ++
-      [ pkgs.nix pkgs.haskell.packages.ghc822.hpack ];
+      [ pkgs.nix pkgs.haskell.packages.ghc822.hpack
+
+        (let cabalInstallVersion = {
+               ghc802 = "1.24.0.2";
+               ghc822 = "2.0.0.1";
+               ghc842 = "2.2.0.0";
+             }; in
+         haskellPackages.callHackage "cabal-install"
+          (cabalInstallVersion.${compiler}) {})
+      ];
 
     enableLibraryProfiling    = doProfiling;
     enableExecutableProfiling = doProfiling;
