@@ -1,12 +1,12 @@
-{ compiler    ? "ghc822"
+{ compiler ? "ghc822"
 
 , doProfiling ? false
 , doBenchmark ? false
 , doTracing   ? false
 , doStrict    ? false
 
-, rev     ? "255a833e841628c0b834575664eae373e28cdc27"
-, sha256  ? "022xm1pf4fpjjy69g7qz6rpqnwpjcy1l0vj49m8xmgn553cs42ch"
+, rev     ? "9d0b6b9dfc92a2704e2111aa836f5bdbf8c9ba42"
+, sha256  ? "096r7ylnwz4nshrfkh127dg8nhrcvgpr69l4xrdgy3kbq049r3nb"
 , nixpkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
     then abort "hnix requires at least nix 2.0"
@@ -68,16 +68,7 @@ in haskellPackages.developPackage {
 
   modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
     testHaskellDepends = attrs.testHaskellDepends ++
-      [ pkgs.nix pkgs.haskell.packages.ghc822.hpack
-
-        (let cabalInstallVersion = {
-               ghc802 = "1.24.0.2";
-               ghc822 = "2.0.0.1";
-               ghc842 = "2.2.0.0";
-             }; in
-         haskellPackages.callHackage "cabal-install"
-          cabalInstallVersion.${compiler} {})
-      ];
+      [ pkgs.nix pkgs.haskell.packages.ghc822.hpack ];
 
     enableLibraryProfiling    = doProfiling;
     enableExecutableProfiling = doProfiling;
