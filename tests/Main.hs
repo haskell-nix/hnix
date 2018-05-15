@@ -12,7 +12,7 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Fix
 import           Data.List (isInfixOf)
-import           Data.Maybe (isJust, fromMaybe)
+import           Data.Maybe
 import           Data.String.Interpolate.IsString
 import           Data.Text (unpack)
 import           Data.Time
@@ -26,7 +26,7 @@ import           Nix.Value
 import qualified NixLanguageTests
 import qualified ParserTests
 import qualified PrettyTests
-import qualified PrettyParseTests
+-- import qualified PrettyParseTests
 import           System.Directory
 import           System.Environment
 import           System.FilePath.Glob
@@ -85,10 +85,9 @@ main :: IO ()
 main = do
   nixLanguageTests    <- NixLanguageTests.genTests
   evalComparisonTests <- EvalTests.genEvalCompareTests
-  let allOrLookup = \var ->
-        lookupEnv "ALL_TESTS" <|> lookupEnv var
+  let allOrLookup var = lookupEnv "ALL_TESTS" <|> lookupEnv var
   nixpkgsTestsEnv     <- allOrLookup "NIXPKGS_TESTS"
-  prettyTestsEnv      <- allOrLookup "PRETTY_TESTS"
+  -- prettyTestsEnv      <- lookupEnv "PRETTY_TESTS"
   hpackTestsEnv       <- allOrLookup "HPACK_TESTS"
 
   pwd <- getCurrentDirectory
@@ -100,8 +99,8 @@ main = do
     [ ParserTests.tests
     , EvalTests.tests
     , PrettyTests.tests ] ++
-    [ PrettyParseTests.tests
-        (fromIntegral (read (fromMaybe "0" prettyTestsEnv) :: Int)) ] ++
+    -- [ PrettyParseTests.tests
+    --     (fromIntegral (read (fromMaybe "0" prettyTestsEnv) :: Int)) ] ++
     [ evalComparisonTests ] ++
     [ testCase "Nix language tests present" ensureLangTestsPresent
     , nixLanguageTests ] ++
