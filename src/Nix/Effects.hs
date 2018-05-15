@@ -13,6 +13,8 @@ class MonadFile m => MonadEffects m where
     -- | Import a path into the nix store, and return the resulting path
     addPath :: FilePath -> m StorePath
 
+    toFile_ :: FilePath -> String -> m StorePath
+
     -- | Determine the absolute path of relative path in the current context
     makeAbsolutePath :: FilePath -> m FilePath
     findEnvPath :: String -> m FilePath
@@ -38,3 +40,4 @@ class MonadFile m => MonadEffects m where
     traceEffect :: String -> m ()
 
     exec :: [String] -> m (NValue m)
+
