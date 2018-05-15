@@ -5,8 +5,8 @@
 , doTracing   ? false
 , doStrict    ? false
 
-, rev     ? "a2981671523416ad5c9a49de8c16ac8fccb2306b"
-, sha256  ? "1cgp63hdzfs836ynvfsknp43dkgq0dfny1bb79c97rzh1alqx0kz"
+, rev     ? "255a833e841628c0b834575664eae373e28cdc27"
+, sha256  ? "022xm1pf4fpjjy69g7qz6rpqnwpjcy1l0vj49m8xmgn553cs42ch"
 , nixpkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
     then abort "hnix requires at least nix 2.0"
