@@ -1,7 +1,7 @@
 name:       hnix
-version:    0.5.0
+version:    0.5.1
 synopsis:   Haskell implementation of the Nix language
-github:     jwiegley/hnix
+github:     haskell-nix/hnix
 author:     John Wiegley
 maintainer: johnw@newartisans.com
 category:   System, Data, Nix
@@ -11,29 +11,28 @@ description:
   Haskell implementation of the Nix language.
 
 extra-source-files:
+  - LICENSE
   - README.md
-
-dependencies:
-  - base                        >= 4.9 && < 5
-  - ansi-wl-pprint
-  - bytestring
-  - compact
-  - containers
-  - data-fix
-  - deepseq
-  - exceptions
-  - filepath
-  - mtl
-  - optparse-applicative
-  - serialise
-  - template-haskell
-  - text
-  - time
-  - transformers
-  - unordered-containers        >= 0.2.9 && < 0.3
-
-ghc-options:
-  - -Wall
+  - package.yaml
+  - data/*
+  - data/nix/*
+  - data/nix/corepkgs/*
+  - data/nix/config/*
+  - data/nix/perl/*
+  - data/nix/perl/lib/Nix/*
+  - data/nix/tests/*
+  - data/nix/tests/plugins/*
+  - data/nix/tests/lang/*
+  - data/nix/tests/lang/readDir/*
+  - data/nix/tests/lang/readDir/foo/*
+  - data/nix/tests/lang/dir2/*
+  - data/nix/tests/lang/dir4/*
+  - data/nix/tests/lang/dir3/*
+  - data/nix/tests/lang/dir1/*
+  - data/nix/maintainers/*
+  - data/nix/mk/*
+  - data/nix/scripts/*
+  - tests/eval-compare/*
 
 flags:
   tracing:
@@ -51,6 +50,27 @@ flags:
     manual: True
     default: False
 
+ghc-options:
+  - -Wall
+
+dependencies:
+  - base                        >= 4.9 && < 5
+  - ansi-wl-pprint
+  - bytestring
+  - containers
+  - data-fix
+  - deepseq                     >= 1.4.2 && < 1.5
+  - exceptions
+  - filepath
+  - hashing
+  - mtl
+  - optparse-applicative
+  - template-haskell
+  - text
+  - time
+  - transformers
+  - unordered-containers        >= 0.2.9 && < 0.3
+
 when:
   - condition: flag(optimize)
     ghc-options:
@@ -58,38 +78,44 @@ when:
       - -fspecialise-aggressively
       - -O2
 
-when:
   - condition: flag(tracing)
     cpp-options: -DENABLE_TRACING=1
+
+  - condition: "os(linux) && impl(ghc >= 8.2) && impl(ghc < 8.3)"
+    dependencies:
+      - compact
+
+  - condition: "!impl(ghcjs)"
+    dependencies:
+      - base16-bytestring
+      - cryptohash-md5
+      - cryptohash-sha1
+      - cryptohash-sha256
+      - cryptohash-sha512
+      - serialise
 
 library:
   source-dirs: src
   dependencies:
     - aeson
     - ansi-wl-pprint
-    - array                     >= 0.4 && < 0.6
-    - base16-bytestring
+    - array                     >= 0.4   && < 0.6
     - binary
-    - cryptohash
-    - deriving-compat           >= 0.3 && < 0.5
+    - deriving-compat           >= 0.3   && < 0.5
     - directory
-    - hashable
     - http-types
     - http-client
     - http-client-tls
-    - haskeline
-    - lens-family
-    - lens-family-core
+    - interpolate
     - lens-family-th
     - logict
-    - megaparsec
+    - megaparsec                >= 6.0   && < 6.6
     - monadlist
-    - pretty-show
     - process
     - regex-tdfa
     - regex-tdfa-text
     - scientific
-    - semigroups                >= 0.18 && < 0.19
+    - semigroups                >= 0.18  && < 0.19
     - split
     - syb
     - these
@@ -97,9 +123,31 @@ library:
     - vector
     - xml
   when:
-    - condition: impl(ghc < 8.4.0) && !flag(profiling)
+    - condition: "impl(ghc < 8.1)"
+      then:
+        dependencies:
+          - lens-family       == 1.2.1
+          - lens-family-core  == 1.2.1
+      else:
+        dependencies:
+          - lens-family       >= 1.2.2
+          - lens-family-core  >= 1.2.2
+
+    - condition: "impl(ghc < 8.4.0) && !flag(profiling)"
       dependencies:
         - ghc-datasize
+
+    - condition: "impl(ghcjs)"
+      then:
+        dependencies:
+          - hashable >= 1.2.4 && < 1.3
+      else:
+        exposed-modules:
+          - Nix.Options.Parser
+        dependencies:
+          - hashable >= 1.2.5 && < 1.3
+          - haskeline
+          - pretty-show
 
 executables:
   hnix:
@@ -111,6 +159,12 @@ executables:
       - pretty-show
       - repline
       - haskeline
+    when:
+      - condition: "impl(ghcjs)"
+        then:
+          buildable: false
+        else:
+          buildable: true
 
 tests:
   hnix-tests:
@@ -135,6 +189,12 @@ tests:
       - megaparsec
       - tasty-quickcheck
       - pretty-show
+    when:
+      - condition: "impl(ghcjs)"
+        then:
+          buildable: false
+        else:
+          buildable: true
 
 benchmarks:
   hnix-benchmarks:
@@ -143,3 +203,9 @@ benchmarks:
     dependencies:
       - hnix
       - criterion
+    when:
+      - condition: "impl(ghcjs)"
+        then:
+          buildable: false
+        else:
+          buildable: true

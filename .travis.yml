@@ -7,7 +7,11 @@ language: nix
 #     - /nix
 #   timeout: 100000
 
+git:
+  depth: 1
+
 install:
+  - nix-shell --argstr compiler ghc802 --run true
   - nix-shell --argstr compiler ghc822 --run true
   - nix-shell --argstr compiler ghc842 --run true
 
@@ -16,27 +20,24 @@ env:
     - NIXPKGS_TESTS=yes
     - MATCHING_TESTS=yes
   matrix:
-    - GHCVERSION=ghc822 TRACING=true
-    - GHCVERSION=ghc822 TRACING=false
-    - GHCVERSION=ghc822 STRICT=true
-    - GHCVERSION=ghc822 STRICT=false
-    - GHCVERSION=ghc822 PROFILING=true
-    - GHCVERSION=ghc822 PROFILING=false
-    - GHCVERSION=ghc842 TRACING=true
-    - GHCVERSION=ghc842 TRACING=false
-    - GHCVERSION=ghc842 STRICT=true
-    - GHCVERSION=ghc842 STRICT=false
-    - GHCVERSION=ghc842 PROFILING=true
-    - GHCVERSION=ghc842 PROFILING=false
+    - GHCVERSION=ghc802 STRICT=false TRACING=false PROFILING=false
+    - GHCVERSION=ghc802 STRICT=false TRACING=true  PROFILING=true
+    - GHCVERSION=ghc822 STRICT=true  TRACING=false PROFILING=false
+    - GHCVERSION=ghc822 STRICT=true  TRACING=true  PROFILING=false
+    - GHCVERSION=ghc822 STRICT=true  TRACING=true  PROFILING=true
+    - GHCVERSION=ghc842 STRICT=false TRACING=false PROFILING=false
+    - GHCVERSION=ghc842 STRICT=false TRACING=true  PROFILING=true
+    # - GHCVERSION=ghcjs
 
 matrix:
   allow_failures:
+    - env: GHCVERSION=ghc802 STRICT=true
     - env: GHCVERSION=ghc842 STRICT=true
   exclude:
     - env: GHCVERSION=ghc822 STRICT=false
 
 script:
-  - nix-build --argstr compiler $GHCVERSION --arg doProfiling $PROFILING --arg doTracing $TRACING --arg doStrict $STRICT
+  - bash -xe build.sh
 
 branches:
   only:

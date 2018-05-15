@@ -7,6 +7,7 @@ module Main where
 
 import           Control.DeepSeq
 import qualified Control.Exception as Exc
+import           Control.Applicative ((<|>))
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Fix
@@ -26,6 +27,7 @@ import qualified NixLanguageTests
 import qualified ParserTests
 import qualified PrettyTests
 import qualified PrettyParseTests
+import           System.Directory
 import           System.Environment
 import           System.FilePath.Glob
 import           System.Posix.Files
@@ -83,20 +85,25 @@ main :: IO ()
 main = do
   nixLanguageTests    <- NixLanguageTests.genTests
   evalComparisonTests <- EvalTests.genEvalCompareTests
-  langTestsEnv        <- lookupEnv "LANGUAGE_TESTS"
-  nixpkgsTestsEnv     <- lookupEnv "NIXPKGS_TESTS"
-  prettyTestsEnv      <- lookupEnv "PRETTY_TESTS"
+  let allOrLookup = \var ->
+        lookupEnv "ALL_TESTS" <|> lookupEnv var
+  nixpkgsTestsEnv     <- allOrLookup "NIXPKGS_TESTS"
+  prettyTestsEnv      <- allOrLookup "PRETTY_TESTS"
+  hpackTestsEnv       <- allOrLookup "HPACK_TESTS"
+
+  pwd <- getCurrentDirectory
+  setEnv "NIX_REMOTE" ("local?root=" ++ pwd ++ "/")
 
   defaultMain $ testGroup "hnix" $
-    [ testCase "hnix.cabal correctly generated" cabalCorrectlyGenerated ] ++
+    [ testCase "hnix.cabal correctly generated" cabalCorrectlyGenerated
+      | isJust hpackTestsEnv ] ++
     [ ParserTests.tests
     , EvalTests.tests
     , PrettyTests.tests ] ++
     [ PrettyParseTests.tests (read (fromMaybe "0" prettyTestsEnv)) ] ++
     [ evalComparisonTests ] ++
     [ testCase "Nix language tests present" ensureLangTestsPresent
-      | isJust langTestsEnv ] ++
-    [ nixLanguageTests | isJust langTestsEnv ] ++
+    , nixLanguageTests ] ++
     [ testCase "Nixpkgs parses without errors" ensureNixpkgsCanParse
       | isJust nixpkgsTestsEnv ]
 

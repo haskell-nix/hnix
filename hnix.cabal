@@ -2,15 +2,15 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: cbc369801227ccd516b691c3f08a9aae9b5ac8723619706b83703a805d570972
+-- hash: 811d6e9cc2046442e375ad2773d8a96490f8f823e10ef44e726aec59374287bf
 
 name:           hnix
-version:        0.5.0
+version:        0.5.1
 synopsis:       Haskell implementation of the Nix language
 description:    Haskell implementation of the Nix language.
 category:       System, Data, Nix
-homepage:       https://github.com/jwiegley/hnix#readme
-bug-reports:    https://github.com/jwiegley/hnix/issues
+homepage:       https://github.com/haskell-nix/hnix#readme
+bug-reports:    https://github.com/haskell-nix/hnix/issues
 author:         John Wiegley
 maintainer:     johnw@newartisans.com
 license:        BSD3
@@ -19,11 +19,415 @@ build-type:     Simple
 cabal-version:  >= 1.10
 
 extra-source-files:
+    data/let-comments-multiline.nix
+    data/let-comments.nix
+    data/let.nix
+    data/nix/bootstrap.sh
+    data/nix/config/config.guess
+    data/nix/config/config.sub
+    data/nix/config/install-sh
+    data/nix/configure.ac
+    data/nix/COPYING
+    data/nix/corepkgs/buildenv.nix
+    data/nix/corepkgs/config.nix.in
+    data/nix/corepkgs/derivation.nix
+    data/nix/corepkgs/fetchurl.nix
+    data/nix/corepkgs/imported-drv-to-derivation.nix
+    data/nix/corepkgs/local.mk
+    data/nix/corepkgs/unpack-channel.nix
+    data/nix/local.mk
+    data/nix/maintainers/upload-release.pl
+    data/nix/Makefile
+    data/nix/Makefile.config.in
+    data/nix/mk/clean.mk
+    data/nix/mk/dist.mk
+    data/nix/mk/functions.mk
+    data/nix/mk/install.mk
+    data/nix/mk/jars.mk
+    data/nix/mk/lib.mk
+    data/nix/mk/libraries.mk
+    data/nix/mk/patterns.mk
+    data/nix/mk/programs.mk
+    data/nix/mk/README.md
+    data/nix/mk/templates.mk
+    data/nix/mk/tests.mk
+    data/nix/mk/tracing.mk
+    data/nix/nix.spec.in
+    data/nix/perl/configure.ac
+    data/nix/perl/lib/Nix/Config.pm.in
+    data/nix/perl/lib/Nix/CopyClosure.pm
+    data/nix/perl/lib/Nix/Manifest.pm
+    data/nix/perl/lib/Nix/SSH.pm
+    data/nix/perl/lib/Nix/Store.pm
+    data/nix/perl/lib/Nix/Store.xs
+    data/nix/perl/lib/Nix/Utils.pm
+    data/nix/perl/local.mk
+    data/nix/perl/Makefile
+    data/nix/perl/Makefile.config.in
+    data/nix/perl/MANIFEST
+    data/nix/README.md
+    data/nix/release-common.nix
+    data/nix/release.nix
+    data/nix/scripts/install-darwin-multi-user.sh
+    data/nix/scripts/install-multi-user.sh
+    data/nix/scripts/install-nix-from-closure.sh
+    data/nix/scripts/install-systemd-multi-user.sh
+    data/nix/scripts/local.mk
+    data/nix/scripts/nix-http-export.cgi.in
+    data/nix/scripts/nix-profile-daemon.sh.in
+    data/nix/scripts/nix-profile.sh.in
+    data/nix/scripts/nix-reduce-build.in
+    data/nix/shell.nix
+    data/nix/tests/add.sh
+    data/nix/tests/binary-cache.sh
+    data/nix/tests/brotli.sh
+    data/nix/tests/build-dry.sh
+    data/nix/tests/build-hook.nix
+    data/nix/tests/build-remote.sh
+    data/nix/tests/case-hack.sh
+    data/nix/tests/case.nar
+    data/nix/tests/check-refs.nix
+    data/nix/tests/check-refs.sh
+    data/nix/tests/check-reqs.nix
+    data/nix/tests/check-reqs.sh
+    data/nix/tests/check.nix
+    data/nix/tests/check.sh
+    data/nix/tests/common.sh.in
+    data/nix/tests/config.nix
+    data/nix/tests/dependencies.builder0.sh
+    data/nix/tests/dependencies.builder1.sh
+    data/nix/tests/dependencies.builder2.sh
+    data/nix/tests/dependencies.nix
+    data/nix/tests/dependencies.sh
+    data/nix/tests/dump-db.sh
+    data/nix/tests/export-graph.nix
+    data/nix/tests/export-graph.sh
+    data/nix/tests/export.sh
+    data/nix/tests/fetchGit.sh
+    data/nix/tests/fetchMercurial.sh
+    data/nix/tests/fetchurl.sh
+    data/nix/tests/filter-source.nix
+    data/nix/tests/filter-source.sh
+    data/nix/tests/fixed.builder1.sh
+    data/nix/tests/fixed.builder2.sh
+    data/nix/tests/fixed.nix
+    data/nix/tests/fixed.sh
+    data/nix/tests/gc-concurrent.builder.sh
+    data/nix/tests/gc-concurrent.nix
+    data/nix/tests/gc-concurrent.sh
+    data/nix/tests/gc-concurrent2.builder.sh
+    data/nix/tests/gc-runtime.nix
+    data/nix/tests/gc-runtime.sh
+    data/nix/tests/gc.sh
+    data/nix/tests/hash-check.nix
+    data/nix/tests/hash.sh
+    data/nix/tests/import-derivation.nix
+    data/nix/tests/import-derivation.sh
+    data/nix/tests/init.sh
+    data/nix/tests/install-darwin.sh
+    data/nix/tests/lang.sh
+    data/nix/tests/lang/data
+    data/nix/tests/lang/dir1/a.nix
+    data/nix/tests/lang/dir2/a.nix
+    data/nix/tests/lang/dir2/b.nix
+    data/nix/tests/lang/dir3/a.nix
+    data/nix/tests/lang/dir3/b.nix
+    data/nix/tests/lang/dir3/c.nix
+    data/nix/tests/lang/dir4/a.nix
+    data/nix/tests/lang/dir4/c.nix
+    data/nix/tests/lang/eval-fail-abort.nix
+    data/nix/tests/lang/eval-fail-antiquoted-path.nix
+    data/nix/tests/lang/eval-fail-assert.nix
+    data/nix/tests/lang/eval-fail-bad-antiquote-1.nix
+    data/nix/tests/lang/eval-fail-bad-antiquote-2.nix
+    data/nix/tests/lang/eval-fail-bad-antiquote-3.nix
+    data/nix/tests/lang/eval-fail-blackhole.nix
+    data/nix/tests/lang/eval-fail-deepseq.nix
+    data/nix/tests/lang/eval-fail-missing-arg.nix
+    data/nix/tests/lang/eval-fail-path-slash.nix
+    data/nix/tests/lang/eval-fail-remove.nix
+    data/nix/tests/lang/eval-fail-scope-5.nix
+    data/nix/tests/lang/eval-fail-seq.nix
+    data/nix/tests/lang/eval-fail-substring.nix
+    data/nix/tests/lang/eval-fail-to-path.nix
+    data/nix/tests/lang/eval-fail-undeclared-arg.nix
+    data/nix/tests/lang/eval-okay-any-all.exp
+    data/nix/tests/lang/eval-okay-any-all.nix
+    data/nix/tests/lang/eval-okay-arithmetic.exp
+    data/nix/tests/lang/eval-okay-arithmetic.nix
+    data/nix/tests/lang/eval-okay-attrnames.exp
+    data/nix/tests/lang/eval-okay-attrnames.nix
+    data/nix/tests/lang/eval-okay-attrs.exp
+    data/nix/tests/lang/eval-okay-attrs.nix
+    data/nix/tests/lang/eval-okay-attrs2.exp
+    data/nix/tests/lang/eval-okay-attrs2.nix
+    data/nix/tests/lang/eval-okay-attrs3.exp
+    data/nix/tests/lang/eval-okay-attrs3.nix
+    data/nix/tests/lang/eval-okay-attrs4.exp
+    data/nix/tests/lang/eval-okay-attrs4.nix
+    data/nix/tests/lang/eval-okay-attrs5.exp
+    data/nix/tests/lang/eval-okay-attrs5.nix
+    data/nix/tests/lang/eval-okay-autoargs.exp
+    data/nix/tests/lang/eval-okay-autoargs.flags
+    data/nix/tests/lang/eval-okay-autoargs.nix
+    data/nix/tests/lang/eval-okay-backslash-newline-1.exp
+    data/nix/tests/lang/eval-okay-backslash-newline-1.nix
+    data/nix/tests/lang/eval-okay-backslash-newline-2.exp
+    data/nix/tests/lang/eval-okay-backslash-newline-2.nix
+    data/nix/tests/lang/eval-okay-builtins-add.exp
+    data/nix/tests/lang/eval-okay-builtins-add.nix
+    data/nix/tests/lang/eval-okay-builtins.exp
+    data/nix/tests/lang/eval-okay-builtins.nix
+    data/nix/tests/lang/eval-okay-callable-attrs.exp
+    data/nix/tests/lang/eval-okay-callable-attrs.nix
+    data/nix/tests/lang/eval-okay-catattrs.exp
+    data/nix/tests/lang/eval-okay-catattrs.nix
+    data/nix/tests/lang/eval-okay-closure.exp.xml
+    data/nix/tests/lang/eval-okay-closure.nix
+    data/nix/tests/lang/eval-okay-comments.exp
+    data/nix/tests/lang/eval-okay-comments.nix
+    data/nix/tests/lang/eval-okay-concat.exp
+    data/nix/tests/lang/eval-okay-concat.nix
+    data/nix/tests/lang/eval-okay-concatstringssep.exp
+    data/nix/tests/lang/eval-okay-concatstringssep.nix
+    data/nix/tests/lang/eval-okay-context.exp
+    data/nix/tests/lang/eval-okay-context.nix
+    data/nix/tests/lang/eval-okay-curpos.exp
+    data/nix/tests/lang/eval-okay-curpos.nix
+    data/nix/tests/lang/eval-okay-deepseq.exp
+    data/nix/tests/lang/eval-okay-deepseq.nix
+    data/nix/tests/lang/eval-okay-delayed-with-inherit.exp
+    data/nix/tests/lang/eval-okay-delayed-with-inherit.nix
+    data/nix/tests/lang/eval-okay-delayed-with.exp
+    data/nix/tests/lang/eval-okay-delayed-with.nix
+    data/nix/tests/lang/eval-okay-dynamic-attrs-2.exp
+    data/nix/tests/lang/eval-okay-dynamic-attrs-2.nix
+    data/nix/tests/lang/eval-okay-dynamic-attrs-bare.exp
+    data/nix/tests/lang/eval-okay-dynamic-attrs-bare.nix
+    data/nix/tests/lang/eval-okay-dynamic-attrs.exp
+    data/nix/tests/lang/eval-okay-dynamic-attrs.nix
+    data/nix/tests/lang/eval-okay-elem.exp
+    data/nix/tests/lang/eval-okay-elem.nix
+    data/nix/tests/lang/eval-okay-empty-args.exp
+    data/nix/tests/lang/eval-okay-empty-args.nix
+    data/nix/tests/lang/eval-okay-eq-derivations.exp
+    data/nix/tests/lang/eval-okay-eq-derivations.nix
+    data/nix/tests/lang/eval-okay-eq.exp.disabled
+    data/nix/tests/lang/eval-okay-eq.nix
+    data/nix/tests/lang/eval-okay-filter.exp
+    data/nix/tests/lang/eval-okay-filter.nix
+    data/nix/tests/lang/eval-okay-flatten.exp
+    data/nix/tests/lang/eval-okay-flatten.nix
+    data/nix/tests/lang/eval-okay-fromjson.exp
+    data/nix/tests/lang/eval-okay-fromjson.nix
+    data/nix/tests/lang/eval-okay-functionargs.exp.xml
+    data/nix/tests/lang/eval-okay-functionargs.nix
+    data/nix/tests/lang/eval-okay-getattrpos-undefined.exp
+    data/nix/tests/lang/eval-okay-getattrpos-undefined.nix
+    data/nix/tests/lang/eval-okay-getattrpos.exp
+    data/nix/tests/lang/eval-okay-getattrpos.nix
+    data/nix/tests/lang/eval-okay-getenv.exp
+    data/nix/tests/lang/eval-okay-getenv.nix
+    data/nix/tests/lang/eval-okay-hash.exp
+    data/nix/tests/lang/eval-okay-hash.nix
+    data/nix/tests/lang/eval-okay-if.exp
+    data/nix/tests/lang/eval-okay-if.nix
+    data/nix/tests/lang/eval-okay-import.exp
+    data/nix/tests/lang/eval-okay-import.nix
+    data/nix/tests/lang/eval-okay-ind-string.exp
+    data/nix/tests/lang/eval-okay-ind-string.nix
+    data/nix/tests/lang/eval-okay-let.exp
+    data/nix/tests/lang/eval-okay-let.nix
+    data/nix/tests/lang/eval-okay-list.exp
+    data/nix/tests/lang/eval-okay-list.nix
+    data/nix/tests/lang/eval-okay-listtoattrs.exp
+    data/nix/tests/lang/eval-okay-listtoattrs.nix
+    data/nix/tests/lang/eval-okay-logic.exp
+    data/nix/tests/lang/eval-okay-logic.nix
+    data/nix/tests/lang/eval-okay-map.exp
+    data/nix/tests/lang/eval-okay-map.nix
+    data/nix/tests/lang/eval-okay-nested-with.exp
+    data/nix/tests/lang/eval-okay-nested-with.nix
+    data/nix/tests/lang/eval-okay-new-let.exp
+    data/nix/tests/lang/eval-okay-new-let.nix
+    data/nix/tests/lang/eval-okay-null-dynamic-attrs.exp
+    data/nix/tests/lang/eval-okay-null-dynamic-attrs.nix
+    data/nix/tests/lang/eval-okay-overrides.exp
+    data/nix/tests/lang/eval-okay-overrides.nix
+    data/nix/tests/lang/eval-okay-partition.exp
+    data/nix/tests/lang/eval-okay-partition.nix
+    data/nix/tests/lang/eval-okay-path.nix
+    data/nix/tests/lang/eval-okay-pathexists.exp
+    data/nix/tests/lang/eval-okay-pathexists.nix
+    data/nix/tests/lang/eval-okay-patterns.exp
+    data/nix/tests/lang/eval-okay-patterns.nix
+    data/nix/tests/lang/eval-okay-readDir.exp
+    data/nix/tests/lang/eval-okay-readDir.nix
+    data/nix/tests/lang/eval-okay-readfile.exp
+    data/nix/tests/lang/eval-okay-readfile.nix
+    data/nix/tests/lang/eval-okay-redefine-builtin.exp
+    data/nix/tests/lang/eval-okay-redefine-builtin.nix
+    data/nix/tests/lang/eval-okay-regex-match.exp
+    data/nix/tests/lang/eval-okay-regex-match.nix
+    data/nix/tests/lang/eval-okay-regex-split.exp
+    data/nix/tests/lang/eval-okay-regex-split.nix
+    data/nix/tests/lang/eval-okay-remove.exp
+    data/nix/tests/lang/eval-okay-remove.nix
+    data/nix/tests/lang/eval-okay-replacestrings.exp
+    data/nix/tests/lang/eval-okay-replacestrings.nix
+    data/nix/tests/lang/eval-okay-scope-1.exp
+    data/nix/tests/lang/eval-okay-scope-1.nix
+    data/nix/tests/lang/eval-okay-scope-2.exp
+    data/nix/tests/lang/eval-okay-scope-2.nix
+    data/nix/tests/lang/eval-okay-scope-3.exp
+    data/nix/tests/lang/eval-okay-scope-3.nix
+    data/nix/tests/lang/eval-okay-scope-4.exp
+    data/nix/tests/lang/eval-okay-scope-4.nix
+    data/nix/tests/lang/eval-okay-scope-6.exp
+    data/nix/tests/lang/eval-okay-scope-6.nix
+    data/nix/tests/lang/eval-okay-scope-7.exp
+    data/nix/tests/lang/eval-okay-scope-7.nix
+    data/nix/tests/lang/eval-okay-search-path.exp
+    data/nix/tests/lang/eval-okay-search-path.flags
+    data/nix/tests/lang/eval-okay-search-path.nix
+    data/nix/tests/lang/eval-okay-seq.exp
+    data/nix/tests/lang/eval-okay-seq.nix
+    data/nix/tests/lang/eval-okay-sort.exp
+    data/nix/tests/lang/eval-okay-sort.nix
+    data/nix/tests/lang/eval-okay-splitversion.exp
+    data/nix/tests/lang/eval-okay-splitversion.nix
+    data/nix/tests/lang/eval-okay-string.exp
+    data/nix/tests/lang/eval-okay-string.nix
+    data/nix/tests/lang/eval-okay-strings-as-attrs-names.exp
+    data/nix/tests/lang/eval-okay-strings-as-attrs-names.nix
+    data/nix/tests/lang/eval-okay-substring.exp
+    data/nix/tests/lang/eval-okay-substring.nix
+    data/nix/tests/lang/eval-okay-tail-call-1.exp-disabled
+    data/nix/tests/lang/eval-okay-tail-call-1.nix
+    data/nix/tests/lang/eval-okay-tojson.exp
+    data/nix/tests/lang/eval-okay-tojson.nix
+    data/nix/tests/lang/eval-okay-toxml.exp
+    data/nix/tests/lang/eval-okay-toxml.nix
+    data/nix/tests/lang/eval-okay-toxml2.exp
+    data/nix/tests/lang/eval-okay-toxml2.nix
+    data/nix/tests/lang/eval-okay-tryeval.exp
+    data/nix/tests/lang/eval-okay-tryeval.nix
+    data/nix/tests/lang/eval-okay-types.exp
+    data/nix/tests/lang/eval-okay-types.nix
+    data/nix/tests/lang/eval-okay-versions.exp
+    data/nix/tests/lang/eval-okay-versions.nix
+    data/nix/tests/lang/eval-okay-with.exp
+    data/nix/tests/lang/eval-okay-with.nix
+    data/nix/tests/lang/eval-okay-xml.exp.xml
+    data/nix/tests/lang/eval-okay-xml.nix
+    data/nix/tests/lang/imported.nix
+    data/nix/tests/lang/imported2.nix
+    data/nix/tests/lang/lib.nix
+    data/nix/tests/lang/parse-fail-dup-attrs-1.nix
+    data/nix/tests/lang/parse-fail-dup-attrs-2.nix
+    data/nix/tests/lang/parse-fail-dup-attrs-3.nix
+    data/nix/tests/lang/parse-fail-dup-attrs-4.nix
+    data/nix/tests/lang/parse-fail-dup-attrs-6.nix
+    data/nix/tests/lang/parse-fail-dup-attrs-7.nix
+    data/nix/tests/lang/parse-fail-dup-formals.nix
+    data/nix/tests/lang/parse-fail-patterns-1.nix
+    data/nix/tests/lang/parse-fail-regression-20060610.nix
+    data/nix/tests/lang/parse-fail-undef-var-2.nix
+    data/nix/tests/lang/parse-fail-undef-var.nix
+    data/nix/tests/lang/parse-okay-1.nix
+    data/nix/tests/lang/parse-okay-crlf.nix
+    data/nix/tests/lang/parse-okay-dup-attrs-5.nix
+    data/nix/tests/lang/parse-okay-regression-20041027.nix
+    data/nix/tests/lang/parse-okay-regression-751.nix
+    data/nix/tests/lang/parse-okay-subversion.nix
+    data/nix/tests/lang/parse-okay-url.nix
+    data/nix/tests/lang/readDir/bar
+    data/nix/tests/lang/readDir/foo/git-hates-directories
+    data/nix/tests/linux-sandbox.sh
+    data/nix/tests/local.mk
+    data/nix/tests/logging.sh
+    data/nix/tests/misc.sh
+    data/nix/tests/multiple-outputs.nix
+    data/nix/tests/multiple-outputs.sh
+    data/nix/tests/nar-access.nix
+    data/nix/tests/nar-access.sh
+    data/nix/tests/nix-build.sh
+    data/nix/tests/nix-channel.sh
+    data/nix/tests/nix-copy-closure.nix
+    data/nix/tests/nix-profile.sh
+    data/nix/tests/nix-shell.sh
+    data/nix/tests/optimise-store.sh
+    data/nix/tests/parallel.builder.sh
+    data/nix/tests/parallel.nix
+    data/nix/tests/parallel.sh
+    data/nix/tests/pass-as-file.sh
+    data/nix/tests/placeholders.sh
+    data/nix/tests/plugins.sh
+    data/nix/tests/plugins/local.mk
+    data/nix/tests/plugins/plugintest.cc
+    data/nix/tests/pure-eval.nix
+    data/nix/tests/pure-eval.sh
+    data/nix/tests/referrers.sh
+    data/nix/tests/remote-builds.nix
+    data/nix/tests/remote-store.sh
+    data/nix/tests/repair.sh
+    data/nix/tests/restricted.nix
+    data/nix/tests/restricted.sh
+    data/nix/tests/run.nix
+    data/nix/tests/run.sh
+    data/nix/tests/search.nix
+    data/nix/tests/search.sh
+    data/nix/tests/secure-drv-outputs.nix
+    data/nix/tests/secure-drv-outputs.sh
+    data/nix/tests/setuid.nix
+    data/nix/tests/shell.nix
+    data/nix/tests/shell.shebang.rb
+    data/nix/tests/shell.shebang.sh
+    data/nix/tests/signing.sh
+    data/nix/tests/simple.builder.sh
+    data/nix/tests/simple.nix
+    data/nix/tests/simple.sh
+    data/nix/tests/structured-attrs.nix
+    data/nix/tests/structured-attrs.sh
+    data/nix/tests/tarball.sh
+    data/nix/tests/timeout.nix
+    data/nix/tests/timeout.sh
+    data/nix/tests/user-envs.builder.sh
+    data/nix/tests/user-envs.nix
+    data/nix/tests/user-envs.sh
+    data/nix/version
+    data/nixpkgs-all-packages-pretty.nix
+    data/nixpkgs-all-packages.nix
+    data/simple-pretty.nix
+    data/simple.nix
+    LICENSE
+    package.yaml
     README.md
+    tests/eval-compare/builtins.split-01.nix
+    tests/eval-compare/builtins.split-02.nix
+    tests/eval-compare/builtins.split-03.nix
+    tests/eval-compare/builtins.split-04.nix
+    tests/eval-compare/ind-string-01.nix
+    tests/eval-compare/ind-string-02.nix
+    tests/eval-compare/ind-string-03.nix
+    tests/eval-compare/ind-string-04.nix
+    tests/eval-compare/ind-string-05.nix
+    tests/eval-compare/ind-string-06.nix
+    tests/eval-compare/ind-string-07.nix
+    tests/eval-compare/ind-string-08.nix
+    tests/eval-compare/ind-string-09.nix
+    tests/eval-compare/ind-string-10.nix
+    tests/eval-compare/ind-string-11.nix
+    tests/eval-compare/ind-string-12.nix
+    tests/eval-compare/ind-string-13.nix
+    tests/eval-compare/ind-string-14.nix
+    tests/eval-compare/ind-string-15.nix
+    tests/eval-compare/ind-string-16.nix
+    tests/eval-compare/ind-string-17.nix
 
 source-repository head
   type: git
-  location: https://github.com/jwiegley/hnix
+  location: https://github.com/haskell-nix/hnix
 
 flag optimize
   description: Enable all optimization flags
@@ -60,8 +464,6 @@ library
       Nix.Normal
       Nix.Options
       Nix.Parser
-      Nix.Parser.Library
-      Nix.Parser.Operators
       Nix.Pretty
       Nix.Reduce
       Nix.Render
@@ -87,38 +489,31 @@ library
     , ansi-wl-pprint
     , array >=0.4 && <0.6
     , base >=4.9 && <5
-    , base16-bytestring
     , binary
     , bytestring
-    , compact
     , containers
-    , cryptohash
     , data-fix
-    , deepseq
+    , deepseq >=1.4.2 && <1.5
     , deriving-compat >=0.3 && <0.5
     , directory
     , exceptions
     , filepath
-    , hashable
-    , haskeline
+    , hashing
     , http-client
     , http-client-tls
     , http-types
-    , lens-family
-    , lens-family-core
+    , interpolate
     , lens-family-th
     , logict
-    , megaparsec
+    , megaparsec >=6.0 && <6.6
     , monadlist
     , mtl
     , optparse-applicative
-    , pretty-show
     , process
     , regex-tdfa
     , regex-tdfa-text
     , scientific
     , semigroups >=0.18 && <0.19
-    , serialise
     , split
     , syb
     , template-haskell
@@ -130,11 +525,42 @@ library
     , unordered-containers >=0.2.9 && <0.3
     , vector
     , xml
+  if flag(optimize)
+    ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
   if flag(tracing)
     cpp-options: -DENABLE_TRACING=1
+  if os(linux) && impl(ghc >= 8.2) && impl(ghc < 8.3)
+    build-depends:
+        compact
+  if !impl(ghcjs)
+    build-depends:
+        base16-bytestring
+      , cryptohash-md5
+      , cryptohash-sha1
+      , cryptohash-sha256
+      , cryptohash-sha512
+      , serialise
+  if impl(ghc < 8.1)
+    build-depends:
+        lens-family ==1.2.1
+      , lens-family-core ==1.2.1
+  else
+    build-depends:
+        lens-family >=1.2.2
+      , lens-family-core >=1.2.2
   if impl(ghc < 8.4.0) && !flag(profiling)
     build-depends:
         ghc-datasize
+  if impl(ghcjs)
+    build-depends:
+        hashable >=1.2.4 && <1.3
+  else
+    exposed-modules:
+        Nix.Options.Parser
+    build-depends:
+        hashable >=1.2.5 && <1.3
+      , haskeline
+      , pretty-show
   default-language: Haskell2010
 
 executable hnix
@@ -150,26 +576,42 @@ executable hnix
     , ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
-    , compact
     , containers
     , data-fix
-    , deepseq
+    , deepseq >=1.4.2 && <1.5
     , exceptions
     , filepath
+    , hashing
     , haskeline
     , hnix
     , mtl
     , optparse-applicative
     , pretty-show
     , repline
-    , serialise
     , template-haskell
     , text
     , time
     , transformers
     , unordered-containers >=0.2.9 && <0.3
+  if flag(optimize)
+    ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
   if flag(tracing)
     cpp-options: -DENABLE_TRACING=1
+  if os(linux) && impl(ghc >= 8.2) && impl(ghc < 8.3)
+    build-depends:
+        compact
+  if !impl(ghcjs)
+    build-depends:
+        base16-bytestring
+      , cryptohash-md5
+      , cryptohash-sha1
+      , cryptohash-sha256
+      , cryptohash-sha512
+      , serialise
+  if impl(ghcjs)
+    buildable: False
+  else
+    buildable: True
   default-language: Haskell2010
 
 test-suite hnix-tests
@@ -193,14 +635,14 @@ test-suite hnix-tests
     , ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
-    , compact
     , containers
     , data-fix
-    , deepseq
+    , deepseq >=1.4.2 && <1.5
     , directory
     , exceptions
     , filepath
     , generic-random
+    , hashing
     , hnix
     , interpolate
     , megaparsec
@@ -209,7 +651,6 @@ test-suite hnix-tests
     , pretty-show
     , process
     , quickcheck-instances
-    , serialise
     , split
     , tasty
     , tasty-hunit
@@ -221,8 +662,25 @@ test-suite hnix-tests
     , transformers
     , unix
     , unordered-containers >=0.2.9 && <0.3
+  if flag(optimize)
+    ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
   if flag(tracing)
     cpp-options: -DENABLE_TRACING=1
+  if os(linux) && impl(ghc >= 8.2) && impl(ghc < 8.3)
+    build-depends:
+        compact
+  if !impl(ghcjs)
+    build-depends:
+        base16-bytestring
+      , cryptohash-md5
+      , cryptohash-sha1
+      , cryptohash-sha256
+      , cryptohash-sha512
+      , serialise
+  if impl(ghcjs)
+    buildable: False
+  else
+    buildable: True
   default-language: Haskell2010
 
 benchmark hnix-benchmarks
@@ -238,22 +696,38 @@ benchmark hnix-benchmarks
       ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
-    , compact
     , containers
     , criterion
     , data-fix
-    , deepseq
+    , deepseq >=1.4.2 && <1.5
     , exceptions
     , filepath
+    , hashing
     , hnix
     , mtl
     , optparse-applicative
-    , serialise
     , template-haskell
     , text
     , time
     , transformers
     , unordered-containers >=0.2.9 && <0.3
+  if flag(optimize)
+    ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
   if flag(tracing)
     cpp-options: -DENABLE_TRACING=1
+  if os(linux) && impl(ghc >= 8.2) && impl(ghc < 8.3)
+    build-depends:
+        compact
+  if !impl(ghcjs)
+    build-depends:
+        base16-bytestring
+      , cryptohash-md5
+      , cryptohash-sha1
+      , cryptohash-sha256
+      , cryptohash-sha512
+      , serialise
+  if impl(ghcjs)
+    buildable: False
+  else
+    buildable: True
   default-language: Haskell2010

@@ -44,6 +44,7 @@ import           Data.IORef
 import           Data.List
 import qualified Data.List.NonEmpty as NE
 import           Data.List.Split
+import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Typeable
@@ -66,7 +67,9 @@ import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
+#ifdef MIN_VERSION_haskeline
 import           System.Console.Haskeline.MonadException hiding (catch)
+#endif
 import           System.Directory
 import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
@@ -76,6 +79,9 @@ import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
 import           Text.PrettyPrint.ANSI.Leijen (text)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
+#ifdef MIN_VERSION_pretty_show
+import qualified Text.Show.Pretty as PS
+#endif
 
 #ifdef MIN_VERSION_ghc_datasize
 #if MIN_VERSION_ghc_datasize(0,2,0) && __GLASGOW_HASKELL__ >= 804
@@ -362,6 +368,20 @@ execBinaryOp scope span op lval rarg = do
             NNEq    -> toBool . not =<< valueEq (nvSet M.empty M.empty) rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
+        (ls@NVSet {}, NVStr rs rc) -> case op of
+            NPlus   -> (\ls -> bin nvStrP (Text.pack ls `mappend` rs) rc)
+                <$> coerceToString False ls
+            NEq     -> toBool =<< valueEq lval rval
+            NNEq    -> toBool . not =<< valueEq lval rval
+            _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
+
+        (NVStr ls lc, rs@NVSet {}) -> case op of
+            NPlus   -> (\rs -> bin nvStrP (ls `mappend` Text.pack rs) lc)
+                <$> coerceToString False rs
+            NEq     -> toBool =<< valueEq lval rval
+            NNEq    -> toBool . not =<< valueEq lval rval
+            _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
+
         (NVList ls, NVList rs) -> case op of
             NConcat -> pure $ bin nvListP $ ls ++ rs
             NEq     -> toBool =<< valueEq lval rval
@@ -418,27 +438,29 @@ execBinaryOp scope span op lval rarg = do
         toInt   = pure . bin nvConstantP . NInt
         toFloat = pure . bin nvConstantP . NFloat
 
-coerceToString :: MonadNix e m => NValue m -> m String
-coerceToString = \case
-    NVConstant (NBool b)
-        | b               -> pure "1"
-        | otherwise       -> pure ""
-    NVConstant (NInt n)   -> pure $ show n
-    NVConstant (NFloat n) -> pure $ show n
-    NVConstant (NUri u)   -> pure $ show u
-    NVConstant NNull      -> pure ""
+coerceToString :: MonadNix e m => Bool -> NValue m -> m String
+coerceToString copyToStore = go
+  where
+    go = \case
+        NVConstant (NBool b)
+            | b               -> pure "1"
+            | otherwise       -> pure ""
+        NVConstant (NInt n)   -> pure $ show n
+        NVConstant (NFloat n) -> pure $ show n
+        NVConstant NNull      -> pure ""
 
-    NVStr t _ -> pure $ Text.unpack t
-    NVPath p  -> unStorePath <$> addPath p
-    NVList l  -> unwords <$> traverse (`force` coerceToString) l
+        NVStr t _ -> pure $ Text.unpack t
+        NVPath p  | copyToStore -> unStorePath <$> addPath p
+                  | otherwise   -> pure p
+        NVList l  -> unwords <$> traverse (`force` go) l
 
-    v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
-        force p $ (`callFunc` pure v) >=> coerceToString
+        v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
+            force p $ (`callFunc` pure v) >=> go
 
-    NVSet s _ | Just p <- M.lookup "outPath" s ->
-        force p coerceToString
+        NVSet s _ | Just p <- M.lookup "outPath" s ->
+            force p go
 
-    v -> throwError $ ErrorCall $ "Expected a string, but saw: " ++ show v
+        v -> throwError $ ErrorCall $ "Expected a string, but saw: " ++ show v
 
 newtype Lazy m a = Lazy
     { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m)))
@@ -465,10 +487,12 @@ instance MonadCatch m => MonadCatch (Lazy m) where
 instance MonadThrow m => MonadThrow (Lazy m) where
     throwM = Lazy . throwM
 
+#ifdef MIN_VERSION_haskeline
 instance MonadException m => MonadException (Lazy m) where
   controlIO f = Lazy $ controlIO $ \(RunIO run) ->
       let run' = RunIO (fmap Lazy . run . runLazy)
       in runLazy <$> f run'
+#endif
 
 instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
           MonadPlus m, Typeable m)
@@ -575,7 +599,7 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
             "__ignoreNulls" -> pure Nothing
             _               -> force v $ \case
                 NVConstant NNull | ignoreNulls -> pure Nothing
-                v' -> Just <$> (toNix =<< Text.pack <$> coerceToString v')
+                v' -> Just <$> (toNix =<< Text.pack <$> coerceToString True v')
 
     nixInstantiateExpr expr = do
         traceM $ "Executing: "
@@ -737,13 +761,17 @@ addTracing k v = do
             opts :: Options <- asks (view hasLens)
             let rendered =
                     if verbose opts >= Chatty
-                    then show (void x)
-                    else show (prettyNix (Fix (Fix (NSym "?") <$ x)))
-                msg x = "eval: " ++ replicate depth ' ' ++ x
-            loc <- renderLocation span (text (msg rendered ++ " ..."))
+#ifdef MIN_VERSION_pretty_show
+                    then text $ PS.ppShow (void x)
+#else
+                    then text $ show (void x)
+#endif
+                    else prettyNix (Fix (Fix (NSym "?") <$ x))
+                msg x = text ("eval: " ++ replicate depth ' ') <> x
+            loc <- renderLocation span (msg rendered <> text " ...\n")
             liftIO $ putStr $ show loc
             res <- k v'
-            liftIO $ putStrLn $ msg (rendered ++ " ...done")
+            liftIO $ print $ msg rendered <> text " ...done"
             return res
 
 evalExprLoc :: forall e m. (MonadNix e m, Has e Options, MonadIO m)

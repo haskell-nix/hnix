@@ -48,7 +48,7 @@ nixEvalString expr = do
   return res
 
 nixEvalFile :: FilePath -> IO String
-nixEvalFile fp = readProcess "nix-instantiate" ["--eval", fp] ""
+nixEvalFile fp = readProcess "nix-instantiate" ["--eval", "--strict", fp] ""
 
 assertEvalFileMatchesNix :: FilePath -> Assertion
 assertEvalFileMatchesNix fp = do

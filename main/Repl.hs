@@ -103,7 +103,7 @@ exec update source = do
   go expr = do
     val <- evalExprLoc expr
     opts :: Nix.Options <- asks (view hasLens)
-    if | normalize opts ->
+    if | strict opts ->
          liftIO . print . prettyNValueNF =<< normalForm val
        | values opts ->
          liftIO . print =<< prettyNValueProv val
