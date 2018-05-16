@@ -32,7 +32,7 @@ let inherit (nixpkgs) pkgs;
         , modifier ? drv: drv
         , provideDrv ? !pkgs.lib.inNixShell }:
         let drv =
-          (extensible-self.extend
+          (pkgs.haskell.packages.${compiler}.extend
              (pkgs.lib.composeExtensions
                 (self.packageSourceOverrides source-overrides)
                 overrides))
