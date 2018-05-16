@@ -4,6 +4,7 @@
 , doBenchmark ? false
 , doTracing   ? false
 , doStrict    ? false
+, provideDrv  ? false
 
 , rev     ? "9d0b6b9dfc92a2704e2111aa836f5bdbf8c9ba42"
 , sha256  ? "096r7ylnwz4nshrfkh127dg8nhrcvgpr69l4xrdgy3kbq049r3nb"
@@ -20,33 +21,52 @@
 
 let inherit (nixpkgs) pkgs;
 
-  haskellPackages = pkgs.haskell.packages.${compiler}.override {
-    overrides = with pkgs.haskell.lib; self: super:
-      if compiler == "ghcjs" then {} else
-      {
-        cryptohash-md5    = doJailbreak super.cryptohash-md5;
-        cryptohash-sha1   = doJailbreak super.cryptohash-sha1;
-        cryptohash-sha256 = doJailbreak super.cryptohash-sha256;
-        cryptohash-sha512 = doJailbreak super.cryptohash-sha512;
-        serialise         = dontCheck super.serialise;
+  haskellPackages' = pkgs.haskell.packages.${compiler};
 
-        ghc-datasize =
-          if doProfiling
-          then null
-          else pkgs.haskell.lib.overrideCabal super.ghc-datasize (attrs: {
-                 enableLibraryProfiling    = false;
-                 enableExecutableProfiling = false;
-               });
+  haskellPackages = pkgs.lib.fix (this: haskellPackages'.override {
+    overrides = with pkgs.haskell.lib; self: super: {
+      developPackage =
+        { root
+        , source-overrides ? {}
+        , overrides ? self: super: {}
+        , modifier ? drv: drv }:
+        let name = builtins.baseNameOf root;
+            drv =
+              (this.extend
+                 (pkgs.lib.composeExtensions
+                    (self.packageSourceOverrides source-overrides)
+                    overrides))
+              .callCabal2nix name root {};
+        in if pkgs.lib.inNixShell && !provideDrv
+           then (modifier drv).env
+           else modifier drv;
+    }
 
-        ghc-heap-view =
-          if doProfiling
-          then null
-          else pkgs.haskell.lib.overrideCabal super.ghc-heap-view (attrs: {
-                 enableLibraryProfiling    = false;
-                 enableExecutableProfiling = false;
-               });
-      };
-  };
+    // (if compiler == "ghcjs" then {} else
+    {
+      cryptohash-md5    = doJailbreak super.cryptohash-md5;
+      cryptohash-sha1   = doJailbreak super.cryptohash-sha1;
+      cryptohash-sha256 = doJailbreak super.cryptohash-sha256;
+      cryptohash-sha512 = doJailbreak super.cryptohash-sha512;
+      serialise         = dontCheck super.serialise;
+
+      ghc-datasize =
+        if doProfiling
+        then null
+        else overrideCabal super.ghc-datasize (attrs: {
+               enableLibraryProfiling    = false;
+               enableExecutableProfiling = false;
+             });
+
+      ghc-heap-view =
+        if doProfiling
+        then null
+        else overrideCabal super.ghc-heap-view (attrs: {
+               enableLibraryProfiling    = false;
+               enableExecutableProfiling = false;
+             });
+    });
+  });
 
 in haskellPackages.developPackage {
   root = ./.;
@@ -68,7 +88,14 @@ in haskellPackages.developPackage {
 
   modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
     testHaskellDepends = attrs.testHaskellDepends ++
-      [ pkgs.nix pkgs.haskell.packages.ghc822.hpack ];
+      [ pkgs.nix
+
+        # Use the same version of hpack no matter what the compiler version
+        # is, so that we know exactly what the contents of the generated
+        # .cabal file will be. Otherwise, Travis may error out claiming that
+        # the cabal file needs to be updated because the result is different
+        # that the version we committed to Git.
+        pkgs.haskell.packages.ghc822.hpack ];
 
     enableLibraryProfiling    = doProfiling;
     enableExecutableProfiling = doProfiling;
