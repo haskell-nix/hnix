@@ -4,7 +4,6 @@
 , doBenchmark ? false
 , doTracing   ? false
 , doStrict    ? false
-, provideDrv  ? false
 
 , rev     ? "9d0b6b9dfc92a2704e2111aa836f5bdbf8c9ba42"
 , sha256  ? "096r7ylnwz4nshrfkh127dg8nhrcvgpr69l4xrdgy3kbq049r3nb"
@@ -17,6 +16,7 @@
            config.allowUnfree = true;
            config.allowBroken = false;
          }
+, provideDrv  ? !nixpkgs.pkgs.lib.inNixShell
 }:
 
 let inherit (nixpkgs) pkgs;
@@ -29,17 +29,15 @@ let inherit (nixpkgs) pkgs;
         { root
         , source-overrides ? {}
         , overrides ? self: super: {}
-        , modifier ? drv: drv }:
-        let name = builtins.baseNameOf root;
-            drv =
-              (this.extend
-                 (pkgs.lib.composeExtensions
-                    (self.packageSourceOverrides source-overrides)
-                    overrides))
-              .callCabal2nix name root {};
-        in if pkgs.lib.inNixShell && !provideDrv
-           then (modifier drv).env
-           else modifier drv;
+        , modifier ? drv: drv
+        , provideDrv ? !pkgs.lib.inNixShell }:
+        let drv =
+          (extensible-self.extend
+             (pkgs.lib.composeExtensions
+                (self.packageSourceOverrides source-overrides)
+                overrides))
+          .callCabal2nix (builtins.baseNameOf root) root {};
+        in if provideDrv then modifier drv else (modifier drv).env;
     }
 
     // (if compiler == "ghcjs" then {} else
@@ -107,4 +105,6 @@ in haskellPackages.developPackage {
       ++ pkgs.stdenv.lib.optional doProfiling "--flags=profiling"
       ++ pkgs.stdenv.lib.optional doStrict    "--ghc-options=-Werror";
   });
+
+  inherit provideDrv;
 }
