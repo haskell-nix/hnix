@@ -12,7 +12,7 @@ data Type
   | TCon String              -- known type
   | TSet Bool (AttrSet Type) -- heterogenous map, bool if variadic
   | TList [Type]             -- heterogenous list
-  | TArr Type Type           -- type -> type
+  | (:~>) Type Type          -- type -> type
   | TMany [Type]             -- variant type
   deriving (Show, Eq, Ord)
 
@@ -26,8 +26,10 @@ typeSet = TSet True M.empty
 typeList :: Type
 typeList = TList []
 
+infixr 1 :~>
+
 typeFun :: [Type] -> Type
-typeFun = foldr1 TArr
+typeFun = foldr1 (:~>)
 
 typeInt, typeFloat, typeBool, typeString, typePath, typeNull :: Type
 typeInt    = TCon "integer"
