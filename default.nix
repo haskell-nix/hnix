@@ -5,9 +5,9 @@
 , doTracing   ? false
 , doStrict    ? false
 
-, rev     ? "9d0b6b9dfc92a2704e2111aa836f5bdbf8c9ba42"
-, sha256  ? "096r7ylnwz4nshrfkh127dg8nhrcvgpr69l4xrdgy3kbq049r3nb"
-, nixpkgs ?
+, rev     ? "95b1827682dc30ff1ccffb4f46c197289cea3e1c"
+, sha256  ? "0v5s2918a04h6h1m18pzp36l5f41rhkipwqgysamsz7h0q4zwhwz"
+, pkgs    ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
     then abort "hnix requires at least nix 2.0"
     else import (builtins.fetchTarball {
@@ -16,28 +16,15 @@
            config.allowUnfree = true;
            config.allowBroken = false;
          }
-, provideDrv  ? !nixpkgs.pkgs.lib.inNixShell
+, returnShellEnv ? pkgs.lib.inNixShell
+, mkDerivation ? null
 }:
 
-let inherit (nixpkgs) pkgs;
-
+let
   haskellPackages' = pkgs.haskell.packages.${compiler};
 
   haskellPackages = pkgs.lib.fix (this: haskellPackages'.override {
     overrides = with pkgs.haskell.lib; self: super: {
-      developPackage =
-        { root
-        , source-overrides ? {}
-        , overrides ? self: super: {}
-        , modifier ? drv: drv
-        , provideDrv ? !pkgs.lib.inNixShell }:
-        let drv =
-          (this.extend
-             (pkgs.lib.composeExtensions
-                (self.packageSourceOverrides source-overrides)
-                overrides))
-          .callCabal2nix (builtins.baseNameOf root) root {};
-        in if provideDrv then modifier drv else (modifier drv).env;
     }
 
     // (if compiler == "ghcjs" then {} else
@@ -106,5 +93,5 @@ in haskellPackages.developPackage {
       ++ pkgs.stdenv.lib.optional doStrict    "--ghc-options=-Werror";
   });
 
-  inherit provideDrv;
+  inherit returnShellEnv;
 }
