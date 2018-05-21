@@ -19,6 +19,10 @@ class MonadFile m => MonadEffects m where
     makeAbsolutePath :: FilePath -> m FilePath
     findEnvPath :: String -> m FilePath
 
+    -- | Having an explicit list of sets corresponding to the NIX_PATH
+    -- and a file path try to find an existing path
+    findPath :: [NThunk m] -> FilePath -> m FilePath
+
     pathExists :: FilePath -> m Bool
     importPath :: AttrSet (NThunk m) -> FilePath -> m (NValue m)
 
