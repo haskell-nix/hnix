@@ -47,8 +47,8 @@ To build `hnix` for debugging, and with full tracing output and stack traces,
 use:
 
 ```
-$ nix-shell --arg doProfiling true
-$ cabal configure --enable-tests --enable-profiling --flags=tracing
+$ nix-shell
+$ cabal configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
 $ cabal build
 $ ./dist/build/hnix/hnix -v5 --trace <args> +RTS -xc
 ```
@@ -72,8 +72,8 @@ $ cabal bench
 To build `hnix` with profiling enabled:
 
 ```
-$ nix-shell --arg doProfiling true
-$ cabal configure --enable-tests --enable-profiling
+$ nix-shell
+$ cabal configure --enable-tests --enable-profiling --flags=profiling
 $ cabal build
 $ ./dist/build/hnix/hnix <args> +RTS -p
 ```
