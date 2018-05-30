@@ -1,6 +1,5 @@
 { compiler ? "ghc822"
 
-, doProfiling ? false
 , doBenchmark ? false
 , doTracing   ? false
 , doStrict    ? false
@@ -82,15 +81,12 @@ in haskellPackages.developPackage {
         # that the version we committed to Git.
         pkgs.haskell.packages.ghc822.hpack ];
 
-    enableLibraryProfiling    = doProfiling;
-    enableExecutableProfiling = doProfiling;
-
     inherit doBenchmark;
 
     configureFlags =
-         pkgs.stdenv.lib.optional doTracing   "--flags=tracing"
-      ++ pkgs.stdenv.lib.optional doProfiling "--flags=profiling"
-      ++ pkgs.stdenv.lib.optional doStrict    "--ghc-options=-Werror";
+         pkgs.stdenv.lib.optional  doTracing   "--flags=tracing"
+      ++ pkgs.stdenv.lib.optionals doProfiling ["--flags=profiling" "--enable-profiling"]
+      ++ pkgs.stdenv.lib.optional  doStrict    "--ghc-options=-Werror";
   });
 
   inherit returnShellEnv;
