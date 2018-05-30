@@ -35,20 +35,16 @@ let
       serialise         = dontCheck super.serialise;
 
       ghc-datasize =
-        if doProfiling
-        then null
-        else overrideCabal super.ghc-datasize (attrs: {
-               enableLibraryProfiling    = false;
-               enableExecutableProfiling = false;
-             });
+        overrideCabal super.ghc-datasize (attrs: {
+          enableLibraryProfiling    = false;
+          enableExecutableProfiling = false;
+        });
 
       ghc-heap-view =
-        if doProfiling
-        then null
-        else overrideCabal super.ghc-heap-view (attrs: {
-               enableLibraryProfiling    = false;
-               enableExecutableProfiling = false;
-             });
+        overrideCabal super.ghc-heap-view (attrs: {
+          enableLibraryProfiling    = false;
+          enableExecutableProfiling = false;
+        });
     });
   });
 
@@ -85,7 +81,6 @@ in haskellPackages.developPackage {
 
     configureFlags =
          pkgs.stdenv.lib.optional  doTracing   "--flags=tracing"
-      ++ pkgs.stdenv.lib.optionals doProfiling ["--flags=profiling" "--enable-profiling"]
       ++ pkgs.stdenv.lib.optional  doStrict    "--ghc-options=-Werror";
   });
 
