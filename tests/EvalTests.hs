@@ -31,6 +31,12 @@ case_basic_sum =
 case_basic_div =
     constantEqualText "3" "builtins.div 6 2"
 
+case_zero_div = do
+  assertNixEvalThrows "builtins.div 1 0"
+  assertNixEvalThrows "builtins.div 1.0 0"
+  assertNixEvalThrows "builtins.div 1 0.0"
+  assertNixEvalThrows "builtins.div 1.0 0.0"
+
 case_basic_function =
     constantEqualText "2" "(a: a) 2"
 
