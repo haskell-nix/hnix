@@ -222,6 +222,7 @@ builtinsList = sequence [
     , add  TopLevel "placeholder"                placeHolder
     , add  Normal   "readDir"                    readDir_
     , add  Normal   "readFile"                   readFile_
+    , add2 Normal   "findFile"                   findFile_
     , add2 TopLevel "removeAttrs"                removeAttrs
     , add3 Normal   "replaceStrings"             replaceStrings
     , add2 TopLevel "scopedImport"               scopedImport
@@ -325,7 +326,7 @@ unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
     (NVStr key _, NVSet _ apos) -> case M.lookup key apos of
         Nothing -> pure $ nvConstant NNull
         Just delta -> toValue delta
-    (x, y) -> throwError $ ErrorCall $ "Invalid types for builtin.unsafeGetAttrPos: "
+    (x, y) -> throwError $ ErrorCall $ "Invalid types for builtins.unsafeGetAttrPos: "
                  ++ show (x, y)
 
 -- This function is a bit special in that it doesn't care about the contents
@@ -355,11 +356,14 @@ mul_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
 
 div_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 div_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
-    (NVConstant (NInt x),   NVConstant (NInt y))   ->
+    (NVConstant (NInt x),   NVConstant (NInt y))   | y /= 0 ->
         toNix (floor (fromInteger x / fromInteger y :: Double) :: Integer)
-    (NVConstant (NFloat x), NVConstant (NInt y))   -> toNix (x / fromInteger y)
-    (NVConstant (NInt x),   NVConstant (NFloat y)) -> toNix (fromInteger x / y)
-    (NVConstant (NFloat x), NVConstant (NFloat y)) -> toNix (x / y)
+    (NVConstant (NFloat x), NVConstant (NInt y))   | y /= 0 ->
+        toNix (x / fromInteger y)
+    (NVConstant (NInt x),   NVConstant (NFloat y)) | y /= 0 -> 
+        toNix (fromInteger x / y)
+    (NVConstant (NFloat x), NVConstant (NFloat y)) | y /= 0 -> 
+        toNix (x / y)
     (_, _) ->
         throwError $ Division x' y'
 
@@ -861,6 +865,19 @@ absolutePathFromValue = \case
 readFile_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 readFile_ path =
     path >>= absolutePathFromValue >>= Nix.Render.readFile >>= toNix
+
+findFile_ :: forall e m. MonadNix e m
+          => m (NValue m) -> m (NValue m) -> m (NValue m)
+findFile_ aset filePath =
+    aset >>= \aset' ->
+    filePath >>= \filePath' ->
+    case (aset', filePath') of
+      (NVList x, NVStr name _) -> do
+          mres <- findPath x (Text.unpack name)
+          pure $ nvPath mres
+      (NVList _, y)  -> throwError $ ErrorCall $ "expected a string, got " ++ show y
+      (x, NVStr _ _) -> throwError $ ErrorCall $ "expected a list, got " ++ show x
+      (x, y)         -> throwError $ ErrorCall $ "Invalid types for builtins.findFile: " ++ show (x, y)
 
 data FileType
    = FileTypeRegular

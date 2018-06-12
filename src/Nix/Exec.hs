@@ -531,6 +531,8 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
 
     findEnvPath = findEnvPathM
 
+    findPath = findPathM
+
     pathExists = liftIO . fileExist
 
     importPath scope origPath = do
@@ -642,12 +644,12 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
           -- return response
         let status = statusCode (responseStatus response)
         if  status /= 200
-          then throwError $ ErrorCall $ 
+          then throwError $ ErrorCall $
                  "fail, got " ++ show status ++ " when fetching url:" ++ urlstr
           else -- do
             -- let bstr = responseBody response
             -- liftIO $ print bstr
-            throwError $ ErrorCall $ 
+            throwError $ ErrorCall $
               "success in downloading but hnix-store is not yet ready; url = " ++ urlstr
 
     traceEffect = liftIO . putStrLn
@@ -705,49 +707,66 @@ x <///> y | isAbsolute y || "." `isPrefixOf` y = x </> y
         joinPath $ head [ xs ++ drop (length tx) ys
                         | tx <- tails xs, tx `elem` inits ys ]
 
-nixFilePath :: (MonadEffects m, MonadIO m) => FilePath -> m (Maybe FilePath)
-nixFilePath path = do
-    path <- makeAbsolutePath path
-    exists <- liftIO $ doesDirectoryExist path
-    path' <- if exists
-            then makeAbsolutePath $ path </> "default.nix"
-            else return path
-    exists <- liftIO $ doesFileExist path'
-    return $ if exists then Just path' else Nothing
-
-findEnvPathM :: forall e m. (MonadNix e m, MonadIO m)
-             => FilePath -> m FilePath
-findEnvPathM name = do
-    mres <- lookupVar @_ @(NThunk m) "__nixPath"
-    mpath <- case mres of
-        Nothing -> error "impossible"
-        Just x -> force x $ fromValue >=> \(l :: [NThunk m]) ->
-            foldM go Nothing l
+findPathBy :: forall e m. (MonadNix e m, MonadIO m) =>
+            (FilePath -> m (Maybe FilePath)) ->
+            [NThunk m] -> FilePath -> m FilePath
+findPathBy finder l name = do
+    mpath <- foldM go Nothing l
     case mpath of
         Nothing ->
             throwError $ ErrorCall $ "file '" ++ name
                 ++ "' was not found in the Nix search path"
                 ++ " (add it using $NIX_PATH or -I)"
         Just path -> return path
-  where
-    go :: Maybe FilePath -> NThunk m -> m (Maybe FilePath)
-    go p@(Just _) _ = pure p
-    go Nothing l = force l $ fromValue >=> \(s :: HashMap Text (NThunk m)) ->
-        case M.lookup "path" s of
-            Just p -> force p $ fromValue >=> \(Path path) ->
-                case M.lookup "prefix" s of
-                    Nothing -> tryPath path Nothing
-                    Just pf -> force pf $ fromValueMay >=> \case
-                        Just (pfx :: Text) | not (Text.null pfx) ->
-                            tryPath path (Just (Text.unpack pfx))
-                        _ -> tryPath path Nothing
-            Nothing ->
-                throwError $ ErrorCall $ "__nixPath must be a list of attr sets"
-                    ++ " with 'path' elements, but saw: " ++ show s
+    where
+      go :: Maybe FilePath -> NThunk m -> m (Maybe FilePath)
+      go p@(Just _) _ = pure p
+      go Nothing    l = force l $ fromValue >=>
+        \(s :: HashMap Text (NThunk m)) ->
+          case M.lookup "path" s of
+              Just p -> force p $ fromValue >=> \(Path path) ->
+                  case M.lookup "prefix" s of
+                      Nothing -> tryPath path Nothing
+                      Just pf -> force pf $ fromValueMay >=> \case
+                          Just (pfx :: Text) | not (Text.null pfx) ->
+                              tryPath path (Just (Text.unpack pfx))
+                          _ -> tryPath path Nothing
+              Nothing ->
+                  throwError $ ErrorCall $ "__nixPath must be a list of attr sets"
+                      ++ " with 'path' elements, but saw: " ++ show s
 
-    tryPath p (Just n) | n':ns <- splitDirectories name, n == n' =
-        nixFilePath $ p <///> joinPath ns
-    tryPath p _ = nixFilePath $ p <///> name
+      tryPath p (Just n) | n':ns <- splitDirectories name, n == n' =
+          finder $ p <///> joinPath ns
+      tryPath p _ = finder $ p <///> name
+
+findPathM :: forall e m. (MonadNix e m, MonadIO m) =>
+            [NThunk m] -> FilePath -> m FilePath
+findPathM l name = findPathBy path l name
+    where
+      path :: (MonadEffects m, MonadIO m) => FilePath -> m (Maybe FilePath)
+      path path = do
+          path <- makeAbsolutePath path
+          exists <- liftIO $ doesPathExist path
+          return $ if exists then Just path else Nothing
+
+findEnvPathM :: forall e m. (MonadNix e m, MonadIO m)
+             => FilePath -> m FilePath
+findEnvPathM name = do
+    mres <- lookupVar @_ @(NThunk m) "__nixPath"
+    case mres of
+        Nothing -> error "impossible"
+        Just x -> force x $ fromValue >=> \(l :: [NThunk m]) ->
+          findPathBy nixFilePath l name
+    where
+      nixFilePath :: (MonadEffects m, MonadIO m) => FilePath -> m (Maybe FilePath)
+      nixFilePath path = do
+          path <- makeAbsolutePath path
+          exists <- liftIO $ doesDirectoryExist path
+          path' <- if exists
+                  then makeAbsolutePath $ path </> "default.nix"
+                  else return path
+          exists <- liftIO $ doesFileExist path'
+          return $ if exists then Just path' else Nothing
 
 addTracing :: (MonadNix e m, Has e Options, MonadIO m,
               MonadReader Int n, Alternative n)

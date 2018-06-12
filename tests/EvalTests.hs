@@ -8,6 +8,7 @@
 
 module EvalTests (tests, genEvalCompareTests) where
 
+import           Control.Monad.Catch
 import           Control.Monad (when)
 import           Control.Monad.IO.Class
 import qualified Data.HashMap.Lazy as M
@@ -29,6 +30,12 @@ case_basic_sum =
 
 case_basic_div =
     constantEqualText "3" "builtins.div 6 2"
+
+case_zero_div = do
+  assertNixEvalThrows "builtins.div 1 0"
+  assertNixEvalThrows "builtins.div 1.0 0"
+  assertNixEvalThrows "builtins.div 1 0.0"
+  assertNixEvalThrows "builtins.div 1.0 0.0"
 
 case_basic_function =
     constantEqualText "2" "(a: a) 2"
@@ -87,6 +94,30 @@ case_nested_with =
 
 case_match_failure_null =
     constantEqualText "null" "builtins.match \"ab\" \"abc\""
+
+case_find_file_success_no_prefix =
+    constantEqualText "./tests/files/findFile.nix"
+                      "builtins.findFile [{ path=\"./tests/files\"; prefix=\"\"; }] \"findFile.nix\""
+
+case_find_file_success_with_prefix =
+    constantEqualText "./tests/files/findFile.nix"
+                      "builtins.findFile [{ path=\"./tests/files\"; prefix=\"nix\"; }] \"nix/findFile.nix\""
+
+case_find_file_success_folder =
+    constantEqualText "./tests/files"
+                      "builtins.findFile [{ path=\"./tests\"; prefix=\"\"; }] \"files\""
+
+case_find_file_failure_not_found =
+    assertNixEvalThrows "builtins.findFile [{ path=\"./tests/files\"; prefix=\"\"; }] \"not_found.nix\""
+
+case_find_file_failure_invalid_arg_1 =
+    assertNixEvalThrows "builtins.findFile 1 \"files\""
+
+case_find_file_failure_invalid_arg_2 =
+    assertNixEvalThrows "builtins.findFile [{ path=\"./tests/files\"; prefix=\"\"; }] 2"
+
+case_find_file_failure_invalid_arg_no_path =
+    assertNixEvalThrows "builtins.findFile [{ prefix=\"\"; }] \"files\""
 
 case_inherit_in_rec_set =
     constantEqualText "1" "let x = 1; in (rec { inherit x; }).x"
@@ -271,6 +302,7 @@ instance (Show r, Show (NValueF m r), Eq r) => Eq (NValueF m r) where
     NVSetF x _ == NVSetF y _ =
         M.keys x == M.keys y &&
         and (zipWith (==) (M.elems x) (M.elems y))
+    NVPathF x == NVPathF y = x == y
     x == y = error $ "Need to add comparison for values: "
                  ++ show x ++ " == " ++ show y
 
@@ -296,3 +328,17 @@ constantEqualText a b = do
   mres <- liftIO $ lookupEnv "MATCHING_TESTS"
   when (isJust mres) $
       assertEvalMatchesNix b
+
+assertNixEvalThrows :: Text -> Assertion
+assertNixEvalThrows a = do
+    let Success a' = parseNixTextLoc a
+    time <- liftIO getCurrentTime
+    let opts = defaultOptions time
+    errored <- catch ((runLazyM opts $ normalForm =<< nixEvalExprLoc Nothing a') >> pure False) handler
+    if errored then
+        pure ()
+    else
+        assertFailure "Did not catch nix exception"
+    where
+       handler :: NixException -> IO Bool
+       handler _ = pure True
