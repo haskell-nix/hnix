@@ -53,6 +53,7 @@ import qualified Data.List.NonEmpty as NE
 import           Data.Maybe (fromMaybe, mapMaybe, catMaybes)
 import           Data.Text (Text)
 import           Nix.Atoms
+import           Nix.Convert
 import           Nix.Exec
 import           Nix.Expr
 import           Nix.Frames
@@ -124,10 +125,13 @@ reduce :: forall e m.
             MonadState (HashMap FilePath NExprLoc) m)
        => NExprLocF (m NExprLoc) -> m NExprLoc
 
+-- | Reduce the variable to its value if defined.
+--   Leave it as it is otherwise.
 reduce (NSym_ ann var) = lookupVar var <&> \case
     Nothing -> Fix (NSym_ ann var)
     Just v  -> v
 
+-- | Reduce binary and integer negation.
 reduce (NUnary_ uann op arg) = arg >>= \x -> case (op, x) of
     (NNeg, Fix (NConstant_ cann (NInt n))) ->
         return $ Fix $ NConstant_ cann (NInt (negate n))
@@ -135,6 +139,12 @@ reduce (NUnary_ uann op arg) = arg >>= \x -> case (op, x) of
         return $ Fix $ NConstant_ cann (NBool (not b))
     _ -> return $ Fix $ NUnary_ uann op x
 
+-- | Reduce function applications.
+--
+--     * Reduce an import to the actual imported expression.
+--
+--     * Reduce a lambda function by adding its name to the local
+--       scope and recursively reducing its body. 
 reduce (NBinary_ bann NApp fun arg) = fun >>= \case
     f@(Fix (NSym_ _ "import")) -> arg >>= \case
         -- Fix (NEnvPath_     pann origPath) -> staticImport pann origPath
@@ -147,6 +157,7 @@ reduce (NBinary_ bann NApp fun arg) = fun >>= \case
 
     f -> Fix . NBinary_ bann NApp f <$> arg
 
+-- | Reduce an integer addition to its result.
 reduce (NBinary_ bann op larg rarg) = do
     lval <- larg
     rval <- rarg
@@ -155,10 +166,35 @@ reduce (NBinary_ bann op larg rarg) = do
             return $ Fix (NConstant_ ann (NInt (x + y)))
         _ -> pure $ Fix $ NBinary_ bann op lval rval
 
--- reduce (NSelect aset attr alt) = do
+-- | Reduce a select by removing the unecessary paths.
+-- => NExprLocF (m NExprLoc) -> m NExprLoc
+reduce base@(NSelect_ ann aset attr alt) = do
+    -- Maybe (
+    s    <- aset
+    path <- traverse getKeyName attr
+    reducePath s path
+    -- 1 Run path
+  where
+      getKeyName :: NKeyName (m v) -> m (Maybe Text)
+      getKeyName = \case
+        StaticKey k -> pure $ Just k
+        _           -> pure Nothing
+      reducePath (NSet s)  (Just x:|xs) = case s of
+        Just (s :: AttrSet t, p :: AttrSet SourcePos)
+          | Just t <- M.lookup x s -> case xs of
+              [] -> pure t
+              y:ys -> reducePath ?? (y:|ys)
+          | otherwise -> Fix <$> sequence base
+        Nothing -> Fix <$> sequence base
+      reducePath _ _ = Fix <$> sequence base
+
+            
+
 
 -- reduce (NHasAttr aset attr) =
 
+-- | Reduce a set by inlining its binds outside of the set
+--   if none of the binds inherit the super set.
 reduce e@(NSet_ ann binds) = do
     let usesInherit = flip any binds $ \case
             Inherit {} -> True
@@ -178,6 +214,8 @@ reduce (NRecSet_ ann binds) =
 reduce (NWith_ ann scope body) =
     clearScopes @NExprLoc $ fmap Fix $ NWith_ ann <$> scope <*> body
 
+-- | Reduce a let binds section by pushing lambdas,
+--   constants and strings to the body scope.
 reduce (NLet_ ann binds body) = do
     s <- fmap (M.fromList . catMaybes) $ forM binds $ \case
         NamedVar (StaticKey name :| []) def _pos -> def >>= \case
@@ -202,10 +240,14 @@ reduce (NLet_ ann binds body) = do
   --           go (M.insert name v m) xs
   --       _ -> go m xs
 
+-- | Reduce an if to the relevant path if
+--   the condition is a boolean constant.
 reduce e@(NIf_ _ b t f) = b >>= \case
     Fix (NConstant_ _ (NBool b')) -> if b' then t else f
     _ -> Fix <$> sequence e
 
+-- | Reduce an assert atom to its encapsulated
+--   symbol if the assertion is a boolean constant.
 reduce e@(NAssert_ _ b body) = b >>= \case
     Fix (NConstant_ _ (NBool b')) | b' -> body
     _ -> Fix <$> sequence e
