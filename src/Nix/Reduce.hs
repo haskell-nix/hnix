@@ -114,7 +114,7 @@ staticImport pann path = do
 
 reduceExpr :: MonadIO m => Maybe FilePath -> NExprLoc -> m NExprLoc
 reduceExpr mpath expr
-  = trace "reducing.." $ (`evalStateT` M.empty)
+  = (`evalStateT` M.empty)
     . (`runReaderT` (mpath, emptyScopes))
     . runReducer
     $ cata reduce expr
@@ -185,6 +185,7 @@ reduce base@(NSelect_ _ _ attr _)
   where
     sId = Fix <$> sequence base
     sAttrPath (StaticKey _:xs) = sAttrPath xs
+    sAttrPath [] = True
     sAttrPath _ = False
     findBind [] _ = Nothing
     findBind (x:xs) attrs@(a:|_) = case x of
