@@ -356,11 +356,14 @@ mul_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
 
 div_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 div_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
-    (NVConstant (NInt x),   NVConstant (NInt y))   ->
+    (NVConstant (NInt x),   NVConstant (NInt y))   | y /= 0 ->
         toNix (floor (fromInteger x / fromInteger y :: Double) :: Integer)
-    (NVConstant (NFloat x), NVConstant (NInt y))   -> toNix (x / fromInteger y)
-    (NVConstant (NInt x),   NVConstant (NFloat y)) -> toNix (fromInteger x / y)
-    (NVConstant (NFloat x), NVConstant (NFloat y)) -> toNix (x / y)
+    (NVConstant (NFloat x), NVConstant (NInt y))   | y /= 0 ->
+        toNix (x / fromInteger y)
+    (NVConstant (NInt x),   NVConstant (NFloat y)) | y /= 0 -> 
+        toNix (fromInteger x / y)
+    (NVConstant (NFloat x), NVConstant (NFloat y)) | y /= 0 -> 
+        toNix (x / y)
     (_, _) ->
         throwError $ Division x' y'
 

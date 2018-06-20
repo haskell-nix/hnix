@@ -1,13 +1,12 @@
 { compiler ? "ghc822"
 
-, doProfiling ? false
 , doBenchmark ? false
 , doTracing   ? false
 , doStrict    ? false
 
-, rev     ? "9d0b6b9dfc92a2704e2111aa836f5bdbf8c9ba42"
-, sha256  ? "096r7ylnwz4nshrfkh127dg8nhrcvgpr69l4xrdgy3kbq049r3nb"
-, nixpkgs ?
+, rev     ? "49bdae006e66e70ad3245a463edc01b5749250d3"
+, sha256  ? "1ijsifmap47nfzg0spny94lmj66y3x3x8i6vs471bnjamka3dx8p"
+, pkgs    ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
     then abort "hnix requires at least nix 2.0"
     else import (builtins.fetchTarball {
@@ -16,28 +15,15 @@
            config.allowUnfree = true;
            config.allowBroken = false;
          }
-, provideDrv  ? !nixpkgs.pkgs.lib.inNixShell
+, returnShellEnv ? pkgs.lib.inNixShell
+, mkDerivation ? null
 }:
 
-let inherit (nixpkgs) pkgs;
-
+let
   haskellPackages' = pkgs.haskell.packages.${compiler};
 
   haskellPackages = pkgs.lib.fix (this: haskellPackages'.override {
     overrides = with pkgs.haskell.lib; self: super: {
-      developPackage =
-        { root
-        , source-overrides ? {}
-        , overrides ? self: super: {}
-        , modifier ? drv: drv
-        , provideDrv ? !pkgs.lib.inNixShell }:
-        let drv =
-          (this.extend
-             (pkgs.lib.composeExtensions
-                (self.packageSourceOverrides source-overrides)
-                overrides))
-          .callCabal2nix (builtins.baseNameOf root) root {};
-        in if provideDrv then modifier drv else (modifier drv).env;
     }
 
     // (if compiler == "ghcjs" then {} else
@@ -49,20 +35,16 @@ let inherit (nixpkgs) pkgs;
       serialise         = dontCheck super.serialise;
 
       ghc-datasize =
-        if doProfiling
-        then null
-        else overrideCabal super.ghc-datasize (attrs: {
-               enableLibraryProfiling    = false;
-               enableExecutableProfiling = false;
-             });
+        overrideCabal super.ghc-datasize (attrs: {
+          enableLibraryProfiling    = false;
+          enableExecutableProfiling = false;
+        });
 
       ghc-heap-view =
-        if doProfiling
-        then null
-        else overrideCabal super.ghc-heap-view (attrs: {
-               enableLibraryProfiling    = false;
-               enableExecutableProfiling = false;
-             });
+        overrideCabal super.ghc-heap-view (attrs: {
+          enableLibraryProfiling    = false;
+          enableExecutableProfiling = false;
+        });
     });
   });
 
@@ -104,16 +86,12 @@ in haskellPackages.developPackage {
           cabalInstallVersion.${compiler} {})
       ];
 
-    enableLibraryProfiling    = doProfiling;
-    enableExecutableProfiling = doProfiling;
-
     inherit doBenchmark;
 
     configureFlags =
-         pkgs.stdenv.lib.optional doTracing   "--flags=tracing"
-      ++ pkgs.stdenv.lib.optional doProfiling "--flags=profiling"
-      ++ pkgs.stdenv.lib.optional doStrict    "--ghc-options=-Werror";
+         pkgs.stdenv.lib.optional  doTracing   "--flags=tracing"
+      ++ pkgs.stdenv.lib.optional  doStrict    "--ghc-options=-Werror";
   });
 
-  inherit provideDrv;
+  inherit returnShellEnv;
 }
