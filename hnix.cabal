@@ -623,6 +623,7 @@ test-suite hnix-tests
       ParserTests
       PrettyParseTests
       PrettyTests
+      ReduceExprTests
       TestCommon
       Paths_hnix
   hs-source-dirs:
