@@ -53,7 +53,6 @@ import qualified Data.List.NonEmpty as NE
 import           Data.Maybe (fromMaybe, mapMaybe, catMaybes)
 import           Data.Text (Text)
 import           Nix.Atoms
-import           Nix.Convert
 import           Nix.Exec
 import           Nix.Expr
 import           Nix.Frames
@@ -114,7 +113,7 @@ staticImport pann path = do
 
 reduceExpr :: MonadIO m => Maybe FilePath -> NExprLoc -> m NExprLoc
 reduceExpr mpath expr
-  = (`evalStateT` M.empty)
+    = (`evalStateT` M.empty)
     . (`runReaderT` (mpath, emptyScopes))
     . runReducer
     $ cata reduce expr
@@ -170,28 +169,33 @@ reduce (NBinary_ bann op larg rarg) = do
 --
 -- Before applying this reduction, we need to ensure that:
 --
--- 1. The selected expr is indeed a set.
--- 2. The selection AttrPath is a list of StaticKeys.
--- 3. The selected AttrPath exists in the set.
-reduce base@(NSelect_ _ _ attr _)
-    | sAttrPath $ NE.toList attr = do
-      (NSelect_ _ aset attr _) <- sequence base
-      case unFix aset of
-          NSet_ _ binds -> case findBind binds attr of
-              Just (NamedVar _ e _) -> pure e
-              _ -> sId
-          _ -> sId
+--   1. The selected expr is indeed a set.
+--   2. The selection AttrPath is a list of StaticKeys.
+--   3. The selected AttrPath exists in the set.
+reduce base@(NSelect_ _ _ attrs _)
+    | sAttrPath $ NE.toList attrs = do
+      (NSelect_ _ aset attrs _) <- sequence base
+      inspectSet (unFix aset) attrs
     | otherwise = sId
   where
     sId = Fix <$> sequence base
+    -- The selection AttrPath is composed of StaticKeys.
     sAttrPath (StaticKey _:xs) = sAttrPath xs
-    sAttrPath [] = True
-    sAttrPath _ = False
-    findBind [] _ = Nothing
+    sAttrPath []               = True
+    sAttrPath _                = False
+    -- Find appropriate bind in set's binds.
+    findBind [] _                = Nothing
     findBind (x:xs) attrs@(a:|_) = case x of
         n@(NamedVar (a':|_) _ _) | a' == a -> Just n
-        _ -> findBind xs attrs
-            
+        _                                  -> findBind xs attrs
+    -- Follow the attrpath recursively in sets.
+    inspectSet (NSet_ _ binds) attrs = case findBind binds attrs of
+       Just (NamedVar _ e _) -> case NE.uncons attrs of 
+               (_,Just attrs) -> inspectSet (unFix e) attrs
+               _              -> pure e
+       _ -> sId
+    inspectSet _ _ = sId
+
 -- reduce (NHasAttr aset attr) =
 
 -- | Reduce a set by inlining its binds outside of the set
