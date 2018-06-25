@@ -114,7 +114,7 @@ staticImport pann path = do
 
 reduceExpr :: MonadIO m => Maybe FilePath -> NExprLoc -> m NExprLoc
 reduceExpr mpath expr
-    = (`evalStateT` M.empty)
+  = trace "reducing.." $ (`evalStateT` M.empty)
     . (`runReaderT` (mpath, emptyScopes))
     . runReducer
     $ cata reduce expr
@@ -166,31 +166,31 @@ reduce (NBinary_ bann op larg rarg) = do
             return $ Fix (NConstant_ ann (NInt (x + y)))
         _ -> pure $ Fix $ NBinary_ bann op lval rval
 
--- | Reduce a select by removing the unecessary paths.
--- => NExprLocF (m NExprLoc) -> m NExprLoc
-reduce base@(NSelect_ ann aset attr alt) = do
-    -- Maybe (
-    s    <- aset
-    path <- traverse getKeyName attr
-    reducePath s path
-    -- 1 Run path
+-- | Reduce a select on a Set by substituing the set to the selected value.
+--
+-- Before applying this reduction, we need to ensure that:
+--
+-- 1. The selected expr is indeed a set.
+-- 2. The selection AttrPath is a list of StaticKeys.
+-- 3. The selected AttrPath exists in the set.
+reduce base@(NSelect_ _ _ attr _)
+    | sAttrPath $ NE.toList attr = do
+      (NSelect_ _ aset attr _) <- sequence base
+      case unFix aset of
+          NSet_ _ binds -> case findBind binds attr of
+              Just (NamedVar _ e _) -> pure e
+              _ -> sId
+          _ -> sId
+    | otherwise = sId
   where
-      getKeyName :: NKeyName (m v) -> m (Maybe Text)
-      getKeyName = \case
-        StaticKey k -> pure $ Just k
-        _           -> pure Nothing
-      reducePath (NSet s)  (Just x:|xs) = case s of
-        Just (s :: AttrSet t, p :: AttrSet SourcePos)
-          | Just t <- M.lookup x s -> case xs of
-              [] -> pure t
-              y:ys -> reducePath ?? (y:|ys)
-          | otherwise -> Fix <$> sequence base
-        Nothing -> Fix <$> sequence base
-      reducePath _ _ = Fix <$> sequence base
-
+    sId = Fix <$> sequence base
+    sAttrPath (StaticKey _:xs) = sAttrPath xs
+    sAttrPath _ = False
+    findBind [] _ = Nothing
+    findBind (x:xs) attrs@(a:|_) = case x of
+        n@(NamedVar (a':|_) _ _) | a' == a -> Just n
+        _ -> findBind xs attrs
             
-
-
 -- reduce (NHasAttr aset attr) =
 
 -- | Reduce a set by inlining its binds outside of the set
