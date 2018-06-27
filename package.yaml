@@ -109,7 +109,7 @@ library:
     - interpolate
     - lens-family-th
     - logict
-    - megaparsec                >= 6.0   && < 6.6
+    - megaparsec                >= 6.5   && < 7.0
     - monadlist
     - process
     - regex-tdfa

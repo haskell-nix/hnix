@@ -52,11 +52,14 @@ in haskellPackages.developPackage {
   root = ./.;
 
   overrides = with pkgs.haskell.lib; self: super:
-    if compiler == "ghc802"
-    then {
-      concurrent-output = doJailbreak super.concurrent-output;
-    }
-    else {};
+    {
+      megaparsec = super.megaparsec_6_5_0;
+    } //
+    (if compiler == "ghc802"
+     then {
+       concurrent-output = doJailbreak super.concurrent-output;
+     }
+     else {});
 
   source-overrides =
     if compiler == "ghc802"
