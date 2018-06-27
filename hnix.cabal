@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: a731c780e3c32f87f1cbb05127ac46ce527454d8a3c7aecadbb0ae14280de93c
+-- hash: a8f221d87a80d4417a065328cc42b341dadcff4109d2ab26f7ee94fdd2c395e4
 
 name:           hnix
 version:        0.5.1
@@ -682,6 +682,7 @@ test-suite hnix-tests
   else
     buildable: True
   default-language: Haskell2010
+  build-tool-depends: hspec-discover:hspec-discover == 2.*
 
 benchmark hnix-benchmarks
   type: exitcode-stdio-1.0

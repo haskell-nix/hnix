@@ -171,6 +171,9 @@ tests:
     source-dirs: tests
     main: Main.hs
     ghc-options: -threaded
+    verbatim:
+      build-tool-depends:
+        hspec-discover:hspec-discover == 2.*
     dependencies:
       - hnix
       - Glob
