@@ -66,6 +66,7 @@ in haskellPackages.developPackage {
     then {
       lens-family-core = "1.2.1";
       lens-family = "1.2.1";
+      hspec-discover = "2.5.4";
     }
     else {};
 
