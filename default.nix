@@ -75,7 +75,16 @@ in haskellPackages.developPackage {
         # .cabal file will be. Otherwise, Travis may error out claiming that
         # the cabal file needs to be updated because the result is different
         # that the version we committed to Git.
-        pkgs.haskell.packages.ghc822.hpack ];
+        pkgs.haskell.packages.ghc822.hpack
+
+        (let cabalInstallVersion = {
+               ghc802 = "1.24.0.2";
+               ghc822 = "2.0.0.1";
+               ghc842 = "2.2.0.0";
+             }; in
+         haskellPackages.callHackage "cabal-install"
+          cabalInstallVersion.${compiler} {})
+      ];
 
     inherit doBenchmark;
 
