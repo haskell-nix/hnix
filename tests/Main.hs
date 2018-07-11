@@ -26,6 +26,7 @@ import           Nix.Value
 import qualified NixLanguageTests
 import qualified ParserTests
 import qualified PrettyTests
+import qualified ReduceExprTests
 -- import qualified PrettyParseTests
 import           System.Directory
 import           System.Environment
@@ -98,7 +99,8 @@ main = do
       | isJust hpackTestsEnv ] ++
     [ ParserTests.tests
     , EvalTests.tests
-    , PrettyTests.tests ] ++
+    , PrettyTests.tests
+    , ReduceExprTests.tests] ++
     -- [ PrettyParseTests.tests
     --     (fromIntegral (read (fromMaybe "0" prettyTestsEnv) :: Int)) ] ++
     [ evalComparisonTests ] ++
