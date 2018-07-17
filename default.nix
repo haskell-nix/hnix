@@ -19,54 +19,48 @@
 , mkDerivation ? null
 }:
 
-let
-  haskellPackages' = pkgs.haskell.packages.${compiler};
-
-  haskellPackages = pkgs.lib.fix (this: haskellPackages'.override {
-    overrides = with pkgs.haskell.lib; self: super: {
-    }
-
-    // (if compiler == "ghcjs" then {} else
-    {
-      cryptohash-md5    = doJailbreak super.cryptohash-md5;
-      cryptohash-sha1   = doJailbreak super.cryptohash-sha1;
-      cryptohash-sha256 = doJailbreak super.cryptohash-sha256;
-      cryptohash-sha512 = doJailbreak super.cryptohash-sha512;
-      serialise         = dontCheck super.serialise;
-
-      ghc-datasize =
-        overrideCabal super.ghc-datasize (attrs: {
-          enableLibraryProfiling    = false;
-          enableExecutableProfiling = false;
-        });
-
-      ghc-heap-view =
-        overrideCabal super.ghc-heap-view (attrs: {
-          enableLibraryProfiling    = false;
-          enableExecutableProfiling = false;
-        });
-    });
-  });
+let haskellPackages = pkgs.haskell.packages.${compiler};
 
 in haskellPackages.developPackage {
   root = ./.;
 
-  overrides = with pkgs.haskell.lib; self: super:
-    {
-      megaparsec = super.megaparsec_6_5_0;
-    } //
-    (if compiler == "ghc802"
-     then {
-       concurrent-output = doJailbreak super.concurrent-output;
-     }
-     else {});
+  overrides = with pkgs.haskell.lib; self: super: {
+    megaparsec = super.megaparsec_6_5_0;
+  }
+  //
+  (if compiler == "ghc802"
+   then {
+     concurrent-output = doJailbreak super.concurrent-output;
+   }
+   else {})
+  //
+  (if compiler == "ghcjs" then {} else
+   {
+     cryptohash-md5    = doJailbreak super.cryptohash-md5;
+     cryptohash-sha1   = doJailbreak super.cryptohash-sha1;
+     cryptohash-sha256 = doJailbreak super.cryptohash-sha256;
+     cryptohash-sha512 = doJailbreak super.cryptohash-sha512;
+     serialise         = dontCheck super.serialise;
+
+     ghc-datasize =
+       overrideCabal super.ghc-datasize (attrs: {
+         enableLibraryProfiling    = false;
+         enableExecutableProfiling = false;
+       });
+
+     ghc-heap-view =
+       overrideCabal super.ghc-heap-view (attrs: {
+         enableLibraryProfiling    = false;
+         enableExecutableProfiling = false;
+       });
+   });
 
   source-overrides =
     if compiler == "ghc802"
     then {
       lens-family-core = "1.2.1";
       lens-family = "1.2.1";
-      hspec-discover = "2.5.4";
+      hspec-discover = "2.5.5";
     }
     else {};
 
@@ -79,7 +73,9 @@ in haskellPackages.developPackage {
         # .cabal file will be. Otherwise, Travis may error out claiming that
         # the cabal file needs to be updated because the result is different
         # that the version we committed to Git.
-        pkgs.haskell.packages.ghc822.hpack ];
+        pkgs.haskell.packages.ghc822.hpack
+        pkgs.haskell.packages.ghc822.criterion
+      ];
 
     inherit doBenchmark;
 
