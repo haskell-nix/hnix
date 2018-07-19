@@ -2,10 +2,10 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c02b22100fbe18f609b79bbbedea56e6b6aa269c65882a3bf2ee2804c2e1d835
+-- hash: ba0f61f8a049f6970ff03fd924cfed6fc1251eceb90547c1be8051226c453632
 
 name:           hnix
-version:        0.5.1
+version:        0.5.2
 synopsis:       Haskell implementation of the Nix language
 description:    Haskell implementation of the Nix language.
 category:       System, Data, Nix
