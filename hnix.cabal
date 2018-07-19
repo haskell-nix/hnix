@@ -494,7 +494,7 @@ library
     , containers
     , data-fix
     , deepseq >=1.4.2 && <1.5
-    , deriving-compat >=0.3 && <0.5
+    , deriving-compat >=0.3 && <0.6
     , directory
     , exceptions
     , filepath
