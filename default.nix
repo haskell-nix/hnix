@@ -81,6 +81,7 @@ in haskellPackages.developPackage {
                ghc802 = "1.24.0.2";
                ghc822 = "2.0.0.1";
                ghc842 = "2.2.0.0";
+               ghc843 = "2.2.0.0";
              }; in
          haskellPackages.callHackage "cabal-install"
           cabalInstallVersion.${compiler} {})
