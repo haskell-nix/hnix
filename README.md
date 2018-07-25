@@ -92,10 +92,10 @@ application.
 ## Using the Cachix binary cache
 
 If you're on macOS, you can use the binary cache at Cachix to avoid building
-the specific dependencies used by hnix. Just add this to your `nix.conf` file:
+the specific dependencies used by hnix. Just use these commands:
 
-    substituters = https://cache.nixos.org https://hnix.cachix.org
-    trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hnix.cachix.org-1:8MflOlogfd6Y94rD0cjHsmfK0qIF8F5dPz4TSY7qSdU=
+    nix-env -iA cachix -f https://github.com/NixOS/nixpkgs/tarball/db557aab7b690f5e0e3348459f2e4dc8fd0d9298
+    cachix use hnix
 
 ## How you can help
 
