@@ -1,8 +1,8 @@
--- This file has been generated from package.yaml by hpack version 0.27.0.
+-- This file has been generated from package.yaml by hpack version 0.28.2.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ba0f61f8a049f6970ff03fd924cfed6fc1251eceb90547c1be8051226c453632
+-- hash: 6d8b6df867ed451ea735063f46d5ff612f0f9f8433b6bed92ff64d66ab9f2558
 
 name:           hnix
 version:        0.5.2
@@ -17,7 +17,6 @@ license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
 cabal-version:  >= 1.10
-
 extra-source-files:
     data/let-comments-multiline.nix
     data/let-comments.nix

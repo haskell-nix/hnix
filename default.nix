@@ -4,8 +4,8 @@
 , doTracing   ? false
 , doStrict    ? false
 
-, rev     ? "49bdae006e66e70ad3245a463edc01b5749250d3"
-, sha256  ? "1ijsifmap47nfzg0spny94lmj66y3x3x8i6vs471bnjamka3dx8p"
+, rev     ? "d7d31fea7e7eef8ff4495e75be5dcbb37fb215d0"
+, sha256  ? "1ghb1nhgfx3r2rl501r8k0akmfjvnl9pis92if35pawsxgp115kv"
 , pkgs    ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
     then abort "hnix requires at least nix 2.0"
@@ -19,13 +19,14 @@
 , mkDerivation ? null
 }:
 
-let haskellPackages = pkgs.haskell.packages.${compiler};
+let
 
-in haskellPackages.developPackage {
+haskellPackages = pkgs.haskell.packages.${compiler};
+
+drv = haskellPackages.developPackage {
   root = ./.;
 
   overrides = with pkgs.haskell.lib; self: super: {
-    megaparsec = super.megaparsec_6_5_0;
   }
   //
   (if compiler == "ghc802"
@@ -60,7 +61,6 @@ in haskellPackages.developPackage {
     then {
       lens-family-core = "1.2.1";
       lens-family = "1.2.1";
-      hspec-discover = "2.5.5";
     }
     else {};
 
@@ -85,4 +85,8 @@ in haskellPackages.developPackage {
   });
 
   inherit returnShellEnv;
-}
+};
+
+in if returnShellEnv
+   then drv
+   else drv.overrideAttrs (attrs: { strictDeps = pkgs.stdenv.isDarwin; })
