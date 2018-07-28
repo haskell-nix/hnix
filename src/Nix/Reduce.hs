@@ -78,32 +78,30 @@ staticImport
        MonadState (HashMap FilePath NExprLoc) m)
     => SrcSpan -> FilePath -> m NExprLoc
 staticImport pann path = do
+    mfile <- asks fst
+    path  <- liftIO $ pathToDefaultNixFile path
+    path' <- liftIO $ pathToDefaultNixFile =<< canonicalizePath
+        (maybe path (\p -> takeDirectory p </> path) mfile)
+
     imports <- get
-    case M.lookup path imports of
+    case M.lookup path' imports of
         Just expr -> pure expr
-        Nothing -> go
+        Nothing -> go path'
   where
-    go = do
-        mfile <- asks fst
-        path  <- liftIO $ pathToDefaultNixFile path
-        path' <- liftIO $ pathToDefaultNixFile =<< canonicalizePath
-            (maybe path (\p -> takeDirectory p </> path) mfile)
+    go path = do
+        liftIO $ putStrLn $ "Importing file " ++ path
 
-        liftIO $ putStrLn $ "Importing file " ++ path'
-
-        eres <- liftIO $ parseNixFileLoc path'
+        eres <- liftIO $ parseNixFileLoc path
         case eres of
             Failure err  -> error $ "Parse failed: " ++ show err
             Success x -> do
                 let pos  = SourcePos "Reduce.hs" (mkPos 1) (mkPos 1)
                     span = SrcSpan pos pos
-                    cur  = NamedVar
-                        (StaticKey "__cur_file" (Just pos) :| [])
-                        (Fix (NLiteralPath_ pann path'))
+                    cur  = NamedVar (StaticKey "__cur_file" :| [])
+                        (Fix (NLiteralPath_ pann path)) pos
                     x'   = Fix (NLet_ span [cur] x)
                 modify (M.insert path x')
-                local (const (Just path',
-                              emptyScopes @m @NExprLoc)) $ do
+                local (const (Just path, emptyScopes @m @NExprLoc)) $ do
                     x'' <- cata reduce x'
                     modify (M.insert path x'')
                     return x''
@@ -126,10 +124,13 @@ reduce :: forall e m.
             MonadState (HashMap FilePath NExprLoc) m)
        => NExprLocF (m NExprLoc) -> m NExprLoc
 
+-- | Reduce the variable to its value if defined.
+--   Leave it as it is otherwise.
 reduce (NSym_ ann var) = lookupVar var <&> \case
     Nothing -> Fix (NSym_ ann var)
     Just v  -> v
 
+-- | Reduce binary and integer negation.
 reduce (NUnary_ uann op arg) = arg >>= \x -> case (op, x) of
     (NNeg, Fix (NConstant_ cann (NInt n))) ->
         return $ Fix $ NConstant_ cann (NInt (negate n))
@@ -137,6 +138,12 @@ reduce (NUnary_ uann op arg) = arg >>= \x -> case (op, x) of
         return $ Fix $ NConstant_ cann (NBool (not b))
     _ -> return $ Fix $ NUnary_ uann op x
 
+-- | Reduce function applications.
+--
+--     * Reduce an import to the actual imported expression.
+--
+--     * Reduce a lambda function by adding its name to the local
+--       scope and recursively reducing its body. 
 reduce (NBinary_ bann NApp fun arg) = fun >>= \case
     f@(Fix (NSym_ _ "import")) -> arg >>= \case
         -- Fix (NEnvPath_     pann origPath) -> staticImport pann origPath
@@ -149,6 +156,7 @@ reduce (NBinary_ bann NApp fun arg) = fun >>= \case
 
     f -> Fix . NBinary_ bann NApp f <$> arg
 
+-- | Reduce an integer addition to its result.
 reduce (NBinary_ bann op larg rarg) = do
     lval <- larg
     rval <- rarg
@@ -157,13 +165,44 @@ reduce (NBinary_ bann op larg rarg) = do
             return $ Fix (NConstant_ ann (NInt (x + y)))
         _ -> pure $ Fix $ NBinary_ bann op lval rval
 
--- reduce (NSelect aset attr alt) = do
+-- | Reduce a select on a Set by substituing the set to the selected value.
+--
+-- Before applying this reduction, we need to ensure that:
+--
+--   1. The selected expr is indeed a set.
+--   2. The selection AttrPath is a list of StaticKeys.
+--   3. The selected AttrPath exists in the set.
+reduce base@(NSelect_ _ _ attrs _)
+    | sAttrPath $ NE.toList attrs = do
+      (NSelect_ _ aset attrs _) <- sequence base
+      inspectSet (unFix aset) attrs
+    | otherwise = sId
+  where
+    sId = Fix <$> sequence base
+    -- The selection AttrPath is composed of StaticKeys.
+    sAttrPath (StaticKey _:xs) = sAttrPath xs
+    sAttrPath []               = True
+    sAttrPath _                = False
+    -- Find appropriate bind in set's binds.
+    findBind [] _                = Nothing
+    findBind (x:xs) attrs@(a:|_) = case x of
+        n@(NamedVar (a':|_) _ _) | a' == a -> Just n
+        _                                  -> findBind xs attrs
+    -- Follow the attrpath recursively in sets.
+    inspectSet (NSet_ _ binds) attrs = case findBind binds attrs of
+       Just (NamedVar _ e _) -> case NE.uncons attrs of 
+               (_,Just attrs) -> inspectSet (unFix e) attrs
+               _              -> pure e
+       _ -> sId
+    inspectSet _ _ = sId
 
 -- reduce (NHasAttr aset attr) =
 
+-- | Reduce a set by inlining its binds outside of the set
+--   if none of the binds inherit the super set.
 reduce e@(NSet_ ann binds) = do
     let usesInherit = flip any binds $ \case
-            Inherit _ _ -> True
+            Inherit {} -> True
             _ -> False
     if usesInherit
         then clearScopes @NExprLoc $
@@ -180,9 +219,11 @@ reduce (NRecSet_ ann binds) =
 reduce (NWith_ ann scope body) =
     clearScopes @NExprLoc $ fmap Fix $ NWith_ ann <$> scope <*> body
 
+-- | Reduce a let binds section by pushing lambdas,
+--   constants and strings to the body scope.
 reduce (NLet_ ann binds body) = do
     s <- fmap (M.fromList . catMaybes) $ forM binds $ \case
-        NamedVar (StaticKey name _ :| []) def -> def >>= \case
+        NamedVar (StaticKey name :| []) def _pos -> def >>= \case
             d@(Fix NAbs_ {})      -> pure $ Just (name, d)
             d@(Fix NConstant_ {}) -> pure $ Just (name, d)
             d@(Fix NStr_ {})      -> pure $ Just (name, d)
@@ -204,10 +245,14 @@ reduce (NLet_ ann binds body) = do
   --           go (M.insert name v m) xs
   --       _ -> go m xs
 
+-- | Reduce an if to the relevant path if
+--   the condition is a boolean constant.
 reduce e@(NIf_ _ b t f) = b >>= \case
     Fix (NConstant_ _ (NBool b')) -> if b' then t else f
     _ -> Fix <$> sequence e
 
+-- | Reduce an assert atom to its encapsulated
+--   symbol if the assertion is a boolean constant.
 reduce e@(NAssert_ _ b body) = b >>= \case
     Fix (NConstant_ _ (NBool b')) | b' -> body
     _ -> Fix <$> sequence e
@@ -325,10 +370,10 @@ pruneTree opts = cataM $ \(FlaggedF (b, Compose x)) -> do
     pruneAntiquoted (Antiquoted (Just k)) = Just (Antiquoted k)
 
     pruneKeyName :: NKeyName (Maybe NExprLoc) -> NKeyName NExprLoc
-    pruneKeyName (StaticKey n p) = StaticKey n p
+    pruneKeyName (StaticKey n) = StaticKey n
     pruneKeyName (DynamicKey k)
         | Just k' <- pruneAntiquoted k = DynamicKey k'
-        | otherwise = StaticKey "<unused?>" Nothing
+        | otherwise = StaticKey "<unused?>"
 
     pruneParams :: Params (Maybe NExprLoc) -> Params NExprLoc
     pruneParams (Param n) = Param n
@@ -340,13 +385,13 @@ pruneTree opts = cataM $ \(FlaggedF (b, Compose x)) -> do
               ParamSet (map (second (fmap (fromMaybe nNull))) xs) b n
 
     pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
-    pruneBinding (NamedVar _ Nothing)  = Nothing
-    pruneBinding (NamedVar xs (Just x)) =
-        Just (NamedVar (NE.map pruneKeyName xs) x)
-    pruneBinding (Inherit _ [])  = Nothing
-    pruneBinding (Inherit (join -> Nothing) _) = Nothing
-    pruneBinding (Inherit (join -> m) xs) =
-        Just (Inherit m (map pruneKeyName xs))
+    pruneBinding (NamedVar _ Nothing _)  = Nothing
+    pruneBinding (NamedVar xs (Just x) pos) =
+        Just (NamedVar (NE.map pruneKeyName xs) x pos)
+    pruneBinding (Inherit _ [] _)  = Nothing
+    pruneBinding (Inherit (join -> Nothing) _ _) = Nothing
+    pruneBinding (Inherit (join -> m) xs pos) =
+        Just (Inherit m (map pruneKeyName xs) pos)
 
 reducingEvalExpr
     :: (Framed e m, Has e Options, Exception r, MonadCatch m, MonadIO m)

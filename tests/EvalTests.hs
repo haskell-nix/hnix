@@ -297,7 +297,7 @@ genEvalCompareTests = do
 
 instance (Show r, Show (NValueF m r), Eq r) => Eq (NValueF m r) where
     NVConstantF x == NVConstantF y = x == y
-    NVStrF ls == NVStrF rs = ls == rs
+    NVStrF ls == NVStrF rs = stringIntentionallyDropContext ls == stringIntentionallyDropContext rs
     NVListF x == NVListF y = and (zipWith (==) x y)
     NVSetF x _ == NVSetF y _ =
         M.keys x == M.keys y &&

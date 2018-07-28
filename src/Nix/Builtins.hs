@@ -802,7 +802,7 @@ lessThan ta tb = ta >>= \va -> tb >>= \vb -> do
             (NInt   a, NFloat b) -> pure $ fromInteger a < b
             (NFloat a, NFloat b) -> pure $ a < b
             _ -> badType
-        (NVStr a, NVStr b) -> pure $ a < b
+        (NVStr a, NVStr b) -> pure $ stringIntentionallyDropContext a < stringIntentionallyDropContext b
         _ -> badType
 
 concatLists :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)

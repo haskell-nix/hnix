@@ -186,8 +186,7 @@ nixLet = annotateLocation1 (reserved "let"
         <*> (reserved "in" *> nixToplevelForm)
     -- Let expressions `let {..., body = ...}' are just desugared
     -- into `(rec {..., body = ...}).body'.
-    letBody = (\x pos -> NSelect x (StaticKey "body" (Just pos) :| []) Nothing)
-        <$> aset <*> getPosition
+    letBody = (\x -> NSelect x (StaticKey "body" :| []) Nothing) <$> aset
     aset = annotateLocation1 $ NRecSet <$> braces nixBinders
 
 nixIf :: Parser NExprLoc
@@ -223,7 +222,8 @@ nixUri = annotateLocation1 $ lexeme $ try $ do
     _ <- string ":"
     address  <- some $ satisfy $ \x ->
         isAlpha x || isDigit x || x `elem` ("%/?:@&=+$,-_.!~*'" :: String)
-    return $ mkUriF $ pack $ start : protocol ++ ':' : address
+    return $ NStr $
+        DoubleQuoted [Plain $ pack $ start : protocol ++ ':' : address]
 
 nixString :: Parser (NString NExprLoc)
 nixString = lexeme (doubleQuoted <+> indented <?> "string")
@@ -312,19 +312,24 @@ argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
 
 nixBinders :: Parser [Binding NExprLoc]
 nixBinders = (inherit <+> namedVar) `endBy` semi where
-  inherit = Inherit <$> (reserved "inherit" *> optional scope)
-                    <*> many keyName
-                    <?> "inherited binding"
-  namedVar = NamedVar <$> (annotated <$> nixSelector)
-                      <*> (equals *> nixToplevelForm)
-                      <?> "variable binding"
+  inherit = do
+      -- We can't use 'reserved' here because it would consume the whitespace
+      -- after the keyword, which is not exactly the semantics of C++ Nix.
+      try $ string "inherit" *> lookAhead (void (satisfy reservedEnd))
+      p <- getPosition
+      x <- whiteSpace *> optional scope
+      Inherit x <$> many keyName <*> pure p <?> "inherited binding"
+  namedVar = do
+      p <- getPosition
+      NamedVar <$> (annotated <$> nixSelector)
+               <*> (equals *> nixToplevelForm)
+               <*> pure p
+               <?> "variable binding"
   scope = parens nixToplevelForm <?> "inherit scope"
 
 keyName :: Parser (NKeyName NExprLoc)
 keyName = dynamicKey <+> staticKey where
-  staticKey = do
-      beg <- getPosition
-      StaticKey <$> identifier <*> pure (Just beg)
+  staticKey = StaticKey <$> identifier
   dynamicKey = DynamicKey <$> nixAntiquoted nixString
 
 nixSet :: Parser NExprLoc

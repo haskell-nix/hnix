@@ -40,7 +40,7 @@ normalFormBy k n v = do
     when (n > 2000) $ throwError $ NormalLoop v
     case v of
         NVConstant a     -> return $ Fix $ NVConstantF a
-        NVStr ns         -> return $ Fix $ NVStrF $ ns
+        NVStr ns         -> return $ Fix $ NVStrF ns
         NVList l         ->
             fmap (Fix . NVListF) $ forM (zip [0..] l) $ \(i :: Int, t) -> do
                 traceM $ replicate n ' ' ++ "normalFormBy: List[" ++ show i ++ "]"

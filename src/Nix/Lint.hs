@@ -56,7 +56,6 @@ data TAtom
   | TFloat
   | TBool
   | TNull
-  | TUri
   deriving (Show, Eq, Ord)
 
 data NTypeF (m :: * -> *) r
@@ -131,7 +130,6 @@ renderSymbolic = unpackSymbolic >=> \case
             TFloat -> return "float"
             TBool  -> return "bool"
             TNull  -> return "null"
-            TUri   -> return "uri"
         TStr            -> return "string"
         TList r         -> do
             x <- force r renderSymbolic
@@ -283,7 +281,6 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
           NFloat _ -> TFloat
           NBool _  -> TBool
           NNull    -> TNull
-          NUri _   -> TUri
 
     evalString      = const $ mkSymbolic [TStr]
     evalLiteralPath = const $ mkSymbolic [TPath]
@@ -332,17 +329,17 @@ lintBinaryOp op lsym rarg = do
     y <- thunk everyPossible
     case op of
         NApp   -> symerr "lintBinaryOp:NApp: should never get here"
-        NEq    -> check lsym rsym [ TConstant [TInt, TBool, TNull, TUri]
+        NEq    -> check lsym rsym [ TConstant [TInt, TBool, TNull]
                                  , TStr
                                  , TList y ]
-        NNEq   -> check lsym rsym [ TConstant [TInt, TBool, TNull, TUri]
+        NNEq   -> check lsym rsym [ TConstant [TInt, TBool, TNull]
                                  , TStr
                                  , TList y ]
 
-        NLt    -> check lsym rsym [ TConstant [TInt, TBool, TNull, TUri] ]
-        NLte   -> check lsym rsym [ TConstant [TInt, TBool, TNull, TUri] ]
-        NGt    -> check lsym rsym [ TConstant [TInt, TBool, TNull, TUri] ]
-        NGte   -> check lsym rsym [ TConstant [TInt, TBool, TNull, TUri] ]
+        NLt    -> check lsym rsym [ TConstant [TInt, TBool, TNull] ]
+        NLte   -> check lsym rsym [ TConstant [TInt, TBool, TNull] ]
+        NGt    -> check lsym rsym [ TConstant [TInt, TBool, TNull] ]
+        NGte   -> check lsym rsym [ TConstant [TInt, TBool, TNull] ]
 
         NAnd   -> check lsym rsym [ TConstant [TBool] ]
         NOr    -> check lsym rsym [ TConstant [TBool] ]
