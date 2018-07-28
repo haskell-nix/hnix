@@ -8,6 +8,7 @@
 
 module EvalTests (tests, genEvalCompareTests) where
 
+import           Control.Monad.Catch
 import           Control.Monad (when)
 import           Control.Monad.IO.Class
 import qualified Data.HashMap.Lazy as M
@@ -29,6 +30,12 @@ case_basic_sum =
 
 case_basic_div =
     constantEqualText "3" "builtins.div 6 2"
+
+case_zero_div = do
+  assertNixEvalThrows "builtins.div 1 0"
+  assertNixEvalThrows "builtins.div 1.0 0"
+  assertNixEvalThrows "builtins.div 1 0.0"
+  assertNixEvalThrows "builtins.div 1.0 0.0"
 
 case_basic_function =
     constantEqualText "2" "(a: a) 2"
@@ -52,9 +59,11 @@ case_function_definition_uses_environment =
     constantEqualText "3" "let f = (let a=1; in x: x+a); in f 2"
 
 case_function_atpattern =
+    -- jww (2018-05-09): This should be constantEqualText
     constantEqualText' "2" "(({a}@attrs:attrs) {a=2;}).a"
 
 case_function_ellipsis =
+    -- jww (2018-05-09): This should be constantEqualText
     constantEqualText' "2" "(({a, ...}@attrs:attrs) {a=0; b=2;}).b"
 
 case_function_default_value_not_in_atpattern =
@@ -67,7 +76,7 @@ case_function_recursive_args =
     constantEqualText "2" "({ x ? 1, y ? x * 3}: y - x) {}"
 
 case_function_recursive_sets =
-    constantEqualText' "[ [ 6 4 100 ] 4 ]" [i|
+    constantEqualText "[ [ 6 4 100 ] 4 ]" [i|
         let x = rec {
 
           y = 2;
@@ -85,6 +94,30 @@ case_nested_with =
 
 case_match_failure_null =
     constantEqualText "null" "builtins.match \"ab\" \"abc\""
+
+case_find_file_success_no_prefix =
+    constantEqualText "./tests/files/findFile.nix"
+                      "builtins.findFile [{ path=\"./tests/files\"; prefix=\"\"; }] \"findFile.nix\""
+
+case_find_file_success_with_prefix =
+    constantEqualText "./tests/files/findFile.nix"
+                      "builtins.findFile [{ path=\"./tests/files\"; prefix=\"nix\"; }] \"nix/findFile.nix\""
+
+case_find_file_success_folder =
+    constantEqualText "./tests/files"
+                      "builtins.findFile [{ path=\"./tests\"; prefix=\"\"; }] \"files\""
+
+case_find_file_failure_not_found =
+    assertNixEvalThrows "builtins.findFile [{ path=\"./tests/files\"; prefix=\"\"; }] \"not_found.nix\""
+
+case_find_file_failure_invalid_arg_1 =
+    assertNixEvalThrows "builtins.findFile 1 \"files\""
+
+case_find_file_failure_invalid_arg_2 =
+    assertNixEvalThrows "builtins.findFile [{ path=\"./tests/files\"; prefix=\"\"; }] 2"
+
+case_find_file_failure_invalid_arg_no_path =
+    assertNixEvalThrows "builtins.findFile [{ prefix=\"\"; }] \"files\""
 
 case_inherit_in_rec_set =
     constantEqualText "1" "let x = 1; in (rec { inherit x; }).x"
@@ -109,8 +142,100 @@ case_inherit_from_set_has_no_scope =
       )).success
     |]
 
+case_unsafegetattrpos1 =
+    constantEqualText "[ 6 20 ]" [i|
+      let e = 1;
+          f = 1;
+          t = {};
+          s = {
+            inherit t e f;
+            a = 1;
+            "b" = 2;
+            c.d = 3;
+          };
+          p = builtins.unsafeGetAttrPos "e" s; in
+      [ p.line p.column ]
+    |]
+
+case_unsafegetattrpos2 =
+    constantEqualText "[ 6 20 ]" [i|
+      let e = 1;
+          f = 1;
+          t = {};
+          s = {
+            inherit t e f;
+            a = 1;
+            "b" = 2;
+            c.d = 3;
+          };
+          p = builtins.unsafeGetAttrPos "f" s; in
+      [ p.line p.column ]
+    |]
+
+case_unsafegetattrpos3 =
+    constantEqualText "[ 7 13 ]" [i|
+      let e = 1;
+          f = 1;
+          t = {};
+          s = {
+            inherit t e f;
+            a = 1;
+            "b" = 2;
+            c.d = 3;
+          };
+          p = builtins.unsafeGetAttrPos "a" s; in
+      [ p.line p.column ]
+    |]
+
+case_unsafegetattrpos4 =
+    constantEqualText "[ 8 13 ]" [i|
+      let e = 1;
+          f = 1;
+          t = {};
+          s = {
+            inherit t e f;
+            a = 1;
+            "b" = 2;
+            c.d = 3;
+          };
+          p = builtins.unsafeGetAttrPos "b" s; in
+      [ p.line p.column ]
+    |]
+
+-- jww (2018-05-09): These two are failing but they shouldn't be
+
+-- case_unsafegetattrpos5 =
+--     constantEqualText "[ 7 13 ]" [i|
+--       let e = 1;
+--           f = 1;
+--           t = {};
+--           s = {
+--             inherit t e f;
+--             a = 1;
+--             "b" = 2;
+--             c.d = 3;
+--           };
+--           p = builtins.unsafeGetAttrPos "c.d" s; in
+--       [ p.line p.column ]
+--     |]
+
+-- case_unsafegetattrpos6 =
+--     constantEqualText "[ 7 13 ]" [i|
+--       let e = 1;
+--           f = 1;
+--           t = {};
+--           s = {
+--             inherit t e f;
+--             a = 1;
+--             "b" = 2;
+--             c.d = 3;
+--           };
+--           p = builtins.unsafeGetAttrPos "d" s; in
+--       [ p.line p.column ]
+--     |]
+
 case_fixed_points =
-    constantEqualText' [i|[
+    constantEqualText [i|[
   {
     foobar = "foobar";
     foo = "foo";
@@ -134,7 +259,7 @@ case_fixed_points =
 |]
 
 case_fixed_points_and_fold =
-    constantEqualText' [i|[ {} {} ]|] [i|
+    constantEqualText [i|[ {} {} ]|] [i|
 let
   extends = f: rattrs: self:
     let super = rattrs self; in super // f self super;
@@ -144,6 +269,13 @@ let
   fix = f: let x = f x; in x;
 in [ (fix toFixFold) (fix toFix) ]
 |]
+
+case_fixed_points_attrsets =
+    constantEqualText "{ x = { y = { z = 100; }; z = { y = 100; }; }; }" [i|
+      let fix = f: let x = f x; in x;
+          f = self: { x.z.y = 100; x.y.z = self.x.z.y; };
+      in fix f
+    |]
 
 -- jww (2018-05-02): This constantly changes!
 -- case_placeholder =
@@ -170,6 +302,7 @@ instance (Show r, Show (NValueF m r), Eq r) => Eq (NValueF m r) where
     NVSetF x _ == NVSetF y _ =
         M.keys x == M.keys y &&
         and (zipWith (==) (M.elems x) (M.elems y))
+    NVPathF x == NVPathF y = x == y
     x == y = error $ "Need to add comparison for values: "
                  ++ show x ++ " == " ++ show y
 
@@ -195,3 +328,17 @@ constantEqualText a b = do
   mres <- liftIO $ lookupEnv "MATCHING_TESTS"
   when (isJust mres) $
       assertEvalMatchesNix b
+
+assertNixEvalThrows :: Text -> Assertion
+assertNixEvalThrows a = do
+    let Success a' = parseNixTextLoc a
+    time <- liftIO getCurrentTime
+    let opts = defaultOptions time
+    errored <- catch ((runLazyM opts $ normalForm =<< nixEvalExprLoc Nothing a') >> pure False) handler
+    if errored then
+        pure ()
+    else
+        assertFailure "Did not catch nix exception"
+    where
+       handler :: NixException -> IO Bool
+       handler _ = pure True

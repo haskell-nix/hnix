@@ -1,9 +1,12 @@
-/Setup
-/dist/
+**/*~
 **/#*
 **/.#*
-result
+/.history
+/Setup
+/dist/
+/nix-test-eval*
+/nix/
 TAGS
 ctags
 dist-newstyle
-/.history
+result

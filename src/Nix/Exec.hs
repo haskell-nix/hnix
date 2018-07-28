@@ -44,6 +44,7 @@ import           Data.IORef
 import           Data.List
 import qualified Data.List.NonEmpty as NE
 import           Data.List.Split
+import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Typeable
@@ -67,7 +68,9 @@ import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
+#ifdef MIN_VERSION_haskeline
 import           System.Console.Haskeline.MonadException hiding (catch)
+#endif
 import           System.Directory
 import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
@@ -77,6 +80,9 @@ import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
 import           Text.PrettyPrint.ANSI.Leijen (text)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
+#ifdef MIN_VERSION_pretty_show
+import qualified Text.Show.Pretty as PS
+#endif
 
 #ifdef MIN_VERSION_ghc_datasize
 #if MIN_VERSION_ghc_datasize(0,2,0) && __GLASGOW_HASKELL__ >= 804
@@ -179,11 +185,13 @@ instance MonadNix e m => MonadEval (NValue m) m where
         span  <- currentPos
         pure $ nvConstantP (Provenance scope (NConstant_ span c)) c
 
-    evalString ns = do
-        scope <- currentScopes
-        span  <- currentPos
-        pure $ nvStrP (Provenance scope
-                           (NStr_ span (DoubleQuoted [Plain (stringIntentionallyDropContext ns)]))) ns
+    evalString = assembleString >=> \case
+        Just (s, c) -> do
+            scope <- currentScopes
+            span  <- currentPos
+            pure $ nvStrP (Provenance scope
+                           (NStr_ span (DoubleQuoted [Plain s]))) s c
+        Nothing -> nverr $ ErrorCall "Failed to assemble string"
 
     evalLiteralPath p = do
         scope <- currentScopes
@@ -323,8 +331,8 @@ execBinaryOp scope span op lval rarg = do
              NBool l, NBool r) -> toBool $ not l || r
             _                  -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
-        (NVStr ls, NVStr rs) -> case op of
-            NPlus -> pure $ bin nvStrP (ls `mappend` rs)
+        (NVStr ls lc, NVStr rs rc) -> case op of
+            NPlus -> pure $ bin nvStrP (ls `mappend` rs) (lc `mappend` rc)
             NEq   -> toBool =<< valueEq lval rval
             NNEq  -> toBool . not =<< valueEq lval rval
             NLt   -> toBool $ ls <  rs
@@ -361,6 +369,20 @@ execBinaryOp scope span op lval rarg = do
             NNEq    -> toBool . not =<< valueEq (nvSet M.empty M.empty) rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
+        (ls@NVSet {}, NVStr rs) -> case op of
+            NPlus   -> (\lx -> bin nvStrP (modifyNixContents (Text.pack lx `mappend`) rs))
+                <$> coerceToString False ls
+            NEq     -> toBool =<< valueEq lval rval
+            NNEq    -> toBool . not =<< valueEq lval rval
+            _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
+
+        (NVStr ls, rs@NVSet {}) -> case op of
+            NPlus   -> (\rx -> bin nvStrP (modifyNixContents (`mappend` Text.pack rx) ls))
+                <$> coerceToString False rs
+            NEq     -> toBool =<< valueEq lval rval
+            NNEq    -> toBool . not =<< valueEq lval rval
+            _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
+
         (NVList ls, NVList rs) -> case op of
             NConcat -> pure $ bin nvListP $ ls ++ rs
             NEq     -> toBool =<< valueEq lval rval
@@ -382,9 +404,7 @@ execBinaryOp scope span op lval rarg = do
         (NVPath p, NVStr ns) -> case op of
             NEq   -> toBool $ Just p == fmap Text.unpack (stringNoContext ns)
             NNEq  -> toBool $ Just p /= fmap Text.unpack (stringNoContext ns)
-            NPlus -> case stringNoContext ns of 
-                       Just s -> bin nvPathP <$> makeAbsolutePath (p `mappend` Text.unpack s)
-                       Nothing -> nverr $ ErrorCall $ unsupportedTypes lval rval 
+            NPlus -> bin nvPathP <$> makeAbsolutePath (p `mappend` Text.unpack (stringIntentionallyDropContext ns))
             _     -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVPath ls, NVPath rs) -> case op of
@@ -419,27 +439,29 @@ execBinaryOp scope span op lval rarg = do
         toInt   = pure . bin nvConstantP . NInt
         toFloat = pure . bin nvConstantP . NFloat
 
-coerceToString :: MonadNix e m => NValue m -> m String
-coerceToString = \case
-    NVConstant (NBool b)
-        | b               -> pure "1"
-        | otherwise       -> pure ""
-    NVConstant (NInt n)   -> pure $ show n
-    NVConstant (NFloat n) -> pure $ show n
-    NVConstant (NUri u)   -> pure $ show u
-    NVConstant NNull      -> pure ""
+coerceToString :: MonadNix e m => Bool -> NValue m -> m String
+coerceToString copyToStore = go
+  where
+    go = \case
+        NVConstant (NBool b)
+            | b               -> pure "1"
+            | otherwise       -> pure ""
+        NVConstant (NInt n)   -> pure $ show n
+        NVConstant (NFloat n) -> pure $ show n
+        NVConstant NNull      -> pure ""
 
-    NVStr ns -> pure $ Text.unpack $ stringIntentionallyDropContext ns
-    NVPath p  -> unStorePath <$> addPath p
-    NVList l  -> unwords <$> traverse (`force` coerceToString) l
+        NVStr ns _ -> pure $ Text.unpack (stringIntentionallyDropContext ns)
+        NVPath p  | copyToStore -> unStorePath <$> addPath p
+                  | otherwise   -> pure p
+        NVList l  -> unwords <$> traverse (`force` go) l
 
-    v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
-        force p $ (`callFunc` pure v) >=> coerceToString
+        v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
+            force p $ (`callFunc` pure v) >=> go
 
-    NVSet s _ | Just p <- M.lookup "outPath" s ->
-        force p coerceToString
+        NVSet s _ | Just p <- M.lookup "outPath" s ->
+            force p go
 
-    v -> throwError $ ErrorCall $ "Expected a string, but saw: " ++ show v
+        v -> throwError $ ErrorCall $ "Expected a string, but saw: " ++ show v
 
 newtype Lazy m a = Lazy
     { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m)))
@@ -466,10 +488,12 @@ instance MonadCatch m => MonadCatch (Lazy m) where
 instance MonadThrow m => MonadThrow (Lazy m) where
     throwM = Lazy . throwM
 
+#ifdef MIN_VERSION_haskeline
 instance MonadException m => MonadException (Lazy m) where
   controlIO f = Lazy $ controlIO $ \(RunIO run) ->
       let run' = RunIO (fmap Lazy . run . runLazy)
       in runLazy <$> f run'
+#endif
 
 instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
           MonadPlus m, Typeable m)
@@ -483,6 +507,12 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
             return $ StorePath $ dropTrailingLinefeed out
           _ -> throwError $ ErrorCall $
                   "addPath: failed: nix-store --add " ++ show path
+
+    toFile_ filepath content = do
+      liftIO $ writeFile filepath content
+      storepath <- addPath filepath
+      liftIO $ removeFile filepath
+      return storepath
 
     makeAbsolutePath origPath = do
         origPathExpanded <- liftIO $ expandHomePath origPath
@@ -501,6 +531,8 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
         liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
 
     findEnvPath = findEnvPathM
+
+    findPath = findPathM
 
     pathExists = liftIO . fileExist
 
@@ -570,7 +602,7 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
             "__ignoreNulls" -> pure Nothing
             _               -> force v $ \case
                 NVConstant NNull | ignoreNulls -> pure Nothing
-                v' -> Just <$> (toNix =<< Text.pack <$> coerceToString v')
+                v' -> Just <$> (toNix =<< Text.pack <$> coerceToString True v')
 
     nixInstantiateExpr expr = do
         traceM $ "Executing: "
@@ -613,12 +645,12 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
           -- return response
         let status = statusCode (responseStatus response)
         if  status /= 200
-          then throwError $ ErrorCall $ 
+          then throwError $ ErrorCall $
                  "fail, got " ++ show status ++ " when fetching url:" ++ urlstr
           else -- do
             -- let bstr = responseBody response
             -- liftIO $ print bstr
-            throwError $ ErrorCall $ 
+            throwError $ ErrorCall $
               "success in downloading but hnix-store is not yet ready; url = " ++ urlstr
 
     traceEffect = liftIO . putStrLn
@@ -676,49 +708,66 @@ x <///> y | isAbsolute y || "." `isPrefixOf` y = x </> y
         joinPath $ head [ xs ++ drop (length tx) ys
                         | tx <- tails xs, tx `elem` inits ys ]
 
-nixFilePath :: (MonadEffects m, MonadIO m) => FilePath -> m (Maybe FilePath)
-nixFilePath path = do
-    path <- makeAbsolutePath path
-    exists <- liftIO $ doesDirectoryExist path
-    path' <- if exists
-            then makeAbsolutePath $ path </> "default.nix"
-            else return path
-    exists <- liftIO $ doesFileExist path'
-    return $ if exists then Just path' else Nothing
-
-findEnvPathM :: forall e m. (MonadNix e m, MonadIO m)
-             => FilePath -> m FilePath
-findEnvPathM name = do
-    mres <- lookupVar @_ @(NThunk m) "__nixPath"
-    mpath <- case mres of
-        Nothing -> error "impossible"
-        Just x -> force x $ fromValue >=> \(l :: [NThunk m]) ->
-            foldM go Nothing l
+findPathBy :: forall e m. (MonadNix e m, MonadIO m) =>
+            (FilePath -> m (Maybe FilePath)) ->
+            [NThunk m] -> FilePath -> m FilePath
+findPathBy finder l name = do
+    mpath <- foldM go Nothing l
     case mpath of
         Nothing ->
             throwError $ ErrorCall $ "file '" ++ name
                 ++ "' was not found in the Nix search path"
                 ++ " (add it using $NIX_PATH or -I)"
         Just path -> return path
-  where
-    go :: Maybe FilePath -> NThunk m -> m (Maybe FilePath)
-    go p@(Just _) _ = pure p
-    go Nothing l = force l $ fromValue >=> \(s :: HashMap Text (NThunk m)) ->
-        case M.lookup "path" s of
-            Just p -> force p $ fromValue >=> \(Path path) ->
-                case M.lookup "prefix" s of
-                    Nothing -> tryPath path Nothing
-                    Just pf -> force pf $ fromValueMay >=> \case
-                        Just (pfx :: Text) | not (Text.null pfx) ->
-                            tryPath path (Just (Text.unpack pfx))
-                        _ -> tryPath path Nothing
-            Nothing ->
-                throwError $ ErrorCall $ "__nixPath must be a list of attr sets"
-                    ++ " with 'path' elements, but saw: " ++ show s
+    where
+      go :: Maybe FilePath -> NThunk m -> m (Maybe FilePath)
+      go p@(Just _) _ = pure p
+      go Nothing    l = force l $ fromValue >=>
+        \(s :: HashMap Text (NThunk m)) ->
+          case M.lookup "path" s of
+              Just p -> force p $ fromValue >=> \(Path path) ->
+                  case M.lookup "prefix" s of
+                      Nothing -> tryPath path Nothing
+                      Just pf -> force pf $ fromValueMay >=> \case
+                          Just (pfx :: Text) | not (Text.null pfx) ->
+                              tryPath path (Just (Text.unpack pfx))
+                          _ -> tryPath path Nothing
+              Nothing ->
+                  throwError $ ErrorCall $ "__nixPath must be a list of attr sets"
+                      ++ " with 'path' elements, but saw: " ++ show s
 
-    tryPath p (Just n) | n':ns <- splitDirectories name, n == n' =
-        nixFilePath $ p <///> joinPath ns
-    tryPath p _ = nixFilePath $ p <///> name
+      tryPath p (Just n) | n':ns <- splitDirectories name, n == n' =
+          finder $ p <///> joinPath ns
+      tryPath p _ = finder $ p <///> name
+
+findPathM :: forall e m. (MonadNix e m, MonadIO m) =>
+            [NThunk m] -> FilePath -> m FilePath
+findPathM l name = findPathBy path l name
+    where
+      path :: (MonadEffects m, MonadIO m) => FilePath -> m (Maybe FilePath)
+      path path = do
+          path <- makeAbsolutePath path
+          exists <- liftIO $ doesPathExist path
+          return $ if exists then Just path else Nothing
+
+findEnvPathM :: forall e m. (MonadNix e m, MonadIO m)
+             => FilePath -> m FilePath
+findEnvPathM name = do
+    mres <- lookupVar @_ @(NThunk m) "__nixPath"
+    case mres of
+        Nothing -> error "impossible"
+        Just x -> force x $ fromValue >=> \(l :: [NThunk m]) ->
+          findPathBy nixFilePath l name
+    where
+      nixFilePath :: (MonadEffects m, MonadIO m) => FilePath -> m (Maybe FilePath)
+      nixFilePath path = do
+          path <- makeAbsolutePath path
+          exists <- liftIO $ doesDirectoryExist path
+          path' <- if exists
+                  then makeAbsolutePath $ path </> "default.nix"
+                  else return path
+          exists <- liftIO $ doesFileExist path'
+          return $ if exists then Just path' else Nothing
 
 addTracing :: (MonadNix e m, Has e Options, MonadIO m,
               MonadReader Int n, Alternative n)
@@ -732,13 +781,17 @@ addTracing k v = do
             opts :: Options <- asks (view hasLens)
             let rendered =
                     if verbose opts >= Chatty
-                    then show (void x)
-                    else show (prettyNix (Fix (Fix (NSym "?") <$ x)))
-                msg x = "eval: " ++ replicate depth ' ' ++ x
-            loc <- renderLocation span (text (msg rendered ++ " ..."))
+#ifdef MIN_VERSION_pretty_show
+                    then text $ PS.ppShow (void x)
+#else
+                    then text $ show (void x)
+#endif
+                    else prettyNix (Fix (Fix (NSym "?") <$ x))
+                msg x = text ("eval: " ++ replicate depth ' ') <> x
+            loc <- renderLocation span (msg rendered <> text " ...\n")
             liftIO $ putStr $ show loc
             res <- k v'
-            liftIO $ putStrLn $ msg (rendered ++ " ...done")
+            liftIO $ print $ msg rendered <> text " ...done"
             return res
 
 evalExprLoc :: forall e m. (MonadNix e m, Has e Options, MonadIO m)

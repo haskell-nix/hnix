@@ -11,6 +11,4 @@ RUN nix-env -f '<nixpkgs>' -i gnutar gzip && \
     nix-shell -Q -j2 --run true
 
 COPY . /tmp/build
-RUN nix-env -f . -i hnix
-
-CMD ["/root/.nix-profile/bin/hnix"]
+RUN bash -xe build.sh

@@ -76,7 +76,7 @@ valueText :: forall e m. (Framed e m, MonadEffects m, Typeable m)
           => Bool -> NValueNF m -> m NixString
 valueText addPathsToStore = cata phi
   where
-    --phi :: () --  NValueF m (m ns) -> m ns
+    phi :: NValueF m NixString -> m NixString
     phi (NVConstantF a) = pure (makeNixStringWithoutContext (atomText a))
     phi (NVStrF ns) = pure ns
     phi v@(NVListF _)   = coercionFailed v

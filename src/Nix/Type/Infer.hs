@@ -99,7 +99,7 @@ instance Substitutable Type where
   apply s (TSet b a)         = TSet b (M.map (apply s) a)
   apply s (TList a)          = TList (map (apply s) a)
   apply (Subst s) t@(TVar a) = Map.findWithDefault t a s
-  apply s (t1 `TArr` t2)     = apply s t1 `TArr` apply s t2
+  apply s (t1 :~> t2)        = apply s t1 :~> apply s t2
   apply s (TMany ts)         = TMany (map (apply s) ts)
 
 instance Substitutable Scheme where
@@ -122,12 +122,12 @@ class FreeTypeVars a where
   ftv :: a -> Set.Set TVar
 
 instance FreeTypeVars Type where
-  ftv TCon{}         = Set.empty
-  ftv (TVar a)       = Set.singleton a
-  ftv (TSet _ a)     = Set.unions (map ftv (M.elems a))
-  ftv (TList a)      = Set.unions (map ftv a)
-  ftv (t1 `TArr` t2) = ftv t1 `Set.union` ftv t2
-  ftv (TMany ts)     = Set.unions (map ftv ts)
+  ftv TCon{}      = Set.empty
+  ftv (TVar a)    = Set.singleton a
+  ftv (TSet _ a)  = Set.unions (map ftv (M.elems a))
+  ftv (TList a)   = Set.unions (map ftv a)
+  ftv (t1 :~> t2) = ftv t1 `Set.union` ftv t2
+  ftv (TMany ts)  = Set.unions (map ftv ts)
 
 instance FreeTypeVars TVar where
   ftv = Set.singleton
@@ -359,7 +359,6 @@ instance MonadEval (Judgment s) (Infer s) where
           NFloat _ -> typeFloat
           NBool _  -> typeBool
           NNull    -> typeNull
-          NUri _   -> typeUri
 
     evalString      = const $ return $ Judgment As.empty [] typeString
     evalLiteralPath = const $ return $ Judgment As.empty [] typePath
@@ -367,14 +366,14 @@ instance MonadEval (Judgment s) (Infer s) where
 
     evalUnary op (Judgment as1 cs1 t1) = do
         tv <- fresh
-        return $ Judgment as1 (cs1 ++ unops (t1 `TArr` tv) op) tv
+        return $ Judgment as1 (cs1 ++ unops (t1 :~> tv) op) tv
 
     evalBinary op (Judgment as1 cs1 t1) e2 = do
         Judgment as2 cs2 t2 <- e2
         tv <- fresh
         return $ Judgment
             (as1 `As.merge` as2)
-            (cs1 ++ cs2 ++ binops (t1 `TArr` (t2 `TArr` tv)) op)
+            (cs1 ++ cs2 ++ binops (t1 :~> t2 :~> tv) op)
             tv
 
     evalWith = Eval.evalWithAttrSet
@@ -399,7 +398,7 @@ instance MonadEval (Judgment s) (Infer s) where
         tv <- fresh
         return $ Judgment
             (as1 `As.merge` as2)
-            (cs1 ++ cs2 ++ [EqConst t1 (t2 `TArr` tv)])
+            (cs1 ++ cs2 ++ [EqConst t1 (t2 :~> tv)])
             tv
 
     evalAbs (Param x) k = do
@@ -410,7 +409,7 @@ instance MonadEval (Judgment s) (Infer s) where
         return $ Judgment
             (as `As.remove` x)
             (cs ++ [EqConst t' tv | t' <- As.lookup x as])
-            (tv `TArr` t)
+            (tv :~> t)
 
     evalAbs (ParamSet ps variadic _mname) k = do
         js <- fmap concat $ forM ps $ \(name, _) -> do
@@ -434,7 +433,7 @@ instance MonadEval (Judgment s) (Infer s) where
             (cs ++ [ EqConst t' (tys M.! x)
                    | x  <- names
                    , t' <- As.lookup x as])
-            (ty `TArr` t)
+            (ty :~> t)
 
     evalError = throwError . EvaluationError
 
@@ -492,18 +491,18 @@ normalize (Forall _ body) = Forall (map snd ord) (normtype body)
     ord = zip (nub $ fv body) (map TV letters)
 
     fv (TVar a)    = [a]
-    fv (TArr a b)  = fv a ++ fv b
+    fv (a :~> b)   = fv a ++ fv b
     fv (TCon _)    = []
     fv (TSet _ a)  = concatMap fv (M.elems a)
     fv (TList a)   = concatMap fv a
     fv (TMany ts)  = concatMap fv ts
 
-    normtype (TArr a b)  = TArr (normtype a) (normtype b)
-    normtype (TCon a)    = TCon a
-    normtype (TSet b a)  = TSet b (M.map normtype a)
-    normtype (TList a)   = TList (map normtype a)
-    normtype (TMany ts)  = TMany (map normtype ts)
-    normtype (TVar a)    =
+    normtype (a :~> b)  = normtype a :~> normtype b
+    normtype (TCon a)   = TCon a
+    normtype (TSet b a) = TSet b (M.map normtype a)
+    normtype (TList a)  = TList (map normtype a)
+    normtype (TMany ts) = TMany (map normtype ts)
+    normtype (TVar a)   =
       case Prelude.lookup a ord of
         Just x -> TVar x
         Nothing -> error "type variable not in signature"
@@ -571,7 +570,7 @@ unifies (TSet True s) (TSet False b)
     | M.keys b `intersect` M.keys s == M.keys b = return emptySubst
 unifies (TSet False s) (TSet False b)
     | null (M.keys b \\ M.keys s) = return emptySubst
-unifies (TArr t1 t2) (TArr t3 t4) = unifyMany [t1, t2] [t3, t4]
+unifies (t1 :~> t2) (t3 :~> t4) = unifyMany [t1, t2] [t3, t4]
 unifies (TMany t1s) t2 = considering t1s >>- unifies ?? t2
 unifies t1 (TMany t2s) = considering t2s >>- unifies t1
 unifies t1 t2 = throwError $ UnificationFail t1 t2

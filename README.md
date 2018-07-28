@@ -2,6 +2,7 @@
 
 [![Build Status](https://api.travis-ci.org/haskell-nix/hnix.svg)](https://travis-ci.org/haskell-nix/hnix)
 [![Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/haskell-nix/Lobby)
+<sup>([Hackage Matrix Builder](https://matrix.hackage.haskell.org/package/hnix))</sup>
 
 Haskell parser, evaluator and type checker for the Nix language.
 
@@ -21,7 +22,9 @@ $ cabal configure --enable-tests
 $ cabal build
 $ cabal test
 # To run all of the tests, which takes up to a minute:
-$ LANGUAGE_TESTS=yes NIXPKGS_TESTS=yes cabal test
+$ env ALL_TESTS=yes cabal test
+# To run only specific tests (see `tests/Main.hs` for a list)
+$ env NIXPKGS_TESTS=yes PRETTY_TESTS=yes cabal test
 $ ./dist/build/hnix/hnix --help
 ```
 
@@ -44,8 +47,8 @@ To build `hnix` for debugging, and with full tracing output and stack traces,
 use:
 
 ```
-$ nix-shell --arg doProfiling true
-$ cabal configure --enable-tests --enable-profiling --flags=tracing
+$ nix-shell
+$ cabal configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
 $ cabal build
 $ ./dist/build/hnix/hnix -v5 --trace <args> +RTS -xc
 ```
@@ -69,11 +72,22 @@ $ cabal bench
 To build `hnix` with profiling enabled:
 
 ```
-$ nix-shell --arg doProfiling true
-$ cabal configure --enable-tests --enable-profiling
+$ nix-shell
+$ cabal configure --enable-tests --enable-profiling --flags=profiling
 $ cabal build
 $ ./dist/build/hnix/hnix <args> +RTS -p
 ```
+
+## Building with GHCJS
+
+From the project root directory, run:
+
+```
+$ NIX_CONF_DIR=$PWD/ghcjs nix-build ghcjs
+```
+
+This will build an `hnix` library that can be linked to your GHCJS
+application.
 
 ## How you can help
 

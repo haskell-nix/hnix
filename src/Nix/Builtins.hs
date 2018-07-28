@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -7,7 +8,9 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PackageImports #-}
 {-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
@@ -24,17 +27,30 @@ import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.ListM (sortByM)
 import           Control.Monad.Reader (asks)
-import qualified Crypto.Hash.MD5 as MD5
-import qualified Crypto.Hash.SHA1 as SHA1
-import qualified Crypto.Hash.SHA256 as SHA256
-import qualified Crypto.Hash.SHA512 as SHA512
+
+-- Using package imports here because there is a bug in cabal2nix that forces
+-- us to put the hashing package in the unconditional dependency list.
+-- See https://github.com/NixOS/cabal2nix/issues/348 for more info
+#if MIN_VERSION_hashing(0, 1, 0)
+import           Crypto.Hash
+import qualified "hashing" Crypto.Hash.MD5 as MD5
+import qualified "hashing" Crypto.Hash.SHA1 as SHA1
+import qualified "hashing" Crypto.Hash.SHA256 as SHA256
+import qualified "hashing" Crypto.Hash.SHA512 as SHA512
+#else
+import           Data.ByteString.Base16 as Base16
+import qualified "cryptohash-md5" Crypto.Hash.MD5 as MD5
+import qualified "cryptohash-sha1" Crypto.Hash.SHA1 as SHA1
+import qualified "cryptohash-sha256" Crypto.Hash.SHA256 as SHA256
+import qualified "cryptohash-sha512" Crypto.Hash.SHA512 as SHA512
+#endif
+
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Encoding as A
 import           Data.Align (alignWith)
 import           Data.Array
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
-import           Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
 import           Data.Coerce
@@ -46,6 +62,7 @@ import           Data.Maybe
 import           Data.Semigroup
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Data.String.Interpolate.IsString
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Text.Encoding
@@ -54,7 +71,6 @@ import qualified Data.Text.Lazy.Builder as Builder
 import           Data.These (fromThese)
 import qualified Data.Time.Clock.POSIX as Time
 import           Data.Traversable (mapM)
-import           Language.Haskell.TH.Syntax (addDependentFile, runIO)
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Effects
@@ -128,12 +144,41 @@ builtinsList = sequence [
     , add0 Normal   "currentSystem"              currentSystem
     , add0 Normal   "currentTime"                currentTime_
     , add2 Normal   "deepSeq"                    deepSeq
-    , add0 TopLevel "derivation"                 $(do
-          let f = "data/nix/corepkgs/derivation.nix"
-          addDependentFile f
-          Success expr <- runIO $ parseNixFile f
+
+    , add0 TopLevel "derivation" $(do
+          -- This is compiled in so that we only parse and evaluate it once,
+          -- at compile-time.
+          let Success expr = parseNixText [i|
+    /* This is the implementation of the ‘derivation’ builtin function.
+       It's actually a wrapper around the ‘derivationStrict’ primop. */
+
+    drvAttrs @ { outputs ? [ "out" ], ... }:
+
+    let
+
+      strict = derivationStrict drvAttrs;
+
+      commonAttrs = drvAttrs // (builtins.listToAttrs outputsList) //
+        { all = map (x: x.value) outputsList;
+          inherit drvAttrs;
+        };
+
+      outputToAttrListElement = outputName:
+        { name = outputName;
+          value = commonAttrs // {
+            outPath = builtins.getAttr outputName strict;
+            drvPath = strict.drvPath;
+            type = "derivation";
+            inherit outputName;
+          };
+        };
+
+      outputsList = map outputToAttrListElement outputs;
+
+    in (builtins.head outputsList).value|]
           [| cata Eval.eval expr |]
       )
+
     , add  TopLevel "derivationStrict"           derivationStrict_
     , add  TopLevel "dirOf"                      dirOf
     , add2 Normal   "div"                        div_
@@ -178,6 +223,7 @@ builtinsList = sequence [
     , add  TopLevel "placeholder"                placeHolder
     , add  Normal   "readDir"                    readDir_
     , add  Normal   "readFile"                   readFile_
+    , add2 Normal   "findFile"                   findFile_
     , add2 TopLevel "removeAttrs"                removeAttrs
     , add3 Normal   "replaceStrings"             replaceStrings
     , add2 TopLevel "scopedImport"               scopedImport
@@ -195,6 +241,7 @@ builtinsList = sequence [
     , add' Normal   "toJSON"
       (arity1 $ decodeUtf8 . LBS.toStrict . A.encodingToLazyByteString
                            . toEncodingSorted)
+    , add2 Normal   "toFile"                     toFile
     , add  Normal   "toPath"                     toPath
     , add  TopLevel "toString"                   toString
     , add  Normal   "toXML"                      toXML_
@@ -250,8 +297,7 @@ nixPath = fmap nvList $ flip foldNixPath [] $ \p mn rest ->
                    nvStr (makeNixStringWithoutContext $ Text.pack (fromMaybe "" mn))) ]) : rest
 
 toString :: MonadNix e m => m (NValue m) -> m (NValue m)
-toString str =
-    str >>= normalForm >>= valueText False >>= toNix @NixString
+toString str = str >>= coerceToString False >>= toNix @NixString . Text.pack
 
 hasAttr :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 hasAttr x y =
@@ -269,26 +315,19 @@ hasContext :: MonadNix e m => m (NValue m) -> m (NValue m)
 hasContext =
     toNix . not . null . stringContextOnly  <=< fromValue
 
-getAttr :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
-getAttr x y = x >>= \x' -> y >>= \y' -> case (x', y') of
-    (NVStr ns, NVSet aset _) -> 
-       case stringNoContext ns of
-        Just key -> attrsetGet key aset >>= force'
-        Nothing -> throwError $ ErrorCall $ "Invalid NixString for builtin.getAttr: "
-                 ++ show (ns, aset) 
-    (x, y) -> throwError $ ErrorCall $ "Invalid types for builtin.getAttr: "
-                 ++ show (x, y)
+getAttr :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+getAttr x y =
+    fromValue @Text x >>= \key ->
+    fromValue @(AttrSet (NThunk m), AttrSet SourcePos) y >>= \(aset, _) ->
+        attrsetGet key aset >>= force'
 
 unsafeGetAttrPos :: forall e m. MonadNix e m
                  => m (NValue m) -> m (NValue m) -> m (NValue m)
 unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
-    (NVStr ns, NVSet _ apos) -> 
-       case stringNoContext ns of
-         Just key -> case M.lookup key apos of
-                       Nothing -> pure $ nvConstant NNull
-                       Just delta -> toValue delta
-         Nothing -> throwError $ ErrorCall $ "Invalid NixString for unsafeGetAttrPos " ++ show apos
-    (x, y) -> throwError $ ErrorCall $ "Invalid types for builtin.unsafeGetAttrPos: "
+    (NVStr ns _, NVSet _ apos) -> case M.lookup (stringIntentionallyDropContext key) apos of
+        Nothing -> pure $ nvConstant NNull
+        Just delta -> toValue delta
+    (x, y) -> throwError $ ErrorCall $ "Invalid types for builtins.unsafeGetAttrPos: "
                  ++ show (x, y)
 
 -- This function is a bit special in that it doesn't care about the contents
@@ -318,11 +357,14 @@ mul_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
 
 div_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 div_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
-    (NVConstant (NInt x),   NVConstant (NInt y))   ->
+    (NVConstant (NInt x),   NVConstant (NInt y))   | y /= 0 ->
         toNix (floor (fromInteger x / fromInteger y :: Double) :: Integer)
-    (NVConstant (NFloat x), NVConstant (NInt y))   -> toNix (x / fromInteger y)
-    (NVConstant (NInt x),   NVConstant (NFloat y)) -> toNix (fromInteger x / y)
-    (NVConstant (NFloat x), NVConstant (NFloat y)) -> toNix (x / y)
+    (NVConstant (NFloat x), NVConstant (NInt y))   | y /= 0 ->
+        toNix (x / fromInteger y)
+    (NVConstant (NInt x),   NVConstant (NFloat y)) | y /= 0 -> 
+        toNix (fromInteger x / y)
+    (NVConstant (NFloat x), NVConstant (NFloat y)) | y /= 0 -> 
+        toNix (x / y)
     (_, _) ->
         throwError $ Division x' y'
 
@@ -668,6 +710,13 @@ functionArgs fun = fun >>= \case
     v -> throwError $ ErrorCall $
             "builtins.functionArgs: expected function, got " ++ show v
 
+toFile :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+toFile name s = do
+    name' <- fromValue name
+    s' <- fromValue s
+    mres <- toFile_ (Text.unpack name') (Text.unpack s')
+    toNix $ Text.pack $ unStorePath mres
+
 toPath :: MonadNix e m => m (NValue m) -> m (NValue m)
 toPath = fromValue @Path >=> toNix @Path
 
@@ -771,14 +820,33 @@ listToAttrs = fromValue @[NThunk m] >=> \l ->
 
 hashString :: MonadNix e m => Text -> Text -> Prim m Text
 hashString algo s = Prim $ do
-    hash <- case algo of
-        "md5"    -> pure MD5.hash
-        "sha1"   -> pure SHA1.hash
-        "sha256" -> pure SHA256.hash
-        "sha512" -> pure SHA512.hash
+    case algo of
+        "md5"    -> pure $
+#if MIN_VERSION_hashing(0, 1, 0)
+          Text.pack $ show (hash (encodeUtf8 s) :: MD5.MD5)
+#else
+          decodeUtf8 $ Base16.encode $ MD5.hash $ encodeUtf8 s
+#endif
+        "sha1"   -> pure $
+#if MIN_VERSION_hashing(0, 1, 0)
+          Text.pack $ show (hash (encodeUtf8 s) :: SHA1.SHA1)
+#else
+          decodeUtf8 $ Base16.encode $ SHA1.hash $ encodeUtf8 s
+#endif
+        "sha256" -> pure $
+#if MIN_VERSION_hashing(0, 1, 0)
+          Text.pack $ show (hash (encodeUtf8 s) :: SHA256.SHA256)
+#else
+          decodeUtf8 $ Base16.encode $ SHA256.hash $ encodeUtf8 s
+#endif
+        "sha512" -> pure $
+#if MIN_VERSION_hashing(0, 1, 0)
+          Text.pack $ show (hash (encodeUtf8 s) :: SHA512.SHA512)
+#else
+          decodeUtf8 $ Base16.encode $ SHA512.hash $ encodeUtf8 s
+#endif
         _ -> throwError $ ErrorCall $ "builtins.hashString: "
             ++ "expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got " ++ show algo
-    pure $ decodeUtf8 $ Base16.encode $ hash $ encodeUtf8 s
 
 placeHolder :: MonadNix e m => m (NValue m) -> m (NValue m)
 placeHolder = fromValue @Text >=> \_ -> do
@@ -798,6 +866,19 @@ absolutePathFromValue = \case
 readFile_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 readFile_ path =
     path >>= absolutePathFromValue >>= Nix.Render.readFile >>= toNix
+
+findFile_ :: forall e m. MonadNix e m
+          => m (NValue m) -> m (NValue m) -> m (NValue m)
+findFile_ aset filePath =
+    aset >>= \aset' ->
+    filePath >>= \filePath' ->
+    case (aset', filePath') of
+      (NVList x, NVStr ns) -> do
+          mres <- findPath x (Text.unpack (stringIntentionallyDropContext ns))
+          pure $ nvPath mres
+      (NVList _, y)  -> throwError $ ErrorCall $ "expected a string, got " ++ show y
+      (x, NVStr _ _) -> throwError $ ErrorCall $ "expected a list, got " ++ show x
+      (x, y)         -> throwError $ ErrorCall $ "Invalid types for builtins.findFile: " ++ show (x, y)
 
 data FileType
    = FileTypeRegular
@@ -845,8 +926,7 @@ typeOf v = v >>= toNix @Text . \case
         NFloat _ -> "float"
         NBool _  -> "bool"
         NNull    -> "null"
-        NUri _   -> "string"
-    NVStr _       -> "string"
+    NVStr _     -> "string"
     NVList _      -> "list"
     NVSet _ _     -> "set"
     NVClosure {}  -> "lambda"
@@ -886,14 +966,12 @@ fetchTarball v = v >>= \case
                       "builtins.fetchTarball: Missing url attribute"
         Just url -> force url $ go (M.lookup "sha256" s)
     v@NVStr {} -> go Nothing v
-    v@(NVConstant (NUri _)) -> go Nothing v
     v -> throwError $ ErrorCall $
             "builtins.fetchTarball: Expected URI or set, got " ++ show v
  where
     go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
     go msha = \case
         NVStr ns -> fetch (stringIntentionallyDropContext ns) msha
-        NVConstant (NUri uri) -> fetch uri msha
         v -> throwError $ ErrorCall $
                 "builtins.fetchTarball: Expected URI or string, got " ++ show v
 
@@ -922,14 +1000,12 @@ fetchurl :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 fetchurl v = v >>= \case
     NVSet s _ -> attrsetGet "url" s >>= force ?? (go (M.lookup "sha256" s))
     v@NVStr {} -> go Nothing v
-    v@(NVConstant (NUri _)) -> go Nothing v
     v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI or set, got "
             ++ show v
  where
     go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
     go _msha = \case
         NVStr ns -> getURL (stringIntentionallyDropContext ns) -- msha
-        NVConstant (NUri uri) -> getURL uri -- msha
         v -> throwError $ ErrorCall $
                  "builtins.fetchurl: Expected URI or string, got " ++ show v
 

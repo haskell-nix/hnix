@@ -28,6 +28,7 @@ import           Nix
 import           Nix.Convert
 import qualified Nix.Eval as Eval
 -- import           Nix.Lint
+import           Nix.Options.Parser
 import qualified Nix.Type.Env as Env
 import qualified Nix.Type.Infer as HM
 import           Nix.Utils
@@ -143,7 +144,7 @@ main = do
                      . A.encodingToLazyByteString
                      . toEncodingSorted
                      <=< fromNix
-            | normalize opts =
+            | strict opts =
               liftIO . print . prettyNValueNF <=< normalForm
             | values opts  =
               liftIO . print <=< prettyNValueProv
