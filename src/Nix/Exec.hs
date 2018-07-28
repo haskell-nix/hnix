@@ -186,11 +186,11 @@ instance MonadNix e m => MonadEval (NValue m) m where
         pure $ nvConstantP (Provenance scope (NConstant_ span c)) c
 
     evalString = assembleString >=> \case
-        Just (s, c) -> do
+        Just ns -> do
             scope <- currentScopes
             span  <- currentPos
             pure $ nvStrP (Provenance scope
-                           (NStr_ span (DoubleQuoted [Plain s]))) s c
+                           (NStr_ span (DoubleQuoted [Plain (stringIntentionallyDropContext ns)]))) ns
         Nothing -> nverr $ ErrorCall "Failed to assemble string"
 
     evalLiteralPath p = do
@@ -331,8 +331,8 @@ execBinaryOp scope span op lval rarg = do
              NBool l, NBool r) -> toBool $ not l || r
             _                  -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
-        (NVStr ls lc, NVStr rs rc) -> case op of
-            NPlus -> pure $ bin nvStrP (ls `mappend` rs) (lc `mappend` rc)
+        (NVStr ls, NVStr rs) -> case op of
+            NPlus -> pure $ bin nvStrP (ls `mappend` rs)
             NEq   -> toBool =<< valueEq lval rval
             NNEq  -> toBool . not =<< valueEq lval rval
             NLt   -> toBool $ ls <  rs
@@ -450,7 +450,7 @@ coerceToString copyToStore = go
         NVConstant (NFloat n) -> pure $ show n
         NVConstant NNull      -> pure ""
 
-        NVStr ns _ -> pure $ Text.unpack (stringIntentionallyDropContext ns)
+        NVStr ns -> pure $ Text.unpack (stringIntentionallyDropContext ns)
         NVPath p  | copyToStore -> unStorePath <$> addPath p
                   | otherwise   -> pure p
         NVList l  -> unwords <$> traverse (`force` go) l

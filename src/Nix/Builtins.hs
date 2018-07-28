@@ -297,7 +297,7 @@ nixPath = fmap nvList $ flip foldNixPath [] $ \p mn rest ->
                    nvStr (makeNixStringWithoutContext $ Text.pack (fromMaybe "" mn))) ]) : rest
 
 toString :: MonadNix e m => m (NValue m) -> m (NValue m)
-toString str = str >>= coerceToString False >>= toNix @NixString . Text.pack
+toString str = str >>= coerceToString False >>= toNix . Text.pack
 
 hasAttr :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 hasAttr x y =
@@ -324,7 +324,7 @@ getAttr x y =
 unsafeGetAttrPos :: forall e m. MonadNix e m
                  => m (NValue m) -> m (NValue m) -> m (NValue m)
 unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
-    (NVStr ns _, NVSet _ apos) -> case M.lookup (stringIntentionallyDropContext key) apos of
+    (NVStr ns, NVSet _ apos) -> case M.lookup (stringIntentionallyDropContext ns) apos of
         Nothing -> pure $ nvConstant NNull
         Just delta -> toValue delta
     (x, y) -> throwError $ ErrorCall $ "Invalid types for builtins.unsafeGetAttrPos: "
@@ -877,7 +877,7 @@ findFile_ aset filePath =
           mres <- findPath x (Text.unpack (stringIntentionallyDropContext ns))
           pure $ nvPath mres
       (NVList _, y)  -> throwError $ ErrorCall $ "expected a string, got " ++ show y
-      (x, NVStr _ _) -> throwError $ ErrorCall $ "expected a list, got " ++ show x
+      (x, NVStr _) -> throwError $ ErrorCall $ "expected a list, got " ++ show x
       (x, y)         -> throwError $ ErrorCall $ "Invalid types for builtins.findFile: " ++ show (x, y)
 
 data FileType

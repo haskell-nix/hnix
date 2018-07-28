@@ -309,7 +309,7 @@ evalSetterKeyName :: (MonadEval v m, FromValue NixString m v)
 evalSetterKeyName = \case
     StaticKey  k -> pure (Just k)
     DynamicKey k -> runAntiquoted "\n" assembleString (>>= fromValueMay) k
-        <&> \case Just (t, _) -> Just t
+        <&> \case Just ns -> Just (stringIntentionallyDropContext ns)
                   _ -> Nothing
 
 assembleString :: forall v m. (MonadEval v m, FromValue NixString m v)
