@@ -28,7 +28,7 @@ module Nix.Exec where
 
 import           Control.Applicative
 import           Control.Monad
-import           Control.Monad.Catch
+import           Control.Monad.Catch hiding (catchJust)
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
@@ -48,6 +48,7 @@ import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Typeable
+import           GHC.IO.Exception (IOErrorType(..))
 import           Network.HTTP.Client
 import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
@@ -75,6 +76,7 @@ import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
 import           System.FilePath
 import qualified System.Info
+import           System.IO.Error
 import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
 import           Text.PrettyPrint.ANSI.Leijen (text)
@@ -533,7 +535,12 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
 
     findPath = findPathM
 
-    pathExists = liftIO . fileExist
+    pathExists fp = liftIO $ catchJust
+        -- "inappropriate type" error is thrown if `fileExist` is given a filepath where
+        -- a plain file appears as a directory, i.e. /bin/sh/nonexistent-file
+        (\ e -> guard (ioeGetErrorType e == InappropriateType) >> pure e)
+        (fileExist fp)
+        (\ _ -> return False)
 
     importPath scope origPath = do
         path <- liftIO $ pathToDefaultNixFile origPath

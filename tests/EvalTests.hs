@@ -286,6 +286,9 @@ case_function_equals2 =
 case_function_equals3 =
     constantEqualText "false" "(x: x) == (x: x)"
 
+case_directory_pathexists =
+    constantEqualText "false" "builtins.pathExists \"/bin/sh/invalid-directory\""
+
 -- jww (2018-05-02): This constantly changes!
 -- case_placeholder =
 --   constantEqualText
