@@ -131,27 +131,31 @@ renderExpr _level longLabel shortLabel e@(Fix (Compose (Ann _ x))) = do
                     P.<$> text "<<<<<<<<"
            else text shortLabel <> text ": " </> rendered
 
-renderValueFrame :: (MonadReader e m, Has e Options, MonadFile m)
+renderValueFrame :: (MonadReader e m, Has e Options,
+                    MonadFile m, MonadVar m)
                  => NixLevel -> ValueFrame m -> m [Doc]
-renderValueFrame level = pure . (:[]) . \case
-    ForcingThunk       -> text "ForcingThunk"
-    ConcerningValue _v -> text "ConcerningValue"
-    Comparison _ _     -> text "Comparing"
-    Addition _ _       -> text "Adding"
-    Division _ _       -> text "Dividing"
-    Multiplication _ _ -> text "Multiplying"
+renderValueFrame level = fmap (:[]) . \case
+    ForcingThunk       -> pure $ text "ForcingThunk"
+    ConcerningValue _v -> pure $ text "ConcerningValue"
+    Comparison _ _     -> pure $ text "Comparing"
+    Addition _ _       -> pure $ text "Adding"
+    Division _ _       -> pure $ text "Dividing"
+    Multiplication _ _ -> pure $ text "Multiplying"
 
     Coercion x y ->
-        text desc <> text (describeValue x)
+        pure $ text desc <> text (describeValue x)
             <> text " to " <> text (describeValue y)
       where
         desc | level <= Error = "Cannot coerce "
              | otherwise     = "While coercing "
 
-    CoercionToJsonNF _v -> text "CoercionToJsonNF"
-    CoercionFromJson _j -> text "CoercionFromJson"
-    ExpectationNF _t _v -> text "ExpectationNF"
-    Expectation _t _v   -> text "Expectation"
+    CoercionToJsonNF _v -> pure $ text "CoercionToJsonNF"
+    CoercionFromJson _j -> pure $ text "CoercionFromJson"
+    ExpectationNF _t _v -> pure $ text "ExpectationNF"
+    Expectation t v     -> do
+        v' <- renderValue level "" "" v
+        pure $ text "Saw " <> v'
+            <> text " but expected " <> text (describeValue t)
 
 renderValue :: (MonadReader e m, Has e Options, MonadFile m, MonadVar m)
             => NixLevel -> String -> String -> NValue m -> m Doc
