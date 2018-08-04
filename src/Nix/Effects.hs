@@ -2,7 +2,6 @@ module Nix.Effects where
 
 import Data.Text (Text)
 import Nix.Render
-import Nix.Utils
 import Nix.Value
 import System.Posix.Files
 
