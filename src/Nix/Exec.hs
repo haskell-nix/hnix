@@ -531,6 +531,9 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
             pure $ cwd <///> origPathExpanded
         liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
 
+    -- Given a path, determine the nix file to load
+    pathToDefaultNix = liftIO . pathToDefaultNixFile
+
     findEnvPath = findEnvPathM
 
     findPath = findPathM
@@ -542,40 +545,22 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
         (fileExist fp)
         (\ _ -> return False)
 
-    importPath scope origPath = do
-        path <- liftIO $ pathToDefaultNixFile origPath
-        mres <- lookupVar @(Context (Lazy m) (NThunk (Lazy m)))
-                         "__cur_file"
-        path' <- case mres of
-            Nothing  -> do
-                traceM "No known current directory"
-                return path
-            Just p -> fromValue @_ @_ @(NThunk (Lazy m)) p >>= \(Path p') -> do
-                traceM $ "Current file being evaluated is: " ++ show p'
-                return $ takeDirectory p' </> path
-
-        traceM $ "Importing file " ++ path'
-        withFrame Info (ErrorCall $ "While importing file " ++ show path') $ do
+    importPath path = do
+        traceM $ "Importing file " ++ path
+        withFrame Info (ErrorCall $ "While importing file " ++ show path) $ do
             imports <- Lazy $ ReaderT $ const get
-            expr <- case M.lookup path' imports of
+            evalExprLoc =<< case M.lookup path imports of
                 Just expr -> pure expr
                 Nothing -> do
-                    eres <- Lazy $ parseNixFileLoc path'
+                    eres <- Lazy $ parseNixFileLoc path
                     case eres of
                         Failure err  ->
                             throwError $ ErrorCall . show $
                                 text "Parse during import failed:" P.</> err
                         Success expr -> do
                             Lazy $ ReaderT $ const $
-                                modify (M.insert origPath expr)
+                                modify (M.insert path expr)
                             pure expr
-
-            let ref = value @_ @_ @(Lazy m) (nvPath path')
-            -- Use this cookie so that when we evaluate the next
-            -- import, we'll remember which directory its containing
-            -- file was in.
-            pushScope (M.singleton "__cur_file" ref) $
-                pushScope scope $ evalExprLoc expr
 
     getEnvVar = liftIO . lookupEnv
 

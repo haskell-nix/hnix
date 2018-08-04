@@ -40,28 +40,10 @@ import           Nix.Parser
 import           Nix.Pretty
 import           Nix.Reduce
 import           Nix.Render.Frame
-import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 import           Nix.XML
-
--- | Evaluate a nix expression in the default context
-withNixContext :: forall e m r. (MonadNix e m, Has e Options)
-               => Maybe FilePath -> m r -> m r
-withNixContext mpath action = do
-    base <- builtins
-    opts :: Options <- asks (view hasLens)
-    let i = value @(NValue m) @(NThunk m) @m $ nvList $
-            map (value @(NValue m) @(NThunk m) @m
-                     . flip nvStr mempty . Text.pack) (include opts)
-    pushScope (M.singleton "__includes" i) $
-        pushScopes base $ case mpath of
-            Nothing -> action
-            Just path -> do
-                traceM $ "Setting __cur_file = " ++ show path
-                let ref = value @(NValue m) @(NThunk m) @m $ nvPath path
-                pushScope (M.singleton "__cur_file" ref) action
 
 -- | This is the entry point for all evaluations, whatever the expression tree
 --   type. It sets up the common Nix environment and applies the

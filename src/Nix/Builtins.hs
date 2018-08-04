@@ -21,7 +21,7 @@
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
-module Nix.Builtins (builtins) where
+module Nix.Builtins (withNixContext, builtins) where
 
 import           Control.Monad
 import           Control.Monad.Catch
@@ -91,6 +91,23 @@ import           Nix.XML
 import           System.FilePath
 import           System.Posix.Files
 import           Text.Regex.TDFA
+
+-- | Evaluate a nix expression in the default context
+withNixContext :: forall e m r. (MonadNix e m, Has e Options)
+               => Maybe FilePath -> m r -> m r
+withNixContext mpath action = do
+    base <- builtins
+    opts :: Options <- asks (view hasLens)
+    let i = value @(NValue m) @(NThunk m) @m $ nvList $
+            map (value @(NValue m) @(NThunk m) @m
+                     . flip nvStr mempty . Text.pack) (include opts)
+    pushScope (M.singleton "__includes" i) $
+        pushScopes base $ case mpath of
+            Nothing -> action
+            Just path -> do
+                traceM $ "Setting __cur_file = " ++ show path
+                let ref = value @(NValue m) @(NThunk m) @m $ nvPath path
+                pushScope (M.singleton "__cur_file" ref) action
 
 builtins :: (MonadNix e m, Scoped e (NThunk m) m)
          => m (Scopes m (NThunk m))
@@ -759,14 +776,27 @@ isFunction func = func >>= \case
 throw_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 throw_ = fromValue >=> throwError . ErrorCall . Text.unpack
 
-import_ :: MonadNix e m => m (NValue m) -> m (NValue m)
-import_ = fromValue >=> importPath M.empty . getPath
+import_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
+import_ = scopedImport (pure (nvSet M.empty M.empty))
 
 scopedImport :: forall e m. MonadNix e m
              => m (NValue m) -> m (NValue m) -> m (NValue m)
-scopedImport aset path =
-    fromValue aset >>= \s ->
-    fromValue   path >>= \p -> importPath @m s (getPath p)
+scopedImport asetArg pathArg =
+    fromValue @(AttrSet (NThunk m)) asetArg >>= \s ->
+    fromValue pathArg >>= \(Path p) -> do
+        path  <- pathToDefaultNix p
+        mres  <- lookupVar @_ @(NThunk m) "__cur_file"
+        path' <- case mres of
+            Nothing  -> do
+                traceM "No known current directory"
+                return path
+            Just p -> fromValue @_ @_ @(NThunk m) p >>= \(Path p') -> do
+                traceM $ "Current file being evaluated is: " ++ show p'
+                return $ takeDirectory p' </> path
+        clearScopes @(NThunk m) $
+            withNixContext (Just path') $
+                pushScope s $
+                    importPath @m path'
 
 getEnv_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 getEnv_ = fromValue >=> \s -> do
