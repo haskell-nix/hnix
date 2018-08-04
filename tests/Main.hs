@@ -64,10 +64,17 @@ ensureNixpkgsCanParse =
           sha256 = "#{sha256}";
         }|]) $ \expr -> do
         NVStr dir _ <- do
-            time <- liftIO getCurrentTime
-            runLazyM (defaultOptions time) $ Nix.nixEvalExprLoc Nothing expr
+          time <- liftIO getCurrentTime
+          runLazyM (defaultOptions time) $ Nix.nixEvalExprLoc Nothing expr
+        exists <- fileExist (unpack dir)
+        unless exists $
+          errorWithoutStackTrace $
+            "Directory " ++ show dir ++ " does not exist"
         files <- globDir1 (compile "**/*.nix") (unpack dir)
-        forM_ files $ \file ->
+        when (length files == 0) $
+          errorWithoutStackTrace $
+            "Directory " ++ show dir ++ " does not have any files"
+        forM_ files $ \file -> do
           unless ("azure-cli/default.nix" `isSuffixOf` file ||
                   "os-specific/linux/udisks/2-default.nix"  `isSuffixOf` file) $ do
             -- Parse and deepseq the resulting expression tree, to ensure the
