@@ -45,7 +45,7 @@ main = do
     opts <- execParser (nixOptionsInfo time)
     runLazyM opts $ case readFrom opts of
         Just path -> do
-            let file = addExtension (dropExtension path) "nix"
+            let file = addExtension (dropExtension path) "nixc"
             process opts (Just file) =<< liftIO (readCache path)
         Nothing -> case expression opts of
             Just s -> handleResult opts Nothing (parseNixTextLoc s)
@@ -57,7 +57,7 @@ main = do
                     mapM_ (processFile opts)
                         =<< (lines <$> liftIO (readFile path))
                 Nothing -> case filePaths opts of
-                    [] -> Repl.shell (pure ())
+                    [] -> withNixContext Nothing $ Repl.shell (pure ())
                     ["-"] ->
                         handleResult opts Nothing . parseNixTextLoc
                             =<< liftIO Text.getContents
@@ -92,7 +92,8 @@ main = do
                     errorWithoutStackTrace . show
                         =<< renderFrames @(NThunk (Lazy IO)) frames
 
-            when (repl opts) $ Repl.shell (pure ())
+            when (repl opts) $
+                withNixContext Nothing $ Repl.shell (pure ())
 
     process opts mpath expr
         | evaluate opts, tracing opts =
