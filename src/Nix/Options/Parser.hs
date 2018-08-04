@@ -45,6 +45,9 @@ nixOptions current = Options
     <*> switch
         (   long "values"
          <> help "Enable reporting of value provenance in error messages")
+    <*> switch
+        (   long "scopes"
+         <> help "Enable reporting of scopes in evaluation traces")
     <*> optional (strOption
         (   long "reduce"
          <> help "When done evaluating, output the evaluated part of the expression to FILE"))

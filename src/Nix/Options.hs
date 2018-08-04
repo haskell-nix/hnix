@@ -8,6 +8,7 @@ data Options = Options
     , tracing      :: Bool
     , thunks       :: Bool
     , values       :: Bool
+    , scopes       :: Bool
     , reduce       :: Maybe FilePath
     , reduceSets   :: Bool
     , reduceLists  :: Bool
@@ -41,6 +42,7 @@ defaultOptions current = Options
     , tracing      = False
     , thunks       = False
     , values       = False
+    , scopes       = False
     , reduce       = Nothing
     , reduceSets   = False
     , reduceLists  = False

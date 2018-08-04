@@ -92,8 +92,10 @@ renderEvalFrame :: (MonadReader e m, Has e Options, MonadFile m)
 renderEvalFrame level f = do
     opts :: Options <- asks (view hasLens)
     case f of
-        EvaluatingExpr _scope e@(Fix (Compose (Ann ann _))) ->
-            fmap (:[]) $ renderLocation ann
+        EvaluatingExpr scope e@(Fix (Compose (Ann ann _))) -> do
+            let scopeInfo | scopes opts = [string (show scope)]
+                          | otherwise   = []
+            fmap (\x -> scopeInfo ++ [x]) $ renderLocation ann
                 =<< renderExpr level "While evaluating" "Expression" e
 
         ForcingExpr _scope e@(Fix (Compose (Ann ann _)))
