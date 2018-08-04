@@ -65,6 +65,10 @@ drv = haskellPackages.developPackage {
     else {};
 
   modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
+    buildTools = (attrs.buildTools or []) ++ [
+      pkgs.haskell.packages.${compiler}.cabal-install
+    ];
+
     testHaskellDepends = attrs.testHaskellDepends ++
       [ pkgs.nix
 
