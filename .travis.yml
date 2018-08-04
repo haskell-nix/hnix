@@ -40,7 +40,7 @@ script:
     cachix.cachix.org-1:eWNHQldwUO7G2VkjpnjDbWwy4KQ/HNxht7H4SSoMckM='
   - cachix use hnix
   - cachix push hnix --watch-store &
-  - bash build.sh | cachix push cachix  -
+  - bash build.sh | cachix push hnix
 
 branches:
   only:
