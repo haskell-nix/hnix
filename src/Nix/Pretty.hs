@@ -205,7 +205,8 @@ exprFNixDoc = \case
     NSelect r attr o ->
       (if isJust o then leastPrecedence else flip mkNixDoc selectOp) $
           wrapPath selectOp r <> dot <> prettySelector attr <> ordoc
-      where ordoc = maybe empty (((space <> text "or") <+>) . wrapParens selectOp) o
+      where
+        ordoc = maybe empty (((space <> text "or") <+>) . wrapParens appOpNonAssoc) o
     NHasAttr r attr ->
         mkNixDoc (wrapParens hasAttrOp r <+> text "?" <+> prettySelector attr) hasAttrOp
     NEnvPath p -> simpleExpr $ text ("<" ++ p ++ ">")

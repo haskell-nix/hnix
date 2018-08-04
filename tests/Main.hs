@@ -27,7 +27,7 @@ import qualified NixLanguageTests
 import qualified ParserTests
 import qualified PrettyTests
 import qualified ReduceExprTests
--- import qualified PrettyParseTests
+import qualified PrettyParseTests
 import           System.Directory
 import           System.Environment
 import           System.FilePath.Glob
@@ -91,7 +91,7 @@ main = do
   evalComparisonTests <- EvalTests.genEvalCompareTests
   let allOrLookup var = lookupEnv "ALL_TESTS" <|> lookupEnv var
   nixpkgsTestsEnv     <- allOrLookup "NIXPKGS_TESTS"
-  -- prettyTestsEnv      <- lookupEnv "PRETTY_TESTS"
+  prettyTestsEnv      <- lookupEnv "PRETTY_TESTS"
   hpackTestsEnv       <- allOrLookup "HPACK_TESTS"
 
   pwd <- getCurrentDirectory
@@ -104,11 +104,10 @@ main = do
     , EvalTests.tests
     , PrettyTests.tests
     , ReduceExprTests.tests] ++
-    -- [ PrettyParseTests.tests
-    --     (fromIntegral (read (fromMaybe "0" prettyTestsEnv) :: Int)) ] ++
+    [ PrettyParseTests.tests
+        (fromIntegral (read (fromMaybe "0" prettyTestsEnv) :: Int)) ] ++
     [ evalComparisonTests ] ++
     [ testCase "Nix language tests present" ensureLangTestsPresent
     , nixLanguageTests ] ++
     [ testCase "Nixpkgs parses without errors" ensureNixpkgsCanParse
       | isJust nixpkgsTestsEnv ]
-
