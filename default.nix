@@ -27,6 +27,7 @@ drv = haskellPackages.developPackage {
   root = ./.;
 
   overrides = with pkgs.haskell.lib; self: super: {
+    mono-traversable = dontCheck super.mono-traversable;
   }
   //
   (if compiler == "ghc802"
