@@ -8,6 +8,7 @@
 
 module EvalTests (tests, genEvalCompareTests) where
 
+import           Control.Applicative ((<|>))
 import           Control.Monad.Catch
 import           Control.Monad (when)
 import           Control.Monad.IO.Class
@@ -341,7 +342,7 @@ constantEqualText' a b = do
 constantEqualText :: Text -> Text -> Assertion
 constantEqualText a b = do
   constantEqualText' a b
-  mres <- liftIO $ lookupEnv "MATCHING_TESTS"
+  mres <- liftIO $ lookupEnv "ALL_TESTS" <|> lookupEnv "MATCHING_TESTS"
   when (isJust mres) $
       assertEvalMatchesNix b
 
