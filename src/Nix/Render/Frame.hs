@@ -78,8 +78,7 @@ renderFrame (NixFrame level f)
     | Just (e :: EvalFrame m v) <- fromException f = renderEvalFrame level e
     | Just (e :: ThunkLoop)     <- fromException f = renderThunkLoop level e
     | Just (e :: ValueFrame m)  <- fromException f = renderValueFrame level e
-    | Just (_ :: NormalLoop m)  <- fromException f =
-      pure [text "<<loop during normalization>>"]
+    | Just (e :: NormalLoop m)  <- fromException f = renderNormalLoop level e
     | Just (e :: ExecFrame m)   <- fromException f = renderExecFrame level e
     | Just (e :: ErrorCall)     <- fromException f = pure [text (show e)]
     | otherwise = error $ "Unrecognized frame: " ++ show f
@@ -179,3 +178,10 @@ renderThunkLoop _level = pure . (:[]) . \case
     ThunkLoop Nothing -> text "<<loop>>"
     ThunkLoop (Just n) ->
         text $ "<<loop forcing thunk #" ++ show n ++ ">>"
+
+renderNormalLoop :: (MonadReader e m, Has e Options, MonadFile m, MonadVar m)
+                => NixLevel -> NormalLoop m -> m [Doc]
+renderNormalLoop level = fmap (:[]) . \case
+    NormalLoop v -> do
+        v' <- renderValue level "" "" v
+        pure $ text "<<loop during normalization forcing " <> v' <> text ">>"
