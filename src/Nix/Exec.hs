@@ -44,6 +44,7 @@ import           Data.IORef
 import           Data.List
 import qualified Data.List.NonEmpty as NE
 import           Data.List.Split
+import           Data.Maybe (maybeToList)
 import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -535,8 +536,7 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
     pathToDefaultNix = liftIO . pathToDefaultNixFile
 
     findEnvPath = findEnvPathM
-
-    findPath = findPathM
+    findPath    = findPathM
 
     pathExists fp = liftIO $ catchJust
         -- "inappropriate type" error is thrown if `fileExist` is given a filepath where
@@ -563,7 +563,6 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
                             pure expr
 
     getEnvVar = liftIO . lookupEnv
-
     getCurrentSystemOS = return $ Text.pack System.Info.os
 
     -- Invert the conversion done by GHC_CONVERT_CPU in GHC's aclocal.m4
@@ -582,18 +581,18 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
       where
         mapMaybeM :: (a -> Lazy m (Maybe b)) -> [a] -> Lazy m [b]
         mapMaybeM op = foldr f (return [])
-          where f x xs = op x >>= \case
-                    Nothing -> xs
-                    Just x  -> (x:) <$> xs
+          where f x xs = op x >>= (<$> xs) . (++) . maybeToList
 
         handleEntry ignoreNulls (k, v) = fmap (k,) <$> case k of
             -- The `args' attribute is special: it supplies the command-line
             -- arguments to the builder.
             "args"          -> Just <$> convertNix @[Text] v
             "__ignoreNulls" -> pure Nothing
-            _               -> force v $ \case
+            _ -> force v $ \case
                 NVConstant NNull | ignoreNulls -> pure Nothing
-                v' -> Just <$> (toNix =<< Text.pack <$> coerceToString True True v')
+                v' -> Just <$> coerceNix v'
+          where
+            coerceNix = toNix . Text.pack <=< coerceToString True True
 
     nixInstantiateExpr expr = do
         traceM $ "Executing: "
