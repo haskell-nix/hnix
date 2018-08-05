@@ -20,6 +20,7 @@ import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Effects
 import           Nix.Frames
+-- import           Nix.Pretty
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
@@ -36,17 +37,20 @@ normalFormBy
     -> NValue m
     -> m (NValueNF m)
 normalFormBy k n v = do
-    when (n > 2000) $ throwError $ NormalLoop v
+    -- doc <- prettyNValue v
+    -- traceM $ show n ++ ": normalFormBy: " ++ show doc
+    unless (n < 2000) $
+        throwError $ NormalLoop v
     case v of
         NVConstant a     -> return $ Fix $ NVConstantF a
         NVStr t s        -> return $ Fix $ NVStrF t s
         NVList l         ->
             fmap (Fix . NVListF) $ forM (zip [0..] l) $ \(i :: Int, t) -> do
-                traceM $ replicate n ' ' ++ "normalFormBy: List[" ++ show i ++ "]"
+                traceM $ show n ++ ": normalFormBy: List[" ++ show i ++ "]"
                 t `k` normalFormBy k (succ n)
         NVSet s p        ->
             fmap (Fix . flip NVSetF p) $ sequence $ flip M.mapWithKey s $ \ky t -> do
-                traceM $ replicate n ' ' ++ "normalFormBy: Set{" ++ show ky ++ "}"
+                traceM $ show n ++ ": normalFormBy: Set{" ++ show ky ++ "}"
                 t `k` normalFormBy k (succ n)
         NVClosure p f    -> return $ Fix $ NVClosureF p f
         NVPath fp        -> return $ Fix $ NVPathF fp
