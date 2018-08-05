@@ -372,14 +372,14 @@ execBinaryOp scope span op lval rarg = do
 
         (ls@NVSet {}, NVStr rs rc) -> case op of
             NPlus   -> (\ls -> bin nvStrP (Text.pack ls `mappend` rs) rc)
-                <$> coerceToString False ls
+                <$> coerceToString False False ls
             NEq     -> toBool =<< valueEq lval rval
             NNEq    -> toBool . not =<< valueEq lval rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVStr ls lc, rs@NVSet {}) -> case op of
             NPlus   -> (\rs -> bin nvStrP (ls `mappend` Text.pack rs) lc)
-                <$> coerceToString False rs
+                <$> coerceToString False False rs
             NEq     -> toBool =<< valueEq lval rval
             NNEq    -> toBool . not =<< valueEq lval rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
@@ -440,21 +440,21 @@ execBinaryOp scope span op lval rarg = do
         toInt   = pure . bin nvConstantP . NInt
         toFloat = pure . bin nvConstantP . NFloat
 
-coerceToString :: MonadNix e m => Bool -> NValue m -> m String
-coerceToString copyToStore = go
+coerceToString :: MonadNix e m => Bool -> Bool -> NValue m -> m String
+coerceToString copyToStore coerceMore = go
   where
     go = \case
         NVConstant (NBool b)
-            | b               -> pure "1"
-            | otherwise       -> pure ""
-        NVConstant (NInt n)   -> pure $ show n
-        NVConstant (NFloat n) -> pure $ show n
-        NVConstant NNull      -> pure ""
+            | b && coerceMore  -> pure "1"
+            | coerceMore      -> pure ""
+        NVConstant (NInt n)   | coerceMore -> pure $ show n
+        NVConstant (NFloat n) | coerceMore -> pure $ show n
+        NVConstant NNull      | coerceMore -> pure ""
 
         NVStr t _ -> pure $ Text.unpack t
         NVPath p  | copyToStore -> unStorePath <$> addPath p
                   | otherwise   -> pure p
-        NVList l  -> unwords <$> traverse (`force` go) l
+        NVList l | coerceMore   -> unwords <$> traverse (`force` go) l
 
         v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
             force p $ (`callFunc` pure v) >=> go
@@ -593,7 +593,7 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
             "__ignoreNulls" -> pure Nothing
             _               -> force v $ \case
                 NVConstant NNull | ignoreNulls -> pure Nothing
-                v' -> Just <$> (toNix =<< Text.pack <$> coerceToString True v')
+                v' -> Just <$> (toNix =<< Text.pack <$> coerceToString True True v')
 
     nixInstantiateExpr expr = do
         traceM $ "Executing: "
