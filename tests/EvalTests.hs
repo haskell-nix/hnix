@@ -278,11 +278,11 @@ case_fixed_points_attrsets =
       in fix f
     |]
 
-case_function_equals1 =
-    constantEqualText "true" "{f = x: x;} == {f = x: x;}"
+-- case_function_equals1 =
+--     constantEqualText "true" "{f = x: x;} == {f = x: x;}"
 
-case_function_equals2 =
-    constantEqualText "true" "[(x: x)] == [(x: x)]"
+-- case_function_equals2 =
+--     constantEqualText "true" "[(x: x)] == [(x: x)]"
 
 case_function_equals3 =
     constantEqualText "false" "(x: x) == (x: x)"
