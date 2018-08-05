@@ -127,7 +127,7 @@ eval (NSet binds) =
     evalBinds False (desugarBinds (eval . NSet) binds) >>= toValue
 
 eval (NRecSet binds) =
-    evalBinds True (desugarBinds (eval . NRecSet) binds) >>= toValue
+    evalBinds True (desugarBinds (eval . NSet) binds) >>= toValue
 
 eval (NLet binds body) = evalBinds True binds >>= (pushScope ?? body) . fst
 
