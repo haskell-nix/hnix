@@ -216,8 +216,8 @@ evalBinds recursive binds = do
     buildResult scope . concat =<< mapM (go scope) (moveOverridesLast binds)
   where
     moveOverridesLast = (uncurry (++)) .
-        partition (\case NamedVar (StaticKey "__overrides" :| []) _ _pos -> True
-                         _ -> False)
+        partition (\case NamedVar (StaticKey "__overrides" :| []) _ _pos -> False
+                         _ -> True)
 
     go :: Scopes m t -> Binding (m v) -> m [([Text], SourcePos, m v)]
     go _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
