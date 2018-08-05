@@ -142,6 +142,34 @@ case_inherit_from_set_has_no_scope =
       )).success
     |]
 
+-- github/orblivion (2018-08-05): Adding these failing tests so we fix this feature
+
+-- case_overrides =
+--     constantEqualText' "2" [i|
+--       let
+--
+--         overrides = { a = 2; };
+--
+--       in (rec {
+--         __overrides = overrides;
+--         x = a;
+--         a = 1;
+--       }.__overrides.a)
+--     |]
+
+-- case_inherit_overrides =
+--     constantEqualText' "2" [i|
+--       let
+--
+--         __overrides = { a = 2; };
+--
+--       in (rec {
+--         inherit __overrides;
+--         x = a;
+--         a = 1;
+--       }.__overrides.a)
+--     |]
+
 case_unsafegetattrpos1 =
     constantEqualText "[ 6 20 ]" [i|
       let e = 1;
