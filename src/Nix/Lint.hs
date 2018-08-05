@@ -23,7 +23,6 @@
 
 module Nix.Lint where
 
-import           Control.Exception
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.Fix
@@ -115,7 +114,8 @@ unpackSymbolic :: MonadVar m
                => Symbolic m -> m (NSymbolicF (NTypeF m (SThunk m)))
 unpackSymbolic = readVar . coerce
 
-type MonadLint e m = (Scoped e (SThunk m) m, Framed e m, MonadVar m)
+type MonadLint e m = (Scoped e (SThunk m) m, Framed e m, MonadVar m,
+                      MonadCatch m)
 
 symerr :: forall e m a. MonadLint e m => String -> m a
 symerr = evalError @(Symbolic m) . ErrorCall
@@ -403,6 +403,9 @@ instance MonadVar (Lint s) where
 
 instance MonadThrow (Lint s) where
     throwM e = Lint $ ReaderT $ \_ -> throw e
+
+instance MonadCatch (Lint s) where
+    catch _m _h = Lint $ ReaderT $ \_ -> error "Cannot catch in 'Lint s'"
 
 runLintM :: Options -> Lint s a -> ST s a
 runLintM opts = flip runReaderT (newContext opts) . runLint
