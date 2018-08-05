@@ -61,15 +61,13 @@ normalForm = normalFormBy force 0
 embed :: forall m. (MonadThunk (NValue m) (NThunk m) m)
       => NValueNF m -> m (NValue m)
 embed (Fix x) = case x of
-    NVConstantF a     -> return $ nvConstant a
-    NVStrF t s        -> return $ nvStr t s
-    NVListF l         -> nvList . fmap (value @_ @_ @m)
-        <$> traverse embed l
-    NVSetF s p        -> flip nvSet p . fmap (value @_ @_ @m)
-        <$> traverse embed s
-    NVClosureF p f    -> return $ nvClosure p f
-    NVPathF fp        -> return $ nvPath fp
-    NVBuiltinF name f -> return $ nvBuiltin name f
+    NVConstantF a  -> return $ nvConstant a
+    NVStrF t s     -> return $ nvStr t s
+    NVListF l      -> nvList       . fmap (value @_ @_ @m) <$> traverse embed l
+    NVSetF s p     -> flip nvSet p . fmap (value @_ @_ @m) <$> traverse embed s
+    NVClosureF p f -> return $ nvClosure p f
+    NVPathF fp     -> return $ nvPath fp
+    NVBuiltinF n f -> return $ nvBuiltin n f
 
 valueText :: forall e m. (Framed e m, MonadEffects m, Typeable m)
           => Bool -> NValueNF m -> m (Text, DList Text)
