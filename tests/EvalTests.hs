@@ -295,6 +295,10 @@ case_directory_pathexists =
 --       "\"/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9\""
 --       "builtins.placeholder \"out\""
 
+case_rec_path_attr =
+    constantEqualText "10"
+        "let src = 10; x = rec { passthru.src = src; }; in x.passthru.src"
+
 -----------------------
 
 tests :: TestTree
