@@ -26,6 +26,8 @@ env:
 matrix:
   allow_failures:
     - env: GHCVERSION=ghcjs
+    - env: GHCVERSION=ghc802 STRICT=false TRACING=false
+    - env: GHCVERSION=ghc802 STRICT=false TRACING=true
 
 before_script:
   - sudo mount -o remount,exec,size=4G,mode=755 /run/user || true
