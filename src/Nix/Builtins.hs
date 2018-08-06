@@ -148,6 +148,7 @@ builtinsList = sequence [
     , add0 Normal   "nixPath"                    nixPath
     , add  TopLevel "abort"                      throw_ -- for now
     , add2 Normal   "add"                        add_
+    , add2 Normal   "addErrorContext"            addErrorContext
     , add2 Normal   "all"                        all_
     , add2 Normal   "any"                        any_
     , add  Normal   "attrNames"                  attrNames
@@ -981,6 +982,10 @@ trace_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue 
 trace_ msg action = do
   traceEffect . Text.unpack =<< fromValue @Text msg
   action
+
+-- TODO: remember error context
+addErrorContext :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+addErrorContext _ action = action
 
 exec_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 exec_ xs = do
