@@ -70,6 +70,8 @@ drv = haskellPackages.developPackage {
       pkgs.haskell.packages.${compiler}.cabal-install
     ];
 
+    enableLibraryProfiling = false;
+
     testHaskellDepends = attrs.testHaskellDepends ++
       [ pkgs.nix
 
