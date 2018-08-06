@@ -26,8 +26,8 @@ env:
 matrix:
   allow_failures:
     - env: GHCVERSION=ghcjs
-  exclude:
-    - env: GHCVERSION=ghc822 STRICT=false
+    - env: GHCVERSION=ghc802 STRICT=false TRACING=false
+    - env: GHCVERSION=ghc802 STRICT=false TRACING=true
 
 before_script:
   - sudo mount -o remount,exec,size=4G,mode=755 /run/user || true
@@ -36,11 +36,10 @@ before_script:
   - sudo launchctl kickstart -k system/org.nixos.nix-daemon || true
 
 script:
-  - nix-env -if https://github.com/cachix/cachix/tarball/master --extra-substituters https://cachix.cachix.org --trusted-public-keys 'cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
-    cachix.cachix.org-1:eWNHQldwUO7G2VkjpnjDbWwy4KQ/HNxht7H4SSoMckM='
+  - nix-env -iA cachix -f https://github.com/NixOS/nixpkgs/tarball/db557aab7b690f5e0e3348459f2e4dc8fd0d9298
   - cachix use hnix
-  - cachix push hnix --watch-store &
-  - bash build.sh | cachix push hnix
+  - if [ ! -v $CACHIX_SIGNING_KEY ]; then cachix push hnix --watch-store& fi
+  - if [ ! -v $CACHIX_SIGNING_KEY ]; then ./build.sh | cachix push hnix; else ./build.sh; fi
 
 branches:
   only:
