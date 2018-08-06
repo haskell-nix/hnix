@@ -37,7 +37,7 @@ script:
   - nix-env -iA cachix -f https://github.com/NixOS/nixpkgs/tarball/db557aab7b690f5e0e3348459f2e4dc8fd0d9298
   - cachix use hnix
   - if [ ! -v $CACHIX_SIGNING_KEY ]; then cachix push hnix --watch-store& fi
-  - if [ ! -v $CACHIX_SIGNING_KEY ]; then ./build.sh | cachix push hnix; else ./build.sh fi
+  - if [ ! -v $CACHIX_SIGNING_KEY ]; then ./build.sh | cachix push hnix; else ./build.sh; fi
 
 branches:
   only:
