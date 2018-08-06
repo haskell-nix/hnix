@@ -15,5 +15,6 @@ else
     nix-build                                   \
         --argstr compiler $GHCVERSION           \
         --arg doTracing $TRACING                \
-        --arg doStrict $STRICT
+        --arg doStrict $STRICT                  \
+        $@
 fi
