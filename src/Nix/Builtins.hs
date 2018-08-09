@@ -231,6 +231,7 @@ builtinsList = sequence [
     , add2 Normal   "lessThan"                   lessThan
     , add  Normal   "listToAttrs"                listToAttrs
     , add2 TopLevel "map"                        map_
+    , add2 TopLevel "mapAttrs"                   mapAttrs_
     , add2 Normal   "match"                      match_
     , add2 Normal   "mul"                        mul_
     , add0 Normal   "null"                       (return $ nvConstant NNull)
@@ -565,6 +566,16 @@ map_ fun xs = fun >>= \f ->
                                     (ErrorCall "While applying f in map:\n")
                               . (f `callFunc`) . force')
           <=< fromValue @[NThunk m] $ xs
+
+mapAttrs_ :: forall e m. MonadNix e m
+     => m (NValue m) -> m (NValue m) -> m (NValue m)
+mapAttrs_ fun xs = fun >>= \f ->
+    fromValue @(AttrSet (NThunk m)) xs >>= \aset -> do
+        let pairs = M.toList aset
+        values <- traverse (thunk . withFrame Debug
+                               (ErrorCall "While applying f in mapAttrs:\n")
+                                  . (f `callFunc`) . force') (map snd pairs)
+        toNix . M.fromList . zip (map fst pairs) $ values
 
 filter_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 filter_ fun xs = fun >>= \f ->
