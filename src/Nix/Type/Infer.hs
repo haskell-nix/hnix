@@ -305,11 +305,12 @@ binops u1 = \case
 
 instance MonadVar (Infer s) where
     type Var (Infer s) = STRef s
+    eqVar = (==)
 
-    newVar x     = Infer $ lift $ lift $ lift $ newSTRef x
-    readVar x    = Infer $ lift $ lift $ lift $ readSTRef x
-    writeVar x y = Infer $ lift $ lift $ lift $ writeSTRef x y
-    atomicModifyVar x f = Infer $ lift $ lift $ lift $ do
+    newVar x            = Infer . lift . lift . lift $ newSTRef x
+    readVar x           = Infer . lift . lift . lift $ readSTRef x
+    writeVar x y        = Infer . lift . lift . lift $ writeSTRef x y
+    atomicModifyVar x f = Infer . lift . lift . lift $ do
         res <- snd . f <$> readSTRef x
         _ <- modifySTRef x (fst . f)
         return res

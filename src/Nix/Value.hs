@@ -181,8 +181,8 @@ instance Eq (NValue m) where
     NVConstant (NInt x)   == NVConstant (NFloat y) = fromInteger x == y
     NVConstant (NInt x)   == NVConstant (NInt y)   = x == y
     NVConstant (NFloat x) == NVConstant (NFloat y) = x == y
-    NVStr x _ == NVStr y _ = x < y
-    NVPath x  == NVPath y  = x < y
+    NVStr x _ == NVStr y _ = x == y
+    NVPath x  == NVPath y  = x == y
     _         == _         = False
 
 instance Ord (NValue m) where
@@ -190,8 +190,8 @@ instance Ord (NValue m) where
     NVConstant (NInt x)   <= NVConstant (NFloat y) = fromInteger x <= y
     NVConstant (NInt x)   <= NVConstant (NInt y)   = x <= y
     NVConstant (NFloat x) <= NVConstant (NFloat y) = x <= y
-    NVStr x _ <= NVStr y _ = x < y
-    NVPath x  <= NVPath y  = x < y
+    NVStr x _ <= NVStr y _ = x <= y
+    NVPath x  <= NVPath y  = x <= y
     _         <= _         = False
 
 checkComparable :: (Framed e m, Typeable m) => NValue m -> NValue m -> m ()
@@ -323,9 +323,11 @@ instance Show (NThunk m) where
     show (NThunk _ _) = "<thunk>"
 
 instance Eq1 (NValueF m) where
-    liftEq _ (NVConstantF x) (NVConstantF y) = x == y
-    liftEq _ (NVStrF x _) (NVStrF y _) = x == y
-    liftEq _ (NVPathF x) (NVPathF y)   = x == y
+    liftEq _  (NVConstantF x)  (NVConstantF y)  = x == y
+    liftEq _  (NVStrF x _)     (NVStrF y _)     = x == y
+    liftEq eq (NVListF x)      (NVListF y)      = liftEq eq x y
+    liftEq eq (NVSetF x _)     (NVSetF y _)     = liftEq eq x y
+    liftEq _  (NVPathF x)      (NVPathF y)      = x == y
     liftEq _ _ _ = False
 
 instance Show1 (NValueF m) where

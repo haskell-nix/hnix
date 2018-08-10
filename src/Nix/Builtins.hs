@@ -53,7 +53,6 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
-import           Data.Coerce
 import           Data.Fix
 import           Data.Foldable (foldrM)
 import qualified Data.HashMap.Lazy as M
@@ -600,7 +599,7 @@ seq_ a b = a >> b
 deepSeq :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 deepSeq a b = do
     -- We evaluate 'a' only for its effects, so data cycles are ignored.
-    _ <- normalFormBy (forceEffects . coerce . _baseThunk) 0 =<< a
+    normalForm_ =<< a
 
     -- Then we evaluate the other argument to deepseq, thus this function
     -- should always produce a result (unlike applying 'deepseq' on infinitely

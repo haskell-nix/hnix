@@ -508,7 +508,8 @@ instance Convertible e m => FromNix (HashMap Text (NThunk m), HashMap Text Sourc
 instance (Convertible e m, MonadEffects m, MonadThunk (NValue m) (NThunk m) m) => FromNix A.Value m (NValueNF m) where
 
 instance (Convertible e m, MonadEffects m,
-          MonadThunk (NValue m) (NThunk m) m) => FromNix A.Value m (NValue m) where
+          MonadThunk (NValue m) (NThunk m) m)
+      => FromNix A.Value m (NValue m) where
     fromNixMay = fromNixMay <=< normalForm
     fromNix    = fromNix <=< normalForm
 
