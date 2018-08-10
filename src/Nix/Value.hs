@@ -1,6 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
@@ -15,6 +16,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -26,11 +28,13 @@ module Nix.Value where
 
 import           Control.Monad
 import           Control.Monad.Catch
+import           Control.Monad.Free
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import qualified Data.Aeson as A
 import           Data.Align
 import           Data.Fix
+import           Data.Functor.Classes
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.Hashable
@@ -85,8 +89,11 @@ data NValueF m r
 --   has yet to be performed. An 'NThunk m' is either a pending evaluation, or
 --   a value in head normal form. A 'NThunkSet' is a set of mappings from keys
 --   to thunks.
+--
+--   The 'Free' structure is used here to represent the possibility that
+--   cycles may appear during normalization.
 
-type NValueNF m = Fix (NValueF m)      -- normal form
+type NValueNF m = Free (NValueF m) (NValue m)
 type ValueSet m = AttrSet (NThunk m)
 
 data Provenance m = Provenance
@@ -214,7 +221,7 @@ builtin3 name f =
     builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
 
 isClosureNF :: Monad m => NValueNF m -> Bool
-isClosureNF (Fix NVClosureF {}) = True
+isClosureNF (Free NVClosureF {}) = True
 isClosureNF _ = False
 
 thunkEq :: MonadThunk (NValue m) (NThunk m) m
@@ -314,6 +321,22 @@ instance Show (NValue m) where
 instance Show (NThunk m) where
     show (NThunk _ (Value v)) = show v
     show (NThunk _ _) = "<thunk>"
+
+instance Eq1 (NValueF m) where
+    liftEq _ (NVConstantF x) (NVConstantF y) = x == y
+    liftEq _ (NVStrF x _) (NVStrF y _) = x == y
+    liftEq _ (NVPathF x) (NVPathF y)   = x == y
+    liftEq _ _ _ = False
+
+instance Show1 (NValueF m) where
+    liftShowsPrec sp sl p = \case
+        NVConstantF atom  -> showsUnaryWith showsPrec "NVConstantF" p atom
+        NVStrF txt _      -> showsUnaryWith showsPrec "NVStrF"      p txt
+        NVListF     lst   -> showsUnaryWith (liftShowsPrec sp sl) "NVListF" p lst
+        NVSetF attrs _    -> showsUnaryWith (liftShowsPrec sp sl) "NVSetF"  p attrs
+        NVClosureF c _    -> showsUnaryWith showsPrec "NVClosureF"  p c
+        NVPathF path      -> showsUnaryWith showsPrec "NVPathF"     p path
+        NVBuiltinF name _ -> showsUnaryWith showsPrec "NVBuiltinF"  p name
 
 data ValueFrame m
     = ForcingThunk

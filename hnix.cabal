@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6d8b6df867ed451ea735063f46d5ff612f0f9f8433b6bed92ff64d66ab9f2558
+-- hash: 3ca81d4efceb654f9c796b7812fa26a3604be30b5891e92a1b617b24f82ca9af
 
 name:           hnix
 version:        0.5.2
@@ -497,6 +497,7 @@ library
     , directory
     , exceptions
     , filepath
+    , free
     , hashing
     , http-client
     , http-client-tls

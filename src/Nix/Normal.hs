@@ -13,7 +13,7 @@
 module Nix.Normal where
 
 import           Control.Monad
-import           Data.Fix
+import           Control.Monad.Free
 import qualified Data.HashMap.Lazy as M
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -39,22 +39,22 @@ normalFormBy
 normalFormBy k n v = do
     -- doc <- prettyNValue v
     -- traceM $ show n ++ ": normalFormBy: " ++ show doc
-    unless (n < 2000) $
-        throwError $ NormalLoop v
-    case v of
-        NVConstant a     -> return $ Fix $ NVConstantF a
-        NVStr t s        -> return $ Fix $ NVStrF t s
+    if n > 2000
+    then return $ Pure v
+    else case v of
+        NVConstant a     -> return $ Free $ NVConstantF a
+        NVStr t s        -> return $ Free $ NVStrF t s
         NVList l         ->
-            fmap (Fix . NVListF) $ forM (zip [0..] l) $ \(i :: Int, t) -> do
+            fmap (Free . NVListF) $ forM (zip [0..] l) $ \(i :: Int, t) -> do
                 traceM $ show n ++ ": normalFormBy: List[" ++ show i ++ "]"
                 t `k` normalFormBy k (succ n)
         NVSet s p        ->
-            fmap (Fix . flip NVSetF p) $ sequence $ flip M.mapWithKey s $ \ky t -> do
+            fmap (Free . flip NVSetF p) $ sequence $ flip M.mapWithKey s $ \ky t -> do
                 traceM $ show n ++ ": normalFormBy: Set{" ++ show ky ++ "}"
                 t `k` normalFormBy k (succ n)
-        NVClosure p f    -> return $ Fix $ NVClosureF p f
-        NVPath fp        -> return $ Fix $ NVPathF fp
-        NVBuiltin name f -> return $ Fix $ NVBuiltinF name f
+        NVClosure p f    -> return $ Free $ NVClosureF p f
+        NVPath fp        -> return $ Free $ NVPathF fp
+        NVBuiltin name f -> return $ Free $ NVBuiltinF name f
         _ -> error "Pattern synonyms mask complete matches"
 
 normalForm :: (Framed e m, MonadVar m, Typeable m,
@@ -64,7 +64,8 @@ normalForm = normalFormBy force 0
 
 embed :: forall m. (MonadThunk (NValue m) (NThunk m) m)
       => NValueNF m -> m (NValue m)
-embed (Fix x) = case x of
+embed (Pure v) = return v
+embed (Free x) = case x of
     NVConstantF a  -> return $ nvConstant a
     NVStrF t s     -> return $ nvStr t s
     NVListF l      -> nvList       . fmap (value @_ @_ @m) <$> traverse embed l
@@ -75,8 +76,11 @@ embed (Fix x) = case x of
 
 valueText :: forall e m. (Framed e m, MonadEffects m, Typeable m)
           => Bool -> NValueNF m -> m (Text, DList Text)
-valueText addPathsToStore = cata phi
+valueText addPathsToStore = iter phi . check
   where
+    check :: NValueNF m -> Free (NValueF m) (m (Text, DList Text))
+    check = fmap (const $ pure ("<CYCLE>", mempty))
+
     phi :: NValueF m (m (Text, DList Text)) -> m (Text, DList Text)
     phi (NVConstantF a) = pure (atomText a, mempty)
     phi (NVStrF t c)    = pure (t, c)
