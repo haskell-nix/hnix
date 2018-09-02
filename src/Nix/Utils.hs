@@ -19,6 +19,7 @@ import qualified Data.HashMap.Lazy as M
 import           Data.List (sortOn)
 import           Data.Monoid (Endo)
 import           Data.Text (Text)
+import qualified Data.Text as Text
 import qualified Data.Vector as V
 import           Lens.Family2 as X
 import           Lens.Family2.Stock (_1, _2)
@@ -108,3 +109,17 @@ toEncodingSorted = \case
                 $ M.toList m
     A.Array l -> A.list toEncodingSorted $ V.toList l
     v -> A.toEncoding v
+
+data NixPathEntryType = PathEntryPath | PathEntryURI deriving (Show, Eq)
+
+-- | @NIX_PATH@ is colon-separated, but can also contain URLs, which have a colon
+-- (i.e. @https://...@)
+uriAwareSplit :: Text -> [(Text, NixPathEntryType)]
+uriAwareSplit = go where
+    go str = case Text.break (== ':') str of
+        (e1, e2)
+            | Text.null e2 -> [(e1, PathEntryPath)]
+            | Text.pack "://" `Text.isPrefixOf` e2 ->
+                let ((suffix, _):path) = go (Text.drop 3 e2)
+                 in (e1 <> Text.pack "://" <> suffix, PathEntryURI) : path
+            | otherwise -> (e1, PathEntryPath) : go (Text.drop 1 e2)
