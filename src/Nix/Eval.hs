@@ -308,9 +308,8 @@ evalSetterKeyName :: (MonadEval v m, FromValue (Text, DList Text) m v)
                   => NKeyName (m v) -> m (Maybe Text)
 evalSetterKeyName = \case
     StaticKey  k -> pure (Just k)
-    DynamicKey k -> runAntiquoted "\n" assembleString (>>= fromValueMay) k
-        <&> \case Just (t, _) -> Just t
-                  _ -> Nothing
+    DynamicKey k ->
+        runAntiquoted "\n" assembleString (>>= fromValueMay) k <&> fmap fst
 
 assembleString :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
                => NString (m v) -> m (Maybe (Text, DList Text))

@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveFoldable #-}
@@ -35,6 +36,7 @@ data Deferred m v = Deferred (m v) | Computed v
 
 class Monad m => MonadVar m where
     type Var m :: * -> *
+    eqVar :: Var m a -> Var m a -> Bool
     newVar :: a -> m (Var m a)
     readVar :: Var m a -> m a
     writeVar :: Var m a -> a -> m ()
