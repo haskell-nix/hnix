@@ -203,10 +203,11 @@ exprFNixDoc = \case
     NUnary op r1 ->
         mkNixDoc (text (unpack (operatorName opInfo)) <> wrapParens opInfo r1) opInfo
       where opInfo = getUnaryOperator op
-    NSelect r attr o ->
+    NSelect r' attr o ->
       (if isJust o then leastPrecedence else flip mkNixDoc selectOp) $
           wrapPath selectOp r <> dot <> prettySelector attr <> ordoc
       where
+        r = flip mkNixDoc selectOp $ wrapParens appOpNonAssoc r'
         ordoc = maybe empty (((space <> text "or") <+>) . wrapParens appOpNonAssoc) o
     NHasAttr r attr ->
         mkNixDoc (wrapParens hasAttrOp r <+> text "?" <+> prettySelector attr) hasAttrOp
