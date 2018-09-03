@@ -175,7 +175,7 @@ renderExecFrame level = \case
 renderThunkLoop :: (MonadReader e m, Has e Options, MonadFile m)
                 => NixLevel -> ThunkLoop -> m [Doc]
 renderThunkLoop _level = pure . (:[]) . \case
-    ThunkLoop Nothing -> text "<<loop>>"
+    ThunkLoop Nothing -> text "<<thunk loop>>"
     ThunkLoop (Just n) ->
         text $ "<<loop forcing thunk #" ++ show n ++ ">>"
 
