@@ -335,6 +335,14 @@ case_rec_path_attr =
     constantEqualText "10"
         "let src = 10; x = rec { passthru.src = src; }; in x.passthru.src"
 
+case_mapattrs_builtin =
+    constantEqualText' "{ a = 6; b = 7; }" [i|
+      (builtins.mapAttrs (x: x+5) {
+        a = 1;
+        b = 2;
+      })
+    |]
+
 -----------------------
 
 tests :: TestTree
