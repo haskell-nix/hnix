@@ -13,6 +13,7 @@
 module Nix.Pretty where
 
 import           Control.Monad
+import           Control.Monad.Free
 import           Data.Fix
 import           Data.HashMap.Lazy (toList)
 import qualified Data.HashMap.Lazy as M
@@ -235,42 +236,56 @@ exprFNixDoc = \case
   where
     recPrefix = text "rec" <> space
 
+fixate :: Functor f => (a -> f (Fix f)) -> Free f a -> Fix f
+fixate g = Fix . go
+  where
+    go (Pure a) = g a
+    go (Free f) = fmap (Fix . go) f
+
 prettyNValueNF :: Functor m => NValueNF m -> Doc
 prettyNValueNF = prettyNix . valueToExpr
-  where valueToExpr :: Functor m => NValueNF m -> NExpr
-        valueToExpr = transport go
+  where
+    check :: NValueNF m -> Fix (NValueF m)
+    check = fixate (const (NVStrF "<CYCLE>" mempty))
 
-        go (NVConstantF a) = NConstant a
-        go (NVStrF t _) = NStr (DoubleQuoted [Plain t])
-        go (NVListF l) = NList l
-        go (NVSetF s p) = NSet
-            [ NamedVar (StaticKey k :| []) v (fromMaybe nullPos (M.lookup k p))
-            | (k, v) <- toList s ]
-        go (NVClosureF _ _) = NSym . pack $ "<closure>"
-        go (NVPathF p) = NLiteralPath p
-        go (NVBuiltinF name _) = NSym $ Text.pack $ "builtins." ++ name
+    valueToExpr :: Functor m => NValueNF m -> NExpr
+    valueToExpr = transport go . check
+
+    go (NVConstantF a)     = NConstant a
+    go (NVStrF t _)        = NStr (DoubleQuoted [Plain t])
+    go (NVListF l)         = NList l
+    go (NVSetF s p)        = NSet
+        [ NamedVar (StaticKey k :| []) v (fromMaybe nullPos (M.lookup k p))
+        | (k, v) <- toList s ]
+    go (NVClosureF _ _)    = NSym . pack $ "<closure>"
+    go (NVPathF p)         = NLiteralPath p
+    go (NVBuiltinF name _) = NSym $ Text.pack $ "builtins." ++ name
 
 printNix :: Functor m => NValueNF m -> String
-printNix = cata phi
-  where phi :: NValueF m String -> String
-        phi (NVConstantF a) = unpack $ atomText a
-        phi (NVStrF t _) = show t
-        phi (NVListF l) = "[ " ++ unwords l ++ " ]"
-        phi (NVSetF s _) =
-            "{ " ++ concat [ unpack k ++ " = " ++ v ++ "; "
-                           | (k, v) <- sort $ toList s ] ++ "}"
-        phi NVClosureF {} = "<<lambda>>"
-        phi (NVPathF fp) = fp
-        phi (NVBuiltinF name _) = "<<builtin " ++ name ++ ">>"
+printNix = iter phi . check
+  where
+    check :: NValueNF m -> Free (NValueF m) String
+    check = fmap (const "<CYCLE>")
+
+    phi :: NValueF m String -> String
+    phi (NVConstantF a) = unpack $ atomText a
+    phi (NVStrF t _) = show t
+    phi (NVListF l) = "[ " ++ unwords l ++ " ]"
+    phi (NVSetF s _) =
+        "{ " ++ concat [ unpack k ++ " = " ++ v ++ "; "
+                       | (k, v) <- sort $ toList s ] ++ "}"
+    phi NVClosureF {} = "<<lambda>>"
+    phi (NVPathF fp) = fp
+    phi (NVBuiltinF name _) = "<<builtin " ++ name ++ ">>"
 
 removeEffects :: Functor m => NValueF m (NThunk m) -> NValueNF m
-removeEffects = Fix . fmap dethunk
+removeEffects = Free . fmap dethunk
   where
     dethunk (NThunk _ (Value v)) = removeEffects (_baseValue v)
-    dethunk (NThunk _ _) = Fix $ NVStrF "<thunk>" mempty
+    dethunk (NThunk _ _) = Free $ NVStrF "<thunk>" mempty
 
 removeEffectsM :: MonadVar m => NValueF m (NThunk m) -> m (NValueNF m)
-removeEffectsM = fmap Fix . traverse dethunk
+removeEffectsM = fmap Free . traverse dethunk
 
 prettyNValueF :: MonadVar m => NValueF m (NThunk m) -> m Doc
 prettyNValueF = fmap prettyNValueNF . removeEffectsM
@@ -299,9 +314,9 @@ dethunk = \case
     NThunk _ (Thunk _ active ref) -> do
         nowActive <- atomicModifyVar active (True,)
         if nowActive
-            then pure $ Fix $ NVStrF "<thunk>" mempty
+            then pure $ Free $ NVStrF "<thunk>" mempty
             else do
                 eres <- readVar ref
                 case eres of
                     Computed v -> removeEffectsM (_baseValue v)
-                    _ -> pure $ Fix $ NVStrF "<thunk>" mempty
+                    _ -> pure $ Free $ NVStrF "<thunk>" mempty
