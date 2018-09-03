@@ -38,6 +38,13 @@ case_zero_div = do
   assertNixEvalThrows "builtins.div 1 0.0"
   assertNixEvalThrows "builtins.div 1.0 0.0"
 
+case_bit_ops = do
+    -- mic92 (2018-08-20): change to constantEqualText, 
+    -- when hnix's nix fork supports bitAnd/bitOr/bitXor
+    constantEqualText' "0" "builtins.bitAnd 1 0"
+    constantEqualText' "1" "builtins.bitOr 1 1"
+    constantEqualText' "3" "builtins.bitXor 1 2"
+
 case_basic_function =
     constantEqualText "2" "(a: a) 2"
 

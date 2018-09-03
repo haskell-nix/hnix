@@ -476,6 +476,7 @@ newtype Lazy m a = Lazy
 instance MonadIO m => MonadVar (Lazy m) where
     type Var (Lazy m) = IORef
 
+    eqVar = (==)
     newVar = liftIO . newIORef
     readVar = liftIO . readIORef
     writeVar = (liftIO .) . writeIORef

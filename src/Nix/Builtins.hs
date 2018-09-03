@@ -49,11 +49,11 @@ import qualified Data.Aeson as A
 import qualified Data.Aeson.Encoding as A
 import           Data.Align (alignWith)
 import           Data.Array
+import           Data.Bits
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
-import           Data.Coerce
 import           Data.Fix
 import           Data.Foldable (foldrM)
 import qualified Data.HashMap.Lazy as M
@@ -154,6 +154,9 @@ builtinsList = sequence [
     , add  Normal   "attrNames"                  attrNames
     , add  Normal   "attrValues"                 attrValues
     , add  TopLevel "baseNameOf"                 baseNameOf
+    , add2 Normal   "bitAnd"                     bitAnd
+    , add2 Normal   "bitOr"                      bitOr
+    , add2 Normal   "bitXor"                     bitXor
     , add2 Normal   "catAttrs"                   catAttrs
     , add2 Normal   "compareVersions"            compareVersions_
     , add  Normal   "concatLists"                concatLists
@@ -595,6 +598,21 @@ baseNameOf x = x >>= \case
     NVPath path -> pure $ nvPath $ takeFileName path
     v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
 
+bitAnd :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+bitAnd x y =
+    fromValue @Integer x >>= \a ->
+    fromValue @Integer y >>= \b -> toNix (a .&. b)
+
+bitOr :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+bitOr x y =
+    fromValue @Integer x >>= \a ->
+    fromValue @Integer y >>= \b -> toNix (a .|. b)
+
+bitXor :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+bitXor x y =
+    fromValue @Integer x >>= \a ->
+    fromValue @Integer y >>= \b -> toNix (a `xor` b)
+
 dirOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 dirOf x = x >>= \case
     NVStr path ctx -> pure $ nvStr (Text.pack $ takeDirectory $ Text.unpack path) ctx
@@ -611,7 +629,7 @@ seq_ a b = a >> b
 deepSeq :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 deepSeq a b = do
     -- We evaluate 'a' only for its effects, so data cycles are ignored.
-    _ <- normalFormBy (forceEffects . coerce . _baseThunk) 0 =<< a
+    normalForm_ =<< a
 
     -- Then we evaluate the other argument to deepseq, thus this function
     -- should always produce a result (unlike applying 'deepseq' on infinitely
