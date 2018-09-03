@@ -293,27 +293,32 @@ builtinsList = sequence [
 -- Primops
 
 foldNixPath :: forall e m r. MonadNix e m
-            => (FilePath -> Maybe String -> r -> m r) -> r -> m r
+            => (FilePath -> Maybe String -> NixPathEntryType -> r -> m r) -> r -> m r
 foldNixPath f z = do
     mres <- lookupVar @_ @(NThunk m) "__includes"
     dirs <- case mres of
         Nothing -> return []
         Just v  -> fromNix @[Text] v
     menv <- getEnvVar "NIX_PATH"
-    foldrM go z $ dirs ++ case menv of
+    foldrM go z $ map fromInclude dirs ++ case menv of
         Nothing -> []
-        Just str -> Text.splitOn ":" (Text.pack str)
+        Just str -> uriAwareSplit (Text.pack str)
   where
-    go x rest = case Text.splitOn "=" x of
-        [p]    -> f (Text.unpack p) Nothing rest
-        [n, p] -> f (Text.unpack p) (Just (Text.unpack n)) rest
+    fromInclude x
+        | "://" `Text.isInfixOf` x = (x, PathEntryURI)
+        | otherwise = (x, PathEntryPath)
+    go (x, ty) rest = case Text.splitOn "=" x of
+        [p]    -> f (Text.unpack p) Nothing ty rest
+        [n, p] -> f (Text.unpack p) (Just (Text.unpack n)) ty rest
         _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " ++ show x
 
 nixPath :: MonadNix e m => m (NValue m)
-nixPath = fmap nvList $ flip foldNixPath [] $ \p mn rest ->
+nixPath = fmap nvList $ flip foldNixPath [] $ \p mn ty rest ->
     pure $ valueThunk
         (flip nvSet mempty $ M.fromList
-            [ ("path",   valueThunk $ nvPath p)
+            [ case ty of
+                PathEntryPath -> ("path", valueThunk $ nvPath p)
+                PathEntryURI ->  ("uri",  valueThunk $ nvStr (Text.pack p) mempty)
             , ("prefix", valueThunk $
                    nvStr (Text.pack (fromMaybe "" mn)) mempty) ]) : rest
 
@@ -1021,43 +1026,6 @@ exec_ xs = do
   ls <- fromValue @[NThunk m] xs
   xs <- traverse (fromValue @Text . force') ls
   exec (map Text.unpack xs)
-
-fetchTarball :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
-fetchTarball v = v >>= \case
-    NVSet s _ -> case M.lookup "url" s of
-        Nothing -> throwError $ ErrorCall
-                      "builtins.fetchTarball: Missing url attribute"
-        Just url -> force url $ go (M.lookup "sha256" s)
-    v@NVStr {} -> go Nothing v
-    v -> throwError $ ErrorCall $
-            "builtins.fetchTarball: Expected URI or set, got " ++ show v
- where
-    go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
-    go msha = \case
-        NVStr uri _ -> fetch uri msha
-        v -> throwError $ ErrorCall $
-                "builtins.fetchTarball: Expected URI or string, got " ++ show v
-
-{- jww (2018-04-11): This should be written using pipes in another module
-    fetch :: Text -> Maybe (NThunk m) -> m (NValue m)
-    fetch uri msha = case takeExtension (Text.unpack uri) of
-        ".tgz" -> undefined
-        ".gz"  -> undefined
-        ".bz2" -> undefined
-        ".xz"  -> undefined
-        ".tar" -> undefined
-        ext -> throwError $ ErrorCall $ "builtins.fetchTarball: Unsupported extension '"
-                  ++ ext ++ "'"
--}
-
-    fetch :: Text -> Maybe (NThunk m) -> m (NValue m)
-    fetch uri Nothing =
-        nixInstantiateExpr $ "builtins.fetchTarball \"" ++
-            Text.unpack uri ++ "\""
-    fetch url (Just m) = fromValue m >>= \sha ->
-        nixInstantiateExpr $ "builtins.fetchTarball { "
-          ++ "url    = \"" ++ Text.unpack url ++ "\"; "
-          ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"
 
 fetchurl :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 fetchurl v = v >>= \case

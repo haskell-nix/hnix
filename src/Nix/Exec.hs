@@ -715,22 +715,27 @@ findPathBy finder l name = do
       go :: Maybe FilePath -> NThunk m -> m (Maybe FilePath)
       go p@(Just _) _ = pure p
       go Nothing    l = force l $ fromValue >=>
-        \(s :: HashMap Text (NThunk m)) ->
-          case M.lookup "path" s of
-              Just p -> force p $ fromValue >=> \(Path path) ->
-                  case M.lookup "prefix" s of
-                      Nothing -> tryPath path Nothing
-                      Just pf -> force pf $ fromValueMay >=> \case
-                          Just (pfx :: Text) | not (Text.null pfx) ->
-                              tryPath path (Just (Text.unpack pfx))
-                          _ -> tryPath path Nothing
-              Nothing ->
-                  throwError $ ErrorCall $ "__nixPath must be a list of attr sets"
-                      ++ " with 'path' elements, but saw: " ++ show s
+        \(s :: HashMap Text (NThunk m)) -> do
+          p <- resolvePath s
+          force p $ fromValue >=> \(Path path) ->
+              case M.lookup "prefix" s of
+                  Nothing -> tryPath path Nothing
+                  Just pf -> force pf $ fromValueMay >=> \case
+                      Just (pfx :: Text) | not (Text.null pfx) ->
+                          tryPath path (Just (Text.unpack pfx))
+                      _ -> tryPath path Nothing
 
       tryPath p (Just n) | n':ns <- splitDirectories name, n == n' =
           finder $ p <///> joinPath ns
       tryPath p _ = finder $ p <///> name
+
+      resolvePath s = case M.lookup "path" s of
+          Just t -> return t
+          Nothing -> case M.lookup "uri" s of
+              Just ut -> thunk $ fetchTarball (force ut pure)
+              Nothing ->
+                  throwError $ ErrorCall $ "__nixPath must be a list of attr sets"
+                      ++ " with 'path' elements, but saw: " ++ show s
 
 findPathM :: forall e m. (MonadNix e m, MonadIO m) =>
             [NThunk m] -> FilePath -> m FilePath
@@ -799,3 +804,40 @@ evalExprLoc expr = do
   where
     phi = Eval.eval @_ @(NValue m) @(NThunk m) @m . annotated . getCompose
     raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x
+
+fetchTarball :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
+fetchTarball v = v >>= \case
+    NVSet s _ -> case M.lookup "url" s of
+        Nothing -> throwError $ ErrorCall
+                      "builtins.fetchTarball: Missing url attribute"
+        Just url -> force url $ go (M.lookup "sha256" s)
+    v@NVStr {} -> go Nothing v
+    v -> throwError $ ErrorCall $
+            "builtins.fetchTarball: Expected URI or set, got " ++ show v
+ where
+    go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
+    go msha = \case
+        NVStr uri _ -> fetch uri msha
+        v -> throwError $ ErrorCall $
+                "builtins.fetchTarball: Expected URI or string, got " ++ show v
+
+{- jww (2018-04-11): This should be written using pipes in another module
+    fetch :: Text -> Maybe (NThunk m) -> m (NValue m)
+    fetch uri msha = case takeExtension (Text.unpack uri) of
+        ".tgz" -> undefined
+        ".gz"  -> undefined
+        ".bz2" -> undefined
+        ".xz"  -> undefined
+        ".tar" -> undefined
+        ext -> throwError $ ErrorCall $ "builtins.fetchTarball: Unsupported extension '"
+                  ++ ext ++ "'"
+-}
+
+    fetch :: Text -> Maybe (NThunk m) -> m (NValue m)
+    fetch uri Nothing =
+        nixInstantiateExpr $ "builtins.fetchTarball \"" ++
+            Text.unpack uri ++ "\""
+    fetch url (Just m) = fromValue m >>= \sha ->
+        nixInstantiateExpr $ "builtins.fetchTarball { "
+          ++ "url    = \"" ++ Text.unpack url ++ "\"; "
+          ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"
