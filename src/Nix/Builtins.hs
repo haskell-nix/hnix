@@ -70,7 +70,7 @@ import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Lazy.Builder as Builder
 import           Data.These (fromThese)
 import qualified Data.Time.Clock.POSIX as Time
-import           Data.Traversable (mapM)
+import           Data.Traversable (for, mapM)
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Effects
@@ -580,9 +580,10 @@ mapAttrs_ :: forall e m. MonadNix e m
 mapAttrs_ fun xs = fun >>= \f ->
     fromValue @(AttrSet (NThunk m)) xs >>= \aset -> do
         let pairs = M.toList aset
-        values <- traverse (thunk . withFrame Debug
-                               (ErrorCall "While applying f in mapAttrs:\n")
-                                  . (f `callFunc`) . force') (map snd pairs)
+        values <- for pairs $ \(key, value) ->
+            thunk $
+            withFrame Debug (ErrorCall "While applying f in mapAttrs:\n") $
+            callFunc ?? force' value =<< callFunc f (pure (nvStr key mempty))
         toNix . M.fromList . zip (map fst pairs) $ values
 
 filter_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
