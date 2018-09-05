@@ -342,10 +342,10 @@ case_rec_path_attr =
         "let src = 10; x = rec { passthru.src = src; }; in x.passthru.src"
 
 case_mapattrs_builtin =
-    constantEqualText' "{ a = 6; b = 7; }" [i|
-      (builtins.mapAttrs (x: x+5) {
-        a = 1;
-        b = 2;
+    constantEqualText' "{ a = \"afoo\"; b = \"bbar\"; }" [i|
+      (builtins.mapAttrs (x: y: x + y) {
+        a = "foo";
+        b = "bar";
       })
     |]
 
