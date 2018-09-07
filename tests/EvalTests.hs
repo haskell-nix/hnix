@@ -100,6 +100,9 @@ case_function_recursive_sets =
 case_nested_with =
     constantEqualText "2" "with { x = 1; }; with { x = 2; }; x"
 
+case_with_strictness =
+    constantEqualText "5" "let x = with x; with { a = 5; }; a; in x"
+
 case_match_failure_null =
     constantEqualText "null" "builtins.match \"ab\" \"abc\""
 
