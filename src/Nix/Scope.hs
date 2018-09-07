@@ -76,7 +76,11 @@ lookupVar k = do
         Just sym -> return $ Just sym
         Nothing -> do
             ws <- asks (dynamicScopes . view hasLens)
-            foldr (\x -> liftM2 (<|>) (M.lookup k . getScope <$> x))
+            foldr (\x rest -> do
+                          mres' <- M.lookup k . getScope <$> x
+                          case mres' of
+                              Just sym -> return $ Just sym
+                              Nothing  -> rest)
                   (return Nothing) ws
 
 withScopes :: forall v m e a. Scoped e v m => Scopes m v -> m a -> m a
