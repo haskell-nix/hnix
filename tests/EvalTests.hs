@@ -323,7 +323,13 @@ case_fixed_points_attrsets =
 --     constantEqualText "true" "[(x: x)] == [(x: x)]"
 
 case_function_equals3 =
-    constantEqualText "false" "(x: x) == (x: x)"
+    constantEqualText "false" "(let a = (x: x); in a == a)"
+
+case_function_equals4 =
+    constantEqualText "true" "(let a = {f = x: x;}; in a == a)"
+
+case_function_equals5 =
+    constantEqualText "true" "(let a = [(x: x)]; in a == a)"
 
 case_directory_pathexists =
     constantEqualText "false" "builtins.pathExists \"/bin/sh/invalid-directory\""
@@ -337,6 +343,14 @@ case_directory_pathexists =
 case_rec_path_attr =
     constantEqualText "10"
         "let src = 10; x = rec { passthru.src = src; }; in x.passthru.src"
+
+case_mapattrs_builtin =
+    constantEqualText' "{ a = \"afoo\"; b = \"bbar\"; }" [i|
+      (builtins.mapAttrs (x: y: x + y) {
+        a = "foo";
+        b = "bar";
+      })
+    |]
 
 -----------------------
 
