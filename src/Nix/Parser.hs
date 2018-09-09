@@ -413,8 +413,7 @@ reservedNames = HashSet.fromList
     , "assert"
     , "with"
     , "rec"
-    , "inherit"
-    , "true", "false" ]
+    , "inherit" ]
 
 type Parser = ParsecT Void Text Identity
 

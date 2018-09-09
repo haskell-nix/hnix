@@ -78,8 +78,7 @@ renderFrame (NixFrame level f)
     | Just (e :: EvalFrame m v) <- fromException f = renderEvalFrame level e
     | Just (e :: ThunkLoop)     <- fromException f = renderThunkLoop level e
     | Just (e :: ValueFrame m)  <- fromException f = renderValueFrame level e
-    | Just (_ :: NormalLoop m)  <- fromException f =
-      pure [text "<<loop during normalization>>"]
+    | Just (e :: NormalLoop m)  <- fromException f = renderNormalLoop level e
     | Just (e :: ExecFrame m)   <- fromException f = renderExecFrame level e
     | Just (e :: ErrorCall)     <- fromException f = pure [text (show e)]
     | otherwise = error $ "Unrecognized frame: " ++ show f
@@ -92,8 +91,10 @@ renderEvalFrame :: (MonadReader e m, Has e Options, MonadFile m)
 renderEvalFrame level f = do
     opts :: Options <- asks (view hasLens)
     case f of
-        EvaluatingExpr _scope e@(Fix (Compose (Ann ann _))) ->
-            fmap (:[]) $ renderLocation ann
+        EvaluatingExpr scope e@(Fix (Compose (Ann ann _))) -> do
+            let scopeInfo | scopes opts = [string (show scope)]
+                          | otherwise   = []
+            fmap (\x -> scopeInfo ++ [x]) $ renderLocation ann
                 =<< renderExpr level "While evaluating" "Expression" e
 
         ForcingExpr _scope e@(Fix (Compose (Ann ann _)))
@@ -129,27 +130,31 @@ renderExpr _level longLabel shortLabel e@(Fix (Compose (Ann _ x))) = do
                     P.<$> text "<<<<<<<<"
            else text shortLabel <> text ": " </> rendered
 
-renderValueFrame :: (MonadReader e m, Has e Options, MonadFile m)
+renderValueFrame :: (MonadReader e m, Has e Options,
+                    MonadFile m, MonadVar m)
                  => NixLevel -> ValueFrame m -> m [Doc]
-renderValueFrame level = pure . (:[]) . \case
-    ForcingThunk       -> text "ForcingThunk"
-    ConcerningValue _v -> text "ConcerningValue"
-    Comparison _ _     -> text "Comparing"
-    Addition _ _       -> text "Adding"
-    Division _ _       -> text "Dividing"
-    Multiplication _ _ -> text "Multiplying"
+renderValueFrame level = fmap (:[]) . \case
+    ForcingThunk       -> pure $ text "ForcingThunk"
+    ConcerningValue _v -> pure $ text "ConcerningValue"
+    Comparison _ _     -> pure $ text "Comparing"
+    Addition _ _       -> pure $ text "Adding"
+    Division _ _       -> pure $ text "Dividing"
+    Multiplication _ _ -> pure $ text "Multiplying"
 
     Coercion x y ->
-        text desc <> text (describeValue x)
+        pure $ text desc <> text (describeValue x)
             <> text " to " <> text (describeValue y)
       where
         desc | level <= Error = "Cannot coerce "
              | otherwise     = "While coercing "
 
-    CoercionToJsonNF _v -> text "CoercionToJsonNF"
-    CoercionFromJson _j -> text "CoercionFromJson"
-    ExpectationNF _t _v -> text "ExpectationNF"
-    Expectation _t _v   -> text "Expectation"
+    CoercionToJsonNF _v -> pure $ text "CoercionToJsonNF"
+    CoercionFromJson _j -> pure $ text "CoercionFromJson"
+    ExpectationNF _t _v -> pure $ text "ExpectationNF"
+    Expectation t v     -> do
+        v' <- renderValue level "" "" v
+        pure $ text "Saw " <> v'
+            <> text " but expected " <> text (describeValue t)
 
 renderValue :: (MonadReader e m, Has e Options, MonadFile m, MonadVar m)
             => NixLevel -> String -> String -> NValue m -> m Doc
@@ -170,6 +175,13 @@ renderExecFrame level = \case
 renderThunkLoop :: (MonadReader e m, Has e Options, MonadFile m)
                 => NixLevel -> ThunkLoop -> m [Doc]
 renderThunkLoop _level = pure . (:[]) . \case
-    ThunkLoop Nothing -> text "<<loop>>"
+    ThunkLoop Nothing -> text "<<thunk loop>>"
     ThunkLoop (Just n) ->
         text $ "<<loop forcing thunk #" ++ show n ++ ">>"
+
+renderNormalLoop :: (MonadReader e m, Has e Options, MonadFile m, MonadVar m)
+                => NixLevel -> NormalLoop m -> m [Doc]
+renderNormalLoop level = fmap (:[]) . \case
+    NormalLoop v -> do
+        v' <- renderValue level "" "" v
+        pure $ text "<<loop during normalization forcing " <> v' <> text ">>"

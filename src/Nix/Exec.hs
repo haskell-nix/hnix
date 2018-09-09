@@ -28,7 +28,7 @@ module Nix.Exec where
 
 import           Control.Applicative
 import           Control.Monad
-import           Control.Monad.Catch
+import           Control.Monad.Catch hiding (catchJust)
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
@@ -44,10 +44,12 @@ import           Data.IORef
 import           Data.List
 import qualified Data.List.NonEmpty as NE
 import           Data.List.Split
+import           Data.Maybe (maybeToList)
 import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Typeable
+import           GHC.IO.Exception (IOErrorType(..))
 import           Network.HTTP.Client
 import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
@@ -76,6 +78,7 @@ import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
 import           System.FilePath
 import qualified System.Info
+import           System.IO.Error
 import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
 import           Text.PrettyPrint.ANSI.Leijen (text)
@@ -164,10 +167,11 @@ instance MonadNix e m => MonadEval (NValue m) m where
             "Inheriting unknown attribute: "
                 ++ intercalate "." (map Text.unpack (NE.toList ks))
 
-    attrMissing ks (Just s) =
+    attrMissing ks (Just s) = do
+        s' <- prettyNValue s
         evalError @(NValue m) $ ErrorCall $ "Could not look up attribute "
             ++ intercalate "." (map Text.unpack (NE.toList ks))
-            ++ " in " ++ show s
+            ++ " in " ++ show s'
 
     evalCurPos = do
         scope <- currentScopes
@@ -190,7 +194,7 @@ instance MonadNix e m => MonadEval (NValue m) m where
             scope <- currentScopes
             span  <- currentPos
             pure $ nvStrP (Provenance scope
-                           (NStr_ span (DoubleQuoted [Plain (stringIntentionallyDropContext ns)]))) ns
+                           (NStr_ span (DoubleQuoted [Plain (hackyStringIgnoreContext ns)]))) ns
         Nothing -> nverr $ ErrorCall "Failed to assemble string"
 
     evalLiteralPath p = do
@@ -370,15 +374,15 @@ execBinaryOp scope span op lval rarg = do
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (ls@NVSet {}, NVStr rs) -> case op of
-            NPlus   -> (\lx -> bin nvStrP (modifyNixContents (Text.pack lx `mappend`) rs))
-                <$> coerceToString False ls
+            NPlus   -> (\ls -> bin nvStrP (modifyNixContents (Text.pack ls `mappend`) rs))
+                <$> coerceToString False False ls
             NEq     -> toBool =<< valueEq lval rval
             NNEq    -> toBool . not =<< valueEq lval rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVStr ls, rs@NVSet {}) -> case op of
-            NPlus   -> (\rx -> bin nvStrP (modifyNixContents (`mappend` Text.pack rx) ls))
-                <$> coerceToString False rs
+            NPlus   -> (\rs -> bin nvStrP (modifyNixContents (`mappend` Text.pack rs) ls))
+                <$> coerceToString False False rs
             NEq     -> toBool =<< valueEq lval rval
             NNEq    -> toBool . not =<< valueEq lval rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
@@ -402,9 +406,9 @@ execBinaryOp scope span op lval rarg = do
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVPath p, NVStr ns) -> case op of
-            NEq   -> toBool $ Just p == fmap Text.unpack (stringNoContext ns)
-            NNEq  -> toBool $ Just p /= fmap Text.unpack (stringNoContext ns)
-            NPlus -> bin nvPathP <$> makeAbsolutePath (p `mappend` Text.unpack (stringIntentionallyDropContext ns))
+            NEq   -> toBool $ Just p == fmap Text.unpack (hackyStringIgnoreContextMaybe ns)
+            NNEq  -> toBool $ Just p /= fmap Text.unpack (hackyStringIgnoreContextMaybe ns)
+            NPlus -> bin nvPathP <$> makeAbsolutePath (p `mappend` Text.unpack (hackyStringIgnoreContext ns))
             _     -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVPath ls, NVPath rs) -> case op of
@@ -439,21 +443,21 @@ execBinaryOp scope span op lval rarg = do
         toInt   = pure . bin nvConstantP . NInt
         toFloat = pure . bin nvConstantP . NFloat
 
-coerceToString :: MonadNix e m => Bool -> NValue m -> m String
-coerceToString copyToStore = go
+coerceToString :: MonadNix e m => Bool -> Bool -> NValue m -> m String
+coerceToString copyToStore coerceMore = go
   where
     go = \case
         NVConstant (NBool b)
-            | b               -> pure "1"
-            | otherwise       -> pure ""
-        NVConstant (NInt n)   -> pure $ show n
-        NVConstant (NFloat n) -> pure $ show n
-        NVConstant NNull      -> pure ""
+            | b && coerceMore  -> pure "1"
+            | coerceMore      -> pure ""
+        NVConstant (NInt n)   | coerceMore -> pure $ show n
+        NVConstant (NFloat n) | coerceMore -> pure $ show n
+        NVConstant NNull      | coerceMore -> pure ""
 
-        NVStr ns -> pure $ Text.unpack (stringIntentionallyDropContext ns)
+        NVStr ns -> pure $ Text.unpack (hackyStringIgnoreContext ns)
         NVPath p  | copyToStore -> unStorePath <$> addPath p
                   | otherwise   -> pure p
-        NVList l  -> unwords <$> traverse (`force` go) l
+        NVList l | coerceMore   -> unwords <$> traverse (`force` go) l
 
         v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
             force p $ (`callFunc` pure v) >=> go
@@ -473,6 +477,7 @@ newtype Lazy m a = Lazy
 instance MonadIO m => MonadVar (Lazy m) where
     type Var (Lazy m) = IORef
 
+    eqVar = (==)
     newVar = liftIO . newIORef
     readVar = liftIO . readIORef
     writeVar = (liftIO .) . writeIORef
@@ -530,46 +535,35 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
             pure $ cwd <///> origPathExpanded
         liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
 
+    -- Given a path, determine the nix file to load
+    pathToDefaultNix = liftIO . pathToDefaultNixFile
+
     findEnvPath = findEnvPathM
+    findPath    = findPathM
 
-    findPath = findPathM
+    pathExists fp = liftIO $ catchJust
+        -- "inappropriate type" error is thrown if `fileExist` is given a filepath where
+        -- a plain file appears as a directory, i.e. /bin/sh/nonexistent-file
+        (\ e -> guard (ioeGetErrorType e == InappropriateType) >> pure e)
+        (fileExist fp)
+        (\ _ -> return False)
 
-    pathExists = liftIO . fileExist
-
-    importPath scope origPath = do
-        path <- liftIO $ pathToDefaultNixFile origPath
-        mres <- lookupVar @(Context (Lazy m) (NThunk (Lazy m)))
-                         "__cur_file"
-        path' <- case mres of
-            Nothing  -> do
-                traceM "No known current directory"
-                return path
-            Just p -> fromValue @_ @_ @(NThunk (Lazy m)) p >>= \(Path p') -> do
-                traceM $ "Current file being evaluated is: " ++ show p'
-                return $ takeDirectory p' </> path
-
-        traceM $ "Importing file " ++ path'
-        withFrame Info (ErrorCall $ "While importing file " ++ show path') $ do
+    importPath path = do
+        traceM $ "Importing file " ++ path
+        withFrame Info (ErrorCall $ "While importing file " ++ show path) $ do
             imports <- Lazy $ ReaderT $ const get
-            expr <- case M.lookup path' imports of
+            evalExprLoc =<< case M.lookup path imports of
                 Just expr -> pure expr
                 Nothing -> do
-                    eres <- Lazy $ parseNixFileLoc path'
+                    eres <- Lazy $ parseNixFileLoc path
                     case eres of
                         Failure err  ->
                             throwError $ ErrorCall . show $
                                 text "Parse during import failed:" P.</> err
                         Success expr -> do
                             Lazy $ ReaderT $ const $
-                                modify (M.insert origPath expr)
+                                modify (M.insert path expr)
                             pure expr
-
-            let ref = value @_ @_ @(Lazy m) (nvPath path')
-            -- Use this cookie so that when we evaluate the next
-            -- import, we'll remember which directory its containing
-            -- file was in.
-            pushScope (M.singleton "__cur_file" ref) $
-                pushScope scope $ evalExprLoc expr
 
     getEnvVar = liftIO . lookupEnv
 
@@ -591,18 +585,18 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
       where
         mapMaybeM :: (a -> Lazy m (Maybe b)) -> [a] -> Lazy m [b]
         mapMaybeM op = foldr f (return [])
-          where f x xs = op x >>= \case
-                    Nothing -> xs
-                    Just x  -> (x:) <$> xs
+          where f x xs = op x >>= (<$> xs) . (++) . maybeToList
 
         handleEntry ignoreNulls (k, v) = fmap (k,) <$> case k of
             -- The `args' attribute is special: it supplies the command-line
             -- arguments to the builder.
             "args"          -> Just <$> convertNix @[Text] v
             "__ignoreNulls" -> pure Nothing
-            _               -> force v $ \case
+            _ -> force v $ \case
                 NVConstant NNull | ignoreNulls -> pure Nothing
-                v' -> Just <$> (toNix =<< Text.pack <$> coerceToString True v')
+                v' -> Just <$> coerceNix v'
+          where
+            coerceNix = toNix . Text.pack <=< coerceToString True True
 
     nixInstantiateExpr expr = do
         traceM $ "Executing: "
@@ -723,22 +717,27 @@ findPathBy finder l name = do
       go :: Maybe FilePath -> NThunk m -> m (Maybe FilePath)
       go p@(Just _) _ = pure p
       go Nothing    l = force l $ fromValue >=>
-        \(s :: HashMap Text (NThunk m)) ->
-          case M.lookup "path" s of
-              Just p -> force p $ fromValue >=> \(Path path) ->
-                  case M.lookup "prefix" s of
-                      Nothing -> tryPath path Nothing
-                      Just pf -> force pf $ fromValueMay >=> \case
-                          Just (pfx :: Text) | not (Text.null pfx) ->
-                              tryPath path (Just (Text.unpack pfx))
-                          _ -> tryPath path Nothing
-              Nothing ->
-                  throwError $ ErrorCall $ "__nixPath must be a list of attr sets"
-                      ++ " with 'path' elements, but saw: " ++ show s
+        \(s :: HashMap Text (NThunk m)) -> do
+          p <- resolvePath s
+          force p $ fromValue >=> \(Path path) ->
+              case M.lookup "prefix" s of
+                  Nothing -> tryPath path Nothing
+                  Just pf -> force pf $ fromValueMay >=> \case
+                      Just (pfx :: Text) | not (Text.null pfx) ->
+                          tryPath path (Just (Text.unpack pfx))
+                      _ -> tryPath path Nothing
 
       tryPath p (Just n) | n':ns <- splitDirectories name, n == n' =
           finder $ p <///> joinPath ns
       tryPath p _ = finder $ p <///> name
+
+      resolvePath s = case M.lookup "path" s of
+          Just t -> return t
+          Nothing -> case M.lookup "uri" s of
+              Just ut -> thunk $ fetchTarball (force ut pure)
+              Nothing ->
+                  throwError $ ErrorCall $ "__nixPath must be a list of attr sets"
+                      ++ " with 'path' elements, but saw: " ++ show s
 
 findPathM :: forall e m. (MonadNix e m, MonadIO m) =>
             [NThunk m] -> FilePath -> m FilePath
@@ -807,3 +806,40 @@ evalExprLoc expr = do
   where
     phi = Eval.eval @_ @(NValue m) @(NThunk m) @m . annotated . getCompose
     raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x
+
+fetchTarball :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
+fetchTarball v = v >>= \case
+    NVSet s _ -> case M.lookup "url" s of
+        Nothing -> throwError $ ErrorCall
+                      "builtins.fetchTarball: Missing url attribute"
+        Just url -> force url $ go (M.lookup "sha256" s)
+    v@NVStr {} -> go Nothing v
+    v -> throwError $ ErrorCall $
+            "builtins.fetchTarball: Expected URI or set, got " ++ show v
+ where
+    go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
+    go msha = \case
+        NVStr ns -> fetch (hackyStringIgnoreContext ns) msha
+        v -> throwError $ ErrorCall $
+                "builtins.fetchTarball: Expected URI or string, got " ++ show v
+
+{- jww (2018-04-11): This should be written using pipes in another module
+    fetch :: Text -> Maybe (NThunk m) -> m (NValue m)
+    fetch uri msha = case takeExtension (Text.unpack uri) of
+        ".tgz" -> undefined
+        ".gz"  -> undefined
+        ".bz2" -> undefined
+        ".xz"  -> undefined
+        ".tar" -> undefined
+        ext -> throwError $ ErrorCall $ "builtins.fetchTarball: Unsupported extension '"
+                  ++ ext ++ "'"
+-}
+
+    fetch :: Text -> Maybe (NThunk m) -> m (NValue m)
+    fetch uri Nothing =
+        nixInstantiateExpr $ "builtins.fetchTarball \"" ++
+            Text.unpack uri ++ "\""
+    fetch url (Just m) = fromValue m >>= \sha ->
+        nixInstantiateExpr $ "builtins.fetchTarball { "
+          ++ "url    = \"" ++ Text.unpack url ++ "\"; "
+          ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"

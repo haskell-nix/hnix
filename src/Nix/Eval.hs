@@ -128,7 +128,7 @@ eval (NSet binds) =
     evalBinds False (desugarBinds (eval . NSet) binds) >>= toValue
 
 eval (NRecSet binds) =
-    evalBinds True (desugarBinds (eval . NRecSet) binds) >>= toValue
+    evalBinds True (desugarBinds (eval . NSet) binds) >>= toValue
 
 eval (NLet binds body) = evalBinds True binds >>= (pushScope ?? body) . fst
 
@@ -216,9 +216,10 @@ evalBinds recursive binds = do
     scope <- currentScopes @_ @t
     buildResult scope . concat =<< mapM (go scope) (moveOverridesLast binds)
   where
-    moveOverridesLast = (\(x, y) -> y ++ x) .
-        partition (\case NamedVar (StaticKey "__overrides" :| []) _ _pos -> True
-                         _ -> False)
+    moveOverridesLast = uncurry (++) .
+        partition (\case
+            NamedVar (StaticKey "__overrides" :| []) _ _pos -> False
+            _ -> True)
 
     go :: Scopes m t -> Binding (m v) -> m [([Text], SourcePos, m v)]
     go _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
@@ -308,8 +309,9 @@ evalSetterKeyName :: (MonadEval v m, FromValue NixString m v)
                   => NKeyName (m v) -> m (Maybe Text)
 evalSetterKeyName = \case
     StaticKey  k -> pure (Just k)
-    DynamicKey k -> runAntiquoted "\n" assembleString (>>= fromValueMay) k
-        <&> \case Just ns -> Just (stringIntentionallyDropContext ns)
+    DynamicKey k -> 
+        runAntiquoted "\n" assembleString (>>= fromValueMay) k <&> 
+            \case Just ns -> Just (hackyStringIgnoreContext ns)
                   _ -> Nothing
 
 assembleString :: forall v m. (MonadEval v m, FromValue NixString m v)

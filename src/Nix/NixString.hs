@@ -1,12 +1,10 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Nix.NixString (
-    stringNoContext
-  , stringContextOnly
-  , stringWithContext
-  , stringIntentionallyDropContext
-  , NixString
+    NixString
+  , hackyStringHasContext
+  , hackyStringIgnoreContextMaybe
+  , hackyStringIgnoreContext
   , makeNixStringWithoutContext
-  , makeNixString
   , modifyNixContents
 ) where
 
@@ -16,11 +14,12 @@ import           Data.Text (Text)
 import           GHC.Generics
 import           Data.Semigroup
 
+{-# WARNING hackyStringHasContext, hackyStringIgnoreContextMaybe, hackyStringIgnoreContext "This NixString function needs to be replaced" #-}
+
 -- | A 'ContextFlavor' describes the sum of possible derivations for string contexts
 data ContextFlavor = 
     DirectPath
   | DerivationOutput !Text
-  | AllDerivationOutputs
   deriving (Show, Eq, Ord, Generic)
 
 instance Hashable ContextFlavor
@@ -47,21 +46,18 @@ instance Monoid NixString where
   mempty = NixString mempty mempty
   mappend = (<>)
 
-stringNoContext :: NixString -> Maybe Text
-stringNoContext (NixString s c) | null c = Just s
+hackyStringIgnoreContextMaybe :: NixString -> Maybe Text
+hackyStringIgnoreContextMaybe (NixString s c) | null c = Just s
                                 | otherwise = Nothing 
 
-stringIntentionallyDropContext :: NixString -> Text
-stringIntentionallyDropContext (NixString s _) = s
+hackyStringIgnoreContext :: NixString -> Text
+hackyStringIgnoreContext (NixString s _) = s
 
-stringContextOnly :: NixString -> S.HashSet StringContext
-stringContextOnly (NixString _ c) = c 
+hackyStringHasContext :: NixString -> Bool
+hackyStringHasContext = const False
 
-stringWithContext :: NixString -> (Text, S.HashSet StringContext)
-stringWithContext (NixString s d) = (s, d)
-
-makeNixString :: Text -> S.HashSet StringContext -> NixString
-makeNixString = NixString
+--stringWithContext :: NixString -> (Text, S.HashSet StringContext)
+--stringWithContext (NixString s d) = (s, d)
 
 makeNixStringWithoutContext :: Text -> NixString
 makeNixStringWithoutContext = flip NixString mempty 

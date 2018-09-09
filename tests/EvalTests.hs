@@ -8,6 +8,7 @@
 
 module EvalTests (tests, genEvalCompareTests) where
 
+import           Control.Applicative ((<|>))
 import           Control.Monad.Catch
 import           Control.Monad (when)
 import           Control.Monad.IO.Class
@@ -36,6 +37,13 @@ case_zero_div = do
   assertNixEvalThrows "builtins.div 1.0 0"
   assertNixEvalThrows "builtins.div 1 0.0"
   assertNixEvalThrows "builtins.div 1.0 0.0"
+
+case_bit_ops = do
+    -- mic92 (2018-08-20): change to constantEqualText, 
+    -- when hnix's nix fork supports bitAnd/bitOr/bitXor
+    constantEqualText' "0" "builtins.bitAnd 1 0"
+    constantEqualText' "1" "builtins.bitOr 1 1"
+    constantEqualText' "3" "builtins.bitXor 1 2"
 
 case_basic_function =
     constantEqualText "2" "(a: a) 2"
@@ -141,6 +149,34 @@ case_inherit_from_set_has_no_scope =
         in { inherit (y) x; }.x
       )).success
     |]
+
+-- github/orblivion (2018-08-05): Adding these failing tests so we fix this feature
+
+-- case_overrides =
+--     constantEqualText' "2" [i|
+--       let
+--
+--         overrides = { a = 2; };
+--
+--       in (rec {
+--         __overrides = overrides;
+--         x = a;
+--         a = 1;
+--       }.__overrides.a)
+--     |]
+
+-- case_inherit_overrides =
+--     constantEqualText' "2" [i|
+--       let
+--
+--         __overrides = { a = 2; };
+--
+--       in (rec {
+--         inherit __overrides;
+--         x = a;
+--         a = 1;
+--       }.__overrides.a)
+--     |]
 
 case_unsafegetattrpos1 =
     constantEqualText "[ 6 20 ]" [i|
@@ -277,11 +313,41 @@ case_fixed_points_attrsets =
       in fix f
     |]
 
+-- case_function_equals1 =
+--     constantEqualText "true" "{f = x: x;} == {f = x: x;}"
+
+-- case_function_equals2 =
+--     constantEqualText "true" "[(x: x)] == [(x: x)]"
+
+case_function_equals3 =
+    constantEqualText "false" "(let a = (x: x); in a == a)"
+
+case_function_equals4 =
+    constantEqualText "true" "(let a = {f = x: x;}; in a == a)"
+
+case_function_equals5 =
+    constantEqualText "true" "(let a = [(x: x)]; in a == a)"
+
+case_directory_pathexists =
+    constantEqualText "false" "builtins.pathExists \"/bin/sh/invalid-directory\""
+
 -- jww (2018-05-02): This constantly changes!
 -- case_placeholder =
 --   constantEqualText
 --       "\"/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9\""
 --       "builtins.placeholder \"out\""
+
+case_rec_path_attr =
+    constantEqualText "10"
+        "let src = 10; x = rec { passthru.src = src; }; in x.passthru.src"
+
+case_mapattrs_builtin =
+    constantEqualText' "{ a = \"afoo\"; b = \"bbar\"; }" [i|
+      (builtins.mapAttrs (x: y: x + y) {
+        a = "foo";
+        b = "bar";
+      })
+    |]
 
 -----------------------
 
@@ -297,7 +363,7 @@ genEvalCompareTests = do
 
 instance (Show r, Show (NValueF m r), Eq r) => Eq (NValueF m r) where
     NVConstantF x == NVConstantF y = x == y
-    NVStrF ls == NVStrF rs = stringIntentionallyDropContext ls == stringIntentionallyDropContext rs
+    NVStrF ls == NVStrF rs = hackyStringIgnoreContext ls == hackyStringIgnoreContext rs
     NVListF x == NVListF y = and (zipWith (==) x y)
     NVSetF x _ == NVSetF y _ =
         M.keys x == M.keys y &&
@@ -325,7 +391,7 @@ constantEqualText' a b = do
 constantEqualText :: Text -> Text -> Assertion
 constantEqualText a b = do
   constantEqualText' a b
-  mres <- liftIO $ lookupEnv "MATCHING_TESTS"
+  mres <- liftIO $ lookupEnv "ALL_TESTS" <|> lookupEnv "MATCHING_TESTS"
   when (isJust mres) $
       assertEvalMatchesNix b
 

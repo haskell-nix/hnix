@@ -11,7 +11,7 @@ import           Control.Applicative ((<|>))
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Fix
-import           Data.List (isInfixOf)
+import           Data.List (isInfixOf, isSuffixOf)
 import           Data.Maybe
 import           Data.String.Interpolate.IsString
 import           Data.Text (unpack)
@@ -28,7 +28,7 @@ import qualified NixLanguageTests
 import qualified ParserTests
 import qualified PrettyTests
 import qualified ReduceExprTests
--- import qualified PrettyParseTests
+import qualified PrettyParseTests
 import           System.Directory
 import           System.Environment
 import           System.FilePath.Glob
@@ -65,13 +65,24 @@ ensureNixpkgsCanParse =
           sha256 = "#{sha256}";
         }|]) $ \expr -> do
         NVStr ns <- do
-            time <- liftIO getCurrentTime
-            runLazyM (defaultOptions time) $ Nix.nixEvalExprLoc Nothing expr
-        files <- globDir1 (compile "**/*.nix") (unpack $ stringIntentionallyDropContext ns)
-        forM_ files $ \file ->
-          -- Parse and deepseq the resulting expression tree, to ensure the
-          -- parser is fully executed.
-          consider file (parseNixFileLoc file) $ Exc.evaluate . force
+          time <- liftIO getCurrentTime
+          runLazyM (defaultOptions time) $ Nix.nixEvalExprLoc Nothing expr
+        let dir = hackyStringIgnoreContext ns
+        exists <- fileExist (unpack dir)
+        unless exists $
+          errorWithoutStackTrace $
+            "Directory " ++ show dir ++ " does not exist"
+        files <- globDir1 (compile "**/*.nix") (unpack dir)
+        when (length files == 0) $
+          errorWithoutStackTrace $
+            "Directory " ++ show dir ++ " does not have any files"
+        forM_ files $ \file -> do
+          unless ("azure-cli/default.nix" `isSuffixOf` file ||
+                  "os-specific/linux/udisks/2-default.nix"  `isSuffixOf` file) $ do
+            -- Parse and deepseq the resulting expression tree, to ensure the
+            -- parser is fully executed.
+            _ <- consider file (parseNixFileLoc file) $ Exc.evaluate . force
+            return ()
     v -> error $ "Unexpected parse from default.nix: " ++ show v
  where
   getExpr   k m = let Just (Just r) = lookup k m in r
@@ -89,7 +100,7 @@ main = do
   evalComparisonTests <- EvalTests.genEvalCompareTests
   let allOrLookup var = lookupEnv "ALL_TESTS" <|> lookupEnv var
   nixpkgsTestsEnv     <- allOrLookup "NIXPKGS_TESTS"
-  -- prettyTestsEnv      <- lookupEnv "PRETTY_TESTS"
+  prettyTestsEnv      <- lookupEnv "PRETTY_TESTS"
   hpackTestsEnv       <- allOrLookup "HPACK_TESTS"
 
   pwd <- getCurrentDirectory
@@ -102,8 +113,8 @@ main = do
     , EvalTests.tests
     , PrettyTests.tests
     , ReduceExprTests.tests] ++
-    -- [ PrettyParseTests.tests
-    --     (fromIntegral (read (fromMaybe "0" prettyTestsEnv) :: Int)) ] ++
+    [ PrettyParseTests.tests
+        (fromIntegral (read (fromMaybe "0" prettyTestsEnv) :: Int)) ] ++
     [ evalComparisonTests ] ++
     [ testCase "Nix language tests present" ensureLangTestsPresent
     , nixLanguageTests ] ++

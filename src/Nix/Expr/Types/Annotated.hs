@@ -19,7 +19,7 @@ module Nix.Expr.Types.Annotated
   ( module Nix.Expr.Types.Annotated
   , module Data.Functor.Compose
   , SourcePos(..), unPos, mkPos
-  )where
+  ) where
 
 #ifdef MIN_VERSION_serialise
 import Codec.Serialise
@@ -53,8 +53,7 @@ data SrcSpan = SrcSpan
     { spanBegin :: SourcePos
     , spanEnd   :: SourcePos
     }
-    deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData,
-              Hashable)
+    deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData, Hashable)
 
 #ifdef MIN_VERSION_serialise
 instance Serialise SrcSpan

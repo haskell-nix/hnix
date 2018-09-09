@@ -275,6 +275,9 @@ case_select_path = do
     (mkPath False "./def")
  where select = Fix $ NSelect (mkSym "f") (mkSelector "b") Nothing
 
+case_select_keyword = do
+  assertParseText "{ false = \"foo\"; }" $ Fix $ NSet [NamedVar (mkSelector "false") (mkStr "foo") nullPos]
+
 case_fun_app = do
   assertParseText "f a b" $ Fix $ NBinary NApp (Fix $ NBinary NApp (mkSym "f") (mkSym "a")) (mkSym "b")
   assertParseText "f a.x or null" $ Fix $ NBinary NApp (mkSym "f") $ Fix $

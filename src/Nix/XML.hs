@@ -2,7 +2,7 @@
 
 module Nix.XML where
 
-import           Data.Fix
+import           Control.Monad.Free
 import qualified Data.HashMap.Lazy as M
 import           Data.List
 import           Data.Ord
@@ -14,30 +14,37 @@ import           Nix.Value
 import           Text.XML.Light
 
 toXML :: Functor m => NValueNF m -> String
-toXML = (.) ((++ "\n") .
-             ("<?xml version='1.0' encoding='utf-8'?>\n" ++) .
-             ppElement .
-             (\e -> Element (unqual "expr") [] [Elem e] Nothing))
-        $ cata
-        $ \case
-    NVConstantF a -> case a of
-        NInt n   -> mkElem "int" "value" (show n)
-        NFloat f -> mkElem "float" "value" (show f)
-        NBool b  -> mkElem "bool" "value" (if b then "true" else "false")
-        NNull    -> Element (unqual "null") [] [] Nothing
+toXML = ("<?xml version='1.0' encoding='utf-8'?>\n" ++)
+      . (++ "\n")
+      . ppElement
+      . (\e -> Element (unqual "expr") [] [Elem e] Nothing)
+      . iter phi
+      . check
+  where
+    check :: NValueNF m -> Free (NValueF m) Element
+    check = fmap (const (mkElem "cycle" "value" ""))
 
-    NVStrF ns -> mkElem "string" "value" (Text.unpack $ stringIntentionallyDropContext ns)
-    NVListF l  -> Element (unqual "list") [] (Elem <$> l) Nothing
+    phi :: NValueF m Element -> Element
+    phi = \case
+        NVConstantF a -> case a of
+            NInt n   -> mkElem "int" "value" (show n)
+            NFloat f -> mkElem "float" "value" (show f)
+            NBool b  -> mkElem "bool" "value" (if b then "true" else "false")
+            NNull    -> Element (unqual "null") [] [] Nothing
 
-    NVSetF s _ -> Element (unqual "attrs") []
-        (map (\(k, v) -> Elem (Element (unqual "attr")
-                                      [Attr (unqual "name") (Text.unpack k)]
-                                      [Elem v] Nothing))
-             (sortBy (comparing fst) $ M.toList s)) Nothing
+        NVStrF ns -> mkElem "string" "value" (Text.unpack $ hackyStringIgnoreContext ns)
+        NVListF l  -> Element (unqual "list") [] (Elem <$> l) Nothing
 
-    NVClosureF p _  -> Element (unqual "function") [] (paramsXML p) Nothing
-    NVPathF fp -> mkElem "path" "value" fp
-    NVBuiltinF name _ -> mkElem "function" "name" name
+        NVSetF s _ -> Element (unqual "attrs") []
+            (map (\(k, v) ->
+                      Elem (Element (unqual "attr")
+                               [Attr (unqual "name") (Text.unpack k)]
+                               [Elem v] Nothing))
+                 (sortBy (comparing fst) $ M.toList s)) Nothing
+
+        NVClosureF p _    -> Element (unqual "function") [] (paramsXML p) Nothing
+        NVPathF fp        -> mkElem "path" "value" fp
+        NVBuiltinF name _ -> mkElem "function" "name" name
 
 mkElem :: String -> String -> String -> Element
 mkElem n a v = Element (unqual n) [Attr (unqual a) v] [] Nothing

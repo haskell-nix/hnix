@@ -136,8 +136,7 @@ data NExprF r
   | NAssert !r !r
   -- ^ Assert that the first returns true before evaluating the second.
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
-            Foldable, Traversable, Show, NFData,
-            Hashable)
+            Foldable, Traversable, Show, NFData, Hashable)
 
 #if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 NExprF
@@ -187,8 +186,7 @@ data Binding r
   --   first name, whether that be the first argument to this constructor, or
   --   the first member of the list in the second argument.
   deriving (Generic, Generic1, Typeable, Data, Ord, Eq, Functor,
-            Foldable, Traversable, Show, NFData,
-            Hashable)
+            Foldable, Traversable, Show, NFData, Hashable)
 
 #if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 Binding
@@ -312,8 +310,7 @@ instance IsString (NString r) where
 data NKeyName r
   = DynamicKey !(Antiquoted (NString r) r)
   | StaticKey !VarName
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
-            Hashable)
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData, Hashable)
 
 #ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (NKeyName r)

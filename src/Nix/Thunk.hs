@@ -1,7 +1,8 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE CPP #-}
 
 #if ENABLE_TRACING
 {-# LANGUAGE BangPatterns #-}
@@ -10,12 +11,13 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Nix.Thunk where
 
-import Control.Exception
+import Control.Exception hiding (catch)
 import Control.Monad.Catch
 import Data.Typeable
 
@@ -34,6 +36,7 @@ data Deferred m v = Deferred (m v) | Computed v
 
 class Monad m => MonadVar m where
     type Var m :: * -> *
+    eqVar :: Var m a -> Var m a -> Bool
     newVar :: a -> m (Var m a)
     readVar :: Var m a -> m a
     writeVar :: Var m a -> a -> m ()
@@ -66,7 +69,8 @@ buildThunk action =
 #endif
         <$> newVar False <*> newVar (Deferred action)
 
-forceThunk :: (MonadVar m, MonadThrow m) => Thunk m v -> (v -> m a) -> m a
+forceThunk :: (MonadVar m, MonadThrow m, MonadCatch m)
+           => Thunk m v -> (v -> m a) -> m a
 forceThunk (Value ref) k = k ref
 #if ENABLE_TRACING
 forceThunk (Thunk n active ref) k = do
@@ -89,9 +93,11 @@ forceThunk (Thunk _ active ref) k = do
 #if ENABLE_TRACING
                     traceM $ "Forcing " ++ show n
 #endif
-                    v <- action
-                    writeVar ref (Computed v)
+                    v <- catch action $ \(e :: SomeException) -> do
+                        _ <- atomicModifyVar active (False,)
+                        throwM e
                     _ <- atomicModifyVar active (False,)
+                    writeVar ref (Computed v)
                     k v
 
 forceEffects :: MonadVar m => Thunk m v -> (v -> m a) -> m a

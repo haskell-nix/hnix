@@ -21,7 +21,7 @@
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
-module Nix.Builtins (builtins) where
+module Nix.Builtins (withNixContext, builtins) where
 
 import           Control.Monad
 import           Control.Monad.Catch
@@ -49,11 +49,11 @@ import qualified Data.Aeson as A
 import qualified Data.Aeson.Encoding as A
 import           Data.Align (alignWith)
 import           Data.Array
+import           Data.Bits
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
-import           Data.Coerce
 import           Data.Fix
 import           Data.Foldable (foldrM)
 import qualified Data.HashMap.Lazy as M
@@ -70,7 +70,7 @@ import qualified Data.Text.Lazy as LazyText
 import qualified Data.Text.Lazy.Builder as Builder
 import           Data.These (fromThese)
 import qualified Data.Time.Clock.POSIX as Time
-import           Data.Traversable (mapM)
+import           Data.Traversable (for, mapM)
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Effects
@@ -92,6 +92,23 @@ import           Nix.XML
 import           System.FilePath
 import           System.Posix.Files
 import           Text.Regex.TDFA
+
+-- | Evaluate a nix expression in the default context
+withNixContext :: forall e m r. (MonadNix e m, Has e Options)
+               => Maybe FilePath -> m r -> m r
+withNixContext mpath action = do
+    base <- builtins
+    opts :: Options <- asks (view hasLens)
+    let i = value @(NValue m) @(NThunk m) @m $ nvList $
+            map (value @(NValue m) @(NThunk m) @m
+                     . nvStr . makeNixStringWithoutContext . Text.pack) (include opts)
+    pushScope (M.singleton "__includes" i) $
+        pushScopes base $ case mpath of
+            Nothing -> action
+            Just path -> do
+                traceM $ "Setting __cur_file = " ++ show path
+                let ref = value @(NValue m) @(NThunk m) @m $ nvPath path
+                pushScope (M.singleton "__cur_file" ref) action
 
 builtins :: (MonadNix e m, Scoped e (NThunk m) m)
          => m (Scopes m (NThunk m))
@@ -132,11 +149,15 @@ builtinsList = sequence [
     , add0 Normal   "nixPath"                    nixPath
     , add  TopLevel "abort"                      throw_ -- for now
     , add2 Normal   "add"                        add_
+    , add2 Normal   "addErrorContext"            addErrorContext
     , add2 Normal   "all"                        all_
     , add2 Normal   "any"                        any_
     , add  Normal   "attrNames"                  attrNames
     , add  Normal   "attrValues"                 attrValues
     , add  TopLevel "baseNameOf"                 baseNameOf
+    , add2 Normal   "bitAnd"                     bitAnd
+    , add2 Normal   "bitOr"                      bitOr
+    , add2 Normal   "bitXor"                     bitXor
     , add2 Normal   "catAttrs"                   catAttrs
     , add2 Normal   "compareVersions"            compareVersions_
     , add  Normal   "concatLists"                concatLists
@@ -214,6 +235,7 @@ builtinsList = sequence [
     , add2 Normal   "lessThan"                   lessThan
     , add  Normal   "listToAttrs"                listToAttrs
     , add2 TopLevel "map"                        map_
+    , add2 TopLevel "mapAttrs"                   mapAttrs_
     , add2 Normal   "match"                      match_
     , add2 Normal   "mul"                        mul_
     , add0 Normal   "null"                       (return $ nvConstant NNull)
@@ -272,32 +294,37 @@ builtinsList = sequence [
 -- Primops
 
 foldNixPath :: forall e m r. MonadNix e m
-            => (FilePath -> Maybe String -> r -> m r) -> r -> m r
+            => (FilePath -> Maybe String -> NixPathEntryType -> r -> m r) -> r -> m r
 foldNixPath f z = do
     mres <- lookupVar @_ @(NThunk m) "__includes"
     dirs <- case mres of
         Nothing -> return []
         Just v  -> fromNix @[Text] v
     menv <- getEnvVar "NIX_PATH"
-    foldrM go z $ dirs ++ case menv of
+    foldrM go z $ map fromInclude dirs ++ case menv of
         Nothing -> []
-        Just str -> Text.splitOn ":" (Text.pack str)
+        Just str -> uriAwareSplit (Text.pack str)
   where
-    go x rest = case Text.splitOn "=" x of
-        [p]    -> f (Text.unpack p) Nothing rest
-        [n, p] -> f (Text.unpack p) (Just (Text.unpack n)) rest
+    fromInclude x
+        | "://" `Text.isInfixOf` x = (x, PathEntryURI)
+        | otherwise = (x, PathEntryPath)
+    go (x, ty) rest = case Text.splitOn "=" x of
+        [p]    -> f (Text.unpack p) Nothing ty rest
+        [n, p] -> f (Text.unpack p) (Just (Text.unpack n)) ty rest
         _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " ++ show x
 
 nixPath :: MonadNix e m => m (NValue m)
-nixPath = fmap nvList $ flip foldNixPath [] $ \p mn rest ->
+nixPath = fmap nvList $ flip foldNixPath [] $ \p mn ty rest ->
     pure $ valueThunk
         (flip nvSet mempty $ M.fromList
-            [ ("path",   valueThunk $ nvPath p)
+            [ case ty of
+                PathEntryPath -> ("path", valueThunk $ nvPath p)
+                PathEntryURI ->  ("uri",  valueThunk $ nvStr (makeNixStringWithoutContext (Text.pack p)))
             , ("prefix", valueThunk $
                    nvStr (makeNixStringWithoutContext $ Text.pack (fromMaybe "" mn))) ]) : rest
 
 toString :: MonadNix e m => m (NValue m) -> m (NValue m)
-toString str = str >>= coerceToString False >>= toNix . Text.pack
+toString str = str >>= coerceToString False True >>= toNix . Text.pack
 
 hasAttr :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 hasAttr x y =
@@ -313,7 +340,7 @@ attrsetGet k s = case M.lookup k s of
 
 hasContext :: MonadNix e m => m (NValue m) -> m (NValue m)
 hasContext =
-    toNix . not . null . stringContextOnly  <=< fromValue
+    toNix . hackyStringHasContext <=< fromValue
 
 getAttr :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 getAttr x y =
@@ -324,7 +351,7 @@ getAttr x y =
 unsafeGetAttrPos :: forall e m. MonadNix e m
                  => m (NValue m) -> m (NValue m) -> m (NValue m)
 unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
-    (NVStr ns, NVSet _ apos) -> case M.lookup (stringIntentionallyDropContext ns) apos of
+    (NVStr ns, NVSet _ apos) -> case M.lookup (hackyStringIgnoreContext ns) apos of
         Nothing -> pure $ nvConstant NNull
         Just delta -> toValue delta
     (x, y) -> throwError $ ErrorCall $ "Invalid types for builtins.unsafeGetAttrPos: "
@@ -549,6 +576,17 @@ map_ fun xs = fun >>= \f ->
                               . (f `callFunc`) . force')
           <=< fromValue @[NThunk m] $ xs
 
+mapAttrs_ :: forall e m. MonadNix e m
+     => m (NValue m) -> m (NValue m) -> m (NValue m)
+mapAttrs_ fun xs = fun >>= \f ->
+    fromValue @(AttrSet (NThunk m)) xs >>= \aset -> do
+        let pairs = M.toList aset
+        values <- for pairs $ \(key, value) ->
+            thunk $
+            withFrame Debug (ErrorCall "While applying f in mapAttrs:\n") $
+            callFunc ?? force' value =<< callFunc f (pure (nvStr (makeNixStringWithoutContext key)))
+        toNix . M.fromList . zip (map fst pairs) $ values
+
 filter_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 filter_ fun xs = fun >>= \f ->
     toNix <=< filterM (fromValue <=< callFunc f . force')
@@ -567,6 +605,21 @@ baseNameOf x = x >>= \case
     NVPath path -> pure $ nvPath $ takeFileName path
     v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
 
+bitAnd :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+bitAnd x y =
+    fromValue @Integer x >>= \a ->
+    fromValue @Integer y >>= \b -> toNix (a .&. b)
+
+bitOr :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+bitOr x y =
+    fromValue @Integer x >>= \a ->
+    fromValue @Integer y >>= \b -> toNix (a .|. b)
+
+bitXor :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+bitXor x y =
+    fromValue @Integer x >>= \a ->
+    fromValue @Integer y >>= \b -> toNix (a `xor` b)
+
 dirOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 dirOf x = x >>= \case
     NVStr ns -> pure $ nvStr (modifyNixContents (Text.pack . takeDirectory . Text.unpack) ns)
@@ -583,7 +636,7 @@ seq_ a b = a >> b
 deepSeq :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 deepSeq a b = do
     -- We evaluate 'a' only for its effects, so data cycles are ignored.
-    _ <- normalFormBy (forceEffects . coerce . _baseThunk) 0 =<< a
+    normalForm_ =<< a
 
     -- Then we evaluate the other argument to deepseq, thus this function
     -- should always produce a result (unlike applying 'deepseq' on infinitely
@@ -723,7 +776,7 @@ toPath = fromValue @Path >=> toNix @Path
 pathExists_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 pathExists_ path = path >>= \case
     NVPath p  -> toNix =<< pathExists p
-    NVStr ns -> toNix =<< pathExists (Text.unpack (stringIntentionallyDropContext ns))
+    NVStr ns -> toNix =<< pathExists (Text.unpack (hackyStringIgnoreContext ns))
     v -> throwError $ ErrorCall $
             "builtins.pathExists: expected path, got " ++ show v
 
@@ -760,14 +813,27 @@ isFunction func = func >>= \case
 throw_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 throw_ = fromValue >=> throwError . ErrorCall . Text.unpack
 
-import_ :: MonadNix e m => m (NValue m) -> m (NValue m)
-import_ = fromValue >=> importPath M.empty . getPath
+import_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
+import_ = scopedImport (pure (nvSet M.empty M.empty))
 
 scopedImport :: forall e m. MonadNix e m
              => m (NValue m) -> m (NValue m) -> m (NValue m)
-scopedImport aset path =
-    fromValue aset >>= \s ->
-    fromValue   path >>= \p -> importPath @m s (getPath p)
+scopedImport asetArg pathArg =
+    fromValue @(AttrSet (NThunk m)) asetArg >>= \s ->
+    fromValue pathArg >>= \(Path p) -> do
+        path  <- pathToDefaultNix p
+        mres  <- lookupVar @_ @(NThunk m) "__cur_file"
+        path' <- case mres of
+            Nothing  -> do
+                traceM "No known current directory"
+                return path
+            Just p -> fromValue @_ @_ @(NThunk m) p >>= \(Path p') -> do
+                traceM $ "Current file being evaluated is: " ++ show p'
+                return $ takeDirectory p' </> path
+        clearScopes @(NThunk m) $
+            withNixContext (Just path') $
+                pushScope s $
+                    importPath @m path'
 
 getEnv_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 getEnv_ = fromValue >=> \s -> do
@@ -802,7 +868,7 @@ lessThan ta tb = ta >>= \va -> tb >>= \vb -> do
             (NInt   a, NFloat b) -> pure $ fromInteger a < b
             (NFloat a, NFloat b) -> pure $ a < b
             _ -> badType
-        (NVStr a, NVStr b) -> pure $ stringIntentionallyDropContext a < stringIntentionallyDropContext b
+        (NVStr a, NVStr b) -> pure $ hackyStringIgnoreContext a < hackyStringIgnoreContext b
         _ -> badType
 
 concatLists :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
@@ -856,7 +922,7 @@ placeHolder = fromValue @Text >=> \_ -> do
 absolutePathFromValue :: MonadNix e m => NValue m -> m FilePath
 absolutePathFromValue = \case
     NVStr ns -> do
-        let path = Text.unpack $ stringIntentionallyDropContext ns
+        let path = Text.unpack $ hackyStringIgnoreContext ns
         unless (isAbsolute path) $
             throwError $ ErrorCall $ "string " ++ show path ++ " doesn't represent an absolute path"
         pure path
@@ -874,7 +940,7 @@ findFile_ aset filePath =
     filePath >>= \filePath' ->
     case (aset', filePath') of
       (NVList x, NVStr ns) -> do
-          mres <- findPath x (Text.unpack (stringIntentionallyDropContext ns))
+          mres <- findPath x (Text.unpack (hackyStringIgnoreContext ns))
           pure $ nvPath mres
       (NVList _, y)  -> throwError $ ErrorCall $ "expected a string, got " ++ show y
       (x, NVStr _) -> throwError $ ErrorCall $ "expected a list, got " ++ show x
@@ -953,48 +1019,15 @@ trace_ msg action = do
   traceEffect . Text.unpack =<< fromValue @Text msg
   action
 
+-- TODO: remember error context
+addErrorContext :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+addErrorContext _ action = action
+
 exec_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 exec_ xs = do
   ls <- fromValue @[NThunk m] xs
   xs <- traverse (fromValue @Text . force') ls
   exec (map Text.unpack xs)
-
-fetchTarball :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
-fetchTarball v = v >>= \case
-    NVSet s _ -> case M.lookup "url" s of
-        Nothing -> throwError $ ErrorCall
-                      "builtins.fetchTarball: Missing url attribute"
-        Just url -> force url $ go (M.lookup "sha256" s)
-    v@NVStr {} -> go Nothing v
-    v -> throwError $ ErrorCall $
-            "builtins.fetchTarball: Expected URI or set, got " ++ show v
- where
-    go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
-    go msha = \case
-        NVStr ns -> fetch (stringIntentionallyDropContext ns) msha
-        v -> throwError $ ErrorCall $
-                "builtins.fetchTarball: Expected URI or string, got " ++ show v
-
-{- jww (2018-04-11): This should be written using pipes in another module
-    fetch :: Text -> Maybe (NThunk m) -> m (NValue m)
-    fetch uri msha = case takeExtension (Text.unpack uri) of
-        ".tgz" -> undefined
-        ".gz"  -> undefined
-        ".bz2" -> undefined
-        ".xz"  -> undefined
-        ".tar" -> undefined
-        ext -> throwError $ ErrorCall $ "builtins.fetchTarball: Unsupported extension '"
-                  ++ ext ++ "'"
--}
-
-    fetch :: Text -> Maybe (NThunk m) -> m (NValue m)
-    fetch uri Nothing =
-        nixInstantiateExpr $ "builtins.fetchTarball \"" ++
-            Text.unpack uri ++ "\""
-    fetch url (Just m) = fromValue m >>= \sha ->
-        nixInstantiateExpr $ "builtins.fetchTarball { "
-          ++ "url    = \"" ++ Text.unpack url ++ "\"; "
-          ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"
 
 fetchurl :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 fetchurl v = v >>= \case
@@ -1005,7 +1038,7 @@ fetchurl v = v >>= \case
  where
     go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
     go _msha = \case
-        NVStr ns -> getURL (stringIntentionallyDropContext ns) -- msha
+        NVStr ns -> getURL (hackyStringIgnoreContext ns) -- msha
         v -> throwError $ ErrorCall $
                  "builtins.fetchurl: Expected URI or string, got " ++ show v
 

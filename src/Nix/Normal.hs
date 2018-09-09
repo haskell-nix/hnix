@@ -13,13 +13,18 @@
 module Nix.Normal where
 
 import           Control.Monad
-import           Data.Fix
+import           Control.Monad.Free
+import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.State
 import qualified Data.HashMap.Lazy as M
+import           Data.List (find)
+import           Data.Maybe (isJust)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Effects
 import           Nix.Frames
+-- import           Nix.Pretty
 import           Nix.NixString
 import           Nix.Thunk
 import           Nix.Utils
@@ -32,53 +37,88 @@ instance Typeable m => Exception (NormalLoop m)
 
 normalFormBy
     :: forall e m. (Framed e m, MonadVar m, Typeable m)
-    => (forall r. NThunk m -> (NValue m -> m r) -> m r)
+    => (forall r. NThunk m -> (NValue m -> StateT [Var m Bool] m r)
+         -> StateT [Var m Bool] m r)
     -> Int
     -> NValue m
-    -> m (NValueNF m)
-normalFormBy k n v = do
-    when (n > 2000) $ throwError $ NormalLoop v
-    case v of
-        NVConstant a     -> return $ Fix $ NVConstantF a
-        NVStr ns         -> return $ Fix $ NVStrF ns
-        NVList l         ->
-            fmap (Fix . NVListF) $ forM (zip [0..] l) $ \(i :: Int, t) -> do
-                traceM $ replicate n ' ' ++ "normalFormBy: List[" ++ show i ++ "]"
-                t `k` normalFormBy k (succ n)
-        NVSet s p        ->
-            fmap (Fix . flip NVSetF p) $ sequence $ flip M.mapWithKey s $ \ky t -> do
-                traceM $ replicate n ' ' ++ "normalFormBy: Set{" ++ show ky ++ "}"
-                t `k` normalFormBy k (succ n)
-        NVClosure p f    -> return $ Fix $ NVClosureF p f
-        NVPath fp        -> return $ Fix $ NVPathF fp
-        NVBuiltin name f -> return $ Fix $ NVBuiltinF name f
-        _ -> error "Pattern synonyms mask complete matches"
+    -> StateT [Var m Bool] m (NValueNF m)
+normalFormBy k n v = case v of
+    NVConstant a     -> return $ Free $ NVConstantF a
+    NVStr ns         -> return $ Free $ NVStrF ns
+    NVList l         ->
+        fmap (Free . NVListF) $ forM (zip [0..] l) $ \(i :: Int, t) -> do
+            traceM $ show n ++ ": normalFormBy: List[" ++ show i ++ "]"
+            k t (next t)
+    NVSet s p        ->
+        fmap (Free . flip NVSetF p) $ sequence $ flip M.mapWithKey s $ \ky t -> do
+            traceM $ show n ++ ": normalFormBy: Set{" ++ show ky ++ "}"
+            k t (next t)
+    NVClosure p f    -> return $ Free $ NVClosureF p f
+    NVPath fp        -> return $ Free $ NVPathF fp
+    NVBuiltin name f -> return $ Free $ NVBuiltinF name f
+    _ -> error "Pattern synonyms mask complete matches"
+  where
+    next t val = do
+        b <- seen t
+        if b
+            then return $ Pure val
+            else normalFormBy k (succ n) val
 
-normalForm :: (Framed e m, MonadVar m, Typeable m,
+    seen (NThunk _ (Thunk _ b _)) = do
+        res <- gets (isJust . find (eqVar @m b))
+        unless res $
+            modify (b:)
+        return res
+    seen _ = pure False
+
+normalForm' :: forall e m. (Framed e m, MonadVar m, Typeable m,
+               MonadThunk (NValue m) (NThunk m) m)
+            => (forall r. NThunk m -> (NValue m -> m r) -> m r)
+            -> NValue m -> m (NValueNF m)
+normalForm' f = flip evalStateT mempty . normalFormBy go 0
+  where
+    go :: NThunk m
+       -> (NValue m -> StateT [Var m Bool] m r)
+       -> StateT [Var m Bool] m r
+    go t k = do
+        s <- get
+        (res, s') <- lift $ f t $ \v -> runStateT (k v) s
+        put s'
+        return res
+
+normalForm :: forall e m. (Framed e m, MonadVar m, Typeable m,
               MonadThunk (NValue m) (NThunk m) m)
            => NValue m -> m (NValueNF m)
-normalForm = normalFormBy force 0
+normalForm = normalForm' force
+
+normalForm_
+    :: forall e m. (Framed e m, MonadVar m, Typeable m,
+              MonadThunk (NValue m) (NThunk m) m)
+    => NValue m -> m ()
+normalForm_ = void . normalForm' (forceEffects . _baseThunk)
 
 embed :: forall m. (MonadThunk (NValue m) (NThunk m) m)
       => NValueNF m -> m (NValue m)
-embed (Fix x) = case x of
-    NVConstantF a     -> return $ nvConstant a
-    NVStrF ns  -> return $ nvStr ns
-    NVListF l         -> nvList . fmap (value @_ @_ @m)
-        <$> traverse embed l
-    NVSetF s p        -> flip nvSet p . fmap (value @_ @_ @m)
-        <$> traverse embed s
-    NVClosureF p f    -> return $ nvClosure p f
-    NVPathF fp        -> return $ nvPath fp
-    NVBuiltinF name f -> return $ nvBuiltin name f
+embed (Pure v) = return v
+embed (Free x) = case x of
+    NVConstantF a  -> return $ nvConstant a
+    NVStrF ns      -> return $ nvStr ns
+    NVListF l      -> nvList       . fmap (value @_ @_ @m) <$> traverse embed l
+    NVSetF s p     -> flip nvSet p . fmap (value @_ @_ @m) <$> traverse embed s
+    NVClosureF p f -> return $ nvClosure p f
+    NVPathF fp     -> return $ nvPath fp
+    NVBuiltinF n f -> return $ nvBuiltin n f
 
 valueText :: forall e m. (Framed e m, MonadEffects m, Typeable m)
           => Bool -> NValueNF m -> m NixString
-valueText addPathsToStore = cata phi
+valueText addPathsToStore = iter phi . check
   where
+    check :: NValueNF m -> Free (NValueF m) (m NixString)
+    check = fmap (const $ pure (makeNixStringWithoutContext "<CYCLE>"))
+
     phi :: NValueF m (m NixString) -> m NixString
     phi (NVConstantF a) = pure (makeNixStringWithoutContext (atomText a))
-    phi (NVStrF ns) = pure ns
+    phi (NVStrF ns)     = pure ns
     phi v@(NVListF _)   = coercionFailed v
     phi v@(NVSetF s _)
       | Just asString <- M.lookup "__asString" s = asString
@@ -96,4 +136,4 @@ valueText addPathsToStore = cata phi
 
 valueTextNoContext :: (Framed e m, MonadEffects m, Typeable m)
                    => Bool -> NValueNF m -> m Text
-valueTextNoContext addPathsToStore = fmap stringIntentionallyDropContext . valueText addPathsToStore
+valueTextNoContext addPathsToStore = fmap hackyStringIgnoreContext . valueText addPathsToStore

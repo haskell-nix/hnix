@@ -2,7 +2,6 @@ module Nix.Effects where
 
 import Data.Text (Text)
 import Nix.Render
-import Nix.Utils
 import Nix.Value
 import System.Posix.Files
 
@@ -24,7 +23,8 @@ class MonadFile m => MonadEffects m where
     findPath :: [NThunk m] -> FilePath -> m FilePath
 
     pathExists :: FilePath -> m Bool
-    importPath :: AttrSet (NThunk m) -> FilePath -> m (NValue m)
+    importPath :: FilePath -> m (NValue m)
+    pathToDefaultNix :: FilePath -> m FilePath
 
     getEnvVar :: String -> m (Maybe String)
     getCurrentSystemOS :: m Text
