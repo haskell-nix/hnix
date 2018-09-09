@@ -103,6 +103,7 @@ library:
     - binary
     - deriving-compat           >= 0.3   && < 0.6
     - directory
+    - free
     - http-types
     - http-client
     - http-client-tls

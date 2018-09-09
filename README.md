@@ -89,6 +89,14 @@ $ NIX_CONF_DIR=$PWD/ghcjs nix-build ghcjs
 This will build an `hnix` library that can be linked to your GHCJS
 application.
 
+## Using the Cachix binary cache
+
+If you're on macOS, you can use the binary cache at Cachix to avoid building
+the specific dependencies used by hnix. Just use these commands:
+
+    nix-env -iA cachix -f https://github.com/NixOS/nixpkgs/tarball/db557aab7b690f5e0e3348459f2e4dc8fd0d9298
+    cachix use hnix
+
 ## How you can help
 
 If you're looking for a way to help out, try taking a look

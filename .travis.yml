@@ -1,19 +1,19 @@
+os:
+  - linux
+  - osx
+
 language: nix
 
-# sudo: false
-
-# cache:
-#   directories:
-#     - /nix
-#   timeout: 100000
+sudo: required
 
 git:
   depth: 1
 
 env:
   global:
-    - NIXPKGS_TESTS=yes
-    - MATCHING_TESTS=yes
+    - ALL_TESTS=yes
+    - secure: "dm6I+M4+V+C7QMTpcSADdKPE633SvmToXZrTbZ7miNDGmMN+/SfHeN2ybi1+PW6oViMlbPN/7J/aEfiGjSJI8vLk72Y4uCWGmpSb8TXZLu6+whnxtZzzW8+z4tsM4048QJg7CF3N/25U8thRFgs3DqUub1Sf3nG9LrNWdz6ZcDQ="
+
   matrix:
     - GHCVERSION=ghc802 STRICT=false TRACING=false
     - GHCVERSION=ghc802 STRICT=false TRACING=true
@@ -26,11 +26,20 @@ env:
 matrix:
   allow_failures:
     - env: GHCVERSION=ghcjs
-  exclude:
-    - env: GHCVERSION=ghc822 STRICT=false
+    - env: GHCVERSION=ghc802 STRICT=false TRACING=false
+    - env: GHCVERSION=ghc802 STRICT=false TRACING=true
+
+before_script:
+  - sudo mount -o remount,exec,size=4G,mode=755 /run/user || true
+  - sudo mkdir -p /etc/nix
+  - echo "trusted-users = root $USER" | sudo tee -a /etc/nix/nix.conf
+  - sudo launchctl kickstart -k system/org.nixos.nix-daemon || true
 
 script:
-  - bash -xe build.sh
+  - nix-env -iA cachix -f https://github.com/NixOS/nixpkgs/tarball/db557aab7b690f5e0e3348459f2e4dc8fd0d9298
+  - cachix use hnix
+  - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push hnix --watch-store& fi
+  - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then ./build.sh | cachix push hnix; else ./build.sh; fi
 
 branches:
   only:
