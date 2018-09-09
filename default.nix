@@ -4,8 +4,8 @@
 , doTracing   ? false
 , doStrict    ? false
 
-, rev     ? "49bdae006e66e70ad3245a463edc01b5749250d3"
-, sha256  ? "1ijsifmap47nfzg0spny94lmj66y3x3x8i6vs471bnjamka3dx8p"
+, rev     ? "d1ae60cbad7a49874310de91cd17708b042400c8"
+, sha256  ? "0a1w4702jlycg2ab87m7n8frjjngf0cis40lyxm3vdwn7p4fxikz"
 , pkgs    ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
     then abort "hnix requires at least nix 2.0"
@@ -19,13 +19,15 @@
 , mkDerivation ? null
 }:
 
-let haskellPackages = pkgs.haskell.packages.${compiler};
+let
 
-in haskellPackages.developPackage {
+haskellPackages = pkgs.haskell.packages.${compiler};
+
+drv = haskellPackages.developPackage {
   root = ./.;
 
   overrides = with pkgs.haskell.lib; self: super: {
-    megaparsec = super.megaparsec_6_5_0;
+    mono-traversable = dontCheck super.mono-traversable;
   }
   //
   (if compiler == "ghc802"
@@ -60,11 +62,16 @@ in haskellPackages.developPackage {
     then {
       lens-family-core = "1.2.1";
       lens-family = "1.2.1";
-      hspec-discover = "2.5.5";
     }
     else {};
 
   modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
+    buildTools = (attrs.buildTools or []) ++ [
+      pkgs.haskell.packages.${compiler}.cabal-install
+    ];
+
+    enableLibraryProfiling = false;
+
     testHaskellDepends = attrs.testHaskellDepends ++
       [ pkgs.nix
 
@@ -85,4 +92,6 @@ in haskellPackages.developPackage {
   });
 
   inherit returnShellEnv;
-}
+};
+
+in drv
