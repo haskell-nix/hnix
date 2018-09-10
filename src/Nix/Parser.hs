@@ -15,6 +15,7 @@ module Nix.Parser
     , parseNixText
     , parseNixTextLoc
     , parseFromFileEx
+    , Parser
     , parseFromText
     , Result(..)
     , reservedNames
@@ -25,6 +26,22 @@ module Nix.Parser
     , getUnaryOperator
     , getBinaryOperator
     , getSpecialOperator
+
+    , nixToplevelForm
+    , nixExpr
+    , nixSet
+    , nixBinders
+    , nixSelector
+
+    , nixSym
+    , nixPath
+    , nixString
+    , nixUri
+    , nixSearchPath
+    , nixFloat
+    , nixInt
+    , nixBool
+    , nixNull
     ) where
 
 import           Control.Applicative hiding (many, some)
