@@ -61,8 +61,8 @@ infixl 3 <+>
 
 --------------------------------------------------------------------------------
 
-nixExprLoc :: Parser NExprLoc
-nixExprLoc = makeExprParser nixTerm $ map (map snd) (nixOperators nixSelector)
+nixExpr :: Parser NExprLoc
+nixExpr = makeExprParser nixTerm $ map (map snd) (nixOperators nixSelector)
 
 antiStart :: Parser Text
 antiStart = symbol "${" <?> show ("${" :: String)
@@ -113,10 +113,10 @@ nixTerm = do
         '('  -> nixSelect nixParens
         '{'  -> nixSelect nixSet
         '['  -> nixList
-        '<'  -> nixSPath
+        '<'  -> nixSearchPath
         '/'  -> nixPath
-        '"'  -> nixStringExpr
-        '\'' -> nixStringExpr
+        '"'  -> nixString
+        '\'' -> nixString
         _    -> msum $
             [ nixSelect nixSet | c == 'r' ] ++
             [ nixPath | pathChar c ] ++
@@ -129,7 +129,7 @@ nixTerm = do
                  [ nixSelect nixSym ]
 
 nixToplevelForm :: Parser NExprLoc
-nixToplevelForm = keywords <+> nixLambda <+> nixExprLoc
+nixToplevelForm = keywords <+> nixLambda <+> nixExpr
   where
     keywords = nixLet <+> nixIf <+> nixAssert <+> nixWith
 
@@ -165,8 +165,8 @@ slash = try (char '/' <* notFollowedBy (satisfy (\x -> x == '/' || x == '*' || i
 
 -- | A path surrounded by angle brackets, indicating that it should be
 -- looked up in the NIX_PATH environment variable at evaluation.
-nixSPath :: Parser NExprLoc
-nixSPath = annotateLocation1
+nixSearchPath :: Parser NExprLoc
+nixSearchPath = annotateLocation1
     (mkPathF True <$> try (char '<' *> many (satisfy pathChar <+> slash) <* symbol ">")
          <?> "spath")
 
@@ -192,14 +192,14 @@ nixLet = annotateLocation1 (reserved "let"
 
 nixIf :: Parser NExprLoc
 nixIf = annotateLocation1 (NIf
-     <$> (reserved "if" *> nixExprLoc)
+     <$> (reserved "if" *> nixExpr)
      <*> (reserved "then" *> nixToplevelForm)
      <*> (reserved "else" *> nixToplevelForm)
      <?> "if")
 
 nixAssert :: Parser NExprLoc
 nixAssert = annotateLocation1 (NAssert
-  <$> (reserved "assert" *> nixExprLoc)
+  <$> (reserved "assert" *> nixExpr)
   <*> (semi *> nixToplevelForm)
   <?> "assert")
 
@@ -212,8 +212,8 @@ nixWith = annotateLocation1 (NWith
 nixLambda :: Parser NExprLoc
 nixLambda = nAbs <$> annotateLocation (try argExpr) <*> nixToplevelForm
 
-nixStringExpr :: Parser NExprLoc
-nixStringExpr = nStr <$> annotateLocation nixString
+nixString :: Parser NExprLoc
+nixString = nStr <$> annotateLocation nixString'
 
 nixUri :: Parser NExprLoc
 nixUri = annotateLocation1 $ lexeme $ try $ do
@@ -226,8 +226,8 @@ nixUri = annotateLocation1 $ lexeme $ try $ do
     return $ NStr $
         DoubleQuoted [Plain $ pack $ start : protocol ++ ':' : address]
 
-nixString :: Parser (NString NExprLoc)
-nixString = lexeme (doubleQuoted <+> indented <?> "string")
+nixString' :: Parser (NString NExprLoc)
+nixString' = lexeme (doubleQuoted <+> indented <?> "string")
   where
     doubleQuoted :: Parser (NString NExprLoc)
     doubleQuoted = DoubleQuoted . removePlainEmpty . mergePlain
@@ -331,7 +331,7 @@ nixBinders = (inherit <+> namedVar) `endBy` semi where
 keyName :: Parser (NKeyName NExprLoc)
 keyName = dynamicKey <+> staticKey where
   staticKey = StaticKey <$> identifier
-  dynamicKey = DynamicKey <$> nixAntiquoted nixString
+  dynamicKey = DynamicKey <$> nixAntiquoted nixString'
 
 nixSet :: Parser NExprLoc
 nixSet = annotateLocation1 ((isRec <*> braces nixBinders) <?> "set") where
