@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFunctor      #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -417,7 +418,7 @@ reservedNames = HashSet.fromList
 
 type Parser = ParsecT Void Text Identity
 
-data Result a = Success a | Failure Doc deriving Show
+data Result a = Success a | Failure Doc deriving (Show, Functor)
 
 parseFromFileEx :: MonadIO m => Parser a -> FilePath -> m (Result a)
 parseFromFileEx p path = do
