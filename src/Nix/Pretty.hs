@@ -317,6 +317,8 @@ dethunk = \case
             then pure $ Free $ NVStrF "<thunk>" mempty
             else do
                 eres <- readVar ref
-                case eres of
+                res <- case eres of
                     Computed v -> removeEffectsM (_baseValue v)
                     _ -> pure $ Free $ NVStrF "<thunk>" mempty
+                _ <- atomicModifyVar active (False,)
+                return res
