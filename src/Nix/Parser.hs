@@ -42,6 +42,8 @@ module Nix.Parser
     , nixInt
     , nixBool
     , nixNull
+    , symbol
+    , whiteSpace
     ) where
 
 import           Control.Applicative hiding (many, some)
