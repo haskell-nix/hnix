@@ -82,7 +82,7 @@ import           Nix.Frames
 import           Nix.NixString
 import           Nix.Normal
 import           Nix.Options
-import           Nix.Parser
+import           Nix.Parser hiding (nixPath)
 import           Nix.Render
 import           Nix.Scope
 import           Nix.Thunk

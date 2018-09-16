@@ -318,6 +318,8 @@ dethunk = \case
             then pure $ Free $ NVStrF (hackyMakeNixStringWithoutContext "<thunk>")
             else do
                 eres <- readVar ref
-                case eres of
+                res <- case eres of
                     Computed v -> removeEffectsM (_baseValue v)
                     _ -> pure $ Free $ NVStrF (hackyMakeNixStringWithoutContext "<thunk>")
+                _ <- atomicModifyVar active (False,)
+                return res
