@@ -6,6 +6,8 @@ module Nix.NixString (
   , hackyStringIgnoreContext
   , hackyMakeNixStringWithoutContext
   , hackyModifyNixContents
+  , hackyStringMappend
+  , hackyStringMConcat
 ) where
 
 import qualified Data.HashSet as S
@@ -14,7 +16,7 @@ import           Data.Text (Text)
 import           GHC.Generics
 import           Data.Semigroup
 
-{-# WARNING hackyStringIgnoreContextMaybe, hackyStringIgnoreContext, hackyMakeNixStringWithoutContext, hackyModifyNixContents "This NixString function needs to be replaced" #-}
+{-# WARNING hackyStringMappend, hackyStringMConcat, hackyStringIgnoreContextMaybe, hackyStringIgnoreContext, hackyMakeNixStringWithoutContext, hackyModifyNixContents "This NixString function needs to be replaced" #-}
 
 -- | A 'ContextFlavor' describes the sum of possible derivations for string contexts
 data ContextFlavor = 
@@ -39,12 +41,20 @@ data NixString = NixString
 
 instance Hashable NixString
 
-instance Semigroup NixString where
-  NixString s1 t1 <> NixString s2 t2 = NixString (s1 <> s2) (t1 <> t2)
+-- | Combine two NixStrings using mappend 
+hackyStringMappend :: NixString -> NixString -> NixString
+hackyStringMappend (NixString s1 t1) (NixString s2 t2) = NixString (s1 <> s2) (t1 <> t2)
 
-instance Monoid NixString where
-  mempty = NixString mempty mempty
-  mappend = (<>)
+-- | Combine NixStrings using mconcat 
+hackyStringMConcat :: [NixString] -> NixString
+hackyStringMConcat = foldr hackyStringMappend (NixString mempty mempty) 
+
+--instance Semigroup NixString where
+  --NixString s1 t1 <> NixString s2 t2 = NixString (s1 <> s2) (t1 <> t2)
+
+--instance Monoid NixString where
+--  mempty = NixString mempty mempty
+--  mappend = (<>)
 
 -- | Extract the string contents from a NixString that has no context 
 hackyStringIgnoreContextMaybe :: NixString -> Maybe Text
