@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 module Nix.NixString (
     NixString
   , stringHasContext

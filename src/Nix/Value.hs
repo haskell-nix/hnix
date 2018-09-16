@@ -38,8 +38,6 @@ import           Data.Functor.Classes
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.Hashable
-import           Data.Monoid (appEndo)
-import           Data.Text (Text)
 import           Data.These
 import           Data.Typeable (Typeable)
 import           GHC.Generics
@@ -167,7 +165,7 @@ instance Show (NValueF m (Fix (NValueF m))) where
       showsCon1 :: Show a => String -> a -> Int -> String -> String
       showsCon1 con a d =
           showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a
-
+{-
       showsCon2 :: (Show a, Show b)
                 => String -> a -> b -> Int -> String -> String
       showsCon2 con a b d =
@@ -176,7 +174,7 @@ instance Show (NValueF m (Fix (NValueF m))) where
               . showsPrec 11 a
               . showString " "
               . showsPrec 11 b
-
+-}
 instance Eq (NValue m) where
     NVConstant (NFloat x) == NVConstant (NInt y)   = x == fromInteger y
     NVConstant (NInt x)   == NVConstant (NFloat y) = fromInteger x == y
