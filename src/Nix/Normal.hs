@@ -114,10 +114,10 @@ valueText :: forall e m. (Framed e m, MonadEffects m, Typeable m)
 valueText addPathsToStore = iter phi . check
   where
     check :: NValueNF m -> Free (NValueF m) (m NixString)
-    check = fmap (const $ pure (makeNixStringWithoutContext "<CYCLE>"))
+    check = fmap (const $ pure (hackyMakeNixStringWithoutContext "<CYCLE>"))
 
     phi :: NValueF m (m NixString) -> m NixString
-    phi (NVConstantF a) = pure (makeNixStringWithoutContext (atomText a))
+    phi (NVConstantF a) = pure (hackyMakeNixStringWithoutContext (atomText a))
     phi (NVStrF ns)     = pure ns
     phi v@(NVListF _)   = coercionFailed v
     phi v@(NVSetF s _)
@@ -127,8 +127,8 @@ valueText addPathsToStore = iter phi . check
     phi (NVPathF originalPath)
         | addPathsToStore = do
             storePath <- addPath originalPath
-            pure (makeNixStringWithoutContext $ Text.pack $ unStorePath storePath)
-        | otherwise = pure (makeNixStringWithoutContext (Text.pack originalPath))
+            pure (hackyMakeNixStringWithoutContext $ Text.pack $ unStorePath storePath)
+        | otherwise = pure (hackyMakeNixStringWithoutContext (Text.pack originalPath))
     phi v@(NVBuiltinF _ _) = coercionFailed v
 
     coercionFailed v =

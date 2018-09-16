@@ -1,11 +1,11 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Nix.NixString (
     NixString
-  , hackyStringHasContext
+  , stringHasContext
   , hackyStringIgnoreContextMaybe
   , hackyStringIgnoreContext
-  , makeNixStringWithoutContext
-  , modifyNixContents
+  , hackyMakeNixStringWithoutContext
+  , hackyModifyNixContents
 ) where
 
 import qualified Data.HashSet as S
@@ -14,7 +14,7 @@ import           Data.Text (Text)
 import           GHC.Generics
 import           Data.Semigroup
 
-{-# WARNING hackyStringHasContext, hackyStringIgnoreContextMaybe, hackyStringIgnoreContext "This NixString function needs to be replaced" #-}
+{-# WARNING hackyStringIgnoreContextMaybe, hackyStringIgnoreContext, hackyMakeNixStringWithoutContext, hackyModifyNixContents "This NixString function needs to be replaced" #-}
 
 -- | A 'ContextFlavor' describes the sum of possible derivations for string contexts
 data ContextFlavor = 
@@ -46,23 +46,25 @@ instance Monoid NixString where
   mempty = NixString mempty mempty
   mappend = (<>)
 
+-- | Extract the string contents from a NixString that has no context 
 hackyStringIgnoreContextMaybe :: NixString -> Maybe Text
 hackyStringIgnoreContextMaybe (NixString s c) | null c = Just s
                                 | otherwise = Nothing 
 
+-- | Extract the string contents from a NixString even if the NixString has an associated context 
 hackyStringIgnoreContext :: NixString -> Text
 hackyStringIgnoreContext (NixString s _) = s
 
-hackyStringHasContext :: NixString -> Bool
-hackyStringHasContext = const False
+-- | Returns True if the NixString has an associated context
+stringHasContext :: NixString -> Bool
+stringHasContext (NixString _ c) = not (null c)
 
---stringWithContext :: NixString -> (Text, S.HashSet StringContext)
---stringWithContext (NixString s d) = (s, d)
+-- | Constructs a NixString without a context
+hackyMakeNixStringWithoutContext :: Text -> NixString
+hackyMakeNixStringWithoutContext = flip NixString mempty 
 
-makeNixStringWithoutContext :: Text -> NixString
-makeNixStringWithoutContext = flip NixString mempty 
-
-modifyNixContents :: (Text -> Text) -> NixString -> NixString
-modifyNixContents f (NixString s c) = NixString (f s) c 
+-- | Modify the string part of the NixString -- ignores the context
+hackyModifyNixContents :: (Text -> Text) -> NixString -> NixString
+hackyModifyNixContents f (NixString s c) = NixString (f s) c 
 
 

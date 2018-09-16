@@ -247,7 +247,7 @@ prettyNValueNF :: Functor m => NValueNF m -> Doc
 prettyNValueNF = prettyNix . valueToExpr
   where
     check :: NValueNF m -> Fix (NValueF m)
-    check = fixate (const (NVStrF (makeNixStringWithoutContext "<CYCLE>")))
+    check = fixate (const (NVStrF (hackyMakeNixStringWithoutContext "<CYCLE>")))
 
     valueToExpr :: Functor m => NValueNF m -> NExpr
     valueToExpr = transport go . check
@@ -283,7 +283,7 @@ removeEffects :: Functor m => NValueF m (NThunk m) -> NValueNF m
 removeEffects = Free . fmap dethunk
   where
     dethunk (NThunk _ (Value v)) = removeEffects (_baseValue v)
-    dethunk (NThunk _ _) = Free $ NVStrF (makeNixStringWithoutContext "<thunk>")
+    dethunk (NThunk _ _) = Free $ NVStrF (hackyMakeNixStringWithoutContext "<thunk>")
 
 removeEffectsM :: MonadVar m => NValueF m (NThunk m) -> m (NValueNF m)
 removeEffectsM = fmap Free . traverse dethunk
@@ -315,9 +315,9 @@ dethunk = \case
     NThunk _ (Thunk _ active ref) -> do
         nowActive <- atomicModifyVar active (True,)
         if nowActive
-            then pure $ Free $ NVStrF (makeNixStringWithoutContext "<thunk>")
+            then pure $ Free $ NVStrF (hackyMakeNixStringWithoutContext "<thunk>")
             else do
                 eres <- readVar ref
                 case eres of
                     Computed v -> removeEffectsM (_baseValue v)
-                    _ -> pure $ Free $ NVStrF (makeNixStringWithoutContext "<thunk>")
+                    _ -> pure $ Free $ NVStrF (hackyMakeNixStringWithoutContext "<thunk>")

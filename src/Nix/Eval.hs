@@ -322,7 +322,7 @@ assembleString = \case
   where
     fromParts = fmap (fmap mconcat . sequence) . traverse go
 
-    go = runAntiquoted "\n" (pure . Just . makeNixStringWithoutContext) (>>= fromValueMay)
+    go = runAntiquoted "\n" (pure . Just . hackyMakeNixStringWithoutContext) (>>= fromValueMay)
 
 buildArgument :: forall e v t m. MonadNixEval e v t m
               => Params (m v) -> m v -> m (AttrSet t)

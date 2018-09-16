@@ -251,7 +251,7 @@ isDerivation :: MonadThunk (NValue m) (NThunk m) m
              => AttrSet (NThunk m) -> m Bool
 isDerivation m = case M.lookup "type" m of
     Nothing -> pure False
-    Just t -> force t $ valueEq (nvStr (makeNixStringWithoutContext "derivation"))
+    Just t -> force t $ valueEq (nvStr (hackyMakeNixStringWithoutContext "derivation"))
 
 valueEq :: MonadThunk (NValue m) (NThunk m) m
         => NValue m -> NValue m -> m Bool

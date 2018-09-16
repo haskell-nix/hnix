@@ -101,7 +101,7 @@ withNixContext mpath action = do
     opts :: Options <- asks (view hasLens)
     let i = value @(NValue m) @(NThunk m) @m $ nvList $
             map (value @(NValue m) @(NThunk m) @m
-                     . nvStr . makeNixStringWithoutContext . Text.pack) (include opts)
+                     . nvStr . hackyMakeNixStringWithoutContext . Text.pack) (include opts)
     pushScope (M.singleton "__includes" i) $
         pushScopes base $ case mpath of
             Nothing -> action
@@ -319,9 +319,9 @@ nixPath = fmap nvList $ flip foldNixPath [] $ \p mn ty rest ->
         (flip nvSet mempty $ M.fromList
             [ case ty of
                 PathEntryPath -> ("path", valueThunk $ nvPath p)
-                PathEntryURI ->  ("uri",  valueThunk $ nvStr (makeNixStringWithoutContext (Text.pack p)))
+                PathEntryURI ->  ("uri",  valueThunk $ nvStr (hackyMakeNixStringWithoutContext (Text.pack p)))
             , ("prefix", valueThunk $
-                   nvStr (makeNixStringWithoutContext $ Text.pack (fromMaybe "" mn))) ]) : rest
+                   nvStr (hackyMakeNixStringWithoutContext $ Text.pack (fromMaybe "" mn))) ]) : rest
 
 toString :: MonadNix e m => m (NValue m) -> m (NValue m)
 toString str = str >>= coerceToString False True >>= toNix . Text.pack
@@ -340,7 +340,7 @@ attrsetGet k s = case M.lookup k s of
 
 hasContext :: MonadNix e m => m (NValue m) -> m (NValue m)
 hasContext =
-    toNix . hackyStringHasContext <=< fromValue
+    toNix . stringHasContext <=< fromValue
 
 getAttr :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 getAttr x y =
@@ -470,7 +470,7 @@ splitVersion s = case Text.uncons s of
 splitVersion_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 splitVersion_ = fromValue >=> \s -> do
     let vals = flip map (splitVersion s) $ \c ->
-            valueThunk $ nvStr $ makeNixStringWithoutContext $ versionComponentToString c
+            valueThunk $ nvStr $ hackyMakeNixStringWithoutContext $ versionComponentToString c
     return $ nvList vals
 
 compareVersions :: Text -> Text -> Ordering
@@ -553,7 +553,7 @@ splitMatches numDropped (((_,(start,len)):captures):mts) haystack =
     caps = valueThunk $ nvList (map f captures)
     f (a,(s,_)) = if s < 0 then valueThunk (nvConstant NNull) else thunkStr a
 
-thunkStr s = valueThunk (nvStr (makeNixStringWithoutContext (decodeUtf8 s)))
+thunkStr s = valueThunk (nvStr (hackyMakeNixStringWithoutContext (decodeUtf8 s)))
 
 substring :: MonadNix e m => Int -> Int -> Text -> Prim m Text
 substring start len str = Prim $
@@ -584,7 +584,7 @@ mapAttrs_ fun xs = fun >>= \f ->
         values <- for pairs $ \(key, value) ->
             thunk $
             withFrame Debug (ErrorCall "While applying f in mapAttrs:\n") $
-            callFunc ?? force' value =<< callFunc f (pure (nvStr (makeNixStringWithoutContext key)))
+            callFunc ?? force' value =<< callFunc f (pure (nvStr (hackyMakeNixStringWithoutContext key)))
         toNix . M.fromList . zip (map fst pairs) $ values
 
 filter_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
@@ -601,7 +601,7 @@ catAttrs attrName xs =
 
 baseNameOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 baseNameOf x = x >>= \case
-    NVStr ns -> pure $ nvStr (modifyNixContents (Text.pack . takeFileName . Text.unpack) ns)
+    NVStr ns -> pure $ nvStr (hackyModifyNixContents (Text.pack . takeFileName . Text.unpack) ns)
     NVPath path -> pure $ nvPath $ takeFileName path
     v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
 
@@ -622,7 +622,7 @@ bitXor x y =
 
 dirOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 dirOf x = x >>= \case
-    NVStr ns -> pure $ nvStr (modifyNixContents (Text.pack . takeDirectory . Text.unpack) ns)
+    NVStr ns -> pure $ nvStr (hackyModifyNixContents (Text.pack . takeDirectory . Text.unpack) ns)
     NVPath path -> pure $ nvPath $ takeDirectory path
     v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
 
@@ -983,7 +983,7 @@ fromJSON = fromValue >=> \encoded ->
 
 toXML_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 toXML_ v = v >>= normalForm >>= \x ->
-    pure $ nvStr $ makeNixStringWithoutContext $ Text.pack (toXML x)
+    pure $ nvStr $ hackyMakeNixStringWithoutContext $ Text.pack (toXML x)
 
 typeOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 typeOf v = v >>= toNix @Text . \case
@@ -1057,7 +1057,7 @@ currentSystem :: MonadNix e m => m (NValue m)
 currentSystem = do
   os <- getCurrentSystemOS
   arch <- getCurrentSystemArch
-  return $ nvStr $ makeNixStringWithoutContext (arch <> "-" <> os)
+  return $ nvStr $ hackyMakeNixStringWithoutContext (arch <> "-" <> os)
 
 currentTime_ :: MonadNix e m => m (NValue m)
 currentTime_ = do

@@ -346,13 +346,13 @@ execBinaryOp scope span op lval rarg = do
             _     -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVStr _, NVConstant NNull) -> case op of
-            NEq  -> toBool =<< valueEq lval (nvStr (makeNixStringWithoutContext ""))
-            NNEq -> toBool . not =<< valueEq lval (nvStr (makeNixStringWithoutContext ""))
+            NEq  -> toBool =<< valueEq lval (nvStr (hackyMakeNixStringWithoutContext ""))
+            NNEq -> toBool . not =<< valueEq lval (nvStr (hackyMakeNixStringWithoutContext ""))
             _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVConstant NNull, NVStr _) -> case op of
-            NEq  -> toBool =<< valueEq (nvStr (makeNixStringWithoutContext "")) rval
-            NNEq -> toBool . not =<< valueEq (nvStr (makeNixStringWithoutContext "")) rval
+            NEq  -> toBool =<< valueEq (nvStr (hackyMakeNixStringWithoutContext "")) rval
+            NNEq -> toBool . not =<< valueEq (nvStr (hackyMakeNixStringWithoutContext "")) rval
             _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVSet ls lp, NVSet rs rp) -> case op of
@@ -374,14 +374,14 @@ execBinaryOp scope span op lval rarg = do
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (ls@NVSet {}, NVStr rs) -> case op of
-            NPlus   -> (\ls -> bin nvStrP (modifyNixContents (Text.pack ls `mappend`) rs))
+            NPlus   -> (\ls -> bin nvStrP (hackyModifyNixContents (Text.pack ls `mappend`) rs))
                 <$> coerceToString False False ls
             NEq     -> toBool =<< valueEq lval rval
             NNEq    -> toBool . not =<< valueEq lval rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVStr ls, rs@NVSet {}) -> case op of
-            NPlus   -> (\rs -> bin nvStrP (modifyNixContents (`mappend` Text.pack rs) ls))
+            NPlus   -> (\rs -> bin nvStrP (hackyModifyNixContents (`mappend` Text.pack rs) ls))
                 <$> coerceToString False False rs
             NEq     -> toBool =<< valueEq lval rval
             NNEq    -> toBool . not =<< valueEq lval rval
