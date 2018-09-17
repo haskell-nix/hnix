@@ -177,7 +177,7 @@ instance (Convertible e m, MonadEffects m)
         Free (NVPathF p) -> Just . (,mempty) . Text.pack . unStorePath <$> addPath p
         Free (NVSetF s _) -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
-            Just p -> fmap (,mempty) <$> fromValueMay @Text p
+            Just p -> fromValueMay p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -190,7 +190,7 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
         NVPath p -> Just . (,mempty) . Text.pack . unStorePath <$> addPath p
         NVSet s _ -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
-            Just p -> fmap (,mempty) <$> fromValueMay @Text p
+            Just p -> fromValueMay p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
