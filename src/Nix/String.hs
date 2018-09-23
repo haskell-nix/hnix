@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
-module Nix.NixString (
+module Nix.String (
     NixString
   , stringHasContext
   , hackyStringIgnoreContextMaybe

@@ -9,7 +9,7 @@ import           Data.Ord
 import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Expr.Types
-import           Nix.NixString
+import           Nix.String
 import           Nix.Value
 import           Text.XML.Light
 

@@ -42,7 +42,7 @@ import           Nix.Effects
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
-import           Nix.NixString
+import           Nix.String
 import           Nix.Normal
 import           Nix.Thunk
 import           Nix.Utils

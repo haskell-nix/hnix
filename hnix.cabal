@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: cf3720314c18393c8e86154180e3f986a610f3fab8cf0e7de5ea10aaf8c3bbb6
+-- hash: 7e613ce82a3337411d625301abd33a6d7f1c400edadbd602287027f2af1e4fdf
 
 cabal-version:  >= 1.10
 name:           hnix
@@ -460,7 +460,6 @@ library
       Nix.Expr.Types.Annotated
       Nix.Frames
       Nix.Lint
-      Nix.NixString
       Nix.Normal
       Nix.Options
       Nix.Parser
@@ -469,6 +468,7 @@ library
       Nix.Render
       Nix.Render.Frame
       Nix.Scope
+      Nix.String
       Nix.Strings
       Nix.TH
       Nix.Thunk

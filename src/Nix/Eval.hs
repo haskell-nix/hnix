@@ -33,7 +33,7 @@ import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Expr
 import           Nix.Frames
-import           Nix.NixString
+import           Nix.String
 import           Nix.Scope
 import           Nix.Strings (runAntiquoted)
 import           Nix.Thunk

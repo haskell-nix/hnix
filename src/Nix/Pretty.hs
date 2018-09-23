@@ -27,7 +27,7 @@ import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Expr
 import           Nix.Parser
-import           Nix.NixString
+import           Nix.String
 import           Nix.Strings
 import           Nix.Thunk
 #if ENABLE_TRACING

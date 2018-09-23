@@ -79,7 +79,7 @@ import           Nix.Exec
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
-import           Nix.NixString
+import           Nix.String
 import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser hiding (nixPath)

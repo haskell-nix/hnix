@@ -60,7 +60,7 @@ import           Nix.Effects
 import           Nix.Eval as Eval
 import           Nix.Expr
 import           Nix.Frames
-import           Nix.NixString
+import           Nix.String
 import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser

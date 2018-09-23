@@ -25,7 +25,7 @@ import           Nix.Atoms
 import           Nix.Effects
 import           Nix.Frames
 -- import           Nix.Pretty
-import           Nix.NixString
+import           Nix.String
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value

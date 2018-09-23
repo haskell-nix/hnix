@@ -20,7 +20,7 @@ import qualified EvalTests
 import qualified Nix
 import           Nix.Exec
 import           Nix.Expr.Types
-import           Nix.NixString
+import           Nix.String
 import           Nix.Options
 import           Nix.Parser
 import           Nix.Value
