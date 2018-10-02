@@ -411,7 +411,7 @@ data NBinaryOp
   | NAnd     -- ^ Logical and (&&)
   | NOr      -- ^ Logical or (||)
   | NImpl    -- ^ Logical implication (->)
-  | NUpdate  -- ^ Joining two attribut sets (//)
+  | NUpdate  -- ^ Joining two attribute sets (//)
   | NPlus    -- ^ Addition (+)
   | NMinus   -- ^ Subtraction (-)
   | NMult    -- ^ Multiplication (*)
