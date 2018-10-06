@@ -17,7 +17,7 @@ import           Data.Text (Text)
 import           GHC.Generics
 import           Data.Semigroup
 
-{-# WARNING hackyStringMappend, hackyStringMConcat, hackyStringIgnoreContextMaybe, hackyStringIgnoreContext, hackyMakeNixStringWithoutContext, hackyModifyNixContents "This NixString function needs to be replaced" #-}
+-- {-# WARNING hackyStringMappend, hackyStringMConcat, hackyStringIgnoreContextMaybe, hackyStringIgnoreContext, hackyMakeNixStringWithoutContext, hackyModifyNixContents "This NixString function needs to be replaced" #-}
 
 -- | A 'ContextFlavor' describes the sum of possible derivations for string contexts
 data ContextFlavor = 
