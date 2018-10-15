@@ -11,6 +11,7 @@ module Nix (module Nix.Cache,
             module Nix.Render.Frame,
             module Nix.Normal,
             module Nix.Options,
+            module Nix.String,
             module Nix.Parser,
             module Nix.Pretty,
             module Nix.Reduce,
@@ -35,6 +36,7 @@ import qualified Nix.Eval as Eval
 import           Nix.Exec
 import           Nix.Expr
 import           Nix.Frames
+import           Nix.String
 import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser

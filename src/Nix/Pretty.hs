@@ -27,6 +27,7 @@ import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Expr
 import           Nix.Parser
+import           Nix.String
 import           Nix.Strings
 import           Nix.Thunk
 #if ENABLE_TRACING
@@ -246,13 +247,13 @@ prettyNValueNF :: Functor m => NValueNF m -> Doc
 prettyNValueNF = prettyNix . valueToExpr
   where
     check :: NValueNF m -> Fix (NValueF m)
-    check = fixate (const (NVStrF "<CYCLE>" mempty))
+    check = fixate (const (NVStrF (hackyMakeNixStringWithoutContext "<CYCLE>")))
 
     valueToExpr :: Functor m => NValueNF m -> NExpr
     valueToExpr = transport go . check
 
     go (NVConstantF a)     = NConstant a
-    go (NVStrF t _)        = NStr (DoubleQuoted [Plain t])
+    go (NVStrF ns)         = NStr (DoubleQuoted [Plain (hackyStringIgnoreContext ns)])
     go (NVListF l)         = NList l
     go (NVSetF s p)        = NSet
         [ NamedVar (StaticKey k :| []) v (fromMaybe nullPos (M.lookup k p))
@@ -269,7 +270,7 @@ printNix = iter phi . check
 
     phi :: NValueF m String -> String
     phi (NVConstantF a) = unpack $ atomText a
-    phi (NVStrF t _) = show t
+    phi (NVStrF ns) = show $ hackyStringIgnoreContext ns
     phi (NVListF l) = "[ " ++ unwords l ++ " ]"
     phi (NVSetF s _) =
         "{ " ++ concat [ unpack k ++ " = " ++ v ++ "; "
@@ -282,7 +283,7 @@ removeEffects :: Functor m => NValueF m (NThunk m) -> NValueNF m
 removeEffects = Free . fmap dethunk
   where
     dethunk (NThunk _ (Value v)) = removeEffects (_baseValue v)
-    dethunk (NThunk _ _) = Free $ NVStrF "<thunk>" mempty
+    dethunk (NThunk _ _) = Free $ NVStrF (hackyMakeNixStringWithoutContext "<thunk>")
 
 removeEffectsM :: MonadVar m => NValueF m (NThunk m) -> m (NValueNF m)
 removeEffectsM = fmap Free . traverse dethunk
@@ -314,11 +315,11 @@ dethunk = \case
     NThunk _ (Thunk _ active ref) -> do
         nowActive <- atomicModifyVar active (True,)
         if nowActive
-            then pure $ Free $ NVStrF "<thunk>" mempty
+            then pure $ Free $ NVStrF (hackyMakeNixStringWithoutContext "<thunk>")
             else do
                 eres <- readVar ref
                 res <- case eres of
                     Computed v -> removeEffectsM (_baseValue v)
-                    _ -> pure $ Free $ NVStrF "<thunk>" mempty
+                    _ -> pure $ Free $ NVStrF (hackyMakeNixStringWithoutContext "<thunk>")
                 _ <- atomicModifyVar active (False,)
                 return res

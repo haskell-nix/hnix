@@ -42,6 +42,7 @@ import           Nix.Effects
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
+import           Nix.String
 import           Nix.Normal
 import           Nix.Thunk
 import           Nix.Utils
@@ -147,7 +148,7 @@ instance Convertible e m
 instance (Convertible e m, MonadEffects m)
       => FromValue Text m (NValueNF m) where
     fromValueMay = \case
-        Free (NVStrF t _) -> pure $ Just t
+        Free (NVStrF ns) -> pure $ hackyStringIgnoreContextMaybe ns
         Free (NVPathF p) -> Just . Text.pack . unStorePath <$> addPath p
         Free (NVSetF s _) -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
@@ -160,7 +161,7 @@ instance (Convertible e m, MonadEffects m)
 instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
       => FromValue Text m (NValue m) where
     fromValueMay = \case
-        NVStr t _ -> pure $ Just t
+        NVStr ns -> pure $ hackyStringIgnoreContextMaybe ns
         NVPath p -> Just . Text.pack . unStorePath <$> addPath p
         NVSet s _ -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
@@ -171,26 +172,26 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
         _ -> throwError $ Expectation TString v
 
 instance (Convertible e m, MonadEffects m)
-      => FromValue (Text, DList Text) m (NValueNF m) where
+      => FromValue NixString m (NValueNF m) where
     fromValueMay = \case
-        Free (NVStrF t d) -> pure $ Just (t, d)
-        Free (NVPathF p) -> Just . (,mempty) . Text.pack . unStorePath <$> addPath p
+        Free (NVStrF ns) -> pure $ Just ns
+        Free (NVPathF p) -> Just . hackyMakeNixStringWithoutContext . Text.pack . unStorePath <$> addPath p
         Free (NVSetF s _) -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
-            Just p -> fmap (,mempty) <$> fromValueMay @Text p
+            Just p -> fmap hackyMakeNixStringWithoutContext <$> fromValueMay @Text p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
         _ -> throwError $ ExpectationNF TString v
 
 instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
-      => FromValue (Text, DList Text) m (NValue m) where
+      => FromValue NixString m (NValue m) where
     fromValueMay = \case
-        NVStr t d -> pure $ Just (t, d)
-        NVPath p -> Just . (,mempty) . Text.pack . unStorePath <$> addPath p
+        NVStr ns -> pure $ Just ns
+        NVPath p -> Just . hackyMakeNixStringWithoutContext . Text.pack . unStorePath <$> addPath p
         NVSet s _ -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
-            Just p -> fmap (,mempty) <$> fromValueMay @Text p
+            Just p -> fmap hackyMakeNixStringWithoutContext <$> fromValueMay @Text p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -199,7 +200,7 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
 instance Convertible e m
       => FromValue ByteString m (NValueNF m) where
     fromValueMay = \case
-        Free (NVStrF t _) -> pure $ Just (encodeUtf8 t)
+        Free (NVStrF ns) -> pure $ encodeUtf8 <$> hackyStringIgnoreContextMaybe ns
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -208,7 +209,7 @@ instance Convertible e m
 instance Convertible e m
       => FromValue ByteString m (NValue m) where
     fromValueMay = \case
-        NVStr t _ -> pure $ Just (encodeUtf8 t)
+        NVStr ns -> pure $ encodeUtf8 <$> hackyStringIgnoreContextMaybe ns
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -220,7 +221,7 @@ newtype Path = Path { getPath :: FilePath }
 instance Convertible e m => FromValue Path m (NValueNF m) where
     fromValueMay = \case
         Free (NVPathF p) -> pure $ Just (Path p)
-        Free (NVStrF s _) -> pure $ Just (Path (Text.unpack s))
+        Free (NVStrF ns) -> pure $ Path . Text.unpack <$> hackyStringIgnoreContextMaybe ns
         Free (NVSetF s _) -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
             Just p -> fromValueMay @Path p
@@ -233,7 +234,7 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m)
       => FromValue Path m (NValue m) where
     fromValueMay = \case
         NVPath p -> pure $ Just (Path p)
-        NVStr s _ -> pure $ Just (Path (Text.unpack s))
+        NVStr ns -> pure $ Path . Text.unpack <$> hackyStringIgnoreContextMaybe ns
         NVSet s _ -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
             Just p -> fromValueMay @Path p
@@ -321,7 +322,7 @@ instance (Convertible e m, MonadEffects m)
             NFloat n -> toJSON n
             NBool b  -> toJSON b
             NNull    -> A.Null
-        Free (NVStrF s _) -> pure $ Just $ toJSON s
+        Free (NVStrF ns)  -> pure $ toJSON <$> hackyStringIgnoreContextMaybe ns
         Free (NVListF l)  ->
             fmap (A.Array . V.fromList) . sequence
                 <$> traverse fromValueMay l
@@ -367,22 +368,22 @@ instance Applicative m => ToValue Float m (NValue m) where
     toValue = pure . nvConstant . NFloat
 
 instance Applicative m => ToValue Text m (NValueNF m) where
-    toValue = pure . Free . flip NVStrF mempty
+    toValue = pure . Free . NVStrF . hackyMakeNixStringWithoutContext
 
 instance Applicative m => ToValue Text m (NValue m) where
-    toValue = pure . flip nvStr mempty
+    toValue = pure . nvStr . hackyMakeNixStringWithoutContext
 
-instance Applicative m => ToValue (Text, DList Text) m (NValueNF m) where
-    toValue = pure . Free . uncurry NVStrF
+instance Applicative m => ToValue NixString m (NValueNF m) where
+    toValue = pure . Free . NVStrF
 
-instance Applicative m => ToValue (Text, DList Text) m (NValue m) where
-    toValue = pure . uncurry nvStr
+instance Applicative m => ToValue NixString m (NValue m) where
+    toValue = pure . nvStr
 
 instance Applicative m => ToValue ByteString m (NValueNF m) where
-    toValue = pure . Free . flip NVStrF mempty . decodeUtf8
+    toValue = pure . Free . NVStrF . hackyMakeNixStringWithoutContext . decodeUtf8
 
 instance Applicative m => ToValue ByteString m (NValue m) where
-    toValue = pure . flip nvStr mempty . decodeUtf8
+    toValue = pure . nvStr . hackyMakeNixStringWithoutContext . decodeUtf8
 
 instance Applicative m => ToValue Path m (NValueNF m) where
     toValue = pure . Free . NVPathF . getPath
@@ -447,7 +448,7 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m)
         A.Array l -> nvList <$>
             traverse (\x -> thunk . whileForcingThunk (CoercionFromJson @m x)
                                  . toValue $ x) (V.toList l)
-        A.String s -> pure $ nvStr s mempty
+        A.String s -> pure $ nvStr $ hackyMakeNixStringWithoutContext s 
         A.Number n -> pure $ nvConstant $ case floatingOrInteger n of
             Left r -> NFloat r
             Right i -> NInt i
@@ -495,8 +496,8 @@ instance Convertible e m => FromNix Float m (NValueNF m) where
 instance Convertible e m => FromNix Float m (NValue m) where
 instance (Convertible e m, MonadEffects m) => FromNix Text m (NValueNF m) where
 instance (Convertible e m, MonadEffects m, MonadThunk (NValue m) (NThunk m) m) => FromNix Text m (NValue m) where
-instance (Convertible e m, MonadEffects m) => FromNix (Text, DList Text) m (NValueNF m) where
-instance (Convertible e m, MonadEffects m, MonadThunk (NValue m) (NThunk m) m) => FromNix (Text, DList Text) m (NValue m) where
+instance (Convertible e m, MonadEffects m) => FromNix NixString m (NValueNF m) where
+instance (Convertible e m, MonadEffects m, MonadThunk (NValue m) (NThunk m) m) => FromNix NixString m (NValue m) where
 instance Convertible e m => FromNix ByteString m (NValueNF m) where
 instance Convertible e m => FromNix ByteString m (NValue m) where
 instance Convertible e m => FromNix Path m (NValueNF m) where
@@ -558,8 +559,8 @@ instance Applicative m => ToNix Float m (NValueNF m) where
 instance Applicative m => ToNix Float m (NValue m) where
 instance Applicative m => ToNix Text m (NValueNF m) where
 instance Applicative m => ToNix Text m (NValue m) where
-instance Applicative m => ToNix (Text, DList Text) m (NValueNF m) where
-instance Applicative m => ToNix (Text, DList Text) m (NValue m) where
+instance Applicative m => ToNix NixString m (NValueNF m) where
+instance Applicative m => ToNix NixString m (NValue m) where
 instance Applicative m => ToNix ByteString m (NValueNF m) where
 instance Applicative m => ToNix ByteString m (NValue m) where
 instance Applicative m => ToNix Path m (NValueNF m) where

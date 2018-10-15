@@ -9,6 +9,7 @@ import           Data.Ord
 import qualified Data.Text as Text
 import           Nix.Atoms
 import           Nix.Expr.Types
+import           Nix.String
 import           Nix.Value
 import           Text.XML.Light
 
@@ -31,7 +32,7 @@ toXML = ("<?xml version='1.0' encoding='utf-8'?>\n" ++)
             NBool b  -> mkElem "bool" "value" (if b then "true" else "false")
             NNull    -> Element (unqual "null") [] [] Nothing
 
-        NVStrF t _ -> mkElem "string" "value" (Text.unpack t)
+        NVStrF ns -> mkElem "string" "value" (Text.unpack $ hackyStringIgnoreContext ns)
         NVListF l  -> Element (unqual "list") [] (Elem <$> l) Nothing
 
         NVSetF s _ -> Element (unqual "attrs") []

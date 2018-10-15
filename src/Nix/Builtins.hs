@@ -79,6 +79,7 @@ import           Nix.Exec
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
+import           Nix.String
 import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser hiding (nixPath)
@@ -100,7 +101,7 @@ withNixContext mpath action = do
     opts :: Options <- asks (view hasLens)
     let i = value @(NValue m) @(NThunk m) @m $ nvList $
             map (value @(NValue m) @(NThunk m) @m
-                     . flip nvStr mempty . Text.pack) (include opts)
+                     . nvStr . hackyMakeNixStringWithoutContext . Text.pack) (include opts)
     pushScope (M.singleton "__includes" i) $
         pushScopes base $ case mpath of
             Nothing -> action
@@ -318,9 +319,9 @@ nixPath = fmap nvList $ flip foldNixPath [] $ \p mn ty rest ->
         (flip nvSet mempty $ M.fromList
             [ case ty of
                 PathEntryPath -> ("path", valueThunk $ nvPath p)
-                PathEntryURI ->  ("uri",  valueThunk $ nvStr (Text.pack p) mempty)
+                PathEntryURI ->  ("uri",  valueThunk $ nvStr (hackyMakeNixStringWithoutContext (Text.pack p)))
             , ("prefix", valueThunk $
-                   nvStr (Text.pack (fromMaybe "" mn)) mempty) ]) : rest
+                   nvStr (hackyMakeNixStringWithoutContext $ Text.pack (fromMaybe "" mn))) ]) : rest
 
 toString :: MonadNix e m => m (NValue m) -> m (NValue m)
 toString str = str >>= coerceToString False True >>= toNix . Text.pack
@@ -339,7 +340,7 @@ attrsetGet k s = case M.lookup k s of
 
 hasContext :: MonadNix e m => m (NValue m) -> m (NValue m)
 hasContext =
-    toNix . not . null . (appEndo ?? []) . snd <=< fromValue @(Text, DList Text)
+    toNix . stringHasContext <=< fromValue
 
 getAttr :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 getAttr x y =
@@ -350,7 +351,7 @@ getAttr x y =
 unsafeGetAttrPos :: forall e m. MonadNix e m
                  => m (NValue m) -> m (NValue m) -> m (NValue m)
 unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
-    (NVStr key _, NVSet _ apos) -> case M.lookup key apos of
+    (NVStr ns, NVSet _ apos) -> case M.lookup (hackyStringIgnoreContext ns) apos of
         Nothing -> pure $ nvConstant NNull
         Just delta -> toValue delta
     (x, y) -> throwError $ ErrorCall $ "Invalid types for builtins.unsafeGetAttrPos: "
@@ -469,7 +470,7 @@ splitVersion s = case Text.uncons s of
 splitVersion_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 splitVersion_ = fromValue >=> \s -> do
     let vals = flip map (splitVersion s) $ \c ->
-            valueThunk $ nvStr (versionComponentToString c) mempty
+            valueThunk $ nvStr $ hackyMakeNixStringWithoutContext $ versionComponentToString c
     return $ nvList vals
 
 compareVersions :: Text -> Text -> Ordering
@@ -552,7 +553,7 @@ splitMatches numDropped (((_,(start,len)):captures):mts) haystack =
     caps = valueThunk $ nvList (map f captures)
     f (a,(s,_)) = if s < 0 then valueThunk (nvConstant NNull) else thunkStr a
 
-thunkStr s = valueThunk (nvStr (decodeUtf8 s) mempty)
+thunkStr s = valueThunk (nvStr (hackyMakeNixStringWithoutContext (decodeUtf8 s)))
 
 substring :: MonadNix e m => Int -> Int -> Text -> Prim m Text
 substring start len str = Prim $
@@ -583,7 +584,7 @@ mapAttrs_ fun xs = fun >>= \f ->
         values <- for pairs $ \(key, value) ->
             thunk $
             withFrame Debug (ErrorCall "While applying f in mapAttrs:\n") $
-            callFunc ?? force' value =<< callFunc f (pure (nvStr key mempty))
+            callFunc ?? force' value =<< callFunc f (pure (nvStr (hackyMakeNixStringWithoutContext key)))
         toNix . M.fromList . zip (map fst pairs) $ values
 
 filter_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
@@ -600,7 +601,7 @@ catAttrs attrName xs =
 
 baseNameOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 baseNameOf x = x >>= \case
-    NVStr path ctx -> pure $ nvStr (Text.pack $ takeFileName $ Text.unpack path) ctx
+    NVStr ns -> pure $ nvStr (hackyModifyNixContents (Text.pack . takeFileName . Text.unpack) ns)
     NVPath path -> pure $ nvPath $ takeFileName path
     v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
 
@@ -621,7 +622,7 @@ bitXor x y =
 
 dirOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 dirOf x = x >>= \case
-    NVStr path ctx -> pure $ nvStr (Text.pack $ takeDirectory $ Text.unpack path) ctx
+    NVStr ns -> pure $ nvStr (hackyModifyNixContents (Text.pack . takeDirectory . Text.unpack) ns)
     NVPath path -> pure $ nvPath $ takeDirectory path
     v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
 
@@ -775,7 +776,7 @@ toPath = fromValue @Path >=> toNix @Path
 pathExists_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 pathExists_ path = path >>= \case
     NVPath p  -> toNix =<< pathExists p
-    NVStr s _ -> toNix =<< pathExists (Text.unpack s)
+    NVStr ns -> toNix =<< pathExists (Text.unpack (hackyStringIgnoreContext ns))
     v -> throwError $ ErrorCall $
             "builtins.pathExists: expected path, got " ++ show v
 
@@ -867,7 +868,7 @@ lessThan ta tb = ta >>= \va -> tb >>= \vb -> do
             (NInt   a, NFloat b) -> pure $ fromInteger a < b
             (NFloat a, NFloat b) -> pure $ a < b
             _ -> badType
-        (NVStr a _, NVStr b _) -> pure $ a < b
+        (NVStr a, NVStr b) -> pure $ hackyStringIgnoreContext a < hackyStringIgnoreContext b
         _ -> badType
 
 concatLists :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
@@ -920,8 +921,8 @@ placeHolder = fromValue @Text >=> \_ -> do
 
 absolutePathFromValue :: MonadNix e m => NValue m -> m FilePath
 absolutePathFromValue = \case
-    NVStr pathText _ -> do
-        let path = Text.unpack pathText
+    NVStr ns -> do
+        let path = Text.unpack $ hackyStringIgnoreContext ns
         unless (isAbsolute path) $
             throwError $ ErrorCall $ "string " ++ show path ++ " doesn't represent an absolute path"
         pure path
@@ -938,11 +939,11 @@ findFile_ aset filePath =
     aset >>= \aset' ->
     filePath >>= \filePath' ->
     case (aset', filePath') of
-      (NVList x, NVStr name _) -> do
-          mres <- findPath x (Text.unpack name)
+      (NVList x, NVStr ns) -> do
+          mres <- findPath x (Text.unpack (hackyStringIgnoreContext ns))
           pure $ nvPath mres
       (NVList _, y)  -> throwError $ ErrorCall $ "expected a string, got " ++ show y
-      (x, NVStr _ _) -> throwError $ ErrorCall $ "expected a list, got " ++ show x
+      (x, NVStr _) -> throwError $ ErrorCall $ "expected a list, got " ++ show x
       (x, y)         -> throwError $ ErrorCall $ "Invalid types for builtins.findFile: " ++ show (x, y)
 
 data FileType
@@ -982,7 +983,7 @@ fromJSON = fromValue >=> \encoded ->
 
 toXML_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 toXML_ v = v >>= normalForm >>= \x ->
-    pure $ nvStr (Text.pack (toXML x)) mempty
+    pure $ nvStr $ hackyMakeNixStringWithoutContext $ Text.pack (toXML x)
 
 typeOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 typeOf v = v >>= toNix @Text . \case
@@ -991,7 +992,7 @@ typeOf v = v >>= toNix @Text . \case
         NFloat _ -> "float"
         NBool _  -> "bool"
         NNull    -> "null"
-    NVStr _ _     -> "string"
+    NVStr _     -> "string"
     NVList _      -> "list"
     NVSet _ _     -> "set"
     NVClosure {}  -> "lambda"
@@ -1037,7 +1038,7 @@ fetchurl v = v >>= \case
  where
     go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
     go _msha = \case
-        NVStr uri _ -> getURL uri -- msha
+        NVStr ns -> getURL (hackyStringIgnoreContext ns) -- msha
         v -> throwError $ ErrorCall $
                  "builtins.fetchurl: Expected URI or string, got " ++ show v
 
@@ -1056,7 +1057,7 @@ currentSystem :: MonadNix e m => m (NValue m)
 currentSystem = do
   os <- getCurrentSystemOS
   arch <- getCurrentSystemArch
-  return $ nvStr (arch <> "-" <> os) mempty
+  return $ nvStr $ hackyMakeNixStringWithoutContext (arch <> "-" <> os)
 
 currentTime_ :: MonadNix e m => m (NValue m)
 currentTime_ = do

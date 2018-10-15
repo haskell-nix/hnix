@@ -38,8 +38,6 @@ import           Data.Functor.Classes
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.Hashable
-import           Data.Monoid (appEndo)
-import           Data.Text (Text)
 import           Data.These
 import           Data.Typeable (Typeable)
 import           GHC.Generics
@@ -50,6 +48,7 @@ import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
+import           Nix.String
 import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Utils
@@ -61,7 +60,7 @@ data NValueF m r
     = NVConstantF NAtom
      -- | A string has a value and a context, which can be used to record what a
      -- string has been build from
-    | NVStrF Text (DList Text)
+    | NVStrF NixString
     | NVPathF FilePath
     | NVListF [r]
     | NVSetF (AttrSet r) (AttrSet SourcePos)
@@ -123,10 +122,10 @@ pattern NVConstant x <- NValue _ (NVConstantF x)
 nvConstant x = NValue [] (NVConstantF x)
 nvConstantP p x = NValue [p] (NVConstantF x)
 
-pattern NVStr s d <- NValue _ (NVStrF s d)
+pattern NVStr ns <- NValue _ (NVStrF ns)
 
-nvStr s d = NValue [] (NVStrF s d)
-nvStrP p s d = NValue [p] (NVStrF s d)
+nvStr ns = NValue [] (NVStrF ns)
+nvStrP p ns = NValue [p] (NVStrF ns)
 
 pattern NVPath x <- NValue _ (NVPathF x)
 
@@ -156,7 +155,7 @@ nvBuiltinP p name f = NValue [p] (NVBuiltinF name f)
 instance Show (NValueF m (Fix (NValueF m))) where
     showsPrec = flip go where
       go (NVConstantF atom)  = showsCon1 "NVConstant" atom
-      go (NVStrF txt ctxt)   = showsCon2 "NVStr"      txt (appEndo ctxt [])
+      go (NVStrF ns)         = showsCon1 "NVStr"      (hackyStringIgnoreContext ns)
       go (NVListF     lst)   = showsCon1 "NVList"     lst
       go (NVSetF attrs _)    = showsCon1 "NVSet"      attrs
       go (NVClosureF p _)    = showsCon1 "NVClosure"  p
@@ -166,7 +165,7 @@ instance Show (NValueF m (Fix (NValueF m))) where
       showsCon1 :: Show a => String -> a -> Int -> String -> String
       showsCon1 con a d =
           showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a
-
+{-
       showsCon2 :: (Show a, Show b)
                 => String -> a -> b -> Int -> String -> String
       showsCon2 con a b d =
@@ -175,13 +174,13 @@ instance Show (NValueF m (Fix (NValueF m))) where
               . showsPrec 11 a
               . showString " "
               . showsPrec 11 b
-
+-}
 instance Eq (NValue m) where
     NVConstant (NFloat x) == NVConstant (NInt y)   = x == fromInteger y
     NVConstant (NInt x)   == NVConstant (NFloat y) = fromInteger x == y
     NVConstant (NInt x)   == NVConstant (NInt y)   = x == y
     NVConstant (NFloat x) == NVConstant (NFloat y) = x == y
-    NVStr x _ == NVStr y _ = x == y
+    NVStr x   == NVStr y   = hackyStringIgnoreContext x == hackyStringIgnoreContext y
     NVPath x  == NVPath y  = x == y
     _         == _         = False
 
@@ -190,7 +189,7 @@ instance Ord (NValue m) where
     NVConstant (NInt x)   <= NVConstant (NFloat y) = fromInteger x <= y
     NVConstant (NInt x)   <= NVConstant (NInt y)   = x <= y
     NVConstant (NFloat x) <= NVConstant (NFloat y) = x <= y
-    NVStr x _ <= NVStr y _ = x <= y
+    NVStr x   <= NVStr y   = hackyStringIgnoreContext x <= hackyStringIgnoreContext y
     NVPath x  <= NVPath y  = x <= y
     _         <= _         = False
 
@@ -200,7 +199,7 @@ checkComparable x y = case (x, y) of
     (NVConstant (NInt _),   NVConstant (NFloat _)) -> pure ()
     (NVConstant (NInt _),   NVConstant (NInt _))   -> pure ()
     (NVConstant (NFloat _), NVConstant (NFloat _)) -> pure ()
-    (NVStr _ _, NVStr _ _) -> pure ()
+    (NVStr _, NVStr _)     -> pure ()
     (NVPath _, NVPath _)   -> pure ()
     _ -> throwError $ Comparison x y
 
@@ -250,15 +249,15 @@ isDerivation :: MonadThunk (NValue m) (NThunk m) m
              => AttrSet (NThunk m) -> m Bool
 isDerivation m = case M.lookup "type" m of
     Nothing -> pure False
-    Just t -> force t $ valueEq (nvStr "derivation" mempty)
+    Just t -> force t $ valueEq (nvStr (hackyMakeNixStringWithoutContext "derivation"))
 
 valueEq :: MonadThunk (NValue m) (NThunk m) m
         => NValue m -> NValue m -> m Bool
 valueEq l r = case (l, r) of
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
-    (NVStr ls _, NVStr rs _) -> pure $ ls == rs
-    (NVStr ls _, NVConstant NNull) -> pure $ ls == ""
-    (NVConstant NNull, NVStr rs _) -> pure $ "" == rs
+    (NVStr ls, NVStr rs) -> pure (ls == rs) 
+    (NVStr ns, NVConstant NNull) -> pure (hackyStringIgnoreContextMaybe ns == Just "")
+    (NVConstant NNull, NVStr ns) -> pure (Just "" == hackyStringIgnoreContextMaybe ns)
     (NVList ls, NVList rs) -> alignEqM thunkEq ls rs
     (NVSet lm _, NVSet rm _) -> do
         let compareAttrs = alignEqM thunkEq lm rm
@@ -324,7 +323,7 @@ instance Show (NThunk m) where
 
 instance Eq1 (NValueF m) where
     liftEq _  (NVConstantF x)  (NVConstantF y)  = x == y
-    liftEq _  (NVStrF x _)     (NVStrF y _)     = x == y
+    liftEq _  (NVStrF x)     (NVStrF y)     = x == y
     liftEq eq (NVListF x)      (NVListF y)      = liftEq eq x y
     liftEq eq (NVSetF x _)     (NVSetF y _)     = liftEq eq x y
     liftEq _  (NVPathF x)      (NVPathF y)      = x == y
@@ -333,7 +332,7 @@ instance Eq1 (NValueF m) where
 instance Show1 (NValueF m) where
     liftShowsPrec sp sl p = \case
         NVConstantF atom  -> showsUnaryWith showsPrec "NVConstantF" p atom
-        NVStrF txt _      -> showsUnaryWith showsPrec "NVStrF"      p txt
+        NVStrF ns         -> showsUnaryWith showsPrec "NVStrF"      p (hackyStringIgnoreContext ns)
         NVListF     lst   -> showsUnaryWith (liftShowsPrec sp sl) "NVListF" p lst
         NVSetF attrs _    -> showsUnaryWith (liftShowsPrec sp sl) "NVSetF"  p attrs
         NVClosureF c _    -> showsUnaryWith showsPrec "NVClosureF"  p c

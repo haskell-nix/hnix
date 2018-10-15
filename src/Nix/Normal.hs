@@ -25,6 +25,7 @@ import           Nix.Atoms
 import           Nix.Effects
 import           Nix.Frames
 -- import           Nix.Pretty
+import           Nix.String
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
@@ -43,7 +44,7 @@ normalFormBy
     -> StateT [Var m Bool] m (NValueNF m)
 normalFormBy k n v = case v of
     NVConstant a     -> return $ Free $ NVConstantF a
-    NVStr t s        -> return $ Free $ NVStrF t s
+    NVStr ns         -> return $ Free $ NVStrF ns
     NVList l         ->
         fmap (Free . NVListF) $ forM (zip [0..] l) $ \(i :: Int, t) -> do
             traceM $ show n ++ ": normalFormBy: List[" ++ show i ++ "]"
@@ -101,7 +102,7 @@ embed :: forall m. (MonadThunk (NValue m) (NThunk m) m)
 embed (Pure v) = return v
 embed (Free x) = case x of
     NVConstantF a  -> return $ nvConstant a
-    NVStrF t s     -> return $ nvStr t s
+    NVStrF ns      -> return $ nvStr ns
     NVListF l      -> nvList       . fmap (value @_ @_ @m) <$> traverse embed l
     NVSetF s p     -> flip nvSet p . fmap (value @_ @_ @m) <$> traverse embed s
     NVClosureF p f -> return $ nvClosure p f
@@ -109,15 +110,15 @@ embed (Free x) = case x of
     NVBuiltinF n f -> return $ nvBuiltin n f
 
 valueText :: forall e m. (Framed e m, MonadEffects m, Typeable m)
-          => Bool -> NValueNF m -> m (Text, DList Text)
+          => Bool -> NValueNF m -> m NixString
 valueText addPathsToStore = iter phi . check
   where
-    check :: NValueNF m -> Free (NValueF m) (m (Text, DList Text))
-    check = fmap (const $ pure ("<CYCLE>", mempty))
+    check :: NValueNF m -> Free (NValueF m) (m NixString)
+    check = fmap (const $ pure (hackyMakeNixStringWithoutContext "<CYCLE>"))
 
-    phi :: NValueF m (m (Text, DList Text)) -> m (Text, DList Text)
-    phi (NVConstantF a) = pure (atomText a, mempty)
-    phi (NVStrF t c)    = pure (t, c)
+    phi :: NValueF m (m NixString) -> m NixString
+    phi (NVConstantF a) = pure (hackyMakeNixStringWithoutContext (atomText a))
+    phi (NVStrF ns)     = pure ns
     phi v@(NVListF _)   = coercionFailed v
     phi v@(NVSetF s _)
       | Just asString <- M.lookup "__asString" s = asString
@@ -126,8 +127,8 @@ valueText addPathsToStore = iter phi . check
     phi (NVPathF originalPath)
         | addPathsToStore = do
             storePath <- addPath originalPath
-            pure (Text.pack $ unStorePath storePath, mempty)
-        | otherwise = pure (Text.pack originalPath, mempty)
+            pure (hackyMakeNixStringWithoutContext $ Text.pack $ unStorePath storePath)
+        | otherwise = pure (hackyMakeNixStringWithoutContext (Text.pack originalPath))
     phi v@(NVBuiltinF _ _) = coercionFailed v
 
     coercionFailed v =
@@ -135,4 +136,4 @@ valueText addPathsToStore = iter phi . check
 
 valueTextNoContext :: (Framed e m, MonadEffects m, Typeable m)
                    => Bool -> NValueNF m -> m Text
-valueTextNoContext addPathsToStore = fmap fst . valueText addPathsToStore
+valueTextNoContext addPathsToStore = fmap hackyStringIgnoreContext . valueText addPathsToStore
