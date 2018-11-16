@@ -6,7 +6,6 @@ import Nix.Frames
 import Nix.Render
 import Nix.Value
 import System.Exit
-import System.Posix.Files
 import System.Process
 import System.Directory
 
@@ -29,9 +28,6 @@ class (MonadFile m, MonadStore m) => MonadEffects m where
     getEnvVar :: String -> m (Maybe String)
     getCurrentSystemOS :: m Text
     getCurrentSystemArch :: m Text
-
-    listDirectory :: FilePath -> m [FilePath]
-    getSymbolicLinkStatus :: FilePath -> m FileStatus
 
     derivationStrict :: NValue m -> m (NValue m)
 

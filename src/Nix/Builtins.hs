@@ -90,7 +90,7 @@ import           Nix.Utils
 import           Nix.Value
 import           Nix.XML
 import           System.FilePath
-import           System.Posix.Files
+import           System.Posix.Files (isRegularFile, isDirectory, isSymbolicLink)
 import           Text.Regex.TDFA
 
 -- | Evaluate a nix expression in the default context
@@ -965,7 +965,7 @@ readDir_ pathThunk = do
     path  <- absolutePathFromValue =<< pathThunk
     items <- listDirectory path
     itemsWithTypes <- forM items $ \item -> do
-        s <- Nix.Effects.getSymbolicLinkStatus $ path </> item
+        s <- getSymbolicLinkStatus $ path </> item
         let t = if
                 | isRegularFile s  -> FileTypeRegular
                 | isDirectory s    -> FileTypeDirectory

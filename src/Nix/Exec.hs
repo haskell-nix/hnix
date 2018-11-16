@@ -36,7 +36,6 @@ import           Control.Monad.Ref
 import           Control.Monad.State.Strict
 import           Control.Monad.Trans.Reader (ReaderT(..))
 import           Control.Monad.Trans.State.Strict (StateT(..))
-import qualified Data.ByteString as BS
 import           Data.Coerce
 import           Data.Fix
 import           Data.HashMap.Lazy (HashMap)
@@ -73,7 +72,6 @@ import           Nix.Value
 #ifdef MIN_VERSION_haskeline
 import           System.Console.Haskeline.MonadException hiding (catch)
 #endif
-import           System.Directory
 import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
 import           System.FilePath
@@ -486,11 +484,7 @@ instance MonadRef m => MonadRef (Lazy m) where
 instance MonadAtomicRef m => MonadAtomicRef (Lazy m) where
     atomicModifyRef r = lift . atomicModifyRef r
 
-instance (MonadFile m, Monad m) => MonadFile (Lazy m) where
-    readFile = lift . Nix.Render.readFile
-
-instance MonadFile IO where
-    readFile = BS.readFile
+instance (MonadFile m, Monad m) => MonadFile (Lazy m)
 
 instance MonadCatch m => MonadCatch (Lazy m) where
     catch (Lazy (ReaderT m)) f = Lazy $ ReaderT $ \e ->
@@ -514,12 +508,12 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
           MonadIO m, Alternative m, MonadPlus m, Typeable m)
       => MonadEffects (Lazy m) where
     makeAbsolutePath origPath = do
-        origPathExpanded <- liftIO $ expandHomePath origPath
+        origPathExpanded <- expandHomePath origPath
         absPath <- if isAbsolute origPathExpanded then pure origPathExpanded else do
             cwd <- do
                 mres <- lookupVar @_ @(NThunk (Lazy m)) "__cur_file"
                 case mres of
-                    Nothing -> liftIO getCurrentDirectory
+                    Nothing -> getCurrentDirectory
                     Just v -> force v $ \case
                         NVPath s -> return $ takeDirectory s
                         v -> throwError $ ErrorCall $ "when resolving relative path,"
@@ -527,10 +521,10 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
                                 ++ " but is not a path; it is: "
                                 ++ show v
             pure $ cwd <///> origPathExpanded
-        liftIO $ removeDotDotIndirections <$> canonicalizePath absPath
+        removeDotDotIndirections <$> canonicalizePath absPath
 
     -- Given a path, determine the nix file to load
-    pathToDefaultNix = liftIO . pathToDefaultNixFile
+    pathToDefaultNix = pathToDefaultNixFile
 
     findEnvPath = findEnvPathM
     findPath    = findPathM
@@ -567,9 +561,6 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
     getCurrentSystemArch = return $ Text.pack $ case System.Info.arch of
       "i386" -> "i686"
       arch -> arch
-
-    listDirectory         = liftIO . System.Directory.listDirectory
-    getSymbolicLinkStatus = liftIO . System.Posix.Files.getSymbolicLinkStatus
 
     derivationStrict = fromValue @(ValueSet (Lazy m)) >=> \s -> do
         nn <- maybe (pure False) fromNix (M.lookup "__ignoreNulls" s)
@@ -677,12 +668,12 @@ removeDotDotIndirections = intercalate "/" . go [] . splitOn "/"
           go (_:s) ("..":rest) = go s rest
           go s (this:rest) = go (this:s) rest
 
-expandHomePath :: FilePath -> IO FilePath
+expandHomePath :: MonadFile m => FilePath -> m FilePath
 expandHomePath ('~' : xs) = flip (++) xs <$> getHomeDirectory
 expandHomePath p = return p
 
 -- Given a path, determine the nix file to load
-pathToDefaultNixFile :: FilePath -> IO FilePath
+pathToDefaultNixFile :: MonadFile m => FilePath -> m FilePath
 pathToDefaultNixFile p = do
     isDir <- doesDirectoryExist p
     pure $ if isDir then p </> "default.nix" else p
@@ -740,7 +731,7 @@ findPathM l name = findPathBy path l name
       path :: (MonadEffects m, MonadIO m) => FilePath -> m (Maybe FilePath)
       path path = do
           path <- makeAbsolutePath path
-          exists <- liftIO $ doesPathExist path
+          exists <- doesPathExist path
           return $ if exists then Just path else Nothing
 
 findEnvPathM :: forall e m. (MonadNix e m, MonadIO m)
@@ -755,11 +746,11 @@ findEnvPathM name = do
       nixFilePath :: (MonadEffects m, MonadIO m) => FilePath -> m (Maybe FilePath)
       nixFilePath path = do
           path <- makeAbsolutePath path
-          exists <- liftIO $ doesDirectoryExist path
+          exists <- doesDirectoryExist path
           path' <- if exists
                   then makeAbsolutePath $ path </> "default.nix"
                   else return path
-          exists <- liftIO $ doesFileExist path'
+          exists <- doesFileExist path'
           return $ if exists then Just path' else Nothing
 
 addTracing :: (MonadNix e m, Has e Options, MonadIO m,
