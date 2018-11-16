@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -30,7 +31,7 @@ import           System.Process
 -- | A path into the nix store
 newtype StorePath = StorePath { unStorePath :: FilePath }
 
-class (MonadFile m, MonadStore m, MonadPutStr m, MonadHttp m, MonadEnv m, MonadInstantiate m, MonadExec m) => MonadEffects m where
+class (MonadFile m, MonadStore m, MonadPutStr m, MonadHttp m, MonadEnv m, MonadInstantiate m, MonadExec m, MonadIntrospect m) => MonadEffects m where
     -- | Determine the absolute path of relative path in the current context
     makeAbsolutePath :: FilePath -> m FilePath
     findEnvPath :: String -> m FilePath
@@ -44,9 +45,24 @@ class (MonadFile m, MonadStore m, MonadPutStr m, MonadHttp m, MonadEnv m, MonadI
 
     derivationStrict :: NValue m -> m (NValue m)
 
-    getRecursiveSize :: a -> m (NValue m)
-
     traceEffect :: String -> m ()
+
+class Monad m => MonadIntrospect m where
+    recursiveSize :: a -> m Word
+    default recursiveSize :: (MonadTrans t, MonadIntrospect m', m ~ t m') => a -> m Word
+    recursiveSize = lift . recursiveSize
+
+instance MonadIntrospect IO where
+    recursiveSize =
+#ifdef MIN_VERSION_ghc_datasize
+#if MIN_VERSION_ghc_datasize(0,2,0) && __GLASGOW_HASKELL__ >= 804
+        recursiveSize
+#else
+        \_ -> return 0
+#endif
+#else
+        \_ -> return 0
+#endif
 
 class Monad m => MonadExec m where
     exec' :: [String] -> m (Either ErrorCall NExprLoc)

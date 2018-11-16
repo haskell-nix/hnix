@@ -507,9 +507,11 @@ instance MonadInstantiate m => MonadInstantiate (Lazy m)
 
 instance MonadExec m => MonadExec (Lazy m)
 
+instance MonadIntrospect m => MonadIntrospect (Lazy m)
+
 instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
           MonadPutStr m, MonadHttp m, MonadEnv m, MonadInstantiate m, MonadExec m,
-          MonadIO m, Alternative m, MonadPlus m, Typeable m)
+          MonadIntrospect m, MonadIO m, Alternative m, MonadPlus m, Typeable m)
       => MonadEffects (Lazy m) where
     makeAbsolutePath origPath = do
         origPathExpanded <- expandHomePath origPath
@@ -571,18 +573,10 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
           where
             coerceNix = toNix . Text.pack <=< coerceToString True True
 
-    getRecursiveSize =
-#ifdef MIN_VERSION_ghc_datasize
-#if MIN_VERSION_ghc_datasize(0,2,0) && __GLASGOW_HASKELL__ >= 804
-        toNix @Integer <=< fmap fromIntegral . liftIO . recursiveSize
-#else
-        const $ toNix (0 :: Integer)
-#endif
-#else
-        const $ toNix (0 :: Integer)
-#endif
-
     traceEffect = putStrLn
+
+getRecursiveSize :: MonadIntrospect m => a -> m (NValue m)
+getRecursiveSize = toNix @Integer . fromIntegral <=< recursiveSize
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
 runLazyM opts = (`evalStateT` M.empty)
