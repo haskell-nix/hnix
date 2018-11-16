@@ -18,13 +18,15 @@ import           Nix.Render
 import           Nix.Value
 import           Nix.Utils
 import           System.Directory
+import           System.Environment
 import           System.Exit
+import qualified System.Info
 import           System.Process
 
 -- | A path into the nix store
 newtype StorePath = StorePath { unStorePath :: FilePath }
 
-class (MonadFile m, MonadStore m, MonadPutStr m, MonadHttp m) => MonadEffects m where
+class (MonadFile m, MonadStore m, MonadPutStr m, MonadHttp m, MonadEnv m) => MonadEffects m where
     -- | Determine the absolute path of relative path in the current context
     makeAbsolutePath :: FilePath -> m FilePath
     findEnvPath :: String -> m FilePath
@@ -37,10 +39,6 @@ class (MonadFile m, MonadStore m, MonadPutStr m, MonadHttp m) => MonadEffects m 
     importPath :: FilePath -> m (NValue m)
     pathToDefaultNix :: FilePath -> m FilePath
 
-    getEnvVar :: String -> m (Maybe String)
-    getCurrentSystemOS :: m Text
-    getCurrentSystemArch :: m Text
-
     derivationStrict :: NValue m -> m (NValue m)
 
     nixInstantiateExpr :: String -> m (NValue m)
@@ -50,6 +48,27 @@ class (MonadFile m, MonadStore m, MonadPutStr m, MonadHttp m) => MonadEffects m 
     traceEffect :: String -> m ()
 
     exec :: [String] -> m (NValue m)
+
+class Monad m => MonadEnv m where
+    getEnvVar :: String -> m (Maybe String)
+    default getEnvVar :: (MonadTrans t, MonadEnv m', m ~ t m') => String -> m (Maybe String)
+    getEnvVar = lift . getEnvVar
+    getCurrentSystemOS :: m Text
+    default getCurrentSystemOS :: (MonadTrans t, MonadEnv m', m ~ t m') => m Text
+    getCurrentSystemOS = lift getCurrentSystemOS
+    getCurrentSystemArch :: m Text
+    default getCurrentSystemArch :: (MonadTrans t, MonadEnv m', m ~ t m') => m Text
+    getCurrentSystemArch = lift getCurrentSystemArch
+
+instance MonadEnv IO where
+    getEnvVar = lookupEnv
+
+    getCurrentSystemOS = return $ T.pack System.Info.os
+
+    -- Invert the conversion done by GHC_CONVERT_CPU in GHC's aclocal.m4
+    getCurrentSystemArch = return $ T.pack $ case System.Info.arch of
+      "i386" -> "i686"
+      arch -> arch
 
 class Monad m => MonadHttp m where
     getURL :: Text -> m (Either ErrorCall StorePath)

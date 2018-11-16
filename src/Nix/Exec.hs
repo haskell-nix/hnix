@@ -71,10 +71,8 @@ import           Nix.Value
 #ifdef MIN_VERSION_haskeline
 import           System.Console.Haskeline.MonadException hiding (catch)
 #endif
-import           System.Environment
 import           System.Exit (ExitCode (ExitSuccess))
 import           System.FilePath
-import qualified System.Info
 import           System.IO.Error
 import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
@@ -507,8 +505,11 @@ instance MonadPutStr m => MonadPutStr (Lazy m)
 
 instance MonadHttp m => MonadHttp (Lazy m)
 
+instance MonadEnv m => MonadEnv (Lazy m)
+
 instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
-          MonadPutStr m, MonadHttp m, MonadIO m, Alternative m, MonadPlus m, Typeable m)
+          MonadPutStr m, MonadHttp m, MonadEnv m,
+          MonadIO m, Alternative m, MonadPlus m, Typeable m)
       => MonadEffects (Lazy m) where
     makeAbsolutePath origPath = do
         origPathExpanded <- expandHomePath origPath
@@ -555,15 +556,6 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
                             Lazy $ ReaderT $ const $
                                 modify (M.insert path expr)
                             pure expr
-
-    getEnvVar = liftIO . lookupEnv
-
-    getCurrentSystemOS = return $ Text.pack System.Info.os
-
-    -- Invert the conversion done by GHC_CONVERT_CPU in GHC's aclocal.m4
-    getCurrentSystemArch = return $ Text.pack $ case System.Info.arch of
-      "i386" -> "i686"
-      arch -> arch
 
     derivationStrict = fromValue @(ValueSet (Lazy m)) >=> \s -> do
         nn <- maybe (pure False) fromNix (M.lookup "__ignoreNulls" s)
