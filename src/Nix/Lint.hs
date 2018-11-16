@@ -1,8 +1,8 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -13,6 +13,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -27,6 +28,7 @@ import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.Reader (MonadReader)
+import           Control.Monad.Ref
 import           Control.Monad.ST
 import           Control.Monad.Trans.Reader
 import           Data.Coerce
@@ -391,13 +393,14 @@ newtype Lint s a = Lint
     deriving (Functor, Applicative, Monad, MonadFix,
               MonadReader (Context (Lint s) (SThunk (Lint s))))
 
-instance MonadVar (Lint s) where
-    type Var (Lint s) = STRef s
+instance MonadRef (Lint s) where
+    type Ref (Lint s) = Ref (ST s)
+    newRef x     = Lint $ newRef x
+    readRef x    = Lint $ readRef x
+    writeRef x y = Lint $ writeRef x y
 
-    newVar x     = Lint $ ReaderT $ \_ -> newSTRef x
-    readVar x    = Lint $ ReaderT $ \_ -> readSTRef x
-    writeVar x y = Lint $ ReaderT $ \_ -> writeSTRef x y
-    atomicModifyVar x f = Lint $ ReaderT $ \_ -> do
+instance MonadAtomicRef (Lint s) where
+    atomicModifyRef x f = Lint $ ReaderT $ \_ -> do
         res <- snd . f <$> readSTRef x
         _ <- modifySTRef x (fst . f)
         return res

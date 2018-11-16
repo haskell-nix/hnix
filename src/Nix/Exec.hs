@@ -32,6 +32,7 @@ import           Control.Monad.Catch hiding (catchJust)
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
+import           Control.Monad.Ref
 import           Control.Monad.State.Strict
 import           Control.Monad.Trans.Reader (ReaderT(..))
 import           Control.Monad.Trans.State.Strict (StateT(..))
@@ -40,7 +41,6 @@ import           Data.Coerce
 import           Data.Fix
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
-import           Data.IORef
 import           Data.List
 import qualified Data.List.NonEmpty as NE
 import           Data.List.Split
@@ -474,14 +474,17 @@ newtype Lazy m a = Lazy
               MonadFix, MonadIO,
               MonadReader (Context (Lazy m) (NThunk (Lazy m))))
 
-instance MonadIO m => MonadVar (Lazy m) where
-    type Var (Lazy m) = IORef
+instance MonadTrans Lazy where
+    lift = Lazy . lift . lift
 
-    eqVar = (==)
-    newVar = liftIO . newIORef
-    readVar = liftIO . readIORef
-    writeVar = (liftIO .) . writeIORef
-    atomicModifyVar = (liftIO .) . atomicModifyIORef
+instance MonadRef m => MonadRef (Lazy m) where
+    type Ref (Lazy m) = Ref m
+    newRef = lift . newRef
+    readRef = lift . readRef
+    writeRef r = lift . writeRef r
+
+instance MonadAtomicRef m => MonadAtomicRef (Lazy m) where
+    atomicModifyRef r = lift . atomicModifyRef r
 
 instance (MonadIO m, Monad m) => MonadFile (Lazy m) where
     readFile = liftIO . BS.readFile
@@ -500,7 +503,7 @@ instance MonadException m => MonadException (Lazy m) where
       in runLazy <$> f run'
 #endif
 
-instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
+instance (MonadFix m, MonadCatch m, MonadIO m, MonadVar m, Alternative m,
           MonadPlus m, Typeable m)
       => MonadEffects (Lazy m) where
     addPath path = do
