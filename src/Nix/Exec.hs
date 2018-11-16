@@ -486,8 +486,11 @@ instance MonadRef m => MonadRef (Lazy m) where
 instance MonadAtomicRef m => MonadAtomicRef (Lazy m) where
     atomicModifyRef r = lift . atomicModifyRef r
 
-instance (MonadIO m, Monad m) => MonadFile (Lazy m) where
-    readFile = liftIO . BS.readFile
+instance (MonadFile m, Monad m) => MonadFile (Lazy m) where
+    readFile = lift . Nix.Render.readFile
+
+instance MonadFile IO where
+    readFile = BS.readFile
 
 instance MonadCatch m => MonadCatch (Lazy m) where
     catch (Lazy (ReaderT m)) f = Lazy $ ReaderT $ \e ->
@@ -503,25 +506,13 @@ instance MonadException m => MonadException (Lazy m) where
       in runLazy <$> f run'
 #endif
 
-instance (MonadFix m, MonadCatch m, MonadIO m, MonadVar m, Alternative m,
-          MonadPlus m, Typeable m)
+instance MonadStore m => MonadStore (Lazy m) where
+    addPath' = lift . addPath'
+    toFile_' n = lift . toFile_' n
+
+instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
+          MonadIO m, Alternative m, MonadPlus m, Typeable m)
       => MonadEffects (Lazy m) where
-    addPath path = do
-        (exitCode, out, _) <-
-            liftIO $ readProcessWithExitCode "nix-store" ["--add", path] ""
-        case exitCode of
-          ExitSuccess -> do
-            let dropTrailingLinefeed p = take (length p - 1) p
-            return $ StorePath $ dropTrailingLinefeed out
-          _ -> throwError $ ErrorCall $
-                  "addPath: failed: nix-store --add " ++ show path
-
-    toFile_ filepath content = do
-      liftIO $ writeFile filepath content
-      storepath <- addPath filepath
-      liftIO $ removeFile filepath
-      return storepath
-
     makeAbsolutePath origPath = do
         origPathExpanded <- liftIO $ expandHomePath origPath
         absPath <- if isAbsolute origPathExpanded then pure origPathExpanded else do
