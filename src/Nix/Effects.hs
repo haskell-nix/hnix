@@ -1,5 +1,6 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 module Nix.Effects where
 
@@ -8,17 +9,22 @@ import qualified Prelude
 
 import           Control.Monad.Trans
 import           Data.Text (Text)
+import qualified Data.Text as T
+import           Network.HTTP.Client hiding (path)
+import           Network.HTTP.Client.TLS
+import           Network.HTTP.Types
 import           Nix.Frames
 import           Nix.Render
 import           Nix.Value
+import           Nix.Utils
+import           System.Directory
 import           System.Exit
 import           System.Process
-import           System.Directory
 
 -- | A path into the nix store
 newtype StorePath = StorePath { unStorePath :: FilePath }
 
-class (MonadFile m, MonadStore m, MonadPutStr m) => MonadEffects m where
+class (MonadFile m, MonadStore m, MonadPutStr m, MonadHttp m) => MonadEffects m where
     -- | Determine the absolute path of relative path in the current context
     makeAbsolutePath :: FilePath -> m FilePath
     findEnvPath :: String -> m FilePath
@@ -39,13 +45,37 @@ class (MonadFile m, MonadStore m, MonadPutStr m) => MonadEffects m where
 
     nixInstantiateExpr :: String -> m (NValue m)
 
-    getURL :: Text -> m (NValue m)
-
     getRecursiveSize :: a -> m (NValue m)
 
     traceEffect :: String -> m ()
 
     exec :: [String] -> m (NValue m)
+
+class Monad m => MonadHttp m where
+    getURL :: Text -> m (Either ErrorCall StorePath)
+    default getURL :: (MonadTrans t, MonadHttp m', m ~ t m') => Text -> m (Either ErrorCall StorePath)
+    getURL = lift . getURL
+
+instance MonadHttp IO where
+    getURL url = do
+        let urlstr = T.unpack url
+        traceM $ "fetching HTTP URL: " ++ urlstr
+        req <- parseRequest urlstr
+        manager <-
+          if secure req
+          then newTlsManager
+          else newManager defaultManagerSettings
+        -- print req
+        response <- httpLbs (req { method = "GET" }) manager
+        let status = statusCode (responseStatus response)
+        if  status /= 200
+          then return $ Left $ ErrorCall $
+                 "fail, got " ++ show status ++ " when fetching url:" ++ urlstr
+          else -- do
+            -- let bstr = responseBody response
+            return $ Left $ ErrorCall $
+              "success in downloading but hnix-store is not yet ready; url = " ++ urlstr
+
 
 class Monad m => MonadPutStr m where
     --TODO: Should this be used *only* when the Nix to be evaluated invokes a

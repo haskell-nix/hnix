@@ -51,9 +51,6 @@ import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Typeable
 import           GHC.IO.Exception (IOErrorType(..))
-import           Network.HTTP.Client
-import           Network.HTTP.Client.TLS
-import           Network.HTTP.Types
 import           Nix.Atoms
 import           Nix.Context
 import           Nix.Convert
@@ -508,8 +505,10 @@ instance MonadStore m => MonadStore (Lazy m) where
 
 instance MonadPutStr m => MonadPutStr (Lazy m)
 
+instance MonadHttp m => MonadHttp (Lazy m)
+
 instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
-          MonadPutStr m, MonadIO m, Alternative m, MonadPlus m, Typeable m)
+          MonadPutStr m, MonadHttp m, MonadIO m, Alternative m, MonadPlus m, Typeable m)
       => MonadEffects (Lazy m) where
     makeAbsolutePath origPath = do
         origPathExpanded <- expandHomePath origPath
@@ -613,27 +612,6 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
 #else
         const $ toNix (0 :: Integer)
 #endif
-
-    getURL url = do
-        let urlstr = Text.unpack url
-        traceM $ "fetching HTTP URL: " ++ urlstr
-        response <- liftIO $ do
-          req <- parseRequest urlstr
-          manager <-
-            if secure req
-            then newTlsManager
-            else newManager defaultManagerSettings
-          -- print req
-          httpLbs (req { method = "GET" }) manager
-          -- return response
-        let status = statusCode (responseStatus response)
-        if  status /= 200
-          then throwError $ ErrorCall $
-                 "fail, got " ++ show status ++ " when fetching url:" ++ urlstr
-          else -- do
-            -- let bstr = responseBody response
-            throwError $ ErrorCall $
-              "success in downloading but hnix-store is not yet ready; url = " ++ urlstr
 
     traceEffect = putStrLn
 

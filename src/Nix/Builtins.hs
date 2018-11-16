@@ -1038,7 +1038,9 @@ fetchurl v = v >>= \case
  where
     go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
     go _msha = \case
-        NVStr ns -> getURL (hackyStringIgnoreContext ns) -- msha
+        NVStr ns -> getURL (hackyStringIgnoreContext ns) >>= \case -- msha
+            Left e -> throwError e
+            Right p -> toValue p
         v -> throwError $ ErrorCall $
                  "builtins.fetchurl: Expected URI or string, got " ++ show v
 
