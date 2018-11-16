@@ -483,7 +483,7 @@ instance MonadIO m => MonadVar (Lazy m) where
     writeVar = (liftIO .) . writeIORef
     atomicModifyVar = (liftIO .) . atomicModifyIORef
 
-instance (MonadIO m, Monad m) => MonadFile m where
+instance (MonadIO m, Monad m) => MonadFile (Lazy m) where
     readFile = liftIO . BS.readFile
 
 instance MonadCatch m => MonadCatch (Lazy m) where
