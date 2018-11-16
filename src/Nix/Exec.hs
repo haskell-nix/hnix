@@ -32,7 +32,6 @@ import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Catch hiding (catchJust)
 import           Control.Monad.Fix
-import           Control.Monad.IO.Class
 import           Control.Monad.Reader
 import           Control.Monad.Ref
 import           Control.Monad.State.Strict
@@ -511,7 +510,7 @@ instance MonadIntrospect m => MonadIntrospect (Lazy m)
 
 instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
           MonadPutStr m, MonadHttp m, MonadEnv m, MonadInstantiate m, MonadExec m,
-          MonadIntrospect m, MonadIO m, Alternative m, MonadPlus m, Typeable m)
+          MonadIntrospect m, Alternative m, MonadPlus m, Typeable m)
       => MonadEffects (Lazy m) where
     makeAbsolutePath origPath = do
         origPathExpanded <- expandHomePath origPath
@@ -542,7 +541,7 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
             evalExprLoc =<< case M.lookup path imports of
                 Just expr -> pure expr
                 Nothing -> do
-                    eres <- Lazy $ parseNixFileLoc path
+                    eres <- parseNixFileLoc path
                     case eres of
                         Failure err  ->
                             throwError $ ErrorCall . show $
@@ -612,7 +611,7 @@ x <///> y | isAbsolute y || "." `isPrefixOf` y = x </> y
         joinPath $ head [ xs ++ drop (length tx) ys
                         | tx <- tails xs, tx `elem` inits ys ]
 
-findPathBy :: forall e m. (MonadNix e m, MonadIO m) =>
+findPathBy :: forall e m. MonadNix e m =>
             (FilePath -> m (Maybe FilePath)) ->
             [NThunk m] -> FilePath -> m FilePath
 findPathBy finder l name = do
@@ -649,17 +648,17 @@ findPathBy finder l name = do
                   throwError $ ErrorCall $ "__nixPath must be a list of attr sets"
                       ++ " with 'path' elements, but saw: " ++ show s
 
-findPathM :: forall e m. (MonadNix e m, MonadIO m) =>
+findPathM :: forall e m. MonadNix e m =>
             [NThunk m] -> FilePath -> m FilePath
 findPathM l name = findPathBy path l name
     where
-      path :: (MonadEffects m, MonadIO m) => FilePath -> m (Maybe FilePath)
+      path :: MonadEffects m => FilePath -> m (Maybe FilePath)
       path path = do
           path <- makeAbsolutePath path
           exists <- doesPathExist path
           return $ if exists then Just path else Nothing
 
-findEnvPathM :: forall e m. (MonadNix e m, MonadIO m)
+findEnvPathM :: forall e m. MonadNix e m
              => FilePath -> m FilePath
 findEnvPathM name = do
     mres <- lookupVar @_ @(NThunk m) "__nixPath"
@@ -668,7 +667,7 @@ findEnvPathM name = do
         Just x -> force x $ fromValue >=> \(l :: [NThunk m]) ->
           findPathBy nixFilePath l name
     where
-      nixFilePath :: (MonadEffects m, MonadIO m) => FilePath -> m (Maybe FilePath)
+      nixFilePath :: MonadEffects m => FilePath -> m (Maybe FilePath)
       nixFilePath path = do
           path <- makeAbsolutePath path
           exists <- doesDirectoryExist path
