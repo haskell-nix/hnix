@@ -50,7 +50,6 @@ import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Typeable
-import           GHC.IO.Exception (IOErrorType(..))
 import           Nix.Atoms
 import           Nix.Context
 import           Nix.Convert
@@ -73,8 +72,6 @@ import           System.Console.Haskeline.MonadException hiding (catch)
 #endif
 import           System.Exit (ExitCode (ExitSuccess))
 import           System.FilePath
-import           System.IO.Error
-import           System.Posix.Files
 import           System.Process (readProcessWithExitCode)
 import           Text.PrettyPrint.ANSI.Leijen (text)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
@@ -532,13 +529,6 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
 
     findEnvPath = findEnvPathM
     findPath    = findPathM
-
-    pathExists fp = liftIO $ catchJust
-        -- "inappropriate type" error is thrown if `fileExist` is given a filepath where
-        -- a plain file appears as a directory, i.e. /bin/sh/nonexistent-file
-        (\ e -> guard (ioeGetErrorType e == InappropriateType) >> pure e)
-        (fileExist fp)
-        (\ _ -> return False)
 
     importPath path = do
         traceM $ "Importing file " ++ path

@@ -17,7 +17,7 @@ import           Nix.Frames
 import           Nix.Render
 import           Nix.Value
 import           Nix.Utils
-import           System.Directory
+import qualified System.Directory as S
 import           System.Environment
 import           System.Exit
 import qualified System.Info
@@ -35,7 +35,6 @@ class (MonadFile m, MonadStore m, MonadPutStr m, MonadHttp m, MonadEnv m) => Mon
     -- and a file path try to find an existing path
     findPath :: [NThunk m] -> FilePath -> m FilePath
 
-    pathExists :: FilePath -> m Bool
     importPath :: FilePath -> m (NValue m)
     pathToDefaultNix :: FilePath -> m FilePath
 
@@ -48,6 +47,9 @@ class (MonadFile m, MonadStore m, MonadPutStr m, MonadHttp m, MonadEnv m) => Mon
     traceEffect :: String -> m ()
 
     exec :: [String] -> m (NValue m)
+
+pathExists :: MonadFile m => FilePath -> m Bool
+pathExists = doesFileExist
 
 class Monad m => MonadEnv m where
     getEnvVar :: String -> m (Maybe String)
@@ -134,7 +136,7 @@ instance MonadStore IO where
     toFile_' filepath content = do
       writeFile filepath content
       storepath <- addPath' filepath
-      removeFile filepath
+      S.removeFile filepath
       return storepath
 
 addPath :: (Framed e m, MonadStore m) => FilePath -> m StorePath
