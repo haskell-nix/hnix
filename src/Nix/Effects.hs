@@ -1,5 +1,7 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 module Nix.Effects where
@@ -13,10 +15,12 @@ import qualified Data.Text as T
 import           Network.HTTP.Client hiding (path)
 import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
+import           Nix.Expr
 import           Nix.Frames
+import           Nix.Parser
 import           Nix.Render
-import           Nix.Value
 import           Nix.Utils
+import           Nix.Value
 import qualified System.Directory as S
 import           System.Environment
 import           System.Exit
@@ -26,7 +30,7 @@ import           System.Process
 -- | A path into the nix store
 newtype StorePath = StorePath { unStorePath :: FilePath }
 
-class (MonadFile m, MonadStore m, MonadPutStr m, MonadHttp m, MonadEnv m) => MonadEffects m where
+class (MonadFile m, MonadStore m, MonadPutStr m, MonadHttp m, MonadEnv m, MonadInstantiate m, MonadExec m) => MonadEffects m where
     -- | Determine the absolute path of relative path in the current context
     makeAbsolutePath :: FilePath -> m FilePath
     findEnvPath :: String -> m FilePath
@@ -40,13 +44,56 @@ class (MonadFile m, MonadStore m, MonadPutStr m, MonadHttp m, MonadEnv m) => Mon
 
     derivationStrict :: NValue m -> m (NValue m)
 
-    nixInstantiateExpr :: String -> m (NValue m)
-
     getRecursiveSize :: a -> m (NValue m)
 
     traceEffect :: String -> m ()
 
-    exec :: [String] -> m (NValue m)
+class Monad m => MonadExec m where
+    exec' :: [String] -> m (Either ErrorCall NExprLoc)
+    default exec' :: (MonadTrans t, MonadExec m', m ~ t m') => [String] -> m (Either ErrorCall NExprLoc)
+    exec' = lift . exec'
+
+instance MonadExec IO where
+    exec' = \case
+      [] -> return $ Left $ ErrorCall "exec: missing program"
+      (prog:args) -> do
+        (exitCode, out, _) <-
+            liftIO $ readProcessWithExitCode prog args ""
+        let t = T.strip (T.pack out)
+        let emsg = "program[" ++ prog ++ "] args=" ++ show args
+        case exitCode of
+          ExitSuccess ->
+            if T.null t
+            then return $ Left $ ErrorCall $ "exec has no output :" ++ emsg
+            else case parseNixTextLoc t of
+              Failure err ->
+                return $ Left $ ErrorCall $
+                    "Error parsing output of exec: " ++ show err ++ " " ++ emsg
+              Success v -> return $ Right v
+          err -> return $ Left $ ErrorCall $
+                    "exec  failed: " ++ show err ++ " " ++ emsg
+
+class Monad m => MonadInstantiate m where
+    instantiateExpr :: String -> m (Either ErrorCall NExprLoc)
+    default instantiateExpr :: (MonadTrans t, MonadInstantiate m', m ~ t m') => String -> m (Either ErrorCall NExprLoc)
+    instantiateExpr = lift . instantiateExpr
+
+instance MonadInstantiate IO where
+    instantiateExpr expr = do
+        traceM $ "Executing: "
+            ++ show ["nix-instantiate", "--eval", "--expr ", expr]
+        (exitCode, out, err) <-
+            readProcessWithExitCode "nix-instantiate"
+                [ "--eval", "--expr", expr] ""
+        case exitCode of
+            ExitSuccess -> case parseNixTextLoc (T.pack out) of
+                Failure e ->
+                    return $ Left $ ErrorCall $
+                        "Error parsing output of nix-instantiate: " ++ show e
+                Success v -> return $ Right v
+            status ->
+                return $ Left $ ErrorCall $ "nix-instantiate failed: " ++ show status
+                    ++ ": " ++ err
 
 pathExists :: MonadFile m => FilePath -> m Bool
 pathExists = doesFileExist

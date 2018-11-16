@@ -40,6 +40,7 @@ import           Control.Monad.Trans.Reader (ReaderT(..))
 import           Control.Monad.Trans.State.Strict (StateT(..))
 import           Data.Coerce
 import           Data.Fix
+import           Data.GADT.Compare
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.List
@@ -70,9 +71,7 @@ import           Nix.Value
 #ifdef MIN_VERSION_haskeline
 import           System.Console.Haskeline.MonadException hiding (catch)
 #endif
-import           System.Exit (ExitCode (ExitSuccess))
 import           System.FilePath
-import           System.Process (readProcessWithExitCode)
 import           Text.PrettyPrint.ANSI.Leijen (text)
 import qualified Text.PrettyPrint.ANSI.Leijen as P
 #ifdef MIN_VERSION_pretty_show
@@ -504,8 +503,12 @@ instance MonadHttp m => MonadHttp (Lazy m)
 
 instance MonadEnv m => MonadEnv (Lazy m)
 
+instance MonadInstantiate m => MonadInstantiate (Lazy m)
+
+instance MonadExec m => MonadExec (Lazy m)
+
 instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
-          MonadPutStr m, MonadHttp m, MonadEnv m,
+          MonadPutStr m, MonadHttp m, MonadEnv m, MonadInstantiate m, MonadExec m,
           MonadIO m, Alternative m, MonadPlus m, Typeable m)
       => MonadEffects (Lazy m) where
     makeAbsolutePath origPath = do
@@ -568,22 +571,6 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
           where
             coerceNix = toNix . Text.pack <=< coerceToString True True
 
-    nixInstantiateExpr expr = do
-        traceM $ "Executing: "
-            ++ show ["nix-instantiate", "--eval", "--expr ", expr]
-        (exitCode, out, err) <-
-            liftIO $ readProcessWithExitCode "nix-instantiate"
-                [ "--eval", "--expr", expr] ""
-        case exitCode of
-            ExitSuccess -> case parseNixTextLoc (Text.pack out) of
-                Failure err ->
-                    throwError $ ErrorCall $
-                        "Error parsing output of nix-instantiate: " ++ show err
-                Success v -> evalExprLoc v
-            status ->
-                throwError $ ErrorCall $ "nix-instantiate failed: " ++ show status
-                    ++ ": " ++ err
-
     getRecursiveSize =
 #ifdef MIN_VERSION_ghc_datasize
 #if MIN_VERSION_ghc_datasize(0,2,0) && __GLASGOW_HASKELL__ >= 804
@@ -596,25 +583,6 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
 #endif
 
     traceEffect = putStrLn
-
-    exec = \case
-      [] -> throwError $ ErrorCall "exec: missing program"
-      (prog:args) -> do
-        (exitCode, out, _) <-
-            liftIO $ readProcessWithExitCode prog args ""
-        let t = Text.strip (Text.pack out)
-        let emsg = "program[" ++ prog ++ "] args=" ++ show args
-        case exitCode of
-          ExitSuccess ->
-            if Text.null t
-            then throwError $ ErrorCall $ "exec has no output :" ++ emsg
-            else case parseNixTextLoc t of
-              Failure err ->
-                throwError $ ErrorCall $
-                    "Error parsing output of exec: " ++ show err ++ " " ++ emsg
-              Success v -> evalExprLoc v
-          err -> throwError $ ErrorCall $
-                    "exec  failed: " ++ show err ++ " " ++ emsg
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
 runLazyM opts = (`evalStateT` M.empty)
@@ -716,7 +684,7 @@ findEnvPathM name = do
           exists <- doesFileExist path'
           return $ if exists then Just path' else Nothing
 
-addTracing :: (MonadNix e m, Has e Options, MonadIO m,
+addTracing :: (MonadNix e m, Has e Options,
               MonadReader Int n, Alternative n)
            => Alg NExprLocF (m a) -> Alg NExprLocF (n (m a))
 addTracing k v = do
@@ -741,7 +709,7 @@ addTracing k v = do
             print $ msg rendered <> text " ...done"
             return res
 
-evalExprLoc :: forall e m. (MonadNix e m, Has e Options, MonadIO m)
+evalExprLoc :: forall e m. (MonadNix e m, Has e Options)
             => NExprLoc -> m (NValue m)
 evalExprLoc expr = do
     opts :: Options <- asks (view hasLens)
@@ -791,3 +759,9 @@ fetchTarball v = v >>= \case
         nixInstantiateExpr $ "builtins.fetchTarball { "
           ++ "url    = \"" ++ Text.unpack url ++ "\"; "
           ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"
+
+exec :: (MonadExec m, Framed e m, MonadThrow m, Alternative m, MonadCatch m, MonadFix m, MonadEffects m, GEq (Ref m), MonadAtomicRef m, Typeable m, Has e (Scopes m (NThunk m)), Has e Options, Has e SrcSpan) => [String] -> m (NValue m)
+exec args = either throwError evalExprLoc =<< exec' args
+
+nixInstantiateExpr :: (MonadInstantiate m, Framed e m, MonadThrow m, Alternative m, MonadCatch m, MonadFix m, MonadEffects m, GEq (Ref m), MonadAtomicRef m, Typeable m, Has e (Scopes m (NThunk m)), Has e Options, Has e SrcSpan) => String -> m (NValue m)
+nixInstantiateExpr s = either throwError evalExprLoc =<< instantiateExpr s
