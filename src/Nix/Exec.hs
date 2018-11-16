@@ -26,6 +26,8 @@
 
 module Nix.Exec where
 
+import           Prelude hiding (putStr, putStrLn, print)
+
 import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Catch hiding (catchJust)
@@ -504,8 +506,10 @@ instance MonadStore m => MonadStore (Lazy m) where
     addPath' = lift . addPath'
     toFile_' n = lift . toFile_' n
 
+instance MonadPutStr m => MonadPutStr (Lazy m)
+
 instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
-          MonadIO m, Alternative m, MonadPlus m, Typeable m)
+          MonadPutStr m, MonadIO m, Alternative m, MonadPlus m, Typeable m)
       => MonadEffects (Lazy m) where
     makeAbsolutePath origPath = do
         origPathExpanded <- expandHomePath origPath
@@ -628,11 +632,10 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
                  "fail, got " ++ show status ++ " when fetching url:" ++ urlstr
           else -- do
             -- let bstr = responseBody response
-            -- liftIO $ print bstr
             throwError $ ErrorCall $
               "success in downloading but hnix-store is not yet ready; url = " ++ urlstr
 
-    traceEffect = liftIO . putStrLn
+    traceEffect = putStrLn
 
     exec = \case
       [] -> throwError $ ErrorCall "exec: missing program"
@@ -773,9 +776,9 @@ addTracing k v = do
                     else prettyNix (Fix (Fix (NSym "?") <$ x))
                 msg x = text ("eval: " ++ replicate depth ' ') <> x
             loc <- renderLocation span (msg rendered <> text " ...\n")
-            liftIO $ putStr $ show loc
+            putStr $ show loc
             res <- k v'
-            liftIO $ print $ msg rendered <> text " ...done"
+            print $ msg rendered <> text " ...done"
             return res
 
 evalExprLoc :: forall e m. (MonadNix e m, Has e Options, MonadIO m)

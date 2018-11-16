@@ -1,18 +1,24 @@
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies #-}
 module Nix.Effects where
 
-import Data.Text (Text)
-import Nix.Frames
-import Nix.Render
-import Nix.Value
-import System.Exit
-import System.Process
-import System.Directory
+import           Prelude hiding (putStr, putStrLn, print)
+import qualified Prelude
+
+import           Control.Monad.Trans
+import           Data.Text (Text)
+import           Nix.Frames
+import           Nix.Render
+import           Nix.Value
+import           System.Exit
+import           System.Process
+import           System.Directory
 
 -- | A path into the nix store
 newtype StorePath = StorePath { unStorePath :: FilePath }
 
-class (MonadFile m, MonadStore m) => MonadEffects m where
+class (MonadFile m, MonadStore m, MonadPutStr m) => MonadEffects m where
     -- | Determine the absolute path of relative path in the current context
     makeAbsolutePath :: FilePath -> m FilePath
     findEnvPath :: String -> m FilePath
@@ -40,6 +46,22 @@ class (MonadFile m, MonadStore m) => MonadEffects m where
     traceEffect :: String -> m ()
 
     exec :: [String] -> m (NValue m)
+
+class Monad m => MonadPutStr m where
+    --TODO: Should this be used *only* when the Nix to be evaluated invokes a
+    --`trace` operation?
+    putStr :: String -> m ()
+    default putStr :: (MonadTrans t, MonadPutStr m', m ~ t m') => String -> m ()
+    putStr = lift . putStr
+
+putStrLn :: MonadPutStr m => String -> m ()
+putStrLn = putStr . (++"\n")
+
+print :: (MonadPutStr m, Show a) => a -> m ()
+print = putStrLn . show
+
+instance MonadPutStr IO where
+    putStr = Prelude.putStr
 
 class Monad m => MonadStore m where
     -- | Import a path into the nix store, and return the resulting path
