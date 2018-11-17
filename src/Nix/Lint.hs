@@ -117,7 +117,7 @@ unpackSymbolic :: MonadVar m
                => Symbolic m -> m (NSymbolicF (NTypeF m (SThunk m)))
 unpackSymbolic = readVar . coerce
 
-type MonadLint e m = (Scoped e (SThunk m) m, Framed e m, MonadVar m,
+type MonadLint e m = (Scoped (SThunk m) m, Framed e m, MonadVar m,
                       MonadCatch m)
 
 symerr :: forall e m a. MonadLint e m => String -> m a
@@ -423,3 +423,9 @@ lint opts expr = runLintM opts $
         >>= (`pushScopes`
                 adi (Eval.eval . annotated . getCompose)
                     Eval.addSourcePositions expr)
+
+instance Scoped (SThunk (Lint s)) (Lint s) where
+  currentScopes = currentScopesReader
+  clearScopes = clearScopesReader @(Lint s) @(SThunk (Lint s))
+  pushScopes = pushScopesReader
+  lookupVar = lookupVarReader

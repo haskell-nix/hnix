@@ -84,7 +84,7 @@ import           GHC.DataSize
 #endif
 
 type MonadNix e m =
-    (Scoped e (NThunk m) m, Framed e m, Has e SrcSpan, Has e Options,
+    (Scoped (NThunk m) m, Framed e m, Has e SrcSpan, Has e Options,
      Typeable m, MonadVar m, MonadEffects m, MonadFix m, MonadCatch m,
      Alternative m)
 
@@ -516,7 +516,7 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
         origPathExpanded <- expandHomePath origPath
         absPath <- if isAbsolute origPathExpanded then pure origPathExpanded else do
             cwd <- do
-                mres <- lookupVar @_ @(NThunk (Lazy m)) "__cur_file"
+                mres <- lookupVar "__cur_file"
                 case mres of
                     Nothing -> getCurrentDirectory
                     Just v -> force v $ \case
@@ -661,7 +661,7 @@ findPathM l name = findPathBy path l name
 findEnvPathM :: forall e m. MonadNix e m
              => FilePath -> m FilePath
 findEnvPathM name = do
-    mres <- lookupVar @_ @(NThunk m) "__nixPath"
+    mres <- lookupVar "__nixPath"
     case mres of
         Nothing -> error "impossible"
         Just x -> force x $ fromValue >=> \(l :: [NThunk m]) ->
@@ -713,7 +713,7 @@ evalExprLoc expr = do
                  expr
         else adi phi (addStackFrames @(NThunk m) . addSourcePositions) expr
   where
-    phi = Eval.eval @_ @(NValue m) @(NThunk m) @m . annotated . getCompose
+    phi = Eval.eval . annotated . getCompose
     raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x
 
 fetchTarball :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
@@ -753,8 +753,14 @@ fetchTarball v = v >>= \case
           ++ "url    = \"" ++ Text.unpack url ++ "\"; "
           ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"
 
-exec :: (MonadExec m, Framed e m, MonadThrow m, Alternative m, MonadCatch m, MonadFix m, MonadEffects m, GEq (Ref m), MonadAtomicRef m, Typeable m, Has e (Scopes m (NThunk m)), Has e Options, Has e SrcSpan) => [String] -> m (NValue m)
+exec :: (MonadExec m, Framed e m, MonadThrow m, Alternative m, MonadCatch m, MonadFix m, MonadEffects m, GEq (Ref m), MonadAtomicRef m, Typeable m, Has e Options, Has e SrcSpan, Scoped (NThunk m) m) => [String] -> m (NValue m)
 exec args = either throwError evalExprLoc =<< exec' args
 
-nixInstantiateExpr :: (MonadInstantiate m, Framed e m, MonadThrow m, Alternative m, MonadCatch m, MonadFix m, MonadEffects m, GEq (Ref m), MonadAtomicRef m, Typeable m, Has e (Scopes m (NThunk m)), Has e Options, Has e SrcSpan) => String -> m (NValue m)
+nixInstantiateExpr :: (MonadInstantiate m, Framed e m, MonadThrow m, Alternative m, MonadCatch m, MonadFix m, MonadEffects m, GEq (Ref m), MonadAtomicRef m, Typeable m, Has e Options, Has e SrcSpan, Scoped (NThunk m) m) => String -> m (NValue m)
 nixInstantiateExpr s = either throwError evalExprLoc =<< instantiateExpr s
+
+instance Monad m => Scoped (NThunk (Lazy m)) (Lazy m) where
+  currentScopes = currentScopesReader
+  clearScopes = clearScopesReader @(Lazy m) @(NThunk (Lazy m))
+  pushScopes = pushScopesReader
+  lookupVar = lookupVarReader

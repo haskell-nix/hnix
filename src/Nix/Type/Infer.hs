@@ -9,6 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
@@ -616,3 +617,9 @@ solve cs = solve' (nextSolvable cs)
     solve' (ExpInstConst t s, cs) = do
       s' <- lift $ instantiate s
       solve (EqConst t s' : cs)
+
+instance Scoped (JThunk s) (Infer s) where
+  currentScopes = currentScopesReader
+  clearScopes = clearScopesReader @(Infer s) @(JThunk s)
+  pushScopes = pushScopesReader
+  lookupVar = lookupVarReader

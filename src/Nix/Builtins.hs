@@ -110,7 +110,7 @@ withNixContext mpath action = do
                 let ref = value @(NValue m) @(NThunk m) @m $ nvPath path
                 pushScope (M.singleton "__cur_file" ref) action
 
-builtins :: (MonadNix e m, Scoped e (NThunk m) m)
+builtins :: (MonadNix e m, Scoped (NThunk m) m)
          => m (Scopes m (NThunk m))
 builtins = do
     ref <- thunk $ flip nvSet M.empty <$> buildMap
@@ -296,7 +296,7 @@ builtinsList = sequence [
 foldNixPath :: forall e m r. MonadNix e m
             => (FilePath -> Maybe String -> NixPathEntryType -> r -> m r) -> r -> m r
 foldNixPath f z = do
-    mres <- lookupVar @_ @(NThunk m) "__includes"
+    mres <- lookupVar "__includes"
     dirs <- case mres of
         Nothing -> return []
         Just v  -> fromNix @[Text] v
@@ -822,7 +822,7 @@ scopedImport asetArg pathArg =
     fromValue @(AttrSet (NThunk m)) asetArg >>= \s ->
     fromValue pathArg >>= \(Path p) -> do
         path  <- pathToDefaultNix p
-        mres  <- lookupVar @_ @(NThunk m) "__cur_file"
+        mres  <- lookupVar "__cur_file"
         path' <- case mres of
             Nothing  -> do
                 traceM "No known current directory"
