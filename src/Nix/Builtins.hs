@@ -468,10 +468,12 @@ splitVersion s = case Text.uncons s of
           in thisComponent : splitVersion rest
 
 splitVersion_ :: MonadNix e m => m (NValue m) -> m (NValue m)
-splitVersion_ = fromValue >=> \s -> do
-    let vals = flip map (splitVersion s) $ \c ->
-            valueThunk $ nvStr $ hackyMakeNixStringWithoutContext $ versionComponentToString c
-    return $ nvList vals
+splitVersion_ = fromValue >=> \str ->
+  case principledStringIgnoreContextMaybe str of
+    Just s -> return $ nvList $ flip map (splitVersion s) $ \c ->
+      valueThunk $ nvStr $ principledMakeNixStringWithoutContext $ versionComponentToString c
+    Nothing -> throwError $ ErrorCall $
+      "builtins.splitVersion: string must not have context"
 
 compareVersions :: Text -> Text -> Ordering
 compareVersions s1 s2 =
