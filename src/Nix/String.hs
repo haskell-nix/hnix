@@ -15,8 +15,7 @@ module Nix.String (
   , principledMakeNixStringWithSingletonContext
   , hackyModifyNixContents
   , principledStringMappend
-  , hackyStringMappend
-  , hackyStringMConcat
+  , principledStringMConcat
 ) where
 
 import qualified Data.HashSet as S
@@ -26,7 +25,7 @@ import qualified Data.Text as Text
 import           GHC.Generics
 import           Data.Semigroup
 
--- {-# WARNING hackyStringMappend, hackyStringMConcat, hackyStringIgnoreContextMaybe, hackyStringIgnoreContext, hackyMakeNixStringWithoutContext, hackyModifyNixContents "This NixString function needs to be replaced" #-}
+-- {-# WARNING hackyStringIgnoreContextMaybe, hackyStringIgnoreContext, hackyMakeNixStringWithoutContext, hackyModifyNixContents "This NixString function needs to be replaced" #-}
 
 -- | A 'ContextFlavor' describes the sum of possible derivations for string contexts
 data ContextFlavor =
@@ -75,6 +74,10 @@ principledIntercalateNixString sep nss = NixString contents ctx
 -- | Combine NixStrings using mconcat
 hackyStringMConcat :: [NixString] -> NixString
 hackyStringMConcat = foldr hackyStringMappend (NixString mempty mempty)
+
+-- | Combine NixStrings using mconcat
+principledStringMConcat :: [NixString] -> NixString
+principledStringMConcat = foldr principledStringMappend (NixString mempty mempty)
 
 --instance Semigroup NixString where
   --NixString s1 t1 <> NixString s2 t2 = NixString (s1 <> s2) (t1 <> t2)
