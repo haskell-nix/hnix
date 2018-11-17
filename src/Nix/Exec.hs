@@ -475,6 +475,13 @@ coerceToString copyToStore coerceMore = go
       where
         t = Text.pack $ unStorePath sp
 
+fromStringNoContext :: MonadNix e m => m (NValue m) -> m Text
+fromStringNoContext =
+  fromValue >=> \s -> case principledGetStringNoContext s of
+    Just str -> return str
+    Nothing -> throwError $ ErrorCall
+      "expected string with no context"
+
 newtype Lazy m a = Lazy
     { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m)))
                         (StateT (HashMap FilePath NExprLoc) m) a }
