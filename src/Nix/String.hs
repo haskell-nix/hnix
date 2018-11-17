@@ -16,6 +16,7 @@ module Nix.String (
   , principledMakeNixStringWithSingletonContext
   , principledModifyNixContents
   , principledStringMappend
+  , principledStringMempty
   , principledStringMConcat
 ) where
 
@@ -75,6 +76,10 @@ principledIntercalateNixString sep nss = NixString contents ctx
 -- | Combine NixStrings using mconcat
 hackyStringMConcat :: [NixString] -> NixString
 hackyStringMConcat = foldr hackyStringMappend (NixString mempty mempty)
+
+-- | Empty string with empty context.
+principledStringMempty :: NixString
+principledStringMempty = NixString mempty mempty
 
 -- | Combine NixStrings using mconcat
 principledStringMConcat :: [NixString] -> NixString
