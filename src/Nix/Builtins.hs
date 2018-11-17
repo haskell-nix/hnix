@@ -601,7 +601,7 @@ catAttrs attrName xs =
 
 baseNameOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 baseNameOf x = x >>= \case
-    NVStr ns -> pure $ nvStr (hackyModifyNixContents (Text.pack . takeFileName . Text.unpack) ns)
+    NVStr ns -> pure $ nvStr (principledModifyNixContents (Text.pack . takeFileName . Text.unpack) ns)
     NVPath path -> pure $ nvPath $ takeFileName path
     v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
 
@@ -622,7 +622,7 @@ bitXor x y =
 
 dirOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 dirOf x = x >>= \case
-    NVStr ns -> pure $ nvStr (hackyModifyNixContents (Text.pack . takeDirectory . Text.unpack) ns)
+    NVStr ns -> pure $ nvStr (principledModifyNixContents (Text.pack . takeDirectory . Text.unpack) ns)
     NVPath path -> pure $ nvPath $ takeDirectory path
     v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
 

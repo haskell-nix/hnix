@@ -13,7 +13,7 @@ module Nix.String (
   , hackyMakeNixStringWithoutContext
   , principledMakeNixStringWithoutContext
   , principledMakeNixStringWithSingletonContext
-  , hackyModifyNixContents
+  , principledModifyNixContents
   , principledStringMappend
   , principledStringMConcat
 ) where
@@ -25,7 +25,7 @@ import qualified Data.Text as Text
 import           GHC.Generics
 import           Data.Semigroup
 
--- {-# WARNING hackyStringIgnoreContextMaybe, hackyStringIgnoreContext, hackyMakeNixStringWithoutContext, hackyModifyNixContents "This NixString function needs to be replaced" #-}
+-- {-# WARNING hackyStringIgnoreContextMaybe, hackyStringIgnoreContext, hackyMakeNixStringWithoutContext "This NixString function needs to be replaced" #-}
 
 -- | A 'ContextFlavor' describes the sum of possible derivations for string contexts
 data ContextFlavor =
@@ -108,8 +108,8 @@ principledMakeNixStringWithoutContext :: Text -> NixString
 principledMakeNixStringWithoutContext = flip NixString mempty
 
 -- | Modify the string part of the NixString -- ignores the context
-hackyModifyNixContents :: (Text -> Text) -> NixString -> NixString
-hackyModifyNixContents f (NixString s c) = NixString (f s) c
+principledModifyNixContents :: (Text -> Text) -> NixString -> NixString
+principledModifyNixContents f (NixString s c) = NixString (f s) c
 
 -- | Create a NixString using a singleton context
 principledMakeNixStringWithSingletonContext :: Text -> StringContext -> NixString
