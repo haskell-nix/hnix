@@ -12,7 +12,7 @@
   "inputs": {
     "src": {
       "type": "git",
-      "value": "https://github.com/haskell-nix/hnix.git master",
+      "value": "https://github.com/haskell-nix/hnix.git master 1",
       "emailresponsible": false
     },
     "nixpkgs": {
