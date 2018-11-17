@@ -255,7 +255,7 @@ valueEq :: MonadThunk (NValue m) (NThunk m) m
         => NValue m -> NValue m -> m Bool
 valueEq = curry $ \case
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
-    (NVStr ls, NVStr rs) -> pure (ls == rs) 
+    (NVStr ls, NVStr rs) -> pure $ principledStringIgnoreContext ls == principledStringIgnoreContext rs
     (NVStr ns, NVConstant NNull) -> pure (hackyStringIgnoreContextMaybe ns == Just "")
     (NVConstant NNull, NVStr ns) -> pure (Just "" == hackyStringIgnoreContextMaybe ns)
     (NVList ls, NVList rs) -> alignEqM thunkEq ls rs
