@@ -346,13 +346,13 @@ execBinaryOp scope span op lval rarg = do
             _     -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVStr _, NVConstant NNull) -> case op of
-            NEq  -> toBool =<< valueEq lval (nvStr (hackyMakeNixStringWithoutContext ""))
-            NNEq -> toBool . not =<< valueEq lval (nvStr (hackyMakeNixStringWithoutContext ""))
+            NEq  -> toBool False
+            NNEq -> toBool True
             _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVConstant NNull, NVStr _) -> case op of
-            NEq  -> toBool =<< valueEq (nvStr (hackyMakeNixStringWithoutContext "")) rval
-            NNEq -> toBool . not =<< valueEq (nvStr (hackyMakeNixStringWithoutContext "")) rval
+            NEq  -> toBool False
+            NNEq -> toBool True
             _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVSet ls lp, NVSet rs rp) -> case op of
