@@ -62,6 +62,7 @@ import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
 import           Data.Text (Text)
 import           Data.Text hiding (map, foldr1, concat, concatMap, zipWith)
+import           Data.Text.Prettyprint.Doc (Doc, pretty)
 import qualified Data.Text.IO as T
 import           Data.Typeable (Typeable)
 import           Data.Void
@@ -72,7 +73,6 @@ import           Text.Megaparsec
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 import           Text.Megaparsec.Expr
-import           Text.PrettyPrint.ANSI.Leijen (Doc, text)
 
 infixl 3 <+>
 (<+>) :: MonadPlus m => m a -> m a -> m a
@@ -437,17 +437,17 @@ reservedNames = HashSet.fromList
 
 type Parser = ParsecT Void Text Identity
 
-data Result a = Success a | Failure Doc deriving (Show, Functor)
+data Result a = Success a | Failure (Doc Void) deriving (Show, Functor)
 
 parseFromFileEx :: MonadIO m => Parser a -> FilePath -> m (Result a)
 parseFromFileEx p path = do
     txt <- liftIO (T.readFile path)
-    return $ either (Failure . text . parseErrorPretty' txt) Success
+    return $ either (Failure . pretty . parseErrorPretty' txt) Success
            $ parse p path txt
 
 parseFromText :: Parser a -> Text -> Result a
 parseFromText p txt =
-    either (Failure . text . parseErrorPretty' txt) Success $
+    either (Failure . pretty . parseErrorPretty' txt) Success $
         parse p "<string>" txt
 
 {- Parser.Operators -}

@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7e613ce82a3337411d625301abd33a6d7f1c400edadbd602287027f2af1e4fdf
+-- hash: 0e0438f43eaffbbd952e85bc24499b40e17f276ec7488f3a483e7d848ea1075d
 
 cabal-version:  >= 1.10
 name:           hnix
@@ -486,7 +486,6 @@ library
   ghc-options: -Wall
   build-depends:
       aeson
-    , ansi-wl-pprint
     , array >=0.4 && <0.6
     , base >=4.9 && <5
     , binary
@@ -510,6 +509,7 @@ library
     , monadlist
     , mtl
     , optparse-applicative
+    , prettyprinter
     , process
     , regex-tdfa
     , regex-tdfa-text
@@ -574,7 +574,6 @@ executable hnix
   ghc-options: -Wall
   build-depends:
       aeson
-    , ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
     , containers
@@ -588,6 +587,7 @@ executable hnix
     , mtl
     , optparse-applicative
     , pretty-show
+    , prettyprinter
     , repline
     , template-haskell
     , text
@@ -633,7 +633,6 @@ test-suite hnix-tests
   build-depends:
       Diff
     , Glob
-    , ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
     , containers
@@ -651,6 +650,7 @@ test-suite hnix-tests
     , mtl
     , optparse-applicative
     , pretty-show
+    , prettyprinter
     , process
     , split
     , tasty
@@ -696,8 +696,7 @@ benchmark hnix-benchmarks
       benchmarks
   ghc-options: -Wall
   build-depends:
-      ansi-wl-pprint
-    , base >=4.9 && <5
+      base >=4.9 && <5
     , bytestring
     , containers
     , criterion
