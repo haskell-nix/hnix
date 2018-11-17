@@ -9,6 +9,7 @@ module Nix.String (
   , stringHasContext
   , principledIntercalateNixString
   , hackyStringIgnoreContextMaybe
+  , principledStringIgnoreContext
   , hackyStringIgnoreContext
   , hackyMakeNixStringWithoutContext
   , principledMakeNixStringWithoutContext
@@ -92,6 +93,10 @@ hackyStringIgnoreContextMaybe (NixString s c) | null c = Just s
                                 | otherwise = Nothing
 
 -- | Extract the string contents from a NixString even if the NixString has an associated context
+principledStringIgnoreContext :: NixString -> Text
+principledStringIgnoreContext (NixString s _) = s
+
+-- | Extract the string contents from a NixString even if the NixString has an associated context 
 hackyStringIgnoreContext :: NixString -> Text
 hackyStringIgnoreContext (NixString s _) = s
 
