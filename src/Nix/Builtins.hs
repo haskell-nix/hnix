@@ -324,7 +324,7 @@ nixPath = fmap nvList $ flip foldNixPath [] $ \p mn ty rest ->
                    nvStr (hackyMakeNixStringWithoutContext $ Text.pack (fromMaybe "" mn))) ]) : rest
 
 toString :: MonadNix e m => m (NValue m) -> m (NValue m)
-toString str = str >>= coerceToString False True >>= toNix . Text.pack
+toString str = str >>= coerceToString False True >>= toNix
 
 hasAttr :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 hasAttr x y =
@@ -388,9 +388,9 @@ div_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
         toNix (floor (fromInteger x / fromInteger y :: Double) :: Integer)
     (NVConstant (NFloat x), NVConstant (NInt y))   | y /= 0 ->
         toNix (x / fromInteger y)
-    (NVConstant (NInt x),   NVConstant (NFloat y)) | y /= 0 -> 
+    (NVConstant (NInt x),   NVConstant (NFloat y)) | y /= 0 ->
         toNix (fromInteger x / y)
-    (NVConstant (NFloat x), NVConstant (NFloat y)) | y /= 0 -> 
+    (NVConstant (NFloat x), NVConstant (NFloat y)) | y /= 0 ->
         toNix (x / y)
     (_, _) ->
         throwError $ Division x' y'
