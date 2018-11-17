@@ -8,7 +8,6 @@ module Nix.String (
   , hackyMakeNixStringWithoutContext
   , hackyModifyNixContents
   , principledStringMappend
-  , hackyStringMappend
   , principledStringMConcat
 ) where
 
@@ -18,7 +17,7 @@ import           Data.Text (Text)
 import           GHC.Generics
 import           Data.Semigroup
 
--- {-# WARNING hackyStringMappend, hackyStringIgnoreContextMaybe, hackyStringIgnoreContext, hackyMakeNixStringWithoutContext, hackyModifyNixContents "This NixString function needs to be replaced" #-}
+-- {-# WARNING hackyStringIgnoreContextMaybe, hackyStringIgnoreContext, hackyMakeNixStringWithoutContext, hackyModifyNixContents "This NixString function needs to be replaced" #-}
 
 -- | A 'ContextFlavor' describes the sum of possible derivations for string contexts
 data ContextFlavor = 
@@ -47,13 +46,9 @@ instance Hashable NixString
 principledStringMappend :: NixString -> NixString -> NixString
 principledStringMappend (NixString s1 t1) (NixString s2 t2) = NixString (s1 <> s2) (t1 <> t2)
 
--- | Combine two NixStrings using mappend
-hackyStringMappend :: NixString -> NixString -> NixString
-hackyStringMappend (NixString s1 t1) (NixString s2 t2) = NixString (s1 <> s2) (t1 <> t2)
-
 -- | Combine NixStrings using mconcat
 principledStringMConcat :: [NixString] -> NixString
-principledStringMConcat = foldr hackyStringMappend (NixString mempty mempty)
+principledStringMConcat = foldr principledStringMappend (NixString mempty mempty)
 
 --instance Semigroup NixString where
   --NixString s1 t1 <> NixString s2 t2 = NixString (s1 <> s2) (t1 <> t2)
