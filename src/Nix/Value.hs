@@ -249,7 +249,11 @@ isDerivation :: MonadThunk (NValue m) (NThunk m) m
              => AttrSet (NThunk m) -> m Bool
 isDerivation m = case M.lookup "type" m of
     Nothing -> pure False
-    Just t -> force t $ valueEq (nvStr (hackyMakeNixStringWithoutContext "derivation"))
+    Just t -> force t $ \case
+      -- We should probably really make sure the context is empty here but the
+      -- C++ implementation ignores it.
+      NVStr s -> pure $ principledStringIgnoreContext s == "derivation"
+      _ -> pure False
 
 valueEq :: MonadThunk (NValue m) (NThunk m) m
         => NValue m -> NValue m -> m Bool
