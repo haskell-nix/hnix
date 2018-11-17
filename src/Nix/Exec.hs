@@ -375,14 +375,14 @@ execBinaryOp scope span op lval rarg = do
 
         (ls@NVSet {}, NVStr rs) -> case op of
             NPlus   -> (\ls2 -> bin nvStrP (ls2 `principledStringMappend` rs))
-                <$> coerceToString False False ls
+                <$> coerceToString DontCopyToStore CoerceStringy ls
             NEq     -> toBool =<< valueEq lval rval
             NNEq    -> toBool . not =<< valueEq lval rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVStr ls, rs@NVSet {}) -> case op of
             NPlus   -> (\rs2 -> bin nvStrP (ls `principledStringMappend` rs2))
-                <$> coerceToString False False rs
+                <$> coerceToString DontCopyToStore CoerceStringy rs
             NEq     -> toBool =<< valueEq lval rval
             NNEq    -> toBool . not =<< valueEq lval rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
@@ -443,22 +443,37 @@ execBinaryOp scope span op lval rarg = do
         toInt   = pure . bin nvConstantP . NInt
         toFloat = pure . bin nvConstantP . NFloat
 
--- coerceNix = toNix . Text.pack <=< coerceToString True True
-coerceToString :: MonadNix e m => Bool -> Bool -> NValue m -> m NixString
-coerceToString copyToStore coerceMore = go
+-- | Data type to avoid boolean blindness on what used to be called coerceMore
+data CoercionLevel
+  = CoerceStringy
+  -- ^ Coerce only stringlike types: strings, paths, and appropriate sets
+  | CoerceAny
+  -- ^ Coerce everything but functions
+  deriving (Eq,Ord,Enum,Bounded)
+
+-- | Data type to avoid boolean blindness on what used to be called copyToStore
+data CopyToStoreMode
+  = CopyToStore
+  -- ^ Add paths to the store as they are encountered
+  | DontCopyToStore
+  -- ^ Add paths to the store as they are encountered
+  deriving (Eq,Ord,Enum,Bounded)
+
+coerceToString :: MonadNix e m => CopyToStoreMode -> CoercionLevel -> NValue m -> m NixString
+coerceToString ctsm clevel = go
   where
     go = \case
         NVConstant (NBool b)
             -- TODO Return a singleton for "" and "1"
-            | b && coerceMore  -> pure $ principledMakeNixStringWithoutContext "1"
-            | coerceMore      -> pure $ principledMakeNixStringWithoutContext ""
-        NVConstant (NInt n)   | coerceMore -> pure $ principledMakeNixStringWithoutContext $ Text.pack $ show n
-        NVConstant (NFloat n) | coerceMore -> pure $ principledMakeNixStringWithoutContext $ Text.pack $ show n
-        NVConstant NNull      | coerceMore -> pure $ principledMakeNixStringWithoutContext ""
+            | b && clevel == CoerceAny -> pure $ principledMakeNixStringWithoutContext "1"
+            | clevel == CoerceAny      -> pure $ principledMakeNixStringWithoutContext ""
+        NVConstant (NInt n)   | clevel == CoerceAny -> pure $ principledMakeNixStringWithoutContext $ Text.pack $ show n
+        NVConstant (NFloat n) | clevel == CoerceAny -> pure $ principledMakeNixStringWithoutContext $ Text.pack $ show n
+        NVConstant NNull      | clevel == CoerceAny -> pure $ principledMakeNixStringWithoutContext ""
         NVStr ns -> pure ns
-        NVPath p  | copyToStore -> storePathToNixString <$> addPath p
+        NVPath p  | ctsm == CopyToStore -> storePathToNixString <$> addPath p
                   | otherwise   -> pure $ principledMakeNixStringWithoutContext $ Text.pack p
-        NVList l | coerceMore   -> nixStringUnwords <$> traverse (`force` go) l
+        NVList l | clevel == CoerceAny -> nixStringUnwords <$> traverse (`force` go) l
 
         v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
             force p $ (`callFunc` pure v) >=> go
@@ -604,7 +619,7 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
                 NVConstant NNull | ignoreNulls -> pure Nothing
                 v' -> Just <$> coerceNix v'
           where
-            coerceNix = toNix <=< coerceToString True True
+            coerceNix = toNix <=< coerceToString CopyToStore CoerceAny
 
     nixInstantiateExpr expr = do
         traceM $ "Executing: "

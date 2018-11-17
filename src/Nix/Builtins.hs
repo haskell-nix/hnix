@@ -324,7 +324,7 @@ nixPath = fmap nvList $ flip foldNixPath [] $ \p mn ty rest ->
                    nvStr (hackyMakeNixStringWithoutContext $ Text.pack (fromMaybe "" mn))) ]) : rest
 
 toString :: MonadNix e m => m (NValue m) -> m (NValue m)
-toString str = str >>= coerceToString False True >>= toNix
+toString str = str >>= coerceToString DontCopyToStore CoerceAny >>= toNix
 
 hasAttr :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 hasAttr x y =
