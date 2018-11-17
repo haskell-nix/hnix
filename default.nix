@@ -80,8 +80,8 @@ drv = haskellPackages.developPackage {
         # .cabal file will be. Otherwise, Travis may error out claiming that
         # the cabal file needs to be updated because the result is different
         # that the version we committed to Git.
-        pkgs.haskell.packages.ghc843.hpack
-        pkgs.haskell.packages.ghc843.criterion
+        pkgs.haskell.packages.ghc822.hpack
+        pkgs.haskell.packages.ghc822.criterion
       ];
 
     inherit doBenchmark;
