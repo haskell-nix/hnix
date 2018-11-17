@@ -336,7 +336,7 @@ execBinaryOp scope span op lval rarg = do
             _                  -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVStr ls, NVStr rs) -> case op of
-            NPlus -> pure $ bin nvStrP (ls `hackyStringMappend` rs)
+            NPlus -> pure $ bin nvStrP (ls `principledStringMappend` rs)
             NEq   -> toBool =<< valueEq lval rval
             NNEq  -> toBool . not =<< valueEq lval rval
             NLt   -> toBool $ ls <  rs

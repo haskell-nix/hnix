@@ -42,7 +42,11 @@ data NixString = NixString
 
 instance Hashable NixString
 
--- | Combine two NixStrings using mappend 
+-- | Combine two NixStrings using mappend
+principledStringMappend :: NixString -> NixString -> NixString
+principledStringMappend (NixString s1 t1) (NixString s2 t2) = NixString (s1 <> s2) (t1 <> t2)
+
+-- | Combine two NixStrings using mappend
 hackyStringMappend :: NixString -> NixString -> NixString
 hackyStringMappend (NixString s1 t1) (NixString s2 t2) = NixString (s1 <> s2) (t1 <> t2)
 
