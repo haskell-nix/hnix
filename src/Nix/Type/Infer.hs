@@ -47,6 +47,7 @@ import           Nix.Eval (MonadEval(..))
 import qualified Nix.Eval as Eval
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
+import           Nix.String
 import           Nix.Scope
 import           Nix.Thunk
 import qualified Nix.Type.Assumption as As
@@ -444,7 +445,7 @@ data Judgment s = Judgment
     }
     deriving Show
 
-instance FromValue (Text, DList Text) (Infer s) (Judgment s) where
+instance FromValue NixString (Infer s) (Judgment s) where
     fromValueMay _ = return Nothing
     fromValue _ = error "Unused"
 

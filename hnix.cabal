@@ -1,11 +1,10 @@
-cabal-version: >= 1.10
-
--- This file has been generated from package.yaml by hpack version 0.29.7.
+-- This file has been generated from package.yaml by hpack version 0.28.2.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: db047ec647c1294d48f00efbf9730dd31e90dd93940ce25df499b90fa85e8626
+-- hash: 7e613ce82a3337411d625301abd33a6d7f1c400edadbd602287027f2af1e4fdf
 
+cabal-version:  >= 1.10
 name:           hnix
 version:        0.5.2
 synopsis:       Haskell implementation of the Nix language
@@ -469,6 +468,7 @@ library
       Nix.Render
       Nix.Render.Frame
       Nix.Scope
+      Nix.String
       Nix.Strings
       Nix.TH
       Nix.Thunk

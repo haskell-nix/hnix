@@ -20,6 +20,7 @@ import qualified EvalTests
 import qualified Nix
 import           Nix.Exec
 import           Nix.Expr.Types
+import           Nix.String
 import           Nix.Options
 import           Nix.Parser
 import           Nix.Value
@@ -63,9 +64,10 @@ ensureNixpkgsCanParse =
           url    = "https://github.com/NixOS/nixpkgs/archive/#{rev}.tar.gz";
           sha256 = "#{sha256}";
         }|]) $ \expr -> do
-        NVStr dir _ <- do
+        NVStr ns <- do
           time <- liftIO getCurrentTime
           runLazyM (defaultOptions time) $ Nix.nixEvalExprLoc Nothing expr
+        let dir = hackyStringIgnoreContext ns
         exists <- fileExist (unpack dir)
         unless exists $
           errorWithoutStackTrace $
@@ -118,3 +120,4 @@ main = do
     , nixLanguageTests ] ++
     [ testCase "Nixpkgs parses without errors" ensureNixpkgsCanParse
       | isJust nixpkgsTestsEnv ]
+

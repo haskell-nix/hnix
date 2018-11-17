@@ -60,6 +60,7 @@ import           Nix.Effects
 import           Nix.Eval as Eval
 import           Nix.Expr
 import           Nix.Frames
+import           Nix.String
 import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser
@@ -189,11 +190,11 @@ instance MonadNix e m => MonadEval (NValue m) m where
         pure $ nvConstantP (Provenance scope (NConstant_ span c)) c
 
     evalString = assembleString >=> \case
-        Just (s, c) -> do
+        Just ns -> do
             scope <- currentScopes
             span  <- currentPos
             pure $ nvStrP (Provenance scope
-                           (NStr_ span (DoubleQuoted [Plain s]))) s c
+                           (NStr_ span (DoubleQuoted [Plain (hackyStringIgnoreContext ns)]))) ns
         Nothing -> nverr $ ErrorCall "Failed to assemble string"
 
     evalLiteralPath p = do
@@ -334,8 +335,8 @@ execBinaryOp scope span op lval rarg = do
              NBool l, NBool r) -> toBool $ not l || r
             _                  -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
-        (NVStr ls lc, NVStr rs rc) -> case op of
-            NPlus -> pure $ bin nvStrP (ls `mappend` rs) (lc `mappend` rc)
+        (NVStr ls, NVStr rs) -> case op of
+            NPlus -> pure $ bin nvStrP (ls `hackyStringMappend` rs)
             NEq   -> toBool =<< valueEq lval rval
             NNEq  -> toBool . not =<< valueEq lval rval
             NLt   -> toBool $ ls <  rs
@@ -344,14 +345,14 @@ execBinaryOp scope span op lval rarg = do
             NGte  -> toBool $ ls >= rs
             _     -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
-        (NVStr _ _, NVConstant NNull) -> case op of
-            NEq  -> toBool =<< valueEq lval (nvStr "" mempty)
-            NNEq -> toBool . not =<< valueEq lval (nvStr "" mempty)
+        (NVStr _, NVConstant NNull) -> case op of
+            NEq  -> toBool =<< valueEq lval (nvStr (hackyMakeNixStringWithoutContext ""))
+            NNEq -> toBool . not =<< valueEq lval (nvStr (hackyMakeNixStringWithoutContext ""))
             _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
-        (NVConstant NNull, NVStr _ _) -> case op of
-            NEq  -> toBool =<< valueEq (nvStr "" mempty) rval
-            NNEq -> toBool . not =<< valueEq (nvStr "" mempty) rval
+        (NVConstant NNull, NVStr _) -> case op of
+            NEq  -> toBool =<< valueEq (nvStr (hackyMakeNixStringWithoutContext "")) rval
+            NNEq -> toBool . not =<< valueEq (nvStr (hackyMakeNixStringWithoutContext "")) rval
             _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVSet ls lp, NVSet rs rp) -> case op of
@@ -372,15 +373,15 @@ execBinaryOp scope span op lval rarg = do
             NNEq    -> toBool . not =<< valueEq (nvSet M.empty M.empty) rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
-        (ls@NVSet {}, NVStr rs rc) -> case op of
-            NPlus   -> (\ls -> bin nvStrP (Text.pack ls `mappend` rs) rc)
+        (ls@NVSet {}, NVStr rs) -> case op of
+            NPlus   -> (\ls -> bin nvStrP (hackyModifyNixContents (Text.pack ls `mappend`) rs))
                 <$> coerceToString False False ls
             NEq     -> toBool =<< valueEq lval rval
             NNEq    -> toBool . not =<< valueEq lval rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
-        (NVStr ls lc, rs@NVSet {}) -> case op of
-            NPlus   -> (\rs -> bin nvStrP (ls `mappend` Text.pack rs) lc)
+        (NVStr ls, rs@NVSet {}) -> case op of
+            NPlus   -> (\rs -> bin nvStrP (hackyModifyNixContents (`mappend` Text.pack rs) ls))
                 <$> coerceToString False False rs
             NEq     -> toBool =<< valueEq lval rval
             NNEq    -> toBool . not =<< valueEq lval rval
@@ -404,10 +405,10 @@ execBinaryOp scope span op lval rarg = do
             NNEq    -> toBool . not =<< valueEq (nvList []) rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
-        (NVPath p, NVStr s _) -> case op of
-            NEq   -> toBool $ p == Text.unpack s
-            NNEq  -> toBool $ p /= Text.unpack s
-            NPlus -> bin nvPathP <$> makeAbsolutePath (p `mappend` Text.unpack s)
+        (NVPath p, NVStr ns) -> case op of
+            NEq   -> toBool $ Just p == fmap Text.unpack (hackyStringIgnoreContextMaybe ns)
+            NNEq  -> toBool $ Just p /= fmap Text.unpack (hackyStringIgnoreContextMaybe ns)
+            NPlus -> bin nvPathP <$> makeAbsolutePath (p `mappend` Text.unpack (hackyStringIgnoreContext ns))
             _     -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVPath ls, NVPath rs) -> case op of
@@ -453,7 +454,7 @@ coerceToString copyToStore coerceMore = go
         NVConstant (NFloat n) | coerceMore -> pure $ show n
         NVConstant NNull      | coerceMore -> pure ""
 
-        NVStr t _ -> pure $ Text.unpack t
+        NVStr ns -> pure $ Text.unpack (hackyStringIgnoreContext ns)
         NVPath p  | copyToStore -> unStorePath <$> addPath p
                   | otherwise   -> pure p
         NVList l | coerceMore   -> unwords <$> traverse (`force` go) l
@@ -565,6 +566,7 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
                             pure expr
 
     getEnvVar = liftIO . lookupEnv
+
     getCurrentSystemOS = return $ Text.pack System.Info.os
 
     -- Invert the conversion done by GHC_CONVERT_CPU in GHC's aclocal.m4
@@ -817,7 +819,7 @@ fetchTarball v = v >>= \case
  where
     go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
     go msha = \case
-        NVStr uri _ -> fetch uri msha
+        NVStr ns -> fetch (hackyStringIgnoreContext ns) msha
         v -> throwError $ ErrorCall $
                 "builtins.fetchTarball: Expected URI or string, got " ++ show v
 

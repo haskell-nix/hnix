@@ -33,6 +33,7 @@ import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Expr
 import           Nix.Frames
+import           Nix.String
 import           Nix.Scope
 import           Nix.Strings (runAntiquoted)
 import           Nix.Thunk
@@ -82,7 +83,7 @@ type MonadNixEval e v t m =
      MonadFix m,
      ToValue Bool m v,
      ToValue [t] m v,
-     FromValue (Text, DList Text) m v,
+     FromValue NixString m v,
      ToValue (AttrSet t, AttrSet SourcePos) m v,
      FromValue (AttrSet t, AttrSet SourcePos) m v)
 
@@ -296,7 +297,7 @@ evalSelect aset attr = do
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value
-evalGetterKeyName :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
+evalGetterKeyName :: forall v m. (MonadEval v m, FromValue NixString m v)
                   => NKeyName (m v) -> m Text
 evalGetterKeyName = evalSetterKeyName >=> \case
     Just k -> pure k
@@ -304,22 +305,24 @@ evalGetterKeyName = evalSetterKeyName >=> \case
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *binding* a value
-evalSetterKeyName :: (MonadEval v m, FromValue (Text, DList Text) m v)
+evalSetterKeyName :: (MonadEval v m, FromValue NixString m v)
                   => NKeyName (m v) -> m (Maybe Text)
 evalSetterKeyName = \case
     StaticKey  k -> pure (Just k)
-    DynamicKey k ->
-        runAntiquoted "\n" assembleString (>>= fromValueMay) k <&> fmap fst
+    DynamicKey k -> 
+        runAntiquoted "\n" assembleString (>>= fromValueMay) k <&> 
+            \case Just ns -> Just (hackyStringIgnoreContext ns)
+                  _ -> Nothing
 
-assembleString :: forall v m. (MonadEval v m, FromValue (Text, DList Text) m v)
-               => NString (m v) -> m (Maybe (Text, DList Text))
+assembleString :: forall v m. (MonadEval v m, FromValue NixString m v)
+               => NString (m v) -> m (Maybe NixString)
 assembleString = \case
     Indented _   parts -> fromParts parts
     DoubleQuoted parts -> fromParts parts
   where
-    fromParts = fmap (fmap mconcat . sequence) . traverse go
+    fromParts = fmap (fmap hackyStringMConcat . sequence) . traverse go
 
-    go = runAntiquoted "\n" (pure . Just . (, mempty)) (>>= fromValueMay)
+    go = runAntiquoted "\n" (pure . Just . hackyMakeNixStringWithoutContext) (>>= fromValueMay)
 
 buildArgument :: forall e v t m. MonadNixEval e v t m
               => Params (m v) -> m v -> m (AttrSet t)

@@ -44,6 +44,7 @@ import           Nix.Eval (MonadEval(..))
 import qualified Nix.Eval as Eval
 import           Nix.Expr
 import           Nix.Frames
+import           Nix.String
 import           Nix.Options
 import           Nix.Scope
 import           Nix.Thunk
@@ -237,7 +238,7 @@ instance ToValue Bool m (Symbolic m) where
 
 instance ToValue [SThunk m] m (Symbolic m) where
 
-instance FromValue (Text, DList Text) m (Symbolic m) where
+instance FromValue NixString m (Symbolic m) where
 
 instance FromValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
 
