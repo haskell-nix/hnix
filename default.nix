@@ -28,6 +28,12 @@ drv = haskellPackages.developPackage {
 
   overrides = with pkgs.haskell.lib; self: super: {
     mono-traversable = dontCheck super.mono-traversable;
+    megaparsec = self.callCabal2nix "megaparsec" (pkgs.fetchFromGitHub {
+      owner = "mrkkrp";
+      repo = "megaparsec";
+      rev = "9fff501f7794c01e2cf4a7a492f1cfef67fab19a";
+      sha256 = "0a9g6gpc8m9qrvldwn4chs0yqnr4dps93achg1df72lxknrpp0iy";
+    }) {};
   }
   //
   (if compiler == "ghc802"
