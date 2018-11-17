@@ -8,8 +8,8 @@ module Nix.String (
   , ContextFlavor(..)
   , stringHasContext
   , principledIntercalateNixString
-  , hackyStringIgnoreContextMaybe
-  , principledStringIgnoreContextMaybe
+  , hackyGetStringNoContext
+  , principledGetStringNoContext
   , principledStringIgnoreContext
   , hackyStringIgnoreContext
   , hackyMakeNixStringWithoutContext
@@ -28,7 +28,7 @@ import qualified Data.Text as Text
 import           GHC.Generics
 import           Data.Semigroup
 
--- {-# WARNING hackyStringIgnoreContextMaybe, hackyStringIgnoreContext, hackyMakeNixStringWithoutContext "This NixString function needs to be replaced" #-}
+-- {-# WARNING hackyGetStringNoContext, hackyStringIgnoreContext, hackyMakeNixStringWithoutContext "This NixString function needs to be replaced" #-}
 
 -- | A 'ContextFlavor' describes the sum of possible derivations for string contexts
 data ContextFlavor =
@@ -94,13 +94,13 @@ principledStringMConcat = foldr principledStringMappend (NixString mempty mempty
 --  mappend = (<>)
 
 -- | Extract the string contents from a NixString that has no context
-hackyStringIgnoreContextMaybe :: NixString -> Maybe Text
-hackyStringIgnoreContextMaybe (NixString s c) | null c = Just s
+hackyGetStringNoContext :: NixString -> Maybe Text
+hackyGetStringNoContext (NixString s c) | null c = Just s
                                 | otherwise = Nothing
 
 -- | Extract the string contents from a NixString that has no context
-principledStringIgnoreContextMaybe :: NixString -> Maybe Text
-principledStringIgnoreContextMaybe (NixString s c) | null c = Just s
+principledGetStringNoContext :: NixString -> Maybe Text
+principledGetStringNoContext (NixString s c) | null c = Just s
                                      | otherwise = Nothing
 
 -- | Extract the string contents from a NixString even if the NixString has an associated context

@@ -469,7 +469,7 @@ splitVersion s = case Text.uncons s of
 
 splitVersion_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 splitVersion_ = fromValue >=> \str ->
-  case principledStringIgnoreContextMaybe str of
+  case principledGetStringNoContext str of
     Just s -> return $ nvList $ flip map (splitVersion s) $ \c ->
       valueThunk $ nvStr $ principledMakeNixStringWithoutContext $ versionComponentToString c
     Nothing -> throwError $ ErrorCall $
@@ -486,7 +486,7 @@ compareVersions_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 compareVersions_ t1 t2 =
     fromValue t1 >>= \s1 ->
     fromValue t2 >>= \s2 ->
-      case (principledStringIgnoreContextMaybe s1, principledStringIgnoreContextMaybe s2) of
+      case (principledGetStringNoContext s1, principledGetStringNoContext s2) of
         (Just str1, Just str2) -> return $ nvConstant $ NInt $
           case compareVersions str1 str2 of
             LT -> -1

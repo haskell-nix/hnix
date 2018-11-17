@@ -406,8 +406,8 @@ execBinaryOp scope span op lval rarg = do
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVPath p, NVStr ns) -> case op of
-            NEq   -> toBool $ Just p == fmap Text.unpack (hackyStringIgnoreContextMaybe ns)
-            NNEq  -> toBool $ Just p /= fmap Text.unpack (hackyStringIgnoreContextMaybe ns)
+            NEq   -> toBool $ Just p == fmap Text.unpack (hackyGetStringNoContext ns)
+            NNEq  -> toBool $ Just p /= fmap Text.unpack (hackyGetStringNoContext ns)
             NPlus -> bin nvPathP <$> makeAbsolutePath (p `mappend` Text.unpack (hackyStringIgnoreContext ns))
             _     -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
