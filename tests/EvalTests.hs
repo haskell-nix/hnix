@@ -18,6 +18,7 @@ import           Data.String.Interpolate.IsString
 import           Data.Text (Text)
 import           Data.Time
 import           Nix
+import           Nix.TH
 import qualified System.Directory as D
 import           System.Environment
 import           System.FilePath
@@ -352,6 +353,13 @@ case_mapattrs_builtin =
       })
     |]
 
+-- Regression test for #373
+case_regression_373 :: Assertion
+case_regression_373 = do
+  freeVarsEqualTest "{ inherit a; }" ["a"]
+  freeVarsEqualTest "rec {inherit a; }" ["a"]
+  freeVarsEqualTest "let inherit a; in { }" ["a"]
+
 -----------------------
 
 tests :: TestTree
@@ -411,3 +419,10 @@ assertNixEvalThrows a = do
     where
        handler :: NixException -> IO Bool
        handler _ = pure True
+
+freeVarsEqual :: Text -> [VarName] -> Assertion
+freeVarsEqual a xs = do
+  let Success a' = parseNixText a
+      xs' = S.fromList xs
+      free = freeVars a'
+  assertEqual "" xs' free
