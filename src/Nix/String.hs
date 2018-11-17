@@ -7,6 +7,7 @@ module Nix.String (
   , hackyStringIgnoreContext
   , hackyMakeNixStringWithoutContext
   , hackyModifyNixContents
+  , principledStringMappend
   , hackyStringMappend
   , hackyStringMConcat
 ) where
