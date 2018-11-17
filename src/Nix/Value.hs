@@ -253,7 +253,7 @@ isDerivation m = case M.lookup "type" m of
 
 valueEq :: MonadThunk (NValue m) (NThunk m) m
         => NValue m -> NValue m -> m Bool
-valueEq l r = case (l, r) of
+valueEq = curry $ \case
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
     (NVStr ls, NVStr rs) -> pure (ls == rs) 
     (NVStr ns, NVConstant NNull) -> pure (hackyStringIgnoreContextMaybe ns == Just "")
