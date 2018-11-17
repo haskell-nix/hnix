@@ -374,14 +374,14 @@ execBinaryOp scope span op lval rarg = do
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (ls@NVSet {}, NVStr rs) -> case op of
-            NPlus   -> (\ls -> bin nvStrP (hackyModifyNixContents (Text.pack ls `mappend`) rs))
+            NPlus   -> (\ls2 -> bin nvStrP (ls2 `principledStringMappend` rs))
                 <$> coerceToString False False ls
             NEq     -> toBool =<< valueEq lval rval
             NNEq    -> toBool . not =<< valueEq lval rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVStr ls, rs@NVSet {}) -> case op of
-            NPlus   -> (\rs -> bin nvStrP (hackyModifyNixContents (`mappend` Text.pack rs) ls))
+            NPlus   -> (\rs2 -> bin nvStrP (ls `principledStringMappend` rs2))
                 <$> coerceToString False False rs
             NEq     -> toBool =<< valueEq lval rval
             NNEq    -> toBool . not =<< valueEq lval rval
@@ -443,21 +443,22 @@ execBinaryOp scope span op lval rarg = do
         toInt   = pure . bin nvConstantP . NInt
         toFloat = pure . bin nvConstantP . NFloat
 
-coerceToString :: MonadNix e m => Bool -> Bool -> NValue m -> m String
+-- coerceNix = toNix . Text.pack <=< coerceToString True True
+coerceToString :: MonadNix e m => Bool -> Bool -> NValue m -> m NixString
 coerceToString copyToStore coerceMore = go
   where
     go = \case
         NVConstant (NBool b)
-            | b && coerceMore  -> pure "1"
-            | coerceMore      -> pure ""
-        NVConstant (NInt n)   | coerceMore -> pure $ show n
-        NVConstant (NFloat n) | coerceMore -> pure $ show n
-        NVConstant NNull      | coerceMore -> pure ""
-
-        NVStr ns -> pure $ Text.unpack (hackyStringIgnoreContext ns)
-        NVPath p  | copyToStore -> unStorePath <$> addPath p
-                  | otherwise   -> pure p
-        NVList l | coerceMore   -> unwords <$> traverse (`force` go) l
+            -- TODO Return a singleton for "" and "1"
+            | b && coerceMore  -> pure $ principledMakeNixStringWithoutContext "1"
+            | coerceMore      -> pure $ principledMakeNixStringWithoutContext ""
+        NVConstant (NInt n)   | coerceMore -> pure $ principledMakeNixStringWithoutContext $ Text.pack $ show n
+        NVConstant (NFloat n) | coerceMore -> pure $ principledMakeNixStringWithoutContext $ Text.pack $ show n
+        NVConstant NNull      | coerceMore -> pure $ principledMakeNixStringWithoutContext ""
+        NVStr ns -> pure ns
+        NVPath p  | copyToStore -> storePathToNixString <$> addPath p
+                  | otherwise   -> pure $ principledMakeNixStringWithoutContext $ Text.pack p
+        NVList l | coerceMore   -> nixStringUnwords <$> traverse (`force` go) l
 
         v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
             force p $ (`callFunc` pure v) >=> go
@@ -466,6 +467,13 @@ coerceToString copyToStore coerceMore = go
             force p go
 
         v -> throwError $ ErrorCall $ "Expected a string, but saw: " ++ show v
+
+    nixStringUnwords = principledIntercalateNixString (principledMakeNixStringWithoutContext " ")
+    storePathToNixString :: StorePath -> NixString
+    storePathToNixString sp =
+        principledMakeNixStringWithSingletonContext t (StringContext t DirectPath)
+      where
+        t = Text.pack $ unStorePath sp
 
 newtype Lazy m a = Lazy
     { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m)))
@@ -596,7 +604,7 @@ instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
                 NVConstant NNull | ignoreNulls -> pure Nothing
                 v' -> Just <$> coerceNix v'
           where
-            coerceNix = toNix . Text.pack <=< coerceToString True True
+            coerceNix = toNix <=< coerceToString True True
 
     nixInstantiateExpr expr = do
         traceM $ "Executing: "
