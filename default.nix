@@ -30,14 +30,11 @@ drv = haskellPackages.developPackage {
     mono-traversable = dontCheck super.mono-traversable;
   }
   //
-  (if compiler == "ghc802"
-   then {
+  (pkgs.lib.optionalAttrs (compiler == "ghc802") {
      concurrent-output = doJailbreak super.concurrent-output;
-   }
-   else {})
+  })
   //
-  (if compiler == "ghcjs" then {} else
-   {
+  (pkgs.lib.optionalAttrs (compiler != "ghcjs") {
      cryptohash-md5    = doJailbreak super.cryptohash-md5;
      cryptohash-sha1   = doJailbreak super.cryptohash-sha1;
      cryptohash-sha256 = doJailbreak super.cryptohash-sha256;
@@ -55,15 +52,12 @@ drv = haskellPackages.developPackage {
          enableLibraryProfiling    = false;
          enableExecutableProfiling = false;
        });
-   });
+  });
 
-  source-overrides =
-    if compiler == "ghc802"
-    then {
-      lens-family-core = "1.2.1";
-      lens-family = "1.2.1";
-    }
-    else {};
+  source-overrides = pkgs.lib.optionalAttrs (compiler == "ghc802") {
+    lens-family-core = "1.2.1";
+    lens-family = "1.2.1";
+  };
 
   modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
     buildTools = (attrs.buildTools or []) ++ [
