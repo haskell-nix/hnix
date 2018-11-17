@@ -486,10 +486,13 @@ compareVersions_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 compareVersions_ t1 t2 =
     fromValue t1 >>= \s1 ->
     fromValue t2 >>= \s2 ->
-        return $ nvConstant $ NInt $ case compareVersions s1 s2 of
+      case (principledStringIgnoreContextMaybe s1, principledStringIgnoreContextMaybe s2) of
+        (Just str1, Just str2) -> return $ nvConstant $ NInt $
+          case compareVersions str1 str2 of
             LT -> -1
             EQ -> 0
             GT -> 1
+        _ -> throwError $ ErrorCall "builtins.compareVersions: expecting strings with no context"
 
 splitDrvName :: Text -> (Text, Text)
 splitDrvName s =
