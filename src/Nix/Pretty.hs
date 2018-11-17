@@ -234,6 +234,7 @@ exprFNixDoc = \case
         text "with"  <+> withoutParens scope <> semi <$> align (withoutParens body)
     NAssert cond body -> leastPrecedence $
         text "assert" <+> withoutParens cond <> semi <$> align (withoutParens body)
+    NSynHole name -> simpleExpr $ text ("^" <> unpack name)
   where
     recPrefix = text "rec" <> space
 

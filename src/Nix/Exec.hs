@@ -162,6 +162,14 @@ instance MonadNix e m => MonadEval (NValue m) m where
     freeVariable var =
         nverr $ ErrorCall $ "Undefined variable '" ++ Text.unpack var ++ "'"
 
+    synHole name = do
+        span <- currentPos
+        scope <- currentScopes @_ @(NThunk m)
+        evalError @(NValue m) $ SynHole $ SynHoleInfo
+          { _synHoleInfo_expr = Fix $ NSynHole_ span name
+          , _synHoleInfo_scope = scope
+          }
+
     attrMissing ks Nothing =
         evalError @(NValue m) $ ErrorCall $
             "Inheriting unknown attribute: "

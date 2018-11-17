@@ -342,6 +342,10 @@ instance MonadEval (Judgment s) (Infer s) where
         tv <- fresh
         return $ Judgment (As.singleton var tv) [] tv
 
+    synHole var = do
+        tv <- fresh
+        return $ Judgment (As.singleton var tv) [] tv
+
     -- If we fail to look up an attribute, we just don't know the type.
     attrMissing _ _ = Judgment As.empty [] <$> fresh
 

@@ -127,7 +127,8 @@ nixTerm = do
         x == '<' ||
         x == '/' ||
         x == '"' ||
-        x == '\''
+        x == '\''||
+        x == '^'
     case c of
         '('  -> nixSelect nixParens
         '{'  -> nixSelect nixSet
@@ -136,6 +137,7 @@ nixTerm = do
         '/'  -> nixPath
         '"'  -> nixString
         '\'' -> nixString
+        '^'  -> nixSynHole
         _    -> msum $
             [ nixSelect nixSet | c == 'r' ] ++
             [ nixPath | pathChar c ] ++
@@ -154,6 +156,9 @@ nixToplevelForm = keywords <+> nixLambda <+> nixExpr
 
 nixSym :: Parser NExprLoc
 nixSym = annotateLocation1 $ mkSymF <$> identifier
+
+nixSynHole :: Parser NExprLoc
+nixSynHole = annotateLocation1 $ mkSynHoleF <$> (char '^' >> identifier)
 
 nixInt :: Parser NExprLoc
 nixInt = annotateLocation1 (mkIntF <$> integer <?> "integer")

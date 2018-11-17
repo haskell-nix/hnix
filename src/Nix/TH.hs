@@ -61,6 +61,7 @@ freeVars e = case unFix e of
   -- This also makes sense because its value can be overridden by `x: with y; x`
   (NWith set expr) -> freeVars set `Set.union` freeVars expr
   (NAssert assertion expr) -> freeVars assertion `Set.union` freeVars expr
+  (NSynHole _) -> Set.empty
 
   where
 
