@@ -320,9 +320,9 @@ assembleString = \case
     Indented _   parts -> fromParts parts
     DoubleQuoted parts -> fromParts parts
   where
-    fromParts = fmap (fmap hackyStringMConcat . sequence) . traverse go
+    fromParts = fmap (fmap principledStringMConcat . sequence) . traverse go
 
-    go = runAntiquoted "\n" (pure . Just . hackyMakeNixStringWithoutContext) (>>= fromValueMay)
+    go = runAntiquoted "\n" (pure . Just . principledMakeNixStringWithoutContext) (>>= fromValueMay)
 
 buildArgument :: forall v t m. MonadNixEval v t m
               => Params (m v) -> m v -> m (AttrSet t)

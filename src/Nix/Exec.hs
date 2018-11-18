@@ -326,7 +326,7 @@ execBinaryOp scope span op lval rarg = do
             _                  -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVStr ls, NVStr rs) -> case op of
-            NPlus -> pure $ bin nvStrP (ls `hackyStringMappend` rs)
+            NPlus -> pure $ bin nvStrP (ls `principledStringMappend` rs)
             NEq   -> toBool =<< valueEq lval rval
             NNEq  -> toBool . not =<< valueEq lval rval
             NLt   -> toBool $ ls <  rs
@@ -336,13 +336,13 @@ execBinaryOp scope span op lval rarg = do
             _     -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVStr _, NVConstant NNull) -> case op of
-            NEq  -> toBool =<< valueEq lval (nvStr (hackyMakeNixStringWithoutContext ""))
-            NNEq -> toBool . not =<< valueEq lval (nvStr (hackyMakeNixStringWithoutContext ""))
+            NEq  -> toBool False
+            NNEq -> toBool True
             _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVConstant NNull, NVStr _) -> case op of
-            NEq  -> toBool =<< valueEq (nvStr (hackyMakeNixStringWithoutContext "")) rval
-            NNEq -> toBool . not =<< valueEq (nvStr (hackyMakeNixStringWithoutContext "")) rval
+            NEq  -> toBool False
+            NNEq -> toBool True
             _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVSet ls lp, NVSet rs rp) -> case op of
@@ -364,15 +364,15 @@ execBinaryOp scope span op lval rarg = do
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (ls@NVSet {}, NVStr rs) -> case op of
-            NPlus   -> (\ls -> bin nvStrP (hackyModifyNixContents (Text.pack ls `mappend`) rs))
-                <$> coerceToString False False ls
+            NPlus   -> (\ls2 -> bin nvStrP (ls2 `principledStringMappend` rs))
+                <$> coerceToString DontCopyToStore CoerceStringy ls
             NEq     -> toBool =<< valueEq lval rval
             NNEq    -> toBool . not =<< valueEq lval rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVStr ls, rs@NVSet {}) -> case op of
-            NPlus   -> (\rs -> bin nvStrP (hackyModifyNixContents (`mappend` Text.pack rs) ls))
-                <$> coerceToString False False rs
+            NPlus   -> (\rs2 -> bin nvStrP (ls `principledStringMappend` rs2))
+                <$> coerceToString DontCopyToStore CoerceStringy rs
             NEq     -> toBool =<< valueEq lval rval
             NNEq    -> toBool . not =<< valueEq lval rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
@@ -396,8 +396,8 @@ execBinaryOp scope span op lval rarg = do
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVPath p, NVStr ns) -> case op of
-            NEq   -> toBool $ Just p == fmap Text.unpack (hackyStringIgnoreContextMaybe ns)
-            NNEq  -> toBool $ Just p /= fmap Text.unpack (hackyStringIgnoreContextMaybe ns)
+            NEq   -> toBool $ Just p == fmap Text.unpack (hackyGetStringNoContext ns)
+            NNEq  -> toBool $ Just p /= fmap Text.unpack (hackyGetStringNoContext ns)
             NPlus -> bin nvPathP <$> makeAbsolutePath (p `mappend` Text.unpack (hackyStringIgnoreContext ns))
             _     -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
@@ -433,21 +433,37 @@ execBinaryOp scope span op lval rarg = do
         toInt   = pure . bin nvConstantP . NInt
         toFloat = pure . bin nvConstantP . NFloat
 
-coerceToString :: MonadNix e m => Bool -> Bool -> NValue m -> m String
-coerceToString copyToStore coerceMore = go
+-- | Data type to avoid boolean blindness on what used to be called coerceMore
+data CoercionLevel
+  = CoerceStringy
+  -- ^ Coerce only stringlike types: strings, paths, and appropriate sets
+  | CoerceAny
+  -- ^ Coerce everything but functions
+  deriving (Eq,Ord,Enum,Bounded)
+
+-- | Data type to avoid boolean blindness on what used to be called copyToStore
+data CopyToStoreMode
+  = CopyToStore
+  -- ^ Add paths to the store as they are encountered
+  | DontCopyToStore
+  -- ^ Add paths to the store as they are encountered
+  deriving (Eq,Ord,Enum,Bounded)
+
+coerceToString :: MonadNix e m => CopyToStoreMode -> CoercionLevel -> NValue m -> m NixString
+coerceToString ctsm clevel = go
   where
     go = \case
         NVConstant (NBool b)
-            | b && coerceMore  -> pure "1"
-            | coerceMore      -> pure ""
-        NVConstant (NInt n)   | coerceMore -> pure $ show n
-        NVConstant (NFloat n) | coerceMore -> pure $ show n
-        NVConstant NNull      | coerceMore -> pure ""
-
-        NVStr ns -> pure $ Text.unpack (hackyStringIgnoreContext ns)
-        NVPath p  | copyToStore -> unStorePath <$> addPath p
-                  | otherwise   -> pure p
-        NVList l | coerceMore   -> unwords <$> traverse (`force` go) l
+            -- TODO Return a singleton for "" and "1"
+            | b && clevel == CoerceAny -> pure $ principledMakeNixStringWithoutContext "1"
+            | clevel == CoerceAny      -> pure $ principledMakeNixStringWithoutContext ""
+        NVConstant (NInt n)   | clevel == CoerceAny -> pure $ principledMakeNixStringWithoutContext $ Text.pack $ show n
+        NVConstant (NFloat n) | clevel == CoerceAny -> pure $ principledMakeNixStringWithoutContext $ Text.pack $ show n
+        NVConstant NNull      | clevel == CoerceAny -> pure $ principledMakeNixStringWithoutContext ""
+        NVStr ns -> pure ns
+        NVPath p  | ctsm == CopyToStore -> storePathToNixString <$> addPath p
+                  | otherwise   -> pure $ principledMakeNixStringWithoutContext $ Text.pack p
+        NVList l | clevel == CoerceAny -> nixStringUnwords <$> traverse (`force` go) l
 
         v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
             force p $ (`callFunc` pure v) >=> go
@@ -456,6 +472,20 @@ coerceToString copyToStore coerceMore = go
             force p go
 
         v -> throwError $ ErrorCall $ "Expected a string, but saw: " ++ show v
+
+    nixStringUnwords = principledIntercalateNixString (principledMakeNixStringWithoutContext " ")
+    storePathToNixString :: StorePath -> NixString
+    storePathToNixString sp =
+        principledMakeNixStringWithSingletonContext t (StringContext t DirectPath)
+      where
+        t = Text.pack $ unStorePath sp
+
+fromStringNoContext :: MonadNix e m => m (NValue m) -> m Text
+fromStringNoContext =
+  fromValue >=> \s -> case principledGetStringNoContext s of
+    Just str -> return str
+    Nothing -> throwError $ ErrorCall
+      "expected string with no context"
 
 newtype Lazy m a = Lazy
     { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m)))
@@ -570,7 +600,7 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
                 NVConstant NNull | ignoreNulls -> pure Nothing
                 v' -> Just <$> coerceNix v'
           where
-            coerceNix = toNix . Text.pack <=< coerceToString True True
+            coerceNix = toNix <=< coerceToString CopyToStore CoerceAny
 
     traceEffect = putStrLn
 

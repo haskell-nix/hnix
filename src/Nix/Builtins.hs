@@ -324,7 +324,7 @@ nixPath = fmap nvList $ flip foldNixPath [] $ \p mn ty rest ->
                    nvStr (hackyMakeNixStringWithoutContext $ Text.pack (fromMaybe "" mn))) ]) : rest
 
 toString :: MonadNix e m => m (NValue m) -> m (NValue m)
-toString str = str >>= coerceToString False True >>= toNix . Text.pack
+toString str = str >>= coerceToString DontCopyToStore CoerceAny >>= toNix
 
 hasAttr :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 hasAttr x y =
@@ -388,9 +388,9 @@ div_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
         toNix (floor (fromInteger x / fromInteger y :: Double) :: Integer)
     (NVConstant (NFloat x), NVConstant (NInt y))   | y /= 0 ->
         toNix (x / fromInteger y)
-    (NVConstant (NInt x),   NVConstant (NFloat y)) | y /= 0 -> 
+    (NVConstant (NInt x),   NVConstant (NFloat y)) | y /= 0 ->
         toNix (fromInteger x / y)
-    (NVConstant (NFloat x), NVConstant (NFloat y)) | y /= 0 -> 
+    (NVConstant (NFloat x), NVConstant (NFloat y)) | y /= 0 ->
         toNix (x / y)
     (_, _) ->
         throwError $ Division x' y'
@@ -468,10 +468,9 @@ splitVersion s = case Text.uncons s of
           in thisComponent : splitVersion rest
 
 splitVersion_ :: MonadNix e m => m (NValue m) -> m (NValue m)
-splitVersion_ = fromValue >=> \s -> do
-    let vals = flip map (splitVersion s) $ \c ->
-            valueThunk $ nvStr $ hackyMakeNixStringWithoutContext $ versionComponentToString c
-    return $ nvList vals
+splitVersion_ = fromStringNoContext >=> \s ->
+  return $ nvList $ flip map (splitVersion s) $ \c ->
+    valueThunk $ nvStr $ principledMakeNixStringWithoutContext $ versionComponentToString c
 
 compareVersions :: Text -> Text -> Ordering
 compareVersions s1 s2 =
@@ -482,12 +481,12 @@ compareVersions s1 s2 =
 
 compareVersions_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 compareVersions_ t1 t2 =
-    fromValue t1 >>= \s1 ->
-    fromValue t2 >>= \s2 ->
-        return $ nvConstant $ NInt $ case compareVersions s1 s2 of
-            LT -> -1
-            EQ -> 0
-            GT -> 1
+    fromStringNoContext t1 >>= \s1 ->
+    fromStringNoContext t2 >>= \s2 ->
+      return $ nvConstant $ NInt $ case compareVersions s1 s2 of
+        LT -> -1
+        EQ -> 0
+        GT -> 1
 
 splitDrvName :: Text -> (Text, Text)
 splitDrvName s =
@@ -601,7 +600,7 @@ catAttrs attrName xs =
 
 baseNameOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 baseNameOf x = x >>= \case
-    NVStr ns -> pure $ nvStr (hackyModifyNixContents (Text.pack . takeFileName . Text.unpack) ns)
+    NVStr ns -> pure $ nvStr (principledModifyNixContents (Text.pack . takeFileName . Text.unpack) ns)
     NVPath path -> pure $ nvPath $ takeFileName path
     v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
 
@@ -622,7 +621,7 @@ bitXor x y =
 
 dirOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 dirOf x = x >>= \case
-    NVStr ns -> pure $ nvStr (hackyModifyNixContents (Text.pack . takeDirectory . Text.unpack) ns)
+    NVStr ns -> pure $ nvStr (principledModifyNixContents (Text.pack . takeDirectory . Text.unpack) ns)
     NVPath path -> pure $ nvPath $ takeDirectory path
     v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
 
