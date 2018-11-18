@@ -15,6 +15,7 @@ import           Control.Monad.IO.Class
 import qualified Data.HashMap.Lazy as M
 import           Data.Maybe (isJust)
 import           Data.String.Interpolate.IsString
+import qualified Data.Set as S
 import           Data.Text (Text)
 import           Data.Time
 import           Nix
