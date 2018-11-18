@@ -15,19 +15,13 @@ env:
     - secure: "dm6I+M4+V+C7QMTpcSADdKPE633SvmToXZrTbZ7miNDGmMN+/SfHeN2ybi1+PW6oViMlbPN/7J/aEfiGjSJI8vLk72Y4uCWGmpSb8TXZLu6+whnxtZzzW8+z4tsM4048QJg7CF3N/25U8thRFgs3DqUub1Sf3nG9LrNWdz6ZcDQ="
 
   matrix:
-    - GHCVERSION=ghc802 STRICT=false TRACING=false
-    - GHCVERSION=ghc802 STRICT=false TRACING=true
-    - GHCVERSION=ghc822 STRICT=true  TRACING=false
-    - GHCVERSION=ghc822 STRICT=true  TRACING=true
     - GHCVERSION=ghc843 STRICT=false TRACING=false
     - GHCVERSION=ghc843 STRICT=false TRACING=true
-    - GHCVERSION=ghcjs
-
-matrix:
-  allow_failures:
-    - env: GHCVERSION=ghcjs
-    - env: GHCVERSION=ghc802 STRICT=false TRACING=false
-    - env: GHCVERSION=ghc802 STRICT=false TRACING=true
+#     - GHCVERSION=ghcjs
+# 
+# matrix:
+#   allow_failures:
+#     - env: GHCVERSION=ghcjs
 
 before_script:
   - sudo mount -o remount,exec,size=4G,mode=755 /run/user || true
