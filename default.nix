@@ -83,6 +83,10 @@ drv = haskellPackages.developPackage {
     configureFlags =
          pkgs.stdenv.lib.optional  doTracing   "--flags=tracing"
       ++ pkgs.stdenv.lib.optional  doStrict    "--ghc-options=-Werror";
+
+    passthru = {
+      nixpkgs = pkgs;
+    };
   });
 
   inherit returnShellEnv;
