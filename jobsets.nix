@@ -60,7 +60,7 @@ let
   };
   processedPrs = mapAttrs' makePr (builtins.fromJSON (builtins.readFile prs));
   jobsetsAttrs = processedPrs //
-    genAttrs ["master"] branchJobset;
+    genAttrs ["master" "pending"] branchJobset;
 in {
   jobsets = pkgs.writeText "spec.json" (builtins.toJSON jobsetsAttrs);
 }
