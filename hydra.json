@@ -1,0 +1,29 @@
+{
+  "enabled": 1,
+  "hidden": true,
+  "description": "Jobsets",
+  "nixexprinput": "src",
+  "nixexprpath": "jobsets.nix",
+  "checkinterval": 300,
+  "schedulingshares": 100,
+  "enableemail": false,
+  "emailoverride": "",
+  "keepnr": 10,
+  "inputs": {
+    "src": {
+      "type": "git",
+      "value": "https://github.com/haskell-nix/hnix.git master 1",
+      "emailresponsible": false
+    },
+    "nixpkgs": {
+      "type": "git",
+      "value": "https://github.com/NixOS/nixpkgs-channels nixos-unstable",
+      "emailresponsible": false
+    },
+    "prs": {
+      "type": "githubpulls",
+      "value": "haskell-nix hnix",
+      "emailresponsible": false
+    }
+  }
+}
