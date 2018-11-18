@@ -72,7 +72,7 @@ drv = haskellPackages.developPackage {
 
     enableLibraryProfiling = false;
 
-    testHaskellDepends = attrs.testHaskellDepends ++
+    testHaskellDepends = (attrs.testHaskellDepends or []) ++
       [ pkgs.nix
 
         # Use the same version of hpack no matter what the compiler version

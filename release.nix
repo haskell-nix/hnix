@@ -2,6 +2,7 @@
 let matrix = [
       { compiler = "ghc843"; doStrict = false; doTracing = false; }
       { compiler = "ghc843"; doStrict = false; doTracing = true;  }
+      { compiler = "ghcjs";  doStrict = false; doTracing = false; }
 
       # Broken
       # { compiler = "ghc802"; doStrict = false; doTracing = false; }
@@ -10,9 +11,6 @@ let matrix = [
       # Deprecated
       # { compiler = "ghc822"; doStrict = true;  doTracing = false; }
       # { compiler = "ghc822"; doStrict = true;  doTracing = true;  }
-
-      # Broken
-      # { compiler = "ghcjs";  doStrict = false; doTracing = false; }
     ];
     boolToString = x: if x then "true" else "false";
     nameForConfig = {compiler, doStrict, doTracing}: builtins.concatStringsSep "-"
