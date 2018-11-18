@@ -65,7 +65,7 @@ normalFormBy k n v = case v of
             else normalFormBy k (succ n) val
 
     seen (NThunk _ (Thunk _ b _)) = do
-        res <- gets (isJust . find (eqVar @m b))
+        res <- gets (isJust . find (eqVar @m b)) --TODO: This looks slow
         unless res $
             modify (b:)
         return res
