@@ -21,7 +21,7 @@
 
 module Repl where
 
-import           Nix
+import           Nix hiding (try)
 import           Nix.Convert
 import           Nix.Eval
 import           Nix.Scope
@@ -37,6 +37,7 @@ import           Data.Text (unpack, pack)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 
+import           Control.Monad.Catch
 import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
@@ -57,7 +58,7 @@ newtype IState m = IState
 initState :: MonadIO m => IState m
 initState = IState M.empty
 
-type Repl e m a = HaskelineT (StateT (IState m) m) a
+type Repl e m = HaskelineT (StateT (IState m) m)
 hoistErr :: MonadIO m => Result a -> Repl e m a
 hoistErr (Success val) = return val
 hoistErr (Failure err) = do
@@ -69,7 +70,7 @@ hoistErr (Failure err) = do
 -------------------------------------------------------------------------------
 
 exec :: forall e m. (MonadNix e m, MonadIO m, MonadException m)
-     => Bool -> Text.Text -> Repl e m (NValue m)
+     => Bool -> Text.Text -> Repl e m (NValue (Repl e m))
 exec update source = do
   -- Get the current interpreter state
   st <- get
@@ -81,7 +82,7 @@ exec update source = do
   -- Type Inference ( returns Typing Environment )
   -- tyctx' <- hoistErr $ inferTop (tyctx st) expr
 
-  mVal <- liftIO $ pushScope (tmctx st) (try $ evalExprLoc expr)
+  mVal <- pushScope (tmctx st) (try $ evalExprLoc expr)
 
   case mVal of
     Left (NixException frames) -> do
