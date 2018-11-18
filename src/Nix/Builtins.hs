@@ -90,7 +90,7 @@ import           Nix.Utils
 import           Nix.Value
 import           Nix.XML
 import           System.FilePath
-import           System.Posix.Files
+import           System.Posix.Files (isRegularFile, isDirectory, isSymbolicLink)
 import           Text.Regex.TDFA
 
 -- | Evaluate a nix expression in the default context
@@ -110,7 +110,7 @@ withNixContext mpath action = do
                 let ref = value @(NValue m) @(NThunk m) @m $ nvPath path
                 pushScope (M.singleton "__cur_file" ref) action
 
-builtins :: (MonadNix e m, Scoped e (NThunk m) m)
+builtins :: (MonadNix e m, Scoped (NThunk m) m)
          => m (Scopes m (NThunk m))
 builtins = do
     ref <- thunk $ flip nvSet M.empty <$> buildMap
@@ -296,7 +296,7 @@ builtinsList = sequence [
 foldNixPath :: forall e m r. MonadNix e m
             => (FilePath -> Maybe String -> NixPathEntryType -> r -> m r) -> r -> m r
 foldNixPath f z = do
-    mres <- lookupVar @_ @(NThunk m) "__includes"
+    mres <- lookupVar "__includes"
     dirs <- case mres of
         Nothing -> return []
         Just v  -> fromNix @[Text] v
@@ -821,7 +821,7 @@ scopedImport asetArg pathArg =
     fromValue @(AttrSet (NThunk m)) asetArg >>= \s ->
     fromValue pathArg >>= \(Path p) -> do
         path  <- pathToDefaultNix p
-        mres  <- lookupVar @_ @(NThunk m) "__cur_file"
+        mres  <- lookupVar "__cur_file"
         path' <- case mres of
             Nothing  -> do
                 traceM "No known current directory"
@@ -964,7 +964,7 @@ readDir_ pathThunk = do
     path  <- absolutePathFromValue =<< pathThunk
     items <- listDirectory path
     itemsWithTypes <- forM items $ \item -> do
-        s <- Nix.Effects.getSymbolicLinkStatus $ path </> item
+        s <- getSymbolicLinkStatus $ path </> item
         let t = if
                 | isRegularFile s  -> FileTypeRegular
                 | isDirectory s    -> FileTypeDirectory
@@ -1037,7 +1037,9 @@ fetchurl v = v >>= \case
  where
     go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
     go _msha = \case
-        NVStr ns -> getURL (hackyStringIgnoreContext ns) -- msha
+        NVStr ns -> getURL (hackyStringIgnoreContext ns) >>= \case -- msha
+            Left e -> throwError e
+            Right p -> toValue p
         v -> throwError $ ErrorCall $
                  "builtins.fetchurl: Expected URI or string, got " ++ show v
 

@@ -1,10 +1,13 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -49,28 +52,32 @@ instance Monoid (Scopes m v) where
     mempty  = emptyScopes
     mappend = (<>)
 
-type Scoped e v m = (MonadReader e m, Has e (Scopes m v))
-
-emptyScopes :: Scopes m v
+emptyScopes :: forall m v. Scopes m v
 emptyScopes = Scopes [] []
 
-currentScopes :: Scoped e v m => m (Scopes m v)
-currentScopes = asks (view hasLens)
+class Scoped t m | m -> t where
+  currentScopes :: m (Scopes m t)
+  clearScopes :: m a -> m a
+  pushScopes :: Scopes m t -> m a -> m a
+  lookupVar :: Text -> m (Maybe t)
 
-clearScopes :: forall v m e r. Scoped e v m => m r -> m r
-clearScopes = local (set hasLens (emptyScopes @m @v))
+currentScopesReader :: forall m t e. (MonadReader e m, Has e (Scopes m t)) => m (Scopes m t)
+currentScopesReader = asks (view hasLens)
 
-pushScope :: forall v m e r. Scoped e v m => AttrSet v -> m r -> m r
+clearScopesReader :: forall m t e a. (MonadReader e m, Has e (Scopes m t)) => m a -> m a
+clearScopesReader = local (set hasLens (emptyScopes @m @t))
+
+pushScope :: Scoped t m => AttrSet t -> m a -> m a
 pushScope s = pushScopes (Scopes [Scope s] [])
 
-pushWeakScope :: forall v m e r. Scoped e v m => m (AttrSet v) -> m r -> m r
+pushWeakScope :: (Functor m, Scoped t m) => m (AttrSet t) -> m a -> m a
 pushWeakScope s = pushScopes (Scopes [] [Scope <$> s])
 
-pushScopes :: Scoped e v m => Scopes m v -> m r -> m r
-pushScopes s = local (over hasLens (s <>))
+pushScopesReader :: (MonadReader e m, Has e (Scopes m t)) => Scopes m t -> m a -> m a
+pushScopesReader s = local (over hasLens (s <>))
 
-lookupVar :: forall e v m. (Scoped e v m, Monad m) => Text -> m (Maybe v)
-lookupVar k = do
+lookupVarReader :: forall m t e. (MonadReader e m, Has e (Scopes m t)) => Text -> m (Maybe t)
+lookupVarReader k = do
     mres <- asks (scopeLookup k . lexicalScopes @m . view hasLens)
     case mres of
         Just sym -> return $ Just sym
@@ -83,5 +90,5 @@ lookupVar k = do
                               Nothing  -> rest)
                   (return Nothing) ws
 
-withScopes :: forall v m e a. Scoped e v m => Scopes m v -> m a -> m a
-withScopes scope = clearScopes @v . pushScopes scope
+withScopes :: Scoped t m => Scopes m t -> m a -> m a
+withScopes scope = clearScopes . pushScopes scope

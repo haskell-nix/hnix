@@ -102,6 +102,7 @@ library:
     - array                     >= 0.4   && < 0.6
     - binary
     - deriving-compat           >= 0.3   && < 0.6
+    - dependent-sum
     - directory
     - free
     - http-types
@@ -115,6 +116,7 @@ library:
     - process
     - regex-tdfa
     - regex-tdfa-text
+    - ref-tf
     - scientific
     - semigroups                >= 0.18  && < 0.19
     - split
@@ -193,6 +195,7 @@ tests:
       - megaparsec
       - tasty-quickcheck
       - pretty-show
+      - dependent-sum
     when:
       - condition: "impl(ghcjs)"
         then:

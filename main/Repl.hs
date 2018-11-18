@@ -21,7 +21,7 @@
 
 module Repl where
 
-import           Nix
+import           Nix hiding (exec)
 import           Nix.Convert
 import           Nix.Eval
 import           Nix.Scope
