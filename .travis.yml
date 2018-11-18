@@ -17,11 +17,11 @@ env:
   matrix:
     - GHCVERSION=ghc843 STRICT=false TRACING=false
     - GHCVERSION=ghc843 STRICT=false TRACING=true
-    - GHCVERSION=ghcjs
-
-matrix:
-  allow_failures:
-    - env: GHCVERSION=ghcjs
+#     - GHCVERSION=ghcjs
+# 
+# matrix:
+#   allow_failures:
+#     - env: GHCVERSION=ghcjs
 
 before_script:
   - sudo mount -o remount,exec,size=4G,mode=755 /run/user || true
