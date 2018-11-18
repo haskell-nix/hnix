@@ -1,11 +1,15 @@
 {}:
 let matrix = [
-      { compiler = "ghc802"; doStrict = false; doTracing = false; }
-      { compiler = "ghc802"; doStrict = false; doTracing = true;  }
-      { compiler = "ghc822"; doStrict = true;  doTracing = false; }
-      { compiler = "ghc822"; doStrict = true;  doTracing = true;  }
       { compiler = "ghc843"; doStrict = false; doTracing = false; }
       { compiler = "ghc843"; doStrict = false; doTracing = true;  }
+
+      # Broken
+      # { compiler = "ghc802"; doStrict = false; doTracing = false; }
+      # { compiler = "ghc802"; doStrict = false; doTracing = true;  }
+
+      # Deprecated
+      # { compiler = "ghc822"; doStrict = true;  doTracing = false; }
+      # { compiler = "ghc822"; doStrict = true;  doTracing = true;  }
 
       # Broken
       # { compiler = "ghcjs";  doStrict = false; doTracing = false; }
