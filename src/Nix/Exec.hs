@@ -46,7 +46,6 @@ import           Data.List
 import qualified Data.List.NonEmpty as NE
 import           Data.List.Split
 import           Data.Maybe (maybeToList)
-import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Typeable

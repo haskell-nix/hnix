@@ -2,9 +2,8 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d6ddd115698a11c74ef8507fa6e00df1f8888a254bed435e6a75b154a4906cb3
+-- hash: b1520c3cc7c409e4c172b14158f72de30a59786bd55cf6d3da2c294cf8120b7a
 
-cabal-version:  >= 1.10
 name:           hnix
 version:        0.5.2
 synopsis:       Haskell implementation of the Nix language
@@ -17,6 +16,7 @@ maintainer:     johnw@newartisans.com
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
+cabal-version:  >= 1.10
 extra-source-files:
     data/let-comments-multiline.nix
     data/let-comments.nix

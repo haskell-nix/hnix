@@ -10,7 +10,6 @@ module ParserTests (tests) where
 
 import Data.Fix
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Semigroup
 import Data.String.Interpolate.IsString
 import Data.Text (Text, unpack, pack)
 import Nix.Atoms

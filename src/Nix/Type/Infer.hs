@@ -40,7 +40,6 @@ import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.Maybe (fromJust)
 import           Data.STRef
-import           Data.Semigroup
 import qualified Data.Set as Set
 import           Data.Text (Text)
 import           Nix.Atoms
