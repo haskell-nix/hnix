@@ -526,10 +526,13 @@ match_ pat str =
         let s = principledStringIgnoreContext ns
 
         let re = makeRegex (encodeUtf8 p) :: Regex
+        let mkMatch t = if Text.null t
+                          then toValue () -- Shorthand for Null
+                          else toValue $ principledMakeNixStringWithoutContext t
         case matchOnceText re (encodeUtf8 s) of
             Just ("", sarr, "") -> do
                 let s = map fst (elems sarr)
-                nvList <$> traverse (toValue . principledMakeNixStringWithoutContext . decodeUtf8)
+                nvList <$> traverse (mkMatch . decodeUtf8)
                     (if length s > 1 then tail s else s)
             _ -> pure $ nvConstant NNull
 
