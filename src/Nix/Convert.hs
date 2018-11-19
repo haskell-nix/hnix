@@ -48,6 +48,19 @@ import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 
+{-
+
+IMPORTANT NOTE
+
+We used to have Text instances of FromValue, ToValue, FromNix, and ToNix.
+However, we're removing these instances because they are dangerous due to the
+fact that they hide the way string contexts are handled. It's better to have to
+explicitly handle string context in a way that is appropriate for the situation.
+
+Do not add these instances back!
+
+-}
+
 class FromValue a m v where
     fromValue    :: v -> m a
     fromValueMay :: v -> m (Maybe a)
@@ -146,39 +159,9 @@ instance Convertible e m
         _ -> throwError $ Expectation TFloat v
 
 instance (Convertible e m, MonadEffects m)
-      => FromValue Text m (NValueNF m) where
-    fromValueMay = \case
-        Free (NVStrF ns) -> pure $ hackyGetStringNoContext ns
-        Free (NVPathF p) -> Just . Text.pack . unStorePath <$> addPath p
-        Free (NVSetF s _) -> case M.lookup "outPath" s of
-            Nothing -> pure Nothing
-            Just p -> fromValueMay @Text p
-        _ -> pure Nothing
-    fromValue v = fromValueMay v >>= \case
-        Just b -> pure b
-        _ -> throwError $ ExpectationNF TString v
-
-instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
-      => FromValue Text m (NValue m) where
-    fromValueMay = \case
-        NVStr ns -> pure $ hackyGetStringNoContext ns
-        NVPath p -> Just . Text.pack . unStorePath <$> addPath p
-        NVSet s _ -> case M.lookup "outPath" s of
-            Nothing -> pure Nothing
-            Just p -> fromValueMay @Text p
-        _ -> pure Nothing
-    fromValue v = fromValueMay v >>= \case
-        Just b -> pure b
-        _ -> throwError $ Expectation TString v
-
-instance (Convertible e m, MonadEffects m)
       => FromValue NixString m (NValueNF m) where
     fromValueMay = \case
         Free (NVStrF ns) -> pure $ Just ns
-        Free (NVPathF p) -> Just . hackyMakeNixStringWithoutContext . Text.pack . unStorePath <$> addPath p
-        Free (NVSetF s _) -> case M.lookup "outPath" s of
-            Nothing -> pure Nothing
-            Just p -> fmap hackyMakeNixStringWithoutContext <$> fromValueMay @Text p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -188,10 +171,6 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
       => FromValue NixString m (NValue m) where
     fromValueMay = \case
         NVStr ns -> pure $ Just ns
-        NVPath p -> Just . hackyMakeNixStringWithoutContext . Text.pack . unStorePath <$> addPath p
-        NVSet s _ -> case M.lookup "outPath" s of
-            Nothing -> pure Nothing
-            Just p -> fmap hackyMakeNixStringWithoutContext <$> fromValueMay @Text p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -367,12 +346,6 @@ instance Applicative m => ToValue Float m (NValueNF m) where
 instance Applicative m => ToValue Float m (NValue m) where
     toValue = pure . nvConstant . NFloat
 
-instance Applicative m => ToValue Text m (NValueNF m) where
-    toValue = pure . Free . NVStrF . hackyMakeNixStringWithoutContext
-
-instance Applicative m => ToValue Text m (NValue m) where
-    toValue = pure . nvStr . hackyMakeNixStringWithoutContext
-
 instance Applicative m => ToValue NixString m (NValueNF m) where
     toValue = pure . Free . NVStrF
 
@@ -394,7 +367,7 @@ instance Applicative m => ToValue Path m (NValue m) where
 instance MonadThunk (NValue m) (NThunk m) m
       => ToValue SourcePos m (NValue m) where
     toValue (SourcePos f l c) = do
-        f' <- toValue (Text.pack f)
+        f' <- pure $ nvStr $ principledMakeNixStringWithoutContext (Text.pack f)
         l' <- toValue (unPos l)
         c' <- toValue (unPos c)
         let pos = M.fromList
@@ -448,7 +421,7 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m)
         A.Array l -> nvList <$>
             traverse (\x -> thunk . whileForcingThunk (CoercionFromJson @m x)
                                  . toValue $ x) (V.toList l)
-        A.String s -> pure $ nvStr $ hackyMakeNixStringWithoutContext s 
+        A.String s -> pure $ nvStr $ hackyMakeNixStringWithoutContext s
         A.Number n -> pure $ nvConstant $ case floatingOrInteger n of
             Left r -> NFloat r
             Right i -> NInt i
@@ -494,8 +467,6 @@ instance Convertible e m => FromNix Integer m (NValueNF m) where
 instance Convertible e m => FromNix Integer m (NValue m) where
 instance Convertible e m => FromNix Float m (NValueNF m) where
 instance Convertible e m => FromNix Float m (NValue m) where
-instance (Convertible e m, MonadEffects m) => FromNix Text m (NValueNF m) where
-instance (Convertible e m, MonadEffects m, MonadThunk (NValue m) (NThunk m) m) => FromNix Text m (NValue m) where
 instance (Convertible e m, MonadEffects m) => FromNix NixString m (NValueNF m) where
 instance (Convertible e m, MonadEffects m, MonadThunk (NValue m) (NThunk m) m) => FromNix NixString m (NValue m) where
 instance Convertible e m => FromNix ByteString m (NValueNF m) where
@@ -557,8 +528,6 @@ instance Applicative m => ToNix Integer m (NValueNF m) where
 instance Applicative m => ToNix Integer m (NValue m) where
 instance Applicative m => ToNix Float m (NValueNF m) where
 instance Applicative m => ToNix Float m (NValue m) where
-instance Applicative m => ToNix Text m (NValueNF m) where
-instance Applicative m => ToNix Text m (NValue m) where
 instance Applicative m => ToNix NixString m (NValueNF m) where
 instance Applicative m => ToNix NixString m (NValue m) where
 instance Applicative m => ToNix ByteString m (NValueNF m) where
