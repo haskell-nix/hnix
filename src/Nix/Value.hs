@@ -260,8 +260,6 @@ valueEq :: MonadThunk (NValue m) (NThunk m) m
 valueEq = curry $ \case
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
     (NVStr ls, NVStr rs) -> pure $ principledStringIgnoreContext ls == principledStringIgnoreContext rs
-    (NVStr ns, NVConstant NNull) -> pure False -- eqValues function in nix/src/libexpr/eval.cc
-    (NVConstant NNull, NVStr ns) -> pure False
     (NVList ls, NVList rs) -> alignEqM thunkEq ls rs
     (NVSet lm _, NVSet rm _) -> do
         let compareAttrs = alignEqM thunkEq lm rm
