@@ -36,8 +36,17 @@ drv = haskellPackages.developPackage {
    }
    else {})
   //
-  (if compiler == "ghcjs" then {} else
-   {
+  (if compiler == "ghcjs" then {
+     comonad           = dontCheck super.comonad;
+     http-types        = dontCheck super.http-types;
+     semigroupoids     = dontCheck super.semigroupoids;
+     Glob              = dontCheck super.Glob;
+     # Might be necessary
+     # conduit = dontCheck super.conduit;
+     # yaml = dontCheck super.yaml;
+     # hpack = dontCheck super.hpack;
+     doctest           = throw "doctest doesn't work in ghcjs";
+   } else {
      cryptohash-md5    = doJailbreak super.cryptohash-md5;
      cryptohash-sha1   = doJailbreak super.cryptohash-sha1;
      cryptohash-sha256 = doJailbreak super.cryptohash-sha256;
