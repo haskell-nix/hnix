@@ -364,6 +364,12 @@ instance Applicative m => ToValue Path m (NValueNF m) where
 instance Applicative m => ToValue Path m (NValue m) where
     toValue = pure . nvPath . getPath
 
+instance Applicative m => ToValue StorePath m (NValueNF m) where
+    toValue = toValue . Path . unStorePath
+
+instance Applicative m => ToValue StorePath m (NValue m) where
+    toValue = toValue . Path . unStorePath
+
 instance MonadThunk (NValue m) (NThunk m) m
       => ToValue SourcePos m (NValue m) where
     toValue (SourcePos f l c) = do

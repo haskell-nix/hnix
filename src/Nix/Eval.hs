@@ -76,9 +76,9 @@ class (Show v, Monad m) => MonadEval v m | v -> m where
 -}
     evalError :: Exception s => s -> m a
 
-type MonadNixEval e v t m =
+type MonadNixEval v t m =
     (MonadEval v m,
-     Scoped e t m,
+     Scoped t m,
      MonadThunk v t m,
      MonadFix m,
      ToValue Bool m v,
@@ -95,12 +95,12 @@ data EvalFrame m v
 
 instance (Typeable m, Typeable v) => Exception (EvalFrame m v)
 
-eval :: forall e v t m. MonadNixEval e v t m => NExprF (m v) -> m v
+eval :: forall v t m. MonadNixEval v t m => NExprF (m v) -> m v
 
 eval (NSym "__curPos") = evalCurPos
 
 eval (NSym var) =
-    lookupVar var >>= maybe (freeVariable var) (force ?? evaledSym var)
+    (lookupVar var :: m (Maybe t)) >>= maybe (freeVariable var) (force ?? evaledSym var)
 
 eval (NConstant x)    = evalConstant x
 eval (NStr str)       = evalString str
@@ -109,7 +109,7 @@ eval (NEnvPath p)     = evalEnvPath p
 eval (NUnary op arg)  = evalUnary op =<< arg
 
 eval (NBinary NApp fun arg) = do
-    scope <- currentScopes @_ @t
+    scope <- currentScopes :: m (Scopes m t)
     fun >>= (`evalApp` withScopes scope arg)
 
 eval (NBinary op larg rarg) = larg >>= evalBinary op ?? rarg
@@ -143,25 +143,25 @@ eval (NAbs params body) = do
     -- needs to be used when evaluating the body and default arguments, hence
     -- we defer here so the present scope is restored when the parameters and
     -- body are forced during application.
-    scope <- currentScopes @_ @t
-    evalAbs params $ \arg k -> withScopes @t scope $ do
+    scope <- currentScopes :: m (Scopes m t)
+    evalAbs params $ \arg k -> withScopes scope $ do
         args <- buildArgument params arg
         pushScope args (k (M.map (`force` pure) args) body)
 
 -- | If you know that the 'scope' action will result in an 'AttrSet t', then
 --   this implementation may be used as an implementation for 'evalWith'.
-evalWithAttrSet :: forall e v t m. MonadNixEval e v t m => m v -> m v -> m v
+evalWithAttrSet :: forall v t m. MonadNixEval v t m => m v -> m v -> m v
 evalWithAttrSet aset body = do
     -- The scope is deliberately wrapped in a thunk here, since it is
     -- evaluated each time a name is looked up within the weak scope, and
     -- we want to be sure the action it evaluates is to force a thunk, so
     -- its value is only computed once.
-    scope <- currentScopes @_ @t
+    scope <- currentScopes :: m (Scopes m t)
     s <- thunk $ withScopes scope aset
     pushWeakScope ?? body $ force s $
         fmap fst . fromValue @(AttrSet t, AttrSet SourcePos)
 
-attrSetAlter :: forall e v t m. MonadNixEval e v t m
+attrSetAlter :: forall v t m. MonadNixEval v t m
              => [Text]
              -> SourcePos
              -> AttrSet (m v)
@@ -208,12 +208,12 @@ desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
         Just (p, v) <- gets $ M.lookup x
         pure $ NamedVar (StaticKey x :| []) (embed v) p
 
-evalBinds :: forall e v t m. MonadNixEval e v t m
+evalBinds :: forall v t m. MonadNixEval v t m
           => Bool
           -> [Binding (m v)]
           -> m (AttrSet t, AttrSet SourcePos)
 evalBinds recursive binds = do
-    scope <- currentScopes @_ @t
+    scope <- currentScopes :: m (Scopes m t)
     buildResult scope . concat =<< mapM (go scope) (moveOverridesLast binds)
   where
     moveOverridesLast = uncurry (++) .
@@ -278,7 +278,7 @@ evalBinds recursive binds = do
 
         insert (m, p) (path, pos, value) = attrSetAlter path pos m p value
 
-evalSelect :: forall e v t m. MonadNixEval e v t m
+evalSelect :: forall v t m. MonadNixEval v t m
            => m v
            -> NAttrPath (m v)
            -> m (Either (v, NonEmpty Text) (m v))
@@ -324,10 +324,10 @@ assembleString = \case
 
     go = runAntiquoted "\n" (pure . Just . principledMakeNixStringWithoutContext) (>>= fromValueMay)
 
-buildArgument :: forall e v t m. MonadNixEval e v t m
+buildArgument :: forall v t m. MonadNixEval v t m
               => Params (m v) -> m v -> m (AttrSet t)
 buildArgument params arg = do
-    scope <- currentScopes @_ @t
+    scope <- currentScopes :: m (Scopes m t)
     case params of
         Param name -> M.singleton name <$> thunk (withScopes scope arg)
         ParamSet s isVariadic m ->
@@ -364,15 +364,15 @@ addSourcePositions f v@(Fix (Compose (Ann ann _))) =
     local (set hasLens ann) (f v)
 
 addStackFrames
-    :: forall t e m a. (Scoped e t m, Framed e m, Typeable t, Typeable m)
+    :: forall t e m a. (Scoped t m, Framed e m, Typeable t, Typeable m)
     => Transform NExprLocF (m a)
 addStackFrames f v = do
-    scopes <- currentScopes @e @t
+    scopes <- currentScopes :: m (Scopes m t)
     withFrame Info (EvaluatingExpr scopes v) (f v)
 
 framedEvalExprLoc
     :: forall t e v m.
-      (MonadNixEval e v t m, Framed e m, Has e SrcSpan,
+      (MonadNixEval v t m, Framed e m, Has e SrcSpan,
        Typeable t, Typeable m)
     => NExprLoc -> m v
 framedEvalExprLoc = adi (eval . annotated . getCompose)

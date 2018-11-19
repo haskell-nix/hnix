@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
@@ -243,14 +244,11 @@ fixate g = Fix . go
     go (Pure a) = g a
     go (Free f) = fmap (Fix . go) f
 
-prettyNValueNF :: Functor m => NValueNF m -> Doc
-prettyNValueNF = prettyNix . valueToExpr
+valueToExpr :: Functor m => NValueNF m -> NExpr
+valueToExpr = transport go . check
   where
     check :: NValueNF m -> Fix (NValueF m)
     check = fixate $ const $ NVStrF $ principledMakeNixStringWithoutContext "<CYCLE>"
-
-    valueToExpr :: Functor m => NValueNF m -> NExpr
-    valueToExpr = transport go . check
 
     go (NVConstantF a)     = NConstant a
     go (NVStrF ns)         = NStr (DoubleQuoted [Plain (hackyStringIgnoreContext ns)])
@@ -261,6 +259,9 @@ prettyNValueNF = prettyNix . valueToExpr
     go (NVClosureF _ _)    = NSym . pack $ "<closure>"
     go (NVPathF p)         = NLiteralPath p
     go (NVBuiltinF name _) = NSym $ Text.pack $ "builtins." ++ name
+
+prettyNValueNF :: Functor m => NValueNF m -> Doc
+prettyNValueNF = prettyNix . valueToExpr
 
 printNix :: Functor m => NValueNF m -> String
 printNix = iter phi . check

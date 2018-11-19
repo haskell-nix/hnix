@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7e613ce82a3337411d625301abd33a6d7f1c400edadbd602287027f2af1e4fdf
+-- hash: d6ddd115698a11c74ef8507fa6e00df1f8888a254bed435e6a75b154a4906cb3
 
 cabal-version:  >= 1.10
 name:           hnix
@@ -494,6 +494,7 @@ library
     , containers
     , data-fix
     , deepseq >=1.4.2 && <1.5
+    , dependent-sum
     , deriving-compat >=0.3 && <0.6
     , directory
     , exceptions
@@ -511,6 +512,7 @@ library
     , mtl
     , optparse-applicative
     , process
+    , ref-tf
     , regex-tdfa
     , regex-tdfa-text
     , scientific
@@ -639,6 +641,7 @@ test-suite hnix-tests
     , containers
     , data-fix
     , deepseq >=1.4.2 && <1.5
+    , dependent-sum
     , directory
     , exceptions
     , filepath
