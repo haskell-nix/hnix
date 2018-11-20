@@ -19,13 +19,8 @@ import           Control.Monad.Trans.State
 import qualified Data.HashMap.Lazy as M
 import           Data.List (find)
 import           Data.Maybe (isJust)
-import           Data.Text (Text)
-import qualified Data.Text as Text
-import           Nix.Atoms
-import           Nix.Effects
 import           Nix.Frames
 -- import           Nix.Pretty
-import           Nix.String
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value

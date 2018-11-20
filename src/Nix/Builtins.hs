@@ -59,7 +59,6 @@ import           Data.Foldable (foldrM)
 import qualified Data.HashMap.Lazy as M
 import           Data.List
 import           Data.Maybe
-import           Data.Semigroup
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.String.Interpolate.IsString
