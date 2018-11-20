@@ -9,6 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
@@ -28,6 +29,7 @@ import           Control.Monad.Catch
 import           Control.Monad.Except
 import           Control.Monad.Logic
 import           Control.Monad.Reader
+import           Control.Monad.Ref
 import           Control.Monad.ST
 import           Control.Monad.State
 import           Data.Fix
@@ -38,7 +40,6 @@ import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.Maybe (fromJust)
 import           Data.STRef
-import           Data.Semigroup
 import qualified Data.Set as Set
 import           Data.Text (Text)
 import           Nix.Atoms
@@ -304,14 +305,17 @@ binops u1 = \case
                             , typeFun [typeFloat,  typeInt,    typeFloat]
                             ]) ]
 
-instance MonadVar (Infer s) where
-    type Var (Infer s) = STRef s
-    eqVar = (==)
+liftInfer :: ST s a -> Infer s a
+liftInfer = Infer . lift . lift . lift
 
-    newVar x            = Infer . lift . lift . lift $ newSTRef x
-    readVar x           = Infer . lift . lift . lift $ readSTRef x
-    writeVar x y        = Infer . lift . lift . lift $ writeSTRef x y
-    atomicModifyVar x f = Infer . lift . lift . lift $ do
+instance MonadRef (Infer s) where
+    type Ref (Infer s) = STRef s
+    newRef x            = liftInfer $ newSTRef x
+    readRef x           = liftInfer $ readSTRef x
+    writeRef x y        = liftInfer $ writeSTRef x y
+
+instance MonadAtomicRef (Infer s) where
+    atomicModifyRef x f = liftInfer $ do
         res <- snd . f <$> readSTRef x
         _ <- modifySTRef x (fst . f)
         return res
@@ -612,3 +616,9 @@ solve cs = solve' (nextSolvable cs)
     solve' (ExpInstConst t s, cs) = do
       s' <- lift $ instantiate s
       solve (EqConst t s' : cs)
+
+instance Scoped (JThunk s) (Infer s) where
+  currentScopes = currentScopesReader
+  clearScopes = clearScopesReader @(Infer s) @(JThunk s)
+  pushScopes = pushScopesReader
+  lookupVar = lookupVarReader

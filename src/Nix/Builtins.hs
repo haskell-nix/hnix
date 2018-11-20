@@ -59,7 +59,6 @@ import           Data.Foldable (foldrM)
 import qualified Data.HashMap.Lazy as M
 import           Data.List
 import           Data.Maybe
-import           Data.Semigroup
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.String.Interpolate.IsString
@@ -90,7 +89,7 @@ import           Nix.Utils
 import           Nix.Value
 import           Nix.XML
 import           System.FilePath
-import           System.Posix.Files
+import           System.Posix.Files (isRegularFile, isDirectory, isSymbolicLink)
 import           Text.Regex.TDFA
 
 -- | Evaluate a nix expression in the default context
@@ -110,7 +109,7 @@ withNixContext mpath action = do
                 let ref = value @(NValue m) @(NThunk m) @m $ nvPath path
                 pushScope (M.singleton "__cur_file" ref) action
 
-builtins :: (MonadNix e m, Scoped e (NThunk m) m)
+builtins :: (MonadNix e m, Scoped (NThunk m) m)
          => m (Scopes m (NThunk m))
 builtins = do
     ref <- thunk $ flip nvSet M.empty <$> buildMap
@@ -296,7 +295,7 @@ builtinsList = sequence [
 foldNixPath :: forall e m r. MonadNix e m
             => (FilePath -> Maybe String -> NixPathEntryType -> r -> m r) -> r -> m r
 foldNixPath f z = do
-    mres <- lookupVar @_ @(NThunk m) "__includes"
+    mres <- lookupVar "__includes"
     dirs <- case mres of
         Nothing -> return []
         Just v  -> fromNix @[Text] v
@@ -324,7 +323,7 @@ nixPath = fmap nvList $ flip foldNixPath [] $ \p mn ty rest ->
                    nvStr (hackyMakeNixStringWithoutContext $ Text.pack (fromMaybe "" mn))) ]) : rest
 
 toString :: MonadNix e m => m (NValue m) -> m (NValue m)
-toString str = str >>= coerceToString False True >>= toNix . Text.pack
+toString str = str >>= coerceToString DontCopyToStore CoerceAny >>= toNix
 
 hasAttr :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 hasAttr x y =
@@ -388,9 +387,9 @@ div_ x y = x >>= \x' -> y >>= \y' -> case (x', y') of
         toNix (floor (fromInteger x / fromInteger y :: Double) :: Integer)
     (NVConstant (NFloat x), NVConstant (NInt y))   | y /= 0 ->
         toNix (x / fromInteger y)
-    (NVConstant (NInt x),   NVConstant (NFloat y)) | y /= 0 -> 
+    (NVConstant (NInt x),   NVConstant (NFloat y)) | y /= 0 ->
         toNix (fromInteger x / y)
-    (NVConstant (NFloat x), NVConstant (NFloat y)) | y /= 0 -> 
+    (NVConstant (NFloat x), NVConstant (NFloat y)) | y /= 0 ->
         toNix (x / y)
     (_, _) ->
         throwError $ Division x' y'
@@ -468,10 +467,9 @@ splitVersion s = case Text.uncons s of
           in thisComponent : splitVersion rest
 
 splitVersion_ :: MonadNix e m => m (NValue m) -> m (NValue m)
-splitVersion_ = fromValue >=> \s -> do
-    let vals = flip map (splitVersion s) $ \c ->
-            valueThunk $ nvStr $ hackyMakeNixStringWithoutContext $ versionComponentToString c
-    return $ nvList vals
+splitVersion_ = fromStringNoContext >=> \s ->
+  return $ nvList $ flip map (splitVersion s) $ \c ->
+    valueThunk $ nvStr $ principledMakeNixStringWithoutContext $ versionComponentToString c
 
 compareVersions :: Text -> Text -> Ordering
 compareVersions s1 s2 =
@@ -482,12 +480,12 @@ compareVersions s1 s2 =
 
 compareVersions_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 compareVersions_ t1 t2 =
-    fromValue t1 >>= \s1 ->
-    fromValue t2 >>= \s2 ->
-        return $ nvConstant $ NInt $ case compareVersions s1 s2 of
-            LT -> -1
-            EQ -> 0
-            GT -> 1
+    fromStringNoContext t1 >>= \s1 ->
+    fromStringNoContext t2 >>= \s2 ->
+      return $ nvConstant $ NInt $ case compareVersions s1 s2 of
+        LT -> -1
+        EQ -> 0
+        GT -> 1
 
 splitDrvName :: Text -> (Text, Text)
 splitDrvName s =
@@ -601,7 +599,7 @@ catAttrs attrName xs =
 
 baseNameOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 baseNameOf x = x >>= \case
-    NVStr ns -> pure $ nvStr (hackyModifyNixContents (Text.pack . takeFileName . Text.unpack) ns)
+    NVStr ns -> pure $ nvStr (principledModifyNixContents (Text.pack . takeFileName . Text.unpack) ns)
     NVPath path -> pure $ nvPath $ takeFileName path
     v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
 
@@ -622,7 +620,7 @@ bitXor x y =
 
 dirOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 dirOf x = x >>= \case
-    NVStr ns -> pure $ nvStr (hackyModifyNixContents (Text.pack . takeDirectory . Text.unpack) ns)
+    NVStr ns -> pure $ nvStr (principledModifyNixContents (Text.pack . takeDirectory . Text.unpack) ns)
     NVPath path -> pure $ nvPath $ takeDirectory path
     v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
 
@@ -822,7 +820,7 @@ scopedImport asetArg pathArg =
     fromValue @(AttrSet (NThunk m)) asetArg >>= \s ->
     fromValue pathArg >>= \(Path p) -> do
         path  <- pathToDefaultNix p
-        mres  <- lookupVar @_ @(NThunk m) "__cur_file"
+        mres  <- lookupVar "__cur_file"
         path' <- case mres of
             Nothing  -> do
                 traceM "No known current directory"
@@ -965,7 +963,7 @@ readDir_ pathThunk = do
     path  <- absolutePathFromValue =<< pathThunk
     items <- listDirectory path
     itemsWithTypes <- forM items $ \item -> do
-        s <- Nix.Effects.getSymbolicLinkStatus $ path </> item
+        s <- getSymbolicLinkStatus $ path </> item
         let t = if
                 | isRegularFile s  -> FileTypeRegular
                 | isDirectory s    -> FileTypeDirectory
@@ -1038,7 +1036,9 @@ fetchurl v = v >>= \case
  where
     go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
     go _msha = \case
-        NVStr ns -> getURL (hackyStringIgnoreContext ns) -- msha
+        NVStr ns -> getURL (hackyStringIgnoreContext ns) >>= \case -- msha
+            Left e -> throwError e
+            Right p -> toValue p
         v -> throwError $ ErrorCall $
                  "builtins.fetchurl: Expected URI or string, got " ++ show v
 

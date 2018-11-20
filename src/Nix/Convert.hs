@@ -148,7 +148,7 @@ instance Convertible e m
 instance (Convertible e m, MonadEffects m)
       => FromValue Text m (NValueNF m) where
     fromValueMay = \case
-        Free (NVStrF ns) -> pure $ hackyStringIgnoreContextMaybe ns
+        Free (NVStrF ns) -> pure $ hackyGetStringNoContext ns
         Free (NVPathF p) -> Just . Text.pack . unStorePath <$> addPath p
         Free (NVSetF s _) -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
@@ -161,7 +161,7 @@ instance (Convertible e m, MonadEffects m)
 instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
       => FromValue Text m (NValue m) where
     fromValueMay = \case
-        NVStr ns -> pure $ hackyStringIgnoreContextMaybe ns
+        NVStr ns -> pure $ hackyGetStringNoContext ns
         NVPath p -> Just . Text.pack . unStorePath <$> addPath p
         NVSet s _ -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
@@ -200,7 +200,7 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
 instance Convertible e m
       => FromValue ByteString m (NValueNF m) where
     fromValueMay = \case
-        Free (NVStrF ns) -> pure $ encodeUtf8 <$> hackyStringIgnoreContextMaybe ns
+        Free (NVStrF ns) -> pure $ encodeUtf8 <$> hackyGetStringNoContext ns
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -209,7 +209,7 @@ instance Convertible e m
 instance Convertible e m
       => FromValue ByteString m (NValue m) where
     fromValueMay = \case
-        NVStr ns -> pure $ encodeUtf8 <$> hackyStringIgnoreContextMaybe ns
+        NVStr ns -> pure $ encodeUtf8 <$> hackyGetStringNoContext ns
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -221,7 +221,7 @@ newtype Path = Path { getPath :: FilePath }
 instance Convertible e m => FromValue Path m (NValueNF m) where
     fromValueMay = \case
         Free (NVPathF p) -> pure $ Just (Path p)
-        Free (NVStrF ns) -> pure $ Path . Text.unpack <$> hackyStringIgnoreContextMaybe ns
+        Free (NVStrF ns) -> pure $ Path . Text.unpack <$> hackyGetStringNoContext ns
         Free (NVSetF s _) -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
             Just p -> fromValueMay @Path p
@@ -234,7 +234,7 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m)
       => FromValue Path m (NValue m) where
     fromValueMay = \case
         NVPath p -> pure $ Just (Path p)
-        NVStr ns -> pure $ Path . Text.unpack <$> hackyStringIgnoreContextMaybe ns
+        NVStr ns -> pure $ Path . Text.unpack <$> hackyGetStringNoContext ns
         NVSet s _ -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
             Just p -> fromValueMay @Path p
@@ -322,7 +322,7 @@ instance (Convertible e m, MonadEffects m)
             NFloat n -> toJSON n
             NBool b  -> toJSON b
             NNull    -> A.Null
-        Free (NVStrF ns)  -> pure $ toJSON <$> hackyStringIgnoreContextMaybe ns
+        Free (NVStrF ns)  -> pure $ toJSON <$> hackyGetStringNoContext ns
         Free (NVListF l)  ->
             fmap (A.Array . V.fromList) . sequence
                 <$> traverse fromValueMay l
@@ -390,6 +390,12 @@ instance Applicative m => ToValue Path m (NValueNF m) where
 
 instance Applicative m => ToValue Path m (NValue m) where
     toValue = pure . nvPath . getPath
+
+instance Applicative m => ToValue StorePath m (NValueNF m) where
+    toValue = toValue . Path . unStorePath
+
+instance Applicative m => ToValue StorePath m (NValue m) where
+    toValue = toValue . Path . unStorePath
 
 instance MonadThunk (NValue m) (NThunk m) m
       => ToValue SourcePos m (NValue m) where

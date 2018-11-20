@@ -72,8 +72,8 @@ newtype Reducer m a = Reducer
               MonadState (HashMap FilePath NExprLoc))
 
 staticImport
-    :: forall e m.
-      (MonadIO m, Scoped e NExprLoc m,
+    :: forall m.
+      (MonadIO m, Scoped NExprLoc m,
        MonadReader (Maybe FilePath, Scopes m NExprLoc) m,
        MonadState (HashMap FilePath NExprLoc) m)
     => SrcSpan -> FilePath -> m NExprLoc
@@ -118,8 +118,8 @@ reduceExpr mpath expr
     . runReducer
     $ cata reduce expr
 
-reduce :: forall e m.
-           (MonadIO m, Scoped e NExprLoc m,
+reduce :: forall m.
+           (MonadIO m, Scoped NExprLoc m,
             MonadReader (Maybe FilePath, Scopes m NExprLoc) m,
             MonadState (HashMap FilePath NExprLoc) m)
        => NExprLocF (m NExprLoc) -> m NExprLoc
@@ -407,3 +407,9 @@ reducingEvalExpr eval mpath expr = do
     return (fromMaybe nNull expr'', eres)
   where
     addEvalFlags k (FlaggedF (b, x)) = liftIO (writeIORef b True) *> k x
+
+instance Monad m => Scoped NExprLoc (Reducer m) where
+  currentScopes = currentScopesReader
+  clearScopes = clearScopesReader @(Reducer m) @NExprLoc
+  pushScopes = pushScopesReader
+  lookupVar = lookupVarReader

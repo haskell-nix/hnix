@@ -2,9 +2,8 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0e0438f43eaffbbd952e85bc24499b40e17f276ec7488f3a483e7d848ea1075d
+-- hash: 07b6631da5bfe4929607211146ef8fdde38ea28d4aece34188af8e33d0287e5e
 
-cabal-version:  >= 1.10
 name:           hnix
 version:        0.5.2
 synopsis:       Haskell implementation of the Nix language
@@ -17,6 +16,7 @@ maintainer:     johnw@newartisans.com
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
+cabal-version:  >= 1.10
 extra-source-files:
     data/let-comments-multiline.nix
     data/let-comments.nix
@@ -493,6 +493,7 @@ library
     , containers
     , data-fix
     , deepseq >=1.4.2 && <1.5
+    , dependent-sum
     , deriving-compat >=0.3 && <0.6
     , directory
     , exceptions
@@ -511,6 +512,7 @@ library
     , optparse-applicative
     , prettyprinter
     , process
+    , ref-tf
     , regex-tdfa
     , regex-tdfa-text
     , scientific
@@ -638,6 +640,7 @@ test-suite hnix-tests
     , containers
     , data-fix
     , deepseq >=1.4.2 && <1.5
+    , dependent-sum
     , directory
     , exceptions
     , filepath
