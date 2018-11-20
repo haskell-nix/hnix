@@ -357,9 +357,9 @@ case_mapattrs_builtin =
 -- Regression test for #373
 case_regression_373 :: Assertion
 case_regression_373 = do
-  freeVarsEqualTest "{ inherit a; }" ["a"]
-  freeVarsEqualTest "rec {inherit a; }" ["a"]
-  freeVarsEqualTest "let inherit a; in { }" ["a"]
+  freeVarsEqual "{ inherit a; }" ["a"]
+  freeVarsEqual "rec {inherit a; }" ["a"]
+  freeVarsEqual "let inherit a; in { }" ["a"]
 
 -----------------------
 
