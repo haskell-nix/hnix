@@ -25,6 +25,7 @@ import           Text.Megaparsec.Error
 import           Text.Megaparsec.Pos (SourcePos(..))
 import           Text.PrettyPrint.ANSI.Leijen
 
+
 class Monad m => MonadFile m where
     readFile :: FilePath -> m ByteString
     default readFile :: (MonadTrans t, MonadFile m', m ~ t m') => FilePath -> m ByteString
@@ -65,15 +66,11 @@ instance MonadFile IO where
     doesDirectoryExist = S.doesDirectoryExist
     getSymbolicLinkStatus = S.getSymbolicLinkStatus
 
-posAndMsg :: SourcePos -> Doc -> ParseError t Void
-posAndMsg beg msg =
-    FancyError (beg :| [])
+posAndMsg :: SourcePos -> Doc -> ParseError s Void
+posAndMsg (SourcePos _ lineNo _) msg =
+    FancyError (unPos lineNo)
         (Set.fromList [ErrorFail (show msg) :: ErrorFancy Void])
 
-renderLocation :: MonadFile m => SrcSpan -> Doc -> m Doc
-renderLocation (SrcSpan beg@(SourcePos "<string>" _ _) _) msg =
-    return $ text $ init $ parseErrorPretty @Char (posAndMsg beg msg)
-
-renderLocation (SrcSpan beg@(SourcePos path _ _) _) msg = do
-    contents <- Nix.Render.readFile path
-    return $ text $ init $ parseErrorPretty' contents (posAndMsg beg msg)
+renderLocation :: Monad m => SrcSpan -> Doc -> m Doc
+renderLocation (SrcSpan beg@(SourcePos _ _ _) _) msg =
+    return $ text $ init $ parseErrorPretty @String (posAndMsg beg msg)

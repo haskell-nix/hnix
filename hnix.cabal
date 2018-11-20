@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b1520c3cc7c409e4c172b14158f72de30a59786bd55cf6d3da2c294cf8120b7a
+-- hash: fb6d5ddfd34f2d7933906c487fb98b1d7f2999243b4cb36640f88767d9ca000a
 
 name:           hnix
 version:        0.5.2
@@ -507,10 +507,11 @@ library
     , interpolate
     , lens-family-th
     , logict
-    , megaparsec >=6.5 && <7.0
+    , megaparsec >=7.0 && <7.1
     , monadlist
     , mtl
     , optparse-applicative
+    , parser-combinators
     , process
     , ref-tf
     , regex-tdfa
