@@ -15,8 +15,8 @@ env:
     - secure: "dm6I+M4+V+C7QMTpcSADdKPE633SvmToXZrTbZ7miNDGmMN+/SfHeN2ybi1+PW6oViMlbPN/7J/aEfiGjSJI8vLk72Y4uCWGmpSb8TXZLu6+whnxtZzzW8+z4tsM4048QJg7CF3N/25U8thRFgs3DqUub1Sf3nG9LrNWdz6ZcDQ="
 
   matrix:
-    - GHCVERSION=ghc843 STRICT=false TRACING=false
-    - GHCVERSION=ghc843 STRICT=false TRACING=true
+    - GHCVERSION=ghc844 STRICT=false TRACING=false
+    - GHCVERSION=ghc844 STRICT=false TRACING=true
 #     - GHCVERSION=ghcjs
 # 
 # matrix:
