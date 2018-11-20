@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 07b6631da5bfe4929607211146ef8fdde38ea28d4aece34188af8e33d0287e5e
+-- hash: bd9c8bad70af6e6bdc23b53988448061d7ab6aaee6054beb9d0f696e717f8a3c
 
 name:           hnix
 version:        0.5.2
@@ -573,7 +573,7 @@ executable hnix
       Paths_hnix
   hs-source-dirs:
       main
-  ghc-options: -Wall
+  ghc-options: -Wall -rtsopts
   build-depends:
       aeson
     , base >=4.9 && <5

@@ -155,6 +155,7 @@ executables:
   hnix:
     source-dirs: main
     main: Main.hs
+    ghc-options: -rtsopts
     dependencies:
       - hnix
       - aeson

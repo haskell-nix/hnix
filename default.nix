@@ -2,6 +2,10 @@
 
 , doBenchmark ? false
 , doTracing   ? false
+# enables GHC optimizations for production use
+, doOptimize ? false 
+# enables profiling support in GHC
+, doProfiling  ? false
 , doStrict    ? false
 
 , rev     ? "b37872d4268164614e3ecef6e1f730d48cf5a90f"
@@ -70,7 +74,8 @@ drv = haskellPackages.developPackage {
       pkgs.haskell.packages.${compiler}.cabal-install
     ];
 
-    enableLibraryProfiling = false;
+    enableLibraryProfiling = doProfiling;
+    enableExecutableProfiling = doProfiling;
 
     testHaskellDepends = attrs.testHaskellDepends ++
       [ pkgs.nix
@@ -88,6 +93,7 @@ drv = haskellPackages.developPackage {
 
     configureFlags =
          pkgs.stdenv.lib.optional  doTracing   "--flags=tracing"
+      ++ pkgs.stdenv.lib.optional  doOptimize  "--flags=optimize"
       ++ pkgs.stdenv.lib.optional  doStrict    "--ghc-options=-Werror";
 
     passthru = {
