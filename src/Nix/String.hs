@@ -21,6 +21,7 @@ module Nix.String (
   , principledStringMappend
   , principledStringMempty
   , principledStringMConcat
+  , principledContextToReferences
 ) where
 
 import qualified Data.HashSet as S
@@ -139,3 +140,12 @@ principledMakeNixStringWithSingletonContext s c = NixString s (S.singleton c)
 -- | Create a NixString using a singleton context
 principledMakeNixString :: Text -> S.HashSet StringContext -> NixString
 principledMakeNixString s c = NixString s c
+
+principledContextToReferences :: NixString -> S.HashSet StringContext
+principledContextToReferences (NixString _ c) = S.map mungeContext c
+
+mungeContext :: StringContext -> StringContext
+mungeContext c@(StringContext t f) =
+  case Text.uncons t of
+    Nothing -> c
+    Just (a,as) -> if a == '=' then StringContext as f else c

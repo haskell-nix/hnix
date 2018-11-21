@@ -787,9 +787,12 @@ toFile :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 toFile name s = do
     name' <- fromStringNoContext =<< fromValue name
     s' <- fromValue s
-    mres <- toFile_ (Text.unpack name') (Text.unpack $ principledStringIgnoreContext s')
+    -- TODO Using hacky here because we still need to turn the context into
+    -- runtime references of the resulting file.
+    -- See prim_toFile in nix/src/libexpr/primops.cc
+    mres <- toFile_ (Text.unpack name') (Text.unpack $ hackyStringIgnoreContext s')
     let t = Text.pack $ unStorePath mres
-        sc = StringContext t $ DerivationOutput t
+        sc = StringContext t DirectPath
     toNix $ principledMakeNixStringWithSingletonContext t sc
 
 toPath :: MonadNix e m => m (NValue m) -> m (NValue m)
