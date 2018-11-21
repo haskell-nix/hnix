@@ -949,9 +949,9 @@ hashString nsAlgo ns = Prim $ do
 
 -- TODO Double-check this
 placeHolder :: MonadNix e m => m (NValue m) -> m (NValue m)
-placeHolder = fromValue >=> fromStringNoContext >=> \ns -> do
+placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
     h <- runPrim (hashString (principledMakeNixStringWithoutContext "sha256")
-                             (principledMakeNixStringWithoutContext ns))
+                             (principledMakeNixStringWithoutContext t))
     toNix h
 
 absolutePathFromValue :: MonadNix e m => NValue m -> m FilePath
