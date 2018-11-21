@@ -1064,7 +1064,7 @@ exec_ xs = do
   xs <- traverse (coerceToString DontCopyToStore CoerceStringy <=< force') ls
   -- TODO Still need to do something with the context here
   -- See prim_exec in nix/src/libexpr/primops.cc
-  exec (map (Text.unpack . principledStringIgnoreContext) xs)
+  exec (map (Text.unpack . hackyStringIgnoreContext) xs)
 
 fetchurl :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 fetchurl v = v >>= \case
