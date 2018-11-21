@@ -57,6 +57,7 @@ import           Data.Char (isDigit)
 import           Data.Fix
 import           Data.Foldable (foldrM)
 import qualified Data.HashMap.Lazy as M
+import qualified Data.HashSet as HS
 import           Data.List
 import           Data.Maybe
 import           Data.Semigroup
@@ -508,7 +509,7 @@ splitDrvName s =
     in (Text.intercalate sep namePieces, Text.intercalate sep versionPieces)
 
 parseDrvName :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
-parseDrvName = fromValue >=> fromStringNoContext >=> \(s :: Text) -> do
+parseDrvName = fromValue >=> fromStringNoContext >=> \s -> do
     let (name :: Text, version :: Text) = splitDrvName s
     -- jww (2018-04-15): There should be an easier way to write this.
     (toValue =<<) $ sequence $ M.fromList
@@ -750,7 +751,8 @@ replaceStrings tfrom tto ts =
                             , Builder.singleton h
                             ]
                     _ -> go rest $ result <> Builder.fromText replacement
-        toNix $ principledModifyNixContents (\x -> go x mempty) ns
+        let ctx = HS.unions $ principledGetContext ns : map principledGetContext nsTo
+        toNix $ principledMakeNixString (go (principledStringIgnoreContext ns) mempty) ctx
 
 removeAttrs :: forall e m. MonadNix e m
             => m (NValue m) -> m (NValue m) -> m (NValue m)

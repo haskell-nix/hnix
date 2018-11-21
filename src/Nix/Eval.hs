@@ -309,8 +309,8 @@ evalSetterKeyName :: (MonadEval v m, FromValue NixString m v)
                   => NKeyName (m v) -> m (Maybe Text)
 evalSetterKeyName = \case
     StaticKey  k -> pure (Just k)
-    DynamicKey k -> 
-        runAntiquoted "\n" assembleString (>>= fromValueMay) k <&> 
+    DynamicKey k ->
+        runAntiquoted "\n" assembleString (>>= fromValueMay) k <&>
             \case Just ns -> Just (hackyStringIgnoreContext ns)
                   _ -> Nothing
 

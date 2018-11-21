@@ -3,6 +3,8 @@
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 module Nix.String (
     NixString
+  , principledGetContext
+  , principledMakeNixString
   , principledMempty
   , StringContext(..)
   , ContextFlavor(..)
@@ -52,6 +54,9 @@ data NixString = NixString
   } deriving (Eq, Ord, Show, Generic)
 
 instance Hashable NixString
+
+principledGetContext :: NixString -> S.HashSet StringContext
+principledGetContext = nsContext
 
 -- | Combine two NixStrings using mappend
 principledMempty :: NixString
@@ -130,3 +135,7 @@ principledModifyNixContents f (NixString s c) = NixString (f s) c
 -- | Create a NixString using a singleton context
 principledMakeNixStringWithSingletonContext :: Text -> StringContext -> NixString
 principledMakeNixStringWithSingletonContext s c = NixString s (S.singleton c)
+
+-- | Create a NixString using a singleton context
+principledMakeNixString :: Text -> S.HashSet StringContext -> NixString
+principledMakeNixString s c = NixString s c
