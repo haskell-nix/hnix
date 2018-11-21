@@ -205,8 +205,12 @@ desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
                 (Binding r)
     go (Right x) = pure x
     go (Left x) = do
-        Just (p, v) <- gets $ M.lookup x
-        pure $ NamedVar (StaticKey x :| []) (embed v) p
+        maybeValue <- gets (M.lookup x)
+        case maybeValue of
+          Nothing ->
+            fail ("No binding " ++ show x)
+          Just (p, v) ->
+            pure $ NamedVar (StaticKey x :| []) (embed v) p
 
 evalBinds :: forall v t m. MonadNixEval v t m
           => Bool
@@ -309,8 +313,8 @@ evalSetterKeyName :: (MonadEval v m, FromValue NixString m v)
                   => NKeyName (m v) -> m (Maybe Text)
 evalSetterKeyName = \case
     StaticKey  k -> pure (Just k)
-    DynamicKey k -> 
-        runAntiquoted "\n" assembleString (>>= fromValueMay) k <&> 
+    DynamicKey k ->
+        runAntiquoted "\n" assembleString (>>= fromValueMay) k <&>
             \case Just ns -> Just (hackyStringIgnoreContext ns)
                   _ -> Nothing
 
