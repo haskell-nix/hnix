@@ -51,9 +51,9 @@ drv = haskellPackages.developPackage {
     inherit doBenchmark;
 
     configureFlags =
-         pkgs.stdenv.lib.optional  doTracing   "--flags=tracing"
-      ++ pkgs.stdenv.lib.optional  doOptimize  "--flags=optimize"
-      ++ pkgs.stdenv.lib.optional  doStrict    "--ghc-options=-Werror";
+         pkgs.stdenv.lib.optional doTracing  "--flags=tracing"
+      ++ pkgs.stdenv.lib.optional doOptimize "--flags=optimize"
+      ++ pkgs.stdenv.lib.optional doStrict   "--ghc-options=-Werror";
 
     passthru = {
       nixpkgs = pkgs;
