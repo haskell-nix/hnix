@@ -644,7 +644,7 @@ test-suite hnix-tests
     , hedgehog
     , hnix
     , interpolate
-    , megaparsec
+    , megaparsec >=7.0 && <7.1
     , mtl
     , optparse-applicative
     , pretty-show
