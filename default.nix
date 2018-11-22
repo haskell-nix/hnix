@@ -2,16 +2,14 @@
 
 , doBenchmark ? false
 , doTracing   ? false
-# enables GHC optimizations for production use
-, doOptimize ? false 
-# enables profiling support in GHC
-, doProfiling  ? false
+, doOptimize  ? false # enables GHC optimizations for production use
+, doProfiling ? false # enables profiling support in GHC
 , doStrict    ? false
 
-, rev     ? "3f3f6021593070330091a4a2bc785f6761bbb3c1"
-, sha256  ? "1a7vvxxz8phff51vwsrdlsq5i70ig5hxvvb7lkm2lgwizgvpa6gv"
+, rev    ? "3f3f6021593070330091a4a2bc785f6761bbb3c1"
+, sha256 ? "1a7vvxxz8phff51vwsrdlsq5i70ig5hxvvb7lkm2lgwizgvpa6gv"
 
-, pkgs    ?
+, pkgs   ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
     then abort "hnix requires at least nix 2.0"
     else import (builtins.fetchTarball {
@@ -22,7 +20,7 @@
          }
 
 , returnShellEnv ? pkgs.lib.inNixShell
-, mkDerivation ? null
+, mkDerivation   ? null
 }:
 
 let haskellPackages = pkgs.haskell.packages.${compiler};
@@ -32,37 +30,10 @@ drv = haskellPackages.developPackage {
 
   overrides = with pkgs.haskell.lib; self: super: {
     mono-traversable = dontCheck super.mono-traversable;
-    megaparsec = self.megaparsec_7_0_4;
-  }
-  //
-  (pkgs.lib.optionalAttrs (compiler == "ghc802") {
-     concurrent-output = doJailbreak super.concurrent-output;
-  })
-  //
-  (pkgs.lib.optionalAttrs (compiler != "ghcjs") {
-     cryptohash-md5    = doJailbreak super.cryptohash-md5;
-     cryptohash-sha1   = doJailbreak super.cryptohash-sha1;
-     cryptohash-sha256 = doJailbreak super.cryptohash-sha256;
-     cryptohash-sha512 = doJailbreak super.cryptohash-sha512;
-     serialise         = dontCheck super.serialise;
-
-     ghc-datasize =
-       overrideCabal super.ghc-datasize (attrs: {
-         enableLibraryProfiling    = false;
-         enableExecutableProfiling = false;
-       });
-
-     ghc-heap-view =
-       overrideCabal super.ghc-heap-view (attrs: {
-         enableLibraryProfiling    = false;
-         enableExecutableProfiling = false;
-       });
-  });
-
-  source-overrides = pkgs.lib.optionalAttrs (compiler == "ghc802") {
-    lens-family-core = "1.2.1";
-    lens-family = "1.2.1";
+    megaparsec = super.megaparsec_7_0_4;
   };
+
+  source-overrides = {};
 
   modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
     buildTools = (attrs.buildTools or []) ++ [
