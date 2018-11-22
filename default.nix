@@ -8,8 +8,9 @@
 , doProfiling  ? false
 , doStrict    ? false
 
-, rev     ? "b37872d4268164614e3ecef6e1f730d48cf5a90f"
-, sha256  ? "05km33sz4srf05vvmkidz3k59phm5a3k9wpj1jc6ly9yqws0dbn4"
+, rev     ? "3f3f6021593070330091a4a2bc785f6761bbb3c1"
+, sha256  ? "1a7vvxxz8phff51vwsrdlsq5i70ig5hxvvb7lkm2lgwizgvpa6gv"
+
 , pkgs    ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
     then abort "hnix requires at least nix 2.0"
@@ -19,25 +20,19 @@
            config.allowUnfree = true;
            config.allowBroken = false;
          }
+
 , returnShellEnv ? pkgs.lib.inNixShell
 , mkDerivation ? null
 }:
 
-let
-
-haskellPackages = pkgs.haskell.packages.${compiler};
+let haskellPackages = pkgs.haskell.packages.${compiler};
 
 drv = haskellPackages.developPackage {
   root = ./.;
 
   overrides = with pkgs.haskell.lib; self: super: {
     mono-traversable = dontCheck super.mono-traversable;
-    megaparsec = self.callCabal2nix "megaparsec" (pkgs.fetchFromGitHub {
-      owner = "mrkkrp";
-      repo = "megaparsec";
-      rev = "9fff501f7794c01e2cf4a7a492f1cfef67fab19a";
-      sha256 = "0a9g6gpc8m9qrvldwn4chs0yqnr4dps93achg1df72lxknrpp0iy";
-    }) {};
+    megaparsec = super.callHackage "megaparsec" "7.0.4" {};
   }
   //
   (pkgs.lib.optionalAttrs (compiler == "ghc802") {
