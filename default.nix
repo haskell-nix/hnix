@@ -32,7 +32,7 @@ drv = haskellPackages.developPackage {
 
   overrides = with pkgs.haskell.lib; self: super: {
     mono-traversable = dontCheck super.mono-traversable;
-    megaparsec = super.callHackage "megaparsec" "7.0.4" {};
+    megaparsec = self.megaparsec_7_0_4;
   }
   //
   (pkgs.lib.optionalAttrs (compiler == "ghc802") {
