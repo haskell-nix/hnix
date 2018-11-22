@@ -85,13 +85,6 @@ drv = haskellPackages.developPackage {
 
     testHaskellDepends = attrs.testHaskellDepends ++
       [ pkgs.nix
-
-        # Use the same version of hpack no matter what the compiler version
-        # is, so that we know exactly what the contents of the generated
-        # .cabal file will be. Otherwise, Travis may error out claiming that
-        # the cabal file needs to be updated because the result is different
-        # that the version we committed to Git.
-        pkgs.haskell.packages.ghc844.hpack
         pkgs.haskell.packages.ghc844.criterion
       ];
 

@@ -1,9 +1,3 @@
--- This file has been generated from package.yaml by hpack version 0.28.2.
---
--- see: https://github.com/sol/hpack
---
--- hash: 01a6c3bc4e7f71ac6b77c5b00cad1822a2b855928e68f33b68cdb5e549f7cd5d
-
 name:           hnix
 version:        0.5.2
 synopsis:       Haskell implementation of the Nix language

@@ -37,13 +37,6 @@ import           System.Process
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
-cabalCorrectlyGenerated :: Assertion
-cabalCorrectlyGenerated = do
-  output <- readCreateProcess (shell "hpack") ""
-  when ("modified manually" `isInfixOf` output) $
-    errorWithoutStackTrace
-      "Edit package.yaml and re-generate hnix.cabal by running \"hpack\""
-
 ensureLangTestsPresent :: Assertion
 ensureLangTestsPresent = do
   exist <- fileExist "data/nix/tests/local.mk"
@@ -101,14 +94,11 @@ main = do
   let allOrLookup var = lookupEnv "ALL_TESTS" <|> lookupEnv var
   nixpkgsTestsEnv     <- allOrLookup "NIXPKGS_TESTS"
   prettyTestsEnv      <- lookupEnv "PRETTY_TESTS"
-  hpackTestsEnv       <- allOrLookup "HPACK_TESTS"
 
   pwd <- getCurrentDirectory
   setEnv "NIX_REMOTE" ("local?root=" ++ pwd ++ "/")
 
   defaultMain $ testGroup "hnix" $
-    [ testCase "hnix.cabal correctly generated" cabalCorrectlyGenerated
-      | isJust hpackTestsEnv ] ++
     [ ParserTests.tests
     , EvalTests.tests
     , PrettyTests.tests
