@@ -69,7 +69,8 @@ freeVars e = case unFix e of
     staticKey (DynamicKey _) = Nothing
 
     bindDefs :: Binding r -> Set VarName
-    bindDefs (Inherit _ keys _) = Set.fromList $ mapMaybe staticKey keys
+    bindDefs (Inherit Nothing _ _) = Set.empty;
+    bindDefs (Inherit (Just _) keys _) = Set.fromList $ mapMaybe staticKey keys
     bindDefs (NamedVar (StaticKey varname :| _) _ _) = Set.singleton varname
     bindDefs (NamedVar (DynamicKey _ :| _) _ _) = Set.empty
 
