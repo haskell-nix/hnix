@@ -24,6 +24,8 @@ import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Text.Lazy.IO as TL
+import           Data.Text.Prettyprint.Doc
+import           Data.Text.Prettyprint.Doc.Render.Text
 import           Nix
 import           Nix.Convert
 import qualified Nix.Eval as Eval
@@ -36,7 +38,6 @@ import           Options.Applicative hiding (ParserResult(..))
 import qualified Repl
 import           System.FilePath
 import           System.IO
-import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 import qualified Text.Show.Pretty as PS
 
 main :: IO ()
@@ -127,8 +128,8 @@ main = do
               void $ liftIO $ Exc.evaluate $ Deep.force expr
 
         | otherwise =
-              liftIO $ displayIO stdout
-                  . renderPretty 0.4 80
+              liftIO $ renderIO stdout
+                  . layoutPretty (LayoutOptions $ AvailablePerLine 80 0.4)
                   . prettyNix
                   . stripAnnotation $ expr
       where

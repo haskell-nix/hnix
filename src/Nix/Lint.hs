@@ -372,7 +372,7 @@ lintApp context fun arg = unpackSymbolic fun >>= \case
     NAny -> throwError $ ErrorCall
         "Cannot apply something not known to be a function"
     NMany xs -> do
-        (args:_, ys) <- fmap unzip $ forM xs $ \case
+        (args, ys) <- fmap unzip $ forM xs $ \case
             TClosure _params -> arg >>= unpackSymbolic >>= \case
                 NAny -> do
                     error "NYI"
@@ -386,7 +386,7 @@ lintApp context fun arg = unpackSymbolic fun >>= \case
             _x -> throwError $ ErrorCall "Attempt to call non-function"
 
         y <- everyPossible
-        (args,) <$> foldM (unify context) y ys
+        (head args,) <$> foldM (unify context) y ys
 
 newtype Lint s a = Lint
     { runLint :: ReaderT (Context (Lint s) (SThunk (Lint s))) (ST s) a }

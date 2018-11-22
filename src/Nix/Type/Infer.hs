@@ -27,6 +27,7 @@ import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad.Catch
 import           Control.Monad.Except
+import           Control.Monad.Fail
 import           Control.Monad.Logic
 import           Control.Monad.Reader
 import           Control.Monad.Ref
@@ -68,7 +69,7 @@ newtype Infer s a = Infer
             (StateT InferState (ExceptT InferError (ST s))) a
     }
     deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadFix,
-              MonadReader (Set.Set TVar, Scopes (Infer s) (JThunk s)),
+              MonadReader (Set.Set TVar, Scopes (Infer s) (JThunk s)), MonadFail,
               MonadState InferState, MonadError InferError)
 
 -- | Inference state

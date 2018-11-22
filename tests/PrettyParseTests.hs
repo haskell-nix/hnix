@@ -17,6 +17,7 @@ import           Data.Char
 import           Data.Fix
 import qualified Data.List.NonEmpty as NE
 import           Data.Text (Text, pack)
+import           Data.Text.Prettyprint.Doc
 import           Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
@@ -27,8 +28,6 @@ import           Nix.Pretty
 import           Test.Tasty
 import           Test.Tasty.Hedgehog
 import           Text.Megaparsec (Pos, SourcePos, mkPos)
-import           Text.PrettyPrint.ANSI.Leijen ((</>), text)
-import qualified Text.PrettyPrint.ANSI.Leijen as P
 import qualified Text.Show.Pretty as PS
 
 asciiString :: MonadGen m => m String
@@ -188,38 +187,38 @@ normalize = cata $ \case
 -- | Test that parse . pretty == id up to attribute position information.
 prop_prettyparse :: Monad m => NExpr -> PropertyT m ()
 prop_prettyparse p = do
-  let prog = show (pretty p)
+  let prog = show (prettyNix p)
   case parse (pack prog) of
     Failure s -> do
-        footnote $ show $
-            text "Parse failed:" </> text (show s)
-              P.<$> P.indent 2 (pretty p)
+        footnote $ show $ vsep
+            [ fillSep ["Parse failed:", pretty (show s)]
+            , indent 2 (prettyNix p)
+            ]
         discard
     Success v
         | equivUpToNormalization p v -> success
         | otherwise -> do
           let pp = normalise prog
-              pv = normalise (show (pretty v))
-          footnote $ show $
-                  text "----------------------------------------"
-            P.<$> text "Expr before:" P.<$> P.indent 2 (text (PS.ppShow p))
-            P.<$> text "----------------------------------------"
-            P.<$> text "Expr after:"  P.<$> P.indent 2 (text (PS.ppShow v))
-            P.<$> text "----------------------------------------"
-            P.<$> text "Pretty before:" P.<$> P.indent 2 (text prog)
-            P.<$> text "----------------------------------------"
-            P.<$> text "Pretty after:"  P.<$> P.indent 2 (pretty v)
-            P.<$> text "----------------------------------------"
-            P.<$> text "Normalised before:" P.<$> P.indent 2 (text pp)
-            P.<$> text "----------------------------------------"
-            P.<$> text "Normalised after:"  P.<$> P.indent 2 (text pv)
-            P.<$> text "========================================"
-            P.<$> text "Normalised diff:"
-            P.<$> text (ppDiff (diff pp pv))
-            P.<$> text "========================================"
+              pv = normalise (show (prettyNix v))
+          footnote $ show $ vsep $
+              [ "----------------------------------------"
+              , vsep ["Expr before:", indent 2 (pretty (PS.ppShow p))]
+              , "----------------------------------------"
+              , vsep ["Expr after:", indent 2 (pretty (PS.ppShow v))]
+              , "----------------------------------------"
+              , vsep ["Pretty before:", indent 2 (pretty prog)]
+              , "----------------------------------------"
+              , vsep ["Pretty after:", indent 2 (prettyNix v)]
+              , "----------------------------------------"
+              , vsep ["Normalised before:", indent 2 (pretty pp)]
+              , "----------------------------------------"
+              , vsep ["Normalised after:", indent 2 (pretty pv)]
+              , "========================================"
+              , vsep ["Normalised diff:", pretty (ppDiff (diff pp pv))]
+              , "========================================"
+              ]
           assert (pp == pv)
   where
-    pretty = prettyNix
     parse  = parseNixText
 
     normalise = unlines . map (reverse . dropWhile isSpace . reverse) . lines

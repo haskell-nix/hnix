@@ -11,7 +11,9 @@ module ParserTests (tests) where
 import Data.Fix
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.String.Interpolate.IsString
-import Data.Text (Text, unpack, pack)
+import Data.Text (Text, unpack)
+import Data.Text.Prettyprint.Doc
+import Data.Text.Prettyprint.Doc.Render.Text
 import Nix.Atoms
 import Nix.Expr
 import Nix.Parser
@@ -19,7 +21,6 @@ import Nix.Pretty
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.TH
-import Text.PrettyPrint.ANSI.Leijen hiding ((<$>), (<>))
 
 case_constant_int = assertParseText "234" $ mkInt 234
 
@@ -393,9 +394,9 @@ assertParseFail str = case parseNixText str of
 assertParsePrint :: Text -> Text -> Assertion
 assertParsePrint src expect =
   let Success expr = parseNixTextLoc src
-      result = displayS
-             . renderPretty 0.4 80
+      result = renderStrict
+             . layoutPretty (LayoutOptions $ AvailablePerLine 80 0.4)
              . prettyNix
              . stripAnnotation
              $ expr
-  in assertEqual "" expect (pack (result ""))
+  in assertEqual "" expect result
