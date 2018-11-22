@@ -574,7 +574,7 @@ executable hnix
       Paths_hnix
   hs-source-dirs:
       main
-  ghc-options: -Wall
+  ghc-options: -Wall -rtsopts
   build-depends:
       aeson
     , base >=4.9 && <5
