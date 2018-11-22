@@ -1,11 +1,11 @@
-{ compiler ? "ghc822"
+{ compiler ? "ghc844"
 
 , doBenchmark ? false
 , doTracing   ? false
 , doStrict    ? false
 
-, rev     ? "d1ae60cbad7a49874310de91cd17708b042400c8"
-, sha256  ? "0a1w4702jlycg2ab87m7n8frjjngf0cis40lyxm3vdwn7p4fxikz"
+, rev     ? "b37872d4268164614e3ecef6e1f730d48cf5a90f"
+, sha256  ? "05km33sz4srf05vvmkidz3k59phm5a3k9wpj1jc6ly9yqws0dbn4"
 , pkgs    ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
     then abort "hnix requires at least nix 2.0"
@@ -80,8 +80,8 @@ drv = haskellPackages.developPackage {
         # .cabal file will be. Otherwise, Travis may error out claiming that
         # the cabal file needs to be updated because the result is different
         # that the version we committed to Git.
-        pkgs.haskell.packages.ghc822.hpack
-        pkgs.haskell.packages.ghc822.criterion
+        pkgs.haskell.packages.ghc844.hpack
+        pkgs.haskell.packages.ghc844.criterion
       ];
 
     inherit doBenchmark;
