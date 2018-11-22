@@ -361,6 +361,18 @@ case_regression_373 = do
   freeVarsEqual "rec {inherit a; }" ["a"]
   freeVarsEqual "let inherit a; in { }" ["a"]
 
+case_empty_string_equal_null_is_false =
+  constantEqualText "false" "\"\" == null"
+
+case_null_equal_empty_string_is_false =
+  constantEqualText "false" "null == \"\""
+
+case_empty_string_not_equal_null_is_true =
+  constantEqualText "true" "\"\" != null"
+
+case_null_equal_not_empty_string_is_true =
+  constantEqualText "true" "null != \"\""
+
 -----------------------
 
 tests :: TestTree

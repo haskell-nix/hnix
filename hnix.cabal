@@ -1,10 +1,3 @@
--- This file has been generated from package.yaml by hpack version 0.28.2.
---
--- see: https://github.com/sol/hpack
---
--- hash: 7e613ce82a3337411d625301abd33a6d7f1c400edadbd602287027f2af1e4fdf
-
-cabal-version:  >= 1.10
 name:           hnix
 version:        0.5.2
 synopsis:       Haskell implementation of the Nix language
@@ -17,6 +10,7 @@ maintainer:     johnw@newartisans.com
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
+cabal-version:  >= 1.10
 extra-source-files:
     data/let-comments-multiline.nix
     data/let-comments.nix
@@ -486,7 +480,6 @@ library
   ghc-options: -Wall
   build-depends:
       aeson
-    , ansi-wl-pprint
     , array >=0.4 && <0.6
     , base >=4.9 && <5
     , binary
@@ -494,6 +487,7 @@ library
     , containers
     , data-fix
     , deepseq >=1.4.2 && <1.5
+    , dependent-sum
     , deriving-compat >=0.3 && <0.6
     , directory
     , exceptions
@@ -506,11 +500,14 @@ library
     , interpolate
     , lens-family-th
     , logict
-    , megaparsec >=6.5 && <7.0
+    , megaparsec >=7.0 && <7.1
     , monadlist
     , mtl
     , optparse-applicative
+    , parser-combinators
+    , prettyprinter
     , process
+    , ref-tf
     , regex-tdfa
     , regex-tdfa-text
     , scientific
@@ -571,10 +568,9 @@ executable hnix
       Paths_hnix
   hs-source-dirs:
       main
-  ghc-options: -Wall
+  ghc-options: -Wall -rtsopts
   build-depends:
       aeson
-    , ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
     , containers
@@ -588,6 +584,7 @@ executable hnix
     , mtl
     , optparse-applicative
     , pretty-show
+    , prettyprinter
     , repline
     , template-haskell
     , text
@@ -633,12 +630,12 @@ test-suite hnix-tests
   build-depends:
       Diff
     , Glob
-    , ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
     , containers
     , data-fix
     , deepseq >=1.4.2 && <1.5
+    , dependent-sum
     , directory
     , exceptions
     , filepath
@@ -651,6 +648,7 @@ test-suite hnix-tests
     , mtl
     , optparse-applicative
     , pretty-show
+    , prettyprinter
     , process
     , split
     , tasty
@@ -696,8 +694,7 @@ benchmark hnix-benchmarks
       benchmarks
   ghc-options: -Wall
   build-depends:
-      ansi-wl-pprint
-    , base >=4.9 && <5
+      base >=4.9 && <5
     , bytestring
     , containers
     , criterion

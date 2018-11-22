@@ -27,7 +27,7 @@ import           Lens.Family2.Stock (_1, _2)
 #if ENABLE_TRACING
 import           Debug.Trace as X
 #else
-import           Prelude as X
+import           Prelude as X hiding (putStr, putStrLn, print)
 trace :: String -> a -> a
 trace = const id
 traceM :: Monad m => String -> m ()

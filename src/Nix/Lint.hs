@@ -1,8 +1,8 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -13,6 +13,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -27,6 +28,7 @@ import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.Fix
 import           Control.Monad.Reader (MonadReader)
+import           Control.Monad.Ref
 import           Control.Monad.ST
 import           Control.Monad.Trans.Reader
 import           Data.Coerce
@@ -115,7 +117,7 @@ unpackSymbolic :: MonadVar m
                => Symbolic m -> m (NSymbolicF (NTypeF m (SThunk m)))
 unpackSymbolic = readVar . coerce
 
-type MonadLint e m = (Scoped e (SThunk m) m, Framed e m, MonadVar m,
+type MonadLint e m = (Scoped (SThunk m) m, Framed e m, MonadVar m,
                       MonadCatch m)
 
 symerr :: forall e m a. MonadLint e m => String -> m a
@@ -370,7 +372,7 @@ lintApp context fun arg = unpackSymbolic fun >>= \case
     NAny -> throwError $ ErrorCall
         "Cannot apply something not known to be a function"
     NMany xs -> do
-        (args:_, ys) <- fmap unzip $ forM xs $ \case
+        (args, ys) <- fmap unzip $ forM xs $ \case
             TClosure _params -> arg >>= unpackSymbolic >>= \case
                 NAny -> do
                     error "NYI"
@@ -384,20 +386,21 @@ lintApp context fun arg = unpackSymbolic fun >>= \case
             _x -> throwError $ ErrorCall "Attempt to call non-function"
 
         y <- everyPossible
-        (args,) <$> foldM (unify context) y ys
+        (head args,) <$> foldM (unify context) y ys
 
 newtype Lint s a = Lint
     { runLint :: ReaderT (Context (Lint s) (SThunk (Lint s))) (ST s) a }
     deriving (Functor, Applicative, Monad, MonadFix,
               MonadReader (Context (Lint s) (SThunk (Lint s))))
 
-instance MonadVar (Lint s) where
-    type Var (Lint s) = STRef s
+instance MonadRef (Lint s) where
+    type Ref (Lint s) = Ref (ST s)
+    newRef x     = Lint $ newRef x
+    readRef x    = Lint $ readRef x
+    writeRef x y = Lint $ writeRef x y
 
-    newVar x     = Lint $ ReaderT $ \_ -> newSTRef x
-    readVar x    = Lint $ ReaderT $ \_ -> readSTRef x
-    writeVar x y = Lint $ ReaderT $ \_ -> writeSTRef x y
-    atomicModifyVar x f = Lint $ ReaderT $ \_ -> do
+instance MonadAtomicRef (Lint s) where
+    atomicModifyRef x f = Lint $ ReaderT $ \_ -> do
         res <- snd . f <$> readSTRef x
         _ <- modifySTRef x (fst . f)
         return res
@@ -420,3 +423,9 @@ lint opts expr = runLintM opts $
         >>= (`pushScopes`
                 adi (Eval.eval . annotated . getCompose)
                     Eval.addSourcePositions expr)
+
+instance Scoped (SThunk (Lint s)) (Lint s) where
+  currentScopes = currentScopesReader
+  clearScopes = clearScopesReader @(Lint s) @(SThunk (Lint s))
+  pushScopes = pushScopesReader
+  lookupVar = lookupVarReader

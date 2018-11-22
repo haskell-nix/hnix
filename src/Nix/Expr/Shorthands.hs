@@ -9,7 +9,6 @@ module Nix.Expr.Shorthands where
 
 import Data.Fix
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Monoid
 import Data.Text (Text)
 import Nix.Atoms
 import Nix.Expr.Types

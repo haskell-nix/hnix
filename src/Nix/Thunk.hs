@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveTraversable #-}
@@ -19,7 +20,14 @@ module Nix.Thunk where
 
 import Control.Exception hiding (catch)
 import Control.Monad.Catch
+import Control.Monad.Ref
+import Data.GADT.Compare
+import Data.IORef
+import Data.Maybe
+import Data.STRef
 import Data.Typeable
+
+import Unsafe.Coerce
 
 #if ENABLE_TRACING
 import Data.IORef
@@ -34,13 +42,36 @@ counter = unsafePerformIO $ newIORef 0
 data Deferred m v = Deferred (m v) | Computed v
     deriving (Functor, Foldable, Traversable)
 
-class Monad m => MonadVar m where
-    type Var m :: * -> *
-    eqVar :: Var m a -> Var m a -> Bool
-    newVar :: a -> m (Var m a)
-    readVar :: Var m a -> m a
-    writeVar :: Var m a -> a -> m ()
-    atomicModifyVar :: Var m a -> (a -> (a, b)) -> m b
+type Var m = Ref m
+
+--TODO: Eliminate the old MonadVar shims
+type MonadVar m = (MonadAtomicRef m, GEq (Ref m))
+
+eqVar :: forall m a. GEq (Ref m) => Ref m a -> Ref m a -> Bool
+eqVar a b = isJust $ geq a b
+
+newVar :: MonadRef m => a -> m (Ref m a)
+newVar = newRef
+
+readVar :: MonadRef m => Ref m a -> m a
+readVar = readRef
+
+writeVar :: MonadRef m => Ref m a -> a -> m ()
+writeVar = writeRef
+
+atomicModifyVar :: MonadAtomicRef m => Ref m a -> (a -> (a, b)) -> m b
+atomicModifyVar = atomicModifyRef
+
+--TODO: Upstream GEq instances
+instance GEq IORef where
+    a `geq` b = if a == unsafeCoerce b
+                then Just $ unsafeCoerce Refl
+                else Nothing
+
+instance GEq (STRef s) where
+    a `geq` b = if a == unsafeCoerce b
+                then Just $ unsafeCoerce Refl
+                else Nothing
 
 class Monad m => MonadThunk v t m | v -> m, v -> t, t -> m, t -> v where
     thunk :: m v -> m t

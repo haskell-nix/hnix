@@ -46,10 +46,12 @@ module Nix.Parser
     , whiteSpace
     ) where
 
+import           Prelude hiding (readFile)
+
 import           Control.Applicative hiding (many, some)
 import           Control.DeepSeq
 import           Control.Monad
-import           Control.Monad.IO.Class
+import           Control.Monad.Combinators.Expr
 import           Data.Char (isAlpha, isDigit, isSpace)
 import           Data.Data (Data(..))
 import           Data.Foldable (concat)
@@ -62,17 +64,17 @@ import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
 import           Data.Text (Text)
 import           Data.Text hiding (map, foldr1, concat, concatMap, zipWith)
-import qualified Data.Text.IO as T
+import           Data.Text.Prettyprint.Doc (Doc, pretty)
+import           Data.Text.Encoding
 import           Data.Typeable (Typeable)
 import           Data.Void
 import           GHC.Generics hiding (Prefix)
 import           Nix.Expr hiding (($>))
+import           Nix.Render
 import           Nix.Strings
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
-import           Text.Megaparsec.Expr
-import           Text.PrettyPrint.ANSI.Leijen (Doc, text)
 
 infixl 3 <+>
 (<+>) :: MonadPlus m => m a -> m a -> m a
@@ -282,9 +284,9 @@ nixString' = lexeme (doubleQuoted <+> indented <?> "string")
         <+> Plain . pack <$> some plainChar
      where
        plainChar =
-           notFollowedBy (end <+> void (char '$') <+> escStart) *> anyChar
+           notFollowedBy (end <+> void (char '$') <+> escStart) *> anySingle
 
-    escapeCode = msum [ c <$ char e | (c,e) <- escapeCodes ] <+> anyChar
+    escapeCode = msum [ c <$ char e | (c,e) <- escapeCodes ] <+> anySingle
 
 -- | Gets all of the arguments for a function.
 argExpr :: Parser (Params NExprLoc)
@@ -336,11 +338,11 @@ nixBinders = (inherit <+> namedVar) `endBy` semi where
       -- We can't use 'reserved' here because it would consume the whitespace
       -- after the keyword, which is not exactly the semantics of C++ Nix.
       try $ string "inherit" *> lookAhead (void (satisfy reservedEnd))
-      p <- getPosition
+      p <- getSourcePos
       x <- whiteSpace *> optional scope
       Inherit x <$> many keyName <*> pure p <?> "inherited binding"
   namedVar = do
-      p <- getPosition
+      p <- getSourcePos
       NamedVar <$> (annotated <$> nixSelector)
                <*> (equals *> nixToplevelForm)
                <*> pure p
@@ -357,11 +359,11 @@ nixSet = annotateLocation1 ((isRec <*> braces nixBinders) <?> "set") where
   isRec = (reserved "rec" $> NRecSet <?> "recursive set")
        <+> pure NSet
 
-parseNixFile :: MonadIO m => FilePath -> m (Result NExpr)
+parseNixFile :: MonadFile m => FilePath -> m (Result NExpr)
 parseNixFile =
     parseFromFileEx $ stripAnnotation <$> (whiteSpace *> nixToplevelForm <* eof)
 
-parseNixFileLoc :: MonadIO m => FilePath -> m (Result NExprLoc)
+parseNixFileLoc :: MonadFile m => FilePath -> m (Result NExprLoc)
 parseNixFileLoc = parseFromFileEx (whiteSpace *> nixToplevelForm <* eof)
 
 parseNixText :: Text -> Result NExpr
@@ -437,17 +439,17 @@ reservedNames = HashSet.fromList
 
 type Parser = ParsecT Void Text Identity
 
-data Result a = Success a | Failure Doc deriving (Show, Functor)
+data Result a = Success a | Failure (Doc Void) deriving (Show, Functor)
 
-parseFromFileEx :: MonadIO m => Parser a -> FilePath -> m (Result a)
+parseFromFileEx :: MonadFile m => Parser a -> FilePath -> m (Result a)
 parseFromFileEx p path = do
-    txt <- liftIO (T.readFile path)
-    return $ either (Failure . text . parseErrorPretty' txt) Success
+    txt <- decodeUtf8 <$> readFile path
+    return $ either (Failure . pretty . errorBundlePretty) Success
            $ parse p path txt
 
 parseFromText :: Parser a -> Text -> Result a
 parseFromText p txt =
-    either (Failure . text . parseErrorPretty' txt) Success $
+    either (Failure . pretty . errorBundlePretty) Success $
         parse p "<string>" txt
 
 {- Parser.Operators -}
@@ -466,9 +468,9 @@ data NOperatorDef
 
 annotateLocation :: Parser a -> Parser (Ann SrcSpan a)
 annotateLocation p = do
-  begin <- getPosition
+  begin <- getSourcePos
   res   <- p
-  end   <- getPosition
+  end   <- getSourcePos
   pure $ Ann (SrcSpan begin end) res
 
 annotateLocation1 :: Parser (NExprF NExprLoc) -> Parser NExprLoc

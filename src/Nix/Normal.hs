@@ -19,13 +19,8 @@ import           Control.Monad.Trans.State
 import qualified Data.HashMap.Lazy as M
 import           Data.List (find)
 import           Data.Maybe (isJust)
-import           Data.Text (Text)
-import qualified Data.Text as Text
-import           Nix.Atoms
-import           Nix.Effects
 import           Nix.Frames
 -- import           Nix.Pretty
-import           Nix.String
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
@@ -108,32 +103,3 @@ embed (Free x) = case x of
     NVClosureF p f -> return $ nvClosure p f
     NVPathF fp     -> return $ nvPath fp
     NVBuiltinF n f -> return $ nvBuiltin n f
-
-valueText :: forall e m. (Framed e m, MonadEffects m, Typeable m)
-          => Bool -> NValueNF m -> m NixString
-valueText addPathsToStore = iter phi . check
-  where
-    check :: NValueNF m -> Free (NValueF m) (m NixString)
-    check = fmap (const $ pure (hackyMakeNixStringWithoutContext "<CYCLE>"))
-
-    phi :: NValueF m (m NixString) -> m NixString
-    phi (NVConstantF a) = pure (hackyMakeNixStringWithoutContext (atomText a))
-    phi (NVStrF ns)     = pure ns
-    phi v@(NVListF _)   = coercionFailed v
-    phi v@(NVSetF s _)
-      | Just asString <- M.lookup "__asString" s = asString
-      | otherwise = coercionFailed v
-    phi v@NVClosureF {} = coercionFailed v
-    phi (NVPathF originalPath)
-        | addPathsToStore = do
-            storePath <- addPath originalPath
-            pure (hackyMakeNixStringWithoutContext $ Text.pack $ unStorePath storePath)
-        | otherwise = pure (hackyMakeNixStringWithoutContext (Text.pack originalPath))
-    phi v@(NVBuiltinF _ _) = coercionFailed v
-
-    coercionFailed v =
-        throwError $ Coercion @m (valueType v) TString
-
-valueTextNoContext :: (Framed e m, MonadEffects m, Typeable m)
-                   => Bool -> NValueNF m -> m Text
-valueTextNoContext addPathsToStore = fmap hackyStringIgnoreContext . valueText addPathsToStore
