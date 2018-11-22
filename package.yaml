@@ -55,7 +55,6 @@ ghc-options:
 
 dependencies:
   - base                        >= 4.9 && < 5
-  - ansi-wl-pprint
   - bytestring
   - containers
   - data-fix
@@ -98,10 +97,10 @@ library:
   source-dirs: src
   dependencies:
     - aeson
-    - ansi-wl-pprint
     - array                     >= 0.4   && < 0.6
     - binary
     - deriving-compat           >= 0.3   && < 0.6
+    - dependent-sum
     - directory
     - free
     - http-types
@@ -112,9 +111,11 @@ library:
     - logict
     - megaparsec                >= 6.5   && < 7.0
     - monadlist
+    - prettyprinter
     - process
     - regex-tdfa
     - regex-tdfa-text
+    - ref-tf
     - scientific
     - semigroups                >= 0.18  && < 0.19
     - split
@@ -158,6 +159,7 @@ executables:
       - hnix
       - aeson
       - pretty-show
+      - prettyprinter
       - repline
       - haskeline
     when:
@@ -193,6 +195,8 @@ tests:
       - megaparsec
       - tasty-quickcheck
       - pretty-show
+      - prettyprinter
+      - dependent-sum
     when:
       - condition: "impl(ghcjs)"
         then:

@@ -35,6 +35,7 @@ import           Control.Applicative
 import           Control.Arrow (second)
 import           Control.Monad
 import           Control.Monad.Catch
+import           Control.Monad.Fail
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
@@ -67,13 +68,13 @@ newtype Reducer m a = Reducer
     { runReducer :: ReaderT (Maybe FilePath, Scopes (Reducer m) NExprLoc)
                            (StateT (HashMap FilePath NExprLoc) m) a }
     deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
-              MonadFix, MonadIO,
+              MonadFix, MonadIO, MonadFail,
               MonadReader (Maybe FilePath, Scopes (Reducer m) NExprLoc),
               MonadState (HashMap FilePath NExprLoc))
 
 staticImport
-    :: forall e m.
-      (MonadIO m, Scoped e NExprLoc m,
+    :: forall m.
+      (MonadIO m, Scoped NExprLoc m, MonadFail m,
        MonadReader (Maybe FilePath, Scopes m NExprLoc) m,
        MonadState (HashMap FilePath NExprLoc) m)
     => SrcSpan -> FilePath -> m NExprLoc
@@ -111,15 +112,16 @@ staticImport pann path = do
 --     NSym_ _ var -> S.singleton var
 --     Compose (Ann _ x) -> fold x
 
-reduceExpr :: MonadIO m => Maybe FilePath -> NExprLoc -> m NExprLoc
+reduceExpr :: (MonadIO m, MonadFail m)
+           => Maybe FilePath -> NExprLoc -> m NExprLoc
 reduceExpr mpath expr
     = (`evalStateT` M.empty)
     . (`runReaderT` (mpath, emptyScopes))
     . runReducer
     $ cata reduce expr
 
-reduce :: forall e m.
-           (MonadIO m, Scoped e NExprLoc m,
+reduce :: forall m.
+            (MonadIO m, Scoped NExprLoc m, MonadFail m,
             MonadReader (Maybe FilePath, Scopes m NExprLoc) m,
             MonadState (HashMap FilePath NExprLoc) m)
        => NExprLocF (m NExprLoc) -> m NExprLoc
@@ -143,7 +145,7 @@ reduce (NUnary_ uann op arg) = arg >>= \x -> case (op, x) of
 --     * Reduce an import to the actual imported expression.
 --
 --     * Reduce a lambda function by adding its name to the local
---       scope and recursively reducing its body. 
+--       scope and recursively reducing its body.
 reduce (NBinary_ bann NApp fun arg) = fun >>= \case
     f@(Fix (NSym_ _ "import")) -> arg >>= \case
         -- Fix (NEnvPath_     pann origPath) -> staticImport pann origPath
@@ -190,7 +192,7 @@ reduce base@(NSelect_ _ _ attrs _)
         _                                  -> findBind xs attrs
     -- Follow the attrpath recursively in sets.
     inspectSet (NSet_ _ binds) attrs = case findBind binds attrs of
-       Just (NamedVar _ e _) -> case NE.uncons attrs of 
+       Just (NamedVar _ e _) -> case NE.uncons attrs of
                (_,Just attrs) -> inspectSet (unFix e) attrs
                _              -> pure e
        _ -> sId
@@ -407,3 +409,9 @@ reducingEvalExpr eval mpath expr = do
     return (fromMaybe nNull expr'', eres)
   where
     addEvalFlags k (FlaggedF (b, x)) = liftIO (writeIORef b True) *> k x
+
+instance Monad m => Scoped NExprLoc (Reducer m) where
+  currentScopes = currentScopesReader
+  clearScopes = clearScopesReader @(Reducer m) @NExprLoc
+  pushScopes = pushScopesReader
+  lookupVar = lookupVarReader

@@ -11,6 +11,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -21,7 +22,7 @@
 
 module Repl where
 
-import           Nix
+import           Nix hiding (exec)
 import           Nix.Convert
 import           Nix.Eval
 import           Nix.Scope
@@ -180,7 +181,13 @@ completer = Prefix (wordCompleter comp) defaultMatcher
 
 shell :: (MonadNix e m, MonadIO m, MonadException m) => Repl e m a -> m ()
 shell pre = flip evalStateT initState $
-    evalRepl "hnix> " cmd options completer pre
+#if MIN_VERSION_repline(0, 2, 0)
+    evalRepl (return prefix() cmd options Nothing completer pre
+#else
+    evalRepl prefix cmd options completer pre
+#endif
+    where
+      prefix = "hnix> "
 
 -------------------------------------------------------------------------------
 -- Toplevel

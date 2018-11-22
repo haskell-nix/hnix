@@ -19,7 +19,6 @@ import           Nix.Type.Type
 
 import           Data.Foldable hiding (toList)
 import qualified Data.Map as Map
-import           Data.Semigroup
 
 -------------------------------------------------------------------------------
 -- Typing Environment
