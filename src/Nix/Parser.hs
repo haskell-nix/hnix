@@ -51,6 +51,7 @@ import           Prelude hiding (readFile)
 import           Control.Applicative hiding (many, some)
 import           Control.DeepSeq
 import           Control.Monad
+import           Control.Monad.Combinators.Expr
 import           Data.Char (isAlpha, isDigit, isSpace)
 import           Data.Data (Data(..))
 import           Data.Foldable (concat)
@@ -74,7 +75,6 @@ import           Nix.Strings
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
-import           Text.Megaparsec.Expr
 
 infixl 3 <+>
 (<+>) :: MonadPlus m => m a -> m a -> m a
@@ -284,9 +284,9 @@ nixString' = lexeme (doubleQuoted <+> indented <?> "string")
         <+> Plain . pack <$> some plainChar
      where
        plainChar =
-           notFollowedBy (end <+> void (char '$') <+> escStart) *> anyChar
+           notFollowedBy (end <+> void (char '$') <+> escStart) *> anySingle
 
-    escapeCode = msum [ c <$ char e | (c,e) <- escapeCodes ] <+> anyChar
+    escapeCode = msum [ c <$ char e | (c,e) <- escapeCodes ] <+> anySingle
 
 -- | Gets all of the arguments for a function.
 argExpr :: Parser (Params NExprLoc)
@@ -338,11 +338,11 @@ nixBinders = (inherit <+> namedVar) `endBy` semi where
       -- We can't use 'reserved' here because it would consume the whitespace
       -- after the keyword, which is not exactly the semantics of C++ Nix.
       try $ string "inherit" *> lookAhead (void (satisfy reservedEnd))
-      p <- getPosition
+      p <- getSourcePos
       x <- whiteSpace *> optional scope
       Inherit x <$> many keyName <*> pure p <?> "inherited binding"
   namedVar = do
-      p <- getPosition
+      p <- getSourcePos
       NamedVar <$> (annotated <$> nixSelector)
                <*> (equals *> nixToplevelForm)
                <*> pure p
@@ -444,12 +444,12 @@ data Result a = Success a | Failure (Doc Void) deriving (Show, Functor)
 parseFromFileEx :: MonadFile m => Parser a -> FilePath -> m (Result a)
 parseFromFileEx p path = do
     txt <- decodeUtf8 <$> readFile path
-    return $ either (Failure . pretty . parseErrorPretty' txt) Success
+    return $ either (Failure . pretty . errorBundlePretty) Success
            $ parse p path txt
 
 parseFromText :: Parser a -> Text -> Result a
 parseFromText p txt =
-    either (Failure . pretty . parseErrorPretty' txt) Success $
+    either (Failure . pretty . errorBundlePretty) Success $
         parse p "<string>" txt
 
 {- Parser.Operators -}
@@ -468,9 +468,9 @@ data NOperatorDef
 
 annotateLocation :: Parser a -> Parser (Ann SrcSpan a)
 annotateLocation p = do
-  begin <- getPosition
+  begin <- getSourcePos
   res   <- p
-  end   <- getPosition
+  end   <- getSourcePos
   pure $ Ann (SrcSpan begin end) res
 
 annotateLocation1 :: Parser (NExprF NExprLoc) -> Parser NExprLoc
