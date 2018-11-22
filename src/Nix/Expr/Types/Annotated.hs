@@ -38,7 +38,6 @@ import Data.Hashable
 import Data.Hashable.Lifted
 #endif
 import Data.Ord.Deriving
-import Data.Semigroup
 import Data.Text (Text, pack)
 import GHC.Generics
 import Nix.Atoms
