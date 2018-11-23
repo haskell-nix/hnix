@@ -179,7 +179,7 @@ completer = Prefix (wordCompleter comp) defaultMatcher
 shell :: (MonadNix e m, MonadIO m, MonadException m) => Repl e m a -> m ()
 shell pre = flip evalStateT initState $
 #if MIN_VERSION_repline(0, 2, 0)
-    evalRepl (return prefix() cmd options Nothing completer pre
+    evalRepl (return prefix) cmd options (Just ':') completer pre
 #else
     evalRepl prefix cmd options completer pre
 #endif
