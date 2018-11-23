@@ -980,8 +980,7 @@ fromJSON = fromValue >=> \encoded ->
         Right v -> toValue v
 
 toXML_ :: MonadNix e m => m (NValue m) -> m (NValue m)
-toXML_ v = v >>= normalForm >>= \x ->
-    pure $ nvStr $ hackyMakeNixStringWithoutContext $ Text.pack (toXML x)
+toXML_ v = v >>= normalForm >>= pure . nvStr . toXML
 
 typeOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 typeOf v = v >>= toNix @Text . \case
