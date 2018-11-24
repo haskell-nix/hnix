@@ -180,13 +180,13 @@ renderExecFrame level = \case
 renderThunkLoop :: (MonadReader e m, Has e Options, MonadFile m)
                 => NixLevel -> ThunkLoop -> m [Doc ann]
 renderThunkLoop _level = pure . (:[]) . \case
-    ThunkLoop Nothing -> "<<thunk loop>>"
+    ThunkLoop Nothing -> "Infinite recursion"
     ThunkLoop (Just n) ->
-        pretty $ "<<loop forcing thunk #" ++ show n ++ ">>"
+        pretty $ "Infinite recursion in thunk #" ++ show n
 
 renderNormalLoop :: (MonadReader e m, Has e Options, MonadFile m, MonadVar m)
                 => NixLevel -> NormalLoop m -> m [Doc ann]
 renderNormalLoop level = fmap (:[]) . \case
     NormalLoop v -> do
         v' <- renderValue level "" "" v
-        pure $ "<<loop during normalization forcing " <> v' <> ">>"
+        pure $ "Infinite recursion during normalization forcing " <> v' <> ">>"
