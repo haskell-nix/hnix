@@ -137,7 +137,7 @@ principledModifyNixContents f (NixString s c) = NixString (f s) c
 principledMakeNixStringWithSingletonContext :: Text -> StringContext -> NixString
 principledMakeNixStringWithSingletonContext s c = NixString s (S.singleton c)
 
--- | Create a NixString using a singleton context
+-- | Create a NixString from a Text and context
 principledMakeNixString :: Text -> S.HashSet StringContext -> NixString
 principledMakeNixString s c = NixString s c
 
