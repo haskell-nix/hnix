@@ -26,6 +26,7 @@
 let haskellPackages = pkgs.haskell.packages.${compiler};
 
 drv = haskellPackages.developPackage {
+  name = "hnix";
   root = ./.;
 
   overrides = with pkgs.haskell.lib; self: super: {
