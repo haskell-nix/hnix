@@ -17,13 +17,13 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import           Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Set as Set
+import           Data.Text.Prettyprint.Doc
 import           Data.Void
 import           Nix.Expr.Types.Annotated
 import qualified System.Posix.Files as S
 import qualified System.Directory as S
 import           Text.Megaparsec.Error
 import           Text.Megaparsec.Pos (SourcePos(..))
-import           Text.PrettyPrint.ANSI.Leijen
 
 class Monad m => MonadFile m where
     readFile :: FilePath -> m ByteString
@@ -65,15 +65,11 @@ instance MonadFile IO where
     doesDirectoryExist = S.doesDirectoryExist
     getSymbolicLinkStatus = S.getSymbolicLinkStatus
 
-posAndMsg :: SourcePos -> Doc -> ParseError t Void
-posAndMsg beg msg =
-    FancyError (beg :| [])
+posAndMsg :: SourcePos -> Doc a -> ParseError s Void
+posAndMsg (SourcePos _ lineNo _) msg =
+    FancyError (unPos lineNo)
         (Set.fromList [ErrorFail (show msg) :: ErrorFancy Void])
 
-renderLocation :: MonadFile m => SrcSpan -> Doc -> m Doc
-renderLocation (SrcSpan beg@(SourcePos "<string>" _ _) _) msg =
-    return $ text $ init $ parseErrorPretty @Char (posAndMsg beg msg)
-
-renderLocation (SrcSpan beg@(SourcePos path _ _) _) msg = do
-    contents <- Nix.Render.readFile path
-    return $ text $ init $ parseErrorPretty' contents (posAndMsg beg msg)
+renderLocation :: Monad m => SrcSpan -> Doc a -> m (Doc a)
+renderLocation (SrcSpan beg@(SourcePos _ _ _) _) msg =
+    return $ pretty $ init $ parseErrorPretty @String (posAndMsg beg msg)

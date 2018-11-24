@@ -205,8 +205,12 @@ desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
                 (Binding r)
     go (Right x) = pure x
     go (Left x) = do
-        Just (p, v) <- gets $ M.lookup x
-        pure $ NamedVar (StaticKey x :| []) (embed v) p
+        maybeValue <- gets (M.lookup x)
+        case maybeValue of
+          Nothing ->
+            fail ("No binding " ++ show x)
+          Just (p, v) ->
+            pure $ NamedVar (StaticKey x :| []) (embed v) p
 
 evalBinds :: forall v t m. MonadNixEval v t m
           => Bool

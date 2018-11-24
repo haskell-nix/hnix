@@ -46,9 +46,9 @@ import           Data.List
 import qualified Data.List.NonEmpty as NE
 import           Data.List.Split
 import           Data.Maybe (maybeToList)
-import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as Text
+import           Data.Text.Prettyprint.Doc
 import           Data.Typeable
 import           Nix.Atoms
 import           Nix.Context
@@ -71,8 +71,6 @@ import           Nix.Value
 import           System.Console.Haskeline.MonadException hiding (catch)
 #endif
 import           System.FilePath
-import           Text.PrettyPrint.ANSI.Leijen (text)
-import qualified Text.PrettyPrint.ANSI.Leijen as P
 #ifdef MIN_VERSION_pretty_show
 import qualified Text.Show.Pretty as PS
 #endif
@@ -574,8 +572,10 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
                     eres <- parseNixFileLoc path
                     case eres of
                         Failure err  ->
-                            throwError $ ErrorCall . show $
-                                text "Parse during import failed:" P.</> err
+                            throwError $ ErrorCall . show $ fillSep $
+                                [ "Parse during import failed:"
+                                , err
+                                ]
                         Success expr -> do
                             Lazy $ ReaderT $ const $
                                 modify (M.insert path expr)
@@ -726,16 +726,16 @@ addTracing k v = do
             let rendered =
                     if verbose opts >= Chatty
 #ifdef MIN_VERSION_pretty_show
-                    then text $ PS.ppShow (void x)
+                    then pretty $ PS.ppShow (void x)
 #else
-                    then text $ show (void x)
+                    then pretty $ show (void x)
 #endif
                     else prettyNix (Fix (Fix (NSym "?") <$ x))
-                msg x = text ("eval: " ++ replicate depth ' ') <> x
-            loc <- renderLocation span (msg rendered <> text " ...\n")
+                msg x = pretty ("eval: " ++ replicate depth ' ') <> x
+            loc <- renderLocation span (msg rendered <> " ...\n")
             putStr $ show loc
             res <- k v'
-            print $ msg rendered <> text " ...done"
+            print $ msg rendered <> " ...done"
             return res
 
 evalExprLoc :: forall e m. (MonadNix e m, Has e Options)

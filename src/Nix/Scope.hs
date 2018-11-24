@@ -16,7 +16,6 @@ module Nix.Scope where
 import           Control.Applicative
 import           Control.Monad.Reader
 import qualified Data.HashMap.Lazy as M
-import           Data.Semigroup
 import           Data.Text (Text)
 import           Lens.Family2
 import           Nix.Utils

@@ -60,7 +60,6 @@ import qualified Data.HashMap.Lazy as M
 import qualified Data.HashSet as HS
 import           Data.List
 import           Data.Maybe
-import           Data.Semigroup
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.String.Interpolate.IsString

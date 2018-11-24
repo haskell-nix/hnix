@@ -29,7 +29,6 @@ import           Data.Hashable
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           GHC.Generics
-import           Data.Semigroup
 
 -- {-# WARNING hackyGetStringNoContext, hackyStringIgnoreContext, hackyMakeNixStringWithoutContext "This NixString function needs to be replaced" #-}
 
