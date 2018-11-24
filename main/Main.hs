@@ -58,7 +58,7 @@ main = do
                     mapM_ (processFile opts)
                         =<< (lines <$> liftIO (readFile path))
                 Nothing -> case filePaths opts of
-                    [] -> withNixContext Nothing $ Repl.shell (pure ())
+                    [] -> withNixContext Nothing $ Repl.main
                     ["-"] ->
                         handleResult opts Nothing . parseNixTextLoc
                             =<< liftIO Text.getContents
@@ -94,7 +94,7 @@ main = do
                         =<< renderFrames @(NThunk (Lazy IO)) frames
 
             when (repl opts) $
-                withNixContext Nothing $ Repl.shell (pure ())
+                withNixContext Nothing $ Repl.main
 
     process opts mpath expr
         | evaluate opts, tracing opts =

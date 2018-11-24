@@ -37,6 +37,8 @@ import           Data.Monoid
 import           Data.Text (unpack, pack)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
+import           Data.Version (showVersion)
+import           Paths_hnix (version)
 
 import           Control.Monad.Catch
 import           Control.Monad.Identity
@@ -47,6 +49,18 @@ import           System.Console.Haskeline.MonadException
 import           System.Console.Repline
 import           System.Environment
 import           System.Exit
+
+
+main :: (MonadNix e m, MonadIO m, MonadException m) => m ()
+main = flip evalStateT initState $
+#if MIN_VERSION_repline(0, 2, 0)
+    evalRepl (return prefix) cmd options (Just ':') completer init
+#else
+    evalRepl prefix cmd options completer welcomeText
+#endif
+    where
+      prefix = "hnix> "
+      welcomeText = liftIO $ putStrLn $ "Welcome to hnix " <> showVersion version <> ". For help type :help\n"
 
 -------------------------------------------------------------------------------
 -- Types
@@ -131,11 +145,12 @@ load args = do
 typeof :: (MonadNix e m, MonadException m, MonadIO m) => [String] -> Repl e m ()
 typeof args = do
   st <- get
-  let arg = unwords args
-  val <- case M.lookup (Text.pack arg) (tmctx st) of
+  val <- case M.lookup line (tmctx st) of
     Just val -> return val
-    Nothing -> exec False (Text.pack arg)
+    Nothing -> exec False line
   liftIO $ putStrLn $ describeValue $ valueType (_baseValue val)
+  where
+    line = Text.pack (unwords args)
 
 -- :quit command
 quit :: (MonadNix e m, MonadIO m) => a -> Repl e m ()
@@ -164,37 +179,17 @@ options :: (MonadNix e m, MonadIO m, MonadException m)
         => [(String, [String] -> Repl e m ())]
 options = [
     ("load"   , load)
-  , ("browse" , browse)
+  --, ("browse" , browse)
   , ("quit"   , quit)
   , ("type"   , typeof)
+  , ("help"   , help)
   ]
 
--------------------------------------------------------------------------------
--- Entry Point
--------------------------------------------------------------------------------
+help :: forall e m . (MonadNix e m, MonadIO m, MonadException m)
+     => [String] -> Repl e m ()
+help _ = liftIO $ do
+  putStrLn "Available commands:\n"
+  mapM_ putStrLn $ map fst (options @e @m)
 
 completer :: (MonadNix e m, MonadIO m) => CompleterStyle (StateT (IState m) m)
 completer = Prefix (wordCompleter comp) defaultMatcher
-
-shell :: (MonadNix e m, MonadIO m, MonadException m) => Repl e m a -> m ()
-shell pre = flip evalStateT initState $
-#if MIN_VERSION_repline(0, 2, 0)
-    evalRepl (return prefix) cmd options (Just ':') completer pre
-#else
-    evalRepl prefix cmd options completer pre
-#endif
-    where
-      prefix = "hnix> "
-
--------------------------------------------------------------------------------
--- Toplevel
--------------------------------------------------------------------------------
-
--- main :: IO ()
--- main = do
---   args <- getArgs
---   case args of
---     []      -> shell (return ())
---     [fname] -> shell (load [fname])
---     ["test", fname] -> shell (load [fname] >> browse [] >> quit ())
---     _ -> putStrLn "invalid arguments"
