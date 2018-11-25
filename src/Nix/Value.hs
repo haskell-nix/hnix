@@ -275,12 +275,16 @@ valueEq = curry $ \case
     (NVPath lp, NVPath rp) -> pure $ lp == rp
     _ -> pure False
 
+
+data TStringContext = NoContext | HasContext
+  deriving Show
+
 data ValueType
     = TInt
     | TFloat
     | TBool
     | TNull
-    | TString
+    | TString TStringContext
     | TList
     | TSet
     | TClosure
@@ -295,7 +299,8 @@ valueType = \case
         NFloat _  -> TFloat
         NBool _   -> TBool
         NNull     -> TNull
-    NVStrF {}     -> TString
+    NVStrF ns | stringHasContext ns ->  TString HasContext
+              | otherwise -> TString NoContext
     NVListF {}    -> TList
     NVSetF {}     -> TSet
     NVClosureF {} -> TClosure
@@ -304,16 +309,17 @@ valueType = \case
 
 describeValue :: ValueType -> String
 describeValue = \case
-    TInt     -> "an integer"
-    TFloat   -> "a float"
-    TBool    -> "a boolean"
-    TNull    -> "a null"
-    TString  -> "a string"
-    TList    -> "a list"
-    TSet     -> "an attr set"
-    TClosure -> "a function"
-    TPath    -> "a path"
-    TBuiltin -> "a builtin function"
+    TInt               -> "an integer"
+    TFloat             -> "a float"
+    TBool              -> "a boolean"
+    TNull              -> "a null"
+    TString NoContext  -> "a string"
+    TString HasContext -> "a string with context"
+    TList              -> "a list"
+    TSet               -> "an attr set"
+    TClosure           -> "a function"
+    TPath              -> "a path"
+    TBuiltin           -> "a builtin function"
 
 instance Show (NValueF m (NThunk m)) where
     show = show . describeValue . valueType
