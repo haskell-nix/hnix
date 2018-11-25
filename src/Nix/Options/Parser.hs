@@ -26,7 +26,7 @@ argPair = option $ str >>= \s ->
 
 nixOptions :: UTCTime -> Parser Options
 nixOptions current = Options
-    <$> (fromMaybe ErrorsOnly <$>
+    <$> (fromMaybe Informational <$>
          optional
            (option (do a <- str
                        if all isDigit a
