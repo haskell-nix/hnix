@@ -54,7 +54,7 @@ import           System.Exit
 main :: (MonadNix e m, MonadIO m, MonadException m) => m ()
 main = flip evalStateT initState $
 #if MIN_VERSION_repline(0, 2, 0)
-    evalRepl (return prefix) cmd options (Just ':') completer init
+    evalRepl (return prefix) cmd options (Just ':') completer welcomeText
 #else
     evalRepl prefix cmd options completer welcomeText
 #endif
