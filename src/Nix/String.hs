@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 module Nix.String (
-    NixString(..)
+    NixString
   , principledMempty
   , StringContext(..)
   , ContextFlavor(..)
