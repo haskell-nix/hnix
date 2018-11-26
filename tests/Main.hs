@@ -11,7 +11,7 @@ import           Control.Applicative ((<|>))
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Fix
-import           Data.List (isInfixOf, isSuffixOf)
+import           Data.List (isSuffixOf)
 import           Data.Maybe
 import           Data.String.Interpolate.IsString
 import           Data.Text (unpack)
@@ -33,7 +33,6 @@ import           System.Directory
 import           System.Environment
 import           System.FilePath.Glob
 import           System.Posix.Files
-import           System.Process
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -110,4 +109,3 @@ main = do
     , nixLanguageTests ] ++
     [ testCase "Nixpkgs parses without errors" ensureNixpkgsCanParse
       | isJust nixpkgsTestsEnv ]
-

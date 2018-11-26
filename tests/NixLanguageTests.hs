@@ -22,6 +22,7 @@ import           Nix.Options
 import           Nix.Options.Parser
 import           Nix.Parser
 import           Nix.Pretty
+import           Nix.String
 import           Nix.Utils
 import           Nix.XML
 import qualified Options.Applicative as Opts
@@ -110,7 +111,7 @@ assertLangOkXml :: Options -> FilePath -> Assertion
 assertLangOkXml opts file = do
   actual <- toXML <$> hnixEvalFile opts (file ++ ".nix")
   expected <- Text.readFile $ file ++ ".exp.xml"
-  assertEqual "" expected $ Text.pack actual
+  assertEqual "" expected $ hackyStringIgnoreContext actual
 
 assertEval :: Options -> [FilePath] -> Assertion
 assertEval _opts files = do
