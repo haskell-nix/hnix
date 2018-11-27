@@ -139,7 +139,7 @@ main = do
             | finder opts =
               fromValue @(AttrSet (NThunk m)) >=> findAttrs
             | xml opts =
-              liftIO . Text.putStrLn . hackyStringIgnoreContext .toXML <=< normalForm
+              liftIO . putStrLn . toXML <=< normalForm
             | json opts =
               liftIO . TL.putStrLn
                      . TL.decodeUtf8
