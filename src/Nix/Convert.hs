@@ -165,7 +165,7 @@ instance (Convertible e m, MonadEffects m)
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
-        _ -> throwError $ ExpectationNF TString v
+        _ -> throwError $ ExpectationNF (TString NoContext) v
 
 instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
       => FromValue NixString m (NValue m) where
@@ -174,7 +174,7 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
-        _ -> throwError $ Expectation TString v
+        _ -> throwError $ Expectation (TString NoContext) v
 
 instance Convertible e m
       => FromValue ByteString m (NValueNF m) where
@@ -183,7 +183,7 @@ instance Convertible e m
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
-        _ -> throwError $ ExpectationNF TString v
+        _ -> throwError $ ExpectationNF (TString NoContext) v
 
 instance Convertible e m
       => FromValue ByteString m (NValue m) where
@@ -192,7 +192,7 @@ instance Convertible e m
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
-        _ -> throwError $ Expectation TString v
+        _ -> throwError $ Expectation (TString NoContext) v
 
 newtype Path = Path { getPath :: FilePath }
     deriving Show

@@ -15,7 +15,6 @@ import           Prelude hiding (readFile)
 import           Control.Monad.Trans
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
-import           Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Set as Set
 import           Data.Text.Prettyprint.Doc
 import           Data.Void

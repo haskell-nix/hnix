@@ -2,15 +2,14 @@
 
 , doBenchmark ? false
 , doTracing   ? false
-# enables GHC optimizations for production use
-, doOptimize ? false 
-# enables profiling support in GHC
-, doProfiling  ? false
+, doOptimize  ? false # enables GHC optimizations for production use
+, doProfiling ? false # enables profiling support in GHC
 , doStrict    ? false
 
-, rev     ? "b37872d4268164614e3ecef6e1f730d48cf5a90f"
-, sha256  ? "05km33sz4srf05vvmkidz3k59phm5a3k9wpj1jc6ly9yqws0dbn4"
-, pkgs    ?
+, rev    ? "3f3f6021593070330091a4a2bc785f6761bbb3c1"
+, sha256 ? "1a7vvxxz8phff51vwsrdlsq5i70ig5hxvvb7lkm2lgwizgvpa6gv"
+
+, pkgs   ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
     then abort "hnix requires at least nix 2.0"
     else import (builtins.fetchTarball {
@@ -19,61 +18,23 @@
            config.allowUnfree = true;
            config.allowBroken = false;
          }
+
 , returnShellEnv ? pkgs.lib.inNixShell
-, mkDerivation ? null
+, mkDerivation   ? null
 }:
 
-let
-
-haskellPackages = pkgs.haskell.packages.${compiler};
+let haskellPackages = pkgs.haskell.packages.${compiler};
 
 drv = haskellPackages.developPackage {
+  name = "hnix";
   root = ./.;
 
   overrides = with pkgs.haskell.lib; self: super: {
     mono-traversable = dontCheck super.mono-traversable;
-    megaparsec = self.callCabal2nix "megaparsec" (pkgs.fetchFromGitHub {
-      owner = "mrkkrp";
-      repo = "megaparsec";
-      rev = "9fff501f7794c01e2cf4a7a492f1cfef67fab19a";
-      sha256 = "0a9g6gpc8m9qrvldwn4chs0yqnr4dps93achg1df72lxknrpp0iy";
-    }) {};
-  }
-  //
-  (if compiler == "ghc802"
-   then {
-     concurrent-output = doJailbreak super.concurrent-output;
-   }
-   else {})
-  //
-  (if compiler == "ghcjs" then {} else
-   {
-     cryptohash-md5    = doJailbreak super.cryptohash-md5;
-     cryptohash-sha1   = doJailbreak super.cryptohash-sha1;
-     cryptohash-sha256 = doJailbreak super.cryptohash-sha256;
-     cryptohash-sha512 = doJailbreak super.cryptohash-sha512;
-     serialise         = dontCheck super.serialise;
+    megaparsec = super.megaparsec_7_0_4;
+  };
 
-     ghc-datasize =
-       overrideCabal super.ghc-datasize (attrs: {
-         enableLibraryProfiling    = false;
-         enableExecutableProfiling = false;
-       });
-
-     ghc-heap-view =
-       overrideCabal super.ghc-heap-view (attrs: {
-         enableLibraryProfiling    = false;
-         enableExecutableProfiling = false;
-       });
-   });
-
-  source-overrides =
-    if compiler == "ghc802"
-    then {
-      lens-family-core = "1.2.1";
-      lens-family = "1.2.1";
-    }
-    else {};
+  source-overrides = {};
 
   modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
     buildTools = (attrs.buildTools or []) ++ [
@@ -91,9 +52,9 @@ drv = haskellPackages.developPackage {
     inherit doBenchmark;
 
     configureFlags =
-         pkgs.stdenv.lib.optional  doTracing   "--flags=tracing"
-      ++ pkgs.stdenv.lib.optional  doOptimize  "--flags=optimize"
-      ++ pkgs.stdenv.lib.optional  doStrict    "--ghc-options=-Werror";
+         pkgs.stdenv.lib.optional doTracing  "--flags=tracing"
+      ++ pkgs.stdenv.lib.optional doOptimize "--flags=optimize"
+      ++ pkgs.stdenv.lib.optional doStrict   "--ghc-options=-Werror";
 
     passthru = {
       nixpkgs = pkgs;
