@@ -162,6 +162,10 @@ instance (Convertible e m, MonadEffects m)
       => FromValue NixString m (NValueNF m) where
     fromValueMay = \case
         Free (NVStrF ns) -> pure $ Just ns
+        Free (NVPathF p) -> Just . hackyMakeNixStringWithoutContext . Text.pack . unStorePath <$> addPath p
+        Free (NVSetF s _) -> case M.lookup "outPath" s of
+            Nothing -> pure Nothing
+            Just p -> fromValueMay p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
@@ -171,6 +175,10 @@ instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m, MonadEffects m)
       => FromValue NixString m (NValue m) where
     fromValueMay = \case
         NVStr ns -> pure $ Just ns
+        NVPath p -> Just . hackyMakeNixStringWithoutContext . Text.pack . unStorePath <$> addPath p
+        NVSet s _ -> case M.lookup "outPath" s of
+            Nothing -> pure Nothing
+            Just p -> fromValueMay p
         _ -> pure Nothing
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
