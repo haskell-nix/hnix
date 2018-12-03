@@ -400,6 +400,7 @@ extra-source-files:
     tests/eval-compare/builtins.split-02.nix
     tests/eval-compare/builtins.split-03.nix
     tests/eval-compare/builtins.split-04.nix
+    tests/eval-compare/builtins.string.store.nix
     tests/eval-compare/ind-string-01.nix
     tests/eval-compare/ind-string-02.nix
     tests/eval-compare/ind-string-03.nix
