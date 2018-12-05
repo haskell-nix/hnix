@@ -725,32 +725,33 @@ replaceStrings tfrom tto ts =
     fromNix tto   >>= \(nsTo   :: [NixString]) ->
     fromValue ts  >>= \(ns    :: NixString) -> do
         let from = map principledStringIgnoreContext nsFrom
-        let to = map principledStringIgnoreContext nsTo
-        when (length from /= length to) $
+        when (length nsFrom /= length nsTo) $
             throwError $ ErrorCall $
                 "'from' and 'to' arguments to 'replaceStrings'"
                     ++ " have different lengths"
         let lookupPrefix s = do
                 (prefix, replacement) <-
-                    find ((`Text.isPrefixOf` s) . fst) $ zip from to
+                    find ((`Text.isPrefixOf` s) . fst) $ zip from nsTo
                 let rest = Text.drop (Text.length prefix) s
                 return (prefix, replacement, rest)
-            finish = LazyText.toStrict . Builder.toLazyText
-            go orig result = case lookupPrefix orig of
+            finish b = principledMakeNixString (LazyText.toStrict $ Builder.toLazyText b)
+            go orig result ctx = case lookupPrefix orig of
                 Nothing -> case Text.uncons orig of
-                    Nothing -> finish result
-                    Just (h, t) -> go t $ result <> Builder.singleton h
-                Just (prefix, replacement, rest) -> case prefix of
-                    "" -> case Text.uncons rest of
-                        Nothing -> finish $ result <> Builder.fromText replacement
-                        Just (h, t) -> go t $ mconcat
-                            [ result
-                            , Builder.fromText replacement
-                            , Builder.singleton h
-                            ]
-                    _ -> go rest $ result <> Builder.fromText replacement
-        let ctx = HS.unions $ principledGetContext ns : map principledGetContext nsTo
-        toNix $ principledMakeNixString (go (principledStringIgnoreContext ns) mempty) ctx
+                    Nothing -> finish result ctx
+                    Just (h, t) -> go t (result <> Builder.singleton h) ctx
+                Just (prefix, replacementNS, rest) ->
+                  let replacement = principledStringIgnoreContext replacementNS
+                      newCtx = principledGetContext replacementNS
+                  in case prefix of
+                       "" -> case Text.uncons rest of
+                           Nothing -> finish (result <> Builder.fromText replacement) (ctx <> newCtx)
+                           Just (h, t) -> go t (mconcat
+                               [ result
+                               , Builder.fromText replacement
+                               , Builder.singleton h
+                               ]) (ctx <> newCtx)
+                       _ -> go rest (result <> Builder.fromText replacement) (ctx <> newCtx)
+        toNix $ go (principledStringIgnoreContext ns) mempty $ principledGetContext ns
 
 removeAttrs :: forall e m. MonadNix e m
             => m (NValue m) -> m (NValue m) -> m (NValue m)
