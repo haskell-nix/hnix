@@ -60,6 +60,7 @@ import qualified Data.HashMap.Lazy as M
 import qualified Data.HashSet as HS
 import           Data.List
 import           Data.Maybe
+import           Data.Scientific
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.String.Interpolate.IsString
@@ -71,6 +72,7 @@ import qualified Data.Text.Lazy.Builder as Builder
 import           Data.These (fromThese)
 import qualified Data.Time.Clock.POSIX as Time
 import           Data.Traversable (for, mapM)
+import qualified Data.Vector as V
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Effects
@@ -260,9 +262,7 @@ builtinsList = sequence [
     , add  Normal   "tail"                       tail_
     , add0 Normal   "true"                       (return $ nvConstant $ NBool True)
     , add  TopLevel "throw"                      throw_
-    , add' Normal   "toJSON"
-      (arity1 $ principledMakeNixStringWithoutContext . decodeUtf8 . LBS.toStrict
-                  . A.encodingToLazyByteString . toEncodingSorted)
+    , add  Normal   "toJSON"                     prim_toJSON
     , add2 Normal   "toFile"                     toFile
     , add  Normal   "toPath"                     toPath
     , add  TopLevel "toString"                   toString
@@ -1009,12 +1009,57 @@ readDir_ pathThunk = do
         pure (Text.pack item, t)
     toNix (M.fromList itemsWithTypes)
 
-fromJSON :: MonadNix e m => m (NValue m) -> m (NValue m)
+fromJSON :: forall e m. (MonadNix e m, Typeable m) => m (NValue m) -> m (NValue m)
 fromJSON = fromValue >=> fromStringNoContext >=> \encoded ->
     case A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded of
         Left jsonError ->
             throwError $ ErrorCall $ "builtins.fromJSON: " ++ jsonError
-        Right v -> toValue v
+        Right v -> jsonToNValue v
+  where
+    jsonToNValue = \case
+        A.Object m -> flip nvSet M.empty
+            <$> traverse (thunk . jsonToNValue) m
+        A.Array l -> nvList <$>
+            traverse (\x -> thunk . whileForcingThunk (CoercionFromJson @m x)
+                                 . jsonToNValue $ x) (V.toList l)
+        A.String s -> pure $ nvStr $ hackyMakeNixStringWithoutContext s
+        A.Number n -> pure $ nvConstant $ case floatingOrInteger n of
+            Left r -> NFloat r
+            Right i -> NInt i
+        A.Bool b -> pure $ nvConstant $ NBool b
+        A.Null -> pure $ nvConstant NNull
+
+prim_toJSON
+  :: MonadNix e m
+  => m (NValue m)
+  -> m (NValue m)
+prim_toJSON x = do
+  (ctx, v) <- nvalueToJSON =<< x
+  let t = decodeUtf8 $ LBS.toStrict $ A.encodingToLazyByteString $ toEncodingSorted v
+  pure $ nvStr $ principledMakeNixString t ctx
+
+nvalueToJSON
+  :: MonadNix e m
+  => NValue m
+  -> m (HS.HashSet StringContext, A.Value)
+nvalueToJSON v = case v of
+    NVConstant a -> retEmpty $ case a of
+        NInt n   -> A.toJSON n
+        NFloat n -> A.toJSON n
+        NBool b  -> A.toJSON b
+        NNull    -> A.Null
+    NVStr ns  -> pure (principledGetContext ns, A.toJSON $ principledStringIgnoreContext ns)
+    NVList l  -> do
+        (ctxs, vals) <- unzip <$> traverse (`force` nvalueToJSON) l
+        return (HS.unions ctxs, A.Array $ V.fromList vals)
+    NVSet m _ ->
+        fmap A.Object . sequence <$> traverse (`force` nvalueToJSON) m
+    NVPath p  -> do
+      fp <- unStorePath <$> addPath p
+      return (HS.singleton $ StringContext (Text.pack fp) DirectPath, A.toJSON fp)
+    _ -> throwError $ CoercionToJson v
+  where
+    retEmpty a = pure (mempty, a)
 
 toXML_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 toXML_ v = v >>= normalForm >>= \x ->

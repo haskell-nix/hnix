@@ -355,7 +355,7 @@ data ValueFrame m
     | Multiplication (NValue m) (NValue m)
     | Division (NValue m) (NValue m)
     | Coercion ValueType ValueType
-    | CoercionToJsonNF (NValueNF m)
+    | CoercionToJson (NValue m)
     | CoercionFromJson A.Value
     | ExpectationNF ValueType (NValueNF m)
     | Expectation ValueType (NValue m)

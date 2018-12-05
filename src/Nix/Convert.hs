@@ -27,23 +27,18 @@ module Nix.Convert where
 
 import           Control.Monad
 import           Control.Monad.Free
-import           Data.Aeson (toJSON)
-import qualified Data.Aeson as A
 import           Data.ByteString
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
-import           Data.Scientific
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Text.Encoding (encodeUtf8, decodeUtf8)
-import qualified Data.Vector as V
 import           Nix.Atoms
 import           Nix.Effects
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.String
-import           Nix.Normal
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
@@ -301,26 +296,6 @@ instance (MonadThunk (NValue m) (NThunk m) m, FromValue a m (NValue m))
     fromValueMay = force ?? fromValueMay
     fromValue    = force ?? fromValue
 
-instance (Convertible e m, MonadEffects m)
-      => FromValue A.Value m (NValueNF m) where
-    fromValueMay = \case
-        Free (NVConstantF a) -> pure $ Just $ case a of
-            NInt n   -> toJSON n
-            NFloat n -> toJSON n
-            NBool b  -> toJSON b
-            NNull    -> A.Null
-        Free (NVStrF ns)  -> pure $ toJSON <$> hackyGetStringNoContext ns
-        Free (NVListF l)  ->
-            fmap (A.Array . V.fromList) . sequence
-                <$> traverse fromValueMay l
-        Free (NVSetF m _) ->
-            fmap A.Object . sequence <$> traverse fromValueMay m
-        Free (NVPathF p)  -> Just . toJSON . unStorePath <$> addPath p
-        _ -> pure Nothing
-    fromValue v = fromValueMay v >>= \case
-        Just b -> pure b
-        _ -> throwError $ CoercionToJsonNF v
-
 class ToValue a m v where
     toValue :: a -> m v
 
@@ -427,21 +402,6 @@ whileForcingThunk :: forall s e m r. (Framed e m, Exception s, Typeable m)
 whileForcingThunk frame =
     withFrame Debug (ForcingThunk @m) . withFrame Debug frame
 
-instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m)
-      => ToValue A.Value m (NValue m) where
-    toValue = \case
-        A.Object m -> flip nvSet M.empty
-            <$> traverse (thunk . toValue @_ @_ @(NValue m)) m
-        A.Array l -> nvList <$>
-            traverse (\x -> thunk . whileForcingThunk (CoercionFromJson @m x)
-                                 . toValue $ x) (V.toList l)
-        A.String s -> pure $ nvStr $ hackyMakeNixStringWithoutContext s
-        A.Number n -> pure $ nvConstant $ case floatingOrInteger n of
-            Left r -> NFloat r
-            Right i -> NInt i
-        A.Bool b -> pure $ nvConstant $ NBool b
-        A.Null -> pure $ nvConstant NNull
-
 class FromNix a m v where
     fromNix :: v -> m a
     default fromNix :: FromValue a m v => v -> m a
@@ -491,13 +451,6 @@ instance (Convertible e m, FromValue a m (NValueNF m), Show a) => FromNix [a] m 
 instance Convertible e m => FromNix (HashMap Text (NValueNF m)) m (NValueNF m) where
 instance Convertible e m => FromNix (HashMap Text (NValueNF m), HashMap Text SourcePos) m (NValueNF m) where
 instance Convertible e m => FromNix (HashMap Text (NThunk m), HashMap Text SourcePos) m (NValue m) where
-instance (Convertible e m, MonadEffects m, MonadThunk (NValue m) (NThunk m) m) => FromNix A.Value m (NValueNF m) where
-
-instance (Convertible e m, MonadEffects m,
-          MonadThunk (NValue m) (NThunk m) m)
-      => FromNix A.Value m (NValue m) where
-    fromNixMay = fromNixMay <=< normalForm
-    fromNix    = fromNix <=< normalForm
 
 instance (Monad m, FromNix a m v) => FromNix a m (m v) where
     fromNixMay = (>>= fromNixMay)
@@ -551,7 +504,6 @@ instance Applicative m => ToNix Path m (NValue m) where
 instance Applicative m => ToNix (HashMap Text (NValueNF m)) m (NValueNF m) where
 instance Applicative m => ToNix (HashMap Text (NValueNF m), HashMap Text SourcePos) m (NValueNF m) where
 instance Applicative m => ToNix (HashMap Text (NThunk m), HashMap Text SourcePos) m (NValue m) where
-instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m) => ToNix A.Value m (NValue m) where
 instance Applicative m => ToNix Bool m (NExprF r) where
 instance Applicative m => ToNix () m (NExprF r) where
 
