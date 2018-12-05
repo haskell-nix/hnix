@@ -613,7 +613,7 @@ catAttrs attrName xs =
             forM l $ fmap (M.lookup n) . fromValue
 
 baseNameOf :: MonadNix e m => m (NValue m) -> m (NValue m)
-baseNameOf x = do --x >>= \case
+baseNameOf x = do
     ns <- coerceToString DontCopyToStore CoerceStringy =<< x
     pure $ nvStr (principledModifyNixContents (Text.pack . takeFileName . Text.unpack) ns)
 
