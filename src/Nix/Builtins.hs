@@ -38,7 +38,6 @@ import qualified "hashing" Crypto.Hash.SHA1 as SHA1
 import qualified "hashing" Crypto.Hash.SHA256 as SHA256
 import qualified "hashing" Crypto.Hash.SHA512 as SHA512
 #else
-import           Data.ByteString.Base16 as Base16
 import qualified "cryptohash-md5" Crypto.Hash.MD5 as MD5
 import qualified "cryptohash-sha1" Crypto.Hash.SHA1 as SHA1
 import qualified "cryptohash-sha256" Crypto.Hash.SHA256 as SHA256
@@ -52,6 +51,7 @@ import           Data.Array
 import           Data.Bits
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import           Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
 import           Data.Fix
@@ -945,12 +945,13 @@ hashString nsAlgo ns = Prim $ do
         _ -> throwError $ ErrorCall $ "builtins.hashString: "
             ++ "expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got " ++ show algo
 
--- TODO Double-check this
 placeHolder :: MonadNix e m => m (NValue m) -> m (NValue m)
 placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
     h <- runPrim (hashString (principledMakeNixStringWithoutContext "sha256")
-                             (principledMakeNixStringWithoutContext t))
-    toNix h
+                             (principledMakeNixStringWithoutContext ("nix-output:" <> t)))
+    toNix $ principledMakeNixStringWithoutContext $ Text.cons '/' $ printHash32 $
+      -- The result coming out of hashString is base16 encoded
+      fst $ Base16.decode $ encodeUtf8 $ principledStringIgnoreContext h
 
 absolutePathFromValue :: MonadNix e m => NValue m -> m FilePath
 absolutePathFromValue = \case
@@ -1062,6 +1063,7 @@ exec_ xs = do
   xs <- traverse (coerceToString DontCopyToStore CoerceStringy <=< force') ls
   -- TODO Still need to do something with the context here
   -- See prim_exec in nix/src/libexpr/primops.cc
+  -- Requires the implementation of EvalState::realiseContext
   exec (map (Text.unpack . hackyStringIgnoreContext) xs)
 
 fetchurl :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
