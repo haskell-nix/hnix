@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 module Nix.String (
@@ -19,8 +20,12 @@ module Nix.String (
   , principledStringMappend
   , principledStringMempty
   , principledStringMConcat
+  , WithStringContext
+  , extractNixString
+  , runWithStringContext
 ) where
 
+import           Control.Monad.Writer
 import qualified Data.HashSet as S
 import           Data.Hashable
 import           Data.Text (Text)
@@ -129,3 +134,15 @@ principledModifyNixContents f (NixString s c) = NixString (f s) c
 -- | Create a NixString using a singleton context
 principledMakeNixStringWithSingletonContext :: Text -> StringContext -> NixString
 principledMakeNixStringWithSingletonContext s c = NixString s (S.singleton c)
+
+-- | A monad for accumulating string context while producing a result string.
+newtype WithStringContext a = WithStringContext (Writer (S.HashSet StringContext) a)
+  deriving (Functor, Applicative, Monad, MonadWriter (S.HashSet StringContext))
+
+-- | Get the contents of a 'NixString' and write its context into the resulting set.
+extractNixString :: NixString -> WithStringContext Text
+extractNixString (NixString s c) = WithStringContext $ tell c >> return s
+
+-- | Run an action producing a string with a context and put those into a 'NixString'.
+runWithStringContext :: WithStringContext Text -> NixString
+runWithStringContext (WithStringContext m) = uncurry NixString $ runWriter m
