@@ -260,8 +260,6 @@ valueEq :: MonadThunk (NValue m) (NThunk m) m
 valueEq = curry $ \case
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
     (NVStr ls, NVStr rs) -> pure $ principledStringIgnoreContext ls == principledStringIgnoreContext rs
-    (NVStr ns, NVConstant NNull) -> pure (hackyGetStringNoContext ns == Just "")
-    (NVConstant NNull, NVStr ns) -> pure (Just "" == hackyGetStringNoContext ns)
     (NVList ls, NVList rs) -> alignEqM thunkEq ls rs
     (NVSet lm _, NVSet rm _) -> do
         let compareAttrs = alignEqM thunkEq lm rm
@@ -357,7 +355,7 @@ data ValueFrame m
     | Multiplication (NValue m) (NValue m)
     | Division (NValue m) (NValue m)
     | Coercion ValueType ValueType
-    | CoercionToJsonNF (NValueNF m)
+    | CoercionToJson (NValue m)
     | CoercionFromJson A.Value
     | ExpectationNF ValueType (NValueNF m)
     | Expectation ValueType (NValue m)

@@ -153,7 +153,9 @@ renderValueFrame level = fmap (:[]) . \case
         desc | level <= Error = "Cannot coerce "
              | otherwise     = "While coercing "
 
-    CoercionToJsonNF _v -> pure "CoercionToJsonNF"
+    CoercionToJson v -> do
+        v' <- renderValue level "" "" v
+        pure $ "CoercionToJson " <> v'
     CoercionFromJson _j -> pure "CoercionFromJson"
     ExpectationNF _t _v -> pure "ExpectationNF"
     Expectation t v     -> do

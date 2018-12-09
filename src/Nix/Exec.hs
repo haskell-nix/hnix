@@ -394,8 +394,8 @@ execBinaryOp scope span op lval rarg = do
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVPath p, NVStr ns) -> case op of
-            NEq   -> toBool $ Just p == fmap Text.unpack (hackyGetStringNoContext ns)
-            NNEq  -> toBool $ Just p /= fmap Text.unpack (hackyGetStringNoContext ns)
+            NEq   -> toBool False -- From eqValues in nix/src/libexpr/eval.cc
+            NNEq  -> toBool True
             NPlus -> bin nvPathP <$> makeAbsolutePath (p `mappend` Text.unpack (hackyStringIgnoreContext ns))
             _     -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
@@ -478,9 +478,9 @@ coerceToString ctsm clevel = go
       where
         t = Text.pack $ unStorePath sp
 
-fromStringNoContext :: MonadNix e m => m (NValue m) -> m Text
-fromStringNoContext =
-  fromValue >=> \s -> case principledGetStringNoContext s of
+fromStringNoContext :: MonadNix e m => NixString -> m Text
+fromStringNoContext ns =
+  case principledGetStringNoContext ns of
     Just str -> return str
     Nothing -> throwError $ ErrorCall
       "expected string with no context"
@@ -591,10 +591,13 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
         mapMaybeM op = foldr f (return [])
           where f x xs = op x >>= (<$> xs) . (++) . maybeToList
 
+        --handleEntry :: Bool -> (Text, NThunk (Lazy m)) -> Lazy m (Maybe (Text, NThunk (Lazy m)))
         handleEntry ignoreNulls (k, v) = fmap (k,) <$> case k of
             -- The `args' attribute is special: it supplies the command-line
             -- arguments to the builder.
-            "args"          -> Just <$> convertNix @[Text] v
+            -- TODO This use of coerceToString is probably not right and may
+            -- not have the right arguments.
+            "args"          -> force v (\v2 -> Just <$> coerceNix v2)
             "__ignoreNulls" -> pure Nothing
             _ -> force v $ \case
                 NVConstant NNull | ignoreNulls -> pure Nothing
@@ -662,8 +665,11 @@ findPathBy finder l name = do
               case M.lookup "prefix" s of
                   Nothing -> tryPath path Nothing
                   Just pf -> force pf $ fromValueMay >=> \case
-                      Just (pfx :: Text) | not (Text.null pfx) ->
-                          tryPath path (Just (Text.unpack pfx))
+                      Just (nsPfx :: NixString) ->
+                        let pfx = hackyStringIgnoreContext nsPfx
+                         in if not (Text.null pfx)
+                              then tryPath path (Just (Text.unpack pfx))
+                              else tryPath path Nothing
                       _ -> tryPath path Nothing
 
       tryPath p (Just n) | n':ns <- splitDirectories name, n == n' =
@@ -778,10 +784,11 @@ fetchTarball v = v >>= \case
     fetch uri Nothing =
         nixInstantiateExpr $ "builtins.fetchTarball \"" ++
             Text.unpack uri ++ "\""
-    fetch url (Just m) = fromValue m >>= \sha ->
-        nixInstantiateExpr $ "builtins.fetchTarball { "
-          ++ "url    = \"" ++ Text.unpack url ++ "\"; "
-          ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"
+    fetch url (Just m) = fromValue m >>= \nsSha ->
+        let sha = hackyStringIgnoreContext nsSha
+         in nixInstantiateExpr $ "builtins.fetchTarball { "
+              ++ "url    = \"" ++ Text.unpack url ++ "\"; "
+              ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"
 
 exec :: (MonadExec m, Framed e m, MonadThrow m, Alternative m, MonadCatch m, MonadFix m, MonadEffects m, GEq (Ref m), MonadAtomicRef m, Typeable m, Has e Options, Has e SrcSpan, Scoped (NThunk m) m) => [String] -> m (NValue m)
 exec args = either throwError evalExprLoc =<< exec' args
