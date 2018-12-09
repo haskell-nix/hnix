@@ -57,7 +57,6 @@ import           Data.Char (isDigit)
 import           Data.Fix
 import           Data.Foldable (foldrM)
 import qualified Data.HashMap.Lazy as M
-import qualified Data.HashSet as HS
 import           Data.List
 import           Data.Maybe
 import           Data.Scientific
@@ -81,6 +80,7 @@ import           Nix.Exec
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
+import           Nix.Json
 import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser hiding (nixPath)
@@ -255,7 +255,7 @@ builtinsList = sequence [
     , add2 Normal   "sort"                       sort_
     , add2 Normal   "split"                      split_
     , add  Normal   "splitVersion"               splitVersion_
-    , add0 Normal   "storeDir"                   (return $ nvPath "/nix/store")
+    , add0 Normal   "storeDir"                   (return $ nvStr $ principledMakeNixStringWithoutContext "/nix/store")
     , add' Normal   "stringLength"               (arity1 $ Text.length . principledStringIgnoreContext)
     , add' Normal   "sub"                        (arity2 ((-) @Integer))
     , add' Normal   "substring"                  substring
@@ -1037,29 +1037,6 @@ prim_toJSON x = do
   (ctx, v) <- nvalueToJSON =<< x
   let t = decodeUtf8 $ LBS.toStrict $ A.encodingToLazyByteString $ toEncodingSorted v
   pure $ nvStr $ principledMakeNixString t ctx
-
-nvalueToJSON
-  :: MonadNix e m
-  => NValue m
-  -> m (HS.HashSet StringContext, A.Value)
-nvalueToJSON v = case v of
-    NVConstant a -> retEmpty $ case a of
-        NInt n   -> A.toJSON n
-        NFloat n -> A.toJSON n
-        NBool b  -> A.toJSON b
-        NNull    -> A.Null
-    NVStr ns  -> pure (principledGetContext ns, A.toJSON $ principledStringIgnoreContext ns)
-    NVList l  -> do
-        (ctxs, vals) <- unzip <$> traverse (`force` nvalueToJSON) l
-        return (HS.unions ctxs, A.Array $ V.fromList vals)
-    NVSet m _ ->
-        fmap A.Object . sequence <$> traverse (`force` nvalueToJSON) m
-    NVPath p  -> do
-      fp <- unStorePath <$> addPath p
-      return (HS.singleton $ StringContext (Text.pack fp) DirectPath, A.toJSON fp)
-    _ -> throwError $ CoercionToJson v
-  where
-    retEmpty a = pure (mempty, a)
 
 toXML_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 toXML_ v = v >>= normalForm >>= \x ->
