@@ -38,7 +38,6 @@ import qualified "hashing" Crypto.Hash.SHA1 as SHA1
 import qualified "hashing" Crypto.Hash.SHA256 as SHA256
 import qualified "hashing" Crypto.Hash.SHA512 as SHA512
 #else
-import           Data.ByteString.Base16 as Base16
 import qualified "cryptohash-md5" Crypto.Hash.MD5 as MD5
 import qualified "cryptohash-sha1" Crypto.Hash.SHA1 as SHA1
 import qualified "cryptohash-sha256" Crypto.Hash.SHA256 as SHA256
@@ -52,6 +51,7 @@ import           Data.Array
 import           Data.Bits
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
+import           Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
 import           Data.Fix
@@ -59,6 +59,7 @@ import           Data.Foldable (foldrM)
 import qualified Data.HashMap.Lazy as M
 import           Data.List
 import           Data.Maybe
+import           Data.Scientific
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.String.Interpolate.IsString
@@ -70,6 +71,7 @@ import qualified Data.Text.Lazy.Builder as Builder
 import           Data.These (fromThese)
 import qualified Data.Time.Clock.POSIX as Time
 import           Data.Traversable (for, mapM)
+import qualified Data.Vector as V
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Effects
@@ -78,12 +80,13 @@ import           Nix.Exec
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
-import           Nix.String
+import           Nix.Json
 import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser hiding (nixPath)
 import           Nix.Render
 import           Nix.Scope
+import           Nix.String
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
@@ -139,7 +142,7 @@ force' = force ?? pure
 
 builtinsList :: forall e m. MonadNix e m => m [ Builtin m ]
 builtinsList = sequence [
-      do version <- toValue ("2.0" :: Text)
+      do version <- toValue (principledMakeNixStringWithoutContext "2.0")
          pure $ Builtin Normal ("nixVersion", version)
 
     , do version <- toValue (5 :: Int)
@@ -160,7 +163,7 @@ builtinsList = sequence [
     , add2 Normal   "catAttrs"                   catAttrs
     , add2 Normal   "compareVersions"            compareVersions_
     , add  Normal   "concatLists"                concatLists
-    , add' Normal   "concatStringsSep"           (arity2 Text.intercalate)
+    , add' Normal   "concatStringsSep"           (arity2 principledIntercalateNixString)
     , add0 Normal   "currentSystem"              currentSystem
     , add0 Normal   "currentTime"                currentTime_
     , add2 Normal   "deepSeq"                    deepSeq
@@ -253,15 +256,13 @@ builtinsList = sequence [
     , add2 Normal   "split"                      split_
     , add  Normal   "splitVersion"               splitVersion_
     , add0 Normal   "storeDir"                   (return $ nvStr $ principledMakeNixStringWithoutContext "/nix/store")
-    , add' Normal   "stringLength"               (arity1 Text.length)
+    , add' Normal   "stringLength"               (arity1 $ Text.length . principledStringIgnoreContext)
     , add' Normal   "sub"                        (arity2 ((-) @Integer))
     , add' Normal   "substring"                  substring
     , add  Normal   "tail"                       tail_
     , add0 Normal   "true"                       (return $ nvConstant $ NBool True)
     , add  TopLevel "throw"                      throw_
-    , add' Normal   "toJSON"
-      (arity1 $ decodeUtf8 . LBS.toStrict . A.encodingToLazyByteString
-                           . toEncodingSorted)
+    , add  Normal   "toJSON"                     prim_toJSON
     , add2 Normal   "toFile"                     toFile
     , add  Normal   "toPath"                     toPath
     , add  TopLevel "toString"                   toString
@@ -298,9 +299,9 @@ foldNixPath f z = do
     mres <- lookupVar "__includes"
     dirs <- case mres of
         Nothing -> return []
-        Just v  -> fromNix @[Text] v
+        Just v  -> fromNix v
     menv <- getEnvVar "NIX_PATH"
-    foldrM go z $ map fromInclude dirs ++ case menv of
+    foldrM go z $ map (fromInclude . principledStringIgnoreContext) dirs ++ case menv of
         Nothing -> []
         Just str -> uriAwareSplit (Text.pack str)
   where
@@ -327,7 +328,7 @@ toString str = str >>= coerceToString DontCopyToStore CoerceAny >>= toNix
 
 hasAttr :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 hasAttr x y =
-    fromValue @Text x >>= \key ->
+    fromValue x >>= fromStringNoContext >>= \key ->
     fromValue @(AttrSet (NThunk m), AttrSet SourcePos) y >>= \(aset, _) ->
         toNix $ M.member key aset
 
@@ -343,7 +344,7 @@ hasContext =
 
 getAttr :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 getAttr x y =
-    fromValue @Text x >>= \key ->
+    fromValue x >>= fromStringNoContext >>= \key ->
     fromValue @(AttrSet (NThunk m), AttrSet SourcePos) y >>= \(aset, _) ->
         attrsetGet key aset >>= force'
 
@@ -467,7 +468,7 @@ splitVersion s = case Text.uncons s of
           in thisComponent : splitVersion rest
 
 splitVersion_ :: MonadNix e m => m (NValue m) -> m (NValue m)
-splitVersion_ = fromStringNoContext >=> \s ->
+splitVersion_ = fromValue >=> fromStringNoContext >=> \s ->
   return $ nvList $ flip map (splitVersion s) $ \c ->
     valueThunk $ nvStr $ principledMakeNixStringWithoutContext $ versionComponentToString c
 
@@ -480,8 +481,8 @@ compareVersions s1 s2 =
 
 compareVersions_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 compareVersions_ t1 t2 =
-    fromStringNoContext t1 >>= \s1 ->
-    fromStringNoContext t2 >>= \s2 ->
+    fromValue t1 >>= fromStringNoContext >>= \s1 ->
+    fromValue t2 >>= fromStringNoContext >>= \s2 ->
       return $ nvConstant $ NInt $ case compareVersions s1 s2 of
         LT -> -1
         EQ -> 0
@@ -507,29 +508,43 @@ splitDrvName s =
     in (Text.intercalate sep namePieces, Text.intercalate sep versionPieces)
 
 parseDrvName :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
-parseDrvName = fromValue >=> \(s :: Text) -> do
+parseDrvName = fromValue >=> fromStringNoContext >=> \s -> do
     let (name :: Text, version :: Text) = splitDrvName s
     -- jww (2018-04-15): There should be an easier way to write this.
     (toValue =<<) $ sequence $ M.fromList
-        [ ("name" :: Text, thunk (toValue @_ @_ @(NValue m) name))
-        , ("version",     thunk (toValue version)) ]
+        [ ("name" :: Text, thunk (toValue @_ @_ @(NValue m) $ principledMakeNixStringWithoutContext name))
+        , ("version",     thunk (toValue $ principledMakeNixStringWithoutContext version)) ]
 
 match_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 match_ pat str =
-    fromValue pat >>= \p ->
-    fromValue str >>= \s -> do
+    fromValue pat >>= fromStringNoContext >>= \p ->
+    fromValue str >>= \ns -> do
+        -- NOTE: Currently prim_match in nix/src/libexpr/primops.cc ignores the
+        -- context of its second argument. This is probably a bug but we're
+        -- going to preserve the behavior here until it is fixed upstream.
+        -- Relevant issue: https://github.com/NixOS/nix/issues/2547
+        let s = principledStringIgnoreContext ns
+
         let re = makeRegex (encodeUtf8 p) :: Regex
+        let mkMatch t = if Text.null t
+                          then toValue () -- Shorthand for Null
+                          else toValue $ principledMakeNixStringWithoutContext t
         case matchOnceText re (encodeUtf8 s) of
             Just ("", sarr, "") -> do
                 let s = map fst (elems sarr)
-                nvList <$> traverse (toValue . decodeUtf8)
+                nvList <$> traverse (mkMatch . decodeUtf8)
                     (if length s > 1 then tail s else s)
             _ -> pure $ nvConstant NNull
 
 split_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 split_ pat str =
-    fromValue pat >>= \p ->
-    fromValue str >>= \s -> do
+    fromValue pat >>= fromStringNoContext >>= \p ->
+    fromValue str >>= \ns -> do
+        -- NOTE: Currently prim_split in nix/src/libexpr/primops.cc ignores the
+        -- context of its second argument. This is probably a bug but we're
+        -- going to preserve the behavior here until it is fixed upstream.
+        -- Relevant issue: https://github.com/NixOS/nix/issues/2547
+        let s = principledStringIgnoreContext ns
         let re = makeRegex (encodeUtf8 p) :: Regex
             haystack = encodeUtf8 s
         return $ nvList $
@@ -553,14 +568,14 @@ splitMatches numDropped (((_,(start,len)):captures):mts) haystack =
 
 thunkStr s = valueThunk (nvStr (hackyMakeNixStringWithoutContext (decodeUtf8 s)))
 
-substring :: MonadNix e m => Int -> Int -> Text -> Prim m Text
+substring :: MonadNix e m => Int -> Int -> NixString -> Prim m NixString
 substring start len str = Prim $
     if start < 0 --NOTE: negative values of 'len' are OK
     then throwError $ ErrorCall $ "builtins.substring: negative start position: " ++ show start
-    else pure $ Text.take len $ Text.drop start str
+    else pure $ principledModifyNixContents (Text.take len . Text.drop start) str
 
 attrNames :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
-attrNames = fromValue @(ValueSet m) >=> toNix . sort . M.keys
+attrNames = fromValue @(ValueSet m) >=> toNix . map principledMakeNixStringWithoutContext . sort . M.keys
 
 attrValues :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 attrValues = fromValue @(ValueSet m) >=>
@@ -592,16 +607,15 @@ filter_ fun xs = fun >>= \f ->
 
 catAttrs :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 catAttrs attrName xs =
-    fromValue @Text attrName >>= \n ->
+    fromValue attrName >>= fromStringNoContext >>= \n ->
     fromValue @[NThunk m] xs >>= \l ->
         fmap (nvList . catMaybes) $
             forM l $ fmap (M.lookup n) . fromValue
 
 baseNameOf :: MonadNix e m => m (NValue m) -> m (NValue m)
-baseNameOf x = x >>= \case
-    NVStr ns -> pure $ nvStr (principledModifyNixContents (Text.pack . takeFileName . Text.unpack) ns)
-    NVPath path -> pure $ nvPath $ takeFileName path
-    v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
+baseNameOf x = do
+    ns <- coerceToString DontCopyToStore CoerceStringy =<< x
+    pure $ nvStr (principledModifyNixContents (Text.pack . takeFileName . Text.unpack) ns)
 
 bitAnd :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 bitAnd x y =
@@ -626,7 +640,9 @@ dirOf x = x >>= \case
 
 -- jww (2018-04-28): This should only be a string argument, and not coerced?
 unsafeDiscardStringContext :: MonadNix e m => m (NValue m) -> m (NValue m)
-unsafeDiscardStringContext = fromValue @Text >=> toNix
+unsafeDiscardStringContext mnv = do
+  ns <- fromValue mnv
+  toNix $ principledMakeNixStringWithoutContext $ principledStringIgnoreContext ns
 
 seq_ :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 seq_ a b = a >> b
@@ -705,39 +721,44 @@ genericClosure = fromValue @(AttrSet (NThunk m)) >=> \s ->
 
 replaceStrings :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m) -> m (NValue m)
 replaceStrings tfrom tto ts =
-    fromNix tfrom >>= \(from :: [Text]) ->
-    fromNix tto   >>= \(to   :: [Text]) ->
-    fromValue ts  >>= \(s    :: Text) -> do
-        when (length from /= length to) $
+    fromNix tfrom >>= \(nsFrom :: [NixString]) ->
+    fromNix tto   >>= \(nsTo   :: [NixString]) ->
+    fromValue ts  >>= \(ns    :: NixString) -> do
+        let from = map principledStringIgnoreContext nsFrom
+        when (length nsFrom /= length nsTo) $
             throwError $ ErrorCall $
                 "'from' and 'to' arguments to 'replaceStrings'"
                     ++ " have different lengths"
         let lookupPrefix s = do
                 (prefix, replacement) <-
-                    find ((`Text.isPrefixOf` s) . fst) $ zip from to
+                    find ((`Text.isPrefixOf` s) . fst) $ zip from nsTo
                 let rest = Text.drop (Text.length prefix) s
                 return (prefix, replacement, rest)
-            finish = LazyText.toStrict . Builder.toLazyText
-            go orig result = case lookupPrefix orig of
+            finish b = principledMakeNixString (LazyText.toStrict $ Builder.toLazyText b)
+            go orig result ctx = case lookupPrefix orig of
                 Nothing -> case Text.uncons orig of
-                    Nothing -> finish result
-                    Just (h, t) -> go t $ result <> Builder.singleton h
-                Just (prefix, replacement, rest) -> case prefix of
-                    "" -> case Text.uncons rest of
-                        Nothing -> finish $ result <> Builder.fromText replacement
-                        Just (h, t) -> go t $ mconcat
-                            [ result
-                            , Builder.fromText replacement
-                            , Builder.singleton h
-                            ]
-                    _ -> go rest $ result <> Builder.fromText replacement
-        toNix $ go s mempty
+                    Nothing -> finish result ctx
+                    Just (h, t) -> go t (result <> Builder.singleton h) ctx
+                Just (prefix, replacementNS, rest) ->
+                  let replacement = principledStringIgnoreContext replacementNS
+                      newCtx = principledGetContext replacementNS
+                  in case prefix of
+                       "" -> case Text.uncons rest of
+                           Nothing -> finish (result <> Builder.fromText replacement) (ctx <> newCtx)
+                           Just (h, t) -> go t (mconcat
+                               [ result
+                               , Builder.fromText replacement
+                               , Builder.singleton h
+                               ]) (ctx <> newCtx)
+                       _ -> go rest (result <> Builder.fromText replacement) (ctx <> newCtx)
+        toNix $ go (principledStringIgnoreContext ns) mempty $ principledGetContext ns
 
 removeAttrs :: forall e m. MonadNix e m
             => m (NValue m) -> m (NValue m) -> m (NValue m)
-removeAttrs set = fromNix >=> \(toRemove :: [Text]) ->
+removeAttrs set = fromNix >=> \(nsToRemove :: [NixString]) ->
     fromValue @(AttrSet (NThunk m),
-                AttrSet SourcePos) set >>= \(m, p) ->
+                AttrSet SourcePos) set >>= \(m, p) -> do
+        toRemove <- mapM fromStringNoContext nsToRemove
         toNix (go m toRemove, go p toRemove)
   where
     go = foldl' (flip M.delete)
@@ -763,10 +784,15 @@ functionArgs fun = fun >>= \case
 
 toFile :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 toFile name s = do
-    name' <- fromValue name
+    name' <- fromStringNoContext =<< fromValue name
     s' <- fromValue s
-    mres <- toFile_ (Text.unpack name') (Text.unpack s')
-    toNix $ Text.pack $ unStorePath mres
+    -- TODO Using hacky here because we still need to turn the context into
+    -- runtime references of the resulting file.
+    -- See prim_toFile in nix/src/libexpr/primops.cc
+    mres <- toFile_ (Text.unpack name') (Text.unpack $ hackyStringIgnoreContext s')
+    let t = Text.pack $ unStorePath mres
+        sc = StringContext t DirectPath
+    toNix $ principledMakeNixStringWithSingletonContext t sc
 
 toPath :: MonadNix e m => m (NValue m) -> m (NValue m)
 toPath = fromValue @Path >=> toNix @Path
@@ -789,7 +815,7 @@ isList :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 isList = hasKind @[NThunk m]
 
 isString :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
-isString = hasKind @Text
+isString = hasKind @NixString
 
 isInt :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 isInt = hasKind @Int
@@ -809,7 +835,9 @@ isFunction func = func >>= \case
     _ -> toValue False
 
 throw_ :: MonadNix e m => m (NValue m) -> m (NValue m)
-throw_ = fromValue >=> throwError . ErrorCall . Text.unpack
+throw_ mnv = do
+  ns <- coerceToString CopyToStore CoerceStringy =<< mnv
+  throwError . ErrorCall . Text.unpack $ principledStringIgnoreContext ns
 
 import_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 import_ = scopedImport (pure (nvSet M.empty M.empty))
@@ -834,9 +862,10 @@ scopedImport asetArg pathArg =
                     importPath @m path'
 
 getEnv_ :: MonadNix e m => m (NValue m) -> m (NValue m)
-getEnv_ = fromValue >=> \s -> do
+getEnv_ = fromValue >=> fromStringNoContext >=> \s -> do
     mres <- getEnvVar (Text.unpack s)
-    toNix $ case mres of
+    toNix $ principledMakeNixStringWithoutContext $
+      case mres of
         Nothing -> ""
         Just v  -> Text.pack v
 
@@ -878,32 +907,37 @@ listToAttrs :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 listToAttrs = fromValue @[NThunk m] >=> \l ->
     fmap (flip nvSet M.empty . M.fromList . reverse) $
         forM l $ fromValue @(AttrSet (NThunk m)) >=> \s -> do
-            name <- attrsetGet "name" s
+            name <- fromStringNoContext =<< fromValue =<< attrsetGet "name" s
             val  <- attrsetGet "value" s
-            fromValue name <&> (, val)
+            pure (name, val)
 
-hashString :: MonadNix e m => Text -> Text -> Prim m Text
-hashString algo s = Prim $ do
+-- prim_hashString from nix/src/libexpr/primops.cc
+-- fail if context in the algo arg
+-- propagate context from the s arg
+hashString :: MonadNix e m => NixString -> NixString -> Prim m NixString
+hashString nsAlgo ns = Prim $ do
+    algo <- fromStringNoContext nsAlgo
+    let f g = pure $ principledModifyNixContents g ns
     case algo of
-        "md5"    -> pure $
+        "md5"    -> f $ \s ->
 #if MIN_VERSION_hashing(0, 1, 0)
           Text.pack $ show (hash (encodeUtf8 s) :: MD5.MD5)
 #else
           decodeUtf8 $ Base16.encode $ MD5.hash $ encodeUtf8 s
 #endif
-        "sha1"   -> pure $
+        "sha1"   -> f $ \s ->
 #if MIN_VERSION_hashing(0, 1, 0)
           Text.pack $ show (hash (encodeUtf8 s) :: SHA1.SHA1)
 #else
           decodeUtf8 $ Base16.encode $ SHA1.hash $ encodeUtf8 s
 #endif
-        "sha256" -> pure $
+        "sha256" -> f $ \s ->
 #if MIN_VERSION_hashing(0, 1, 0)
           Text.pack $ show (hash (encodeUtf8 s) :: SHA256.SHA256)
 #else
           decodeUtf8 $ Base16.encode $ SHA256.hash $ encodeUtf8 s
 #endif
-        "sha512" -> pure $
+        "sha512" -> f $ \s ->
 #if MIN_VERSION_hashing(0, 1, 0)
           Text.pack $ show (hash (encodeUtf8 s) :: SHA512.SHA512)
 #else
@@ -913,9 +947,12 @@ hashString algo s = Prim $ do
             ++ "expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got " ++ show algo
 
 placeHolder :: MonadNix e m => m (NValue m) -> m (NValue m)
-placeHolder = fromValue @Text >=> \_ -> do
-    h <- runPrim (hashString "sha256" "fdasdfas")
-    toNix h
+placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
+    h <- runPrim (hashString (principledMakeNixStringWithoutContext "sha256")
+                             (principledMakeNixStringWithoutContext ("nix-output:" <> t)))
+    toNix $ principledMakeNixStringWithoutContext $ Text.cons '/' $ printHash32 $
+      -- The result coming out of hashString is base16 encoded
+      fst $ Base16.decode $ encodeUtf8 $ principledStringIgnoreContext h
 
 absolutePathFromValue :: MonadNix e m => NValue m -> m FilePath
 absolutePathFromValue = \case
@@ -952,7 +989,7 @@ data FileType
    deriving (Show, Read, Eq, Ord)
 
 instance Applicative m => ToNix FileType m (NValue m) where
-    toNix = toNix . \case
+    toNix = toNix . principledMakeNixStringWithoutContext . \case
         FileTypeRegular   -> "regular" :: Text
         FileTypeDirectory -> "directory"
         FileTypeSymlink   -> "symlink"
@@ -972,18 +1009,40 @@ readDir_ pathThunk = do
         pure (Text.pack item, t)
     toNix (M.fromList itemsWithTypes)
 
-fromJSON :: MonadNix e m => m (NValue m) -> m (NValue m)
-fromJSON = fromValue >=> \encoded ->
+fromJSON :: forall e m. (MonadNix e m, Typeable m) => m (NValue m) -> m (NValue m)
+fromJSON = fromValue >=> fromStringNoContext >=> \encoded ->
     case A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded of
         Left jsonError ->
             throwError $ ErrorCall $ "builtins.fromJSON: " ++ jsonError
-        Right v -> toValue v
+        Right v -> jsonToNValue v
+  where
+    jsonToNValue = \case
+        A.Object m -> flip nvSet M.empty
+            <$> traverse (thunk . jsonToNValue) m
+        A.Array l -> nvList <$>
+            traverse (\x -> thunk . whileForcingThunk (CoercionFromJson @m x)
+                                 . jsonToNValue $ x) (V.toList l)
+        A.String s -> pure $ nvStr $ hackyMakeNixStringWithoutContext s
+        A.Number n -> pure $ nvConstant $ case floatingOrInteger n of
+            Left r -> NFloat r
+            Right i -> NInt i
+        A.Bool b -> pure $ nvConstant $ NBool b
+        A.Null -> pure $ nvConstant NNull
+
+prim_toJSON
+  :: MonadNix e m
+  => m (NValue m)
+  -> m (NValue m)
+prim_toJSON x = do
+  (ctx, v) <- nvalueToJSON =<< x
+  let t = decodeUtf8 $ LBS.toStrict $ A.encodingToLazyByteString $ toEncodingSorted v
+  pure $ nvStr $ principledMakeNixString t ctx
 
 toXML_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 toXML_ v = v >>= normalForm >>= pure . nvStr . toXML
 
 typeOf :: MonadNix e m => m (NValue m) -> m (NValue m)
-typeOf v = v >>= toNix @Text . \case
+typeOf v = v >>= toNix . principledMakeNixStringWithoutContext . \case
     NVConstant a -> case a of
         NInt _   -> "int"
         NFloat _ -> "float"
@@ -1013,7 +1072,7 @@ tryEval e = catch (onSuccess <$> e) (pure . onError)
 
 trace_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 trace_ msg action = do
-  traceEffect . Text.unpack =<< fromValue @Text msg
+  traceEffect . Text.unpack . principledStringIgnoreContext =<< fromValue msg
   action
 
 -- TODO: remember error context
@@ -1023,8 +1082,11 @@ addErrorContext _ action = action
 exec_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 exec_ xs = do
   ls <- fromValue @[NThunk m] xs
-  xs <- traverse (fromValue @Text . force') ls
-  exec (map Text.unpack xs)
+  xs <- traverse (coerceToString DontCopyToStore CoerceStringy <=< force') ls
+  -- TODO Still need to do something with the context here
+  -- See prim_exec in nix/src/libexpr/primops.cc
+  -- Requires the implementation of EvalState::realiseContext
+  exec (map (Text.unpack . hackyStringIgnoreContext) xs)
 
 fetchurl :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 fetchurl v = v >>= \case

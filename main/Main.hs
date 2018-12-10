@@ -29,6 +29,7 @@ import           Data.Text.Prettyprint.Doc.Render.Text
 import           Nix
 import           Nix.Convert
 import qualified Nix.Eval as Eval
+import           Nix.Json
 -- import           Nix.Lint
 import           Nix.Options.Parser
 import qualified Nix.Type.Env as Env
@@ -145,7 +146,8 @@ main = do
                      . TL.decodeUtf8
                      . A.encodingToLazyByteString
                      . toEncodingSorted
-                     <=< fromNix
+                     . snd
+                     <=< nvalueToJSON
             | strict opts =
               liftIO . print . prettyNValueNF <=< normalForm
             | values opts  =

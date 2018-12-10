@@ -4,6 +4,8 @@
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 module Nix.String (
     NixString
+  , principledGetContext
+  , principledMakeNixString
   , principledMempty
   , StringContext(..)
   , ContextFlavor(..)
@@ -56,6 +58,9 @@ data NixString = NixString
   } deriving (Eq, Ord, Show, Generic)
 
 instance Hashable NixString
+
+principledGetContext :: NixString -> S.HashSet StringContext
+principledGetContext = nsContext
 
 -- | Combine two NixStrings using mappend
 principledMempty :: NixString
@@ -111,7 +116,7 @@ principledGetStringNoContext (NixString s c) | null c = Just s
 principledStringIgnoreContext :: NixString -> Text
 principledStringIgnoreContext (NixString s _) = s
 
--- | Extract the string contents from a NixString even if the NixString has an associated context 
+-- | Extract the string contents from a NixString even if the NixString has an associated context
 hackyStringIgnoreContext :: NixString -> Text
 hackyStringIgnoreContext (NixString s _) = s
 
@@ -127,13 +132,17 @@ hackyMakeNixStringWithoutContext = flip NixString mempty
 principledMakeNixStringWithoutContext :: Text -> NixString
 principledMakeNixStringWithoutContext = flip NixString mempty
 
--- | Modify the string part of the NixString -- ignores the context
+-- | Modify the string part of the NixString, leaving the context unchanged
 principledModifyNixContents :: (Text -> Text) -> NixString -> NixString
 principledModifyNixContents f (NixString s c) = NixString (f s) c
 
 -- | Create a NixString using a singleton context
 principledMakeNixStringWithSingletonContext :: Text -> StringContext -> NixString
 principledMakeNixStringWithSingletonContext s c = NixString s (S.singleton c)
+
+-- | Create a NixString from a Text and context
+principledMakeNixString :: Text -> S.HashSet StringContext -> NixString
+principledMakeNixString s c = NixString s c
 
 -- | A monad for accumulating string context while producing a result string.
 newtype WithStringContext a = WithStringContext (Writer (S.HashSet StringContext) a)
