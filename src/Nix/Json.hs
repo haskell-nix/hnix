@@ -1,10 +1,15 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Nix.Json where
 
+import           Control.Monad
+import           Control.Monad.Trans
 import qualified Data.Aeson as A
-import qualified Data.HashSet as HS
+import qualified Data.Aeson.Encoding as A
 import qualified Data.Text as Text
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Vector as V
 import           Nix.Atoms
 import           Nix.Effects
@@ -12,27 +17,29 @@ import           Nix.Exec
 import           Nix.Frames
 import           Nix.String
 import           Nix.Thunk
+import           Nix.Utils
 import           Nix.Value
 
-nvalueToJSON
-  :: MonadNix e m
-  => NValue m
-  -> m (HS.HashSet StringContext, A.Value)
-nvalueToJSON v = case v of
-    NVConstant a -> retEmpty $ case a of
-        NInt n   -> A.toJSON n
-        NFloat n -> A.toJSON n
-        NBool b  -> A.toJSON b
-        NNull    -> A.Null
-    NVStr ns  -> pure (principledGetContext ns, A.toJSON $ principledStringIgnoreContext ns)
-    NVList l  -> do
-        (ctxs, vals) <- unzip <$> traverse (`force` nvalueToJSON) l
-        return (HS.unions ctxs, A.Array $ V.fromList vals)
-    NVSet m _ ->
-        fmap A.Object . sequence <$> traverse (`force` nvalueToJSON) m
-    NVPath p  -> do
-      fp <- unStorePath <$> addPath p
-      return (HS.singleton $ StringContext (Text.pack fp) DirectPath, A.toJSON fp)
-    _ -> throwError $ CoercionToJson v
-  where
-    retEmpty a = pure (mempty, a)
+nvalueToJSONNixString :: MonadNix e m => NValue m -> m NixString
+nvalueToJSONNixString = runWithStringContextT
+  . fmap (TL.toStrict . TL.decodeUtf8 . A.encodingToLazyByteString . toEncodingSorted)
+  . nvalueToJSON
+
+nvalueToJSON :: MonadNix e m => NValue m -> WithStringContextT m A.Value
+nvalueToJSON = \case
+  NVConstant (NInt n) -> pure $ A.toJSON n
+  NVConstant (NFloat n) -> pure $ A.toJSON n
+  NVConstant (NBool b) -> pure $ A.toJSON b
+  NVConstant NNull -> pure $ A.Null
+  NVStr ns  -> do
+    addStringContext $ principledGetContext ns
+    return $ A.toJSON $ principledStringIgnoreContext ns
+  NVList l  ->
+    A.Array . V.fromList <$> traverse (join . lift . flip force (return . nvalueToJSON)) l
+  NVSet m _ ->
+    A.Object <$> traverse (join . lift . flip force (return . nvalueToJSON)) m
+  NVPath p  -> do
+    fp <- lift $ unStorePath <$> addPath p
+    addSingletonStringContext $ StringContext (Text.pack fp) DirectPath
+    return $ A.toJSON fp
+  v -> lift $ throwError $ CoercionToJson v
