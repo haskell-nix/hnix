@@ -31,9 +31,7 @@ nvalueToJSON = \case
   NVConstant (NFloat n) -> pure $ A.toJSON n
   NVConstant (NBool b) -> pure $ A.toJSON b
   NVConstant NNull -> pure $ A.Null
-  NVStr ns  -> do
-    addStringContext $ principledGetContext ns
-    return $ A.toJSON $ principledStringIgnoreContext ns
+  NVStr ns  -> A.toJSON <$> extractNixString ns
   NVList l  ->
     A.Array . V.fromList <$> traverse (join . lift . flip force (return . nvalueToJSON)) l
   NVSet m _ ->
