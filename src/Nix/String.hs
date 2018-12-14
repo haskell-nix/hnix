@@ -23,11 +23,16 @@ module Nix.String (
   , principledStringMempty
   , principledStringMConcat
   , WithStringContext
+  , WithStringContextT
   , extractNixString
+  , addStringContext
+  , addSingletonStringContext
+  , runWithStringContextT
   , runWithStringContext
 ) where
 
 import           Control.Monad.Writer
+import           Data.Functor.Identity
 import qualified Data.HashSet as S
 import           Data.Hashable
 import           Data.Text (Text)
@@ -145,13 +150,27 @@ principledMakeNixString :: Text -> S.HashSet StringContext -> NixString
 principledMakeNixString s c = NixString s c
 
 -- | A monad for accumulating string context while producing a result string.
-newtype WithStringContext a = WithStringContext (Writer (S.HashSet StringContext) a)
-  deriving (Functor, Applicative, Monad, MonadWriter (S.HashSet StringContext))
+newtype WithStringContextT m a = WithStringContextT (WriterT (S.HashSet StringContext) m a)
+  deriving (Functor, Applicative, Monad, MonadTrans, MonadWriter (S.HashSet StringContext))
+
+type WithStringContext = WithStringContextT Identity
+
+-- | Add 'StringContext's into the resulting set.
+addStringContext :: Monad m => S.HashSet StringContext -> WithStringContextT m ()
+addStringContext = WithStringContextT . tell
+
+-- | Add a 'StringContext' into the resulting set.
+addSingletonStringContext :: Monad m => StringContext -> WithStringContextT m ()
+addSingletonStringContext = WithStringContextT . tell . S.singleton
 
 -- | Get the contents of a 'NixString' and write its context into the resulting set.
-extractNixString :: NixString -> WithStringContext Text
-extractNixString (NixString s c) = WithStringContext $ tell c >> return s
+extractNixString :: Monad m => NixString -> WithStringContextT m Text
+extractNixString (NixString s c) = WithStringContextT $ tell c >> return s
 
 -- | Run an action producing a string with a context and put those into a 'NixString'.
-runWithStringContext :: WithStringContext Text -> NixString
-runWithStringContext (WithStringContext m) = uncurry NixString $ runWriter m
+runWithStringContextT :: Monad m => WithStringContextT m Text -> m NixString
+runWithStringContextT (WithStringContextT m) = uncurry NixString <$> runWriterT m
+
+-- | Run an action producing a string with a context and put those into a 'NixString'.
+runWithStringContext :: WithStringContextT Identity Text -> NixString
+runWithStringContext = runIdentity . runWithStringContextT
