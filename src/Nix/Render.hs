@@ -19,10 +19,10 @@ import qualified Data.Set as Set
 import           Data.Text.Prettyprint.Doc
 import           Data.Void
 import           Nix.Expr.Types.Annotated
-import qualified System.Posix.Files as S
 import qualified System.Directory as S
+import qualified System.Posix.Files as S
 import           Text.Megaparsec.Error
-import           Text.Megaparsec.Pos (SourcePos(..))
+import           Text.Megaparsec.Pos
 
 class Monad m => MonadFile m where
     readFile :: FilePath -> m ByteString
@@ -70,5 +70,18 @@ posAndMsg (SourcePos _ lineNo _) msg =
         (Set.fromList [ErrorFail (show msg) :: ErrorFancy Void])
 
 renderLocation :: Monad m => SrcSpan -> Doc a -> m (Doc a)
-renderLocation (SrcSpan beg@(SourcePos _ _ _) _) msg =
-    return $ pretty $ init $ parseErrorPretty @String (posAndMsg beg msg)
+renderLocation (SrcSpan beg@(SourcePos file begLine begCol)
+                        (SourcePos file' endLine endCol)) msg
+    | file == file' = do
+
+    return $ vsep
+      [ "In file " <> errorContext file begLine begCol endLine endCol <> ":"
+      , pretty (parseErrorTextPretty @String (posAndMsg beg msg))
+      ]
+renderLocation (SrcSpan beg end) msg =
+    fail $ "Don't know how to render range from " ++ show beg ++ " to " ++ show end
+      ++ " for error: " ++ show msg
+
+errorContext :: FilePath -> Pos -> Pos -> Pos -> Pos -> Doc a
+errorContext path bl bc _el _ec =
+    pretty path <> ":" <> pretty (unPos bl) <> ":" <> pretty (unPos bc)
