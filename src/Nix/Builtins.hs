@@ -45,14 +45,12 @@ import qualified "cryptohash-sha512" Crypto.Hash.SHA512 as SHA512
 #endif
 
 import qualified Data.Aeson as A
-import qualified Data.Aeson.Encoding as A
 import           Data.Align (alignWith)
 import           Data.Array
 import           Data.Bits
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import           Data.ByteString.Base16 as Base16
-import qualified Data.ByteString.Lazy as LBS
 import           Data.Char (isDigit)
 import           Data.Fix
 import           Data.Foldable (foldrM)
@@ -1033,14 +1031,10 @@ prim_toJSON
   :: MonadNix e m
   => m (NValue m)
   -> m (NValue m)
-prim_toJSON x = do
-  (ctx, v) <- nvalueToJSON =<< x
-  let t = decodeUtf8 $ LBS.toStrict $ A.encodingToLazyByteString $ toEncodingSorted v
-  pure $ nvStr $ principledMakeNixString t ctx
+prim_toJSON x = x >>= nvalueToJSONNixString >>= pure . nvStr
 
 toXML_ :: MonadNix e m => m (NValue m) -> m (NValue m)
-toXML_ v = v >>= normalForm >>= \x ->
-    pure $ nvStr $ hackyMakeNixStringWithoutContext $ Text.pack (toXML x)
+toXML_ v = v >>= normalForm >>= pure . nvStr . toXML
 
 typeOf :: MonadNix e m => m (NValue m) -> m (NValue m)
 typeOf v = v >>= toNix . principledMakeNixStringWithoutContext . \case

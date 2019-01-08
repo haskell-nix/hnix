@@ -13,7 +13,6 @@ import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
 -- import           Control.Monad.ST
-import qualified Data.Aeson.Encoding as A
 import qualified Data.Aeson.Text as A
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Map as Map
@@ -22,7 +21,6 @@ import           Data.Maybe (fromJust)
 import           Data.Time
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Text.Lazy.IO as TL
 import           Data.Text.Prettyprint.Doc
 import           Data.Text.Prettyprint.Doc.Render.Text
@@ -140,14 +138,11 @@ main = do
             | finder opts =
               fromValue @(AttrSet (NThunk m)) >=> findAttrs
             | xml opts =
-              liftIO . putStrLn . toXML <=< normalForm
+              liftIO . putStrLn . Text.unpack . principledStringIgnoreContext . toXML <=< normalForm
             | json opts =
-              liftIO . TL.putStrLn
-                     . TL.decodeUtf8
-                     . A.encodingToLazyByteString
-                     . toEncodingSorted
-                     . snd
-                     <=< nvalueToJSON
+              liftIO . Text.putStrLn
+                     . principledStringIgnoreContext
+                     <=< nvalueToJSONNixString
             | strict opts =
               liftIO . print . prettyNValueNF <=< normalForm
             | values opts  =
