@@ -189,7 +189,7 @@ help :: forall e m . (MonadNix e m, MonadIO m, MonadException m)
      => [String] -> Repl e m ()
 help _ = liftIO $ do
   putStrLn "Available commands:\n"
-  mapM_ putStrLn $ map fst (options @e @m)
+  mapM_ putStrLn $ map (\o -> ":" ++ (fst o)) (options @e @m)
 
 completer :: (MonadNix e m, MonadIO m) => CompleterStyle (StateT (IState m) m)
 completer = Prefix (wordCompleter comp) defaultMatcher
