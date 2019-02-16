@@ -1,4 +1,4 @@
-{ compiler ? "ghc844"
+{ compiler ? "ghc863"
 
 , doBenchmark ? false
 , doTracing   ? false
@@ -6,8 +6,10 @@
 , doProfiling ? false # enables profiling support in GHC
 , doStrict    ? false
 
-, rev    ? "3f3f6021593070330091a4a2bc785f6761bbb3c1"
-, sha256 ? "1a7vvxxz8phff51vwsrdlsq5i70ig5hxvvb7lkm2lgwizgvpa6gv"
+, withHoogle  ? false
+
+, rev    ? "120eab94e0981758a1c928ff81229cd802053158"
+, sha256 ? "0qk6k8gxx5xlkyg05dljywj5wx5fvrc3dzp4v2h6ab83b7zwg813"
 
 , pkgs   ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
@@ -31,23 +33,26 @@ drv = haskellPackages.developPackage {
 
   overrides = with pkgs.haskell.lib; self: super: {
     mono-traversable = dontCheck super.mono-traversable;
-    megaparsec = super.megaparsec_7_0_4;
-  };
+  } //
+  (if withHoogle then {
+     ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
+     ghcWithPackages = self.ghc.withPackages;
+   } else {});
 
   source-overrides = {};
 
   modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
     buildTools = (attrs.buildTools or []) ++ [
-      pkgs.haskell.packages.${compiler}.cabal-install
+      haskellPackages.cabal-install
     ];
 
     enableLibraryProfiling = doProfiling;
     enableExecutableProfiling = doProfiling;
 
-    testHaskellDepends = attrs.testHaskellDepends ++
-      [ pkgs.nix
-        pkgs.haskell.packages.ghc844.criterion
-      ];
+    testHaskellDepends = attrs.testHaskellDepends ++ [
+      pkgs.nix
+      haskellPackages.criterion
+    ];
 
     inherit doBenchmark;
 
@@ -56,9 +61,7 @@ drv = haskellPackages.developPackage {
       ++ pkgs.stdenv.lib.optional doOptimize "--flags=optimize"
       ++ pkgs.stdenv.lib.optional doStrict   "--ghc-options=-Werror";
 
-    passthru = {
-      nixpkgs = pkgs;
-    };
+    passthru = { nixpkgs = pkgs; };
   });
 
   inherit returnShellEnv;
