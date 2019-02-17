@@ -33,6 +33,7 @@ drv = haskellPackages.developPackage {
 
   overrides = with pkgs.haskell.lib; self: super: {
     mono-traversable = dontCheck super.mono-traversable;
+    these = doJailbreak super.these;
   } //
   (if withHoogle then {
      ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
