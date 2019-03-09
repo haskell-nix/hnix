@@ -1,10 +1,18 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFunctor      #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
@@ -54,6 +62,7 @@ import           Control.Monad
 import           Control.Monad.Combinators.Expr
 import           Data.Char (isAlpha, isDigit, isSpace)
 import           Data.Data (Data(..))
+import           Data.Fix
 import           Data.Foldable (concat)
 import           Data.Functor
 import           Data.Functor.Identity
@@ -72,8 +81,9 @@ import           GHC.Generics hiding (Prefix)
 import           Nix.Expr hiding (($>))
 import           Nix.Render
 import           Nix.Strings
+import           Nix.Syntax
 import           Text.Megaparsec
-import           Text.Megaparsec.Char
+import           Text.Megaparsec.Char as C
 import qualified Text.Megaparsec.Char.Lexer as L
 
 infixl 3 <+>
@@ -167,6 +177,10 @@ nixBool :: Parser NExprLoc
 nixBool = annotateLocation1 (bool "true" True <+>
                              bool "false" False) <?> "bool" where
   bool str b = mkBoolF b <$ reserved str
+
+-- nixBool' :: Parser NExprSyn
+-- nixBool' = (bool "true" True <+> bool "false" False) <?> "bool" where
+--   bool str b = liftM2 (<>) (reservedSyntax str) (exprSyntax (pure (mkBoolF b)))
 
 nixNull :: Parser NExprLoc
 nixNull = annotateLocation1 (mkNullF <$ reserved "null" <?> "null")
@@ -375,6 +389,7 @@ parseNixTextLoc = parseFromText (whiteSpace *> nixToplevelForm <* eof)
 
 {- Parser.Library -}
 
+{-
 skipLineComment' :: Tokens Text -> Parser ()
 skipLineComment' prefix =
   string prefix
@@ -388,8 +403,42 @@ whiteSpace = L.space space1 lineCmnt blockCmnt
 
 lexeme :: Parser a -> Parser a
 lexeme p = p <* whiteSpace
+-}
 
-symbol :: Text -> Parser Text
+space' :: Parser (Tokens Text)
+space' = takeWhileP (Just "white space") isSpace
+
+space1' :: Parser (Tokens Text)
+space1' = takeWhile1P (Just "white space") isSpace
+
+lineComment' :: Tokens Text -> Parser (Tokens Text)
+lineComment' prefix =
+    string prefix
+        *> takeWhileP (Just "character") (\x -> x /= '\n' && x /= '\r')
+
+blockComment'
+  :: Tokens Text                 -- ^ Start of block comment
+  -> Tokens Text                 -- ^ End of block comment
+  -> Parser (Tokens Text)
+blockComment' start end =
+    C.string start *> (pack <$> manyTill anySingle (C.string end))
+
+whiteSpace :: forall expr. (Syntactic expr, Monoid (WhiteSpace expr))
+           => Parser (WhiteSpace expr)
+whiteSpace = fmap mconcat $ many $ choice
+    [ synWhiteSpace @expr <$> hidden space1'
+    , synLineComment @expr <$> hidden lineCmnt
+    , synBlockComment @expr <$> hidden blockCmnt
+    ]
+  where
+    lineCmnt  = lineComment' "#"
+    blockCmnt = blockComment' "/*" "*/"
+
+lexeme :: forall expr. (Syntactic expr, Monoid (WhiteSpace expr))
+       => Parser expr -> Parser expr
+lexeme p = synWithSuffix @expr <$> p <*> whiteSpace @expr
+
+symbol :: Text -> Parser (Syntax expr)
 symbol = lexeme . string
 
 reservedEnd :: Char -> Bool
@@ -399,9 +448,14 @@ reservedEnd x = isSpace x ||
     x == ';' || x == ':' || x == '.' ||
     x == '"' || x == '\'' || x == ','
 
-reserved :: Text -> Parser ()
+reserved :: Text -> Parser (Syntax expr)
 reserved n = lexeme $ try $
-    string n *> lookAhead (void (satisfy reservedEnd) <|> eof)
+    string n <* lookAhead (void (satisfy reservedEnd) <|> eof)
+
+-- reservedSyntax :: Text -> Parser NExprSyn
+-- reservedSyntax n = lexemeSyntax $ try $
+--     Fix . NSynSyntax <$> string n
+--         <* lookAhead (void (satisfy reservedEnd) <|> eof)
 
 identifier = lexeme $ try $ do
     ident <- cons <$> satisfy (\x -> isAlpha x || x == '_')
