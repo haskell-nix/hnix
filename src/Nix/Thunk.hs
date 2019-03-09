@@ -8,8 +8,10 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -47,6 +49,7 @@ class Monad m => MonadFreshId i m | m -> i where
   freshId = lift freshId
 
 newtype FreshIdT i m a = FreshIdT { unFreshIdT :: StateT i m a }
+  deriving (Functor, Applicative, Monad, MonadTrans)
 
 runFreshIdT :: Functor m => i -> FreshIdT i m a -> m a
 runFreshIdT i m = fst <$> runStateT (unFreshIdT m) i
@@ -56,10 +59,8 @@ instance (Monoid w, MonadFreshId i m) => MonadFreshId i (WriterT w m)
 instance MonadFreshId i m => MonadFreshId i (ExceptT e m)
 instance MonadFreshId i m => MonadFreshId i (StateT s m)
 
-instance (Functor m) => Functor (FreshIdT i m)
-instance (Applicative m) => Applicative (FreshIdT i m)
-instance (MonadRef m) => MonadRef (FreshIdT i m)
-instance MonadAtomicRef m => MonadAtomicRef (FreshIdT i m)
+deriving instance (MonadRef m) => MonadRef (FreshIdT i m)
+deriving instance MonadAtomicRef m => MonadAtomicRef (FreshIdT i m)
 
 --TODO: Eliminate the old MonadVar shims
 type MonadVar m =
