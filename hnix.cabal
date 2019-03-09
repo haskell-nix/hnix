@@ -548,9 +548,9 @@ library
     build-depends:
         lens-family >=1.2.2
       , lens-family-core >=1.2.2
-  if impl(ghc < 8.4.0) && !flag(profiling)
-    build-depends:
-        ghc-datasize
+  -- if impl(ghc < 8.4.0) && !flag(profiling)
+  --   build-depends:
+  --       ghc-datasize
   if impl(ghcjs)
     build-depends:
         hashable >=1.2.4 && <1.3
