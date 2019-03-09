@@ -669,7 +669,7 @@ solve cs = solve' (nextSolvable cs)
       s' <- lift $ instantiate s
       solve (EqConst t s' : cs)
 
-instance Scoped (JThunkT s m) (InferT s m) where
+instance Monad m => Scoped (JThunkT s m) (InferT s m) where
   currentScopes = currentScopesReader
   clearScopes = clearScopesReader @(InferT s m) @(JThunkT s m)
   pushScopes = pushScopesReader
