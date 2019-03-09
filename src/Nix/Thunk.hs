@@ -16,6 +16,8 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 module Nix.Thunk where
 
 import Control.Exception hiding (catch)
