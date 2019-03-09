@@ -595,7 +595,7 @@ mapAttrs_ fun xs = fun >>= \f ->
         values <- for pairs $ \(key, value) ->
             thunk $
             withFrame Debug (ErrorCall "While applying f in mapAttrs:\n") $
-            callFunc ?? force' value =<< callFunc f (pure (nvStr (hackyMakeNixStringWithoutContext key)))
+            callFunc ?? force' value =<< callFunc f (pure (nvStr (principledMakeNixStringWithoutContext key)))
         toNix . M.fromList . zip (map fst pairs) $ values
 
 filter_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
