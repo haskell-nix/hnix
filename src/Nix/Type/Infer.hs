@@ -32,7 +32,7 @@ import           Control.Monad.Logic
 import           Control.Monad.Reader
 import           Control.Monad.Ref
 import           Control.Monad.ST
-import           Control.Monad.State
+import           Control.Monad.State.Strict
 import           Data.Fix
 import           Data.Foldable
 import qualified Data.HashMap.Lazy as M

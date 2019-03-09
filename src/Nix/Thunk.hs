@@ -20,12 +20,13 @@
 
 module Nix.Thunk where
 
+import Control.Applicative
 import Control.Exception hiding (catch)
 import Control.Monad.Catch
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.Ref
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Control.Monad.ST
 import Control.Monad.Writer
 import Data.GADT.Compare
@@ -33,6 +34,9 @@ import Data.IORef
 import Data.Maybe
 import Data.STRef
 import Data.Typeable
+#ifdef MIN_VERSION_haskeline
+import System.Console.Haskeline.MonadException hiding (catch)
+#endif
 
 import Unsafe.Coerce
 
@@ -66,11 +70,19 @@ newtype FreshIdT i m a = FreshIdT { unFreshIdT :: StateT i m a }
   deriving
     ( Functor
     , Applicative
+    , Alternative
     , Monad
+    , MonadPlus
     , MonadTrans
     , MonadFix
     , MonadRef
     , MonadAtomicRef
+    , MonadIO
+    , MonadCatch
+    , MonadThrow
+#ifdef MIN_VERSION_haskeline
+    , MonadException
+#endif
     )
 
 instance (Monad m, Num i) => MonadFreshId i (FreshIdT i m) where
