@@ -13,6 +13,7 @@ import           Control.Monad.Catch
 import           Control.Monad (when)
 import           Control.Monad.IO.Class
 import qualified Data.HashMap.Lazy as M
+import           Data.List ((\\))
 import           Data.Maybe (isJust)
 import           Data.String.Interpolate.IsString
 import qualified Data.Set as S
@@ -41,7 +42,7 @@ case_zero_div = do
   assertNixEvalThrows "builtins.div 1.0 0.0"
 
 case_bit_ops = do
-    -- mic92 (2018-08-20): change to constantEqualText, 
+    -- mic92 (2018-08-20): change to constantEqualText,
     -- when hnix's nix fork supports bitAnd/bitOr/bitXor
     constantEqualText' "0" "builtins.bitAnd 1 0"
     constantEqualText' "1" "builtins.bitOr 1 1"
@@ -403,11 +404,15 @@ tests :: TestTree
 tests = $testGroupGenerator
 
 genEvalCompareTests = do
-    files <- filter ((==".nix") . takeExtension) <$> D.listDirectory testDir
-    return $ testGroup "Eval comparison tests" $ map mkTestCase files
+    td <- D.listDirectory testDir
+
+    let unmaskedFiles = filter ((==".nix") . takeExtension) td
+    let files = unmaskedFiles \\ maskedFiles
+
+    return $ testGroup "Eval comparison tests" $ map (mkTestCase testDir) files
   where
-    testDir = "tests/eval-compare"
-    mkTestCase f = testCase f $ assertEvalFileMatchesNix (testDir </> f)
+    mkTestCase td f = testCase f $ assertEvalFileMatchesNix (td </> f)
+
 
 instance (Show r, Show (NValueF m r), Eq r) => Eq (NValueF m r) where
     NVConstantF x == NVConstantF y = x == y
@@ -463,3 +468,10 @@ freeVarsEqual a xs = do
       xs' = S.fromList xs
       free = freeVars a'
   assertEqual "" xs' free
+
+maskedFiles :: [FilePath]
+maskedFiles =
+  [ "builtins.fetchurl-01.nix" ]
+
+testDir :: FilePath
+testDir = "tests/eval-compare"
