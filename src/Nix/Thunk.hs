@@ -26,6 +26,7 @@ import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.Ref
 import Control.Monad.State
+import Control.Monad.ST
 import Control.Monad.Writer
 import Data.GADT.Compare
 import Data.IORef
@@ -36,6 +37,19 @@ import Data.Typeable
 import Unsafe.Coerce
 
 import Nix.Utils
+
+-- Since there's no forking, it's automatically atomic.
+instance MonadAtomicRef (ST s) where
+  atomicModifyRef r f = do
+    v <- readRef r
+    let (a, b) = f v
+    writeRef r a
+    return b
+  atomicModifyRef' r f = do
+    v <- readRef r
+    let (a, b) = f v
+    writeRef r $! a
+    return b
 
 data Deferred m v = Deferred (m v) | Computed v
     deriving (Functor, Foldable, Traversable)
