@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 
 module Nix.Json where
@@ -7,6 +8,7 @@ import           Control.Monad
 import           Control.Monad.Trans
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Encoding as A
+import qualified Data.HashMap.Lazy as HM
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TL
@@ -34,8 +36,9 @@ nvalueToJSON = \case
   NVStr ns  -> A.toJSON <$> extractNixString ns
   NVList l  ->
     A.Array . V.fromList <$> traverse (join . lift . flip force (return . nvalueToJSON)) l
-  NVSet m _ ->
-    A.Object <$> traverse (join . lift . flip force (return . nvalueToJSON)) m
+  NVSet m _ -> case HM.lookup "outPath" m of
+    Nothing -> A.Object <$> traverse (join . lift . flip force (return . nvalueToJSON)) m
+    Just outPath -> join $ lift $ force outPath (return . nvalueToJSON)
   NVPath p  -> do
     fp <- lift $ unStorePath <$> addPath p
     addSingletonStringContext $ StringContext (Text.pack fp) DirectPath
