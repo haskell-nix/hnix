@@ -46,12 +46,20 @@ class Monad m => MonadFreshId i m | m -> i where
   default freshId :: (MonadFreshId i m', MonadTrans t, m ~ (t m')) => m i
   freshId = lift freshId
 
-newtype FreshIdT i m a = FreshIdT { runFreshIdT :: StateT i m a }
+newtype FreshIdT i m a = FreshIdT { unFreshIdT :: StateT i m a }
 
-instance MonadFreshId i m => MonadFreshId i (ReaderT r m) where
-instance (Monoid w, MonadFreshId i m) => MonadFreshId i (WriterT w m) where
-instance MonadFreshId i m => MonadFreshId i (ExceptT e m) where
-instance MonadFreshId i m => MonadFreshId i (StateT s m) where
+runFreshIdT :: Functor m => i -> FreshIdT i m a -> m a
+runFreshIdT i m = fst <$> runStateT (unFreshIdT m) i
+
+instance MonadFreshId i m => MonadFreshId i (ReaderT r m)
+instance (Monoid w, MonadFreshId i m) => MonadFreshId i (WriterT w m)
+instance MonadFreshId i m => MonadFreshId i (ExceptT e m)
+instance MonadFreshId i m => MonadFreshId i (StateT s m)
+
+instance (Functor m) => Functor (FreshIdT i m)
+instance (Applicative m) => Applicative (FreshIdT i m)
+instance (MonadRef m) => MonadRef (FreshIdT i m)
+instance MonadAtomicRef m => MonadAtomicRef (FreshIdT i m)
 
 --TODO: Eliminate the old MonadVar shims
 type MonadVar m =
