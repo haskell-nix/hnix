@@ -32,7 +32,6 @@ import Data.Typeable
 import Unsafe.Coerce
 
 #if ENABLE_TRACING
-import Data.IORef
 import System.IO.Unsafe
 import Nix.Utils
 

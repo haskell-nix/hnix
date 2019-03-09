@@ -91,6 +91,7 @@ import           Nix.Value
 import           Nix.XML
 import           System.FilePath
 import           System.Posix.Files (isRegularFile, isDirectory, isSymbolicLink)
+import           Text.Read
 import           Text.Regex.TDFA
 
 -- | Evaluate a nix expression in the default context
@@ -457,7 +458,7 @@ splitVersion s = case Text.uncons s of
       | h `elem` versionComponentSeparators -> splitVersion t
       | isDigit h ->
           let (digits, rest) = Text.span isDigit s
-          in VersionComponent_Number (read $ Text.unpack digits) : splitVersion rest
+          in VersionComponent_Number (fromMaybe (error $ "splitVersion: couldn't parse " <> show digits) $ readMaybe $ Text.unpack digits) : splitVersion rest
       | otherwise ->
           let (chars, rest) = Text.span (\c -> not $ isDigit c || c `elem` versionComponentSeparators) s
               thisComponent = case chars of
@@ -1092,11 +1093,16 @@ fetchurl v = v >>= \case
  where
     go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
     go _msha = \case
-        NVStr ns -> getURL (hackyStringIgnoreContext ns) >>= \case -- msha
+        NVStr ns -> noContextAttrs ns >>= getURL >>= \case -- msha
             Left e -> throwError e
             Right p -> toValue p
         v -> throwError $ ErrorCall $
-                 "builtins.fetchurl: Expected URI or string, got " ++ show v
+          "builtins.fetchurl: Expected URI or string, got " ++ show v
+  
+    noContextAttrs ns = case principledGetStringNoContext ns of
+      Nothing -> throwError $ ErrorCall $
+        "builtins.fetchurl: unsupported arguments to url"
+      Just t -> pure t
 
 partition_ :: forall e m. MonadNix e m
            => m (NValue m) -> m (NValue m) -> m (NValue m)
