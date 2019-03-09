@@ -2,8 +2,10 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 module Nix.Effects where
 
@@ -11,6 +13,7 @@ import           Prelude hiding (putStr, putStrLn, print)
 import qualified Prelude
 
 import           Control.Monad.Trans
+import           Control.Monad.State.Strict
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Network.HTTP.Client hiding (path)
@@ -20,6 +23,7 @@ import           Nix.Expr
 import           Nix.Frames
 import           Nix.Parser
 import           Nix.Render
+import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 import qualified System.Directory as S
@@ -52,6 +56,9 @@ class Monad m => MonadIntrospect m where
     default recursiveSize :: (MonadTrans t, MonadIntrospect m', m ~ t m') => a -> m Word
     recursiveSize = lift . recursiveSize
 
+instance MonadIntrospect m => MonadIntrospect (StateT s m)
+deriving instance MonadIntrospect m => MonadIntrospect (FreshIdT i m)
+
 instance MonadIntrospect IO where
     recursiveSize =
 #ifdef MIN_VERSION_ghc_datasize
@@ -68,6 +75,8 @@ class Monad m => MonadExec m where
     exec' :: [String] -> m (Either ErrorCall NExprLoc)
     default exec' :: (MonadTrans t, MonadExec m', m ~ t m') => [String] -> m (Either ErrorCall NExprLoc)
     exec' = lift . exec'
+
+instance MonadExec m => MonadExec (FreshIdT i m)
 
 instance MonadExec IO where
     exec' = \case
@@ -93,6 +102,8 @@ class Monad m => MonadInstantiate m where
     instantiateExpr :: String -> m (Either ErrorCall NExprLoc)
     default instantiateExpr :: (MonadTrans t, MonadInstantiate m', m ~ t m') => String -> m (Either ErrorCall NExprLoc)
     instantiateExpr = lift . instantiateExpr
+
+instance MonadInstantiate m => MonadInstantiate (FreshIdT i m)
 
 instance MonadInstantiate IO where
     instantiateExpr expr = do
@@ -125,6 +136,8 @@ class Monad m => MonadEnv m where
     default getCurrentSystemArch :: (MonadTrans t, MonadEnv m', m ~ t m') => m Text
     getCurrentSystemArch = lift getCurrentSystemArch
 
+instance MonadEnv m => MonadEnv (FreshIdT i m)
+
 instance MonadEnv IO where
     getEnvVar = lookupEnv
 
@@ -139,6 +152,8 @@ class Monad m => MonadHttp m where
     getURL :: Text -> m (Either ErrorCall StorePath)
     default getURL :: (MonadTrans t, MonadHttp m', m ~ t m') => Text -> m (Either ErrorCall StorePath)
     getURL = lift . getURL
+
+instance MonadHttp m => MonadHttp (FreshIdT i m)
 
 instance MonadHttp IO where
     getURL url = do
@@ -174,15 +189,23 @@ putStrLn = putStr . (++"\n")
 print :: (MonadPutStr m, Show a) => a -> m ()
 print = putStrLn . show
 
+instance MonadPutStr m => MonadPutStr (FreshIdT i m)
+
 instance MonadPutStr IO where
     putStr = Prelude.putStr
 
 class Monad m => MonadStore m where
     -- | Import a path into the nix store, and return the resulting path
     addPath' :: FilePath -> m (Either ErrorCall StorePath)
+    default addPath' :: (MonadTrans t, MonadStore m', m ~ t m') => FilePath -> m (Either ErrorCall StorePath)
+    addPath' = lift . addPath'
 
     -- | Add a file with the given name and contents to the nix store
     toFile_' :: FilePath -> String -> m (Either ErrorCall StorePath)
+    default toFile_' :: (MonadTrans t, MonadStore m', m ~ t m') => FilePath -> String -> m (Either ErrorCall StorePath)
+    toFile_' f = lift . toFile_' f
+
+instance MonadStore m => MonadStore (FreshIdT i m)
 
 instance MonadStore IO where
     addPath' path = do
