@@ -55,6 +55,8 @@ newtype FreshIdT i m a = FreshIdT { unFreshIdT :: StateT i m a }
     , Monad
     , MonadTrans
     , MonadFix
+    , MonadRef
+    , MonadAtomicRef
     )
 
 instance (Monad m, Num i) => MonadFreshId i (FreshIdT i m) where
@@ -67,9 +69,6 @@ instance MonadFreshId i m => MonadFreshId i (ReaderT r m)
 instance (Monoid w, MonadFreshId i m) => MonadFreshId i (WriterT w m)
 instance MonadFreshId i m => MonadFreshId i (ExceptT e m)
 instance MonadFreshId i m => MonadFreshId i (StateT s m)
-
-deriving instance (MonadRef m) => MonadRef (FreshIdT i m)
-deriving instance MonadAtomicRef m => MonadAtomicRef (FreshIdT i m)
 
 --TODO: Eliminate the old MonadVar shims
 type MonadVar m =
