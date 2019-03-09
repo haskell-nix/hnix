@@ -199,8 +199,8 @@ runInfer' = runExceptT
           . (`runReaderT` (Set.empty, emptyScopes))
           . getInfer
 
-runInfer :: (forall s. InferT s (ST s) a) -> Either InferError a
-runInfer m = runST (runInfer' m)
+runInfer :: (forall s. InferT s (FreshIdT Int (ST s)) a) -> Either InferError a
+runInfer m = runST (runFreshIdT 0 (runInfer' m))
 
 inferType ::
   ( MonadFreshId Int m
