@@ -39,7 +39,7 @@ import           Nix.Strings (runAntiquoted)
 import           Nix.Thunk
 import           Nix.Utils
 
-class (Show v, Monad m) => MonadEval v m | v -> m where
+class (Show v, Monad m) => MonadEval v m where
     freeVariable    :: Text -> m v
     attrMissing     :: NonEmpty Text -> Maybe v -> m v
     evaledSym       :: Text -> v -> m v

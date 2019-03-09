@@ -227,8 +227,12 @@ thunkEq :: MonadThunk (NValue m) (NThunk m) m
         => NThunk m -> NThunk m -> m Bool
 thunkEq lt rt = force lt $ \lv -> force rt $ \rv ->
   case (lv, rv) of
-    (NVClosure _ _, NVClosure _ _) -> pure True
+    (NVClosure _ _, NVClosure _ _) -> pure unsafePtrEq
+    (NVList _, NVList _) -> pure unsafePtrEq
+    (NVSet _ _, NVSet _ _) -> pure unsafePtrEq
     _ -> valueEq lv rv
+  where
+    unsafePtrEq = True -- TODO
 
 -- | Checks whether two containers are equal, using the given item equality
 --   predicate. If there are any item slots that don't match between the two
