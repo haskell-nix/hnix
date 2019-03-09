@@ -271,6 +271,8 @@ builtinsList = sequence [
     , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
     , add2 Normal   "unsafeGetAttrPos"           unsafeGetAttrPos
     , add  Normal   "valueSize"                  getRecursiveSize
+    , add  Normal   "getContext"                 getContext
+    , add2 Normal   "appendContext"              appendContext
   ]
   where
     wrap t n f = Builtin t (n, f)
@@ -1122,6 +1124,25 @@ currentTime_ = do
 
 derivationStrict_ :: MonadNix e m => m (NValue m) -> m (NValue m)
 derivationStrict_ = (>>= derivationStrict)
+
+getContext :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
+getContext x = x >>= \x' -> case x' of
+  (NVStr ns) -> let
+    context = getNixLikeContext $ toNixLikeContext $ principledGetContext ns
+    in do
+      valued :: M.HashMap Text (NValue m) <- sequenceA $ M.map toValue context
+      pure $ flip nvSet M.empty $ M.map (value @(NValue m) @_ @m) valued
+  x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: "
+    ++ show x
+
+appendContext :: forall e m. MonadNix e m
+                 => m (NValue m) -> m (NValue m) -> m (NValue m)
+appendContext x y = x >>= \x' -> y >>= \y' -> case (x', y') of
+    (NVStr ns, NVSet attrs _) -> do
+      context <- getContext x
+      pure _
+    (x, y) -> throwError $ ErrorCall $ "Invalid types for builtins.appendContext: "
+                 ++ show (x, y)
 
 newtype Prim m a = Prim { runPrim :: m a }
 

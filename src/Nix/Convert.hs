@@ -397,6 +397,22 @@ instance Applicative m => ToValue Bool m (NExprF r) where
 instance Applicative m => ToValue () m (NExprF r) where
     toValue _ = pure . NConstant $ NNull
 
+instance (MonadThunk (NValue m) (NThunk m) m)
+    => ToValue NixLikeContextValue m (NValue m) where
+    toValue nlcv = do
+        path <- toValue $ nlcvPath nlcv
+        allOutputs <- toValue $ nlcvAllOutputs nlcv
+        outputs <- do
+            let outputs = fmap principledMakeNixStringWithoutContext $ nlcvOutputs nlcv
+            outputsM :: [NValue m] <- traverse toValue outputs
+            let thunk :: [NThunk m] = fmap (value @(NValue m) @_ @m) outputsM
+            toValue thunk
+        pure $ flip nvSet M.empty $ M.fromList
+            [ ("path", value @(NValue m) @_ @m path)
+            , ("allOutputs", value @(NValue m) @_ @m allOutputs)
+            , ("outputs", value @(NValue m) @_ @m outputs)
+            ]
+
 whileForcingThunk :: forall s e m r. (Framed e m, Exception s, Typeable m)
                   => s -> m r -> m r
 whileForcingThunk frame =
