@@ -13,7 +13,6 @@ import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
 -- import           Control.Monad.ST
-import qualified Data.Aeson.Encoding as A
 import qualified Data.Aeson.Text as A
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Map as Map
@@ -22,11 +21,13 @@ import           Data.Maybe (fromJust)
 import           Data.Time
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
-import qualified Data.Text.Lazy.Encoding as TL
 import qualified Data.Text.Lazy.IO as TL
+import           Data.Text.Prettyprint.Doc
+import           Data.Text.Prettyprint.Doc.Render.Text
 import           Nix
 import           Nix.Convert
 import qualified Nix.Eval as Eval
+import           Nix.Json
 -- import           Nix.Lint
 import           Nix.Options.Parser
 import qualified Nix.Type.Env as Env
@@ -36,7 +37,6 @@ import           Options.Applicative hiding (ParserResult(..))
 import qualified Repl
 import           System.FilePath
 import           System.IO
-import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 import qualified Text.Show.Pretty as PS
 
 main :: IO ()
@@ -57,7 +57,7 @@ main = do
                     mapM_ (processFile opts)
                         =<< (lines <$> liftIO (readFile path))
                 Nothing -> case filePaths opts of
-                    [] -> withNixContext Nothing $ Repl.shell (pure ())
+                    [] -> withNixContext Nothing $ Repl.main
                     ["-"] ->
                         handleResult opts Nothing . parseNixTextLoc
                             =<< liftIO Text.getContents
@@ -93,7 +93,7 @@ main = do
                         =<< renderFrames @(NThunk (Lazy IO)) frames
 
             when (repl opts) $
-                withNixContext Nothing $ Repl.shell (pure ())
+                withNixContext Nothing $ Repl.main
 
     process opts mpath expr
         | evaluate opts, tracing opts =
@@ -127,8 +127,8 @@ main = do
               void $ liftIO $ Exc.evaluate $ Deep.force expr
 
         | otherwise =
-              liftIO $ displayIO stdout
-                  . renderPretty 0.4 80
+              liftIO $ renderIO stdout
+                  . layoutPretty (LayoutOptions $ AvailablePerLine 80 0.4)
                   . prettyNix
                   . stripAnnotation $ expr
       where
@@ -138,13 +138,11 @@ main = do
             | finder opts =
               fromValue @(AttrSet (NThunk m)) >=> findAttrs
             | xml opts =
-              liftIO . putStrLn . toXML <=< normalForm
+              liftIO . putStrLn . Text.unpack . principledStringIgnoreContext . toXML <=< normalForm
             | json opts =
-              liftIO . TL.putStrLn
-                     . TL.decodeUtf8
-                     . A.encodingToLazyByteString
-                     . toEncodingSorted
-                     <=< fromNix
+              liftIO . Text.putStrLn
+                     . principledStringIgnoreContext
+                     <=< nvalueToJSONNixString
             | strict opts =
               liftIO . print . prettyNValueNF <=< normalForm
             | values opts  =

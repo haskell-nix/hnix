@@ -7,6 +7,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Nix.Render where
 
@@ -15,15 +16,17 @@ import           Prelude hiding (readFile)
 import           Control.Monad.Trans
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
-import           Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Set as Set
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
+import           Data.Text.Prettyprint.Doc
 import           Data.Void
+import           Debug.Trace
 import           Nix.Expr.Types.Annotated
-import qualified System.Posix.Files as S
 import qualified System.Directory as S
+import qualified System.Posix.Files as S
 import           Text.Megaparsec.Error
-import           Text.Megaparsec.Pos (SourcePos(..))
-import           Text.PrettyPrint.ANSI.Leijen
+import           Text.Megaparsec.Pos
 
 class Monad m => MonadFile m where
     readFile :: FilePath -> m ByteString
@@ -65,15 +68,44 @@ instance MonadFile IO where
     doesDirectoryExist = S.doesDirectoryExist
     getSymbolicLinkStatus = S.getSymbolicLinkStatus
 
-posAndMsg :: SourcePos -> Doc -> ParseError t Void
-posAndMsg beg msg =
-    FancyError (beg :| [])
+posAndMsg :: SourcePos -> Doc a -> ParseError s Void
+posAndMsg (SourcePos _ lineNo _) msg =
+    FancyError (unPos lineNo)
         (Set.fromList [ErrorFail (show msg) :: ErrorFancy Void])
 
-renderLocation :: MonadFile m => SrcSpan -> Doc -> m Doc
-renderLocation (SrcSpan beg@(SourcePos "<string>" _ _) _) msg =
-    return $ text $ init $ parseErrorPretty @Char (posAndMsg beg msg)
+renderLocation :: MonadFile m => SrcSpan -> Doc a -> m (Doc a)
+renderLocation (SrcSpan (SourcePos file begLine begCol)
+                        (SourcePos file' endLine endCol)) msg
+    | file /= "<string>" && file == file' = do
+    exist <- doesFileExist file
+    if exist
+        then do
+            txt <- sourceContext file begLine begCol endLine endCol msg
+            return $ vsep
+              [ "In file " <> errorContext file begLine begCol endLine endCol <> ":"
+              , txt
+              ]
+        else return msg
+renderLocation (SrcSpan beg end) msg =
+    fail $ "Don't know how to render range from " ++ show beg ++ " to " ++ show end
+      ++ " for error: " ++ show msg
 
-renderLocation (SrcSpan beg@(SourcePos path _ _) _) msg = do
-    contents <- Nix.Render.readFile path
-    return $ text $ init $ parseErrorPretty' contents (posAndMsg beg msg)
+errorContext :: FilePath -> Pos -> Pos -> Pos -> Pos -> Doc a
+errorContext path bl bc _el _ec =
+    pretty path <> ":" <> pretty (unPos bl) <> ":" <> pretty (unPos bc)
+
+sourceContext :: MonadFile m => FilePath -> Pos -> Pos -> Pos -> Pos -> Doc a -> m (Doc a)
+sourceContext path (unPos -> begLine) (unPos -> begCol)
+                   (unPos -> endLine) (unPos -> endCol) msg = do
+    traceM $ "Taking lines from " ++ path
+    traceM $ "begLine = " ++ show begLine
+    traceM $ "begCol  = " ++ show begCol
+    traceM $ "endLine = " ++ show endLine
+    traceM $ "endCol  = " ++ show endCol
+    traceM $ "msg     = " ++ show msg
+    ls <- take (endLine - begLine)
+        . drop (pred begLine)
+        . T.lines
+        . T.decodeUtf8
+        <$> readFile path
+    pure $ vsep $ map pretty ls

@@ -11,7 +11,7 @@ import           Control.Applicative ((<|>))
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Fix
-import           Data.List (isInfixOf, isSuffixOf)
+import           Data.List (isSuffixOf)
 import           Data.Maybe
 import           Data.String.Interpolate.IsString
 import           Data.Text (unpack)
@@ -33,16 +33,8 @@ import           System.Directory
 import           System.Environment
 import           System.FilePath.Glob
 import           System.Posix.Files
-import           System.Process
 import           Test.Tasty
 import           Test.Tasty.HUnit
-
-cabalCorrectlyGenerated :: Assertion
-cabalCorrectlyGenerated = do
-  output <- readCreateProcess (shell "hpack") ""
-  when ("modified manually" `isInfixOf` output) $
-    errorWithoutStackTrace
-      "Edit package.yaml and re-generate hnix.cabal by running \"hpack\""
 
 ensureLangTestsPresent :: Assertion
 ensureLangTestsPresent = do
@@ -101,14 +93,11 @@ main = do
   let allOrLookup var = lookupEnv "ALL_TESTS" <|> lookupEnv var
   nixpkgsTestsEnv     <- allOrLookup "NIXPKGS_TESTS"
   prettyTestsEnv      <- lookupEnv "PRETTY_TESTS"
-  hpackTestsEnv       <- allOrLookup "HPACK_TESTS"
 
   pwd <- getCurrentDirectory
   setEnv "NIX_REMOTE" ("local?root=" ++ pwd ++ "/")
 
   defaultMain $ testGroup "hnix" $
-    [ testCase "hnix.cabal correctly generated" cabalCorrectlyGenerated
-      | isJust hpackTestsEnv ] ++
     [ ParserTests.tests
     , EvalTests.tests
     , PrettyTests.tests
@@ -120,4 +109,3 @@ main = do
     , nixLanguageTests ] ++
     [ testCase "Nixpkgs parses without errors" ensureNixpkgsCanParse
       | isJust nixpkgsTestsEnv ]
-

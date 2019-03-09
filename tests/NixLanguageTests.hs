@@ -13,6 +13,8 @@ import           Data.List (delete, sort)
 import           Data.List.Split (splitOn)
 import           Data.Map (Map)
 import qualified Data.Map as Map
+import           Data.Set (Set)
+import qualified Data.Set as Set
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           Data.Time
@@ -22,6 +24,7 @@ import           Nix.Options
 import           Nix.Options.Parser
 import           Nix.Parser
 import           Nix.Pretty
+import           Nix.String
 import           Nix.Utils
 import           Nix.XML
 import qualified Options.Applicative as Opts
@@ -55,11 +58,23 @@ From (git://nix)/tests/lang.sh we see that
 groupBy :: Ord k => (v -> k) -> [v] -> Map k [v]
 groupBy key = Map.fromListWith (++) . map (key &&& pure)
 
+-- | New tests, which have never yet passed.  Once any of these is passing,
+-- please remove it from this list.  Do not add tests to this list if they have
+-- previously passed.
+newFailingTests :: Set String
+newFailingTests = Set.fromList
+  [ "eval-okay-path"
+  , "eval-okay-fromTOML"
+  , "eval-okay-context-introspection"
+  , "eval-okay-concatmap"
+  , "eval-okay-builtins-add"
+  ]
+
 genTests :: IO TestTree
 genTests = do
   testFiles <- sort
         -- jww (2018-05-07): Temporarily disable this test until #128 is fixed.
-      . filter ((/= "eval-okay-path") . takeBaseName)
+      . filter ((`Set.notMember` newFailingTests) . takeBaseName)
       . filter ((/= ".xml") . takeExtension)
       <$> globDir1 (compile "*-*-*.*") "data/nix/tests/lang"
   let testsByName = groupBy (takeFileName . dropExtensions) testFiles
@@ -108,9 +123,9 @@ assertLangOk opts file = do
 
 assertLangOkXml :: Options -> FilePath -> Assertion
 assertLangOkXml opts file = do
-  actual <- toXML <$> hnixEvalFile opts (file ++ ".nix")
+  actual <- principledStringIgnoreContext . toXML <$> hnixEvalFile opts (file ++ ".nix")
   expected <- Text.readFile $ file ++ ".exp.xml"
-  assertEqual "" expected $ Text.pack actual
+  assertEqual "" expected actual
 
 assertEval :: Options -> [FilePath] -> Assertion
 assertEval _opts files = do

@@ -117,7 +117,7 @@ unpackSymbolic :: MonadVar m
                => Symbolic m -> m (NSymbolicF (NTypeF m (SThunk m)))
 unpackSymbolic = readVar . coerce
 
-type MonadLint e m = (Scoped e (SThunk m) m, Framed e m, MonadVar m,
+type MonadLint e m = (Scoped (SThunk m) m, Framed e m, MonadVar m,
                       MonadCatch m)
 
 symerr :: forall e m a. MonadLint e m => String -> m a
@@ -372,7 +372,7 @@ lintApp context fun arg = unpackSymbolic fun >>= \case
     NAny -> throwError $ ErrorCall
         "Cannot apply something not known to be a function"
     NMany xs -> do
-        (args:_, ys) <- fmap unzip $ forM xs $ \case
+        (args, ys) <- fmap unzip $ forM xs $ \case
             TClosure _params -> arg >>= unpackSymbolic >>= \case
                 NAny -> do
                     error "NYI"
@@ -386,7 +386,7 @@ lintApp context fun arg = unpackSymbolic fun >>= \case
             _x -> throwError $ ErrorCall "Attempt to call non-function"
 
         y <- everyPossible
-        (args,) <$> foldM (unify context) y ys
+        (head args,) <$> foldM (unify context) y ys
 
 newtype Lint s a = Lint
     { runLint :: ReaderT (Context (Lint s) (SThunk (Lint s))) (ST s) a }
@@ -423,3 +423,9 @@ lint opts expr = runLintM opts $
         >>= (`pushScopes`
                 adi (Eval.eval . annotated . getCompose)
                     Eval.addSourcePositions expr)
+
+instance Scoped (SThunk (Lint s)) (Lint s) where
+  currentScopes = currentScopesReader
+  clearScopes = clearScopesReader @(Lint s) @(SThunk (Lint s))
+  pushScopes = pushScopesReader
+  lookupVar = lookupVarReader

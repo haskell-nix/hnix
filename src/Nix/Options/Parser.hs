@@ -8,7 +8,6 @@ import qualified Data.Text as Text
 import           Data.Time
 import           Nix.Options
 import           Options.Applicative hiding (ParserResult(..))
-import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 
 decodeVerbosity :: Int -> Verbosity
 decodeVerbosity 0 = ErrorsOnly
@@ -27,7 +26,7 @@ argPair = option $ str >>= \s ->
 
 nixOptions :: UTCTime -> Parser Options
 nixOptions current = Options
-    <$> (fromMaybe ErrorsOnly <$>
+    <$> (fromMaybe Informational <$>
          optional
            (option (do a <- str
                        if all isDigit a

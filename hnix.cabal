@@ -1,10 +1,3 @@
--- This file has been generated from package.yaml by hpack version 0.28.2.
---
--- see: https://github.com/sol/hpack
---
--- hash: d6ddd115698a11c74ef8507fa6e00df1f8888a254bed435e6a75b154a4906cb3
-
-cabal-version:  >= 1.10
 name:           hnix
 version:        0.5.2
 synopsis:       Haskell implementation of the Nix language
@@ -17,6 +10,7 @@ maintainer:     johnw@newartisans.com
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
+cabal-version:  >= 1.10
 extra-source-files:
     data/let-comments-multiline.nix
     data/let-comments.nix
@@ -406,6 +400,7 @@ extra-source-files:
     tests/eval-compare/builtins.split-02.nix
     tests/eval-compare/builtins.split-03.nix
     tests/eval-compare/builtins.split-04.nix
+    tests/eval-compare/builtins.string.store.nix
     tests/eval-compare/ind-string-01.nix
     tests/eval-compare/ind-string-02.nix
     tests/eval-compare/ind-string-03.nix
@@ -459,6 +454,7 @@ library
       Nix.Expr.Types
       Nix.Expr.Types.Annotated
       Nix.Frames
+      Nix.Json
       Nix.Lint
       Nix.Normal
       Nix.Options
@@ -486,7 +482,6 @@ library
   ghc-options: -Wall
   build-depends:
       aeson
-    , ansi-wl-pprint
     , array >=0.4 && <0.6
     , base >=4.9 && <5
     , binary
@@ -507,10 +502,12 @@ library
     , interpolate
     , lens-family-th
     , logict
-    , megaparsec >=6.5 && <7.0
+    , megaparsec >=7.0 && <7.1
     , monadlist
     , mtl
     , optparse-applicative
+    , parser-combinators
+    , prettyprinter
     , process
     , ref-tf
     , regex-tdfa
@@ -551,9 +548,9 @@ library
     build-depends:
         lens-family >=1.2.2
       , lens-family-core >=1.2.2
-  if impl(ghc < 8.4.0) && !flag(profiling)
-    build-depends:
-        ghc-datasize
+  -- if impl(ghc < 8.4.0) && !flag(profiling)
+  --   build-depends:
+  --       ghc-datasize
   if impl(ghcjs)
     build-depends:
         hashable >=1.2.4 && <1.3
@@ -573,10 +570,9 @@ executable hnix
       Paths_hnix
   hs-source-dirs:
       main
-  ghc-options: -Wall
+  ghc-options: -Wall -rtsopts
   build-depends:
       aeson
-    , ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
     , containers
@@ -590,6 +586,7 @@ executable hnix
     , mtl
     , optparse-applicative
     , pretty-show
+    , prettyprinter
     , repline
     , template-haskell
     , text
@@ -635,7 +632,6 @@ test-suite hnix-tests
   build-depends:
       Diff
     , Glob
-    , ansi-wl-pprint
     , base >=4.9 && <5
     , bytestring
     , containers
@@ -650,10 +646,11 @@ test-suite hnix-tests
     , hedgehog
     , hnix
     , interpolate
-    , megaparsec
+    , megaparsec >=7.0 && <7.1
     , mtl
     , optparse-applicative
     , pretty-show
+    , prettyprinter
     , process
     , split
     , tasty
@@ -699,8 +696,7 @@ benchmark hnix-benchmarks
       benchmarks
   ghc-options: -Wall
   build-depends:
-      ansi-wl-pprint
-    , base >=4.9 && <5
+      base >=4.9 && <5
     , bytestring
     , containers
     , criterion

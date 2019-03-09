@@ -1,12 +1,17 @@
-{ compiler ? "ghc822"
+{ compiler ? "ghc863"
 
 , doBenchmark ? false
 , doTracing   ? false
+, doOptimize  ? false # enables GHC optimizations for production use
+, doProfiling ? false # enables profiling support in GHC
 , doStrict    ? false
 
-, rev     ? "d1ae60cbad7a49874310de91cd17708b042400c8"
-, sha256  ? "0a1w4702jlycg2ab87m7n8frjjngf0cis40lyxm3vdwn7p4fxikz"
-, pkgs    ?
+, withHoogle  ? false
+
+, rev    ? "120eab94e0981758a1c928ff81229cd802053158"
+, sha256 ? "0qk6k8gxx5xlkyg05dljywj5wx5fvrc3dzp4v2h6ab83b7zwg813"
+
+, pkgs   ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
     then abort "hnix requires at least nix 2.0"
     else import (builtins.fetchTarball {
@@ -15,84 +20,49 @@
            config.allowUnfree = true;
            config.allowBroken = false;
          }
+
 , returnShellEnv ? pkgs.lib.inNixShell
-, mkDerivation ? null
+, mkDerivation   ? null
 }:
 
-let
-
-haskellPackages = pkgs.haskell.packages.${compiler};
+let haskellPackages = pkgs.haskell.packages.${compiler};
 
 drv = haskellPackages.developPackage {
+  name = "hnix";
   root = ./.;
 
   overrides = with pkgs.haskell.lib; self: super: {
     mono-traversable = dontCheck super.mono-traversable;
-  }
-  //
-  (if compiler == "ghc802"
-   then {
-     concurrent-output = doJailbreak super.concurrent-output;
-   }
-   else {})
-  //
-  (if compiler == "ghcjs" then {} else
-   {
-     cryptohash-md5    = doJailbreak super.cryptohash-md5;
-     cryptohash-sha1   = doJailbreak super.cryptohash-sha1;
-     cryptohash-sha256 = doJailbreak super.cryptohash-sha256;
-     cryptohash-sha512 = doJailbreak super.cryptohash-sha512;
-     serialise         = dontCheck super.serialise;
+    these = doJailbreak super.these;
+  } //
+  (if withHoogle then {
+     ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
+     ghcWithPackages = self.ghc.withPackages;
+   } else {});
 
-     ghc-datasize =
-       overrideCabal super.ghc-datasize (attrs: {
-         enableLibraryProfiling    = false;
-         enableExecutableProfiling = false;
-       });
-
-     ghc-heap-view =
-       overrideCabal super.ghc-heap-view (attrs: {
-         enableLibraryProfiling    = false;
-         enableExecutableProfiling = false;
-       });
-   });
-
-  source-overrides =
-    if compiler == "ghc802"
-    then {
-      lens-family-core = "1.2.1";
-      lens-family = "1.2.1";
-    }
-    else {};
+  source-overrides = {};
 
   modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
     buildTools = (attrs.buildTools or []) ++ [
-      pkgs.haskell.packages.${compiler}.cabal-install
+      haskellPackages.cabal-install
     ];
 
-    enableLibraryProfiling = false;
+    enableLibraryProfiling = doProfiling;
+    enableExecutableProfiling = doProfiling;
 
-    testHaskellDepends = attrs.testHaskellDepends ++
-      [ pkgs.nix
-
-        # Use the same version of hpack no matter what the compiler version
-        # is, so that we know exactly what the contents of the generated
-        # .cabal file will be. Otherwise, Travis may error out claiming that
-        # the cabal file needs to be updated because the result is different
-        # that the version we committed to Git.
-        pkgs.haskell.packages.ghc822.hpack
-        pkgs.haskell.packages.ghc822.criterion
-      ];
+    testHaskellDepends = attrs.testHaskellDepends ++ [
+      pkgs.nix
+      haskellPackages.criterion
+    ];
 
     inherit doBenchmark;
 
     configureFlags =
-         pkgs.stdenv.lib.optional  doTracing   "--flags=tracing"
-      ++ pkgs.stdenv.lib.optional  doStrict    "--ghc-options=-Werror";
+         pkgs.stdenv.lib.optional doTracing  "--flags=tracing"
+      ++ pkgs.stdenv.lib.optional doOptimize "--flags=optimize"
+      ++ pkgs.stdenv.lib.optional doStrict   "--ghc-options=-Werror";
 
-    passthru = {
-      nixpkgs = pkgs;
-    };
+    passthru = { nixpkgs = pkgs; };
   });
 
   inherit returnShellEnv;

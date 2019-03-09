@@ -16,6 +16,7 @@ module Nix.Render.Frame where
 import           Control.Monad.Reader
 import           Data.Fix
 import           Data.Typeable
+import           Data.Text.Prettyprint.Doc
 import           Nix.Eval
 import           Nix.Exec
 import           Nix.Expr
@@ -28,16 +29,15 @@ import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 import           Text.Megaparsec.Pos
-import qualified Text.PrettyPrint.ANSI.Leijen as P
-import           Text.PrettyPrint.ANSI.Leijen hiding ((<$>))
 #ifdef MIN_VERSION_pretty_show
 import qualified Text.Show.Pretty as PS
 #endif
 
-renderFrames :: forall v e m.
-               (MonadReader e m, Has e Options,
-                MonadVar m, MonadFile m, Typeable m, Typeable v)
-             => Frames -> m Doc
+renderFrames
+  :: forall v e m ann
+  .  ( MonadReader e m, Has e Options
+     , MonadVar m, MonadFile m, Typeable m, Typeable v)
+  => Frames -> m (Doc ann)
 renderFrames [] = pure mempty
 renderFrames (x:xs) = do
     opts :: Options <- asks (view hasLens)
@@ -51,13 +51,13 @@ renderFrames (x:xs) = do
              concat <$> mapM (renderFrame @v) (reverse (x:xs))
     pure $ case frames of
         [] -> mempty
-        _  -> foldr1 (P.<$>) frames
+        _  -> vsep frames
   where
-    go :: NixFrame -> [Doc]
+    go :: NixFrame -> [Doc ann]
     go f = case framePos @v @m f of
         Just pos ->
-            [text "While evaluating at "
-                <> text (sourcePosPretty pos)
+            ["While evaluating at "
+                <> pretty (sourcePosPretty pos)
                 <> colon]
         Nothing -> []
 
@@ -70,29 +70,29 @@ framePos (NixFrame _ f)
           _ -> Nothing
     | otherwise = Nothing
 
-renderFrame :: forall v e m.
+renderFrame :: forall v e m ann.
               (MonadReader e m, Has e Options, MonadVar m,
                MonadFile m, Typeable m, Typeable v)
-            => NixFrame -> m [Doc]
+            => NixFrame -> m [Doc ann]
 renderFrame (NixFrame level f)
     | Just (e :: EvalFrame m v) <- fromException f = renderEvalFrame level e
     | Just (e :: ThunkLoop)     <- fromException f = renderThunkLoop level e
     | Just (e :: ValueFrame m)  <- fromException f = renderValueFrame level e
     | Just (e :: NormalLoop m)  <- fromException f = renderNormalLoop level e
     | Just (e :: ExecFrame m)   <- fromException f = renderExecFrame level e
-    | Just (e :: ErrorCall)     <- fromException f = pure [text (show e)]
+    | Just (e :: ErrorCall)     <- fromException f = pure [pretty (show e)]
     | otherwise = error $ "Unrecognized frame: " ++ show f
 
 wrapExpr :: NExprF r -> NExpr
 wrapExpr x = Fix (Fix (NSym "<?>") <$ x)
 
 renderEvalFrame :: (MonadReader e m, Has e Options, MonadFile m)
-                => NixLevel -> EvalFrame m v -> m [Doc]
+                => NixLevel -> EvalFrame m v -> m [Doc ann]
 renderEvalFrame level f = do
     opts :: Options <- asks (view hasLens)
     case f of
         EvaluatingExpr scope e@(Fix (Compose (Ann ann _))) -> do
-            let scopeInfo | scopes opts = [string (show scope)]
+            let scopeInfo | scopes opts = [pretty $ show scope]
                           | otherwise   = []
             fmap (\x -> scopeInfo ++ [x]) $ renderLocation ann
                 =<< renderExpr level "While evaluating" "Expression" e
@@ -105,59 +105,66 @@ renderEvalFrame level f = do
 
         Calling name ann ->
             fmap (:[]) $ renderLocation ann $
-                text "While calling builtins." <> text name
+                "While calling builtins." <> pretty name
 
         _ -> pure []
 
 renderExpr :: (MonadReader e m, Has e Options, MonadFile m)
-           => NixLevel -> String -> String -> NExprLoc -> m Doc
+           => NixLevel -> String -> String -> NExprLoc -> m (Doc ann)
 renderExpr _level longLabel shortLabel e@(Fix (Compose (Ann _ x))) = do
     opts :: Options <- asks (view hasLens)
     let rendered
             | verbose opts >= DebugInfo =
 #ifdef MIN_VERSION_pretty_show
-              text (PS.ppShow (stripAnnotation e))
+              pretty (PS.ppShow (stripAnnotation e))
 #else
-              text (show (stripAnnotation e))
+              pretty (show (stripAnnotation e))
 #endif
             | verbose opts >= Chatty =
               prettyNix (stripAnnotation e)
             | otherwise =
               prettyNix (Fix (Fix (NSym "<?>") <$ x))
     pure $ if verbose opts >= Chatty
-           then text (longLabel ++ ":\n>>>>>>>>")
-                    P.<$> indent 2 rendered
-                    P.<$> text "<<<<<<<<"
-           else text shortLabel <> text ": " </> rendered
+           then vsep $
+               [ pretty (longLabel ++ ":\n>>>>>>>>")
+               , indent 2 rendered
+               , "<<<<<<<<"
+               ]
+           else pretty shortLabel <> fillSep [": ", rendered]
 
 renderValueFrame :: (MonadReader e m, Has e Options,
                     MonadFile m, MonadVar m)
-                 => NixLevel -> ValueFrame m -> m [Doc]
+                 => NixLevel -> ValueFrame m -> m [Doc ann]
 renderValueFrame level = fmap (:[]) . \case
-    ForcingThunk       -> pure $ text "ForcingThunk"
-    ConcerningValue _v -> pure $ text "ConcerningValue"
-    Comparison _ _     -> pure $ text "Comparing"
-    Addition _ _       -> pure $ text "Adding"
-    Division _ _       -> pure $ text "Dividing"
-    Multiplication _ _ -> pure $ text "Multiplying"
+    ForcingThunk       -> pure "ForcingThunk"
+    ConcerningValue _v -> pure "ConcerningValue"
+    Comparison _ _     -> pure "Comparing"
+    Addition _ _       -> pure "Adding"
+    Division _ _       -> pure "Dividing"
+    Multiplication _ _ -> pure "Multiplying"
 
-    Coercion x y ->
-        pure $ text desc <> text (describeValue x)
-            <> text " to " <> text (describeValue y)
+    Coercion x y -> pure $ mconcat
+        [ desc
+        , pretty (describeValue x)
+        , " to "
+        , pretty (describeValue y)
+        ]
       where
         desc | level <= Error = "Cannot coerce "
              | otherwise     = "While coercing "
 
-    CoercionToJsonNF _v -> pure $ text "CoercionToJsonNF"
-    CoercionFromJson _j -> pure $ text "CoercionFromJson"
-    ExpectationNF _t _v -> pure $ text "ExpectationNF"
+    CoercionToJson v -> do
+        v' <- renderValue level "" "" v
+        pure $ "CoercionToJson " <> v'
+    CoercionFromJson _j -> pure "CoercionFromJson"
+    ExpectationNF _t _v -> pure "ExpectationNF"
     Expectation t v     -> do
         v' <- renderValue level "" "" v
-        pure $ text "Saw " <> v'
-            <> text " but expected " <> text (describeValue t)
+        pure $ "Saw " <> v'
+            <> " but expected " <> pretty (describeValue t)
 
 renderValue :: (MonadReader e m, Has e Options, MonadFile m, MonadVar m)
-            => NixLevel -> String -> String -> NValue m -> m Doc
+            => NixLevel -> String -> String -> NValue m -> m (Doc ann)
 renderValue _level _longLabel _shortLabel v = do
     opts :: Options <- asks (view hasLens)
     if values opts
@@ -165,23 +172,23 @@ renderValue _level _longLabel _shortLabel v = do
         else prettyNValue v
 
 renderExecFrame :: (MonadReader e m, Has e Options, MonadVar m, MonadFile m)
-                => NixLevel -> ExecFrame m -> m [Doc]
+                => NixLevel -> ExecFrame m -> m [Doc ann]
 renderExecFrame level = \case
     Assertion ann v ->
         fmap (:[]) $ renderLocation ann
-            =<< ((text "Assertion failed:" </>)
+            =<< ((\d -> fillSep ["Assertion failed:", d])
                      <$> renderValue level "" "" v)
 
 renderThunkLoop :: (MonadReader e m, Has e Options, MonadFile m)
-                => NixLevel -> ThunkLoop -> m [Doc]
+                => NixLevel -> ThunkLoop -> m [Doc ann]
 renderThunkLoop _level = pure . (:[]) . \case
-    ThunkLoop Nothing -> text "<<thunk loop>>"
+    ThunkLoop Nothing -> "Infinite recursion"
     ThunkLoop (Just n) ->
-        text $ "<<loop forcing thunk #" ++ show n ++ ">>"
+        pretty $ "Infinite recursion in thunk #" ++ show n
 
 renderNormalLoop :: (MonadReader e m, Has e Options, MonadFile m, MonadVar m)
-                => NixLevel -> NormalLoop m -> m [Doc]
+                => NixLevel -> NormalLoop m -> m [Doc ann]
 renderNormalLoop level = fmap (:[]) . \case
     NormalLoop v -> do
         v' <- renderValue level "" "" v
-        pure $ text "<<loop during normalization forcing " <> v' <> text ">>"
+        pure $ "Infinite recursion during normalization forcing " <> v'

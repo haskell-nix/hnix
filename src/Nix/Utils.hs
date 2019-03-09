@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -13,6 +14,9 @@ import           Control.Monad
 import           Control.Monad.Fix
 import qualified Data.Aeson as A
 import qualified Data.Aeson.Encoding as A
+import           Data.Bits
+import           Data.ByteString (ByteString)
+import qualified Data.ByteString as B
 import           Data.Fix
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
@@ -123,3 +127,26 @@ uriAwareSplit = go where
                 let ((suffix, _):path) = go (Text.drop 3 e2)
                  in (e1 <> Text.pack "://" <> suffix, PathEntryURI) : path
             | otherwise -> (e1, PathEntryPath) : go (Text.drop 1 e2)
+
+printHash32 :: ByteString -> Text
+printHash32 bs = go (base32Len bs - 1) ""
+  where
+   go n s
+     | n >= 0 = go (n-1) (Text.snoc s $ nextCharHash32 bs n)
+     | otherwise = s
+
+nextCharHash32 :: ByteString -> Int -> Char
+nextCharHash32 bs n = Text.index base32Chars (c .&. 0x1f)
+  where
+    b = n * 5
+    i = b `div` 8
+    j = b `mod` 8
+    c = fromIntegral $ shiftR (B.index bs i) j .|. mask
+    mask = if i >= B.length bs - 1
+             then 0
+             else shiftL (B.index bs (i+1)) (8 - j)
+    -- e, o, u, and t are omitted (see base32Chars in nix/src/libutil/hash.cc)
+    base32Chars = "0123456789abcdfghijklmnpqrsvwxyz"
+
+base32Len :: ByteString -> Int
+base32Len bs = ((B.length bs * 8 - 1) `div` 5) + 1

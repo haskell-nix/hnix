@@ -24,7 +24,7 @@ $ cabal test
 # To run all of the tests, which takes up to a minute:
 $ env ALL_TESTS=yes cabal test
 # To run only specific tests (see `tests/Main.hs` for a list)
-$ env NIXPKGS_TESTS=yes PRETTY_TESTS=yes cabal test
+$ env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal test
 $ ./dist/build/hnix/hnix --help
 ```
 
@@ -99,6 +99,8 @@ the specific dependencies used by hnix. Just use these commands:
 
 ## How you can help
 
+### Issue Tracker Backlog
+
 If you're looking for a way to help out, try taking a look
 [here](https://github.com/haskell-nix/hnix/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22+no%3Aassignee).
 When you find an issue that looks interesting to you, comment on the ticket to
@@ -114,3 +116,13 @@ nix-shell --run "LANGUAGE_TESTS=yes cabal test"
 
 Make sure that all the tests that were passing prior to your PR are still
 passing afterwards; it's OK if no new tests are passing.
+
+### Evaluating Nixpkgs with HNix
+
+Currently the main high-level goal is to be able to evaluate all of nixpkgs. To
+run this yourself, first build hnix with `nix-build`, then run the following
+command:
+
+```
+./result/bin/hnix --eval -E "import <nixpkgs> {}" --find
+```

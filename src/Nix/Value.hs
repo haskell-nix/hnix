@@ -249,15 +249,17 @@ isDerivation :: MonadThunk (NValue m) (NThunk m) m
              => AttrSet (NThunk m) -> m Bool
 isDerivation m = case M.lookup "type" m of
     Nothing -> pure False
-    Just t -> force t $ valueEq (nvStr (hackyMakeNixStringWithoutContext "derivation"))
+    Just t -> force t $ \case
+      -- We should probably really make sure the context is empty here but the
+      -- C++ implementation ignores it.
+      NVStr s -> pure $ principledStringIgnoreContext s == "derivation"
+      _ -> pure False
 
 valueEq :: MonadThunk (NValue m) (NThunk m) m
         => NValue m -> NValue m -> m Bool
-valueEq l r = case (l, r) of
+valueEq = curry $ \case
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
-    (NVStr ls, NVStr rs) -> pure (ls == rs) 
-    (NVStr ns, NVConstant NNull) -> pure (hackyStringIgnoreContextMaybe ns == Just "")
-    (NVConstant NNull, NVStr ns) -> pure (Just "" == hackyStringIgnoreContextMaybe ns)
+    (NVStr ls, NVStr rs) -> pure $ principledStringIgnoreContext ls == principledStringIgnoreContext rs
     (NVList ls, NVList rs) -> alignEqM thunkEq ls rs
     (NVSet lm _, NVSet rm _) -> do
         let compareAttrs = alignEqM thunkEq lm rm
@@ -271,12 +273,16 @@ valueEq l r = case (l, r) of
     (NVPath lp, NVPath rp) -> pure $ lp == rp
     _ -> pure False
 
+
+data TStringContext = NoContext | HasContext
+  deriving Show
+
 data ValueType
     = TInt
     | TFloat
     | TBool
     | TNull
-    | TString
+    | TString TStringContext
     | TList
     | TSet
     | TClosure
@@ -291,7 +297,8 @@ valueType = \case
         NFloat _  -> TFloat
         NBool _   -> TBool
         NNull     -> TNull
-    NVStrF {}     -> TString
+    NVStrF ns | stringHasContext ns ->  TString HasContext
+              | otherwise -> TString NoContext
     NVListF {}    -> TList
     NVSetF {}     -> TSet
     NVClosureF {} -> TClosure
@@ -300,16 +307,17 @@ valueType = \case
 
 describeValue :: ValueType -> String
 describeValue = \case
-    TInt     -> "an integer"
-    TFloat   -> "a float"
-    TBool    -> "a boolean"
-    TNull    -> "a null"
-    TString  -> "a string"
-    TList    -> "a list"
-    TSet     -> "an attr set"
-    TClosure -> "a function"
-    TPath    -> "a path"
-    TBuiltin -> "a builtin function"
+    TInt               -> "an integer"
+    TFloat             -> "a float"
+    TBool              -> "a boolean"
+    TNull              -> "a null"
+    TString NoContext  -> "a string"
+    TString HasContext -> "a string with context"
+    TList              -> "a list"
+    TSet               -> "an attr set"
+    TClosure           -> "a function"
+    TPath              -> "a path"
+    TBuiltin           -> "a builtin function"
 
 instance Show (NValueF m (NThunk m)) where
     show = show . describeValue . valueType
@@ -347,7 +355,7 @@ data ValueFrame m
     | Multiplication (NValue m) (NValue m)
     | Division (NValue m) (NValue m)
     | Coercion ValueType ValueType
-    | CoercionToJsonNF (NValueNF m)
+    | CoercionToJson (NValue m)
     | CoercionFromJson A.Value
     | ExpectationNF ValueType (NValueNF m)
     | Expectation ValueType (NValue m)
