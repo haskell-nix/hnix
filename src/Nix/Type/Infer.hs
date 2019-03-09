@@ -13,7 +13,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
+{-# OPTIONS_GHC -Wno-name-shadowing -Wno-orphans #-}
 
 module Nix.Type.Infer (
   Constraint(..),
@@ -32,7 +32,6 @@ import           Control.Monad.Logic
 import           Control.Monad.Reader
 import           Control.Monad.Ref
 import           Control.Monad.ST
-import           Control.Monad.ST.Class
 import           Control.Monad.State
 import           Data.Fix
 import           Data.Foldable
@@ -186,6 +185,19 @@ instance Monoid InferError where
 -------------------------------------------------------------------------------
 -- Inference
 -------------------------------------------------------------------------------
+
+-- Since there's no forking, it's automatically atomic.
+instance MonadAtomicRef (ST s) where
+  atomicModifyRef r f = do
+    v <- readRef r
+    let (a, b) = f v
+    writeRef r a
+    return b
+  atomicModifyRef' r f = do
+    v <- readRef r
+    let (a, b) = f v
+    writeRef r $! a
+    return b
 
 -- | Run the inference monad
 runInfer' ::
