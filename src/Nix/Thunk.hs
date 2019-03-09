@@ -51,6 +51,9 @@ class Monad m => MonadFreshId i m | m -> i where
 newtype FreshIdT i m a = FreshIdT { unFreshIdT :: StateT i m a }
   deriving (Functor, Applicative, Monad, MonadTrans)
 
+instance (Monad m, Num i) => MonadFreshId i (FreshIdT i m) where
+  freshId = FreshIdT $ get <* modify (+ 1)
+
 runFreshIdT :: Functor m => i -> FreshIdT i m a -> m a
 runFreshIdT i m = fst <$> runStateT (unFreshIdT m) i
 
