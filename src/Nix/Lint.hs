@@ -36,7 +36,6 @@ import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.List
 import qualified Data.List.NonEmpty as NE
-import           Data.STRef
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Nix.Atoms
@@ -389,21 +388,17 @@ lintApp context fun arg = unpackSymbolic fun >>= \case
         (head args,) <$> foldM (unify context) y ys
 
 newtype Lint s a = Lint
-    { runLint :: ReaderT (Context (Lint s) (SThunk (Lint s))) (ST s) a }
-    deriving (Functor, Applicative, Monad, MonadFix,
-              MonadReader (Context (Lint s) (SThunk (Lint s))))
-
-instance MonadRef (Lint s) where
-    type Ref (Lint s) = Ref (ST s)
-    newRef x     = Lint $ newRef x
-    readRef x    = Lint $ readRef x
-    writeRef x y = Lint $ writeRef x y
-
-instance MonadAtomicRef (Lint s) where
-    atomicModifyRef x f = Lint $ ReaderT $ \_ -> do
-        res <- snd . f <$> readSTRef x
-        _ <- modifySTRef x (fst . f)
-        return res
+  { runLint :: ReaderT (Context (Lint s) (SThunk (Lint s))) (FreshIdT Int (ST s)) a }
+  deriving
+    ( Functor
+    , Applicative
+    , Monad
+    , MonadFix
+    , MonadReader (Context (Lint s) (SThunk (Lint s)))
+    , MonadFreshId Int
+    , MonadRef
+    , MonadAtomicRef
+    )
 
 instance MonadThrow (Lint s) where
     throwM e = Lint $ ReaderT $ \_ -> throw e
@@ -412,7 +407,7 @@ instance MonadCatch (Lint s) where
     catch _m _h = Lint $ ReaderT $ \_ -> error "Cannot catch in 'Lint s'"
 
 runLintM :: Options -> Lint s a -> ST s a
-runLintM opts = flip runReaderT (newContext opts) . runLint
+runLintM opts = runFreshIdT 0 . flip runReaderT (newContext opts) . runLint
 
 symbolicBaseEnv :: Monad m => m (Scopes m (SThunk m))
 symbolicBaseEnv = return emptyScopes
