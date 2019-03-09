@@ -1113,7 +1113,7 @@ currentSystem :: MonadNix e m => m (NValue m)
 currentSystem = do
   os <- getCurrentSystemOS
   arch <- getCurrentSystemArch
-  return $ nvStr $ hackyMakeNixStringWithoutContext (arch <> "-" <> os)
+  return $ nvStr $ principledMakeNixStringWithoutContext (arch <> "-" <> os)
 
 currentTime_ :: MonadNix e m => m (NValue m)
 currentTime_ = do
