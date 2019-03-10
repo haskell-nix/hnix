@@ -253,17 +253,21 @@ instance MonadNix e m => MonadEval (NValue m) m where
 infixl 1 `callFunc`
 callFunc :: forall e m. (MonadNix e m, Typeable m)
          => NValue m -> m (NValue m) -> m (NValue m)
-callFunc fun arg = case fun of
-    NVClosure params f -> do
-        traceM $ "callFunc:NVFunction taking " ++ show params
-        f arg
-    NVBuiltin name f -> do
-        span <- currentPos
-        withFrame Info (Calling @m @(NThunk m) name span) $ f arg
-    s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
-        traceM "callFunc:__functor"
-        force f $ (`callFunc` pure s) >=> (`callFunc` arg)
-    x -> throwError $ ErrorCall $ "Attempt to call non-function: " ++ show x
+callFunc fun arg = do
+    frames :: Frames <- asks (view hasLens)
+    when (length frames > 2000) $
+        throwError $ ErrorCall "Function call stack exhausted"
+    case fun of
+        NVClosure params f -> do
+            traceM $ "callFunc:NVFunction taking " ++ show params
+            f arg
+        NVBuiltin name f -> do
+            span <- currentPos
+            withFrame Info (Calling @m @(NThunk m) name span) $ f arg
+        s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
+            traceM "callFunc:__functor"
+            force f $ (`callFunc` pure s) >=> (`callFunc` arg)
+        x -> throwError $ ErrorCall $ "Attempt to call non-function: " ++ show x
 
 execUnaryOp :: (Framed e m, MonadVar m)
             => Scopes m (NThunk m) -> SrcSpan -> NUnaryOp -> NValue m
