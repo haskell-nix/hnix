@@ -70,6 +70,12 @@ mkSym = Fix . mkSymF
 mkSymF :: Text -> NExprF a
 mkSymF = NSym
 
+mkSynHole :: Text -> NExpr
+mkSynHole = Fix . mkSynHoleF
+
+mkSynHoleF :: Text -> NExprF a
+mkSynHoleF = NSynHole
+
 mkSelector :: Text -> NAttrPath NExpr
 mkSelector = (:| []) . StaticKey
 

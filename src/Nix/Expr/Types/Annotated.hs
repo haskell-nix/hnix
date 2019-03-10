@@ -190,6 +190,9 @@ nullSpan = SrcSpan nullPos nullPos
 pattern NSym_ :: SrcSpan -> VarName -> NExprLocF r
 pattern NSym_ ann x = Compose (Ann ann (NSym x))
 
+pattern NSynHole_ :: SrcSpan -> Text -> NExprLocF r
+pattern NSynHole_ ann x = Compose (Ann ann (NSynHole x))
+
 pattern NConstant_ :: SrcSpan -> NAtom -> NExprLocF r
 pattern NConstant_ ann x = Compose (Ann ann (NConstant x))
 
