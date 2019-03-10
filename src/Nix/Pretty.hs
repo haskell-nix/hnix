@@ -256,6 +256,7 @@ exprFNixDoc = \case
         [ "assert" <+> withoutParens cond <> semi
         , align $ withoutParens body
         ]
+    NSynHole name -> simpleExpr $ pretty ("^" <> unpack name)
   where
     recPrefix = "rec" <> space
 
