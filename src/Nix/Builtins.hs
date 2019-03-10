@@ -1145,7 +1145,6 @@ appendContext :: forall e m. MonadNix e m
                  => m (NValue m) -> m (NValue m) -> m (NValue m)
 appendContext x y = x >>= \x' -> y >>= \y' -> case (x', y') of
     (NVStr ns, NVSet attrs _) -> do
-      let context = toNixLikeContext $ principledGetContext ns
       newContextValues <- forM attrs $ force' >=> \case
         NVSet attrs _ -> do
           -- TODO: Fail for unexpected keys.
@@ -1160,9 +1159,8 @@ appendContext x y = x >>= \x' -> y >>= \y' -> case (x', y') of
           return $ NixLikeContextValue path allOutputs outputs
         x -> throwError $ ErrorCall $
           "Invalid types for context value in builtins.appendContext: " ++ show x
-      values :: AttrSet (NThunk m) <- traverse (fmap valueThunk . toValue) $
-        M.unionWith (<>) newContextValues $ getNixLikeContext context
-      toValue values
+      toValue $ principledMakeNixString (principledStringIgnoreContext ns) $
+        fromNixLikeContext $ NixLikeContext $ M.unionWith (<>) newContextValues $ getNixLikeContext $ toNixLikeContext $ principledGetContext ns
     (x, y) -> throwError $ ErrorCall $ "Invalid types for builtins.appendContext: "
                  ++ show (x, y)
 
