@@ -23,7 +23,6 @@ import           Data.Text.Prettyprint.Doc
 import           Data.Void
 import           Debug.Trace
 import           Nix.Expr.Types.Annotated
-import           Nix.Thunk
 import qualified System.Directory as S
 import qualified System.Posix.Files as S
 import           Text.Megaparsec.Error
@@ -57,8 +56,6 @@ class Monad m => MonadFile m where
     getSymbolicLinkStatus :: FilePath -> m S.FileStatus
     default getSymbolicLinkStatus :: (MonadTrans t, MonadFile m', m ~ t m') => FilePath -> m S.FileStatus
     getSymbolicLinkStatus = lift . getSymbolicLinkStatus
-
-instance MonadFile m => MonadFile (FreshIdT i m)
 
 instance MonadFile IO where
     readFile = BS.readFile
