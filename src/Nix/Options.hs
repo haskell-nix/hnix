@@ -33,6 +33,7 @@ data Options = Options
     , fromFile     :: Maybe FilePath
     , currentTime  :: UTCTime
     , filePaths    :: [FilePath]
+    , readonly     :: Bool
     }
     deriving Show
 
@@ -61,6 +62,7 @@ defaultOptions current = Options
     , cache        = False
     , repl         = False
     , ignoreErrors = False
+    , readonly     = False
     , expression   = Nothing
     , arg          = []
     , argstr       = []

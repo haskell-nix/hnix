@@ -55,6 +55,7 @@ import           Data.Char (isDigit)
 import           Data.Fix
 import           Data.Foldable (foldrM)
 import qualified Data.HashMap.Lazy as M
+import qualified Data.HashSet as HS
 import           Data.List
 import           Data.Maybe
 import           Data.Scientific
@@ -90,6 +91,8 @@ import           Nix.Utils
 import           Nix.Value
 import           Nix.XML
 import           System.Nix.Internal.Hash (printHashBytes32)
+import           System.Nix.Path (pathToText)
+import           System.Nix.ReadonlyStore
 import           System.FilePath
 import           System.Posix.Files (isRegularFile, isDirectory, isSymbolicLink)
 import           Text.Read
@@ -783,16 +786,31 @@ functionArgs fun = fun >>= \case
             "builtins.functionArgs: expected function, got " ++ show v
 
 toFile :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
-toFile name s = do
-    name' <- fromStringNoContext =<< fromValue name
-    s' <- fromValue s
-    -- TODO Using hacky here because we still need to turn the context into
-    -- runtime references of the resulting file.
-    -- See prim_toFile in nix/src/libexpr/primops.cc
-    mres <- toFile_ (Text.unpack name') (Text.unpack $ hackyStringIgnoreContext s')
-    let t = Text.pack $ unStorePath mres
+toFile nameval sval = do
+    name <- fromStringNoContext =<< fromValue nameval
+    s <- fromValue sval
+    let (good,bad) = partition isDerivationOutput $ HS.toList $ principledGetContext s
+    unless (null bad) $
+      throwError $ ErrorCall $
+            "builtins.toFile: the file '" ++ show name ++ "' cannot refer to derivation outputs"
+    let refs = HS.fromList $ map scPath good
+    opts :: Options <- asks (view hasLens)
+    storePath <- if readonly opts
+      -- TODO FIXME Don't hard code the nix store dir
+      then pure $ computeStorePathForText "/nix/store" name
+                    (encodeUtf8 $ principledStringIgnoreContext s) refs
+      else throwError $ ErrorCall "toFile has only been implemented for readonly mode"
+
+    mres <- toFile_ (Text.unpack name) (Text.unpack $ hackyStringIgnoreContext s)
+    let t = pathToText storePath
         sc = StringContext t DirectPath
     toNix $ principledMakeNixStringWithSingletonContext t sc
+
+isDerivationOutput :: StringContext -> Bool
+isDerivationOutput sc =
+  case scFlavor sc of
+    DerivationOutput _ -> True
+    DirectPath -> False
 
 toPath :: MonadNix e m => m (NValue m) -> m (NValue m)
 toPath = fromValue @Path >=> toNix @Path
@@ -1099,7 +1117,7 @@ fetchurl v = v >>= \case
             Right p -> toValue p
         v -> throwError $ ErrorCall $
           "builtins.fetchurl: Expected URI or string, got " ++ show v
-  
+
     noContextAttrs ns = case principledGetStringNoContext ns of
       Nothing -> throwError $ ErrorCall $
         "builtins.fetchurl: unsupported arguments to url"

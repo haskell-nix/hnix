@@ -205,5 +205,7 @@ instance MonadStore IO where
 addPath :: (Framed e m, MonadStore m) => FilePath -> m StorePath
 addPath p = either throwError return =<< addPath' p
 
+-- TODO Now that we're getting to proper implementations of store functions, we
+-- might be able to remove this.
 toFile_ :: (Framed e m, MonadStore m) => FilePath -> String -> m StorePath
 toFile_ p contents = either throwError return =<< toFile_' p contents

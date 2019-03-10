@@ -103,6 +103,9 @@ nixOptions current = Options
     <*> switch
         (   long "ignore-errors"
          <> help "Continue parsing files, even if there are errors")
+    <*> switch
+        (   long "readonly-mode"
+         <> help "Don't attempt to add things to the nix store")
     <*> optional (strOption
         (   short 'E'
          <> long "expr"
