@@ -96,7 +96,7 @@ errorContext path bl bc _el _ec =
 sourceContext :: MonadFile m => FilePath -> Pos -> Pos -> Pos -> Pos -> Doc a -> m (Doc a)
 sourceContext path (unPos -> begLine) (unPos -> _begCol)
                    (unPos -> endLine) (unPos -> _endCol) msg = do
-    let beg' = min begLine (begLine - 3)
+    let beg' = max 1 (min begLine (begLine - 3))
         end' = max endLine (endLine + 3)
     ls <- map pretty
         . take (end' - beg')
