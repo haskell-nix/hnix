@@ -1,8 +1,8 @@
 with builtins;
 
 let simpleJSON = "{\"foo\": \"39\", \"bar\": 472}";
-    screweyJSON = "{\"4275\": \"Please do not fail.\"}";
-      # crazyJSON should be tested once screweyJSON works!
+    screwyJSON = "{\"4275\": \"Please do not fail.\"}";
+      # crazyJSON should be tested once screwyJSON works!
     crazyJSON = "     {
     \"response\": {
         \"success\": 1,
@@ -61,4 +61,4 @@ let simpleJSON = "{\"foo\": \"39\", \"bar\": 472}";
         }
     }
 }";
-in [(fromJSON simpleJSON) (fromJSON screweyJSON)]
+in [(fromJSON simpleJSON) (fromJSON screwyJSON)]
