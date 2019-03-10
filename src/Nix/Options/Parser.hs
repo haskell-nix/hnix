@@ -1,6 +1,9 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Nix.Options.Parser where
 
 import           Control.Arrow (second)
+import           Data.Bool (bool)
 import           Data.Char (isDigit)
 import           Data.Maybe (fromMaybe)
 import           Data.Text (Text)
@@ -62,9 +65,14 @@ nixOptions current = Options
     <*> switch
         (   long "parse-only"
          <> help "Whether to parse only, no pretty printing or checking")
-    <*> switch
-        (   long "find"
-         <> help "If selected, find paths within attr trees")
+    <*> ( ( bool Nothing (Just "") <$> switch
+              (   long "find"
+               <> help "If selected, find paths within attr trees"))
+          <|>
+          ( optional $ strOption
+              (   long "find-after"
+               <> help "Like --find, but skip all keys up to and including the given key"))
+        )
     <*> optional (strOption
         (   long "find-file"
          <> help "Look up the given files in Nix's search path"))

@@ -30,6 +30,7 @@ import qualified Nix.Eval as Eval
 import           Nix.Json
 -- import           Nix.Lint
 import           Nix.Options.Parser
+import           Nix.String
 import qualified Nix.Type.Env as Env
 import qualified Nix.Type.Infer as HM
 import           Nix.Utils
@@ -135,8 +136,8 @@ main = do
         printer :: forall e m. (MonadNix e m, MonadIO m, Typeable m)
                 => NValue m -> m ()
         printer
-            | finder opts =
-              fromValue @(AttrSet (NThunk m)) >=> findAttrs
+            | Just excluded <- findFrom opts =
+              fromValue @(AttrSet (NThunk m)) >=> findAttrs excluded
             | xml opts =
               liftIO . putStrLn . Text.unpack . principledStringIgnoreContext . toXML <=< normalForm
             | json opts =
@@ -150,21 +151,24 @@ main = do
             | otherwise  =
               liftIO . print <=< prettyNValue
           where
-            findAttrs = go ""
+            findAttrs excluded = go ""
               where
                 go prefix s = do
-                    xs <- forM (sortOn fst (M.toList s))
+                    xs <- forM (filter ((\x -> Text.pack prefix <> x > excluded) . fst) $ sortOn fst (M.toList s))
                         $ \(k, nv@(NThunk _ t)) -> case t of
                             Value v -> pure (k, Just v)
-                            Thunk _ _ ref -> do
+                            Thunk n activeRef ref -> do
+                                active <- readVar activeRef
                                 let path = prefix ++ Text.unpack k
                                     (_, descend) = filterEntry path k
                                 val <- readVar ref
                                 case val of
                                     Computed _ -> pure (k, Nothing)
-                                    _ | descend   -> (k,) <$> forceEntry path nv
+                                    _ | not active && descend -> do
+                                          liftIO $ putStrLn $ "Forcing " <> show n <> ": " <> show (Text.pack prefix <> k)
+                                          (k,) <$> forceEntry path nv
                                       | otherwise -> pure (k, Nothing)
-
+                    liftIO $ putStrLn $ "Done with initial force for prefix " <> show prefix
                     forM_ xs $ \(k, mv) -> do
                         let path = prefix ++ Text.unpack k
                             (report, descend) = filterEntry path k
@@ -173,7 +177,14 @@ main = do
                             when descend $ case mv of
                                 Nothing -> return ()
                                 Just v -> case v of
-                                    NVSet s' _ -> go (path ++ ".") s'
+                                    NVSet s' _ -> do
+                                      isDerivation <- case M.lookup "type" s' of
+                                        Nothing -> pure False
+                                        Just t -> force t $ \case
+                                          NVStr s -> pure $ principledGetStringNoContext s == Just "derivation"
+                                          _ -> pure False
+                                      when isDerivation $
+                                        go (path ++ ".") s'
                                     _ -> return ()
                   where
                     filterEntry path k = case (path, k) of
@@ -186,11 +197,13 @@ main = do
                         (_,        "builder")          -> (False,  False)
                         (_,        "drvPath")          -> (False,  False)
                         (_,        "outPath")          -> (False,  False)
+                        (_,        "compiler")         -> (False,  False)
                         (_,        "__impureHostDeps") -> (False,  False)
                         (_,        "__sandboxProfile") -> (False,  False)
                         ("pkgs",   "pkgs")             -> (True,  True)
                         (_,        "pkgs")             -> (False, False)
                         (_,        "drvAttrs")         -> (False, False)
+                        (_,        "coqPackages")      -> (False, False)
                         _ -> (True, True)
 
                     forceEntry k v = catch (Just <$> force v pure)

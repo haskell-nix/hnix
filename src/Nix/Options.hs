@@ -14,7 +14,7 @@ data Options = Options
     , reduceLists  :: Bool
     , parse        :: Bool
     , parseOnly    :: Bool
-    , finder       :: Bool
+    , findFrom     :: Maybe Text
     , findFile     :: Maybe FilePath
     , strict       :: Bool
     , evaluate     :: Bool
@@ -48,7 +48,7 @@ defaultOptions current = Options
     , reduceLists  = False
     , parse        = False
     , parseOnly    = False
-    , finder       = False
+    , findFrom     = Nothing
     , findFile     = Nothing
     , strict       = False
     , evaluate     = False
