@@ -241,11 +241,14 @@ extendMSet x = InferT . local (first (Set.insert x)) . getInfer
 letters :: [String]
 letters = [1..] >>= flip replicateM ['a'..'z']
 
-fresh :: MonadState InferState m => m Type
-fresh = do
+freshTVar :: MonadState InferState m => m TVar
+freshTVar = do
     s <- get
     put s{count = count s + 1}
-    return $ TVar $ TV (letters !! count s)
+    return $ TV (letters !! count s)
+
+fresh :: MonadState InferState m => m Type
+fresh = TVar <$> freshTVar
 
 instantiate :: MonadState InferState m => Scheme -> m Type
 instantiate (Forall as t) = do
@@ -426,7 +429,8 @@ instance ( MonadFreshId Int m
             tv
 
     evalAbs (Param x) k = do
-        tv@(TVar a) <- fresh
+        a <- freshTVar
+        let tv = TVar a
         ((), Judgment as cs t) <-
             extendMSet a (k (pure (Judgment (As.singleton x tv) [] tv))
                             (\_ b -> ((),) <$> b))
