@@ -24,22 +24,40 @@
 , mkDerivation   ? null
 }:
 
-let haskellPackages = pkgs.haskell.packages.${compiler};
+let
+
+  hnix-store-src = pkgs.fetchFromGitHub {
+    owner = "haskell-nix";
+    repo = "hnix-store";
+    rev = "0fe7ff5e8492ce6141d0eb400685516b4d07594b";
+    sha256 = "1izqp4ma6bkvdjcxhkasjcv1p11l72hdnm4dqmnnpkbmw70xrp36";
+  };
+
+  overlay = pkgs.lib.foldr pkgs.lib.composeExtensions (_: _: {}) [
+    (import "${hnix-store-src}/overlay.nix")
+    (self: super: with pkgs.haskell.lib; {
+      mono-traversable = dontCheck super.mono-traversable;
+      these = doJailbreak super.these;
+    } // pkgs.lib.optionalAttrs withHoogle {
+      ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
+      ghcWithPackages = self.ghc.withPackages;
+    })
+  ];
+
+  overrideHaskellPackages = orig: {
+    buildHaskellPackages =
+      orig.buildHaskellPackages.override overrideHaskellPackages;
+    overrides = if orig ? overrides
+      then pkgs.lib.composeExtensions orig.overrides overlay
+      else overlay;
+  };
+
+  haskellPackages = pkgs.haskell.packages.${compiler}.override
+    overrideHaskellPackages;
 
 drv = haskellPackages.developPackage {
   name = "hnix";
   root = ./.;
-
-  overrides = with pkgs.haskell.lib; self: super: {
-    mono-traversable = dontCheck super.mono-traversable;
-    these = doJailbreak super.these;
-  } //
-  (if withHoogle then {
-     ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
-     ghcWithPackages = self.ghc.withPackages;
-   } else {});
-
-  source-overrides = {};
 
   modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
     buildTools = (attrs.buildTools or []) ++ [
