@@ -12,6 +12,7 @@ module Nix.String (
   , NixLikeContext(..)
   , NixLikeContextValue(..)
   , toNixLikeContext
+  , fromNixLikeContext
   , stringHasContext
   , principledIntercalateNixString
   , hackyGetStringNoContext
@@ -111,6 +112,10 @@ toNixLikeContext stringContext = NixLikeContext $ S.foldr go mempty stringContex
     go sc hm = let
       (t, nlcv) = toNixLikeContextValue sc
       in M.insertWith (<>) t nlcv hm
+
+fromNixLikeContext :: NixLikeContext -> S.HashSet StringContext
+fromNixLikeContext =
+  S.fromList . join . map toStringContexts . M.toList . getNixLikeContext
 
 principledGetContext :: NixString -> S.HashSet StringContext
 principledGetContext = nsContext
