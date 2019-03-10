@@ -18,9 +18,10 @@ let
     };
   };
 
-  legit-context = builtins.getContext "${path}${drv.outPath}${drv.foo.outPath}${drv.drvPath}";
+  # TODO: Remove builtins.attrValues here once store hash is correct.
+  legit-context = builtins.attrValues (builtins.getContext "${path}${drv.outPath}${drv.foo.outPath}${drv.drvPath}");
 
-  constructed-context = builtins.getContext (builtins.appendContext "" desired-context);
+  constructed-context = builtins.attrValues (builtins.getContext (builtins.appendContext "" desired-context));
 in [ (builtins.appendContext "foo" {})
      (legit-context == constructed-context)
      constructed-context
