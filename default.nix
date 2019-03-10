@@ -19,6 +19,16 @@
            inherit sha256; }) {
            config.allowUnfree = true;
            config.allowBroken = false;
+           config.packageOverrides = pkgs: rec {
+             nix = pkgs.nixUnstable.overrideDerivation (attrs: {
+               src = data/nix;
+               configureFlags = attrs.configureFlags ++ [ "--disable-doc-gen" ];
+               buildInputs = attrs.buildInputs ++
+                 [ pkgs.editline.dev
+                 ];
+               outputs = builtins.filter (s: s != "doc" && s != "man" ) attrs.outputs;
+             });
+           };
          }
 
 , mkDerivation   ? null
