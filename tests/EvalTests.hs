@@ -389,7 +389,7 @@ case_list_function_nested_bottom_equal =
   constantEqualText "true" "let nested = [(_: let x = x; in x)]; in nested == nested"
 
 case_attrset_list_nested_bottom_equal =
-  constantEqualText "true" "let nested = { y = [(let x = x; in x)]];}; in nested == nested"
+  constantEqualText "true" "let nested = { y = [(let x = x; in x)];}; in nested == nested"
 
 case_attrset_attrset_nested_bottom_equal =
   constantEqualText "true" "let nested = { y = { y = (let x = x; in x); }; }; in nested == nested"
