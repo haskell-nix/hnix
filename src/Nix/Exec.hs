@@ -84,7 +84,7 @@ import           GHC.DataSize
 type MonadNix e m =
     (Scoped (NThunk m) m, Framed e m, Has e SrcSpan, Has e Options,
      Typeable m, MonadVar m, MonadEffects m, MonadFix m, MonadCatch m,
-     Alternative m)
+     Alternative m, MonadFreshId Int m)
 
 data ExecFrame m = Assertion SrcSpan (NValue m)
     deriving (Show, Typeable)
@@ -489,7 +489,7 @@ newtype Lazy m a = Lazy
     { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m)))
                         (StateT (HashMap FilePath NExprLoc) (FreshIdT Int m)) a }
     deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
-              MonadFix, MonadIO, MonadFreshId Int,
+              MonadFix, MonadIO,
               MonadReader (Context (Lazy m) (NThunk (Lazy m))))
 
 instance MonadTrans Lazy where
@@ -519,6 +519,9 @@ instance MonadException m => MonadException (Lazy m) where
       let run' = RunIO (fmap Lazy . run . runLazy)
       in runLazy <$> f run'
 #endif
+
+instance Monad m => MonadFreshId Int (Lazy m) where
+  freshId = Lazy $ lift $ lift freshId
 
 instance MonadStore m => MonadStore (Lazy m) where
     addPath' = lift . addPath'

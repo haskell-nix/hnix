@@ -100,7 +100,6 @@ instance MonadFreshId i m => MonadFreshId i (StateT s m)
 type MonadVar m =
   ( MonadAtomicRef m
   , GEq (Ref m)
-  , MonadFreshId Int m
   )
 
 eqVar :: forall m a. GEq (Ref m) => Ref m a -> Ref m a -> Bool
@@ -146,7 +145,7 @@ instance Exception ThunkLoop
 valueRef :: v -> Thunk m v
 valueRef = Value
 
-buildThunk :: MonadVar m => m v -> m (Thunk m v)
+buildThunk :: (MonadVar m, MonadFreshId Int m) => m v -> m (Thunk m v)
 buildThunk action =do
     freshThunkId <- freshId
     Thunk freshThunkId <$> newVar False <*> newVar (Deferred action)
