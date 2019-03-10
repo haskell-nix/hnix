@@ -10,4 +10,5 @@ TAGS
 cabal.project*
 ctags
 dist-newstyle
-result
+result*
+.ghc.environment.*
