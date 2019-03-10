@@ -373,6 +373,30 @@ case_empty_string_not_equal_null_is_true =
 case_null_equal_not_empty_string_is_true =
   constantEqualText "true" "null != \"\""
 
+case_list_nested_bottom_diverges =
+  assertNixEvalThrows "let nested = [(let x = x; in x)]; in nested == nested"
+
+case_attrset_nested_bottom_diverges =
+  assertNixEvalThrows "let nested = { y = (let x = x; in x); }; in nested == nested"
+
+case_list_list_nested_bottom_equal =
+  constantEqualText "true" "let nested = [[(let x = x; in x)]]; in nested == nested"
+
+case_list_attrset_nested_bottom_equal =
+  constantEqualText "true" "let nested = [{ y = (let x = x; in x); }]; in nested == nested"
+
+case_list_function_nested_bottom_equal =
+  constantEqualText "true" "let nested = [(_: let x = x; in x)]; in nested == nested"
+
+case_attrset_list_nested_bottom_equal =
+  constantEqualText "true" "let nested = { y = [(let x = x; in x)];}; in nested == nested"
+
+case_attrset_attrset_nested_bottom_equal =
+  constantEqualText "true" "let nested = { y = { y = (let x = x; in x); }; }; in nested == nested"
+
+case_attrset_function_nested_bottom_equal =
+  constantEqualText "true" "let nested = { y = _: (let x = x; in x); }; in nested == nested"
+
 -----------------------
 
 tests :: TestTree

@@ -84,7 +84,7 @@ import           GHC.DataSize
 type MonadNix e m =
     (Scoped (NThunk m) m, Framed e m, Has e SrcSpan, Has e Options,
      Typeable m, MonadVar m, MonadEffects m, MonadFix m, MonadCatch m,
-     Alternative m)
+     Alternative m, MonadFreshId Int m)
 
 data ExecFrame m = Assertion SrcSpan (NValue m)
     deriving (Show, Typeable)
@@ -487,13 +487,13 @@ fromStringNoContext ns =
 
 newtype Lazy m a = Lazy
     { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m)))
-                        (StateT (HashMap FilePath NExprLoc) m) a }
+                        (StateT (HashMap FilePath NExprLoc) (FreshIdT Int m)) a }
     deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
               MonadFix, MonadIO,
               MonadReader (Context (Lazy m) (NThunk (Lazy m))))
 
 instance MonadTrans Lazy where
-    lift = Lazy . lift . lift
+    lift = Lazy . lift . lift . lift
 
 instance MonadRef m => MonadRef (Lazy m) where
     type Ref (Lazy m) = Ref m
@@ -519,6 +519,9 @@ instance MonadException m => MonadException (Lazy m) where
       let run' = RunIO (fmap Lazy . run . runLazy)
       in runLazy <$> f run'
 #endif
+
+instance Monad m => MonadFreshId Int (Lazy m) where
+  freshId = Lazy $ lift $ lift freshId
 
 instance MonadStore m => MonadStore (Lazy m) where
     addPath' = lift . addPath'
@@ -612,7 +615,8 @@ getRecursiveSize :: MonadIntrospect m => a -> m (NValue m)
 getRecursiveSize = toNix @Integer . fromIntegral <=< recursiveSize
 
 runLazyM :: Options -> MonadIO m => Lazy m a -> m a
-runLazyM opts = (`evalStateT` M.empty)
+runLazyM opts = runFreshIdT 0
+              . (`evalStateT` M.empty)
               . (`runReaderT` newContext opts)
               . runLazy
 
@@ -791,10 +795,44 @@ fetchTarball v = v >>= \case
               ++ "url    = \"" ++ Text.unpack url ++ "\"; "
               ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"
 
-exec :: (MonadExec m, Framed e m, MonadThrow m, Alternative m, MonadCatch m, MonadFix m, MonadEffects m, GEq (Ref m), MonadAtomicRef m, Typeable m, Has e Options, Has e SrcSpan, Scoped (NThunk m) m) => [String] -> m (NValue m)
+exec
+  :: ( MonadExec m
+     , Framed e m
+     , MonadThrow m
+     , Alternative m
+     , MonadCatch m
+     , MonadFix m
+     , MonadEffects m
+     , MonadFreshId Int m
+     , GEq (Ref m)
+     , MonadAtomicRef m
+     , Typeable m
+     , Has e Options
+     , Has e SrcSpan
+     , Scoped (NThunk m) m
+     )
+  => [String]
+  -> m (NValue m)
 exec args = either throwError evalExprLoc =<< exec' args
 
-nixInstantiateExpr :: (MonadInstantiate m, Framed e m, MonadThrow m, Alternative m, MonadCatch m, MonadFix m, MonadEffects m, GEq (Ref m), MonadAtomicRef m, Typeable m, Has e Options, Has e SrcSpan, Scoped (NThunk m) m) => String -> m (NValue m)
+nixInstantiateExpr
+  :: ( MonadInstantiate m
+     , Framed e m
+     , MonadThrow m
+     , Alternative m
+     , MonadCatch m
+     , MonadFix m
+     , MonadEffects m
+     , MonadFreshId Int m
+     , GEq (Ref m)
+     , MonadAtomicRef m
+     , Typeable m
+     , Has e Options
+     , Has e SrcSpan
+     , Scoped (NThunk m) m
+     )
+  => String
+  -> m (NValue m)
 nixInstantiateExpr s = either throwError evalExprLoc =<< instantiateExpr s
 
 instance Monad m => Scoped (NThunk (Lazy m)) (Lazy m) where
