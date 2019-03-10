@@ -21,7 +21,6 @@
            config.allowBroken = false;
          }
 
-, returnShellEnv ? pkgs.lib.inNixShell
 , mkDerivation   ? null
 }:
 
@@ -62,10 +61,13 @@ drv = haskellPackages.developPackage {
       ++ pkgs.stdenv.lib.optional doOptimize "--flags=optimize"
       ++ pkgs.stdenv.lib.optional doStrict   "--ghc-options=-Werror";
 
-    passthru = { nixpkgs = pkgs; };
+    passthru = {
+      nixpkgs = pkgs;
+      inherit haskellPackages;
+    };
   });
 
-  inherit returnShellEnv;
+  returnShellEnv = false;
 };
 
 in drv
