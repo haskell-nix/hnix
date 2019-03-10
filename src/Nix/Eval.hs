@@ -39,7 +39,7 @@ import           Nix.Strings (runAntiquoted)
 import           Nix.Thunk
 import           Nix.Utils
 
-class (Show v, Monad m) => MonadEval v m | v -> m where
+class (Show v, Monad m) => MonadEval v m where
     freeVariable    :: Text -> m v
     attrMissing     :: NonEmpty Text -> Maybe v -> m v
     evaledSym       :: Text -> v -> m v
@@ -341,26 +341,25 @@ buildArgument params arg = do
                         Nothing -> id
                         Just n -> M.insert n $ const $
                             thunk (withScopes scope arg)
-                loebM (inject $ alignWithKey (assemble scope isVariadic)
+                loebM (inject $ M.mapMaybe id $ alignWithKey (assemble scope isVariadic)
                                              args (M.fromList s))
   where
     assemble :: Scopes m t
              -> Bool
              -> Text
              -> These t (Maybe (m v))
-             -> AttrSet t
-             -> m t
+             -> Maybe (AttrSet t -> m t)
     assemble scope isVariadic k = \case
-        That Nothing  ->
+        That Nothing  -> Just $
             const $ evalError @v $ ErrorCall $
                 "Missing value for parameter: " ++ show k
-        That (Just f) -> \args ->
+        That (Just f) -> Just $ \args ->
             thunk $ withScopes scope $ pushScope args f
-        This x | isVariadic -> const (pure x)
-               | otherwise  ->
+        This _ | isVariadic -> Nothing
+               | otherwise  -> Just $
                  const $ evalError @v $ ErrorCall $
                      "Unexpected parameter: " ++ show k
-        These x _ -> const (pure x)
+        These x _ -> Just (const (pure x))
 
 addSourcePositions :: (MonadReader e m, Has e SrcSpan)
                    => Transform NExprLocF (m a)
