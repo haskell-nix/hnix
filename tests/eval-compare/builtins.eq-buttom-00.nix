@@ -19,7 +19,7 @@ let
     (nested_list_function == nested_list_function)
     (nested_attrset_attrset == nested_attrset_attrset)
     (nested_attrset_list == nested_attrset_list)
-    (nested_set_function == nested_set_function)
+    (nested_attrset_function == nested_attrset_function)
   ];
 
 in tests
