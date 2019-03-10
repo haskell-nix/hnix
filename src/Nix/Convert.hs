@@ -30,6 +30,7 @@ import           Control.Monad.Free
 import           Data.ByteString
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
+import           Data.Maybe
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Text.Encoding (encodeUtf8, decodeUtf8)
@@ -400,17 +401,23 @@ instance Applicative m => ToValue () m (NExprF r) where
 instance (MonadThunk (NValue m) (NThunk m) m)
     => ToValue NixLikeContextValue m (NValue m) where
     toValue nlcv = do
-        path <- toValue $ nlcvPath nlcv
-        allOutputs <- toValue $ nlcvAllOutputs nlcv
+        path <- if nlcvPath nlcv
+          then Just <$> toValue True
+          else return Nothing
+        allOutputs <- if nlcvAllOutputs nlcv
+          then Just <$> toValue True
+          else return Nothing
         outputs <- do
             let outputs = fmap principledMakeNixStringWithoutContext $ nlcvOutputs nlcv
             outputsM :: [NValue m] <- traverse toValue outputs
             let thunk :: [NThunk m] = fmap (value @(NValue m) @_ @m) outputsM
-            toValue thunk
-        pure $ flip nvSet M.empty $ M.fromList
-            [ ("path", value @(NValue m) @_ @m path)
-            , ("allOutputs", value @(NValue m) @_ @m allOutputs)
-            , ("outputs", value @(NValue m) @_ @m outputs)
+            case thunk of
+              [] -> return Nothing
+              _ -> Just <$> toValue thunk
+        pure $ flip nvSet M.empty $ M.fromList $ catMaybes
+            [ (\p -> ("path", value @(NValue m) @_ @m p)) <$> path
+            , (\ao -> ("allOutputs", value @(NValue m) @_ @m ao)) <$> allOutputs
+            , (\os -> ("outputs", value @(NValue m) @_ @m os)) <$> outputs
             ]
 
 whileForcingThunk :: forall s e m r. (Framed e m, Exception s, Typeable m)
