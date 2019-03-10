@@ -57,6 +57,7 @@ import           Nix.Effects
 import           Nix.Eval as Eval
 import           Nix.Expr
 import           Nix.Frames
+import           Nix.Fresh
 import           Nix.String
 import           Nix.Normal
 import           Nix.Options

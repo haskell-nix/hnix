@@ -45,6 +45,7 @@ import           Nix.Eval (MonadEval(..))
 import qualified Nix.Eval as Eval
 import           Nix.Expr
 import           Nix.Frames
+import           Nix.Fresh
 import           Nix.String
 import           Nix.Options
 import           Nix.Scope
