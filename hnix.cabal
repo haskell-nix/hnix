@@ -499,7 +499,6 @@ library
     , logict
     , megaparsec >=7.0 && <7.1
     , monadlist
-    , monad-st
     , mtl
     , optparse-applicative
     , parser-combinators
