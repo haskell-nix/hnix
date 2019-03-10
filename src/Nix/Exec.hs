@@ -153,7 +153,7 @@ instance MonadNix e m => MonadEval (NValue m) m where
 
     synHole name = do
         span <- currentPos
-        scope <- currentScopes @_ @(NThunk m)
+        scope <- currentScopes
         evalError @(NValue m) $ SynHole $ SynHoleInfo
           { _synHoleInfo_expr = Fix $ NSynHole_ span name
           , _synHoleInfo_scope = scope

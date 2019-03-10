@@ -81,7 +81,7 @@ renderFrame (NixFrame level f)
     | Just (e :: NormalLoop m)    <- fromException f = renderNormalLoop level e
     | Just (e :: ExecFrame m)     <- fromException f = renderExecFrame level e
     | Just (e :: ErrorCall)       <- fromException f = pure [pretty (show e)]
-    | Just (e :: SynHoleInfo m v) <- fromException f = pure [text (show e)]
+    | Just (e :: SynHoleInfo m v) <- fromException f = pure [pretty (show e)]
     | otherwise = error $ "Unrecognized frame: " ++ show f
 
 wrapExpr :: NExprF r -> NExpr
@@ -112,7 +112,7 @@ renderEvalFrame level f = do
             let e@(Fix (Compose (Ann ann _))) = _synHoleInfo_expr synfo
              in [ renderLocation ann =<<
                     renderExpr level "While evaluating" "Syntactic Hole" e
-                , pure $ text $ show (_synHoleInfo_scope synfo)
+                , pure $ pretty $ show (_synHoleInfo_scope synfo)
                 ]
 
         ForcingExpr _ _ -> pure []
