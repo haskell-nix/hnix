@@ -10,4 +10,4 @@ TAGS
 ctags
 dist-newstyle
 result
-.ghc.environment.x86_64-linux-*
+.ghc.environment.*
