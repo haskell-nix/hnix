@@ -232,7 +232,9 @@ thunkEq lt rt = force lt $ \lv -> force rt $ \rv ->
     (NVSet _ _, NVSet _ _) -> pure unsafePtrEq
     _ -> valueEq lv rv
   where
-    unsafePtrEq = True -- TODO
+    unsafePtrEq = case (lt, rt) of
+      (NThunk _ (Thunk lid _ _), NThunk _ (Thunk rid _ _)) -> lid == rid
+      _ -> False
 
 -- | Checks whether two containers are equal, using the given item equality
 --   predicate. If there are any item slots that don't match between the two
