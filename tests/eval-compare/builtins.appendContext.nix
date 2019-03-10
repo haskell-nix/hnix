@@ -6,7 +6,7 @@ let
     outputs = [ "out" "foo" ];
   };
 
-  path = "${./eval-okay-context-introspection.nix}";
+  path = "${./builtins.appendContext.nix}";
 
   desired-context = {
     "${builtins.unsafeDiscardStringContext path}" = {
