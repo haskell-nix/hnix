@@ -1,1 +1,1 @@
-builtins.pathExists "/bin/sh/invalid-director"
+builtins.pathExists "/var/empty/invalid-directory"
