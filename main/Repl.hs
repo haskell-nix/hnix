@@ -148,7 +148,7 @@ typeof args = do
   val <- case M.lookup line (tmctx st) of
     Just val -> return val
     Nothing -> exec False line
-  liftIO $ putStrLn $ describeValue $ valueType (_baseValue val)
+  liftIO $ putStrLn $ describeValue . valueType . _cited . _nValue $ val
   where
     line = Text.pack (unwords args)
 

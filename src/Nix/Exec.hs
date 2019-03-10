@@ -119,15 +119,15 @@ instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
                     go _ = []
                     ps = concatMap (go . frame) frames
 
-                fmap (NThunk ps . coerce) . buildThunk $ mv
+                fmap (NThunk . NCited ps . coerce) . buildThunk $ mv
             else
-                fmap (NThunk [] . coerce) . buildThunk $ mv
+                fmap (NThunk . NCited [] . coerce) . buildThunk $ mv
 
     -- The ThunkLoop exception is thrown as an exception with MonadThrow,
     -- which does not capture the current stack frame information to provide
     -- it in a NixException, so we catch and re-throw it here using
     -- 'throwError' from Frames.hs.
-    force (NThunk ps t) f = catch go (throwError @ThunkLoop)
+    force (NThunk (NCited ps t)) f = catch go (throwError @ThunkLoop)
       where
         go = case ps of
             [] -> forceThunk t f
@@ -135,7 +135,7 @@ instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
                 withFrame Info (ForcingExpr scope (wrapExprLoc span e))
                     (forceThunk t f)
 
-    value = NThunk [] . coerce . valueRef
+    value = NThunk . NCited [] . coerce . valueRef
 
 {-
 prov :: MonadNix e m
