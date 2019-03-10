@@ -335,7 +335,7 @@ case_function_equals5 =
     constantEqualText "true" "(let a = [(x: x)]; in a == a)"
 
 case_directory_pathexists =
-    constantEqualText "false" "builtins.pathExists \"/bin/sh/invalid-directory\""
+    constantEqualText "false" "builtins.pathExists \"/var/empty/invalid-directory\""
 
 -- jww (2018-05-02): This constantly changes!
 -- case_placeholder =
