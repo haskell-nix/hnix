@@ -16,7 +16,6 @@ env:
 
   matrix:
     - GHCVERSION=ghc863 STRICT=false TRACING=false
-    - GHCVERSION=ghc863 STRICT=false TRACING=true
 #     - GHCVERSION=ghcjs
 # 
 # matrix:
