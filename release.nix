@@ -1,7 +1,10 @@
 {}:
 let matrix = [
-      { compiler = "ghc843"; doStrict = false; doTracing = false; }
-      { compiler = "ghc843"; doStrict = false; doTracing = true;  }
+      { compiler = "ghc863"; doStrict = false; doTracing = false; }
+      { compiler = "ghc863"; doStrict = false; doTracing = true;  }
+
+      { compiler = "ghc844"; doStrict = false; doTracing = false; }
+      { compiler = "ghc844"; doStrict = false; doTracing = true;  }
 
       # Broken
       # { compiler = "ghc802"; doStrict = false; doTracing = false; }

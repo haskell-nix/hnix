@@ -134,6 +134,8 @@ data NExprF r
   -- evaluate the second argument.
   | NAssert !r !r
   -- ^ Assert that the first returns true before evaluating the second.
+  | NSynHole !VarName
+  -- ^ Syntactic hole, e.g. @^foo@ , @^hole_name@
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
             Foldable, Traversable, Show, NFData, Hashable)
 

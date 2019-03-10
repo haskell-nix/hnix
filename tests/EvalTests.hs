@@ -13,6 +13,7 @@ import           Control.Monad.Catch
 import           Control.Monad (when)
 import           Control.Monad.IO.Class
 import qualified Data.HashMap.Lazy as M
+import           Data.List ((\\))
 import           Data.Maybe (isJust)
 import           Data.String.Interpolate.IsString
 import qualified Data.Set as S
@@ -41,7 +42,7 @@ case_zero_div = do
   assertNixEvalThrows "builtins.div 1.0 0.0"
 
 case_bit_ops = do
-    -- mic92 (2018-08-20): change to constantEqualText, 
+    -- mic92 (2018-08-20): change to constantEqualText,
     -- when hnix's nix fork supports bitAnd/bitOr/bitXor
     constantEqualText' "0" "builtins.bitAnd 1 0"
     constantEqualText' "1" "builtins.bitOr 1 1"
@@ -334,7 +335,7 @@ case_function_equals5 =
     constantEqualText "true" "(let a = [(x: x)]; in a == a)"
 
 case_directory_pathexists =
-    constantEqualText "false" "builtins.pathExists \"/bin/sh/invalid-directory\""
+    constantEqualText "false" "builtins.pathExists \"/var/empty/invalid-directory\""
 
 -- jww (2018-05-02): This constantly changes!
 -- case_placeholder =
@@ -373,17 +374,45 @@ case_empty_string_not_equal_null_is_true =
 case_null_equal_not_empty_string_is_true =
   constantEqualText "true" "null != \"\""
 
+case_list_nested_bottom_diverges =
+  assertNixEvalThrows "let nested = [(let x = x; in x)]; in nested == nested"
+
+case_attrset_nested_bottom_diverges =
+  assertNixEvalThrows "let nested = { y = (let x = x; in x); }; in nested == nested"
+
+case_list_list_nested_bottom_equal =
+  constantEqualText "true" "let nested = [[(let x = x; in x)]]; in nested == nested"
+
+case_list_attrset_nested_bottom_equal =
+  constantEqualText "true" "let nested = [{ y = (let x = x; in x); }]; in nested == nested"
+
+case_list_function_nested_bottom_equal =
+  constantEqualText "true" "let nested = [(_: let x = x; in x)]; in nested == nested"
+
+case_attrset_list_nested_bottom_equal =
+  constantEqualText "true" "let nested = { y = [(let x = x; in x)];}; in nested == nested"
+
+case_attrset_attrset_nested_bottom_equal =
+  constantEqualText "true" "let nested = { y = { y = (let x = x; in x); }; }; in nested == nested"
+
+case_attrset_function_nested_bottom_equal =
+  constantEqualText "true" "let nested = { y = _: (let x = x; in x); }; in nested == nested"
+
 -----------------------
 
 tests :: TestTree
 tests = $testGroupGenerator
 
 genEvalCompareTests = do
-    files <- filter ((==".nix") . takeExtension) <$> D.listDirectory testDir
-    return $ testGroup "Eval comparison tests" $ map mkTestCase files
+    td <- D.listDirectory testDir
+
+    let unmaskedFiles = filter ((==".nix") . takeExtension) td
+    let files = unmaskedFiles \\ maskedFiles
+
+    return $ testGroup "Eval comparison tests" $ map (mkTestCase testDir) files
   where
-    testDir = "tests/eval-compare"
-    mkTestCase f = testCase f $ assertEvalFileMatchesNix (testDir </> f)
+    mkTestCase td f = testCase f $ assertEvalFileMatchesNix (td </> f)
+
 
 instance (Show r, Show (NValueF m r), Eq r) => Eq (NValueF m r) where
     NVConstantF x == NVConstantF y = x == y
@@ -439,3 +468,10 @@ freeVarsEqual a xs = do
       xs' = S.fromList xs
       free = freeVars a'
   assertEqual "" xs' free
+
+maskedFiles :: [FilePath]
+maskedFiles =
+  [ "builtins.fetchurl-01.nix" ]
+
+testDir :: FilePath
+testDir = "tests/eval-compare"

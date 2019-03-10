@@ -7,6 +7,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Nix.Render where
 
@@ -16,13 +17,15 @@ import           Control.Monad.Trans
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.Set as Set
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import           Data.Text.Prettyprint.Doc
 import           Data.Void
 import           Nix.Expr.Types.Annotated
-import qualified System.Posix.Files as S
 import qualified System.Directory as S
+import qualified System.Posix.Files as S
 import           Text.Megaparsec.Error
-import           Text.Megaparsec.Pos (SourcePos(..))
+import           Text.Megaparsec.Pos
 
 class Monad m => MonadFile m where
     readFile :: FilePath -> m ByteString
@@ -69,6 +72,44 @@ posAndMsg (SourcePos _ lineNo _) msg =
     FancyError (unPos lineNo)
         (Set.fromList [ErrorFail (show msg) :: ErrorFancy Void])
 
-renderLocation :: Monad m => SrcSpan -> Doc a -> m (Doc a)
-renderLocation (SrcSpan beg@(SourcePos _ _ _) _) msg =
-    return $ pretty $ init $ parseErrorPretty @String (posAndMsg beg msg)
+renderLocation :: MonadFile m => SrcSpan -> Doc a -> m (Doc a)
+renderLocation (SrcSpan (SourcePos file begLine begCol)
+                        (SourcePos file' endLine endCol)) msg
+    | file /= "<string>" && file == file' = do
+    exist <- doesFileExist file
+    if exist
+        then do
+            txt <- sourceContext file begLine begCol endLine endCol msg
+            return $ vsep
+              [ "In file " <> errorContext file begLine begCol endLine endCol <> ":"
+              , txt
+              ]
+        else return msg
+renderLocation (SrcSpan beg end) msg =
+    fail $ "Don't know how to render range from " ++ show beg ++ " to " ++ show end
+      ++ " for error: " ++ show msg
+
+errorContext :: FilePath -> Pos -> Pos -> Pos -> Pos -> Doc a
+errorContext path bl bc _el _ec =
+    pretty path <> ":" <> pretty (unPos bl) <> ":" <> pretty (unPos bc)
+
+sourceContext :: MonadFile m => FilePath -> Pos -> Pos -> Pos -> Pos -> Doc a -> m (Doc a)
+sourceContext path (unPos -> begLine) (unPos -> _begCol)
+                   (unPos -> endLine) (unPos -> _endCol) msg = do
+    let beg' = min begLine (begLine - 3)
+        end' = max endLine (endLine + 3)
+    ls <- map pretty
+        . take (end' - beg')
+        . drop (pred beg')
+        . T.lines
+        . T.decodeUtf8
+        <$> readFile path
+    let nums    = map (show . fst) $ zip [beg'..] ls
+        longest = maximum (map length nums)
+        nums'   = flip map nums $ \n ->
+            replicate (longest - length n) ' ' ++ n
+        pad n | read n == begLine = "==> " ++ n
+              | otherwise = "    " ++ n
+        ls' = zipWith (<+>) (map (pretty . pad) nums')
+                  (zipWith (<+>) (repeat "| ") ls)
+    pure $ vsep $ ls' ++ [msg]
