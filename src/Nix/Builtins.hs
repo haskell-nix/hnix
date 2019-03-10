@@ -595,7 +595,7 @@ mapAttrs_ fun xs = fun >>= \f ->
         values <- for pairs $ \(key, value) ->
             thunk $
             withFrame Debug (ErrorCall "While applying f in mapAttrs:\n") $
-            callFunc ?? force' value =<< callFunc f (pure (nvStr (principledMakeNixStringWithoutContext key)))
+            callFunc ?? force' value =<< callFunc f (pure (nvStr (hackyMakeNixStringWithoutContext key)))
         toNix . M.fromList . zip (map fst pairs) $ values
 
 filter_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
@@ -893,7 +893,7 @@ lessThan ta tb = ta >>= \va -> tb >>= \vb -> do
             (NInt   a, NFloat b) -> pure $ fromInteger a < b
             (NFloat a, NFloat b) -> pure $ a < b
             _ -> badType
-        (NVStr a, NVStr b) -> pure $ principledStringIgnoreContext a < principledStringIgnoreContext b
+        (NVStr a, NVStr b) -> pure $ hackyStringIgnoreContext a < hackyStringIgnoreContext b
         _ -> badType
 
 concatLists :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
