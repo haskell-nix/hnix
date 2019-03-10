@@ -591,19 +591,20 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
         mapMaybeM op = foldr f (return [])
           where f x xs = op x >>= (<$> xs) . (++) . maybeToList
 
-        --handleEntry :: Bool -> (Text, NThunk (Lazy m)) -> Lazy m (Maybe (Text, NThunk (Lazy m)))
+        handleEntry :: Bool -> (Text, NThunk (Lazy m)) -> Lazy m (Maybe (Text, NThunk (Lazy m)))
         handleEntry ignoreNulls (k, v) = fmap (k,) <$> case k of
             -- The `args' attribute is special: it supplies the command-line
             -- arguments to the builder.
             -- TODO This use of coerceToString is probably not right and may
             -- not have the right arguments.
-            "args"          -> force v (\v2 -> Just <$> coerceNix v2)
+            "args"          -> force v $ fmap Just . coerceNixList
             "__ignoreNulls" -> pure Nothing
             _ -> force v $ \case
                 NVConstant NNull | ignoreNulls -> pure Nothing
                 v' -> Just <$> coerceNix v'
           where
             coerceNix = toNix <=< coerceToString CopyToStore CoerceAny
+            coerceNixList = toNix <=< traverse (\x -> force x coerceNix) <=< fromValue @[NThunk (Lazy m)]
 
     traceEffect = putStrLn
 

@@ -91,6 +91,7 @@ import           Nix.Value
 import           Nix.XML
 import           System.FilePath
 import           System.Posix.Files (isRegularFile, isDirectory, isSymbolicLink)
+import           Text.Read
 import           Text.Regex.TDFA
 
 -- | Evaluate a nix expression in the default context
@@ -457,7 +458,7 @@ splitVersion s = case Text.uncons s of
       | h `elem` versionComponentSeparators -> splitVersion t
       | isDigit h ->
           let (digits, rest) = Text.span isDigit s
-          in VersionComponent_Number (read $ Text.unpack digits) : splitVersion rest
+          in VersionComponent_Number (fromMaybe (error $ "splitVersion: couldn't parse " <> show digits) $ readMaybe $ Text.unpack digits) : splitVersion rest
       | otherwise ->
           let (chars, rest) = Text.span (\c -> not $ isDigit c || c `elem` versionComponentSeparators) s
               thisComponent = case chars of
