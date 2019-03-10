@@ -13,6 +13,7 @@
 
 module Nix.Pretty where
 
+import           Control.Applicative ((<|>))
 import           Control.Monad
 import           Control.Monad.Free
 import           Data.Fix
@@ -39,6 +40,7 @@ import           Nix.Utils hiding ((<$>))
 #endif
 import           Nix.Value
 import           Prelude hiding ((<$>))
+import           Text.Read (readMaybe)
 
 -- | This type represents a pretty printed nix expression
 -- together with some information about the expression.
@@ -295,8 +297,15 @@ printNix = iter phi . check
     phi (NVStrF ns) = show $ hackyStringIgnoreContext ns
     phi (NVListF l) = "[ " ++ unwords l ++ " ]"
     phi (NVSetF s _) =
-        "{ " ++ concat [ unpack k ++ " = " ++ v ++ "; "
+        "{ " ++ concat [ check (unpack k) ++ " = " ++ v ++ "; "
                        | (k, v) <- sort $ toList s ] ++ "}"
+      where
+        check v =
+            fromMaybe v
+            ((fmap (surround . show) (readMaybe v :: Maybe Int))
+             <|> (fmap (surround . show) (readMaybe v :: Maybe Float)))
+          where
+            surround s = "\"" ++ s ++ "\""
     phi NVClosureF {} = "<<lambda>>"
     phi (NVPathF fp) = fp
     phi (NVBuiltinF name _) = "<<builtin " ++ name ++ ">>"
