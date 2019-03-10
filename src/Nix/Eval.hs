@@ -39,8 +39,9 @@ import           Nix.Strings (runAntiquoted)
 import           Nix.Thunk
 import           Nix.Utils
 
-class (Show v, Monad m) => MonadEval v m | v -> m where
+class (Show v, Monad m) => MonadEval v m where
     freeVariable    :: Text -> m v
+    synHole         :: Text -> m v
     attrMissing     :: NonEmpty Text -> Maybe v -> m v
     evaledSym       :: Text -> v -> m v
     evalCurPos      :: m v
@@ -91,9 +92,17 @@ data EvalFrame m v
     = EvaluatingExpr (Scopes m v) NExprLoc
     | ForcingExpr (Scopes m v) NExprLoc
     | Calling String SrcSpan
+    | SynHole (SynHoleInfo m v)
     deriving (Show, Typeable)
 
 instance (Typeable m, Typeable v) => Exception (EvalFrame m v)
+
+data SynHoleInfo m t = SynHoleInfo
+   { _synHoleInfo_expr :: NExprLoc
+   , _synHoleInfo_scope :: Scopes m t
+   } deriving (Show, Typeable)
+
+instance (Typeable m, Typeable t) => Exception (SynHoleInfo m t)
 
 eval :: forall v t m. MonadNixEval v t m => NExprF (m v) -> m v
 
@@ -147,6 +156,8 @@ eval (NAbs params body) = do
     evalAbs params $ \arg k -> withScopes scope $ do
         args <- buildArgument params arg
         pushScope args (k (M.map (`force` pure) args) body)
+
+eval (NSynHole name) = synHole name
 
 -- | If you know that the 'scope' action will result in an 'AttrSet t', then
 --   this implementation may be used as an implementation for 'evalWith'.
@@ -341,26 +352,25 @@ buildArgument params arg = do
                         Nothing -> id
                         Just n -> M.insert n $ const $
                             thunk (withScopes scope arg)
-                loebM (inject $ alignWithKey (assemble scope isVariadic)
+                loebM (inject $ M.mapMaybe id $ alignWithKey (assemble scope isVariadic)
                                              args (M.fromList s))
   where
     assemble :: Scopes m t
              -> Bool
              -> Text
              -> These t (Maybe (m v))
-             -> AttrSet t
-             -> m t
+             -> Maybe (AttrSet t -> m t)
     assemble scope isVariadic k = \case
-        That Nothing  ->
+        That Nothing  -> Just $
             const $ evalError @v $ ErrorCall $
                 "Missing value for parameter: " ++ show k
-        That (Just f) -> \args ->
+        That (Just f) -> Just $ \args ->
             thunk $ withScopes scope $ pushScope args f
-        This x | isVariadic -> const (pure x)
-               | otherwise  ->
+        This _ | isVariadic -> Nothing
+               | otherwise  -> Just $
                  const $ evalError @v $ ErrorCall $
                      "Unexpected parameter: " ++ show k
-        These x _ -> const (pure x)
+        These x _ -> Just (const (pure x))
 
 addSourcePositions :: (MonadReader e m, Has e SrcSpan)
                    => Transform NExprLocF (m a)

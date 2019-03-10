@@ -226,8 +226,13 @@ isClosureNF _ = False
 thunkEq :: MonadThunk (NValue m) (NThunk m) m
         => NThunk m -> NThunk m -> m Bool
 thunkEq lt rt = force lt $ \lv -> force rt $ \rv ->
-  case (lv, rv) of
-    (NVClosure _ _, NVClosure _ _) -> pure True
+  let unsafePtrEq = case (lt, rt) of
+        (NThunk _ (Thunk lid _ _), NThunk _ (Thunk rid _ _)) | lid == rid -> return True
+        _ -> valueEq lv rv
+  in case (lv, rv) of
+    (NVClosure _ _, NVClosure _ _) -> unsafePtrEq
+    (NVList _, NVList _) -> unsafePtrEq
+    (NVSet _ _, NVSet _ _) -> unsafePtrEq
     _ -> valueEq lv rv
 
 -- | Checks whether two containers are equal, using the given item equality

@@ -24,7 +24,7 @@ $ cabal test
 # To run all of the tests, which takes up to a minute:
 $ env ALL_TESTS=yes cabal test
 # To run only specific tests (see `tests/Main.hs` for a list)
-$ env NIXPKGS_TESTS=yes PRETTY_TESTS=yes cabal test
+$ env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal test
 $ ./dist/build/hnix/hnix --help
 ```
 
