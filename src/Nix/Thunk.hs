@@ -1,52 +1,106 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveTraversable #-}
-
-#if ENABLE_TRACING
-{-# LANGUAGE BangPatterns #-}
-#endif
-
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Nix.Thunk where
 
+import Control.Applicative
 import Control.Exception hiding (catch)
 import Control.Monad.Catch
+import Control.Monad.Except
+import Control.Monad.Reader
 import Control.Monad.Ref
+import Control.Monad.State.Strict
+import Control.Monad.ST
+import Control.Monad.Writer
 import Data.GADT.Compare
 import Data.IORef
 import Data.Maybe
 import Data.STRef
 import Data.Typeable
+#ifdef MIN_VERSION_haskeline
+import System.Console.Haskeline.MonadException hiding (catch)
+#endif
 
 import Unsafe.Coerce
 
-#if ENABLE_TRACING
-import System.IO.Unsafe
 import Nix.Utils
 
-counter :: IORef Int
-counter = unsafePerformIO $ newIORef 0
-{-# NOINLINE counter #-}
-#endif
+-- Since there's no forking, it's automatically atomic.
+instance MonadAtomicRef (ST s) where
+  atomicModifyRef r f = do
+    v <- readRef r
+    let (a, b) = f v
+    writeRef r a
+    return b
+  atomicModifyRef' r f = do
+    v <- readRef r
+    let (a, b) = f v
+    writeRef r $! a
+    return b
 
 data Deferred m v = Deferred (m v) | Computed v
     deriving (Functor, Foldable, Traversable)
 
 type Var m = Ref m
 
+-- TODO better fresh name supply
+class Monad m => MonadFreshId i m | m -> i where
+  freshId :: m i
+  default freshId :: (MonadFreshId i m', MonadTrans t, m ~ (t m')) => m i
+  freshId = lift freshId
+
+newtype FreshIdT i m a = FreshIdT { unFreshIdT :: StateT i m a }
+  deriving
+    ( Functor
+    , Applicative
+    , Alternative
+    , Monad
+    , MonadPlus
+    , MonadTrans
+    , MonadFix
+    , MonadRef
+    , MonadAtomicRef
+    , MonadIO
+    , MonadCatch
+    , MonadThrow
+#ifdef MIN_VERSION_haskeline
+    , MonadException
+#endif
+    )
+
+instance (Monad m, Num i) => MonadFreshId i (FreshIdT i m) where
+  freshId = FreshIdT $ get <* modify (+ 1)
+
+runFreshIdT :: Functor m => i -> FreshIdT i m a -> m a
+runFreshIdT i m = fst <$> runStateT (unFreshIdT m) i
+
+instance MonadFreshId i m => MonadFreshId i (ReaderT r m)
+instance (Monoid w, MonadFreshId i m) => MonadFreshId i (WriterT w m)
+instance MonadFreshId i m => MonadFreshId i (ExceptT e m)
+instance MonadFreshId i m => MonadFreshId i (StateT s m)
+
 --TODO: Eliminate the old MonadVar shims
-type MonadVar m = (MonadAtomicRef m, GEq (Ref m))
+type MonadVar m =
+  ( MonadAtomicRef m
+  , GEq (Ref m)
+  )
 
 eqVar :: forall m a. GEq (Ref m) => Ref m a -> Ref m a -> Bool
 eqVar a b = isJust $ geq a b
@@ -74,7 +128,7 @@ instance GEq (STRef s) where
                 then Just $ unsafeCoerce Refl
                 else Nothing
 
-class Monad m => MonadThunk v t m | v -> m, v -> t, t -> m, t -> v where
+class Monad m => MonadThunk v t m | m -> t, t -> m, t -> v where
     thunk :: m v -> m t
     force :: t -> (v -> m r) -> m r
     value :: v -> t
@@ -91,24 +145,15 @@ instance Exception ThunkLoop
 valueRef :: v -> Thunk m v
 valueRef = Value
 
-buildThunk :: MonadVar m => m v -> m (Thunk m v)
-buildThunk action =
-#if ENABLE_TRACING
-    let !x = unsafePerformIO (atomicModifyIORef' counter (\c -> (succ c, c))) in
-    Thunk x
-#else
-    Thunk 0
-#endif
-        <$> newVar False <*> newVar (Deferred action)
+buildThunk :: (MonadVar m, MonadFreshId Int m) => m v -> m (Thunk m v)
+buildThunk action =do
+    freshThunkId <- freshId
+    Thunk freshThunkId <$> newVar False <*> newVar (Deferred action)
 
 forceThunk :: (MonadVar m, MonadThrow m, MonadCatch m)
            => Thunk m v -> (v -> m a) -> m a
 forceThunk (Value ref) k = k ref
-#if ENABLE_TRACING
 forceThunk (Thunk n active ref) k = do
-#else
-forceThunk (Thunk _ active ref) k = do
-#endif
     eres <- readVar ref
     case eres of
         Computed v -> k v
@@ -116,15 +161,9 @@ forceThunk (Thunk _ active ref) k = do
             nowActive <- atomicModifyVar active (True,)
             if nowActive
                 then
-#if ENABLE_TRACING
                     throwM $ ThunkLoop (Just n)
-#else
-                    throwM $ ThunkLoop Nothing
-#endif
                 else do
-#if ENABLE_TRACING
                     traceM $ "Forcing " ++ show n
-#endif
                     v <- catch action $ \(e :: SomeException) -> do
                         _ <- atomicModifyVar active (False,)
                         throwM e

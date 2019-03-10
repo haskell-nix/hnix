@@ -433,11 +433,6 @@ flag profiling
   manual: True
   default: False
 
-flag tracing
-  description: Enable full debug tracing
-  manual: True
-  default: False
-
 library
   exposed-modules:
       Nix
@@ -527,8 +522,6 @@ library
     , xml
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
-  if flag(tracing)
-    cpp-options: -DENABLE_TRACING=1
   if os(linux) && impl(ghc >= 8.2) && impl(ghc < 8.3)
     build-depends:
         compact
@@ -595,8 +588,6 @@ executable hnix
     , unordered-containers >=0.2.9 && <0.3
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
-  if flag(tracing)
-    cpp-options: -DENABLE_TRACING=1
   if os(linux) && impl(ghc >= 8.2) && impl(ghc < 8.3)
     build-depends:
         compact
@@ -666,8 +657,6 @@ test-suite hnix-tests
     , unordered-containers >=0.2.9 && <0.3
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
-  if flag(tracing)
-    cpp-options: -DENABLE_TRACING=1
   if os(linux) && impl(ghc >= 8.2) && impl(ghc < 8.3)
     build-depends:
         compact
@@ -684,7 +673,6 @@ test-suite hnix-tests
   else
     buildable: True
   default-language: Haskell2010
-  build-tool-depends: hspec-discover:hspec-discover == 2.*
 
 benchmark hnix-benchmarks
   type: exitcode-stdio-1.0
@@ -715,8 +703,6 @@ benchmark hnix-benchmarks
     , unordered-containers >=0.2.9 && <0.3
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
-  if flag(tracing)
-    cpp-options: -DENABLE_TRACING=1
   if os(linux) && impl(ghc >= 8.2) && impl(ghc < 8.3)
     build-depends:
         compact
