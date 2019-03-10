@@ -49,6 +49,7 @@ import           Nix.Eval (MonadEval(..))
 import qualified Nix.Eval as Eval
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
+import           Nix.Fresh
 import           Nix.String
 import           Nix.Scope
 import           Nix.Thunk
