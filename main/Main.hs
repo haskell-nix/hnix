@@ -43,7 +43,7 @@ main :: IO ()
 main = do
     time <- liftIO getCurrentTime
     opts <- execParser (nixOptionsInfo time)
-    runFreshIdT 0 $ runLazyM opts $ case readFrom opts of
+    runLazyM opts $ case readFrom opts of
         Just path -> do
             let file = addExtension (dropExtension path) "nixc"
             process opts (Just file) =<< liftIO (readCache path)
