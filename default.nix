@@ -1,4 +1,4 @@
-{ compiler ? "ghc844"
+{ compiler ? "ghc863"
 
 , doBenchmark ? false
 , doTracing   ? false
@@ -6,8 +6,10 @@
 , doProfiling ? false # enables profiling support in GHC
 , doStrict    ? false
 
-, rev    ? "3f3f6021593070330091a4a2bc785f6761bbb3c1"
-, sha256 ? "1a7vvxxz8phff51vwsrdlsq5i70ig5hxvvb7lkm2lgwizgvpa6gv"
+, withHoogle  ? false
+
+, rev    ? "120eab94e0981758a1c928ff81229cd802053158"
+, sha256 ? "0qk6k8gxx5xlkyg05dljywj5wx5fvrc3dzp4v2h6ab83b7zwg813"
 
 , pkgs   ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
@@ -17,37 +19,68 @@
            inherit sha256; }) {
            config.allowUnfree = true;
            config.allowBroken = false;
+           config.packageOverrides = pkgs: rec {
+             nix = pkgs.nixUnstable.overrideDerivation (attrs: {
+               src = data/nix;
+               configureFlags = attrs.configureFlags ++ [ "--disable-doc-gen" ];
+               buildInputs = attrs.buildInputs ++
+                 [ pkgs.editline.dev
+                 ];
+               outputs = builtins.filter (s: s != "doc" && s != "man" ) attrs.outputs;
+             });
+           };
          }
 
-, returnShellEnv ? pkgs.lib.inNixShell
 , mkDerivation   ? null
 }:
 
-let haskellPackages = pkgs.haskell.packages.${compiler};
+let
+
+  hnix-store-src = pkgs.fetchFromGitHub {
+    owner = "haskell-nix";
+    repo = "hnix-store";
+    rev = "0fe7ff5e8492ce6141d0eb400685516b4d07594b";
+    sha256 = "1izqp4ma6bkvdjcxhkasjcv1p11l72hdnm4dqmnnpkbmw70xrp36";
+  };
+
+  overlay = pkgs.lib.foldr pkgs.lib.composeExtensions (_: _: {}) [
+    (import "${hnix-store-src}/overlay.nix")
+    (self: super: with pkgs.haskell.lib; {
+      mono-traversable = dontCheck super.mono-traversable;
+      these = doJailbreak super.these;
+    } // pkgs.lib.optionalAttrs withHoogle {
+      ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
+      ghcWithPackages = self.ghc.withPackages;
+    })
+  ];
+
+  overrideHaskellPackages = orig: {
+    buildHaskellPackages =
+      orig.buildHaskellPackages.override overrideHaskellPackages;
+    overrides = if orig ? overrides
+      then pkgs.lib.composeExtensions orig.overrides overlay
+      else overlay;
+  };
+
+  haskellPackages = pkgs.haskell.packages.${compiler}.override
+    overrideHaskellPackages;
 
 drv = haskellPackages.developPackage {
   name = "hnix";
   root = ./.;
 
-  overrides = with pkgs.haskell.lib; self: super: {
-    mono-traversable = dontCheck super.mono-traversable;
-    megaparsec = super.megaparsec_7_0_4;
-  };
-
-  source-overrides = {};
-
   modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
     buildTools = (attrs.buildTools or []) ++ [
-      pkgs.haskell.packages.${compiler}.cabal-install
+      haskellPackages.cabal-install
     ];
 
     enableLibraryProfiling = doProfiling;
     enableExecutableProfiling = doProfiling;
 
-    testHaskellDepends = attrs.testHaskellDepends ++
-      [ pkgs.nix
-        pkgs.haskell.packages.ghc844.criterion
-      ];
+    testHaskellDepends = attrs.testHaskellDepends ++ [
+      pkgs.nix
+      haskellPackages.criterion
+    ];
 
     inherit doBenchmark;
 
@@ -58,10 +91,11 @@ drv = haskellPackages.developPackage {
 
     passthru = {
       nixpkgs = pkgs;
+      inherit haskellPackages;
     };
   });
 
-  inherit returnShellEnv;
+  returnShellEnv = false;
 };
 
 in drv
