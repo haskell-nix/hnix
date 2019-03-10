@@ -1145,8 +1145,22 @@ appendContext :: forall e m. MonadNix e m
                  => m (NValue m) -> m (NValue m) -> m (NValue m)
 appendContext x y = x >>= \x' -> y >>= \y' -> case (x', y') of
     (NVStr ns, NVSet attrs _) -> do
-      context <- getContext x
-      pure _
+      let context = toNixLikeContext $ principledGetContext ns
+      newContextValues <- forM attrs $ force' >=> \case
+        NVSet (M.toList -> [("allOutputs", allOutputs), ("outputs", outputs), ("path", path)]) _ -> do
+          outputsV <- force' outputs >>= \case
+            NVList vs -> forM vs $ fmap principledStringIgnoreContext . fromNix
+            x -> throwError $ ErrorCall $
+              "Invalid types for context value outputs in builtins.appendContext: " ++ show x
+          NixLikeContextValue
+            <$> fromValue path
+            <*> fromValue allOutputs
+            <*> pure outputsV
+        x -> throwError $ ErrorCall $
+          "Invalid types for context value in builtins.appendContext: " ++ show x
+      values :: AttrSet (NThunk m) <- traverse (fmap valueThunk . toValue) $
+        M.unionWith (<>) newContextValues $ getNixLikeContext context
+      toValue values
     (x, y) -> throwError $ ErrorCall $ "Invalid types for builtins.appendContext: "
                  ++ show (x, y)
 
