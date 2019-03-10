@@ -21,7 +21,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import           Data.Text.Prettyprint.Doc
 import           Data.Void
-import           Debug.Trace
 import           Nix.Expr.Types.Annotated
 import qualified System.Directory as S
 import qualified System.Posix.Files as S
@@ -95,17 +94,22 @@ errorContext path bl bc _el _ec =
     pretty path <> ":" <> pretty (unPos bl) <> ":" <> pretty (unPos bc)
 
 sourceContext :: MonadFile m => FilePath -> Pos -> Pos -> Pos -> Pos -> Doc a -> m (Doc a)
-sourceContext path (unPos -> begLine) (unPos -> begCol)
-                   (unPos -> endLine) (unPos -> endCol) msg = do
-    traceM $ "Taking lines from " ++ path
-    traceM $ "begLine = " ++ show begLine
-    traceM $ "begCol  = " ++ show begCol
-    traceM $ "endLine = " ++ show endLine
-    traceM $ "endCol  = " ++ show endCol
-    traceM $ "msg     = " ++ show msg
-    ls <- take (endLine - begLine)
-        . drop (pred begLine)
+sourceContext path (unPos -> begLine) (unPos -> _begCol)
+                   (unPos -> endLine) (unPos -> _endCol) msg = do
+    let beg' = min begLine (begLine - 3)
+        end' = max endLine (endLine + 3)
+    ls <- map pretty
+        . take (end' - beg')
+        . drop (pred beg')
         . T.lines
         . T.decodeUtf8
         <$> readFile path
-    pure $ vsep $ map pretty ls
+    let nums    = map (show . fst) $ zip [beg'..] ls
+        longest = maximum (map length nums)
+        nums'   = flip map nums $ \n ->
+            replicate (longest - length n) ' ' ++ n
+        pad n | read n == begLine = "==> " ++ n
+              | otherwise = "    " ++ n
+        ls' = zipWith (<+>) (map (pretty . pad) nums')
+                  (zipWith (<+>) (repeat "| ") ls)
+    pure $ vsep $ ls' ++ [msg]
