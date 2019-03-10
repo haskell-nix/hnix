@@ -133,6 +133,9 @@ case_find_file_failure_invalid_arg_2 =
 case_find_file_failure_invalid_arg_no_path =
     assertNixEvalThrows "builtins.findFile [{ prefix=\"\"; }] \"files\""
 
+case_infinite_recursion =
+    assertNixEvalThrows "let foo = a: bar a; bar = a: foo a; in foo 3"
+
 case_inherit_in_rec_set =
     constantEqualText "1" "let x = 1; in (rec { inherit x; }).x"
 
