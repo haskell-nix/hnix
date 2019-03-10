@@ -89,6 +89,7 @@ import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 import           Nix.XML
+import           System.Nix.Internal.Hash (printHashBytes32)
 import           System.FilePath
 import           System.Posix.Files (isRegularFile, isDirectory, isSymbolicLink)
 import           Text.Read
@@ -949,7 +950,7 @@ placeHolder :: MonadNix e m => m (NValue m) -> m (NValue m)
 placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
     h <- runPrim (hashString (principledMakeNixStringWithoutContext "sha256")
                              (principledMakeNixStringWithoutContext ("nix-output:" <> t)))
-    toNix $ principledMakeNixStringWithoutContext $ Text.cons '/' $ printHash32 $
+    toNix $ principledMakeNixStringWithoutContext $ Text.cons '/' $ printHashBytes32 $
       -- The result coming out of hashString is base16 encoded
       fst $ Base16.decode $ encodeUtf8 $ principledStringIgnoreContext h
 
