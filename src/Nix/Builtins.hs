@@ -1134,11 +1134,10 @@ derivationStrict_ = (>>= derivationStrict)
 
 getContext :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m)
 getContext x = x >>= \x' -> case x' of
-  (NVStr ns) -> let
-    context = getNixLikeContext $ toNixLikeContext $ principledGetContext ns
-    in do
-      valued :: M.HashMap Text (NValue m) <- sequenceA $ M.map toValue context
-      pure $ flip nvSet M.empty $ M.map (value @(NValue m) @_ @m) valued
+  (NVStr ns) -> do
+    let context = getNixLikeContext $ toNixLikeContext $ principledGetContext ns
+    valued :: M.HashMap Text (NValue m) <- sequenceA $ M.map toValue context
+    pure $ flip nvSet M.empty $ M.map (value @(NValue m) @_ @m) valued
   x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: "
     ++ show x
 
