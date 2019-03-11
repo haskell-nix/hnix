@@ -464,12 +464,14 @@ library
       Nix.Strings
       Nix.TH
       Nix.Thunk
+      Nix.Thunk.Basic
       Nix.Type.Assumption
       Nix.Type.Env
       Nix.Type.Infer
       Nix.Type.Type
       Nix.Utils
       Nix.Value
+      Nix.Var
       Nix.XML
   other-modules:
       Paths_hnix

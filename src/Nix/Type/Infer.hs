@@ -53,6 +53,7 @@ import           Nix.Fresh
 import           Nix.String
 import           Nix.Scope
 import           Nix.Thunk
+import           Nix.Thunk.Basic
 import qualified Nix.Type.Assumption as As
 import           Nix.Type.Env
 import qualified Nix.Type.Env as Env
@@ -336,7 +337,7 @@ instance (MonadAtomicRef m, Ref m ~ STRef s) => MonadAtomicRef (InferT s m) wher
         _ <- modifyRef x (fst . f)
         return res
 
-newtype JThunkT s m = JThunk (Thunk (InferT s m) (Judgment s))
+newtype JThunkT s m = JThunk (NThunkF (InferT s m) (Judgment s))
 
 instance Monad m => MonadThrow (InferT s m) where
     throwM = throwError . EvaluationError
@@ -357,8 +358,12 @@ instance ( MonadFreshId Int m
     force (JThunk t) f = catch (forceThunk t f) $ \(_ :: ThunkLoop) ->
         -- If we have a thunk loop, we just don't know the type.
         f =<< Judgment As.empty [] <$> fresh
+    forceEff (JThunk t) f = catch (forceEffects t f) $ \(_ :: ThunkLoop) ->
+        -- If we have a thunk loop, we just don't know the type.
+        f =<< Judgment As.empty [] <$> fresh
 
-    value = JThunk . valueRef
+    wrapValue = JThunk . valueRef
+    getValue (JThunk x) = thunkValue x
 
 instance ( MonadFreshId Int m
          , MonadAtomicRef m
@@ -488,7 +493,7 @@ instance ( MonadFreshId Int m
          ) => FromValue (AttrSet (JThunkT s m), AttrSet SourcePos) (InferT s m) (Judgment s) where
     fromValueMay (Judgment _ _ (TSet _ xs)) = do
         let sing _ = Judgment As.empty []
-        pure $ Just (M.mapWithKey (\k v -> value (sing k v)) xs, M.empty)
+        pure $ Just (M.mapWithKey (\k v -> wrapValue (sing k v)) xs, M.empty)
     fromValueMay _ = pure Nothing
     fromValue = fromValueMay >=> \case
         Just v  -> pure v

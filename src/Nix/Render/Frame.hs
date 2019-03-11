@@ -28,6 +28,7 @@ import           Nix.Render
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
+import           Nix.Var
 import           Text.Megaparsec.Pos
 #ifdef MIN_VERSION_pretty_show
 import qualified Text.Show.Pretty as PS

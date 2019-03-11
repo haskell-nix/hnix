@@ -22,8 +22,10 @@ import           Data.Maybe (isJust)
 import           Nix.Frames
 -- import           Nix.Pretty
 import           Nix.Thunk
+import           Nix.Thunk.Basic
 import           Nix.Utils
 import           Nix.Value
+import           Nix.Var
 
 newtype NormalLoop m = NormalLoop (NValue m)
     deriving Show
@@ -98,8 +100,10 @@ embed (Pure v) = return v
 embed (Free x) = case x of
     NVConstantF a  -> return $ nvConstant a
     NVStrF ns      -> return $ nvStr ns
-    NVListF l      -> nvList       . fmap (value @_ @_ @m) <$> traverse embed l
-    NVSetF s p     -> flip nvSet p . fmap (value @_ @_ @m) <$> traverse embed s
+    NVListF l      ->
+        nvList       . fmap (wrapValue @_ @_ @m) <$> traverse embed l
+    NVSetF s p     ->
+        flip nvSet p . fmap (wrapValue @_ @_ @m) <$> traverse embed s
     NVClosureF p f -> return $ nvClosure p f
     NVPathF fp     -> return $ nvPath fp
     NVBuiltinF n f -> return $ nvBuiltin n f

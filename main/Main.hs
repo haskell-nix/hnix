@@ -30,9 +30,11 @@ import qualified Nix.Eval as Eval
 import           Nix.Json
 -- import           Nix.Lint
 import           Nix.Options.Parser
+import           Nix.Thunk.Basic
 import qualified Nix.Type.Env as Env
 import qualified Nix.Type.Infer as HM
 import           Nix.Utils
+import           Nix.Var
 import           Options.Applicative hiding (ParserResult(..))
 import qualified Repl
 import           System.FilePath

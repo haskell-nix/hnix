@@ -33,12 +33,14 @@ import           Nix.Parser
 import           Nix.String
 import           Nix.Strings
 import           Nix.Thunk
+import           Nix.Thunk.Basic
 #if ENABLE_TRACING
 import           Nix.Utils
 #else
 import           Nix.Utils hiding ((<$>))
 #endif
 import           Nix.Value
+import           Nix.Var
 import           Prelude hiding ((<$>))
 import           Text.Read (readMaybe)
 
@@ -311,11 +313,11 @@ printNix = iter phi . check
     phi (NVPathF fp) = fp
     phi (NVBuiltinF name _) = "<<builtin " ++ name ++ ">>"
 
-removeEffects :: Functor m => NValueF m (NThunk m) -> NValueNF m
+removeEffects :: MonadThunk (NThunk m) (NValue m) m
+              => NValueF m (NThunk m) -> NValueNF m
 removeEffects = Free . fmap dethunk
   where
-    dethunk (NThunk (NCited _ (Value (NValue v)))) =
-        removeEffects (_cited v)
+    dethunk (NThunk (NCited _ (Value (NValue v)))) = removeEffects (_cited v)
     dethunk (NThunk (NCited _ _)) =
         Free $ NVStrF $ principledMakeNixStringWithoutContext "<thunk>"
 
@@ -349,6 +351,7 @@ prettyNThunk = \case
             $ "thunk from: "
             : map (prettyOriginExpr . _originExpr) ps
           ]
+
 dethunk :: MonadVar m => NThunk m -> m (NValueNF m)
 dethunk = \case
     NThunk (NCited _ (Value (NValue v))) -> removeEffectsM (_cited v)

@@ -42,6 +42,7 @@ import           Nix.String
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
+import           Nix.Var
 
 {-
 
@@ -282,7 +283,7 @@ instance Convertible e m
 
 instance (Convertible e m, MonadThunk (NValue m) (NThunk m) m)
       => FromValue (NThunk m) m (NValue m) where
-    fromValueMay = pure . Just . value @_ @_ @m
+    fromValueMay = pure . Just . wrapValue @_ @_ @m
     fromValue v = fromValueMay v >>= \case
         Just b -> pure b
         _ -> error "Impossible, see fromValueMay"
@@ -360,9 +361,9 @@ instance MonadThunk (NValue m) (NThunk m) m
         l' <- toValue (unPos l)
         c' <- toValue (unPos c)
         let pos = M.fromList
-                [ ("file" :: Text, value @_ @_ @m f')
-                , ("line",        value @_ @_ @m l')
-                , ("column",      value @_ @_ @m c') ]
+                [ ("file" :: Text, wrapValue @_ @_ @m f')
+                , ("line",        wrapValue @_ @_ @m l')
+                , ("column",      wrapValue @_ @_ @m c') ]
         pure $ nvSet pos mempty
 
 instance (ToValue a m (NValueNF m), Applicative m)
@@ -389,7 +390,7 @@ instance Applicative m => ToValue (HashMap Text (NThunk m),
 
 instance (MonadThunk (NValue m) (NThunk m) m, ToValue a m (NValue m))
       => ToValue a m (NThunk m) where
-    toValue = fmap (value @(NValue m) @_ @m) . toValue
+    toValue = fmap (wrapValue @(NValue m) @_ @m) . toValue
 
 instance Applicative m => ToValue Bool m (NExprF r) where
     toValue = pure . NConstant . NBool
@@ -463,8 +464,8 @@ instance (MonadThunk (NValue m) (NThunk m) m, FromNix a m (NValue m))
 
 instance MonadThunk (NValue m) (NThunk m) m
       => FromNix (NThunk m) m (NValue m) where
-    fromNixMay = pure . Just . value
-    fromNix    = pure . value
+    fromNixMay = pure . Just . wrapValue
+    fromNix    = pure . wrapValue
 
 class ToNix a m v where
     toNix :: a -> m v
