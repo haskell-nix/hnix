@@ -56,6 +56,20 @@ import           Nix.Thunk
 import           Nix.Thunk.Basic
 import           Nix.Utils
 
+data Provenance m = Provenance
+    { _lexicalScope :: Scopes m (NThunk m)
+    , _originExpr   :: NExprLocF (Maybe (NValue m))
+      -- ^ When calling the function x: x + 2 with argument x = 3, the
+      --   'originExpr' for the resulting value will be 3 + 2, while the
+      --   'contextExpr' will be @(x: x + 2) 3@, preserving not only the
+      --   result of the call, but what was called and with what arguments.
+    }
+
+data NCited f m a = NCited
+    { _provenance :: [Provenance m]
+    , _cited      :: f m a
+    }
+
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation is
 --   completed. 's' is related to the type of errors that might occur during
 --   construction or use of a value.
@@ -98,22 +112,15 @@ data NValueF m r
 type NValueNF m = Free (NValueF m) (NValue m)
 type ValueSet m = AttrSet (NThunk m)
 
-data Provenance m = Provenance
-    { _lexicalScope :: Scopes m (NThunk m)
-    , _originExpr   :: NExprLocF (Maybe (NValue m))
-      -- ^ When calling the function x: x + 2 with argument x = 3, the
-      --   'originExpr' for the resulting value will be 3 + 2, while the
-      --   'contextExpr' will be @(x: x + 2) 3@, preserving not only the
-      --   result of the call, but what was called and with what arguments.
-    }
+-- These mutually recursive types interleave thunk representations with value
+-- representations, each provided by functors 't' and 'v'.
+newtype NThunkR t v = NThunk { _nThunk :: t (NValueR t v) }
+newtype NValueR t v = NValue { _nValue :: v (NThunkR t v) }
 
-data NCited f m a = NCited
-    { _provenance :: [Provenance m]
-    , _cited      :: f m a
-    }
-
-newtype NThunk m = NThunk { _nThunk :: NCited NThunkF m (NValue m) }
-newtype NValue m = NValue { _nValue :: NCited NValueF m (NThunk m) }
+-- jww (2019-03-11): The code below should be generic in 'f', rather than
+-- specialized to 'NCited'.
+type NThunk m = NThunkR (NCited NThunkF m) (NCited NValueF m)
+type NValue m = NValueR (NCited NThunkF m) (NCited NValueF m)
 
 nthunk :: MonadThunk (NValue m) (NThunk m) m
        => m (NValue m) -> m (NThunk m)
@@ -387,8 +394,8 @@ instance Typeable m => Exception (ValueFrame m)
 $(makeTraversals ''NValueF)
 $(makeLenses ''Provenance)
 $(makeLenses ''NCited)
-$(makeLenses ''NThunk)
-$(makeLenses ''NValue)
+$(makeLenses ''NThunkR)
+$(makeLenses ''NValueR)
 
 alterF :: (Eq k, Hashable k, Functor f)
        => (Maybe v -> f (Maybe v)) -> k -> HashMap k v -> f (HashMap k v)
