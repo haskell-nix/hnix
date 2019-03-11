@@ -66,8 +66,10 @@ import           Nix.Pretty
 import           Nix.Render
 import           Nix.Scope
 import           Nix.Thunk
+import           Nix.Thunk.Basic
 import           Nix.Utils
 import           Nix.Value
+import           Nix.Var
 #ifdef MIN_VERSION_haskeline
 import           System.Console.Haskeline.MonadException hiding (catch)
 #endif
@@ -135,7 +137,16 @@ instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
                 withFrame Info (ForcingExpr scope (wrapExprLoc span e))
                     (forceThunk t f)
 
-    value = NThunk . NCited [] . coerce . valueRef
+    forceEff (NThunk (NCited ps t)) f = catch go (throwError @ThunkLoop)
+      where
+        go = case ps of
+            [] -> forceEffects t f
+            Provenance scope e@(Compose (Ann span _)):_ ->
+                withFrame Info (ForcingExpr scope (wrapExprLoc span e))
+                    (forceEffects t f)
+
+    wrapValue = NThunk . NCited [] . coerce . valueRef
+    getValue (NThunk (NCited _ v)) = thunkValue (coerce v)
 
 {-
 prov :: MonadNix e m

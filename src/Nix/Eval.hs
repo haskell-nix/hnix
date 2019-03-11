@@ -194,7 +194,7 @@ attrSetAlter (k:ks) pos m p val = case M.lookup k m of
 
     recurse st sp = attrSetAlter ks pos st sp val <&> \(st', _) ->
         ( M.insert k (toValue @(AttrSet t, AttrSet SourcePos)
-                         =<< (, mempty) . fmap value <$> sequence st') st
+                         =<< (, mempty) . fmap wrapValue <$> sequence st') st
         , M.insert k pos sp )
 
 desugarBinds :: forall r. ([Binding r] -> r) -> [Binding r] -> [Binding r]

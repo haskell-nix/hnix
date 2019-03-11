@@ -20,6 +20,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
@@ -51,6 +53,7 @@ import           Nix.Frames
 import           Nix.String
 import           Nix.Scope
 import           Nix.Thunk
+import           Nix.Thunk.Basic
 import           Nix.Utils
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation is
@@ -109,8 +112,36 @@ data NCited f m a = NCited
     , _cited      :: f m a
     }
 
-newtype NThunk m = NThunk { _nThunk :: NCited Thunk   m (NValue m) }
+newtype NThunk m = NThunk { _nThunk :: NCited NThunkF m (NValue m) }
 newtype NValue m = NValue { _nValue :: NCited NValueF m (NThunk m) }
+
+nthunk :: MonadThunk (NValue m) (NThunk m) m
+       => m (NValue m) -> m (NThunk m)
+nthunk = fmap (NThunk . NCited []) . buildThunk
+
+nthunkEq :: MonadThunk (NValue m) (NThunk m) m
+         => NThunk m -> NThunk m -> m Bool
+nthunkEq lt rt = force lt $ \lv -> force rt $ \rv ->
+  let unsafePtrEq = case (lt, rt) of
+          (NThunk (NCited _ (Thunk lid _ _)),
+           NThunk (NCited _ (Thunk rid _ _))) | lid == rid -> return True
+          _ -> valueEq lv rv
+  in case (lv, rv) of
+    (NVClosure _ _, NVClosure _ _) -> unsafePtrEq
+    (NVList _, NVList _) -> unsafePtrEq
+    (NVSet _ _, NVSet _ _) -> unsafePtrEq
+    _ -> valueEq lv rv
+
+nforce :: (MonadThunk (NValue m) (NThunk m) m, MonadCatch m)
+       => NThunk m -> (NValue m -> m r) -> m r
+nforce (NThunk (NCited _ t)) = forceThunk t
+
+nforceEff :: MonadThunk (NValue m) (NThunk m) m
+          => NThunk m -> (NValue m -> m r) -> m r
+nforceEff (NThunk (NCited _ t)) = forceEffects t
+
+nwrapValue :: MonadThunk (NValue m) (NThunk m) m => NValue m -> NThunk m
+nwrapValue = NThunk . NCited [] . valueRef
 
 addProvenance :: (NValue m -> Provenance m) -> NValue m -> NValue m
 addProvenance f l@(NValue (NCited p v)) = NValue (NCited (f l : p) v)
@@ -221,19 +252,6 @@ isClosureNF :: Monad m => NValueNF m -> Bool
 isClosureNF (Free NVClosureF {}) = True
 isClosureNF _ = False
 
-thunkEq :: MonadThunk (NValue m) (NThunk m) m
-        => NThunk m -> NThunk m -> m Bool
-thunkEq lt rt = force lt $ \lv -> force rt $ \rv ->
-  let unsafePtrEq = case (lt, rt) of
-        (NThunk (NCited _ (Thunk lid _ _)),
-         NThunk (NCited _ (Thunk rid _ _))) | lid == rid -> return True
-        _ -> valueEq lv rv
-  in case (lv, rv) of
-    (NVClosure _ _, NVClosure _ _) -> unsafePtrEq
-    (NVList _, NVList _) -> unsafePtrEq
-    (NVSet _ _, NVSet _ _) -> unsafePtrEq
-    _ -> valueEq lv rv
-
 -- | Checks whether two containers are equal, using the given item equality
 --   predicate. If there are any item slots that don't match between the two
 --   containers, the result will be False.
@@ -264,19 +282,18 @@ valueEq :: MonadThunk (NValue m) (NThunk m) m
 valueEq = curry $ \case
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
     (NVStr ls, NVStr rs) -> pure $ principledStringIgnoreContext ls == principledStringIgnoreContext rs
-    (NVList ls, NVList rs) -> alignEqM thunkEq ls rs
+    (NVList ls, NVList rs) -> alignEqM nthunkEq ls rs
     (NVSet lm _, NVSet rm _) -> do
-        let compareAttrs = alignEqM thunkEq lm rm
+        let compareAttrs = alignEqM nthunkEq lm rm
         isDerivation lm >>= \case
             True -> isDerivation rm >>= \case
                 True | Just lp <- M.lookup "outPath" lm
                      , Just rp <- M.lookup "outPath" rm
-                       -> thunkEq lp rp
+                       -> nthunkEq lp rp
                 _ -> compareAttrs
             _ -> compareAttrs
     (NVPath lp, NVPath rp) -> pure $ lp == rp
     _ -> pure False
-
 
 data TStringContext = NoContext | HasContext
   deriving Show
@@ -329,8 +346,8 @@ instance Show (NValueF m (NThunk m)) where
 instance Show (NValue m) where
     show (NValue (NCited _ v))  = show v
 
-instance Show (NThunk m) where
-    show (NThunk (NCited _ (Value v))) = show v
+instance MonadThunk (NValue m) (NThunk m) m => Show (NThunk m) where
+    show (NThunk (NCited _ (thunkValue -> Just v))) = show v
     show (NThunk (NCited _ _)) = "<thunk>"
 
 instance Eq1 (NValueF m) where

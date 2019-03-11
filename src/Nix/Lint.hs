@@ -50,7 +50,9 @@ import           Nix.String
 import           Nix.Options
 import           Nix.Scope
 import           Nix.Thunk
+import           Nix.Thunk.Basic
 import           Nix.Utils
+import           Nix.Var
 
 data TAtom
   = TInt
@@ -95,7 +97,7 @@ data NSymbolicF r
     | NMany [r]
     deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
-newtype SThunk m = SThunk { getSThunk :: Thunk m (Symbolic m) }
+newtype SThunk m = SThunk { getSThunk :: NThunkF m (Symbolic m) }
 
 newtype Symbolic m =
     Symbolic { getSymbolic :: Var m (NSymbolicF (NTypeF m (SThunk m))) }
@@ -249,7 +251,9 @@ instance ToValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
 instance MonadLint e m => MonadThunk (Symbolic m) (SThunk m) m where
     thunk = fmap coerce . buildThunk
     force = forceThunk . coerce
-    value = coerce . valueRef
+    forceEff = forceEffects . coerce
+    wrapValue = coerce . valueRef
+    getValue = thunkValue . coerce
 
 instance MonadLint e m => MonadEval (Symbolic m) m where
     freeVariable var = symerr $
@@ -266,9 +270,9 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
             ++ " in " ++ show s
 
     evalCurPos = do
-        f <- value <$> mkSymbolic [TPath]
-        l <- value <$> mkSymbolic [TConstant [TInt]]
-        c <- value <$> mkSymbolic [TConstant [TInt]]
+        f <- wrapValue <$> mkSymbolic [TPath]
+        l <- wrapValue <$> mkSymbolic [TConstant [TInt]]
+        c <- wrapValue <$> mkSymbolic [TConstant [TInt]]
         mkSymbolic [TSet (Just (M.fromList (go f l c)))]
       where
         go f l c =

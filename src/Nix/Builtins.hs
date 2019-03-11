@@ -101,15 +101,15 @@ withNixContext :: forall e m r. (MonadNix e m, Has e Options)
 withNixContext mpath action = do
     base <- builtins
     opts :: Options <- asks (view hasLens)
-    let i = value @(NValue m) @(NThunk m) @m $ nvList $
-            map (value @(NValue m) @(NThunk m) @m
+    let i = wrapValue @(NValue m) @(NThunk m) @m $ nvList $
+            map (wrapValue @(NValue m) @(NThunk m) @m
                      . nvStr . hackyMakeNixStringWithoutContext . Text.pack) (include opts)
     pushScope (M.singleton "__includes" i) $
         pushScopes base $ case mpath of
             Nothing -> action
             Just path -> do
                 traceM $ "Setting __cur_file = " ++ show path
-                let ref = value @(NValue m) @(NThunk m) @m $ nvPath path
+                let ref = wrapValue @(NValue m) @(NThunk m) @m $ nvPath path
                 pushScope (M.singleton "__cur_file" ref) action
 
 builtins :: (MonadNix e m, Scoped (NThunk m) m)
@@ -135,7 +135,7 @@ data Builtin m = Builtin
     }
 
 valueThunk :: forall e m. MonadNix e m => NValue m -> NThunk m
-valueThunk = value @_ @_ @m
+valueThunk = wrapValue @_ @_ @m
 
 force' :: forall e m. MonadNix e m => NThunk m -> m (NValue m)
 force' = force ?? pure
