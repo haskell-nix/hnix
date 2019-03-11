@@ -1,9 +1,13 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -11,6 +15,8 @@ module Nix.Thunk.Basic where
 
 import Control.Exception hiding (catch)
 import Control.Monad.Catch
+import Control.Monad.Ref
+import Data.GADT.Compare
 
 import Nix.Fresh
 import Nix.Thunk
@@ -29,8 +35,23 @@ instance Show v => Show (NThunkF m v) where
     show (Value v) = show v
     show (Thunk _ _ _) = "<thunk>"
 
+type MonadBasicThunk m
+    = (MonadAtomicRef m, GEq (Ref m), MonadFreshId Int m, MonadCatch m)
+
+instance (MonadAtomicRef m, GEq (Ref m), MonadFreshId Int m, MonadCatch m)
+  => MonadThunk v (NThunkF m v) m where
+    thunk = buildThunk
+    force = forceThunk
+    forceEff = forceEffects
+    wrapValue = valueRef
+    getValue = thunkValue
+
 valueRef :: v -> NThunkF m v
 valueRef = Value
+
+thunkValue :: NThunkF m v -> Maybe v
+thunkValue (Value v) = Just v
+thunkValue _ = Nothing
 
 buildThunk :: (MonadVar m, MonadFreshId Int m) => m v -> m (NThunkF m v)
 buildThunk action =do
@@ -73,7 +94,3 @@ forceEffects (Thunk _ active ref) k = do
                     writeVar ref (Computed v)
                     _ <- atomicModifyVar active (False,)
                     k v
-
-thunkValue :: NThunkF m v -> Maybe v
-thunkValue (Value v) = Just v
-thunkValue _ = Nothing

@@ -303,7 +303,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
         -- evaluated each time a name is looked up within the weak scope, and
         -- we want to be sure the action it evaluates is to force a thunk, so
         -- its value is only computed once.
-        s <- thunk scope
+        s <- thunk @(Symbolic m) @(SThunk m) scope
         pushWeakScope ?? body $ force s $ unpackSymbolic >=> \case
             NMany [TSet (Just s')] -> return s'
             NMany [TSet Nothing] -> error "NYI: with unknown"

@@ -131,7 +131,7 @@ eval (NHasAttr aset attr) = evalSelect aset attr >>= toValue . isRight
 
 eval (NList l) = do
     scope <- currentScopes
-    for l (thunk . withScopes @t scope) >>= toValue
+    for l (thunk @v @t . withScopes @t scope) >>= toValue
 
 eval (NSet binds) =
     evalBinds False (desugarBinds (eval . NSet) binds) >>= toValue
@@ -168,7 +168,7 @@ evalWithAttrSet aset body = do
     -- we want to be sure the action it evaluates is to force a thunk, so
     -- its value is only computed once.
     scope <- currentScopes :: m (Scopes m t)
-    s <- thunk $ withScopes scope aset
+    s <- thunk @v @t $ withScopes scope aset
     pushWeakScope ?? body $ force s $
         fmap fst . fromValue @(AttrSet t, AttrSet SourcePos)
 
@@ -241,7 +241,7 @@ evalBinds recursive binds = do
         finalValue >>= fromValue >>= \(o', p') ->
             -- jww (2018-05-09): What to do with the key position here?
             return $ map (\(k, v) -> ([k], fromMaybe pos (M.lookup k p'),
-                                     force v pure))
+                                     force @v @t v pure))
                          (M.toList o')
 
     go _ (NamedVar pathExpr finalValue pos) = do

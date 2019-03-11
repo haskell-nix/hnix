@@ -50,8 +50,8 @@ import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
-import           Nix.String
 import           Nix.Scope
+import           Nix.String
 import           Nix.Thunk
 import           Nix.Thunk.Basic
 import           Nix.Utils
@@ -122,33 +122,18 @@ newtype NValueR t v = NValue { _nValue :: v (NThunkR t v) }
 type NThunk m = NThunkR (NCited NThunkF m) (NCited NValueF m)
 type NValue m = NValueR (NCited NThunkF m) (NCited NValueF m)
 
-nthunk :: MonadThunk (NValue m) (NThunk m) m
-       => m (NValue m) -> m (NThunk m)
-nthunk = fmap (NThunk . NCited []) . buildThunk
-
-nthunkEq :: MonadThunk (NValue m) (NThunk m) m
-         => NThunk m -> NThunk m -> m Bool
-nthunkEq lt rt = force lt $ \lv -> force rt $ \rv ->
-  let unsafePtrEq = case (lt, rt) of
-          (NThunk (NCited _ (Thunk lid _ _)),
-           NThunk (NCited _ (Thunk rid _ _))) | lid == rid -> return True
-          _ -> valueEq lv rv
-  in case (lv, rv) of
-    (NVClosure _ _, NVClosure _ _) -> unsafePtrEq
-    (NVList _, NVList _) -> unsafePtrEq
-    (NVSet _ _, NVSet _ _) -> unsafePtrEq
-    _ -> valueEq lv rv
-
-nforce :: (MonadThunk (NValue m) (NThunk m) m, MonadCatch m)
-       => NThunk m -> (NValue m -> m r) -> m r
-nforce (NThunk (NCited _ t)) = forceThunk t
-
-nforceEff :: MonadThunk (NValue m) (NThunk m) m
-          => NThunk m -> (NValue m -> m r) -> m r
-nforceEff (NThunk (NCited _ t)) = forceEffects t
-
-nwrapValue :: MonadThunk (NValue m) (NThunk m) m => NValue m -> NThunk m
-nwrapValue = NThunk . NCited [] . valueRef
+thunkEq :: (MonadThunk (NValue m) (NThunk m) m, MonadBasicThunk m)
+        => NThunk m -> NThunk m -> m Bool
+thunkEq lt rt = force lt $ \lv -> force rt $ \rv ->
+ let unsafePtrEq = case (lt, rt) of
+         (NThunk (NCited _ (Thunk lid _ _)),
+          NThunk (NCited _ (Thunk rid _ _))) | lid == rid -> return True
+         _ -> valueEq lv rv
+ in case (lv, rv) of
+   (NVClosure _ _, NVClosure _ _) -> unsafePtrEq
+   (NVList _, NVList _) -> unsafePtrEq
+   (NVSet _ _, NVSet _ _) -> unsafePtrEq
+   _ -> valueEq lv rv
 
 addProvenance :: (NValue m -> Provenance m) -> NValue m -> NValue m
 addProvenance f l@(NValue (NCited p v)) = NValue (NCited (f l : p) v)
@@ -274,7 +259,7 @@ alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
         _ -> throwE ()
     forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
 
-isDerivation :: MonadThunk (NValue m) (NThunk m) m
+isDerivation :: (MonadThunk (NValue m) (NThunk m) m, MonadBasicThunk m)
              => AttrSet (NThunk m) -> m Bool
 isDerivation m = case M.lookup "type" m of
     Nothing -> pure False
@@ -284,19 +269,21 @@ isDerivation m = case M.lookup "type" m of
       NVStr s -> pure $ principledStringIgnoreContext s == "derivation"
       _ -> pure False
 
-valueEq :: MonadThunk (NValue m) (NThunk m) m
+valueEq :: (MonadThunk (NValue m) (NThunk m) m, MonadBasicThunk m)
         => NValue m -> NValue m -> m Bool
 valueEq = curry $ \case
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
-    (NVStr ls, NVStr rs) -> pure $ principledStringIgnoreContext ls == principledStringIgnoreContext rs
-    (NVList ls, NVList rs) -> alignEqM nthunkEq ls rs
+    (NVStr ls, NVStr rs) ->
+        pure $ principledStringIgnoreContext ls
+            == principledStringIgnoreContext rs
+    (NVList ls, NVList rs) -> alignEqM thunkEq ls rs
     (NVSet lm _, NVSet rm _) -> do
-        let compareAttrs = alignEqM nthunkEq lm rm
+        let compareAttrs = alignEqM thunkEq lm rm
         isDerivation lm >>= \case
             True -> isDerivation rm >>= \case
                 True | Just lp <- M.lookup "outPath" lm
                      , Just rp <- M.lookup "outPath" rm
-                       -> nthunkEq lp rp
+                       -> thunkEq lp rp
                 _ -> compareAttrs
             _ -> compareAttrs
     (NVPath lp, NVPath rp) -> pure $ lp == rp

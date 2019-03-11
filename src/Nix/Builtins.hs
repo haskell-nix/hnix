@@ -512,8 +512,12 @@ parseDrvName = fromValue >=> fromStringNoContext >=> \s -> do
     let (name :: Text, version :: Text) = splitDrvName s
     -- jww (2018-04-15): There should be an easier way to write this.
     (toValue =<<) $ sequence $ M.fromList
-        [ ("name" :: Text, thunk (toValue @_ @_ @(NValue m) $ principledMakeNixStringWithoutContext name))
-        , ("version",     thunk (toValue $ principledMakeNixStringWithoutContext version)) ]
+        [ ("name" :: Text,
+           thunk @_ @(NThunk m)
+             (toValue $ principledMakeNixStringWithoutContext name))
+        , ("version",
+           thunk @_ @(NThunk m)
+             (toValue $ principledMakeNixStringWithoutContext version)) ]
 
 match_ :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 match_ pat str =
@@ -584,7 +588,7 @@ attrValues = fromValue @(ValueSet m) >=>
 map_ :: forall e m. MonadNix e m
      => m (NValue m) -> m (NValue m) -> m (NValue m)
 map_ fun xs = fun >>= \f ->
-    toNix <=< traverse (thunk . withFrame Debug
+    toNix <=< traverse (thunk @_ @(NThunk m) . withFrame Debug
                                     (ErrorCall "While applying f in map:\n")
                               . (f `callFunc`) . force')
           <=< fromValue @[NThunk m] $ xs
@@ -595,7 +599,7 @@ mapAttrs_ fun xs = fun >>= \f ->
     fromValue @(AttrSet (NThunk m)) xs >>= \aset -> do
         let pairs = M.toList aset
         values <- for pairs $ \(key, value) ->
-            thunk $
+            thunk @_ @(NThunk m) $
             withFrame Debug (ErrorCall "While applying f in mapAttrs:\n") $
             callFunc ?? force' value =<< callFunc f (pure (nvStr (principledMakeNixStringWithoutContext key)))
         toNix . M.fromList . zip (map fst pairs) $ values
@@ -674,11 +678,12 @@ elemAt_ xs n = fromValue n >>= \n' -> fromValue xs >>= \xs' ->
       Nothing -> throwError $ ErrorCall $ "builtins.elem: Index " ++ show n'
           ++ " too large for list of length " ++ show (length xs')
 
-genList :: MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
+genList :: forall e m. MonadNix e m => m (NValue m) -> m (NValue m) -> m (NValue m)
 genList generator = fromValue @Integer >=> \n ->
     if n >= 0
     then generator >>= \f ->
-        toNix =<< forM [0 .. n - 1] (\i -> thunk $ f `callFunc` toNix i)
+        toNix =<< forM [0 .. n - 1]
+          (\i -> thunk @_ @(NThunk m) $ f `callFunc` toNix i)
     else throwError $ ErrorCall $ "builtins.genList: Expected a non-negative number, got "
              ++ show n
 
