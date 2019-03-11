@@ -119,15 +119,15 @@ instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
                     go _ = []
                     ps = concatMap (go . frame) frames
 
-                fmap (NThunk ps . coerce) . buildThunk $ mv
+                fmap (NThunk . NCited ps . coerce) . buildThunk $ mv
             else
-                fmap (NThunk [] . coerce) . buildThunk $ mv
+                fmap (NThunk . NCited [] . coerce) . buildThunk $ mv
 
     -- The ThunkLoop exception is thrown as an exception with MonadThrow,
     -- which does not capture the current stack frame information to provide
     -- it in a NixException, so we catch and re-throw it here using
     -- 'throwError' from Frames.hs.
-    force (NThunk ps t) f = catch go (throwError @ThunkLoop)
+    force (NThunk (NCited ps t)) f = catch go (throwError @ThunkLoop)
       where
         go = case ps of
             [] -> forceThunk t f
@@ -135,7 +135,7 @@ instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
                 withFrame Info (ForcingExpr scope (wrapExprLoc span e))
                     (forceThunk t f)
 
-    value = NThunk [] . coerce . valueRef
+    value = NThunk . NCited [] . coerce . valueRef
 
 {-
 prov :: MonadNix e m
@@ -253,17 +253,21 @@ instance MonadNix e m => MonadEval (NValue m) m where
 infixl 1 `callFunc`
 callFunc :: forall e m. (MonadNix e m, Typeable m)
          => NValue m -> m (NValue m) -> m (NValue m)
-callFunc fun arg = case fun of
-    NVClosure params f -> do
-        traceM $ "callFunc:NVFunction taking " ++ show params
-        f arg
-    NVBuiltin name f -> do
-        span <- currentPos
-        withFrame Info (Calling @m @(NThunk m) name span) $ f arg
-    s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
-        traceM "callFunc:__functor"
-        force f $ (`callFunc` pure s) >=> (`callFunc` arg)
-    x -> throwError $ ErrorCall $ "Attempt to call non-function: " ++ show x
+callFunc fun arg = do
+    frames :: Frames <- asks (view hasLens)
+    when (length frames > 2000) $
+        throwError $ ErrorCall "Function call stack exhausted"
+    case fun of
+        NVClosure params f -> do
+            traceM $ "callFunc:NVFunction taking " ++ show params
+            f arg
+        NVBuiltin name f -> do
+            span <- currentPos
+            withFrame Info (Calling @m @(NThunk m) name span) $ f arg
+        s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
+            traceM "callFunc:__functor"
+            force f $ (`callFunc` pure s) >=> (`callFunc` arg)
+        x -> throwError $ ErrorCall $ "Attempt to call non-function: " ++ show x
 
 execUnaryOp :: (Framed e m, MonadVar m)
             => Scopes m (NThunk m) -> SrcSpan -> NUnaryOp -> NValue m

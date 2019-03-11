@@ -59,7 +59,7 @@ normalFormBy k n v = case v of
             then return $ Pure val
             else normalFormBy k (succ n) val
 
-    seen (NThunk _ (Thunk _ b _)) = do
+    seen (NThunk (NCited _ (Thunk _ b _))) = do
         res <- gets (isJust . find (eqVar @m b))
         unless res $
             modify (b:)
@@ -90,7 +90,7 @@ normalForm_
     :: forall e m. (Framed e m, MonadVar m, Typeable m,
               MonadThunk (NValue m) (NThunk m) m)
     => NValue m -> m ()
-normalForm_ = void . normalForm' (forceEffects . _baseThunk)
+normalForm_ = void . normalForm' (forceEffects . _cited . _nThunk)
 
 embed :: forall m. (MonadThunk (NValue m) (NThunk m) m)
       => NValueNF m -> m (NValue m)

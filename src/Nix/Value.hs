@@ -104,53 +104,51 @@ data Provenance m = Provenance
       --   result of the call, but what was called and with what arguments.
     }
 
-data NThunk m = NThunk
-    { _thunkProvenance :: [Provenance m]
-    , _baseThunk       :: Thunk m (NValue m)
+data NCited f m a = NCited
+    { _provenance :: [Provenance m]
+    , _cited      :: f m a
     }
 
-data NValue m = NValue
-    { _valueProvenance :: [Provenance m]
-    , _baseValue       :: NValueF m (NThunk m)
-    }
+newtype NThunk m = NThunk { _nThunk :: NCited Thunk   m (NValue m) }
+newtype NValue m = NValue { _nValue :: NCited NValueF m (NThunk m) }
 
 addProvenance :: (NValue m -> Provenance m) -> NValue m -> NValue m
-addProvenance f l@(NValue p v) = NValue (f l : p) v
+addProvenance f l@(NValue (NCited p v)) = NValue (NCited (f l : p) v)
 
-pattern NVConstant x <- NValue _ (NVConstantF x)
+pattern NVConstant x <- NValue (NCited _ (NVConstantF x))
 
-nvConstant x = NValue [] (NVConstantF x)
-nvConstantP p x = NValue [p] (NVConstantF x)
+nvConstant x = NValue (NCited [] (NVConstantF x))
+nvConstantP p x = NValue (NCited [p] (NVConstantF x))
 
-pattern NVStr ns <- NValue _ (NVStrF ns)
+pattern NVStr ns <- NValue (NCited _ (NVStrF ns))
 
-nvStr ns = NValue [] (NVStrF ns)
-nvStrP p ns = NValue [p] (NVStrF ns)
+nvStr ns = NValue (NCited [] (NVStrF ns))
+nvStrP p ns = NValue (NCited [p] (NVStrF ns))
 
-pattern NVPath x <- NValue _ (NVPathF x)
+pattern NVPath x <- NValue (NCited _ (NVPathF x))
 
-nvPath x = NValue [] (NVPathF x)
-nvPathP p x = NValue [p] (NVPathF x)
+nvPath x = NValue (NCited [] (NVPathF x))
+nvPathP p x = NValue (NCited [p] (NVPathF x))
 
-pattern NVList l <- NValue _ (NVListF l)
+pattern NVList l <- NValue (NCited _ (NVListF l))
 
-nvList l = NValue [] (NVListF l)
-nvListP p l = NValue [p] (NVListF l)
+nvList l = NValue (NCited [] (NVListF l))
+nvListP p l = NValue (NCited [p] (NVListF l))
 
-pattern NVSet s x <- NValue _ (NVSetF s x)
+pattern NVSet s x <- NValue (NCited _ (NVSetF s x))
 
-nvSet s x = NValue [] (NVSetF s x)
-nvSetP p s x = NValue [p] (NVSetF s x)
+nvSet s x = NValue (NCited [] (NVSetF s x))
+nvSetP p s x = NValue (NCited [p] (NVSetF s x))
 
-pattern NVClosure x f <- NValue _ (NVClosureF x f)
+pattern NVClosure x f <- NValue (NCited _ (NVClosureF x f))
 
-nvClosure x f = NValue [] (NVClosureF x f)
-nvClosureP p x f = NValue [p] (NVClosureF x f)
+nvClosure x f = NValue (NCited [] (NVClosureF x f))
+nvClosureP p x f = NValue (NCited [p] (NVClosureF x f))
 
-pattern NVBuiltin name f <- NValue _ (NVBuiltinF name f)
+pattern NVBuiltin name f <- NValue (NCited _ (NVBuiltinF name f))
 
-nvBuiltin name f = NValue [] (NVBuiltinF name f)
-nvBuiltinP p name f = NValue [p] (NVBuiltinF name f)
+nvBuiltin name f = NValue (NCited [] (NVBuiltinF name f))
+nvBuiltinP p name f = NValue (NCited [p] (NVBuiltinF name f))
 
 instance Show (NValueF m (Fix (NValueF m))) where
     showsPrec = flip go where
@@ -227,7 +225,8 @@ thunkEq :: MonadThunk (NValue m) (NThunk m) m
         => NThunk m -> NThunk m -> m Bool
 thunkEq lt rt = force lt $ \lv -> force rt $ \rv ->
   let unsafePtrEq = case (lt, rt) of
-        (NThunk _ (Thunk lid _ _), NThunk _ (Thunk rid _ _)) | lid == rid -> return True
+        (NThunk (NCited _ (Thunk lid _ _)),
+         NThunk (NCited _ (Thunk rid _ _))) | lid == rid -> return True
         _ -> valueEq lv rv
   in case (lv, rv) of
     (NVClosure _ _, NVClosure _ _) -> unsafePtrEq
@@ -328,11 +327,11 @@ instance Show (NValueF m (NThunk m)) where
     show = show . describeValue . valueType
 
 instance Show (NValue m) where
-    show (NValue _ v)  = show v
+    show (NValue (NCited _ v))  = show v
 
 instance Show (NThunk m) where
-    show (NThunk _ (Value v)) = show v
-    show (NThunk _ _) = "<thunk>"
+    show (NThunk (NCited _ (Value v))) = show v
+    show (NThunk (NCited _ _)) = "<thunk>"
 
 instance Eq1 (NValueF m) where
     liftEq _  (NVConstantF x)  (NVConstantF y)  = x == y
@@ -370,6 +369,7 @@ instance Typeable m => Exception (ValueFrame m)
 
 $(makeTraversals ''NValueF)
 $(makeLenses ''Provenance)
+$(makeLenses ''NCited)
 $(makeLenses ''NThunk)
 $(makeLenses ''NValue)
 
@@ -383,4 +383,4 @@ hashAt :: VarName -> Lens' (AttrSet v) (Maybe v)
 hashAt = flip alterF
 
 key :: Applicative f => VarName -> LensLike' f (NValue m) (Maybe (NThunk m))
-key k = baseValue._NVSetF._1.hashAt k
+key k = nValue.cited._NVSetF._1.hashAt k

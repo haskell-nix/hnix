@@ -154,7 +154,7 @@ main = do
               where
                 go prefix s = do
                     xs <- forM (sortOn fst (M.toList s))
-                        $ \(k, nv@(NThunk _ t)) -> case t of
+                        $ \(k, nv@(NThunk (NCited _ t))) -> case t of
                             Value v -> pure (k, Just v)
                             Thunk _ _ ref -> do
                                 let path = prefix ++ Text.unpack k

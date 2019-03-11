@@ -13,6 +13,7 @@
 
 module Nix.Pretty where
 
+import           Control.Applicative ((<|>))
 import           Control.Monad
 import           Control.Monad.Free
 import           Data.Fix
@@ -39,6 +40,7 @@ import           Nix.Utils hiding ((<$>))
 #endif
 import           Nix.Value
 import           Prelude hiding ((<$>))
+import           Text.Read (readMaybe)
 
 -- | This type represents a pretty printed nix expression
 -- together with some information about the expression.
@@ -172,8 +174,8 @@ prettyOriginExpr = withoutParens . go
     go = exprFNixDoc . annotated . getCompose . fmap render
 
     render Nothing = simpleExpr $ "_"
-    render (Just (NValue (reverse -> p:_) _)) = go (_originExpr p)
-    render (Just (NValue _ _)) = simpleExpr "?"
+    render (Just (NValue (NCited (reverse -> p:_) _))) = go (_originExpr p)
+    render (Just (NValue (NCited _ _))) = simpleExpr "?"
         -- simpleExpr $ foldr ((\x y -> vsep [x, y]) . parens . indent 2 . withoutParens
         --                           . go . originExpr)
         --     mempty (reverse ps)
@@ -296,8 +298,15 @@ printNix = iter phi . check
     phi (NVStrF ns) = show $ hackyStringIgnoreContext ns
     phi (NVListF l) = "[ " ++ unwords l ++ " ]"
     phi (NVSetF s _) =
-        "{ " ++ concat [ unpack k ++ " = " ++ v ++ "; "
+        "{ " ++ concat [ check (unpack k) ++ " = " ++ v ++ "; "
                        | (k, v) <- sort $ toList s ] ++ "}"
+      where
+        check v =
+            fromMaybe v
+            ((fmap (surround . show) (readMaybe v :: Maybe Int))
+             <|> (fmap (surround . show) (readMaybe v :: Maybe Float)))
+          where
+            surround s = "\"" ++ s ++ "\""
     phi NVClosureF {} = "<<lambda>>"
     phi (NVPathF fp) = fp
     phi (NVBuiltinF name _) = "<<builtin " ++ name ++ ">>"
@@ -305,8 +314,10 @@ printNix = iter phi . check
 removeEffects :: Functor m => NValueF m (NThunk m) -> NValueNF m
 removeEffects = Free . fmap dethunk
   where
-    dethunk (NThunk _ (Value v)) = removeEffects (_baseValue v)
-    dethunk (NThunk _ _) = Free $ NVStrF $ principledMakeNixStringWithoutContext "<thunk>"
+    dethunk (NThunk (NCited _ (Value (NValue v)))) =
+        removeEffects (_cited v)
+    dethunk (NThunk (NCited _ _)) =
+        Free $ NVStrF $ principledMakeNixStringWithoutContext "<thunk>"
 
 removeEffectsM :: MonadVar m => NValueF m (NThunk m) -> m (NValueNF m)
 removeEffectsM = fmap Free . traverse dethunk
@@ -315,12 +326,12 @@ prettyNValueF :: MonadVar m => NValueF m (NThunk m) -> m (Doc ann)
 prettyNValueF = fmap prettyNValueNF . removeEffectsM
 
 prettyNValue :: MonadVar m => NValue m -> m (Doc ann)
-prettyNValue (NValue _ v) = prettyNValueF v
+prettyNValue (NValue (NCited _ v)) = prettyNValueF v
 
 prettyNValueProv :: MonadVar m => NValue m -> m (Doc ann)
 prettyNValueProv = \case
-    NValue [] v -> prettyNValueF v
-    NValue ps v -> do
+    NValue (NCited [] v) -> prettyNValueF v
+    NValue (NCited ps v) -> do
         v' <- prettyNValueF v
         pure $ fillSep $
           [ v'
@@ -330,7 +341,7 @@ prettyNValueProv = \case
           ]
 prettyNThunk :: MonadVar m => NThunk m -> m (Doc ann)
 prettyNThunk = \case
-    t@(NThunk ps _) -> do
+    t@(NThunk (NCited ps _)) -> do
         v' <- fmap prettyNValueNF (dethunk t)
         pure $ fillSep $
           [ v'
@@ -340,15 +351,15 @@ prettyNThunk = \case
           ]
 dethunk :: MonadVar m => NThunk m -> m (NValueNF m)
 dethunk = \case
-    NThunk _ (Value v) -> removeEffectsM (_baseValue v)
-    NThunk _ (Thunk _ active ref) -> do
+    NThunk (NCited _ (Value (NValue v))) -> removeEffectsM (_cited v)
+    NThunk (NCited _ (Thunk _ active ref)) -> do
         nowActive <- atomicModifyVar active (True,)
         if nowActive
             then pure $ Free $ NVStrF $ principledMakeNixStringWithoutContext "<thunk>"
             else do
                 eres <- readVar ref
                 res <- case eres of
-                    Computed v -> removeEffectsM (_baseValue v)
+                    Computed (NValue v) -> removeEffectsM (_cited v)
                     _ -> pure $ Free $ NVStrF $ principledMakeNixStringWithoutContext "<thunk>"
                 _ <- atomicModifyVar active (False,)
                 return res
