@@ -70,6 +70,9 @@ import qualified Type.Reflection as Reflection
 
 type VarName = Text
 
+hashAt :: VarName -> Lens' (AttrSet v) (Maybe v)
+hashAt = flip alterF
+
 -- unfortunate orphans
 #if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 NonEmpty

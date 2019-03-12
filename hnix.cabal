@@ -439,6 +439,7 @@ library
       Nix.Atoms
       Nix.Builtins
       Nix.Cache
+      Nix.Cited
       Nix.Context
       Nix.Convert
       Nix.Effects

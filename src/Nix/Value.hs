@@ -30,7 +30,6 @@
 module Nix.Value where
 
 import           Control.Comonad
-import           Control.Comonad.Env
 import           Control.Monad
 -- import           Control.Monad.Catch
 import           Control.Monad.Free
@@ -40,9 +39,7 @@ import qualified Data.Aeson as A
 import           Data.Align
 import           Data.Fix
 import           Data.Functor.Classes
-import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
-import           Data.Hashable
 import           Data.These
 import           Data.Typeable (Typeable)
 import           GHC.Generics
@@ -53,38 +50,9 @@ import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 -- import           Nix.Frames
-import           Nix.Scope
 import           Nix.String
 import           Nix.Thunk
 import           Nix.Utils
-
-data Provenance t v m = Provenance
-    { _lexicalScope :: Scopes m t
-    , _originExpr   :: NExprLocF (Maybe v)
-      -- ^ When calling the function x: x + 2 with argument x = 3, the
-      --   'originExpr' for the resulting value will be 3 + 2, while the
-      --   'contextExpr' will be @(x: x + 2) 3@, preserving not only the
-      --   result of the call, but what was called and with what arguments.
-    }
-    deriving (Generic, Typeable)
-
-data NCited t v m a = NCited
-    { _provenance :: [Provenance t v m]
-    , _cited      :: a
-    }
-    deriving (Generic, Typeable, Functor, Foldable, Traversable)
-
-instance Applicative (NCited t v m) where
-  pure = NCited []
-  -- jww (2019-03-11): ??
-  NCited xs f <*> NCited ys x = NCited (xs <> ys) (f x)
-
-instance Comonad (NCited t v m) where
-  duplicate p = NCited (_provenance p) p
-  extract = _cited
-
-instance ComonadEnv [Provenance t v m] (NCited t v m) where
-  ask = _provenance
 
 -- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation is
 --   completed. 's' is related to the type of errors that might occur during
@@ -419,8 +387,18 @@ describeValue = \case
     TPath              -> "a path"
     TBuiltin           -> "a builtin function"
 
--- instance Show (NValueF (NValue m) m (NThunk m)) where
---     show = describeValue . valueType
+instance MonadDataContext m => Show (NValue m) where
+    show = describeValue
+        . valueType
+        . getCompose
+        . extract
+        . getCompose
+        . unFix
+        . _nValue
+
+instance Show (NValueF (NValue m) m
+               (f (Fix (Compose g (Compose (NValueF (NValue m) m) f))))) where
+    show = describeValue . valueType
 
 instance Show (NValueF (NValueNF m) m r) where
     show = describeValue . valueType
@@ -467,20 +445,7 @@ data ValueFrame m
 -- instance Typeable m => Exception (ValueFrame m)
 
 $(makeTraversals ''NValueF)
-$(makeLenses ''Provenance)
-$(makeLenses ''NCited)
 $(makeLenses ''NValue)
-$(makeLensesBy (\n -> Just ("_" ++ n)) ''Fix)
-$(makeLensesBy (\n -> Just ("_" ++ n)) ''Compose)
-
-alterF :: (Eq k, Hashable k, Functor f)
-       => (Maybe v -> f (Maybe v)) -> k -> HashMap k v -> f (HashMap k v)
-alterF f k m = f (M.lookup k m) <&> \case
-    Nothing -> M.delete k m
-    Just v  -> M.insert k v m
-
-hashAt :: VarName -> Lens' (AttrSet v) (Maybe v)
-hashAt = flip alterF
 
 key :: (Applicative f, MonadDataContext m)
     => VarName -> LensLike' f (NValue m) (Maybe (NThunk m))
