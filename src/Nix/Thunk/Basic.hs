@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -40,11 +41,16 @@ type MonadBasicThunk m
 
 instance (MonadAtomicRef m, GEq (Ref m), MonadFreshId Int m, MonadCatch m)
   => MonadThunk v (NThunkF m v) m where
-    thunk = buildThunk
-    force = forceThunk
-    forceEff = forceEffects
+    thunk     = buildThunk
+    thunkId   = \case
+        Value _     -> -1
+        Thunk n _ _ -> n
+    query     = queryValue
+    queryM    = queryThunk
+    force     = forceThunk
+    forceEff  = forceEffects
     wrapValue = valueRef
-    getValue = thunkValue
+    getValue  = thunkValue
 
 valueRef :: v -> NThunkF m v
 valueRef = Value
@@ -58,9 +64,29 @@ buildThunk action =do
     freshThunkId <- freshId
     Thunk freshThunkId <$> newVar False <*> newVar (Deferred action)
 
+queryValue :: (MonadVar m, MonadThrow m, MonadCatch m)
+           => NThunkF m v -> a -> (v -> a) -> a
+queryValue (Value v) _ k = k v
+queryValue _ n _ = n
+
+queryThunk :: (MonadVar m, MonadThrow m, MonadCatch m)
+           => NThunkF m v -> m a -> (v -> m a) -> m a
+queryThunk (Value v) _ k = k v
+queryThunk (Thunk _ active ref) n k = do
+    nowActive <- atomicModifyVar active (True,)
+    if nowActive
+        then n
+        else do
+            eres <- readVar ref
+            res <- case eres of
+                Computed v -> k v
+                _ -> n
+            _ <- atomicModifyVar active (False,)
+            return res
+
 forceThunk :: (MonadVar m, MonadThrow m, MonadCatch m)
            => NThunkF m v -> (v -> m a) -> m a
-forceThunk (Value ref) k = k ref
+forceThunk (Value v) k = k v
 forceThunk (Thunk n active ref) k = do
     eres <- readVar ref
     case eres of
@@ -80,7 +106,7 @@ forceThunk (Thunk n active ref) k = do
                     k v
 
 forceEffects :: MonadVar m => NThunkF m v -> (v -> m a) -> m a
-forceEffects (Value ref) k = k ref
+forceEffects (Value v) k = k v
 forceEffects (Thunk _ active ref) k = do
     nowActive <- atomicModifyVar active (True,)
     if nowActive

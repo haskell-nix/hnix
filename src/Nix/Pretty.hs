@@ -170,6 +170,7 @@ prettyAtom atom = simpleExpr $ pretty $ unpack $ atomText atom
 prettyNix :: NExpr -> Doc ann
 prettyNix = withoutParens . cata exprFNixDoc
 
+{-
 prettyOriginExpr :: NExprLocF (Maybe (NValue m)) -> Doc ann
 prettyOriginExpr = withoutParens . go
   where
@@ -181,6 +182,7 @@ prettyOriginExpr = withoutParens . go
         -- simpleExpr $ foldr ((\x y -> vsep [x, y]) . parens . indent 2 . withoutParens
         --                           . go . originExpr)
         --     mempty (reverse ps)
+-}
 
 exprFNixDoc :: NExprF (NixDoc ann) -> NixDoc ann
 exprFNixDoc = \case
@@ -270,6 +272,7 @@ fixate g = Fix . go
     go (Pure a) = g a
     go (Free f) = fmap (Fix . go) f
 
+{-
 valueToExpr :: Functor m => NValueNF m -> NExpr
 valueToExpr = transport go . check
   where
@@ -288,7 +291,9 @@ valueToExpr = transport go . check
 
 prettyNValueNF :: Functor m => NValueNF m -> Doc ann
 prettyNValueNF = prettyNix . valueToExpr
+-}
 
+{-
 printNix :: Functor m => NValueNF m -> String
 printNix = iter phi . check
   where
@@ -312,19 +317,10 @@ printNix = iter phi . check
     phi NVClosureF {} = "<<lambda>>"
     phi (NVPathF fp) = fp
     phi (NVBuiltinF name _) = "<<builtin " ++ name ++ ">>"
+-}
 
-removeEffects :: MonadThunk (NThunk m) (NValue m) m
-              => NValueF m (NThunk m) -> NValueNF m
-removeEffects = Free . fmap dethunk
-  where
-    dethunk (NThunk (NCited _ (Value (NValue v)))) = removeEffects (_cited v)
-    dethunk (NThunk (NCited _ _)) =
-        Free $ NVStrF $ principledMakeNixStringWithoutContext "<thunk>"
-
-removeEffectsM :: MonadVar m => NValueF m (NThunk m) -> m (NValueNF m)
-removeEffectsM = fmap Free . traverse dethunk
-
-prettyNValueF :: MonadVar m => NValueF m (NThunk m) -> m (Doc ann)
+{-
+prettyNValueF :: MonadVar m => NValueF (NValue m) m (NThunk m) -> m (Doc ann)
 prettyNValueF = fmap prettyNValueNF . removeEffectsM
 
 prettyNValue :: MonadVar m => NValue m -> m (Doc ann)
@@ -341,6 +337,9 @@ prettyNValueProv = \case
             $ "from: "
             : map (prettyOriginExpr . _originExpr) ps
           ]
+-}
+
+{-
 prettyNThunk :: MonadVar m => NThunk m -> m (Doc ann)
 prettyNThunk = \case
     t@(NThunk (NCited ps _)) -> do
@@ -351,18 +350,4 @@ prettyNThunk = \case
             $ "thunk from: "
             : map (prettyOriginExpr . _originExpr) ps
           ]
-
-dethunk :: MonadVar m => NThunk m -> m (NValueNF m)
-dethunk = \case
-    NThunk (NCited _ (Value (NValue v))) -> removeEffectsM (_cited v)
-    NThunk (NCited _ (Thunk _ active ref)) -> do
-        nowActive <- atomicModifyVar active (True,)
-        if nowActive
-            then pure $ Free $ NVStrF $ principledMakeNixStringWithoutContext "<thunk>"
-            else do
-                eres <- readVar ref
-                res <- case eres of
-                    Computed (NValue v) -> removeEffectsM (_cited v)
-                    _ -> pure $ Free $ NVStrF $ principledMakeNixStringWithoutContext "<thunk>"
-                _ <- atomicModifyVar active (False,)
-                return res
+-}

@@ -484,6 +484,7 @@ library
     , base >=4.9 && <5
     , binary
     , bytestring
+    , comonad
     , containers
     , data-fix
     , deepseq >=1.4.2 && <1.5

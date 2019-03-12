@@ -31,7 +31,14 @@ import           System.Process
 -- | A path into the nix store
 newtype StorePath = StorePath { unStorePath :: FilePath }
 
-class (MonadFile m, MonadStore m, MonadPutStr m, MonadHttp m, MonadEnv m, MonadInstantiate m, MonadExec m, MonadIntrospect m) => MonadEffects m where
+class (MonadFile m,
+       MonadStore m,
+       MonadPutStr m,
+       MonadHttp m,
+       MonadEnv m,
+       MonadInstantiate m,
+       MonadExec m,
+       MonadIntrospect m) => MonadEffects m where
     -- | Determine the absolute path of relative path in the current context
     makeAbsolutePath :: FilePath -> m FilePath
     findEnvPath :: String -> m FilePath

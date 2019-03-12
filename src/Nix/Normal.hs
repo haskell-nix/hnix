@@ -61,11 +61,12 @@ normalFormBy k n v = case v of
             then return $ Pure val
             else normalFormBy k (succ n) val
 
-    seen (NThunk (NCited _ (Thunk _ b _))) = do
-        res <- gets (isJust . find (eqVar @m b))
-        unless res $
-            modify (b:)
-        return res
+    -- jww (2019-03-11): NYI
+    -- seen (NThunk (NCited _ (Thunk _ b _))) = do
+    --     res <- gets (isJust . find (eqVar @m b))
+    --     unless res $
+    --         modify (b:)
+    --     return res
     seen _ = pure False
 
 normalForm' :: forall e m. (Framed e m, MonadVar m, Typeable m,
