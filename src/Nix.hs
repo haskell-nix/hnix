@@ -97,7 +97,7 @@ evaluateExpression mpath evaluator handler expr = do
 
     eval' = (normalForm =<<) . nixEvalExpr mpath
 
-    argmap args = embed $ Free $ NVSetF (M.fromList args) mempty
+    argmap args = Fix $ NVSetF (M.fromList args) mempty
 
     compute ev x args p = do
          f <- ev mpath x

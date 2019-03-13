@@ -141,44 +141,86 @@ thunkEq lt rt = force lt $ \lv -> force rt $ \rv ->
    (NVSet _ _, NVSet _ _) -> unsafePtrEq
    _ -> valueEq lv rv
 
-weakenNValue :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-             => NValueNF m -> NValue m
-weakenNValue (NValueNF v) = iter (phi . getCompose) (fmap weakenNValue v)
+iterNValue
+    :: forall m r. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
+    => (NThunk m -> r)
+    -> (ValueContext m (NValueF (NValue m) m r) -> r)
+    -> NValue m -> r
+iterNValue h f (NValue (Fix (Compose (fmap getCompose -> v)))) =
+    f (fmap (fmap h) v)
+
+iterNValueM
+    :: forall m r. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
+    => (NThunk m -> m r)
+    -> (ValueContext m (NValueF (NValue m) m r) -> m r)
+    -> NValue m -> m r
+iterNValueM h f (NValue (Fix (Compose (fmap getCompose -> v)))) =
+    f =<< traverse go v
   where
-    phi :: ValueContext m (NValueF (NValueNF m) m (NValue m)) -> NValue m
-    phi = NValue . Fix . Compose
-        . fmap (Compose . fmap wrapValue . comapNValueFArg removeEffects)
-
-removeEffects :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-              => NValue m -> NValueNF m
-removeEffects (NValue (Fix (Compose (fmap getCompose -> v)))) =
-    NValueNF $ Free $ Compose $
-        fmap (fmap (_nValueNF . dethunk) . comapNValueFArg weakenNValue) v
-
-dethunk :: (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-        => NThunk m -> NValueNF m
-dethunk t = query t opaque removeEffects
-
-removeEffectsM :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-               => NValue m -> m (NValueNF m)
-removeEffectsM (NValue (Fix (Compose (fmap getCompose -> v)))) = do
-    x <- traverse (fmap (fmap _nValueNF) . go . comapNValueFArg weakenNValue) v
-    pure $ NValueNF . Free . Compose $ x
-  where
-    go :: NValueF (NValueNF m) m (NThunk m)
-       -> m (NValueF (NValueNF m) m (NValueNF m))
     go = \case
         NVConstantF a  -> pure $ NVConstantF a
         NVStrF s       -> pure $ NVStrF s
         NVPathF p      -> pure $ NVPathF p
-        NVListF l      -> NVListF <$> traverse dethunkM l
-        NVSetF s p     -> NVSetF <$> traverse dethunkM s <*> pure p
-        NVClosureF p g -> pure $ NVClosureF p (dethunkM <=< g)
-        NVBuiltinF s g -> pure $ NVBuiltinF s (dethunkM <=< g)
+        NVListF l      -> NVListF <$> traverse h l
+        NVSetF s p     -> NVSetF <$> traverse h s <*> pure p
+        NVClosureF p g -> pure $ NVClosureF p (h <=< g)
+        NVBuiltinF s g -> pure $ NVBuiltinF s (h <=< g)
 
-dethunkM :: (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-        => NThunk m -> m (NValueNF m)
-dethunkM t = queryM t (pure opaque) removeEffectsM
+iterNValueNF
+    :: forall m r. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
+    => (ValueContext m (NValueF (NValueNF m) m r) -> r)
+    -> NValueNF m -> r
+iterNValueNF f (NValueNF (Pure v)) = iterNValueNF f v
+iterNValueNF f (NValueNF (Free (Compose v))) =
+    f (fmap (fmap (iterNValueNF f . NValueNF)) v)
+
+iterNValueNFM
+    :: forall m r. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
+    => (ValueContext m (NValueF (NValueNF m) m r) -> m r)
+    -> NValueNF m -> m r
+iterNValueNFM f (NValueNF (Pure v)) = iterNValueNFM f v
+iterNValueNFM f (NValueNF (Free (Compose v))) =
+    f =<< traverse go v
+  where
+    go = \case
+        NVConstantF a  -> pure $ NVConstantF a
+        NVStrF s       -> pure $ NVStrF s
+        NVPathF p      -> pure $ NVPathF p
+        NVListF l      -> NVListF <$> traverse h l
+        NVSetF s p     -> NVSetF <$> traverse h s <*> pure p
+        NVClosureF p g -> pure $ NVClosureF p (h <=< g)
+        NVBuiltinF s g -> pure $ NVBuiltinF s (h <=< g)
+      where
+        h = iterNValueNFM f . NValueNF
+
+nValueFromNF :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
+             => (NValue m -> NValueNF m) -> NValueNF m -> NValue m
+nValueFromNF f = iterNValueNF $
+    NValue . Fix . Compose . fmap (Compose . fmap wrapValue . comapNValueFArg f)
+
+nValueToNF :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
+           => (NThunk m -> NValueNF m) -> (NValueNF m -> NValue m) -> NValue m
+           -> NValueNF m
+nValueToNF k f = iterNValue k $
+    NValueNF . Free . Compose . fmap (fmap _nValueNF . comapNValueFArg f)
+
+removeEffects :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
+              => NValue m -> NValueNF m
+removeEffects =
+    nValueToNF (\t -> query t opaque removeEffects) (nValueFromNF removeEffects)
+
+nValueToNFM :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
+            => (NThunk m -> m (NValueNF m)) -> (NValueNF m -> NValue m) -> NValue m
+            -> m (NValueNF m)
+nValueToNFM k f = iterNValueM k $
+    pure . NValueNF . Free . Compose
+         . fmap (fmap _nValueNF . comapNValueFArg f)
+
+removeEffectsM :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
+               => NValue m -> m (NValueNF m)
+removeEffectsM =
+    nValueToNFM (\t -> queryM t (pure opaque) removeEffectsM)
+                (nValueFromNF removeEffects)
 
 opaque :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
        => NValueNF m

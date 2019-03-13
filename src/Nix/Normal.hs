@@ -94,17 +94,3 @@ normalForm_
               MonadThunk (NValue m) (NThunk m) m)
     => NValue m -> m ()
 normalForm_ = void . normalForm' (forceEffects . _cited . _nThunk)
-
-embed :: forall m. (MonadThunk (NValue m) (NThunk m) m)
-      => NValueNF m -> m (NValue m)
-embed (Pure v) = return v
-embed (Free x) = case x of
-    NVConstantF a  -> return $ nvConstant a
-    NVStrF ns      -> return $ nvStr ns
-    NVListF l      ->
-        nvList       . fmap (wrapValue @_ @_ @m) <$> traverse embed l
-    NVSetF s p     ->
-        flip nvSet p . fmap (wrapValue @_ @_ @m) <$> traverse embed s
-    NVClosureF p f -> return $ nvClosure p f
-    NVPathF fp     -> return $ nvPath fp
-    NVBuiltinF n f -> return $ nvBuiltin n f
