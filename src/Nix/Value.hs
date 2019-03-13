@@ -105,7 +105,7 @@ comapNValueFArg f = \case
 
 newtype NValueNF m
     = NValueNF { _nValueNF :: Free (Compose (ValueContext m)
-                                   (NValueF (NValueNF m) m)) (NValueNF m) }
+                                   (NValueF (NValue m) m)) (NValue m) }
     deriving (Generic, Typeable)
 
 class (Monad m,
@@ -143,18 +143,22 @@ thunkEq lt rt = force lt $ \lv -> force rt $ \rv ->
 
 iterNValue
     :: forall m r. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-    => (NThunk m -> r)
+    => (NThunk m -> (NValue m -> r) -> r)
     -> (ValueContext m (NValueF (NValue m) m r) -> r)
     -> NValue m -> r
-iterNValue h f (NValue (Fix (Compose (fmap getCompose -> v)))) =
-    f (fmap (fmap h) v)
+iterNValue k f (NValue (Fix (Compose (fmap getCompose -> v)))) =
+    f (fmap (fmap (\t -> k t (iterNValue k f))) v)
 
 iterNValueM
-    :: forall m r. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-    => (NThunk m -> m r)
-    -> (ValueContext m (NValueF (NValue m) m r) -> m r)
-    -> NValue m -> m r
-iterNValueM h f (NValue (Fix (Compose (fmap getCompose -> v)))) =
+    :: forall m n r.
+    (MonadThunk (NValue m) (NThunk m) m,
+     MonadDataContext m,
+     Monad n)
+    => (forall x. n x -> m x)
+    -> (NThunk m -> (NValue m -> n r) -> n r)
+    -> (ValueContext m (NValueF (NValue m) m r) -> n r)
+    -> NValue m -> n r
+iterNValueM transform k f (NValue (Fix (Compose (fmap getCompose -> v)))) =
     f =<< traverse go v
   where
     go = \case
@@ -163,23 +167,31 @@ iterNValueM h f (NValue (Fix (Compose (fmap getCompose -> v)))) =
         NVPathF p      -> pure $ NVPathF p
         NVListF l      -> NVListF <$> traverse h l
         NVSetF s p     -> NVSetF <$> traverse h s <*> pure p
-        NVClosureF p g -> pure $ NVClosureF p (h <=< g)
-        NVBuiltinF s g -> pure $ NVBuiltinF s (h <=< g)
+        NVClosureF p g -> pure $ NVClosureF p (transform . h <=< g)
+        NVBuiltinF s g -> pure $ NVBuiltinF s (transform . h <=< g)
+      where
+        h t = k t (iterNValueM transform k f)
 
 iterNValueNF
     :: forall m r. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-    => (ValueContext m (NValueF (NValueNF m) m r) -> r)
+    => (ValueContext m (NValueF (NValue m) m r) -> r)
+    -> (NValue m -> r)
     -> NValueNF m -> r
-iterNValueNF f (NValueNF (Pure v)) = iterNValueNF f v
-iterNValueNF f (NValueNF (Free (Compose v))) =
-    f (fmap (fmap (iterNValueNF f . NValueNF)) v)
+iterNValueNF _ k (NValueNF (Pure v)) = k v
+iterNValueNF f k (NValueNF (Free (Compose v))) =
+    f (fmap (fmap (iterNValueNF f k . NValueNF)) v)
 
 iterNValueNFM
-    :: forall m r. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-    => (ValueContext m (NValueF (NValueNF m) m r) -> m r)
-    -> NValueNF m -> m r
-iterNValueNFM f (NValueNF (Pure v)) = iterNValueNFM f v
-iterNValueNFM f (NValueNF (Free (Compose v))) =
+    :: forall m n r.
+    (MonadThunk (NValue m) (NThunk m) m,
+     MonadDataContext m,
+     Monad n)
+    => (forall x. n x -> m x)
+    -> (ValueContext m (NValueF (NValue m) m r) -> n r)
+    -> (NValue m -> n r)
+    -> NValueNF m -> n r
+iterNValueNFM _ _ k (NValueNF (Pure v)) = k v
+iterNValueNFM transform f k (NValueNF (Free (Compose v))) =
     f =<< traverse go v
   where
     go = \case
@@ -188,44 +200,34 @@ iterNValueNFM f (NValueNF (Free (Compose v))) =
         NVPathF p      -> pure $ NVPathF p
         NVListF l      -> NVListF <$> traverse h l
         NVSetF s p     -> NVSetF <$> traverse h s <*> pure p
-        NVClosureF p g -> pure $ NVClosureF p (h <=< g)
-        NVBuiltinF s g -> pure $ NVBuiltinF s (h <=< g)
+        NVClosureF p g -> pure $ NVClosureF p (transform . h <=< g)
+        NVBuiltinF s g -> pure $ NVBuiltinF s (transform . h <=< g)
       where
-        h = iterNValueNFM f . NValueNF
+        h = iterNValueNFM transform f k . NValueNF
 
 nValueFromNF :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-             => (NValue m -> NValueNF m) -> NValueNF m -> NValue m
-nValueFromNF f = iterNValueNF $
-    NValue . Fix . Compose . fmap (Compose . fmap wrapValue . comapNValueFArg f)
+             => NValueNF m -> NValue m
+nValueFromNF =
+    iterNValueNF (NValue . Fix . Compose . fmap (Compose . fmap wrapValue)) id
 
 nValueToNF :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-           => (NThunk m -> NValueNF m) -> (NValueNF m -> NValue m) -> NValue m
+           => (NThunk m -> (NValue m -> NValueNF m) -> NValueNF m)
+           -> NValue m
            -> NValueNF m
-nValueToNF k f = iterNValue k $
-    NValueNF . Free . Compose . fmap (fmap _nValueNF . comapNValueFArg f)
+nValueToNF k =
+    iterNValue k $ NValueNF . Free . Compose . fmap (fmap _nValueNF)
 
-removeEffects :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-              => NValue m -> NValueNF m
-removeEffects =
-    nValueToNF (\t -> query t opaque removeEffects) (nValueFromNF removeEffects)
-
-nValueToNFM :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-            => (NThunk m -> m (NValueNF m)) -> (NValueNF m -> NValue m) -> NValue m
-            -> m (NValueNF m)
-nValueToNFM k f = iterNValueM k $
-    pure . NValueNF . Free . Compose
-         . fmap (fmap _nValueNF . comapNValueFArg f)
-
-removeEffectsM :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-               => NValue m -> m (NValueNF m)
-removeEffectsM =
-    nValueToNFM (\t -> queryM t (pure opaque) removeEffectsM)
-                (nValueFromNF removeEffects)
-
-opaque :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-       => NValueNF m
-opaque = NValueNF $ Free $ Compose $ pure $ NVStrF @(NValueNF m) $
-    principledMakeNixStringWithoutContext "<thunk>"
+nValueToNFM
+    :: forall m n.
+    (MonadThunk (NValue m) (NThunk m) m,
+     MonadDataContext m,
+     Monad n)
+    => (forall x. n x -> m x)
+    -> (NThunk m -> (NValue m -> n (NValueNF m)) -> n (NValueNF m))
+    -> NValue m
+    -> n (NValueNF m)
+nValueToNFM transform k = iterNValueM transform k $
+    pure . NValueNF . Free . Compose . fmap (fmap _nValueNF)
 
 -- addProvenance :: (NValue m -> Provenance t (NValue m) m) -> NValue m -> NValue m
 -- addProvenance f l@(NValue (NCited p v)) = NValue (NCited (f l : p) v)
@@ -439,10 +441,15 @@ instance MonadDataContext m => Show (NValue m) where
         . _nValue
 
 instance Show (NValueF (NValue m) m
-               (f (Fix (Compose g (Compose (NValueF (NValue m) m) f))))) where
+               (f (Fix (Compose g
+                        (Compose (NValueF (NValue m) m)
+                         f))))) where
     show = describeValue . valueType
 
-instance Show (NValueF (NValueNF m) m r) where
+instance Show (NValueF (NValue m) m
+                  (Free (Compose g
+                         (NValueF (NValue m) m))
+                        r)) where
     show = describeValue . valueType
 
 -- instance MonadDataContext m => Show (NValue m) where

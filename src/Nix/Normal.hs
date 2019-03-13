@@ -15,82 +15,87 @@ module Nix.Normal where
 import           Control.Monad
 import           Control.Monad.Free
 import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.Reader
 import           Control.Monad.Trans.State
-import qualified Data.HashMap.Lazy as M
-import           Data.List (find)
-import           Data.Maybe (isJust)
+import           Data.Functor.Compose
+import           Data.Set
 import           Nix.Frames
--- import           Nix.Pretty
+import           Nix.String
 import           Nix.Thunk
-import           Nix.Thunk.Basic
-import           Nix.Utils
 import           Nix.Value
-import           Nix.Var
 
 newtype NormalLoop m = NormalLoop (NValue m)
     deriving Show
 
 instance (MonadDataContext m, Typeable m) => Exception (NormalLoop m)
 
-normalFormBy
-    :: forall e m. (Framed e m, MonadVar m, Typeable m)
-    => (forall r. NThunk m -> (NValue m -> StateT [Var m Bool] m r)
-         -> StateT [Var m Bool] m r)
-    -> Int
-    -> NValue m
-    -> StateT [Var m Bool] m (NValueNF m)
-normalFormBy k n v = case v of
-    NVConstant a     -> return $ Free $ NVConstantF a
-    NVStr ns         -> return $ Free $ NVStrF ns
-    NVList l         ->
-        fmap (Free . NVListF) $ forM (zip [0..] l) $ \(i :: Int, t) -> do
-            traceM $ show n ++ ": normalFormBy: List[" ++ show i ++ "]"
-            k t (next t)
-    NVSet s p        ->
-        fmap (Free . flip NVSetF p) $ sequence $ flip M.mapWithKey s $ \ky t -> do
-            traceM $ show n ++ ": normalFormBy: Set{" ++ show ky ++ "}"
-            k t (next t)
-    NVClosure p f    -> return $ Free $ NVClosureF p f
-    NVPath fp        -> return $ Free $ NVPathF fp
-    NVBuiltin name f -> return $ Free $ NVBuiltinF name f
-    _ -> error "Pattern synonyms mask complete matches"
+normalForm'
+    :: forall e m.
+    (Framed e m,
+     Typeable m,
+     MonadThunk (NValue m) (NThunk m) m,
+     MonadDataContext m)
+    => (forall r. NThunk m -> (NValue m -> m r) -> m r)
+    -> NValue m -> m (NValueNF m)
+normalForm' f = run . nValueToNFM run go
   where
-    next t val = do
-        b <- seen t
-        if b
-            then return $ Pure val
-            else normalFormBy k (succ n) val
+    start = 0 :: Int
+    table = mempty
 
-    -- jww (2019-03-11): NYI
-    -- seen (NThunk (NCited _ (Thunk _ b _))) = do
-    --     res <- gets (isJust . find (eqVar @m b))
-    --     unless res $
-    --         modify (b:)
-    --     return res
-    seen _ = pure False
+    run :: ReaderT Int (StateT (Set Int) m) r -> m r
+    run = (`evalStateT` table) . (`runReaderT` start)
 
-normalForm' :: forall e m. (Framed e m, MonadVar m, Typeable m,
-               MonadThunk (NValue m) (NThunk m) m)
-            => (forall r. NThunk m -> (NValue m -> m r) -> m r)
-            -> NValue m -> m (NValueNF m)
-normalForm' f = flip evalStateT mempty . normalFormBy go 0
-  where
     go :: NThunk m
-       -> (NValue m -> StateT [Var m Bool] m r)
-       -> StateT [Var m Bool] m r
+       -> (NValue m -> ReaderT Int (StateT (Set Int) m) (NValueNF m))
+       -> ReaderT Int (StateT (Set Int) m) (NValueNF m)
     go t k = do
-        s <- get
-        (res, s') <- lift $ f t $ \v -> runStateT (k v) s
-        put s'
+        i <- ask
+        when (i > 2000) $
+            error "Exceeded maximum normalization depth of 2000 levels"
+        s <- lift get
+        (res, s') <- lift $ lift $ f t $ \v ->
+            (`runStateT` s) . (`runReaderT` i) $ local succ $ do
+                b <- seen t
+                if b
+                    then return $ NValueNF $ Pure v
+                    else k v
+        lift $ put s'
         return res
 
-normalForm :: forall e m. (Framed e m, MonadVar m, Typeable m,
-              MonadThunk (NValue m) (NThunk m) m)
-           => NValue m -> m (NValueNF m)
+    seen t = do
+        let tid = thunkId t
+        lift $ do
+            res <- gets (member tid)
+            unless res $ modify (insert tid)
+            return res
+
+normalForm
+    :: forall e m.
+    (Framed e m,
+     Typeable m,
+     MonadThunk (NValue m) (NThunk m) m,
+     MonadDataContext m)
+    => NValue m -> m (NValueNF m)
 normalForm = normalForm' force
 
 normalForm_
-    :: forall e m. (Framed e m, MonadVar m, Typeable m,
-              MonadThunk (NValue m) (NThunk m) m)
+    :: forall e m.
+    (Framed e m,
+     Typeable m,
+     MonadThunk (NValue m) (NThunk m) m,
+     MonadDataContext m)
     => NValue m -> m ()
-normalForm_ = void . normalForm' (forceEffects . _cited . _nThunk)
+normalForm_ = void . normalForm' forceEff
+
+removeEffects :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
+              => NValue m -> NValueNF m
+removeEffects = nValueToNF (flip query opaque)
+
+removeEffectsM :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
+               => NValue m -> m (NValueNF m)
+removeEffectsM = nValueToNFM id (flip queryM (pure opaque))
+
+opaque :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
+       => NValueNF m
+opaque = NValueNF $ Free $ Compose $ pure $ NVStrF @(NValue m) $
+    principledMakeNixStringWithoutContext "<thunk>"
