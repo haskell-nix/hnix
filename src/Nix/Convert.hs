@@ -11,6 +11,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -236,7 +237,7 @@ instance (Convertible e m, FromValue a m (NValueNF m), Show a)
         Just b -> pure b
         _ -> throwError $ ExpectationNF TList v
 
-instance Convertible e m => FromValue [NThunk m] m (NValue m) where
+instance (Convertible e m, IsNThunk t m) => FromValue [t] m (NValue m) where
     fromValueMay = \case
         NVList l -> pure $ Just l
         _ -> pure Nothing

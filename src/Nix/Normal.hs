@@ -30,12 +30,11 @@ newtype NormalLoop m = NormalLoop (NValue m)
 instance (MonadDataContext m, Typeable m) => Exception (NormalLoop m)
 
 normalForm'
-    :: forall e m.
+    :: forall e t m.
     (Framed e m,
      Typeable m,
-     MonadThunk (NValue m) (NThunk m) m,
-     MonadDataContext m)
-    => (forall r. NThunk m -> (NValue m -> m r) -> m r)
+     IsNThunk t m)
+    => (forall r. t -> (NValue m -> m r) -> m r)
     -> NValue m -> m (NValueNF m)
 normalForm' f = run . nValueToNFM run go
   where
@@ -70,22 +69,14 @@ normalForm' f = run . nValueToNFM run go
             return res
 
 normalForm
-    :: forall e m.
-    (Framed e m,
-     Typeable m,
-     MonadThunk (NValue m) (NThunk m) m,
-     MonadDataContext m)
+    :: forall e t m. (Framed e m, Typeable m, IsNThunk t m)
     => NValue m -> m (NValueNF m)
-normalForm = normalForm' force
+normalForm = normalForm' @e @t @m force
 
 normalForm_
-    :: forall e m.
-    (Framed e m,
-     Typeable m,
-     MonadThunk (NValue m) (NThunk m) m,
-     MonadDataContext m)
+    :: forall e t m. (Framed e m, Typeable m, IsNThunk t m)
     => NValue m -> m ()
-normalForm_ = void . normalForm' forceEff
+normalForm_ = void . normalForm' @e @t @m forceEff
 
 removeEffects :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
               => NValue m -> NValueNF m

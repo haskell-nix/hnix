@@ -121,6 +121,9 @@ newtype NValue m
                               (Compose (NValueF (NValue m) m)
                                (ThunkContext m))) }
 
+type IsNThunk t m =
+    (MonadThunk (NValue m) t m, MonadDataContext m, t ~ NThunk m)
+
 type NThunk m
     = ThunkContext m (Fix (Compose (ValueContext m)
                            (Compose (NValueF (NValue m) m)
@@ -128,8 +131,7 @@ type NThunk m
 
 type ValueSet m = AttrSet (NThunk m)
 
-thunkEq :: (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-        => NThunk m -> NThunk m -> m Bool
+thunkEq :: IsNThunk t m => t -> t -> m Bool
 thunkEq lt rt = force lt $ \lv -> force rt $ \rv ->
  let unsafePtrEq = case (lt, rt) of
          (thunkId -> lid, thunkId -> rid)
@@ -142,20 +144,17 @@ thunkEq lt rt = force lt $ \lv -> force rt $ \rv ->
    _ -> valueEq lv rv
 
 iterNValue
-    :: forall m r. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-    => (NThunk m -> (NValue m -> r) -> r)
+    :: forall t m r. IsNThunk t m
+    => (t -> (NValue m -> r) -> r)
     -> (ValueContext m (NValueF (NValue m) m r) -> r)
     -> NValue m -> r
 iterNValue k f (NValue (Fix (Compose (fmap getCompose -> v)))) =
     f (fmap (fmap (\t -> k t (iterNValue k f))) v)
 
 iterNValueM
-    :: forall m n r.
-    (MonadThunk (NValue m) (NThunk m) m,
-     MonadDataContext m,
-     Monad n)
+    :: forall t m n r. (IsNThunk t m, Monad n)
     => (forall x. n x -> m x)
-    -> (NThunk m -> (NValue m -> n r) -> n r)
+    -> (t -> (NValue m -> n r) -> n r)
     -> (ValueContext m (NValueF (NValue m) m r) -> n r)
     -> NValue m -> n r
 iterNValueM transform k f (NValue (Fix (Compose (fmap getCompose -> v)))) =
@@ -218,12 +217,9 @@ nValueToNF k =
     iterNValue k $ NValueNF . Free . Compose . fmap (fmap _nValueNF)
 
 nValueToNFM
-    :: forall m n.
-    (MonadThunk (NValue m) (NThunk m) m,
-     MonadDataContext m,
-     Monad n)
+    :: forall t m n. (IsNThunk t m, Monad n)
     => (forall x. n x -> m x)
-    -> (NThunk m -> (NValue m -> n (NValueNF m)) -> n (NValueNF m))
+    -> (t -> (NValue m -> n (NValueNF m)) -> n (NValueNF m))
     -> NValue m
     -> n (NValueNF m)
 nValueToNFM transform k = iterNValueM transform k $
