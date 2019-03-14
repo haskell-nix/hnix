@@ -2,9 +2,12 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -14,6 +17,7 @@
 module Nix.Pretty where
 
 import           Control.Applicative ((<|>))
+import           Control.Comonad
 import           Control.Monad
 import           Control.Monad.Free
 import           Data.Fix
@@ -27,20 +31,21 @@ import           Data.Maybe (isJust, fromMaybe)
 import           Data.Text (pack, unpack, replace, strip)
 import qualified Data.Text as Text
 import           Data.Text.Prettyprint.Doc
+import           Data.Void
 import           Nix.Atoms
+import           Nix.Cited
 import           Nix.Expr
+import           Nix.Normal
 import           Nix.Parser
 import           Nix.String
 import           Nix.Strings
 import           Nix.Thunk
-import           Nix.Thunk.Basic
 #if ENABLE_TRACING
 import           Nix.Utils
 #else
 import           Nix.Utils hiding ((<$>))
 #endif
 import           Nix.Value
-import           Nix.Var
 import           Prelude hiding ((<$>))
 import           Text.Read (readMaybe)
 
@@ -170,19 +175,19 @@ prettyAtom atom = simpleExpr $ pretty $ unpack $ atomText atom
 prettyNix :: NExpr -> Doc ann
 prettyNix = withoutParens . cata exprFNixDoc
 
-{-
-prettyOriginExpr :: NExprLocF (Maybe (NValue m)) -> Doc ann
+prettyOriginExpr :: HasCitations1 (NThunk f g m) (NValue f g m) m f
+                 => NExprLocF (Maybe (NValue f g m)) -> Doc ann
 prettyOriginExpr = withoutParens . go
   where
     go = exprFNixDoc . annotated . getCompose . fmap render
 
     render Nothing = simpleExpr $ "_"
-    render (Just (NValue (NCited (reverse -> p:_) _))) = go (_originExpr p)
-    render (Just (NValue (NCited _ _))) = simpleExpr "?"
+    render (Just (reverse . citations1 -> p:_)) = go (_originExpr p)
+    render _ = simpleExpr "?"
+    -- render (Just (NValue (citations -> ps))) =
         -- simpleExpr $ foldr ((\x y -> vsep [x, y]) . parens . indent 2 . withoutParens
         --                           . go . originExpr)
         --     mempty (reverse ps)
--}
 
 exprFNixDoc :: NExprF (NixDoc ann) -> NixDoc ann
 exprFNixDoc = \case
@@ -266,41 +271,30 @@ exprFNixDoc = \case
   where
     recPrefix = "rec" <> space
 
-fixate :: Functor f => (a -> f (Fix f)) -> Free f a -> Fix f
-fixate g = Fix . go
+valueToExpr :: MonadDataContext f m => NValueNF f g m -> NExpr
+valueToExpr = nValueF
+    (const (mkStr (principledMakeNixStringWithoutContext "<CYCLE>")))
+    (phi . extract)
   where
-    go (Pure a) = g a
-    go (Free f) = fmap (Fix . go) f
-
-{-
-valueToExpr :: Functor m => NValueNF m -> NExpr
-valueToExpr = transport go . check
-  where
-    check :: NValueNF m -> Fix (NValueF m)
-    check = fixate $ const $ NVStrF $ principledMakeNixStringWithoutContext "<CYCLE>"
-
-    go (NVConstantF a)     = NConstant a
-    go (NVStrF ns)         = NStr (DoubleQuoted [Plain (hackyStringIgnoreContext ns)])
-    go (NVListF l)         = NList l
-    go (NVSetF s p)        = NSet
+    phi (NVConstantF a)     = Fix $ NConstant a
+    phi (NVStrF ns)         = mkStr ns
+    phi (NVListF l)         = Fix $ NList (fmap valueToExpr l)
+    phi (NVSetF s p)        = Fix $ NSet
         [ NamedVar (StaticKey k :| []) v (fromMaybe nullPos (M.lookup k p))
-        | (k, v) <- toList s ]
-    go (NVClosureF _ _)    = NSym . pack $ "<closure>"
-    go (NVPathF p)         = NLiteralPath p
-    go (NVBuiltinF name _) = NSym $ Text.pack $ "builtins." ++ name
+        | (k, v) <- toList (fmap valueToExpr s) ]
+    phi (NVClosureF _ _)    = Fix . NSym . pack $ "<closure>"
+    phi (NVPathF p)         = Fix $ NLiteralPath p
+    phi (NVBuiltinF name _) = Fix . NSym . pack $ "builtins." ++ name
 
-prettyNValueNF :: Functor m => NValueNF m -> Doc ann
+    mkStr ns = Fix $ NStr $ DoubleQuoted [Plain (hackyStringIgnoreContext ns)]
+
+prettyNValueNF :: MonadDataContext f m => NValueNF f g m -> Doc ann
 prettyNValueNF = prettyNix . valueToExpr
--}
 
-{-
-printNix :: Functor m => NValueNF m -> String
-printNix = iter phi . check
+printNix :: MonadDataContext f m => NValueNF f g m -> String
+printNix = iterNValueNF (const "<CYCLE>") (phi . extract)
   where
-    check :: NValueNF m -> Free (NValueF m) String
-    check = fmap (const "<CYCLE>")
-
-    phi :: NValueF m String -> String
+    phi :: NValueF (NValue f g m) m String -> String
     phi (NVConstantF a) = unpack $ atomText a
     phi (NVStrF ns) = show $ hackyStringIgnoreContext ns
     phi (NVListF l) = "[ " ++ unwords l ++ " ]"
@@ -317,37 +311,47 @@ printNix = iter phi . check
     phi NVClosureF {} = "<<lambda>>"
     phi (NVPathF fp) = fp
     phi (NVBuiltinF name _) = "<<builtin " ++ name ++ ">>"
--}
 
-{-
-prettyNValueF :: MonadVar m => NValueF (NValue m) m (NThunk m) -> m (Doc ann)
-prettyNValueF = fmap prettyNValueNF . removeEffectsM
+prettyNValue
+    :: (MonadThunk (NValue f g m) (NThunk f g m) m,
+       MonadDataContext f m)
+    => NValue f g m -> m (Doc ann)
+prettyNValue = fmap prettyNValueNF . removeEffectsM
 
-prettyNValue :: MonadVar m => NValue m -> m (Doc ann)
-prettyNValue (NValue (NCited _ v)) = prettyNValueF v
+instance HasCitations1 (NThunk f g m) (NValue f g m) m f
+  => HasCitations (NThunk f g m) (NValue f g m) m (NValue f g m) where
+    citations (NValue (Fix (Compose f))) = citations1 f
 
-prettyNValueProv :: MonadVar m => NValue m -> m (Doc ann)
-prettyNValueProv = \case
-    NValue (NCited [] v) -> prettyNValueF v
-    NValue (NCited ps v) -> do
-        v' <- prettyNValueF v
-        pure $ fillSep $
-          [ v'
-          , indent 2 $ parens $ mconcat
-            $ "from: "
-            : map (prettyOriginExpr . _originExpr) ps
-          ]
--}
+prettyNValueProv :: (HasCitations1 (NThunk f g m) (NValue f g m) m f,
+                    MonadDataContext f m)
+                 => NValue f g m -> m (Doc ann)
+prettyNValueProv (NValue (Fix (Compose nv))) = do
+    let ps        = citations nv
+        Compose v = extract nv
+    case ps of
+        [] -> prettyNValueF v
+        ps -> do
+            v' <- prettyNValueF v
+            pure $ fillSep $
+              [ v'
+              , indent 2 $ parens $ mconcat
+                $ "from: "
+                : map (prettyOriginExpr . _originExpr) ps
+              ]
 
-{-
-prettyNThunk :: MonadVar m => NThunk m -> m (Doc ann)
-prettyNThunk = \case
-    t@(NThunk (NCited ps _)) -> do
-        v' <- fmap prettyNValueNF (dethunk t)
-        pure $ fillSep $
-          [ v'
-          , indent 2 $ parens $ mconcat
-            $ "thunk from: "
-            : map (prettyOriginExpr . _originExpr) ps
-          ]
--}
+prettyNThunk
+    :: forall f g m ann.
+    (HasCitations1 (NThunk f g m) (NValue f g m) m g,
+     HasCitations1 (NThunk f g m) (NValue f g m) m f,
+     MonadThunk (NValue f g m) (NThunk f g m) m,
+     MonadDataContext f m)
+    => NThunk f g m -> m (Doc ann)
+prettyNThunk t = do
+    let ps = citations1 @(NThunk f g m) @(NValue f g m) @m @g t
+    v' <- prettyNValueNF <$> dethunk t
+    pure $ fillSep $
+      [ v'
+      , indent 2 $ parens $ mconcat
+        $ "thunk from: "
+        : map (prettyOriginExpr . _originExpr) ps
+      ]

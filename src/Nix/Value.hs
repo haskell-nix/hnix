@@ -9,6 +9,7 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -30,8 +31,8 @@
 module Nix.Value where
 
 import           Control.Comonad
+import           Control.Exception
 import           Control.Monad
--- import           Control.Monad.Catch
 import           Control.Monad.Free
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
@@ -39,9 +40,12 @@ import qualified Data.Aeson as A
 import           Data.Align
 import           Data.Fix
 import           Data.Functor.Classes
+import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
+import           Data.Text (Text)
 import           Data.These
 import           Data.Typeable (Typeable)
+import           Data.Void
 import           GHC.Generics
 import           Lens.Family2
 import           Lens.Family2.Stock
@@ -83,10 +87,10 @@ data NValueF a m r
       --   result.
     deriving (Generic, Typeable, Functor)
 
--- | An 'NValueNF' is a fully evaluated value in normal form. An 'NValue m' is
+-- | An 'NValueNF' is a fully evaluated value in normal form. An 'NValue f g m' is
 --   a value in head normal form, where only the "top layer" has been
---   evaluated. An action of type 'm (NValue m)' is a pending evualation that
---   has yet to be performed. An 'NThunk m' is either a pending evaluation, or
+--   evaluated. An action of type 'm (NValue f g m)' is a pending evualation that
+--   has yet to be performed. An 'NThunk f g m' is either a pending evaluation, or
 --   a value in head normal form. A 'NThunkSet' is a set of mappings from keys
 --   to thunks.
 --
@@ -103,35 +107,40 @@ comapNValueFArg f = \case
     NVClosureF p g -> NVClosureF p (g . fmap f)
     NVBuiltinF s g -> NVBuiltinF s (g . fmap f)
 
-newtype NValueNF m
-    = NValueNF { _nValueNF :: Free (Compose (ValueContext m)
-                                   (NValueF (NValue m) m)) (NValue m) }
-    deriving (Generic, Typeable)
+-- type IsNValueNF v m = (MonadDataContext f m, v ~ NValueNF f g m)
 
-class (Monad m,
-       Comonad (ValueContext m),
-       Applicative (ValueContext m),
-       Traversable (ValueContext m))
-  => MonadDataContext (m :: * -> *) where
-    type ThunkContext m :: * -> *
-    type ValueContext m :: * -> *
+type NValueNF f g m
+    = Free (Compose f (NValueF (NValue f g m) m)) (NValue f g m)
 
-newtype NValue m
-    = NValue { _nValue :: Fix (Compose (ValueContext m)
-                              (Compose (NValueF (NValue m) m)
-                               (ThunkContext m))) }
+type MonadDataContext f (m :: * -> *) =
+    (Monad m, Show1 f, Comonad f, Applicative f, Traversable f)
 
-type IsNThunk t m =
-    (MonadThunk (NValue m) t m, MonadDataContext m, t ~ NThunk m)
+newtype NValue f g m = NValue
+    { _nValue :: Fix (Compose f (Compose (NValueF (NValue f g m) m) g)) }
 
-type NThunk m
-    = ThunkContext m (Fix (Compose (ValueContext m)
-                           (Compose (NValueF (NValue m) m)
-                            (ThunkContext m))))
+type IsNThunk t f g m =
+    (MonadThunk (NValue f g m) t m, MonadDataContext f m, t ~ NThunk f g m)
 
-type ValueSet m = AttrSet (NThunk m)
+type NThunk f g m
+    = g (Fix (Compose f (Compose (NValueF (NValue f g m) m) g)))
 
-thunkEq :: IsNThunk t m => t -> t -> m Bool
+class HasNValueF f g v m s r | v -> f, v -> g, v -> s, v -> r, v -> m where
+    nValueF :: (s -> a) -> (f (NValueF (NValue f g m) m r) -> a) -> v -> a
+
+instance MonadDataContext f m
+  => HasNValueF f g (NValue f g m) m Void (NThunk f g m) where
+    nValueF _ r (NValue (Fix (Compose (fmap getCompose -> v)))) = r v
+
+instance MonadDataContext f m
+  => HasNValueF f g (NValueNF f g m) m
+      (NValue f g m)
+      (NValueNF f g m) where
+    nValueF s _ (Pure v) = s v
+    nValueF _ r (Free (Compose v)) = r v
+
+type ValueSet f g m = AttrSet (NThunk f g m)
+
+thunkEq :: IsNThunk t f g m => t -> t -> m Bool
 thunkEq lt rt = force lt $ \lv -> force rt $ \rv ->
  let unsafePtrEq = case (lt, rt) of
          (thunkId -> lid, thunkId -> rid)
@@ -144,21 +153,19 @@ thunkEq lt rt = force lt $ \lv -> force rt $ \rv ->
    _ -> valueEq lv rv
 
 iterNValue
-    :: forall t m r. IsNThunk t m
-    => (t -> (NValue m -> r) -> r)
-    -> (ValueContext m (NValueF (NValue m) m r) -> r)
-    -> NValue m -> r
-iterNValue k f (NValue (Fix (Compose (fmap getCompose -> v)))) =
-    f (fmap (fmap (\t -> k t (iterNValue k f))) v)
+    :: forall t m f g r. IsNThunk t f g m
+    => (t -> (NValue f g m -> r) -> r)
+    -> (f (NValueF (NValue f g m) m r) -> r)
+    -> NValue f g m -> r
+iterNValue k f = nValueF absurd (f . fmap (fmap (\t -> k t (iterNValue k f))))
 
 iterNValueM
-    :: forall t m n r. (IsNThunk t m, Monad n)
+    :: forall t m n f g r. (IsNThunk t f g m, Monad n)
     => (forall x. n x -> m x)
-    -> (t -> (NValue m -> n r) -> n r)
-    -> (ValueContext m (NValueF (NValue m) m r) -> n r)
-    -> NValue m -> n r
-iterNValueM transform k f (NValue (Fix (Compose (fmap getCompose -> v)))) =
-    f =<< traverse go v
+    -> (t -> (NValue f g m -> n r) -> n r)
+    -> (f (NValueF (NValue f g m) m r) -> n r)
+    -> NValue f g m -> n r
+iterNValueM transform k f = nValueF absurd (f <=< traverse go)
   where
     go = \case
         NVConstantF a  -> pure $ NVConstantF a
@@ -172,26 +179,19 @@ iterNValueM transform k f (NValue (Fix (Compose (fmap getCompose -> v)))) =
         h t = k t (iterNValueM transform k f)
 
 iterNValueNF
-    :: forall m r. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-    => (ValueContext m (NValueF (NValue m) m r) -> r)
-    -> (NValue m -> r)
-    -> NValueNF m -> r
-iterNValueNF _ k (NValueNF (Pure v)) = k v
-iterNValueNF f k (NValueNF (Free (Compose v))) =
-    f (fmap (fmap (iterNValueNF f k . NValueNF)) v)
+    :: forall m f g r. MonadDataContext f m
+    => (NValue f g m -> r)
+    -> (f (NValueF (NValue f g m) m r) -> r)
+    -> NValueNF f g m -> r
+iterNValueNF k f = nValueF k (f . fmap (fmap (iterNValueNF k f)))
 
 iterNValueNFM
-    :: forall m n r.
-    (MonadThunk (NValue m) (NThunk m) m,
-     MonadDataContext m,
-     Monad n)
+    :: forall m n f g r. (MonadDataContext f m, Monad n)
     => (forall x. n x -> m x)
-    -> (ValueContext m (NValueF (NValue m) m r) -> n r)
-    -> (NValue m -> n r)
-    -> NValueNF m -> n r
-iterNValueNFM _ _ k (NValueNF (Pure v)) = k v
-iterNValueNFM transform f k (NValueNF (Free (Compose v))) =
-    f =<< traverse go v
+    -> (NValue f g m -> n r)
+    -> (f (NValueF (NValue f g m) m r) -> n r)
+    -> NValueNF f g m -> n r
+iterNValueNFM transform k f = nValueF k (f <=< traverse go)
   where
     go = \case
         NVConstantF a  -> pure $ NVConstantF a
@@ -202,68 +202,101 @@ iterNValueNFM transform f k (NValueNF (Free (Compose v))) =
         NVClosureF p g -> pure $ NVClosureF p (transform . h <=< g)
         NVBuiltinF s g -> pure $ NVBuiltinF s (transform . h <=< g)
       where
-        h = iterNValueNFM transform f k . NValueNF
+        h = iterNValueNFM transform k f
 
-nValueFromNF :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-             => NValueNF m -> NValue m
+nValueFromNF :: forall m f g. (MonadThunk (NValue f g m) (NThunk f g m) m, MonadDataContext f m)
+             => NValueNF f g m -> NValue f g m
 nValueFromNF =
-    iterNValueNF (NValue . Fix . Compose . fmap (Compose . fmap wrapValue)) id
+    iterNValueNF id (NValue . Fix . Compose . fmap (Compose . fmap wrapValue))
 
-nValueToNF :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-           => (NThunk m -> (NValue m -> NValueNF m) -> NValueNF m)
-           -> NValue m
-           -> NValueNF m
-nValueToNF k =
-    iterNValue k $ NValueNF . Free . Compose . fmap (fmap _nValueNF)
+nValueToNF :: forall m f g. (MonadThunk (NValue f g m) (NThunk f g m) m, MonadDataContext f m)
+           => (NThunk f g m -> (NValue f g m -> NValueNF f g m) -> NValueNF f g m)
+           -> NValue f g m
+           -> NValueNF f g m
+nValueToNF k = iterNValue k $ Free . Compose
 
 nValueToNFM
-    :: forall t m n. (IsNThunk t m, Monad n)
+    :: forall t m n f g. (IsNThunk t f g m, Monad n)
     => (forall x. n x -> m x)
-    -> (t -> (NValue m -> n (NValueNF m)) -> n (NValueNF m))
-    -> NValue m
-    -> n (NValueNF m)
-nValueToNFM transform k = iterNValueM transform k $
-    pure . NValueNF . Free . Compose . fmap (fmap _nValueNF)
+    -> (t -> (NValue f g m -> n (NValueNF f g m)) -> n (NValueNF f g m))
+    -> NValue f g m
+    -> n (NValueNF f g m)
+nValueToNFM transform k = iterNValueM transform k $ pure . Free . Compose
 
--- addProvenance :: (NValue m -> Provenance t (NValue m) m) -> NValue m -> NValue m
+-- addProvenance :: (NValue f g m -> Provenance t (NValue f g m) m) -> NValue f g m -> NValue f g m
 -- addProvenance f l@(NValue (NCited p v)) = NValue (NCited (f l : p) v)
 
 pattern NVConstant x <- NValue (Fix (Compose (extract -> Compose (NVConstantF x))))
+pattern NVConstantNF x <- Free (Compose (extract -> NVConstantF x))
 
+nvConstant :: MonadDataContext f m => NAtom -> NValue f g m
 nvConstant x = NValue (Fix (Compose (pure (Compose (NVConstantF x)))))
+nvConstantNF :: MonadDataContext f m => NAtom -> NValueNF f g m
+nvConstantNF x = Free (Compose (pure (NVConstantF x)))
 -- nvConstantP p x = NValue (NCited [p] (NVConstantF x))
 
 pattern NVStr ns <- NValue (Fix (Compose (extract -> Compose (NVStrF ns))))
+pattern NVStrNF ns <- Free (Compose (extract -> NVStrF ns))
 
+nvStr :: MonadDataContext f m => NixString -> NValue f g m
 nvStr ns = NValue (Fix (Compose (pure (Compose (NVStrF ns)))))
+nvStrNF :: MonadDataContext f m => NixString -> NValueNF f g m
+nvStrNF ns = Free (Compose (pure (NVStrF ns)))
 -- nvStrP p ns = NValue (NCited [p] (NVStrF ns))
 
 pattern NVPath x <- NValue (Fix (Compose (extract -> Compose (NVPathF x))))
+pattern NVPathNF x <- Free (Compose (extract -> NVPathF x))
 
+nvPath :: MonadDataContext f m => FilePath -> NValue f g m
 nvPath x = NValue (Fix (Compose (pure (Compose (NVPathF x)))))
+nvPathNF :: MonadDataContext f m => FilePath -> NValueNF f g m
+nvPathNF x = Free (Compose (pure (NVPathF x)))
 -- nvPathP p x = NValue (NCited [p] (NVPathF x))
 
 pattern NVList l <- NValue (Fix (Compose (extract -> Compose (NVListF l))))
+pattern NVListNF l <- Free (Compose (extract -> NVListF l))
 
+nvList :: MonadDataContext f m => [NThunk f g m] -> NValue f g m
 nvList l = NValue (Fix (Compose (pure (Compose (NVListF l)))))
+nvListNF :: MonadDataContext f m => [NValueNF f g m] -> NValueNF f g m
+nvListNF l = Free (Compose (pure (NVListF l)))
 -- nvListP p l = NValue (NCited [p] (NVListF l))
 
 pattern NVSet s x <- NValue (Fix (Compose (extract -> Compose (NVSetF s x))))
+pattern NVSetNF s x <- Free (Compose (extract -> NVSetF s x))
 
+nvSet :: MonadDataContext f m
+      => HashMap Text (NThunk f g m) -> HashMap Text SourcePos -> NValue f g m
 nvSet s x = NValue (Fix (Compose (pure (Compose (NVSetF s x)))))
+nvSetNF :: MonadDataContext f m
+        => HashMap Text (NValueNF f g m) -> HashMap Text SourcePos -> NValueNF f g m
+nvSetNF s x = Free (Compose (pure (NVSetF s x)))
 -- nvSetP p s x = NValue (NCited [p] (NVSetF s x))
 
 pattern NVClosure x f <- NValue (Fix (Compose (extract -> Compose (NVClosureF x f))))
+pattern NVClosureNF x f <- Free (Compose (extract -> NVClosureF x f))
 
+nvClosure :: MonadDataContext f m
+          => Params () -> (m (NValue f g m) -> m (NThunk f g m)) -> NValue f g m
 nvClosure x f = NValue (Fix (Compose (pure (Compose (NVClosureF x f)))))
+nvClosureNF :: MonadDataContext f m
+            => Params () -> (m (NValue f g m) -> m (NValueNF f g m)) -> NValueNF f g m
+nvClosureNF x f = Free (Compose (pure (NVClosureF x f)))
 -- nvClosureP p x f = NValue (NCited [p] (NVClosureF x f))
 
 pattern NVBuiltin name f <- NValue (Fix (Compose (extract -> Compose (NVBuiltinF name f))))
+pattern NVBuiltinNF name f <- Free (Compose (extract -> NVBuiltinF name f))
 
+nvBuiltin :: MonadDataContext f m
+          => String -> (m (NValue f g m) -> m (NThunk f g m)) -> NValue f g m
 nvBuiltin name f = NValue (Fix (Compose (pure (Compose (NVBuiltinF name f)))))
+nvBuiltinNF :: MonadDataContext f m
+            => String -> (m (NValue f g m) -> m (NValueNF f g m)) -> NValueNF f g m
+nvBuiltinNF name f = Free (Compose (pure (NVBuiltinF name f)))
 -- nvBuiltinP p name f = NValue (NCited [p] (NVBuiltinF name f))
 
-instance Show (NValueF (NValue m) m (Fix (NValueF (NValue m) m))) where
+{-
+instance Show (NValueF (NValue f g m) m (Fix (NValueF (NValue f g m) m))) where
     showsPrec = flip go where
       go (NVConstantF atom)  = showsCon1 "NVConstant" atom
       go (NVStrF ns)         = showsCon1 "NVStr"      (hackyStringIgnoreContext ns)
@@ -276,6 +309,8 @@ instance Show (NValueF (NValue m) m (Fix (NValueF (NValue m) m))) where
       showsCon1 :: Show a => String -> a -> Int -> String -> String
       showsCon1 con a d =
           showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a
+-}
+
 {-
       showsCon2 :: (Show a, Show b)
                 => String -> a -> b -> Int -> String -> String
@@ -288,7 +323,7 @@ instance Show (NValueF (NValue m) m (Fix (NValueF (NValue m) m))) where
 -}
 
 {-
-instance Eq (NValue m) where
+instance Eq (NValue f g m) where
     NVConstant (NFloat x) == NVConstant (NInt y)   = x == fromInteger y
     NVConstant (NInt x)   == NVConstant (NFloat y) = fromInteger x == y
     NVConstant (NInt x)   == NVConstant (NInt y)   = x == y
@@ -297,7 +332,7 @@ instance Eq (NValue m) where
     NVPath x  == NVPath y  = x == y
     _         == _         = False
 
-instance Ord (NValue m) where
+instance Ord (NValue f g m) where
     NVConstant (NFloat x) <= NVConstant (NInt y)   = x <= fromInteger y
     NVConstant (NInt x)   <= NVConstant (NFloat y) = fromInteger x <= y
     NVConstant (NInt x)   <= NVConstant (NInt y)   = x <= y
@@ -306,7 +341,7 @@ instance Ord (NValue m) where
     NVPath x  <= NVPath y  = x <= y
     _         <= _         = False
 
-checkComparable :: (Framed e m, Typeable m) => NValue m -> NValue m -> m ()
+checkComparable :: (Framed e m, Typeable m) => NValue f g m -> NValue f g m -> m ()
 checkComparable x y = case (x, y) of
     (NVConstant (NFloat _), NVConstant (NInt _))   -> pure ()
     (NVConstant (NInt _),   NVConstant (NFloat _)) -> pure ()
@@ -317,24 +352,24 @@ checkComparable x y = case (x, y) of
     _ -> throwError $ Comparison x y
 -}
 
-builtin :: forall m. (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-        => String -> (m (NValue m) -> m (NValue m)) -> m (NValue m)
+builtin :: forall m f g. (MonadThunk (NValue f g m) (NThunk f g m) m, MonadDataContext f m)
+        => String -> (m (NValue f g m) -> m (NValue f g m)) -> m (NValue f g m)
 builtin name f = return $ nvBuiltin name $ thunk . f
 
-builtin2 :: (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-         => String -> (m (NValue m) -> m (NValue m) -> m (NValue m))
-         -> m (NValue m)
+builtin2 :: (MonadThunk (NValue f g m) (NThunk f g m) m, MonadDataContext f m)
+         => String -> (m (NValue f g m) -> m (NValue f g m) -> m (NValue f g m))
+         -> m (NValue f g m)
 builtin2 name f = builtin name (builtin name . f)
 
-builtin3 :: (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
+builtin3 :: (MonadThunk (NValue f g m) (NThunk f g m) m, MonadDataContext f m)
          => String
-         -> (m (NValue m) -> m (NValue m) -> m (NValue m) -> m (NValue m))
-         -> m (NValue m)
+         -> (m (NValue f g m) -> m (NValue f g m) -> m (NValue f g m) -> m (NValue f g m))
+         -> m (NValue f g m)
 builtin3 name f =
     builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
 
-isClosureNF :: MonadDataContext m => NValueNF m -> Bool
-isClosureNF (NValueNF (Free (Compose (extract -> NVClosureF {})))) = True
+isClosureNF :: MonadDataContext f m => NValueNF f g m -> Bool
+isClosureNF (Free (Compose (extract -> NVClosureF {}))) = True
 isClosureNF _ = False
 
 -- | Checks whether two containers are equal, using the given item equality
@@ -352,8 +387,8 @@ alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
         _ -> throwE ()
     forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
 
-isDerivation :: (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-             => AttrSet (NThunk m) -> m Bool
+isDerivation :: (MonadThunk (NValue f g m) (NThunk f g m) m, MonadDataContext f m)
+             => AttrSet (NThunk f g m) -> m Bool
 isDerivation m = case M.lookup "type" m of
     Nothing -> pure False
     Just t -> force t $ \case
@@ -362,8 +397,8 @@ isDerivation m = case M.lookup "type" m of
       NVStr s -> pure $ principledStringIgnoreContext s == "derivation"
       _ -> pure False
 
-valueEq :: (MonadThunk (NValue m) (NThunk m) m, MonadDataContext m)
-        => NValue m -> NValue m -> m Bool
+valueEq :: (MonadThunk (NValue f g m) (NThunk f g m) m, MonadDataContext f m)
+        => NValue f g m -> NValue f g m -> m Bool
 valueEq = curry $ \case
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
     (NVStr ls, NVStr rs) ->
@@ -427,7 +462,7 @@ describeValue = \case
     TPath              -> "a path"
     TBuiltin           -> "a builtin function"
 
-instance MonadDataContext m => Show (NValue m) where
+instance MonadDataContext f m => Show (NValue f g m) where
     show = describeValue
         . valueType
         . getCompose
@@ -436,26 +471,27 @@ instance MonadDataContext m => Show (NValue m) where
         . unFix
         . _nValue
 
-instance Show (NValueF (NValue m) m
+{-
+instance Show (NValueF (NValue f g m) m
                (f (Fix (Compose g
-                        (Compose (NValueF (NValue m) m)
+                        (Compose (NValueF (NValue f g m) m)
                          f))))) where
     show = describeValue . valueType
 
-instance Show (NValueF (NValue m) m
-                  (Free (Compose g
-                         (NValueF (NValue m) m))
-                        r)) where
+instance Show (NValueF (NValue f g m) m
+               (Free (Compose g
+                      (NValueF (NValue f g m) m)) v)) where
     show = describeValue . valueType
 
--- instance MonadDataContext m => Show (NValue m) where
---     show (NValue (Fix (Compose (extract -> Compose v)))) = show v
+instance MonadDataContext f m
+  => Show (Free (Compose g
+                (NValueF (NValue f g m) m))
+               (NValue f g m)) where
+    show (Pure v) = show v
+    show (Free (Compose (extract -> v))) = show v
+-}
 
-instance MonadDataContext m => Show (NValueNF m) where
-    show (NValueNF (Pure v)) = show v
-    show (NValueNF (Free (Compose (extract -> v)))) = show v
-
-instance Eq1 (NValueF (NValue m) m) where
+instance Eq1 (NValueF (NValue f g m) m) where
     liftEq _  (NVConstantF x) (NVConstantF y) = x == y
     liftEq _  (NVStrF x)      (NVStrF y)      = x == y
     liftEq eq (NVListF x)     (NVListF y)     = liftEq eq x y
@@ -463,7 +499,7 @@ instance Eq1 (NValueF (NValue m) m) where
     liftEq _  (NVPathF x)     (NVPathF y)     = x == y
     liftEq _ _ _ = False
 
-instance Show1 (NValueF (NValue m) m) where
+instance Show1 (NValueF (NValue f g m) m) where
     liftShowsPrec sp sl p = \case
         NVConstantF atom  -> showsUnaryWith showsPrec "NVConstantF" p atom
         NVStrF ns         -> showsUnaryWith showsPrec "NVStrF"      p (hackyStringIgnoreContext ns)
@@ -473,25 +509,26 @@ instance Show1 (NValueF (NValue m) m) where
         NVPathF path      -> showsUnaryWith showsPrec "NVPathF"     p path
         NVBuiltinF name _ -> showsUnaryWith showsPrec "NVBuiltinF"  p name
 
-data ValueFrame m
+data ValueFrame f g m
     = ForcingThunk
-    | ConcerningValue (NValue m)
-    | Comparison (NValue m) (NValue m)
-    | Addition (NValue m) (NValue m)
-    | Multiplication (NValue m) (NValue m)
-    | Division (NValue m) (NValue m)
+    | ConcerningValue (NValue f g m)
+    | Comparison (NValue f g m) (NValue f g m)
+    | Addition (NValue f g m) (NValue f g m)
+    | Multiplication (NValue f g m) (NValue f g m)
+    | Division (NValue f g m) (NValue f g m)
     | Coercion ValueType ValueType
-    | CoercionToJson (NValue m)
+    | CoercionToJson (NValue f g m)
     | CoercionFromJson A.Value
-    | ExpectationNF ValueType (NValueNF m)
-    | Expectation ValueType (NValue m)
---     deriving (Show, Typeable)
+    | ExpectationNF ValueType (NValueNF f g m)
+    | Expectation ValueType (NValue f g m)
+    deriving (Show, Typeable)
 
--- instance Typeable m => Exception (ValueFrame m)
+instance (Typeable m, Typeable f, Typeable g, MonadDataContext f m)
+  => Exception (ValueFrame f g m)
 
 $(makeTraversals ''NValueF)
 $(makeLenses ''NValue)
 
-key :: (Applicative f, MonadDataContext m)
-    => VarName -> LensLike' f (NValue m) (Maybe (NThunk m))
+key :: MonadDataContext f m
+    => VarName -> LensLike' f (NValue f g m) (Maybe (NThunk f g m))
 key k = nValue._unFix._getCompose.traverse._getCompose._NVSetF._1.hashAt k

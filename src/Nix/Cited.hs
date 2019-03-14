@@ -13,10 +13,10 @@ module Nix.Cited where
 
 import Control.Comonad
 import Control.Comonad.Env
-import Lens.Family2.TH
-
+import Data.Functor.Compose
 import Data.Typeable (Typeable)
 import GHC.Generics
+import Lens.Family2.TH
 
 import Nix.Expr.Types.Annotated
 import Nix.Scope
@@ -51,3 +51,15 @@ instance ComonadEnv [Provenance t v m] (NCited t v m) where
 
 $(makeLenses ''Provenance)
 $(makeLenses ''NCited)
+
+class HasCitations t v m a where
+    citations :: a -> [Provenance t v m]
+
+instance HasCitations t v m (NCited t v m a) where
+    citations = _provenance
+
+class HasCitations1 t v m f where
+    citations1 :: f a -> [Provenance t v m]
+
+instance HasCitations1 t v m f => HasCitations1 t v m (Compose f g) where
+    citations1 (Compose f) = citations1 f
