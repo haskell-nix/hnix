@@ -248,12 +248,15 @@ instance FromValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
 
 instance ToValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
 
-instance MonadLint e m => MonadThunk (Symbolic m) (SThunk m) m where
-    thunk = fmap coerce . buildThunk
-    force = forceThunk . coerce
-    forceEff = forceEffects . coerce
-    wrapValue = coerce . valueRef
-    getValue = thunkValue . coerce
+instance MonadLint e m => MonadThunk (SThunk m) m (Symbolic m) where
+    thunk = fmap SThunk . thunk
+    thunkId = thunkId . getSThunk
+    query x b f = query (getSThunk x) b f
+    queryM x b f = queryM (getSThunk x) b f
+    force = force . getSThunk
+    forceEff = forceEff . getSThunk
+    wrapValue = SThunk . wrapValue
+    getValue = getValue . getSThunk
 
 instance MonadLint e m => MonadEval (Symbolic m) m where
     freeVariable var = symerr $
@@ -303,7 +306,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
         -- evaluated each time a name is looked up within the weak scope, and
         -- we want to be sure the action it evaluates is to force a thunk, so
         -- its value is only computed once.
-        s <- thunk @(Symbolic m) @(SThunk m) scope
+        s <- thunk @(SThunk m) @m @(Symbolic m) scope
         pushWeakScope ?? body $ force s $ unpackSymbolic >=> \case
             NMany [TSet (Just s')] -> return s'
             NMany [TSet Nothing] -> error "NYI: with unknown"

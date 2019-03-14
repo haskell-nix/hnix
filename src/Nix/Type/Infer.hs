@@ -352,18 +352,22 @@ instance Monad m => MonadCatch (InferT s m) where
 instance ( MonadFreshId Int m
          , MonadAtomicRef m
          , Ref m ~ STRef s
-         ) => MonadThunk (Judgment s) (JThunkT s m) (InferT s m) where
-    thunk = fmap JThunk . buildThunk
+         ) => MonadThunk (JThunkT s m) (InferT s m) (Judgment s) where
+    thunk = fmap JThunk . thunk
+    thunkId (JThunk x) = thunkId x
 
-    force (JThunk t) f = catch (forceThunk t f) $ \(_ :: ThunkLoop) ->
+    query (JThunk x) b f = query x b f
+    queryM (JThunk x) b f = queryM x b f
+
+    force (JThunk t) f = catch (force t f) $ \(_ :: ThunkLoop) ->
         -- If we have a thunk loop, we just don't know the type.
         f =<< Judgment As.empty [] <$> fresh
-    forceEff (JThunk t) f = catch (forceEffects t f) $ \(_ :: ThunkLoop) ->
+    forceEff (JThunk t) f = catch (forceEff t f) $ \(_ :: ThunkLoop) ->
         -- If we have a thunk loop, we just don't know the type.
         f =<< Judgment As.empty [] <$> fresh
 
-    wrapValue = JThunk . valueRef
-    getValue (JThunk x) = thunkValue x
+    wrapValue = JThunk . wrapValue
+    getValue (JThunk x) = getValue x
 
 instance ( MonadFreshId Int m
          , MonadAtomicRef m

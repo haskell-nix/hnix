@@ -64,7 +64,7 @@ class FromValue a m v where
 type Convertible e t f m =
     (Framed e m, MonadThunk t m (NValue t f m), MonadDataErrorContext t f m)
 
-instance Convertible GAMARI e t f m => FromValue () m (NValueNF t f m) where
+instance Convertible e t f m => FromValue () m (NValueNF t f m) where
     fromValueMay = \case
         NVConstantNF NNull -> pure $ Just ()
         _ -> pure Nothing
@@ -72,8 +72,7 @@ instance Convertible GAMARI e t f m => FromValue () m (NValueNF t f m) where
         Just b -> pure b
         _ -> throwError $ ExpectationNF TNull v
 
-instance Convertible e t f m
-      => FromValue () m (NValue t f m) where
+instance Convertible e t f m => FromValue () m (NValue t f m) where
     fromValueMay = \case
         NVConstant NNull -> pure $ Just ()
         _ -> pure Nothing
@@ -81,8 +80,7 @@ instance Convertible e t f m
         Just b -> pure b
         _ -> throwError $ Expectation TNull v
 
-instance Convertible e t f m
-      => FromValue Bool m (NValueNF t f m) where
+instance Convertible e t f m => FromValue Bool m (NValueNF t f m) where
     fromValueMay = \case
         NVConstantNF (NBool b) -> pure $ Just b
         _ -> pure Nothing
@@ -90,8 +88,7 @@ instance Convertible e t f m
         Just b -> pure b
         _ -> throwError $ ExpectationNF TBool v
 
-instance Convertible e t f m
-      => FromValue Bool m (NValue t f m) where
+instance Convertible e t f m => FromValue Bool m (NValue t f m) where
     fromValueMay = \case
         NVConstant (NBool b) -> pure $ Just b
         _ -> pure Nothing
@@ -99,8 +96,7 @@ instance Convertible e t f m
         Just b -> pure b
         _ -> throwError $ Expectation TBool v
 
-instance Convertible e t f m
-      => FromValue Int m (NValueNF t f m) where
+instance Convertible e t f m => FromValue Int m (NValueNF t f m) where
     fromValueMay = \case
         NVConstantNF (NInt b) -> pure $ Just (fromInteger b)
         _ -> pure Nothing
@@ -108,8 +104,7 @@ instance Convertible e t f m
         Just b -> pure b
         _ -> throwError $ ExpectationNF TInt v
 
-instance Convertible e t f m
-      => FromValue Int m (NValue t f m) where
+instance Convertible e t f m => FromValue Int m (NValue t f m) where
     fromValueMay = \case
         NVConstant (NInt b) -> pure $ Just (fromInteger b)
         _ -> pure Nothing
@@ -117,8 +112,7 @@ instance Convertible e t f m
         Just b -> pure b
         _ -> throwError $ Expectation TInt v
 
-instance Convertible e t f m
-      => FromValue Integer m (NValueNF t f m) where
+instance Convertible e t f m => FromValue Integer m (NValueNF t f m) where
     fromValueMay = \case
         NVConstantNF (NInt b) -> pure $ Just b
         _ -> pure Nothing
@@ -126,8 +120,7 @@ instance Convertible e t f m
         Just b -> pure b
         _ -> throwError $ ExpectationNF TInt v
 
-instance Convertible e t f m
-      => FromValue Integer m (NValue t f m) where
+instance Convertible e t f m => FromValue Integer m (NValue t f m) where
     fromValueMay = \case
         NVConstant (NInt b) -> pure $ Just b
         _ -> pure Nothing
@@ -135,8 +128,7 @@ instance Convertible e t f m
         Just b -> pure b
         _ -> throwError $ Expectation TInt v
 
-instance Convertible e t f m
-      => FromValue Float m (NValueNF t f m) where
+instance Convertible e t f m => FromValue Float m (NValueNF t f m) where
     fromValueMay = \case
         NVConstantNF (NFloat b) -> pure $ Just b
         NVConstantNF (NInt i) -> pure $ Just (fromInteger i)
@@ -145,8 +137,7 @@ instance Convertible e t f m
         Just b -> pure b
         _ -> throwError $ ExpectationNF TFloat v
 
-instance Convertible e t f m
-      => FromValue Float m (NValue t f m) where
+instance Convertible e t f m => FromValue Float m (NValue t f m) where
     fromValueMay = \case
         NVConstant (NFloat b) -> pure $ Just b
         NVConstant (NInt i) -> pure $ Just (fromInteger i)
@@ -159,7 +150,9 @@ instance (Convertible e t f m, MonadEffects t f m)
       => FromValue NixString m (NValueNF t f m) where
     fromValueMay = \case
         NVStrNF ns -> pure $ Just ns
-        NVPathNF p -> Just . hackyMakeNixStringWithoutContext . Text.pack . unStorePath <$> addPath p
+        NVPathNF p ->
+            Just . hackyMakeNixStringWithoutContext
+                 . Text.pack . unStorePath <$> addPath p
         NVSetNF s _ -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
             Just p -> fromValueMay p
@@ -168,11 +161,13 @@ instance (Convertible e t f m, MonadEffects t f m)
         Just b -> pure b
         _ -> throwError $ ExpectationNF (TString NoContext) v
 
-instance (Convertible e t f m, MonadThunk t m (NValue t f m), MonadEffects t f m)
+instance (Convertible e t f m, MonadEffects t f m, FromValue NixString m t)
       => FromValue NixString m (NValue t f m) where
     fromValueMay = \case
         NVStr ns -> pure $ Just ns
-        NVPath p -> Just . hackyMakeNixStringWithoutContext . Text.pack . unStorePath <$> addPath p
+        NVPath p ->
+            Just . hackyMakeNixStringWithoutContext
+                 . Text.pack . unStorePath <$> addPath p
         NVSet s _ -> case M.lookup "outPath" s of
             Nothing -> pure Nothing
             Just p -> fromValueMay p
@@ -214,8 +209,8 @@ instance Convertible e t f m => FromValue Path m (NValueNF t f m) where
         Just b -> pure b
         _ -> throwError $ ExpectationNF TPath v
 
-instance (Convertible e t f m, MonadThunk t m (NValue t f m))
-      => FromValue Path m (NValue t f m) where
+instance (Convertible e t f m, FromValue Path m t)
+  => FromValue Path m (NValue t f m) where
     fromValueMay = \case
         NVPath p -> pure $ Just (Path p)
         NVStr ns -> pure $ Path . Text.unpack <$> hackyGetStringNoContext ns
@@ -282,21 +277,19 @@ instance Convertible e t f m
         Just b -> pure b
         _ -> throwError $ Expectation TSet v
 
-instance (Convertible e t f m, MonadThunk t m (NValue t f m))
-      => FromValue t m (NValue t f m) where
-    fromValueMay = pure . Just . wrapValue @_ @_ @m
-    fromValue v = fromValueMay v >>= \case
-        Just b -> pure b
-        _ -> error "Impossible, see fromValueMay"
+-- instance Convertible e t f m => FromValue t m (NValue t f m) where
+--     fromValueMay = pure . Just . wrapValue @_ @_ @m
+--     fromValue v = fromValueMay v >>= \case
+--         Just b -> pure b
+--         _ -> error "Impossible, see fromValueMay"
 
 instance (Monad m, FromValue a m v) => FromValue a m (m v) where
     fromValueMay = (>>= fromValueMay)
     fromValue    = (>>= fromValue)
 
-instance (MonadThunk t m (NValue t f m), FromValue a m (NValue t f m))
-      => FromValue a m t where
-    fromValueMay = force ?? fromValueMay
-    fromValue    = force ?? fromValue
+-- instance FromValue a m (NValue t f m) => FromValue a m t where
+--     fromValueMay = force ?? fromValueMay
+--     fromValue    = force ?? fromValue
 
 class ToValue a m v where
     toValue :: a -> m v
@@ -361,9 +354,9 @@ instance Convertible e t f m => ToValue SourcePos m (NValue t f m) where
         l' <- toValue (unPos l)
         c' <- toValue (unPos c)
         let pos = M.fromList
-                [ ("file" :: Text, wrapValue @_ @_ @m f')
-                , ("line",        wrapValue @_ @_ @m l')
-                , ("column",      wrapValue @_ @_ @m c') ]
+                [ ("file" :: Text, wrapValue f')
+                , ("line",        wrapValue l')
+                , ("column",      wrapValue c') ]
         pure $ nvSet pos mempty
 
 instance (Convertible e t f m, ToValue a m (NValueNF t f m))
@@ -388,9 +381,9 @@ instance Convertible e t f m => ToValue (HashMap Text t,
                 HashMap Text SourcePos) m (NValue t f m) where
     toValue (s, p) = pure $ nvSet s p
 
-instance (MonadThunk t m (NValue t f m), ToValue a m (NValue t f m))
-      => ToValue a m t where
-    toValue = fmap (wrapValue @(NValue t f m) @_ @m) . toValue
+-- instance (MonadThunk t m (NValue t f m), ToValue a m (NValue t f m))
+--       => ToValue a m t where
+--     toValue = fmap (wrapValue @(NValue t f m) @_ @m) . toValue
 
 instance Convertible e t f m => ToValue Bool m (NExprF r) where
     toValue = pure . NConstant . NBool
@@ -401,7 +394,7 @@ instance Convertible e t f m => ToValue () m (NExprF r) where
 whileForcingThunk :: forall t f m s e r. (Exception s, Convertible e t f m)
                   => s -> m r -> m r
 whileForcingThunk frame =
-    withFrame Debug ForcingThunk . withFrame Debug frame
+    withFrame Debug (ForcingThunk @t @f @m) . withFrame Debug frame
 
 class FromNix a m v where
     fromNix :: v -> m a
@@ -412,8 +405,7 @@ class FromNix a m v where
     default fromNixMay :: FromValue a m v => v -> m (Maybe a)
     fromNixMay = fromValueMay
 
-instance (Convertible e t f m, MonadThunk t m (NValue t f m),
-          FromNix a m (NValue t f m))
+instance (Convertible e t f m, FromNix a m (NValue t f m))
       => FromNix [a] m (NValue t f m) where
     fromNixMay = \case
         NVList l -> sequence <$> traverse (`force` fromNixMay) l
@@ -422,8 +414,7 @@ instance (Convertible e t f m, MonadThunk t m (NValue t f m),
         Just b -> pure b
         _ -> throwError $ Expectation TList v
 
-instance (Convertible e t f m, MonadThunk t m (NValue t f m),
-          FromNix a m (NValue t f m))
+instance (Convertible e t f m, FromNix a m (NValue t f m))
       => FromNix (HashMap Text a) m (NValue t f m) where
     fromNixMay = \case
         NVSet s _ -> sequence <$> traverse (`force` fromNixMay) s
@@ -442,28 +433,35 @@ instance Convertible e t f m => FromNix Integer m (NValueNF t f m) where
 instance Convertible e t f m => FromNix Integer m (NValue t f m) where
 instance Convertible e t f m => FromNix Float m (NValueNF t f m) where
 instance Convertible e t f m => FromNix Float m (NValue t f m) where
-instance (Convertible e t f m, MonadEffects t f m) => FromNix NixString m (NValueNF t f m) where
-instance (Convertible e t f m, MonadEffects t f m, MonadThunk t m (NValue t f m)) => FromNix NixString m (NValue t f m) where
+instance (Convertible e t f m, MonadEffects t f m)
+  => FromNix NixString m (NValueNF t f m) where
+instance (Convertible e t f m, MonadEffects t f m, FromValue NixString m t)
+  => FromNix NixString m (NValue t f m) where
 instance Convertible e t f m => FromNix ByteString m (NValueNF t f m) where
 instance Convertible e t f m => FromNix ByteString m (NValue t f m) where
 instance Convertible e t f m => FromNix Path m (NValueNF t f m) where
-instance (Convertible e t f m, MonadThunk t m (NValue t f m)) => FromNix Path m (NValue t f m) where
-instance (Convertible e t f m, FromValue a m (NValueNF t f m), Show a) => FromNix [a] m (NValueNF t f m) where
-instance Convertible e t f m => FromNix (HashMap Text (NValueNF t f m)) m (NValueNF t f m) where
-instance Convertible e t f m => FromNix (HashMap Text (NValueNF t f m), HashMap Text SourcePos) m (NValueNF t f m) where
-instance Convertible e t f m => FromNix (HashMap Text t, HashMap Text SourcePos) m (NValue t f m) where
+instance (Convertible e t f m, FromValue Path m t)
+  => FromNix Path m (NValue t f m) where
+instance (Convertible e t f m, FromValue a m (NValueNF t f m), Show a)
+  => FromNix [a] m (NValueNF t f m) where
+instance Convertible e t f m
+  => FromNix (HashMap Text (NValueNF t f m)) m (NValueNF t f m) where
+instance Convertible e t f m
+  => FromNix (HashMap Text (NValueNF t f m),
+             HashMap Text SourcePos) m (NValueNF t f m) where
+instance Convertible e t f m
+  => FromNix (HashMap Text t, HashMap Text SourcePos) m (NValue t f m) where
 
 instance (Monad m, FromNix a m v) => FromNix a m (m v) where
     fromNixMay = (>>= fromNixMay)
     fromNix    = (>>= fromNix)
 
-instance (MonadThunk t m (NValue t f m), FromNix a m (NValue t f m))
-      => FromNix a m t where
-    fromNixMay = force ?? fromNixMay
-    fromNix    = force ?? fromNix
+-- instance (MonadThunk t m (NValue t f m), FromNix a m (NValue t f m))
+--       => FromNix a m t where
+--     fromNixMay = force ?? fromNixMay
+--     fromNix    = force ?? fromNix
 
-instance MonadThunk t m (NValue t f m)
-      => FromNix t m (NValue t f m) where
+instance MonadThunk t m (NValue t f m) => FromNix t m (NValue t f m) where
     fromNixMay = pure . Just . wrapValue
     fromNix    = pure . wrapValue
 
@@ -472,19 +470,19 @@ class ToNix a m v where
     default toNix :: ToValue a m v => a -> m v
     toNix = toValue
 
-instance (Convertible e t f m, MonadThunk t m (NValue t f m),
-          ToNix a m (NValue t f m))
+instance (Convertible e t f m, ToNix a m (NValue t f m))
       => ToNix [a] m (NValue t f m) where
-    toNix = fmap nvList . traverse
-        (thunk . ((\v -> whileForcingThunk (ConcerningValue v) (pure v))
-                     <=< toNix))
+    toNix = fmap nvList . traverse (thunk . go)
+      where
+        go = (\v -> whileForcingThunk @t @f @m (ConcerningValue v) (pure v))
+            <=< toNix
 
-instance (Convertible e t f m, MonadThunk t m (NValue t f m),
-          ToNix a m (NValue t f m))
+instance (Convertible e t f m, ToNix a m (NValue t f m))
       => ToNix (HashMap Text a) m (NValue t f m) where
-    toNix = fmap (flip nvSet M.empty) . traverse
-        (thunk . ((\v -> whileForcingThunk (ConcerningValue v) (pure v))
-                     <=< toNix))
+    toNix = fmap (flip nvSet M.empty) . traverse (thunk . go)
+      where
+        go = (\v -> whileForcingThunk @t @f @m (ConcerningValue v) (pure v))
+            <=< toNix
 
 instance Convertible e t f m => ToNix () m (NValueNF t f m) where
 instance Convertible e t f m => ToNix () m (NValue t f m) where
@@ -502,9 +500,13 @@ instance Convertible e t f m => ToNix ByteString m (NValueNF t f m) where
 instance Convertible e t f m => ToNix ByteString m (NValue t f m) where
 instance Convertible e t f m => ToNix Path m (NValueNF t f m) where
 instance Convertible e t f m => ToNix Path m (NValue t f m) where
-instance Convertible e t f m => ToNix (HashMap Text (NValueNF t f m)) m (NValueNF t f m) where
-instance Convertible e t f m => ToNix (HashMap Text (NValueNF t f m), HashMap Text SourcePos) m (NValueNF t f m) where
-instance Convertible e t f m => ToNix (HashMap Text t, HashMap Text SourcePos) m (NValue t f m) where
+instance Convertible e t f m
+  => ToNix (HashMap Text (NValueNF t f m)) m (NValueNF t f m) where
+instance Convertible e t f m
+  => ToNix (HashMap Text (NValueNF t f m),
+           HashMap Text SourcePos) m (NValueNF t f m) where
+instance Convertible e t f m
+  => ToNix (HashMap Text t, HashMap Text SourcePos) m (NValue t f m) where
 
 instance Convertible e t f m => ToNix Bool m (NExprF r) where
     toNix = pure . NConstant . NBool
@@ -512,11 +514,12 @@ instance Convertible e t f m => ToNix Bool m (NExprF r) where
 instance Convertible e t f m => ToNix () m (NExprF r) where
     toNix _ = pure $ NConstant NNull
 
-instance (MonadThunk t m (NValue t f m), ToNix a m (NValue t f m))
-      => ToNix a m t where
-    toNix = thunk . toNix
+-- instance (MonadThunk t m (NValue t f m), ToNix a m (NValue t f m))
+--       => ToNix a m t where
+--     toNix = thunk . toNix
 
-instance (Convertible e t f m, ToNix a m (NValueNF t f m)) => ToNix [a] m (NValueNF t f m) where
+instance (Convertible e t f m, ToNix a m (NValueNF t f m))
+  => ToNix [a] m (NValueNF t f m) where
     toNix = fmap nvListNF . traverse toNix
 
 instance MonadThunk t m (NValue t f m) => ToNix t m (NValue t f m) where

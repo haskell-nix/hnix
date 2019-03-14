@@ -84,10 +84,9 @@ import           GHC.DataSize
 #endif
 #endif
 
-type MonadNix e m =
-    (Scoped (NThunk m) m, Framed e m, Has e SrcSpan, Has e Options,
-     Typeable m, MonadVar m, MonadEffects m, MonadFix m, MonadCatch m,
-     Alternative m, MonadFreshId Int m)
+type MonadNix e t m =
+    (Scoped t m, Framed e m, Has e SrcSpan, Has e Options,
+     MonadEffects m, MonadFix m, MonadCatch m, Typeable m, Alternative m)
 
 data ExecFrame m = Assertion SrcSpan (NValue m)
     deriving (Show, Typeable)
@@ -103,7 +102,8 @@ currentPos = asks (view hasLens)
 wrapExprLoc :: SrcSpan -> NExprLocF r -> NExprLoc
 wrapExprLoc span x = Fix (Fix (NSym_ span "<?>") <$ x)
 
-instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
+{-
+instance MonadNix e m => MonadThunk (NThunk m) m (NValue m) where
     thunk mv = do
         opts :: Options <- asks (view hasLens)
 
@@ -147,6 +147,7 @@ instance MonadNix e m => MonadThunk (NValue m) (NThunk m) m where
 
     wrapValue = NThunk . NCited [] . coerce . valueRef
     getValue (NThunk (NCited _ v)) = thunkValue (coerce v)
+-}
 
 {-
 prov :: MonadNix e m
@@ -262,7 +263,7 @@ instance MonadNix e m => MonadEval (NValue m) m where
     evalError = throwError
 
 infixl 1 `callFunc`
-callFunc :: forall e m. (MonadNix e m, Typeable m)
+callFunc :: forall e t m. (MonadNix e m, Typeable m)
          => NValue m -> m (NValue m) -> m (NValue m)
 callFunc fun arg = do
     frames :: Frames <- asks (view hasLens)
@@ -274,14 +275,14 @@ callFunc fun arg = do
             f arg
         NVBuiltin name f -> do
             span <- currentPos
-            withFrame Info (Calling @m @(NThunk m) name span) $ f arg
+            withFrame Info (Calling @m @t name span) $ f arg
         s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
             traceM "callFunc:__functor"
             force f $ (`callFunc` pure s) >=> (`callFunc` arg)
         x -> throwError $ ErrorCall $ "Attempt to call non-function: " ++ show x
 
-execUnaryOp :: (Framed e m, MonadVar m)
-            => Scopes m (NThunk m) -> SrcSpan -> NUnaryOp -> NValue m
+execUnaryOp :: Framed e m
+            => Scopes m t -> SrcSpan -> NUnaryOp -> NValue m
             -> m (NValue m)
 execUnaryOp scope span op arg = do
     traceM "NUnary"
@@ -298,8 +299,8 @@ execUnaryOp scope span op arg = do
     unaryOp = pure . nvConstantP (Provenance scope (NUnary_ span op (Just arg)))
 
 execBinaryOp
-    :: forall e m. (MonadNix e m, MonadEval (NValue m) m)
-    => Scopes m (NThunk m)
+    :: forall e t m. (MonadNix e m, MonadEval (NValue m) m)
+    => Scopes m t
     -> SrcSpan
     -> NBinaryOp
     -> NValue m
@@ -510,11 +511,15 @@ fromStringNoContext ns =
       "expected string with no context"
 
 newtype Lazy m a = Lazy
-    { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m)))
+    { runLazy :: ReaderT (Context (Lazy m) (NThunkF (Lazy m) (NValue m)))
                         (StateT (HashMap FilePath NExprLoc) (FreshIdT Int m)) a }
     deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
               MonadFix, MonadIO,
-              MonadReader (Context (Lazy m) (NThunk (Lazy m))))
+              MonadReader (Context (Lazy m) (NThunkF (Lazy m) (NValue m))))
+
+type LazyThunk m = NThunkF m (NValue m)
+
+type ValueSet m = AttrSet (LazyThunk m)
 
 instance MonadTrans Lazy where
     lift = Lazy . lift . lift . lift
@@ -618,7 +623,7 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
         mapMaybeM op = foldr f (return [])
           where f x xs = op x >>= (<$> xs) . (++) . maybeToList
 
-        handleEntry :: Bool -> (Text, NThunk (Lazy m)) -> Lazy m (Maybe (Text, NThunk (Lazy m)))
+        handleEntry :: Bool -> (Text, t) -> Lazy m (Maybe (Text, t))
         handleEntry ignoreNulls (k, v) = fmap (k,) <$> case k of
             -- The `args' attribute is special: it supplies the command-line
             -- arguments to the builder.
@@ -631,7 +636,9 @@ instance (MonadFix m, MonadCatch m, MonadFile m, MonadStore m, MonadVar m,
                 v' -> Just <$> coerceNix v'
           where
             coerceNix = toNix <=< coerceToString CopyToStore CoerceAny
-            coerceNixList = toNix <=< traverse (\x -> force x coerceNix) <=< fromValue @[NThunk (Lazy m)]
+            coerceNixList =
+                toNix <=< traverse (\x -> force x coerceNix)
+                      <=< fromValue @[LazyThunk m]
 
     traceEffect = putStrLn
 
@@ -673,9 +680,9 @@ x <///> y | isAbsolute y || "." `isPrefixOf` y = x </> y
         joinPath $ head [ xs ++ drop (length tx) ys
                         | tx <- tails xs, tx `elem` inits ys ]
 
-findPathBy :: forall e m. MonadNix e m =>
-            (FilePath -> m (Maybe FilePath)) ->
-            [NThunk m] -> FilePath -> m FilePath
+findPathBy :: forall e t m. MonadNix e m
+           => (FilePath -> m (Maybe FilePath))
+           -> [t] -> FilePath -> m FilePath
 findPathBy finder l name = do
     mpath <- foldM go Nothing l
     case mpath of
@@ -685,10 +692,10 @@ findPathBy finder l name = do
                 ++ " (add it using $NIX_PATH or -I)"
         Just path -> return path
     where
-      go :: Maybe FilePath -> NThunk m -> m (Maybe FilePath)
+      go :: Maybe FilePath -> t -> m (Maybe FilePath)
       go p@(Just _) _ = pure p
       go Nothing    l = force l $ fromValue >=>
-        \(s :: HashMap Text (NThunk m)) -> do
+        \(s :: HashMap Text t) -> do
           p <- resolvePath s
           force p $ fromValue >=> \(Path path) ->
               case M.lookup "prefix" s of
@@ -713,8 +720,8 @@ findPathBy finder l name = do
                   throwError $ ErrorCall $ "__nixPath must be a list of attr sets"
                       ++ " with 'path' elements, but saw: " ++ show s
 
-findPathM :: forall e m. MonadNix e m =>
-            [NThunk m] -> FilePath -> m FilePath
+findPathM :: forall e t m. MonadNix e m =>
+            [t] -> FilePath -> m FilePath
 findPathM l name = findPathBy path l name
     where
       path :: MonadEffects m => FilePath -> m (Maybe FilePath)
@@ -729,7 +736,7 @@ findEnvPathM name = do
     mres <- lookupVar "__nixPath"
     case mres of
         Nothing -> error "impossible"
-        Just x -> force x $ fromValue >=> \(l :: [NThunk m]) ->
+        Just x -> force x $ fromValue >=> \(l :: [t]) ->
           findPathBy nixFilePath l name
     where
       nixFilePath :: MonadEffects m => FilePath -> m (Maybe FilePath)
@@ -767,16 +774,16 @@ addTracing k v = do
             print $ msg rendered <> " ...done"
             return res
 
-evalExprLoc :: forall e m. (MonadNix e m, Has e Options)
+evalExprLoc :: forall e t m. (MonadNix e m, Has e Options)
             => NExprLoc -> m (NValue m)
 evalExprLoc expr = do
     opts :: Options <- asks (view hasLens)
     if tracing opts
         then join . (`runReaderT` (0 :: Int)) $
              adi (addTracing phi)
-                 (raise (addStackFrames @(NThunk m) . addSourcePositions))
+                 (raise (addStackFrames @t . addSourcePositions))
                  expr
-        else adi phi (addStackFrames @(NThunk m) . addSourcePositions) expr
+        else adi phi (addStackFrames @t . addSourcePositions) expr
   where
     phi = Eval.eval . annotated . getCompose
     raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x
@@ -791,7 +798,7 @@ fetchTarball v = v >>= \case
     v -> throwError $ ErrorCall $
             "builtins.fetchTarball: Expected URI or set, got " ++ show v
  where
-    go :: Maybe (NThunk m) -> NValue m -> m (NValue m)
+    go :: Maybe t -> NValue m -> m (NValue m)
     go msha = \case
         NVStr ns -> fetch (hackyStringIgnoreContext ns) msha
         v -> throwError $ ErrorCall $
@@ -809,7 +816,7 @@ fetchTarball v = v >>= \case
                   ++ ext ++ "'"
 -}
 
-    fetch :: Text -> Maybe (NThunk m) -> m (NValue m)
+    fetch :: Text -> Maybe t -> m (NValue m)
     fetch uri Nothing =
         nixInstantiateExpr $ "builtins.fetchTarball \"" ++
             Text.unpack uri ++ "\""
@@ -833,7 +840,7 @@ exec
      , Typeable m
      , Has e Options
      , Has e SrcSpan
-     , Scoped (NThunk m) m
+     , Scoped t m
      )
   => [String]
   -> m (NValue m)
@@ -853,14 +860,14 @@ nixInstantiateExpr
      , Typeable m
      , Has e Options
      , Has e SrcSpan
-     , Scoped (NThunk m) m
+     , Scoped t m
      )
   => String
   -> m (NValue m)
 nixInstantiateExpr s = either throwError evalExprLoc =<< instantiateExpr s
 
-instance Monad m => Scoped (NThunk (Lazy m)) (Lazy m) where
+instance Monad m => Scoped t (Lazy m) where
   currentScopes = currentScopesReader
-  clearScopes = clearScopesReader @(Lazy m) @(NThunk (Lazy m))
+  clearScopes = clearScopesReader @(Lazy m) @t
   pushScopes = pushScopesReader
   lookupVar = lookupVarReader
