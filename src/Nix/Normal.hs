@@ -17,26 +17,24 @@ import           Control.Monad.Free
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Reader
 import           Control.Monad.Trans.State
-import           Data.Functor.Compose
 import           Data.Set
 import           Nix.Frames
 import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
 
-newtype NormalLoop f g m = NormalLoop (NValue f g m)
+newtype NormalLoop t f m = NormalLoop (NValue t f m)
     deriving Show
 
-instance(Typeable m, Typeable f, Typeable g, MonadDataContext f m)
-  => Exception (NormalLoop f g m)
+instance MonadDataErrorContext t f m => Exception (NormalLoop t f m)
 
 normalForm'
-    :: forall e t m f g.
+    :: forall e t m f.
     (Framed e m,
-     Typeable m,
-     IsNThunk t f g m)
-    => (forall r. t -> (NValue f g m -> m r) -> m r)
-    -> NValue f g m -> m (NValueNF f g m)
+     MonadThunk t m (NValue t f m),
+     MonadDataErrorContext t f m)
+    => (forall r. t -> (NValue t f m -> m r) -> m r) -> NValue t f m
+    -> m (NValueNF t f m)
 normalForm' f = run . nValueToNFM run go
   where
     start = 0 :: Int
@@ -45,9 +43,9 @@ normalForm' f = run . nValueToNFM run go
     run :: ReaderT Int (StateT (Set Int) m) r -> m r
     run = (`evalStateT` table) . (`runReaderT` start)
 
-    go :: NThunk f g m
-       -> (NValue f g m -> ReaderT Int (StateT (Set Int) m) (NValueNF f g m))
-       -> ReaderT Int (StateT (Set Int) m) (NValueNF f g m)
+    go :: t
+       -> (NValue t f m -> ReaderT Int (StateT (Set Int) m) (NValueNF t f m))
+       -> ReaderT Int (StateT (Set Int) m) (NValueNF t f m)
     go t k = do
         i <- ask
         when (i > 2000) $
@@ -57,7 +55,7 @@ normalForm' f = run . nValueToNFM run go
             (`runStateT` s) . (`runReaderT` i) $ local succ $ do
                 b <- seen t
                 if b
-                    then return $ Pure v
+                    then return $ Pure (undefined <$ v)
                     else k v
         lift $ put s'
         return res
@@ -69,35 +67,30 @@ normalForm' f = run . nValueToNFM run go
             unless res $ modify (insert tid)
             return res
 
-normalForm
-    :: forall e t m f g. (Framed e m, Typeable m, IsNThunk t f g m)
-    => NValue f g m -> m (NValueNF f g m)
-normalForm = normalForm' @e @t @m force
+normalForm :: (Framed e m,
+              MonadThunk t m (NValue t f m),
+              MonadDataErrorContext t f m)
+           => NValue t f m -> m (NValueNF t f m)
+normalForm = normalForm' force
 
-normalForm_
-    :: forall e t m f g. (Framed e m, Typeable m, IsNThunk t f g m)
-    => NValue f g m -> m ()
-normalForm_ = void . normalForm' @e @t @m forceEff
+normalForm_ :: (Framed e m,
+               MonadThunk t m (NValue t f m),
+               MonadDataErrorContext t f m)
+            => NValue t f m -> m ()
+normalForm_ = void . normalForm' forceEff
 
-removeEffects
-    :: forall m f g. (MonadThunk (NValue f g m) (NThunk f g m) m,
-                MonadDataContext f m)
-    => NValue f g m -> NValueNF f g m
+removeEffects :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
+              => NValue t f m -> NValueNF t f m
 removeEffects = nValueToNF (flip query opaque)
 
-removeEffectsM
-    :: forall m f g. (MonadThunk (NValue f g m) (NThunk f g m) m,
-                MonadDataContext f m)
-    => NValue f g m -> m (NValueNF f g m)
+removeEffectsM :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
+               => NValue t f m -> m (NValueNF t f m)
 removeEffectsM = nValueToNFM id (flip queryM (pure opaque))
 
-opaque :: forall m f g. (MonadThunk (NValue f g m) (NThunk f g m) m,
-                   MonadDataContext f m)
-       => NValueNF f g m
-opaque = Free $ Compose $ pure $ NVStrF @(NValue f g m) $
-    principledMakeNixStringWithoutContext "<thunk>"
+opaque :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
+       => NValueNF t f m
+opaque = nvStrNF $ principledMakeNixStringWithoutContext "<thunk>"
 
-dethunk :: (MonadThunk (NValue f g m) (NThunk f g m) m,
-           MonadDataContext f m)
-        => NThunk f g m -> m (NValueNF f g m)
+dethunk :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
+        => t -> m (NValueNF t f m)
 dethunk t = queryM t (pure opaque) removeEffectsM

@@ -12,7 +12,7 @@
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Nix.Thunk.Basic () where
+module Nix.Thunk.Basic (MonadBasicThunk) where
 
 import Control.Exception hiding (catch)
 import Control.Monad.Catch
@@ -40,7 +40,7 @@ type MonadBasicThunk m
     = (MonadAtomicRef m, GEq (Ref m), MonadFreshId Int m, MonadCatch m)
 
 instance (MonadAtomicRef m, GEq (Ref m), MonadFreshId Int m, MonadCatch m)
-  => MonadThunk v (NThunkF m v) m where
+  => MonadThunk (NThunkF m v) m v where
     thunk     = buildThunk
     thunkId   = \case
         Value _     -> -1
