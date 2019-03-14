@@ -8,7 +8,7 @@ module Nix.Thunk where
 import Control.Exception hiding (catch)
 import Data.Typeable
 
-class Monad m => MonadThunk v t m | t -> m, t -> v where
+class Monad m => MonadThunk t m v | t -> m, t -> v where
     thunk :: m v -> m t
     thunkId :: t -> Int
     query :: t -> r -> (v -> r) -> r
