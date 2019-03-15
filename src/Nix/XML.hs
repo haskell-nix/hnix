@@ -16,7 +16,6 @@ import           Nix.String
 import           Nix.Value
 import           Text.XML.Light
 
-{-
 toXML :: Functor m => NValueNF m -> NixString
 toXML = runWithStringContext . fmap pp . iterM phi . check
   where
@@ -52,7 +51,6 @@ toXML = runWithStringContext . fmap pp . iterM phi . check
         NVClosureF p _    -> return $ Element (unqual "function") [] (paramsXML p) Nothing
         NVPathF fp        -> return $ mkElem "path" "value" fp
         NVBuiltinF name _ -> return $ mkElem "function" "name" name
--}
 
 mkElem :: String -> String -> String -> Element
 mkElem n a v = Element (unqual n) [Attr (unqual a) v] [] Nothing

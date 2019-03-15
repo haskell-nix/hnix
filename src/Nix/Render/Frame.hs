@@ -28,28 +28,31 @@ import           Nix.Render
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
-import           Nix.Var
 import           Text.Megaparsec.Pos
 #ifdef MIN_VERSION_pretty_show
 import qualified Text.Show.Pretty as PS
 #endif
 
 renderFrames
-  :: forall v e m ann
-  .  ( MonadReader e m, Has e Options
-     , MonadVar m, MonadFile m, Typeable m, Typeable v)
+  :: forall v t f e m ann
+  .  ( MonadReader e m
+     , Has e Options
+     , MonadFile m
+     , MonadCitedThunks t f m
+     , Typeable v
+     )
   => Frames -> m (Doc ann)
 renderFrames [] = pure mempty
 renderFrames (x:xs) = do
     opts :: Options <- asks (view hasLens)
     frames <-
         if | verbose opts <= ErrorsOnly ->
-             renderFrame @v x
+             renderFrame @v @t @f x
            | verbose opts <= Informational -> do
-             f <- renderFrame @v x
+             f <- renderFrame @v @t @f x
              pure $ concatMap go (reverse xs) ++ f
            | otherwise ->
-             concat <$> mapM (renderFrame @v) (reverse (x:xs))
+             concat <$> mapM (renderFrame @v @t @f) (reverse (x:xs))
     pure $ case frames of
         [] -> mempty
         _  -> vsep frames
@@ -71,18 +74,23 @@ framePos (NixFrame _ f)
           _ -> Nothing
     | otherwise = Nothing
 
-renderFrame :: forall v e m ann.
-              (MonadReader e m, Has e Options, MonadVar m,
-               MonadFile m, Typeable m, Typeable v)
-            => NixFrame -> m [Doc ann]
+renderFrame
+    :: forall v t f e m ann.
+      ( MonadReader e m
+      , Has e Options
+      , MonadFile m
+      , MonadCitedThunks t f m
+      , Typeable v
+      )
+    => NixFrame -> m [Doc ann]
 renderFrame (NixFrame level f)
-    | Just (e :: EvalFrame m v)   <- fromException f = renderEvalFrame level e
-    | Just (e :: ThunkLoop)       <- fromException f = renderThunkLoop level e
-    | Just (e :: ValueFrame m)    <- fromException f = renderValueFrame level e
-    | Just (e :: NormalLoop m)    <- fromException f = renderNormalLoop level e
-    | Just (e :: ExecFrame m)     <- fromException f = renderExecFrame level e
-    | Just (e :: ErrorCall)       <- fromException f = pure [pretty (show e)]
-    | Just (e :: SynHoleInfo m v) <- fromException f = pure [pretty (show e)]
+    | Just (e :: EvalFrame m v)    <- fromException f = renderEvalFrame level e
+    | Just (e :: ThunkLoop)        <- fromException f = renderThunkLoop level e
+    | Just (e :: ValueFrame t f m) <- fromException f = renderValueFrame level e
+    | Just (e :: NormalLoop t f m) <- fromException f = renderNormalLoop level e
+    | Just (e :: ExecFrame t f m)  <- fromException f = renderExecFrame level e
+    | Just (e :: ErrorCall)        <- fromException f = pure [pretty (show e)]
+    | Just (e :: SynHoleInfo m v)  <- fromException f = pure [pretty (show e)]
     | otherwise = error $ "Unrecognized frame: " ++ show f
 
 wrapExpr :: NExprF r -> NExpr
@@ -142,9 +150,13 @@ renderExpr _level longLabel shortLabel e@(Fix (Compose (Ann _ x))) = do
                ]
            else pretty shortLabel <> fillSep [": ", rendered]
 
-renderValueFrame :: (MonadReader e m, Has e Options,
-                    MonadFile m, MonadVar m)
-                 => NixLevel -> ValueFrame m -> m [Doc ann]
+renderValueFrame
+    :: ( MonadReader e m
+      , Has e Options
+      , MonadFile m
+      , MonadCitedThunks t f m
+      )
+    => NixLevel -> ValueFrame t f m -> m [Doc ann]
 renderValueFrame level = fmap (:[]) . \case
     ForcingThunk       -> pure "ForcingThunk"
     ConcerningValue _v -> pure "ConcerningValue"
@@ -173,16 +185,26 @@ renderValueFrame level = fmap (:[]) . \case
         pure $ "Saw " <> v'
             <> " but expected " <> pretty (describeValue t)
 
-renderValue :: (MonadReader e m, Has e Options, MonadFile m, MonadVar m)
-            => NixLevel -> String -> String -> NValue m -> m (Doc ann)
+renderValue
+    :: ( MonadReader e m
+      , Has e Options
+      , MonadFile m
+      , MonadCitedThunks t f m
+      )
+    => NixLevel -> String -> String -> NValue t f m -> m (Doc ann)
 renderValue _level _longLabel _shortLabel v = do
     opts :: Options <- asks (view hasLens)
     if values opts
         then prettyNValueProv v
         else prettyNValue v
 
-renderExecFrame :: (MonadReader e m, Has e Options, MonadVar m, MonadFile m)
-                => NixLevel -> ExecFrame m -> m [Doc ann]
+renderExecFrame
+    :: ( MonadReader e m
+      , Has e Options
+      , MonadFile m
+      , MonadCitedThunks t f m
+      )
+    => NixLevel -> ExecFrame t f m -> m [Doc ann]
 renderExecFrame level = \case
     Assertion ann v ->
         fmap (:[]) $ renderLocation ann
@@ -196,8 +218,13 @@ renderThunkLoop _level = pure . (:[]) . \case
     ThunkLoop (Just n) ->
         pretty $ "Infinite recursion in thunk #" ++ show n
 
-renderNormalLoop :: (MonadReader e m, Has e Options, MonadFile m, MonadVar m)
-                => NixLevel -> NormalLoop m -> m [Doc ann]
+renderNormalLoop
+    :: ( MonadReader e m
+      , Has e Options
+      , MonadFile m
+      , MonadCitedThunks t f m
+      )
+    => NixLevel -> NormalLoop t f m -> m [Doc ann]
 renderNormalLoop level = fmap (:[]) . \case
     NormalLoop v -> do
         v' <- renderValue level "" "" v

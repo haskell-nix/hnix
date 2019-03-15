@@ -22,12 +22,14 @@ import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 
-nvalueToJSONNixString :: MonadNix e m => NValue m -> m NixString
+nvalueToJSONNixString :: MonadNix e t f m => NValue t f m -> m NixString
 nvalueToJSONNixString = runWithStringContextT
-  . fmap (TL.toStrict . TL.decodeUtf8 . A.encodingToLazyByteString . toEncodingSorted)
+  . fmap (TL.toStrict . TL.decodeUtf8
+                      . A.encodingToLazyByteString
+                      . toEncodingSorted)
   . nvalueToJSON
 
-nvalueToJSON :: MonadNix e m => NValue m -> WithStringContextT m A.Value
+nvalueToJSON :: MonadNix e t f m => NValue t f m -> WithStringContextT m A.Value
 nvalueToJSON = \case
   NVConstant (NInt n) -> pure $ A.toJSON n
   NVConstant (NFloat n) -> pure $ A.toJSON n
@@ -35,9 +37,11 @@ nvalueToJSON = \case
   NVConstant NNull -> pure $ A.Null
   NVStr ns  -> A.toJSON <$> extractNixString ns
   NVList l  ->
-    A.Array . V.fromList <$> traverse (join . lift . flip force (return . nvalueToJSON)) l
+    A.Array . V.fromList
+        <$> traverse (join . lift . flip force (return . nvalueToJSON)) l
   NVSet m _ -> case HM.lookup "outPath" m of
-    Nothing -> A.Object <$> traverse (join . lift . flip force (return . nvalueToJSON)) m
+    Nothing -> A.Object
+          <$> traverse (join . lift . flip force (return . nvalueToJSON)) m
     Just outPath -> join $ lift $ force outPath (return . nvalueToJSON)
   NVPath p  -> do
     fp <- lift $ unStorePath <$> addPath p
