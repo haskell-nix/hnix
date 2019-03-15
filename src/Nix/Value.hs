@@ -142,7 +142,7 @@ instance Show r => Show (NValueF p m r) where
       showsCon1 con a d =
           showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a
 
-instance (MonadDataContext f m, Show a) => Show (NValue' t f m a) where
+instance (Comonad f, Show a) => Show (NValue' t f m a) where
     show (NValue (extract -> v)) = show v
 
 type NValue t f m = NValue' t f m t
@@ -216,66 +216,66 @@ nValueToNFM transform k = iterNValueM transform k $ pure . Free
 pattern NVConstant x <- NValue (extract -> NVConstantF x)
 pattern NVConstantNF x <- Free (NValue (extract -> NVConstantF x))
 
-nvConstant :: MonadDataContext f m => NAtom -> NValue t f m
+nvConstant :: Applicative f => NAtom -> NValue t f m
 nvConstant x = NValue (pure (NVConstantF x))
-nvConstantNF :: MonadDataContext f m => NAtom -> NValueNF t f m
+nvConstantNF :: Applicative f => NAtom -> NValueNF t f m
 nvConstantNF x = Free (NValue (pure (NVConstantF x)))
 
 pattern NVStr ns <- NValue (extract -> NVStrF ns)
 pattern NVStrNF ns <- Free (NValue (extract -> NVStrF ns))
 
-nvStr :: MonadDataContext f m => NixString -> NValue t f m
+nvStr :: Applicative f => NixString -> NValue t f m
 nvStr ns = NValue (pure (NVStrF ns))
-nvStrNF :: MonadDataContext f m => NixString -> NValueNF t f m
+nvStrNF :: Applicative f => NixString -> NValueNF t f m
 nvStrNF ns = Free (NValue (pure (NVStrF ns)))
 
 pattern NVPath x <- NValue (extract -> NVPathF x)
 pattern NVPathNF x <- Free (NValue (extract -> NVPathF x))
 
-nvPath :: MonadDataContext f m => FilePath -> NValue t f m
+nvPath :: Applicative f => FilePath -> NValue t f m
 nvPath x = NValue (pure (NVPathF x))
-nvPathNF :: MonadDataContext f m => FilePath -> NValueNF t f m
+nvPathNF :: Applicative f => FilePath -> NValueNF t f m
 nvPathNF x = Free (NValue (pure (NVPathF x)))
 
 pattern NVList l <- NValue (extract -> NVListF l)
 pattern NVListNF l <- Free (NValue (extract -> NVListF l))
 
-nvList :: MonadDataContext f m => [t] -> NValue t f m
+nvList :: Applicative f => [t] -> NValue t f m
 nvList l = NValue (pure (NVListF l))
-nvListNF :: MonadDataContext f m => [NValueNF t f m] -> NValueNF t f m
+nvListNF :: Applicative f => [NValueNF t f m] -> NValueNF t f m
 nvListNF l = Free (NValue (pure (NVListF l)))
 
 pattern NVSet s x <- NValue (extract -> NVSetF s x)
 pattern NVSetNF s x <- Free (NValue (extract -> NVSetF s x))
 
-nvSet :: MonadDataContext f m
+nvSet :: Applicative f
       => HashMap Text t -> HashMap Text SourcePos -> NValue t f m
 nvSet s x = NValue (pure (NVSetF s x))
-nvSetNF :: MonadDataContext f m
+nvSetNF :: Applicative f
         => HashMap Text (NValueNF t f m) -> HashMap Text SourcePos -> NValueNF t f m
 nvSetNF s x = Free (NValue (pure (NVSetF s x)))
 
 pattern NVClosure x f <- NValue (extract -> NVClosureF x f)
 pattern NVClosureNF x f <- Free (NValue (extract -> NVClosureF x f))
 
-nvClosure :: MonadDataContext f m
+nvClosure :: Applicative f
           => Params () -> (m (NValue t f m) -> m t) -> NValue t f m
 nvClosure x f = NValue (pure (NVClosureF x f))
-nvClosureNF :: MonadDataContext f m
+nvClosureNF :: Applicative f
             => Params () -> (m (NValue t f m) -> m (NValueNF t f m)) -> NValueNF t f m
 nvClosureNF x f = Free (NValue (pure (NVClosureF x f)))
 
 pattern NVBuiltin name f <- NValue (extract -> NVBuiltinF name f)
 pattern NVBuiltinNF name f <- Free (NValue (extract -> NVBuiltinF name f))
 
-nvBuiltin :: MonadDataContext f m
+nvBuiltin :: Applicative f
           => String -> (m (NValue t f m) -> m t) -> NValue t f m
 nvBuiltin name f = NValue (pure (NVBuiltinF name f))
-nvBuiltinNF :: MonadDataContext f m
+nvBuiltinNF :: Applicative f
             => String -> (m (NValue t f m) -> m (NValueNF t f m)) -> NValueNF t f m
 nvBuiltinNF name f = Free (NValue (pure (NVBuiltinF name f)))
 
-instance MonadDataContext f m => Eq (NValue t f m) where
+instance Comonad f => Eq (NValue t f m) where
     NVConstant (NFloat x) == NVConstant (NInt y)   = x == fromInteger y
     NVConstant (NInt x)   == NVConstant (NFloat y) = fromInteger x == y
     NVConstant (NInt x)   == NVConstant (NInt y)   = x == y
@@ -284,7 +284,7 @@ instance MonadDataContext f m => Eq (NValue t f m) where
     NVPath x  == NVPath y  = x == y
     _         == _         = False
 
-instance MonadDataContext f m => Ord (NValue t f m) where
+instance Comonad f => Ord (NValue t f m) where
     NVConstant (NFloat x) <= NVConstant (NInt y)   = x <= fromInteger y
     NVConstant (NInt x)   <= NVConstant (NFloat y) = fromInteger x <= y
     NVConstant (NInt x)   <= NVConstant (NInt y)   = x <= y
@@ -304,9 +304,7 @@ checkComparable x y = case (x, y) of
     (NVPath _, NVPath _)   -> pure ()
     _ -> throwError $ Comparison x y
 
-type IsThunk f m t = (MonadThunk t m (NValue t f m), MonadDataContext f m)
-
-thunkEq :: IsThunk f m t => t -> t -> m Bool
+thunkEq :: (MonadThunk t m (NValue t f m), Comonad f) => t -> t -> m Bool
 thunkEq lt rt = force lt $ \lv -> force rt $ \rv ->
  let unsafePtrEq = case (lt, rt) of
          (thunkId -> lid, thunkId -> rid)
@@ -334,7 +332,7 @@ builtin3 :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
 builtin3 name f =
     builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
 
-isClosureNF :: MonadDataContext f m => NValueNF t f m -> Bool
+isClosureNF :: Comonad f => NValueNF t f m -> Bool
 isClosureNF NVClosureNF {} = True
 isClosureNF _ = False
 
@@ -353,7 +351,7 @@ alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
         _ -> throwE ()
     forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
 
-isDerivation :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
+isDerivation :: (MonadThunk t m (NValue t f m), Comonad f)
              => AttrSet t -> m Bool
 isDerivation m = case M.lookup "type" m of
     Nothing -> pure False
@@ -363,7 +361,7 @@ isDerivation m = case M.lookup "type" m of
       NVStr s -> pure $ principledStringIgnoreContext s == "derivation"
       _ -> pure False
 
-valueEq :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
+valueEq :: (MonadThunk t m (NValue t f m), Comonad f)
         => NValue t f m -> NValue t f m -> m Bool
 valueEq = curry $ \case
     (NVConstant lc, NVConstant rc) -> pure $ lc == rc
@@ -436,7 +434,7 @@ instance Eq1 (NValueF (NValue' t f m a) m) where
     liftEq _  (NVPathF x)     (NVPathF y)     = x == y
     liftEq _ _ _ = False
 
-instance MonadDataContext f m => Show1 (NValue' t f m) where
+instance Comonad f => Show1 (NValue' t f m) where
     liftShowsPrec sp sl p = \case
         NVConstant atom  -> showsUnaryWith showsPrec "NVConstantF" p atom
         NVStr ns         -> showsUnaryWith showsPrec "NVStrF"      p
@@ -470,6 +468,6 @@ instance MonadDataErrorContext t f m => Exception (ValueFrame t f m)
 $(makeTraversals ''NValueF)
 $(makeLenses ''NValue')
 
-key :: (MonadDataContext f m, Applicative g)
+key :: (Traversable f, Applicative g)
     => VarName -> LensLike' g (NValue' t f m a) (Maybe a)
 key k = nValue.traverse._NVSetF._1.hashAt k

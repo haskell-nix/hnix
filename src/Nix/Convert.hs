@@ -41,7 +41,7 @@ import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.String
 import           Nix.Thunk
-import           Nix.Utils
+-- import           Nix.Utils
 import           Nix.Value
 
 {-
@@ -461,9 +461,9 @@ instance (Monad m, FromNix a m v) => FromNix a m (m v) where
 --     fromNixMay = force ?? fromNixMay
 --     fromNix    = force ?? fromNix
 
-instance MonadThunk t m (NValue t f m) => FromNix t m (NValue t f m) where
-    fromNixMay = pure . Just . wrapValue
-    fromNix    = pure . wrapValue
+-- instance MonadThunk t m (NValue t f m) => FromNix t m (NValue t f m) where
+--     fromNixMay = pure . Just . wrapValue
+--     fromNix    = pure . wrapValue
 
 class ToNix a m v where
     toNix :: a -> m v
@@ -522,8 +522,8 @@ instance (Convertible e t f m, ToNix a m (NValueNF t f m))
   => ToNix [a] m (NValueNF t f m) where
     toNix = fmap nvListNF . traverse toNix
 
-instance MonadThunk t m (NValue t f m) => ToNix t m (NValue t f m) where
-    toNix = force ?? pure
+-- instance MonadThunk t m (NValue t f m) => ToNix t m (NValue t f m) where
+--     toNix = force ?? pure
 
 convertNix :: forall a t m v. (FromNix a m t, ToNix a m v, Monad m) => t -> m v
 convertNix = fromNix @a >=> toNix

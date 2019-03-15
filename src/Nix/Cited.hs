@@ -54,23 +54,19 @@ $(makeLenses ''NCited)
 
 class HasCitations t v m a where
     citations :: a -> [Provenance t v m]
-
-instance HasCitations t v m (NCited t v m a) where
-    citations = _provenance
-
-class HasCitations1 t v m f where
-    citations1 :: f a -> [Provenance t v m]
-
-instance HasCitations1 t v m f => HasCitations1 t v m (Compose f g) where
-    citations1 (Compose f) = citations1 f
+    addProvenance :: Provenance t v m -> a -> a
 
 -- addProvenance :: (NValue t f m a -> Provenance t (NValue t f m a) m) -> NValue t f m a -> NValue t f m a
 -- addProvenance f l@(NValue (NCited p v)) = NValue (NCited (f l : p) v)
 
--- nvConstantP p x = NValue (NCited [p] (NVConstantF x))
--- nvStrP p ns = NValue (NCited [p] (NVStrF ns))
--- nvPathP p x = NValue (NCited [p] (NVPathF x))
--- nvListP p l = NValue (NCited [p] (NVListF l))
--- nvSetP p s x = NValue (NCited [p] (NVSetF s x))
--- nvClosureP p x f = NValue (NCited [p] (NVClosureF x f))
--- nvBuiltinP p name f = NValue (NCited [p] (NVBuiltinF name f))
+instance HasCitations t v m (NCited t v m a) where
+    citations = _provenance
+    addProvenance x (NCited p v) = (NCited (x : p) v)
+
+class HasCitations1 t v m f where
+    citations1 :: f a -> [Provenance t v m]
+    addProvenance1 :: Provenance t v m -> f a -> f a
+
+instance HasCitations1 t v m f => HasCitations1 t v m (Compose f g) where
+    citations1 (Compose f) = citations1 f
+    addProvenance1 x (Compose f) = Compose (addProvenance1 x f)
