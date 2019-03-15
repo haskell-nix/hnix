@@ -33,7 +33,8 @@ normalForm'
     (Framed e m,
      MonadThunk t m (NValue t f m),
      MonadDataErrorContext t f m)
-    => (forall r. t -> (NValue t f m -> m r) -> m r) -> NValue t f m
+    => (forall r. t -> (NValue t f m -> m r) -> m r)
+    -> NValue t f m
     -> m (NValueNF t f m)
 normalForm' f = run . nValueToNFM run go
   where
@@ -77,7 +78,11 @@ normalForm_ :: (Framed e m,
                MonadThunk t m (NValue t f m),
                MonadDataErrorContext t f m)
             => NValue t f m -> m ()
-normalForm_ = void . normalForm' forceEff
+normalForm_ = fmap void $ normalForm' $ \t k -> do
+    forceEff t (void . k)
+    -- This next return is safe, only because we never inspect this value, nor
+    -- is anything returned to the user due to 'fmap void' above.
+    return $ error "normalForm_: a value was expected"
 
 removeEffects :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
               => NValue t f m -> NValueNF t f m

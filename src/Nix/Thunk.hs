@@ -14,7 +14,7 @@ class Monad m => MonadThunk t m v | t -> m, t -> v where
     query :: t -> r -> (v -> r) -> r
     queryM :: t -> m r -> (v -> m r) -> m r
     force :: t -> (v -> m r) -> m r
-    forceEff :: t -> (v -> m r) -> m r
+    forceEff :: t -> (v -> m ()) -> m ()
     wrapValue :: v -> t
     getValue :: t -> Maybe v
 
