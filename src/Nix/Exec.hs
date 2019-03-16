@@ -81,47 +81,50 @@ import           GHC.DataSize
 #endif
 #endif
 
-type Cited t f m = (HasCitations1 t (NValue t f m) m f, MonadDataContext f m)
+type Cited t f m =
+    ( HasCitations1 t f m
+    , MonadDataContext f m
+    )
 
 nvConstantP :: Cited t f m
-            => Provenance t (NValue t f m) m -> NAtom -> NValue t f m
-nvConstantP  p x      = addProvenance1 p (nvConstant x)
+            => Provenance t f m -> NAtom -> NValue t f m
+nvConstantP  p x      = addProvenance p (nvConstant x)
 
 nvStrP :: Cited t f m
-       => Provenance t (NValue t f m) m -> NixString -> NValue t f m
-nvStrP       p ns     = addProvenance1 p (nvStr ns)
+       => Provenance t f m -> NixString -> NValue t f m
+nvStrP       p ns     = addProvenance p (nvStr ns)
 
 nvPathP :: Cited t f m
-        => Provenance t (NValue t f m) m -> FilePath -> NValue t f m
-nvPathP      p x      = addProvenance1 p (nvPath x)
+        => Provenance t f m -> FilePath -> NValue t f m
+nvPathP      p x      = addProvenance p (nvPath x)
 
 nvListP :: Cited t f m
-        => Provenance t (NValue t f m) m -> [t] -> NValue t f m
-nvListP      p l      = addProvenance1 p (nvList l)
+        => Provenance t f m -> [t] -> NValue t f m
+nvListP      p l      = addProvenance p (nvList l)
 
 nvSetP :: Cited t f m
-       => Provenance t (NValue t f m) m -> AttrSet t -> AttrSet SourcePos
+       => Provenance t f m -> AttrSet t -> AttrSet SourcePos
        -> NValue t f m
-nvSetP       p s x    = addProvenance1 p (nvSet s x)
+nvSetP       p s x    = addProvenance p (nvSet s x)
 
 nvClosureP :: Cited t f m
-           => Provenance t (NValue t f m) m
+           => Provenance t f m
            -> Params ()
            -> (m (NValue t f m) -> m t)
            -> NValue t f m
-nvClosureP   p x f    = addProvenance1 p (nvClosure x f)
+nvClosureP   p x f    = addProvenance p (nvClosure x f)
 
 nvBuiltinP :: Cited t f m
-           => Provenance t (NValue t f m) m
+           => Provenance t f m
            -> String
            -> (m (NValue t f m) -> m t)
            -> NValue t f m
-nvBuiltinP   p name f = addProvenance1 p (nvBuiltin name f)
+nvBuiltinP   p name f = addProvenance p (nvBuiltin name f)
 
 type MonadCitedThunks t f m =
     ( MonadThunk t m (NValue t f m)
     , MonadDataErrorContext t f m
-    , HasCitations1 t (NValue t f m) m f
+    , HasCitations1 t f m
     )
 
 type MonadNix e t f m =
@@ -155,17 +158,9 @@ currentPos = asks (view hasLens)
 wrapExprLoc :: SrcSpan -> NExprLocF r -> NExprLoc
 wrapExprLoc span x = Fix (Fix (NSym_ span "<?>") <$ x)
 
-{-
-prov :: MonadNix e t f m
-     => (NValue t f m -> Provenance m) -> NValue t f m -> m (NValue t f m)
-prov p v = do
-    opts :: Options <- asks (view hasLens)
-    pure $ if values opts
-           then addProvenance p v
-           else v
--}
-
-instance (MonadNix e t f m, FromValue NixString m t) => MonadEval (NValue t f m) m where
+instance ( MonadNix e t f m
+         , FromValue NixString m t
+         ) => MonadEval (NValue t f m) m where
     freeVariable var = nverr @e @t @f $
         ErrorCall $ "Undefined variable '" ++ Text.unpack var ++ "'"
 
@@ -191,13 +186,13 @@ instance (MonadNix e t f m, FromValue NixString m t) => MonadEval (NValue t f m)
     evalCurPos = do
         scope <- currentScopes
         span@(SrcSpan delta _) <- currentPos
-        addProvenance1 @_ @(NValue t f m) (Provenance scope (NSym_ span "__curPos"))
+        addProvenance @_ @f (Provenance scope (NSym_ span "__curPos"))
             <$> toValue delta
 
     evaledSym name val = do
         scope <- currentScopes
         span <- currentPos
-        pure $ addProvenance1 @_ @(NValue t f m) (Provenance scope (NSym_ span name)) val
+        pure $ addProvenance @_ @f (Provenance scope (NSym_ span name)) val
 
     evalConstant c = do
         scope <- currentScopes
@@ -235,7 +230,7 @@ instance (MonadNix e t f m, FromValue NixString m t) => MonadEval (NValue t f m)
     evalWith c b = do
         scope <- currentScopes
         span <- currentPos
-        (\b -> addProvenance1 (Provenance scope (NWith_ span Nothing (Just b))) b)
+        (\b -> addProvenance (Provenance scope (NWith_ span Nothing (Just b))) b)
             <$> evalWithAttrSet c b
 
     evalIf c t f = do
@@ -243,21 +238,21 @@ instance (MonadNix e t f m, FromValue NixString m t) => MonadEval (NValue t f m)
         span  <- currentPos
         fromValue c >>= \b ->
             if b
-            then (\t -> addProvenance1 (Provenance scope (NIf_ span (Just c) (Just t) Nothing)) t) <$> t
-            else (\f -> addProvenance1 (Provenance scope (NIf_ span (Just c) Nothing (Just f))) f) <$> f
+            then (\t -> addProvenance (Provenance scope (NIf_ span (Just c) (Just t) Nothing)) t) <$> t
+            else (\f -> addProvenance (Provenance scope (NIf_ span (Just c) Nothing (Just f))) f) <$> f
 
     evalAssert c body = fromValue c >>= \b -> do
         span  <- currentPos
         if b
             then do
                 scope <- currentScopes
-                (\b -> addProvenance1 (Provenance scope (NAssert_ span (Just c) (Just b))) b) <$> body
+                (\b -> addProvenance (Provenance scope (NAssert_ span (Just c) (Just b))) b) <$> body
             else nverr $ Assertion span c
 
     evalApp f x = do
         scope <- currentScopes
         span <- currentPos
-        addProvenance1 (Provenance scope (NBinary_ span NApp (Just f) Nothing))
+        addProvenance (Provenance scope (NBinary_ span NApp (Just f) Nothing))
             <$> callFunc f x
 
     evalAbs p k = do
@@ -334,7 +329,7 @@ execBinaryOp scope span NAnd larg rarg = fromNix larg >>= \l ->
 
 execBinaryOp scope span op lval rarg = do
     rval <- rarg
-    let bin :: (Provenance t (NValue t f m) m -> a) -> a
+    let bin :: (Provenance t f m -> a) -> a
         bin f  = f (Provenance scope (NBinary_ span op (Just lval) (Just rval)))
         toBool = pure . bin nvConstantP . NBool
     case (lval, rval) of
@@ -448,11 +443,11 @@ execBinaryOp scope span op lval rarg = do
         "Unsupported argument types for binary operator "
             ++ show op ++ ": " ++ show lval ++ ", " ++ show rval
 
-    numBinOp :: (forall r. (Provenance t (NValue t f m) m -> r) -> r)
+    numBinOp :: (forall r. (Provenance t f m -> r) -> r)
              -> (forall a. Num a => a -> a -> a) -> NAtom -> NAtom -> m (NValue t f m)
     numBinOp bin f = numBinOp' bin f f
 
-    numBinOp' :: (forall r. (Provenance t (NValue t f m) m -> r) -> r)
+    numBinOp' :: (forall r. (Provenance t f m -> r) -> r)
               -> (Integer -> Integer -> Integer)
               -> (Float -> Float -> Float)
               -> NAtom -> NAtom -> m (NValue t f m)

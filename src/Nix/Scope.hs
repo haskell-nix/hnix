@@ -20,38 +20,38 @@ import           Data.Text (Text)
 import           Lens.Family2
 import           Nix.Utils
 
-newtype Scope a = Scope { getScope :: AttrSet a }
+newtype Scope t = Scope { getScope :: AttrSet t }
     deriving (Functor, Foldable, Traversable, Eq)
 
-instance Show (Scope a) where
+instance Show (Scope t) where
     show (Scope m) = show (M.keys m)
 
-newScope :: AttrSet a -> Scope a
+newScope :: AttrSet t -> Scope t
 newScope = Scope
 
-scopeLookup :: Text -> [Scope v] -> Maybe v
+scopeLookup :: Text -> [Scope t] -> Maybe t
 scopeLookup key = foldr go Nothing
   where
     go (Scope m) rest = M.lookup key m <|> rest
 
-data Scopes m v = Scopes
-    { lexicalScopes :: [Scope v]
-    , dynamicScopes :: [m (Scope v)]
+data Scopes m t = Scopes
+    { lexicalScopes :: [Scope t]
+    , dynamicScopes :: [m (Scope t)]
     }
 
-instance Show (Scopes m v) where
-    show (Scopes m v) =
+instance Show (Scopes m t) where
+    show (Scopes m t) =
         "Scopes: " ++ show m ++ ", and "
-            ++ show (length v) ++ " with-scopes"
+            ++ show (length t) ++ " with-scopes"
 
-instance Semigroup (Scopes m v) where
+instance Semigroup (Scopes m t) where
     Scopes ls lw <> Scopes rs rw = Scopes (ls <> rs) (lw <> rw)
 
-instance Monoid (Scopes m v) where
+instance Monoid (Scopes m t) where
     mempty  = emptyScopes
     mappend = (<>)
 
-emptyScopes :: forall m v. Scopes m v
+emptyScopes :: forall m t. Scopes m t
 emptyScopes = Scopes [] []
 
 class Scoped t m | m -> t where

@@ -5,8 +5,8 @@
 
 module Nix.Thunk where
 
-import Control.Exception hiding (catch)
-import Data.Typeable
+import Control.Exception (Exception)
+import Data.Typeable (Typeable)
 
 class Monad m => MonadThunk t m v | t -> m, t -> v where
     thunk :: m v -> m t
@@ -18,7 +18,7 @@ class Monad m => MonadThunk t m v | t -> m, t -> v where
     wrapValue :: v -> t
     getValue :: t -> Maybe v
 
-newtype ThunkLoop = ThunkLoop (Maybe Int)
+newtype ThunkLoop = ThunkLoop Int
     deriving (Show, Typeable)
 
 instance Exception ThunkLoop

@@ -12,16 +12,15 @@
 
 module Nix.Normal where
 
-import           Control.Monad
-import           Control.Monad.Free
-import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Reader
-import           Control.Monad.Trans.State
-import           Data.Set
-import           Nix.Frames
-import           Nix.String
-import           Nix.Thunk
-import           Nix.Value
+import Control.Monad
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Reader
+import Control.Monad.Trans.State
+import Data.Set
+import Nix.Frames
+import Nix.String
+import Nix.Thunk
+import Nix.Value
 
 newtype NormalLoop t f m = NormalLoop (NValue t f m)
     deriving Show
@@ -56,7 +55,7 @@ normalForm' f = run . nValueToNFM run go
             (`runStateT` s) . (`runReaderT` i) $ local succ $ do
                 b <- seen t
                 if b
-                    then return $ Pure (undefined <$ v)
+                    then return $ pure (error "Loop detected" <$ v)
                     else k v
         lift $ put s'
         return res

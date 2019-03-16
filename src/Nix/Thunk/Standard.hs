@@ -23,9 +23,7 @@ import           Control.Comonad (Comonad)
 import           Control.Comonad.Env (ComonadEnv)
 import           Control.Monad.Catch hiding (catchJust)
 import           Control.Monad.Reader
-import           Control.Monad.Trans.Control
 import           Data.Fix
-import           Data.Functor.Classes
 import qualified Data.HashMap.Lazy as M
 import           Data.Text (Text)
 import           GHC.Generics
@@ -39,7 +37,6 @@ import           Nix.Frames
 import           Nix.Fresh
 import           Nix.Options
 import           Nix.Render
-import           Nix.Scope
 import           Nix.String
 import           Nix.Thunk
 import           Nix.Thunk.Basic
@@ -48,7 +45,7 @@ import           Nix.Value
 import           Nix.Var (MonadVar)
 
 newtype StdCited m a = StdCited
-    { _stdCited :: NCited (StdThunk m) (StdValue m) (StdLazy m) a }
+    { _stdCited :: NCited (StdThunk m) (StdCited m) (StdLazy m) a }
     deriving
         ( Generic
         , Typeable
@@ -57,7 +54,7 @@ newtype StdCited m a = StdCited
         , Foldable
         , Traversable
         , Comonad
-        , ComonadEnv [Provenance (StdThunk m) (StdValue m) (StdLazy m)]
+        , ComonadEnv [Provenance (StdThunk m) (StdCited m) (StdLazy m)]
         )
 
 newtype StdThunk m = StdThunk
@@ -67,9 +64,6 @@ type StdValue   m = NValue   (StdThunk m) (StdCited m) (StdLazy m)
 type StdValueNF m = NValueNF (StdThunk m) (StdCited m) (StdLazy m)
 
 type StdLazy m = Lazy (StdThunk m) (StdCited m) (FreshIdT Int m)
-
-instance Show1 (StdLazy m) => Show1 (StdCited m) where
-    liftShowsPrec f g n (StdCited c) = liftShowsPrec f g n c
 
 instance ( MonadVar m
          , MonadCatch m
@@ -171,7 +165,7 @@ instance MonadExec m => MonadExec (FreshIdT Int m)
 
 instance MonadEffects t f m => MonadEffects t f (FreshIdT Int m)
 
-instance HasCitations1 (StdThunk m) (StdValue m) (StdLazy m) (StdCited m)
+instance HasCitations1 (StdThunk m) (StdCited m) (StdLazy m)
 
 runStdLazyM :: MonadIO m => Options -> StdLazy m a -> m a
 runStdLazyM opts = runFreshIdT (1 :: Int) . runLazyM opts

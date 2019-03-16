@@ -172,12 +172,12 @@ prettyAtom atom = simpleExpr $ pretty $ unpack $ atomText atom
 prettyNix :: NExpr -> Doc ann
 prettyNix = withoutParens . cata exprFNixDoc
 
-instance HasCitations1 t (NValue t f m) m f
-  => HasCitations1 t (NValue t f m) m (NValue' t f m) where
-    citations1 (NValue f) = citations1 f
-    addProvenance1 x (NValue f) = NValue (addProvenance1 x f)
+instance HasCitations1 t f m
+  => HasCitations t f m (NValue' t f m a) where
+    citations (NValue f) = citations1 f
+    addProvenance x (NValue f) = NValue (addProvenance1 x f)
 
-prettyOriginExpr :: forall t f m ann. HasCitations1 t (NValue t f m) m f
+prettyOriginExpr :: forall t f m ann. HasCitations1 t f m
                  => NExprLocF (Maybe (NValue t f m)) -> Doc ann
 prettyOriginExpr = withoutParens . go
   where
@@ -185,8 +185,7 @@ prettyOriginExpr = withoutParens . go
 
     render :: Maybe (NValue t f m) -> NixDoc ann
     render Nothing = simpleExpr $ "_"
-    render (Just (reverse . citations1 @t @_ @m -> p:_)) =
-        go (_originExpr p)
+    render (Just (reverse . citations @t @f @m -> p:_)) = go (_originExpr p)
     render _ = simpleExpr "?"
     -- render (Just (NValue (citations -> ps))) =
         -- simpleExpr $ foldr ((\x y -> vsep [x, y]) . parens . indent 2 . withoutParens
@@ -326,12 +325,13 @@ prettyNValue = fmap prettyNValueNF . removeEffectsM
 
 prettyNValueProv
     :: forall t f m ann.
-    (HasCitations1 t (NValue t f m) m f,
-     MonadThunk t m (NValue t f m),
-     MonadDataContext f m)
+    ( HasCitations1 t f m
+    , MonadThunk t m (NValue t f m)
+    , MonadDataContext f m
+    )
     => NValue t f m -> m (Doc ann)
 prettyNValueProv v@(NValue nv) = do
-    let ps = citations1 @t @(NValue t f m) @m nv
+    let ps = citations1 @t @f @m nv
     case ps of
         [] -> prettyNValue v
         ps -> do
@@ -345,13 +345,14 @@ prettyNValueProv v@(NValue nv) = do
 
 prettyNThunk
     :: forall t f m ann.
-    (HasCitations t (NValue t f m) m t,
-     HasCitations1 t (NValue t f m) m f,
-     MonadThunk t m (NValue t f m),
-     MonadDataContext f m)
+    ( HasCitations t f m t
+    , HasCitations1 t f m
+    , MonadThunk t m (NValue t f m)
+    , MonadDataContext f m
+    )
     => t -> m (Doc ann)
 prettyNThunk t = do
-    let ps = citations @t @(NValue t f m) @m @t t
+    let ps = citations @t @f @m @t t
     v' <- prettyNValueNF <$> dethunk t
     pure $ fillSep $
       [ v'

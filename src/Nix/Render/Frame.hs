@@ -214,9 +214,7 @@ renderExecFrame level = \case
 renderThunkLoop :: (MonadReader e m, Has e Options, MonadFile m)
                 => NixLevel -> ThunkLoop -> m [Doc ann]
 renderThunkLoop _level = pure . (:[]) . \case
-    ThunkLoop Nothing -> "Infinite recursion"
-    ThunkLoop (Just n) ->
-        pretty $ "Infinite recursion in thunk #" ++ show n
+    ThunkLoop n -> pretty $ "Infinite recursion in thunk #" ++ show n
 
 renderNormalLoop
     :: ( MonadReader e m
