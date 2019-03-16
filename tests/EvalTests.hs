@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -9,18 +10,19 @@
 module EvalTests (tests, genEvalCompareTests) where
 
 import           Control.Applicative ((<|>))
-import           Control.Monad.Catch
 import           Control.Monad (when)
+import           Control.Monad.Catch
 import           Control.Monad.IO.Class
-import qualified Data.HashMap.Lazy as M
+-- import qualified Data.HashMap.Lazy as M
 import           Data.List ((\\))
 import           Data.Maybe (isJust)
-import           Data.String.Interpolate.IsString
 import qualified Data.Set as S
+import           Data.String.Interpolate.IsString
 import           Data.Text (Text)
 import           Data.Time
 import           Nix
 import           Nix.TH
+import           Nix.Thunk.Standard
 import qualified System.Directory as D
 import           System.Environment
 import           System.FilePath
@@ -417,26 +419,29 @@ genEvalCompareTests = do
     mkTestCase td f = testCase f $ assertEvalFileMatchesNix (td </> f)
 
 
-instance (Show r, Show (NValueF m r), Eq r) => Eq (NValueF m r) where
-    NVConstantF x == NVConstantF y = x == y
-    NVStrF ls == NVStrF rs = hackyStringIgnoreContext ls == hackyStringIgnoreContext rs
-    NVListF x == NVListF y = and (zipWith (==) x y)
-    NVSetF x _ == NVSetF y _ =
-        M.keys x == M.keys y &&
-        and (zipWith (==) (M.elems x) (M.elems y))
-    NVPathF x == NVPathF y = x == y
-    x == y = error $ "Need to add comparison for values: "
-                 ++ show x ++ " == " ++ show y
+-- instance (Show r, Show (NValueF p m r), Eq r) => Eq (NValueF p m r) where
+--     NVConstantF x == NVConstantF y = x == y
+--     NVStrF ls     == NVStrF rs = hackyStringIgnoreContext ls == hackyStringIgnoreContext rs
+--     NVListF x     == NVListF y = and (zipWith (==) x y)
+--     NVSetF x _    == NVSetF y _ =
+--         M.keys x == M.keys y &&
+--         and (zipWith (==) (M.elems x) (M.elems y))
+--     NVPathF x     == NVPathF y = x == y
+--     x == y = error $ "Need to add comparison for values: "
+--                  ++ show x ++ " == " ++ show y
 
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
 constantEqual a b = do
     time <- liftIO getCurrentTime
     let opts = defaultOptions time
     -- putStrLn =<< lint (stripAnnotation a)
-    a' <- runLazyM opts $ normalForm =<< nixEvalExprLoc Nothing a
-    -- putStrLn =<< lint (stripAnnotation b)
-    b' <- runLazyM opts $ normalForm =<< nixEvalExprLoc Nothing b
-    assertEqual "" a' b'
+    res <- runStdLazyM opts $ do
+        a' <- nixEvalExprLoc Nothing a
+        b' <- nixEvalExprLoc Nothing b
+        iterNValue forceEff (const (return ())) a'
+        iterNValue forceEff (const (return ())) b'
+        valueEq a' b'
+    assertBool "" res
 
 constantEqualText' :: Text -> Text -> Assertion
 constantEqualText' a b = do
@@ -456,14 +461,13 @@ assertNixEvalThrows a = do
     let Success a' = parseNixTextLoc a
     time <- liftIO getCurrentTime
     let opts = defaultOptions time
-    errored <- catch ((runLazyM opts $ normalForm =<< nixEvalExprLoc Nothing a') >> pure False) handler
+    errored <- catch
+        (False <$ runStdLazyM opts (normalForm =<< nixEvalExprLoc Nothing a'))
+        (\(_ :: NixException) -> pure True)
     if errored then
         pure ()
     else
         assertFailure "Did not catch nix exception"
-    where
-       handler :: NixException -> IO Bool
-       handler _ = pure True
 
 freeVarsEqual :: Text -> [VarName] -> Assertion
 freeVarsEqual a xs = do

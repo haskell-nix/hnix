@@ -30,6 +30,11 @@ data NThunkF m v
     = Value v
     | Thunk Int (Var m Bool) (Var m (Deferred m v))
 
+instance Eq v => Eq (NThunkF m v) where
+    Value x == Value y = x == y
+    Thunk x _ _ == Thunk y _ _ = x == y
+    _ == _ = False              -- jww (2019-03-16): not accurate...
+
 instance Show v => Show (NThunkF m v) where
     show (Value v) = show v
     show (Thunk _ _ _) = "<thunk>"

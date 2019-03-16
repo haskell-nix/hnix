@@ -38,6 +38,7 @@ import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import qualified Data.Aeson as A
 import           Data.Align
+import           Data.Eq.Deriving
 import           Data.Functor.Classes
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
@@ -121,7 +122,7 @@ lmapNValueF f = \case
     NVBuiltinF s g -> NVBuiltinF s (g . fmap f)
 
 type MonadDataContext f (m :: * -> *) =
-    (Show1 f, Comonad f, Applicative f, Traversable f, Monad m)
+    (Comonad f, Applicative f, Traversable f, Monad m)
 
 -- | At the time of constructor, the expected arguments to closures are values
 --   that may contain thunks. The type of such thunks are fixed at that time.
@@ -275,7 +276,7 @@ nvBuiltinNF :: Applicative f
             => String -> (m (NValue t f m) -> m (NValueNF t f m)) -> NValueNF t f m
 nvBuiltinNF name f = Free (NValue (pure (NVBuiltinF name f)))
 
-instance Comonad f => Eq (NValue t f m) where
+instance Comonad f => Eq (NValue' t f m a) where
     NVConstant (NFloat x) == NVConstant (NInt y)   = x == fromInteger y
     NVConstant (NInt x)   == NVConstant (NFloat y) = fromInteger x == y
     NVConstant (NInt x)   == NVConstant (NInt y)   = x == y
@@ -284,7 +285,7 @@ instance Comonad f => Eq (NValue t f m) where
     NVPath x  == NVPath y  = x == y
     _         == _         = False
 
-instance Comonad f => Ord (NValue t f m) where
+instance Comonad f => Ord (NValue' t f m a) where
     NVConstant (NFloat x) <= NVConstant (NInt y)   = x <= fromInteger y
     NVConstant (NInt x)   <= NVConstant (NFloat y) = fromInteger x <= y
     NVConstant (NInt x)   <= NVConstant (NInt y)   = x <= y
@@ -426,7 +427,7 @@ describeValue = \case
     TPath              -> "a path"
     TBuiltin           -> "a builtin function"
 
-instance Eq1 (NValueF (NValue' t f m a) m) where
+instance Eq1 (NValueF p m) where
     liftEq _  (NVConstantF x) (NVConstantF y) = x == y
     liftEq _  (NVStrF x)      (NVStrF y)      = x == y
     liftEq eq (NVListF x)     (NVListF y)     = liftEq eq x y
@@ -471,3 +472,5 @@ $(makeLenses ''NValue')
 key :: (Traversable f, Applicative g)
     => VarName -> LensLike' g (NValue' t f m a) (Maybe a)
 key k = nValue.traverse._NVSetF._1.hashAt k
+
+$(deriveEq1 ''NValue')

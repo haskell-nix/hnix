@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
@@ -17,6 +18,7 @@ import Data.Functor.Compose
 import Data.Typeable (Typeable)
 import GHC.Generics
 import Lens.Family2.TH
+import Text.Show.Deriving
 
 import Nix.Expr.Types.Annotated
 import Nix.Scope
@@ -29,13 +31,15 @@ data Provenance t v m = Provenance
       --   'contextExpr' will be @(x: x + 2) 3@, preserving not only the
       --   result of the call, but what was called and with what arguments.
     }
-    deriving (Generic, Typeable)
+    deriving (Generic, Typeable, Show)
 
 data NCited t v m a = NCited
     { _provenance :: [Provenance t v m]
     , _cited      :: a
     }
-    deriving (Generic, Typeable, Functor, Foldable, Traversable)
+    deriving (Generic, Typeable, Functor, Foldable, Traversable, Show)
+
+$(deriveShow1 ''NCited)
 
 instance Applicative (NCited t v m) where
   pure = NCited []

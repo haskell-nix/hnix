@@ -13,8 +13,6 @@ import qualified Control.Exception as Exc
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
-import           Control.Monad.Ref
-import           Control.Monad.Trans.Class
 -- import           Control.Monad.ST
 import qualified Data.Aeson.Text as A
 import qualified Data.HashMap.Lazy as M
@@ -31,7 +29,6 @@ import           Nix
 import           Nix.Cited
 import           Nix.Convert
 import qualified Nix.Eval as Eval
-import           Nix.Fresh
 import           Nix.Json
 -- import           Nix.Lint
 import           Nix.Options.Parser
@@ -59,18 +56,18 @@ main = do
             Just s -> handleResult opts Nothing (parseNixTextLoc s)
             Nothing  -> case fromFile opts of
                 Just "-" ->
-                    liftIO $ mapM_ (processFile opts)
-                        =<< (lines <$> getContents)
+                    mapM_ (processFile opts)
+                        =<< (lines <$> liftIO getContents)
                 Just path ->
-                    liftIO $ mapM_ (processFile opts)
-                        =<< (lines <$> readFile path)
+                    mapM_ (processFile opts)
+                        =<< (lines <$> liftIO (readFile path))
                 Nothing -> case filePaths opts of
                     [] -> withNixContext Nothing $ Repl.main
                     ["-"] ->
                         handleResult opts Nothing . parseNixTextLoc
                             =<< liftIO Text.getContents
                     paths ->
-                        liftIO $ mapM_ (processFile opts) paths
+                        mapM_ (processFile opts) paths
   where
     processFile opts path = do
         eres <- parseNixFileLoc path
@@ -98,7 +95,7 @@ main = do
             catch (process opts mpath expr) $ \case
                 NixException frames ->
                     errorWithoutStackTrace . show
-                        =<< renderFrames frames
+                        =<< renderFrames @(StdValue IO) @(StdThunk IO) frames
 
             when (repl opts) $
                 withNixContext Nothing $ Repl.main
@@ -140,19 +137,19 @@ main = do
                   . prettyNix
                   . stripAnnotation $ expr
       where
-        printer
-            :: forall e t f m.
-            ( MonadNix e t f m
-            , MonadRef m
-            , MonadFreshId Int m
-            , MonadVar m
-            , MonadIO m
-            , Typeable m
-            )
-            => NValue t f m -> m ()
+        -- printer
+        --     :: forall e t f m.
+        --     ( MonadNix e t f m
+        --     , MonadRef m
+        --     , MonadFreshId Int m
+        --     , MonadVar m
+        --     , MonadIO m
+        --     , Typeable m
+        --     )
+        --     => NValue t f m -> m ()
         printer
             | finder opts =
-              fromValue @(AttrSet (StdThunk m)) >=> findAttrs
+              fromValue @(AttrSet (StdThunk IO)) >=> findAttrs
             | xml opts =
               liftIO . putStrLn
                      . Text.unpack
@@ -174,12 +171,12 @@ main = do
               where
                 go prefix s = do
                     xs <- forM (sortOn fst (M.toList s))
-                        $ \(k, nv@(StdThunk (NCited _ t))) -> case t of
+                        $ \(k, nv@(StdThunk (StdCited (NCited _ t)))) -> case t of
                             Value v -> pure (k, Just v)
                             Thunk _ _ ref -> do
                                 let path = prefix ++ Text.unpack k
                                     (_, descend) = filterEntry path k
-                                val <- readVar @m ref
+                                val <- readVar @(StdLazy IO) ref
                                 case val of
                                     Computed _ -> pure (k, Nothing)
                                     _ | descend   -> (k,) <$> forceEntry path nv
@@ -193,7 +190,7 @@ main = do
                             when descend $ case mv of
                                 Nothing -> return ()
                                 Just v -> case v of
-                                    StdValue (NVSet s' _) ->
+                                    NVSet s' _ ->
                                         go (path ++ ".") s'
                                     _ -> return ()
                   where
@@ -220,7 +217,7 @@ main = do
                                      . ("Exception forcing " ++)
                                      . (k ++)
                                      . (": " ++) . show
-                                  =<< renderFrames @(StdThunk m) frames
+                                  =<< renderFrames @(StdValue IO) @(StdThunk IO) frames
                               return Nothing
 
     reduction path mp x = do

@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
 module TestCommon where
@@ -16,7 +17,7 @@ import System.Posix.Temp
 import System.Process
 import Test.Tasty.HUnit
 
-hnixEvalFile :: Options -> FilePath -> IO (StdValueNF (StdLazy IO))
+hnixEvalFile :: Options -> FilePath -> IO (StdValueNF IO)
 hnixEvalFile opts file = do
   parseResult <- parseNixFileLoc file
   case parseResult of
@@ -29,14 +30,15 @@ hnixEvalFile opts file = do
                                       normalForm expr) $ \case
                 NixException frames ->
                     errorWithoutStackTrace . show
-                        =<< renderFrames frames
+                        =<< renderFrames @(StdValue IO) @(StdThunk IO) frames
 
-hnixEvalText :: Options -> Text -> IO (StdValueNF (StdLazy IO))
+hnixEvalText :: Options -> Text -> IO (StdValueNF IO)
 hnixEvalText opts src = case parseNixText src of
     Failure err        ->
         error $ "Parsing failed for expressien `"
             ++ unpack src ++ "`.\n" ++ show err
     Success expr ->
+        -- runStdLazyM opts $ normalForm =<< nixEvalExpr Nothing expr
         runStdLazyM opts $ normalForm =<< nixEvalExpr Nothing expr
 
 nixEvalString :: String -> IO String

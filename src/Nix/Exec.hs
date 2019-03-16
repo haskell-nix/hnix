@@ -119,22 +119,24 @@ nvBuiltinP :: Cited t f m
 nvBuiltinP   p name f = addProvenance1 p (nvBuiltin name f)
 
 type MonadCitedThunks t f m =
-    (MonadThunk t m (NValue t f m),
-     MonadDataErrorContext t f m,
-     HasCitations1 t (NValue t f m) m f)
+    ( MonadThunk t m (NValue t f m)
+    , MonadDataErrorContext t f m
+    , HasCitations1 t (NValue t f m) m f
+    )
 
 type MonadNix e t f m =
-    (Has e SrcSpan,
-     Has e Options,
-     Scoped t m,
-     Framed e m,
-     MonadFix m,
-     MonadCatch m,
-     MonadThrow m,
-     Typeable m,
-     Alternative m,
-     MonadEffects t f m,
-     MonadCitedThunks t f m)
+    ( Has e SrcSpan
+    , Has e Options
+    , Scoped t m
+    , Framed e m
+    , MonadFix m
+    , MonadCatch m
+    , MonadThrow m
+    , Typeable m
+    , Alternative m
+    , MonadEffects t f m
+    , MonadCitedThunks t f m
+    )
 
 data ExecFrame t f m = Assertion SrcSpan (NValue t f m)
     deriving (Show, Typeable)

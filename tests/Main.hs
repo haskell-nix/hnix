@@ -18,12 +18,12 @@ import           Data.Text (unpack)
 import           Data.Time
 import qualified EvalTests
 import qualified Nix
-import           Nix.Exec
 import           Nix.Expr.Types
 import           Nix.String
 import           Nix.Options
 import           Nix.Parser
 import           Nix.Value
+import           Nix.Thunk.Standard
 import qualified NixLanguageTests
 import qualified ParserTests
 import qualified PrettyTests
@@ -58,7 +58,7 @@ ensureNixpkgsCanParse =
         }|]) $ \expr -> do
         NVStr ns <- do
           time <- liftIO getCurrentTime
-          runLazyM (defaultOptions time) $ Nix.nixEvalExprLoc Nothing expr
+          runStdLazyM (defaultOptions time) $ Nix.nixEvalExprLoc Nothing expr
         let dir = hackyStringIgnoreContext ns
         exists <- fileExist (unpack dir)
         unless exists $

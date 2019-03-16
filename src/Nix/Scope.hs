@@ -21,7 +21,7 @@ import           Lens.Family2
 import           Nix.Utils
 
 newtype Scope a = Scope { getScope :: AttrSet a }
-    deriving (Functor, Foldable, Traversable)
+    deriving (Functor, Foldable, Traversable, Eq)
 
 instance Show (Scope a) where
     show (Scope m) = show (M.keys m)
