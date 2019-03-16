@@ -475,7 +475,11 @@ splitVersion s = case Text.uncons s of
       | h `elem` versionComponentSeparators -> splitVersion t
       | isDigit h ->
           let (digits, rest) = Text.span isDigit s
-          in VersionComponent_Number (fromMaybe (error $ "splitVersion: couldn't parse " <> show digits) $ readMaybe $ Text.unpack digits) : splitVersion rest
+          in VersionComponent_Number
+              (fromMaybe (error $ "splitVersion: couldn't parse " <> show digits)
+                   $ readMaybe
+                   $ Text.unpack digits)
+              : splitVersion rest
       | otherwise ->
           let (chars, rest) = Text.span (\c -> not $ isDigit c || c `elem` versionComponentSeparators) s
               thisComponent = case chars of
@@ -485,8 +489,10 @@ splitVersion s = case Text.uncons s of
 
 splitVersion_ :: MonadBuiltins e t f m => m (NValue t f m) -> m (NValue t f m)
 splitVersion_ = fromValue >=> fromStringNoContext >=> \s ->
-  return $ nvList $ flip map (splitVersion s) $ \c ->
-    valueThunk $ nvStr $ principledMakeNixStringWithoutContext $ versionComponentToString c
+  return $ nvList $ flip map (splitVersion s) $
+    valueThunk . nvStr
+               . principledMakeNixStringWithoutContext
+               . versionComponentToString
 
 compareVersions :: Text -> Text -> Ordering
 compareVersions s1 s2 =

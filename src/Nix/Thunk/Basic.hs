@@ -45,8 +45,8 @@ instance (MonadBasicThunk m, MonadCatch m)
   => MonadThunk (NThunkF m v) m v where
     thunk     = buildThunk
     thunkId   = \case
-        Value _     -> -1
-        Thunk n _ _ -> n
+        Value _     -> Nothing
+        Thunk n _ _ -> Just n
     query     = queryValue
     queryM    = queryThunk
     force     = forceThunk

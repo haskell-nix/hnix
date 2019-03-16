@@ -10,7 +10,7 @@ import Data.Typeable (Typeable)
 
 class Monad m => MonadThunk t m v | t -> m, t -> v where
     thunk :: m v -> m t
-    thunkId :: t -> Int
+    thunkId :: t -> Maybe Int
     query :: t -> r -> (v -> r) -> r
     queryM :: t -> m r -> (v -> m r) -> m r
     force :: t -> (v -> m r) -> m r

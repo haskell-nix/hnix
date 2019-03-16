@@ -436,11 +436,9 @@ constantEqual a b = do
     let opts = defaultOptions time
     -- putStrLn =<< lint (stripAnnotation a)
     res <- runStdLazyM opts $ do
-        a' <- nixEvalExprLoc Nothing a
-        b' <- nixEvalExprLoc Nothing b
-        iterNValue forceEff (const (return ())) a'
-        iterNValue forceEff (const (return ())) b'
-        valueEq a' b'
+        a' <- normalForm =<< nixEvalExprLoc Nothing a
+        b' <- normalForm =<< nixEvalExprLoc Nothing b
+        valueNFEq a' b'
     assertBool "" res
 
 constantEqualText' :: Text -> Text -> Assertion

@@ -402,35 +402,72 @@ alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
         _ -> throwE ()
     forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
 
-isDerivation :: (MonadThunk t m (NValue t f m), Comonad f)
-             => AttrSet t -> m Bool
-isDerivation m = case M.lookup "type" m of
+isDerivation :: Monad m
+             => (t -> m (Maybe NixString)) -> AttrSet t
+             -> m Bool
+isDerivation f m = case M.lookup "type" m of
     Nothing -> pure False
-    Just t -> force t $ \case
-      -- We should probably really make sure the context is empty here but the
-      -- C++ implementation ignores it.
-      NVStr s -> pure $ principledStringIgnoreContext s == "derivation"
-      _ -> pure False
+    Just t -> do
+        mres <- f t
+        case mres of
+            -- We should probably really make sure the context is empty here
+            -- but the C++ implementation ignores it.
+            Just s -> pure $ principledStringIgnoreContext s == "derivation"
+            Nothing -> pure False
+
+valueFEq :: Monad m
+         => (AttrSet a -> AttrSet a -> m Bool)
+         -> (a -> a -> m Bool)
+         -> NValueF p m a
+         -> NValueF p m a
+         -> m Bool
+valueFEq attrsEq eq = curry $ \case
+    (NVConstantF lc, NVConstantF rc) -> pure $ lc == rc
+    (NVStrF ls, NVStrF rs) ->
+        pure $ principledStringIgnoreContext ls
+            == principledStringIgnoreContext rs
+    (NVListF ls, NVListF rs)   -> alignEqM eq ls rs
+    (NVSetF lm _, NVSetF rm _) -> attrsEq lm rm
+    (NVPathF lp, NVPathF rp)   -> pure $ lp == rp
+    _ -> pure False
+
+compareAttrSets :: Monad m
+                => (t -> m (Maybe NixString))
+                -> (t -> t -> m Bool)
+                -> AttrSet t
+                -> AttrSet t
+                -> m Bool
+compareAttrSets f eq lm rm = do
+    isDerivation f lm >>= \case
+        True -> isDerivation f rm >>= \case
+            True | Just lp <- M.lookup "outPath" lm
+                 , Just rp <- M.lookup "outPath" rm
+                   -> eq lp rp
+            _ -> compareAttrs
+        _ -> compareAttrs
+  where
+    compareAttrs = alignEqM eq lm rm
 
 valueEq :: (MonadThunk t m (NValue t f m), Comonad f)
         => NValue t f m -> NValue t f m -> m Bool
-valueEq = curry $ \case
-    (NVConstant lc, NVConstant rc) -> pure $ lc == rc
-    (NVStr ls, NVStr rs) ->
-        pure $ principledStringIgnoreContext ls
-            == principledStringIgnoreContext rs
-    (NVList ls, NVList rs) -> alignEqM thunkEq ls rs
-    (NVSet lm _, NVSet rm _) -> do
-        let compareAttrs = alignEqM thunkEq lm rm
-        isDerivation lm >>= \case
-            True -> isDerivation rm >>= \case
-                True | Just lp <- M.lookup "outPath" lm
-                     , Just rp <- M.lookup "outPath" rm
-                       -> thunkEq lp rp
-                _ -> compareAttrs
-            _ -> compareAttrs
-    (NVPath lp, NVPath rp) -> pure $ lp == rp
-    _ -> pure False
+valueEq (NValue (extract -> x)) (NValue (extract -> y)) =
+    valueFEq (compareAttrSets f thunkEq) thunkEq x y
+  where
+    f t = force t $ \case
+        NVStr s -> pure $ Just s
+        _ -> pure Nothing
+
+valueNFEq :: (Comonad f, Monad m)
+          => NValueNF t f m -> NValueNF t f m -> m Bool
+valueNFEq (Pure _) (Pure _) = pure False
+valueNFEq (Pure _) (Free _) = pure False
+valueNFEq (Free _) (Pure _) = pure False
+valueNFEq (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
+    valueFEq (compareAttrSets f valueNFEq) valueNFEq x y
+  where
+    f (Pure (NVStr s)) = pure $ Just s
+    f (Free (NVStr s)) = pure $ Just s
+    f _ = pure Nothing
 
 data TStringContext = NoContext | HasContext
   deriving Show

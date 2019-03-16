@@ -60,12 +60,13 @@ normalForm' f = run . nValueToNFM run go
         lift $ put s'
         return res
 
-    seen t = do
-        let tid = thunkId t
-        lift $ do
+    seen t = case thunkId t of
+        Just tid -> lift $ do
             res <- gets (member tid)
             unless res $ modify (insert tid)
             return res
+        Nothing ->
+            return False
 
 normalForm :: (Framed e m,
               MonadThunk t m (NValue t f m),
