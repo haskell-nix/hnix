@@ -60,7 +60,9 @@ newtype StdThunk m = StdThunk
 type StdValue   m = NValue   (StdThunk m) (StdCited m) (StdLazy m)
 type StdValueNF m = NValueNF (StdThunk m) (StdCited m) (StdLazy m)
 
-type StdLazy m = Lazy (StdThunk m) (StdCited m) (FreshIdT Int m)
+type StdIdT m = FreshIdT Int m
+
+type StdLazy m = Lazy (StdThunk m) (StdCited m) (StdIdT m)
 
 type MonadStdThunk m =
     ( MonadVar m
@@ -177,19 +179,19 @@ instance MonadStdThunk m
 instance Show (StdThunk m) where
     show _ = "<thunk>"          -- jww (2019-03-15): NYI
 
-instance MonadFile m => MonadFile (FreshIdT Int m)
-instance MonadIntrospect m => MonadIntrospect (FreshIdT Int m)
-instance MonadStore m => MonadStore (FreshIdT Int m) where
+instance MonadFile m => MonadFile (StdIdT m)
+instance MonadIntrospect m => MonadIntrospect (StdIdT m)
+instance MonadStore m => MonadStore (StdIdT m) where
     addPath' = lift . addPath'
     toFile_' = (lift .) . toFile_'
-instance MonadPutStr m => MonadPutStr (FreshIdT Int m)
-instance MonadHttp m => MonadHttp (FreshIdT Int m)
-instance MonadEnv m => MonadEnv (FreshIdT Int m)
-instance MonadInstantiate m => MonadInstantiate (FreshIdT Int m)
-instance MonadExec m => MonadExec (FreshIdT Int m)
+instance MonadPutStr m => MonadPutStr (StdIdT m)
+instance MonadHttp m => MonadHttp (StdIdT m)
+instance MonadEnv m => MonadEnv (StdIdT m)
+instance MonadInstantiate m => MonadInstantiate (StdIdT m)
+instance MonadExec m => MonadExec (StdIdT m)
 
 instance (MonadEffects t f m, MonadDataContext f m)
-  => MonadEffects t f (FreshIdT Int m) where
+  => MonadEffects t f (StdIdT m) where
     makeAbsolutePath = lift . makeAbsolutePath @t @f @m
     findEnvPath      = lift . findEnvPath @t @f @m
     findPath         = (lift .) . findPath @t @f @m
