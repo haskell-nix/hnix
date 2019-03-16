@@ -92,10 +92,10 @@ instance MonadStdThunk m
             else
                 fmap (StdThunk . StdCited . NCited []) . thunk $ mv
 
-    thunkId = error "jww (2019-03-15): NYI"
+    thunkId (StdThunk (StdCited (NCited _ t))) = thunkId t
 
-    query = error "jww (2019-03-15): NYI"
-    queryM = error "jww (2019-03-15): NYI"
+    query  (StdThunk (StdCited (NCited _ t))) = query t
+    queryM (StdThunk (StdCited (NCited _ t))) = queryM t
 
     -- The ThunkLoop exception is thrown as an exception with MonadThrow,
     -- which does not capture the current stack frame information to provide
