@@ -137,16 +137,6 @@ main = do
                   . prettyNix
                   . stripAnnotation $ expr
       where
-        -- printer
-        --     :: forall e t f m.
-        --     ( MonadNix e t f m
-        --     , MonadRef m
-        --     , MonadFreshId Int m
-        --     , MonadVar m
-        --     , MonadIO m
-        --     , Typeable m
-        --     )
-        --     => NValue t f m -> m ()
         printer
             | finder opts =
               fromValue @(AttrSet (StdThunk IO)) >=> findAttrs
