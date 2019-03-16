@@ -229,12 +229,22 @@ iterNValueNF
     -> NValueNF t f m -> r
 iterNValueNF k f = iter f . fmap k
 
+sequenceNValueNF :: (Functor n, Traversable f, Monad m, Monad n)
+                 => (forall x. n x -> m x) -> Free (NValue' t f m) (n a)
+                 -> n (Free (NValue' t f m) a)
+sequenceNValueNF transform = go
+  where
+    go (Pure a) = Pure <$> a
+    go (Free fa) = Free <$> bindNValue transform go fa
+
 iterNValueNFM
     :: forall f m n t r. (MonadDataContext f m, Monad n)
-    => (NValue' t f m Void -> n r)
+    => (forall x. n x -> m x)
+    -> (NValue' t f m Void -> n r)
     -> (NValue' t f m (n r) -> n r)
     -> NValueNF t f m -> n r
-iterNValueNFM k f v = join (iterM (pure . f . fmap join) (fmap k v))
+iterNValueNFM transform k f v =
+    iterM f =<< sequenceNValueNF transform (fmap k v)
 
 nValueFromNF :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
              => NValueNF t f m -> NValue t f m

@@ -18,7 +18,7 @@ import           Text.XML.Light
 toXML :: forall t f m. MonadDataContext f m => NValueNF t f m -> NixString
 toXML = runWithStringContext
     . fmap pp
-    . iterNValueNFM (const (pure (mkElem "cycle" "value" ""))) phi
+    . iterNValueNF (const (pure (mkElem "cycle" "value" ""))) phi
   where
     pp = ("<?xml version='1.0' encoding='utf-8'?>\n" <>)
       . (<> "\n")
