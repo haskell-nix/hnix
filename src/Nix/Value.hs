@@ -121,6 +121,32 @@ lmapNValueF f = \case
     NVClosureF p g -> NVClosureF p (g . fmap f)
     NVBuiltinF s g -> NVBuiltinF s (g . fmap f)
 
+liftNValueF :: (MonadTrans u, Monad m)
+            => (forall x. u m x -> m x)
+            -> NValueF p m a
+            -> NValueF p (u m) a
+liftNValueF run = \case
+    NVConstantF a  -> NVConstantF a
+    NVStrF s       -> NVStrF s
+    NVPathF p      -> NVPathF p
+    NVListF l      -> NVListF l
+    NVSetF s p     -> NVSetF s p
+    NVClosureF p g -> NVClosureF p $ lift . g . run
+    NVBuiltinF s g -> NVBuiltinF s $ lift . g . run
+
+unliftNValueF :: (MonadTrans u, Monad m)
+              => (forall x. u m x -> m x)
+              -> NValueF p (u m) a
+              -> NValueF p m a
+unliftNValueF run = \case
+    NVConstantF a  -> NVConstantF a
+    NVStrF s       -> NVStrF s
+    NVPathF p      -> NVPathF p
+    NVListF l      -> NVListF l
+    NVSetF s p     -> NVSetF s p
+    NVClosureF p g -> NVClosureF p $ run . g . lift
+    NVBuiltinF s g -> NVBuiltinF s $ run . g . lift
+
 type MonadDataContext f (m :: * -> *) =
     (Comonad f, Applicative f, Traversable f, Monad m)
 
@@ -153,6 +179,20 @@ bindNValue :: (Traversable f, Monad m, Monad n)
            -> n (NValue' t f m b)
 bindNValue transform f (NValue v) =
     NValue <$> traverse (bindNValueF transform f) v
+
+liftNValue :: (MonadTrans u, Monad m, Functor (u m), Functor f)
+           => (forall x. u m x -> m x)
+           -> NValue' t f m a
+           -> NValue' t f (u m) a
+liftNValue run (NValue v) =
+    NValue (fmap (lmapNValueF (unliftNValue run) . liftNValueF run) v)
+
+unliftNValue :: (MonadTrans u, Monad m, Functor (u m), Functor f)
+             => (forall x. u m x -> m x)
+             -> NValue' t f (u m) a
+             -> NValue' t f m a
+unliftNValue run (NValue v) =
+    NValue (fmap (lmapNValueF (liftNValue run) . unliftNValueF run) v)
 
 -- | An 'NValueNF' is a fully evaluated value in normal form. An 'NValue f t m' is
 --   a value in head normal form, where only the "top layer" has been

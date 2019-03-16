@@ -415,7 +415,9 @@ instance MonadCatch (Lint s) where
     catch _m _h = Lint $ ReaderT $ \_ -> error "Cannot catch in 'Lint s'"
 
 runLintM :: Options -> Lint s a -> ST s a
-runLintM opts = runFreshIdT 0 . flip runReaderT (newContext opts) . runLint
+runLintM opts action = do
+    i <- newVar (1 :: Int)
+    runFreshIdT i $ flip runReaderT (newContext opts) $ runLint action
 
 symbolicBaseEnv :: Monad m => m (Scopes m (SThunk m))
 symbolicBaseEnv = return emptyScopes

@@ -21,11 +21,11 @@ import Control.Monad.Reader
 import Control.Monad.Ref
 import Control.Monad.ST
 import Control.Monad.State.Strict
-import Control.Monad.Trans.Control
 import Control.Monad.Writer
 #ifdef MIN_VERSION_haskeline
 import System.Console.Haskeline.MonadException hiding (catch)
 #endif
+import Nix.Var
 
 -- TODO better fresh name supply
 class Monad m => MonadFreshId i m | m -> i where
@@ -33,14 +33,13 @@ class Monad m => MonadFreshId i m | m -> i where
   default freshId :: (MonadFreshId i m', MonadTrans t, m ~ (t m')) => m i
   freshId = lift freshId
 
-newtype FreshIdT i m a = FreshIdT { unFreshIdT :: StateT i m a }
+newtype FreshIdT i m a = FreshIdT { unFreshIdT :: ReaderT (Var m i) m a }
   deriving
     ( Functor
     , Applicative
     , Alternative
     , Monad
     , MonadPlus
-    , MonadTrans
     , MonadFix
     , MonadRef
     , MonadAtomicRef
@@ -52,24 +51,29 @@ newtype FreshIdT i m a = FreshIdT { unFreshIdT :: StateT i m a }
 #endif
     )
 
+instance MonadTrans (FreshIdT i) where
+    lift = FreshIdT . lift
+
 instance MonadBase b m => MonadBase b (FreshIdT i m) where
     liftBase = FreshIdT . liftBase
 
-instance MonadTransControl (FreshIdT i) where
-    type StT (FreshIdT i) a = StT (StateT i) a
-    liftWith = defaultLiftWith FreshIdT unFreshIdT
-    restoreT = defaultRestoreT FreshIdT
+-- instance MonadTransControl (FreshIdT i) where
+--     type StT (FreshIdT i) a = StT (ReaderT (Var m i)) a
+--     liftWith = defaultLiftWith FreshIdT unFreshIdT
+--     restoreT = defaultRestoreT FreshIdT
 
-instance MonadBaseControl b m => MonadBaseControl b (FreshIdT i m) where
-    type StM (FreshIdT i m) a = ComposeSt (FreshIdT i) m a
-    liftBaseWith     = defaultLiftBaseWith
-    restoreM         = defaultRestoreM
+-- instance MonadBaseControl b m => MonadBaseControl b (FreshIdT i m) where
+--     type StM (FreshIdT i m) a = ComposeSt (FreshIdT i) m a
+--     liftBaseWith     = defaultLiftBaseWith
+--     restoreM         = defaultRestoreM
 
-instance (Monad m, Num i) => MonadFreshId i (FreshIdT i m) where
-  freshId = FreshIdT $ get <* modify (+ 1)
+instance (MonadVar m, Num i) => MonadFreshId i (FreshIdT i m) where
+  freshId = FreshIdT $ do
+      v <- ask
+      atomicModifyVar v (\i -> (i + 1, i))
 
-runFreshIdT :: Functor m => i -> FreshIdT i m a -> m a
-runFreshIdT i m = fst <$> runStateT (unFreshIdT m) i
+runFreshIdT :: Functor m => Var m i -> FreshIdT i m a -> m a
+runFreshIdT i m = runReaderT (unFreshIdT m) i
 
 instance MonadFreshId i m => MonadFreshId i (ReaderT r m)
 instance (Monoid w, MonadFreshId i m) => MonadFreshId i (WriterT w m)

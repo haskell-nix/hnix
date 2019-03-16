@@ -41,7 +41,6 @@ import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.String
 import           Nix.Thunk
--- import           Nix.Utils
 import           Nix.Value
 
 {-
@@ -277,19 +276,9 @@ instance Convertible e t f m
         Just b -> pure b
         _ -> throwError $ Expectation TSet v
 
--- instance Convertible e t f m => FromValue t m (NValue t f m) where
---     fromValueMay = pure . Just . wrapValue @_ @_ @m
---     fromValue v = fromValueMay v >>= \case
---         Just b -> pure b
---         _ -> error "Impossible, see fromValueMay"
-
 instance (Monad m, FromValue a m v) => FromValue a m (m v) where
     fromValueMay = (>>= fromValueMay)
     fromValue    = (>>= fromValue)
-
--- instance FromValue a m (NValue t f m) => FromValue a m t where
---     fromValueMay = force ?? fromValueMay
---     fromValue    = force ?? fromValue
 
 class ToValue a m v where
     toValue :: a -> m v
@@ -381,10 +370,6 @@ instance Convertible e t f m => ToValue (HashMap Text t,
                 HashMap Text SourcePos) m (NValue t f m) where
     toValue (s, p) = pure $ nvSet s p
 
--- instance (MonadThunk t m (NValue t f m), ToValue a m (NValue t f m))
---       => ToValue a m t where
---     toValue = fmap (wrapValue @(NValue t f m) @_ @m) . toValue
-
 instance Convertible e t f m => ToValue Bool m (NExprF r) where
     toValue = pure . NConstant . NBool
 
@@ -456,15 +441,6 @@ instance (Monad m, FromNix a m v) => FromNix a m (m v) where
     fromNixMay = (>>= fromNixMay)
     fromNix    = (>>= fromNix)
 
--- instance (MonadThunk t m (NValue t f m), FromNix a m (NValue t f m))
---       => FromNix a m t where
---     fromNixMay = force ?? fromNixMay
---     fromNix    = force ?? fromNix
-
--- instance MonadThunk t m (NValue t f m) => FromNix t m (NValue t f m) where
---     fromNixMay = pure . Just . wrapValue
---     fromNix    = pure . wrapValue
-
 class ToNix a m v where
     toNix :: a -> m v
     default toNix :: ToValue a m v => a -> m v
@@ -514,16 +490,9 @@ instance Convertible e t f m => ToNix Bool m (NExprF r) where
 instance Convertible e t f m => ToNix () m (NExprF r) where
     toNix _ = pure $ NConstant NNull
 
--- instance (MonadThunk t m (NValue t f m), ToNix a m (NValue t f m))
---       => ToNix a m t where
---     toNix = thunk . toNix
-
 instance (Convertible e t f m, ToNix a m (NValueNF t f m))
   => ToNix [a] m (NValueNF t f m) where
     toNix = fmap nvListNF . traverse toNix
-
--- instance MonadThunk t m (NValue t f m) => ToNix t m (NValue t f m) where
---     toNix = force ?? pure
 
 convertNix :: forall a t m v. (FromNix a m t, ToNix a m v, Monad m) => t -> m v
 convertNix = fromNix @a >=> toNix

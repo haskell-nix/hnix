@@ -59,6 +59,7 @@ import           Nix.Type.Env
 import qualified Nix.Type.Env as Env
 import           Nix.Type.Type
 import           Nix.Utils
+import           Nix.Var
 
 -------------------------------------------------------------------------------
 -- Classes
@@ -201,7 +202,9 @@ runInfer' = runExceptT
           . getInfer
 
 runInfer :: (forall s. InferT s (FreshIdT Int (ST s)) a) -> Either InferError a
-runInfer m = runST (runFreshIdT 0 (runInfer' m))
+runInfer m = runST $ do
+    i <- newVar (1 :: Int)
+    runFreshIdT i (runInfer' m)
 
 inferType ::
   ( MonadFreshId Int m
