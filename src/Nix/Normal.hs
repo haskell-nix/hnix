@@ -77,11 +77,7 @@ normalForm_ :: (Framed e m,
                MonadThunk t m (NValue t f m),
                MonadDataErrorContext t f m)
             => NValue t f m -> m ()
-normalForm_ = fmap void $ normalForm' $ \t k -> do
-    forceEff t (void . k)
-    -- This next return is safe, only because we never inspect this value, nor
-    -- is anything returned to the user due to 'fmap void' above.
-    return $ error "normalForm_: a value was expected"
+normalForm_ = void <$> normalForm' forceEff
 
 removeEffects :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
               => NValue t f m -> NValueNF t f m

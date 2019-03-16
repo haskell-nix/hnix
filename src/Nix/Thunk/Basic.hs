@@ -105,12 +105,12 @@ forceThunk (Thunk n active ref) k = do
                     writeVar ref (Computed v)
                     k v
 
-forceEffects :: MonadVar m => NThunkF m v -> (v -> m ()) -> m ()
+forceEffects :: MonadVar m => NThunkF m v -> (v -> m r) -> m r
 forceEffects (Value v) k = k v
 forceEffects (Thunk _ active ref) k = do
     nowActive <- atomicModifyVar active (True,)
     if nowActive
-        then return ()
+        then return $ error "Loop detected"
         else do
             eres <- readVar ref
             case eres of
