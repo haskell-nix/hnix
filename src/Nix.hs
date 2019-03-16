@@ -24,7 +24,6 @@ module Nix (module Nix.Cache,
 
 import           Control.Applicative
 import           Control.Arrow (second)
-import           Control.Monad.Free
 import           Control.Monad.Reader
 import           Data.Fix
 import qualified Data.HashMap.Lazy as M
@@ -51,20 +50,20 @@ import           Nix.XML
 -- | This is the entry point for all evaluations, whatever the expression tree
 --   type. It sets up the common Nix environment and applies the
 --   transformations, allowing them to be easily composed.
-nixEval :: (MonadNix e m, Has e Options, Functor f)
-        => Maybe FilePath -> Transform f (m a) -> Alg f (m a) -> Fix f -> m a
+nixEval :: (MonadBuiltins e t f m, Has e Options, Functor g)
+    => Maybe FilePath -> Transform g (m a) -> Alg g (m a) -> Fix g -> m a
 nixEval mpath xform alg = withNixContext mpath . adi alg xform
 
 -- | Evaluate a nix expression in the default context
-nixEvalExpr :: forall e m. (MonadNix e m, Has e Options)
-            => Maybe FilePath -> NExpr -> m (NValue m)
+nixEvalExpr :: (MonadBuiltins e t f m, Has e Options)
+            => Maybe FilePath -> NExpr -> m (NValue t f m)
 nixEvalExpr mpath = nixEval mpath id Eval.eval
 
 -- | Evaluate a nix expression in the default context
-nixEvalExprLoc :: forall e m. (MonadNix e m, Has e Options)
-               => Maybe FilePath -> NExprLoc -> m (NValue m)
+nixEvalExprLoc :: forall e t f m. (MonadBuiltins e t f m, Has e Options)
+               => Maybe FilePath -> NExprLoc -> m (NValue t f m)
 nixEvalExprLoc mpath =
-    nixEval mpath (Eval.addStackFrames @(NThunk m) . Eval.addSourcePositions)
+    nixEval mpath (Eval.addStackFrames @t . Eval.addSourcePositions)
             (Eval.eval . annotated . getCompose)
 
 -- | Evaluate a nix expression with tracing in the default context. Note that
@@ -73,15 +72,15 @@ nixEvalExprLoc mpath =
 --   'MonadNix'). All this function does is provide the right type class
 --   context.
 nixTracingEvalExprLoc
-    :: forall e m. (MonadNix e m, Has e Options, MonadIO m, Alternative m)
-    => Maybe FilePath -> NExprLoc -> m (NValue m)
+    :: (MonadBuiltins e t f m, Has e Options, MonadIO m, Alternative m)
+    => Maybe FilePath -> NExprLoc -> m (NValue t f m)
 nixTracingEvalExprLoc mpath = withNixContext mpath . evalExprLoc
 
 evaluateExpression
-    :: (MonadNix e m, Has e Options)
+    :: (MonadBuiltins e t f m, Has e Options)
     => Maybe FilePath
-    -> (Maybe FilePath -> NExprLoc -> m (NValue m))
-    -> (NValue m -> m a)
+    -> (Maybe FilePath -> NExprLoc -> m (NValue t f m))
+    -> (NValue t f m -> m a)
     -> NExprLoc
     -> m a
 evaluateExpression mpath evaluator handler expr = do
@@ -97,27 +96,29 @@ evaluateExpression mpath evaluator handler expr = do
 
     eval' = (normalForm =<<) . nixEvalExpr mpath
 
-    argmap args = Fix $ NVSetF (M.fromList args) mempty
+    argmap args = pure $ nvSet (M.fromList args') mempty
+      where
+        args' = map (fmap (wrapValue . nValueFromNF)) args
 
     compute ev x args p = do
-         f <- ev mpath x
+         f :: NValue t f m <- ev mpath x
          processResult p =<< case f of
-             NVClosure _ g -> g args
+             NVClosure _ g -> force ?? pure =<< g args
              _ -> pure f
 
-processResult :: forall e m a. (MonadNix e m, Has e Options)
-              => (NValue m -> m a) -> NValue m -> m a
+processResult :: forall e t f m a. (MonadNix e t f m, Has e Options)
+              => (NValue t f m -> m a) -> NValue t f m -> m a
 processResult h val = do
     opts :: Options <- asks (view hasLens)
     case attr opts of
         Nothing -> h val
         Just (Text.splitOn "." -> keys) -> go keys val
   where
-    go :: [Text.Text] -> NValue m -> m a
+    go :: [Text.Text] -> NValue t f m -> m a
     go [] v = h v
     go ((Text.decimal -> Right (n,"")):ks) v = case v of
         NVList xs -> case ks of
-            [] -> force @(NValue m) @(NThunk m) (xs !! n) h
+            [] -> force @t @m @(NValue t f m) (xs !! n) h
             _  -> force (xs !! n) (go ks)
         _ -> errorWithoutStackTrace $
                 "Expected a list for selector '" ++ show n

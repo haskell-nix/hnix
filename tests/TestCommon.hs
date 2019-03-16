@@ -28,7 +28,7 @@ hnixEvalFile opts file = do
                                       normalForm expr) $ \case
                 NixException frames ->
                     errorWithoutStackTrace . show
-                        =<< renderFrames @(NThunk (Lazy IO)) frames
+                        =<< renderFrames frames
 
 hnixEvalText :: Options -> Text -> IO (NValueNF (Lazy IO))
 hnixEvalText opts src = case parseNixText src of

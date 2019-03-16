@@ -21,7 +21,7 @@
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
-module Nix.Builtins (withNixContext, builtins) where
+module Nix.Builtins (MonadBuiltins, withNixContext, builtins) where
 
 import           Control.Monad
 import           Control.Monad.Catch
@@ -1011,7 +1011,7 @@ data FileType
    | FileTypeUnknown
    deriving (Show, Read, Eq, Ord)
 
-instance Applicative m => ToNix FileType m (NValue t f m) where
+instance Convertible e t f m => ToNix FileType m (NValue t f m) where
     toNix = toNix . principledMakeNixStringWithoutContext . \case
         FileTypeRegular   -> "regular" :: Text
         FileTypeDirectory -> "directory"
@@ -1045,7 +1045,7 @@ fromJSON = fromValue >=> fromStringNoContext >=> \encoded ->
             <$> traverse (thunk . jsonToNValue) m
         A.Array l -> nvList <$>
             traverse (\x -> thunk @t @m @(NValue t f m)
-                         . whileForcingThunk @t @f (CoercionFromJson x)
+                         . whileForcingThunk @t @f (CoercionFromJson @t @f @m x)
                          . jsonToNValue $ x)
                      (V.toList l)
         A.String s -> pure $ nvStr $ hackyMakeNixStringWithoutContext s
@@ -1176,5 +1176,5 @@ instance ( MonadBuiltins e t f m
          , FromNix a m (NValue t f m)
          , ToBuiltin t f m b)
       => ToBuiltin t f m (a -> b) where
-    toBuiltin name f =
-        return $ nvBuiltin name (fromNix >=> toBuiltin name . f)
+    toBuiltin name f = return $ nvBuiltin name
+        (fromNix >=> fmap wrapValue . toBuiltin name . f)
