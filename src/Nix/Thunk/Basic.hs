@@ -12,7 +12,7 @@
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Nix.Thunk.Basic (NThunkF, MonadBasicThunk) where
+module Nix.Thunk.Basic (NThunkF(..), Deferred(..), MonadBasicThunk) where
 
 import Control.Exception hiding (catch)
 import Control.Monad.Catch

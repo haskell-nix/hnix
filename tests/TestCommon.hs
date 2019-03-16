@@ -8,6 +8,7 @@ import Control.Monad.IO.Class
 import Data.Text (Text, unpack)
 import Data.Time
 import Nix
+import Nix.Thunk.Standard
 import System.Environment
 import System.IO
 import System.Posix.Files
@@ -15,7 +16,7 @@ import System.Posix.Temp
 import System.Process
 import Test.Tasty.HUnit
 
-hnixEvalFile :: Options -> FilePath -> IO (NValueNF (Lazy IO))
+hnixEvalFile :: Options -> FilePath -> IO (StdValueNF (StdLazy IO))
 hnixEvalFile opts file = do
   parseResult <- parseNixFileLoc file
   case parseResult of
@@ -23,20 +24,20 @@ hnixEvalFile opts file = do
         error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
     Success expr -> do
         setEnv "TEST_VAR" "foo"
-        runLazyM opts $
+        runStdLazyM opts $
             catch (evaluateExpression (Just file) nixEvalExprLoc
                                       normalForm expr) $ \case
                 NixException frames ->
                     errorWithoutStackTrace . show
                         =<< renderFrames frames
 
-hnixEvalText :: Options -> Text -> IO (NValueNF (Lazy IO))
+hnixEvalText :: Options -> Text -> IO (StdValueNF (StdLazy IO))
 hnixEvalText opts src = case parseNixText src of
     Failure err        ->
         error $ "Parsing failed for expressien `"
             ++ unpack src ++ "`.\n" ++ show err
     Success expr ->
-        runLazyM opts $ normalForm =<< nixEvalExpr Nothing expr
+        runStdLazyM opts $ normalForm =<< nixEvalExpr Nothing expr
 
 nixEvalString :: String -> IO String
 nixEvalString expr = do

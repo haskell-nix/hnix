@@ -13,6 +13,8 @@ import qualified Control.Exception as Exc
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
+import           Control.Monad.Ref
+import           Control.Monad.Trans.Class
 -- import           Control.Monad.ST
 import qualified Data.Aeson.Text as A
 import qualified Data.HashMap.Lazy as M
@@ -26,12 +28,15 @@ import qualified Data.Text.Lazy.IO as TL
 import           Data.Text.Prettyprint.Doc
 import           Data.Text.Prettyprint.Doc.Render.Text
 import           Nix
+import           Nix.Cited
 import           Nix.Convert
 import qualified Nix.Eval as Eval
+import           Nix.Fresh
 import           Nix.Json
 -- import           Nix.Lint
 import           Nix.Options.Parser
 import           Nix.Thunk.Basic
+import           Nix.Thunk.Standard
 import qualified Nix.Type.Env as Env
 import qualified Nix.Type.Infer as HM
 import           Nix.Utils
@@ -46,7 +51,7 @@ main :: IO ()
 main = do
     time <- liftIO getCurrentTime
     opts <- execParser (nixOptionsInfo time)
-    runLazyM opts $ case readFrom opts of
+    runStdLazyM opts $ case readFrom opts of
         Just path -> do
             let file = addExtension (dropExtension path) "nixc"
             process opts (Just file) =<< liftIO (readCache path)
@@ -54,18 +59,18 @@ main = do
             Just s -> handleResult opts Nothing (parseNixTextLoc s)
             Nothing  -> case fromFile opts of
                 Just "-" ->
-                    mapM_ (processFile opts)
-                        =<< (lines <$> liftIO getContents)
+                    liftIO $ mapM_ (processFile opts)
+                        =<< (lines <$> getContents)
                 Just path ->
-                    mapM_ (processFile opts)
-                        =<< (lines <$> liftIO (readFile path))
+                    liftIO $ mapM_ (processFile opts)
+                        =<< (lines <$> readFile path)
                 Nothing -> case filePaths opts of
                     [] -> withNixContext Nothing $ Repl.main
                     ["-"] ->
                         handleResult opts Nothing . parseNixTextLoc
                             =<< liftIO Text.getContents
                     paths ->
-                        mapM_ (processFile opts) paths
+                        liftIO $ mapM_ (processFile opts) paths
   where
     processFile opts path = do
         eres <- parseNixFileLoc path
@@ -93,7 +98,7 @@ main = do
             catch (process opts mpath expr) $ \case
                 NixException frames ->
                     errorWithoutStackTrace . show
-                        =<< renderFrames @(NThunk (Lazy IO)) frames
+                        =<< renderFrames frames
 
             when (repl opts) $
                 withNixContext Nothing $ Repl.main
@@ -135,13 +140,25 @@ main = do
                   . prettyNix
                   . stripAnnotation $ expr
       where
-        printer :: forall e m. (MonadNix e m, MonadIO m, Typeable m)
-                => NValue m -> m ()
+        printer
+            :: forall e t f m.
+            ( MonadNix e t f m
+            , MonadRef m
+            , MonadFreshId Int m
+            , MonadVar m
+            , MonadIO m
+            , Typeable m
+            )
+            => NValue t f m -> m ()
         printer
             | finder opts =
-              fromValue @(AttrSet (NThunk m)) >=> findAttrs
+              fromValue @(AttrSet (StdThunk m)) >=> findAttrs
             | xml opts =
-              liftIO . putStrLn . Text.unpack . principledStringIgnoreContext . toXML <=< normalForm
+              liftIO . putStrLn
+                     . Text.unpack
+                     . principledStringIgnoreContext
+                     . toXML
+                     <=< normalForm
             | json opts =
               liftIO . Text.putStrLn
                      . principledStringIgnoreContext
@@ -157,12 +174,12 @@ main = do
               where
                 go prefix s = do
                     xs <- forM (sortOn fst (M.toList s))
-                        $ \(k, nv@(NThunk (NCited _ t))) -> case t of
+                        $ \(k, nv@(StdThunk (NCited _ t))) -> case t of
                             Value v -> pure (k, Just v)
                             Thunk _ _ ref -> do
                                 let path = prefix ++ Text.unpack k
                                     (_, descend) = filterEntry path k
-                                val <- readVar ref
+                                val <- readVar @m ref
                                 case val of
                                     Computed _ -> pure (k, Nothing)
                                     _ | descend   -> (k,) <$> forceEntry path nv
@@ -176,7 +193,8 @@ main = do
                             when descend $ case mv of
                                 Nothing -> return ()
                                 Just v -> case v of
-                                    NVSet s' _ -> go (path ++ ".") s'
+                                    StdValue (NVSet s' _) ->
+                                        go (path ++ ".") s'
                                     _ -> return ()
                   where
                     filterEntry path k = case (path, k) of
@@ -202,7 +220,7 @@ main = do
                                      . ("Exception forcing " ++)
                                      . (k ++)
                                      . (": " ++) . show
-                                  =<< renderFrames @(NThunk (Lazy IO)) frames
+                                  =<< renderFrames @(StdThunk m) frames
                               return Nothing
 
     reduction path mp x = do
@@ -212,8 +230,8 @@ main = do
 
     handleReduced :: (MonadThrow m, MonadIO m)
                   => FilePath
-                  -> (NExprLoc, Either SomeException (NValue m))
-                  -> m (NValue m)
+                  -> (NExprLoc, Either SomeException (NValue t f m))
+                  -> m (NValue t f m)
     handleReduced path (expr', eres) = do
         liftIO $ do
             putStrLn $ "Wrote winnowed expression tree to " ++ path

@@ -18,9 +18,8 @@ module Nix.Thunk.Standard where
 
 import           Control.Monad.Catch hiding (catchJust)
 import           Control.Monad.Reader
-import           Control.Monad.Ref
+import           Control.Monad.Trans.Control
 import           Data.Fix
-import           Data.GADT.Compare
 import qualified Data.HashMap.Lazy as M
 import           Data.Text (Text)
 import           Nix.Cited
@@ -36,69 +35,99 @@ import           Nix.Thunk
 import           Nix.Thunk.Basic
 import           Nix.Utils
 import           Nix.Value
+import           Nix.Var (MonadVar)
 
-newtype NThunk f m = NThunk
-    { _nThunk :: NCited (NThunk f m) (NValue (NThunk f m) f m) m
-                       (NThunkF m (NValue (NThunk f m) f m)) }
+newtype StdThunk m = StdThunk
+    { _stdThunk ::
+            NCited (StdThunk m) (StdValue m)
+                   (FreshIdT Int m)
+                   (NThunkF (FreshIdT Int m) (StdValue m)) }
 
-instance (MonadNix e t f m, MonadFreshId Int m, MonadAtomicRef m, GEq (Ref m))
-  => MonadThunk (NThunk f m) m (NValue (NThunk f m) f m) where
+newtype StdValue m = StdValue
+    { _stdValue ::
+            NValue (StdThunk m)
+                   (NCited (StdThunk m) (StdValue m) (FreshIdT Int m))
+                   (FreshIdT Int m) }
+
+newtype StdValueNF m = StdValueNF
+    { _stdValueNF ::
+            NValueNF (StdThunk m)
+                     (NCited (StdThunk m) (StdValue m) (FreshIdT Int m))
+                     (FreshIdT Int m) }
+
+type StdLazy m =
+    Lazy (StdThunk m)
+         (NCited (StdThunk m) (StdValue m) (FreshIdT Int m))
+         (FreshIdT Int m)
+
+instance (MonadNix e t f m, MonadVar m)
+  => MonadThunk (StdThunk m) (FreshIdT Int m) (StdValue m) where
     thunk mv = do
-        opts :: Options <- asks (view hasLens)
+        opts :: Options <- lift $ asks (view hasLens)
 
         if thunks opts
             then do
-                frames :: Frames <- asks (view hasLens)
+                frames :: Frames <- lift $ asks (view hasLens)
 
                 -- Gather the current evaluation context at the time of thunk
                 -- creation, and record it along with the thunk.
                 let go (fromException ->
                             Just (EvaluatingExpr scope
-                                     (Fix (Compose (Ann span e))))) =
-                        let e' = Compose (Ann span (Nothing <$ e))
+                                     (Fix (Compose (Ann s e))))) =
+                        let e' = Compose (Ann s (Nothing <$ e))
                         in [Provenance scope e']
                     go _ = []
                     ps = concatMap (go . frame) frames
 
-                fmap (NThunk . NCited ps) . thunk $ mv
+                fmap (StdThunk . NCited ps) . thunk $ mv
             else
-                fmap (NThunk . NCited []) . thunk $ mv
+                fmap (StdThunk . NCited []) . thunk $ mv
+
+    thunkId = error "jww (2019-03-15): NYI"
+
+    query = error "jww (2019-03-15): NYI"
+    queryM = error "jww (2019-03-15): NYI"
 
     -- The ThunkLoop exception is thrown as an exception with MonadThrow,
     -- which does not capture the current stack frame information to provide
     -- it in a NixException, so we catch and re-throw it here using
     -- 'throwError' from Frames.hs.
-    force (NThunk (NCited ps t)) f = catch go (throwError @ThunkLoop)
+    force (StdThunk (NCited ps t)) f =
+        catch go (lift . throwError @ThunkLoop)
       where
         go = case ps of
             [] -> force t f
-            Provenance scope e@(Compose (Ann span _)):_ ->
-                withFrame Info (ForcingExpr scope (wrapExprLoc span e))
-                    (force t f)
+            Provenance scope e@(Compose (Ann s _)):_ -> do
+                r <- liftWith $ \run -> do
+                    withFrame Info (ForcingExpr scope (wrapExprLoc s e))
+                        (run (force t f))
+                restoreT $ return r
 
-    forceEff (NThunk (NCited ps t)) f = catch go (throwError @ThunkLoop)
+    forceEff (StdThunk (NCited ps t)) f =
+        catch go (lift . throwError @ThunkLoop)
       where
         go = case ps of
             [] -> forceEff t f
-            Provenance scope e@(Compose (Ann span _)):_ ->
-                withFrame Info (ForcingExpr scope (wrapExprLoc span e))
-                    (forceEff t f)
+            Provenance scope e@(Compose (Ann s _)):_ -> do
+                r <- liftWith $ \run -> do
+                    withFrame Info (ForcingExpr scope (wrapExprLoc s e))
+                        (run (forceEff t f))
+                restoreT $ return r
 
-    wrapValue = NThunk . NCited [] . wrapValue
-    getValue (NThunk (NCited _ v)) = getValue v
+    wrapValue = StdThunk . NCited [] . wrapValue
+    getValue (StdThunk (NCited _ v)) = getValue v
 
--- instance Monad m => MonadFreshId Int (Lazy t f m) where
---   freshId = Lazy $ lift $ lift freshId
+instance FromValue NixString m (StdThunk m) where
+instance FromValue Path m (StdThunk m) where
+instance FromValue [StdThunk m] m (StdThunk m) where
+instance FromValue (M.HashMap Text (StdThunk m)) m (StdThunk m) where
+instance ToValue NixString m (StdThunk m) where
+instance ToValue Int m (StdThunk m) where
+instance ToValue () m (StdThunk m) where
+instance FromValue [NixString] m (StdThunk m) where
+instance FromNix [NixString] m (StdThunk m) where
+instance ToValue (StdThunk m) m (NValue (StdThunk m) f m) where
+instance ToNix (StdThunk m) m (NValue (StdThunk m) f m) where
 
-instance FromValue NixString m (NThunk f m) where
-instance FromValue Path m (NThunk f m) where
-instance FromValue [NThunk f m] m (NThunk f m) where
-instance FromValue (M.HashMap Text (NThunk f m)) m (NThunk f m) where
-instance ToValue NixString m (NThunk f m) where
-instance ToValue Int m (NThunk f m) where
-instance ToValue () m (NThunk f m) where
-instance FromValue [NixString] m (NThunk f m) where
-instance FromNix [NixString] m (NThunk f m) where
-instance ToValue (NThunk f m) m (NValue (NThunk f m) f m) where
-instance ToNix (NThunk f m) m (NValue (NThunk f m) f m) where
-
+runStdLazyM :: MonadIO m => Options -> StdLazy m a -> m a
+runStdLazyM opts = runFreshIdT (1 :: Int) . runLazyM opts

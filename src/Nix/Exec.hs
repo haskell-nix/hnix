@@ -56,6 +56,7 @@ import           Nix.Effects
 import           Nix.Eval as Eval
 import           Nix.Expr
 import           Nix.Frames
+import           Nix.Fresh (MonadFreshId(..))
 import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser
@@ -520,8 +521,16 @@ fromStringNoContext ns =
 newtype Lazy t (f :: * -> *) m a = Lazy
     { runLazy :: ReaderT (Context (Lazy t f m) t)
                         (StateT (HashMap FilePath NExprLoc) m) a }
-    deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
-              MonadFix, MonadIO, MonadReader (Context (Lazy t f m) t))
+    deriving
+        ( Functor
+        , Applicative
+        , Alternative
+        , Monad
+        , MonadPlus
+        , MonadFix
+        , MonadIO
+        , MonadReader (Context (Lazy t f m) t)
+        )
 
 instance MonadTrans (Lazy t f) where
     lift = Lazy . lift . lift
@@ -566,6 +575,9 @@ instance MonadInstantiate m => MonadInstantiate (Lazy t f m)
 instance MonadExec m => MonadExec (Lazy t f m)
 
 instance MonadIntrospect m => MonadIntrospect (Lazy t f m)
+
+instance MonadFreshId Int m => MonadFreshId Int (Lazy t f m) where
+  freshId = Lazy $ lift $ lift freshId
 
 instance (MonadFix m, MonadCatch m, MonadFile m,
           MonadStore m, MonadPutStr m, MonadHttp m,

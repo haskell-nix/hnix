@@ -14,12 +14,14 @@
 module Nix.Fresh where
 
 import Control.Applicative
+import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.Ref
 import Control.Monad.ST
 import Control.Monad.State.Strict
+import Control.Monad.Trans.Control
 import Control.Monad.Writer
 #ifdef MIN_VERSION_haskeline
 import System.Console.Haskeline.MonadException hiding (catch)
@@ -49,6 +51,19 @@ newtype FreshIdT i m a = FreshIdT { unFreshIdT :: StateT i m a }
     , MonadException
 #endif
     )
+
+instance MonadBase b m => MonadBase b (FreshIdT i m) where
+    liftBase = FreshIdT . liftBase
+
+instance MonadTransControl (FreshIdT i) where
+    type StT (FreshIdT i) a = StT (StateT i) a
+    liftWith = defaultLiftWith FreshIdT unFreshIdT
+    restoreT = defaultRestoreT FreshIdT
+
+instance MonadBaseControl b m => MonadBaseControl b (FreshIdT i m) where
+    type StM (FreshIdT i m) a = ComposeSt (FreshIdT i) m a
+    liftBaseWith     = defaultLiftBaseWith
+    restoreM         = defaultRestoreM
 
 instance (Monad m, Num i) => MonadFreshId i (FreshIdT i m) where
   freshId = FreshIdT $ get <* modify (+ 1)

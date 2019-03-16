@@ -505,6 +505,7 @@ library
     , lens-family-th
     , logict
     , megaparsec >=7.0 && <7.1
+    , monad-control
     , monadlist
     , mtl
     , optparse-applicative
@@ -523,6 +524,7 @@ library
     , these
     , time
     , transformers
+    , transformers-base
     , unix
     , unordered-containers >=0.2.9 && <0.3
     , vector
@@ -588,6 +590,7 @@ executable hnix
     , optparse-applicative
     , pretty-show
     , prettyprinter
+    , ref-tf
     , repline
     , template-haskell
     , text
