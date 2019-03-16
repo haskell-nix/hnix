@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -12,9 +13,27 @@ import Control.Monad.State.Strict
 import Control.Monad.Ref
 import Control.Monad.Catch
 import Control.Applicative
+#ifdef MIN_VERSION_haskeline
+import System.Console.Haskeline.MonadException (MonadException)
+#endif
 
 newtype FreshStableIdT m a = FreshStableIdT (ReaderT StableId (StateT Int m) a)
-  deriving (Functor, Applicative, Monad, MonadRef, MonadAtomicRef, MonadCatch, MonadThrow, MonadIO, MonadFix, MonadPlus, Alternative)
+  deriving
+    ( Functor
+    , Applicative
+    , Monad
+    , MonadRef
+    , MonadAtomicRef
+    , MonadCatch
+    , MonadThrow
+    , MonadIO
+    , MonadFix
+    , MonadPlus
+    , Alternative
+#ifdef MIN_VERSION_haskeline
+    , MonadException
+#endif
+    )
 
 instance MonadTrans FreshStableIdT where
   lift = FreshStableIdT . lift . lift
