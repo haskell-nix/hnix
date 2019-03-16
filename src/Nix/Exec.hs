@@ -38,7 +38,6 @@ import           Control.Monad.State.Strict
 import           Control.Monad.Trans.Reader (ReaderT(..))
 import           Control.Monad.Trans.State.Strict (StateT(..))
 import           Data.Fix
--- import           Data.GADT.Compare
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.List
@@ -57,16 +56,14 @@ import           Nix.Effects
 import           Nix.Eval as Eval
 import           Nix.Expr
 import           Nix.Frames
--- import           Nix.Fresh
-import           Nix.String
 import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser
 import           Nix.Pretty
 import           Nix.Render
 import           Nix.Scope
+import           Nix.String
 import           Nix.Thunk
--- import           Nix.Thunk.Basic
 import           Nix.Utils
 import           Nix.Value
 #ifdef MIN_VERSION_haskeline
@@ -847,63 +844,10 @@ fetchTarball v = v >>= \case
               ++ "url    = \"" ++ Text.unpack url ++ "\"; "
               ++ "sha256 = \"" ++ Text.unpack sha ++ "\"; }"
 
-{-
-instance MonadNix e t f m => MonadThunk (NThunk m) m (NValue t f m) where
-    thunk mv = do
-        opts :: Options <- asks (view hasLens)
-
-        if thunks opts
-            then do
-                frames :: Frames <- asks (view hasLens)
-
-                -- Gather the current evaluation context at the time of thunk
-                -- creation, and record it along with the thunk.
-                let go (fromException ->
-                            Just (EvaluatingExpr scope
-                                     (Fix (Compose (Ann span e))))) =
-                        let e' = Compose (Ann span (Nothing <$ e))
-                        in [Provenance scope e']
-                    go _ = []
-                    ps = concatMap (go . frame) frames
-
-                fmap (NThunk . NCited ps . coerce) . buildThunk $ mv
-            else
-                fmap (NThunk . NCited [] . coerce) . buildThunk $ mv
-
-    -- The ThunkLoop exception is thrown as an exception with MonadThrow,
-    -- which does not capture the current stack frame information to provide
-    -- it in a NixException, so we catch and re-throw it here using
-    -- 'throwError' from Frames.hs.
-    force (NThunk (NCited ps t)) f = catch go (throwError @ThunkLoop)
-      where
-        go = case ps of
-            [] -> forceThunk t f
-            Provenance scope e@(Compose (Ann span _)):_ ->
-                withFrame Info (ForcingExpr scope (wrapExprLoc span e))
-                    (forceThunk t f)
-
-    forceEff (NThunk (NCited ps t)) f = catch go (throwError @ThunkLoop)
-      where
-        go = case ps of
-            [] -> forceEffects t f
-            Provenance scope e@(Compose (Ann span _)):_ ->
-                withFrame Info (ForcingExpr scope (wrapExprLoc span e))
-                    (forceEffects t f)
-
-    wrapValue = NThunk . NCited [] . coerce . valueRef
-    getValue (NThunk (NCited _ v)) = thunkValue (coerce v)
--}
-
--- instance Monad m => MonadFreshId Int (Lazy t f m) where
---   freshId = Lazy $ lift $ lift freshId
-
 exec
   :: ( MonadNix e t f m
     , MonadInstantiate m
     , FromValue NixString m t
-    -- , MonadFreshId Int m
-    -- , GEq (Ref m)
-    -- , MonadAtomicRef m
     )
   => [String]
   -> m (NValue t f m)
@@ -913,9 +857,6 @@ nixInstantiateExpr
   :: ( MonadNix e t f m
     , MonadInstantiate m
     , FromValue NixString m t
-    -- , MonadFreshId Int m
-    -- , GEq (Ref m)
-    -- , MonadAtomicRef m
     )
   => String
   -> m (NValue t f m)

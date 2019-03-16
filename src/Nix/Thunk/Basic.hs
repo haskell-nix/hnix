@@ -16,8 +16,6 @@ module Nix.Thunk.Basic (NThunkF, MonadBasicThunk) where
 
 import Control.Exception hiding (catch)
 import Control.Monad.Catch
-import Control.Monad.Ref
-import Data.GADT.Compare
 
 import Nix.Fresh
 import Nix.Thunk
@@ -36,10 +34,9 @@ instance Show v => Show (NThunkF m v) where
     show (Value v) = show v
     show (Thunk _ _ _) = "<thunk>"
 
-type MonadBasicThunk m
-    = (MonadAtomicRef m, GEq (Ref m), MonadFreshId Int m, MonadCatch m)
+type MonadBasicThunk m = (MonadFreshId Int m, MonadVar m)
 
-instance (MonadAtomicRef m, GEq (Ref m), MonadFreshId Int m, MonadCatch m)
+instance (MonadBasicThunk m, MonadCatch m)
   => MonadThunk (NThunkF m v) m v where
     thunk     = buildThunk
     thunkId   = \case
@@ -59,18 +56,16 @@ thunkValue :: NThunkF m v -> Maybe v
 thunkValue (Value v) = Just v
 thunkValue _ = Nothing
 
-buildThunk :: (MonadVar m, MonadFreshId Int m) => m v -> m (NThunkF m v)
+buildThunk :: MonadBasicThunk m => m v -> m (NThunkF m v)
 buildThunk action =do
     freshThunkId <- freshId
     Thunk freshThunkId <$> newVar False <*> newVar (Deferred action)
 
-queryValue :: (MonadVar m, MonadThrow m, MonadCatch m)
-           => NThunkF m v -> a -> (v -> a) -> a
+queryValue :: MonadVar m => NThunkF m v -> a -> (v -> a) -> a
 queryValue (Value v) _ k = k v
 queryValue _ n _ = n
 
-queryThunk :: (MonadVar m, MonadThrow m, MonadCatch m)
-           => NThunkF m v -> m a -> (v -> m a) -> m a
+queryThunk :: MonadVar m => NThunkF m v -> m a -> (v -> m a) -> m a
 queryThunk (Value v) _ k = k v
 queryThunk (Thunk _ active ref) n k = do
     nowActive <- atomicModifyVar active (True,)
