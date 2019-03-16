@@ -20,11 +20,7 @@ import Unsafe.Coerce
 
 type Var m = Ref m
 
---TODO: Eliminate the old MonadVar shims
-type MonadVar m =
-  ( MonadAtomicRef m
-  , GEq (Ref m)
-  )
+type MonadVar m = MonadAtomicRef m
 
 eqVar :: forall m a. GEq (Ref m) => Ref m a -> Ref m a -> Bool
 eqVar a b = isJust $ geq a b

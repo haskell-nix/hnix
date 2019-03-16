@@ -29,9 +29,11 @@ instance MonadDataErrorContext t f m => Exception (NormalLoop t f m)
 
 normalForm'
     :: forall e t m f.
-    (Framed e m,
-     MonadThunk t m (NValue t f m),
-     MonadDataErrorContext t f m)
+    ( Framed e m
+    , MonadThunk t m (NValue t f m)
+    , MonadDataErrorContext t f m
+    , Ord (ThunkId m)
+    )
     => (forall r. t -> (NValue t f m -> m r) -> m r)
     -> NValue t f m
     -> m (NValueNF t f m)
@@ -40,12 +42,12 @@ normalForm' f = run . nValueToNFM run go
     start = 0 :: Int
     table = mempty
 
-    run :: ReaderT Int (StateT (Set Int) m) r -> m r
+    run :: ReaderT Int (StateT (Set (ThunkId m)) m) r -> m r
     run = (`evalStateT` table) . (`runReaderT` start)
 
     go :: t
-       -> (NValue t f m -> ReaderT Int (StateT (Set Int) m) (NValueNF t f m))
-       -> ReaderT Int (StateT (Set Int) m) (NValueNF t f m)
+       -> (NValue t f m -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValueNF t f m))
+       -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValueNF t f m)
     go t k = do
         i <- ask
         when (i > 2000) $
@@ -68,16 +70,22 @@ normalForm' f = run . nValueToNFM run go
         Nothing ->
             return False
 
-normalForm :: (Framed e m,
-              MonadThunk t m (NValue t f m),
-              MonadDataErrorContext t f m)
-           => NValue t f m -> m (NValueNF t f m)
+normalForm
+    :: ( Framed e m
+      , MonadThunk t m (NValue t f m)
+      , MonadDataErrorContext t f m
+      , Ord (ThunkId m)
+      )
+    => NValue t f m -> m (NValueNF t f m)
 normalForm = normalForm' force
 
-normalForm_ :: (Framed e m,
-               MonadThunk t m (NValue t f m),
-               MonadDataErrorContext t f m)
-            => NValue t f m -> m ()
+normalForm_
+    :: ( Framed e m
+      , MonadThunk t m (NValue t f m)
+      , MonadDataErrorContext t f m
+      , Ord (ThunkId m)
+      )
+    => NValue t f m -> m ()
 normalForm_ = void <$> normalForm' forceEff
 
 removeEffects :: (MonadThunk t m (NValue t f m), MonadDataContext f m)

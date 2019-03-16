@@ -1,3 +1,5 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -40,7 +42,6 @@ import           Data.List (delete, find, nub, intersect, (\\))
 import           Data.Map (Map)
 import qualified Data.Map as Map
 import           Data.Maybe (fromJust)
-import           Data.STRef
 import qualified Data.Set as Set
 import           Data.Text (Text)
 import           Nix.Atoms
@@ -71,10 +72,24 @@ newtype InferT s m a = InferT
         ReaderT (Set.Set TVar, Scopes (InferT s m) (JThunkT s m))
             (StateT InferState (ExceptT InferError m)) a
     }
-    deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadFix,
-              MonadReader (Set.Set TVar, Scopes (InferT s m) (JThunkT s m)), MonadFail,
-              MonadState InferState, MonadError InferError,
-              MonadFreshId i)
+    deriving
+        ( Functor
+        , Applicative
+        , Alternative
+        , Monad
+        , MonadPlus
+        , MonadFix
+        , MonadReader (Set.Set TVar, Scopes (InferT s m) (JThunkT s m))
+        , MonadFail
+        , MonadState InferState
+        , MonadError InferError
+        )
+
+instance MonadTrans (InferT s) where
+    lift = InferT . lift . lift . lift
+
+instance MonadThunkId m => MonadThunkId (InferT s m) where
+    type ThunkId (InferT s m) = ThunkId m
 
 -- | Inference state
 newtype InferState = InferState { count :: Int }
@@ -190,12 +205,7 @@ instance Monoid InferError where
 -------------------------------------------------------------------------------
 
 -- | Run the inference monad
-runInfer' ::
-  ( MonadFreshId Int m
-  , MonadAtomicRef m
-  , Ref m ~ STRef s
-  , MonadFix m
-  ) => InferT s m a -> m (Either InferError a)
+runInfer' :: MonadInfer m => InferT s m a -> m (Either InferError a)
 runInfer' = runExceptT
           . (`evalStateT` initInfer)
           . (`runReaderT` (Set.empty, emptyScopes))
@@ -206,12 +216,8 @@ runInfer m = runST $ do
     i <- newVar (1 :: Int)
     runFreshIdT i (runInfer' m)
 
-inferType ::
-  ( MonadFreshId Int m
-  , MonadAtomicRef m
-  , Ref m ~ STRef s
-  , MonadFix m
-  ) => Env -> NExpr -> InferT s m [(Subst, Type)]
+inferType :: forall s m. MonadInfer m
+          => Env -> NExpr -> InferT s m [(Subst, Type)]
 inferType env ex = do
   Judgment as cs t <- infer ex
   let unbounds = Set.fromList (As.keys as) `Set.difference`
@@ -328,13 +334,13 @@ binops u1 = \case
 liftInfer :: Monad m => m a -> InferT s m a
 liftInfer = InferT . lift . lift . lift
 
-instance (MonadRef m, Ref m ~ STRef s) => MonadRef (InferT s m) where
+instance MonadRef m => MonadRef (InferT s m) where
     type Ref (InferT s m) = Ref m
     newRef x     = liftInfer $ newRef x
     readRef x    = liftInfer $ readRef x
     writeRef x y = liftInfer $ writeRef x y
 
-instance (MonadAtomicRef m, Ref m ~ STRef s) => MonadAtomicRef (InferT s m) where
+instance MonadAtomicRef m => MonadAtomicRef (InferT s m) where
     atomicModifyRef x f = liftInfer $ do
         res <- snd . f <$> readRef x
         _ <- modifyRef x (fst . f)
@@ -352,10 +358,14 @@ instance Monad m => MonadCatch (InferT s m) where
                   (fromException (toException e))
         err -> error $ "Unexpected error: " ++ show err
 
-instance ( MonadFreshId Int m
-         , MonadAtomicRef m
-         , Ref m ~ STRef s
-         ) => MonadThunk (JThunkT s m) (InferT s m) (Judgment s) where
+type MonadInfer m
+    = ( MonadThunkId m
+      , MonadVar m
+      , MonadFix m
+      )
+
+instance MonadInfer m
+  => MonadThunk (JThunkT s m) (InferT s m) (Judgment s) where
     thunk = fmap JThunk . thunk
     thunkId (JThunk x) = thunkId x
 
@@ -372,11 +382,7 @@ instance ( MonadFreshId Int m
     wrapValue = JThunk . wrapValue
     getValue (JThunk x) = getValue x
 
-instance ( MonadFreshId Int m
-         , MonadAtomicRef m
-         , Ref m ~ STRef s
-         , MonadFix m
-         ) => MonadEval (Judgment s) (InferT s m) where
+instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     freeVariable var = do
         tv <- fresh
         return $ Judgment (As.singleton var tv) [] tv
@@ -493,11 +499,9 @@ instance Monad m => FromValue NixString (InferT s m) (Judgment s) where
     fromValueMay _ = return Nothing
     fromValue _ = error "Unused"
 
-instance ( MonadFreshId Int m
-         , MonadAtomicRef m
-         , Ref m ~ STRef s
-         , MonadFix m
-         ) => FromValue (AttrSet (JThunkT s m), AttrSet SourcePos) (InferT s m) (Judgment s) where
+instance MonadInfer m
+  => FromValue (AttrSet (JThunkT s m), AttrSet SourcePos)
+              (InferT s m) (Judgment s) where
     fromValueMay (Judgment _ _ (TSet _ xs)) = do
         let sing _ = Judgment As.empty []
         pure $ Just (M.mapWithKey (\k v -> wrapValue (sing k v)) xs, M.empty)
@@ -506,11 +510,9 @@ instance ( MonadFreshId Int m
         Just v  -> pure v
         Nothing -> pure (M.empty, M.empty)
 
-instance ( MonadFreshId Int m
-         , MonadAtomicRef m
-         , Ref m ~ STRef s
-         , MonadFix m
-         ) => ToValue (AttrSet (JThunkT s m), AttrSet SourcePos) (InferT s m) (Judgment s) where
+instance MonadInfer m
+  => ToValue (AttrSet (JThunkT s m), AttrSet SourcePos)
+            (InferT s m) (Judgment s) where
     toValue (xs, _) = Judgment
         <$> foldrM go As.empty xs
         <*> (concat <$> traverse (`force` (pure . typeConstraints)) xs)
@@ -518,11 +520,7 @@ instance ( MonadFreshId Int m
       where
         go x rest = force x $ \x' -> pure $ As.merge (assumptions x') rest
 
-instance ( MonadFreshId Int m
-         , MonadAtomicRef m
-         , Ref m ~ STRef s
-         , MonadFix m
-         ) => ToValue [JThunkT s m] (InferT s m) (Judgment s) where
+instance MonadInfer m => ToValue [JThunkT s m] (InferT s m) (Judgment s) where
     toValue xs = Judgment
         <$> foldrM go As.empty xs
         <*> (concat <$> traverse (`force` (pure . typeConstraints)) xs)
@@ -530,18 +528,10 @@ instance ( MonadFreshId Int m
       where
         go x rest = force x $ \x' -> pure $ As.merge (assumptions x') rest
 
-instance ( MonadFreshId Int m
-         , MonadAtomicRef m
-         , Ref m ~ STRef s
-         , MonadFix m
-         ) => ToValue Bool (InferT s m) (Judgment s) where
+instance MonadInfer m => ToValue Bool (InferT s m) (Judgment s) where
     toValue _ = pure $ Judgment As.empty [] typeBool
 
-infer :: ( MonadFreshId Int m
-         , MonadAtomicRef m
-         , Ref m ~ STRef s
-         , MonadFix m
-         ) => NExpr -> InferT s m (Judgment s)
+infer :: MonadInfer m => NExpr -> InferT s m (Judgment s)
 infer = cata Eval.eval
 
 inferTop :: Env -> [(Text, NExpr)] -> Either InferError Env

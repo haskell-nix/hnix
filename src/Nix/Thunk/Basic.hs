@@ -8,6 +8,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -17,7 +18,6 @@ module Nix.Thunk.Basic (NThunkF(..), Deferred(..), MonadBasicThunk) where
 import Control.Exception hiding (catch)
 import Control.Monad.Catch
 
-import Nix.Fresh
 import Nix.Thunk
 import Nix.Utils
 import Nix.Var
@@ -28,9 +28,9 @@ data Deferred m v = Deferred (m v) | Computed v
 -- | The type of very basic thunks
 data NThunkF m v
     = Value v
-    | Thunk Int (Var m Bool) (Var m (Deferred m v))
+    | Thunk (ThunkId m) (Var m Bool) (Var m (Deferred m v))
 
-instance Eq v => Eq (NThunkF m v) where
+instance (Eq v, Eq (ThunkId m)) => Eq (NThunkF m v) where
     Value x == Value y = x == y
     Thunk x _ _ == Thunk y _ _ = x == y
     _ == _ = False              -- jww (2019-03-16): not accurate...
@@ -39,7 +39,7 @@ instance Show v => Show (NThunkF m v) where
     show (Value v) = show v
     show (Thunk _ _ _) = "<thunk>"
 
-type MonadBasicThunk m = (MonadFreshId Int m, MonadVar m)
+type MonadBasicThunk m = (MonadThunkId m, MonadVar m)
 
 instance (MonadBasicThunk m, MonadCatch m)
   => MonadThunk (NThunkF m v) m v where
@@ -84,8 +84,14 @@ queryThunk (Thunk _ active ref) n k = do
             _ <- atomicModifyVar active (False,)
             return res
 
-forceThunk :: (MonadVar m, MonadThrow m, MonadCatch m)
-           => NThunkF m v -> (v -> m a) -> m a
+forceThunk
+    :: forall m v a.
+    ( MonadVar m
+    , MonadThrow m
+    , MonadCatch m
+    , Show (ThunkId m)
+    )
+    => NThunkF m v -> (v -> m a) -> m a
 forceThunk (Value v) k = k v
 forceThunk (Thunk n active ref) k = do
     eres <- readVar ref
@@ -95,7 +101,7 @@ forceThunk (Thunk n active ref) k = do
             nowActive <- atomicModifyVar active (True,)
             if nowActive
                 then
-                    throwM $ ThunkLoop n
+                    throwM $ ThunkLoop $ show n
                 else do
                     traceM $ "Forcing " ++ show n
                     v <- catch action $ \(e :: SomeException) -> do

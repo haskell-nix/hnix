@@ -120,7 +120,7 @@ unpackSymbolic :: MonadVar m
 unpackSymbolic = readVar . coerce
 
 type MonadLint e m = (Scoped (SThunk m) m, Framed e m, MonadVar m,
-                      MonadCatch m, MonadFreshId Int m)
+                      MonadCatch m, MonadThunkId m)
 
 symerr :: forall e m a. MonadLint e m => String -> m a
 symerr = evalError @(Symbolic m) . ErrorCall
@@ -403,7 +403,7 @@ newtype Lint s a = Lint
     , Monad
     , MonadFix
     , MonadReader (Context (Lint s) (SThunk (Lint s)))
-    , MonadFreshId Int
+    , MonadThunkId
     , MonadRef
     , MonadAtomicRef
     )

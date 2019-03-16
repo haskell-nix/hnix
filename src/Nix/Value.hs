@@ -355,7 +355,8 @@ checkComparable x y = case (x, y) of
     (NVPath _, NVPath _)   -> pure ()
     _ -> throwError $ Comparison x y
 
-thunkEq :: (MonadThunk t m (NValue t f m), Comonad f) => t -> t -> m Bool
+thunkEq :: (MonadThunk t m (NValue t f m), Comonad f)
+        => t -> t -> m Bool
 thunkEq lt rt = force lt $ \lv -> force rt $ \rv ->
  let unsafePtrEq = case (lt, rt) of
          (thunkId -> lid, thunkId -> rid)

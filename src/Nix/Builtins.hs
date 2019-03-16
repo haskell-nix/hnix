@@ -1038,7 +1038,7 @@ readDir_ pathThunk = do
         pure (Text.pack item, t)
     toNix (M.fromList itemsWithTypes)
 
-fromJSON :: forall e t f m. (MonadBuiltins e t f m, Typeable m)
+fromJSON :: forall e t f m. MonadBuiltins e t f m
          => m (NValue t f m) -> m (NValue t f m)
 fromJSON = fromValue >=> fromStringNoContext >=> \encoded ->
     case A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded of

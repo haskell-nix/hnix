@@ -65,8 +65,8 @@ renderFrames (x:xs) = do
                 <> colon]
         Nothing -> []
 
-framePos :: forall v (m :: * -> *). (Typeable m, Typeable v) => NixFrame
-         -> Maybe SourcePos
+framePos :: forall v (m :: * -> *). (Typeable m, Typeable v)
+         => NixFrame -> Maybe SourcePos
 framePos (NixFrame _ f)
     | Just (e :: EvalFrame m v) <- fromException f = case e of
           EvaluatingExpr _ (Fix (Compose (Ann (SrcSpan beg _) _))) ->
@@ -211,10 +211,11 @@ renderExecFrame level = \case
             =<< ((\d -> fillSep ["Assertion failed:", d])
                      <$> renderValue level "" "" v)
 
-renderThunkLoop :: (MonadReader e m, Has e Options, MonadFile m)
-                => NixLevel -> ThunkLoop -> m [Doc ann]
+renderThunkLoop
+    :: (MonadReader e m, Has e Options, MonadFile m, Show (ThunkId m))
+    => NixLevel -> ThunkLoop -> m [Doc ann]
 renderThunkLoop _level = pure . (:[]) . \case
-    ThunkLoop n -> pretty $ "Infinite recursion in thunk #" ++ show n
+    ThunkLoop n -> pretty $ "Infinite recursion in thunk " ++ n
 
 renderNormalLoop
     :: ( MonadReader e m

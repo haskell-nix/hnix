@@ -56,7 +56,6 @@ import           Nix.Effects
 import           Nix.Eval as Eval
 import           Nix.Expr
 import           Nix.Frames
-import           Nix.Fresh (MonadFreshId(..))
 import           Nix.Normal
 import           Nix.Options
 import           Nix.Parser
@@ -135,7 +134,6 @@ type MonadNix e t f m =
     , MonadFix m
     , MonadCatch m
     , MonadThrow m
-    , Typeable m
     , Alternative m
     , MonadEffects t f m
     , MonadCitedThunks t f m
@@ -264,7 +262,7 @@ instance ( MonadNix e t f m
     evalError = throwError
 
 infixl 1 `callFunc`
-callFunc :: forall e t f m. (MonadNix e t f m, Typeable m)
+callFunc :: forall e t f m. MonadNix e t f m
          => NValue t f m -> m (NValue t f m) -> m (NValue t f m)
 callFunc fun arg = do
     frames :: Frames <- asks (view hasLens)
@@ -573,21 +571,29 @@ instance MonadExec m => MonadExec (Lazy t f m)
 
 instance MonadIntrospect m => MonadIntrospect (Lazy t f m)
 
-instance MonadFreshId Int m => MonadFreshId Int (Lazy t f m) where
-  freshId = Lazy $ lift $ lift freshId
+instance MonadThunkId m => MonadThunkId (Lazy t f m) where
+    type ThunkId (Lazy t f m) = ThunkId m
 
-instance (MonadFix m, MonadCatch m, MonadFile m,
-          MonadStore m, MonadPutStr m, MonadHttp m,
-          MonadEnv m, MonadInstantiate m,
-          MonadExec m, MonadIntrospect m,
-          Alternative m, MonadPlus m, Typeable m,
-          MonadCitedThunks t f (Lazy t f m),
-          FromNix Bool (Lazy t f m) t,
-          FromValue NixString (Lazy t f m) t,
-          FromValue Path (Lazy t f m) t,
-          ToNix NixString (Lazy t f m) t,
-          ToNix [t] (Lazy t f m) t)
-      => MonadEffects t f (Lazy t f m) where
+instance ( MonadFix m
+         , MonadCatch m
+         , MonadFile m
+         , MonadStore m
+         , MonadPutStr m
+         , MonadHttp m
+         , MonadEnv m
+         , MonadInstantiate m
+         , MonadExec m
+         , MonadIntrospect m
+         , Alternative m
+         , MonadPlus m
+         , MonadCitedThunks t f (Lazy t f m)
+         , FromNix Bool (Lazy t f m) t
+         , FromValue NixString (Lazy t f m) t
+         , FromValue Path (Lazy t f m) t
+         , ToNix NixString (Lazy t f m) t
+         , ToNix [t] (Lazy t f m) t
+        )
+         => MonadEffects t f (Lazy t f m) where
     makeAbsolutePath origPath = do
         origPathExpanded <- expandHomePath origPath
         absPath <- if isAbsolute origPathExpanded then pure origPathExpanded else do
