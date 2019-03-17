@@ -58,8 +58,6 @@ import qualified Data.HashMap.Lazy as M
 import           Data.List
 import           Data.Maybe
 import           Data.Scientific
-import           Data.Set (Set)
-import qualified Data.Set as S
 import           Data.String.Interpolate.IsString
 import           Data.Text (Text)
 import qualified Data.Text as Text
