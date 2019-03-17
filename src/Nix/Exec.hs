@@ -332,8 +332,8 @@ execBinaryOp scope span op lval rarg = do
         toBool = pure . bin nvConstantP . NBool
     case (lval, rval) of
         (NVConstant lc, NVConstant rc) -> case (op, lc, rc) of
-            (NEq,  _, _)       -> toBool =<< valueEq lval rval
-            (NNEq, _, _)       -> toBool . not =<< valueEq lval rval
+            (NEq,  _, _)       -> toBool =<< valueEqM lval rval
+            (NNEq, _, _)       -> toBool . not =<< valueEqM lval rval
             (NLt,  l, r)       -> toBool $ l <  r
             (NLte, l, r)       -> toBool $ l <= r
             (NGt,  l, r)       -> toBool $ l >  r
@@ -352,8 +352,8 @@ execBinaryOp scope span op lval rarg = do
 
         (NVStr ls, NVStr rs) -> case op of
             NPlus -> pure $ bin nvStrP (ls `principledStringMappend` rs)
-            NEq   -> toBool =<< valueEq lval rval
-            NNEq  -> toBool . not =<< valueEq lval rval
+            NEq   -> toBool =<< valueEqM lval rval
+            NNEq  -> toBool . not =<< valueEqM lval rval
             NLt   -> toBool $ ls <  rs
             NLte  -> toBool $ ls <= rs
             NGt   -> toBool $ ls >  rs
@@ -372,52 +372,52 @@ execBinaryOp scope span op lval rarg = do
 
         (NVSet ls lp, NVSet rs rp) -> case op of
             NUpdate -> pure $ bin nvSetP (rs `M.union` ls) (rp `M.union` lp)
-            NEq     -> toBool =<< valueEq lval rval
-            NNEq    -> toBool . not =<< valueEq lval rval
+            NEq     -> toBool =<< valueEqM lval rval
+            NNEq    -> toBool . not =<< valueEqM lval rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVSet ls lp, NVConstant NNull) -> case op of
             NUpdate -> pure $ bin nvSetP ls lp
-            NEq     -> toBool =<< valueEq lval (nvSet M.empty M.empty)
-            NNEq    -> toBool . not =<< valueEq lval (nvSet M.empty M.empty)
+            NEq     -> toBool =<< valueEqM lval (nvSet M.empty M.empty)
+            NNEq    -> toBool . not =<< valueEqM lval (nvSet M.empty M.empty)
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVConstant NNull, NVSet rs rp) -> case op of
             NUpdate -> pure $ bin nvSetP rs rp
-            NEq     -> toBool =<< valueEq (nvSet M.empty M.empty) rval
-            NNEq    -> toBool . not =<< valueEq (nvSet M.empty M.empty) rval
+            NEq     -> toBool =<< valueEqM (nvSet M.empty M.empty) rval
+            NNEq    -> toBool . not =<< valueEqM (nvSet M.empty M.empty) rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (ls@NVSet {}, NVStr rs) -> case op of
             NPlus   -> (\ls2 -> bin nvStrP (ls2 `principledStringMappend` rs))
                 <$> coerceToString DontCopyToStore CoerceStringy ls
-            NEq     -> toBool =<< valueEq lval rval
-            NNEq    -> toBool . not =<< valueEq lval rval
+            NEq     -> toBool =<< valueEqM lval rval
+            NNEq    -> toBool . not =<< valueEqM lval rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVStr ls, rs@NVSet {}) -> case op of
             NPlus   -> (\rs2 -> bin nvStrP (ls `principledStringMappend` rs2))
                 <$> coerceToString DontCopyToStore CoerceStringy rs
-            NEq     -> toBool =<< valueEq lval rval
-            NNEq    -> toBool . not =<< valueEq lval rval
+            NEq     -> toBool =<< valueEqM lval rval
+            NNEq    -> toBool . not =<< valueEqM lval rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVList ls, NVList rs) -> case op of
             NConcat -> pure $ bin nvListP $ ls ++ rs
-            NEq     -> toBool =<< valueEq lval rval
-            NNEq    -> toBool . not =<< valueEq lval rval
+            NEq     -> toBool =<< valueEqM lval rval
+            NNEq    -> toBool . not =<< valueEqM lval rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVList ls, NVConstant NNull) -> case op of
             NConcat -> pure $ bin nvListP ls
-            NEq     -> toBool =<< valueEq lval (nvList [])
-            NNEq    -> toBool . not =<< valueEq lval (nvList [])
+            NEq     -> toBool =<< valueEqM lval (nvList [])
+            NNEq    -> toBool . not =<< valueEqM lval (nvList [])
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVConstant NNull, NVList rs) -> case op of
             NConcat -> pure $ bin nvListP rs
-            NEq     -> toBool =<< valueEq (nvList []) rval
-            NNEq    -> toBool . not =<< valueEq (nvList []) rval
+            NEq     -> toBool =<< valueEqM (nvList []) rval
+            NNEq    -> toBool . not =<< valueEqM (nvList []) rval
             _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
         (NVPath p, NVStr ns) -> case op of

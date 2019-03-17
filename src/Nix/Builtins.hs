@@ -688,7 +688,7 @@ deepSeq a b = do
 elem_ :: forall e t f m. MonadBuiltins e t f m
       => m (NValue t f m) -> m (NValue t f m) -> m (NValue t f m)
 elem_ x xs = x >>= \x' ->
-    toValue <=< anyM (valueEq x' <=< force') <=< fromValue @[t] $ xs
+    toValue <=< anyM (valueEqM x' <=< force') <=< fromValue @[t] $ xs
 
 elemAt :: [a] -> Int -> Maybe a
 elemAt ls i = case drop i ls of
@@ -727,10 +727,9 @@ genericClosure = fromValue @(AttrSet t) >=> \s ->
       (Just startSet, Just operator) ->
           fromValue @[t] startSet >>= \ss ->
           force operator $ \op ->
-              toValue @[t] =<< snd <$> go op ss S.empty
+              toValue @[t] =<< snd <$> go op ss []
   where
-    go :: NValue t f m -> [t] -> Set (NValue t f m)
-       -> m (Set (NValue t f m), [t])
+    go :: NValue t f m -> [t] -> [NValue t f m] -> m ([NValue t f m], [t])
     go _ [] ks = pure (ks, [])
     go op (t:ts) ks =
         force t $ \v -> fromValue @(AttrSet t) t >>= \s ->
@@ -738,15 +737,12 @@ genericClosure = fromValue @(AttrSet t) >=> \s ->
                 Nothing ->
                     throwError $ ErrorCall $
                         "builtins.genericClosure: Attribute 'key' required"
-                Just k -> force k $ \k' ->
-                    if S.member k' ks
-                        then go op ts ks
-                        else do
-                            ys <- fromValue @[t] =<< (op `callFunc` pure v)
-                            case S.toList ks of
-                                []  -> checkComparable k' k'
-                                j:_ -> checkComparable k' j
-                            fmap (t:) <$> go op (ts ++ ys) (S.insert k' ks)
+                Just k -> force k $ \k' -> do
+                    ys <- fromValue @[t] =<< (op `callFunc` pure v)
+                    case ks of
+                        []  -> checkComparable k' k'
+                        j:_ -> checkComparable k' j
+                    fmap (t:) <$> go op (ts ++ ys) (k':ks)
 
 replaceStrings :: MonadBuiltins e t f m => m (NValue t f m) -> m (NValue t f m) -> m (NValue t f m) -> m (NValue t f m)
 replaceStrings tfrom tto ts =

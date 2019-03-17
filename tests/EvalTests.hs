@@ -418,18 +418,6 @@ genEvalCompareTests = do
   where
     mkTestCase td f = testCase f $ assertEvalFileMatchesNix (td </> f)
 
-
--- instance (Show r, Show (NValueF p m r), Eq r) => Eq (NValueF p m r) where
---     NVConstantF x == NVConstantF y = x == y
---     NVStrF ls     == NVStrF rs = hackyStringIgnoreContext ls == hackyStringIgnoreContext rs
---     NVListF x     == NVListF y = and (zipWith (==) x y)
---     NVSetF x _    == NVSetF y _ =
---         M.keys x == M.keys y &&
---         and (zipWith (==) (M.elems x) (M.elems y))
---     NVPathF x     == NVPathF y = x == y
---     x == y = error $ "Need to add comparison for values: "
---                  ++ show x ++ " == " ++ show y
-
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
 constantEqual a b = do
     time <- liftIO getCurrentTime
@@ -438,7 +426,7 @@ constantEqual a b = do
     res <- runStdLazyM opts $ do
         a' <- normalForm =<< nixEvalExprLoc Nothing a
         b' <- normalForm =<< nixEvalExprLoc Nothing b
-        valueNFEq a' b'
+        return $ valueNFEq a' b'
     assertBool "" res
 
 constantEqualText' :: Text -> Text -> Assertion

@@ -40,6 +40,7 @@ import qualified Data.Aeson as A
 import           Data.Align
 import           Data.Eq.Deriving
 import           Data.Functor.Classes
+import           Data.Functor.Identity
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
 import           Data.Text (Text)
@@ -328,24 +329,6 @@ nvBuiltinNF :: Applicative f
             => String -> (m (NValue t f m) -> m (NValueNF t f m)) -> NValueNF t f m
 nvBuiltinNF name f = Free (NValue (pure (NVBuiltinF name f)))
 
-instance Comonad f => Eq (NValue' t f m a) where
-    NVConstant (NFloat x) == NVConstant (NInt y)   = x == fromInteger y
-    NVConstant (NInt x)   == NVConstant (NFloat y) = fromInteger x == y
-    NVConstant (NInt x)   == NVConstant (NInt y)   = x == y
-    NVConstant (NFloat x) == NVConstant (NFloat y) = x == y
-    NVStr x   == NVStr y   = hackyStringIgnoreContext x == hackyStringIgnoreContext y
-    NVPath x  == NVPath y  = x == y
-    _         == _         = False
-
-instance Comonad f => Ord (NValue' t f m a) where
-    NVConstant (NFloat x) <= NVConstant (NInt y)   = x <= fromInteger y
-    NVConstant (NInt x)   <= NVConstant (NFloat y) = fromInteger x <= y
-    NVConstant (NInt x)   <= NVConstant (NInt y)   = x <= y
-    NVConstant (NFloat x) <= NVConstant (NFloat y) = x <= y
-    NVStr x   <= NVStr y   = hackyStringIgnoreContext x <= hackyStringIgnoreContext y
-    NVPath x  <= NVPath y  = x <= y
-    _         <= _         = False
-
 checkComparable :: (Framed e m, MonadDataErrorContext t f m)
                 => NValue t f m -> NValue t f m -> m ()
 checkComparable x y = case (x, y) of
@@ -357,18 +340,18 @@ checkComparable x y = case (x, y) of
     (NVPath _, NVPath _)   -> pure ()
     _ -> throwError $ Comparison x y
 
-thunkEq :: (MonadThunk t m (NValue t f m), Comonad f)
-        => t -> t -> m Bool
-thunkEq lt rt = force lt $ \lv -> force rt $ \rv ->
+thunkEqM :: (MonadThunk t m (NValue t f m), Comonad f)
+         => t -> t -> m Bool
+thunkEqM lt rt = force lt $ \lv -> force rt $ \rv ->
  let unsafePtrEq = case (lt, rt) of
          (thunkId -> lid, thunkId -> rid)
              | lid == rid -> return True
-         _ -> valueEq lv rv
+         _ -> valueEqM lv rv
  in case (lv, rv) of
    (NVClosure _ _, NVClosure _ _) -> unsafePtrEq
    (NVList _, NVList _) -> unsafePtrEq
    (NVSet _ _, NVSet _ _) -> unsafePtrEq
-   _ -> valueEq lv rv
+   _ -> valueEqM lv rv
 
 builtin :: forall m f t. (MonadThunk t m (NValue t f m), MonadDataContext f m)
         => String -> (m (NValue t f m) -> m (NValue t f m)) -> m (NValue t f m)
@@ -405,10 +388,11 @@ alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
         _ -> throwE ()
     forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
 
-isDerivation :: Monad m
-             => (t -> m (Maybe NixString)) -> AttrSet t
-             -> m Bool
-isDerivation f m = case M.lookup "type" m of
+alignEq :: (Align f, Traversable f) => (a -> b -> Bool) -> f a -> f b -> Bool
+alignEq eq fa fb = runIdentity $ alignEqM (\x y -> Identity (eq x y)) fa fb
+
+isDerivationM :: Monad m => (t -> m (Maybe NixString)) -> AttrSet t -> m Bool
+isDerivationM f m = case M.lookup "type" m of
     Nothing -> pure False
     Just t -> do
         mres <- f t
@@ -418,13 +402,18 @@ isDerivation f m = case M.lookup "type" m of
             Just s -> pure $ principledStringIgnoreContext s == "derivation"
             Nothing -> pure False
 
-valueFEq :: Monad m
-         => (AttrSet a -> AttrSet a -> m Bool)
-         -> (a -> a -> m Bool)
-         -> NValueF p m a
-         -> NValueF p m a
-         -> m Bool
-valueFEq attrsEq eq = curry $ \case
+isDerivation :: Monad m => (t -> Maybe NixString) -> AttrSet t -> Bool
+isDerivation f = runIdentity . isDerivationM (\x -> Identity (f x))
+
+valueFEqM :: Monad n
+          => (AttrSet a -> AttrSet a -> n Bool)
+          -> (a -> a -> n Bool)
+          -> NValueF p m a
+          -> NValueF p m a
+          -> n Bool
+valueFEqM attrsEq eq = curry $ \case
+    (NVConstantF (NFloat x), NVConstantF (NInt y)) -> pure $ x == fromInteger y
+    (NVConstantF (NInt x), NVConstantF (NFloat y)) -> pure $ fromInteger x == y
     (NVConstantF lc, NVConstantF rc) -> pure $ lc == rc
     (NVStrF ls, NVStrF rs) ->
         pure $ principledStringIgnoreContext ls
@@ -434,15 +423,25 @@ valueFEq attrsEq eq = curry $ \case
     (NVPathF lp, NVPathF rp)   -> pure $ lp == rp
     _ -> pure False
 
-compareAttrSets :: Monad m
-                => (t -> m (Maybe NixString))
-                -> (t -> t -> m Bool)
-                -> AttrSet t
-                -> AttrSet t
-                -> m Bool
-compareAttrSets f eq lm rm = do
-    isDerivation f lm >>= \case
-        True -> isDerivation f rm >>= \case
+valueFEq :: (AttrSet a -> AttrSet a -> Bool)
+         -> (a -> a -> Bool)
+         -> NValueF p m a
+         -> NValueF p m a
+         -> Bool
+valueFEq attrsEq eq x y =
+    runIdentity $ valueFEqM
+        (\x' y' -> Identity (attrsEq x' y'))
+        (\x' y' -> Identity (eq x' y')) x y
+
+compareAttrSetsM :: Monad m
+                 => (t -> m (Maybe NixString))
+                 -> (t -> t -> m Bool)
+                 -> AttrSet t
+                 -> AttrSet t
+                 -> m Bool
+compareAttrSetsM f eq lm rm = do
+    isDerivationM f lm >>= \case
+        True -> isDerivationM f rm >>= \case
             True | Just lp <- M.lookup "outPath" lm
                  , Just rp <- M.lookup "outPath" rm
                    -> eq lp rp
@@ -451,26 +450,36 @@ compareAttrSets f eq lm rm = do
   where
     compareAttrs = alignEqM eq lm rm
 
-valueEq :: (MonadThunk t m (NValue t f m), Comonad f)
-        => NValue t f m -> NValue t f m -> m Bool
-valueEq (NValue (extract -> x)) (NValue (extract -> y)) =
-    valueFEq (compareAttrSets f thunkEq) thunkEq x y
+compareAttrSets :: (t -> Maybe NixString)
+                -> (t -> t -> Bool)
+                -> AttrSet t
+                -> AttrSet t
+                -> Bool
+compareAttrSets f eq lm rm =
+    runIdentity $ compareAttrSetsM
+        (\t -> Identity (f t))
+        (\x y -> Identity (eq x y)) lm rm
+
+valueEqM :: (MonadThunk t m (NValue t f m), Comonad f)
+         => NValue t f m -> NValue t f m -> m Bool
+valueEqM (NValue (extract -> x)) (NValue (extract -> y)) =
+    valueFEqM (compareAttrSetsM f thunkEqM) thunkEqM x y
   where
     f t = force t $ \case
         NVStr s -> pure $ Just s
         _ -> pure Nothing
 
-valueNFEq :: (Comonad f, Monad m)
-          => NValueNF t f m -> NValueNF t f m -> m Bool
-valueNFEq (Pure _) (Pure _) = pure False
-valueNFEq (Pure _) (Free _) = pure False
-valueNFEq (Free _) (Pure _) = pure False
+valueNFEq :: Comonad f
+          => NValueNF t f m -> NValueNF t f m -> Bool
+valueNFEq (Pure _) (Pure _) = False
+valueNFEq (Pure _) (Free _) = False
+valueNFEq (Free _) (Pure _) = False
 valueNFEq (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
     valueFEq (compareAttrSets f valueNFEq) valueNFEq x y
   where
-    f (Pure _) = pure Nothing
-    f (Free (NVStr s)) = pure $ Just s
-    f _ = pure Nothing
+    f (Pure _) = Nothing
+    f (Free (NVStr s)) = Just s
+    f _ = Nothing
 
 data TStringContext = NoContext | HasContext
   deriving Show
