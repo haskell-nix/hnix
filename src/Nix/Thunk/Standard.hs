@@ -26,7 +26,6 @@ import           Control.Monad.Reader
 import           Data.Fix
 import           GHC.Generics
 import           Nix.Cited
-import           Nix.Convert
 import           Nix.Effects
 import           Nix.Eval                      as Eval
 import           Nix.Exec
@@ -126,50 +125,6 @@ instance MonadStdThunk m
 
   wrapValue = StdThunk . StdCited . NCited [] . wrapValue
   getValue (StdThunk (StdCited (NCited _ v))) = getValue v
-
-instance ( MonadStdThunk m
-         , ToValue a (StdLazy m) (StdValue m)
-         )
-         => ToValue a (StdLazy m) (StdThunk m) where
-  toValue = fmap wrapValue . toValue
-
-instance MonadStdThunk m
-  => ToValue (StdThunk m) (StdLazy m) (StdValue m) where
-  toValue = force ?? pure
-
-instance ( MonadStdThunk m
-         , FromValue a (StdLazy m) (StdValue m)
-         )
-         => FromValue a (StdLazy m) (StdThunk m) where
-  fromValueMay = force ?? fromValueMay
-  fromValue    = force ?? fromValue
-
-instance MonadStdThunk m
-  => FromValue (StdThunk m) (StdLazy m) (StdValue m) where
-  fromValueMay = pure . Just . wrapValue
-  fromValue    = pure . wrapValue
-
-instance ( MonadStdThunk m
-         , ToNix a (StdLazy m) (StdValue m)
-         )
-         => ToNix a (StdLazy m) (StdThunk m) where
-  toNix = fmap wrapValue . toNix
-
-instance MonadStdThunk m
-  => ToNix (StdThunk m) (StdLazy m) (StdValue m) where
-  toNix = force ?? pure
-
-instance ( MonadStdThunk m
-         , FromNix a (StdLazy m) (StdValue m)
-         )
-         => FromNix a (StdLazy m) (StdThunk m) where
-  fromNixMay = force ?? fromNixMay
-  fromNix    = force ?? fromNix
-
-instance MonadStdThunk m
-  => FromNix (StdThunk m) (StdLazy m) (StdValue m) where
-  fromNixMay = pure . Just . wrapValue
-  fromNix    = pure . wrapValue
 
 instance Show (StdThunk m) where
   show _ = "<thunk>"          -- jww (2019-03-15): NYI

@@ -57,7 +57,7 @@ import           Nix.XML
 --   type. It sets up the common Nix environment and applies the
 --   transformations, allowing them to be easily composed.
 nixEval
-  :: (MonadBuiltins e t f m, Has e Options, Functor g)
+  :: (MonadNix e t f m, Has e Options, Functor g)
   => Maybe FilePath
   -> Transform g (m a)
   -> Alg g (m a)
@@ -67,7 +67,7 @@ nixEval mpath xform alg = withNixContext mpath . adi alg xform
 
 -- | Evaluate a nix expression in the default context
 nixEvalExpr
-  :: (MonadBuiltins e t f m, Has e Options)
+  :: (MonadNix e t f m, Has e Options)
   => Maybe FilePath
   -> NExpr
   -> m (NValue t f m)
@@ -76,7 +76,7 @@ nixEvalExpr mpath = nixEval mpath id Eval.eval
 -- | Evaluate a nix expression in the default context
 nixEvalExprLoc
   :: forall e t f m
-   . (MonadBuiltins e t f m, Has e Options)
+   . (MonadNix e t f m, Has e Options)
   => Maybe FilePath
   -> NExprLoc
   -> m (NValue t f m)
@@ -91,14 +91,14 @@ nixEvalExprLoc mpath = nixEval
 --   'MonadNix'). All this function does is provide the right type class
 --   context.
 nixTracingEvalExprLoc
-  :: (MonadBuiltins e t f m, Has e Options, MonadIO m, Alternative m)
+  :: (MonadNix e t f m, Has e Options, MonadIO m, Alternative m)
   => Maybe FilePath
   -> NExprLoc
   -> m (NValue t f m)
 nixTracingEvalExprLoc mpath = withNixContext mpath . evalExprLoc
 
 evaluateExpression
-  :: (MonadBuiltins e t f m, Has e Options)
+  :: (MonadNix e t f m, Has e Options)
   => Maybe FilePath
   -> (Maybe FilePath -> NExprLoc -> m (NValue t f m))
   -> (NValue t f m -> m a)

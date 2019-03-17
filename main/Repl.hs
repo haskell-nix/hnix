@@ -25,7 +25,6 @@ module Repl where
 import           Nix                     hiding ( exec
                                                 , try
                                                 )
-import           Nix.Builtins                   ( MonadBuiltins )
 import           Nix.Cited
 import           Nix.Convert
 import           Nix.Eval
@@ -60,7 +59,7 @@ import           System.Environment
 import           System.Exit
 
 
-main :: (MonadBuiltins e t f m, MonadIO m, MonadException m) => m ()
+main :: (MonadNix e t f m, MonadIO m, MonadException m) => m ()
 main = flip evalStateT initState
 #if MIN_VERSION_repline(0, 2, 0)
     $ evalRepl (return prefix) cmd options (Just ':') completer welcomeText
@@ -100,7 +99,7 @@ hoistErr (Failure err) = do
 
 exec
   :: forall e t f m
-   . (MonadBuiltins e t f m, MonadIO m, MonadException m)
+   . (MonadNix e t f m, MonadIO m, MonadException m)
   => Bool
   -> Text.Text
   -> Repl e t f m (NValue t f m)
@@ -131,7 +130,7 @@ exec update source = do
 
 
 cmd
-  :: (MonadBuiltins e t f m, MonadIO m, MonadException m)
+  :: (MonadNix e t f m, MonadIO m, MonadException m)
   => String
   -> Repl e t f m ()
 cmd source = do
@@ -147,7 +146,7 @@ cmd source = do
 -------------------------------------------------------------------------------
 
 -- :browse command
-browse :: MonadBuiltins e t f m => [String] -> Repl e t f m ()
+browse :: MonadNix e t f m => [String] -> Repl e t f m ()
 browse _ = do
   st <- get
   undefined
@@ -155,7 +154,7 @@ browse _ = do
 
 -- :load command
 load
-  :: (MonadBuiltins e t f m, MonadIO m, MonadException m)
+  :: (MonadNix e t f m, MonadIO m, MonadException m)
   => [String]
   -> Repl e t f m ()
 load args = do
@@ -164,7 +163,7 @@ load args = do
 
 -- :type command
 typeof
-  :: (MonadBuiltins e t f m, MonadException m, MonadIO m)
+  :: (MonadNix e t f m, MonadException m, MonadIO m)
   => [String]
   -> Repl e t f m ()
 typeof args = do
@@ -176,7 +175,7 @@ typeof args = do
   where line = Text.pack (unwords args)
 
 -- :quit command
-quit :: (MonadBuiltins e t f m, MonadIO m) => a -> Repl e t f m ()
+quit :: (MonadNix e t f m, MonadIO m) => a -> Repl e t f m ()
 quit _ = liftIO exitSuccess
 
 -------------------------------------------------------------------------------
@@ -200,7 +199,7 @@ comp n = do
                                       )
 
 options
-  :: (MonadBuiltins e t f m, MonadIO m, MonadException m)
+  :: (MonadNix e t f m, MonadIO m, MonadException m)
   => [(String, [String] -> Repl e t f m ())]
 options =
   [ ( "load"
@@ -214,7 +213,7 @@ options =
 
 help
   :: forall e t f m
-   . (MonadBuiltins e t f m, MonadIO m, MonadException m)
+   . (MonadNix e t f m, MonadIO m, MonadException m)
   => [String]
   -> Repl e t f m ()
 help _ = liftIO $ do
@@ -222,7 +221,7 @@ help _ = liftIO $ do
   mapM_ putStrLn $ map (\o -> ":" ++ (fst o)) (options @e @t @f @m)
 
 completer
-  :: (MonadBuiltins e t f m, MonadIO m)
+  :: (MonadNix e t f m, MonadIO m)
   => CompleterStyle (StateT (IState t f m) m)
 completer = Prefix (wordCompleter comp) defaultMatcher
 

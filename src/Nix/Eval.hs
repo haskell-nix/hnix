@@ -361,8 +361,7 @@ evalSetterKeyName = \case
       _       -> Nothing
 
 assembleString
-  :: forall v m
-   . (MonadEval v m, FromValue NixString m v)
+  :: forall v m. (MonadEval v m, FromValue NixString m v)
   => NString (m v)
   -> m (Maybe NixString)
 assembleString = \case

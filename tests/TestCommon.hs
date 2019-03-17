@@ -44,7 +44,6 @@ hnixEvalText opts src = case parseNixText src of
       ++ "`.\n"
       ++ show err
   Success expr ->
-      -- runStdLazyM opts $ normalForm =<< nixEvalExpr Nothing expr
     runStdLazyM opts $ normalForm =<< nixEvalExpr Nothing expr
 
 nixEvalString :: String -> IO String

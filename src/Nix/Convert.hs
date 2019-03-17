@@ -165,7 +165,7 @@ instance (Convertible e t f m, MonadEffects t f m)
     Just b -> pure b
     _      -> throwError $ ExpectationNF (TString NoContext) v
 
-instance (Convertible e t f m, MonadEffects t f m, FromValue NixString m t)
+instance (Convertible e t f m, MonadEffects t f m)
       => FromValue NixString m (NValue t f m) where
   fromValueMay = \case
     NVStr ns -> pure $ Just ns
@@ -177,7 +177,7 @@ instance (Convertible e t f m, MonadEffects t f m, FromValue NixString m t)
         <$> addPath p
     NVSet s _ -> case M.lookup "outPath" s of
       Nothing -> pure Nothing
-      Just p  -> fromValueMay p
+      Just p  -> force p fromValueMay
     _ -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
@@ -216,14 +216,13 @@ instance Convertible e t f m => FromValue Path m (NValueNF t f m) where
     Just b -> pure b
     _      -> throwError $ ExpectationNF TPath v
 
-instance (Convertible e t f m, FromValue Path m t)
-  => FromValue Path m (NValue t f m) where
+instance Convertible e t f m => FromValue Path m (NValue t f m) where
   fromValueMay = \case
     NVPath p  -> pure $ Just (Path p)
     NVStr  ns -> pure $ Path . Text.unpack <$> hackyGetStringNoContext ns
     NVSet s _ -> case M.lookup "outPath" s of
       Nothing -> pure Nothing
-      Just p  -> fromValueMay @Path p
+      Just p  -> force p $ fromValueMay @Path
     _ -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
@@ -429,13 +428,12 @@ instance Convertible e t f m => FromNix Float m (NValueNF t f m) where
 instance Convertible e t f m => FromNix Float m (NValue t f m) where
 instance (Convertible e t f m, MonadEffects t f m)
   => FromNix NixString m (NValueNF t f m) where
-instance (Convertible e t f m, MonadEffects t f m, FromValue NixString m t)
+instance (Convertible e t f m, MonadEffects t f m)
   => FromNix NixString m (NValue t f m) where
 instance Convertible e t f m => FromNix ByteString m (NValueNF t f m) where
 instance Convertible e t f m => FromNix ByteString m (NValue t f m) where
 instance Convertible e t f m => FromNix Path m (NValueNF t f m) where
-instance (Convertible e t f m, FromValue Path m t)
-  => FromNix Path m (NValue t f m) where
+instance Convertible e t f m => FromNix Path m (NValue t f m) where
 instance (Convertible e t f m, FromValue a m (NValueNF t f m), Show a)
   => FromNix [a] m (NValueNF t f m) where
 instance Convertible e t f m
@@ -502,6 +500,3 @@ instance Convertible e t f m => ToNix () m (NExprF r) where
 instance (Convertible e t f m, ToNix a m (NValueNF t f m))
   => ToNix [a] m (NValueNF t f m) where
   toNix = fmap nvListNF . traverse toNix
-
-convertNix :: forall a t m v . (FromNix a m t, ToNix a m v, Monad m) => t -> m v
-convertNix = fromNix @a >=> toNix
