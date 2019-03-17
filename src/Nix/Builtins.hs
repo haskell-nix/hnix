@@ -670,10 +670,12 @@ unsafeDiscardStringContext mnv = do
   ns <- fromValue mnv
   toNix $ principledMakeNixStringWithoutContext $ principledStringIgnoreContext ns
 
-seq_ :: MonadBuiltins e t f m => m (NValue t f m) -> m (NValue t f m) -> m (NValue t f m)
+seq_ :: MonadBuiltins e t f m
+     => m (NValue t f m) -> m (NValue t f m) -> m (NValue t f m)
 seq_ a b = a >> b
 
-deepSeq :: MonadBuiltins e t f m => m (NValue t f m) -> m (NValue t f m) -> m (NValue t f m)
+deepSeq :: MonadBuiltins e t f m
+        => m (NValue t f m) -> m (NValue t f m) -> m (NValue t f m)
 deepSeq a b = do
     -- We evaluate 'a' only for its effects, so data cycles are ignored.
     normalForm_ =<< a
@@ -693,14 +695,16 @@ elemAt ls i = case drop i ls of
    [] -> Nothing
    a:_ -> Just a
 
-elemAt_ :: MonadBuiltins e t f m => m (NValue t f m) -> m (NValue t f m) -> m (NValue t f m)
+elemAt_ :: MonadBuiltins e t f m
+        => m (NValue t f m) -> m (NValue t f m) -> m (NValue t f m)
 elemAt_ xs n = fromValue n >>= \n' -> fromValue xs >>= \xs' ->
     case elemAt xs' n' of
       Just a -> force' a
       Nothing -> throwError $ ErrorCall $ "builtins.elem: Index " ++ show n'
           ++ " too large for list of length " ++ show (length xs')
 
-genList :: forall e t f m. MonadBuiltins e t f m => m (NValue t f m) -> m (NValue t f m) -> m (NValue t f m)
+genList :: forall e t f m. MonadBuiltins e t f m
+        => m (NValue t f m) -> m (NValue t f m) -> m (NValue t f m)
 genList generator = fromValue @Integer >=> \n ->
     if n >= 0
     then generator >>= \f ->
@@ -709,7 +713,8 @@ genList generator = fromValue @Integer >=> \n ->
     else throwError $ ErrorCall $ "builtins.genList: Expected a non-negative number, got "
              ++ show n
 
-genericClosure :: forall e t f m. MonadBuiltins e t f m => m (NValue t f m) -> m (NValue t f m)
+genericClosure :: forall e t f m. MonadBuiltins e t f m
+               => m (NValue t f m) -> m (NValue t f m)
 genericClosure = fromValue @(AttrSet t) >=> \s ->
     case (M.lookup "startSet" s, M.lookup "operator" s) of
       (Nothing, Nothing) ->
