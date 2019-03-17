@@ -45,7 +45,6 @@ import qualified Data.HashMap.Lazy as M
 import           Data.Text (Text)
 import           Data.These
 import           Data.Typeable (Typeable)
-import           Data.Void
 import           GHC.Generics
 import           Lens.Family2
 import           Lens.Family2.Stock
@@ -204,7 +203,7 @@ unliftNValue run (NValue v) =
 --   The 'Free' structure is used here to represent the possibility that
 --   cycles may appear during normalization.
 
-type NValueNF t f m = Free (NValue' t f m) (NValue' t f m Void)
+type NValueNF t f m = Free (NValue' t f m) t
 
 iterNValue
     :: forall t f m a r. MonadDataContext f m
@@ -224,7 +223,7 @@ iterNValueM transform k f =
 
 iterNValueNF
     :: MonadDataContext f m
-    => (NValue' t f m Void -> r)
+    => (t -> r)
     -> (NValue' t f m r -> r)
     -> NValueNF t f m -> r
 iterNValueNF k f = iter f . fmap k
@@ -240,7 +239,7 @@ sequenceNValueNF transform = go
 iterNValueNFM
     :: forall f m n t r. (MonadDataContext f m, Monad n)
     => (forall x. n x -> m x)
-    -> (NValue' t f m Void -> n r)
+    -> (t -> n r)
     -> (NValue' t f m (n r) -> n r)
     -> NValueNF t f m -> n r
 iterNValueNFM transform k f v =
@@ -248,7 +247,10 @@ iterNValueNFM transform k f v =
 
 nValueFromNF :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
              => NValueNF t f m -> NValue t f m
-nValueFromNF = iterNValueNF (fmap absurd) (fmap wrapValue)
+nValueFromNF = iterNValueNF f (fmap wrapValue)
+  where
+    f t = query t cyc id
+    cyc = nvStr (principledMakeNixStringWithoutContext "<CYCLE>")
 
 nValueToNF :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
            => (t -> (NValue t f m -> NValueNF t f m) -> NValueNF t f m)
@@ -466,7 +468,7 @@ valueNFEq (Free _) (Pure _) = pure False
 valueNFEq (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
     valueFEq (compareAttrSets f valueNFEq) valueNFEq x y
   where
-    f (Pure (NVStr s)) = pure $ Just s
+    f (Pure _) = pure Nothing
     f (Free (NVStr s)) = pure $ Just s
     f _ = pure Nothing
 

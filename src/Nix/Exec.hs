@@ -560,15 +560,10 @@ instance MonadStore m => MonadStore (Lazy t f m) where
     toFile_' n = lift . toFile_' n
 
 instance MonadPutStr m => MonadPutStr (Lazy t f m)
-
 instance MonadHttp m => MonadHttp (Lazy t f m)
-
 instance MonadEnv m => MonadEnv (Lazy t f m)
-
 instance MonadInstantiate m => MonadInstantiate (Lazy t f m)
-
 instance MonadExec m => MonadExec (Lazy t f m)
-
 instance MonadIntrospect m => MonadIntrospect (Lazy t f m)
 
 instance MonadThunkId m => MonadThunkId (Lazy t f m) where

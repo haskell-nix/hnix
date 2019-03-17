@@ -46,21 +46,22 @@ normalForm' f = run . nValueToNFM run go
     run = (`evalStateT` table) . (`runReaderT` start)
 
     go :: t
-       -> (NValue t f m -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValueNF t f m))
+       -> (NValue t f m
+              -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValueNF t f m))
        -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValueNF t f m)
     go t k = do
-        i <- ask
-        when (i > 2000) $
-            error "Exceeded maximum normalization depth of 2000 levels"
-        s <- lift get
-        (res, s') <- lift $ lift $ f t $ \v ->
-            (`runStateT` s) . (`runReaderT` i) $ local succ $ do
-                b <- seen t
-                if b
-                    then return $ pure (error "Loop detected" <$ v)
-                    else k v
-        lift $ put s'
-        return res
+        b <- seen t
+        if b
+            then return $ pure t
+            else do
+                i <- ask
+                when (i > 2000) $
+                    error "Exceeded maximum normalization depth of 2000 levels"
+                s <- lift get
+                (res, s') <- lift $ lift $ f t $ \v ->
+                    (`runStateT` s) . (`runReaderT` i) $ local succ $ k v
+                lift $ put s'
+                return res
 
     seen t = case thunkId t of
         Just tid -> lift $ do

@@ -35,3 +35,21 @@ effects.
 `v` is the type of values, which is almost always going to be `NValue t f m`,
 though it could be `NValueNF t f m`, the type of normal form values. Very few
 points in the code are generic over both.
+
+## Different value types
+
+Having said that, I should mention that there are two different types of
+values: `NValue` and `NValueNF`. The former is created by evaluating an
+`NExpr`, and then latter by calling `normalForm` on an `NValue`.
+
+However, not every term can be reduced to normal form. There are cases where
+Nix allows a cycle to exist in the data, so that it can printed simply as
+`<CYCLE>`. To represent this, we use a simple recursive type for `NValue`, but
+a `Free` construction for `NValueNF`:
+
+    type NValueNF t f m = Free (NValue' t f m) t
+
+The idea here is that `Free` values are those we were able to normalize (since
+it has its own terminating base cases of constants, strings, etc), while the
+`Pure` thunk is the thunk we'd seen before while normalizing, indicating the
+beginning of the cycle.
