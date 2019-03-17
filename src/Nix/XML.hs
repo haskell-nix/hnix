@@ -5,7 +5,6 @@
 
 module Nix.XML (toXML) where
 
-import           Control.Monad.Free
 import qualified Data.HashMap.Lazy as M
 import           Data.List
 import           Data.Ord
@@ -16,8 +15,10 @@ import           Nix.String
 import           Nix.Value
 import           Text.XML.Light
 
-toXML :: Functor m => NValueNF m -> NixString
-toXML = runWithStringContext . fmap pp . iterM phi . check
+toXML :: forall t f m. MonadDataContext f m => NValueNF t f m -> NixString
+toXML = runWithStringContext
+    . fmap pp
+    . iterNValueNF (const (pure (mkElem "cycle" "value" ""))) phi
   where
     pp = ("<?xml version='1.0' encoding='utf-8'?>\n" <>)
       . (<> "\n")
@@ -25,22 +26,19 @@ toXML = runWithStringContext . fmap pp . iterM phi . check
       . ppElement
       . (\e -> Element (unqual "expr") [] [Elem e] Nothing)
 
-    check :: NValueNF f -> Free (NValueF f) Element
-    check = fmap $ const $ mkElem "cycle" "value" ""
-
-    phi :: NValueF f (WithStringContext Element) -> WithStringContext Element
+    phi :: NValue' t f m (WithStringContext Element) -> WithStringContext Element
     phi = \case
-        NVConstantF a -> case a of
+        NVConstant a -> case a of
             NInt n   -> return $ mkElem "int" "value" (show n)
             NFloat f -> return $ mkElem "float" "value" (show f)
             NBool b  -> return $ mkElem "bool" "value" (if b then "true" else "false")
             NNull    -> return $ Element (unqual "null") [] [] Nothing
 
-        NVStrF str -> mkElem "string" "value" . Text.unpack <$> extractNixString str
-        NVListF l  -> sequence l >>= \els ->
+        NVStr str -> mkElem "string" "value" . Text.unpack <$> extractNixString str
+        NVList l  -> sequence l >>= \els ->
           return $ Element (unqual "list") [] (Elem <$> els) Nothing
 
-        NVSetF s _ -> sequence s >>= \kvs ->
+        NVSet s _ -> sequence s >>= \kvs ->
           return $ Element (unqual "attrs") []
             (map (\(k, v) ->
                       Elem (Element (unqual "attr")
@@ -48,9 +46,10 @@ toXML = runWithStringContext . fmap pp . iterM phi . check
                                [Elem v] Nothing))
                  (sortBy (comparing fst) $ M.toList kvs)) Nothing
 
-        NVClosureF p _    -> return $ Element (unqual "function") [] (paramsXML p) Nothing
-        NVPathF fp        -> return $ mkElem "path" "value" fp
-        NVBuiltinF name _ -> return $ mkElem "function" "name" name
+        NVClosure p _    -> return $ Element (unqual "function") [] (paramsXML p) Nothing
+        NVPath fp        -> return $ mkElem "path" "value" fp
+        NVBuiltin name _ -> return $ mkElem "function" "name" name
+        _                -> error "Pattern synonyms mask coverage"
 
 mkElem :: String -> String -> String -> Element
 mkElem n a v = Element (unqual n) [Attr (unqual a) v] [] Nothing

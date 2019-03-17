@@ -12,98 +12,94 @@
 
 module Nix.Normal where
 
-import           Control.Monad
-import           Control.Monad.Free
-import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.State
-import qualified Data.HashMap.Lazy as M
-import           Data.List (find)
-import           Data.Maybe (isJust)
-import           Nix.Frames
--- import           Nix.Pretty
-import           Nix.Thunk
-import           Nix.Thunk.Basic
-import           Nix.Utils
-import           Nix.Value
-import           Nix.Var
+import Control.Monad
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Reader
+import Control.Monad.Trans.State
+import Data.Set
+import Nix.Frames
+import Nix.String
+import Nix.Thunk
+import Nix.Value
 
-newtype NormalLoop m = NormalLoop (NValue m)
+newtype NormalLoop t f m = NormalLoop (NValue t f m)
     deriving Show
 
-instance Typeable m => Exception (NormalLoop m)
+instance MonadDataErrorContext t f m => Exception (NormalLoop t f m)
 
-normalFormBy
-    :: forall e m. (Framed e m, MonadVar m, Typeable m)
-    => (forall r. NThunk m -> (NValue m -> StateT [Var m Bool] m r)
-         -> StateT [Var m Bool] m r)
-    -> Int
-    -> NValue m
-    -> StateT [Var m Bool] m (NValueNF m)
-normalFormBy k n v = case v of
-    NVConstant a     -> return $ Free $ NVConstantF a
-    NVStr ns         -> return $ Free $ NVStrF ns
-    NVList l         ->
-        fmap (Free . NVListF) $ forM (zip [0..] l) $ \(i :: Int, t) -> do
-            traceM $ show n ++ ": normalFormBy: List[" ++ show i ++ "]"
-            k t (next t)
-    NVSet s p        ->
-        fmap (Free . flip NVSetF p) $ sequence $ flip M.mapWithKey s $ \ky t -> do
-            traceM $ show n ++ ": normalFormBy: Set{" ++ show ky ++ "}"
-            k t (next t)
-    NVClosure p f    -> return $ Free $ NVClosureF p f
-    NVPath fp        -> return $ Free $ NVPathF fp
-    NVBuiltin name f -> return $ Free $ NVBuiltinF name f
-    _ -> error "Pattern synonyms mask complete matches"
+normalForm'
+    :: forall e t m f.
+    ( Framed e m
+    , MonadThunk t m (NValue t f m)
+    , MonadDataErrorContext t f m
+    , Ord (ThunkId m)
+    )
+    => (forall r. t -> (NValue t f m -> m r) -> m r)
+    -> NValue t f m
+    -> m (NValueNF t f m)
+normalForm' f = run . nValueToNFM run go
   where
-    next t val = do
-        b <- seen t
-        if b
-            then return $ Pure val
-            else normalFormBy k (succ n) val
+    start = 0 :: Int
+    table = mempty
 
-    seen (NThunk (NCited _ (Thunk _ b _))) = do
-        res <- gets (isJust . find (eqVar @m b))
-        unless res $
-            modify (b:)
-        return res
-    seen _ = pure False
+    run :: ReaderT Int (StateT (Set (ThunkId m)) m) r -> m r
+    run = (`evalStateT` table) . (`runReaderT` start)
 
-normalForm' :: forall e m. (Framed e m, MonadVar m, Typeable m,
-               MonadThunk (NValue m) (NThunk m) m)
-            => (forall r. NThunk m -> (NValue m -> m r) -> m r)
-            -> NValue m -> m (NValueNF m)
-normalForm' f = flip evalStateT mempty . normalFormBy go 0
-  where
-    go :: NThunk m
-       -> (NValue m -> StateT [Var m Bool] m r)
-       -> StateT [Var m Bool] m r
+    go :: t
+       -> (NValue t f m -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValueNF t f m))
+       -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValueNF t f m)
     go t k = do
-        s <- get
-        (res, s') <- lift $ f t $ \v -> runStateT (k v) s
-        put s'
+        i <- ask
+        when (i > 2000) $
+            error "Exceeded maximum normalization depth of 2000 levels"
+        s <- lift get
+        (res, s') <- lift $ lift $ f t $ \v ->
+            (`runStateT` s) . (`runReaderT` i) $ local succ $ do
+                b <- seen t
+                if b
+                    then return $ pure (error "Loop detected" <$ v)
+                    else k v
+        lift $ put s'
         return res
 
-normalForm :: forall e m. (Framed e m, MonadVar m, Typeable m,
-              MonadThunk (NValue m) (NThunk m) m)
-           => NValue m -> m (NValueNF m)
+    seen t = case thunkId t of
+        Just tid -> lift $ do
+            res <- gets (member tid)
+            unless res $ modify (insert tid)
+            return res
+        Nothing ->
+            return False
+
+normalForm
+    :: ( Framed e m
+      , MonadThunk t m (NValue t f m)
+      , MonadDataErrorContext t f m
+      , Ord (ThunkId m)
+      )
+    => NValue t f m -> m (NValueNF t f m)
 normalForm = normalForm' force
 
 normalForm_
-    :: forall e m. (Framed e m, MonadVar m, Typeable m,
-              MonadThunk (NValue m) (NThunk m) m)
-    => NValue m -> m ()
-normalForm_ = void . normalForm' (forceEffects . _cited . _nThunk)
+    :: ( Framed e m
+      , MonadThunk t m (NValue t f m)
+      , MonadDataErrorContext t f m
+      , Ord (ThunkId m)
+      )
+    => NValue t f m -> m ()
+normalForm_ = void <$> normalForm' forceEff
 
-embed :: forall m. (MonadThunk (NValue m) (NThunk m) m)
-      => NValueNF m -> m (NValue m)
-embed (Pure v) = return v
-embed (Free x) = case x of
-    NVConstantF a  -> return $ nvConstant a
-    NVStrF ns      -> return $ nvStr ns
-    NVListF l      ->
-        nvList       . fmap (wrapValue @_ @_ @m) <$> traverse embed l
-    NVSetF s p     ->
-        flip nvSet p . fmap (wrapValue @_ @_ @m) <$> traverse embed s
-    NVClosureF p f -> return $ nvClosure p f
-    NVPathF fp     -> return $ nvPath fp
-    NVBuiltinF n f -> return $ nvBuiltin n f
+removeEffects :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
+              => NValue t f m -> NValueNF t f m
+removeEffects = nValueToNF (flip query opaque)
+
+removeEffectsM :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
+               => NValue t f m -> m (NValueNF t f m)
+removeEffectsM = nValueToNFM id (flip queryM (pure opaque))
+
+opaque :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
+       => NValueNF t f m
+opaque = nvStrNF $ principledMakeNixStringWithoutContext "<thunk>"
+
+dethunk :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
+        => t -> m (NValueNF t f m)
+dethunk t = queryM t (pure opaque) removeEffectsM

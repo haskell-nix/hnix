@@ -439,6 +439,7 @@ library
       Nix.Atoms
       Nix.Builtins
       Nix.Cache
+      Nix.Cited
       Nix.Context
       Nix.Convert
       Nix.Effects
@@ -465,6 +466,7 @@ library
       Nix.TH
       Nix.Thunk
       Nix.Thunk.Basic
+      Nix.Thunk.Standard
       Nix.Type.Assumption
       Nix.Type.Env
       Nix.Type.Infer
@@ -484,6 +486,7 @@ library
     , base >=4.9 && <5
     , binary
     , bytestring
+    , comonad
     , containers
     , data-fix
     , deepseq >=1.4.2 && <1.5
@@ -502,6 +505,7 @@ library
     , lens-family-th
     , logict
     , megaparsec >=7.0 && <7.1
+    , monad-control
     , monadlist
     , mtl
     , optparse-applicative
@@ -520,6 +524,7 @@ library
     , these
     , time
     , transformers
+    , transformers-base
     , unix
     , unordered-containers >=0.2.9 && <0.3
     , vector
@@ -572,6 +577,7 @@ executable hnix
       aeson
     , base >=4.9 && <5
     , bytestring
+    , comonad
     , containers
     , data-fix
     , deepseq >=1.4.2 && <1.5
@@ -584,6 +590,7 @@ executable hnix
     , optparse-applicative
     , pretty-show
     , prettyprinter
+    , ref-tf
     , repline
     , template-haskell
     , text

@@ -120,7 +120,7 @@ unpackSymbolic :: MonadVar m
 unpackSymbolic = readVar . coerce
 
 type MonadLint e m = (Scoped (SThunk m) m, Framed e m, MonadVar m,
-                      MonadCatch m, MonadFreshId Int m)
+                      MonadCatch m, MonadThunkId m)
 
 symerr :: forall e m a. MonadLint e m => String -> m a
 symerr = evalError @(Symbolic m) . ErrorCall
@@ -248,12 +248,15 @@ instance FromValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
 
 instance ToValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
 
-instance MonadLint e m => MonadThunk (Symbolic m) (SThunk m) m where
-    thunk = fmap coerce . buildThunk
-    force = forceThunk . coerce
-    forceEff = forceEffects . coerce
-    wrapValue = coerce . valueRef
-    getValue = thunkValue . coerce
+instance MonadLint e m => MonadThunk (SThunk m) m (Symbolic m) where
+    thunk = fmap SThunk . thunk
+    thunkId = thunkId . getSThunk
+    query x b f = query (getSThunk x) b f
+    queryM x b f = queryM (getSThunk x) b f
+    force = force . getSThunk
+    forceEff = forceEff . getSThunk
+    wrapValue = SThunk . wrapValue
+    getValue = getValue . getSThunk
 
 instance MonadLint e m => MonadEval (Symbolic m) m where
     freeVariable var = symerr $
@@ -303,7 +306,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
         -- evaluated each time a name is looked up within the weak scope, and
         -- we want to be sure the action it evaluates is to force a thunk, so
         -- its value is only computed once.
-        s <- thunk @(Symbolic m) @(SThunk m) scope
+        s <- thunk @(SThunk m) @m @(Symbolic m) scope
         pushWeakScope ?? body $ force s $ unpackSymbolic >=> \case
             NMany [TSet (Just s')] -> return s'
             NMany [TSet Nothing] -> error "NYI: with unknown"
@@ -400,7 +403,7 @@ newtype Lint s a = Lint
     , Monad
     , MonadFix
     , MonadReader (Context (Lint s) (SThunk (Lint s)))
-    , MonadFreshId Int
+    , MonadThunkId
     , MonadRef
     , MonadAtomicRef
     )
@@ -412,7 +415,9 @@ instance MonadCatch (Lint s) where
     catch _m _h = Lint $ ReaderT $ \_ -> error "Cannot catch in 'Lint s'"
 
 runLintM :: Options -> Lint s a -> ST s a
-runLintM opts = runFreshIdT 0 . flip runReaderT (newContext opts) . runLint
+runLintM opts action = do
+    i <- newVar (1 :: Int)
+    runFreshIdT i $ flip runReaderT (newContext opts) $ runLint action
 
 symbolicBaseEnv :: Monad m => m (Scopes m (SThunk m))
 symbolicBaseEnv = return emptyScopes

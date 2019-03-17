@@ -1,10 +1,13 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
+
 module Nix.Effects where
 
 import           Prelude hiding (putStr, putStrLn, print)
@@ -31,19 +34,26 @@ import           System.Process
 -- | A path into the nix store
 newtype StorePath = StorePath { unStorePath :: FilePath }
 
-class (MonadFile m, MonadStore m, MonadPutStr m, MonadHttp m, MonadEnv m, MonadInstantiate m, MonadExec m, MonadIntrospect m) => MonadEffects m where
+class (MonadFile m,
+       MonadStore m,
+       MonadPutStr m,
+       MonadHttp m,
+       MonadEnv m,
+       MonadInstantiate m,
+       MonadExec m,
+       MonadIntrospect m) => MonadEffects t f m where
     -- | Determine the absolute path of relative path in the current context
     makeAbsolutePath :: FilePath -> m FilePath
     findEnvPath :: String -> m FilePath
 
     -- | Having an explicit list of sets corresponding to the NIX_PATH
     -- and a file path try to find an existing path
-    findPath :: [NThunk m] -> FilePath -> m FilePath
+    findPath :: [t] -> FilePath -> m FilePath
 
-    importPath :: FilePath -> m (NValue m)
+    importPath :: FilePath -> m (NValue t f m)
     pathToDefaultNix :: FilePath -> m FilePath
 
-    derivationStrict :: NValue m -> m (NValue m)
+    derivationStrict :: NValue t f m -> m (NValue t f m)
 
     traceEffect :: String -> m ()
 

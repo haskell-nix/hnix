@@ -80,7 +80,7 @@ class (Show v, Monad m) => MonadEval v m where
 type MonadNixEval v t m =
     (MonadEval v m,
      Scoped t m,
-     MonadThunk v t m,
+     MonadThunk t m v,
      MonadFix m,
      ToValue Bool m v,
      ToValue [t] m v,
@@ -88,14 +88,14 @@ type MonadNixEval v t m =
      ToValue (AttrSet t, AttrSet SourcePos) m v,
      FromValue (AttrSet t, AttrSet SourcePos) m v)
 
-data EvalFrame m v
-    = EvaluatingExpr (Scopes m v) NExprLoc
-    | ForcingExpr (Scopes m v) NExprLoc
+data EvalFrame m t
+    = EvaluatingExpr (Scopes m t) NExprLoc
+    | ForcingExpr (Scopes m t) NExprLoc
     | Calling String SrcSpan
-    | SynHole (SynHoleInfo m v)
+    | SynHole (SynHoleInfo m t)
     deriving (Show, Typeable)
 
-instance (Typeable m, Typeable v) => Exception (EvalFrame m v)
+instance (Typeable m, Typeable t) => Exception (EvalFrame m t)
 
 data SynHoleInfo m t = SynHoleInfo
    { _synHoleInfo_expr :: NExprLoc
@@ -131,7 +131,7 @@ eval (NHasAttr aset attr) = evalSelect aset attr >>= toValue . isRight
 
 eval (NList l) = do
     scope <- currentScopes
-    for l (thunk @v @t . withScopes @t scope) >>= toValue
+    for l (thunk @t @m @v . withScopes @t scope) >>= toValue
 
 eval (NSet binds) =
     evalBinds False (desugarBinds (eval . NSet) binds) >>= toValue
@@ -168,7 +168,7 @@ evalWithAttrSet aset body = do
     -- we want to be sure the action it evaluates is to force a thunk, so
     -- its value is only computed once.
     scope <- currentScopes :: m (Scopes m t)
-    s <- thunk @v @t $ withScopes scope aset
+    s <- thunk @t @m @v $ withScopes scope aset
     pushWeakScope ?? body $ force s $
         fmap fst . fromValue @(AttrSet t, AttrSet SourcePos)
 
@@ -241,7 +241,7 @@ evalBinds recursive binds = do
         finalValue >>= fromValue >>= \(o', p') ->
             -- jww (2018-05-09): What to do with the key position here?
             return $ map (\(k, v) -> ([k], fromMaybe pos (M.lookup k p'),
-                                     force @v @t v pure))
+                                     force @t @m @v v pure))
                          (M.toList o')
 
     go _ (NamedVar pathExpr finalValue pos) = do

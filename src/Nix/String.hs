@@ -23,7 +23,7 @@ module Nix.String (
   , principledStringMempty
   , principledStringMConcat
   , WithStringContext
-  , WithStringContextT
+  , WithStringContextT(..)
   , extractNixString
   , addStringContext
   , addSingletonStringContext
