@@ -23,6 +23,7 @@
 
 module Nix.Builtins (MonadBuiltins, withNixContext, builtins) where
 
+import           Control.Comonad
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.ListM (sortByM)
@@ -58,6 +59,8 @@ import qualified Data.HashMap.Lazy as M
 import           Data.List
 import           Data.Maybe
 import           Data.Scientific
+import           Data.Set (Set)
+import qualified Data.Set as S
 import           Data.String.Interpolate.IsString
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -713,6 +716,29 @@ genList generator = fromValue @Integer >=> \n ->
     else throwError $ ErrorCall $ "builtins.genList: Expected a non-negative number, got "
              ++ show n
 
+-- We wrap values solely to provide an Ord instance for genericClosure
+newtype WValue t f m a = WValue (NValue' t f m a)
+
+instance Comonad f => Eq (WValue t f m a) where
+    WValue (NVConstant (NFloat x)) == WValue (NVConstant (NInt y))   = x == fromInteger y
+    WValue (NVConstant (NInt x))   == WValue (NVConstant (NFloat y)) = fromInteger x == y
+    WValue (NVConstant (NInt x))   == WValue (NVConstant (NInt y))   = x == y
+    WValue (NVConstant (NFloat x)) == WValue (NVConstant (NFloat y)) = x == y
+    WValue (NVStr x)               == WValue (NVStr y)               =
+        hackyStringIgnoreContext x == hackyStringIgnoreContext y
+    WValue (NVPath x)              == WValue (NVPath y)              = x == y
+    _ == _ = False
+
+instance Comonad f => Ord (WValue t f m a) where
+    WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NInt y))   = x <= fromInteger y
+    WValue (NVConstant (NInt x))   <= WValue (NVConstant (NFloat y)) = fromInteger x <= y
+    WValue (NVConstant (NInt x))   <= WValue (NVConstant (NInt y))   = x <= y
+    WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NFloat y)) = x <= y
+    WValue (NVStr x)               <= WValue (NVStr y)               =
+        hackyStringIgnoreContext x <= hackyStringIgnoreContext y
+    WValue (NVPath x)              <= WValue (NVPath y)              = x <= y
+    _ <= _ = False
+
 genericClosure :: forall e t f m. MonadBuiltins e t f m
                => m (NValue t f m) -> m (NValue t f m)
 genericClosure = fromValue @(AttrSet t) >=> \s ->
@@ -730,28 +756,28 @@ genericClosure = fromValue @(AttrSet t) >=> \s ->
       (Just startSet, Just operator) ->
           fromValue @[t] startSet >>= \ss ->
           force operator $ \op ->
-              toValue @[t] =<< snd <$> go op ss []
+              toValue @[t] =<< snd <$> go op ss S.empty
   where
-    go :: NValue t f m -> [t] -> [NValue t f m] -> m ([NValue t f m], [t])
+    go :: NValue t f m -> [t] -> Set (WValue t f m t)
+       -> m (Set (WValue t f m t), [t])
     go _ [] ks = pure (ks, [])
-    go op (t:ts) ks =
-        force t $ \v -> fromValue @(AttrSet t) t >>= \s ->
-            case M.lookup "key" s of
-                Nothing ->
-                    throwError $ ErrorCall $
-                        "builtins.genericClosure: Attribute 'key' required"
-                Just k -> force k $ \k' -> do
+    go op (t:ts) ks = force t $ \v -> fromValue @(AttrSet t) v >>= \s -> do
+        k <- attrsetGet "key" s
+        force k $ \k' -> do
+            if S.member (WValue k') ks
+                then go op ts ks
+                else do
                     ys <- fromValue @[t] =<< (op `callFunc` pure v)
-                    case ks of
+                    case S.toList ks of
                         []  -> checkComparable k' k'
-                        j:_ -> checkComparable k' j
-                    fmap (t:) <$> go op (ts ++ ys) (k':ks)
+                        WValue j:_ -> checkComparable k' j
+                    fmap (t:) <$> go op (ts ++ ys) (S.insert (WValue k') ks)
 
 replaceStrings :: MonadBuiltins e t f m => m (NValue t f m) -> m (NValue t f m) -> m (NValue t f m) -> m (NValue t f m)
 replaceStrings tfrom tto ts =
     fromNix tfrom >>= \(nsFrom :: [NixString]) ->
     fromNix tto   >>= \(nsTo   :: [NixString]) ->
-    fromValue ts  >>= \(ns    :: NixString) -> do
+    fromValue ts  >>= \(ns     :: NixString) -> do
         let from = map principledStringIgnoreContext nsFrom
         when (length nsFrom /= length nsTo) $
             throwError $ ErrorCall $
