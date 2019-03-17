@@ -1,61 +1,80 @@
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
--- | Thunks where the computed values are stored separately rather than in
--- mutable variables
-module Nix.Thunk.Separate (NThunkF, MonadSeparateThunk) where
+module Nix.Thunk.Separate (NThunkF(..), MonadSeparateThunk, runSeparateThunkT, askThunkCache) where
 
 import Control.Exception hiding (catch)
 import Control.Monad.Catch
+import Control.Monad.Reader
 import Control.Monad.Ref
-import Data.GADT.Compare
-import Control.Monad.State.Strict
-import Data.IntMap.Strict (IntMap)
-import qualified Data.IntMap as IntMap
-import Data.IntSet (IntSet)
-import qualified Data.IntSet as IntSet
-import Nix.Thunk.StableId
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 
-import Nix.Fresh
 import Nix.Thunk
-import Nix.Utils
-import Nix.Var
 
 -- | The type of very basic thunks
 data NThunkF m v
     = Value v
-    | Thunk Int (m v)
+    | Thunk (ThunkId m) (SeparateThunkT v m v)
+
+instance (Eq v, Eq (ThunkId m)) => Eq (NThunkF m v) where
+    Value x == Value y = x == y
+    Thunk x _ == Thunk y _ = x == y
+    _ == _ = False              -- jww (2019-03-16): not accurate...
 
 instance Show v => Show (NThunkF m v) where
     show (Value v) = show v
     show (Thunk _ _) = "<thunk>"
 
-type MonadSeparateThunk m
-    = (MonadAtomicRef m, GEq (Ref m), MonadFreshId Int m, MonadCatch m)
+type MonadSeparateThunk m = (MonadThunkId m, MonadAtomicRef m, Ord (ThunkId m)) --TODO: ThunkId allocation also needs to be sufficiently deterministic
 
---TODO: Make these things weak?
-data SeparateThunkState v = SeparateThunkState
-  { _separateThunkState_active :: !IntSet
-  , _separateThunkState_computed :: !(IntMap v)
-  }
+type ThunkCache m v = Ref m (Map (ThunkId m) (Maybe v))
 
-instance (MonadAtomicRef m, GEq (Ref m), MonadState (SeparateThunkState v) m, MonadFreshId Int m, MonadCatch m)
-  => MonadThunk (NThunkF m v) m v where
+--TODO: HashMap?
+newtype SeparateThunkT v m a = SeparateThunkT (ReaderT (ThunkCache m v) m a)
+  deriving
+    ( Functor
+    , Applicative
+    , Monad
+    , MonadRef
+    , MonadAtomicRef
+    , MonadCatch
+    , MonadThrow
+    )
+
+askThunkCache :: Monad m => SeparateThunkT v m (ThunkCache m v)
+askThunkCache = SeparateThunkT ask
+
+runSeparateThunkT :: ThunkCache m v -> SeparateThunkT v m a -> m a
+runSeparateThunkT c (SeparateThunkT a) = runReaderT a c
+
+instance MonadTrans (SeparateThunkT v) where
+    lift = SeparateThunkT . lift
+
+instance MonadThunkId m => MonadThunkId (SeparateThunkT v m) where
+    type ThunkId (SeparateThunkT v m) = ThunkId m
+
+instance (MonadSeparateThunk m, MonadCatch m)
+  => MonadThunk (NThunkF m v) (SeparateThunkT v m) v where
     thunk     = buildThunk
     thunkId   = \case
-        Value _   -> -1
-        Thunk n _ -> n
+        Value _   -> Nothing
+        Thunk n _ -> Just n
     query     = queryValue
     queryM    = queryThunk
     force     = forceThunk
@@ -70,72 +89,74 @@ thunkValue :: NThunkF m v -> Maybe v
 thunkValue (Value v) = Just v
 thunkValue _ = Nothing
 
-buildThunk :: (MonadFreshId Int m) => m v -> m (NThunkF m v)
-buildThunk action =do
-    freshThunkId <- freshId
-    pure $ Thunk freshThunkId action
+buildThunk :: MonadThunkId m => SeparateThunkT v m v -> SeparateThunkT v m (NThunkF m v)
+buildThunk action = do
+    freshThunkId <- lift freshId
+    return $ Thunk freshThunkId action
 
-queryValue :: (MonadThrow m, MonadCatch m)
-           => NThunkF m v -> a -> (v -> a) -> a
+queryValue :: NThunkF m v -> a -> (v -> a) -> a
 queryValue (Value v) _ k = k v
 queryValue _ n _ = n
 
-queryThunk :: (MonadState (SeparateThunkState v) m, MonadThrow m, MonadCatch m)
-           => NThunkF m v -> m a -> (v -> m a) -> m a
+queryThunk :: (MonadAtomicRef m, Ord (ThunkId m)) => NThunkF m v -> SeparateThunkT v m a -> (v -> SeparateThunkT v m a) -> SeparateThunkT v m a
 queryThunk (Value v) _ k = k v
 queryThunk (Thunk tid _) n k = do
-    initialState <- get
-    if tid `IntSet.member` _separateThunkState_active initialState then n else do
-        put $ initialState { _separateThunkState_active = IntSet.insert tid $ _separateThunkState_active initialState }
-        result <- case IntMap.lookup tid $ _separateThunkState_computed initialState of
-            Just v -> k v
-            Nothing -> n
-        modify $ \s -> s { _separateThunkState_active = IntSet.delete tid $ _separateThunkState_active s }
-        pure result
+    c <- SeparateThunkT ask
+    mOldVal <- atomicModifyRef' c $ \old ->
+        -- Try to insert Nothing into the given key, but if something is already
+        -- there, just leave it
+        let (mOldVal, !new) = Map.insertLookupWithKey (\_ _ oldVal -> oldVal) tid Nothing old
+        in (new, mOldVal)
+    case mOldVal of
+        Nothing -> do
+            result <- n -- Not computed, inactive
+            -- This is the only case where we've actually changed c, so restore it
+            atomicModifyRef' c $ \old -> (Map.delete tid old, ())
+            return result
+        Just Nothing -> n -- Active
+        Just (Just v) -> k v -- Computed, inactive
 
-forceThunk :: (MonadState (SeparateThunkState v) m, MonadThrow m, MonadCatch m)
-           => NThunkF m v -> (v -> m a) -> m a
+forceThunk
+    :: forall m v a.
+    ( MonadAtomicRef m
+    , MonadThrow m
+    , MonadCatch m
+    , Show (ThunkId m)
+    , Ord (ThunkId m)
+    )
+    => NThunkF m v -> (v -> SeparateThunkT v m a) -> SeparateThunkT v m a
 forceThunk (Value v) k = k v
 forceThunk (Thunk tid action) k = do
-    initialState <- get
-    if tid `IntSet.member` _separateThunkState_active initialState
-        then throwM $ ThunkLoop tid
-        else do
-            put $ initialState { _separateThunkState_active = IntSet.insert tid $ _separateThunkState_active initialState }
-            traceM $ "Forcing " ++ show tid
-            result <- case IntMap.lookup tid $ _separateThunkState_computed initialState of
-                Just v -> k v
-                Nothing -> do
-                    let setNotActive = modify $ \s -> s
-                          { _separateThunkState_active = IntSet.delete tid $ _separateThunkState_active s
-                          }
-                    v <- catch action $ \(e :: SomeException) -> do
-                        _ <- setNotActive
-                        throwM e
-                    _ <- setNotActive
-                    modify $ \s -> s { _separateThunkState_computed = IntMap.insert tid v $ _separateThunkState_computed s }
-                    k v
-            modify $ \s -> s { _separateThunkState_active = IntSet.delete tid $ _separateThunkState_active s }
-            pure result
+    c <- SeparateThunkT ask
+    mOldVal <- atomicModifyRef' c $ \old ->
+        -- Try to insert Nothing into the given key, but if something is already
+        -- there, just leave it
+        let (mOldVal, !new) = Map.insertLookupWithKey (\_ _ oldVal -> oldVal) tid Nothing old
+        in (new, mOldVal)
+    case mOldVal of
+        Nothing -> do -- Not computed, inactive
+            v <- catch action $ \(e :: SomeException) -> do
+                -- This is the only case where we've actually changed c, so restore it
+                _ <- atomicModifyRef' c $ \old -> (Map.delete tid old, ())
+                throwM e
+            atomicModifyRef' c $ \old -> (Map.insert tid (Just v) old, ())
+            k v
+        Just Nothing -> throwM $ ThunkLoop $ show tid
+        Just (Just v) -> k v -- Computed, inactive
 
-forceEffects :: (MonadState (SeparateThunkState v) m, MonadVar m) => NThunkF m v -> (v -> m a) -> m a
+forceEffects :: (MonadAtomicRef m, Ord (ThunkId m)) => NThunkF m v -> (v -> SeparateThunkT v m r) -> SeparateThunkT v m r
 forceEffects (Value v) k = k v
 forceEffects (Thunk tid action) k = do
-    initialState <- get
-    if tid `IntSet.member` _separateThunkState_active initialState
-        then return $ error "forceEffects: a value was expected"
-        else do
-            put $ initialState { _separateThunkState_active = IntSet.insert tid $ _separateThunkState_active initialState }
-            traceM $ "Forcing " ++ show tid
-            result <- case IntMap.lookup tid $ _separateThunkState_computed initialState of
-                Just v -> k v
-                Nothing -> do
-                    let setNotActive = modify $ \s -> s
-                          { _separateThunkState_active = IntSet.delete tid $ _separateThunkState_active s
-                          }
-                    v <- action
-                    _ <- setNotActive
-                    modify $ \s -> s { _separateThunkState_computed = IntMap.insert tid v $ _separateThunkState_computed s }
-                    k v
-            modify $ \s -> s { _separateThunkState_active = IntSet.delete tid $ _separateThunkState_active s }
-            pure result
+    c <- SeparateThunkT ask
+    mOldVal <- atomicModifyRef' c $ \old ->
+        -- Try to insert Nothing into the given key, but if something is already
+        -- there, just leave it
+        let (mOldVal, !new) = Map.insertLookupWithKey (\_ _ oldVal -> oldVal) tid Nothing old
+        in (new, mOldVal)
+    case mOldVal of
+        Nothing -> do -- Not computed, inactive
+            v <- action
+            atomicModifyRef' c $ \old -> (Map.insert tid (Just v) old, ())
+            k v
+        Just Nothing -> return $ error "Loop detected"
+        Just (Just v) -> k v -- Computed, inactive
