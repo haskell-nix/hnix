@@ -32,14 +32,15 @@ import Nix.Eval as Eval
 import Nix.Exec
 import Nix.Expr
 import Nix.Frames
-import Nix.Fresh
 import Nix.Options
 import Nix.Render
 import Nix.Thunk
 import Nix.Thunk.Basic
+import Nix.Thunk.StableId
+import Nix.Thunk.FreshStableIdT
 import Nix.Utils
 import Nix.Value
-import Nix.Var (MonadVar, newVar)
+import Nix.Var (MonadVar)
 
 newtype StdCited m a = StdCited
     { _stdCited :: NCited (StdThunk m) (StdCited m) (StdLazy m) a }
@@ -60,7 +61,7 @@ newtype StdThunk m = StdThunk
 type StdValue   m = NValue   (StdThunk m) (StdCited m) (StdLazy m)
 type StdValueNF m = NValueNF (StdThunk m) (StdCited m) (StdLazy m)
 
-type StdIdT m = FreshIdT Int m
+type StdIdT m = FreshStableIdT m
 
 type StdLazy m = Lazy (StdThunk m) (StdCited m) (StdIdT m)
 
@@ -196,14 +197,14 @@ instance (MonadEffects t f m, MonadDataContext f m)
     findEnvPath      = lift . findEnvPath @t @f @m
     findPath         = (lift .) . findPath @t @f @m
     importPath path  = do
-        i <- FreshIdT ask
+        i <- freshId
         p <- lift $ importPath @t @f @m path
-        return $ liftNValue (runFreshIdT i) p
+        return $ liftNValue (runFreshStableIdT i) p
     pathToDefaultNix = lift . pathToDefaultNix @t @f @m
     derivationStrict v = do
-        i <- FreshIdT ask
-        p <- lift $ derivationStrict @t @f @m (unliftNValue (runFreshIdT i) v)
-        return $ liftNValue (runFreshIdT i) p
+        i <- freshId
+        p <- lift $ derivationStrict @t @f @m (unliftNValue (runFreshStableIdT i) v)
+        return $ liftNValue (runFreshStableIdT i) p
     traceEffect      = lift . traceEffect @t @f @m
 
 instance HasCitations1 (StdThunk m) (StdCited m) (StdLazy m) where
@@ -212,5 +213,4 @@ instance HasCitations1 (StdThunk m) (StdCited m) (StdLazy m) where
 
 runStdLazyM :: (MonadVar m, MonadIO m) => Options -> StdLazy m a -> m a
 runStdLazyM opts action = do
-    i <- newVar (1 :: Int)
-    runFreshIdT i $ runLazyM opts action
+    runFreshStableIdT nil $ runLazyM opts action

@@ -465,6 +465,8 @@ library
       Nix.Strings
       Nix.TH
       Nix.Thunk
+      Nix.Thunk.StableId
+      Nix.Thunk.FreshStableIdT
       Nix.Thunk.Basic
       Nix.Thunk.Standard
       Nix.Type.Assumption
@@ -496,6 +498,7 @@ library
     , exceptions
     , filepath
     , free
+    , ghc-prim
     , hashing
     , hnix-store-core
     , http-client
