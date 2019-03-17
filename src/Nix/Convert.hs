@@ -28,9 +28,11 @@
 module Nix.Convert where
 
 import           Control.Monad
+import           Control.Monad.Catch
 import           Data.ByteString
 import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
+import           Data.Maybe
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
 import           Data.Text.Encoding             ( encodeUtf8
@@ -383,6 +385,30 @@ instance Convertible e t f m => ToValue Bool m (NExprF r) where
 
 instance Convertible e t f m => ToValue () m (NExprF r) where
   toValue _ = pure . NConstant $ NNull
+
+instance ( MonadThunk t m (NValue t f m)
+         , MonadDataErrorContext t f m
+         , Framed e m
+         )
+    => ToValue NixLikeContextValue m (NValue t f m) where
+  toValue nlcv = do
+    path <- if nlcvPath nlcv then Just <$> toValue True else return Nothing
+    allOutputs <- if nlcvAllOutputs nlcv
+      then Just <$> toValue True
+      else return Nothing
+    outputs <- do
+      let outputs =
+            fmap principledMakeNixStringWithoutContext $ nlcvOutputs nlcv
+      outputsM :: [NValue t f m] <- traverse toValue outputs
+      let ts :: [t] = fmap wrapValue outputsM
+      case ts of
+        [] -> return Nothing
+        _  -> Just <$> toValue ts
+    pure $ flip nvSet M.empty $ M.fromList $ catMaybes
+      [ (\p -> ("path", wrapValue p)) <$> path
+      , (\ao -> ("allOutputs", wrapValue ao)) <$> allOutputs
+      , (\os -> ("outputs", wrapValue os)) <$> outputs
+      ]
 
 whileForcingThunk
   :: forall t f m s e r . (Exception s, Convertible e t f m) => s -> m r -> m r
