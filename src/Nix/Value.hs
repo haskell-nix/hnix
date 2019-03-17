@@ -381,14 +381,14 @@ builtin
   => String
   -> (m (NValue t f m) -> m (NValue t f m))
   -> m (NValue t f m)
-builtin name f = return $ nvBuiltin name $ thunk . f
+builtin name f = return $ nvBuiltin name $ \a -> thunk $ f a
 
 builtin2
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
   => String
   -> (m (NValue t f m) -> m (NValue t f m) -> m (NValue t f m))
   -> m (NValue t f m)
-builtin2 name f = builtin name (builtin name . f)
+builtin2 name f = builtin name $ \a -> builtin name $ \b -> f a b
 
 builtin3
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
