@@ -94,20 +94,16 @@ instance MonadStdThunk m
   query (StdThunk (StdCited (NCited _ t))) = query t
   queryM (StdThunk (StdCited (NCited _ t))) = queryM t
 
--- The ThunkLoop exception is thrown as an exception with MonadThrow,
--- which does not capture the current stack frame information to provide
--- it in a NixException, so we catch and re-throw it here using
--- 'throwError' from Frames.hs.
-  force (StdThunk (StdCited (NCited ps t))) f = catch go
-                                                      (throwError @ThunkLoop)
+  -- | The ThunkLoop exception is thrown as an exception with MonadThrow,
+  --   which does not capture the current stack frame information to provide
+  --   it in a NixException, so we catch and re-throw it here using
+  --   'throwError' from Frames.hs.
+  force (StdThunk (StdCited (NCited ps t))) f =
+    catch go (throwError @ThunkLoop)
    where
     go = case ps of
       [] -> force t f
       Provenance scope e@(Compose (Ann s _)) : _ ->
-          -- r <- liftWith $ \run -> do
-          --     withFrame Info (ForcingExpr scope (wrapExprLoc s e))
-          --         (run (force t f))
-          -- restoreT $ return r
         withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (force t f)
 
   forceEff (StdThunk (StdCited (NCited ps t))) f = catch
@@ -116,11 +112,7 @@ instance MonadStdThunk m
    where
     go = case ps of
       [] -> forceEff t f
-      Provenance scope e@(Compose (Ann s _)) : _ -> do
-          -- r <- liftWith $ \run -> do
-          --     withFrame Info (ForcingExpr scope (wrapExprLoc s e))
-          --         (run (forceEff t f))
-          -- restoreT $ return r
+      Provenance scope e@(Compose (Ann s _)) : _ ->
         withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceEff t f)
 
   wrapValue = StdThunk . StdCited . NCited [] . wrapValue
