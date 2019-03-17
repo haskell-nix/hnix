@@ -48,6 +48,25 @@ let
     (self: super: with pkgs.haskell.lib; {
       mono-traversable = dontCheck super.mono-traversable;
       these = doJailbreak super.these;
+      multistate = doJailbreak super.multistate;
+
+      brittany = doJailbreak (self.callCabal2nix "brittany"
+        (pkgs.fetchFromGitHub {
+           owner  = "lspitzner";
+           repo   = "brittany";
+           rev    = "6c187da8f8166d595f36d6aaf419370283b3d1e9";
+           sha256 = "0nmnxprbwws3w1sh63p80qj09rkrgn9888g7iim5p8611qyhdgky";
+           # date = 2018-11-30T22:13:02+01:00;
+         }) {});
+
+      ghc-exactprint = dontCheck (self.callCabal2nix "ghc-exactprint"
+        (pkgs.fetchFromGitHub {
+           owner  = "alanz";
+           repo   = "ghc-exactprint";
+           rev    = "281f65324fb1fcad8f5ceec06f5ea4c7d78cfb59";
+           sha256 = "1d6sjy5mw0jn09sgx7zn0w1gszn3mf6lzqsfv3li50fnvwv1gwzb";
+           # date = 2019-03-01T17:38:18+02:00;
+         }) {});
     } // pkgs.lib.optionalAttrs withHoogle {
       ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
       ghcWithPackages = self.ghc.withPackages;
@@ -72,6 +91,7 @@ drv = haskellPackages.developPackage {
   modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
     buildTools = (attrs.buildTools or []) ++ [
       haskellPackages.cabal-install
+      haskellPackages.brittany
     ];
 
     enableLibraryProfiling = doProfiling;
