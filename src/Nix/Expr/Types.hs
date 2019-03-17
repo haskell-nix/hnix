@@ -28,16 +28,16 @@
 module Nix.Expr.Types where
 
 #ifdef MIN_VERSION_serialise
-import           Codec.Serialise (Serialise)
-import qualified Codec.Serialise as Ser
+import           Codec.Serialise                ( Serialise )
+import qualified Codec.Serialise               as Ser
 #endif
 import           Control.Applicative
 import           Control.DeepSeq
 import           Control.Monad
 import           Data.Aeson
 import           Data.Aeson.TH
-import           Data.Binary (Binary)
-import qualified Data.Binary as Bin
+import           Data.Binary                    ( Binary )
+import qualified Data.Binary                   as Bin
 import           Data.Data
 import           Data.Eq.Deriving
 import           Data.Fix
@@ -46,12 +46,17 @@ import           Data.Hashable
 #if MIN_VERSION_hashable(1, 2, 5)
 import           Data.Hashable.Lifted
 #endif
-import           Data.List (inits, tails)
-import           Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NE
-import           Data.Maybe (fromMaybe)
+import           Data.List                      ( inits
+                                                , tails
+                                                )
+import           Data.List.NonEmpty             ( NonEmpty(..) )
+import qualified Data.List.NonEmpty            as NE
+import           Data.Maybe                     ( fromMaybe )
 import           Data.Ord.Deriving
-import           Data.Text (Text, pack, unpack)
+import           Data.Text                      ( Text
+                                                , pack
+                                                , unpack
+                                                )
 import           Data.Traversable
 import           GHC.Exts
 import           GHC.Generics
@@ -64,8 +69,8 @@ import           Text.Megaparsec.Pos
 import           Text.Read.Deriving
 import           Text.Show.Deriving
 #if MIN_VERSION_base(4, 10, 0)
-import           Type.Reflection (eqTypeRep)
-import qualified Type.Reflection as Reflection
+import           Type.Reflection                ( eqTypeRep )
+import qualified Type.Reflection               as Reflection
 #endif
 
 type VarName = Text
@@ -161,10 +166,10 @@ instance IsString NExpr where
 
 #if MIN_VERSION_base(4, 10, 0)
 instance Lift (Fix NExprF) where
-    lift = dataToExpQ $ \b ->
-        case Reflection.typeOf b `eqTypeRep` Reflection.typeRep @Text of
-            Just HRefl -> Just [| pack $(liftString $ unpack b) |]
-            Nothing -> Nothing
+  lift = dataToExpQ $ \b ->
+    case Reflection.typeOf b `eqTypeRep` Reflection.typeRep @Text of
+      Just HRefl -> Just [| pack $(liftString $ unpack b) |]
+      Nothing    -> Nothing
 #else
 instance Lift (Fix NExprF) where
     lift = dataToExpQ $ \b -> case cast b of
@@ -245,12 +250,10 @@ data Antiquoted (v :: *) (r :: *) = Plain !v | EscapedNewline | Antiquoted !r
 instance Hashable v => Hashable1 (Antiquoted v)
 
 instance Hashable2 Antiquoted where
-    liftHashWithSalt2 ha _ salt (Plain a) =
-        ha (salt `hashWithSalt` (0 :: Int)) a
-    liftHashWithSalt2 _ _ salt EscapedNewline =
-        salt `hashWithSalt` (1 :: Int)
-    liftHashWithSalt2 _ hb salt (Antiquoted b) =
-        hb (salt `hashWithSalt` (2 :: Int)) b
+  liftHashWithSalt2 ha _ salt (Plain a) = ha (salt `hashWithSalt` (0 :: Int)) a
+  liftHashWithSalt2 _ _ salt EscapedNewline = salt `hashWithSalt` (1 :: Int)
+  liftHashWithSalt2 _ hb salt (Antiquoted b) =
+    hb (salt `hashWithSalt` (2 :: Int)) b
 #endif
 
 #if MIN_VERSION_deepseq(1, 4, 3)
@@ -289,7 +292,7 @@ instance Serialise r => Serialise (NString r)
 
 -- | For the the 'IsString' instance, we use a plain doublequoted string.
 instance IsString (NString r) where
-  fromString "" = DoubleQuoted []
+  fromString ""     = DoubleQuoted []
   fromString string = DoubleQuoted [Plain $ pack string]
 
 -- | A 'KeyName' is something that can appear on the left side of an
@@ -320,20 +323,20 @@ data NKeyName r
 instance Serialise r => Serialise (NKeyName r)
 
 instance Serialise Pos where
-    encode x = Ser.encode (unPos x)
-    decode = mkPos <$> Ser.decode
+  encode x = Ser.encode (unPos x)
+  decode = mkPos <$> Ser.decode
 
 instance Serialise SourcePos where
-    encode (SourcePos f l c) = Ser.encode f <> Ser.encode l <> Ser.encode c
-    decode = SourcePos <$> Ser.decode <*> Ser.decode <*> Ser.decode
+  encode (SourcePos f l c) = Ser.encode f <> Ser.encode l <> Ser.encode c
+  decode = SourcePos <$> Ser.decode <*> Ser.decode <*> Ser.decode
 #endif
 
 instance Hashable Pos where
-    hashWithSalt salt x = hashWithSalt salt (unPos x)
+  hashWithSalt salt x = hashWithSalt salt (unPos x)
 
 instance Hashable SourcePos where
-    hashWithSalt salt (SourcePos f l c) =
-        salt `hashWithSalt` f `hashWithSalt` l `hashWithSalt` c
+  hashWithSalt salt (SourcePos f l c) =
+    salt `hashWithSalt` f `hashWithSalt` l `hashWithSalt` c
 
 instance Generic1 NKeyName where
   type Rep1 NKeyName = NKeyName
@@ -342,10 +345,10 @@ instance Generic1 NKeyName where
 
 #if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData1 NKeyName where
-    liftRnf _ (StaticKey !_) = ()
-    liftRnf _ (DynamicKey (Plain !_)) = ()
-    liftRnf _ (DynamicKey EscapedNewline) = ()
-    liftRnf k (DynamicKey (Antiquoted r)) = k r
+  liftRnf _ (StaticKey  !_            ) = ()
+  liftRnf _ (DynamicKey (Plain !_)    ) = ()
+  liftRnf _ (DynamicKey EscapedNewline) = ()
+  liftRnf k (DynamicKey (Antiquoted r)) = k r
 #endif
 
 -- | Most key names are just static text, so this instance is convenient.
@@ -354,22 +357,26 @@ instance IsString (NKeyName r) where
 
 instance Eq1 NKeyName where
   liftEq eq (DynamicKey a) (DynamicKey b) = liftEq2 (liftEq eq) eq a b
-  liftEq _ (StaticKey a) (StaticKey b) = a == b
-  liftEq _ _ _ = False
+  liftEq _  (StaticKey  a) (StaticKey  b) = a == b
+  liftEq _  _              _              = False
 
 #if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 NKeyName where
   liftHashWithSalt h salt (DynamicKey a) =
-      liftHashWithSalt2 (liftHashWithSalt h) h (salt `hashWithSalt` (0 :: Int)) a
+    liftHashWithSalt2 (liftHashWithSalt h) h (salt `hashWithSalt` (0 :: Int)) a
   liftHashWithSalt _ salt (StaticKey n) =
-      salt `hashWithSalt` (1 :: Int) `hashWithSalt` n
+    salt `hashWithSalt` (1 :: Int) `hashWithSalt` n
 #endif
 
 -- Deriving this instance automatically is not possible because @r@
 -- occurs not only as last argument in @Antiquoted (NString r) r@
 instance Show1 NKeyName where
   liftShowsPrec sp sl p = \case
-    DynamicKey a -> showsUnaryWith (liftShowsPrec2 (liftShowsPrec sp sl) (liftShowList sp sl) sp sl) "DynamicKey" p a
+    DynamicKey a -> showsUnaryWith
+      (liftShowsPrec2 (liftShowsPrec sp sl) (liftShowList sp sl) sp sl)
+      "DynamicKey"
+      p
+      a
     StaticKey t -> showsUnaryWith showsPrec "StaticKey" p t
 
 -- Deriving this instance automatically is not possible because @r@
@@ -386,10 +393,10 @@ instance Foldable NKeyName where
 -- occurs not only as last argument in @Antiquoted (NString r) r@
 instance Traversable NKeyName where
   traverse f = \case
-    DynamicKey (Plain str)    -> DynamicKey . Plain <$> traverse f str
-    DynamicKey (Antiquoted e) -> DynamicKey . Antiquoted <$> f e
-    DynamicKey EscapedNewline -> pure $ DynamicKey EscapedNewline
-    StaticKey key -> pure (StaticKey key)
+    DynamicKey (Plain      str) -> DynamicKey . Plain <$> traverse f str
+    DynamicKey (Antiquoted e  ) -> DynamicKey . Antiquoted <$> f e
+    DynamicKey EscapedNewline   -> pure $ DynamicKey EscapedNewline
+    StaticKey  key              -> pure (StaticKey key)
 
 -- | A selector (for example in a @let@ or an attribute set) is made up
 -- of strung-together key names.
@@ -431,7 +438,7 @@ instance Serialise NBinaryOp
 
 -- | Get the name out of the parameter (there might be none).
 paramName :: Params r -> Maybe VarName
-paramName (Param n) = Just n
+paramName (Param n       ) = Just n
 paramName (ParamSet _ _ n) = n
 
 #if !MIN_VERSION_deepseq(1, 4, 3)
@@ -473,8 +480,8 @@ instance (Binary v, Binary a) => Binary (Antiquoted v a)
 instance Binary a => Binary (NString a)
 instance Binary a => Binary (Binding a)
 instance Binary Pos where
-    put x = Bin.put (unPos x)
-    get = mkPos <$> Bin.get
+  put x = Bin.put (unPos x)
+  get = mkPos <$> Bin.get
 instance Binary SourcePos
 instance Binary a => Binary (NKeyName a)
 instance Binary a => Binary (Params a)
@@ -487,7 +494,7 @@ instance (ToJSON v, ToJSON a) => ToJSON (Antiquoted v a)
 instance ToJSON a => ToJSON (NString a)
 instance ToJSON a => ToJSON (Binding a)
 instance ToJSON Pos where
-    toJSON x = toJSON (unPos x)
+  toJSON x = toJSON (unPos x)
 instance ToJSON SourcePos
 instance ToJSON a => ToJSON (NKeyName a)
 instance ToJSON a => ToJSON (Params a)
@@ -501,7 +508,7 @@ instance (FromJSON v, FromJSON a) => FromJSON (Antiquoted v a)
 instance FromJSON a => FromJSON (NString a)
 instance FromJSON a => FromJSON (Binding a)
 instance FromJSON Pos where
-    parseJSON = fmap mkPos . parseJSON
+  parseJSON = fmap mkPos . parseJSON
 instance FromJSON SourcePos
 instance FromJSON a => FromJSON (NKeyName a)
 instance FromJSON a => FromJSON (Params a)
@@ -526,43 +533,46 @@ class NExprAnn ann g | g -> ann where
     fromNExpr :: g r -> (NExprF r, ann)
     toNExpr :: (NExprF r, ann) -> g r
 
-ekey :: NExprAnn ann g
-     => NonEmpty Text
-     -> SourcePos
-     -> Lens' (Fix g) (Maybe (Fix g))
-ekey keys pos f e@(Fix x) | (NSet xs, ann) <- fromNExpr x =
-    case go xs of
-        ((v, []):_) -> fromMaybe e <$> f (Just v)
-        ((v, r:rest):_) -> ekey (r :| rest) pos f v
+ekey
+  :: NExprAnn ann g
+  => NonEmpty Text
+  -> SourcePos
+  -> Lens' (Fix g) (Maybe (Fix g))
+ekey keys pos f e@(Fix x) | (NSet xs, ann) <- fromNExpr x = case go xs of
+  ((v, []      ) : _) -> fromMaybe e <$> f (Just v)
+  ((v, r : rest) : _) -> ekey (r :| rest) pos f v
 
-        _ -> f Nothing <&> \case
-            Nothing -> e
-            Just v  ->
-                let entry = NamedVar (NE.map StaticKey keys) v pos
-                in Fix (toNExpr (NSet (entry : xs), ann))
-  where
-    go xs = do
-        let keys' = NE.toList keys
-        (ks, rest) <- zip (inits keys') (tails keys')
-        case ks of
-            [] -> empty
-            j:js -> do
-                NamedVar ns v _p <- xs
-                guard $ (j:js) == (NE.toList ns ^.. traverse._StaticKey)
-                return (v, rest)
+  _                   -> f Nothing <&> \case
+    Nothing -> e
+    Just v ->
+      let entry = NamedVar (NE.map StaticKey keys) v pos
+      in  Fix (toNExpr (NSet (entry : xs), ann))
+ where
+  go xs = do
+    let keys' = NE.toList keys
+    (ks, rest) <- zip (inits keys') (tails keys')
+    case ks of
+      []     -> empty
+      j : js -> do
+        NamedVar ns v _p <- xs
+        guard $ (j : js) == (NE.toList ns ^.. traverse . _StaticKey)
+        return (v, rest)
 
 ekey _ _ f e = fromMaybe e <$> f Nothing
 
 stripPositionInfo :: NExpr -> NExpr
 stripPositionInfo = transport phi
-  where
-    phi (NSet binds)         = NSet (map go binds)
-    phi (NRecSet binds)      = NRecSet (map go binds)
-    phi (NLet binds body)    = NLet (map go binds) body
-    phi x = x
+ where
+  phi (NSet    binds  ) = NSet (map go binds)
+  phi (NRecSet binds  ) = NRecSet (map go binds)
+  phi (NLet binds body) = NLet (map go binds) body
+  phi x                 = x
 
-    go (NamedVar path r _pos)  = NamedVar path r nullPos
-    go (Inherit ms names _pos) = Inherit ms names nullPos
+  go (NamedVar path r     _pos) = NamedVar path r nullPos
+  go (Inherit  ms   names _pos) = Inherit ms names nullPos
 
 nullPos :: SourcePos
 nullPos = SourcePos "<string>" (mkPos 1) (mkPos 1)
+
+
+

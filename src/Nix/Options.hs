@@ -1,6 +1,6 @@
 module Nix.Options where
 
-import           Data.Text (Text)
+import           Data.Text                      ( Text )
 import           Data.Time
 
 data Options = Options
@@ -37,37 +37,36 @@ data Options = Options
     deriving Show
 
 defaultOptions :: UTCTime -> Options
-defaultOptions current = Options
-    { verbose      = ErrorsOnly
-    , tracing      = False
-    , thunks       = False
-    , values       = False
-    , scopes       = False
-    , reduce       = Nothing
-    , reduceSets   = False
-    , reduceLists  = False
-    , parse        = False
-    , parseOnly    = False
-    , finder       = False
-    , findFile     = Nothing
-    , strict       = False
-    , evaluate     = False
-    , json         = False
-    , xml          = False
-    , attr         = Nothing
-    , include      = []
-    , check        = False
-    , readFrom     = Nothing
-    , cache        = False
-    , repl         = False
-    , ignoreErrors = False
-    , expression   = Nothing
-    , arg          = []
-    , argstr       = []
-    , fromFile     = Nothing
-    , currentTime  = current
-    , filePaths    = []
-    }
+defaultOptions current = Options { verbose      = ErrorsOnly
+                                 , tracing      = False
+                                 , thunks       = False
+                                 , values       = False
+                                 , scopes       = False
+                                 , reduce       = Nothing
+                                 , reduceSets   = False
+                                 , reduceLists  = False
+                                 , parse        = False
+                                 , parseOnly    = False
+                                 , finder       = False
+                                 , findFile     = Nothing
+                                 , strict       = False
+                                 , evaluate     = False
+                                 , json         = False
+                                 , xml          = False
+                                 , attr         = Nothing
+                                 , include      = []
+                                 , check        = False
+                                 , readFrom     = Nothing
+                                 , cache        = False
+                                 , repl         = False
+                                 , ignoreErrors = False
+                                 , expression   = Nothing
+                                 , arg          = []
+                                 , argstr       = []
+                                 , fromFile     = Nothing
+                                 , currentTime  = current
+                                 , filePaths    = []
+                                 }
 
 data Verbosity
     = ErrorsOnly

@@ -12,15 +12,15 @@
 
 module Nix.Normal where
 
-import Control.Monad
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.Reader
-import Control.Monad.Trans.State
-import Data.Set
-import Nix.Frames
-import Nix.String
-import Nix.Thunk
-import Nix.Value
+import           Control.Monad
+import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.Reader
+import           Control.Monad.Trans.State
+import           Data.Set
+import           Nix.Frames
+import           Nix.String
+import           Nix.Thunk
+import           Nix.Value
 
 newtype NormalLoop t f m = NormalLoop (NValue t f m)
     deriving Show
@@ -28,79 +28,88 @@ newtype NormalLoop t f m = NormalLoop (NValue t f m)
 instance MonadDataErrorContext t f m => Exception (NormalLoop t f m)
 
 normalForm'
-    :: forall e t m f.
-    ( Framed e m
-    , MonadThunk t m (NValue t f m)
-    , MonadDataErrorContext t f m
-    , Ord (ThunkId m)
-    )
-    => (forall r. t -> (NValue t f m -> m r) -> m r)
-    -> NValue t f m
-    -> m (NValueNF t f m)
+  :: forall e t m f
+   . ( Framed e m
+     , MonadThunk t m (NValue t f m)
+     , MonadDataErrorContext t f m
+     , Ord (ThunkId m)
+     )
+  => (forall r . t -> (NValue t f m -> m r) -> m r)
+  -> NValue t f m
+  -> m (NValueNF t f m)
 normalForm' f = run . nValueToNFM run go
-  where
-    start = 0 :: Int
-    table = mempty
+ where
+  start = 0 :: Int
+  table = mempty
 
-    run :: ReaderT Int (StateT (Set (ThunkId m)) m) r -> m r
-    run = (`evalStateT` table) . (`runReaderT` start)
+  run :: ReaderT Int (StateT (Set (ThunkId m)) m) r -> m r
+  run = (`evalStateT` table) . (`runReaderT` start)
 
-    go :: t
-       -> (NValue t f m
-              -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValueNF t f m))
+  go
+    :: t
+    -> (  NValue t f m
        -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValueNF t f m)
-    go t k = do
-        b <- seen t
-        if b
-            then return $ pure t
-            else do
-                i <- ask
-                when (i > 2000) $
-                    error "Exceeded maximum normalization depth of 2000 levels"
-                s <- lift get
-                (res, s') <- lift $ lift $ f t $ \v ->
-                    (`runStateT` s) . (`runReaderT` i) $ local succ $ k v
-                lift $ put s'
-                return res
+       )
+    -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValueNF t f m)
+  go t k = do
+    b <- seen t
+    if b
+      then return $ pure t
+      else do
+        i <- ask
+        when (i > 2000)
+          $ error "Exceeded maximum normalization depth of 2000 levels"
+        s         <- lift get
+        (res, s') <- lift $ lift $ f t $ \v ->
+          (`runStateT` s) . (`runReaderT` i) $ local succ $ k v
+        lift $ put s'
+        return res
 
-    seen t = case thunkId t of
-        Just tid -> lift $ do
-            res <- gets (member tid)
-            unless res $ modify (insert tid)
-            return res
-        Nothing ->
-            return False
+  seen t = case thunkId t of
+    Just tid -> lift $ do
+      res <- gets (member tid)
+      unless res $ modify (insert tid)
+      return res
+    Nothing -> return False
 
 normalForm
-    :: ( Framed e m
-      , MonadThunk t m (NValue t f m)
-      , MonadDataErrorContext t f m
-      , Ord (ThunkId m)
-      )
-    => NValue t f m -> m (NValueNF t f m)
+  :: ( Framed e m
+     , MonadThunk t m (NValue t f m)
+     , MonadDataErrorContext t f m
+     , Ord (ThunkId m)
+     )
+  => NValue t f m
+  -> m (NValueNF t f m)
 normalForm = normalForm' force
 
 normalForm_
-    :: ( Framed e m
-      , MonadThunk t m (NValue t f m)
-      , MonadDataErrorContext t f m
-      , Ord (ThunkId m)
-      )
-    => NValue t f m -> m ()
+  :: ( Framed e m
+     , MonadThunk t m (NValue t f m)
+     , MonadDataErrorContext t f m
+     , Ord (ThunkId m)
+     )
+  => NValue t f m
+  -> m ()
 normalForm_ = void <$> normalForm' forceEff
 
-removeEffects :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
-              => NValue t f m -> NValueNF t f m
+removeEffects
+  :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
+  => NValue t f m
+  -> NValueNF t f m
 removeEffects = nValueToNF (flip query opaque)
 
-removeEffectsM :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
-               => NValue t f m -> m (NValueNF t f m)
+removeEffectsM
+  :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
+  => NValue t f m
+  -> m (NValueNF t f m)
 removeEffectsM = nValueToNFM id (flip queryM (pure opaque))
 
-opaque :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
-       => NValueNF t f m
+opaque
+  :: (MonadThunk t m (NValue t f m), MonadDataContext f m) => NValueNF t f m
 opaque = nvStrNF $ principledMakeNixStringWithoutContext "<thunk>"
 
-dethunk :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
-        => t -> m (NValueNF t f m)
+dethunk
+  :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
+  => t
+  -> m (NValueNF t f m)
 dethunk t = queryM t (pure opaque) removeEffectsM

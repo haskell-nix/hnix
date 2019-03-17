@@ -1,10 +1,8 @@
 module Main where
 
-import Criterion.Main
+import           Criterion.Main
 
 import qualified ParserBench
 
 main :: IO ()
-main = defaultMain
-  [ ParserBench.benchmarks
-  ]
+main = defaultMain [ParserBench.benchmarks]

@@ -7,12 +7,12 @@
 -- 'Fix' wrapper.
 module Nix.Expr.Shorthands where
 
-import Data.Fix
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Text (Text)
-import Nix.Atoms
-import Nix.Expr.Types
-import Text.Megaparsec.Pos (SourcePos)
+import           Data.Fix
+import           Data.List.NonEmpty             ( NonEmpty(..) )
+import           Data.Text                      ( Text )
+import           Nix.Atoms
+import           Nix.Expr.Types
+import           Text.Megaparsec.Pos            ( SourcePos )
 
 -- | Make an integer literal expression.
 mkInt :: Integer -> NExpr
@@ -32,13 +32,13 @@ mkFloatF = NConstant . NFloat
 mkStr :: Text -> NExpr
 mkStr = Fix . NStr . DoubleQuoted . \case
   "" -> []
-  x -> [Plain x]
+  x  -> [Plain x]
 
 -- | Make an indented string.
 mkIndentedStr :: Int -> Text -> NExpr
 mkIndentedStr w = Fix . NStr . Indented w . \case
   "" -> []
-  x -> [Plain x]
+  x  -> [Plain x]
 
 -- | Make a path. Use 'True' if the path should be read from the
 -- environment, else 'False'.
@@ -47,7 +47,7 @@ mkPath b = Fix . mkPathF b
 
 mkPathF :: Bool -> FilePath -> NExprF a
 mkPathF False = NLiteralPath
-mkPathF True = NEnvPath
+mkPathF True  = NEnvPath
 
 -- | Make a path expression which pulls from the NIX_PATH env variable.
 mkEnvPath :: FilePath -> NExpr
@@ -162,15 +162,15 @@ infixr 2 $=
 appendBindings :: [Binding NExpr] -> NExpr -> NExpr
 appendBindings newBindings (Fix e) = case e of
   NLet bindings e' -> Fix $ NLet (bindings <> newBindings) e'
-  NSet bindings -> Fix $ NSet (bindings <> newBindings)
+  NSet    bindings -> Fix $ NSet (bindings <> newBindings)
   NRecSet bindings -> Fix $ NRecSet (bindings <> newBindings)
-  _ -> error "Can only append bindings to a set or a let"
+  _                -> error "Can only append bindings to a set or a let"
 
 -- | Applies a transformation to the body of a nix function.
 modifyFunctionBody :: (NExpr -> NExpr) -> NExpr -> NExpr
 modifyFunctionBody f (Fix e) = case e of
   NAbs params body -> Fix $ NAbs params (f body)
-  _ -> error "Not a function"
+  _                -> error "Not a function"
 
 -- | A let statement with multiple assignments.
 letsE :: [(Text, NExpr)] -> NExpr -> NExpr
@@ -201,8 +201,7 @@ mkBinop :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkBinop op e1 e2 = Fix (NBinary op e1 e2)
 
 -- | Various nix binary operators
-($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->),
-  ($//), ($+), ($-), ($*), ($/), ($++)
+($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->), ($//), ($+), ($-), ($*), ($/), ($++)
   :: NExpr -> NExpr -> NExpr
 e1 $== e2 = mkBinop NEq e1 e2
 e1 $!= e2 = mkBinop NNEq e1 e2

@@ -7,9 +7,9 @@
 
 module Nix.Thunk where
 
-import Control.Exception (Exception)
-import Control.Monad.Trans.Class (MonadTrans(..))
-import Data.Typeable (Typeable)
+import           Control.Exception              ( Exception )
+import           Control.Monad.Trans.Class      ( MonadTrans(..) )
+import           Data.Typeable                  ( Typeable )
 
 class ( Monad m
       , Eq (ThunkId m)
@@ -46,6 +46,6 @@ newtype ThunkLoop = ThunkLoop String -- contains rendering of ThunkId
     deriving Typeable
 
 instance Show ThunkLoop where
-    show (ThunkLoop i) = "ThunkLoop " ++ i
+  show (ThunkLoop i) = "ThunkLoop " ++ i
 
 instance Exception ThunkLoop

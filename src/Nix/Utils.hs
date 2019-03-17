@@ -12,28 +12,36 @@
 
 module Nix.Utils (module Nix.Utils, module X) where
 
-import           Control.Arrow ((&&&))
+import           Control.Arrow                  ( (&&&) )
 import           Control.Monad
 import           Control.Monad.Fix
-import qualified Data.Aeson as A
-import qualified Data.Aeson.Encoding as A
+import qualified Data.Aeson                    as A
+import qualified Data.Aeson.Encoding           as A
 import           Data.Fix
 import           Data.Hashable
-import           Data.HashMap.Lazy (HashMap)
-import qualified Data.HashMap.Lazy as M
-import           Data.List (sortOn)
-import           Data.Monoid (Endo, (<>))
-import           Data.Text (Text)
-import qualified Data.Text as Text
-import qualified Data.Vector as V
-import           Lens.Family2 as X
-import           Lens.Family2.Stock (_1, _2)
+import           Data.HashMap.Lazy              ( HashMap )
+import qualified Data.HashMap.Lazy             as M
+import           Data.List                      ( sortOn )
+import           Data.Monoid                    ( Endo
+                                                , (<>)
+                                                )
+import           Data.Text                      ( Text )
+import qualified Data.Text                     as Text
+import qualified Data.Vector                   as V
+import           Lens.Family2                  as X
+import           Lens.Family2.Stock             ( _1
+                                                , _2
+                                                )
 import           Lens.Family2.TH
 
 #if ENABLE_TRACING
 import           Debug.Trace as X
 #else
-import           Prelude as X hiding (putStr, putStrLn, print)
+import           Prelude                       as X
+                                         hiding ( putStr
+                                                , putStrLn
+                                                , print
+                                                )
 trace :: String -> a -> a
 trace = const id
 traceM :: Monad m => String -> m ()
@@ -71,7 +79,7 @@ para :: Functor f => (f (Fix f, a) -> a) -> Fix f -> a
 para f = f . fmap (id &&& para f) . unFix
 
 paraM :: (Traversable f, Monad m) => (f (Fix f, a) -> m a) -> Fix f -> m a
-paraM f = f <=< traverse (\x -> (x,) <$> paraM f x) . unFix
+paraM f = f <=< traverse (\x -> (x, ) <$> paraM f x) . unFix
 
 cataP :: Functor f => (Fix f -> f a -> a) -> Fix f -> a
 cataP f x = f x . fmap (cataP f) . unFix $ x
@@ -79,7 +87,7 @@ cataP f x = f x . fmap (cataP f) . unFix $ x
 cataPM :: (Traversable f, Monad m) => (Fix f -> f a -> m a) -> Fix f -> m a
 cataPM f x = f x <=< traverse (cataPM f) . unFix $ x
 
-transport :: Functor g => (forall x. f x -> g x) -> Fix f -> Fix g
+transport :: Functor g => (forall x . f x -> g x) -> Fix f -> Fix g
 transport f (Fix x) = Fix $ fmap (transport f) (f x)
 
 -- | adi is Abstracting Definitional Interpreters:
@@ -92,31 +100,36 @@ transport f (Fix x) = Fix $ fmap (transport f) (f x)
 adi :: Functor f => (f a -> a) -> ((Fix f -> a) -> Fix f -> a) -> Fix f -> a
 adi f g = g (f . fmap (adi f g) . unFix)
 
-adiM :: (Traversable t, Monad m)
-     => (t a -> m a) -> ((Fix t -> m a) -> Fix t -> m a) -> Fix t -> m a
+adiM
+  :: (Traversable t, Monad m)
+  => (t a -> m a)
+  -> ((Fix t -> m a) -> Fix t -> m a)
+  -> Fix t
+  -> m a
 adiM f g = g ((f <=< traverse (adiM f g)) . unFix)
 
 class Has a b where
     hasLens :: Lens' a b
 
 instance Has a a where
-    hasLens f = f
+  hasLens f = f
 
 instance Has (a, b) a where
-    hasLens = _1
+  hasLens = _1
 
 instance Has (a, b) b where
-    hasLens = _2
+  hasLens = _2
 
 toEncodingSorted :: A.Value -> A.Encoding
 toEncodingSorted = \case
-    A.Object m ->
-        A.pairs . mconcat
-                . fmap (\(k, v) -> A.pair k $ toEncodingSorted v)
-                . sortOn fst
-                $ M.toList m
-    A.Array l -> A.list toEncodingSorted $ V.toList l
-    v -> A.toEncoding v
+  A.Object m ->
+    A.pairs
+      . mconcat
+      . fmap (\(k, v) -> A.pair k $ toEncodingSorted v)
+      . sortOn fst
+      $ M.toList m
+  A.Array l -> A.list toEncodingSorted $ V.toList l
+  v         -> A.toEncoding v
 
 data NixPathEntryType = PathEntryPath | PathEntryURI deriving (Show, Eq)
 
@@ -124,16 +137,30 @@ data NixPathEntryType = PathEntryPath | PathEntryURI deriving (Show, Eq)
 -- (i.e. @https://...@)
 uriAwareSplit :: Text -> [(Text, NixPathEntryType)]
 uriAwareSplit = go where
-    go str = case Text.break (== ':') str of
-        (e1, e2)
-            | Text.null e2 -> [(e1, PathEntryPath)]
-            | Text.pack "://" `Text.isPrefixOf` e2 ->
-                let ((suffix, _):path) = go (Text.drop 3 e2)
-                 in (e1 <> Text.pack "://" <> suffix, PathEntryURI) : path
-            | otherwise -> (e1, PathEntryPath) : go (Text.drop 1 e2)
+  go str = case Text.break (== ':') str of
+    (e1, e2)
+      | Text.null e2
+      -> [(e1, PathEntryPath)]
+      | Text.pack "://" `Text.isPrefixOf` e2
+      -> let ((suffix, _) : path) = go (Text.drop 3 e2)
+         in  (e1 <> Text.pack "://" <> suffix, PathEntryURI) : path
+      | otherwise
+      -> (e1, PathEntryPath) : go (Text.drop 1 e2)
 
-alterF :: (Eq k, Hashable k, Functor f)
-       => (Maybe v -> f (Maybe v)) -> k -> HashMap k v -> f (HashMap k v)
+alterF
+  :: (Eq k, Hashable k, Functor f)
+  => (Maybe v -> f (Maybe v))
+  -> k
+  -> HashMap k v
+  -> f (HashMap k v)
 alterF f k m = f (M.lookup k m) <&> \case
-    Nothing -> M.delete k m
-    Just v  -> M.insert k v m
+  Nothing -> M.delete k m
+  Just v  -> M.insert k v m
+
+
+
+
+
+
+
+

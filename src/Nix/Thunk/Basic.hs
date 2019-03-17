@@ -15,12 +15,12 @@
 
 module Nix.Thunk.Basic (NThunkF(..), Deferred(..), MonadBasicThunk) where
 
-import Control.Exception hiding (catch)
-import Control.Monad.Catch
+import           Control.Exception       hiding ( catch )
+import           Control.Monad.Catch
 
-import Nix.Thunk
-import Nix.Utils
-import Nix.Var
+import           Nix.Thunk
+import           Nix.Utils
+import           Nix.Var
 
 data Deferred m v = Deferred (m v) | Computed v
     deriving (Functor, Foldable, Traversable)
@@ -31,98 +31,95 @@ data NThunkF m v
     | Thunk (ThunkId m) (Var m Bool) (Var m (Deferred m v))
 
 instance (Eq v, Eq (ThunkId m)) => Eq (NThunkF m v) where
-    Value x == Value y = x == y
-    Thunk x _ _ == Thunk y _ _ = x == y
-    _ == _ = False              -- jww (2019-03-16): not accurate...
+  Value x     == Value y     = x == y
+  Thunk x _ _ == Thunk y _ _ = x == y
+  _           == _           = False              -- jww (2019-03-16): not accurate...
 
 instance Show v => Show (NThunkF m v) where
-    show (Value v) = show v
-    show (Thunk _ _ _) = "<thunk>"
+  show (Value v    ) = show v
+  show (Thunk _ _ _) = "<thunk>"
 
 type MonadBasicThunk m = (MonadThunkId m, MonadVar m)
 
 instance (MonadBasicThunk m, MonadCatch m)
   => MonadThunk (NThunkF m v) m v where
-    thunk     = buildThunk
-    thunkId   = \case
-        Value _     -> Nothing
-        Thunk n _ _ -> Just n
-    query     = queryValue
-    queryM    = queryThunk
-    force     = forceThunk
-    forceEff  = forceEffects
-    wrapValue = valueRef
-    getValue  = thunkValue
+  thunk   = buildThunk
+  thunkId = \case
+    Value _     -> Nothing
+    Thunk n _ _ -> Just n
+  query     = queryValue
+  queryM    = queryThunk
+  force     = forceThunk
+  forceEff  = forceEffects
+  wrapValue = valueRef
+  getValue  = thunkValue
 
 valueRef :: v -> NThunkF m v
 valueRef = Value
 
 thunkValue :: NThunkF m v -> Maybe v
 thunkValue (Value v) = Just v
-thunkValue _ = Nothing
+thunkValue _         = Nothing
 
 buildThunk :: MonadBasicThunk m => m v -> m (NThunkF m v)
-buildThunk action =do
-    freshThunkId <- freshId
-    Thunk freshThunkId <$> newVar False <*> newVar (Deferred action)
+buildThunk action = do
+  freshThunkId <- freshId
+  Thunk freshThunkId <$> newVar False <*> newVar (Deferred action)
 
 queryValue :: MonadVar m => NThunkF m v -> a -> (v -> a) -> a
 queryValue (Value v) _ k = k v
-queryValue _ n _ = n
+queryValue _         n _ = n
 
 queryThunk :: MonadVar m => NThunkF m v -> m a -> (v -> m a) -> m a
-queryThunk (Value v) _ k = k v
+queryThunk (Value v           ) _ k = k v
 queryThunk (Thunk _ active ref) n k = do
-    nowActive <- atomicModifyVar active (True,)
-    if nowActive
-        then n
-        else do
-            eres <- readVar ref
-            res <- case eres of
-                Computed v -> k v
-                _ -> n
-            _ <- atomicModifyVar active (False,)
-            return res
+  nowActive <- atomicModifyVar active (True, )
+  if nowActive
+    then n
+    else do
+      eres <- readVar ref
+      res  <- case eres of
+        Computed v -> k v
+        _          -> n
+      _ <- atomicModifyVar active (False, )
+      return res
 
 forceThunk
-    :: forall m v a.
-    ( MonadVar m
-    , MonadThrow m
-    , MonadCatch m
-    , Show (ThunkId m)
-    )
-    => NThunkF m v -> (v -> m a) -> m a
-forceThunk (Value v) k = k v
+  :: forall m v a
+   . (MonadVar m, MonadThrow m, MonadCatch m, Show (ThunkId m))
+  => NThunkF m v
+  -> (v -> m a)
+  -> m a
+forceThunk (Value v           ) k = k v
 forceThunk (Thunk n active ref) k = do
-    eres <- readVar ref
-    case eres of
-        Computed v -> k v
-        Deferred action -> do
-            nowActive <- atomicModifyVar active (True,)
-            if nowActive
-                then
-                    throwM $ ThunkLoop $ show n
-                else do
-                    traceM $ "Forcing " ++ show n
-                    v <- catch action $ \(e :: SomeException) -> do
-                        _ <- atomicModifyVar active (False,)
-                        throwM e
-                    _ <- atomicModifyVar active (False,)
-                    writeVar ref (Computed v)
-                    k v
+  eres <- readVar ref
+  case eres of
+    Computed v      -> k v
+    Deferred action -> do
+      nowActive <- atomicModifyVar active (True, )
+      if nowActive
+        then throwM $ ThunkLoop $ show n
+        else do
+          traceM $ "Forcing " ++ show n
+          v <- catch action $ \(e :: SomeException) -> do
+            _ <- atomicModifyVar active (False, )
+            throwM e
+          _ <- atomicModifyVar active (False, )
+          writeVar ref (Computed v)
+          k v
 
 forceEffects :: MonadVar m => NThunkF m v -> (v -> m r) -> m r
-forceEffects (Value v) k = k v
+forceEffects (Value v           ) k = k v
 forceEffects (Thunk _ active ref) k = do
-    nowActive <- atomicModifyVar active (True,)
-    if nowActive
-        then return $ error "Loop detected"
-        else do
-            eres <- readVar ref
-            case eres of
-                Computed v -> k v
-                Deferred action -> do
-                    v <- action
-                    writeVar ref (Computed v)
-                    _ <- atomicModifyVar active (False,)
-                    k v
+  nowActive <- atomicModifyVar active (True, )
+  if nowActive
+    then return $ error "Loop detected"
+    else do
+      eres <- readVar ref
+      case eres of
+        Computed v      -> k v
+        Deferred action -> do
+          v <- action
+          writeVar ref (Computed v)
+          _ <- atomicModifyVar active (False, )
+          k v

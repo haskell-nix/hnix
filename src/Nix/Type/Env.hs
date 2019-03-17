@@ -1,24 +1,25 @@
-module Nix.Type.Env (
-  Env(..),
-  empty,
-  lookup,
-  remove,
-  extend,
-  extends,
-  merge,
-  mergeEnvs,
-  singleton,
-  keys,
-  fromList,
-  toList,
-) where
+module Nix.Type.Env
+  ( Env(..)
+  , empty
+  , lookup
+  , remove
+  , extend
+  , extends
+  , merge
+  , mergeEnvs
+  , singleton
+  , keys
+  , fromList
+  , toList
+  )
+where
 
-import           Prelude hiding (lookup)
+import           Prelude                 hiding ( lookup )
 
 import           Nix.Type.Type
 
-import           Data.Foldable hiding (toList)
-import qualified Data.Map as Map
+import           Data.Foldable           hiding ( toList )
+import qualified Data.Map                      as Map
 
 -------------------------------------------------------------------------------
 -- Typing Environment
@@ -37,8 +38,7 @@ remove :: Env -> Name -> Env
 remove (TypeEnv env) var = TypeEnv (Map.delete var env)
 
 extends :: Env -> [(Name, [Scheme])] -> Env
-extends env xs =
-    env { types = Map.union (Map.fromList xs) (types env) }
+extends env xs = env { types = Map.union (Map.fromList xs) (types env) }
 
 lookup :: Name -> Env -> Maybe [Scheme]
 lookup key (TypeEnv tys) = Map.lookup key tys
@@ -65,5 +65,5 @@ instance Semigroup Env where
   (<>) = merge
 
 instance Monoid Env where
-  mempty = empty
+  mempty  = empty
   mappend = merge

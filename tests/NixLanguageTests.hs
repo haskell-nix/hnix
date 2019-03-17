@@ -4,19 +4,21 @@
 
 module NixLanguageTests (genTests) where
 
-import           Control.Arrow ((&&&))
+import           Control.Arrow                  ( (&&&) )
 import           Control.Exception
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.ST
-import           Data.List (delete, sort)
-import           Data.List.Split (splitOn)
-import           Data.Map (Map)
-import qualified Data.Map as Map
-import           Data.Set (Set)
-import qualified Data.Set as Set
-import qualified Data.Text as Text
-import qualified Data.Text.IO as Text
+import           Data.List                      ( delete
+                                                , sort
+                                                )
+import           Data.List.Split                ( splitOn )
+import           Data.Map                       ( Map )
+import qualified Data.Map                      as Map
+import           Data.Set                       ( Set )
+import qualified Data.Set                      as Set
+import qualified Data.Text                     as Text
+import qualified Data.Text.IO                  as Text
 import           Data.Time
 import           GHC.Exts
 import           Nix.Lint
@@ -27,10 +29,12 @@ import           Nix.Pretty
 import           Nix.String
 import           Nix.Utils
 import           Nix.XML
-import qualified Options.Applicative as Opts
+import qualified Options.Applicative           as Opts
 import           System.Environment
 import           System.FilePath
-import           System.FilePath.Glob (compile, globDir1)
+import           System.FilePath.Glob           ( compile
+                                                , globDir1
+                                                )
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           TestCommon
@@ -72,103 +76,123 @@ newFailingTests = Set.fromList
 
 genTests :: IO TestTree
 genTests = do
-  testFiles <- sort
+  testFiles <-
+    sort
         -- jww (2018-05-07): Temporarily disable this test until #128 is fixed.
-      . filter ((`Set.notMember` newFailingTests) . takeBaseName)
-      . filter ((/= ".xml") . takeExtension)
-      <$> globDir1 (compile "*-*-*.*") "data/nix/tests/lang"
+    .   filter ((`Set.notMember` newFailingTests) . takeBaseName)
+    .   filter ((/= ".xml") . takeExtension)
+    <$> globDir1 (compile "*-*-*.*") "data/nix/tests/lang"
   let testsByName = groupBy (takeFileName . dropExtensions) testFiles
   let testsByType = groupBy testType (Map.toList testsByName)
   let testGroups  = map mkTestGroup (Map.toList testsByType)
-  return $ localOption (mkTimeout 2000000)
-         $ testGroup "Nix (upstream) language tests" testGroups
-  where
-    testType (fullpath, _files) =
-        take 2 $ splitOn "-" $ takeFileName fullpath
-    mkTestGroup (kind, tests) =
-        testGroup (unwords kind) $ map (mkTestCase kind) tests
-    mkTestCase kind (basename, files) =
-        testCase (takeFileName basename) $ do
-            time <- liftIO getCurrentTime
-            let opts = defaultOptions time
-            case kind of
-                ["parse", "okay"] -> assertParse opts $ the files
-                ["parse", "fail"] -> assertParseFail opts $ the files
-                ["eval", "okay"]  -> assertEval opts files
-                ["eval", "fail"]  -> assertEvalFail $ the files
-                _ -> error $ "Unexpected: " ++ show kind
+  return $ localOption (mkTimeout 2000000) $ testGroup
+    "Nix (upstream) language tests"
+    testGroups
+ where
+  testType (fullpath, _files) = take 2 $ splitOn "-" $ takeFileName fullpath
+  mkTestGroup (kind, tests) =
+    testGroup (unwords kind) $ map (mkTestCase kind) tests
+  mkTestCase kind (basename, files) = testCase (takeFileName basename) $ do
+    time <- liftIO getCurrentTime
+    let opts = defaultOptions time
+    case kind of
+      ["parse", "okay"] -> assertParse opts $ the files
+      ["parse", "fail"] -> assertParseFail opts $ the files
+      ["eval" , "okay"] -> assertEval opts files
+      ["eval" , "fail"] -> assertEvalFail $ the files
+      _                 -> error $ "Unexpected: " ++ show kind
 
 assertParse :: Options -> FilePath -> Assertion
 assertParse _opts file = parseNixFileLoc file >>= \case
   Success _expr -> return () -- pure $! runST $ void $ lint opts expr
-  Failure err  ->
-      assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
+  Failure err ->
+    assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
 
 assertParseFail :: Options -> FilePath -> Assertion
 assertParseFail opts file = do
-    eres <- parseNixFileLoc file
-    catch (case eres of
-               Success expr -> do
-                   _ <- pure $! runST $ void $ lint opts expr
-                   assertFailure $ "Unexpected success parsing `"
-                       ++ file ++ ":\nParsed value: " ++ show expr
-               Failure _ -> return ()) $ \(_ :: SomeException) ->
-        return ()
+  eres <- parseNixFileLoc file
+  catch
+      (case eres of
+        Success expr -> do
+          _ <- pure $! runST $ void $ lint opts expr
+          assertFailure
+            $  "Unexpected success parsing `"
+            ++ file
+            ++ ":\nParsed value: "
+            ++ show expr
+        Failure _ -> return ()
+      )
+    $ \(_ :: SomeException) -> return ()
 
 assertLangOk :: Options -> FilePath -> Assertion
 assertLangOk opts file = do
-  actual <- printNix <$> hnixEvalFile opts (file ++ ".nix")
+  actual   <- printNix <$> hnixEvalFile opts (file ++ ".nix")
   expected <- Text.readFile $ file ++ ".exp"
   assertEqual "" expected $ Text.pack (actual ++ "\n")
 
 assertLangOkXml :: Options -> FilePath -> Assertion
 assertLangOkXml opts file = do
-  actual <- principledStringIgnoreContext . toXML <$> hnixEvalFile opts (file ++ ".nix")
+  actual <- principledStringIgnoreContext . toXML <$> hnixEvalFile
+    opts
+    (file ++ ".nix")
   expected <- Text.readFile $ file ++ ".exp.xml"
   assertEqual "" expected actual
 
 assertEval :: Options -> [FilePath] -> Assertion
 assertEval _opts files = do
-    time <- liftIO getCurrentTime
-    let opts = defaultOptions time
-    case delete ".nix" $ sort $ map takeExtensions files of
-        [] -> () <$ hnixEvalFile opts (name ++ ".nix")
-        [".exp"] -> assertLangOk opts name
-        [".exp.xml"] -> assertLangOkXml opts name
-        [".exp.disabled"] -> return ()
-        [".exp-disabled"] -> return ()
-        [".exp", ".flags"] -> do
-            liftIO $ unsetEnv "NIX_PATH"
-            flags <- Text.readFile (name ++ ".flags")
-            let flags' | Text.last flags == '\n' = Text.init flags
-                       | otherwise = flags
-            case Opts.execParserPure Opts.defaultPrefs (nixOptionsInfo time)
-                     (fixup (map Text.unpack (Text.splitOn " " flags'))) of
-                Opts.Failure err -> errorWithoutStackTrace $
-                    "Error parsing flags from " ++ name ++ ".flags: "
-                        ++ show err
-                Opts.Success opts' ->
-                    assertLangOk
-                        (opts' { include = include opts' ++
-                                   [ "nix=../../../../data/nix/corepkgs"
-                                   , "lang/dir4"
-                                   , "lang/dir5" ] })
-                        name
-                Opts.CompletionInvoked _ -> error "unused"
-        _ -> assertFailure $ "Unknown test type " ++ show files
-  where
-    name = "data/nix/tests/lang/"
-        ++ the (map (takeFileName . dropExtensions) files)
+  time <- liftIO getCurrentTime
+  let opts = defaultOptions time
+  case delete ".nix" $ sort $ map takeExtensions files of
+    []                 -> () <$ hnixEvalFile opts (name ++ ".nix")
+    [".exp"         ]  -> assertLangOk opts name
+    [".exp.xml"     ]  -> assertLangOkXml opts name
+    [".exp.disabled"]  -> return ()
+    [".exp-disabled"]  -> return ()
+    [".exp", ".flags"] -> do
+      liftIO $ unsetEnv "NIX_PATH"
+      flags <- Text.readFile (name ++ ".flags")
+      let flags' | Text.last flags == '\n' = Text.init flags
+                 | otherwise               = flags
+      case
+          Opts.execParserPure
+            Opts.defaultPrefs
+            (nixOptionsInfo time)
+            (fixup (map Text.unpack (Text.splitOn " " flags')))
+        of
+          Opts.Failure err ->
+            errorWithoutStackTrace
+              $  "Error parsing flags from "
+              ++ name
+              ++ ".flags: "
+              ++ show err
+          Opts.Success opts' -> assertLangOk
+            (opts'
+              { include = include opts'
+                            ++ [ "nix=../../../../data/nix/corepkgs"
+                               , "lang/dir4"
+                               , "lang/dir5"
+                               ]
+              }
+            )
+            name
+          Opts.CompletionInvoked _ -> error "unused"
+    _ -> assertFailure $ "Unknown test type " ++ show files
+ where
+  name =
+    "data/nix/tests/lang/" ++ the (map (takeFileName . dropExtensions) files)
 
-    fixup ("--arg":x:y:rest) = "--arg":(x ++ "=" ++ y):fixup rest
-    fixup ("--argstr":x:y:rest) = "--argstr":(x ++ "=" ++ y):fixup rest
-    fixup (x:rest) = x:fixup rest
-    fixup [] = []
+  fixup ("--arg"    : x : y : rest) = "--arg" : (x ++ "=" ++ y) : fixup rest
+  fixup ("--argstr" : x : y : rest) = "--argstr" : (x ++ "=" ++ y) : fixup rest
+  fixup (x                  : rest) = x : fixup rest
+  fixup []                          = []
 
 assertEvalFail :: FilePath -> Assertion
 assertEvalFail file = catch ?? (\(_ :: SomeException) -> return ()) $ do
-  time <- liftIO getCurrentTime
+  time       <- liftIO getCurrentTime
   evalResult <- printNix <$> hnixEvalFile (defaultOptions time) file
-  evalResult `seq` assertFailure $
-      file ++ " should not evaluate.\nThe evaluation result was `"
-           ++ evalResult ++ "`."
+  evalResult
+    `seq` assertFailure
+    $     file
+    ++    " should not evaluate.\nThe evaluation result was `"
+    ++    evalResult
+    ++    "`."
