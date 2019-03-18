@@ -281,6 +281,8 @@ builtinsList = sequence
   , add  Normal   "tryEval"          tryEval
   , add  Normal   "typeOf"           typeOf
   , add  Normal   "valueSize"        getRecursiveSize
+  , add  Normal   "getContext"                 getContext
+  , add2 Normal   "appendContext"              appendContext
 
   , add2 Normal   "unsafeGetAttrPos"           unsafeGetAttrPos
   , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
@@ -402,10 +404,7 @@ unsafeGetAttrPos x y = x >>= \x' -> y >>= \y' -> case (x', y') of
 -- This function is a bit special in that it doesn't care about the contents
 -- of the list.
 length_
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 length_ = toValue . (length :: [t] -> Int) <=< fromValue
 
 add_
@@ -584,10 +583,7 @@ splitDrvName s =
     (Text.intercalate sep namePieces, Text.intercalate sep versionPieces)
 
 parseDrvName
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 parseDrvName = fromValue >=> fromStringNoContext >=> \s -> do
   let (name :: Text, version :: Text) = splitDrvName s
   -- jww (2018-04-15): There should be an easier way to write this.
@@ -615,8 +611,10 @@ match_ pat str = fromValue pat >>= fromStringNoContext >>= \p ->
     let s  = principledStringIgnoreContext ns
 
     let re = makeRegex (encodeUtf8 p) :: Regex
-    let mkMatch t | Text.null t = toValue () -- Shorthand for Null
-                  | otherwise   = toValue $ principledMakeNixStringWithoutContext t
+    let mkMatch t
+          | Text.null t = toValue ()
+          | -- Shorthand for Null
+            otherwise   = toValue $ principledMakeNixStringWithoutContext t
     case matchOnceText re (encodeUtf8 s) of
       Just ("", sarr, "") -> do
         let s = map fst (elems sarr)
@@ -666,8 +664,7 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
 thunkStr s =
   valueThunk (nvStr (hackyMakeNixStringWithoutContext (decodeUtf8 s)))
 
-substring
-  :: MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
+substring :: MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
 substring start len str = Prim $ if start < 0 --NOTE: negative values of 'len' are OK
   then
     throwError
@@ -677,10 +674,7 @@ substring start len str = Prim $ if start < 0 --NOTE: negative values of 'len' a
   else pure $ principledModifyNixContents (Text.take len . Text.drop start) str
 
 attrNames
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 attrNames =
   fromValue @(AttrSet t)
     >=> toNix
@@ -689,10 +683,7 @@ attrNames =
     .   M.keys
 
 attrValues
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 attrValues =
   fromValue @(AttrSet t)
     >=> toValue
@@ -740,7 +731,10 @@ filter_
   -> m (NValue t f m)
   -> m (NValue t f m)
 filter_ fun xs = fun >>= \f ->
-  toValue <=< filterM (fromValue <=< callFunc f . force') <=< fromValue @[t] $ xs
+  toValue
+    <=< filterM (fromValue <=< callFunc f . force')
+    <=< fromValue @[t]
+    $   xs
 
 catAttrs
   :: forall e t f m
@@ -752,7 +746,8 @@ catAttrs attrName xs = fromValue attrName >>= fromStringNoContext >>= \n ->
   fromValue @[t] xs >>= \l ->
     fmap (nvList . catMaybes)
       $ forM l
-      $ fmap (M.lookup n) . flip force fromValue
+      $ fmap (M.lookup n)
+      . flip force fromValue
 
 baseNameOf :: MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 baseNameOf x = do
@@ -873,30 +868,31 @@ genList generator = fromValue @Integer >=> \n -> if n >= 0
 newtype WValue t f m a = WValue (NValue' t f m a)
 
 instance Comonad f => Eq (WValue t f m a) where
-  WValue (NVConstant (NFloat x)) == WValue (NVConstant (NInt y))   = x == fromInteger y
-  WValue (NVConstant (NInt x))   == WValue (NVConstant (NFloat y)) = fromInteger x == y
+  WValue (NVConstant (NFloat x)) == WValue (NVConstant (NInt y)) =
+    x == fromInteger y
+  WValue (NVConstant (NInt x)) == WValue (NVConstant (NFloat y)) =
+    fromInteger x == y
   WValue (NVConstant (NInt   x)) == WValue (NVConstant (NInt   y)) = x == y
   WValue (NVConstant (NFloat x)) == WValue (NVConstant (NFloat y)) = x == y
-  WValue (NVPath x)              == WValue (NVPath y)              = x == y
-  WValue (NVStr x)               == WValue (NVStr y) =
-    hackyStringIgnoreContext x   == hackyStringIgnoreContext y
+  WValue (NVPath     x         ) == WValue (NVPath     y         ) = x == y
+  WValue (NVStr x) == WValue (NVStr y) =
+    hackyStringIgnoreContext x == hackyStringIgnoreContext y
   _ == _ = False
 
 instance Comonad f => Ord (WValue t f m a) where
-  WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NInt y))   = x <= fromInteger y
-  WValue (NVConstant (NInt x))   <= WValue (NVConstant (NFloat y)) = fromInteger x <= y
+  WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NInt y)) =
+    x <= fromInteger y
+  WValue (NVConstant (NInt x)) <= WValue (NVConstant (NFloat y)) =
+    fromInteger x <= y
   WValue (NVConstant (NInt   x)) <= WValue (NVConstant (NInt   y)) = x <= y
   WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NFloat y)) = x <= y
-  WValue (NVPath x)              <= WValue (NVPath y)              = x <= y
-  WValue (NVStr x)               <= WValue (NVStr y) =
-    hackyStringIgnoreContext x   <= hackyStringIgnoreContext y
+  WValue (NVPath     x         ) <= WValue (NVPath     y         ) = x <= y
+  WValue (NVStr x) <= WValue (NVStr y) =
+    hackyStringIgnoreContext x <= hackyStringIgnoreContext y
   _ <= _ = False
 
 genericClosure
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 genericClosure = fromValue @(AttrSet t) >=> \s ->
   case (M.lookup "startSet" s, M.lookup "operator" s) of
     (Nothing, Nothing) ->
@@ -1009,10 +1005,7 @@ intersectAttrs set1 set2 =
       return $ nvSet (s2 `M.intersection` s1) (p2 `M.intersection` p1)
 
 functionArgs
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 functionArgs fun = fun >>= \case
   NVClosure p _ ->
     toValue @(AttrSet t) $ valueThunk . nvConstant . NBool <$> case p of
@@ -1064,52 +1057,31 @@ hasKind = fromValueMay >=> toNix . \case
   _             -> False
 
 isAttrs
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 isAttrs = hasKind @(AttrSet t)
 
 isList
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 isList = hasKind @[t]
 
 isString
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 isString = hasKind @NixString
 
 isInt
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 isInt = hasKind @Int
 
 isFloat
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 isFloat = hasKind @Float
 
 isBool
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 isBool = hasKind @Bool
 
 isNull
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 isNull = hasKind @()
 
 isFunction :: MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
@@ -1123,10 +1095,7 @@ throw_ mnv = do
   throwError . ErrorCall . Text.unpack $ principledStringIgnoreContext ns
 
 import_
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 import_ = scopedImport (pure (nvSet M.empty M.empty))
 
 scopedImport
@@ -1202,20 +1171,15 @@ lessThan ta tb = ta >>= \va -> tb >>= \vb -> do
     _ -> badType
 
 concatLists
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 concatLists =
   fromValue @[t]
     >=> mapM (flip force $ fromValue @[t] >=> pure)
-    >=> toValue . concat
+    >=> toValue
+    .   concat
 
 listToAttrs
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 listToAttrs = fromValue @[t] >=> \l ->
   fmap (flip nvSet M.empty . M.fromList . reverse)
     $   forM l
@@ -1338,10 +1302,7 @@ instance Convertible e t f m => ToNix FileType m (NValue t f m) where
     FileTypeUnknown   -> "unknown"
 
 readDir_
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 readDir_ pathThunk = do
   path           <- absolutePathFromValue =<< pathThunk
   items          <- listDirectory path
@@ -1356,10 +1317,7 @@ readDir_ pathThunk = do
   toNix (M.fromList itemsWithTypes)
 
 fromJSON
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 fromJSON = fromValue >=> fromStringNoContext >=> \encoded ->
   case A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded of
     Left jsonError ->
@@ -1405,10 +1363,7 @@ typeOf v = v >>= toNix . principledMakeNixStringWithoutContext . \case
   _             -> error "Pattern synonyms obscure complete patterns"
 
 tryEval
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 tryEval e = catch (onSuccess <$> e) (pure . onError)
  where
   onSuccess v = flip nvSet M.empty $ M.fromList
@@ -1443,10 +1398,7 @@ addErrorContext
 addErrorContext _ action = action
 
 exec_
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 exec_ xs = do
   ls <- fromValue @[t] xs
   xs <- traverse (coerceToString DontCopyToStore CoerceStringy <=< force') ls
@@ -1456,10 +1408,7 @@ exec_ xs = do
   exec (map (Text.unpack . hackyStringIgnoreContext) xs)
 
 fetchurl
-  :: forall e t f m
-   . MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 fetchurl v = v >>= \case
   NVSet s _ -> attrsetGet "url" s >>= force ?? (go (M.lookup "sha256" s))
   v@NVStr{} -> go Nothing v
@@ -1510,9 +1459,64 @@ currentTime_ = do
   opts :: Options <- asks (view hasLens)
   toNix @Integer $ round $ Time.utcTimeToPOSIXSeconds (currentTime opts)
 
-derivationStrict_
-  :: MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
+derivationStrict_ :: MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 derivationStrict_ = (>>= derivationStrict)
+
+getContext
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
+getContext x = x >>= \x' -> case x' of
+  (NVStr ns) -> do
+    let context =
+          getNixLikeContext $ toNixLikeContext $ principledGetContext ns
+    valued :: M.HashMap Text (NValue t f m) <- sequenceA $ M.map toValue context
+    pure $ flip nvSet M.empty $ M.map wrapValue valued
+  x ->
+    throwError $ ErrorCall $ "Invalid type for builtins.getContext: " ++ show x
+
+appendContext
+  :: forall e t f m
+   . MonadNix e t f m
+  => m (NValue t f m)
+  -> m (NValue t f m)
+  -> m (NValue t f m)
+appendContext x y = x >>= \x' -> y >>= \y' -> case (x', y') of
+  (NVStr ns, NVSet attrs _) -> do
+    newContextValues <- forM attrs $ force' >=> \case
+      NVSet attrs _ -> do
+        -- TODO: Fail for unexpected keys.
+        path <- maybe (return False) (force ?? fromValue)
+          $ M.lookup "path" attrs
+        allOutputs <- maybe (return False) (force ?? fromValue)
+          $ M.lookup "allOutputs" attrs
+        outputs <- case M.lookup "outputs" attrs of
+          Nothing -> return []
+          Just os -> force' os >>= \case
+            NVList vs ->
+              forM vs $ fmap principledStringIgnoreContext . fromNix . force'
+            x ->
+              throwError
+                $ ErrorCall
+                $ "Invalid types for context value outputs in builtins.appendContext: "
+                ++ show x
+        return $ NixLikeContextValue path allOutputs outputs
+      x ->
+        throwError
+          $  ErrorCall
+          $  "Invalid types for context value in builtins.appendContext: "
+          ++ show x
+    toValue
+      $ principledMakeNixString (principledStringIgnoreContext ns)
+      $ fromNixLikeContext
+      $ NixLikeContext
+      $ M.unionWith (<>) newContextValues
+      $ getNixLikeContext
+      $ toNixLikeContext
+      $ principledGetContext ns
+  (x, y) ->
+    throwError
+      $  ErrorCall
+      $  "Invalid types for builtins.appendContext: "
+      ++ show (x, y)
 
 newtype Prim m a = Prim { runPrim :: m a }
 
@@ -1530,4 +1534,3 @@ instance ( MonadNix e t f m
       => ToBuiltin t f m (a -> b) where
   toBuiltin name f =
     return $ nvBuiltin name (fromNix >=> fmap wrapValue . toBuiltin name . f)
-
