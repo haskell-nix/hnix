@@ -11,7 +11,7 @@ import           Data.Text                      ( Text
                                                 )
 import           Data.Time
 import           Nix
-import           Nix.Exec                       ()
+import           Nix.Exec                       ( )
 import           Nix.Thunk.Standard
 import           System.Environment
 import           System.IO

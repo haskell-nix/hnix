@@ -86,20 +86,28 @@ import           GHC.DataSize
 #endif
 
 type MonadCited t f m
-    = ( HasCitations1 t m (NValue t f m) f
-      , MonadDataContext f m
-      )
+  = (HasCitations1 t m (NValue t f m) f, MonadDataContext f m)
 
-nvConstantP :: MonadCited t f m => Provenance t m (NValue t f m) -> NAtom -> NValue t f m
+nvConstantP
+  :: MonadCited t f m => Provenance t m (NValue t f m) -> NAtom -> NValue t f m
 nvConstantP p x = addProvenance p (nvConstant x)
 
-nvStrP :: MonadCited t f m => Provenance t m (NValue t f m) -> NixString -> NValue t f m
+nvStrP
+  :: MonadCited t f m
+  => Provenance t m (NValue t f m)
+  -> NixString
+  -> NValue t f m
 nvStrP p ns = addProvenance p (nvStr ns)
 
-nvPathP :: MonadCited t f m => Provenance t m (NValue t f m) -> FilePath -> NValue t f m
+nvPathP
+  :: MonadCited t f m
+  => Provenance t m (NValue t f m)
+  -> FilePath
+  -> NValue t f m
 nvPathP p x = addProvenance p (nvPath x)
 
-nvListP :: MonadCited t f m => Provenance t m (NValue t f m) -> [t] -> NValue t f m
+nvListP
+  :: MonadCited t f m => Provenance t m (NValue t f m) -> [t] -> NValue t f m
 nvListP p l = addProvenance p (nvList l)
 
 nvSetP
@@ -150,10 +158,7 @@ data ExecFrame t f m = Assertion SrcSpan (NValue t f m)
 
 instance MonadDataErrorContext t f m => Exception (ExecFrame t f m)
 
-nverr
-  :: forall e t f s m a . (MonadNix e t f m, Exception s)
-  => s
-  -> m a
+nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
 
 currentPos :: forall e m . (MonadReader e m, Has e SrcSpan) => m SrcSpan
@@ -197,14 +202,15 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     scope                  <- currentScopes
     span@(SrcSpan delta _) <- currentPos
     addProvenance @_ @_ @(NValue t f m)
-      (Provenance scope (NSym_ span "__curPos"))
+        (Provenance scope (NSym_ span "__curPos"))
       <$> toValue delta
 
   evaledSym name val = do
     scope <- currentScopes
     span  <- currentPos
     pure $ addProvenance @_ @_ @(NValue t f m)
-      (Provenance scope (NSym_ span name)) val
+      (Provenance scope (NSym_ span name))
+      val
 
   evalConstant c = do
     scope <- currentScopes
@@ -721,8 +727,8 @@ instance ( MonadFix m
 
       coerceNixList :: NValue t f (Lazy t f m) -> Lazy t f m t
       coerceNixList v = do
-        xs :: [t] <- fromValue @[t] v
-        ys :: [t] <- traverse (\x -> force x coerceNix) xs
+        xs :: [t]                     <- fromValue @[t] v
+        ys :: [t]                     <- traverse (\x -> force x coerceNix) xs
         v' :: NValue t f (Lazy t f m) <- toValue @[t] ys
         return $ wrapValue v'
 
@@ -766,7 +772,8 @@ x <///> y | isAbsolute y || "." `isPrefixOf` y = x </> y
       [ xs ++ drop (length tx) ys | tx <- tails xs, tx `elem` inits ys ]
 
 findPathBy
-  :: forall e t f m. MonadNix e t f m
+  :: forall e t f m
+   . MonadNix e t f m
   => (FilePath -> m (Maybe FilePath))
   -> [t]
   -> FilePath
@@ -812,11 +819,7 @@ findPathBy finder l name = do
           ++ " with 'path' elements, but saw: "
           ++ show s
 
-findPathM
-  :: forall e t f m. MonadNix e t f m
-  => [t]
-  -> FilePath
-  -> m FilePath
+findPathM :: forall e t f m . MonadNix e t f m => [t] -> FilePath -> m FilePath
 findPathM l name = findPathBy path l name
  where
   path :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
@@ -825,10 +828,7 @@ findPathM l name = findPathBy path l name
     exists <- doesPathExist path
     return $ if exists then Just path else Nothing
 
-findEnvPathM
-  :: forall e t f m. MonadNix e t f m
-  => FilePath
-  -> m FilePath
+findEnvPathM :: forall e t f m . MonadNix e t f m => FilePath -> m FilePath
 findEnvPathM name = do
   mres <- lookupVar "__nixPath"
   case mres of
@@ -871,10 +871,7 @@ addTracing k v = do
       print $ msg rendered <> " ...done"
       return res
 
-evalExprLoc
-  :: forall e t f m. MonadNix e t f m
-  => NExprLoc
-  -> m (NValue t f m)
+evalExprLoc :: forall e t f m . MonadNix e t f m => NExprLoc -> m (NValue t f m)
 evalExprLoc expr = do
   opts :: Options <- asks (view hasLens)
   if tracing opts
@@ -888,9 +885,7 @@ evalExprLoc expr = do
   raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x
 
 fetchTarball
-  :: forall e t f m. MonadNix e t f m
-  => m (NValue t f m)
-  -> m (NValue t f m)
+  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
 fetchTarball v = v >>= \case
   NVSet s _ -> case M.lookup "url" s of
     Nothing ->
@@ -938,16 +933,11 @@ fetchTarball v = v >>= \case
           ++ Text.unpack sha
           ++ "\"; }"
 
-exec
-  :: (MonadNix e t f m, MonadInstantiate m)
-  => [String]
-  -> m (NValue t f m)
+exec :: (MonadNix e t f m, MonadInstantiate m) => [String] -> m (NValue t f m)
 exec args = either throwError evalExprLoc =<< exec' args
 
 nixInstantiateExpr
-  :: (MonadNix e t f m, MonadInstantiate m)
-  => String
-  -> m (NValue t f m)
+  :: (MonadNix e t f m, MonadInstantiate m) => String -> m (NValue t f m)
 nixInstantiateExpr s = either throwError evalExprLoc =<< instantiateExpr s
 
 instance Monad m => Scoped t (Lazy t f m) where

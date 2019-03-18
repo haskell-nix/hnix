@@ -83,9 +83,9 @@ data NixLikeContextValue = NixLikeContextValue
 
 instance Semigroup NixLikeContextValue where
   a <> b = NixLikeContextValue
-    { nlcvPath = nlcvPath a || nlcvPath b
+    { nlcvPath       = nlcvPath a || nlcvPath b
     , nlcvAllOutputs = nlcvAllOutputs a || nlcvAllOutputs b
-    , nlcvOutputs = nlcvOutputs a <> nlcvOutputs b
+    , nlcvOutputs    = nlcvOutputs a <> nlcvOutputs b
     }
 
 instance Monoid NixLikeContextValue where
@@ -93,26 +93,26 @@ instance Monoid NixLikeContextValue where
 
 toStringContexts :: (Text, NixLikeContextValue) -> [StringContext]
 toStringContexts (path, nlcv) = case nlcv of
-  NixLikeContextValue True _ _ ->
-    StringContext path DirectPath:toStringContexts (path, nlcv { nlcvPath = False })
-  NixLikeContextValue _ True _ ->
-    StringContext path AllOutputs:toStringContexts (path, nlcv { nlcvAllOutputs = False })
+  NixLikeContextValue True _ _ -> StringContext path DirectPath
+    : toStringContexts (path, nlcv { nlcvPath = False })
+  NixLikeContextValue _ True _ -> StringContext path AllOutputs
+    : toStringContexts (path, nlcv { nlcvAllOutputs = False })
   NixLikeContextValue _ _ ls | not (null ls) ->
     map (StringContext path . DerivationOutput) ls
   _ -> []
 
 toNixLikeContextValue :: StringContext -> (Text, NixLikeContextValue)
 toNixLikeContextValue sc = (,) (scPath sc) $ case scFlavor sc of
-  DirectPath -> NixLikeContextValue True False []
-  AllOutputs -> NixLikeContextValue False True []
+  DirectPath         -> NixLikeContextValue True False []
+  AllOutputs         -> NixLikeContextValue False True []
   DerivationOutput t -> NixLikeContextValue False False [t]
 
 toNixLikeContext :: S.HashSet StringContext -> NixLikeContext
-toNixLikeContext stringContext = NixLikeContext $ S.foldr go mempty stringContext
-  where
-    go sc hm = let
-      (t, nlcv) = toNixLikeContextValue sc
-      in M.insertWith (<>) t nlcv hm
+toNixLikeContext stringContext = NixLikeContext
+  $ S.foldr go mempty stringContext
+ where
+  go sc hm =
+    let (t, nlcv) = toNixLikeContextValue sc in M.insertWith (<>) t nlcv hm
 
 fromNixLikeContext :: NixLikeContext -> S.HashSet StringContext
 fromNixLikeContext =
