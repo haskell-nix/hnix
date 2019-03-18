@@ -11,6 +11,8 @@ import Data.Hashable
 import Data.List (unfoldr)
 import Data.Ord
 
+import Debug.Trace
+
 --TODO: If we have a really long chain, we will keep leaking memory; what can we do about this?
 
 data StableId = StableId
@@ -36,10 +38,12 @@ uncons s = if _stableId_parent s == _stableId_parent nil
 
 --TODO: Reimplement Eq in terms of Ord?
 instance Eq StableId where
-  a == b = if
+  a == b = trace (show a <> " == " <> show b) $ if
     | _stableId_parent a == _stableId_parent b -- We're the exact same heap object
       -> True
     | _stableId_hash a /= _stableId_hash b || _stableId_value a /= _stableId_value b -- We're definitely different
+      -> False
+    | _stableId_parent a == _stableId_parent nil || _stableId_parent b == _stableId_parent nil -- One of them is nil, but the other isn't.  Note that this relies on nil being unique. --TODO: Can we avoid this?
       -> False
     | otherwise -- Different objects, but same value and hash.  These are either the same value or a hash collision.
       -> unsafeDupablePerformIO $ do
@@ -55,24 +59,27 @@ instance Eq StableId where
              _ -> return True
 
 instance Ord StableId where
-  a `compare` b = case comparing _stableId_hash a b <> comparing _stableId_value a b of
+  a `compare` b = trace (show a <> " `compare` " <> show b) $ case comparing _stableId_hash a b <> comparing _stableId_value a b of
     LT -> LT
     GT -> GT
     EQ -> case _stableId_parent a == _stableId_parent b of
       True -> EQ
-      False -> unsafeDupablePerformIO $ do
-        pa <- readIORef $ _stableId_parent a
-        pb <- readIORef $ _stableId_parent b
-        case reallyUnsafePtrEquality# pa pb of
-          -- Parents are different objects
-          0# -> case pa `compare` pb of
-            LT -> return LT
-            GT -> return GT
-            EQ -> do
-              writeIORef (_stableId_parent b) pa
-              return EQ
-          -- Parents are the same object already
-          _ -> return EQ
+      False ->
+        if _stableId_parent a == _stableId_parent nil then LT else --TODO: Can we avoid this?
+        if _stableId_parent b == _stableId_parent nil then GT else
+        unsafeDupablePerformIO $ do
+          pa <- readIORef $ _stableId_parent a
+          pb <- readIORef $ _stableId_parent b
+          case reallyUnsafePtrEquality# pa pb of
+            -- Parents are different objects
+            0# -> case pa `compare` pb of
+              LT -> return LT
+              GT -> return GT
+              EQ -> do
+                writeIORef (_stableId_parent b) pa
+                return EQ
+            -- Parents are the same object already
+            _ -> return EQ
 
 toList :: StableId -> [Int]
 toList = unfoldr uncons
