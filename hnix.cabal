@@ -467,6 +467,9 @@ library
       Nix.Thunk
       Nix.Thunk.Basic
       Nix.Thunk.Standard
+      Nix.Thunk.StableId
+      Nix.Thunk.FreshStableIdT
+      Nix.Thunk.Separate
       Nix.Type.Assumption
       Nix.Type.Env
       Nix.Type.Infer
@@ -496,6 +499,7 @@ library
     , exceptions
     , filepath
     , free
+    , ghc-prim
     , hashing
     , hnix-store-core
     , http-client

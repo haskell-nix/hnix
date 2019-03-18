@@ -19,6 +19,7 @@
 
 module Nix.Thunk.Standard where
 
+import           Control.Applicative
 import           Control.Comonad                ( Comonad )
 import           Control.Comonad.Env            ( ComonadEnv )
 import           Control.Monad.Catch     hiding ( catchJust )
@@ -31,16 +32,15 @@ import           Nix.Eval                      as Eval
 import           Nix.Exec
 import           Nix.Expr
 import           Nix.Frames
-import           Nix.Fresh
 import           Nix.Options
 import           Nix.Render
 import           Nix.Thunk
-import           Nix.Thunk.Basic
+import           Nix.Thunk.Separate
+import qualified Nix.Thunk.StableId            as StableId
+import           Nix.Thunk.FreshStableIdT
 import           Nix.Utils
 import           Nix.Value
-import           Nix.Var                        ( MonadVar
-                                                , newVar
-                                                )
+import           Control.Monad.Ref
 
 newtype StdCited m a = StdCited
     { _stdCited :: NCited (StdThunk m) (StdCited m) (StdLazy m) a }
@@ -61,11 +61,29 @@ newtype StdThunk m = StdThunk
 type StdValue m = NValue (StdThunk m) (StdCited m) (StdLazy m)
 type StdValueNF m = NValueNF (StdThunk m) (StdCited m) (StdLazy m)
 
-type StdIdT m = FreshIdT Int m
+newtype StdIdT m a = StdIdT { unStdIdT :: SeparateThunkT (StdLazy m) (StdValue m) (FreshStableIdT m) a }
+  deriving
+    ( Functor
+    , Applicative
+    , Monad
+    , MonadThunkId
+    , MonadCatch
+    , MonadThrow
+    , MonadIO
+    , MonadPlus
+    , Alternative
+    , MonadFix
+    )
 
 type StdLazy m = Lazy (StdThunk m) (StdCited m) (StdIdT m)
 
-type MonadStdThunk m = (MonadVar m, MonadCatch m, MonadThrow m, Typeable m)
+type MonadStdThunk m = (MonadAtomicRef m, MonadCatch m, MonadThrow m, Typeable m)
+
+instance MonadTrans StdIdT where
+  lift = StdIdT . lift . lift
+
+instance Monad m => Forcer (StdLazy m) (StdValue m) (FreshStableIdT m) where
+  liftSeparateThunkT = lift . StdIdT
 
 instance MonadStdThunk m
   => MonadThunk (StdThunk m) (StdLazy m) (StdValue m) where
@@ -86,13 +104,13 @@ instance MonadStdThunk m
             go _ = []
             ps = concatMap (go . frame) frames
 
-        fmap (StdThunk . StdCited . NCited ps) . thunk $ mv
-      else fmap (StdThunk . StdCited . NCited []) . thunk $ mv
+        lift $ StdIdT $ fmap (StdThunk . StdCited . NCited ps) $ buildThunk mv
+      else lift $ StdIdT $ fmap (StdThunk . StdCited . NCited []) $ buildThunk mv
 
-  thunkId (StdThunk (StdCited (NCited _ t))) = thunkId t
+  thunkId (StdThunk (StdCited (NCited _ t))) = separateThunkId t
 
-  query (StdThunk (StdCited (NCited _ t))) = query t
-  queryM (StdThunk (StdCited (NCited _ t))) = queryM t
+  query (StdThunk (StdCited (NCited _ t))) = queryValue t
+  queryM (StdThunk (StdCited (NCited _ t))) = queryThunk t
 
   -- | The ThunkLoop exception is thrown as an exception with MonadThrow,
   --   which does not capture the current stack frame information to provide
@@ -102,21 +120,21 @@ instance MonadStdThunk m
     catch go (throwError @ThunkLoop)
    where
     go = case ps of
-      [] -> force t f
+      [] -> forceThunk t f
       Provenance scope e@(Compose (Ann s _)) : _ ->
-        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (force t f)
+        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceThunk t f)
 
   forceEff (StdThunk (StdCited (NCited ps t))) f = catch
     go
     (throwError @ThunkLoop)
    where
     go = case ps of
-      [] -> forceEff t f
+      [] -> forceEffects t f
       Provenance scope e@(Compose (Ann s _)) : _ ->
-        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceEff t f)
+        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceEffects t f)
 
-  wrapValue = StdThunk . StdCited . NCited [] . wrapValue
-  getValue (StdThunk (StdCited (NCited _ v))) = getValue v
+  wrapValue = StdThunk . StdCited . NCited [] . valueRef
+  getValue (StdThunk (StdCited (NCited _ v))) = thunkValue v
 
 instance Show (StdThunk m) where
   show _ = "<thunk>"          -- jww (2019-03-15): NYI
@@ -138,21 +156,23 @@ instance (MonadEffects t f m, MonadDataContext f m)
   findEnvPath      = lift . findEnvPath @t @f @m
   findPath         = (lift .) . findPath @t @f @m
   importPath path = do
-    i <- FreshIdT ask
+    i <- freshId
+    c <- StdIdT askThunkCache
     p <- lift $ importPath @t @f @m path
-    return $ liftNValue (runFreshIdT i) p
+    return $ liftNValue (runFreshStableIdT i . runSeparateThunkT c . unStdIdT) p
   pathToDefaultNix = lift . pathToDefaultNix @t @f @m
   derivationStrict v = do
-    i <- FreshIdT ask
-    p <- lift $ derivationStrict @t @f @m (unliftNValue (runFreshIdT i) v)
-    return $ liftNValue (runFreshIdT i) p
+    i <- freshId
+    c <- StdIdT askThunkCache
+    p <- lift $ derivationStrict @t @f @m (unliftNValue (runFreshStableIdT i . runSeparateThunkT c . unStdIdT) v)
+    return $ liftNValue (runFreshStableIdT i . runSeparateThunkT c . unStdIdT) p
   traceEffect = lift . traceEffect @t @f @m
 
 instance HasCitations1 (StdThunk m) (StdCited m) (StdLazy m) where
   citations1 (StdCited c) = citations c
   addProvenance1 x (StdCited c) = StdCited (addProvenance x c)
 
-runStdLazyM :: (MonadVar m, MonadIO m) => Options -> StdLazy m a -> m a
+runStdLazyM :: (MonadIO m, MonadRef m) => Options -> StdLazy m a -> m a
 runStdLazyM opts action = do
-  i <- newVar (1 :: Int)
-  runFreshIdT i $ runLazyM opts action
+  c <- newThunkCache
+  runFreshStableIdT StableId.nil $ runSeparateThunkT c $ unStdIdT $ runLazyM opts action
