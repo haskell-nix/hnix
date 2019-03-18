@@ -106,3 +106,8 @@ runStandard opts action = do
 
 runStandardIO :: Options -> StdLazy StdIdT IO a -> IO a
 runStandardIO = runStandard
+
+whileForcingThunk
+  :: forall t f m s e r . (Exception s, Convertible e t f m) => s -> m r -> m r
+whileForcingThunk frame =
+  withFrame Debug (ForcingThunk @t @f @m) . withFrame Debug frame

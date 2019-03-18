@@ -150,9 +150,6 @@ data Builtin v = Builtin
     , mapping :: (Text, v)
     }
 
-demand' :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-demand' = demand ?? pure
-
 builtinsList :: forall e t f m . MonadNix e t f m => m [Builtin (NValue t f m)]
 builtinsList = sequence
   [ do
@@ -383,7 +380,7 @@ getAttr
   -> m (NValue t f m)
 getAttr x y = fromValue x >>= fromStringNoContext >>= \key ->
   fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) y
-    >>= \(aset, _) -> attrsetGet key aset >>= demand'
+    >>= \(aset, _) -> attrsetGet key aset
 
 unsafeGetAttrPos
   :: forall e t f m
@@ -486,7 +483,7 @@ foldl'_ f z xs = fromValue @[NValue t f m] xs >>= foldM go z
 head_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 head_ = fromValue >=> \case
   []    -> throwError $ ErrorCall "builtins.head: empty list"
-  h : _ -> demand' h
+  h : _ -> pure h
 
 tail_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 tail_ = fromValue >=> \case
@@ -825,7 +822,7 @@ elemAt_
   -> m (NValue t f m)
 elemAt_ xs n = fromValue n >>= \n' -> fromValue xs >>= \xs' ->
   case elemAt xs' n' of
-    Just a -> demand' a
+    Just a -> pure a
     Nothing ->
       throwError
         $  ErrorCall
@@ -1133,7 +1130,7 @@ lessThan
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-lessThan ta tb = ta >>= \va -> tb >>= \vb -> do
+lessThan ta tb = demand ta $ \va -> demand tb $ \vb -> do
   let badType =
         throwError
           $  ErrorCall
@@ -1249,8 +1246,7 @@ absolutePathFromValue = \case
   v           -> throwError $ ErrorCall $ "expected a path, got " ++ show v
 
 readFile_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-readFile_ path =
-  path >>= absolutePathFromValue >>= Nix.Render.readFile >>= toValue
+readFile_ = absolutePathFromValue >=> Nix.Render.readFile >=> toValue
 
 findFile_
   :: forall e t f m
@@ -1258,7 +1254,7 @@ findFile_
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-findFile_ aset filePath = aset >>= \aset' -> filePath >>= \filePath' ->
+findFile_ aset filePath = demand aset $ \aset' -> demand filePath $ \filePath' ->
   case (aset', filePath') of
     (NVList x, NVStr ns) -> do
       mres <- findPath @t @f @m x (Text.unpack (hackyStringIgnoreContext ns))
@@ -1286,8 +1282,8 @@ instance Convertible e t f m => ToValue FileType m (NValue t f m) where
 
 readDir_
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-readDir_ pathThunk = do
-  path           <- absolutePathFromValue =<< pathThunk
+readDir_ path = do
+  path           <- absolutePathFromValue path
   items          <- listDirectory path
   itemsWithTypes <- forM items $ \item -> do
     s <- getSymbolicLinkStatus $ path </> item
@@ -1309,14 +1305,7 @@ fromJSON = fromValue >=> fromStringNoContext >=> \encoded ->
  where
   jsonToNValue = \case
     A.Object m -> flip nvSet M.empty <$> traverse (defer . jsonToNValue) m
-    A.Array  l -> nvList <$> traverse
-      (\x ->
-        defer @(NValue t f m) @m @(NValue t f m)
-          . whileForcingThunk @(NValue t f m) @f (CoercionFromJson @t @f @m x)
-          . jsonToNValue
-          $ x
-      )
-      (V.toList l)
+    A.Array  l -> nvList <$> traverse jsonToNValue (V.toList l)
     A.String s -> pure $ nvStr $ hackyMakeNixStringWithoutContext s
     A.Number n -> pure $ nvConstant $ case floatingOrInteger n of
       Left  r -> NFloat r
@@ -1325,13 +1314,13 @@ fromJSON = fromValue >=> fromStringNoContext >=> \encoded ->
     A.Null   -> pure $ nvConstant NNull
 
 prim_toJSON :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-prim_toJSON x = x >>= nvalueToJSONNixString >>= pure . nvStr
+prim_toJSON x = demand x $ fmap nvStr . nvalueToJSONNixString
 
 toXML_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-toXML_ v = v >>= normalForm >>= pure . nvStr . toXML
+toXML_ v = demand v $ fmap (nvStr . toXML) . normalForm
 
 typeOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-typeOf v = v >>= toValue . principledMakeNixStringWithoutContext . \case
+typeOf v = demand v $ toValue . principledMakeNixStringWithoutContext . \case
   NVConstant a -> case a of
     NInt   _ -> "int"
     NFloat _ -> "float"
@@ -1347,7 +1336,7 @@ typeOf v = v >>= toValue . principledMakeNixStringWithoutContext . \case
 
 tryEval
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-tryEval e = catch (onSuccess <$> e) (pure . onError)
+tryEval e = catch (demand e (pure . onSuccess)) (pure . onError)
  where
   onSuccess v = flip nvSet M.empty $ M.fromList
     [("success", nvConstant (NBool True)), ("value", v)]
@@ -1369,7 +1358,7 @@ trace_ msg action = do
     .   Text.unpack
     .   principledStringIgnoreContext
     =<< fromValue msg
-  action
+  pure action
 
 -- TODO: remember error context
 addErrorContext
@@ -1378,13 +1367,13 @@ addErrorContext
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-addErrorContext _ action = action
+addErrorContext _ action = pure action
 
 exec_
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 exec_ xs = do
   ls <- fromValue @[NValue t f m] xs
-  xs <- traverse (coerceToString DontCopyToStore CoerceStringy <=< demand') ls
+  xs <- traverse (coerceToString DontCopyToStore CoerceStringy) ls
   -- TODO Still need to do something with the context here
   -- See prim_exec in nix/src/libexpr/primops.cc
   -- Requires the implementation of EvalState::realiseContext
@@ -1392,7 +1381,7 @@ exec_ xs = do
 
 fetchurl
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-fetchurl v = v >>= \case
+fetchurl v = demand v $ \case
   NVSet s _ -> attrsetGet "url" s >>= demand ?? (go (M.lookup "sha256" s))
   v@NVStr{} -> go Nothing v
   v ->
@@ -1401,7 +1390,7 @@ fetchurl v = v >>= \case
       $  "builtins.fetchurl: Expected URI or set, got "
       ++ show v
  where
-  go :: Maybe t -> NValue t f m -> m (NValue t f m)
+  go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
   go _msha = \case
     NVStr ns -> noContextAttrs ns >>= getURL >>= \case -- msha
       Left  e -> throwError e
@@ -1423,7 +1412,7 @@ partition_
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-partition_ fun xs = fun >>= \f -> fromValue @[NValue t f m] xs >>= \l -> do
+partition_ f = fromValue @[NValue t f m] >=> \l -> do
   let match t = f `callFunc` t >>= fmap (, t) . fromValue
   selection <- traverse match l
   let (right, wrong) = partition fst selection
@@ -1443,11 +1432,11 @@ currentTime_ = do
   toValue @Integer $ round $ Time.utcTimeToPOSIXSeconds (currentTime opts)
 
 derivationStrict_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-derivationStrict_ = (>>= derivationStrict)
+derivationStrict_ = derivationStrict
 
 getContext
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-getContext x = x >>= \x' -> case x' of
+getContext x = demand x $ \case
   (NVStr ns) -> do
     let context =
           getNixLikeContext $ toNixLikeContext $ principledGetContext ns
@@ -1462,9 +1451,9 @@ appendContext
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-appendContext x y = x >>= \x' -> y >>= \y' -> case (x', y') of
+appendContext x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
   (NVStr ns, NVSet attrs _) -> do
-    newContextValues <- forM attrs $ demand' >=> \case
+    newContextValues <- forM attrs $ \attr -> demand attr $ \case
       NVSet attrs _ -> do
         -- TODO: Fail for unexpected keys.
         path <- maybe (return False) (demand ?? fromValue)
@@ -1473,9 +1462,9 @@ appendContext x y = x >>= \x' -> y >>= \y' -> case (x', y') of
           $ M.lookup "allOutputs" attrs
         outputs <- case M.lookup "outputs" attrs of
           Nothing -> return []
-          Just os -> demand' os >>= \case
+          Just os -> demand os $ \case
             NVList vs ->
-              forM vs $ fmap principledStringIgnoreContext . fromValue . demand'
+              forM vs $ fmap principledStringIgnoreContext . fromValue
             x ->
               throwError
                 $ ErrorCall
