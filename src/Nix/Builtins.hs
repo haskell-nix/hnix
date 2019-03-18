@@ -229,7 +229,7 @@ builtinsList = sequence
   , add  Normal   "getEnv"           getEnv_
   , add2 Normal   "hasAttr"          hasAttr
   , add  Normal   "hasContext"       hasContext
-  , add' Normal   "hashString"       hashString
+  , add' Normal   "hashString"       (hashString @e @t @f @m)
   , add  Normal   "head"             head_
   , add  TopLevel "import"           import_
   , add2 Normal   "intersectAttrs"   intersectAttrs
@@ -266,7 +266,7 @@ builtinsList = sequence
   , add0 Normal   "storeDir"         (return $ nvStr $ principledMakeNixStringWithoutContext "/nix/store")
   , add' Normal   "stringLength"     (arity1 $ Text.length . principledStringIgnoreContext)
   , add' Normal   "sub"              (arity2 ((-) @Integer))
-  , add' Normal   "substring"        substring
+  , add' Normal   "substring"        (substring @e @t @f @m)
   , add  Normal   "tail"             tail_
   , add0 Normal   "true"             (return $ nvConstant $ NBool True)
   , add  TopLevel "throw"            throw_
@@ -289,7 +289,9 @@ builtinsList = sequence
   wrap :: BuiltinType -> Text -> v -> Builtin v
   wrap t n f = Builtin t (n, f)
 
+  arity1 :: forall a b. (a -> b) -> (a -> Prim m b)
   arity1 f = Prim . pure . f
+  arity2 :: forall a b c. (a -> b -> c) -> (a -> b -> Prim m c)
   arity2 f = ((Prim . pure) .) . f
 
   mkThunk n = defer . withFrame
@@ -301,7 +303,7 @@ builtinsList = sequence
   add2 t n v = wrap t n <$> mkThunk n (builtin2 (Text.unpack n) v)
   add3 t n v = wrap t n <$> mkThunk n (builtin3 (Text.unpack n) v)
 
-  add' :: forall a. ToBuiltin (NValue t f m) m a
+  add' :: forall a. ToBuiltin t f m a
        => BuiltinType -> Text -> a -> m (Builtin (NValue t f m))
   add' t n v = wrap t n <$> mkThunk n (toBuiltin (Text.unpack n) v)
 
@@ -657,7 +659,7 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
 
 thunkStr s = nvStr (hackyMakeNixStringWithoutContext (decodeUtf8 s))
 
-substring :: MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
+substring :: forall e t f m. MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
 substring start len str = Prim $ if start < 0 --NOTE: negative values of 'len' are OK
   then
     throwError
@@ -1176,7 +1178,7 @@ listToAttrs = fromValue @[NValue t f m] >=> \l ->
 -- fail if context in the algo arg
 -- propagate context from the s arg
 hashString
-  :: MonadNix e t f m => NixString -> NixString -> Prim m NixString
+  :: forall e t f m. MonadNix e t f m => NixString -> NixString -> Prim m NixString
 hashString nsAlgo ns = Prim $ do
   algo <- fromStringNoContext nsAlgo
   let f g = pure $ principledModifyNixContents g ns
@@ -1493,17 +1495,17 @@ appendContext x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
 newtype Prim m a = Prim { runPrim :: m a }
 
 -- | Types that support conversion to nix in a particular monad
-class ToBuiltin v m a | a -> m where
-    toBuiltin :: String -> a -> m v
+class ToBuiltin t f m a | a -> m where
+    toBuiltin :: String -> a -> m (NValue t f m)
 
 instance (MonadNix e t f m, ToValue a m (NValue t f m))
-      => ToBuiltin (NValue t f m) m (Prim m a) where
+      => ToBuiltin t f m (Prim m a) where
   toBuiltin _ p = toValue =<< runPrim p
 
 instance ( MonadNix e t f m
          , FromValue a m (Deeper (NValue t f m))
-         , ToBuiltin (NValue t f m) m b
+         , ToBuiltin t f m b
          )
-      => ToBuiltin (NValue t f m) m (a -> b) where
+      => ToBuiltin t f m (a -> b) where
   toBuiltin name f =
     return $ nvBuiltin name (fromValue . Deeper >=> toBuiltin name . f)

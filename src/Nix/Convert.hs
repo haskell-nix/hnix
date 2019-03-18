@@ -252,7 +252,7 @@ instance (Convertible e t f m, Show r, FromValue a m r)
     Just b -> pure b
     _      -> throwError $ Expectation TSet (getDeeper v)
 
-instance (Convertible e t f m, FromValue a m r) => FromValue a m (Deeper r) where
+instance (Convertible e t f m, FromValue a m (NValue' t f m (NValue t f m))) => FromValue a m (Deeper (NValue' t f m (NValue t f m))) where
   fromValueMay = fromValueMay . getDeeper
   fromValue    = fromValue . getDeeper
 
