@@ -475,6 +475,7 @@ library
       Nix.Type.Type
       Nix.Utils
       Nix.Value
+      Nix.Value.Equal
       Nix.Var
       Nix.XML
   other-modules:

@@ -91,6 +91,7 @@ import           Nix.String
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
+import           Nix.Value.Equal
 import           Nix.XML
 import           System.Nix.Internal.Hash       ( printHashBytes32 )
 import           System.FilePath
@@ -825,8 +826,8 @@ elem_
   => m (NValue t f m)
   -> m (NValue t f m)
   -> m (NValue t f m)
-elem_ x xs =
-  x >>= \x' -> toValue <=< anyM (valueEqM x' <=< force') <=< fromValue @[t] $ xs
+elem_ x xs = x >>= \x' ->
+    toValue <=< anyM (valueEqM x' <=< force') <=< fromValue @[t] $ xs
 
 elemAt :: [a] -> Int -> Maybe a
 elemAt ls i = case drop i ls of

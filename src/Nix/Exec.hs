@@ -70,6 +70,7 @@ import           Nix.String
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
+import           Nix.Value.Equal
 #ifdef MIN_VERSION_haskeline
 import           System.Console.Haskeline.MonadException hiding(catch)
 #endif

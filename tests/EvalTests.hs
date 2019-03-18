@@ -23,6 +23,7 @@ import           Data.Time
 import           Nix
 import           Nix.TH
 import           Nix.Thunk.Standard
+import           Nix.Value.Equal
 import qualified System.Directory as D
 import           System.Environment
 import           System.FilePath

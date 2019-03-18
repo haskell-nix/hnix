@@ -35,16 +35,10 @@ import           Control.Exception
 import           Control.Monad
 import           Control.Monad.Free
 import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Except
 import qualified Data.Aeson                    as A
-import           Data.Align
-import           Data.Eq.Deriving
 import           Data.Functor.Classes
-import           Data.Functor.Identity
 import           Data.HashMap.Lazy              ( HashMap )
-import qualified Data.HashMap.Lazy             as M
 import           Data.Text                      ( Text )
-import           Data.These
 import           Data.Typeable                  ( Typeable )
 import           GHC.Generics
 import           Lens.Family2
@@ -53,7 +47,6 @@ import           Lens.Family2.TH
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
-import           Nix.Frames
 import           Nix.String
 import           Nix.Thunk
 import           Nix.Utils
@@ -99,6 +92,44 @@ instance Foldable (NValueF p m) where
     NVClosureF _ _ -> mempty
     NVBuiltinF _ _ -> mempty
 
+lmapNValueF :: Functor m => (b -> a) -> NValueF a m r -> NValueF b m r
+lmapNValueF f = \case
+  NVConstantF a  -> NVConstantF a
+  NVStrF      s  -> NVStrF s
+  NVPathF     p  -> NVPathF p
+  NVListF     l  -> NVListF l
+  NVSetF     s p -> NVSetF s p
+  NVClosureF p g -> NVClosureF p (g . fmap f)
+  NVBuiltinF s g -> NVBuiltinF s (g . fmap f)
+
+hoistNValueF
+  :: (forall x . n x -> m x)
+  -> (forall x . m x -> n x)
+  -> NValueF p m a
+  -> NValueF p n a
+hoistNValueF run lft = \case
+  NVConstantF a  -> NVConstantF a
+  NVStrF      s  -> NVStrF s
+  NVPathF     p  -> NVPathF p
+  NVListF     l  -> NVListF l
+  NVSetF     s p -> NVSetF s p
+  NVClosureF p g -> NVClosureF p (lft . g . run)
+  NVBuiltinF s g -> NVBuiltinF s (lft . g . run)
+
+sequenceNValueF
+  :: (Functor n, Monad m, Applicative n)
+  => (forall x . n x -> m x)
+  -> NValueF p m (n a)
+  -> n (NValueF p m a)
+sequenceNValueF transform = \case
+  NVConstantF a  -> pure $ NVConstantF a
+  NVStrF      s  -> pure $ NVStrF s
+  NVPathF     p  -> pure $ NVPathF p
+  NVListF     l  -> NVListF <$> sequenceA l
+  NVSetF     s p -> NVSetF <$> sequenceA s <*> pure p
+  NVClosureF p g -> pure $ NVClosureF p (transform <=< g)
+  NVBuiltinF s g -> pure $ NVBuiltinF s (transform <=< g)
+
 bindNValueF
   :: (Monad m, Monad n)
   => (forall x . n x -> m x)
@@ -114,43 +145,19 @@ bindNValueF transform f = \case
   NVClosureF p g -> pure $ NVClosureF p (transform . f <=< g)
   NVBuiltinF s g -> pure $ NVBuiltinF s (transform . f <=< g)
 
-lmapNValueF :: Functor m => (b -> a) -> NValueF a m r -> NValueF b m r
-lmapNValueF f = \case
-  NVConstantF a  -> NVConstantF a
-  NVStrF      s  -> NVStrF s
-  NVPathF     p  -> NVPathF p
-  NVListF     l  -> NVListF l
-  NVSetF     s p -> NVSetF s p
-  NVClosureF p g -> NVClosureF p (g . fmap f)
-  NVBuiltinF s g -> NVBuiltinF s (g . fmap f)
-
 liftNValueF
   :: (MonadTrans u, Monad m)
   => (forall x . u m x -> m x)
   -> NValueF p m a
   -> NValueF p (u m) a
-liftNValueF run = \case
-  NVConstantF a  -> NVConstantF a
-  NVStrF      s  -> NVStrF s
-  NVPathF     p  -> NVPathF p
-  NVListF     l  -> NVListF l
-  NVSetF     s p -> NVSetF s p
-  NVClosureF p g -> NVClosureF p $ lift . g . run
-  NVBuiltinF s g -> NVBuiltinF s $ lift . g . run
+liftNValueF run = hoistNValueF run lift
 
 unliftNValueF
   :: (MonadTrans u, Monad m)
   => (forall x . u m x -> m x)
   -> NValueF p (u m) a
   -> NValueF p m a
-unliftNValueF run = \case
-  NVConstantF a  -> NVConstantF a
-  NVStrF      s  -> NVStrF s
-  NVPathF     p  -> NVPathF p
-  NVListF     l  -> NVListF l
-  NVSetF     s p -> NVSetF s p
-  NVClosureF p g -> NVClosureF p $ run . g . lift
-  NVBuiltinF s g -> NVBuiltinF s $ run . g . lift
+unliftNValueF run = hoistNValueF lift run
 
 type MonadDataContext f (m :: * -> *)
   = (Comonad f, Applicative f, Traversable f, Monad m)
@@ -177,7 +184,27 @@ instance Show r => Show (NValueF p m r) where
 instance (Comonad f, Show a) => Show (NValue' t f m a) where
   show (NValue (extract -> v)) = show v
 
+instance Comonad f => Show1 (NValue' t f m) where
+  liftShowsPrec sp sl p = \case
+    NVConstant atom -> showsUnaryWith showsPrec "NVConstantF" p atom
+    NVStr ns ->
+      showsUnaryWith showsPrec "NVStrF" p (hackyStringIgnoreContext ns)
+    NVList lst       -> showsUnaryWith (liftShowsPrec sp sl) "NVListF" p lst
+    NVSet attrs _    -> showsUnaryWith (liftShowsPrec sp sl) "NVSetF" p attrs
+    NVPath path      -> showsUnaryWith showsPrec "NVPathF" p path
+    NVClosure c    _ -> showsUnaryWith showsPrec "NVClosureF" p c
+    NVBuiltin name _ -> showsUnaryWith showsPrec "NVBuiltinF" p name
+    _                -> error "Pattern synonyms mask coverage"
+
 type NValue t f m = NValue' t f m t
+
+sequenceNValue
+  :: (Functor n, Traversable f, Monad m, Applicative n)
+  => (forall x . n x -> m x)
+  -> NValue' t f m (n a)
+  -> n (NValue' t f m a)
+sequenceNValue transform (NValue v) =
+  NValue <$> traverse (sequenceNValueF transform) v
 
 bindNValue
   :: (Traversable f, Monad m, Monad n)
@@ -188,21 +215,28 @@ bindNValue
 bindNValue transform f (NValue v) =
   NValue <$> traverse (bindNValueF transform f) v
 
+hoistNValue
+  :: (Functor m, Functor n, Functor f)
+  => (forall x . n x -> m x)
+  -> (forall x . m x -> n x)
+  -> NValue' t f m a
+  -> NValue' t f n a
+hoistNValue run lft (NValue v) =
+  NValue (fmap (lmapNValueF (hoistNValue lft run) . hoistNValueF run lft) v)
+
 liftNValue
   :: (MonadTrans u, Monad m, Functor (u m), Functor f)
   => (forall x . u m x -> m x)
   -> NValue' t f m a
   -> NValue' t f (u m) a
-liftNValue run (NValue v) =
-  NValue (fmap (lmapNValueF (unliftNValue run) . liftNValueF run) v)
+liftNValue run = hoistNValue run lift
 
 unliftNValue
   :: (MonadTrans u, Monad m, Functor (u m), Functor f)
   => (forall x . u m x -> m x)
   -> NValue' t f (u m) a
   -> NValue' t f m a
-unliftNValue run (NValue v) =
-  NValue (fmap (lmapNValueF (liftNValue run) . unliftNValueF run) v)
+unliftNValue run = hoistNValue lift run
 
 -- | An 'NValueNF' is a fully evaluated value in normal form. An 'NValue f t m' is
 --   a value in head normal form, where only the "top layer" has been
@@ -243,16 +277,6 @@ iterNValueNF
   -> r
 iterNValueNF k f = iter f . fmap k
 
-sequenceNValueNF
-  :: (Functor n, Traversable f, Monad m, Monad n)
-  => (forall x . n x -> m x)
-  -> Free (NValue' t f m) (n a)
-  -> n (Free (NValue' t f m) a)
-sequenceNValueNF transform = go
- where
-  go (Pure a ) = Pure <$> a
-  go (Free fa) = Free <$> bindNValue transform go fa
-
 iterNValueNFM
   :: forall f m n t r
    . (MonadDataContext f m, Monad n)
@@ -262,7 +286,10 @@ iterNValueNFM
   -> NValueNF t f m
   -> n r
 iterNValueNFM transform k f v =
-  iterM f =<< sequenceNValueNF transform (fmap k v)
+  iterM f =<< go (fmap k v)
+  where
+  go (Pure a ) = Pure <$> a
+  go (Free fa) = Free <$> bindNValue transform go fa
 
 nValueFromNF
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
@@ -350,31 +377,6 @@ nvBuiltinNF :: Applicative f
             => String -> (m (NValue t f m) -> m (NValueNF t f m)) -> NValueNF t f m
 nvBuiltinNF name f = Free (NValue (pure (NVBuiltinF name f)))
 
-checkComparable
-  :: (Framed e m, MonadDataErrorContext t f m)
-  => NValue t f m
-  -> NValue t f m
-  -> m ()
-checkComparable x y = case (x, y) of
-  (NVConstant (NFloat _), NVConstant (NInt _)) -> pure ()
-  (NVConstant (NInt _), NVConstant (NFloat _)) -> pure ()
-  (NVConstant (NInt _), NVConstant (NInt _)) -> pure ()
-  (NVConstant (NFloat _), NVConstant (NFloat _)) -> pure ()
-  (NVStr _, NVStr _) -> pure ()
-  (NVPath _, NVPath _) -> pure ()
-  _ -> throwError $ Comparison x y
-
-thunkEqM :: (MonadThunk t m (NValue t f m), Comonad f) => t -> t -> m Bool
-thunkEqM lt rt = force lt $ \lv -> force rt $ \rv ->
-  let unsafePtrEq = case (lt, rt) of
-        (thunkId -> lid, thunkId -> rid) | lid == rid -> return True
-        _ -> valueEqM lv rv
-  in  case (lv, rv) of
-        (NVClosure _ _, NVClosure _ _) -> unsafePtrEq
-        (NVList _     , NVList _     ) -> unsafePtrEq
-        (NVSet _ _    , NVSet _ _    ) -> unsafePtrEq
-        _                              -> valueEqM lv rv
-
 builtin
   :: forall m f t
    . (MonadThunk t m (NValue t f m), MonadDataContext f m)
@@ -405,121 +407,6 @@ builtin3 name f =
 isClosureNF :: Comonad f => NValueNF t f m -> Bool
 isClosureNF NVClosureNF{} = True
 isClosureNF _             = False
-
--- | Checks whether two containers are equal, using the given item equality
---   predicate. If there are any item slots that don't match between the two
---   containers, the result will be False.
-alignEqM
-  :: (Align f, Traversable f, Monad m)
-  => (a -> b -> m Bool)
-  -> f a
-  -> f b
-  -> m Bool
-alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
-  pairs <- forM (Data.Align.align fa fb) $ \case
-    These a b -> return (a, b)
-    _         -> throwE ()
-  forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
-
-alignEq :: (Align f, Traversable f) => (a -> b -> Bool) -> f a -> f b -> Bool
-alignEq eq fa fb = runIdentity $ alignEqM (\x y -> Identity (eq x y)) fa fb
-
-isDerivationM :: Monad m => (t -> m (Maybe NixString)) -> AttrSet t -> m Bool
-isDerivationM f m = case M.lookup "type" m of
-  Nothing -> pure False
-  Just t  -> do
-    mres <- f t
-    case mres of
-        -- We should probably really make sure the context is empty here
-        -- but the C++ implementation ignores it.
-      Just s  -> pure $ principledStringIgnoreContext s == "derivation"
-      Nothing -> pure False
-
-isDerivation :: Monad m => (t -> Maybe NixString) -> AttrSet t -> Bool
-isDerivation f = runIdentity . isDerivationM (\x -> Identity (f x))
-
-valueFEqM
-  :: Monad n
-  => (AttrSet a -> AttrSet a -> n Bool)
-  -> (a -> a -> n Bool)
-  -> NValueF p m a
-  -> NValueF p m a
-  -> n Bool
-valueFEqM attrsEq eq = curry $ \case
-  (NVConstantF (NFloat x), NVConstantF (NInt y)  ) -> pure $ x == fromInteger y
-  (NVConstantF (NInt   x), NVConstantF (NFloat y)) -> pure $ fromInteger x == y
-  (NVConstantF lc        , NVConstantF rc        ) -> pure $ lc == rc
-  (NVStrF ls, NVStrF rs) ->
-    pure $ principledStringIgnoreContext ls == principledStringIgnoreContext rs
-  (NVListF ls , NVListF rs ) -> alignEqM eq ls rs
-  (NVSetF lm _, NVSetF rm _) -> attrsEq lm rm
-  (NVPathF lp , NVPathF rp ) -> pure $ lp == rp
-  _                          -> pure False
-
-valueFEq
-  :: (AttrSet a -> AttrSet a -> Bool)
-  -> (a -> a -> Bool)
-  -> NValueF p m a
-  -> NValueF p m a
-  -> Bool
-valueFEq attrsEq eq x y = runIdentity $ valueFEqM
-  (\x' y' -> Identity (attrsEq x' y'))
-  (\x' y' -> Identity (eq x' y'))
-  x
-  y
-
-compareAttrSetsM
-  :: Monad m
-  => (t -> m (Maybe NixString))
-  -> (t -> t -> m Bool)
-  -> AttrSet t
-  -> AttrSet t
-  -> m Bool
-compareAttrSetsM f eq lm rm = do
-  isDerivationM f lm >>= \case
-    True -> isDerivationM f rm >>= \case
-      True
-        | Just lp <- M.lookup "outPath" lm, Just rp <- M.lookup "outPath" rm -> eq
-          lp
-          rp
-      _ -> compareAttrs
-    _ -> compareAttrs
-  where compareAttrs = alignEqM eq lm rm
-
-compareAttrSets
-  :: (t -> Maybe NixString)
-  -> (t -> t -> Bool)
-  -> AttrSet t
-  -> AttrSet t
-  -> Bool
-compareAttrSets f eq lm rm = runIdentity
-  $ compareAttrSetsM (\t -> Identity (f t)) (\x y -> Identity (eq x y)) lm rm
-
-valueEqM
-  :: (MonadThunk t m (NValue t f m), Comonad f)
-  => NValue t f m
-  -> NValue t f m
-  -> m Bool
-valueEqM (NValue (extract -> x)) (NValue (extract -> y)) = valueFEqM
-  (compareAttrSetsM f thunkEqM)
-  thunkEqM
-  x
-  y
- where
-  f t = force t $ \case
-    NVStr s -> pure $ Just s
-    _       -> pure Nothing
-
-valueNFEq :: Comonad f => NValueNF t f m -> NValueNF t f m -> Bool
-valueNFEq (Pure _) (Pure _) = False
-valueNFEq (Pure _) (Free _) = False
-valueNFEq (Free _) (Pure _) = False
-valueNFEq (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
-  valueFEq (compareAttrSets f valueNFEq) valueNFEq x y
- where
-  f (Pure _        ) = Nothing
-  f (Free (NVStr s)) = Just s
-  f _                = Nothing
 
 data TStringContext = NoContext | HasContext
   deriving Show
@@ -566,26 +453,6 @@ describeValue = \case
   TPath              -> "a path"
   TBuiltin           -> "a builtin function"
 
-instance Eq1 (NValueF p m) where
-  liftEq _  (NVConstantF x) (NVConstantF y) = x == y
-  liftEq _  (NVStrF      x) (NVStrF      y) = x == y
-  liftEq eq (NVListF     x) (NVListF     y) = liftEq eq x y
-  liftEq eq (NVSetF x _   ) (NVSetF y _   ) = liftEq eq x y
-  liftEq _  (NVPathF x    ) (NVPathF y    ) = x == y
-  liftEq _  _               _               = False
-
-instance Comonad f => Show1 (NValue' t f m) where
-  liftShowsPrec sp sl p = \case
-    NVConstant atom -> showsUnaryWith showsPrec "NVConstantF" p atom
-    NVStr ns ->
-      showsUnaryWith showsPrec "NVStrF" p (hackyStringIgnoreContext ns)
-    NVList lst       -> showsUnaryWith (liftShowsPrec sp sl) "NVListF" p lst
-    NVSet attrs _    -> showsUnaryWith (liftShowsPrec sp sl) "NVSetF" p attrs
-    NVPath path      -> showsUnaryWith showsPrec "NVPathF" p path
-    NVClosure c    _ -> showsUnaryWith showsPrec "NVClosureF" p c
-    NVBuiltin name _ -> showsUnaryWith showsPrec "NVBuiltinF" p name
-    _                -> error "Pattern synonyms mask coverage"
-
 data ValueFrame t f m
     = ForcingThunk
     | ConcerningValue (NValue t f m)
@@ -613,5 +480,3 @@ key
   => VarName
   -> LensLike' g (NValue' t f m a) (Maybe a)
 key k = nValue . traverse . _NVSetF . _1 . hashAt k
-
-$(deriveEq1 ''NValue')
