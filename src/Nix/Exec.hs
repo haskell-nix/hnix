@@ -589,6 +589,9 @@ newtype Lazy t (f :: * -> *) m a = Lazy
         , MonadReader (Context (Lazy t f m) t)
         )
 
+mapLazy :: (forall x. m x -> m x) -> Lazy t f m a -> Lazy t f m a
+mapLazy f (Lazy a) = Lazy $ mapReaderT (mapStateT f) a
+
 instance MonadTrans (Lazy t f) where
   lift = Lazy . lift . lift
 

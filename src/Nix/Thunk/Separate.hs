@@ -14,6 +14,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE RankNTypes #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -44,6 +45,8 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 
 import Nix.Thunk
+import Nix.Thunk.StableId
+import Nix.Thunk.FreshStableIdT
 
 -- | The type of very basic thunks
 data NThunkF forcer v
@@ -59,15 +62,16 @@ instance Show v => Show (NThunkF forcer v) where
     show (Value v) = show v
     show (Thunk _ _) = "<thunk>"
 
-type MonadSeparateThunk m = (MonadThunkId m, MonadAtomicRef m, Ord (ThunkId m)) --TODO: ThunkId allocation also needs to be sufficiently deterministic
+type MonadSeparateThunk m = (MonadAtomicRef m) --TODO: ThunkId allocation also needs to be sufficiently deterministic
 
-newtype ThunkCache m v = ThunkCache (Ref m (Map (ThunkId m) (Maybe v)))
+newtype ThunkCache m v = ThunkCache (Ref m (Map StableId (Maybe v)))
 
-class (Monad forcer, ThunkId forcer ~ ThunkId m) => Forcer forcer v m | forcer -> v, forcer -> m where
+class Monad forcer => Forcer forcer v m | forcer -> v, forcer -> m where
   liftSeparateThunkT :: SeparateThunkT forcer v m a -> forcer a
+  mapSeparateThunkT :: (forall x. SeparateThunkT forcer v m x -> SeparateThunkT forcer v m x) -> forcer a -> forcer a
 
 --TODO: HashMap?
-newtype SeparateThunkT (forcer :: * -> *) v m a = SeparateThunkT (ReaderT (ThunkCache m v) m a)
+newtype SeparateThunkT (forcer :: * -> *) v m a = SeparateThunkT (ReaderT (ThunkCache m v) (FreshStableIdT m) a)
   deriving
     ( Functor
     , Applicative
@@ -88,14 +92,15 @@ newThunkCache = ThunkCache <$> newRef Map.empty
 askThunkCache :: Monad m => SeparateThunkT forcer v m (ThunkCache m v)
 askThunkCache = SeparateThunkT ask
 
-runSeparateThunkT :: ThunkCache m v -> SeparateThunkT forcer v m a -> m a
-runSeparateThunkT c (SeparateThunkT a) = runReaderT a c
+runSeparateThunkT :: Monad m => StableId -> ThunkCache m v -> SeparateThunkT forcer v m a -> m a
+runSeparateThunkT root c (SeparateThunkT a) = runFreshStableIdT root $ runReaderT a c
 
 instance MonadTrans (SeparateThunkT forcer v) where
-    lift = SeparateThunkT . lift
+    lift = SeparateThunkT . lift . lift
 
-instance MonadThunkId m => MonadThunkId (SeparateThunkT forcer v m) where
-    type ThunkId (SeparateThunkT forcer v m) = ThunkId m
+instance Monad m => MonadThunkId (SeparateThunkT forcer v m) where
+    type ThunkId (SeparateThunkT forcer v m) = StableId
+    freshId = SeparateThunkT $ lift freshId
 
 {-
 instance (MonadSeparateThunk m, MonadCatch m)
@@ -124,16 +129,17 @@ thunkValue :: NThunkF forcer v -> Maybe v
 thunkValue (Value v) = Just v
 thunkValue _ = Nothing
 
-buildThunk :: (MonadThunkId m, ThunkId m ~ ThunkId forcer) => forcer v -> SeparateThunkT forcer v m (NThunkF forcer v)
+buildThunk :: (Monad m, Forcer forcer v m, ThunkId forcer ~ StableId) => forcer v -> SeparateThunkT forcer v m (NThunkF forcer v)
 buildThunk action = do
-    freshThunkId <- lift freshId
-    return $ Thunk freshThunkId action
+    freshThunkId <- freshId
+    c <- askThunkCache
+    return $ Thunk freshThunkId $ mapSeparateThunkT (lift . runSeparateThunkT freshThunkId c) action
 
 queryValue :: NThunkF forcer v -> a -> (v -> a) -> a
 queryValue (Value v) _ k = k v
 queryValue _ n _ = n
 
-queryThunk :: (Forcer forcer v m, Monad m, MonadAtomicRef m, Ord (ThunkId m)) => NThunkF forcer v -> forcer a -> (v -> forcer a) -> forcer a
+queryThunk :: (Forcer forcer v m, Monad m, MonadAtomicRef m, ThunkId forcer ~ StableId) => NThunkF forcer v -> forcer a -> (v -> forcer a) -> forcer a
 queryThunk (Value v) _ k = k v
 queryThunk (Thunk tid _) n k = do
     ThunkCache c <- liftSeparateThunkT $ SeparateThunkT ask
@@ -156,9 +162,8 @@ forceThunk
     ( MonadAtomicRef m
     , MonadThrow forcer
     , MonadCatch forcer
-    , Show (ThunkId m)
-    , Ord (ThunkId m)
     , Forcer forcer v m
+    , ThunkId forcer ~ StableId
     )
     => NThunkF forcer v -> (v -> forcer a) -> forcer a
 forceThunk (Value v) k = k v
@@ -180,7 +185,12 @@ forceThunk (Thunk tid action) k = do
         Just Nothing -> throwM $ ThunkLoop $ show tid
         Just (Just v) -> k v -- Computed, inactive
 
-forceEffects :: (MonadAtomicRef m, Ord (ThunkId m), Forcer forcer v m) => NThunkF forcer v -> (v -> forcer r) -> forcer r
+forceEffects
+  :: ( MonadAtomicRef m
+     , Forcer forcer v m
+     , ThunkId forcer ~ StableId
+     )
+  => NThunkF forcer v -> (v -> forcer r) -> forcer r
 forceEffects (Value v) k = k v
 forceEffects (Thunk tid action) k = do
     ThunkCache c <- liftSeparateThunkT $ SeparateThunkT ask

@@ -37,7 +37,6 @@ import           Nix.Render
 import           Nix.Thunk
 import           Nix.Thunk.Separate
 import qualified Nix.Thunk.StableId            as StableId
-import           Nix.Thunk.FreshStableIdT
 import           Nix.Utils
 import           Nix.Value
 import           Control.Monad.Ref
@@ -61,7 +60,7 @@ newtype StdThunk m = StdThunk
 type StdValue m = NValue (StdThunk m) (StdCited m) (StdLazy m)
 type StdValueNF m = NValueNF (StdThunk m) (StdCited m) (StdLazy m)
 
-newtype StdIdT m a = StdIdT { unStdIdT :: SeparateThunkT (StdLazy m) (StdValue m) (FreshStableIdT m) a }
+newtype StdIdT m a = StdIdT { unStdIdT :: SeparateThunkT (StdLazy m) (StdValue m) m a }
   deriving
     ( Functor
     , Applicative
@@ -80,10 +79,11 @@ type StdLazy m = Lazy (StdThunk m) (StdCited m) (StdIdT m)
 type MonadStdThunk m = (MonadAtomicRef m, MonadCatch m, MonadThrow m, Typeable m)
 
 instance MonadTrans StdIdT where
-  lift = StdIdT . lift . lift
+  lift = StdIdT . lift
 
-instance Monad m => Forcer (StdLazy m) (StdValue m) (FreshStableIdT m) where
+instance Monad m => Forcer (StdLazy m) (StdValue m) m where
   liftSeparateThunkT = lift . StdIdT
+  mapSeparateThunkT f = mapLazy (\(StdIdT a) -> StdIdT $ f a)
 
 instance MonadStdThunk m
   => MonadThunk (StdThunk m) (StdLazy m) (StdValue m) where
@@ -159,13 +159,13 @@ instance (MonadEffects t f m, MonadDataContext f m)
     i <- freshId
     c <- StdIdT askThunkCache
     p <- lift $ importPath @t @f @m path
-    return $ liftNValue (runFreshStableIdT i . runSeparateThunkT c . unStdIdT) p
+    return $ liftNValue (runSeparateThunkT i c . unStdIdT) p
   pathToDefaultNix = lift . pathToDefaultNix @t @f @m
   derivationStrict v = do
     i <- freshId
     c <- StdIdT askThunkCache
-    p <- lift $ derivationStrict @t @f @m (unliftNValue (runFreshStableIdT i . runSeparateThunkT c . unStdIdT) v)
-    return $ liftNValue (runFreshStableIdT i . runSeparateThunkT c . unStdIdT) p
+    p <- lift $ derivationStrict @t @f @m (unliftNValue (runSeparateThunkT i c . unStdIdT) v)
+    return $ liftNValue (runSeparateThunkT i c . unStdIdT) p
   traceEffect = lift . traceEffect @t @f @m
 
 instance HasCitations1 (StdThunk m) (StdCited m) (StdLazy m) where
@@ -175,4 +175,4 @@ instance HasCitations1 (StdThunk m) (StdCited m) (StdLazy m) where
 runStdLazyM :: (MonadIO m, MonadRef m) => Options -> StdLazy m a -> m a
 runStdLazyM opts action = do
   c <- newThunkCache
-  runFreshStableIdT StableId.nil $ runSeparateThunkT c $ unStdIdT $ runLazyM opts action
+  runSeparateThunkT StableId.nil c $ unStdIdT $ runLazyM opts action
