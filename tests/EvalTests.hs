@@ -22,7 +22,9 @@ import           Data.Text (Text)
 import           Data.Time
 import           Nix
 import           Nix.TH
+import           Nix.Fresh
 import           Nix.Thunk.Standard
+import           Nix.Var
 import qualified System.Directory as D
 import           System.Environment
 import           System.FilePath
@@ -423,7 +425,8 @@ constantEqual a b = do
     time <- liftIO getCurrentTime
     let opts = defaultOptions time
     -- putStrLn =<< lint (stripAnnotation a)
-    res <- runStdLazyM opts $ do
+    j <- newVar (1 :: Int)
+    res <- runStdLazyM opts (runFreshIdT j) $ do
         a' <- normalForm =<< nixEvalExprLoc Nothing a
         b' <- normalForm =<< nixEvalExprLoc Nothing b
         return $ valueNFEq a' b'
@@ -447,8 +450,10 @@ assertNixEvalThrows a = do
     let Success a' = parseNixTextLoc a
     time <- liftIO getCurrentTime
     let opts = defaultOptions time
+    j <- newVar (1 :: Int)
     errored <- catch
-        (False <$ runStdLazyM opts (normalForm =<< nixEvalExprLoc Nothing a'))
+        (False <$ runStdLazyM opts (runFreshIdT j)
+           (normalForm =<< nixEvalExprLoc Nothing a'))
         (\(_ :: NixException) -> pure True)
     if errored then
         pure ()

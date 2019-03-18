@@ -14,7 +14,10 @@ import           Nix
 import           Nix.Exec                       ()
 import           Nix.Cited                      ()
 import           Nix.Cited.Basic                ()
+import           Nix.Fresh
+import           Nix.Fresh.Basic
 import           Nix.Thunk.Standard
+import           Nix.Var
 import           System.Environment
 import           System.IO
 import           System.Posix.Files
@@ -22,7 +25,7 @@ import           System.Posix.Temp
 import           System.Process
 import           Test.Tasty.HUnit
 
-hnixEvalFile :: Options -> FilePath -> IO (StdValueNF IO)
+hnixEvalFile :: Options -> FilePath -> IO (StdValueNF StdIdT IO)
 hnixEvalFile opts file = do
   parseResult <- parseNixFileLoc file
   case parseResult of
@@ -30,15 +33,16 @@ hnixEvalFile opts file = do
       error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
     Success expr -> do
       setEnv "TEST_VAR" "foo"
-      runStdLazyM opts
+      i <- newVar (1 :: Int)
+      runStdLazyM opts (runFreshIdT i)
         $ catch (evaluateExpression (Just file) nixEvalExprLoc normalForm expr)
         $ \case
             NixException frames ->
               errorWithoutStackTrace
                 .   show
-                =<< renderFrames @(StdValue IO) @(StdThunk IO) frames
+                =<< renderFrames @(StdValue StdIdT IO) @(StdThunk StdIdT IO) frames
 
-hnixEvalText :: Options -> Text -> IO (StdValueNF IO)
+hnixEvalText :: Options -> Text -> IO (StdValueNF StdIdT IO)
 hnixEvalText opts src = case parseNixText src of
   Failure err ->
     error
@@ -46,8 +50,9 @@ hnixEvalText opts src = case parseNixText src of
       ++ unpack src
       ++ "`.\n"
       ++ show err
-  Success expr ->
-    runStdLazyM opts $ normalForm =<< nixEvalExpr Nothing expr
+  Success expr -> do
+    i <- newVar (1 :: Int)
+    runStdLazyM opts (runFreshIdT i) $ normalForm =<< nixEvalExpr Nothing expr
 
 nixEvalString :: String -> IO String
 nixEvalString expr = do

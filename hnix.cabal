@@ -452,6 +452,7 @@ library
       Nix.Expr.Types.Annotated
       Nix.Frames
       Nix.Fresh
+      Nix.Fresh.Basic
       Nix.Json
       Nix.Lint
       Nix.Normal
