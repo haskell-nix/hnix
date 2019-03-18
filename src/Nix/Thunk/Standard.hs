@@ -29,23 +29,20 @@ import           Data.Typeable
 import           GHC.Generics
 import           Nix.Cited
 import           Nix.Cited.Basic
-import           Nix.Effects
 import           Nix.Exec
 import           Nix.Fresh
+import           Nix.Fresh.Basic
 import           Nix.Options
-import           Nix.Render
 import           Nix.Thunk
 import           Nix.Thunk.Basic
 import           Nix.Value
-import           Nix.Var                        ( MonadVar
-                                                , newVar
-                                                )
+import           Nix.Var
 
-newtype StdThunk m = StdThunk
-  { _stdThunk :: StdCited m (NThunkF (StdLazy m) (StdValue m)) }
+newtype StdThunk (u :: (* -> *) -> * -> *) (m :: * -> *) = StdThunk
+  { _stdThunk :: StdCited u m (NThunkF (StdLazy u m) (StdValue u m)) }
 
-newtype StdCited m a = StdCited
-    { _stdCited :: Cited (StdThunk m) (StdCited m) (StdLazy m) a }
+newtype StdCited u m a = StdCited
+    { _stdCited :: Cited (StdThunk u m) (StdCited u m) (StdLazy u m) a }
     deriving
         ( Generic
         , Typeable
@@ -54,16 +51,16 @@ newtype StdCited m a = StdCited
         , Foldable
         , Traversable
         , Comonad
-        , ComonadEnv [Provenance (StdThunk m) (StdLazy m) (StdValue m)]
+        , ComonadEnv [Provenance (StdThunk u m) (StdLazy u m) (StdValue u m)]
         )
 
-type StdValue m   = NValue   (StdThunk m) (StdCited m) (StdLazy m)
-type StdValueNF m = NValueNF (StdThunk m) (StdCited m) (StdLazy m)
-type StdIdT m     = FreshIdT Int m
+type StdValue u m   = NValue   (StdThunk u m) (StdCited u m) (StdLazy u m)
+type StdValueNF u m = NValueNF (StdThunk u m) (StdCited u m) (StdLazy u m)
+-- type StdIdT m     = FreshIdT Int m
 
-type StdLazy m    = Lazy (StdThunk m) (StdCited m) (StdIdT m)
+type StdLazy u m  = Lazy (StdThunk u m) (StdCited u m) (u m)
 
-instance Show (StdThunk m) where
+instance Show (StdThunk u m) where
   show _ = "<thunk>"          -- jww (2019-03-15): NYI
 
 type MonadStdThunk m
@@ -74,8 +71,13 @@ type MonadStdThunk m
       , MonadAtomicRef m
       )
 
-instance MonadStdThunk m
-  => MonadThunk (StdThunk m) (StdLazy m) (StdValue m) where
+instance ( MonadStdThunk (u m)
+         , MonadThunkId (u m)
+         , MonadTrans u
+         , Typeable u
+         , Typeable m
+         )
+  => MonadThunk (StdThunk u m) (StdLazy u m) (StdValue u m) where
   thunk        = fmap (StdThunk . StdCited) . thunk
   thunkId      = thunkId . _stdCited . _stdThunk
   query x b f  = query (_stdCited (_stdThunk x)) b f
@@ -85,38 +87,24 @@ instance MonadStdThunk m
   wrapValue    = StdThunk . StdCited . wrapValue
   getValue     = getValue . _stdCited . _stdThunk
 
-instance MonadFile m => MonadFile (StdIdT m)
-instance MonadIntrospect m => MonadIntrospect (StdIdT m)
-instance MonadStore m => MonadStore (StdIdT m) where
-  addPath' = lift . addPath'
-  toFile_' = (lift .) . toFile_'
-instance MonadPutStr m => MonadPutStr (StdIdT m)
-instance MonadHttp m => MonadHttp (StdIdT m)
-instance MonadEnv m => MonadEnv (StdIdT m)
-instance MonadInstantiate m => MonadInstantiate (StdIdT m)
-instance MonadExec m => MonadExec (StdIdT m)
-
-instance (MonadEffects t f m, MonadDataContext f m)
-  => MonadEffects t f (StdIdT m) where
-  makeAbsolutePath = lift . makeAbsolutePath @t @f @m
-  findEnvPath      = lift . findEnvPath @t @f @m
-  findPath         = (lift .) . findPath @t @f @m
-  importPath path = do
-    i <- FreshIdT ask
-    p <- lift $ importPath @t @f @m path
-    return $ liftNValue (runFreshIdT i) p
-  pathToDefaultNix = lift . pathToDefaultNix @t @f @m
-  derivationStrict v = do
-    i <- FreshIdT ask
-    p <- lift $ derivationStrict @t @f @m (unliftNValue (runFreshIdT i) v)
-    return $ liftNValue (runFreshIdT i) p
-  traceEffect = lift . traceEffect @t @f @m
-
-instance HasCitations1 (StdThunk m) (StdLazy m) (StdValue m) (StdCited m) where
+instance HasCitations1 (StdThunk u m) (StdLazy u m) (StdValue u m) (StdCited u m) where
   citations1 (StdCited c) = citations1 c
   addProvenance1 x (StdCited c) = StdCited (addProvenance1 x c)
 
-runStdLazyM :: (MonadVar m, MonadIO m) => Options -> StdLazy m a -> m a
-runStdLazyM opts action = do
+runStdLazyM :: (MonadVar m, MonadIO m, MonadIO (u m))
+            => Options -> (u m a -> m a) -> StdLazy u m a -> m a
+runStdLazyM opts run action = run $ runLazyM opts action
+
+type StandardThunk m   = StdThunk StdIdT m
+type StandardValue m   = StdValue StdIdT m
+type StandardValueNF m = StdValueNF StdIdT m
+type StandardT m       = StdLazy StdIdT m
+
+runStandard :: (MonadVar m, MonadIO m)
+            => Options -> StdLazy StdIdT m a -> m a
+runStandard opts action = do
   i <- newVar (1 :: Int)
-  runFreshIdT i $ runLazyM opts action
+  runStdLazyM opts (runFreshIdT i) action
+
+runStandardIO :: Options -> StdLazy StdIdT IO a -> IO a
+runStandardIO = runStandard

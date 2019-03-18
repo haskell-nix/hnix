@@ -9,7 +9,6 @@ import           Control.DeepSeq
 import qualified Control.Exception as Exc
 import           Control.Applicative ((<|>))
 import           Control.Monad
-import           Control.Monad.IO.Class
 import           Data.Fix
 import           Data.List (isSuffixOf)
 import           Data.Maybe
@@ -22,8 +21,8 @@ import           Nix.Expr.Types
 import           Nix.String
 import           Nix.Options
 import           Nix.Parser
-import           Nix.Value
 import           Nix.Thunk.Standard
+import           Nix.Value
 import qualified NixLanguageTests
 import qualified ParserTests
 import qualified PrettyTests
@@ -57,8 +56,9 @@ ensureNixpkgsCanParse =
           sha256 = "#{sha256}";
         }|]) $ \expr -> do
         NVStr ns <- do
-          time <- liftIO getCurrentTime
-          runStdLazyM (defaultOptions time) $ Nix.nixEvalExprLoc Nothing expr
+          time <- getCurrentTime
+          runStandardIO (defaultOptions time) $
+            Nix.nixEvalExprLoc Nothing expr
         let dir = hackyStringIgnoreContext ns
         exists <- fileExist (unpack dir)
         unless exists $
