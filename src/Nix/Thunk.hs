@@ -40,7 +40,7 @@ class MonadThunkId m => MonadThunk t m a | t -> m, t -> a where
     forceEff :: t -> (a -> m r) -> m r
     -- | Modify the action to be performed by the thunk. For some implicits
     --   this modifies the thunk, for others it may create a new thunk.
-    further :: t -> (m a -> m a) -> m t
+    -- further :: t -> (m a -> m a) -> m t
 
 newtype ThunkLoop = ThunkLoop String -- contains rendering of ThunkId
     deriving Typeable

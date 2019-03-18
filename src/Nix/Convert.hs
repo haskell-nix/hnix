@@ -8,7 +8,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
@@ -217,11 +216,11 @@ class ToValue a m v where
 instance (Monad m, ToValue a m v) => ToValue a m (m v) where
   toValue = pure . toValue
 
-instance (Convertible e t f m, forall r. Show r => ToValue a m (NValue' t f m r))
+instance (Convertible e t f m, ToValue a m (NValue' t f m (NValueNF t f m)))
   => ToValue a m (NValueNF t f m) where
   toValue = fmap Fix . toValue
 
-instance (Convertible e t f m, forall r. Show r => ToValue a m (NValue' t f m r))
+instance (Convertible e t f m, ToValue a m (NValue' t f m (NValue t f m)))
   => ToValue a m (NValue t f m) where
   toValue = fmap Free . toValue
 

@@ -18,9 +18,9 @@ import           Nix.Effects
 import           Nix.Exec
 import           Nix.Frames
 import           Nix.String
-import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
+import           Nix.Value.Monad
 
 nvalueToJSONNixString :: MonadNix e t f m => NValue t f m -> m NixString
 nvalueToJSONNixString =
@@ -43,11 +43,11 @@ nvalueToJSON = \case
   NVList l ->
     A.Array
       .   V.fromList
-      <$> traverse (join . lift . flip force (return . nvalueToJSON)) l
+      <$> traverse (join . lift . flip demand (return . nvalueToJSON)) l
   NVSet m _ -> case HM.lookup "outPath" m of
     Nothing ->
-      A.Object <$> traverse (join . lift . flip force (return . nvalueToJSON)) m
-    Just outPath -> join $ lift $ force outPath (return . nvalueToJSON)
+      A.Object <$> traverse (join . lift . flip demand (return . nvalueToJSON)) m
+    Just outPath -> join $ lift $ demand outPath (return . nvalueToJSON)
   NVPath p -> do
     fp <- lift $ unStorePath <$> addPath p
     addSingletonStringContext $ StringContext (Text.pack fp) DirectPath

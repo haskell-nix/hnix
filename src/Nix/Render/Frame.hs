@@ -163,7 +163,7 @@ renderValueFrame
   -> ValueFrame t f m
   -> m [Doc ann]
 renderValueFrame level = fmap (: []) . \case
-  ForcingThunk       -> pure "ForcingThunk"
+  ForcingThunk   _t  -> pure "ForcingThunk" -- jww (2019-03-18): NYI
   ConcerningValue _v -> pure "ConcerningValue"
   Comparison     _ _ -> pure "Comparing"
   Addition       _ _ -> pure "Adding"
@@ -180,10 +180,9 @@ renderValueFrame level = fmap (: []) . \case
     v' <- renderValue level "" "" v
     pure $ "CoercionToJson " <> v'
   CoercionFromJson _j -> pure "CoercionFromJson"
-  ExpectationNF _t _v -> pure "ExpectationNF"
-  Expectation   t  v  -> do
-    v' <- renderValue level "" "" v
-    pure $ "Saw " <> v' <> " but expected " <> pretty (describeValue t)
+  Expectation   t  v  -> undefined {- jww (2019-03-18): NYI v -} -- do
+    -- v' <- renderValue level "" "" v
+    -- pure $ "Saw " <> v' <> " but expected " <> pretty (describeValue t)
 
 renderValue
   :: (MonadReader e m, Has e Options, MonadFile m, MonadCitedThunks t f m)

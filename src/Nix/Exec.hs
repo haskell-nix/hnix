@@ -35,7 +35,6 @@ import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Catch     hiding ( catchJust )
 import           Control.Monad.Fix
-import           Control.Monad.Free
 import           Control.Monad.Reader
 import           Control.Monad.Ref
 import           Control.Monad.State.Strict
@@ -140,8 +139,7 @@ nvBuiltinP
 nvBuiltinP p name f = addProvenance p (nvBuiltin name f)
 
 type MonadCitedThunks t f m
-  = ( MonadValue (NValue t f m) m
-  , MonadThunk t m (NValue t f m)
+  = ( MonadThunk t m (NValue t f m)
   , MonadDataErrorContext t f m
   , HasCitations m (NValue t f m) t
   , HasCitations1 m (NValue t f m) f
@@ -659,7 +657,8 @@ instance ( MonadFix m
          , Alternative m
          , MonadPlus m
          , MonadCitedThunks t f (Lazy t f m)
-        )
+         , MonadValue (NValue t f (Lazy t f m)) (Lazy t f m)
+         )
          => MonadEffects t f (Lazy t f m) where
   makeAbsolutePath origPath = do
     origPathExpanded <- expandHomePath origPath
@@ -708,7 +707,7 @@ instance ( MonadFix m
               pure expr
 
   derivationStrict = fromValue @(AttrSet (NValue t f (Lazy t f m))) >=> \s -> do
-    nn <- maybe (pure False) (force ?? fromValue) (M.lookup "__ignoreNulls" s)
+    nn <- maybe (pure False) (demand ?? fromValue) (M.lookup "__ignoreNulls" s)
     s' <- M.fromList <$> mapMaybeM (handleEntry nn) (M.toList s)
     v' <- normalForm =<< toValue @(AttrSet (NValue t f (Lazy t f m))) @_ @(NValue t f (Lazy t f m)) s'
     nixInstantiateExpr $ "derivationStrict " ++ show (prettyNValueNF v')
@@ -724,9 +723,9 @@ instance ( MonadFix m
         -- arguments to the builder.
         -- TODO This use of coerceToString is probably not right and may
         -- not have the right arguments.
-      "args"          -> force v $ fmap Just . coerceNixList
+      "args"          -> demand v $ fmap Just . coerceNixList
       "__ignoreNulls" -> pure Nothing
-      _               -> force v $ \case
+      _               -> demand v $ \case
         NVConstant NNull | ignoreNulls -> pure Nothing
         v'                             -> Just <$> coerceNix v'
      where

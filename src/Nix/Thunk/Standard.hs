@@ -51,7 +51,7 @@ newtype StdCited u m a = StdCited
         , Foldable
         , Traversable
         , Comonad
-        , ComonadEnv [Provenance (StdThunk u m) (StdLazy u m) (StdValue u m)]
+        , ComonadEnv [Provenance (StdLazy u m) (StdValue u m)]
         )
 
 type StdValue u m = NValue (StdThunk u m) (StdCited u m) (StdLazy u m)
@@ -75,14 +75,14 @@ instance ( MonadStdThunk (u m)
   => MonadThunk (StdThunk u m) (StdLazy u m) (StdValue u m) where
   thunk   = fmap (StdThunk . StdCited) . thunk
   thunkId = thunkId . _stdCited . _stdThunk
-  query x b f = query (_stdCited (_stdThunk x)) b f
   queryM x b f = queryM (_stdCited (_stdThunk x)) b f
   force     = force . _stdCited . _stdThunk
   forceEff  = forceEff . _stdCited . _stdThunk
-  wrapValue = StdThunk . StdCited . wrapValue
-  getValue  = getValue . _stdCited . _stdThunk
+  -- query x b f = query (_stdCited (_stdThunk x)) b f
+  -- wrapValue = StdThunk . StdCited . wrapValue
+  -- getValue  = getValue . _stdCited . _stdThunk
 
-instance HasCitations1 (StdThunk u m) (StdLazy u m) (StdValue u m) (StdCited u m) where
+instance HasCitations1 (StdLazy u m) (StdValue u m) (StdCited u m) where
   citations1 (StdCited c) = citations1 c
   addProvenance1 x (StdCited c) = StdCited (addProvenance1 x c)
 

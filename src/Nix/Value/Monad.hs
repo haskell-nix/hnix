@@ -9,4 +9,4 @@ class MonadValue v m where
   -- | If 'v' is a thunk, 'train' allows us to modify the action to be
   --   peformed by the thunk, perhaps by enriching it with scpoe info, for
   --   example.
-  train :: v -> (m v -> m v) -> m v
+  -- train :: v -> (m v -> m v) -> m v

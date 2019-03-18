@@ -29,7 +29,7 @@ import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 
-newtype Cited t f m a = Cited { getCited :: NCited t m (NValue t f m) a }
+newtype Cited t f m a = Cited { getCited :: NCited m (NValue t f m) a }
   deriving
     ( Generic
     , Typeable
@@ -38,10 +38,10 @@ newtype Cited t f m a = Cited { getCited :: NCited t m (NValue t f m) a }
     , Foldable
     , Traversable
     , Comonad
-    , ComonadEnv [Provenance t m (NValue t f m)]
+    , ComonadEnv [Provenance m (NValue t f m)]
     )
 
-instance HasCitations1 t m (NValue t f m) (Cited t f m) where
+instance HasCitations1 m (NValue t f m) (Cited t f m) where
   citations1 (Cited c) = citations c
   addProvenance1 x (Cited c) = Cited (addProvenance x c)
 
@@ -49,6 +49,7 @@ instance ( Has e Options
          , Framed e m
          , MonadThunk t m v
          , Typeable m
+         , Typeable f
          , Typeable u
          , MonadCatch m
          )
@@ -75,7 +76,6 @@ instance ( Has e Options
 
   thunkId (Cited (NCited _ t)) = thunkId @_ @m t
 
-  query (Cited (NCited _ t)) = query t
   queryM (Cited (NCited _ t)) = queryM t
 
   -- | The ThunkLoop exception is thrown as an exception with MonadThrow,
@@ -98,6 +98,3 @@ instance ( Has e Options
       [] -> forceEff t f
       Provenance scope e@(Compose (Ann s _)) : _ ->
         withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceEff t f)
-
-  wrapValue = Cited . NCited [] . wrapValue
-  getValue (Cited (NCited _ v)) = getValue v
