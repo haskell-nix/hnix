@@ -30,6 +30,8 @@ import           GHC.Generics
 import           Nix.Cited
 import           Nix.Cited.Basic
 import           Nix.Exec
+import           Nix.Fresh
+import           Nix.Fresh.Basic
 import           Nix.Options
 import           Nix.Thunk
 import           Nix.Thunk.Basic
@@ -95,3 +97,17 @@ runStdLazyM opts run action = do
   -- i <- newVar (1 :: Int)
   -- runFreshIdT i $ runLazyM opts action
   run $ runLazyM opts action
+
+type StandardThunk m   = StdThunk StdIdT m
+type StandardValue m   = StdValue StdIdT m
+type StandardValueNF m = StdValueNF StdIdT m
+type StandardT m       = StdLazy StdIdT m
+
+runStandard :: (MonadVar m, MonadIO m)
+            => Options -> StdLazy StdIdT m a -> m a
+runStandard opts action = do
+  i <- newVar (1 :: Int)
+  runStdLazyM opts (runFreshIdT i) action
+
+runStandardIO :: Options -> StdLazy StdIdT IO a -> IO a
+runStandardIO = runStandard

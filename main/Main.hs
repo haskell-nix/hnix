@@ -30,8 +30,6 @@ import           Data.Text.Prettyprint.Doc.Render.Text
 import           Nix
 import           Nix.Convert
 import qualified Nix.Eval                      as Eval
-import           Nix.Fresh
-import           Nix.Fresh.Basic
 import           Nix.Json
 -- import           Nix.Lint
 import           Nix.Options.Parser
@@ -49,10 +47,9 @@ import qualified Text.Show.Pretty              as PS
 
 main :: IO ()
 main = do
-  time <- liftIO getCurrentTime
+  time <- getCurrentTime
   opts <- execParser (nixOptionsInfo time)
-  i <- newVar (1 :: Int)
-  runStdLazyM opts (runFreshIdT i) $ case readFrom opts of
+  runStandardIO opts $ case readFrom opts of
     Just path -> do
       let file = addExtension (dropExtension path) "nixc"
       process opts (Just file) =<< liftIO (readCache path)
@@ -98,7 +95,7 @@ main = do
         NixException frames ->
           errorWithoutStackTrace
             .   show
-            =<< renderFrames @(StdValue StdIdT IO) @(StdThunk StdIdT IO) frames
+            =<< renderFrames @(StandardValue IO) @(StandardThunk IO) frames
 
       when (repl opts) $ withNixContext Nothing $ Repl.main
 
@@ -135,7 +132,7 @@ main = do
    where
     printer
       | finder opts
-      = fromValue @(AttrSet (StdThunk StdIdT IO)) >=> findAttrs
+      = fromValue @(AttrSet (StandardThunk IO)) >=> findAttrs
       | xml opts
       = liftIO
         .   putStrLn
@@ -165,7 +162,7 @@ main = do
                   Thunk _ _ ref -> do
                     let path         = prefix ++ Text.unpack k
                         (_, descend) = filterEntry path k
-                    val <- readVar @(StdLazy StdIdT IO) ref
+                    val <- readVar @(StandardT IO) ref
                     case val of
                       Computed _ -> pure (k, Nothing)
                       _ | descend   -> (k, ) <$> forceEntry path nv
@@ -207,7 +204,7 @@ main = do
                 .   (k ++)
                 .   (": " ++)
                 .   show
-                =<< renderFrames @(StdValue StdIdT IO) @(StdThunk StdIdT IO) frames
+                =<< renderFrames @(StandardValue IO) @(StandardThunk IO) frames
               return Nothing
 
   reduction path mp x = do
