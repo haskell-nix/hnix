@@ -482,7 +482,7 @@ library
       Paths_hnix
   hs-source-dirs:
       src
-  ghc-options: -Wall
+  ghc-options: -Wall -fprint-potential-instances
   build-depends:
       aeson
     , array >=0.4 && <0.6

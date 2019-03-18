@@ -818,7 +818,7 @@ findPathBy finder l name = do
   resolvePath s = case M.lookup "path" s of
     Just t  -> return t
     Nothing -> case M.lookup "uri" s of
-      Just ut -> defer $ fetchTarball (demand ut pure)
+      Just ut -> defer $ fetchTarball ut
       Nothing ->
         throwError
           $  ErrorCall
@@ -893,8 +893,8 @@ evalExprLoc expr = do
   raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x
 
 fetchTarball
-  :: forall e t f m . MonadNix e t f m => m (NValue t f m) -> m (NValue t f m)
-fetchTarball v = v >>= \case
+  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
+fetchTarball = flip demand $ \case
   NVSet s _ -> case M.lookup "url" s of
     Nothing ->
       throwError $ ErrorCall "builtins.fetchTarball: Missing url attribute"
