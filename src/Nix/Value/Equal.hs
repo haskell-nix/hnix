@@ -38,6 +38,7 @@ import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import           Data.Align
 import           Data.Eq.Deriving
+import           Data.Fix
 import           Data.Functor.Classes
 import           Data.Functor.Identity
 import qualified Data.HashMap.Lazy             as M
@@ -164,30 +165,30 @@ compareAttrSets f eq lm rm = runIdentity
   $ compareAttrSetsM (\t -> Identity (f t)) (\x y -> Identity (eq x y)) lm rm
 
 valueEqM
-  :: (MonadThunk t m (NValue t f m), Comonad f)
+  :: forall t f m. (MonadThunk t m (NValue t f m), Comonad f)
   => NValue t f m
   -> NValue t f m
   -> m Bool
-valueEqM (NValue (extract -> x)) (NValue (extract -> y)) = valueFEqM
-  (compareAttrSetsM f thunkEqM)
-  thunkEqM
-  x
-  y
- where
-  f t = force t $ \case
+valueEqM (Pure x) (Pure y) = thunkEqM x y
+valueEqM (Pure _) _ = pure False
+valueEqM _ (Pure _) = pure False
+valueEqM (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
+  valueFEqM (compareAttrSetsM f valueEqM) valueEqM x y
+  where
+  f (Pure t) = force t $ \case
     NVStr s -> pure $ Just s
     _       -> pure Nothing
+  f (Free v) = case v of
+    NVStr' s -> pure $ Just s
+    _        -> pure Nothing
 
 valueNFEq :: Comonad f => NValueNF t f m -> NValueNF t f m -> Bool
-valueNFEq (Pure _) (Pure _) = False
-valueNFEq (Pure _) (Free _) = False
-valueNFEq (Free _) (Pure _) = False
-valueNFEq (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
+valueNFEq (Fix (NValue (extract -> x))) (Fix (NValue (extract -> y))) =
   valueFEq (compareAttrSets f valueNFEq) valueNFEq x y
  where
-  f (Pure _        ) = Nothing
-  f (Free (NVStr s)) = Just s
-  f _                = Nothing
+  f = \case
+    NVStrNF s -> Just s
+    _         -> Nothing
 
 instance Eq1 (NValueF p m) where
   liftEq _  (NVConstantF x) (NVConstantF y) = x == y

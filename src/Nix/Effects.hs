@@ -51,7 +51,7 @@ class (MonadFile m,
 
     -- | Having an explicit list of sets corresponding to the NIX_PATH
     -- and a file path try to find an existing path
-    findPath :: [t] -> FilePath -> m FilePath
+    findPath :: [NValue t f m] -> FilePath -> m FilePath
 
     importPath :: FilePath -> m (NValue t f m)
     pathToDefaultNix :: FilePath -> m FilePath

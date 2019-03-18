@@ -126,7 +126,8 @@ withNixContext mpath action = do
       let ref = wrapValue @t @m @(NValue t f m) $ nvPath path
       pushScope (M.singleton "__cur_file" ref) action
 
-builtins :: (MonadNix e t f m, Scoped t m) => m (Scopes m t)
+builtins :: (MonadNix e t f m, Scoped (NValue t f m) m)
+         => m (Scopes m (NValue t f m))
 builtins = do
   ref <- thunk $ flip nvSet M.empty <$> buildMap
   lst <- ([("builtins", ref)] ++) <$> topLevelBuiltins

@@ -15,6 +15,8 @@ module Nix.Utils (module Nix.Utils, module X) where
 import           Control.Arrow                  ( (&&&) )
 import           Control.Monad
 import           Control.Monad.Fix
+import           Control.Monad.Free
+import           Control.Monad.Trans.Control    ( MonadTransControl(..) )
 import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Encoding           as A
 import           Data.Fix
@@ -28,6 +30,7 @@ import           Data.Monoid                    ( Endo
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
 import qualified Data.Vector                   as V
+import           Data.Void
 import           Lens.Family2                  as X
 import           Lens.Family2.Stock             ( _1
                                                 , _2
@@ -89,6 +92,25 @@ cataPM f x = f x <=< traverse (cataPM f) . unFix $ x
 
 transport :: Functor g => (forall x . f x -> g x) -> Fix f -> Fix g
 transport f (Fix x) = Fix $ fmap (transport f) (f x)
+
+lifted
+    :: ( MonadTransControl u
+      , Monad (u m)
+      , Monad m
+      )
+    => ((a -> m (StT u b)) -> m (StT u b)) -> (a -> u m b) -> u m b
+lifted f k = liftWith (\run -> f (run . k)) >>= restoreT . return
+
+freeToFix :: Functor f => (a -> Fix f) -> Free f a -> Fix f
+freeToFix f = go
+  where
+    go (Pure a) = f a
+    go (Free v) = Fix (fmap go v)
+
+fixToFree :: Functor f => Fix f -> Free f Void
+fixToFree = Free . go
+  where
+    go (Fix f) = fmap (Free . go) f
 
 -- | adi is Abstracting Definitional Interpreters:
 --
