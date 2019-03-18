@@ -93,10 +93,7 @@ instance HasCitations1 (StdThunk u m) (StdLazy u m) (StdValue u m) (StdCited u m
 
 runStdLazyM :: (MonadVar m, MonadIO m, MonadIO (u m))
             => Options -> (u m a -> m a) -> StdLazy u m a -> m a
-runStdLazyM opts run action = do
-  -- i <- newVar (1 :: Int)
-  -- runFreshIdT i $ runLazyM opts action
-  run $ runLazyM opts action
+runStdLazyM opts run action = run $ runLazyM opts action
 
 type StandardThunk m   = StdThunk StdIdT m
 type StandardValue m   = StdValue StdIdT m
