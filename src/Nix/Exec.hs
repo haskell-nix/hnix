@@ -84,39 +84,42 @@ import           GHC.DataSize
 #endif
 #endif
 
-type Cited t f m = (HasCitations1 t f m, MonadDataContext f m)
+type MonadCited t f m
+    = ( HasCitations1 t m (NValue t f m) f
+      , MonadDataContext f m
+      )
 
-nvConstantP :: Cited t f m => Provenance t f m -> NAtom -> NValue t f m
+nvConstantP :: MonadCited t f m => Provenance t m (NValue t f m) -> NAtom -> NValue t f m
 nvConstantP p x = addProvenance p (nvConstant x)
 
-nvStrP :: Cited t f m => Provenance t f m -> NixString -> NValue t f m
+nvStrP :: MonadCited t f m => Provenance t m (NValue t f m) -> NixString -> NValue t f m
 nvStrP p ns = addProvenance p (nvStr ns)
 
-nvPathP :: Cited t f m => Provenance t f m -> FilePath -> NValue t f m
+nvPathP :: MonadCited t f m => Provenance t m (NValue t f m) -> FilePath -> NValue t f m
 nvPathP p x = addProvenance p (nvPath x)
 
-nvListP :: Cited t f m => Provenance t f m -> [t] -> NValue t f m
+nvListP :: MonadCited t f m => Provenance t m (NValue t f m) -> [t] -> NValue t f m
 nvListP p l = addProvenance p (nvList l)
 
 nvSetP
-  :: Cited t f m
-  => Provenance t f m
+  :: MonadCited t f m
+  => Provenance t m (NValue t f m)
   -> AttrSet t
   -> AttrSet SourcePos
   -> NValue t f m
 nvSetP p s x = addProvenance p (nvSet s x)
 
 nvClosureP
-  :: Cited t f m
-  => Provenance t f m
+  :: MonadCited t f m
+  => Provenance t m (NValue t f m)
   -> Params ()
   -> (m (NValue t f m) -> m t)
   -> NValue t f m
 nvClosureP p x f = addProvenance p (nvClosure x f)
 
 nvBuiltinP
-  :: Cited t f m
-  => Provenance t f m
+  :: MonadCited t f m
+  => Provenance t m (NValue t f m)
   -> String
   -> (m (NValue t f m) -> m t)
   -> NValue t f m
@@ -125,7 +128,7 @@ nvBuiltinP p name f = addProvenance p (nvBuiltin name f)
 type MonadCitedThunks t f m
   = ( MonadThunk t m (NValue t f m)
   , MonadDataErrorContext t f m
-  , HasCitations1 t f m
+  , HasCitations1 t m (NValue t f m) f
   )
 
 type MonadNix e t f m
@@ -192,13 +195,15 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalCurPos = do
     scope                  <- currentScopes
     span@(SrcSpan delta _) <- currentPos
-    addProvenance @_ @f (Provenance scope (NSym_ span "__curPos"))
+    addProvenance @_ @_ @(NValue t f m)
+      (Provenance scope (NSym_ span "__curPos"))
       <$> toValue delta
 
   evaledSym name val = do
     scope <- currentScopes
     span  <- currentPos
-    pure $ addProvenance @_ @f (Provenance scope (NSym_ span name)) val
+    pure $ addProvenance @_ @_ @(NValue t f m)
+      (Provenance scope (NSym_ span name)) val
 
   evalConstant c = do
     scope <- currentScopes
@@ -312,7 +317,7 @@ callFunc fun arg = do
     x -> throwError $ ErrorCall $ "Attempt to call non-function: " ++ show x
 
 execUnaryOp
-  :: (Framed e m, Cited t f m, Show t)
+  :: (Framed e m, MonadCited t f m, Show t)
   => Scopes m t
   -> SrcSpan
   -> NUnaryOp
@@ -367,7 +372,7 @@ execBinaryOp scope span NAnd larg rarg = fromNix larg >>= \l -> if l
 
 execBinaryOp scope span op lval rarg = do
   rval <- rarg
-  let bin :: (Provenance t f m -> a) -> a
+  let bin :: (Provenance t m (NValue t f m) -> a) -> a
       bin f = f (Provenance scope (NBinary_ span op (Just lval) (Just rval)))
       toBool = pure . bin nvConstantP . NBool
   case (lval, rval) of
@@ -487,7 +492,7 @@ execBinaryOp scope span op lval rarg = do
       ++ show rval
 
   numBinOp
-    :: (forall r . (Provenance t f m -> r) -> r)
+    :: (forall r . (Provenance t m (NValue t f m) -> r) -> r)
     -> (forall a . Num a => a -> a -> a)
     -> NAtom
     -> NAtom
@@ -495,7 +500,7 @@ execBinaryOp scope span op lval rarg = do
   numBinOp bin f = numBinOp' bin f f
 
   numBinOp'
-    :: (forall r . (Provenance t f m -> r) -> r)
+    :: (forall r . (Provenance t m (NValue t f m) -> r) -> r)
     -> (Integer -> Integer -> Integer)
     -> (Float -> Float -> Float)
     -> NAtom
@@ -586,6 +591,8 @@ newtype Lazy t (f :: * -> *) m a = Lazy
         , MonadPlus
         , MonadFix
         , MonadIO
+        , MonadCatch
+        , MonadThrow
         , MonadReader (Context (Lazy t f m) t)
         )
 
@@ -602,13 +609,6 @@ instance MonadAtomicRef m => MonadAtomicRef (Lazy t f m) where
   atomicModifyRef r = lift . atomicModifyRef r
 
 instance (MonadFile m, Monad m) => MonadFile (Lazy t f m)
-
-instance MonadCatch m => MonadCatch (Lazy t f m) where
-  catch (Lazy (ReaderT m)) f =
-    Lazy $ ReaderT $ \e -> catch (m e) ((`runReaderT` e) . runLazy . f)
-
-instance MonadThrow m => MonadThrow (Lazy t f m) where
-  throwM = Lazy . throwM
 
 #ifdef MIN_VERSION_haskeline
 instance MonadException m => MonadException (Lazy t f m) where

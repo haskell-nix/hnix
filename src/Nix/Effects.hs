@@ -79,7 +79,8 @@ recursiveSize
 
 class Monad m => MonadExec m where
     exec' :: [String] -> m (Either ErrorCall NExprLoc)
-    default exec' :: (MonadTrans t, MonadExec m', m ~ t m') => [String] -> m (Either ErrorCall NExprLoc)
+    default exec' :: (MonadTrans t, MonadExec m', m ~ t m')
+                  => [String] -> m (Either ErrorCall NExprLoc)
     exec' = lift . exec'
 
 instance MonadExec IO where

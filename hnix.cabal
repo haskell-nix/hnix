@@ -440,6 +440,7 @@ library
       Nix.Builtins
       Nix.Cache
       Nix.Cited
+      Nix.Cited.Basic
       Nix.Context
       Nix.Convert
       Nix.Effects

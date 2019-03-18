@@ -192,14 +192,14 @@ prettyAtom atom = simpleExpr $ pretty $ unpack $ atomText atom
 prettyNix :: NExpr -> Doc ann
 prettyNix = withoutParens . cata exprFNixDoc
 
-instance HasCitations1 t f m
-  => HasCitations t f m (NValue' t f m a) where
+instance HasCitations1 t m v f
+  => HasCitations t m v (NValue' t f m a) where
   citations (NValue f) = citations1 f
   addProvenance x (NValue f) = NValue (addProvenance1 x f)
 
 prettyOriginExpr
   :: forall t f m ann
-   . HasCitations1 t f m
+   . HasCitations1 t m (NValue t f m) f
   => NExprLocF (Maybe (NValue t f m))
   -> Doc ann
 prettyOriginExpr = withoutParens . go
@@ -208,7 +208,7 @@ prettyOriginExpr = withoutParens . go
 
   render :: Maybe (NValue t f m) -> NixDoc ann
   render Nothing = simpleExpr $ "_"
-  render (Just (reverse . citations @t @f @m -> p:_)) = go (_originExpr p)
+  render (Just (reverse . citations @t @m -> p:_)) = go (_originExpr p)
   render _       = simpleExpr "?"
     -- render (Just (NValue (citations -> ps))) =
         -- simpleExpr $ foldr ((\x y -> vsep [x, y]) . parens . indent 2 . withoutParens
@@ -370,14 +370,14 @@ prettyNValue = fmap prettyNValueNF . removeEffectsM
 
 prettyNValueProv
   :: forall t f m ann
-   . ( HasCitations1 t f m
+   . ( HasCitations1 t m (NValue t f m) f
      , MonadThunk t m (NValue t f m)
      , MonadDataContext f m
      )
   => NValue t f m
   -> m (Doc ann)
 prettyNValueProv v@(NValue nv) = do
-  let ps = citations1 @t @f @m nv
+  let ps = citations1 @t @m @(NValue t f m) @f nv
   case ps of
     [] -> prettyNValue v
     ps -> do
@@ -394,15 +394,15 @@ prettyNValueProv v@(NValue nv) = do
 
 prettyNThunk
   :: forall t f m ann
-   . ( HasCitations t f m t
-     , HasCitations1 t f m
+   . ( HasCitations t m (NValue t f m) t
+     , HasCitations1 t m (NValue t f m) f
      , MonadThunk t m (NValue t f m)
      , MonadDataContext f m
      )
   => t
   -> m (Doc ann)
 prettyNThunk t = do
-  let ps = citations @t @f @m @t t
+  let ps = citations @t @m @(NValue t f m) @t t
   v' <- prettyNValueNF <$> dethunk t
   pure
     $ fillSep

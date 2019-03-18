@@ -5,9 +5,11 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Main where
 
+import           Control.Comonad                ( extract )
 import qualified Control.DeepSeq               as Deep
 import qualified Control.Exception             as Exc
 import           Control.Monad
@@ -26,7 +28,6 @@ import qualified Data.Text.Lazy.IO             as TL
 import           Data.Text.Prettyprint.Doc
 import           Data.Text.Prettyprint.Doc.Render.Text
 import           Nix
-import           Nix.Cited
 import           Nix.Convert
 import qualified Nix.Eval                      as Eval
 import           Nix.Json
@@ -156,7 +157,7 @@ main = do
         go prefix s = do
           xs <-
             forM (sortOn fst (M.toList s))
-              $ \(k, nv@(StdThunk (StdCited (NCited _ t)))) -> case t of
+              $ \(k, nv@(StdThunk (extract -> t))) -> case t of
                   Value v       -> pure (k, Just v)
                   Thunk _ _ ref -> do
                     let path         = prefix ++ Text.unpack k

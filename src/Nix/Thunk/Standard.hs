@@ -12,6 +12,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -23,27 +24,28 @@ import           Control.Comonad                ( Comonad )
 import           Control.Comonad.Env            ( ComonadEnv )
 import           Control.Monad.Catch     hiding ( catchJust )
 import           Control.Monad.Reader
-import           Data.Fix
+import           Control.Monad.Ref
+import           Data.Typeable
 import           GHC.Generics
 import           Nix.Cited
+import           Nix.Cited.Basic
 import           Nix.Effects
-import           Nix.Eval                      as Eval
 import           Nix.Exec
-import           Nix.Expr
-import           Nix.Frames
 import           Nix.Fresh
 import           Nix.Options
 import           Nix.Render
 import           Nix.Thunk
 import           Nix.Thunk.Basic
-import           Nix.Utils
 import           Nix.Value
 import           Nix.Var                        ( MonadVar
                                                 , newVar
                                                 )
 
+newtype StdThunk m = StdThunk
+  { _stdThunk :: StdCited m (NThunkF (StdLazy m) (StdValue m)) }
+
 newtype StdCited m a = StdCited
-    { _stdCited :: NCited (StdThunk m) (StdCited m) (StdLazy m) a }
+    { _stdCited :: Cited (StdThunk m) (StdCited m) (StdLazy m) a }
     deriving
         ( Generic
         , Typeable
@@ -52,74 +54,36 @@ newtype StdCited m a = StdCited
         , Foldable
         , Traversable
         , Comonad
-        , ComonadEnv [Provenance (StdThunk m) (StdCited m) (StdLazy m)]
+        , ComonadEnv [Provenance (StdThunk m) (StdLazy m) (StdValue m)]
         )
 
-newtype StdThunk m = StdThunk
-    { _stdThunk :: StdCited m (NThunkF (StdLazy m) (StdValue m)) }
-
-type StdValue m = NValue (StdThunk m) (StdCited m) (StdLazy m)
+type StdValue m   = NValue   (StdThunk m) (StdCited m) (StdLazy m)
 type StdValueNF m = NValueNF (StdThunk m) (StdCited m) (StdLazy m)
+type StdIdT m     = FreshIdT Int m
 
-type StdIdT m = FreshIdT Int m
-
-type StdLazy m = Lazy (StdThunk m) (StdCited m) (StdIdT m)
-
-type MonadStdThunk m = (MonadVar m, MonadCatch m, MonadThrow m, Typeable m)
-
-instance MonadStdThunk m
-  => MonadThunk (StdThunk m) (StdLazy m) (StdValue m) where
-  thunk mv = do
-    opts :: Options <- asks (view hasLens)
-
-    if thunks opts
-      then do
-        frames :: Frames <- asks (view hasLens)
-
-        -- Gather the current evaluation context at the time of thunk
-        -- creation, and record it along with the thunk.
-        let go (fromException ->
-                    Just (EvaluatingExpr scope
-                             (Fix (Compose (Ann s e))))) =
-                let e' = Compose (Ann s (Nothing <$ e))
-                in [Provenance scope e']
-            go _ = []
-            ps = concatMap (go . frame) frames
-
-        fmap (StdThunk . StdCited . NCited ps) . thunk $ mv
-      else fmap (StdThunk . StdCited . NCited []) . thunk $ mv
-
-  thunkId (StdThunk (StdCited (NCited _ t))) = thunkId t
-
-  query (StdThunk (StdCited (NCited _ t))) = query t
-  queryM (StdThunk (StdCited (NCited _ t))) = queryM t
-
-  -- | The ThunkLoop exception is thrown as an exception with MonadThrow,
-  --   which does not capture the current stack frame information to provide
-  --   it in a NixException, so we catch and re-throw it here using
-  --   'throwError' from Frames.hs.
-  force (StdThunk (StdCited (NCited ps t))) f =
-    catch go (throwError @ThunkLoop)
-   where
-    go = case ps of
-      [] -> force t f
-      Provenance scope e@(Compose (Ann s _)) : _ ->
-        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (force t f)
-
-  forceEff (StdThunk (StdCited (NCited ps t))) f = catch
-    go
-    (throwError @ThunkLoop)
-   where
-    go = case ps of
-      [] -> forceEff t f
-      Provenance scope e@(Compose (Ann s _)) : _ ->
-        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceEff t f)
-
-  wrapValue = StdThunk . StdCited . NCited [] . wrapValue
-  getValue (StdThunk (StdCited (NCited _ v))) = getValue v
+type StdLazy m    = Lazy (StdThunk m) (StdCited m) (StdIdT m)
 
 instance Show (StdThunk m) where
   show _ = "<thunk>"          -- jww (2019-03-15): NYI
+
+type MonadStdThunk m
+    = ( MonadVar m
+      , MonadCatch m
+      , MonadThrow m
+      , Typeable m
+      , MonadAtomicRef m
+      )
+
+instance MonadStdThunk m
+  => MonadThunk (StdThunk m) (StdLazy m) (StdValue m) where
+  thunk        = fmap (StdThunk . StdCited) . thunk
+  thunkId      = thunkId . _stdCited . _stdThunk
+  query x b f  = query (_stdCited (_stdThunk x)) b f
+  queryM x b f = queryM (_stdCited (_stdThunk x)) b f
+  force        = force . _stdCited . _stdThunk
+  forceEff     = forceEff . _stdCited . _stdThunk
+  wrapValue    = StdThunk . StdCited . wrapValue
+  getValue     = getValue . _stdCited . _stdThunk
 
 instance MonadFile m => MonadFile (StdIdT m)
 instance MonadIntrospect m => MonadIntrospect (StdIdT m)
@@ -148,9 +112,9 @@ instance (MonadEffects t f m, MonadDataContext f m)
     return $ liftNValue (runFreshIdT i) p
   traceEffect = lift . traceEffect @t @f @m
 
-instance HasCitations1 (StdThunk m) (StdCited m) (StdLazy m) where
-  citations1 (StdCited c) = citations c
-  addProvenance1 x (StdCited c) = StdCited (addProvenance x c)
+instance HasCitations1 (StdThunk m) (StdLazy m) (StdValue m) (StdCited m) where
+  citations1 (StdCited c) = citations1 c
+  addProvenance1 x (StdCited c) = StdCited (addProvenance1 x c)
 
 runStdLazyM :: (MonadVar m, MonadIO m) => Options -> StdLazy m a -> m a
 runStdLazyM opts action = do
