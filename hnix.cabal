@@ -1,5 +1,5 @@
 name:           hnix
-version:        0.5.2
+version:        0.6.0
 synopsis:       Haskell implementation of the Nix language
 description:    Haskell implementation of the Nix language.
 category:       System, Data, Nix
@@ -394,7 +394,6 @@ extra-source-files:
     data/simple-pretty.nix
     data/simple.nix
     LICENSE
-    package.yaml
     README.md
     tests/eval-compare/builtins.split-01.nix
     tests/eval-compare/builtins.split-02.nix
