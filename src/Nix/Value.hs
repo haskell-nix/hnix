@@ -328,7 +328,8 @@ nValueToNFM
   -> (t -> (NValue t f m -> n (NValueNF t f m)) -> n (NValueNF t f m))
   -> NValue t f m
   -> n (NValueNF t f m)
-nValueToNFM transform k = iterNValueM transform k undefined
+nValueToNFM transform k =
+  iterNValueM transform k $ fmap Fix . sequenceNValue' transform
 
 pattern NVThunk t <- Pure t
 

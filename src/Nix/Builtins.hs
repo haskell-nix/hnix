@@ -6,6 +6,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -59,7 +60,6 @@ import           Data.Foldable                  ( foldrM )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List
 import           Data.Maybe
-import           Data.Proxy
 import           Data.Scientific
 import           Data.Set                       ( Set )
 import qualified Data.Set                      as S
@@ -90,7 +90,6 @@ import           Nix.Parser              hiding ( nixPath )
 import           Nix.Render
 import           Nix.Scope
 import           Nix.String
-import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 import           Nix.Value.Equal
@@ -672,7 +671,8 @@ attrNames
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 attrNames =
   fromValue @(AttrSet (NValue t f m))
-    >=> toValue
+    >=> fmap getDeeper
+    .   toValue
     .   map principledMakeNixStringWithoutContext
     .   sort
     .   M.keys
@@ -1248,7 +1248,8 @@ absolutePathFromValue = \case
   v           -> throwError $ ErrorCall $ "expected a path, got " ++ show v
 
 readFile_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-readFile_ = absolutePathFromValue >=> Nix.Render.readFile >=> toValue
+readFile_ path = demand path $
+  absolutePathFromValue >=> Nix.Render.readFile >=> toValue
 
 findFile_
   :: forall e t f m
@@ -1284,8 +1285,8 @@ instance Convertible e t f m => ToValue FileType m (NValue t f m) where
 
 readDir_
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-readDir_ path = do
-  path           <- absolutePathFromValue path
+readDir_ p = demand p $ \path' -> do
+  path           <- absolutePathFromValue path'
   items          <- listDirectory path
   itemsWithTypes <- forM items $ \item -> do
     s <- getSymbolicLinkStatus $ path </> item
@@ -1295,7 +1296,7 @@ readDir_ path = do
           | isSymbolicLink s -> FileTypeSymlink
           | otherwise        -> FileTypeUnknown
     pure (Text.pack item, t)
-  toValue (M.fromList itemsWithTypes)
+  getDeeper <$> toValue (M.fromList itemsWithTypes)
 
 fromJSON
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)

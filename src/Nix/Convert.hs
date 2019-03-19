@@ -1,11 +1,13 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE IncoherentInstances #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -13,7 +15,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
@@ -46,9 +47,11 @@ import           Nix.Frames
 import           Nix.String
 import           Nix.Value
 import           Nix.Value.Monad
+import           Nix.Thunk
 import           Nix.Utils
 
 newtype Deeper a = Deeper { getDeeper :: a }
+  deriving (Typeable, Functor, Foldable, Traversable)
 
 {-
 
@@ -71,15 +74,19 @@ class FromValue a m v where
     fromValue    :: v -> m a
     fromValueMay :: v -> m (Maybe a)
 
-type Convertible e t f m = (Framed e m, MonadDataErrorContext t f m)
+type Convertible e t f m
+  = ( Framed e m
+  , MonadDataErrorContext t f m
+  , MonadThunk t m (NValue t f m)
+  )
 
 instance ( Convertible e t f m
          , MonadValue (NValueNF t f m) m
          , FromValue a m (NValue' t f m (NValueNF t f m))
          )
   => FromValue a m (NValueNF t f m) where
-  fromValueMay = flip demand $ \(Fix v) -> fromValueMay v
-  fromValue    = flip demand $ \(Fix v) -> fromValue v
+  fromValueMay (Fix v) = fromValueMay v
+  fromValue    (Fix v) = fromValue v
 
 instance ( Convertible e t f m
          , MonadValue (NValue t f m) m
@@ -87,10 +94,10 @@ instance ( Convertible e t f m
          )
   => FromValue a m (NValue t f m) where
   fromValueMay = flip demand $ \case
-    Pure _ -> pure Nothing
+    Pure t -> force t fromValueMay
     Free v -> fromValueMay v
   fromValue    = flip demand $ \case
-    Pure t -> throwError $ ForcingThunk @t @f @m t
+    Pure t -> force t fromValue
     Free v -> fromValue v
 
 instance ( Convertible e t f m
@@ -98,8 +105,8 @@ instance ( Convertible e t f m
          , FromValue a m (Deeper (NValue' t f m (NValueNF t f m)))
          )
   => FromValue a m (Deeper (NValueNF t f m)) where
-  fromValueMay (Deeper v) = demand v $ \(Fix v) -> fromValueMay (Deeper v)
-  fromValue (Deeper v)    = demand v $ \(Fix v) -> fromValue (Deeper v)
+  fromValueMay (Deeper (Fix v)) = fromValueMay (Deeper v)
+  fromValue    (Deeper (Fix v)) = fromValue    (Deeper v)
 
 instance ( Convertible e t f m
          , MonadValue (NValue t f m) m
@@ -107,10 +114,10 @@ instance ( Convertible e t f m
          )
   => FromValue a m (Deeper (NValue t f m)) where
   fromValueMay (Deeper v) = demand v $ \case
-    Pure _ -> pure Nothing
+    Pure t -> force t (fromValueMay . Deeper)
     Free v -> fromValueMay (Deeper v)
   fromValue (Deeper v)   = demand v $ \case
-    Pure t -> throwError $ ForcingThunk @t @f @m t
+    Pure t -> force t (fromValue . Deeper)
     Free v -> fromValue (Deeper v)
 
 instance (Convertible e t f m, Show r) => FromValue () m (NValue' t f m r) where
@@ -252,7 +259,9 @@ instance (Convertible e t f m, Show r, FromValue a m r)
     Just b -> pure b
     _      -> throwError $ Expectation TSet (getDeeper v)
 
-instance (Convertible e t f m, FromValue a m (NValue' t f m (NValue t f m))) => FromValue a m (Deeper (NValue' t f m (NValue t f m))) where
+-- This instance needs IncoherentInstances, and only because of ToBuiltin
+instance (Convertible e t f m, FromValue a m (NValue' t f m (NValue t f m)))
+  => FromValue a m (Deeper (NValue' t f m (NValue t f m))) where
   fromValueMay = fromValueMay . getDeeper
   fromValue    = fromValue . getDeeper
 
@@ -263,12 +272,6 @@ instance (Convertible e t f m, FromValue a m (NValue' t f m (NValue t f m))) => 
 class ToValue a m v where
     toValue :: a -> m v
 
-instance Applicative m => ToValue (NValueNF t f m) m (NValueNF t f m) where
-  toValue = pure
-
-instance Applicative m => ToValue (NValue t f m) m (NValue t f m) where
-  toValue = pure
-
 instance (Convertible e t f m, ToValue a m (NValue' t f m (NValueNF t f m)))
   => ToValue a m (NValueNF t f m) where
   toValue = fmap Fix . toValue
@@ -276,6 +279,18 @@ instance (Convertible e t f m, ToValue a m (NValue' t f m (NValueNF t f m)))
 instance (Convertible e t f m, ToValue a m (NValue' t f m (NValue t f m)))
   => ToValue a m (NValue t f m) where
   toValue = fmap Free . toValue
+
+instance ( Convertible e t f m
+         , ToValue a m (Deeper (NValue' t f m (NValueNF t f m)))
+         )
+  => ToValue a m (Deeper (NValueNF t f m)) where
+  toValue = fmap (fmap Fix) . toValue
+
+instance ( Convertible e t f m
+         , ToValue a m (Deeper (NValue' t f m (NValue t f m)))
+         )
+  => ToValue a m (Deeper (NValue t f m)) where
+  toValue = fmap (fmap Free) . toValue
 
 instance Convertible e t f m => ToValue () m (NValue' t f m r) where
   toValue _ = pure . nvConstant' $ NNull
@@ -321,17 +336,28 @@ instance ( Convertible e t f m
     pure $ nvSet' pos mempty
 
 -- | With 'ToValue', we can always act recursively
-instance (Convertible e t f m, ToValue a m r)
-  => ToValue [a] m (NValue' t f m r) where
-  toValue = fmap nvList' . traverse toValue
+instance Convertible e t f m => ToValue [r] m (NValue' t f m r) where
+  toValue = pure . nvList'
 
 instance (Convertible e t f m, ToValue a m r)
-  => ToValue (AttrSet a) m (NValue' t f m r) where
-  toValue s = nvSet' <$> traverse toValue s <*> pure mempty
+  => ToValue [a] m (Deeper (NValue' t f m r)) where
+  toValue = fmap (Deeper . nvList') . traverse toValue
+
+instance Convertible e t f m
+  => ToValue (AttrSet r) m (NValue' t f m r) where
+  toValue s = pure $ nvSet' s mempty
 
 instance (Convertible e t f m, ToValue a m r)
-  => ToValue (AttrSet a, AttrSet SourcePos) m (NValue' t f m r) where
-  toValue (s, p) = nvSet' <$> traverse toValue s <*> pure p
+  => ToValue (AttrSet a) m (Deeper (NValue' t f m r)) where
+  toValue s = (Deeper .) . nvSet' <$> traverse toValue s <*> pure mempty
+
+instance Convertible e t f m
+  => ToValue (AttrSet r, AttrSet SourcePos) m (NValue' t f m r) where
+  toValue (s, p) = pure $ nvSet' s p
+
+instance (Convertible e t f m, ToValue a m r)
+  => ToValue (AttrSet a, AttrSet SourcePos) m (Deeper (NValue' t f m r)) where
+  toValue (s, p) = (Deeper .) . nvSet' <$> traverse toValue s <*> pure p
 
 instance ( MonadValue (NValue t f m) m
          , MonadDataErrorContext t f m

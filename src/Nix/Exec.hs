@@ -553,7 +553,7 @@ coerceToString
   -> m NixString
 coerceToString ctsm clevel = go
  where
-  go = \case
+  go x = demand x $ \case
     NVConstant (NBool b)
       |
         -- TODO Return a singleton for "" and "1"
@@ -734,10 +734,9 @@ instance ( MonadFix m
 
       coerceNixList :: NValue t f (Lazy t f m) -> Lazy t f m (NValue t f (Lazy t f m))
       coerceNixList v = do
-        xs :: [NValue t f (Lazy t f m)] <- fromValue @[NValue t f (Lazy t f m)] v
-        ys :: [NValue t f (Lazy t f m)] <- traverse (\x -> demand x coerceNix) xs
-        v' :: NValue t f (Lazy t f m)   <- toValue @[NValue t f (Lazy t f m)] ys
-        return v'
+        xs <- fromValue @[NValue t f (Lazy t f m)] v
+        ys <- traverse (\x -> demand x coerceNix) xs
+        toValue @[NValue t f (Lazy t f m)] ys
 
   traceEffect = putStrLn
 
