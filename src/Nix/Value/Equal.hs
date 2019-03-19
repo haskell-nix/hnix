@@ -38,6 +38,7 @@ import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import           Data.Align
 import           Data.Eq.Deriving
+import           Data.Fix
 import           Data.Functor.Classes
 import           Data.Functor.Identity
 import qualified Data.HashMap.Lazy             as M
@@ -62,17 +63,6 @@ checkComparable x y = case (x, y) of
   (NVStr _, NVStr _) -> pure ()
   (NVPath _, NVPath _) -> pure ()
   _ -> throwError $ Comparison x y
-
-thunkEqM :: (MonadThunk t m (NValue t f m), Comonad f) => t -> t -> m Bool
-thunkEqM lt rt = force lt $ \lv -> force rt $ \rv ->
-  let unsafePtrEq = case (lt, rt) of
-        (thunkId -> lid, thunkId -> rid) | lid == rid -> return True
-        _ -> valueEqM lv rv
-  in  case (lv, rv) of
-        (NVClosure _ _, NVClosure _ _) -> unsafePtrEq
-        (NVList _     , NVList _     ) -> unsafePtrEq
-        (NVSet _ _    , NVSet _ _    ) -> unsafePtrEq
-        _                              -> valueEqM lv rv
 
 -- | Checks whether two containers are equal, using the given item equality
 --   predicate. If there are any item slots that don't match between the two
@@ -164,30 +154,42 @@ compareAttrSets f eq lm rm = runIdentity
   $ compareAttrSetsM (\t -> Identity (f t)) (\x y -> Identity (eq x y)) lm rm
 
 valueEqM
-  :: (MonadThunk t m (NValue t f m), Comonad f)
+  :: forall t f m
+   . (MonadThunk t m (NValue t f m), Comonad f)
   => NValue t f m
   -> NValue t f m
   -> m Bool
-valueEqM (NValue (extract -> x)) (NValue (extract -> y)) = valueFEqM
-  (compareAttrSetsM f thunkEqM)
-  thunkEqM
-  x
-  y
+valueEqM (  Pure x) (  Pure y) = thunkEqM x y
+valueEqM (  Pure x) y@(Free _) = thunkEqM x =<< thunk (pure y)
+valueEqM x@(Free _) (  Pure y) = thunkEqM ?? y =<< thunk (pure x)
+valueEqM (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
+  valueFEqM (compareAttrSetsM f valueEqM) valueEqM x y
  where
-  f t = force t $ \case
+  f (Pure t) = force t $ \case
     NVStr s -> pure $ Just s
     _       -> pure Nothing
+  f (Free v) = case v of
+    NVStr' s -> pure $ Just s
+    _        -> pure Nothing
+
+thunkEqM :: (MonadThunk t m (NValue t f m), Comonad f) => t -> t -> m Bool
+thunkEqM lt rt = force lt $ \lv -> force rt $ \rv ->
+  let unsafePtrEq = case (lt, rt) of
+        (thunkId -> lid, thunkId -> rid) | lid == rid -> return True
+        _ -> valueEqM lv rv
+  in  case (lv, rv) of
+        (NVClosure _ _, NVClosure _ _) -> unsafePtrEq
+        (NVList _     , NVList _     ) -> unsafePtrEq
+        (NVSet _ _    , NVSet _ _    ) -> unsafePtrEq
+        _                              -> valueEqM lv rv
 
 valueNFEq :: Comonad f => NValueNF t f m -> NValueNF t f m -> Bool
-valueNFEq (Pure _) (Pure _) = False
-valueNFEq (Pure _) (Free _) = False
-valueNFEq (Free _) (Pure _) = False
-valueNFEq (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
+valueNFEq (Fix (NValue (extract -> x))) (Fix (NValue (extract -> y))) =
   valueFEq (compareAttrSets f valueNFEq) valueNFEq x y
  where
-  f (Pure _        ) = Nothing
-  f (Free (NVStr s)) = Just s
-  f _                = Nothing
+  f = \case
+    NVStrNF s -> Just s
+    _         -> Nothing
 
 instance Eq1 (NValueF p m) where
   liftEq _  (NVConstantF x) (NVConstantF y) = x == y

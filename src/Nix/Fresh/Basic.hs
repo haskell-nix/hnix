@@ -31,7 +31,10 @@ instance (MonadEffects t f m, MonadDataContext f m)
   => MonadEffects t f (StdIdT m) where
   makeAbsolutePath = lift . makeAbsolutePath @t @f @m
   findEnvPath      = lift . findEnvPath @t @f @m
-  findPath         = (lift .) . findPath @t @f @m
+  findPath vs path = do
+    i <- FreshIdT ask
+    let vs' = map (unliftNValue (runFreshIdT i)) vs
+    lift $ findPath @t @f @m vs' path
   importPath path = do
     i <- FreshIdT ask
     p <- lift $ importPath @t @f @m path
@@ -42,4 +45,3 @@ instance (MonadEffects t f m, MonadDataContext f m)
     p <- lift $ derivationStrict @t @f @m (unliftNValue (runFreshIdT i) v)
     return $ liftNValue (runFreshIdT i) p
   traceEffect = lift . traceEffect @t @f @m
-

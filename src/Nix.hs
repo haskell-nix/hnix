@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Nix
@@ -51,6 +51,7 @@ import           Nix.Render.Frame
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
+import           Nix.Value.Monad
 import           Nix.XML
 
 -- | This is the entry point for all evaluations, whatever the expression tree
@@ -82,7 +83,7 @@ nixEvalExprLoc
   -> m (NValue t f m)
 nixEvalExprLoc mpath = nixEval
   mpath
-  (Eval.addStackFrames @t . Eval.addSourcePositions)
+  (Eval.addStackFrames . Eval.addSourcePositions)
   (Eval.eval . annotated . getCompose)
 
 -- | Evaluate a nix expression with tracing in the default context. Note that
@@ -117,13 +118,12 @@ evaluateExpression mpath evaluator handler expr = do
 
   eval' = (normalForm =<<) . nixEvalExpr mpath
 
-  argmap args = pure $ nvSet (M.fromList args') mempty
-    where args' = map (fmap (wrapValue . nValueFromNF)) args
+  argmap args = nvSet (M.fromList args') mempty
+    where args' = map (fmap nValueFromNF) args
 
-  compute ev x args p = do
-    f :: NValue t f m <- ev mpath x
-    processResult p =<< case f of
-      NVClosure _ g -> force ?? pure =<< g args
+  compute ev x args p = ev mpath x >>= \f -> demand f $ \f' ->
+    processResult p =<< case f' of
+      NVClosure _ g -> g args
       _             -> pure f
 
 processResult
@@ -140,17 +140,17 @@ processResult h val = do
  where
   go :: [Text.Text] -> NValue t f m -> m a
   go [] v = h v
-  go ((Text.decimal -> Right (n,"")) : ks) v = case v of
+  go ((Text.decimal -> Right (n,"")) : ks) v = demand v $ \case
     NVList xs -> case ks of
-      [] -> force @t @m @(NValue t f m) (xs !! n) h
-      _  -> force (xs !! n) (go ks)
+      [] -> h (xs !! n)
+      _  -> go ks (xs !! n)
     _ ->
       errorWithoutStackTrace
         $  "Expected a list for selector '"
         ++ show n
         ++ "', but got: "
         ++ show v
-  go (k : ks) v = case v of
+  go (k : ks) v = demand v $ \case
     NVSet xs _ -> case M.lookup k xs of
       Nothing ->
         errorWithoutStackTrace
@@ -158,8 +158,8 @@ processResult h val = do
           ++ Text.unpack k
           ++ "'"
       Just v' -> case ks of
-        [] -> force v' h
-        _  -> force v' (go ks)
+        [] -> h v'
+        _  -> go ks v'
     _ ->
       errorWithoutStackTrace
         $  "Expected a set for selector '"

@@ -43,11 +43,3 @@ atomText (NInt   i) = pack (show i)
 atomText (NFloat f) = pack (show f)
 atomText (NBool  b) = if b then "true" else "false"
 atomText NNull      = "null"
-
-
-
-
-
-
-
-

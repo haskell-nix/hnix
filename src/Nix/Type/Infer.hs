@@ -59,13 +59,14 @@ import           Nix.Expr.Types.Annotated
 import           Nix.Fresh
 import           Nix.String
 import           Nix.Scope
-import           Nix.Thunk
-import           Nix.Thunk.Basic
+-- import           Nix.Thunk
+-- import           Nix.Thunk.Basic
 import qualified Nix.Type.Assumption           as As
 import           Nix.Type.Env
 import qualified Nix.Type.Env                  as Env
 import           Nix.Type.Type
 import           Nix.Utils
+import           Nix.Value.Monad
 import           Nix.Var
 
 -------------------------------------------------------------------------------
@@ -75,7 +76,7 @@ import           Nix.Var
 -- | Inference monad
 newtype InferT s m a = InferT
     { getInfer ::
-        ReaderT (Set.Set TVar, Scopes (InferT s m) (JThunkT s m))
+        ReaderT (Set.Set TVar, Scopes (InferT s m) (Judgment s))
             (StateT InferState (ExceptT InferError m)) a
     }
     deriving
@@ -85,7 +86,7 @@ newtype InferT s m a = InferT
         , Monad
         , MonadPlus
         , MonadFix
-        , MonadReader (Set.Set TVar, Scopes (InferT s m) (JThunkT s m))
+        , MonadReader (Set.Set TVar, Scopes (InferT s m) (Judgment s))
         , MonadFail
         , MonadState InferState
         , MonadError InferError
@@ -94,8 +95,8 @@ newtype InferT s m a = InferT
 instance MonadTrans (InferT s) where
   lift = InferT . lift . lift . lift
 
-instance MonadThunkId m => MonadThunkId (InferT s m) where
-  type ThunkId (InferT s m) = ThunkId m
+-- instance MonadThunkId m => MonadThunkId (InferT s m) where
+--   type ThunkId (InferT s m) = ThunkId m
 
 -- | Inference state
 newtype InferState = InferState { count :: Int }
@@ -389,7 +390,7 @@ instance MonadAtomicRef m => MonadAtomicRef (InferT s m) where
     _   <- modifyRef x (fst . f)
     return res
 
-newtype JThunkT s m = JThunk (NThunkF (InferT s m) (Judgment s))
+-- newtype JThunkT s m = JThunk (NThunkF (InferT s m) (Judgment s))
 
 instance Monad m => MonadThrow (InferT s m) where
   throwM = throwError . EvaluationError
@@ -402,27 +403,32 @@ instance Monad m => MonadCatch (InferT s m) where
       (fromException (toException e))
     err -> error $ "Unexpected error: " ++ show err
 
-type MonadInfer m = (MonadThunkId m, MonadVar m, MonadFix m)
+type MonadInfer m
+  = ({- MonadThunkId m,-}
+     MonadVar m, MonadFix m)
 
+instance MonadValue (Judgment s) (InferT s m) where
+  defer  = id
+  demand = flip ($)
+
+{-
 instance MonadInfer m
   => MonadThunk (JThunkT s m) (InferT s m) (Judgment s) where
   thunk = fmap JThunk . thunk
   thunkId (JThunk x) = thunkId x
 
-  query (JThunk x) b f = query x b f
   queryM (JThunk x) b f = queryM x b f
 
+  -- If we have a thunk loop, we just don't know the type.
   force (JThunk t) f = catch (force t f)
     $ \(_ :: ThunkLoop) ->
--- If we have a thunk loop, we just don't know the type.
-                           f =<< Judgment As.empty [] <$> fresh
-  forceEff (JThunk t) f = catch (forceEff t f)
-    $ \(_ :: ThunkLoop) ->
--- If we have a thunk loop, we just don't know the type.
                            f =<< Judgment As.empty [] <$> fresh
 
-  wrapValue = JThunk . wrapValue
-  getValue (JThunk x) = getValue x
+  -- If we have a thunk loop, we just don't know the type.
+  forceEff (JThunk t) f = catch (forceEff t f)
+    $ \(_ :: ThunkLoop) ->
+                           f =<< Judgment As.empty [] <$> fresh
+-}
 
 instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
   freeVariable var = do
@@ -531,33 +537,33 @@ instance Monad m => FromValue NixString (InferT s m) (Judgment s) where
   fromValue _ = error "Unused"
 
 instance MonadInfer m
-  => FromValue (AttrSet (JThunkT s m), AttrSet SourcePos)
+  => FromValue (AttrSet (Judgment s), AttrSet SourcePos)
               (InferT s m) (Judgment s) where
   fromValueMay (Judgment _ _ (TSet _ xs)) = do
     let sing _ = Judgment As.empty []
-    pure $ Just (M.mapWithKey (\k v -> wrapValue (sing k v)) xs, M.empty)
+    pure $ Just (M.mapWithKey sing xs, M.empty)
   fromValueMay _ = pure Nothing
   fromValue = fromValueMay >=> \case
     Just v  -> pure v
     Nothing -> pure (M.empty, M.empty)
 
 instance MonadInfer m
-  => ToValue (AttrSet (JThunkT s m), AttrSet SourcePos)
+  => ToValue (AttrSet (Judgment s), AttrSet SourcePos)
             (InferT s m) (Judgment s) where
   toValue (xs, _) =
     Judgment
       <$> foldrM go As.empty xs
-      <*> (concat <$> traverse (`force` (pure . typeConstraints)) xs)
-      <*> (TSet True <$> traverse (`force` (pure . inferredType)) xs)
-    where go x rest = force x $ \x' -> pure $ As.merge (assumptions x') rest
+      <*> (concat <$> traverse (`demand` (pure . typeConstraints)) xs)
+      <*> (TSet True <$> traverse (`demand` (pure . inferredType)) xs)
+    where go x rest = demand x $ \x' -> pure $ As.merge (assumptions x') rest
 
-instance MonadInfer m => ToValue [JThunkT s m] (InferT s m) (Judgment s) where
+instance MonadInfer m => ToValue [Judgment s] (InferT s m) (Judgment s) where
   toValue xs =
     Judgment
       <$> foldrM go As.empty xs
-      <*> (concat <$> traverse (`force` (pure . typeConstraints)) xs)
-      <*> (TList <$> traverse (`force` (pure . inferredType)) xs)
-    where go x rest = force x $ \x' -> pure $ As.merge (assumptions x') rest
+      <*> (concat <$> traverse (`demand` (pure . typeConstraints)) xs)
+      <*> (TList <$> traverse (`demand` (pure . inferredType)) xs)
+    where go x rest = demand x $ \x' -> pure $ As.merge (assumptions x') rest
 
 instance MonadInfer m => ToValue Bool (InferT s m) (Judgment s) where
   toValue _ = pure $ Judgment As.empty [] typeBool
@@ -695,8 +701,8 @@ solve cs = solve' (nextSolvable cs)
     s' <- lift $ instantiate s
     solve (EqConst t s' : cs)
 
-instance Monad m => Scoped (JThunkT s m) (InferT s m) where
+instance Monad m => Scoped (Judgment s) (InferT s m) where
   currentScopes = currentScopesReader
-  clearScopes   = clearScopesReader @(InferT s m) @(JThunkT s m)
+  clearScopes   = clearScopesReader @(InferT s m) @(Judgment s)
   pushScopes    = pushScopesReader
   lookupVar     = lookupVarReader

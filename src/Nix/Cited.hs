@@ -21,8 +21,8 @@ import           Lens.Family2.TH
 import           Nix.Expr.Types.Annotated
 import           Nix.Scope
 
-data Provenance t m v = Provenance
-    { _lexicalScope :: Scopes m t
+data Provenance m v = Provenance
+    { _lexicalScope :: Scopes m v
     , _originExpr   :: NExprLocF (Maybe v)
       -- ^ When calling the function x: x + 2 with argument x = 3, the
       --   'originExpr' for the resulting value will be 3 + 2, while the
@@ -31,34 +31,34 @@ data Provenance t m v = Provenance
     }
     deriving (Generic, Typeable, Show)
 
-data NCited t m v a = NCited
-    { _provenance :: [Provenance t m v]
+data NCited m v a = NCited
+    { _provenance :: [Provenance m v]
     , _cited      :: a
     }
     deriving (Generic, Typeable, Functor, Foldable, Traversable, Show)
 
-instance Applicative (NCited t m v) where
+instance Applicative (NCited m v) where
   pure = NCited []
   NCited xs f <*> NCited ys x = NCited (xs <> ys) (f x)
 
-instance Comonad (NCited t m v) where
+instance Comonad (NCited m v) where
   duplicate p = NCited (_provenance p) p
   extract = _cited
 
-instance ComonadEnv [Provenance t m v] (NCited t m v) where
+instance ComonadEnv [Provenance m v] (NCited m v) where
   ask = _provenance
 
 $(makeLenses ''Provenance)
 $(makeLenses ''NCited)
 
-class HasCitations t m v a where
-    citations :: a -> [Provenance t m v]
-    addProvenance :: Provenance t m v -> a -> a
+class HasCitations m v a where
+    citations :: a -> [Provenance m v]
+    addProvenance :: Provenance m v -> a -> a
 
-instance HasCitations t m v (NCited t m v a) where
+instance HasCitations m v (NCited m v a) where
   citations = _provenance
   addProvenance x (NCited p v) = (NCited (x : p) v)
 
-class HasCitations1 t m v f where
-    citations1 :: f a -> [Provenance t m v]
-    addProvenance1 :: Provenance t m v -> f a -> f a
+class HasCitations1 m v f where
+    citations1 :: f a -> [Provenance m v]
+    addProvenance1 :: Provenance m v -> f a -> f a

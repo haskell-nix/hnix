@@ -27,51 +27,30 @@ data Deferred m v = Deferred (m v) | Computed v
 
 -- | The type of very basic thunks
 data NThunkF m v
-    = Value v
-    | Thunk (ThunkId m) (Var m Bool) (Var m (Deferred m v))
+    = Thunk (ThunkId m) (Var m Bool) (Var m (Deferred m v))
 
 instance (Eq v, Eq (ThunkId m)) => Eq (NThunkF m v) where
-  Value x     == Value y     = x == y
   Thunk x _ _ == Thunk y _ _ = x == y
-  _           == _           = False              -- jww (2019-03-16): not accurate...
 
 instance Show v => Show (NThunkF m v) where
-  show (Value v    ) = show v
   show (Thunk _ _ _) = "<thunk>"
 
 type MonadBasicThunk m = (MonadThunkId m, MonadVar m)
 
 instance (MonadBasicThunk m, MonadCatch m)
   => MonadThunk (NThunkF m v) m v where
-  thunk   = buildThunk
-  thunkId = \case
-    Value _     -> Nothing
-    Thunk n _ _ -> Just n
-  query     = queryValue
-  queryM    = queryThunk
-  force     = forceThunk
-  forceEff  = forceEffects
-  wrapValue = valueRef
-  getValue  = thunkValue
-
-valueRef :: v -> NThunkF m v
-valueRef = Value
-
-thunkValue :: NThunkF m v -> Maybe v
-thunkValue (Value v) = Just v
-thunkValue _         = Nothing
+  thunk = buildThunk
+  thunkId (Thunk n _ _) = n
+  queryM   = queryThunk
+  force    = forceThunk
+  forceEff = forceEffects
 
 buildThunk :: MonadBasicThunk m => m v -> m (NThunkF m v)
 buildThunk action = do
   freshThunkId <- freshId
   Thunk freshThunkId <$> newVar False <*> newVar (Deferred action)
 
-queryValue :: MonadVar m => NThunkF m v -> a -> (v -> a) -> a
-queryValue (Value v) _ k = k v
-queryValue _         n _ = n
-
 queryThunk :: MonadVar m => NThunkF m v -> m a -> (v -> m a) -> m a
-queryThunk (Value v           ) _ k = k v
 queryThunk (Thunk _ active ref) n k = do
   nowActive <- atomicModifyVar active (True, )
   if nowActive
@@ -90,7 +69,6 @@ forceThunk
   => NThunkF m v
   -> (v -> m a)
   -> m a
-forceThunk (Value v           ) k = k v
 forceThunk (Thunk n active ref) k = do
   eres <- readVar ref
   case eres of
@@ -109,7 +87,6 @@ forceThunk (Thunk n active ref) k = do
           k v
 
 forceEffects :: MonadVar m => NThunkF m v -> (v -> m r) -> m r
-forceEffects (Value v           ) k = k v
 forceEffects (Thunk _ active ref) k = do
   nowActive <- atomicModifyVar active (True, )
   if nowActive

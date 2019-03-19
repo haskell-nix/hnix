@@ -31,7 +31,6 @@ import           Control.Monad.Reader           ( MonadReader )
 import           Control.Monad.Ref
 import           Control.Monad.ST
 import           Control.Monad.Trans.Reader
-import           Data.Coerce
 import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List
@@ -53,6 +52,7 @@ import           Nix.Thunk
 import           Nix.Thunk.Basic
 import           Nix.Utils
 import           Nix.Var
+import           Nix.Value.Monad
 
 data TAtom
   = TInt
@@ -68,7 +68,7 @@ data NTypeF (m :: * -> *) r
     | TSet (Maybe (HashMap Text r))
     | TClosure (Params ())
     | TPath
-    | TBuiltin String (SThunk m -> m (Symbolic m))
+    | TBuiltin String (Symbolic m -> m r)
     deriving Functor
 
 compareTypes :: NTypeF m r -> NTypeF m r -> Ordering
@@ -97,10 +97,11 @@ data NSymbolicF r
     | NMany [r]
     deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
-newtype SThunk m = SThunk { getSThunk :: NThunkF m (Symbolic m) }
+type SThunk (m :: * -> *) = NThunkF m (Symbolic m)
 
-newtype Symbolic m =
-    Symbolic { getSymbolic :: Var m (NSymbolicF (NTypeF m (SThunk m))) }
+type SValue (m :: * -> *) = Var m (NSymbolicF (NTypeF m (Symbolic m)))
+
+data Symbolic m = SV { getSV :: SValue m } | ST { getST :: SThunk m }
 
 instance Show (Symbolic m) where
   show _ = "<symbolic>"
@@ -108,18 +109,26 @@ instance Show (Symbolic m) where
 everyPossible :: MonadVar m => m (Symbolic m)
 everyPossible = packSymbolic NAny
 
-mkSymbolic :: MonadVar m => [NTypeF m (SThunk m)] -> m (Symbolic m)
+mkSymbolic :: MonadVar m => [NTypeF m (Symbolic m)] -> m (Symbolic m)
 mkSymbolic xs = packSymbolic (NMany xs)
 
-packSymbolic :: MonadVar m => NSymbolicF (NTypeF m (SThunk m)) -> m (Symbolic m)
-packSymbolic = fmap coerce . newVar
+packSymbolic
+  :: MonadVar m => NSymbolicF (NTypeF m (Symbolic m)) -> m (Symbolic m)
+packSymbolic = fmap SV . newVar
 
 unpackSymbolic
-  :: MonadVar m => Symbolic m -> m (NSymbolicF (NTypeF m (SThunk m)))
-unpackSymbolic = readVar . coerce
+  :: (MonadVar m, MonadThunkId m, MonadCatch m)
+  => Symbolic m
+  -> m (NSymbolicF (NTypeF m (Symbolic m)))
+unpackSymbolic = flip demand $ readVar . getSV
 
 type MonadLint e m
-  = (Scoped (SThunk m) m, Framed e m, MonadVar m, MonadCatch m, MonadThunkId m)
+  = ( Scoped (Symbolic m) m
+  , Framed e m
+  , MonadVar m
+  , MonadCatch m
+  , MonadThunkId m
+  )
 
 symerr :: forall e m a . MonadLint e m => String -> m a
 symerr = evalError @(Symbolic m) . ErrorCall
@@ -135,11 +144,11 @@ renderSymbolic = unpackSymbolic >=> \case
       TNull  -> return "null"
     TStr    -> return "string"
     TList r -> do
-      x <- force r renderSymbolic
+      x <- demand r renderSymbolic
       return $ "[" ++ x ++ "]"
     TSet Nothing  -> return "<any set>"
     TSet (Just s) -> do
-      x <- traverse (`force` renderSymbolic) s
+      x <- traverse (`demand` renderSymbolic) s
       return $ "{" ++ show x ++ "}"
     f@(TClosure p) -> do
       (args, sym) <- do
@@ -156,13 +165,15 @@ merge
   :: forall e m
    . MonadLint e m
   => NExprF ()
-  -> [NTypeF m (SThunk m)]
-  -> [NTypeF m (SThunk m)]
-  -> m [NTypeF m (SThunk m)]
+  -> [NTypeF m (Symbolic m)]
+  -> [NTypeF m (Symbolic m)]
+  -> m [NTypeF m (Symbolic m)]
 merge context = go
  where
   go
-    :: [NTypeF m (SThunk m)] -> [NTypeF m (SThunk m)] -> m [NTypeF m (SThunk m)]
+    :: [NTypeF m (Symbolic m)]
+    -> [NTypeF m (Symbolic m)]
+    -> m [NTypeF m (Symbolic m)]
   go []       _        = return []
   go _        []       = return []
   go (x : xs) (y : ys) = case (x, y) of
@@ -170,8 +181,8 @@ merge context = go
     (TPath, TPath) -> (TPath :) <$> go xs ys
     (TConstant ls, TConstant rs) ->
       (TConstant (ls `intersect` rs) :) <$> go xs ys
-    (TList l, TList r) -> force l $ \l' -> force r $ \r' -> do
-      m <- thunk $ unify context l' r'
+    (TList l, TList r) -> demand l $ \l' -> demand r $ \r' -> do
+      m <- defer $ unify context l' r'
       (TList m :) <$> go xs ys
     (TSet x       , TSet Nothing ) -> (TSet x :) <$> go xs ys
     (TSet Nothing , TSet x       ) -> (TSet x :) <$> go xs ys
@@ -179,8 +190,8 @@ merge context = go
       m <- sequenceA $ M.intersectionWith
         (\i j -> i >>= \i' ->
           j
-            >>= \j' -> force i'
-                  $ \i'' -> force j' $ \j'' -> thunk $ unify context i'' j''
+            >>= \j' -> demand i'
+                  $ \i'' -> demand j' $ \j'' -> defer $ unify context i'' j''
         )
         (return <$> l)
         (return <$> r)
@@ -220,16 +231,16 @@ unify
   -> Symbolic m
   -> Symbolic m
   -> m (Symbolic m)
-unify context (Symbolic x) (Symbolic y) = do
+unify context (SV x) (SV y) = do
   x' <- readVar x
   y' <- readVar y
   case (x', y') of
     (NAny, _) -> do
       writeVar x y'
-      return $ Symbolic y
+      return $ SV y
     (_, NAny) -> do
       writeVar y x'
-      return $ Symbolic x
+      return $ SV x
     (NMany xs, NMany ys) -> do
       m <- merge context xs ys
       if null m
@@ -243,29 +254,26 @@ unify context (Symbolic x) (Symbolic y) = do
           writeVar x (NMany m)
           writeVar y (NMany m)
           packSymbolic (NMany m)
+unify _ _ _ = error "The unexpected hath transpired!"
 
 -- These aren't worth defining yet, because once we move to Hindley-Milner,
 -- we're not going to be managing Symbolic values this way anymore.
 
 instance ToValue Bool m (Symbolic m) where
 
-instance ToValue [SThunk m] m (Symbolic m) where
+instance ToValue [Symbolic m] m (Symbolic m) where
 
 instance FromValue NixString m (Symbolic m) where
 
-instance FromValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
+instance FromValue (AttrSet (Symbolic m), AttrSet SourcePos) m (Symbolic m) where
 
-instance ToValue (AttrSet (SThunk m), AttrSet SourcePos) m (Symbolic m) where
+instance ToValue (AttrSet (Symbolic m), AttrSet SourcePos) m (Symbolic m) where
 
-instance MonadLint e m => MonadThunk (SThunk m) m (Symbolic m) where
-  thunk   = fmap SThunk . thunk
-  thunkId = thunkId . getSThunk
-  query x b f = query (getSThunk x) b f
-  queryM x b f = queryM (getSThunk x) b f
-  force     = force . getSThunk
-  forceEff  = forceEff . getSThunk
-  wrapValue = SThunk . wrapValue
-  getValue  = getValue . getSThunk
+instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
+  => MonadValue (Symbolic m) m where
+  defer = fmap ST . thunk
+  demand (ST v) f = force v (flip demand f)
+  demand (SV v) f = f (SV v)
 
 instance MonadLint e m => MonadEval (Symbolic m) m where
   freeVariable var = symerr $ "Undefined variable '" ++ Text.unpack var ++ "'"
@@ -285,9 +293,9 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
       ++ show s
 
   evalCurPos = do
-    f <- wrapValue <$> mkSymbolic [TPath]
-    l <- wrapValue <$> mkSymbolic [TConstant [TInt]]
-    c <- wrapValue <$> mkSymbolic [TConstant [TInt]]
+    f <- mkSymbolic [TPath]
+    l <- mkSymbolic [TConstant [TInt]]
+    c <- mkSymbolic [TConstant [TInt]]
     mkSymbolic [TSet (Just (M.fromList (go f l c)))]
    where
     go f l c =
@@ -315,8 +323,8 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
   -- sure the action it evaluates is to force a thunk, so its value is only
   -- computed once.
   evalWith scope body = do
-    s <- thunk @(SThunk m) @m @(Symbolic m) scope
-    pushWeakScope ?? body $ force s $ unpackSymbolic >=> \case
+    s <- defer scope
+    pushWeakScope ?? body $ demand s $ unpackSymbolic >=> \case
       NMany [TSet (Just s')] -> return s'
       NMany [TSet Nothing] -> error "NYI: with unknown"
       _ -> throwError $ ErrorCall "scope must be a set in with statement"
@@ -348,7 +356,7 @@ lintBinaryOp
   -> m (Symbolic m)
 lintBinaryOp op lsym rarg = do
   rsym <- rarg
-  y    <- thunk everyPossible
+  y    <- defer everyPossible
   case op of
     NApp    -> symerr "lintBinaryOp:NApp: should never get here"
     NEq     -> check lsym rsym [TConstant [TInt, TBool, TNull], TStr, TList y]
@@ -409,13 +417,13 @@ lintApp context fun arg = unpackSymbolic fun >>= \case
     (head args, ) <$> foldM (unify context) y ys
 
 newtype Lint s a = Lint
-  { runLint :: ReaderT (Context (Lint s) (SThunk (Lint s))) (FreshIdT Int (ST s)) a }
+  { runLint :: ReaderT (Context (Lint s) (Symbolic (Lint s))) (FreshIdT Int (ST s)) a }
   deriving
     ( Functor
     , Applicative
     , Monad
     , MonadFix
-    , MonadReader (Context (Lint s) (SThunk (Lint s)))
+    , MonadReader (Context (Lint s) (Symbolic (Lint s)))
     , MonadThunkId
     , MonadRef
     , MonadAtomicRef
@@ -432,7 +440,7 @@ runLintM opts action = do
   i <- newVar (1 :: Int)
   runFreshIdT i $ flip runReaderT (newContext opts) $ runLint action
 
-symbolicBaseEnv :: Monad m => m (Scopes m (SThunk m))
+symbolicBaseEnv :: Monad m => m (Scopes m (Symbolic m))
 symbolicBaseEnv = return emptyScopes
 
 lint :: Options -> NExprLoc -> ST s (Symbolic (Lint s))
@@ -444,8 +452,8 @@ lint opts expr =
                           expr
         )
 
-instance Scoped (SThunk (Lint s)) (Lint s) where
+instance Scoped (Symbolic (Lint s)) (Lint s) where
   currentScopes = currentScopesReader
-  clearScopes   = clearScopesReader @(Lint s) @(SThunk (Lint s))
+  clearScopes   = clearScopesReader @(Lint s) @(Symbolic (Lint s))
   pushScopes    = pushScopesReader
   lookupVar     = lookupVarReader

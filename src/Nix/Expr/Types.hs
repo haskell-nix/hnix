@@ -573,6 +573,3 @@ stripPositionInfo = transport phi
 
 nullPos :: SourcePos
 nullPos = SourcePos "<string>" (mkPos 1) (mkPos 1)
-
-
-

@@ -18,6 +18,7 @@ module Nix.Pretty where
 
 import           Control.Applicative            ( (<|>) )
 import           Control.Comonad
+import           Control.Monad.Free
 import           Data.Fix
 import           Data.HashMap.Lazy              ( toList )
 import qualified Data.HashMap.Lazy             as M
@@ -192,14 +193,25 @@ prettyAtom atom = simpleExpr $ pretty $ unpack $ atomText atom
 prettyNix :: NExpr -> Doc ann
 prettyNix = withoutParens . cata exprFNixDoc
 
-instance HasCitations1 t m v f
-  => HasCitations t m v (NValue' t f m a) where
+instance HasCitations1 m v f
+  => HasCitations m v (NValue' t f m a) where
   citations (NValue f) = citations1 f
   addProvenance x (NValue f) = NValue (addProvenance1 x f)
 
+instance (HasCitations1 m v f, HasCitations m v t)
+  => HasCitations m v (NValue t f m) where
+  citations (Pure t) = citations t
+  citations (Free v) = citations v
+  addProvenance x (Pure t) = Pure (addProvenance x t)
+  addProvenance x (Free v) = Free (addProvenance x v)
+
+instance HasCitations1 m v f => HasCitations m v (NValueNF t f m) where
+  citations (Fix v) = citations v
+  addProvenance x (Fix v) = Fix (addProvenance x v)
+
 prettyOriginExpr
   :: forall t f m ann
-   . HasCitations1 t m (NValue t f m) f
+   . HasCitations1 m (NValue t f m) f
   => NExprLocF (Maybe (NValue t f m))
   -> Doc ann
 prettyOriginExpr = withoutParens . go
@@ -208,7 +220,7 @@ prettyOriginExpr = withoutParens . go
 
   render :: Maybe (NValue t f m) -> NixDoc ann
   render Nothing = simpleExpr $ "_"
-  render (Just (reverse . citations @t @m -> p:_)) = go (_originExpr p)
+  render (Just (Free (reverse . citations @m -> p:_))) = go (_originExpr p)
   render _       = simpleExpr "?"
     -- render (Just (NValue (citations -> ps))) =
         -- simpleExpr $ foldr ((\x y -> vsep [x, y]) . parens . indent 2 . withoutParens
@@ -314,36 +326,36 @@ exprFNixDoc = \case
   where recPrefix = "rec" <> space
 
 valueToExpr :: forall t f m . MonadDataContext f m => NValueNF t f m -> NExpr
-valueToExpr = iterNValueNF
-  (const (mkStr (principledMakeNixStringWithoutContext "<CYCLE>")))
-  phi
+valueToExpr = iterNValueNF phi
  where
   phi :: NValue' t f m NExpr -> NExpr
-  phi (NVConstant a ) = Fix $ NConstant a
-  phi (NVStr      ns) = mkStr ns
-  phi (NVList     l ) = Fix $ NList l
-  phi (NVSet s p    ) = Fix $ NSet
+  phi (NVConstant' a ) = Fix $ NConstant a
+  phi (NVStr'      ns) = mkStr ns
+  phi (NVList'     l ) = Fix $ NList l
+  phi (NVSet' s p    ) = Fix $ NSet
     [ NamedVar (StaticKey k :| []) v (fromMaybe nullPos (M.lookup k p))
     | (k, v) <- toList s
     ]
-  phi (NVClosure _ _   ) = Fix . NSym . pack $ "<closure>"
-  phi (NVPath p        ) = Fix $ NLiteralPath p
-  phi (NVBuiltin name _) = Fix . NSym . pack $ "builtins." ++ name
-  phi _                  = error "Pattern synonyms foil completeness check"
+  phi (NVClosure' _ _   ) = Fix . NSym . pack $ "<closure>"
+  phi (NVPath' p        ) = Fix $ NLiteralPath p
+  phi (NVBuiltin' name _) = Fix . NSym . pack $ "builtins." ++ name
+  phi _                   = error "Pattern synonyms foil completeness check"
 
   mkStr ns = Fix $ NStr $ DoubleQuoted [Plain (hackyStringIgnoreContext ns)]
 
-prettyNValueNF :: MonadDataContext f m => NValueNF t f m -> Doc ann
+prettyNValueNF
+  :: forall t f m ann . MonadDataContext f m => NValueNF t f m -> Doc ann
 prettyNValueNF = prettyNix . valueToExpr
 
+-- | This function is used only by the testing code.
 printNix :: forall t f m . MonadDataContext f m => NValueNF t f m -> String
-printNix = iterNValueNF (const "<CYCLE>") phi
+printNix = iterNValueNF phi
  where
   phi :: NValue' t f m String -> String
-  phi (NVConstant a ) = unpack $ atomText a
-  phi (NVStr      ns) = show $ hackyStringIgnoreContext ns
-  phi (NVList     l ) = "[ " ++ unwords l ++ " ]"
-  phi (NVSet s _) =
+  phi (NVConstant' a ) = unpack $ atomText a
+  phi (NVStr'      ns) = show $ hackyStringIgnoreContext ns
+  phi (NVList'     l ) = "[ " ++ unwords l ++ " ]"
+  phi (NVSet' s _) =
     "{ "
       ++ concat
            [ check (unpack k) ++ " = " ++ v ++ "; "
@@ -357,27 +369,28 @@ printNix = iterNValueNF (const "<CYCLE>") phi
       <|> (fmap (surround . show) (readMaybe v :: Maybe Float))
       )
       where surround s = "\"" ++ s ++ "\""
-  phi NVClosure{}        = "<<lambda>>"
-  phi (NVPath fp       ) = fp
-  phi (NVBuiltin name _) = "<<builtin " ++ name ++ ">>"
-  phi _                  = error "Pattern synonyms foil completeness check"
+  phi NVClosure'{}        = "<<lambda>>"
+  phi (NVPath' fp       ) = fp
+  phi (NVBuiltin' name _) = "<<builtin " ++ name ++ ">>"
+  phi _                   = error "Pattern synonyms foil completeness check"
 
 prettyNValue
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
   => NValue t f m
   -> m (Doc ann)
-prettyNValue = fmap prettyNValueNF . removeEffectsM
+prettyNValue = fmap prettyNValueNF . removeEffects
 
 prettyNValueProv
   :: forall t f m ann
-   . ( HasCitations1 t m (NValue t f m) f
+   . ( HasCitations m (NValue t f m) t
+     , HasCitations1 m (NValue t f m) f
      , MonadThunk t m (NValue t f m)
      , MonadDataContext f m
      )
   => NValue t f m
   -> m (Doc ann)
-prettyNValueProv v@(NValue nv) = do
-  let ps = citations1 @t @m @(NValue t f m) @f nv
+prettyNValueProv v = do
+  let ps = citations @m @(NValue t f m) v
   case ps of
     [] -> prettyNValue v
     ps -> do
@@ -394,15 +407,15 @@ prettyNValueProv v@(NValue nv) = do
 
 prettyNThunk
   :: forall t f m ann
-   . ( HasCitations t m (NValue t f m) t
-     , HasCitations1 t m (NValue t f m) f
+   . ( HasCitations m (NValue t f m) t
+     , HasCitations1 m (NValue t f m) f
      , MonadThunk t m (NValue t f m)
      , MonadDataContext f m
      )
   => t
   -> m (Doc ann)
 prettyNThunk t = do
-  let ps = citations @t @m @(NValue t f m) @t t
+  let ps = citations @m @(NValue t f m) @t t
   v' <- prettyNValueNF <$> dethunk t
   pure
     $ fillSep
@@ -413,11 +426,3 @@ prettyNThunk t = do
       $ "thunk from: "
       : map (prettyOriginExpr . _originExpr) ps
       ]
-
-
-
-
-
-
-
-

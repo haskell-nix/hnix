@@ -14,6 +14,7 @@ import qualified Control.DeepSeq               as Deep
 import qualified Control.Exception             as Exc
 import           Control.Monad
 import           Control.Monad.Catch
+import           Control.Monad.Free
 import           Control.Monad.IO.Class
 -- import           Control.Monad.ST
 import qualified Data.Aeson.Text               as A
@@ -39,6 +40,7 @@ import qualified Nix.Type.Env                  as Env
 import qualified Nix.Type.Infer                as HM
 import           Nix.Utils
 import           Nix.Var
+import           Nix.Value.Monad
 import           Options.Applicative     hiding ( ParserResult(..) )
 import qualified Repl
 import           System.FilePath
@@ -132,7 +134,7 @@ main = do
    where
     printer
       | finder opts
-      = fromValue @(AttrSet (StandardThunk IO)) >=> findAttrs
+      = fromValue @(AttrSet (StandardValue IO)) >=> findAttrs
       | xml opts
       = liftIO
         .   putStrLn
@@ -152,21 +154,20 @@ main = do
       | otherwise
       = liftIO . print <=< prettyNValue
      where
+      findAttrs :: AttrSet (StandardValue IO) -> StandardT IO ()
       findAttrs = go ""
        where
         go prefix s = do
-          xs <-
-            forM (sortOn fst (M.toList s))
-              $ \(k, nv@(StdThunk (extract -> t))) -> case t of
-                  Value v       -> pure (k, Just v)
-                  Thunk _ _ ref -> do
-                    let path         = prefix ++ Text.unpack k
-                        (_, descend) = filterEntry path k
-                    val <- readVar @(StandardT IO) ref
-                    case val of
-                      Computed _ -> pure (k, Nothing)
-                      _ | descend   -> (k, ) <$> forceEntry path nv
-                        | otherwise -> pure (k, Nothing)
+          xs <- forM (sortOn fst (M.toList s)) $ \(k, nv) -> case nv of
+            Free v -> pure (k, Just (Free v))
+            Pure (StdThunk (extract -> Thunk _ _ ref)) -> do
+              let path         = prefix ++ Text.unpack k
+                  (_, descend) = filterEntry path k
+              val <- readVar @(StandardT IO) ref
+              case val of
+                Computed _ -> pure (k, Nothing)
+                _ | descend   -> (k, ) <$> forceEntry path nv
+                  | otherwise -> pure (k, Nothing)
 
           forM_ xs $ \(k, mv) -> do
             let path              = prefix ++ Text.unpack k
@@ -197,7 +198,7 @@ main = do
             _                              -> (True, True)
 
           forceEntry k v =
-            catch (Just <$> force v pure) $ \(NixException frames) -> do
+            catch (Just <$> demand v pure) $ \(NixException frames) -> do
               liftIO
                 .   putStrLn
                 .   ("Exception forcing " ++)

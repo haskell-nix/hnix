@@ -475,13 +475,14 @@ library
       Nix.Utils
       Nix.Value
       Nix.Value.Equal
+      Nix.Value.Monad
       Nix.Var
       Nix.XML
   other-modules:
       Paths_hnix
   hs-source-dirs:
       src
-  ghc-options: -Wall
+  ghc-options: -Wall -fprint-potential-instances
   build-depends:
       aeson
     , array >=0.4 && <0.6
@@ -585,6 +586,7 @@ executable hnix
     , deepseq >=1.4.2 && <1.5
     , exceptions
     , filepath
+    , free
     , hashing
     , haskeline
     , hnix
