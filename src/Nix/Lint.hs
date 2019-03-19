@@ -31,7 +31,6 @@ import           Control.Monad.Reader           ( MonadReader )
 import           Control.Monad.Ref
 import           Control.Monad.ST
 import           Control.Monad.Trans.Reader
-import           Data.Coerce
 import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List
@@ -49,8 +48,8 @@ import           Nix.Fresh
 import           Nix.String
 import           Nix.Options
 import           Nix.Scope
--- import           Nix.Thunk
--- import           Nix.Thunk.Basic
+import           Nix.Thunk
+import           Nix.Thunk.Basic
 import           Nix.Utils
 import           Nix.Var
 import           Nix.Value.Monad
@@ -98,10 +97,11 @@ data NSymbolicF r
     | NMany [r]
     deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
--- newtype SThunk m = SThunk { getSThunk :: NThunkF m (Symbolic m) }
+type SThunk (m :: * -> *) = NThunkF m (Symbolic m)
 
-newtype Symbolic m =
-    Symbolic { getSymbolic :: Var m (NSymbolicF (NTypeF m (Symbolic m))) }
+type SValue (m :: * -> *) = Var m (NSymbolicF (NTypeF m (Symbolic m)))
+
+data Symbolic m = SV { getSV :: SValue m } | ST { getST :: SThunk m }
 
 instance Show (Symbolic m) where
   show _ = "<symbolic>"
@@ -112,15 +112,16 @@ everyPossible = packSymbolic NAny
 mkSymbolic :: MonadVar m => [NTypeF m (Symbolic m)] -> m (Symbolic m)
 mkSymbolic xs = packSymbolic (NMany xs)
 
-packSymbolic :: MonadVar m => NSymbolicF (NTypeF m (Symbolic m)) -> m (Symbolic m)
-packSymbolic = fmap coerce . newVar
+packSymbolic :: MonadVar m
+             => NSymbolicF (NTypeF m (Symbolic m)) -> m (Symbolic m)
+packSymbolic = fmap SV . newVar
 
-unpackSymbolic
-  :: MonadVar m => Symbolic m -> m (NSymbolicF (NTypeF m (Symbolic m)))
-unpackSymbolic = readVar . coerce
+unpackSymbolic :: (MonadVar m, MonadThunkId m, MonadCatch m)
+               => Symbolic m -> m (NSymbolicF (NTypeF m (Symbolic m)))
+unpackSymbolic = flip demand $ readVar . getSV
 
 type MonadLint e m
-  = (Scoped (Symbolic m) m, Framed e m, MonadVar m, MonadCatch m {-, MonadThunkId m-})
+  = (Scoped (Symbolic m) m, Framed e m, MonadVar m, MonadCatch m, MonadThunkId m)
 
 symerr :: forall e m a . MonadLint e m => String -> m a
 symerr = evalError @(Symbolic m) . ErrorCall
@@ -221,16 +222,16 @@ unify
   -> Symbolic m
   -> Symbolic m
   -> m (Symbolic m)
-unify context (Symbolic x) (Symbolic y) = do
+unify context (SV x) (SV y) = do
   x' <- readVar x
   y' <- readVar y
   case (x', y') of
     (NAny, _) -> do
       writeVar x y'
-      return $ Symbolic y
+      return $ SV y
     (_, NAny) -> do
       writeVar y x'
-      return $ Symbolic x
+      return $ SV x
     (NMany xs, NMany ys) -> do
       m <- merge context xs ys
       if null m
@@ -244,6 +245,7 @@ unify context (Symbolic x) (Symbolic y) = do
           writeVar x (NMany m)
           writeVar y (NMany m)
           packSymbolic (NMany m)
+unify _ _ _ = error "The unexpected hath transpired!"
 
 -- These aren't worth defining yet, because once we move to Hindley-Milner,
 -- we're not going to be managing Symbolic values this way anymore.
@@ -258,21 +260,11 @@ instance FromValue (AttrSet (Symbolic m), AttrSet SourcePos) m (Symbolic m) wher
 
 instance ToValue (AttrSet (Symbolic m), AttrSet SourcePos) m (Symbolic m) where
 
-{-
-instance MonadLint e m => MonadThunk (SThunk m) m (Symbolic m) where
-  thunk   = fmap SThunk . thunk
-  thunkId = thunkId . getSThunk
-  query x b f = query (getSThunk x) b f
-  queryM x b f = queryM (getSThunk x) b f
-  force     = force . getSThunk
-  forceEff  = forceEff . getSThunk
-  wrapValue = SThunk . wrapValue
-  getValue  = getValue . getSThunk
--}
-
-instance MonadValue (Symbolic m) m where
-  defer = id
-  demand = flip ($)
+instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
+  => MonadValue (Symbolic m) m where
+  defer = fmap ST . thunk
+  demand (ST v) f = force v (flip demand f)
+  demand (SV v) f = f (SV v)
 
 instance MonadLint e m => MonadEval (Symbolic m) m where
   freeVariable var = symerr $ "Undefined variable '" ++ Text.unpack var ++ "'"
@@ -423,7 +415,7 @@ newtype Lint s a = Lint
     , Monad
     , MonadFix
     , MonadReader (Context (Lint s) (Symbolic (Lint s)))
-    -- , MonadThunkId
+    , MonadThunkId
     , MonadRef
     , MonadAtomicRef
     )
