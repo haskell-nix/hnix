@@ -407,9 +407,10 @@ type MonadInfer m
   = ({- MonadThunkId m,-}
      MonadVar m, MonadFix m)
 
-instance MonadValue (Judgment s) (InferT s m) where
-  defer  = id
-  demand = flip ($)
+instance Monad m => MonadValue (Judgment s) (InferT s m) where
+  defer      = id
+  demand     = flip ($)
+  inform j f = f (pure j)
 
 {-
 instance MonadInfer m

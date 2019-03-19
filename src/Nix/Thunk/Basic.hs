@@ -44,6 +44,7 @@ instance (MonadBasicThunk m, MonadCatch m)
   queryM   = queryThunk
   force    = forceThunk
   forceEff = forceEffects
+  further  = furtherThunk
 
 buildThunk :: MonadBasicThunk m => m v -> m (NThunkF m v)
 buildThunk action = do
@@ -100,3 +101,10 @@ forceEffects (Thunk _ active ref) k = do
           writeVar ref (Computed v)
           _ <- atomicModifyVar active (False, )
           k v
+
+furtherThunk :: MonadVar m => NThunkF m v -> (m v -> m v) -> m (NThunkF m v)
+furtherThunk t@(Thunk _ _ ref) k = do
+  _ <- atomicModifyVar ref $ \x -> case x of
+    Computed _ -> (x, x)
+    Deferred d -> (Deferred (k d), x)
+  return t

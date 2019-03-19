@@ -41,11 +41,6 @@ import           Nix.Strings                    ( runAntiquoted )
 import           Nix.Utils
 import           Nix.Value.Monad
 
--- instance MonadThunk t m (NValue t f m) => MonadValue (NValue t f m) m where
---   defer = fmap Pure . thunk
---   demand (Pure t) f = force t f
---   demand v@(Free _) f = f v
-
 class (Show v, Monad m) => MonadEval v m where
   freeVariable    :: Text -> m v
   synHole         :: Text -> m v
@@ -119,8 +114,11 @@ eval :: forall v m . MonadNixEval v m => NExprF (m v) -> m v
 
 eval (NSym "__curPos") = evalCurPos
 
-eval (NSym var       ) = (lookupVar var :: m (Maybe v))
-  >>= maybe (freeVariable var) (demand ?? evaledSym var)
+eval (NSym var       ) = do
+  mres <- lookupVar var
+  case mres of
+    Just x  -> demand x $ evaledSym var
+    Nothing -> freeVariable var
 
 eval (NConstant    x      ) = evalConstant x
 eval (NStr         str    ) = evalString str
@@ -158,14 +156,14 @@ eval (NWith   scope  body) = evalWith scope body
 eval (NAssert cond   body) = cond >>= evalAssert ?? body
 
 eval (NAbs    params body) = do
-    -- It is the environment at the definition site, not the call site, that
-    -- needs to be used when evaluating the body and default arguments, hence
-    -- we defer here so the present scope is restored when the parameters and
-    -- body are forced during application.
+  -- It is the environment at the definition site, not the call site, that
+  -- needs to be used when evaluating the body and default arguments, hence we
+  -- defer here so the present scope is restored when the parameters and body
+  -- are forced during application.
   scope <- currentScopes :: m (Scopes m v)
   evalAbs params $ \arg k -> withScopes scope $ do
     args <- buildArgument params arg
-    pushScope args (k (M.map (`demand` pure) args) body)
+    pushScope args (k (fmap (inform ?? withScopes scope) args) body)
 
 eval (NSynHole name) = synHole name
 
@@ -173,17 +171,14 @@ eval (NSynHole name) = synHole name
 --   this implementation may be used as an implementation for 'evalWith'.
 evalWithAttrSet :: forall v m . MonadNixEval v m => m v -> m v -> m v
 evalWithAttrSet aset body = do
-    -- The scope is deliberately wrapped in a thunk here, since it is
-    -- evaluated each time a name is looked up within the weak scope, and
-    -- we want to be sure the action it evaluates is to force a thunk, so
-    -- its value is only computed once.
+  -- The scope is deliberately wrapped in a thunk here, since it is demanded
+  -- each time a name is looked up within the weak scope, and we want to be
+  -- sure the action it evaluates is to force a thunk, so its value is only
+  -- computed once.
   scope <- currentScopes :: m (Scopes m v)
-  s     <- defer @v @m $ withScopes scope aset
-  pushWeakScope
-    ?? body
-    $  demand s
-    $  fmap fst
-    .  fromValue @(AttrSet v, AttrSet SourcePos)
+  s     <- defer $ withScopes scope aset
+  let s' = demand s $ fmap fst . fromValue @(AttrSet v, AttrSet SourcePos)
+  pushWeakScope s' body
 
 attrSetAlter
   :: forall v m
@@ -264,7 +259,7 @@ evalBinds recursive binds = do
     finalValue >>= fromValue >>= \(o', p') ->
           -- jww (2018-05-09): What to do with the key position here?
                                               return $ map
-      (\(k, v) -> ([k], fromMaybe pos (M.lookup k p'), demand @v @m v pure))
+      (\(k, v) -> ([k], fromMaybe pos (M.lookup k p'), demand v pure))
       (M.toList o')
 
   go _ (NamedVar pathExpr finalValue pos) = do
