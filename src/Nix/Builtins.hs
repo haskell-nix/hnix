@@ -95,7 +95,7 @@ import           Nix.Value
 import           Nix.Value.Equal
 import           Nix.Value.Monad
 import           Nix.XML
-import           System.Nix.Internal.Hash       ( printHashBytes32 )
+import           System.Nix.Base32              as Base32
 import           System.FilePath
 import           System.Posix.Files             ( isRegularFile
                                                 , isDirectory
@@ -1227,7 +1227,7 @@ placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
   toValue
     $ principledMakeNixStringWithoutContext
     $ Text.cons '/'
-    $ printHashBytes32
+    $ Base32.encode
     $ fst             -- The result coming out of hashString is base16 encoded
     $ Base16.decode
     $ encodeUtf8
