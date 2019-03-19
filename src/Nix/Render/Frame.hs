@@ -159,16 +159,12 @@ renderExpr _level longLabel shortLabel e@(Fix (Compose (Ann _ x))) = do
 
 renderValueFrame
   :: forall e t f m ann
-  . ( MonadReader e m
-    , Has e Options
-    , MonadFile m
-    , MonadCitedThunks t f m
-    )
+   . (MonadReader e m, Has e Options, MonadFile m, MonadCitedThunks t f m)
   => NixLevel
   -> ValueFrame t f m
   -> m [Doc ann]
 renderValueFrame level = fmap (: []) . \case
-  ForcingThunk   _t  -> pure "ForcingThunk" -- jww (2019-03-18): NYI
+  ForcingThunk    _t -> pure "ForcingThunk" -- jww (2019-03-18): NYI
   ConcerningValue _v -> pure "ConcerningValue"
   Comparison     _ _ -> pure "Comparing"
   Addition       _ _ -> pure "Adding"
@@ -185,7 +181,7 @@ renderValueFrame level = fmap (: []) . \case
     v' <- renderValue level "" "" v
     pure $ "CoercionToJson " <> v'
   CoercionFromJson _j -> pure "CoercionFromJson"
-  Expectation   t  r  -> case getEitherOr r of
+  Expectation t r     -> case getEitherOr r of
     Left nf -> do
       let v' = prettyNValueNF @t @f @m nf
       pure $ "Saw " <> v' <> " but expected " <> pretty (describeValue t)
@@ -195,11 +191,7 @@ renderValueFrame level = fmap (: []) . \case
 
 renderValue
   :: forall e t f m ann
-  . ( MonadReader e m
-    , Has e Options
-    , MonadFile m
-    , MonadCitedThunks t f m
-    )
+   . (MonadReader e m, Has e Options, MonadFile m, MonadCitedThunks t f m)
   => NixLevel
   -> String
   -> String

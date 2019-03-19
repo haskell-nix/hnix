@@ -158,18 +158,16 @@ main = do
       findAttrs = go ""
        where
         go prefix s = do
-          xs <-
-            forM (sortOn fst (M.toList s))
-              $ \(k, nv) -> case nv of
-                  Free v       -> pure (k, Just (Free v))
-                  Pure (StdThunk (extract -> Thunk _ _ ref)) -> do
-                    let path         = prefix ++ Text.unpack k
-                        (_, descend) = filterEntry path k
-                    val <- readVar @(StandardT IO) ref
-                    case val of
-                      Computed _ -> pure (k, Nothing)
-                      _ | descend   -> (k, ) <$> forceEntry path nv
-                        | otherwise -> pure (k, Nothing)
+          xs <- forM (sortOn fst (M.toList s)) $ \(k, nv) -> case nv of
+            Free v -> pure (k, Just (Free v))
+            Pure (StdThunk (extract -> Thunk _ _ ref)) -> do
+              let path         = prefix ++ Text.unpack k
+                  (_, descend) = filterEntry path k
+              val <- readVar @(StandardT IO) ref
+              case val of
+                Computed _ -> pure (k, Nothing)
+                _ | descend   -> (k, ) <$> forceEntry path nv
+                  | otherwise -> pure (k, Nothing)
 
           forM_ xs $ \(k, mv) -> do
             let path              = prefix ++ Text.unpack k

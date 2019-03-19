@@ -39,11 +39,11 @@ type MonadBasicThunk m = (MonadThunkId m, MonadVar m)
 
 instance (MonadBasicThunk m, MonadCatch m)
   => MonadThunk (NThunkF m v) m v where
-  thunk   = buildThunk
+  thunk = buildThunk
   thunkId (Thunk n _ _) = n
-  queryM    = queryThunk
-  force     = forceThunk
-  forceEff  = forceEffects
+  queryM   = queryThunk
+  force    = forceThunk
+  forceEff = forceEffects
 
 buildThunk :: MonadBasicThunk m => m v -> m (NThunkF m v)
 buildThunk action = do

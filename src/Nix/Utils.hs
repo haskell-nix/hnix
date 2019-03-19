@@ -95,23 +95,20 @@ transport :: Functor g => (forall x . f x -> g x) -> Fix f -> Fix g
 transport f (Fix x) = Fix $ fmap (transport f) (f x)
 
 lifted
-    :: ( MonadTransControl u
-      , Monad (u m)
-      , Monad m
-      )
-    => ((a -> m (StT u b)) -> m (StT u b)) -> (a -> u m b) -> u m b
+  :: (MonadTransControl u, Monad (u m), Monad m)
+  => ((a -> m (StT u b)) -> m (StT u b))
+  -> (a -> u m b)
+  -> u m b
 lifted f k = liftWith (\run -> f (run . k)) >>= restoreT . return
 
 freeToFix :: Functor f => (a -> Fix f) -> Free f a -> Fix f
 freeToFix f = go
-  where
-    go (Pure a) = f a
-    go (Free v) = Fix (fmap go v)
+ where
+  go (Pure a) = f a
+  go (Free v) = Fix (fmap go v)
 
 fixToFree :: Functor f => Fix f -> Free f Void
-fixToFree = Free . go
-  where
-    go (Fix f) = fmap (Free . go) f
+fixToFree = Free . go where go (Fix f) = fmap (Free . go) f
 
 -- | adi is Abstracting Definitional Interpreters:
 --

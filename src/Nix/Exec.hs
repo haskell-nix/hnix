@@ -88,9 +88,9 @@ import           GHC.DataSize
 
 type MonadCited t f m
   = ( HasCitations m (NValue t f m) t
-    , HasCitations1 m (NValue t f m) f
-    , MonadDataContext f m
-    )
+  , HasCitations1 m (NValue t f m) f
+  , MonadDataContext f m
+  )
 
 nvConstantP
   :: MonadCited t f m => Provenance m (NValue t f m) -> NAtom -> NValue t f m
@@ -104,14 +104,14 @@ nvStrP
 nvStrP p ns = addProvenance p (nvStr ns)
 
 nvPathP
-  :: MonadCited t f m
-  => Provenance m (NValue t f m)
-  -> FilePath
-  -> NValue t f m
+  :: MonadCited t f m => Provenance m (NValue t f m) -> FilePath -> NValue t f m
 nvPathP p x = addProvenance p (nvPath x)
 
-nvListP :: MonadCited t f m
-        => Provenance m (NValue t f m) -> [NValue t f m] -> NValue t f m
+nvListP
+  :: MonadCited t f m
+  => Provenance m (NValue t f m)
+  -> [NValue t f m]
+  -> NValue t f m
 nvListP p l = addProvenance p (nvList l)
 
 nvSetP
@@ -299,10 +299,9 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalAbs p k = do
     scope <- currentScopes
     span  <- currentPos
-    pure $ nvClosureP
-      (Provenance scope (NAbs_ span (Nothing <$ p) Nothing))
-      (void p)
-      (\arg -> snd <$> k (pure arg) (\_ b -> ((), ) <$> b))
+    pure $ nvClosureP (Provenance scope (NAbs_ span (Nothing <$ p) Nothing))
+                      (void p)
+                      (\arg -> snd <$> k (pure arg) (\_ b -> ((), ) <$> b))
 
   evalError = throwError
 
@@ -706,18 +705,27 @@ instance ( MonadFix m
               Lazy $ ReaderT $ const $ modify (M.insert path expr)
               pure expr
 
-  derivationStrict = fromValue @(AttrSet (NValue t f (Lazy t f m))) >=> \s -> do
-    nn <- maybe (pure False) (demand ?? fromValue) (M.lookup "__ignoreNulls" s)
-    s' <- M.fromList <$> mapMaybeM (handleEntry nn) (M.toList s)
-    v' <- normalForm =<< toValue @(AttrSet (NValue t f (Lazy t f m))) @_ @(NValue t f (Lazy t f m)) s'
-    nixInstantiateExpr $ "derivationStrict " ++ show (prettyNValueNF v')
+  derivationStrict = fromValue @(AttrSet (NValue t f (Lazy t f m))) >=> \s ->
+    do
+      nn <- maybe (pure False)
+                  (demand ?? fromValue)
+                  (M.lookup "__ignoreNulls" s)
+      s' <- M.fromList <$> mapMaybeM (handleEntry nn) (M.toList s)
+      v' <-
+        normalForm
+          =<< toValue @(AttrSet (NValue t f (Lazy t f m))) @_
+                @(NValue t f (Lazy t f m))
+                s'
+      nixInstantiateExpr $ "derivationStrict " ++ show (prettyNValueNF v')
    where
     mapMaybeM :: (a -> Lazy t f m (Maybe b)) -> [a] -> Lazy t f m [b]
     mapMaybeM op = foldr f (return [])
       where f x xs = op x >>= (<$> xs) . (++) . maybeToList
 
-    handleEntry :: Bool -> (Text, NValue t f (Lazy t f m))
-                -> Lazy t f m (Maybe (Text, NValue t f (Lazy t f m)))
+    handleEntry
+      :: Bool
+      -> (Text, NValue t f (Lazy t f m))
+      -> Lazy t f m (Maybe (Text, NValue t f (Lazy t f m)))
     handleEntry ignoreNulls (k, v) = fmap (k, ) <$> case k of
         -- The `args' attribute is special: it supplies the command-line
         -- arguments to the builder.
@@ -729,10 +737,12 @@ instance ( MonadFix m
         NVConstant NNull | ignoreNulls -> pure Nothing
         v'                             -> Just <$> coerceNix v'
      where
-      coerceNix :: NValue t f (Lazy t f m) -> Lazy t f m (NValue t f (Lazy t f m))
+      coerceNix
+        :: NValue t f (Lazy t f m) -> Lazy t f m (NValue t f (Lazy t f m))
       coerceNix = toValue <=< coerceToString CopyToStore CoerceAny
 
-      coerceNixList :: NValue t f (Lazy t f m) -> Lazy t f m (NValue t f (Lazy t f m))
+      coerceNixList
+        :: NValue t f (Lazy t f m) -> Lazy t f m (NValue t f (Lazy t f m))
       coerceNixList v = do
         xs <- fromValue @[NValue t f (Lazy t f m)] v
         ys <- traverse (\x -> demand x coerceNix) xs
@@ -798,17 +808,18 @@ findPathBy finder l name = do
  where
   go :: Maybe FilePath -> NValue t f m -> m (Maybe FilePath)
   go p@(Just _) _ = pure p
-  go Nothing    l = demand l $ fromValue >=> \(s :: HashMap Text (NValue t f m)) -> do
-    p <- resolvePath s
-    demand p $ fromValue >=> \(Path path) -> case M.lookup "prefix" s of
-      Nothing -> tryPath path Nothing
-      Just pf -> demand pf $ fromValueMay >=> \case
-        Just (nsPfx :: NixString) ->
-          let pfx = hackyStringIgnoreContext nsPfx
-          in  if not (Text.null pfx)
-                then tryPath path (Just (Text.unpack pfx))
-                else tryPath path Nothing
-        _ -> tryPath path Nothing
+  go Nothing l =
+    demand l $ fromValue >=> \(s :: HashMap Text (NValue t f m)) -> do
+      p <- resolvePath s
+      demand p $ fromValue >=> \(Path path) -> case M.lookup "prefix" s of
+        Nothing -> tryPath path Nothing
+        Just pf -> demand pf $ fromValueMay >=> \case
+          Just (nsPfx :: NixString) ->
+            let pfx = hackyStringIgnoreContext nsPfx
+            in  if not (Text.null pfx)
+                  then tryPath path (Just (Text.unpack pfx))
+                  else tryPath path Nothing
+          _ -> tryPath path Nothing
 
   tryPath p (Just n) | n' : ns <- splitDirectories name, n == n' =
     finder $ p <///> joinPath ns
@@ -825,8 +836,12 @@ findPathBy finder l name = do
           ++ " with 'path' elements, but saw: "
           ++ show s
 
-findPathM :: forall e t f m . MonadNix e t f m
-          => [NValue t f m] -> FilePath -> m FilePath
+findPathM
+  :: forall e t f m
+   . MonadNix e t f m
+  => [NValue t f m]
+  -> FilePath
+  -> m FilePath
 findPathM l name = findPathBy path l name
  where
   path :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
@@ -840,7 +855,7 @@ findEnvPathM name = do
   mres <- lookupVar "__nixPath"
   case mres of
     Nothing -> error "impossible"
-    Just x -> demand x $ fromValue >=> \(l :: [NValue t f m]) ->
+    Just x  -> demand x $ fromValue >=> \(l :: [NValue t f m]) ->
       findPathBy nixFilePath l name
  where
   nixFilePath :: MonadEffects t f m => FilePath -> m (Maybe FilePath)

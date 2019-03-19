@@ -154,16 +154,17 @@ compareAttrSets f eq lm rm = runIdentity
   $ compareAttrSetsM (\t -> Identity (f t)) (\x y -> Identity (eq x y)) lm rm
 
 valueEqM
-  :: forall t f m. (MonadThunk t m (NValue t f m), Comonad f)
+  :: forall t f m
+   . (MonadThunk t m (NValue t f m), Comonad f)
   => NValue t f m
   -> NValue t f m
   -> m Bool
-valueEqM (Pure x) (Pure y) = thunkEqM x y
-valueEqM (Pure x) y@(Free _) = thunkEqM x =<< thunk (pure y)
-valueEqM x@(Free _) (Pure y) = thunkEqM ?? y =<< thunk (pure x)
+valueEqM (  Pure x) (  Pure y) = thunkEqM x y
+valueEqM (  Pure x) y@(Free _) = thunkEqM x =<< thunk (pure y)
+valueEqM x@(Free _) (  Pure y) = thunkEqM ?? y =<< thunk (pure x)
 valueEqM (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
   valueFEqM (compareAttrSetsM f valueEqM) valueEqM x y
-  where
+ where
   f (Pure t) = force t $ \case
     NVStr s -> pure $ Just s
     _       -> pure Nothing

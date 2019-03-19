@@ -75,10 +75,7 @@ class FromValue a m v where
     fromValueMay :: v -> m (Maybe a)
 
 type Convertible e t f m
-  = ( Framed e m
-  , MonadDataErrorContext t f m
-  , MonadThunk t m (NValue t f m)
-  )
+  = (Framed e m, MonadDataErrorContext t f m, MonadThunk t m (NValue t f m))
 
 instance ( Convertible e t f m
          , MonadValue (NValueNF t f m) m
@@ -86,7 +83,7 @@ instance ( Convertible e t f m
          )
   => FromValue a m (NValueNF t f m) where
   fromValueMay (Fix v) = fromValueMay v
-  fromValue    (Fix v) = fromValue v
+  fromValue (Fix v) = fromValue v
 
 instance ( Convertible e t f m
          , MonadValue (NValue t f m) m
@@ -96,7 +93,7 @@ instance ( Convertible e t f m
   fromValueMay = flip demand $ \case
     Pure t -> force t fromValueMay
     Free v -> fromValueMay v
-  fromValue    = flip demand $ \case
+  fromValue = flip demand $ \case
     Pure t -> force t fromValue
     Free v -> fromValue v
 
@@ -106,7 +103,7 @@ instance ( Convertible e t f m
          )
   => FromValue a m (Deeper (NValueNF t f m)) where
   fromValueMay (Deeper (Fix v)) = fromValueMay (Deeper v)
-  fromValue    (Deeper (Fix v)) = fromValue    (Deeper v)
+  fromValue (Deeper (Fix v)) = fromValue (Deeper v)
 
 instance ( Convertible e t f m
          , MonadValue (NValue t f m) m
@@ -116,7 +113,7 @@ instance ( Convertible e t f m
   fromValueMay (Deeper v) = demand v $ \case
     Pure t -> force t (fromValueMay . Deeper)
     Free v -> fromValueMay (Deeper v)
-  fromValue (Deeper v)   = demand v $ \case
+  fromValue (Deeper v) = demand v $ \case
     Pure t -> force t (fromValue . Deeper)
     Free v -> fromValue (Deeper v)
 
@@ -196,7 +193,7 @@ instance (Convertible e t f m
     _ -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m (TString NoContext) (embedValue v)
+    _ -> throwError $ Expectation @t @f @m (TString NoContext) (embedValue v)
 
 instance ( Convertible e t f m
          , EmbedValue t f m r
@@ -204,10 +201,10 @@ instance ( Convertible e t f m
   => FromValue ByteString m (NValue' t f m r) where
   fromValueMay = \case
     NVStr' ns -> pure $ encodeUtf8 <$> hackyGetStringNoContext ns
-    _        -> pure Nothing
+    _         -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m (TString NoContext) (embedValue v)
+    _ -> throwError $ Expectation @t @f @m (TString NoContext) (embedValue v)
 
 newtype Path = Path { getPath :: FilePath }
     deriving Show
@@ -291,7 +288,7 @@ instance ( Convertible e t f m
          )
   => FromValue (AttrSet a, AttrSet SourcePos) m (Deeper (NValue' t f m r)) where
   fromValueMay = \case
-    Deeper (NVSet' s p) -> fmap (,p) <$> sequence <$> traverse fromValueMay s
+    Deeper (NVSet' s p) -> fmap (, p) <$> sequence <$> traverse fromValueMay s
     _                   -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
@@ -368,11 +365,7 @@ instance ( Convertible e t f m
     f' <- toValue (principledMakeNixStringWithoutContext (Text.pack f))
     l' <- toValue (unPos l)
     c' <- toValue (unPos c)
-    let pos = M.fromList
-          [ ("file" :: Text, f')
-          , ("line"       , l')
-          , ("column"     , c')
-          ]
+    let pos = M.fromList [("file" :: Text, f'), ("line", l'), ("column", c')]
     pure $ nvSet' pos mempty
 
 -- | With 'ToValue', we can always act recursively
@@ -420,9 +413,9 @@ instance ( MonadValue (NValue t f m) m
         [] -> return Nothing
         _  -> Just <$> toValue ts
     pure $ flip nvSet' M.empty $ M.fromList $ catMaybes
-      [ (\p  -> ("path",       p))  <$> path
+      [ (\p -> ("path", p)) <$> path
       , (\ao -> ("allOutputs", ao)) <$> allOutputs
-      , (\os -> ("outputs",    os)) <$> outputs
+      , (\os -> ("outputs", os)) <$> outputs
       ]
 
 instance Convertible e t f m => ToValue () m (NExprF r) where

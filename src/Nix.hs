@@ -135,7 +135,7 @@ processResult
 processResult h val = do
   opts :: Options <- asks (view hasLens)
   case attr opts of
-    Nothing                        -> h val
+    Nothing                         -> h val
     Just (Text.splitOn "." -> keys) -> go keys val
  where
   go :: [Text.Text] -> NValue t f m -> m a

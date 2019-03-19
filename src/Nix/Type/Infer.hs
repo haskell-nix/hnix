@@ -403,10 +403,12 @@ instance Monad m => MonadCatch (InferT s m) where
       (fromException (toException e))
     err -> error $ "Unexpected error: " ++ show err
 
-type MonadInfer m = ({- MonadThunkId m,-} MonadVar m, MonadFix m)
+type MonadInfer m
+  = ({- MonadThunkId m,-}
+     MonadVar m, MonadFix m)
 
 instance MonadValue (Judgment s) (InferT s m) where
-  defer = id
+  defer  = id
   demand = flip ($)
 
 {-

@@ -339,11 +339,12 @@ valueToExpr = iterNValueNF phi
   phi (NVClosure' _ _   ) = Fix . NSym . pack $ "<closure>"
   phi (NVPath' p        ) = Fix $ NLiteralPath p
   phi (NVBuiltin' name _) = Fix . NSym . pack $ "builtins." ++ name
-  phi _                  = error "Pattern synonyms foil completeness check"
+  phi _                   = error "Pattern synonyms foil completeness check"
 
   mkStr ns = Fix $ NStr $ DoubleQuoted [Plain (hackyStringIgnoreContext ns)]
 
-prettyNValueNF :: forall t f m ann. MonadDataContext f m => NValueNF t f m -> Doc ann
+prettyNValueNF
+  :: forall t f m ann . MonadDataContext f m => NValueNF t f m -> Doc ann
 prettyNValueNF = prettyNix . valueToExpr
 
 -- | This function is used only by the testing code.
@@ -371,7 +372,7 @@ printNix = iterNValueNF phi
   phi NVClosure'{}        = "<<lambda>>"
   phi (NVPath' fp       ) = fp
   phi (NVBuiltin' name _) = "<<builtin " ++ name ++ ">>"
-  phi _                  = error "Pattern synonyms foil completeness check"
+  phi _                   = error "Pattern synonyms foil completeness check"
 
 prettyNValue
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)

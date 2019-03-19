@@ -212,10 +212,7 @@ attrSetAlter (k : ks) pos m p val = case M.lookup k m of
   recurse st sp = attrSetAlter ks pos st sp val <&> \(st', _) ->
     ( M.insert
       k
-      (   toValue @(AttrSet v, AttrSet SourcePos)
-      =<< (, mempty)
-      <$> sequence st'
-      )
+      (toValue @(AttrSet v, AttrSet SourcePos) =<< (, mempty) <$> sequence st')
       st
     , M.insert k pos sp
     )

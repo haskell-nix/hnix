@@ -75,20 +75,21 @@ normalize f = run . iterNValueM run go (fmap Free . sequenceNValue' run)
 
 stubCycles
   :: forall t f m
-  . ( Applicative f
-    , Functor m
-    , HasCitations m (NValue t f m) t
-    , HasCitations1 m (NValue t f m) f
-    )
-  => NValue t f m -> NValueNF t f m
-stubCycles = freeToFix $ \t -> Fix
-  $ NValue
-  $ Prelude.foldr (addProvenance1 @m @(NValue t f m)) cyc
-  $ reverse
-  $ citations @m @(NValue t f m) t
-  where
-  Fix (NValue cyc) =
-    nvStrNF (principledMakeNixStringWithoutContext "<CYCLE>")
+   . ( Applicative f
+     , Functor m
+     , HasCitations m (NValue t f m) t
+     , HasCitations1 m (NValue t f m) f
+     )
+  => NValue t f m
+  -> NValueNF t f m
+stubCycles = freeToFix $ \t ->
+  Fix
+    $ NValue
+    $ Prelude.foldr (addProvenance1 @m @(NValue t f m)) cyc
+    $ reverse
+    $ citations @m @(NValue t f m) t
+ where
+  Fix (NValue cyc) = nvStrNF (principledMakeNixStringWithoutContext "<CYCLE>")
 
 normalForm
   :: ( Framed e m

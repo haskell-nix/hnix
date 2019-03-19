@@ -112,16 +112,23 @@ everyPossible = packSymbolic NAny
 mkSymbolic :: MonadVar m => [NTypeF m (Symbolic m)] -> m (Symbolic m)
 mkSymbolic xs = packSymbolic (NMany xs)
 
-packSymbolic :: MonadVar m
-             => NSymbolicF (NTypeF m (Symbolic m)) -> m (Symbolic m)
+packSymbolic
+  :: MonadVar m => NSymbolicF (NTypeF m (Symbolic m)) -> m (Symbolic m)
 packSymbolic = fmap SV . newVar
 
-unpackSymbolic :: (MonadVar m, MonadThunkId m, MonadCatch m)
-               => Symbolic m -> m (NSymbolicF (NTypeF m (Symbolic m)))
+unpackSymbolic
+  :: (MonadVar m, MonadThunkId m, MonadCatch m)
+  => Symbolic m
+  -> m (NSymbolicF (NTypeF m (Symbolic m)))
 unpackSymbolic = flip demand $ readVar . getSV
 
 type MonadLint e m
-  = (Scoped (Symbolic m) m, Framed e m, MonadVar m, MonadCatch m, MonadThunkId m)
+  = ( Scoped (Symbolic m) m
+  , Framed e m
+  , MonadVar m
+  , MonadCatch m
+  , MonadThunkId m
+  )
 
 symerr :: forall e m a . MonadLint e m => String -> m a
 symerr = evalError @(Symbolic m) . ErrorCall
@@ -164,7 +171,9 @@ merge
 merge context = go
  where
   go
-    :: [NTypeF m (Symbolic m)] -> [NTypeF m (Symbolic m)] -> m [NTypeF m (Symbolic m)]
+    :: [NTypeF m (Symbolic m)]
+    -> [NTypeF m (Symbolic m)]
+    -> m [NTypeF m (Symbolic m)]
   go []       _        = return []
   go _        []       = return []
   go (x : xs) (y : ys) = case (x, y) of

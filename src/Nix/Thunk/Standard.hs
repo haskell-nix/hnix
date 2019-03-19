@@ -78,8 +78,8 @@ instance ( MonadStdThunk (u m)
   thunk   = fmap (StdThunk . StdCited) . thunk
   thunkId = thunkId . _stdCited . _stdThunk
   queryM x b f = queryM (_stdCited (_stdThunk x)) b f
-  force     = force . _stdCited . _stdThunk
-  forceEff  = forceEff . _stdCited . _stdThunk
+  force    = force . _stdCited . _stdThunk
+  forceEff = forceEff . _stdCited . _stdThunk
   -- query x b f = query (_stdCited (_stdThunk x)) b f
   -- wrapValue = StdThunk . StdCited . wrapValue
   -- getValue  = getValue . _stdCited . _stdThunk

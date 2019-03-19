@@ -16,10 +16,7 @@ import           Nix.Value
 import           Text.XML.Light
 
 toXML :: forall t f m . MonadDataContext f m => NValueNF t f m -> NixString
-toXML =
-  runWithStringContext
-    . fmap pp
-    . iterNValueNF phi
+toXML = runWithStringContext . fmap pp . iterNValueNF phi
  where
   pp =
     ("<?xml version='1.0' encoding='utf-8'?>\n" <>)
@@ -36,8 +33,9 @@ toXML =
       NBool  b -> return $ mkElem "bool" "value" (if b then "true" else "false")
       NNull    -> return $ Element (unqual "null") [] [] Nothing
 
-    NVStr'  str -> mkElem "string" "value" . Text.unpack <$> extractNixString str
-    NVList' l   -> sequence l
+    NVStr' str ->
+      mkElem "string" "value" . Text.unpack <$> extractNixString str
+    NVList' l -> sequence l
       >>= \els -> return $ Element (unqual "list") [] (Elem <$> els) Nothing
 
     NVSet' s _ -> sequence s >>= \kvs -> return $ Element
@@ -59,7 +57,7 @@ toXML =
       return $ Element (unqual "function") [] (paramsXML p) Nothing
     NVPath' fp        -> return $ mkElem "path" "value" fp
     NVBuiltin' name _ -> return $ mkElem "function" "name" name
-    _                -> error "Pattern synonyms mask coverage"
+    _                 -> error "Pattern synonyms mask coverage"
 
 mkElem :: String -> String -> String -> Element
 mkElem n a v = Element (unqual n) [Attr (unqual a) v] [] Nothing

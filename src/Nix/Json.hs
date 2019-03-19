@@ -46,7 +46,8 @@ nvalueToJSON = \case
       <$> traverse (join . lift . flip demand (return . nvalueToJSON)) l
   NVSet m _ -> case HM.lookup "outPath" m of
     Nothing ->
-      A.Object <$> traverse (join . lift . flip demand (return . nvalueToJSON)) m
+      A.Object
+        <$> traverse (join . lift . flip demand (return . nvalueToJSON)) m
     Just outPath -> join $ lift $ demand outPath (return . nvalueToJSON)
   NVPath p -> do
     fp <- lift $ unStorePath <$> addPath p
