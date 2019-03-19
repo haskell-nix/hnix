@@ -1300,21 +1300,21 @@ readDir_ p = demand p $ \path' -> do
 
 fromJSON
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-fromJSON = fromValue >=> fromStringNoContext >=> \encoded ->
+fromJSON arg = demand arg $ fromValue >=> fromStringNoContext >=> \encoded ->
   case A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded of
     Left jsonError ->
       throwError $ ErrorCall $ "builtins.fromJSON: " ++ jsonError
     Right v -> jsonToNValue v
  where
   jsonToNValue = \case
-    A.Object m -> flip nvSet M.empty <$> traverse (defer . jsonToNValue) m
+    A.Object m -> flip nvSet M.empty <$> traverse jsonToNValue m
     A.Array  l -> nvList <$> traverse jsonToNValue (V.toList l)
     A.String s -> pure $ nvStr $ hackyMakeNixStringWithoutContext s
     A.Number n -> pure $ nvConstant $ case floatingOrInteger n of
       Left  r -> NFloat r
       Right i -> NInt i
-    A.Bool b -> pure $ nvConstant $ NBool b
-    A.Null   -> pure $ nvConstant NNull
+    A.Bool   b -> pure $ nvConstant $ NBool b
+    A.Null     -> pure $ nvConstant NNull
 
 prim_toJSON :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 prim_toJSON x = demand x $ fmap nvStr . nvalueToJSONNixString

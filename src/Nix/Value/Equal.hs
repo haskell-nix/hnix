@@ -64,17 +64,6 @@ checkComparable x y = case (x, y) of
   (NVPath _, NVPath _) -> pure ()
   _ -> throwError $ Comparison x y
 
-thunkEqM :: (MonadThunk t m (NValue t f m), Comonad f) => t -> t -> m Bool
-thunkEqM lt rt = force lt $ \lv -> force rt $ \rv ->
-  let unsafePtrEq = case (lt, rt) of
-        (thunkId -> lid, thunkId -> rid) | lid == rid -> return True
-        _ -> valueEqM lv rv
-  in  case (lv, rv) of
-        (NVClosure _ _, NVClosure _ _) -> unsafePtrEq
-        (NVList _     , NVList _     ) -> unsafePtrEq
-        (NVSet _ _    , NVSet _ _    ) -> unsafePtrEq
-        _                              -> valueEqM lv rv
-
 -- | Checks whether two containers are equal, using the given item equality
 --   predicate. If there are any item slots that don't match between the two
 --   containers, the result will be False.
@@ -170,8 +159,8 @@ valueEqM
   -> NValue t f m
   -> m Bool
 valueEqM (Pure x) (Pure y) = thunkEqM x y
-valueEqM (Pure _) _ = pure False
-valueEqM _ (Pure _) = pure False
+valueEqM (Pure x) y@(Free _) = thunkEqM x =<< thunk (pure y)
+valueEqM x@(Free _) (Pure y) = thunkEqM ?? y =<< thunk (pure x)
 valueEqM (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
   valueFEqM (compareAttrSetsM f valueEqM) valueEqM x y
   where
@@ -181,6 +170,17 @@ valueEqM (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
   f (Free v) = case v of
     NVStr' s -> pure $ Just s
     _        -> pure Nothing
+
+thunkEqM :: (MonadThunk t m (NValue t f m), Comonad f) => t -> t -> m Bool
+thunkEqM lt rt = force lt $ \lv -> force rt $ \rv ->
+  let unsafePtrEq = case (lt, rt) of
+        (thunkId -> lid, thunkId -> rid) | lid == rid -> return True
+        _ -> valueEqM lv rv
+  in  case (lv, rv) of
+        (NVClosure _ _, NVClosure _ _) -> unsafePtrEq
+        (NVList _     , NVList _     ) -> unsafePtrEq
+        (NVSet _ _    , NVSet _ _    ) -> unsafePtrEq
+        _                              -> valueEqM lv rv
 
 valueNFEq :: Comonad f => NValueNF t f m -> NValueNF t f m -> Bool
 valueNFEq (Fix (NValue (extract -> x))) (Fix (NValue (extract -> y))) =
