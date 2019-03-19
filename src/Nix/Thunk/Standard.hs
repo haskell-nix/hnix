@@ -23,6 +23,7 @@ module Nix.Thunk.Standard where
 import           Control.Comonad                ( Comonad )
 import           Control.Comonad.Env            ( ComonadEnv )
 import           Control.Monad.Catch     hiding ( catchJust )
+import           Control.Monad.Free
 import           Control.Monad.Reader
 import           Control.Monad.Ref
 import           Data.Typeable
@@ -36,6 +37,7 @@ import           Nix.Options
 import           Nix.Thunk
 import           Nix.Thunk.Basic
 import           Nix.Value
+import           Nix.Value.Monad
 import           Nix.Var
 
 newtype StdThunk (u :: (* -> *) -> * -> *) (m :: * -> *) = StdThunk
@@ -82,6 +84,18 @@ instance ( MonadStdThunk (u m)
   -- wrapValue = StdThunk . StdCited . wrapValue
   -- getValue  = getValue . _stdCited . _stdThunk
 
+instance ( MonadAtomicRef (u m)
+         , MonadThunk (StdThunk u m) (StdLazy u m) (StdValue u m)
+         )
+  => MonadValue (StdValue u m) (StdLazy u m) where
+  defer = fmap Pure . thunk
+  demand (Pure v) f = force v (flip demand f)
+  demand (Free v) f = f (Free v)
+
+instance HasCitations (StdLazy u m) (StdValue u m) (StdThunk u m) where
+  citations (StdThunk c) = citations1 c
+  addProvenance x (StdThunk c) = StdThunk (addProvenance1 x c)
+
 instance HasCitations1 (StdLazy u m) (StdValue u m) (StdCited u m) where
   citations1 (StdCited c) = citations1 c
   addProvenance1 x (StdCited c) = StdCited (addProvenance1 x c)
@@ -107,7 +121,7 @@ runStandard opts action = do
 runStandardIO :: Options -> StdLazy StdIdT IO a -> IO a
 runStandardIO = runStandard
 
-whileForcingThunk
-  :: forall t f m s e r . (Exception s, Convertible e t f m) => s -> m r -> m r
-whileForcingThunk frame =
-  withFrame Debug (ForcingThunk @t @f @m) . withFrame Debug frame
+-- whileForcingThunk
+--   :: forall t f m s e r . (Exception s, Convertible e t f m) => s -> m r -> m r
+-- whileForcingThunk frame =
+--   withFrame Debug (ForcingThunk @t @f @m) . withFrame Debug frame

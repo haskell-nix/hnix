@@ -586,6 +586,7 @@ executable hnix
     , deepseq >=1.4.2 && <1.5
     , exceptions
     , filepath
+    , free
     , hashing
     , haskeline
     , hnix

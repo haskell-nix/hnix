@@ -501,6 +501,12 @@ describeValue = \case
   TPath              -> "a path"
   TBuiltin           -> "a builtin function"
 
+showValueType :: (MonadThunk t m (NValue t f m), Comonad f)
+              => NValue t f m -> m String
+showValueType (Pure t) = force t showValueType
+showValueType (Free (NValue (extract -> v))) =
+  pure $ describeValue $ valueType $ v
+
 data ValueFrame t f m
     = ForcingThunk t
     | ConcerningValue (NValue t f m)

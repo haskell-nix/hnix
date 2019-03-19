@@ -115,7 +115,7 @@ exec update source = do
   -- tyctx' <- hoistErr $ inferTop (tyctx st) expr
 
   -- TODO: track scope with (tmctx st)
-  mVal <- lift $ lift $ try $ pushScope @t M.empty (evalExprLoc expr)
+  mVal <- lift $ lift $ try $ pushScope M.empty (evalExprLoc expr)
 
   case mVal of
     Left (NixException frames) -> do
@@ -171,7 +171,8 @@ typeof args = do
   val <- case M.lookup line (tmctx st) of
     Just val -> return val
     Nothing  -> exec False line
-  liftIO $ putStrLn $ describeValue . valueType . extract . _nValue $ val
+  str <- lift $ lift $ showValueType val
+  liftIO $ putStrLn str
   where line = Text.pack (unwords args)
 
 -- :quit command

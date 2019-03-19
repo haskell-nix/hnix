@@ -174,7 +174,7 @@ builtinsList = sequence
   , add2 Normal   "catAttrs"         catAttrs
   , add2 Normal   "compareVersions"  compareVersions_
   , add  Normal   "concatLists"      concatLists
-  , add' Normal   "concatStringsSep" (arity2 principledIntercalateNixString)
+  -- , add' Normal   "concatStringsSep" (arity2 principledIntercalateNixString)
   , add0 Normal   "currentSystem"    currentSystem
   , add0 Normal   "currentTime"      currentTime_
   , add2 Normal   "deepSeq"          deepSeq
