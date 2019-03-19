@@ -407,9 +407,10 @@ type MonadInfer m
   = ({- MonadThunkId m,-}
      MonadVar m, MonadFix m)
 
-instance MonadValue (Judgment s) (InferT s m) where
-  defer  = id
-  demand = flip ($)
+instance Monad m => MonadValue (Judgment s) (InferT s m) where
+  defer      = id
+  demand     = flip ($)
+  inform v f = f (pure v)
 
 {-
 instance MonadInfer m
@@ -463,8 +464,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     tv <- fresh
     return $ Judgment as1 (cs1 ++ unops (t1 :~> tv) op) tv
 
-  evalBinary op (Judgment as1 cs1 t1) e2 = do
-    Judgment as2 cs2 t2 <- e2
+  evalBinary op (Judgment as1 cs1 t1) (Judgment as2 cs2 t2) = do
     tv                  <- fresh
     return $ Judgment (as1 `As.merge` as2)
                       (cs1 ++ cs2 ++ binops (t1 :~> t2 :~> tv) op)
@@ -472,21 +472,17 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
 
   evalWith = Eval.evalWithAttrSet
 
-  evalIf (Judgment as1 cs1 t1) t f = do
-    Judgment as2 cs2 t2 <- t
-    Judgment as3 cs3 t3 <- f
+  evalIf (Judgment as1 cs1 t1) (Judgment as2 cs2 t2) (Judgment as3 cs3 t3) =
     return $ Judgment
       (as1 `As.merge` as2 `As.merge` as3)
       (cs1 ++ cs2 ++ cs3 ++ [EqConst t1 typeBool, EqConst t2 t3])
       t2
 
-  evalAssert (Judgment as1 cs1 t1) body = do
-    Judgment as2 cs2 t2 <- body
+  evalAssert (Judgment as1 cs1 t1) (Judgment as2 cs2 t2) =
     return
       $ Judgment (as1 `As.merge` as2) (cs1 ++ cs2 ++ [EqConst t1 typeBool]) t2
 
-  evalApp (Judgment as1 cs1 t1) e2 = do
-    Judgment as2 cs2 t2 <- e2
+  evalApp (Judgment as1 cs1 t1) (Judgment as2 cs2 t2) = do
     tv                  <- fresh
     return $ Judgment (as1 `As.merge` as2)
                       (cs1 ++ cs2 ++ [EqConst t1 (t2 :~> tv)])
@@ -497,7 +493,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     let tv = TVar a
     ((), Judgment as cs t) <- extendMSet
       a
-      (k (pure (Judgment (As.singleton x tv) [] tv)) (\_ b -> ((), ) <$> b))
+      (k (Judgment (As.singleton x tv) [] tv) (\_ b -> pure ((), b)))
     return $ Judgment (as `As.remove` x)
                       (cs ++ [ EqConst t' tv | t' <- As.lookup x as ])
                       (tv :~> t)
@@ -510,13 +506,13 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     let (env, tys) =
           (\f -> foldl' f (As.empty, M.empty) js) $ \(as1, t1) (k, t) ->
             (as1 `As.merge` As.singleton k t, M.insert k t t1)
-        arg   = pure $ Judgment env [] (TSet True tys)
-        call  = k arg $ \args b -> (args, ) <$> b
+        arg   = Judgment env [] (TSet True tys)
+        call  = k arg $ \args b -> pure (args, b)
         names = map fst js
 
     (args, Judgment as cs t) <- foldr (\(_, TVar a) -> extendMSet a) call js
 
-    ty <- TSet variadic <$> traverse (inferredType <$>) args
+    let ty = TSet variadic (fmap inferredType args)
 
     return $ Judgment
       (foldl' As.remove as names)
@@ -569,7 +565,7 @@ instance MonadInfer m => ToValue Bool (InferT s m) (Judgment s) where
   toValue _ = pure $ Judgment As.empty [] typeBool
 
 infer :: MonadInfer m => NExpr -> InferT s m (Judgment s)
-infer = cata Eval.eval
+infer = cataM Eval.eval
 
 inferTop :: Env -> [(Text, NExpr)] -> Either InferError Env
 inferTop env []                = Right env

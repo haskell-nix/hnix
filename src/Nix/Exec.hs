@@ -265,43 +265,32 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalIf c t f = do
     scope <- currentScopes
     span  <- currentPos
-    fromValue c >>= \b -> if b
+    demand c $ fromValue >=> \b -> if b
       then
-        (\t -> addProvenance
-            (Provenance scope (NIf_ span (Just c) (Just t) Nothing))
-            t
-          )
-          <$> t
+        pure $ addProvenance (Provenance scope (NIf_ span (Just c) (Just t) Nothing)) t
       else
-        (\f -> addProvenance
-            (Provenance scope (NIf_ span (Just c) Nothing (Just f)))
-            f
-          )
-          <$> f
+        pure $ addProvenance (Provenance scope (NIf_ span (Just c) Nothing (Just f))) f
 
-  evalAssert c body = fromValue c >>= \b -> do
+  evalAssert c body = demand c $ fromValue >=> \b -> do
     span <- currentPos
     if b
       then do
         scope <- currentScopes
-        (\b ->
-            addProvenance (Provenance scope (NAssert_ span (Just c) (Just b))) b
-          )
-          <$> body
+        pure $ addProvenance (Provenance scope (NAssert_ span (Just c) (Just body))) body
       else nverr $ Assertion span c
 
   evalApp f x = do
     scope <- currentScopes
     span  <- currentPos
     addProvenance (Provenance scope (NBinary_ span NApp (Just f) Nothing))
-      <$> (callFunc f =<< defer x)
+      <$> (f `callFunc` x)
 
   evalAbs p k = do
     scope <- currentScopes
     span  <- currentPos
     pure $ nvClosureP (Provenance scope (NAbs_ span (Nothing <$ p) Nothing))
                       (void p)
-                      (\arg -> snd <$> k (pure arg) (\_ b -> ((), ) <$> b))
+                      (\arg -> snd <$> k arg (\_ b -> pure ((), b)))
 
   evalError = throwError
 
@@ -363,27 +352,26 @@ execBinaryOp
   -> SrcSpan
   -> NBinaryOp
   -> NValue t f m
-  -> m (NValue t f m)
+  -> NValue t f m
   -> m (NValue t f m)
 
-execBinaryOp scope span NOr larg rarg = fromValue larg >>= \l -> if l
+execBinaryOp scope span NOr larg rarg = demand larg $ fromValue >=> \l -> if l
   then orOp Nothing True
-  else rarg >>= \rval -> fromValue @Bool rval >>= orOp (Just rval)
+  else demand rarg $ \rval -> fromValue @Bool rval >>= orOp (Just rval)
  where
   orOp r b = pure $ nvConstantP
     (Provenance scope (NBinary_ span NOr (Just larg) r))
     (NBool b)
 
-execBinaryOp scope span NAnd larg rarg = fromValue larg >>= \l -> if l
-  then rarg >>= \rval -> fromValue @Bool rval >>= andOp (Just rval)
+execBinaryOp scope span NAnd larg rarg = demand larg $ fromValue >=> \l -> if l
+  then demand rarg $ \rval -> fromValue @Bool rval >>= andOp (Just rval)
   else andOp Nothing False
  where
   andOp r b = pure $ nvConstantP
     (Provenance scope (NBinary_ span NAnd (Just larg) r))
     (NBool b)
 
-execBinaryOp scope span op lval rarg = do
-  rval <- rarg
+execBinaryOp scope span op lval rval = do
   let bin :: (Provenance m (NValue t f m) -> a) -> a
       bin f = f (Provenance scope (NBinary_ span op (Just lval) (Just rval)))
       toBool = pure . bin nvConstantP . NBool
@@ -869,41 +857,44 @@ findEnvPathM name = do
     return $ if exists then Just path' else Nothing
 
 addTracing
-  :: (MonadNix e t f m, Has e Options, MonadReader Int n, Alternative n)
-  => Alg NExprLocF (m a)
-  -> Alg NExprLocF (n (m a))
-addTracing k v = do
+  :: ( MonadNix e t f m
+    , MonadTrans u
+    , MonadReader Int (u m)
+    , Alternative (u m)
+    )
+  => AlgM NExprLocF m a
+  -> AlgM NExprLocF (u m) a
+addTracing k v@(Compose (Ann span x)) = do
   depth <- ask
   guard (depth < 2000)
-  local succ $ do
-    v'@(Compose (Ann span x)) <- sequence v
-    return $ do
-      opts :: Options <- asks (view hasLens)
-      let rendered = if verbose opts >= Chatty
+  local succ $ lift $ do
+    opts :: Options <- asks (view hasLens)
+    let rendered = if verbose opts >= Chatty
+          then
 #ifdef MIN_VERSION_pretty_show
-                     then pretty $ PS.ppShow (void x)
+            pretty $ PS.ppShow (void x)
 #else
-            then pretty $ show (void x)
+            pretty $ show (void x)
 #endif
-            else prettyNix (Fix (Fix (NSym "?") <$ x))
-          msg x = pretty ("eval: " ++ replicate depth ' ') <> x
-      loc <- renderLocation span (msg rendered <> " ...\n")
-      putStr $ show loc
-      res <- k v'
-      print $ msg rendered <> " ...done"
-      return res
+          else prettyNix (Fix (Fix (NSym "?") <$ x))
+        msg x = pretty ("eval: " ++ replicate depth ' ') <> x
+    loc <- renderLocation span (msg rendered <> " ...\n")
+    putStr $ show loc
+    res <- k v
+    print $ msg rendered <> " ...done"
+    return res
 
 evalExprLoc :: forall e t f m . MonadNix e t f m => NExprLoc -> m (NValue t f m)
 evalExprLoc expr = do
   opts :: Options <- asks (view hasLens)
   if tracing opts
-    then join . (`runReaderT` (0 :: Int)) $ adi
+    then (`runReaderT` (0 :: Int)) $ adiM
       (addTracing phi)
-      (raise (addStackFrames @(NValue t f m) . addSourcePositions))
+      (raise (addStackFrames . addSourcePositions))
       expr
-    else adi phi (addStackFrames @(NValue t f m) . addSourcePositions) expr
+    else adiM phi (addStackFrames . addSourcePositions) expr
  where
-  phi = Eval.eval . annotated . getCompose
+  phi = Eval.eval @(NValue t f m) . annotated . getCompose
   raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x
 
 fetchTarball

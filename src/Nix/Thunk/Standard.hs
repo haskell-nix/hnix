@@ -80,17 +80,19 @@ instance ( MonadStdThunk (u m)
   queryM x b f = queryM (_stdCited (_stdThunk x)) b f
   force    = force . _stdCited . _stdThunk
   forceEff = forceEff . _stdCited . _stdThunk
-  -- query x b f = query (_stdCited (_stdThunk x)) b f
-  -- wrapValue = StdThunk . StdCited . wrapValue
-  -- getValue  = getValue . _stdCited . _stdThunk
+  further  = (fmap (StdThunk . StdCited) .) . further . _stdCited . _stdThunk
 
 instance ( MonadAtomicRef (u m)
          , MonadThunk (StdThunk u m) (StdLazy u m) (StdValue u m)
          )
   => MonadValue (StdValue u m) (StdLazy u m) where
   defer = fmap Pure . thunk
-  demand (Pure v) f = force v (flip demand f)
+
+  demand (Pure t) f = force t (flip demand f)
   demand (Free v) f = f (Free v)
+
+  inform (Pure t) f = Pure <$> further t f
+  inform (Free v) f = Free <$> bindNValue' id (flip inform f) v
 
 instance HasCitations (StdLazy u m) (StdValue u m) (StdThunk u m) where
   citations (StdThunk c) = citations1 c
@@ -121,6 +123,7 @@ runStandard opts action = do
 runStandardIO :: Options -> StdLazy StdIdT IO a -> IO a
 runStandardIO = runStandard
 
+-- jww (2019-03-18): NYI
 -- whileForcingThunk
 --   :: forall t f m s e r . (Exception s, Convertible e t f m) => s -> m r -> m r
 -- whileForcingThunk frame =

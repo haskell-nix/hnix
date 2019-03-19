@@ -58,13 +58,13 @@ import           Nix.XML
 --   type. It sets up the common Nix environment and applies the
 --   transformations, allowing them to be easily composed.
 nixEval
-  :: (MonadNix e t f m, Has e Options, Functor g)
+  :: (MonadNix e t f m, Has e Options, Traversable g)
   => Maybe FilePath
   -> Transform g (m a)
-  -> Alg g (m a)
+  -> AlgM g m a
   -> Fix g
   -> m a
-nixEval mpath xform alg = withNixContext mpath . adi alg xform
+nixEval mpath xform alg = withNixContext mpath . adiM alg xform
 
 -- | Evaluate a nix expression in the default context
 nixEvalExpr

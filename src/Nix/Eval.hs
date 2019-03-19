@@ -30,7 +30,6 @@ import           Data.Maybe                     ( fromMaybe
                                                 )
 import           Data.Text                      ( Text )
 import           Data.These                     ( These(..) )
-import           Data.Traversable               ( for )
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Expr
@@ -53,19 +52,19 @@ class (Show v, Monad m) => MonadEval v m where
   evaledSym       :: Text -> v -> m v
   evalCurPos      :: m v
   evalConstant    :: NAtom -> m v
-  evalString      :: NString (m v) -> m v
+  evalString      :: NString v -> m v
   evalLiteralPath :: FilePath -> m v
   evalEnvPath     :: FilePath -> m v
   evalUnary       :: NUnaryOp -> v -> m v
-  evalBinary      :: NBinaryOp -> v -> m v -> m v
+  evalBinary      :: NBinaryOp -> v -> v -> m v
   -- ^ The second argument is an action because operators such as boolean &&
   -- and || may not evaluate the second argument.
-  evalWith        :: m v -> m v -> m v
-  evalIf          :: v -> m v -> m v -> m v
-  evalAssert      :: v -> m v -> m v
-  evalApp         :: v -> m v -> m v
-  evalAbs         :: Params (m v)
-                  -> (forall a. m v -> (AttrSet (m v) -> m v -> m (a, v)) -> m (a, v))
+  evalWith        :: v -> v -> m v
+  evalIf          :: v -> v -> v -> m v
+  evalAssert      :: v -> v -> m v
+  evalApp         :: v -> v -> m v
+  evalAbs         :: Params v
+                  -> (forall a. v -> (AttrSet v -> v -> m (a, v)) -> m (a, v))
                   -> m v
 {-
   evalSelect     :: v -> NonEmpty Text -> Maybe (m v) -> m v
@@ -112,50 +111,67 @@ data SynHoleInfo m v = SynHoleInfo
 
 instance (Typeable m, Typeable v) => Exception (SynHoleInfo m v)
 
--- jww (2019-03-18): By deferring only those things which must wait until
--- context of us, this can be written as:
--- eval :: forall v m . MonadNixEval v m => NExprF v -> m v
-eval :: forall v m . MonadNixEval v m => NExprF (m v) -> m v
+eval :: forall v m . MonadNixEval v m => NExprF v -> m v
 
 eval (NSym "__curPos") = evalCurPos
 
-eval (NSym var       ) = (lookupVar var :: m (Maybe v))
-  >>= maybe (freeVariable var) (demand ?? evaledSym var)
+-- Because 'eval' is a monadic catamorphism, we evaluate at the leaves of the
+-- expression tree first, then make the results of these evaluations available
+-- to the higher levels. For example, given the expression:
+--
+--   let x = 1; in 10 + x
+--
+-- The first expression to be evaluated is 10, then x, then +, then let. If we
+-- evaluated in this order, we'd immediately get an error about 'x' being
+-- undefined, since we haven't evaluated the 'let' to establish its bindings
+-- yet.
+--
+-- Therefore, we defer the lookup of x, and then, when evaluating the let,
+-- inform all thunks in its body with the newly defined lexical scope. Finally, when the e
+
+eval (NSym var       ) = defer $ do
+  mres <- lookupVar var
+  case mres of
+    Just x  -> evaledSym var x
+    Nothing -> freeVariable var
 
 eval (NConstant    x      ) = evalConstant x
 eval (NStr         str    ) = evalString str
 eval (NLiteralPath p      ) = evalLiteralPath p
 eval (NEnvPath     p      ) = evalEnvPath p
-eval (NUnary op arg       ) = evalUnary op =<< arg
+eval (NUnary op arg       ) = evalUnary op arg
 
 eval (NBinary NApp fun arg) = do
   scope <- currentScopes :: m (Scopes m v)
-  fun >>= (`evalApp` withScopes scope arg)
+  -- We don't know when the function will demand its argument, so we inform
+  -- the argument with the lexical scope at the time the call was made.
+  (fun `evalApp`) =<< inform arg (withScopes scope)
 
-eval (NBinary op   larg rarg) = larg >>= evalBinary op ?? rarg
+eval (NBinary op   larg rarg) = evalBinary op larg rarg
 
-eval (NSelect aset attr alt ) = evalSelect aset attr >>= either go id
-  where go (s, ks) = fromMaybe (attrMissing ks (Just s)) alt
+eval (NSelect aset attr alt ) = either go pure =<< evalSelect aset attr
+  where go (s, ks) = fromMaybe (attrMissing ks (Just s)) (pure <$> alt)
 
 eval (NHasAttr aset attr) = evalSelect aset attr >>= toValue . isRight
 
-eval (NList l           ) = do
-  scope <- currentScopes
-  for l (defer @v @m . withScopes @v scope) >>= toValue
+eval (NList l           ) = toValue l
 
-eval (NSet binds) =
-  evalBinds False (desugarBinds (eval . NSet) binds) >>= toValue
+eval (NSet binds) = do
+  bs <- desugarBinds (eval . NSet) binds
+  evalBinds False bs >>= toValue
 
-eval (NRecSet binds) =
-  evalBinds True (desugarBinds (eval . NSet) binds) >>= toValue
+eval (NRecSet binds) = do
+  bs <- desugarBinds (eval . NSet) binds
+  evalBinds True bs >>= toValue
 
-eval (NLet binds body    ) = evalBinds True binds >>= (pushScope ?? body) . fst
+eval (NLet binds body    ) =
+  evalBinds True binds >>= inform body . pushScope . fst
 
-eval (NIf cond t f       ) = cond >>= \v -> evalIf v t f
+eval (NIf cond t f       ) = evalIf cond t f
 
 eval (NWith   scope  body) = evalWith scope body
 
-eval (NAssert cond   body) = cond >>= evalAssert ?? body
+eval (NAssert cond   body) = evalAssert cond body
 
 eval (NAbs    params body) = do
     -- It is the environment at the definition site, not the call site, that
@@ -165,35 +181,32 @@ eval (NAbs    params body) = do
   scope <- currentScopes :: m (Scopes m v)
   evalAbs params $ \arg k -> withScopes scope $ do
     args <- buildArgument params arg
-    pushScope args (k (M.map (`demand` pure) args) body)
+    pushScope args (k args body)
 
 eval (NSynHole name) = synHole name
 
 -- | If you know that the 'scope' action will result in an 'AttrSet v', then
 --   this implementation may be used as an implementation for 'evalWith'.
-evalWithAttrSet :: forall v m . MonadNixEval v m => m v -> m v -> m v
+evalWithAttrSet :: forall v m . MonadNixEval v m => v -> v -> m v
 evalWithAttrSet aset body = do
     -- The scope is deliberately wrapped in a thunk here, since it is
     -- evaluated each time a name is looked up within the weak scope, and
     -- we want to be sure the action it evaluates is to force a thunk, so
     -- its value is only computed once.
   scope <- currentScopes :: m (Scopes m v)
-  s     <- defer @v @m $ withScopes scope aset
-  pushWeakScope
-    ?? body
-    $  demand s
-    $  fmap fst
-    .  fromValue @(AttrSet v, AttrSet SourcePos)
+  s     <- inform aset $ withScopes scope
+  inform body $ pushWeakScope $ demand s $
+    fmap fst . fromValue @(AttrSet v, AttrSet SourcePos)
 
 attrSetAlter
   :: forall v m
    . MonadNixEval v m
   => [Text]
   -> SourcePos
-  -> AttrSet (m v)
+  -> AttrSet v
   -> AttrSet SourcePos
-  -> m v
-  -> m (AttrSet (m v), AttrSet SourcePos)
+  -> v
+  -> m (AttrSet v, AttrSet SourcePos)
 attrSetAlter [] _ _ _ _ =
   evalError @v $ ErrorCall "invalid selector with no components"
 
@@ -204,27 +217,25 @@ attrSetAlter (k : ks) pos m p val = case M.lookup k m of
     | null ks
     -> go
     | otherwise
-    -> x >>= fromValue @(AttrSet v, AttrSet SourcePos) >>= \(st, sp) ->
-      recurse (demand ?? pure <$> st) sp
+    -> demand x $ fromValue >=> uncurry recurse
  where
   go = return (M.insert k val m, M.insert k pos p)
 
-  recurse st sp = attrSetAlter ks pos st sp val <&> \(st', _) ->
-    ( M.insert
-      k
-      (toValue @(AttrSet v, AttrSet SourcePos) =<< (, mempty) <$> sequence st')
-      st
-    , M.insert k pos sp
-    )
+  recurse st sp = attrSetAlter ks pos st sp val >>= \(st', _) -> do
+    st'' <- toValue @(AttrSet v, AttrSet SourcePos) (st', mempty)
+    pure $ ( M.insert k st'' st
+           , M.insert k pos sp
+           )
 
-desugarBinds :: forall r . ([Binding r] -> r) -> [Binding r] -> [Binding r]
-desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
+desugarBinds :: forall m r. Monad m
+             => ([Binding r] -> m r) -> [Binding r] -> m [Binding r]
+desugarBinds embed binds = evalStateT (mapM (go <=< collect) binds) M.empty
  where
   collect
     :: Binding r
-    -> State
+    -> StateT
          (HashMap VarName (SourcePos, [Binding r]))
-         (Either VarName (Binding r))
+         m (Either VarName (Binding r))
   collect (NamedVar (StaticKey x :| y : ys) val p) = do
     m <- get
     put $ M.insert x ?? m $ case M.lookup x m of
@@ -235,19 +246,21 @@ desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
 
   go
     :: Either VarName (Binding r)
-    -> State (HashMap VarName (SourcePos, [Binding r])) (Binding r)
+    -> StateT (HashMap VarName (SourcePos, [Binding r])) m (Binding r)
   go (Right x) = pure x
   go (Left  x) = do
     maybeValue <- gets (M.lookup x)
     case maybeValue of
       Nothing     -> fail ("No binding " ++ show x)
-      Just (p, v) -> pure $ NamedVar (StaticKey x :| []) (embed v) p
+      Just (p, v) -> do
+        bs <- lift $ embed v
+        pure $ NamedVar (StaticKey x :| []) bs p
 
 evalBinds
   :: forall v m
    . MonadNixEval v m
   => Bool
-  -> [Binding (m v)]
+  -> [Binding v]
   -> m (AttrSet v, AttrSet SourcePos)
 evalBinds recursive binds = do
   scope <- currentScopes :: m (Scopes m v)
@@ -259,30 +272,27 @@ evalBinds recursive binds = do
       _ -> True
     )
 
-  go :: Scopes m v -> Binding (m v) -> m [([Text], SourcePos, m v)]
+  go :: Scopes m v -> Binding v -> m [([Text], SourcePos, v)]
   go _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
-    finalValue >>= fromValue >>= \(o', p') ->
-          -- jww (2018-05-09): What to do with the key position here?
-                                              return $ map
-      (\(k, v) -> ([k], fromMaybe pos (M.lookup k p'), demand @v @m v pure))
-      (M.toList o')
+    -- jww (2018-05-09): What to do with the key position here?
+    demand finalValue $ fromValue >=> \(o', p') ->
+      return $ map
+        (\(k, v) -> ([k], fromMaybe pos (M.lookup k p'), v))
+        (M.toList o')
 
   go _ (NamedVar pathExpr finalValue pos) = do
-    let go :: NAttrPath (m v) -> m ([Text], SourcePos, m v)
-        go = \case
+    let go' :: NAttrPath v -> m ([Text], SourcePos, v)
+        go' = \case
           h :| t -> evalSetterKeyName h >>= \case
-            Nothing ->
-              pure
-                ( []
-                , nullPos
-                , toValue @(AttrSet v, AttrSet SourcePos) (mempty, mempty)
-                )
+            Nothing -> do
+              mt <- toValue @(AttrSet v, AttrSet SourcePos) (mempty, mempty)
+              pure ([], nullPos, mt)
             Just k -> case t of
               []     -> pure ([k], pos, finalValue)
               x : xs -> do
-                (restOfPath, _, v) <- go (x :| xs)
+                (restOfPath, _, v) <- go' (x :| xs)
                 pure (k : restOfPath, pos, v)
-    go pathExpr <&> \case
+    go' pathExpr <&> \case
         -- When there are no path segments, e.g. `${null} = 5;`, we don't
         -- bind anything
       ([], _, _) -> []
@@ -291,50 +301,47 @@ evalBinds recursive binds = do
   go scope (Inherit ms names pos) =
     fmap catMaybes $ forM names $ evalSetterKeyName >=> \case
       Nothing  -> pure Nothing
-      Just key -> pure $ Just
-        ( [key]
-        , pos
-        , do
+      Just key -> do
+        a <- defer $ do
           mv <- case ms of
             Nothing -> withScopes scope $ lookupVar key
             Just s ->
-              s >>= fromValue @(AttrSet v, AttrSet SourcePos) >>= \(s, _) ->
+              demand s $ fromValue @(AttrSet v, AttrSet SourcePos) >=> \(s, _) ->
                 clearScopes @v $ pushScope s $ lookupVar key
           case mv of
             Nothing -> attrMissing (key :| []) Nothing
             Just v  -> demand v pure
-        )
+        pure $ Just ([key], pos, a)
 
   buildResult
     :: Scopes m v
-    -> [([Text], SourcePos, m v)]
+    -> [([Text], SourcePos, v)]
     -> m (AttrSet v, AttrSet SourcePos)
   buildResult scope bindings = do
     (s, p) <- foldM insert (M.empty, M.empty) bindings
     res <- if recursive then loebM (encapsulate <$> s) else traverse mkThunk s
     return (res, p)
    where
-    mkThunk = defer . withScopes scope
+    mkThunk = inform ?? withScopes scope
 
-    encapsulate f attrs = mkThunk . pushScope attrs $ f
+    encapsulate f attrs = inform f (withScopes scope . pushScope attrs)
 
     insert (m, p) (path, pos, value) = attrSetAlter path pos m p value
 
 evalSelect
   :: forall v m
    . MonadNixEval v m
-  => m v
-  -> NAttrPath (m v)
-  -> m (Either (v, NonEmpty Text) (m v))
+  => v
+  -> NAttrPath v
+  -> m (Either (v, NonEmpty Text) v)
 evalSelect aset attr = do
-  s    <- aset
   path <- traverse evalGetterKeyName attr
-  extract s path
+  extract aset path
  where
-  extract x path@(k :| ks) = fromValueMay x >>= \case
+  extract x path@(k :| ks) = demand x $ fromValueMay >=> \case
     Just (s :: AttrSet v, p :: AttrSet SourcePos)
       | Just t <- M.lookup k s -> case ks of
-        []     -> pure $ Right $ demand t pure
+        []     -> pure $ Right t
         y : ys -> demand t $ extract ?? (y :| ys)
       | otherwise -> Left . (, path) <$> toValue (s, p)
     Nothing -> return $ Left (x, path)
@@ -344,7 +351,7 @@ evalSelect aset attr = do
 evalGetterKeyName
   :: forall v m
    . (MonadEval v m, FromValue NixString m v)
-  => NKeyName (m v)
+  => NKeyName v
   -> m Text
 evalGetterKeyName = evalSetterKeyName >=> \case
   Just k -> pure k
@@ -355,19 +362,19 @@ evalGetterKeyName = evalSetterKeyName >=> \case
 -- *binding* a value
 evalSetterKeyName
   :: (MonadEval v m, FromValue NixString m v)
-  => NKeyName (m v)
+  => NKeyName v
   -> m (Maybe Text)
 evalSetterKeyName = \case
   StaticKey k -> pure (Just k)
   DynamicKey k ->
-    runAntiquoted "\n" assembleString (>>= fromValueMay) k <&> \case
+    runAntiquoted "\n" assembleString fromValueMay k <&> \case
       Just ns -> Just (hackyStringIgnoreContext ns)
       _       -> Nothing
 
 assembleString
   :: forall v m
    . (MonadEval v m, FromValue NixString m v)
-  => NString (m v)
+  => NString v
   -> m (Maybe NixString)
 assembleString = \case
   Indented _ parts   -> fromParts parts
@@ -377,19 +384,19 @@ assembleString = \case
 
   go = runAntiquoted "\n"
                      (pure . Just . principledMakeNixStringWithoutContext)
-                     (>>= fromValueMay)
+                     fromValueMay
 
 buildArgument
-  :: forall v m . MonadNixEval v m => Params (m v) -> m v -> m (AttrSet v)
+  :: forall v m . MonadNixEval v m => Params v -> v -> m (AttrSet v)
 buildArgument params arg = do
   scope <- currentScopes :: m (Scopes m v)
   case params of
-    Param name -> M.singleton name <$> defer (withScopes scope arg)
+    Param name -> M.singleton name <$> inform arg (withScopes scope)
     ParamSet s isVariadic m ->
-      arg >>= fromValue @(AttrSet v, AttrSet SourcePos) >>= \(args, _) -> do
+      demand arg $ fromValue @(AttrSet v, AttrSet SourcePos) >=> \(args, _) -> do
         let inject = case m of
               Nothing -> id
-              Just n  -> M.insert n $ const $ defer (withScopes scope arg)
+              Just n  -> M.insert n $ const $ inform arg (withScopes scope)
         loebM
           (inject $ M.mapMaybe id $ alignWithKey (assemble scope isVariadic)
                                                  args
@@ -400,7 +407,7 @@ buildArgument params arg = do
     :: Scopes m v
     -> Bool
     -> Text
-    -> These v (Maybe (m v))
+    -> These v (Maybe v)
     -> Maybe (AttrSet v -> m v)
   assemble scope isVariadic k = \case
     That Nothing ->
@@ -411,7 +418,7 @@ buildArgument params arg = do
         $  "Missing value for parameter: "
         ++ show k
     That (Just f) ->
-      Just $ \args -> defer $ withScopes scope $ pushScope args f
+      Just $ \args -> inform f (withScopes scope . pushScope args)
     This _
       | isVariadic
       -> Nothing
@@ -443,4 +450,4 @@ framedEvalExprLoc
   => NExprLoc
   -> m v
 framedEvalExprLoc =
-  adi (eval . annotated . getCompose) (addStackFrames @v . addSourcePositions)
+  adiM (eval . annotated . getCompose) (addStackFrames @v . addSourcePositions)

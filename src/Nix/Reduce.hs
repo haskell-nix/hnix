@@ -410,13 +410,13 @@ pruneTree opts = cataM $ \(FlaggedF (b, Compose x)) -> do
 
 reducingEvalExpr
   :: (Framed e m, Has e Options, Exception r, MonadCatch m, MonadIO m)
-  => (NExprLocF (m a) -> m a)
+  => (NExprLocF a -> m a)
   -> Maybe FilePath
   -> NExprLoc
   -> m (NExprLoc, Either r a)
 reducingEvalExpr eval mpath expr = do
   expr'           <- flagExprLoc =<< liftIO (reduceExpr mpath expr)
-  eres <- catch (Right <$> cata (addEvalFlags eval) expr') (pure . Left)
+  eres <- catch (Right <$> cataM (addEvalFlags eval) expr') (pure . Left)
   opts :: Options <- asks (view hasLens)
   expr''          <- pruneTree opts expr'
   return (fromMaybe nNull expr'', eres)

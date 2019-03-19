@@ -206,7 +206,7 @@ builtinsList = sequence
           outputsList = map outputToAttrListElement outputs;
 
         in (builtins.head outputsList).value|]
-      [| cata Eval.eval expr |]
+      [| cataM Eval.eval expr |]
     )
 
   , add  TopLevel "derivationStrict" derivationStrict_

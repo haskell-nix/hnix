@@ -153,7 +153,8 @@ renderSymbolic = unpackSymbolic >=> \case
     f@(TClosure p) -> do
       (args, sym) <- do
         f' <- mkSymbolic [f]
-        lintApp (NAbs (void p) ()) f' everyPossible
+        ep <- everyPossible
+        lintApp (NAbs (void p) ()) f' ep
       args' <- traverse renderSymbolic args
       sym'  <- renderSymbolic sym
       return $ "(" ++ show args' ++ " -> " ++ sym' ++ ")"
@@ -323,24 +324,20 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
   -- sure the action it evaluates is to force a thunk, so its value is only
   -- computed once.
   evalWith scope body = do
-    s <- defer scope
-    pushWeakScope ?? body $ demand s $ unpackSymbolic >=> \case
+    pushWeakScope ?? demand body pure $ demand scope $ unpackSymbolic >=> \case
       NMany [TSet (Just s')] -> return s'
       NMany [TSet Nothing] -> error "NYI: with unknown"
       _ -> throwError $ ErrorCall "scope must be a set in with statement"
 
   evalIf cond t f = do
-    t' <- t
-    f' <- f
-    let e = NIf cond t' f'
+    let e = NIf cond t f
     _ <- unify (void e) cond =<< mkSymbolic [TConstant [TBool]]
-    unify (void e) t' f'
+    unify (void e) t f
 
   evalAssert cond body = do
-    body' <- body
-    let e = NAssert cond body'
+    let e = NAssert cond body
     _ <- unify (void e) cond =<< mkSymbolic [TConstant [TBool]]
-    pure body'
+    pure body
 
   evalApp = (fmap snd .) . lintApp (NBinary NApp () ())
   evalAbs params _ = mkSymbolic [TClosure (void params)]
@@ -352,11 +349,10 @@ lintBinaryOp
    . (MonadLint e m, MonadEval (Symbolic m) m)
   => NBinaryOp
   -> Symbolic m
+  -> Symbolic m
   -> m (Symbolic m)
-  -> m (Symbolic m)
-lintBinaryOp op lsym rarg = do
-  rsym <- rarg
-  y    <- defer everyPossible
+lintBinaryOp op lsym rsym = do
+  y    <- everyPossible
   case op of
     NApp    -> symerr "lintBinaryOp:NApp: should never get here"
     NEq     -> check lsym rsym [TConstant [TInt, TBool, TNull], TStr, TList y]
@@ -394,14 +390,14 @@ lintApp
    . MonadLint e m
   => NExprF ()
   -> Symbolic m
-  -> m (Symbolic m)
+  -> Symbolic m
   -> m (HashMap VarName (Symbolic m), Symbolic m)
 lintApp context fun arg = unpackSymbolic fun >>= \case
   NAny ->
     throwError $ ErrorCall "Cannot apply something not known to be a function"
   NMany xs -> do
     (args, ys) <- fmap unzip $ forM xs $ \case
-      TClosure _params -> arg >>= unpackSymbolic >>= \case
+      TClosure _params -> demand arg $ unpackSymbolic >=> \case
         NAny -> do
           error "NYI"
 
@@ -447,9 +443,9 @@ lint :: Options -> NExprLoc -> ST s (Symbolic (Lint s))
 lint opts expr =
   runLintM opts
     $   symbolicBaseEnv
-    >>= (`pushScopes` adi (Eval.eval . annotated . getCompose)
-                          Eval.addSourcePositions
-                          expr
+    >>= (`pushScopes` adiM (Eval.eval . annotated . getCompose)
+                           Eval.addSourcePositions
+                           expr
         )
 
 instance Scoped (Symbolic (Lint s)) (Lint s) where
