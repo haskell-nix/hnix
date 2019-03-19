@@ -120,50 +120,68 @@ instance ( Convertible e t f m
     Pure t -> force t (fromValue . Deeper)
     Free v -> fromValue (Deeper v)
 
-instance (Convertible e t f m, Show r) => FromValue () m (NValue' t f m r) where
+instance ( Convertible e t f m
+         , EmbedValue t f m r
+         )
+  => FromValue () m (NValue' t f m r) where
   fromValueMay = \case
     NVConstant' NNull -> pure $ Just ()
     _                 -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation TNull v
+    _      -> throwError $ Expectation @t @f @m TNull (embedValue v)
 
-instance (Convertible e t f m, Show r) => FromValue Bool m (NValue' t f m r) where
+instance ( Convertible e t f m
+         , EmbedValue t f m r
+         )
+  => FromValue Bool m (NValue' t f m r) where
   fromValueMay = \case
     NVConstant' (NBool b) -> pure $ Just b
     _                     -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation TBool v
+    _      -> throwError $ Expectation @t @f @m TBool (embedValue v)
 
-instance (Convertible e t f m, Show r) => FromValue Int m (NValue' t f m r) where
+instance ( Convertible e t f m
+         , EmbedValue t f m r
+         )
+  => FromValue Int m (NValue' t f m r) where
   fromValueMay = \case
     NVConstant' (NInt b) -> pure $ Just (fromInteger b)
     _                    -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation TInt v
+    _      -> throwError $ Expectation @t @f @m TInt (embedValue v)
 
-instance (Convertible e t f m, Show r) => FromValue Integer m (NValue' t f m r) where
+instance ( Convertible e t f m
+         , EmbedValue t f m r
+         )
+  => FromValue Integer m (NValue' t f m r) where
   fromValueMay = \case
     NVConstant' (NInt b) -> pure $ Just b
     _                    -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation TInt v
+    _      -> throwError $ Expectation @t @f @m TInt (embedValue v)
 
-instance (Convertible e t f m, Show r) => FromValue Float m (NValue' t f m r) where
+instance ( Convertible e t f m
+         , EmbedValue t f m r
+         )
+  => FromValue Float m (NValue' t f m r) where
   fromValueMay = \case
     NVConstant' (NFloat b) -> pure $ Just b
     NVConstant' (NInt   i) -> pure $ Just (fromInteger i)
     _                      -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation TFloat v
+    _      -> throwError $ Expectation @t @f @m TFloat (embedValue v)
 
-instance (Convertible e t f m, Show r, MonadEffects t f m,
-          FromValue NixString m r)
-      => FromValue NixString m (NValue' t f m r) where
+instance (Convertible e t f m
+         , EmbedValue t f m r
+         , MonadEffects t f m
+         , FromValue NixString m r
+         )
+  => FromValue NixString m (NValue' t f m r) where
   fromValueMay = \case
     NVStr' ns -> pure $ Just ns
     NVPath' p ->
@@ -178,21 +196,26 @@ instance (Convertible e t f m, Show r, MonadEffects t f m,
     _ -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation (TString NoContext) v
+    _      -> throwError $ Expectation @t @f @m (TString NoContext) (embedValue v)
 
-instance (Convertible e t f m, Show r)
-      => FromValue ByteString m (NValue' t f m r) where
+instance ( Convertible e t f m
+         , EmbedValue t f m r
+         )
+  => FromValue ByteString m (NValue' t f m r) where
   fromValueMay = \case
     NVStr' ns -> pure $ encodeUtf8 <$> hackyGetStringNoContext ns
     _        -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation (TString NoContext) v
+    _      -> throwError $ Expectation @t @f @m (TString NoContext) (embedValue v)
 
 newtype Path = Path { getPath :: FilePath }
     deriving Show
 
-instance (Convertible e t f m, Show r, FromValue Path m r)
+instance ( Convertible e t f m
+         , EmbedValue t f m r
+         , FromValue Path m r
+         )
   => FromValue Path m (NValue' t f m r) where
   fromValueMay = \case
     NVPath' p  -> pure $ Just (Path p)
@@ -203,64 +226,81 @@ instance (Convertible e t f m, Show r, FromValue Path m r)
     _ -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation TPath v
+    _      -> throwError $ Expectation @t @f @m TPath (embedValue v)
 
-instance (Convertible e t f m, Show r)
+instance ( Convertible e t f m
+         , EmbedValue t f m r
+         )
   => FromValue [r] m (NValue' t f m r) where
   fromValueMay = \case
     NVList' l -> pure $ Just l
     _         -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation TList v
+    _      -> throwError $ Expectation @t @f @m TList (embedValue v)
 
-instance (Convertible e t f m, Show r, FromValue a m r)
+instance ( Convertible e t f m
+         , EmbedValue t f m r
+         , FromValue a m r
+         )
   => FromValue [a] m (Deeper (NValue' t f m r)) where
   fromValueMay = \case
     Deeper (NVList' l) -> sequence <$> traverse fromValueMay l
     _                  -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation TList (getDeeper v)
+    _      -> throwError $ Expectation @t @f @m TList (embedValue (getDeeper v))
 
-instance (Convertible e t f m, Show r)
-      => FromValue (AttrSet r) m (NValue' t f m r) where
+instance ( Convertible e t f m
+         , EmbedValue t f m r
+         )
+  => FromValue (AttrSet r) m (NValue' t f m r) where
   fromValueMay = \case
     NVSet' s _ -> pure $ Just s
     _          -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation TSet v
+    _      -> throwError $ Expectation @t @f @m TSet (embedValue v)
 
-instance (Convertible e t f m, Show r, FromValue a m r)
-      => FromValue (AttrSet a) m (Deeper (NValue' t f m r)) where
+instance ( Convertible e t f m
+         , EmbedValue t f m r
+         , FromValue a m r
+         )
+  => FromValue (AttrSet a) m (Deeper (NValue' t f m r)) where
   fromValueMay = \case
     Deeper (NVSet' s _) -> sequence <$> traverse fromValueMay s
     _                   -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation TSet (getDeeper v)
+    _      -> throwError $ Expectation @t @f @m TSet (embedValue (getDeeper v))
 
-instance (Convertible e t f m, Show r)
-      => FromValue (AttrSet r, AttrSet SourcePos) m (NValue' t f m r) where
+instance ( Convertible e t f m
+         , EmbedValue t f m r
+         )
+  => FromValue (AttrSet r, AttrSet SourcePos) m (NValue' t f m r) where
   fromValueMay = \case
     NVSet' s p -> pure $ Just (s, p)
     _          -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation TSet v
+    _      -> throwError $ Expectation @t @f @m TSet (embedValue v)
 
-instance (Convertible e t f m, Show r, FromValue a m r)
-      => FromValue (AttrSet a, AttrSet SourcePos) m (Deeper (NValue' t f m r)) where
+instance ( Convertible e t f m
+         , EmbedValue t f m r
+         , FromValue a m r
+         )
+  => FromValue (AttrSet a, AttrSet SourcePos) m (Deeper (NValue' t f m r)) where
   fromValueMay = \case
     Deeper (NVSet' s p) -> fmap (,p) <$> sequence <$> traverse fromValueMay s
     _                   -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation TSet (getDeeper v)
+    _      -> throwError $ Expectation @t @f @m TSet (embedValue (getDeeper v))
 
 -- This instance needs IncoherentInstances, and only because of ToBuiltin
-instance (Convertible e t f m, FromValue a m (NValue' t f m (NValue t f m)))
+instance ( Convertible e t f m
+         , FromValue a m (NValue' t f m (NValue t f m))
+         )
   => FromValue a m (Deeper (NValue' t f m (NValue t f m))) where
   fromValueMay = fromValueMay . getDeeper
   fromValue    = fromValue . getDeeper

@@ -343,9 +343,10 @@ valueToExpr = iterNValueNF phi
 
   mkStr ns = Fix $ NStr $ DoubleQuoted [Plain (hackyStringIgnoreContext ns)]
 
-prettyNValueNF :: MonadDataContext f m => NValueNF t f m -> Doc ann
+prettyNValueNF :: forall t f m ann. MonadDataContext f m => NValueNF t f m -> Doc ann
 prettyNValueNF = prettyNix . valueToExpr
 
+-- | This function is used only by the testing code.
 printNix :: forall t f m . MonadDataContext f m => NValueNF t f m -> String
 printNix = iterNValueNF phi
  where
@@ -424,11 +425,3 @@ prettyNThunk t = do
       $ "thunk from: "
       : map (prettyOriginExpr . _originExpr) ps
       ]
-
-
-
-
-
-
-
-

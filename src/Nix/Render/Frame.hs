@@ -13,6 +13,7 @@
 
 module Nix.Render.Frame where
 
+import           Control.Monad.Free
 import           Control.Monad.Reader
 import           Data.Fix
 import           Data.Typeable
@@ -158,7 +159,12 @@ renderExpr _level longLabel shortLabel e@(Fix (Compose (Ann _ x))) = do
     else pretty shortLabel <> fillSep [": ", rendered]
 
 renderValueFrame
-  :: (MonadReader e m, Has e Options, MonadFile m, MonadCitedThunks t f m)
+  :: forall e t f m ann
+  . ( MonadReader e m
+    , Has e Options
+    , MonadFile m
+    , MonadCitedThunks t f m
+    )
   => NixLevel
   -> ValueFrame t f m
   -> m [Doc ann]
@@ -180,12 +186,21 @@ renderValueFrame level = fmap (: []) . \case
     v' <- renderValue level "" "" v
     pure $ "CoercionToJson " <> v'
   CoercionFromJson _j -> pure "CoercionFromJson"
-  Expectation   t  v  -> undefined {- jww (2019-03-18): NYI v -} -- do
-    -- v' <- renderValue level "" "" v
-    -- pure $ "Saw " <> v' <> " but expected " <> pretty (describeValue t)
+  Expectation   t  r  -> case getEitherOr r of
+    Left nf -> do
+      let v' = prettyNValueNF @t @f @m nf
+      pure $ "Saw " <> v' <> " but expected " <> pretty (describeValue t)
+    Right v -> do
+      v' <- renderValue @_ @t @f @m level "" "" v
+      pure $ "Saw " <> v' <> " but expected " <> pretty (describeValue t)
 
 renderValue
-  :: (MonadReader e m, Has e Options, MonadFile m, MonadCitedThunks t f m)
+  :: forall e t f m ann
+  . ( MonadReader e m
+    , Has e Options
+    , MonadFile m
+    , MonadCitedThunks t f m
+    )
   => NixLevel
   -> String
   -> String

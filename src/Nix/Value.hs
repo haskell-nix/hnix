@@ -508,6 +508,18 @@ showValueType (Pure t) = force t showValueType
 showValueType (Free (NValue (extract -> v))) =
   pure $ describeValue $ valueType $ v
 
+class Show r => EmbedValue t f m r where
+  embedValue :: NValue' t f m r -> r
+  getEitherOr :: r -> Either (NValueNF t f m) (NValue t f m)
+
+instance Comonad f => EmbedValue t f m (NValueNF t f m) where
+  embedValue = Fix
+  getEitherOr = Left
+
+instance (Comonad f, Show t) => EmbedValue t f m (NValue t f m) where
+  embedValue = Free
+  getEitherOr = Right
+
 data ValueFrame t f m
     = ForcingThunk t
     | ConcerningValue (NValue t f m)
@@ -518,7 +530,7 @@ data ValueFrame t f m
     | Coercion ValueType ValueType
     | CoercionToJson (NValue t f m)
     | CoercionFromJson A.Value
-    | forall r. Show r => Expectation ValueType (NValue' t f m r)
+    | forall r. EmbedValue t f m r => Expectation ValueType r
     deriving Typeable
 
 deriving instance (Comonad f, Show t) => Show (ValueFrame t f m)
