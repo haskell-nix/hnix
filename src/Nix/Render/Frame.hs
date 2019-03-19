@@ -13,7 +13,6 @@
 
 module Nix.Render.Frame where
 
-import           Control.Monad.Free
 import           Control.Monad.Reader
 import           Data.Fix
 import           Data.Typeable
