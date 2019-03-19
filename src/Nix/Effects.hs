@@ -249,10 +249,3 @@ addPath p = either throwError return =<< addPath' p
 
 toFile_ :: (Framed e m, MonadStore m) => FilePath -> String -> m StorePath
 toFile_ p contents = either throwError return =<< toFile_' p contents
-
-
-
-
-
-
-

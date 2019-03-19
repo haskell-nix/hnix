@@ -179,11 +179,3 @@ alterF
 alterF f k m = f (M.lookup k m) <&> \case
   Nothing -> M.delete k m
   Just v  -> M.insert k v m
-
-
-
-
-
-
-
-

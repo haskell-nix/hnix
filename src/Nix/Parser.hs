@@ -664,11 +664,3 @@ getSpecialOperator o         = m Map.! o where
   buildEntry i = concatMap $ \case
     (NSpecialDef name op assoc, _) -> [(op, OperatorInfo i assoc name)]
     _                              -> []
-
-
-
-
-
-
-
-

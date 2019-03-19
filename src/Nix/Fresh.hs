@@ -104,10 +104,3 @@ instance MonadAtomicRef (ST s) where
     let (a, b) = f v
     writeRef r $! a
     return b
-
-
-
-
-
-
-

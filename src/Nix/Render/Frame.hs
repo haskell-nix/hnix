@@ -239,11 +239,3 @@ renderNormalLoop level = fmap (: []) . \case
   NormalLoop v -> do
     v' <- renderValue level "" "" v
     pure $ "Infinite recursion during normalization forcing " <> v'
-
-
-
-
-
-
-
-

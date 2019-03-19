@@ -225,6 +225,3 @@ completer
   :: (MonadNix e t f m, MonadIO m)
   => CompleterStyle (StateT (IState t f m) m)
 completer = Prefix (wordCompleter comp) defaultMatcher
-
-
-

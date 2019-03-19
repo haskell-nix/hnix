@@ -45,4 +45,3 @@ instance (MonadEffects t f m, MonadDataContext f m)
     p <- lift $ derivationStrict @t @f @m (unliftNValue (runFreshIdT i) v)
     return $ liftNValue (runFreshIdT i) p
   traceEffect = lift . traceEffect @t @f @m
-
