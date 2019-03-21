@@ -46,6 +46,16 @@ let
   overlay = pkgs.lib.foldr pkgs.lib.composeExtensions (_: _: {}) [
     (import "${hnix-store-src}/overlay.nix")
     (self: super: with pkgs.haskell.lib; {
+
+      # Type error in the tests under ghc844 package set
+      Diff = dontCheck super.Diff;
+
+      # These packages only depend on contravariant when ghc >= 8.6.3
+      # Without normalizing the dependencies, our build fails with
+      # aeson and base-compat-batteries unable to find `contravariant`
+      aeson                 = addBuildDepend super.aeson self.contravariant;
+      base-compat-batteries = addBuildDepend super.base-compat-batteries self.contravariant;
+
       mono-traversable = dontCheck super.mono-traversable;
       these = doJailbreak super.these;
       multistate = doJailbreak super.multistate;
