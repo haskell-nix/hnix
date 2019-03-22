@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -12,7 +13,7 @@ import           Data.Text                      ( Text
 import           Data.Time
 import           Nix
 import           Nix.Exec                       ( )
-import           Nix.Thunk.Standard
+import           Nix.Standard
 import           System.Environment
 import           System.IO
 import           System.Posix.Files
@@ -20,7 +21,7 @@ import           System.Posix.Temp
 import           System.Process
 import           Test.Tasty.HUnit
 
-hnixEvalFile :: Options -> FilePath -> IO (StandardValueNF IO)
+hnixEvalFile :: Options -> FilePath -> IO (StdValueNF (StandardT IO))
 hnixEvalFile opts file = do
   parseResult <- parseNixFileLoc file
   case parseResult of
@@ -28,15 +29,17 @@ hnixEvalFile opts file = do
       error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
     Success expr -> do
       setEnv "TEST_VAR" "foo"
-      runStandardIO opts
+      runWithBasicEffects opts
         $ catch (evaluateExpression (Just file) nixEvalExprLoc normalForm expr)
         $ \case
             NixException frames ->
               errorWithoutStackTrace
                 .   show
-                =<< renderFrames @(StandardValue IO) @(StandardThunk IO) frames
+                =<< renderFrames @(StdValue (StandardT IO))
+                      @(StdThunk (StandardT IO))
+                      frames
 
-hnixEvalText :: Options -> Text -> IO (StandardValueNF IO)
+hnixEvalText :: Options -> Text -> IO (StdValueNF (StandardT IO))
 hnixEvalText opts src = case parseNixText src of
   Failure err ->
     error
@@ -44,7 +47,8 @@ hnixEvalText opts src = case parseNixText src of
       ++ unpack src
       ++ "`.\n"
       ++ show err
-  Success expr -> runStandardIO opts $ normalForm =<< nixEvalExpr Nothing expr
+  Success expr ->
+    runWithBasicEffects opts $ normalForm =<< nixEvalExpr Nothing expr
 
 nixEvalString :: String -> IO String
 nixEvalString expr = do

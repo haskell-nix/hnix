@@ -21,7 +21,7 @@ import           Nix.Expr.Types
 import           Nix.String
 import           Nix.Options
 import           Nix.Parser
-import           Nix.Thunk.Standard
+import           Nix.Standard
 import           Nix.Value
 import qualified NixLanguageTests
 import qualified ParserTests
@@ -57,7 +57,7 @@ ensureNixpkgsCanParse =
         }|]) $ \expr -> do
         NVStr ns <- do
           time <- getCurrentTime
-          runStandardIO (defaultOptions time) $
+          runWithBasicEffectsIO (defaultOptions time) $
             Nix.nixEvalExprLoc Nothing expr
         let dir = hackyStringIgnoreContext ns
         exists <- fileExist (unpack dir)

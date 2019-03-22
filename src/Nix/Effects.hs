@@ -45,25 +45,25 @@ class (MonadFile m,
        MonadInstantiate m,
        MonadExec m,
        MonadIntrospect m) => MonadEffects t f m where
-    -- | Determine the absolute path of relative path in the current context
-    makeAbsolutePath :: FilePath -> m FilePath
-    findEnvPath :: String -> m FilePath
+  -- | Determine the absolute path of relative path in the current context
+  makeAbsolutePath :: FilePath -> m FilePath
+  findEnvPath :: String -> m FilePath
 
-    -- | Having an explicit list of sets corresponding to the NIX_PATH
-    -- and a file path try to find an existing path
-    findPath :: [NValue t f m] -> FilePath -> m FilePath
+  -- | Having an explicit list of sets corresponding to the NIX_PATH
+  -- and a file path try to find an existing path
+  findPath :: [NValue t f m] -> FilePath -> m FilePath
 
-    importPath :: FilePath -> m (NValue t f m)
-    pathToDefaultNix :: FilePath -> m FilePath
+  importPath :: FilePath -> m (NValue t f m)
+  pathToDefaultNix :: FilePath -> m FilePath
 
-    derivationStrict :: NValue t f m -> m (NValue t f m)
+  derivationStrict :: NValue t f m -> m (NValue t f m)
 
-    traceEffect :: String -> m ()
+  traceEffect :: String -> m ()
 
 class Monad m => MonadIntrospect m where
-    recursiveSize :: a -> m Word
-    default recursiveSize :: (MonadTrans t, MonadIntrospect m', m ~ t m') => a -> m Word
-    recursiveSize = lift . recursiveSize
+  recursiveSize :: a -> m Word
+  default recursiveSize :: (MonadTrans t, MonadIntrospect m', m ~ t m') => a -> m Word
+  recursiveSize = lift . recursiveSize
 
 instance MonadIntrospect IO where
   recursiveSize =
