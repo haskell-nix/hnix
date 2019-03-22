@@ -34,8 +34,8 @@ import qualified Nix.Eval                      as Eval
 import           Nix.Json
 -- import           Nix.Lint
 import           Nix.Options.Parser
+import           Nix.Standard
 import           Nix.Thunk.Basic
-import           Nix.Thunk.Standard
 import qualified Nix.Type.Env                  as Env
 import qualified Nix.Type.Infer                as HM
 import           Nix.Utils
@@ -51,7 +51,7 @@ main :: IO ()
 main = do
   time <- getCurrentTime
   opts <- execParser (nixOptionsInfo time)
-  runStandardIO opts $ case readFrom opts of
+  runWithBasicEffectsIO opts $ case readFrom opts of
     Just path -> do
       let file = addExtension (dropExtension path) "nixc"
       process opts (Just file) =<< liftIO (readCache path)
@@ -97,9 +97,11 @@ main = do
         NixException frames ->
           errorWithoutStackTrace
             .   show
-            =<< renderFrames @(StandardValue IO) @(StandardThunk IO) frames
+            =<< renderFrames @(StdValue (StandardT IO))
+                  @(StdThunk (StandardT IO))
+                  frames
 
-      when (repl opts) $ withNixContext Nothing $ Repl.main
+      when (repl opts) $ withNixContext Nothing Repl.main
 
   process opts mpath expr
     | evaluate opts
@@ -134,7 +136,7 @@ main = do
    where
     printer
       | finder opts
-      = fromValue @(AttrSet (StandardValue IO)) >=> findAttrs
+      = fromValue @(AttrSet (StdValue (StandardT IO))) >=> findAttrs
       | xml opts
       = liftIO
         .   putStrLn
@@ -154,7 +156,7 @@ main = do
       | otherwise
       = liftIO . print <=< prettyNValue
      where
-      findAttrs :: AttrSet (StandardValue IO) -> StandardT IO ()
+      findAttrs :: AttrSet (StdValue (StandardT IO)) -> StandardT IO ()
       findAttrs = go ""
        where
         go prefix s = do
@@ -205,7 +207,9 @@ main = do
                 .   (k ++)
                 .   (": " ++)
                 .   show
-                =<< renderFrames @(StandardValue IO) @(StandardThunk IO) frames
+                =<< renderFrames @(StdValue (StandardT IO))
+                      @(StdThunk (StandardT IO))
+                      frames
               return Nothing
 
   reduction path mp x = do

@@ -408,8 +408,8 @@ type MonadInfer m
      MonadVar m, MonadFix m)
 
 instance Monad m => MonadValue (Judgment s) (InferT s m) where
-  defer      = id
-  demand     = flip ($)
+  defer  = id
+  demand = flip ($)
   inform j f = f (pure j)
 
 {-

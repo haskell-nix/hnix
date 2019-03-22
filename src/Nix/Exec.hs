@@ -36,46 +36,33 @@ import           Control.Monad
 import           Control.Monad.Catch     hiding ( catchJust )
 import           Control.Monad.Fix
 import           Control.Monad.Reader
-import           Control.Monad.Ref
-import           Control.Monad.State.Strict
 import           Control.Monad.Trans.Reader     ( ReaderT(..) )
-import           Control.Monad.Trans.State.Strict
-                                                ( StateT(..) )
 import           Data.Fix
-import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List
 import qualified Data.List.NonEmpty            as NE
-import           Data.List.Split
-import           Data.Maybe                     ( maybeToList )
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
 import           Data.Text.Prettyprint.Doc
 import           Data.Typeable
 import           Nix.Atoms
 import           Nix.Cited
-import           Nix.Context
 import           Nix.Convert
 import           Nix.Effects
 import           Nix.Eval                      as Eval
 import           Nix.Expr
 import           Nix.Frames
-import           Nix.Normal
 import           Nix.Options
-import           Nix.Parser
 import           Nix.Pretty
 import           Nix.Render
 import           Nix.Scope
 import           Nix.String
+import           Nix.String.Coerce
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 import           Nix.Value.Equal
 import           Nix.Value.Monad
-#ifdef MIN_VERSION_haskeline
-import           System.Console.Haskeline.MonadException hiding(catch)
-#endif
-import           System.FilePath
 #ifdef MIN_VERSION_pretty_show
 import qualified Text.Show.Pretty as PS
 #endif
@@ -447,7 +434,7 @@ execBinaryOp scope span op lval rarg = do
     (ls@NVSet{}, NVStr rs) -> case op of
       NPlus ->
         (\ls2 -> bin nvStrP (ls2 `principledStringMappend` rs))
-          <$> coerceToString DontCopyToStore CoerceStringy ls
+          <$> coerceToString callFunc DontCopyToStore CoerceStringy ls
       NEq  -> toBool =<< valueEqM lval rval
       NNEq -> toBool . not =<< valueEqM lval rval
       _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
@@ -455,7 +442,7 @@ execBinaryOp scope span op lval rarg = do
     (NVStr ls, rs@NVSet{}) -> case op of
       NPlus ->
         (\rs2 -> bin nvStrP (ls `principledStringMappend` rs2))
-          <$> coerceToString DontCopyToStore CoerceStringy rs
+          <$> coerceToString callFunc DontCopyToStore CoerceStringy rs
       NEq  -> toBool =<< valueEqM lval rval
       NNEq -> toBool . not =<< valueEqM lval rval
       _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
@@ -528,345 +515,12 @@ execBinaryOp scope span op lval rarg = do
     toInt   = pure . bin nvConstantP . NInt
     toFloat = pure . bin nvConstantP . NFloat
 
--- | Data type to avoid boolean blindness on what used to be called coerceMore
-data CoercionLevel
-  = CoerceStringy
-  -- ^ Coerce only stringlike types: strings, paths, and appropriate sets
-  | CoerceAny
-  -- ^ Coerce everything but functions
-  deriving (Eq,Ord,Enum,Bounded)
-
--- | Data type to avoid boolean blindness on what used to be called copyToStore
-data CopyToStoreMode
-  = CopyToStore
-  -- ^ Add paths to the store as they are encountered
-  | DontCopyToStore
-  -- ^ Add paths to the store as they are encountered
-  deriving (Eq,Ord,Enum,Bounded)
-
-coerceToString
-  :: MonadNix e t f m
-  => CopyToStoreMode
-  -> CoercionLevel
-  -> NValue t f m
-  -> m NixString
-coerceToString ctsm clevel = go
- where
-  go x = demand x $ \case
-    NVConstant (NBool b)
-      |
-        -- TODO Return a singleton for "" and "1"
-        b && clevel == CoerceAny -> pure
-      $  principledMakeNixStringWithoutContext "1"
-      | clevel == CoerceAny -> pure $ principledMakeNixStringWithoutContext ""
-    NVConstant (NInt n) | clevel == CoerceAny ->
-      pure $ principledMakeNixStringWithoutContext $ Text.pack $ show n
-    NVConstant (NFloat n) | clevel == CoerceAny ->
-      pure $ principledMakeNixStringWithoutContext $ Text.pack $ show n
-    NVConstant NNull | clevel == CoerceAny ->
-      pure $ principledMakeNixStringWithoutContext ""
-    NVStr ns -> pure ns
-    NVPath p
-      | ctsm == CopyToStore -> storePathToNixString <$> addPath p
-      | otherwise -> pure $ principledMakeNixStringWithoutContext $ Text.pack p
-    NVList l | clevel == CoerceAny ->
-      nixStringUnwords <$> traverse (`demand` go) l
-
-    v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
-      demand p $ (`callFunc` v) >=> go
-
-    NVSet s _ | Just p <- M.lookup "outPath" s -> demand p go
-
-    v -> throwError $ ErrorCall $ "Expected a string, but saw: " ++ show v
-
-  nixStringUnwords =
-    principledIntercalateNixString (principledMakeNixStringWithoutContext " ")
-  storePathToNixString :: StorePath -> NixString
-  storePathToNixString sp = principledMakeNixStringWithSingletonContext
-    t
-    (StringContext t DirectPath)
-    where t = Text.pack $ unStorePath sp
-
-fromStringNoContext :: MonadNix e t f m => NixString -> m Text
+-- This function is here, rather than in 'Nix.String', because of the need to
+-- use 'throwError'.
+fromStringNoContext :: Framed e m => NixString -> m Text
 fromStringNoContext ns = case principledGetStringNoContext ns of
   Just str -> return str
   Nothing  -> throwError $ ErrorCall "expected string with no context"
-
-newtype Lazy t (f :: * -> *) m a = Lazy
-    { runLazy :: ReaderT (Context (Lazy t f m) (NValue t f (Lazy t f m)))
-                        (StateT (HashMap FilePath NExprLoc) m) a }
-    deriving
-        ( Functor
-        , Applicative
-        , Alternative
-        , Monad
-        , MonadPlus
-        , MonadFix
-        , MonadIO
-        , MonadCatch
-        , MonadThrow
-        , MonadReader (Context (Lazy t f m) (NValue t f (Lazy t f m)))
-        )
-
-instance MonadTrans (Lazy t f) where
-  lift = Lazy . lift . lift
-
-instance MonadRef m => MonadRef (Lazy t f m) where
-  type Ref (Lazy t f m) = Ref m
-  newRef  = lift . newRef
-  readRef = lift . readRef
-  writeRef r = lift . writeRef r
-
-instance MonadAtomicRef m => MonadAtomicRef (Lazy t f m) where
-  atomicModifyRef r = lift . atomicModifyRef r
-
-instance (MonadFile m, Monad m) => MonadFile (Lazy t f m)
-
-#ifdef MIN_VERSION_haskeline
-instance MonadException m => MonadException (Lazy t f m) where
-  controlIO f = Lazy $ controlIO $ \(RunIO run) ->
-      let run' = RunIO (fmap Lazy . run . runLazy)
-      in runLazy <$> f run'
-#endif
-
-instance MonadStore m => MonadStore (Lazy t f m) where
-  addPath' = lift . addPath'
-  toFile_' n = lift . toFile_' n
-
-instance MonadPutStr m => MonadPutStr (Lazy t f m)
-instance MonadHttp m => MonadHttp (Lazy t f m)
-instance MonadEnv m => MonadEnv (Lazy t f m)
-instance MonadInstantiate m => MonadInstantiate (Lazy t f m)
-instance MonadExec m => MonadExec (Lazy t f m)
-instance MonadIntrospect m => MonadIntrospect (Lazy t f m)
-
-instance MonadThunkId m => MonadThunkId (Lazy t f m) where
-  type ThunkId (Lazy t f m) = ThunkId m
-
-instance ( MonadFix m
-         , MonadCatch m
-         , MonadFile m
-         , MonadStore m
-         , MonadPutStr m
-         , MonadHttp m
-         , MonadEnv m
-         , MonadInstantiate m
-         , MonadExec m
-         , MonadIntrospect m
-         , Alternative m
-         , MonadPlus m
-         , MonadCitedThunks t f (Lazy t f m)
-         , MonadValue (NValue t f (Lazy t f m)) (Lazy t f m)
-         )
-         => MonadEffects t f (Lazy t f m) where
-  makeAbsolutePath origPath = do
-    origPathExpanded <- expandHomePath origPath
-    absPath          <- if isAbsolute origPathExpanded
-      then pure origPathExpanded
-      else do
-        cwd <- do
-          mres <- lookupVar "__cur_file"
-          case mres of
-            Nothing -> getCurrentDirectory
-            Just v  -> demand v $ \case
-              NVPath s -> return $ takeDirectory s
-              v ->
-                throwError
-                  $  ErrorCall
-                  $  "when resolving relative path,"
-                  ++ " __cur_file is in scope,"
-                  ++ " but is not a path; it is: "
-                  ++ show v
-        pure $ cwd <///> origPathExpanded
-    removeDotDotIndirections <$> canonicalizePath absPath
-
--- Given a path, determine the nix file to load
-  pathToDefaultNix = pathToDefaultNixFile
-
-  findEnvPath      = findEnvPathM
-  findPath         = findPathM
-
-  importPath path = do
-    traceM $ "Importing file " ++ path
-    withFrame Info (ErrorCall $ "While importing file " ++ show path) $ do
-      imports <- Lazy $ ReaderT $ const get
-      evalExprLoc =<< case M.lookup path imports of
-        Just expr -> pure expr
-        Nothing   -> do
-          eres <- parseNixFileLoc path
-          case eres of
-            Failure err ->
-              throwError
-                $ ErrorCall
-                . show
-                $ fillSep
-                $ ["Parse during import failed:", err]
-            Success expr -> do
-              Lazy $ ReaderT $ const $ modify (M.insert path expr)
-              pure expr
-
-  derivationStrict = fromValue @(AttrSet (NValue t f (Lazy t f m))) >=> \s ->
-    do
-      nn <- maybe (pure False)
-                  (demand ?? fromValue)
-                  (M.lookup "__ignoreNulls" s)
-      s' <- M.fromList <$> mapMaybeM (handleEntry nn) (M.toList s)
-      v' <-
-        normalForm
-          =<< toValue @(AttrSet (NValue t f (Lazy t f m))) @_
-                @(NValue t f (Lazy t f m))
-                s'
-      nixInstantiateExpr $ "derivationStrict " ++ show (prettyNValueNF v')
-   where
-    mapMaybeM :: (a -> Lazy t f m (Maybe b)) -> [a] -> Lazy t f m [b]
-    mapMaybeM op = foldr f (return [])
-      where f x xs = op x >>= (<$> xs) . (++) . maybeToList
-
-    handleEntry
-      :: Bool
-      -> (Text, NValue t f (Lazy t f m))
-      -> Lazy t f m (Maybe (Text, NValue t f (Lazy t f m)))
-    handleEntry ignoreNulls (k, v) = fmap (k, ) <$> case k of
-        -- The `args' attribute is special: it supplies the command-line
-        -- arguments to the builder.
-        -- TODO This use of coerceToString is probably not right and may
-        -- not have the right arguments.
-      "args"          -> demand v $ fmap Just . coerceNixList
-      "__ignoreNulls" -> pure Nothing
-      _               -> demand v $ \case
-        NVConstant NNull | ignoreNulls -> pure Nothing
-        v'                             -> Just <$> coerceNix v'
-     where
-      coerceNix
-        :: NValue t f (Lazy t f m) -> Lazy t f m (NValue t f (Lazy t f m))
-      coerceNix = toValue <=< coerceToString CopyToStore CoerceAny
-
-      coerceNixList
-        :: NValue t f (Lazy t f m) -> Lazy t f m (NValue t f (Lazy t f m))
-      coerceNixList v = do
-        xs <- fromValue @[NValue t f (Lazy t f m)] v
-        ys <- traverse (\x -> demand x coerceNix) xs
-        toValue @[NValue t f (Lazy t f m)] ys
-
-  traceEffect = putStrLn
-
-getRecursiveSize :: (MonadIntrospect m, Applicative f) => a -> m (NValue t f m)
-getRecursiveSize = fmap (nvConstant . NInt . fromIntegral) . recursiveSize
-
-runLazyM :: Options -> MonadIO m => Lazy t f m a -> m a
-runLazyM opts =
-  (`evalStateT` M.empty) . (`runReaderT` newContext opts) . runLazy
-
--- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
---   This is incorrect on POSIX systems, because if @b@ is a symlink, its
---   parent may be a different directory from @a@. See the discussion at
---   https://hackage.haskell.org/package/directory-1.3.1.5/docs/System-Directory.html#v:canonicalizePath
-removeDotDotIndirections :: FilePath -> FilePath
-removeDotDotIndirections = intercalate "/" . go [] . splitOn "/"
- where
-  go s       []            = reverse s
-  go (_ : s) (".." : rest) = go s rest
-  go s       (this : rest) = go (this : s) rest
-
-expandHomePath :: MonadFile m => FilePath -> m FilePath
-expandHomePath ('~' : xs) = flip (++) xs <$> getHomeDirectory
-expandHomePath p          = return p
-
--- Given a path, determine the nix file to load
-pathToDefaultNixFile :: MonadFile m => FilePath -> m FilePath
-pathToDefaultNixFile p = do
-  isDir <- doesDirectoryExist p
-  pure $ if isDir then p </> "default.nix" else p
-
-infixr 9 <///>
-(<///>) :: FilePath -> FilePath -> FilePath
-x <///> y | isAbsolute y || "." `isPrefixOf` y = x </> y
-          | otherwise                          = joinByLargestOverlap x y
- where
-  joinByLargestOverlap (splitDirectories -> xs) (splitDirectories -> ys) =
-    joinPath $ head
-      [ xs ++ drop (length tx) ys | tx <- tails xs, tx `elem` inits ys ]
-
-findPathBy
-  :: forall e t f m
-   . MonadNix e t f m
-  => (FilePath -> m (Maybe FilePath))
-  -> [NValue t f m]
-  -> FilePath
-  -> m FilePath
-findPathBy finder l name = do
-  mpath <- foldM go Nothing l
-  case mpath of
-    Nothing ->
-      throwError
-        $  ErrorCall
-        $  "file '"
-        ++ name
-        ++ "' was not found in the Nix search path"
-        ++ " (add it using $NIX_PATH or -I)"
-    Just path -> return path
- where
-  go :: Maybe FilePath -> NValue t f m -> m (Maybe FilePath)
-  go p@(Just _) _ = pure p
-  go Nothing l =
-    demand l $ fromValue >=> \(s :: HashMap Text (NValue t f m)) -> do
-      p <- resolvePath s
-      demand p $ fromValue >=> \(Path path) -> case M.lookup "prefix" s of
-        Nothing -> tryPath path Nothing
-        Just pf -> demand pf $ fromValueMay >=> \case
-          Just (nsPfx :: NixString) ->
-            let pfx = hackyStringIgnoreContext nsPfx
-            in  if not (Text.null pfx)
-                  then tryPath path (Just (Text.unpack pfx))
-                  else tryPath path Nothing
-          _ -> tryPath path Nothing
-
-  tryPath p (Just n) | n' : ns <- splitDirectories name, n == n' =
-    finder $ p <///> joinPath ns
-  tryPath p _ = finder $ p <///> name
-
-  resolvePath s = case M.lookup "path" s of
-    Just t  -> return t
-    Nothing -> case M.lookup "uri" s of
-      Just ut -> defer $ fetchTarball ut
-      Nothing ->
-        throwError
-          $  ErrorCall
-          $  "__nixPath must be a list of attr sets"
-          ++ " with 'path' elements, but saw: "
-          ++ show s
-
-findPathM
-  :: forall e t f m
-   . MonadNix e t f m
-  => [NValue t f m]
-  -> FilePath
-  -> m FilePath
-findPathM l name = findPathBy path l name
- where
-  path :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
-  path path = do
-    path   <- makeAbsolutePath @t @f path
-    exists <- doesPathExist path
-    return $ if exists then Just path else Nothing
-
-findEnvPathM :: forall e t f m . MonadNix e t f m => FilePath -> m FilePath
-findEnvPathM name = do
-  mres <- lookupVar "__nixPath"
-  case mres of
-    Nothing -> error "impossible"
-    Just x  -> demand x $ fromValue >=> \(l :: [NValue t f m]) ->
-      findPathBy nixFilePath l name
- where
-  nixFilePath :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
-  nixFilePath path = do
-    path   <- makeAbsolutePath @t @f path
-    exists <- doesDirectoryExist path
-    path'  <- if exists
-      then makeAbsolutePath @t @f $ path </> "default.nix"
-      else return path
-    exists <- doesFileExist path'
-    return $ if exists then Just path' else Nothing
 
 addTracing
   :: (MonadNix e t f m, Has e Options, MonadReader Int n, Alternative n)
@@ -906,64 +560,9 @@ evalExprLoc expr = do
   phi = Eval.eval . annotated . getCompose
   raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x
 
-fetchTarball
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-fetchTarball = flip demand $ \case
-  NVSet s _ -> case M.lookup "url" s of
-    Nothing ->
-      throwError $ ErrorCall "builtins.fetchTarball: Missing url attribute"
-    Just url -> demand url $ go (M.lookup "sha256" s)
-  v@NVStr{} -> go Nothing v
-  v ->
-    throwError
-      $  ErrorCall
-      $  "builtins.fetchTarball: Expected URI or set, got "
-      ++ show v
- where
-  go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
-  go msha = \case
-    NVStr ns -> fetch (hackyStringIgnoreContext ns) msha
-    v ->
-      throwError
-        $  ErrorCall
-        $  "builtins.fetchTarball: Expected URI or string, got "
-        ++ show v
-
-{- jww (2018-04-11): This should be written using pipes in another module
-    fetch :: Text -> Maybe (NThunk m) -> m (NValue t f m)
-    fetch uri msha = case takeExtension (Text.unpack uri) of
-        ".tgz" -> undefined
-        ".gz"  -> undefined
-        ".bz2" -> undefined
-        ".xz"  -> undefined
-        ".tar" -> undefined
-        ext -> throwError $ ErrorCall $ "builtins.fetchTarball: Unsupported extension '"
-                  ++ ext ++ "'"
--}
-
-  fetch :: Text -> Maybe (NValue t f m) -> m (NValue t f m)
-  fetch uri Nothing =
-    nixInstantiateExpr $ "builtins.fetchTarball \"" ++ Text.unpack uri ++ "\""
-  fetch url (Just t) = demand t $ fromValue >=> \nsSha ->
-    let sha = hackyStringIgnoreContext nsSha
-    in  nixInstantiateExpr
-          $  "builtins.fetchTarball { "
-          ++ "url    = \""
-          ++ Text.unpack url
-          ++ "\"; "
-          ++ "sha256 = \""
-          ++ Text.unpack sha
-          ++ "\"; }"
-
 exec :: (MonadNix e t f m, MonadInstantiate m) => [String] -> m (NValue t f m)
 exec args = either throwError evalExprLoc =<< exec' args
 
 nixInstantiateExpr
   :: (MonadNix e t f m, MonadInstantiate m) => String -> m (NValue t f m)
 nixInstantiateExpr s = either throwError evalExprLoc =<< instantiateExpr s
-
-instance Monad m => Scoped (NValue t f (Lazy t f m)) (Lazy t f m) where
-  currentScopes = currentScopesReader
-  clearScopes   = clearScopesReader @(Lazy t f m) @(NValue t f (Lazy t f m))
-  pushScopes    = pushScopesReader
-  lookupVar     = lookupVarReader

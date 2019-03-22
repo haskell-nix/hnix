@@ -81,8 +81,8 @@ import           Data.Typeable                  ( Typeable )
 import           Data.Void
 import           GHC.Generics            hiding ( Prefix )
 import           Nix.Expr                hiding ( ($>) )
+import           Nix.Expr.Strings
 import           Nix.Render
-import           Nix.Strings
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer    as L

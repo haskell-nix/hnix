@@ -58,7 +58,7 @@ import           Data.Maybe                     ( fromMaybe
                                                 )
 import           Data.Text                      ( Text )
 import           Nix.Atoms
-import           Nix.Exec
+import           Nix.Effects.Basic              ( pathToDefaultNixFile )
 import           Nix.Expr
 import           Nix.Frames
 import           Nix.Options                    ( Options

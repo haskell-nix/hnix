@@ -21,8 +21,6 @@ import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.Ref
 import           Control.Monad.ST
-import           Control.Monad.State.Strict
-import           Control.Monad.Writer
 import           Data.Typeable
 #ifdef MIN_VERSION_haskeline
 import System.Console.Haskeline.MonadException hiding(catch)
@@ -55,16 +53,6 @@ instance MonadTrans (FreshIdT i) where
 instance MonadBase b m => MonadBase b (FreshIdT i m) where
   liftBase = FreshIdT . liftBase
 
--- instance MonadTransControl (FreshIdT i) where
---     type StT (FreshIdT i) a = StT (ReaderT (Var m i)) a
---     liftWith = defaultLiftWith FreshIdT unFreshIdT
---     restoreT = defaultRestoreT FreshIdT
-
--- instance MonadBaseControl b m => MonadBaseControl b (FreshIdT i m) where
---     type StM (FreshIdT i m) a = ComposeSt (FreshIdT i) m a
---     liftBaseWith     = defaultLiftBaseWith
---     restoreM         = defaultRestoreM
-
 instance ( MonadVar m
          , Eq i
          , Ord i
@@ -80,15 +68,6 @@ instance ( MonadVar m
 
 runFreshIdT :: Functor m => Var m i -> FreshIdT i m a -> m a
 runFreshIdT i m = runReaderT (unFreshIdT m) i
-
-instance MonadThunkId m => MonadThunkId (ReaderT r m) where
-  type ThunkId (ReaderT r m) = ThunkId m
-instance (Monoid w, MonadThunkId m) => MonadThunkId (WriterT w m) where
-  type ThunkId (WriterT w m) = ThunkId m
-instance MonadThunkId m => MonadThunkId (ExceptT e m) where
-  type ThunkId (ExceptT e m) = ThunkId m
-instance MonadThunkId m => MonadThunkId (StateT s m) where
-  type ThunkId (StateT s m) = ThunkId m
 
 -- Orphan instance needed by Infer.hs and Lint.hs
 

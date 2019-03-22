@@ -41,10 +41,10 @@ import           Data.Text.Prettyprint.Doc
 import           Nix.Atoms
 import           Nix.Cited
 import           Nix.Expr
+import           Nix.Expr.Strings
 import           Nix.Normal
 import           Nix.Parser
 import           Nix.String
-import           Nix.Strings
 import           Nix.Thunk
 #if ENABLE_TRACING
 import           Nix.Utils

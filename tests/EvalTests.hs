@@ -21,8 +21,8 @@ import           Data.String.Interpolate.IsString
 import           Data.Text (Text)
 import           Data.Time
 import           Nix
+import           Nix.Standard
 import           Nix.TH
-import           Nix.Thunk.Standard
 import           Nix.Value.Equal
 import qualified System.Directory as D
 import           System.Environment
@@ -424,7 +424,7 @@ constantEqual a b = do
     time <- getCurrentTime
     let opts = defaultOptions time
     -- putStrLn =<< lint (stripAnnotation a)
-    res <- runStandardIO opts $ do
+    res <- runWithBasicEffectsIO opts $ do
         a' <- normalForm =<< nixEvalExprLoc Nothing a
         b' <- normalForm =<< nixEvalExprLoc Nothing b
         return $ valueNFEq a' b'
@@ -449,7 +449,7 @@ assertNixEvalThrows a = do
   time <- getCurrentTime
   let opts = defaultOptions time
   errored <- catch
-      (False <$ runStandardIO opts
+      (False <$ runWithBasicEffectsIO opts
          (normalForm =<< nixEvalExprLoc Nothing a'))
       (\(_ :: NixException) -> pure True)
   unless errored $

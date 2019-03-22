@@ -34,10 +34,10 @@ import           Data.Traversable               ( for )
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Expr
+import           Nix.Expr.Strings               ( runAntiquoted )
 import           Nix.Frames
 import           Nix.String
 import           Nix.Scope
-import           Nix.Strings                    ( runAntiquoted )
 import           Nix.Utils
 import           Nix.Value.Monad
 

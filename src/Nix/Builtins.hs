@@ -78,6 +78,7 @@ import qualified Data.Vector                   as V
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Effects
+import           Nix.Effects.Basic              ( fetchTarball )
 import qualified Nix.Eval                      as Eval
 import           Nix.Exec
 import           Nix.Expr.Types
@@ -90,6 +91,7 @@ import           Nix.Parser              hiding ( nixPath )
 import           Nix.Render
 import           Nix.Scope
 import           Nix.String
+import           Nix.String.Coerce
 import           Nix.Utils
 import           Nix.Value
 import           Nix.Value.Equal
@@ -352,7 +354,7 @@ nixPath = fmap nvList $ flip foldNixPath [] $ \p mn ty rest ->
     : rest
 
 toString :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-toString = coerceToString DontCopyToStore CoerceAny >=> toValue
+toString = coerceToString callFunc DontCopyToStore CoerceAny >=> toValue
 
 hasAttr
   :: forall e t f m
@@ -742,7 +744,7 @@ catAttrs attrName xs = fromValue attrName >>= fromStringNoContext >>= \n ->
 
 baseNameOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 baseNameOf x = do
-  ns <- coerceToString DontCopyToStore CoerceStringy x
+  ns <- coerceToString callFunc DontCopyToStore CoerceStringy x
   pure $ nvStr
     (principledModifyNixContents (Text.pack . takeFileName . Text.unpack) ns)
 
@@ -1074,7 +1076,7 @@ isFunction func = demand func $ \case
 
 throw_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 throw_ mnv = do
-  ns <- coerceToString CopyToStore CoerceStringy mnv
+  ns <- coerceToString callFunc CopyToStore CoerceStringy mnv
   throwError . ErrorCall . Text.unpack $ principledStringIgnoreContext ns
 
 import_
@@ -1376,7 +1378,7 @@ exec_
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 exec_ xs = do
   ls <- fromValue @[NValue t f m] xs
-  xs <- traverse (coerceToString DontCopyToStore CoerceStringy) ls
+  xs <- traverse (coerceToString callFunc DontCopyToStore CoerceStringy) ls
   -- TODO Still need to do something with the context here
   -- See prim_exec in nix/src/libexpr/primops.cc
   -- Requires the implementation of EvalState::realiseContext
@@ -1436,6 +1438,9 @@ currentTime_ = do
 
 derivationStrict_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 derivationStrict_ = derivationStrict
+
+getRecursiveSize :: (MonadIntrospect m, Applicative f) => a -> m (NValue t f m)
+getRecursiveSize = fmap (nvConstant . NInt . fromIntegral) . recursiveSize
 
 getContext
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)

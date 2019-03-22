@@ -443,10 +443,12 @@ library
       Nix.Context
       Nix.Convert
       Nix.Effects
+      Nix.Effects.Basic
       Nix.Eval
       Nix.Exec
       Nix.Expr
       Nix.Expr.Shorthands
+      Nix.Expr.Strings
       Nix.Expr.Types
       Nix.Expr.Types.Annotated
       Nix.Frames
@@ -462,12 +464,12 @@ library
       Nix.Render
       Nix.Render.Frame
       Nix.Scope
+      Nix.Standard
       Nix.String
-      Nix.Strings
+      Nix.String.Coerce
       Nix.TH
       Nix.Thunk
       Nix.Thunk.Basic
-      Nix.Thunk.Standard
       Nix.Type.Assumption
       Nix.Type.Env
       Nix.Type.Infer
