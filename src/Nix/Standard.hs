@@ -226,12 +226,12 @@ newtype StandardTF r m a
 instance MonadTrans (StandardTF m) where
   lift = StandardTF . lift . lift . lift
 
-instance (MonadPutStr m, MonadPutStr r) => MonadPutStr (StandardTF m r)
-instance (MonadHttp m, MonadHttp r) => MonadHttp (StandardTF m r)
-instance (MonadEnv m, MonadEnv r) => MonadEnv (StandardTF m r)
-instance (MonadInstantiate m, MonadInstantiate r) => MonadInstantiate (StandardTF m r)
-instance (MonadExec m, MonadExec r) => MonadExec (StandardTF m r)
-instance (MonadIntrospect m, MonadIntrospect r) => MonadIntrospect (StandardTF m r)
+instance (MonadPutStr r, MonadPutStr m) => MonadPutStr (StandardTF r m)
+instance (MonadHttp r, MonadHttp m) => MonadHttp (StandardTF r m)
+instance (MonadEnv r, MonadEnv m) => MonadEnv (StandardTF r m)
+instance (MonadInstantiate r, MonadInstantiate m) => MonadInstantiate (StandardTF r m)
+instance (MonadExec r, MonadExec m) => MonadExec (StandardTF r m)
+instance (MonadIntrospect r, MonadIntrospect m) => MonadIntrospect (StandardTF r m)
 
 {------------------------------------------------------------------------}
 
