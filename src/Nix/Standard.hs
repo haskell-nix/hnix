@@ -239,7 +239,6 @@ type StandardT m = Fix1T StandardTF m
 instance MonadTrans (Fix1T StandardTF) where
   lift = Fix1T . lift
 
--- | This instance is based on the 'StdIdT' layer of 'StandardTF m'.
 instance MonadThunkId m => MonadThunkId (Fix1T StandardTF m) where
   type ThunkId (Fix1T StandardTF m) = ThunkId m
 
