@@ -475,6 +475,7 @@ library
       Nix.Type.Infer
       Nix.Type.Type
       Nix.Utils
+      Nix.Utils.Fix1
       Nix.Value
       Nix.Value.Equal
       Nix.Value.Monad

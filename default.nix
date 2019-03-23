@@ -35,7 +35,6 @@
 }:
 
 let
-
   hnix-store-src = pkgs.fetchFromGitHub {
     owner = "haskell-nix";
     repo = "hnix-store";
@@ -94,7 +93,7 @@ let
   haskellPackages = pkgs.haskell.packages.${compiler}.override
     overrideHaskellPackages;
 
-drv = haskellPackages.developPackage {
+in haskellPackages.developPackage {
   name = "hnix";
   root = ./.;
 
@@ -126,6 +125,4 @@ drv = haskellPackages.developPackage {
   });
 
   returnShellEnv = false;
-};
-
-in drv
+}
