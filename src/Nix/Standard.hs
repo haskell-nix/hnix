@@ -207,8 +207,7 @@ instance ( MonadAtomicRef m
 
 newtype StandardTF r m a
   = StandardTF (ReaderT (Context r (StdValue r))
-                        (StateT (HashMap FilePath NExprLoc)
-                                (StdIdT m)) a)
+                        (StateT (HashMap FilePath NExprLoc) m) a)
   deriving
     ( Functor
     , Applicative
@@ -223,8 +222,8 @@ newtype StandardTF r m a
     , MonadState (HashMap FilePath NExprLoc)
     )
 
-instance MonadTrans (StandardTF m) where
-  lift = StandardTF . lift . lift . lift
+instance MonadTrans (StandardTF r) where
+  lift = StandardTF . lift . lift
 
 instance (MonadPutStr r, MonadPutStr m) => MonadPutStr (StandardTF r m)
 instance (MonadHttp r, MonadHttp m) => MonadHttp (StandardTF r m)
@@ -241,14 +240,13 @@ instance MonadTrans (Fix1T StandardTF) where
   lift = Fix1T . lift
 
 -- | This instance is based on the 'StdIdT' layer of 'StandardTF m'.
-instance MonadAtomicRef m => MonadThunkId (Fix1T StandardTF m) where
-  type ThunkId (Fix1T StandardTF m) = Int
-  freshId = mkStandardT $ lift $ lift freshId
+instance MonadThunkId m => MonadThunkId (Fix1T StandardTF m) where
+  type ThunkId (Fix1T StandardTF m) = ThunkId m
 
 mkStandardT
   :: ReaderT (Context (StandardT m) (StdValue (StandardT m)))
             (StateT (HashMap FilePath NExprLoc)
-                    (StdIdT m)) a
+                    m) a
   -> StandardT m a
 mkStandardT = Fix1T . StandardTF
 
@@ -256,11 +254,11 @@ runStandardT
   :: StandardT m a
   -> ReaderT (Context (StandardT m) (StdValue (StandardT m)))
             (StateT (HashMap FilePath NExprLoc)
-                    (StdIdT m)) a
+                    m) a
 runStandardT (Fix1T (StandardTF m)) = m
 
 runWithBasicEffects :: (MonadIO m, MonadAtomicRef m)
-                    => Options -> StandardT m a -> m a
+                    => Options -> StandardT (StdIdT m) a -> m a
 runWithBasicEffects opts =
   go . (`evalStateT` mempty)
      . (`runReaderT` newContext opts)
@@ -270,5 +268,5 @@ runWithBasicEffects opts =
     i <- newVar (1 :: Int)
     runFreshIdT i action
 
-runWithBasicEffectsIO :: Options -> StandardT IO a -> IO a
+runWithBasicEffectsIO :: Options -> StandardT (StdIdT IO) a -> IO a
 runWithBasicEffectsIO = runWithBasicEffects
