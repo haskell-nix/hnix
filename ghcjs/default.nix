@@ -2,17 +2,16 @@
 
 let rp = builtins.fetchTarball "https://github.com/reflex-frp/reflex-platform/archive/${rpRef}.tar.gz";
 
-in
-  (import rp {}).project ({ pkgs, ... }:
-  with pkgs.haskell.lib; {
-    name = "hnix-ghcjs";
-    overrides = self: super:
+    hnix-store-src = pkgs: pkgs.fetchFromGitHub {
+      owner = "haskell-nix";
+      repo = "hnix-store";
+      rev = "0.1.0.0";
+      sha256 = "1z48msfkiys432rkd00fgimjgspp98dci11kgg3v8ddf4mk1s8g0";
+    };
+
+    overlay = pkgs: with pkgs.haskell.lib; self: super:
       let guardGhcjs = p: if self.ghc.isGhcjs or false then null else p;
        in {
-         cryptohash-md5 = guardGhcjs super.cryptohash-md5;
-         cryptohash-sha1 = guardGhcjs super.cryptohash-sha1;
-         cryptohash-sha256 = guardGhcjs super.cryptohash-sha256;
-         cryptohash-sha512 = guardGhcjs super.cryptohash-sha512;
          hashing = super.hashing;
          haskeline = guardGhcjs super.haskeline;
          serialise = doJailbreak super.serialise;
@@ -59,6 +58,15 @@ in
            sha256 = "128q8k4py2wr1v0gmyvqvzikk6sksl9aqj0lxzf46763lis8x9my";
          }) {};
        };
+in
+  (import rp {}).project ({ pkgs, ... }:
+  {
+    name = "hnix-ghcjs";
+    overrides = pkgs.lib.foldr pkgs.lib.composeExtensions (_: _: {})
+                [
+                 (import "${hnix-store-src pkgs}/overlay.nix")
+                 (overlay pkgs)
+                ];
     packages = {
       hnix = ../.;
     };
