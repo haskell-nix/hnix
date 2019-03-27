@@ -17,7 +17,6 @@ import           Control.Monad.Free
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Reader
 import           Control.Monad.Trans.State
-import           Data.Fix
 import           Data.Set
 import           Nix.Cited
 import           Nix.Frames
@@ -32,7 +31,7 @@ newtype NormalLoop t f m = NormalLoop (NValue t f m)
 instance MonadDataErrorContext t f m => Exception (NormalLoop t f m)
 
 -- | Normalize the value as much as possible, leaving only detected cycles.
-normalize
+normalizeValue
   :: forall e t m f
    . ( Framed e m
      , MonadThunk t m (NValue t f m)
@@ -42,7 +41,7 @@ normalize
   => (forall r . t -> (NValue t f m -> m r) -> m r)
   -> NValue t f m
   -> m (NValue t f m)
-normalize f = run . iterNValueM run go (fmap Free . sequenceNValue' run)
+normalizeValue f = run . iterNValueM run go (fmap Free . sequenceNValue' run)
  where
   start = 0 :: Int
   table = mempty
@@ -73,24 +72,6 @@ normalize f = run . iterNValueM run go (fmap Free . sequenceNValue' run)
       unless res $ modify (insert tid)
       return res
 
-stubCycles
-  :: forall t f m
-   . ( Applicative f
-     , Functor m
-     , HasCitations m (NValue t f m) t
-     , HasCitations1 m (NValue t f m) f
-     )
-  => NValue t f m
-  -> NValueNF t f m
-stubCycles = freeToFix $ \t ->
-  Fix
-    $ NValue
-    $ Prelude.foldr (addProvenance1 @m @(NValue t f m)) cyc
-    $ reverse
-    $ citations @m @(NValue t f m) t
- where
-  Fix (NValue cyc) = nvStrNF (principledMakeNixStringWithoutContext "<CYCLE>")
-
 normalForm
   :: ( Framed e m
      , MonadThunk t m (NValue t f m)
@@ -100,8 +81,8 @@ normalForm
      , Ord (ThunkId m)
      )
   => NValue t f m
-  -> m (NValueNF t f m)
-normalForm = fmap stubCycles . normalize force
+  -> m (NValue t f m)
+normalForm = fmap stubCycles . normalizeValue force
 
 normalForm_
   :: ( Framed e m
@@ -111,20 +92,40 @@ normalForm_
      )
   => NValue t f m
   -> m ()
-normalForm_ = void <$> normalize forceEff
+normalForm_ = void <$> normalizeValue forceEff
+
+stubCycles
+  :: forall t f m
+   . ( MonadDataContext f m
+     , HasCitations m (NValue t f m) t
+     , HasCitations1 m (NValue t f m) f
+     )
+  => NValue t f m
+  -> NValue t f m
+stubCycles = flip iterNValue Free $ \t _ ->
+  Free
+    $ NValue
+    $ Prelude.foldr (addProvenance1 @m @(NValue t f m)) cyc
+    $ reverse
+    $ citations @m @(NValue t f m) t
+ where
+  Free (NValue cyc) = opaque
 
 removeEffects
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
   => NValue t f m
-  -> m (NValueNF t f m)
-removeEffects = nValueToNFM id (flip queryM (pure opaque))
+  -> m (NValue t f m)
+removeEffects =
+  iterNValueM
+    id
+    (flip queryM (pure opaque))
+    (fmap Free . sequenceNValue' id)
 
-opaque
-  :: (MonadThunk t m (NValue t f m), MonadDataContext f m) => NValueNF t f m
-opaque = nvStrNF $ principledMakeNixStringWithoutContext "<thunk>"
+opaque :: Applicative f => NValue t f m
+opaque = nvStr $ principledMakeNixStringWithoutContext "<CYCLE>"
 
 dethunk
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
   => t
-  -> m (NValueNF t f m)
+  -> m (NValue t f m)
 dethunk t = queryM t (pure opaque) removeEffects

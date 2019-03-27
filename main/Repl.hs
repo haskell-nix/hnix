@@ -138,9 +138,9 @@ cmd source = do
   lift $ lift $ do
     opts :: Nix.Options <- asks (view hasLens)
     if
-      | strict opts -> liftIO . print . prettyNValueNF =<< normalForm val
-      | values opts -> liftIO . print =<< prettyNValueProv val
-      | otherwise   -> liftIO . print =<< prettyNValue val
+      | strict opts -> liftIO . print . prettyNValue =<< normalForm val
+      | values opts -> liftIO . print . prettyNValueProv =<< removeEffects val
+      | otherwise   -> liftIO . print . prettyNValue =<< removeEffects val
 -------------------------------------------------------------------------------
 -- Commands
 -------------------------------------------------------------------------------

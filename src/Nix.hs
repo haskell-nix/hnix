@@ -118,8 +118,7 @@ evaluateExpression mpath evaluator handler expr = do
 
   eval' = (normalForm =<<) . nixEvalExpr mpath
 
-  argmap args = nvSet (M.fromList args') mempty
-    where args' = map (fmap nValueFromNF) args
+  argmap args = nvSet (M.fromList args) mempty
 
   compute ev x args p = ev mpath x >>= \f -> demand f $ \f' ->
     processResult p =<< case f' of

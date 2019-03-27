@@ -182,14 +182,13 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
       $  "Inheriting unknown attribute: "
       ++ intercalate "." (map Text.unpack (NE.toList ks))
 
-  attrMissing ks (Just s) = do
-    s' <- prettyNValue s
+  attrMissing ks (Just s) =
     evalError @(NValue t f m)
       $  ErrorCall
       $  "Could not look up attribute "
       ++ intercalate "." (map Text.unpack (NE.toList ks))
       ++ " in "
-      ++ show s'
+      ++ show (prettyNValue s)
 
   evalCurPos = do
     scope                  <- currentScopes

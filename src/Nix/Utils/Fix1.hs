@@ -9,13 +9,13 @@
 
 module Nix.Utils.Fix1 where
 
-import Control.Applicative
-import Control.Monad
-import Control.Monad.Fix
-import Control.Monad.IO.Class
-import Control.Monad.Catch
-import Control.Monad.Reader
-import Control.Monad.State
+import           Control.Applicative
+import           Control.Monad
+import           Control.Monad.Fix
+import           Control.Monad.IO.Class
+import           Control.Monad.Catch
+import           Control.Monad.Reader
+import           Control.Monad.State
 
 -- | The fixpoint combinator, courtesy of Gregory Malecha.
 --   https://gist.github.com/gmalecha/ceb3778b9fdaa4374976e325ac8feced

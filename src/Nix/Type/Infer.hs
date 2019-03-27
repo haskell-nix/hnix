@@ -36,7 +36,7 @@ import           Control.Monad.Reader
 import           Control.Monad.Ref
 import           Control.Monad.ST
 import           Control.Monad.State.Strict
-import           Data.Fix
+import           Data.Fix                       ( cata )
 import           Data.Foldable
 import qualified Data.HashMap.Lazy             as M
 import           Data.List                      ( delete
@@ -257,7 +257,7 @@ inferExpr env ex = case runInfer (inferType env ex) of
 
 -- | Canonicalize and return the polymorphic toplevel type.
 closeOver :: Type -> Scheme
-closeOver = normalize . generalize Set.empty
+closeOver = normalizeScheme . generalize Set.empty
 
 extendMSet :: Monad m => TVar -> InferT s m a -> InferT s m a
 extendMSet x = InferT . local (first (Set.insert x)) . getInfer
@@ -578,8 +578,8 @@ inferTop env ((name, ex) : xs) = case inferExpr env ex of
   Left  err -> Left err
   Right ty  -> inferTop (extend env (name, ty)) xs
 
-normalize :: Scheme -> Scheme
-normalize (Forall _ body) = Forall (map snd ord) (normtype body)
+normalizeScheme :: Scheme -> Scheme
+normalizeScheme (Forall _ body) = Forall (map snd ord) (normtype body)
  where
   ord = zip (nub $ fv body) (map TV letters)
 

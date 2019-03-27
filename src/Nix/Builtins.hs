@@ -55,7 +55,7 @@ import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString               as B
 import           Data.ByteString.Base16        as Base16
 import           Data.Char                      ( isDigit )
-import           Data.Fix
+import           Data.Fix                       ( cata )
 import           Data.Foldable                  ( foldrM )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List
