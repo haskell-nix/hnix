@@ -38,7 +38,6 @@ import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import           Data.Align
 import           Data.Eq.Deriving
-import           Data.Fix
 import           Data.Functor.Classes
 import           Data.Functor.Identity
 import qualified Data.HashMap.Lazy             as M
@@ -182,14 +181,6 @@ thunkEqM lt rt = force lt $ \lv -> force rt $ \rv ->
         (NVList _     , NVList _     ) -> unsafePtrEq
         (NVSet _ _    , NVSet _ _    ) -> unsafePtrEq
         _                              -> valueEqM lv rv
-
-valueNFEq :: Comonad f => NValueNF t f m -> NValueNF t f m -> Bool
-valueNFEq (Fix (NValue (extract -> x))) (Fix (NValue (extract -> y))) =
-  valueFEq (compareAttrSets f valueNFEq) valueNFEq x y
- where
-  f = \case
-    NVStrNF s -> Just s
-    _         -> Nothing
 
 instance Eq1 (NValueF p m) where
   liftEq _  (NVConstantF x) (NVConstantF y) = x == y

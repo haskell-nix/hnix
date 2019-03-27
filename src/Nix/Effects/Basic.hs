@@ -284,7 +284,7 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
   nn <- maybe (pure False) (demand ?? fromValue) (M.lookup "__ignoreNulls" s)
   s' <- M.fromList <$> mapMaybeM (handleEntry nn) (M.toList s)
   v' <- normalForm =<< toValue @(AttrSet (NValue t f m)) @_ @(NValue t f m) s'
-  nixInstantiateExpr $ "derivationStrict " ++ show (prettyNValueNF v')
+  nixInstantiateExpr $ "derivationStrict " ++ show (prettyNValue v')
  where
   mapMaybeM :: (a -> m (Maybe b)) -> [a] -> m [b]
   mapMaybeM op = foldr f (return [])

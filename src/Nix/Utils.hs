@@ -31,7 +31,6 @@ import           Data.Monoid                    ( Endo
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
 import qualified Data.Vector                   as V
-import           Data.Void
 import           Lens.Family2                  as X
 import           Lens.Family2.Stock             ( _1
                                                 , _2
@@ -107,7 +106,7 @@ freeToFix f = go
   go (Pure a) = f a
   go (Free v) = Fix (fmap go v)
 
-fixToFree :: Functor f => Fix f -> Free f Void
+fixToFree :: Functor f => Fix f -> Free f a
 fixToFree = Free . go where go (Fix f) = fmap (Free . go) f
 
 -- | adi is Abstracting Definitional Interpreters:

@@ -15,9 +15,11 @@ import           Nix.String
 import           Nix.Value
 import           Text.XML.Light
 
-toXML :: forall t f m . MonadDataContext f m => NValueNF t f m -> NixString
-toXML = runWithStringContext . fmap pp . iterNValueNF phi
+toXML :: forall t f m . MonadDataContext f m => NValue t f m -> NixString
+toXML = runWithStringContext . fmap pp . iterNValue (\_ _ -> cyc) phi
  where
+  cyc = return $ mkElem "string" "value" "<CYCLE>"
+
   pp =
     ("<?xml version='1.0' encoding='utf-8'?>\n" <>)
       . (<> "\n")
