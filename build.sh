@@ -4,10 +4,10 @@ set -xe
 set -euo pipefail
 IFS=$'\n\t'
 
-GHCVERSION=${GHCVERSION:-ghc822}
+GHCVERSION=${GHCVERSION:-ghc863}
 STRICT=${STRICT:-false}
 TRACING=${TRACING:-false}
-NIX_PATH=nixpkgs=https://github.com/NixOS/nixpkgs/archive/6820e2f0dd16104961d6fc7e8e38846807159c4e.tar.gz
+NIX_PATH=nixpkgs=https://github.com/NixOS/nixpkgs/archive/120eab94e0981758a1c928ff81229cd802053158.tar.gz
 
 if [ "$GHCVERSION" = "ghcjs" ]; then
     nix-build --substituters 'https://nixcache.reflex-frp.org?trusted=1' ghcjs
