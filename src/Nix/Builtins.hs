@@ -175,6 +175,7 @@ builtinsList = sequence
   , add2 Normal   "catAttrs"         catAttrs
   , add2 Normal   "compareVersions"  compareVersions_
   , add  Normal   "concatLists"      concatLists
+  , add2 Normal   "concatMap"        concatMap_
   , add' Normal   "concatStringsSep" (arity2 principledIntercalateNixString)
   , add0 Normal   "currentSystem"    currentSystem
   , add0 Normal   "currentTime"      currentTime_
@@ -1161,6 +1162,20 @@ concatLists =
     >=> mapM (flip demand $ fromValue @[NValue t f m] >=> pure)
     >=> toValue
     .   concat
+
+concatMap_
+  :: forall e t f m
+   . MonadNix e t f m
+  => NValue t f m
+  -> NValue t f m
+  -> m (NValue t f m)
+concatMap_ f =
+  fromValue @[NValue t f m]
+    >=> traverse applyFunc
+    >=> toValue . concat
+  where
+    applyFunc :: NValue t f m  -> m [NValue t f m]
+    applyFunc =  (f `callFunc`) >=> fromValue
 
 listToAttrs
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
