@@ -22,7 +22,7 @@ import           System.Posix.Temp
 import           System.Process
 import           Test.Tasty.HUnit
 
-hnixEvalFile :: Options -> FilePath -> IO (StdValueNF (StandardT (StdIdT IO)))
+hnixEvalFile :: Options -> FilePath -> IO (StdValue (StandardT (StdIdT IO)))
 hnixEvalFile opts file = do
   parseResult <- parseNixFileLoc file
   case parseResult of
@@ -40,7 +40,7 @@ hnixEvalFile opts file = do
                       @(StdThunk (StandardT (StdIdT IO)))
                       frames
 
-hnixEvalText :: Options -> Text -> IO (StdValueNF (StandardT (StdIdT IO)))
+hnixEvalText :: Options -> Text -> IO (StdValue (StandardT (StdIdT IO)))
 hnixEvalText opts src = case parseNixText src of
   Failure err ->
     error

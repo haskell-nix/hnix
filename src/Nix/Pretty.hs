@@ -205,10 +205,6 @@ instance (HasCitations1 m v f, HasCitations m v t)
   addProvenance x (Pure t) = Pure (addProvenance x t)
   addProvenance x (Free v) = Free (addProvenance x v)
 
-instance HasCitations1 m v f => HasCitations m v (NValueNF t f m) where
-  citations (Fix v) = citations v
-  addProvenance x (Fix v) = Fix (addProvenance x v)
-
 prettyOriginExpr
   :: forall t f m ann
    . HasCitations1 m (NValue t f m) f
@@ -325,9 +321,11 @@ exprFNixDoc = \case
   NSynHole name -> simpleExpr $ pretty ("^" <> unpack name)
   where recPrefix = "rec" <> space
 
-valueToExpr :: forall t f m . MonadDataContext f m => NValueNF t f m -> NExpr
-valueToExpr = iterNValueNF phi
+valueToExpr :: forall t f m . MonadDataContext f m => NValue t f m -> NExpr
+valueToExpr = iterNValue (\_ _ -> thk) phi
  where
+  thk = Fix . NSym . pack $ "<CYCLE>"
+
   phi :: NValue' t f m NExpr -> NExpr
   phi (NVConstant' a ) = Fix $ NConstant a
   phi (NVStr'      ns) = mkStr ns
@@ -343,14 +341,62 @@ valueToExpr = iterNValueNF phi
 
   mkStr ns = Fix $ NStr $ DoubleQuoted [Plain (hackyStringIgnoreContext ns)]
 
-prettyNValueNF
-  :: forall t f m ann . MonadDataContext f m => NValueNF t f m -> Doc ann
-prettyNValueNF = prettyNix . valueToExpr
+prettyNValue
+  :: forall t f m ann . MonadDataContext f m => NValue t f m -> Doc ann
+prettyNValue = prettyNix . valueToExpr
+
+prettyNValueProv
+  :: forall t f m ann
+   . ( HasCitations m (NValue t f m) t
+     , HasCitations1 m (NValue t f m) f
+     , MonadThunk t m (NValue t f m)
+     , MonadDataContext f m
+     )
+  => NValue t f m
+  -> Doc ann
+prettyNValueProv v = do
+  let ps = citations @m @(NValue t f m) v
+  case ps of
+    [] -> prettyNValue v
+    ps ->
+      let v' = prettyNValue v in
+      fillSep
+        [ v'
+        , indent 2
+        $ parens
+        $ mconcat
+        $ "from: "
+        : map (prettyOriginExpr . _originExpr) ps
+        ]
+
+prettyNThunk
+  :: forall t f m ann
+   . ( HasCitations m (NValue t f m) t
+     , HasCitations1 m (NValue t f m) f
+     , MonadThunk t m (NValue t f m)
+     , MonadDataContext f m
+     )
+  => t
+  -> m (Doc ann)
+prettyNThunk t = do
+  let ps = citations @m @(NValue t f m) @t t
+  v' <- prettyNValue <$> dethunk t
+  pure
+    $ fillSep
+    $ [ v'
+      , indent 2
+      $ parens
+      $ mconcat
+      $ "thunk from: "
+      : map (prettyOriginExpr . _originExpr) ps
+      ]
 
 -- | This function is used only by the testing code.
-printNix :: forall t f m . MonadDataContext f m => NValueNF t f m -> String
-printNix = iterNValueNF phi
+printNix :: forall t f m . MonadDataContext f m => NValue t f m -> String
+printNix = iterNValue (\_ _ -> thk) phi
  where
+  thk = "<thunk>"
+
   phi :: NValue' t f m String -> String
   phi (NVConstant' a ) = unpack $ atomText a
   phi (NVStr'      ns) = show $ hackyStringIgnoreContext ns
@@ -373,56 +419,3 @@ printNix = iterNValueNF phi
   phi (NVPath' fp       ) = fp
   phi (NVBuiltin' name _) = "<<builtin " ++ name ++ ">>"
   phi _                   = error "Pattern synonyms foil completeness check"
-
-prettyNValue
-  :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
-  => NValue t f m
-  -> m (Doc ann)
-prettyNValue = fmap prettyNValueNF . removeEffects
-
-prettyNValueProv
-  :: forall t f m ann
-   . ( HasCitations m (NValue t f m) t
-     , HasCitations1 m (NValue t f m) f
-     , MonadThunk t m (NValue t f m)
-     , MonadDataContext f m
-     )
-  => NValue t f m
-  -> m (Doc ann)
-prettyNValueProv v = do
-  let ps = citations @m @(NValue t f m) v
-  case ps of
-    [] -> prettyNValue v
-    ps -> do
-      v' <- prettyNValue v
-      pure
-        $ fillSep
-        $ [ v'
-          , indent 2
-          $ parens
-          $ mconcat
-          $ "from: "
-          : map (prettyOriginExpr . _originExpr) ps
-          ]
-
-prettyNThunk
-  :: forall t f m ann
-   . ( HasCitations m (NValue t f m) t
-     , HasCitations1 m (NValue t f m) f
-     , MonadThunk t m (NValue t f m)
-     , MonadDataContext f m
-     )
-  => t
-  -> m (Doc ann)
-prettyNThunk t = do
-  let ps = citations @m @(NValue t f m) @t t
-  v' <- prettyNValueNF <$> dethunk t
-  pure
-    $ fillSep
-    $ [ v'
-      , indent 2
-      $ parens
-      $ mconcat
-      $ "thunk from: "
-      : map (prettyOriginExpr . _originExpr) ps
-      ]

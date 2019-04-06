@@ -181,13 +181,9 @@ renderValueFrame level = fmap (: []) . \case
     v' <- renderValue level "" "" v
     pure $ "CoercionToJson " <> v'
   CoercionFromJson _j -> pure "CoercionFromJson"
-  Expectation t r     -> case getEitherOr r of
-    Left nf -> do
-      let v' = prettyNValueNF @t @f @m nf
-      pure $ "Saw " <> v' <> " but expected " <> pretty (describeValue t)
-    Right v -> do
-      v' <- renderValue @_ @t @f @m level "" "" v
-      pure $ "Saw " <> v' <> " but expected " <> pretty (describeValue t)
+  Expectation t v     -> do
+    v' <- renderValue @_ @t @f @m level "" "" v
+    pure $ "Saw " <> v' <> " but expected " <> pretty (describeValue t)
 
 renderValue
   :: forall e t f m ann
@@ -199,7 +195,9 @@ renderValue
   -> m (Doc ann)
 renderValue _level _longLabel _shortLabel v = do
   opts :: Options <- asks (view hasLens)
-  if values opts then prettyNValueProv v else prettyNValue v
+  (if values opts
+     then prettyNValueProv
+     else prettyNValue) <$> removeEffects v
 
 renderExecFrame
   :: (MonadReader e m, Has e Options, MonadFile m, MonadCitedThunks t f m)

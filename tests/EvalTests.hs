@@ -427,7 +427,7 @@ constantEqual a b = do
     res <- runWithBasicEffectsIO opts $ do
         a' <- normalForm =<< nixEvalExprLoc Nothing a
         b' <- normalForm =<< nixEvalExprLoc Nothing b
-        return $ valueNFEq a' b'
+        valueEqM a' b'
     assertBool "" res
 
 constantEqualText' :: Text -> Text -> Assertion

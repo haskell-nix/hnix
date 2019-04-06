@@ -151,14 +151,15 @@ main = do
         .   principledStringIgnoreContext
         <=< nvalueToJSONNixString
       | strict opts
-      = liftIO . print . prettyNValueNF <=< normalForm
+      = liftIO . print . prettyNValue <=< normalForm
       | values opts
-      = liftIO . print <=< prettyNValueProv
+      = liftIO . print . prettyNValueProv <=< removeEffects
       | otherwise
-      = liftIO . print <=< prettyNValue
+      = liftIO . print . prettyNValue <=< removeEffects
      where
-      findAttrs :: AttrSet (StdValue (StandardT (StdIdT IO)))
-                -> StandardT (StdIdT IO) ()
+      findAttrs
+        :: AttrSet (StdValue (StandardT (StdIdT IO)))
+        -> StandardT (StdIdT IO) ()
       findAttrs = go ""
        where
         go prefix s = do

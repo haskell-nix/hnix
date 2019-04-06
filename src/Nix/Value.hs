@@ -36,12 +36,10 @@ import           Control.Monad
 import           Control.Monad.Free
 import           Control.Monad.Trans.Class
 import qualified Data.Aeson                    as A
-import           Data.Fix
 import           Data.Functor.Classes
 import           Data.HashMap.Lazy              ( HashMap )
 import           Data.Text                      ( Text )
 import           Data.Typeable                  ( Typeable )
-import           Data.Void
 import           GHC.Generics
 import           Lens.Family2
 import           Lens.Family2.Stock
@@ -255,8 +253,7 @@ iterNValue' k f = f . fmap (\a -> k a (iterNValue' k f))
 --   The 'Free' structure is used here to represent the possibility that
 --   cycles may appear during normalization.
 
-type NValue   t f m = Free (NValue' t f m) t
-type NValueNF t f m = Fix  (NValue' t f m)
+type NValue t f m = Free (NValue' t f m) t
 
 hoistNValue
   :: (Functor m, Functor n, Functor f)
@@ -302,35 +299,6 @@ iterNValueM transform k f =
     go (Pure x) = Pure <$> x
     go (Free fa) = Free <$> bindNValue' transform go fa
 
-iterNValueNF
-  :: MonadDataContext f m
-  => (NValue' t f m r -> r)
-  -> NValueNF t f m
-  -> r
-iterNValueNF = cata
-
-nValueFromNF
-  :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
-  => NValueNF t f m
-  -> NValue t f m
-nValueFromNF = fmap absurd . fixToFree
-
-nValueToNF
-  :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
-  => (t -> (NValue t f m -> NValueNF t f m) -> NValueNF t f m)
-  -> NValue t f m
-  -> NValueNF t f m
-nValueToNF k = iterNValue k Fix
-
-nValueToNFM
-  :: (MonadDataContext f m, Monad n)
-  => (forall x . n x -> m x)
-  -> (t -> (NValue t f m -> n (NValueNF t f m)) -> n (NValueNF t f m))
-  -> NValue t f m
-  -> n (NValueNF t f m)
-nValueToNFM transform k =
-  iterNValueM transform k $ fmap Fix . sequenceNValue' transform
-
 pattern NVThunk t <- Pure t
 
 nvThunk :: Applicative f => t -> NValue t f m
@@ -338,51 +306,38 @@ nvThunk = Pure
 
 pattern NVConstant' x <- NValue (extract -> NVConstantF x)
 pattern NVConstant x <- Free (NVConstant' x)
-pattern NVConstantNF x <- Fix (NVConstant' x)
 
 nvConstant' :: Applicative f => NAtom -> NValue' t f m r
 nvConstant' x = NValue (pure (NVConstantF x))
 nvConstant :: Applicative f => NAtom -> NValue t f m
 nvConstant x = Free (NValue (pure (NVConstantF x)))
-nvConstantNF :: Applicative f => NAtom -> NValueNF t f m
-nvConstantNF x = Fix (NValue (pure (NVConstantF x)))
 
 pattern NVStr' ns <- NValue (extract -> NVStrF ns)
 pattern NVStr ns <- Free (NVStr' ns)
-pattern NVStrNF ns <- Fix (NVStr' ns)
 
 nvStr' :: Applicative f => NixString -> NValue' t f m r
 nvStr' ns = NValue (pure (NVStrF ns))
 nvStr :: Applicative f => NixString -> NValue t f m
 nvStr ns = Free (NValue (pure (NVStrF ns)))
-nvStrNF :: Applicative f => NixString -> NValueNF t f m
-nvStrNF ns = Fix (NValue (pure (NVStrF ns)))
 
 pattern NVPath' x <- NValue (extract -> NVPathF x)
 pattern NVPath x <- Free (NVPath' x)
-pattern NVPathNF x <- Fix (NVPath' x)
 
 nvPath' :: Applicative f => FilePath -> NValue' t f m r
 nvPath' x = NValue (pure (NVPathF x))
 nvPath :: Applicative f => FilePath -> NValue t f m
 nvPath x = Free (NValue (pure (NVPathF x)))
-nvPathNF :: Applicative f => FilePath -> NValueNF t f m
-nvPathNF x = Fix (NValue (pure (NVPathF x)))
 
 pattern NVList' l <- NValue (extract -> NVListF l)
 pattern NVList l <- Free (NVList' l)
-pattern NVListNF l <- Fix (NVList' l)
 
 nvList' :: Applicative f => [r] -> NValue' t f m r
 nvList' l = NValue (pure (NVListF l))
 nvList :: Applicative f => [NValue t f m] -> NValue t f m
 nvList l = Free (NValue (pure (NVListF l)))
-nvListNF :: Applicative f => [NValueNF t f m] -> NValueNF t f m
-nvListNF l = Fix (NValue (pure (NVListF l)))
 
 pattern NVSet' s x <- NValue (extract -> NVSetF s x)
 pattern NVSet s x <- Free (NVSet' s x)
-pattern NVSetNF s x <- Fix (NVSet' s x)
 
 nvSet' :: Applicative f
        => HashMap Text r -> HashMap Text SourcePos -> NValue' t f m r
@@ -390,14 +345,9 @@ nvSet' s x = NValue (pure (NVSetF s x))
 nvSet :: Applicative f
       => HashMap Text (NValue t f m) -> HashMap Text SourcePos -> NValue t f m
 nvSet s x = Free (NValue (pure (NVSetF s x)))
-nvSetNF :: Applicative f
-        => HashMap Text (NValueNF t f m) -> HashMap Text SourcePos
-        -> NValueNF t f m
-nvSetNF s x = Fix (NValue (pure (NVSetF s x)))
 
 pattern NVClosure' x f <- NValue (extract -> NVClosureF x f)
 pattern NVClosure x f <- Free (NVClosure' x f)
-pattern NVClosureNF x f <- Fix (NVClosure' x f)
 
 nvClosure' :: (Applicative f, Functor m)
            => Params () -> (NValue t f m -> m r) -> NValue' t f m r
@@ -405,14 +355,9 @@ nvClosure' x f = NValue (pure (NVClosureF x f))
 nvClosure :: (Applicative f, Functor m)
           => Params () -> (NValue t f m -> m (NValue t f m)) -> NValue t f m
 nvClosure x f = Free (NValue (pure (NVClosureF x f)))
-nvClosureNF :: Applicative f
-            => Params () -> (NValue t f m -> m (NValueNF t f m))
-            -> NValueNF t f m
-nvClosureNF x f = Fix (NValue (pure (NVClosureF x f)))
 
 pattern NVBuiltin' name f <- NValue (extract -> NVBuiltinF name f)
 pattern NVBuiltin name f <- Free (NVBuiltin' name f)
-pattern NVBuiltinNF name f <- Fix (NVBuiltin' name f)
 
 nvBuiltin' :: (Applicative f, Functor m)
            => String -> (NValue t f m -> m r) -> NValue' t f m r
@@ -421,10 +366,6 @@ nvBuiltin :: (Applicative f, Functor m)
           => String -> (NValue t f m -> m (NValue t f m)) -> NValue t f m
 nvBuiltin name f =
   Free (NValue (pure (NVBuiltinF name f)))
-nvBuiltinNF :: Applicative f
-            => String -> (NValue t f m -> m (NValueNF t f m))
-            -> NValueNF t f m
-nvBuiltinNF name f = Fix (NValue (pure (NVBuiltinF name f)))
 
 builtin
   :: forall m f t
@@ -452,10 +393,6 @@ builtin3
   -> m (NValue t f m)
 builtin3 name f =
   builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
-
-isClosureNF :: Comonad f => NValueNF t f m -> Bool
-isClosureNF NVClosureNF{} = True
-isClosureNF _             = False
 
 data TStringContext = NoContext | HasContext
   deriving Show
@@ -508,18 +445,6 @@ showValueType (Pure t) = force t showValueType
 showValueType (Free (NValue (extract -> v))) =
   pure $ describeValue $ valueType $ v
 
-class Show r => EmbedValue t f m r where
-  embedValue :: NValue' t f m r -> r
-  getEitherOr :: r -> Either (NValueNF t f m) (NValue t f m)
-
-instance Comonad f => EmbedValue t f m (NValueNF t f m) where
-  embedValue = Fix
-  getEitherOr = Left
-
-instance (Comonad f, Show t) => EmbedValue t f m (NValue t f m) where
-  embedValue = Free
-  getEitherOr = Right
-
 data ValueFrame t f m
     = ForcingThunk t
     | ConcerningValue (NValue t f m)
@@ -530,7 +455,7 @@ data ValueFrame t f m
     | Coercion ValueType ValueType
     | CoercionToJson (NValue t f m)
     | CoercionFromJson A.Value
-    | forall r. EmbedValue t f m r => Expectation ValueType r
+    | Expectation ValueType (NValue t f m)
     deriving Typeable
 
 deriving instance (Comonad f, Show t) => Show (ValueFrame t f m)

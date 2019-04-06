@@ -73,14 +73,14 @@ deriving instance MonadIntrospect (t (Fix1T t m) m) => MonadIntrospect (Fix1T t 
 -- For whatever reason, using the default StateT instance provided by
 -- haskeline does not work.
 instance MonadException m
-  => MonadException (StateT (HashMap FilePath NExprLoc) m) where
+  => MonadException(StateT(HashMap FilePath NExprLoc) m) where
   controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
-    run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
-    in fmap (flip runStateT s) $ f run'
+    run' = RunIO(fmap(StateT . const) . run . flip runStateT s)
+    in fmap(flip runStateT s) $ f run'
 
-instance MonadException m => MonadException (Fix1T StandardTF m) where
+instance MonadException m => MonadException(Fix1T StandardTF m) where
   controlIO f = mkStandardT $ controlIO $ \(RunIO run) ->
-    let run' = RunIO (fmap mkStandardT . run . runStandardT)
+    let run' = RunIO(fmap mkStandardT . run . runStandardT)
     in runStandardT <$> f run'
 #endif
 
@@ -119,8 +119,7 @@ newtype StdCited m a = StdCited
 newtype StdThunk (m :: * -> *) = StdThunk
   { _stdThunk :: StdCited m (NThunkF m (StdValue m)) }
 
-type StdValue   m = NValue   (StdThunk m) (StdCited m) m
-type StdValueNF m = NValueNF (StdThunk m) (StdCited m) m
+type StdValue m = NValue (StdThunk m) (StdCited m) m
 
 instance Show (StdThunk m) where
   show _ = "<thunk>"
@@ -243,25 +242,25 @@ instance MonadThunkId m => MonadThunkId (Fix1T StandardTF m) where
   type ThunkId (Fix1T StandardTF m) = ThunkId m
 
 mkStandardT
-  :: ReaderT (Context (StandardT m) (StdValue (StandardT m)))
-            (StateT (HashMap FilePath NExprLoc)
-                    m) a
+  :: ReaderT
+       (Context (StandardT m) (StdValue (StandardT m)))
+       (StateT (HashMap FilePath NExprLoc) m)
+       a
   -> StandardT m a
 mkStandardT = Fix1T . StandardTF
 
 runStandardT
   :: StandardT m a
-  -> ReaderT (Context (StandardT m) (StdValue (StandardT m)))
-            (StateT (HashMap FilePath NExprLoc)
-                    m) a
+  -> ReaderT
+       (Context (StandardT m) (StdValue (StandardT m)))
+       (StateT (HashMap FilePath NExprLoc) m)
+       a
 runStandardT (Fix1T (StandardTF m)) = m
 
-runWithBasicEffects :: (MonadIO m, MonadAtomicRef m)
-                    => Options -> StandardT (StdIdT m) a -> m a
+runWithBasicEffects
+  :: (MonadIO m, MonadAtomicRef m) => Options -> StandardT (StdIdT m) a -> m a
 runWithBasicEffects opts =
-  go . (`evalStateT` mempty)
-     . (`runReaderT` newContext opts)
-     . runStandardT
+  go . (`evalStateT` mempty) . (`runReaderT` newContext opts) . runStandardT
  where
   go action = do
     i <- newVar (1 :: Int)
