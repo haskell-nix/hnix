@@ -308,7 +308,7 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
     coerceNixList :: NValue t f m -> m (NValue t f m)
     coerceNixList v = do
       xs <- fromValue @[NValue t f m] v
-      ys <- traverse (\x -> demand x coerceNix) xs
+      ys <- traverse (`demand` coerceNix) xs
       toValue @[NValue t f m] ys
 
 defaultTraceEffect :: MonadPutStr m => String -> m ()
