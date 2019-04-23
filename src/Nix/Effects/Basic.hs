@@ -250,9 +250,7 @@ defaultImportPath path = do
           Failure err ->
             throwError
               $ ErrorCall
-              . show
-              $ fillSep
-              $ ["Parse during import failed:", err]
+              . show $ fillSep ["Parse during import failed:", err]
           Success expr -> do
             modify (M.insert path expr)
             pure expr
