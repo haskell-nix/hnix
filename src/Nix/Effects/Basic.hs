@@ -235,7 +235,7 @@ findPathM
   => [NValue t f m]
   -> FilePath
   -> m FilePath
-findPathM l name = findPathBy path l name
+findPathM = findPathBy path
  where
   path :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
   path path = do
