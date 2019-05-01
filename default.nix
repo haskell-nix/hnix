@@ -1,4 +1,4 @@
-{ compiler ? "ghc863"
+{ compiler ? "ghc864"
 
 , doBenchmark ? false
 , doTracing   ? false
@@ -6,10 +6,10 @@
 , doProfiling ? false # enables profiling support in GHC
 , doStrict    ? false
 
-, withHoogle  ? false
+, withHoogle  ? true
 
-, rev    ? "120eab94e0981758a1c928ff81229cd802053158"
-, sha256 ? "0qk6k8gxx5xlkyg05dljywj5wx5fvrc3dzp4v2h6ab83b7zwg813"
+, rev    ? "ed1b59a98e7bd61dd7eac266569c294fb6b16300"
+, sha256 ? "0b2wdbbaqdqccl7q9gskhfjk7xaqvjwcls4b6218anyc247gscnb"
 
 , pkgs   ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
@@ -57,7 +57,8 @@ let
 
       mono-traversable = dontCheck super.mono-traversable;
       these = doJailbreak super.these;
-      multistate = doJailbreak super.multistate;
+      multistate = doJailbreak (overrideCabal super.multistate (attrs: { broken = false; }));
+      butcher = doJailbreak (overrideCabal super.butcher (attrs: { broken = false; }));
 
       brittany = doJailbreak (self.callCabal2nix "brittany"
         (pkgs.fetchFromGitHub {
