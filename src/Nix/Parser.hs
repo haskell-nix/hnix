@@ -286,7 +286,7 @@ nixString :: Parser NExprLoc
 nixString = nStr <$> annotateLocation nixString'
 
 nixUri :: Parser NExprLoc
-nixUri = annotateLocation1 $ lexeme $ try $ do
+nixUri = lexeme $ annotateLocation1 $ try $ do
   start    <- letterChar
   protocol <- many $ satisfy $ \x ->
     isAlpha x || isDigit x || x `elem` ("+-." :: String)
