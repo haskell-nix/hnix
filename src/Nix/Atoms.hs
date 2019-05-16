@@ -22,9 +22,11 @@ import           GHC.Generics
 -- they appear in both the parsed AST (in the form of literals) and
 -- the evaluated form.
 data NAtom
+  -- | An URI like @https://example.com@.
+  = NURI Text
   -- | An integer. The c nix implementation currently only supports
   -- integers that fit in the range of 'Int64'.
-  = NInt Integer
+  | NInt Integer
   -- | A floating point number
   | NFloat Float
   -- | Booleans.
@@ -40,6 +42,7 @@ instance Serialise NAtom
 
 -- | Translate an atom into its nix representation.
 atomText :: NAtom -> Text
+atomText (NURI   t) = t
 atomText (NInt   i) = pack (show i)
 atomText (NFloat f) = pack (showNixFloat f)
   where

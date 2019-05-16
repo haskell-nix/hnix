@@ -1347,6 +1347,7 @@ toXML_ v = demand v $ fmap (nvStr . toXML) . normalForm
 typeOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 typeOf v = demand v $ toValue . principledMakeNixStringWithoutContext . \case
   NVConstant a -> case a of
+    NURI   _ -> "string"
     NInt   _ -> "int"
     NFloat _ -> "float"
     NBool  _ -> "bool"

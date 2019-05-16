@@ -442,6 +442,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
   evalConstant c = return $ Judgment As.empty [] (go c)
    where
     go = \case
+      NURI   _ -> typeString
       NInt   _ -> typeInt
       NFloat _ -> typeFloat
       NBool  _ -> typeBool
