@@ -141,11 +141,11 @@ eval (NList l           ) = do
   scope <- currentScopes
   for l (defer @v @m . withScopes @v scope) >>= toValue
 
-eval (NSet binds) =
-  evalBinds False (desugarBinds (eval . NSet) binds) >>= toValue
+eval (NSet NNonRecursive binds) =
+  evalBinds False (desugarBinds (eval . NSet NNonRecursive) binds) >>= toValue
 
-eval (NRecSet binds) =
-  evalBinds True (desugarBinds (eval . NSet) binds) >>= toValue
+eval (NSet NRecursive binds) =
+  evalBinds True (desugarBinds (eval . NSet NNonRecursive) binds) >>= toValue
 
 eval (NLet binds body    ) = evalBinds True binds >>= (pushScope ?? body) . fst
 

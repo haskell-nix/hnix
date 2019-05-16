@@ -235,16 +235,16 @@ exprFNixDoc = \case
       $ vsep
       $ concat
       $ [[lbracket], map (wrapParens appOpNonAssoc) xs, [rbracket]]
-  NSet [] -> simpleExpr $ lbrace <> rbrace
-  NSet xs ->
+  NSet NNonRecursive [] -> simpleExpr $ lbrace <> rbrace
+  NSet NNonRecursive xs ->
     simpleExpr
       $ group
       $ nest 2
       $ vsep
       $ concat
       $ [[lbrace], map prettyBind xs, [rbrace]]
-  NRecSet [] -> simpleExpr $ recPrefix <> lbrace <> rbrace
-  NRecSet xs ->
+  NSet NRecursive [] -> simpleExpr $ recPrefix <> lbrace <> rbrace
+  NSet NRecursive xs ->
     simpleExpr
       $ group
       $ nest 2
@@ -330,7 +330,7 @@ valueToExpr = iterNValue (\_ _ -> thk) phi
   phi (NVConstant' a ) = Fix $ NConstant a
   phi (NVStr'      ns) = mkStr ns
   phi (NVList'     l ) = Fix $ NList l
-  phi (NVSet' s p    ) = Fix $ NSet
+  phi (NVSet' s p    ) = Fix $ NSet NNonRecursive
     [ NamedVar (StaticKey k :| []) v (fromMaybe nullPos (M.lookup k p))
     | (k, v) <- toList s
     ]

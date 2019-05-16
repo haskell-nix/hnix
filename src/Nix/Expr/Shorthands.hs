@@ -18,6 +18,7 @@ import           Text.Megaparsec.Pos            ( SourcePos )
 mkInt :: Integer -> NExpr
 mkInt = Fix . mkIntF
 
+
 mkIntF :: Integer -> NExprF a
 mkIntF = NConstant . NInt
 
@@ -101,10 +102,10 @@ mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
 mkParamset params variadic = ParamSet params variadic Nothing
 
 mkRecSet :: [Binding NExpr] -> NExpr
-mkRecSet = Fix . NRecSet
+mkRecSet = Fix . NSet NRecursive
 
 mkNonRecSet :: [Binding NExpr] -> NExpr
-mkNonRecSet = Fix . NSet
+mkNonRecSet = Fix . NSet NNonRecursive
 
 mkLets :: [Binding NExpr] -> NExpr -> NExpr
 mkLets bindings = Fix . NLet bindings
@@ -161,10 +162,9 @@ infixr 2 $=
 -- `let a = 1; b = 2; c = 3; in 4`.
 appendBindings :: [Binding NExpr] -> NExpr -> NExpr
 appendBindings newBindings (Fix e) = case e of
-  NLet bindings e' -> Fix $ NLet (bindings <> newBindings) e'
-  NSet    bindings -> Fix $ NSet (bindings <> newBindings)
-  NRecSet bindings -> Fix $ NRecSet (bindings <> newBindings)
-  _                -> error "Can only append bindings to a set or a let"
+  NLet bindings e'    -> Fix $ NLet (bindings <> newBindings) e'
+  NSet recur bindings -> Fix $ NSet recur (bindings <> newBindings)
+  _                   -> error "Can only append bindings to a set or a let"
 
 -- | Applies a transformation to the body of a nix function.
 modifyFunctionBody :: (NExpr -> NExpr) -> NExpr -> NExpr
@@ -182,11 +182,11 @@ letE varName varExpr = letsE [(varName, varExpr)]
 
 -- | Make an attribute set (non-recursive).
 attrsE :: [(Text, NExpr)] -> NExpr
-attrsE pairs = Fix $ NSet (map (uncurry bindTo) pairs)
+attrsE pairs = Fix $ NSet NNonRecursive (map (uncurry bindTo) pairs)
 
 -- | Make an attribute set (recursive).
 recAttrsE :: [(Text, NExpr)] -> NExpr
-recAttrsE pairs = Fix $ NRecSet (map (uncurry bindTo) pairs)
+recAttrsE pairs = Fix $ NSet NRecursive (map (uncurry bindTo) pairs)
 
 -- | Logical negation.
 mkNot :: NExpr -> NExpr

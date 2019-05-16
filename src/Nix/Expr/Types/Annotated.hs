@@ -210,11 +210,8 @@ pattern NStr_ ann x = Compose (Ann ann (NStr x))
 pattern NList_ :: SrcSpan -> [r] -> NExprLocF r
 pattern NList_ ann x = Compose (Ann ann (NList x))
 
-pattern NSet_ :: SrcSpan -> [Binding r] -> NExprLocF r
-pattern NSet_ ann x = Compose (Ann ann (NSet x))
-
-pattern NRecSet_ :: SrcSpan -> [Binding r] -> NExprLocF r
-pattern NRecSet_ ann x = Compose (Ann ann (NRecSet x))
+pattern NSet_ :: SrcSpan -> NRecordType -> [Binding r] -> NExprLocF r
+pattern NSet_ ann recur x = Compose (Ann ann (NSet recur x))
 
 pattern NLiteralPath_ :: SrcSpan -> FilePath -> NExprLocF r
 pattern NLiteralPath_ ann x = Compose (Ann ann (NLiteralPath x))
