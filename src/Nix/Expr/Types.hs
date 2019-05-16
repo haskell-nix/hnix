@@ -111,10 +111,8 @@ data NExprF r
   -- as @NSym "f"@ and @a@ as @NSym "a"@.
   | NList ![r]
   -- ^ A list literal.
-  | NSet ![Binding r]
-  -- ^ An attribute set literal, not recursive.
-  | NRecSet ![Binding r]
-  -- ^ An attribute set literal, recursive.
+  | NSet !NRecordType ![Binding r]
+  -- ^ An attribute set literal
   | NLiteralPath !FilePath
   -- ^ A path expression, which is evaluated to a store path. The path here
   -- can be relative, in which case it's evaluated relative to the file in
@@ -436,6 +434,16 @@ data NBinaryOp
 instance Serialise NBinaryOp
 #endif
 
+data NRecordType
+  = NNonRecursive
+  | NRecursive
+  deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
+            NFData, Hashable)
+
+#ifdef MIN_VERSION_serialise
+instance Serialise NRecordType
+#endif
+
 -- | Get the name out of the parameter (there might be none).
 paramName :: Params r -> Maybe VarName
 paramName (Param n       ) = Just n
@@ -488,6 +496,7 @@ instance Binary a => Binary (Params a)
 instance Binary NAtom
 instance Binary NUnaryOp
 instance Binary NBinaryOp
+instance Binary NRecordType
 instance Binary a => Binary (NExprF a)
 
 instance (ToJSON v, ToJSON a) => ToJSON (Antiquoted v a)
@@ -501,6 +510,7 @@ instance ToJSON a => ToJSON (Params a)
 instance ToJSON NAtom
 instance ToJSON NUnaryOp
 instance ToJSON NBinaryOp
+instance ToJSON NRecordType
 instance ToJSON a => ToJSON (NExprF a)
 instance ToJSON NExpr
 
@@ -515,6 +525,7 @@ instance FromJSON a => FromJSON (Params a)
 instance FromJSON NAtom
 instance FromJSON NUnaryOp
 instance FromJSON NBinaryOp
+instance FromJSON NRecordType
 instance FromJSON a => FromJSON (NExprF a)
 instance FromJSON NExpr
 
@@ -538,7 +549,7 @@ ekey
   => NonEmpty Text
   -> SourcePos
   -> Lens' (Fix g) (Maybe (Fix g))
-ekey keys pos f e@(Fix x) | (NSet xs, ann) <- fromNExpr x = case go xs of
+ekey keys pos f e@(Fix x) | (NSet NNonRecursive xs, ann) <- fromNExpr x = case go xs of
   ((v, []      ) : _) -> fromMaybe e <$> f (Just v)
   ((v, r : rest) : _) -> ekey (r :| rest) pos f v
 
@@ -546,7 +557,7 @@ ekey keys pos f e@(Fix x) | (NSet xs, ann) <- fromNExpr x = case go xs of
     Nothing -> e
     Just v ->
       let entry = NamedVar (NE.map StaticKey keys) v pos
-      in  Fix (toNExpr (NSet (entry : xs), ann))
+      in  Fix (toNExpr (NSet NNonRecursive (entry : xs), ann))
  where
   go xs = do
     let keys' = NE.toList keys
@@ -563,8 +574,7 @@ ekey _ _ f e = fromMaybe e <$> f Nothing
 stripPositionInfo :: NExpr -> NExpr
 stripPositionInfo = transport phi
  where
-  phi (NSet    binds  ) = NSet (map go binds)
-  phi (NRecSet binds  ) = NRecSet (map go binds)
+  phi (NSet recur binds) = NSet recur (map go binds)
   phi (NLet binds body) = NLet (map go binds) body
   phi x                 = x
 

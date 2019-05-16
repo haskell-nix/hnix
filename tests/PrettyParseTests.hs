@@ -120,8 +120,8 @@ genExpr = Gen.sized $ \(Size n) -> Fix <$> if n < 2
   genStr         = NStr <$> genString
   genSym         = NSym <$> asciiText
   genList        = NList <$> fairList genExpr
-  genSet         = NSet <$> fairList genBinding
-  genRecSet      = NRecSet <$> fairList genBinding
+  genSet         = NSet NNonRecursive <$> fairList genBinding
+  genRecSet      = NSet NRecursive <$> fairList genBinding
   genLiteralPath = NLiteralPath . ("./" ++) <$> asciiString
   genEnvPath     = NEnvPath <$> asciiString
   genUnary       = NUnary <$> Gen.enumBounded <*> genExpr
@@ -152,8 +152,7 @@ normalize = cata $ \case
   NConstant (NFloat n) | n < 0 ->
     Fix (NUnary NNeg (Fix (NConstant (NFloat (negate n)))))
 
-  NSet    binds -> Fix (NSet (map normBinding binds))
-  NRecSet binds -> Fix (NRecSet (map normBinding binds))
+  NSet recur binds -> Fix (NSet recur (map normBinding binds))
   NLet binds  r -> Fix (NLet (map normBinding binds) r)
 
   NAbs params r -> Fix (NAbs (normParams params) r)

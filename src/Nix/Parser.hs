@@ -252,7 +252,7 @@ nixLet = annotateLocation1
   -- Let expressions `let {..., body = ...}' are just desugared
   -- into `(rec {..., body = ...}).body'.
   letBody    = (\x -> NSelect x (StaticKey "body" :| []) Nothing) <$> aset
-  aset       = annotateLocation1 $ NRecSet <$> braces nixBinders
+  aset       = annotateLocation1 $ NSet NRecursive <$> braces nixBinders
 
 nixIf :: Parser NExprLoc
 nixIf = annotateLocation1
@@ -418,7 +418,7 @@ keyName = dynamicKey <+> staticKey where
 
 nixSet :: Parser NExprLoc
 nixSet = annotateLocation1 ((isRec <*> braces nixBinders) <?> "set")
-  where isRec = (reserved "rec" $> NRecSet <?> "recursive set") <+> pure NSet
+  where isRec = (reserved "rec" $> NSet NRecursive <?> "recursive set") <+> pure (NSet NNonRecursive)
 
 parseNixFile :: MonadFile m => FilePath -> m (Result NExpr)
 parseNixFile =
