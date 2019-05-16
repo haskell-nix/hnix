@@ -30,6 +30,7 @@ toXML = runWithStringContext . fmap pp . iterNValue (\_ _ -> cyc) phi
   phi :: NValue' t f m (WithStringContext Element) -> WithStringContext Element
   phi = \case
     NVConstant' a -> case a of
+      NURI   t -> return $ mkElem "string" "value" (Text.unpack t)
       NInt   n -> return $ mkElem "int" "value" (show n)
       NFloat f -> return $ mkElem "float" "value" (show f)
       NBool  b -> return $ mkElem "bool" "value" (if b then "true" else "false")

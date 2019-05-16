@@ -301,13 +301,14 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
     go f l c =
       [(Text.pack "file", f), (Text.pack "line", l), (Text.pack "col", c)]
 
-  evalConstant c = mkSymbolic [TConstant [go c]]
+  evalConstant c = mkSymbolic [go c]
    where
     go = \case
-      NInt   _ -> TInt
-      NFloat _ -> TFloat
-      NBool  _ -> TBool
-      NNull    -> TNull
+      NURI   _ -> TStr
+      NInt   _ -> TConstant [TInt]
+      NFloat _ -> TConstant [TFloat]
+      NBool  _ -> TConstant [TBool]
+      NNull    -> TConstant [TNull]
 
   evalString      = const $ mkSymbolic [TStr]
   evalLiteralPath = const $ mkSymbolic [TPath]

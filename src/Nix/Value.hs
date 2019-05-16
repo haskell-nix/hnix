@@ -413,6 +413,7 @@ data ValueType
 valueType :: NValueF a m r -> ValueType
 valueType = \case
   NVConstantF a -> case a of
+    NURI   _ -> TString NoContext
     NInt   _ -> TInt
     NFloat _ -> TFloat
     NBool  _ -> TBool
