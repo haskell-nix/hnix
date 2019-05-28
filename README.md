@@ -18,13 +18,13 @@ $ git clone --recursive https://github.com/haskell-nix/hnix.git
 ...
 $ cd hnix
 $ nix-shell
-$ cabal configure --enable-tests
-$ cabal build
-$ cabal test
+$ cabal new-configure --enable-tests
+$ cabal new-build
+$ cabal new-test
 # To run all of the tests, which takes up to a minute:
-$ env ALL_TESTS=yes cabal test
+$ env ALL_TESTS=yes cabal new-test
 # To run only specific tests (see `tests/Main.hs` for a list)
-$ env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal test
+$ env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal new-test
 $ ./dist/build/hnix/hnix --help
 ```
 
