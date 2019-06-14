@@ -21,7 +21,7 @@
            config.allowBroken = false;
            config.packageOverrides = pkgs: rec {
              nix = pkgs.nixUnstable.overrideDerivation (attrs: {
-               src = data/nix;
+               src = if builtins.pathExists ./data/nix/version then data/nix else throw "data/nix doesn't seem to contain the nix source. You may want to run git submodule update --init.";
                configureFlags = attrs.configureFlags ++ [ "--disable-doc-gen" ];
                buildInputs = attrs.buildInputs ++
                  [ pkgs.editline.dev
