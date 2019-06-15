@@ -311,16 +311,7 @@ binops u1 = \case
   NOr   -> [EqConst u1 (typeFun [typeBool, typeBool, typeBool])]
   NImpl -> [EqConst u1 (typeFun [typeBool, typeBool, typeBool])]
 
-  NConcat ->
-    [ EqConst
-        u1
-        (TMany
-          [ typeFun [typeList, typeList, typeList]
-          , typeFun [typeList, typeNull, typeList]
-          , typeFun [typeNull, typeList, typeList]
-          ]
-        )
-    ]
+  NConcat -> [EqConst u1 (typeFun [typeList, typeList, typeList])]
 
   NUpdate ->
     [ EqConst
