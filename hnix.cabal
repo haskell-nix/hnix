@@ -495,6 +495,7 @@ library
     , comonad >= 5.0.4 && < 5.1
     , containers >= 0.5.11.0 && < 0.7
     , contravariant >= 1.5 && < 1.6
+    , cryptonite >= 0.25 && <= 0.26
     , data-fix >= 0.2.0 && <  0.3
     , deepseq >=1.4.2 && <1.5
     , dependent-sum >= 0.4 && < 0.5
@@ -503,7 +504,6 @@ library
     , exceptions >= 0.10.0 && < 0.11
     , filepath >= 1.4.2 && < 1.5
     , free >= 5.1 && < 5.2
-    , hashing >= 0.1.0 && < 0.2
     , hnix-store-core >= 0.1.0 && < 0.2
     , http-client >= 0.5.14 && < 0.6
     , http-client-tls >= 0.3.5 && < 0.4
@@ -586,12 +586,12 @@ executable hnix
     , bytestring
     , comonad
     , containers
+    , cryptonite
     , data-fix
     , deepseq
     , exceptions
     , filepath
     , free
-    , hashing
     , haskeline
     , hnix
     , mtl
@@ -645,6 +645,7 @@ test-suite hnix-tests
     , base >=4.9 && <5
     , bytestring
     , containers
+    , cryptonite
     , data-fix
     , deepseq >=1.4.2 && <1.5
     , dependent-sum
@@ -652,7 +653,6 @@ test-suite hnix-tests
     , exceptions
     , filepath
     , generic-random
-    , hashing
     , hedgehog
     , hnix
     , interpolate
@@ -707,11 +707,11 @@ benchmark hnix-benchmarks
     , bytestring
     , containers
     , criterion
+    , cryptonite
     , data-fix
     , deepseq >=1.4.2 && <1.5
     , exceptions
     , filepath
-    , hashing
     , hnix
     , mtl
     , optparse-applicative
