@@ -12,19 +12,18 @@
 
 module Nix.Cited where
 
-import Control.Comonad
-import Control.Comonad.Env
-import Data.Typeable (Typeable)
-import GHC.Generics
-import Lens.Family2.TH
+import           Control.Comonad
+import           Control.Comonad.Env
+import           Data.Typeable                  ( Typeable )
+import           GHC.Generics
+import           Lens.Family2.TH
 
-import Nix.Expr.Types.Annotated
-import Nix.Scope
-import Nix.Value
+import           Nix.Expr.Types.Annotated
+import           Nix.Scope
 
-data Provenance t f m = Provenance
-    { _lexicalScope :: Scopes m t
-    , _originExpr   :: NExprLocF (Maybe (NValue t f m))
+data Provenance m v = Provenance
+    { _lexicalScope :: Scopes m v
+    , _originExpr   :: NExprLocF (Maybe v)
       -- ^ When calling the function x: x + 2 with argument x = 3, the
       --   'originExpr' for the resulting value will be 3 + 2, while the
       --   'contextExpr' will be @(x: x + 2) 3@, preserving not only the
@@ -32,35 +31,34 @@ data Provenance t f m = Provenance
     }
     deriving (Generic, Typeable, Show)
 
-data NCited t f m a = NCited
-    { _provenance :: [Provenance t f m]
+data NCited m v a = NCited
+    { _provenance :: [Provenance m v]
     , _cited      :: a
     }
     deriving (Generic, Typeable, Functor, Foldable, Traversable, Show)
 
-instance Applicative (NCited t f m) where
+instance Applicative (NCited m v) where
   pure = NCited []
-  -- jww (2019-03-11): ??
   NCited xs f <*> NCited ys x = NCited (xs <> ys) (f x)
 
-instance Comonad (NCited t f m) where
+instance Comonad (NCited m v) where
   duplicate p = NCited (_provenance p) p
   extract = _cited
 
-instance ComonadEnv [Provenance t f m] (NCited t f m) where
+instance ComonadEnv [Provenance m v] (NCited m v) where
   ask = _provenance
 
 $(makeLenses ''Provenance)
 $(makeLenses ''NCited)
 
-class HasCitations t f m a where
-    citations :: a -> [Provenance t f m]
-    addProvenance :: Provenance t f m -> a -> a
+class HasCitations m v a where
+    citations :: a -> [Provenance m v]
+    addProvenance :: Provenance m v -> a -> a
 
-instance HasCitations t f m (NCited t f m a) where
-    citations = _provenance
-    addProvenance x (NCited p v) = (NCited (x : p) v)
+instance HasCitations m v (NCited m v a) where
+  citations = _provenance
+  addProvenance x (NCited p v) = (NCited (x : p) v)
 
-class HasCitations1 t f m where
-    citations1 :: f a -> [Provenance t f m]
-    addProvenance1 :: Provenance t f m -> f a -> f a
+class HasCitations1 m v f where
+    citations1 :: f a -> [Provenance m v]
+    addProvenance1 :: Provenance m v -> f a -> f a

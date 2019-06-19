@@ -1,20 +1,21 @@
-module Nix.Type.Assumption (
-  Assumption(..),
-  empty,
-  lookup,
-  remove,
-  extend,
-  keys,
-  merge,
-  mergeAssumptions,
-  singleton,
-) where
+module Nix.Type.Assumption
+  ( Assumption(..)
+  , empty
+  , lookup
+  , remove
+  , extend
+  , keys
+  , merge
+  , mergeAssumptions
+  , singleton
+  )
+where
 
-import Prelude hiding (lookup)
+import           Prelude                 hiding ( lookup )
 
-import Nix.Type.Type
+import           Nix.Type.Type
 
-import Data.Foldable
+import           Data.Foldable
 
 newtype Assumption = Assumption { assumptions :: [(Name, Type)] }
   deriving (Eq, Show)

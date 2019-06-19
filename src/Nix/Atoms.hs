@@ -9,11 +9,14 @@ module Nix.Atoms where
 #ifdef MIN_VERSION_serialise
 import Codec.Serialise
 #endif
-import Control.DeepSeq
-import Data.Data
-import Data.Hashable
-import Data.Text (Text, pack)
-import GHC.Generics
+import           Control.DeepSeq
+import           Data.Data
+import           Data.Fixed                     (mod')
+import           Data.Hashable
+import           Data.Text                      ( Text
+                                                , pack
+                                                )
+import           GHC.Generics
 
 -- | Atoms are values that evaluate to themselves. This means that
 -- they appear in both the parsed AST (in the form of literals) and
@@ -37,7 +40,11 @@ instance Serialise NAtom
 
 -- | Translate an atom into its nix representation.
 atomText :: NAtom -> Text
-atomText (NInt i)   = pack (show i)
-atomText (NFloat f) = pack (show f)
-atomText (NBool b)  = if b then "true" else "false"
+atomText (NInt   i) = pack (show i)
+atomText (NFloat f) = pack (showNixFloat f)
+  where
+    showNixFloat x
+      | x `mod'` 1 /= 0 = show x
+      | otherwise       = show (truncate x :: Int)
+atomText (NBool  b) = if b then "true" else "false"
 atomText NNull      = "null"

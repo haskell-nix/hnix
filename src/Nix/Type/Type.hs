@@ -1,7 +1,7 @@
 module Nix.Type.Type where
 
-import qualified Data.HashMap.Lazy as M
-import           Data.Text (Text)
+import qualified Data.HashMap.Lazy             as M
+import           Data.Text                      ( Text )
 import           Nix.Utils
 
 newtype TVar = TV String
@@ -32,11 +32,11 @@ typeFun :: [Type] -> Type
 typeFun = foldr1 (:~>)
 
 typeInt, typeFloat, typeBool, typeString, typePath, typeNull :: Type
-typeInt    = TCon "integer"
-typeFloat  = TCon "float"
-typeBool   = TCon "boolean"
+typeInt = TCon "integer"
+typeFloat = TCon "float"
+typeBool = TCon "boolean"
 typeString = TCon "string"
-typePath   = TCon "path"
-typeNull   = TCon "null"
+typePath = TCon "path"
+typeNull = TCon "null"
 
 type Name = Text

@@ -1,5 +1,5 @@
 name:           hnix
-version:        0.5.2
+version:        0.6.1
 synopsis:       Haskell implementation of the Nix language
 description:    Haskell implementation of the Nix language.
 category:       System, Data, Nix
@@ -394,7 +394,6 @@ extra-source-files:
     data/simple-pretty.nix
     data/simple.nix
     LICENSE
-    package.yaml
     README.md
     tests/eval-compare/builtins.split-01.nix
     tests/eval-compare/builtins.split-02.nix
@@ -440,17 +439,21 @@ library
       Nix.Builtins
       Nix.Cache
       Nix.Cited
+      Nix.Cited.Basic
       Nix.Context
       Nix.Convert
       Nix.Effects
+      Nix.Effects.Basic
       Nix.Eval
       Nix.Exec
       Nix.Expr
       Nix.Expr.Shorthands
+      Nix.Expr.Strings
       Nix.Expr.Types
       Nix.Expr.Types.Annotated
       Nix.Frames
       Nix.Fresh
+      Nix.Fresh.Basic
       Nix.Json
       Nix.Lint
       Nix.Normal
@@ -461,77 +464,81 @@ library
       Nix.Render
       Nix.Render.Frame
       Nix.Scope
+      Nix.Standard
       Nix.String
-      Nix.Strings
+      Nix.String.Coerce
       Nix.TH
       Nix.Thunk
       Nix.Thunk.StableId
       Nix.Thunk.FreshStableIdT
       Nix.Thunk.Basic
-      Nix.Thunk.Standard
       Nix.Type.Assumption
       Nix.Type.Env
       Nix.Type.Infer
       Nix.Type.Type
       Nix.Utils
+      Nix.Utils.Fix1
       Nix.Value
+      Nix.Value.Equal
+      Nix.Value.Monad
       Nix.Var
       Nix.XML
   other-modules:
       Paths_hnix
   hs-source-dirs:
       src
-  ghc-options: -Wall
+  ghc-options: -Wall -fprint-potential-instances
   build-depends:
-      aeson
+      aeson >= 1.4.2 && < 1.5
     , array >=0.4 && <0.6
     , base >=4.9 && <5
-    , binary
-    , bytestring
-    , comonad
-    , containers
-    , data-fix
+    , binary >= 0.8.5 && < 0.9
+    , bytestring >= 0.10.8 && < 0.11
+    , comonad >= 5.0.4 && < 5.1
+    , containers >= 0.5.11.0 && < 0.7
+    , contravariant >= 1.5 && < 1.6
+    , data-fix >= 0.2.0 && <  0.3
     , deepseq >=1.4.2 && <1.5
-    , dependent-sum
+    , dependent-sum >= 0.4 && < 0.5
     , deriving-compat >=0.3 && <0.6
-    , directory
-    , exceptions
-    , filepath
-    , free
-    , ghc-prim
-    , hashing
-    , hnix-store-core
-    , http-client
-    , http-client-tls
-    , http-types
-    , interpolate
-    , lens-family-th
-    , logict
+    , directory >= 1.3.1 && < 1.4
+    , exceptions >= 0.10.0 && < 0.11
+    , filepath >= 1.4.2 && < 1.5
+    , free >= 5.1 && < 5.2
+    , ghc-prim >= 0.5.3 && < 0.6
+    , hashing >= 0.1.0 && < 0.2
+    , hnix-store-core >= 0.1.0 && < 0.2
+    , http-client >= 0.5.14 && < 0.6
+    , http-client-tls >= 0.3.5 && < 0.4
+    , http-types >= 0.12.2 && < 0.13
+    , interpolate >= 0.2.0 && < 0.3
+    , lens-family-th >= 0.5.0 && < 0.6
+    , logict >= 0.6.0 && < 0.7
     , megaparsec >=7.0 && <7.1
-    , monad-control
-    , monadlist
-    , mtl
-    , optparse-applicative
-    , parser-combinators
-    , prettyprinter
-    , process
-    , ref-tf
-    , regex-tdfa
-    , regex-tdfa-text
-    , scientific
+    , monad-control >= 1.0.2 && < 1.1
+    , monadlist >= 0.0.2 && < 0.1
+    , mtl >= 2.2.2 && < 2.3
+    , optparse-applicative >= 0.14.3 && < 0.15
+    , parser-combinators >= 1.0.1 && < 1.1
+    , prettyprinter >= 1.2.1 && < 1.3
+    , process >= 1.6.3 && < 1.7
+    , ref-tf >= 0.4.0 && < 0.5
+    , regex-tdfa >= 1.2.3 && < 1.3
+    , regex-tdfa-text >= 1.0.0 && < 1.1
+    , scientific >= 0.3.6 && < 0.4
     , semigroups >=0.18 && <0.19
-    , split
-    , syb
+    , split >= 0.2.3 && < 0.3
+    , syb >= 0.7 && < 0.8
     , template-haskell
-    , text
-    , these
-    , time
-    , transformers
-    , transformers-base
-    , unix
-    , unordered-containers >=0.2.9 && <0.3
-    , vector
-    , xml
+    , text >= 1.2.3 && < 1.3
+    , these >= 0.7.5 && < 0.8
+    , time >= 1.8.0 && < 1.9
+    , transformers >= 0.5.5 && < 0.6
+    , transformers-base >= 0.4.5 && < 0.5
+    , unix >= 2.7.2 && < 2.8
+    , unordered-containers >=0.2.9 && < 0.3
+    , vector >= 0.12.0 && < 0.13
+    , xml >= 1.3.14 && < 1.4
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
   if os(linux) && impl(ghc >= 8.2) && impl(ghc < 8.3)
@@ -539,12 +546,12 @@ library
         compact
   if !impl(ghcjs)
     build-depends:
-        base16-bytestring
-      , cryptohash-md5
-      , cryptohash-sha1
-      , cryptohash-sha256
-      , cryptohash-sha512
-      , serialise
+        base16-bytestring >= 0.1.1 && < 0.2
+      , cryptohash-md5 >= 0.11.100 && < 0.12
+      , cryptohash-sha1 >= 0.11.100 && < 0.12
+      , cryptohash-sha256 >= 0.11.101 && < 0.12
+      , cryptohash-sha512 >= 0.11.100 && < 0.12
+      , serialise >= 0.2.1 && < 0.3
   if impl(ghc < 8.1)
     build-depends:
         lens-family ==1.2.1
@@ -564,8 +571,8 @@ library
         Nix.Options.Parser
     build-depends:
         hashable >=1.2.5 && <1.3
-      , haskeline
-      , pretty-show
+      , haskeline >= 0.7.4.2 && < 0.8
+      , pretty-show >= 1.9.5 && < 1.10
   default-language: Haskell2010
 
 executable hnix
@@ -578,14 +585,15 @@ executable hnix
   ghc-options: -Wall -rtsopts
   build-depends:
       aeson
-    , base >=4.9 && <5
+    , base
     , bytestring
     , comonad
     , containers
     , data-fix
-    , deepseq >=1.4.2 && <1.5
+    , deepseq
     , exceptions
     , filepath
+    , free
     , hashing
     , haskeline
     , hnix
@@ -599,7 +607,7 @@ executable hnix
     , text
     , time
     , transformers
-    , unordered-containers >=0.2.9 && <0.3
+    , unordered-containers
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
   if os(linux) && impl(ghc >= 8.2) && impl(ghc < 8.3)

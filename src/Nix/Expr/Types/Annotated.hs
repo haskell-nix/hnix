@@ -18,34 +18,43 @@
 module Nix.Expr.Types.Annotated
   ( module Nix.Expr.Types.Annotated
   , module Data.Functor.Compose
-  , SourcePos(..), unPos, mkPos
-  ) where
+  , SourcePos(..)
+  , unPos
+  , mkPos
+  )
+where
 
 #ifdef MIN_VERSION_serialise
-import Codec.Serialise
+import           Codec.Serialise
 #endif
-import Control.DeepSeq
-import Data.Aeson (ToJSON(..), FromJSON(..))
-import Data.Aeson.TH
-import Data.Binary (Binary(..))
-import Data.Data
-import Data.Eq.Deriving
-import Data.Fix
-import Data.Function (on)
-import Data.Functor.Compose
-import Data.Hashable
+import           Control.DeepSeq
+import           Data.Aeson                     ( ToJSON(..)
+                                                , FromJSON(..)
+                                                )
+import           Data.Aeson.TH
+import           Data.Binary                    ( Binary(..) )
+import           Data.Data
+import           Data.Eq.Deriving
+import           Data.Fix
+import           Data.Function                  ( on )
+import           Data.Functor.Compose
+import           Data.Hashable
 #if MIN_VERSION_hashable(1, 2, 5)
-import Data.Hashable.Lifted
+import           Data.Hashable.Lifted
 #endif
-import Data.Ord.Deriving
-import Data.Text (Text, pack)
-import GHC.Generics
-import Nix.Atoms
-import Nix.Expr.Types
-import Text.Megaparsec (unPos, mkPos)
-import Text.Megaparsec.Pos (SourcePos(..))
-import Text.Read.Deriving
-import Text.Show.Deriving
+import           Data.Ord.Deriving
+import           Data.Text                      ( Text
+                                                , pack
+                                                )
+import           GHC.Generics
+import           Nix.Atoms
+import           Nix.Expr.Types
+import           Text.Megaparsec                ( unPos
+                                                , mkPos
+                                                )
+import           Text.Megaparsec.Pos            ( SourcePos(..) )
+import           Text.Read.Deriving
+import           Text.Show.Deriving
 
 -- | A location in a source file
 data SrcSpan = SrcSpan
@@ -93,8 +102,7 @@ $(deriveJSON1 defaultOptions ''Ann)
 $(deriveJSON2 defaultOptions ''Ann)
 
 instance Semigroup SrcSpan where
-  s1 <> s2 = SrcSpan ((min `on` spanBegin) s1 s2)
-                     ((max `on` spanEnd) s1 s2)
+  s1 <> s2 = SrcSpan ((min `on` spanBegin) s1 s2) ((max `on` spanEnd) s1 s2)
 
 type AnnF ann f = Compose (Ann ann) f
 
@@ -130,8 +138,8 @@ instance FromJSON SrcSpan
 
 #ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (Compose (Ann SrcSpan) NExprF r) where
-    encode (Compose (Ann ann a)) = encode ann <> encode a
-    decode = (Compose .) . Ann <$> decode <*> decode
+  encode (Compose (Ann ann a)) = encode ann <> encode a
+  decode = (Compose .) . Ann <$> decode <*> decode
 #endif
 
 pattern AnnE :: forall ann (g :: * -> *). ann
@@ -146,32 +154,32 @@ stripAnn = annotated . getCompose
 
 nUnary :: Ann SrcSpan NUnaryOp -> NExprLoc -> NExprLoc
 nUnary (Ann s1 u) e1@(AnnE s2 _) = AnnE (s1 <> s2) (NUnary u e1)
-nUnary _ _ = error "nUnary: unexpected"
+nUnary _          _              = error "nUnary: unexpected"
 
 nBinary :: Ann SrcSpan NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
 nBinary (Ann s1 b) e1@(AnnE s2 _) e2@(AnnE s3 _) =
   AnnE (s1 <> s2 <> s3) (NBinary b e1 e2)
 nBinary _ _ _ = error "nBinary: unexpected"
 
-nSelectLoc :: NExprLoc -> Ann SrcSpan (NAttrPath NExprLoc) -> Maybe NExprLoc
-           -> NExprLoc
+nSelectLoc
+  :: NExprLoc -> Ann SrcSpan (NAttrPath NExprLoc) -> Maybe NExprLoc -> NExprLoc
 nSelectLoc e1@(AnnE s1 _) (Ann s2 ats) d = case d of
   Nothing               -> AnnE (s1 <> s2) (NSelect e1 ats Nothing)
   Just (e2@(AnnE s3 _)) -> AnnE (s1 <> s2 <> s3) (NSelect e1 ats (Just e2))
-  _ -> error "nSelectLoc: unexpected"
+  _                     -> error "nSelectLoc: unexpected"
 nSelectLoc _ _ _ = error "nSelectLoc: unexpected"
 
 nHasAttr :: NExprLoc -> Ann SrcSpan (NAttrPath NExprLoc) -> NExprLoc
 nHasAttr e1@(AnnE s1 _) (Ann s2 ats) = AnnE (s1 <> s2) (NHasAttr e1 ats)
-nHasAttr _ _ = error "nHasAttr: unexpected"
+nHasAttr _              _            = error "nHasAttr: unexpected"
 
 nApp :: NExprLoc -> NExprLoc -> NExprLoc
 nApp e1@(AnnE s1 _) e2@(AnnE s2 _) = AnnE (s1 <> s2) (NBinary NApp e1 e2)
-nApp _ _ = error "nApp: unexpected"
+nApp _              _              = error "nApp: unexpected"
 
 nAbs :: Ann SrcSpan (Params NExprLoc) -> NExprLoc -> NExprLoc
 nAbs (Ann s1 ps) e1@(AnnE s2 _) = AnnE (s1 <> s2) (NAbs ps e1)
-nAbs _ _ = error "nAbs: unexpected"
+nAbs _           _              = error "nAbs: unexpected"
 
 nStr :: Ann SrcSpan (NString NExprLoc) -> NExprLoc
 nStr (Ann s1 s) = AnnE s1 (NStr s)

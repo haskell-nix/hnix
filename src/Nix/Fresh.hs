@@ -14,22 +14,20 @@
 
 module Nix.Fresh where
 
-import Control.Applicative
-import Control.Monad.Base
-import Control.Monad.Catch
-import Control.Monad.Except
-import Control.Monad.Reader
-import Control.Monad.Ref
-import Control.Monad.ST
-import Control.Monad.State.Strict
-import Control.Monad.Writer
-import Data.Typeable
+import           Control.Applicative
+import           Control.Monad.Base
+import           Control.Monad.Catch
+import           Control.Monad.Except
+import           Control.Monad.Reader
+import           Control.Monad.Ref
+import           Control.Monad.ST
+import           Data.Typeable
 #ifdef MIN_VERSION_haskeline
-import System.Console.Haskeline.MonadException hiding (catch)
+import System.Console.Haskeline.MonadException hiding(catch)
 #endif
 
-import Nix.Var
-import Nix.Thunk
+import           Nix.Var
+import           Nix.Thunk
 
 newtype FreshIdT i m a = FreshIdT { unFreshIdT :: ReaderT (Var m i) m a }
   deriving
@@ -50,20 +48,10 @@ newtype FreshIdT i m a = FreshIdT { unFreshIdT :: ReaderT (Var m i) m a }
     )
 
 instance MonadTrans (FreshIdT i) where
-    lift = FreshIdT . lift
+  lift = FreshIdT . lift
 
 instance MonadBase b m => MonadBase b (FreshIdT i m) where
-    liftBase = FreshIdT . liftBase
-
--- instance MonadTransControl (FreshIdT i) where
---     type StT (FreshIdT i) a = StT (ReaderT (Var m i)) a
---     liftWith = defaultLiftWith FreshIdT unFreshIdT
---     restoreT = defaultRestoreT FreshIdT
-
--- instance MonadBaseControl b m => MonadBaseControl b (FreshIdT i m) where
---     type StM (FreshIdT i m) a = ComposeSt (FreshIdT i) m a
---     liftBaseWith     = defaultLiftBaseWith
---     restoreM         = defaultRestoreM
+  liftBase = FreshIdT . liftBase
 
 instance ( MonadVar m
          , Eq i
@@ -75,20 +63,11 @@ instance ( MonadVar m
          => MonadThunkId (FreshIdT i m) where
   type ThunkId (FreshIdT i m) = i
   freshId = FreshIdT $ do
-      v <- ask
-      atomicModifyVar v (\i -> (succ i, i))
+    v <- ask
+    atomicModifyVar v (\i -> (succ i, i))
 
 runFreshIdT :: Functor m => Var m i -> FreshIdT i m a -> m a
 runFreshIdT i m = runReaderT (unFreshIdT m) i
-
-instance MonadThunkId m => MonadThunkId (ReaderT r m) where
-    type ThunkId (ReaderT r m) = ThunkId m
-instance (Monoid w, MonadThunkId m) => MonadThunkId (WriterT w m) where
-    type ThunkId (WriterT w m) = ThunkId m
-instance MonadThunkId m => MonadThunkId (ExceptT e m) where
-    type ThunkId (ExceptT e m) = ThunkId m
-instance MonadThunkId m => MonadThunkId (StateT s m) where
-    type ThunkId (StateT s m) = ThunkId m
 
 -- Orphan instance needed by Infer.hs and Lint.hs
 

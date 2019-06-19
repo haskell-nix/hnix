@@ -2,13 +2,17 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
-module Nix.String (
-    NixString
+module Nix.String
+  ( NixString
   , principledGetContext
   , principledMakeNixString
   , principledMempty
   , StringContext(..)
   , ContextFlavor(..)
+  , NixLikeContext(..)
+  , NixLikeContextValue(..)
+  , toNixLikeContext
+  , fromNixLikeContext
   , stringHasContext
   , principledIntercalateNixString
   , hackyGetStringNoContext
@@ -29,14 +33,16 @@ module Nix.String (
   , addSingletonStringContext
   , runWithStringContextT
   , runWithStringContext
-) where
+  )
+where
 
 import           Control.Monad.Writer
 import           Data.Functor.Identity
-import qualified Data.HashSet as S
+import qualified Data.HashMap.Lazy             as M
+import qualified Data.HashSet                  as S
 import           Data.Hashable
-import           Data.Text (Text)
-import qualified Data.Text as Text
+import           Data.Text                      ( Text )
+import qualified Data.Text                     as Text
 import           GHC.Generics
 
 -- {-# WARNING hackyGetStringNoContext, hackyStringIgnoreContext, hackyMakeNixStringWithoutContext "This NixString function needs to be replaced" #-}
@@ -44,6 +50,7 @@ import           GHC.Generics
 -- | A 'ContextFlavor' describes the sum of possible derivations for string contexts
 data ContextFlavor =
     DirectPath
+  | AllOutputs
   | DerivationOutput !Text
   deriving (Show, Eq, Ord, Generic)
 
@@ -64,6 +71,53 @@ data NixString = NixString
 
 instance Hashable NixString
 
+newtype NixLikeContext = NixLikeContext
+  { getNixLikeContext :: M.HashMap Text NixLikeContextValue
+  } deriving (Eq, Ord, Show, Generic)
+
+data NixLikeContextValue = NixLikeContextValue
+  { nlcvPath :: !Bool
+  , nlcvAllOutputs :: !Bool
+  , nlcvOutputs :: ![Text]
+  } deriving (Show, Eq, Ord, Generic)
+
+instance Semigroup NixLikeContextValue where
+  a <> b = NixLikeContextValue
+    { nlcvPath       = nlcvPath a || nlcvPath b
+    , nlcvAllOutputs = nlcvAllOutputs a || nlcvAllOutputs b
+    , nlcvOutputs    = nlcvOutputs a <> nlcvOutputs b
+    }
+
+instance Monoid NixLikeContextValue where
+  mempty = NixLikeContextValue False False []
+
+toStringContexts :: (Text, NixLikeContextValue) -> [StringContext]
+toStringContexts (path, nlcv) = case nlcv of
+  NixLikeContextValue True _ _ -> StringContext path DirectPath
+    : toStringContexts (path, nlcv { nlcvPath = False })
+  NixLikeContextValue _ True _ -> StringContext path AllOutputs
+    : toStringContexts (path, nlcv { nlcvAllOutputs = False })
+  NixLikeContextValue _ _ ls | not (null ls) ->
+    map (StringContext path . DerivationOutput) ls
+  _ -> []
+
+toNixLikeContextValue :: StringContext -> (Text, NixLikeContextValue)
+toNixLikeContextValue sc = (,) (scPath sc) $ case scFlavor sc of
+  DirectPath         -> NixLikeContextValue True False []
+  AllOutputs         -> NixLikeContextValue False True []
+  DerivationOutput t -> NixLikeContextValue False False [t]
+
+toNixLikeContext :: S.HashSet StringContext -> NixLikeContext
+toNixLikeContext stringContext = NixLikeContext
+  $ S.foldr go mempty stringContext
+ where
+  go sc hm =
+    let (t, nlcv) = toNixLikeContextValue sc in M.insertWith (<>) t nlcv hm
+
+fromNixLikeContext :: NixLikeContext -> S.HashSet StringContext
+fromNixLikeContext =
+  S.fromList . join . map toStringContexts . M.toList . getNixLikeContext
+
 principledGetContext :: NixString -> S.HashSet StringContext
 principledGetContext = nsContext
 
@@ -73,20 +127,22 @@ principledMempty = NixString "" mempty
 
 -- | Combine two NixStrings using mappend
 principledStringMappend :: NixString -> NixString -> NixString
-principledStringMappend (NixString s1 t1) (NixString s2 t2) = NixString (s1 <> s2) (t1 <> t2)
+principledStringMappend (NixString s1 t1) (NixString s2 t2) =
+  NixString (s1 <> s2) (t1 <> t2)
 
 -- | Combine two NixStrings using mappend
 hackyStringMappend :: NixString -> NixString -> NixString
-hackyStringMappend (NixString s1 t1) (NixString s2 t2) = NixString (s1 <> s2) (t1 <> t2)
+hackyStringMappend (NixString s1 t1) (NixString s2 t2) =
+  NixString (s1 <> s2) (t1 <> t2)
 
 -- | Combine NixStrings with a separator
 principledIntercalateNixString :: NixString -> [NixString] -> NixString
-principledIntercalateNixString _ [] = principledMempty
-principledIntercalateNixString _ [ns] = ns
-principledIntercalateNixString sep nss = NixString contents ctx
-  where
-    contents = Text.intercalate (nsContents sep) (map nsContents nss)
-    ctx = S.unions (nsContext sep : map nsContext nss)
+principledIntercalateNixString _   []   = principledMempty
+principledIntercalateNixString _   [ns] = ns
+principledIntercalateNixString sep nss  = NixString contents ctx
+ where
+  contents = Text.intercalate (nsContents sep) (map nsContents nss)
+  ctx      = S.unions (nsContext sep : map nsContext nss)
 
 -- | Combine NixStrings using mconcat
 hackyStringMConcat :: [NixString] -> NixString
@@ -98,7 +154,8 @@ principledStringMempty = NixString mempty mempty
 
 -- | Combine NixStrings using mconcat
 principledStringMConcat :: [NixString] -> NixString
-principledStringMConcat = foldr principledStringMappend (NixString mempty mempty)
+principledStringMConcat =
+  foldr principledStringMappend (NixString mempty mempty)
 
 --instance Semigroup NixString where
   --NixString s1 t1 <> NixString s2 t2 = NixString (s1 <> s2) (t1 <> t2)
@@ -109,13 +166,13 @@ principledStringMConcat = foldr principledStringMappend (NixString mempty mempty
 
 -- | Extract the string contents from a NixString that has no context
 hackyGetStringNoContext :: NixString -> Maybe Text
-hackyGetStringNoContext (NixString s c) | null c = Just s
-                                | otherwise = Nothing
+hackyGetStringNoContext (NixString s c) | null c    = Just s
+                                        | otherwise = Nothing
 
 -- | Extract the string contents from a NixString that has no context
 principledGetStringNoContext :: NixString -> Maybe Text
-principledGetStringNoContext (NixString s c) | null c = Just s
-                                     | otherwise = Nothing
+principledGetStringNoContext (NixString s c) | null c    = Just s
+                                             | otherwise = Nothing
 
 -- | Extract the string contents from a NixString even if the NixString has an associated context
 principledStringIgnoreContext :: NixString -> Text
@@ -142,7 +199,8 @@ principledModifyNixContents :: (Text -> Text) -> NixString -> NixString
 principledModifyNixContents f (NixString s c) = NixString (f s) c
 
 -- | Create a NixString using a singleton context
-principledMakeNixStringWithSingletonContext :: Text -> StringContext -> NixString
+principledMakeNixStringWithSingletonContext
+  :: Text -> StringContext -> NixString
 principledMakeNixStringWithSingletonContext s c = NixString s (S.singleton c)
 
 -- | Create a NixString from a Text and context
@@ -156,7 +214,8 @@ newtype WithStringContextT m a = WithStringContextT (WriterT (S.HashSet StringCo
 type WithStringContext = WithStringContextT Identity
 
 -- | Add 'StringContext's into the resulting set.
-addStringContext :: Monad m => S.HashSet StringContext -> WithStringContextT m ()
+addStringContext
+  :: Monad m => S.HashSet StringContext -> WithStringContextT m ()
 addStringContext = WithStringContextT . tell
 
 -- | Add a 'StringContext' into the resulting set.
@@ -169,7 +228,8 @@ extractNixString (NixString s c) = WithStringContextT $ tell c >> return s
 
 -- | Run an action producing a string with a context and put those into a 'NixString'.
 runWithStringContextT :: Monad m => WithStringContextT m Text -> m NixString
-runWithStringContextT (WithStringContextT m) = uncurry NixString <$> runWriterT m
+runWithStringContextT (WithStringContextT m) =
+  uncurry NixString <$> runWriterT m
 
 -- | Run an action producing a string with a context and put those into a 'NixString'.
 runWithStringContext :: WithStringContextT Identity Text -> NixString

@@ -11,6 +11,8 @@ import Data.Hashable
 import Data.List (unfoldr)
 import Data.Ord
 
+import Debug.Trace
+
 --TODO: If we have a really long chain, we will keep leaking memory; what can we do about this?
 
 data StableId = StableId
@@ -55,7 +57,7 @@ instance Eq StableId where
              _ -> return True
 
 instance Ord StableId where
-  a `compare` b = case comparing _stableId_hash a b <> comparing _stableId_value a b of
+  a `compare` b = trace "StableId:compare" $ case comparing _stableId_hash a b <> comparing _stableId_value a b of
     LT -> LT
     GT -> GT
     EQ -> case _stableId_parent a == _stableId_parent b of

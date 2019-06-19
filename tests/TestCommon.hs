@@ -1,49 +1,59 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
 module TestCommon where
 
-import Control.Monad.Catch
-import Control.Monad.IO.Class
-import Data.Text (Text, unpack)
-import Data.Time
-import Nix
-import Nix.Thunk.Standard
-import System.Environment
-import System.IO
-import System.Posix.Files
-import System.Posix.Temp
-import System.Process
-import Test.Tasty.HUnit
+import           Control.Monad.Catch
+import           Control.Monad.IO.Class
+import           Data.Text                      ( Text
+                                                , unpack
+                                                )
+import           Data.Time
+import           Nix
+import           Nix.Exec                       ( )
+import           Nix.Standard
+import           Nix.Fresh.Basic
+import           System.Environment
+import           System.IO
+import           System.Posix.Files
+import           System.Posix.Temp
+import           System.Process
+import           Test.Tasty.HUnit
 
-hnixEvalFile :: Options -> FilePath -> IO (StdValueNF IO)
+hnixEvalFile :: Options -> FilePath -> IO (StdValue (StandardT (StdIdT IO)))
 hnixEvalFile opts file = do
   parseResult <- parseNixFileLoc file
   case parseResult of
-    Failure err        ->
-        error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
+    Failure err ->
+      error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
     Success expr -> do
-        setEnv "TEST_VAR" "foo"
-        runStdLazyM opts $
-            catch (evaluateExpression (Just file) nixEvalExprLoc
-                                      normalForm expr) $ \case
-                NixException frames ->
-                    errorWithoutStackTrace . show
-                        =<< renderFrames @(StdValue IO) @(StdThunk IO) frames
+      setEnv "TEST_VAR" "foo"
+      runWithBasicEffects opts
+        $ catch (evaluateExpression (Just file) nixEvalExprLoc normalForm expr)
+        $ \case
+            NixException frames ->
+              errorWithoutStackTrace
+                .   show
+                =<< renderFrames @(StdValue (StandardT (StdIdT IO)))
+                      @(StdThunk (StandardT (StdIdT IO)))
+                      frames
 
-hnixEvalText :: Options -> Text -> IO (StdValueNF IO)
+hnixEvalText :: Options -> Text -> IO (StdValue (StandardT (StdIdT IO)))
 hnixEvalText opts src = case parseNixText src of
-    Failure err        ->
-        error $ "Parsing failed for expressien `"
-            ++ unpack src ++ "`.\n" ++ show err
-    Success expr ->
-        -- runStdLazyM opts $ normalForm =<< nixEvalExpr Nothing expr
-        runStdLazyM opts $ normalForm =<< nixEvalExpr Nothing expr
+  Failure err ->
+    error
+      $  "Parsing failed for expressien `"
+      ++ unpack src
+      ++ "`.\n"
+      ++ show err
+  Success expr ->
+    runWithBasicEffects opts $ normalForm =<< nixEvalExpr Nothing expr
 
 nixEvalString :: String -> IO String
 nixEvalString expr = do
-  (fp,h) <- mkstemp "nix-test-eval"
+  (fp, h) <- mkstemp "nix-test-eval"
   hPutStr h expr
   hClose h
   res <- nixEvalFile fp
@@ -55,16 +65,15 @@ nixEvalFile fp = readProcess "nix-instantiate" ["--eval", "--strict", fp] ""
 
 assertEvalFileMatchesNix :: FilePath -> Assertion
 assertEvalFileMatchesNix fp = do
-  time <- liftIO getCurrentTime
-  hnixVal <- (++"\n") . printNix <$> hnixEvalFile (defaultOptions time) fp
-  nixVal <- nixEvalFile fp
+  time    <- liftIO getCurrentTime
+  hnixVal <- (++ "\n") . printNix <$> hnixEvalFile (defaultOptions time) fp
+  nixVal  <- nixEvalFile fp
   assertEqual fp nixVal hnixVal
 
 assertEvalMatchesNix :: Text -> Assertion
 assertEvalMatchesNix expr = do
-  time <- liftIO getCurrentTime
-  hnixVal <- (++"\n") . printNix <$> hnixEvalText (defaultOptions time) expr
-  nixVal <- nixEvalString expr'
+  time    <- liftIO getCurrentTime
+  hnixVal <- (++ "\n") . printNix <$> hnixEvalText (defaultOptions time) expr
+  nixVal  <- nixEvalString expr'
   assertEqual expr' nixVal hnixVal
- where
-  expr' = unpack expr
+  where expr' = unpack expr

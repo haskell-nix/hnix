@@ -10,7 +10,7 @@
 module EvalTests (tests, genEvalCompareTests) where
 
 import           Control.Applicative ((<|>))
-import           Control.Monad (when)
+import           Control.Monad (when, unless)
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
 -- import qualified Data.HashMap.Lazy as M
@@ -21,8 +21,9 @@ import           Data.String.Interpolate.IsString
 import           Data.Text (Text)
 import           Data.Time
 import           Nix
+import           Nix.Standard
 import           Nix.TH
-import           Nix.Thunk.Standard
+import           Nix.Value.Equal
 import qualified System.Directory as D
 import           System.Environment
 import           System.FilePath
@@ -420,13 +421,13 @@ genEvalCompareTests = do
 
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
 constantEqual a b = do
-    time <- liftIO getCurrentTime
+    time <- getCurrentTime
     let opts = defaultOptions time
     -- putStrLn =<< lint (stripAnnotation a)
-    res <- runStdLazyM opts $ do
+    res <- runWithBasicEffectsIO opts $ do
         a' <- normalForm =<< nixEvalExprLoc Nothing a
         b' <- normalForm =<< nixEvalExprLoc Nothing b
-        return $ valueNFEq a' b'
+        valueEqM a' b'
     assertBool "" res
 
 constantEqualText' :: Text -> Text -> Assertion
@@ -444,16 +445,15 @@ constantEqualText a b = do
 
 assertNixEvalThrows :: Text -> Assertion
 assertNixEvalThrows a = do
-    let Success a' = parseNixTextLoc a
-    time <- liftIO getCurrentTime
-    let opts = defaultOptions time
-    errored <- catch
-        (False <$ runStdLazyM opts (normalForm =<< nixEvalExprLoc Nothing a'))
-        (\(_ :: NixException) -> pure True)
-    if errored then
-        pure ()
-    else
-        assertFailure "Did not catch nix exception"
+  let Success a' = parseNixTextLoc a
+  time <- getCurrentTime
+  let opts = defaultOptions time
+  errored <- catch
+      (False <$ runWithBasicEffectsIO opts
+         (normalForm =<< nixEvalExprLoc Nothing a'))
+      (\(_ :: NixException) -> pure True)
+  unless errored $
+    assertFailure "Did not catch nix exception"
 
 freeVarsEqual :: Text -> [VarName] -> Assertion
 freeVarsEqual a xs = do

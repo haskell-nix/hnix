@@ -2,7 +2,7 @@
 
 module Nix.Cache where
 
-import qualified Data.ByteString.Lazy as BS
+import qualified Data.ByteString.Lazy          as BS
 import           Nix.Expr.Types.Annotated
 
 #if defined (__linux__) && MIN_VERSION_base(4, 10, 0)
@@ -14,7 +14,7 @@ import qualified Data.Compact as C
 import qualified Data.Compact.Serialize as C
 #endif
 #ifdef MIN_VERSION_serialise
-import qualified Codec.Serialise as S
+import qualified Codec.Serialise               as S
 #endif
 
 readCache :: FilePath -> IO NExprLoc
@@ -26,10 +26,10 @@ readCache path = do
         Right expr -> return $ C.getCompact expr
 #else
 #ifdef MIN_VERSION_serialise
-    eres <- S.deserialiseOrFail <$> BS.readFile path
-    case eres of
-        Left err -> error $ "Error reading cache file: " ++ show err
-        Right expr -> return expr
+  eres <- S.deserialiseOrFail <$> BS.readFile path
+  case eres of
+    Left  err  -> error $ "Error reading cache file: " ++ show err
+    Right expr -> return expr
 #else
     error "readCache not implemented for this platform"
 #endif
@@ -41,7 +41,7 @@ writeCache path expr =
     C.writeCompact path =<< C.compact expr
 #else
 #ifdef MIN_VERSION_serialise
-    BS.writeFile path (S.serialise expr)
+  BS.writeFile path (S.serialise expr)
 #else
     error "writeCache not implemented for this platform"
 #endif

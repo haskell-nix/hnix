@@ -1,4 +1,4 @@
-{ compiler ? "ghc863"
+{ compiler ? "ghc864"
 
 , doBenchmark ? false
 , doTracing   ? false
@@ -6,10 +6,10 @@
 , doProfiling ? false # enables profiling support in GHC
 , doStrict    ? false
 
-, withHoogle  ? false
+, withHoogle  ? true
 
-, rev    ? "120eab94e0981758a1c928ff81229cd802053158"
-, sha256 ? "0qk6k8gxx5xlkyg05dljywj5wx5fvrc3dzp4v2h6ab83b7zwg813"
+, rev    ? "ed1b59a98e7bd61dd7eac266569c294fb6b16300"
+, sha256 ? "0b2wdbbaqdqccl7q9gskhfjk7xaqvjwcls4b6218anyc247gscnb"
 
 , pkgs   ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
@@ -35,20 +35,30 @@
 }:
 
 let
-
   hnix-store-src = pkgs.fetchFromGitHub {
     owner = "haskell-nix";
     repo = "hnix-store";
-    rev = "8cc6595803872b7effc4cbf97aec0b8723068212";
-    sha256 = "1scm72bxn4wx9r00m0l4h4kanlgq9fw5z1nfzi11d973b5pf1nf3";
+    rev = "0.1.0.0";
+    sha256 = "1z48msfkiys432rkd00fgimjgspp98dci11kgg3v8ddf4mk1s8g0";
   };
 
   overlay = pkgs.lib.foldr pkgs.lib.composeExtensions (_: _: {}) [
     (import "${hnix-store-src}/overlay.nix")
     (self: super: with pkgs.haskell.lib; {
+
+      # Type error in the tests under ghc844 package set
+      Diff = dontCheck super.Diff;
+
+      # These packages only depend on contravariant when ghc >= 8.6.3
+      # Without normalizing the dependencies, our build fails with
+      # aeson and base-compat-batteries unable to find `contravariant`
+      aeson                 = addBuildDepend super.aeson self.contravariant;
+      base-compat-batteries = addBuildDepend super.base-compat-batteries self.contravariant;
+
       mono-traversable = dontCheck super.mono-traversable;
       these = doJailbreak super.these;
-      multistate = doJailbreak super.multistate;
+      multistate = doJailbreak (overrideCabal super.multistate (attrs: { broken = false; }));
+      butcher = doJailbreak (overrideCabal super.butcher (attrs: { broken = false; }));
 
       brittany = doJailbreak (self.callCabal2nix "brittany"
         (pkgs.fetchFromGitHub {
@@ -84,7 +94,7 @@ let
   haskellPackages = pkgs.haskell.packages.${compiler}.override
     overrideHaskellPackages;
 
-drv = haskellPackages.developPackage {
+in haskellPackages.developPackage {
   name = "hnix";
   root = ./.;
 
@@ -116,6 +126,4 @@ drv = haskellPackages.developPackage {
   });
 
   returnShellEnv = false;
-};
-
-in drv
+}
