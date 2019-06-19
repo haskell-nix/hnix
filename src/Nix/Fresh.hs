@@ -65,6 +65,7 @@ instance ( MonadVar m
   freshId = FreshIdT $ do
     v <- ask
     atomicModifyVar v (\i -> (succ i, i))
+  withRootId = error "doesn't work"
 
 runFreshIdT :: Functor m => Var m i -> FreshIdT i m a -> m a
 runFreshIdT i m = runReaderT (unFreshIdT m) i

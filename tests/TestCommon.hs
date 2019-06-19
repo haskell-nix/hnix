@@ -14,7 +14,7 @@ import           Data.Time
 import           Nix
 import           Nix.Exec                       ( )
 import           Nix.Standard
-import           Nix.Fresh.Basic
+import           Nix.Fresh.Stable
 import           System.Environment
 import           System.IO
 import           System.Posix.Files
@@ -22,7 +22,7 @@ import           System.Posix.Temp
 import           System.Process
 import           Test.Tasty.HUnit
 
-hnixEvalFile :: Options -> FilePath -> IO (StdValue (StandardT (StdIdT IO)))
+hnixEvalFile :: Options -> FilePath -> IO (StdValue (StandardT (FreshStableIdT IO)))
 hnixEvalFile opts file = do
   parseResult <- parseNixFileLoc file
   case parseResult of
@@ -36,11 +36,11 @@ hnixEvalFile opts file = do
             NixException frames ->
               errorWithoutStackTrace
                 .   show
-                =<< renderFrames @(StdValue (StandardT (StdIdT IO)))
-                      @(StdThunk (StandardT (StdIdT IO)))
+                =<< renderFrames @(StdValue (StandardT (FreshStableIdT IO)))
+                      @(StdThunk (StandardT (FreshStableIdT IO)))
                       frames
 
-hnixEvalText :: Options -> Text -> IO (StdValue (StandardT (StdIdT IO)))
+hnixEvalText :: Options -> Text -> IO (StdValue (StandardT (FreshStableIdT IO)))
 hnixEvalText opts src = case parseNixText src of
   Failure err ->
     error

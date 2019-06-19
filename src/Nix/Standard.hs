@@ -38,8 +38,8 @@ import           Nix.Context
 import           Nix.Effects
 import           Nix.Effects.Basic
 import           Nix.Expr.Types.Annotated
-import           Nix.Fresh
-import           Nix.Fresh.Basic
+import           Nix.Fresh.Stable
+import           Nix.Thunk.StableId
 import           Nix.Options
 import           Nix.Render
 import           Nix.Scope
@@ -48,7 +48,6 @@ import           Nix.Thunk.Basic
 import           Nix.Utils.Fix1
 import           Nix.Value
 import           Nix.Value.Monad
-import           Nix.Var
 #ifdef MIN_VERSION_haskeline
 import           System.Console.Haskeline.MonadException hiding(catch)
 #endif
@@ -224,6 +223,9 @@ newtype StandardTF r m a
 instance MonadTrans (StandardTF r) where
   lift = StandardTF . lift . lift
 
+instance MonadTransWrap (StandardTF t) where
+  liftWrap f (StandardTF a) = StandardTF $ liftWrap (liftWrap f) a
+
 instance (MonadPutStr r, MonadPutStr m) => MonadPutStr (StandardTF r m)
 instance (MonadHttp r, MonadHttp m) => MonadHttp (StandardTF r m)
 instance (MonadEnv r, MonadEnv m) => MonadEnv (StandardTF r m)
@@ -258,13 +260,9 @@ runStandardT
 runStandardT (Fix1T (StandardTF m)) = m
 
 runWithBasicEffects
-  :: (MonadIO m, MonadAtomicRef m) => Options -> StandardT (StdIdT m) a -> m a
+  :: (MonadIO m, MonadAtomicRef m) => Options -> StandardT (FreshStableIdT m) a -> m a
 runWithBasicEffects opts =
-  go . (`evalStateT` mempty) . (`runReaderT` newContext opts) . runStandardT
- where
-  go action = do
-    i <- newVar (1 :: Int)
-    runFreshIdT i action
+  runFreshStableIdT nil . (`evalStateT` mempty) . (`runReaderT` newContext opts) . runStandardT
 
-runWithBasicEffectsIO :: Options -> StandardT (StdIdT IO) a -> IO a
+runWithBasicEffectsIO :: Options -> StandardT (FreshStableIdT IO) a -> IO a
 runWithBasicEffectsIO = runWithBasicEffects

@@ -50,7 +50,7 @@ import           Nix.Options
 import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Thunk.StableId
-import           Nix.Thunk.FreshStableIdT
+import           Nix.Fresh.Stable
 import           Nix.Thunk.Basic
 import           Nix.Utils
 import           Nix.Var

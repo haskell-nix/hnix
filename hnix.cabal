@@ -454,6 +454,7 @@ library
       Nix.Frames
       Nix.Fresh
       Nix.Fresh.Basic
+      Nix.Fresh.Stable
       Nix.Json
       Nix.Lint
       Nix.Normal
@@ -469,9 +470,8 @@ library
       Nix.String.Coerce
       Nix.TH
       Nix.Thunk
-      Nix.Thunk.StableId
-      Nix.Thunk.FreshStableIdT
       Nix.Thunk.Basic
+      Nix.Thunk.StableId
       Nix.Type.Assumption
       Nix.Type.Env
       Nix.Type.Infer

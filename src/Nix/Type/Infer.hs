@@ -60,7 +60,7 @@ import           Nix.Fresh ()
 import           Nix.String
 import           Nix.Scope
 import           Nix.Thunk.StableId
-import           Nix.Thunk.FreshStableIdT
+import           Nix.Fresh.Stable
 import qualified Nix.Type.Assumption           as As
 import           Nix.Type.Env
 import qualified Nix.Type.Env                  as Env

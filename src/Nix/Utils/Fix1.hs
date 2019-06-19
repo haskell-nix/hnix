@@ -6,6 +6,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 
 module Nix.Utils.Fix1 where
 
@@ -16,6 +17,8 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Catch
 import           Control.Monad.Reader
 import           Control.Monad.State
+
+import Nix.Thunk --TODO: Move MonadTransWrap somewhere better, or find something that already exists
 
 -- | The fixpoint combinator, courtesy of Gregory Malecha.
 --   https://gist.github.com/gmalecha/ceb3778b9fdaa4374976e325ac8feced
@@ -49,6 +52,9 @@ deriving instance MonadThrow (t (Fix1T t m) m) => MonadThrow (Fix1T t m)
 
 deriving instance MonadReader e (t (Fix1T t m) m) => MonadReader e (Fix1T t m)
 deriving instance MonadState s (t (Fix1T t m) m) => MonadState s (Fix1T t m)
+
+instance (forall m. MonadTransWrap (t (Fix1T t m))) => MonadTransWrap (Fix1T t) where
+  liftWrap f (Fix1T a) = Fix1T $ liftWrap f a
 
 {-
 
