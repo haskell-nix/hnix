@@ -20,6 +20,8 @@ import           Control.Monad.Trans.State
 import           Control.Monad.Trans.Writer
 import           Data.Typeable                  ( Typeable )
 
+type ThunkId m = ThunkId' (Thunk m)
+
 class ( Monad m
       , Eq (ThunkId m)
       , Ord (ThunkId m)
@@ -27,7 +29,6 @@ class ( Monad m
       , Typeable (ThunkId m)
       )
       => MonadThunkId m where
-  type ThunkId m :: *
   freshId :: m (ThunkId m)
   default freshId
       :: ( MonadThunkId m'
@@ -76,30 +77,28 @@ instance MonadTransWrap (StateT s) where
     put new
     pure result
 
-instance MonadThunkId m => MonadThunkId (ReaderT r m) where
-  type ThunkId (ReaderT r m) = ThunkId m
-instance (Monoid w, MonadThunkId m) => MonadThunkId (WriterT w m) where
-  type ThunkId (WriterT w m) = ThunkId m
-instance MonadThunkId m => MonadThunkId (ExceptT e m) where
-  type ThunkId (ExceptT e m) = ThunkId m
-instance MonadThunkId m => MonadThunkId (StateT s m) where
-  type ThunkId (StateT s m) = ThunkId m
+instance MonadThunkId m => MonadThunkId (ReaderT r m)
+instance (Monoid w, MonadThunkId m) => MonadThunkId (WriterT w m)
+instance MonadThunkId m => MonadThunkId (ExceptT e m)
+instance MonadThunkId m => MonadThunkId (StateT s m)
 
-class MonadThunkId m => MonadThunk t m a | t -> m, t -> a where
-  thunk :: m a -> m t
+class ( Monad m
+      , Eq (Thunk m)
+      , Ord (Thunk m)
+      , Show (Thunk m)
+      , Typeable (Thunk m)
+      ) => MonadThunk m where
+  type Thunk m :: *
+  type ThunkValue m :: *
+  thunk :: m (ThunkValue m) -> m (Thunk m)
 
-  -- | Return an identifier for the thunk unless it is a pure value (i.e.,
-  --   strictly an encapsulation of some 'a' without any additional
-  --   structure). For pure values represented as thunks, returns Nothing.
-  thunkId :: t -> ThunkId m
-
-  queryM :: t -> m r -> (a -> m r) -> m r
-  force :: t -> (a -> m r) -> m r
-  forceEff :: t -> (a -> m r) -> m r
+  queryM :: Thunk m -> m r -> (ThunkValue m -> m r) -> m r
+  force :: Thunk m -> (ThunkValue m -> m r) -> m r
+  forceEff :: Thunk m -> (ThunkValue m -> m r) -> m r
 
   -- | Modify the action to be performed by the thunk. For some implicits
   --   this modifies the thunk, for others it may create a new thunk.
-  further :: t -> (m a -> m a) -> m t
+  further :: Thunk m -> (m a -> m a) -> m (Thunk m)
 
 newtype ThunkLoop = ThunkLoop String -- contains rendering of ThunkId
   deriving Typeable

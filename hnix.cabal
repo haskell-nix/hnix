@@ -456,7 +456,7 @@ library
       Nix.Fresh.Basic
       Nix.Fresh.Stable
       Nix.Json
-      Nix.Lint
+--      Nix.Lint
       Nix.Normal
       Nix.Options
       Nix.Parser

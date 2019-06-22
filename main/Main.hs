@@ -98,8 +98,8 @@ main = do
         NixException frames ->
           errorWithoutStackTrace
             .   show
-            =<< renderFrames @(StdValue (StandardT (FreshStableIdT IO)))
-                  @(StdThunk (StandardT (FreshStableIdT IO)))
+            =<< renderFrames @(StdValue (NThunkF _ _) (StandardT (NThunkF _ _) (FreshStableIdT IO)))
+                  @(StdThunk (NThunkF _ _) (StandardT (NThunkF _ _) (FreshStableIdT IO)))
                   frames
 
       when (repl opts) $ withNixContext Nothing Repl.main

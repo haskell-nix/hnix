@@ -14,7 +14,7 @@ import           Nix.Render
 import           Nix.Fresh
 import           Nix.Value
 
-type StdIdT = FreshIdT Int
+type StdIdT = FreshStableIdT Int
 
 instance MonadFile m => MonadFile (StdIdT m)
 instance MonadIntrospect m => MonadIntrospect (StdIdT m)

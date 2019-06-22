@@ -22,7 +22,7 @@ import           System.Posix.Temp
 import           System.Process
 import           Test.Tasty.HUnit
 
-hnixEvalFile :: Options -> FilePath -> IO (StdValue (StandardT (FreshStableIdT IO)))
+hnixEvalFile :: Options -> FilePath -> IO (StdValue t (StandardT t (FreshStableIdT IO)))
 hnixEvalFile opts file = do
   parseResult <- parseNixFileLoc file
   case parseResult of

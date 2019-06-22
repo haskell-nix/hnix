@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
@@ -10,10 +11,12 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Nix.Thunk.Basic (NThunkF(..), Deferred(..), MonadBasicThunk) where
+module Nix.Thunk.Basic (ThunkT (..), NThunkF(..), Deferred(..), MonadBasicThunk) where
 
 import           Control.Exception       hiding ( catch )
 import           Control.Monad.Catch
@@ -21,6 +24,44 @@ import           Control.Monad.Catch
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Var
+import           Control.Applicative
+import           Control.Monad.Base
+import           Control.Monad.Catch
+import           Control.Monad.Except
+import           Control.Monad.Reader
+import           Control.Monad.Ref
+import           Control.Monad.ST
+import Data.Typeable
+#ifdef MIN_VERSION_haskeline
+import System.Console.Haskeline.MonadException hiding(catch)
+#endif
+
+newtype ThunkT m a = ThunkT { unThunkT :: m a }
+  deriving
+    ( Functor
+    , Applicative
+    , Alternative
+    , Monad
+    , MonadPlus
+    , MonadFix
+    , MonadRef
+    , MonadAtomicRef
+    , MonadIO
+    , MonadCatch
+    , MonadThrow
+#ifdef MIN_VERSION_haskeline
+    , MonadException
+#endif
+    )
+
+instance MonadThunkId m => MonadThunkId (ThunkT m) where
+  type ThunkId (ThunkT m) = ThunkId m
+
+instance MonadTrans ThunkT where
+  lift = ThunkT
+
+instance MonadTransWrap ThunkT where
+  liftWrap f (ThunkT a) = ThunkT $ f a
 
 data Deferred m v = Deferred (m v) | Computed v
     deriving (Functor, Foldable, Traversable)
@@ -38,13 +79,13 @@ instance Show v => Show (NThunkF m v) where
 type MonadBasicThunk m = (MonadThunkId m, MonadVar m)
 
 instance (MonadBasicThunk m, MonadCatch m)
-  => MonadThunk (NThunkF m v) m v where
-  thunk = buildThunk
+  => MonadThunk (NThunkF m v) (ThunkT m) v where
+  thunk = ThunkT . buildThunk . unThunkT
   thunkId (Thunk n _ _) = n
-  queryM   = queryThunk
-  force    = forceThunk
-  forceEff = forceEffects
-  further t f = buildThunk $ f $ forceThunk t pure
+  queryM t n k = ThunkT $ queryThunk t (unThunkT n) (unThunkT . k)
+  force t k = ThunkT $ forceThunk t (unThunkT . k)
+  forceEff t k = ThunkT $ forceEffects t (unThunkT . k)
+  further t f = thunk $ f $ force t pure
 
 buildThunk :: MonadBasicThunk m => m v -> m (NThunkF m v)
 buildThunk action = do
@@ -84,7 +125,7 @@ forceThunk (Thunk n active ref) k = do
             _ <- atomicModifyVar active (False, )
             throwM e
           _ <- atomicModifyVar active (False, )
---          writeVar ref (Computed v)
+          writeVar ref (Computed v)
           k v
 
 forceEffects :: MonadVar m => NThunkF m v -> (v -> m r) -> m r
@@ -98,11 +139,12 @@ forceEffects (Thunk _ active ref) k = do
         Computed v      -> k v
         Deferred action -> do
           v <- action
---          writeVar ref (Computed v)
+          writeVar ref (Computed v)
           _ <- atomicModifyVar active (False, )
           k v
 
 {-
+--[ryantrinkle] I'm worried about what impact this will have on the way withRootId works
 furtherThunk :: MonadVar m => NThunkF m v -> (m v -> m v) -> m (NThunkF m v)
 furtherThunk t@(Thunk _ _ ref) k = do
   _ <- atomicModifyVar ref $ \x -> case x of
