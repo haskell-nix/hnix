@@ -453,15 +453,13 @@ execBinaryOp scope span op lval rarg = do
       _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
     (NVList ls, NVConstant NNull) -> case op of
-      NConcat -> pure $ bin nvListP ls
-      NEq     -> toBool =<< valueEqM lval (nvList [])
-      NNEq    -> toBool . not =<< valueEqM lval (nvList [])
+      NEq     -> toBool False
+      NNEq    -> toBool True
       _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
     (NVConstant NNull, NVList rs) -> case op of
-      NConcat -> pure $ bin nvListP rs
-      NEq     -> toBool =<< valueEqM (nvList []) rval
-      NNEq    -> toBool . not =<< valueEqM (nvList []) rval
+      NEq     -> toBool False
+      NNEq    -> toBool True
       _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
 
     (NVPath p, NVStr ns) -> case op of
