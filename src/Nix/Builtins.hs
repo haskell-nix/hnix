@@ -20,6 +20,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE RecursiveDo #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
@@ -135,9 +136,11 @@ withNixContext mpath action = do
 builtins :: (MonadNix e f m, Scoped (NValue f m) m)
          => m (Scopes m (NValue f m))
 builtins = do
-  ref <- defer $ flip nvSet M.empty <$> buildMap
-  lst <- ([("builtins", ref)] ++) <$> topLevelBuiltins
-  pushScope (M.fromList lst) currentScopes
+  rec lst <- pushScope s $ do
+        ref <- defer $ flip nvSet M.empty <$> buildMap
+        ([("builtins", ref)] ++) <$> topLevelBuiltins
+      let s = M.fromList lst
+  pushScope s currentScopes
  where
   buildMap         = M.fromList . map mapping <$> builtinsList
   topLevelBuiltins = map mapping <$> fullBuiltinsList
