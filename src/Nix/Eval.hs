@@ -290,7 +290,7 @@ evalBinds recursive binds = do
           mv <- case ms of
             Nothing -> lookupVar key
             Just s ->
-              -- TODO: The inherit source expression is evaluated in the recursive context
+              -- The inherit source expression is evaluated in the recursive context
               -- if this is a recursive record
               pushScope scope s >>= fromValue @(AttrSet v, AttrSet SourcePos) >>= \(s, _) ->
                 lookupVarScopes key (Scopes [Scope s] [])
