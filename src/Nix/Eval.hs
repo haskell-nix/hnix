@@ -9,6 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE RecursiveDo #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
@@ -243,7 +244,8 @@ evalBinds
   -> [Binding (m v)]
   -> m (AttrSet v, AttrSet SourcePos)
 evalBinds recursive binds = do
-  buildResult . concat =<< mapM go (moveOverridesLast binds)
+  rec result <- buildResult . concat =<< mapM (go $ fst result) (moveOverridesLast binds)
+  pure result
  where
   moveOverridesLast = uncurry (++) . partition
     (\case
@@ -251,15 +253,15 @@ evalBinds recursive binds = do
       _ -> True
     )
 
-  go :: Binding (m v) -> m [([Text], SourcePos, m v)]
-  go (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
+  go :: AttrSet v -> Binding (m v) -> m [([Text], SourcePos, m v)]
+  go _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
     finalValue >>= fromValue >>= \(o', p') ->
           -- jww (2018-05-09): What to do with the key position here?
                                               return $ map
       (\(k, v) -> ([k], fromMaybe pos (M.lookup k p'), demand v pure))
       (M.toList o')
 
-  go (NamedVar pathExpr finalValue pos) = do
+  go _ (NamedVar pathExpr finalValue pos) = do
     let go :: NAttrPath (m v) -> m ([Text], SourcePos, m v)
         go = \case
           h :| t -> evalSetterKeyName h >>= \case
@@ -280,7 +282,7 @@ evalBinds recursive binds = do
       ([], _, _) -> []
       result     -> [result]
 
-  go (Inherit ms names pos) = do
+  go scope (Inherit ms names pos) = do
     fmap catMaybes $ forM names $ evalSetterKeyName >=> \case
       Nothing  -> pure Nothing
       Just key -> do
@@ -290,7 +292,7 @@ evalBinds recursive binds = do
             Just s ->
               -- TODO: The inherit source expression is evaluated in the recursive context
               -- if this is a recursive record
-              s >>= fromValue @(AttrSet v, AttrSet SourcePos) s >>= \(s, _) ->
+              pushScope scope s >>= fromValue @(AttrSet v, AttrSet SourcePos) >>= \(s, _) ->
                 lookupVarScopes key (Scopes [Scope s] [])
           case mv of
             Nothing -> attrMissing (key :| []) Nothing
