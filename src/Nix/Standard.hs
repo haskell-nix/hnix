@@ -22,35 +22,34 @@
 module Nix.Standard where
 
 import           Control.Applicative
-import           Control.Comonad                ( Comonad )
-import           Control.Comonad.Env            ( ComonadEnv )
 import           Control.Monad.Catch     hiding ( catchJust )
 import           Control.Monad.Free
 import           Control.Monad.Reader
 import           Control.Monad.Ref
 import           Control.Monad.State
+import           Data.Coerce
+import           Data.Functor.Identity
 import           Data.HashMap.Lazy              ( HashMap )
 import           Data.Typeable
-import           GHC.Generics
 import           Nix.Cited
-import           Nix.Cited.Basic
 import           Nix.Context
 import           Nix.Effects
 import           Nix.Effects.Basic
 import           Nix.Expr.Types.Annotated
-import           Nix.Fresh.Stable
 import           Nix.Thunk.StableId
+import           Nix.Thunk.Basic
 import           Nix.Options
 import           Nix.Render
 import           Nix.Scope
+import           Nix.Scope.Basic
 import           Nix.Thunk
-import           Nix.Thunk.Basic
 import           Nix.Utils.Fix1
 import           Nix.Value
 import           Nix.Value.Monad
 #ifdef MIN_VERSION_haskeline
 import           System.Console.Haskeline.MonadException hiding(catch)
 #endif
+--TODO: Put citations back in
 
 -- All of the following type classes defer to the underlying 'm'.
 
@@ -72,14 +71,14 @@ deriving instance MonadIntrospect (t (Fix1T t m) m) => MonadIntrospect (Fix1T t 
 -- For whatever reason, using the default StateT instance provided by
 -- haskeline does not work.
 instance MonadException m
-  => MonadException(StateT(HashMap FilePath NExprLoc) m) where
+  => MonadException (StateT (HashMap FilePath NExprLoc) m) where
   controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
     run' = RunIO(fmap(StateT . const) . run . flip runStateT s)
     in fmap(flip runStateT s) $ f run'
 
-instance MonadException m => MonadException(Fix1T (StandardTF t) m) where
+instance MonadException m => MonadException (Fix1T StandardTF m) where
   controlIO f = mkStandardT $ controlIO $ \(RunIO run) ->
-    let run' = RunIO(fmap mkStandardT . run . runStandardT)
+    let run' = RunIO (fmap mkStandardT . run . runStandardT)
     in runStandardT <$> f run'
 #endif
 
@@ -100,8 +99,11 @@ instance (MonadFix1T t m, MonadStore m) => MonadStore (Fix1T t m) where
   addPath' = lift . addPath'
   toFile_' n = lift . toFile_' n
 
+deriving instance MonadThunk (t (Fix1T t m) m) => MonadThunk (Fix1T t m)
+
 {------------------------------------------------------------------------}
 
+{-
 newtype StdCited (t :: *) (m :: * -> *) a = StdCited
   { _stdCited :: Cited (StdThunk t m) (StdCited t m) m a }
   deriving
@@ -117,9 +119,34 @@ newtype StdCited (t :: *) (m :: * -> *) a = StdCited
 
 newtype StdThunk t (m :: * -> *) = StdThunk
   { _stdThunk :: StdCited t m t }
+-}
 
-type StdValue t m = NValue (StdThunk t m) (StdCited t m) m
+--type StdValue m a = NValue m a
 
+instance ( MonadFix m
+         , MonadFile m
+         , MonadCatch m
+         , MonadEnv m
+         , MonadExec m
+         , MonadHttp m
+         , MonadInstantiate m
+         , MonadIntrospect m
+         , MonadPlus m
+         , MonadPutStr m
+         , MonadStore m
+         , MonadAtomicRef m
+         , Typeable m
+         )
+  => MonadEffects Identity (StandardT m) where
+  makeAbsolutePath = defaultMakeAbsolutePath
+  findEnvPath      = defaultFindEnvPath
+  findPath         = defaultFindPath
+  importPath       = defaultImportPath
+  pathToDefaultNix = defaultPathToDefaultNix
+  derivationStrict = defaultDerivationStrict
+  traceEffect      = defaultTraceEffect
+
+{-
 instance Show (StdThunk t m) where
   show _ = "<thunk>"
 
@@ -157,7 +184,7 @@ instance ( MonadFix m
          , MonadThunk (StdThunk t m) m (StdValue t m)
          , MonadValue (StdValue t m) m
          )
-  => MonadEffects (StdThunk t m) (StdCited t m) m where
+  => MonadEffects (StdCited t m) m where
   makeAbsolutePath = defaultMakeAbsolutePath
   findEnvPath      = defaultFindEnvPath
   findPath         = defaultFindPath
@@ -186,7 +213,6 @@ instance ( MonadAtomicRef m
          , MonadCatch m
          , Typeable m
          , MonadReader (Context m (StdValue t m)) m
-         , MonadThunkId m
          , MonadThunk t m (Free (NValue' (StdThunk t m) (StdCited t m) m) (StdThunk t m))
          , Typeable t
          )
@@ -198,6 +224,7 @@ instance ( MonadAtomicRef m
 
   inform (Pure t) f = Pure <$> further t f
   inform (Free v) f = Free <$> bindNValue' id (flip inform f) v
+-}
 
 {------------------------------------------------------------------------}
 
@@ -207,12 +234,15 @@ instance ( MonadAtomicRef m
 -- whileForcingThunk frame =
 --   withFrame Debug (ForcingThunk @t @f @m) . withFrame Debug frame
 
-newtype StandardTF t r m a
-  = StandardTF (ReaderT (Context r (StdValue t r))
-                        (StateT (HashMap FilePath NExprLoc) m) a)
+type StandardTFInner r m = ScopeT (NValue Identity r)
+  (ThunkT (NValue Identity r) --TODO: What should this `Identity` be? Probably (StdCited ...)
+    (ReaderT Context
+      (StateT (HashMap FilePath NExprLoc) m)))
+
+newtype StandardTF r m a
+  = StandardTF { unStandardTF :: StandardTFInner r m a }
   deriving
-    ( Functor
-    , Applicative
+    ( Applicative
     , Alternative
     , Monad
     , MonadPlus
@@ -220,53 +250,93 @@ newtype StandardTF t r m a
     , MonadIO
     , MonadCatch
     , MonadThrow
-    , MonadReader (Context r (StdValue t r))
+    , MonadReader Context
     , MonadState (HashMap FilePath NExprLoc)
     )
 
-instance MonadTrans (StandardTF t r) where
-  lift = StandardTF . lift . lift
+deriving instance Functor m => Functor (StandardTF r m)
+instance Monad m => Scoped (Free (NValue' Identity (StandardT m)) (StdThunk (StandardT m) m)) (StandardT m) where
+  currentScopes = mkStandardT $ hoistDynamicScopes mkStandardT <$> currentScopes
+  clearScopes = mkStandardT . clearScopes . runStandardT
+  pushScopes s = mkStandardT . pushScopes (hoistDynamicScopes runStandardT s) . runStandardT
+  lookupVar = mkStandardT . lookupVar
 
-instance MonadTransWrap (StandardTF t r) where
-  liftWrap f (StandardTF a) = StandardTF $ liftWrap (liftWrap f) a
+instance MonadTrans (StandardTF r) where
+  lift = StandardTF . lift . lift . lift . lift
 
-instance (MonadPutStr r, MonadPutStr m) => MonadPutStr (StandardTF t r m)
-instance (MonadHttp r, MonadHttp m) => MonadHttp (StandardTF t r m)
-instance (MonadEnv r, MonadEnv m) => MonadEnv (StandardTF t r m)
-instance (MonadInstantiate r, MonadInstantiate m) => MonadInstantiate (StandardTF t r m)
-instance (MonadExec r, MonadExec m) => MonadExec (StandardTF t r m)
-instance (MonadIntrospect r, MonadIntrospect m) => MonadIntrospect (StandardTF t r m)
+instance MonadTransWrap (StandardTF r) where
+  liftWrap f (StandardTF a) = StandardTF $ liftWrap (liftWrap (liftWrap (liftWrap f))) a
+
+instance (MonadPutStr m) => MonadPutStr (StandardTF r m)
+instance (MonadHttp m) => MonadHttp (StandardTF r m)
+instance (MonadEnv m) => MonadEnv (StandardTF r m)
+instance (MonadInstantiate m) => MonadInstantiate (StandardTF r m)
+instance (MonadExec m) => MonadExec (StandardTF r m)
+instance (MonadIntrospect m) => MonadIntrospect (StandardTF r m)
+
+instance ( Monad m
+         , Typeable r
+         , Typeable (Thunk r)
+         , Typeable m
+         , MonadAtomicRef m
+         , MonadCatch m
+         ) => MonadThunk (StandardTF r m) where
+  type Thunk (StandardTF r m) = StdThunk r m
+  type ThunkValue (StandardTF r m) = StdValue r
+  thunk v = StandardTF $ StdThunk <$> thunk (unStandardTF v)
+  queryM = coerce $ queryM @(StandardTFInner r m)
+  force = coerce $ force @(StandardTFInner r m)
+  forceEff = coerce $ forceEff @(StandardTFInner r m)
+  further t f = fmap StdThunk $ StandardTF $ further (unStdThunk t) $ unStandardTF . f . StandardTF
+
+newtype StdThunk r m = StdThunk { unStdThunk :: Thunk (StandardTFInner r m) }
+  deriving (Eq, Ord, Show, Typeable)
+
+type StdValue r = NValue Identity r
+
+instance ( Monad m
+         , Typeable m
+         , MonadAtomicRef m
+         , MonadCatch m
+         ) => MonadValue (Free (NValue' Identity (StandardT m)) (StdThunk (StandardT m) m)) (StandardT m) where
+  defer = fmap pure . thunk
+
+  demand (Pure v) f = force v (flip demand f)
+  demand (Free v) f = f (Free v)
+
+  inform (Pure t) f = Pure <$> further t f
+  inform (Free v) f = Free <$> bindNValue' id (flip inform f) v
+
+--TODO
+instance HasCitations m' v (StdThunk r m) where
+  citations _ = []
+  addProvenance _ = id
+
+instance HasCitations1 m v Identity where
+  citations1 _ = []
+  addProvenance1 _ = id
 
 {------------------------------------------------------------------------}
 
-type StandardT t m = Fix1T (StandardTF t) m
+type StandardT m = Fix1T StandardTF m
 
-instance MonadTrans (Fix1T (StandardTF t)) where
+instance MonadTrans (Fix1T StandardTF) where
   lift = Fix1T . lift
 
-instance MonadThunkId m => MonadThunkId (Fix1T (StandardTF t) m) where
-  type ThunkId (Fix1T (StandardTF t) m) = ThunkId m
-
 mkStandardT
-  :: ReaderT
-       (Context (StandardT t m) (StdValue t (StandardT t m)))
-       (StateT (HashMap FilePath NExprLoc) m)
-       a
-  -> StandardT t m a
+  :: StandardTFInner (Fix1T StandardTF m) m a
+  -> StandardT m a
 mkStandardT = Fix1T . StandardTF
 
 runStandardT
-  :: StandardT t m a
-  -> ReaderT
-       (Context (StandardT t m) (StdValue t (StandardT t m)))
-       (StateT (HashMap FilePath NExprLoc) m)
-       a
+  :: StandardT m a
+  -> StandardTFInner (Fix1T StandardTF m) m a
 runStandardT (Fix1T (StandardTF m)) = m
 
 runWithBasicEffects
-  :: (MonadIO m, MonadAtomicRef m) => Options -> StandardT t (FreshStableIdT m) a -> m a
+  :: (MonadIO m, MonadAtomicRef m) => Options -> StandardT m a -> m a
 runWithBasicEffects opts =
-  runFreshStableIdT nil . (`evalStateT` mempty) . (`runReaderT` newContext opts) . runStandardT
+  (`evalStateT` mempty) . (`runReaderT` newContext opts) . (`runThunkT` nil) . (`runScopeT` mempty) . runStandardT
 
-runWithBasicEffectsIO :: Options -> StandardT t (FreshStableIdT IO) a -> IO a
+runWithBasicEffectsIO :: Options -> StandardT IO a -> IO a
 runWithBasicEffectsIO = runWithBasicEffects

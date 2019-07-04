@@ -20,34 +20,6 @@ import           Control.Monad.Trans.State
 import           Control.Monad.Trans.Writer
 import           Data.Typeable                  ( Typeable )
 
-type ThunkId m = ThunkId' (Thunk m)
-
-class ( Monad m
-      , Eq (ThunkId m)
-      , Ord (ThunkId m)
-      , Show (ThunkId m)
-      , Typeable (ThunkId m)
-      )
-      => MonadThunkId m where
-  freshId :: m (ThunkId m)
-  default freshId
-      :: ( MonadThunkId m'
-        , MonadTrans t
-        , m ~ t m'
-        , ThunkId m ~ ThunkId m'
-        )
-      => m (ThunkId m)
-  freshId = lift freshId
-  withRootId :: ThunkId m -> m a -> m a
-  default withRootId
-      :: ( MonadThunkId m'
-         , MonadTransWrap t
-         , m ~ t m'
-         , ThunkId m ~ ThunkId m'
-         )
-      => ThunkId m -> m a -> m a
-  withRootId root = liftWrap $ withRootId root
-
 class MonadTransWrap t where
   --TODO: Can we enforce that the resulting function is as linear as the provided one?
   --TODO: Can we allow the `m` type to change?
@@ -77,11 +49,6 @@ instance MonadTransWrap (StateT s) where
     put new
     pure result
 
-instance MonadThunkId m => MonadThunkId (ReaderT r m)
-instance (Monoid w, MonadThunkId m) => MonadThunkId (WriterT w m)
-instance MonadThunkId m => MonadThunkId (ExceptT e m)
-instance MonadThunkId m => MonadThunkId (StateT s m)
-
 class ( Monad m
       , Eq (Thunk m)
       , Ord (Thunk m)
@@ -98,7 +65,7 @@ class ( Monad m
 
   -- | Modify the action to be performed by the thunk. For some implicits
   --   this modifies the thunk, for others it may create a new thunk.
-  further :: Thunk m -> (m a -> m a) -> m (Thunk m)
+  further :: Thunk m -> (m (ThunkValue m) -> m (ThunkValue m)) -> m (Thunk m)
 
 newtype ThunkLoop = ThunkLoop String -- contains rendering of ThunkId
   deriving Typeable

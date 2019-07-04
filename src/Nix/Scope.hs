@@ -20,6 +20,12 @@ import           Data.Text                      ( Text )
 import           Lens.Family2
 import           Nix.Utils
 
+class Scoped a m | m -> a where
+  currentScopes :: m (Scopes m a)
+  clearScopes :: m r -> m r
+  pushScopes :: Scopes m a -> m r -> m r
+  lookupVar :: Text -> m (Maybe a)
+
 newtype Scope a = Scope { getScope :: AttrSet a }
     deriving (Functor, Foldable, Traversable, Eq)
 
@@ -49,14 +55,11 @@ instance Monoid (Scopes m a) where
   mempty  = emptyScopes
   mappend = (<>)
 
+instance Functor m => Functor (Scopes m) where
+  fmap f (Scopes l d) = Scopes (fmap (fmap f) l) (fmap (fmap (fmap f)) d)
+
 emptyScopes :: forall m a . Scopes m a
 emptyScopes = Scopes [] []
-
-class Scoped a m | m -> a where
-  currentScopes :: m (Scopes m a)
-  clearScopes :: m r -> m r
-  pushScopes :: Scopes m a -> m r -> m r
-  lookupVar :: Text -> m (Maybe a)
 
 currentScopesReader
   :: forall m a e . (MonadReader e m, Has e (Scopes m a)) => m (Scopes m a)
@@ -65,6 +68,9 @@ currentScopesReader = asks (view hasLens)
 clearScopesReader
   :: forall m a e r . (MonadReader e m, Has e (Scopes m a)) => m r -> m r
 clearScopesReader = local (set hasLens (emptyScopes @m @a))
+
+strongScope :: AttrSet a -> Scopes m a
+strongScope a = Scopes [Scope a] []
 
 pushScope :: Scoped a m => AttrSet a -> m r -> m r
 pushScope s = pushScopes (Scopes [Scope s] [])
@@ -79,11 +85,17 @@ pushScopesReader s = local (over hasLens (s <>))
 lookupVarReader
   :: forall m a e . (MonadReader e m, Has e (Scopes m a)) => Text -> m (Maybe a)
 lookupVarReader k = do
-  mres <- asks (scopeLookup k . lexicalScopes @m . view hasLens)
+  s <- asks $ view hasLens
+  lookupVarScopes k s
+
+lookupVarScopes
+  :: forall m a . Monad m => Text -> Scopes m a -> m (Maybe a)
+lookupVarScopes k s = do
+  let mres = scopeLookup k $ lexicalScopes @m s
   case mres of
     Just sym -> return $ Just sym
     Nothing  -> do
-      ws <- asks (dynamicScopes . view hasLens)
+      let ws = dynamicScopes s
       foldr
         (\x rest -> do
           mres' <- M.lookup k . getScope <$> x
@@ -96,3 +108,6 @@ lookupVarReader k = do
 
 withScopes :: Scoped a m => Scopes m a -> m r -> m r
 withScopes scope = clearScopes . pushScopes scope
+
+hoistDynamicScopes :: (m (Scope a) -> n (Scope a)) -> Scopes m a -> Scopes n a
+hoistDynamicScopes f (Scopes s d) = Scopes s $ fmap f d

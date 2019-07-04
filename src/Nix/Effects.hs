@@ -44,19 +44,19 @@ class (MonadFile m,
        MonadEnv m,
        MonadInstantiate m,
        MonadExec m,
-       MonadIntrospect m) => MonadEffects t f m where
+       MonadIntrospect m) => MonadEffects f m where
   -- | Determine the absolute path of relative path in the current context
   makeAbsolutePath :: FilePath -> m FilePath
   findEnvPath :: String -> m FilePath
 
   -- | Having an explicit list of sets corresponding to the NIX_PATH
   -- and a file path try to find an existing path
-  findPath :: [NValue t f m] -> FilePath -> m FilePath
+  findPath :: [NValue f m] -> FilePath -> m FilePath
 
-  importPath :: FilePath -> m (NValue t f m)
+  importPath :: FilePath -> m (NValue f m)
   pathToDefaultNix :: FilePath -> m FilePath
 
-  derivationStrict :: NValue t f m -> m (NValue t f m)
+  derivationStrict :: NValue f m -> m (NValue f m)
 
   traceEffect :: String -> m ()
 

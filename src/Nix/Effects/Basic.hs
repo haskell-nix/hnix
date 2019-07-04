@@ -64,7 +64,7 @@ import           GHC.DataSize
 #endif
 #endif
 
-defaultMakeAbsolutePath :: MonadNix e t f m => FilePath -> m FilePath
+defaultMakeAbsolutePath :: MonadNix e f m => FilePath -> m FilePath
 defaultMakeAbsolutePath origPath = do
   origPathExpanded <- expandHomePath origPath
   absPath          <- if isAbsolute origPathExpanded
@@ -110,32 +110,32 @@ x <///> y | isAbsolute y || "." `isPrefixOf` y = x </> y
     joinPath $ head
       [ xs ++ drop (length tx) ys | tx <- tails xs, tx `elem` inits ys ]
 
-defaultFindEnvPath :: MonadNix e t f m => String -> m FilePath
+defaultFindEnvPath :: MonadNix e f m => String -> m FilePath
 defaultFindEnvPath = findEnvPathM
 
-findEnvPathM :: forall e t f m . MonadNix e t f m => FilePath -> m FilePath
+findEnvPathM :: forall e t f m . MonadNix e f m => FilePath -> m FilePath
 findEnvPathM name = do
   mres <- lookupVar "__nixPath"
   case mres of
     Nothing -> error "impossible"
-    Just x  -> demand x $ fromValue >=> \(l :: [NValue t f m]) ->
+    Just x  -> demand x $ fromValue >=> \(l :: [NValue f m]) ->
       findPathBy nixFilePath l name
  where
-  nixFilePath :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
+  nixFilePath :: MonadEffects f m => FilePath -> m (Maybe FilePath)
   nixFilePath path = do
-    path   <- makeAbsolutePath @t @f path
+    path   <- makeAbsolutePath @f path
     exists <- doesDirectoryExist path
     path'  <- if exists
-      then makeAbsolutePath @t @f $ path </> "default.nix"
+      then makeAbsolutePath @f $ path </> "default.nix"
       else return path
     exists <- doesFileExist path'
     return $ if exists then Just path' else Nothing
 
 findPathBy
-  :: forall e t f m
-   . MonadNix e t f m
+  :: forall e f m
+   . MonadNix e f m
   => (FilePath -> m (Maybe FilePath))
-  -> [NValue t f m]
+  -> [NValue f m]
   -> FilePath
   -> m FilePath
 findPathBy finder l name = do
@@ -150,10 +150,10 @@ findPathBy finder l name = do
         ++ " (add it using $NIX_PATH or -I)"
     Just path -> return path
  where
-  go :: Maybe FilePath -> NValue t f m -> m (Maybe FilePath)
+  go :: Maybe FilePath -> NValue f m -> m (Maybe FilePath)
   go p@(Just _) _ = pure p
   go Nothing l =
-    demand l $ fromValue >=> \(s :: HashMap Text (NValue t f m)) -> do
+    demand l $ fromValue >=> \(s :: HashMap Text (NValue f m)) -> do
       p <- resolvePath s
       demand p $ fromValue >=> \(Path path) -> case M.lookup "prefix" s of
         Nothing -> tryPath path Nothing
@@ -181,7 +181,7 @@ findPathBy finder l name = do
           ++ show s
 
 fetchTarball
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
+  :: forall e f m . MonadNix e f m => NValue f m -> m (NValue f m)
 fetchTarball = flip demand $ \case
   NVSet s _ -> case M.lookup "url" s of
     Nothing ->
@@ -194,7 +194,7 @@ fetchTarball = flip demand $ \case
       $  "builtins.fetchTarball: Expected URI or set, got "
       ++ show v
  where
-  go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
+  go :: Maybe (NValue f m) -> NValue f m -> m (NValue f m)
   go msha = \case
     NVStr ns -> fetch (hackyStringIgnoreContext ns) msha
     v ->
@@ -204,7 +204,7 @@ fetchTarball = flip demand $ \case
         ++ show v
 
 {- jww (2018-04-11): This should be written using pipes in another module
-    fetch :: Text -> Maybe (NThunk m) -> m (NValue t f m)
+    fetch :: Text -> Maybe (NThunk m) -> m (NValue f m)
     fetch uri msha = case takeExtension (Text.unpack uri) of
         ".tgz" -> undefined
         ".gz"  -> undefined
@@ -215,7 +215,7 @@ fetchTarball = flip demand $ \case
                   ++ ext ++ "'"
 -}
 
-  fetch :: Text -> Maybe (NValue t f m) -> m (NValue t f m)
+  fetch :: Text -> Maybe (NValue f m) -> m (NValue f m)
   fetch uri Nothing =
     nixInstantiateExpr $ "builtins.fetchTarball \"" ++ Text.unpack uri ++ "\""
   fetch url (Just t) = demand t $ fromValue >=> \nsSha ->
@@ -229,27 +229,27 @@ fetchTarball = flip demand $ \case
           ++ Text.unpack sha
           ++ "\"; }"
 
-defaultFindPath :: MonadNix e t f m => [NValue t f m] -> FilePath -> m FilePath
+defaultFindPath :: MonadNix e f m => [NValue f m] -> FilePath -> m FilePath
 defaultFindPath = findPathM
 
 findPathM
-  :: forall e t f m
-   . MonadNix e t f m
-  => [NValue t f m]
+  :: forall e f m
+   . MonadNix e f m
+  => [NValue f m]
   -> FilePath
   -> m FilePath
 findPathM l name = findPathBy path l name
  where
-  path :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
+  path :: MonadEffects f m => FilePath -> m (Maybe FilePath)
   path path = do
-    path   <- makeAbsolutePath @t @f path
+    path   <- makeAbsolutePath @f path
     exists <- doesPathExist path
     return $ if exists then Just path else Nothing
 
 defaultImportPath
-  :: (MonadNix e t f m, MonadState (HashMap FilePath NExprLoc) m)
+  :: (MonadNix e f m, MonadState (HashMap FilePath NExprLoc) m)
   => FilePath
-  -> m (NValue t f m)
+  -> m (NValue f m)
 defaultImportPath path = do
   traceM $ "Importing file " ++ path
   withFrame Info (ErrorCall $ "While importing file " ++ show path) $ do
@@ -269,7 +269,7 @@ defaultImportPath path = do
             modify (M.insert path expr)
             pure expr
 
-defaultPathToDefaultNix :: MonadNix e t f m => FilePath -> m FilePath
+defaultPathToDefaultNix :: MonadNix e f m => FilePath -> m FilePath
 defaultPathToDefaultNix = pathToDefaultNixFile
 
 -- Given a path, determine the nix file to load
@@ -279,18 +279,18 @@ pathToDefaultNixFile p = do
   pure $ if isDir then p </> "default.nix" else p
 
 defaultDerivationStrict
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
+  :: forall e f m . MonadNix e f m => NValue f m -> m (NValue f m)
+defaultDerivationStrict = fromValue @(AttrSet (NValue f m)) >=> \s -> do
   nn <- maybe (pure False) (demand ?? fromValue) (M.lookup "__ignoreNulls" s)
   s' <- M.fromList <$> mapMaybeM (handleEntry nn) (M.toList s)
-  v' <- normalForm =<< toValue @(AttrSet (NValue t f m)) @_ @(NValue t f m) s'
+  v' <- normalForm =<< toValue @(AttrSet (NValue f m)) @_ @(NValue f m) s'
   nixInstantiateExpr $ "derivationStrict " ++ show (prettyNValue v')
  where
   mapMaybeM :: (a -> m (Maybe b)) -> [a] -> m [b]
   mapMaybeM op = foldr f (return [])
     where f x xs = op x >>= (<$> xs) . (++) . maybeToList
 
-  handleEntry :: Bool -> (Text, NValue t f m) -> m (Maybe (Text, NValue t f m))
+  handleEntry :: Bool -> (Text, NValue f m) -> m (Maybe (Text, NValue f m))
   handleEntry ignoreNulls (k, v) = fmap (k, ) <$> case k of
       -- The `args' attribute is special: it supplies the command-line
       -- arguments to the builder.
@@ -302,14 +302,14 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
       NVConstant NNull | ignoreNulls -> pure Nothing
       v'                             -> Just <$> coerceNix v'
    where
-    coerceNix :: NValue t f m -> m (NValue t f m)
+    coerceNix :: NValue f m -> m (NValue f m)
     coerceNix = toValue <=< coerceToString callFunc CopyToStore CoerceAny
 
-    coerceNixList :: NValue t f m -> m (NValue t f m)
+    coerceNixList :: NValue f m -> m (NValue f m)
     coerceNixList v = do
-      xs <- fromValue @[NValue t f m] v
+      xs <- fromValue @[NValue f m] v
       ys <- traverse (\x -> demand x coerceNix) xs
-      toValue @[NValue t f m] ys
+      toValue @[NValue f m] ys
 
 defaultTraceEffect :: MonadPutStr m => String -> m ()
 defaultTraceEffect = Nix.Effects.putStrLn

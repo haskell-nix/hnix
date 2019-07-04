@@ -74,13 +74,13 @@ class FromValue a m v where
     fromValueMay :: v -> m (Maybe a)
 
 type Convertible e t f m
-  = (Framed e m, MonadDataErrorContext t f m, MonadThunk t m (NValue t f m))
+  = (Framed e m, MonadDataErrorContext f m, MonadThunk m, Thunk m ~ t, ThunkValue m ~ NValue f m)
 
 instance ( Convertible e t f m
-         , MonadValue (NValue t f m) m
-         , FromValue a m (NValue' t f m (NValue t f m))
+         , MonadValue (NValue f m) m
+         , FromValue a m (NValue' f m (NValue f m))
          )
-  => FromValue a m (NValue t f m) where
+  => FromValue a m (Free (NValue' f m) t) where
   fromValueMay = flip demand $ \case
     Pure t -> force t fromValueMay
     Free v -> fromValueMay v
@@ -89,10 +89,10 @@ instance ( Convertible e t f m
     Free v -> fromValue v
 
 instance ( Convertible e t f m
-         , MonadValue (NValue t f m) m
-         , FromValue a m (Deeper (NValue' t f m (NValue t f m)))
+         , MonadValue (NValue f m) m
+         , FromValue a m (Deeper (NValue' f m (NValue f m)))
          )
-  => FromValue a m (Deeper (NValue t f m)) where
+  => FromValue a m (Deeper (Free (NValue' f m) t)) where
   fromValueMay (Deeper v) = demand v $ \case
     Pure t -> force t (fromValueMay . Deeper)
     Free v -> fromValueMay (Deeper v)
@@ -101,56 +101,56 @@ instance ( Convertible e t f m
     Free v -> fromValue (Deeper v)
 
 instance Convertible e t f m
-  => FromValue () m (NValue' t f m (NValue t f m)) where
+  => FromValue () m (NValue' f m (Free (NValue' f m) t)) where
   fromValueMay = \case
     NVConstant' NNull -> pure $ Just ()
     _                 -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m TNull (Free v)
+    _      -> throwError $ Expectation @f @m TNull (Free v)
 
 instance Convertible e t f m
-  => FromValue Bool m (NValue' t f m (NValue t f m)) where
+  => FromValue Bool m (NValue' f m (Free (NValue' f m) t)) where
   fromValueMay = \case
     NVConstant' (NBool b) -> pure $ Just b
     _                     -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m TBool (Free v)
+    _      -> throwError $ Expectation @f @m TBool (Free v)
 
 instance Convertible e t f m
-  => FromValue Int m (NValue' t f m (NValue t f m)) where
+  => FromValue Int m (NValue' f m (Free (NValue' f m) t)) where
   fromValueMay = \case
     NVConstant' (NInt b) -> pure $ Just (fromInteger b)
     _                    -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m TInt (Free v)
+    _      -> throwError $ Expectation @f @m TInt (Free v)
 
 instance Convertible e t f m
-  => FromValue Integer m (NValue' t f m (NValue t f m)) where
+  => FromValue Integer m (NValue' f m (Free (NValue' f m) t)) where
   fromValueMay = \case
     NVConstant' (NInt b) -> pure $ Just b
     _                    -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m TInt (Free v)
+    _      -> throwError $ Expectation @f @m TInt (Free v)
 
 instance Convertible e t f m
-  => FromValue Float m (NValue' t f m (NValue t f m)) where
+  => FromValue Float m (NValue' f m (Free (NValue' f m) t)) where
   fromValueMay = \case
     NVConstant' (NFloat b) -> pure $ Just b
     NVConstant' (NInt   i) -> pure $ Just (fromInteger i)
     _                      -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m TFloat (Free v)
+    _      -> throwError $ Expectation @f @m TFloat (Free v)
 
 instance ( Convertible e t f m
-         , MonadValue (NValue t f m) m
-         , MonadEffects t f m
+         , MonadValue (NValue f m) m
+         , MonadEffects f m
          )
-  => FromValue NixString m (NValue' t f m (NValue t f m)) where
+  => FromValue NixString m (NValue' f m (Free (NValue' f m) t)) where
   fromValueMay = \case
     NVStr' ns -> pure $ Just ns
     NVPath' p ->
@@ -165,24 +165,24 @@ instance ( Convertible e t f m
     _ -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m (TString NoContext) (Free v)
+    _      -> throwError $ Expectation @f @m (TString NoContext) (Free v)
 
 instance Convertible e t f m
-  => FromValue ByteString m (NValue' t f m (NValue t f m)) where
+  => FromValue ByteString m (NValue' f m (Free (NValue' f m) t)) where
   fromValueMay = \case
     NVStr' ns -> pure $ encodeUtf8 <$> hackyGetStringNoContext ns
     _         -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m (TString NoContext) (Free v)
+    _      -> throwError $ Expectation @f @m (TString NoContext) (Free v)
 
 newtype Path = Path { getPath :: FilePath }
     deriving Show
 
 instance ( Convertible e t f m
-         , MonadValue (NValue t f m) m
+         , MonadValue (NValue f m) m
          )
-  => FromValue Path m (NValue' t f m (NValue t f m)) where
+  => FromValue Path m (NValue' f m (Free (NValue' f m) t)) where
   fromValueMay = \case
     NVPath' p  -> pure $ Just (Path p)
     NVStr'  ns -> pure $ Path . Text.unpack <$> hackyGetStringNoContext ns
@@ -192,75 +192,75 @@ instance ( Convertible e t f m
     _ -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m TPath (Free v)
+    _      -> throwError $ Expectation @f @m TPath (Free v)
 
 instance Convertible e t f m
-  => FromValue [NValue t f m] m (NValue' t f m (NValue t f m)) where
+  => FromValue [Free (NValue' f m) t] m (NValue' f m (Free (NValue' f m) t)) where
   fromValueMay = \case
     NVList' l -> pure $ Just l
     _         -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m TList (Free v)
+    _      -> throwError $ Expectation @f @m TList (Free v)
 
 instance ( Convertible e t f m
-         , FromValue a m (NValue t f m)
+         , FromValue a m (NValue f m)
          )
-  => FromValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
+  => FromValue [a] m (Deeper (NValue' f m (Free (NValue' f m) t))) where
   fromValueMay = \case
     Deeper (NVList' l) -> sequence <$> traverse fromValueMay l
     _                  -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m TList (Free (getDeeper v))
+    _      -> throwError $ Expectation @f @m TList (Free (getDeeper v))
 
 instance Convertible e t f m
-  => FromValue (AttrSet (NValue t f m)) m (NValue' t f m (NValue t f m)) where
+  => FromValue (AttrSet (Free (NValue' f m) t)) m (NValue' f m (Free (NValue' f m) t)) where
   fromValueMay = \case
     NVSet' s _ -> pure $ Just s
     _          -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m TSet (Free v)
+    _      -> throwError $ Expectation @f @m TSet (Free v)
 
 instance ( Convertible e t f m
-         , FromValue a m (NValue t f m)
+         , FromValue a m (NValue f m)
          )
-  => FromValue (AttrSet a) m (Deeper (NValue' t f m (NValue t f m))) where
+  => FromValue (AttrSet a) m (Deeper (NValue' f m (Free (NValue' f m) t))) where
   fromValueMay = \case
     Deeper (NVSet' s _) -> sequence <$> traverse fromValueMay s
     _                   -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m TSet (Free (getDeeper v))
+    _      -> throwError $ Expectation @f @m TSet (Free (getDeeper v))
 
 instance Convertible e t f m
-  => FromValue (AttrSet (NValue t f m), AttrSet SourcePos) m
-              (NValue' t f m (NValue t f m)) where
+  => FromValue (AttrSet (Free (NValue' f m) t), AttrSet SourcePos) m
+              (NValue' f m (Free (NValue' f m) t)) where
   fromValueMay = \case
     NVSet' s p -> pure $ Just (s, p)
     _          -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m TSet (Free v)
+    _      -> throwError $ Expectation @f @m TSet (Free v)
 
 instance ( Convertible e t f m
-         , FromValue a m (NValue t f m)
+         , FromValue a m (NValue f m)
          )
   => FromValue (AttrSet a, AttrSet SourcePos) m
-              (Deeper (NValue' t f m (NValue t f m))) where
+              (Deeper (NValue' f m (Free (NValue' f m) t))) where
   fromValueMay = \case
     Deeper (NVSet' s p) -> fmap (, p) <$> sequence <$> traverse fromValueMay s
     _                   -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m TSet (Free (getDeeper v))
+    _      -> throwError $ Expectation @f @m TSet (Free (getDeeper v))
 
 -- This instance needs IncoherentInstances, and only because of ToBuiltin
 instance ( Convertible e t f m
-         , FromValue a m (NValue' t f m (NValue t f m))
+         , FromValue a m (NValue' f m (NValue f m))
          )
-  => FromValue a m (Deeper (NValue' t f m (NValue t f m))) where
+  => FromValue a m (Deeper (NValue' f m (Free (NValue' f m) t))) where
   fromValueMay = fromValueMay . getDeeper
   fromValue    = fromValue . getDeeper
 
@@ -271,55 +271,55 @@ instance ( Convertible e t f m
 class ToValue a m v where
     toValue :: a -> m v
 
-instance (Convertible e t f m, ToValue a m (NValue' t f m (NValue t f m)))
-  => ToValue a m (NValue t f m) where
+instance (Convertible e t f m, ToValue a m (NValue' f m (NValue f m)))
+  => ToValue a m (Free (NValue' f m) t) where
   toValue = fmap Free . toValue
 
 instance ( Convertible e t f m
-         , ToValue a m (Deeper (NValue' t f m (NValue t f m)))
+         , ToValue a m (Deeper (NValue' f m (NValue f m)))
          )
-  => ToValue a m (Deeper (NValue t f m)) where
+  => ToValue a m (Deeper (Free (NValue' f m) t)) where
   toValue = fmap (fmap Free) . toValue
 
 instance Convertible e t f m
-  => ToValue () m (NValue' t f m (NValue t f m)) where
+  => ToValue () m (NValue' f m (Free (NValue' f m) t)) where
   toValue _ = pure . nvConstant' $ NNull
 
 instance Convertible e t f m
-  => ToValue Bool m (NValue' t f m (NValue t f m)) where
+  => ToValue Bool m (NValue' f m (Free (NValue' f m) t)) where
   toValue = pure . nvConstant' . NBool
 
 instance Convertible e t f m
-  => ToValue Int m (NValue' t f m (NValue t f m)) where
+  => ToValue Int m (NValue' f m (Free (NValue' f m) t)) where
   toValue = pure . nvConstant' . NInt . toInteger
 
 instance Convertible e t f m
-  => ToValue Integer m (NValue' t f m (NValue t f m)) where
+  => ToValue Integer m (NValue' f m (Free (NValue' f m) t)) where
   toValue = pure . nvConstant' . NInt
 
 instance Convertible e t f m
-  => ToValue Float m (NValue' t f m (NValue t f m)) where
+  => ToValue Float m (NValue' f m (Free (NValue' f m) t)) where
   toValue = pure . nvConstant' . NFloat
 
 instance Convertible e t f m
-  => ToValue NixString m (NValue' t f m (NValue t f m)) where
+  => ToValue NixString m (NValue' f m (Free (NValue' f m) t)) where
   toValue = pure . nvStr'
 
 instance Convertible e t f m
-  => ToValue ByteString m (NValue' t f m (NValue t f m)) where
+  => ToValue ByteString m (NValue' f m (Free (NValue' f m) t)) where
   toValue = pure . nvStr' . hackyMakeNixStringWithoutContext . decodeUtf8
 
 instance Convertible e t f m
-  => ToValue Path m (NValue' t f m (NValue t f m)) where
+  => ToValue Path m (NValue' f m (Free (NValue' f m) t)) where
   toValue = pure . nvPath' . getPath
 
 instance Convertible e t f m
-  => ToValue StorePath m (NValue' t f m (NValue t f m)) where
+  => ToValue StorePath m (NValue' f m (Free (NValue' f m) t)) where
   toValue = toValue . Path . unStorePath
 
 instance ( Convertible e t f m
          )
-  => ToValue SourcePos m (NValue' t f m (NValue t f m)) where
+  => ToValue SourcePos m (NValue' f m (Free (NValue' f m) t)) where
   toValue (SourcePos f l c) = do
     f' <- toValue (principledMakeNixStringWithoutContext (Text.pack f))
     l' <- toValue (unPos l)
@@ -329,33 +329,33 @@ instance ( Convertible e t f m
 
 -- | With 'ToValue', we can always act recursively
 instance Convertible e t f m
-  => ToValue [NValue t f m] m (NValue' t f m (NValue t f m)) where
+  => ToValue [Free (NValue' f m) t] m (NValue' f m (Free (NValue' f m) t)) where
   toValue = pure . nvList'
 
-instance (Convertible e t f m, ToValue a m (NValue t f m))
-  => ToValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
+instance (Convertible e t f m, ToValue a m (NValue f m))
+  => ToValue [a] m (Deeper (NValue' f m (Free (NValue' f m) t))) where
   toValue = fmap (Deeper . nvList') . traverse toValue
 
 instance Convertible e t f m
-  => ToValue (AttrSet (NValue t f m)) m (NValue' t f m (NValue t f m)) where
+  => ToValue (AttrSet (Free (NValue' f m) t)) m (NValue' f m (Free (NValue' f m) t)) where
   toValue s = pure $ nvSet' s mempty
 
-instance (Convertible e t f m, ToValue a m (NValue t f m))
-  => ToValue (AttrSet a) m (Deeper (NValue' t f m (NValue t f m))) where
+instance (Convertible e t f m, ToValue a m (NValue f m))
+  => ToValue (AttrSet a) m (Deeper (NValue' f m (Free (NValue' f m) t))) where
   toValue s = (Deeper .) . nvSet' <$> traverse toValue s <*> pure mempty
 
 instance Convertible e t f m
-  => ToValue (AttrSet (NValue t f m), AttrSet SourcePos) m
-            (NValue' t f m (NValue t f m)) where
+  => ToValue (AttrSet (Free (NValue' f m) t), AttrSet SourcePos) m
+            (NValue' f m (Free (NValue' f m) t)) where
   toValue (s, p) = pure $ nvSet' s p
 
-instance (Convertible e t f m, ToValue a m (NValue t f m))
+instance (Convertible e t f m, ToValue a m (NValue f m))
   => ToValue (AttrSet a, AttrSet SourcePos) m
-            (Deeper (NValue' t f m (NValue t f m))) where
+            (Deeper (NValue' f m (Free (NValue' f m) t))) where
   toValue (s, p) = (Deeper .) . nvSet' <$> traverse toValue s <*> pure p
 
 instance Convertible e t f m
-  => ToValue NixLikeContextValue m (NValue' t f m (NValue t f m)) where
+  => ToValue NixLikeContextValue m (NValue' f m (Free (NValue' f m) t)) where
   toValue nlcv = do
     path <- if nlcvPath nlcv then Just <$> toValue True else return Nothing
     allOutputs <- if nlcvAllOutputs nlcv
@@ -364,7 +364,7 @@ instance Convertible e t f m
     outputs <- do
       let outputs =
             fmap principledMakeNixStringWithoutContext $ nlcvOutputs nlcv
-      ts :: [NValue t f m] <- traverse toValue outputs
+      ts :: [NValue f m] <- traverse toValue outputs
       case ts of
         [] -> return Nothing
         _  -> Just <$> toValue ts
@@ -374,8 +374,8 @@ instance Convertible e t f m
       , (\os -> ("outputs", os)) <$> outputs
       ]
 
-instance Convertible e t f m => ToValue () m (NExprF (NValue t f m)) where
+instance Convertible e t f m => ToValue () m (NExprF (Free (NValue' f m) t)) where
   toValue _ = pure . NConstant $ NNull
 
-instance Convertible e t f m => ToValue Bool m (NExprF (NValue t f m)) where
+instance Convertible e t f m => ToValue Bool m (NExprF (Free (NValue' f m) t)) where
   toValue = pure . NConstant . NBool

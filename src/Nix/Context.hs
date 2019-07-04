@@ -12,24 +12,20 @@ import           Nix.Expr.Types.Annotated       ( SrcSpan
                                                 , nullSpan
                                                 )
 
-data Context m t = Context
-    { scopes  :: Scopes m t
-    , source  :: SrcSpan
-    , frames  :: Frames
-    , options :: Options
+data Context = Context
+    { source  :: SrcSpan -- Should we capture?
+    , frames  :: Frames -- Don't capture (should change)
+    , options :: Options -- Don't capture (never changes)
     }
 
-instance Has (Context m t) (Scopes m t) where
-  hasLens f (Context x y z w) = (\x' -> Context x' y z w) <$> f x
+instance Has Context SrcSpan where
+  hasLens f (Context x y z) = (\x' -> Context x' y z) <$> f x
 
-instance Has (Context m t) SrcSpan where
-  hasLens f (Context x y z w) = (\y' -> Context x y' z w) <$> f y
+instance Has Context Frames where
+  hasLens f (Context x y z) = (\y' -> Context x y' z) <$> f y
 
-instance Has (Context m t) Frames where
-  hasLens f (Context x y z w) = (\z' -> Context x y z' w) <$> f z
+instance Has Context Options where
+  hasLens f (Context x y z) = (\z' -> Context x y z') <$> f z
 
-instance Has (Context m t) Options where
-  hasLens f (Context x y z w) = (\w' -> Context x y z w') <$> f w
-
-newContext :: Options -> Context m t
-newContext = Context emptyScopes nullSpan []
+newContext :: Options -> Context
+newContext = Context nullSpan []

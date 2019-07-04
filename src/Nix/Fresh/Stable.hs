@@ -8,7 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Nix.Fresh.Stable (FreshStableIdT, runFreshStableIdT) where
+module Nix.Fresh.Stable (FreshStableIdT, runFreshStableIdT, freshId) where
 
 import Nix.Effects
 import Nix.Value
@@ -42,21 +42,36 @@ newtype FreshStableIdT m a = FreshStableIdT (ReaderT StableId (StateT Int m) a)
 #endif
     )
 
+instance MonadState s m => MonadState s (FreshStableIdT m) where
+  get = lift get
+  put = lift . put
+  state = lift . state
+
 instance MonadTrans FreshStableIdT where
   lift = FreshStableIdT . lift . lift
+
+instance MonadTransWrap (StateT s) where
+  liftWrap f a = do
+    old <- get
+    (result, new) <- lift $ f $ runStateT a old
+    put new
+    pure result
+
+instance MonadTransWrap FreshStableIdT where
+  liftWrap f (FreshStableIdT a) = FreshStableIdT $ liftWrap (liftWrap f) a
 
 runFreshStableIdT :: Monad m => StableId -> FreshStableIdT m a -> m a
 runFreshStableIdT root (FreshStableIdT a) = evalStateT (runReaderT a root) 0
 
-instance Monad m => MonadThunkId (FreshStableIdT m) where
-  type ThunkId (FreshStableIdT m) = StableId
-  freshId = FreshStableIdT $ do
-    root <- ask
-    n <- get
-    put $ succ n
-    return $ cons n root
-  withRootId root a =
-    lift $ runFreshStableIdT root a
+freshId :: Monad m => FreshStableIdT m StableId
+freshId = FreshStableIdT $ do
+  root <- ask
+  n <- get
+  put $ succ n
+  return $ cons n root
+
+withRootId root a =
+  lift $ runFreshStableIdT root a
 
 instance MonadFile m => MonadFile (FreshStableIdT m)
 instance MonadIntrospect m => MonadIntrospect (FreshStableIdT m)
@@ -69,6 +84,7 @@ instance MonadEnv m => MonadEnv (FreshStableIdT m)
 instance MonadInstantiate m => MonadInstantiate (FreshStableIdT m)
 instance MonadExec m => MonadExec (FreshStableIdT m)
 
+{-
 instance (MonadEffects t f m, MonadDataContext f m)
   => MonadEffects t f (FreshStableIdT m) where
   makeAbsolutePath = lift . makeAbsolutePath @t @f @m
@@ -87,3 +103,4 @@ instance (MonadEffects t f m, MonadDataContext f m)
     p <- lift $ derivationStrict @t @f @m (unliftNValue (runFreshStableIdT root) v)
     return $ liftNValue (runFreshStableIdT root) p
   traceEffect = lift . traceEffect @t @f @m
+-}
