@@ -1,23 +1,11 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PartialTypeSignatures #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
@@ -238,7 +226,7 @@ findPathM
   => [NValue t f m]
   -> FilePath
   -> m FilePath
-findPathM l name = findPathBy path l name
+findPathM = findPathBy path
  where
   path :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
   path path = do
@@ -262,9 +250,7 @@ defaultImportPath path = do
           Failure err ->
             throwError
               $ ErrorCall
-              . show
-              $ fillSep
-              $ ["Parse during import failed:", err]
+              . show $ fillSep ["Parse during import failed:", err]
           Success expr -> do
             modify (M.insert path expr)
             pure expr
@@ -308,7 +294,7 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
     coerceNixList :: NValue t f m -> m (NValue t f m)
     coerceNixList v = do
       xs <- fromValue @[NValue t f m] v
-      ys <- traverse (\x -> demand x coerceNix) xs
+      ys <- traverse (`demand` coerceNix) xs
       toValue @[NValue t f m] ys
 
 defaultTraceEffect :: MonadPutStr m => String -> m ()
