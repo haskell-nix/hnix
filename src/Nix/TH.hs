@@ -43,8 +43,8 @@ freeVars e = case unFix e of
   (NStr         string  ) -> foldMap freeVars string
   (NSym         var     ) -> Set.singleton var
   (NList        list    ) -> foldMap freeVars list
-  (NSet         bindings) -> foldMap bindFree bindings
-  (NRecSet bindings) -> foldMap bindFree bindings \\ foldMap bindDefs bindings
+  (NSet NNonRecursive bindings) -> foldMap bindFree bindings
+  (NSet NRecursive bindings) -> foldMap bindFree bindings \\ foldMap bindDefs bindings
   (NLiteralPath _       ) -> Set.empty
   (NEnvPath     _       ) -> Set.empty
   (NUnary _ expr        ) -> freeVars expr

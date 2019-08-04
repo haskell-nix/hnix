@@ -210,7 +210,7 @@ reduce base@(NSelect_ _ _ attrs _)
     n@(NamedVar (a' :| _) _ _) | a' == a -> Just n
     _ -> findBind xs attrs
   -- Follow the attrpath recursively in sets.
-  inspectSet (NSet_ _ binds) attrs = case findBind binds attrs of
+  inspectSet (NSet_ _ NNonRecursive binds) attrs = case findBind binds attrs of
     Just (NamedVar _ e _) -> case NE.uncons attrs of
       (_, Just attrs) -> inspectSet (unFix e) attrs
       _               -> pure e
@@ -221,18 +221,18 @@ reduce base@(NSelect_ _ _ attrs _)
 
 -- | Reduce a set by inlining its binds outside of the set
 --   if none of the binds inherit the super set.
-reduce e@(NSet_ ann binds) = do
+reduce e@(NSet_ ann NNonRecursive binds) = do
   let usesInherit = flip any binds $ \case
         Inherit{} -> True
         _         -> False
   if usesInherit
-    then clearScopes @NExprLoc $ Fix . NSet_ ann <$> traverse sequence binds
+    then clearScopes @NExprLoc $ Fix . NSet_ ann NNonRecursive <$> traverse sequence binds
     else Fix <$> sequence e
 
 -- Encountering a 'rec set' construction eliminates any hope of inlining
 -- definitions.
-reduce (NRecSet_ ann binds) =
-  clearScopes @NExprLoc $ Fix . NRecSet_ ann <$> traverse sequence binds
+reduce (NSet_ ann NRecursive binds) =
+  clearScopes @NExprLoc $ Fix . NSet_ ann NRecursive <$> traverse sequence binds
 
 -- Encountering a 'with' construction eliminates any hope of inlining
 -- definitions.
@@ -320,11 +320,9 @@ pruneTree opts = cataM $ \(FlaggedF (b, Compose x)) -> do
 
     NList l | reduceLists opts -> Just $ NList (catMaybes l)
             | otherwise        -> Just $ NList (map (fromMaybe nNull) l)
-    NSet binds | reduceSets opts -> Just $ NSet (mapMaybe sequence binds)
-               | otherwise -> Just $ NSet (map (fmap (fromMaybe nNull)) binds)
-    NRecSet binds
-      | reduceSets opts -> Just $ NRecSet (mapMaybe sequence binds)
-      | otherwise       -> Just $ NRecSet (map (fmap (fromMaybe nNull)) binds)
+    NSet recur binds
+      | reduceSets opts -> Just $ NSet recur (mapMaybe sequence binds)
+      | otherwise -> Just $ NSet recur (map (fmap (fromMaybe nNull)) binds)
 
     NLet binds (Just body@(Fix (Compose (Ann _ x)))) ->
       Just $ case mapMaybe pruneBinding binds of
