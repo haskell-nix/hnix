@@ -264,7 +264,7 @@ instance (Serialise v, Serialise r) => Serialise (Antiquoted v r)
 
 -- | An 'NString' is a list of things that are either a plain string
 -- or an antiquoted expression. After the antiquotes have been evaluated,
--- the final string is constructed by concating all the parts.
+-- the final string is constructed by concatenating all the parts.
 data NString r
   = DoubleQuoted ![Antiquoted Text r]
   -- ^ Strings wrapped with double-quotes (") can contain literal newline

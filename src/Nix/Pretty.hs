@@ -66,7 +66,7 @@ data NixDoc ann = NixDoc
     -- parentheses.
   , rootOp :: OperatorInfo
   , wasPath :: Bool -- This is needed so that when a path is used in a selector path
-                    -- we can add brackets appropiately
+                    -- we can add brackets appropriately
   }
 
 mkNixDoc :: Doc ann -> OperatorInfo -> NixDoc ann
@@ -83,7 +83,7 @@ pathExpr d = (simpleExpr d) { wasPath = True }
 
 -- | An expression that behaves as if its root operator had a precedence lower
 --   than all other operators. That ensures that the expression is wrapped in
---   parantheses in almost always, but it's still rendered without parentheses
+--   parentheses in almost always, but it's still rendered without parentheses
 --   in cases where parentheses are never required (such as in the LHS of a
 --   binding).
 leastPrecedence :: Doc ann -> NixDoc ann

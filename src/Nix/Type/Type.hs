@@ -10,8 +10,8 @@ newtype TVar = TV String
 data Type
   = TVar TVar                -- type variable
   | TCon String              -- known type
-  | TSet Bool (AttrSet Type) -- heterogenous map, bool if variadic
-  | TList [Type]             -- heterogenous list
+  | TSet Bool (AttrSet Type) -- heterogeneous map, bool if variadic
+  | TList [Type]             -- heterogeneous list
   | (:~>) Type Type          -- type -> type
   | TMany [Type]             -- variant type
   deriving (Show, Eq, Ord)

@@ -44,7 +44,7 @@ hnixEvalText :: Options -> Text -> IO (StdValue (StandardT (StdIdT IO)))
 hnixEvalText opts src = case parseNixText src of
   Failure err ->
     error
-      $  "Parsing failed for expressien `"
+      $  "Parsing failed for expression `"
       ++ unpack src
       ++ "`.\n"
       ++ show err
