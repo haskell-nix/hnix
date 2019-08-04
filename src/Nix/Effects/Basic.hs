@@ -135,7 +135,7 @@ findPathBy finder l name = do
         $  "file '"
         ++ name
         ++ "' was not found in the Nix search path"
-        ++ " (add it using $NIX_PATH or -I)"
+        ++ " (add it's using $NIX_PATH or -I)"
     Just path -> return path
  where
   go :: Maybe FilePath -> NValue t f m -> m (Maybe FilePath)
@@ -165,7 +165,7 @@ findPathBy finder l name = do
         throwError
           $  ErrorCall
           $  "__nixPath must be a list of attr sets"
-          ++ " with 'path' elements, but saw: "
+          ++ " with 'path' elements, but received: "
           ++ show s
 
 fetchTarball
