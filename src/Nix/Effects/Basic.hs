@@ -79,6 +79,7 @@ instance (Show v, Typeable v) => Exception (NixPathError v)
 data FetchTarballError a
   = NoUrlAttr
   | NorUriNorSet a
+  | NorUriNorString a
   deriving Show
 
 instance (Show v, Typeable v) => Exception (FetchTarballError v)
@@ -87,6 +88,9 @@ instance (Show v, Typeable v) => Exception (FetchTarballError v)
     = "builtins.fetchTarball: Missing url attribute."
   displayException (NorUriNorSet v)
     = "builtins.fetchTarball: Expected URI or set, received: '"
+    <> show v <> "'."
+  displayException (NorUriNorString v)
+    = "builtins.fetchTarball: Expected URI or string, received: '"
     <> show v <> "'."
 
 defaultMakeAbsolutePath :: MonadNix e t f m => FilePath -> m FilePath
@@ -204,11 +208,7 @@ fetchTarball = flip demand $ \case
   go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
   go msha = \case
     NVStr ns -> fetch (hackyStringIgnoreContext ns) msha
-    v ->
-      throwError
-        $  ErrorCall
-        $  "builtins.fetchTarball: Expected URI or string, got "
-        ++ show v
+    v -> throwError $ ErrorCall $ displayException $ NorUriNorString v
 
 {- jww (2018-04-11): This should be written using pipes in another module
     fetch :: Text -> Maybe (NThunk m) -> m (NValue t f m)
