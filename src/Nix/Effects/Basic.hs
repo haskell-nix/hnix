@@ -76,6 +76,15 @@ instance (Show v, Typeable v) => Exception (NixPathError v)
     =  "__nixPath must be a list of attr sets with 'path' elements, "
     <> "but received: '" <> show s <> "'."
 
+data FetchTarballError
+  = NoUrlAttr
+  deriving Show
+
+instance Exception (FetchTarballError)
+ where
+  displayException NoUrlAttr
+    = "builtins.fetchTarball: Missing url attribute."
+
 defaultMakeAbsolutePath :: MonadNix e t f m => FilePath -> m FilePath
 defaultMakeAbsolutePath origPath = do
   origPathExpanded <- expandHomePath origPath
@@ -182,7 +191,7 @@ fetchTarball
 fetchTarball = flip demand $ \case
   NVSet s _ -> case M.lookup "url" s of
     Nothing ->
-      throwError $ ErrorCall "builtins.fetchTarball: Missing url attribute"
+      throwError $ ErrorCall $ displayException NoUrlAttr
     Just url -> demand url $ go (M.lookup "sha256" s)
   v@NVStr{} -> go Nothing v
   v ->
