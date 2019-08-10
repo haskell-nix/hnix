@@ -76,14 +76,18 @@ instance (Show v, Typeable v) => Exception (NixPathError v)
     =  "__nixPath must be a list of attr sets with 'path' elements, "
     <> "but received: '" <> show s <> "'."
 
-data FetchTarballError
+data FetchTarballError a
   = NoUrlAttr
+  | NorUriNorSet a
   deriving Show
 
-instance Exception (FetchTarballError)
+instance (Show v, Typeable v) => Exception (FetchTarballError v)
  where
   displayException NoUrlAttr
     = "builtins.fetchTarball: Missing url attribute."
+  displayException (NorUriNorSet v)
+    = "builtins.fetchTarball: Expected URI or set, received: '"
+    <> show v <> "'."
 
 defaultMakeAbsolutePath :: MonadNix e t f m => FilePath -> m FilePath
 defaultMakeAbsolutePath origPath = do
@@ -191,14 +195,11 @@ fetchTarball
 fetchTarball = flip demand $ \case
   NVSet s _ -> case M.lookup "url" s of
     Nothing ->
-      throwError $ ErrorCall $ displayException NoUrlAttr
+      throwError $ ErrorCall $ displayException (NoUrlAttr :: FetchTarballError String)
     Just url -> demand url $ go (M.lookup "sha256" s)
   v@NVStr{} -> go Nothing v
   v ->
-    throwError
-      $  ErrorCall
-      $  "builtins.fetchTarball: Expected URI or set, got "
-      ++ show v
+    throwError $ ErrorCall $ displayException $ NorUriNorSet v
  where
   go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
   go msha = \case
