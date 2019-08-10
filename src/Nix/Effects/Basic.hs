@@ -66,6 +66,16 @@ instance (Show v, Typeable v) => Exception (FileError v)
     =  "File '" <> show name <> "' was not found in the Nix search path "
     <> "(add it using $NIX_PATH or -I)."
 
+data NixPathError a
+  = WrongNixPathFormat a
+  deriving Show
+
+instance (Show v, Typeable v) => Exception (NixPathError v)
+ where
+  displayException (WrongNixPathFormat s)
+    =  "__nixPath must be a list of attr sets with 'path' elements, "
+    <> "but received: '" <> show s <> "'."
+
 defaultMakeAbsolutePath :: MonadNix e t f m => FilePath -> m FilePath
 defaultMakeAbsolutePath origPath = do
   origPathExpanded <- expandHomePath origPath
@@ -165,11 +175,7 @@ findPathBy finder l name = do
     Nothing -> case M.lookup "uri" s of
       Just ut -> defer $ fetchTarball ut
       Nothing ->
-        throwError
-          $  ErrorCall
-          $  "__nixPath must be a list of attr sets"
-          ++ " with 'path' elements, but received: "
-          ++ show s
+        throwError $ ErrorCall $ displayException $ WrongNixPathFormat s
 
 fetchTarball
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
