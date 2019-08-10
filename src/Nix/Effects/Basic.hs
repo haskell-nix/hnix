@@ -54,6 +54,7 @@ import           GHC.DataSize
 
 data FileError a
   = CurFileIsntPath a
+  | FileNotInNixPath a
   deriving Show
 
 instance (Show v, Typeable v) => Exception (FileError v)
@@ -61,6 +62,9 @@ instance (Show v, Typeable v) => Exception (FileError v)
   displayException (CurFileIsntPath v)
     =  "When resolving relative path, __cur_file is in scope, "
     <> "but is not a path; it is: '" <> show v <>"'."
+  displayException (FileNotInNixPath name)
+    =  "File '" <> show name <> "' was not found in the Nix search path "
+    <> "(add it using $NIX_PATH or -I)."
 
 defaultMakeAbsolutePath :: MonadNix e t f m => FilePath -> m FilePath
 defaultMakeAbsolutePath origPath = do
@@ -134,12 +138,7 @@ findPathBy finder l name = do
   mpath <- foldM go Nothing l
   case mpath of
     Nothing ->
-      throwError
-        $  ErrorCall
-        $  "file '"
-        ++ name
-        ++ "' was not found in the Nix search path"
-        ++ " (add it's using $NIX_PATH or -I)"
+      throwError $ ErrorCall $ displayException $ FileNotInNixPath name
     Just path -> return path
  where
   go :: Maybe FilePath -> NValue t f m -> m (Maybe FilePath)
