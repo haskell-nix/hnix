@@ -52,6 +52,16 @@ import           GHC.DataSize
 #endif
 #endif
 
+data FileError a
+  = CurFileIsntPath a
+  deriving Show
+
+instance (Show v, Typeable v) => Exception (FileError v)
+ where
+  displayException (CurFileIsntPath v)
+    =  "When resolving relative path, __cur_file is in scope, "
+    <> "but is not a path; it is: '" <> show v <>"'."
+
 defaultMakeAbsolutePath :: MonadNix e t f m => FilePath -> m FilePath
 defaultMakeAbsolutePath origPath = do
   origPathExpanded <- expandHomePath origPath
@@ -64,13 +74,7 @@ defaultMakeAbsolutePath origPath = do
           Nothing -> getCurrentDirectory
           Just v  -> demand v $ \case
             NVPath s -> return $ takeDirectory s
-            v ->
-              throwError
-                $  ErrorCall
-                $  "when resolving relative path,"
-                ++ " __cur_file is in scope,"
-                ++ " but is not a path; it is: "
-                ++ show v
+            v -> throwError $ ErrorCall $ displayException $ CurFileIsntPath v
       pure $ cwd <///> origPathExpanded
   removeDotDotIndirections <$> canonicalizePath absPath
 
