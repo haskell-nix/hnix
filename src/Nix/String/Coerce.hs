@@ -38,6 +38,15 @@ data CopyToStoreMode
   -- ^ Add paths to the store as they are encountered
   deriving (Eq,Ord,Enum,Bounded)
 
+newtype CoerceAsyncException a
+  = CoerceUnexpectedArgument a
+  deriving Show
+
+instance (Show a, Typeable a) => Exception (CoerceAsyncException a)
+ where
+  displayException (CoerceUnexpectedArgument v)
+    = "Expected a string, but received: '" <> show v <> "'."
+
 coerceToString
   :: ( Framed e m
      , MonadStore m
@@ -77,7 +86,7 @@ coerceToString call ctsm clevel = go
 
     NVSet s _ | Just p <- M.lookup "outPath" s -> demand p go
 
-    v -> throwError $ ErrorCall $ "Expected a string, but saw: " ++ show v
+    v -> throwError $ ErrorCall $ displayException $ CoerceUnexpectedArgument v
 
   nixStringUnwords =
     principledIntercalateNixString (principledMakeNixStringWithoutContext " ")
