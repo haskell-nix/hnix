@@ -106,6 +106,15 @@ data SynHoleInfo m v = SynHoleInfo
 
 instance (Typeable m, Typeable v) => Exception (SynHoleInfo m v)
 
+data AttrSetAlterAsyncException
+  = AttrSetAlterInvalidSelector
+  deriving Show
+
+instance Exception AttrSetAlterAsyncException
+ where
+  displayException AttrSetAlterInvalidSelector
+    = "invalid selector with no components"
+
 -- jww (2019-03-18): By deferring only those things which must wait until
 -- context of us, this can be written as:
 -- eval :: forall v m . MonadNixEval v m => NExprF v -> m v
@@ -189,7 +198,7 @@ attrSetAlter
   -> m v
   -> m (AttrSet (m v), AttrSet SourcePos)
 attrSetAlter [] _ _ _ _ =
-  evalError @v $ ErrorCall "invalid selector with no components"
+  evalError @v $ ErrorCall $ displayException AttrSetAlterInvalidSelector
 
 attrSetAlter (k : ks) pos m p val = case M.lookup k m of
   Nothing | null ks   -> go
