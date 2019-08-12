@@ -105,6 +105,9 @@ defaultMakeAbsolutePath origPath = do
           Nothing -> getCurrentDirectory
           Just v  -> demand v $ \case
             NVPath s -> return $ takeDirectory s
+            -- TODO: 2019-08-12: John Ericson (Ericson2314):
+            -- You don't want to call displayException here, but where the m is
+            -- eliminated.
             v -> throwError $ ErrorCall $ displayException $ CurFileIsntPath v
       pure $ cwd <///> origPathExpanded
   removeDotDotIndirections <$> canonicalizePath absPath
