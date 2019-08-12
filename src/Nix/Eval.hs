@@ -115,6 +115,15 @@ instance Exception AttrSetAlterAsyncException
   displayException AttrSetAlterInvalidSelector
     = "invalid selector with no components"
 
+data EvalGetterKeyNameAsyncException
+  = ComponentValueIsNullExpectedString
+  deriving Show
+
+instance Exception EvalGetterKeyNameAsyncException
+ where
+  displayException ComponentValueIsNullExpectedString
+    = "value is null while a string was expected"
+
 -- jww (2019-03-18): By deferring only those things which must wait until
 -- context of us, this can be written as:
 -- eval :: forall v m . MonadNixEval v m => NExprF v -> m v
@@ -352,7 +361,8 @@ evalGetterKeyName
 evalGetterKeyName = evalSetterKeyName >=> \case
   Just k -> pure k
   Nothing ->
-    evalError @v $ ErrorCall "value is null while a string was expected"
+    evalError @v $ ErrorCall
+      $ displayException ComponentValueIsNullExpectedString
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *binding* a value
