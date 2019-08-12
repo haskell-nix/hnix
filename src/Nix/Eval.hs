@@ -126,12 +126,15 @@ instance Exception EvalGetterKeyNameAsyncException
 
 data BuildArgumentAsyncException a
   = BuildArgumentMissingValue a
+  | BuildArgumentUnexpectedParameter a
   deriving Show
 
 instance (Show a, Typeable a) => Exception (BuildArgumentAsyncException a)
  where
   displayException (BuildArgumentMissingValue k)
     = "Missing value for parameter '" <> show k <> "'."
+  displayException (BuildArgumentUnexpectedParameter k)
+    = "Unexpected parameter '" <> show k <> "'."
 
 -- jww (2019-03-18): By deferring only those things which must wait until
 -- context of us, this can be written as:
@@ -434,12 +437,8 @@ buildArgument params arg = do
       | isVariadic
       -> Nothing
       | otherwise
-      -> Just
-        $  const
-        $  evalError @v
-        $  ErrorCall
-        $  "Unexpected parameter: "
-        ++ show k
+      -> Just $ const $ evalError @v $ ErrorCall
+        $ displayException $ BuildArgumentUnexpectedParameter k
     These x _ -> Just (const (pure x))
 
 addSourcePositions
