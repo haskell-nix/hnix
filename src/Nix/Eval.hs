@@ -124,6 +124,15 @@ instance Exception EvalGetterKeyNameAsyncException
   displayException ComponentValueIsNullExpectedString
     = "value is null while a string was expected"
 
+data BuildArgumentAsyncException a
+  = BuildArgumentMissingValue a
+  deriving Show
+
+instance (Show a, Typeable a) => Exception (BuildArgumentAsyncException a)
+ where
+  displayException (BuildArgumentMissingValue k)
+    = "Missing value for parameter '" <> show k <> "'."
+
 -- jww (2019-03-18): By deferring only those things which must wait until
 -- context of us, this can be written as:
 -- eval :: forall v m . MonadNixEval v m => NExprF v -> m v
@@ -417,12 +426,8 @@ buildArgument params arg = do
     -> Maybe (AttrSet v -> m v)
   assemble scope isVariadic k = \case
     That Nothing ->
-      Just
-        $  const
-        $  evalError @v
-        $  ErrorCall
-        $  "Missing value for parameter: "
-        ++ show k
+      Just $ const $ evalError @v $ ErrorCall
+        $ displayException $ BuildArgumentMissingValue k
     That (Just f) ->
       Just $ \args -> defer $ withScopes scope $ pushScope args f
     This _
