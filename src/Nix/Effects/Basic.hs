@@ -262,6 +262,7 @@ defaultImportPath
   -> m (NValue t f m)
 defaultImportPath path = do
   traceM $ "Importing file " ++ path
+  -- TODO: 2019-08-13: Incorporate into exceptions structure
   withFrame Info (ErrorCall $ "While importing file " ++ show path) $ do
     imports <- get
     evalExprLoc =<< case M.lookup path imports of
@@ -271,6 +272,7 @@ defaultImportPath path = do
         case eres of
           Failure err ->
             throwError
+              -- TODO: 2019-08-13: Incorporate into exceptions structure
               $ ErrorCall
               . show $ fillSep ["Parse during import failed:", err]
           Success expr -> do
