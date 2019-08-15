@@ -145,6 +145,19 @@ instance Exception MergeAsyncException
     = "Got into the merge case that is in the code considered impossible "
     <> "to solve (which is most probably is)."
 
+data UnifyAsyncException
+  = UnifyNotDoneException
+  deriving Show
+
+instance Exception UnifyAsyncException
+ where
+  displayException UnifyNotDoneException
+    = "Could not unify arguments."
+    -- x' <- renderSymbolic (Symbolic x)
+    -- y' <- renderSymbolic (Symbolic y)
+    -- ++ show x' ++ " with " ++ show y'
+    --  ++ " in context: " ++ show context
+
 symerr :: forall e m a . MonadLint e m => String -> m a
 symerr = evalError @(Symbolic m) . ErrorCall
 
@@ -260,12 +273,8 @@ unify context (SV x) (SV y) = do
     (NMany xs, NMany ys) -> do
       m <- merge context xs ys
       if null m
-        then do
-              -- x' <- renderSymbolic (Symbolic x)
-              -- y' <- renderSymbolic (Symbolic y)
-          throwError $ ErrorCall "Cannot unify "
-                  -- ++ show x' ++ " with " ++ show y'
-                  --  ++ " in context: " ++ show context
+        then
+          throwError $ ErrorCall $ displayException UnifyNotDoneException
         else do
           writeVar x (NMany m)
           writeVar y (NMany m)
