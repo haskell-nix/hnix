@@ -147,6 +147,7 @@ instance Exception MergeAsyncException
 
 data UnifyAsyncException
   = UnifyNotDoneException
+  | UnifyUnexpectedCaseException
   deriving Show
 
 instance Exception UnifyAsyncException
@@ -157,6 +158,8 @@ instance Exception UnifyAsyncException
     -- y' <- renderSymbolic (Symbolic y)
     -- ++ show x' ++ " with " ++ show y'
     --  ++ " in context: " ++ show context
+  displayException UnifyUnexpectedCaseException
+    = "The unexpected hath transpired! (No case for recieved arguments)"
 
 symerr :: forall e m a . MonadLint e m => String -> m a
 symerr = evalError @(Symbolic m) . ErrorCall
@@ -279,7 +282,7 @@ unify context (SV x) (SV y) = do
           writeVar x (NMany m)
           writeVar y (NMany m)
           packSymbolic (NMany m)
-unify _ _ _ = error "The unexpected hath transpired!"
+unify _ _ _ = error $ displayException UnifyUnexpectedCaseException
 
 -- These aren't worth defining yet, because once we move to Hindley-Milner,
 -- we're not going to be managing Symbolic values this way anymore.
