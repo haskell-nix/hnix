@@ -129,6 +129,14 @@ type MonadLint e m
   , MonadThunkId m
   )
 
+data MergeAsyncException
+  = MergeClosuresException
+  deriving Show
+
+instance Exception MergeAsyncException
+ where
+  displayException MergeClosuresException
+    = "Do not know how to merge functions (closures)."
 symerr :: forall e m a . MonadLint e m => String -> m a
 symerr = evalError @(Symbolic m) . ErrorCall
 
@@ -196,7 +204,7 @@ merge context = go
         (return <$> r)
       if M.null m then go xs ys else (TSet (Just m) :) <$> go xs ys
     (TClosure{}, TClosure{}) ->
-      throwError $ ErrorCall "Cannot unify functions"
+      throwError $ ErrorCall $ displayException MergeClosuresException
     (TBuiltin _ _, TBuiltin _ _) ->
       throwError $ ErrorCall "Cannot unify builtin functions"
     _ | compareTypes x y == LT -> go xs (y : ys)
