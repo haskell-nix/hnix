@@ -131,12 +131,15 @@ type MonadLint e m
 
 data MergeAsyncException
   = MergeClosuresException
+  | MergeBuiltinsException
   deriving Show
 
 instance Exception MergeAsyncException
  where
   displayException MergeClosuresException
     = "Do not know how to merge functions (closures)."
+  displayException MergeBuiltinsException
+    = "Do not know how to merge built-in functions."
 symerr :: forall e m a . MonadLint e m => String -> m a
 symerr = evalError @(Symbolic m) . ErrorCall
 
@@ -206,7 +209,7 @@ merge context = go
     (TClosure{}, TClosure{}) ->
       throwError $ ErrorCall $ displayException MergeClosuresException
     (TBuiltin _ _, TBuiltin _ _) ->
-      throwError $ ErrorCall "Cannot unify builtin functions"
+      throwError $ ErrorCall $ displayException MergeBuiltinsException
     _ | compareTypes x y == LT -> go xs (y : ys)
       | compareTypes x y == GT -> go (x : xs) ys
       | otherwise              -> error "impossible"
