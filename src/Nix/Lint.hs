@@ -132,6 +132,7 @@ type MonadLint e m
 data MergeAsyncException
   = MergeClosuresException
   | MergeBuiltinsException
+  | MergeImpossibleException
   deriving Show
 
 instance Exception MergeAsyncException
@@ -140,6 +141,10 @@ instance Exception MergeAsyncException
     = "Do not know how to merge functions (closures)."
   displayException MergeBuiltinsException
     = "Do not know how to merge built-in functions."
+  displayException MergeImpossibleException
+    = "Got into the merge case that is in the code considered impossible "
+    <> "to solve (which is most probably is)."
+
 symerr :: forall e m a . MonadLint e m => String -> m a
 symerr = evalError @(Symbolic m) . ErrorCall
 
@@ -212,7 +217,8 @@ merge context = go
       throwError $ ErrorCall $ displayException MergeBuiltinsException
     _ | compareTypes x y == LT -> go xs (y : ys)
       | compareTypes x y == GT -> go (x : xs) ys
-      | otherwise              -> error "impossible"
+      | otherwise              -> error
+        $ displayException MergeImpossibleException
 
 {-
     mergeFunctions pl nl fl pr fr xs ys = do
