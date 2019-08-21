@@ -188,6 +188,7 @@ data LintAppAsyncException
   | LintAppNotImplementedException
   | LintAppNotImplementedNManyNotSetException
   | LintAppNotImplementedBuiltinException
+  | LintAppNotImplementedSetException
   deriving Show
 
 instance Exception LintAppAsyncException
@@ -200,6 +201,8 @@ instance Exception LintAppAsyncException
     = "Not yet implemented: lintApp NMany is not a set."
   displayException LintAppNotImplementedBuiltinException
     = "Not yet implemented: lintApp builtin."
+  displayException LintAppNotImplementedSetException
+    = "Not yet implemented: lintApp Set."
 
 
 symerr :: forall e m a . MonadLint e m => String -> m a
@@ -482,12 +485,13 @@ lintApp context fun arg = unpackSymbolic fun >>= \case
         NMany [TSet (Just _)] ->
           error $ displayException LintAppNotImplementedException
 
-      TSet _m       -> throwError $ ErrorCall "NYI: lintApp Set"
       _x            -> throwError $ ErrorCall "Attempt to call non-function"
         NMany _ -> throwError $ ErrorCall
           $ displayException LintAppNotImplementedNManyNotSetException
       TBuiltin _ _f -> throwError $ ErrorCall
         $ displayException LintAppNotImplementedBuiltinException
+      TSet _m       -> throwError $ ErrorCall
+        $ displayException LintAppNotImplementedSetException
 
     y <- everyPossible
     (head args, ) <$> foldM (unify context) y ys
