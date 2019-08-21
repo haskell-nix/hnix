@@ -207,6 +207,14 @@ instance Exception LintAppAsyncException
   displayException LintAppCallNonFunctionException
     = "Attempt to call non-function."
 
+data MonadCatchAsyncException
+  = MonadCatchCanNotCatchInLintException
+  deriving Show
+
+instance Exception MonadCatchAsyncException
+ where
+  displayException MonadCatchCanNotCatchInLintException
+    = "Cannot catch in 'Lint s'."
 
 symerr :: forall e m a . MonadLint e m => String -> m a
 symerr = evalError @(Symbolic m) . ErrorCall
@@ -517,7 +525,8 @@ instance MonadThrow (Lint s) where
   throwM e = Lint $ ReaderT $ \_ -> throw e
 
 instance MonadCatch (Lint s) where
-  catch _m _h = Lint $ ReaderT $ \_ -> error "Cannot catch in 'Lint s'"
+  catch _m _h = Lint $ ReaderT
+    $ \_ -> error $ displayException MonadCatchCanNotCatchInLintException
 
 runLintM :: Options -> Lint s a -> ST s a
 runLintM opts action = do
