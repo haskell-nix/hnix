@@ -106,30 +106,30 @@ data SynHoleInfo m v = SynHoleInfo
 
 instance (Typeable m, Typeable v) => Exception (SynHoleInfo m v)
 
-data AttrSetAlterAsyncException
+data AttrSetAlterAsyncE
   = AttrSetAlterInvalidSelector
   deriving Show
 
-instance Exception AttrSetAlterAsyncException
+instance Exception AttrSetAlterAsyncE
  where
   displayException AttrSetAlterInvalidSelector
     = "invalid selector with no components"
 
-data EvalGetterKeyNameAsyncException
+data EvalGetterKeyNameAsyncE
   = ComponentValueIsNullExpectedString
   deriving Show
 
-instance Exception EvalGetterKeyNameAsyncException
+instance Exception EvalGetterKeyNameAsyncE
  where
   displayException ComponentValueIsNullExpectedString
     = "value is null while a string was expected"
 
-data BuildArgumentAsyncException a
+data BuildArgumentAsyncE a
   = BuildArgumentMissingValue a
   | BuildArgumentUnexpectedParameter a
   deriving Show
 
-instance (Show a, Typeable a) => Exception (BuildArgumentAsyncException a)
+instance (Show a, Typeable a) => Exception (BuildArgumentAsyncE a)
  where
   displayException (BuildArgumentMissingValue k)
     = "Missing value for parameter '" <> show k <> "'."

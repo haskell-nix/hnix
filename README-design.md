@@ -41,3 +41,7 @@ points in the code are generic over both.
 Having said that, I should mention that there are two different types of
 values: `NValue` and `NValueNF`. The former is created by evaluating an
 `NExpr`, and then latter by calling `normalForm` on an `NValue`.
+
+## Exception types
+
+Exception type and data constructors end with an `E`.

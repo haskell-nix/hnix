@@ -52,12 +52,12 @@ import           GHC.DataSize
 #endif
 #endif
 
-data FileAsyncException a
+data FileAsyncE a
   = CurFileIsntPath a
   | FileNotInNixPath a
   deriving Show
 
-instance (Show v, Typeable v) => Exception (FileAsyncException v)
+instance (Show v, Typeable v) => Exception (FileAsyncE v)
  where
   displayException (CurFileIsntPath v)
     =  "When resolving relative path, __cur_file is in scope, "
@@ -66,23 +66,23 @@ instance (Show v, Typeable v) => Exception (FileAsyncException v)
     =  "File '" <> show name <> "' was not found in the Nix search path "
     <> "(add it using $NIX_PATH or -I)."
 
-data NixPathAsyncException a
+data NixPathAsyncE a
   = WrongNixPathFormat a
   deriving Show
 
-instance (Show v, Typeable v) => Exception (NixPathAsyncException v)
+instance (Show v, Typeable v) => Exception (NixPathAsyncE v)
  where
   displayException (WrongNixPathFormat s)
     =  "__nixPath must be a list of attr sets with 'path' elements, "
     <> "but received: '" <> show s <> "'."
 
-data FetchTarballAsyncException a
+data FetchTarballAsyncE a
   = NoUrlAttr
   | NorUriNorSet a
   | NorUriNorString a
   deriving Show
 
-instance (Show v, Typeable v) => Exception (FetchTarballAsyncException v)
+instance (Show v, Typeable v) => Exception (FetchTarballAsyncE v)
  where
   displayException NoUrlAttr
     = "builtins.fetchTarball: Missing url attribute."
@@ -202,7 +202,7 @@ fetchTarball
 fetchTarball = flip demand $ \case
   NVSet s _ -> case M.lookup "url" s of
     Nothing ->
-      throwError $ ErrorCall $ displayException (NoUrlAttr :: FetchTarballAsyncException String)
+      throwError $ ErrorCall $ displayException (NoUrlAttr :: FetchTarballAsyncE String)
     Just url -> demand url $ go (M.lookup "sha256" s)
   v@NVStr{} -> go Nothing v
   v ->

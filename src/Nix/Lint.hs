@@ -129,13 +129,13 @@ type MonadLint e m
   , MonadThunkId m
   )
 
-data MergeAsyncException
+data MergeAsyncE
   = MergeClosuresException
   | MergeBuiltinsException
   | MergeImpossibleException
   deriving Show
 
-instance Exception MergeAsyncException
+instance Exception MergeAsyncE
  where
   displayException MergeClosuresException
     = "Do not know how to merge functions (closures)."
@@ -145,12 +145,12 @@ instance Exception MergeAsyncException
     = "Got into the merge case that is in the code considered impossible "
     <> "to solve (which is most probably is)."
 
-data UnifyAsyncException
+data UnifyAsyncE
   = UnifyNotDoneException
   | UnifyUnexpectedCaseException
   deriving Show
 
-instance Exception UnifyAsyncException
+instance Exception UnifyAsyncE
  where
   displayException UnifyNotDoneException
     = "Could not unify arguments."
@@ -161,14 +161,14 @@ instance Exception UnifyAsyncException
   displayException UnifyUnexpectedCaseException
     = "The unexpected hath transpired! (No case for recieved arguments)"
 
-data MonadEvalAsyncException a
+data MonadEvalAsyncE a
   = MonadEvalAttrUnknownInheritException a
   -- | MonadEvalAttrNotFound a b
   | MonadEvalNotImplementedException a
   | MonadEvalScopeNotASetWithStatementException a
   deriving Show
 
-instance Exception (MonadEvalAsyncException (NE.NonEmpty Text))
+instance Exception (MonadEvalAsyncE (NE.NonEmpty Text))
  where
   displayException (MonadEvalAttrUnknownInheritException ks)
     = "Inheriting unknown attribute: "
@@ -183,7 +183,7 @@ instance Exception (MonadEvalAsyncException (NE.NonEmpty Text))
   displayException (MonadEvalScopeNotASetWithStatementException _)
     = "scope must be a set in with statement"
 
-data LintAppAsyncException
+data LintAppAsyncE
   = LintAppNotFuncException
   | LintAppNotImplementedException
   | LintAppNotImplementedNManyNotSetException
@@ -192,7 +192,7 @@ data LintAppAsyncException
   | LintAppCallNonFunctionException
   deriving Show
 
-instance Exception LintAppAsyncException
+instance Exception LintAppAsyncE
  where
   displayException LintAppNotFuncException
     = "Cannot apply something that is not known to be a function."
@@ -207,11 +207,11 @@ instance Exception LintAppAsyncException
   displayException LintAppCallNonFunctionException
     = "Attempt to call non-function."
 
-data MonadCatchAsyncException
+data MonadCatchAsyncE
   = MonadCatchCanNotCatchInLintException
   deriving Show
 
-instance Exception MonadCatchAsyncException
+instance Exception MonadCatchAsyncE
  where
   displayException MonadCatchCanNotCatchInLintException
     = "Cannot catch in 'Lint s'."
@@ -368,7 +368,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
   attrMissing ks (Just s) =
     evalError @(Symbolic m)
       $  ErrorCall
-      -- TODO: 2019-08-19: Abstracting this into MonadEvalAsyncException
+      -- TODO: 2019-08-19: Abstracting this into MonadEvalAsyncE
       -- required propagation of the Typeable of s everywhere
       $  "Could not look up attribute "
       ++ intercalate "." (map Text.unpack (NE.toList ks))

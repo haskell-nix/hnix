@@ -33,13 +33,13 @@ import           Text.Megaparsec.Pos
 import qualified Text.Show.Pretty as PS
 #endif
 
-newtype FrameAsyncException a
-  = UnrecognizedFrame a
+newtype FrameAsyncE a
+  = UnrecognizedFrameE a
   deriving Show
 
-instance (Show a, Typeable a) => Exception (FrameAsyncException a)
+instance (Show a, Typeable a) => Exception (FrameAsyncE a)
  where
-  displayException (UnrecognizedFrame f) = "Unrecognized frame: '" <> show f <> "'."
+  displayException (UnrecognizedFrameE f) = "Unrecognized frame: '" <> show f <> "'."
 
 renderFrames
   :: forall v t f e m ann
@@ -99,7 +99,7 @@ renderFrame (NixFrame level f)
   | Just (e :: ExecFrame t f m) <- fromException f = renderExecFrame level e
   | Just (e :: ErrorCall) <- fromException f = pure [pretty (show e)]
   | Just (e :: SynHoleInfo m v) <- fromException f = pure [pretty (show e)]
-  | otherwise = error $ displayException $ UnrecognizedFrame f
+  | otherwise = error $ displayException $ UnrecognizedFrameE f
 
 wrapExpr :: NExprF r -> NExpr
 wrapExpr x = Fix (Fix (NSym "<?>") <$ x)
