@@ -161,6 +161,16 @@ instance Exception UnifyAsyncException
   displayException UnifyUnexpectedCaseException
     = "The unexpected hath transpired! (No case for recieved arguments)"
 
+data MonadEvalAsyncException a
+  = MonadEvalAttrUnknownInheritException a
+  deriving Show
+
+instance Exception (MonadEvalAsyncException (NE.NonEmpty Text))
+ where
+  displayException (MonadEvalAttrUnknownInheritException ks)
+    = "Inheriting unknown attribute: "
+    <> intercalate "." (map Text.unpack (NE.toList ks))
+
 symerr :: forall e m a . MonadLint e m => String -> m a
 symerr = evalError @(Symbolic m) . ErrorCall
 
@@ -308,9 +318,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
 
   attrMissing ks Nothing =
     evalError @(Symbolic m)
-      $  ErrorCall
-      $  "Inheriting unknown attribute: "
-      ++ intercalate "." (map Text.unpack (NE.toList ks))
+      $  ErrorCall $ displayException $ MonadEvalAttrUnknownInheritException ks
 
   attrMissing ks (Just s) =
     evalError @(Symbolic m)
