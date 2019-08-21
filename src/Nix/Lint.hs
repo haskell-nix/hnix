@@ -163,6 +163,7 @@ instance Exception UnifyAsyncException
 
 data MonadEvalAsyncException a
   = MonadEvalAttrUnknownInheritException a
+  -- | MonadEvalAttrNotFound a b
   deriving Show
 
 instance Exception (MonadEvalAsyncException (NE.NonEmpty Text))
@@ -170,6 +171,11 @@ instance Exception (MonadEvalAsyncException (NE.NonEmpty Text))
   displayException (MonadEvalAttrUnknownInheritException ks)
     = "Inheriting unknown attribute: "
     <> intercalate "." (map Text.unpack (NE.toList ks))
+  -- displayException (MonadEvalAttrNotFound ks s)
+  --   = "Could not look up attribute "
+  --     ++ intercalate "." (map Text.unpack (NE.toList ks))
+  --     ++ " in "
+  --     ++ show s
 
 symerr :: forall e m a . MonadLint e m => String -> m a
 symerr = evalError @(Symbolic m) . ErrorCall
@@ -323,6 +329,8 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
   attrMissing ks (Just s) =
     evalError @(Symbolic m)
       $  ErrorCall
+      -- TODO: 2019-08-19: Abstracting this into MonadEvalAsyncException
+      -- required propagation of the Typeable of s everywhere
       $  "Could not look up attribute "
       ++ intercalate "." (map Text.unpack (NE.toList ks))
       ++ " in "
