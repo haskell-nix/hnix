@@ -185,12 +185,15 @@ instance Exception (MonadEvalAsyncException (NE.NonEmpty Text))
 
 data LintAppAsyncException
   = LintAppNotFuncException
+  | LintAppNotImplementedException
   deriving Show
 
 instance Exception LintAppAsyncException
  where
   displayException LintAppNotFuncException
     = "Cannot apply something that is not known to be a function."
+  displayException LintAppNotImplementedException
+    = "Not yet implemented."
 
 
 symerr :: forall e m a . MonadLint e m => String -> m a
@@ -467,11 +470,11 @@ lintApp context fun arg = unpackSymbolic fun >>= \case
   NMany xs -> do
     (args, ys) <- fmap unzip $ forM xs $ \case
       TClosure _params -> arg >>= unpackSymbolic >>= \case
-        NAny -> do
-          error "NYI"
+        NAny ->
+          error $ displayException LintAppNotImplementedException
 
-        NMany [TSet (Just _)] -> do
-          error "NYI"
+        NMany [TSet (Just _)] ->
+          error $ displayException LintAppNotImplementedException
 
         NMany _ -> throwError $ ErrorCall "NYI: lintApp NMany not set"
       TBuiltin _ _f -> throwError $ ErrorCall "NYI: lintApp builtin"
