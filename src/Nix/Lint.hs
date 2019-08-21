@@ -165,6 +165,7 @@ data MonadEvalAsyncException a
   = MonadEvalAttrUnknownInheritException a
   -- | MonadEvalAttrNotFound a b
   | MonadEvalNotImplementedException a
+  | MonadEvalScopeNotASetWithStatementException a
   deriving Show
 
 instance Exception (MonadEvalAsyncException (NE.NonEmpty Text))
@@ -179,6 +180,9 @@ instance Exception (MonadEvalAsyncException (NE.NonEmpty Text))
   --     ++ show s
   displayException (MonadEvalNotImplementedException _)
     = "Not yet implemented: with unknown"
+  displayException (MonadEvalScopeNotASetWithStatementException _)
+    = "scope must be a set in with statement"
+
 
 symerr :: forall e m a . MonadLint e m => String -> m a
 symerr = evalError @(Symbolic m) . ErrorCall
@@ -373,10 +377,11 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
     s <- defer scope
     pushWeakScope ?? body $ demand s $ unpackSymbolic >=> \case
       NMany [TSet (Just s')] -> return s'
-      _ -> throwError $ ErrorCall "scope must be a set in with statement"
       NMany [TSet Nothing] ->
         error $ displayException
         $ MonadEvalNotImplementedException u
+      _ -> throwError $ ErrorCall $ displayException
+        $ MonadEvalScopeNotASetWithStatementException u
    where
     u = undefined :: NE.NonEmpty Text -- Stub parameter for exception constructor
 
