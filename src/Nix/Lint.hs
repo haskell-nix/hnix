@@ -183,6 +183,15 @@ instance Exception (MonadEvalAsyncException (NE.NonEmpty Text))
   displayException (MonadEvalScopeNotASetWithStatementException _)
     = "scope must be a set in with statement"
 
+data LintAppAsyncException
+  = LintAppNotFuncException
+  deriving Show
+
+instance Exception LintAppAsyncException
+ where
+  displayException LintAppNotFuncException
+    = "Cannot apply something that is not known to be a function."
+
 
 symerr :: forall e m a . MonadLint e m => String -> m a
 symerr = evalError @(Symbolic m) . ErrorCall
@@ -454,7 +463,7 @@ lintApp
   -> m (HashMap VarName (Symbolic m), Symbolic m)
 lintApp context fun arg = unpackSymbolic fun >>= \case
   NAny ->
-    throwError $ ErrorCall "Cannot apply something not known to be a function"
+    throwError $ ErrorCall $ displayException LintAppNotFuncException
   NMany xs -> do
     (args, ys) <- fmap unzip $ forM xs $ \case
       TClosure _params -> arg >>= unpackSymbolic >>= \case
