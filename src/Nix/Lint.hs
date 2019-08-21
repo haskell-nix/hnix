@@ -233,8 +233,8 @@ merge context = go
       throwError $ ErrorCall $ displayException MergeBuiltinsException
     _ | compareTypes x y == LT -> go xs (y : ys)
       | compareTypes x y == GT -> go (x : xs) ys
-      | otherwise              -> error
-        $ displayException MergeImpossibleException
+      | otherwise              ->
+        error $ displayException MergeImpossibleException
 
 {-
     mergeFunctions pl nl fl pr fr xs ys = do
@@ -255,7 +255,7 @@ merge context = go
                     <$> go xs ys
 -}
 
--- | unify raises an error if the result is would be 'NMany []'.
+-- | unify raises an error if the result would be 'NMany []'.
 unify
   :: forall e m
    . MonadLint e m
