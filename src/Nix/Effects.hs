@@ -125,13 +125,10 @@ instance MonadInstantiate IO where
           $ ErrorCall $ displayException $ MonadInstantiateParsingOutputE e u
         Success v -> return $ Right v
       status ->
-        return
-          $  Left
-          $  ErrorCall
-          $  "nix-instantiate failed: "
-          ++ show status
-          ++ ": "
-          ++ err
+        return $ Left
+          $ ErrorCall $ displayException $ MonadInstantiateFailE status err
+   where
+     u = undefined :: String
 
 data MonadExecAsyncE a b
   = MonadExecMissingProgramE a b
@@ -155,6 +152,7 @@ instance (Show a, Typeable a) => Exception (MonadExecAsyncE a String)
 
 data MonadInstantiateAsyncE a b
   = MonadInstantiateParsingOutputE a b
+  | MonadInstantiateFailE a b
   deriving Show
 
 instance (Show a, Typeable a) => Exception (MonadInstantiateAsyncE a String)
@@ -162,6 +160,11 @@ instance (Show a, Typeable a) => Exception (MonadInstantiateAsyncE a String)
   displayException (MonadInstantiateParsingOutputE e _)
     = "Error parsing output of nix-instantiate: "
     <> show e
+  displayException (MonadInstantiateFailE status err)
+    = "nix-instantiate failed: "
+    <> show status
+    <> ": "
+    <> err
 
 pathExists :: MonadFile m => FilePath -> m Bool
 pathExists = doesFileExist
