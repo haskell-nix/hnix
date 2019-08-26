@@ -101,14 +101,8 @@ instance MonadExec IO where
             Failure err -> return $ Left
               $ ErrorCall $ displayException $ MonadExecParsingOutputE err emsg
             Success v -> return $ Right v
-        err ->
-          return
-            $  Left
-            $  ErrorCall
-            $  "exec  failed: "
-            ++ show err
-            ++ " "
-            ++ emsg
+        err -> return $ Left
+           $ ErrorCall $ displayException $ MonadExecFailE err emsg
    where
      u = undefined :: String
 
@@ -146,6 +140,7 @@ data MonadExecAsyncE a b
   = MonadExecMissingProgramE a b
   | MonadExecNoOutputE a b
   | MonadExecParsingOutputE a b
+  | MonadExecFailE a b
   deriving Show
 
 instance (Show a, Typeable a) => Exception (MonadExecAsyncE a String)
@@ -156,6 +151,9 @@ instance (Show a, Typeable a) => Exception (MonadExecAsyncE a String)
     = "exec has no output:" <> emsg
   displayException (MonadExecParsingOutputE err emsg)
     = "Error parsing output of exec: "
+    <> show err <> ", " <> emsg
+  displayException (MonadExecFailE err emsg)
+    = "exec  failed: "
     <> show err <> ", " <> emsg
 
 pathExists :: MonadFile m => FilePath -> m Bool
