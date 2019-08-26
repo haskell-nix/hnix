@@ -95,7 +95,8 @@ instance MonadExec IO where
       let emsg = "program[" ++ prog ++ "] args=" ++ show args
       case exitCode of
         ExitSuccess -> if T.null t
-          then return $ Left $ ErrorCall $ "exec has no output :" ++ emsg
+          then return $ Left
+            $ ErrorCall $ displayException $ MonadExecNoOutputE u emsg
           else case parseNixTextLoc t of
             Failure err ->
               return
@@ -149,12 +150,15 @@ instance MonadInstantiate IO where
 
 data MonadExecAsyncE a b
   = MonadExecMissingProgramE a b
+  | MonadExecNoOutputE a b
   deriving Show
 
 instance (Show a, Typeable a) => Exception (MonadExecAsyncE a String)
  where
   displayException (MonadExecMissingProgramE _ _)
     = "exec: missing program"
+  displayException (MonadExecNoOutputE _ emsg)
+    = "exec has no output:" <> emsg
 
 pathExists :: MonadFile m => FilePath -> m Bool
 pathExists = doesFileExist
