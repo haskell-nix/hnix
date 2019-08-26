@@ -182,6 +182,16 @@ instance (Show a, Typeable a) => Exception (MonadHttpAsyncE String a)
     = "successful download, but hnix-store is not yet ready; url = "
     <> urlstr
 
+newtype MonadStoreAsyncE a
+  = MonadStoreAddPathFailE a
+  deriving Show
+
+instance (Show a, Typeable a) => Exception (MonadStoreAsyncE a)
+ where
+  displayException (MonadStoreAddPathFailE path)
+    = "addPath: failed: nix-store --add "
+    <> show path
+
 pathExists :: MonadFile m => FilePath -> m Bool
 pathExists = doesFileExist
 
@@ -273,11 +283,8 @@ instance MonadStore IO where
         let dropTrailingLinefeed p = take (length p - 1) p
         return $ Right $ StorePath $ dropTrailingLinefeed out
       _ ->
-        return
-          $  Left
-          $  ErrorCall
-          $  "addPath: failed: nix-store --add "
-          ++ show path
+        return $ Left
+        $ ErrorCall $ displayException $ MonadStoreAddPathFailE path
 
 --TODO: Use a temp directory so we don't overwrite anything important
   toFile_' filepath content = do
