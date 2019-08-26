@@ -98,14 +98,8 @@ instance MonadExec IO where
           then return $ Left
             $ ErrorCall $ displayException $ MonadExecNoOutputE u emsg
           else case parseNixTextLoc t of
-            Failure err ->
-              return
-                $  Left
-                $  ErrorCall
-                $  "Error parsing output of exec: "
-                ++ show err
-                ++ " "
-                ++ emsg
+            Failure err -> return $ Left
+              $ ErrorCall $ displayException $ MonadExecParsingOutputE err emsg
             Success v -> return $ Right v
         err ->
           return
@@ -151,6 +145,7 @@ instance MonadInstantiate IO where
 data MonadExecAsyncE a b
   = MonadExecMissingProgramE a b
   | MonadExecNoOutputE a b
+  | MonadExecParsingOutputE a b
   deriving Show
 
 instance (Show a, Typeable a) => Exception (MonadExecAsyncE a String)
@@ -159,6 +154,9 @@ instance (Show a, Typeable a) => Exception (MonadExecAsyncE a String)
     = "exec: missing program"
   displayException (MonadExecNoOutputE _ emsg)
     = "exec has no output:" <> emsg
+  displayException (MonadExecParsingOutputE err emsg)
+    = "Error parsing output of exec: "
+    <> show err <> ", " <> emsg
 
 pathExists :: MonadFile m => FilePath -> m Bool
 pathExists = doesFileExist
