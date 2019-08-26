@@ -87,7 +87,8 @@ class Monad m => MonadExec m where
 
 instance MonadExec IO where
   exec' = \case
-    []            -> return $ Left $ ErrorCall "exec: missing program"
+    []            -> return $ Left
+      $ ErrorCall $ displayException $ MonadExecMissingProgramE u u
     (prog : args) -> do
       (exitCode, out, _) <- liftIO $ readProcessWithExitCode prog args ""
       let t    = T.strip (T.pack out)
@@ -113,6 +114,8 @@ instance MonadExec IO where
             ++ show err
             ++ " "
             ++ emsg
+   where
+     u = undefined :: String
 
 class Monad m => MonadInstantiate m where
     instantiateExpr :: String -> m (Either ErrorCall NExprLoc)
@@ -143,6 +146,15 @@ instance MonadInstantiate IO where
           ++ show status
           ++ ": "
           ++ err
+
+data MonadExecAsyncE a b
+  = MonadExecMissingProgramE a b
+  deriving Show
+
+instance (Show a, Typeable a) => Exception (MonadExecAsyncE a String)
+ where
+  displayException (MonadExecMissingProgramE _ _)
+    = "exec: missing program"
 
 pathExists :: MonadFile m => FilePath -> m Bool
 pathExists = doesFileExist
