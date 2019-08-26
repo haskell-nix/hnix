@@ -168,6 +168,7 @@ instance (Show a, Typeable a) => Exception (MonadInstantiateAsyncE a String)
 
 data MonadHttpAsyncE a b
   = MonadHttpFetchFailE a b
+  | MonadHttpStoreNotReadyE a b
   deriving Show
 
 instance (Show a, Typeable a) => Exception (MonadHttpAsyncE String a)
@@ -176,6 +177,9 @@ instance (Show a, Typeable a) => Exception (MonadHttpAsyncE String a)
     = "fail, got "
     <> show status
     <> " when fetching url:"
+    <> urlstr
+  displayException (MonadHttpStoreNotReadyE urlstr _)
+    = "successful download, but hnix-store is not yet ready; url = "
     <> urlstr
 
 pathExists :: MonadFile m => FilePath -> m Bool
@@ -232,11 +236,10 @@ instance MonadHttp IO where
         $ ErrorCall $ displayException $ MonadHttpFetchFailE urlstr status
       else -- do
         -- let bstr = responseBody response
-        return
-        $  Left
-        $  ErrorCall
-        $  "success in downloading but hnix-store is not yet ready; url = "
-        ++ urlstr
+        return $ Left
+        $ ErrorCall $ displayException $ MonadHttpStoreNotReadyE  urlstr u
+      where
+       u = undefined :: String
 
 
 class Monad m => MonadPutStr m where
