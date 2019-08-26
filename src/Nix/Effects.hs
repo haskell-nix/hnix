@@ -121,11 +121,8 @@ instance MonadInstantiate IO where
     case exitCode of
       ExitSuccess -> case parseNixTextLoc (T.pack out) of
         Failure e ->
-          return
-            $  Left
-            $  ErrorCall
-            $  "Error parsing output of nix-instantiate: "
-            ++ show e
+          return $ Left
+          $ ErrorCall $ displayException $ MonadInstantiateParsingOutputE e u
         Success v -> return $ Right v
       status ->
         return
@@ -155,6 +152,16 @@ instance (Show a, Typeable a) => Exception (MonadExecAsyncE a String)
   displayException (MonadExecFailE err emsg)
     = "exec  failed: "
     <> show err <> ", " <> emsg
+
+data MonadInstantiateAsyncE a b
+  = MonadInstantiateParsingOutputE a b
+  deriving Show
+
+instance (Show a, Typeable a) => Exception (MonadInstantiateAsyncE a String)
+ where
+  displayException (MonadInstantiateParsingOutputE e _)
+    = "Error parsing output of nix-instantiate: "
+    <> show e
 
 pathExists :: MonadFile m => FilePath -> m Bool
 pathExists = doesFileExist
