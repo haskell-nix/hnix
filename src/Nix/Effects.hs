@@ -166,6 +166,18 @@ instance (Show a, Typeable a) => Exception (MonadInstantiateAsyncE a String)
     <> ": "
     <> err
 
+data MonadHttpAsyncE a b
+  = MonadHttpFetchFailE a b
+  deriving Show
+
+instance (Show a, Typeable a) => Exception (MonadHttpAsyncE String a)
+ where
+  displayException (MonadHttpFetchFailE urlstr status)
+    = "fail, got "
+    <> show status
+    <> " when fetching url:"
+    <> urlstr
+
 pathExists :: MonadFile m => FilePath -> m Bool
 pathExists = doesFileExist
 
@@ -216,13 +228,8 @@ instance MonadHttp IO where
     let status = statusCode (responseStatus response)
     if status /= 200
       then
-        return
-        $  Left
-        $  ErrorCall
-        $  "fail, got "
-        ++ show status
-        ++ " when fetching url:"
-        ++ urlstr
+        return $ Left
+        $ ErrorCall $ displayException $ MonadHttpFetchFailE urlstr status
       else -- do
         -- let bstr = responseBody response
         return
