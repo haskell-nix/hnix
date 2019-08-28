@@ -88,7 +88,7 @@ class Monad m => MonadExec m where
 instance MonadExec IO where
   exec' = \case
     []            -> return $ Left
-      $ ErrorCall $ displayException $ MonadExecMissingProgramE u u
+      $ ErrorCall $ displayException $ EMonadExecMissingProgram u u
     (prog : args) -> do
       (exitCode, out, _) <- liftIO $ readProcessWithExitCode prog args ""
       let t    = T.strip (T.pack out)
@@ -96,13 +96,13 @@ instance MonadExec IO where
       case exitCode of
         ExitSuccess -> if T.null t
           then return $ Left
-            $ ErrorCall $ displayException $ MonadExecNoOutputE u emsg
+            $ ErrorCall $ displayException $ EMonadExecNoOutput u emsg
           else case parseNixTextLoc t of
             Failure err -> return $ Left
-              $ ErrorCall $ displayException $ MonadExecParsingOutputE err emsg
+              $ ErrorCall $ displayException $ EMonadExecParsingOutput err emsg
             Success v -> return $ Right v
         err -> return $ Left
-           $ ErrorCall $ displayException $ MonadExecFailE err emsg
+           $ ErrorCall $ displayException $ EMonadExecFail err emsg
    where
      u = undefined :: String
 
@@ -122,73 +122,73 @@ instance MonadInstantiate IO where
       ExitSuccess -> case parseNixTextLoc (T.pack out) of
         Failure e ->
           return $ Left
-          $ ErrorCall $ displayException $ MonadInstantiateParsingOutputE e u
+          $ ErrorCall $ displayException $ EMonadInstantiateParsingOutput e u
         Success v -> return $ Right v
       status ->
         return $ Left
-          $ ErrorCall $ displayException $ MonadInstantiateFailE status err
+          $ ErrorCall $ displayException $ EMonadInstantiateFail status err
    where
      u = undefined :: String
 
-data MonadExecAsyncE a b
-  = MonadExecMissingProgramE a b
-  | MonadExecNoOutputE a b
-  | MonadExecParsingOutputE a b
-  | MonadExecFailE a b
+data EAMonadExec a b
+  = EMonadExecMissingProgram a b
+  | EMonadExecNoOutput a b
+  | EMonadExecParsingOutput a b
+  | EMonadExecFail a b
   deriving Show
 
-instance (Show a, Typeable a) => Exception (MonadExecAsyncE a String)
+instance (Show a, Typeable a) => Exception (EAMonadExec a String)
  where
-  displayException (MonadExecMissingProgramE _ _)
+  displayException (EMonadExecMissingProgram _ _)
     = "exec: missing program"
-  displayException (MonadExecNoOutputE _ emsg)
+  displayException (EMonadExecNoOutput _ emsg)
     = "exec has no output:" <> emsg
-  displayException (MonadExecParsingOutputE err emsg)
+  displayException (EMonadExecParsingOutput err emsg)
     = "Error parsing output of exec: "
     <> show err <> ", " <> emsg
-  displayException (MonadExecFailE err emsg)
+  displayException (EMonadExecFail err emsg)
     = "exec  failed: "
     <> show err <> ", " <> emsg
 
-data MonadInstantiateAsyncE a b
-  = MonadInstantiateParsingOutputE a b
-  | MonadInstantiateFailE a b
+data EAMonadInstantiate a b
+  = EMonadInstantiateParsingOutput a b
+  | EMonadInstantiateFail a b
   deriving Show
 
-instance (Show a, Typeable a) => Exception (MonadInstantiateAsyncE a String)
+instance (Show a, Typeable a) => Exception (EAMonadInstantiate a String)
  where
-  displayException (MonadInstantiateParsingOutputE e _)
+  displayException (EMonadInstantiateParsingOutput e _)
     = "Error parsing output of nix-instantiate: "
     <> show e
-  displayException (MonadInstantiateFailE status err)
+  displayException (EMonadInstantiateFail status err)
     = "nix-instantiate failed: "
     <> show status
     <> ": "
     <> err
 
-data MonadHttpAsyncE a b
-  = MonadHttpFetchFailE a b
-  | MonadHttpStoreNotReadyE a b
+data EAMonadHttp a b
+  = EMonadHttpFetchFail a b
+  | EMonadHttpStoreNotReady a b
   deriving Show
 
-instance (Show a, Typeable a) => Exception (MonadHttpAsyncE String a)
+instance (Show a, Typeable a) => Exception (EAMonadHttp String a)
  where
-  displayException (MonadHttpFetchFailE urlstr status)
+  displayException (EMonadHttpFetchFail urlstr status)
     = "fail, got "
     <> show status
     <> " when fetching url:"
     <> urlstr
-  displayException (MonadHttpStoreNotReadyE urlstr _)
+  displayException (EMonadHttpStoreNotReady urlstr _)
     = "successful download, but hnix-store is not yet ready; url = "
     <> urlstr
 
-newtype MonadStoreAsyncE a
-  = MonadStoreAddPathFailE a
+newtype EAMonadStore a
+  = EMonadStoreAddPathFail a
   deriving Show
 
-instance (Show a, Typeable a) => Exception (MonadStoreAsyncE a)
+instance (Show a, Typeable a) => Exception (EAMonadStore a)
  where
-  displayException (MonadStoreAddPathFailE path)
+  displayException (EMonadStoreAddPathFail path)
     = "addPath: failed: nix-store --add "
     <> show path
 
@@ -243,11 +243,11 @@ instance MonadHttp IO where
     if status /= 200
       then
         return $ Left
-        $ ErrorCall $ displayException $ MonadHttpFetchFailE urlstr status
+        $ ErrorCall $ displayException $ EMonadHttpFetchFail urlstr status
       else -- do
         -- let bstr = responseBody response
         return $ Left
-        $ ErrorCall $ displayException $ MonadHttpStoreNotReadyE  urlstr u
+        $ ErrorCall $ displayException $ EMonadHttpStoreNotReady  urlstr u
       where
        u = undefined :: String
 
@@ -284,7 +284,7 @@ instance MonadStore IO where
         return $ Right $ StorePath $ dropTrailingLinefeed out
       _ ->
         return $ Left
-        $ ErrorCall $ displayException $ MonadStoreAddPathFailE path
+        $ ErrorCall $ displayException $ EMonadStoreAddPathFail path
 
 --TODO: Use a temp directory so we don't overwrite anything important
   toFile_' filepath content = do

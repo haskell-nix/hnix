@@ -129,48 +129,48 @@ type MonadLint e m
   , MonadThunkId m
   )
 
-data MergeAsyncE
-  = MergeClosuresE
-  | MergeBuiltinsE
-  | MergeImpossibleE
+data EAMerge
+  = EMergeClosures
+  | EMergeBuiltins
+  | EMergeImpossible
   deriving Show
 
-instance Exception MergeAsyncE
+instance Exception EAMerge
  where
-  displayException MergeClosuresE
+  displayException EMergeClosures
     = "Do not know how to merge functions (closures)."
-  displayException MergeBuiltinsE
+  displayException EMergeBuiltins
     = "Do not know how to merge built-in functions."
-  displayException MergeImpossibleE
+  displayException EMergeImpossible
     = "Got into the merge case that is in the code considered impossible "
     <> "to solve (which is most probably is)."
 
-data UnifyAsyncE
-  = UnifyNotDoneE
-  | UnifyUnexpectedCaseE
+data EAUnify
+  = EUnifyNotDone
+  | EUnifyUnexpectedCase
   deriving Show
 
-instance Exception UnifyAsyncE
+instance Exception EAUnify
  where
-  displayException UnifyNotDoneE
+  displayException EUnifyNotDone
     = "Could not unify arguments."
     -- x' <- renderSymbolic (Symbolic x)
     -- y' <- renderSymbolic (Symbolic y)
     -- ++ show x' ++ " with " ++ show y'
     --  ++ " in context: " ++ show context
-  displayException UnifyUnexpectedCaseE
+  displayException EUnifyUnexpectedCase
     = "The unexpected hath transpired! (No case for recieved arguments)"
 
-data MonadEvalAsyncE a
-  = MonadEvalAttrUnknownInheritE a
+data EAMonadEval a
+  = EMonadEvalAttrUnknownInherit a
   -- | MonadEvalAttrNotFound a b
-  | MonadEvalNotImplementedE a
-  | MonadEvalScopeNotASetWithStatementE a
+  | EMonadEvalNotImplemented a
+  | EMonadEvalScopeNotASetWithStatement a
   deriving Show
 
-instance Exception (MonadEvalAsyncE (NE.NonEmpty Text))
+instance Exception (EAMonadEval (NE.NonEmpty Text))
  where
-  displayException (MonadEvalAttrUnknownInheritE ks)
+  displayException (EMonadEvalAttrUnknownInherit ks)
     = "Inheriting unknown attribute: "
     <> intercalate "." (map Text.unpack (NE.toList ks))
   -- displayException (MonadEvalAttrNotFound ks s)
@@ -178,42 +178,42 @@ instance Exception (MonadEvalAsyncE (NE.NonEmpty Text))
   --     ++ intercalate "." (map Text.unpack (NE.toList ks))
   --     ++ " in "
   --     ++ show s
-  displayException (MonadEvalNotImplementedE _)
+  displayException (EMonadEvalNotImplemented _)
     = "Not yet implemented: with unknown"
-  displayException (MonadEvalScopeNotASetWithStatementE _)
+  displayException (EMonadEvalScopeNotASetWithStatement _)
     = "scope must be a set in with statement"
 
-data LintAppAsyncE
-  = LintAppNotFuncE
-  | LintAppNotImplementedE
-  | LintAppNotImplementedNManyNotSetE
-  | LintAppNotImplementedBuiltinE
-  | LintAppNotImplementedSetE
-  | LintAppCallNonFunctionE
+data EALintApp
+  = ELintAppNotFunc
+  | ELintAppNotImplemented
+  | ELintAppNotImplementedNManyNotSet
+  | ELintAppNotImplementedBuiltin
+  | ELintAppNotImplementedSet
+  | ELintAppCallNonFunction
   deriving Show
 
-instance Exception LintAppAsyncE
+instance Exception EALintApp
  where
-  displayException LintAppNotFuncE
+  displayException ELintAppNotFunc
     = "Cannot apply something that is not known to be a function."
-  displayException LintAppNotImplementedE
+  displayException ELintAppNotImplemented
     = "Not yet implemented."
-  displayException LintAppNotImplementedNManyNotSetE
+  displayException ELintAppNotImplementedNManyNotSet
     = "Not yet implemented: lintApp NMany is not a set."
-  displayException LintAppNotImplementedBuiltinE
+  displayException ELintAppNotImplementedBuiltin
     = "Not yet implemented: lintApp builtin."
-  displayException LintAppNotImplementedSetE
+  displayException ELintAppNotImplementedSet
     = "Not yet implemented: lintApp Set."
-  displayException LintAppCallNonFunctionE
+  displayException ELintAppCallNonFunction
     = "Attempt to call non-function."
 
-data MonadCatchAsyncE
-  = MonadCatchCanNotCatchInLintE
+data EAMonadCatch
+  = EMonadCatchCanNotCatchInLint
   deriving Show
 
-instance Exception MonadCatchAsyncE
+instance Exception EAMonadCatch
  where
-  displayException MonadCatchCanNotCatchInLintE
+  displayException EMonadCatchCanNotCatchInLint
     = "Cannot catch in 'Lint s'."
 
 symerr :: forall e m a . MonadLint e m => String -> m a
@@ -283,13 +283,13 @@ merge context = go
         (return <$> r)
       if M.null m then go xs ys else (TSet (Just m) :) <$> go xs ys
     (TClosure{}, TClosure{}) ->
-      throwError $ ErrorCall $ displayException MergeClosuresE
+      throwError $ ErrorCall $ displayException EMergeClosures
     (TBuiltin _ _, TBuiltin _ _) ->
-      throwError $ ErrorCall $ displayException MergeBuiltinsE
+      throwError $ ErrorCall $ displayException EMergeBuiltins
     _ | compareTypes x y == LT -> go xs (y : ys)
       | compareTypes x y == GT -> go (x : xs) ys
       | otherwise              ->
-        error $ displayException MergeImpossibleE
+        error $ displayException EMergeImpossible
 
 {-
     mergeFunctions pl nl fl pr fr xs ys = do
@@ -332,12 +332,12 @@ unify context (SV x) (SV y) = do
       m <- merge context xs ys
       if null m
         then
-          throwError $ ErrorCall $ displayException UnifyNotDoneE
+          throwError $ ErrorCall $ displayException EUnifyNotDone
         else do
           writeVar x (NMany m)
           writeVar y (NMany m)
           packSymbolic (NMany m)
-unify _ _ _ = error $ displayException UnifyUnexpectedCaseE
+unify _ _ _ = error $ displayException EUnifyUnexpectedCase
 
 -- These aren't worth defining yet, because once we move to Hindley-Milner,
 -- we're not going to be managing Symbolic values this way anymore.
@@ -363,7 +363,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
 
   attrMissing ks Nothing =
     evalError @(Symbolic m)
-      $  ErrorCall $ displayException $ MonadEvalAttrUnknownInheritE ks
+      $  ErrorCall $ displayException $ EMonadEvalAttrUnknownInherit ks
 
   attrMissing ks (Just s) =
     evalError @(Symbolic m)
@@ -411,9 +411,9 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
       NMany [TSet (Just s')] -> return s'
       NMany [TSet Nothing] ->
         error $ displayException
-        $ MonadEvalNotImplementedE u
+        $ EMonadEvalNotImplemented u
       _ -> throwError $ ErrorCall $ displayException
-        $ MonadEvalScopeNotASetWithStatementE u
+        $ EMonadEvalScopeNotASetWithStatement u
    where
     u = undefined :: NE.NonEmpty Text -- Stub parameter for exception constructor
 
@@ -486,24 +486,24 @@ lintApp
   -> m (HashMap VarName (Symbolic m), Symbolic m)
 lintApp context fun arg = unpackSymbolic fun >>= \case
   NAny ->
-    throwError $ ErrorCall $ displayException LintAppNotFuncE
+    throwError $ ErrorCall $ displayException ELintAppNotFunc
   NMany xs -> do
     (args, ys) <- fmap unzip $ forM xs $ \case
       TClosure _params -> arg >>= unpackSymbolic >>= \case
         NAny ->
-          error $ displayException LintAppNotImplementedE
+          error $ displayException ELintAppNotImplemented
 
         NMany [TSet (Just _)] ->
-          error $ displayException LintAppNotImplementedE
+          error $ displayException ELintAppNotImplemented
 
         NMany _ -> throwError $ ErrorCall
-          $ displayException LintAppNotImplementedNManyNotSetE
+          $ displayException ELintAppNotImplementedNManyNotSet
       TBuiltin _ _f -> throwError $ ErrorCall
-        $ displayException LintAppNotImplementedBuiltinE
+        $ displayException ELintAppNotImplementedBuiltin
       TSet _m       -> throwError $ ErrorCall
-        $ displayException LintAppNotImplementedSetE
+        $ displayException ELintAppNotImplementedSet
       _x            -> throwError $ ErrorCall
-        $ displayException LintAppCallNonFunctionE
+        $ displayException ELintAppCallNonFunction
 
     y <- everyPossible
     (head args, ) <$> foldM (unify context) y ys
@@ -526,7 +526,7 @@ instance MonadThrow (Lint s) where
 
 instance MonadCatch (Lint s) where
   catch _m _h = Lint $ ReaderT
-    $ \_ -> error $ displayException MonadCatchCanNotCatchInLintE
+    $ \_ -> error $ displayException EMonadCatchCanNotCatchInLint
 
 runLintM :: Options -> Lint s a -> ST s a
 runLintM opts action = do

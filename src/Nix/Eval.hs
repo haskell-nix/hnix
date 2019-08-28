@@ -106,34 +106,34 @@ data SynHoleInfo m v = SynHoleInfo
 
 instance (Typeable m, Typeable v) => Exception (SynHoleInfo m v)
 
-data AttrSetAlterAsyncE
-  = AttrSetAlterInvalidSelector
+data EAAttrSetAlter
+  = EAttrSetAlterInvalidSelector
   deriving Show
 
-instance Exception AttrSetAlterAsyncE
+instance Exception EAAttrSetAlter
  where
-  displayException AttrSetAlterInvalidSelector
+  displayException EAttrSetAlterInvalidSelector
     = "invalid selector with no components"
 
-data EvalGetterKeyNameAsyncE
-  = ComponentValueIsNullExpectedString
+data EAEvalGetterKeyName
+  = EComponentValueIsNullExpectedString
   deriving Show
 
-instance Exception EvalGetterKeyNameAsyncE
+instance Exception EAEvalGetterKeyName
  where
-  displayException ComponentValueIsNullExpectedString
+  displayException EComponentValueIsNullExpectedString
     = "value is null while a string was expected"
 
-data BuildArgumentAsyncE a
-  = BuildArgumentMissingValue a
-  | BuildArgumentUnexpectedParameter a
+data EABuildArgument a
+  = EBuildArgumentMissingValue a
+  | EBuildArgumentUnexpectedParameter a
   deriving Show
 
-instance (Show a, Typeable a) => Exception (BuildArgumentAsyncE a)
+instance (Show a, Typeable a) => Exception (EABuildArgument a)
  where
-  displayException (BuildArgumentMissingValue k)
+  displayException (EBuildArgumentMissingValue k)
     = "Missing value for parameter '" <> show k <> "'."
-  displayException (BuildArgumentUnexpectedParameter k)
+  displayException (EBuildArgumentUnexpectedParameter k)
     = "Unexpected parameter '" <> show k <> "'."
 
 -- jww (2019-03-18): By deferring only those things which must wait until
@@ -219,7 +219,7 @@ attrSetAlter
   -> m v
   -> m (AttrSet (m v), AttrSet SourcePos)
 attrSetAlter [] _ _ _ _ =
-  evalError @v $ ErrorCall $ displayException AttrSetAlterInvalidSelector
+  evalError @v $ ErrorCall $ displayException EAttrSetAlterInvalidSelector
 
 attrSetAlter (k : ks) pos m p val = case M.lookup k m of
   Nothing | null ks   -> go
@@ -374,7 +374,7 @@ evalGetterKeyName = evalSetterKeyName >=> \case
   Just k -> pure k
   Nothing ->
     evalError @v $ ErrorCall
-      $ displayException ComponentValueIsNullExpectedString
+      $ displayException EComponentValueIsNullExpectedString
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *binding* a value
@@ -430,7 +430,7 @@ buildArgument params arg = do
   assemble scope isVariadic k = \case
     That Nothing ->
       Just $ const $ evalError @v $ ErrorCall
-        $ displayException $ BuildArgumentMissingValue k
+        $ displayException $ EBuildArgumentMissingValue k
     That (Just f) ->
       Just $ \args -> defer $ withScopes scope $ pushScope args f
     This _
@@ -438,7 +438,7 @@ buildArgument params arg = do
       -> Nothing
       | otherwise
       -> Just $ const $ evalError @v $ ErrorCall
-        $ displayException $ BuildArgumentUnexpectedParameter k
+        $ displayException $ EBuildArgumentUnexpectedParameter k
     These x _ -> Just (const (pure x))
 
 addSourcePositions

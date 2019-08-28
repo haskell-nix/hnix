@@ -38,13 +38,13 @@ data CopyToStoreMode
   -- ^ Add paths to the store as they are encountered
   deriving (Eq,Ord,Enum,Bounded)
 
-newtype CoerceAsyncE a
-  = CoerceUnexpectedArgumentE a
+newtype EACoerce a
+  = ECoerceUnexpectedArgument a
   deriving Show
 
-instance (Show a, Typeable a) => Exception (CoerceAsyncE a)
+instance (Show a, Typeable a) => Exception (EACoerce a)
  where
-  displayException (CoerceUnexpectedArgumentE v)
+  displayException (ECoerceUnexpectedArgument v)
     = "Expected a string, but received: '" <> show v <> "'."
 
 coerceToString
@@ -86,7 +86,7 @@ coerceToString call ctsm clevel = go
 
     NVSet s _ | Just p <- M.lookup "outPath" s -> demand p go
 
-    v -> throwError $ ErrorCall $ displayException $ CoerceUnexpectedArgumentE v
+    v -> throwError $ ErrorCall $ displayException $ ECoerceUnexpectedArgument v
 
   nixStringUnwords =
     principledIntercalateNixString (principledMakeNixStringWithoutContext " ")

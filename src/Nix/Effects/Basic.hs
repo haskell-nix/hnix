@@ -52,44 +52,44 @@ import           GHC.DataSize
 #endif
 #endif
 
-data FileAsyncE a
-  = CurFileIsntPath a
-  | FileNotInNixPath a
+data EAFile a
+  = ECurFileIsntPath a
+  | EFileNotInNixPath a
   deriving Show
 
-instance (Show v, Typeable v) => Exception (FileAsyncE v)
+instance (Show v, Typeable v) => Exception (EAFile v)
  where
-  displayException (CurFileIsntPath v)
+  displayException (ECurFileIsntPath v)
     =  "When resolving relative path, __cur_file is in scope, "
     <> "but is not a path; it is: '" <> show v <>"'."
-  displayException (FileNotInNixPath name)
+  displayException (EFileNotInNixPath name)
     =  "File '" <> show name <> "' was not found in the Nix search path "
     <> "(add it using $NIX_PATH or -I)."
 
-data NixPathAsyncE a
-  = WrongNixPathFormat a
+newtype EANixPath a
+  = EWrongNixPathFormat a
   deriving Show
 
-instance (Show v, Typeable v) => Exception (NixPathAsyncE v)
+instance (Show v, Typeable v) => Exception (EANixPath v)
  where
-  displayException (WrongNixPathFormat s)
+  displayException (EWrongNixPathFormat s)
     =  "__nixPath must be a list of attr sets with 'path' elements, "
     <> "but received: '" <> show s <> "'."
 
-data FetchTarballAsyncE a
-  = NoUrlAttr
-  | NorUriNorSet a
-  | NorUriNorString a
+data EAFetchTarball a
+  = ENoUrlAttr
+  | ENorUriNorSet a
+  | ENorUriNorString a
   deriving Show
 
-instance (Show v, Typeable v) => Exception (FetchTarballAsyncE v)
+instance (Show v, Typeable v) => Exception (EAFetchTarball v)
  where
-  displayException NoUrlAttr
+  displayException ENoUrlAttr
     = "builtins.fetchTarball: Missing url attribute."
-  displayException (NorUriNorSet v)
+  displayException (ENorUriNorSet v)
     = "builtins.fetchTarball: Expected URI or set, received: '"
     <> show v <> "'."
-  displayException (NorUriNorString v)
+  displayException (ENorUriNorString v)
     = "builtins.fetchTarball: Expected URI or string, received: '"
     <> show v <> "'."
 
@@ -108,7 +108,7 @@ defaultMakeAbsolutePath origPath = do
             -- TODO: 2019-08-12: John Ericson (Ericson2314):
             -- You don't want to call displayException here, but where the m is
             -- eliminated.
-            v -> throwError $ ErrorCall $ displayException $ CurFileIsntPath v
+            v -> throwError $ ErrorCall $ displayException $ ECurFileIsntPath v
       pure $ cwd <///> origPathExpanded
   removeDotDotIndirections <$> canonicalizePath absPath
 
@@ -168,7 +168,7 @@ findPathBy finder l name = do
   mpath <- foldM go Nothing l
   case mpath of
     Nothing ->
-      throwError $ ErrorCall $ displayException $ FileNotInNixPath name
+      throwError $ ErrorCall $ displayException $ EFileNotInNixPath name
     Just path -> return path
  where
   go :: Maybe FilePath -> NValue t f m -> m (Maybe FilePath)
@@ -195,23 +195,23 @@ findPathBy finder l name = do
     Nothing -> case M.lookup "uri" s of
       Just ut -> defer $ fetchTarball ut
       Nothing ->
-        throwError $ ErrorCall $ displayException $ WrongNixPathFormat s
+        throwError $ ErrorCall $ displayException $ EWrongNixPathFormat s
 
 fetchTarball
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 fetchTarball = flip demand $ \case
   NVSet s _ -> case M.lookup "url" s of
     Nothing ->
-      throwError $ ErrorCall $ displayException (NoUrlAttr :: FetchTarballAsyncE String)
+      throwError $ ErrorCall $ displayException (ENoUrlAttr :: EAFetchTarball String)
     Just url -> demand url $ go (M.lookup "sha256" s)
   v@NVStr{} -> go Nothing v
   v ->
-    throwError $ ErrorCall $ displayException $ NorUriNorSet v
+    throwError $ ErrorCall $ displayException $ ENorUriNorSet v
  where
   go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
   go msha = \case
     NVStr ns -> fetch (hackyStringIgnoreContext ns) msha
-    v -> throwError $ ErrorCall $ displayException $ NorUriNorString v
+    v -> throwError $ ErrorCall $ displayException $ ENorUriNorString v
 
 {- jww (2018-04-11): This should be written using pipes in another module
     fetch :: Text -> Maybe (NThunk m) -> m (NValue t f m)
