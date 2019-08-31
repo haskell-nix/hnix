@@ -8,15 +8,14 @@
 
 , withHoogle  ? true
 
-, rev    ? "ed1b59a98e7bd61dd7eac266569c294fb6b16300"
-, sha256 ? "0b2wdbbaqdqccl7q9gskhfjk7xaqvjwcls4b6218anyc247gscnb"
+, rev    ? "c4adeddb5f8e945517068968d06ea838b7c24bd3"
 
 , pkgs   ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
     then abort "hnix requires at least nix 2.0"
-    else import (builtins.fetchTarball {
-           url = "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz";
-           inherit sha256; }) {
+    else import (builtins.fetchGit {
+           url = "https://github.com/NixOS/nixpkgs/";
+           inherit rev; }) {
            config.allowUnfree = true;
            config.allowBroken = false;
            config.packageOverrides = pkgs: rec {
