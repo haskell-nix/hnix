@@ -17,7 +17,7 @@ import           Control.Monad
 import           Control.Monad.Fix
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
-import           Data.Align.Key                 ( alignWithKey )
+import           Data.Semialign.Indexed         ( ialignWith )
 import           Data.Either                    ( isRight )
 import           Data.Fix                       ( Fix(Fix) )
 import           Data.HashMap.Lazy              ( HashMap )
@@ -385,9 +385,9 @@ buildArgument params arg = do
               Nothing -> id
               Just n  -> M.insert n $ const $ defer (withScopes scope arg)
         loebM
-          (inject $ M.mapMaybe id $ alignWithKey (assemble scope isVariadic)
-                                                 args
-                                                 (M.fromList s)
+          (inject $ M.mapMaybe id $ ialignWith (assemble scope isVariadic)
+                                               args
+                                               (M.fromList s)
           )
  where
   assemble
