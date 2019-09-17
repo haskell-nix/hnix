@@ -148,6 +148,17 @@ data ExecFrame t f m = Assertion SrcSpan (NValue t f m)
 
 instance MonadDataErrorContext t f m => Exception (ExecFrame t f m)
 
+data EAMonadNix a b
+  = EMonadNixUndefinedVar a b
+  deriving Show
+
+instance Exception (EAMonadNix String String)
+ where
+  displayException (EMonadNixUndefinedVar var _)
+    = "Undefined variable: '"
+    <> var
+    <> "'."
+
 nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
 
@@ -159,11 +170,9 @@ wrapExprLoc span x = Fix (Fix (NSym_ span "<?>") <$ x)
 
 instance MonadNix e t f m => MonadEval (NValue t f m) m where
   freeVariable var =
-    nverr @e @t @f
-      $  ErrorCall
-      $  "Undefined variable '"
-      ++ Text.unpack var
-      ++ "'"
+    nverr @e @t @f $ ErrorCall
+      $ displayException
+      $ EMonadNixUndefinedVar (Text.unpack var) (undefined :: String)
 
   synHole name = do
     span  <- currentPos
