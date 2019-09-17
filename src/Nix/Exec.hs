@@ -184,6 +184,15 @@ instance (Show a, Typeable a) => Exception (EACallFunc a)
   displayException (ECallFuncCalledNotFunction x)
     = "Attempt to call non-function: " <> show x
 
+data EAExecUnaryOp a
+  = EExecUnaryOpUnsupportedType a
+  deriving Show
+
+instance Exception (EAExecUnaryOp String)
+ where
+  displayException (EExecUnaryOpUnsupportedType op)
+    = "unsupported argument type for unary operator "
+    <> op
 
 nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
@@ -367,10 +376,8 @@ execUnaryOp scope span op arg = do
       (NNeg, NFloat f) -> unaryOp $ NFloat (-f)
       (NNot, NBool b ) -> unaryOp $ NBool (not b)
       _ ->
-        throwError
-          $  ErrorCall
-          $  "unsupported argument type for unary operator "
-          ++ show op
+        throwError $ ErrorCall
+          $ displayException $ EExecUnaryOpUnsupportedType $ show op
     x ->
       throwError
         $  ErrorCall
