@@ -150,6 +150,7 @@ instance MonadDataErrorContext t f m => Exception (ExecFrame t f m)
 
 data EAMonadNix a b
   = EMonadNixUndefinedVar a b
+  | EMonadNixUnknownAttrInherit a b
   deriving Show
 
 instance Exception (EAMonadNix String String)
@@ -158,6 +159,9 @@ instance Exception (EAMonadNix String String)
     = "Undefined variable: '"
     <> var
     <> "'."
+  displayException (EMonadNixUnknownAttrInherit ks _)
+    = "Inheriting unknown attribute: "
+    <> ks
 
 nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
@@ -184,9 +188,11 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
 
   attrMissing ks Nothing =
     evalError @(NValue t f m)
-      $  ErrorCall
-      $  "Inheriting unknown attribute: "
-      ++ intercalate "." (map Text.unpack (NE.toList ks))
+      $ ErrorCall
+      $ displayException
+      $ EMonadNixUnknownAttrInherit
+        (intercalate "." (map Text.unpack (NE.toList ks)))
+        (undefined :: String)
 
   attrMissing ks (Just s) =
     evalError @(NValue t f m)
