@@ -186,6 +186,7 @@ instance (Show a, Typeable a) => Exception (EACallFunc a)
 
 data EAExecUnaryOp a
   = EExecUnaryOpUnsupportedType a
+  | EExecUnaryOpEvaluatedToNotAtomicType a
   deriving Show
 
 instance Exception (EAExecUnaryOp String)
@@ -193,6 +194,9 @@ instance Exception (EAExecUnaryOp String)
   displayException (EExecUnaryOpUnsupportedType op)
     = "unsupported argument type for unary operator "
     <> op
+  displayException (EExecUnaryOpEvaluatedToNotAtomicType x)
+    = "argument to unary operator must evaluate to an atomic type: "
+    <> x
 
 nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
@@ -379,11 +383,8 @@ execUnaryOp scope span op arg = do
         throwError $ ErrorCall
           $ displayException $ EExecUnaryOpUnsupportedType $ show op
     x ->
-      throwError
-        $  ErrorCall
-        $  "argument to unary operator"
-        ++ " must evaluate to an atomic type: "
-        ++ show x
+      throwError $ ErrorCall
+        $ displayException $ EExecUnaryOpEvaluatedToNotAtomicType $ show x
  where
   unaryOp = pure . nvConstantP (Provenance scope (NUnary_ span op (Just arg)))
 
