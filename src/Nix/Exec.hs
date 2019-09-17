@@ -174,12 +174,16 @@ instance Exception (EAMonadNix String String)
 
 data EACallFunc a
   = ECallFuncCallStackExausted a
+  | ECallFuncCalledNotFunction a
   deriving Show
 
 instance (Show a, Typeable a) => Exception (EACallFunc a)
  where
   displayException (ECallFuncCallStackExausted _)
     = "Function call stack exhausted"
+  displayException (ECallFuncCalledNotFunction x)
+    = "Attempt to call non-function: " <> show x
+
 
 nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
@@ -345,7 +349,8 @@ callFunc fun arg = demand fun $ \fun' -> do
     s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
       traceM "callFunc:__functor"
       demand f $ (`callFunc` s) >=> (`callFunc` arg)
-    x -> throwError $ ErrorCall $ "Attempt to call non-function: " ++ show x
+    x -> throwError $ ErrorCall
+      $ displayException $ ECallFuncCalledNotFunction x
 
 execUnaryOp
   :: (Framed e m, MonadCited t f m, Show t)
