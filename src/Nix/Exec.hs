@@ -172,6 +172,15 @@ instance Exception (EAMonadNix String String)
   displayException (EMonadNixStringAssembleFail _ _)
     = "Failed to assemble string"
 
+data EACallFunc a
+  = ECallFuncCallStackExausted a
+  deriving Show
+
+instance (Show a, Typeable a) => Exception (EACallFunc a)
+ where
+  displayException (ECallFuncCallStackExausted _)
+    = "Function call stack exhausted"
+
 nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
 
@@ -325,7 +334,7 @@ callFunc
 callFunc fun arg = demand fun $ \fun' -> do
   frames :: Frames <- asks (view hasLens)
   when (length frames > 2000) $ throwError $ ErrorCall
-    "Function call stack exhausted"
+    $ displayException $ ECallFuncCallStackExausted (undefined :: String)
   case fun' of
     NVClosure params f -> do
       traceM $ "callFunc:NVFunction taking " ++ show params
