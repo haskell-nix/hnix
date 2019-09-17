@@ -151,6 +151,7 @@ instance MonadDataErrorContext t f m => Exception (ExecFrame t f m)
 data EAMonadNix a b
   = EMonadNixUndefinedVar a b
   | EMonadNixUnknownAttrInherit a b
+  | EMonadNixAttrNotFound a b
   deriving Show
 
 instance Exception (EAMonadNix String String)
@@ -162,6 +163,11 @@ instance Exception (EAMonadNix String String)
   displayException (EMonadNixUnknownAttrInherit ks _)
     = "Inheriting unknown attribute: "
     <> ks
+  displayException (EMonadNixAttrNotFound ks s)
+    = "Could not look up attribute "
+    <> ks
+    <> " in "
+    <> s
 
 nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
@@ -196,11 +202,11 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
 
   attrMissing ks (Just s) =
     evalError @(NValue t f m)
-      $  ErrorCall
-      $  "Could not look up attribute "
-      ++ intercalate "." (map Text.unpack (NE.toList ks))
-      ++ " in "
-      ++ show (prettyNValue s)
+      $ ErrorCall
+      $ displayException
+      $ EMonadNixAttrNotFound
+        (intercalate "." (map Text.unpack (NE.toList ks)))
+        (show (prettyNValue s))
 
   evalCurPos = do
     scope                  <- currentScopes
