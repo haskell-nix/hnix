@@ -152,6 +152,7 @@ data EAMonadNix a b
   = EMonadNixUndefinedVar a b
   | EMonadNixUnknownAttrInherit a b
   | EMonadNixAttrNotFound a b
+  | EMonadNixStringAssembleFail a b
   deriving Show
 
 instance Exception (EAMonadNix String String)
@@ -168,6 +169,8 @@ instance Exception (EAMonadNix String String)
     <> ks
     <> " in "
     <> s
+  displayException (EMonadNixStringAssembleFail _ _)
+    = "Failed to assemble string"
 
 nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
@@ -237,7 +240,10 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
           (NStr_ span (DoubleQuoted [Plain (hackyStringIgnoreContext ns)]))
         )
         ns
-    Nothing -> nverr $ ErrorCall "Failed to assemble string"
+    Nothing -> nverr
+      $ ErrorCall
+      $ displayException
+      $ EMonadNixStringAssembleFail (undefined :: String) (undefined :: String)
 
   evalLiteralPath p = do
     scope <- currentScopes
