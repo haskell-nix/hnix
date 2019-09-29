@@ -8,6 +8,7 @@
 
 module Nix.Fresh.Basic where
 
+import           Control.Monad.Fail ( MonadFail )
 import           Control.Monad.Reader
 import           Nix.Effects
 import           Nix.Render
@@ -16,7 +17,7 @@ import           Nix.Value
 
 type StdIdT = FreshIdT Int
 
-instance MonadFile m => MonadFile (StdIdT m)
+instance (MonadFail m, MonadFile m) => MonadFile (StdIdT m)
 instance MonadIntrospect m => MonadIntrospect (StdIdT m)
 instance MonadStore m => MonadStore (StdIdT m) where
   addPath' = lift . addPath'

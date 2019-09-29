@@ -22,6 +22,7 @@ import           Control.Applicative
 import           Control.Comonad                ( Comonad )
 import           Control.Comonad.Env            ( ComonadEnv )
 import           Control.Monad.Catch     hiding ( catchJust )
+import           Control.Monad.Fail             ( MonadFail )
 import           Control.Monad.Free
 import           Control.Monad.Reader
 import           Control.Monad.Ref
@@ -92,7 +93,7 @@ instance (MonadFix1T t m, MonadRef m) => MonadRef (Fix1T t m) where
 instance (MonadFix1T t m, MonadAtomicRef m) => MonadAtomicRef (Fix1T t m) where
   atomicModifyRef r = lift . atomicModifyRef r
 
-instance (MonadFix1T t m, MonadFile m) => MonadFile (Fix1T t m)
+instance (MonadFix1T t m, MonadFail (Fix1T t m), MonadFile m) => MonadFile (Fix1T t m)
 
 instance (MonadFix1T t m, MonadStore m) => MonadStore (Fix1T t m) where
   addPath' = lift . addPath'
@@ -209,6 +210,7 @@ newtype StandardTF r m a
     , Applicative
     , Alternative
     , Monad
+    , MonadFail
     , MonadPlus
     , MonadFix
     , MonadIO

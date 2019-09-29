@@ -11,6 +11,7 @@ module Nix.Utils.Fix1 where
 
 import           Control.Applicative
 import           Control.Monad
+import           Control.Monad.Fail
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Catch
@@ -41,6 +42,7 @@ deriving instance Functor (t (Fix1T t m) m) => Functor (Fix1T t m)
 deriving instance Applicative (t (Fix1T t m) m) => Applicative (Fix1T t m)
 deriving instance Alternative (t (Fix1T t m) m) => Alternative (Fix1T t m)
 deriving instance Monad (t (Fix1T t m) m) => Monad (Fix1T t m)
+deriving instance MonadFail (t (Fix1T t m) m) => MonadFail (Fix1T t m)
 deriving instance MonadPlus (t (Fix1T t m) m) => MonadPlus (Fix1T t m)
 deriving instance MonadFix (t (Fix1T t m) m) => MonadFix (Fix1T t m)
 deriving instance MonadIO (t (Fix1T t m) m) => MonadIO (Fix1T t m)

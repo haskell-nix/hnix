@@ -234,7 +234,7 @@ desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
   go (Left  x) = do
     maybeValue <- gets (M.lookup x)
     case maybeValue of
-      Nothing     -> fail ("No binding " ++ show x)
+      Nothing     -> error ("No binding " ++ show x)
       Just (p, v) -> pure $ NamedVar (StaticKey x :| []) (embed v) p
 
 evalBinds
