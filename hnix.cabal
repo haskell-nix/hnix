@@ -15,12 +15,16 @@ extra-source-files:
     data/let-comments-multiline.nix
     data/let-comments.nix
     data/let.nix
+    data/nix/COPYING
+    data/nix/Makefile
+    data/nix/Makefile.config.in
+    data/nix/README.md
     data/nix/bootstrap.sh
     data/nix/config/config.guess
     data/nix/config/config.sub
     data/nix/config/install-sh
     data/nix/configure.ac
-    data/nix/COPYING
+    data/nix/contrib/stack-collapse.py
     data/nix/corepkgs/buildenv.nix
     data/nix/corepkgs/config.nix.in
     data/nix/corepkgs/derivation.nix
@@ -28,10 +32,147 @@ extra-source-files:
     data/nix/corepkgs/imported-drv-to-derivation.nix
     data/nix/corepkgs/local.mk
     data/nix/corepkgs/unpack-channel.nix
+    data/nix/doc/manual/advanced-topics/advanced-topics.xml
+    data/nix/doc/manual/advanced-topics/cores-vs-jobs.xml
+    data/nix/doc/manual/advanced-topics/diff-hook.xml
+    data/nix/doc/manual/advanced-topics/distributed-builds.xml
+    data/nix/doc/manual/advanced-topics/post-build-hook.xml
+    data/nix/doc/manual/command-ref/command-ref.xml
+    data/nix/doc/manual/command-ref/conf-file.xml
+    data/nix/doc/manual/command-ref/env-common.xml
+    data/nix/doc/manual/command-ref/files.xml
+    data/nix/doc/manual/command-ref/main-commands.xml
+    data/nix/doc/manual/command-ref/nix-build.xml
+    data/nix/doc/manual/command-ref/nix-channel.xml
+    data/nix/doc/manual/command-ref/nix-collect-garbage.xml
+    data/nix/doc/manual/command-ref/nix-copy-closure.xml
+    data/nix/doc/manual/command-ref/nix-daemon.xml
+    data/nix/doc/manual/command-ref/nix-env.xml
+    data/nix/doc/manual/command-ref/nix-hash.xml
+    data/nix/doc/manual/command-ref/nix-instantiate.xml
+    data/nix/doc/manual/command-ref/nix-prefetch-url.xml
+    data/nix/doc/manual/command-ref/nix-shell.xml
+    data/nix/doc/manual/command-ref/nix-store.xml
+    data/nix/doc/manual/command-ref/opt-common-syn.xml
+    data/nix/doc/manual/command-ref/opt-common.xml
+    data/nix/doc/manual/command-ref/opt-inst-syn.xml
+    data/nix/doc/manual/command-ref/utilities.xml
+    data/nix/doc/manual/expressions/advanced-attributes.xml
+    data/nix/doc/manual/expressions/arguments-variables.xml
+    data/nix/doc/manual/expressions/build-script.xml
+    data/nix/doc/manual/expressions/builder-syntax.xml
+    data/nix/doc/manual/expressions/builtins.xml
+    data/nix/doc/manual/expressions/derivations.xml
+    data/nix/doc/manual/expressions/expression-language.xml
+    data/nix/doc/manual/expressions/expression-syntax.xml
+    data/nix/doc/manual/expressions/generic-builder.xml
+    data/nix/doc/manual/expressions/language-constructs.xml
+    data/nix/doc/manual/expressions/language-operators.xml
+    data/nix/doc/manual/expressions/language-values.xml
+    data/nix/doc/manual/expressions/simple-building-testing.xml
+    data/nix/doc/manual/expressions/simple-expression.xml
+    data/nix/doc/manual/expressions/writing-nix-expressions.xml
+    data/nix/doc/manual/figures/user-environments.png
+    data/nix/doc/manual/figures/user-environments.sxd
+    data/nix/doc/manual/glossary/glossary.xml
+    data/nix/doc/manual/hacking.xml
+    data/nix/doc/manual/images/callouts/1.gif
+    data/nix/doc/manual/images/callouts/10.gif
+    data/nix/doc/manual/images/callouts/11.gif
+    data/nix/doc/manual/images/callouts/12.gif
+    data/nix/doc/manual/images/callouts/13.gif
+    data/nix/doc/manual/images/callouts/14.gif
+    data/nix/doc/manual/images/callouts/15.gif
+    data/nix/doc/manual/images/callouts/2.gif
+    data/nix/doc/manual/images/callouts/3.gif
+    data/nix/doc/manual/images/callouts/4.gif
+    data/nix/doc/manual/images/callouts/5.gif
+    data/nix/doc/manual/images/callouts/6.gif
+    data/nix/doc/manual/images/callouts/7.gif
+    data/nix/doc/manual/images/callouts/8.gif
+    data/nix/doc/manual/images/callouts/9.gif
+    data/nix/doc/manual/installation/building-source.xml
+    data/nix/doc/manual/installation/env-variables.xml
+    data/nix/doc/manual/installation/installation.xml
+    data/nix/doc/manual/installation/installing-binary.xml
+    data/nix/doc/manual/installation/installing-source.xml
+    data/nix/doc/manual/installation/multi-user.xml
+    data/nix/doc/manual/installation/nix-security.xml
+    data/nix/doc/manual/installation/obtaining-source.xml
+    data/nix/doc/manual/installation/prerequisites-source.xml
+    data/nix/doc/manual/installation/single-user.xml
+    data/nix/doc/manual/installation/supported-platforms.xml
+    data/nix/doc/manual/installation/upgrading.xml
+    data/nix/doc/manual/introduction/about-nix.xml
+    data/nix/doc/manual/introduction/introduction.xml
+    data/nix/doc/manual/introduction/quick-start.xml
+    data/nix/doc/manual/local.mk
+    data/nix/doc/manual/manual.xml
+    data/nix/doc/manual/nix-lang-ref.xml
+    data/nix/doc/manual/packages/basic-package-mgmt.xml
+    data/nix/doc/manual/packages/binary-cache-substituter.xml
+    data/nix/doc/manual/packages/channels.xml
+    data/nix/doc/manual/packages/copy-closure.xml
+    data/nix/doc/manual/packages/garbage-collection.xml
+    data/nix/doc/manual/packages/garbage-collector-roots.xml
+    data/nix/doc/manual/packages/package-management.xml
+    data/nix/doc/manual/packages/profiles.xml
+    data/nix/doc/manual/packages/s3-substituter.xml
+    data/nix/doc/manual/packages/sharing-packages.xml
+    data/nix/doc/manual/packages/ssh-substituter.xml
+    data/nix/doc/manual/quote-literals.xsl
+    data/nix/doc/manual/release-notes/release-notes.xml
+    data/nix/doc/manual/release-notes/rl-0.10.1.xml
+    data/nix/doc/manual/release-notes/rl-0.10.xml
+    data/nix/doc/manual/release-notes/rl-0.11.xml
+    data/nix/doc/manual/release-notes/rl-0.12.xml
+    data/nix/doc/manual/release-notes/rl-0.13.xml
+    data/nix/doc/manual/release-notes/rl-0.14.xml
+    data/nix/doc/manual/release-notes/rl-0.15.xml
+    data/nix/doc/manual/release-notes/rl-0.16.xml
+    data/nix/doc/manual/release-notes/rl-0.5.xml
+    data/nix/doc/manual/release-notes/rl-0.6.xml
+    data/nix/doc/manual/release-notes/rl-0.7.xml
+    data/nix/doc/manual/release-notes/rl-0.8.1.xml
+    data/nix/doc/manual/release-notes/rl-0.8.xml
+    data/nix/doc/manual/release-notes/rl-0.9.1.xml
+    data/nix/doc/manual/release-notes/rl-0.9.2.xml
+    data/nix/doc/manual/release-notes/rl-0.9.xml
+    data/nix/doc/manual/release-notes/rl-1.0.xml
+    data/nix/doc/manual/release-notes/rl-1.1.xml
+    data/nix/doc/manual/release-notes/rl-1.10.xml
+    data/nix/doc/manual/release-notes/rl-1.11.10.xml
+    data/nix/doc/manual/release-notes/rl-1.11.xml
+    data/nix/doc/manual/release-notes/rl-1.2.xml
+    data/nix/doc/manual/release-notes/rl-1.3.xml
+    data/nix/doc/manual/release-notes/rl-1.4.xml
+    data/nix/doc/manual/release-notes/rl-1.5.1.xml
+    data/nix/doc/manual/release-notes/rl-1.5.2.xml
+    data/nix/doc/manual/release-notes/rl-1.5.xml
+    data/nix/doc/manual/release-notes/rl-1.6.1.xml
+    data/nix/doc/manual/release-notes/rl-1.6.xml
+    data/nix/doc/manual/release-notes/rl-1.7.xml
+    data/nix/doc/manual/release-notes/rl-1.8.xml
+    data/nix/doc/manual/release-notes/rl-1.9.xml
+    data/nix/doc/manual/release-notes/rl-2.0.xml
+    data/nix/doc/manual/release-notes/rl-2.1.xml
+    data/nix/doc/manual/release-notes/rl-2.2.xml
+    data/nix/doc/manual/release-notes/rl-2.3.xml
+    data/nix/doc/manual/schemas.xml
+    data/nix/doc/manual/style.css
     data/nix/local.mk
+    data/nix/m4/ax_cxx_compile_stdcxx.m4
+    data/nix/m4/ax_cxx_compile_stdcxx_17.m4
     data/nix/maintainers/upload-release.pl
-    data/nix/Makefile
-    data/nix/Makefile.config.in
+    data/nix/misc/launchd/local.mk
+    data/nix/misc/launchd/org.nixos.nix-daemon.plist.in
+    data/nix/misc/systemd/local.mk
+    data/nix/misc/systemd/nix-daemon.service.in
+    data/nix/misc/systemd/nix-daemon.socket.in
+    data/nix/misc/systemv/nix-daemon
+    data/nix/misc/upstart/local.mk
+    data/nix/misc/upstart/nix-daemon.conf.in
+    data/nix/mk/README.md
     data/nix/mk/clean.mk
     data/nix/mk/dist.mk
     data/nix/mk/functions.mk
@@ -41,11 +182,13 @@ extra-source-files:
     data/nix/mk/libraries.mk
     data/nix/mk/patterns.mk
     data/nix/mk/programs.mk
-    data/nix/mk/README.md
     data/nix/mk/templates.mk
     data/nix/mk/tests.mk
     data/nix/mk/tracing.mk
     data/nix/nix.spec.in
+    data/nix/perl/MANIFEST
+    data/nix/perl/Makefile
+    data/nix/perl/Makefile.config.in
     data/nix/perl/configure.ac
     data/nix/perl/lib/Nix/Config.pm.in
     data/nix/perl/lib/Nix/CopyClosure.pm
@@ -55,22 +198,210 @@ extra-source-files:
     data/nix/perl/lib/Nix/Store.xs
     data/nix/perl/lib/Nix/Utils.pm
     data/nix/perl/local.mk
-    data/nix/perl/Makefile
-    data/nix/perl/Makefile.config.in
-    data/nix/perl/MANIFEST
-    data/nix/README.md
     data/nix/release-common.nix
     data/nix/release.nix
     data/nix/scripts/install-darwin-multi-user.sh
     data/nix/scripts/install-multi-user.sh
     data/nix/scripts/install-nix-from-closure.sh
     data/nix/scripts/install-systemd-multi-user.sh
+    data/nix/scripts/install.in
     data/nix/scripts/local.mk
     data/nix/scripts/nix-http-export.cgi.in
     data/nix/scripts/nix-profile-daemon.sh.in
     data/nix/scripts/nix-profile.sh.in
     data/nix/scripts/nix-reduce-build.in
     data/nix/shell.nix
+    data/nix/src/build-remote/build-remote.cc
+    data/nix/src/cpptoml/LICENSE
+    data/nix/src/cpptoml/cpptoml.h
+    data/nix/src/libexpr/attr-path.cc
+    data/nix/src/libexpr/attr-path.hh
+    data/nix/src/libexpr/attr-set.cc
+    data/nix/src/libexpr/attr-set.hh
+    data/nix/src/libexpr/common-eval-args.cc
+    data/nix/src/libexpr/common-eval-args.hh
+    data/nix/src/libexpr/eval-inline.hh
+    data/nix/src/libexpr/eval.cc
+    data/nix/src/libexpr/eval.hh
+    data/nix/src/libexpr/function-trace.hh
+    data/nix/src/libexpr/get-drvs.cc
+    data/nix/src/libexpr/get-drvs.hh
+    data/nix/src/libexpr/json-to-value.cc
+    data/nix/src/libexpr/json-to-value.hh
+    data/nix/src/libexpr/lexer.l
+    data/nix/src/libexpr/local.mk
+    data/nix/src/libexpr/names.cc
+    data/nix/src/libexpr/names.hh
+    data/nix/src/libexpr/nix-expr.pc.in
+    data/nix/src/libexpr/nixexpr.cc
+    data/nix/src/libexpr/nixexpr.hh
+    data/nix/src/libexpr/parser.y
+    data/nix/src/libexpr/primops.cc
+    data/nix/src/libexpr/primops.hh
+    data/nix/src/libexpr/primops/context.cc
+    data/nix/src/libexpr/primops/fetchGit.cc
+    data/nix/src/libexpr/primops/fetchMercurial.cc
+    data/nix/src/libexpr/primops/fromTOML.cc
+    data/nix/src/libexpr/symbol-table.hh
+    data/nix/src/libexpr/value-to-json.cc
+    data/nix/src/libexpr/value-to-json.hh
+    data/nix/src/libexpr/value-to-xml.cc
+    data/nix/src/libexpr/value-to-xml.hh
+    data/nix/src/libexpr/value.hh
+    data/nix/src/libmain/common-args.cc
+    data/nix/src/libmain/common-args.hh
+    data/nix/src/libmain/local.mk
+    data/nix/src/libmain/nix-main.pc.in
+    data/nix/src/libmain/shared.cc
+    data/nix/src/libmain/shared.hh
+    data/nix/src/libmain/stack.cc
+    data/nix/src/libstore/binary-cache-store.cc
+    data/nix/src/libstore/binary-cache-store.hh
+    data/nix/src/libstore/build.cc
+    data/nix/src/libstore/builtins.hh
+    data/nix/src/libstore/builtins/buildenv.cc
+    data/nix/src/libstore/builtins/fetchurl.cc
+    data/nix/src/libstore/crypto.cc
+    data/nix/src/libstore/crypto.hh
+    data/nix/src/libstore/derivations.cc
+    data/nix/src/libstore/derivations.hh
+    data/nix/src/libstore/download.cc
+    data/nix/src/libstore/download.hh
+    data/nix/src/libstore/export-import.cc
+    data/nix/src/libstore/fs-accessor.hh
+    data/nix/src/libstore/gc.cc
+    data/nix/src/libstore/globals.cc
+    data/nix/src/libstore/globals.hh
+    data/nix/src/libstore/http-binary-cache-store.cc
+    data/nix/src/libstore/legacy-ssh-store.cc
+    data/nix/src/libstore/local-binary-cache-store.cc
+    data/nix/src/libstore/local-fs-store.cc
+    data/nix/src/libstore/local-store.cc
+    data/nix/src/libstore/local-store.hh
+    data/nix/src/libstore/local.mk
+    data/nix/src/libstore/machines.cc
+    data/nix/src/libstore/machines.hh
+    data/nix/src/libstore/misc.cc
+    data/nix/src/libstore/nar-accessor.cc
+    data/nix/src/libstore/nar-accessor.hh
+    data/nix/src/libstore/nar-info-disk-cache.cc
+    data/nix/src/libstore/nar-info-disk-cache.hh
+    data/nix/src/libstore/nar-info.cc
+    data/nix/src/libstore/nar-info.hh
+    data/nix/src/libstore/nix-store.pc.in
+    data/nix/src/libstore/optimise-store.cc
+    data/nix/src/libstore/parsed-derivations.cc
+    data/nix/src/libstore/parsed-derivations.hh
+    data/nix/src/libstore/pathlocks.cc
+    data/nix/src/libstore/pathlocks.hh
+    data/nix/src/libstore/profiles.cc
+    data/nix/src/libstore/profiles.hh
+    data/nix/src/libstore/references.cc
+    data/nix/src/libstore/references.hh
+    data/nix/src/libstore/remote-fs-accessor.cc
+    data/nix/src/libstore/remote-fs-accessor.hh
+    data/nix/src/libstore/remote-store.cc
+    data/nix/src/libstore/remote-store.hh
+    data/nix/src/libstore/s3-binary-cache-store.cc
+    data/nix/src/libstore/s3-binary-cache-store.hh
+    data/nix/src/libstore/s3.hh
+    data/nix/src/libstore/sandbox-defaults.sb
+    data/nix/src/libstore/sandbox-minimal.sb
+    data/nix/src/libstore/sandbox-network.sb
+    data/nix/src/libstore/schema.sql
+    data/nix/src/libstore/serve-protocol.hh
+    data/nix/src/libstore/sqlite.cc
+    data/nix/src/libstore/sqlite.hh
+    data/nix/src/libstore/ssh-store.cc
+    data/nix/src/libstore/ssh.cc
+    data/nix/src/libstore/ssh.hh
+    data/nix/src/libstore/store-api.cc
+    data/nix/src/libstore/store-api.hh
+    data/nix/src/libstore/worker-protocol.hh
+    data/nix/src/libutil/affinity.cc
+    data/nix/src/libutil/affinity.hh
+    data/nix/src/libutil/archive.cc
+    data/nix/src/libutil/archive.hh
+    data/nix/src/libutil/args.cc
+    data/nix/src/libutil/args.hh
+    data/nix/src/libutil/compression.cc
+    data/nix/src/libutil/compression.hh
+    data/nix/src/libutil/config.cc
+    data/nix/src/libutil/config.hh
+    data/nix/src/libutil/finally.hh
+    data/nix/src/libutil/hash.cc
+    data/nix/src/libutil/hash.hh
+    data/nix/src/libutil/istringstream_nocopy.hh
+    data/nix/src/libutil/json.cc
+    data/nix/src/libutil/json.hh
+    data/nix/src/libutil/lazy.hh
+    data/nix/src/libutil/local.mk
+    data/nix/src/libutil/logging.cc
+    data/nix/src/libutil/logging.hh
+    data/nix/src/libutil/lru-cache.hh
+    data/nix/src/libutil/monitor-fd.hh
+    data/nix/src/libutil/pool.hh
+    data/nix/src/libutil/ref.hh
+    data/nix/src/libutil/serialise.cc
+    data/nix/src/libutil/serialise.hh
+    data/nix/src/libutil/sync.hh
+    data/nix/src/libutil/thread-pool.cc
+    data/nix/src/libutil/thread-pool.hh
+    data/nix/src/libutil/types.hh
+    data/nix/src/libutil/util.cc
+    data/nix/src/libutil/util.hh
+    data/nix/src/libutil/xml-writer.cc
+    data/nix/src/libutil/xml-writer.hh
+    data/nix/src/nix-build/nix-build.cc
+    data/nix/src/nix-channel/nix-channel.cc
+    data/nix/src/nix-collect-garbage/nix-collect-garbage.cc
+    data/nix/src/nix-copy-closure/nix-copy-closure.cc
+    data/nix/src/nix-daemon/nix-daemon.cc
+    data/nix/src/nix-env/nix-env.cc
+    data/nix/src/nix-env/user-env.cc
+    data/nix/src/nix-env/user-env.hh
+    data/nix/src/nix-instantiate/nix-instantiate.cc
+    data/nix/src/nix-prefetch-url/nix-prefetch-url.cc
+    data/nix/src/nix-store/dotgraph.cc
+    data/nix/src/nix-store/dotgraph.hh
+    data/nix/src/nix-store/graphml.cc
+    data/nix/src/nix-store/graphml.hh
+    data/nix/src/nix-store/nix-store.cc
+    data/nix/src/nix/add-to-store.cc
+    data/nix/src/nix/build.cc
+    data/nix/src/nix/cat.cc
+    data/nix/src/nix/command.cc
+    data/nix/src/nix/command.hh
+    data/nix/src/nix/copy.cc
+    data/nix/src/nix/doctor.cc
+    data/nix/src/nix/dump-path.cc
+    data/nix/src/nix/edit.cc
+    data/nix/src/nix/eval.cc
+    data/nix/src/nix/hash.cc
+    data/nix/src/nix/installables.cc
+    data/nix/src/nix/legacy.cc
+    data/nix/src/nix/legacy.hh
+    data/nix/src/nix/local.mk
+    data/nix/src/nix/log.cc
+    data/nix/src/nix/ls.cc
+    data/nix/src/nix/main.cc
+    data/nix/src/nix/optimise-store.cc
+    data/nix/src/nix/path-info.cc
+    data/nix/src/nix/ping-store.cc
+    data/nix/src/nix/progress-bar.cc
+    data/nix/src/nix/progress-bar.hh
+    data/nix/src/nix/repl.cc
+    data/nix/src/nix/run.cc
+    data/nix/src/nix/search.cc
+    data/nix/src/nix/show-config.cc
+    data/nix/src/nix/show-derivation.cc
+    data/nix/src/nix/sigs.cc
+    data/nix/src/nix/upgrade-nix.cc
+    data/nix/src/nix/verify.cc
+    data/nix/src/nix/why-depends.cc
+    data/nix/src/nlohmann/json.hpp
+    data/nix/src/resolve-system-dependencies/local.mk
+    data/nix/src/resolve-system-dependencies/resolve-system-dependencies.cc
     data/nix/tests/add.sh
     data/nix/tests/binary-cache.sh
     data/nix/tests/brotli.sh
@@ -105,6 +436,8 @@ extra-source-files:
     data/nix/tests/fixed.builder2.sh
     data/nix/tests/fixed.nix
     data/nix/tests/fixed.sh
+    data/nix/tests/function-trace.sh
+    data/nix/tests/gc-auto.sh
     data/nix/tests/gc-concurrent.builder.sh
     data/nix/tests/gc-concurrent.nix
     data/nix/tests/gc-concurrent.sh
@@ -119,6 +452,7 @@ extra-source-files:
     data/nix/tests/init.sh
     data/nix/tests/install-darwin.sh
     data/nix/tests/lang.sh
+    data/nix/tests/lang/binary-data
     data/nix/tests/lang/data
     data/nix/tests/lang/dir1/a.nix
     data/nix/tests/lang/dir2/a.nix
@@ -136,6 +470,7 @@ extra-source-files:
     data/nix/tests/lang/eval-fail-bad-antiquote-3.nix
     data/nix/tests/lang/eval-fail-blackhole.nix
     data/nix/tests/lang/eval-fail-deepseq.nix
+    data/nix/tests/lang/eval-fail-hashfile-missing.nix
     data/nix/tests/lang/eval-fail-missing-arg.nix
     data/nix/tests/lang/eval-fail-path-slash.nix
     data/nix/tests/lang/eval-fail-remove.nix
@@ -181,8 +516,12 @@ extra-source-files:
     data/nix/tests/lang/eval-okay-comments.nix
     data/nix/tests/lang/eval-okay-concat.exp
     data/nix/tests/lang/eval-okay-concat.nix
+    data/nix/tests/lang/eval-okay-concatmap.exp
+    data/nix/tests/lang/eval-okay-concatmap.nix
     data/nix/tests/lang/eval-okay-concatstringssep.exp
     data/nix/tests/lang/eval-okay-concatstringssep.nix
+    data/nix/tests/lang/eval-okay-context-introspection.exp
+    data/nix/tests/lang/eval-okay-context-introspection.nix
     data/nix/tests/lang/eval-okay-context.exp
     data/nix/tests/lang/eval-okay-context.nix
     data/nix/tests/lang/eval-okay-curpos.exp
@@ -211,6 +550,10 @@ extra-source-files:
     data/nix/tests/lang/eval-okay-filter.nix
     data/nix/tests/lang/eval-okay-flatten.exp
     data/nix/tests/lang/eval-okay-flatten.nix
+    data/nix/tests/lang/eval-okay-float.exp
+    data/nix/tests/lang/eval-okay-float.nix
+    data/nix/tests/lang/eval-okay-fromTOML.exp
+    data/nix/tests/lang/eval-okay-fromTOML.nix
     data/nix/tests/lang/eval-okay-fromjson.exp
     data/nix/tests/lang/eval-okay-fromjson.nix
     data/nix/tests/lang/eval-okay-functionargs.exp.xml
@@ -222,7 +565,10 @@ extra-source-files:
     data/nix/tests/lang/eval-okay-getenv.exp
     data/nix/tests/lang/eval-okay-getenv.nix
     data/nix/tests/lang/eval-okay-hash.exp
-    data/nix/tests/lang/eval-okay-hash.nix
+    data/nix/tests/lang/eval-okay-hashfile.exp
+    data/nix/tests/lang/eval-okay-hashfile.nix
+    data/nix/tests/lang/eval-okay-hashstring.exp
+    data/nix/tests/lang/eval-okay-hashstring.nix
     data/nix/tests/lang/eval-okay-if.exp
     data/nix/tests/lang/eval-okay-if.nix
     data/nix/tests/lang/eval-okay-import.exp
@@ -239,6 +585,8 @@ extra-source-files:
     data/nix/tests/lang/eval-okay-logic.nix
     data/nix/tests/lang/eval-okay-map.exp
     data/nix/tests/lang/eval-okay-map.nix
+    data/nix/tests/lang/eval-okay-mapattrs.exp
+    data/nix/tests/lang/eval-okay-mapattrs.nix
     data/nix/tests/lang/eval-okay-nested-with.exp
     data/nix/tests/lang/eval-okay-nested-with.nix
     data/nix/tests/lang/eval-okay-new-let.exp
@@ -320,16 +668,22 @@ extra-source-files:
     data/nix/tests/lang/parse-fail-dup-attrs-2.nix
     data/nix/tests/lang/parse-fail-dup-attrs-3.nix
     data/nix/tests/lang/parse-fail-dup-attrs-4.nix
-    data/nix/tests/lang/parse-fail-dup-attrs-6.nix
     data/nix/tests/lang/parse-fail-dup-attrs-7.nix
     data/nix/tests/lang/parse-fail-dup-formals.nix
+    data/nix/tests/lang/parse-fail-mixed-nested-attrs1.nix
+    data/nix/tests/lang/parse-fail-mixed-nested-attrs2.nix
     data/nix/tests/lang/parse-fail-patterns-1.nix
     data/nix/tests/lang/parse-fail-regression-20060610.nix
+    data/nix/tests/lang/parse-fail-uft8.nix
     data/nix/tests/lang/parse-fail-undef-var-2.nix
     data/nix/tests/lang/parse-fail-undef-var.nix
     data/nix/tests/lang/parse-okay-1.nix
     data/nix/tests/lang/parse-okay-crlf.nix
     data/nix/tests/lang/parse-okay-dup-attrs-5.nix
+    data/nix/tests/lang/parse-okay-dup-attrs-6.nix
+    data/nix/tests/lang/parse-okay-mixed-nested-attrs-1.nix
+    data/nix/tests/lang/parse-okay-mixed-nested-attrs-2.nix
+    data/nix/tests/lang/parse-okay-mixed-nested-attrs-3.nix
     data/nix/tests/lang/parse-okay-regression-20041027.nix
     data/nix/tests/lang/parse-okay-regression-751.nix
     data/nix/tests/lang/parse-okay-subversion.nix
@@ -347,6 +701,7 @@ extra-source-files:
     data/nix/tests/nix-build.sh
     data/nix/tests/nix-channel.sh
     data/nix/tests/nix-copy-closure.nix
+    data/nix/tests/nix-copy-ssh.sh
     data/nix/tests/nix-profile.sh
     data/nix/tests/nix-shell.sh
     data/nix/tests/optimise-store.sh
@@ -358,8 +713,10 @@ extra-source-files:
     data/nix/tests/plugins.sh
     data/nix/tests/plugins/local.mk
     data/nix/tests/plugins/plugintest.cc
+    data/nix/tests/post-hook.sh
     data/nix/tests/pure-eval.nix
     data/nix/tests/pure-eval.sh
+    data/nix/tests/push-to-store.sh
     data/nix/tests/referrers.sh
     data/nix/tests/remote-builds.nix
     data/nix/tests/remote-store.sh
@@ -388,7 +745,6 @@ extra-source-files:
     data/nix/tests/user-envs.builder.sh
     data/nix/tests/user-envs.nix
     data/nix/tests/user-envs.sh
-    data/nix/version
     data/nixpkgs-all-packages-pretty.nix
     data/nixpkgs-all-packages.nix
     data/simple-pretty.nix
@@ -516,7 +872,7 @@ library
     , monadlist >= 0.0.2 && < 0.1
     , mtl >= 2.2.2 && < 2.3
     , optparse-applicative >= 0.14.3 && < 0.15 || >= 0.15.0.0 && < 0.16
-    , parser-combinators >= 1.0.1 && < 1.1 || >= 1.2.0 && < 1.3
+    , parser-combinators
     , prettyprinter >= 1.2.1 && < 1.3 || >= 1.3.0 && < 1.4
     , process >= 1.6.3 && < 1.7
     , ref-tf >= 0.4.0 && < 0.5
