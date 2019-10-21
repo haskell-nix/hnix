@@ -5,7 +5,7 @@ module Nix.Cache where
 import qualified Data.ByteString.Lazy          as BS
 import           Nix.Expr.Types.Annotated
 
-#if defined (__linux__) && MIN_VERSION_base(4, 10, 0)
+#if defined (__linux__)
 #define USE_COMPACT 1
 #endif
 

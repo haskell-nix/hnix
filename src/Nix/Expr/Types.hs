@@ -68,10 +68,8 @@ import           Nix.Utils
 import           Text.Megaparsec.Pos
 import           Text.Read.Deriving
 import           Text.Show.Deriving
-#if MIN_VERSION_base(4, 10, 0)
 import           Type.Reflection                ( eqTypeRep )
 import qualified Type.Reflection               as Reflection
-#endif
 
 type VarName = Text
 
@@ -81,14 +79,6 @@ hashAt = flip alterF
 -- unfortunate orphans
 #if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 NonEmpty
-#endif
-
-#if !MIN_VERSION_base(4, 10, 0)
-instance Eq1 NonEmpty where
-  liftEq eq (a NE.:| as) (b NE.:| bs) = eq a b && liftEq eq as bs
-instance Show1 NonEmpty where
-  liftShowsPrec shwP shwL p (a NE.:| as) = showParen (p > 5) $
-    shwP 6 a . showString " :| " . shwL as
 #endif
 
 #if !MIN_VERSION_binary(0, 8, 4)
@@ -162,18 +152,11 @@ instance Serialise r => Serialise (NExprF r)
 instance IsString NExpr where
   fromString = Fix . NSym . fromString
 
-#if MIN_VERSION_base(4, 10, 0)
 instance Lift (Fix NExprF) where
   lift = dataToExpQ $ \b ->
     case Reflection.typeOf b `eqTypeRep` Reflection.typeRep @Text of
       Just HRefl -> Just [| pack $(liftString $ unpack b) |]
       Nothing    -> Nothing
-#else
-instance Lift (Fix NExprF) where
-    lift = dataToExpQ $ \b -> case cast b of
-        Just t -> Just [| pack $(liftString $ unpack t) |]
-        Nothing -> Nothing
-#endif
 
 -- | The monomorphic expression type is a fixed point of the polymorphic one.
 type NExpr = Fix NExprF
