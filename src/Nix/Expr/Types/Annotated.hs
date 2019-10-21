@@ -82,9 +82,7 @@ instance Hashable ann => Hashable1 (Ann ann)
 instance (Serialise ann, Serialise a) => Serialise (Ann ann a)
 #endif
 
-#if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData ann => NFData1 (Ann ann)
-#endif
 
 $(deriveEq1   ''Ann)
 $(deriveEq2   ''Ann)
@@ -109,10 +107,6 @@ type NExprLocF = AnnF SrcSpan NExprF
 
 -- | A nix expression with source location at each subexpression.
 type NExprLoc = Fix NExprLocF
-
-#if !MIN_VERSION_deepseq(1, 4, 3)
-instance (NFData (f (g a)), NFData (g a)) => NFData (Compose f g a)
-#endif
 
 instance NFData NExprLoc
 

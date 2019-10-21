@@ -127,9 +127,7 @@ data NExprF r
 
 instance Hashable1 NExprF
 
-#if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData1 NExprF
-#endif
 
 #ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (NExprF r)
@@ -168,9 +166,7 @@ data Binding r
 
 instance Hashable1 Binding
 
-#if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData1 Binding
-#endif
 
 #ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (Binding r)
@@ -190,9 +186,7 @@ data Params r
 
 instance Hashable1 Params
 
-#if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData1 Params
-#endif
 
 #ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (Params r)
@@ -219,9 +213,7 @@ instance Hashable2 Antiquoted where
   liftHashWithSalt2 _ hb salt (Antiquoted b) =
     hb (salt `hashWithSalt` (2 :: Int)) b
 
-#if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData v => NFData1 (Antiquoted v)
-#endif
 
 #ifdef MIN_VERSION_serialise
 instance (Serialise v, Serialise r) => Serialise (Antiquoted v r)
@@ -243,9 +235,7 @@ data NString r
 
 instance Hashable1 NString
 
-#if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData1 NString
-#endif
 
 #ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (NString r)
@@ -304,13 +294,11 @@ instance Generic1 NKeyName where
   from1 = id
   to1   = id
 
-#if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData1 NKeyName where
   liftRnf _ (StaticKey  !_            ) = ()
   liftRnf _ (DynamicKey (Plain !_)    ) = ()
   liftRnf _ (DynamicKey EscapedNewline) = ()
   liftRnf k (DynamicKey (Antiquoted r)) = k r
-#endif
 
 -- | Most key names are just static text, so this instance is convenient.
 instance IsString (NKeyName r) where
@@ -409,10 +397,6 @@ instance Serialise NRecordType
 paramName :: Params r -> Maybe VarName
 paramName (Param n       ) = Just n
 paramName (ParamSet _ _ n) = n
-
-#if !MIN_VERSION_deepseq(1, 4, 3)
-instance NFData NExpr
-#endif
 
 $(deriveEq1 ''NExprF)
 $(deriveEq1 ''NString)
