@@ -503,6 +503,7 @@ library
     , exceptions >= 0.10.0 && < 0.11
     , filepath >= 1.4.2 && < 1.5
     , free >= 5.1 && < 5.2
+    , hashable >=1.2.5 && < 1.4
     , hashing >= 0.1.0 && < 0.2
     , hnix-store-core >= 0.1.0 && < 0.2
     , http-client >= 0.5.14 && < 0.6 || >= 0.6.4 && < 0.7
@@ -553,15 +554,11 @@ library
   -- if !flag(profiling)
   --   build-depends:
   --       ghc-datasize
-  if impl(ghcjs)
-    build-depends:
-        hashable >=1.2.4 && <1.3 || >= 1.3.0.0 && < 1.4
-  else
+  if !impl(ghcjs)
     exposed-modules:
         Nix.Options.Parser
     build-depends:
-        hashable >=1.2.5 && <1.3 || >= 1.3.0.0 && < 1.4
-      , haskeline >= 0.7.4.2 && < 0.8
+        haskeline >= 0.7.4.2 && < 0.8
       , pretty-show >= 1.9.5 && < 1.10
   default-language: Haskell2010
 

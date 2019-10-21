@@ -43,9 +43,7 @@ import           Data.Eq.Deriving
 import           Data.Fix
 import           Data.Functor.Classes
 import           Data.Hashable
-#if MIN_VERSION_hashable(1, 2, 5)
 import           Data.Hashable.Lifted
-#endif
 import           Data.List                      ( inits
                                                 , tails
                                                 )
@@ -77,9 +75,7 @@ hashAt :: VarName -> Lens' (AttrSet v) (Maybe v)
 hashAt = flip alterF
 
 -- unfortunate orphans
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 NonEmpty
-#endif
 
 #if !MIN_VERSION_binary(0, 8, 4)
 instance Binary a => Binary (NE.NonEmpty a) where
@@ -135,9 +131,7 @@ data NExprF r
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
             Foldable, Traversable, Show, NFData, Hashable)
 
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 NExprF
-#endif
 
 #if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData1 NExprF
@@ -178,9 +172,7 @@ data Binding r
   deriving (Generic, Generic1, Typeable, Data, Ord, Eq, Functor,
             Foldable, Traversable, Show, NFData, Hashable)
 
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 Binding
-#endif
 
 #if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData1 Binding
@@ -202,9 +194,7 @@ data Params r
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Show,
             Foldable, Traversable, NFData, Hashable)
 
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 Params
-#endif
 
 #if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData1 Params
@@ -227,7 +217,6 @@ data Antiquoted (v :: *) (r :: *) = Plain !v | EscapedNewline | Antiquoted !r
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Foldable,
             Traversable, Show, Read, NFData, Hashable)
 
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable v => Hashable1 (Antiquoted v)
 
 instance Hashable2 Antiquoted where
@@ -235,7 +224,6 @@ instance Hashable2 Antiquoted where
   liftHashWithSalt2 _ _ salt EscapedNewline = salt `hashWithSalt` (1 :: Int)
   liftHashWithSalt2 _ hb salt (Antiquoted b) =
     hb (salt `hashWithSalt` (2 :: Int)) b
-#endif
 
 #if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData v => NFData1 (Antiquoted v)
@@ -259,9 +247,7 @@ data NString r
   deriving (Eq, Ord, Generic, Generic1, Typeable, Data, Functor, Foldable,
             Traversable, Show, Read, NFData, Hashable)
 
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 NString
-#endif
 
 #if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData1 NString
@@ -341,13 +327,11 @@ instance Eq1 NKeyName where
   liftEq _  (StaticKey  a) (StaticKey  b) = a == b
   liftEq _  _              _              = False
 
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 NKeyName where
   liftHashWithSalt h salt (DynamicKey a) =
     liftHashWithSalt2 (liftHashWithSalt h) h (salt `hashWithSalt` (0 :: Int)) a
   liftHashWithSalt _ salt (StaticKey n) =
     salt `hashWithSalt` (1 :: Int) `hashWithSalt` n
-#endif
 
 -- Deriving this instance automatically is not possible because @r@
 -- occurs not only as last argument in @Antiquoted (NString r) r@

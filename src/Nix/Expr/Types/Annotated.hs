@@ -39,9 +39,7 @@ import           Data.Fix
 import           Data.Function                  ( on )
 import           Data.Functor.Compose
 import           Data.Hashable
-#if MIN_VERSION_hashable(1, 2, 5)
 import           Data.Hashable.Lifted
-#endif
 import           Data.Ord.Deriving
 import           Data.Text                      ( Text
                                                 , pack
@@ -78,9 +76,7 @@ data Ann ann a = Ann
     deriving (Ord, Eq, Data, Generic, Generic1, Typeable, Functor, Foldable,
               Traversable, Read, Show, NFData, Hashable)
 
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable ann => Hashable1 (Ann ann)
-#endif
 
 #ifdef MIN_VERSION_serialise
 instance (Serialise ann, Serialise a) => Serialise (Ann ann a)
@@ -124,9 +120,7 @@ instance NFData NExprLoc
 instance Serialise NExprLoc
 #endif
 
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable NExprLoc
-#endif
 
 instance Binary SrcSpan
 instance (Binary ann, Binary a) => Binary (Ann ann a)
