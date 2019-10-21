@@ -77,12 +77,6 @@ hashAt = flip alterF
 -- unfortunate orphans
 instance Hashable1 NonEmpty
 
-#if !MIN_VERSION_binary(0, 8, 4)
-instance Binary a => Binary (NE.NonEmpty a) where
-  get = fmap NE.fromList Bin.get
-  put = Bin.put . NE.toList
-#endif
-
 -- | The main nix expression type. This is polymorphic so that it can be made
 -- a functor, which allows us to traverse expressions and map functions over
 -- them. The actual 'NExpr' type is a fixed point of this functor, defined
