@@ -68,7 +68,7 @@ class Monad m => MonadIntrospect m where
 instance MonadIntrospect IO where
   recursiveSize =
 #ifdef MIN_VERSION_ghc_datasize
-#if MIN_VERSION_ghc_datasize(0,2,0) && __GLASGOW_HASKELL__ >= 804
+#if MIN_VERSION_ghc_datasize(0,2,0)
 recursiveSize
 #else
 \_ -> return 0

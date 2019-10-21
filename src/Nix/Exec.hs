@@ -65,7 +65,7 @@ import qualified Text.Show.Pretty as PS
 #endif
 
 #ifdef MIN_VERSION_ghc_datasize
-#if MIN_VERSION_ghc_datasize(0,2,0) && __GLASGOW_HASKELL__ >= 804
+#if MIN_VERSION_ghc_datasize(0,2,0)
 import           GHC.DataSize
 #endif
 #endif
