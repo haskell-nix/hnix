@@ -511,7 +511,7 @@ library
     , interpolate >= 0.2.0 && < 0.3
     , lens-family-th >= 0.5.0 && < 0.6
     , logict >= 0.6.0 && < 0.7 || >= 0.7.0.2 && < 0.8
-    , megaparsec >=7.0 && <7.1
+    , megaparsec >=7.0 && <8.1
     , monad-control >= 1.0.2 && < 1.1
     , monadlist >= 0.0.2 && < 0.1
     , mtl >= 2.2.2 && < 2.3
@@ -658,7 +658,7 @@ test-suite hnix-tests
     , hedgehog
     , hnix
     , interpolate
-    , megaparsec >=7.0 && <7.1
+    , megaparsec >=7.0 && <8.1
     , mtl
     , optparse-applicative
     , pretty-show
