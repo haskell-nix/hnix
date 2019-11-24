@@ -207,8 +207,8 @@ attrSetAlter (k : ks) pos m p val = case M.lookup k m of
     ( M.insert
       k
       (toValue @(AttrSet v, AttrSet SourcePos) =<< (, mempty) <$> sequence st')
-      st
-    , M.insert k pos sp
+      m
+    , M.insert k pos p
     )
 
 desugarBinds :: forall r . ([Binding r] -> r) -> [Binding r] -> [Binding r]
