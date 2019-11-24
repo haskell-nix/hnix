@@ -139,6 +139,12 @@ case_find_file_failure_invalid_arg_no_path =
 case_infinite_recursion =
     assertNixEvalThrows "let foo = a: bar a; bar = a: foo a; in foo 3"
 
+case_nested_let =
+    constantEqualText "3" "let a = 3; x.x = 2; in a"
+
+case_nested_nested_let =
+    constantEqualText "3" "let a = 3; x.x = let b = a; in b; c = x.x; in c"
+
 case_inherit_in_rec_set =
     constantEqualText "1" "let x = 1; in (rec { inherit x; }).x"
 
