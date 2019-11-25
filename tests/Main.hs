@@ -96,6 +96,7 @@ main = do
 
   pwd <- getCurrentDirectory
   setEnv "NIX_REMOTE" ("local?root=" ++ pwd ++ "/")
+  setEnv "NIX_DATA_DIR" (pwd ++ "/data")
 
   defaultMain $ testGroup "hnix" $
     [ ParserTests.tests

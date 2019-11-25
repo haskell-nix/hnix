@@ -147,7 +147,7 @@ assertEval _opts files = do
     [".exp.disabled"]  -> return ()
     [".exp-disabled"]  -> return ()
     [".exp", ".flags"] -> do
-      liftIO $ unsetEnv "NIX_PATH"
+      liftIO $ setEnv "NIX_PATH" "lang/dir4:lang/dir5"
       flags <- Text.readFile (name ++ ".flags")
       let flags' | Text.last flags == '\n' = Text.init flags
                  | otherwise               = flags
@@ -163,16 +163,7 @@ assertEval _opts files = do
               ++ name
               ++ ".flags: "
               ++ show err
-          Opts.Success opts' -> assertLangOk
-            (opts'
-              { include = include opts'
-                            ++ [ "nix=../../../../data/nix/corepkgs"
-                               , "lang/dir4"
-                               , "lang/dir5"
-                               ]
-              }
-            )
-            name
+          Opts.Success opts' -> assertLangOk opts' name
           Opts.CompletionInvoked _ -> error "unused"
     _ -> assertFailure $ "Unknown test type " ++ show files
  where

@@ -28,6 +28,7 @@ import           Nix.Parser
 import           Nix.Render
 import           Nix.Utils
 import           Nix.Value
+import qualified Paths_hnix
 import qualified System.Directory              as S
 import           System.Environment
 import           System.Exit
@@ -42,6 +43,7 @@ class (MonadFile m,
        MonadPutStr m,
        MonadHttp m,
        MonadEnv m,
+       MonadPaths m,
        MonadInstantiate m,
        MonadExec m,
        MonadIntrospect m) => MonadEffects t f m where
@@ -165,6 +167,14 @@ instance MonadEnv IO where
   getCurrentSystemArch = return $ T.pack $ case System.Info.arch of
     "i386" -> "i686"
     arch   -> arch
+
+class Monad m => MonadPaths m where
+    getDataDir :: m FilePath
+    default getDataDir :: (MonadTrans t, MonadPaths m', m ~ t m') => m FilePath
+    getDataDir = lift getDataDir
+
+instance MonadPaths IO where
+    getDataDir = Paths_hnix.getDataDir
 
 class Monad m => MonadHttp m where
     getURL :: Text -> m (Either ErrorCall StorePath)
