@@ -55,6 +55,7 @@ import           System.Console.Haskeline.MonadException hiding(catch)
 deriving instance MonadPutStr (t (Fix1 t)) => MonadPutStr (Fix1 t)
 deriving instance MonadHttp (t (Fix1 t)) => MonadHttp (Fix1 t)
 deriving instance MonadEnv (t (Fix1 t)) => MonadEnv (Fix1 t)
+deriving instance MonadPaths (t (Fix1 t)) => MonadPaths (Fix1 t)
 deriving instance MonadInstantiate (t (Fix1 t)) => MonadInstantiate (Fix1 t)
 deriving instance MonadExec (t (Fix1 t)) => MonadExec (Fix1 t)
 deriving instance MonadIntrospect (t (Fix1 t)) => MonadIntrospect (Fix1 t)
@@ -62,6 +63,7 @@ deriving instance MonadIntrospect (t (Fix1 t)) => MonadIntrospect (Fix1 t)
 deriving instance MonadPutStr (t (Fix1T t m) m) => MonadPutStr (Fix1T t m)
 deriving instance MonadHttp (t (Fix1T t m) m) => MonadHttp (Fix1T t m)
 deriving instance MonadEnv (t (Fix1T t m) m) => MonadEnv (Fix1T t m)
+deriving instance MonadPaths (t (Fix1T t m) m) => MonadPaths (Fix1T t m)
 deriving instance MonadInstantiate (t (Fix1T t m) m) => MonadInstantiate (Fix1T t m)
 deriving instance MonadExec (t (Fix1T t m) m) => MonadExec (Fix1T t m)
 deriving instance MonadIntrospect (t (Fix1T t m) m) => MonadIntrospect (Fix1T t m)
@@ -139,6 +141,7 @@ instance ( MonadFix m
          , MonadFile m
          , MonadCatch m
          , MonadEnv m
+         , MonadPaths m
          , MonadExec m
          , MonadHttp m
          , MonadInstantiate m
@@ -224,6 +227,7 @@ instance MonadTrans (StandardTF r) where
 instance (MonadPutStr r, MonadPutStr m) => MonadPutStr (StandardTF r m)
 instance (MonadHttp r, MonadHttp m) => MonadHttp (StandardTF r m)
 instance (MonadEnv r, MonadEnv m) => MonadEnv (StandardTF r m)
+instance (MonadPaths r, MonadPaths m) => MonadPaths (StandardTF r m)
 instance (MonadInstantiate r, MonadInstantiate m) => MonadInstantiate (StandardTF r m)
 instance (MonadExec r, MonadExec m) => MonadExec (StandardTF r m)
 instance (MonadIntrospect r, MonadIntrospect m) => MonadIntrospect (StandardTF r m)

@@ -97,7 +97,7 @@ import           Nix.Value
 import           Nix.Value.Equal
 import           Nix.Value.Monad
 import           Nix.XML
-import           System.Nix.Base32              as Base32
+import           System.Nix.Base32             as Base32
 import           System.FilePath
 import           System.Posix.Files             ( isRegularFile
                                                 , isDirectory
@@ -322,12 +322,17 @@ foldNixPath f z = do
   dirs <- case mres of
     Nothing -> return []
     Just v  -> demand v $ fromValue . Deeper
-  menv <- getEnvVar "NIX_PATH"
+  mPath <- getEnvVar "NIX_PATH"
+  mDataDir <- getEnvVar "NIX_DATA_DIR"
+  dataDir <- case mDataDir of
+    Nothing -> getDataDir
+    Just dataDir -> return dataDir
   foldrM go z
     $  map (fromInclude . principledStringIgnoreContext) dirs
-    ++ case menv of
+    ++ case mPath of
          Nothing  -> []
          Just str -> uriAwareSplit (Text.pack str)
+    ++ [ fromInclude $ Text.pack $ "nix=" ++ dataDir ++ "/nix/corepkgs" ]
  where
   fromInclude x | "://" `Text.isInfixOf` x = (x, PathEntryURI)
                 | otherwise                = (x, PathEntryPath)

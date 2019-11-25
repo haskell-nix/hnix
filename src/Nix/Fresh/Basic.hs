@@ -24,6 +24,7 @@ instance MonadStore m => MonadStore (StdIdT m) where
 instance MonadPutStr m => MonadPutStr (StdIdT m)
 instance MonadHttp m => MonadHttp (StdIdT m)
 instance MonadEnv m => MonadEnv (StdIdT m)
+instance MonadPaths m => MonadPaths (StdIdT m)
 instance MonadInstantiate m => MonadInstantiate (StdIdT m)
 instance MonadExec m => MonadExec (StdIdT m)
 
