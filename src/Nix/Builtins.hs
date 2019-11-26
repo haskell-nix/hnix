@@ -97,7 +97,7 @@ import           Nix.Value
 import           Nix.Value.Equal
 import           Nix.Value.Monad
 import           Nix.XML
-import           System.Nix.Base32             as Base32
+import           System.Nix.Base32              as Base32
 import           System.FilePath
 import           System.Posix.Files             ( isRegularFile
                                                 , isDirectory
