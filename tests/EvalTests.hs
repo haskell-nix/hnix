@@ -410,6 +410,26 @@ case_attrset_attrset_nested_bottom_equal =
 case_attrset_function_nested_bottom_equal =
   constantEqualText "true" "let nested = { y = _: (let x = x; in x); }; in nested == nested"
 
+-- Regression test for #527
+
+case_add_string_thunk_left =
+  constantEqualText [i|"cygwin"|] [i|builtins.head ["cyg"] + "win"|]
+
+case_add_string_thunk_right =
+  constantEqualText [i|"cygwin"|] [i|"cyg" + builtins.head ["win"]|]
+
+case_add_int_thunk_left =
+  constantEqualText "3" "builtins.head [1] + 2"
+
+case_add_int_thunk_right =
+  constantEqualText "3" "1 + builtins.head [2]"
+
+case_concat_thunk_left =
+  constantEqualText "[1 2 3]" "builtins.tail [0 1 2] ++ [3]"
+
+case_concat_thunk_rigth =
+  constantEqualText "[1 2 3]" "[1] ++ builtins.tail [1 2 3]"
+
 -----------------------
 
 tests :: TestTree

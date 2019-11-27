@@ -349,134 +349,121 @@ execBinaryOp
   -> m (NValue t f m)
   -> m (NValue t f m)
 
-execBinaryOp scope span NOr larg rarg = fromValue larg >>= \l -> if l
-  then orOp Nothing True
-  else rarg >>= \rval -> fromValue @Bool rval >>= orOp (Just rval)
+execBinaryOp scope span op lval rarg = case op of
+  NEq   -> rarg >>= \rval -> valueEqM lval rval >>= boolOp rval
+  NNEq  -> rarg >>= \rval -> valueEqM lval rval >>= boolOp rval . not
+  NOr   -> fromValue lval >>= \l -> if l
+             then bypass True
+             else rarg >>= \rval -> fromValue rval >>= boolOp rval
+  NAnd  -> fromValue lval >>= \l -> if l
+             then rarg >>= \rval -> fromValue rval >>= boolOp rval
+             else bypass False
+  NImpl -> fromValue lval >>= \l -> if l
+             then rarg >>= \rval -> fromValue rval >>= boolOp rval
+             else bypass True
+  _     -> rarg >>= \rval -> 
+             demand rval $ \rval' ->
+               demand lval $ \lval' ->
+                 execBinaryOpForced scope span op lval' rval'
+
  where
-  orOp r b = pure $ nvConstantP
-    (Provenance scope (NBinary_ span NOr (Just larg) r))
+  toBoolOp :: Maybe (NValue t f m) -> Bool -> m (NValue t f m)
+  toBoolOp r b = pure $ nvConstantP
+    (Provenance scope (NBinary_ span op (Just lval) r))
     (NBool b)
+  boolOp rval = toBoolOp (Just rval)
+  bypass      = toBoolOp Nothing
 
-execBinaryOp scope span NAnd larg rarg = fromValue larg >>= \l -> if l
-  then rarg >>= \rval -> fromValue @Bool rval >>= andOp (Just rval)
-  else andOp Nothing False
+
+execBinaryOpForced
+  :: forall e t f m
+   . (MonadNix e t f m, MonadEval (NValue t f m) m)
+  => Scopes m (NValue t f m)
+  -> SrcSpan
+  -> NBinaryOp
+  -> NValue t f m
+  -> NValue t f m
+  -> m (NValue t f m)
+
+execBinaryOpForced scope span op lval rval = case op of
+  NLt  -> compare (<)
+  NLte -> compare (<=)
+  NGt  -> compare (>)
+  NGte -> compare (>=)
+  NMinus -> numBinOp (-)
+  NMult  -> numBinOp (*)
+  NDiv   -> numBinOp' div (/)
+  NConcat -> case (lval, rval) of
+    (NVList ls, NVList rs) -> pure $ nvListP prov $ ls ++ rs
+    _ -> unsupportedTypes
+
+  NUpdate -> case (lval, rval) of
+    (NVSet ls lp, NVSet rs rp) -> pure $ nvSetP prov (rs `M.union` ls) (rp `M.union` lp)
+    (NVSet ls lp, NVConstant NNull) -> pure $ nvSetP prov ls lp
+    (NVConstant NNull, NVSet rs rp) -> pure $ nvSetP prov rs rp
+    _ -> unsupportedTypes
+
+  NPlus -> case (lval, rval) of
+    (NVConstant _, NVConstant _) -> numBinOp (+)
+
+    (NVStr ls, NVStr rs) -> pure $ nvStrP prov (ls `principledStringMappend` rs)
+    (NVStr ls, rs@NVPath{}) ->
+      (\rs2 -> nvStrP prov (ls `principledStringMappend` rs2))
+        <$> coerceToString callFunc CopyToStore CoerceStringy rs
+    (NVPath ls, NVStr rs) -> case principledGetStringNoContext rs of
+      Just rs2 -> nvPathP prov <$> makeAbsolutePath @t @f (ls `mappend` (Text.unpack rs2))
+      Nothing -> throwError $ ErrorCall $ 
+        -- data/nix/src/libexpr/eval.cc:1412
+        "A string that refers to a store path cannot be appended to a path."
+    (NVPath ls, NVPath rs) -> nvPathP prov <$> makeAbsolutePath @t @f (ls ++ rs)
+
+    (ls@NVSet{}, NVStr rs) -> 
+      (\ls2 -> nvStrP prov (ls2 `principledStringMappend` rs))
+        <$> coerceToString callFunc DontCopyToStore CoerceStringy ls
+    (NVStr ls, rs@NVSet{}) ->
+      (\rs2 -> nvStrP prov (ls `principledStringMappend` rs2))
+        <$> coerceToString callFunc DontCopyToStore CoerceStringy rs
+    _ -> unsupportedTypes
+
+  NEq   -> alreadyHandled
+  NNEq  -> alreadyHandled
+  NAnd  -> alreadyHandled
+  NOr   -> alreadyHandled
+  NImpl -> alreadyHandled
+  NApp  -> throwError $ ErrorCall $ "NApp should be handled by evalApp"
+
  where
-  andOp r b = pure $ nvConstantP
-    (Provenance scope (NBinary_ span NAnd (Just larg) r))
-    (NBool b)
+  prov :: Provenance m (NValue t f m)
+  prov = (Provenance scope (NBinary_ span op (Just lval) (Just rval)))
 
-execBinaryOp scope span op lval rarg = do
-  rval <- rarg
-  let bin :: (Provenance m (NValue t f m) -> a) -> a
-      bin f = f (Provenance scope (NBinary_ span op (Just lval) (Just rval)))
-      toBool = pure . bin nvConstantP . NBool
-  case (lval, rval) of
-    (NVConstant lc, NVConstant rc) -> case (op, lc, rc) of
-      (NEq , _, _) -> toBool =<< valueEqM lval rval
-      (NNEq, _, _) -> toBool . not =<< valueEqM lval rval
-      (NLt , l, r) -> toBool $ l < r
-      (NLte, l, r) -> toBool $ l <= r
-      (NGt , l, r) -> toBool $ l > r
-      (NGte, l, r) -> toBool $ l >= r
-      (NAnd, _, _) ->
-        nverr $ ErrorCall "should be impossible: && is handled above"
-      (NOr, _, _) ->
-        nverr $ ErrorCall "should be impossible: || is handled above"
-      (NPlus , l      , r      ) -> numBinOp bin (+) l r
-      (NMinus, l      , r      ) -> numBinOp bin (-) l r
-      (NMult , l      , r      ) -> numBinOp bin (*) l r
-      (NDiv  , l      , r      ) -> numBinOp' bin div (/) l r
-      (NImpl , NBool l, NBool r) -> toBool $ not l || r
-      _ -> nverr $ ErrorCall $ unsupportedTypes lval rval
+  toBool = pure . nvConstantP prov . NBool
+  compare :: (forall a. Ord a => a -> a -> Bool) -> m (NValue t f m)
+  compare op = case (lval, rval) of
+    (NVConstant l, NVConstant r) -> toBool $ l `op` r
+    (NVStr l, NVStr r) -> toBool $ l `op` r
+    _ -> unsupportedTypes
 
-    (NVStr ls, NVStr rs) -> case op of
-      NPlus -> pure $ bin nvStrP (ls `principledStringMappend` rs)
-      NEq   -> toBool =<< valueEqM lval rval
-      NNEq  -> toBool . not =<< valueEqM lval rval
-      NLt   -> toBool $ ls < rs
-      NLte  -> toBool $ ls <= rs
-      NGt   -> toBool $ ls > rs
-      NGte  -> toBool $ ls >= rs
-      _     -> nverr $ ErrorCall $ unsupportedTypes lval rval
+  toInt = pure . nvConstantP prov . NInt
+  toFloat = pure . nvConstantP prov . NFloat
 
-    (NVStr _, NVConstant NNull) -> case op of
-      NEq  -> toBool False
-      NNEq -> toBool True
-      _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
+  numBinOp :: (forall a. Num a => a -> a -> a) -> m (NValue t f m)
+  numBinOp op = numBinOp' op op
 
-    (NVConstant NNull, NVStr _) -> case op of
-      NEq  -> toBool False
-      NNEq -> toBool True
-      _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
+  numBinOp'
+    :: (Integer -> Integer -> Integer)
+    -> (Float -> Float -> Float)
+    -> m (NValue t f m)
 
-    (NVSet ls lp, NVSet rs rp) -> case op of
-      NUpdate -> pure $ bin nvSetP (rs `M.union` ls) (rp `M.union` lp)
-      NEq     -> toBool =<< valueEqM lval rval
-      NNEq    -> toBool . not =<< valueEqM lval rval
-      _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
+  numBinOp' intOp floatOp = case (lval, rval) of
+    (NVConstant l, NVConstant r) -> case (l, r) of
+      (NInt   li, NInt   ri) -> toInt $ li `intOp` ri
+      (NInt   li, NFloat rf) -> toFloat $ fromInteger li `floatOp` rf
+      (NFloat lf, NInt   ri) -> toFloat $ lf `floatOp` fromInteger ri
+      (NFloat lf, NFloat rf) -> toFloat $ lf `floatOp` rf
+      _ -> unsupportedTypes
+    _ -> unsupportedTypes
 
-    (NVSet ls lp, NVConstant NNull) -> case op of
-      NUpdate -> pure $ bin nvSetP ls lp
-      NEq     -> toBool =<< valueEqM lval (nvSet M.empty M.empty)
-      NNEq    -> toBool . not =<< valueEqM lval (nvSet M.empty M.empty)
-      _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
-
-    (NVConstant NNull, NVSet rs rp) -> case op of
-      NUpdate -> pure $ bin nvSetP rs rp
-      NEq     -> toBool =<< valueEqM (nvSet M.empty M.empty) rval
-      NNEq    -> toBool . not =<< valueEqM (nvSet M.empty M.empty) rval
-      _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
-
-    (ls@NVSet{}, NVStr rs) -> case op of
-      NPlus ->
-        (\ls2 -> bin nvStrP (ls2 `principledStringMappend` rs))
-          <$> coerceToString callFunc DontCopyToStore CoerceStringy ls
-      NEq  -> toBool =<< valueEqM lval rval
-      NNEq -> toBool . not =<< valueEqM lval rval
-      _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
-
-    (NVStr ls, rs@NVSet{}) -> case op of
-      NPlus ->
-        (\rs2 -> bin nvStrP (ls `principledStringMappend` rs2))
-          <$> coerceToString callFunc DontCopyToStore CoerceStringy rs
-      NEq  -> toBool =<< valueEqM lval rval
-      NNEq -> toBool . not =<< valueEqM lval rval
-      _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
-
-    (NVList ls, NVList rs) -> case op of
-      NConcat -> pure $ bin nvListP $ ls ++ rs
-      NEq     -> toBool =<< valueEqM lval rval
-      NNEq    -> toBool . not =<< valueEqM lval rval
-      _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
-
-    (NVList ls, NVConstant NNull) -> case op of
-      NEq     -> toBool False
-      NNEq    -> toBool True
-      _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
-
-    (NVConstant NNull, NVList rs) -> case op of
-      NEq     -> toBool False
-      NNEq    -> toBool True
-      _       -> nverr $ ErrorCall $ unsupportedTypes lval rval
-
-    (NVPath p, NVStr ns) -> case op of
-      NEq   -> toBool False -- From eqValues in nix/src/libexpr/eval.cc
-      NNEq  -> toBool True
-      NPlus -> bin nvPathP <$> makeAbsolutePath @t @f
-        (p `mappend` Text.unpack (hackyStringIgnoreContext ns))
-      _ -> nverr $ ErrorCall $ unsupportedTypes lval rval
-
-    (NVPath ls, NVPath rs) -> case op of
-      NPlus -> bin nvPathP <$> makeAbsolutePath @t @f (ls ++ rs)
-      _     -> nverr $ ErrorCall $ unsupportedTypes lval rval
-
-    _ -> case op of
-      NEq  -> toBool False
-      NNEq -> toBool True
-      _    -> nverr $ ErrorCall $ unsupportedTypes lval rval
- where
-  unsupportedTypes :: Show a => a -> a -> String
-  unsupportedTypes lval rval =
+  unsupportedTypes = throwError $ ErrorCall $
     "Unsupported argument types for binary operator "
       ++ show op
       ++ ": "
@@ -484,30 +471,10 @@ execBinaryOp scope span op lval rarg = do
       ++ ", "
       ++ show rval
 
-  numBinOp
-    :: (forall r . (Provenance m (NValue t f m) -> r) -> r)
-    -> (forall a . Num a => a -> a -> a)
-    -> NAtom
-    -> NAtom
-    -> m (NValue t f m)
-  numBinOp bin f = numBinOp' bin f f
-
-  numBinOp'
-    :: (forall r . (Provenance m (NValue t f m) -> r) -> r)
-    -> (Integer -> Integer -> Integer)
-    -> (Float -> Float -> Float)
-    -> NAtom
-    -> NAtom
-    -> m (NValue t f m)
-  numBinOp' bin intF floatF l r = case (l, r) of
-    (NInt   li, NInt ri  ) -> toInt $ li `intF` ri
-    (NInt   li, NFloat rf) -> toFloat $ fromInteger li `floatF` rf
-    (NFloat lf, NInt ri  ) -> toFloat $ lf `floatF` fromInteger ri
-    (NFloat lf, NFloat rf) -> toFloat $ lf `floatF` rf
-    _                      -> nverr $ ErrorCall $ unsupportedTypes l r
-   where
-    toInt   = pure . bin nvConstantP . NInt
-    toFloat = pure . bin nvConstantP . NFloat
+  alreadyHandled = throwError $ ErrorCall $
+    "This cannot happen: operator "
+      ++ show op
+      ++ " should have been handled in execBinaryOp."
 
 -- This function is here, rather than in 'Nix.String', because of the need to
 -- use 'throwError'.
