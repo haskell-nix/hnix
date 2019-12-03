@@ -521,7 +521,6 @@ library
     , process >= 1.6.3 && < 1.7
     , ref-tf >= 0.4.0 && < 0.5
     , regex-tdfa >= 1.2.3 && < 1.4
-    , regex-tdfa-text >= 1.0.0 && < 1.1
     , scientific >= 0.3.6 && < 0.4
     , semialign >= 1 && < 1.2
     , semialign-indexed >= 1 && < 1.2
