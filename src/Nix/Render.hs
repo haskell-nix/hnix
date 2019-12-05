@@ -77,6 +77,9 @@ posAndMsg (SourcePos _ lineNo _) msg = FancyError
 
 renderLocation :: MonadFile m => SrcSpan -> Doc a -> m (Doc a)
 renderLocation (SrcSpan (SourcePos file begLine begCol) (SourcePos file' endLine endCol)) msg
+  | file == file' && file == "<string>" && begLine == endLine
+  = pure $ "In raw input string at position " <> pretty (unPos begCol)
+
   | file /= "<string>" && file == file'
   = do
     exist <- doesFileExist file
