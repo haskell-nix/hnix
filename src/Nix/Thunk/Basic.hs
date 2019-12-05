@@ -15,7 +15,6 @@ import           Control.Exception       hiding ( catch )
 import           Control.Monad.Catch
 
 import           Nix.Thunk
-import           Nix.Utils
 import           Nix.Var
 
 data Deferred m v = Deferred (m v) | Computed v
@@ -75,7 +74,6 @@ forceThunk (Thunk n active ref) k = do
       if nowActive
         then throwM $ ThunkLoop $ show n
         else do
-          traceM $ "Forcing " ++ show n
           v <- catch action $ \(e :: SomeException) -> do
             _ <- atomicModifyVar active (False, )
             throwM e
