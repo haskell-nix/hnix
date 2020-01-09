@@ -1,4 +1,4 @@
-{ compiler ? "ghc864"
+{ compiler ? "ghc865"
 
 , doBenchmark ? false
 , doTracing   ? false
@@ -8,27 +8,53 @@
 
 , withHoogle  ? true
 
-, rev    ? "c4adeddb5f8e945517068968d06ea838b7c24bd3"
+, rev  ? "7e8454fb856573967a70f61116e15f879f2e3f6a"
 
-, pkgs   ?
+, pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
     then abort "hnix requires at least nix 2.0"
     else import (builtins.fetchGit {
            url = "https://github.com/NixOS/nixpkgs/";
            inherit rev; }) {
-           config.allowUnfree = true;
-           config.allowBroken = false;
-           config.packageOverrides = pkgs: rec {
-             nix = pkgs.nixUnstable.overrideDerivation (attrs: {
-               src = if builtins.pathExists ./data/nix/version then data/nix else throw "data/nix doesn't seem to contain the nix source. You may want to run git submodule update --init.";
-               configureFlags = attrs.configureFlags ++ [ "--disable-doc-gen" ];
-               buildInputs = attrs.buildInputs ++
-                 [ pkgs.editline.dev
-                 ];
-               outputs = builtins.filter (s: s != "doc" && s != "man" ) attrs.outputs;
-             });
-           };
-         }
+      config.allowUnfree = true;
+      config.allowBroken = true;
+      # config.packageOverrides = pkgs: rec {
+      #   nix = pkgs.nixStable.overrideDerivation (attrs: with pkgs; rec {
+      #     src = if builtins.pathExists ./data/nix/.version
+      #           then data/nix
+      #           else throw "data/nix doesn't seem to contain the nix source. You may want to run git submodule update --init.";
+
+      #     enableParallelBuilding = true;
+
+      #     configureFlags =
+      #       [ "--disable-doc-gen"
+      #         "--enable-gc"
+      #       ];
+
+      #     buildInputs =
+      #       [ bison
+      #         flex
+      #         autoconf-archive
+      #         autoreconfHook
+      #         curl
+      #         bzip2 xz brotli editline
+      #         openssl pkgconfig sqlite boehmgc
+      #         boost
+      #         git
+      #         mercurial
+      #       ]
+      #       ++ lib.optionals stdenv.isLinux [libseccomp utillinuxMinimal]
+      #       ++ lib.optional (stdenv.isLinux || stdenv.isDarwin) libsodium
+      #       ++ lib.optional (stdenv.isLinux || stdenv.isDarwin)
+      #            (aws-sdk-cpp.override {
+      #               apis = ["s3" "transfer"];
+      #               customMemoryManagement = false;
+      #             });
+
+      #     outputs = builtins.filter (s: s != "doc" && s != "man" ) attrs.outputs;
+      #   });
+      # };
+    }
 
 , mkDerivation   ? null
 }:
@@ -54,27 +80,29 @@ let
       aeson                 = addBuildDepend super.aeson self.contravariant;
       base-compat-batteries = addBuildDepend super.base-compat-batteries self.contravariant;
 
-      mono-traversable = dontCheck super.mono-traversable;
-      these = doJailbreak super.these;
-      multistate = doJailbreak (overrideCabal super.multistate (attrs: { broken = false; }));
-      butcher = doJailbreak (overrideCabal super.butcher (attrs: { broken = false; }));
+      mono-traversable  = dontCheck super.mono-traversable;
+      regex-tdfa-text   = doJailbreak super.regex-tdfa-text;
+      these             = doJailbreak super.these;
+      semialign-indexed = doJailbreak super.semialign-indexed;
+      multistate        = doJailbreak (overrideCabal super.multistate (attrs: { broken = false; }));
+      butcher           = doJailbreak (overrideCabal super.butcher (attrs: { broken = false; }));
 
       brittany = doJailbreak (self.callCabal2nix "brittany"
         (pkgs.fetchFromGitHub {
            owner  = "lspitzner";
            repo   = "brittany";
-           rev    = "6c187da8f8166d595f36d6aaf419370283b3d1e9";
-           sha256 = "0nmnxprbwws3w1sh63p80qj09rkrgn9888g7iim5p8611qyhdgky";
-           # date = 2018-11-30T22:13:02+01:00;
+           rev    = "af227a797d588eda936280dc1c3b0b376735335e";
+           sha256 = "0l1nk4dgmlv8vl1d993vnyw3da0kzg4gq8c2zd8sd224f2rz6f35";
+           # date = 2019-12-20T01:20:07+01:00;
          }) {});
 
       ghc-exactprint = dontCheck (self.callCabal2nix "ghc-exactprint"
         (pkgs.fetchFromGitHub {
            owner  = "alanz";
            repo   = "ghc-exactprint";
-           rev    = "281f65324fb1fcad8f5ceec06f5ea4c7d78cfb59";
-           sha256 = "1d6sjy5mw0jn09sgx7zn0w1gszn3mf6lzqsfv3li50fnvwv1gwzb";
-           # date = 2019-03-01T17:38:18+02:00;
+           rev    = "91f54d7a7a1d8d2131c5e83d13dee6c9e8b57831";
+           sha256 = "15yf0ckcb6f706p39w448vgj0nrkd0rk71lvb1nd0ak46y0aqnhb";
+           # date = 2019-08-28T20:44:28+02:00;
          }) {});
     } // pkgs.lib.optionalAttrs withHoogle {
       ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
@@ -100,7 +128,7 @@ in haskellPackages.developPackage {
   modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
     buildTools = (attrs.buildTools or []) ++ [
       haskellPackages.cabal-install
-      haskellPackages.brittany
+      # haskellPackages.brittany
     ];
 
     enableLibraryProfiling = doProfiling;
