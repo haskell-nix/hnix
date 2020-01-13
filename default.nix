@@ -83,6 +83,7 @@ let
       mono-traversable  = dontCheck super.mono-traversable;
       regex-tdfa-text   = doJailbreak super.regex-tdfa-text;
       these             = doJailbreak super.these;
+      semialign         = super.semialign_1_1;
       semialign-indexed = doJailbreak super.semialign-indexed;
       multistate        = doJailbreak (overrideCabal super.multistate (attrs: { broken = false; }));
       butcher           = doJailbreak (overrideCabal super.butcher (attrs: { broken = false; }));
