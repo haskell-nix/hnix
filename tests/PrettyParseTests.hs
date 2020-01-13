@@ -214,7 +214,7 @@ prop_prettyparse p = do
             , "----------------------------------------"
             , vsep ["Normalised after:", indent 2 (pretty pv)]
             , "========================================"
-            , vsep ["Normalised diff:", pretty (ppDiff (diff pp pv))]
+            , vsep ["Normalised diff:", pretty (ppDiff (ldiff pp pv))]
             , "========================================"
             ]
         assert (pp == pv)
@@ -223,8 +223,8 @@ prop_prettyparse p = do
 
   normalise = unlines . map (reverse . dropWhile isSpace . reverse) . lines
 
-  diff :: String -> String -> [Diff [String]]
-  diff s1 s2 = getDiff (map (: []) (lines s1)) (map (: []) (lines s2))
+  ldiff :: String -> String -> [Diff [String]]
+  ldiff s1 s2 = getDiff (map (: []) (lines s1)) (map (: []) (lines s2))
 
 tests :: TestLimit -> TestTree
 tests n = testProperty "Pretty/Parse Property" $ withTests n $ property $ do
