@@ -489,26 +489,29 @@ library
   build-depends:
       aeson >= 1.4.2 && < 1.5
     , array >=0.4 && <0.6
-    , base >=4.9 && <5
+    , base >=4.11 && <5
     , binary >= 0.8.5 && < 0.9
     , bytestring >= 0.10.8 && < 0.11
     , comonad >= 5.0.4 && < 5.1
     , containers >= 0.5.11.0 && < 0.7
     , contravariant >= 1.5 && < 1.6
     , data-fix >= 0.2.0 && <  0.3
-    , deepseq >=1.4.2 && <1.5
+    , deepseq >=1.4.3 && <1.5
     , dependent-sum >= 0.4 && < 0.5 || >= 0.6.2.0 && < 0.7
     , deriving-compat >=0.3 && <0.6
     , directory >= 1.3.1 && < 1.4
     , exceptions >= 0.10.0 && < 0.11
     , filepath >= 1.4.2 && < 1.5
     , free >= 5.1 && < 5.2
+    , hashable >=1.2.5 && < 1.4
     , hashing >= 0.1.0 && < 0.2
     , hnix-store-core >= 0.1.0 && < 0.2
     , http-client >= 0.5.14 && < 0.6 || >= 0.6.4 && < 0.7
     , http-client-tls >= 0.3.5 && < 0.4
     , http-types >= 0.12.2 && < 0.13
     , interpolate >= 0.2.0 && < 0.3
+    , lens-family >=1.2.2
+    , lens-family-core >=1.2.2
     , lens-family-th >= 0.5.0 && < 0.6
     , logict >= 0.6.0 && < 0.7 || >= 0.7.0.2 && < 0.8
     , megaparsec >=7.0 && <8.1
@@ -539,38 +542,21 @@ library
     , xml >= 1.3.14 && < 1.4
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
-  if os(linux) && impl(ghc >= 8.2) && impl(ghc < 8.3)
-    build-depends:
-        compact
   if !impl(ghcjs)
+    exposed-modules:
+        Nix.Options.Parser
     build-depends:
         base16-bytestring >= 0.1.1 && < 0.2
       , cryptohash-md5 >= 0.11.100 && < 0.12
       , cryptohash-sha1 >= 0.11.100 && < 0.12
       , cryptohash-sha256 >= 0.11.101 && < 0.12
       , cryptohash-sha512 >= 0.11.100 && < 0.12
-      , serialise >= 0.2.1 && < 0.3
-  if impl(ghc < 8.1)
-    build-depends:
-        lens-family ==1.2.1
-      , lens-family-core ==1.2.1
-  else
-    build-depends:
-        lens-family >=1.2.2
-      , lens-family-core >=1.2.2
-  -- if impl(ghc < 8.4.0) && !flag(profiling)
-  --   build-depends:
-  --       ghc-datasize
-  if impl(ghcjs)
-    build-depends:
-        hashable >=1.2.4 && <1.3 || >= 1.3.0.0 && < 1.4
-  else
-    exposed-modules:
-        Nix.Options.Parser
-    build-depends:
-        hashable >=1.2.5 && <1.3 || >= 1.3.0.0 && < 1.4
       , haskeline >= 0.7.4.2 && < 0.8
       , pretty-show >= 1.9.5 && < 1.10
+      , serialise >= 0.2.1 && < 0.3
+  -- if !flag(profiling)
+  --   build-depends:
+  --       ghc-datasize
   default-language: Haskell2010
 
 executable hnix
@@ -584,9 +570,14 @@ executable hnix
   build-depends:
       aeson
     , base
+    , base16-bytestring
     , bytestring
     , comonad
     , containers
+    , cryptohash-md5
+    , cryptohash-sha1
+    , cryptohash-sha256
+    , cryptohash-sha512
     , data-fix
     , deepseq
     , exceptions
@@ -601,6 +592,7 @@ executable hnix
     , prettyprinter
     , ref-tf
     , repline
+    , serialise
     , template-haskell
     , text
     , time
@@ -608,21 +600,8 @@ executable hnix
     , unordered-containers
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
-  if os(linux) && impl(ghc >= 8.2) && impl(ghc < 8.3)
-    build-depends:
-        compact
-  if !impl(ghcjs)
-    build-depends:
-        base16-bytestring
-      , cryptohash-md5
-      , cryptohash-sha1
-      , cryptohash-sha256
-      , cryptohash-sha512
-      , serialise
   if impl(ghcjs)
     buildable: False
-  else
-    buildable: True
   default-language: Haskell2010
 
 test-suite hnix-tests
@@ -643,11 +622,16 @@ test-suite hnix-tests
   build-depends:
       Diff
     , Glob
-    , base >=4.9 && <5
+    , base >=4.11 && <5
+    , base16-bytestring
     , bytestring
     , containers
+    , cryptohash-md5
+    , cryptohash-sha1
+    , cryptohash-sha256
+    , cryptohash-sha512
     , data-fix
-    , deepseq >=1.4.2 && <1.5
+    , deepseq >=1.4.3 && <1.5
     , dependent-sum
     , directory
     , exceptions
@@ -669,6 +653,7 @@ test-suite hnix-tests
     , tasty-hunit
     , tasty-quickcheck
     , tasty-th
+    , serialise
     , template-haskell
     , text
     , time
@@ -677,21 +662,8 @@ test-suite hnix-tests
     , unordered-containers >=0.2.9 && <0.3
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
-  if os(linux) && impl(ghc >= 8.2) && impl(ghc < 8.3)
-    build-depends:
-        compact
-  if !impl(ghcjs)
-    build-depends:
-        base16-bytestring
-      , cryptohash-md5
-      , cryptohash-sha1
-      , cryptohash-sha256
-      , cryptohash-sha512
-      , serialise
   if impl(ghcjs)
     buildable: False
-  else
-    buildable: True
   default-language: Haskell2010
 
 benchmark hnix-benchmarks
@@ -704,18 +676,24 @@ benchmark hnix-benchmarks
       benchmarks
   ghc-options: -Wall
   build-depends:
-      base >=4.9 && <5
+      base >=4.11 && <5
+    , base16-bytestring
     , bytestring
     , containers
     , criterion
+    , cryptohash-md5
+    , cryptohash-sha1
+    , cryptohash-sha256
+    , cryptohash-sha512
     , data-fix
-    , deepseq >=1.4.2 && <1.5
+    , deepseq >=1.4.3 && <1.5
     , exceptions
     , filepath
     , hashing
     , hnix
     , mtl
     , optparse-applicative
+    , serialise
     , template-haskell
     , text
     , time
@@ -723,19 +701,6 @@ benchmark hnix-benchmarks
     , unordered-containers >=0.2.9 && <0.3
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
-  if os(linux) && impl(ghc >= 8.2) && impl(ghc < 8.3)
-    build-depends:
-        compact
-  if !impl(ghcjs)
-    build-depends:
-        base16-bytestring
-      , cryptohash-md5
-      , cryptohash-sha1
-      , cryptohash-sha256
-      , cryptohash-sha512
-      , serialise
   if impl(ghcjs)
     buildable: False
-  else
-    buildable: True
   default-language: Haskell2010
