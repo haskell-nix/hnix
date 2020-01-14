@@ -16,6 +16,7 @@ import           Control.Applicative
 import           Control.Monad.Base
 import           Control.Monad.Catch
 import           Control.Monad.Except
+import           Control.Monad.Fail
 import           Control.Monad.Reader
 import           Control.Monad.Ref
 import           Control.Monad.ST
@@ -33,6 +34,7 @@ newtype FreshIdT i m a = FreshIdT { unFreshIdT :: ReaderT (Var m i) m a }
     , Applicative
     , Alternative
     , Monad
+    , MonadFail
     , MonadPlus
     , MonadFix
     , MonadRef
