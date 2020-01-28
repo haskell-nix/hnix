@@ -211,6 +211,14 @@ instance (Show op, Typeable op, Show lval, Typeable lval, Show rval, Typeable rv
     <> show lval
     <> show rval
 
+data EAFromStringNoContext
+  = EAFromStringNoContext
+  deriving Show
+
+instance Exception EAFromStringNoContext
+ where
+  displayException EAFromStringNoContext = "expected string with no context"
+
 nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
 
@@ -543,7 +551,7 @@ execBinaryOpForced scope span op lval rval = case op of
 fromStringNoContext :: Framed e m => NixString -> m Text
 fromStringNoContext ns = case principledGetStringNoContext ns of
   Just str -> return str
-  Nothing  -> throwError $ ErrorCall "expected string with no context"
+  Nothing  -> throwError $ ErrorCall $ displayException EAFromStringNoContext
 
 addTracing
   :: (MonadNix e t f m, Has e Options, MonadReader Int n, Alternative n)
