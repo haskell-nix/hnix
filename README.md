@@ -28,19 +28,6 @@ $ env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal new-test
 $ ./dist/build/hnix/hnix --help
 ```
 
-## Building a Docker container
-
-If you don't have Nix installed, or you'd just like to play around with `hnix`
-completely separately from your main system, you can build a Docker container:
-
-```bash
-$ docker build -t hnix .
-$ docker run hnix hnix --eval --expr '1 + 2'
-
-# In order to refer to files under the current directory:
-$ docker run -v $PWD/:/tmp/build run hnix hnix default.nix
-```
-
 ## Building with full debug info
 
 To build `hnix` for debugging, and with full tracing output and stack traces,
