@@ -1,4 +1,4 @@
-{ compiler ? "ghc865"
+{ compiler    ? "ghc865"
 
 , doBenchmark ? false
 , doTracing   ? false
@@ -8,7 +8,7 @@
 
 , withHoogle  ? true
 
-, rev  ? "7e8454fb856573967a70f61116e15f879f2e3f6a"
+, rev ? "8da81465c19fca393a3b17004c743e4d82a98e4f"
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
