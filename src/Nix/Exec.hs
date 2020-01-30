@@ -198,6 +198,19 @@ instance Exception (EAExecUnaryOp String)
     = "argument to unary operator must evaluate to an atomic type: "
     <> x
 
+data EAUnsupportedTypes o l r
+  = EUnsupportedTypes o l r
+  deriving Show
+
+instance (Show op, Typeable op, Show lval, Typeable lval, Show rval, Typeable rval)
+  => Exception (EAUnsupportedTypes op lval rval)
+ where
+  displayException (EUnsupportedTypes op lval rval)
+    = "Unsupported argument types for binary operator "
+    <> show op
+    <> show lval
+    <> show rval
+
 nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
 
