@@ -148,28 +148,29 @@ data ExecFrame t f m = Assertion SrcSpan (NValue t f m)
 
 instance MonadDataErrorContext t f m => Exception (ExecFrame t f m)
 
-data EAMonadNix a b
-  = EMonadNixUndefinedVar a b
-  | EMonadNixUnknownAttrInherit a b
-  | EMonadNixAttrNotFound a b
-  | EMonadNixStringAssembleFail a b
+data EAMonadEval a b
+  = EMonadEvalUndefinedVar a
+  | EMonadEvalUnknownAttrInherit a
+  | EMonadEvalAttrNotFound a b
+  | EMonadEvalStringAssembleFail
   deriving Show
 
-instance Exception (EAMonadNix String String)
+instance (Show a, Typeable a, Show b, Typeable b)
+  => Exception (EAMonadEval a b)
  where
-  displayException (EMonadNixUndefinedVar var _)
+  displayException (EMonadEvalUndefinedVar var)
     = "Undefined variable: '"
-    <> var
+    <> show var
     <> "'."
-  displayException (EMonadNixUnknownAttrInherit ks _)
+  displayException (EMonadEvalUnknownAttrInherit ks)
     = "Inheriting unknown attribute: "
-    <> ks
-  displayException (EMonadNixAttrNotFound ks s)
+    <> show ks
+  displayException (EMonadEvalAttrNotFound ks s)
     = "Could not look up attribute "
-    <> ks
+    <> show ks
     <> " in "
-    <> s
-  displayException (EMonadNixStringAssembleFail _ _)
+    <> show s
+  displayException (EMonadEvalStringAssembleFail)
     = "Failed to assemble string"
 
 data EACallFunc a
@@ -232,7 +233,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   freeVariable var =
     nverr @e @t @f $ ErrorCall
       $ displayException
-      $ EMonadNixUndefinedVar (Text.unpack var) (undefined :: String)
+      (EMonadEvalUndefinedVar (Text.unpack var) :: EAMonadEval String ())
 
   synHole name = do
     span  <- currentPos
@@ -246,17 +247,15 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     evalError @(NValue t f m)
       $ ErrorCall
       $ displayException
-      $ EMonadNixUnknownAttrInherit
-        (intercalate "." (map Text.unpack (NE.toList ks)))
-        (undefined :: String)
+      (EMonadEvalUnknownAttrInherit
+        (intercalate "." (map Text.unpack (NE.toList ks))) :: EAMonadEval String ())
 
   attrMissing ks (Just s) =
     evalError @(NValue t f m)
       $ ErrorCall
       $ displayException
-      $ EMonadNixAttrNotFound
-        (intercalate "." (map Text.unpack (NE.toList ks)))
-        (show (prettyNValue s))
+      $ EMonadEvalAttrNotFound
+      (intercalate "." (map Text.unpack (NE.toList ks))) $ show $ prettyNValue s
 
   evalCurPos = do
     scope                  <- currentScopes
@@ -289,8 +288,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
         ns
     Nothing -> nverr
       $ ErrorCall
-      $ displayException
-      $ EMonadNixStringAssembleFail (undefined :: String) (undefined :: String)
+      $ displayException (EMonadEvalStringAssembleFail :: EAMonadEval () ())
 
   evalLiteralPath p = do
     scope <- currentScopes
