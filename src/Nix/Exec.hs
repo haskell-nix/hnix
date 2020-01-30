@@ -207,10 +207,13 @@ instance (Show op, Typeable op, Show lval, Typeable lval, Show rval, Typeable rv
   => Exception (EAUnsupportedTypes op lval rval)
  where
   displayException (EUnsupportedTypes op lval rval)
-    = "Unsupported argument types for binary operator "
+    = "Unsupported argument types for binary operator '"
     <> show op
+    <> "': '"
     <> show lval
+    <> "', '"
     <> show rval
+    <> "'."
 
 data EAFromStringNoContext
   = EAFromStringNoContext
@@ -463,13 +466,13 @@ execBinaryOpForced scope span op lval rval = case op of
   NDiv   -> numBinOp' div (/)
   NConcat -> case (lval, rval) of
     (NVList ls, NVList rs) -> pure $ nvListP prov $ ls ++ rs
-    _ -> unsupportedTypes
+    _ -> unsupportedTypes op lval rval
 
   NUpdate -> case (lval, rval) of
     (NVSet ls lp, NVSet rs rp) -> pure $ nvSetP prov (rs `M.union` ls) (rp `M.union` lp)
     (NVSet ls lp, NVConstant NNull) -> pure $ nvSetP prov ls lp
     (NVConstant NNull, NVSet rs rp) -> pure $ nvSetP prov rs rp
-    _ -> unsupportedTypes
+    _ -> unsupportedTypes op lval rval
 
   NPlus -> case (lval, rval) of
     (NVConstant _, NVConstant _) -> numBinOp (+)
@@ -491,7 +494,7 @@ execBinaryOpForced scope span op lval rval = case op of
     (NVStr ls, rs@NVSet{}) ->
       (\rs2 -> nvStrP prov (ls `principledStringMappend` rs2))
         <$> coerceToString callFunc DontCopyToStore CoerceStringy rs
-    _ -> unsupportedTypes
+    _ -> unsupportedTypes op lval rval
 
   NEq   -> alreadyHandled
   NNEq  -> alreadyHandled
@@ -505,11 +508,12 @@ execBinaryOpForced scope span op lval rval = case op of
   prov = (Provenance scope (NBinary_ span op (Just lval) (Just rval)))
 
   toBool = pure . nvConstantP prov . NBool
-  compare :: (forall a. Ord a => a -> a -> Bool) -> m (NValue t f m)
+
+  compare :: (forall a. Ord a => a -> a -> Bool ) -> m (NValue t f m)
   compare op = case (lval, rval) of
     (NVConstant l, NVConstant r) -> toBool $ l `op` r
     (NVStr l, NVStr r) -> toBool $ l `op` r
-    _ -> unsupportedTypes
+    _ -> hackyUnsupportedTypesForCompare
 
   toInt = pure . nvConstantP prov . NInt
   toFloat = pure . nvConstantP prov . NFloat
@@ -528,16 +532,16 @@ execBinaryOpForced scope span op lval rval = case op of
       (NInt   li, NFloat rf) -> toFloat $ fromInteger li `floatOp` rf
       (NFloat lf, NInt   ri) -> toFloat $ lf `floatOp` fromInteger ri
       (NFloat lf, NFloat rf) -> toFloat $ lf `floatOp` rf
-      _ -> unsupportedTypes
-    _ -> unsupportedTypes
+      _ -> unsupportedTypes op l r
+    _ -> unsupportedTypes op lval rval
 
-  unsupportedTypes = throwError $ ErrorCall $
-    "Unsupported argument types for binary operator "
-      ++ show op
-      ++ ": "
-      ++ show lval
-      ++ ", "
-      ++ show rval
+  unsupportedTypes op lval rval
+    = throwError $ ErrorCall $ displayException $ EUnsupportedTypes op lval rval
+
+  -- FIXME: Special function for `compare`,
+  -- because can not typecheck the rank-2 existential type of it properly
+  hackyUnsupportedTypesForCompare = throwError $ ErrorCall
+    $ displayException $ EUnsupportedTypes op lval rval
 
   alreadyHandled = throwError $ ErrorCall $
     "This cannot happen: operator "
