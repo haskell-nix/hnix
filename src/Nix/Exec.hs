@@ -190,14 +190,14 @@ data EAExecUnaryOp a
   | EExecUnaryOpEvaluatedToNotAtomicType a
   deriving Show
 
-instance Exception (EAExecUnaryOp String)
+instance (Show a, Typeable a) => Exception (EAExecUnaryOp a)
  where
   displayException (EExecUnaryOpUnsupportedType op)
     = "unsupported argument type for unary operator "
-    <> op
+    <> show op
   displayException (EExecUnaryOpEvaluatedToNotAtomicType x)
     = "argument to unary operator must evaluate to an atomic type: "
-    <> x
+    <> show x
 
 data EAUnsupportedTypes o l r
   = EUnsupportedTypes o l r
@@ -400,7 +400,7 @@ execUnaryOp scope span op arg = do
       (NNot, NBool b ) -> unaryOp $ NBool (not b)
       _ ->
         throwError $ ErrorCall
-          $ displayException $ EExecUnaryOpUnsupportedType $ show op
+          $ displayException $ EExecUnaryOpUnsupportedType op
     x ->
       throwError $ ErrorCall
         $ displayException $ EExecUnaryOpEvaluatedToNotAtomicType $ show x
