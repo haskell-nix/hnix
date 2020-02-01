@@ -199,17 +199,6 @@ instance (Show a, Typeable a) => Exception (EAExecUnaryOp a)
     = "argument to unary operator must evaluate to an atomic type: "
     <> show x
 
-data EAAlreadyHandled a
-  = EAlreadyHandled a
-  deriving Show
-
-instance (Show a, Typeable a) => Exception (EAAlreadyHandled a)
- where
-  displayException (EAlreadyHandled op)
-    = "This cannot happen: operator '"
-      <> show op
-      <> "' should have been handled in execBinaryOp."
-
 data EAFromStringNoContext
   = EAFromStringNoContext
   deriving Show
@@ -221,6 +210,7 @@ instance Exception EAFromStringNoContext
 data EAExecBinaryOpForced o l r
   = EExecBinaryOpForcedNPlusStringToPath
   | EExecBinaryOpForcedUnsupportedTypes o l r
+  | EExecBinaryOpForcedAlreadyHandled o
   deriving Show
 
 instance (Show op, Typeable op, Show lval, Typeable lval, Show rval, Typeable rval)
@@ -238,6 +228,11 @@ instance (Show op, Typeable op, Show lval, Typeable lval, Show rval, Typeable rv
     <> "', '"
     <> show rval
     <> "'."
+  displayException (EExecBinaryOpForcedAlreadyHandled op)
+    = "This cannot happen: operator '"
+      <> show op
+      <> "' should have been handled in 'execBinaryOp'."
+
 
 nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
@@ -564,7 +559,7 @@ execBinaryOpForced scope span op lval rval = case op of
 
   alreadyHandled = throwError $ ErrorCall
     $ displayException
-    (EAlreadyHandled op :: EAExecBinaryOpForced NBinaryOp () ())
+    (EExecBinaryOpForcedAlreadyHandled op :: EAExecBinaryOpForced NBinaryOp () ())
 
 -- This function is here, rather than in 'Nix.String', because of the need to
 -- use 'throwError'.
