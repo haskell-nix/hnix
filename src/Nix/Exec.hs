@@ -242,7 +242,8 @@ instance (Show op, Typeable op, Show lval, Typeable lval, Show rval, Typeable rv
   => Exception (EAExecBinaryOpForced op lval rval)
  where
   displayException EExecBinaryOpForcedNPlusStringToPath
-    -- data/nix/src/libexpr/eval.cc:1412
+    -- Upstream case:
+    -- https://github.com/haskell-nix/nix/blob/b18a4898ff990c0b8ec1d3571d23a054a7d4c5cd/src/libexpr/eval.cc#L1412
     = "A string that refers to a store path cannot be appended to a path."
 
 nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
