@@ -211,6 +211,7 @@ data EAExecBinaryOpForced o l r
   = EExecBinaryOpForcedNPlusStringToPath
   | EExecBinaryOpForcedUnsupportedTypes o l r
   | EExecBinaryOpForcedAlreadyHandled o
+  | EExecBinaryOpForcedNApp
   deriving Show
 
 instance (Show op, Typeable op, Show lval, Typeable lval, Show rval, Typeable rval)
@@ -232,7 +233,8 @@ instance (Show op, Typeable op, Show lval, Typeable lval, Show rval, Typeable rv
     = "This cannot happen: operator '"
       <> show op
       <> "' should have been handled in 'execBinaryOp'."
-
+  displayException EExecBinaryOpForcedNApp
+    = "NApp should be handled by 'evalApp' function."
 
 nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
@@ -512,7 +514,9 @@ execBinaryOpForced scope span op lval rval = case op of
   NAnd  -> alreadyHandled
   NOr   -> alreadyHandled
   NImpl -> alreadyHandled
-  NApp  -> throwError $ ErrorCall $ "NApp should be handled by evalApp"
+  NApp  -> throwError $ ErrorCall
+          $ displayException
+          (EExecBinaryOpForcedNApp :: EAExecBinaryOpForced () () ())
 
  where
   prov :: Provenance m (NValue t f m)
