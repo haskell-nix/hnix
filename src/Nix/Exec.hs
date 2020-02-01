@@ -215,6 +215,17 @@ instance (Show op, Typeable op, Show lval, Typeable lval, Show rval, Typeable rv
     <> show rval
     <> "'."
 
+data EAAlreadyHandled a
+  = EAlreadyHandled a
+  deriving Show
+
+instance (Show a, Typeable a) => Exception (EAAlreadyHandled a)
+ where
+  displayException (EAlreadyHandled op)
+    = "This cannot happen: operator '"
+      <> show op
+      <> "' should have been handled in execBinaryOp."
+
 data EAFromStringNoContext
   = EAFromStringNoContext
   deriving Show
@@ -543,10 +554,7 @@ execBinaryOpForced scope span op lval rval = case op of
   hackyUnsupportedTypesForCompare = throwError $ ErrorCall
     $ displayException $ EUnsupportedTypes op lval rval
 
-  alreadyHandled = throwError $ ErrorCall $
-    "This cannot happen: operator "
-      ++ show op
-      ++ " should have been handled in execBinaryOp."
+  alreadyHandled = throwError $ ErrorCall $ displayException $ EAlreadyHandled op
 
 -- This function is here, rather than in 'Nix.String', because of the need to
 -- use 'throwError'.
