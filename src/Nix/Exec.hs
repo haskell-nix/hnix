@@ -199,22 +199,6 @@ instance (Show a, Typeable a) => Exception (EAExecUnaryOp a)
     = "argument to unary operator must evaluate to an atomic type: "
     <> show x
 
-data EAUnsupportedTypes o l r
-  = EUnsupportedTypes o l r
-  deriving Show
-
-instance (Show op, Typeable op, Show lval, Typeable lval, Show rval, Typeable rval)
-  => Exception (EAUnsupportedTypes op lval rval)
- where
-  displayException (EUnsupportedTypes op lval rval)
-    = "Unsupported argument types for binary operator '"
-    <> show op
-    <> "': '"
-    <> show lval
-    <> "', '"
-    <> show rval
-    <> "'."
-
 data EAAlreadyHandled a
   = EAlreadyHandled a
   deriving Show
@@ -236,6 +220,7 @@ instance Exception EAFromStringNoContext
 
 data EAExecBinaryOpForced o l r
   = EExecBinaryOpForcedNPlusStringToPath
+  | EExecBinaryOpForcedUnsupportedTypes o l r
   deriving Show
 
 instance (Show op, Typeable op, Show lval, Typeable lval, Show rval, Typeable rval)
@@ -245,6 +230,14 @@ instance (Show op, Typeable op, Show lval, Typeable lval, Show rval, Typeable rv
     -- Upstream case:
     -- https://github.com/haskell-nix/nix/blob/b18a4898ff990c0b8ec1d3571d23a054a7d4c5cd/src/libexpr/eval.cc#L1412
     = "A string that refers to a store path cannot be appended to a path."
+  displayException (EExecBinaryOpForcedUnsupportedTypes op lval rval)
+    = "Unsupported argument types for binary operator '"
+    <> show op
+    <> "': '"
+    <> show lval
+    <> "', '"
+    <> show rval
+    <> "'."
 
 nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
@@ -559,12 +552,15 @@ execBinaryOpForced scope span op lval rval = case op of
     _ -> unsupportedTypes op lval rval
 
   unsupportedTypes op lval rval
-    = throwError $ ErrorCall $ displayException $ EUnsupportedTypes op lval rval
+    = throwError
+    $ ErrorCall
+    $ displayException
+    $ EExecBinaryOpForcedUnsupportedTypes op lval rval
 
   -- FIXME: Special function for `compare`,
   -- because can not typecheck the rank-2 existential type of it properly
   hackyUnsupportedTypesForCompare = throwError $ ErrorCall
-    $ displayException $ EUnsupportedTypes op lval rval
+    $ displayException $ EExecBinaryOpForcedUnsupportedTypes op lval rval
 
   alreadyHandled = throwError $ ErrorCall
     $ displayException
