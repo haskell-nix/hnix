@@ -93,6 +93,16 @@ instance (Show v, Typeable v) => Exception (EAFetchTarball v)
     = "builtins.fetchTarball: Expected URI or string, received: '"
     <> show v <> "'."
 
+data EADefaultImportPath a
+  = EDefaultImportPathParse a
+  deriving Show
+
+instance (Show a, Typeable a) => Exception (EADefaultImportPath a)
+ where
+  -- displayException :: EADefaultImportPath a -> String
+  displayException (EDefaultImportPathParse a)
+    = show a
+
 defaultMakeAbsolutePath :: MonadNix e t f m => FilePath -> m FilePath
 defaultMakeAbsolutePath origPath = do
   origPathExpanded <- expandHomePath origPath
@@ -272,9 +282,10 @@ defaultImportPath path = do
         case eres of
           Failure err ->
             throwError
-              -- TODO: 2019-08-13: Incorporate into exceptions structure
               $ ErrorCall
-              . show $ fillSep ["Parse during import failed:", err]
+              . displayException
+              $ EDefaultImportPathParse
+              $ fillSep ["Parse during import failed:", err]
           Success expr -> do
             modify (M.insert path expr)
             pure expr
