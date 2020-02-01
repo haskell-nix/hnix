@@ -95,6 +95,7 @@ instance (Show v, Typeable v) => Exception (EAFetchTarball v)
 
 data EADefaultImportPath a
   = EDefaultImportPathParse a
+  | EDefaultImportPath a
   deriving Show
 
 instance (Show a, Typeable a) => Exception (EADefaultImportPath a)
@@ -102,6 +103,8 @@ instance (Show a, Typeable a) => Exception (EADefaultImportPath a)
   -- displayException :: EADefaultImportPath a -> String
   displayException (EDefaultImportPathParse a)
     = show a
+  displayException (EDefaultImportPath a)
+    = "While importing file " <> show a
 
 defaultMakeAbsolutePath :: MonadNix e t f m => FilePath -> m FilePath
 defaultMakeAbsolutePath origPath = do
@@ -272,8 +275,7 @@ defaultImportPath
   -> m (NValue t f m)
 defaultImportPath path = do
   traceM $ "Importing file " ++ path
-  -- TODO: 2019-08-13: Incorporate into exceptions structure
-  withFrame Info (ErrorCall $ "While importing file " ++ show path) $ do
+  withFrame Info (ErrorCall $ displayException $ EDefaultImportPath path) $ do
     imports <- get
     evalExprLoc =<< case M.lookup path imports of
       Just expr -> pure expr
