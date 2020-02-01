@@ -234,6 +234,17 @@ instance Exception EAFromStringNoContext
  where
   displayException EAFromStringNoContext = "expected string with no context"
 
+data EAExecBinaryOpForced o l r
+  = EExecBinaryOpForcedNPlusStringToPath
+  deriving Show
+
+instance (Show op, Typeable op, Show lval, Typeable lval, Show rval, Typeable rval)
+  => Exception (EAExecBinaryOpForced op lval rval)
+ where
+  displayException EExecBinaryOpForcedNPlusStringToPath
+    -- data/nix/src/libexpr/eval.cc:1412
+    = "A string that refers to a store path cannot be appended to a path."
+
 nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
 
@@ -494,9 +505,9 @@ execBinaryOpForced scope span op lval rval = case op of
         <$> coerceToString callFunc CopyToStore CoerceStringy rs
     (NVPath ls, NVStr rs) -> case principledGetStringNoContext rs of
       Just rs2 -> nvPathP prov <$> makeAbsolutePath @t @f (ls `mappend` (Text.unpack rs2))
-      Nothing -> throwError $ ErrorCall $ 
-        -- data/nix/src/libexpr/eval.cc:1412
-        "A string that refers to a store path cannot be appended to a path."
+      Nothing -> throwError $ ErrorCall
+        $ displayException
+        (EExecBinaryOpForcedNPlusStringToPath :: EAExecBinaryOpForced () () ())
     (NVPath ls, NVPath rs) -> nvPathP prov <$> makeAbsolutePath @t @f (ls ++ rs)
 
     (ls@NVSet{}, NVStr rs) -> 
@@ -554,7 +565,9 @@ execBinaryOpForced scope span op lval rval = case op of
   hackyUnsupportedTypesForCompare = throwError $ ErrorCall
     $ displayException $ EUnsupportedTypes op lval rval
 
-  alreadyHandled = throwError $ ErrorCall $ displayException $ EAlreadyHandled op
+  alreadyHandled = throwError $ ErrorCall
+    $ displayException
+    (EAlreadyHandled op :: EAExecBinaryOpForced NBinaryOp () ())
 
 -- This function is here, rather than in 'Nix.String', because of the need to
 -- use 'throwError'.
