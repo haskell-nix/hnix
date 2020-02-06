@@ -106,6 +106,15 @@ import           System.Posix.Files             ( isRegularFile
 import           Text.Read
 import           Text.Regex.TDFA
 
+newtype EAMkThunk a
+  = EMkThunkInBuiltin a
+  deriving Show
+
+instance Exception (EAMkThunk Text)
+ where
+  displayException (EMkThunkInBuiltin n)
+    = "While calling builtin " <> Text.unpack n <> "\n"
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -298,7 +307,7 @@ builtinsList = sequence
 
   mkThunk n = defer . withFrame
     Info
-    (ErrorCall $ "While calling builtin " ++ Text.unpack n ++ "\n")
+    (ErrorCall $ displayException $ EMkThunkInBuiltin n)
 
   add0 t n v = wrap t n <$> mkThunk n v
   add  t n v = wrap t n <$> mkThunk n (builtin (Text.unpack n) v)
