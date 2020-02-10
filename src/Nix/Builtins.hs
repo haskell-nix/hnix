@@ -125,6 +125,15 @@ instance (Show a, Typeable a)
   displayException (EFoldNixPathUnexpectedEntry x)
     = "Unexpected entry in NIX_PATH: " <> show x
 
+newtype EAAttrsetGet a
+  = EAttrsetGetAttrRequired a
+  deriving Show
+
+instance Exception (EAAttrsetGet Text)
+ where
+  displayException (EAttrsetGetAttrRequired k)
+    = "Attribute '" <> Text.unpack k <> "' required"
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -396,7 +405,7 @@ attrsetGet :: MonadNix e t f m => Text -> AttrSet (NValue t f m) -> m (NValue t 
 attrsetGet k s = case M.lookup k s of
   Just v -> pure v
   Nothing ->
-    throwError $ ErrorCall $ "Attribute '" ++ Text.unpack k ++ "' required"
+    throwError $ ErrorCall $ displayException $ EAttrsetGetAttrRequired k
 
 hasContext :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 hasContext = toValue . stringHasContext <=< fromValue
