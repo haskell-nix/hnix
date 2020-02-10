@@ -115,6 +115,16 @@ instance Exception (EAMkThunk Text)
   displayException (EMkThunkInBuiltin n)
     = "While calling builtin " <> Text.unpack n <> "\n"
 
+newtype EAFoldNixPath a
+  = EFoldNixPathUnexpectedEntry a
+  deriving Show
+
+instance (Show a, Typeable a)
+  => Exception (EAFoldNixPath a)
+ where
+  displayException (EFoldNixPathUnexpectedEntry x)
+    = "Unexpected entry in NIX_PATH: " <> show x
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -348,7 +358,8 @@ foldNixPath f z = do
   go (x, ty) rest = case Text.splitOn "=" x of
     [p] -> f (Text.unpack p) Nothing ty rest
     [n, p] -> f (Text.unpack p) (Just (Text.unpack n)) ty rest
-    _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " ++ show x
+    _ -> throwError
+      $ ErrorCall $ displayException $ EFoldNixPathUnexpectedEntry x
 
 nixPath :: MonadNix e t f m => m (NValue t f m)
 nixPath = fmap nvList $ flip foldNixPath [] $ \p mn ty rest ->
