@@ -721,8 +721,10 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
 
 thunkStr s = nvStr (hackyMakeNixStringWithoutContext (decodeUtf8 s))
 
-substring :: forall e t f m. MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
-substring start len str = Prim $ if start < 0 --NOTE: negative values of 'len' are OK
+substring :: forall e t f m. MonadNix e t f m
+  => Int -> Int -> NixString -> Prim m NixString
+-- 2019-03-17: NOTE: negative values of 'len' are OK
+substring start len str = Prim $ if start < 0
   then
     throwError
     $  ErrorCall
