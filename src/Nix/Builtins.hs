@@ -153,6 +153,15 @@ instance Exception EAHead_
   displayException EHead_EmptyList
     = "builtins.head: empty list"
 
+data EATail_
+  = ETail_EmptyList
+  deriving Show
+
+instance Exception EATail_
+ where
+  displayException ETail_EmptyList
+    = "builtins.tail: empty list"
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -542,7 +551,7 @@ head_ = fromValue >=> \case
 
 tail_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 tail_ = fromValue >=> \case
-  []    -> throwError $ ErrorCall "builtins.tail: empty list"
+  []    -> throwError $ ErrorCall $ displayException ETail_EmptyList
   _ : t -> return $ nvList t
 
 data VersionComponent
