@@ -162,6 +162,16 @@ instance Exception EATail_
   displayException ETail_EmptyList
     = "builtins.tail: empty list"
 
+newtype EASubString a
+  = ESubStringNegativeStartPosition a
+  deriving Show
+
+instance (Show a, Typeable a)
+  => Exception (EASubString a)
+ where
+  displayException (ESubStringNegativeStartPosition start)
+    = "builtins.substring: negative start position: " <> show start
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -727,9 +737,7 @@ substring :: forall e t f m. MonadNix e t f m
 substring start len str = Prim $ if start < 0
   then
     throwError
-    $  ErrorCall
-    $  "builtins.substring: negative start position: "
-    ++ show start
+    $  ErrorCall $ displayException $ ESubStringNegativeStartPosition start
   else pure $ principledModifyNixContents (Text.take len . Text.drop start) str
 
 attrNames
