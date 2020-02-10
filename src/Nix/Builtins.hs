@@ -134,6 +134,16 @@ instance Exception (EAAttrsetGet Text)
   displayException (EAttrsetGetAttrRequired k)
     = "Attribute '" <> Text.unpack k <> "' required"
 
+data EAUnsafeGetAttrPos a b
+  = EUnsafeGetAttrPosInvalidTypes a b
+  deriving Show
+
+instance (Show a, Typeable a, Show b, Typeable b)
+  => Exception (EAUnsafeGetAttrPos a b)
+ where
+  displayException (EUnsafeGetAttrPosInvalidTypes x y)
+    = "Invalid types for builtins.unsafeGetAttrPos: " <> show (x, y)
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -433,9 +443,7 @@ unsafeGetAttrPos x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
       Just delta -> toValue delta
   (x, y) ->
     throwError
-      $  ErrorCall
-      $  "Invalid types for builtins.unsafeGetAttrPos: "
-      ++ show (x, y)
+      $  ErrorCall $ displayException $ EUnsafeGetAttrPosInvalidTypes x y
 
 -- This function is a bit special in that it doesn't care about the contents
 -- of the list.
