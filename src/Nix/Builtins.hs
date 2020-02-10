@@ -144,6 +144,15 @@ instance (Show a, Typeable a, Show b, Typeable b)
   displayException (EUnsafeGetAttrPosInvalidTypes x y)
     = "Invalid types for builtins.unsafeGetAttrPos: " <> show (x, y)
 
+data EAHead_
+  = EHead_EmptyList
+  deriving Show
+
+instance Exception EAHead_
+ where
+  displayException EHead_EmptyList
+    = "builtins.head: empty list"
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -528,7 +537,7 @@ foldl'_ f z xs = fromValue @[NValue t f m] xs >>= foldM go z
 
 head_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 head_ = fromValue >=> \case
-  []    -> throwError $ ErrorCall "builtins.head: empty list"
+  []    -> throwError $ ErrorCall $ displayException EHead_EmptyList
   h : _ -> pure h
 
 tail_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
