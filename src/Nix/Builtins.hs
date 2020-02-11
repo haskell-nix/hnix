@@ -248,6 +248,16 @@ instance Exception EAReplaceStrings
   displayException EReplaceStringsDiffLenArgs
     = "'from' and 'to' arguments to 'replaceStrings'have different lengths"
 
+newtype EAPathExists_ a
+  = EPathExists_NotPath a
+  deriving Show
+
+instance (Show a, Typeable a)
+  => Exception (EAPathExists_ a)
+ where
+  displayException (EPathExists_NotPath v)
+    = "builtins.pathExists: expected path, got " <> show v
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -1171,9 +1181,7 @@ pathExists_ path = demand path $ \case
   NVStr  ns -> toValue =<< pathExists (Text.unpack (hackyStringIgnoreContext ns))
   v ->
     throwError
-      $  ErrorCall
-      $  "builtins.pathExists: expected path, got "
-      ++ show v
+      $ ErrorCall $ displayException $ EPathExists_NotPath v
 
 hasKind
   :: forall a e t f m
