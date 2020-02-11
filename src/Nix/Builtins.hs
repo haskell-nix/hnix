@@ -239,6 +239,15 @@ instance Exception EAGenericClosure
   displayException EGenericClosureNoAttrOperator
     = "builtins.genericClosure: Attribute 'operator' required"
 
+data EAReplaceStrings
+  = EReplaceStringsDiffLenArgs
+  deriving Show
+
+instance Exception EAReplaceStrings
+ where
+  displayException EReplaceStringsDiffLenArgs
+    = "'from' and 'to' arguments to 'replaceStrings'have different lengths"
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -1061,10 +1070,9 @@ replaceStrings tfrom tto ts = fromValue (Deeper tfrom) >>= \(nsFrom :: [NixStrin
     fromValue ts >>= \(ns :: NixString) -> do
       let from = map principledStringIgnoreContext nsFrom
       when (length nsFrom /= length nsTo)
-        $  throwError
-        $  ErrorCall
-        $  "'from' and 'to' arguments to 'replaceStrings'"
-        ++ " have different lengths"
+        $ throwError
+        $ ErrorCall
+        $ displayException EReplaceStringsDiffLenArgs
       let
         lookupPrefix s = do
           (prefix, replacement) <- find ((`Text.isPrefixOf` s) . fst)
