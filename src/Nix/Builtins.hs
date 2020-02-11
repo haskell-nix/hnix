@@ -268,6 +268,21 @@ instance (Show a, Typeable a)
   displayException (EFunctionArgsArgNotFun v)
     = "builtins.functionArgs: expected function, got " <> show v
 
+data EALessThan a b
+  = ELessThanUnsupportedArgs a b
+  deriving Show
+
+instance (Show a, Typeable a, Show b, Typeable b)
+  => Exception (EALessThan a b)
+ where
+  displayException (ELessThanUnsupportedArgs va vb)
+    = "builtins.lessThan: expected two numbers or two strings, got '"
+    <> show va
+    <> "' and '"
+    <> show vb
+    <> "'"
+
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -1296,12 +1311,7 @@ lessThan
 lessThan ta tb = demand ta $ \va -> demand tb $ \vb -> do
   let badType =
         throwError
-          $  ErrorCall
-          $  "builtins.lessThan: expected two numbers or two strings, "
-          ++ "got "
-          ++ show va
-          ++ " and "
-          ++ show vb
+          $ ErrorCall $ displayException $ ELessThanUnsupportedArgs va vb
   nvConstant . NBool <$> case (va, vb) of
     (NVConstant ca, NVConstant cb) -> case (ca, cb) of
       (NInt   a, NInt b  ) -> pure $ a < b
