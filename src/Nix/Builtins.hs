@@ -258,6 +258,16 @@ instance (Show a, Typeable a)
   displayException (EPathExists_NotPath v)
     = "builtins.pathExists: expected path, got " <> show v
 
+newtype EAFunctionArgs a
+ = EFunctionArgsArgNotFun a
+ deriving Show
+
+instance (Show a, Typeable a)
+  => Exception (EAFunctionArgs a)
+ where
+  displayException (EFunctionArgsArgNotFun v)
+    = "builtins.functionArgs: expected function, got " <> show v
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -1151,9 +1161,7 @@ functionArgs fun = demand fun $ \case
       ParamSet s _ _ -> isJust <$> M.fromList s
   v ->
     throwError
-      $  ErrorCall
-      $  "builtins.functionArgs: expected function, got "
-      ++ show v
+      $ ErrorCall $ displayException $ EFunctionArgsArgNotFun v
 
 toFile
   :: MonadNix e t f m
