@@ -294,6 +294,22 @@ instance (Show a, Typeable a)
     <> "expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got "
     <> show algo
 
+data EAAbsolutePathFromValue a
+  = EAbsolutePathFromValueNotAbsPath a
+  | EAbsolutePathFromValueNotPath a
+  deriving Show
+
+instance (Show a, Typeable a)
+  => Exception (EAAbsolutePathFromValue a)
+ where
+   displayException (EAbsolutePathFromValueNotAbsPath path)
+     = "string "
+     <> show path
+     <> " doesn't represent an absolute path"
+
+   displayException (EAbsolutePathFromValueNotPath v)
+     = "expected a path, got " <> show v
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -1431,14 +1447,12 @@ absolutePathFromValue = \case
   NVStr ns -> do
     let path = Text.unpack $ hackyStringIgnoreContext ns
     unless (isAbsolute path)
-      $  throwError
-      $  ErrorCall
-      $  "string "
-      ++ show path
-      ++ " doesn't represent an absolute path"
+      $ throwError
+      $ ErrorCall $ displayException $ EAbsolutePathFromValueNotAbsPath path
     pure path
   NVPath path -> pure path
-  v           -> throwError $ ErrorCall $ "expected a path, got " ++ show v
+  v           -> throwError
+    $ ErrorCall $ displayException $ EAbsolutePathFromValueNotPath v
 
 readFile_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 readFile_ path = demand path $
