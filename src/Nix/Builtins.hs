@@ -354,6 +354,16 @@ instance (Show a, Typeable a)
   displayException (EFetchrulUnsupportedArg _)
     = "builtins.fetchurl: unsupported arguments to url"
 
+newtype EAGetContext a
+  = EGetContextUnsupportedType a
+  deriving Show
+
+instance (Show a, Typeable a)
+  => Exception (EAGetContext a)
+ where
+  displayException (EGetContextUnsupportedType x)
+    = "Invalid type for builtins.getContext: " <> show x
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -1698,7 +1708,7 @@ getContext x = demand x $ \case
     valued :: M.HashMap Text (NValue t f m) <- sequenceA $ M.map toValue context
     pure $ flip nvSet M.empty $ valued
   x ->
-    throwError $ ErrorCall $ "Invalid type for builtins.getContext: " ++ show x
+    throwError $ ErrorCall $ displayException $ EGetContextUnsupportedType x
 
 appendContext
   :: forall e t f m
