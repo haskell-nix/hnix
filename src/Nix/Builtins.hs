@@ -190,6 +190,16 @@ instance Exception EAMapAttrs_
   displayException EMapAttrs_
     = "While applying f in mapAttrs:\n"
 
+newtype EADirOf a
+  = EDirOfWrongArg a
+  deriving Show
+
+instance (Show a, Typeable a)
+  => Exception (EADirOf a)
+ where
+  displayException (EDirOfWrongArg v)
+    = "dirOf: expected string or path, got " ++ show v
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -870,7 +880,7 @@ dirOf x = demand x $ \case
     (principledModifyNixContents (Text.pack . takeDirectory . Text.unpack) ns)
   NVPath path -> pure $ nvPath $ takeDirectory path
   v ->
-    throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
+    throwError $ ErrorCall $ displayException $ EDirOfWrongArg v
 
 -- jww (2018-04-28): This should only be a string argument, and not coerced?
 unsafeDiscardStringContext
