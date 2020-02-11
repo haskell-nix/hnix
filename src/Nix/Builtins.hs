@@ -224,6 +224,21 @@ instance (Show a, Typeable a)
     = "builtins.genList: Expected a non-negative number, got "
     <> show n
 
+data EAGenericClosure
+ = EGenericClosureNoAttrsStartSetNOperator
+ | EGenericClosureNoAttrStartSet
+ | EGenericClosureNoAttrOperator
+ deriving Show
+
+instance Exception EAGenericClosure
+ where
+  displayException EGenericClosureNoAttrsStartSetNOperator
+    = "builtins.genericClosure: Attributes 'startSet' and 'operator' required"
+  displayException EGenericClosureNoAttrStartSet
+    = "builtins.genericClosure: Attribute 'startSet' required"
+  displayException EGenericClosureNoAttrOperator
+    = "builtins.genericClosure: Attribute 'operator' required"
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -1003,17 +1018,16 @@ genericClosure = fromValue @(AttrSet (NValue t f m)) >=> \s ->
   case (M.lookup "startSet" s, M.lookup "operator" s) of
     (Nothing, Nothing) ->
       throwError
-        $  ErrorCall
-        $  "builtins.genericClosure: "
-        ++ "Attributes 'startSet' and 'operator' required"
+        $ ErrorCall
+        $ displayException EGenericClosureNoAttrsStartSetNOperator
     (Nothing, Just _) ->
       throwError
         $ ErrorCall
-        $ "builtins.genericClosure: Attribute 'startSet' required"
+        $ displayException EGenericClosureNoAttrStartSet
     (Just _, Nothing) ->
       throwError
         $ ErrorCall
-        $ "builtins.genericClosure: Attribute 'operator' required"
+        $ displayException EGenericClosureNoAttrOperator
     (Just startSet, Just operator) ->
       demand startSet $ fromValue @[NValue t f m] >=> \ss ->
         demand operator $ \op -> toValue @[NValue t f m] =<< snd <$> go op ss S.empty
