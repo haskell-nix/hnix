@@ -172,6 +172,15 @@ instance (Show a, Typeable a)
   displayException (ESubStringNegativeStartPosition start)
     = "builtins.substring: negative start position: " <> show start
 
+data EAMap_
+  = EMap_
+  deriving Show
+
+instance Exception EAMap_
+ where
+  displayException EMap_
+    = "While applying f in map:\n"
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -769,7 +778,7 @@ map_ f =
   toValue
     <=< traverse
           ( defer @(NValue t f m)
-          . withFrame Debug (ErrorCall "While applying f in map:\n")
+          . withFrame Debug (ErrorCall $ displayException EMap_)
           . (f `callFunc`)
           )
     <=< fromValue @[NValue t f m]
