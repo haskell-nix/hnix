@@ -310,6 +310,22 @@ instance (Show a, Typeable a)
    displayException (EAbsolutePathFromValueNotPath v)
      = "expected a path, got " <> show v
 
+data EAFindFile_ a
+  = EFindFile_NotString a
+  | EFindFile_NotList a
+  | EFindFile_InvalidTypes a
+  deriving Show
+
+instance (Show a, Typeable a)
+  => Exception (EAFindFile_ a)
+ where
+  displayException (EFindFile_NotString y)
+    = "expected a string, got " <> show y
+  displayException (EFindFile_NotList x)
+    = "expected a list, got " <> show x
+  displayException (EFindFile_InvalidTypes xy)
+    = "Invalid types for builtins.findFile: " <> show xy
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -1469,12 +1485,12 @@ findFile_ aset filePath = demand aset $ \aset' -> demand filePath $ \filePath' -
     (NVList x, NVStr ns) -> do
       mres <- findPath @t @f @m x (Text.unpack (hackyStringIgnoreContext ns))
       pure $ nvPath mres
-    (NVList _, y) ->
-      throwError $ ErrorCall $ "expected a string, got " ++ show y
-    (x, NVStr _) -> throwError $ ErrorCall $ "expected a list, got " ++ show x
-    (x, y) ->
-      throwError $ ErrorCall $ "Invalid types for builtins.findFile: " ++ show
-        (x, y)
+    (NVList _, y) -> throwError
+      $ ErrorCall $ displayException $ EFindFile_NotString y
+    (x, NVStr _)  -> throwError
+      $ ErrorCall $ displayException $ EFindFile_NotList x
+    (x, y)        -> throwError
+      $ ErrorCall $ displayException $ EFindFile_InvalidTypes (x, y)
 
 data FileType
    = FileTypeRegular
