@@ -364,6 +364,25 @@ instance (Show a, Typeable a)
   displayException (EGetContextUnsupportedType x)
     = "Invalid type for builtins.getContext: " <> show x
 
+data EAAppendContext a
+  = EAppendContextInvalidContextOutTypes a
+  | EAppendContextInvalidContextValTypes a
+  | EAppendContextInvalidTypes a
+  deriving Show
+
+instance (Show a, Typeable a)
+  => Exception (EAAppendContext a)
+ where
+  displayException (EAppendContextInvalidContextOutTypes x)
+    = "Invalid types for context value outputs in builtins.appendContext: "
+    <> show x
+  displayException (EAppendContextInvalidContextValTypes x)
+    = "Invalid types for context value in builtins.appendContext: "
+    <> show x
+  displayException (EAppendContextInvalidTypes xy)
+    = "Invalid types for builtins.appendContext: "
+    <> show xy
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -1733,14 +1752,12 @@ appendContext x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
             x ->
               throwError
                 $ ErrorCall
-                $ "Invalid types for context value outputs in builtins.appendContext: "
-                ++ show x
+                $ displayException $ EAppendContextInvalidContextOutTypes x
         return $ NixLikeContextValue path allOutputs outputs
       x ->
         throwError
-          $  ErrorCall
-          $  "Invalid types for context value in builtins.appendContext: "
-          ++ show x
+          $ ErrorCall
+          $ displayException $ EAppendContextInvalidContextValTypes x
     toValue
       $ principledMakeNixString (principledStringIgnoreContext ns)
       $ fromNixLikeContext
@@ -1751,9 +1768,7 @@ appendContext x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
       $ principledGetContext ns
   (x, y) ->
     throwError
-      $  ErrorCall
-      $  "Invalid types for builtins.appendContext: "
-      ++ show (x, y)
+      $ ErrorCall $ displayException $ EAppendContextInvalidTypes (x, y)
 
 newtype Prim m a = Prim { runPrim :: m a }
 
