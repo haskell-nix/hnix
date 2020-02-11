@@ -326,6 +326,16 @@ instance (Show a, Typeable a)
   displayException (EFindFile_InvalidTypes xy)
     = "Invalid types for builtins.findFile: " <> show xy
 
+newtype EAFromJSON a
+  = EFromJSON a
+  deriving Show
+
+instance (Show a, Typeable a)
+  => Exception (EAFromJSON a)
+ where
+  displayException (EFromJSON jsonError)
+    = "builtins.fromJSON: " <> show jsonError
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -1526,7 +1536,8 @@ fromJSON
 fromJSON arg = demand arg $ fromValue >=> fromStringNoContext >=> \encoded ->
   case A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded of
     Left jsonError ->
-      throwError $ ErrorCall $ "builtins.fromJSON: " ++ jsonError
+      throwError
+      $ ErrorCall $ displayException $ EFromJSON jsonError
     Right v -> jsonToNValue v
  where
   jsonToNValue = \case
