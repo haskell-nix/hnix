@@ -336,6 +336,24 @@ instance (Show a, Typeable a)
   displayException (EFromJSON jsonError)
     = "builtins.fromJSON: " <> show jsonError
 
+data EAFetchurl a
+  = EFetchrulNotURIOrSet a
+  | EFetchrulNotURIOrString a
+  | EFetchrulUnsupportedArg a
+  deriving Show
+
+instance (Show a, Typeable a)
+  => Exception (EAFetchurl a)
+ where
+  displayException (EFetchrulNotURIOrSet v)
+    = "builtins.fetchurl: Expected URI or set, got "
+    <> show v
+  displayException (EFetchrulNotURIOrString v)
+    = "builtins.fetchurl: Expected URI or string, got "
+    <> show v
+  displayException (EFetchrulUnsupportedArg _)
+    = "builtins.fetchurl: unsupported arguments to url"
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -1623,9 +1641,7 @@ fetchurl v = demand v $ \case
   v@NVStr{} -> go Nothing v
   v ->
     throwError
-      $  ErrorCall
-      $  "builtins.fetchurl: Expected URI or set, got "
-      ++ show v
+    $ ErrorCall $ displayException $ EFetchrulNotURIOrSet v
  where
   go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
   go _msha = \case
@@ -1634,13 +1650,12 @@ fetchurl v = demand v $ \case
       Right p -> toValue p
     v ->
       throwError
-        $  ErrorCall
-        $  "builtins.fetchurl: Expected URI or string, got "
-        ++ show v
+      $ ErrorCall $ displayException $ EFetchrulNotURIOrString v
 
   noContextAttrs ns = case principledGetStringNoContext ns of
     Nothing ->
-      throwError $ ErrorCall $ "builtins.fetchurl: unsupported arguments to url"
+      throwError
+      $ ErrorCall $ displayException $ EFetchrulUnsupportedArg ()
     Just t -> pure t
 
 partition_
