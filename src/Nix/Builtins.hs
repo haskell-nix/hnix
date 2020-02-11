@@ -282,6 +282,17 @@ instance (Show a, Typeable a, Show b, Typeable b)
     <> show vb
     <> "'"
 
+newtype EAHashString a
+  = EHashStringUnsupportedValue a
+  deriving Show
+
+instance (Show a, Typeable a)
+  => Exception (EAHashString a)
+ where
+  displayException (EHashStringUnsupportedValue algo)
+    = "builtins.hashString: "
+    <> "expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got "
+    <> show algo
 
 -- | Evaluate a nix expression in the default context
 withNixContext
@@ -1398,10 +1409,7 @@ hashString nsAlgo ns = Prim $ do
 #endif
     _ ->
       throwError
-        $  ErrorCall
-        $  "builtins.hashString: "
-        ++ "expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got "
-        ++ show algo
+        $ ErrorCall $ displayException $ EHashStringUnsupportedValue algo
 
 placeHolder :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
