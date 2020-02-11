@@ -181,6 +181,15 @@ instance Exception EAMap_
   displayException EMap_
     = "While applying f in map:\n"
 
+data EAMapAttrs_
+  = EMapAttrs_
+  deriving Show
+
+instance Exception EAMapAttrs_
+ where
+  displayException EMapAttrs_
+    = "While applying f in mapAttrs:\n"
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -793,7 +802,7 @@ mapAttrs_ f xs = fromValue @(AttrSet (NValue t f m)) xs >>= \aset -> do
   let pairs = M.toList aset
   values <- for pairs $ \(key, value) ->
     defer @(NValue t f m)
-      $   withFrame Debug (ErrorCall "While applying f in mapAttrs:\n")
+      $   withFrame Debug (ErrorCall $ displayException EMapAttrs_)
       $   callFunc ?? value
       =<< callFunc f (nvStr (principledMakeNixStringWithoutContext key))
   toValue . M.fromList . zip (map fst pairs) $ values
