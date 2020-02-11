@@ -200,6 +200,19 @@ instance (Show a, Typeable a)
   displayException (EDirOfWrongArg v)
     = "dirOf: expected string or path, got " ++ show v
 
+data EAElemAt_ a b
+  = EElemAt_IndexOutOfBound a b
+  deriving Show
+
+instance (Show a, Typeable a, Foldable t, Show (t b), Typeable (t b))
+  => Exception (EAElemAt_ a (t b))
+ where
+  displayException (EElemAt_IndexOutOfBound n' xs')
+    = "builtins.elem: Index "
+    <> show n'
+    <> " too large for list of length "
+    <> show (length xs')
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -928,11 +941,9 @@ elemAt_ xs n = fromValue n >>= \n' -> fromValue xs >>= \xs' ->
     Just a -> pure a
     Nothing ->
       throwError
-        $  ErrorCall
-        $  "builtins.elem: Index "
-        ++ show n'
-        ++ " too large for list of length "
-        ++ show (length xs')
+        $ ErrorCall
+        $ displayException
+        $ EElemAt_IndexOutOfBound n' xs'
 
 genList
   :: forall e t f m
