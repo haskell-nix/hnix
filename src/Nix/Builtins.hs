@@ -213,6 +213,17 @@ instance (Show a, Typeable a, Foldable t, Show (t b), Typeable (t b))
     <> " too large for list of length "
     <> show (length xs')
 
+newtype EAGenList a
+  = EGenListNegativeNum a
+  deriving Show
+
+instance (Show a, Typeable a)
+  => Exception (EAGenList a)
+ where
+  displayException (EGenListNegativeNum n)
+    = "builtins.genList: Expected a non-negative number, got "
+    <> show n
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -956,8 +967,8 @@ genList f = fromValue @Integer >=> \n -> if n >= 0
   else
     throwError
     $  ErrorCall
-    $  "builtins.genList: Expected a non-negative number, got "
-    ++ show n
+    $  displayException
+    $  EGenListNegativeNum n
 
 -- We wrap values solely to provide an Ord instance for genericClosure
 newtype WValue t f m = WValue (NValue t f m)
