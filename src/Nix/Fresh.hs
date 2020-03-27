@@ -21,9 +21,6 @@ import           Control.Monad.Reader
 import           Control.Monad.Ref
 import           Control.Monad.ST
 import           Data.Typeable
-#ifdef MIN_VERSION_haskeline
-import System.Console.Haskeline.MonadException hiding(catch)
-#endif
 
 import           Nix.Var
 import           Nix.Thunk
@@ -42,9 +39,6 @@ newtype FreshIdT i m a = FreshIdT { unFreshIdT :: ReaderT (Var m i) m a }
     , MonadIO
     , MonadCatch
     , MonadThrow
-#ifdef MIN_VERSION_haskeline
-    , MonadException
-#endif
     )
 
 instance MonadTrans (FreshIdT i) where
