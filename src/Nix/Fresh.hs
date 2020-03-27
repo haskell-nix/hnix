@@ -39,6 +39,7 @@ newtype FreshIdT i m a = FreshIdT { unFreshIdT :: ReaderT (Var m i) m a }
     , MonadIO
     , MonadCatch
     , MonadThrow
+    , MonadMask
     )
 
 instance MonadTrans (FreshIdT i) where

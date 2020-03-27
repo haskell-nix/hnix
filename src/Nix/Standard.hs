@@ -201,6 +201,7 @@ newtype StandardTF r m a
     , MonadIO
     , MonadCatch
     , MonadThrow
+    , MonadMask
     , MonadReader (Context r (StdValue r))
     , MonadState (HashMap FilePath NExprLoc)
     )
