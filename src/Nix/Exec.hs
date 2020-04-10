@@ -406,8 +406,7 @@ execUnaryOp scope span op arg = do
       (NNeg, NFloat f) -> unaryOp $ NFloat (-f)
       (NNot, NBool b ) -> unaryOp $ NBool (not b)
       _ ->
-        throwError $ ErrorCall
-          $ displayException $ EExecUnaryOpUnsupportedType op
+        throwError $ EExecUnaryOpUnsupportedType op
     x ->
       throwError $ ErrorCall
         $ displayException $ EExecUnaryOpEvaluatedToNotAtomicType $ show x
