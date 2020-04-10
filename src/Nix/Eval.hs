@@ -428,8 +428,7 @@ buildArgument params arg = do
     -> Maybe (AttrSet v -> m v)
   assemble scope isVariadic k = \case
     That Nothing ->
-      Just $ const $ evalError @v $ ErrorCall
-        $ displayException $ EBuildArgumentMissingValue k
+      Just $ const $ evalError @v $ EBuildArgumentMissingValue k
     That (Just f) ->
       Just $ \args -> defer $ withScopes scope $ pushScope args f
     This _
