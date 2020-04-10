@@ -275,7 +275,7 @@ defaultImportPath
   -> m (NValue t f m)
 defaultImportPath path = do
   traceM $ "Importing file " ++ path
-  withFrame Info (ErrorCall $ displayException $ EDefaultImportPath path) $ do
+  withFrame Info (EDefaultImportPath path) $ do
     imports <- get
     evalExprLoc =<< case M.lookup path imports of
       Just expr -> pure expr
