@@ -542,8 +542,8 @@ execBinaryOpForced scope span op lval rval = case op of
 
   -- FIXME: Special function for `compare`,
   -- because can not typecheck the rank-2 existential type of it properly
-  hackyUnsupportedTypesForCompare = throwError $ ErrorCall
-    $ displayException $ EExecBinaryOpForcedUnsupportedTypes op lval rval
+  hackyUnsupportedTypesForCompare = throwError
+    $ EExecBinaryOpForcedUnsupportedTypes op lval rval
 
   alreadyHandled = throwError $ ErrorCall
     $ displayException
