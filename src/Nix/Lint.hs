@@ -362,8 +362,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
   freeVariable var = symerr $ "Undefined variable '" ++ Text.unpack var ++ "'"
 
   attrMissing ks Nothing =
-    evalError @(Symbolic m)
-      $  ErrorCall $ displayException $ EMonadEvalAttrUnknownInherit ks
+    evalError @(Symbolic m) $ EMonadEvalAttrUnknownInherit ks
 
   attrMissing ks (Just s) =
     evalError @(Symbolic m)
