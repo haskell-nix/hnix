@@ -1516,8 +1516,7 @@ findFile_ aset filePath = demand aset $ \aset' -> demand filePath $ \filePath' -
     (NVList x, NVStr ns) -> do
       mres <- findPath @t @f @m x (Text.unpack (hackyStringIgnoreContext ns))
       pure $ nvPath mres
-    (NVList _, y) -> throwError
-      $ ErrorCall $ displayException $ EFindFile_NotString y
+    (NVList _, y) -> throwError $ EFindFile_NotString y
     (x, NVStr _)  -> throwError $ EFindFile_NotList x
     (x, y)        -> throwError $ EFindFile_InvalidTypes (x, y)
 
