@@ -113,7 +113,7 @@ data EAAttrSetAlter
 instance Exception EAAttrSetAlter
  where
   displayException EAttrSetAlterInvalidSelector
-    = "invalid selector with no components"
+    = "Invalid selector (no components)."
 
 data EAEvalGetterKeyName
   = EComponentValueIsNullExpectedString
