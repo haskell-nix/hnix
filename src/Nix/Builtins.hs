@@ -976,7 +976,7 @@ map_ f =
   toValue
     <=< traverse
           ( defer @(NValue t f m)
-          . withFrame Debug (ErrorCall $ displayException EMap_)
+          . withFrame Debug EMap_
           . (f `callFunc`)
           )
     <=< fromValue @[NValue t f m]
