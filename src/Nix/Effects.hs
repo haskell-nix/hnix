@@ -108,7 +108,9 @@ instance MonadExec IO where
 
 class Monad m => MonadInstantiate m where
     instantiateExpr :: String -> m (Either ErrorCall NExprLoc)
-    default instantiateExpr :: (MonadTrans t, MonadInstantiate m', m ~ t m') => String -> m (Either ErrorCall NExprLoc)
+    default instantiateExpr
+      :: (MonadTrans t, MonadInstantiate m', m ~ t m')
+      => String -> m (Either ErrorCall NExprLoc)
     instantiateExpr = lift . instantiateExpr
 
 instance MonadInstantiate IO where
