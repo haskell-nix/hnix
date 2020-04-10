@@ -297,9 +297,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
           (NStr_ span (DoubleQuoted [Plain (hackyStringIgnoreContext ns)]))
         )
         ns
-    Nothing -> nverr
-      $ ErrorCall
-      $ displayException (EMonadEvalStringAssembleFail :: EAMonadEval () ())
+    Nothing -> nverr (EMonadEvalStringAssembleFail :: EAMonadEval () ())
 
   evalLiteralPath p = do
     scope <- currentScopes
