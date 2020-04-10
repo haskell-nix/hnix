@@ -1520,8 +1520,7 @@ findFile_ aset filePath = demand aset $ \aset' -> demand filePath $ \filePath' -
       $ ErrorCall $ displayException $ EFindFile_NotString y
     (x, NVStr _)  -> throwError
       $ ErrorCall $ displayException $ EFindFile_NotList x
-    (x, y)        -> throwError
-      $ ErrorCall $ displayException $ EFindFile_InvalidTypes (x, y)
+    (x, y)        -> throwError $ EFindFile_InvalidTypes (x, y)
 
 data FileType
    = FileTypeRegular
