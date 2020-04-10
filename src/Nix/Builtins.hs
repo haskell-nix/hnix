@@ -991,7 +991,7 @@ mapAttrs_ f xs = fromValue @(AttrSet (NValue t f m)) xs >>= \aset -> do
   let pairs = M.toList aset
   values <- for pairs $ \(key, value) ->
     defer @(NValue t f m)
-      $   withFrame Debug (ErrorCall $ displayException EMapAttrs_)
+      $   withFrame Debug EMapAttrs_
       $   callFunc ?? value
       =<< callFunc f (nvStr (principledMakeNixStringWithoutContext key))
   toValue . M.fromList . zip (map fst pairs) $ values
