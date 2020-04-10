@@ -573,9 +573,7 @@ builtinsList = sequence
   arity2 :: forall a b c. (a -> b -> c) -> (a -> b -> Prim m c)
   arity2 f = ((Prim . pure) .) . f
 
-  mkThunk n = defer . withFrame
-    Info
-    (ErrorCall $ displayException $ EMkThunkInBuiltin n)
+  mkThunk n = defer . withFrame Info (EMkThunkInBuiltin n)
 
   add0 t n v = wrap t n <$> mkThunk n v
   add  t n v = wrap t n <$> mkThunk n (builtin (Text.unpack n) v)
