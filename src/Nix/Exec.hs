@@ -506,7 +506,7 @@ execBinaryOpForced scope span op lval rval = case op of
 
  where
   prov :: Provenance m (NValue t f m)
-  prov = (Provenance scope (NBinary_ span op (Just lval) (Just rval)))
+  prov = Provenance scope $ NBinary_ span op (Just lval) (Just rval)
 
   toBool = pure . nvConstantP prov . NBool
 
