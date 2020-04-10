@@ -223,7 +223,7 @@ attrSetAlter [] _ _ _ _ =
 
 attrSetAlter (k : ks) pos m p val = case M.lookup k m of
   Nothing | null ks   -> go
-          | otherwise -> recurse M.empty M.empty
+    | otherwise -> recurse M.empty M.empty
   Just x
     | null ks
     -> go
