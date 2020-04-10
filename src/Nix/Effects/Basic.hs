@@ -283,10 +283,7 @@ defaultImportPath path = do
         eres <- parseNixFileLoc path
         case eres of
           Failure err ->
-            throwError
-              $ ErrorCall
-              . displayException
-              $ EDefaultImportPathParse
+            throwError $ EDefaultImportPathParse
               $ fillSep ["Parse during import failed:", err]
           Success expr -> do
             modify (M.insert path expr)
