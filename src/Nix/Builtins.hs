@@ -1117,10 +1117,7 @@ genList
 genList f = fromValue @Integer >=> \n -> if n >= 0
   then toValue =<< forM [0 .. n - 1] (\i -> defer $ (f `callFunc`) =<< toValue i)
   else
-    throwError
-    $  ErrorCall
-    $  displayException
-    $  EGenListNegativeNum n
+    throwError $ EGenListNegativeNum n
 
 -- We wrap values solely to provide an Ord instance for genericClosure
 newtype WValue t f m = WValue (NValue t f m)
