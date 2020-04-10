@@ -38,7 +38,7 @@ nvalueToJSON = \case
   NVConstant (NInt   n) -> pure $ A.toJSON n
   NVConstant (NFloat n) -> pure $ A.toJSON n
   NVConstant (NBool  b) -> pure $ A.toJSON b
-  NVConstant NNull      -> pure $ A.Null
+  NVConstant NNull      -> pure   A.Null
   NVStr      ns         -> A.toJSON <$> extractNixString ns
   NVList l ->
     A.Array
