@@ -500,8 +500,7 @@ lintApp context fun arg = unpackSymbolic fun >>= \case
         $ displayException ELintAppNotImplementedBuiltin
       TSet _m       -> throwError $ ErrorCall
         $ displayException ELintAppNotImplementedSet
-      _x            -> throwError $ ErrorCall
-        $ displayException ELintAppCallNonFunction
+      _x            -> throwError ELintAppCallNonFunction
 
     y <- everyPossible
     (head args, ) <$> foldM (unify context) y ys
