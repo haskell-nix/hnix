@@ -77,19 +77,19 @@ instance (Show v, Typeable v) => Exception (EAFindPathByFile v)
     <> "but received: '" <> show s <> "'."
 
 data EAFetchTarball a
-  = ENoUrlAttr
-  | ENorUriNorSet a
-  | ENorUriNorString a
+  = EFetchTarballNoUrlAttr
+  | EFetchTarballNorUriNorSet a
+  | EFetchTarballNorUriNorString a
   deriving Show
 
 instance (Show v, Typeable v) => Exception (EAFetchTarball v)
  where
-  displayException ENoUrlAttr
+  displayException EFetchTarballNoUrlAttr
     = "builtins.fetchTarball: Missing url attribute."
-  displayException (ENorUriNorSet v)
+  displayException (EFetchTarballNorUriNorSet v)
     = "builtins.fetchTarball: Expected URI or set, received: '"
     <> show v <> "'."
-  displayException (ENorUriNorString v)
+  displayException (EFetchTarballNorUriNorString v)
     = "builtins.fetchTarball: Expected URI or string, received: '"
     <> show v <> "'."
 
@@ -215,16 +215,16 @@ fetchTarball
 fetchTarball = flip demand $ \case
   NVSet s _ -> case M.lookup "url" s of
     Nothing ->
-      throwError (ENoUrlAttr :: EAFetchTarball String)
+      throwError (EFetchTarballNoUrlAttr :: EAFetchTarball String)
     Just url -> demand url $ go (M.lookup "sha256" s)
   v@NVStr{} -> go Nothing v
   v ->
-    throwError $ ErrorCall $ displayException $ ENorUriNorSet v
+    throwError $ EFetchTarballNorUriNorSet v
  where
   go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
   go msha = \case
     NVStr ns -> fetch (hackyStringIgnoreContext ns) msha
-    v -> throwError $ ErrorCall $ displayException $ ENorUriNorString v
+    v -> throwError $ EFetchTarballNorUriNorString v
 
 {- jww (2018-04-11): This should be written using pipes in another module
     fetch :: Text -> Maybe (NThunk m) -> m (NValue t f m)
