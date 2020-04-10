@@ -435,8 +435,7 @@ buildArgument params arg = do
       | isVariadic
       -> Nothing
       | otherwise
-      -> Just $ const $ evalError @v $ ErrorCall
-        $ displayException $ EBuildArgumentUnexpectedParameter k
+      -> Just $ const $ evalError @v $ EBuildArgumentUnexpectedParameter k
     These x _ -> Just (const (pure x))
 
 addSourcePositions
