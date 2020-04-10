@@ -498,8 +498,7 @@ lintApp context fun arg = unpackSymbolic fun >>= \case
           $ displayException ELintAppNotImplementedNManyNotSet
       TBuiltin _ _f -> throwError $ ErrorCall
         $ displayException ELintAppNotImplementedBuiltin
-      TSet _m       -> throwError $ ErrorCall
-        $ displayException ELintAppNotImplementedSet
+      TSet _m       -> throwError ELintAppNotImplementedSet
       _x            -> throwError ELintAppCallNonFunction
 
     y <- everyPossible
