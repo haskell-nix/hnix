@@ -941,11 +941,11 @@ thunkStr s = nvStr (hackyMakeNixStringWithoutContext (decodeUtf8 s))
 substring :: forall e t f m. MonadNix e t f m
   => Int -> Int -> NixString -> Prim m NixString
 -- 2019-03-17: NOTE: negative values of 'len' are OK
-substring start len str = Prim $ if start < 0
-  then
-    throwError
-    $  ErrorCall $ displayException $ ESubStringNegativeStartPosition start
-  else pure $ principledModifyNixContents (Text.take len . Text.drop start) str
+substring start len str = Prim
+  $ if start < 0
+    then
+      throwError $ ESubStringNegativeStartPosition start
+    else pure $ principledModifyNixContents (Text.take len . Text.drop start) str
 
 attrNames
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
