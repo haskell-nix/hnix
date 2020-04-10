@@ -408,8 +408,7 @@ execUnaryOp scope span op arg = do
       _ ->
         throwError $ EExecUnaryOpUnsupportedType op
     x ->
-      throwError $ ErrorCall
-        $ displayException $ EExecUnaryOpEvaluatedToNotAtomicType $ show x
+      throwError $ EExecUnaryOpEvaluatedToNotAtomicType $ show x
  where
   unaryOp = pure . nvConstantP (Provenance scope (NUnary_ span op (Just arg)))
 
