@@ -247,8 +247,7 @@ wrapExprLoc span x = Fix (Fix (NSym_ span "<?>") <$ x)
 
 instance MonadNix e t f m => MonadEval (NValue t f m) m where
   freeVariable var =
-    nverr @e @t @f $ ErrorCall
-      $ displayException
+    nverr @e @t @f
       (EMonadEvalUndefinedVar (Text.unpack var) :: EAMonadEval String ())
 
   synHole name = do
