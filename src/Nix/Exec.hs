@@ -485,8 +485,7 @@ execBinaryOpForced scope span op lval rval = case op of
         <$> coerceToString callFunc CopyToStore CoerceStringy rs
     (NVPath ls, NVStr rs) -> case principledGetStringNoContext rs of
       Just rs2 -> nvPathP prov <$> makeAbsolutePath @t @f (ls `mappend` (Text.unpack rs2))
-      Nothing -> throwError $ ErrorCall
-        $ displayException
+      Nothing -> throwError
         (EExecBinaryOpForcedNPlusStringToPath :: EAExecBinaryOpForced () () ())
     (NVPath ls, NVPath rs) -> nvPathP prov <$> makeAbsolutePath @t @f (ls ++ rs)
 
