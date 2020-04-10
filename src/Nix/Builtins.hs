@@ -1155,9 +1155,7 @@ genericClosure = fromValue @(AttrSet (NValue t f m)) >=> \s ->
     (Nothing, Just _) ->
       throwError EGenericClosureNoAttrStartSet
     (Just _, Nothing) ->
-      throwError
-        $ ErrorCall
-        $ displayException EGenericClosureNoAttrOperator
+      throwError EGenericClosureNoAttrOperator
     (Just startSet, Just operator) ->
       demand startSet $ fromValue @[NValue t f m] >=> \ss ->
         demand operator $ \op -> toValue @[NValue t f m] =<< snd <$> go op ss S.empty
