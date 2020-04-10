@@ -260,8 +260,6 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
 
   attrMissing ks Nothing =
     evalError @(NValue t f m)
-      $ ErrorCall
-      $ displayException
       (EMonadEvalUnknownAttrInherit
         (intercalate "." (map Text.unpack (NE.toList ks))) :: EAMonadEval String ())
 
