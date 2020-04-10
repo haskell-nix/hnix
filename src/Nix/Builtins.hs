@@ -1151,9 +1151,7 @@ genericClosure
 genericClosure = fromValue @(AttrSet (NValue t f m)) >=> \s ->
   case (M.lookup "startSet" s, M.lookup "operator" s) of
     (Nothing, Nothing) ->
-      throwError
-        $ ErrorCall
-        $ displayException EGenericClosureNoAttrsStartSetNOperator
+      throwError EGenericClosureNoAttrsStartSetNOperator
     (Nothing, Just _) ->
       throwError
         $ ErrorCall
