@@ -1518,8 +1518,7 @@ findFile_ aset filePath = demand aset $ \aset' -> demand filePath $ \filePath' -
       pure $ nvPath mres
     (NVList _, y) -> throwError
       $ ErrorCall $ displayException $ EFindFile_NotString y
-    (x, NVStr _)  -> throwError
-      $ ErrorCall $ displayException $ EFindFile_NotList x
+    (x, NVStr _)  -> throwError $ EFindFile_NotList x
     (x, y)        -> throwError $ EFindFile_InvalidTypes (x, y)
 
 data FileType
