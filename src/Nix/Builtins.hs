@@ -763,7 +763,7 @@ foldl'_ f z xs = fromValue @[NValue t f m] xs >>= foldM go z
 
 head_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 head_ = fromValue >=> \case
-  []    -> throwError $ ErrorCall $ displayException EHead_EmptyList
+  []    -> throwError EHead_EmptyList
   h : _ -> pure h
 
 tail_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
