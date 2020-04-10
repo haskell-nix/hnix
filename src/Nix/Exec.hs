@@ -389,8 +389,7 @@ callFunc fun arg = demand fun $ \fun' -> do
     s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
       traceM "callFunc:__functor"
       demand f $ (`callFunc` s) >=> (`callFunc` arg)
-    x -> throwError $ ErrorCall
-      $ displayException $ ECallFuncCalledNotFunction x
+    x -> throwError $ ECallFuncCalledNotFunction x
 
 execUnaryOp
   :: (Framed e m, MonadCited t f m, Show t)
