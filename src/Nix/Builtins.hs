@@ -1389,9 +1389,7 @@ lessThan
   -> NValue t f m
   -> m (NValue t f m)
 lessThan ta tb = demand ta $ \va -> demand tb $ \vb -> do
-  let badType =
-        throwError
-          $ ErrorCall $ displayException $ ELessThanUnsupportedArgs va vb
+  let badType = throwError $ ELessThanUnsupportedArgs va vb
   nvConstant . NBool <$> case (va, vb) of
     (NVConstant ca, NVConstant cb) -> case (ca, cb) of
       (NInt   a, NInt b  ) -> pure $ a < b
