@@ -545,8 +545,7 @@ execBinaryOpForced scope span op lval rval = case op of
   hackyUnsupportedTypesForCompare = throwError
     $ EExecBinaryOpForcedUnsupportedTypes op lval rval
 
-  alreadyHandled = throwError $ ErrorCall
-    $ displayException
+  alreadyHandled = throwError
     (EExecBinaryOpForcedAlreadyHandled op :: EAExecBinaryOpForced NBinaryOp () ())
 
 -- This function is here, rather than in 'Nix.String', because of the need to
