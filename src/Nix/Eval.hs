@@ -373,8 +373,7 @@ evalGetterKeyName
 evalGetterKeyName = evalSetterKeyName >=> \case
   Just k -> pure k
   Nothing ->
-    evalError @v $ ErrorCall
-      $ displayException EComponentValueIsNullExpectedString
+    evalError @v EComponentValueIsNullExpectedString
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *binding* a value
