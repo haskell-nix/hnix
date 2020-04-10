@@ -1189,9 +1189,7 @@ replaceStrings tfrom tto ts = fromValue (Deeper tfrom) >>= \(nsFrom :: [NixStrin
     fromValue ts >>= \(ns :: NixString) -> do
       let from = map principledStringIgnoreContext nsFrom
       when (length nsFrom /= length nsTo)
-        $ throwError
-        $ ErrorCall
-        $ displayException EReplaceStringsDiffLenArgs
+        $ throwError EReplaceStringsDiffLenArgs
       let
         lookupPrefix s = do
           (prefix, replacement) <- find ((`Text.isPrefixOf` s) . fst)
