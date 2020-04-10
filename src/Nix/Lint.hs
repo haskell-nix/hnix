@@ -285,7 +285,7 @@ merge context = go
     (TClosure{}, TClosure{}) ->
       throwError EMergeClosures
     (TBuiltin _ _, TBuiltin _ _) ->
-      throwError $ ErrorCall $ displayException EMergeBuiltins
+      throwError EMergeBuiltins
     _ | compareTypes x y == LT -> go xs (y : ys)
       | compareTypes x y == GT -> go (x : xs) ys
       | otherwise              ->
