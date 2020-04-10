@@ -1284,8 +1284,7 @@ pathExists_ path = demand path $ \case
   NVPath p  -> toValue =<< pathExists p
   NVStr  ns -> toValue =<< pathExists (Text.unpack (hackyStringIgnoreContext ns))
   v ->
-    throwError
-      $ ErrorCall $ displayException $ EPathExists_NotPath v
+    throwError $ EPathExists_NotPath v
 
 hasKind
   :: forall a e t f m
