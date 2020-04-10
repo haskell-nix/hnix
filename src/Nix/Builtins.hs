@@ -614,8 +614,7 @@ foldNixPath f z = do
   go (x, ty) rest = case Text.splitOn "=" x of
     [p] -> f (Text.unpack p) Nothing ty rest
     [n, p] -> f (Text.unpack p) (Just (Text.unpack n)) ty rest
-    _ -> throwError
-      $ ErrorCall $ displayException $ EFoldNixPathUnexpectedEntry x
+    _ -> throwError $ EFoldNixPathUnexpectedEntry x
 
 nixPath :: MonadNix e t f m => m (NValue t f m)
 nixPath = fmap nvList $ flip foldNixPath [] $ \p mn ty rest ->
