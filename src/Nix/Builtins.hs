@@ -1474,9 +1474,7 @@ hashString nsAlgo ns = Prim $ do
 #else
           decodeUtf8 $ Base16.encode $ SHA512.hash $ encodeUtf8 s
 #endif
-    _ ->
-      throwError
-        $ ErrorCall $ displayException $ EHashStringUnsupportedValue algo
+    _ -> throwError $ EHashStringUnsupportedValue algo
 
 placeHolder :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
