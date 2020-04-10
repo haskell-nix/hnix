@@ -1693,7 +1693,7 @@ getContext x = demand x $ \case
     valued :: M.HashMap Text (NValue t f m) <- sequenceA $ M.map toValue context
     pure $ flip nvSet M.empty $ valued
   x ->
-    throwError $ ErrorCall $ displayException $ EGetContextUnsupportedType x
+    throwError $ EGetContextUnsupportedType x
 
 appendContext
   :: forall e t f m
