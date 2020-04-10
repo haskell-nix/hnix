@@ -332,7 +332,7 @@ unify context (SV x) (SV y) = do
       m <- merge context xs ys
       if null m
         then
-          throwError $ ErrorCall $ displayException EUnifyNotDone
+          throwError EUnifyNotDone
         else do
           writeVar x (NMany m)
           writeVar y (NMany m)
