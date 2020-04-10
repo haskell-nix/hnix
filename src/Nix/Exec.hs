@@ -265,8 +265,6 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
 
   attrMissing ks (Just s) =
     evalError @(NValue t f m)
-      $ ErrorCall
-      $ displayException
       $ EMonadEvalAttrNotFound
       (intercalate "." (map Text.unpack (NE.toList ks))) $ show $ prettyNValue s
 
