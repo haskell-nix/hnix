@@ -1716,9 +1716,7 @@ appendContext x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
             NVList vs ->
               forM vs $ fmap principledStringIgnoreContext . fromValue
             x ->
-              throwError
-                $ ErrorCall
-                $ displayException $ EAppendContextInvalidContextOutTypes x
+              throwError $ EAppendContextInvalidContextOutTypes x
         return $ NixLikeContextValue path allOutputs outputs
       x ->
         throwError
