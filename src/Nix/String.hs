@@ -205,7 +205,7 @@ principledMakeNixStringWithSingletonContext s c = NixString s (S.singleton c)
 
 -- | Create a NixString from a Text and context
 principledMakeNixString :: Text -> S.HashSet StringContext -> NixString
-principledMakeNixString s c = NixString s c
+principledMakeNixString = NixString
 
 -- | A monad for accumulating string context while producing a result string.
 newtype WithStringContextT m a = WithStringContextT (WriterT (S.HashSet StringContext) m a)
