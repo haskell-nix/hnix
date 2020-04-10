@@ -283,7 +283,7 @@ merge context = go
         (return <$> r)
       if M.null m then go xs ys else (TSet (Just m) :) <$> go xs ys
     (TClosure{}, TClosure{}) ->
-      throwError $ ErrorCall $ displayException EMergeClosures
+      throwError EMergeClosures
     (TBuiltin _ _, TBuiltin _ _) ->
       throwError $ ErrorCall $ displayException EMergeBuiltins
     _ | compareTypes x y == LT -> go xs (y : ys)
