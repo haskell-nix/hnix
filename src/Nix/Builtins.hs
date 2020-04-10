@@ -1729,8 +1729,7 @@ appendContext x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
       $ toNixLikeContext
       $ principledGetContext ns
   (x, y) ->
-    throwError
-      $ ErrorCall $ displayException $ EAppendContextInvalidTypes (x, y)
+    throwError $ EAppendContextInvalidTypes (x, y)
 
 newtype Prim m a = Prim { runPrim :: m a }
 
