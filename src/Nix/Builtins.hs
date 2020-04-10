@@ -1499,8 +1499,7 @@ absolutePathFromValue = \case
       $ throwError $ EAbsolutePathFromValueNotAbsPath path
     pure path
   NVPath path -> pure path
-  v           -> throwError
-    $ ErrorCall $ displayException $ EAbsolutePathFromValueNotPath v
+  v           -> throwError $ EAbsolutePathFromValueNotPath v
 
 readFile_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 readFile_ path = demand path $
