@@ -1059,7 +1059,7 @@ dirOf x = demand x $ \case
     (principledModifyNixContents (Text.pack . takeDirectory . Text.unpack) ns)
   NVPath path -> pure $ nvPath $ takeDirectory path
   v ->
-    throwError $ ErrorCall $ displayException $ EDirOfWrongArg v
+    throwError $ EDirOfWrongArg v
 
 -- jww (2018-04-28): This should only be a string argument, and not coerced?
 unsafeDiscardStringContext
