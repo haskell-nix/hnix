@@ -1153,9 +1153,7 @@ genericClosure = fromValue @(AttrSet (NValue t f m)) >=> \s ->
     (Nothing, Nothing) ->
       throwError EGenericClosureNoAttrsStartSetNOperator
     (Nothing, Just _) ->
-      throwError
-        $ ErrorCall
-        $ displayException EGenericClosureNoAttrStartSet
+      throwError EGenericClosureNoAttrStartSet
     (Just _, Nothing) ->
       throwError
         $ ErrorCall
