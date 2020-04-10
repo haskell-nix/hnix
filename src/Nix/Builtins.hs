@@ -1638,8 +1638,7 @@ fetchurl v = demand v $ \case
   NVSet s _ -> attrsetGet "url" s >>= demand ?? (go (M.lookup "sha256" s))
   v@NVStr{} -> go Nothing v
   v ->
-    throwError
-    $ ErrorCall $ displayException $ EFetchrulNotURIOrSet v
+    throwError $ EFetchrulNotURIOrSet v
  where
   go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
   go _msha = \case
