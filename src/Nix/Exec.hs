@@ -378,8 +378,7 @@ callFunc
   -> m (NValue t f m)
 callFunc fun arg = demand fun $ \fun' -> do
   frames :: Frames <- asks (view hasLens)
-  when (length frames > 2000) $ throwError $ ErrorCall
-    $ displayException $ ECallFuncCallStackExausted (undefined :: String)
+  when (length frames > 2000) $ throwError $ ECallFuncCallStackExausted (undefined :: String)
   case fun' of
     NVClosure params f -> do
       traceM $ "callFunc:NVFunction taking " ++ show params
