@@ -768,7 +768,7 @@ head_ = fromValue >=> \case
 
 tail_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 tail_ = fromValue >=> \case
-  []    -> throwError $ ErrorCall $ displayException ETail_EmptyList
+  []    -> throwError ETail_EmptyList
   _ : t -> return $ nvList t
 
 data VersionComponent
