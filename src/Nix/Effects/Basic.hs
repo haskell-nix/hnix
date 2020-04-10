@@ -62,8 +62,9 @@ instance (Show v, Typeable v) => Exception (EADefaultMakeAbsolutePath v)
     =  "When resolving relative path, __cur_file is in scope, "
     <> "but is not a path; it is: '" <> show v <>"'."
 
-newtype EAFindPathByFile a
+data EAFindPathByFile a
   = EFindPathByFileNotInNixPath a
+  | EFindPathByWrongNixPathFormat a
   deriving Show
 
 instance (Show v, Typeable v) => Exception (EAFindPathByFile v)
@@ -71,14 +72,7 @@ instance (Show v, Typeable v) => Exception (EAFindPathByFile v)
   displayException (EFindPathByFileNotInNixPath name)
     =  "File '" <> show name <> "' was not found in the Nix search path "
     <> "(add it using $NIX_PATH or -I)."
-
-newtype EANixPath a
-  = EWrongNixPathFormat a
-  deriving Show
-
-instance (Show v, Typeable v) => Exception (EANixPath v)
- where
-  displayException (EWrongNixPathFormat s)
+  displayException (EFindPathByWrongNixPathFormat s)
     =  "__nixPath must be a list of attr sets with 'path' elements, "
     <> "but received: '" <> show s <> "'."
 
@@ -214,7 +208,7 @@ findPathBy finder l name = do
     Nothing -> case M.lookup "uri" s of
       Just ut -> defer $ fetchTarball ut
       Nothing ->
-        throwError $ ErrorCall $ displayException $ EWrongNixPathFormat s
+        throwError $ EFindPathByWrongNixPathFormat s
 
 fetchTarball
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
