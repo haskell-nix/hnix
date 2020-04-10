@@ -1650,8 +1650,7 @@ fetchurl v = demand v $ \case
 
   noContextAttrs ns = case principledGetStringNoContext ns of
     Nothing ->
-      throwError
-      $ ErrorCall $ displayException $ EFetchrulUnsupportedArg ()
+      throwError $ EFetchrulUnsupportedArg ()
     Just t -> pure t
 
 partition_
