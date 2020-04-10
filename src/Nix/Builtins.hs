@@ -1257,8 +1257,7 @@ functionArgs fun = demand fun $ \case
       Param name     -> M.singleton name False
       ParamSet s _ _ -> isJust <$> M.fromList s
   v ->
-    throwError
-      $ ErrorCall $ displayException $ EFunctionArgsArgNotFun v
+    throwError $ EFunctionArgsArgNotFun v
 
 toFile
   :: MonadNix e t f m
