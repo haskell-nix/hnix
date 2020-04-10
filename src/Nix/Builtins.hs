@@ -1553,9 +1553,7 @@ fromJSON
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 fromJSON arg = demand arg $ fromValue >=> fromStringNoContext >=> \encoded ->
   case A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded of
-    Left jsonError ->
-      throwError
-      $ ErrorCall $ displayException $ EFromJSON jsonError
+    Left jsonError -> throwError $ EFromJSON jsonError
     Right v -> jsonToNValue v
  where
   jsonToNValue = \case
