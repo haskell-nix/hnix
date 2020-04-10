@@ -411,8 +411,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
       NMany [TSet Nothing] ->
         error $ displayException
         $ EMonadEvalNotImplemented u
-      _ -> throwError $ ErrorCall $ displayException
-        $ EMonadEvalScopeNotASetWithStatement u
+      _ -> throwError $ EMonadEvalScopeNotASetWithStatement u
    where
     u = undefined :: NE.NonEmpty Text -- Stub parameter for exception constructor
 
