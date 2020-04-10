@@ -181,7 +181,7 @@ findPathBy finder l name = do
   mpath <- foldM go Nothing l
   case mpath of
     Nothing ->
-      throwError $ ErrorCall $ displayException $ EFileNotInNixPath name
+      throwError $ EFileNotInNixPath name
     Just path -> return path
  where
   go :: Maybe FilePath -> NValue t f m -> m (Maybe FilePath)
