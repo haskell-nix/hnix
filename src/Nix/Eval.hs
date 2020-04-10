@@ -219,7 +219,7 @@ attrSetAlter
   -> m v
   -> m (AttrSet (m v), AttrSet SourcePos)
 attrSetAlter [] _ _ _ _ =
-  evalError @v $ ErrorCall $ displayException EAttrSetAlterInvalidSelector
+  evalError @v $ EAttrSetAlterInvalidSelector
 
 attrSetAlter (k : ks) pos m p val = case M.lookup k m of
   Nothing | null ks   -> go
