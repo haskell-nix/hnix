@@ -678,8 +678,7 @@ unsafeGetAttrPos x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
       Nothing    -> pure $ nvConstant NNull
       Just delta -> toValue delta
   (x, y) ->
-    throwError
-      $  ErrorCall $ displayException $ EUnsafeGetAttrPosInvalidTypes x y
+    throwError $ EUnsafeGetAttrPosInvalidTypes x y
 
 -- This function is a bit special in that it doesn't care about the contents
 -- of the list.
