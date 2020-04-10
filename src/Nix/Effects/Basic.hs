@@ -121,7 +121,7 @@ defaultMakeAbsolutePath origPath = do
             -- TODO: 2019-08-12: John Ericson (Ericson2314):
             -- You don't want to call displayException here, but where the m is
             -- eliminated.
-            v -> throwError $ ErrorCall $ displayException $ ECurFileIsntPath v
+            v -> throwError $ ECurFileIsntPath v
       pure $ cwd <///> origPathExpanded
   removeDotDotIndirections <$> canonicalizePath absPath
 
