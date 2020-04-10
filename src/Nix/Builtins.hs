@@ -651,7 +651,7 @@ attrsetGet :: MonadNix e t f m => Text -> AttrSet (NValue t f m) -> m (NValue t 
 attrsetGet k s = case M.lookup k s of
   Just v -> pure v
   Nothing ->
-    throwError $ ErrorCall $ displayException $ EAttrsetGetAttrRequired k
+    throwError $ EAttrsetGetAttrRequired k
 
 hasContext :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 hasContext = toValue . stringHasContext <=< fromValue
