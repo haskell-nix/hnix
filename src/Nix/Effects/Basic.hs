@@ -215,7 +215,7 @@ fetchTarball
 fetchTarball = flip demand $ \case
   NVSet s _ -> case M.lookup "url" s of
     Nothing ->
-      throwError $ ErrorCall $ displayException (ENoUrlAttr :: EAFetchTarball String)
+      throwError (ENoUrlAttr :: EAFetchTarball String)
     Just url -> demand url $ go (M.lookup "sha256" s)
   v@NVStr{} -> go Nothing v
   v ->
