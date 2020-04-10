@@ -484,7 +484,7 @@ lintApp
   -> m (HashMap VarName (Symbolic m), Symbolic m)
 lintApp context fun arg = unpackSymbolic fun >>= \case
   NAny ->
-    throwError $ ErrorCall $ displayException ELintAppNotFunc
+    throwError ELintAppNotFunc
   NMany xs -> do
     (args, ys) <- fmap unzip $ forM xs $ \case
       TClosure _params -> arg >>= unpackSymbolic >>= \case
