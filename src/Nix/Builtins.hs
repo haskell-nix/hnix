@@ -1646,8 +1646,7 @@ fetchurl v = demand v $ \case
       Left  e -> throwError e
       Right p -> toValue p
     v ->
-      throwError
-      $ ErrorCall $ displayException $ EFetchrulNotURIOrString v
+      throwError $ EFetchrulNotURIOrString v
 
   noContextAttrs ns = case principledGetStringNoContext ns of
     Nothing ->
