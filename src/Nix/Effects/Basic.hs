@@ -52,17 +52,23 @@ import           GHC.DataSize
 #endif
 #endif
 
-data EAFile a
-  = ECurFileIsntPath a
-  | EFileNotInNixPath a
+newtype EADefaultMakeAbsolutePath a
+  = EDefaultMakeAbsolutePathCurFileIsntPath a
   deriving Show
 
-instance (Show v, Typeable v) => Exception (EAFile v)
+instance (Show v, Typeable v) => Exception (EADefaultMakeAbsolutePath v)
  where
-  displayException (ECurFileIsntPath v)
+  displayException (EDefaultMakeAbsolutePathCurFileIsntPath v)
     =  "When resolving relative path, __cur_file is in scope, "
     <> "but is not a path; it is: '" <> show v <>"'."
-  displayException (EFileNotInNixPath name)
+
+newtype EAFindPathByFile a
+  = EFindPathByFileNotInNixPath a
+  deriving Show
+
+instance (Show v, Typeable v) => Exception (EAFindPathByFile v)
+ where
+  displayException (EFindPathByFileNotInNixPath name)
     =  "File '" <> show name <> "' was not found in the Nix search path "
     <> "(add it using $NIX_PATH or -I)."
 
@@ -121,7 +127,7 @@ defaultMakeAbsolutePath origPath = do
             -- TODO: 2019-08-12: John Ericson (Ericson2314):
             -- You don't want to call displayException here, but where the m is
             -- eliminated.
-            v -> throwError $ ECurFileIsntPath v
+            v -> throwError $ EDefaultMakeAbsolutePathCurFileIsntPath v
       pure $ cwd <///> origPathExpanded
   removeDotDotIndirections <$> canonicalizePath absPath
 
@@ -181,7 +187,7 @@ findPathBy finder l name = do
   mpath <- foldM go Nothing l
   case mpath of
     Nothing ->
-      throwError $ EFileNotInNixPath name
+      throwError $ EFindPathByFileNotInNixPath name
     Just path -> return path
  where
   go :: Maybe FilePath -> NValue t f m -> m (Maybe FilePath)
