@@ -538,8 +538,6 @@ execBinaryOpForced scope span op lval rval = case op of
 
   unsupportedTypes op lval rval
     = throwError
-    $ ErrorCall
-    $ displayException
     $ EExecBinaryOpForcedUnsupportedTypes op lval rval
 
   -- FIXME: Special function for `compare`,
