@@ -86,7 +86,7 @@ coerceToString call ctsm clevel = go
 
     NVSet s _ | Just p <- M.lookup "outPath" s -> demand p go
 
-    v -> throwError $ ErrorCall $ displayException $ ECoerceUnexpectedArgument v
+    v -> throwError $ ECoerceUnexpectedArgument v
 
   nixStringUnwords =
     principledIntercalateNixString (principledMakeNixStringWithoutContext " ")
