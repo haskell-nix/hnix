@@ -494,8 +494,7 @@ lintApp context fun arg = unpackSymbolic fun >>= \case
         NMany [TSet (Just _)] ->
           error $ displayException ELintAppNotImplemented
 
-        NMany _ -> throwError $ ErrorCall
-          $ displayException ELintAppNotImplementedNManyNotSet
+        NMany _ -> throwError ELintAppNotImplementedNManyNotSet
       TBuiltin _ _f -> throwError ELintAppNotImplementedBuiltin
       TSet _m       -> throwError ELintAppNotImplementedSet
       _x            -> throwError ELintAppCallNonFunction
