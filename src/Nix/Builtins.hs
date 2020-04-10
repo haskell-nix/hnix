@@ -1496,8 +1496,7 @@ absolutePathFromValue = \case
   NVStr ns -> do
     let path = Text.unpack $ hackyStringIgnoreContext ns
     unless (isAbsolute path)
-      $ throwError
-      $ ErrorCall $ displayException $ EAbsolutePathFromValueNotAbsPath path
+      $ throwError $ EAbsolutePathFromValueNotAbsPath path
     pure path
   NVPath path -> pure path
   v           -> throwError
