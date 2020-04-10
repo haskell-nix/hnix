@@ -502,9 +502,7 @@ execBinaryOpForced scope span op lval rval = case op of
   NAnd  -> alreadyHandled
   NOr   -> alreadyHandled
   NImpl -> alreadyHandled
-  NApp  -> throwError $ ErrorCall
-          $ displayException
-          (EExecBinaryOpForcedNApp :: EAExecBinaryOpForced () () ())
+  NApp  -> throwError (EExecBinaryOpForcedNApp :: EAExecBinaryOpForced () () ())
 
  where
   prov :: Provenance m (NValue t f m)
