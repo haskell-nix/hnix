@@ -1719,9 +1719,7 @@ appendContext x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
               throwError $ EAppendContextInvalidContextOutTypes x
         return $ NixLikeContextValue path allOutputs outputs
       x ->
-        throwError
-          $ ErrorCall
-          $ displayException $ EAppendContextInvalidContextValTypes x
+        throwError $ EAppendContextInvalidContextValTypes x
     toValue
       $ principledMakeNixString (principledStringIgnoreContext ns)
       $ fromNixLikeContext
