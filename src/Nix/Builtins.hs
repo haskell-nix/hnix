@@ -1106,10 +1106,7 @@ elemAt_ xs n = fromValue n >>= \n' -> fromValue xs >>= \xs' ->
   case elemAt xs' n' of
     Just a -> pure a
     Nothing ->
-      throwError
-        $ ErrorCall
-        $ displayException
-        $ EElemAt_IndexOutOfBound n' xs'
+      throwError $ EElemAt_IndexOutOfBound n' xs'
 
 genList
   :: forall e t f m
