@@ -148,7 +148,7 @@ data ExecFrame t f m = Assertion SrcSpan (NValue t f m)
 
 instance MonadDataErrorContext t f m => Exception (ExecFrame t f m)
 
-data EAMonadEval a b
+data EMonadEval a b
   = EMonadEvalUndefinedVar a
   | EMonadEvalUnknownAttrInherit a
   | EMonadEvalAttrNotFound a b
@@ -156,7 +156,7 @@ data EAMonadEval a b
   deriving Show
 
 instance (Show a, Typeable a, Show b, Typeable b)
-  => Exception (EAMonadEval a b)
+  => Exception (EMonadEval a b)
  where
   displayException (EMonadEvalUndefinedVar var)
     = "Undefined variable: '"
@@ -173,24 +173,24 @@ instance (Show a, Typeable a, Show b, Typeable b)
   displayException (EMonadEvalStringAssembleFail)
     = "Failed to assemble string"
 
-data EACallFunc a
+data ECallFunc a
   = ECallFuncCallStackExausted a
   | ECallFuncCalledNotFunction a
   deriving Show
 
-instance (Show a, Typeable a) => Exception (EACallFunc a)
+instance (Show a, Typeable a) => Exception (ECallFunc a)
  where
   displayException (ECallFuncCallStackExausted _)
     = "Function call stack exhausted"
   displayException (ECallFuncCalledNotFunction x)
     = "Attempt to call non-function: " <> show x
 
-data EAExecUnaryOp a
+data EExecUnaryOp a
   = EExecUnaryOpUnsupportedType a
   | EExecUnaryOpEvaluatedToNotAtomicType a
   deriving Show
 
-instance (Show a, Typeable a) => Exception (EAExecUnaryOp a)
+instance (Show a, Typeable a) => Exception (EExecUnaryOp a)
  where
   displayException (EExecUnaryOpUnsupportedType op)
     = "unsupported argument type for unary operator "
@@ -199,15 +199,15 @@ instance (Show a, Typeable a) => Exception (EAExecUnaryOp a)
     = "argument to unary operator must evaluate to an atomic type: "
     <> show x
 
-data EAFromStringNoContext
-  = EAFromStringNoContext
+data EFromStringNoContext
+  = EFromStringNoContext
   deriving Show
 
-instance Exception EAFromStringNoContext
+instance Exception EFromStringNoContext
  where
-  displayException EAFromStringNoContext = "expected string with no context"
+  displayException EFromStringNoContext = "expected string with no context"
 
-data EAExecBinaryOpForced o l r
+data EExecBinaryOpForced o l r
   = EExecBinaryOpForcedNPlusStringToPath
   | EExecBinaryOpForcedUnsupportedTypes o l r
   | EExecBinaryOpForcedAlreadyHandled o
@@ -215,7 +215,7 @@ data EAExecBinaryOpForced o l r
   deriving Show
 
 instance (Show op, Typeable op, Show lval, Typeable lval, Show rval, Typeable rval)
-  => Exception (EAExecBinaryOpForced op lval rval)
+  => Exception (EExecBinaryOpForced op lval rval)
  where
   displayException EExecBinaryOpForcedNPlusStringToPath
     -- Upstream case:
@@ -248,7 +248,7 @@ wrapExprLoc span x = Fix (Fix (NSym_ span "<?>") <$ x)
 instance MonadNix e t f m => MonadEval (NValue t f m) m where
   freeVariable var =
     nverr @e @t @f
-      (EMonadEvalUndefinedVar (Text.unpack var) :: EAMonadEval String ())
+      (EMonadEvalUndefinedVar (Text.unpack var) :: EMonadEval String ())
 
   synHole name = do
     span  <- currentPos
@@ -261,7 +261,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   attrMissing ks Nothing =
     evalError @(NValue t f m)
       (EMonadEvalUnknownAttrInherit
-        (intercalate "." (map Text.unpack (NE.toList ks))) :: EAMonadEval String ())
+        (intercalate "." (map Text.unpack (NE.toList ks))) :: EMonadEval String ())
 
   attrMissing ks (Just s) =
     evalError @(NValue t f m)
@@ -297,7 +297,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
           (NStr_ span (DoubleQuoted [Plain (hackyStringIgnoreContext ns)]))
         )
         ns
-    Nothing -> nverr (EMonadEvalStringAssembleFail :: EAMonadEval () ())
+    Nothing -> nverr (EMonadEvalStringAssembleFail :: EMonadEval () ())
 
   evalLiteralPath p = do
     scope <- currentScopes
@@ -486,7 +486,7 @@ execBinaryOpForced scope span op lval rval = case op of
     (NVPath ls, NVStr rs) -> case principledGetStringNoContext rs of
       Just rs2 -> nvPathP prov <$> makeAbsolutePath @t @f (ls `mappend` (Text.unpack rs2))
       Nothing -> throwError
-        (EExecBinaryOpForcedNPlusStringToPath :: EAExecBinaryOpForced () () ())
+        (EExecBinaryOpForcedNPlusStringToPath :: EExecBinaryOpForced () () ())
     (NVPath ls, NVPath rs) -> nvPathP prov <$> makeAbsolutePath @t @f (ls ++ rs)
 
     (ls@NVSet{}, NVStr rs) -> 
@@ -502,7 +502,7 @@ execBinaryOpForced scope span op lval rval = case op of
   NAnd  -> alreadyHandled
   NOr   -> alreadyHandled
   NImpl -> alreadyHandled
-  NApp  -> throwError (EExecBinaryOpForcedNApp :: EAExecBinaryOpForced () () ())
+  NApp  -> throwError (EExecBinaryOpForcedNApp :: EExecBinaryOpForced () () ())
 
  where
   prov :: Provenance m (NValue t f m)
@@ -546,14 +546,14 @@ execBinaryOpForced scope span op lval rval = case op of
     $ EExecBinaryOpForcedUnsupportedTypes op lval rval
 
   alreadyHandled = throwError
-    (EExecBinaryOpForcedAlreadyHandled op :: EAExecBinaryOpForced NBinaryOp () ())
+    (EExecBinaryOpForcedAlreadyHandled op :: EExecBinaryOpForced NBinaryOp () ())
 
 -- This function is here, rather than in 'Nix.String', because of the need to
 -- use 'throwError'.
 fromStringNoContext :: Framed e m => NixString -> m Text
 fromStringNoContext ns = case principledGetStringNoContext ns of
   Just str -> return str
-  Nothing  -> throwError EAFromStringNoContext
+  Nothing  -> throwError EFromStringNoContext
 
 addTracing
   :: (MonadNix e t f m, Has e Options, MonadReader Int n, Alternative n)

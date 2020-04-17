@@ -33,11 +33,11 @@ import           Text.Megaparsec.Pos
 import qualified Text.Show.Pretty as PS
 #endif
 
-newtype EAFrame a
+newtype EFrame a
   = EUnrecognizedFrame a
   deriving Show
 
-instance (Show a, Typeable a) => Exception (EAFrame a)
+instance (Show a, Typeable a) => Exception (EFrame a)
  where
   displayException (EUnrecognizedFrame f) = "Unrecognized frame: '" <> show f <> "'."
 

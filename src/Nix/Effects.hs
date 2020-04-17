@@ -132,14 +132,14 @@ instance MonadInstantiate IO where
    where
      u = undefined :: String
 
-data EAMonadExec a b
+data EMonadExec a b
   = EMonadExecMissingProgram a b
   | EMonadExecNoOutput a b
   | EMonadExecParsingOutput a b
   | EMonadExecFail a b
   deriving Show
 
-instance (Show a, Typeable a) => Exception (EAMonadExec a String)
+instance (Show a, Typeable a) => Exception (EMonadExec a String)
  where
   displayException (EMonadExecMissingProgram _ _)
     = "exec: missing program"
@@ -152,12 +152,12 @@ instance (Show a, Typeable a) => Exception (EAMonadExec a String)
     = "exec  failed: "
     <> show err <> ", " <> emsg
 
-data EAMonadInstantiate a b
+data EMonadInstantiate a b
   = EMonadInstantiateParsingOutput a b
   | EMonadInstantiateFail a b
   deriving Show
 
-instance (Show a, Typeable a) => Exception (EAMonadInstantiate a String)
+instance (Show a, Typeable a) => Exception (EMonadInstantiate a String)
  where
   displayException (EMonadInstantiateParsingOutput e _)
     = "Error parsing output of nix-instantiate: "
@@ -168,12 +168,12 @@ instance (Show a, Typeable a) => Exception (EAMonadInstantiate a String)
     <> ": "
     <> err
 
-data EAMonadHttp a b
+data EMonadHttp a b
   = EMonadHttpFetchFail a b
   | EMonadHttpStoreNotReady a b
   deriving Show
 
-instance (Show a, Typeable a) => Exception (EAMonadHttp String a)
+instance (Show a, Typeable a) => Exception (EMonadHttp String a)
  where
   displayException (EMonadHttpFetchFail urlstr status)
     = "fail, got "
@@ -184,11 +184,11 @@ instance (Show a, Typeable a) => Exception (EAMonadHttp String a)
     = "successful download, but hnix-store is not yet ready; url = "
     <> urlstr
 
-newtype EAMonadStore a
+newtype EMonadStore a
   = EMonadStoreAddPathFail a
   deriving Show
 
-instance (Show a, Typeable a) => Exception (EAMonadStore a)
+instance (Show a, Typeable a) => Exception (EMonadStore a)
  where
   displayException (EMonadStoreAddPathFail path)
     = "addPath: failed: nix-store --add "

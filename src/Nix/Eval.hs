@@ -106,30 +106,30 @@ data SynHoleInfo m v = SynHoleInfo
 
 instance (Typeable m, Typeable v) => Exception (SynHoleInfo m v)
 
-data EAAttrSetAlter
+data EAttrSetAlter
   = EAttrSetAlterInvalidSelector
   deriving Show
 
-instance Exception EAAttrSetAlter
+instance Exception EAttrSetAlter
  where
   displayException EAttrSetAlterInvalidSelector
     = "Invalid selector (no components)."
 
-data EAEvalGetterKeyName
+data EEvalGetterKeyName
   = EComponentValueIsNullExpectedString
   deriving Show
 
-instance Exception EAEvalGetterKeyName
+instance Exception EEvalGetterKeyName
  where
   displayException EComponentValueIsNullExpectedString
     = "value is null while a string was expected"
 
-data EABuildArgument a
+data EBuildArgument a
   = EBuildArgumentMissingValue a
   | EBuildArgumentUnexpectedParameter a
   deriving Show
 
-instance (Show a, Typeable a) => Exception (EABuildArgument a)
+instance (Show a, Typeable a) => Exception (EBuildArgument a)
  where
   displayException (EBuildArgumentMissingValue k)
     = "Missing value for parameter '" <> show k <> "'."

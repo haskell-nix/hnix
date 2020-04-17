@@ -129,13 +129,13 @@ type MonadLint e m
   , MonadThunkId m
   )
 
-data EAMerge
+data EMerge
   = EMergeClosures
   | EMergeBuiltins
   | EMergeImpossible
   deriving Show
 
-instance Exception EAMerge
+instance Exception EMerge
  where
   displayException EMergeClosures
     = "Do not know how to merge functions (closures)."
@@ -145,12 +145,12 @@ instance Exception EAMerge
     = "Got into the merge case that is in the code considered impossible "
     <> "to solve (which is most probably is)."
 
-data EAUnify
+data EUnify
   = EUnifyNotDone
   | EUnifyUnexpectedCase
   deriving Show
 
-instance Exception EAUnify
+instance Exception EUnify
  where
   displayException EUnifyNotDone
     = "Could not unify arguments."
@@ -161,14 +161,14 @@ instance Exception EAUnify
   displayException EUnifyUnexpectedCase
     = "The unexpected hath transpired! (No case for recieved arguments)"
 
-data EAMonadEval a
+data EMonadEval a
   = EMonadEvalAttrUnknownInherit a
   -- | MonadEvalAttrNotFound a b
   | EMonadEvalNotImplemented a
   | EMonadEvalScopeNotASetWithStatement a
   deriving Show
 
-instance Exception (EAMonadEval (NE.NonEmpty Text))
+instance Exception (EMonadEval (NE.NonEmpty Text))
  where
   displayException (EMonadEvalAttrUnknownInherit ks)
     = "Inheriting unknown attribute: "
@@ -183,7 +183,7 @@ instance Exception (EAMonadEval (NE.NonEmpty Text))
   displayException (EMonadEvalScopeNotASetWithStatement _)
     = "scope must be a set in with statement"
 
-data EALintApp
+data ELintApp
   = ELintAppNotFunc
   | ELintAppNotImplemented
   | ELintAppNotImplementedNManyNotSet
@@ -192,7 +192,7 @@ data EALintApp
   | ELintAppCallNonFunction
   deriving Show
 
-instance Exception EALintApp
+instance Exception ELintApp
  where
   displayException ELintAppNotFunc
     = "Cannot apply something that is not known to be a function."
@@ -207,11 +207,11 @@ instance Exception EALintApp
   displayException ELintAppCallNonFunction
     = "Attempt to call non-function."
 
-data EAMonadCatch
+data EMonadCatch
   = EMonadCatchCanNotCatchInLint
   deriving Show
 
-instance Exception EAMonadCatch
+instance Exception EMonadCatch
  where
   displayException EMonadCatchCanNotCatchInLint
     = "Cannot catch in 'Lint s'."

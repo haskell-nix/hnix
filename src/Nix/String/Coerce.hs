@@ -38,11 +38,11 @@ data CopyToStoreMode
   -- ^ Add paths to the store as they are encountered
   deriving (Eq,Ord,Enum,Bounded)
 
-newtype EACoerceToString a
+newtype ECoerceToString a
   = ECoerceToStringUnexpectedArgument a
   deriving Show
 
-instance (Show a, Typeable a) => Exception (EACoerceToString a)
+instance (Show a, Typeable a) => Exception (ECoerceToString a)
  where
   displayException (ECoerceToStringUnexpectedArgument v)
     = "Expected a string, but received: '" <> show v <> "'."

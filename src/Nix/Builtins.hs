@@ -106,106 +106,106 @@ import           System.Posix.Files             ( isRegularFile
 import           Text.Read
 import           Text.Regex.TDFA
 
-newtype EAMkThunk a
+newtype EMkThunk a
   = EMkThunkInBuiltin a
   deriving Show
 
-instance Exception (EAMkThunk Text)
+instance Exception (EMkThunk Text)
  where
   displayException (EMkThunkInBuiltin n)
     = "While calling builtin " <> Text.unpack n <> "\n"
 
-newtype EAFoldNixPath a
+newtype EFoldNixPath a
   = EFoldNixPathUnexpectedEntry a
   deriving Show
 
 instance (Show a, Typeable a)
-  => Exception (EAFoldNixPath a)
+  => Exception (EFoldNixPath a)
  where
   displayException (EFoldNixPathUnexpectedEntry x)
     = "Unexpected entry in NIX_PATH: " <> show x
 
-newtype EAAttrsetGet a
+newtype EAttrsetGet a
   = EAttrsetGetAttrRequired a
   deriving Show
 
-instance Exception (EAAttrsetGet Text)
+instance Exception (EAttrsetGet Text)
  where
   displayException (EAttrsetGetAttrRequired k)
     = "Attribute '" <> Text.unpack k <> "' required"
 
-data EAUnsafeGetAttrPos a b
+data EUnsafeGetAttrPos a b
   = EUnsafeGetAttrPosInvalidTypes a b
   deriving Show
 
 instance (Show a, Typeable a, Show b, Typeable b)
-  => Exception (EAUnsafeGetAttrPos a b)
+  => Exception (EUnsafeGetAttrPos a b)
  where
   displayException (EUnsafeGetAttrPosInvalidTypes x y)
     = "Invalid types for builtins.unsafeGetAttrPos: " <> show (x, y)
 
-data EAHead_
+data EHead_
   = EHead_EmptyList
   deriving Show
 
-instance Exception EAHead_
+instance Exception EHead_
  where
   displayException EHead_EmptyList
     = "builtins.head: empty list"
 
-data EATail_
+data ETail_
   = ETail_EmptyList
   deriving Show
 
-instance Exception EATail_
+instance Exception ETail_
  where
   displayException ETail_EmptyList
     = "builtins.tail: empty list"
 
-newtype EASubString a
+newtype ESubString a
   = ESubStringNegativeStartPosition a
   deriving Show
 
 instance (Show a, Typeable a)
-  => Exception (EASubString a)
+  => Exception (ESubString a)
  where
   displayException (ESubStringNegativeStartPosition start)
     = "builtins.substring: negative start position: " <> show start
 
-data EAMap_
+data EMap_
   = EMap_
   deriving Show
 
-instance Exception EAMap_
+instance Exception EMap_
  where
   displayException EMap_
     = "While applying f in map:\n"
 
-data EAMapAttrs_
+data EMapAttrs_
   = EMapAttrs_
   deriving Show
 
-instance Exception EAMapAttrs_
+instance Exception EMapAttrs_
  where
   displayException EMapAttrs_
     = "While applying f in mapAttrs:\n"
 
-newtype EADirOf a
+newtype EDirOf a
   = EDirOfWrongArg a
   deriving Show
 
 instance (Show a, Typeable a)
-  => Exception (EADirOf a)
+  => Exception (EDirOf a)
  where
   displayException (EDirOfWrongArg v)
     = "dirOf: expected string or path, got " ++ show v
 
-data EAElemAt_ a b
+data EElemAt_ a b
   = EElemAt_IndexOutOfBound a b
   deriving Show
 
 instance (Show a, Typeable a, Foldable t, Show (t b), Typeable (t b))
-  => Exception (EAElemAt_ a (t b))
+  => Exception (EElemAt_ a (t b))
  where
   displayException (EElemAt_IndexOutOfBound n' xs')
     = "builtins.elem: Index "
@@ -213,24 +213,24 @@ instance (Show a, Typeable a, Foldable t, Show (t b), Typeable (t b))
     <> " too large for list of length "
     <> show (length xs')
 
-newtype EAGenList a
+newtype EGenList a
   = EGenListNegativeNum a
   deriving Show
 
 instance (Show a, Typeable a)
-  => Exception (EAGenList a)
+  => Exception (EGenList a)
  where
   displayException (EGenListNegativeNum n)
     = "builtins.genList: Expected a non-negative number, got "
     <> show n
 
-data EAGenericClosure
+data EGenericClosure
  = EGenericClosureNoAttrsStartSetNOperator
  | EGenericClosureNoAttrStartSet
  | EGenericClosureNoAttrOperator
  deriving Show
 
-instance Exception EAGenericClosure
+instance Exception EGenericClosure
  where
   displayException EGenericClosureNoAttrsStartSetNOperator
     = "builtins.genericClosure: Attributes 'startSet' and 'operator' required"
@@ -239,41 +239,41 @@ instance Exception EAGenericClosure
   displayException EGenericClosureNoAttrOperator
     = "builtins.genericClosure: Attribute 'operator' required"
 
-data EAReplaceStrings
+data EReplaceStrings
   = EReplaceStringsDiffLenArgs
   deriving Show
 
-instance Exception EAReplaceStrings
+instance Exception EReplaceStrings
  where
   displayException EReplaceStringsDiffLenArgs
     = "'from' and 'to' arguments to 'replaceStrings'have different lengths"
 
-newtype EAPathExists_ a
+newtype EPathExists_ a
   = EPathExists_NotPath a
   deriving Show
 
 instance (Show a, Typeable a)
-  => Exception (EAPathExists_ a)
+  => Exception (EPathExists_ a)
  where
   displayException (EPathExists_NotPath v)
     = "builtins.pathExists: expected path, got " <> show v
 
-newtype EAFunctionArgs a
+newtype EFunctionArgs a
  = EFunctionArgsArgNotFun a
  deriving Show
 
 instance (Show a, Typeable a)
-  => Exception (EAFunctionArgs a)
+  => Exception (EFunctionArgs a)
  where
   displayException (EFunctionArgsArgNotFun v)
     = "builtins.functionArgs: expected function, got " <> show v
 
-data EALessThan a b
+data ELessThan a b
   = ELessThanUnsupportedArgs a b
   deriving Show
 
 instance (Show a, Typeable a, Show b, Typeable b)
-  => Exception (EALessThan a b)
+  => Exception (ELessThan a b)
  where
   displayException (ELessThanUnsupportedArgs va vb)
     = "builtins.lessThan: expected two numbers or two strings, got '"
@@ -282,25 +282,25 @@ instance (Show a, Typeable a, Show b, Typeable b)
     <> show vb
     <> "'"
 
-newtype EAHashString a
+newtype EHashString a
   = EHashStringUnsupportedValue a
   deriving Show
 
 instance (Show a, Typeable a)
-  => Exception (EAHashString a)
+  => Exception (EHashString a)
  where
   displayException (EHashStringUnsupportedValue algo)
     = "builtins.hashString: "
     <> "expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got "
     <> show algo
 
-data EAAbsolutePathFromValue a
+data EAbsolutePathFromValue a
   = EAbsolutePathFromValueNotAbsPath a
   | EAbsolutePathFromValueNotPath a
   deriving Show
 
 instance (Show a, Typeable a)
-  => Exception (EAAbsolutePathFromValue a)
+  => Exception (EAbsolutePathFromValue a)
  where
    displayException (EAbsolutePathFromValueNotAbsPath path)
      = "string "
@@ -310,14 +310,14 @@ instance (Show a, Typeable a)
    displayException (EAbsolutePathFromValueNotPath v)
      = "expected a path, got " <> show v
 
-data EAFindFile_ a
+data EFindFile_ a
   = EFindFile_NotString a
   | EFindFile_NotList a
   | EFindFile_InvalidTypes a
   deriving Show
 
 instance (Show a, Typeable a)
-  => Exception (EAFindFile_ a)
+  => Exception (EFindFile_ a)
  where
   displayException (EFindFile_NotString y)
     = "expected a string, got " <> show y
@@ -326,24 +326,24 @@ instance (Show a, Typeable a)
   displayException (EFindFile_InvalidTypes xy)
     = "Invalid types for builtins.findFile: " <> show xy
 
-newtype EAFromJSON a
+newtype EFromJSON a
   = EFromJSON a
   deriving Show
 
 instance (Show a, Typeable a)
-  => Exception (EAFromJSON a)
+  => Exception (EFromJSON a)
  where
   displayException (EFromJSON jsonError)
     = "builtins.fromJSON: " <> show jsonError
 
-data EAFetchurl a
+data EFetchurl a
   = EFetchrulNotURIOrSet a
   | EFetchrulNotURIOrString a
   | EFetchrulUnsupportedArg a
   deriving Show
 
 instance (Show a, Typeable a)
-  => Exception (EAFetchurl a)
+  => Exception (EFetchurl a)
  where
   displayException (EFetchrulNotURIOrSet v)
     = "builtins.fetchurl: Expected URI or set, got "
@@ -354,24 +354,24 @@ instance (Show a, Typeable a)
   displayException (EFetchrulUnsupportedArg _)
     = "builtins.fetchurl: unsupported arguments to url"
 
-newtype EAGetContext a
+newtype EGetContext a
   = EGetContextUnsupportedType a
   deriving Show
 
 instance (Show a, Typeable a)
-  => Exception (EAGetContext a)
+  => Exception (EGetContext a)
  where
   displayException (EGetContextUnsupportedType x)
     = "Invalid type for builtins.getContext: " <> show x
 
-data EAAppendContext a
+data EAppendContext a
   = EAppendContextInvalidContextOutTypes a
   | EAppendContextInvalidContextValTypes a
   | EAppendContextInvalidTypes a
   deriving Show
 
 instance (Show a, Typeable a)
-  => Exception (EAAppendContext a)
+  => Exception (EAppendContext a)
  where
   displayException (EAppendContextInvalidContextOutTypes x)
     = "Invalid types for context value outputs in builtins.appendContext: "

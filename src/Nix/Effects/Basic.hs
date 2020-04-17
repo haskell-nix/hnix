@@ -52,22 +52,22 @@ import           GHC.DataSize
 #endif
 #endif
 
-newtype EADefaultMakeAbsolutePath a
+newtype EDefaultMakeAbsolutePath a
   = EDefaultMakeAbsolutePathCurFileIsntPath a
   deriving Show
 
-instance (Show v, Typeable v) => Exception (EADefaultMakeAbsolutePath v)
+instance (Show v, Typeable v) => Exception (EDefaultMakeAbsolutePath v)
  where
   displayException (EDefaultMakeAbsolutePathCurFileIsntPath v)
     =  "When resolving relative path, __cur_file is in scope, "
     <> "but is not a path; it is: '" <> show v <>"'."
 
-data EAFindPathByFile a
+data EFindPathByFile a
   = EFindPathByFileNotInNixPath a
   | EFindPathByWrongNixPathFormat a
   deriving Show
 
-instance (Show v, Typeable v) => Exception (EAFindPathByFile v)
+instance (Show v, Typeable v) => Exception (EFindPathByFile v)
  where
   displayException (EFindPathByFileNotInNixPath name)
     =  "File '" <> show name <> "' was not found in the Nix search path "
@@ -76,13 +76,13 @@ instance (Show v, Typeable v) => Exception (EAFindPathByFile v)
     =  "__nixPath must be a list of attr sets with 'path' elements, "
     <> "but received: '" <> show s <> "'."
 
-data EAFetchTarball a
+data EFetchTarball a
   = EFetchTarballNoUrlAttr
   | EFetchTarballNorUriNorSet a
   | EFetchTarballNorUriNorString a
   deriving Show
 
-instance (Show v, Typeable v) => Exception (EAFetchTarball v)
+instance (Show v, Typeable v) => Exception (EFetchTarball v)
  where
   displayException EFetchTarballNoUrlAttr
     = "builtins.fetchTarball: Missing url attribute."
@@ -93,12 +93,12 @@ instance (Show v, Typeable v) => Exception (EAFetchTarball v)
     = "builtins.fetchTarball: Expected URI or string, received: '"
     <> show v <> "'."
 
-data EADefaultImportPath a
+data EDefaultImportPath a
   = EDefaultImportPathParse a
   | EDefaultImportPath a
   deriving Show
 
-instance (Show a, Typeable a) => Exception (EADefaultImportPath a)
+instance (Show a, Typeable a) => Exception (EDefaultImportPath a)
  where
   -- displayException :: EADefaultImportPath a -> String
   displayException (EDefaultImportPathParse a)
@@ -215,7 +215,7 @@ fetchTarball
 fetchTarball = flip demand $ \case
   NVSet s _ -> case M.lookup "url" s of
     Nothing ->
-      throwError (EFetchTarballNoUrlAttr :: EAFetchTarball String)
+      throwError (EFetchTarballNoUrlAttr :: EFetchTarball String)
     Just url -> demand url $ go (M.lookup "sha256" s)
   v@NVStr{} -> go Nothing v
   v ->
