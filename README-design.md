@@ -44,5 +44,5 @@ values: `NValue` and `NValueNF`. The former is created by evaluating an
 
 ## Exception types
 
-Exception type constructors start with `EA` or `ES`, exception data constructors start
-with an `E`, where: `E` - *exception*, `A` - *asynchronous*, `S` - *synchronous*.
+*Synchronous* exception type and data constructors start with `E` acronym.
+*Asynchronous* exception constructors start with `EA` acronym.
