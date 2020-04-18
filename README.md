@@ -13,7 +13,7 @@ for interacting with store paths, until `hnix-store` is ready.
 
 ## Getting Started
 
-```bash
+```
 $ git clone --recursive https://github.com/haskell-nix/hnix.git
 ...
 $ cd hnix
@@ -81,8 +81,10 @@ application.
 If you're on macOS, you can use the binary cache at Cachix to avoid building
 the specific dependencies used by hnix. Just use these commands:
 
-    nix-env -iA cachix -f https://github.com/NixOS/nixpkgs/tarball/db557aab7b690f5e0e3348459f2e4dc8fd0d9298
-    cachix use hnix
+```
+$ nix-env -iA cachix -f https://github.com/NixOS/nixpkgs/tarball/db557aab7b690f5e0e3348459f2e4dc8fd0d9298
+$ cachix use hnix
+```
 
 ## How you can help
 
@@ -96,9 +98,10 @@ same. You can talk with everyone live on
 [Gitter](https://gitter.im/haskell-nix/Lobby).
 
 When you're ready to submit a pull request, test it with:
+
 ```
-git submodule update --init --recursive
-nix-shell --run "LANGUAGE_TESTS=yes cabal v2-test"
+$ git submodule update --init --recursive
+$ nix-shell --run "LANGUAGE_TESTS=yes cabal v2-test"
 ```
 
 Make sure that all the tests that were passing prior to your PR are still
@@ -111,5 +114,5 @@ run this yourself, first build hnix with `nix-build`, then run the following
 command:
 
 ```
-./result/bin/hnix --eval -E "import <nixpkgs> {}" --find
+$ ./result/bin/hnix --eval -E "import <nixpkgs> {}" --find
 ```
