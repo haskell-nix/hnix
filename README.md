@@ -35,8 +35,8 @@ use:
 
 ```
 $ nix-shell
-$ cabal configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
-$ cabal build
+$ cabal v2-configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
+$ cabal v2-build
 $ ./dist/build/hnix/hnix -v5 --trace <args> +RTS -xc
 ```
 
@@ -49,9 +49,9 @@ To build `hnix` with benchmarks enabled:
 
 ```
 $ nix-shell --arg doBenchmarks true
-$ cabal configure --enable-tests --enable-benchmarks
-$ cabal build
-$ cabal bench
+$ cabal v2-configure --enable-tests --enable-benchmarks
+$ cabal v2-build
+$ cabal v2-bench
 ```
 
 ## Building with profiling enabled
@@ -60,8 +60,8 @@ To build `hnix` with profiling enabled:
 
 ```
 $ nix-shell
-$ cabal configure --enable-tests --enable-profiling --flags=profiling
-$ cabal build
+$ cabal v2-configure --enable-tests --enable-profiling --flags=profiling
+$ cabal v2-build
 $ ./dist/build/hnix/hnix <args> +RTS -p
 ```
 
@@ -98,7 +98,7 @@ same. You can talk with everyone live on
 When you're ready to submit a pull request, test it with:
 ```
 git submodule update --init --recursive
-nix-shell --run "LANGUAGE_TESTS=yes cabal test"
+nix-shell --run "LANGUAGE_TESTS=yes cabal v2-test"
 ```
 
 Make sure that all the tests that were passing prior to your PR are still
