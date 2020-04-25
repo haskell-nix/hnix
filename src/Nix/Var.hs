@@ -33,10 +33,3 @@ writeVar = writeRef
 
 atomicModifyVar :: MonadAtomicRef m => Ref m a -> (a -> (a, b)) -> m b
 atomicModifyVar = atomicModifyRef
-
---TODO: Upstream GEq instances
-instance GEq IORef where
-  a `geq` b = if a == unsafeCoerce b then Just $ unsafeCoerce Refl else Nothing
-
-instance GEq (STRef s) where
-  a `geq` b = if a == unsafeCoerce b then Just $ unsafeCoerce Refl else Nothing
