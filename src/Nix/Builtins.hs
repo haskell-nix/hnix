@@ -191,10 +191,11 @@ builtinsList = sequence
 
           strict = derivationStrict drvAttrs;
 
-          commonAttrs = drvAttrs // (builtins.listToAttrs outputsList) //
-            { all = map (x: x.value) outputsList;
-              inherit drvAttrs;
-            };
+          commonAttrs = drvAttrs
+            // (builtins.listToAttrs outputsList)
+            // { all = map (x: x.value) outputsList;
+                 inherit drvAttrs;
+               };
 
           outputToAttrListElement = outputName:
             { name = outputName;
