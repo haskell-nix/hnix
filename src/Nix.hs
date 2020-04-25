@@ -110,7 +110,10 @@ evaluateExpression mpath evaluator handler expr = do
   args <- traverse (traverse eval') $ map (second parseArg) (arg opts) ++ map
     (second mkStr)
     (argstr opts)
-  compute evaluator expr (argmap args) handler
+  evaluator mpath expr >>= \f -> demand f $ \f' ->
+    processResult handler =<< case f' of
+      NVClosure _ g -> g (argmap args)
+      _             -> pure f
  where
   parseArg s = case parseNixText s of
     Success x   -> x
@@ -119,11 +122,6 @@ evaluateExpression mpath evaluator handler expr = do
   eval' = (normalForm =<<) . nixEvalExpr mpath
 
   argmap args = nvSet (M.fromList args) mempty
-
-  compute ev x args p = ev mpath x >>= \f -> demand f $ \f' ->
-    processResult p =<< case f' of
-      NVClosure _ g -> g args
-      _             -> pure f
 
 processResult
   :: forall e t f m a
