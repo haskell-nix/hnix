@@ -20,7 +20,7 @@
            stageFun = step:
              last:
                { shell ? "/bin/bash"
-               , overrides ? null
+               , overrides ? (self: super: {})
                , allowedRequisites ? null }:
                  let
                    name = "bootstrap-stage${toString step}";
@@ -31,15 +31,18 @@
                          let callLibs = file: import file { lib = self; };
                          in with self; {
                            customisation =
-                             callLibs /Users/johnw/src/nix/nixpkgs/lib/customisation.nix;
+                             callLibs <nixpkgs/lib/customisation.nix>;
+                           trivial =
+                             callLibs <nixpkgs/lib/trivial.nix>;
                            inherit (customisation) makeOverridable;
+                           inherit (trivial) functionArgs setFunctionArgs;
                          });
                    in lib.makeOverridable ({ name ? null
                                            , preHook ? null
                                            , initialPath
                                            , shell
                                            , allowedRequisites ? null
-                                           , overrides ? null
+                                           , overrides ? (self: super: {})
                                            , config
                                            , buildPlatform
                                            , hostPlatform
@@ -66,8 +69,7 @@
                      hostPlatform = localSystem;
                      targetPlatform = localSystem;
                      initialPath = [];
-                     overrides = self: super:
-                         overrides null super // { fetchurl = null; };
+                     overrides = self: super: (overrides self super) // { fetchurl = null; };
                    };
                  in {
                    inherit config overlays;
@@ -82,7 +84,7 @@
                allowedRequisites = [
                  (pkgs.darwin.Libsystem) # THUNK FORCE STARTS HERE
                ];
-               overrides = null;
+               overrides = sefl: super: {};
              };
            stagesDarwin = [ ({  }: stage0) stage1 ];
          }) stagesDarwin;
@@ -95,8 +97,8 @@
             let callLibs = file: import file { lib = self; };
             in with self;
             {
-              fixedPoints = callLibs /Users/johnw/src/nix/nixpkgs/lib/fixed-points.nix;
-              lists = callLibs /Users/johnw/src/nix/nixpkgs/lib/lists.nix;
+              fixedPoints = callLibs <nixpkgs/lib/fixed-points.nix>;
+              lists = callLibs <nixpkgs/lib/lists.nix>;
               inherit (fixedPoints) fix extends;
               inherit (lists) foldl' imap1;
             });
