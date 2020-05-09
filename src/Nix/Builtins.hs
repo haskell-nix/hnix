@@ -1040,10 +1040,6 @@ isList
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isList = hasKind @[NValue t f m]
 
-isString
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-isString = hasKind @NixString
-
 isInt
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isInt = hasKind @Int
@@ -1059,6 +1055,12 @@ isBool = hasKind @Bool
 isNull
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isNull = hasKind @()
+
+-- isString cannot use `hasKind` because it coerces derivations to strings.
+isString :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
+isString v = demand v $ \case
+  NVStr{} -> toValue True
+  _       -> toValue False
 
 isFunction :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isFunction func = demand func $ \case
