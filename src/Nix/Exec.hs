@@ -478,7 +478,7 @@ execBinaryOpForced scope span op lval rval = case op of
 fromStringNoContext :: Framed e m => NixString -> m Text
 fromStringNoContext ns = case principledGetStringNoContext ns of
   Just str -> pure str
-  Nothing  -> throwError $ ErrorCall "expected string with no context"
+  Nothing  -> throwError $ ErrorCall $ "expected string with no context, but got " ++ show ns
 
 addTracing
   :: (MonadNix e t f m, Has e Options, MonadReader Int n, Alternative n)
