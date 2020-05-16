@@ -17,7 +17,7 @@ import           Control.Monad
 import           Control.Monad.Fix
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
-import           Data.Align.Key                 ( alignWithKey )
+import           Data.Semialign.Indexed         ( ialignWith )
 import           Data.Either                    ( isRight )
 import           Data.Fix                       ( Fix(Fix) )
 import           Data.HashMap.Lazy              ( HashMap )
@@ -207,8 +207,8 @@ attrSetAlter (k : ks) pos m p val = case M.lookup k m of
     ( M.insert
       k
       (toValue @(AttrSet v, AttrSet SourcePos) =<< (, mempty) <$> sequence st')
-      st
-    , M.insert k pos sp
+      m
+    , M.insert k pos p
     )
 
 desugarBinds :: forall r . ([Binding r] -> r) -> [Binding r] -> [Binding r]
@@ -234,7 +234,7 @@ desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
   go (Left  x) = do
     maybeValue <- gets (M.lookup x)
     case maybeValue of
-      Nothing     -> fail ("No binding " ++ show x)
+      Nothing     -> error ("No binding " ++ show x)
       Just (p, v) -> pure $ NamedVar (StaticKey x :| []) (embed v) p
 
 evalBinds
@@ -385,9 +385,9 @@ buildArgument params arg = do
               Nothing -> id
               Just n  -> M.insert n $ const $ defer (withScopes scope arg)
         loebM
-          (inject $ M.mapMaybe id $ alignWithKey (assemble scope isVariadic)
-                                                 args
-                                                 (M.fromList s)
+          (inject $ M.mapMaybe id $ ialignWith (assemble scope isVariadic)
+                                               args
+                                               (M.fromList s)
           )
  where
   assemble

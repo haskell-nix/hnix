@@ -186,7 +186,7 @@ reduce (NBinary_ bann op larg rarg) = do
       return $ Fix (NConstant_ ann (NInt (x + y)))
     _ -> pure $ Fix $ NBinary_ bann op lval rval
 
--- | Reduce a select on a Set by substituing the set to the selected value.
+-- | Reduce a select on a Set by substituting the set to the selected value.
 --
 -- Before applying this reduction, we need to ensure that:
 --

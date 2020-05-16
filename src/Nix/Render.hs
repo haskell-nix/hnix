@@ -12,6 +12,7 @@ module Nix.Render where
 
 import           Prelude                 hiding ( readFile )
 
+import           Control.Monad.Fail             ( MonadFail )
 import           Control.Monad.Trans
 import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString               as BS
@@ -26,7 +27,7 @@ import qualified System.Posix.Files            as S
 import           Text.Megaparsec.Error
 import           Text.Megaparsec.Pos
 
-class Monad m => MonadFile m where
+class MonadFail m => MonadFile m where
     readFile :: FilePath -> m ByteString
     default readFile :: (MonadTrans t, MonadFile m', m ~ t m') => FilePath -> m ByteString
     readFile = lift . readFile

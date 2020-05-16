@@ -39,9 +39,7 @@ import           Data.Fix
 import           Data.Function                  ( on )
 import           Data.Functor.Compose
 import           Data.Hashable
-#if MIN_VERSION_hashable(1, 2, 5)
 import           Data.Hashable.Lifted
-#endif
 import           Data.Ord.Deriving
 import           Data.Text                      ( Text
                                                 , pack
@@ -78,17 +76,13 @@ data Ann ann a = Ann
     deriving (Ord, Eq, Data, Generic, Generic1, Typeable, Functor, Foldable,
               Traversable, Read, Show, NFData, Hashable)
 
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable ann => Hashable1 (Ann ann)
-#endif
 
 #ifdef MIN_VERSION_serialise
 instance (Serialise ann, Serialise a) => Serialise (Ann ann a)
 #endif
 
-#if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData ann => NFData1 (Ann ann)
-#endif
 
 $(deriveEq1   ''Ann)
 $(deriveEq2   ''Ann)
@@ -114,19 +108,13 @@ type NExprLocF = AnnF SrcSpan NExprF
 -- | A nix expression with source location at each subexpression.
 type NExprLoc = Fix NExprLocF
 
-#if !MIN_VERSION_deepseq(1, 4, 3)
-instance (NFData (f (g a)), NFData (g a)) => NFData (Compose f g a)
-#endif
-
 instance NFData NExprLoc
 
 #ifdef MIN_VERSION_serialise
 instance Serialise NExprLoc
 #endif
 
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable NExprLoc
-#endif
 
 instance Binary SrcSpan
 instance (Binary ann, Binary a) => Binary (Ann ann a)

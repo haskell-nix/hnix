@@ -22,6 +22,7 @@ import           Control.Applicative
 import           Control.Comonad                ( Comonad )
 import           Control.Comonad.Env            ( ComonadEnv )
 import           Control.Monad.Catch     hiding ( catchJust )
+import           Control.Monad.Fail             ( MonadFail )
 import           Control.Monad.Free
 import           Control.Monad.Reader
 import           Control.Monad.Ref
@@ -55,6 +56,7 @@ import           System.Console.Haskeline.MonadException hiding(catch)
 deriving instance MonadPutStr (t (Fix1 t)) => MonadPutStr (Fix1 t)
 deriving instance MonadHttp (t (Fix1 t)) => MonadHttp (Fix1 t)
 deriving instance MonadEnv (t (Fix1 t)) => MonadEnv (Fix1 t)
+deriving instance MonadPaths (t (Fix1 t)) => MonadPaths (Fix1 t)
 deriving instance MonadInstantiate (t (Fix1 t)) => MonadInstantiate (Fix1 t)
 deriving instance MonadExec (t (Fix1 t)) => MonadExec (Fix1 t)
 deriving instance MonadIntrospect (t (Fix1 t)) => MonadIntrospect (Fix1 t)
@@ -62,6 +64,7 @@ deriving instance MonadIntrospect (t (Fix1 t)) => MonadIntrospect (Fix1 t)
 deriving instance MonadPutStr (t (Fix1T t m) m) => MonadPutStr (Fix1T t m)
 deriving instance MonadHttp (t (Fix1T t m) m) => MonadHttp (Fix1T t m)
 deriving instance MonadEnv (t (Fix1T t m) m) => MonadEnv (Fix1T t m)
+deriving instance MonadPaths (t (Fix1T t m) m) => MonadPaths (Fix1T t m)
 deriving instance MonadInstantiate (t (Fix1T t m) m) => MonadInstantiate (Fix1T t m)
 deriving instance MonadExec (t (Fix1T t m) m) => MonadExec (Fix1T t m)
 deriving instance MonadIntrospect (t (Fix1T t m) m) => MonadIntrospect (Fix1T t m)
@@ -92,7 +95,7 @@ instance (MonadFix1T t m, MonadRef m) => MonadRef (Fix1T t m) where
 instance (MonadFix1T t m, MonadAtomicRef m) => MonadAtomicRef (Fix1T t m) where
   atomicModifyRef r = lift . atomicModifyRef r
 
-instance (MonadFix1T t m, MonadFile m) => MonadFile (Fix1T t m)
+instance (MonadFix1T t m, MonadFail (Fix1T t m), MonadFile m) => MonadFile (Fix1T t m)
 
 instance (MonadFix1T t m, MonadStore m) => MonadStore (Fix1T t m) where
   addPath' = lift . addPath'
@@ -139,6 +142,7 @@ instance ( MonadFix m
          , MonadFile m
          , MonadCatch m
          , MonadEnv m
+         , MonadPaths m
          , MonadExec m
          , MonadHttp m
          , MonadInstantiate m
@@ -209,6 +213,7 @@ newtype StandardTF r m a
     , Applicative
     , Alternative
     , Monad
+    , MonadFail
     , MonadPlus
     , MonadFix
     , MonadIO
@@ -224,6 +229,7 @@ instance MonadTrans (StandardTF r) where
 instance (MonadPutStr r, MonadPutStr m) => MonadPutStr (StandardTF r m)
 instance (MonadHttp r, MonadHttp m) => MonadHttp (StandardTF r m)
 instance (MonadEnv r, MonadEnv m) => MonadEnv (StandardTF r m)
+instance (MonadPaths r, MonadPaths m) => MonadPaths (StandardTF r m)
 instance (MonadInstantiate r, MonadInstantiate m) => MonadInstantiate (StandardTF r m)
 instance (MonadExec r, MonadExec m) => MonadExec (StandardTF r m)
 instance (MonadIntrospect r, MonadIntrospect m) => MonadIntrospect (StandardTF r m)

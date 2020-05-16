@@ -43,9 +43,7 @@ import           Data.Eq.Deriving
 import           Data.Fix
 import           Data.Functor.Classes
 import           Data.Hashable
-#if MIN_VERSION_hashable(1, 2, 5)
 import           Data.Hashable.Lifted
-#endif
 import           Data.List                      ( inits
                                                 , tails
                                                 )
@@ -68,10 +66,8 @@ import           Nix.Utils
 import           Text.Megaparsec.Pos
 import           Text.Read.Deriving
 import           Text.Show.Deriving
-#if MIN_VERSION_base(4, 10, 0)
 import           Type.Reflection                ( eqTypeRep )
 import qualified Type.Reflection               as Reflection
-#endif
 
 type VarName = Text
 
@@ -79,23 +75,7 @@ hashAt :: VarName -> Lens' (AttrSet v) (Maybe v)
 hashAt = flip alterF
 
 -- unfortunate orphans
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 NonEmpty
-#endif
-
-#if !MIN_VERSION_base(4, 10, 0)
-instance Eq1 NonEmpty where
-  liftEq eq (a NE.:| as) (b NE.:| bs) = eq a b && liftEq eq as bs
-instance Show1 NonEmpty where
-  liftShowsPrec shwP shwL p (a NE.:| as) = showParen (p > 5) $
-    shwP 6 a . showString " :| " . shwL as
-#endif
-
-#if !MIN_VERSION_binary(0, 8, 4)
-instance Binary a => Binary (NE.NonEmpty a) where
-  get = fmap NE.fromList Bin.get
-  put = Bin.put . NE.toList
-#endif
 
 -- | The main nix expression type. This is polymorphic so that it can be made
 -- a functor, which allows us to traverse expressions and map functions over
@@ -145,13 +125,9 @@ data NExprF r
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
             Foldable, Traversable, Show, NFData, Hashable)
 
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 NExprF
-#endif
 
-#if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData1 NExprF
-#endif
 
 #ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (NExprF r)
@@ -162,18 +138,11 @@ instance Serialise r => Serialise (NExprF r)
 instance IsString NExpr where
   fromString = Fix . NSym . fromString
 
-#if MIN_VERSION_base(4, 10, 0)
 instance Lift (Fix NExprF) where
   lift = dataToExpQ $ \b ->
     case Reflection.typeOf b `eqTypeRep` Reflection.typeRep @Text of
       Just HRefl -> Just [| pack $(liftString $ unpack b) |]
       Nothing    -> Nothing
-#else
-instance Lift (Fix NExprF) where
-    lift = dataToExpQ $ \b -> case cast b of
-        Just t -> Just [| pack $(liftString $ unpack t) |]
-        Nothing -> Nothing
-#endif
 
 -- | The monomorphic expression type is a fixed point of the polymorphic one.
 type NExpr = Fix NExprF
@@ -195,13 +164,9 @@ data Binding r
   deriving (Generic, Generic1, Typeable, Data, Ord, Eq, Functor,
             Foldable, Traversable, Show, NFData, Hashable)
 
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 Binding
-#endif
 
-#if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData1 Binding
-#endif
 
 #ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (Binding r)
@@ -219,13 +184,9 @@ data Params r
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Show,
             Foldable, Traversable, NFData, Hashable)
 
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 Params
-#endif
 
-#if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData1 Params
-#endif
 
 #ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (Params r)
@@ -244,7 +205,6 @@ data Antiquoted (v :: *) (r :: *) = Plain !v | EscapedNewline | Antiquoted !r
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Foldable,
             Traversable, Show, Read, NFData, Hashable)
 
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable v => Hashable1 (Antiquoted v)
 
 instance Hashable2 Antiquoted where
@@ -252,11 +212,8 @@ instance Hashable2 Antiquoted where
   liftHashWithSalt2 _ _ salt EscapedNewline = salt `hashWithSalt` (1 :: Int)
   liftHashWithSalt2 _ hb salt (Antiquoted b) =
     hb (salt `hashWithSalt` (2 :: Int)) b
-#endif
 
-#if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData v => NFData1 (Antiquoted v)
-#endif
 
 #ifdef MIN_VERSION_serialise
 instance (Serialise v, Serialise r) => Serialise (Antiquoted v r)
@@ -264,7 +221,7 @@ instance (Serialise v, Serialise r) => Serialise (Antiquoted v r)
 
 -- | An 'NString' is a list of things that are either a plain string
 -- or an antiquoted expression. After the antiquotes have been evaluated,
--- the final string is constructed by concating all the parts.
+-- the final string is constructed by concatenating all the parts.
 data NString r
   = DoubleQuoted ![Antiquoted Text r]
   -- ^ Strings wrapped with double-quotes (") can contain literal newline
@@ -276,13 +233,9 @@ data NString r
   deriving (Eq, Ord, Generic, Generic1, Typeable, Data, Functor, Foldable,
             Traversable, Show, Read, NFData, Hashable)
 
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 NString
-#endif
 
-#if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData1 NString
-#endif
 
 #ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (NString r)
@@ -341,13 +294,11 @@ instance Generic1 NKeyName where
   from1 = id
   to1   = id
 
-#if MIN_VERSION_deepseq(1, 4, 3)
 instance NFData1 NKeyName where
   liftRnf _ (StaticKey  !_            ) = ()
   liftRnf _ (DynamicKey (Plain !_)    ) = ()
   liftRnf _ (DynamicKey EscapedNewline) = ()
   liftRnf k (DynamicKey (Antiquoted r)) = k r
-#endif
 
 -- | Most key names are just static text, so this instance is convenient.
 instance IsString (NKeyName r) where
@@ -358,13 +309,11 @@ instance Eq1 NKeyName where
   liftEq _  (StaticKey  a) (StaticKey  b) = a == b
   liftEq _  _              _              = False
 
-#if MIN_VERSION_hashable(1, 2, 5)
 instance Hashable1 NKeyName where
   liftHashWithSalt h salt (DynamicKey a) =
     liftHashWithSalt2 (liftHashWithSalt h) h (salt `hashWithSalt` (0 :: Int)) a
   liftHashWithSalt _ salt (StaticKey n) =
     salt `hashWithSalt` (1 :: Int) `hashWithSalt` n
-#endif
 
 -- Deriving this instance automatically is not possible because @r@
 -- occurs not only as last argument in @Antiquoted (NString r) r@
@@ -448,10 +397,6 @@ instance Serialise NRecordType
 paramName :: Params r -> Maybe VarName
 paramName (Param n       ) = Just n
 paramName (ParamSet _ _ n) = n
-
-#if !MIN_VERSION_deepseq(1, 4, 3)
-instance NFData NExpr
-#endif
 
 $(deriveEq1 ''NExprF)
 $(deriveEq1 ''NString)

@@ -139,6 +139,12 @@ case_find_file_failure_invalid_arg_no_path =
 case_infinite_recursion =
     assertNixEvalThrows "let foo = a: bar a; bar = a: foo a; in foo 3"
 
+case_nested_let =
+    constantEqualText "3" "let a = 3; x.x = 2; in a"
+
+case_nested_nested_let =
+    constantEqualText "3" "let a = 3; x.x = let b = a; in b; c = x.x; in c"
+
 case_inherit_in_rec_set =
     constantEqualText "1" "let x = 1; in (rec { inherit x; }).x"
 
@@ -403,6 +409,26 @@ case_attrset_attrset_nested_bottom_equal =
 
 case_attrset_function_nested_bottom_equal =
   constantEqualText "true" "let nested = { y = _: (let x = x; in x); }; in nested == nested"
+
+-- Regression test for #527
+
+case_add_string_thunk_left =
+  constantEqualText [i|"cygwin"|] [i|builtins.head ["cyg"] + "win"|]
+
+case_add_string_thunk_right =
+  constantEqualText [i|"cygwin"|] [i|"cyg" + builtins.head ["win"]|]
+
+case_add_int_thunk_left =
+  constantEqualText "3" "builtins.head [1] + 2"
+
+case_add_int_thunk_right =
+  constantEqualText "3" "1 + builtins.head [2]"
+
+case_concat_thunk_left =
+  constantEqualText "[1 2 3]" "builtins.tail [0 1 2] ++ [3]"
+
+case_concat_thunk_rigth =
+  constantEqualText "[1 2 3]" "[1] ++ builtins.tail [1 2 3]"
 
 -----------------------
 
