@@ -149,7 +149,7 @@ main = do
       = liftIO
         .   Text.putStrLn
         .   principledStringIgnoreContext
-        <=< nvalueToJSONNixString
+        <=< nvalueToJSONNString
       | strict opts
       = liftIO . print . prettyNValue <=< normalForm
       | values opts
