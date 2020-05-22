@@ -149,12 +149,12 @@ instance ( Convertible e t f m
          , MonadValue (NValue t f m) m
          , MonadEffects t f m
          )
-  => FromValue NixString m (NValue' t f m (NValue t f m)) where
+  => FromValue NAtom m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
     NVStr' ns -> pure $ Just ns
     NVPath' p ->
       Just
-        .   hackyMakeNixStringWithoutContext
+        .   hackyMakeNStringWithoutContext
         .   Text.pack
         .   unStorePath
         <$> addPath p
@@ -301,12 +301,12 @@ instance Convertible e t f m
   toValue = pure . nvConstant' . NFloat
 
 instance Convertible e t f m
-  => ToValue NixString m (NValue' t f m (NValue t f m)) where
+  => ToValue NAtom m (NValue' t f m (NValue t f m)) where
   toValue = pure . nvStr'
 
 instance Convertible e t f m
   => ToValue ByteString m (NValue' t f m (NValue t f m)) where
-  toValue = pure . nvStr' . hackyMakeNixStringWithoutContext . decodeUtf8
+  toValue = pure . nvStr' . hackyMakeNStringWithoutContext . decodeUtf8
 
 instance Convertible e t f m
   => ToValue Path m (NValue' t f m (NValue t f m)) where
@@ -320,7 +320,7 @@ instance ( Convertible e t f m
          )
   => ToValue SourcePos m (NValue' t f m (NValue t f m)) where
   toValue (SourcePos f l c) = do
-    f' <- toValue (principledMakeNixStringWithoutContext (Text.pack f))
+    f' <- toValue (principledMakeNStringWithoutContext (Text.pack f))
     l' <- toValue (unPos l)
     c' <- toValue (unPos c)
     let pos = M.fromList [("file" :: Text, f'), ("line", l'), ("column", c')]
@@ -362,7 +362,7 @@ instance Convertible e t f m
       else return Nothing
     outputs <- do
       let outputs =
-            fmap principledMakeNixStringWithoutContext $ nlcvOutputs nlcv
+            fmap principledMakeNStringWithoutContext $ nlcvOutputs nlcv
       ts :: [NValue t f m] <- traverse toValue outputs
       case ts of
         [] -> return Nothing

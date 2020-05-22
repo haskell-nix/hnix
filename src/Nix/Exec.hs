@@ -83,7 +83,7 @@ nvConstantP p x = addProvenance p (nvConstant x)
 nvStrP
   :: MonadCited t f m
   => Provenance m (NValue t f m)
-  -> NixString
+  -> NAtom
   -> NValue t f m
 nvStrP p ns = addProvenance p (nvStr ns)
 
@@ -478,7 +478,7 @@ execBinaryOpForced scope span op lval rval = case op of
 
 -- This function is here, rather than in 'Nix.String', because of the need to
 -- use 'throwError'.
-fromStringNoContext :: Framed e m => NixString -> m Text
+fromStringNoContext :: Framed e m => NAtom -> m Text
 fromStringNoContext ns = case principledGetStringNoContext ns of
   Just str -> return str
   Nothing  -> throwError $ ErrorCall "expected string with no context"

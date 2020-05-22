@@ -525,7 +525,7 @@ data Judgment s = Judgment
     }
     deriving Show
 
-instance Monad m => FromValue NixString (InferT s m) (Judgment s) where
+instance Monad m => FromValue NAtom (InferT s m) (Judgment s) where
   fromValueMay _ = return Nothing
   fromValue _ = error "Unused"
 

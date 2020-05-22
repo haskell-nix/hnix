@@ -118,7 +118,7 @@ withNixContext mpath action = do
   opts :: Options <- asks (view hasLens)
   let i = nvList $ map
         ( nvStr
-        . hackyMakeNixStringWithoutContext
+        . hackyMakeNStringWithoutContext
         . Text.pack
         )
         (include opts)
@@ -154,7 +154,7 @@ data Builtin v = Builtin
 builtinsList :: forall e t f m . MonadNix e t f m => m [Builtin (NValue t f m)]
 builtinsList = sequence
   [ do
-    version <- toValue (principledMakeNixStringWithoutContext "2.0")
+    version <- toValue (principledMakeNStringWithoutContext "2.0")
     pure $ Builtin Normal ("nixVersion", version)
   , do
     version <- toValue (5 :: Int)
@@ -176,7 +176,7 @@ builtinsList = sequence
   , add2 Normal   "compareVersions"  compareVersions_
   , add  Normal   "concatLists"      concatLists
   , add2 Normal   "concatMap"        concatMap_
-  , add' Normal   "concatStringsSep" (arity2 principledIntercalateNixString)
+  , add' Normal   "concatStringsSep" (arity2 principledIntercalateNString)
   , add0 Normal   "currentSystem"    currentSystem
   , add0 Normal   "currentTime"      currentTime_
   , add2 Normal   "deepSeq"          deepSeq
@@ -266,7 +266,7 @@ builtinsList = sequence
   , add2 Normal   "sort"             sort_
   , add2 Normal   "split"            split_
   , add  Normal   "splitVersion"     splitVersion_
-  , add0 Normal   "storeDir"         (return $ nvStr $ principledMakeNixStringWithoutContext "/nix/store")
+  , add0 Normal   "storeDir"         (return $ nvStr $ principledMakeNStringWithoutContext "/nix/store")
   , add' Normal   "stringLength"     (arity1 $ Text.length . principledStringIgnoreContext)
   , add' Normal   "sub"              (arity2 ((-) @Integer))
   , add' Normal   "substring"        (substring @e @t @f @m)
@@ -350,11 +350,11 @@ nixPath = fmap nvList $ flip foldNixPath [] $ \p mn ty rest ->
           PathEntryPath -> ("path", nvPath p)
           PathEntryURI ->
             ( "uri"
-            , nvStr (hackyMakeNixStringWithoutContext (Text.pack p))
+            , nvStr (hackyMakeNStringWithoutContext (Text.pack p))
             )
         , ( "prefix"
           , nvStr
-            (hackyMakeNixStringWithoutContext $ Text.pack (fromMaybe "" mn))
+            (hackyMakeNStringWithoutContext $ Text.pack (fromMaybe "" mn))
           )
         ]
       )
@@ -546,7 +546,7 @@ splitVersion_ = fromValue >=> fromStringNoContext >=> \s ->
     $ nvList
     $ flip map (splitVersion s)
     $ nvStr
-    . principledMakeNixStringWithoutContext
+    . principledMakeNStringWithoutContext
     . versionComponentToString
 
 compareVersions :: Text -> Text -> Ordering
@@ -593,10 +593,10 @@ parseDrvName = fromValue >=> fromStringNoContext >=> \s -> do
   let (name :: Text, version :: Text) = splitDrvName s
   toValue @(AttrSet (NValue t f m)) $ M.fromList
     [ ( "name" :: Text
-      , nvStr $ principledMakeNixStringWithoutContext name
+      , nvStr $ principledMakeNStringWithoutContext name
       )
     , ( "version"
-      , nvStr $ principledMakeNixStringWithoutContext version
+      , nvStr $ principledMakeNStringWithoutContext version
       )
     ]
 
@@ -618,7 +618,7 @@ match_ pat str = fromValue pat >>= fromStringNoContext >>= \p ->
     let mkMatch t
           | Text.null t = toValue ()
           | -- Shorthand for Null
-            otherwise   = toValue $ principledMakeNixStringWithoutContext t
+            otherwise   = toValue $ principledMakeNStringWithoutContext t
     case matchOnceText re (encodeUtf8 s) of
       Just ("", sarr, "") -> do
         let s = map fst (elems sarr)
@@ -665,9 +665,9 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
   caps           = nvList (map f captures)
   f (a, (s, _)) = if s < 0 then nvConstant NNull else thunkStr a
 
-thunkStr s = nvStr (hackyMakeNixStringWithoutContext (decodeUtf8 s))
+thunkStr s = nvStr (hackyMakeNStringWithoutContext (decodeUtf8 s))
 
-substring :: forall e t f m. MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
+substring :: forall e t f m. MonadNix e t f m => Int -> Int -> NAtom -> Prim m NAtom
 substring start len str = Prim $ if start < 0 --NOTE: negative values of 'len' are OK
   then
     throwError
@@ -682,7 +682,7 @@ attrNames =
   fromValue @(AttrSet (NValue t f m))
     >=> fmap getDeeper
     .   toValue
-    .   map principledMakeNixStringWithoutContext
+    .   map principledMakeNStringWithoutContext
     .   sort
     .   M.keys
 
@@ -722,7 +722,7 @@ mapAttrs_ f xs = fromValue @(AttrSet (NValue t f m)) xs >>= \aset -> do
     defer @(NValue t f m)
       $   withFrame Debug (ErrorCall "While applying f in mapAttrs:\n")
       $   callFunc ?? value
-      =<< callFunc f (nvStr (principledMakeNixStringWithoutContext key))
+      =<< callFunc f (nvStr (principledMakeNStringWithoutContext key))
   toValue . M.fromList . zip (map fst pairs) $ values
 
 filter_
@@ -795,7 +795,7 @@ unsafeDiscardStringContext
   :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 unsafeDiscardStringContext mnv = do
   ns <- fromValue mnv
-  toValue $ principledMakeNixStringWithoutContext $ principledStringIgnoreContext
+  toValue $ principledMakeNStringWithoutContext $ principledStringIgnoreContext
     ns
 
 seq_
@@ -928,9 +928,9 @@ replaceStrings
   -> NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-replaceStrings tfrom tto ts = fromValue (Deeper tfrom) >>= \(nsFrom :: [NixString]) ->
-  fromValue (Deeper tto) >>= \(nsTo :: [NixString]) ->
-    fromValue ts >>= \(ns :: NixString) -> do
+replaceStrings tfrom tto ts = fromValue (Deeper tfrom) >>= \(nsFrom :: [NAtom]) ->
+  fromValue (Deeper tto) >>= \(nsTo :: [NAtom]) ->
+    fromValue ts >>= \(ns :: NAtom) -> do
       let from = map principledStringIgnoreContext nsFrom
       when (length nsFrom /= length nsTo)
         $  throwError
@@ -944,7 +944,7 @@ replaceStrings tfrom tto ts = fromValue (Deeper tfrom) >>= \(nsFrom :: [NixStrin
           let rest = Text.drop (Text.length prefix) s
           return (prefix, replacement, rest)
         finish b =
-          principledMakeNixString (LazyText.toStrict $ Builder.toLazyText b)
+          principledMakeNString (LazyText.toStrict $ Builder.toLazyText b)
         go orig result ctx = case lookupPrefix orig of
           Nothing -> case Text.uncons orig of
             Nothing     -> finish result ctx
@@ -979,7 +979,7 @@ removeAttrs
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-removeAttrs set = fromValue . Deeper >=> \(nsToRemove :: [NixString]) ->
+removeAttrs set = fromValue . Deeper >=> \(nsToRemove :: [NAtom]) ->
   fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) set >>= \(m, p) -> do
     toRemove <- mapM fromStringNoContext nsToRemove
     toValue (go m toRemove, go p toRemove)
@@ -1024,7 +1024,7 @@ toFile name s = do
                    (Text.unpack $ hackyStringIgnoreContext s')
   let t  = Text.pack $ unStorePath mres
       sc = StringContext t DirectPath
-  toValue $ principledMakeNixStringWithSingletonContext t sc
+  toValue $ principledMakeNStringWithSingletonContext t sc
 
 toPath :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toPath = fromValue @Path >=> toValue @Path
@@ -1058,7 +1058,7 @@ isList = hasKind @[NValue t f m]
 
 isString
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-isString = hasKind @NixString
+isString = hasKind @NAtom
 
 isInt
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1115,7 +1115,7 @@ scopedImport asetArg pathArg = fromValue @(AttrSet (NValue t f m)) asetArg >>= \
 getEnv_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 getEnv_ = fromValue >=> fromStringNoContext >=> \s -> do
   mres <- getEnvVar (Text.unpack s)
-  toValue $ principledMakeNixStringWithoutContext $ case mres of
+  toValue $ principledMakeNStringWithoutContext $ case mres of
     Nothing -> ""
     Just v  -> Text.pack v
 
@@ -1201,7 +1201,7 @@ listToAttrs = fromValue @[NValue t f m] >=> \l ->
 -- fail if context in the algo arg
 -- propagate context from the s arg
 hashString
-  :: forall e t f m. MonadNix e t f m => NixString -> NixString -> Prim m NixString
+  :: forall e t f m. MonadNix e t f m => NAtom -> NAtom -> Prim m NAtom
 hashString nsAlgo ns = Prim $ do
   algo <- fromStringNoContext nsAlgo
   let f g = pure $ principledModifyNixContents g ns
@@ -1244,11 +1244,11 @@ hashString nsAlgo ns = Prim $ do
 placeHolder :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
   h <- runPrim
-    (hashString (principledMakeNixStringWithoutContext "sha256")
-                (principledMakeNixStringWithoutContext ("nix-output:" <> t))
+    (hashString (principledMakeNStringWithoutContext "sha256")
+                (principledMakeNStringWithoutContext ("nix-output:" <> t))
     )
   toValue
-    $ principledMakeNixStringWithoutContext
+    $ principledMakeNStringWithoutContext
     $ Text.cons '/'
     $ Base32.encode
     $ fst             -- The result coming out of hashString is base16 encoded
@@ -1300,7 +1300,7 @@ data FileType
    deriving (Show, Read, Eq, Ord)
 
 instance Convertible e t f m => ToValue FileType m (NValue t f m) where
-  toValue = toValue . principledMakeNixStringWithoutContext . \case
+  toValue = toValue . principledMakeNStringWithoutContext . \case
     FileTypeRegular   -> "regular" :: Text
     FileTypeDirectory -> "directory"
     FileTypeSymlink   -> "symlink"
@@ -1332,7 +1332,7 @@ fromJSON arg = demand arg $ fromValue >=> fromStringNoContext >=> \encoded ->
   jsonToNValue = \case
     A.Object m -> flip nvSet M.empty <$> traverse jsonToNValue m
     A.Array  l -> nvList <$> traverse jsonToNValue (V.toList l)
-    A.String s -> pure $ nvStr $ hackyMakeNixStringWithoutContext s
+    A.String s -> pure $ nvStr $ hackyMakeNStringWithoutContext s
     A.Number n -> pure $ nvConstant $ case floatingOrInteger n of
       Left  r -> NFloat r
       Right i -> NInt i
@@ -1340,13 +1340,13 @@ fromJSON arg = demand arg $ fromValue >=> fromStringNoContext >=> \encoded ->
     A.Null     -> pure $ nvConstant NNull
 
 prim_toJSON :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-prim_toJSON x = demand x $ fmap nvStr . nvalueToJSONNixString
+prim_toJSON x = demand x $ fmap nvStr . nvalueToJSONNString
 
 toXML_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toXML_ v = demand v $ fmap (nvStr . toXML) . normalForm
 
 typeOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-typeOf v = demand v $ toValue . principledMakeNixStringWithoutContext . \case
+typeOf v = demand v $ toValue . principledMakeNStringWithoutContext . \case
   NVConstant a -> case a of
     NURI   _ -> "string"
     NInt   _ -> "int"
@@ -1451,7 +1451,7 @@ currentSystem :: MonadNix e t f m => m (NValue t f m)
 currentSystem = do
   os   <- getCurrentSystemOS
   arch <- getCurrentSystemArch
-  return $ nvStr $ principledMakeNixStringWithoutContext (arch <> "-" <> os)
+  return $ nvStr $ principledMakeNStringWithoutContext (arch <> "-" <> os)
 
 currentTime_ :: MonadNix e t f m => m (NValue t f m)
 currentTime_ = do
@@ -1507,7 +1507,7 @@ appendContext x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
           $  "Invalid types for context value in builtins.appendContext: "
           ++ show x
     toValue
-      $ principledMakeNixString (principledStringIgnoreContext ns)
+      $ principledMakeNString (principledStringIgnoreContext ns)
       $ fromNixLikeContext
       $ NixLikeContext
       $ M.unionWith (<>) newContextValues

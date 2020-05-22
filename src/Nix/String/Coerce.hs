@@ -49,7 +49,7 @@ coerceToString
   -> CopyToStoreMode
   -> CoercionLevel
   -> NValue t f m
-  -> m NixString
+  -> m NAtom
 coerceToString call ctsm clevel = go
  where
   go x = demand x $ \case
@@ -57,18 +57,18 @@ coerceToString call ctsm clevel = go
       |
         -- TODO Return a singleton for "" and "1"
         b && clevel == CoerceAny -> pure
-      $  principledMakeNixStringWithoutContext "1"
-      | clevel == CoerceAny -> pure $ principledMakeNixStringWithoutContext ""
+      $  principledMakeNStringWithoutContext "1"
+      | clevel == CoerceAny -> pure $ principledMakeNStringWithoutContext ""
     NVConstant (NInt n) | clevel == CoerceAny ->
-      pure $ principledMakeNixStringWithoutContext $ Text.pack $ show n
+      pure $ principledMakeNStringWithoutContext $ Text.pack $ show n
     NVConstant (NFloat n) | clevel == CoerceAny ->
-      pure $ principledMakeNixStringWithoutContext $ Text.pack $ show n
+      pure $ principledMakeNStringWithoutContext $ Text.pack $ show n
     NVConstant NNull | clevel == CoerceAny ->
-      pure $ principledMakeNixStringWithoutContext ""
+      pure $ principledMakeNStringWithoutContext ""
     NVStr ns -> pure ns
     NVPath p
-      | ctsm == CopyToStore -> storePathToNixString <$> addPath p
-      | otherwise -> pure $ principledMakeNixStringWithoutContext $ Text.pack p
+      | ctsm == CopyToStore -> storePathToNString <$> addPath p
+      | otherwise -> pure $ principledMakeNStringWithoutContext $ Text.pack p
     NVList l | clevel == CoerceAny ->
       nixStringUnwords <$> traverse (`demand` go) l
 
@@ -80,9 +80,9 @@ coerceToString call ctsm clevel = go
     v -> throwError $ ErrorCall $ "Expected a string, but saw: " ++ show v
 
   nixStringUnwords =
-    principledIntercalateNixString (principledMakeNixStringWithoutContext " ")
-  storePathToNixString :: StorePath -> NixString
-  storePathToNixString sp = principledMakeNixStringWithSingletonContext
+    principledIntercalateNString (principledMakeNStringWithoutContext " ")
+  storePathToNString :: StorePath -> NAtom
+  storePathToNString sp = principledMakeNStringWithSingletonContext
     t
     (StringContext t DirectPath)
     where t = Text.pack $ unStorePath sp

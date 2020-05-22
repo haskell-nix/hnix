@@ -85,7 +85,7 @@ type MonadNixEval v m
   , MonadFix m
   , ToValue Bool m v
   , ToValue [v] m v
-  , FromValue NixString m v
+  , FromValue NAtom m v
   , ToValue (AttrSet v, AttrSet SourcePos) m v
   , FromValue (AttrSet v, AttrSet SourcePos) m v
   )
@@ -337,7 +337,7 @@ evalSelect aset attr = do
 -- *retrieving* a value
 evalGetterKeyName
   :: forall v m
-   . (MonadEval v m, FromValue NixString m v)
+   . (MonadEval v m, FromValue NAtom m v)
   => NKeyName (m v)
   -> m Text
 evalGetterKeyName = evalSetterKeyName >=> \case
@@ -348,7 +348,7 @@ evalGetterKeyName = evalSetterKeyName >=> \case
 -- | Evaluate a component of an attribute path in a context where we are
 -- *binding* a value
 evalSetterKeyName
-  :: (MonadEval v m, FromValue NixString m v)
+  :: (MonadEval v m, FromValue NAtom m v)
   => NKeyName (m v)
   -> m (Maybe Text)
 evalSetterKeyName = \case
@@ -360,9 +360,9 @@ evalSetterKeyName = \case
 
 assembleString
   :: forall v m
-   . (MonadEval v m, FromValue NixString m v)
+   . (MonadEval v m, FromValue NAtom m v)
   => NString (m v)
-  -> m (Maybe NixString)
+  -> m (Maybe NAtom)
 assembleString = \case
   Indented _ parts   -> fromParts parts
   DoubleQuoted parts -> fromParts parts
@@ -370,7 +370,7 @@ assembleString = \case
   fromParts = fmap (fmap principledStringMConcat . sequence) . traverse go
 
   go = runAntiquoted "\n"
-                     (pure . Just . principledMakeNixStringWithoutContext)
+                     (pure . Just . principledMakeNStringWithoutContext)
                      (>>= fromValueMay)
 
 buildArgument

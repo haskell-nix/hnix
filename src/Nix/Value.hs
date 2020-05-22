@@ -58,7 +58,7 @@ data NValueF p m r
     = NVConstantF NAtom
      -- | A string has a value and a context, which can be used to record what a
      -- string has been build from
-    | NVStrF NixString
+    | NVStrF NAtom
     | NVPathF FilePath
     | NVListF [r]
     | NVSetF (AttrSet r) (AttrSet SourcePos)
@@ -315,9 +315,9 @@ nvConstant x = Free (NValue (pure (NVConstantF x)))
 pattern NVStr' ns <- NValue (extract -> NVStrF ns)
 pattern NVStr ns <- Free (NVStr' ns)
 
-nvStr' :: Applicative f => NixString -> NValue' t f m r
+nvStr' :: Applicative f => NAtom -> NValue' t f m r
 nvStr' ns = NValue (pure (NVStrF ns))
-nvStr :: Applicative f => NixString -> NValue t f m
+nvStr :: Applicative f => NAtom -> NValue t f m
 nvStr ns = Free (NValue (pure (NVStrF ns)))
 
 pattern NVPath' x <- NValue (extract -> NVPathF x)

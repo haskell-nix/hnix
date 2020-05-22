@@ -81,7 +81,7 @@ alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
 alignEq :: (Align f, Traversable f) => (a -> b -> Bool) -> f a -> f b -> Bool
 alignEq eq fa fb = runIdentity $ alignEqM (\x y -> Identity (eq x y)) fa fb
 
-isDerivationM :: Monad m => (t -> m (Maybe NixString)) -> AttrSet t -> m Bool
+isDerivationM :: Monad m => (t -> m (Maybe NAtom)) -> AttrSet t -> m Bool
 isDerivationM f m = case M.lookup "type" m of
   Nothing -> pure False
   Just t  -> do
@@ -92,7 +92,7 @@ isDerivationM f m = case M.lookup "type" m of
       Just s  -> pure $ principledStringIgnoreContext s == "derivation"
       Nothing -> pure False
 
-isDerivation :: Monad m => (t -> Maybe NixString) -> AttrSet t -> Bool
+isDerivation :: Monad m => (t -> Maybe NAtom) -> AttrSet t -> Bool
 isDerivation f = runIdentity . isDerivationM (\x -> Identity (f x))
 
 valueFEqM
@@ -127,7 +127,7 @@ valueFEq attrsEq eq x y = runIdentity $ valueFEqM
 
 compareAttrSetsM
   :: Monad m
-  => (t -> m (Maybe NixString))
+  => (t -> m (Maybe NAtom))
   -> (t -> t -> m Bool)
   -> AttrSet t
   -> AttrSet t
@@ -144,7 +144,7 @@ compareAttrSetsM f eq lm rm = do
   where compareAttrs = alignEqM eq lm rm
 
 compareAttrSets
-  :: (t -> Maybe NixString)
+  :: (t -> Maybe NAtom)
   -> (t -> t -> Bool)
   -> AttrSet t
   -> AttrSet t

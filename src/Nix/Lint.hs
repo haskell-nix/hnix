@@ -262,7 +262,7 @@ instance ToValue Bool m (Symbolic m) where
 
 instance ToValue [Symbolic m] m (Symbolic m) where
 
-instance FromValue NixString m (Symbolic m) where
+instance FromValue NAtom m (Symbolic m) where
 
 instance FromValue (AttrSet (Symbolic m), AttrSet SourcePos) m (Symbolic m) where
 

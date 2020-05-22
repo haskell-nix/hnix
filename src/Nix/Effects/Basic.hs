@@ -146,7 +146,7 @@ findPathBy finder l name = do
       demand p $ fromValue >=> \(Path path) -> case M.lookup "prefix" s of
         Nothing -> tryPath path Nothing
         Just pf -> demand pf $ fromValueMay >=> \case
-          Just (nsPfx :: NixString) ->
+          Just (nsPfx :: NAtom) ->
             let pfx = hackyStringIgnoreContext nsPfx
             in  if not (Text.null pfx)
                   then tryPath path (Just (Text.unpack pfx))

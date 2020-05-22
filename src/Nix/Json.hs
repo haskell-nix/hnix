@@ -22,8 +22,8 @@ import           Nix.Utils
 import           Nix.Value
 import           Nix.Value.Monad
 
-nvalueToJSONNixString :: MonadNix e t f m => NValue t f m -> m NixString
-nvalueToJSONNixString =
+nvalueToJSONNString :: MonadNix e t f m => NValue t f m -> m NAtom
+nvalueToJSONNString =
   runWithStringContextT
     . fmap
         ( TL.toStrict
@@ -39,7 +39,7 @@ nvalueToJSON = \case
   NVConstant (NFloat n) -> pure $ A.toJSON n
   NVConstant (NBool  b) -> pure $ A.toJSON b
   NVConstant NNull      -> pure $ A.Null
-  NVStr      ns         -> A.toJSON <$> extractNixString ns
+  NVStr      ns         -> A.toJSON <$> extractNString ns
   NVList l ->
     A.Array
       .   V.fromList
