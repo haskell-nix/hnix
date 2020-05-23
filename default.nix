@@ -8,7 +8,7 @@
 
 , withHoogle  ? true
 
-, rev ? "8da81465c19fca393a3b17004c743e4d82a98e4f"
+, rev ? "29d57de30101b51b016310ee51c2c4ec762f88db" #  2020-05-23: NOTE: UTC 17:00
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
