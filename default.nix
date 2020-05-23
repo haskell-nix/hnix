@@ -60,15 +60,17 @@
 }:
 
 let
-  hnix-store-src = pkgs.fetchFromGitHub {
-    owner = "haskell-nix";
-    repo = "hnix-store";
-    rev = "0.2.0.0";
-    sha256 = "1qf5rn43d46vgqqgmwqdkjh78rfg6bcp4kypq3z7mx46sdpzvb78";
-  };
+
+  #  2020-05-23: NOTE: Currently HNix-store needs no overlay
+  # hnix-store-src = pkgs.fetchFromGitHub {
+  #   owner = "haskell-nix";
+  #   repo = "hnix-store";
+  #   rev = "0.2.0.0";
+  #   sha256 = "1qf5rn43d46vgqqgmwqdkjh78rfg6bcp4kypq3z7mx46sdpzvb78";
+  # };
 
   overlay = pkgs.lib.foldr pkgs.lib.composeExtensions (_: _: {}) [
-    (import "${hnix-store-src}/overlay.nix")
+    # (import "${hnix-store-src}/overlay.nix")
     (self: super: with pkgs.haskell.lib;
       pkgs.lib.optionalAttrs withHoogle {
       ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
