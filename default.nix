@@ -69,11 +69,8 @@ let
 
   overlay = pkgs.lib.foldr pkgs.lib.composeExtensions (_: _: {}) [
     (import "${hnix-store-src}/overlay.nix")
-    (self: super: with pkgs.haskell.lib; {
-
-      semialign         = super.semialign_1_1;
-
-    } // pkgs.lib.optionalAttrs withHoogle {
+    (self: super: with pkgs.haskell.lib;
+      pkgs.lib.optionalAttrs withHoogle {
       ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
       ghcWithPackages = self.ghc.withPackages;
     })
