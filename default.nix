@@ -74,9 +74,6 @@ let
       # Type error in the tests under ghc844 package set
       Diff = dontCheck super.Diff;
 
-      mono-traversable  = dontCheck super.mono-traversable;
-      regex-tdfa-text   = doJailbreak super.regex-tdfa-text;
-      these             = doJailbreak super.these;
       semialign         = super.semialign_1_1;
 
     } // pkgs.lib.optionalAttrs withHoogle {
