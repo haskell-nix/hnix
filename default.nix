@@ -82,23 +82,6 @@ let
       multistate        = doJailbreak (overrideCabal super.multistate (attrs: { broken = false; }));
       butcher           = doJailbreak (overrideCabal super.butcher (attrs: { broken = false; }));
 
-      brittany = doJailbreak (self.callCabal2nix "brittany"
-        (pkgs.fetchFromGitHub {
-           owner  = "lspitzner";
-           repo   = "brittany";
-           rev    = "af227a797d588eda936280dc1c3b0b376735335e";
-           sha256 = "0l1nk4dgmlv8vl1d993vnyw3da0kzg4gq8c2zd8sd224f2rz6f35";
-           # date = 2019-12-20T01:20:07+01:00;
-         }) {});
-
-      ghc-exactprint = dontCheck (self.callCabal2nix "ghc-exactprint"
-        (pkgs.fetchFromGitHub {
-           owner  = "alanz";
-           repo   = "ghc-exactprint";
-           rev    = "91f54d7a7a1d8d2131c5e83d13dee6c9e8b57831";
-           sha256 = "15yf0ckcb6f706p39w448vgj0nrkd0rk71lvb1nd0ak46y0aqnhb";
-           # date = 2019-08-28T20:44:28+02:00;
-         }) {});
     } // pkgs.lib.optionalAttrs withHoogle {
       ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
       ghcWithPackages = self.ghc.withPackages;
