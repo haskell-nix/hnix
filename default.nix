@@ -78,9 +78,6 @@ let
       regex-tdfa-text   = doJailbreak super.regex-tdfa-text;
       these             = doJailbreak super.these;
       semialign         = super.semialign_1_1;
-      semialign-indexed = doJailbreak super.semialign-indexed;
-      multistate        = doJailbreak (overrideCabal super.multistate (attrs: { broken = false; }));
-      butcher           = doJailbreak (overrideCabal super.butcher (attrs: { broken = false; }));
 
     } // pkgs.lib.optionalAttrs withHoogle {
       ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
