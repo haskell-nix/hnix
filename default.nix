@@ -71,9 +71,6 @@ let
     (import "${hnix-store-src}/overlay.nix")
     (self: super: with pkgs.haskell.lib; {
 
-      # Type error in the tests under ghc844 package set
-      Diff = dontCheck super.Diff;
-
       semialign         = super.semialign_1_1;
 
     } // pkgs.lib.optionalAttrs withHoogle {
