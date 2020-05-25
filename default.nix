@@ -71,40 +71,8 @@ let
     (import "${hnix-store-src}/overlay.nix")
     (self: super: with pkgs.haskell.lib; {
 
-      # Type error in the tests under ghc844 package set
-      Diff = dontCheck super.Diff;
-
-      # These packages only depend on contravariant when ghc >= 8.6.3
-      # Without normalizing the dependencies, our build fails with
-      # aeson and base-compat-batteries unable to find `contravariant`
-      aeson                 = addBuildDepend super.aeson self.contravariant;
-      base-compat-batteries = addBuildDepend super.base-compat-batteries self.contravariant;
-
-      mono-traversable  = dontCheck super.mono-traversable;
-      regex-tdfa-text   = doJailbreak super.regex-tdfa-text;
-      these             = doJailbreak super.these;
       semialign         = super.semialign_1_1;
-      semialign-indexed = doJailbreak super.semialign-indexed;
-      multistate        = doJailbreak (overrideCabal super.multistate (attrs: { broken = false; }));
-      butcher           = doJailbreak (overrideCabal super.butcher (attrs: { broken = false; }));
 
-      brittany = doJailbreak (self.callCabal2nix "brittany"
-        (pkgs.fetchFromGitHub {
-           owner  = "lspitzner";
-           repo   = "brittany";
-           rev    = "af227a797d588eda936280dc1c3b0b376735335e";
-           sha256 = "0l1nk4dgmlv8vl1d993vnyw3da0kzg4gq8c2zd8sd224f2rz6f35";
-           # date = 2019-12-20T01:20:07+01:00;
-         }) {});
-
-      ghc-exactprint = dontCheck (self.callCabal2nix "ghc-exactprint"
-        (pkgs.fetchFromGitHub {
-           owner  = "alanz";
-           repo   = "ghc-exactprint";
-           rev    = "91f54d7a7a1d8d2131c5e83d13dee6c9e8b57831";
-           sha256 = "15yf0ckcb6f706p39w448vgj0nrkd0rk71lvb1nd0ak46y0aqnhb";
-           # date = 2019-08-28T20:44:28+02:00;
-         }) {});
     } // pkgs.lib.optionalAttrs withHoogle {
       ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
       ghcWithPackages = self.ghc.withPackages;
