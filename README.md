@@ -4,6 +4,7 @@
 [![Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/haskell-nix/Lobby)
 [![Hackage](https://img.shields.io/hackage/v/hnix?color=purple&label=Latest%20release)](https://hackage.haskell.org/package/hnix)
 <sup>([Hackage Matrix Builder](https://matrix.hackage.haskell.org/package/hnix))</sup>
+[![Dependencies](https://img.shields.io/hackage-deps/v/hnix?label=Dependencies)](https://packdeps.haskellers.com/feed?needle=hnix)
 
 Haskell parser, evaluator and type checker for the Nix language.
 
