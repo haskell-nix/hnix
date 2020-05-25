@@ -12,6 +12,7 @@ import           Data.GADT.Compare
 import           Data.IORef
 import           Data.Maybe
 import           Data.STRef
+import           Type.Reflection ((:~:)(Refl))
 
 import           Unsafe.Coerce
 
