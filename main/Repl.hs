@@ -53,7 +53,7 @@ import           Control.Monad.Reader
 import           Control.Monad.State.Strict
 
 import           System.Console.Haskeline.MonadException
-import           System.Console.Repline
+import           System.Console.Repline        hiding ( options )
 import           System.Environment
 import           System.Exit
 
