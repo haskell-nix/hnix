@@ -8,7 +8,7 @@
 
 , withHoogle  ? true
 
-, rev ? "8da81465c19fca393a3b17004c743e4d82a98e4f"
+, rev ? "29d57de30101b51b016310ee51c2c4ec762f88db" #  2020-05-23: NOTE: UTC 17:00
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
@@ -60,20 +60,19 @@
 }:
 
 let
-  hnix-store-src = pkgs.fetchFromGitHub {
-    owner = "haskell-nix";
-    repo = "hnix-store";
-    rev = "0.1.0.0";
-    sha256 = "1z48msfkiys432rkd00fgimjgspp98dci11kgg3v8ddf4mk1s8g0";
-  };
+
+  #  2020-05-23: NOTE: Currently HNix-store needs no overlay
+  # hnix-store-src = pkgs.fetchFromGitHub {
+  #   owner = "haskell-nix";
+  #   repo = "hnix-store";
+  #   rev = "0.2.0.0";
+  #   sha256 = "1qf5rn43d46vgqqgmwqdkjh78rfg6bcp4kypq3z7mx46sdpzvb78";
+  # };
 
   overlay = pkgs.lib.foldr pkgs.lib.composeExtensions (_: _: {}) [
-    (import "${hnix-store-src}/overlay.nix")
-    (self: super: with pkgs.haskell.lib; {
-
-      semialign         = super.semialign_1_1;
-
-    } // pkgs.lib.optionalAttrs withHoogle {
+    # (import "${hnix-store-src}/overlay.nix")
+    (self: super: with pkgs.haskell.lib;
+      pkgs.lib.optionalAttrs withHoogle {
       ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
       ghcWithPackages = self.ghc.withPackages;
     })
@@ -97,7 +96,6 @@ in haskellPackages.developPackage {
   modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
     buildTools = (attrs.buildTools or []) ++ [
       haskellPackages.cabal-install
-      # haskellPackages.brittany
     ];
 
     enableLibraryProfiling = doProfiling;
