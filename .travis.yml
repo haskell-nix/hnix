@@ -11,6 +11,7 @@ language: nix
 sudo: required    #  2020-05-26: NOTE: Despite deprecated, but siletly still RAM 4GB -> 7.5GB
 
 git:
+  quiet: true # NOTE: Do not log
   depth: 4    # NOTE: "The use of clone depth: 1 often results in a git error
               # when a new commit has been pushed to a branch before the CI
               # platform started cloning the intended commit."
