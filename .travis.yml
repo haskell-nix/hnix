@@ -99,6 +99,7 @@ env:
 jobs:
   allow_failures:
     - env: GHCVERSION=ghcjs
+    - env: GHCVERSION=ghc8101
 
 before_script:
   - sudo mount -o remount,exec,size=4G,mode=755 /run/user || true
