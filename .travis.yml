@@ -67,6 +67,8 @@ env:
     - doBenchmark=false
     - enableExecutableProfiling=false
     - enableLibraryProfiling=false
+    # NOTE: Build a source distribution tarball instead of using the source files directly. The effect is that the package is built as if it were published on hackage. This can be used as a test for the source distribution, assuming the build fails when packaging mistakes are in the cabal file.
+    - buildFromSdist=false
 
   matrix:
     - GHCVERSION=ghc865 STRICT=false TRACING=false
