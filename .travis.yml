@@ -75,6 +75,13 @@ env:
     # NOTE: Disable core optimizations, significantly speeds up the build
     - disableOptimization=true
     - buildStackProject=false
+    # NOTE: Modify a Haskell package to add shell completion scripts for the given executable produced by it. These completion scripts will be picked up automatically if the resulting derivation is installed, e.g. by `nix-env -i`.
+    # Invocation:
+    #   generateOptparseApplicativeCompletions command pkg
+    #
+    #   command: name of an executable
+    #       pkg: Haskell package that builds the executables
+    - generateOptparseApplicativeCompletion=false
 
   matrix:
     - GHCVERSION=ghc865 STRICT=false TRACING=false
