@@ -44,6 +44,8 @@ env:
     # - rev=nixos-unstable
     # # NOTE: Switching into Nixpkgs revision
     # - NIX_PATH="nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"
+    # NOTE: Project/binary name
+    - name=hnix
     # NOTE: Enable all our tests in cabal
     - ALL_TESTS=yes
 
