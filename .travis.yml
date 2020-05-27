@@ -1,6 +1,3 @@
-os:
-  - linux
-  - osx
 
 language: nix
 
@@ -10,6 +7,11 @@ git:
   depth: 4    # NOTE: "The use of clone depth: 1 often results in a git error
               # when a new commit has been pushed to a branch before the CI
               # platform started cloning the intended commit."
+
+# NOTE: {os} x {jobs} - {exclude} = {build matrix}
+os:
+  - linux
+  - osx
 
 env:
   global:
