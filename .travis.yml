@@ -54,6 +54,9 @@ env:
     - failOnAllWarnings=false
     # NOTE: checkUnusedPackages: is `failOnAllWarnings` + `cabal sdist` to ensure all needed files are listed in the Cabal file. Uses `packunused` or GHC internals. Adds a post-build check to verify that dependencies declared in the cabal file are actually used. The first attrset argument can be used to configure the strictness of this check and a list of ignored package names that would otherwise cause false alarms.
     - checkUnusedPackages=false
+    # NOTE: Generation and installation of a coverage report.
+    # See https://wiki.haskell.org/Haskell_program_coverage
+    - doCoverage=false
 
   matrix:
     - GHCVERSION=ghc865 STRICT=false TRACING=false
