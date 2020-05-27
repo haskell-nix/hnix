@@ -88,10 +88,11 @@ env:
     - ghcjsTmpLogFile='/tmp/ghcjsTmpLogFile.jog'
     # NOTE: Length of the GHCJS log tail (<40000)
     - ghcjsLogTailLength=10000
+  # NOTE: {os} x {jobs} - {exclude} = {build matrix}
+  jobs:
+    - GHCVERSION=ghc865
+    - GHCVERSION=ghcjs
 
-  matrix:
-    - GHCVERSION=ghc865 STRICT=false TRACING=false
-#     - GHCVERSION=ghcjs
 # 
 # matrix:
 #   allow_failures:
