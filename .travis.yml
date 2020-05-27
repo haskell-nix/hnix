@@ -120,8 +120,13 @@ before_script:
   - sudo launchctl kickstart -k system/org.nixos.nix-daemon || true
 
 script:
-  - nix-env -iA cachix -f https://github.com/NixOS/nixpkgs/tarball/db557aab7b690f5e0e3348459f2e4dc8fd0d9298
-  - cachix use hnix
+  #
+  #
+  # NOTE: Install Cachix client using Nix:
+  - nix-env -iA cachix -f https://cachix.org/api/v1/install
+  - cachix use "$name"
+  #
+  #
   - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push hnix --watch-store& fi
   - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then ./build.sh | cachix push hnix; else ./build.sh; fi
 
