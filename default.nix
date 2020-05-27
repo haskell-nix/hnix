@@ -10,12 +10,14 @@
 
 , rev ? "29d57de30101b51b016310ee51c2c4ec762f88db" #  2020-05-23: NOTE: UTC 17:00
 
+, sha256 ? "1wjljkffb3gzdvpfc4v98mrhzack6k9i7860n8cf5nipyab6jbq9"
+
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
     then abort "hnix requires at least nix 2.0"
-    else import (builtins.fetchGit {
-           url = "https://github.com/NixOS/nixpkgs/";
-           inherit rev; }) {
+    else import (builtins.fetchTarball {
+           url = "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz";
+           inherit sha256; }) {
       config.allowUnfree = true;
       config.allowBroken = true;
       # config.packageOverrides = pkgs: rec {
