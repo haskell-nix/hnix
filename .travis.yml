@@ -74,6 +74,7 @@ env:
     - buildStrictly=false
     # NOTE: Disable core optimizations, significantly speeds up the build
     - disableOptimization=true
+    - buildStackProject=false
 
   matrix:
     - GHCVERSION=ghc865 STRICT=false TRACING=false
