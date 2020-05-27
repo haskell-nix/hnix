@@ -66,6 +66,7 @@ env:
     # NOTE: doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
     - doBenchmark=false
     - enableExecutableProfiling=false
+    - enableLibraryProfiling=false
 
   matrix:
     - GHCVERSION=ghc865 STRICT=false TRACING=false
