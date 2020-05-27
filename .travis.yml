@@ -63,6 +63,8 @@ env:
     - doJailbreak=false
     # NOTE: Disables Nix dependency checking, compilation and execution of test suites listed in the package description file.
     - doCheck=true
+    # NOTE: doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
+    - doBenchmark=false
 
   matrix:
     - GHCVERSION=ghc865 STRICT=false TRACING=false
