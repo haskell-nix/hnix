@@ -31,21 +31,11 @@ import           Control.Monad.Catch
 import           Control.Monad.ListM            ( sortByM )
 import           Control.Monad.Reader           ( asks )
 
--- Using package imports here because there is a bug in cabal2nix that demands
--- us to put the hashing package in the unconditional dependency list.
--- See https://github.com/NixOS/cabal2nix/issues/348 for more info
-#if MIN_VERSION_hashing(0, 1, 0)
-import "hashing" Crypto.Hash
-import qualified "hashing" Crypto.Hash.MD5     as MD5
-import qualified "hashing" Crypto.Hash.SHA1    as SHA1
-import qualified "hashing" Crypto.Hash.SHA256  as SHA256
-import qualified "hashing" Crypto.Hash.SHA512  as SHA512
-#else
-import qualified "cryptohash-md5" Crypto.Hash.MD5 as MD5
-import qualified "cryptohash-sha1" Crypto.Hash.SHA1 as SHA1
-import qualified "cryptohash-sha256" Crypto.Hash.SHA256 as SHA256
-import qualified "cryptohash-sha512" Crypto.Hash.SHA512 as SHA512
-#endif
+import Crypto.Hash
+import qualified Crypto.Hash.MD5     as MD5
+import qualified Crypto.Hash.SHA1    as SHA1
+import qualified Crypto.Hash.SHA256  as SHA256
+import qualified Crypto.Hash.SHA512  as SHA512
 
 import qualified Data.Aeson                    as A
 import           Data.Align                     ( alignWith )
@@ -1208,32 +1198,16 @@ hashString nsAlgo ns = Prim $ do
   case algo of
     "md5" ->
       f $ \s ->
-#if MIN_VERSION_hashing(0, 1, 0)
                 Text.pack $ show (hash (encodeUtf8 s) :: MD5.MD5)
-#else
-          decodeUtf8 $ Base16.encode $ MD5.hash $ encodeUtf8 s
-#endif
     "sha1" ->
       f $ \s ->
-#if MIN_VERSION_hashing(0, 1, 0)
                 Text.pack $ show (hash (encodeUtf8 s) :: SHA1.SHA1)
-#else
-          decodeUtf8 $ Base16.encode $ SHA1.hash $ encodeUtf8 s
-#endif
     "sha256" ->
       f $ \s ->
-#if MIN_VERSION_hashing(0, 1, 0)
                 Text.pack $ show (hash (encodeUtf8 s) :: SHA256.SHA256)
-#else
-          decodeUtf8 $ Base16.encode $ SHA256.hash $ encodeUtf8 s
-#endif
     "sha512" ->
       f $ \s ->
-#if MIN_VERSION_hashing(0, 1, 0)
                 Text.pack $ show (hash (encodeUtf8 s) :: SHA512.SHA512)
-#else
-          decodeUtf8 $ Base16.encode $ SHA512.hash $ encodeUtf8 s
-#endif
     _ ->
       throwError
         $  ErrorCall
