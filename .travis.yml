@@ -8,7 +8,7 @@ version: ~> 1.0
 
 language: nix
 
-sudo: required
+sudo: required    #  2020-05-26: NOTE: Despite deprecated, but siletly still RAM 4GB -> 7.5GB
 
 git:
   depth: 4    # NOTE: "The use of clone depth: 1 often results in a git error
