@@ -1,4 +1,10 @@
-{ compiler    ? "ghc865"
+# *** head: imports & settings
+
+{
+
+# **** Compiler version, settings and Hoogle
+
+  compiler    ? "ghc865"
 
 , doBenchmark ? false
 , doTracing   ? false
@@ -8,9 +14,13 @@
 
 , withHoogle  ? true
 
+# **** Nixpkgs revision
+
 , rev ? "29d57de30101b51b016310ee51c2c4ec762f88db" #  2020-05-23: NOTE: UTC 17:00
 
 , sha256 ? "1wjljkffb3gzdvpfc4v98mrhzack6k9i7860n8cf5nipyab6jbq9"
+
+# **** Nixpkgs source
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
@@ -59,9 +69,16 @@
     }
 
 , mkDerivation   ? null
+
+# **** 
+
 }:
 
+# *** ~let~ block (Custom abstractions)
+
 let
+
+# **** nix-store-src
 
   #  2020-05-23: NOTE: Currently HNix-store needs no overlay
   # hnix-store-src = pkgs.fetchFromGitHub {
@@ -71,14 +88,21 @@ let
   #   sha256 = "1qf5rn43d46vgqqgmwqdkjh78rfg6bcp4kypq3z7mx46sdpzvb78";
   # };
 
+# **** overlay
+
   overlay = pkgs.lib.foldr pkgs.lib.composeExtensions (_: _: {}) [
     # (import "${hnix-store-src}/overlay.nix")
     (self: super: with pkgs.haskell.lib;
+
+# ***** Package overrides
+
       pkgs.lib.optionalAttrs withHoogle {
       ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
       ghcWithPackages = self.ghc.withPackages;
     })
   ];
+
+# **** overrideHaskellPackage
 
   overrideHaskellPackages = orig: {
     buildHaskellPackages =
@@ -88,8 +112,12 @@ let
       else overlay;
   };
 
+# **** haskellPackages
+
   haskellPackages = pkgs.haskell.packages.${compiler}.override
     overrideHaskellPackages;
+
+# *** main: ~in~ haskellPackafes.developPackage
 
 in haskellPackages.developPackage {
   name = "hnix";
