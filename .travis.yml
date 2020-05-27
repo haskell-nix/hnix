@@ -57,6 +57,8 @@ env:
     # NOTE: Generation and installation of a coverage report.
     # See https://wiki.haskell.org/Haskell_program_coverage
     - doCoverage=false
+    # NOTE: Generation and installation of haddock API documentation
+    - doHaddock=false
 
   matrix:
     - GHCVERSION=ghc865 STRICT=false TRACING=false
