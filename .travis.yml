@@ -157,5 +157,6 @@ notifications:
     urls:
       - https://webhooks.gitter.im/e/b0312b18473340459d3e
     on_success: change
-    on_failure: always
+    # NOTE: `master` status in on the front page badge.
+    on_failure: never
     on_start: never
