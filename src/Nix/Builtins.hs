@@ -30,13 +30,11 @@ import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.ListM            ( sortByM )
 import           Control.Monad.Reader           ( asks )
-
-import Crypto.Hash
-import qualified Crypto.Hash.MD5     as MD5
-import qualified Crypto.Hash.SHA1    as SHA1
-import qualified Crypto.Hash.SHA256  as SHA256
-import qualified Crypto.Hash.SHA512  as SHA512
-
+import           Crypto.Hash
+import qualified Crypto.Hash.MD5               as MD5
+import qualified Crypto.Hash.SHA1              as SHA1
+import qualified Crypto.Hash.SHA256            as SHA256
+import qualified Crypto.Hash.SHA512            as SHA512
 import qualified Data.Aeson                    as A
 import           Data.Align                     ( alignWith )
 import           Data.Array
