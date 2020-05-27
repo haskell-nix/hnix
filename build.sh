@@ -2,6 +2,14 @@
 
 # NOTE: Script for the CI builds. CI comes here from `.travis.yml`
 
+GHCJS_BUILD(){
+# NOTE: Function for GHCJS build that outputs its huge log into a file
+
+  # NOTE: Run the build into Log (log is too long for Travis)
+  "$@" &> "$ghcjsTmpLogFile"
+
+}
+
 BUILD_PROJECT(){
 set -xe
 set -euo pipefail
