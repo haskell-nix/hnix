@@ -125,9 +125,10 @@ script:
   # NOTE: Install Cachix client using Nix:
   - nix-env -iA cachix -f https://cachix.org/api/v1/install
   - cachix use "$name"
+  # NOTE: If key is set - use Cachix push, else - proceed without it
+  - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push "$name" --watch-store& fi
   #
   #
-  - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push hnix --watch-store& fi
   - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then ./build.sh | cachix push hnix; else ./build.sh; fi
 
 branches:
