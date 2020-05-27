@@ -4,6 +4,7 @@ version: ~> 1.0
 
 # NOTE: Please, be aware that Travis YAML & docs & API are hard to make work properly. Travis configuration requires a lot of retries and some compromises. Tere are many ways that may look like that can be done in that way, but it would not work most of the time, or not work the way that you expect, need it. Travis config works only the certain particular ways. Some things look possible - but they are impossible in Travis. Current configuration is "the best way possible" that was found in ~100-150-200 retries, depending on what concider a retry.
 
+# NOTE: Let the official Travis YAML checker help you: https://config.travis-ci.com/explore
 
 language: nix
 
