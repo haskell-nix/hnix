@@ -2,6 +2,7 @@
 
 # NOTE: Script for the CI builds. CI comes here from `.travis.yml`
 
+BUILD_PROJECT(){
 set -xe
 set -euo pipefail
 IFS=$'\n\t'
@@ -40,6 +41,8 @@ generateOptparseApplicativeCompletion=${generateOptparseApplicativeCompletion:-'
 allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
 ghcjsTmpLogFile=${ghcjsTmpLogFile:-'/tmp/ghcjsTmpLogFile.jog'}
 ghcjsLogTailLength=${ghcjsLogTailLength:-'10000'}
+
+}
 
 MAIN() {
 
