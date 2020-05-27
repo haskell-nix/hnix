@@ -72,6 +72,8 @@ env:
     # NOTE: Build the package in a strict way to uncover potential problems. This includes buildFromSdist and failOnAllWarnings.
     #  2020-05-26: NOTE: Currently HNix not able to pass Strict
     - buildStrictly=false
+    # NOTE: Disable core optimizations, significantly speeds up the build
+    - disableOptimization=true
 
   matrix:
     - GHCVERSION=ghc865 STRICT=false TRACING=false
