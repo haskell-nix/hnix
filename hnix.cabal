@@ -962,6 +962,8 @@ executable hnix
     , unordered-containers
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
+  if impl(ghc < 8.10)
+    buildable: False
   if impl(ghcjs)
     buildable: False
   default-language: Haskell2010
