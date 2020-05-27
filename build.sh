@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# NOTE: Script for the CI builds. CI comes here from `.travis.yml`
+
 set -xe
 set -euo pipefail
 IFS=$'\n\t'
