@@ -46,6 +46,8 @@ env:
     # - NIX_PATH="nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"
     # NOTE: Project/binary name
     - name=hnix
+    # NOTE: Used in the `generateOptparseApplicativeCompletions = true`
+    - pkgName='haskellPackages.hnix'
     # NOTE: Enable all our tests in cabal
     - ALL_TESTS=yes
 
