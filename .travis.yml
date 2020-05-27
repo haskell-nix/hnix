@@ -100,6 +100,14 @@ jobs:
   allow_failures:
     - env: GHCVERSION=ghcjs
     - env: GHCVERSION=ghc8101
+  #  2020-05-26: NOTE: Discard macOS GHCJS build + -> CI loop becomes ~30-40 minutes shorter
+  exclude:
+    - os: osx
+      env: GHCVERSION=ghcjs
+    - os: osx
+      env: GHCVERSION=ghc8101
+    - os: osx
+      env: GHCVERSION=ghc865
 
 before_script:
   - sudo mount -o remount,exec,size=4G,mode=755 /run/user || true
