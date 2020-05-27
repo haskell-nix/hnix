@@ -131,7 +131,10 @@ script:
   - sleep 2
   #
   #
-  - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then ./build.sh | cachix push hnix; else ./build.sh; fi
+  # NOTE: Normal GHC build
+  - if [ ! "$GHCVERSION" = 'ghcjs' ]; then ./build.sh; fi
+  #
+  #
 
 branches:
   only:
