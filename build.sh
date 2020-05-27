@@ -65,8 +65,37 @@ allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
 ghcjsTmpLogFile=${ghcjsTmpLogFile:-'/tmp/ghcjsTmpLogFile.jog'}
 ghcjsLogTailLength=${ghcjsLogTailLength:-'10000'}
 
-if [ "$GHCVERSION" = "ghcjs" ]; then
-    nix-build --substituters 'https://nixcache.reflex-frp.org?trusted=1' ghcjs
+if [ "$GHCVERSION" = "ghcjs" ]
+  then
+
+    # NOTE: GHC JS build
+    # Bu itselt GHC JS build every tine creates >65000 line logs that are >4MB in size, so Travis terminates due to log size quota.
+    # nixbuild --quiet (x5) does not work on GHC JS build
+    # So there was a need to make it build.
+    # Solution - is to silence the stdout
+    # But Travis then terminates on 10 min no stdout timeout
+    # so HACK: SILENT wrapper allows to surpress the huge log, while still preserves the Cachix caching ability in any case of the build
+    # On build failure outputs the last 10000 lines of log (that should be more then enough), and terminates
+    SILENT nix-build                                         \
+      --arg failOnAllWarnings "$failOnAllWarnings"           \
+      --arg buildStrictly "$buildStrictly"                   \
+      --arg checkUnusedPackages "$checkUnusedPackages"       \
+      --arg doCoverage "$doCoverage" \
+      --arg doHaddock "$doHaddock" \
+      --arg doJailbreak "$doJailbreak" \
+      --arg doCheck "$doCheck" \
+      --arg doBenchmark "$doBenchmark" \
+      --arg enableExecutableProfiling "$enableExecutableProfiling" \
+      --arg enableLibraryProfiling "$enableLibraryProfiling" \
+      --arg buildFromSdist "$buildFromSdist" \
+      --arg buildStrictly "$buildStrictly" \
+      --arg disableOptimization "$disableOptimization" \
+      --arg buildStackProject "$buildStackProject" \
+      "$generateOptparseApplicativeCompletion" \
+      --arg allowInconsistentDependencies "$allowInconsistentDependencies" \
+      ghcjs \
+      "$@"
+
   else
 
     # NOTE: Normal GHC build
