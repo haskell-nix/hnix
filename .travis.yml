@@ -50,6 +50,8 @@ env:
     - pkgName='haskellPackages.hnix'
     # NOTE: Enable all our tests in cabal
     - ALL_TESTS=yes
+    # NOTE: Turn all warn into err with {-Wall,-Werror}
+    - failOnAllWarnings=false
 
   matrix:
     - GHCVERSION=ghc865 STRICT=false TRACING=false
