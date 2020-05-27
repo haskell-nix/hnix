@@ -95,10 +95,10 @@ env:
     - GHCVERSION=ghc8101
     - GHCVERSION=ghcjs
 
-# 
-# matrix:
-#   allow_failures:
-#     - env: GHCVERSION=ghcjs
+#  2020-05-25: NOTE: We still yet to build this in `master`
+jobs:
+  allow_failures:
+    - env: GHCVERSION=ghcjs
 
 before_script:
   - sudo mount -o remount,exec,size=4G,mode=755 /run/user || true
