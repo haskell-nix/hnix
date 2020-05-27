@@ -21,6 +21,9 @@ os:
   - linux
   - osx
 
+#  2020-05-26: NOTE: Currently newest Travis dist Ubuntu 18.04 bionic
+dist: bionic
+
 env:
   global:
     - ALL_TESTS=yes
