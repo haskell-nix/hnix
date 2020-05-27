@@ -84,6 +84,10 @@ env:
     - generateOptparseApplicativeCompletion=false
     # NOTE: Don't fail at configure time if there are multiple versions of the same package in the (recursive) dependencies of the package being built. Will delay failures, if any, to compile time.
     - allowInconsistentDependencies=false
+    # NOTE: Log file to dump GHCJS build into
+    - ghcjsTmpLogFile='/tmp/ghcjsTmpLogFile.jog'
+    # NOTE: Length of the GHCJS log tail (<40000)
+    - ghcjsLogTailLength=10000
 
   matrix:
     - GHCVERSION=ghc865 STRICT=false TRACING=false
