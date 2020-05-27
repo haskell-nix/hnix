@@ -10,6 +10,30 @@ GHCJS_BUILD(){
 
 }
 
+SILENT(){
+# NOTE: Funtion that silences the build process
+# In normal mode outputs only the /nix/store paths
+
+  echo "Log: $ghcjsTmpLogFile"
+  # NOTE: Pass into the ghcjsbuild function the build command
+  if GHCJS_BUILD "$@"
+  then
+
+    # NOTE: Output log lines for stdout -> cachix caching
+    grep '^/nix/store/' "$ghcjsTmpLogFile"
+
+  else
+
+    # NOTE: Output log lines for stdout -> cachix caching
+    grep '^/nix/store/' "$ghcjsTmpLogFile"
+
+    # NOTE: Propagate the error state, fail the CI build
+    exit 1
+
+  fi
+
+}
+
 BUILD_PROJECT(){
 set -xe
 set -euo pipefail
