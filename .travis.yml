@@ -59,6 +59,8 @@ env:
     - doCoverage=false
     # NOTE: Generation and installation of haddock API documentation
     - doHaddock=false
+    # NOTE: Escape the version bounds from the cabal file. You may want to avoid this function.
+    - doJailbreak=false
 
   matrix:
     - GHCVERSION=ghc865 STRICT=false TRACING=false
