@@ -153,6 +153,8 @@ script:
 cache:
   directories:
     - /nix/store
+
+# NOTE: Track the commits on this repo branches + cron rechecks build
 branches:
   only:
     - master
