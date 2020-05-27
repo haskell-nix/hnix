@@ -963,6 +963,8 @@ executable hnix
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
   if impl(ghc < 8.10)
+    -- GHC < 8.10 comes with haskeline < 0.8, which we don't support.
+    -- To simplify CI, we just disable the component.
     buildable: False
   if impl(ghcjs)
     buildable: False
