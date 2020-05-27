@@ -135,6 +135,17 @@ script:
   - if [ ! "$GHCVERSION" = 'ghcjs' ]; then ./build.sh; fi
   #
   #
+  # NOTE: GHCJS build
+  # HACK: Travis terminates GHCJS because of very huge log,
+  # so `SILENT` mode for it was created
+  # and travis_wait 50 to wait on no outputs (otherwise Travis terminates build in 10 minutes as stale)
+  # and `bash` wrapper so Travis parses `travis_wait` => `if; then; fi` line
+  - travis_wait 50 bash -c 'if [ "$GHCVERSION" = "ghcjs" ]; then ./build.sh; fi'
+  # NOTE: For GHCJS dump the last $ghcjsLogTailLength lines into CI out to see
+  # Since build runs inside `travis_wait` - it was impossible to output log from it
+  - if [ "$GHCVERSION" = "ghcjs" ]; then tail -n "$ghcjsLogTailLength" "$ghcjsTmpLogFile" && rm "$ghcjsTmpLogFile"; fi
+  #
+  #
 
 branches:
   only:
