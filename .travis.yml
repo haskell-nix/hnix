@@ -24,6 +24,9 @@ os:
 #  2020-05-26: NOTE: Currently newest Travis dist Ubuntu 18.04 bionic
 dist: bionic
 
+# #  2020-05-26: NOTE: Currently newest macOS image
+# osx_image: xcode11.4  # NOTE: Official Nix installer fails spectacularly on it.
+
 env:
   global:
     - ALL_TESTS=yes
