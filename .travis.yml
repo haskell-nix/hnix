@@ -92,6 +92,7 @@ env:
   jobs:
     - GHCVERSION=ghc865
     - GHCVERSION=ghc883
+    - GHCVERSION=ghc8101
     - GHCVERSION=ghcjs
 
 # 
