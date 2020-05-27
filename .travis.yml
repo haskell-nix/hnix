@@ -61,6 +61,8 @@ env:
     - doHaddock=false
     # NOTE: Escape the version bounds from the cabal file. You may want to avoid this function.
     - doJailbreak=false
+    # NOTE: Disables Nix dependency checking, compilation and execution of test suites listed in the package description file.
+    - doCheck=true
 
   matrix:
     - GHCVERSION=ghc865 STRICT=false TRACING=false
