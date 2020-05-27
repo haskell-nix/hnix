@@ -65,6 +65,17 @@ allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
 ghcjsTmpLogFile=${ghcjsTmpLogFile:-'/tmp/ghcjsTmpLogFile.jog'}
 ghcjsLogTailLength=${ghcjsLogTailLength:-'10000'}
 
+
+if [ "$generateOptparseApplicativeCompletion" = 'true' ]
+  then
+    # NOTE: Enable shell complition generation
+    generateOptparseApplicativeCompletion="--arg generateOptparseApplicativeCompletion $name $pkgName"
+  else
+    # NOTE: Skip the shell complition generation
+    generateOptparseApplicativeCompletion=''
+fi
+
+
 if [ "$GHCVERSION" = "ghcjs" ]
   then
 
