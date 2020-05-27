@@ -1,3 +1,7 @@
+#  2020-05-26: NOTE: Enabling experimental Travis feature of YAML check inside
+# Look into: Build #NUM -> Job #NUM.N -> View config -> Build config validation
+version: ~> 1.0
+
 
 language: nix
 
