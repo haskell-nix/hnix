@@ -41,3 +41,27 @@ allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
 ghcjsTmpLogFile=${ghcjsTmpLogFile:-'/tmp/ghcjsTmpLogFile.jog'}
 ghcjsLogTailLength=${ghcjsLogTailLength:-'10000'}
 
+MAIN() {
+
+# NOTE: Secrets are not shared to PRs from forks
+# NOTE: nix-build | cachix push <name> - uploads binaries, runs&works only in the branches of the main repository, so for PRs - else case runs
+
+  if [ ! "$CACHIX_SIGNING_KEY" = "" ]
+
+    then
+
+      # NOTE: Build of the inside repo branch - enable push Cachix cache
+      BUILD_PROJECT | cachix push "$name"
+
+    else
+
+      # NOTE: Build of the side repo/PR - can not push Cachix cache
+      BUILD_PROJECT
+
+  fi
+
+}
+
+# NOTE: Run the entry function of the script
+MAIN
+
