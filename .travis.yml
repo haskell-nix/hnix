@@ -91,6 +91,7 @@ env:
   # NOTE: {os} x {jobs} - {exclude} = {build matrix}
   jobs:
     - GHCVERSION=ghc865
+    - GHCVERSION=ghc883
     - GHCVERSION=ghcjs
 
 # 
