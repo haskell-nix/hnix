@@ -914,7 +914,6 @@ library
       , cryptohash-sha1 >= 0.11.100 && < 0.12
       , cryptohash-sha256 >= 0.11.101 && < 0.12
       , cryptohash-sha512 >= 0.11.100 && < 0.12
-      , haskeline >= 0.8.0.0 && < 0.9
       , pretty-show >= 1.9.5 && < 1.11
       , serialise >= 0.2.1 && < 0.3
   -- if !flag(profiling)
@@ -947,7 +946,7 @@ executable hnix
     , filepath
     , free
     , hashing
-    , haskeline
+    , haskeline >= 0.8.0.0 && < 0.9
     , hnix
     , mtl
     , optparse-applicative
