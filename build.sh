@@ -66,6 +66,7 @@ ghcjsTmpLogFile=${ghcjsTmpLogFile:-'/tmp/ghcjsTmpLogFile.jog'}
 ghcjsLogTailLength=${ghcjsLogTailLength:-'10000'}
 
 
+# NOTE: Resulting value injects into `nix-build` commands
 if [ "$generateOptparseApplicativeCompletion" = 'true' ]
   then
     # NOTE: Enable shell completion generation
