@@ -71,7 +71,7 @@ if [ "$generateOptparseApplicativeCompletion" = 'true' ]
     # NOTE: Enable shell completion generation
     generateOptparseApplicativeCompletion="--arg generateOptparseApplicativeCompletion $name $pkgName"
   else
-    # NOTE: Skip the shell complition generation
+    # NOTE: Skip the shell completion generation
     generateOptparseApplicativeCompletion=''
 fi
 
