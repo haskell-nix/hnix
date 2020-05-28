@@ -68,7 +68,7 @@ ghcjsLogTailLength=${ghcjsLogTailLength:-'10000'}
 
 if [ "$generateOptparseApplicativeCompletion" = 'true' ]
   then
-    # NOTE: Enable shell complition generation
+    # NOTE: Enable shell completion generation
     generateOptparseApplicativeCompletion="--arg generateOptparseApplicativeCompletion $name $pkgName"
   else
     # NOTE: Skip the shell complition generation
