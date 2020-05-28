@@ -33,10 +33,10 @@ env:
     - secure: "dm6I+M4+V+C7QMTpcSADdKPE633SvmToXZrTbZ7miNDGmMN+/SfHeN2ybi1+PW6oViMlbPN/7J/aEfiGjSJI8vLk72Y4uCWGmpSb8TXZLu6+whnxtZzzW8+z4tsM4048QJg7CF3N/25U8thRFgs3DqUub1Sf3nG9LrNWdz6ZcDQ="
     # NOTE: Nix by default uses nixpkgs-unstable channel
     # NOTE: Setup for Nixpkgs revision
-    # `rev` vals in order of freshness -> cache & stability (branch causes differ):
+    # `rev` vals in order of freshness -> cache & stability:
     # { master
     # , commitHash
-    # , haskell-updates
+    # , haskell-updates  # Haskell development branch in Nixpkgs, can be inconsistent. Weekly merged into the upstream
     # , nixpkgs-unstable
     # , nixos-unstable
     # , nixos-20.03
