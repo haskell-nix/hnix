@@ -108,6 +108,9 @@ jobs:
       env: GHCVERSION=ghc8101
     - os: osx
       env: GHCVERSION=ghc865
+    # NOTE: Discard Linux GHC 8.8.3 in favour of macOS GHC 8.8.3, Nixpkgs channel is the same and Nix package code is the same, since we test other Linux deployments and since 8.8.3 builds on macOS - we can be sure it builds inside Nix in Linux also. So lets optimize number of CI builds
+    - os: linux
+      env: GHCVERSION=ghc883
 
 before_script:
   - sudo mount -o remount,exec,size=4G,mode=755 /run/user || true
