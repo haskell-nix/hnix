@@ -11,7 +11,7 @@ GHCJS_BUILD(){
 }
 
 SILENT(){
-# NOTE: Funtion that silences the build process
+# NOTE: Function that silences the build process
 # In normal mode outputs only the /nix/store paths
 
   echo "Log: $ghcjsTmpLogFile"
@@ -158,4 +158,3 @@ MAIN() {
 
 # NOTE: Run the entry function of the script
 MAIN
-
