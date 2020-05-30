@@ -1,41 +1,160 @@
-os:
-  - linux
-  - osx
+#  2020-05-26: NOTE: Enabling experimental Travis feature of YAML check inside
+# Look into: Build #NUM -> Job #NUM.N -> View config -> Build config validation
+version: ~> 1.0
+
+# NOTE: Please, be aware that Travis YAML & docs & API are hard to make work properly. Travis configuration requires a lot of retries and some compromises. There are many ways that may look like that can be done in that way, but it would not work most of the time, or not work the way that you expect/need it. Travis config works only in certain particular ways. Some things look possible - but they are impossible in Travis. Current configuration is "the best way possible" that was found in ~100-150-200 retries, depending on what one considers a retry.
+
+# NOTE: Let the official Travis YAML checker help you: https://config.travis-ci.com/explore
 
 language: nix
 
-sudo: required
+sudo: required    #  2020-05-26: NOTE: This mode is deprecated, but still offers 7.5 GB RAM instead of the default 4GB
 
 git:
+  quiet: true # NOTE: Do not log
   depth: 4    # NOTE: "The use of clone depth: 1 often results in a git error
               # when a new commit has been pushed to a branch before the CI
               # platform started cloning the intended commit."
 
+# NOTE: {os} x {jobs} - {exclude} = {build matrix}
+os:
+  - linux
+  - osx
+
+#  2020-05-26: NOTE: Currently newest Travis dist Ubuntu 18.04 bionic
+dist: bionic
+
+# #  2020-05-26: NOTE: Currently newest macOS image
+# osx_image: xcode11.4  # NOTE: Official Nix installer fails spectacularly on it.
+
 env:
   global:
-    - ALL_TESTS=yes
+    # NOTE: This is secure CACHIX_SIGNING_KEY=val
     - secure: "dm6I+M4+V+C7QMTpcSADdKPE633SvmToXZrTbZ7miNDGmMN+/SfHeN2ybi1+PW6oViMlbPN/7J/aEfiGjSJI8vLk72Y4uCWGmpSb8TXZLu6+whnxtZzzW8+z4tsM4048QJg7CF3N/25U8thRFgs3DqUub1Sf3nG9LrNWdz6ZcDQ="
+    # NOTE: Nix by default uses nixpkgs-unstable channel
+    # NOTE: Setup for Nixpkgs revision
+    # `rev` vals in order of freshness -> cache & stability:
+    # { master
+    # , commitHash
+    # , haskell-updates  # Haskell development branch in Nixpkgs, can be inconsistent. Weekly merged into the upstream
+    # , nixpkgs-unstable
+    # , nixos-unstable
+    # , nixos-20.03
+    # }
+    # - rev=nixos-unstable
+    # # NOTE: Switching into Nixpkgs revision
+    # - NIX_PATH="nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"
+    # NOTE: Project/binary name
+    - name=hnix
+    # NOTE: Used in the `generateOptparseApplicativeCompletions = true`
+    - pkgName='haskellPackages.hnix'
+    # NOTE: Enable all our tests in cabal
+    - ALL_TESTS=yes
+    # NOTE: Turn all warn into err with {-Wall,-Werror}
+    - failOnAllWarnings=false
+    # NOTE: checkUnusedPackages: is `failOnAllWarnings` + `cabal sdist` to ensure all needed files are listed in the Cabal file. Uses `packunused` or GHC internals. Adds a post-build check to verify that dependencies declared in the cabal file are actually used. The first attrset argument can be used to configure the strictness of this check and a list of ignored package names that would otherwise cause false alarms.
+    - checkUnusedPackages=false
+    # NOTE: Generation and installation of a coverage report.
+    # See https://wiki.haskell.org/Haskell_program_coverage
+    - doCoverage=false
+    # NOTE: Generation and installation of haddock API documentation
+    - doHaddock=false
+    # NOTE: Escape the version bounds from the cabal file. You may want to avoid this function.
+    - doJailbreak=false
+    # NOTE: Disables Nix dependency checking, compilation and execution of test suites listed in the package description file.
+    - doCheck=true
+    # NOTE: doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
+    - doBenchmark=false
+    - enableExecutableProfiling=false
+    - enableLibraryProfiling=false
+    # NOTE: Build a source distribution tarball instead of using the source files directly. The effect is that the package is built as if it were published on hackage. This can be used as a test for the source distribution, assuming the build fails when packaging mistakes are in the cabal file.
+    - buildFromSdist=false
+    # NOTE: Build the package in a strict way to uncover potential problems. This includes buildFromSdist and failOnAllWarnings.
+    #  2020-05-26: NOTE: Currently HNix not able to pass Strict
+    - buildStrictly=false
+    # NOTE: Disable core optimizations, significantly speeds up the build
+    - disableOptimization=true
+    - buildStackProject=false
+    # NOTE: Modify a Haskell package to add shell completion scripts for the given executable produced by it. These completion scripts will be picked up automatically if the resulting derivation is installed, e.g. by `nix-env -i`.
+    # Invocation:
+    #   generateOptparseApplicativeCompletions command pkg
+    #
+    #   command: name of an executable
+    #       pkg: Haskell package that builds the executables
+    - generateOptparseApplicativeCompletion=false
+    # NOTE: Don't fail at configure time if there are multiple versions of the same package in the (recursive) dependencies of the package being built. Will delay failures, if any, to compile time.
+    - allowInconsistentDependencies=false
+    # NOTE: Log file to dump GHCJS build into
+    - ghcjsTmpLogFile='/tmp/ghcjsTmpLogFile.jog'
+    # NOTE: Length of the GHCJS log tail (<40000)
+    - ghcjsLogTailLength=10000
+  # NOTE: {os} x {jobs} - {exclude} = {build matrix}
+  jobs:
+    - GHCVERSION=ghc865
+    - GHCVERSION=ghc883
+    - GHCVERSION=ghc8101
+    - GHCVERSION=ghcjs
 
-  matrix:
-    - GHCVERSION=ghc865 STRICT=false TRACING=false
-#     - GHCVERSION=ghcjs
-# 
-# matrix:
-#   allow_failures:
-#     - env: GHCVERSION=ghcjs
+#  2020-05-25: NOTE: We still yet to build this in `master`
+jobs:
+  allow_failures:
+    - env: GHCVERSION=ghcjs
+    - env: GHCVERSION=ghc8101
+  #  2020-05-26: NOTE: Discard macOS GHCJS build + -> CI loop becomes ~30-40 minutes shorter
+  exclude:
+    - os: osx
+      env: GHCVERSION=ghcjs
+    - os: osx
+      env: GHCVERSION=ghc8101
+    - os: osx
+      env: GHCVERSION=ghc865
+    # NOTE: Discard Linux GHC 8.8.3 in favour of macOS GHC 8.8.3, Nixpkgs channel is the same and Nix package code is the same, since we test other Linux deployments and since 8.8.3 builds on macOS - we can be sure it builds inside Nix in Linux also. So lets optimize number of CI builds
+    - os: linux
+      env: GHCVERSION=ghc883
 
 before_script:
   - sudo mount -o remount,exec,size=4G,mode=755 /run/user || true
   - sudo mkdir -p /etc/nix
   - echo "trusted-users = root $USER" | sudo tee -a /etc/nix/nix.conf
+  # NOTE: macOS service restart
   - sudo launchctl kickstart -k system/org.nixos.nix-daemon || true
 
 script:
-  - nix-env -iA cachix -f https://github.com/NixOS/nixpkgs/tarball/db557aab7b690f5e0e3348459f2e4dc8fd0d9298
-  - cachix use hnix
-  - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push hnix --watch-store& fi
-  - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then ./build.sh | cachix push hnix; else ./build.sh; fi
+  #
+  #
+  # NOTE: Install Cachix client using Nix:
+  - nix-env -iA cachix -f https://cachix.org/api/v1/install
+  - cachix use "$name"
+  # NOTE: If key is set - use Cachix push, else - proceed without it
+  - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push "$name" --watch-store& fi
+  # NOTE: Brush timeout for previous daemon to start
+  - sleep 2
+  #
+  #
+  # NOTE: Normal GHC build
+  - if [ ! "$GHCVERSION" = 'ghcjs' ]; then ./build.sh; fi
+  #
+  #
+  # NOTE: GHCJS build
+  # HACK: Travis terminates GHCJS because of very huge log,
+  # so `SILENT` mode for it was created
+  # and travis_wait 50 to wait on no outputs (otherwise Travis terminates build in 10 minutes as stale)
+  # and `bash` wrapper so Travis parses `travis_wait` => `if; then; fi` line
+  - travis_wait 50 bash -c 'if [ "$GHCVERSION" = "ghcjs" ]; then ./build.sh; fi'
+  # NOTE: For GHCJS dump the last $ghcjsLogTailLength lines into CI out to see
+  # Since build runs inside `travis_wait` - it was impossible to output log from it
+  - if [ "$GHCVERSION" = "ghcjs" ]; then tail -n "$ghcjsLogTailLength" "$ghcjsTmpLogFile" && rm "$ghcjsTmpLogFile"; fi
+  #
+  #
 
+# NOTE: Travis cache allows near fast cache loading of Nix pkgs store,
+# Since the Cachix does not cache PRs - Travis cache is great because it caches PR branch builds
+# During devepment of this PR I had ~40GB cache on the PR branch.
+cache:
+  directories:
+    - /nix/store
+
+# NOTE: Track the commits on this repo branches + cron rechecks build
 branches:
   only:
     - master
@@ -45,6 +164,8 @@ notifications:
   webhooks:
     urls:
       - https://webhooks.gitter.im/e/b0312b18473340459d3e
+    # NOTE: Be silent about CI, until some PR started to pass CI succesfully.
     on_success: change
-    on_failure: always
+    # NOTE: `master` status in on the front page badge.
+    on_failure: never
     on_start: never
