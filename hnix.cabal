@@ -910,10 +910,6 @@ library
         Nix.Options.Parser
     build-depends:
         base16-bytestring >= 0.1.1 && < 0.2
-      , cryptohash-md5 >= 0.11.100 && < 0.12
-      , cryptohash-sha1 >= 0.11.100 && < 0.12
-      , cryptohash-sha256 >= 0.11.101 && < 0.12
-      , cryptohash-sha512 >= 0.11.100 && < 0.12
       , haskeline >= 0.7.4.2 && < 0.8
       , pretty-show >= 1.9.5 && < 1.11
       , serialise >= 0.2.1 && < 0.3
@@ -937,16 +933,11 @@ executable hnix
     , bytestring
     , comonad
     , containers
-    , cryptohash-md5
-    , cryptohash-sha1
-    , cryptohash-sha256
-    , cryptohash-sha512
     , data-fix
     , deepseq
     , exceptions
     , filepath
     , free
-    , hashing
     , haskeline
     , hnix
     , mtl
@@ -989,17 +980,12 @@ test-suite hnix-tests
     , base16-bytestring
     , bytestring
     , containers
-    , cryptohash-md5
-    , cryptohash-sha1
-    , cryptohash-sha256
-    , cryptohash-sha512
     , data-fix
     , deepseq >=1.4.3 && <1.5
     , directory
     , exceptions
     , filepath
     , generic-random
-    , hashing
     , hedgehog
     , hnix
     , interpolate
@@ -1043,15 +1029,10 @@ benchmark hnix-benchmarks
     , bytestring
     , containers
     , criterion
-    , cryptohash-md5
-    , cryptohash-sha1
-    , cryptohash-sha256
-    , cryptohash-sha512
     , data-fix
     , deepseq >=1.4.3 && <1.5
     , exceptions
     , filepath
-    , hashing
     , hnix
     , mtl
     , optparse-applicative
