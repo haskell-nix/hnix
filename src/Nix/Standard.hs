@@ -47,9 +47,6 @@ import           Nix.Utils.Fix1
 import           Nix.Value
 import           Nix.Value.Monad
 import           Nix.Var
-#ifdef MIN_VERSION_haskeline
-import           System.Console.Haskeline.MonadException hiding(catch)
-#endif
 
 -- All of the following type classes defer to the underlying 'm'.
 
@@ -68,21 +65,6 @@ deriving instance MonadPaths (t (Fix1T t m) m) => MonadPaths (Fix1T t m)
 deriving instance MonadInstantiate (t (Fix1T t m) m) => MonadInstantiate (Fix1T t m)
 deriving instance MonadExec (t (Fix1T t m) m) => MonadExec (Fix1T t m)
 deriving instance MonadIntrospect (t (Fix1T t m) m) => MonadIntrospect (Fix1T t m)
-
-#ifdef MIN_VERSION_haskeline
--- For whatever reason, using the default StateT instance provided by
--- haskeline does not work.
-instance MonadException m
-  => MonadException(StateT(HashMap FilePath NExprLoc) m) where
-  controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
-    run' = RunIO(fmap(StateT . const) . run . flip runStateT s)
-    in fmap(flip runStateT s) $ f run'
-
-instance MonadException m => MonadException(Fix1T StandardTF m) where
-  controlIO f = mkStandardT $ controlIO $ \(RunIO run) ->
-    let run' = RunIO(fmap mkStandardT . run . runStandardT)
-    in runStandardT <$> f run'
-#endif
 
 type MonadFix1T t m = (MonadTrans (Fix1T t), Monad (t (Fix1T t m) m))
 
@@ -219,6 +201,7 @@ newtype StandardTF r m a
     , MonadIO
     , MonadCatch
     , MonadThrow
+    , MonadMask
     , MonadReader (Context r (StdValue r))
     , MonadState (HashMap FilePath NExprLoc)
     )

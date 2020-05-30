@@ -52,19 +52,14 @@ import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
 
-import           System.Console.Haskeline.MonadException
-import           System.Console.Repline        hiding ( options )
+import           System.Console.Repline        hiding ( options, prefix )
 import           System.Environment
 import           System.Exit
 
 
-main :: (MonadNix e t f m, MonadIO m, MonadException m) => m ()
+main :: (MonadNix e t f m, MonadIO m, MonadMask m) => m ()
 main = flip evalStateT initState
-#if MIN_VERSION_repline(0, 2, 0)
     $ evalRepl (return prefix) cmd options (Just ':') completer welcomeText
-#else
-    $ evalRepl prefix cmd options completer welcomeText
-#endif
  where
   prefix = "hnix> "
   welcomeText =
@@ -86,7 +81,7 @@ initState :: MonadIO m => IState t f m
 initState = IState M.empty
 
 type Repl e t f m = HaskelineT (StateT (IState t f m) m)
-hoistErr :: MonadIO m => Result a -> Repl e t f m a
+hoistErr :: (MonadIO m, MonadThrow m) => Result a -> Repl e t f m a
 hoistErr (Success val) = return val
 hoistErr (Failure err) = do
   liftIO $ print err
@@ -98,7 +93,7 @@ hoistErr (Failure err) = do
 
 exec
   :: forall e t f m
-   . (MonadNix e t f m, MonadIO m, MonadException m)
+   . (MonadNix e t f m, MonadIO m)
   => Bool
   -> Text.Text
   -> Repl e t f m (NValue t f m)
@@ -129,7 +124,7 @@ exec update source = do
 
 
 cmd
-  :: (MonadNix e t f m, MonadIO m, MonadException m)
+  :: (MonadNix e t f m, MonadIO m)
   => String
   -> Repl e t f m ()
 cmd source = do
@@ -153,7 +148,7 @@ browse _ = do
 
 -- :load command
 load
-  :: (MonadNix e t f m, MonadIO m, MonadException m)
+  :: (MonadNix e t f m, MonadIO m)
   => [String]
   -> Repl e t f m ()
 load args = do
@@ -162,7 +157,7 @@ load args = do
 
 -- :type command
 typeof
-  :: (MonadNix e t f m, MonadException m, MonadIO m)
+  :: (MonadNix e t f m, MonadIO m)
   => [String]
   -> Repl e t f m ()
 typeof args = do
@@ -199,7 +194,7 @@ comp n = do
                                       )
 
 options
-  :: (MonadNix e t f m, MonadIO m, MonadException m)
+  :: (MonadNix e t f m, MonadIO m)
   => [(String, [String] -> Repl e t f m ())]
 options =
   [ ( "load"
@@ -213,7 +208,7 @@ options =
 
 help
   :: forall e t f m
-   . (MonadNix e t f m, MonadIO m, MonadException m)
+   . (MonadNix e t f m, MonadIO m)
   => [String]
   -> Repl e t f m ()
 help _ = liftIO $ do
