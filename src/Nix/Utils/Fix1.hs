@@ -48,6 +48,7 @@ deriving instance MonadFix (t (Fix1T t m) m) => MonadFix (Fix1T t m)
 deriving instance MonadIO (t (Fix1T t m) m) => MonadIO (Fix1T t m)
 deriving instance MonadCatch (t (Fix1T t m) m) => MonadCatch (Fix1T t m)
 deriving instance MonadThrow (t (Fix1T t m) m) => MonadThrow (Fix1T t m)
+deriving instance MonadMask (t (Fix1T t m) m) => MonadMask (Fix1T t m)
 
 deriving instance MonadReader e (t (Fix1T t m) m) => MonadReader e (Fix1T t m)
 deriving instance MonadState s (t (Fix1T t m) m) => MonadState s (Fix1T t m)
