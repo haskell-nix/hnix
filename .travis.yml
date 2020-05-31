@@ -150,12 +150,6 @@ script:
   #
   #
 
-# NOTE: Travis cache allows near fast cache loading of Nix pkgs store,
-# Since the Cachix does not cache PRs - Travis cache is great because it caches PR branch builds
-# During devepment of this PR I had ~40GB cache on the PR branch.
-cache:
-  directories:
-    - /nix/store
 
 # NOTE: Track the commits on this repo branches + cron rechecks build
 branches:
