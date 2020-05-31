@@ -30,6 +30,8 @@ generateOptparseApplicativeCompletions=${generateOptparseApplicativeCompletions:
 allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
 ghcjsTmpLogFile=${ghcjsTmpLogFile:-'/tmp/ghcjsTmpLogFile.log'}
 ghcjsLogTailLength=${ghcjsLogTailLength:-'10000'}
+# NOTE: If key not provided (branch is not inside the central repo) - init CACHIX_SIGNING_KEY as empty
+CACHIX_SIGNING_KEY=${CACHIX_SIGNING_KEY:-""}
 
 
 GHCJS_BUILD(){
