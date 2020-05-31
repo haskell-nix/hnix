@@ -1,6 +1,9 @@
+{ compiler    ? "ghc883"
 
 , doBenchmark ? false
-{ compiler    ? "ghc883"
+, doCoverage  ? false
+, doHaddock   ? false
+, doCheck     ? true
 , enableLibraryProfiling ? false
 , enableExecutableProfiling ? false
 , doTracing   ? false
@@ -106,6 +109,9 @@ in haskellPackages.developPackage {
     ];
 
     inherit doBenchmark;
+    inherit doCoverage;
+    inherit doHaddock;
+    inherit doCheck;
     inherit enableLibraryProfiling;
     inherit enableExecutableProfiling;
 
