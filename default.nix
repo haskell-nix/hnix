@@ -18,7 +18,6 @@
     else import (builtins.fetchTarball {
            url = "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz";
            inherit sha256; }) {
-      config.allowUnfree = true;
       config.allowBroken = true;
       # config.packageOverrides = pkgs: rec {
       #   nix = pkgs.nixStable.overrideDerivation (attrs: with pkgs; rec {
