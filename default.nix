@@ -1,6 +1,6 @@
-{ compiler    ? "ghc865"
 
 , doBenchmark ? false
+{ compiler    ? "ghc883"
 , doTracing   ? false
 , doOptimize  ? false # enables GHC optimizations for production use
 , doProfiling ? false # enables profiling support in GHC
