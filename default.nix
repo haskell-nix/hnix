@@ -1,9 +1,10 @@
 
 , doBenchmark ? false
 { compiler    ? "ghc883"
+, enableLibraryProfiling ? false
+, enableExecutableProfiling ? false
 , doTracing   ? false
 , doOptimize  ? false # enables GHC optimizations for production use
-, doProfiling ? false # enables profiling support in GHC
 , doStrict    ? false
 
 , withHoogle  ? true
@@ -99,15 +100,14 @@ in haskellPackages.developPackage {
       haskellPackages.cabal-install
     ];
 
-    enableLibraryProfiling = doProfiling;
-    enableExecutableProfiling = doProfiling;
-
     testHaskellDepends = attrs.testHaskellDepends ++ [
       pkgs.nix
       haskellPackages.criterion
     ];
 
     inherit doBenchmark;
+    inherit enableLibraryProfiling;
+    inherit enableExecutableProfiling;
 
     configureFlags =
          pkgs.stdenv.lib.optional doTracing  "--flags=tracing"
