@@ -9,6 +9,15 @@
 , doTracing   ? false
 , doOptimize  ? false # enables GHC optimizations for production use
 , doStrict    ? false
+, doJailbreak ? false
+, enableSharedExecutables ? true
+, enableSharedLibraries ? true
+, enableStaticLibraries ? false
+, enableDeadCodeElimination ? true
+, doHyperlinkSource ? false
+, doStrip ? false
+, justStaticExecutables ? false
+, allowInconsistentDependencies ? false
 
 , withHoogle  ? true
 
