@@ -2,6 +2,36 @@
 
 # NOTE: Script for the CI builds. CI comes here from `.travis.yml`
 
+# NOTE: The most strict error checking requirements
+set -Eexuo pipefail
+
+# NOTE: If var not imported - set to the default value
+GHCVERSION=${GHCVERSION:-'ghc883'}
+rev=${rev:-'nixpkgs-unstable'}
+NIX_PATH=${NIX_PATH:-"nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"}
+export NIX_PATH
+name=${name:-'defaultBinaryName'}
+pkgName=${pkgName:-'defaultPkgName'}
+failOnAllWarnings=${failOnAllWarnings:-'false'}
+checkUnusedPackages=${checkUnusedPackages:-'false'}
+doCoverage=${doCoverage:-'false'}
+doHaddock=${doHaddock:-'false'}
+doJailbreak=${doJailbreak:-'false'}
+doCheck=${doCheck:-'true'}
+doBenchmark=${doBenchmark:-'false'}
+enableExecutableProfiling=${enableExecutableProfiling:-'false'}
+enableLibraryProfiling=${enableLibraryProfiling:-'false'}
+buildFromSdist=${buildFromSdist:-'false'}
+buildStrictly=${buildStrictly:-'false'}
+disableOptimization=${disableOptimization:-'true'}
+buildStackProject=${buildStackProject:-'false'}
+# NOTE: *Oprparse* key is redifined in the code further
+generateOptparseApplicativeCompletions=${generateOptparseApplicativeCompletions:-'false'}
+allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
+ghcjsTmpLogFile=${ghcjsTmpLogFile:-'/tmp/ghcjsTmpLogFile.log'}
+ghcjsLogTailLength=${ghcjsLogTailLength:-'10000'}
+
+
 GHCJS_BUILD(){
 # NOTE: Function for GHCJS build that outputs its huge log into a file
 
@@ -35,35 +65,6 @@ SILENT(){
 }
 
 BUILD_PROJECT(){
-set -xe
-set -euo pipefail
-IFS=$'\n\t'
-
-# NOTE: If var not imported - set to the default value
-GHCVERSION=${GHCVERSION:-ghc865}
-rev=${rev:-nixpkgs-unstable}
-NIX_PATH=${NIX_PATH:-"nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"}
-export NIX_PATH
-name=${name:-defaultBinaryName}
-pkgName=${pkgName:-defaultPkgName}
-failOnAllWarnings=${failOnAllWarnings:-'false'}
-checkUnusedPackages=${checkUnusedPackages:-'false'}
-doCoverage=${doCoverage:-'false'}
-doHaddock=${doHaddock:-'false'}
-doJailbreak=${doJailbreak:-'false'}
-doCheck=${doCheck:-'true'}
-doBenchmark=${doBenchmark:-'false'}
-enableExecutableProfiling=${enableExecutableProfiling:-'false'}
-enableLibraryProfiling=${enableLibraryProfiling:-'false'}
-buildFromSdist=${buildFromSdist:-'false'}
-buildStrictly=${buildStrictly:-'false'}
-disableOptimization=${disableOptimization:-'true'}
-buildStackProject=${buildStackProject:-'false'}
-# NOTE: *Oprparse* key is redifined in the code further
-generateOptparseApplicativeCompletion=${generateOptparseApplicativeCompletion:-'false'}
-allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
-ghcjsTmpLogFile=${ghcjsTmpLogFile:-'/tmp/ghcjsTmpLogFile.jog'}
-ghcjsLogTailLength=${ghcjsLogTailLength:-'10000'}
 
 
 # NOTE: Resulting value injects into `nix-build` commands
@@ -76,6 +77,7 @@ if [ "$generateOptparseApplicativeCompletion" = 'true' ]
     generateOptparseApplicativeCompletion=''
 fi
 
+IFS=$'\n\t'
 
 if [ "$GHCVERSION" = "ghcjs" ]
   then
