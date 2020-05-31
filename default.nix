@@ -1,14 +1,21 @@
 { compiler    ? "ghc883"
 
+# doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
 , doBenchmark ? false
+# Generation and installation of a coverage report.
+# See https://wiki.haskell.org/Haskell_program_coverage
 , doCoverage  ? false
+# Generation and installation of haddock API documentation
 , doHaddock   ? false
+# Nix dependency checking, compilation and execution of test suites listed in the package description file.
 , doCheck     ? true
 , enableLibraryProfiling ? false
 , enableExecutableProfiling ? false
 , doTracing   ? false
-, doOptimize  ? false # enables GHC optimizations for production use
+# Enables GHC optimizations for production use, without optimizations compilation is way faster
+, doOptimize  ? false
 , doStrict    ? false
+# Escape the version bounds from the cabal file. You may want to avoid this function.
 , doJailbreak ? false
 , enableSharedExecutables ? true
 , enableSharedLibraries ? true
@@ -17,6 +24,7 @@
 , doHyperlinkSource ? false
 , doStrip ? false
 , justStaticExecutables ? false
+# Don't fail at configure time if there are multiple versions of the same package in the (recursive) dependencies of the package being built. Will delay failures, if any, to compile time.
 , allowInconsistentDependencies ? false
 
 , withHoogle  ? true
