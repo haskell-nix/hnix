@@ -38,7 +38,6 @@ import           Data.List                      ( isPrefixOf
                                                 , foldl'
                                                 )
 import qualified Data.Map                      as Map
-import           Data.Monoid
 import           Data.Text                      ( unpack
                                                 , pack
                                                 )
