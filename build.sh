@@ -109,8 +109,7 @@ if [ "$GHCVERSION" = "ghcjs" ]
       --arg buildStackProject "$buildStackProject" \
       "$generateOptparseApplicativeCompletion" \
       --arg allowInconsistentDependencies "$allowInconsistentDependencies" \
-      ghcjs \
-      "$@"
+      ghcjs
 
   else
 
@@ -134,8 +133,7 @@ if [ "$GHCVERSION" = "ghcjs" ]
       --arg disableOptimization "$disableOptimization" \
       --arg buildStackProject "$buildStackProject" \
       "$generateOptparseApplicativeCompletion" \
-      --arg allowInconsistentDependencies "$allowInconsistentDependencies" \
-      "$@"
+      --arg allowInconsistentDependencies "$allowInconsistentDependencies"
 
 fi
 }
