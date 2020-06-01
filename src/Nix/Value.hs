@@ -30,20 +30,23 @@
 
 module Nix.Value where
 
-import           Control.Comonad
-import           Control.Exception
-import           Control.Monad
-import           Control.Monad.Free
-import           Control.Monad.Trans.Class
+import           Control.Comonad                ( Comonad, extract )
+import           Control.Exception              ( Exception )
+import           Control.Monad                  ( (<=<) )
+import           Control.Monad.Free             ( Free(..)
+                                                , hoistFree, iter, iterM )
+import           Control.Monad.Trans.Class      ( MonadTrans, lift )
 import qualified Data.Aeson                    as A
-import           Data.Functor.Classes
+import           Data.Functor.Classes           ( Show1
+                                                , liftShowsPrec
+                                                , showsUnaryWith )
 import           Data.HashMap.Lazy              ( HashMap )
 import           Data.Text                      ( Text )
 import           Data.Typeable                  ( Typeable )
-import           GHC.Generics
-import           Lens.Family2
-import           Lens.Family2.Stock
-import           Lens.Family2.TH
+import           GHC.Generics                   ( Generic )
+import           Lens.Family2.Stock             ( _1 )
+import           Lens.Family2.TH                ( makeTraversals
+                                                , makeLenses )
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
