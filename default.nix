@@ -136,6 +136,11 @@ in haskellPackages.developPackage {
     inherit doCheck;
     inherit enableLibraryProfiling;
     inherit enableExecutableProfiling;
+    inherit enableSharedExecutables;
+    inherit enableSharedLibraries;
+    inherit enableStaticLibraries;
+    inherit enableDeadCodeElimination;
+    inherit allowInconsistentDependencies;
 
     configureFlags =
          pkgs.stdenv.lib.optional doTracing  "--flags=tracing"
