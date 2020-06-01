@@ -20,7 +20,8 @@
 , enableSharedExecutables ? true
 , enableSharedLibraries ? true
 , enableStaticLibraries ? false
-, enableDeadCodeElimination ? true
+#  2020-06-02: NOTE: enableDeadCodeElimination = true: On GHC =< 8.8.3 macOS build falls due to https://gitlab.haskell.org/ghc/ghc/issues/17283, so temporarily set default to `false`
+, enableDeadCodeElimination ? false
 , doHyperlinkSource ? false
 , doStrip ? false
 , justStaticExecutables ? false
