@@ -148,6 +148,10 @@ nix upgrade-nix || true
 # NOTE: Superuser update for macOS setup
 sudo nix upgrade-nix || true
 
+# NOTE: Make channels current
+nix-channel --update || true
+sudo nix-channel --update || true
+
 
 # NOTE: Secrets are not shared to PRs from forks
 # NOTE: nix-build | cachix push <name> - uploads binaries, runs&works only in the branches of the main repository, so for PRs - else case runs
