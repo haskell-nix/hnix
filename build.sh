@@ -140,6 +140,15 @@ fi
 
 MAIN() {
 
+
+#  2020-06-01: NOTE: Nix installer installs old Nix version that has bugs that prevented importing Nixpks repository channels, updating to latest Nix since it does not have that bug
+# NOTE: Overall it is useful to have in CI test builds the latest stable Nix
+# NOTE: User-run update for Linux setup
+nix upgrade-nix || true
+# NOTE: Superuser update for macOS setup
+sudo nix upgrade-nix || true
+
+
 # NOTE: Secrets are not shared to PRs from forks
 # NOTE: nix-build | cachix push <name> - uploads binaries, runs&works only in the branches of the main repository, so for PRs - else case runs
 
