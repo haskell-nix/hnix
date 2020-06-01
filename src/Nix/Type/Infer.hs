@@ -40,7 +40,6 @@ import           Data.Fix                       ( cata )
 import           Data.Foldable
 import qualified Data.HashMap.Lazy             as M
 import           Data.List                      ( delete
-                                                , find
                                                 , nub
                                                 , intersect
                                                 , (\\)
