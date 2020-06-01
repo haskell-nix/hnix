@@ -29,7 +29,7 @@
 
 , withHoogle  ? true
 
-, rev ? "29d57de30101b51b016310ee51c2c4ec762f88db" #  2020-05-23: NOTE: UTC 17:00
+, rev ? "nixpkgs-unstable"
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
