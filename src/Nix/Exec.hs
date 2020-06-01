@@ -33,7 +33,6 @@ import           Control.Monad
 import           Control.Monad.Catch     hiding ( catchJust )
 import           Control.Monad.Fix
 import           Control.Monad.Reader
-import           Control.Monad.Trans.Reader     ( ReaderT(..) )
 import           Data.Fix
 import qualified Data.HashMap.Lazy             as M
 import           Data.List

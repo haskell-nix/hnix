@@ -40,9 +40,6 @@ import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
-import           Control.Monad.Trans.Reader     ( ReaderT(..) )
-import           Control.Monad.Trans.State.Strict
-                                                ( StateT(..) )
 import           Data.Fix
 -- import           Data.Foldable
 import           Data.HashMap.Lazy              ( HashMap )
