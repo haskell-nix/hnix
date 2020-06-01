@@ -29,14 +29,21 @@
 
 , withHoogle  ? true
 
+
+, useRev ? false
+# Accepts Nixpkgs channel name and Git revision
 , rev ? "nixpkgs-unstable"
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
     then abort "hnix requires at least nix 2.0"
-    else import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz") {}
+    else
+      if useRev
+        then import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz") {}
+      # Please not guard with hash, so we able to use current channels (rolling `rev`) of Haskell&Nixpkgs
+        else import <nixpkgs> {}
       // {
-      config.allowBroken = true;
+        config.allowBroken = true;
       # config.packageOverrides = pkgs: rec {
       #   nix = pkgs.nixStable.overrideDerivation (attrs: with pkgs; rec {
       #     src = if builtins.pathExists ./data/nix/.version
@@ -73,7 +80,7 @@
       #     outputs = builtins.filter (s: s != "doc" && s != "man" ) attrs.outputs;
       #   });
       # };
-    }
+      }
 
 , mkDerivation   ? null
 }:
