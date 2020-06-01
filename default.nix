@@ -29,17 +29,21 @@
 
 , withHoogle  ? true
 
-, rev ? "29d57de30101b51b016310ee51c2c4ec762f88db" #  2020-05-23: NOTE: UTC 17:00
 
-, sha256 ? "1wjljkffb3gzdvpfc4v98mrhzack6k9i7860n8cf5nipyab6jbq9"
+, useRev ? false
+# Accepts Nixpkgs channel name and Git revision
+, rev ? "nixpkgs-unstable"
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
     then abort "hnix requires at least nix 2.0"
-    else import (builtins.fetchTarball {
-           url = "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz";
-           inherit sha256; }) {
-      config.allowBroken = true;
+    else
+      if useRev
+        then import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz") {}
+      # Please not guard with hash, so we able to use current channels (rolling `rev`) of Haskell&Nixpkgs
+        else import <nixpkgs> {}
+      // {
+        config.allowBroken = true;
       # config.packageOverrides = pkgs: rec {
       #   nix = pkgs.nixStable.overrideDerivation (attrs: with pkgs; rec {
       #     src = if builtins.pathExists ./data/nix/.version
@@ -76,7 +80,7 @@
       #     outputs = builtins.filter (s: s != "doc" && s != "man" ) attrs.outputs;
       #   });
       # };
-    }
+      }
 
 , mkDerivation   ? null
 }:
