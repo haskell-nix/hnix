@@ -133,17 +133,18 @@ let
         haskellPackages.criterion
       ];
 
+      # Declare that the header set arguments as according Haskell.lib switches
+      inherit allowInconsistentDependencies;
+      inherit doCheck;
+      inherit enableDeadCodeElimination;
+      inherit enableLibraryProfiling;
+      inherit enableExecutableProfiling;
+      inherit enableSharedLibraries;
+      inherit enableStaticLibraries;
+      inherit enableSharedExecutables;
       inherit doBenchmark;
       inherit doCoverage;
       inherit doHaddock;
-      inherit doCheck;
-      inherit enableLibraryProfiling;
-      inherit enableExecutableProfiling;
-      inherit enableSharedExecutables;
-      inherit enableSharedLibraries;
-      inherit enableStaticLibraries;
-      inherit enableDeadCodeElimination;
-      inherit allowInconsistentDependencies;
 
       configureFlags =
           pkgs.stdenv.lib.optional doTracing  "--flags=tracing"
