@@ -6,6 +6,8 @@
 , doJailbreak ? false
 # Nix dependency checking, compilation and execution of test suites listed in the package description file.
 , doCheck     ? true
+# Just produce a SDist src tarball
+, sdistTarball ? false
 #  2020-06-02: NOTE: enableDeadCodeElimination = true: On GHC =< 8.8.3 macOS build falls due to https://gitlab.haskell.org/ghc/ghc/issues/17283
 # Disable GHC code optimizations for faster dev loops. Enable optimizations for production use or benchmarks.
 , enableDeadCodeElimination ? false
@@ -121,6 +123,10 @@ let
 
   listOfSetsOfSwitchExtend =
     [
+      {
+        switch = sdistTarball;
+        function = pkgs.haskell.lib.sdistTarball;
+      }
     ];
 
   funcOnSwitchAppliesFunction = set: object:
