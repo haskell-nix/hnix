@@ -1,32 +1,34 @@
 { compiler    ? "ghc883"
 
-# doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
-, doBenchmark ? false
-# Generation and installation of a coverage report.
-# See https://wiki.haskell.org/Haskell_program_coverage
-, doCoverage  ? false
-# Generation and installation of haddock API documentation
-, doHaddock   ? false
+# Don't fail at configure time if there are multiple versions of the same package in the (recursive) dependencies of the package being built. Will delay failures, if any, to compile time.
+, allowInconsistentDependencies ? false
+# Escape the version bounds from the cabal file. You may want to avoid this function.
+, doJailbreak ? false
 # Nix dependency checking, compilation and execution of test suites listed in the package description file.
 , doCheck     ? true
+#  2020-06-02: NOTE: enableDeadCodeElimination = true: On GHC =< 8.8.3 macOS build falls due to https://gitlab.haskell.org/ghc/ghc/issues/17283
+# Disable GHC code optimizations for faster dev loops. Enable optimizations for production use or benchmarks.
+, enableDeadCodeElimination ? false
 , enableLibraryProfiling ? false
 , enableExecutableProfiling ? false
 , doTracing   ? false
 # Enables GHC optimizations for production use, without optimizations compilation is way faster
 , doOptimize  ? false
 , doStrict    ? false
-# Escape the version bounds from the cabal file. You may want to avoid this function.
-, doJailbreak ? false
-, enableSharedExecutables ? false
+# Strip results from all debugging symbols
+, doStrip ? false
 , enableSharedLibraries ? true
 , enableStaticLibraries ? false
-#  2020-06-02: NOTE: enableDeadCodeElimination = true: On GHC =< 8.8.3 macOS build falls due to https://gitlab.haskell.org/ghc/ghc/issues/17283, so temporarily set default to `false`
-, enableDeadCodeElimination ? false
 , doHyperlinkSource ? false
-, doStrip ? false
+# Make hybrid executable that is also a shared library
+, enableSharedExecutables ? false
 , justStaticExecutables ? false
-# Don't fail at configure time if there are multiple versions of the same package in the (recursive) dependencies of the package being built. Will delay failures, if any, to compile time.
-, allowInconsistentDependencies ? false
+# Generation and installation of haddock API documentation
+, doHaddock   ? false
+# Generation and installation of a coverage report. See https://wiki.haskell.org/Haskell_program_coverage
+, doCoverage  ? false
+# doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
+, doBenchmark ? false
 
 , withHoogle  ? true
 
