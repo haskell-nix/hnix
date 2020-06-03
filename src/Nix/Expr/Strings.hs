@@ -8,7 +8,6 @@ import           Data.List                      ( intercalate
                                                 , dropWhileEnd
                                                 , inits
                                                 )
-import           Data.Monoid                    ( (<>) )
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import           Data.Tuple                     ( swap )

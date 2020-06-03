@@ -59,9 +59,7 @@ import qualified Data.Text.Lazy                as LazyText
 import qualified Data.Text.Lazy.Builder        as Builder
 import           Data.These                     ( fromThese )
 import qualified Data.Time.Clock.POSIX         as Time
-import           Data.Traversable               ( for
-                                                , mapM
-                                                )
+import           Data.Traversable               ( for )
 import qualified Data.Vector                   as V
 import           Nix.Atoms
 import           Nix.Convert

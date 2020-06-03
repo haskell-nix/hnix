@@ -25,9 +25,7 @@ import           Data.Hashable
 import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List                      ( sortOn )
-import           Data.Monoid                    ( Endo
-                                                , (<>)
-                                                )
+import           Data.Monoid                    ( Endo )
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
 import qualified Data.Vector                   as V
