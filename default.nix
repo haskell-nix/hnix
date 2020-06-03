@@ -118,42 +118,49 @@ let
   haskellPackages = pkgs.haskell.packages.${compiler}.override
     overrideHaskellPackages;
 
-in haskellPackages.developPackage {
-  name = "hnix";
-  root = ./.;
+  # General description of package
+  package = haskellPackages.developPackage {
+    name = "hnix";
+    root = ./.;
 
-  modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
-    buildTools = (attrs.buildTools or []) ++ [
-      haskellPackages.cabal-install
-    ];
+    modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
+      buildTools = (attrs.buildTools or []) ++ [
+        haskellPackages.cabal-install
+      ];
 
-    testHaskellDepends = attrs.testHaskellDepends ++ [
-      pkgs.nix
-      haskellPackages.criterion
-    ];
+      testHaskellDepends = attrs.testHaskellDepends ++ [
+        pkgs.nix
+        haskellPackages.criterion
+      ];
 
-    inherit doBenchmark;
-    inherit doCoverage;
-    inherit doHaddock;
-    inherit doCheck;
-    inherit enableLibraryProfiling;
-    inherit enableExecutableProfiling;
-    inherit enableSharedExecutables;
-    inherit enableSharedLibraries;
-    inherit enableStaticLibraries;
-    inherit enableDeadCodeElimination;
-    inherit allowInconsistentDependencies;
+      inherit doBenchmark;
+      inherit doCoverage;
+      inherit doHaddock;
+      inherit doCheck;
+      inherit enableLibraryProfiling;
+      inherit enableExecutableProfiling;
+      inherit enableSharedExecutables;
+      inherit enableSharedLibraries;
+      inherit enableStaticLibraries;
+      inherit enableDeadCodeElimination;
+      inherit allowInconsistentDependencies;
 
-    configureFlags =
-         pkgs.stdenv.lib.optional doTracing  "--flags=tracing"
-      ++ pkgs.stdenv.lib.optional doOptimize "--flags=optimize"
-      ++ pkgs.stdenv.lib.optional doStrict   "--ghc-options=-Werror";
+      configureFlags =
+          pkgs.stdenv.lib.optional doTracing  "--flags=tracing"
+        ++ pkgs.stdenv.lib.optional doOptimize "--flags=optimize"
+        ++ pkgs.stdenv.lib.optional doStrict   "--ghc-options=-Werror";
 
-    passthru = {
-      nixpkgs = pkgs;
-      inherit haskellPackages;
-    };
-  });
+      passthru = {
+        nixpkgs = pkgs;
+        inherit haskellPackages;
+      };
+    });
 
-  returnShellEnv = false;
-}
+    returnShellEnv = false;
+  };
+
+  composedPackage = package;
+
+in composedPackage
+
+
