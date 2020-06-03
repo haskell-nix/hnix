@@ -40,8 +40,8 @@
     then abort "hnix requires at least nix 2.0"
     else
       if useRev
+        # Please do not guard with hash, so the package able to use current channels (rolling `rev`) of Haskell&Nixpkgs
         then import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz") {}
-      # Please not guard with hash, so we able to use current channels (rolling `rev`) of Haskell&Nixpkgs
         else import <nixpkgs> {}
       // {
         config.allowBroken = true;
