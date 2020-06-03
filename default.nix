@@ -17,10 +17,11 @@
 , doStrict    ? false
 # Escape the version bounds from the cabal file. You may want to avoid this function.
 , doJailbreak ? false
-, enableSharedExecutables ? true
+, enableSharedExecutables ? false
 , enableSharedLibraries ? true
 , enableStaticLibraries ? false
-, enableDeadCodeElimination ? true
+#  2020-06-02: NOTE: enableDeadCodeElimination = true: On GHC =< 8.8.3 macOS build falls due to https://gitlab.haskell.org/ghc/ghc/issues/17283, so temporarily set default to `false`
+, enableDeadCodeElimination ? false
 , doHyperlinkSource ? false
 , doStrip ? false
 , justStaticExecutables ? false
@@ -135,6 +136,11 @@ in haskellPackages.developPackage {
     inherit doCheck;
     inherit enableLibraryProfiling;
     inherit enableExecutableProfiling;
+    inherit enableSharedExecutables;
+    inherit enableSharedLibraries;
+    inherit enableStaticLibraries;
+    inherit enableDeadCodeElimination;
+    inherit allowInconsistentDependencies;
 
     configureFlags =
          pkgs.stdenv.lib.optional doTracing  "--flags=tracing"
