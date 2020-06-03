@@ -26,6 +26,8 @@
 # Enables GHC optimizations for production use, without optimizations compilation is way faster
 , doOptimize  ? false
 , doStrict    ? false
+# Include DWARF debugging information & abilities
+, enableDWARFDebugging ? true
 # Strip results from all debugging symbols
 , doStrip ? false
 , enableSharedLibraries ? true
@@ -147,6 +149,10 @@ let
       {
         switch = disableOptimization;
         function = pkgs.haskell.lib.disableOptimization;
+      }
+      {
+        switch = enableDWARFDebugging;
+        function = pkgs.haskell.lib.enableDWARFDebugging;
       }
       {
         switch = linkWithGold;
