@@ -25,7 +25,6 @@
 , doTracing   ? false
 # Enables GHC optimizations for production use, without optimizations compilation is way faster
 , doOptimize  ? false
-, doStrict    ? false
 # Include DWARF debugging information & abilities
 , enableDWARFDebugging ? true
 # Strip results from all debugging symbols
@@ -230,7 +229,6 @@ let
       configureFlags =
           pkgs.stdenv.lib.optional doTracing  "--flags=tracing"
         ++ pkgs.stdenv.lib.optional doOptimize "--flags=optimize"
-        ++ pkgs.stdenv.lib.optional doStrict   "--ghc-options=-Werror";
 
       passthru = {
         nixpkgs = pkgs;
