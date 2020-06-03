@@ -123,7 +123,7 @@ let
     [
     ];
 
-  funcOnSwitchAplliesFunction = set: object:
+  funcOnSwitchAppliesFunction = set: object:
     if set.switch
       then set.function object
       else object;
@@ -171,7 +171,7 @@ let
     returnShellEnv = false;
   };
 
-  composedPackage = pkgs.lib.foldr (funcOnSwitchAplliesFunction) package listOfSetsOfSwitchExtend;
+  composedPackage = pkgs.lib.foldr (funcOnSwitchAppliesFunction) package listOfSetsOfSwitchExtend;
 
 in composedPackage
 
