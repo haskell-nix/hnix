@@ -119,6 +119,15 @@ let
   haskellPackages = pkgs.haskell.packages.${compiler}.override
     overrideHaskellPackages;
 
+  listOfSetsOfSwitchExtend =
+    [
+    ];
+
+  funcOnSwitchAplliesFunction = set: object:
+    if set.switch
+      then set.function object
+      else object;
+
   # General description of package
   package = haskellPackages.developPackage {
     name = "hnix";
@@ -162,7 +171,7 @@ let
     returnShellEnv = false;
   };
 
-  composedPackage = package;
+  composedPackage = pkgs.lib.foldr (funcOnSwitchAplliesFunction) package listOfSetsOfSwitchExtend;
 
 in composedPackage
 
