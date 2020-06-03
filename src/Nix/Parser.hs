@@ -58,7 +58,6 @@ import           Data.Char                      ( isAlpha
                                                 , isSpace
                                                 )
 import           Data.Data                      ( Data(..) )
-import           Data.Foldable                  ( concat )
 import           Data.Functor
 import           Data.Functor.Identity
 import           Data.HashSet                   ( HashSet )
@@ -66,7 +65,6 @@ import qualified Data.HashSet                  as HashSet
 import           Data.List.NonEmpty             ( NonEmpty(..) )
 import qualified Data.List.NonEmpty            as NE
 import qualified Data.Map                      as Map
-import           Data.Text                      ( Text )
 import           Data.Text               hiding ( map
                                                 , foldr1
                                                 , concat
