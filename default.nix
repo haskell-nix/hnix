@@ -16,6 +16,8 @@
 #  2020-06-02: NOTE: enableDeadCodeElimination = true: On GHC =< 8.8.3 macOS build falls due to https://gitlab.haskell.org/ghc/ghc/issues/17283
 # Disable GHC code optimizations for faster dev loops. Enable optimizations for production use or benchmarks.
 , enableDeadCodeElimination ? false
+# Optimization disabled for faster compiling/dev loop
+, disableOptimization ? true
 , enableLibraryProfiling ? false
 , enableExecutableProfiling ? false
 , doTracing   ? false
@@ -139,6 +141,10 @@ let
       {
         switch = buildStrictly;
         function = pkgs.haskell.lib.buildStrictly;
+      }
+      {
+        switch = disableOptimization;
+        function = pkgs.haskell.lib.disableOptimization;
       }
       {
         switch = failOnAllWarnings;
