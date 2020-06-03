@@ -20,8 +20,10 @@
 , disableOptimization ? true
 # Use faster `gold` ELF linker from GNU binutils instead of older&slower but more versatile GNU linker. Is not available by default since macOS does not have it.
 , linkWithGold ? false
+# Provide an inventory of performance events and timings for the execution. Provides informaiton in an absolute sense. Nothing is timestamped.
 , enableLibraryProfiling ? false
 , enableExecutableProfiling ? false
+# Include tracing information & abilities. Tracing records the chronology, often with timestamps and is extensive in time
 , doTracing   ? false
 # Include DWARF debugging information & abilities
 , enableDWARFDebugging ? true
@@ -29,10 +31,13 @@
 , doStrip ? false
 #	Generate hyperlinked source code for documentation using HsColour, and have Haddock documentation link to it.
 , doHyperlinkSource ? false
+# Nixpkgs expects shared libraries
 , enableSharedLibraries ? true
+# Ability to make static libraries
 , enableStaticLibraries ? false
 # Make hybrid executable that is also a shared library
 , enableSharedExecutables ? false
+# link executables statically against haskell libs to reduce closure size
 , justStaticExecutables ? false
 , enableSeparateBinOutput ? false
 # Add a post-build check to verify that dependencies declared in the .cabal file are actually used.
