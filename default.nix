@@ -170,6 +170,10 @@ let
         switch = failOnAllWarnings;
         function = pkgs.haskell.lib.failOnAllWarnings;
       }
+      {
+        switch = justStaticExecutables;
+        function = pkgs.haskell.lib.justStaticExecutables;
+      }
     ];
 
   funcOnSwitchAppliesFunction = set: object:
