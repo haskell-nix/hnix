@@ -23,6 +23,7 @@
 # Make hybrid executable that is also a shared library
 , enableSharedExecutables ? false
 , justStaticExecutables ? false
+, enableSeparateBinOutput ? false
 # Generation and installation of haddock API documentation
 , doHaddock   ? false
 # Generation and installation of a coverage report. See https://wiki.haskell.org/Haskell_program_coverage
@@ -142,6 +143,7 @@ let
       inherit enableSharedLibraries;
       inherit enableStaticLibraries;
       inherit enableSharedExecutables;
+      inherit enableSeparateBinOutput;
       inherit doBenchmark;
       inherit doCoverage;
       inherit doHaddock;
