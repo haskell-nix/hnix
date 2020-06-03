@@ -45,6 +45,8 @@
 , doCoverage  ? false
 # doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
 , doBenchmark ? false
+# Modify a Haskell package to add shell completion scripts for the given executable produced by it. These completion scripts will be picked up automatically if the resulting derivation is installed
+, generateOptparseApplicativeCompletion ? false
 
 , withHoogle  ? true
 
@@ -179,6 +181,10 @@ let
       {
         switch = checkUnusedPackages;
         function = pkgs.haskell.lib.checkUnusedPackages {};
+      }
+      {
+        switch = generateOptparseApplicativeCompletion;
+        function = pkgs.haskell.lib.generateOptparseApplicativeCompletion "hnix";
       }
     ];
 
