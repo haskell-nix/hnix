@@ -155,6 +155,10 @@ let
         function = pkgs.haskell.lib.doJailBreak;
       }
       {
+        switch = doStrip;
+        function = pkgs.haskell.lib.doStrip;
+      }
+      {
         switch = enableDWARFDebugging;
         function = pkgs.haskell.lib.enableDWARFDebugging;
       }
