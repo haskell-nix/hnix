@@ -139,6 +139,7 @@ let
   haskellPackages = pkgs.haskell.packages.${compiler}.override
     overrideHaskellPackages;
 
+  # Application of functions from this list to the package in code here happens in the reverse order (from the tail). Some options depend on & override others, so if enabling options caused Nix error or not expected result - change the order, and please do not change this order without proper testing.
   listOfSetsOfSwitchExtend =
     [
       {
@@ -195,6 +196,7 @@ let
       }
     ];
 
+  # Function that applies enabled option to the package, used in the fold.
   funcOnSwitchAppliesFunction = set: object:
     if set.switch
       then set.function object
@@ -240,6 +242,9 @@ let
     returnShellEnv = false;
   };
 
+  # One part of Haskell.lib options are argument switches, those are in `inherit`ed list.
+  # Other part - are function wrappers over pkg. Fold allows to compose those.
+  # composePackage = foldr (if switch then function) (package) ([{switch,function}]) == (functionN .. (function1 package))
   composedPackage = pkgs.lib.foldr (funcOnSwitchAppliesFunction) package listOfSetsOfSwitchExtend;
 
 in composedPackage
