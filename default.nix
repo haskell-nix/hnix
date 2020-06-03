@@ -18,6 +18,8 @@
 , enableDeadCodeElimination ? false
 # Optimization disabled for faster compiling/dev loop
 , disableOptimization ? true
+# Use faster `gold` ELF linker from GNU binutils instead of older&slower but more versatile GNU linker. Is not available by default since macOS does not have it.
+, linkWithGold ? false
 , enableLibraryProfiling ? false
 , enableExecutableProfiling ? false
 , doTracing   ? false
@@ -145,6 +147,10 @@ let
       {
         switch = disableOptimization;
         function = pkgs.haskell.lib.disableOptimization;
+      }
+      {
+        switch = linkWithGold;
+        function = pkgs.haskell.lib.linkWithGold;
       }
       {
         switch = failOnAllWarnings;
