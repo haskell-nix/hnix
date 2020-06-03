@@ -23,8 +23,6 @@
 , enableLibraryProfiling ? false
 , enableExecutableProfiling ? false
 , doTracing   ? false
-# Enables GHC optimizations for production use, without optimizations compilation is way faster
-, doOptimize  ? false
 # Include DWARF debugging information & abilities
 , enableDWARFDebugging ? true
 # Strip results from all debugging symbols
@@ -226,9 +224,7 @@ let
       inherit doCoverage;
       inherit doHaddock;
 
-      configureFlags =
-          pkgs.stdenv.lib.optional doTracing  "--flags=tracing"
-        ++ pkgs.stdenv.lib.optional doOptimize "--flags=optimize"
+      configureFlags = pkgs.stdenv.lib.optional doTracing  "--flags=tracing";
 
       passthru = {
         nixpkgs = pkgs;
