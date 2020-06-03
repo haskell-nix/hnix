@@ -151,6 +151,10 @@ let
         function = pkgs.haskell.lib.disableOptimization;
       }
       {
+        switch = doJailbreak;
+        function = pkgs.haskell.lib.doJailBreak;
+      }
+      {
         switch = enableDWARFDebugging;
         function = pkgs.haskell.lib.enableDWARFDebugging;
       }
