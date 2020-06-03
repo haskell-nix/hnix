@@ -30,9 +30,10 @@
 , enableDWARFDebugging ? true
 # Strip results from all debugging symbols
 , doStrip ? false
+#	Generate hyperlinked source code for documentation using HsColour, and have Haddock documentation link to it.
+, doHyperlinkSource ? false
 , enableSharedLibraries ? true
 , enableStaticLibraries ? false
-, doHyperlinkSource ? false
 # Make hybrid executable that is also a shared library
 , enableSharedExecutables ? false
 , justStaticExecutables ? false
@@ -185,6 +186,10 @@ let
       {
         switch = generateOptparseApplicativeCompletion;
         function = pkgs.haskell.lib.generateOptparseApplicativeCompletion "hnix";
+      }
+      {
+        switch = doHyperlinkSource;
+        function = pkgs.haskell.lib.doHyperlinkSource;
       }
     ];
 
