@@ -780,6 +780,21 @@ extra-source-files:
     tests/eval-compare/ind-string-15.nix
     tests/eval-compare/ind-string-16.nix
     tests/eval-compare/ind-string-17.nix
+    tests/files/attrs.nix
+    tests/files/callLibs.nix
+    tests/files/eighty.nix
+    tests/files/file.nix
+    tests/files/file2.nix
+    tests/files/findFile.nix
+    tests/files/force.nix
+    tests/files/goodbye.nix
+    tests/files/hello.nix
+    tests/files/hello2.nix
+    tests/files/if-then.nix
+    tests/files/lint.nix
+    tests/files/loop.nix
+    tests/files/test.nix
+    tests/files/with.nix
 
 source-repository head
   type: git
