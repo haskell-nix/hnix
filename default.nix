@@ -37,6 +37,8 @@
 , enableSharedExecutables ? false
 , justStaticExecutables ? false
 , enableSeparateBinOutput ? false
+# Add a post-build check to verify that dependencies declared in the .cabal file are actually used.
+, checkUnusedPackages ? false
 # Generation and installation of haddock API documentation
 , doHaddock   ? false
 # Generation and installation of a coverage report. See https://wiki.haskell.org/Haskell_program_coverage
@@ -173,6 +175,10 @@ let
       {
         switch = justStaticExecutables;
         function = pkgs.haskell.lib.justStaticExecutables;
+      }
+      {
+        switch = checkUnusedPackages;
+        function = pkgs.haskell.lib.checkUnusedPackages {};
       }
     ];
 
