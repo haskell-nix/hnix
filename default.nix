@@ -10,6 +10,7 @@
 , sdistTarball ? false
 # Produce SDist tarball and build project from it
 , buildFromSdist ? true
+, failOnAllWarnings ? false
 #  2020-06-02: NOTE: enableDeadCodeElimination = true: On GHC =< 8.8.3 macOS build falls due to https://gitlab.haskell.org/ghc/ghc/issues/17283
 # Disable GHC code optimizations for faster dev loops. Enable optimizations for production use or benchmarks.
 , enableDeadCodeElimination ? false
@@ -132,6 +133,10 @@ let
       {
         switch = buildFromSdist;
         function = pkgs.haskell.lib.buildFromSdist;
+      }
+      {
+        switch = failOnAllWarnings;
+        function = pkgs.haskell.lib.failOnAllWarnings;
       }
     ];
 
