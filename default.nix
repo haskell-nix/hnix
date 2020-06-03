@@ -1,5 +1,9 @@
 { compiler    ? "ghc883"
 
+# This settings expose most of the Nixpkgs Haskell.lib API: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
+
+# Some of these options implicitly enable other options they require, and some counterpoint options clash, obviously
+
 # Don't fail at configure time if there are multiple versions of the same package in the (recursive) dependencies of the package being built. Will delay failures, if any, to compile time.
 , allowInconsistentDependencies ? false
 # Escape the version bounds from the cabal file. You may want to avoid this function.
