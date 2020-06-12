@@ -88,13 +88,6 @@ env:
     - ghcjsTmpLogFile='/tmp/ghcjsTmpLogFile.log'
     # NOTE: Length of the GHCJS log tail (<40000)
     - ghcjsLogTailLength=10000
-  # NOTE: {os} x {jobs} - {exclude} = {build matrix}
-  jobs:
-    - GHCVERSION=ghc844
-    - GHCVERSION=ghc865
-    - GHCVERSION=ghc883
-    - GHCVERSION=ghc8101
-    - GHCVERSION=ghcjs
 
 #  2020-05-26: NOTE: Currently newest Travis dist Ubuntu 18.04 bionic
 # NOTE: {os} x {jobs} + {jobs:include} - {jobs:exclude} = {build matrix}
