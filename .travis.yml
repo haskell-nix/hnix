@@ -62,7 +62,7 @@ env:
     # NOTE: Build a source distribution tarball instead of using the source files directly. The effect is that the package is built as if it were published on hackage. This can be used as a test for the source distribution, assuming the build fails when packaging mistakes are in the cabal file.
     - buildFromSdist=false
     # NOTE: Build the package in a strict way to uncover potential problems. This includes buildFromSdist and failOnAllWarnings.
-    #  2020-05-26: NOTE: Currently HNix not able to pass Strict
+    #  2020-05-26: NOTE: Currently HNix not able to pass Strict on GHC 8.8.3 due to MonalFail migration
     - buildStrictly=false
     # NOTE: Disable core optimizations, significantly speeds up the build
     - disableOptimization=true
@@ -92,7 +92,7 @@ jobs:
     - name: GHC 8.6.5 Linux
       env:
         - GHCVERSION=ghc865
-        - buildFromSdist=true
+        - buildStrictly=true
       os: linux
       dist: bionic
     - name: GHC 8.8.3 macOS
