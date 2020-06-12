@@ -85,17 +85,17 @@ env:
 # NOTE: {os} x {jobs} + {jobs:include} - {jobs:exclude} = {build matrix}
 jobs:
   include:
-    - name: GHC 8.4.4 Linux
+    - name: GHC 8.4.4, Linux
       env: GHCVERSION=ghc844
       os: linux
       dist: bionic
-    - name: GHC 8.6.5 Linux
+    - name: GHC 8.6.5, Linux, Strict
       env:
         - GHCVERSION=ghc865
         - buildStrictly=true
       os: linux
       dist: bionic
-    - name: GHC 8.8.3 macOS
+    - name: GHC 8.8.3, macOS, SDist
       env:
         - GHCVERSION=ghc883
         - buildFromSdist=true
@@ -105,7 +105,7 @@ jobs:
         - GHCVERSION=ghc8101
       os: linux
       dist: bionic
-    - name: GHCJS Linux
+    - name: GHCJS, Linux
       env:
         - GHCVERSION=ghcjs
       os: linux
