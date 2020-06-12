@@ -137,7 +137,6 @@ script:
   # NOTE: If key is set - use Cachix push, else - proceed without it
   - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push "$name" --watch-store& fi
   # NOTE: Brush timeout for previous daemon to start
-  - sleep 2
   #
   #
   # NOTE: Normal GHC build
