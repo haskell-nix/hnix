@@ -131,7 +131,8 @@ script:
   #
   #
   # NOTE: Install Cachix client using Nix:
-  - nix-env -iA cachix -f https://cachix.org/api/v1/install
+  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
+  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
   - cachix use "$name"
   # NOTE: If key is set - use Cachix push, else - proceed without it
   - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push "$name" --watch-store& fi
