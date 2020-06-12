@@ -119,6 +119,11 @@ before_script:
   - sudo mount -o remount,exec,size=4G,mode=755 /run/user || true
   - sudo mkdir -p /etc/nix
   - echo "trusted-users = root $USER" | sudo tee -a /etc/nix/nix.conf
+  #
+  # NOTE: Update Nix and Nix packages, Cachix requires that
+  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then nix upgrade-nix; fi
+  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo nix upgrade-nix; fi
+  #
   # NOTE: macOS service restart
   - sudo launchctl kickstart -k system/org.nixos.nix-daemon || true
 
