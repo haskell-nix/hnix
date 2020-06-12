@@ -1,32 +1,59 @@
 { compiler    ? "ghc883"
 
-# doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
-, doBenchmark ? false
-# Generation and installation of a coverage report.
-# See https://wiki.haskell.org/Haskell_program_coverage
-, doCoverage  ? false
-# Generation and installation of haddock API documentation
-, doHaddock   ? false
-# Nix dependency checking, compilation and execution of test suites listed in the package description file.
-, doCheck     ? true
-, enableLibraryProfiling ? false
-, enableExecutableProfiling ? false
-, doTracing   ? false
-# Enables GHC optimizations for production use, without optimizations compilation is way faster
-, doOptimize  ? false
-, doStrict    ? false
-# Escape the version bounds from the cabal file. You may want to avoid this function.
-, doJailbreak ? false
-, enableSharedExecutables ? false
-, enableSharedLibraries ? true
-, enableStaticLibraries ? false
-#  2020-06-02: NOTE: enableDeadCodeElimination = true: On GHC =< 8.8.3 macOS build falls due to https://gitlab.haskell.org/ghc/ghc/issues/17283, so temporarily set default to `false`
-, enableDeadCodeElimination ? false
-, doHyperlinkSource ? false
-, doStrip ? false
-, justStaticExecutables ? false
+# This settings expose most of the Nixpkgs Haskell.lib API: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
+
+# Some of these options implicitly enable other options they require, and some counterpoint options clash, obviously
+
 # Don't fail at configure time if there are multiple versions of the same package in the (recursive) dependencies of the package being built. Will delay failures, if any, to compile time.
 , allowInconsistentDependencies ? false
+# Escape the version bounds from the cabal file. You may want to avoid this function.
+, doJailbreak ? false
+# Nix dependency checking, compilation and execution of test suites listed in the package description file.
+, doCheck     ? true
+# Just produce a SDist src tarball
+, sdistTarball ? false
+# Produce SDist tarball and build project from it
+, buildFromSdist ? true
+, failOnAllWarnings ? false
+# `failOnAllWarnings` + `buildFromSdist`
+, buildStrictly ? false
+#  2020-06-02: NOTE: enableDeadCodeElimination = true: On GHC =< 8.8.3 macOS build falls due to https://gitlab.haskell.org/ghc/ghc/issues/17283
+# Disable GHC code optimizations for faster dev loops. Enable optimizations for production use or benchmarks.
+, enableDeadCodeElimination ? false
+# Optimization disabled for faster compiling/dev loop
+, disableOptimization ? true
+# Use faster `gold` ELF linker from GNU binutils instead of older&slower but more versatile GNU linker. Is not available by default since macOS does not have it.
+, linkWithGold ? false
+# Provide an inventory of performance events and timings for the execution. Provides informaiton in an absolute sense. Nothing is timestamped.
+, enableLibraryProfiling ? false
+, enableExecutableProfiling ? false
+# Include tracing information & abilities. Tracing records the chronology, often with timestamps and is extensive in time
+, doTracing   ? false
+# Include DWARF debugging information & abilities
+, enableDWARFDebugging ? true
+# Strip results from all debugging symbols
+, doStrip ? false
+#	Generate hyperlinked source code for documentation using HsColour, and have Haddock documentation link to it.
+, doHyperlinkSource ? false
+# Nixpkgs expects shared libraries
+, enableSharedLibraries ? true
+# Ability to make static libraries
+, enableStaticLibraries ? false
+# Make hybrid executable that is also a shared library
+, enableSharedExecutables ? false
+# link executables statically against haskell libs to reduce closure size
+, justStaticExecutables ? false
+, enableSeparateBinOutput ? false
+# Add a post-build check to verify that dependencies declared in the .cabal file are actually used.
+, checkUnusedPackages ? false
+# Generation and installation of haddock API documentation
+, doHaddock   ? false
+# Generation and installation of a coverage report. See https://wiki.haskell.org/Haskell_program_coverage
+, doCoverage  ? false
+# doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
+, doBenchmark ? false
+# Modify a Haskell package to add shell completion scripts for the given executable produced by it. These completion scripts will be picked up automatically if the resulting derivation is installed
+, generateOptparseApplicativeCompletion ? false
 
 , withHoogle  ? true
 
@@ -40,8 +67,8 @@
     then abort "hnix requires at least nix 2.0"
     else
       if useRev
+        # Please do not guard with hash, so the package able to use current channels (rolling `rev`) of Haskell&Nixpkgs
         then import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz") {}
-      # Please not guard with hash, so we able to use current channels (rolling `rev`) of Haskell&Nixpkgs
         else import <nixpkgs> {}
       // {
         config.allowBroken = true;
@@ -116,42 +143,114 @@ let
   haskellPackages = pkgs.haskell.packages.${compiler}.override
     overrideHaskellPackages;
 
-in haskellPackages.developPackage {
-  name = "hnix";
-  root = ./.;
-
-  modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
-    buildTools = (attrs.buildTools or []) ++ [
-      haskellPackages.cabal-install
+  # Application of functions from this list to the package in code here happens in the reverse order (from the tail). Some options depend on & override others, so if enabling options caused Nix error or not expected result - change the order, and please do not change this order without proper testing.
+  listOfSetsOfSwitchExtend =
+    [
+      {
+        switch = sdistTarball;
+        function = pkgs.haskell.lib.sdistTarball;
+      }
+      {
+        switch = buildFromSdist;
+        function = pkgs.haskell.lib.buildFromSdist;
+      }
+      {
+        switch = buildStrictly;
+        function = pkgs.haskell.lib.buildStrictly;
+      }
+      {
+        switch = disableOptimization;
+        function = pkgs.haskell.lib.disableOptimization;
+      }
+      {
+        switch = doJailbreak;
+        function = pkgs.haskell.lib.doJailBreak;
+      }
+      {
+        switch = doStrip;
+        function = pkgs.haskell.lib.doStrip;
+      }
+      {
+        switch = enableDWARFDebugging;
+        function = pkgs.haskell.lib.enableDWARFDebugging;
+      }
+      {
+        switch = linkWithGold;
+        function = pkgs.haskell.lib.linkWithGold;
+      }
+      {
+        switch = failOnAllWarnings;
+        function = pkgs.haskell.lib.failOnAllWarnings;
+      }
+      {
+        switch = justStaticExecutables;
+        function = pkgs.haskell.lib.justStaticExecutables;
+      }
+      {
+        switch = checkUnusedPackages;
+        function = pkgs.haskell.lib.checkUnusedPackages {};
+      }
+      {
+        switch = generateOptparseApplicativeCompletion;
+        function = pkgs.haskell.lib.generateOptparseApplicativeCompletion "hnix";
+      }
+      {
+        switch = doHyperlinkSource;
+        function = pkgs.haskell.lib.doHyperlinkSource;
+      }
     ];
 
-    testHaskellDepends = attrs.testHaskellDepends ++ [
-      pkgs.nix
-      haskellPackages.criterion
-    ];
+  # Function that applies enabled option to the package, used in the fold.
+  funcOnSwitchAppliesFunction = set: object:
+    if set.switch
+      then set.function object
+      else object;
 
-    inherit doBenchmark;
-    inherit doCoverage;
-    inherit doHaddock;
-    inherit doCheck;
-    inherit enableLibraryProfiling;
-    inherit enableExecutableProfiling;
-    inherit enableSharedExecutables;
-    inherit enableSharedLibraries;
-    inherit enableStaticLibraries;
-    inherit enableDeadCodeElimination;
-    inherit allowInconsistentDependencies;
+  # General description of package
+  package = haskellPackages.developPackage {
+    name = "hnix";
+    root = ./.;
 
-    configureFlags =
-         pkgs.stdenv.lib.optional doTracing  "--flags=tracing"
-      ++ pkgs.stdenv.lib.optional doOptimize "--flags=optimize"
-      ++ pkgs.stdenv.lib.optional doStrict   "--ghc-options=-Werror";
+    modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
+      buildTools = (attrs.buildTools or []) ++ [
+        haskellPackages.cabal-install
+      ];
 
-    passthru = {
-      nixpkgs = pkgs;
-      inherit haskellPackages;
-    };
-  });
+      testHaskellDepends = attrs.testHaskellDepends ++ [
+        pkgs.nix
+        haskellPackages.criterion
+      ];
 
-  returnShellEnv = false;
-}
+      # Declare that the header set arguments as according Haskell.lib switches
+      inherit allowInconsistentDependencies;
+      inherit doCheck;
+      inherit enableDeadCodeElimination;
+      inherit enableLibraryProfiling;
+      inherit enableExecutableProfiling;
+      inherit enableSharedLibraries;
+      inherit enableStaticLibraries;
+      inherit enableSharedExecutables;
+      inherit enableSeparateBinOutput;
+      inherit doBenchmark;
+      inherit doCoverage;
+      inherit doHaddock;
+
+      configureFlags = pkgs.stdenv.lib.optional doTracing  "--flags=tracing";
+
+      passthru = {
+        nixpkgs = pkgs;
+        inherit haskellPackages;
+      };
+    });
+
+    returnShellEnv = false;
+  };
+
+  # One part of Haskell.lib options are argument switches, those are in `inherit`ed list.
+  # Other part - are function wrappers over pkg. Fold allows to compose those.
+  # composePackage = foldr (if switch then function) (package) ([{switch,function}]) == (functionN .. (function1 package))
+  composedPackage = pkgs.lib.foldr (funcOnSwitchAppliesFunction) package listOfSetsOfSwitchExtend;
+
+in composedPackage
+
+
