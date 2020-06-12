@@ -119,19 +119,37 @@ before_script:
   - sudo mount -o remount,exec,size=4G,mode=755 /run/user || true
   - sudo mkdir -p /etc/nix
   - echo "trusted-users = root $USER" | sudo tee -a /etc/nix/nix.conf
+  #
+  # NOTE: Update Nix and Nix packages, Cachix requires that
+  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then nix upgrade-nix; fi
+  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo nix upgrade-nix; fi
+  #
   # NOTE: macOS service restart
-  - sudo launchctl kickstart -k system/org.nixos.nix-daemon || true
+  # HACK: Because Nix can not update its daemon itself between 2.0 -> 2.2:
+  # 1. https://github.com/NixOS/nix/issues/3125#issuecomment-539667327
+  # 2. https://github.com/NixOS/nix/issues/3125#issuecomment-539771768
+  # Since Nix on macOS has problems restarting the service:
+  # Force the real disable, get target file from the symlink, unlink symlink, copy file, and reload service
+  - |
+    if [ "${TRAVIS_OS_NAME}" = "osx" ]; then true && \
+    sudo launchctl unload /Library/LaunchDaemons/org.nixos.nix-daemon.plist && \
+    export NIX_SERVICE_FILE=$(readlink /Library/LaunchDaemons/org.nixos.nix-daemon.plist) && \
+    sudo unlink /Library/LaunchDaemons/org.nixos.nix-daemon.plist && \
+    sudo cp -f "$NIX_SERVICE_FILE" /Library/LaunchDaemons/org.nixos.nix-daemon.plist && \
+    sudo launchctl load /Library/LaunchDaemons/org.nixos.nix-daemon.plist && \
+    sudo launchctl kickstart -k system/org.nixos.nix-daemon && \
+    true; fi
 
 script:
   #
   #
   # NOTE: Install Cachix client using Nix:
-  - nix-env -iA cachix -f https://cachix.org/api/v1/install
+  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
+  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
   - cachix use "$name"
   # NOTE: If key is set - use Cachix push, else - proceed without it
   - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push "$name" --watch-store& fi
   # NOTE: Brush timeout for previous daemon to start
-  - sleep 2
   #
   #
   # NOTE: Normal GHC build
