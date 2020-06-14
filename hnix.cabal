@@ -758,6 +758,7 @@ extra-source-files:
     data/let.nix
     LICENSE
     README.md
+    CHANGELOG.md
     tests/eval-compare/builtins.split-01.nix
     tests/eval-compare/builtins.split-02.nix
     tests/eval-compare/builtins.split-03.nix
