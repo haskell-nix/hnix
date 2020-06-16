@@ -112,7 +112,6 @@ jobs:
       dist: bionic
   allow_failures:
     - env: GHCVERSION=ghcjs
-    - env: GHCVERSION=ghc8101
   #  2020-05-26: NOTE: Discard macOS GHCJS build + -> CI loop becomes ~30-40 minutes shorter
   exclude:
     - os: osx
