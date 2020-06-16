@@ -95,14 +95,14 @@ jobs:
         - buildStrictly=true
       os: linux
       dist: bionic
-    - name: GHC 8.8.3, macOS, SDist
+    - name: GHC 8.8.3, macOS
       env:
         - GHCVERSION=ghc883
-        - buildFromSdist=true
       os: osx
-    - name: GHC 8.10.1 Linux
+    - name: GHC 8.10.1, Linux, SDist
       env:
         - GHCVERSION=ghc8101
+        - buildFromSdist=true
       os: linux
       dist: bionic
     - name: GHCJS, Linux
