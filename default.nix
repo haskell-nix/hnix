@@ -18,9 +18,8 @@
 # `failOnAllWarnings` + `buildFromSdist`
 , buildStrictly ? false
 #  2020-06-02: NOTE: enableDeadCodeElimination = true: On GHC =< 8.8.3 macOS build falls due to https://gitlab.haskell.org/ghc/ghc/issues/17283
-# Disable GHC code optimizations for faster dev loops. Enable optimizations for production use or benchmarks.
 , enableDeadCodeElimination ? false
-# Optimization disabled for faster compiling/dev loop
+# Disable GHC code optimizations for faster dev loops. Enable optimizations for production use or benchmarks.
 , disableOptimization ? true
 # Use faster `gold` ELF linker from GNU binutils instead of older&slower but more versatile GNU linker. Is not available by default since macOS does not have it.
 , linkWithGold ? false
@@ -53,7 +52,8 @@
 # doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
 , doBenchmark ? false
 # Modify a Haskell package to add shell completion scripts for the given executable produced by it. These completion scripts will be picked up automatically if the resulting derivation is installed
-, generateOptparseApplicativeCompletion ? false
+, generateOptparseApplicativeCompletions ? false
+, executableNamesToShellComplete ? [ "hnix" ]
 
 , withHoogle  ? true
 
@@ -191,8 +191,8 @@ let
         function = pkgs.haskell.lib.checkUnusedPackages {};
       }
       {
-        switch = generateOptparseApplicativeCompletion;
-        function = pkgs.haskell.lib.generateOptparseApplicativeCompletion "hnix";
+        switch = generateOptparseApplicativeCompletions;
+        function = pkgs.haskell.lib.generateOptparseApplicativeCompletions executableNamesToShellComplete;
       }
       {
         switch = doHyperlinkSource;

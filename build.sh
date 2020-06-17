@@ -6,28 +6,71 @@
 set -Eexuo pipefail
 
 # NOTE: If var not imported - set to the default value
-GHCVERSION=${GHCVERSION:-'ghc883'}
+GHCVERSION=${GHCVERSION:-'ghc8101'}
 rev=${rev:-'nixpkgs-unstable'}
 NIX_PATH=${NIX_PATH:-"nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"}
 export NIX_PATH
-name=${name:-'defaultBinaryName'}
-pkgName=${pkgName:-'defaultPkgName'}
-failOnAllWarnings=${failOnAllWarnings:-'false'}
-checkUnusedPackages=${checkUnusedPackages:-'false'}
-doCoverage=${doCoverage:-'false'}
-doHaddock=${doHaddock:-'false'}
+name=${name:-'defaultProjectName'}
+
+# This settings expose most of the Nixpkgs Haskell.lib API: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
+
+# Some of these options implicitly enable other options they require, and some counterpoint options clash, obviously
+
+# Don't fail at configure time if there are multiple versions of the same package in the (recursive) dependencies of the package being built. Will delay failures, if any, to compile time.
+allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
+
+# Escape the version bounds from the cabal file. You may want to avoid this function.
 doJailbreak=${doJailbreak:-'false'}
+# Nix dependency checking, compilation and execution of test suites listed in the package description file.
 doCheck=${doCheck:-'true'}
-doBenchmark=${doBenchmark:-'false'}
-enableExecutableProfiling=${enableExecutableProfiling:-'false'}
-enableLibraryProfiling=${enableLibraryProfiling:-'false'}
+# Just produce a SDist src tarball
+sdistTarball=${sdistTarball:-'false'}
+# Produce SDist tarball and build project from it
 buildFromSdist=${buildFromSdist:-'false'}
+failOnAllWarnings=${failOnAllWarnings:-'false'}
+# `failOnAllWarnings` + `buildFromSdist`
 buildStrictly=${buildStrictly:-'false'}
+#  2020-06-02: NOTE: enableDeadCodeElimination = true: On GHC =< 8.8.3 macOS build falls due to https://gitlab.haskell.org/ghc/ghc/issues/17283
+enableDeadCodeElimination=${enableDeadCodeElimination:-'false'}
+# Disable GHC code optimizations for faster dev loops. Enable optimizations for production use or benchmarks.
 disableOptimization=${disableOptimization:-'true'}
-buildStackProject=${buildStackProject:-'false'}
+# Use faster `gold` ELF linker from GNU binutils instead of older&slower but more versatile GNU linker. Is not available by default since macOS does not have it.
+linkWithGold=${linkWithGold:-'false'}
+# Provide an inventory of performance events and timings for the execution. Provides informaiton in an absolute sense. Nothing is timestamped.
+enableLibraryProfiling=${enableLibraryProfiling:-'false'}
+enableExecutableProfiling=${enableExecutableProfiling:-'false'}
+# Include tracing information & abilities. Tracing records the chronology, often with timestamps and is extensive in time
+doTracing=${doTracing:-'false'}
+# Include DWARF debugging information & abilities
+enableDWARFDebugging=${enableDWARFDebugging:-'false'}
+# Strip results from all debugging symbols
+doStrip=${doStrip:-'false'}
+#	Generate hyperlinked source code for documentation using HsColour, and have Haddock documentation link to it.
+doHyperlinkSource=${doHyperlinkSource:-'false'}
+# Nixpkgs expects shared libraries
+enableSharedLibraries=${enableSharedLibraries:-'true'}
+# Ability to make static libraries
+enableStaticLibraries=${enableStaticLibraries:-'false'}
+# Make hybrid executable that is also a shared library
+enableSharedExecutables=${enableSharedExecutables:-'false'}
+# link executables statically against haskell libs to reduce closure size
+justStaticExecutables=${justStaticExecutables:-'false'}
+enableSeparateBinOutput=${enableSeparateBinOutput:-'false'}
+# Add a post-build check to verify that dependencies declared in the .cabal file are actually used.
+checkUnusedPackages=${checkUnusedPackages:-'false'}
+# Generation and installation of haddock API documentation
+doHaddock=${doHaddock:-'false'}
+# Generation and installation of a coverage report. See https://wiki.haskell.org/Haskell_program_coverage
+doCoverage=${doCoverage:-'false'}
+# doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
+doBenchmark=${doBenchmark:-'false'}
 # NOTE: *Oprparse* key is redifined in the code further
 generateOptparseApplicativeCompletions=${generateOptparseApplicativeCompletions:-'false'}
-allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
+executableNamesToShellComplete=${executableNamesToShellComplete:-'[ "defaultBinaryName" ]'}
+
+# Include Hoogle into derivation
+withHoogle=${withHoogle:-'false'}
+
 ghcjsTmpLogFile=${ghcjsTmpLogFile:-'/tmp/ghcjsTmpLogFile.log'}
 ghcjsLogTailLength=${ghcjsLogTailLength:-'10000'}
 # NOTE: If key not provided (branch is not inside the central repo) - init CACHIX_SIGNING_KEY as empty
@@ -69,16 +112,6 @@ SILENT(){
 BUILD_PROJECT(){
 
 
-# NOTE: Resulting value injects into `nix-build` commands
-if [ "$generateOptparseApplicativeCompletion" = 'true' ]
-  then
-    # NOTE: Enable shell completion generation
-    generateOptparseApplicativeCompletion="--arg generateOptparseApplicativeCompletion $name $pkgName"
-  else
-    # NOTE: Skip the shell completion generation
-    generateOptparseApplicativeCompletion=''
-fi
-
 IFS=$'\n\t'
 
 if [ "$GHCVERSION" = "ghcjs" ]
@@ -92,48 +125,70 @@ if [ "$GHCVERSION" = "ghcjs" ]
     # But Travis then terminates on 10 min no stdout timeout
     # so HACK: SILENT wrapper allows to surpress the huge log, while still preserves the Cachix caching ability in any case of the build
     # On build failure outputs the last 10000 lines of log (that should be more then enough), and terminates
-    SILENT nix-build                                         \
-      --arg failOnAllWarnings "$failOnAllWarnings"           \
-      --arg buildStrictly "$buildStrictly"                   \
-      --arg checkUnusedPackages "$checkUnusedPackages"       \
-      --arg doCoverage "$doCoverage" \
-      --arg doHaddock "$doHaddock" \
+    SILENT nix-build \
+      --arg allowInconsistentDependencies "$allowInconsistentDependencies" \
       --arg doJailbreak "$doJailbreak" \
       --arg doCheck "$doCheck" \
-      --arg doBenchmark "$doBenchmark" \
-      --arg enableExecutableProfiling "$enableExecutableProfiling" \
-      --arg enableLibraryProfiling "$enableLibraryProfiling" \
+      --arg sdistTarball "$sdistTarball" \
       --arg buildFromSdist "$buildFromSdist" \
+      --arg failOnAllWarnings "$failOnAllWarnings" \
       --arg buildStrictly "$buildStrictly" \
+      --arg enableDeadCodeElimination "$enableDeadCodeElimination" \
       --arg disableOptimization "$disableOptimization" \
-      --arg buildStackProject "$buildStackProject" \
-      "$generateOptparseApplicativeCompletion" \
-      --arg allowInconsistentDependencies "$allowInconsistentDependencies" \
+      --arg linkWithGold "$linkWithGold" \
+      --arg enableLibraryProfiling "$enableLibraryProfiling" \
+      --arg enableExecutableProfiling "$enableExecutableProfiling" \
+      --arg doTracing "$doTracing" \
+      --arg enableDWARFDebugging "$enableDWARFDebugging" \
+      --arg doStrip "$doStrip" \
+      --arg doHyperlinkSource "$doHyperlinkSource" \
+      --arg enableSharedLibraries "$enableSharedLibraries" \
+      --arg enableStaticLibraries "$enableStaticLibraries" \
+      --arg enableSharedExecutables "$enableSharedExecutables" \
+      --arg justStaticExecutables "$justStaticExecutables" \
+      --arg checkUnusedPackages "$checkUnusedPackages" \
+      --arg doCoverage "$doCoverage" \
+      --arg doHaddock "$doHaddock" \
+      --arg doBenchmark "$doBenchmark" \
+      --arg generateOptparseApplicativeCompletions "$generateOptparseApplicativeCompletions" \
+      --arg executableNamesToShellComplete "$executableNamesToShellComplete" \
+      --arg withHoogle "$withHoogle" \
       ghcjs
 
   else
 
     # NOTE: Normal GHC build
     # NOTE: GHC sometimes produces logs so big - that Travis terminates builds, so multiple --quiet
-    nix-build                                                \
-      --quiet --quiet                                        \
-      --argstr compiler "$GHCVERSION"                        \
-      --arg failOnAllWarnings "$failOnAllWarnings"           \
-      --arg buildStrictly "$buildStrictly"                   \
-      --arg checkUnusedPackages "$checkUnusedPackages"       \
-      --arg doCoverage "$doCoverage" \
-      --arg doHaddock "$doHaddock" \
+    nix-build \
+      --quiet --quiet \
+      --argstr compiler "$GHCVERSION" \
+      --arg allowInconsistentDependencies "$allowInconsistentDependencies" \
       --arg doJailbreak "$doJailbreak" \
       --arg doCheck "$doCheck" \
-      --arg doBenchmark "$doBenchmark" \
-      --arg enableExecutableProfiling "$enableExecutableProfiling" \
-      --arg enableLibraryProfiling "$enableLibraryProfiling" \
+      --arg sdistTarball "$sdistTarball" \
       --arg buildFromSdist "$buildFromSdist" \
+      --arg failOnAllWarnings "$failOnAllWarnings" \
       --arg buildStrictly "$buildStrictly" \
+      --arg enableDeadCodeElimination "$enableDeadCodeElimination" \
       --arg disableOptimization "$disableOptimization" \
-      --arg buildStackProject "$buildStackProject" \
-      "$generateOptparseApplicativeCompletion" \
-      --arg allowInconsistentDependencies "$allowInconsistentDependencies"
+      --arg linkWithGold "$linkWithGold" \
+      --arg enableLibraryProfiling "$enableLibraryProfiling" \
+      --arg enableExecutableProfiling "$enableExecutableProfiling" \
+      --arg doTracing "$doTracing" \
+      --arg enableDWARFDebugging "$enableDWARFDebugging" \
+      --arg doStrip "$doStrip" \
+      --arg doHyperlinkSource "$doHyperlinkSource" \
+      --arg enableSharedLibraries "$enableSharedLibraries" \
+      --arg enableStaticLibraries "$enableStaticLibraries" \
+      --arg enableSharedExecutables "$enableSharedExecutables" \
+      --arg justStaticExecutables "$justStaticExecutables" \
+      --arg checkUnusedPackages "$checkUnusedPackages" \
+      --arg doCoverage "$doCoverage" \
+      --arg doHaddock "$doHaddock" \
+      --arg doBenchmark "$doBenchmark" \
+      --arg generateOptparseApplicativeCompletions "$generateOptparseApplicativeCompletions" \
+      --arg executableNamesToShellComplete "$executableNamesToShellComplete" \
+      --arg withHoogle "$withHoogle"
 
 fi
 }
