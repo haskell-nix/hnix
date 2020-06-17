@@ -23,16 +23,39 @@ allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
 doJailbreak=${doJailbreak:-'false'}
 # Nix dependency checking, compilation and execution of test suites listed in the package description file.
 doCheck=${doCheck:-'true'}
+# Just produce a SDist src tarball
+sdistTarball=${sdistTarball:-'false'}
 # Produce SDist tarball and build project from it
 buildFromSdist=${buildFromSdist:-'false'}
 failOnAllWarnings=${failOnAllWarnings:-'false'}
 # `failOnAllWarnings` + `buildFromSdist`
 buildStrictly=${buildStrictly:-'false'}
+#  2020-06-02: NOTE: enableDeadCodeElimination = true: On GHC =< 8.8.3 macOS build falls due to https://gitlab.haskell.org/ghc/ghc/issues/17283
+enableDeadCodeElimination=${enableDeadCodeElimination:-'false'}
 # Disable GHC code optimizations for faster dev loops. Enable optimizations for production use or benchmarks.
 disableOptimization=${disableOptimization:-'true'}
+# Use faster `gold` ELF linker from GNU binutils instead of older&slower but more versatile GNU linker. Is not available by default since macOS does not have it.
+linkWithGold=${linkWithGold:-'false'}
 # Provide an inventory of performance events and timings for the execution. Provides informaiton in an absolute sense. Nothing is timestamped.
 enableLibraryProfiling=${enableLibraryProfiling:-'false'}
 enableExecutableProfiling=${enableExecutableProfiling:-'false'}
+# Include tracing information & abilities. Tracing records the chronology, often with timestamps and is extensive in time
+doTracing=${doTracing:-'false'}
+# Include DWARF debugging information & abilities
+enableDWARFDebugging=${enableDWARFDebugging:-'false'}
+# Strip results from all debugging symbols
+doStrip=${doStrip:-'false'}
+#	Generate hyperlinked source code for documentation using HsColour, and have Haddock documentation link to it.
+doHyperlinkSource=${doHyperlinkSource:-'false'}
+# Nixpkgs expects shared libraries
+enableSharedLibraries=${enableSharedLibraries:-'true'}
+# Ability to make static libraries
+enableStaticLibraries=${enableStaticLibraries:-'false'}
+# Make hybrid executable that is also a shared library
+enableSharedExecutables=${enableSharedExecutables:-'false'}
+# link executables statically against haskell libs to reduce closure size
+justStaticExecutables=${justStaticExecutables:-'false'}
+enableSeparateBinOutput=${enableSeparateBinOutput:-'false'}
 # Add a post-build check to verify that dependencies declared in the .cabal file are actually used.
 checkUnusedPackages=${checkUnusedPackages:-'false'}
 # Generation and installation of haddock API documentation
@@ -44,6 +67,9 @@ doBenchmark=${doBenchmark:-'false'}
 # NOTE: *Oprparse* key is redifined in the code further
 generateOptparseApplicativeCompletions=${generateOptparseApplicativeCompletions:-'false'}
 executableNamesToShellComplete=${executableNamesToShellComplete:-'[ "defaultBinaryName" ]'}
+
+# Include Hoogle into derivation
+withHoogle=${withHoogle:-'false'}
 
 ghcjsTmpLogFile=${ghcjsTmpLogFile:-'/tmp/ghcjsTmpLogFile.log'}
 ghcjsLogTailLength=${ghcjsLogTailLength:-'10000'}
