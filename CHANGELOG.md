@@ -10,7 +10,7 @@
     * `instance MonadException m => MonadException(Fix1T StandardTF m)`
 
 * Minor:
-  * Added support for `GHC 8.4.4, 8.8.3`
+  * Added support for `GHC 8.10`
 
 ---
 
