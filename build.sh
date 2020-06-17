@@ -125,48 +125,70 @@ if [ "$GHCVERSION" = "ghcjs" ]
     # But Travis then terminates on 10 min no stdout timeout
     # so HACK: SILENT wrapper allows to surpress the huge log, while still preserves the Cachix caching ability in any case of the build
     # On build failure outputs the last 10000 lines of log (that should be more then enough), and terminates
-    SILENT nix-build                                         \
-      --arg failOnAllWarnings "$failOnAllWarnings"           \
-      --arg buildStrictly "$buildStrictly"                   \
-      --arg checkUnusedPackages "$checkUnusedPackages"       \
-      --arg doCoverage "$doCoverage" \
-      --arg doHaddock "$doHaddock" \
+    SILENT nix-build \
+      --arg allowInconsistentDependencies "$allowInconsistentDependencies" \
       --arg doJailbreak "$doJailbreak" \
       --arg doCheck "$doCheck" \
-      --arg doBenchmark "$doBenchmark" \
-      --arg enableExecutableProfiling "$enableExecutableProfiling" \
-      --arg enableLibraryProfiling "$enableLibraryProfiling" \
+      --arg sdistTarball "$sdistTarball" \
       --arg buildFromSdist "$buildFromSdist" \
+      --arg failOnAllWarnings "$failOnAllWarnings" \
       --arg buildStrictly "$buildStrictly" \
+      --arg enableDeadCodeElimination "$enableDeadCodeElimination" \
       --arg disableOptimization "$disableOptimization" \
-      --arg allowInconsistentDependencies "$allowInconsistentDependencies" \
+      --arg linkWithGold "$linkWithGold" \
+      --arg enableLibraryProfiling "$enableLibraryProfiling" \
+      --arg enableExecutableProfiling "$enableExecutableProfiling" \
+      --arg doTracing "$doTracing" \
+      --arg enableDWARFDebugging "$enableDWARFDebugging" \
+      --arg doStrip "$doStrip" \
+      --arg doHyperlinkSource "$doHyperlinkSource" \
+      --arg enableSharedLibraries "$enableSharedLibraries" \
+      --arg enableStaticLibraries "$enableStaticLibraries" \
+      --arg enableSharedExecutables "$enableSharedExecutables" \
+      --arg justStaticExecutables "$justStaticExecutables" \
+      --arg checkUnusedPackages "$checkUnusedPackages" \
+      --arg doCoverage "$doCoverage" \
+      --arg doHaddock "$doHaddock" \
+      --arg doBenchmark "$doBenchmark" \
       --arg generateOptparseApplicativeCompletions "$generateOptparseApplicativeCompletions" \
       --arg executableNamesToShellComplete "$executableNamesToShellComplete" \
+      --arg withHoogle "$withHoogle" \
       ghcjs
 
   else
 
     # NOTE: Normal GHC build
     # NOTE: GHC sometimes produces logs so big - that Travis terminates builds, so multiple --quiet
-    nix-build                                                \
-      --quiet --quiet                                        \
-      --argstr compiler "$GHCVERSION"                        \
-      --arg failOnAllWarnings "$failOnAllWarnings"           \
-      --arg buildStrictly "$buildStrictly"                   \
-      --arg checkUnusedPackages "$checkUnusedPackages"       \
-      --arg doCoverage "$doCoverage" \
-      --arg doHaddock "$doHaddock" \
+    nix-build \
+      --quiet --quiet \
+      --argstr compiler "$GHCVERSION" \
+      --arg allowInconsistentDependencies "$allowInconsistentDependencies" \
       --arg doJailbreak "$doJailbreak" \
       --arg doCheck "$doCheck" \
-      --arg doBenchmark "$doBenchmark" \
-      --arg enableExecutableProfiling "$enableExecutableProfiling" \
-      --arg enableLibraryProfiling "$enableLibraryProfiling" \
+      --arg sdistTarball "$sdistTarball" \
       --arg buildFromSdist "$buildFromSdist" \
+      --arg failOnAllWarnings "$failOnAllWarnings" \
       --arg buildStrictly "$buildStrictly" \
+      --arg enableDeadCodeElimination "$enableDeadCodeElimination" \
       --arg disableOptimization "$disableOptimization" \
-      --arg allowInconsistentDependencies "$allowInconsistentDependencies" \
+      --arg linkWithGold "$linkWithGold" \
+      --arg enableLibraryProfiling "$enableLibraryProfiling" \
+      --arg enableExecutableProfiling "$enableExecutableProfiling" \
+      --arg doTracing "$doTracing" \
+      --arg enableDWARFDebugging "$enableDWARFDebugging" \
+      --arg doStrip "$doStrip" \
+      --arg doHyperlinkSource "$doHyperlinkSource" \
+      --arg enableSharedLibraries "$enableSharedLibraries" \
+      --arg enableStaticLibraries "$enableStaticLibraries" \
+      --arg enableSharedExecutables "$enableSharedExecutables" \
+      --arg justStaticExecutables "$justStaticExecutables" \
+      --arg checkUnusedPackages "$checkUnusedPackages" \
+      --arg doCoverage "$doCoverage" \
+      --arg doHaddock "$doHaddock" \
+      --arg doBenchmark "$doBenchmark" \
       --arg generateOptparseApplicativeCompletions "$generateOptparseApplicativeCompletions" \
-      --arg executableNamesToShellComplete "$executableNamesToShellComplete"
+      --arg executableNamesToShellComplete "$executableNamesToShellComplete" \
+      --arg withHoogle "$withHoogle"
 
 fi
 }
