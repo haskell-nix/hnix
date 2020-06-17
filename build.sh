@@ -10,7 +10,6 @@ GHCVERSION=${GHCVERSION:-'ghc883'}
 rev=${rev:-'nixpkgs-unstable'}
 NIX_PATH=${NIX_PATH:-"nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"}
 export NIX_PATH
-name=${name:-'defaultBinaryName'}
 pkgName=${pkgName:-'defaultPkgName'}
 failOnAllWarnings=${failOnAllWarnings:-'false'}
 checkUnusedPackages=${checkUnusedPackages:-'false'}
@@ -24,7 +23,6 @@ enableLibraryProfiling=${enableLibraryProfiling:-'false'}
 buildFromSdist=${buildFromSdist:-'false'}
 buildStrictly=${buildStrictly:-'false'}
 disableOptimization=${disableOptimization:-'true'}
-buildStackProject=${buildStackProject:-'false'}
 # NOTE: *Oprparse* key is redifined in the code further
 generateOptparseApplicativeCompletions=${generateOptparseApplicativeCompletions:-'false'}
 allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
@@ -98,7 +96,6 @@ if [ "$GHCVERSION" = "ghcjs" ]
       --arg buildFromSdist "$buildFromSdist" \
       --arg buildStrictly "$buildStrictly" \
       --arg disableOptimization "$disableOptimization" \
-      --arg buildStackProject "$buildStackProject" \
       --arg allowInconsistentDependencies "$allowInconsistentDependencies" \
       --arg generateOptparseApplicativeCompletions "$generateOptparseApplicativeCompletions" \
       --arg executableNamesToShellComplete "$executableNamesToShellComplete" \
@@ -124,7 +121,6 @@ if [ "$GHCVERSION" = "ghcjs" ]
       --arg buildFromSdist "$buildFromSdist" \
       --arg buildStrictly "$buildStrictly" \
       --arg disableOptimization "$disableOptimization" \
-      --arg buildStackProject "$buildStackProject" \
       --arg allowInconsistentDependencies "$allowInconsistentDependencies" \
       --arg generateOptparseApplicativeCompletions "$generateOptparseApplicativeCompletions" \
       --arg executableNamesToShellComplete "$executableNamesToShellComplete"
