@@ -102,11 +102,16 @@ jobs:
       env:
         - GHCVERSION=ghc883
       os: osx
-    - name: GHC 8.10.1, Linux, SDist
+    - name: GHC 8.10.1, Linux, SDist, Optimize, Benchmark, Haddock, Shell Completions
       env:
         - GHCVERSION=ghc8101
         - buildFromSdist=true
         - linkWithGold=true
+        - doHaddock=true
+        - doBenchmark=true
+        - disableOptimization=false
+        - enableDeadCodeElimination=true
+        - generateOptparseApplicativeCompletions=true
       os: linux
       dist: bionic
     - name: GHCJS, Linux
