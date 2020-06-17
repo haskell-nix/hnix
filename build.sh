@@ -6,7 +6,7 @@
 set -Eexuo pipefail
 
 # NOTE: If var not imported - set to the default value
-GHCVERSION=${GHCVERSION:-'ghc883'}
+GHCVERSION=${GHCVERSION:-'ghc8101'}
 rev=${rev:-'nixpkgs-unstable'}
 NIX_PATH=${NIX_PATH:-"nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"}
 export NIX_PATH
