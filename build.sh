@@ -28,6 +28,8 @@ buildStackProject=${buildStackProject:-'false'}
 # NOTE: *Oprparse* key is redifined in the code further
 generateOptparseApplicativeCompletions=${generateOptparseApplicativeCompletions:-'false'}
 allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
+executableNamesToShellComplete=${executableNamesToShellComplete:-'[ "defaultBinaryName" ]'}
+
 ghcjsTmpLogFile=${ghcjsTmpLogFile:-'/tmp/ghcjsTmpLogFile.log'}
 ghcjsLogTailLength=${ghcjsLogTailLength:-'10000'}
 # NOTE: If key not provided (branch is not inside the central repo) - init CACHIX_SIGNING_KEY as empty
@@ -69,16 +71,6 @@ SILENT(){
 BUILD_PROJECT(){
 
 
-# NOTE: Resulting value injects into `nix-build` commands
-if [ "$generateOptparseApplicativeCompletion" = 'true' ]
-  then
-    # NOTE: Enable shell completion generation
-    generateOptparseApplicativeCompletion="--arg generateOptparseApplicativeCompletion $name $pkgName"
-  else
-    # NOTE: Skip the shell completion generation
-    generateOptparseApplicativeCompletion=''
-fi
-
 IFS=$'\n\t'
 
 if [ "$GHCVERSION" = "ghcjs" ]
@@ -107,8 +99,9 @@ if [ "$GHCVERSION" = "ghcjs" ]
       --arg buildStrictly "$buildStrictly" \
       --arg disableOptimization "$disableOptimization" \
       --arg buildStackProject "$buildStackProject" \
-      "$generateOptparseApplicativeCompletion" \
       --arg allowInconsistentDependencies "$allowInconsistentDependencies" \
+      --arg generateOptparseApplicativeCompletions "$generateOptparseApplicativeCompletions" \
+      --arg executableNamesToShellComplete "$executableNamesToShellComplete" \
       ghcjs
 
   else
@@ -132,8 +125,9 @@ if [ "$GHCVERSION" = "ghcjs" ]
       --arg buildStrictly "$buildStrictly" \
       --arg disableOptimization "$disableOptimization" \
       --arg buildStackProject "$buildStackProject" \
-      "$generateOptparseApplicativeCompletion" \
-      --arg allowInconsistentDependencies "$allowInconsistentDependencies"
+      --arg allowInconsistentDependencies "$allowInconsistentDependencies" \
+      --arg generateOptparseApplicativeCompletions "$generateOptparseApplicativeCompletions" \
+      --arg executableNamesToShellComplete "$executableNamesToShellComplete"
 
 fi
 }

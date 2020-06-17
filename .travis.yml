@@ -73,7 +73,8 @@ env:
     #
     #   command: name of an executable
     #       pkg: Haskell package that builds the executables
-    - generateOptparseApplicativeCompletion=false
+    - generateOptparseApplicativeCompletions=false
+    - executableNamesToShellComplete='[ "hnix" ]'
     # NOTE: Don't fail at configure time if there are multiple versions of the same package in the (recursive) dependencies of the package being built. Will delay failures, if any, to compile time.
     - allowInconsistentDependencies=false
     # NOTE: Log file to dump GHCJS build into
