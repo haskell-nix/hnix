@@ -11,21 +11,21 @@ rev=${rev:-'nixpkgs-unstable'}
 NIX_PATH=${NIX_PATH:-"nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"}
 export NIX_PATH
 pkgName=${pkgName:-'defaultPkgName'}
-failOnAllWarnings=${failOnAllWarnings:-'false'}
-checkUnusedPackages=${checkUnusedPackages:-'false'}
-doCoverage=${doCoverage:-'false'}
-doHaddock=${doHaddock:-'false'}
+allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
 doJailbreak=${doJailbreak:-'false'}
 doCheck=${doCheck:-'true'}
-doBenchmark=${doBenchmark:-'false'}
-enableExecutableProfiling=${enableExecutableProfiling:-'false'}
-enableLibraryProfiling=${enableLibraryProfiling:-'false'}
 buildFromSdist=${buildFromSdist:-'false'}
+failOnAllWarnings=${failOnAllWarnings:-'false'}
 buildStrictly=${buildStrictly:-'false'}
 disableOptimization=${disableOptimization:-'true'}
+enableLibraryProfiling=${enableLibraryProfiling:-'false'}
+enableExecutableProfiling=${enableExecutableProfiling:-'false'}
+checkUnusedPackages=${checkUnusedPackages:-'false'}
+doHaddock=${doHaddock:-'false'}
+doCoverage=${doCoverage:-'false'}
+doBenchmark=${doBenchmark:-'false'}
 # NOTE: *Oprparse* key is redifined in the code further
 generateOptparseApplicativeCompletions=${generateOptparseApplicativeCompletions:-'false'}
-allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
 executableNamesToShellComplete=${executableNamesToShellComplete:-'[ "defaultBinaryName" ]'}
 
 ghcjsTmpLogFile=${ghcjsTmpLogFile:-'/tmp/ghcjsTmpLogFile.log'}
