@@ -10,7 +10,7 @@ GHCVERSION=${GHCVERSION:-'ghc8101'}
 rev=${rev:-'nixpkgs-unstable'}
 NIX_PATH=${NIX_PATH:-"nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"}
 export NIX_PATH
-pkgName=${pkgName:-'defaultPkgName'}
+name=${name:-'defaultProjectName'}
 
 # This settings expose most of the Nixpkgs Haskell.lib API: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
 
