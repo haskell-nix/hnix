@@ -77,35 +77,6 @@
       #     src = if builtins.pathExists ./data/nix/.version
       #           then data/nix
       #           else throw "data/nix doesn't seem to contain the nix source. You may want to run git submodule update --init.";
-
-      #     enableParallelBuilding = true;
-
-      #     configureFlags =
-      #       [ "--disable-doc-gen"
-      #         "--enable-gc"
-      #       ];
-
-      #     buildInputs =
-      #       [ bison
-      #         flex
-      #         autoconf-archive
-      #         autoreconfHook
-      #         curl
-      #         bzip2 xz brotli editline
-      #         openssl pkgconfig sqlite boehmgc
-      #         boost
-      #         git
-      #         mercurial
-      #       ]
-      #       ++ lib.optionals stdenv.isLinux [libseccomp utillinuxMinimal]
-      #       ++ lib.optional (stdenv.isLinux || stdenv.isDarwin) libsodium
-      #       ++ lib.optional (stdenv.isLinux || stdenv.isDarwin)
-      #            (aws-sdk-cpp.override {
-      #               apis = ["s3" "transfer"];
-      #               customMemoryManagement = false;
-      #             });
-
-      #     outputs = builtins.filter (s: s != "doc" && s != "man" ) attrs.outputs;
       #   });
       # };
       }
