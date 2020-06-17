@@ -11,18 +11,31 @@ rev=${rev:-'nixpkgs-unstable'}
 NIX_PATH=${NIX_PATH:-"nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"}
 export NIX_PATH
 pkgName=${pkgName:-'defaultPkgName'}
+
+# Don't fail at configure time if there are multiple versions of the same package in the (recursive) dependencies of the package being built. Will delay failures, if any, to compile time.
 allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
+
+# Escape the version bounds from the cabal file. You may want to avoid this function.
 doJailbreak=${doJailbreak:-'false'}
+# Nix dependency checking, compilation and execution of test suites listed in the package description file.
 doCheck=${doCheck:-'true'}
+# Produce SDist tarball and build project from it
 buildFromSdist=${buildFromSdist:-'false'}
 failOnAllWarnings=${failOnAllWarnings:-'false'}
+# `failOnAllWarnings` + `buildFromSdist`
 buildStrictly=${buildStrictly:-'false'}
+# Disable GHC code optimizations for faster dev loops. Enable optimizations for production use or benchmarks.
 disableOptimization=${disableOptimization:-'true'}
+# Provide an inventory of performance events and timings for the execution. Provides informaiton in an absolute sense. Nothing is timestamped.
 enableLibraryProfiling=${enableLibraryProfiling:-'false'}
 enableExecutableProfiling=${enableExecutableProfiling:-'false'}
+# Add a post-build check to verify that dependencies declared in the .cabal file are actually used.
 checkUnusedPackages=${checkUnusedPackages:-'false'}
+# Generation and installation of haddock API documentation
 doHaddock=${doHaddock:-'false'}
+# Generation and installation of a coverage report. See https://wiki.haskell.org/Haskell_program_coverage
 doCoverage=${doCoverage:-'false'}
+# doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
 doBenchmark=${doBenchmark:-'false'}
 # NOTE: *Oprparse* key is redifined in the code further
 generateOptparseApplicativeCompletions=${generateOptparseApplicativeCompletions:-'false'}
