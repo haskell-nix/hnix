@@ -86,13 +86,16 @@ env:
 jobs:
   include:
     - name: GHC 8.4.4, Linux
-      env: GHCVERSION=ghc844
+      env:
+        - GHCVERSION=ghc844
+        - linkWithGold=true
       os: linux
       dist: bionic
     - name: GHC 8.6.5, Linux, Strict
       env:
         - GHCVERSION=ghc865
         - buildStrictly=true
+        - linkWithGold=true
       os: linux
       dist: bionic
     - name: GHC 8.8.3, macOS
@@ -103,6 +106,7 @@ jobs:
       env:
         - GHCVERSION=ghc8101
         - buildFromSdist=true
+        - linkWithGold=true
       os: linux
       dist: bionic
     - name: GHCJS, Linux
