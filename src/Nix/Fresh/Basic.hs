@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -8,7 +9,9 @@
 
 module Nix.Fresh.Basic where
 
+#if !MIN_VERSION_base(4,13,0)
 import           Control.Monad.Fail ( MonadFail )
+#endif
 import           Control.Monad.Reader
 import           Nix.Effects
 import           Nix.Render

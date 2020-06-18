@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE ConstraintKinds #-}
@@ -35,7 +36,9 @@ import           Control.Applicative
 import           Control.Arrow                  ( second )
 import           Control.Monad
 import           Control.Monad.Catch
+#if !MIN_VERSION_base(4,13,0)
 import           Control.Monad.Fail
+#endif
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader

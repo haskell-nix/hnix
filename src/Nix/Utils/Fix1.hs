@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -11,7 +12,9 @@ module Nix.Utils.Fix1 where
 
 import           Control.Applicative
 import           Control.Monad
+#if !MIN_VERSION_base(4,13,0)
 import           Control.Monad.Fail
+#endif
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Catch
