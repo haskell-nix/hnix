@@ -1002,7 +1002,6 @@ test-suite hnix-tests
     , directory
     , exceptions
     , filepath
-    , generic-random
     , hedgehog
     , hnix
     , interpolate
@@ -1016,7 +1015,6 @@ test-suite hnix-tests
     , tasty
     , tasty-hedgehog
     , tasty-hunit
-    , tasty-quickcheck
     , tasty-th
     , serialise
     , template-haskell
