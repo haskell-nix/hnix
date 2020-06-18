@@ -873,7 +873,6 @@ library
     , bytestring >= 0.10.8 && < 0.11
     , comonad >= 5.0.4 && < 5.1
     , containers >= 0.5.11.0 && < 0.7
-    , contravariant >= 1.5 && < 1.6
     , data-fix >= 0.2.0 && <  0.3
     , deepseq >=1.4.3 && <1.5
     , deriving-compat >=0.3 && <0.6
@@ -905,7 +904,6 @@ library
     , scientific >= 0.3.6 && < 0.4
     , semialign >= 1 && < 1.2
     , semialign-indexed >= 1 && < 1.2
-    , semigroups >=0.18 && <0.19 || >= 0.19.1 && < 0.20
     , some >= 1.0.1 && < 1.1
     , split >= 0.2.3 && < 0.3
     , syb >= 0.7 && < 0.8
