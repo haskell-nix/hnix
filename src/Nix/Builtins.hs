@@ -51,7 +51,6 @@ import           Data.Maybe
 import           Data.Scientific
 import           Data.Set                       ( Set )
 import qualified Data.Set                      as S
-import           Data.String.Interpolate.IsString
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
 import           Data.Text.Encoding
@@ -61,6 +60,7 @@ import           Data.These                     ( fromThese )
 import qualified Data.Time.Clock.POSIX         as Time
 import           Data.Traversable               ( for )
 import qualified Data.Vector                   as V
+import           NeatInterpolation              ( text )
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Effects
@@ -170,7 +170,7 @@ builtinsList = sequence
     -- This is compiled in so that we only parse and evaluate it once, at
     -- compile-time.
   , add0 TopLevel "derivation" $(do
-      let Success expr = parseNixText [i|
+      let Success expr = parseNixText [text|
         drvAttrs @ { outputs ? [ "out" ], ... }:
 
         let

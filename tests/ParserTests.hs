@@ -10,10 +10,10 @@ module ParserTests (tests) where
 
 import Data.Fix
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.String.Interpolate.IsString
 import Data.Text (Text, unpack)
 import Data.Text.Prettyprint.Doc
 import Data.Text.Prettyprint.Doc.Render.Text
+import NeatInterpolation (text)
 import Nix.Atoms
 import Nix.Expr
 import Nix.Parser
@@ -329,12 +329,12 @@ case_comments = do
   assertParseFile "let-comments.nix" expected
 
 case_select_or_precedence =
-    assertParsePrint [i|let
+    assertParsePrint [text|let
   matchDef = def:   matcher:
                       v:   let
                              case = builtins.head (builtins.attrNames v);
                            in (matcher.case or def case) (v.case);
-in null|] [i|let
+in null|] [text|let
   matchDef = def:
     matcher:
       v:
@@ -344,12 +344,12 @@ in null|] [i|let
 in null|]
 
 case_select_or_precedence2 =
-    assertParsePrint [i|let
+    assertParsePrint [text|let
   matchDef = def:   matcher:
                       v:   let
                              case = builtins.head (builtins.attrNames v);
                            in (matcher.case or null.foo) (v.case);
-in null|] [i|let
+in null|] [text|let
   matchDef = def:
     matcher:
       v:

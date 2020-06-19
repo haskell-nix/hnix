@@ -12,10 +12,10 @@ import           Control.Monad
 import           Data.Fix
 import           Data.List (isSuffixOf)
 import           Data.Maybe
-import           Data.String.Interpolate.IsString
 import           Data.Text (unpack)
 import           Data.Time
 import qualified EvalTests
+import           NeatInterpolation (text)
 import qualified Nix
 import           Nix.Expr.Types
 import           Nix.String
@@ -50,10 +50,10 @@ ensureNixpkgsCanParse =
     Fix (NAbs (ParamSet params _ _) _) -> do
       let rev    = getString "rev" params
           sha256 = getString "sha256" params
-      consider "fetchTarball expression" (pure $ parseNixTextLoc [i|
+      consider "fetchTarball expression" (pure $ parseNixTextLoc [text|
         builtins.fetchTarball {
-          url    = "https://github.com/NixOS/nixpkgs/archive/#{rev}.tar.gz";
-          sha256 = "#{sha256}";
+          url    = "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz";
+          sha256 = "${sha256}";
         }|]) $ \expr -> do
         NVStr ns <- do
           time <- getCurrentTime
@@ -65,7 +65,7 @@ ensureNixpkgsCanParse =
           errorWithoutStackTrace $
             "Directory " ++ show dir ++ " does not exist"
         files <- globDir1 (compile "**/*.nix") (unpack dir)
-        when (length files == 0) $
+        when (null files) $
           errorWithoutStackTrace $
             "Directory " ++ show dir ++ " does not have any files"
         forM_ files $ \file -> do

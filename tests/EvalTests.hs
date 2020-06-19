@@ -17,9 +17,9 @@ import           Control.Monad.IO.Class
 import           Data.List ((\\))
 import           Data.Maybe (isJust)
 import qualified Data.Set as S
-import           Data.String.Interpolate.IsString
 import           Data.Text (Text)
 import           Data.Time
+import           NeatInterpolation (text)
 import           Nix
 import           Nix.Standard
 import           Nix.TH
@@ -90,7 +90,7 @@ case_function_recursive_args =
     constantEqualText "2" "({ x ? 1, y ? x * 3}: y - x) {}"
 
 case_function_recursive_sets =
-    constantEqualText "[ [ 6 4 100 ] 4 ]" [i|
+    constantEqualText "[ [ 6 4 100 ] 4 ]" [text|
         let x = rec {
 
           y = 2;
@@ -152,7 +152,7 @@ case_lang_version =
     constantEqualText "5" "builtins.langVersion"
 
 case_rec_set_attr_path_simpl =
-    constantEqualText "123" [i|
+    constantEqualText "123" [text|
       let x = rec {
         foo.number = 123;
         foo.function = y: foo.number;
@@ -160,7 +160,7 @@ case_rec_set_attr_path_simpl =
     |]
 
 case_inherit_from_set_has_no_scope =
-    constantEqualText' "false" [i|
+    constantEqualText' "false" [text|
       (builtins.tryEval (
         let x = 1;
             y = { z = 2; };
@@ -171,7 +171,7 @@ case_inherit_from_set_has_no_scope =
 -- github/orblivion (2018-08-05): Adding these failing tests so we fix this feature
 
 -- case_overrides =
---     constantEqualText' "2" [i|
+--     constantEqualText' "2" [text|
 --       let
 --
 --         overrides = { a = 2; };
@@ -184,7 +184,7 @@ case_inherit_from_set_has_no_scope =
 --     |]
 
 -- case_inherit_overrides =
---     constantEqualText' "2" [i|
+--     constantEqualText' "2" [text|
 --       let
 --
 --         __overrides = { a = 2; };
@@ -197,7 +197,7 @@ case_inherit_from_set_has_no_scope =
 --     |]
 
 case_unsafegetattrpos1 =
-    constantEqualText "[ 6 20 ]" [i|
+    constantEqualText "[ 5 14 ]" [text|
       let e = 1;
           f = 1;
           t = {};
@@ -212,7 +212,7 @@ case_unsafegetattrpos1 =
     |]
 
 case_unsafegetattrpos2 =
-    constantEqualText "[ 6 20 ]" [i|
+    constantEqualText "[ 5 14 ]" [text|
       let e = 1;
           f = 1;
           t = {};
@@ -227,7 +227,7 @@ case_unsafegetattrpos2 =
     |]
 
 case_unsafegetattrpos3 =
-    constantEqualText "[ 7 13 ]" [i|
+    constantEqualText "[ 6 7 ]" [text|
       let e = 1;
           f = 1;
           t = {};
@@ -242,7 +242,7 @@ case_unsafegetattrpos3 =
     |]
 
 case_unsafegetattrpos4 =
-    constantEqualText "[ 8 13 ]" [i|
+    constantEqualText "[ 7 7 ]" [text|
       let e = 1;
           f = 1;
           t = {};
@@ -259,7 +259,7 @@ case_unsafegetattrpos4 =
 -- jww (2018-05-09): These two are failing but they shouldn't be
 
 -- case_unsafegetattrpos5 =
---     constantEqualText "[ 7 13 ]" [i|
+--     constantEqualText "[ 7 13 ]" [text|
 --       let e = 1;
 --           f = 1;
 --           t = {};
@@ -274,7 +274,7 @@ case_unsafegetattrpos4 =
 --     |]
 
 -- case_unsafegetattrpos6 =
---     constantEqualText "[ 7 13 ]" [i|
+--     constantEqualText "[ 7 13 ]" [text|
 --       let e = 1;
 --           f = 1;
 --           t = {};
@@ -289,7 +289,7 @@ case_unsafegetattrpos4 =
 --     |]
 
 case_fixed_points =
-    constantEqualText [i|[
+    constantEqualText [text|[
   {
     foobar = "foobar";
     foo = "foo";
@@ -300,7 +300,7 @@ case_fixed_points =
     foo = "foo + ";
     bar = "bar";
   }
-]|] [i|
+]|] [text|
     let
       fix = f: let x = f x; in x;
       extends = f: rattrs: self:
@@ -313,7 +313,7 @@ case_fixed_points =
 |]
 
 case_fixed_points_and_fold =
-    constantEqualText [i|[ {} {} ]|] [i|
+    constantEqualText [text|[ {} {} ]|] [text|
 let
   extends = f: rattrs: self:
     let super = rattrs self; in super // f self super;
@@ -325,7 +325,7 @@ in [ (fix toFixFold) (fix toFix) ]
 |]
 
 case_fixed_points_attrsets =
-    constantEqualText "{ x = { y = { z = 100; }; z = { y = 100; }; }; }" [i|
+    constantEqualText "{ x = { y = { z = 100; }; z = { y = 100; }; }; }" [text|
       let fix = f: let x = f x; in x;
           f = self: { x.z.y = 100; x.y.z = self.x.z.y; };
       in fix f
@@ -360,7 +360,7 @@ case_rec_path_attr =
         "let src = 10; x = rec { passthru.src = src; }; in x.passthru.src"
 
 case_mapattrs_builtin =
-    constantEqualText' "{ a = \"afoo\"; b = \"bbar\"; }" [i|
+    constantEqualText' "{ a = \"afoo\"; b = \"bbar\"; }" [text|
       (builtins.mapAttrs (x: y: x + y) {
         a = "foo";
         b = "bar";
@@ -413,10 +413,10 @@ case_attrset_function_nested_bottom_equal =
 -- Regression test for #527
 
 case_add_string_thunk_left =
-  constantEqualText [i|"cygwin"|] [i|builtins.head ["cyg"] + "win"|]
+  constantEqualText [text|"cygwin"|] [text|builtins.head ["cyg"] + "win"|]
 
 case_add_string_thunk_right =
-  constantEqualText [i|"cygwin"|] [i|"cyg" + builtins.head ["win"]|]
+  constantEqualText [text|"cygwin"|] [text|"cyg" + builtins.head ["win"]|]
 
 case_add_int_thunk_left =
   constantEqualText "3" "builtins.head [1] + 2"
@@ -446,28 +446,33 @@ genEvalCompareTests = do
     mkTestCase td f = testCase f $ assertEvalFileMatchesNix (td </> f)
 
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
-constantEqual a b = do
+constantEqual expected actual = do
     time <- getCurrentTime
     let opts = defaultOptions time
     -- putStrLn =<< lint (stripAnnotation a)
-    res <- runWithBasicEffectsIO opts $ do
-        a' <- normalForm =<< nixEvalExprLoc Nothing a
-        b' <- normalForm =<< nixEvalExprLoc Nothing b
-        valueEqM a' b'
-    assertBool "" res
+    (eq, expectedNF, actualNF) <- runWithBasicEffectsIO opts $ do
+        expectedNF <- normalForm =<< nixEvalExprLoc Nothing expected
+        actualNF <- normalForm =<< nixEvalExprLoc Nothing actual
+        eq <- valueEqM expectedNF actualNF
+        return (eq, expectedNF, actualNF)
+    let message =
+                "Inequal normal forms:\n"
+            <>  "Expected: " <> printNix expectedNF <> "\n"
+            <>  "Actual:   " <> printNix actualNF
+    assertBool message eq
 
 constantEqualText' :: Text -> Text -> Assertion
-constantEqualText' a b = do
-  let Success a' = parseNixTextLoc a
-      Success b' = parseNixTextLoc b
-  constantEqual a' b'
+constantEqualText' expected actual = do
+  let Success expected' = parseNixTextLoc expected
+      Success actual' = parseNixTextLoc actual
+  constantEqual expected' actual'
 
 constantEqualText :: Text -> Text -> Assertion
-constantEqualText a b = do
-  constantEqualText' a b
+constantEqualText expected actual = do
+  constantEqualText' expected actual
   mres <- liftIO $ lookupEnv "ALL_TESTS" <|> lookupEnv "MATCHING_TESTS"
   when (isJust mres) $
-      assertEvalMatchesNix b
+      assertEvalMatchesNix actual
 
 assertNixEvalThrows :: Text -> Assertion
 assertNixEvalThrows a = do
