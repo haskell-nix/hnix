@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ExistentialQuantification #-}
@@ -30,7 +31,9 @@ import           Control.Applicative
 import           Control.Arrow
 import           Control.Monad.Catch
 import           Control.Monad.Except
+#if !MIN_VERSION_base(4,13,0)
 import           Control.Monad.Fail
+#endif
 import           Control.Monad.Logic
 import           Control.Monad.Reader
 import           Control.Monad.Ref

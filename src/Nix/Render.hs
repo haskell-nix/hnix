@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -12,7 +13,9 @@ module Nix.Render where
 
 import           Prelude                 hiding ( readFile )
 
+#if !MIN_VERSION_base(4,13,0)
 import           Control.Monad.Fail             ( MonadFail )
+#endif
 import           Control.Monad.Trans
 import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString               as BS

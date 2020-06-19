@@ -22,7 +22,9 @@ import           Control.Applicative
 import           Control.Comonad                ( Comonad )
 import           Control.Comonad.Env            ( ComonadEnv )
 import           Control.Monad.Catch     hiding ( catchJust )
+#if !MIN_VERSION_base(4,13,0)
 import           Control.Monad.Fail             ( MonadFail )
+#endif
 import           Control.Monad.Free
 import           Control.Monad.Reader
 import           Control.Monad.Ref

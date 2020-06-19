@@ -16,7 +16,9 @@ import           Control.Applicative
 import           Control.Monad.Base
 import           Control.Monad.Catch
 import           Control.Monad.Except
+#if !MIN_VERSION_base(4,13,0)
 import           Control.Monad.Fail
+#endif
 import           Control.Monad.Reader
 import           Control.Monad.Ref
 import           Control.Monad.ST
