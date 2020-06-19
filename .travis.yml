@@ -101,6 +101,7 @@ jobs:
     - name: GHC 8.8.3, macOS
       env:
         - GHCVERSION=ghc883
+        - buildStrictly=true
       os: osx
     - name: GHC 8.10.1, Linux, SDist, Optimize, Benchmark, Haddock, Shell Completions
       env:
