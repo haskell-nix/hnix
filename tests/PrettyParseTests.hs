@@ -29,10 +29,7 @@ import           Nix.Parser
 import           Nix.Pretty
 import           Test.Tasty
 import           Test.Tasty.Hedgehog
-import           Text.Megaparsec                ( Pos
-                                                , SourcePos
-                                                , mkPos
-                                                )
+import           Text.Megaparsec                ( Pos )
 import qualified Text.Show.Pretty              as PS
 
 asciiString :: MonadGen m => m String
