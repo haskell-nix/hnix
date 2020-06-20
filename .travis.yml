@@ -97,7 +97,7 @@ jobs:
         - linkWithGold=true
       os: linux
       dist: bionic
-    - name: GHC 8.8.3, macOS
+    - name: GHC 8.8.3, macOS, Strict
       env:
         - GHCVERSION=ghc883
         - buildStrictly=true
