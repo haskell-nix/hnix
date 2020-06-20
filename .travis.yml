@@ -91,10 +91,9 @@ jobs:
         - linkWithGold=true
       os: linux
       dist: bionic
-    - name: GHC 8.6.5, Linux, Strict
+    - name: GHC 8.6.5, Linux
       env:
         - GHCVERSION=ghc865
-        - buildStrictly=true
         - linkWithGold=true
       os: linux
       dist: bionic
