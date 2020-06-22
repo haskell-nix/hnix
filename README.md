@@ -2,9 +2,9 @@
 
 [![Build Status](https://api.travis-ci.org/haskell-nix/hnix.svg)](https://travis-ci.org/haskell-nix/hnix)
 [![Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/haskell-nix/Lobby)
-[![Hackage](https://img.shields.io/hackage/v/hnix?color=purple&label=Latest%20release)](https://hackage.haskell.org/package/hnix)
-[![Hackage Matrix Builder](https://img.shields.io/badge/Hackage%20Matrix-Builder-green)](https://matrix.hackage.haskell.org/package/hnix)
-[![Nixpkgs Hydra CI](https://img.shields.io/badge/Nixpkgs%20Hydra-CI-green)](https://hydra.nixos.org/job/nixpkgs/trunk/haskellPackages.hnix.x86_64-linux#tabs-status)
+[![Hackage](https://img.shields.io/hackage/v/hnix?color=%235e5086&label=Latest%20release)](https://hackage.haskell.org/package/hnix)
+[![Hackage Matrix Builder](https://img.shields.io/badge/Hackage%20Matrix-Builder-%235e5086)](https://matrix.hackage.haskell.org/package/hnix)
+[![Nixpkgs Hydra CI](https://img.shields.io/badge/Nixpkgs%20Hydra-CI-%234f72bb)](https://hydra.nixos.org/job/nixpkgs/trunk/haskellPackages.hnix.x86_64-linux#tabs-status)
 [![Dependencies](https://img.shields.io/hackage-deps/v/hnix?label=Dependencies)](https://packdeps.haskellers.com/feed?needle=hnix)
 
 Haskell parser, evaluator and type checker for the Nix language.
