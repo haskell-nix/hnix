@@ -1,4 +1,6 @@
-{ compiler    ? "ghc883"
+{
+# Compiler in a form ghc8101 == GHC 8.10.1, just remove spaces and dots
+  compiler    ? "ghc883"
 
 # This settings expose most of the Nixpkgs Haskell.lib API: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
 
