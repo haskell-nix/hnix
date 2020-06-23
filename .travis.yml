@@ -23,63 +23,35 @@ env:
   global:
     # NOTE: This is secure CACHIX_SIGNING_KEY=val
     - secure: "dm6I+M4+V+C7QMTpcSADdKPE633SvmToXZrTbZ7miNDGmMN+/SfHeN2ybi1+PW6oViMlbPN/7J/aEfiGjSJI8vLk72Y4uCWGmpSb8TXZLu6+whnxtZzzW8+z4tsM4048QJg7CF3N/25U8thRFgs3DqUub1Sf3nG9LrNWdz6ZcDQ="
-    # NOTE: Nix by default uses nixpkgs-unstable channel
-    # NOTE: Setup for Nixpkgs revision
-    # `rev` vals in order of freshness -> cache & stability:
-    # { master
-    # , commitHash
-    # , haskell-updates  # Haskell development branch in Nixpkgs, can be inconsistent. Weekly merged into the upstream
-    # , nixpkgs-unstable  # Default branch on Nix installation, default for non NixOS
-    # , nixos-unstable  # nixpkgs-unstable that passes a bunch of base tests
-    # , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
-    # }
+    ###
+    ### NOTE: This configuration uses `build.sh` interface, which uses `default.nix` interface, which exposes the Nixpkgs Haskell Lib interface.
+    ###
+    ### Documentation of this settings is in `default.nix`,
+    ### and the other part of keys explained in `build.sh`
+    ###
+    #
     # - rev=nixos-unstable
-    # # NOTE: Switching into Nixpkgs revision
     # - NIX_PATH="nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"
-    # NOTE: Project/binary name
-    - name='hnix'
-    # NOTE: Used in the `generateOptparseApplicativeCompletions = true`
-    - pkgName='haskellPackages.hnix'
-    # NOTE: Enable all our tests in cabal
+    - project='hnix'
+    # Enable all our tests in Cabal
     - ALL_TESTS='yes'
-    # NOTE: Turn all warn into err with {-Wall,-Werror}
     - failOnAllWarnings='false'
-    # NOTE: checkUnusedPackages: is `failOnAllWarnings` + `cabal sdist` to ensure all needed files are listed in the Cabal file. Uses `packunused` or GHC internals. Adds a post-build check to verify that dependencies declared in the cabal file are actually used. The first attrset argument can be used to configure the strictness of this check and a list of ignored package names that would otherwise cause false alarms.
     - checkUnusedPackages='false'
-    # NOTE: Generation and installation of a coverage report.
-    # See https://wiki.haskell.org/Haskell_program_coverage
     - doCoverage='false'
-    # NOTE: Generation and installation of haddock API documentation
     - doHaddock='false'
-    # NOTE: Escape the version bounds from the cabal file. You may want to avoid this function.
     - doJailbreak='false'
-    # NOTE: Disables Nix dependency checking, compilation and execution of test suites listed in the package description file.
     - doCheck='true'
-    # NOTE: doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
     - doBenchmark='false'
     - enableExecutableProfiling='false'
     - enableLibraryProfiling='false'
-    # NOTE: Build a source distribution tarball instead of using the source files directly. The effect is that the package is built as if it were published on hackage. This can be used as a test for the source distribution, assuming the build fails when packaging mistakes are in the cabal file.
     - buildFromSdist='false'
-    # NOTE: Build the package in a strict way to uncover potential problems. This includes buildFromSdist and failOnAllWarnings.
-    #  2020-05-26: NOTE: Currently HNix not able to pass Strict on GHC 8.8.3 due to MonalFail migration
     - buildStrictly='false'
-    # NOTE: Disable core optimizations, significantly speeds up the build
     - disableOptimization='true'
-    # NOTE: Modify a Haskell package to add shell completion scripts for the given executable produced by it. These completion scripts will be picked up automatically if the resulting derivation is installed, e.g. by `nix-env -i`.
-    # Invocation:
-    #   generateOptparseApplicativeCompletions command pkg
-    #
-    #   command: name of an executable
-    #       pkg: Haskell package that builds the executables
     - generateOptparseApplicativeCompletions='false'
-    # [ "binary1" "binary2" ] - should pass " quotes into Nix interpreter
     - executableNamesToShellComplete='[ "hnix" ]'
-    # NOTE: Don't fail at configure time if there are multiple versions of the same package in the (recursive) dependencies of the package being built. Will delay failures, if any, to compile time.
     - allowInconsistentDependencies='false'
-    # NOTE: Log file to dump GHCJS build into
+    #
     - ghcjsTmpLogFile='/tmp/ghcjsTmpLogFile.log'
-    # NOTE: Length of the GHCJS log tail (<40000)
     - ghcjsLogTailLength='10000'
 
 #  2020-05-26: NOTE: Currently newest Travis dist Ubuntu 18.04 bionic
@@ -154,9 +126,9 @@ script:
   # NOTE: Install Cachix client using Nix:
   - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
   - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
-  - cachix use "$name"
+  - cachix use "$project"
   # NOTE: If key is set - use Cachix push, else - proceed without it
-  - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push "$name" --watch-store& fi
+  - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push "$project" --watch-store& fi
   # NOTE: Brush timeout for previous daemon to start
   #
   #

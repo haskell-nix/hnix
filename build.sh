@@ -1,20 +1,35 @@
 #!/usr/bin/env bash
 
-# NOTE: Script for the CI builds. CI comes here from `.travis.yml`
+# NOTE: Script for the CI builds, relies on `default.nix` interface, which exposes Nixpkgs Haskell Lib interface
 
-# NOTE: The most strict error checking requirements
+# The most strict error checking requirements
 set -Eexuo pipefail
+
+### NOTE: Section handles imports from env, these are settings for Nixpkgs.
+# Some of these options implicitly switch the dependent options.
+
 
 # NOTE: If var not imported - set to the default value
 GHCVERSION=${GHCVERSION:-'ghc8101'}
+# NOTE: Nix by default uses nixpkgs-unstable channel
+# Setup for Nixpkgs revision:
+#   `rev` vals in order of freshness -> cache & stability:
+#   { master
+#   , commitHash
+#   , haskell-updates  # Haskell development branch in Nixpkgs, can be inconsistent. Weekly merged into the upstream
+#   , nixpkgs-unstable  # Default branch on Nix installation, default for non NixOS
+#   , nixos-unstable  # nixpkgs-unstable that passes a bunch of base tests
+#   , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
+#   ...
+#   }
 rev=${rev:-'nixpkgs-unstable'}
+# If NIX_PATH not imported - construct it from `rev`
 NIX_PATH=${NIX_PATH:-"nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"}
 export NIX_PATH
-name=${name:-'defaultProjectName'}
+# NOTE: Project name, used by cachix
+project=${project:-'defaultProjectName'}
 
 # This settings expose most of the Nixpkgs Haskell.lib API: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
-
-# Some of these options implicitly enable other options they require, and some counterpoint options clash, obviously
 
 # Don't fail at configure time if there are multiple versions of the same package in the (recursive) dependencies of the package being built. Will delay failures, if any, to compile time.
 allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
@@ -26,13 +41,16 @@ doCheck=${doCheck:-'true'}
 # Just produce a SDist src tarball
 sdistTarball=${sdistTarball:-'false'}
 # Produce SDist tarball and build project from it
+# The strict packaging process as used on Hackage. Tests consistency of the Cabal file.
 buildFromSdist=${buildFromSdist:-'false'}
+# Turn all warn into err with {-Wall,-Werror}
 failOnAllWarnings=${failOnAllWarnings:-'false'}
 # `failOnAllWarnings` + `buildFromSdist`
 buildStrictly=${buildStrictly:-'false'}
 #  2020-06-02: NOTE: enableDeadCodeElimination = true: On GHC =< 8.8.3 macOS build falls due to https://gitlab.haskell.org/ghc/ghc/issues/17283
 enableDeadCodeElimination=${enableDeadCodeElimination:-'false'}
-# Disable GHC code optimizations for faster dev loops. Enable optimizations for production use or benchmarks.
+# Disabled GHC code optimizations make build/tolling/dev loops faster. Works for Haskel IDE Engine and GHCID
+# Enable optimizations for production use, and to pass benchmarks.
 disableOptimization=${disableOptimization:-'true'}
 # Use faster `gold` ELF linker from GNU binutils instead of older&slower but more versatile GNU linker. Is not available by default since macOS does not have it.
 linkWithGold=${linkWithGold:-'false'}
@@ -57,6 +75,7 @@ enableSharedExecutables=${enableSharedExecutables:-'false'}
 justStaticExecutables=${justStaticExecutables:-'false'}
 enableSeparateBinOutput=${enableSeparateBinOutput:-'false'}
 # Add a post-build check to verify that dependencies declared in the .cabal file are actually used.
+# checkUnusedPackages: is `failOnAllWarnings` + `cabal sdist` to ensure all needed files are listed in the Cabal file. Currently uses `packunused` or GHC 8.8 internals, later switches into GHC internal feature. Adds a post-build check to verify that dependencies declared in the cabal file are actually used.
 checkUnusedPackages=${checkUnusedPackages:-'false'}
 # Generation and installation of haddock API documentation
 doHaddock=${doHaddock:-'false'}
@@ -64,16 +83,20 @@ doHaddock=${doHaddock:-'false'}
 doCoverage=${doCoverage:-'false'}
 # doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
 doBenchmark=${doBenchmark:-'false'}
-# NOTE: *Oprparse* key is redifined in the code further
+# For binaries named in `executableNamesToShellComplete` list, generate and bundle-into package an automatically loaded shell complettions
 generateOptparseApplicativeCompletions=${generateOptparseApplicativeCompletions:-'false'}
+# [ "binary1" "binary2" ] - should pass " quotes into Nix interpreter
 executableNamesToShellComplete=${executableNamesToShellComplete:-'[ "defaultBinaryName" ]'}
 
 # Include Hoogle into derivation
 withHoogle=${withHoogle:-'false'}
 
+# Log file to dump GHCJS build into
 ghcjsTmpLogFile=${ghcjsTmpLogFile:-'/tmp/ghcjsTmpLogFile.log'}
+# Length of the GHCJS log tail (<40000)
 ghcjsLogTailLength=${ghcjsLogTailLength:-'10000'}
-# NOTE: If key not provided (branch is not inside the central repo) - init CACHIX_SIGNING_KEY as empty
+
+# If key not provided (branch is not inside the central repo) - init CACHIX_SIGNING_KEY as empty
 CACHIX_SIGNING_KEY=${CACHIX_SIGNING_KEY:-""}
 
 
@@ -209,14 +232,14 @@ sudo nix-channel --update || true
 
 
 # NOTE: Secrets are not shared to PRs from forks
-# NOTE: nix-build | cachix push <name> - uploads binaries, runs&works only in the branches of the main repository, so for PRs - else case runs
+# NOTE: nix-build | cachix push <project> - uploads binaries, runs&works only in the branches of the main repository, so for PRs - else case runs
 
   if [ ! "$CACHIX_SIGNING_KEY" = "" ]
 
     then
 
       # NOTE: Build of the inside repo branch - enable push Cachix cache
-      BUILD_PROJECT | cachix push "$name"
+      BUILD_PROJECT | cachix push "$project"
 
     else
 
