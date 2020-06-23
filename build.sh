@@ -5,6 +5,8 @@
 # NOTE: The most strict error checking requirements
 set -Eexuo pipefail
 
+### NOTE: Section handles imports from env, these are settings for Nixpkgs.
+
 # NOTE: If var not imported - set to the default value
 GHCVERSION=${GHCVERSION:-'ghc8101'}
 # NOTE: Nix by default uses nixpkgs-unstable channel
