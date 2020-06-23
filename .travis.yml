@@ -71,24 +71,24 @@ jobs:
   include:
     - name: GHC 8.4.4, Linux
       env:
-        - GHCVERSION='ghc844'
+        - compiler='ghc844'
         - linkWithGold='true'
       os: linux
       dist: bionic
     - name: GHC 8.6.5, Linux
       env:
-        - GHCVERSION='ghc865'
+        - compiler='ghc865'
         - linkWithGold='true'
       os: linux
       dist: bionic
     - name: GHC 8.8.3, macOS, Strict
       env:
-        - GHCVERSION='ghc883'
+        - compiler='ghc883'
         - buildStrictly='true'
       os: osx
     - name: GHC 8.10.1, Linux, SDist, Optimize, Benchmark, Haddock, Shell Completions
       env:
-        - GHCVERSION='ghc8101'
+        - compiler='ghc8101'
         - buildFromSdist='true'
         - linkWithGold='true'
         - doHaddock='true'
@@ -101,11 +101,11 @@ jobs:
       dist: bionic
     - name: GHCJS, Linux
       env:
-        - GHCVERSION='ghcjs'
+        - compiler='ghcjs'
       os: linux
       dist: bionic
   allow_failures:
-    - env: GHCVERSION='ghcjs'
+    - env: compiler='ghcjs'
 
 before_script:
   - sudo mount -o remount,exec,size=4G,mode=755 /run/user || true
@@ -144,7 +144,7 @@ script:
   #
   #
   # NOTE: Normal GHC build
-  - if [ ! "$GHCVERSION" = 'ghcjs' ]; then ./build.sh; fi
+  - if [ ! "$compiler" = 'ghcjs' ]; then ./build.sh; fi
   #
   #
   # NOTE: GHCJS build
@@ -152,10 +152,10 @@ script:
   # so `SILENT` mode for it was created
   # and travis_wait 50 to wait on no outputs (otherwise Travis terminates build in 10 minutes as stale)
   # and `bash` wrapper so Travis parses `travis_wait` => `if; then; fi` line
-  - travis_wait 50 bash -c 'if [ "$GHCVERSION" = "ghcjs" ]; then ./build.sh; fi'
+  - travis_wait 50 bash -c 'if [ "$compiler" = "ghcjs" ]; then ./build.sh; fi'
   # NOTE: For GHCJS dump the last $ghcjsLogTailLength lines into CI out to see
   # Since build runs inside `travis_wait` - it was impossible to output log from it
-  - if [ "$GHCVERSION" = "ghcjs" ]; then tail -n "$ghcjsLogTailLength" "$ghcjsTmpLogFile" && rm "$ghcjsTmpLogFile"; fi
+  - if [ "$compiler" = "ghcjs" ]; then tail -n "$ghcjsLogTailLength" "$ghcjsTmpLogFile" && rm "$ghcjsTmpLogFile"; fi
   #
   #
 

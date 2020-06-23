@@ -10,7 +10,7 @@ set -Eexuo pipefail
 
 
 # NOTE: If var not imported - set to the default value
-GHCVERSION=${GHCVERSION:-'ghc8101'}
+compiler=${compiler:-'ghc8101'}
 # NOTE: Nix by default uses nixpkgs-unstable channel
 # Setup for Nixpkgs revision:
 #   `rev` vals in order of freshness -> cache & stability:
@@ -137,7 +137,7 @@ BUILD_PROJECT(){
 
 IFS=$'\n\t'
 
-if [ "$GHCVERSION" = "ghcjs" ]
+if [ "$compiler" = "ghcjs" ]
   then
 
     # NOTE: GHCJS build
@@ -176,7 +176,7 @@ if [ "$GHCVERSION" = "ghcjs" ]
       --arg generateOptparseApplicativeCompletions "$generateOptparseApplicativeCompletions" \
       --arg executableNamesToShellComplete "$executableNamesToShellComplete" \
       --arg withHoogle "$withHoogle" \
-      ghcjs
+      "$compiler"
 
   else
 
@@ -184,7 +184,7 @@ if [ "$GHCVERSION" = "ghcjs" ]
     # NOTE: GHC sometimes produces logs so big - that Travis terminates builds, so multiple --quiet
     nix-build \
       --quiet --quiet \
-      --argstr compiler "$GHCVERSION" \
+      --argstr compiler "$compiler" \
       --arg allowInconsistentDependencies "$allowInconsistentDependencies" \
       --arg doJailbreak "$doJailbreak" \
       --arg doCheck "$doCheck" \
