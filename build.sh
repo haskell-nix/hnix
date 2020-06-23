@@ -219,16 +219,11 @@ fi
 MAIN() {
 
 
-#  2020-06-01: NOTE: Nix installer installs old Nix version that has bugs that prevented importing Nixpks repository channels, updating to latest Nix since it does not have that bug
 # NOTE: Overall it is useful to have in CI test builds the latest stable Nix
-# NOTE: User-run update for Linux setup
-nix upgrade-nix || true
-# NOTE: Superuser update for macOS setup
-sudo nix upgrade-nix || true
+# NOTE: User-run Linux setup old update command, or superuser update for macOS setup
+#  2020-06-24: HACK: Do not ask why different commands on Linux and macOS. IDK, wished they we the same. These are the only commands that worked on according platforms right after the fresh Nix installer rollout.
+(nix-channel --update && nix-env -iA nixpkgs.nix) || (sudo nix upgrade-nix)
 
-# NOTE: Make channels current
-nix-channel --update || true
-sudo nix-channel --update || true
 
 
 # NOTE: Secrets are not shared to PRs from forks

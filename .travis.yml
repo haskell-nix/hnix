@@ -111,33 +111,25 @@ before_script:
   - sudo mount -o remount,exec,size=4G,mode=755 /run/user || true
   - sudo mkdir -p /etc/nix
   - echo "trusted-users = root $USER" | sudo tee -a /etc/nix/nix.conf
-  #
-  # Update Nix and Nix packages, Cachix requires that
-  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then nix upgrade-nix; fi
-  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo nix upgrade-nix; fi
-  #
-  # macOS service restart
-  # HACK: Because Nix can not itself update its daemon between 2.0 -> 2.2:
-  # 1. https://github.com/NixOS/nix/issues/3125#issuecomment-539667327
-  # 2. https://github.com/NixOS/nix/issues/3125#issuecomment-539771768
-  # Since Nix on macOS has problems restarting the service:
-  # Force the real disable, get target file from the symlink, unlink symlink, copy file, and reload service
   - |
-    if [ "${TRAVIS_OS_NAME}" = "osx" ]; then true && \
-    sudo launchctl unload /Library/LaunchDaemons/org.nixos.nix-daemon.plist && \
-    export NIX_SERVICE_FILE=$(readlink /Library/LaunchDaemons/org.nixos.nix-daemon.plist) && \
-    sudo unlink /Library/LaunchDaemons/org.nixos.nix-daemon.plist && \
-    sudo cp -f "$NIX_SERVICE_FILE" /Library/LaunchDaemons/org.nixos.nix-daemon.plist && \
-    sudo launchctl load /Library/LaunchDaemons/org.nixos.nix-daemon.plist && \
-    sudo launchctl kickstart -k system/org.nixos.nix-daemon && \
+    if [ "${TRAVIS_OS_NAME}" = "linux" ]; then true && \
+    sudo systemctl stop nix-daemon.service && \
+    sudo systemctl daemon-reload && \
+    sudo systemctl start nix-daemon.service && \
     true; fi
+  # # macOS service restart
+  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo launchctl kickstart -k system/org.nixos.nix-daemon; fi
+  # update on Linux
+  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then nix-channel --update && nix-env -iA nixpkgs.nix; fi
+  # update on macOS
+  # 2020-06-24: HACK: Do not ask why different commands on Linux and macOS. IDK, wished they we the same. These are the only commands that worked on according platforms right after the fresh Nix installer rollout.
+  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo nix upgrade-nix; fi
 
 script:
   #
   #
   # Install Cachix client using Nix:
-  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
-  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
+  - if [ "${TRAVIS_OS_NAME}" = "linux" ] || [ "${TRAVIS_OS_NAME}" = "osx" ]; then nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
   - cachix use "$project"
   # If key is set - use Cachix push, else - proceed without it
   - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push "$project" --watch-store& fi
