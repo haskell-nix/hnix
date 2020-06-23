@@ -24,7 +24,7 @@ rev=${rev:-'nixpkgs-unstable'}
 # If NIX_PATH not imported - construct it from `rev`
 NIX_PATH=${NIX_PATH:-"nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"}
 export NIX_PATH
-name=${name:-'defaultProjectName'}
+project=${project:-'defaultProjectName'}
 
 # This settings expose most of the Nixpkgs Haskell.lib API: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
 
@@ -223,14 +223,14 @@ sudo nix-channel --update || true
 
 
 # NOTE: Secrets are not shared to PRs from forks
-# NOTE: nix-build | cachix push <name> - uploads binaries, runs&works only in the branches of the main repository, so for PRs - else case runs
+# NOTE: nix-build | cachix push <project> - uploads binaries, runs&works only in the branches of the main repository, so for PRs - else case runs
 
   if [ ! "$CACHIX_SIGNING_KEY" = "" ]
 
     then
 
       # NOTE: Build of the inside repo branch - enable push Cachix cache
-      BUILD_PROJECT | cachix push "$name"
+      BUILD_PROJECT | cachix push "$project"
 
     else
 

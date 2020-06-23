@@ -33,7 +33,7 @@ env:
     # - rev=nixos-unstable
     # - NIX_PATH="nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"
     # NOTE: Project/binary name
-    - name='hnix'
+    - project='hnix'
     # NOTE: Enable all our tests in cabal
     - ALL_TESTS='yes'
     # NOTE: Turn all warn into err with {-Wall,-Werror}
@@ -148,9 +148,9 @@ script:
   # NOTE: Install Cachix client using Nix:
   - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
   - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
-  - cachix use "$name"
+  - cachix use "$project"
   # NOTE: If key is set - use Cachix push, else - proceed without it
-  - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push "$name" --watch-store& fi
+  - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push "$project" --watch-store& fi
   # NOTE: Brush timeout for previous daemon to start
   #
   #
