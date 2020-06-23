@@ -92,6 +92,7 @@ jobs:
         - buildFromSdist='true'
         - linkWithGold='true'
         - doHaddock='true'
+        - doHyperlinkSource='true'
         - doBenchmark='true'
         - disableOptimization='false'
         - enableDeadCodeElimination='true'
