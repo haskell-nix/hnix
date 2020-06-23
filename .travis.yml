@@ -8,8 +8,6 @@ version: ~> 1.0
 
 language: nix
 
-sudo: required    #  2020-05-26: This mode is deprecated, but still offers 7.5 GB RAM instead of the default 4GB
-
 git:
   quiet: true # Do not log
   depth: 4    # NOTE: "The use of clone depth: 1 often results in a git error
