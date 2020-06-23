@@ -8,16 +8,16 @@ version: ~> 1.0
 
 language: nix
 
-sudo: required    #  2020-05-26: NOTE: This mode is deprecated, but still offers 7.5 GB RAM instead of the default 4GB
+sudo: required    #  2020-05-26: This mode is deprecated, but still offers 7.5 GB RAM instead of the default 4GB
 
 git:
-  quiet: true # NOTE: Do not log
+  quiet: true # Do not log
   depth: 4    # NOTE: "The use of clone depth: 1 often results in a git error
               # when a new commit has been pushed to a branch before the CI
               # platform started cloning the intended commit."
 
-# #  2020-05-26: NOTE: Currently newest macOS image
-# osx_image: xcode11.4  # NOTE: Official Nix installer fails spectacularly on it.
+# #  2020-05-26: Currently newest macOS image
+# osx_image: xcode11.4  # Official Nix installer fails spectacularly on it.
 
 env:
   global:
@@ -54,8 +54,8 @@ env:
     - ghcjsTmpLogFile='/tmp/ghcjsTmpLogFile.log'
     - ghcjsLogTailLength='10000'
 
-#  2020-05-26: NOTE: Currently newest Travis dist Ubuntu 18.04 bionic
-# NOTE: {os} x {jobs} + {jobs:include} - {jobs:exclude} = {build matrix}
+# 2020-05-26: Currently newest Travis dist Ubuntu 18.04 bionic
+# {os} x {jobs} + {jobs:include} - {jobs:exclude} = {build matrix}
 jobs:
   include:
     - name: GHC 8.4.4, Linux
@@ -100,12 +100,12 @@ before_script:
   - sudo mkdir -p /etc/nix
   - echo "trusted-users = root $USER" | sudo tee -a /etc/nix/nix.conf
   #
-  # NOTE: Update Nix and Nix packages, Cachix requires that
+  # Update Nix and Nix packages, Cachix requires that
   - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then nix upgrade-nix; fi
   - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo nix upgrade-nix; fi
   #
-  # NOTE: macOS service restart
-  # HACK: Because Nix can not update its daemon itself between 2.0 -> 2.2:
+  # macOS service restart
+  # HACK: Because Nix can not itself update its daemon between 2.0 -> 2.2:
   # 1. https://github.com/NixOS/nix/issues/3125#issuecomment-539667327
   # 2. https://github.com/NixOS/nix/issues/3125#issuecomment-539771768
   # Since Nix on macOS has problems restarting the service:
@@ -123,13 +123,12 @@ before_script:
 script:
   #
   #
-  # NOTE: Install Cachix client using Nix:
+  # Install Cachix client using Nix:
   - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
   - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
   - cachix use "$project"
-  # NOTE: If key is set - use Cachix push, else - proceed without it
+  # If key is set - use Cachix push, else - proceed without it
   - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push "$project" --watch-store& fi
-  # NOTE: Brush timeout for previous daemon to start
   #
   #
   # NOTE: Normal GHC build
@@ -149,7 +148,7 @@ script:
   #
 
 
-# NOTE: Track the commits on this repo branches + cron rechecks build
+# Track the commits on this repo branches + cron rechecks build
 branches:
   only:
     - master
@@ -159,8 +158,8 @@ notifications:
   webhooks:
     urls:
       - https://webhooks.gitter.im/e/b0312b18473340459d3e
-    # NOTE: Be silent about CI, until some PR started to pass CI succesfully.
+    # Be silent about CI, until some PR started to pass CI succesfully.
     on_success: change
-    # NOTE: `master` status in on the front page badge.
+    # `master` status in on the front page badge.
     on_failure: never
     on_start: never
