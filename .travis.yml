@@ -34,8 +34,6 @@ env:
     # - rev=nixos-unstable
     # - NIX_PATH="nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"
     - project='hnix'
-    # Enable all our tests in Cabal
-    - ALL_TESTS='yes'
     - allowInconsistentDependencies='false'
     - doJailbreak='false'
     - doCheck='true'
