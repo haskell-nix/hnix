@@ -180,7 +180,7 @@ let
   # General description of package
   package = haskellPackages.developPackage {
     name = "hnix";
-    root = ./.;
+    root = pkgs.nix-gitignore.gitignoreSource [ ] ./.;
 
     modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
       buildTools = (attrs.buildTools or []) ++ [
