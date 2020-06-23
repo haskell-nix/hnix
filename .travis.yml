@@ -21,7 +21,7 @@ git:
 
 env:
   global:
-    # NOTE: This is secure CACHIX_SIGNING_KEY=val
+    # NOTE: This is secure CACHIX_SIGNING_KEY=val, it is only available on project internal branches, so Cachix would push only there
     - secure: "dm6I+M4+V+C7QMTpcSADdKPE633SvmToXZrTbZ7miNDGmMN+/SfHeN2ybi1+PW6oViMlbPN/7J/aEfiGjSJI8vLk72Y4uCWGmpSb8TXZLu6+whnxtZzzW8+z4tsM4048QJg7CF3N/25U8thRFgs3DqUub1Sf3nG9LrNWdz6ZcDQ="
     ###
     ### NOTE: This configuration uses `build.sh` interface, which uses `default.nix` interface, which exposes the Nixpkgs Haskell Lib interface.
