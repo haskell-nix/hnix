@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# NOTE: Script for the CI builds. CI comes here from `.travis.yml`
+# NOTE: Script for the CI builds, relies on `default.nix` interface, which exposes Nixpkgs Haskell Lib interface
 
 # NOTE: The most strict error checking requirements
 set -Eexuo pipefail
