@@ -33,6 +33,13 @@ env:
     # , nixos-unstable  # nixpkgs-unstable that passes a bunch of base tests
     # , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
     # }
+    ###
+    ### NOTE: This configuration uses `build.sh` interface, which uses `default.nix` interface, which exposes the Nixpkgs Haskell Lib interface.
+    ###
+    ### Documentation of this settings is in `default.nix`,
+    ### and the other part of keys explained in `build.sh`
+    ###
+    #
     # - rev=nixos-unstable
     # # NOTE: Switching into Nixpkgs revision
     # - NIX_PATH="nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"
