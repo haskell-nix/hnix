@@ -108,7 +108,6 @@ jobs:
     - env: compiler='ghcjs'
 
 before_script:
-  - sudo mount -o remount,exec,size=4G,mode=755 /run/user || true
   - sudo mkdir -p /etc/nix
   - echo "trusted-users = root $USER" | sudo tee -a /etc/nix/nix.conf
   - |
