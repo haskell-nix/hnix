@@ -63,8 +63,6 @@ doTracing=${doTracing:-'false'}
 enableDWARFDebugging=${enableDWARFDebugging:-'false'}
 # Strip results from all debugging symbols
 doStrip=${doStrip:-'false'}
-#	Generate hyperlinked source code for documentation using HsColour, and have Haddock documentation link to it.
-doHyperlinkSource=${doHyperlinkSource:-'false'}
 # Nixpkgs expects shared libraries
 enableSharedLibraries=${enableSharedLibraries:-'true'}
 # Ability to make static libraries
@@ -79,6 +77,8 @@ enableSeparateBinOutput=${enableSeparateBinOutput:-'false'}
 checkUnusedPackages=${checkUnusedPackages:-'false'}
 # Generation and installation of haddock API documentation
 doHaddock=${doHaddock:-'false'}
+#	Generate hyperlinked source code for documentation using HsColour, and have Haddock documentation link to it.
+doHyperlinkSource=${doHyperlinkSource:-'false'}
 # Generation and installation of a coverage report. See https://wiki.haskell.org/Haskell_program_coverage
 doCoverage=${doCoverage:-'false'}
 # doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
