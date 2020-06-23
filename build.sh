@@ -10,7 +10,7 @@ set -Eexuo pipefail
 
 
 # NOTE: If var not imported - set to the default value
-GHCVERSION=${GHCVERSION:-'ghc8101'}
+compiler=${compiler:-'ghc8101'}
 # NOTE: Nix by default uses nixpkgs-unstable channel
 # Setup for Nixpkgs revision:
 #   `rev` vals in order of freshness -> cache & stability:
@@ -63,8 +63,6 @@ doTracing=${doTracing:-'false'}
 enableDWARFDebugging=${enableDWARFDebugging:-'false'}
 # Strip results from all debugging symbols
 doStrip=${doStrip:-'false'}
-#	Generate hyperlinked source code for documentation using HsColour, and have Haddock documentation link to it.
-doHyperlinkSource=${doHyperlinkSource:-'false'}
 # Nixpkgs expects shared libraries
 enableSharedLibraries=${enableSharedLibraries:-'true'}
 # Ability to make static libraries
@@ -79,6 +77,8 @@ enableSeparateBinOutput=${enableSeparateBinOutput:-'false'}
 checkUnusedPackages=${checkUnusedPackages:-'false'}
 # Generation and installation of haddock API documentation
 doHaddock=${doHaddock:-'false'}
+#	Generate hyperlinked source code for documentation using HsColour, and have Haddock documentation link to it.
+doHyperlinkSource=${doHyperlinkSource:-'false'}
 # Generation and installation of a coverage report. See https://wiki.haskell.org/Haskell_program_coverage
 doCoverage=${doCoverage:-'false'}
 # doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
@@ -137,7 +137,7 @@ BUILD_PROJECT(){
 
 IFS=$'\n\t'
 
-if [ "$GHCVERSION" = "ghcjs" ]
+if [ "$compiler" = "ghcjs" ]
   then
 
     # NOTE: GHCJS build
@@ -176,7 +176,7 @@ if [ "$GHCVERSION" = "ghcjs" ]
       --arg generateOptparseApplicativeCompletions "$generateOptparseApplicativeCompletions" \
       --arg executableNamesToShellComplete "$executableNamesToShellComplete" \
       --arg withHoogle "$withHoogle" \
-      ghcjs
+      "$compiler"
 
   else
 
@@ -184,7 +184,7 @@ if [ "$GHCVERSION" = "ghcjs" ]
     # NOTE: GHC sometimes produces logs so big - that Travis terminates builds, so multiple --quiet
     nix-build \
       --quiet --quiet \
-      --argstr compiler "$GHCVERSION" \
+      --argstr compiler "$compiler" \
       --arg allowInconsistentDependencies "$allowInconsistentDependencies" \
       --arg doJailbreak "$doJailbreak" \
       --arg doCheck "$doCheck" \
@@ -219,16 +219,11 @@ fi
 MAIN() {
 
 
-#  2020-06-01: NOTE: Nix installer installs old Nix version that has bugs that prevented importing Nixpks repository channels, updating to latest Nix since it does not have that bug
 # NOTE: Overall it is useful to have in CI test builds the latest stable Nix
-# NOTE: User-run update for Linux setup
-nix upgrade-nix || true
-# NOTE: Superuser update for macOS setup
-sudo nix upgrade-nix || true
+# NOTE: User-run Linux setup old update command, or superuser update for macOS setup
+#  2020-06-24: HACK: Do not ask why different commands on Linux and macOS. IDK, wished they we the same. These are the only commands that worked on according platforms right after the fresh Nix installer rollout.
+(nix-channel --update && nix-env -iA nixpkgs.nix) || (sudo nix upgrade-nix)
 
-# NOTE: Make channels current
-nix-channel --update || true
-sudo nix-channel --update || true
 
 
 # NOTE: Secrets are not shared to PRs from forks

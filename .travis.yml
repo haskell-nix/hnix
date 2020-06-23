@@ -8,79 +8,91 @@ version: ~> 1.0
 
 language: nix
 
-sudo: required    #  2020-05-26: NOTE: This mode is deprecated, but still offers 7.5 GB RAM instead of the default 4GB
+sudo: required    #  2020-05-26: This mode is deprecated, but still offers 7.5 GB RAM instead of the default 4GB
 
 git:
-  quiet: true # NOTE: Do not log
+  quiet: true # Do not log
   depth: 4    # NOTE: "The use of clone depth: 1 often results in a git error
               # when a new commit has been pushed to a branch before the CI
               # platform started cloning the intended commit."
 
-# #  2020-05-26: NOTE: Currently newest macOS image
-# osx_image: xcode11.4  # NOTE: Official Nix installer fails spectacularly on it.
+# #  2020-05-26: Currently newest macOS image
+# osx_image: xcode11.4  # Official Nix installer fails spectacularly on it.
 
 env:
   global:
-    # NOTE: This is secure CACHIX_SIGNING_KEY=val
+    # NOTE: This is secure CACHIX_SIGNING_KEY=val, it is only available on project internal branches, so Cachix would push only there
     - secure: "dm6I+M4+V+C7QMTpcSADdKPE633SvmToXZrTbZ7miNDGmMN+/SfHeN2ybi1+PW6oViMlbPN/7J/aEfiGjSJI8vLk72Y4uCWGmpSb8TXZLu6+whnxtZzzW8+z4tsM4048QJg7CF3N/25U8thRFgs3DqUub1Sf3nG9LrNWdz6ZcDQ="
     ###
     ### NOTE: This configuration uses `build.sh` interface, which uses `default.nix` interface, which exposes the Nixpkgs Haskell Lib interface.
     ###
-    ### Documentation of this settings is in `default.nix`,
-    ### and the other part of keys explained in `build.sh`
+    ### Documentation of this settings is mosly in `default.nix`, since most settings it Nixpkgs related
+    ### and the other part of keys explained in `build.sh`, since those address external procedures aound the builds.
+    ### Additional documentation is in Nixpkgs Haskell.lib: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
     ###
     #
     # - rev=nixos-unstable
     # - NIX_PATH="nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"
     - project='hnix'
-    # Enable all our tests in Cabal
-    - ALL_TESTS='yes'
-    - failOnAllWarnings='false'
-    - checkUnusedPackages='false'
-    - doCoverage='false'
-    - doHaddock='false'
+    - allowInconsistentDependencies='false'
     - doJailbreak='false'
     - doCheck='true'
-    - doBenchmark='false'
-    - enableExecutableProfiling='false'
-    - enableLibraryProfiling='false'
+    - sdistTarball='false'
     - buildFromSdist='false'
     - buildStrictly='false'
+    - failOnAllWarnings='false'
+    - enableDeadCodeElimination='false'
     - disableOptimization='true'
+    - linkWithGold='false'
+    - enableLibraryProfiling='false'
+    - enableExecutableProfiling='false'
+    - doTracing='false'
+    - enableDWARFDebugging='false'
+    - doStrip='false'
+    - enableSharedLibraries='true'
+    - enableStaticLibraries='false'
+    - enableSharedExecutables='false'
+    - justStaticExecutables='false'
+    - enableSeparateBinOutput='false'
+    - checkUnusedPackages='false'
+    - doHaddock='false'
+    - doHyperlinkSource='false'
+    - doCoverage='false'
+    - doBenchmark='false'
     - generateOptparseApplicativeCompletions='false'
     - executableNamesToShellComplete='[ "hnix" ]'
-    - allowInconsistentDependencies='false'
     #
     - ghcjsTmpLogFile='/tmp/ghcjsTmpLogFile.log'
     - ghcjsLogTailLength='10000'
 
-#  2020-05-26: NOTE: Currently newest Travis dist Ubuntu 18.04 bionic
-# NOTE: {os} x {jobs} + {jobs:include} - {jobs:exclude} = {build matrix}
+# 2020-05-26: Currently newest Travis dist Ubuntu 18.04 bionic
+# {os} x {jobs} + {jobs:include} - {jobs:exclude} = {build matrix}
 jobs:
   include:
     - name: GHC 8.4.4, Linux
       env:
-        - GHCVERSION='ghc844'
+        - compiler='ghc844'
         - linkWithGold='true'
       os: linux
       dist: bionic
     - name: GHC 8.6.5, Linux
       env:
-        - GHCVERSION='ghc865'
+        - compiler='ghc865'
         - linkWithGold='true'
       os: linux
       dist: bionic
     - name: GHC 8.8.3, macOS, Strict
       env:
-        - GHCVERSION='ghc883'
+        - compiler='ghc883'
         - buildStrictly='true'
       os: osx
     - name: GHC 8.10.1, Linux, SDist, Optimize, Benchmark, Haddock, Shell Completions
       env:
-        - GHCVERSION='ghc8101'
+        - compiler='ghc8101'
         - buildFromSdist='true'
         - linkWithGold='true'
         - doHaddock='true'
+        - doHyperlinkSource='true'
         - doBenchmark='true'
         - disableOptimization='false'
         - enableDeadCodeElimination='true'
@@ -89,51 +101,42 @@ jobs:
       dist: bionic
     - name: GHCJS, Linux
       env:
-        - GHCVERSION='ghcjs'
+        - compiler='ghcjs'
       os: linux
       dist: bionic
   allow_failures:
-    - env: GHCVERSION='ghcjs'
+    - env: compiler='ghcjs'
 
 before_script:
   - sudo mount -o remount,exec,size=4G,mode=755 /run/user || true
   - sudo mkdir -p /etc/nix
   - echo "trusted-users = root $USER" | sudo tee -a /etc/nix/nix.conf
-  #
-  # NOTE: Update Nix and Nix packages, Cachix requires that
-  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then nix upgrade-nix; fi
-  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo nix upgrade-nix; fi
-  #
-  # NOTE: macOS service restart
-  # HACK: Because Nix can not update its daemon itself between 2.0 -> 2.2:
-  # 1. https://github.com/NixOS/nix/issues/3125#issuecomment-539667327
-  # 2. https://github.com/NixOS/nix/issues/3125#issuecomment-539771768
-  # Since Nix on macOS has problems restarting the service:
-  # Force the real disable, get target file from the symlink, unlink symlink, copy file, and reload service
   - |
-    if [ "${TRAVIS_OS_NAME}" = "osx" ]; then true && \
-    sudo launchctl unload /Library/LaunchDaemons/org.nixos.nix-daemon.plist && \
-    export NIX_SERVICE_FILE=$(readlink /Library/LaunchDaemons/org.nixos.nix-daemon.plist) && \
-    sudo unlink /Library/LaunchDaemons/org.nixos.nix-daemon.plist && \
-    sudo cp -f "$NIX_SERVICE_FILE" /Library/LaunchDaemons/org.nixos.nix-daemon.plist && \
-    sudo launchctl load /Library/LaunchDaemons/org.nixos.nix-daemon.plist && \
-    sudo launchctl kickstart -k system/org.nixos.nix-daemon && \
+    if [ "${TRAVIS_OS_NAME}" = "linux" ]; then true && \
+    sudo systemctl stop nix-daemon.service && \
+    sudo systemctl daemon-reload && \
+    sudo systemctl start nix-daemon.service && \
     true; fi
+  # # macOS service restart
+  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo launchctl kickstart -k system/org.nixos.nix-daemon; fi
+  # update on Linux
+  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then nix-channel --update && nix-env -iA nixpkgs.nix; fi
+  # update on macOS
+  # 2020-06-24: HACK: Do not ask why different commands on Linux and macOS. IDK, wished they we the same. These are the only commands that worked on according platforms right after the fresh Nix installer rollout.
+  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo nix upgrade-nix; fi
 
 script:
   #
   #
-  # NOTE: Install Cachix client using Nix:
-  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
-  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
+  # Install Cachix client using Nix:
+  - if [ "${TRAVIS_OS_NAME}" = "linux" ] || [ "${TRAVIS_OS_NAME}" = "osx" ]; then nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
   - cachix use "$project"
-  # NOTE: If key is set - use Cachix push, else - proceed without it
+  # If key is set - use Cachix push, else - proceed without it
   - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push "$project" --watch-store& fi
-  # NOTE: Brush timeout for previous daemon to start
   #
   #
   # NOTE: Normal GHC build
-  - if [ ! "$GHCVERSION" = 'ghcjs' ]; then ./build.sh; fi
+  - if [ ! "$compiler" = 'ghcjs' ]; then ./build.sh; fi
   #
   #
   # NOTE: GHCJS build
@@ -141,15 +144,15 @@ script:
   # so `SILENT` mode for it was created
   # and travis_wait 50 to wait on no outputs (otherwise Travis terminates build in 10 minutes as stale)
   # and `bash` wrapper so Travis parses `travis_wait` => `if; then; fi` line
-  - travis_wait 50 bash -c 'if [ "$GHCVERSION" = "ghcjs" ]; then ./build.sh; fi'
+  - travis_wait 50 bash -c 'if [ "$compiler" = "ghcjs" ]; then ./build.sh; fi'
   # NOTE: For GHCJS dump the last $ghcjsLogTailLength lines into CI out to see
   # Since build runs inside `travis_wait` - it was impossible to output log from it
-  - if [ "$GHCVERSION" = "ghcjs" ]; then tail -n "$ghcjsLogTailLength" "$ghcjsTmpLogFile" && rm "$ghcjsTmpLogFile"; fi
+  - if [ "$compiler" = "ghcjs" ]; then tail -n "$ghcjsLogTailLength" "$ghcjsTmpLogFile" && rm "$ghcjsTmpLogFile"; fi
   #
   #
 
 
-# NOTE: Track the commits on this repo branches + cron rechecks build
+# Track the commits on this repo branches + cron rechecks build
 branches:
   only:
     - master
@@ -159,8 +162,8 @@ notifications:
   webhooks:
     urls:
       - https://webhooks.gitter.im/e/b0312b18473340459d3e
-    # NOTE: Be silent about CI, until some PR started to pass CI succesfully.
+    # Be silent about CI, until some PR started to pass CI succesfully.
     on_success: change
-    # NOTE: `master` status in on the front page badge.
+    # `master` status in on the front page badge.
     on_failure: never
     on_start: never
