@@ -6,8 +6,10 @@
 set -Eexuo pipefail
 
 ### NOTE: Section handles imports from env, these are settings for Nixpkgs.
-# Settings expose most of the Nixpkgs Haskell.lib API: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
-# Some of these options implicitly switch the dependent options.
+### They use the `default.nix` interface, which exposes expose most of the Nixpkgs Haskell.lib API: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
+### Some of these options implicitly switch the dependent options.
+### Documentation of this settings is mosly in `default.nix`, since most settings it Nixpkgs related
+### Additional documentation is in Nixpkgs Haskell.lib: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
 
 
 # NOTE: If vars not imported - set to the default value
