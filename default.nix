@@ -15,16 +15,19 @@
 
 # Just produce a SDist src tarball
 , sdistTarball ? false
-# Produce SDist tarball and build project from it
+# The strict packaging process as used on Hackage. Tests consistency of the Cabal file.
 , buildFromSdist ? true
 
+# Turn all warn into err with {-Wall,-Werror}
 , failOnAllWarnings ? false
 # `failOnAllWarnings` + `buildFromSdist`
 , buildStrictly ? false
 
 #  2020-06-02: NOTE: enableDeadCodeElimination = true: On GHC =< 8.8.3 macOS build falls due to https://gitlab.haskell.org/ghc/ghc/issues/17283
 , enableDeadCodeElimination ? false
-# Disable GHC code optimizations for faster dev loops. Enable optimizations for production use or benchmarks.
+# Disabled GHC code optimizations make build/tolling/dev loops faster.
+# Works also for Haskel IDE Engine and GHCID.
+# Enable optimizations for production use, and to pass benchmarks.
 , disableOptimization ? true
 # Use faster `gold` ELF linker from GNU binutils instead of older&slower but more versatile GNU linker. Is not available by default since macOS does not have it.
 , linkWithGold ? false
@@ -49,7 +52,9 @@
 , justStaticExecutables ? false
 , enableSeparateBinOutput ? false
 
-# Add a post-build check to verify that dependencies declared in the .cabal file are actually used.
+# checkUnusedPackages: is `failOnAllWarnings` + `cabal sdist` + post-build dep check.
+# Currently uses `packunused` or GHC 8.8 internals, later switches into GHC internal feature.
+# Adds a post-build check to verify that dependencies declared in the cabal file are actually used.
 , checkUnusedPackages ? false
 # Generation and installation of haddock API documentation
 , doHaddock   ? false
@@ -59,11 +64,12 @@
 , doCoverage  ? false
 # doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
 , doBenchmark ? false
-# Modify a Haskell package to add shell completion scripts for the given executable produced by it. These completion scripts will be picked up automatically if the resulting derivation is installed
+# For binaries named in `executableNamesToShellComplete` list, generate and bundle-into package an automatically loaded shell complettions
 , generateOptparseApplicativeCompletions ? false
 , executableNamesToShellComplete ? [ "hnix" ]
 
 
+# Include Hoogle into derivation
 , withHoogle  ? true
 
 

@@ -22,70 +22,42 @@ export NIX_PATH
 project=${project:-'defaultProjectName'}
 
 
-# Don't fail at configure time if there are multiple versions of the same package in the (recursive) dependencies of the package being built. Will delay failures, if any, to compile time.
 allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
-# Escape the version bounds from the cabal file. You may want to avoid this function.
 doJailbreak=${doJailbreak:-'false'}
-# Nix dependency checking, compilation and execution of test suites listed in the package description file.
 doCheck=${doCheck:-'true'}
 
-# Just produce a SDist src tarball
 sdistTarball=${sdistTarball:-'false'}
-# Produce SDist tarball and build project from it
-# The strict packaging process as used on Hackage. Tests consistency of the Cabal file.
 buildFromSdist=${buildFromSdist:-'false'}
 
-# Turn all warn into err with {-Wall,-Werror}
 failOnAllWarnings=${failOnAllWarnings:-'false'}
-# `failOnAllWarnings` + `buildFromSdist`
 buildStrictly=${buildStrictly:-'false'}
 
-#  2020-06-02: NOTE: enableDeadCodeElimination = true: On GHC =< 8.8.3 macOS build falls due to https://gitlab.haskell.org/ghc/ghc/issues/17283
 enableDeadCodeElimination=${enableDeadCodeElimination:-'false'}
-# Disabled GHC code optimizations make build/tolling/dev loops faster. Works for Haskel IDE Engine and GHCID
-# Enable optimizations for production use, and to pass benchmarks.
 disableOptimization=${disableOptimization:-'true'}
-# Use faster `gold` ELF linker from GNU binutils instead of older&slower but more versatile GNU linker. Is not available by default since macOS does not have it.
 linkWithGold=${linkWithGold:-'false'}
 
-# Provide an inventory of performance events and timings for the execution. Provides informaiton in an absolute sense. Nothing is timestamped.
 enableLibraryProfiling=${enableLibraryProfiling:-'false'}
 enableExecutableProfiling=${enableExecutableProfiling:-'false'}
-# Include tracing information & abilities. Tracing records the chronology, often with timestamps and is extensive in time
 doTracing=${doTracing:-'false'}
-# Include DWARF debugging information & abilities
 enableDWARFDebugging=${enableDWARFDebugging:-'false'}
-# Strip results from all debugging symbols
 doStrip=${doStrip:-'false'}
 
-# Nixpkgs expects shared libraries
 enableSharedLibraries=${enableSharedLibraries:-'true'}
-# Ability to make static libraries
 enableStaticLibraries=${enableStaticLibraries:-'false'}
-# Make hybrid executable that is also a shared library
 enableSharedExecutables=${enableSharedExecutables:-'false'}
-# link executables statically against haskell libs to reduce closure size
 justStaticExecutables=${justStaticExecutables:-'false'}
 enableSeparateBinOutput=${enableSeparateBinOutput:-'false'}
 
-# Add a post-build check to verify that dependencies declared in the .cabal file are actually used.
-# checkUnusedPackages: is `failOnAllWarnings` + `cabal sdist` to ensure all needed files are listed in the Cabal file. Currently uses `packunused` or GHC 8.8 internals, later switches into GHC internal feature. Adds a post-build check to verify that dependencies declared in the cabal file are actually used.
 checkUnusedPackages=${checkUnusedPackages:-'false'}
-# Generation and installation of haddock API documentation
 doHaddock=${doHaddock:-'false'}
-#	Generate hyperlinked source code for documentation using HsColour, and have Haddock documentation link to it.
 doHyperlinkSource=${doHyperlinkSource:-'false'}
-# Generation and installation of a coverage report. See https://wiki.haskell.org/Haskell_program_coverage
 doCoverage=${doCoverage:-'false'}
-# doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
 doBenchmark=${doBenchmark:-'false'}
-# For binaries named in `executableNamesToShellComplete` list, generate and bundle-into package an automatically loaded shell complettions
 generateOptparseApplicativeCompletions=${generateOptparseApplicativeCompletions:-'false'}
 # [ "binary1" "binary2" ] - should pass " quotes into Nix interpreter
 executableNamesToShellComplete=${executableNamesToShellComplete:-'[ "defaultBinaryName" ]'}
 
 
-# Include Hoogle into derivation
 withHoogle=${withHoogle:-'false'}
 
 # Log file to dump GHCJS build into
