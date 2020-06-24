@@ -118,11 +118,6 @@ before_script:
     true; fi
   # # macOS service restart
   - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo launchctl kickstart -k system/org.nixos.nix-daemon; fi
-  # update on Linux
-  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then nix-channel --update && nix-env -iA nixpkgs.nix; fi
-  # update on macOS
-  # 2020-06-24: HACK: Do not ask why different commands on Linux and macOS. IDK, wished they we the same. These are the only commands that worked on according platforms right after the fresh Nix installer rollout.
-  - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo nix upgrade-nix; fi
 
 script:
   #
