@@ -110,12 +110,8 @@ jobs:
 before_script:
   - sudo mkdir -p /etc/nix
   - echo "trusted-users = root $USER" | sudo tee -a /etc/nix/nix.conf
-  - |
-    if [ "${TRAVIS_OS_NAME}" = "linux" ]; then true && \
-    sudo systemctl stop nix-daemon.service && \
-    sudo systemctl daemon-reload && \
-    sudo systemctl start nix-daemon.service && \
-    true; fi
+  # # Linux service restart
+  - if [ "${TRAVIS_OS_NAME}" = "linux" ]; then sudo systemctl restart nix-daemon.service;fi
   # # macOS service restart
   - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo launchctl kickstart -k system/org.nixos.nix-daemon; fi
 
