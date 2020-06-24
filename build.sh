@@ -12,13 +12,13 @@ set -Eexuo pipefail
 ### Additional documentation is in Nixpkgs Haskell.lib: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
 
 
-# NOTE: If vars not imported - set to the default value
+# NOTE: If vars not imported - init the vars with default values
 compiler=${compiler:-'ghc8101'}
 rev=${rev:-'nixpkgs-unstable'}
 # If NIX_PATH not imported - construct it from `rev`
 NIX_PATH=${NIX_PATH:-"nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"}
 export NIX_PATH
-# NOTE: Project name, used by cachix
+# Project name, used by cachix
 project=${project:-'defaultProjectName'}
 
 
@@ -72,7 +72,7 @@ CACHIX_SIGNING_KEY=${CACHIX_SIGNING_KEY:-""}
 GHCJS_BUILD(){
 # NOTE: Function for GHCJS build that outputs its huge log into a file
 
-  # NOTE: Run the build into Log (log is too long for Travis)
+  # Run the build into Log (log is too long for Travis)
   "$@" &> "$ghcjsTmpLogFile"
 
 }
@@ -82,19 +82,19 @@ SILENT(){
 # In normal mode outputs only the /nix/store paths
 
   echo "Log: $ghcjsTmpLogFile"
-  # NOTE: Pass into the ghcjsbuild function the build command
+  # Pass into the ghcjsbuild function the build command
   if GHCJS_BUILD "$@"
   then
 
-    # NOTE: Output log lines for stdout -> cachix caching
+    # Output log lines for stdout -> cachix caching
     grep '^/nix/store/' "$ghcjsTmpLogFile"
 
   else
 
-    # NOTE: Output log lines for stdout -> cachix caching
+    # Output log lines for stdout -> cachix caching
     grep '^/nix/store/' "$ghcjsTmpLogFile"
 
-    # NOTE: Propagate the error state, fail the CI build
+    # Propagate the error state, fail the CI build
     exit 1
 
   fi
@@ -109,7 +109,7 @@ IFS=$'\n\t'
 if [ "$compiler" = "ghcjs" ]
   then
 
-    # NOTE: GHCJS build
+    # GHCJS build
     # By itself, GHCJS creates >65000 lines of log that are >4MB in size, so Travis terminates due to log size quota.
     # nixbuild --quiet (x5) does not work on GHC JS build
     # So there was a need to make it build.
@@ -149,8 +149,8 @@ if [ "$compiler" = "ghcjs" ]
 
   else
 
-    # NOTE: Normal GHC build
-    # NOTE: GHC sometimes produces logs so big - that Travis terminates builds, so multiple --quiet
+    # Normal GHC build
+    # GHC sometimes produces logs so big - that Travis terminates builds, so multiple --quiet
     nix-build \
       --quiet --quiet \
       --argstr compiler "$compiler" \
@@ -188,31 +188,30 @@ fi
 MAIN() {
 
 
-# NOTE: Overall it is useful to have in CI test builds the latest stable Nix
-# NOTE: User-run Linux setup old update command, or superuser update for macOS setup
-#  2020-06-24: HACK: Do not ask why different commands on Linux and macOS. IDK, wished they we the same. These are the only commands that worked on according platforms right after the fresh Nix installer rollout.
+# Overall it is useful to have in CI test builds the latest stable Nix
+# 2020-06-24: HACK: Do not ask why different commands on Linux and macOS. IDK, wished they we the same. These are the only commands that worked on according platforms right after the fresh Nix installer rollout.
 (nix-channel --update && nix-env -iA nixpkgs.nix) || (sudo nix upgrade-nix)
 
 
 
-# NOTE: Secrets are not shared to PRs from forks
-# NOTE: nix-build | cachix push <project> - uploads binaries, runs&works only in the branches of the main repository, so for PRs - else case runs
+# Secrets are not shared to PRs from forks
+# nix-build | cachix push <project> - uploads binaries, runs&works only in the branches of the main repository, so for PRs - else case runs
 
   if [ ! "$CACHIX_SIGNING_KEY" = "" ]
 
     then
 
-      # NOTE: Build of the inside repo branch - enable push Cachix cache
+      # Build of the inside repo branch - enable push Cachix cache
       BUILD_PROJECT | cachix push "$project"
 
     else
 
-      # NOTE: Build of the side repo/PR - can not push Cachix cache
+      # Build of the side repo/PR - can not push Cachix cache
       BUILD_PROJECT
 
   fi
 
 }
 
-# NOTE: Run the entry function of the script
+# Run the entry function of the script
 MAIN
