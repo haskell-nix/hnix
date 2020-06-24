@@ -6,6 +6,7 @@
 [![Hackage Matrix Builder](https://img.shields.io/badge/Hackage%20Matrix-Builder-%235e5086)](https://matrix.hackage.haskell.org/package/hnix)
 [![Nixpkgs Hydra CI](https://img.shields.io/badge/Nixpkgs%20Hydra-CI-%234f72bb)](https://hydra.nixos.org/job/nixpkgs/trunk/haskellPackages.hnix.x86_64-linux#tabs-status)
 [![Dependencies](https://img.shields.io/hackage-deps/v/hnix?label=Dependencies)](https://packdeps.haskellers.com/feed?needle=hnix)
+[![Repology page](https://img.shields.io/badge/Repology-page-%23005500)](https://repology.org/project/haskell:hnix/versions)
 
 Haskell parser, evaluator and type checker for the Nix language.
 
