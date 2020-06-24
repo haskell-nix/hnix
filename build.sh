@@ -14,17 +14,6 @@ set -Eexuo pipefail
 
 # NOTE: If vars not imported - set to the default value
 compiler=${compiler:-'ghc8101'}
-# NOTE: Nix by default uses nixpkgs-unstable channel
-# Setup for Nixpkgs revision:
-#   `rev` vals in order of freshness -> cache & stability:
-#   { master
-#   , commitHash
-#   , haskell-updates  # Haskell development branch in Nixpkgs, can be inconsistent. Weekly merged into the upstream
-#   , nixpkgs-unstable  # Default branch on Nix installation, default for non NixOS
-#   , nixos-unstable  # nixpkgs-unstable that passes a bunch of base tests
-#   , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
-#   ...
-#   }
 rev=${rev:-'nixpkgs-unstable'}
 # If NIX_PATH not imported - construct it from `rev`
 NIX_PATH=${NIX_PATH:-"nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"}
