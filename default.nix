@@ -12,19 +12,26 @@
 , doJailbreak ? false
 # Nix dependency checking, compilation and execution of test suites listed in the package description file.
 , doCheck     ? true
+
 # Just produce a SDist src tarball
 , sdistTarball ? false
-# Produce SDist tarball and build project from it
+# The strict packaging process as used on Hackage. Tests consistency of the Cabal file.
 , buildFromSdist ? true
+
+# Turn all warn into err with {-Wall,-Werror}
 , failOnAllWarnings ? false
 # `failOnAllWarnings` + `buildFromSdist`
 , buildStrictly ? false
+
 #  2020-06-02: NOTE: enableDeadCodeElimination = true: On GHC =< 8.8.3 macOS build falls due to https://gitlab.haskell.org/ghc/ghc/issues/17283
 , enableDeadCodeElimination ? false
-# Disable GHC code optimizations for faster dev loops. Enable optimizations for production use or benchmarks.
+# Disabled GHC code optimizations make build/tolling/dev loops faster.
+# Works also for Haskel IDE Engine and GHCID.
+# Enable optimizations for production use, and to pass benchmarks.
 , disableOptimization ? true
 # Use faster `gold` ELF linker from GNU binutils instead of older&slower but more versatile GNU linker. Is not available by default since macOS does not have it.
 , linkWithGold ? false
+
 # Provide an inventory of performance events and timings for the execution. Provides informaiton in an absolute sense. Nothing is timestamped.
 , enableLibraryProfiling ? false
 , enableExecutableProfiling ? false
@@ -34,8 +41,7 @@
 , enableDWARFDebugging ? true
 # Strip results from all debugging symbols
 , doStrip ? false
-#	Generate hyperlinked source code for documentation using HsColour, and have Haddock documentation link to it.
-, doHyperlinkSource ? false
+
 # Nixpkgs expects shared libraries
 , enableSharedLibraries ? true
 # Ability to make static libraries
@@ -45,23 +51,40 @@
 # link executables statically against haskell libs to reduce closure size
 , justStaticExecutables ? false
 , enableSeparateBinOutput ? false
-# Add a post-build check to verify that dependencies declared in the .cabal file are actually used.
+
+# checkUnusedPackages: is `failOnAllWarnings` + `cabal sdist` + post-build dep check.
+# Currently uses `packunused` or GHC 8.8 internals, later switches into GHC internal feature.
+# Adds a post-build check to verify that dependencies declared in the cabal file are actually used.
 , checkUnusedPackages ? false
 # Generation and installation of haddock API documentation
 , doHaddock   ? false
+#	Generate hyperlinked source code for documentation using HsColour, and have Haddock documentation link to it.
+, doHyperlinkSource ? false
 # Generation and installation of a coverage report. See https://wiki.haskell.org/Haskell_program_coverage
 , doCoverage  ? false
 # doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
 , doBenchmark ? false
-# Modify a Haskell package to add shell completion scripts for the given executable produced by it. These completion scripts will be picked up automatically if the resulting derivation is installed
+# For binaries named in `executableNamesToShellComplete` list, generate and bundle-into package an automatically loaded shell complettions
 , generateOptparseApplicativeCompletions ? false
 , executableNamesToShellComplete ? [ "hnix" ]
 
+
+# Include Hoogle into derivation
 , withHoogle  ? true
 
 
 , useRev ? false
-# Accepts Nixpkgs channel name and Git revision
+# Nix by default uses nixpkgs-unstable channel
+# Nixpkgs revision options:
+#   `rev` vals in order of freshness -> cache & stability:
+#   { master
+#   , <commitHash>
+#   , haskell-updates  # Haskell development branch in Nixpkgs, can be inconsistent. Weekly merged into the upstream
+#   , nixpkgs-unstable  # Default branch on Nix installation, default for non NixOS
+#   , nixos-unstable  # nixpkgs-unstable that passes a bunch of base tests
+#   , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
+#   ...
+#   }
 , rev ? "nixpkgs-unstable"
 
 , pkgs ?
