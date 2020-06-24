@@ -12,19 +12,23 @@
 , doJailbreak ? false
 # Nix dependency checking, compilation and execution of test suites listed in the package description file.
 , doCheck     ? true
+
 # Just produce a SDist src tarball
 , sdistTarball ? false
 # Produce SDist tarball and build project from it
 , buildFromSdist ? true
+
 , failOnAllWarnings ? false
 # `failOnAllWarnings` + `buildFromSdist`
 , buildStrictly ? false
+
 #  2020-06-02: NOTE: enableDeadCodeElimination = true: On GHC =< 8.8.3 macOS build falls due to https://gitlab.haskell.org/ghc/ghc/issues/17283
 , enableDeadCodeElimination ? false
 # Disable GHC code optimizations for faster dev loops. Enable optimizations for production use or benchmarks.
 , disableOptimization ? true
 # Use faster `gold` ELF linker from GNU binutils instead of older&slower but more versatile GNU linker. Is not available by default since macOS does not have it.
 , linkWithGold ? false
+
 # Provide an inventory of performance events and timings for the execution. Provides informaiton in an absolute sense. Nothing is timestamped.
 , enableLibraryProfiling ? false
 , enableExecutableProfiling ? false
@@ -34,8 +38,7 @@
 , enableDWARFDebugging ? true
 # Strip results from all debugging symbols
 , doStrip ? false
-#	Generate hyperlinked source code for documentation using HsColour, and have Haddock documentation link to it.
-, doHyperlinkSource ? false
+
 # Nixpkgs expects shared libraries
 , enableSharedLibraries ? true
 # Ability to make static libraries
@@ -45,10 +48,13 @@
 # link executables statically against haskell libs to reduce closure size
 , justStaticExecutables ? false
 , enableSeparateBinOutput ? false
+
 # Add a post-build check to verify that dependencies declared in the .cabal file are actually used.
 , checkUnusedPackages ? false
 # Generation and installation of haddock API documentation
 , doHaddock   ? false
+#	Generate hyperlinked source code for documentation using HsColour, and have Haddock documentation link to it.
+, doHyperlinkSource ? false
 # Generation and installation of a coverage report. See https://wiki.haskell.org/Haskell_program_coverage
 , doCoverage  ? false
 # doBenchmark: Dependency checking + compilation and execution for benchmarks listed in the package description file.
@@ -56,6 +62,7 @@
 # Modify a Haskell package to add shell completion scripts for the given executable produced by it. These completion scripts will be picked up automatically if the resulting derivation is installed
 , generateOptparseApplicativeCompletions ? false
 , executableNamesToShellComplete ? [ "hnix" ]
+
 
 , withHoogle  ? true
 
