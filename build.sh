@@ -193,6 +193,9 @@ MAIN() {
 (nix-channel --update && nix-env -iA nixpkgs.nix) || (sudo nix upgrade-nix)
 
 
+# Report the Nixpkgs channel revision
+nix-instantiate --eval -E 'with import <nixpkgs> {}; lib.version or lib.nixpkgsVersion'
+
 
 # Secrets are not shared to PRs from forks
 # nix-build | cachix push <project> - uploads binaries, runs&works only in the branches of the main repository, so for PRs - else case runs
