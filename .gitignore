@@ -7,7 +7,7 @@
 /nix-test-eval*
 /nix/
 TAGS
-cabal.project*
+cabal.project.local
 ctags
 dist-newstyle
 result*
