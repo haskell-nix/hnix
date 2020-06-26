@@ -58,7 +58,15 @@ import           System.Exit
 
 main :: (MonadNix e t f m, MonadIO m, MonadMask m) => m ()
 main = flip evalStateT initState
-    $ evalRepl (return prefix) cmd options (Just ':') completer welcomeText
+    $ evalRepl
+        (const $ return prefix)
+        cmd
+        options
+        (Just ':')
+        Nothing
+        completer
+        welcomeText
+        (return Exit)
  where
   prefix = "hnix> "
   welcomeText =
@@ -139,7 +147,7 @@ cmd source = do
 -------------------------------------------------------------------------------
 
 -- :browse command
-browse :: MonadNix e t f m => [String] -> Repl e t f m ()
+browse :: MonadNix e t f m => String -> Repl e t f m ()
 browse _ = do
   st <- get
   undefined
@@ -148,16 +156,16 @@ browse _ = do
 -- :load command
 load
   :: (MonadNix e t f m, MonadIO m)
-  => [String]
+  => String
   -> Repl e t f m ()
 load args = do
-  contents <- liftIO $ Text.readFile (unwords args)
+  contents <- liftIO $ Text.readFile args
   void $ exec True contents
 
 -- :type command
 typeof
   :: (MonadNix e t f m, MonadIO m)
-  => [String]
+  => String
   -> Repl e t f m ()
 typeof args = do
   st  <- get
@@ -166,7 +174,7 @@ typeof args = do
     Nothing  -> exec False line
   str <- lift $ lift $ showValueType val
   liftIO $ putStrLn str
-  where line = Text.pack (unwords args)
+  where line = Text.pack args
 
 -- :quit command
 quit :: (MonadNix e t f m, MonadIO m) => a -> Repl e t f m ()
@@ -194,11 +202,9 @@ comp n = do
 
 options
   :: (MonadNix e t f m, MonadIO m)
-  => [(String, [String] -> Repl e t f m ())]
+  => System.Console.Repline.Options (Repl e t f m)
 options =
-  [ ( "load"
-    , load
-    )
+  [ ( "load" , load)
   --, ("browse" , browse)
   , ("quit", quit)
   , ("type", typeof)
@@ -208,7 +214,7 @@ options =
 help
   :: forall e t f m
    . (MonadNix e t f m, MonadIO m)
-  => [String]
+  => String
   -> Repl e t f m ()
 help _ = liftIO $ do
   putStrLn "Available commands:\n"
