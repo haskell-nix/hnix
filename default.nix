@@ -207,6 +207,13 @@ let
     name = "hnix";
     root = pkgs.nix-gitignore.gitignoreSource [ ] ./.;
 
+    overrides = self: super: {
+      # 2020-06-26 Due to a behaviour change in neat-interpolation-0.4, we
+      # require n-i >= 0.4. dontCheck helps us avoid conflicts with
+      # neat-interpolation's test dependencies.
+      neat-interpolation = pkgs.haskell.lib.dontCheck super.neat-interpolation_0_5_1;
+    };
+
     modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
       buildTools = (attrs.buildTools or []) ++ [
         haskellPackages.cabal-install
@@ -248,5 +255,4 @@ let
   composedPackage = pkgs.lib.foldr (funcOnSwitchAppliesFunction) package listOfSetsOfSwitchExtend;
 
 in composedPackage
-
 
