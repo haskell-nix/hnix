@@ -29,9 +29,9 @@ data NAtom
   | NInt Integer
   -- | A floating point number
   | NFloat Float
-  -- | Booleans.
+  -- | Booleans. @false@ or @true@.
   | NBool Bool
-  -- | Null values. There's only one of this variant.
+  -- | Null values. There's only one of this variant: @null@.
   | NNull
   deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
             Hashable)
