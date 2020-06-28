@@ -7,6 +7,7 @@
    directory for more details.
 -}
 
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiWayIf #-}
@@ -51,30 +52,40 @@ import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
 
-import           System.Console.Repline        hiding ( options, prefix )
-import           System.Environment
-import           System.Exit
+import           System.Console.Repline         ( CompletionFunc
+                                                , CompleterStyle (Prefix)
+                                                , ExitDecision(Exit)
+                                                , HaskelineT
+                                                , WordCompleter
+                                                )
+import qualified System.Console.Repline
+import qualified System.Exit
 
 
 main :: (MonadNix e t f m, MonadIO m, MonadMask m) => m ()
 main = flip evalStateT initState
-    $ evalRepl
-        (const $ return prefix)
+    $ System.Console.Repline.evalRepl
+        banner
         cmd
         options
         (Just ':')
-        Nothing
+        (Just "paste")
         completer
-        welcomeText
-        (return Exit)
+        greeter
+        finalizer
  where
-  prefix = "hnix> "
-  welcomeText =
+  banner = pure . \case
+    System.Console.Repline.SingleLine -> "hnix> "
+    System.Console.Repline.MultiLine  -> "| "
+  greeter =
     liftIO
       $  putStrLn
       $  "Welcome to hnix "
       <> showVersion version
       <> ". For help type :help\n"
+  finalizer = do
+    liftIO $ putStrLn "Goodbye."
+    return Exit
 
 -------------------------------------------------------------------------------
 -- Types
@@ -92,7 +103,7 @@ hoistErr :: (MonadIO m, MonadThrow m) => Result a -> Repl e t f m a
 hoistErr (Success val) = return val
 hoistErr (Failure err) = do
   liftIO $ print err
-  abort
+  System.Console.Repline.abort
 
 -------------------------------------------------------------------------------
 -- Execution
@@ -121,7 +132,7 @@ exec update source = do
   case mVal of
     Left (NixException frames) -> do
       lift $ lift $ liftIO . print =<< renderFrames @(NValue t f m) @t frames
-      abort
+      System.Console.Repline.abort
     Right val -> do
       -- Update the interpreter state
       when update $ do
@@ -178,7 +189,7 @@ typeof args = do
 
 -- :quit command
 quit :: (MonadNix e t f m, MonadIO m) => a -> Repl e t f m ()
-quit _ = liftIO exitSuccess
+quit _ = liftIO System.Exit.exitSuccess
 
 -------------------------------------------------------------------------------
 -- Interactive Shell
@@ -187,7 +198,7 @@ quit _ = liftIO exitSuccess
 -- Prefix tab completer
 defaultMatcher :: MonadIO m => [(String, CompletionFunc m)]
 defaultMatcher =
-  [(":load", fileCompleter)
+  [(":load", System.Console.Repline.fileCompleter)
   --, (":type"  , values)
                            ]
 
@@ -219,8 +230,9 @@ help
 help _ = liftIO $ do
   putStrLn "Available commands:\n"
   mapM_ putStrLn $ map (\o -> ":" ++ (fst o)) (options @e @t @f @m)
+  putStrLn ":paste - enter multi-line mode"
 
 completer
   :: (MonadNix e t f m, MonadIO m)
   => CompleterStyle (StateT (IState t f m) m)
-completer = Prefix (wordCompleter comp) defaultMatcher
+completer = Prefix (System.Console.Repline.wordCompleter comp) defaultMatcher
