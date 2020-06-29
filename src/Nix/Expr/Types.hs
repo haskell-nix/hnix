@@ -508,10 +508,10 @@ $(deriveShow1 ''Binding)
 $(deriveShow1 ''Antiquoted)
 $(deriveShow2 ''Antiquoted)
 
--- $(deriveJSON1 defaultOptions ''NExprF)
+--x $(deriveJSON1 defaultOptions ''NExprF)
 $(deriveJSON1 defaultOptions ''NString)
 $(deriveJSON1 defaultOptions ''Params)
--- $(deriveJSON1 defaultOptions ''Binding)
+--x $(deriveJSON1 defaultOptions ''Binding)
 $(deriveJSON1 defaultOptions ''Antiquoted)
 $(deriveJSON2 defaultOptions ''Antiquoted)
 
@@ -569,7 +569,7 @@ $(makeTraversals ''NKeyName)
 $(makeTraversals ''NUnaryOp)
 $(makeTraversals ''NBinaryOp)
 
--- $(makeLenses ''Fix)
+--x $(makeLenses ''Fix)
 
 class NExprAnn ann g | g -> ann where
     fromNExpr :: g r -> (NExprF r, ann)
