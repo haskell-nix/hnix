@@ -62,6 +62,7 @@ import           System.Console.Repline         ( Cmd
                                                 )
 import qualified System.Console.Repline
 import qualified System.Exit
+import qualified System.IO.Error
 
 -- | Repl entry point
 main :: (MonadNix e t f m, MonadIO m, MonadMask m) =>  m ()
@@ -76,15 +77,18 @@ main' iniVal = flip evalStateT (initState iniVal)
         banner
         cmd
         options
-        (Just ':')
+        (Just commandPrefix)
         (Just "paste")
         completer
-        greeter
+        (rcFile >> greeter)
         finalizer
  where
+  commandPrefix = ':'
+
   banner = pure . \case
     System.Console.Repline.SingleLine -> "hnix> "
     System.Console.Repline.MultiLine  -> "| "
+
   greeter =
     liftIO
       $  putStrLn
@@ -94,6 +98,32 @@ main' iniVal = flip evalStateT (initState iniVal)
   finalizer = do
     liftIO $ putStrLn "Goodbye."
     return Exit
+
+  rcFile = do
+    f <- liftIO $ Data.Text.IO.readFile ".hnixrc" `catch` handleMissing
+    forM_ (map (words . Data.Text.unpack) $ Data.Text.lines f) $ \case
+      ((prefix:command) : xs) | prefix == commandPrefix -> do
+        let arguments = unwords xs
+        optMatcher command options arguments
+      x -> cmd $ unwords x
+
+  handleMissing e
+    | System.IO.Error.isDoesNotExistError e = return ""
+    | otherwise = throwIO e
+
+  -- Replicated and slightly adjusted `optMatcher` from `System.Console.Repline`
+  -- which doesn't export it.
+  -- * @MonadIO m@ instead of @MonadHaskeline m@
+  -- * @putStrLn@ instead of @outputStrLn@
+  optMatcher :: MonadIO m
+             => String
+             -> System.Console.Repline.Options m
+             -> String
+             -> m ()
+  optMatcher s [] _ = liftIO $ putStrLn $ "No such command :" ++ s
+  optMatcher s ((x, m) : xs) args
+    | s `Data.List.isPrefixOf` x = m args
+    | otherwise = optMatcher s xs args
 
 -------------------------------------------------------------------------------
 -- Types
