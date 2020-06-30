@@ -39,6 +39,9 @@ import qualified Data.HashMap.Lazy
 import           Data.Text                      (Text)
 import qualified Data.Text
 import qualified Data.Text.IO
+import           Data.Text.Prettyprint.Doc      (Doc, (<+>))
+import qualified Data.Text.Prettyprint.Doc
+import qualified Data.Text.Prettyprint.Doc.Render.Text
 import           Data.Version                   ( showVersion )
 import           Paths_hnix                     ( version )
 
@@ -47,7 +50,8 @@ import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
 
-import           System.Console.Repline         ( CompletionFunc
+import           System.Console.Repline         ( Cmd
+                                                , CompletionFunc
                                                 , CompleterStyle (Prefix)
                                                 , ExitDecision(Exit)
                                                 , HaskelineT
@@ -199,7 +203,11 @@ load
   => String
   -> Repl e t f m ()
 load args = do
-  contents <- liftIO $ Data.Text.IO.readFile args
+  contents <- liftIO
+    $ Data.Text.IO.readFile
+    $ Data.Text.unpack
+    $ Data.Text.strip
+    $ Data.Text.pack args
   void $ exec True contents
 
 -- :type command
@@ -249,27 +257,78 @@ comp n = do
     -- ++ defs
     )
 
+-- HelpOption inspired by Dhall Repl
+-- with `Doc` instead of String for syntax and doc
+data HelpOption e t f m = HelpOption
+  { helpOptionName     :: String
+  , helpOptionSyntax   :: Doc ()
+  , helpOptionDoc      :: Doc ()
+  , helpOptionFunction :: Cmd (Repl e t f m)
+  }
+
+type HelpOptions e t f m = [HelpOption e t f m]
+
+helpOptions :: (MonadNix e t f m, MonadIO m) => HelpOptions e t f m
+helpOptions =
+  [ HelpOption
+      "help"
+      ""
+      "Print help text"
+      (help helpOptions)
+  , HelpOption
+      "paste"
+      ""
+      "Enter multi-line mode"
+      (error "Unreachable")
+  , HelpOption
+      "load"
+      "FILENAME"
+      "Load .nix file into scope"
+      load
+  , HelpOption
+      "browse"
+      ""
+      "Browse bindings in interpreter context"
+      browse
+  , HelpOption
+      "type"
+      "EXPRESSION"
+      "Evaluate expression or binding from context and print the type of the result value"
+      typeof
+  , HelpOption
+      "quit"
+      ""
+      "Quit interpreter"
+      quit
+  , HelpOption
+      "debug"
+      ""
+      "Enable REPL debugging output"
+      debug
+  ]
+
+help :: (MonadNix e t f m, MonadIO m)
+     => HelpOptions e t f m
+     -> String
+     -> Repl e t f m ()
+help hs _ = do
+  liftIO $ putStrLn "Available commands:\n"
+  forM_ hs $ \h ->
+      liftIO
+    . Data.Text.IO.putStrLn
+    . Data.Text.Prettyprint.Doc.Render.Text.renderStrict
+    . Data.Text.Prettyprint.Doc.layoutPretty
+        Data.Text.Prettyprint.Doc.defaultLayoutOptions
+    $     ":"
+       <>  Data.Text.Prettyprint.Doc.pretty (helpOptionName h)
+       <+> helpOptionSyntax h
+       <>  Data.Text.Prettyprint.Doc.line
+       <>  Data.Text.Prettyprint.Doc.indent 4 (helpOptionDoc h)
+
 options
   :: (MonadNix e t f m, MonadIO m)
   => System.Console.Repline.Options (Repl e t f m)
-options =
-  [ ( "load" , load)
-  , ("browse" , browse)
-  , ("quit", quit)
-  , ("type", typeof)
-  , ("help", help)
-  , ("debug", debug)
-  ]
-
-help
-  :: forall e t f m
-   . (MonadNix e t f m, MonadIO m)
-  => String
-  -> Repl e t f m ()
-help _ = liftIO $ do
-  putStrLn "Available commands:\n"
-  mapM_ putStrLn $ map (\o -> ":" ++ (fst o)) (options @e @t @f @m)
-  putStrLn ":paste - enter multi-line mode"
+options = (\h -> (helpOptionName h, helpOptionFunction h)) <$> helpOptions
 
 completer
   :: (MonadNix e t f m, MonadIO m)
