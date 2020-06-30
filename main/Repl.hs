@@ -20,7 +20,10 @@
 {-# OPTIONS_GHC -Wno-unused-matches #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 
-module Repl where
+module Repl
+  ( main
+  , main'
+  ) where
 
 import           Nix                     hiding ( exec
                                                 , try
@@ -60,9 +63,15 @@ import           System.Console.Repline         ( Cmd
 import qualified System.Console.Repline
 import qualified System.Exit
 
+-- | Repl entry point
+main :: (MonadNix e t f m, MonadIO m, MonadMask m) =>  m ()
+main = main' Nothing
 
-main :: (MonadNix e t f m, MonadIO m, MonadMask m) => m ()
-main = flip evalStateT initState
+-- | Principled version allowing to pass initial value for context.
+--
+-- Passed value is stored in context with "input" key.
+main' :: (MonadNix e t f m, MonadIO m, MonadMask m) => Maybe (NValue t f m) -> m ()
+main' iniVal = flip evalStateT (initState iniVal)
     $ System.Console.Repline.evalRepl
         banner
         cmd
@@ -96,8 +105,12 @@ data IState t f m = IState
   , replDbg :: Bool                    -- ^ Enable REPL debug output, dumping IState on each command
   } deriving (Eq, Show)
 
-initState :: MonadIO m => IState t f m
-initState = IState Nothing mempty False
+initState :: MonadIO m => Maybe (NValue t f m) -> IState t f m
+initState mIni =
+  IState
+    Nothing
+    (maybe mempty (\x -> Data.HashMap.Lazy.fromList [("input", x)]) mIni)
+    False
 
 type Repl e t f m = HaskelineT (StateT (IState t f m) m)
 

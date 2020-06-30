@@ -102,7 +102,12 @@ main = do
                   @(StdThunk (StandardT (StdIdT IO)))
                   frames
 
-      when (repl opts) $ withNixContext Nothing Repl.main
+      when (repl opts) $
+        if evaluate opts
+          then do
+            val <- Nix.nixEvalExprLoc mpath expr
+            withNixContext Nothing (Repl.main' $ Just val)
+          else withNixContext Nothing Repl.main
 
   process opts mpath expr
     | evaluate opts
