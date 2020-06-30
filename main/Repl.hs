@@ -39,11 +39,9 @@ import           Data.List                      ( isPrefixOf
                                                 , foldl'
                                                 )
 import qualified Data.Map                      as Map
-import           Data.Text                      ( unpack
-                                                , pack
-                                                )
-import qualified Data.Text                     as Text
-import qualified Data.Text.IO                  as Text
+import           Data.Text                     (Text)
+import qualified Data.Text
+import qualified Data.Text.IO
 import           Data.Version                   ( showVersion )
 import           Paths_hnix                     ( version )
 
@@ -96,14 +94,9 @@ newtype IState t f m = IState
   }
 
 initState :: MonadIO m => IState t f m
-initState = IState M.empty
+initState = IState mempty
 
 type Repl e t f m = HaskelineT (StateT (IState t f m) m)
-hoistErr :: (MonadIO m, MonadThrow m) => Result a -> Repl e t f m a
-hoistErr (Success val) = return val
-hoistErr (Failure err) = do
-  liftIO $ print err
-  System.Console.Repline.abort
 
 -------------------------------------------------------------------------------
 -- Execution
@@ -113,46 +106,53 @@ exec
   :: forall e t f m
    . (MonadNix e t f m, MonadIO m)
   => Bool
-  -> Text.Text
-  -> Repl e t f m (NValue t f m)
+  -> Text
+  -> Repl e t f m (Maybe (NValue t f m))
 exec update source = do
   -- Get the current interpreter state
-  st   <- get
+  st <- get
 
   -- Parser ( returns AST )
   -- TODO: parse <var> = <expr>
-  expr <- hoistErr $ parseNixTextLoc source
+  case parseNixTextLoc source of
+    Failure err -> do
+      liftIO $ print err
+      return Nothing
+    Success expr -> do
+      -- Type Inference ( returns Typing Environment )
+      --let tyctx' = inferTop Env.empty [("repl", stripAnnotation expr)]
+      --liftIO $ print tyctx'
 
-  -- Type Inference ( returns Typing Environment )
-  -- tyctx' <- hoistErr $ inferTop (tyctx st) expr
+      -- TODO: track scope with (tmctx st)
+      mVal <- lift $ lift $ try $ pushScope mempty (evalExprLoc expr)
 
-  -- TODO: track scope with (tmctx st)
-  mVal <- lift $ lift $ try $ pushScope M.empty (evalExprLoc expr)
-
-  case mVal of
-    Left (NixException frames) -> do
-      lift $ lift $ liftIO . print =<< renderFrames @(NValue t f m) @t frames
-      System.Console.Repline.abort
-    Right val -> do
-      -- Update the interpreter state
-      when update $ do
-        -- Create the new environment
-        put st { tmctx = tmctx st } -- TODO: M.insert key val (tmctx st)
-      return val
-
+      case mVal of
+        Left (NixException frames) -> do
+          lift $ lift $ liftIO . print =<< renderFrames @(NValue t f m) @t frames
+          return Nothing
+        Right val -> do
+          -- Update the interpreter state
+          when update $ do
+            -- Create the new environment
+            put st { tmctx = tmctx st } -- TODO: M.insert key val (tmctx st)
+          return $ Just val
 
 cmd
   :: (MonadNix e t f m, MonadIO m)
   => String
   -> Repl e t f m ()
 cmd source = do
-  val <- exec True (Text.pack source)
-  lift $ lift $ do
-    opts :: Nix.Options <- asks (view hasLens)
-    if
-      | strict opts -> liftIO . print . prettyNValue =<< normalForm val
-      | values opts -> liftIO . print . prettyNValueProv =<< removeEffects val
-      | otherwise   -> liftIO . print . prettyNValue =<< removeEffects val
+  mVal <- exec True (Data.Text.pack source)
+  case mVal of
+    Nothing -> return ()
+    Just val -> do
+      lift $ lift $ do
+        opts :: Nix.Options <- asks (view hasLens)
+        if
+          | strict opts -> liftIO . print . prettyNValue =<< normalForm val
+          | values opts -> liftIO . print . prettyNValueProv =<< removeEffects val
+          | otherwise   -> liftIO . print . prettyNValue =<< removeEffects val
+
 -------------------------------------------------------------------------------
 -- Commands
 -------------------------------------------------------------------------------
@@ -170,7 +170,7 @@ load
   => String
   -> Repl e t f m ()
 load args = do
-  contents <- liftIO $ Text.readFile args
+  contents <- liftIO $ Data.Text.IO.readFile args
   void $ exec True contents
 
 -- :type command
@@ -179,13 +179,17 @@ typeof
   => String
   -> Repl e t f m ()
 typeof args = do
-  st  <- get
-  val <- case M.lookup line (tmctx st) of
-    Just val -> return val
-    Nothing  -> exec False line
-  str <- lift $ lift $ showValueType val
-  liftIO $ putStrLn str
-  where line = Text.pack args
+  st <- get
+  mVal <- case M.lookup line (tmctx st) of
+    Just val -> return $ Just val
+    Nothing  -> do
+      exec False line
+
+  forM_ mVal $ \val -> do
+    s <- lift . lift . showValueType $ val
+    liftIO $ putStrLn s
+
+  where line = Data.Text.pack args
 
 -- :quit command
 quit :: (MonadNix e t f m, MonadIO m) => a -> Repl e t f m ()
@@ -201,15 +205,15 @@ defaultMatcher =
   [(":load", System.Console.Repline.fileCompleter)
   --, (":type"  , values)
                            ]
-
 -- Default tab completer
 comp :: Monad m => WordCompleter m
 comp n = do
   let cmds = [":load", ":type", ":browse", ":quit"]
   -- Env.TypeEnv ctx <- gets tyctx
-  -- let defs = map unpack $ Map.keys ctx
-  return $ filter (isPrefixOf n) (cmds {-++ defs-}
-                                      )
+  -- let defs = map Data.Text.unpack $ Map.keys ctx
+  return $ filter (isPrefixOf n) (cmds
+    -- ++ defs
+    )
 
 options
   :: (MonadNix e t f m, MonadIO m)
