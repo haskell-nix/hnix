@@ -34,12 +34,9 @@ import           Nix.Type.Infer
 import           Nix.Utils
 
 import           Control.Comonad
-import qualified Data.HashMap.Lazy             as M
-import           Data.List                      ( isPrefixOf
-                                                , foldl'
-                                                )
-import qualified Data.Map                      as Map
-import           Data.Text                     (Text)
+import qualified Data.List
+import qualified Data.HashMap.Lazy
+import           Data.Text                      (Text)
 import qualified Data.Text
 import qualified Data.Text.IO
 import           Data.Version                   ( showVersion )
@@ -89,12 +86,14 @@ main = flip evalStateT initState
 -- Types
 -------------------------------------------------------------------------------
 
-newtype IState t f m = IState
-  { tmctx :: AttrSet (NValue t f m)  -- Value environment
-  }
+data IState t f m = IState
+  { replIt  :: Maybe NExprLoc          -- ^ Last expression entered
+  , replCtx :: AttrSet (NValue t f m)  -- ^ Value environment
+  , replDbg :: Bool                    -- ^ Enable REPL debug output, dumping IState on each command
+  } deriving (Eq, Show)
 
 initState :: MonadIO m => IState t f m
-initState = IState mempty
+initState = IState Nothing mempty False
 
 type Repl e t f m = HaskelineT (StateT (IState t f m) m)
 
@@ -112,19 +111,21 @@ exec update source = do
   -- Get the current interpreter state
   st <- get
 
-  -- Parser ( returns AST )
-  -- TODO: parse <var> = <expr>
-  case parseNixTextLoc source of
-    Failure err -> do
+  when (replDbg st) $ liftIO $ print st
+
+  -- Parser ( returns AST as `NExprLoc` )
+  case parseExprOrBinding source of
+    (Failure err, _) -> do
       liftIO $ print err
       return Nothing
-    Success expr -> do
+    (Success expr, isBinding) -> do
+
       -- Type Inference ( returns Typing Environment )
+      --
       --let tyctx' = inferTop Env.empty [("repl", stripAnnotation expr)]
       --liftIO $ print tyctx'
 
-      -- TODO: track scope with (tmctx st)
-      mVal <- lift $ lift $ try $ pushScope mempty (evalExprLoc expr)
+      mVal <- lift $ lift $ try $ pushScope (replCtx st) (evalExprLoc expr)
 
       case mVal of
         Left (NixException frames) -> do
@@ -132,10 +133,31 @@ exec update source = do
           return Nothing
         Right val -> do
           -- Update the interpreter state
-          when update $ do
-            -- Create the new environment
-            put st { tmctx = tmctx st } -- TODO: M.insert key val (tmctx st)
+          when (update && isBinding) $ do
+            -- Set `replIt` to last entered expression
+            put st { replIt = Just expr }
+
+            -- If the result value is a set, update our context with it
+            case val of
+              NVSet xs _ -> put st { replCtx = Data.HashMap.Lazy.union xs (replCtx st) }
+              _          -> return ()
+
           return $ Just val
+  where
+    -- If parsing fails, turn the input into singleton attribute set
+    -- and try again.
+    --
+    -- This allows us to handle assignments like @a = 42@
+    -- which get turned into @{ a = 42; }@
+    parseExprOrBinding i =
+      case parseNixTextLoc i of
+        Success expr -> (Success expr, False)
+        Failure e    ->
+          case parseNixTextLoc $ toAttrSet i of
+            Failure _  -> (Failure e, False) -- return the first parsing failure
+            Success e' -> (Success e', True)
+
+    toAttrSet i = "{" <> i <> (if Data.Text.isSuffixOf ";" i then mempty else ";") <> "}"
 
 cmd
   :: (MonadNix e t f m, MonadIO m)
@@ -145,24 +167,31 @@ cmd source = do
   mVal <- exec True (Data.Text.pack source)
   case mVal of
     Nothing -> return ()
-    Just val -> do
-      lift $ lift $ do
-        opts :: Nix.Options <- asks (view hasLens)
-        if
-          | strict opts -> liftIO . print . prettyNValue =<< normalForm val
-          | values opts -> liftIO . print . prettyNValueProv =<< removeEffects val
-          | otherwise   -> liftIO . print . prettyNValue =<< removeEffects val
+    Just val -> printValue val
+
+printValue :: (MonadNix e t f m, MonadIO m)
+           => NValue t f m
+           -> Repl e t f m ()
+printValue val = lift $ lift $ do
+  opts :: Nix.Options <- asks (view hasLens)
+  if
+    | strict opts -> liftIO . print . prettyNValue =<< normalForm val
+    | values opts -> liftIO . print . prettyNValueProv =<< removeEffects val
+    | otherwise   -> liftIO . print . prettyNValue =<< removeEffects val
 
 -------------------------------------------------------------------------------
 -- Commands
 -------------------------------------------------------------------------------
 
 -- :browse command
-browse :: MonadNix e t f m => String -> Repl e t f m ()
+browse :: (MonadNix e t f m, MonadIO m)
+       => String
+       -> Repl e t f m ()
 browse _ = do
   st <- get
-  undefined
-  -- liftIO $ mapM_ putStrLn $ ppenv (tyctx st)
+  forM_ (Data.HashMap.Lazy.toList $ replCtx st) $ \(k, v) -> do
+    liftIO $ putStr $ Data.Text.unpack $ k <> " = "
+    printValue v
 
 -- :load command
 load
@@ -180,7 +209,7 @@ typeof
   -> Repl e t f m ()
 typeof args = do
   st <- get
-  mVal <- case M.lookup line (tmctx st) of
+  mVal <- case Data.HashMap.Lazy.lookup line (replCtx st) of
     Just val -> return $ Just val
     Nothing  -> do
       exec False line
@@ -195,6 +224,10 @@ typeof args = do
 quit :: (MonadNix e t f m, MonadIO m) => a -> Repl e t f m ()
 quit _ = liftIO System.Exit.exitSuccess
 
+-- :debug command
+debug :: (MonadNix e t f m, MonadIO m) => a -> Repl e t f m ()
+debug _ = modify (\x -> x { replDbg = True })
+
 -------------------------------------------------------------------------------
 -- Interactive Shell
 -------------------------------------------------------------------------------
@@ -202,16 +235,17 @@ quit _ = liftIO System.Exit.exitSuccess
 -- Prefix tab completer
 defaultMatcher :: MonadIO m => [(String, CompletionFunc m)]
 defaultMatcher =
-  [(":load", System.Console.Repline.fileCompleter)
+  [ (":load", System.Console.Repline.fileCompleter)
   --, (":type"  , values)
-                           ]
+  ]
+
 -- Default tab completer
 comp :: Monad m => WordCompleter m
 comp n = do
   let cmds = [":load", ":type", ":browse", ":quit"]
   -- Env.TypeEnv ctx <- gets tyctx
   -- let defs = map Data.Text.unpack $ Map.keys ctx
-  return $ filter (isPrefixOf n) (cmds
+  return $ filter (Data.List.isPrefixOf n) (cmds
     -- ++ defs
     )
 
@@ -220,10 +254,11 @@ options
   => System.Console.Repline.Options (Repl e t f m)
 options =
   [ ( "load" , load)
-  --, ("browse" , browse)
+  , ("browse" , browse)
   , ("quit", quit)
   , ("type", typeof)
   , ("help", help)
+  , ("debug", debug)
   ]
 
 help
