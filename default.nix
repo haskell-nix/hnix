@@ -199,6 +199,7 @@ let
   # General description of package
   package = haskellPackages.developPackage {
     name = "dummy";
+    # Do not include into closure the files listed in .gitignore
     root = pkgs.nix-gitignore.gitignoreSource [ ] ./.;
 
     modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
