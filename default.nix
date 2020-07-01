@@ -191,7 +191,7 @@ let
     ];
 
   # Function that applies enabled option to the package, used in the fold.
-  funcOnSwitchAppliesFunction = set: object:
+  onSwitchApplyFunc = set: object:
     if set.switch
       then set.function object
       else object;
@@ -239,7 +239,7 @@ let
   # One part of Haskell.lib options are argument switches, those are in `inherit`ed list.
   # Other part - are function wrappers over pkg. Fold allows to compose those.
   # composePackage = foldr (if switch then function) (package) ([{switch,function}]) == (functionN .. (function1 package))
-  composedPackage = pkgs.lib.foldr (funcOnSwitchAppliesFunction) package listOfSetsOfSwitchExtend;
+  composedPackage = pkgs.lib.foldr (onSwitchApplyFunc) package listOfSetsOfSwitchExtend;
 
 in composedPackage
 
