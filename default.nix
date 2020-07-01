@@ -89,7 +89,7 @@
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
-    then abort "hnix requires at least nix 2.0"
+    then abort "Requires at least nix 2.0"
     else
       if useRev
         # Please do not guard with hash, so the package able to use current channels (rolling `rev`) of Haskell&Nixpkgs
