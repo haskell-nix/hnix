@@ -98,13 +98,6 @@
       // {
         # Try to build dependencies even if they are marked broken.
         config.allowBroken = true;
-      # config.packageOverrides = pkgs: rec {
-      #   nix = pkgs.nixStable.overrideDerivation (attrs: with pkgs; rec {
-      #     src = if builtins.pathExists ./data/nix/.version
-      #           then data/nix
-      #           else throw "data/nix doesn't seem to contain the nix source. You may want to run git submodule update --init.";
-      #   });
-      # };
       }
 
 , mkDerivation   ? null
