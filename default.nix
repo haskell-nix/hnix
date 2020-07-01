@@ -96,6 +96,7 @@
         then import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz") {}
         else import <nixpkgs> {}
       // {
+        # Try to build dependencies even if they are marked broken.
         config.allowBroken = true;
       # config.packageOverrides = pkgs: rec {
       #   nix = pkgs.nixStable.overrideDerivation (attrs: with pkgs; rec {
