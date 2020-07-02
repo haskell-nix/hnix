@@ -36,6 +36,7 @@ import           Nix.Scope
 import qualified Nix.Type.Env                  as Env
 import           Nix.Type.Infer
 import           Nix.Utils
+import           Nix.Value.Monad                (demand)
 
 import           Control.Comonad
 import qualified Data.List
@@ -55,6 +56,12 @@ import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
 
+import           System.Console.Haskeline.Completion
+                                                ( Completion(isFinished)
+                                                , completeWordWithPrev
+                                                , simpleCompletion
+                                                , listFiles
+                                                )
 import           System.Console.Repline         ( Cmd
                                                 , CompletionFunc
                                                 , CompleterStyle (Prefix)
@@ -81,7 +88,7 @@ main' iniVal = initState iniVal >>= \s -> flip evalStateT s
         options
         (Just commandPrefix)
         (Just "paste")
-        completer
+        completion
         (rcFile >> greeter)
         finalizer
  where
@@ -325,18 +332,89 @@ setConfig args = case words args of
 defaultMatcher :: MonadIO m => [(String, CompletionFunc m)]
 defaultMatcher =
   [ (":load", System.Console.Repline.fileCompleter)
-  --, (":type"  , values)
   ]
 
--- Default tab completer
-comp :: Monad m => WordCompleter m
-comp n = do
-  let cmds = [":load", ":type", ":browse", ":quit"]
-  -- Env.TypeEnv ctx <- gets tyctx
-  -- let defs = map Data.Text.unpack $ Map.keys ctx
-  return $ filter (Data.List.isPrefixOf n) (cmds
-    -- ++ defs
-    )
+completion
+  :: (MonadNix e t f m, MonadIO m)
+  => CompleterStyle (StateT (IState t f m) m)
+completion = System.Console.Repline.Prefix
+  (completeWordWithPrev (Just '\\') separators completeFunc)
+  defaultMatcher
+  where
+    separators :: String
+    separators = " \t[(,=+*&|}#?>:"
+
+-- | Main completion function
+--
+-- Heavily inspired by Dhall Repl, with `algebraicComplete`
+-- adjusted to monadic variant able to `demand` thunks.
+completeFunc
+  :: forall e t f m . (MonadNix e t f m, MonadIO m)
+  => String
+  -> String
+  -> (StateT (IState t f m) m) [Completion]
+completeFunc reversedPrev word
+  -- Commands
+  | reversedPrev == ":"
+  = pure . listCompletion
+      $ map helpOptionName (helpOptions :: HelpOptions e t f m)
+
+  -- Files
+  | any (`Data.List.isPrefixOf` word) [ "/", "./", "../", "~/" ]
+  = listFiles word
+
+  -- Attributes of sets in REPL context
+  | var : subFields <- Data.Text.split (== '.') (Data.Text.pack word)
+  , not $ null subFields
+  = do
+    s <- get
+    case Data.HashMap.Lazy.lookup var (replCtx s) of
+      Nothing -> pure []
+      Just binding -> do
+        candidates <- lift $ algebraicComplete subFields binding
+        pure
+          $ map notFinished
+          $ listCompletion (Data.Text.unpack . (var <>) <$> candidates)
+
+  -- Builtins, context variables
+  | otherwise
+  = do
+    s <- get
+    let contextKeys = Data.HashMap.Lazy.keys (replCtx s)
+        (Just (NVSet builtins _)) = Data.HashMap.Lazy.lookup "builtins" (replCtx s)
+        shortBuiltins = Data.HashMap.Lazy.keys builtins
+
+    pure $ listCompletion
+      $ ["__includes"]
+      ++ (Data.Text.unpack <$> contextKeys)
+      ++ (Data.Text.unpack <$> shortBuiltins)
+
+  where
+    listCompletion = map simpleCompletion . filter (word `Data.List.isPrefixOf`)
+
+    notFinished x = x { isFinished = False }
+
+    algebraicComplete :: (MonadNix e t f m)
+                      => [Text]
+                      -> NValue t f m
+                      -> m [Text]
+    algebraicComplete subFields val =
+      let keys = fmap ("." <>) . Data.HashMap.Lazy.keys
+          withMap m =
+            case subFields of
+              [] -> pure $ keys m
+              -- Stop on last subField (we care about the keys at this level)
+              [_] -> pure $ keys m
+              f:fs ->
+                case Data.HashMap.Lazy.lookup f m of
+                  Nothing -> pure []
+                  Just e ->
+                    (demand e)
+                    (\e' -> fmap (("." <> f) <>) <$> algebraicComplete fs e')
+
+      in case val of
+        NVSet xs _ -> withMap xs
+        _          -> pure []
 
 -- HelpOption inspired by Dhall Repl
 -- with `Doc` instead of String for syntax and doc
@@ -468,8 +546,3 @@ options
   :: (MonadNix e t f m, MonadIO m)
   => System.Console.Repline.Options (Repl e t f m)
 options = (\h -> (helpOptionName h, helpOptionFunction h)) <$> helpOptions
-
-completer
-  :: (MonadNix e t f m, MonadIO m)
-  => CompleterStyle (StateT (IState t f m) m)
-completer = Prefix (System.Console.Repline.wordCompleter comp) defaultMatcher
