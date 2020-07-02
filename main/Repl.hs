@@ -14,6 +14,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
@@ -38,6 +39,7 @@ import           Nix.Utils
 
 import           Control.Comonad
 import qualified Data.List
+import qualified Data.Maybe
 import qualified Data.HashMap.Lazy
 import           Data.Text                      (Text)
 import qualified Data.Text
@@ -72,7 +74,7 @@ main = main' Nothing
 --
 -- Passed value is stored in context with "input" key.
 main' :: (MonadNix e t f m, MonadIO m, MonadMask m) => Maybe (NValue t f m) -> m ()
-main' iniVal = flip evalStateT (initState iniVal)
+main' iniVal = initState iniVal >>= \s -> flip evalStateT s
     $ System.Console.Repline.evalRepl
         banner
         cmd
@@ -132,15 +134,45 @@ main' iniVal = flip evalStateT (initState iniVal)
 data IState t f m = IState
   { replIt  :: Maybe NExprLoc          -- ^ Last expression entered
   , replCtx :: AttrSet (NValue t f m)  -- ^ Value environment
-  , replDbg :: Bool                    -- ^ Enable REPL debug output, dumping IState on each command
+  , replCfg :: ReplConfig              -- ^ REPL configuration
   } deriving (Eq, Show)
 
-initState :: MonadIO m => Maybe (NValue t f m) -> IState t f m
-initState mIni =
-  IState
+data ReplConfig = ReplConfig
+  { cfgDebug  :: Bool
+  , cfgStrict :: Bool
+  , cfgValues :: Bool
+  } deriving (Eq, Show)
+
+defReplConfig :: ReplConfig
+defReplConfig = ReplConfig
+  { cfgDebug  = False
+  , cfgStrict = False
+  , cfgValues = False
+  }
+
+-- | Create initial IState for REPL
+initState :: MonadNix e t f m => Maybe (NValue t f m) -> m (IState t f m)
+initState mIni = do
+
+  builtins <- evalText "builtins"
+
+  opts :: Nix.Options <- asks (view hasLens)
+
+  pure $ IState
     Nothing
-    (maybe mempty (\x -> Data.HashMap.Lazy.fromList [("input", x)]) mIni)
-    False
+    (Data.HashMap.Lazy.fromList
+      $ ("builtins", builtins) : fmap ("input",) (Data.Maybe.maybeToList mIni))
+    defReplConfig
+      { cfgStrict = strict opts
+      , cfgValues = values opts
+      }
+  where
+    evalText :: (MonadNix e t f m) => Text -> m (NValue t f m)
+    evalText expr = case parseNixTextLoc expr of
+      Failure e -> error $ "Impossible happened: Unable to parse expression - '" ++ (Data.Text.unpack expr) ++ "' error was " ++ show e
+      Success e -> do
+        value <- evalExprLoc e
+        pure value
 
 type Repl e t f m = HaskelineT (StateT (IState t f m) m)
 
@@ -158,7 +190,7 @@ exec update source = do
   -- Get the current interpreter state
   st <- get
 
-  when (replDbg st) $ liftIO $ print st
+  when (cfgDebug $ replCfg st) $ liftIO $ print st
 
   -- Parser ( returns AST as `NExprLoc` )
   case parseExprOrBinding source of
@@ -219,12 +251,13 @@ cmd source = do
 printValue :: (MonadNix e t f m, MonadIO m)
            => NValue t f m
            -> Repl e t f m ()
-printValue val = lift $ lift $ do
-  opts :: Nix.Options <- asks (view hasLens)
-  if
-    | strict opts -> liftIO . print . prettyNValue =<< normalForm val
-    | values opts -> liftIO . print . prettyNValueProv =<< removeEffects val
-    | otherwise   -> liftIO . print . prettyNValue =<< removeEffects val
+printValue val = do
+  cfg <- replCfg <$> get
+  lift $ lift $ do
+    if
+      | cfgStrict cfg -> liftIO . print . prettyNValue =<< normalForm val
+      | cfgValues cfg -> liftIO . print . prettyNValueProv =<< removeEffects val
+      | otherwise     -> liftIO . print . prettyNValue =<< removeEffects val
 
 -------------------------------------------------------------------------------
 -- Commands
@@ -275,9 +308,14 @@ typeof args = do
 quit :: (MonadNix e t f m, MonadIO m) => a -> Repl e t f m ()
 quit _ = liftIO System.Exit.exitSuccess
 
--- :debug command
-debug :: (MonadNix e t f m, MonadIO m) => a -> Repl e t f m ()
-debug _ = modify (\x -> x { replDbg = True })
+-- :set command
+setConfig :: (MonadNix e t f m, MonadIO m) => String -> Repl e t f m ()
+setConfig args = case words args of
+  []       -> liftIO $ putStrLn "No option to set specified"
+  (x:_xs)  ->
+    case filter ((==x) . helpSetOptionName) helpSetOptions of
+      [opt] -> modify (\s -> s { replCfg = helpSetOptionFunction opt (replCfg s) })
+      _     -> liftIO $ putStrLn "No such option"
 
 -------------------------------------------------------------------------------
 -- Interactive Shell
@@ -344,11 +382,69 @@ helpOptions =
       "Quit interpreter"
       quit
   , HelpOption
+      "set"
+      ""
+      (    "Set REPL option"
+        <> Data.Text.Prettyprint.Doc.line
+        <> "Available options:"
+        <> Data.Text.Prettyprint.Doc.line
+        <> (renderSetOptions helpSetOptions)
+      )
+      setConfig
+  ]
+
+-- Options for :set
+data HelpSetOption = HelpSetOption
+  { helpSetOptionName     :: String
+  , helpSetOptionSyntax   :: Doc ()
+  , helpSetOptionDoc      :: Doc ()
+  , helpSetOptionFunction :: ReplConfig -> ReplConfig
+  }
+
+helpSetOptions :: [HelpSetOption]
+helpSetOptions =
+  [ HelpSetOption
+      "strict"
+      ""
+      "Enable strict evaluation of REPL expressions"
+      (\x -> x { cfgStrict = True})
+  , HelpSetOption
+      "lazy"
+      ""
+      "Disable strict evaluation of REPL expressions"
+      (\x -> x { cfgStrict = False})
+  , HelpSetOption
+      "values"
+      ""
+      "Enable printing of value provenance information"
+      (\x -> x { cfgValues = True})
+  , HelpSetOption
+      "novalues"
+      ""
+      "Disable printing of value provenance information"
+      (\x -> x { cfgValues = False})
+  , HelpSetOption
       "debug"
       ""
-      "Enable REPL debugging output"
-      debug
+      "Enable printing of REPL debug information"
+      (\x -> x { cfgDebug = True})
+  , HelpSetOption
+      "nodebug"
+      ""
+      "Disable REPL debugging"
+      (\x -> x { cfgDebug = False})
   ]
+
+renderSetOptions :: [HelpSetOption] -> Doc ()
+renderSetOptions so =
+  Data.Text.Prettyprint.Doc.indent 4
+    $ Data.Text.Prettyprint.Doc.vsep
+    $ flip map so
+    $ \h ->
+             Data.Text.Prettyprint.Doc.pretty (helpSetOptionName h)
+         <+> helpSetOptionSyntax h
+         <>  Data.Text.Prettyprint.Doc.line
+         <>  Data.Text.Prettyprint.Doc.indent 4 (helpSetOptionDoc h)
 
 help :: (MonadNix e t f m, MonadIO m)
      => HelpOptions e t f m
