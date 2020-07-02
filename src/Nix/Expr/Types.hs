@@ -24,7 +24,10 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 
--- | The nix expression type and supporting types.
+-- | The Nix expression type and supporting types.
+--
+-- For a brief introduction of the Nix expression language, see
+-- <https://nixos.org/nix/manual/#ch-expression-language>.
 module Nix.Expr.Types where
 
 #ifdef MIN_VERSION_serialise
@@ -83,45 +86,84 @@ instance Hashable1 NonEmpty
 -- below.
 data NExprF r
   = NConstant !NAtom
-  -- ^ Constants: ints, bools, URIs, and null.
+  -- ^ Constants: ints, floats, bools, URIs, and null.
   | NStr !(NString r)
   -- ^ A string, with interpolated expressions.
   | NSym !VarName
   -- ^ A variable. For example, in the expression @f a@, @f@ is represented
   -- as @NSym "f"@ and @a@ as @NSym "a"@.
+  --
+  -- > NSym "x"                                    ~  x
   | NList ![r]
   -- ^ A list literal.
+  --
+  -- > NList [x,y]                                 ~  [ x y ]
   | NSet !NRecordType ![Binding r]
   -- ^ An attribute set literal
+  --
+  -- > NSet NRecursive    [NamedVar x y _]         ~  rec { x = y; }
+  -- > NSet NNonRecursive [Inherit Nothing [x] _]  ~  { inherit x; }
   | NLiteralPath !FilePath
   -- ^ A path expression, which is evaluated to a store path. The path here
   -- can be relative, in which case it's evaluated relative to the file in
   -- which it appears.
+  --
+  -- > NLiteralPath "/x"                           ~  /x
+  -- > NLiteralPath "x/y"                          ~  x/y
   | NEnvPath !FilePath
   -- ^ A path which refers to something in the Nix search path (the NIX_PATH
   -- environment variable. For example, @<nixpkgs/pkgs>@.
+  --
+  -- > NEnvPath "x"                                ~  <x>
   | NUnary !NUnaryOp !r
   -- ^ Application of a unary operator to an expression.
+  --
+  -- > NUnary NNeg x                               ~  - x
+  -- > NUnary NNot x                               ~  ! x
   | NBinary !NBinaryOp !r !r
   -- ^ Application of a binary operator to two expressions.
+  --
+  -- > NBinary NPlus x y                           ~  x + y
+  -- > NBinary NApp  f x                           ~  f x
   | NSelect !r !(NAttrPath r) !(Maybe r)
   -- ^ Dot-reference into an attribute set, optionally providing an
   -- alternative if the key doesn't exist.
+  --
+  -- > NSelect s (x :| []) Nothing                 ~  s.x
+  -- > NSelect s (x :| []) (Just y)                ~  s.x or y
   | NHasAttr !r !(NAttrPath r)
   -- ^ Ask if a set contains a given attribute path.
+  --
+  -- > NHasAttr s (x :| [])                        ~  s ? x
   | NAbs !(Params r) !r
   -- ^ A function literal (lambda abstraction).
+  --
+  -- > NAbs (Param "x") y                          ~  x: y
   | NLet ![Binding r] !r
   -- ^ Evaluate the second argument after introducing the bindings.
+  --
+  -- > NLet []                    x                ~  let in x
+  -- > NLet [NamedVar x y _]      z                ~  let x = y; in z
+  -- > NLet [Inherit Nothing x _] y                ~  let inherit x; in y
   | NIf !r !r !r
   -- ^ If-then-else statement.
+  --
+  -- > NIf x y z                                   ~  if x then y else z
   | NWith !r !r
   -- ^ Evaluate an attribute set, bring its bindings into scope, and
   -- evaluate the second argument.
+  --
+  -- > NWith x y                                   ~  with x; y
   | NAssert !r !r
-  -- ^ Assert that the first returns true before evaluating the second.
+  -- ^ Assert that the first returns @true@ before evaluating the second.
+  --
+  -- > NAssert x y                                 ~  assert x; y
   | NSynHole !VarName
-  -- ^ Syntactic hole, e.g. @^foo@ , @^hole_name@
+  -- ^ Syntactic hole.
+  --
+  -- See <https://github.com/haskell-nix/hnix/issues/197> for context.
+  --
+  -- > NSynHole "x"                                ~  ^x
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
             Foldable, Traversable, Show, NFData, Hashable)
 
@@ -154,13 +196,18 @@ instance Serialise NExpr
 -- | A single line of the bindings section of a let expression or of a set.
 data Binding r
   = NamedVar !(NAttrPath r) !r !SourcePos
-  -- ^ An explicit naming, such as @x = y@ or @x.y = z@.
+  -- ^ An explicit naming.
+  --
+  -- > NamedVar (StaticKey "x" :| [StaticKey "y"]) z SourcePos{}  ~  x.y = z;
   | Inherit !(Maybe r) ![NKeyName r] !SourcePos
   -- ^ Using a name already in scope, such as @inherit x;@ which is shorthand
   --   for @x = x;@ or @inherit (x) y;@ which means @y = x.y;@. The
-  --   unsafeGetAttrPos for every name so inherited is the position of the
+  --   @unsafeGetAttrPos@ for every name so inherited is the position of the
   --   first name, whether that be the first argument to this constructor, or
   --   the first member of the list in the second argument.
+  --
+  -- > Inherit Nothing  [StaticKey "x"] SourcePos{}               ~  inherit x;
+  -- > Inherit (Just x) []              SourcePos{}               ~  inherit (x);
   deriving (Generic, Generic1, Typeable, Data, Ord, Eq, Functor,
             Foldable, Traversable, Show, NFData, Hashable)
 
@@ -177,10 +224,15 @@ instance Serialise r => Serialise (Binding r)
 data Params r
   = Param !VarName
   -- ^ For functions with a single named argument, such as @x: x + 1@.
+  --
+  -- > Param "x"                                  ~  x
   | ParamSet !(ParamSet r) !Bool !(Maybe VarName)
   -- ^ Explicit parameters (argument must be a set). Might specify a name to
   -- bind to the set in the function body. The bool indicates whether it is
   -- variadic or not.
+  --
+  -- > ParamSet [("x",Nothing)] False Nothing     ~  { x }
+  -- > ParamSet [("x",Just y)]  True  (Just "s")  ~  s@{ x ? y, ... }
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Show,
             Foldable, Traversable, NFData, Hashable)
 
@@ -201,7 +253,17 @@ instance IsString (Params r) where
 
 -- | 'Antiquoted' represents an expression that is either
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
-data Antiquoted (v :: *) (r :: *) = Plain !v | EscapedNewline | Antiquoted !r
+data Antiquoted (v :: *) (r :: *)
+  = Plain !v
+  | EscapedNewline
+  -- ^ 'EscapedNewline' corresponds to the special newline form
+  --
+  -- > ''\n
+  --
+  -- in an indented string. It is equivalent to a single newline character:
+  --
+  -- > ''''\n''  ≡  "\n"
+  | Antiquoted !r
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Foldable,
             Traversable, Show, Read, NFData, Hashable)
 
@@ -226,10 +288,20 @@ data NString r
   = DoubleQuoted ![Antiquoted Text r]
   -- ^ Strings wrapped with double-quotes (") can contain literal newline
   -- characters, but the newlines are preserved and no indentation is stripped.
+  --
+  -- > DoubleQuoted [Plain "x",Antiquoted y]   ~  "x${y}"
   | Indented !Int ![Antiquoted Text r]
   -- ^ Strings wrapped with two single quotes ('') can contain newlines, and
   --   their indentation will be stripped, but the amount stripped is
   --   remembered.
+  --
+  -- > Indented 1 [Plain "x"]                  ~  '' x''
+  -- >
+  -- > Indented 0 [EscapedNewline]             ~  ''''\n''
+  -- >
+  -- > Indented 0 [Plain "x\n ",Antiquoted y]  ~  ''
+  -- >                                            x
+  -- >                                             ${y}''
   deriving (Eq, Ord, Generic, Generic1, Typeable, Data, Functor, Foldable,
             Traversable, Show, Read, NFData, Hashable)
 
@@ -267,7 +339,13 @@ instance IsString (NString r) where
 -- parser still considers it a 'DynamicKey' for simplicity.
 data NKeyName r
   = DynamicKey !(Antiquoted (NString r) r)
+  -- ^
+  -- > DynamicKey (Plain (DoubleQuoted [Plain "x"]))     ~  "x"
+  -- > DynamicKey (Antiquoted x)                         ~  ${x}
+  -- > DynamicKey (Plain (DoubleQuoted [Antiquoted x]))  ~  "${x}"
   | StaticKey !VarName
+  -- ^
+  -- > StaticKey "x"                                     ~  x
   deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData, Hashable)
 
 #ifdef MIN_VERSION_serialise
@@ -347,10 +425,14 @@ instance Traversable NKeyName where
 
 -- | A selector (for example in a @let@ or an attribute set) is made up
 -- of strung-together key names.
+--
+-- > StaticKey "x" :| [DynamicKey (Antiquoted y)]  ~  x.${y}
 type NAttrPath r = NonEmpty (NKeyName r)
 
 -- | There are two unary operations: logical not and integer negation.
-data NUnaryOp = NNeg | NNot
+data NUnaryOp
+  = NNeg  -- ^ @-@
+  | NNot  -- ^ @!@
   deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
             NFData, Hashable)
 
@@ -360,22 +442,24 @@ instance Serialise NUnaryOp
 
 -- | Binary operators expressible in the nix language.
 data NBinaryOp
-  = NEq      -- ^ Equality (==)
-  | NNEq     -- ^ Inequality (!=)
-  | NLt      -- ^ Less than (<)
-  | NLte     -- ^ Less than or equal (<=)
-  | NGt      -- ^ Greater than (>)
-  | NGte     -- ^ Greater than or equal (>=)
-  | NAnd     -- ^ Logical and (&&)
-  | NOr      -- ^ Logical or (||)
-  | NImpl    -- ^ Logical implication (->)
-  | NUpdate  -- ^ Joining two attribute sets (//)
-  | NPlus    -- ^ Addition (+)
-  | NMinus   -- ^ Subtraction (-)
-  | NMult    -- ^ Multiplication (*)
-  | NDiv     -- ^ Division (/)
-  | NConcat  -- ^ List concatenation (++)
+  = NEq      -- ^ Equality (@==@)
+  | NNEq     -- ^ Inequality (@!=@)
+  | NLt      -- ^ Less than (@<@)
+  | NLte     -- ^ Less than or equal (@<=@)
+  | NGt      -- ^ Greater than (@>@)
+  | NGte     -- ^ Greater than or equal (@>=@)
+  | NAnd     -- ^ Logical and (@&&@)
+  | NOr      -- ^ Logical or (@||@)
+  | NImpl    -- ^ Logical implication (@->@)
+  | NUpdate  -- ^ Joining two attribute sets (@//@)
+  | NPlus    -- ^ Addition (@+@)
+  | NMinus   -- ^ Subtraction (@-@)
+  | NMult    -- ^ Multiplication (@*@)
+  | NDiv     -- ^ Division (@/@)
+  | NConcat  -- ^ List concatenation (@++@)
   | NApp     -- ^ Apply a function to an argument.
+             --
+             -- > NBinary NApp f x  ~  f x
   deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
             NFData, Hashable)
 
@@ -383,9 +467,11 @@ data NBinaryOp
 instance Serialise NBinaryOp
 #endif
 
+-- | 'NRecordType' distinguishes between recursive and non-recursive attribute
+-- sets.
 data NRecordType
-  = NNonRecursive
-  | NRecursive
+  = NNonRecursive  -- ^ >     { ... }
+  | NRecursive     -- ^ > rec { ... }
   deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
             NFData, Hashable)
 
@@ -422,10 +508,10 @@ $(deriveShow1 ''Binding)
 $(deriveShow1 ''Antiquoted)
 $(deriveShow2 ''Antiquoted)
 
--- $(deriveJSON1 defaultOptions ''NExprF)
+--x $(deriveJSON1 defaultOptions ''NExprF)
 $(deriveJSON1 defaultOptions ''NString)
 $(deriveJSON1 defaultOptions ''Params)
--- $(deriveJSON1 defaultOptions ''Binding)
+--x $(deriveJSON1 defaultOptions ''Binding)
 $(deriveJSON1 defaultOptions ''Antiquoted)
 $(deriveJSON2 defaultOptions ''Antiquoted)
 
@@ -483,7 +569,7 @@ $(makeTraversals ''NKeyName)
 $(makeTraversals ''NUnaryOp)
 $(makeTraversals ''NBinaryOp)
 
--- $(makeLenses ''Fix)
+--x $(makeLenses ''Fix)
 
 class NExprAnn ann g | g -> ann where
     fromNExpr :: g r -> (NExprF r, ann)
