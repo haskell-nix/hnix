@@ -140,7 +140,7 @@ data Builtin v = Builtin
 builtinsList :: forall e t f m . MonadNix e t f m => m [Builtin (NValue t f m)]
 builtinsList = sequence
   [ do
-    version <- toValue (principledMakeNixStringWithoutContext "2.0")
+    version <- toValue (principledMakeNixStringWithoutContext "2.3")
     pure $ Builtin Normal ("nixVersion", version)
   , do
     version <- toValue (5 :: Int)
