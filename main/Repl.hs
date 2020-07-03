@@ -18,9 +18,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
-{-# OPTIONS_GHC -Wno-unused-matches #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
-
 module Repl
   ( main
   , main'
@@ -29,16 +26,10 @@ module Repl
 import           Nix                     hiding ( exec
                                                 , try
                                                 )
-import           Nix.Cited
-import           Nix.Convert
-import           Nix.Eval
 import           Nix.Scope
-import qualified Nix.Type.Env                  as Env
-import           Nix.Type.Infer
 import           Nix.Utils
 import           Nix.Value.Monad                (demand)
 
-import           Control.Comonad
 import qualified Data.List
 import qualified Data.Maybe
 import qualified Data.HashMap.Lazy
@@ -67,7 +58,6 @@ import           System.Console.Repline         ( Cmd
                                                 , CompleterStyle (Prefix)
                                                 , ExitDecision(Exit)
                                                 , HaskelineT
-                                                , WordCompleter
                                                 )
 import qualified System.Console.Repline
 import qualified System.Exit
@@ -208,8 +198,11 @@ exec update source = do
 
       -- Type Inference ( returns Typing Environment )
       --
-      --let tyctx' = inferTop Env.empty [("repl", stripAnnotation expr)]
-      --liftIO $ print tyctx'
+      -- import qualified Nix.Type.Env                  as Env
+      -- import           Nix.Type.Infer
+      --
+      -- let tyctx' = inferTop Env.empty [("repl", stripAnnotation expr)]
+      -- liftIO $ print tyctx'
 
       mVal <- lift $ lift $ try $ pushScope (replCtx st) (evalExprLoc expr)
 
