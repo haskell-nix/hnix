@@ -54,4 +54,4 @@ jobs:
     - uses: cachix/install-nix-action@v10
       with:
         nix_path: nixpkgs=channel:nixpkgs-unstable
-    - run: nix-build
+    - run: ./build.sh
