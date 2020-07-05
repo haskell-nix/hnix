@@ -42,7 +42,7 @@ env:
   doBenchmark: "false"
   generateOptparseApplicativeCompletions: "false"
   executableNamesToShellComplete: '[ "replaceWithExecutableName" ]'
-  # placeholder
+  #
   ghcjsTmpLogFile: "/tmp/ghcjsTmpLogFile.log"
   ghcjsLogTailLength: "10000"
 
@@ -50,7 +50,7 @@ jobs:
   Basic_build:
     runs-on: ubuntu-latest
     steps:
-    - name: Clone Git repo
+    - name: Import Git checkout
       uses: actions/checkout@v2
     - name: Install Nix
       uses: cachix/install-nix-action@v10
