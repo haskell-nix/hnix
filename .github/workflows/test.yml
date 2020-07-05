@@ -47,7 +47,7 @@ env:
   ghcjsLogTailLength: "10000"
 
 jobs:
-  tests:
+  Basic_build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
