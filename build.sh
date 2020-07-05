@@ -19,7 +19,7 @@ rev=${rev:-'nixpkgs-unstable'}
 NIX_PATH=${NIX_PATH:-"nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"}
 export NIX_PATH
 # Project name, used by cachix
-project=${project:-'defaultProjectName'}
+project=${project:-'replaceWithProjectNameInCachix'}
 
 
 allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}

@@ -14,7 +14,7 @@ env:
   #
   # - rev: nixos-unstable
   # - NIX_PATH: "nixpkgs: https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"
-  project: "hnix"
+  project: "replaceWithProjectNameInCachix"
   allowInconsistentDependencies: "false"
   doJailbreak: "false"
   doCheck: "true"
