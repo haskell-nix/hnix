@@ -13,7 +13,6 @@ set -Eexuo pipefail
 
 
 # NOTE: If vars not imported - init the vars with default values
-#  2020-07-05: By default using default GHC for Nixpkgs, see https://search.nixos.org/packages?query=ghc&from=0&size=500&channel=unstable for current version (currently ghc883 == GHC 8.8.3)
 compiler=${compiler:-'ghc883'}
 rev=${rev:-'nixpkgs-unstable'}
 # If NIX_PATH not imported - construct it from `rev`

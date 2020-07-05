@@ -1,5 +1,6 @@
 {
 # Compiler in a form ghc8101 == GHC 8.10.1, just remove spaces and dots
+#  2020-07-05: By default using default GHC for Nixpkgs, see https://search.nixos.org/packages?query=ghc&from=0&size=500&channel=unstable for current version (currently ghc883 == GHC 8.8.3)
   compiler    ? "ghc883"
 
 # This settings expose most of the Nixpkgs Haskell.lib API: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
