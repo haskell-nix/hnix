@@ -190,7 +190,7 @@ MAIN() {
 
 # Overall it is useful to have in CI test builds the latest stable Nix
 # 2020-06-24: HACK: Do not ask why different commands on Linux and macOS. IDK, wished they we the same. These are the only commands that worked on according platforms right after the fresh Nix installer rollout.
-(nix-channel --update && nix-env -iA nixpkgs.nix) || (sudo nix upgrade-nix)
+(nix-channel --update && nix-env -u) || (sudo nix upgrade-nix)
 
 
 # Report the Nixpkgs channel revision
