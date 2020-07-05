@@ -2,6 +2,50 @@ name: "CI"
 on:
   pull_request:
   push:
+
+env:
+  ###
+  ### NOTE: This configuration uses `build.sh` interface, which uses `default.nix` interface, which exposes the Nixpkgs Haskell Lib interface.
+  ###
+  ### Documentation of this settings is mosly in `default.nix`, since most settings it Nixpkgs related
+  ### and the other part of keys explained in `build.sh`, since those address external procedures aound the builds.
+  ### Additional documentation is in Nixpkgs Haskell.lib: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
+  ###
+  #
+  # - rev: nixos-unstable
+  # - NIX_PATH: "nixpkgs: https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"
+  project: "hnix"
+  allowInconsistentDependencies: "false"
+  doJailbreak: "false"
+  doCheck: "true"
+  sdistTarball: "false"
+  buildFromSdist: "false"
+  buildStrictly: "false"
+  failOnAllWarnings: "false"
+  enableDeadCodeElimination: "false"
+  disableOptimization: "true"
+  linkWithGold: "false"
+  enableLibraryProfiling: "false"
+  enableExecutableProfiling: "false"
+  doTracing: "false"
+  enableDWARFDebugging: "false"
+  doStrip: "false"
+  enableSharedLibraries: "true"
+  enableStaticLibraries: "false"
+  enableSharedExecutables: "false"
+  justStaticExecutables: "false"
+  enableSeparateBinOutput: "false"
+  checkUnusedPackages: "false"
+  doHaddock: "false"
+  doHyperlinkSource: "false"
+  doCoverage: "false"
+  doBenchmark: "false"
+  generateOptparseApplicativeCompletions: "false"
+  executableNamesToShellComplete: '[ "hnix" ]'
+  # placeholder
+  ghcjsTmpLogFile: "/tmp/ghcjsTmpLogFile.log"
+  ghcjsLogTailLength: "10000"
+
 jobs:
   tests:
     runs-on: ubuntu-latest
