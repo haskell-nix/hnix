@@ -55,7 +55,7 @@ doCoverage=${doCoverage:-'false'}
 doBenchmark=${doBenchmark:-'false'}
 generateOptparseApplicativeCompletions=${generateOptparseApplicativeCompletions:-'false'}
 # [ "binary1" "binary2" ] - should pass " quotes into Nix interpreter
-executableNamesToShellComplete=${executableNamesToShellComplete:-'[ "defaultBinaryName" ]'}
+executableNamesToShellComplete=${executableNamesToShellComplete:-'[ "replaceWithExecutableName" ]'}
 
 
 withHoogle=${withHoogle:-'false'}

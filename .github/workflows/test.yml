@@ -41,7 +41,7 @@ env:
   doCoverage: "false"
   doBenchmark: "false"
   generateOptparseApplicativeCompletions: "false"
-  executableNamesToShellComplete: '[ "hnix" ]'
+  executableNamesToShellComplete: '[ "replaceWithExecutableName" ]'
   # placeholder
   ghcjsTmpLogFile: "/tmp/ghcjsTmpLogFile.log"
   ghcjsLogTailLength: "10000"
