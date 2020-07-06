@@ -113,16 +113,3 @@ jobs:
       uses: cachix/install-nix-action@v10
     - name: Determined nix-build
       run: ./build.sh
-  Nixpkgs_unstable_macOS:
-    name: Nixpkgs, unstable, default (GHC 8.8), macOS
-    runs-on: macos-latest
-    continue-on-error: true
-    env:
-      rev: "nixpkgs-unstable"
-    steps:
-    - name: Git checkout
-      uses: actions/checkout@v2
-    - name: Install Nix
-      uses: cachix/install-nix-action@v10
-    - name: Determined nix-build
-      run: ./build.sh
