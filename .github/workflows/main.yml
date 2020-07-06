@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - master
+  schedule:
+    # Every day at 03:45
+    - cron: "45 03 * * *"
 
 env:
   ###
