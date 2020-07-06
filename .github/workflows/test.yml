@@ -99,3 +99,11 @@ jobs:
         nix_path: nixpkgs=channel:nixpkgs-unstable
     - name: Determined nix-build
       run: ./build.sh
+  Cabal_Hackage:
+    runs-on: ubuntu-latest # or macOS-latest, or windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-haskell@v1.1
+        with:
+          ghc-version: "8.10"
+          # cabal-version: "3.0.0.0"
