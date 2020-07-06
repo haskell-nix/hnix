@@ -62,6 +62,8 @@ env:
     - generateOptparseApplicativeCompletions='false'
     - executableNamesToShellComplete='[ "hnix" ]'
     #
+    - withHoogle='false'
+    #
     - ghcjsTmpLogFile='/tmp/ghcjsTmpLogFile.log'
     - ghcjsLogTailLength='10000'
 
