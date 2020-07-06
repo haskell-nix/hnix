@@ -16,14 +16,6 @@ set -Eexuo pipefail
 compiler=${compiler:-'ghc883'}
 useRev=${useRev:-'false'}
 rev=${rev:-'nixpkgs-unstable'}
-# If NIX_PATH not imported - construct it from `rev`
-if test "$useRev"
-  then
-    NIX_PATH="nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz:$NIX_PATH"
-  else
-    true
-fi
-export NIX_PATH
 # Account in Cachix to use
 cachixAccount=${cachixAccount:-'replaceWithProjectNameInCachix'}
 
