@@ -58,6 +58,7 @@ jobs:
   Nixpkgs_default_Linux:
     name: Nixpkgs, NixOS unstable channel, default (GHC 8.8), Linux
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
     - name: Git checkout
       uses: actions/checkout@v2
@@ -70,6 +71,7 @@ jobs:
   Nixpkgs_stable_Linux:
     name: Nixpkgs, NixOS stable channel, default (GHC 8.8), Linux
     runs-on: ubuntu-latest
+    continue-on-error: true
     env:
       rev: "nixos-20.03"
     steps:
@@ -84,6 +86,7 @@ jobs:
   Nixpkgs_SDist_Optimize_Benchmark_Haddock_GHC-8-10_Linux:
     name: Nixpkgs, SDist, Optimize, Benchmark, Haddock, GHC 8.10.1, Linux
     runs-on: ubuntu-latest
+    continue-on-error: true
     env:
       compiler: "ghc8101"
       buildFromSdist: "true"
@@ -106,6 +109,7 @@ jobs:
   Nixpkgs_GHCJS_Linux:
     name: Nixpkgs, GHCJS, Linux
     runs-on: ubuntu-latest
+    continue-on-error: true
     env:
       compiler: "ghcjs"
     steps:
@@ -120,6 +124,7 @@ jobs:
   Nixpkgs_default_macOS:
     name: Nixpkgs, default (GHC 8.8), macOS
     runs-on: macos-latest
+    continue-on-error: true
     steps:
     - name: Git checkout
       uses: actions/checkout@v2
@@ -132,6 +137,7 @@ jobs:
   Hackage_Cabal_GHC-8-10:
     name: Hackage, Cabal, GHC 8.10, Linux
     runs-on: ubuntu-latest # or macOS-latest, or windows-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-haskell@v1.1
