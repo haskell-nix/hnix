@@ -14,7 +14,7 @@ env:
   ### Additional documentation is in Nixpkgs Haskell.lib: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
   ###
   #
-  useRev: "false"
+  useRev: "true"
   rev: "nixos-unstable"
   cachixAccount: "replaceWithProjectNameInCachix"
   allowInconsistentDependencies: "false"
