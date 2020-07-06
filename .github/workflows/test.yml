@@ -108,3 +108,4 @@ jobs:
           ghc-version: "8.10"
           # cabal-version: "3.0.0.0"
       - run: cabal v2-configure
+      - run: cabal v2-build
