@@ -65,7 +65,7 @@ jobs:
     - name: Install Nix
       uses: cachix/install-nix-action@v10
       with:
-        nix_path: nixpkgs=channel:nixpkgs-unstable
+        nix_path: nixpkgs=channel:nixos-unstable
     - name: Determined nix-build
       run: ./build.sh
   Nixpkgs_stable_Linux:
@@ -80,7 +80,7 @@ jobs:
     - name: Install Nix
       uses: cachix/install-nix-action@v10
       with:
-        nix_path: nixpkgs=channel:nixpkgs-unstable
+        nix_path: nixpkgs=channel:nixos-unstable
     - name: Determined nix-build
       run: ./build.sh
   Nixpkgs_SDist_Optimize_Benchmark_Haddock_GHC-8-10_Linux:
@@ -103,7 +103,7 @@ jobs:
     - name: Install Nix
       uses: cachix/install-nix-action@v10
       with:
-        nix_path: nixpkgs=channel:nixpkgs-unstable
+        nix_path: nixpkgs=channel:nixos-unstable
     - name: Determined nix-build
       run: ./build.sh
   Nixpkgs_GHCJS_Linux:
@@ -118,7 +118,7 @@ jobs:
     - name: Install Nix
       uses: cachix/install-nix-action@v10
       with:
-        nix_path: nixpkgs=channel:nixpkgs-unstable
+        nix_path: nixpkgs=channel:nixos-unstable
     - name: Determined nix-build
       run: ./build.sh
   Nixpkgs_unstable_macOS:
@@ -133,6 +133,6 @@ jobs:
     - name: Install Nix
       uses: cachix/install-nix-action@v10
       with:
-        nix_path: nixpkgs=channel:nixpkgs-unstable
+        nix_path: nixpkgs=channel:nixos-unstable
     - name: Determined nix-build
       run: ./build.sh
