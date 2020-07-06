@@ -51,7 +51,7 @@ env:
 
 jobs:
   build10:
-    name: Nixpkgs-unstable channel, default GHC (8.8.3)
+    name: "Nixpkgs-unstable channel, default GHC (8.8.3)"
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
@@ -64,7 +64,7 @@ jobs:
     - name: Determined nix-build
       run: ./build.sh
   build20:
-    name: NixOS-unstable channel, Strict build, default GHC (8.8.3)
+    name: "NixOS-unstable channel, Strict build, default GHC (8.8.3)"
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
@@ -77,7 +77,7 @@ jobs:
     - name: Determined nix-build
       run: ./build.sh
   build30:
-    name: NixOS 20.03 stable channel, default GHC (8.8.3)
+    name: "NixOS 20.03 stable channel, default GHC (8.8.3)"
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
@@ -90,7 +90,7 @@ jobs:
     - name: Determined nix-build
       run: ./build.sh
   build40:
-    name: Release test, SDist, Optimize, Benchmark, Haddock, GHC 8.10.1
+    name: "Quality test, SDist, Optimization, Benchmark, Haddock, GHC 8.10.1"
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
@@ -111,7 +111,7 @@ jobs:
     - name: Determined nix-build
       run: ./build.sh
   build50:
-    name: NixOS-unstable channel, GHC 8.6.5
+    name: "NixOS-unstable channel, GHC 8.6.5"
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
@@ -124,7 +124,7 @@ jobs:
     - name: Determined nix-build
       run: ./build.sh
   build60:
-    name: NixOS-unstable channel, GHC 8.4.4
+    name: "NixOS-unstable channel, GHC 8.4.4"
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
