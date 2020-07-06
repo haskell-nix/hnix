@@ -134,9 +134,9 @@ jobs:
         nix_path: nixpkgs=channel:nixpkgs-unstable
     - name: Determined nix-build
       run: ./build.sh
-  Hackage_Cabal_GHC-8-10:
+  Hackage_Cabal_GHC-8-10_Linux:
     name: Hackage, Cabal, GHC 8.10, Linux
-    runs-on: ubuntu-latest # or macOS-latest, or windows-latest
+    runs-on: ubuntu-latest
     continue-on-error: true
     steps:
       - uses: actions/checkout@v2
