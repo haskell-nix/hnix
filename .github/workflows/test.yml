@@ -49,14 +49,14 @@ env:
   ghcjsLogTailLength: "10000"
 
 jobs:
-  Basic_build:
+  Linux_default:
     runs-on: ubuntu-latest
     steps:
-    - name: Import Git checkout
+    - name: Git checkout
       uses: actions/checkout@v2
     - name: Install Nix
       uses: cachix/install-nix-action@v10
       with:
         nix_path: nixpkgs=channel:nixpkgs-unstable
-    - name: Run determined nix-build
+    - name: Determined nix-build
       run: ./build.sh
