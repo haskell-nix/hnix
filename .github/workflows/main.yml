@@ -63,6 +63,20 @@ jobs:
         nix_path: nixpkgs=channel:nixpkgs-unstable
     - name: Determined nix-build
       run: ./build.sh
+  Nixpkgs_stable_Linux:
+    name: Nixpkgs, NixOS stable channel, default (GHC 8.8), Linux
+    runs-on: ubuntu-latest
+    env:
+      rev: "nixos-20.03"
+    steps:
+    - name: Git checkout
+      uses: actions/checkout@v2
+    - name: Install Nix
+      uses: cachix/install-nix-action@v10
+      with:
+        nix_path: nixpkgs=channel:nixpkgs-unstable
+    - name: Determined nix-build
+      run: ./build.sh
   Nixpkgs_SDist_Optimize_Benchmark_Haddock_GHC-8-10_Linux:
     name: Nixpkgs, SDist, Optimize, Benchmark, Haddock, GHC 8.10.1, Linux
     runs-on: ubuntu-latest
