@@ -1,6 +1,8 @@
 name: "CI"
 on:
+  # On Git changes in PR
   pull_request:
+  # On Git changes of the master
   push:
     branches:
       - master
@@ -16,7 +18,6 @@ env:
   ### and the other part of keys explained in `build.sh`, since those address external procedures aound the builds.
   ### Additional documentation is in Nixpkgs Haskell.lib: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
   ###
-  #
   useRev: "true"
   rev: "nixos-unstable"
   cachixAccount: "replaceWithProjectNameInCachix"
