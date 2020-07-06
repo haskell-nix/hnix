@@ -45,6 +45,8 @@ env:
   generateOptparseApplicativeCompletions: "false"
   executableNamesToShellComplete: '[ "replaceWithExecutableName" ]'
   #
+  withHoogle: "false"
+  #
   ghcjsTmpLogFile: "/tmp/ghcjsTmpLogFile.log"
   ghcjsLogTailLength: "10000"
 
