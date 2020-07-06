@@ -50,8 +50,8 @@ env:
   executableNamesToShellComplete: '[ "replaceWithExecutableName" ]'
 
 jobs:
-    name: Nixpkgs, NixOS unstable channel, default (GHC 8.8), Linux
   build10:
+    name: Nixpkgs-unstable channel, default GHC (8.8)
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -61,8 +61,8 @@ jobs:
       uses: cachix/install-nix-action@v10
     - name: Determined nix-build
       run: ./build.sh
-    name: Nixpkgs, NixOS stable channel, default (GHC 8.8), Linux
   build30:
+    name: NixOS 20.03 stable channel, default (GHC 8.8)
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
@@ -74,8 +74,8 @@ jobs:
       uses: cachix/install-nix-action@v10
     - name: Determined nix-build
       run: ./build.sh
-    name: Nixpkgs, SDist, Optimize, Benchmark, Haddock, GHC 8.10.1, Linux
   build40:
+    name: Custom: SDist, Optimize, Benchmark, Haddock, GHC 8.10.1
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
