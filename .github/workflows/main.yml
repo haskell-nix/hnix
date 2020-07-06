@@ -110,3 +110,16 @@ jobs:
       uses: cachix/install-nix-action@v10
     - name: Determined nix-build
       run: ./build.sh
+  build50:
+    name: NixOS-unstable channel, GHC 8.6.5
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      compiler: "ghc865"
+    steps:
+    - name: Git checkout
+      uses: actions/checkout@v2
+    - name: Install Nix
+      uses: cachix/install-nix-action@v10
+    - name: Determined nix-build
+      run: ./build.sh
