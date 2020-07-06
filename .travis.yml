@@ -33,7 +33,7 @@ env:
     #
     # - rev=nixos-unstable
     # - NIX_PATH="nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"
-    - project='hnix'
+    - cachixAccount='hnix'
     - allowInconsistentDependencies='false'
     - doJailbreak='false'
     - doCheck='true'
@@ -120,9 +120,9 @@ script:
   #
   # Install Cachix client using Nix:
   - if [ "${TRAVIS_OS_NAME}" = "linux" ] || [ "${TRAVIS_OS_NAME}" = "osx" ]; then nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
-  - cachix use "$project"
+  - cachix use "$cachixAccount"
   # If key is set - use Cachix push, else - proceed without it
-  - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push "$project" --watch-store& fi
+  - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push "$cachixAccount" --watch-store& fi
   #
   #
   # NOTE: Normal GHC build

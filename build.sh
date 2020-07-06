@@ -18,8 +18,8 @@ rev=${rev:-'nixpkgs-unstable'}
 # If NIX_PATH not imported - construct it from `rev`
 NIX_PATH=${NIX_PATH:-"nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"}
 export NIX_PATH
-# Project name, used by cachix
-project=${project:-'replaceWithProjectNameInCachix'}
+# Account in Cachix to use
+cachixAccount=${cachixAccount:-'replaceWithProjectNameInCachix'}
 
 
 allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
@@ -198,14 +198,14 @@ nix-instantiate --eval -E 'with import <nixpkgs> {}; lib.version or lib.nixpkgsV
 
 
 # Secrets are not shared to PRs from forks
-# nix-build | cachix push <project> - uploads binaries, runs&works only in the branches of the main repository, so for PRs - else case runs
+# nix-build | cachix push <account> - uploads binaries, runs&works only in the branches of the main repository, so for PRs - else case runs
 
   if [ ! "$CACHIX_SIGNING_KEY" = "" ]
 
     then
 
       # Build of the inside repo branch - enable push Cachix cache
-      BUILD_PROJECT | cachix push "$project"
+      BUILD_PROJECT | cachix push "$cachixAccount"
 
     else
 
