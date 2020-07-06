@@ -14,6 +14,7 @@ set -Eexuo pipefail
 
 # NOTE: If vars not imported - init the vars with default values
 compiler=${compiler:-'ghc883'}
+useRev=${useRev:-'false'}
 rev=${rev:-'nixpkgs-unstable'}
 # If NIX_PATH not imported - construct it from `rev`
 NIX_PATH=${NIX_PATH:-"nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"}

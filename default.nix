@@ -75,7 +75,7 @@
 
 
 , useRev ? false
-# Nix by default uses nixpkgs-unstable channel
+# Nix by default updates and uses locally configured nixpkgs-unstable channel
 # Nixpkgs revision options:
 #   `rev` vals in order of freshness -> cache & stability:
 #   { master
