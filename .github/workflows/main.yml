@@ -30,7 +30,7 @@ env:
   failOnAllWarnings: "false"
   enableDeadCodeElimination: "false"
   disableOptimization: "true"
-  linkWithGold: "false"
+  linkWithGold: "true"
   enableLibraryProfiling: "false"
   enableExecutableProfiling: "false"
   doTracing: "false"
