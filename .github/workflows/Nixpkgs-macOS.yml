@@ -11,7 +11,7 @@ on:
     # Every day at 04:45
     - cron: "45 01 * * *"
 jobs:
-  Nixpkgs_unstable_macOS:
+  build10:
     name: NixOS-unstable, default GHC (8.8)
     runs-on: macos-latest
     continue-on-error: true
