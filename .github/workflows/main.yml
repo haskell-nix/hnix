@@ -68,6 +68,14 @@ jobs:
     runs-on: ubuntu-latest
     env:
       compiler: "ghc8101"
+      buildFromSdist: "true"
+      linkWithGold: "true"
+      doHaddock: "true"
+      doHyperlinkSource: "true"
+      doBenchmark: "true"
+      disableOptimization: "false"
+      enableDeadCodeElimination: "true"
+      generateOptparseApplicativeCompletions: "false"
     steps:
     - name: Git checkout
       uses: actions/checkout@v2
