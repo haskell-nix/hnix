@@ -90,7 +90,7 @@ jobs:
     - name: Determined nix-build
       run: ./build.sh
   build40:
-    name: Custom: SDist, Optimize, Benchmark, Haddock, GHC 8.10.1
+    name: Release test, SDist, Optimize, Benchmark, Haddock, GHC 8.10.1
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
