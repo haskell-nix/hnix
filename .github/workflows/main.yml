@@ -54,6 +54,21 @@ jobs:
     name: Nixpkgs-unstable channel, default GHC (8.8)
     runs-on: ubuntu-latest
     continue-on-error: true
+    env:
+      rev: "nixpkgs-unstable"
+    steps:
+    - name: Git checkout
+      uses: actions/checkout@v2
+    - name: Install Nix
+      uses: cachix/install-nix-action@v10
+    - name: Determined nix-build
+      run: ./build.sh
+  build20:
+    name: NixOS-unstable channel, Strict build, default GHC (8.8)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      buildStrictly: "true"
     steps:
     - name: Git checkout
       uses: actions/checkout@v2
