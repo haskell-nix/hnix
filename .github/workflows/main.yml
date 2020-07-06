@@ -50,9 +50,6 @@ env:
   executableNamesToShellComplete: '[ "replaceWithExecutableName" ]'
   #
   withHoogle: "false"
-  #
-  ghcjsTmpLogFile: "/tmp/ghcjsTmpLogFile.log"
-  ghcjsLogTailLength: "10000"
 
 jobs:
   Nixpkgs_default_Linux:
@@ -93,19 +90,6 @@ jobs:
       disableOptimization: "false"
       enableDeadCodeElimination: "true"
       generateOptparseApplicativeCompletions: "false"
-    steps:
-    - name: Git checkout
-      uses: actions/checkout@v2
-    - name: Install Nix
-      uses: cachix/install-nix-action@v10
-    - name: Determined nix-build
-      run: ./build.sh
-  Nixpkgs_GHCJS_Linux:
-    name: Nixpkgs, GHCJS, Linux
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    env:
-      compiler: "ghcjs"
     steps:
     - name: Git checkout
       uses: actions/checkout@v2
