@@ -51,7 +51,8 @@ env:
   ghcjsLogTailLength: "10000"
 
 jobs:
-  Linux_default:
+  Nixpkgs_default_Linux:
+    name: Nixpkgs, NixOS unstable channel, default (GHC 8.8), Linux
     runs-on: ubuntu-latest
     steps:
     - name: Git checkout
@@ -62,7 +63,8 @@ jobs:
         nix_path: nixpkgs=channel:nixpkgs-unstable
     - name: Determined nix-build
       run: ./build.sh
-  Linux_GHC_8-10:
+  Nixpkgs_SDist_Optimize_Benchmark_Haddock_GHC-8-10_Linux:
+    name: Nixpkgs, SDist, Optimize, Benchmark, Haddock, GHC 8.10.1, Linux
     runs-on: ubuntu-latest
     env:
       compiler: "ghc8101"
@@ -75,7 +77,8 @@ jobs:
         nix_path: nixpkgs=channel:nixpkgs-unstable
     - name: Determined nix-build
       run: ./build.sh
-  Linux_GHCJS:
+  Nixpkgs_GHCJS_Linux:
+    name: Nixpkgs, GHCJS, Linux
     runs-on: ubuntu-latest
     env:
       compiler: "ghcjs"
@@ -88,7 +91,8 @@ jobs:
         nix_path: nixpkgs=channel:nixpkgs-unstable
     - name: Determined nix-build
       run: ./build.sh
-  macOS_default:
+  Nixpkgs_default_macOS:
+    name: Nixpkgs, default (GHC 8.8), macOS
     runs-on: macos-latest
     steps:
     - name: Git checkout
@@ -99,7 +103,8 @@ jobs:
         nix_path: nixpkgs=channel:nixpkgs-unstable
     - name: Determined nix-build
       run: ./build.sh
-  Cabal_Hackage:
+  Hackage_Cabal_GHC-8-10:
+    name: Hackage, Cabal, GHC 8.10, Linux
     runs-on: ubuntu-latest # or macOS-latest, or windows-latest
     steps:
       - uses: actions/checkout@v2
