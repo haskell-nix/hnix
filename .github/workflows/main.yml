@@ -48,8 +48,6 @@ env:
   doBenchmark: "false"
   generateOptparseApplicativeCompletions: "false"
   executableNamesToShellComplete: '[ "replaceWithExecutableName" ]'
-  #
-  withHoogle: "false"
 
 jobs:
   Nixpkgs_default_Linux:
