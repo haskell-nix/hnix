@@ -59,7 +59,6 @@ jobs:
   build10:
     name: "NixOS-unstable channel, Strict build, default GHC (8.8.3)"
     runs-on: ubuntu-latest
-    continue-on-error: true
     env:
       buildStrictly: "true"
     steps:
@@ -74,7 +73,6 @@ jobs:
   build20:
     name: "Release-quality test, SDist, Optimization, Benchmark, Haddock, GHC 8.10.1, Nix shell"
     runs-on: ubuntu-latest
-    continue-on-error: true
     env:
       compiler: "ghc8101"
       buildFromSdist: "true"
@@ -99,7 +97,6 @@ jobs:
   build30:
     name: "NixOS 20.03 stable channel, default GHC (8.8.3)"
     runs-on: ubuntu-latest
-    continue-on-error: true
     env:
       rev: "nixos-20.03"
     steps:
