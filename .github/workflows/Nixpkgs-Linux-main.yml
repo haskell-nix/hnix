@@ -78,9 +78,9 @@ jobs:
       linkWithGold: "true"
       doHaddock: "true"
       doHyperlinkSource: "true"
-      doBenchmark: "true"
       disableOptimization: "false"
       enableDeadCodeElimination: "true"
+      doBenchmark: "true"
       generateOptparseApplicativeCompletions: "false"
     steps:
     - name: Git checkout
