@@ -110,7 +110,7 @@ jobs:
   # NOTE: This would additionally test that the Nix shell customization of the project works.
   # By default *this setup provides local hoogle and generates database of the documetation for the project and its dependencies
   build40:
-    name: "Nix-shell & supplied locall Hoogle DB"
+    name: "Nix-shell & supplied locall project Hoogle DB"
     runs-on: ubuntu-latest
     steps:
     - name: Git checkout
