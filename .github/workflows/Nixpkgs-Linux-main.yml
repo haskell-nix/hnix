@@ -95,14 +95,14 @@ jobs:
   build30:
     name: "NixOS 20.03 stable channel, default GHC (8.8.3)"
     runs-on: ubuntu-latest
-    env:
-      rev: "nixos-20.03"
     steps:
     - name: Git checkout
       uses: actions/checkout@v2
     - name: Install Nix
       uses: cachix/install-nix-action@v10
     - name: Determined nix-build
+      env:
+        rev: "nixos-20.03"
       run: ./build.sh
 
 
