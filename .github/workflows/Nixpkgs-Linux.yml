@@ -1,4 +1,4 @@
-name: "Nixpkgs, GHC, Linux"
+name: "Nixpkgs, Linux"
 on:
   # On Git changes in PR
   pull_request:
