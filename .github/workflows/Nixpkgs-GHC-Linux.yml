@@ -84,6 +84,8 @@ jobs:
       uses: cachix/install-nix-action@v10
     - name: Determined nix-build
       run: ./build.sh
+    - name: Test Nix-shell
+      run: nix-shell --command "echo Succesfully evaluated, loaded and entered $IN_NIX_SHELL Nix shell env."
   build30:
     name: "NixOS-unstable channel, Strict build, default GHC (8.8.3)"
     runs-on: ubuntu-latest
