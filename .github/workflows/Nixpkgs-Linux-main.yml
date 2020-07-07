@@ -58,7 +58,7 @@ jobs:
 
   # NOTE: Basic example
   build10:
-    name: "NixOS-unstable channel, Strict build, default GHC (8.8.3)"
+    name: "NixOS-unstable channel, default GHC (8.8.3)"
     runs-on: ubuntu-latest
     steps:
     - name: Git checkout
