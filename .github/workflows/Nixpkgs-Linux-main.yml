@@ -1,6 +1,6 @@
-name: "Nixpkgs, Linux"
+name: "Nixpkgs, Linux, main"
 
-
+# When to trigger builds
 on:
   # On Git changes in PR
   pull_request:
