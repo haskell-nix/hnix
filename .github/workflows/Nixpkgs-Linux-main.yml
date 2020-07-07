@@ -119,7 +119,7 @@ jobs:
       uses: cachix/install-nix-action@v10
     - name: Nix-shell
       run: nix-shell --command 'echo "Evaluated, loaded and entered $IN_NIX_SHELL Nix shell env."'
-    - name: Project Hoogle DB by Nix-shell
+    - name: Local Hoogle DB of the project development
       run: nix-shell --command 'hoogle True'
 
 
