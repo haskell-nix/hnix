@@ -119,7 +119,7 @@ jobs:
     - name: Test Nix-shell
       run: nix-shell --command 'echo "Evaluated, loaded and entered $IN_NIX_SHELL Nix shell env."'
     - name: Test Nix-shell local Hoogle DB
-      run: hoogle True
+      run: nix-shell --command 'hoogle True'
 
 
   # Other samples of tests used in the project see in the directory
