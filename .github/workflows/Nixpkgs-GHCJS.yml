@@ -10,6 +10,8 @@ on:
     - cron: "45 05 * * *"
 
 env:
+  useRev: "true"
+  rev: "nixos-unstable"
   compiler: "ghcjs"
   ghcjsTmpLogFile: "/tmp/ghcjsTmpLogFile.log"
   ghcjsLogTailLength: "10000"
