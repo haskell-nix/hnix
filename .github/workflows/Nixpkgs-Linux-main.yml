@@ -15,7 +15,8 @@ on:
 
 env:
   ###
-  ### NOTE: This configuration uses `build.sh` interface, which uses `default.nix` interface, which exposes the Nixpkgs Haskell Lib interface.
+  ### NOTE: Table example of the provided build configuration keys
+  ### Infrastructure uses `build.sh` API, which uses `default.nix` API, which exposes the almost literal Nixpkgs Haskell Lib API wich was abstracted for use outside of Nix language.
   ###
   ### Documentation of this settings is mosly in `default.nix`, since most settings it Nixpkgs related
   ### and the other part of keys explained in `build.sh`, since those address external procedures aound the builds.
