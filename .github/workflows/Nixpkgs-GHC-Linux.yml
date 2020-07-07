@@ -90,7 +90,7 @@ jobs:
     - name: Determined nix-build
       run: ./build.sh
     - name: Test Nix-shell
-      run: nix-shell --command "echo Succesfully evaluated, loaded and entered $IN_NIX_SHELL Nix shell env."
+      run: nix-shell --command 'echo Succesfully evaluated, loaded and entered $IN_NIX_SHELL Nix shell env.'
 
   # Other samples of tests used in the project
   build30:
