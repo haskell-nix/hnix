@@ -111,43 +111,4 @@ jobs:
       run: ./build.sh
 
 
-  # Other samples of tests used in the project, mor
-  build40:
-    name: "Nixpkgs-unstable channel, default GHC (8.8.3)"
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    env:
-      rev: "nixpkgs-unstable"
-    steps:
-    - name: Git checkout
-      uses: actions/checkout@v2
-    - name: Install Nix
-      uses: cachix/install-nix-action@v10
-    - name: Determined nix-build
-      run: ./build.sh
-  build50:
-    name: "NixOS-unstable channel, GHC 8.6.5"
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    env:
-      compiler: "ghc865"
-    steps:
-    - name: Git checkout
-      uses: actions/checkout@v2
-    - name: Install Nix
-      uses: cachix/install-nix-action@v10
-    - name: Determined nix-build
-      run: ./build.sh
-  build60:
-    name: "NixOS-unstable channel, GHC 8.4.4"
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    env:
-      compiler: "ghc844"
-    steps:
-    - name: Git checkout
-      uses: actions/checkout@v2
-    - name: Install Nix
-      uses: cachix/install-nix-action@v10
-    - name: Determined nix-build
-      run: ./build.sh
+  # Other samples of tests used in the project see in the directory

@@ -1,0 +1,71 @@
+name: "Nixpkgs, Linux"
+
+
+on:
+  # On Git changes in PR
+  pull_request:
+  # On Git changes of the master
+  push:
+    branches:
+      - master
+  schedule:
+    # Every day at 03:45
+    - cron: "45 06 * * *"
+
+
+env:
+  ###
+  ### NOTE: This configuration uses `build.sh` interface, which uses `default.nix` interface, which exposes the Nixpkgs Haskell Lib interface.
+  ###
+  ### Documentation of this settings is mosly in `default.nix`, since most settings it Nixpkgs related
+  ### and the other part of keys explained in `build.sh`, since those address external procedures aound the builds.
+  ### Additional documentation is in Nixpkgs Haskell.lib: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
+  ###
+  useRev: "true"
+  rev: "nixos-unstable"
+  linkWithGold: "true"
+
+
+jobs:
+
+  build40:
+    name: "Nixpkgs-unstable channel, default GHC (8.8.3)"
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      rev: "nixpkgs-unstable"
+    steps:
+    - name: Git checkout
+      uses: actions/checkout@v2
+    - name: Install Nix
+      uses: cachix/install-nix-action@v10
+    - name: Determined nix-build
+      run: ./build.sh
+
+  build50:
+    name: "NixOS-unstable channel, GHC 8.6.5"
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      compiler: "ghc865"
+    steps:
+    - name: Git checkout
+      uses: actions/checkout@v2
+    - name: Install Nix
+      uses: cachix/install-nix-action@v10
+    - name: Determined nix-build
+      run: ./build.sh
+
+  build60:
+    name: "NixOS-unstable channel, GHC 8.4.4"
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      compiler: "ghc844"
+    steps:
+    - name: Git checkout
+      uses: actions/checkout@v2
+    - name: Install Nix
+      uses: cachix/install-nix-action@v10
+    - name: Determined nix-build
+      run: ./build.sh
