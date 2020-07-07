@@ -86,8 +86,6 @@ jobs:
       uses: actions/checkout@v2
     - name: Install Nix
       uses: cachix/install-nix-action@v10
-    - name: Test Nix-shell
-      run: nix-shell --command 'echo Succesfully evaluated, loaded and entered $IN_NIX_SHELL Nix shell env.'
     - name: Determined nix-build
       run: ./build.sh
 
@@ -104,6 +102,19 @@ jobs:
       uses: cachix/install-nix-action@v10
     - name: Determined nix-build
       run: ./build.sh
+
+  # NOTE: This would additionally test that the Nix shell customization of the project works.
+  # By default *this setup provides local hoogle and generates database of project documentation
+  build40:
+    name: "Test Nix-shell"
+    runs-on: ubuntu-latest
+    steps:
+    - name: Git checkout
+      uses: actions/checkout@v2
+    - name: Install Nix
+      uses: cachix/install-nix-action@v10
+    - name: Test Nix-shell
+      run: nix-shell --command 'echo Succesfully evaluated, loaded and entered $IN_NIX_SHELL Nix shell env.'
 
 
   # Other samples of tests used in the project see in the directory
