@@ -63,6 +63,27 @@ jobs:
       uses: cachix/install-nix-action@v10
     - name: Determined nix-build
       run: ./build.sh
+  build40:
+    name: "Quality test, SDist, Optimization, Benchmark, Haddock, GHC 8.10.1"
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      compiler: "ghc8101"
+      buildFromSdist: "true"
+      linkWithGold: "true"
+      doHaddock: "true"
+      doHyperlinkSource: "true"
+      doBenchmark: "true"
+      disableOptimization: "false"
+      enableDeadCodeElimination: "true"
+      generateOptparseApplicativeCompletions: "false"
+    steps:
+    - name: Git checkout
+      uses: actions/checkout@v2
+    - name: Install Nix
+      uses: cachix/install-nix-action@v10
+    - name: Determined nix-build
+      run: ./build.sh
   build20:
     name: "NixOS-unstable channel, Strict build, default GHC (8.8.3)"
     runs-on: ubuntu-latest
@@ -82,27 +103,6 @@ jobs:
     continue-on-error: true
     env:
       rev: "nixos-20.03"
-    steps:
-    - name: Git checkout
-      uses: actions/checkout@v2
-    - name: Install Nix
-      uses: cachix/install-nix-action@v10
-    - name: Determined nix-build
-      run: ./build.sh
-  build40:
-    name: "Quality test, SDist, Optimization, Benchmark, Haddock, GHC 8.10.1"
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    env:
-      compiler: "ghc8101"
-      buildFromSdist: "true"
-      linkWithGold: "true"
-      doHaddock: "true"
-      doHyperlinkSource: "true"
-      doBenchmark: "true"
-      disableOptimization: "false"
-      enableDeadCodeElimination: "true"
-      generateOptparseApplicativeCompletions: "false"
     steps:
     - name: Git checkout
       uses: actions/checkout@v2
