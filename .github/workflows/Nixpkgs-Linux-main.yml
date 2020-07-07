@@ -95,14 +95,13 @@ jobs:
     - name: Test Nix-shell
       run: nix-shell --command 'echo Succesfully evaluated, loaded and entered $IN_NIX_SHELL Nix shell env.'
 
-
-  # Other samples of tests used in the project, mor
+  # NOTE: Build on latest stable NixOS release
   build30:
-    name: "Nixpkgs-unstable channel, default GHC (8.8.3)"
+    name: "NixOS 20.03 stable channel, default GHC (8.8.3)"
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
-      rev: "nixpkgs-unstable"
+      rev: "nixos-20.03"
     steps:
     - name: Git checkout
       uses: actions/checkout@v2
@@ -110,12 +109,15 @@ jobs:
       uses: cachix/install-nix-action@v10
     - name: Determined nix-build
       run: ./build.sh
+
+
+  # Other samples of tests used in the project, mor
   build40:
-    name: "NixOS 20.03 stable channel, default GHC (8.8.3)"
+    name: "Nixpkgs-unstable channel, default GHC (8.8.3)"
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
-      rev: "nixos-20.03"
+      rev: "nixpkgs-unstable"
     steps:
     - name: Git checkout
       uses: actions/checkout@v2
