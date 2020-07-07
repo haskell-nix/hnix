@@ -1,21 +1,22 @@
 name: "Nixpkgs, GHCJS, Linux"
+
 on:
-  # On Git changes in PR
   pull_request:
-  # On Git changes of the master
   push:
     branches:
       - master
   schedule:
-    # Every day at 03:45
+    # Every day at 05:45
     - cron: "45 05 * * *"
+
 env:
   compiler: "ghcjs"
   ghcjsTmpLogFile: "/tmp/ghcjsTmpLogFile.log"
   ghcjsLogTailLength: "10000"
+
 jobs:
   build10:
-    name: GHCJS
+    name: Build
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
