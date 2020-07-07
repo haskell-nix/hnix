@@ -12,6 +12,7 @@ on:
 env:
   useRev: "true"
   rev: "nixos-unstable"
+  linkWithGold: "true"
   compiler: "ghcjs"
   ghcjsTmpLogFile: "/tmp/ghcjsTmpLogFile.log"
   ghcjsLogTailLength: "10000"
