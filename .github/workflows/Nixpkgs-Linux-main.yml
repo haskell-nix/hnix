@@ -65,7 +65,7 @@ jobs:
       uses: actions/checkout@v2
     - name: Install Nix
       uses: cachix/install-nix-action@v10
-    - name: Determined nix-build
+    - name: Determined Nix-build
       run: ./build.sh
 
 
@@ -78,7 +78,7 @@ jobs:
       uses: actions/checkout@v2
     - name: Install Nix
       uses: cachix/install-nix-action@v10
-    - name: Determined nix-build
+    - name: Determined Nix-build
       env:
         compiler: "ghc8101"
         buildFromSdist: "true"
@@ -101,7 +101,7 @@ jobs:
       uses: actions/checkout@v2
     - name: Install Nix
       uses: cachix/install-nix-action@v10
-    - name: Determined nix-build
+    - name: Determined Nix-build
       env:
         rev: "nixos-20.03"
       run: ./build.sh

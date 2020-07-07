@@ -27,5 +27,5 @@ jobs:
       uses: actions/checkout@v2
     - name: Install Nix
       uses: cachix/install-nix-action@v10
-    - name: Determined nix-build
+    - name: Determined Nix-build
       run: ./build.sh
