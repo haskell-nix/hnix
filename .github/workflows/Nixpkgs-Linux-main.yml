@@ -67,6 +67,7 @@ jobs:
     - name: Determined nix-build
       run: ./build.sh
 
+
   # NOTE: Example of customization using Nixpkgs Haskell Lib API
   build20:
     name: "Release-quality test, SDist, Optimization, Benchmark, Haddock, GHC 8.10.1, Nix shell"
@@ -89,6 +90,7 @@ jobs:
     - name: Determined nix-build
       run: ./build.sh
 
+
   # NOTE: Build on latest stable NixOS release
   build30:
     name: "NixOS 20.03 stable channel, default GHC (8.8.3)"
@@ -102,6 +104,7 @@ jobs:
       uses: cachix/install-nix-action@v10
     - name: Determined nix-build
       run: ./build.sh
+
 
   # NOTE: This would additionally test that the Nix shell customization of the project works.
   # By default *this setup provides local hoogle and generates database of project documentation
