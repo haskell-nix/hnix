@@ -64,7 +64,7 @@ jobs:
     - name: Determined nix-build
       run: ./build.sh
   build20:
-    name: "Quality test, SDist, Optimization, Benchmark, Haddock, GHC 8.10.1"
+    name: "Release-quality test, SDist, Optimization, Benchmark, Haddock, GHC 8.10.1, Nix shell"
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
