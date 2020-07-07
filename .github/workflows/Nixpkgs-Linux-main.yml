@@ -67,6 +67,8 @@ jobs:
       uses: cachix/install-nix-action@v10
     - name: Determined Nix-build
       env:
+        # nixos-unstable is a nixpkgs-upstable that passed a number of upstream CI and quality checks, it is essentially a current branch while also receives stable updates fitting for our CI checkups with current Nixpkgs.
+        # Note that Nix nature is purely functional lazy language, it is referentially transparent, reproducible (deterministic) builds, that means that just as in the type system - any the Nix build failures properly cascade through the Nixpkgs tree graph branch, so particular `master` broken checkouts would properly refuse/would not be able to build parts of Nixpkgs tree graph. So the Nix builds are pretty brittle, do not be ashamed to make Nixpkgs builds optional (`continue-on-error: true`), or set them to the latest stable NixOS Nixpkgs release.
         useRev: "true"
         rev: "nixos-unstable"
       run: ./build.sh
