@@ -1,4 +1,4 @@
-name: "Nixpkgs, GHCJS, Linux"
+name: "Nixpkgs, Linux, GHCJS"
 
 on:
   pull_request:
