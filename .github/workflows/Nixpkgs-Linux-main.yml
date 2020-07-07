@@ -109,16 +109,16 @@ jobs:
   # NOTE: This would additionally test that the Nix shell customization of the project works.
   # By default *this setup provides local hoogle and generates database of project documentation
   build40:
-    name: "Test Nix-shell & supplied locall Hoogle DB"
+    name: "Nix-shell & supplied locall Hoogle DB"
     runs-on: ubuntu-latest
     steps:
     - name: Git checkout
       uses: actions/checkout@v2
     - name: Install Nix
       uses: cachix/install-nix-action@v10
-    - name: Test Nix-shell
+    - name: Nix-shell
       run: nix-shell --command 'echo "Evaluated, loaded and entered $IN_NIX_SHELL Nix shell env."'
-    - name: Test Nix-shell local Hoogle DB
+    - name: Project Hoogle DB by Nix-shell
       run: nix-shell --command 'hoogle True'
 
 
