@@ -66,6 +66,9 @@ jobs:
     - name: Install Nix
       uses: cachix/install-nix-action@v10
     - name: Determined Nix-build
+      env:
+        useRev: "true"
+        rev: "nixos-unstable"
       run: ./build.sh
 
 
@@ -80,6 +83,8 @@ jobs:
       uses: cachix/install-nix-action@v10
     - name: Determined Nix-build
       env:
+        useRev: "true"
+        rev: "nixos-unstable"
         compiler: "ghc8101"
         buildFromSdist: "true"
         linkWithGold: "true"
