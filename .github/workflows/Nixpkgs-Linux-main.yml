@@ -1,4 +1,6 @@
 name: "Nixpkgs, Linux"
+
+
 on:
   # On Git changes in PR
   pull_request:
@@ -9,6 +11,7 @@ on:
   schedule:
     # Every day at 03:45
     - cron: "45 03 * * *"
+
 
 env:
   ###
@@ -49,9 +52,10 @@ env:
   generateOptparseApplicativeCompletions: "false"
   executableNamesToShellComplete: '[ "replaceWithExecutableName" ]'
 
+
 jobs:
 
-  # Basic example
+  # NOTE: Basic example
   build10:
     name: "Nixpkgs-unstable channel, default GHC (8.8.3)"
     runs-on: ubuntu-latest
@@ -66,8 +70,7 @@ jobs:
     - name: Determined nix-build
       run: ./build.sh
 
-
-  # Example of customization using Nixpkgs Haskell Lib API
+  # NOTE: Example of customization using Nixpkgs Haskell Lib API
   build20:
     name: "Release-quality test, SDist, Optimization, Benchmark, Haddock, GHC 8.10.1, Nix shell"
     runs-on: ubuntu-latest
@@ -92,7 +95,8 @@ jobs:
     - name: Test Nix-shell
       run: nix-shell --command 'echo Succesfully evaluated, loaded and entered $IN_NIX_SHELL Nix shell env.'
 
-  # Other samples of tests used in the project
+
+  # Other samples of tests used in the project, mor
   build30:
     name: "NixOS-unstable channel, Strict build, default GHC (8.8.3)"
     runs-on: ubuntu-latest
