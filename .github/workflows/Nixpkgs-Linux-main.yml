@@ -114,7 +114,7 @@ jobs:
     - name: Install Nix
       uses: cachix/install-nix-action@v10
     - name: Test Nix-shell
-      run: nix-shell --command 'echo Succesfully evaluated, loaded and entered $IN_NIX_SHELL Nix shell env.'
+      run: nix-shell --command 'echo "Evaluated, loaded and entered $IN_NIX_SHELL Nix shell env."\n\n"Testing local Hoogle DB:" && hoogle True'
 
 
   # Other samples of tests used in the project see in the directory
