@@ -32,6 +32,23 @@ $ env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
 $ ./dist/build/hnix/hnix --help
 ```
 
+## Using the REPL
+
+To enter the `hnix` REPL use
+
+```
+hnix --repl
+```
+
+To evaluate an expression and make it available in the REPL
+as the `input` variable use
+
+```
+hnix --eval -E '(import <nixpkgs> {}).pkgs.hello' --repl
+```
+
+Use the `:help` command for a list of all available REPL commands.
+
 ## Building with full debug info
 
 To build `hnix` for debugging, and with full tracing output and stack traces,

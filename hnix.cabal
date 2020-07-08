@@ -958,7 +958,7 @@ executable hnix
     , pretty-show
     , prettyprinter
     , ref-tf
-    , repline
+    , repline >= 0.4.0.0 && < 0.5
     , serialise
     , template-haskell
     , text

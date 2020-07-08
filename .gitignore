@@ -12,3 +12,4 @@ ctags
 dist-newstyle
 result*
 .ghc.environment.*
+.hnixrc
