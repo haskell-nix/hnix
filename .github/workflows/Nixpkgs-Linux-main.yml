@@ -78,6 +78,10 @@ jobs:
   build20:
     name: "Release-quality test, SDist, Optimization, Benchmark, Haddock, GHC 8.10.1, Nix shell"
     runs-on: ubuntu-latest
+    # Matrix of builds for multiple subprojects in a monorepo
+    strategy:
+      matrix:
+        packageRoots: [ ./ ]
     steps:
     - name: Git checkout
       uses: actions/checkout@v2
@@ -96,6 +100,8 @@ jobs:
         enableDeadCodeElimination: "true"
         doBenchmark: "true"
         generateOptparseApplicativeCompletions: "false"
+        # packageRoot for CI builds can be just a paths, since CI uses remote Git repo that is already filtered with local .gitignore's
+        packageRoot: ${{ matrix.packageRoots }}
       run: ./build.sh
 
 
