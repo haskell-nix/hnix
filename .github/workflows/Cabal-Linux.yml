@@ -11,6 +11,13 @@ jobs:
     name: GHC 8.10
     runs-on: ubuntu-latest
     continue-on-error: true
+    # Template to build matrix of builds for subprojects in monorepo
+    strategy:
+      matrix:
+        packageRoots: [ ./ ]
+    defaults:
+      run:
+        working-directory: ${{ matrix.packageRoots }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-haskell@v1.1
