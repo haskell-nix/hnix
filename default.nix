@@ -3,6 +3,10 @@
 #  2020-07-05: By default using default GHC for Nixpkgs, see https://search.nixos.org/packages?query=ghc&from=0&size=500&channel=unstable for current version (currently ghc883 == GHC 8.8.3)
   compiler    ? "ghc883"
 
+# Deafult.nix is a unit package abstraciton that allows to abstract over packages even in monorepos:
+# Example: pass --arg packageRoot "./subprojectDir", or map default.nix over a list of subprojects.
+, packageRoot ? pkgs.nix-gitignore.gitignoreSource [ ] ./.
+
 # This settings expose most of the Nixpkgs Haskell.lib API: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
 
 # Some of these options implicitly enable other options they require, and some counterpoint options clash, obviously
@@ -201,7 +205,7 @@ let
   package = haskellPackages.developPackage {
     name = "dummy";
     # Do not include into closure the files listed in .gitignore
-    root = pkgs.nix-gitignore.gitignoreSource [ ] ./.;
+    root = packageRoot;
 
     modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
       buildTools = (attrs.buildTools or []) ++ [
