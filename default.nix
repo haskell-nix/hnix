@@ -4,7 +4,8 @@
   compiler    ? "ghc883"
 
 # Deafult.nix is a unit package abstraciton that allows to abstract over packages even in monorepos:
-# Example: pass --arg packageRoot "./subprojectDir", or map default.nix over a list of subprojects.
+# Example: pass --arg packageName --arg packageRoot "./subprojectDir", or map default.nix over a list of tiples for subprojects.
+, packageName ? "defaultPackageName"
 , packageRoot ? pkgs.nix-gitignore.gitignoreSource [ ] ./.
 
 # This settings expose most of the Nixpkgs Haskell.lib API: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
@@ -203,7 +204,7 @@ let
 
   # General description of package
   package = haskellPackages.developPackage {
-    name = "dummy";
+    name = packageName;
     # Do not include into closure the files listed in .gitignore
     root = packageRoot;
 
