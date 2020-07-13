@@ -21,8 +21,8 @@
     * `instance MonadException m => MonadException(StateT(HashMap FilePath NExprLoc) m)`
     * `instance MonadException m => MonadException(Fix1T StandardTF m)`
 
-* Minor:
-  * Added support for `GHC 8.10`
+* Additional:
+  * Library: Official support for `GHC 8.4 - 8.10`
 
 ---
 
