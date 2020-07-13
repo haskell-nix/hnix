@@ -2,8 +2,6 @@
 
 ## [0.9.1](https://github.com/haskell-nix/hnix/compare/0.9.0...0.9.1) (2020-07-13)
 
-* Previous release was `0.9.0`. In new release:
-
 * `builtins.nixVersion` bumped from 2.0 to 2.3
 * Documentation improvements for `Nix.{Atoms,Expr.Types}`
 * Reduced number of dependencies
