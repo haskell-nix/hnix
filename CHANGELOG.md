@@ -2,15 +2,17 @@
 
 ## [0.9.1](https://github.com/haskell-nix/hnix/compare/0.9.0...0.9.1) (2020-07-13)
 
-* `builtins.nixVersion` bumped from 2.0 to 2.3
-* Documentation improvements for `Nix.{Atoms,Expr.Types}`
-* Reduced number of dependencies
-* REPL improvements
-  * Better tab completion
-  * Multi-line input
-  * Support for passing evaluated expression result of `hnix --eval -E`
-    to REPL as `input` variable.
-  * Support for loading `.hnixrc` from current directory
+* Additional:
+  * REPL improvements
+    * Better tab completion
+    * Multi-line input
+    * Support for passing evaluated expression result of `hnix --eval -E`
+      to REPL as `input` variable.
+    * Support for loading `.hnixrc` from current directory
+  * `builtins.nixVersion` bumped from 2.0 to 2.3
+  * Dependencies:
+    * Freed from: `interpolate`, `contravariant`, `semigroups`, `generic-random`, `tasty-quickcheck`
+    * `repline` now `>= 0.4.0.0 && < 0.5`
 
 ## [0.9.0](https://github.com/haskell-nix/hnix/compare/0.8.0...0.9.0) (2020-06-15)
 
