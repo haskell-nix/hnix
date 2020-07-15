@@ -993,18 +993,18 @@ test-suite hnix-tests
   build-depends:
       Diff
     , Glob
-    , base >=4.11 && <5
+    , base
     , base16-bytestring
     , bytestring
     , containers
     , data-fix
-    , deepseq >=1.4.3 && <1.5
+    , deepseq
     , directory
     , exceptions
     , filepath
     , hedgehog
     , hnix
-    , megaparsec >=7.0 && <8.1
+    , megaparsec
     , mtl
     , neat-interpolation
     , optparse-applicative
@@ -1022,7 +1022,7 @@ test-suite hnix-tests
     , time
     , transformers
     , unix
-    , unordered-containers >=0.2.9 && <0.3
+    , unordered-containers
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
   if impl(ghcjs)
@@ -1039,13 +1039,13 @@ benchmark hnix-benchmarks
       benchmarks
   ghc-options: -Wall
   build-depends:
-      base >=4.11 && <5
+      base
     , base16-bytestring
     , bytestring
     , containers
     , criterion
     , data-fix
-    , deepseq >=1.4.3 && <1.5
+    , deepseq
     , exceptions
     , filepath
     , hnix
@@ -1056,7 +1056,7 @@ benchmark hnix-benchmarks
     , text
     , time
     , transformers
-    , unordered-containers >=0.2.9 && <0.3
+    , unordered-containers
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
   if impl(ghcjs)
