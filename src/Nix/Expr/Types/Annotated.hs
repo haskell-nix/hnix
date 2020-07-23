@@ -35,7 +35,7 @@ import           Data.Aeson.TH
 import           Data.Binary                    ( Binary(..) )
 import           Data.Data
 import           Data.Eq.Deriving
-import           Data.Fix
+import           Data.Fix                       ( Fix(..), unfoldFix )
 import           Data.Function                  ( on )
 import           Data.Functor.Compose
 import           Data.Hashable
@@ -108,13 +108,9 @@ type NExprLocF = AnnF SrcSpan NExprF
 -- | A nix expression with source location at each subexpression.
 type NExprLoc = Fix NExprLocF
 
-instance NFData NExprLoc
-
 #ifdef MIN_VERSION_serialise
 instance Serialise NExprLoc
 #endif
-
-instance Hashable NExprLoc
 
 instance Binary SrcSpan
 instance (Binary ann, Binary a) => Binary (Ann ann a)
@@ -135,7 +131,7 @@ pattern AnnE :: forall ann (g :: * -> *). ann
 pattern AnnE ann a = Fix (Compose (Ann ann a))
 
 stripAnnotation :: Functor f => Fix (AnnF ann f) -> Fix f
-stripAnnotation = ana (annotated . getCompose . unFix)
+stripAnnotation = unfoldFix (annotated . getCompose . unFix)
 
 stripAnn :: AnnF ann f r -> f r
 stripAnn = annotated . getCompose

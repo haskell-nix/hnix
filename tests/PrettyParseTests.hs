@@ -143,7 +143,7 @@ equivUpToNormalization :: NExpr -> NExpr -> Bool
 equivUpToNormalization x y = normalize x == normalize y
 
 normalize :: NExpr -> NExpr
-normalize = cata $ \case
+normalize = foldFix $ \case
   NConstant (NInt n) | n < 0 ->
     Fix (NUnary NNeg (Fix (NConstant (NInt (negate n)))))
   NConstant (NFloat n) | n < 0 ->

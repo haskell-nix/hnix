@@ -18,7 +18,7 @@ module Nix.Pretty where
 import           Control.Applicative            ( (<|>) )
 import           Control.Comonad
 import           Control.Monad.Free
-import           Data.Fix
+import           Data.Fix                       ( Fix(..), foldFix )
 import           Data.HashMap.Lazy              ( toList )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.HashSet                  as HashSet
@@ -190,7 +190,7 @@ prettyAtom :: NAtom -> NixDoc ann
 prettyAtom atom = simpleExpr $ pretty $ unpack $ atomText atom
 
 prettyNix :: NExpr -> Doc ann
-prettyNix = withoutParens . cata exprFNixDoc
+prettyNix = withoutParens . foldFix exprFNixDoc
 
 instance HasCitations1 m v f
   => HasCitations m v (NValue' t f m a) where

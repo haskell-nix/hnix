@@ -43,7 +43,7 @@ import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString               as B
 import           Data.ByteString.Base16        as Base16
 import           Data.Char                      ( isDigit )
-import           Data.Fix                       ( cata )
+import           Data.Fix                       ( foldFix )
 import           Data.Foldable                  ( foldrM )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List
@@ -196,7 +196,7 @@ builtinsList = sequence
           outputsList = map outputToAttrListElement outputs;
 
         in (builtins.head outputsList).value|]
-      [| cata Eval.eval expr |]
+      [| foldFix Eval.eval expr |]
     )
 
   , add  TopLevel "derivationStrict" derivationStrict_
