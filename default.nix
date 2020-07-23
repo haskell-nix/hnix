@@ -212,6 +212,20 @@ let
       # require n-i >= 0.4. dontCheck helps us avoid conflicts with
       # neat-interpolation's test dependencies.
       neat-interpolation = pkgs.haskell.lib.dontCheck super.neat-interpolation_0_5_1;
+
+      # 2020-07-23 hnix uses multiple functions that are unavailable in
+      # data-fix < 0.3.
+      data-fix = haskellPackages.callPackage
+       ({ mkDerivation, base, deepseq, hashable, stdenv }:
+        mkDerivation {
+          pname = "data-fix";
+          version = "0.3.0";
+          sha256 = "9e59b3ed694b5139316093b3767842e60ad4821858459e7cd763e5773dfa99a0";
+          libraryHaskellDepends = [ base deepseq hashable ];
+          homepage = "https://github.com/spell-music/data-fix";
+          description = "Fixpoint data types";
+          license = stdenv.lib.licenses.bsd3;
+        }) {};
     };
 
     modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {

@@ -39,7 +39,7 @@ import           Control.Monad.Reader
 import           Control.Monad.Ref
 import           Control.Monad.ST
 import           Control.Monad.State.Strict
-import           Data.Fix                       ( cata )
+import           Data.Fix                       ( foldFix )
 import           Data.Foldable
 import qualified Data.HashMap.Lazy             as M
 import           Data.List                      ( delete
@@ -564,7 +564,7 @@ instance MonadInfer m => ToValue Bool (InferT s m) (Judgment s) where
   toValue _ = pure $ Judgment As.empty [] typeBool
 
 infer :: MonadInfer m => NExpr -> InferT s m (Judgment s)
-infer = cata Eval.eval
+infer = foldFix Eval.eval
 
 inferTop :: Env -> [(Text, NExpr)] -> Either InferError Env
 inferTop env []                = Right env

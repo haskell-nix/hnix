@@ -43,7 +43,7 @@ import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
-import           Data.Fix
+import           Data.Fix                       ( Fix(..), foldFix, foldFixM )
 -- import           Data.Foldable
 import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
@@ -117,12 +117,12 @@ staticImport pann path = do
           x' = Fix (NLet_ span [cur] x)
         modify (M.insert path x')
         local (const (Just path, emptyScopes @m @NExprLoc)) $ do
-          x'' <- cata reduce x'
+          x'' <- foldFix reduce x'
           modify (M.insert path x'')
           return x''
 
 -- gatherNames :: NExprLoc -> HashSet VarName
--- gatherNames = cata $ \case
+-- gatherNames = foldFix $ \case
 --     NSym_ _ var -> S.singleton var
 --     Compose (Ann _ x) -> fold x
 
@@ -132,7 +132,7 @@ reduceExpr mpath expr =
   (`evalStateT` M.empty)
     . (`runReaderT` (mpath, emptyScopes))
     . runReducer
-    $ cata reduce expr
+    $ foldFix reduce expr
 
 reduce
   :: forall m
@@ -173,7 +173,7 @@ reduce (NBinary_ bann NApp fun arg) = fun >>= \case
 
   Fix (NAbs_ _ (Param name) body) -> do
     x <- arg
-    pushScope (M.singleton name x) (cata reduce body)
+    pushScope (M.singleton name x) (foldFix reduce body)
 
   f -> Fix . NBinary_ bann NApp f <$> arg
 
@@ -299,15 +299,15 @@ instance Show (f r) => Show (FlaggedF f r) where
 type Flagged f = Fix (FlaggedF f)
 
 flagExprLoc :: (MonadIO n, Traversable f) => Fix f -> n (Flagged f)
-flagExprLoc = cataM $ \x -> do
+flagExprLoc = foldFixM $ \x -> do
   flag <- liftIO $ newIORef False
   pure $ Fix $ FlaggedF (flag, x)
 
 -- stripFlags :: Functor f => Flagged f -> Fix f
--- stripFlags = cata $ Fix . snd . flagged
+-- stripFlags = foldFix $ Fix . snd . flagged
 
 pruneTree :: MonadIO n => Options -> Flagged NExprLocF -> n (Maybe NExprLoc)
-pruneTree opts = cataM $ \(FlaggedF (b, Compose x)) -> do
+pruneTree opts = foldFixM $ \(FlaggedF (b, Compose x)) -> do
   used <- liftIO $ readIORef b
   pure $ if used then Fix . Compose <$> traverse prune x else Nothing
  where
@@ -414,7 +414,7 @@ reducingEvalExpr
   -> m (NExprLoc, Either r a)
 reducingEvalExpr eval mpath expr = do
   expr'           <- flagExprLoc =<< liftIO (reduceExpr mpath expr)
-  eres <- catch (Right <$> cata (addEvalFlags eval) expr') (pure . Left)
+  eres <- catch (Right <$> foldFix (addEvalFlags eval) expr') (pure . Left)
   opts :: Options <- asks (view hasLens)
   expr''          <- pruneTree opts expr'
   return (fromMaybe nNull expr'', eres)
