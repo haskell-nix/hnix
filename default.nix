@@ -224,9 +224,25 @@ let
 
     overrides = self: super: {
       # 2020-06-26 Due to a behaviour change in neat-interpolation-0.4, we
-      # require n-i >= 0.4. dontCheck helps us avoid conflicts with
-      # neat-interpolation's test dependencies.
-      neat-interpolation = pkgs.haskell.lib.dontCheck super.neat-interpolation_0_5_1_1;
+      # require n-i >= 0.4.
+      neat-interpolation = haskellPackages.callPackage
+       ({ mkDerivation, base, megaparsec, QuickCheck, quickcheck-instances
+        , rerebase, tasty, tasty-hunit, tasty-quickcheck, template-haskell
+        , text, stdenv
+        }:
+        mkDerivation {
+          pname = "neat-interpolation";
+          version = "0.5.1.2";
+          sha256 = "18c48r5qwrapkjh35l5dng3ahkkn1ch47vc4nzjwh4a9va94laln";
+          libraryHaskellDepends = [ base megaparsec template-haskell text ];
+          testHaskellDepends = [
+            QuickCheck quickcheck-instances rerebase tasty tasty-hunit
+            tasty-quickcheck
+          ];
+          description = "A quasiquoter for neat and simple multiline text interpolation";
+          license = stdenv.lib.licenses.mit;
+          hydraPlatforms = stdenv.lib.platforms.none;
+        }) {};
 
       # 2020-07-23 hnix uses multiple functions that are unavailable in
       # data-fix < 0.3.
