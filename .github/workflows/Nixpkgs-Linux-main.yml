@@ -68,6 +68,10 @@ jobs:
       uses: actions/checkout@v2
     - name: Install Nix
       uses: cachix/install-nix-action@v10
+    - name: Install Cachix
+      uses: cachix/cachix-action@v6
+      with:
+        name: ${{ env.cachixAccount }}
     - name: Determined Nix-build
       env:
         # nixos-unstable is a nixpkgs-upstable that passed a number of upstream CI and quality checks, it is essentially a current branch while also receives stable updates fitting for our CI checkups with current Nixpkgs.
@@ -90,6 +94,10 @@ jobs:
       uses: actions/checkout@v2
     - name: Install Nix
       uses: cachix/install-nix-action@v10
+    - name: Install Cachix
+      uses: cachix/cachix-action@v6
+      with:
+        name: ${{ env.cachixAccount }}
     - name: Determined Nix-build
       env:
         useRev: "true"
@@ -117,6 +125,10 @@ jobs:
       uses: actions/checkout@v2
     - name: Install Nix
       uses: cachix/install-nix-action@v10
+    - name: Install Cachix
+      uses: cachix/cachix-action@v6
+      with:
+        name: ${{ env.cachixAccount }}
     - name: Determined Nix-build
       env:
         rev: "nixos-20.03"
@@ -133,6 +145,10 @@ jobs:
       uses: actions/checkout@v2
     - name: Install Nix
       uses: cachix/install-nix-action@v10
+    - name: Install Cachix
+      uses: cachix/cachix-action@v6
+      with:
+        name: ${{ env.cachixAccount }}
     - name: Nix-shell
       run: nix-shell --pure --command 'echo "Evaluated, loaded and entered $IN_NIX_SHELL Nix shell env."'
     - name: Local Hoogle DB for the project development and tooling

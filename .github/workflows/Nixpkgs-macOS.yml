@@ -30,5 +30,9 @@ jobs:
       uses: actions/checkout@v2
     - name: Install Nix
       uses: cachix/install-nix-action@v10
+    - name: Install Cachix
+      uses: cachix/cachix-action@v6
+      with:
+        name: ${{ env.cachixAccount }}
     - name: Determined Nix-build
       run: ./build.sh
