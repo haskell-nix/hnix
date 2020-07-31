@@ -83,7 +83,7 @@ jobs:
 
   # NOTE: Example of customization using Nixpkgs Haskell Lib API
   build20:
-    name: "Release-quality test, SDist, Optimization, Benchmark, Haddock, GHC 8.10.1, Nix shell"
+    name: "Release-quality test, SDist, Optimizations, Benchmark, Haddock, GHC 8.10.1"
     runs-on: ubuntu-latest
     # Matrix of builds for multiple subprojects in a monorepo
     strategy:
