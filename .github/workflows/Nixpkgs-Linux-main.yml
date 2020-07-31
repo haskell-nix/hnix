@@ -26,6 +26,8 @@ env:
   rev: "nixos-unstable"
   # Register and use Cachix account
   cachixAccount: "haskell-with-nixpkgs"
+  # GitHub secret
+  CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
   allowInconsistentDependencies: "false"
   doJailbreak: "false"
   doCheck: "true"
