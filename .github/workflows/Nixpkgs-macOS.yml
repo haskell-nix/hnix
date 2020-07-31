@@ -1,0 +1,38 @@
+name: "Nixpkgs, macOS"
+  # Due to macOS is a side-build to test the platform, using nixos-unstable for additional long-term stability of it
+on:
+  # On Git changes in PR
+  pull_request:
+  # On Git changes of the master
+  push:
+    branches:
+      - master
+  schedule:
+    # Every day at 04:45
+    - cron: "45 01 * * *"
+
+
+env:
+  useRev: "true"
+  rev: "nixos-unstable"
+  cachixAccount: "haskell-with-nixpkgs"
+  # GitHub secret
+  CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
+
+
+jobs:
+  build10:
+    name: NixOS-unstable, default GHC (8.8)
+    runs-on: macos-latest
+    continue-on-error: true
+    steps:
+    - name: Git checkout
+      uses: actions/checkout@v2
+    - name: Install Nix
+      uses: cachix/install-nix-action@v10
+    - name: Install Cachix
+      uses: cachix/cachix-action@v6
+      with:
+        name: ${{ env.cachixAccount }}
+    - name: Determined Nix-build
+      run: ./build.sh

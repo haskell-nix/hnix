@@ -1,6 +1,13 @@
 {
 # Compiler in a form ghc8101 == GHC 8.10.1, just remove spaces and dots
+#  2020-07-05: By default using default GHC for Nixpkgs, see https://search.nixos.org/packages?query=ghc&from=0&size=500&channel=unstable for current version (currently ghc883 == GHC 8.8.3)
   compiler    ? "ghc883"
+
+# Deafult.nix is a unit package abstraciton that allows to abstract over packages even in monorepos:
+# Example: pass --arg cabalName --arg packageRoot "./subprojectDir", or map default.nix over a list of tiples for subprojects.
+# cabalName is package resulting name: by default and on error resolves in haskellPackages.developPackage to project root directory name by default, but outside the haskellPackages.developPackage as you see below packageRoot can be different
+, cabalName ? "replace"
+, packageRoot ? pkgs.nix-gitignore.gitignoreSource [ ] ./.
 
 # This settings expose most of the Nixpkgs Haskell.lib API: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
 
@@ -74,7 +81,7 @@
 
 
 , useRev ? false
-# Nix by default uses nixpkgs-unstable channel
+# Nix by default updates and uses locally configured nixpkgs-unstable channel
 # Nixpkgs revision options:
 #   `rev` vals in order of freshness -> cache & stability:
 #   { master
@@ -89,21 +96,15 @@
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
-    then abort "hnix requires at least nix 2.0"
+    then abort "Requires Nix >= 2.0"
     else
       if useRev
-        # Please do not guard with hash, so the package able to use current channels (rolling `rev`) of Haskell&Nixpkgs
+        # Do not guard with hash, so the project is able to use current channels (rolling `rev`) of Nixpkgs
         then import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz") {}
         else import <nixpkgs> {}
       // {
+        # Try to build dependencies even if they are marked broken.
         config.allowBroken = true;
-      # config.packageOverrides = pkgs: rec {
-      #   nix = pkgs.nixStable.overrideDerivation (attrs: with pkgs; rec {
-      #     src = if builtins.pathExists ./data/nix/.version
-      #           then data/nix
-      #           else throw "data/nix doesn't seem to contain the nix source. You may want to run git submodule update --init.";
-      #   });
-      # };
       }
 
 , mkDerivation   ? null
@@ -140,7 +141,7 @@ let
     overrideHaskellPackages;
 
   # Application of functions from this list to the package in code here happens in the reverse order (from the tail). Some options depend on & override others, so if enabling options caused Nix error or not expected result - change the order, and please do not change this order without proper testing.
-  listOfSetsOfSwitchExtend =
+  listSwitchFunc =
     [
       {
         switch = sdistTarball;
@@ -197,15 +198,16 @@ let
     ];
 
   # Function that applies enabled option to the package, used in the fold.
-  funcOnSwitchAppliesFunction = set: object:
+  onSwitchApplyFunc = set: object:
     if set.switch
       then set.function object
       else object;
 
   # General description of package
   package = haskellPackages.developPackage {
-    name = "hnix";
-    root = pkgs.nix-gitignore.gitignoreSource [ ] ./.;
+    name = cabalName;
+    # Do not include into closure the files listed in .gitignore
+    root = packageRoot;
 
     overrides = self: super: {
       # 2020-06-26 Due to a behaviour change in neat-interpolation-0.4, we
@@ -266,7 +268,7 @@ let
   # One part of Haskell.lib options are argument switches, those are in `inherit`ed list.
   # Other part - are function wrappers over pkg. Fold allows to compose those.
   # composePackage = foldr (if switch then function) (package) ([{switch,function}]) == (functionN .. (function1 package))
-  composedPackage = pkgs.lib.foldr (funcOnSwitchAppliesFunction) package listOfSetsOfSwitchExtend;
+  composedPackage = pkgs.lib.foldr (onSwitchApplyFunc) package listSwitchFunc;
 
 in composedPackage
 

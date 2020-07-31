@@ -13,13 +13,14 @@ set -Eexuo pipefail
 
 
 # NOTE: If vars not imported - init the vars with default values
-compiler=${compiler:-'ghc8101'}
+compiler=${compiler:-'ghc883'}
+
+packageRoot=${packageRoot:-'pkgs.nix-gitignore.gitignoreSource [ ] ./.'}
+cabalName=${cabalName:-'replace'}
+useRev=${useRev:-'false'}
 rev=${rev:-'nixpkgs-unstable'}
-# If NIX_PATH not imported - construct it from `rev`
-NIX_PATH=${NIX_PATH:-"nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"}
-export NIX_PATH
-# Project name, used by cachix
-project=${project:-'defaultProjectName'}
+# Account in Cachix to use
+cachixAccount=${cachixAccount:-'replaceWithProjectNameInCachix'}
 
 
 allowInconsistentDependencies=${allowInconsistentDependencies:-'false'}
@@ -190,7 +191,8 @@ MAIN() {
 
 # Overall it is useful to have in CI test builds the latest stable Nix
 # 2020-06-24: HACK: Do not ask why different commands on Linux and macOS. IDK, wished they we the same. These are the only commands that worked on according platforms right after the fresh Nix installer rollout.
-(nix-channel --update && nix-env -iA nixpkgs.nix) || (sudo nix upgrade-nix)
+# 2020-07-06: HACK: GitHub Actions CI shown that nix-channel or nix-upgrade-nix do not work, there is probably some new rollout, shortcircuting for the time bing with || true
+(nix-channel --update && nix-env -u) || (sudo nix upgrade-nix) || true
 
 
 # Report the Nixpkgs channel revision
@@ -198,14 +200,14 @@ nix-instantiate --eval -E 'with import <nixpkgs> {}; lib.version or lib.nixpkgsV
 
 
 # Secrets are not shared to PRs from forks
-# nix-build | cachix push <project> - uploads binaries, runs&works only in the branches of the main repository, so for PRs - else case runs
+# nix-build | cachix push <account> - uploads binaries, runs&works only in the branches of the main repository, so for PRs - else case runs
 
   if [ ! "$CACHIX_SIGNING_KEY" = "" ]
 
     then
 
       # Build of the inside repo branch - enable push Cachix cache
-      BUILD_PROJECT | cachix push "$project"
+      BUILD_PROJECT | cachix push "$cachixAccount"
 
     else
 

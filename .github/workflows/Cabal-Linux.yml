@@ -1,0 +1,29 @@
+name: "Hackage, Cabal, Linux"
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  schedule:
+    - cron: "45 02 * * *"
+jobs:
+  build10:
+    name: GHC 8.10
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    # Template to build matrix of builds for subprojects in monorepo
+    strategy:
+      matrix:
+        packageRoots: [ ./ ]
+    defaults:
+      run:
+        working-directory: ${{ matrix.packageRoots }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-haskell@v1.1
+        with:
+          ghc-version: "8.10"
+          # cabal-version: "3.0.0.0"
+      - run: cabal v2-configure
+      - run: cabal v2-build
+      - run: cabal v2-test
