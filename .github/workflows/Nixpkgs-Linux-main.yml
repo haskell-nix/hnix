@@ -24,7 +24,8 @@ env:
   ###
   useRev: "true"
   rev: "nixos-unstable"
-  cachixAccount: "replaceWithProjectNameInCachix"
+  # Register and use Cachix account
+  cachixAccount: "haskell-with-nixpkgs"
   allowInconsistentDependencies: "false"
   doJailbreak: "false"
   doCheck: "true"

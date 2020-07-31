@@ -23,6 +23,7 @@ env:
   ###
   useRev: "true"
   rev: "nixos-unstable"
+  cachixAccount: "haskell-with-nixpkgs"
   linkWithGold: "true"
 
 

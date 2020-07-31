@@ -12,6 +12,7 @@ on:
 env:
   useRev: "true"
   rev: "nixos-unstable"
+  cachixAccount: "haskell-with-nixpkgs"
   linkWithGold: "true"
   compiler: "ghcjs"
   ghcjsTmpLogFile: "/tmp/ghcjsTmpLogFile.log"
