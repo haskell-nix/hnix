@@ -84,9 +84,9 @@ jobs:
         - linkWithGold='true'
       os: linux
       dist: bionic
-    - name: GHC 8.8.3, macOS, Strict
+    - name: GHC 8.8.4, macOS, Strict
       env:
-        - compiler='ghc883'
+        - compiler='ghc884'
         - buildStrictly='true'
       os: osx
     - name: GHC 8.10.1, Linux, SDist, Optimize, Benchmark, Haddock, Shell Completions

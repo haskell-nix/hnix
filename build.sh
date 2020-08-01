@@ -13,7 +13,7 @@ set -Eexuo pipefail
 
 
 # NOTE: If vars not imported - init the vars with default values
-compiler=${compiler:-'ghc883'}
+compiler=${compiler:-'ghc884'}
 
 # Account in Cachix to use
 cachixAccount=${cachixAccount:-'replaceWithProjectNameInCachix'}

@@ -32,7 +32,7 @@ env:
 jobs:
 
   build40:
-    name: "Nixpkgs-unstable channel, default GHC (8.8.3)"
+    name: "Nixpkgs-unstable channel, default GHC (8.8)"
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
