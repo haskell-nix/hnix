@@ -72,12 +72,6 @@ env:
 # {os} x {jobs} + {jobs:include} - {jobs:exclude} = {build matrix}
 jobs:
   include:
-    - name: GHC 8.4.4, Linux
-      env:
-        - compiler='ghc844'
-        - linkWithGold='true'
-      os: linux
-      dist: bionic
     - name: GHC 8.6.5, Linux
       env:
         - compiler='ghc865'
