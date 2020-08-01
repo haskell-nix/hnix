@@ -15,7 +15,7 @@ on:
 env:
   useRev: "true"
   rev: "nixos-unstable"
-  cachixAccount: "haskell-with-nixpkgs"
+  cachixAccount: "hnix"
   # GitHub secret
   CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
 

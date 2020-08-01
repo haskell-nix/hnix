@@ -61,7 +61,7 @@ env:
     #
     - withHoogle='false'
     #
-    - cachixAccount='haskell-with-nixpkgs'
+    - cachixAccount='hnix'
     # NOTE: This is secure CACHIX_SIGNING_KEY=val, it is only available on project internal branches, so Cachix would push only there
     - secure: "cfDV3gKzyCs1iK24eeyDriFBFVa9kuWIT51lCzgN65SvRaWZL28XtWTxh5PxubK77eOdKzFypO9ZZuCr7/TLDkwCtTWr2j1cb6RfUYCLSYZvfL4uYWi641jiX2lVFSN4K03Cy7cfByBUK/iVQinK3eyjBKOSdmIq5F7k0hxAmfvFNPCxScRrA2HAsBlnYGZZFhHqCFTpCsqSw2AadJLL6BA1d8652i5IFGgny9thZDev7/qjLVZ8NRlXXFIik0N0GhiNq/XxP25jJ+NPFdhw1TimW78rto+kRfWdFuBWjn1dGcCn5XUr6NthqPoGYk0JIGUaleBJsE9/nvqcTHVzyYgAg1ijgEMd2Sd+mJ2etDbvaADDQJBLSIMGMnBB9UlGJVgRKc/Y+6xBxOgUqw7eMW4FPR+pD1KERE1JaAJ7Ubk4g/t4VDNesPC/bs4z3Xtu188oKMX6ZUgjbMhCCktm6OGl8PdWIlQqYKPFEwYUuhfFi+uGLzZNX8lV61CUXf2ui9Uzq2RmRDbO3Ks/G9uRM8Egie9M/GNF35Twt/GA/A/wp2tpudTTP5ueYvXBHmfTH8LdENBAKnMiheGhq6yhvF43Cxa0s0co9Z22crtJGdW9NPRoLavpX6Yuf5XYtStooNZf036f74BZ8vjVlIClYi/bkdk7v7OmOFa9ZKunsbs="
     #
