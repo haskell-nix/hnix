@@ -14,7 +14,6 @@ jobs:
   build10:
     name: GHC 8.10
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
       matrix:
         packageRoots: [ ./ ]
@@ -42,7 +41,6 @@ jobs:
   build20:
     name: GHC 8.4
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
       matrix:
         packageRoots: [ ./ ]
