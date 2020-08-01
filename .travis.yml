@@ -71,6 +71,7 @@ env:
 # 2020-05-26: Currently newest Travis dist Ubuntu 18.04 bionic
 # {os} x {jobs} + {jobs:include} - {jobs:exclude} = {build matrix}
 jobs:
+  fast_finish: true
   include:
     - name: GHC 8.6.5, Linux
       env:
