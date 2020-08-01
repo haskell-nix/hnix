@@ -20,6 +20,8 @@ jobs:
         working-directory: ${{ matrix.packageRoots }}
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: recursive
       - uses: actions/setup-haskell@v1.1
         with:
           ghc-version: "8.10"

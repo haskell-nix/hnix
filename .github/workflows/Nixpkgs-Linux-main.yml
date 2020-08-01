@@ -66,6 +66,8 @@ jobs:
     steps:
     - name: Git checkout
       uses: actions/checkout@v2
+      with:
+        submodules: recursive
     - name: Install Nix
       uses: cachix/install-nix-action@v10
     - name: Install Cachix
@@ -92,6 +94,8 @@ jobs:
     steps:
     - name: Git checkout
       uses: actions/checkout@v2
+      with:
+        submodules: recursive
     - name: Install Nix
       uses: cachix/install-nix-action@v10
     - name: Install Cachix
@@ -123,6 +127,8 @@ jobs:
     steps:
     - name: Git checkout
       uses: actions/checkout@v2
+      with:
+        submodules: recursive
     - name: Install Nix
       uses: cachix/install-nix-action@v10
     - name: Install Cachix
@@ -143,6 +149,8 @@ jobs:
     steps:
     - name: Git checkout
       uses: actions/checkout@v2
+      with:
+        submodules: recursive
     - name: Install Nix
       uses: cachix/install-nix-action@v10
     - name: Install Cachix
