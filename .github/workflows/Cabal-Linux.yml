@@ -32,7 +32,7 @@ jobs:
           # cabal-version: "3.0.0.0"
       - name: Install additional system packages
         run: sudo apt install libsodium-dev
-      - run: cabal v2-configure
+      - run: cabal v2-configure --disable-optimization --enable-tests --enable-deterministic
       - run: cabal v2-build
       - run: cabal v2-test
 
@@ -58,6 +58,6 @@ jobs:
           # cabal-version: "3.0.0.0"
       - name: Install additional system packages
         run: sudo apt install libsodium-dev
-      - run: cabal v2-configure
+      - run: cabal v2-configure --disable-optimization --enable-tests
       - run: cabal v2-build
       - run: cabal v2-test
