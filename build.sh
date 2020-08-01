@@ -15,10 +15,6 @@ set -Eexuo pipefail
 # NOTE: If vars not imported - init the vars with default values
 compiler=${compiler:-'ghc883'}
 
-packageRoot=${packageRoot:-'pkgs.nix-gitignore.gitignoreSource [ ] ./.'}
-cabalName=${cabalName:-'replace'}
-useRev=${useRev:-'false'}
-rev=${rev:-'nixpkgs-unstable'}
 # Account in Cachix to use
 cachixAccount=${cachixAccount:-'replaceWithProjectNameInCachix'}
 
