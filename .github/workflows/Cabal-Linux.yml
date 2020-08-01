@@ -26,6 +26,8 @@ jobs:
         with:
           ghc-version: "8.10"
           # cabal-version: "3.0.0.0"
+      - name: Install additional system packages
+        run: sudo apt install libsodium-dev
       - run: cabal v2-configure
       - run: cabal v2-build
       - run: cabal v2-test
