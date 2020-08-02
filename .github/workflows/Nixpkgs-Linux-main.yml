@@ -61,7 +61,7 @@ jobs:
 
   # NOTE: Basic example
   build10:
-    name: "NixOS-unstable channel, default GHC (8.8)"
+    name: "NixOS-unstable channel, strict build, default GHC (8.8)"
     runs-on: ubuntu-latest
     #  2020-08-01: NOTE: Due to Nixpkgs brittleness to not block project development Nixpkgs made optional, see commit message for more info
     continue-on-error: true
@@ -82,6 +82,7 @@ jobs:
         # Note that Nix nature is purely functional lazy language, it is referentially transparent, reproducible (deterministic) builds, that means that just as in the type system - any the Nix build failures properly cascade through the Nixpkgs tree graph branch, so particular `master` broken checkouts would properly refuse/would not be able to build parts of Nixpkgs tree graph. So the Nix builds are pretty brittle, do not be ashamed to make Nixpkgs builds optional (`continue-on-error: true`), or set them to the latest stable NixOS Nixpkgs release.
         useRev: "true"
         rev: "nixos-unstable"
+        buildStrictly: "true"
       run: ./build.sh
 
 
