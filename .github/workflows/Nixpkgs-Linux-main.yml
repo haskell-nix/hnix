@@ -54,7 +54,7 @@ env:
   doCoverage: "false"
   doBenchmark: "false"
   generateOptparseApplicativeCompletions: "false"
-  executableNamesToShellComplete: '[ "replaceWithExecutableName" ]'
+  executableNamesToShellComplete: '[ "hnix" ]'
 
 
 jobs:
