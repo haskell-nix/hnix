@@ -38,3 +38,6 @@ jobs:
         name: ${{ env.cachixAccount }}
     - name: Determined Nix-build
       run: ./build.sh
+    - name: Print log tail
+      if: always()
+      run: tail -n "$ghcjsLogTailLength" "$ghcjsTmpLogFile" && rm "$ghcjsTmpLogFile"
