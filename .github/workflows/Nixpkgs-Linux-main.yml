@@ -87,7 +87,7 @@ jobs:
 
   # NOTE: Example of customization using Nixpkgs Haskell Lib API
   build20:
-    name: "Release-quality test, SDist, Optimizations, Benchmark, Haddock, GHC 8.10.1"
+    name: "Quality build, SDist, Optimizations, Benchmark, Haddock, Completions, GHC 8.10.1"
     runs-on: ubuntu-latest
     continue-on-error: true
     # Matrix of builds for multiple subprojects in a monorepo
@@ -117,7 +117,7 @@ jobs:
         disableOptimization: "false"
         enableDeadCodeElimination: "true"
         doBenchmark: "true"
-        generateOptparseApplicativeCompletions: "false"
+        generateOptparseApplicativeCompletions: "true"
         # packageRoot for CI builds can be just a paths, since CI uses remote Git repo that is already filtered with local .gitignore's
         packageRoot: ${{ matrix.packageRoots }}
       run: ./build.sh
