@@ -1,3 +1,5 @@
+#  2020-08-02: NOTE: GHCJS fails for number of month, and makes GitHub CI "red", because team does not care and not pursue GHCJS build currently - there is no need to test for it. Technically compilation directly to WebAssembly looks much easier task than keeping HQ compilation to JS. WebAssembly compilation https://github.com/tweag/asterius look much more promising.
+#  2020-08-02: FIXME: If this is not needed after some time - remove the file.
 name: "Nixpkgs, Linux, GHCJS"
 
 on:
