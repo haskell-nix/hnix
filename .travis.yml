@@ -75,25 +75,20 @@ jobs:
     - name: GHC 8.6.5, Linux
       env:
         - compiler='ghc865'
-        - linkWithGold='true'
       os: linux
       dist: bionic
-    - name: GHC 8.8.4, macOS, Strict
+    - name: GHC 8.8.4, macOS
       env:
         - compiler='ghc884'
-        - buildStrictly='true'
       os: osx
-    - name: GHC 8.10.1, Linux, SDist, Optimize, Benchmark, Haddock, Shell Completions
+    - name: GHC 8.8.4, Linux
+      env:
+        - compiler='ghc884'
+      os: linux
+      dist: bionic
+    - name: GHC 8.10.1, Linux
       env:
         - compiler='ghc8101'
-        - buildFromSdist='true'
-        - linkWithGold='true'
-        - doHaddock='true'
-        - doHyperlinkSource='true'
-        - doBenchmark='true'
-        - disableOptimization='false'
-        - enableDeadCodeElimination='true'
-        - generateOptparseApplicativeCompletions='true'
       os: linux
       dist: bionic
     - name: GHCJS, Linux
@@ -103,6 +98,9 @@ jobs:
       dist: bionic
   allow_failures:
     - env: compiler='ghcjs'
+    - env: compiler='ghc8101'
+    - env: compiler='ghc884'
+    - env: compiler='ghc865'
 
 before_script:
   - sudo mkdir -p /etc/nix
