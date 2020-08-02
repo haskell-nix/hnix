@@ -73,6 +73,11 @@ env:
 jobs:
   fast_finish: true
   include:
+    - name: Bypass build
+      env:
+        - compiler='bypass'
+      os: linux
+      dist: bionic
     - name: GHC 8.6.5, Linux
       env:
         - compiler='ghc865'
@@ -112,6 +117,8 @@ before_script:
   - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo launchctl kickstart -k system/org.nixos.nix-daemon; fi
 
 script:
+  # Ability to bypass builds
+  - if [ "${compiler}" = "bypass" ]; then exit; fi
   #
   #
   # Install Cachix client using Nix:
