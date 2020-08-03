@@ -1,5 +1,9 @@
 # hnix
 
+[![Hackage, Cabal, Linux](https://github.com/haskell-nix/hnix/workflows/Hackage,%20Cabal,%20Linux/badge.svg)](https://github.com/haskell-nix/hnix/actions?query=workflow%3A"Hackage%2C+Cabal%2C+Linux"+branch%3Amaster)
+[![Nixpkgs, Linux, main](https://github.com/haskell-nix/hnix/workflows/Nixpkgs,%20Linux,%20main/badge.svg)]()
+[![Nixpkgs, Linux, additional](https://github.com/haskell-nix/hnix/workflows/Nixpkgs,%20Linux,%20additional/badge.svg)](https://github.com/haskell-nix/hnix/actions?query=workflow%3A%22Nixpkgs%2C+Linux%2C+additional%22+branch%3Amaster)
+[![Nixpkgs, macOS](https://github.com/haskell-nix/hnix/workflows/Nixpkgs,%20macOS/badge.svg)](https://github.com/haskell-nix/hnix/actions?query=workflow%3A%22Nixpkgs%2C+macOS%22+branch%3Amaster)
 [![Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/haskell-nix/Lobby)
 [![Hackage](https://img.shields.io/hackage/v/hnix?color=%235e5086&label=Latest%20release)](https://hackage.haskell.org/package/hnix)
 [![Hackage Matrix Builder](https://img.shields.io/badge/Hackage%20Matrix-Builder-%235e5086)](https://matrix.hackage.haskell.org/package/hnix)
