@@ -21,8 +21,6 @@ git:
 
 env:
   global:
-    # NOTE: This is secure CACHIX_SIGNING_KEY=val, it is only available on project internal branches, so Cachix would push only there
-    - secure: "dm6I+M4+V+C7QMTpcSADdKPE633SvmToXZrTbZ7miNDGmMN+/SfHeN2ybi1+PW6oViMlbPN/7J/aEfiGjSJI8vLk72Y4uCWGmpSb8TXZLu6+whnxtZzzW8+z4tsM4048QJg7CF3N/25U8thRFgs3DqUub1Sf3nG9LrNWdz6ZcDQ="
     ###
     ### NOTE: This configuration uses `build.sh` interface, which uses `default.nix` interface, which exposes the Nixpkgs Haskell Lib interface.
     ###
@@ -31,10 +29,8 @@ env:
     ### Additional documentation is in Nixpkgs Haskell.lib: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
     ###
     #
+    # - rev=nixos-unstable
     # - NIX_PATH="nixpkgs=https://github.com/nixos/nixpkgs/archive/$rev.tar.gz"
-    - project='hnix'
-    - useRev='true'
-    - rev='nixos-unstable'
     - allowInconsistentDependencies='false'
     - doJailbreak='false'
     - doCheck='true'
@@ -63,41 +59,42 @@ env:
     - generateOptparseApplicativeCompletions='false'
     - executableNamesToShellComplete='[ "hnix" ]'
     #
+    - withHoogle='false'
+    #
+    - cachixAccount='hnix'
+    # NOTE: This is secure CACHIX_SIGNING_KEY=val, it is only available on project internal branches, so Cachix would push only there
+    - secure: "dm6I+M4+V+C7QMTpcSADdKPE633SvmToXZrTbZ7miNDGmMN+/SfHeN2ybi1+PW6oViMlbPN/7J/aEfiGjSJI8vLk72Y4uCWGmpSb8TXZLu6+whnxtZzzW8+z4tsM4048QJg7CF3N/25U8thRFgs3DqUub1Sf3nG9LrNWdz6ZcDQ="
+    #
     - ghcjsTmpLogFile='/tmp/ghcjsTmpLogFile.log'
     - ghcjsLogTailLength='10000'
 
 # 2020-05-26: Currently newest Travis dist Ubuntu 18.04 bionic
 # {os} x {jobs} + {jobs:include} - {jobs:exclude} = {build matrix}
 jobs:
+  fast_finish: true
   include:
-    - name: GHC 8.4.4, Linux
+    - name: Bypass build
       env:
-        - compiler='ghc844'
-        - linkWithGold='true'
+        - compiler='bypass'
       os: linux
       dist: bionic
     - name: GHC 8.6.5, Linux
       env:
         - compiler='ghc865'
-        - linkWithGold='true'
       os: linux
       dist: bionic
-    - name: GHC 8.8.3, macOS, Strict
+    - name: GHC 8.8.4, macOS
       env:
-        - compiler='ghc883'
-        - buildStrictly='true'
+        - compiler='ghc884'
       os: osx
-    - name: GHC 8.10.1, Linux, SDist, Optimize, Benchmark, Haddock, Shell Completions
+    - name: GHC 8.8.4, Linux
+      env:
+        - compiler='ghc884'
+      os: linux
+      dist: bionic
+    - name: GHC 8.10.1, Linux
       env:
         - compiler='ghc8101'
-        - buildFromSdist='true'
-        - linkWithGold='true'
-        - doHaddock='true'
-        - doHyperlinkSource='true'
-        - doBenchmark='true'
-        - disableOptimization='false'
-        - enableDeadCodeElimination='true'
-        - generateOptparseApplicativeCompletions='true'
       os: linux
       dist: bionic
     - name: GHCJS, Linux
@@ -107,6 +104,9 @@ jobs:
       dist: bionic
   allow_failures:
     - env: compiler='ghcjs'
+    - env: compiler='ghc8101'
+    - env: compiler='ghc884'
+    - env: compiler='ghc865'
 
 before_script:
   - sudo mkdir -p /etc/nix
@@ -117,13 +117,15 @@ before_script:
   - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then sudo launchctl kickstart -k system/org.nixos.nix-daemon; fi
 
 script:
+  # Ability to bypass builds
+  - if [ "${compiler}" = "bypass" ]; then exit; fi
   #
   #
   # Install Cachix client using Nix:
   - if [ "${TRAVIS_OS_NAME}" = "linux" ] || [ "${TRAVIS_OS_NAME}" = "osx" ]; then nix-env -iA cachix -f https://cachix.org/api/v1/install; fi
-  - cachix use "$project"
+  - cachix use "$cachixAccount"
   # If key is set - use Cachix push, else - proceed without it
-  - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push "$project" --watch-store& fi
+  - if [ ! "$CACHIX_SIGNING_KEY" = "" ]; then cachix push "$cachixAccount" --watch-store& fi
   #
   #
   # NOTE: Normal GHC build
