@@ -36,7 +36,6 @@ import           Data.Text                      ( pack
                                                 , strip
                                                 )
 import qualified Data.Text                     as Text
-import           Data.Text.Prettyprint.Doc
 import           Nix.Atoms
 import           Nix.Cited
 import           Nix.Expr
@@ -52,6 +51,7 @@ import           Nix.Utils               hiding ( (<$>) )
 #endif
 import           Nix.Value
 import           Prelude                 hiding ( (<$>) )
+import           Prettyprinter
 import           Text.Read                      ( readMaybe )
 
 -- | This type represents a pretty printed nix expression

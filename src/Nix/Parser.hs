@@ -71,9 +71,6 @@ import           Data.Text               hiding ( map
                                                 , concatMap
                                                 , zipWith
                                                 )
-import           Data.Text.Prettyprint.Doc      ( Doc
-                                                , pretty
-                                                )
 import           Data.Text.Encoding
 import           Data.Typeable                  ( Typeable )
 import           Data.Void
@@ -81,6 +78,9 @@ import           GHC.Generics            hiding ( Prefix )
 import           Nix.Expr                hiding ( ($>) )
 import           Nix.Expr.Strings
 import           Nix.Render
+import           Prettyprinter                  ( Doc
+                                                , pretty
+                                                )
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer    as L

@@ -16,7 +16,6 @@ module Nix.Render.Frame where
 import           Control.Monad.Reader
 import           Data.Fix
 import           Data.Typeable
-import           Data.Text.Prettyprint.Doc
 import           Nix.Eval
 import           Nix.Exec
 import           Nix.Expr
@@ -28,6 +27,7 @@ import           Nix.Render
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
+import           Prettyprinter
 import           Text.Megaparsec.Pos
 #ifdef MIN_VERSION_pretty_show
 import qualified Text.Show.Pretty as PS

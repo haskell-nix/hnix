@@ -23,7 +23,6 @@ import           Data.List.Split
 import           Data.Maybe                     ( maybeToList )
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
-import           Data.Text.Prettyprint.Doc
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Effects
@@ -44,6 +43,7 @@ import           Nix.String.Coerce
 import           Nix.Utils
 import           Nix.Value
 import           Nix.Value.Monad
+import           Prettyprinter
 import           System.FilePath
 
 #ifdef MIN_VERSION_ghc_datasize

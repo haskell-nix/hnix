@@ -39,7 +39,6 @@ import           Data.List
 import qualified Data.List.NonEmpty            as NE
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
-import           Data.Text.Prettyprint.Doc
 import           Data.Typeable
 import           Nix.Atoms
 import           Nix.Cited
@@ -59,6 +58,7 @@ import           Nix.Utils
 import           Nix.Value
 import           Nix.Value.Equal
 import           Nix.Value.Monad
+import           Prettyprinter
 #ifdef MIN_VERSION_pretty_show
 import qualified Text.Show.Pretty as PS
 #endif
