@@ -22,9 +22,9 @@ import qualified Data.ByteString               as BS
 import qualified Data.Set                      as Set
 import qualified Data.Text                     as T
 import qualified Data.Text.Encoding            as T
-import           Data.Text.Prettyprint.Doc
 import           Data.Void
 import           Nix.Expr.Types.Annotated
+import           Prettyprinter
 import qualified System.Directory              as S
 import qualified System.Posix.Files            as S
 import           Text.Megaparsec.Error

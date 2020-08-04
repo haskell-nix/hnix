@@ -11,13 +11,13 @@ module ParserTests (tests) where
 import Data.Fix
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text (Text, unpack)
-import Data.Text.Prettyprint.Doc
-import Data.Text.Prettyprint.Doc.Render.Text
 import NeatInterpolation (text)
 import Nix.Atoms
 import Nix.Expr
 import Nix.Parser
 import Nix.Pretty
+import Prettyprinter
+import Prettyprinter.Render.Text
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.TH

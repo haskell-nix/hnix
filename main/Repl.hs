@@ -36,9 +36,6 @@ import qualified Data.HashMap.Lazy
 import           Data.Text                      (Text)
 import qualified Data.Text
 import qualified Data.Text.IO
-import           Data.Text.Prettyprint.Doc      (Doc, (<+>))
-import qualified Data.Text.Prettyprint.Doc
-import qualified Data.Text.Prettyprint.Doc.Render.Text
 import           Data.Version                   ( showVersion )
 import           Paths_hnix                     ( version )
 
@@ -46,6 +43,10 @@ import           Control.Monad.Catch
 import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
+
+import           Prettyprinter                  (Doc, (<+>))
+import qualified Prettyprinter
+import qualified Prettyprinter.Render.Text
 
 import           System.Console.Haskeline.Completion
                                                 ( Completion(isFinished)
@@ -456,9 +457,9 @@ helpOptions =
       "set"
       ""
       (    "Set REPL option"
-        <> Data.Text.Prettyprint.Doc.line
+        <> Prettyprinter.line
         <> "Available options:"
-        <> Data.Text.Prettyprint.Doc.line
+        <> Prettyprinter.line
         <> (renderSetOptions helpSetOptions)
       )
       setConfig
@@ -508,14 +509,14 @@ helpSetOptions =
 
 renderSetOptions :: [HelpSetOption] -> Doc ()
 renderSetOptions so =
-  Data.Text.Prettyprint.Doc.indent 4
-    $ Data.Text.Prettyprint.Doc.vsep
+  Prettyprinter.indent 4
+    $ Prettyprinter.vsep
     $ flip map so
     $ \h ->
-             Data.Text.Prettyprint.Doc.pretty (helpSetOptionName h)
+             Prettyprinter.pretty (helpSetOptionName h)
          <+> helpSetOptionSyntax h
-         <>  Data.Text.Prettyprint.Doc.line
-         <>  Data.Text.Prettyprint.Doc.indent 4 (helpSetOptionDoc h)
+         <>  Prettyprinter.line
+         <>  Prettyprinter.indent 4 (helpSetOptionDoc h)
 
 help :: (MonadNix e t f m, MonadIO m)
      => HelpOptions e t f m
@@ -526,14 +527,14 @@ help hs _ = do
   forM_ hs $ \h ->
       liftIO
     . Data.Text.IO.putStrLn
-    . Data.Text.Prettyprint.Doc.Render.Text.renderStrict
-    . Data.Text.Prettyprint.Doc.layoutPretty
-        Data.Text.Prettyprint.Doc.defaultLayoutOptions
+    . Prettyprinter.Render.Text.renderStrict
+    . Prettyprinter.layoutPretty
+        Prettyprinter.defaultLayoutOptions
     $     ":"
-       <>  Data.Text.Prettyprint.Doc.pretty (helpOptionName h)
+       <>  Prettyprinter.pretty (helpOptionName h)
        <+> helpOptionSyntax h
-       <>  Data.Text.Prettyprint.Doc.line
-       <>  Data.Text.Prettyprint.Doc.indent 4 (helpOptionDoc h)
+       <>  Prettyprinter.line
+       <>  Prettyprinter.indent 4 (helpOptionDoc h)
 
 options
   :: (MonadNix e t f m, MonadIO m)

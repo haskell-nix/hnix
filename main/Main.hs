@@ -26,8 +26,6 @@ import           Data.Time
 import qualified Data.Text                     as Text
 import qualified Data.Text.IO                  as Text
 import qualified Data.Text.Lazy.IO             as TL
-import           Data.Text.Prettyprint.Doc
-import           Data.Text.Prettyprint.Doc.Render.Text
 import           Nix
 import           Nix.Convert
 import qualified Nix.Eval                      as Eval
@@ -43,6 +41,8 @@ import           Nix.Utils
 import           Nix.Var
 import           Nix.Value.Monad
 import           Options.Applicative     hiding ( ParserResult(..) )
+import           Prettyprinter
+import           Prettyprinter.Render.Text
 import qualified Repl
 import           System.FilePath
 import           System.IO

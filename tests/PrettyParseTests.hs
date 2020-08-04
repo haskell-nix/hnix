@@ -19,7 +19,6 @@ import qualified Data.List.NonEmpty            as NE
 import           Data.Text                      ( Text
                                                 , pack
                                                 )
-import           Data.Text.Prettyprint.Doc
 import           Hedgehog
 import qualified Hedgehog.Gen                  as Gen
 import qualified Hedgehog.Range                as Range
@@ -27,6 +26,7 @@ import           Nix.Atoms
 import           Nix.Expr
 import           Nix.Parser
 import           Nix.Pretty
+import           Prettyprinter
 import           Test.Tasty
 import           Test.Tasty.Hedgehog
 import           Text.Megaparsec                ( Pos )
