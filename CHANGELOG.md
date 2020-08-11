@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.9.2](https://github.com/haskell-nix/hnix/compare/0.9.1...0.9.2) (yyyy-mm-dd)
+
+* Dependencies:
+  * [Update `data-fix` dependency to `>= 0.3.0 && < 0.4`](https://github.com/haskell-nix/hnix/pull/686)
+  * [Update `prettyprinter` dependency to `>= 1.7.0 && < 1.8`](https://github.com/haskell-nix/hnix/pull/679)
+
 ## [0.9.1](https://github.com/haskell-nix/hnix/compare/0.9.0...0.9.1) (2020-07-13)
 
 * Additional:
