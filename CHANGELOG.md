@@ -2,9 +2,10 @@
 
 ## [0.9.2](https://github.com/haskell-nix/hnix/compare/0.9.1...0.9.2) (yyyy-mm-dd)
 
-* Dependencies:
-  * [Update `data-fix` dependency to `>= 0.3.0 && < 0.4`](https://github.com/haskell-nix/hnix/pull/686)
-  * [Update `prettyprinter` dependency to `>= 1.7.0 && < 1.8`](https://github.com/haskell-nix/hnix/pull/679)
+* Additional:
+  * Dependencies:
+    * [`data-fix >= 0.3.0 && < 0.4`](https://github.com/haskell-nix/hnix/pull/686)
+    * [`prettyprinter >= 1.7.0 && < 1.8`](https://github.com/haskell-nix/hnix/pull/679)
 
 ## [0.9.1](https://github.com/haskell-nix/hnix/compare/0.9.0...0.9.1) (2020-07-13)
 
@@ -15,10 +16,10 @@
     * Support for passing evaluated expression result of `hnix --eval -E`
       to REPL as `input` variable.
     * Support for loading `.hnixrc` from current directory
-  * `builtins.nixVersion` bumped from 2.0 to 2.3
+  * Reporting of `builtins.nixVersion` bumped from 2.0 to 2.3
   * Dependencies:
     * Freed from: `interpolate`, `contravariant`, `semigroups`, `generic-random`, `tasty-quickcheck`
-    * `repline` now `>= 0.4.0.0 && < 0.5`
+    * `repline >= 0.4.0.0 && < 0.5`
 
 ## [0.9.0](https://github.com/haskell-nix/hnix/compare/0.8.0...0.9.0) (2020-06-15)
 
