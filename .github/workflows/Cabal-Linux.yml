@@ -25,6 +25,14 @@ jobs:
       - uses: actions/checkout@v2
         with:
           submodules: recursive
+      - name: Cache of ~/.cabal/packages, ~/.cabal/store and dist-newstyle
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cabal/packages
+            ~/.cabal/store
+            dist-newstyle
+          key: ${{ runner.os }}-Cabal-${{ matrix.ghc }}
       - uses: actions/setup-haskell@v1.1
         with:
           ghc-version: ${{ matrix.ghc }}
