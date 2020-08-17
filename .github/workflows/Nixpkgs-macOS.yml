@@ -13,16 +13,14 @@ on:
 
 
 env:
-  useRev: "true"
   rev: "nixos-unstable"
   cachixAccount: "hnix"
-  # GitHub secret
   CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
 
 
 jobs:
   build10:
-    name: NixOS-unstable, default GHC (8.8)
+    name: "NixOS-unstable, default GHC (8.8)"
     runs-on: macos-latest
     continue-on-error: true
     steps:
@@ -36,5 +34,6 @@ jobs:
       uses: cachix/cachix-action@v6
       with:
         name: ${{ env.cachixAccount }}
+        signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
     - name: Determined Nix-build
       run: ./build.sh
