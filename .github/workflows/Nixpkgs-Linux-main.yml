@@ -22,11 +22,8 @@ env:
   ### and the other part of keys explained in `build.sh`, since those address external procedures aound the builds.
   ### Additional documentation is in Nixpkgs Haskell.lib: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
   ###
-  useRev: "true"
   rev: "nixos-unstable"
-  # Register and use Cachix account
   cachixAccount: "hnix"
-  # GitHub secret
   CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
   allowInconsistentDependencies: "false"
   doJailbreak: "false"
@@ -76,25 +73,18 @@ jobs:
       uses: cachix/cachix-action@v6
       with:
         name: ${{ env.cachixAccount }}
+        signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
     - name: Determined Nix-build
       env:
-        # nixos-unstable is a nixpkgs-upstable that passed a number of upstream CI and quality checks, it is essentially a current branch while also receives stable updates fitting for our CI checkups with current Nixpkgs.
-        # Note that Nix nature is purely functional lazy language, it is referentially transparent, reproducible (deterministic) builds, that means that just as in the type system - any the Nix build failures properly cascade through the Nixpkgs tree graph branch, so particular `master` broken checkouts would properly refuse/would not be able to build parts of Nixpkgs tree graph. So the Nix builds are pretty brittle, do not be ashamed to make Nixpkgs builds optional (`continue-on-error: true`), or set them to the latest stable NixOS Nixpkgs release.
-        useRev: "true"
         rev: "nixos-unstable"
         buildStrictly: "true"
       run: ./build.sh
 
 
-  # NOTE: Example of customization using Nixpkgs Haskell Lib API
   build20:
     name: "Quality build, SDist, Optimizations, Benchmark, Haddock, Completions, GHC 8.10.1"
     runs-on: ubuntu-latest
     continue-on-error: true
-    # Matrix of builds for multiple subprojects in a monorepo
-    strategy:
-      matrix:
-        packageRoots: [ ./ ]
     steps:
     - name: Git checkout
       uses: actions/checkout@v2
@@ -106,9 +96,9 @@ jobs:
       uses: cachix/cachix-action@v6
       with:
         name: ${{ env.cachixAccount }}
+        signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
     - name: Determined Nix-build
       env:
-        useRev: "true"
         rev: "nixos-unstable"
         compiler: "ghc8101"
         buildFromSdist: "true"
@@ -119,35 +109,9 @@ jobs:
         enableDeadCodeElimination: "true"
         doBenchmark: "true"
         generateOptparseApplicativeCompletions: "true"
-        # packageRoot for CI builds can be just a paths, since CI uses remote Git repo that is already filtered with local .gitignore's
-        packageRoot: ${{ matrix.packageRoots }}
       run: ./build.sh
 
 
-  # NOTE: Build on latest stable NixOS release
-  build30:
-    name: "NixOS 20.03 stable channel, default GHC (8.8)"
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-    - name: Git checkout
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
-    - name: Install Nix
-      uses: cachix/install-nix-action@v10
-    - name: Install Cachix
-      uses: cachix/cachix-action@v6
-      with:
-        name: ${{ env.cachixAccount }}
-    - name: Determined Nix-build
-      env:
-        rev: "nixos-20.03"
-      run: ./build.sh
-
-
-  # NOTE: This would additionally test that the Nix shell customization of the project works.
-  # By default *this setup provides local hoogle and generates database of the documetation for the project and its dependencies
   build40:
     name: "Nix-shell & supplied locall project Hoogle DB"
     runs-on: ubuntu-latest
@@ -163,10 +127,10 @@ jobs:
       uses: cachix/cachix-action@v6
       with:
         name: ${{ env.cachixAccount }}
+        signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
     - name: Nix-shell
       run: nix-shell --pure --command 'echo "Evaluated, loaded and entered $IN_NIX_SHELL Nix shell env."'
     - name: Local Hoogle DB for the project development and tooling
       run: nix-shell --pure --command 'hoogle True'
 
 
-  # Other samples of tests used in the project see in the directory

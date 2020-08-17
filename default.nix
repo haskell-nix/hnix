@@ -1,7 +1,7 @@
 {
-# Compiler in a form ghc8101 == GHC 8.10.1, just remove spaces and dots
-#  2020-07-05: By default using default GHC for Nixpkgs, see https://search.nixos.org/packages?query=ghc&from=0&size=500&channel=unstable for current version (currently ghc883 == GHC 8.8.3)
-  compiler    ? "ghc884"
+# Default GHC for Nixpkgs by default, for current default and explicitly supported GHCs https://search.nixos.org/packages?query=ghc&from=0&size=500&channel=unstable, Nixpkgs implicitly supports older minor versions also, until the configuration departs from compatibility with them.
+# Compiler in a form ghc8101 <- GHC 8.10.1, just remove spaces and dots
+  compiler    ? "default"
 
 # Deafult.nix is a unit package abstraciton that allows to abstract over packages even in monorepos:
 # Example: pass --arg cabalName --arg packageRoot "./subprojectDir", or map default.nix over a list of tiples for subprojects.
@@ -80,7 +80,6 @@
 , withHoogle  ? true
 
 
-, useRev ? false
 # Nix by default updates and uses locally configured nixpkgs-unstable channel
 # Nixpkgs revision options:
 #   `rev` vals in order of freshness -> cache & stability:
@@ -92,16 +91,16 @@
 #   , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
 #   ...
 #   }
-, rev ? "nixpkgs-unstable"
+, rev ? "default"
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
     then abort "Requires Nix >= 2.0"
     else
-      if useRev
+      if ((rev == "") || (rev == "default") || (rev == "local"))
+        then import <nixpkgs> {}
         # Do not guard with hash, so the project is able to use current channels (rolling `rev`) of Nixpkgs
-        then import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz") {}
-        else import <nixpkgs> {}
+        else import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz") {}
       // {
         # Try to build dependencies even if they are marked broken.
         config.allowBroken = true;
@@ -111,6 +110,20 @@
 }:
 
 let
+
+ getDefaultGHC = "ghc${
+    (
+      # Remove '.' from the string 8.8.4 -> 884
+      pkgs.lib.stringAsChars (c: if c == "." then "" else c)
+        # Get default GHC version,
+        (pkgs.lib.getVersion pkgs.haskellPackages.ghc)
+    )
+  }";
+
+ compilerPackage =
+   if ((compiler == "") || (compiler == "default"))
+     then getDefaultGHC
+     else compiler;
 
   #  2020-05-23: NOTE: Currently HNix-store needs no overlay
   # hnix-store-src = pkgs.fetchFromGitHub {
@@ -122,7 +135,7 @@ let
 
   overlay = pkgs.lib.foldr pkgs.lib.composeExtensions (_: _: {}) [
     # (import "${hnix-store-src}/overlay.nix")
-    (self: super: with pkgs.haskell.lib;
+    (self: super:
       pkgs.lib.optionalAttrs withHoogle {
       ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
       ghcWithPackages = self.ghc.withPackages;
@@ -137,7 +150,7 @@ let
       else overlay;
   };
 
-  haskellPackages = pkgs.haskell.packages.${compiler}.override
+  haskellPackages = pkgs.haskell.packages.${compilerPackage}.override
     overrideHaskellPackages;
 
   # Application of functions from this list to the package in code here happens in the reverse order (from the tail). Some options depend on & override others, so if enabling options caused Nix error or not expected result - change the order, and please do not change this order without proper testing.

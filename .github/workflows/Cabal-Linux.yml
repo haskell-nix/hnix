@@ -16,11 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        packageRoots: [ ./ ]
         ghc: [ "8.10", "8.4" ]
-    defaults:
-      run:
-        working-directory: ${{ matrix.packageRoots }}
     steps:
       - uses: actions/checkout@v2
         with:
