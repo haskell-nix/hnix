@@ -17,7 +17,6 @@ import           Control.Monad.Catch
 import           Control.Monad.Free
 import           Control.Monad.IO.Class
 -- import           Control.Monad.ST
-import qualified Data.Aeson.Text               as A
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Map                      as Map
 import           Data.List                      ( sortOn )
@@ -25,7 +24,6 @@ import           Data.Maybe                     ( fromJust )
 import           Data.Time
 import qualified Data.Text                     as Text
 import qualified Data.Text.IO                  as Text
-import qualified Data.Text.Lazy.IO             as TL
 import           Nix
 import           Nix.Convert
 import qualified Nix.Eval                      as Eval
@@ -124,7 +122,7 @@ main = do
     | xml opts
     = error "Rendering expression trees to XML is not yet implemented"
     | json opts
-    = liftIO $ TL.putStrLn $ A.encodeToLazyText (stripAnnotation expr)
+    = error "Rendering expression trees to JSON is not implemented"
     | verbose opts >= DebugInfo
     = liftIO $ putStr $ PS.ppShow $ stripAnnotation expr
     | cache opts
