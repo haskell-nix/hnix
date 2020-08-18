@@ -543,7 +543,6 @@ instance ToJSON NUnaryOp
 instance ToJSON NBinaryOp
 instance ToJSON NRecordType
 instance ToJSON a => ToJSON (NExprF a)
-instance ToJSON NExpr
 
 instance (FromJSON v, FromJSON a) => FromJSON (Antiquoted v a)
 instance FromJSON a => FromJSON (NString a)
@@ -558,7 +557,6 @@ instance FromJSON NUnaryOp
 instance FromJSON NBinaryOp
 instance FromJSON NRecordType
 instance FromJSON a => FromJSON (NExprF a)
-instance FromJSON NExpr
 
 $(makeTraversals ''NExprF)
 $(makeTraversals ''Binding)
