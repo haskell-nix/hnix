@@ -8,6 +8,8 @@ import qualified Data.Text                     as Text
 import           Data.Time
 import           Nix.Options
 import           Options.Applicative     hiding ( ParserResult(..) )
+import           Data.Version                   (showVersion)
+import           Paths_hnix                     (version)
 
 decodeVerbosity :: Int -> Verbosity
 decodeVerbosity 0 = ErrorsOnly
@@ -160,7 +162,13 @@ nixOptions current =
             "Set current time for testing purposes"
           )
     <*> many (strArgument (metavar "FILE" <> help "Path of file to parse"))
+versionOpt :: Parser (a -> a)
+versionOpt = infoOption
+             (showVersion version)
+             (  long "version"
+             <> help "Show release version"
+             )
 
 nixOptionsInfo :: UTCTime -> ParserInfo Options
-nixOptionsInfo current = info (helper <*> nixOptions current)
+nixOptionsInfo current = info (helper <*> versionOpt <*> nixOptions current)
                               (fullDesc <> progDesc "" <> header "hnix")
