@@ -44,28 +44,6 @@ jobs:
       run: ./build.sh
 
 
-  build30:
-    name: "NixOS 20.03 stable channel, default GHC (8.8)"
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-    - name: Git checkout
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
-    - name: Install Nix
-      uses: cachix/install-nix-action@v10
-    - name: Install Cachix
-      uses: cachix/cachix-action@v6
-      with:
-        name: ${{ env.cachixAccount }}
-        signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
-    - name: Determined Nix-build
-      env:
-        rev: "nixos-20.03"
-      run: ./build.sh
-
-
   build50:
     name: "NixOS-unstable channel, GHC 8.6.5"
     runs-on: ubuntu-latest
