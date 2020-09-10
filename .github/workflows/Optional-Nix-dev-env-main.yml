@@ -1,4 +1,4 @@
-name: "Nixpkgs, Linux, main"
+name: "(Optional) Nix dev env, Linux, main"
 
 # When to trigger builds
 on:

@@ -1,0 +1,39 @@
+name: "Release testing, Hackage, Cabal, Linux"
+
+on:
+  release:
+    # created: a draft is saved, or a release or pre-release is published without previously being saved as a draft
+    - created
+
+jobs:
+
+  build10:
+    name: GHC
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Since CI by default tests boundary GHCs, test middle versions of GHCs
+        ghc: [ "8.8", "8.6"]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Cache of ~/.cabal/packages, ~/.cabal/store and dist-newstyle
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cabal/packages
+            ~/.cabal/store
+            dist-newstyle
+          key: ${{ runner.os }}-Cabal-${{ matrix.ghc }}
+      - uses: actions/setup-haskell@v1.1
+        with:
+          ghc-version: ${{ matrix.ghc }}
+      - name: Install additional system packages
+        run: sudo apt install libsodium-dev
+      #  2020-08-01: NOTE: Nix instantiate still needed for HNix tests
+      - name: Install Nix
+        uses: cachix/install-nix-action@v10
+      - run: cabal v2-configure --disable-optimization --enable-tests --enable-deterministic
+      - run: cabal v2-build
+      - run: cabal v2-test
