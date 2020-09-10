@@ -1,4 +1,4 @@
-name: "Nixpkgs, macOS"
+name: "(Optional) Nix dev env, macOS"
   # Due to macOS is a side-build to test the platform, using nixos-unstable for additional long-term stability of it
 on:
   # On Git changes in PR
