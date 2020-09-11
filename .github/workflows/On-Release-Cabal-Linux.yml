@@ -3,7 +3,7 @@ name: "Release testing, Hackage, Cabal, Linux"
 on:
   release:
     # created: a draft is saved, or a release or pre-release is published without previously being saved as a draft
-    - created
+    types: [ created ]
 
 jobs:
 
