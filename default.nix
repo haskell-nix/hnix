@@ -226,7 +226,7 @@ let
       # 2020-06-26 Due to a behaviour change in neat-interpolation-0.4, we
       # require n-i >= 0.4. dontCheck helps us avoid conflicts with
       # neat-interpolation's test dependencies.
-      neat-interpolation = pkgs.haskell.lib.dontCheck super.neat-interpolation_0_5_1_1;
+      neat-interpolation = pkgs.haskell.lib.dontCheck super.neat-interpolation_0_5_1_2;
 
       # 2020-07-23 hnix uses multiple functions that are unavailable in
       # data-fix < 0.3.
