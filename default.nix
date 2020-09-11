@@ -91,7 +91,7 @@
 #   , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
 #   ...
 #   }
-, rev ? "default"
+, rev ? "3c0e3697520cbe7d9eb3a64bfd87de840bf4aa77" #  2020-09-11: NOTE: This Nixpkgs revision successfully terminates neat-interpolation evaluation.
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
