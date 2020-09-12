@@ -387,6 +387,13 @@ instance Eq1 NKeyName where
   liftEq _  (StaticKey  a) (StaticKey  b) = a == b
   liftEq _  _              _              = False
 
+-- | @since UNRELEASED
+instance Ord1 NKeyName where
+  liftCompare cmp (DynamicKey a) (DynamicKey b) = liftCompare2 (liftCompare cmp) cmp a b
+  liftCompare _   (DynamicKey _) (StaticKey _)  = LT
+  liftCompare _   (StaticKey _)  (DynamicKey _) = GT
+  liftCompare _   (StaticKey a)  (StaticKey b)  = compare a b
+
 instance Hashable1 NKeyName where
   liftHashWithSalt h salt (DynamicKey a) =
     liftHashWithSalt2 (liftHashWithSalt h) h (salt `hashWithSalt` (0 :: Int)) a
@@ -491,7 +498,9 @@ $(deriveEq1 ''Params)
 $(deriveEq1 ''Antiquoted)
 $(deriveEq2 ''Antiquoted)
 
+$(deriveOrd1 ''NExprF)
 $(deriveOrd1 ''NString)
+$(deriveOrd1 ''Binding)
 $(deriveOrd1 ''Params)
 $(deriveOrd1 ''Antiquoted)
 $(deriveOrd2 ''Antiquoted)
