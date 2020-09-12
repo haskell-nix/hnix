@@ -1,19 +1,19 @@
 # Changelog
 
-## [0.10.0](https://github.com/haskell-nix/hnix/compare/0.9.1...0.10.0)
+## [0.10.0](https://github.com/haskell-nix/hnix/compare/0.9.1...0.10.0) (2020-09-12)
 
-* [Add `--version` option](https://github.com/haskell-nix/hnix/pull/703)
+* Breaking:
+  * [Remove `ToJSON` and `FromJSON` instances for `NExpr`](https://github.com/haskell-nix/hnix/pull/699)
+    * This also removes the JSON output feature for unevaluated expression trees.
 
-* [Remove `ToJSON` and `FromJSON` instances for `NExpr`](https://github.com/haskell-nix/hnix/pull/699)
-  * This also removes the JSON output feature for unevaluated expression trees.
-
-* [Update `data-fix` dependency to `>= 0.3.0 && < 0.4`](https://github.com/haskell-nix/hnix/pull/686)
-
-* [Update `prettyprinter` dependency to `= 1.7.0 && < 1.8`](https://github.com/haskell-nix/hnix/pull/679)
+* Misc:
+  * [Update `data-fix` dependency to `>= 0.3.0 && < 0.4`](https://github.com/haskell-nix/hnix/pull/686)
+  * [Update `prettyprinter` dependency to `= 1.7.0 && < 1.8`](https://github.com/haskell-nix/hnix/pull/679)
+  * [CLI recieved `--version` option](https://github.com/haskell-nix/hnix/pull/703)
 
 ## [0.9.1](https://github.com/haskell-nix/hnix/compare/0.9.0...0.9.1) (2020-07-13)
 
-* Additional:
+* Misc:
   * REPL improvements
     * Better tab completion
     * Multi-line input
@@ -29,12 +29,12 @@
 
 * Changelog started. Previous release was `0.8.0`. In new release:
 
-* Major breaking:
+* Breaking:
   * Removed instances due to migration to `haskeline >= 0.8 && < 0.9`:
     * `instance MonadException m => MonadException(StateT(HashMap FilePath NExprLoc) m)`
     * `instance MonadException m => MonadException(Fix1T StandardTF m)`
 
-* Additional:
+* Misc:
   * Library: Official support for `GHC 8.4 - 8.10`
 
 ---
