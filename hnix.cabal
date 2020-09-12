@@ -398,6 +398,7 @@ library
     , exceptions >= 0.10.0 && < 0.11
     , filepath >= 1.4.2 && < 1.5
     , free >= 5.1 && < 5.2
+    , gitrev >= 1.1.0 && < 1.4
     , hashable >= 1.2.5 && < 1.4
     , hashing >= 0.1.0 && < 0.2
     , hnix-store-core >= 0.1.0 && < 0.3
