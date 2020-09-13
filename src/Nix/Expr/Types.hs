@@ -387,7 +387,7 @@ instance Eq1 NKeyName where
   liftEq _  (StaticKey  a) (StaticKey  b) = a == b
   liftEq _  _              _              = False
 
--- | @since UNRELEASED
+-- | @since 0.10.1
 instance Ord1 NKeyName where
   liftCompare cmp (DynamicKey a) (DynamicKey b) = liftCompare2 (liftCompare cmp) cmp a b
   liftCompare _   (DynamicKey _) (StaticKey _)  = LT
