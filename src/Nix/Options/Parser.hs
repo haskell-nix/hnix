@@ -199,6 +199,7 @@ versionOpt = shortVersionOpt <*> debugVersionOpt
     <> help "Show release version"
     )
 
+  --  2020-09-13: NOTE: Does not work for direct `nix-build`s, works for `nix-shell` `cabal` builds.
   debugVersionOpt :: Parser (a -> a)
   debugVersionOpt = infoOption
     ( concat
