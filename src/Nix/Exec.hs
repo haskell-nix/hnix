@@ -6,7 +6,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes #-}
@@ -14,7 +13,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
@@ -360,7 +358,7 @@ execBinaryOp scope span op lval rarg = case op of
   NImpl -> fromValue lval >>= \l -> if l
              then rarg >>= \rval -> fromValue rval >>= boolOp rval
              else bypass True
-  _     -> rarg >>= \rval -> 
+  _     -> rarg >>= \rval ->
              demand rval $ \rval' ->
                demand lval $ \lval' ->
                  execBinaryOpForced scope span op lval' rval'
@@ -411,12 +409,12 @@ execBinaryOpForced scope span op lval rval = case op of
         <$> coerceToString callFunc CopyToStore CoerceStringy rs
     (NVPath ls, NVStr rs) -> case principledGetStringNoContext rs of
       Just rs2 -> nvPathP prov <$> makeAbsolutePath @t @f (ls `mappend` (Text.unpack rs2))
-      Nothing -> throwError $ ErrorCall $ 
+      Nothing -> throwError $ ErrorCall $
         -- data/nix/src/libexpr/eval.cc:1412
         "A string that refers to a store path cannot be appended to a path."
     (NVPath ls, NVPath rs) -> nvPathP prov <$> makeAbsolutePath @t @f (ls ++ rs)
 
-    (ls@NVSet{}, NVStr rs) -> 
+    (ls@NVSet{}, NVStr rs) ->
       (\ls2 -> nvStrP prov (ls2 `principledStringMappend` rs))
         <$> coerceToString callFunc DontCopyToStore CoerceStringy ls
     (NVStr ls, rs@NVSet{}) ->
