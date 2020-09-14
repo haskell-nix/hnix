@@ -1378,7 +1378,7 @@ exec_ xs = do
 fetchurl
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 fetchurl v = demand v $ \case
-  NVSet s _ -> attrsetGet "url" s >>= demand ?? (go (M.lookup "sha256" s))
+  NVSet s _ -> attrsetGet "url" s >>= demand ?? go (M.lookup "sha256" s)
   v@NVStr{} -> go Nothing v
   v ->
     throwError

@@ -408,7 +408,7 @@ execBinaryOpForced scope span op lval rval = case op of
       (\rs2 -> nvStrP prov (ls `principledStringMappend` rs2))
         <$> coerceToString callFunc CopyToStore CoerceStringy rs
     (NVPath ls, NVStr rs) -> case principledGetStringNoContext rs of
-      Just rs2 -> nvPathP prov <$> makeAbsolutePath @t @f (ls `mappend` (Text.unpack rs2))
+      Just rs2 -> nvPathP prov <$> makeAbsolutePath @t @f (ls `mappend` Text.unpack rs2)
       Nothing -> throwError $ ErrorCall $
         -- data/nix/src/libexpr/eval.cc:1412
         "A string that refers to a store path cannot be appended to a path."
@@ -431,7 +431,7 @@ execBinaryOpForced scope span op lval rval = case op of
 
  where
   prov :: Provenance m (NValue t f m)
-  prov = (Provenance scope (NBinary_ span op (Just lval) (Just rval)))
+  prov = Provenance scope (NBinary_ span op (Just lval) (Just rval))
 
   toBool = pure . nvConstantP prov . NBool
   compare :: (forall a. Ord a => a -> a -> Bool) -> m (NValue t f m)

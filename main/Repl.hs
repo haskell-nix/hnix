@@ -166,7 +166,7 @@ initState mIni = do
   where
     evalText :: (MonadNix e t f m) => Text -> m (NValue t f m)
     evalText expr = case parseNixTextLoc expr of
-      Failure e -> error $ "Impossible happened: Unable to parse expression - '" ++ (Data.Text.unpack expr) ++ "' error was " ++ show e
+      Failure e -> error $ "Impossible happened: Unable to parse expression - '" ++ Data.Text.unpack expr ++ "' error was " ++ show e
       Success e -> do
         value <- evalExprLoc e
         pure value
@@ -402,7 +402,7 @@ completeFunc reversedPrev word
                 case Data.HashMap.Lazy.lookup f m of
                   Nothing -> pure []
                   Just e ->
-                    (demand e)
+                    demand e
                     (\e' -> fmap (("." <> f) <>) <$> algebraicComplete fs e')
 
       in case val of
@@ -459,7 +459,7 @@ helpOptions =
         <> Prettyprinter.line
         <> "Available options:"
         <> Prettyprinter.line
-        <> (renderSetOptions helpSetOptions)
+        <> renderSetOptions helpSetOptions
       )
       setConfig
   ]

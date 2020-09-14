@@ -409,8 +409,8 @@ printNix = iterNValue (\_ _ -> thk) phi
    where
     check v = fromMaybe
       v
-      (   (fmap (surround . show) (readMaybe v :: Maybe Int))
-      <|> (fmap (surround . show) (readMaybe v :: Maybe Float))
+      (   fmap (surround . show) (readMaybe v :: Maybe Int)
+      <|> fmap (surround . show) (readMaybe v :: Maybe Float)
       )
       where surround s = "\"" ++ s ++ "\""
   phi NVClosure'{}        = "<<lambda>>"
