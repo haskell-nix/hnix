@@ -59,7 +59,7 @@ main = do
         Just path ->
           mapM_ (processFile opts) =<< (lines <$> liftIO (readFile path))
         Nothing -> case filePaths opts of
-          [] -> withNixContext Nothing $ Repl.main
+          [] -> withNixContext Nothing Repl.main
           ["-"] ->
             handleResult opts Nothing
               .   parseNixTextLoc
