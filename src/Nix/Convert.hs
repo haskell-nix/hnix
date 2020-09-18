@@ -246,7 +246,7 @@ instance ( Convertible e t f m
   => FromValue (AttrSet a, AttrSet SourcePos) m
               (Deeper (NValue' t f m (NValue t f m))) where
   fromValueMay = \case
-    Deeper (NVSet' s p) -> fmap (, p) <$> sequence <$> traverse fromValueMay s
+    Deeper (NVSet' s p) -> fmap (, p) . sequence <$> traverse fromValueMay s
     _                   -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
