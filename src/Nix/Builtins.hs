@@ -310,9 +310,7 @@ foldNixPath f z = do
     Just v  -> demand v $ fromValue . Deeper
   mPath <- getEnvVar "NIX_PATH"
   mDataDir <- getEnvVar "NIX_DATA_DIR"
-  dataDir <- case mDataDir of
-    Nothing -> getDataDir
-    Just dataDir -> return dataDir
+  dataDir <- maybe getDataDir return mDataDir
   foldrM go z
     $  map (fromInclude . principledStringIgnoreContext) dirs
     ++ case mPath of
@@ -1100,9 +1098,7 @@ scopedImport asetArg pathArg = fromValue @(AttrSet (NValue t f m)) asetArg >>= \
 getEnv_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 getEnv_ = fromValue >=> fromStringNoContext >=> \s -> do
   mres <- getEnvVar (Text.unpack s)
-  toValue $ principledMakeNixStringWithoutContext $ case mres of
-    Nothing -> ""
-    Just v  -> Text.pack v
+  toValue $ principledMakeNixStringWithoutContext $ maybe "" Text.pack mres
 
 sort_
   :: MonadNix e t f m
