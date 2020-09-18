@@ -80,8 +80,7 @@ data NValueF p m r
       --   result.
     deriving (Generic, Typeable, Functor)
 
--- | This 'Foldable' instance only folds what the value actually is known to
---   contain at time of fold.
+-- | Folds what the value is known to contain at time of fold.
 instance Foldable (NValueF p m) where
   foldMap f = \case
     NVConstantF _  -> mempty
