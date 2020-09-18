@@ -365,9 +365,9 @@ instance Convertible e t f m
         [] -> return Nothing
         _  -> Just <$> toValue ts
     pure $ flip nvSet' M.empty $ M.fromList $ catMaybes
-      [ (\p -> ("path", p)) <$> path
-      , (\ao -> ("allOutputs", ao)) <$> allOutputs
-      , (\os -> ("outputs", os)) <$> outputs
+      [ ("path",) <$> path
+      , ("allOutputs",) <$> allOutputs
+      , ("outputs",) <$> outputs
       ]
 
 instance Convertible e t f m => ToValue () m (NExprF (NValue t f m)) where
