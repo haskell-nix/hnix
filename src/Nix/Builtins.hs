@@ -328,16 +328,17 @@ foldNixPath f z = do
 nixPath :: MonadNix e t f m => m (NValue t f m)
 nixPath = fmap nvList $ flip foldNixPath [] $ \p mn ty rest ->
   pure
-    $ (flip nvSet mempty $ M.fromList
+    $ flip nvSet mempty ( M.fromList
         [ case ty of
           PathEntryPath -> ("path", nvPath p)
           PathEntryURI ->
             ( "uri"
-            , nvStr (hackyMakeNixStringWithoutContext (Text.pack p))
+            , nvStr $ hackyMakeNixStringWithoutContext $ Text.pack p
             )
+
         , ( "prefix"
           , nvStr
-            (hackyMakeNixStringWithoutContext $ Text.pack (fromMaybe "" mn))
+            $ hackyMakeNixStringWithoutContext $ Text.pack $ fromMaybe "" mn
           )
         ]
       )
