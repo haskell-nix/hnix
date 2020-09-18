@@ -51,7 +51,7 @@ import           Nix.String
 import           Nix.Thunk
 import           Nix.Utils
 
--- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation is
+-- | 'NValue' is the most reduced form of a 'NExpr' after evaluation is
 --   completed. 's' is related to the type of errors that might occur during
 --   construction or use of a value.
 data NValueF p m r
