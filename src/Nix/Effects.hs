@@ -163,7 +163,7 @@ instance MonadEnv IO where
 
   getCurrentSystemOS   = pure $ T.pack System.Info.os
 
--- Invert the conversion done by GHC_CONVERT_CPU in GHC's aclocal.m4
+  -- Invert the conversion done by GHC_CONVERT_CPU in GHC's aclocal.m4
   getCurrentSystemArch = pure $ T.pack $ case System.Info.arch of
     "i386" -> "i686"
     arch   -> arch
@@ -247,7 +247,7 @@ instance MonadStore IO where
           $  "addPath: failed: nix-store --add "
           ++ show path
 
---TODO: Use a temp directory so we don't overwrite anything important
+  --TODO: Use a temp directory so we don't overwrite anything important
   toFile_' filepath content = do
     writeFile filepath content
     storepath <- addPath' filepath
