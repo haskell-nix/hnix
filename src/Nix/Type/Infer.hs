@@ -61,8 +61,6 @@ import           Nix.Expr.Types.Annotated
 import           Nix.Fresh
 import           Nix.String
 import           Nix.Scope
--- import           Nix.Thunk
--- import           Nix.Thunk.Basic
 import qualified Nix.Type.Assumption           as As
 import           Nix.Type.Env
 import qualified Nix.Type.Env                  as Env

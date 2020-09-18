@@ -44,11 +44,8 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
 import           Data.Fix                       ( Fix(..), foldFix, foldFixM )
--- import           Data.Foldable
 import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
--- import           Data.HashSet (HashSet)
--- import qualified Data.HashSet as S
 import           Data.IORef
 import           Data.List.NonEmpty             ( NonEmpty(..) )
 import qualified Data.List.NonEmpty            as NE

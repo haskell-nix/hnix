@@ -13,7 +13,6 @@ import           Control.Applicative ((<|>))
 import           Control.Monad (when, unless)
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
--- import qualified Data.HashMap.Lazy as M
 import           Data.List ((\\))
 import           Data.Maybe (isJust)
 import qualified Data.Set as S

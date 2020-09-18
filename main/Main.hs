@@ -16,7 +16,6 @@ import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.Free
 import           Control.Monad.IO.Class
--- import           Control.Monad.ST
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Map                      as Map
 import           Data.List                      ( sortOn )
@@ -29,7 +28,6 @@ import           Nix.Convert
 import qualified Nix.Eval                      as Eval
 import           Nix.Fresh.Basic
 import           Nix.Json
--- import           Nix.Lint
 import           Nix.Options.Parser
 import           Nix.Standard
 import           Nix.Thunk.Basic
