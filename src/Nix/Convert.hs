@@ -359,7 +359,7 @@ instance Convertible e t f m
       else return Nothing
     outputs <- do
       let outputs =
-            fmap principledMakeNixStringWithoutContext $ nlcvOutputs nlcv
+            principledMakeNixStringWithoutContext <$> nlcvOutputs nlcv
       ts :: [NValue t f m] <- traverse toValue outputs
       case ts of
         [] -> return Nothing
