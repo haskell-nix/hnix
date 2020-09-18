@@ -477,7 +477,7 @@ execBinaryOpForced scope span op lval rval = case op of
 -- use 'throwError'.
 fromStringNoContext :: Framed e m => NixString -> m Text
 fromStringNoContext ns = case principledGetStringNoContext ns of
-  Just str -> return str
+  Just str -> pure str
   Nothing  -> throwError $ ErrorCall "expected string with no context"
 
 addTracing
@@ -489,7 +489,7 @@ addTracing k v = do
   guard (depth < 2000)
   local succ $ do
     v'@(Compose (Ann span x)) <- sequence v
-    return $ do
+    pure $ do
       opts :: Options <- asks (view hasLens)
       let rendered = if verbose opts >= Chatty
 #ifdef MIN_VERSION_pretty_show
@@ -503,7 +503,7 @@ addTracing k v = do
       putStr $ show loc
       res <- k v'
       print $ msg rendered <> " ...done"
-      return res
+      pure res
 
 evalExprLoc :: forall e t f m . MonadNix e t f m => NExprLoc -> m (NValue t f m)
 evalExprLoc expr = do

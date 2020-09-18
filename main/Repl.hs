@@ -96,7 +96,7 @@ main' iniVal = initState iniVal >>= \s -> flip evalStateT s
       <> ". For help type :help\n"
   finalizer = do
     liftIO $ putStrLn "Goodbye."
-    return Exit
+    pure Exit
 
   rcFile = do
     f <- liftIO $ Data.Text.IO.readFile ".hnixrc" `catch` handleMissing
@@ -107,7 +107,7 @@ main' iniVal = initState iniVal >>= \s -> flip evalStateT s
       x -> cmd $ unwords x
 
   handleMissing e
-    | System.IO.Error.isDoesNotExistError e = return ""
+    | System.IO.Error.isDoesNotExistError e = pure ""
     | otherwise = throwIO e
 
   -- Replicated and slightly adjusted `optMatcher` from `System.Console.Repline`
@@ -193,7 +193,7 @@ exec update source = do
   case parseExprOrBinding source of
     (Failure err, _) -> do
       liftIO $ print err
-      return Nothing
+      pure Nothing
     (Success expr, isBinding) -> do
 
       -- Type Inference ( returns Typing Environment )
@@ -209,7 +209,7 @@ exec update source = do
       case mVal of
         Left (NixException frames) -> do
           lift $ lift $ liftIO . print =<< renderFrames @(NValue t f m) @t frames
-          return Nothing
+          pure Nothing
         Right val -> do
           -- Update the interpreter state
           when (update && isBinding) $ do
@@ -219,9 +219,9 @@ exec update source = do
             -- If the result value is a set, update our context with it
             case val of
               NVSet xs _ -> put st { replCtx = Data.HashMap.Lazy.union xs (replCtx st) }
-              _          -> return ()
+              _          -> pure ()
 
-          return $ Just val
+          pure $ Just val
   where
     -- If parsing fails, turn the input into singleton attribute set
     -- and try again.
@@ -245,7 +245,7 @@ cmd
 cmd source = do
   mVal <- exec True (Data.Text.pack source)
   case mVal of
-    Nothing -> return ()
+    Nothing -> pure ()
     Just val -> printValue val
 
 printValue :: (MonadNix e t f m, MonadIO m)
@@ -294,7 +294,7 @@ typeof
 typeof args = do
   st <- get
   mVal <- case Data.HashMap.Lazy.lookup line (replCtx st) of
-    Just val -> return $ Just val
+    Just val -> pure $ Just val
     Nothing  -> do
       exec False line
 

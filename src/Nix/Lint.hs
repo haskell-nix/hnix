@@ -130,30 +130,30 @@ symerr = evalError @(Symbolic m) . ErrorCall
 
 renderSymbolic :: MonadLint e m => Symbolic m -> m String
 renderSymbolic = unpackSymbolic >=> \case
-  NAny     -> return "<any>"
+  NAny     -> pure "<any>"
   NMany xs -> fmap (intercalate ", ") $ forM xs $ \case
     TConstant ys -> fmap (intercalate ", ") $ forM ys $ \case
-      TInt   -> return "int"
-      TFloat -> return "float"
-      TBool  -> return "bool"
-      TNull  -> return "null"
-    TStr    -> return "string"
+      TInt   -> pure "int"
+      TFloat -> pure "float"
+      TBool  -> pure "bool"
+      TNull  -> pure "null"
+    TStr    -> pure "string"
     TList r -> do
       x <- demand r renderSymbolic
-      return $ "[" ++ x ++ "]"
-    TSet Nothing  -> return "<any set>"
+      pure $ "[" ++ x ++ "]"
+    TSet Nothing  -> pure "<any set>"
     TSet (Just s) -> do
       x <- traverse (`demand` renderSymbolic) s
-      return $ "{" ++ show x ++ "}"
+      pure $ "{" ++ show x ++ "}"
     f@(TClosure p) -> do
       (args, sym) <- do
         f' <- mkSymbolic [f]
         lintApp (NAbs (void p) ()) f' everyPossible
       args' <- traverse renderSymbolic args
       sym'  <- renderSymbolic sym
-      return $ "(" ++ show args' ++ " -> " ++ sym' ++ ")"
-    TPath          -> return "path"
-    TBuiltin _n _f -> return "<builtin function>"
+      pure $ "(" ++ show args' ++ " -> " ++ sym' ++ ")"
+    TPath          -> pure "path"
+    TBuiltin _n _f -> pure "<builtin function>"
 
 -- This function is order and uniqueness preserving (of types).
 merge
@@ -169,8 +169,8 @@ merge context = go
     :: [NTypeF m (Symbolic m)]
     -> [NTypeF m (Symbolic m)]
     -> m [NTypeF m (Symbolic m)]
-  go []       _        = return []
-  go _        []       = return []
+  go []       _        = pure []
+  go _        []       = pure []
   go (x : xs) (y : ys) = case (x, y) of
     (TStr , TStr ) -> (TStr :) <$> go xs ys
     (TPath, TPath) -> (TPath :) <$> go xs ys
@@ -188,8 +188,8 @@ merge context = go
             >>= \j' -> demand i'
                   $ \i'' -> demand j' $ \j'' -> defer $ unify context i'' j''
         )
-        (return <$> l)
-        (return <$> r)
+        (pure <$> l)
+        (pure <$> r)
       if M.null m then go xs ys else (TSet (Just m) :) <$> go xs ys
     (TClosure{}, TClosure{}) ->
       throwError $ ErrorCall "Cannot unify functions"
@@ -232,10 +232,10 @@ unify context (SV x) (SV y) = do
   case (x', y') of
     (NAny, _) -> do
       writeVar x y'
-      return $ SV y
+      pure $ SV y
     (_, NAny) -> do
       writeVar y x'
-      return $ SV x
+      pure $ SV x
     (NMany xs, NMany ys) -> do
       m <- merge context xs ys
       if null m
@@ -321,7 +321,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
   evalWith scope body = do
     s <- defer scope
     pushWeakScope ?? body $ demand s $ unpackSymbolic >=> \case
-      NMany [TSet (Just s')] -> return s'
+      NMany [TSet (Just s')] -> pure s'
       NMany [TSet Nothing] -> error "NYI: with unknown"
       _ -> throwError $ ErrorCall "scope must be a set in with statement"
 
@@ -437,7 +437,7 @@ runLintM opts action = do
   runFreshIdT i $ flip runReaderT (newContext opts) $ runLint action
 
 symbolicBaseEnv :: Monad m => m (Scopes m (Symbolic m))
-symbolicBaseEnv = return emptyScopes
+symbolicBaseEnv = pure emptyScopes
 
 lint :: Options -> NExprLoc -> ST s (Symbolic (Lint s))
 lint opts expr =

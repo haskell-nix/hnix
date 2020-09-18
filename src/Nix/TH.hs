@@ -26,14 +26,14 @@ quoteExprExp :: String -> ExpQ
 quoteExprExp s = do
   expr <- case parseNixText (Text.pack s) of
     Failure err -> fail $ show err
-    Success e   -> return e
+    Success e   -> pure e
   dataToExpQ (const Nothing `extQ` metaExp (freeVars expr)) expr
 
 quoteExprPat :: String -> PatQ
 quoteExprPat s = do
   expr <- case parseNixText (Text.pack s) of
     Failure err -> fail $ show err
-    Success e   -> return e
+    Success e   -> pure e
   dataToPatQ (const Nothing `extQ` metaPat (freeVars expr)) expr
 
 freeVars :: NExpr -> Set VarName

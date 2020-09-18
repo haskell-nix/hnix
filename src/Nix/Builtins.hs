@@ -204,7 +204,7 @@ builtinsList = sequence
   , add2 Normal   "elem"             elem_
   , add2 Normal   "elemAt"           elemAt_
   , add  Normal   "exec"             exec_
-  , add0 Normal   "false"            (return $ nvConstant $ NBool False)
+  , add0 Normal   "false"            (pure $ nvConstant $ NBool False)
   , add  Normal   "fetchTarball"     fetchTarball
   , add  Normal   "fetchurl"         fetchurl
   , add2 Normal   "filter"           filter_
@@ -236,7 +236,7 @@ builtinsList = sequence
   , add2 TopLevel "mapAttrs"         mapAttrs_
   , add2 Normal   "match"            match_
   , add2 Normal   "mul"              mul_
-  , add0 Normal   "null"             (return $ nvConstant NNull)
+  , add0 Normal   "null"             (pure $ nvConstant NNull)
   , add  Normal   "parseDrvName"     parseDrvName
   , add2 Normal   "partition"        partition_
   , add  Normal   "pathExists"       pathExists_
@@ -251,12 +251,12 @@ builtinsList = sequence
   , add2 Normal   "sort"             sort_
   , add2 Normal   "split"            split_
   , add  Normal   "splitVersion"     splitVersion_
-  , add0 Normal   "storeDir"         (return $ nvStr $ principledMakeNixStringWithoutContext "/nix/store")
+  , add0 Normal   "storeDir"         (pure $ nvStr $ principledMakeNixStringWithoutContext "/nix/store")
   , add' Normal   "stringLength"     (arity1 $ Text.length . principledStringIgnoreContext)
   , add' Normal   "sub"              (arity2 ((-) @Integer))
   , add' Normal   "substring"        (substring @e @t @f @m)
   , add  Normal   "tail"             tail_
-  , add0 Normal   "true"             (return $ nvConstant $ NBool True)
+  , add0 Normal   "true"             (pure $ nvConstant $ NBool True)
   , add  TopLevel "throw"            throw_
   , add  Normal   "toJSON"           prim_toJSON
   , add2 Normal   "toFile"           toFile
@@ -306,11 +306,11 @@ foldNixPath
 foldNixPath f z = do
   mres <- lookupVar "__includes"
   dirs <- case mres of
-    Nothing -> return []
+    Nothing -> pure []
     Just v  -> demand v $ fromValue . Deeper
   mPath <- getEnvVar "NIX_PATH"
   mDataDir <- getEnvVar "NIX_DATA_DIR"
-  dataDir <- maybe getDataDir return mDataDir
+  dataDir <- maybe getDataDir pure mDataDir
   foldrM go z
     $  map (fromInclude . principledStringIgnoreContext) dirs
     ++ case mPath of
@@ -438,10 +438,10 @@ div_ x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
   (_, _) -> throwError $ Division x' y'
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
-anyM _ []       = return False
+anyM _ []       = pure False
 anyM p (x : xs) = do
   q <- p x
-  if q then return True else anyM p xs
+  if q then pure True else anyM p xs
 
 any_
   :: MonadNix e t f m
@@ -451,10 +451,10 @@ any_
 any_ f = toValue <=< anyM fromValue <=< mapM (f `callFunc`) <=< fromValue
 
 allM :: Monad m => (a -> m Bool) -> [a] -> m Bool
-allM _ []       = return True
+allM _ []       = pure True
 allM p (x : xs) = do
   q <- p x
-  if q then allM p xs else return False
+  if q then allM p xs else pure False
 
 all_
   :: MonadNix e t f m
@@ -481,7 +481,7 @@ head_ = fromValue >=> \case
 tail_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 tail_ = fromValue >=> \case
   []    -> throwError $ ErrorCall "builtins.tail: empty list"
-  _ : t -> return $ nvList t
+  _ : t -> pure $ nvList t
 
 data VersionComponent
    = VersionComponent_Pre -- ^ The string "pre"
@@ -525,7 +525,7 @@ splitVersion s = case Text.uncons s of
 
 splitVersion_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 splitVersion_ = fromValue >=> fromStringNoContext >=> \s ->
-  return
+  pure
     $ nvList
     $ flip map (splitVersion s)
     $ nvStr
@@ -546,7 +546,7 @@ compareVersions_
   -> m (NValue t f m)
 compareVersions_ t1 t2 = fromValue t1 >>= fromStringNoContext >>= \s1 ->
   fromValue t2 >>= fromStringNoContext >>= \s2 ->
-    return $ nvConstant $ NInt $ case compareVersions s1 s2 of
+    pure $ nvConstant $ NInt $ case compareVersions s1 s2 of
       LT -> -1
       EQ -> 0
       GT -> 1
@@ -624,7 +624,7 @@ split_ pat str = fromValue pat >>= fromStringNoContext >>= \p ->
     let s = principledStringIgnoreContext ns
     let re       = makeRegex (encodeUtf8 p) :: Regex
         haystack = encodeUtf8 s
-    return $ nvList $ splitMatches 0
+    pure $ nvList $ splitMatches 0
                                    (map elems $ matchAllText re haystack)
                                    haystack
 
@@ -925,7 +925,7 @@ replaceStrings tfrom tto ts = fromValue (Deeper tfrom) >>= \(nsFrom :: [NixStrin
           (prefix, replacement) <- find ((`Text.isPrefixOf` s) . fst)
             $ zip from nsTo
           let rest = Text.drop (Text.length prefix) s
-          return (prefix, replacement, rest)
+          pure (prefix, replacement, rest)
         finish b =
           principledMakeNixString (LazyText.toStrict $ Builder.toLazyText b)
         go orig result ctx = case lookupPrefix orig of
@@ -977,7 +977,7 @@ intersectAttrs
 intersectAttrs set1 set2 =
   fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) set1 >>= \(s1, p1) ->
     fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) set2 >>= \(s2, p2) ->
-      return $ nvSet (s2 `M.intersection` s1) (p2 `M.intersection` p1)
+      pure $ nvSet (s2 `M.intersection` s1) (p2 `M.intersection` p1)
 
 functionArgs
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1086,10 +1086,10 @@ scopedImport asetArg pathArg = fromValue @(AttrSet (NValue t f m)) asetArg >>= \
     path' <- case mres of
       Nothing -> do
         traceM "No known current directory"
-        return path
+        pure path
       Just p -> demand p $ fromValue >=> \(Path p') -> do
         traceM $ "Current file being evaluated is: " ++ show p'
-        return $ takeDirectory p' </> path
+        pure $ takeDirectory p' </> path
     clearScopes @(NValue t f m)
       $ withNixContext (Just path')
       $ pushScope s
@@ -1416,7 +1416,7 @@ currentSystem :: MonadNix e t f m => m (NValue t f m)
 currentSystem = do
   os   <- getCurrentSystemOS
   arch <- getCurrentSystemArch
-  return $ nvStr $ principledMakeNixStringWithoutContext (arch <> "-" <> os)
+  pure $ nvStr $ principledMakeNixStringWithoutContext (arch <> "-" <> os)
 
 currentTime_ :: MonadNix e t f m => m (NValue t f m)
 currentTime_ = do
@@ -1451,12 +1451,12 @@ appendContext x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
     newContextValues <- forM attrs $ \attr -> demand attr $ \case
       NVSet attrs _ -> do
         -- TODO: Fail for unexpected keys.
-        path <- maybe (return False) (demand ?? fromValue)
+        path <- maybe (pure False) (demand ?? fromValue)
           $ M.lookup "path" attrs
-        allOutputs <- maybe (return False) (demand ?? fromValue)
+        allOutputs <- maybe (pure False) (demand ?? fromValue)
           $ M.lookup "allOutputs" attrs
         outputs <- case M.lookup "outputs" attrs of
-          Nothing -> return []
+          Nothing -> pure []
           Just os -> demand os $ \case
             NVList vs ->
               forM vs $ fmap principledStringIgnoreContext . fromValue
@@ -1465,7 +1465,7 @@ appendContext x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
                 $ ErrorCall
                 $ "Invalid types for context value outputs in builtins.appendContext: "
                 ++ show x
-        return $ NixLikeContextValue path allOutputs outputs
+        pure $ NixLikeContextValue path allOutputs outputs
       x ->
         throwError
           $  ErrorCall
@@ -1501,4 +1501,4 @@ instance ( MonadNix e t f m
          )
       => ToBuiltin t f m (a -> b) where
   toBuiltin name f =
-    return $ nvBuiltin name (fromValue . Deeper >=> toBuiltin name . f)
+    pure $ nvBuiltin name (fromValue . Deeper >=> toBuiltin name . f)

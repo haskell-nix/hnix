@@ -76,7 +76,7 @@ recursiveSize
 \_ -> return 0
 #endif
 #else
-    \_ -> return 0
+    \_ -> pure 0
 #endif
 
 class Monad m => MonadExec m where
@@ -87,26 +87,26 @@ class Monad m => MonadExec m where
 
 instance MonadExec IO where
   exec' = \case
-    []            -> return $ Left $ ErrorCall "exec: missing program"
+    []            -> pure $ Left $ ErrorCall "exec: missing program"
     (prog : args) -> do
       (exitCode, out, _) <- liftIO $ readProcessWithExitCode prog args ""
       let t    = T.strip (T.pack out)
       let emsg = "program[" ++ prog ++ "] args=" ++ show args
       case exitCode of
         ExitSuccess -> if T.null t
-          then return $ Left $ ErrorCall $ "exec has no output :" ++ emsg
+          then pure $ Left $ ErrorCall $ "exec has no output :" ++ emsg
           else case parseNixTextLoc t of
             Failure err ->
-              return
+              pure
                 $  Left
                 $  ErrorCall
                 $  "Error parsing output of exec: "
                 ++ show err
                 ++ " "
                 ++ emsg
-            Success v -> return $ Right v
+            Success v -> pure $ Right v
         err ->
-          return
+          pure
             $  Left
             $  ErrorCall
             $  "exec  failed: "
@@ -129,14 +129,14 @@ instance MonadInstantiate IO where
     case exitCode of
       ExitSuccess -> case parseNixTextLoc (T.pack out) of
         Failure e ->
-          return
+          pure
             $  Left
             $  ErrorCall
             $  "Error parsing output of nix-instantiate: "
             ++ show e
-        Success v -> return $ Right v
+        Success v -> pure $ Right v
       status ->
-        return
+        pure
           $  Left
           $  ErrorCall
           $  "nix-instantiate failed: "
@@ -161,10 +161,10 @@ class Monad m => MonadEnv m where
 instance MonadEnv IO where
   getEnvVar            = lookupEnv
 
-  getCurrentSystemOS   = return $ T.pack System.Info.os
+  getCurrentSystemOS   = pure $ T.pack System.Info.os
 
 -- Invert the conversion done by GHC_CONVERT_CPU in GHC's aclocal.m4
-  getCurrentSystemArch = return $ T.pack $ case System.Info.arch of
+  getCurrentSystemArch = pure $ T.pack $ case System.Info.arch of
     "i386" -> "i686"
     arch   -> arch
 
@@ -194,7 +194,7 @@ instance MonadHttp IO where
     let status = statusCode (responseStatus response)
     if status /= 200
       then
-        return
+        pure
         $  Left
         $  ErrorCall
         $  "fail, got "
@@ -203,7 +203,7 @@ instance MonadHttp IO where
         ++ urlstr
       else -- do
         -- let bstr = responseBody response
-        return
+        pure
         $  Left
         $  ErrorCall
         $  "success in downloading but hnix-store is not yet ready; url = "
@@ -239,9 +239,9 @@ instance MonadStore IO where
     case exitCode of
       ExitSuccess -> do
         let dropTrailingLinefeed p = take (length p - 1) p
-        return $ Right $ StorePath $ dropTrailingLinefeed out
+        pure $ Right $ StorePath $ dropTrailingLinefeed out
       _ ->
-        return
+        pure
           $  Left
           $  ErrorCall
           $  "addPath: failed: nix-store --add "
@@ -252,10 +252,10 @@ instance MonadStore IO where
     writeFile filepath content
     storepath <- addPath' filepath
     S.removeFile filepath
-    return storepath
+    pure storepath
 
 addPath :: (Framed e m, MonadStore m) => FilePath -> m StorePath
-addPath p = either throwError return =<< addPath' p
+addPath p = either throwError pure =<< addPath' p
 
 toFile_ :: (Framed e m, MonadStore m) => FilePath -> String -> m StorePath
-toFile_ p contents = either throwError return =<< toFile_' p contents
+toFile_ p contents = either throwError pure =<< toFile_' p contents

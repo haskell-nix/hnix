@@ -183,10 +183,10 @@ main = do
             when report $ do
               liftIO $ putStrLn path
               when descend $ case mv of
-                Nothing -> return ()
+                Nothing -> pure ()
                 Just v  -> case v of
                   NVSet s' _ -> go (path ++ ".") s'
-                  _          -> return ()
+                  _          -> pure ()
          where
           filterEntry path k = case (path, k) of
             ("stdenv", "stdenv"          ) -> (True, True)
@@ -216,7 +216,7 @@ main = do
                 =<< renderFrames @(StdValue (StandardT (StdIdT IO)))
                       @(StdThunk (StandardT (StdIdT IO)))
                       frames
-              return Nothing
+              pure Nothing
 
   reduction path mp x = do
     eres <- Nix.withNixContext mp
@@ -234,4 +234,4 @@ main = do
       writeFile path $ show $ prettyNix (stripAnnotation expr')
     case eres of
       Left  err -> throwM err
-      Right v   -> return v
+      Right v   -> pure v

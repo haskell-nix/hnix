@@ -373,7 +373,7 @@ builtin
   => String
   -> (NValue t f m -> m (NValue t f m))
   -> m (NValue t f m)
-builtin name f = return $ nvBuiltin name $ \a -> f a
+builtin name f = pure $ nvBuiltin name $ \a -> f a
 
 builtin2
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)

@@ -353,16 +353,16 @@ instance (Convertible e t f m, ToValue a m (NValue t f m))
 instance Convertible e t f m
   => ToValue NixLikeContextValue m (NValue' t f m (NValue t f m)) where
   toValue nlcv = do
-    path <- if nlcvPath nlcv then Just <$> toValue True else return Nothing
+    path <- if nlcvPath nlcv then Just <$> toValue True else pure Nothing
     allOutputs <- if nlcvAllOutputs nlcv
       then Just <$> toValue True
-      else return Nothing
+      else pure Nothing
     outputs <- do
       let outputs =
             principledMakeNixStringWithoutContext <$> nlcvOutputs nlcv
       ts :: [NValue t f m] <- traverse toValue outputs
       case ts of
-        [] -> return Nothing
+        [] -> pure Nothing
         _  -> Just <$> toValue ts
     pure $ flip nvSet' M.empty $ M.fromList $ catMaybes
       [ ("path",) <$> path

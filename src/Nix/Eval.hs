@@ -201,7 +201,7 @@ attrSetAlter (k : ks) pos m p val = case M.lookup k m of
     -> x >>= fromValue @(AttrSet v, AttrSet SourcePos) >>= \(st, sp) ->
       recurse (demand ?? pure <$> st) sp
  where
-  go = return (M.insert k val m, M.insert k pos p)
+  go = pure (M.insert k val m, M.insert k pos p)
 
   recurse st sp = attrSetAlter ks pos st sp val <&> \(st', _) ->
     ( M.insert
@@ -257,7 +257,7 @@ evalBinds recursive binds = do
   go _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
     finalValue >>= fromValue >>= \(o', p') ->
           -- jww (2018-05-09): What to do with the key position here?
-                                              return $ map
+                                              pure $ map
       (\(k, v) -> ([k], fromMaybe pos (M.lookup k p'), demand v pure))
       (M.toList o')
 
@@ -306,7 +306,7 @@ evalBinds recursive binds = do
   buildResult scope bindings = do
     (s, p) <- foldM insert (M.empty, M.empty) bindings
     res <- if recursive then loebM (encapsulate <$> s) else traverse mkThunk s
-    return (res, p)
+    pure (res, p)
    where
     mkThunk = defer . withScopes scope
 
@@ -331,7 +331,7 @@ evalSelect aset attr = do
         []     -> pure $ Right $ demand t pure
         y : ys -> demand t $ extract ?? (y :| ys)
       | otherwise -> Left . (, path) <$> toValue (s, p)
-    Nothing -> return $ Left (x, path)
+    Nothing -> pure $ Left (x, path)
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value

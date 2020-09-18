@@ -601,7 +601,7 @@ ekey keys pos f e@(Fix x) | (NSet NNonRecursive xs, ann) <- fromNExpr x = case g
       j : js -> do
         NamedVar ns v _p <- xs
         guard $ (j : js) == (NE.toList ns ^.. traverse . _StaticKey)
-        return (v, rest)
+        pure (v, rest)
 
 ekey _ _ f e = fromMaybe e <$> f Nothing
 

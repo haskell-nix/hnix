@@ -45,7 +45,7 @@ import           Prelude                       as X
 trace :: String -> a -> a
 trace = const id
 traceM :: Monad m => String -> m ()
-traceM = const (return ())
+traceM = const (pure ())
 #endif
 
 $(makeLensesBy (\n -> Just ("_" ++ n)) ''Fix)
@@ -95,7 +95,7 @@ lifted
   => ((a -> m (StT u b)) -> m (StT u b))
   -> (a -> u m b)
   -> u m b
-lifted f k = liftWith (\run -> f (run . k)) >>= restoreT . return
+lifted f k = liftWith (\run -> f (run . k)) >>= restoreT . pure
 
 freeToFix :: Functor f => (a -> Fix f) -> Free f a -> Fix f
 freeToFix f = go

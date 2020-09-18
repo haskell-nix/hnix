@@ -224,7 +224,7 @@ addSingletonStringContext = WithStringContextT . tell . S.singleton
 
 -- | Get the contents of a 'NixString' and write its context into the resulting set.
 extractNixString :: Monad m => NixString -> WithStringContextT m Text
-extractNixString (NixString s c) = WithStringContextT $ tell c >> return s
+extractNixString (NixString s c) = WithStringContextT $ tell c >> pure s
 
 -- | Run an action producing a string with a context and put those into a 'NixString'.
 runWithStringContextT :: Monad m => WithStringContextT m Text -> m NixString

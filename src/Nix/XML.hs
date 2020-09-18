@@ -18,7 +18,7 @@ import           Text.XML.Light
 toXML :: forall t f m . MonadDataContext f m => NValue t f m -> NixString
 toXML = runWithStringContext . fmap pp . iterNValue (\_ _ -> cyc) phi
  where
-  cyc = return $ mkElem "string" "value" "<CYCLE>"
+  cyc = pure $ mkElem "string" "value" "<CYCLE>"
 
   pp =
     ("<?xml version='1.0' encoding='utf-8'?>\n" <>)
@@ -30,18 +30,18 @@ toXML = runWithStringContext . fmap pp . iterNValue (\_ _ -> cyc) phi
   phi :: NValue' t f m (WithStringContext Element) -> WithStringContext Element
   phi = \case
     NVConstant' a -> case a of
-      NURI   t -> return $ mkElem "string" "value" (Text.unpack t)
-      NInt   n -> return $ mkElem "int" "value" (show n)
-      NFloat f -> return $ mkElem "float" "value" (show f)
-      NBool  b -> return $ mkElem "bool" "value" (if b then "true" else "false")
-      NNull    -> return $ Element (unqual "null") [] [] Nothing
+      NURI   t -> pure $ mkElem "string" "value" (Text.unpack t)
+      NInt   n -> pure $ mkElem "int" "value" (show n)
+      NFloat f -> pure $ mkElem "float" "value" (show f)
+      NBool  b -> pure $ mkElem "bool" "value" (if b then "true" else "false")
+      NNull    -> pure $ Element (unqual "null") [] [] Nothing
 
     NVStr' str ->
       mkElem "string" "value" . Text.unpack <$> extractNixString str
     NVList' l -> sequence l
-      >>= \els -> return $ Element (unqual "list") [] (Elem <$> els) Nothing
+      >>= \els -> pure $ Element (unqual "list") [] (Elem <$> els) Nothing
 
-    NVSet' s _ -> sequence s >>= \kvs -> return $ Element
+    NVSet' s _ -> sequence s >>= \kvs -> pure $ Element
       (unqual "attrs")
       []
       (map
@@ -57,9 +57,9 @@ toXML = runWithStringContext . fmap pp . iterNValue (\_ _ -> cyc) phi
       Nothing
 
     NVClosure' p _ ->
-      return $ Element (unqual "function") [] (paramsXML p) Nothing
-    NVPath' fp        -> return $ mkElem "path" "value" fp
-    NVBuiltin' name _ -> return $ mkElem "function" "name" name
+      pure $ Element (unqual "function") [] (paramsXML p) Nothing
+    NVPath' fp        -> pure $ mkElem "path" "value" fp
+    NVBuiltin' name _ -> pure $ mkElem "function" "name" name
     _                 -> error "Pattern synonyms mask coverage"
 
 mkElem :: String -> String -> String -> Element

@@ -74,7 +74,7 @@ ensureNixpkgsCanParse =
             -- Parse and deepseq the resulting expression tree, to ensure the
             -- parser is fully executed.
             _ <- consider file (parseNixFileLoc file) $ Exc.evaluate . force
-            return ()
+            pure ()
     v -> error $ "Unexpected parse from default.nix: " ++ show v
  where
   getExpr   k m = let Just (Just r) = lookup k m in r
