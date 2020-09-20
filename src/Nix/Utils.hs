@@ -13,14 +13,14 @@
 module Nix.Utils (module Nix.Utils, module X) where
 
 import           Control.Arrow                  ( (&&&) )
-import           Control.Monad
-import           Control.Monad.Fix
-import           Control.Monad.Free
+import           Control.Monad                  ( (<=<) )
+import           Control.Monad.Fix              ( MonadFix(..) )
+import           Control.Monad.Free             ( Free(..) )
 import           Control.Monad.Trans.Control    ( MonadTransControl(..) )
 import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Encoding           as A
-import           Data.Fix
-import           Data.Hashable
+import           Data.Fix                       ( Fix(..) )
+import           Data.Hashable                  ( Hashable )
 import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List                      ( sortOn )
@@ -32,7 +32,7 @@ import           Lens.Family2                  as X
 import           Lens.Family2.Stock             ( _1
                                                 , _2
                                                 )
-import           Lens.Family2.TH
+import           Lens.Family2.TH                ( makeLensesBy )
 
 #if ENABLE_TRACING
 import           Debug.Trace as X

@@ -15,7 +15,6 @@
 module Nix.Pretty where
 
 import           Control.Applicative            ( (<|>) )
-import           Control.Comonad
 import           Control.Monad.Free
 import           Data.Fix                       ( Fix(..), foldFix )
 import           Data.HashMap.Lazy              ( toList )

@@ -9,16 +9,18 @@
 
 module Nix.Utils.Fix1 where
 
-import           Control.Applicative
-import           Control.Monad
+import           Control.Applicative            ( Alternative )
 #if !MIN_VERSION_base(4,13,0)
 import           Control.Monad.Fail
 #endif
-import           Control.Monad.Fix
-import           Control.Monad.IO.Class
-import           Control.Monad.Catch
-import           Control.Monad.Reader
-import           Control.Monad.State
+import           Control.Monad                  ( MonadPlus )
+import           Control.Monad.Fix              ( MonadFix )
+import           Control.Monad.IO.Class         ( MonadIO )
+import           Control.Monad.Catch            ( MonadCatch
+                                                , MonadMask
+                                                , MonadThrow )
+import           Control.Monad.Reader           ( MonadReader )
+import           Control.Monad.State            ( MonadState )
 
 -- | The fixpoint combinator, courtesy of Gregory Malecha.
 --   https://gist.github.com/gmalecha/ceb3778b9fdaa4374976e325ac8feced
