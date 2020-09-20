@@ -76,9 +76,9 @@ hashAt = flip alterF
 -- unfortunate orphans
 instance Hashable1 NonEmpty
 
--- | The main nix expression type. This is polymorphic so that it can be made
--- a functor, which allows us to traverse expressions and map functions over
--- them. The actual 'NExpr' type is a fixed point of this functor, defined
+-- | The main Nix expression type. As it is polimophic, has a functor,
+-- which allows to traverse expressions and map functions over them.
+-- The actual 'NExpr' type is a fixed point of this functor, defined
 -- below.
 data NExprF r
   = NConstant !NAtom
