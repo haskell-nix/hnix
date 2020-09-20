@@ -43,7 +43,6 @@ import           Nix.Normal
 import           Nix.Parser
 import           Nix.String
 import           Nix.Thunk
-import           Nix.Utils
 import           Nix.Value
 import           Prettyprinter
 import           Text.Read                      ( readMaybe )
