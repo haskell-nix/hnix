@@ -207,7 +207,7 @@ prettyOriginExpr = withoutParens . go
   go = exprFNixDoc . annotated . getCompose . fmap render
 
   render :: Maybe (NValue t f m) -> NixDoc ann
-  render Nothing = simpleExpr $ "_"
+  render Nothing = simpleExpr "_"
   render (Just (Free (reverse . citations @m -> p:_))) = go (_originExpr p)
   render _       = simpleExpr "?"
     -- render (Just (NValue (citations -> ps))) =

@@ -1437,7 +1437,7 @@ getContext x = demand x $ \case
     let context =
           getNixLikeContext $ toNixLikeContext $ principledGetContext ns
     valued :: M.HashMap Text (NValue t f m) <- sequenceA $ M.map toValue context
-    pure $ flip nvSet M.empty $ valued
+    pure $ nvSet valued M.empty
   x ->
     throwError $ ErrorCall $ "Invalid type for builtins.getContext: " ++ show x
 
