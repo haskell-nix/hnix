@@ -43,13 +43,8 @@ import           Nix.Normal
 import           Nix.Parser
 import           Nix.String
 import           Nix.Thunk
-#if ENABLE_TRACING
 import           Nix.Utils
-#else
-import           Nix.Utils               hiding ( (<$>) )
-#endif
 import           Nix.Value
-import           Prelude                 hiding ( (<$>) )
 import           Prettyprinter
 import           Text.Read                      ( readMaybe )
 
