@@ -54,13 +54,13 @@ type DList a = Endo [a]
 
 type AttrSet = HashMap Text
 
--- | An f-algebra defines how to reduced the fixed-point of a functor to a
+-- | F-algebra defines how to reduce the fixed-point of a functor to a
 --   value.
 type Alg f a = f a -> a
 
 type AlgM f m a = f a -> m a
 
--- | An "transform" here is a modification of a catamorphism.
+-- | "Transform" here means a modification of a catamorphism.
 type Transform f a = (Fix f -> a) -> Fix f -> a
 
 (<&>) :: Functor f => f a -> (a -> c) -> f c
