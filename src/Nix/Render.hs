@@ -118,12 +118,12 @@ sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unP
       .   T.decodeUtf8
       <$> readFile path
     let
-      nums    = map (show . fst) $ zip [beg' ..] ls
+      nums    = zipWith (curry (show . fst)) [beg' ..] ls
       longest = maximum (map length nums)
       nums'   = flip map nums $ \n -> replicate (longest - length n) ' ' ++ n
       pad n | read n == begLine = "==> " ++ n
             | otherwise         = "    " ++ n
       ls' = zipWith (<+>)
                     (map (pretty . pad) nums')
-                    (zipWith (<+>) (repeat "| ") ls)
+                    (map ((<+>) "| ") ls)
     pure $ vsep $ ls' ++ [msg]

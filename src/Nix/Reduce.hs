@@ -385,7 +385,7 @@ pruneTree opts = foldFixM $ \(FlaggedF (b, Compose x)) -> do
   pruneParams (Param n) = Param n
   pruneParams (ParamSet xs b n)
     | reduceSets opts = ParamSet
-      (map (second (maybe (Just nNull) Just . fmap (fromMaybe nNull))) xs)
+      (map (second (maybe (Just nNull) (Just . fromMaybe nNull))) xs)
       b
       n
     | otherwise = ParamSet (map (second (fmap (fromMaybe nNull))) xs) b n
