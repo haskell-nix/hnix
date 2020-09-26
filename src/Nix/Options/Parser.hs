@@ -28,7 +28,7 @@ argPair :: Mod OptionFields (Text, Text) -> Parser (Text, Text)
 argPair = option $ str >>= \s -> case Text.findIndex (== '=') s of
   Nothing ->
     errorWithoutStackTrace "Format of --arg/--argstr in hnix is: name=expr"
-  Just i -> return $ second Text.tail $ Text.splitAt i s
+  Just i -> pure $ second Text.tail $ Text.splitAt i s
 
 nixOptions :: UTCTime -> Parser Options
 nixOptions current =

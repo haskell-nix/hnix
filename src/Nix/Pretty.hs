@@ -7,7 +7,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
@@ -16,7 +15,6 @@
 module Nix.Pretty where
 
 import           Control.Applicative            ( (<|>) )
-import           Control.Comonad
 import           Control.Monad.Free
 import           Data.Fix                       ( Fix(..), foldFix )
 import           Data.HashMap.Lazy              ( toList )
@@ -44,13 +42,7 @@ import           Nix.Normal
 import           Nix.Parser
 import           Nix.String
 import           Nix.Thunk
-#if ENABLE_TRACING
-import           Nix.Utils
-#else
-import           Nix.Utils               hiding ( (<$>) )
-#endif
 import           Nix.Value
-import           Prelude                 hiding ( (<$>) )
 import           Prettyprinter
 import           Text.Read                      ( readMaybe )
 
@@ -214,7 +206,7 @@ prettyOriginExpr = withoutParens . go
   go = exprFNixDoc . annotated . getCompose . fmap render
 
   render :: Maybe (NValue t f m) -> NixDoc ann
-  render Nothing = simpleExpr $ "_"
+  render Nothing = simpleExpr "_"
   render (Just (Free (reverse . citations @m -> p:_))) = go (_originExpr p)
   render _       = simpleExpr "?"
     -- render (Just (NValue (citations -> ps))) =
@@ -410,8 +402,8 @@ printNix = iterNValue (\_ _ -> thk) phi
    where
     check v = fromMaybe
       v
-      (   (fmap (surround . show) (readMaybe v :: Maybe Int))
-      <|> (fmap (surround . show) (readMaybe v :: Maybe Float))
+      (   fmap (surround . show) (readMaybe v :: Maybe Int)
+      <|> fmap (surround . show) (readMaybe v :: Maybe Float)
       )
       where surround s = "\"" ++ s ++ "\""
   phi NVClosure'{}        = "<<lambda>>"

@@ -127,7 +127,7 @@ nixSelect term = do
 nixSelector :: Parser (Ann SrcSpan (NAttrPath NExprLoc))
 nixSelector = annotateLocation $ do
   (x : xs) <- keyName `sepBy1` selDot
-  return $ x :| xs
+  pure $ x :| xs
 
 nixTerm :: Parser NExprLoc
 nixTerm = do
@@ -291,7 +291,7 @@ nixUri = lexeme $ annotateLocation1 $ try $ do
   _       <- string ":"
   address <- some $ satisfy $ \x ->
     isAlpha x || isDigit x || x `elem` ("%/?:@&=+$,-_.!~*'" :: String)
-  return $ NStr $ DoubleQuoted
+  pure $ NStr $ DoubleQuoted
     [Plain $ pack $ start : protocol ++ ':' : address]
 
 nixString' :: Parser (NString NExprLoc)
@@ -361,18 +361,18 @@ argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
   atLeft = try $ do
     name               <- identifier <* symbol "@"
     (variadic, params) <- params
-    return $ ParamSet params variadic (Just name)
+    pure $ ParamSet params variadic (Just name)
 
   -- Parameters named by an identifier on the right, or none (`{x, y} @ args`)
   atRight = do
     (variadic, params) <- params
     name               <- optional $ symbol "@" *> identifier
-    return $ ParamSet params variadic name
+    pure $ ParamSet params variadic name
 
   -- Return the parameters set.
   params = do
     (args, dotdots) <- braces getParams
-    return (dotdots, args)
+    pure (dotdots, args)
 
   -- Collects the parameters within curly braces. Returns the parameters and
   -- a boolean indicating if the parameters are variadic.
@@ -488,7 +488,7 @@ identifier = lexeme $ try $ do
     <$> satisfy (\x -> isAlpha x || x == '_')
     <*> takeWhileP Nothing identLetter
   guard (not (ident `HashSet.member` reservedNames))
-  return ident
+  pure ident
  where
   identLetter x = isAlpha x || isDigit x || x == '_' || x == '\'' || x == '-'
 
@@ -520,7 +520,7 @@ data Result a = Success a | Failure (Doc Void) deriving (Show, Functor)
 parseFromFileEx :: MonadFile m => Parser a -> FilePath -> m (Result a)
 parseFromFileEx p path = do
   txt <- decodeUtf8 <$> readFile path
-  return $ either (Failure . pretty . errorBundlePretty) Success $ parse p
+  pure $ either (Failure . pretty . errorBundlePretty) Success $ parse p
                                                                          path
                                                                          txt
 
@@ -564,7 +564,7 @@ opWithLoc :: Text -> o -> (Ann SrcSpan o -> a) -> Parser a
 opWithLoc name op f = do
   Ann ann _ <- annotateLocation $ {- dbg (unpack name) $ -}
                                   operator name
-  return $ f (Ann ann op)
+  pure $ f (Ann ann op)
 
 binaryN name op =
   (NBinaryDef name op NAssocNone, InfixN (opWithLoc name op nBinary))

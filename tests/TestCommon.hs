@@ -58,7 +58,7 @@ nixEvalString expr = do
   hClose h
   res <- nixEvalFile fp
   removeLink fp
-  return res
+  pure res
 
 nixEvalFile :: FilePath -> IO String
 nixEvalFile fp = readProcess "nix-instantiate" ["--eval", "--strict", fp] ""

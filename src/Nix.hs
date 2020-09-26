@@ -119,7 +119,7 @@ evaluateExpression mpath evaluator handler expr = do
     Success x   -> x
     Failure err -> errorWithoutStackTrace (show err)
 
-  eval' = (normalForm =<<) . nixEvalExpr mpath
+  eval' = normalForm <=< nixEvalExpr mpath
 
   argmap args = nvSet (M.fromList args) mempty
 

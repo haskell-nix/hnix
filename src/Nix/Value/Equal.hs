@@ -3,8 +3,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -12,7 +10,6 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
@@ -74,7 +71,7 @@ alignEqM
   -> m Bool
 alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
   pairs <- forM (Data.Align.align fa fb) $ \case
-    These a b -> return (a, b)
+    These a b -> pure (a, b)
     _         -> throwE ()
   forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
 
@@ -174,7 +171,7 @@ valueEqM (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
 thunkEqM :: (MonadThunk t m (NValue t f m), Comonad f) => t -> t -> m Bool
 thunkEqM lt rt = force lt $ \lv -> force rt $ \rv ->
   let unsafePtrEq = case (lt, rt) of
-        (thunkId -> lid, thunkId -> rid) | lid == rid -> return True
+        (thunkId -> lid, thunkId -> rid) | lid == rid -> pure True
         _ -> valueEqM lv rv
   in  case (lv, rv) of
         (NVClosure _ _, NVClosure _ _) -> unsafePtrEq

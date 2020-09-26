@@ -1,7 +1,5 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -57,7 +55,7 @@ class HasCitations m v a where
 
 instance HasCitations m v (NCited m v a) where
   citations = _provenance
-  addProvenance x (NCited p v) = (NCited (x : p) v)
+  addProvenance x (NCited p v) = NCited (x : p) v
 
 class HasCitations1 m v f where
     citations1 :: f a -> [Provenance m v]

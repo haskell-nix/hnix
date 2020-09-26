@@ -6,7 +6,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE RankNTypes #-}
@@ -14,7 +13,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
@@ -360,7 +358,7 @@ execBinaryOp scope span op lval rarg = case op of
   NImpl -> fromValue lval >>= \l -> if l
              then rarg >>= \rval -> fromValue rval >>= boolOp rval
              else bypass True
-  _     -> rarg >>= \rval -> 
+  _     -> rarg >>= \rval ->
              demand rval $ \rval' ->
                demand lval $ \lval' ->
                  execBinaryOpForced scope span op lval' rval'
@@ -410,13 +408,13 @@ execBinaryOpForced scope span op lval rval = case op of
       (\rs2 -> nvStrP prov (ls `principledStringMappend` rs2))
         <$> coerceToString callFunc CopyToStore CoerceStringy rs
     (NVPath ls, NVStr rs) -> case principledGetStringNoContext rs of
-      Just rs2 -> nvPathP prov <$> makeAbsolutePath @t @f (ls `mappend` (Text.unpack rs2))
-      Nothing -> throwError $ ErrorCall $ 
+      Just rs2 -> nvPathP prov <$> makeAbsolutePath @t @f (ls `mappend` Text.unpack rs2)
+      Nothing -> throwError $ ErrorCall $
         -- data/nix/src/libexpr/eval.cc:1412
         "A string that refers to a store path cannot be appended to a path."
     (NVPath ls, NVPath rs) -> nvPathP prov <$> makeAbsolutePath @t @f (ls ++ rs)
 
-    (ls@NVSet{}, NVStr rs) -> 
+    (ls@NVSet{}, NVStr rs) ->
       (\ls2 -> nvStrP prov (ls2 `principledStringMappend` rs))
         <$> coerceToString callFunc DontCopyToStore CoerceStringy ls
     (NVStr ls, rs@NVSet{}) ->
@@ -433,7 +431,7 @@ execBinaryOpForced scope span op lval rval = case op of
 
  where
   prov :: Provenance m (NValue t f m)
-  prov = (Provenance scope (NBinary_ span op (Just lval) (Just rval)))
+  prov = Provenance scope (NBinary_ span op (Just lval) (Just rval))
 
   toBool = pure . nvConstantP prov . NBool
   compare :: (forall a. Ord a => a -> a -> Bool) -> m (NValue t f m)
@@ -479,7 +477,7 @@ execBinaryOpForced scope span op lval rval = case op of
 -- use 'throwError'.
 fromStringNoContext :: Framed e m => NixString -> m Text
 fromStringNoContext ns = case principledGetStringNoContext ns of
-  Just str -> return str
+  Just str -> pure str
   Nothing  -> throwError $ ErrorCall "expected string with no context"
 
 addTracing
@@ -491,7 +489,7 @@ addTracing k v = do
   guard (depth < 2000)
   local succ $ do
     v'@(Compose (Ann span x)) <- sequence v
-    return $ do
+    pure $ do
       opts :: Options <- asks (view hasLens)
       let rendered = if verbose opts >= Chatty
 #ifdef MIN_VERSION_pretty_show
@@ -505,7 +503,7 @@ addTracing k v = do
       putStr $ show loc
       res <- k v'
       print $ msg rendered <> " ...done"
-      return res
+      pure res
 
 evalExprLoc :: forall e t f m . MonadNix e t f m => NExprLoc -> m (NValue t f m)
 evalExprLoc expr = do

@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -14,14 +13,14 @@
 module Nix.Utils (module Nix.Utils, module X) where
 
 import           Control.Arrow                  ( (&&&) )
-import           Control.Monad
-import           Control.Monad.Fix
-import           Control.Monad.Free
+import           Control.Monad                  ( (<=<) )
+import           Control.Monad.Fix              ( MonadFix(..) )
+import           Control.Monad.Free             ( Free(..) )
 import           Control.Monad.Trans.Control    ( MonadTransControl(..) )
 import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Encoding           as A
-import           Data.Fix
-import           Data.Hashable
+import           Data.Fix                       ( Fix(..) )
+import           Data.Hashable                  ( Hashable )
 import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List                      ( sortOn )
@@ -33,7 +32,7 @@ import           Lens.Family2                  as X
 import           Lens.Family2.Stock             ( _1
                                                 , _2
                                                 )
-import           Lens.Family2.TH
+import           Lens.Family2.TH                ( makeLensesBy )
 
 #if ENABLE_TRACING
 import           Debug.Trace as X
@@ -46,7 +45,7 @@ import           Prelude                       as X
 trace :: String -> a -> a
 trace = const id
 traceM :: Monad m => String -> m ()
-traceM = const (return ())
+traceM = const (pure ())
 #endif
 
 $(makeLensesBy (\n -> Just ("_" ++ n)) ''Fix)
@@ -55,13 +54,13 @@ type DList a = Endo [a]
 
 type AttrSet = HashMap Text
 
--- | An f-algebra defines how to reduced the fixed-point of a functor to a
+-- | F-algebra defines how to reduce the fixed-point of a functor to a
 --   value.
 type Alg f a = f a -> a
 
 type AlgM f m a = f a -> m a
 
--- | An "transform" here is a modification of a catamorphism.
+-- | "Transform" here means a modification of a catamorphism.
 type Transform f a = (Fix f -> a) -> Fix f -> a
 
 (<&>) :: Functor f => f a -> (a -> c) -> f c
@@ -96,7 +95,7 @@ lifted
   => ((a -> m (StT u b)) -> m (StT u b))
   -> (a -> u m b)
   -> u m b
-lifted f k = liftWith (\run -> f (run . k)) >>= restoreT . return
+lifted f k = liftWith (\run -> f (run . k)) >>= restoreT . pure
 
 freeToFix :: Functor f => (a -> Fix f) -> Free f a -> Fix f
 freeToFix f = go

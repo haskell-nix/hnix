@@ -86,7 +86,7 @@ genTests = do
   let testsByName = groupBy (takeFileName . dropExtensions) testFiles
   let testsByType = groupBy testType (Map.toList testsByName)
   let testGroups  = map mkTestGroup (Map.toList testsByType)
-  return $ localOption (mkTimeout 2000000) $ testGroup
+  pure $ localOption (mkTimeout 2000000) $ testGroup
     "Nix (upstream) language tests"
     testGroups
  where
@@ -105,7 +105,7 @@ genTests = do
 
 assertParse :: Options -> FilePath -> Assertion
 assertParse _opts file = parseNixFileLoc file >>= \case
-  Success _expr -> return () -- pure $! runST $ void $ lint opts expr
+  Success _expr -> pure () -- pure $! runST $ void $ lint opts expr
   Failure err ->
     assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
 
@@ -121,9 +121,9 @@ assertParseFail opts file = do
             ++ file
             ++ ":\nParsed value: "
             ++ show expr
-        Failure _ -> return ()
+        Failure _ -> pure ()
       )
-    $ \(_ :: SomeException) -> return ()
+    $ \(_ :: SomeException) -> pure ()
 
 assertLangOk :: Options -> FilePath -> Assertion
 assertLangOk opts file = do
@@ -147,8 +147,8 @@ assertEval _opts files = do
     []                 -> () <$ hnixEvalFile opts (name ++ ".nix")
     [".exp"         ]  -> assertLangOk opts name
     [".exp.xml"     ]  -> assertLangOkXml opts name
-    [".exp.disabled"]  -> return ()
-    [".exp-disabled"]  -> return ()
+    [".exp.disabled"]  -> pure ()
+    [".exp-disabled"]  -> pure ()
     [".exp", ".flags"] -> do
       liftIO $ setEnv "NIX_PATH" "lang/dir4:lang/dir5"
       flags <- Text.readFile (name ++ ".flags")
@@ -179,7 +179,7 @@ assertEval _opts files = do
   fixup []                          = []
 
 assertEvalFail :: FilePath -> Assertion
-assertEvalFail file = catch ?? (\(_ :: SomeException) -> return ()) $ do
+assertEvalFail file = catch ?? (\(_ :: SomeException) -> pure ()) $ do
   time       <- liftIO getCurrentTime
   evalResult <- printNix <$> hnixEvalFile (defaultOptions time) file
   evalResult

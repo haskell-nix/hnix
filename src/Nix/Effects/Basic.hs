@@ -63,7 +63,7 @@ defaultMakeAbsolutePath origPath = do
         case mres of
           Nothing -> getCurrentDirectory
           Just v  -> demand v $ \case
-            NVPath s -> return $ takeDirectory s
+            NVPath s -> pure $ takeDirectory s
             v ->
               throwError
                 $  ErrorCall
@@ -76,7 +76,7 @@ defaultMakeAbsolutePath origPath = do
 
 expandHomePath :: MonadFile m => FilePath -> m FilePath
 expandHomePath ('~' : xs) = flip (++) xs <$> getHomeDirectory
-expandHomePath p          = return p
+expandHomePath p          = pure p
 
 -- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
 --   This is incorrect on POSIX systems, because if @b@ is a symlink, its
@@ -115,9 +115,9 @@ findEnvPathM name = do
     exists <- doesDirectoryExist path
     path'  <- if exists
       then makeAbsolutePath @t @f $ path </> "default.nix"
-      else return path
+      else pure path
     exists <- doesFileExist path'
-    return $ if exists then Just path' else Nothing
+    pure $ if exists then Just path' else Nothing
 
 findPathBy
   :: forall e t f m
@@ -136,7 +136,7 @@ findPathBy finder l name = do
         ++ name
         ++ "' was not found in the Nix search path"
         ++ " (add it's using $NIX_PATH or -I)"
-    Just path -> return path
+    Just path -> pure path
  where
   go :: Maybe FilePath -> NValue t f m -> m (Maybe FilePath)
   go p@(Just _) _ = pure p
@@ -158,7 +158,7 @@ findPathBy finder l name = do
   tryPath p _ = finder $ p <///> name
 
   resolvePath s = case M.lookup "path" s of
-    Just t  -> return t
+    Just t  -> pure t
     Nothing -> case M.lookup "uri" s of
       Just ut -> defer $ fetchTarball ut
       Nothing ->
@@ -232,7 +232,7 @@ findPathM = findPathBy path
   path path = do
     path   <- makeAbsolutePath @t @f path
     exists <- doesPathExist path
-    return $ if exists then Just path else Nothing
+    pure $ if exists then Just path else Nothing
 
 defaultImportPath
   :: (MonadNix e t f m, MonadState (HashMap FilePath NExprLoc) m)
@@ -273,7 +273,7 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
   nixInstantiateExpr $ "derivationStrict " ++ show (prettyNValue v')
  where
   mapMaybeM :: (a -> m (Maybe b)) -> [a] -> m [b]
-  mapMaybeM op = foldr f (return [])
+  mapMaybeM op = foldr f (pure [])
     where f x xs = op x >>= (<$> xs) . (++) . maybeToList
 
   handleEntry :: Bool -> (Text, NValue t f m) -> m (Maybe (Text, NValue t f m))

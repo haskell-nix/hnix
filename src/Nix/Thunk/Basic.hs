@@ -1,6 +1,4 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -60,7 +58,7 @@ queryThunk (Thunk _ active ref) n k = do
         Computed v -> k v
         _          -> n
       _ <- atomicModifyVar active (False, )
-      return res
+      pure res
 
 forceThunk
   :: forall m v a
@@ -89,7 +87,7 @@ forceEffects :: MonadVar m => NThunkF m v -> (v -> m r) -> m r
 forceEffects (Thunk _ active ref) k = do
   nowActive <- atomicModifyVar active (True, )
   if nowActive
-    then return $ error "Loop detected"
+    then pure $ error "Loop detected"
     else do
       eres <- readVar ref
       case eres of
@@ -105,4 +103,4 @@ furtherThunk t@(Thunk _ _ ref) k = do
   _ <- atomicModifyVar ref $ \x -> case x of
     Computed _ -> (x, x)
     Deferred d -> (Deferred (k d), x)
-  return t
+  pure t

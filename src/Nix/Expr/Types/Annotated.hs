@@ -1,8 +1,6 @@
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveFoldable     #-}
-{-# LANGUAGE DeriveFunctor      #-}
 {-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DeriveTraversable  #-}
 {-# LANGUAGE FlexibleInstances  #-}
@@ -149,7 +147,7 @@ nSelectLoc
   :: NExprLoc -> Ann SrcSpan (NAttrPath NExprLoc) -> Maybe NExprLoc -> NExprLoc
 nSelectLoc e1@(AnnE s1 _) (Ann s2 ats) d = case d of
   Nothing               -> AnnE (s1 <> s2) (NSelect e1 ats Nothing)
-  Just (e2@(AnnE s3 _)) -> AnnE (s1 <> s2 <> s3) (NSelect e1 ats (Just e2))
+  Just e2@(AnnE s3 _) -> AnnE (s1 <> s2 <> s3) (NSelect e1 ats (Just e2))
   _                     -> error "nSelectLoc: unexpected"
 nSelectLoc _ _ _ = error "nSelectLoc: unexpected"
 

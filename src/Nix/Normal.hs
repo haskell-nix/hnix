@@ -8,7 +8,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
 
 module Nix.Normal where
 
@@ -58,7 +57,7 @@ normalizeValue f = run . iterNValueM run go (fmap Free . sequenceNValue' run)
   go t k = do
     b <- seen t
     if b
-      then return $ Pure t
+      then pure $ Pure t
       else do
         i <- ask
         when (i > 2000)
@@ -70,7 +69,7 @@ normalizeValue f = run . iterNValueM run go (fmap Free . sequenceNValue' run)
     lift $ do
       res <- gets (member tid)
       unless res $ modify (insert tid)
-      return res
+      pure res
 
 normalForm
   :: ( Framed e m

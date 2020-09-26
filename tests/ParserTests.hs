@@ -383,7 +383,7 @@ assertParseFile file expected = do
 
 assertParseFail :: Text -> Assertion
 assertParseFail str = case parseNixText str of
-  Failure _ -> return ()
+  Failure _ -> pure ()
   Success r ->
       assertFailure $ "Unexpected success parsing `"
           ++ unpack str ++ ":\nParsed value: " ++ show r

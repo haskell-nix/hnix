@@ -1,13 +1,10 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -81,17 +78,17 @@ lookupVarReader
 lookupVarReader k = do
   mres <- asks (scopeLookup k . lexicalScopes @m . view hasLens)
   case mres of
-    Just sym -> return $ Just sym
+    Just sym -> pure $ Just sym
     Nothing  -> do
       ws <- asks (dynamicScopes . view hasLens)
       foldr
         (\x rest -> do
           mres' <- M.lookup k . getScope <$> x
           case mres' of
-            Just sym -> return $ Just sym
+            Just sym -> pure $ Just sym
             Nothing  -> rest
         )
-        (return Nothing)
+        (pure Nothing)
         ws
 
 withScopes :: Scoped a m => Scopes m a -> m r -> m r

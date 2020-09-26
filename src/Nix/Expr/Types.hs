@@ -3,17 +3,13 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -80,9 +76,9 @@ hashAt = flip alterF
 -- unfortunate orphans
 instance Hashable1 NonEmpty
 
--- | The main nix expression type. This is polymorphic so that it can be made
--- a functor, which allows us to traverse expressions and map functions over
--- them. The actual 'NExpr' type is a fixed point of this functor, defined
+-- | The main Nix expression type. As it is polimophic, has a functor,
+-- which allows to traverse expressions and map functions over them.
+-- The actual 'NExpr' type is a fixed point of this functor, defined
 -- below.
 data NExprF r
   = NConstant !NAtom
@@ -605,7 +601,7 @@ ekey keys pos f e@(Fix x) | (NSet NNonRecursive xs, ann) <- fromNExpr x = case g
       j : js -> do
         NamedVar ns v _p <- xs
         guard $ (j : js) == (NE.toList ns ^.. traverse . _StaticKey)
-        return (v, rest)
+        pure (v, rest)
 
 ekey _ _ f e = fromMaybe e <$> f Nothing
 

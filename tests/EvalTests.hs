@@ -13,7 +13,6 @@ import           Control.Applicative ((<|>))
 import           Control.Monad (when, unless)
 import           Control.Monad.Catch
 import           Control.Monad.IO.Class
--- import qualified Data.HashMap.Lazy as M
 import           Data.List ((\\))
 import           Data.Maybe (isJust)
 import qualified Data.Set as S
@@ -441,7 +440,7 @@ genEvalCompareTests = do
     let unmaskedFiles = filter ((==".nix") . takeExtension) td
     let files = unmaskedFiles \\ maskedFiles
 
-    return $ testGroup "Eval comparison tests" $ map (mkTestCase testDir) files
+    pure $ testGroup "Eval comparison tests" $ map (mkTestCase testDir) files
   where
     mkTestCase td f = testCase f $ assertEvalFileMatchesNix (td </> f)
 
@@ -454,7 +453,7 @@ constantEqual expected actual = do
         expectedNF <- normalForm =<< nixEvalExprLoc Nothing expected
         actualNF <- normalForm =<< nixEvalExprLoc Nothing actual
         eq <- valueEqM expectedNF actualNF
-        return (eq, expectedNF, actualNF)
+        pure (eq, expectedNF, actualNF)
     let message =
                 "Inequal normal forms:\n"
             <>  "Expected: " <> printNix expectedNF <> "\n"

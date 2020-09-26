@@ -3,8 +3,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -12,7 +10,6 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
@@ -54,7 +51,7 @@ import           Nix.String
 import           Nix.Thunk
 import           Nix.Utils
 
--- | An 'NValue' is the most reduced form of an 'NExpr' after evaluation is
+-- | 'NValue' is the most reduced form of a 'NExpr' after evaluation is
 --   completed. 's' is related to the type of errors that might occur during
 --   construction or use of a value.
 data NValueF p m r
@@ -83,8 +80,7 @@ data NValueF p m r
       --   result.
     deriving (Generic, Typeable, Functor)
 
--- | This 'Foldable' instance only folds what the value actually is known to
---   contain at time of fold.
+-- | Folds what the value is known to contain at time of fold.
 instance Foldable (NValueF p m) where
   foldMap f = \case
     NVConstantF _  -> mempty
@@ -376,7 +372,7 @@ builtin
   => String
   -> (NValue t f m -> m (NValue t f m))
   -> m (NValue t f m)
-builtin name f = return $ nvBuiltin name $ \a -> f a
+builtin name f = pure $ nvBuiltin name $ \a -> f a
 
 builtin2
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
@@ -447,7 +443,7 @@ showValueType :: (MonadThunk t m (NValue t f m), Comonad f)
               => NValue t f m -> m String
 showValueType (Pure t) = force t showValueType
 showValueType (Free (NValue (extract -> v))) =
-  pure $ describeValue $ valueType $ v
+  pure $ describeValue $ valueType v
 
 data ValueFrame t f m
     = ForcingThunk t

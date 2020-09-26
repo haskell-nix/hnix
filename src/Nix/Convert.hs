@@ -1,14 +1,11 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE IncoherentInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -249,7 +246,7 @@ instance ( Convertible e t f m
   => FromValue (AttrSet a, AttrSet SourcePos) m
               (Deeper (NValue' t f m (NValue t f m))) where
   fromValueMay = \case
-    Deeper (NVSet' s p) -> fmap (, p) <$> sequence <$> traverse fromValueMay s
+    Deeper (NVSet' s p) -> fmap (, p) . sequence <$> traverse fromValueMay s
     _                   -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
@@ -356,21 +353,21 @@ instance (Convertible e t f m, ToValue a m (NValue t f m))
 instance Convertible e t f m
   => ToValue NixLikeContextValue m (NValue' t f m (NValue t f m)) where
   toValue nlcv = do
-    path <- if nlcvPath nlcv then Just <$> toValue True else return Nothing
+    path <- if nlcvPath nlcv then Just <$> toValue True else pure Nothing
     allOutputs <- if nlcvAllOutputs nlcv
       then Just <$> toValue True
-      else return Nothing
+      else pure Nothing
     outputs <- do
       let outputs =
-            fmap principledMakeNixStringWithoutContext $ nlcvOutputs nlcv
+            principledMakeNixStringWithoutContext <$> nlcvOutputs nlcv
       ts :: [NValue t f m] <- traverse toValue outputs
       case ts of
-        [] -> return Nothing
+        [] -> pure Nothing
         _  -> Just <$> toValue ts
     pure $ flip nvSet' M.empty $ M.fromList $ catMaybes
-      [ (\p -> ("path", p)) <$> path
-      , (\ao -> ("allOutputs", ao)) <$> allOutputs
-      , (\os -> ("outputs", os)) <$> outputs
+      [ ("path",) <$> path
+      , ("allOutputs",) <$> allOutputs
+      , ("outputs",) <$> outputs
       ]
 
 instance Convertible e t f m => ToValue () m (NExprF (NValue t f m)) where
