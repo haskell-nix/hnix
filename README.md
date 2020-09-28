@@ -11,7 +11,7 @@
 Haskell parser, evaluator and type checker for the Nix language.
 
 ## Prerequisites
-Until `hnix-store` is ready, `nix-store` is still used for interacting with store paths, so HNix still requires Nix to be installed and available through `$PATH`.
+Until `hnix-store` is ready, `nix-store` is still used for interacting with the store paths, so Nix is still required installed and available through `$PATH`.
 
 ## Getting Started
 
