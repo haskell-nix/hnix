@@ -117,15 +117,14 @@ When issue looks interesting, look through the thread and comment on the ticket 
 let others know you're working on it. You can chat with everyone participating in the project on
 [Gitter](https://gitter.im/haskell-nix/Lobby).
 
-When you're ready to submit a pull request, test it with:
+When pull request is ready to be submitted, to save time - please, test it with:
 
 ```
 git submodule update --init --recursive
 nix-shell --run "LANGUAGE_TESTS=yes cabal v2-test"
 ```
 
-Make sure that all the tests that were passing prior to your PR are still
-passing afterwards; it's OK if no new tests are passing.
+Please, check that all the tests that were passing prior are still passing for the PR; it's OK if no new tests are passing.
 
 ### Evaluating Nixpkgs with HNix
 
