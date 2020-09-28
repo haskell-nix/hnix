@@ -69,7 +69,7 @@ use:
 nix-shell
 cabal v2-configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
 cabal v2-build
-./dist/build/hnix/hnix -v5 --trace <args> +RTS -xc
+cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
 ```
 
 Note that this will run quite slowly, but will give the most information as to
@@ -94,7 +94,7 @@ To build `hnix` with profiling enabled:
 nix-shell
 cabal v2-configure --enable-tests --enable-profiling --flags=profiling
 cabal v2-build
-./dist/build/hnix/hnix <args> +RTS -p
+cabal v2-run hnix -- <args> +RTS -p
 ```
 
 ## Using the Cachix binary cache
