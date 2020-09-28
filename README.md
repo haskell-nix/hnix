@@ -37,8 +37,12 @@ Run testing:
   * Selected (list of tests is in `tests/Main.hs`):
     ```
     env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
-    ./dist/build/hnix/hnix --help
     ```
+
+Run built binary with Cabal (`--` is for separation between `cabal` & `hnix` args):
+```
+cabal v2-run hnix -- --help
+```
 
 ## Using the REPL
 
