@@ -42,8 +42,7 @@ Run testing:
 
 ## Using the REPL
 
-To enter the `hnix` REPL use
-
+Enter REPL:
 ```
 hnix --repl
 ```
