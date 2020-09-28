@@ -128,8 +128,8 @@ Please, check that all the tests that were passing prior are still passing for t
 
 ### Evaluating Nixpkgs with HNix
 
-Currently the main high-level goal is to be able to evaluate all of nixpkgs. To
-run this yourself, first build hnix with `nix-build`, then run the following
+Currently the main high-level goal is to be able to evaluate all of Nixpkgs. To
+run this yourself, first build `hnix` with `nix-build`, then run the following
 command:
 
 ```
