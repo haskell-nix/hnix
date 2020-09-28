@@ -93,17 +93,6 @@ cabal v2-build
 ./dist/build/hnix/hnix <args> +RTS -p
 ```
 
-## Building with GHCJS
-
-From the project root directory, run:
-
-```
-NIX_CONF_DIR=$PWD/ghcjs nix-build ghcjs
-```
-
-This will build an `hnix` library that can be linked to your GHCJS
-application.
-
 ## Using the Cachix binary cache
 
 If you're on macOS, you can use the binary cache at Cachix to avoid building
