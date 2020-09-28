@@ -124,7 +124,7 @@ git submodule update --init --recursive
 nix-shell --run "LANGUAGE_TESTS=yes cabal v2-test"
 ```
 
-Please, check that all the tests that were passing prior are still passing for the PR; it's OK if no new tests are passing.
+Please, check that all tests that were passing prior (most probably all tests mentioned in the command) are still passing for the PR, it is faster to chech that locally then through CI. It's OK if no new tests are passing.
 
 ### Evaluating Nixpkgs with HNix
 
