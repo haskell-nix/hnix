@@ -23,21 +23,22 @@ cabal v2-configure --enable-tests
 cabal v2-build
 ```
 
-Default test pack:
-```
-cabal v2-test
-```
+Run testing:
+  * Default:
+    ```
+    cabal v2-test
+    ```
 
-To run all of the tests, which takes up to a minute:
-```
-env ALL_TESTS=yes cabal v2-test
-```
+  * All:
+    ```
+    env ALL_TESTS=yes cabal v2-test
+    ```
 
-To run only specific tests (see `tests/Main.hs` for a list)
-```
-env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
-./dist/build/hnix/hnix --help
-```
+  * Selected (list of tests is in `tests/Main.hs`):
+    ```
+    env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
+    ./dist/build/hnix/hnix --help
+    ```
 
 ## Using the REPL
 
