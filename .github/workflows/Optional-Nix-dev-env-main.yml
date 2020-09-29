@@ -75,6 +75,7 @@ jobs:
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
     - name: Determined Nix-build
       env:
+        compiler: "default"
         buildStrictly: "true"
       run: ./build.sh
 
