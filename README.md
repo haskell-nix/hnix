@@ -1,6 +1,15 @@
+[![Chatroom Gitter](https://img.shields.io/badge/Chatroom-Gitter-%23753a88)](https://gitter.im/haskell-nix/Lobby)
+[![Hackage](https://img.shields.io/hackage/v/hnix?color=%235e5086&label=Latest%20release%20on%20Hackage)](https://hackage.haskell.org/package/hnix)
+[![Hackage Matrix Builder](https://img.shields.io/badge/Hackage%20Matrix-Builder-%235e5086)](https://matrix.hackage.haskell.org/package/hnix)
+[![Bounds](https://img.shields.io/hackage-deps/v/hnix?label=Released%20dep%20bounds)](https://packdeps.haskellers.com/feed?needle=hnix)
+[![Hydra CI](https://img.shields.io/badge/Nixpkgs%20Hydra-CI-%234f72bb)](https://hydra.nixos.org/job/nixpkgs/trunk/haskellPackages.hnix.x86_64-linux#tabs-status)
+[![Repology page](https://img.shields.io/badge/Repology-page-%23005500)](https://repology.org/project/haskell:hnix/versions)
+
+
 # hnix
 
 Haskell parser, evaluator and type checker for the Nix language.
+
 
 ## Contents
 
@@ -22,17 +31,6 @@ Haskell parser, evaluator and type checker for the Nix language.
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
----
-
-| [![Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/haskell-nix/Lobby)                                                                                  | CI                                                                                                                                                                                                                                         |
-| :---                                                                                                                                                                     |  :---                                                                                                                                                                                                                                      |
-| [![Hackage](https://img.shields.io/hackage/v/hnix?color=%235e5086&label=Latest%20release)](https://hackage.haskell.org/package/hnix)                                      | [![Hackage, Cabal, Linux](https://github.com/haskell-nix/hnix/workflows/Hackage,%20Cabal,%20Linux/badge.svg)](https://github.com/haskell-nix/hnix/actions?query=workflow%3A"Hackage%2C+Cabal%2C+Linux"+branch%3Amaster)                    |
-| [![Hackage Matrix Builder](https://img.shields.io/badge/Hackage%20Matrix-Builder-%235e5086)](https://matrix.hackage.haskell.org/package/hnix)                             | [![Nixpkgs, Linux, main](https://github.com/haskell-nix/hnix/workflows/Nixpkgs,%20Linux,%20main/badge.svg)](https://github.com/haskell-nix/hnix/actions?query=workflow%3A%22Nixpkgs%2C+Linux%2C+main%22+branch%3Amaster)                   |
-| [![Nixpkgs Hydra CI](https://img.shields.io/badge/Nixpkgs%20Hydra-CI-%234f72bb)](https://hydra.nixos.org/job/nixpkgs/trunk/haskellPackages.hnix.x86_64-linux#tabs-status) | [![Nixpkgs, Linux, additional](https://github.com/haskell-nix/hnix/workflows/Nixpkgs,%20Linux,%20additional/badge.svg)](https://github.com/haskell-nix/hnix/actions?query=workflow%3A%22Nixpkgs%2C+Linux%2C+additional%22+branch%3Amaster) |
-| [![Release dependencies](https://img.shields.io/hackage-deps/v/hnix?label=Release%20dependencies)](https://packdeps.haskellers.com/feed?needle=hnix)                      | [![Nixpkgs, macOS](https://github.com/haskell-nix/hnix/workflows/Nixpkgs,%20macOS/badge.svg)](https://github.com/haskell-nix/hnix/actions?query=workflow%3A%22Nixpkgs%2C+macOS%22+branch%3Amaster)                                         |
-| [![Repology page](https://img.shields.io/badge/Repology-page-%23005500)](https://repology.org/project/haskell:hnix/versions)                                              | |
-
----
 
 ## Prerequisites
 Tooling is WIP, `nix-shell` and `nix-store` are still used for their purpose, so, to access them Nix is required to be installed.
