@@ -109,12 +109,9 @@ cachix use hnix
 
 ## Contributing
 
-### Issue Tracker Backlog
-
-To participate out, take a look
-[in here](https://github.com/haskell-nix/hnix/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22+no%3Aassignee).
-When issue looks interesting, look through the thread and comment on the ticket to
-let others know you're working on it. You can chat with everyone participating in the project on
+[Requests and reports](https://github.com/haskell-nix/hnix/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22+no%3Aassignee).
+When something looks interesting, look through the thread and comment on the ticket to
+let others know you're working on it. You are free to chat with everyone in the project on
 [Gitter](https://gitter.im/haskell-nix/Lobby).
 
 When pull request is ready to be submitted, to save time - please, test it with:
