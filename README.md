@@ -1,5 +1,16 @@
 # hnix
 
+Haskell parser, evaluator and type checker for the Nix language.
+
+## Contents
+
+<!-- TOC generates automatically, do not bother editing any further TOC text -->
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+---
+
 | [![Chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/haskell-nix/Lobby)                                                                                  | CI                                                                                                                                                                                                                                         |
 | :---                                                                                                                                                                     |  :---                                                                                                                                                                                                                                      |
 | [![Hackage](https://img.shields.io/hackage/v/hnix?color=%235e5086&label=Latest%20release)](https://hackage.haskell.org/package/hnix)                                      | [![Hackage, Cabal, Linux](https://github.com/haskell-nix/hnix/workflows/Hackage,%20Cabal,%20Linux/badge.svg)](https://github.com/haskell-nix/hnix/actions?query=workflow%3A"Hackage%2C+Cabal%2C+Linux"+branch%3Amaster)                    |
@@ -8,21 +19,7 @@
 | [![Release dependencies](https://img.shields.io/hackage-deps/v/hnix?label=Release%20dependencies)](https://packdeps.haskellers.com/feed?needle=hnix)                      | [![Nixpkgs, macOS](https://github.com/haskell-nix/hnix/workflows/Nixpkgs,%20macOS/badge.svg)](https://github.com/haskell-nix/hnix/actions?query=workflow%3A%22Nixpkgs%2C+macOS%22+branch%3Amaster)                                         |
 | [![Repology page](https://img.shields.io/badge/Repology-page-%23005500)](https://repology.org/project/haskell:hnix/versions)                                              | |
 
-Haskell parser, evaluator and type checker for the Nix language.
-
-## Contents
-
-<!-- TOC -->
-- [Prerequisites](#prerequisites)
-- [Getting Started](#getting-started)
-- [Using the REPL](#using-the-repl)
-- [Building with full debug info](#building-with-full-debug-info)
-- [Building with benchmarks enabled](#building-with-benchmarks-enabled)
-- [Building with profiling enabled](#building-with-profiling-enabled)
-- [Using the Cachix binary cache](#using-the-cachix-binary-cache)
-- [Contributing](#contributing)
-  - [Evaluating Nixpkgs with HNix](#evaluating-nixpkgs-with-hnix)
-<!-- /TOC -->
+---
 
 ## Prerequisites
 Until `hnix-store` is ready, `nix-store` is still used for interacting with the store paths, so Nix is still required installed and available through `$PATH`.
@@ -72,20 +69,19 @@ hnix --eval -E '(import <nixpkgs> {}).pkgs.hello' --repl
 
 Use the `:help` command for a list of all available REPL commands.
 
-## Building with full debug info
 
-To build `hnix` for debugging, and with full tracing output and stack traces, use:
+## Cachix prebuild binary caches
 
-```
-nix-shell
-cabal v2-configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
-cabal v2-build
-cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
-```
+To autoload prebuild project dependencies - please, enable the official HNix Cachix binary cache:
 
-Note that this will run quite slowly, but will give the most information as to what might potentially be going wrong during parsing or evaluation.
+1. Go through https://cachix.org/ and set it up.
 
-## Building with benchmarks enabled
+2. Run: `cachix use hnix`
+
+
+## Building
+
+### With benchmarks
 
 To build `hnix` with benchmarks enabled:
 
@@ -96,7 +92,7 @@ cabal v2-build
 cabal v2-bench
 ```
 
-## Building with profiling enabled
+### With profiling
 
 To build `hnix` with profiling enabled:
 
@@ -107,14 +103,19 @@ cabal v2-build
 cabal v2-run hnix -- <args> +RTS -p
 ```
 
-## Using the Cachix binary cache
+### With full debug info
 
-If you're on macOS, you can use the binary cache at Cachix to avoid building the specific dependencies used by hnix. Just use these commands:
+To build `hnix` for debugging, with full tracing output and stack traces:
 
 ```
-nix-env -iA cachix -f https://github.com/NixOS/nixpkgs/tarball/db557aab7b690f5e0e3348459f2e4dc8fd0d9298
-cachix use hnix
+nix-shell
+cabal v2-configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
+cabal v2-build
+cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
 ```
+
+Note that this will run quite slowly, but will give the most information as to what might potentially be going wrong during parsing or evaluation.
+
 
 ## Contributing
 
