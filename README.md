@@ -2,10 +2,10 @@
 
 Haskell parser, evaluator and type checker for the Nix language.
 
+## Contents
+
 <!-- TOC generates automatically, do not bother editing any further TOC text -->
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-## Contents
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
