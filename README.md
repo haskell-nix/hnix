@@ -10,6 +10,20 @@
 
 Haskell parser, evaluator and type checker for the Nix language.
 
+## Contents
+
+<!-- TOC -->
+- [Prerequisites](#prerequisites)
+- [Getting Started](#getting-started)
+- [Using the REPL](#using-the-repl)
+- [Building with full debug info](#building-with-full-debug-info)
+- [Building with benchmarks enabled](#building-with-benchmarks-enabled)
+- [Building with profiling enabled](#building-with-profiling-enabled)
+- [Using the Cachix binary cache](#using-the-cachix-binary-cache)
+- [Contributing](#contributing)
+  - [Evaluating Nixpkgs with HNix](#evaluating-nixpkgs-with-hnix)
+<!-- /TOC -->
+
 ## Prerequisites
 Until `hnix-store` is ready, `nix-store` is still used for interacting with the store paths, so Nix is still required installed and available through `$PATH`.
 
