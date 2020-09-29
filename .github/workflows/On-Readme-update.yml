@@ -1,0 +1,33 @@
+name: "On README change"
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "README.md"
+
+jobs:
+
+  build10:
+    name: "Check TOC, autogenerate and commit it into the PR"
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Install doctoc
+        run: |
+          sudo npm install -g doctoc
+      - uses: actions/checkout@v2
+        with:
+          # 2020-09-29: Official doc:
+          # "In non-push events, such as pull_request, make sure to specify the ref to checkout:'
+          ref: ${{ github.head_ref }}
+      - name: Generate the idenpotent TOC
+        run: |
+          doctoc --github --notitle README.md
+      - name: Commit and push changes
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_author: "Anton Latukha <anton@latukha.com>"
+          commit_message: "[auto] upd README TOC"
+          file_pattern: "README.md"
