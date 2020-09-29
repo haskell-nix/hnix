@@ -22,7 +22,7 @@ env:
   ### and the other part of keys explained in `build.sh`, since those address external procedures aound the builds.
   ### Additional documentation is in Nixpkgs Haskell.lib: https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix
   ###
-  rev: "nixos-unstable"
+  # rev: "nixos-unstable"         #  2020-09-29: NOTE: HNix default.nix currently pins the rev
   cachixAccount: "hnix"
   CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
   allowInconsistentDependencies: "false"
@@ -56,7 +56,6 @@ env:
 
 jobs:
 
-  # NOTE: Basic example
   build10:
     name: "NixOS-unstable channel, strict build, default GHC (8.8)"
     runs-on: ubuntu-latest
@@ -76,7 +75,6 @@ jobs:
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
     - name: Determined Nix-build
       env:
-        rev: "nixos-unstable"
         buildStrictly: "true"
       run: ./build.sh
 
@@ -99,7 +97,6 @@ jobs:
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
     - name: Determined Nix-build
       env:
-        rev: "nixos-unstable"
         compiler: "ghc8101"
         buildFromSdist: "true"
         linkWithGold: "true"
