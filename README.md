@@ -51,9 +51,7 @@ Enter REPL:
 hnix --repl
 ```
 
-To evaluate an expression and make it available in the REPL
-as the `input` variable use
-
+To evaluate an expression and make it available in the REPL as the `input` variable use:
 ```
 hnix --eval -E '(import <nixpkgs> {}).pkgs.hello' --repl
 ```
@@ -62,8 +60,7 @@ Use the `:help` command for a list of all available REPL commands.
 
 ## Building with full debug info
 
-To build `hnix` for debugging, and with full tracing output and stack traces,
-use:
+To build `hnix` for debugging, and with full tracing output and stack traces, use:
 
 ```
 nix-shell
@@ -72,8 +69,7 @@ cabal v2-build
 cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
 ```
 
-Note that this will run quite slowly, but will give the most information as to
-what might potentially be going wrong during parsing or evaluation.
+Note that this will run quite slowly, but will give the most information as to what might potentially be going wrong during parsing or evaluation.
 
 ## Building with benchmarks enabled
 
@@ -99,8 +95,7 @@ cabal v2-run hnix -- <args> +RTS -p
 
 ## Using the Cachix binary cache
 
-If you're on macOS, you can use the binary cache at Cachix to avoid building
-the specific dependencies used by hnix. Just use these commands:
+If you're on macOS, you can use the binary cache at Cachix to avoid building the specific dependencies used by hnix. Just use these commands:
 
 ```
 nix-env -iA cachix -f https://github.com/NixOS/nixpkgs/tarball/db557aab7b690f5e0e3348459f2e4dc8fd0d9298
@@ -124,9 +119,7 @@ Please, check that all tests that were passing prior (most probably all tests me
 
 ### Evaluating Nixpkgs with HNix
 
-Currently the main high-level goal is to be able to evaluate all of Nixpkgs. To
-run this yourself, first build `hnix` with `nix-build`, then run the following
-command:
+Currently the main high-level goal is to be able to evaluate all of Nixpkgs. To run this yourself, first build `hnix` with `nix-build`, then run the following command:
 
 ```
 ./result/bin/hnix --eval -E "import <nixpkgs> {}" --find
