@@ -107,7 +107,7 @@ nix-env -iA cachix -f https://github.com/NixOS/nixpkgs/tarball/db557aab7b690f5e0
 cachix use hnix
 ```
 
-## How you can help
+## Contributing
 
 ### Issue Tracker Backlog
 
