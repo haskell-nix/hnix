@@ -107,9 +107,9 @@ cabal v2-build
 cabal v2-run hnix -- <args> +RTS -p
 ```
 
-## Using the Cachix binary cache
+## Cachix prebuild binary caches
 
-If you're on macOS, you can use the binary cache at Cachix to avoid building the specific dependencies used by hnix. Just use these commands:
+Add the official HNix Cachix binary cache to autoload ready project dependencies:
 
 ```
 nix-env -iA cachix -f https://github.com/NixOS/nixpkgs/tarball/db557aab7b690f5e0e3348459f2e4dc8fd0d9298
