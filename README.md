@@ -109,11 +109,11 @@ cachix use hnix
 
 ## Contributing
 
-If something in the [quests](https://github.com/haskell-nix/hnix/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22+no%3Aassignee) looks interesting, look through the thread and leave a comment taking it, to let others know you're working on it.
+1. If something in the [quests](https://github.com/haskell-nix/hnix/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22+no%3Aassignee) looks interesting, look through the thread and leave a comment taking it, to let others know you're working on it.
 
-You are free to chat with everyone on [Gitter](https://gitter.im/haskell-nix/Lobby).
+2. You are free to chat with everyone on [Gitter](https://gitter.im/haskell-nix/Lobby).
 
-When pull request is ready to be submitted, to save time - please, test it with:
+3. When pull request is ready to be submitted, to save time - please, test it with:
 
 ```
 git submodule update --init --recursive
