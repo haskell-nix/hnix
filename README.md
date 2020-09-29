@@ -109,10 +109,9 @@ cachix use hnix
 
 ## Contributing
 
-[Requests and reports](https://github.com/haskell-nix/hnix/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22+no%3Aassignee).
-When something looks interesting, look through the thread and comment on the ticket to
-let others know you're working on it. You are free to chat with everyone in the project on
-[Gitter](https://gitter.im/haskell-nix/Lobby).
+If something in the [quests](https://github.com/haskell-nix/hnix/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22+no%3Aassignee) looks interesting, look through the thread and leave a comment taking it, to let others know you're working on it.
+
+You are free to chat with everyone on [Gitter](https://gitter.im/haskell-nix/Lobby).
 
 When pull request is ready to be submitted, to save time - please, test it with:
 
