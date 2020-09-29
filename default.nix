@@ -91,7 +91,7 @@
 #   , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
 #   ...
 #   }
-, rev ? "51428e8d38271d14146211867984b8742d304ea4"
+, rev ? "daaa0e33505082716beb52efefe3064f0332b521"
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
