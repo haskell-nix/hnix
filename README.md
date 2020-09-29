@@ -69,6 +69,7 @@ hnix --eval -E '(import <nixpkgs> {}).pkgs.hello' --repl
 
 Use the `:help` command for a list of all available REPL commands.
 
+
 ## Building
 
 ### With full debug info
@@ -109,12 +110,12 @@ cabal v2-run hnix -- <args> +RTS -p
 
 ## Cachix prebuild binary caches
 
-Add the official HNix Cachix binary cache to autoload ready project dependencies:
+To autoload prebuild project dependencies - please, enable the official HNix Cachix binary cache:
 
-```
-nix-env -iA cachix -f https://github.com/NixOS/nixpkgs/tarball/db557aab7b690f5e0e3348459f2e4dc8fd0d9298
-cachix use hnix
-```
+1. Go through https://cachix.org/ and set it up.
+
+2. Run: `cachix use hnix`
+
 
 ## Contributing
 
