@@ -69,9 +69,11 @@ hnix --eval -E '(import <nixpkgs> {}).pkgs.hello' --repl
 
 Use the `:help` command for a list of all available REPL commands.
 
-## Building with full debug info
+## Building
 
-To build `hnix` for debugging, and with full tracing output and stack traces, use:
+### With full debug info
+
+To build `hnix` for debugging, with full tracing output and stack traces:
 
 ```
 nix-shell
@@ -82,7 +84,8 @@ cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
 
 Note that this will run quite slowly, but will give the most information as to what might potentially be going wrong during parsing or evaluation.
 
-## Building with benchmarks enabled
+
+### With benchmarks
 
 To build `hnix` with benchmarks enabled:
 
@@ -93,7 +96,7 @@ cabal v2-build
 cabal v2-bench
 ```
 
-## Building with profiling enabled
+### With profiling
 
 To build `hnix` with profiling enabled:
 
