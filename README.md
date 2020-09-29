@@ -81,20 +81,6 @@ To autoload prebuild project dependencies - please, enable the official HNix Cac
 
 ## Building
 
-### With full debug info
-
-To build `hnix` for debugging, with full tracing output and stack traces:
-
-```
-nix-shell
-cabal v2-configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
-cabal v2-build
-cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
-```
-
-Note that this will run quite slowly, but will give the most information as to what might potentially be going wrong during parsing or evaluation.
-
-
 ### With benchmarks
 
 To build `hnix` with benchmarks enabled:
@@ -116,6 +102,20 @@ cabal v2-configure --enable-tests --enable-profiling --flags=profiling
 cabal v2-build
 cabal v2-run hnix -- <args> +RTS -p
 ```
+
+### With full debug info
+
+To build `hnix` for debugging, with full tracing output and stack traces:
+
+```
+nix-shell
+cabal v2-configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
+cabal v2-build
+cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
+```
+
+Note that this will run quite slowly, but will give the most information as to what might potentially be going wrong during parsing or evaluation.
+
 
 ## Contributing
 
