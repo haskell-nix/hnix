@@ -100,9 +100,9 @@ env ALL_TESTS=yes cabal v2-test
 env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
 ```
 
-### Building the project
+#### Building the project
 
-#### With benchmarks
+##### With benchmarks
 
 To run benchmarks:
 
@@ -110,7 +110,7 @@ To run benchmarks:
 cabal v2-bench
 ```
 
-#### With profiling
+##### With profiling
 
 To build `hnix` with profiling enabled:
 
@@ -119,7 +119,7 @@ cabal v2-configure --enable-tests --enable-profiling --flags=profiling
 cabal v2-run hnix -- <args> +RTS -p
 ```
 
-#### With full debug info
+##### With full debug info
 
 To build `hnix` for debugging, with full tracing output and stack traces:
 
@@ -131,7 +131,7 @@ cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
 Note that this going to run quite slowly, but would give the most information as to what happens during parsing & evaluation.
 
 
-### Run HNix:
+#### Run HNix
 ```
 cabal v2-run hnix -- --help
 ```
