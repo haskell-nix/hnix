@@ -184,6 +184,13 @@ nix-build \
   --arg enableDWARFDebugging true
 ```
 
+#### Run the result
+
+```
+./result/bin/hnix
+```
+
+
 ## Using the HNix REPL
 
 To enter in:
