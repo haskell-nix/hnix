@@ -38,6 +38,7 @@ Tooling is WIP, `nix-shell` and `nix-store` are still used for their purpose, so
 ## Getting Started
 
 ```
+# Note: --recursive
 git clone --recursive https://github.com/haskell-nix/hnix.git
 cd hnix
 ```
