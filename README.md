@@ -8,7 +8,7 @@
 
 # hnix
 
-Haskell parser, evaluator and type checker for the Nix language.
+Parser, evaluator and type checker for the Nix language written in Haskell.
 
 
 ## Contents
@@ -38,35 +38,74 @@ Tooling is WIP, `nix-shell` and `nix-store` are still used for their purpose, so
 ## Getting Started
 
 ```
+# Note: --recursive
 git clone --recursive https://github.com/haskell-nix/hnix.git
 cd hnix
+```
+
+
+### Cachix prebuild binary caches
+
+If you opt in to use of Nix environment, to accelerate processes, please, enable the official HNix Cachix binary cache:
+
+1. Go through https://cachix.org/ and set it up.
+
+2. Run: `cachix use hnix`
+
+
+### Development using Cabal
+
+Cabal [Quickstart](https://cabal.readthedocs.io/en/3.4/nix-local-build.html).
+
+1. (Optional), to enter the projects reproducible Nix environment:
+```
 nix-shell
-cabal v2-configure --enable-tests
+```
+  
+2. Building:
+```
+cabal v2-configure
 cabal v2-build
 ```
 
-Run testing:
-  * Default:
-    ```
-    cabal v2-test
-    ```
+3. Loading the project into `ghci` REPL:
+```
+cabal v2-repl
+```
 
-  * All:
-    ```
-    env ALL_TESTS=yes cabal v2-test
-    ```
+4. Development status loop with amazing [`ghcid`](https://github.com/ndmitchell/ghcid):
+```
+ghcid --command="cabal v2-repl --repl-options=-fno-code --repl-options=-fno-break-on-exception --repl-options=-fno-break-on-error --repl-options=-v1 --repl-options=-ferror-spans --repl-options=-j"
+```
+(optional) To use projects reproducible environment, wrap `ghcid ...` command into a `nix-shell --command ' '`.
 
-  * Selected (list of tests is in `tests/Main.hs`):
-    ```
-    env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
-    ```
+For simplicity alias it for your shell.
 
-Run built binary with Cabal (`--` is for separation between `cabal` & `hnix` args):
+3. Testing:
+
+* Default suite:
+```
+cabal v2-test
+```
+
+* All available tests:
+```
+env ALL_TESTS=yes cabal v2-test
+```
+
+* Selected (list of tests is in `tests/Main.hs`):
+```
+env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
+```
+
+Run built binary with Cabal:
 ```
 cabal v2-run hnix -- --help
 ```
+(`--` is for separation between `cabal` & `hnix` args)
 
-## Using the REPL
+
+## Entering the HNix REPL
 
 Enter REPL:
 ```
@@ -81,25 +120,13 @@ hnix --eval -E '(import <nixpkgs> {}).pkgs.hello' --repl
 Use the `:help` command for a list of all available REPL commands.
 
 
-## Cachix prebuild binary caches
-
-To autoload prebuild project dependencies - please, enable the official HNix Cachix binary cache:
-
-1. Go through https://cachix.org/ and set it up.
-
-2. Run: `cachix use hnix`
-
-
 ## Building
 
 ### With benchmarks
 
-To build `hnix` with benchmarks enabled:
+To run benchmarks:
 
 ```
-nix-shell
-cabal v2-configure --enable-tests --enable-benchmarks
-cabal v2-build
 cabal v2-bench
 ```
 
@@ -108,9 +135,7 @@ cabal v2-bench
 To build `hnix` with profiling enabled:
 
 ```
-nix-shell
 cabal v2-configure --enable-tests --enable-profiling --flags=profiling
-cabal v2-build
 cabal v2-run hnix -- <args> +RTS -p
 ```
 
@@ -119,9 +144,7 @@ cabal v2-run hnix -- <args> +RTS -p
 To build `hnix` for debugging, with full tracing output and stack traces:
 
 ```
-nix-shell
 cabal v2-configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
-cabal v2-build
 cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
 ```
 
@@ -134,18 +157,18 @@ Note that this will run quite slowly, but will give the most information as to w
 
 2. You are free to chat with everyone on [Gitter](https://gitter.im/haskell-nix/Lobby).
 
-3. When pull request is ready to be submitted, to save time - please, test it with:
+3. When the pull request is ready to be submitted, to save time - please, test it with:
 
 ```
 git submodule update --init --recursive
 nix-shell --run "LANGUAGE_TESTS=yes cabal v2-test"
 ```
 
-Please, check that all tests that were passing prior (most probably all tests mentioned in the command) are still passing for the PR, it is faster to chech that locally then through CI. It's OK if no new tests are passing.
+Please, check that all tests that were passing prior (most probably all tests mentioned in the command) are still passing for the PR, it is faster to check that locally than through CI. It's OK if no new tests are passing.
 
 ### Evaluating Nixpkgs with HNix
 
-Currently the main high-level goal is to be able to evaluate all of Nixpkgs. To run this yourself, first build `hnix` with `nix-build`, then run the following command:
+Currently, the main high-level goal is to be able to evaluate all of Nixpkgs. To run this yourself, first build `hnix` with `nix-build`, then run the following command:
 
 ```
 ./result/bin/hnix --eval -E "import <nixpkgs> {}" --find
