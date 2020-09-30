@@ -64,6 +64,14 @@ cabal v2-build
 cabal v2-repl
 ```
 
+4. Development status loop with amazing [`ghcid`](https://github.com/ndmitchell/ghcid):
+```
+ghcid --command="cabal v2-repl --repl-options=-fno-code --repl-options=-fno-break-on-exception --repl-options=-fno-break-on-error --repl-options=-v1 --repl-options=-ferror-spans --repl-options=-j"
+```
+(optional) To use projects reproducible environment, wrap `ghcid ...` command into a `nix-shell --command ' '`.
+
+For simplicity alias it for your shell.
+
 3. Testing:
 
 * Default suite:
