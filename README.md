@@ -59,6 +59,11 @@ cabal v2-configure
 cabal v2-build
 ```
 
+3. Loading the project into `ghci` REPL:
+```
+cabal v2-repl
+```
+
 3. Testing:
 
 * Default suite:
