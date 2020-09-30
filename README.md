@@ -45,32 +45,33 @@ cd hnix
 ### Development with Cabal
 
 1. (Optional), to enter and work in the reproducible Nix environemt:
-  ```
-  nix-shell
-  ```
-  Nix environment currenly defaults to the GHC 8.8, which is the default in Nixpkgs, drawback of it - compilation of `hnix` executable is enabled only for GHC 8.10.
+```
+nix-shell
+```
+Nix environment currenly defaults to the GHC 8.8, which is the default in Nixpkgs, drawback of it - compilation of `hnix` executable is enabled only for GHC 8.10.
   
 2. Building:
-  ```
-  cabal v2-configure --enable-tests
-  cabal v2-build
-  ```
+```
+cabal v2-configure
+cabal v2-build
+```
 
 3. Testing:
-  * Default suite:
-    ```
-    cabal v2-test
-    ```
 
-  * All available tests:
-    ```
-    env ALL_TESTS=yes cabal v2-test
-    ```
+* Default suite:
+```
+cabal v2-test
+```
 
-  * Selected (list of tests is in `tests/Main.hs`):
-    ```
-    env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
-    ```
+* All available tests:
+```
+env ALL_TESTS=yes cabal v2-test
+```
+
+* Selected (list of tests is in `tests/Main.hs`):
+```
+env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
+```
 
 Run built binary with Cabal (`--` is for separation between `cabal` & `hnix` args):
 ```
