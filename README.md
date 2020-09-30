@@ -57,11 +57,10 @@ If you opt in to use of Nix environment, to accelerate processes, please, enable
 
 Cabal [Quickstart](https://cabal.readthedocs.io/en/3.4/nix-local-build.html).
 
-1. (Optional), to enter and work in the reproducible Nix environment:
+1. (Optional), to enter the projects reproducible Nix environment:
 ```
 nix-shell
 ```
-Nix environment currently defaults to the GHC 8.8, which is the default in Nixpkgs, drawback of it - a compilation of `hnix` executable is enabled only for GHC 8.10.
   
 2. Building:
 ```
