@@ -108,9 +108,7 @@ To autoload prebuild project dependencies - please, enable the official HNix Cac
 To build `hnix` with benchmarks enabled:
 
 ```
-nix-shell
 cabal v2-configure --enable-tests --enable-benchmarks
-cabal v2-build
 cabal v2-bench
 ```
 
@@ -119,9 +117,7 @@ cabal v2-bench
 To build `hnix` with profiling enabled:
 
 ```
-nix-shell
 cabal v2-configure --enable-tests --enable-profiling --flags=profiling
-cabal v2-build
 cabal v2-run hnix -- <args> +RTS -p
 ```
 
@@ -130,9 +126,7 @@ cabal v2-run hnix -- <args> +RTS -p
 To build `hnix` for debugging, with full tracing output and stack traces:
 
 ```
-nix-shell
 cabal v2-configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
-cabal v2-build
 cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
 ```
 
