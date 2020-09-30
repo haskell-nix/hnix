@@ -40,18 +40,29 @@ Tooling is WIP, `nix-shell` and `nix-store` are still used for their purpose, so
 ```
 git clone --recursive https://github.com/haskell-nix/hnix.git
 cd hnix
-nix-shell
-cabal v2-configure --enable-tests
-cabal v2-build
 ```
 
-Run testing:
-  * Default:
+### Development with Cabal
+
+1. (Optional), to enter and work in the reproducible Nix environemt:
+  ```
+  nix-shell
+  ```
+  Nix environment currenly defaults to the GHC 8.8, which is the default in Nixpkgs, drawback of it - compilation of `hnix` executable is enabled only for GHC 8.10.
+  
+2. Building:
+  ```
+  cabal v2-configure --enable-tests
+  cabal v2-build
+  ```
+
+3. Testing:
+  * Default suite:
     ```
     cabal v2-test
     ```
 
-  * All:
+  * All available tests:
     ```
     env ALL_TESTS=yes cabal v2-test
     ```
