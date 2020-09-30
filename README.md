@@ -54,7 +54,7 @@ cd hnix
 
 ### Cachix prebuild binary caches
 
-If you opt in to use of Nix environment, to accelerate processes, please, enable the official HNix Cachix binary cache:
+If you opt in to use of Nix environment, please enable the official HNix Cachix binary cache:
 
 1. Go through https://cachix.org/ and set it up.
 
@@ -136,7 +136,7 @@ cabal v2-run hnix -- --help
 (`--` is for separation between `cabal` & `hnix` args)
 
 
-### Using the Nix-build
+### Use of the Nix-build
 
 There is a number of build options to use with `nix-build`, documentation of them is in: `./default.nix`, keys essentially pass-through the [Nixpkgs Haskell Lib API](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix).
 
@@ -195,7 +195,7 @@ ghcid --command="cabal v2-repl --repl-options=-fno-code --repl-options=-fno-brea
 ```
 (optional) To use projects reproducible environment, wrap `ghcid ...` command into a `nix-shell --command ' '`.
 
-For simplicity alias the command in your shell.
+For simplicity `alias` the command in your shell.
 
 
 ## Using the HNix REPL
@@ -231,8 +231,8 @@ Please, check that all tests that were passing prior (most probably all tests me
 
 ## Evaluating Nixpkgs with HNix
 
-Currently, the main high-level goal is to be able to evaluate all of Nixpkgs. To run this yourself, first build `hnix` with `nix-build`, then run the following command:
+Currently, the main high-level goal is to be able to evaluate all of Nixpkgs:
 
 ```
-./result/bin/hnix --eval -E "import <nixpkgs> {}" --find
+hnix --eval -E "import <nixpkgs> {}" --find
 ```
