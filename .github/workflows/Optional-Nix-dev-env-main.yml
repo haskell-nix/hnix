@@ -57,7 +57,7 @@ env:
 jobs:
 
   build10:
-    name: "NixOS-unstable channel, strict build, default GHC (8.8)"
+    name: "Default Nixpkgs GHC (8.8), strict build"
     runs-on: ubuntu-latest
     #  2020-08-01: NOTE: Due to Nixpkgs brittleness to not block project development Nixpkgs made optional, see commit message for more info
     continue-on-error: true
@@ -81,7 +81,7 @@ jobs:
 
 
   build20:
-    name: "Quality build, SDist, Optimizations, Benchmark, Haddock, Completions, GHC 8.10.1"
+    name: "GHC 8.10.1, quality build, SDist, Optimizations, Benchmark, Haddock, Completions"
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
