@@ -89,10 +89,11 @@ env ALL_TESTS=yes cabal v2-test
 env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
 ```
 
-Run built binary with Cabal (`--` is for separation between `cabal` & `hnix` args):
+Run built binary with Cabal:
 ```
 cabal v2-run hnix -- --help
 ```
+(`--` is for separation between `cabal` & `hnix` args)
 
 ## Using the REPL
 
