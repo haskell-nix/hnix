@@ -106,10 +106,9 @@ To autoload prebuild project dependencies - please, enable the official HNix Cac
 
 ### With benchmarks
 
-To build `hnix` with benchmarks enabled:
+To run benchmarks:
 
 ```
-cabal v2-configure --enable-tests --enable-benchmarks
 cabal v2-bench
 ```
 
