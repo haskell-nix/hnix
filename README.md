@@ -8,7 +8,7 @@
 
 # hnix
 
-Haskell parser, evaluator and type checker for the Nix language.
+Parser, evaluator and type checker for the Nix language written in Haskell.
 
 
 ## Contents
