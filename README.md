@@ -100,9 +100,9 @@ env ALL_TESTS=yes cabal v2-test
 env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
 ```
 
-### Building the project
+#### Building the project
 
-#### With benchmarks
+##### With benchmarks
 
 To run benchmarks:
 
@@ -110,7 +110,7 @@ To run benchmarks:
 cabal v2-bench
 ```
 
-#### With profiling
+##### With profiling
 
 To build `hnix` with profiling enabled:
 
@@ -119,7 +119,7 @@ cabal v2-configure --enable-tests --enable-profiling --flags=profiling
 cabal v2-run hnix -- <args> +RTS -p
 ```
 
-#### With full debug info
+##### With full debug info
 
 To build `hnix` for debugging, with full tracing output and stack traces:
 
@@ -131,16 +131,69 @@ cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
 Note that this going to run quite slowly, but would give the most information as to what happens during parsing & evaluation.
 
 
-### Run HNix:
+#### Run HNix
 ```
 cabal v2-run hnix -- --help
 ```
 (`--` is for separation between `cabal` & `hnix` args)
 
 
-## Entering the HNix REPL
+### Using the Nix-build
 
-Enter the REPL:
+There is a number of build options to use with `nix-build`, documentation of them is in: `./default.nix`, keys essentially pass-through the [Nixpkgs Haskell Lib API](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix).
+
+Options can be used as:
+```
+nix-build \
+  --arg <option1> <argument1> \
+  --arg <option2> <argument2> \
+  --argstr <option3> "<strinTypeArg>"
+```
+
+#### Run benchmarks
+
+```
+nix-build \
+  --arg disableOptimization false \
+  --arg enableDeadCodeElimination true \
+  --arg doStrip true \
+  --arg doBenchmark true
+```
+
+#### With profiling
+
+```
+nix-build \
+  --arg disableOptimization false \
+  --arg enableDeadCodeElimination true \
+  --arg enableLibraryProfiling true \
+  --arg enableExecutableProfiling true
+```
+
+#### With full debug info
+
+```
+nix-build \
+  --arg disableOptimization false \
+  --arg enableDeadCodeElimination true \
+  --arg doBenchmark true \
+  --arg doStrip false \
+  --arg enableLibraryProfiling true \
+  --arg enableExecutableProfiling true
+  --arg doTracing true \
+  --arg enableDWARFDebugging true
+```
+
+#### Run the result
+
+```
+./result/bin/hnix
+```
+
+
+## Using the HNix REPL
+
+To enter in:
 ```
 hnix --repl
 ```
