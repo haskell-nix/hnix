@@ -79,7 +79,7 @@ ghcid --command="cabal v2-repl --repl-options=-fno-code --repl-options=-fno-brea
 ```
 (optional) To use projects reproducible environment, wrap `ghcid ...` command into a `nix-shell --command ' '`.
 
-For simplicity alias it for your shell.
+For simplicity alias it in your shell.
 
 3. Testing:
 
@@ -98,7 +98,7 @@ env ALL_TESTS=yes cabal v2-test
 env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
 ```
 
-### Building
+### Building the project
 
 #### With benchmarks
 
@@ -138,7 +138,7 @@ cabal v2-run hnix -- --help
 
 ## Entering the HNix REPL
 
-Enter REPL:
+Enter the REPL:
 ```
 hnix --repl
 ```
@@ -166,7 +166,7 @@ nix-shell --run "LANGUAGE_TESTS=yes cabal v2-test"
 
 Please, check that all tests that were passing prior (most probably all tests mentioned in the command) are still passing for the PR, it is faster to check that locally than through CI. It's OK if no new tests are passing.
 
-### Evaluating Nixpkgs with HNix
+## Evaluating Nixpkgs with HNix
 
 Currently, the main high-level goal is to be able to evaluate all of Nixpkgs. To run this yourself, first build `hnix` with `nix-build`, then run the following command:
 
