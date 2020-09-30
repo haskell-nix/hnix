@@ -45,6 +45,8 @@ cd hnix
 
 ### Development using Cabal
 
+Cabal [Quickstart](https://cabal.readthedocs.io/en/3.4/nix-local-build.html).
+
 1. (Optional), to enter and work in the reproducible Nix environemt:
 ```
 nix-shell
