@@ -138,6 +138,52 @@ cabal v2-run hnix -- --help
 (`--` is for separation between `cabal` & `hnix` args)
 
 
+### Using the Nix-build
+
+There is a number of build options to use with `nix-build`, documentation of them is in: `./default.nix`, keys essentially pass-through the [Nixpkgs Haskell Lib API](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix).
+
+Options can be used as:
+```
+nix-build \
+  --arg <option1> <argument1> \
+  --arg <option2> <argument2> \
+  --argstr <option3> "<strinTypeArg>"
+```
+
+#### Run benchmarks
+
+```
+nix-build \
+  --arg disableOptimization false \
+  --arg enableDeadCodeElimination true \
+  --arg doStrip true \
+  --arg doBenchmark true
+```
+
+#### With profiling
+
+```
+nix-build \
+  --arg disableOptimization false \
+  --arg enableDeadCodeElimination true \
+  --arg enableLibraryProfiling true \
+  --arg enableExecutableProfiling true
+```
+
+#### With full debug info
+
+```
+nix-build \
+  --arg disableOptimization false \
+  --arg enableDeadCodeElimination true \
+  --arg doBenchmark true \
+  --arg doStrip false \
+  --arg enableLibraryProfiling true \
+  --arg enableExecutableProfiling true
+  --arg doTracing true \
+  --arg enableDWARFDebugging true
+```
+
 ## Using the HNix REPL
 
 To enter in:
