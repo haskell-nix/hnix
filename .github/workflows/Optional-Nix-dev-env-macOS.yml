@@ -13,14 +13,14 @@ on:
 
 
 env:
-  rev: "nixos-unstable"
+  # rev: "nixos-unstable"         #  2020-09-29: NOTE: HNix default.nix currently pins the rev
   cachixAccount: "hnix"
   CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
 
 
 jobs:
   build10:
-    name: "NixOS-unstable, default GHC (8.8)"
+    name: "Default GHC (8.8)"
     runs-on: macos-latest
     continue-on-error: true
     steps:

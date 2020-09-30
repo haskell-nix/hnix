@@ -1,7 +1,7 @@
 {
-# Default GHC for Nixpkgs by default, for current default and explicitly supported GHCs https://search.nixos.org/packages?query=ghc&from=0&size=500&channel=unstable, Nixpkgs implicitly supports older minor versions also, until the configuration departs from compatibility with them.
+# For current default and explicitly supported GHCs https://search.nixos.org/packages?query=ghc&from=0&size=500&channel=unstable, Nixpkgs implicitly supports older minor versions also, until the configuration departs from compatibility with them.
 # Compiler in a form ghc8101 <- GHC 8.10.1, just remove spaces and dots
-  compiler    ? "default"
+  compiler    ? "ghc8101"
 
 # Deafult.nix is a unit package abstraciton that allows to abstract over packages even in monorepos:
 # Example: pass --arg cabalName --arg packageRoot "./subprojectDir", or map default.nix over a list of tiples for subprojects.
@@ -91,7 +91,7 @@
 #   , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
 #   ...
 #   }
-, rev ? "daaa0e33505082716beb52efefe3064f0332b521"
+, rev ? "0cfe5377e8993052f9b0dd56d058f8008af45bd9"
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
