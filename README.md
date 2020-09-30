@@ -46,7 +46,7 @@ cd hnix
 
 ### Cachix prebuild binary caches
 
-If you opt in in use of Nix environment, to accelerateprocesses, please, enable the official HNix Cachix binary cache:
+If you opt in to use of Nix environment, to accelerate processes, please, enable the official HNix Cachix binary cache:
 
 1. Go through https://cachix.org/ and set it up.
 
@@ -57,11 +57,11 @@ If you opt in in use of Nix environment, to accelerateprocesses, please, enable 
 
 Cabal [Quickstart](https://cabal.readthedocs.io/en/3.4/nix-local-build.html).
 
-1. (Optional), to enter and work in the reproducible Nix environemt:
+1. (Optional), to enter and work in the reproducible Nix environment:
 ```
 nix-shell
 ```
-Nix environment currenly defaults to the GHC 8.8, which is the default in Nixpkgs, drawback of it - compilation of `hnix` executable is enabled only for GHC 8.10.
+Nix environment currently defaults to the GHC 8.8, which is the default in Nixpkgs, drawback of it - a compilation of `hnix` executable is enabled only for GHC 8.10.
   
 2. Building:
 ```
@@ -158,18 +158,18 @@ Note that this will run quite slowly, but will give the most information as to w
 
 2. You are free to chat with everyone on [Gitter](https://gitter.im/haskell-nix/Lobby).
 
-3. When pull request is ready to be submitted, to save time - please, test it with:
+3. When the pull request is ready to be submitted, to save time - please, test it with:
 
 ```
 git submodule update --init --recursive
 nix-shell --run "LANGUAGE_TESTS=yes cabal v2-test"
 ```
 
-Please, check that all tests that were passing prior (most probably all tests mentioned in the command) are still passing for the PR, it is faster to chech that locally then through CI. It's OK if no new tests are passing.
+Please, check that all tests that were passing prior (most probably all tests mentioned in the command) are still passing for the PR, it is faster to check that locally than through CI. It's OK if no new tests are passing.
 
 ### Evaluating Nixpkgs with HNix
 
-Currently the main high-level goal is to be able to evaluate all of Nixpkgs. To run this yourself, first build `hnix` with `nix-build`, then run the following command:
+Currently, the main high-level goal is to be able to evaluate all of Nixpkgs. To run this yourself, first build `hnix` with `nix-build`, then run the following command:
 
 ```
 ./result/bin/hnix --eval -E "import <nixpkgs> {}" --find
