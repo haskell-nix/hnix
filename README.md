@@ -199,15 +199,16 @@ For simplicity alias the command in your shell.
 
 ## Using the HNix REPL
 
-To enter in:
+Enter in:
 ```
 hnix --repl
 ```
 
-To evaluate an expression and make it available in the REPL as the `input` variable use:
+Evaluate an expression:
 ```
 hnix --eval -E '(import <nixpkgs> {}).pkgs.hello' --repl
 ```
+This also binds the evaluated expression result to the `input` variable, so that variable can be inspected.
 
 Use the `:help` command for a list of all available REPL commands.
 
