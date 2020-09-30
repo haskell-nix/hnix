@@ -27,7 +27,7 @@ Parser, evaluator and type checker for the Nix language written in Haskell.
       - [With profiling](#with-profiling)
       - [With full debug info](#with-full-debug-info)
     - [Run HNix](#run-hnix)
-  - [Using the Nix-build](#using-the-nix-build)
+  - [Use of the Nix-build](#use-of-the-nix-build)
     - [Run benchmarks](#run-benchmarks)
     - [With profiling](#with-profiling-1)
     - [With full debug info](#with-full-debug-info-1)
