@@ -138,9 +138,9 @@ cabal v2-run hnix -- --help
 (`--` is for separation between `cabal` & `hnix` args)
 
 
-## Entering the HNix REPL
+## Using the HNix REPL
 
-Enter the REPL:
+To enter in:
 ```
 hnix --repl
 ```
