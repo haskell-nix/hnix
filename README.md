@@ -98,24 +98,9 @@ env ALL_TESTS=yes cabal v2-test
 env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
 ```
 
-## Entering the HNix REPL
+### Building
 
-Enter REPL:
-```
-hnix --repl
-```
-
-To evaluate an expression and make it available in the REPL as the `input` variable use:
-```
-hnix --eval -E '(import <nixpkgs> {}).pkgs.hello' --repl
-```
-
-Use the `:help` command for a list of all available REPL commands.
-
-
-## Building
-
-### With benchmarks
+#### With benchmarks
 
 To run benchmarks:
 
@@ -123,7 +108,7 @@ To run benchmarks:
 cabal v2-bench
 ```
 
-### With profiling
+#### With profiling
 
 To build `hnix` with profiling enabled:
 
@@ -132,7 +117,7 @@ cabal v2-configure --enable-tests --enable-profiling --flags=profiling
 cabal v2-run hnix -- <args> +RTS -p
 ```
 
-### With full debug info
+#### With full debug info
 
 To build `hnix` for debugging, with full tracing output and stack traces:
 
@@ -149,6 +134,21 @@ Note that this will run quite slowly, but will give the most information as to w
 cabal v2-run hnix -- --help
 ```
 (`--` is for separation between `cabal` & `hnix` args)
+
+
+## Entering the HNix REPL
+
+Enter REPL:
+```
+hnix --repl
+```
+
+To evaluate an expression and make it available in the REPL as the `input` variable use:
+```
+hnix --eval -E '(import <nixpkgs> {}).pkgs.hello' --repl
+```
+
+Use the `:help` command for a list of all available REPL commands.
 
 
 ## Contributing
