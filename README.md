@@ -32,6 +32,7 @@ Parser, evaluator and type checker for the Nix language written in Haskell.
     - [With profiling](#with-profiling-1)
     - [With full debug info](#with-full-debug-info-1)
     - [Run the result](#run-the-result)
+- [Development status loop with amazing `ghcid`](#development-status-loop-with-amazing-ghcid)
 - [Using the HNix REPL](#using-the-hnix-repl)
 - [Contributing](#contributing)
 - [Evaluating Nixpkgs with HNix](#evaluating-nixpkgs-with-hnix)
