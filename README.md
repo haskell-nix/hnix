@@ -20,8 +20,9 @@ Parser, evaluator and type checker for the Nix language written in Haskell.
 
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
-- [Using the REPL](#using-the-repl)
-- [Cachix prebuild binary caches](#cachix-prebuild-binary-caches)
+  - [Cachix prebuild binary caches](#cachix-prebuild-binary-caches)
+  - [Development using Cabal](#development-using-cabal)
+- [Entering the HNix REPL](#entering-the-hnix-repl)
 - [Building](#building)
   - [With benchmarks](#with-benchmarks)
   - [With profiling](#with-profiling)
