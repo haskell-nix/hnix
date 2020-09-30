@@ -126,7 +126,7 @@ cabal v2-configure --enable-tests --enable-profiling --flags=profiling --flags=t
 cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
 ```
 
-Note that this will run quite slowly, but will give the most information as to what might potentially be going wrong during parsing or evaluation.
+Note that this going to run quite slowly, but would give the most information as to what happens during parsing & evaluation.
 
 
 ### Run HNix:
