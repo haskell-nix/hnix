@@ -98,13 +98,6 @@ env ALL_TESTS=yes cabal v2-test
 env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
 ```
 
-Run built binary with Cabal:
-```
-cabal v2-run hnix -- --help
-```
-(`--` is for separation between `cabal` & `hnix` args)
-
-
 ## Entering the HNix REPL
 
 Enter REPL:
@@ -149,6 +142,13 @@ cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
 ```
 
 Note that this will run quite slowly, but will give the most information as to what might potentially be going wrong during parsing or evaluation.
+
+
+### Run HNix:
+```
+cabal v2-run hnix -- --help
+```
+(`--` is for separation between `cabal` & `hnix` args)
 
 
 ## Contributing
