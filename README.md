@@ -80,7 +80,7 @@ ghcid --command="cabal v2-repl --repl-options=-fno-code --repl-options=-fno-brea
 ```
 (optional) To use projects reproducible environment, wrap `ghcid ...` command into a `nix-shell --command ' '`.
 
-For simplicity alias it for your shell.
+For simplicity alias it in your shell.
 
 3. Testing:
 
@@ -99,7 +99,38 @@ env ALL_TESTS=yes cabal v2-test
 env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
 ```
 
-Run built binary with Cabal:
+### Building the project
+
+#### With benchmarks
+
+To run benchmarks:
+
+```
+cabal v2-bench
+```
+
+#### With profiling
+
+To build `hnix` with profiling enabled:
+
+```
+cabal v2-configure --enable-tests --enable-profiling --flags=profiling
+cabal v2-run hnix -- <args> +RTS -p
+```
+
+#### With full debug info
+
+To build `hnix` for debugging, with full tracing output and stack traces:
+
+```
+cabal v2-configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
+cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
+```
+
+Note that this going to run quite slowly, but would give the most information as to what happens during parsing & evaluation.
+
+
+### Run HNix:
 ```
 cabal v2-run hnix -- --help
 ```
@@ -108,7 +139,7 @@ cabal v2-run hnix -- --help
 
 ## Entering the HNix REPL
 
-Enter REPL:
+Enter the REPL:
 ```
 hnix --repl
 ```
@@ -119,37 +150,6 @@ hnix --eval -E '(import <nixpkgs> {}).pkgs.hello' --repl
 ```
 
 Use the `:help` command for a list of all available REPL commands.
-
-
-## Building
-
-### With benchmarks
-
-To run benchmarks:
-
-```
-cabal v2-bench
-```
-
-### With profiling
-
-To build `hnix` with profiling enabled:
-
-```
-cabal v2-configure --enable-tests --enable-profiling --flags=profiling
-cabal v2-run hnix -- <args> +RTS -p
-```
-
-### With full debug info
-
-To build `hnix` for debugging, with full tracing output and stack traces:
-
-```
-cabal v2-configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
-cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
-```
-
-Note that this will run quite slowly, but will give the most information as to what might potentially be going wrong during parsing or evaluation.
 
 
 ## Contributing
@@ -167,7 +167,7 @@ nix-shell --run "LANGUAGE_TESTS=yes cabal v2-test"
 
 Please, check that all tests that were passing prior (most probably all tests mentioned in the command) are still passing for the PR, it is faster to check that locally than through CI. It's OK if no new tests are passing.
 
-### Evaluating Nixpkgs with HNix
+## Evaluating Nixpkgs with HNix
 
 Currently, the main high-level goal is to be able to evaluate all of Nixpkgs. To run this yourself, first build `hnix` with `nix-build`, then run the following command:
 
