@@ -43,7 +43,7 @@ git clone --recursive https://github.com/haskell-nix/hnix.git
 cd hnix
 ```
 
-### Development with Cabal
+### Development using Cabal
 
 1. (Optional), to enter and work in the reproducible Nix environemt:
 ```
