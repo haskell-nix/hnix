@@ -43,6 +43,16 @@ git clone --recursive https://github.com/haskell-nix/hnix.git
 cd hnix
 ```
 
+
+### Cachix prebuild binary caches
+
+If you opt in in use of Nix environment, to accelerateprocesses, please, enable the official HNix Cachix binary cache:
+
+1. Go through https://cachix.org/ and set it up.
+
+2. Run: `cachix use hnix`
+
+
 ### Development using Cabal
 
 Cabal [Quickstart](https://cabal.readthedocs.io/en/3.4/nix-local-build.html).
@@ -109,15 +119,6 @@ hnix --eval -E '(import <nixpkgs> {}).pkgs.hello' --repl
 ```
 
 Use the `:help` command for a list of all available REPL commands.
-
-
-## Cachix prebuild binary caches
-
-To autoload prebuild project dependencies - please, enable the official HNix Cachix binary cache:
-
-1. Go through https://cachix.org/ and set it up.
-
-2. Run: `cachix use hnix`
 
 
 ## Building
