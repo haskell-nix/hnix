@@ -22,13 +22,14 @@ Parser, evaluator and type checker for the Nix language written in Haskell.
 - [Getting Started](#getting-started)
   - [Cachix prebuild binary caches](#cachix-prebuild-binary-caches)
   - [Development using Cabal](#development-using-cabal)
+  - [Building the project](#building-the-project)
+    - [With benchmarks](#with-benchmarks)
+    - [With profiling](#with-profiling)
+    - [With full debug info](#with-full-debug-info)
+  - [Run HNix:](#run-hnix)
 - [Entering the HNix REPL](#entering-the-hnix-repl)
-- [Building](#building)
-  - [With benchmarks](#with-benchmarks)
-  - [With profiling](#with-profiling)
-  - [With full debug info](#with-full-debug-info)
 - [Contributing](#contributing)
-  - [Evaluating Nixpkgs with HNix](#evaluating-nixpkgs-with-hnix)
+- [Evaluating Nixpkgs with HNix](#evaluating-nixpkgs-with-hnix)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
