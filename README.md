@@ -213,6 +213,29 @@ This also binds the evaluated expression result to the `input` variable, so that
 
 Use the `:help` command for a list of all available REPL commands.
 
+## Nix laziness
+
+Nix is a lazy language with the ability of recursion, so by default REPL and eval prints are lazy:
+
+```
+hnix \
+  --eval \
+  --expr '{ x = true; }'
+  
+{ x = "<CYCLE>"; }
+```
+
+To disable laziness add the `--strict` to commands or `:set strict` in the REPL.
+
+```
+hnix \
+  --eval \
+  # Strictly \
+  --strict \
+  --expr '{ x = true; }'
+  
+{ x = true; }
+```
 
 ## Contributing
 
