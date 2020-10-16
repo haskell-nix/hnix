@@ -58,6 +58,7 @@ import           Data.Char                      ( isAlpha
                                                 , isSpace
                                                 )
 import           Data.Data                      ( Data(..) )
+import           Data.Fix                       ( Fix(..) )
 import           Data.Functor
 import           Data.Functor.Identity
 import           Data.HashSet                   ( HashSet )
@@ -195,8 +196,11 @@ nixBool =
 nixNull :: Parser NExprLoc
 nixNull = annotateLocation1 (mkNullF <$ reserved "null" <?> "null")
 
+-- | 'nixTopLevelForm' returns an expression annotated with a source position,
+-- however this position doesn't include the parsed parentheses, so remove the
+-- "inner" location annotateion and annotate again, including the parentheses.
 nixParens :: Parser NExprLoc
-nixParens = parens nixToplevelForm <?> "parens"
+nixParens = annotateLocation1 (stripAnn . unFix <$> (parens nixToplevelForm <?> "parens"))
 
 nixList :: Parser NExprLoc
 nixList = annotateLocation1 (brackets (NList <$> many nixTerm) <?> "list")
