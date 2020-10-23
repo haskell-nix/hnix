@@ -363,11 +363,6 @@ instance Hashable SourcePos where
   hashWithSalt salt (SourcePos f l c) =
     salt `hashWithSalt` f `hashWithSalt` l `hashWithSalt` c
 
-instance Generic1 NKeyName where
-  type Rep1 NKeyName = NKeyName
-  from1 = id
-  to1   = id
-
 instance NFData1 NKeyName where
   liftRnf _ (StaticKey  !_            ) = ()
   liftRnf _ (DynamicKey (Plain !_)    ) = ()
