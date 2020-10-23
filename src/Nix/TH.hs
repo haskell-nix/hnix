@@ -17,6 +17,7 @@ import qualified Data.Text                     as Text
 import           Data.List.NonEmpty             ( NonEmpty(..) )
 import           Data.Maybe                     ( mapMaybe )
 import           Language.Haskell.TH
+import           Language.Haskell.TH.Syntax     ( liftString )
 import           Language.Haskell.TH.Quote
 import           Nix.Atoms
 import           Nix.Expr
@@ -27,7 +28,12 @@ quoteExprExp s = do
   expr <- case parseNixText (Text.pack s) of
     Failure err -> fail $ show err
     Success e   -> pure e
-  dataToExpQ (const Nothing `extQ` metaExp (freeVars expr)) expr
+  dataToExpQ
+    (const Nothing `extQ` metaExp (freeVars expr) `extQ` (Just . liftText))
+    expr
+ where
+  liftText :: Text.Text -> Q Exp
+  liftText txt = AppE (VarE 'Text.pack) <$> liftString (Text.unpack txt)
 
 quoteExprPat :: String -> PatQ
 quoteExprPat s = do
