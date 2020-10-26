@@ -145,18 +145,19 @@ builtinsList = sequence
     version <- toValue (5 :: Int)
     pure $ Builtin Normal ("langVersion", version)
 
-  , add0 Normal   "nixPath"          nixPath
   , add  TopLevel "abort"            throw_ -- for now
   , add2 Normal   "add"              add_
   , add2 Normal   "addErrorContext"  addErrorContext
   , add2 Normal   "all"              all_
   , add2 Normal   "any"              any_
+  , add2 Normal   "appendContext"    appendContext
   , add  Normal   "attrNames"        attrNames
   , add  Normal   "attrValues"       attrValues
   , add  TopLevel "baseNameOf"       baseNameOf
   , add2 Normal   "bitAnd"           bitAnd
   , add2 Normal   "bitOr"            bitOr
   , add2 Normal   "bitXor"           bitXor
+  , add0 Normal   "builtins"         builtinsBuiltin
   , add2 Normal   "catAttrs"         catAttrs
   , add2 Normal   "compareVersions"  compareVersions_
   , add  Normal   "concatLists"      concatLists
@@ -235,6 +236,7 @@ builtinsList = sequence
   , add2 TopLevel "map"              map_
   , add2 TopLevel "mapAttrs"         mapAttrs_
   , add2 Normal   "match"            match_
+  , add0 Normal   "nixPath"          nixPath
   , add2 Normal   "mul"              mul_
   , add0 Normal   "null"             (pure $ nvConstant NNull)
   , add  Normal   "parseDrvName"     parseDrvName
@@ -244,6 +246,16 @@ builtinsList = sequence
   , add  Normal   "readDir"          readDir_
   , add  Normal   "readFile"         readFile_
   , add2 Normal   "findFile"         findFile_
+  {-
+  , add  Normal   "fetchGit"         fetchGit
+  , add  Normal   "fetchMercurial"   fetchMercurial
+  , add  Normal   "filterSource"     filterSource
+  , add  Normal   "fromTOML"         fromTOML
+  -}
+  , add  Normal   "getContext"       getContext
+  {-
+  , add  Normal   "path"             path
+  -}
   , add2 TopLevel "removeAttrs"      removeAttrs
   , add3 Normal   "replaceStrings"   replaceStrings
   , add2 TopLevel "scopedImport"     scopedImport
@@ -252,6 +264,9 @@ builtinsList = sequence
   , add2 Normal   "split"            split_
   , add  Normal   "splitVersion"     splitVersion_
   , add0 Normal   "storeDir"         (pure $ nvStr $ principledMakeNixStringWithoutContext "/nix/store")
+  {-
+  , add  Normal   "storePath"        storePath
+  -}
   , add' Normal   "stringLength"     (arity1 $ Text.length . principledStringIgnoreContext)
   , add' Normal   "sub"              (arity2 ((-) @Integer))
   , add' Normal   "substring"        (substring @e @t @f @m)
@@ -266,12 +281,13 @@ builtinsList = sequence
   , add2 TopLevel "trace"            trace_
   , add  Normal   "tryEval"          tryEval
   , add  Normal   "typeOf"           typeOf
+  , add2 Normal   "unsafeGetAttrPos"              unsafeGetAttrPos
+  , add  Normal   "unsafeDiscardStringContext"    unsafeDiscardStringContext
+  {-
+  , add0 Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependency
+  -}
   , add  Normal   "valueSize"        getRecursiveSize
-  , add  Normal   "getContext"                 getContext
-  , add2 Normal   "appendContext"              appendContext
 
-  , add2 Normal   "unsafeGetAttrPos"           unsafeGetAttrPos
-  , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
   ]
  where
   wrap :: BuiltinType -> Text -> v -> Builtin v
@@ -765,6 +781,12 @@ bitXor
   -> m (NValue t f m)
 bitXor x y = fromValue @Integer x
   >>= \a -> fromValue @Integer y >>= \b -> toValue (a `xor` b)
+
+builtinsBuiltin
+  :: forall e t f m
+   . MonadNix e t f m
+  => m (NValue t f m)
+builtinsBuiltin = (throwError $ ErrorCall "HNix does not provide builtins.builtins at the moment. Using builtins directly should be preferred")
 
 dirOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 dirOf x = demand x $ \case
