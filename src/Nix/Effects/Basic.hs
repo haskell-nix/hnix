@@ -8,10 +8,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-
 module Nix.Effects.Basic where
 
 import           Control.Monad
@@ -20,30 +16,24 @@ import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List
 import           Data.List.Split
-import           Data.Maybe                     ( maybeToList )
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
-import           Nix.Atoms
+import           Data.Text.Prettyprint.Doc
 import           Nix.Convert
 import           Nix.Effects
 import           Nix.Exec                       ( MonadNix
-                                                , callFunc
                                                 , evalExprLoc
                                                 , nixInstantiateExpr
                                                 )
 import           Nix.Expr
 import           Nix.Frames
-import           Nix.Normal
 import           Nix.Parser
-import           Nix.Pretty
 import           Nix.Render
 import           Nix.Scope
 import           Nix.String
-import           Nix.String.Coerce
 import           Nix.Utils
 import           Nix.Value
 import           Nix.Value.Monad
-import           Prettyprinter
 import           System.FilePath
 
 #ifdef MIN_VERSION_ghc_datasize
@@ -126,8 +116,8 @@ findPathBy
   -> [NValue t f m]
   -> FilePath
   -> m FilePath
-findPathBy finder l name = do
-  mpath <- foldM go Nothing l
+findPathBy finder ls name = do
+  mpath <- foldM go Nothing ls
   case mpath of
     Nothing ->
       throwError
@@ -263,39 +253,6 @@ pathToDefaultNixFile :: MonadFile m => FilePath -> m FilePath
 pathToDefaultNixFile p = do
   isDir <- doesDirectoryExist p
   pure $ if isDir then p </> "default.nix" else p
-
-defaultDerivationStrict
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
-  nn <- maybe (pure False) (demand ?? fromValue) (M.lookup "__ignoreNulls" s)
-  s' <- M.fromList <$> mapMaybeM (handleEntry nn) (M.toList s)
-  v' <- normalForm =<< toValue @(AttrSet (NValue t f m)) @_ @(NValue t f m) s'
-  nixInstantiateExpr $ "derivationStrict " ++ show (prettyNValue v')
- where
-  mapMaybeM :: (a -> m (Maybe b)) -> [a] -> m [b]
-  mapMaybeM op = foldr f (pure [])
-    where f x xs = op x >>= (<$> xs) . (++) . maybeToList
-
-  handleEntry :: Bool -> (Text, NValue t f m) -> m (Maybe (Text, NValue t f m))
-  handleEntry ignoreNulls (k, v) = fmap (k, ) <$> case k of
-      -- The `args' attribute is special: it supplies the command-line
-      -- arguments to the builder.
-      -- TODO This use of coerceToString is probably not right and may
-      -- not have the right arguments.
-    "args"          -> demand v $ fmap Just . coerceNixList
-    "__ignoreNulls" -> pure Nothing
-    _               -> demand v $ \case
-      NVConstant NNull | ignoreNulls -> pure Nothing
-      v'                             -> Just <$> coerceNix v'
-   where
-    coerceNix :: NValue t f m -> m (NValue t f m)
-    coerceNix = toValue <=< coerceToString callFunc CopyToStore CoerceAny
-
-    coerceNixList :: NValue t f m -> m (NValue t f m)
-    coerceNixList v = do
-      xs <- fromValue @[NValue t f m] v
-      ys <- traverse (`demand` coerceNix) xs
-      toValue @[NValue t f m] ys
 
 defaultTraceEffect :: MonadPutStr m => String -> m ()
 defaultTraceEffect = Nix.Effects.putStrLn
