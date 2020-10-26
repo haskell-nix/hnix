@@ -32,7 +32,9 @@ module Nix.String
   , addStringContext
   , addSingletonStringContext
   , runWithStringContextT
+  , runWithStringContextT'
   , runWithStringContext
+  , runWithStringContext'
   )
 where
 
@@ -231,6 +233,16 @@ runWithStringContextT :: Monad m => WithStringContextT m Text -> m NixString
 runWithStringContextT (WithStringContextT m) =
   uncurry NixString <$> runWriterT m
 
+-- | Run an action that manipulates nix strings, and collect the contexts encountered.
+-- Warning: this may be unsafe, depending on how you handle the resulting context list.
+runWithStringContextT' :: Monad m => WithStringContextT m a -> m (a, S.HashSet StringContext)
+runWithStringContextT' (WithStringContextT m) = runWriterT m
+
 -- | Run an action producing a string with a context and put those into a 'NixString'.
 runWithStringContext :: WithStringContextT Identity Text -> NixString
 runWithStringContext = runIdentity . runWithStringContextT
+
+-- | Run an action that manipulates nix strings, and collect the contexts encountered.
+-- Warning: this may be unsafe, depending on how you handle the resulting context list.
+runWithStringContext' :: WithStringContextT Identity a -> (a, S.HashSet StringContext)
+runWithStringContext' = runIdentity . runWithStringContextT'
