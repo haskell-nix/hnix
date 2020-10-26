@@ -30,6 +30,8 @@ import           Control.Monad.Reader
 import           Control.Monad.Ref
 import           Control.Monad.State
 import           Data.HashMap.Lazy              ( HashMap )
+import qualified Data.HashMap.Strict
+import           Data.Text                      ( Text )
 import           Data.Typeable
 import           GHC.Generics
 import           Nix.Cited
@@ -139,7 +141,7 @@ instance ( MonadFix m
          , Typeable m
          , Scoped (StdValue m) m
          , MonadReader (Context m (StdValue m)) m
-         , MonadState (HashMap FilePath NExprLoc) m
+         , MonadState (HashMap FilePath NExprLoc, Data.HashMap.Strict.HashMap Text Text) m
          , MonadDataErrorContext (StdThunk m) (StdCited m) m
          , MonadThunk (StdThunk m) m (StdValue m)
          , MonadValue (StdValue m) m
@@ -192,7 +194,7 @@ instance ( MonadAtomicRef m
 
 newtype StandardTF r m a
   = StandardTF (ReaderT (Context r (StdValue r))
-                        (StateT (HashMap FilePath NExprLoc) m) a)
+                        (StateT (HashMap FilePath NExprLoc, HashMap Text Text) m) a)
   deriving
     ( Functor
     , Applicative
@@ -206,7 +208,7 @@ newtype StandardTF r m a
     , MonadThrow
     , MonadMask
     , MonadReader (Context r (StdValue r))
-    , MonadState (HashMap FilePath NExprLoc)
+    , MonadState (HashMap FilePath NExprLoc, HashMap Text Text)
     )
 
 instance MonadTrans (StandardTF r) where
@@ -233,7 +235,7 @@ instance MonadThunkId m => MonadThunkId (Fix1T StandardTF m) where
 mkStandardT
   :: ReaderT
        (Context (StandardT m) (StdValue (StandardT m)))
-       (StateT (HashMap FilePath NExprLoc) m)
+       (StateT (HashMap FilePath NExprLoc, Data.HashMap.Strict.HashMap Text Text) m)
        a
   -> StandardT m a
 mkStandardT = Fix1T . StandardTF
@@ -242,7 +244,7 @@ runStandardT
   :: StandardT m a
   -> ReaderT
        (Context (StandardT m) (StdValue (StandardT m)))
-       (StateT (HashMap FilePath NExprLoc) m)
+       (StateT (HashMap FilePath NExprLoc, Data.HashMap.Strict.HashMap Text Text) m)
        a
 runStandardT (Fix1T (StandardTF m)) = m
 

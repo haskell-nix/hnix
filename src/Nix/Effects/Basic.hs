@@ -225,13 +225,13 @@ findPathM = findPathBy existingPath
     pure $ if exists then Just apath else Nothing
 
 defaultImportPath
-  :: (MonadNix e t f m, MonadState (HashMap FilePath NExprLoc) m)
+  :: (MonadNix e t f m, MonadState (HashMap FilePath NExprLoc, b) m)
   => FilePath
   -> m (NValue t f m)
 defaultImportPath path = do
   traceM $ "Importing file " ++ path
   withFrame Info (ErrorCall $ "While importing file " ++ show path) $ do
-    imports <- get
+    imports <- gets fst
     evalExprLoc =<< case M.lookup path imports of
       Just expr -> pure expr
       Nothing   -> do
@@ -242,7 +242,7 @@ defaultImportPath path = do
               $ ErrorCall
               . show $ fillSep ["Parse during import failed:", err]
           Success expr -> do
-            modify (M.insert path expr)
+            modify (\(a, b) -> (M.insert path expr a, b))
             pure expr
 
 defaultPathToDefaultNix :: MonadNix e t f m => FilePath -> m FilePath
