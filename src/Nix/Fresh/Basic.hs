@@ -22,9 +22,7 @@ type StdIdT = FreshIdT Int
 
 instance (MonadFail m, MonadFile m) => MonadFile (StdIdT m)
 instance MonadIntrospect m => MonadIntrospect (StdIdT m)
-instance MonadStore m => MonadStore (StdIdT m) where
-  addPath' = lift . addPath'
-  toFile_' = (lift .) . toFile_'
+instance MonadStore m => MonadStore (StdIdT m)
 instance MonadPutStr m => MonadPutStr (StdIdT m)
 instance MonadHttp m => MonadHttp (StdIdT m)
 instance MonadEnv m => MonadEnv (StdIdT m)

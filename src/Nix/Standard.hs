@@ -37,6 +37,7 @@ import           Nix.Cited.Basic
 import           Nix.Context
 import           Nix.Effects
 import           Nix.Effects.Basic
+import           Nix.Effects.Derivation
 import           Nix.Expr.Types.Annotated
 import           Nix.Fresh
 import           Nix.Fresh.Basic
@@ -82,8 +83,8 @@ instance (MonadFix1T t m, MonadAtomicRef m) => MonadAtomicRef (Fix1T t m) where
 instance (MonadFix1T t m, MonadFail (Fix1T t m), MonadFile m) => MonadFile (Fix1T t m)
 
 instance (MonadFix1T t m, MonadStore m) => MonadStore (Fix1T t m) where
-  addPath' = lift . addPath'
-  toFile_' n = lift . toFile_' n
+  addToStore a b c d = lift $ addToStore a b c d
+  addTextToStore' a b c d = lift $ addTextToStore' a b c d
 
 ---------------------------------------------------------------------------------
 
