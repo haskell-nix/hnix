@@ -16,9 +16,11 @@ import           Prelude                 hiding ( readFile )
 import           Control.Arrow                  ( first, second )
 import           Control.Monad                  ( (>=>), forM, when )
 import           Control.Monad.Writer           ( join, lift )
+import           Control.Monad.State            ( MonadState, gets, modify )
 
 import           Data.Char                      ( isAscii, isAlphaNum )
 import qualified Data.HashMap.Lazy             as M
+import qualified Data.HashMap.Strict           as MS
 import qualified Data.HashSet                  as S
 import           Data.List
 import qualified Data.Map.Strict               as Map
@@ -100,7 +102,7 @@ writeDerivation (drv@Derivation {inputs, name}) = do
 
 -- | Traverse the graph of inputDrvs to replace fixed output derivations with their fixed output hash.
 -- this avoids propagating changes to their .drv when the output hash stays the same.
-hashDerivationModulo :: (Framed e m, MonadFile m) => Derivation -> m (Store.Digest 'Store.SHA256)
+hashDerivationModulo :: (MonadNix e t f m, MonadState (b, MS.HashMap Text Text) m) => Derivation -> m (Store.Digest 'Store.SHA256)
 hashDerivationModulo (Derivation {
     mFixed = Just (Store.SomeDigest (digest :: Store.Digest hashType)),
     outputs,
@@ -114,10 +116,14 @@ hashDerivationModulo (Derivation {
       <> ":" <> path
     outputsList -> throwError $ ErrorCall $ "This is weird. A fixed output drv should only have one output named 'out'. Got " ++ show outputsList
 hashDerivationModulo drv@(Derivation {inputs = (inputSrcs, inputDrvs)}) = do
-  inputsModulo <- Map.fromList <$> forM (Map.toList inputDrvs) (\(path, outs) -> do
-    drv' <- readDerivation $ Text.unpack path
-    hash <- Store.encodeBase16 <$> hashDerivationModulo drv'
-    return (hash, outs)
+  cache <- gets snd
+  inputsModulo <- Map.fromList <$> forM (Map.toList inputDrvs) (\(path, outs) ->
+    case MS.lookup path cache of
+      Just hash -> return (hash, outs)
+      Nothing -> do
+        drv' <- readDerivation $ Text.unpack path
+        hash <- Store.encodeBase16 <$> hashDerivationModulo drv'
+        return (hash, outs)
     )
   return $ Store.hash @'Store.SHA256 $ Text.encodeUtf8 $ unparseDrv (drv {inputs = (inputSrcs, inputsModulo)})
 
@@ -220,7 +226,7 @@ derivationParser = do
     _ -> (Nothing, Flat)
 
 
-defaultDerivationStrict :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
+defaultDerivationStrict :: forall e t f m b. (MonadNix e t f m, MonadState (b, MS.HashMap Text Text) m) => NValue t f m -> m (NValue t f m)
 defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
     (drv, ctx) <- runWithStringContextT' $ buildDerivationWithContext s
     drvName <- makeStorePathName $ name drv
@@ -248,13 +254,14 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
           , env = if useJson drv then env drv else Map.union outputs' (env drv)
           }
 
-    drvPath <- writeDerivation drv'
+    drvPath <- pathToText <$> writeDerivation drv'
 
-    -- TODO: memoize this result here.
-    -- _ <- hashDerivationModulo drv'
+    -- Memoize here, as it may be our last chance in case of readonly stores.
+    drvHash <- Store.encodeBase16 <$> hashDerivationModulo drv'
+    modify (\(a, b) -> (a, MS.insert drvPath drvHash b))
 
-    let outputsWithContext = Map.mapWithKey (\out path -> principledMakeNixStringWithSingletonContext path (StringContext (pathToText drvPath) (DerivationOutput out))) (outputs drv')
-        drvPathWithContext = principledMakeNixStringWithSingletonContext (pathToText drvPath) (StringContext (pathToText drvPath) AllOutputs)
+    let outputsWithContext = Map.mapWithKey (\out path -> principledMakeNixStringWithSingletonContext path (StringContext drvPath (DerivationOutput out))) (outputs drv')
+        drvPathWithContext = principledMakeNixStringWithSingletonContext drvPath (StringContext drvPath AllOutputs)
         attrSet = M.map nvStr $ M.fromList $ ("drvPath", drvPathWithContext): Map.toList outputsWithContext
     -- TODO: Add location information for all the entries.
     --              here --v
