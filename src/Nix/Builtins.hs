@@ -269,7 +269,7 @@ builtinsList = sequence
   -}
   , add' Normal   "stringLength"     (arity1 $ Text.length . principledStringIgnoreContext)
   , add' Normal   "sub"              (arity2 ((-) @Integer))
-  , add' Normal   "substring"        (substring @e @t @f @m)
+  , add' Normal   "substring"        substring
   , add  Normal   "tail"             tail_
   , add0 Normal   "true"             (pure $ nvConstant $ NBool True)
   , add  TopLevel "throw"            throw_
@@ -668,13 +668,13 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
 thunkStr s = nvStr (hackyMakeNixStringWithoutContext (decodeUtf8 s))
 
 substring :: forall e t f m. MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
-substring start len str = Prim $ if start < 0 --NOTE: negative values of 'len' are OK
-  then
-    throwError
-    $  ErrorCall
-    $  "builtins.substring: negative start position: "
-    ++ show start
-  else pure $ principledModifyNixContents (Text.take len . Text.drop start) str
+substring start len str = Prim $
+  if start < 0
+  then throwError $ ErrorCall $ "builtins.substring: negative start position: " ++ show start
+  else pure $ principledModifyNixContents (take . Text.drop start) str
+ where
+  --NOTE: negative values of 'len' are OK, and mean "take everything"
+  take = if len < 0 then id else Text.take len
 
 attrNames
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
