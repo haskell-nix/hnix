@@ -200,7 +200,7 @@ nixNull = annotateLocation1 (mkNullF <$ reserved "null" <?> "null")
 -- however this position doesn't include the parsed parentheses, so remove the
 -- "inner" location annotateion and annotate again, including the parentheses.
 nixParens :: Parser NExprLoc
-nixParens = annotateLocation1 (stripAnn . unFix <$> (parens nixToplevelForm <?> "parens"))
+nixParens = annotateLocation1 (parens (stripAnn . unFix <$> nixToplevelForm) <?> "parens")
 
 nixList :: Parser NExprLoc
 nixList = annotateLocation1 (brackets (NList <$> many nixTerm) <?> "list")
@@ -411,7 +411,7 @@ nixBinders = (inherit <+> namedVar) `endBy` semi where
       <*> (equals *> nixToplevelForm)
       <*> pure p
       <?> "variable binding"
-  scope = parens nixToplevelForm <?> "inherit scope"
+  scope = nixParens <?> "inherit scope"
 
 keyName :: Parser (NKeyName NExprLoc)
 keyName = dynamicKey <+> staticKey where
@@ -496,6 +496,13 @@ identifier = lexeme $ try $ do
  where
   identLetter x = isAlpha x || isDigit x || x == '_' || x == '\'' || x == '-'
 
+-- We restrict the type of 'parens' and 'brackets' here because if they were to
+-- take a @Parser NExprLoc@ argument they would parse additional text which
+-- wouldn't be captured in the source location annotation.
+--
+-- Braces and angles in hnix don't enclose a single expression so this type
+-- restriction would not be useful.
+parens, brackets :: Parser (NExprF f) -> Parser (NExprF f)
 parens = between (symbol "(") (symbol ")")
 braces = between (symbol "{") (symbol "}")
 -- angles    = between (symbol "<") (symbol ">")
