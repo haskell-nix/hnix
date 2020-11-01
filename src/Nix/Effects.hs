@@ -242,47 +242,36 @@ type StorePathName = Text
 type FilePathFilter m = FilePath -> m Bool
 type StorePathSet = HS.HashSet StorePath
 
-class Monad m => MonadStore m where
+class MonadIO m => MonadStore m where
 
     -- | Add a path to the store, with bells and whistles
-    addToStore :: StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
-    default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
+    addToStore :: StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m StorePath
+    default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m StorePath
     addToStore a b c d = lift $ addToStore a b c d
 
-    -- | Add a nar (action) to the store
-    -- addToStore' :: StorePathName -> IO Nar -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
+    addTextToStore :: StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m StorePath
+    default addTextToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m StorePath
+    addTextToStore a b c d = lift $ addTextToStore a b c d
 
-    addTextToStore' :: StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
-    default addTextToStore' :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
-    addTextToStore' a b c d = lift $ addTextToStore' a b c d
 
-parseStoreResult :: Monad m => String -> (Either String a, [Store.Logger]) -> m (Either ErrorCall a)
-parseStoreResult name res = case res of
-  (Left msg, logs) -> return $ Left $ ErrorCall $ "Failed to execute '" ++ name ++ "': " ++ msg ++ "\n" ++ show logs
-  (Right result, _) -> return $ Right result
+-- relying on show is not ideal, but way more concise.
+-- Bound to disappear anyway if we unify StorePath representation across hnix* projects
+convertStorePath :: Store.StorePath -> StorePath
+convertStorePath = StorePath . show
 
-instance MonadStore IO where
+instance MonadIO m => MonadStore (Store.MonadStoreT m) where
 
-  addToStore name path recursive repair = case Store.makeStorePathName name of
-    Left err -> return $ Left $ ErrorCall $ "String '" ++ show name ++ "' is not a valid path name: " ++ err
-    Right pathName -> do
-      -- TODO: redesign the filter parameter
-      res <- Store.runStore $ Store.addToStore @'Store.SHA256 pathName path recursive (const False) repair
-      parseStoreResult "addToStore" res >>= \case
-        Left err -> return $ Left err
-        Right storePath -> return $ Right $ StorePath $ T.unpack $ T.decodeUtf8 $ Store.storePathToRawFilePath storePath
+  addToStore name path recursive repair = do
+    -- TODO: replace this error call by something smarter. throwE ? throwError ?
+    pathName <- either error return $ Store.makeStorePathName name
+    convertStorePath <$> Store.addToStore @'Store.SHA256 pathName path recursive (const False) repair
 
-  addTextToStore' name text references repair = do
-    res <- Store.runStore $ Store.addTextToStore name text references repair
-    parseStoreResult "addTextToStore" res >>= \case
-      Left err -> return $ Left err
-      Right path -> return $ Right $ StorePath $ T.unpack $ T.decodeUtf8 $ Store.storePathToRawFilePath path
+  addTextToStore name text references repair =
+    convertStorePath <$> Store.addTextToStore name text references repair
 
-addTextToStore :: (Framed e m, MonadStore m) => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m StorePath
-addTextToStore a b c d = either throwError return =<< addTextToStore' a b c d
 
-addPath :: (Framed e m, MonadStore m) => FilePath -> m StorePath
-addPath p = either throwError return =<< addToStore (T.pack $ takeFileName p) p True False
-
-toFile_ :: (Framed e m, MonadStore m) => FilePath -> String -> m StorePath
+toFile_ :: MonadStore m => FilePath -> String -> m StorePath
 toFile_ p contents = addTextToStore (T.pack p) (T.pack contents) HS.empty False
+
+addPath :: (MonadStore m) => FilePath -> m StorePath
+addPath p = addToStore (T.pack $ takeFileName p) p True False
