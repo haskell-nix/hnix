@@ -53,6 +53,7 @@ import           Control.Applicative     hiding ( many
 import           Control.DeepSeq
 import           Control.Monad
 import           Control.Monad.Combinators.Expr
+import           Control.Monad.State.Strict
 import           Data.Char                      ( isAlpha
                                                 , isDigit
                                                 , isSpace
@@ -60,7 +61,6 @@ import           Data.Char                      ( isAlpha
 import           Data.Data                      ( Data(..) )
 import           Data.Fix                       ( Fix(..) )
 import           Data.Functor
-import           Data.Functor.Identity
 import           Data.HashSet                   ( HashSet )
 import qualified Data.HashSet                  as HashSet
 import           Data.List.NonEmpty             ( NonEmpty(..) )
@@ -82,7 +82,7 @@ import           Nix.Render
 import           Prettyprinter                  ( Doc
                                                 , pretty
                                                 )
-import           Text.Megaparsec
+import           Text.Megaparsec         hiding ( State )
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer    as L
 
@@ -443,7 +443,9 @@ skipLineComment' prefix = string prefix
   *> void (takeWhileP (Just "character") (\x -> x /= '\n' && x /= '\r'))
 
 whiteSpace :: Parser ()
-whiteSpace = L.space space1 lineCmnt blockCmnt
+whiteSpace = do
+  put =<< getSourcePos
+  L.space space1 lineCmnt blockCmnt
  where
   lineCmnt  = skipLineComment' "#"
   blockCmnt = L.skipBlockComment "/*" "*/"
@@ -524,20 +526,24 @@ reservedNames :: HashSet Text
 reservedNames = HashSet.fromList
   ["let", "in", "if", "then", "else", "assert", "with", "rec", "inherit"]
 
-type Parser = ParsecT Void Text Identity
+type Parser = ParsecT Void Text (State SourcePos)
 
 data Result a = Success a | Failure (Doc Void) deriving (Show, Functor)
 
 parseFromFileEx :: MonadFile m => Parser a -> FilePath -> m (Result a)
 parseFromFileEx p path = do
   txt <- decodeUtf8 <$> readFile path
-  pure $ either (Failure . pretty . errorBundlePretty) Success $ parse p
-                                                                         path
-                                                                         txt
+  pure
+    $ either (Failure . pretty . errorBundlePretty) Success
+    . flip evalState (initialPos path)
+    $ runParserT p path txt
 
 parseFromText :: Parser a -> Text -> Result a
 parseFromText p txt =
-  either (Failure . pretty . errorBundlePretty) Success $ parse p "<string>" txt
+  let file = "<string>"
+  in  either (Failure . pretty . errorBundlePretty) Success
+        . flip evalState (initialPos file)
+        $ runParserT p file txt
 
 {- Parser.Operators -}
 
@@ -557,7 +563,7 @@ annotateLocation :: Parser a -> Parser (Ann SrcSpan a)
 annotateLocation p = do
   begin <- getSourcePos
   res   <- p
-  end   <- getSourcePos
+  end   <- get -- The state set before the last whitespace
   pure $ Ann (SrcSpan begin end) res
 
 annotateLocation1 :: Parser (NExprF NExprLoc) -> Parser NExprLoc
