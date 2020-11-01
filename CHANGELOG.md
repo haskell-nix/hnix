@@ -1,10 +1,22 @@
 
 # Changelog
 
+
+## [(diff)](https://github.com/haskell-nix/hnix/compare/0.10.1...0.11.0#files_bucket) 0.11.0 (2020-11-02)
+
+* Breaking:
+  * [(link)](https://github.com/haskell-nix/hnix/pull/740) Deleted incorrect `instance Generic1 NKeyName` from `module Nix.Expr.Types`.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/739) Parentheses now are properly included in the location annotation for Nix expressions, change of `nixParens` in `module Nix.Parser` essentially results in the change of all module `nix*` function results, essentially making results of the whole module more proper.
+
+* Additional:
+  * [(link)](https://github.com/haskell-nix/hnix/pull/741) Fix QQ Text lifting error: work around of [GHC#12596 "can't find interface-file declaration"](https://gitlab.haskell.org/ghc/ghc/-/issues/12596).
+  * [(link)](https://github.com/haskell-nix/hnix/pull/744) Fix comments inclusion into location annotations, by using pre-whitespace position for source end locations.
+
+
 ### [(diff)](https://github.com/haskell-nix/hnix/compare/0.10.0...0.10.1#files_bucket) 0.10.1 (2020-09-13)
 
 * Additional:
-  * [(link)](https://github.com/haskell-nix/hnix/pull/715/files) `{Binding, NExpr, NExprF, NKeyName}` gained `Ord1` instances.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/715) `{Binding, NExpr, NExprF, NKeyName}` gained `Ord1` instances.
     * These instances were required by downstream projects to be able to use newer HNix.
   * [(link)](https://github.com/haskell-nix/hnix/pull/712) CLI gained `--long-version` option for gathering a detailed debug information.
     * Currently, reports Git commit and its date.
