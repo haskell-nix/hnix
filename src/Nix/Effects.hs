@@ -145,7 +145,7 @@ instance MonadInstantiate IO where
           ++ err
 
 pathExists :: MonadFile m => FilePath -> m Bool
-pathExists = doesFileExist
+pathExists = doesPathExist
 
 class Monad m => MonadEnv m where
     getEnvVar :: String -> m (Maybe String)
