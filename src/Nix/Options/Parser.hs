@@ -25,9 +25,11 @@ decodeVerbosity 4 = DebugInfo
 decodeVerbosity _ = Vomit
 
 nixOptionsInfo :: UTCTime -> ParserInfo Options
-nixOptionsInfo current = info (helper <*> versionOpt <*> nixOptions current)
-                              (fullDesc <> progDesc "" <> header "hnix")
+nixOptionsInfo current = info (helper <*> versionOpt <*> nixOptions current) nixIntroduction
  where
+  nixIntroduction :: Infomod a
+  nixIntroduction = (fullDesc <> progDesc "" <> header "hnix")
+
   nixOptions :: UTCTime -> Parser Options
   nixOptions curTime =
     Options
