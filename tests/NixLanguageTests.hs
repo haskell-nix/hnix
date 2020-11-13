@@ -69,7 +69,6 @@ newFailingTests :: Set String
 newFailingTests = Set.fromList
   [ "eval-okay-hash"
   , "eval-okay-hashfile"
-  , "eval-okay-path"
   , "eval-okay-fromTOML"
   , "eval-okay-context-introspection"
   ]

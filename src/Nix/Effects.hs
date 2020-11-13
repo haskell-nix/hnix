@@ -10,7 +10,10 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Nix.Effects where
+module Nix.Effects (
+    module Nix.Effects
+  , Store.PathType (..)
+  ) where
 
 import           Prelude                 hiding ( putStr
                                                 , putStrLn
@@ -239,39 +242,32 @@ instance MonadPutStr IO where
 type RecursiveFlag = Bool
 type RepairFlag = Bool
 type StorePathName = Text
-type FilePathFilter m = FilePath -> m Bool
+type FilePathFilter m = FilePath -> Store.PathType -> m Bool
 type StorePathSet = HS.HashSet StorePath
 
-class MonadIO m => MonadStore m where
+class (MonadIO m, Store.MonadRemoteStore m) => MonadStore m where
 
-    -- | Add a path to the store, with bells and whistles
-    addToStore :: StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m StorePath
-    default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m StorePath
-    addToStore a b c d = lift $ addToStore a b c d
-
-    addTextToStore :: StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m StorePath
-    default addTextToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m StorePath
-    addTextToStore a b c d = lift $ addTextToStore a b c d
-
-
--- relying on show is not ideal, but way more concise.
--- Bound to disappear anyway if we unify StorePath representation across hnix* projects
-convertStorePath :: Store.StorePath -> StorePath
-convertStorePath = StorePath . show
-
-instance MonadIO m => MonadStore (Store.MonadStoreT m) where
-
-  addToStore name path recursive repair = do
+  -- | Add a path to the store, with bells and whistles
+  addToStore :: StorePathName -> FilePath -> FilePathFilter m -> RecursiveFlag -> RepairFlag -> m StorePath
+  default addToStore :: StorePathName -> FilePath -> FilePathFilter m -> RecursiveFlag -> RepairFlag -> m StorePath
+  addToStore name path filter recursive repair = do
     -- TODO: replace this error call by something smarter. throwE ? throwError ?
     pathName <- either error return $ Store.makeStorePathName name
-    convertStorePath <$> Store.addToStore @'Store.SHA256 pathName path recursive (const False) repair
+    convertStorePath <$> Store.addToStore @'Store.SHA256 pathName path recursive filter repair
 
+  addTextToStore :: StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m StorePath
+  default addTextToStore :: StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m StorePath
   addTextToStore name text references repair =
     convertStorePath <$> Store.addTextToStore name text references repair
 
+
+-- XXX (layus) relying on show is not ideal, but way more concise.
+-- Bound to disappear anyway if we unify StorePath representation across hnix* projects
+convertStorePath :: Store.StorePath -> StorePath
+convertStorePath = StorePath . show
 
 toFile_ :: MonadStore m => FilePath -> String -> m StorePath
 toFile_ p contents = addTextToStore (T.pack p) (T.pack contents) HS.empty False
 
 addPath :: (MonadStore m) => FilePath -> m StorePath
-addPath p = addToStore (T.pack $ takeFileName p) p True False
+addPath p = addToStore (T.pack $ takeFileName p) p (\_p _pt -> pure True) True False

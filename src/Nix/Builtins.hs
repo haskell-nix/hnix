@@ -257,7 +257,7 @@ builtinsList = sequence
   , add  Normal   "getContext"       getContext
   --, add  Normal   "hashFile"         hashFile
   , add  Normal   "isPath"           isPath
-  --, add  Normal   "path"             path
+  , add  Normal   "path"             path
   , add2 TopLevel "removeAttrs"      removeAttrs
   , add3 Normal   "replaceStrings"   replaceStrings
   , add2 TopLevel "scopedImport"     scopedImport
@@ -986,6 +986,49 @@ replaceStrings tfrom tto ts = fromValue (Deeper tfrom) >>= \(nsFrom :: [NixStrin
       toValue
         $ go (principledStringIgnoreContext ns) mempty
         $ principledGetContext ns
+
+attrGetOr' :: forall e t f m v a. (MonadNix e t f m, FromValue v m (NValue' t f m (NValue t f m)))
+  => (AttrSet (NValue t f m)) -> Text -> m a -> (v -> m a) -> m a
+attrGetOr' attrs n d f = case M.lookup n attrs of
+  Nothing -> d
+  Just v  -> fromValue v >>= f
+
+attrGetOr attrs name fallback fun = attrGetOr' attrs name (return fallback) fun
+-- attrGet attrs name = attrGetOr' attrs name (throwError $ ErrorCall $ "Required attribute '" ++ show name ++ "' not found.")
+
+path :: forall e t f m. MonadNix e t f m => NValue t f m -> m (NValue t f m)
+path arg = fromValue @(AttrSet (NValue t f m)) arg >>= \attrs -> do
+  path      <- fromStringNoContext =<< coerceToPath =<< attrsetGet "path" attrs
+  let filter = maybe (\_p _pt -> pure True) evalFilter $ M.lookup "filter" attrs
+
+  -- TODO: Fail on extra args
+  -- XXX: This is a very common pattern, we could factor it out
+  name      <- attrGetOr attrs "name"      (fileName path) (fromStringNoContext)
+  sha256    <- attrGetOr attrs "sha256"    ("")            (fromStringNoContext)
+  recursive <- attrGetOr attrs "recursive" (True)          (return)
+
+  s <- Text.pack . unStorePath <$> addToStore name (Text.unpack path) filter recursive False
+  -- TODO: Ensure that s matches sha256 when not empty
+  pure $ nvStr $ principledMakeNixStringWithSingletonContext s (StringContext s DirectPath)
+
+ where
+  pathToStr = nvStr . principledMakeNixStringWithoutContext . Text.pack
+  fileName = Text.pack . takeFileName . Text.unpack
+
+  coerceToPath = coerceToString callFunc DontCopyToStore CoerceAny
+
+  evalFilter :: (NValue t f m) -> FilePath -> PathType -> m Bool
+  evalFilter fun p pt = do
+    fun' <- fun  `callFunc` (pathToStr p)
+    res  <- fun' `callFunc` (pathTypeStr pt)
+    fromValue res
+
+  pathTypeStr :: PathType -> (NValue t f m)
+  pathTypeStr = nvStr . principledMakeNixStringWithoutContext . \case
+    Regular -> "regular"
+    Directory -> "directory"
+    Symlink -> "symlink"
+    Unknown -> "unknown"
 
 removeAttrs
   :: forall e t f m
