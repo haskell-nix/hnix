@@ -255,9 +255,9 @@ builtinsList = sequence
   , add  Normal   "fromTOML"         fromTOML
   -}
   , add  Normal   "getContext"       getContext
-  {-
-  , add  Normal   "path"             path
-  -}
+  --, add  Normal   "hashFile"         hashFile
+  , add  Normal   "isPath"           isPath
+  --, add  Normal   "path"             path
   , add2 TopLevel "removeAttrs"      removeAttrs
   , add3 Normal   "replaceStrings"   replaceStrings
   , add2 TopLevel "scopedImport"     scopedImport
@@ -1085,6 +1085,10 @@ isBool = hasKind @Bool
 isNull
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isNull = hasKind @()
+
+isPath
+  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
+isPath = hasKind @Path
 
 -- isString cannot use `hasKind` because it coerces derivations to strings.
 isString :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
