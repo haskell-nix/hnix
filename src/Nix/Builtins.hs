@@ -24,6 +24,7 @@
 
 module Nix.Builtins (withNixContext, builtins) where
 
+import           Control.Arrow                  ( (&&&) )
 import           Control.Comonad
 import           Control.Monad
 import           Control.Monad.Catch
@@ -45,6 +46,7 @@ import           Data.Char                      ( isDigit )
 import           Data.Fix                       ( foldFix )
 import           Data.Foldable                  ( foldrM )
 import qualified Data.HashMap.Lazy             as M
+import qualified Data.HashSet                  as HS
 import           Data.List
 import           Data.Maybe
 import           Data.Scientific
@@ -283,9 +285,7 @@ builtinsList = sequence
   , add  Normal   "typeOf"           typeOf
   , add2 Normal   "unsafeGetAttrPos"              unsafeGetAttrPos
   , add  Normal   "unsafeDiscardStringContext"    unsafeDiscardStringContext
-  {-
-  , add0 Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependency
-  -}
+  , add  Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependency
   , add  Normal   "valueSize"        getRecursiveSize
 
   ]
@@ -796,13 +796,21 @@ dirOf x = demand x $ \case
   v ->
     throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
 
--- jww (2018-04-28): This should only be a string argument, and not coerced?
 unsafeDiscardStringContext
   :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 unsafeDiscardStringContext mnv = do
   ns <- fromValue mnv
   toValue $ principledMakeNixStringWithoutContext $ principledStringIgnoreContext
     ns
+
+unsafeDiscardOutputDependency
+  :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
+unsafeDiscardOutputDependency mnv = do
+  (ns, nc) <- (principledStringIgnoreContext &&& principledGetContext) <$> fromValue mnv
+  toValue $ principledMakeNixString ns $ HS.map discard nc
+ where
+  discard (StringContext a AllOutputs) = StringContext a DirectPath
+  discard x                            = x
 
 seq_
   :: MonadNix e t f m
