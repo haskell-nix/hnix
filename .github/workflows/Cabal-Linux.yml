@@ -29,14 +29,14 @@ jobs:
             ~/.cabal/store
             dist-newstyle
           key: ${{ runner.os }}-Cabal-${{ matrix.ghc }}
-      - uses: actions/setup-haskell@v1.1
+      - uses: actions/setup-haskell@v1
         with:
           ghc-version: ${{ matrix.ghc }}
       - name: Install additional system packages
         run: sudo apt install libsodium-dev
       #  2020-08-01: NOTE: Nix instantiate still needed for HNix tests
       - name: Install Nix
-        uses: cachix/install-nix-action@v10
+        uses: cachix/install-nix-action@v12
       - run: cabal v2-configure --disable-optimization --enable-tests --enable-deterministic
       - run: cabal v2-build
       - run: cabal v2-test
