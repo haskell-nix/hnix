@@ -22,6 +22,7 @@ import           Control.Monad.Fail
 import           Control.Monad.Reader
 import           Control.Monad.Ref
 import           Control.Monad.ST
+import           Control.Monad.Trans.Control
 import           Data.Typeable
 
 import           Nix.Var
@@ -49,6 +50,24 @@ instance MonadTrans (FreshIdT i) where
 
 instance MonadBase b m => MonadBase b (FreshIdT i m) where
   liftBase = FreshIdT . liftBase
+
+-- | MonadBaseControl instance for FreshIdT
+--
+-- This one is needed for monad stacks containing hnix-store stores performing IO.
+--
+-- The reason why the MonadBaseControl instance is so convoluted is that I
+-- could not come up with a MonadTransControl instance. (layus, 2020-11)
+--
+-- ATM I have no idea if such an instance makes sense because the m is used
+-- inside the readable (Var m i) and MonadTransControl is supposed to be
+-- defined without mentioning that m
+--
+instance MonadBaseControl b m => MonadBaseControl b (FreshIdT i m) where
+  type StM (FreshIdT i m) a = StM m a
+  liftBaseWith   f = FreshIdT $ ReaderT $ \r ->
+                        liftBaseWith $ \runInBase ->
+                            f $ runInBase . (\t -> runReaderT (unFreshIdT t) r)
+  restoreM         = (\action -> FreshIdT { unFreshIdT = ReaderT $ const action }) . restoreM
 
 instance ( MonadVar m
          , Eq i

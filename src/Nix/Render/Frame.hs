@@ -90,7 +90,8 @@ renderFrame (NixFrame level f)
   | Just (e :: ExecFrame t f m) <- fromException f = renderExecFrame level e
   | Just (e :: ErrorCall) <- fromException f = pure [pretty (show e)]
   | Just (e :: SynHoleInfo m v) <- fromException f = pure [pretty (show e)]
-  | otherwise = error $ "Unrecognized frame: " ++ show f
+renderFrame (NixFrame level (SomeException e)) =
+  pure [ pretty $ "Unrecognized frame: " ++ show e ++ " of type " ++ show (typeOf e) ]
 
 wrapExpr :: NExprF r -> NExpr
 wrapExpr x = Fix (Fix (NSym "<?>") <$ x)

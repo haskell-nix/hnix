@@ -268,7 +268,7 @@ nixIf = annotateLocation1
 nixAssert :: Parser NExprLoc
 nixAssert = annotateLocation1
   (   NAssert
-  <$> (reserved "assert" *> nixExpr)
+  <$> (reserved "assert" *> nixToplevelForm)
   <*> (semi *> nixToplevelForm)
   <?> "assert"
   )

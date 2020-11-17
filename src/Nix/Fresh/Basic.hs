@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -13,7 +14,9 @@ module Nix.Fresh.Basic where
 import           Control.Monad.Fail ( MonadFail )
 #endif
 import           Control.Monad.Reader
+import           Control.Monad.Except
 import           Nix.Effects
+import           System.Nix.Store.Remote.Types (MonadRemoteStore)
 import           Nix.Render
 import           Nix.Fresh
 import           Nix.Value
@@ -22,15 +25,15 @@ type StdIdT = FreshIdT Int
 
 instance (MonadFail m, MonadFile m) => MonadFile (StdIdT m)
 instance MonadIntrospect m => MonadIntrospect (StdIdT m)
-instance MonadStore m => MonadStore (StdIdT m) where
-  addPath' = lift . addPath'
-  toFile_' = (lift .) . toFile_'
 instance MonadPutStr m => MonadPutStr (StdIdT m)
 instance MonadHttp m => MonadHttp (StdIdT m)
 instance MonadEnv m => MonadEnv (StdIdT m)
 instance MonadPaths m => MonadPaths (StdIdT m)
 instance MonadInstantiate m => MonadInstantiate (StdIdT m)
 instance MonadExec m => MonadExec (StdIdT m)
+instance MonadError String m => MonadError String (StdIdT m)
+instance MonadRemoteStore m => MonadRemoteStore (StdIdT m)
+instance (MonadIO m, MonadRemoteStore m) => MonadStore (StdIdT m)
 
 instance (MonadEffects t f m, MonadDataContext f m)
   => MonadEffects t f (StdIdT m) where

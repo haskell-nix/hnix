@@ -24,6 +24,7 @@
 
 module Nix.Builtins (withNixContext, builtins) where
 
+import           Control.Arrow                  ( (&&&) )
 import           Control.Comonad
 import           Control.Monad
 import           Control.Monad.Catch
@@ -45,6 +46,7 @@ import           Data.Char                      ( isDigit )
 import           Data.Fix                       ( foldFix )
 import           Data.Foldable                  ( foldrM )
 import qualified Data.HashMap.Lazy             as M
+import qualified Data.HashSet                  as HS
 import           Data.List
 import           Data.Maybe
 import           Data.Scientific
@@ -145,18 +147,19 @@ builtinsList = sequence
     version <- toValue (5 :: Int)
     pure $ Builtin Normal ("langVersion", version)
 
-  , add0 Normal   "nixPath"          nixPath
   , add  TopLevel "abort"            throw_ -- for now
   , add2 Normal   "add"              add_
   , add2 Normal   "addErrorContext"  addErrorContext
   , add2 Normal   "all"              all_
   , add2 Normal   "any"              any_
+  , add2 Normal   "appendContext"    appendContext
   , add  Normal   "attrNames"        attrNames
   , add  Normal   "attrValues"       attrValues
   , add  TopLevel "baseNameOf"       baseNameOf
   , add2 Normal   "bitAnd"           bitAnd
   , add2 Normal   "bitOr"            bitOr
   , add2 Normal   "bitXor"           bitXor
+  , add0 Normal   "builtins"         builtinsBuiltin
   , add2 Normal   "catAttrs"         catAttrs
   , add2 Normal   "compareVersions"  compareVersions_
   , add  Normal   "concatLists"      concatLists
@@ -235,6 +238,7 @@ builtinsList = sequence
   , add2 TopLevel "map"              map_
   , add2 TopLevel "mapAttrs"         mapAttrs_
   , add2 Normal   "match"            match_
+  , add0 Normal   "nixPath"          nixPath
   , add2 Normal   "mul"              mul_
   , add0 Normal   "null"             (pure $ nvConstant NNull)
   , add  Normal   "parseDrvName"     parseDrvName
@@ -244,6 +248,16 @@ builtinsList = sequence
   , add  Normal   "readDir"          readDir_
   , add  Normal   "readFile"         readFile_
   , add2 Normal   "findFile"         findFile_
+  {-
+  , add  Normal   "fetchGit"         fetchGit
+  , add  Normal   "fetchMercurial"   fetchMercurial
+  , add  Normal   "filterSource"     filterSource
+  , add  Normal   "fromTOML"         fromTOML
+  -}
+  , add  Normal   "getContext"       getContext
+  --, add  Normal   "hashFile"         hashFile
+  , add  Normal   "isPath"           isPath
+  , add  Normal   "path"             path
   , add2 TopLevel "removeAttrs"      removeAttrs
   , add3 Normal   "replaceStrings"   replaceStrings
   , add2 TopLevel "scopedImport"     scopedImport
@@ -252,9 +266,12 @@ builtinsList = sequence
   , add2 Normal   "split"            split_
   , add  Normal   "splitVersion"     splitVersion_
   , add0 Normal   "storeDir"         (pure $ nvStr $ principledMakeNixStringWithoutContext "/nix/store")
+  {-
+  , add  Normal   "storePath"        storePath
+  -}
   , add' Normal   "stringLength"     (arity1 $ Text.length . principledStringIgnoreContext)
   , add' Normal   "sub"              (arity2 ((-) @Integer))
-  , add' Normal   "substring"        (substring @e @t @f @m)
+  , add' Normal   "substring"        substring
   , add  Normal   "tail"             tail_
   , add0 Normal   "true"             (pure $ nvConstant $ NBool True)
   , add  TopLevel "throw"            throw_
@@ -266,12 +283,11 @@ builtinsList = sequence
   , add2 TopLevel "trace"            trace_
   , add  Normal   "tryEval"          tryEval
   , add  Normal   "typeOf"           typeOf
+  , add2 Normal   "unsafeGetAttrPos"              unsafeGetAttrPos
+  , add  Normal   "unsafeDiscardStringContext"    unsafeDiscardStringContext
+  , add  Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependency
   , add  Normal   "valueSize"        getRecursiveSize
-  , add  Normal   "getContext"                 getContext
-  , add2 Normal   "appendContext"              appendContext
 
-  , add2 Normal   "unsafeGetAttrPos"           unsafeGetAttrPos
-  , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
   ]
  where
   wrap :: BuiltinType -> Text -> v -> Builtin v
@@ -652,13 +668,13 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
 thunkStr s = nvStr (hackyMakeNixStringWithoutContext (decodeUtf8 s))
 
 substring :: forall e t f m. MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
-substring start len str = Prim $ if start < 0 --NOTE: negative values of 'len' are OK
-  then
-    throwError
-    $  ErrorCall
-    $  "builtins.substring: negative start position: "
-    ++ show start
-  else pure $ principledModifyNixContents (Text.take len . Text.drop start) str
+substring start len str = Prim $
+  if start < 0
+  then throwError $ ErrorCall $ "builtins.substring: negative start position: " ++ show start
+  else pure $ principledModifyNixContents (take . Text.drop start) str
+ where
+  --NOTE: negative values of 'len' are OK, and mean "take everything"
+  take = if len < 0 then id else Text.take len
 
 attrNames
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -766,6 +782,12 @@ bitXor
 bitXor x y = fromValue @Integer x
   >>= \a -> fromValue @Integer y >>= \b -> toValue (a `xor` b)
 
+builtinsBuiltin
+  :: forall e t f m
+   . MonadNix e t f m
+  => m (NValue t f m)
+builtinsBuiltin = (throwError $ ErrorCall "HNix does not provide builtins.builtins at the moment. Using builtins directly should be preferred")
+
 dirOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 dirOf x = demand x $ \case
   NVStr ns -> pure $ nvStr
@@ -774,13 +796,21 @@ dirOf x = demand x $ \case
   v ->
     throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
 
--- jww (2018-04-28): This should only be a string argument, and not coerced?
 unsafeDiscardStringContext
   :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 unsafeDiscardStringContext mnv = do
   ns <- fromValue mnv
   toValue $ principledMakeNixStringWithoutContext $ principledStringIgnoreContext
     ns
+
+unsafeDiscardOutputDependency
+  :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
+unsafeDiscardOutputDependency mnv = do
+  (ns, nc) <- (principledStringIgnoreContext &&& principledGetContext) <$> fromValue mnv
+  toValue $ principledMakeNixString ns $ HS.map discard nc
+ where
+  discard (StringContext a AllOutputs) = StringContext a DirectPath
+  discard x                            = x
 
 seq_
   :: MonadNix e t f m
@@ -957,6 +987,49 @@ replaceStrings tfrom tto ts = fromValue (Deeper tfrom) >>= \(nsFrom :: [NixStrin
         $ go (principledStringIgnoreContext ns) mempty
         $ principledGetContext ns
 
+attrGetOr' :: forall e t f m v a. (MonadNix e t f m, FromValue v m (NValue' t f m (NValue t f m)))
+  => (AttrSet (NValue t f m)) -> Text -> m a -> (v -> m a) -> m a
+attrGetOr' attrs n d f = case M.lookup n attrs of
+  Nothing -> d
+  Just v  -> fromValue v >>= f
+
+attrGetOr attrs name fallback fun = attrGetOr' attrs name (return fallback) fun
+-- attrGet attrs name = attrGetOr' attrs name (throwError $ ErrorCall $ "Required attribute '" ++ show name ++ "' not found.")
+
+path :: forall e t f m. MonadNix e t f m => NValue t f m -> m (NValue t f m)
+path arg = fromValue @(AttrSet (NValue t f m)) arg >>= \attrs -> do
+  path      <- fromStringNoContext =<< coerceToPath =<< attrsetGet "path" attrs
+  let filter = maybe (\_p _pt -> pure True) evalFilter $ M.lookup "filter" attrs
+
+  -- TODO: Fail on extra args
+  -- XXX: This is a very common pattern, we could factor it out
+  name      <- attrGetOr attrs "name"      (fileName path) (fromStringNoContext)
+  sha256    <- attrGetOr attrs "sha256"    ("")            (fromStringNoContext)
+  recursive <- attrGetOr attrs "recursive" (True)          (return)
+
+  s <- Text.pack . unStorePath <$> addToStore name (Text.unpack path) filter recursive False
+  -- TODO: Ensure that s matches sha256 when not empty
+  pure $ nvStr $ principledMakeNixStringWithSingletonContext s (StringContext s DirectPath)
+
+ where
+  pathToStr = nvStr . principledMakeNixStringWithoutContext . Text.pack
+  fileName = Text.pack . takeFileName . Text.unpack
+
+  coerceToPath = coerceToString callFunc DontCopyToStore CoerceAny
+
+  evalFilter :: (NValue t f m) -> FilePath -> PathType -> m Bool
+  evalFilter fun p pt = do
+    fun' <- fun  `callFunc` (pathToStr p)
+    res  <- fun' `callFunc` (pathTypeStr pt)
+    fromValue res
+
+  pathTypeStr :: PathType -> (NValue t f m)
+  pathTypeStr = nvStr . principledMakeNixStringWithoutContext . \case
+    Regular -> "regular"
+    Directory -> "directory"
+    Symlink -> "symlink"
+    Unknown -> "unknown"
+
 removeAttrs
   :: forall e t f m
    . MonadNix e t f m
@@ -1040,10 +1113,6 @@ isList
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isList = hasKind @[NValue t f m]
 
-isString
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-isString = hasKind @NixString
-
 isInt
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isInt = hasKind @Int
@@ -1059,6 +1128,16 @@ isBool = hasKind @Bool
 isNull
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isNull = hasKind @()
+
+isPath
+  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
+isPath = hasKind @Path
+
+-- isString cannot use `hasKind` because it coerces derivations to strings.
+isString :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
+isString v = demand v $ \case
+  NVStr{} -> toValue True
+  _       -> toValue False
 
 isFunction :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isFunction func = demand func $ \case

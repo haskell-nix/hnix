@@ -8,10 +8,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-
 module Nix.Effects.Basic where
 
 import           Control.Monad
@@ -20,30 +16,24 @@ import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List
 import           Data.List.Split
-import           Data.Maybe                     ( maybeToList )
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
-import           Nix.Atoms
+import           Data.Text.Prettyprint.Doc
 import           Nix.Convert
 import           Nix.Effects
 import           Nix.Exec                       ( MonadNix
-                                                , callFunc
                                                 , evalExprLoc
                                                 , nixInstantiateExpr
                                                 )
 import           Nix.Expr
 import           Nix.Frames
-import           Nix.Normal
 import           Nix.Parser
-import           Nix.Pretty
 import           Nix.Render
 import           Nix.Scope
 import           Nix.String
-import           Nix.String.Coerce
 import           Nix.Utils
 import           Nix.Value
 import           Nix.Value.Monad
-import           Prettyprinter
 import           System.FilePath
 
 #ifdef MIN_VERSION_ghc_datasize
@@ -64,13 +54,13 @@ defaultMakeAbsolutePath origPath = do
           Nothing -> getCurrentDirectory
           Just v  -> demand v $ \case
             NVPath s -> pure $ takeDirectory s
-            v ->
+            val ->
               throwError
                 $  ErrorCall
                 $  "when resolving relative path,"
                 ++ " __cur_file is in scope,"
                 ++ " but is not a path; it is: "
-                ++ show v
+                ++ show val
       pure $ cwd <///> origPathExpanded
   removeDotDotIndirections <$> canonicalizePath absPath
 
@@ -111,13 +101,13 @@ findEnvPathM name = do
  where
   nixFilePath :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
   nixFilePath path = do
-    path   <- makeAbsolutePath @t @f path
-    exists <- doesDirectoryExist path
-    path'  <- if exists
-      then makeAbsolutePath @t @f $ path </> "default.nix"
-      else pure path
-    exists <- doesFileExist path'
-    pure $ if exists then Just path' else Nothing
+    absPath <- makeAbsolutePath @t @f path
+    isDir   <- doesDirectoryExist absPath
+    absFile <- if isDir
+      then makeAbsolutePath @t @f $ absPath </> "default.nix"
+      else return absPath
+    exists <- doesFileExist absFile
+    pure $ if exists then Just absFile else Nothing
 
 findPathBy
   :: forall e t f m
@@ -126,8 +116,8 @@ findPathBy
   -> [NValue t f m]
   -> FilePath
   -> m FilePath
-findPathBy finder l name = do
-  mpath <- foldM go Nothing l
+findPathBy finder ls name = do
+  mpath <- foldM go Nothing ls
   case mpath of
     Nothing ->
       throwError
@@ -226,22 +216,22 @@ findPathM
   => [NValue t f m]
   -> FilePath
   -> m FilePath
-findPathM = findPathBy path
+findPathM = findPathBy existingPath
  where
-  path :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
-  path path = do
-    path   <- makeAbsolutePath @t @f path
-    exists <- doesPathExist path
-    pure $ if exists then Just path else Nothing
+  existingPath :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
+  existingPath path = do
+    apath  <- makeAbsolutePath @t @f path
+    exists <- doesPathExist apath
+    pure $ if exists then Just apath else Nothing
 
 defaultImportPath
-  :: (MonadNix e t f m, MonadState (HashMap FilePath NExprLoc) m)
+  :: (MonadNix e t f m, MonadState (HashMap FilePath NExprLoc, b) m)
   => FilePath
   -> m (NValue t f m)
 defaultImportPath path = do
   traceM $ "Importing file " ++ path
   withFrame Info (ErrorCall $ "While importing file " ++ show path) $ do
-    imports <- get
+    imports <- gets fst
     evalExprLoc =<< case M.lookup path imports of
       Just expr -> pure expr
       Nothing   -> do
@@ -252,7 +242,7 @@ defaultImportPath path = do
               $ ErrorCall
               . show $ fillSep ["Parse during import failed:", err]
           Success expr -> do
-            modify (M.insert path expr)
+            modify (\(a, b) -> (M.insert path expr a, b))
             pure expr
 
 defaultPathToDefaultNix :: MonadNix e t f m => FilePath -> m FilePath
@@ -263,39 +253,6 @@ pathToDefaultNixFile :: MonadFile m => FilePath -> m FilePath
 pathToDefaultNixFile p = do
   isDir <- doesDirectoryExist p
   pure $ if isDir then p </> "default.nix" else p
-
-defaultDerivationStrict
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
-  nn <- maybe (pure False) (demand ?? fromValue) (M.lookup "__ignoreNulls" s)
-  s' <- M.fromList <$> mapMaybeM (handleEntry nn) (M.toList s)
-  v' <- normalForm =<< toValue @(AttrSet (NValue t f m)) @_ @(NValue t f m) s'
-  nixInstantiateExpr $ "derivationStrict " ++ show (prettyNValue v')
- where
-  mapMaybeM :: (a -> m (Maybe b)) -> [a] -> m [b]
-  mapMaybeM op = foldr f (pure [])
-    where f x xs = op x >>= (<$> xs) . (++) . maybeToList
-
-  handleEntry :: Bool -> (Text, NValue t f m) -> m (Maybe (Text, NValue t f m))
-  handleEntry ignoreNulls (k, v) = fmap (k, ) <$> case k of
-      -- The `args' attribute is special: it supplies the command-line
-      -- arguments to the builder.
-      -- TODO This use of coerceToString is probably not right and may
-      -- not have the right arguments.
-    "args"          -> demand v $ fmap Just . coerceNixList
-    "__ignoreNulls" -> pure Nothing
-    _               -> demand v $ \case
-      NVConstant NNull | ignoreNulls -> pure Nothing
-      v'                             -> Just <$> coerceNix v'
-   where
-    coerceNix :: NValue t f m -> m (NValue t f m)
-    coerceNix = toValue <=< coerceToString callFunc CopyToStore CoerceAny
-
-    coerceNixList :: NValue t f m -> m (NValue t f m)
-    coerceNixList v = do
-      xs <- fromValue @[NValue t f m] v
-      ys <- traverse (`demand` coerceNix) xs
-      toValue @[NValue t f m] ys
 
 defaultTraceEffect :: MonadPutStr m => String -> m ()
 defaultTraceEffect = Nix.Effects.putStrLn

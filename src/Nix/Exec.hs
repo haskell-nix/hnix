@@ -298,13 +298,11 @@ callFunc fun arg = demand fun $ \fun' -> do
     "Function call stack exhausted"
   case fun' of
     NVClosure params f -> do
-      traceM $ "callFunc:NVFunction taking " ++ show params
       f arg
     NVBuiltin name f -> do
       span <- currentPos
       withFrame Info (Calling @m @t name span) (f arg)
     s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
-      traceM "callFunc:__functor"
       demand f $ (`callFunc` s) >=> (`callFunc` arg)
     x -> throwError $ ErrorCall $ "Attempt to call non-function: " ++ show x
 
@@ -316,7 +314,6 @@ execUnaryOp
   -> NValue t f m
   -> m (NValue t f m)
 execUnaryOp scope span op arg = do
-  traceM "NUnary"
   case arg of
     NVConstant c -> case (op, c) of
       (NNeg, NInt i  ) -> unaryOp $ NInt (-i)
@@ -478,7 +475,7 @@ execBinaryOpForced scope span op lval rval = case op of
 fromStringNoContext :: Framed e m => NixString -> m Text
 fromStringNoContext ns = case principledGetStringNoContext ns of
   Just str -> pure str
-  Nothing  -> throwError $ ErrorCall "expected string with no context"
+  Nothing  -> throwError $ ErrorCall $ "expected string with no context, but got " ++ show ns
 
 addTracing
   :: (MonadNix e t f m, Has e Options, MonadReader Int n, Alternative n)

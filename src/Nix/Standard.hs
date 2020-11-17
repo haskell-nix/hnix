@@ -22,6 +22,7 @@ import           Control.Applicative
 import           Control.Comonad                ( Comonad )
 import           Control.Comonad.Env            ( ComonadEnv )
 import           Control.Monad.Catch     hiding ( catchJust )
+import           Control.Monad.Except
 #if !MIN_VERSION_base(4,13,0)
 import           Control.Monad.Fail             ( MonadFail )
 #endif
@@ -29,7 +30,10 @@ import           Control.Monad.Free
 import           Control.Monad.Reader
 import           Control.Monad.Ref
 import           Control.Monad.State
+import           Control.Monad.Trans.Control    ( MonadBaseControl )
 import           Data.HashMap.Lazy              ( HashMap )
+import qualified Data.HashMap.Strict
+import           Data.Text                      ( Text )
 import           Data.Typeable
 import           GHC.Generics
 import           Nix.Cited
@@ -37,6 +41,7 @@ import           Nix.Cited.Basic
 import           Nix.Context
 import           Nix.Effects
 import           Nix.Effects.Basic
+import           Nix.Effects.Derivation
 import           Nix.Expr.Types.Annotated
 import           Nix.Fresh
 import           Nix.Fresh.Basic
@@ -49,24 +54,32 @@ import           Nix.Utils.Fix1
 import           Nix.Value
 import           Nix.Value.Monad
 import           Nix.Var
+import           System.Nix.Store.Remote ( runStore )
+import           System.Nix.Store.Remote.Types ( RemoteStoreT(..) , MonadRemoteStore )
 
 -- All of the following type classes defer to the underlying 'm'.
 
 deriving instance MonadPutStr (t (Fix1 t)) => MonadPutStr (Fix1 t)
 deriving instance MonadHttp (t (Fix1 t)) => MonadHttp (Fix1 t)
 deriving instance MonadEnv (t (Fix1 t)) => MonadEnv (Fix1 t)
+-- deriving instance MonadStore (t (Fix1 t)) => MonadStore (Fix1 t)
 deriving instance MonadPaths (t (Fix1 t)) => MonadPaths (Fix1 t)
 deriving instance MonadInstantiate (t (Fix1 t)) => MonadInstantiate (Fix1 t)
 deriving instance MonadExec (t (Fix1 t)) => MonadExec (Fix1 t)
 deriving instance MonadIntrospect (t (Fix1 t)) => MonadIntrospect (Fix1 t)
+deriving instance MonadError e (t (Fix1 t)) => MonadError e (Fix1 t)
+deriving instance MonadRemoteStore (t (Fix1 t)) => MonadRemoteStore (Fix1 t)
 
 deriving instance MonadPutStr (t (Fix1T t m) m) => MonadPutStr (Fix1T t m)
 deriving instance MonadHttp (t (Fix1T t m) m) => MonadHttp (Fix1T t m)
 deriving instance MonadEnv (t (Fix1T t m) m) => MonadEnv (Fix1T t m)
+-- deriving instance MonadStore (t (Fix1T t m) m) => MonadStore (Fix1T t m)
 deriving instance MonadPaths (t (Fix1T t m) m) => MonadPaths (Fix1T t m)
 deriving instance MonadInstantiate (t (Fix1T t m) m) => MonadInstantiate (Fix1T t m)
 deriving instance MonadExec (t (Fix1T t m) m) => MonadExec (Fix1T t m)
+deriving instance MonadError e (t (Fix1T t m) m) => MonadError e (Fix1T t m)
 deriving instance MonadIntrospect (t (Fix1T t m) m) => MonadIntrospect (Fix1T t m)
+deriving instance MonadRemoteStore (t (Fix1T t m) m) => MonadRemoteStore (Fix1T t m)
 
 type MonadFix1T t m = (MonadTrans (Fix1T t), Monad (t (Fix1T t m) m))
 
@@ -80,10 +93,6 @@ instance (MonadFix1T t m, MonadAtomicRef m) => MonadAtomicRef (Fix1T t m) where
   atomicModifyRef r = lift . atomicModifyRef r
 
 instance (MonadFix1T t m, MonadFail (Fix1T t m), MonadFile m) => MonadFile (Fix1T t m)
-
-instance (MonadFix1T t m, MonadStore m) => MonadStore (Fix1T t m) where
-  addPath' = lift . addPath'
-  toFile_' n = lift . toFile_' n
 
 {------------------------------------------------------------------------}
 
@@ -138,7 +147,7 @@ instance ( MonadFix m
          , Typeable m
          , Scoped (StdValue m) m
          , MonadReader (Context m (StdValue m)) m
-         , MonadState (HashMap FilePath NExprLoc) m
+         , MonadState (HashMap FilePath NExprLoc, Data.HashMap.Strict.HashMap Text Text) m
          , MonadDataErrorContext (StdThunk m) (StdCited m) m
          , MonadThunk (StdThunk m) m (StdValue m)
          , MonadValue (StdValue m) m
@@ -189,9 +198,19 @@ instance ( MonadAtomicRef m
 -- whileForcingThunk frame =
 --   withFrame Debug (ForcingThunk @t @f @m) . withFrame Debug frame
 
+-- RemoteStoreT lacks some of these, needed in the deriving clause of StandardTF
+-- deriving instance MonadState a m => MonadState a (RemoteStoreT m)
+-- deriving instance MonadReader a m => MonadReader a (RemoteStoreT m)
+deriving instance MonadPlus  m => MonadPlus  (RemoteStoreT m)
+deriving instance MonadFix   m => MonadFix   (RemoteStoreT m)
+deriving instance MonadCatch m => MonadCatch (RemoteStoreT m)
+deriving instance MonadThrow m => MonadThrow (RemoteStoreT m)
+deriving instance MonadMask  m => MonadMask  (RemoteStoreT m)
+
 newtype StandardTF r m a
   = StandardTF (ReaderT (Context r (StdValue r))
-                        (StateT (HashMap FilePath NExprLoc) m) a)
+                        (StateT (HashMap FilePath NExprLoc, HashMap Text Text)
+                                (RemoteStoreT m)) a)
   deriving
     ( Functor
     , Applicative
@@ -204,16 +223,20 @@ newtype StandardTF r m a
     , MonadCatch
     , MonadThrow
     , MonadMask
+    , MonadError String
     , MonadReader (Context r (StdValue r))
-    , MonadState (HashMap FilePath NExprLoc)
+    , MonadState (HashMap FilePath NExprLoc, HashMap Text Text)
     )
 
+deriving instance (MonadIO m) => MonadRemoteStore (StandardTF r m)
+
 instance MonadTrans (StandardTF r) where
-  lift = StandardTF . lift . lift
+  lift = StandardTF . lift . lift . lift
 
 instance (MonadPutStr r, MonadPutStr m) => MonadPutStr (StandardTF r m)
 instance (MonadHttp r, MonadHttp m) => MonadHttp (StandardTF r m)
 instance (MonadEnv r, MonadEnv m) => MonadEnv (StandardTF r m)
+instance (MonadStore r, MonadStore m) => MonadStore (StandardTF r m)
 instance (MonadPaths r, MonadPaths m) => MonadPaths (StandardTF r m)
 instance (MonadInstantiate r, MonadInstantiate m) => MonadInstantiate (StandardTF r m)
 instance (MonadExec r, MonadExec m) => MonadExec (StandardTF r m)
@@ -229,26 +252,32 @@ instance MonadTrans (Fix1T StandardTF) where
 instance MonadThunkId m => MonadThunkId (Fix1T StandardTF m) where
   type ThunkId (Fix1T StandardTF m) = ThunkId m
 
+instance (MonadIO m) => MonadStore (Fix1T StandardTF m)
+
 mkStandardT
-  :: ReaderT
-       (Context (StandardT m) (StdValue (StandardT m)))
-       (StateT (HashMap FilePath NExprLoc) m)
-       a
+  :: (ReaderT (Context (StandardT m) (StdValue (StandardT m)))
+       (StateT (HashMap FilePath NExprLoc, Data.HashMap.Strict.HashMap Text Text)
+         (RemoteStoreT m)) a)
   -> StandardT m a
 mkStandardT = Fix1T . StandardTF
 
 runStandardT
   :: StandardT m a
-  -> ReaderT
-       (Context (StandardT m) (StdValue (StandardT m)))
-       (StateT (HashMap FilePath NExprLoc) m)
-       a
+  -> (ReaderT (Context (StandardT m) (StdValue (StandardT m)))
+       (StateT (HashMap FilePath NExprLoc, Data.HashMap.Strict.HashMap Text Text)
+         (RemoteStoreT m)) a)
 runStandardT (Fix1T (StandardTF m)) = m
 
+runStoreSimple :: (MonadIO m, MonadBaseControl IO m) => RemoteStoreT m a -> m a
+runStoreSimple action = do
+    (res, _log) <- runStore action
+    -- TODO: replace this error call by something smarter. throwE ? throwError ?
+    either (error) return res
+
 runWithBasicEffects
-  :: (MonadIO m, MonadAtomicRef m) => Options -> StandardT (StdIdT m) a -> m a
+  :: (MonadBaseControl IO m, MonadIO m, MonadAtomicRef m) => Options -> StandardT (StdIdT m) a -> m a
 runWithBasicEffects opts =
-  go . (`evalStateT` mempty) . (`runReaderT` newContext opts) . runStandardT
+  go . runStoreSimple . (`evalStateT` mempty) . (`runReaderT` newContext opts) . runStandardT
  where
   go action = do
     i <- newVar (1 :: Int)

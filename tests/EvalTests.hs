@@ -494,7 +494,9 @@ freeVarsEqual a xs = do
 
 maskedFiles :: [FilePath]
 maskedFiles =
-  [ "builtins.fetchurl-01.nix" ]
+  [ "builtins.fetchurl-01.nix"
+  , "builtins.nix" -- FIXME (layus) nix conditionally enables exec & co.
+  ]
 
 testDir :: FilePath
 testDir = "tests/eval-compare"
