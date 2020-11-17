@@ -643,7 +643,7 @@ nixOperators selector =
   , {- 13 -}
     [binaryL "||" NOr]
   , {- 14 -}
-    [binaryN "->" NImpl]
+    [binaryR "->" NImpl]
   ]
 
 data OperatorInfo = OperatorInfo
