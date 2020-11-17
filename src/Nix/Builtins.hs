@@ -206,15 +206,21 @@ builtinsList = sequence
   , add2 Normal   "elemAt"           elemAt_
   , add  Normal   "exec"             exec_
   , add0 Normal   "false"            (pure $ nvConstant $ NBool False)
+  --, add  Normal   "fetchGit"         fetchGit
+  --, add  Normal   "fetchMercurial"   fetchMercurial
   , add  Normal   "fetchTarball"     fetchTarball
   , add  Normal   "fetchurl"         fetchurl
   , add2 Normal   "filter"           filter_
+  --, add  Normal   "filterSource"     filterSource
+  , add2 Normal   "findFile"         findFile_
   , add3 Normal   "foldl'"           foldl'_
   , add  Normal   "fromJSON"         fromJSON
+  --, add  Normal   "fromTOML"         fromTOML
   , add  Normal   "functionArgs"     functionArgs
-  , add2 Normal   "genList"          genList
   , add  Normal   "genericClosure"   genericClosure
+  , add2 Normal   "genList"          genList
   , add2 Normal   "getAttr"          getAttr
+  , add  Normal   "getContext"       getContext
   , add  Normal   "getEnv"           getEnv_
   , add2 Normal   "hasAttr"          hasAttr
   , add  Normal   "hasContext"       hasContext
@@ -236,26 +242,16 @@ builtinsList = sequence
   , add2 TopLevel "map"              map_
   , add2 TopLevel "mapAttrs"         mapAttrs_
   , add2 Normal   "match"            match_
-  , add0 Normal   "nixPath"          nixPath
   , add2 Normal   "mul"              mul_
+  , add0 Normal   "nixPath"          nixPath
   , add0 Normal   "null"             (pure $ nvConstant NNull)
   , add  Normal   "parseDrvName"     parseDrvName
   , add2 Normal   "partition"        partition_
+  --, add  Normal   "path"             path
   , add  Normal   "pathExists"       pathExists_
   , add  TopLevel "placeholder"      placeHolder
   , add  Normal   "readDir"          readDir_
   , add  Normal   "readFile"         readFile_
-  , add2 Normal   "findFile"         findFile_
-  {-
-  , add  Normal   "fetchGit"         fetchGit
-  , add  Normal   "fetchMercurial"   fetchMercurial
-  , add  Normal   "filterSource"     filterSource
-  , add  Normal   "fromTOML"         fromTOML
-  -}
-  , add  Normal   "getContext"       getContext
-  {-
-  , add  Normal   "path"             path
-  -}
   , add2 TopLevel "removeAttrs"      removeAttrs
   , add3 Normal   "replaceStrings"   replaceStrings
   , add2 TopLevel "scopedImport"     scopedImport
@@ -264,30 +260,25 @@ builtinsList = sequence
   , add2 Normal   "split"            split_
   , add  Normal   "splitVersion"     splitVersion_
   , add0 Normal   "storeDir"         (pure $ nvStr $ principledMakeNixStringWithoutContext "/nix/store")
-  {-
-  , add  Normal   "storePath"        storePath
-  -}
+  --, add  Normal   "storePath"        storePath
   , add' Normal   "stringLength"     (arity1 $ Text.length . principledStringIgnoreContext)
   , add' Normal   "sub"              (arity2 ((-) @Integer))
   , add' Normal   "substring"        substring
   , add  Normal   "tail"             tail_
-  , add0 Normal   "true"             (pure $ nvConstant $ NBool True)
   , add  TopLevel "throw"            throw_
-  , add  Normal   "toJSON"           prim_toJSON
   , add2 Normal   "toFile"           toFile
+  , add  Normal   "toJSON"           prim_toJSON
   , add  Normal   "toPath"           toPath
   , add  TopLevel "toString"         toString
   , add  Normal   "toXML"            toXML_
   , add2 TopLevel "trace"            trace_
+  , add0 Normal   "true"             (pure $ nvConstant $ NBool True)
   , add  Normal   "tryEval"          tryEval
   , add  Normal   "typeOf"           typeOf
-  , add2 Normal   "unsafeGetAttrPos"              unsafeGetAttrPos
+  --, add0 Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependency
   , add  Normal   "unsafeDiscardStringContext"    unsafeDiscardStringContext
-  {-
-  , add0 Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependency
-  -}
+  , add2 Normal   "unsafeGetAttrPos"              unsafeGetAttrPos
   , add  Normal   "valueSize"        getRecursiveSize
-
   ]
  where
   wrap :: BuiltinType -> Text -> v -> Builtin v
