@@ -64,13 +64,13 @@ defaultMakeAbsolutePath origPath = do
           Nothing -> getCurrentDirectory
           Just v  -> demand v $ \case
             NVPath s -> pure $ takeDirectory s
-            v ->
+            val ->
               throwError
                 $  ErrorCall
                 $  "when resolving relative path,"
                 ++ " __cur_file is in scope,"
                 ++ " but is not a path; it is: "
-                ++ show v
+                ++ show val
       pure $ cwd <///> origPathExpanded
   removeDotDotIndirections <$> canonicalizePath absPath
 
@@ -111,13 +111,13 @@ findEnvPathM name = do
  where
   nixFilePath :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
   nixFilePath path = do
-    path   <- makeAbsolutePath @t @f path
-    exists <- doesDirectoryExist path
-    path'  <- if exists
-      then makeAbsolutePath @t @f $ path </> "default.nix"
-      else pure path
-    exists <- doesFileExist path'
-    pure $ if exists then Just path' else Nothing
+    absPath <- makeAbsolutePath @t @f path
+    isDir   <- doesDirectoryExist absPath
+    absFile <- if isDir
+      then makeAbsolutePath @t @f $ absPath </> "default.nix"
+      else return absPath
+    exists <- doesFileExist absFile
+    pure $ if exists then Just absFile else Nothing
 
 findPathBy
   :: forall e t f m
@@ -226,13 +226,13 @@ findPathM
   => [NValue t f m]
   -> FilePath
   -> m FilePath
-findPathM = findPathBy path
+findPathM = findPathBy existingPath
  where
-  path :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
-  path path = do
-    path   <- makeAbsolutePath @t @f path
-    exists <- doesPathExist path
-    pure $ if exists then Just path else Nothing
+  existingPath :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
+  existingPath path = do
+    apath  <- makeAbsolutePath @t @f path
+    exists <- doesPathExist apath
+    pure $ if exists then Just apath else Nothing
 
 defaultImportPath
   :: (MonadNix e t f m, MonadState (HashMap FilePath NExprLoc) m)

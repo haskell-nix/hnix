@@ -145,18 +145,19 @@ builtinsList = sequence
     version <- toValue (5 :: Int)
     pure $ Builtin Normal ("langVersion", version)
 
-  , add0 Normal   "nixPath"          nixPath
   , add  TopLevel "abort"            throw_ -- for now
   , add2 Normal   "add"              add_
   , add2 Normal   "addErrorContext"  addErrorContext
   , add2 Normal   "all"              all_
   , add2 Normal   "any"              any_
+  , add2 Normal   "appendContext"    appendContext
   , add  Normal   "attrNames"        attrNames
   , add  Normal   "attrValues"       attrValues
   , add  TopLevel "baseNameOf"       baseNameOf
   , add2 Normal   "bitAnd"           bitAnd
   , add2 Normal   "bitOr"            bitOr
   , add2 Normal   "bitXor"           bitXor
+  , add0 Normal   "builtins"         builtinsBuiltin
   , add2 Normal   "catAttrs"         catAttrs
   , add2 Normal   "compareVersions"  compareVersions_
   , add  Normal   "concatLists"      concatLists
@@ -205,15 +206,21 @@ builtinsList = sequence
   , add2 Normal   "elemAt"           elemAt_
   , add  Normal   "exec"             exec_
   , add0 Normal   "false"            (pure $ nvConstant $ NBool False)
+  --, add  Normal   "fetchGit"         fetchGit
+  --, add  Normal   "fetchMercurial"   fetchMercurial
   , add  Normal   "fetchTarball"     fetchTarball
   , add  Normal   "fetchurl"         fetchurl
   , add2 Normal   "filter"           filter_
+  --, add  Normal   "filterSource"     filterSource
+  , add2 Normal   "findFile"         findFile_
   , add3 Normal   "foldl'"           foldl'_
   , add  Normal   "fromJSON"         fromJSON
+  --, add  Normal   "fromTOML"         fromTOML
   , add  Normal   "functionArgs"     functionArgs
-  , add2 Normal   "genList"          genList
   , add  Normal   "genericClosure"   genericClosure
+  , add2 Normal   "genList"          genList
   , add2 Normal   "getAttr"          getAttr
+  , add  Normal   "getContext"       getContext
   , add  Normal   "getEnv"           getEnv_
   , add2 Normal   "hasAttr"          hasAttr
   , add  Normal   "hasContext"       hasContext
@@ -236,14 +243,15 @@ builtinsList = sequence
   , add2 TopLevel "mapAttrs"         mapAttrs_
   , add2 Normal   "match"            match_
   , add2 Normal   "mul"              mul_
+  , add0 Normal   "nixPath"          nixPath
   , add0 Normal   "null"             (pure $ nvConstant NNull)
   , add  Normal   "parseDrvName"     parseDrvName
   , add2 Normal   "partition"        partition_
+  --, add  Normal   "path"             path
   , add  Normal   "pathExists"       pathExists_
   , add  TopLevel "placeholder"      placeHolder
   , add  Normal   "readDir"          readDir_
   , add  Normal   "readFile"         readFile_
-  , add2 Normal   "findFile"         findFile_
   , add2 TopLevel "removeAttrs"      removeAttrs
   , add3 Normal   "replaceStrings"   replaceStrings
   , add2 TopLevel "scopedImport"     scopedImport
@@ -252,26 +260,25 @@ builtinsList = sequence
   , add2 Normal   "split"            split_
   , add  Normal   "splitVersion"     splitVersion_
   , add0 Normal   "storeDir"         (pure $ nvStr $ principledMakeNixStringWithoutContext "/nix/store")
+  --, add  Normal   "storePath"        storePath
   , add' Normal   "stringLength"     (arity1 $ Text.length . principledStringIgnoreContext)
   , add' Normal   "sub"              (arity2 ((-) @Integer))
-  , add' Normal   "substring"        (substring @e @t @f @m)
+  , add' Normal   "substring"        substring
   , add  Normal   "tail"             tail_
-  , add0 Normal   "true"             (pure $ nvConstant $ NBool True)
   , add  TopLevel "throw"            throw_
-  , add  Normal   "toJSON"           prim_toJSON
   , add2 Normal   "toFile"           toFile
+  , add  Normal   "toJSON"           prim_toJSON
   , add  Normal   "toPath"           toPath
   , add  TopLevel "toString"         toString
   , add  Normal   "toXML"            toXML_
   , add2 TopLevel "trace"            trace_
+  , add0 Normal   "true"             (pure $ nvConstant $ NBool True)
   , add  Normal   "tryEval"          tryEval
   , add  Normal   "typeOf"           typeOf
+  --, add0 Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependency
+  , add  Normal   "unsafeDiscardStringContext"    unsafeDiscardStringContext
+  , add2 Normal   "unsafeGetAttrPos"              unsafeGetAttrPos
   , add  Normal   "valueSize"        getRecursiveSize
-  , add  Normal   "getContext"                 getContext
-  , add2 Normal   "appendContext"              appendContext
-
-  , add2 Normal   "unsafeGetAttrPos"           unsafeGetAttrPos
-  , add  Normal   "unsafeDiscardStringContext" unsafeDiscardStringContext
   ]
  where
   wrap :: BuiltinType -> Text -> v -> Builtin v
@@ -652,13 +659,13 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
 thunkStr s = nvStr (hackyMakeNixStringWithoutContext (decodeUtf8 s))
 
 substring :: forall e t f m. MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
-substring start len str = Prim $ if start < 0 --NOTE: negative values of 'len' are OK
-  then
-    throwError
-    $  ErrorCall
-    $  "builtins.substring: negative start position: "
-    ++ show start
-  else pure $ principledModifyNixContents (Text.take len . Text.drop start) str
+substring start len str = Prim $
+  if start < 0
+  then throwError $ ErrorCall $ "builtins.substring: negative start position: " ++ show start
+  else pure $ principledModifyNixContents (take . Text.drop start) str
+ where
+  --NOTE: negative values of 'len' are OK, and mean "take everything"
+  take = if len < 0 then id else Text.take len
 
 attrNames
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -765,6 +772,12 @@ bitXor
   -> m (NValue t f m)
 bitXor x y = fromValue @Integer x
   >>= \a -> fromValue @Integer y >>= \b -> toValue (a `xor` b)
+
+builtinsBuiltin
+  :: forall e t f m
+   . MonadNix e t f m
+  => m (NValue t f m)
+builtinsBuiltin = (throwError $ ErrorCall "HNix does not provide builtins.builtins at the moment. Using builtins directly should be preferred")
 
 dirOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 dirOf x = demand x $ \case
@@ -1040,10 +1053,6 @@ isList
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isList = hasKind @[NValue t f m]
 
-isString
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-isString = hasKind @NixString
-
 isInt
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isInt = hasKind @Int
@@ -1059,6 +1068,12 @@ isBool = hasKind @Bool
 isNull
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isNull = hasKind @()
+
+-- isString cannot use `hasKind` because it coerces derivations to strings.
+isString :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
+isString v = demand v $ \case
+  NVStr{} -> toValue True
+  _       -> toValue False
 
 isFunction :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isFunction func = demand func $ \case
