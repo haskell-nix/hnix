@@ -76,8 +76,8 @@
 , executableNamesToShellComplete ? [ "hnix" ]
 
 
-# Include Hoogle into derivation
-, withHoogle  ? true
+# Include Hoogle executable and DB into derivation
+, withHoogle  ? false
 
 
 # Nix by default updates and uses locally configured nixpkgs-unstable channel
