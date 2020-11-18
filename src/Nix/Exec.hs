@@ -297,7 +297,7 @@ callFunc fun arg = demand fun $ \fun' -> do
   when (length frames > 2000) $ throwError $ ErrorCall
     "Function call stack exhausted"
   case fun' of
-    NVClosure params f -> do
+    NVClosure _params f -> do
       f arg
     NVBuiltin name f -> do
       span <- currentPos
