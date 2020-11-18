@@ -1,5 +1,6 @@
-attrs@
-  { compiler ? "ghc8101"
-  , withHoogle ? true
-  }:
-(import ./. attrs).env
+attrs@{...}:
+let defaultAttrs = {
+  withHoogle = true;
+  compiler = "ghc8101";
+};
+in (import ./. (defaultAttrs // attrs)).env
