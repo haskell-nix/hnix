@@ -125,16 +125,15 @@ let
      then getDefaultGHC
      else compiler;
 
-  #  2020-05-23: NOTE: Currently HNix-store needs no overlay
-  # hnix-store-src = pkgs.fetchFromGitHub {
-  #   owner = "haskell-nix";
-  #   repo = "hnix-store";
-  #   rev = "0.2.0.0";
-  #   sha256 = "1qf5rn43d46vgqqgmwqdkjh78rfg6bcp4kypq3z7mx46sdpzvb78";
-  # };
+  hnix-store-src = pkgs.fetchFromGitHub {
+    owner = "haskell-nix";
+    repo = "hnix-store";
+    rev = "0.3.0.0";
+    sha256 = "1bj3f417ing38sybhvqpa08x10wh98y65d2nchk1z3mfjllznlgy";
+  };
 
   overlay = pkgs.lib.foldr pkgs.lib.composeExtensions (_: _: {}) [
-    # (import "${hnix-store-src}/overlay.nix")
+    (import "${hnix-store-src}/overlay.nix" haskellPackages)
     (self: super:
       pkgs.lib.optionalAttrs withHoogle {
       ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
@@ -223,6 +222,17 @@ let
     root = packageRoot;
 
     overrides = self: super: {
+      # 2020-12-07 We really want cryptohash-sha512, but it conflicts with
+      # recent versions of base, for seemingly no valid reason.
+      # As the update is slow to happen, just jailbreak here
+      # See https://github.com/haskell-hvr/cryptohash-sha512/pull/3
+      # and https://github.com/haskell-hvr/cryptohash-sha512/pull/5
+      cryptohash-sha512 = pkgs.haskell.lib.unmarkBroken ( pkgs.haskell.lib.doJailbreak super.cryptohash-sha512 );
+
+      # 2020-12-07 hnix-store-remote fails when trying to connect to a real hnix daemon.
+      # probably due to nix sandbox restrictions.
+      hnix-store-remote = pkgs.haskell.lib.dontCheck super.hnix-store-remote;
+
       # 2020-08-04 hnix uses custom LayoutOptions and therefore is
       # likely to be affected by the change in the ribbon width
       # calculation in prettyprinter-1.7.0.
