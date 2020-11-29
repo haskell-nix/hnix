@@ -1,6 +1,7 @@
 
 # Changelog
 
+## [(diff)](https://github.com/haskell-nix/hnix/compare/0.11.0...master#files_bucket) Progress
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.10.1...0.11.0#files_bucket) 0.11.0 (2020-11-02)
 
