@@ -91,7 +91,7 @@
 #   , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
 #   ...
 #   }
-, rev ? "1dc37370c489b610f8b91d7fdd40633163ffbafd"
+, rev ? "24eb3f87fc610f18de7076aee7c5a84ac5591e3e"
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
@@ -223,25 +223,6 @@ let
     root = packageRoot;
 
     overrides = self: super: {
-      # 2020-06-26 Due to a behaviour change in neat-interpolation-0.4, we
-      # require n-i >= 0.4. dontCheck helps us avoid conflicts with
-      # neat-interpolation's test dependencies.
-      neat-interpolation = pkgs.haskell.lib.dontCheck super.neat-interpolation_0_5_1_2;
-
-      # 2020-07-23 hnix uses multiple functions that are unavailable in
-      # data-fix < 0.3.
-      data-fix = haskellPackages.callPackage
-       ({ mkDerivation, base, deepseq, hashable, stdenv }:
-        mkDerivation {
-          pname = "data-fix";
-          version = "0.3.0";
-          sha256 = "9e59b3ed694b5139316093b3767842e60ad4821858459e7cd763e5773dfa99a0";
-          libraryHaskellDepends = [ base deepseq hashable ];
-          homepage = "https://github.com/spell-music/data-fix";
-          description = "Fixpoint data types";
-          license = stdenv.lib.licenses.bsd3;
-        }) {};
-
       # 2020-08-04 hnix uses custom LayoutOptions and therefore is
       # likely to be affected by the change in the ribbon width
       # calculation in prettyprinter-1.7.0.
