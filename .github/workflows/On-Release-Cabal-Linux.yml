@@ -8,7 +8,7 @@ on:
 jobs:
 
   build10:
-    name: GHC
+    name: "GHC"
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -29,10 +29,10 @@ jobs:
       - uses: actions/setup-haskell@v1
         with:
           ghc-version: ${{ matrix.ghc }}
-      - name: Install additional system packages
+      - name: "Install additional system packages"
         run: sudo apt install libsodium-dev
       #  2020-08-01: NOTE: Nix instantiate still needed for HNix tests
-      - name: Install Nix
+      - name: "Install Nix"
         uses: cachix/install-nix-action@v12
       - run: cabal v2-configure --disable-optimization --enable-tests --enable-deterministic
       - run: cabal v2-build
