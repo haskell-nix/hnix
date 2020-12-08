@@ -244,14 +244,15 @@ type StorePathSet = HS.HashSet StorePath
 
 class Monad m => MonadStore m where
 
-    -- | Add a path to the store, with bells and whistles
+    -- | Copy the contents of a local path to the store.  The resulting store
+    -- path is returned.  Note: This does not support yet support the expected
+    -- `filter` function that allows excluding some files.
     addToStore :: StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
     default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
     addToStore a b c d = lift $ addToStore a b c d
 
-    -- | Add a nar (action) to the store
-    -- addToStore' :: StorePathName -> IO Nar -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
-
+    -- | Like addToStore, but the contents written to the output path is a
+    -- regular file containing the given string.
     addTextToStore' :: StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
     default addTextToStore' :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
     addTextToStore' a b c d = lift $ addTextToStore' a b c d
