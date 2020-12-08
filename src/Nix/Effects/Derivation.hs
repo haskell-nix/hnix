@@ -219,10 +219,10 @@ derivationParser = do
       let (hashType, hashMode) = case Text.splitOn ":" rht of
             ["r", ht] -> (ht, Recursive)
             [ht] ->      (ht, Flat)
-            _ -> undefined -- What ?! -- TODO: Throw a proper error
+            _ -> error $ "Unsupported hash type for output of fixed-output derivation in .drv file: " ++ show fullOutputs
       in case Store.mkNamedDigest hashType hash of
         Right digest -> (Just digest, hashMode)
-        Left _err -> undefined -- TODO: Raise a proper parse error.
+        Left err -> error $ "Unsupported hash " ++ show (hashType <> ":" <> hash) ++ "in .drv file: " ++ err
     _ -> (Nothing, Flat)
 
 
@@ -282,7 +282,7 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
       AllOutputs ->
         -- TODO: recursive lookup. See prim_derivationStrict
         -- XXX: When is this really used ?
-        undefined
+        error "Not implemented: derivations depending on a .drv file are not yet supported."
 
 
 -- | Build a derivation in a context collecting string contexts.

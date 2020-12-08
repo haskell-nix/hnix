@@ -111,19 +111,19 @@
 
 let
 
- getDefaultGHC = "ghc${
-    (
-      # Remove '.' from the string 8.8.4 -> 884
-      pkgs.lib.stringAsChars (c: if c == "." then "" else c)
-        # Get default GHC version,
-        (pkgs.lib.getVersion pkgs.haskellPackages.ghc)
-    )
-  }";
+  getDefaultGHC = "ghc${
+      (
+        # Remove '.' from the string 8.8.4 -> 884
+        pkgs.lib.stringAsChars (c: if c == "." then "" else c)
+          # Get default GHC version,
+          (pkgs.lib.getVersion pkgs.haskellPackages.ghc)
+      )
+    }";
 
- compilerPackage =
-   if ((compiler == "") || (compiler == "default"))
-     then getDefaultGHC
-     else compiler;
+  compilerPackage =
+    if ((compiler == "") || (compiler == "default"))
+      then getDefaultGHC
+      else compiler;
 
   #  2020-12-31: NOTE: Remove after `hnix-store 0.4` arrives into Nixpkgs
   hnix-store-src = pkgs.fetchFromGitHub {
@@ -226,13 +226,14 @@ let
       # 2020-12-07 We really want cryptohash-sha512, but it conflicts with
       # recent versions of base, for seemingly no valid reason.
       # As the update is slow to happen, just jailbreak here
-      # See https://github.com/haskell-hvr/cryptohash-sha512/pull/3
-      # and https://github.com/haskell-hvr/cryptohash-sha512/pull/5
+      # See https://github.com/haskell-hvr/cryptohash-sha512 PRs 3, 5 and issue 4
+      # See also https://github.com/NixOS/nixpkgs/pull/106333 for a temporary fix.
       cryptohash-sha512 = pkgs.haskell.lib.unmarkBroken ( pkgs.haskell.lib.doJailbreak super.cryptohash-sha512 );
 
       # 2020-12-07 hnix-store-remote fails when trying to connect to a real hnix daemon.
       # probably due to nix sandbox restrictions.
-      hnix-store-remote = pkgs.haskell.lib.dontCheck super.hnix-store-remote;
+      # Upstream issue @ https://github.com/haskell-nix/hnix-store/issues/80
+      hnix-store-remote = pkgs.haskell.lib.removeConfigureFlag super.hnix-store-remote "-fio-testsuite";
 
       # 2020-08-04 hnix uses custom LayoutOptions and therefore is
       # likely to be affected by the change in the ribbon width
