@@ -4,9 +4,9 @@
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.11.0...master#files_bucket) Progress
 
 * Additional:
-  * [(link)](https://github.com/haskell-nix/hnix/commit/d32a6fbaf3df1c8879d1b19a18f21c031a73e56c) `Nix/Builtins`: `isString` fixed - now it properly just checks the value constuctor, before - it was eagerly coersing value.
-  * [(link)](https://github.com/haskell-nix/hnix/commit/3ac720b5aad94f2feb43f643e5a9dd5a17eccb48) `Nix/Builtins`: Polulated the `builtinsList` with provided functions.
-  * [(link)](https://github.com/haskell-nix/hnix/commit/dc31c5e64f8c7aaaea14cac0134bd47544533e67) `Nix/Effects`: `pathExists` has proper behaviour, now accepts all paths (directories also).
+  * [(link)](https://github.com/haskell-nix/hnix/commit/d32a6fbaf3df1c8879d1b19a18f21c031a73e56c) `Nix/Builtins`: `isString` fixed - It used to return `True` for values coercible to string like derivations and paths. It only accepts string values now.
+  * [(link)](https://github.com/haskell-nix/hnix/commit/53b4db2525a8f074d8c262fa7b66ce97e5820890) `Nix/Builtins`: `substring` fixed - Negative lengths used to capture an empty string. Now they capture the whole rmeainder of the string.
+  * [(link)](https://github.com/haskell-nix/hnix/commit/dc31c5e64f8c7aaaea14cac0134bd47544533e67) `Nix/Effects`: `pathExists` fixed - Now also works with directories.
   * [(link)](https://github.com/haskell-nix/hnix/commit/e2ad934492eeac9881527610e4a1c1cf31ea1115) `Nix/Parser`: `->` is now properly right-associative (was non-associative).
   * [(link)](https://github.com/haskell-nix/hnix/commit/50baea5e1e482be3c4fcc13c9a45b1083243f681) `Nix/Parser`: Nix `assert` parser (`nixAssert` function) now accepts top-level Nix format also (which means also accepts all kinds of statements), before that it accepted only regular Nix expressions.
   * [(link)](https://github.com/haskell-nix/hnix/commit/59698de7185dfae508e5ccea4377a82023c4a0d5) `Nix/Render`: `renderLocation` now also shows/handles location of errors in raw strings.
