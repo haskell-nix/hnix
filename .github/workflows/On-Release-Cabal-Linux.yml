@@ -26,7 +26,7 @@ jobs:
             ~/.cabal/store
             dist-newstyle
           key: ${{ runner.os }}-Cabal-${{ matrix.ghc }}
-      - uses: actions/setup-haskell@v1
+      - uses: haskell/actions/setup@v1
         with:
           ghc-version: ${{ matrix.ghc }}
       - name: "Install additional system packages"
