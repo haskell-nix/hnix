@@ -301,7 +301,7 @@ callFunc fun arg = demand fun $ \fun' -> do
       f arg
     NVBuiltin name f -> do
       span <- currentPos
-      withFrame Info (Calling @m @t name span) (f arg)
+      withFrame Info (Calling @m @(NValue t f m) name span) (f arg)
     s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
       demand f $ (`callFunc` s) >=> (`callFunc` arg)
     x -> throwError $ ErrorCall $ "Attempt to call non-function: " ++ show x
