@@ -226,30 +226,7 @@ let
       # 2020-08-04 hnix uses custom LayoutOptions and therefore is
       # likely to be affected by the change in the ribbon width
       # calculation in prettyprinter-1.7.0.
-      prettyprinter = haskellPackages.callPackage
-       ({ mkDerivation, ansi-wl-pprint, base, base-compat, bytestring
-        , containers, deepseq, doctest, gauge, mtl, pgp-wordlist
-        , QuickCheck, quickcheck-instances, random, tasty, tasty-hunit
-        , tasty-quickcheck, text, transformers, stdenv
-        }:
-        mkDerivation {
-          pname = "prettyprinter";
-          version = "1.7.0";
-          sha256 = "19z04sn0kqxgwcyfn5igjmbxw13xsb3mdhdidkb3kzswib78f6sr";
-          isLibrary = true;
-          isExecutable = true;
-          libraryHaskellDepends = [ base text ];
-          testHaskellDepends = [
-            base bytestring doctest pgp-wordlist QuickCheck
-            quickcheck-instances tasty tasty-hunit tasty-quickcheck text
-          ];
-          benchmarkHaskellDepends = [
-            ansi-wl-pprint base base-compat containers deepseq gauge mtl
-            QuickCheck random text transformers
-          ];
-          description = "A modern, easy to use, well-documented, extensible pretty-printer";
-          license = stdenv.lib.licenses.bsd2;
-        }) {};
+      prettyprinter = super.haskellPackages.prettyprinter_1_7_0;
     };
 
     modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
