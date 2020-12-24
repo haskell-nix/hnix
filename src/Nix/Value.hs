@@ -242,9 +242,9 @@ iterNValue'
   -> r
 iterNValue' k f = f . fmap (\a -> k a (iterNValue' k f))
 
--- | An 'NValueNF' is a fully evaluated value in normal form. An 'NValue f t m' is
+-- | An 'NValueNF' is a fully evaluated value in normal form. An 'NValue t f m' is
 --   a value in head normal form, where only the "top layer" has been
---   evaluated. An action of type 'm (NValue f t m)' is a pending evaluation that
+--   evaluated. An action of type 'm (NValue t f m)' is a pending evaluation that
 --   has yet to be performed. An 't' is either a pending evaluation, or
 --   a value in head normal form. A 'NThunkSet' is a set of mappings from keys
 --   to thunks.
