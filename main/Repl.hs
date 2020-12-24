@@ -124,8 +124,8 @@ main' iniVal = initState iniVal >>= \s -> flip evalStateT s
     | s `Data.List.isPrefixOf` x = m args
     | otherwise = optMatcher s xs args
 
--- Types
 ---------------------------------------------------------------------------------
+-- * Types
 ---------------------------------------------------------------------------------
 
 data IState t f m = IState
@@ -171,8 +171,8 @@ initState mIni = do
 
 type Repl e t f m = HaskelineT (StateT (IState t f m) m)
 
--- Execution
 ---------------------------------------------------------------------------------
+-- * Execution
 ---------------------------------------------------------------------------------
 
 exec
@@ -257,8 +257,8 @@ printValue val = do
       | cfgValues cfg -> liftIO . print . prettyNValueProv =<< removeEffects val
       | otherwise     -> liftIO . print . prettyNValue =<< removeEffects val
 
--- Commands
 ---------------------------------------------------------------------------------
+-- * Commands
 ---------------------------------------------------------------------------------
 
 -- :browse command
@@ -315,8 +315,8 @@ setConfig args = case words args of
       [opt] -> modify (\s -> s { replCfg = helpSetOptionFunction opt (replCfg s) })
       _     -> liftIO $ putStrLn "No such option"
 
--- Interactive Shell
 ---------------------------------------------------------------------------------
+-- * Interactive Shell
 ---------------------------------------------------------------------------------
 
 -- Prefix tab completer

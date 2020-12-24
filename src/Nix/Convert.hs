@@ -61,8 +61,8 @@ Do not add these instances back!
 
 -}
 
-   FromValue
 ---------------------------------------------------------------------------------
+-- * FromValue
 ---------------------------------------------------------------------------------
 
 class FromValue a m v where
@@ -260,8 +260,8 @@ instance ( Convertible e t f m
   fromValueMay = fromValueMay . getDeeper
   fromValue    = fromValue . getDeeper
 
-   ToValue
 ---------------------------------------------------------------------------------
+-- * ToValue
 ---------------------------------------------------------------------------------
 
 class ToValue a m v where

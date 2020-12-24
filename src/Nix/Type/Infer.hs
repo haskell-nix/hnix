@@ -69,8 +69,8 @@ import           Nix.Utils
 import           Nix.Value.Monad
 import           Nix.Var
 
--- Classes
 ---------------------------------------------------------------------------------
+-- * Classes
 ---------------------------------------------------------------------------------
 
 -- | Inference monad
@@ -210,8 +210,8 @@ instance Monoid InferError where
   mempty  = TypeInferenceAborted
   mappend = (<>)
 
--- Inference
 ---------------------------------------------------------------------------------
+-- * Inference
 ---------------------------------------------------------------------------------
 
 -- | Run the inference monad
@@ -591,8 +591,8 @@ normalizeScheme (Forall _ body) = Forall (map snd ord) (normtype body)
     Just x  -> TVar x
     Nothing -> error "type variable not in signature"
 
--- Constraint Solver
 ---------------------------------------------------------------------------------
+-- * Constraint Solver
 ---------------------------------------------------------------------------------
 
 newtype Solver m a = Solver (LogicT (StateT [TypeError] m) a)

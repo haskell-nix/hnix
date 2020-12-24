@@ -21,8 +21,8 @@ import           Nix.Type.Type
 import           Data.Foldable           hiding ( toList )
 import qualified Data.Map                      as Map
 
--- Typing Environment
 ---------------------------------------------------------------------------------
+-- * Typing Environment
 ---------------------------------------------------------------------------------
 
 newtype Env = TypeEnv { types :: Map.Map Name [Scheme] }
