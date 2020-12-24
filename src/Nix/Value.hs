@@ -306,64 +306,63 @@ pattern NVConstant' x <- NValue (extract -> NVConstantF x)
 pattern NVConstant x <- Free (NVConstant' x)
 
 nvConstant' :: Applicative f => NAtom -> NValue' t f m r
-nvConstant' x = NValue (pure (NVConstantF x))
+nvConstant' = NValue . pure . NVConstantF
 nvConstant :: Applicative f => NAtom -> NValue t f m
-nvConstant x = Free (NValue (pure (NVConstantF x)))
+nvConstant = Free . nvConstant'
 
 pattern NVStr' ns <- NValue (extract -> NVStrF ns)
 pattern NVStr ns <- Free (NVStr' ns)
 
 nvStr' :: Applicative f => NixString -> NValue' t f m r
-nvStr' ns = NValue (pure (NVStrF ns))
+nvStr' = NValue . pure . NVStrF
 nvStr :: Applicative f => NixString -> NValue t f m
-nvStr ns = Free (NValue (pure (NVStrF ns)))
+nvStr = Free . nvStr'
 
 pattern NVPath' x <- NValue (extract -> NVPathF x)
 pattern NVPath x <- Free (NVPath' x)
 
 nvPath' :: Applicative f => FilePath -> NValue' t f m r
-nvPath' x = NValue (pure (NVPathF x))
+nvPath' = NValue . pure . NVPathF
 nvPath :: Applicative f => FilePath -> NValue t f m
-nvPath x = Free (NValue (pure (NVPathF x)))
+nvPath = Free . nvPath'
 
 pattern NVList' l <- NValue (extract -> NVListF l)
 pattern NVList l <- Free (NVList' l)
 
 nvList' :: Applicative f => [r] -> NValue' t f m r
-nvList' l = NValue (pure (NVListF l))
+nvList' = NValue . pure . NVListF
 nvList :: Applicative f => [NValue t f m] -> NValue t f m
-nvList l = Free (NValue (pure (NVListF l)))
+nvList = Free . nvList'
 
 pattern NVSet' s x <- NValue (extract -> NVSetF s x)
 pattern NVSet s x <- Free (NVSet' s x)
 
 nvSet' :: Applicative f
        => HashMap Text r -> HashMap Text SourcePos -> NValue' t f m r
-nvSet' s x = NValue (pure (NVSetF s x))
+nvSet' s x = NValue $ pure $ NVSetF s x
 nvSet :: Applicative f
       => HashMap Text (NValue t f m) -> HashMap Text SourcePos -> NValue t f m
-nvSet s x = Free (NValue (pure (NVSetF s x)))
+nvSet s x = Free $ nvSet' s x
 
 pattern NVClosure' x f <- NValue (extract -> NVClosureF x f)
 pattern NVClosure x f <- Free (NVClosure' x f)
 
 nvClosure' :: (Applicative f, Functor m)
            => Params () -> (NValue t f m -> m r) -> NValue' t f m r
-nvClosure' x f = NValue (pure (NVClosureF x f))
+nvClosure' x f = NValue $ pure $ NVClosureF x f
 nvClosure :: (Applicative f, Functor m)
           => Params () -> (NValue t f m -> m (NValue t f m)) -> NValue t f m
-nvClosure x f = Free (NValue (pure (NVClosureF x f)))
+nvClosure x f = Free $ nvClosure' x f
 
 pattern NVBuiltin' name f <- NValue (extract -> NVBuiltinF name f)
 pattern NVBuiltin name f <- Free (NVBuiltin' name f)
 
 nvBuiltin' :: (Applicative f, Functor m)
            => String -> (NValue t f m -> m r) -> NValue' t f m r
-nvBuiltin' name f = NValue (pure (NVBuiltinF name f))
+nvBuiltin' name f = NValue $ pure $ NVBuiltinF name f
 nvBuiltin :: (Applicative f, Functor m)
           => String -> (NValue t f m -> m (NValue t f m)) -> NValue t f m
-nvBuiltin name f =
-  Free (NValue (pure (NVBuiltinF name f)))
+nvBuiltin name f = Free $ nvBuiltin' name f
 
 builtin
   :: forall m f t
