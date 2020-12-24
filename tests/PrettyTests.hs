@@ -32,7 +32,7 @@ case_paths = do
 tests :: TestTree
 tests = $testGroupGenerator
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 assertPretty :: NExpr -> String -> Assertion
 assertPretty e s =
   assertEqual ("When pretty-printing " ++ show e) s . show $ prettyNix e

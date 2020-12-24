@@ -361,7 +361,7 @@ in null|]
 tests :: TestTree
 tests = $testGroupGenerator
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 assertParseText :: Text -> NExpr -> Assertion
 assertParseText str expected = case parseNixText str of

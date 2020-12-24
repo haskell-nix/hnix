@@ -85,7 +85,7 @@ instance (MonadFix1T t m, MonadStore m) => MonadStore (Fix1T t m) where
   addPath' = lift . addPath'
   toFile_' n = lift . toFile_' n
 
-{------------------------------------------------------------------------}
+---------------------------------------------------------------------------------
 
 newtype StdCited m a = StdCited
   { _stdCited :: Cited (StdThunk m) (StdCited m) m a }
