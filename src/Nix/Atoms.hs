@@ -45,9 +45,9 @@ atomText :: NAtom -> Text
 atomText (NURI   t) = t
 atomText (NInt   i) = pack (show i)
 atomText (NFloat f) = pack (showNixFloat f)
-  where
-    showNixFloat x
-      | x `mod'` 1 /= 0 = show x
-      | otherwise       = show (truncate x :: Int)
+ where
+  showNixFloat x
+    | x `mod'` 1 /= 0 = show x
+    | otherwise       = show (truncate x :: Int)
 atomText (NBool  b) = if b then "true" else "false"
 atomText NNull      = "null"

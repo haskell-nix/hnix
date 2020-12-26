@@ -219,7 +219,7 @@ instance (MonadInstantiate r, MonadInstantiate m) => MonadInstantiate (StandardT
 instance (MonadExec r, MonadExec m) => MonadExec (StandardTF r m)
 instance (MonadIntrospect r, MonadIntrospect m) => MonadIntrospect (StandardTF r m)
 
-{------------------------------------------------------------------------}
+---------------------------------------------------------------------------------
 
 type StandardT m = Fix1T StandardTF m
 

@@ -8,7 +8,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -16,6 +15,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE InstanceSigs #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
@@ -27,8 +27,8 @@
 module Nix.Expr.Types where
 
 #ifdef MIN_VERSION_serialise
+import qualified Codec.Serialise                ( Serialise(decode, encode) )  -- For instance implementation function disamburgation
 import           Codec.Serialise                ( Serialise )
-import qualified Codec.Serialise               as Ser
 #endif
 import           Control.Applicative
 import           Control.DeepSeq
@@ -348,12 +348,12 @@ data NKeyName r
 instance Serialise r => Serialise (NKeyName r)
 
 instance Serialise Pos where
-  encode x = Ser.encode (unPos x)
-  decode = mkPos <$> Ser.decode
+  encode x = Codec.Serialise.encode (unPos x)
+  decode = mkPos <$> Codec.Serialise.decode
 
 instance Serialise SourcePos where
-  encode (SourcePos f l c) = Ser.encode f <> Ser.encode l <> Ser.encode c
-  decode = SourcePos <$> Ser.decode <*> Ser.decode <*> Ser.decode
+  encode (SourcePos f l c) = Codec.Serialise.encode f <> Codec.Serialise.encode l <> Codec.Serialise.encode c
+  decode = SourcePos <$> Codec.Serialise.decode <*> Codec.Serialise.decode <*> Codec.Serialise.decode
 #endif
 
 instance Hashable Pos where
