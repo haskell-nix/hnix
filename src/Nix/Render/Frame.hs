@@ -10,6 +10,8 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
+
+-- | Code for rendering/representation of the messages packaged with their context (Frames).
 module Nix.Render.Frame where
 
 import           Control.Monad.Reader
@@ -152,8 +154,7 @@ renderExpr _level longLabel shortLabel e@(Fix (Compose (Ann _ x))) = do
           | otherwise = prettyNix (Fix (Fix (NSym "<?>") <$ x))
   pure $ if verbose opts >= Chatty
     then
-      vsep
-        $ [pretty (longLabel ++ ":\n>>>>>>>>"), indent 2 rendered, "<<<<<<<<"]
+      vsep [pretty (longLabel ++ ":\n>>>>>>>>"), indent 2 rendered, "<<<<<<<<"]
     else pretty shortLabel <> fillSep [": ", rendered]
 
 renderValueFrame

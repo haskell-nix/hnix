@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
+-- | Code that configures presentation parser for the CLI options
 module Nix.Options.Parser where
 
 import           Control.Arrow                  ( second )

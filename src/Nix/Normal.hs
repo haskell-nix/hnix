@@ -9,6 +9,9 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
+-- | Code for normalization (reduction into a normal form) of Nix expressions.
+-- Nix language allows recursion, so some expressions do not converge.
+-- And so do not converge into a normal form.
 module Nix.Normal where
 
 import           Control.Monad
@@ -117,7 +120,7 @@ removeEffects
 removeEffects =
   iterNValueM
     id
-    (flip queryM (pure opaque))
+    (`queryM` pure opaque)
     (fmap Free . sequenceNValue' id)
 
 opaque :: Applicative f => NValue t f m

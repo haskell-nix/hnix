@@ -9,6 +9,7 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 
+-- | Main module for parsing Nix expressions.
 module Nix.Parser
   ( parseNixFile
   , parseNixFileLoc

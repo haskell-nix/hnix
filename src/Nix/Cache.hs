@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 
+-- | Reading and writing Nix cache files
 module Nix.Cache where
 
 import qualified Data.ByteString.Lazy          as BS
@@ -38,7 +39,7 @@ readCache path = do
 writeCache :: FilePath -> NExprLoc -> IO ()
 writeCache path expr =
 #ifdef USE_COMPACT
-    C.writeCompact path =<< C.compact expr
+  C.writeCompact path =<< C.compact expr
 #else
 #ifdef MIN_VERSION_serialise
   BS.writeFile path (S.serialise expr)
