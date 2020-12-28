@@ -128,5 +128,5 @@ sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unP
             | otherwise         = "    " ++ n
       ls' = zipWith (<+>)
                     (map (pretty . pad) nums')
-                    (map ((<+>) "| ") ls)
+                    (map ("| " <+>) ls)
     pure $ vsep $ ls' ++ [msg]
