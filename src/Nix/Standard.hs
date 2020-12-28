@@ -85,7 +85,7 @@ instance (MonadFix1T t m, MonadStore m) => MonadStore (Fix1T t m) where
   addPath' = lift . addPath'
   toFile_' n = lift . toFile_' n
 
-{------------------------------------------------------------------------}
+---------------------------------------------------------------------------------
 
 newtype StdCited m a = StdCited
   { _stdCited :: Cited (StdThunk m) (StdCited m) m a }
@@ -219,7 +219,7 @@ instance (MonadInstantiate r, MonadInstantiate m) => MonadInstantiate (StandardT
 instance (MonadExec r, MonadExec m) => MonadExec (StandardTF r m)
 instance (MonadIntrospect r, MonadIntrospect m) => MonadIntrospect (StandardTF r m)
 
-{------------------------------------------------------------------------}
+---------------------------------------------------------------------------------
 
 type StandardT m = Fix1T StandardTF m
 

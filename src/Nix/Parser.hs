@@ -90,7 +90,7 @@ infixl 3 <+>
 (<+>) :: MonadPlus m => m a -> m a -> m a
 (<+>) = mplus
 
---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 nixExpr :: Parser NExprLoc
 nixExpr = makeExprParser nixTerm $ map (map snd) (nixOperators nixSelector)

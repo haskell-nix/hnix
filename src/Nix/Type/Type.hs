@@ -2,7 +2,9 @@ module Nix.Type.Type where
 
 import qualified Data.HashMap.Lazy             as M
 import           Data.Text                      ( Text )
-import           Nix.Utils
+import           Nix.Utils                      ( AttrSet )
+
+-- | Hindrey-Milner type interface
 
 newtype TVar = TV String
   deriving (Show, Eq, Ord)

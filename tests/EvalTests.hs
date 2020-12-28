@@ -429,7 +429,7 @@ case_concat_thunk_left =
 case_concat_thunk_rigth =
   constantEqualText "[1 2 3]" "[1] ++ builtins.tail [1 2 3]"
 
------------------------
+---------------------------------------------------------------------------------
 
 tests :: TestTree
 tests = $testGroupGenerator
