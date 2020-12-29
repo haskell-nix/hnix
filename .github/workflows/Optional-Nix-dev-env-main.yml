@@ -55,9 +55,10 @@ env:
 
 
 jobs:
+  #  2020-12-29: NOTE: Make builds strict again!
 
   build10:
-    name: "Default Nixpkgs GHC (8.8), strict build"
+    name: "Default Nixpkgs GHC (8.8)"
     runs-on: ubuntu-latest
     #  2020-08-01: NOTE: Due to Nixpkgs brittleness to not block project development Nixpkgs made optional, see commit message for more info
     continue-on-error: true
@@ -78,7 +79,6 @@ jobs:
     - name: "Determined Nix-build"
       env:
         compiler: "default"
-        buildStrictly: "true"
       run: ./build.sh
 
 
