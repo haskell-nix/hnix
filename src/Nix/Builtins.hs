@@ -1198,6 +1198,7 @@ listToAttrs = fromValue @[NValue t f m] >=> \l ->
 -- prim_hashString from nix/src/libexpr/primops.cc
 -- fail if context in the algo arg
 -- propagate context from the s arg
+-- | The result coming out of hashString is base16 encoded
 hashString
   :: forall e t f m. MonadNix e t f m => NixString -> NixString -> Prim m NixString
 hashString nsAlgo ns = Prim $ do
@@ -1233,10 +1234,16 @@ placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
     $ principledMakeNixStringWithoutContext
     $ Text.cons '/'
     $ Base32.encode
-    $ fst             -- The result coming out of hashString is base16 encoded
-    $ Base16.decode
-    $ encodeUtf8
-    $ principledStringIgnoreContext h
+    $ case Base16.decode (text h) of -- The result coming out of hashString is base16 encoded
+#if MIN_VERSION_base16_bytestring(1,0,0)
+      Right d -> d
+      Left e -> error $ "Couldn't Base16 decode the text: '" <> show (text h) <> "'.\nThe Left error content: '" <> e <> "'."
+#else
+      (d, "") -> d
+      (_, e) -> error $ "Couldn't Base16 decode the text: '" <> show (text h) <> "'.\nUndecodable remainder: '" <> show e <> "'."
+#endif
+   where
+    text h = encodeUtf8 $ principledStringIgnoreContext h
 
 absolutePathFromValue :: MonadNix e t f m => NValue t f m -> m FilePath
 absolutePathFromValue = \case
