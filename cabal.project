@@ -1,2 +1,8 @@
 packages:
   ./hnix.cabal
+
+source-repository-package
+    type: git
+    location: https://github.com/Anton-Latukha/cryptohash-sha512
+    tag: 48f827eb09a73ad5ee43dd397a06ebdbf51ab856
+
