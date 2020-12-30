@@ -128,8 +128,8 @@ let
   hnix-store-src = pkgs.fetchFromGitHub {
     owner = "haskell-nix";
     repo = "hnix-store";
-    rev = "0.3.0.0";
-    sha256 = "1bj3f417ing38sybhvqpa08x10wh98y65d2nchk1z3mfjllznlgy";
+    rev = "9826ddbce330f90939eebabc2f413e4f2c7ee7c8";
+    sha256 = "1pv0k15pdh50qhjww9jfjf34avd94dgy9wpy4xfybzl1qwi5d83q";
   };
 
   overlay = pkgs.lib.foldr pkgs.lib.composeExtensions (_: _: {}) [
