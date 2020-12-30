@@ -1,17 +1,51 @@
 
 # Changelog
 
-## [(diff)](https://github.com/haskell-nix/hnix/compare/0.11.0...master#files_bucket) Progress
+## [(diff)](https://github.com/haskell-nix/hnix/compare/0.12.0...master#files_bucket) Progress
+
+
+## [(diff)](https://github.com/haskell-nix/hnix/compare/0.11.1...0.12.0#files_bucket) 0.12.0 (2020-12-31)
+
+* Introduction:
+  * New module `Nix.Effects.Derivation`.
+  * Operations on derivations:
+    * old got principled implementations.
+    * also new operations got introduced.
+  * Implementation of the `derivationStrict` primOp.
+
+* Breaking:
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects`: **class** `MonadStore` got principled implementation.
+    * `addPath'` got principled into `addToStore`.
+    * `toFile_` got principled into `addTextToStore'`.
+    * For help & easy migration you may use `addPath` & `toFile_` `addTextToStore` standalone functions in the module.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects.Basic`: `defaultDerivationStrict` got reimplemented & moved into `Nix.Effects.Derivation`.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Standard`: instance for `MonadStore (Fix1T t m)` got principled accoding to class `MonadStore` changes.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Fresh.Basic`: instance for `MonadStore (StdIdT m)` got principled.
+
+* Additional:
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) **New module `Nix.Effects.Derivation`**: [HNix(0.12.0):Nix.Effects.Derivation documentation](https://hackage.haskell.org/package/hnix-0.12.0/docs/Nix-Effects-Derivation.html).
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/9bcfbbe88ff0bd8d803296193ee1d8603dc5289e) `Nix.Convert`: Principled `NVPath -> NixString` coercion.
+    * In a form of principled `instance FromValue NixString m (NValue' t f m (NValue t f m))`.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/a8e6d28fdb98a1c34f425c8395338fdabe96becc) `Nix.String`: Allow custom computations inside string contexts.
+    * By providing `runWithStringContext{T,}'` methods into the API.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/e45f7632c51a9657f6e8d54c39fd4d21c466d85f) Includded support for new `base16-bytestring`, which advertices 2x-4x speed increase of its operations.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `HNix / Nix`: The library now also uses `hnix-store-remote`.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects`: `addPath` & `toFile_` standalone functions got principled implementation through the internal use of the new `MonadStore` type class implementation.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects`: added `addTextToStore`, `parseStoreResult` implementations.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects`: added type synonyms `{RecursiveFlag, RepairFlag, StorePathName, FilePathFilter, StorePathSet}`.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/760) `Nix.Exec`: Fixed the rendering of internal `Frames`.
+    * Which is an internal mechanism of a project to passing around messages with their context, still to be used internally).
+
 
 ### [(diff)](https://github.com/haskell-nix/hnix/compare/0.11.0...0.11.1#files_bucket) 0.11.1 (2020-12-09)
 
 * Additional:
-  * [(link)](https://github.com/haskell-nix/hnix/commit/d32a6fbaf3df1c8879d1b19a18f21c031a73e56c) `Nix/Builtins`: `isString` fixed - It used to return `True` for values coercible to string like derivations and paths. It only accepts string values now.
-  * [(link)](https://github.com/haskell-nix/hnix/commit/53b4db2525a8f074d8c262fa7b66ce97e5820890) `Nix/Builtins`: `substring` fixed - Negative lengths used to capture an empty string. Now they capture the whole rmeainder of the string.
-  * [(link)](https://github.com/haskell-nix/hnix/commit/dc31c5e64f8c7aaaea14cac0134bd47544533e67) `Nix/Effects`: `pathExists` fixed - Now also works with directories.
-  * [(link)](https://github.com/haskell-nix/hnix/commit/e2ad934492eeac9881527610e4a1c1cf31ea1115) `Nix/Parser`: `->` is now properly right-associative (was non-associative).
-  * [(link)](https://github.com/haskell-nix/hnix/commit/50baea5e1e482be3c4fcc13c9a45b1083243f681) `Nix/Parser`: Nix `assert` parser (`nixAssert` function) now accepts top-level Nix format also (which means also accepts all kinds of statements), before that it accepted only regular Nix expressions.
-  * [(link)](https://github.com/haskell-nix/hnix/commit/59698de7185dfae508e5ccea4377a82023c4a0d5) `Nix/Render`: `renderLocation` now also shows/handles location of errors in raw strings.
+  * [(link)](https://github.com/haskell-nix/hnix/commit/d32a6fbaf3df1c8879d1b19a18f21c031a73e56c) `Nix.Builtins`: `isString` fixed - It used to return `True` for values coercible to string like derivations and paths. It only accepts string values now.
+  * [(link)](https://github.com/haskell-nix/hnix/commit/53b4db2525a8f074d8c262fa7b66ce97e5820890) `Nix.Builtins`: `substring` fixed - Negative lengths used to capture an empty string. Now they capture the whole rmeainder of the string.
+  * [(link)](https://github.com/haskell-nix/hnix/commit/dc31c5e64f8c7aaaea14cac0134bd47544533e67) `Nix.Effects`: `pathExists` fixed - Now also works with directories.
+  * [(link)](https://github.com/haskell-nix/hnix/commit/e2ad934492eeac9881527610e4a1c1cf31ea1115) `Nix.Parser`: `->` is now properly right-associative (was non-associative).
+  * [(link)](https://github.com/haskell-nix/hnix/commit/50baea5e1e482be3c4fcc13c9a45b1083243f681) `Nix.Parser`: Nix `assert` parser (`nixAssert` function) now accepts top-level Nix format also (which means also accepts all kinds of statements), before that it accepted only regular Nix expressions.
+  * [(link)](https://github.com/haskell-nix/hnix/commit/59698de7185dfae508e5ccea4377a82023c4a0d5) `Nix.Render`: `renderLocation` now also shows/handles location of errors in raw strings.
 
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.10.1...0.11.0#files_bucket) 0.11.0 (2020-11-02)
