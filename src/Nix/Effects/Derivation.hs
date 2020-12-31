@@ -112,7 +112,7 @@ hashDerivationModulo (Derivation {
       $  "fixed:out"
       <> (if hashMode == Recursive then ":r" else "")
       <> ":" <> (Store.algoName @hashType)
-      <> ":" <> (Store.encodeBase16 digest)
+      <> ":" <> (Store.encodeInBase Store.Base16 digest)
       <> ":" <> path
     outputsList -> throwError $ ErrorCall $ "This is weird. A fixed output drv should only have one output named 'out'. Got " ++ show outputsList
 hashDerivationModulo drv@(Derivation {inputs = (inputSrcs, inputDrvs)}) = do
@@ -122,7 +122,7 @@ hashDerivationModulo drv@(Derivation {inputs = (inputSrcs, inputDrvs)}) = do
       Just hash -> return (hash, outs)
       Nothing -> do
         drv' <- readDerivation $ Text.unpack path
-        hash <- Store.encodeBase16 <$> hashDerivationModulo drv'
+        hash <- Store.encodeInBase Store.Base16 <$> hashDerivationModulo drv'
         return (hash, outs)
     )
   return $ Store.hash @'Store.SHA256 $ Text.encodeUtf8 $ unparseDrv (drv {inputs = (inputSrcs, inputsModulo)})
@@ -135,7 +135,7 @@ unparseDrv (Derivation {..}) = Text.append "Derive" $ parens
         case mFixed of
           Nothing -> parens [s outputName, s outputPath, s "", s ""]
           Just (Store.SomeDigest (digest :: Store.Digest hashType)) ->
-            parens [s outputName, s outputPath, s $ prefix <> Store.algoName @hashType, s $ Store.encodeBase16 digest]
+            parens [s outputName, s outputPath, s $ prefix <> Store.algoName @hashType, s $ Store.encodeInBase Store.Base16 digest]
         )
     , -- inputDrvs
       list $ flip map (Map.toList $ snd inputs) (\(path, outs) ->
@@ -257,7 +257,7 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
     drvPath <- pathToText <$> writeDerivation drv'
 
     -- Memoize here, as it may be our last chance in case of readonly stores.
-    drvHash <- Store.encodeBase16 <$> hashDerivationModulo drv'
+    drvHash <- Store.encodeInBase Store.Base16 <$> hashDerivationModulo drv'
     modify (\(a, b) -> (a, MS.insert drvPath drvHash b))
 
     let outputsWithContext = Map.mapWithKey (\out path -> principledMakeNixStringWithSingletonContext path (StringContext drvPath (DerivationOutput out))) (outputs drv')
