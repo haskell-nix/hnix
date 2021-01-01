@@ -30,6 +30,8 @@ import           Control.Monad.Reader
 import           Control.Monad.Ref
 import           Control.Monad.State
 import           Data.HashMap.Lazy              ( HashMap )
+import qualified Data.HashMap.Strict
+import           Data.Text                      ( Text )
 import           Data.Typeable
 import           GHC.Generics
 import           Nix.Cited
@@ -37,6 +39,7 @@ import           Nix.Cited.Basic
 import           Nix.Context
 import           Nix.Effects
 import           Nix.Effects.Basic
+import           Nix.Effects.Derivation
 import           Nix.Expr.Types.Annotated
 import           Nix.Fresh
 import           Nix.Fresh.Basic
@@ -82,8 +85,8 @@ instance (MonadFix1T t m, MonadAtomicRef m) => MonadAtomicRef (Fix1T t m) where
 instance (MonadFix1T t m, MonadFail (Fix1T t m), MonadFile m) => MonadFile (Fix1T t m)
 
 instance (MonadFix1T t m, MonadStore m) => MonadStore (Fix1T t m) where
-  addPath' = lift . addPath'
-  toFile_' n = lift . toFile_' n
+  addToStore a b c d = lift $ addToStore a b c d
+  addTextToStore' a b c d = lift $ addTextToStore' a b c d
 
 ---------------------------------------------------------------------------------
 
@@ -138,7 +141,7 @@ instance ( MonadFix m
          , Typeable m
          , Scoped (StdValue m) m
          , MonadReader (Context m (StdValue m)) m
-         , MonadState (HashMap FilePath NExprLoc) m
+         , MonadState (HashMap FilePath NExprLoc, Data.HashMap.Strict.HashMap Text Text) m
          , MonadDataErrorContext (StdThunk m) (StdCited m) m
          , MonadThunk (StdThunk m) m (StdValue m)
          , MonadValue (StdValue m) m
@@ -191,7 +194,7 @@ instance ( MonadAtomicRef m
 
 newtype StandardTF r m a
   = StandardTF (ReaderT (Context r (StdValue r))
-                        (StateT (HashMap FilePath NExprLoc) m) a)
+                        (StateT (HashMap FilePath NExprLoc, HashMap Text Text) m) a)
   deriving
     ( Functor
     , Applicative
@@ -205,7 +208,7 @@ newtype StandardTF r m a
     , MonadThrow
     , MonadMask
     , MonadReader (Context r (StdValue r))
-    , MonadState (HashMap FilePath NExprLoc)
+    , MonadState (HashMap FilePath NExprLoc, HashMap Text Text)
     )
 
 instance MonadTrans (StandardTF r) where
@@ -232,7 +235,7 @@ instance MonadThunkId m => MonadThunkId (Fix1T StandardTF m) where
 mkStandardT
   :: ReaderT
        (Context (StandardT m) (StdValue (StandardT m)))
-       (StateT (HashMap FilePath NExprLoc) m)
+       (StateT (HashMap FilePath NExprLoc, Data.HashMap.Strict.HashMap Text Text) m)
        a
   -> StandardT m a
 mkStandardT = Fix1T . StandardTF
@@ -241,7 +244,7 @@ runStandardT
   :: StandardT m a
   -> ReaderT
        (Context (StandardT m) (StdValue (StandardT m)))
-       (StateT (HashMap FilePath NExprLoc) m)
+       (StateT (HashMap FilePath NExprLoc, Data.HashMap.Strict.HashMap Text Text) m)
        a
 runStandardT (Fix1T (StandardTF m)) = m
 

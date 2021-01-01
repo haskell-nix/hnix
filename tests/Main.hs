@@ -95,7 +95,7 @@ main = do
   prettyTestsEnv      <- lookupEnv "PRETTY_TESTS"
 
   pwd <- getCurrentDirectory
-  setEnv "NIX_REMOTE" ("local?root=" ++ pwd ++ "/")
+  setEnv "NIX_REMOTE" (pwd ++ "/real-store")
   setEnv "NIX_DATA_DIR" (pwd ++ "/data")
 
   defaultMain $ testGroup "hnix" $

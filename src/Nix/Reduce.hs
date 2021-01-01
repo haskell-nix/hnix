@@ -42,6 +42,7 @@ import           Control.Monad.State.Strict
 import           Data.Fix                       ( Fix(..), foldFix, foldFixM )
 import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
+import qualified Data.HashMap.Strict           as MS
 import           Data.IORef
 import           Data.List.NonEmpty             ( NonEmpty(..) )
 import qualified Data.List.NonEmpty            as NE
@@ -66,11 +67,11 @@ import           System.FilePath
 
 newtype Reducer m a = Reducer
     { runReducer :: ReaderT (Maybe FilePath, Scopes (Reducer m) NExprLoc)
-                           (StateT (HashMap FilePath NExprLoc) m) a }
+                           (StateT (HashMap FilePath NExprLoc, MS.HashMap Text Text) m) a }
     deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
               MonadFix, MonadIO, MonadFail,
               MonadReader (Maybe FilePath, Scopes (Reducer m) NExprLoc),
-              MonadState (HashMap FilePath NExprLoc))
+              MonadState (HashMap FilePath NExprLoc, MS.HashMap Text Text))
 
 staticImport
   :: forall m
@@ -78,7 +79,7 @@ staticImport
      , Scoped NExprLoc m
      , MonadFail m
      , MonadReader (Maybe FilePath, Scopes m NExprLoc) m
-     , MonadState (HashMap FilePath NExprLoc) m
+     , MonadState (HashMap FilePath NExprLoc, HashMap Text Text) m
      )
   => SrcSpan
   -> FilePath
@@ -89,7 +90,7 @@ staticImport pann path = do
   path' <- liftIO $ pathToDefaultNixFile =<< canonicalizePath
     (maybe path (\p -> takeDirectory p </> path) mfile)
 
-  imports <- get
+  imports <- gets fst
   case M.lookup path' imports of
     Just expr -> pure expr
     Nothing   -> go path'
@@ -108,10 +109,10 @@ staticImport pann path = do
                           (Fix (NLiteralPath_ pann path))
                           pos
           x' = Fix (NLet_ span [cur] x)
-        modify (M.insert path x')
+        modify (\(a, b) -> (M.insert path x' a, b))
         local (const (Just path, emptyScopes @m @NExprLoc)) $ do
           x'' <- foldFix reduce x'
-          modify (M.insert path x'')
+          modify (\(a, b) -> (M.insert path x'' a, b))
           return x''
 
 -- gatherNames :: NExprLoc -> HashSet VarName
@@ -122,7 +123,7 @@ staticImport pann path = do
 reduceExpr
   :: (MonadIO m, MonadFail m) => Maybe FilePath -> NExprLoc -> m NExprLoc
 reduceExpr mpath expr =
-  (`evalStateT` M.empty)
+  (`evalStateT` (M.empty, MS.empty))
     . (`runReaderT` (mpath, emptyScopes))
     . runReducer
     $ foldFix reduce expr
@@ -133,7 +134,7 @@ reduce
      , Scoped NExprLoc m
      , MonadFail m
      , MonadReader (Maybe FilePath, Scopes m NExprLoc) m
-     , MonadState (HashMap FilePath NExprLoc) m
+     , MonadState (HashMap FilePath NExprLoc, MS.HashMap Text Text) m
      )
   => NExprLocF (m NExprLoc)
   -> m NExprLoc

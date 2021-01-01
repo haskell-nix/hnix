@@ -11,9 +11,19 @@ license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
 cabal-version:  >= 1.10
+data-dir:       data/
+data-files:
+    nix/corepkgs/buildenv.nix
+    nix/corepkgs/unpack-channel.nix
+    nix/corepkgs/derivation.nix
+    nix/corepkgs/fetchurl.nix
+    nix/corepkgs/imported-drv-to-derivation.nix
 extra-source-files:
     data/nix/corepkgs/buildenv.nix
+    data/nix/corepkgs/unpack-channel.nix
     data/nix/corepkgs/derivation.nix
+    data/nix/corepkgs/fetchurl.nix
+    data/nix/corepkgs/imported-drv-to-derivation.nix
     data/nix/tests/lang/binary-data
     data/nix/tests/lang/data
     data/nix/tests/lang/dir1/a.nix
@@ -341,6 +351,7 @@ library
       Nix.Convert
       Nix.Effects
       Nix.Effects.Basic
+      Nix.Effects.Derivation
       Nix.Eval
       Nix.Exec
       Nix.Expr
@@ -401,8 +412,9 @@ library
     , gitrev >= 1.1.0 && < 1.4
     , hashable >= 1.2.5 && < 1.4
     , hashing >= 0.1.0 && < 0.2
-    , hnix-store-core >= 0.1.0 && < 0.3
-    , http-client >= 0.5.14 && < 0.6 || >= 0.6.4 && < 0.8
+    , hnix-store-core >= 0.4.0 && < 0.5
+    , hnix-store-remote >= 0.4.0 && < 0.5
+    , http-client >= 0.5.14 && < 0.6 || >= 0.6.4 && < 0.7
     , http-client-tls >= 0.3.5 && < 0.4
     , http-types >= 0.12.2 && < 0.13
     , lens-family >= 1.2.2 && < 2.2

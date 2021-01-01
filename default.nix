@@ -91,7 +91,7 @@
 #   , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
 #   ...
 #   }
-, rev ? "24eb3f87fc610f18de7076aee7c5a84ac5591e3e"
+, rev ? "8ba15f6383c74e981d8038fa19cc77ed0c53ba22"
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
@@ -111,30 +111,30 @@
 
 let
 
- getDefaultGHC = "ghc${
-    (
-      # Remove '.' from the string 8.8.4 -> 884
-      pkgs.lib.stringAsChars (c: if c == "." then "" else c)
-        # Get default GHC version,
-        (pkgs.lib.getVersion pkgs.haskellPackages.ghc)
-    )
-  }";
+  getDefaultGHC = "ghc${
+      (
+        # Remove '.' from the string 8.8.4 -> 884
+        pkgs.lib.stringAsChars (c: if c == "." then "" else c)
+          # Get default GHC version,
+          (pkgs.lib.getVersion pkgs.haskellPackages.ghc)
+      )
+    }";
 
- compilerPackage =
-   if ((compiler == "") || (compiler == "default"))
-     then getDefaultGHC
-     else compiler;
+  compilerPackage =
+    if ((compiler == "") || (compiler == "default"))
+      then getDefaultGHC
+      else compiler;
 
-  #  2020-05-23: NOTE: Currently HNix-store needs no overlay
-  # hnix-store-src = pkgs.fetchFromGitHub {
-  #   owner = "haskell-nix";
-  #   repo = "hnix-store";
-  #   rev = "0.2.0.0";
-  #   sha256 = "1qf5rn43d46vgqqgmwqdkjh78rfg6bcp4kypq3z7mx46sdpzvb78";
-  # };
+  #  2020-12-31: NOTE: Remove after `hnix-store 0.4` arrives into Nixpkgs
+  hnix-store-src = pkgs.fetchFromGitHub {
+    owner = "haskell-nix";
+    repo = "hnix-store";
+    rev = "fd09d29b8bef4904058f033d693e7d928a4a92dc";
+    sha256 = "0fxig1ckzknm5g19jzg7rrcpz7ssn4iiv9bs9hff9gfy3ciq4zrs";
+  };
 
   overlay = pkgs.lib.foldr pkgs.lib.composeExtensions (_: _: {}) [
-    # (import "${hnix-store-src}/overlay.nix")
+    (import "${hnix-store-src}/overlay.nix" pkgs pkgs.haskell.lib)
     (self: super:
       pkgs.lib.optionalAttrs withHoogle {
       ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
@@ -223,6 +223,18 @@ let
     root = packageRoot;
 
     overrides = self: super: {
+      # 2020-12-07 We really want cryptohash-sha512, but it conflicts with
+      # recent versions of base, for seemingly no valid reason.
+      # As the update is slow to happen, just jailbreak here
+      # See https://github.com/haskell-hvr/cryptohash-sha512 PRs 3, 5 and issue 4
+      # See also https://github.com/NixOS/nixpkgs/pull/106333 for a temporary fix.
+      cryptohash-sha512 = pkgs.haskell.lib.unmarkBroken ( pkgs.haskell.lib.doJailbreak super.cryptohash-sha512 );
+
+      # 2020-12-07 hnix-store-remote fails when trying to connect to a real hnix daemon.
+      # probably due to nix sandbox restrictions.
+      # Upstream issue @ https://github.com/haskell-nix/hnix-store/issues/80
+      hnix-store-remote = pkgs.haskell.lib.removeConfigureFlag super.hnix-store-remote "-fio-testsuite";
+
       # 2020-08-04 hnix uses custom LayoutOptions and therefore is
       # likely to be affected by the change in the ribbon width
       # calculation in prettyprinter-1.7.0.
