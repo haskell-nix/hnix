@@ -11,13 +11,12 @@ license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
 cabal-version:  >= 1.10
-data-dir:       data/
 data-files:
-    nix/corepkgs/buildenv.nix
-    nix/corepkgs/unpack-channel.nix
-    nix/corepkgs/derivation.nix
-    nix/corepkgs/fetchurl.nix
-    nix/corepkgs/imported-drv-to-derivation.nix
+    data/nix/corepkgs/buildenv.nix
+    data/nix/corepkgs/unpack-channel.nix
+    data/nix/corepkgs/derivation.nix
+    data/nix/corepkgs/fetchurl.nix
+    data/nix/corepkgs/imported-drv-to-derivation.nix
 extra-source-files:
     data/nix/corepkgs/buildenv.nix
     data/nix/corepkgs/unpack-channel.nix
