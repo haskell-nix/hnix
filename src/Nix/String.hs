@@ -132,6 +132,8 @@ principledStringMappend :: NixString -> NixString -> NixString
 principledStringMappend (NixString s1 t1) (NixString s2 t2) =
   NixString (s1 <> s2) (t1 <> t2)
 
+--  2021-01-02: NOTE: This function is ERRADICATED from the source code.
+-- ERRADICATE it from the API.
 -- | Combine two NixStrings using mappend
 hackyStringMappend :: NixString -> NixString -> NixString
 hackyStringMappend (NixString s1 t1) (NixString s2 t2) =
@@ -146,9 +148,11 @@ principledIntercalateNixString sep nss  = NixString contents ctx
   contents = Text.intercalate (nsContents sep) (map nsContents nss)
   ctx      = S.unions (nsContext sep : map nsContext nss)
 
+--  2021-01-02: NOTE: This function is ERRADICATED from the source code.
+-- ERRADICATE it from the API.
 -- | Combine NixStrings using mconcat
 hackyStringMConcat :: [NixString] -> NixString
-hackyStringMConcat = foldr hackyStringMappend (NixString mempty mempty)
+hackyStringMConcat = foldr principledStringMappend (NixString mempty mempty)
 
 -- | Empty string with empty context.
 principledStringMempty :: NixString
