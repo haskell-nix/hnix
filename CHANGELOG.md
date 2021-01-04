@@ -29,12 +29,13 @@
   * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/a8e6d28fdb98a1c34f425c8395338fdabe96becc) `Nix.String`: Allow custom computations inside string contexts.
     * By providing `runWithStringContext{T,}'` methods into the API.
   * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/e45f7632c51a9657f6e8d54c39fd4d21c466d85f) Includded support for new `base16-bytestring`, which advertices 2x-4x speed increase of its operations.
-  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `HNix / Nix`: The library now also uses `hnix-store-remote`.
   * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects`: `addPath` & `toFile_` standalone functions got principled implementation through the internal use of the new `MonadStore` type class implementation.
   * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects`: added `addTextToStore`, `parseStoreResult` implementations.
   * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects`: added type synonyms `{RecursiveFlag, RepairFlag, StorePathName, FilePathFilter, StorePathSet}`.
   * [(link)](https://github.com/haskell-nix/hnix/pull/760) `Nix.Exec`: Fixed the rendering of internal `Frames`.
     * Which is an internal mechanism of a project to passing around messages with their context, still to be used internally).
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `HNix / Nix`: The library now also uses `hnix-store-remote`.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/06b0fca9fd607eb2e995f003424e797a41ffa5b7) `cabal.project`: project uses `cryptohash-sha512` override, the `hnix-store-core` requires it from `hnix` and uses that override also. [Detailed info](https://github.com/haskell-hvr/cryptohash-sha512/pull/5#issuecomment-752796913). We promise to attend to this issue, probably by migrating to `cryptonite` in the nearest releases.
 
 
 ### [(diff)](https://github.com/haskell-nix/hnix/compare/0.11.0...0.11.1#files_bucket) 0.11.1 (2020-12-09)
