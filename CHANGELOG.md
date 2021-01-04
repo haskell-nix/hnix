@@ -6,6 +6,8 @@
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.11.1...0.12.0#files_bucket) 0.12.0 (2020-12-31)
 
+* *Disclaimer*: Current `derivationStrict` primOp implementation and so every evaluation of a derivation into a store path currently relies on the `hnix-store-remote`, which for those operations relies on the running `nix-daemon`, and so operations use/produce effects into the `/nix/store`. Be cautious - it is effectful.
+
 * Introduction:
   * New module `Nix.Effects.Derivation`.
   * Operations on derivations:
