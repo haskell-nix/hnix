@@ -4,7 +4,7 @@
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.12.0...master#files_bucket) Progress
 
 
-## [(diff)](https://github.com/haskell-nix/hnix/compare/0.11.1...0.12.0#files_bucket) 0.12.0 (2020-12-31)
+## [(diff)](https://github.com/haskell-nix/hnix/compare/0.11.1...0.12.0#files_bucket) 0.12.0 (2021-01-05)
 
 * *Disclaimer*: Current `derivationStrict` primOp implementation and so every evaluation of a derivation into a store path currently relies on the `hnix-store-remote`, which for those operations relies on the running `nix-daemon`, and so operations use/produce effects into the `/nix/store`. Be cautious - it is effectful.
 
@@ -16,28 +16,28 @@
   * Implementation of the `derivationStrict` primOp.
 
 * Breaking:
-  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects`: **class** `MonadStore` got principled implementation.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects`: **class** `MonadStore` got principled implementation.
     * `addPath'` got principled into `addToStore`.
     * `toFile_` got principled into `addTextToStore'`.
     * For help & easy migration you may use `addPath` & `toFile_` `addTextToStore` standalone functions in the module.
-  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects.Basic`: `defaultDerivationStrict` got reimplemented & moved into `Nix.Effects.Derivation`.
-  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Standard`: instance for `MonadStore (Fix1T t m)` got principled accoding to class `MonadStore` changes.
-  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Fresh.Basic`: instance for `MonadStore (StdIdT m)` got principled.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects.Basic`: `defaultDerivationStrict` got reimplemented & moved into `Nix.Effects.Derivation`.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Standard`: instance for `MonadStore (Fix1T t m)` got principled accoding to class `MonadStore` changes.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Fresh.Basic`: instance for `MonadStore (StdIdT m)` got principled.
 
 * Additional:
-  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) **New module `Nix.Effects.Derivation`**: [HNix(0.12.0):Nix.Effects.Derivation documentation](https://hackage.haskell.org/package/hnix-0.12.0/docs/Nix-Effects-Derivation.html).
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/3bba5549273c892c60aad5dd6d5058a8db40efbf) **New module `Nix.Effects.Derivation`**: [HNix(0.12.0):Nix.Effects.Derivation documentation](https://hackage.haskell.org/package/hnix-0.12.0/docs/Nix-Effects-Derivation.html).
   * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/9bcfbbe88ff0bd8d803296193ee1d8603dc5289e) `Nix.Convert`: Principled `NVPath -> NixString` coercion.
     * In a form of principled `instance FromValue NixString m (NValue' t f m (NValue t f m))`.
   * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/a8e6d28fdb98a1c34f425c8395338fdabe96becc) `Nix.String`: Allow custom computations inside string contexts.
     * By providing `runWithStringContext{T,}'` methods into the API.
   * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/e45f7632c51a9657f6e8d54c39fd4d21c466d85f) Includded support for new `base16-bytestring`, which advertices 2x-4x speed increase of its operations.
-  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects`: `addPath` & `toFile_` standalone functions got principled implementation through the internal use of the new `MonadStore` type class implementation.
-  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects`: added `addTextToStore`, `parseStoreResult` implementations.
-  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects`: added type synonyms `{RecursiveFlag, RepairFlag, StorePathName, FilePathFilter, StorePathSet}`.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects`: `addPath` & `toFile_` standalone functions got principled implementation through the internal use of the new `MonadStore` type class implementation.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects`: added `addTextToStore`, `parseStoreResult` implementations.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/3bba5549273c892c60aad5dd6d5058a8db40efbf) `Nix.Effects`: added type synonyms `{RecursiveFlag, RepairFlag, StorePathName, FilePathFilter, StorePathSet}`.
   * [(link)](https://github.com/haskell-nix/hnix/pull/760) `Nix.Exec`: Fixed the rendering of internal `Frames`.
     * Which is an internal mechanism of a project to passing around messages with their context, still to be used internally).
-  * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `HNix / Nix`: The library now also uses `hnix-store-remote`.
-  * [(link)](https://github.com/haskell-nix/hnix/pull/554/06b0fca9fd607eb2e995f003424e797a41ffa5b7) `cabal.project`: project uses `cryptohash-sha512` override, the `hnix-store-core` requires it from `hnix` and uses that override also. [Detailed info](https://github.com/haskell-hvr/cryptohash-sha512/pull/5#issuecomment-752796913). We promise to attend to this issue, probably by migrating to `cryptonite` in the nearest releases.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/3bba5549273c892c60aad5dd6d5058a8db40efbf) `HNix / Nix`: The library now also uses `hnix-store-remote`.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/554/commits/06b0fca9fd607eb2e995f003424e797a41ffa5b7) `cabal.project`: project uses `cryptohash-sha512` override, the `hnix-store-core` requires it from `hnix` and uses that override also. [Detailed info](https://github.com/haskell-hvr/cryptohash-sha512/pull/5#issuecomment-752796913). We promise to attend to this issue, probably by migrating to `cryptonite` in the nearest releases.
 
 Future note: The HNix is a big project. During the initial development and currently the API for simplicity exposes allmost all functions, types, etc. Big open API means a big effort to create/maintain a quite noisy changelog and you parsing through it, and also creates a frequent requirements to mark releases as major and bother you due to some type changes in some parts that may not be used or applicable to be public API.
 
