@@ -37,6 +37,12 @@
   * [(link)](https://github.com/haskell-nix/hnix/pull/554/3bba5549273c892c60aad5dd6d5058a8db40efbf) `HNix / Nix`: The library now also uses `hnix-store-remote`.
   * [(link)](https://github.com/haskell-nix/hnix/pull/554/06b0fca9fd607eb2e995f003424e797a41ffa5b7) `cabal.project`: project uses `cryptohash-sha512` override, the `hnix-store-core` requires it from `hnix` and uses that override also. [Detailed info](https://github.com/haskell-hvr/cryptohash-sha512/pull/5#issuecomment-752796913). We promise to attend to this issue, probably by migrating to `cryptonite` in the nearest releases.
 
+Future note: The HNix is a big project. During the initial development and currently the API for simplicity exposes allmost all functions, types, etc. Big open API means a big effort to create/maintain a quite noisy changelog and you parsing through it, and also creates a frequent requirements to mark releases as major and bother you due to some type changes in some parts that may not be used or applicable to be public API.
+
+This year the most gracious API clean-up would happen, we would check and keep open what Hackage projects are using from the API, and the other parts would be open on the request by a way of rapid minor releases. All that is also a work toward splitting the project into several packages some time in the future (split would be into something like Expressions, Evaluation, Executable, Extra), which migration also would be done most thoughful and graceful as possible, with as much easiness and automation for downstream project migrations as possible.
+
+If it is possible, please, try to switch & use the higher-level API functions where it is applicable. Thank you.
+
 
 ### [(diff)](https://github.com/haskell-nix/hnix/compare/0.11.0...0.11.1#files_bucket) 0.11.1 (2020-12-09)
 
