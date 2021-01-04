@@ -47,9 +47,9 @@ Tooling is WIP, `nix-shell` and `nix-store` are still used for their purpose, so
 
 ## Getting Started
 
-```
+```shell
 # Note: --recursive
-git clone --recursive https://github.com/haskell-nix/hnix.git
+git clone --recursive 'https://github.com/haskell-nix/hnix.git'
 cd hnix
 ```
 
@@ -68,35 +68,35 @@ If you opt in to use of Nix environment, please enable the official HNix Cachix 
 Cabal [Quickstart](https://cabal.readthedocs.io/en/3.4/nix-local-build.html).
 
 1. (Optional), to enter the projects reproducible Nix environment:
-```
+```shell
 nix-shell
 ```
   
 2. Building:
-```
+```shell
 cabal v2-configure
 cabal v2-build
 ```
 
 3. Loading the project into `ghci` REPL:
-```
+```shell
 cabal v2-repl
 ```
 
 4. Testing:
 
 * Default suite:
-```
+```shell
 cabal v2-test
 ```
 
 * All available tests:
-```
+```shell
 env ALL_TESTS=yes cabal v2-test
 ```
 
 * Selected (list of tests is in `tests/Main.hs`):
-```
+```shell
 env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
 ```
 
@@ -106,7 +106,7 @@ env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
 
 To run benchmarks:
 
-```
+```shell
 cabal v2-bench
 ```
 
@@ -114,7 +114,7 @@ cabal v2-bench
 
 To build `hnix` with profiling enabled:
 
-```
+```shell
 cabal v2-configure --enable-tests --enable-profiling --flags=profiling
 cabal v2-run hnix -- <args> +RTS -p
 ```
@@ -123,7 +123,7 @@ cabal v2-run hnix -- <args> +RTS -p
 
 To build `hnix` for debugging, with full tracing output and stack traces:
 
-```
+```shell
 cabal v2-configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
 cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
 ```
@@ -132,7 +132,7 @@ Note that this going to run quite slowly, but would give the most information as
 
 
 #### Run HNix
-```
+```shell
 cabal v2-run hnix -- --help
 ```
 (`--` is for separation between `cabal` & `hnix` args)
@@ -143,7 +143,7 @@ cabal v2-run hnix -- --help
 There is a number of build options to use with `nix-build`, documentation of them is in: `./default.nix`, keys essentially pass-through the [Nixpkgs Haskell Lib API](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix).
 
 Options can be used as:
-```
+```shell
 nix-build \
   --arg <option1> <argument1> \
   --arg <option2> <argument2> \
@@ -152,7 +152,7 @@ nix-build \
 
 #### Run benchmarks
 
-```
+```shell
 nix-build \
   --arg disableOptimization false \
   --arg enableDeadCodeElimination true \
@@ -162,7 +162,7 @@ nix-build \
 
 #### With profiling
 
-```
+```shell
 nix-build \
   --arg disableOptimization false \
   --arg enableDeadCodeElimination true \
@@ -172,7 +172,7 @@ nix-build \
 
 #### With full debug info
 
-```
+```shell
 nix-build \
   --arg disableOptimization false \
   --arg enableDeadCodeElimination true \
@@ -186,13 +186,13 @@ nix-build \
 
 #### Run the result
 
-```
+```shell
 ./result/bin/hnix
 ```
 
 ## Development status loop with amazing [`ghcid`](https://github.com/ndmitchell/ghcid)
 
-```
+```shell
 ghcid --command="cabal v2-repl --repl-options=-fno-code --repl-options=-fno-break-on-exception --repl-options=-fno-break-on-error --repl-options=-v1 --repl-options=-ferror-spans --repl-options=-j"
 ```
 (optional) To use projects reproducible environment, wrap `ghcid ...` command into a `nix-shell --command ' '`.
@@ -203,12 +203,12 @@ For simplicity `alias` the command in your shell.
 ## Using the HNix REPL
 
 Enter in:
-```
+```shell
 hnix --repl
 ```
 
 Evaluate an expression:
-```
+```shell
 hnix --eval -E '(import <nixpkgs> {}).pkgs.hello' --repl
 ```
 This also binds the evaluated expression result to the `input` variable, so that variable can be inspected.
@@ -219,7 +219,7 @@ Use the `:help` command for a list of all available REPL commands.
 
 Nix is a lazy language with the ability of recursion, so by default REPL and eval prints are lazy:
 
-```
+```shell
 hnix \
   --eval \
   --expr '{ x = true; }'
@@ -229,7 +229,7 @@ hnix \
 
 To disable laziness add the `--strict` to commands or `:set strict` in the REPL.
 
-```
+```shell
 hnix \
   --eval \
   # Strictly \
@@ -247,7 +247,7 @@ hnix \
 
 3. When the pull request is ready to be submitted, to save time - please, test it with:
 
-```
+```shell
 git submodule update --init --recursive
 nix-shell --run "LANGUAGE_TESTS=yes cabal v2-test"
 ```
@@ -258,6 +258,6 @@ Please, check that all tests that were passing prior (most probably all tests me
 
 Currently, the main high-level goal is to be able to evaluate all of Nixpkgs:
 
-```
+```shell
 hnix --eval -E "import <nixpkgs> {}" --find
 ```
