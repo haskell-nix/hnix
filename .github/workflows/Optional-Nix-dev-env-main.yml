@@ -83,7 +83,7 @@ jobs:
 
 
   build20:
-    name: "GHC 8.10.1, quality build, SDist, Optimizations, Benchmark, Haddock, Completions"
+    name: "GHC 8.10.3, quality build, SDist, Optimizations, Benchmark, Haddock, Completions"
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -102,7 +102,7 @@ jobs:
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
     - name: "Determined Nix-build"
       env:
-        compiler: "ghc8101"
+        compiler: "ghc8103"
         buildFromSdist: "true"
         linkWithGold: "true"
         doHaddock: "true"
