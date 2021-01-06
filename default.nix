@@ -111,12 +111,15 @@
 
 let
 
+  hlib = pkgs.haskell.lib;
+  lib = pkgs.lib;
+
   getDefaultGHC = "ghc${
       (
         # Remove '.' from the string 8.8.4 -> 884
-        pkgs.lib.stringAsChars (c: if c == "." then "" else c)
+        lib.stringAsChars (c: if c == "." then "" else c)
           # Get default GHC version,
-          (pkgs.lib.getVersion pkgs.haskellPackages.ghc)
+          (lib.getVersion pkgs.haskellPackages.ghc)
       )
     }";
 
@@ -125,18 +128,18 @@ let
       then getDefaultGHC
       else compiler;
 
-  #  2020-12-31: NOTE: Remove after `hnix-store 0.4` arrives into Nixpkgs
-  hnix-store-src = pkgs.fetchFromGitHub {
-    owner = "haskell-nix";
-    repo = "hnix-store";
-    rev = "fd09d29b8bef4904058f033d693e7d928a4a92dc";
-    sha256 = "0fxig1ckzknm5g19jzg7rrcpz7ssn4iiv9bs9hff9gfy3ciq4zrs";
-  };
+  # Overlay source
+  # hnix-store-src = pkgs.fetchFromGitHub {
+  #   owner = "haskell-nix";
+  #   repo = "hnix-store";
+  #   rev = "fd09d29b8bef4904058f033d693e7d928a4a92dc";
+  #   sha256 = "0fxig1ckzknm5g19jzg7rrcpz7ssn4iiv9bs9hff9gfy3ciq4zrs";
+  # };
 
-  overlay = pkgs.lib.foldr pkgs.lib.composeExtensions (_: _: {}) [
-    (import "${hnix-store-src}/overlay.nix" pkgs pkgs.haskell.lib)
+  overlay = lib.foldr lib.composeExtensions (_: _: {}) [
+    # (import "${hnix-store-src}/overlay.nix" pkgs hlib)
     (self: super:
-      pkgs.lib.optionalAttrs withHoogle {
+      lib.optionalAttrs withHoogle {
       ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
       ghcWithPackages = self.ghc.withPackages;
     })
@@ -146,7 +149,7 @@ let
     buildHaskellPackages =
       orig.buildHaskellPackages.override overrideHaskellPackages;
     overrides = if orig ? overrides
-      then pkgs.lib.composeExtensions orig.overrides overlay
+      then lib.composeExtensions orig.overrides overlay
       else overlay;
   };
 
@@ -156,58 +159,19 @@ let
   # Application of functions from this list to the package in code here happens in the reverse order (from the tail). Some options depend on & override others, so if enabling options caused Nix error or not expected result - change the order, and please do not change this order without proper testing.
   listSwitchFunc =
     [
-      {
-        switch = sdistTarball;
-        function = pkgs.haskell.lib.sdistTarball;
-      }
-      {
-        switch = buildFromSdist;
-        function = pkgs.haskell.lib.buildFromSdist;
-      }
-      {
-        switch = buildStrictly;
-        function = pkgs.haskell.lib.buildStrictly;
-      }
-      {
-        switch = disableOptimization;
-        function = pkgs.haskell.lib.disableOptimization;
-      }
-      {
-        switch = doJailbreak;
-        function = pkgs.haskell.lib.doJailBreak;
-      }
-      {
-        switch = doStrip;
-        function = pkgs.haskell.lib.doStrip;
-      }
-      {
-        switch = enableDWARFDebugging;
-        function = pkgs.haskell.lib.enableDWARFDebugging;
-      }
-      {
-        switch = linkWithGold;
-        function = pkgs.haskell.lib.linkWithGold;
-      }
-      {
-        switch = failOnAllWarnings;
-        function = pkgs.haskell.lib.failOnAllWarnings;
-      }
-      {
-        switch = justStaticExecutables;
-        function = pkgs.haskell.lib.justStaticExecutables;
-      }
-      {
-        switch = checkUnusedPackages;
-        function = pkgs.haskell.lib.checkUnusedPackages {};
-      }
-      {
-        switch = generateOptparseApplicativeCompletions;
-        function = pkgs.haskell.lib.generateOptparseApplicativeCompletions executableNamesToShellComplete;
-      }
-      {
-        switch = doHyperlinkSource;
-        function = pkgs.haskell.lib.doHyperlinkSource;
-      }
+      { switch = sdistTarball;                           function = hlib.sdistTarball; }
+      { switch = buildFromSdist;                         function = hlib.buildFromSdist; }
+      { switch = buildStrictly;                          function = hlib.buildStrictly; }
+      { switch = disableOptimization;                    function = hlib.disableOptimization; }
+      { switch = doJailbreak;                            function = hlib.doJailBreak; }
+      { switch = doStrip;                                function = hlib.doStrip; }
+      { switch = enableDWARFDebugging;                   function = hlib.enableDWARFDebugging; }
+      { switch = linkWithGold;                           function = hlib.linkWithGold; }
+      { switch = failOnAllWarnings;                      function = hlib.failOnAllWarnings; }
+      { switch = justStaticExecutables;                  function = hlib.justStaticExecutables; }
+      { switch = checkUnusedPackages;                    function = hlib.checkUnusedPackages {}; }
+      { switch = generateOptparseApplicativeCompletions; function = hlib.generateOptparseApplicativeCompletions executableNamesToShellComplete; }
+      { switch = doHyperlinkSource;                      function = hlib.doHyperlinkSource; }
     ];
 
   # Function that applies enabled option to the package, used in the fold.
@@ -223,48 +187,19 @@ let
     root = packageRoot;
 
     overrides = self: super: {
-      # 2020-12-07 We really want cryptohash-sha512, but it conflicts with
-      # recent versions of base, for seemingly no valid reason.
-      # As the update is slow to happen, just jailbreak here
-      # See https://github.com/haskell-hvr/cryptohash-sha512 PRs 3, 5 and issue 4
-      # See also https://github.com/NixOS/nixpkgs/pull/106333 for a temporary fix.
-      cryptohash-sha512 = pkgs.haskell.lib.unmarkBroken ( pkgs.haskell.lib.doJailbreak super.cryptohash-sha512 );
 
+      #  2021-01-06: NOTE:
+      # Core is on Stackage and pinned at `0.2`: https://github.com/haskell-nix/hnix-store/issues/104
+      # Stackage report: https://github.com/commercialhaskell/stackage/issues/5766
+      hnix-store-core = super.hnix-store-core_0_4_0_0;
       # 2020-12-07 hnix-store-remote fails when trying to connect to a real hnix daemon.
       # probably due to nix sandbox restrictions.
       # Upstream issue @ https://github.com/haskell-nix/hnix-store/issues/80
-      hnix-store-remote = pkgs.haskell.lib.removeConfigureFlag super.hnix-store-remote "-fio-testsuite";
+      hnix-store-remote = hlib.unmarkBroken super.hnix-store-remote;
 
-      # 2020-08-04 hnix uses custom LayoutOptions and therefore is
-      # likely to be affected by the change in the ribbon width
-      # calculation in prettyprinter-1.7.0.
-      prettyprinter = haskellPackages.callPackage
-       ({ mkDerivation, ansi-wl-pprint, base, base-compat, bytestring
-        , containers, deepseq, doctest, gauge, mtl, pgp-wordlist
-        , QuickCheck, quickcheck-instances, random, tasty, tasty-hunit
-        , tasty-quickcheck, text, transformers, stdenv
-        }:
-        mkDerivation {
-          pname = "prettyprinter";
-          version = "1.7.0";
-          sha256 = "19z04sn0kqxgwcyfn5igjmbxw13xsb3mdhdidkb3kzswib78f6sr";
-          isLibrary = true;
-          isExecutable = true;
-          libraryHaskellDepends = [ base text ];
-          testHaskellDepends = [
-            base bytestring doctest pgp-wordlist QuickCheck
-            quickcheck-instances tasty tasty-hunit tasty-quickcheck text
-          ];
-          benchmarkHaskellDepends = [
-            ansi-wl-pprint base base-compat containers deepseq gauge mtl
-            QuickCheck random text transformers
-          ];
-          description = "A modern, easy to use, well-documented, extensible pretty-printer";
-          license = stdenv.lib.licenses.bsd2;
-        }) {};
     };
 
-    modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
+    modifier = drv: hlib.overrideCabal drv (attrs: {
       buildTools = (attrs.buildTools or []) ++ [
         haskellPackages.cabal-install
       ];
@@ -288,7 +223,7 @@ let
       inherit doCoverage;
       inherit doHaddock;
 
-      configureFlags = pkgs.stdenv.lib.optional doTracing  "--flags=tracing";
+      configureFlags = lib.optional doTracing  "--flags=tracing";
 
       passthru = {
         nixpkgs = pkgs;
@@ -302,7 +237,7 @@ let
   # One part of Haskell.lib options are argument switches, those are in `inherit`ed list.
   # Other part - are function wrappers over pkg. Fold allows to compose those.
   # composePackage = foldr (if switch then function) (package) ([{switch,function}]) == (functionN .. (function1 package))
-  composedPackage = pkgs.lib.foldr (onSwitchApplyFunc) package listSwitchFunc;
+  composedPackage = lib.foldr (onSwitchApplyFunc) package listSwitchFunc;
 
 in composedPackage
 
