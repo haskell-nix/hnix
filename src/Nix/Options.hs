@@ -9,7 +9,7 @@ data Options = Options
     , tracing      :: Bool
     , thunks       :: Bool
     , values       :: Bool
-    , scopes       :: Bool
+    , showScopes   :: Bool
     , reduce       :: Maybe FilePath
     , reduceSets   :: Bool
     , reduceLists  :: Bool
@@ -42,7 +42,7 @@ defaultOptions current = Options { verbose      = ErrorsOnly
                                  , tracing      = False
                                  , thunks       = False
                                  , values       = False
-                                 , scopes       = False
+                                 , showScopes   = False
                                  , reduce       = Nothing
                                  , reduceSets   = False
                                  , reduceLists  = False

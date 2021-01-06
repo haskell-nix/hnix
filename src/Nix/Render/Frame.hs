@@ -106,7 +106,7 @@ renderEvalFrame level f = do
   opts :: Options <- asks (view hasLens)
   case f of
     EvaluatingExpr scope e@(Fix (Compose (Ann ann _))) -> do
-      let scopeInfo | scopes opts = [pretty $ show scope]
+      let scopeInfo | showScopes opts = [pretty $ show scope]
                     | otherwise   = []
       fmap (\x -> scopeInfo ++ [x])
         $   renderLocation ann
