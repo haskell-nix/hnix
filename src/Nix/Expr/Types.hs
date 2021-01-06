@@ -182,6 +182,12 @@ instance Lift (Fix NExprF) where
       Just HRefl -> Just [| pack $(liftString $ unpack b) |]
       Nothing    -> Nothing
 
+#if MIN_VERSION_template_haskell(2,17,0)
+  liftTyped = unsafeCodeCoerce . lift
+#elif MIN_VERSION_template_haskell(2,16,0)
+  liftTyped = unsafeTExpCoerce . lift
+#endif
+
 -- | The monomorphic expression type is a fixed point of the polymorphic one.
 type NExpr = Fix NExprF
 

@@ -168,39 +168,7 @@ builtinsList = sequence
   , add0 Normal   "currentSystem"    currentSystem
   , add0 Normal   "currentTime"      currentTime_
   , add2 Normal   "deepSeq"          deepSeq
-
-    -- This is compiled in so that we only parse and evaluate it once, at
-    -- compile-time.
-  , add0 TopLevel "derivation" $(do
-      let Success expr = parseNixText [text|
-        drvAttrs @ { outputs ? [ "out" ], ... }:
-
-        let
-
-          strict = derivationStrict drvAttrs;
-
-          commonAttrs = drvAttrs
-            // (builtins.listToAttrs outputsList)
-            // { all = map (x: x.value) outputsList;
-                 inherit drvAttrs;
-               };
-
-          outputToAttrListElement = outputName:
-            { name = outputName;
-              value = commonAttrs // {
-                outPath = builtins.getAttr outputName strict;
-                drvPath = strict.drvPath;
-                type = "derivation";
-                inherit outputName;
-              };
-            };
-
-          outputsList = map outputToAttrListElement outputs;
-
-        in (builtins.head outputsList).value|]
-      [| foldFix Eval.eval expr |]
-    )
-
+  , add0 TopLevel "derivation"       derivation
   , add  TopLevel "derivationStrict" derivationStrict_
   , add  TopLevel "dirOf"            dirOf
   , add2 Normal   "div"              div_
@@ -305,6 +273,40 @@ builtinsList = sequence
   add' t n v = wrap t n <$> mkThunk n (toBuiltin (Text.unpack n) v)
 
 -- Primops
+
+derivation
+  :: forall e t f m. (MonadNix e t f m, Scoped (NValue t f m) m)
+  => m (NValue t f m)
+derivation = foldFix Eval.eval $$(do
+    -- This is compiled in so that we only parse it once at compile-time.
+    let Success expr = parseNixText [text|
+      drvAttrs @ { outputs ? [ "out" ], ... }:
+
+      let
+
+        strict = derivationStrict drvAttrs;
+
+        commonAttrs = drvAttrs
+          // (builtins.listToAttrs outputsList)
+          // { all = map (x: x.value) outputsList;
+               inherit drvAttrs;
+             };
+
+        outputToAttrListElement = outputName:
+          { name = outputName;
+            value = commonAttrs // {
+              outPath = builtins.getAttr outputName strict;
+              drvPath = strict.drvPath;
+              type = "derivation";
+              inherit outputName;
+            };
+          };
+
+        outputsList = map outputToAttrListElement outputs;
+
+      in (builtins.head outputsList).value|]
+    [|| expr ||]
+  )
 
 foldNixPath
   :: forall e t f m r
