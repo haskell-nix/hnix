@@ -223,12 +223,6 @@ let
     root = packageRoot;
 
     overrides = self: super: {
-      # 2020-12-07 We really want cryptohash-sha512, but it conflicts with
-      # recent versions of base, for seemingly no valid reason.
-      # As the update is slow to happen, just jailbreak here
-      # See https://github.com/haskell-hvr/cryptohash-sha512 PRs 3, 5 and issue 4
-      # See also https://github.com/NixOS/nixpkgs/pull/106333 for a temporary fix.
-      cryptohash-sha512 = pkgs.haskell.lib.unmarkBroken ( pkgs.haskell.lib.doJailbreak super.cryptohash-sha512 );
 
       #  2021-01-06: NOTE:
       # Core is on Stackage and pinned at `0.2`: https://github.com/haskell-nix/hnix-store/issues/104
@@ -238,6 +232,7 @@ let
       # probably due to nix sandbox restrictions.
       # Upstream issue @ https://github.com/haskell-nix/hnix-store/issues/80
       hnix-store-remote = pkgs.haskell.lib.unmarkBroken super.hnix-store-remote;
+
     };
 
     modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
