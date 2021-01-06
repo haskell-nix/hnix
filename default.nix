@@ -111,12 +111,15 @@
 
 let
 
+  hlib = pkgs.haskell.lib;
+  lib = pkgs.lib;
+
   getDefaultGHC = "ghc${
       (
         # Remove '.' from the string 8.8.4 -> 884
-        pkgs.lib.stringAsChars (c: if c == "." then "" else c)
+        lib.stringAsChars (c: if c == "." then "" else c)
           # Get default GHC version,
-          (pkgs.lib.getVersion pkgs.haskellPackages.ghc)
+          (lib.getVersion pkgs.haskellPackages.ghc)
       )
     }";
 
@@ -133,10 +136,10 @@ let
   #   sha256 = "0fxig1ckzknm5g19jzg7rrcpz7ssn4iiv9bs9hff9gfy3ciq4zrs";
   # };
 
-  overlay = pkgs.lib.foldr pkgs.lib.composeExtensions (_: _: {}) [
-    # (import "${hnix-store-src}/overlay.nix" pkgs pkgs.haskell.lib)
+  overlay = lib.foldr lib.composeExtensions (_: _: {}) [
+    # (import "${hnix-store-src}/overlay.nix" pkgs hlib)
     (self: super:
-      pkgs.lib.optionalAttrs withHoogle {
+      lib.optionalAttrs withHoogle {
       ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
       ghcWithPackages = self.ghc.withPackages;
     })
@@ -146,7 +149,7 @@ let
     buildHaskellPackages =
       orig.buildHaskellPackages.override overrideHaskellPackages;
     overrides = if orig ? overrides
-      then pkgs.lib.composeExtensions orig.overrides overlay
+      then lib.composeExtensions orig.overrides overlay
       else overlay;
   };
 
@@ -156,58 +159,19 @@ let
   # Application of functions from this list to the package in code here happens in the reverse order (from the tail). Some options depend on & override others, so if enabling options caused Nix error or not expected result - change the order, and please do not change this order without proper testing.
   listSwitchFunc =
     [
-      {
-        switch = sdistTarball;
-        function = pkgs.haskell.lib.sdistTarball;
-      }
-      {
-        switch = buildFromSdist;
-        function = pkgs.haskell.lib.buildFromSdist;
-      }
-      {
-        switch = buildStrictly;
-        function = pkgs.haskell.lib.buildStrictly;
-      }
-      {
-        switch = disableOptimization;
-        function = pkgs.haskell.lib.disableOptimization;
-      }
-      {
-        switch = doJailbreak;
-        function = pkgs.haskell.lib.doJailBreak;
-      }
-      {
-        switch = doStrip;
-        function = pkgs.haskell.lib.doStrip;
-      }
-      {
-        switch = enableDWARFDebugging;
-        function = pkgs.haskell.lib.enableDWARFDebugging;
-      }
-      {
-        switch = linkWithGold;
-        function = pkgs.haskell.lib.linkWithGold;
-      }
-      {
-        switch = failOnAllWarnings;
-        function = pkgs.haskell.lib.failOnAllWarnings;
-      }
-      {
-        switch = justStaticExecutables;
-        function = pkgs.haskell.lib.justStaticExecutables;
-      }
-      {
-        switch = checkUnusedPackages;
-        function = pkgs.haskell.lib.checkUnusedPackages {};
-      }
-      {
-        switch = generateOptparseApplicativeCompletions;
-        function = pkgs.haskell.lib.generateOptparseApplicativeCompletions executableNamesToShellComplete;
-      }
-      {
-        switch = doHyperlinkSource;
-        function = pkgs.haskell.lib.doHyperlinkSource;
-      }
+      { switch = sdistTarball;                           function = hlib.sdistTarball; }
+      { switch = buildFromSdist;                         function = hlib.buildFromSdist; }
+      { switch = buildStrictly;                          function = hlib.buildStrictly; }
+      { switch = disableOptimization;                    function = hlib.disableOptimization; }
+      { switch = doJailbreak;                            function = hlib.doJailBreak; }
+      { switch = doStrip;                                function = hlib.doStrip; }
+      { switch = enableDWARFDebugging;                   function = hlib.enableDWARFDebugging; }
+      { switch = linkWithGold;                           function = hlib.linkWithGold; }
+      { switch = failOnAllWarnings;                      function = hlib.failOnAllWarnings; }
+      { switch = justStaticExecutables;                  function = hlib.justStaticExecutables; }
+      { switch = checkUnusedPackages;                    function = hlib.checkUnusedPackages {}; }
+      { switch = generateOptparseApplicativeCompletions; function = hlib.generateOptparseApplicativeCompletions executableNamesToShellComplete; }
+      { switch = doHyperlinkSource;                      function = hlib.doHyperlinkSource; }
     ];
 
   # Function that applies enabled option to the package, used in the fold.
@@ -231,11 +195,11 @@ let
       # 2020-12-07 hnix-store-remote fails when trying to connect to a real hnix daemon.
       # probably due to nix sandbox restrictions.
       # Upstream issue @ https://github.com/haskell-nix/hnix-store/issues/80
-      hnix-store-remote = pkgs.haskell.lib.unmarkBroken super.hnix-store-remote;
+      hnix-store-remote = hlib.unmarkBroken super.hnix-store-remote;
 
     };
 
-    modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
+    modifier = drv: hlib.overrideCabal drv (attrs: {
       buildTools = (attrs.buildTools or []) ++ [
         haskellPackages.cabal-install
       ];
@@ -259,7 +223,7 @@ let
       inherit doCoverage;
       inherit doHaddock;
 
-      configureFlags = pkgs.stdenv.lib.optional doTracing  "--flags=tracing";
+      configureFlags = lib.optional doTracing  "--flags=tracing";
 
       passthru = {
         nixpkgs = pkgs;
@@ -273,7 +237,7 @@ let
   # One part of Haskell.lib options are argument switches, those are in `inherit`ed list.
   # Other part - are function wrappers over pkg. Fold allows to compose those.
   # composePackage = foldr (if switch then function) (package) ([{switch,function}]) == (functionN .. (function1 package))
-  composedPackage = pkgs.lib.foldr (onSwitchApplyFunc) package listSwitchFunc;
+  composedPackage = lib.foldr (onSwitchApplyFunc) package listSwitchFunc;
 
 in composedPackage
 
