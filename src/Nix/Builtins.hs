@@ -25,6 +25,7 @@
 -- | Code that implements Nix builtins. Lists the functions that are built into the Nix expression evaluator. Some built-ins (aka `derivation`), are always in the scope, so they can be accessed by the name. To keap the namespace clean, most built-ins are inside the `builtins` scope - a set that contains all what is a built-in.
 module Nix.Builtins (withNixContext, builtins) where
 
+import           Control.Arrow                  ( first )
 import           Control.Comonad
 import           Control.Monad
 import           Control.Monad.Catch
@@ -46,6 +47,7 @@ import           Data.Char                      ( isDigit )
 import           Data.Fix                       ( foldFix )
 import           Data.Foldable                  ( foldrM )
 import qualified Data.HashMap.Lazy             as M
+import           Data.Interned
 import           Data.List
 import           Data.Maybe
 import           Data.Scientific
@@ -130,12 +132,12 @@ builtins = do
    where
     go b@(Builtin TopLevel _) = b
     go (Builtin Normal (name, builtin)) =
-      Builtin TopLevel ("__" <> name, builtin)
+      Builtin TopLevel (intern $ "__" <> unintern name, builtin)
 
 data BuiltinType = Normal | TopLevel
 data Builtin v = Builtin
     { _kind   :: BuiltinType
-    , mapping :: (Text, v)
+    , mapping :: (VarName, v)
     }
 
 builtinsList :: forall e t f m . MonadNix e t f m => m [Builtin (NValue t f m)]
@@ -283,7 +285,7 @@ builtinsList = sequence
   , add  Normal   "valueSize"        getRecursiveSize
   ]
  where
-  wrap :: BuiltinType -> Text -> v -> Builtin v
+  wrap :: BuiltinType -> VarName -> v -> Builtin v
   wrap t n f = Builtin t (n, f)
 
   arity1 :: forall a b. (a -> b) -> (a -> Prim m b)
@@ -293,16 +295,16 @@ builtinsList = sequence
 
   mkThunk n = defer . withFrame
     Info
-    (ErrorCall $ "While calling builtin " ++ Text.unpack n ++ "\n")
+    (ErrorCall $ "While calling builtin " ++ show n ++ "\n")
 
   add0 t n v = wrap t n <$> mkThunk n v
-  add  t n v = wrap t n <$> mkThunk n (builtin (Text.unpack n) v)
-  add2 t n v = wrap t n <$> mkThunk n (builtin2 (Text.unpack n) v)
-  add3 t n v = wrap t n <$> mkThunk n (builtin3 (Text.unpack n) v)
+  add  t n v = wrap t n <$> mkThunk n (builtin n v)
+  add2 t n v = wrap t n <$> mkThunk n (builtin2 n v)
+  add3 t n v = wrap t n <$> mkThunk n (builtin3 n v)
 
   add' :: forall a. ToBuiltin t f m a
-       => BuiltinType -> Text -> a -> m (Builtin (NValue t f m))
-  add' t n v = wrap t n <$> mkThunk n (toBuiltin (Text.unpack n) v)
+       => BuiltinType -> VarName -> a -> m (Builtin (NValue t f m))
+  add' t n v = wrap t n <$> mkThunk n (toBuiltin n v)
 
 -- Primops
 
@@ -364,13 +366,13 @@ hasAttr
   -> m (NValue t f m)
 hasAttr x y = fromValue x >>= fromStringNoContext >>= \key ->
   fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) y
-    >>= \(aset, _) -> toValue $ M.member key aset
+    >>= \(aset, _) -> toValue $ M.member (intern key) aset
 
-attrsetGet :: MonadNix e t f m => Text -> AttrSet (NValue t f m) -> m (NValue t f m)
+attrsetGet :: MonadNix e t f m => VarName -> AttrSet (NValue t f m) -> m (NValue t f m)
 attrsetGet k s = case M.lookup k s of
   Just v -> pure v
   Nothing ->
-    throwError $ ErrorCall $ "Attribute '" ++ Text.unpack k ++ "' required"
+    throwError $ ErrorCall $ "Attribute '" ++ show k ++ "' required"
 
 hasContext :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 hasContext = toValue . stringHasContext <=< fromValue
@@ -383,7 +385,7 @@ getAttr
   -> m (NValue t f m)
 getAttr x y = fromValue x >>= fromStringNoContext >>= \key ->
   fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) y
-    >>= \(aset, _) -> attrsetGet key aset
+    >>= \(aset, _) -> attrsetGet (intern key) aset
 
 unsafeGetAttrPos
   :: forall e t f m
@@ -393,7 +395,7 @@ unsafeGetAttrPos
   -> m (NValue t f m)
 unsafeGetAttrPos x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
   (NVStr ns, NVSet _ apos) ->
-    case M.lookup (stringIgnoreContext ns) apos of
+    case M.lookup (intern $ stringIgnoreContext ns) apos of
       Nothing    -> pure $ nvConstant NNull
       Just delta -> toValue delta
   (x, y) ->
@@ -585,7 +587,7 @@ parseDrvName
 parseDrvName = fromValue >=> fromStringNoContext >=> \s -> do
   let (name :: Text, version :: Text) = splitDrvName s
   toValue @(AttrSet (NValue t f m)) $ M.fromList
-    [ ( "name" :: Text
+    [ ( "name"
       , nvStr $ makeNixStringWithoutContext name
       )
     , ( "version"
@@ -675,8 +677,8 @@ attrNames =
   fromValue @(AttrSet (NValue t f m))
     >=> fmap getDeeper
     .   toValue
-    .   map makeNixStringWithoutContext
     .   sort
+    .   map (makeNixStringWithoutContext . unintern)
     .   M.keys
 
 attrValues
@@ -686,6 +688,7 @@ attrValues =
     >=> toValue
     .   fmap snd
     .   sortOn (fst @Text @(NValue t f m))
+    .   map (first unintern)
     .   M.toList
 
 map_
@@ -715,7 +718,7 @@ mapAttrs_ f xs = fromValue @(AttrSet (NValue t f m)) xs >>= \aset -> do
     defer @(NValue t f m)
       $   withFrame Debug (ErrorCall "While applying f in mapAttrs:\n")
       $   callFunc ?? value
-      =<< callFunc f (nvStr (makeNixStringWithoutContext key))
+      =<< callFunc f (nvStr (makeNixStringWithoutContext $ unintern key))
   toValue . M.fromList . zip (map fst pairs) $ values
 
 filter_
@@ -739,8 +742,8 @@ catAttrs attrName xs = fromValue attrName >>= fromStringNoContext >>= \n ->
   fromValue @[NValue t f m] xs >>= \l ->
     fmap (nvList . catMaybes)
       $ forM l
-      $ fmap (M.lookup n)
-      . flip demand fromValue
+      $ fmap (M.lookup (intern n))
+      . flip demand (fromValue @(AttrSet (NValue t f m)))
 
 baseNameOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 baseNameOf x = do
@@ -982,7 +985,7 @@ removeAttrs set = fromValue . Deeper >=> \(nsToRemove :: [NixString]) ->
   fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) set >>= \(m, p) -> do
     toRemove <- mapM fromStringNoContext nsToRemove
     toValue (go m toRemove, go p toRemove)
-  where go = foldl' (flip M.delete)
+  where go = foldl' (flip $ M.delete . intern)
 
 intersectAttrs
   :: forall e t f m
@@ -1189,7 +1192,7 @@ listToAttrs = fromValue @[NValue t f m] >=> \l ->
     >=> \s -> do
           t <- attrsetGet "name" s
           demand t $ fromValue >=> \n -> do
-            name <- fromStringNoContext n
+            name <- intern <$> fromStringNoContext n
             val  <- attrsetGet "value" s
             pure (name, val)
 
@@ -1305,7 +1308,7 @@ readDir_ p = demand p $ \path' -> do
           | isDirectory s    -> FileTypeDirectory
           | isSymbolicLink s -> FileTypeSymlink
           | otherwise        -> FileTypeUnknown
-    pure (Text.pack item, t)
+    pure (intern @VarName $ Text.pack item, t)
   getDeeper <$> toValue (M.fromList itemsWithTypes)
 
 fromJSON
@@ -1317,7 +1320,7 @@ fromJSON arg = demand arg $ fromValue >=> fromStringNoContext >=> \encoded ->
     Right v -> jsonToNValue v
  where
   jsonToNValue = \case
-    A.Object m -> flip nvSet M.empty <$> traverse jsonToNValue m
+    A.Object m -> flip nvSet M.empty . M.fromList . map (first intern) . M.toList <$> traverse jsonToNValue m
     A.Array  l -> nvList <$> traverse jsonToNValue (V.toList l)
     A.String s -> pure $ nvStr $ makeNixStringWithoutContext s
     A.Number n -> pure $ nvConstant $ case floatingOrInteger n of
@@ -1458,7 +1461,8 @@ getContext x = demand x $ \case
     let context =
           getNixLikeContext $ toNixLikeContext $ NixString.getContext ns
     valued :: M.HashMap Text (NValue t f m) <- sequenceA $ M.map toValue context
-    pure $ nvSet valued M.empty
+    let fixed = M.fromList . map (first intern) . M.toList $ valued
+    pure $ nvSet fixed M.empty
   x ->
     throwError $ ErrorCall $ "Invalid type for builtins.getContext: " ++ show x
 
@@ -1497,7 +1501,7 @@ appendContext x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
       $ makeNixString (stringIgnoreContext ns)
       $ fromNixLikeContext
       $ NixLikeContext
-      $ M.unionWith (<>) newContextValues
+      $ M.unionWith (<>) ((M.fromList . map (first unintern) . M.toList $ newContextValues) :: M.HashMap Text NixLikeContextValue )
       $ getNixLikeContext
       $ toNixLikeContext
       $ NixString.getContext ns
@@ -1511,7 +1515,7 @@ newtype Prim m a = Prim { runPrim :: m a }
 
 -- | Types that support conversion to nix in a particular monad
 class ToBuiltin t f m a | a -> m where
-    toBuiltin :: String -> a -> m (NValue t f m)
+    toBuiltin :: VarName -> a -> m (NValue t f m)
 
 instance (MonadNix e t f m, ToValue a m (NValue t f m))
       => ToBuiltin t f m (Prim m a) where
