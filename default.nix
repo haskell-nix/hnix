@@ -230,11 +230,14 @@ let
       # See also https://github.com/NixOS/nixpkgs/pull/106333 for a temporary fix.
       cryptohash-sha512 = pkgs.haskell.lib.unmarkBroken ( pkgs.haskell.lib.doJailbreak super.cryptohash-sha512 );
 
+      #  2021-01-06: NOTE:
+      # Core is on Stackage and pinned at `0.2`: https://github.com/haskell-nix/hnix-store/issues/104
+      # Stackage report: https://github.com/commercialhaskell/stackage/issues/5766
+      hnix-store-core = super.hnix-store-core_0_4_0_0;
       # 2020-12-07 hnix-store-remote fails when trying to connect to a real hnix daemon.
       # probably due to nix sandbox restrictions.
       # Upstream issue @ https://github.com/haskell-nix/hnix-store/issues/80
-      hnix-store-remote = pkgs.haskell.lib.removeConfigureFlag super.hnix-store-remote "-fio-testsuite";
-
+      hnix-store-remote = pkgs.haskell.lib.unmarkBroken super.hnix-store-remote;
     };
 
     modifier = drv: pkgs.haskell.lib.overrideCabal drv (attrs: {
