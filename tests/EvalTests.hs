@@ -373,6 +373,11 @@ case_regression_373 = do
   freeVarsEqual "rec {inherit a; }" ["a"]
   freeVarsEqual "let inherit a; in { }" ["a"]
 
+case_expression_split =
+  constantEqualText
+    "[ \"\" [ \"a\" ] \"c\" ]"
+    "(x: builtins.deepSeq x x) (builtins.split \"(a)b\" \"abc\")"
+
 case_empty_string_equal_null_is_false =
   constantEqualText "false" "\"\" == null"
 
