@@ -125,16 +125,16 @@ let
       then getDefaultGHC
       else compiler;
 
-  #  2020-12-31: NOTE: Remove after `hnix-store 0.4` arrives into Nixpkgs
-  hnix-store-src = pkgs.fetchFromGitHub {
-    owner = "haskell-nix";
-    repo = "hnix-store";
-    rev = "fd09d29b8bef4904058f033d693e7d928a4a92dc";
-    sha256 = "0fxig1ckzknm5g19jzg7rrcpz7ssn4iiv9bs9hff9gfy3ciq4zrs";
-  };
+  # Overlay source
+  # hnix-store-src = pkgs.fetchFromGitHub {
+  #   owner = "haskell-nix";
+  #   repo = "hnix-store";
+  #   rev = "fd09d29b8bef4904058f033d693e7d928a4a92dc";
+  #   sha256 = "0fxig1ckzknm5g19jzg7rrcpz7ssn4iiv9bs9hff9gfy3ciq4zrs";
+  # };
 
   overlay = pkgs.lib.foldr pkgs.lib.composeExtensions (_: _: {}) [
-    (import "${hnix-store-src}/overlay.nix" pkgs pkgs.haskell.lib)
+    # (import "${hnix-store-src}/overlay.nix" pkgs pkgs.haskell.lib)
     (self: super:
       pkgs.lib.optionalAttrs withHoogle {
       ghc = super.ghc // { withPackages = super.ghc.withHoogle; };
