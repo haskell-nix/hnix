@@ -16,6 +16,7 @@ env:
   # rev: "nixos-unstable"         #  2020-09-29: NOTE: HNix default.nix currently pins the rev
   cachixAccount: "hnix"
   CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
+  doCheck: "false"
 
 
 jobs:
