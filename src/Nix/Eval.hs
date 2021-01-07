@@ -367,7 +367,7 @@ assembleString = \case
   Indented _ parts   -> fromParts parts
   DoubleQuoted parts -> fromParts parts
  where
-  fromParts = fmap (fmap stringMConcat . sequence) . traverse go
+  fromParts = fmap (fmap mconcat . sequence) . traverse go
 
   go = runAntiquoted "\n"
                      (pure . Just . makeNixStringWithoutContext)

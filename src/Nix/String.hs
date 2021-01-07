@@ -19,7 +19,6 @@ module Nix.String
   , makeNixStringWithoutContext
   , makeNixStringWithSingletonContext
   , modifyNixContents
-  , stringMConcat
   , WithStringContext
   , WithStringContextT(..)
   , extractNixString
@@ -133,11 +132,6 @@ intercalateNixString sep nss  = NixString contents ctx
   contents = Text.intercalate (nsContents sep) (map nsContents nss)
   ctx      = S.unions (nsContext sep : map nsContext nss)
 
--- | Combine NixStrings using mconcat
-stringMConcat :: [NixString] -> NixString
-stringMConcat =
-  foldr mappend (NixString mempty mempty)
-
 -- | Extract the string contents from a NixString that has no context
 getStringNoContext :: NixString -> Maybe Text
 getStringNoContext (NixString s c) | null c    = Just s
@@ -219,7 +213,7 @@ hackyStringMappend = mappend
 
 -- | Combine NixStrings using mconcat
 hackyStringMConcat :: [NixString] -> NixString
-hackyStringMConcat = stringMConcat
+hackyStringMConcat = mconcat
 
 -- | Constructs a NixString without a context
 hackyMakeNixStringWithoutContext :: Text -> NixString
