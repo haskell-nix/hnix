@@ -303,7 +303,7 @@ instance Convertible e t f m
 
 instance Convertible e t f m
   => ToValue ByteString m (NValue' t f m (NValue t f m)) where
-  toValue = pure . nvStr' . hackyMakeNixStringWithoutContext . decodeUtf8
+  toValue = pure . nvStr' . principledMakeNixStringWithoutContext . decodeUtf8
 
 instance Convertible e t f m
   => ToValue Path m (NValue' t f m (NValue t f m)) where

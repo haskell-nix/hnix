@@ -104,7 +104,7 @@ withNixContext mpath action = do
   opts :: Options <- asks (view hasLens)
   let i = nvList $ map
         ( nvStr
-        . hackyMakeNixStringWithoutContext
+        . principledMakeNixStringWithoutContext
         . Text.pack
         )
         (include opts)
@@ -341,12 +341,12 @@ nixPath = fmap nvList $ flip foldNixPath [] $ \p mn ty rest ->
           PathEntryPath -> ("path", nvPath p)
           PathEntryURI ->
             ( "uri"
-            , nvStr $ hackyMakeNixStringWithoutContext $ Text.pack p
+            , nvStr $ principledMakeNixStringWithoutContext $ Text.pack p
             )
 
         , ( "prefix"
           , nvStr
-            $ hackyMakeNixStringWithoutContext $ Text.pack $ fromMaybe "" mn
+            $ principledMakeNixStringWithoutContext $ Text.pack $ fromMaybe "" mn
           )
         ]
       )
@@ -657,7 +657,7 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
   caps           = nvList (map f captures)
   f (a, (s, _)) = if s < 0 then nvConstant NNull else thunkStr a
 
-thunkStr s = nvStr (hackyMakeNixStringWithoutContext (decodeUtf8 s))
+thunkStr s = nvStr (principledMakeNixStringWithoutContext (decodeUtf8 s))
 
 substring :: forall e t f m. MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
 substring start len str = Prim $
@@ -1321,7 +1321,7 @@ fromJSON arg = demand arg $ fromValue >=> fromStringNoContext >=> \encoded ->
   jsonToNValue = \case
     A.Object m -> flip nvSet M.empty <$> traverse jsonToNValue m
     A.Array  l -> nvList <$> traverse jsonToNValue (V.toList l)
-    A.String s -> pure $ nvStr $ hackyMakeNixStringWithoutContext s
+    A.String s -> pure $ nvStr $ principledMakeNixStringWithoutContext s
     A.Number n -> pure $ nvConstant $ case floatingOrInteger n of
       Left  r -> NFloat r
       Right i -> NInt i

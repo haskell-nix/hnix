@@ -178,10 +178,6 @@ stringHasContext :: NixString -> Bool
 stringHasContext (NixString _ c) = not (null c)
 
 -- | Constructs a NixString without a context
-hackyMakeNixStringWithoutContext :: Text -> NixString
-hackyMakeNixStringWithoutContext = flip NixString mempty
-
--- | Constructs a NixString without a context
 principledMakeNixStringWithoutContext :: Text -> NixString
 principledMakeNixStringWithoutContext = flip NixString mempty
 
@@ -251,4 +247,8 @@ hackyStringMappend (NixString s1 t1) (NixString s2 t2) =
 -- | Combine NixStrings using mconcat
 hackyStringMConcat :: [NixString] -> NixString
 hackyStringMConcat = foldr principledStringMappend (NixString mempty mempty)
+
+-- | Constructs a NixString without a context
+hackyMakeNixStringWithoutContext :: Text -> NixString
+hackyMakeNixStringWithoutContext = principledMakeNixStringWithoutContext
 
