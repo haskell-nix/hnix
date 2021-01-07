@@ -1,3 +1,6 @@
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -16,6 +19,10 @@ import           Control.Monad.Fail
 import           Control.Monad                  ( MonadPlus )
 import           Control.Monad.Fix              ( MonadFix )
 import           Control.Monad.IO.Class         ( MonadIO )
+import           Control.Monad.Trans.Class      ( MonadTrans
+                                                , lift )
+import           Control.Monad.Ref              ( MonadAtomicRef(..)
+                                                , MonadRef(..) )
 import           Control.Monad.Catch            ( MonadCatch
                                                 , MonadMask
                                                 , MonadThrow )
@@ -56,6 +63,19 @@ deriving instance MonadMask (t (Fix1T t m) m) => MonadMask (Fix1T t m)
 
 deriving instance MonadReader e (t (Fix1T t m) m) => MonadReader e (Fix1T t m)
 deriving instance MonadState s (t (Fix1T t m) m) => MonadState s (Fix1T t m)
+
+
+type MonadFix1T t m = (MonadTrans (Fix1T t), Monad (t (Fix1T t m) m))
+
+instance (MonadFix1T t m, MonadRef m) => MonadRef (Fix1T t m) where
+  type Ref (Fix1T t m) = Ref m
+  newRef  = lift . newRef
+  readRef = lift . readRef
+  writeRef r = lift . writeRef r
+
+
+instance (MonadFix1T t m, MonadAtomicRef m) => MonadAtomicRef (Fix1T t m) where
+  atomicModifyRef r = lift . atomicModifyRef r
 
 {-
 

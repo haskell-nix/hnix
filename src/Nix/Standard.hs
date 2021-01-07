@@ -1,15 +1,14 @@
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -52,17 +51,6 @@ import           Nix.Value
 import           Nix.Value.Monad
 import           Nix.Var
 
-
-type MonadFix1T t m = (MonadTrans (Fix1T t), Monad (t (Fix1T t m) m))
-
-instance (MonadFix1T t m, MonadRef m) => MonadRef (Fix1T t m) where
-  type Ref (Fix1T t m) = Ref m
-  newRef  = lift . newRef
-  readRef = lift . readRef
-  writeRef r = lift . writeRef r
-
-instance (MonadFix1T t m, MonadAtomicRef m) => MonadAtomicRef (Fix1T t m) where
-  atomicModifyRef r = lift . atomicModifyRef r
 
 instance (MonadFix1T t m, MonadFail (Fix1T t m), MonadFile m) => MonadFile (Fix1T t m)
 
