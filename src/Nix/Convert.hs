@@ -166,7 +166,7 @@ instance ( Convertible e t f m
 instance Convertible e t f m
   => FromValue ByteString m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
-    NVStr' ns -> pure $ encodeUtf8 <$> hackyGetStringNoContext ns
+    NVStr' ns -> pure $ encodeUtf8 <$> principledGetStringNoContext  ns
     _         -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
@@ -181,7 +181,7 @@ instance ( Convertible e t f m
   => FromValue Path m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
     NVPath' p  -> pure $ Just (Path p)
-    NVStr'  ns -> pure $ Path . Text.unpack <$> hackyGetStringNoContext ns
+    NVStr'  ns -> pure $ Path . Text.unpack <$> principledGetStringNoContext  ns
     NVSet' s _ -> case M.lookup "outPath" s of
       Nothing -> pure Nothing
       Just p  -> fromValueMay @Path p

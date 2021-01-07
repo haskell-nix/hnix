@@ -156,11 +156,6 @@ principledStringMConcat =
 --  mappend = (<>)
 
 -- | Extract the string contents from a NixString that has no context
-hackyGetStringNoContext :: NixString -> Maybe Text
-hackyGetStringNoContext (NixString s c) | null c    = Just s
-                                        | otherwise = Nothing
-
--- | Extract the string contents from a NixString that has no context
 principledGetStringNoContext :: NixString -> Maybe Text
 principledGetStringNoContext (NixString s c) | null c    = Just s
                                              | otherwise = Nothing
@@ -251,4 +246,8 @@ hackyMakeNixStringWithoutContext = principledMakeNixStringWithoutContext
 -- | Extract the string contents from a NixString even if the NixString has an associated context
 hackyStringIgnoreContext :: NixString -> Text
 hackyStringIgnoreContext = principledStringIgnoreContext
+
+-- | Extract the string contents from a NixString that has no context
+hackyGetStringNoContext :: NixString -> Maybe Text
+hackyGetStringNoContext = principledGetStringNoContext
 
