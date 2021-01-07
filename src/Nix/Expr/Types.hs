@@ -73,9 +73,6 @@ type VarName = Text
 hashAt :: VarName -> Lens' (AttrSet v) (Maybe v)
 hashAt = flip alterF
 
--- unfortunate orphans
-instance Hashable1 NonEmpty
-
 -- | The main Nix expression type. As it is polimophic, has a functor,
 -- which allows to traverse expressions and map functions over them.
 -- The actual 'NExpr' type is a fixed point of this functor, defined
@@ -163,8 +160,6 @@ data NExprF r
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
             Foldable, Traversable, Show, NFData, Hashable)
 
-instance Hashable1 NExprF
-
 instance NFData1 NExprF
 
 #ifdef MIN_VERSION_serialise
@@ -212,8 +207,6 @@ data Binding r
   -- > Inherit (Just x) []              SourcePos{}               ~  inherit (x);
   deriving (Generic, Generic1, Typeable, Data, Ord, Eq, Functor,
             Foldable, Traversable, Show, NFData, Hashable)
-
-instance Hashable1 Binding
 
 instance NFData1 Binding
 
