@@ -31,7 +31,6 @@ import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import           Data.Align
 import           Data.Eq.Deriving
-import           Data.Functor.Classes
 import           Data.Functor.Identity
 import qualified Data.HashMap.Lazy             as M
 import           Data.These
@@ -174,13 +173,5 @@ thunkEqM lt rt = force lt $ \lv -> force rt $ \rv ->
         (NVList _     , NVList _     ) -> unsafePtrEq
         (NVSet _ _    , NVSet _ _    ) -> unsafePtrEq
         _                              -> valueEqM lv rv
-
-instance Eq1 (NValueF p m) where
-  liftEq _  (NVConstantF x) (NVConstantF y) = x == y
-  liftEq _  (NVStrF      x) (NVStrF      y) = x == y
-  liftEq eq (NVListF     x) (NVListF     y) = liftEq eq x y
-  liftEq eq (NVSetF x _   ) (NVSetF y _   ) = liftEq eq x y
-  liftEq _  (NVPathF x    ) (NVPathF y    ) = x == y
-  liftEq _  _               _               = False
 
 $(deriveEq1 ''NValue')

@@ -28,7 +28,8 @@ import           Control.Monad.Trans.Class      ( MonadTrans, lift )
 import qualified Data.Aeson                    as A
 import           Data.Functor.Classes           ( Show1
                                                 , liftShowsPrec
-                                                , showsUnaryWith )
+                                                , showsUnaryWith
+                                                , Eq1(liftEq) )
 import           Data.HashMap.Lazy              ( HashMap )
 import           Data.Text                      ( Text )
 import           Data.Typeable                  ( Typeable )
@@ -99,6 +100,14 @@ instance Show r => Show (NValueF p m r) where
     showsCon1 :: Show a => String -> a -> Int -> String -> String
     showsCon1 con a d =
       showParen (d > 10) $ showString (con <> " ") . showsPrec 11 a
+
+instance Eq1 (NValueF p m) where
+  liftEq _  (NVConstantF x) (NVConstantF y) = x == y
+  liftEq _  (NVStrF      x) (NVStrF      y) = x == y
+  liftEq eq (NVListF     x) (NVListF     y) = liftEq eq x y
+  liftEq eq (NVSetF x _   ) (NVSetF y _   ) = liftEq eq x y
+  liftEq _  (NVPathF x    ) (NVPathF y    ) = x == y
+  liftEq _  _               _               = False
 
 lmapNValueF :: Functor m => (b -> a) -> NValueF a m r -> NValueF b m r
 lmapNValueF f = \case
