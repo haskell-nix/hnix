@@ -52,8 +52,6 @@ import           Nix.Value.Monad
 import           Nix.Var
 
 
-instance (MonadFix1T t m, MonadFail (Fix1T t m), MonadFile m) => MonadFile (Fix1T t m)
-
 instance (MonadFix1T t m, MonadStore m) => MonadStore (Fix1T t m) where
   addToStore a b c d = lift $ addToStore a b c d
   addTextToStore' a b c d = lift $ addTextToStore' a b c d
