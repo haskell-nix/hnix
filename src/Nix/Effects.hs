@@ -9,6 +9,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Nix.Effects where
 
@@ -26,6 +29,7 @@ import qualified Data.Text.Encoding            as T
 import           Network.HTTP.Client     hiding ( path, Proxy )
 import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
+import           Nix.Utils.Fix1
 import           Nix.Expr
 import           Nix.Frames              hiding ( Proxy )
 import           Nix.Parser
@@ -286,3 +290,21 @@ addPath p = either throwError return =<< addToStore (T.pack $ takeFileName p) p 
 
 toFile_ :: (Framed e m, MonadStore m) => FilePath -> String -> m StorePath
 toFile_ p contents = addTextToStore (T.pack p) (T.pack contents) HS.empty False
+
+-- All of the following type classes defer to the underlying 'm'.
+
+deriving instance MonadPutStr (t (Fix1 t)) => MonadPutStr (Fix1 t)
+deriving instance MonadHttp (t (Fix1 t)) => MonadHttp (Fix1 t)
+deriving instance MonadEnv (t (Fix1 t)) => MonadEnv (Fix1 t)
+deriving instance MonadPaths (t (Fix1 t)) => MonadPaths (Fix1 t)
+deriving instance MonadInstantiate (t (Fix1 t)) => MonadInstantiate (Fix1 t)
+deriving instance MonadExec (t (Fix1 t)) => MonadExec (Fix1 t)
+deriving instance MonadIntrospect (t (Fix1 t)) => MonadIntrospect (Fix1 t)
+
+deriving instance MonadPutStr (t (Fix1T t m) m) => MonadPutStr (Fix1T t m)
+deriving instance MonadHttp (t (Fix1T t m) m) => MonadHttp (Fix1T t m)
+deriving instance MonadEnv (t (Fix1T t m) m) => MonadEnv (Fix1T t m)
+deriving instance MonadPaths (t (Fix1T t m) m) => MonadPaths (Fix1T t m)
+deriving instance MonadInstantiate (t (Fix1T t m) m) => MonadInstantiate (Fix1T t m)
+deriving instance MonadExec (t (Fix1T t m) m) => MonadExec (Fix1T t m)
+deriving instance MonadIntrospect (t (Fix1T t m) m) => MonadIntrospect (Fix1T t m)
