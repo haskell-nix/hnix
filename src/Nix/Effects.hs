@@ -74,6 +74,10 @@ class (MonadFile m,
 
   traceEffect :: String -> m ()
 
+instance (MonadFix1T t m, MonadStore m) => MonadStore (Fix1T t m) where
+  addToStore a b c d = lift $ addToStore a b c d
+  addTextToStore' a b c d = lift $ addTextToStore' a b c d
+
 class Monad m => MonadIntrospect m where
   recursiveSize :: a -> m Word
   default recursiveSize :: (MonadTrans t, MonadIntrospect m', m ~ t m') => a -> m Word

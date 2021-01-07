@@ -52,12 +52,6 @@ import           Nix.Value.Monad
 import           Nix.Var
 
 
-instance (MonadFix1T t m, MonadStore m) => MonadStore (Fix1T t m) where
-  addToStore a b c d = lift $ addToStore a b c d
-  addTextToStore' a b c d = lift $ addTextToStore' a b c d
-
----------------------------------------------------------------------------------
-
 newtype StdCited m a = StdCited
   { _stdCited :: Cited (StdThunk m) (StdCited m) m a }
   deriving
