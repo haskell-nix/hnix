@@ -28,9 +28,6 @@ module Nix.String
   , runWithStringContextT'
   , runWithStringContext
   , runWithStringContext'
-  , hackyGetStringNoContext
-  , hackyStringIgnoreContext
-  , hackyMakeNixStringWithoutContext
   )
 where
 
@@ -227,32 +224,4 @@ intercalateNixString sep nss  = NixString contents ctx
  where
   contents = Text.intercalate (nsContents sep) (map nsContents nss)
   ctx      = S.unions (nsContext sep : map nsContext nss)
-
-
--- * Deprecated API
-
--- {-# WARNING hackyGetStringNoContext, hackyStringIgnoreContext, hackyMakeNixStringWithoutContext "This NixString function needs to be replaced" #-}
-
--- NOTE: These functions are ERRADICATED from the source code.
--- ERRADICATE them from the API.
-
--- | Combine two NixStrings using mappend
-hackyStringMappend :: NixString -> NixString -> NixString
-hackyStringMappend = mappend
-
--- | Combine NixStrings using mconcat
-hackyStringMConcat :: [NixString] -> NixString
-hackyStringMConcat = mconcat
-
--- | Constructs a NixString without a context
-hackyMakeNixStringWithoutContext :: Text -> NixString
-hackyMakeNixStringWithoutContext = makeNixStringWithoutContext
-
--- | Extract the string contents from a NixString even if the NixString has an associated context
-hackyStringIgnoreContext :: NixString -> Text
-hackyStringIgnoreContext = stringIgnoreContext
-
--- | Extract the string contents from a NixString that has no context
-hackyGetStringNoContext :: NixString -> Maybe Text
-hackyGetStringNoContext = getStringNoContext
 
