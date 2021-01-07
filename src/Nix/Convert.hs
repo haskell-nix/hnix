@@ -151,7 +151,7 @@ instance ( Convertible e t f m
     NVStr' ns -> pure $ Just ns
     NVPath' p ->
       Just
-        .   (\s -> principledMakeNixStringWithSingletonContext s (StringContext s DirectPath))
+        .   (\s -> makeNixStringWithSingletonContext s (StringContext s DirectPath))
         .   Text.pack
         .   unStorePath
         <$> addPath p
@@ -166,7 +166,7 @@ instance ( Convertible e t f m
 instance Convertible e t f m
   => FromValue ByteString m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
-    NVStr' ns -> pure $ encodeUtf8 <$> hackyGetStringNoContext ns
+    NVStr' ns -> pure $ encodeUtf8 <$> getStringNoContext  ns
     _         -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
@@ -181,7 +181,7 @@ instance ( Convertible e t f m
   => FromValue Path m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
     NVPath' p  -> pure $ Just (Path p)
-    NVStr'  ns -> pure $ Path . Text.unpack <$> hackyGetStringNoContext ns
+    NVStr'  ns -> pure $ Path . Text.unpack <$> getStringNoContext  ns
     NVSet' s _ -> case M.lookup "outPath" s of
       Nothing -> pure Nothing
       Just p  -> fromValueMay @Path p
@@ -303,7 +303,7 @@ instance Convertible e t f m
 
 instance Convertible e t f m
   => ToValue ByteString m (NValue' t f m (NValue t f m)) where
-  toValue = pure . nvStr' . hackyMakeNixStringWithoutContext . decodeUtf8
+  toValue = pure . nvStr' . makeNixStringWithoutContext . decodeUtf8
 
 instance Convertible e t f m
   => ToValue Path m (NValue' t f m (NValue t f m)) where
@@ -317,7 +317,7 @@ instance ( Convertible e t f m
          )
   => ToValue SourcePos m (NValue' t f m (NValue t f m)) where
   toValue (SourcePos f l c) = do
-    f' <- toValue (principledMakeNixStringWithoutContext (Text.pack f))
+    f' <- toValue (makeNixStringWithoutContext (Text.pack f))
     l' <- toValue (unPos l)
     c' <- toValue (unPos c)
     let pos = M.fromList [("file" :: Text, f'), ("line", l'), ("column", c')]
@@ -359,7 +359,7 @@ instance Convertible e t f m
       else pure Nothing
     outputs <- do
       let outputs =
-            principledMakeNixStringWithoutContext <$> nlcvOutputs nlcv
+            makeNixStringWithoutContext <$> nlcvOutputs nlcv
       ts :: [NValue t f m] <- traverse toValue outputs
       case ts of
         [] -> pure Nothing

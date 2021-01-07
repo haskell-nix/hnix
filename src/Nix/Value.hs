@@ -85,7 +85,7 @@ instance Foldable (NValueF p m) where
 instance Show r => Show (NValueF p m r) where
   showsPrec = flip go   where
     go (NVConstantF atom  ) = showsCon1 "NVConstant" atom
-    go (NVStrF      ns    ) = showsCon1 "NVStr" (hackyStringIgnoreContext ns)
+    go (NVStrF      ns    ) = showsCon1 "NVStr" (stringIgnoreContext ns)
     go (NVListF     lst   ) = showsCon1 "NVList" lst
     go (NVSetF     attrs _) = showsCon1 "NVSet" attrs
     go (NVClosureF p     _) = showsCon1 "NVClosure" p
@@ -176,7 +176,7 @@ instance Comonad f => Show1 (NValue' t f m) where
   liftShowsPrec sp sl p = \case
     NVConstant' atom  -> showsUnaryWith showsPrec "NVConstantF" p atom
     NVStr' ns ->
-      showsUnaryWith showsPrec "NVStrF" p (hackyStringIgnoreContext ns)
+      showsUnaryWith showsPrec "NVStrF" p (stringIgnoreContext ns)
     NVList' lst       -> showsUnaryWith (liftShowsPrec sp sl) "NVListF" p lst
     NVSet' attrs _    -> showsUnaryWith (liftShowsPrec sp sl) "NVSetF" p attrs
     NVPath' path      -> showsUnaryWith showsPrec "NVPathF" p path

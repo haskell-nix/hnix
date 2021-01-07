@@ -76,14 +76,15 @@ import           Nix.Options
 import           Nix.Parser              hiding ( nixPath )
 import           Nix.Render
 import           Nix.Scope
-import           Nix.String
+import           Nix.String              hiding (getContext)
+import qualified Nix.String                    as NixString
 import           Nix.String.Coerce
 import           Nix.Utils
 import           Nix.Value
 import           Nix.Value.Equal
 import           Nix.Value.Monad
 import           Nix.XML
-import           System.Nix.Base32              as Base32
+import           System.Nix.Base32             as Base32
 import           System.FilePath
 import           System.Posix.Files             ( isRegularFile
                                                 , isDirectory
@@ -104,7 +105,7 @@ withNixContext mpath action = do
   opts :: Options <- asks (view hasLens)
   let i = nvList $ map
         ( nvStr
-        . hackyMakeNixStringWithoutContext
+        . makeNixStringWithoutContext
         . Text.pack
         )
         (include opts)
@@ -140,7 +141,7 @@ data Builtin v = Builtin
 builtinsList :: forall e t f m . MonadNix e t f m => m [Builtin (NValue t f m)]
 builtinsList = sequence
   [ do
-    version <- toValue (principledMakeNixStringWithoutContext "2.3")
+    version <- toValue (makeNixStringWithoutContext "2.3")
     pure $ Builtin Normal ("nixVersion", version)
   , do
     version <- toValue (5 :: Int)
@@ -163,7 +164,7 @@ builtinsList = sequence
   , add2 Normal   "compareVersions"  compareVersions_
   , add  Normal   "concatLists"      concatLists
   , add2 Normal   "concatMap"        concatMap_
-  , add' Normal   "concatStringsSep" (arity2 principledIntercalateNixString)
+  , add' Normal   "concatStringsSep" (arity2 intercalateNixString)
   , add0 Normal   "currentSystem"    currentSystem
   , add0 Normal   "currentTime"      currentTime_
   , add2 Normal   "deepSeq"          deepSeq
@@ -260,9 +261,9 @@ builtinsList = sequence
   , add2 Normal   "sort"             sort_
   , add2 Normal   "split"            split_
   , add  Normal   "splitVersion"     splitVersion_
-  , add0 Normal   "storeDir"         (pure $ nvStr $ principledMakeNixStringWithoutContext "/nix/store")
+  , add0 Normal   "storeDir"         (pure $ nvStr $ makeNixStringWithoutContext "/nix/store")
   --, add  Normal   "storePath"        storePath
-  , add' Normal   "stringLength"     (arity1 $ Text.length . principledStringIgnoreContext)
+  , add' Normal   "stringLength"     (arity1 $ Text.length . stringIgnoreContext)
   , add' Normal   "sub"              (arity2 ((-) @Integer))
   , add' Normal   "substring"        substring
   , add  Normal   "tail"             tail_
@@ -320,7 +321,7 @@ foldNixPath f z = do
   mDataDir <- getEnvVar "NIX_DATA_DIR"
   dataDir <- maybe getDataDir pure mDataDir
   foldrM go z
-    $  map (fromInclude . principledStringIgnoreContext) dirs
+    $  map (fromInclude . stringIgnoreContext) dirs
     ++ case mPath of
          Nothing  -> []
          Just str -> uriAwareSplit (Text.pack str)
@@ -341,12 +342,12 @@ nixPath = fmap nvList $ flip foldNixPath [] $ \p mn ty rest ->
           PathEntryPath -> ("path", nvPath p)
           PathEntryURI ->
             ( "uri"
-            , nvStr $ hackyMakeNixStringWithoutContext $ Text.pack p
+            , nvStr $ makeNixStringWithoutContext $ Text.pack p
             )
 
         , ( "prefix"
           , nvStr
-            $ hackyMakeNixStringWithoutContext $ Text.pack $ fromMaybe "" mn
+            $ makeNixStringWithoutContext $ Text.pack $ fromMaybe "" mn
           )
         ]
       )
@@ -392,7 +393,7 @@ unsafeGetAttrPos
   -> m (NValue t f m)
 unsafeGetAttrPos x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
   (NVStr ns, NVSet _ apos) ->
-    case M.lookup (hackyStringIgnoreContext ns) apos of
+    case M.lookup (stringIgnoreContext ns) apos of
       Nothing    -> pure $ nvConstant NNull
       Just delta -> toValue delta
   (x, y) ->
@@ -538,7 +539,7 @@ splitVersion_ = fromValue >=> fromStringNoContext >=> \s ->
     $ nvList
     $ flip map (splitVersion s)
     $ nvStr
-    . principledMakeNixStringWithoutContext
+    . makeNixStringWithoutContext
     . versionComponentToString
 
 compareVersions :: Text -> Text -> Ordering
@@ -585,10 +586,10 @@ parseDrvName = fromValue >=> fromStringNoContext >=> \s -> do
   let (name :: Text, version :: Text) = splitDrvName s
   toValue @(AttrSet (NValue t f m)) $ M.fromList
     [ ( "name" :: Text
-      , nvStr $ principledMakeNixStringWithoutContext name
+      , nvStr $ makeNixStringWithoutContext name
       )
     , ( "version"
-      , nvStr $ principledMakeNixStringWithoutContext version
+      , nvStr $ makeNixStringWithoutContext version
       )
     ]
 
@@ -604,13 +605,13 @@ match_ pat str = fromValue pat >>= fromStringNoContext >>= \p ->
         -- context of its second argument. This is probably a bug but we're
         -- going to preserve the behavior here until it is fixed upstream.
         -- Relevant issue: https://github.com/NixOS/nix/issues/2547
-    let s  = principledStringIgnoreContext ns
+    let s  = stringIgnoreContext ns
 
     let re = makeRegex (encodeUtf8 p) :: Regex
     let mkMatch t
           | Text.null t = toValue ()
           | -- Shorthand for Null
-            otherwise   = toValue $ principledMakeNixStringWithoutContext t
+            otherwise   = toValue $ makeNixStringWithoutContext t
     case matchOnceText re (encodeUtf8 s) of
       Just ("", sarr, "") -> do
         let s = map fst (elems sarr)
@@ -630,7 +631,7 @@ split_ pat str = fromValue pat >>= fromStringNoContext >>= \p ->
         -- context of its second argument. This is probably a bug but we're
         -- going to preserve the behavior here until it is fixed upstream.
         -- Relevant issue: https://github.com/NixOS/nix/issues/2547
-    let s = principledStringIgnoreContext ns
+    let s = stringIgnoreContext ns
     let re       = makeRegex (encodeUtf8 p) :: Regex
         haystack = encodeUtf8 s
     pure $ nvList $ splitMatches 0
@@ -657,13 +658,13 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
   caps           = nvList (map f captures)
   f (a, (s, _)) = if s < 0 then nvConstant NNull else thunkStr a
 
-thunkStr s = nvStr (hackyMakeNixStringWithoutContext (decodeUtf8 s))
+thunkStr s = nvStr (makeNixStringWithoutContext (decodeUtf8 s))
 
 substring :: forall e t f m. MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
 substring start len str = Prim $
   if start < 0
   then throwError $ ErrorCall $ "builtins.substring: negative start position: " ++ show start
-  else pure $ principledModifyNixContents (take . Text.drop start) str
+  else pure $ modifyNixContents (take . Text.drop start) str
  where
   --NOTE: negative values of 'len' are OK, and mean "take everything"
   take = if len < 0 then id else Text.take len
@@ -674,7 +675,7 @@ attrNames =
   fromValue @(AttrSet (NValue t f m))
     >=> fmap getDeeper
     .   toValue
-    .   map principledMakeNixStringWithoutContext
+    .   map makeNixStringWithoutContext
     .   sort
     .   M.keys
 
@@ -714,7 +715,7 @@ mapAttrs_ f xs = fromValue @(AttrSet (NValue t f m)) xs >>= \aset -> do
     defer @(NValue t f m)
       $   withFrame Debug (ErrorCall "While applying f in mapAttrs:\n")
       $   callFunc ?? value
-      =<< callFunc f (nvStr (principledMakeNixStringWithoutContext key))
+      =<< callFunc f (nvStr (makeNixStringWithoutContext key))
   toValue . M.fromList . zip (map fst pairs) $ values
 
 filter_
@@ -745,7 +746,7 @@ baseNameOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 baseNameOf x = do
   ns <- coerceToString callFunc DontCopyToStore CoerceStringy x
   pure $ nvStr
-    (principledModifyNixContents (Text.pack . takeFileName . Text.unpack) ns)
+    (modifyNixContents (Text.pack . takeFileName . Text.unpack) ns)
 
 bitAnd
   :: forall e t f m
@@ -783,7 +784,7 @@ builtinsBuiltin = (throwError $ ErrorCall "HNix does not provide builtins.builti
 dirOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 dirOf x = demand x $ \case
   NVStr ns -> pure $ nvStr
-    (principledModifyNixContents (Text.pack . takeDirectory . Text.unpack) ns)
+    (modifyNixContents (Text.pack . takeDirectory . Text.unpack) ns)
   NVPath path -> pure $ nvPath $ takeDirectory path
   v ->
     throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
@@ -793,7 +794,7 @@ unsafeDiscardStringContext
   :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 unsafeDiscardStringContext mnv = do
   ns <- fromValue mnv
-  toValue $ principledMakeNixStringWithoutContext $ principledStringIgnoreContext
+  toValue $ makeNixStringWithoutContext $ stringIgnoreContext
     ns
 
 seq_
@@ -866,7 +867,7 @@ instance Comonad f => Eq (WValue t f m) where
   WValue (NVConstant (NFloat x)) == WValue (NVConstant (NFloat y)) = x == y
   WValue (NVPath     x         ) == WValue (NVPath     y         ) = x == y
   WValue (NVStr x) == WValue (NVStr y) =
-    hackyStringIgnoreContext x == hackyStringIgnoreContext y
+    stringIgnoreContext x == stringIgnoreContext y
   _ == _ = False
 
 instance Comonad f => Ord (WValue t f m) where
@@ -878,7 +879,7 @@ instance Comonad f => Ord (WValue t f m) where
   WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NFloat y)) = x <= y
   WValue (NVPath     x         ) <= WValue (NVPath     y         ) = x <= y
   WValue (NVStr x) <= WValue (NVStr y) =
-    hackyStringIgnoreContext x <= hackyStringIgnoreContext y
+    stringIgnoreContext x <= stringIgnoreContext y
   _ <= _ = False
 
 genericClosure
@@ -929,7 +930,7 @@ replaceStrings
 replaceStrings tfrom tto ts = fromValue (Deeper tfrom) >>= \(nsFrom :: [NixString]) ->
   fromValue (Deeper tto) >>= \(nsTo :: [NixString]) ->
     fromValue ts >>= \(ns :: NixString) -> do
-      let from = map principledStringIgnoreContext nsFrom
+      let from = map stringIgnoreContext nsFrom
       when (length nsFrom /= length nsTo)
         $  throwError
         $  ErrorCall
@@ -942,14 +943,14 @@ replaceStrings tfrom tto ts = fromValue (Deeper tfrom) >>= \(nsFrom :: [NixStrin
           let rest = Text.drop (Text.length prefix) s
           pure (prefix, replacement, rest)
         finish b =
-          principledMakeNixString (LazyText.toStrict $ Builder.toLazyText b)
+          makeNixString (LazyText.toStrict $ Builder.toLazyText b)
         go orig result ctx = case lookupPrefix orig of
           Nothing -> case Text.uncons orig of
             Nothing     -> finish result ctx
             Just (h, t) -> go t (result <> Builder.singleton h) ctx
           Just (prefix, replacementNS, rest) ->
-            let replacement = principledStringIgnoreContext replacementNS
-                newCtx      = principledGetContext replacementNS
+            let replacement = stringIgnoreContext replacementNS
+                newCtx      = NixString.getContext replacementNS
             in  case prefix of
                   "" -> case Text.uncons rest of
                     Nothing -> finish
@@ -968,8 +969,8 @@ replaceStrings tfrom tto ts = fromValue (Deeper tfrom) >>= \(nsFrom :: [NixStrin
                           (result <> Builder.fromText replacement)
                           (ctx <> newCtx)
       toValue
-        $ go (principledStringIgnoreContext ns) mempty
-        $ principledGetContext ns
+        $ go (stringIgnoreContext ns) mempty
+        $ NixString.getContext ns
 
 removeAttrs
   :: forall e t f m
@@ -1015,14 +1016,11 @@ toFile
 toFile name s = do
   name' <- fromStringNoContext =<< fromValue name
   s'    <- fromValue s
-  -- TODO Using hacky here because we still need to turn the context into
-  -- runtime references of the resulting file.
-  -- See prim_toFile in nix/src/libexpr/primops.cc
   mres  <- toFile_ (Text.unpack name')
-                   (Text.unpack $ hackyStringIgnoreContext s')
+                   (Text.unpack $ stringIgnoreContext s')
   let t  = Text.pack $ unStorePath mres
       sc = StringContext t DirectPath
-  toValue $ principledMakeNixStringWithSingletonContext t sc
+  toValue $ makeNixStringWithSingletonContext t sc
 
 toPath :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toPath = fromValue @Path >=> toValue @Path
@@ -1030,7 +1028,7 @@ toPath = fromValue @Path >=> toValue @Path
 pathExists_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 pathExists_ path = demand path $ \case
   NVPath p  -> toValue =<< pathExists p
-  NVStr  ns -> toValue =<< pathExists (Text.unpack (hackyStringIgnoreContext ns))
+  NVStr  ns -> toValue =<< pathExists (Text.unpack (stringIgnoreContext ns))
   v ->
     throwError
       $  ErrorCall
@@ -1084,7 +1082,7 @@ isFunction func = demand func $ \case
 throw_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 throw_ mnv = do
   ns <- coerceToString callFunc CopyToStore CoerceStringy mnv
-  throwError . ErrorCall . Text.unpack $ principledStringIgnoreContext ns
+  throwError . ErrorCall . Text.unpack $ stringIgnoreContext ns
 
 import_
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1115,7 +1113,7 @@ scopedImport asetArg pathArg = fromValue @(AttrSet (NValue t f m)) asetArg >>= \
 getEnv_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 getEnv_ = fromValue >=> fromStringNoContext >=> \s -> do
   mres <- getEnvVar (Text.unpack s)
-  toValue $ principledMakeNixStringWithoutContext $ maybe "" Text.pack mres
+  toValue $ makeNixStringWithoutContext $ maybe "" Text.pack mres
 
 sort_
   :: MonadNix e t f m
@@ -1156,7 +1154,7 @@ lessThan ta tb = demand ta $ \va -> demand tb $ \vb -> do
       (NFloat a, NFloat b) -> pure $ a < b
       _                    -> badType
     (NVStr a, NVStr b) ->
-      pure $ principledStringIgnoreContext a < principledStringIgnoreContext b
+      pure $ stringIgnoreContext a < stringIgnoreContext b
     _ -> badType
 
 concatLists
@@ -1203,7 +1201,7 @@ hashString
   :: forall e t f m. MonadNix e t f m => NixString -> NixString -> Prim m NixString
 hashString nsAlgo ns = Prim $ do
   algo <- fromStringNoContext nsAlgo
-  let f g = pure $ principledModifyNixContents g ns
+  let f g = pure $ modifyNixContents g ns
   case algo of
     "md5" ->
       f $ \s ->
@@ -1227,11 +1225,11 @@ hashString nsAlgo ns = Prim $ do
 placeHolder :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
   h <- runPrim
-    (hashString (principledMakeNixStringWithoutContext "sha256")
-                (principledMakeNixStringWithoutContext ("nix-output:" <> t))
+    (hashString (makeNixStringWithoutContext "sha256")
+                (makeNixStringWithoutContext ("nix-output:" <> t))
     )
   toValue
-    $ principledMakeNixStringWithoutContext
+    $ makeNixStringWithoutContext
     $ Text.cons '/'
     $ Base32.encode
     $ case Base16.decode (text h) of -- The result coming out of hashString is base16 encoded
@@ -1243,12 +1241,12 @@ placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
       (_, e) -> error $ "Couldn't Base16 decode the text: '" <> show (text h) <> "'.\nUndecodable remainder: '" <> show e <> "'."
 #endif
    where
-    text h = encodeUtf8 $ principledStringIgnoreContext h
+    text h = encodeUtf8 $ stringIgnoreContext h
 
 absolutePathFromValue :: MonadNix e t f m => NValue t f m -> m FilePath
 absolutePathFromValue = \case
   NVStr ns -> do
-    let path = Text.unpack $ hackyStringIgnoreContext ns
+    let path = Text.unpack $ stringIgnoreContext ns
     unless (isAbsolute path)
       $  throwError
       $  ErrorCall
@@ -1272,7 +1270,7 @@ findFile_
 findFile_ aset filePath = demand aset $ \aset' -> demand filePath $ \filePath' ->
   case (aset', filePath') of
     (NVList x, NVStr ns) -> do
-      mres <- findPath @t @f @m x (Text.unpack (hackyStringIgnoreContext ns))
+      mres <- findPath @t @f @m x (Text.unpack (stringIgnoreContext ns))
       pure $ nvPath mres
     (NVList _, y) ->
       throwError $ ErrorCall $ "expected a string, got " ++ show y
@@ -1289,7 +1287,7 @@ data FileType
    deriving (Show, Read, Eq, Ord)
 
 instance Convertible e t f m => ToValue FileType m (NValue t f m) where
-  toValue = toValue . principledMakeNixStringWithoutContext . \case
+  toValue = toValue . makeNixStringWithoutContext . \case
     FileTypeRegular   -> "regular" :: Text
     FileTypeDirectory -> "directory"
     FileTypeSymlink   -> "symlink"
@@ -1321,7 +1319,7 @@ fromJSON arg = demand arg $ fromValue >=> fromStringNoContext >=> \encoded ->
   jsonToNValue = \case
     A.Object m -> flip nvSet M.empty <$> traverse jsonToNValue m
     A.Array  l -> nvList <$> traverse jsonToNValue (V.toList l)
-    A.String s -> pure $ nvStr $ hackyMakeNixStringWithoutContext s
+    A.String s -> pure $ nvStr $ makeNixStringWithoutContext s
     A.Number n -> pure $ nvConstant $ case floatingOrInteger n of
       Left  r -> NFloat r
       Right i -> NInt i
@@ -1335,7 +1333,7 @@ toXML_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toXML_ v = demand v $ fmap (nvStr . toXML) . normalForm
 
 typeOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-typeOf v = demand v $ toValue . principledMakeNixStringWithoutContext . \case
+typeOf v = demand v $ toValue . makeNixStringWithoutContext . \case
   NVConstant a -> case a of
     NURI   _ -> "string"
     NInt   _ -> "int"
@@ -1372,7 +1370,7 @@ trace_
 trace_ msg action = do
   traceEffect @t @f @m
     .   Text.unpack
-    .   principledStringIgnoreContext
+    .   stringIgnoreContext
     =<< fromValue msg
   pure action
 
@@ -1393,7 +1391,7 @@ exec_ xs = do
   -- TODO Still need to do something with the context here
   -- See prim_exec in nix/src/libexpr/primops.cc
   -- Requires the implementation of EvalState::realiseContext
-  exec (map (Text.unpack . hackyStringIgnoreContext) xs)
+  exec (map (Text.unpack . stringIgnoreContext) xs)
 
 fetchurl
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1417,7 +1415,7 @@ fetchurl v = demand v $ \case
         $  "builtins.fetchurl: Expected URI or string, got "
         ++ show v
 
-  noContextAttrs ns = case principledGetStringNoContext ns of
+  noContextAttrs ns = case getStringNoContext ns of
     Nothing ->
       throwError $ ErrorCall $ "builtins.fetchurl: unsupported arguments to url"
     Just t -> pure t
@@ -1440,7 +1438,7 @@ currentSystem :: MonadNix e t f m => m (NValue t f m)
 currentSystem = do
   os   <- getCurrentSystemOS
   arch <- getCurrentSystemArch
-  pure $ nvStr $ principledMakeNixStringWithoutContext (arch <> "-" <> os)
+  pure $ nvStr $ makeNixStringWithoutContext (arch <> "-" <> os)
 
 currentTime_ :: MonadNix e t f m => m (NValue t f m)
 currentTime_ = do
@@ -1458,7 +1456,7 @@ getContext
 getContext x = demand x $ \case
   (NVStr ns) -> do
     let context =
-          getNixLikeContext $ toNixLikeContext $ principledGetContext ns
+          getNixLikeContext $ toNixLikeContext $ NixString.getContext ns
     valued :: M.HashMap Text (NValue t f m) <- sequenceA $ M.map toValue context
     pure $ nvSet valued M.empty
   x ->
@@ -1483,7 +1481,7 @@ appendContext x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
           Nothing -> pure []
           Just os -> demand os $ \case
             NVList vs ->
-              forM vs $ fmap principledStringIgnoreContext . fromValue
+              forM vs $ fmap stringIgnoreContext . fromValue
             x ->
               throwError
                 $ ErrorCall
@@ -1496,13 +1494,13 @@ appendContext x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
           $  "Invalid types for context value in builtins.appendContext: "
           ++ show x
     toValue
-      $ principledMakeNixString (principledStringIgnoreContext ns)
+      $ makeNixString (stringIgnoreContext ns)
       $ fromNixLikeContext
       $ NixLikeContext
       $ M.unionWith (<>) newContextValues
       $ getNixLikeContext
       $ toNixLikeContext
-      $ principledGetContext ns
+      $ NixString.getContext ns
   (x, y) ->
     throwError
       $  ErrorCall
