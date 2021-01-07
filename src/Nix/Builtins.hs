@@ -1015,9 +1015,6 @@ toFile
 toFile name s = do
   name' <- fromStringNoContext =<< fromValue name
   s'    <- fromValue s
-  -- TODO Using hacky here because we still need to turn the context into
-  -- runtime references of the resulting file.
-  -- See prim_toFile in nix/src/libexpr/primops.cc
   mres  <- toFile_ (Text.unpack name')
                    (Text.unpack $ principledStringIgnoreContext s')
   let t  = Text.pack $ unStorePath mres

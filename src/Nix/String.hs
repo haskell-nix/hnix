@@ -15,11 +15,8 @@ module Nix.String
   , fromNixLikeContext
   , stringHasContext
   , principledIntercalateNixString
-  , hackyGetStringNoContext
   , principledGetStringNoContext
   , principledStringIgnoreContext
-  , hackyStringIgnoreContext
-  , hackyMakeNixStringWithoutContext
   , principledMakeNixStringWithoutContext
   , principledMakeNixStringWithSingletonContext
   , principledModifyNixContents
@@ -35,6 +32,9 @@ module Nix.String
   , runWithStringContextT'
   , runWithStringContext
   , runWithStringContext'
+  , hackyGetStringNoContext
+  , hackyStringIgnoreContext
+  , hackyMakeNixStringWithoutContext
   )
 where
 
@@ -232,12 +232,11 @@ runWithStringContext' = runIdentity . runWithStringContextT'
 
 -- | Combine two NixStrings using mappend
 hackyStringMappend :: NixString -> NixString -> NixString
-hackyStringMappend (NixString s1 t1) (NixString s2 t2) =
-  NixString (s1 <> s2) (t1 <> t2)
+hackyStringMappend = principledStringMappend
 
 -- | Combine NixStrings using mconcat
 hackyStringMConcat :: [NixString] -> NixString
-hackyStringMConcat = foldr principledStringMappend (NixString mempty mempty)
+hackyStringMConcat = principledStringMConcat
 
 -- | Constructs a NixString without a context
 hackyMakeNixStringWithoutContext :: Text -> NixString
