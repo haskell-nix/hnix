@@ -543,7 +543,6 @@ instance ToJSON Pos where
 instance ToJSON SourcePos
 instance ToJSON a => ToJSON (NKeyName a)
 instance ToJSON a => ToJSON (Params a)
-instance ToJSON NAtom
 instance ToJSON NUnaryOp
 instance ToJSON NBinaryOp
 instance ToJSON NRecordType
@@ -557,7 +556,6 @@ instance FromJSON Pos where
 instance FromJSON SourcePos
 instance FromJSON a => FromJSON (NKeyName a)
 instance FromJSON a => FromJSON (Params a)
-instance FromJSON NAtom
 instance FromJSON NUnaryOp
 instance FromJSON NBinaryOp
 instance FromJSON NRecordType

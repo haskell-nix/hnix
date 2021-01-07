@@ -18,6 +18,7 @@ import           Data.Text                      ( Text
                                                 )
 import           GHC.Generics
 import           Data.Binary                    ( Binary )
+import           Data.Aeson.Types               ( FromJSON, ToJSON )
 
 -- | Atoms are values that evaluate to themselves. This means that
 -- they appear in both the parsed AST (in the form of literals) and
@@ -42,6 +43,8 @@ instance Serialise NAtom
 #endif
 
 instance Binary NAtom
+instance ToJSON NAtom
+instance FromJSON NAtom
 
 -- | Translate an atom into its nix representation.
 atomText :: NAtom -> Text
