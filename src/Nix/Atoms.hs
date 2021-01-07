@@ -11,12 +11,13 @@ import Codec.Serialise
 #endif
 import           Control.DeepSeq
 import           Data.Data
-import           Data.Fixed                     (mod')
+import           Data.Fixed                     ( mod' )
 import           Data.Hashable
 import           Data.Text                      ( Text
                                                 , pack
                                                 )
 import           GHC.Generics
+import           Data.Binary                    ( Binary )
 
 -- | Atoms are values that evaluate to themselves. This means that
 -- they appear in both the parsed AST (in the form of literals) and
@@ -39,6 +40,8 @@ data NAtom
 #ifdef MIN_VERSION_serialise
 instance Serialise NAtom
 #endif
+
+instance Binary NAtom
 
 -- | Translate an atom into its nix representation.
 atomText :: NAtom -> Text

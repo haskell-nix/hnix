@@ -530,7 +530,6 @@ instance Binary Pos where
 instance Binary SourcePos
 instance Binary a => Binary (NKeyName a)
 instance Binary a => Binary (Params a)
-instance Binary NAtom
 instance Binary NUnaryOp
 instance Binary NBinaryOp
 instance Binary NRecordType
