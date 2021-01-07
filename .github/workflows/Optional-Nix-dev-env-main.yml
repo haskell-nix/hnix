@@ -27,7 +27,7 @@ env:
   CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
   allowInconsistentDependencies: "false"
   doJailbreak: "false"
-  doCheck: "true"
+  doCheck: "false"
   sdistTarball: "false"
   buildFromSdist: "false"
   buildStrictly: "false"
