@@ -43,14 +43,10 @@ import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
 import           GHC.Generics
 
--- | A 'ContextFlavor' describes the sum of possible derivations for string contexts
-data ContextFlavor =
-    DirectPath
-  | AllOutputs
-  | DerivationOutput !Text
-  deriving (Show, Eq, Ord, Generic)
 
-instance Hashable ContextFlavor
+-- * Types
+
+-- ** Context
 
 -- | A 'StringContext' ...
 data StringContext =
@@ -60,18 +56,14 @@ data StringContext =
 
 instance Hashable StringContext
 
-data NixString = NixString
-  { nsContents :: !Text
-  , nsContext :: !(S.HashSet StringContext)
-  } deriving (Eq, Ord, Show, Generic)
+-- | A 'ContextFlavor' describes the sum of possible derivations for string contexts
+data ContextFlavor =
+    DirectPath
+  | AllOutputs
+  | DerivationOutput !Text
+  deriving (Show, Eq, Ord, Generic)
 
-instance Semigroup NixString where
-  NixString s1 t1 <> NixString s2 t2 = NixString (s1 <> s2) (t1 <> t2)
-
-instance Monoid NixString where
- mempty = NixString mempty mempty
-
-instance Hashable NixString
+instance Hashable ContextFlavor
 
 newtype NixLikeContext = NixLikeContext
   { getNixLikeContext :: M.HashMap Text NixLikeContextValue
@@ -92,6 +84,82 @@ instance Semigroup NixLikeContextValue where
 
 instance Monoid NixLikeContextValue where
   mempty = NixLikeContextValue False False []
+
+
+-- ** StringContext accumulator
+
+-- | A monad for accumulating string context while producing a result string.
+newtype WithStringContextT m a = WithStringContextT (WriterT (S.HashSet StringContext) m a)
+  deriving (Functor, Applicative, Monad, MonadTrans, MonadWriter (S.HashSet StringContext))
+
+type WithStringContext = WithStringContextT Identity
+
+
+-- ** NixString
+
+data NixString = NixString
+  { nsContents :: !Text
+  , nsContext :: !(S.HashSet StringContext)
+  } deriving (Eq, Ord, Show, Generic)
+
+instance Semigroup NixString where
+  NixString s1 t1 <> NixString s2 t2 = NixString (s1 <> s2) (t1 <> t2)
+
+instance Monoid NixString where
+ mempty = NixString mempty mempty
+
+instance Hashable NixString
+
+
+-- * Functions
+
+-- ** Makers
+
+-- | Constructs NixString without a context
+makeNixStringWithoutContext :: Text -> NixString
+makeNixStringWithoutContext = flip NixString mempty
+
+-- | Create NixString using a singleton context
+makeNixStringWithSingletonContext
+  :: Text -> StringContext -> NixString
+makeNixStringWithSingletonContext s c = NixString s (S.singleton c)
+
+-- | Create NixString from a Text and context
+makeNixString :: Text -> S.HashSet StringContext -> NixString
+makeNixString = NixString
+
+
+-- ** Checkers
+
+-- | Returns True if the NixString has an associated context
+stringHasContext :: NixString -> Bool
+stringHasContext (NixString _ c) = not (null c)
+
+
+-- ** Getters
+
+getContext :: NixString -> S.HashSet StringContext
+getContext = nsContext
+
+fromNixLikeContext :: NixLikeContext -> S.HashSet StringContext
+fromNixLikeContext =
+  S.fromList . join . map toStringContexts . M.toList . getNixLikeContext
+
+-- | Extract the string contents from a NixString that has no context
+getStringNoContext :: NixString -> Maybe Text
+getStringNoContext (NixString s c) | null c    = Just s
+                                             | otherwise = Nothing
+
+-- | Extract the string contents from a NixString even if the NixString has an associated context
+stringIgnoreContext :: NixString -> Text
+stringIgnoreContext (NixString s _) = s
+
+-- | Get the contents of a 'NixString' and write its context into the resulting set.
+extractNixString :: Monad m => NixString -> WithStringContextT m Text
+extractNixString (NixString s c) = WithStringContextT $ tell c >> pure s
+
+
+-- ** Setters
 
 toStringContexts :: (Text, NixLikeContextValue) -> [StringContext]
 toStringContexts (path, nlcv) = case nlcv of
@@ -116,12 +184,40 @@ toNixLikeContext stringContext = NixLikeContext
   go sc hm =
     let (t, nlcv) = toNixLikeContextValue sc in M.insertWith (<>) t nlcv hm
 
-fromNixLikeContext :: NixLikeContext -> S.HashSet StringContext
-fromNixLikeContext =
-  S.fromList . join . map toStringContexts . M.toList . getNixLikeContext
+-- | Add 'StringContext's into the resulting set.
+addStringContext
+  :: Monad m => S.HashSet StringContext -> WithStringContextT m ()
+addStringContext = WithStringContextT . tell
 
-getContext :: NixString -> S.HashSet StringContext
-getContext = nsContext
+-- | Add a 'StringContext' into the resulting set.
+addSingletonStringContext :: Monad m => StringContext -> WithStringContextT m ()
+addSingletonStringContext = WithStringContextT . tell . S.singleton
+
+-- | Run an action producing a string with a context and put those into a 'NixString'.
+runWithStringContextT :: Monad m => WithStringContextT m Text -> m NixString
+runWithStringContextT (WithStringContextT m) =
+  uncurry NixString <$> runWriterT m
+
+-- | Run an action producing a string with a context and put those into a 'NixString'.
+runWithStringContext :: WithStringContextT Identity Text -> NixString
+runWithStringContext = runIdentity . runWithStringContextT
+
+
+-- ** Modifiers
+
+-- | Modify the string part of the NixString, leaving the context unchanged
+modifyNixContents :: (Text -> Text) -> NixString -> NixString
+modifyNixContents f (NixString s c) = NixString (f s) c
+
+-- | Run an action that manipulates nix strings, and collect the contexts encountered.
+-- Warning: this may be unsafe, depending on how you handle the resulting context list.
+runWithStringContextT' :: Monad m => WithStringContextT m a -> m (a, S.HashSet StringContext)
+runWithStringContextT' (WithStringContextT m) = runWriterT m
+
+-- | Run an action that manipulates nix strings, and collect the contexts encountered.
+-- Warning: this may be unsafe, depending on how you handle the resulting context list.
+runWithStringContext' :: WithStringContextT Identity a -> (a, S.HashSet StringContext)
+runWithStringContext' = runIdentity . runWithStringContextT'
 
 -- | Combine NixStrings with a separator
 intercalateNixString :: NixString -> [NixString] -> NixString
@@ -132,73 +228,6 @@ intercalateNixString sep nss  = NixString contents ctx
   contents = Text.intercalate (nsContents sep) (map nsContents nss)
   ctx      = S.unions (nsContext sep : map nsContext nss)
 
--- | Extract the string contents from a NixString that has no context
-getStringNoContext :: NixString -> Maybe Text
-getStringNoContext (NixString s c) | null c    = Just s
-                                             | otherwise = Nothing
-
--- | Extract the string contents from a NixString even if the NixString has an associated context
-stringIgnoreContext :: NixString -> Text
-stringIgnoreContext (NixString s _) = s
-
--- | Returns True if the NixString has an associated context
-stringHasContext :: NixString -> Bool
-stringHasContext (NixString _ c) = not (null c)
-
--- | Constructs a NixString without a context
-makeNixStringWithoutContext :: Text -> NixString
-makeNixStringWithoutContext = flip NixString mempty
-
--- | Modify the string part of the NixString, leaving the context unchanged
-modifyNixContents :: (Text -> Text) -> NixString -> NixString
-modifyNixContents f (NixString s c) = NixString (f s) c
-
--- | Create a NixString using a singleton context
-makeNixStringWithSingletonContext
-  :: Text -> StringContext -> NixString
-makeNixStringWithSingletonContext s c = NixString s (S.singleton c)
-
--- | Create a NixString from a Text and context
-makeNixString :: Text -> S.HashSet StringContext -> NixString
-makeNixString = NixString
-
--- | A monad for accumulating string context while producing a result string.
-newtype WithStringContextT m a = WithStringContextT (WriterT (S.HashSet StringContext) m a)
-  deriving (Functor, Applicative, Monad, MonadTrans, MonadWriter (S.HashSet StringContext))
-
-type WithStringContext = WithStringContextT Identity
-
--- | Add 'StringContext's into the resulting set.
-addStringContext
-  :: Monad m => S.HashSet StringContext -> WithStringContextT m ()
-addStringContext = WithStringContextT . tell
-
--- | Add a 'StringContext' into the resulting set.
-addSingletonStringContext :: Monad m => StringContext -> WithStringContextT m ()
-addSingletonStringContext = WithStringContextT . tell . S.singleton
-
--- | Get the contents of a 'NixString' and write its context into the resulting set.
-extractNixString :: Monad m => NixString -> WithStringContextT m Text
-extractNixString (NixString s c) = WithStringContextT $ tell c >> pure s
-
--- | Run an action producing a string with a context and put those into a 'NixString'.
-runWithStringContextT :: Monad m => WithStringContextT m Text -> m NixString
-runWithStringContextT (WithStringContextT m) =
-  uncurry NixString <$> runWriterT m
-
--- | Run an action that manipulates nix strings, and collect the contexts encountered.
--- Warning: this may be unsafe, depending on how you handle the resulting context list.
-runWithStringContextT' :: Monad m => WithStringContextT m a -> m (a, S.HashSet StringContext)
-runWithStringContextT' (WithStringContextT m) = runWriterT m
-
--- | Run an action producing a string with a context and put those into a 'NixString'.
-runWithStringContext :: WithStringContextT Identity Text -> NixString
-runWithStringContext = runIdentity . runWithStringContextT
-
--- | Run an action that manipulates nix strings, and collect the contexts encountered.
--- Warning: this may be unsafe, depending on how you handle the resulting context list.
-runWithStringContext' :: WithStringContextT Identity a -> (a, S.HashSet StringContext)
-runWithStringContext' = runIdentity . runWithStringContextT'
 
 -- * Deprecated API
 
