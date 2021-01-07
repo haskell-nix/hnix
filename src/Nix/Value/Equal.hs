@@ -30,7 +30,6 @@ import           Control.Monad.Free
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import           Data.Align
-import           Data.Eq.Deriving
 import           Data.Functor.Identity
 import qualified Data.HashMap.Lazy             as M
 import           Data.These
@@ -173,5 +172,3 @@ thunkEqM lt rt = force lt $ \lv -> force rt $ \rv ->
         (NVList _     , NVList _     ) -> unsafePtrEq
         (NVSet _ _    , NVSet _ _    ) -> unsafePtrEq
         _                              -> valueEqM lv rv
-
-$(deriveEq1 ''NValue')

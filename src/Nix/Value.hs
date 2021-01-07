@@ -180,7 +180,7 @@ type MonadDataContext f (m :: * -> *)
 -- | At the time of constructor, the expected arguments to closures are values
 --   that may contain thunks. The type of such thunks are fixed at that time.
 newtype NValue' t f m a = NValue { _nValue :: f (NValueF (NValue t f m) m a) }
-    deriving (Generic, Typeable, Functor, Foldable)
+    deriving (Generic, Typeable, Functor, Foldable, Eq1)
 
 instance (Comonad f, Show a) => Show (NValue' t f m a) where
   show (NValue (extract -> v)) = show v
