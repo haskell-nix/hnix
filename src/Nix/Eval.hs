@@ -355,7 +355,7 @@ evalSetterKeyName = \case
   StaticKey k -> pure (Just k)
   DynamicKey k ->
     runAntiquoted "\n" assembleString (>>= fromValueMay) k <&> \case
-      Just ns -> Just (hackyStringIgnoreContext ns)
+      Just ns -> Just (principledStringIgnoreContext ns)
       _       -> Nothing
 
 assembleString

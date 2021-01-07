@@ -169,10 +169,6 @@ principledGetStringNoContext (NixString s c) | null c    = Just s
 principledStringIgnoreContext :: NixString -> Text
 principledStringIgnoreContext (NixString s _) = s
 
--- | Extract the string contents from a NixString even if the NixString has an associated context
-hackyStringIgnoreContext :: NixString -> Text
-hackyStringIgnoreContext (NixString s _) = s
-
 -- | Returns True if the NixString has an associated context
 stringHasContext :: NixString -> Bool
 stringHasContext (NixString _ c) = not (null c)
@@ -251,4 +247,8 @@ hackyStringMConcat = foldr principledStringMappend (NixString mempty mempty)
 -- | Constructs a NixString without a context
 hackyMakeNixStringWithoutContext :: Text -> NixString
 hackyMakeNixStringWithoutContext = principledMakeNixStringWithoutContext
+
+-- | Extract the string contents from a NixString even if the NixString has an associated context
+hackyStringIgnoreContext :: NixString -> Text
+hackyStringIgnoreContext = principledStringIgnoreContext
 

@@ -210,7 +210,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
       pure $ nvStrP
         (Provenance
           scope
-          (NStr_ span (DoubleQuoted [Plain (hackyStringIgnoreContext ns)]))
+          (NStr_ span (DoubleQuoted [Plain (principledStringIgnoreContext ns)]))
         )
         ns
     Nothing -> nverr $ ErrorCall "Failed to assemble string"

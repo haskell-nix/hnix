@@ -392,7 +392,7 @@ unsafeGetAttrPos
   -> m (NValue t f m)
 unsafeGetAttrPos x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
   (NVStr ns, NVSet _ apos) ->
-    case M.lookup (hackyStringIgnoreContext ns) apos of
+    case M.lookup (principledStringIgnoreContext ns) apos of
       Nothing    -> pure $ nvConstant NNull
       Just delta -> toValue delta
   (x, y) ->
@@ -866,7 +866,7 @@ instance Comonad f => Eq (WValue t f m) where
   WValue (NVConstant (NFloat x)) == WValue (NVConstant (NFloat y)) = x == y
   WValue (NVPath     x         ) == WValue (NVPath     y         ) = x == y
   WValue (NVStr x) == WValue (NVStr y) =
-    hackyStringIgnoreContext x == hackyStringIgnoreContext y
+    principledStringIgnoreContext x == principledStringIgnoreContext y
   _ == _ = False
 
 instance Comonad f => Ord (WValue t f m) where
@@ -878,7 +878,7 @@ instance Comonad f => Ord (WValue t f m) where
   WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NFloat y)) = x <= y
   WValue (NVPath     x         ) <= WValue (NVPath     y         ) = x <= y
   WValue (NVStr x) <= WValue (NVStr y) =
-    hackyStringIgnoreContext x <= hackyStringIgnoreContext y
+    principledStringIgnoreContext x <= principledStringIgnoreContext y
   _ <= _ = False
 
 genericClosure
@@ -1019,7 +1019,7 @@ toFile name s = do
   -- runtime references of the resulting file.
   -- See prim_toFile in nix/src/libexpr/primops.cc
   mres  <- toFile_ (Text.unpack name')
-                   (Text.unpack $ hackyStringIgnoreContext s')
+                   (Text.unpack $ principledStringIgnoreContext s')
   let t  = Text.pack $ unStorePath mres
       sc = StringContext t DirectPath
   toValue $ principledMakeNixStringWithSingletonContext t sc
@@ -1030,7 +1030,7 @@ toPath = fromValue @Path >=> toValue @Path
 pathExists_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 pathExists_ path = demand path $ \case
   NVPath p  -> toValue =<< pathExists p
-  NVStr  ns -> toValue =<< pathExists (Text.unpack (hackyStringIgnoreContext ns))
+  NVStr  ns -> toValue =<< pathExists (Text.unpack (principledStringIgnoreContext ns))
   v ->
     throwError
       $  ErrorCall
@@ -1248,7 +1248,7 @@ placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
 absolutePathFromValue :: MonadNix e t f m => NValue t f m -> m FilePath
 absolutePathFromValue = \case
   NVStr ns -> do
-    let path = Text.unpack $ hackyStringIgnoreContext ns
+    let path = Text.unpack $ principledStringIgnoreContext ns
     unless (isAbsolute path)
       $  throwError
       $  ErrorCall
@@ -1272,7 +1272,7 @@ findFile_
 findFile_ aset filePath = demand aset $ \aset' -> demand filePath $ \filePath' ->
   case (aset', filePath') of
     (NVList x, NVStr ns) -> do
-      mres <- findPath @t @f @m x (Text.unpack (hackyStringIgnoreContext ns))
+      mres <- findPath @t @f @m x (Text.unpack (principledStringIgnoreContext ns))
       pure $ nvPath mres
     (NVList _, y) ->
       throwError $ ErrorCall $ "expected a string, got " ++ show y
@@ -1393,7 +1393,7 @@ exec_ xs = do
   -- TODO Still need to do something with the context here
   -- See prim_exec in nix/src/libexpr/primops.cc
   -- Requires the implementation of EvalState::realiseContext
-  exec (map (Text.unpack . hackyStringIgnoreContext) xs)
+  exec (map (Text.unpack . principledStringIgnoreContext) xs)
 
 fetchurl
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
