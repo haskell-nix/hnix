@@ -137,7 +137,7 @@ findPathBy finder ls name = do
         Nothing -> tryPath path Nothing
         Just pf -> demand pf $ fromValueMay >=> \case
           Just (nsPfx :: NixString) ->
-            let pfx = principledStringIgnoreContext nsPfx
+            let pfx = stringIgnoreContext nsPfx
             in  if not (Text.null pfx)
                   then tryPath path (Just (Text.unpack pfx))
                   else tryPath path Nothing
@@ -174,7 +174,7 @@ fetchTarball = flip demand $ \case
  where
   go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
   go msha = \case
-    NVStr ns -> fetch (principledStringIgnoreContext ns) msha
+    NVStr ns -> fetch (stringIgnoreContext ns) msha
     v ->
       throwError
         $  ErrorCall
@@ -197,7 +197,7 @@ fetchTarball = flip demand $ \case
   fetch uri Nothing =
     nixInstantiateExpr $ "builtins.fetchTarball \"" ++ Text.unpack uri ++ "\""
   fetch url (Just t) = demand t $ fromValue >=> \nsSha ->
-    let sha = principledStringIgnoreContext nsSha
+    let sha = stringIgnoreContext nsSha
     in  nixInstantiateExpr
           $  "builtins.fetchTarball { "
           ++ "url    = \""

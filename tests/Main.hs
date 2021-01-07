@@ -59,7 +59,7 @@ ensureNixpkgsCanParse =
           time <- getCurrentTime
           runWithBasicEffectsIO (defaultOptions time) $
             Nix.nixEvalExprLoc Nothing expr
-        let dir = principledStringIgnoreContext ns
+        let dir = stringIgnoreContext ns
         exists <- fileExist (unpack dir)
         unless exists $
           errorWithoutStackTrace $

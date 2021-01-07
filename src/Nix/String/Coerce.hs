@@ -57,18 +57,18 @@ coerceToString call ctsm clevel = go
       |
         -- TODO Return a singleton for "" and "1"
         b && clevel == CoerceAny -> pure
-      $  principledMakeNixStringWithoutContext "1"
-      | clevel == CoerceAny -> pure $ principledMakeNixStringWithoutContext ""
+      $  makeNixStringWithoutContext "1"
+      | clevel == CoerceAny -> pure $ makeNixStringWithoutContext ""
     NVConstant (NInt n) | clevel == CoerceAny ->
-      pure $ principledMakeNixStringWithoutContext $ Text.pack $ show n
+      pure $ makeNixStringWithoutContext $ Text.pack $ show n
     NVConstant (NFloat n) | clevel == CoerceAny ->
-      pure $ principledMakeNixStringWithoutContext $ Text.pack $ show n
+      pure $ makeNixStringWithoutContext $ Text.pack $ show n
     NVConstant NNull | clevel == CoerceAny ->
-      pure $ principledMakeNixStringWithoutContext ""
+      pure $ makeNixStringWithoutContext ""
     NVStr ns -> pure ns
     NVPath p
       | ctsm == CopyToStore -> storePathToNixString <$> addPath p
-      | otherwise -> pure $ principledMakeNixStringWithoutContext $ Text.pack p
+      | otherwise -> pure $ makeNixStringWithoutContext $ Text.pack p
     NVList l | clevel == CoerceAny ->
       nixStringUnwords <$> traverse (`demand` go) l
 
@@ -80,9 +80,9 @@ coerceToString call ctsm clevel = go
     v -> throwError $ ErrorCall $ "Expected a string, but saw: " ++ show v
 
   nixStringUnwords =
-    principledIntercalateNixString (principledMakeNixStringWithoutContext " ")
+    intercalateNixString (makeNixStringWithoutContext " ")
   storePathToNixString :: StorePath -> NixString
-  storePathToNixString sp = principledMakeNixStringWithSingletonContext
+  storePathToNixString sp = makeNixStringWithSingletonContext
     t
     (StringContext t DirectPath)
     where t = Text.pack $ unStorePath sp

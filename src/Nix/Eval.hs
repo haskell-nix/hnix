@@ -355,7 +355,7 @@ evalSetterKeyName = \case
   StaticKey k -> pure (Just k)
   DynamicKey k ->
     runAntiquoted "\n" assembleString (>>= fromValueMay) k <&> \case
-      Just ns -> Just (principledStringIgnoreContext ns)
+      Just ns -> Just (stringIgnoreContext ns)
       _       -> Nothing
 
 assembleString
@@ -367,10 +367,10 @@ assembleString = \case
   Indented _ parts   -> fromParts parts
   DoubleQuoted parts -> fromParts parts
  where
-  fromParts = fmap (fmap principledStringMConcat . sequence) . traverse go
+  fromParts = fmap (fmap stringMConcat . sequence) . traverse go
 
   go = runAntiquoted "\n"
-                     (pure . Just . principledMakeNixStringWithoutContext)
+                     (pure . Just . makeNixStringWithoutContext)
                      (>>= fromValueMay)
 
 buildArgument

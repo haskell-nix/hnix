@@ -86,7 +86,7 @@ isDerivationM f m = case M.lookup "type" m of
     case mres of
         -- We should probably really make sure the context is empty here
         -- but the C++ implementation ignores it.
-      Just s  -> pure $ principledStringIgnoreContext s == "derivation"
+      Just s  -> pure $ stringIgnoreContext s == "derivation"
       Nothing -> pure False
 
 isDerivation :: Monad m => (t -> Maybe NixString) -> AttrSet t -> Bool
@@ -104,7 +104,7 @@ valueFEqM attrsEq eq = curry $ \case
   (NVConstantF (NInt   x), NVConstantF (NFloat y)) -> pure $ fromInteger x == y
   (NVConstantF lc        , NVConstantF rc        ) -> pure $ lc == rc
   (NVStrF ls, NVStrF rs) ->
-    pure $ principledStringIgnoreContext ls == principledStringIgnoreContext rs
+    pure $ stringIgnoreContext ls == stringIgnoreContext rs
   (NVListF ls , NVListF rs ) -> alignEqM eq ls rs
   (NVSetF lm _, NVSetF rm _) -> attrsEq lm rm
   (NVPathF lp , NVPathF rp ) -> pure $ lp == rp

@@ -143,13 +143,13 @@ main = do
       = liftIO
         .   putStrLn
         .   Text.unpack
-        .   principledStringIgnoreContext
+        .   stringIgnoreContext
         .   toXML
         <=< normalForm
       | json opts
       = liftIO
         .   Text.putStrLn
-        .   principledStringIgnoreContext
+        .   stringIgnoreContext
         <=< nvalueToJSONNixString
       | strict opts
       = liftIO . print . prettyNValue <=< normalForm

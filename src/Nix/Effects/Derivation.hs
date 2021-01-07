@@ -260,8 +260,8 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
     drvHash <- Store.encodeInBase Store.Base16 <$> hashDerivationModulo drv'
     modify (\(a, b) -> (a, MS.insert drvPath drvHash b))
 
-    let outputsWithContext = Map.mapWithKey (\out path -> principledMakeNixStringWithSingletonContext path (StringContext drvPath (DerivationOutput out))) (outputs drv')
-        drvPathWithContext = principledMakeNixStringWithSingletonContext drvPath (StringContext drvPath AllOutputs)
+    let outputsWithContext = Map.mapWithKey (\out path -> makeNixStringWithSingletonContext path (StringContext drvPath (DerivationOutput out))) (outputs drv')
+        drvPathWithContext = makeNixStringWithSingletonContext drvPath (StringContext drvPath AllOutputs)
         attrSet = M.map nvStr $ M.fromList $ ("drvPath", drvPathWithContext): Map.toList outputsWithContext
     -- TODO: Add location information for all the entries.
     --              here --v
@@ -373,7 +373,7 @@ buildDerivationWithContext drvAttrs = do
       return name
 
     extractNoCtx :: MonadNix e t f m => NixString -> WithStringContextT m Text
-    extractNoCtx ns = case principledGetStringNoContext ns of
+    extractNoCtx ns = case getStringNoContext ns of
       Nothing -> lift $ throwError $ ErrorCall $ "The string " ++ show ns ++ " is not allowed to have a context."
       Just v -> return v
 

@@ -330,7 +330,7 @@ valueToExpr = iterNValue (\_ _ -> thk) phi
   phi (NVBuiltin' name _) = Fix . NSym . pack $ "builtins." ++ name
   phi _                   = error "Pattern synonyms foil completeness check"
 
-  mkStr ns = Fix $ NStr $ DoubleQuoted [Plain (principledStringIgnoreContext ns)]
+  mkStr ns = Fix $ NStr $ DoubleQuoted [Plain (stringIgnoreContext ns)]
 
 prettyNValue
   :: forall t f m ann . MonadDataContext f m => NValue t f m -> Doc ann
@@ -390,7 +390,7 @@ printNix = iterNValue (\_ _ -> thk) phi
 
   phi :: NValue' t f m String -> String
   phi (NVConstant' a ) = unpack $ atomText a
-  phi (NVStr'      ns) = show $ principledStringIgnoreContext ns
+  phi (NVStr'      ns) = show $ stringIgnoreContext ns
   phi (NVList'     l ) = "[ " ++ unwords l ++ " ]"
   phi (NVSet' s _) =
     "{ "
