@@ -20,16 +20,16 @@ data Context m t = Context
     }
 
 instance Has (Context m t) (Scopes m t) where
-  hasLens f (Context x y z w) = (\x' -> Context x' y z w) <$> f x
+  hasLens f a = (\x -> a { scopes = x }) <$> f (scopes a)
 
 instance Has (Context m t) SrcSpan where
-  hasLens f (Context x y z w) = (\y' -> Context x y' z w) <$> f y
+  hasLens f a = (\x -> a { source = x }) <$> f (source a)
 
 instance Has (Context m t) Frames where
-  hasLens f (Context x y z w) = (\z' -> Context x y z' w) <$> f z
+  hasLens f a = (\x -> a { frames = x }) <$> f (frames a)
 
 instance Has (Context m t) Options where
-  hasLens f (Context x y z w) = (\w' -> Context x y z w') <$> f w
+  hasLens f a = (\x -> a { options = x }) <$> f (options a)
 
 newContext :: Options -> Context m t
 newContext = Context emptyScopes nullSpan []
