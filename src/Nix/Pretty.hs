@@ -16,6 +16,7 @@
 
 module Nix.Pretty where
 
+import           Control.Arrow                  ( first )
 import           Control.Applicative            ( (<|>) )
 import           Control.Monad.Free
 import           Data.Fix                       ( Fix(..), foldFix )
@@ -399,8 +400,8 @@ printNix = iterNValue (\_ _ -> thk) phi
   phi (NVSet' s _) =
     "{ "
       ++ concat
-           [ check (unpack $ unintern k) ++ " = " ++ v ++ "; "
-           | (k, v) <- sort $ toList s
+           [ check (unpack k) ++ " = " ++ v ++ "; "
+           | (k, v) <- sort $ map (first unintern) $ toList s
            ]
       ++ "}"
    where
