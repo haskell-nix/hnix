@@ -192,10 +192,6 @@ let
       # Core is on Stackage and pinned at `0.2`: https://github.com/haskell-nix/hnix-store/issues/104
       # Stackage report: https://github.com/commercialhaskell/stackage/issues/5766
       hnix-store-core = super.hnix-store-core_0_4_0_0;
-      # 2020-12-07 hnix-store-remote fails when trying to connect to a real hnix daemon.
-      # probably due to nix sandbox restrictions.
-      # Upstream issue @ https://github.com/haskell-nix/hnix-store/issues/80
-      hnix-store-remote = hlib.unmarkBroken super.hnix-store-remote;
 
     };
 
