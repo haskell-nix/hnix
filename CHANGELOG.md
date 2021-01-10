@@ -3,6 +3,32 @@
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.12.0...master#files_bucket) Progress
 
+* Breaking:
+
+  * [(link)](https://github.com/haskell-nix/hnix/pull/802/commits/529095deaf6bc6b102fe5a3ac7baccfbb8852e49#) `Nix.Strings`: all `hacky*` functions replaced with lawful implemetations, because of that all functions become lawful - dropped the `principled` suffix from functions:
+    * `Nix.String`:
+      * `hackyGetStringNoContext` -> `getStringNoContext`.
+      * `hackyStringIgnoreContext` -> `stringIgnoreContext`.
+      * `hackyMakeNixStringWithoutContext` -> `makeNixStringWithoutContext`.
+      * `principledStringMConcat` -> `mconcat`.
+      * `principledStringMappend` -> `mappend`.
+      * `principledStringMempty` -> `mempty`.
+      * `principledMempty` -> `mempty`.
+      * `principledGetContext` -> `getContext`.
+      * `principledMakeNixString` -> `makeNixString`.
+      * `principledIntercalateNixString` -> `intercalateNixString`.
+      * `principledGetStringNoContext` -> `getStringNoContext`.
+      * `principledStringIgnoreContext` -> `stringIgnoreContext`.
+      * `principledMakeNixStringWithoutContext` -> `makeNixStringWithoutContext`.
+      * `principledMakeNixStringWithSingletonContext` -> `makeNixStringWithSingletonContext`.
+      * `principledModifyNixContents` -> `modifyNixContents`.
+
+* Additional:
+  * [(link)](https://github.com/haskell-nix/hnix/commit/7e6cd97bf3288cb584241611fdb25bf85d7e0ba7) `cabal.project`: freed from the `cryptohash-sha512` override, Hackage trustees made a revision.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/824/commits/4422eb10959115f21045f39e302314a77df4b775) To be more approachable for user understanding, the thunk representation in outputs changed from `"<CYCLE>" -> "<expr>"`.
+  * [(link)](https://github.com/haskell-nix/hnix/commit/51a3ff9e0065d50e5c625738696526c4a232b0cf) `Nix.Expr.Types`: added hacky implementation of `liftTyped` for `instance Lift (Fix NExprF)`.
+  * [(link)](https://github.com/haskell-nix/hnix/commit/51a3ff9e0065d50e5c625738696526c4a232b0cf) `Nix.Builtins`: `derivation` primOp internal code always fully evaluated, so GHC now always ships only fully compiled version in the bytecode.
+
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.11.1...0.12.0#files_bucket) 0.12.0 (2021-01-05)
 
