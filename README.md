@@ -191,16 +191,6 @@ nix-build \
 ./result/bin/hnix
 ```
 
-## Development status loop with amazing [`ghcid`](https://github.com/ndmitchell/ghcid)
-
-```shell
-ghcid --command="cabal v2-repl --repl-options=-fno-code --repl-options=-fno-break-on-exception --repl-options=-fno-break-on-error --repl-options=-v1 --repl-options=-ferror-spans --repl-options=-j"
-```
-(optional) To use projects reproducible environment, wrap `ghcid ...` command into a `nix-shell --command ' '`.
-
-For simplicity `alias` the command in your shell.
-
-
 ## Using the HNix REPL
 
 Enter in:
@@ -240,6 +230,14 @@ hnix \
 { x = true; }
 ```
 
+## Evaluating Nixpkgs with HNix
+
+Currently, the main high-level goal is to be able to evaluate all of Nixpkgs:
+
+```shell
+hnix --eval -E "import <nixpkgs> {}" --find
+```
+
 ## Contributing
 
 1. If something in the [quests](https://github.com/haskell-nix/hnix/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22+no%3Aassignee) looks interesting, look through the thread and leave a comment taking it, to let others know you're working on it.
@@ -255,13 +253,15 @@ nix-shell --run "LANGUAGE_TESTS=yes cabal v2-test"
 
 Please, check that all tests that were passing prior (most probably all tests mentioned in the command) are still passing for the PR, it is faster to check that locally than through CI. It's OK if no new tests are passing.
 
-## Evaluating Nixpkgs with HNix
 
-Currently, the main high-level goal is to be able to evaluate all of Nixpkgs:
+### Minimalistic development status loop with amazing [`ghcid`](https://github.com/ndmitchell/ghcid)
 
 ```shell
-hnix --eval -E "import <nixpkgs> {}" --find
+ghcid --command="cabal v2-repl --repl-options=-fno-code --repl-options=-fno-break-on-exception --repl-options=-fno-break-on-error --repl-options=-v1 --repl-options=-ferror-spans --repl-options=-j"
 ```
+(optional) To use projects reproducible environment, wrap `ghcid ...` command into a `nix-shell --command ' '`.
+
+For simplicity `alias` the command in your shell.
 
 ## Current status
 
