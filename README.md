@@ -261,3 +261,8 @@ Currently, the main high-level goal is to be able to evaluate all of Nixpkgs:
 ```shell
 hnix --eval -E "import <nixpkgs> {}" --find
 ```
+
+## Current status
+
+To understand the project implementation state see [Changelog](https://github.com/haskell-nix/hnix/blob/master/CHANGELOG.md), [opened reports](https://github.com/haskell-nix/hnix/issues) and [Project status](https://github.com/haskell-nix/hnix/wiki/Project-status).
+
