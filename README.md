@@ -36,6 +36,7 @@ Parser, evaluator and type checker for the Nix language written in Haskell.
 - [Nix laziness](#nix-laziness)
 - [Contributing](#contributing)
 - [Evaluating Nixpkgs with HNix](#evaluating-nixpkgs-with-hnix)
+- [Current status](#current-status)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
