@@ -315,7 +315,7 @@ exprFNixDoc = \case
 valueToExpr :: forall t f m . MonadDataContext f m => NValue t f m -> NExpr
 valueToExpr = iterNValue (\_ _ -> thk) phi
  where
-  thk = Fix . NSym . pack $ "<CYCLE>"
+  thk = Fix . NSym . pack $ "<expr>"
 
   phi :: NValue' t f m NExpr -> NExpr
   phi (NVConstant' a ) = Fix $ NConstant a
