@@ -285,7 +285,7 @@ hnix \
   --eval \
   --expr '{ x = true; }'
   
-{ x = "<CYCLE>"; }
+{ x = "<expr>"; }
 ```
 
 To disable laziness add the `--strict` to commands or `:set strict` in the REPL.

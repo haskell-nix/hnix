@@ -124,7 +124,7 @@ removeEffects =
     (fmap Free . sequenceNValue' id)
 
 opaque :: Applicative f => NValue t f m
-opaque = nvStr $ makeNixStringWithoutContext "<CYCLE>"
+opaque = nvStr $ makeNixStringWithoutContext "<expr>"
 
 dethunk
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
