@@ -191,22 +191,33 @@ nix-build \
 ./result/bin/hnix
 ```
 
-## Using the HNix REPL
+## Using the HNix
 
-Enter in:
+### Evaluating Nixpkgs with HNix
+
+Currently, the main high-level goal is to be able to evaluate all of Nixpkgs:
+
+```shell
+hnix --eval -E "import <nixpkgs> {}" --find
+```
+
+
+### REPL
+
+Ot enter REPL:
 ```shell
 hnix --repl
 ```
 
-Evaluate an expression:
+Evaluate an expression and load it into REPL:
 ```shell
 hnix --eval -E '(import <nixpkgs> {}).pkgs.hello' --repl
 ```
-This also binds the evaluated expression result to the `input` variable, so that variable can be inspected.
+This binds the evaluated expression result to the `input` variable, so that variable can be inspected.
 
 Use the `:help` command for a list of all available REPL commands.
 
-## Nix laziness
+#### Language laziness
 
 Nix is a lazy language with the ability of recursion, so by default REPL and eval prints are lazy:
 
@@ -223,24 +234,16 @@ To disable laziness add the `--strict` to commands or `:set strict` in the REPL.
 ```shell
 hnix \
   --eval \
-  # Strictly \
   --strict \
   --expr '{ x = true; }'
   
 { x = true; }
 ```
 
-## Evaluating Nixpkgs with HNix
-
-Currently, the main high-level goal is to be able to evaluate all of Nixpkgs:
-
-```shell
-hnix --eval -E "import <nixpkgs> {}" --find
-```
 
 ## Contributing
 
-Haskell Language Server & Cabal development. Or development in the Nis shell environment.
+Haskell Language Server & Cabal development. Or development in the Nix shell environment.
 
 1. If something in the [quests](https://github.com/haskell-nix/hnix/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22+no%3Aassignee) looks interesting, look through the thread and leave a comment taking it, to let others know you're working on it.
 
