@@ -250,6 +250,8 @@ hnix \
 
 ## Contributing
 
+There is a Wiki article: [Design of the HNix code base](https://github.com/haskell-nix/hnix/wiki/Design-of-the-HNix-code-base).
+
 Haskell Language Server & Cabal development. Or development in the Nix shell environment.
 
 1. If something in the [quests](https://github.com/haskell-nix/hnix/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22+no%3Aassignee) looks interesting, look through the thread and leave a comment taking it, to let others know you're working on it.
