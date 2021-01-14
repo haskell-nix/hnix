@@ -200,6 +200,36 @@ nix-build \
 
 ## Using HNix
 
+See:
+```
+hnix --help
+```
+
+It has a pretty full/good description of the current options.
+
+
+### Parse & print
+
+To parse a file with `hnix` and pretty print the result:
+
+```shell
+hnix FILE.nix
+```
+
+### Evaluating and printing the resulting value
+
+Expression from a file:
+
+```shell
+hnix --eval FILE.nix
+```
+
+Expression:
+
+```shell
+hnix --eval --expr 'import <nixpkgs> {}'
+```
+
 ### Evaluating Nixpkgs
 
 Currently, the main high-level goal is to be able to evaluate all of Nixpkgs:
@@ -208,6 +238,25 @@ Currently, the main high-level goal is to be able to evaluate all of Nixpkgs:
 hnix --eval -E "import <nixpkgs> {}" --find
 ```
 
+### Options supported only by HNix
+
+To see value provenance and thunk context:
+
+```shell
+hnix -v2 --values --thunk --eval --expr 'import <nixpkgs> {}'
+```
+
+To see tracing as the evaluator runs (note that building with `cabal configure --flags=tracing` will produce much more output than this):
+
+```shell
+hnix --trace --eval --expr 'import <nixpkgs> {}'
+```
+
+To attempt to generate a reduced test case demonstrating an error:
+
+```shell
+hnix --reduce bug.nix --eval --expr 'import <nixpkgs> {}'
+```
 
 ### REPL
 
