@@ -64,7 +64,7 @@ If you opt in to use of Nix environment, please enable the official HNix Cachix 
 2. Run: `cachix use hnix`
 
 
-### Development using Cabal
+### Using Cabal
 
 Cabal [Quickstart](https://cabal.readthedocs.io/en/3.4/nix-local-build.html).
 
@@ -101,9 +101,9 @@ env ALL_TESTS=yes cabal v2-test
 env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
 ```
 
-#### Building the project
+#### Checking the project
 
-##### With benchmarks
+##### Benchmarks
 
 To run benchmarks:
 
@@ -111,7 +111,7 @@ To run benchmarks:
 cabal v2-bench
 ```
 
-##### With profiling
+##### Profiling
 
 To build `hnix` with profiling enabled:
 
@@ -120,16 +120,16 @@ cabal v2-configure --enable-tests --enable-profiling --flags=profiling
 cabal v2-run hnix -- <args> +RTS -p
 ```
 
-##### With full debug info
+##### Full debug info
 
-To build `hnix` for debugging, with full tracing output and stack traces:
+To run stack traces & full tracing output on `hnix`:
 
 ```shell
 cabal v2-configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
 cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
 ```
 
-Note that this going to run quite slowly, but would give the most information as to what happens during parsing & evaluation.
+This would give the most information as to what happens during parsing & evaluation.
 
 
 #### Run HNix
@@ -139,7 +139,7 @@ cabal v2-run hnix -- --help
 (`--` is for separation between `cabal` & `hnix` args)
 
 
-### Use of the Nix-build
+### Using Nix-build
 
 There is a number of build options to use with `nix-build`, documentation of them is in: `./default.nix`, keys essentially pass-through the [Nixpkgs Haskell Lib API](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix).
 
@@ -151,7 +151,8 @@ nix-build \
   --argstr <option3> "<strinTypeArg>"
 ```
 
-#### Run benchmarks
+#### Checking the project
+##### Benchmarks
 
 ```shell
 nix-build \
@@ -161,7 +162,7 @@ nix-build \
   --arg doBenchmark true
 ```
 
-#### With profiling
+##### Profiling
 
 ```shell
 nix-build \
@@ -169,9 +170,11 @@ nix-build \
   --arg enableDeadCodeElimination true \
   --arg enableLibraryProfiling true \
   --arg enableExecutableProfiling true
+
+./result/bin/hnix <args> +RTS -p
 ```
 
-#### With full debug info
+##### Full debug info
 
 ```shell
 nix-build \
@@ -183,17 +186,19 @@ nix-build \
   --arg enableExecutableProfiling true
   --arg doTracing true \
   --arg enableDWARFDebugging true
+
+./result/bin/hnix -v5 --trace <args> +RTS -xc
 ```
 
-#### Run the result
+#### Run HNix
 
 ```shell
 ./result/bin/hnix
 ```
 
-## Using the HNix
+## Using HNix
 
-### Evaluating Nixpkgs with HNix
+### Evaluating Nixpkgs
 
 Currently, the main high-level goal is to be able to evaluate all of Nixpkgs:
 
@@ -256,7 +261,7 @@ git submodule update --init --recursive
 cabal v2-test
 ```
 
-Please, check that all tests that were passing prior (most probably all tests mentioned in the command) are still passing for the PR, it is faster to check that locally than through CI. It's OK if no new tests are passing.
+Please, check that all default tests that were passing prior are still passing for the PR, it is faster to check that locally than through CI. It's OK if no new tests are passing.
 
 
 ### (optional) Minimalistic development status loop with amazing [`ghcid`](https://github.com/ndmitchell/ghcid)
