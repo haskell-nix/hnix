@@ -83,7 +83,7 @@ jobs:
 
 
   build20:
-    name: "GHC 8.10.3, quality build, SDist, Optimizations, Benchmark, Haddock, Completions"
+    name: "GHC 8.10, quality build, SDist, Optimizations, Benchmark, Haddock, Completions"
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
