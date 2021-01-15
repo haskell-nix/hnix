@@ -1,19 +1,12 @@
-name: "(Optional) Nix dev env, macOS"
+name: "(On shedule) Nix dev env, macOS"
   # Due to macOS is a side-build to test the platform, using nixos-unstable for additional long-term stability of it
 on:
-  # On Git changes in PR
-  pull_request:
-  # On Git changes of the master
-  push:
-    branches:
-      - master
   schedule:
-    # Every day at 04:45
-    - cron: "45 01 * * *"
+    # Every Friday 22:45
+    - cron: "45 22 * * 5"
 
 
 env:
-  # rev: "nixos-unstable"         #  2020-09-29: NOTE: HNix default.nix currently pins the rev
   cachixAccount: "hnix"
   CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
   doCheck: "false"
@@ -21,7 +14,7 @@ env:
 
 jobs:
   build10:
-    name: "Default GHC (8.8)"
+    name: "Default GHC"
     runs-on: macos-latest
     continue-on-error: true
     steps:
