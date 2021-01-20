@@ -959,27 +959,28 @@ replaceStrings tfrom tto ts =
 
         finish = makeNixString . LazyText.toStrict . Builder.toLazyText
 
-        go orig result ctx = case lookupPrefix orig of
+        go orig resultAccum ctx = case lookupPrefix orig of
           Nothing ->
             maybe
-              (finish result)
-              (\(h, t) -> go t (result <> Builder.singleton h))
+              (finish resultAccum)
+              (\(h, t) -> go t (resultAccum <> Builder.singleton h))
               (Text.uncons orig)
               ctx
           Just (prefix, replacementNS, rest) ->
-            (case prefix of
-              "" ->
+            (if prefix == mempty
+              then
                 maybe
-                  (finish (result <> Builder.fromText replacement))
-                  (\(h,t) -> go t (mconcat [ result
-                                           , Builder.fromText replacement
-                                           , Builder.singleton h ]))
+                  (finish (resultAccum <> Builder.fromText replacement))
+                  (\(h,t) -> go t (mconcat [ resultAccum
+                                            , Builder.fromText replacement
+                                            , Builder.singleton h ]))
                   (Text.uncons rest)
-              _prefix ->
-                go rest (result <> Builder.fromText replacement)) (ctx <> newCtx)
-             where
-              replacement = stringIgnoreContext replacementNS
-              newCtx      = NixString.getContext replacementNS
+              else
+                go rest (resultAccum <> Builder.fromText replacement))
+                (ctx <> newCtx)
+           where
+            replacement = stringIgnoreContext replacementNS
+            newCtx      = NixString.getContext replacementNS
       toValue
         $ go (stringIgnoreContext ns) mempty
         $ NixString.getContext ns
