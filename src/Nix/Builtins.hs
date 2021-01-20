@@ -961,21 +961,20 @@ replaceStrings tfrom tto ts =
 
         go orig result ctx = case lookupPrefix orig of
           Nothing ->
-            (case Text.uncons orig of
-              Nothing     ->
-                finish result
-              Just (h, t) ->
-                go t (result <> Builder.singleton h)) ctx
+            maybe
+              (finish result)
+              (\(h, t) -> go t (result <> Builder.singleton h))
+              (Text.uncons orig)
+              ctx
           Just (prefix, replacementNS, rest) ->
             (case prefix of
               "" ->
-                case Text.uncons rest of
-                  Nothing ->
-                    finish (result <> Builder.fromText replacement)
-                  Just (h, t) ->
-                    go t (mconcat [ result
-                                  , Builder.fromText replacement
-                                  , Builder.singleton h ])
+                maybe
+                  (finish (result <> Builder.fromText replacement))
+                  (\(h,t) -> go t (mconcat [ result
+                                           , Builder.fromText replacement
+                                           , Builder.singleton h ]))
+                  (Text.uncons rest)
               _prefix ->
                 go rest (result <> Builder.fromText replacement)) (ctx <> newCtx)
              where
