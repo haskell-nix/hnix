@@ -961,25 +961,24 @@ replaceStrings tfrom tto ts =
 
         go orig resultAccum ctx = case lookupPrefix orig of
           Nothing ->
-            maybe
-              (finish resultAccum)
-              (\(h, t) -> go t (resultAccum <> Builder.singleton h))
-              (Text.uncons orig)
-              ctx
+            process resultAccum orig ctx
           Just (prefix, replacementNS, rest) ->
-            (if prefix == mempty
+            ( if prefix == mempty
               then
-                maybe
-                  (finish newResultAccum)
-                  (\(h,t) -> go t (newResultAccum <> Builder.singleton h))
-                  (Text.uncons rest)
+                process newResultAccum rest
               else
-                go rest newResultAccum)
-                (ctx <> newCtx)
+                go rest newResultAccum
+            ) (ctx <> newCtx)
            where
             replacement = Builder.fromText $ stringIgnoreContext replacementNS
             newResultAccum = resultAccum <> replacement
             newCtx      = NixString.getContext replacementNS
+         where
+            process r t =
+              maybe
+                (finish r)
+                (\(h, t) -> go t (r <> Builder.singleton h))
+                (Text.uncons t)
       toValue
         $ go (stringIgnoreContext ns) mempty
         $ NixString.getContext ns
