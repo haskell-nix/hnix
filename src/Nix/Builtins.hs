@@ -939,46 +939,46 @@ replaceStrings
   -> NValue t f m
   -> m (NValue t f m)
 -- `ns*` goes for NixString here, which are with context - remember
-replaceStrings tfrom tto ts = fromValue (Deeper tfrom) >>= \(nsFrom :: [NixString]) ->
-  fromValue (Deeper tto) >>= \(nsTo :: [NixString]) ->
-    fromValue ts >>= \(ns :: NixString) -> do
+replaceStrings tfrom tto ts =
+  fromValue (Deeper tfrom) >>= \(nsFrom :: [NixString]) ->
+  fromValue (Deeper tto)   >>= \(nsTo   :: [NixString]) ->
+  fromValue ts             >>= \(ns     ::  NixString ) ->
+    do
       when (length nsFrom /= length nsTo)
         $ throwError $ ErrorCall "builtins.replaceStrings: Arguments `from`&`to` are lists `from` what replace `to` what, so the number of their inhabitanting elements must always match."
       let
 
         from = fmap stringIgnoreContext nsFrom
 
-        lookupPrefix s = do  -- monadic context handles Maybe result here, aka if Nothing returned
-          (prefix, replacement) <- find ((`Text.isPrefixOf` s) . fst)
-            $ zip from nsTo
-          let rest = Text.drop (Text.length prefix) s
-          pure (prefix, replacement, rest)
+        lookupPrefix s =
+          do  -- monadic context handles Maybe result here, aka if Nothing returned
+            (prefix, replacement) <- find ((`Text.isPrefixOf` s) . fst)
+              $ zip from nsTo
+            let rest = Text.drop (Text.length prefix) s
+            pure (prefix, replacement, rest)
 
         finish b =
           makeNixString (LazyText.toStrict $ Builder.toLazyText b)
 
         go orig result ctx = case lookupPrefix orig of
-          Nothing -> case Text.uncons orig of
-            Nothing     -> finish result ctx
-            Just (h, t) -> go t (result <> Builder.singleton h) ctx
+          Nothing ->
+            case Text.uncons orig of
+              Nothing     ->
+                finish result ctx
+              Just (h, t) ->
+                go t (result <> Builder.singleton h) ctx
           Just (prefix, replacementNS, rest) ->
             case prefix of
-              "" -> case Text.uncons rest of
-                Nothing -> finish
-                  (result <> Builder.fromText replacement)
-                  (ctx <> newCtx)
-                Just (h, t) -> go
-                  t
-                  (mconcat
-                    [ result
-                    , Builder.fromText replacement
-                    , Builder.singleton h
-                    ]
-                  )
-                  (ctx <> newCtx)
-              _ -> go rest
-                      (result <> Builder.fromText replacement)
-                      (ctx <> newCtx)
+              "" ->
+                case Text.uncons rest of
+                  Nothing ->
+                    finish (result <> Builder.fromText replacement) (ctx <> newCtx)
+                  Just (h, t) ->
+                    go t (mconcat [ result
+                                  , Builder.fromText replacement
+                                  , Builder.singleton h ]) (ctx <> newCtx)
+              _prefix ->
+                go rest (result <> Builder.fromText replacement) (ctx <> newCtx)
              where
               replacement = stringIgnoreContext replacementNS
               newCtx      = NixString.getContext replacementNS
