@@ -959,22 +959,23 @@ replaceStrings tfrom tto ts =
 
         finish = makeNixString . LazyText.toStrict . Builder.toLazyText
 
-        go orig resultAccum ctx = case lookupPrefix orig of
+        go source resultAccum ctx = case lookupPrefix source of
           Nothing ->
-            process resultAccum orig ctx
+            process source resultAccum ctx
           Just (prefix, replacementNS, rest) ->
             ( if prefix == mempty
               then
-                process newResultAccum rest
+                process rest newResultAccum
               else
                 go rest newResultAccum
-            ) (ctx <> newCtx)
+            ) newCtx
            where
-            replacement = Builder.fromText $ stringIgnoreContext replacementNS
+            replacement    = Builder.fromText $ stringIgnoreContext replacementNS
             newResultAccum = resultAccum <> replacement
-            newCtx      = NixString.getContext replacementNS
+            additionalCtx  = NixString.getContext replacementNS
+            newCtx         = ctx <> additionalCtx
          where
-            process r t =
+            process t r =
               maybe
                 (finish r)
                 (\(h, t) -> go t (r <> Builder.singleton h))
