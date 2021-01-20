@@ -957,28 +957,27 @@ replaceStrings tfrom tto ts =
             let rest = Text.drop (Text.length prefix) s
             pure (prefix, replacement, rest)
 
-        finish b =
-          makeNixString (LazyText.toStrict $ Builder.toLazyText b)
+        finish = makeNixString . LazyText.toStrict . Builder.toLazyText
 
         go orig result ctx = case lookupPrefix orig of
           Nothing ->
-            case Text.uncons orig of
+            (case Text.uncons orig of
               Nothing     ->
-                finish result ctx
+                finish result
               Just (h, t) ->
-                go t (result <> Builder.singleton h) ctx
+                go t (result <> Builder.singleton h)) ctx
           Just (prefix, replacementNS, rest) ->
-            case prefix of
+            (case prefix of
               "" ->
                 case Text.uncons rest of
                   Nothing ->
-                    finish (result <> Builder.fromText replacement) (ctx <> newCtx)
+                    finish (result <> Builder.fromText replacement)
                   Just (h, t) ->
                     go t (mconcat [ result
                                   , Builder.fromText replacement
-                                  , Builder.singleton h ]) (ctx <> newCtx)
+                                  , Builder.singleton h ])
               _prefix ->
-                go rest (result <> Builder.fromText replacement) (ctx <> newCtx)
+                go rest (result <> Builder.fromText replacement)) (ctx <> newCtx)
              where
               replacement = stringIgnoreContext replacementNS
               newCtx      = NixString.getContext replacementNS
