@@ -964,11 +964,9 @@ replaceStrings tfrom tto ts =
             process source resultAccum ctx
           Just (prefix, replacementNS, rest) ->
             ( if prefix == mempty
-              then
-                process rest newResultAccum
-              else
-                go rest newResultAccum
-            ) newCtx
+              then process
+              else go
+            ) rest newResultAccum newCtx
            where
             replacement    = Builder.fromText $ stringIgnoreContext replacementNS
             newResultAccum = resultAccum <> replacement
