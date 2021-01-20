@@ -970,16 +970,15 @@ replaceStrings tfrom tto ts =
             (if prefix == mempty
               then
                 maybe
-                  (finish (resultAccum <> Builder.fromText replacement))
-                  (\(h,t) -> go t (mconcat [ resultAccum
-                                            , Builder.fromText replacement
-                                            , Builder.singleton h ]))
+                  (finish newResultAccum)
+                  (\(h,t) -> go t (newResultAccum <> Builder.singleton h))
                   (Text.uncons rest)
               else
-                go rest (resultAccum <> Builder.fromText replacement))
+                go rest newResultAccum)
                 (ctx <> newCtx)
            where
-            replacement = stringIgnoreContext replacementNS
+            replacement = Builder.fromText $ stringIgnoreContext replacementNS
+            newResultAccum = resultAccum <> replacement
             newCtx      = NixString.getContext replacementNS
       toValue
         $ go (stringIgnoreContext ns) mempty
