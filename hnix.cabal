@@ -8,7 +8,7 @@ bug-reports:    https://github.com/haskell-nix/hnix/issues
 author:         John Wiegley
 maintainer:     johnw@newartisans.com
 license:        BSD3
-license-file:   LICENSE
+license-file:   License
 build-type:     Simple
 cabal-version:  >= 1.10
 data-dir:       data/
@@ -19,6 +19,9 @@ data-files:
     nix/corepkgs/fetchurl.nix
     nix/corepkgs/imported-drv-to-derivation.nix
 extra-source-files:
+    ChangeLog.md
+    ReadMe.md
+    License
     data/nix/corepkgs/buildenv.nix
     data/nix/corepkgs/unpack-channel.nix
     data/nix/corepkgs/derivation.nix
@@ -270,9 +273,6 @@ extra-source-files:
     data/simple.nix
     data/nixpkgs-all-packages-pretty.nix
     data/let.nix
-    LICENSE
-    README.md
-    CHANGELOG.md
     tests/eval-compare/builtins.appendContext.nix
     tests/eval-compare/builtins.eq-bottom-00.nix
     tests/eval-compare/builtins.fetchurl-01.nix
