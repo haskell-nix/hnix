@@ -7,7 +7,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
+
 
 module Nix.Thunk.Basic (NThunkF(..), Deferred(..), MonadBasicThunk) where
 

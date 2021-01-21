@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 
+
 module PrettyParseTests where
 
 import           Data.Algorithm.Diff

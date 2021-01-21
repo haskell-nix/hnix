@@ -10,7 +10,7 @@
 {-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
+
 
 module Nix.Pretty where
 

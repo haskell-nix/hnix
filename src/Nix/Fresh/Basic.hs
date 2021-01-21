@@ -5,7 +5,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
+
 
 module Nix.Fresh.Basic where
 
