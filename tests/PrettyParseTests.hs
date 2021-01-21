@@ -5,7 +5,6 @@
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS -Wno-orphans#-}
 
