@@ -19,7 +19,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 -- | Code that implements Nix builtins. Lists the functions that are built into the Nix expression evaluator. Some built-ins (aka `derivation`), are always in the scope, so they can be accessed by the name. To keap the namespace clean, most built-ins are inside the `builtins` scope - a set that contains all what is a built-in.
@@ -660,6 +659,7 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
   caps           = nvList (map f captures)
   f (a, (s, _)) = if s < 0 then nvConstant NNull else thunkStr a
 
+thunkStr :: Applicative f => ByteString -> NValue t f m
 thunkStr s = nvStr (makeNixStringWithoutContext (decodeUtf8 s))
 
 substring :: forall e t f m. MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
@@ -1513,16 +1513,16 @@ newtype Prim m a = Prim { runPrim :: m a }
 
 -- | Types that support conversion to nix in a particular monad
 class ToBuiltin t f m a | a -> m where
-    toBuiltin :: String -> a -> m (NValue t f m)
+  toBuiltin :: String -> a -> m (NValue t f m)
 
 instance (MonadNix e t f m, ToValue a m (NValue t f m))
-      => ToBuiltin t f m (Prim m a) where
+         => ToBuiltin t f m (Prim m a) where
   toBuiltin _ p = toValue =<< runPrim p
 
 instance ( MonadNix e t f m
          , FromValue a m (Deeper (NValue t f m))
          , ToBuiltin t f m b
          )
-      => ToBuiltin t f m (a -> b) where
+         => ToBuiltin t f m (a -> b) where
   toBuiltin name f =
     pure $ nvBuiltin name (fromValue . Deeper >=> toBuiltin name . f)

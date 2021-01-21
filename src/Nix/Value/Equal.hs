@@ -7,7 +7,6 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -19,11 +18,9 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
 
 module Nix.Value.Equal where
@@ -90,7 +87,7 @@ isDerivationM f m = case M.lookup "type" m of
       Nothing -> pure False
 
 isDerivation :: Monad m => (t -> Maybe NixString) -> AttrSet t -> Bool
-isDerivation f = runIdentity . isDerivationM (\x -> Identity (f x))
+isDerivation f = runIdentity . isDerivationM (Identity . f)
 
 valueFEqM
   :: Monad n

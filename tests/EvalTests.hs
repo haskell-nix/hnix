@@ -3,9 +3,8 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE UndecidableInstances #-}
 
-{-# OPTIONS_GHC -Wno-missing-signatures -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-missing-signatures #-}
 
 module EvalTests (tests, genEvalCompareTests) where
 
