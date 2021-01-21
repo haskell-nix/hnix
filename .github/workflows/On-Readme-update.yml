@@ -1,11 +1,11 @@
-name: "On README change"
+name: "On ReadMe change"
 
 on:
   push:
     branches:
       - master
     paths:
-      - "README.md"
+      - "ReadMe.md"
 
 jobs:
 
@@ -24,10 +24,10 @@ jobs:
           ref: ${{ github.head_ref }}
       - name: "Generate the idenpotent TOC"
         run: |
-          doctoc --github --notitle README.md
+          doctoc --github --notitle ReadMe.md
       - name: "Commit and push changes"
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_author: "Anton Latukha <anton@latukha.com>"
-          commit_message: "[auto] upd README TOC"
-          file_pattern: "README.md"
+          commit_message: "[auto] upd ReadMe TOC"
+          file_pattern: "ReadMe.md"
