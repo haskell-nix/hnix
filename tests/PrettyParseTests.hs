@@ -6,7 +6,6 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-{-# OPTIONS -Wno-orphans#-}
 
 module PrettyParseTests where
 

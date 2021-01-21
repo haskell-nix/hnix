@@ -7,7 +7,6 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -88,7 +87,7 @@ isDerivationM f m = case M.lookup "type" m of
       Nothing -> pure False
 
 isDerivation :: Monad m => (t -> Maybe NixString) -> AttrSet t -> Bool
-isDerivation f = runIdentity . isDerivationM (\x -> Identity (f x))
+isDerivation f = runIdentity . isDerivationM (Identity . f)
 
 valueFEqM
   :: Monad n
