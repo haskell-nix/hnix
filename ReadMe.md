@@ -124,6 +124,7 @@ To build `hnix` with profiling enabled:
 cabal v2-configure --enable-tests --enable-profiling --flags=profiling
 cabal v2-run hnix -- <args> +RTS -p
 ```
+where "RTS" stands for "RunTime System" and has a lot of options, which have their own section in the GHC User Manual: [Running a compiled program/Setting RTS options](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/runtime_control.html).
 
 ##### Full debug info
 
