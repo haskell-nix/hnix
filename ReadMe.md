@@ -118,13 +118,15 @@ cabal v2-bench
 
 ##### Profiling
 
+GHC User Manual has a full ["Profiling"](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/profiling.html) section of relevant info.
+
 To build `hnix` with profiling enabled:
 
 ```shell
 cabal v2-configure --enable-tests --enable-profiling --flags=profiling
 cabal v2-run hnix -- <args> +RTS -p
 ```
-where "RTS" stands for "RunTime System" and has a lot of options, which have their own section in the GHC User Manual: [Running a compiled program/Setting RTS options](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/runtime_control.html).
+where "RTS" stands for "RunTime System" and has a lot of options, GHC User Manual has ["Running a compiled program"/"Setting RTS options"](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/runtime_control.html) sections describing them.
 
 ##### Full debug info
 
@@ -139,6 +141,7 @@ This would give the most information as to what happens during parsing & evaluat
 
 
 #### Run HNix
+
 ```shell
 cabal v2-run hnix -- --help
 ```
