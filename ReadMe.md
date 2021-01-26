@@ -192,7 +192,7 @@ nix-build \
   --arg doBenchmark true \
   --arg doStrip false \
   --arg enableLibraryProfiling true \
-  --arg enableExecutableProfiling true
+  --arg enableExecutableProfiling true \
   --arg doTracing true \
   --arg enableDWARFDebugging true
 
