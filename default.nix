@@ -91,7 +91,7 @@
 #   , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
 #   ...
 #   }
-, rev ? "980c4c3c2f664ccc5002f7fd6e08059cf1f00e75"
+, rev ? "891f607d5301d6730cb1f9dcf3618bcb1ab7f10e"
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" < 0
@@ -191,7 +191,7 @@ let
       #  2021-01-06: NOTE:
       # Core is on Stackage and pinned at `0.2`: https://github.com/haskell-nix/hnix-store/issues/104
       # Stackage report: https://github.com/commercialhaskell/stackage/issues/5766
-      hnix-store-core = super.hnix-store-core_0_4_0_0;
+      hnix-store-core = super.hnix-store-core_0_4_1_0;
 
     };
 

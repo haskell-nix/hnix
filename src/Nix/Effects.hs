@@ -41,7 +41,6 @@ import           System.Process
 
 import qualified System.Nix.Hash               as Store
 import qualified System.Nix.Store.Remote       as Store
-import qualified System.Nix.Store.Remote.Types as Store
 import qualified System.Nix.StorePath          as Store
 
 -- | A path into the nix store
