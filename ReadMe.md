@@ -6,7 +6,7 @@
 [![Repology page](https://img.shields.io/badge/Repology-page-%23005500)](https://repology.org/project/haskell:hnix/versions)
 
 
-# hnix
+# HNix
 
 Parser, evaluator and type checker for the Nix language written in Haskell.
 
