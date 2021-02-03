@@ -127,8 +127,7 @@ GHC User Manual has a full ["Profiling"](https://ghc.gitlab.haskell.org/ghc/doc/
 To build `hnix` with profiling enabled:
 
 ```shell
-cabal v2-configure --enable-tests --enable-profiling --flags=profiling
-cabal v2-run hnix -- <args> +RTS -p
+cabal v2-run hnix --enable-profiling --flags=profiling -- <args> +RTS -p
 ```
 where "RTS" stands for "RunTime System" and has a lot of options, GHC User Manual has ["Running a compiled program"/"Setting RTS options"](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/runtime_control.html) sections describing them.
 
