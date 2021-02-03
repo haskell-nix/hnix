@@ -1,5 +1,5 @@
 
-# Changelog
+# ChangeLog
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.12.0...master#files_bucket) Progress
 
