@@ -310,9 +310,9 @@ hnix \
 
 ## Contributing
 
-There is a Wiki article: [Design of the HNix code base](https://github.com/haskell-nix/hnix/wiki/Design-of-the-HNix-code-base).
+* The Haskell Language Server (HLS) works great with our project.
 
-Haskell Language Server & Cabal development. Or development in the Nix shell environment.
+* [Design of the HNix code base Wiki article](https://github.com/haskell-nix/hnix/wiki/Design-of-the-HNix-code-base).
 
 1. If something in the [quests](https://github.com/haskell-nix/hnix/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22+no%3Aassignee) looks interesting, look through the thread and leave a comment taking it, to let others know you're working on it.
 
@@ -321,14 +321,18 @@ Haskell Language Server & Cabal development. Or development in the Nix shell env
 3. When the pull request is ready to be submitted, to save time - please, test it with:
     
     ```shell
-    git submodule update --init --recursive
     cabal v2-test
+    
+    # If forgot to clone recursively, run:
+    # git submodule update --init --recursive
     ```
     
-    Please, check that all default tests that were passing prior are still passing for the PR, it is faster to check that locally than through CI. It's OK if no new tests are passing.
+    Please, check that all default tests that were passing prior are still passing. It's OK if no new tests are passing.
     
     
 ### (optional) Minimalistic development status loop with amazing [`ghcid`](https://github.com/ndmitchell/ghcid)
+
+If HLS is not your cup of yea:
 
 ```shell
 ghcid --command="cabal v2-repl --repl-options=-fno-code --repl-options=-fno-break-on-exception --repl-options=-fno-break-on-error --repl-options=-v1 --repl-options=-ferror-spans --repl-options=-j"
