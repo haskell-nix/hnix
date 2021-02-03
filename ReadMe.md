@@ -158,7 +158,7 @@ cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
 This would give the most information as to what happens during parsing & evaluation.
 
 
-#### Run HNix
+#### Runing executable
 
 ```shell
 cabal v2-run hnix -- --help
@@ -217,7 +217,7 @@ nix-build \
 ./result/bin/hnix -v5 --trace <args> +RTS -xc
 ```
 
-#### Run HNix
+#### Runing executable
 
 ```shell
 ./result/bin/hnix
@@ -238,7 +238,7 @@ It has a pretty full/good description of the current options.
 To parse a file with `hnix` and pretty print the result:
 
 ```shell
-hnix FILE.nix
+hnix file.nix
 ```
 
 ### Evaluating and printing the resulting value
@@ -246,7 +246,7 @@ hnix FILE.nix
 Expression from a file:
 
 ```shell
-hnix --eval FILE.nix
+hnix --eval file.nix
 ```
 
 Expression:
@@ -260,7 +260,7 @@ hnix --eval --expr 'import <nixpkgs> {}'
 Currently, the main high-level goal is to be able to evaluate all of Nixpkgs:
 
 ```shell
-hnix --eval -E "import <nixpkgs> {}" --find
+hnix --eval --expr "import <nixpkgs> {}" --find
 ```
 
 ### Options supported only by HNix
@@ -292,7 +292,7 @@ hnix --repl
 
 Evaluate an expression and load it into REPL:
 ```shell
-hnix --eval -E '(import <nixpkgs> {}).pkgs.hello' --repl
+hnix --eval --expr '(import <nixpkgs> {}).pkgs.hello' --repl
 ```
 This binds the evaluated expression result to the `input` variable, so that variable can be inspected.
 
@@ -358,5 +358,9 @@ For simplicity `alias` the command in your shell.
 
 ## Current status
 
-To understand the project implementation state see [Changelog](https://github.com/haskell-nix/hnix/blob/master/CHANGELOG.md), [opened reports](https://github.com/haskell-nix/hnix/issues) and [Project status](https://github.com/haskell-nix/hnix/wiki/Project-status).
+To understand the project implementation state see:
+  * [ChangeLog](https://github.com/haskell-nix/hnix/blob/master/ChangeLog.md)
+  * [Opened reports](https://github.com/haskell-nix/hnix/issues)
+  * [Project status](https://github.com/haskell-nix/hnix/wiki/Project-status)
+  * [Design of the HNix code base](https://github.com/haskell-nix/hnix/wiki/Design-of-the-HNix-code-base)
 
