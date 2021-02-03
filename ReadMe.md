@@ -49,7 +49,7 @@ Parser, evaluator and type checker for the Nix language written in Haskell.
 ## Prerequisites
 Tooling is WIP, `nix-shell` and `nix-store` are still used for their purpose, so, to access them Nix is required to be installed.
 
-*Disclaimer*: Current `derivationStrict` primOp implementation and so every evaluation of a derivation into a store path currently relies on the `hnix-store-remote`, which for those operations relies on the running `nix-daemon`, and so operations use/produce effects into the `/nix/store`. Be cautious - it is effectful.
+*Disclaimer*: Since still using Nix for some operations, current `derivationStrict` primOp implementation and so evaluations of a derivation into a store path currently rely on the `hnix-store-remote`, which for those operations relies on the running `nix-daemon`, and so operations use/produce effects into the `/nix/store`. Be cautious - it is effectful (produces `/nix/store` entries).
 
 ## Getting Started
 
