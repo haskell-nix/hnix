@@ -19,7 +19,8 @@ Parser, evaluator and type checker for the Nix language written in Haskell.
 
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
-  - [Cachix prebuild binary caches](#cachix-prebuild-binary-caches)
+  - [Git clone](#git-clone)
+  - [(optional) Cachix prebuild binary caches](#optional-cachix-prebuild-binary-caches)
   - [Using Cabal](#using-cabal)
     - [Checking the project](#checking-the-project)
       - [Benchmarks](#benchmarks)
