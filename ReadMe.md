@@ -74,37 +74,37 @@ If you opt in to use of Nix environment, please enable the official HNix Cachix 
 Cabal [Quickstart](https://cabal.readthedocs.io/en/3.4/nix-local-build.html).
 
 1. (Optional), to enter the projects reproducible Nix environment:
-```shell
-nix-shell
-```
-  
+    ```shell
+    nix-shell
+    ```
+    
 2. Building:
-```shell
-cabal v2-configure
-cabal v2-build
-```
-
+    ```shell
+    cabal v2-configure
+    cabal v2-build
+    ```
+  
 3. Loading the project into `ghci` REPL:
-```shell
-cabal v2-repl
-```
-
+    ```shell
+    cabal v2-repl
+    ```
+    
 4. Testing:
 
-* Default suite:
-```shell
-cabal v2-test
-```
-
-* All available tests:
-```shell
-env ALL_TESTS=yes cabal v2-test
-```
-
-* Selected (list of tests is in `tests/Main.hs`):
-```shell
-env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
-```
+  * Default suite:
+    ```shell
+    cabal v2-test
+    ```
+  
+  * All available tests:
+    ```shell
+    env ALL_TESTS=yes cabal v2-test
+    ```
+    
+  * Selected (list of tests is in `tests/Main.hs`):
+    ```shell
+    env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
+    ```
 
 #### Checking the project
 
@@ -267,7 +267,7 @@ hnix --reduce bug.nix --eval --expr 'import <nixpkgs> {}'
 
 ### REPL
 
-Ot enter REPL:
+To enter REPL:
 ```shell
 hnix --repl
 ```
@@ -315,15 +315,15 @@ Haskell Language Server & Cabal development. Or development in the Nix shell env
 2. You are free to chat with everyone on [Gitter](https://gitter.im/haskell-nix/Lobby).
 
 3. When the pull request is ready to be submitted, to save time - please, test it with:
-
-```shell
-git submodule update --init --recursive
-cabal v2-test
-```
-
-Please, check that all default tests that were passing prior are still passing for the PR, it is faster to check that locally than through CI. It's OK if no new tests are passing.
-
-
+    
+    ```shell
+    git submodule update --init --recursive
+    cabal v2-test
+    ```
+    
+    Please, check that all default tests that were passing prior are still passing for the PR, it is faster to check that locally than through CI. It's OK if no new tests are passing.
+    
+    
 ### (optional) Minimalistic development status loop with amazing [`ghcid`](https://github.com/ndmitchell/ghcid)
 
 ```shell
