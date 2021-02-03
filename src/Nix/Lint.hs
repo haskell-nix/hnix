@@ -276,13 +276,13 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
     evalError @(Symbolic m)
       $  ErrorCall
       $  "Inheriting unknown attribute: "
-      <> intercalate "." (map Text.unpack (NE.toList ks))
+      <> intercalate "." (fmap Text.unpack (NE.toList ks))
 
   attrMissing ks (Just s) =
     evalError @(Symbolic m)
       $  ErrorCall
       $  "Could not look up attribute "
-      <> intercalate "." (map Text.unpack (NE.toList ks))
+      <> intercalate "." (fmap Text.unpack (NE.toList ks))
       <> " in "
       <> show s
 

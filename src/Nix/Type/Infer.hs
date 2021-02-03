@@ -126,10 +126,10 @@ instance Substitutable TVar where
 instance Substitutable Type where
   apply _         (  TCon a   ) = TCon a
   apply s         (  TSet b a ) = TSet b (M.map (apply s) a)
-  apply s         (  TList a  ) = TList (map (apply s) a)
+  apply s         (  TList a  ) = TList (fmap (apply s) a)
   apply (Subst s) t@(TVar  a  ) = Map.findWithDefault t a s
   apply s         (  t1 :~> t2) = apply s t1 :~> apply s t2
-  apply s         (  TMany ts ) = TMany (map (apply s) ts)
+  apply s         (  TMany ts ) = TMany (fmap (apply s) ts)
 
 instance Substitutable Scheme where
   apply (Subst s) (Forall as t) = Forall as $ apply s' t
@@ -154,10 +154,10 @@ class FreeTypeVars a where
 instance FreeTypeVars Type where
   ftv TCon{}      = Set.empty
   ftv (TVar a   ) = Set.singleton a
-  ftv (TSet _ a ) = Set.unions (map ftv (M.elems a))
-  ftv (TList a  ) = Set.unions (map ftv a)
+  ftv (TSet _ a ) = Set.unions (fmap ftv (M.elems a))
+  ftv (TList a  ) = Set.unions (fmap ftv a)
   ftv (t1 :~> t2) = ftv t1 `Set.union` ftv t2
-  ftv (TMany ts ) = Set.unions (map ftv ts)
+  ftv (TMany ts ) = Set.unions (fmap ftv ts)
 
 instance FreeTypeVars TVar where
   ftv = Set.singleton
@@ -571,9 +571,9 @@ inferTop env ((name, ex) : xs) = case inferExpr env ex of
   Right ty  -> inferTop (extend env (name, ty)) xs
 
 normalizeScheme :: Scheme -> Scheme
-normalizeScheme (Forall _ body) = Forall (map snd ord) (normtype body)
+normalizeScheme (Forall _ body) = Forall (fmap snd ord) (normtype body)
  where
-  ord = zip (nub $ fv body) (map TV letters)
+  ord = zip (nub $ fv body) (fmap TV letters)
 
   fv (TVar a  ) = [a]
   fv (a :~> b ) = fv a <> fv b
@@ -585,8 +585,8 @@ normalizeScheme (Forall _ body) = Forall (map snd ord) (normtype body)
   normtype (a :~> b ) = normtype a :~> normtype b
   normtype (TCon a  ) = TCon a
   normtype (TSet b a) = TSet b (M.map normtype a)
-  normtype (TList a ) = TList (map normtype a)
-  normtype (TMany ts) = TMany (map normtype ts)
+  normtype (TList a ) = TList (fmap normtype a)
+  normtype (TMany ts) = TMany (fmap normtype ts)
   normtype (TVar  a ) = case Prelude.lookup a ord of
     Just x  -> TVar x
     Nothing -> error "type variable not in signature"

@@ -28,7 +28,7 @@ instance (Eq v, Eq (ThunkId m)) => Eq (NThunkF m v) where
   Thunk x _ _ == Thunk y _ _ = x == y
 
 instance Show v => Show (NThunkF m v) where
-  show (Thunk _ _ _) = "<thunk>"
+  show Thunk{} = "<thunk>"
 
 type MonadBasicThunk m = (MonadThunkId m, MonadVar m)
 

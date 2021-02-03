@@ -149,7 +149,7 @@ prettyParamSet args var = encloseSep
   (lbrace <> space)
   (align (space <> rbrace))
   sep
-  (map prettySetArg args <> prettyVariadic)
+  (fmap prettySetArg args <> prettyVariadic)
  where
   prettySetArg (n, maybeDef) = case maybeDef of
     Nothing -> pretty (unpack n)
@@ -161,7 +161,7 @@ prettyBind :: Binding (NixDoc ann) -> Doc ann
 prettyBind (NamedVar n v _p) =
   prettySelector n <+> equals <+> withoutParens v <> semi
 prettyBind (Inherit s ns _p) =
-  "inherit" <+> scope <> align (fillSep (map prettyKeyName ns)) <> semi
+  "inherit" <+> scope <> align (fillSep (fmap prettyKeyName ns)) <> semi
   where scope = maybe mempty ((<> space) . parens . withoutParens) s
 
 prettyKeyName :: NKeyName (NixDoc ann) -> Doc ann
@@ -289,7 +289,7 @@ exprFNixDoc = \case
       $ group
       $ vsep
       $ [ "let"
-        , indent 2 (vsep (map prettyBind binds))
+        , indent 2 (vsep (fmap prettyBind binds))
         , "in" <+> withoutParens body
         ]
   NIf cond trueBody falseBody ->

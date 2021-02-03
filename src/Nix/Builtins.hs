@@ -636,7 +636,7 @@ split_ pat str = fromValue pat >>= fromStringNoContext >>= \p ->
     let re       = makeRegex (encodeUtf8 p) :: Regex
         haystack = encodeUtf8 s
     pure $ nvList $ splitMatches 0
-                                   (map elems $ matchAllText re haystack)
+                                   (fmap elems $ matchAllText re haystack)
                                    haystack
 
 splitMatches
@@ -656,7 +656,7 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
  where
   relStart       = max 0 start - numDropped
   (before, rest) = B.splitAt relStart haystack
-  caps           = nvList (map f captures)
+  caps           = nvList (fmap f captures)
   f (a, (s, _)) = if s < 0 then nvConstant NNull else thunkStr a
 
 thunkStr :: Applicative f => ByteString -> NValue t f m
@@ -718,7 +718,7 @@ mapAttrs_ f xs = fromValue @(AttrSet (NValue t f m)) xs >>= \aset -> do
       $   withFrame Debug (ErrorCall "While applying f in mapAttrs:\n")
       $   callFunc ?? value
       =<< callFunc f (nvStr (makeNixStringWithoutContext key))
-  toValue . M.fromList . zip (map fst pairs) $ values
+  toValue . M.fromList . zip (fmap fst pairs) $ values
 
 filter_
   :: forall e t f m
@@ -1393,7 +1393,7 @@ exec_ xs = do
   -- TODO Still need to do something with the context here
   -- See prim_exec in nix/src/libexpr/primops.cc
   -- Requires the implementation of EvalState::realiseContext
-  exec (map (Text.unpack . stringIgnoreContext) xs)
+  exec (fmap (Text.unpack . stringIgnoreContext) xs)
 
 fetchurl
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)

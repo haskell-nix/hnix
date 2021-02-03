@@ -127,6 +127,6 @@ sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unP
       pad n | read n == begLine = "==> " <> n
             | otherwise         = "    " <> n
       ls' = zipWith (<+>)
-                    (map (pretty . pad) nums')
-                    (map ("| " <+>) ls)
+                    (fmap (pretty . pad) nums')
+                    (fmap ("| " <+>) ls)
     pure $ vsep $ ls' <> [msg]

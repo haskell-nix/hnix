@@ -221,6 +221,6 @@ intercalateNixString _   []   = mempty
 intercalateNixString _   [ns] = ns
 intercalateNixString sep nss  = NixString contents ctx
  where
-  contents = Text.intercalate (nsContents sep) (map nsContents nss)
+  contents = Text.intercalate (nsContents sep) (fmap nsContents nss)
   ctx      = S.unions (nsContext sep : fmap nsContext nss)
 

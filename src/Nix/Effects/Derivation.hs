@@ -141,7 +141,7 @@ unparseDrv (Derivation {..}) = Text.append "Derive" $ parens
       list $ flip fmap (Map.toList $ snd inputs) (\(path, outs) ->
         parens [s path, list $ fmap s $ sort outs])
     , -- inputSrcs
-      list (map s $ Set.toList $ fst inputs)
+      list (fmap s $ Set.toList $ fst inputs)
     , s platform
     , s builder
     , -- run script args
