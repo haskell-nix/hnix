@@ -94,7 +94,7 @@ instance Show r => Show (NValueF p m r) where
 
     showsCon1 :: Show a => String -> a -> Int -> String -> String
     showsCon1 con a d =
-      showParen (d > 10) $ showString (con ++ " ") . showsPrec 11 a
+      showParen (d > 10) $ showString (con <> " ") . showsPrec 11 a
 
 lmapNValueF :: Functor m => (b -> a) -> NValueF a m r -> NValueF b m r
 lmapNValueF f = \case

@@ -77,7 +77,7 @@ coerceToString call ctsm clevel = go
 
     NVSet s _ | Just p <- M.lookup "outPath" s -> demand p go
 
-    v -> throwError $ ErrorCall $ "Expected a string, but saw: " ++ show v
+    v -> throwError $ ErrorCall $ "Expected a string, but saw: " <> show v
 
   nixStringUnwords =
     intercalateNixString (makeNixStringWithoutContext " ")

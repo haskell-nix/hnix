@@ -243,7 +243,7 @@ inferType env ex = do
         ]
   inferState <- get
   let eres = (`evalState` inferState) $ runSolver $ do
-        subst <- solve (cs ++ cs')
+        subst <- solve (cs <> cs')
         return (subst, subst `apply` t)
   case eres of
     Left  errs -> throwError $ TypeInferenceErrors errs
@@ -389,10 +389,10 @@ instance Monad m => MonadThrow (InferT s m) where
 instance Monad m => MonadCatch (InferT s m) where
   catch m h = catchError m $ \case
     EvaluationError e -> maybe
-      (error $ "Exception was not an exception: " ++ show e)
+      (error $ "Exception was not an exception: " <> show e)
       h
       (fromException (toException e))
-    err -> error $ "Unexpected error: " ++ show err
+    err -> error $ "Unexpected error: " <> show err
 
 type MonadInfer m
   = ({- MonadThunkId m,-}
@@ -454,13 +454,13 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
 
   evalUnary op (Judgment as1 cs1 t1) = do
     tv <- fresh
-    return $ Judgment as1 (cs1 ++ unops (t1 :~> tv) op) tv
+    return $ Judgment as1 (cs1 <> unops (t1 :~> tv) op) tv
 
   evalBinary op (Judgment as1 cs1 t1) e2 = do
     Judgment as2 cs2 t2 <- e2
     tv                  <- fresh
     return $ Judgment (as1 `As.merge` as2)
-                      (cs1 ++ cs2 ++ binops (t1 :~> t2 :~> tv) op)
+                      (cs1 <> cs2 <> binops (t1 :~> t2 :~> tv) op)
                       tv
 
   evalWith = Eval.evalWithAttrSet
@@ -470,19 +470,19 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     Judgment as3 cs3 t3 <- f
     return $ Judgment
       (as1 `As.merge` as2 `As.merge` as3)
-      (cs1 ++ cs2 ++ cs3 ++ [EqConst t1 typeBool, EqConst t2 t3])
+      (cs1 <> cs2 <> cs3 <> [EqConst t1 typeBool, EqConst t2 t3])
       t2
 
   evalAssert (Judgment as1 cs1 t1) body = do
     Judgment as2 cs2 t2 <- body
     return
-      $ Judgment (as1 `As.merge` as2) (cs1 ++ cs2 ++ [EqConst t1 typeBool]) t2
+      $ Judgment (as1 `As.merge` as2) (cs1 <> cs2 <> [EqConst t1 typeBool]) t2
 
   evalApp (Judgment as1 cs1 t1) e2 = do
     Judgment as2 cs2 t2 <- e2
     tv                  <- fresh
     return $ Judgment (as1 `As.merge` as2)
-                      (cs1 ++ cs2 ++ [EqConst t1 (t2 :~> tv)])
+                      (cs1 <> cs2 <> [EqConst t1 (t2 :~> tv)])
                       tv
 
   evalAbs (Param x) k = do
@@ -492,7 +492,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
       a
       (k (pure (Judgment (As.singleton x tv) [] tv)) (\_ b -> ((), ) <$> b))
     return $ Judgment (as `As.remove` x)
-                      (cs ++ [ EqConst t' tv | t' <- As.lookup x as ])
+                      (cs <> [ EqConst t' tv | t' <- As.lookup x as ])
                       (tv :~> t)
 
   evalAbs (ParamSet ps variadic _mname) k = do
@@ -513,7 +513,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
 
     return $ Judgment
       (foldl' As.remove as names)
-      (cs ++ [ EqConst t' (tys M.! x) | x <- names, t' <- As.lookup x as ])
+      (cs <> [ EqConst t' (tys M.! x) | x <- names, t' <- As.lookup x as ])
       (ty :~> t)
 
   evalError = throwError . EvaluationError
@@ -576,7 +576,7 @@ normalizeScheme (Forall _ body) = Forall (map snd ord) (normtype body)
   ord = zip (nub $ fv body) (map TV letters)
 
   fv (TVar a  ) = [a]
-  fv (a :~> b ) = fv a ++ fv b
+  fv (a :~> b ) = fv a <> fv b
   fv (TCon _  ) = []
   fv (TSet _ a) = concatMap fv (M.elems a)
   fv (TList a ) = concatMap fv a

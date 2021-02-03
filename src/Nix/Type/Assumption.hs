@@ -33,7 +33,7 @@ lookup :: Name -> Assumption -> [Type]
 lookup key (Assumption a) = fmap snd (filter (\(n, _) -> n == key) a)
 
 merge :: Assumption -> Assumption -> Assumption
-merge (Assumption a) (Assumption b) = Assumption (a ++ b)
+merge (Assumption a) (Assumption b) = Assumption (a <> b)
 
 mergeAssumptions :: [Assumption] -> Assumption
 mergeAssumptions = foldl' merge empty

@@ -60,6 +60,6 @@ newtype ThunkLoop = ThunkLoop String -- contains rendering of ThunkId
   deriving Typeable
 
 instance Show ThunkLoop where
-  show (ThunkLoop i) = "ThunkLoop " ++ i
+  show (ThunkLoop i) = "ThunkLoop " <> i
 
 instance Exception ThunkLoop

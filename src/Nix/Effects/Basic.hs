@@ -58,14 +58,14 @@ defaultMakeAbsolutePath origPath = do
               throwError
                 $  ErrorCall
                 $  "when resolving relative path,"
-                ++ " __cur_file is in scope,"
-                ++ " but is not a path; it is: "
-                ++ show val
+                <> " __cur_file is in scope,"
+                <> " but is not a path; it is: "
+                <> show val
       pure $ cwd <///> origPathExpanded
   removeDotDotIndirections <$> canonicalizePath absPath
 
 expandHomePath :: MonadFile m => FilePath -> m FilePath
-expandHomePath ('~' : xs) = flip (++) xs <$> getHomeDirectory
+expandHomePath ('~' : xs) = flip (<>) xs <$> getHomeDirectory
 expandHomePath p          = pure p
 
 -- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
@@ -86,7 +86,7 @@ x <///> y | isAbsolute y || "." `isPrefixOf` y = x </> y
  where
   joinByLargestOverlap (splitDirectories -> xs) (splitDirectories -> ys) =
     joinPath $ head
-      [ xs ++ drop (length tx) ys | tx <- tails xs, tx `elem` inits ys ]
+      [ xs <> drop (length tx) ys | tx <- tails xs, tx `elem` inits ys ]
 
 defaultFindEnvPath :: MonadNix e t f m => String -> m FilePath
 defaultFindEnvPath = findEnvPathM
@@ -123,9 +123,9 @@ findPathBy finder ls name = do
       throwError
         $  ErrorCall
         $  "file '"
-        ++ name
-        ++ "' was not found in the Nix search path"
-        ++ " (add it's using $NIX_PATH or -I)"
+        <> name
+        <> "' was not found in the Nix search path"
+        <> " (add it's using $NIX_PATH or -I)"
     Just path -> pure path
  where
   go :: Maybe FilePath -> NValue t f m -> m (Maybe FilePath)
@@ -155,8 +155,8 @@ findPathBy finder ls name = do
         throwError
           $  ErrorCall
           $  "__nixPath must be a list of attr sets"
-          ++ " with 'path' elements, but received: "
-          ++ show s
+          <> " with 'path' elements, but received: "
+          <> show s
 
 fetchTarball
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -170,7 +170,7 @@ fetchTarball = flip demand $ \case
     throwError
       $  ErrorCall
       $  "builtins.fetchTarball: Expected URI or set, got "
-      ++ show v
+      <> show v
  where
   go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
   go msha = \case
@@ -179,7 +179,7 @@ fetchTarball = flip demand $ \case
       throwError
         $  ErrorCall
         $  "builtins.fetchTarball: Expected URI or string, got "
-        ++ show v
+        <> show v
 
 {- jww (2018-04-11): This should be written using pipes in another module
     fetch :: Text -> Maybe (NThunk m) -> m (NValue t f m)
@@ -190,22 +190,22 @@ fetchTarball = flip demand $ \case
         ".xz"  -> undefined
         ".tar" -> undefined
         ext -> throwError $ ErrorCall $ "builtins.fetchTarball: Unsupported extension '"
-                  ++ ext ++ "'"
+                  <> ext <> "'"
 -}
 
   fetch :: Text -> Maybe (NValue t f m) -> m (NValue t f m)
   fetch uri Nothing =
-    nixInstantiateExpr $ "builtins.fetchTarball \"" ++ Text.unpack uri ++ "\""
+    nixInstantiateExpr $ "builtins.fetchTarball \"" <> Text.unpack uri <> "\""
   fetch url (Just t) = demand t $ fromValue >=> \nsSha ->
     let sha = stringIgnoreContext nsSha
     in  nixInstantiateExpr
           $  "builtins.fetchTarball { "
-          ++ "url    = \""
-          ++ Text.unpack url
-          ++ "\"; "
-          ++ "sha256 = \""
-          ++ Text.unpack sha
-          ++ "\"; }"
+          <> "url    = \""
+          <> Text.unpack url
+          <> "\"; "
+          <> "sha256 = \""
+          <> Text.unpack sha
+          <> "\"; }"
 
 defaultFindPath :: MonadNix e t f m => [NValue t f m] -> FilePath -> m FilePath
 defaultFindPath = findPathM
@@ -229,8 +229,8 @@ defaultImportPath
   => FilePath
   -> m (NValue t f m)
 defaultImportPath path = do
-  traceM $ "Importing file " ++ path
-  withFrame Info (ErrorCall $ "While importing file " ++ show path) $ do
+  traceM $ "Importing file " <> path
+  withFrame Info (ErrorCall $ "While importing file " <> show path) $ do
     imports <- gets fst
     evalExprLoc =<< case M.lookup path imports of
       Just expr -> pure expr

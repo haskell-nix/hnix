@@ -111,7 +111,7 @@ withNixContext mpath action = do
   pushScope (M.singleton "__includes" i) $ pushScopes base $ case mpath of
     Nothing   -> action
     Just path -> do
-      traceM $ "Setting __cur_file = " ++ show path
+      traceM $ "Setting __cur_file = " <> show path
       let ref = nvPath path
       pushScope (M.singleton "__cur_file" ref) action
 
@@ -119,7 +119,7 @@ builtins :: (MonadNix e t f m, Scoped (NValue t f m) m)
          => m (Scopes m (NValue t f m))
 builtins = do
   ref <- defer $ flip nvSet M.empty <$> buildMap
-  lst <- ([("builtins", ref)] ++) <$> topLevelBuiltins
+  lst <- ([("builtins", ref)] <>) <$> topLevelBuiltins
   pushScope (M.fromList lst) currentScopes
  where
   buildMap         = M.fromList . fmap mapping <$> builtinsList
@@ -260,7 +260,7 @@ builtinsList = sequence
 
   mkThunk n = defer . withFrame
     Info
-    (ErrorCall $ "While calling builtin " ++ Text.unpack n ++ "\n")
+    (ErrorCall $ "While calling builtin " <> Text.unpack n <> "\n")
 
   add0 t n v = wrap t n <$> mkThunk n v
   add  t n v = wrap t n <$> mkThunk n (builtin (Text.unpack n) v)
@@ -323,17 +323,17 @@ foldNixPath f z = do
   dataDir <- maybe getDataDir pure mDataDir
   foldrM go z
     $  fmap (fromInclude . stringIgnoreContext) dirs
-    ++ case mPath of
+    <> case mPath of
          Nothing  -> []
          Just str -> uriAwareSplit (Text.pack str)
-    ++ [ fromInclude $ Text.pack $ "nix=" ++ dataDir ++ "/nix/corepkgs" ]
+    <> [ fromInclude $ Text.pack $ "nix=" <> dataDir <> "/nix/corepkgs" ]
  where
   fromInclude x | "://" `Text.isInfixOf` x = (x, PathEntryURI)
                 | otherwise                = (x, PathEntryPath)
   go (x, ty) rest = case Text.splitOn "=" x of
     [p] -> f (Text.unpack p) Nothing ty rest
     [n, p] -> f (Text.unpack p) (Just (Text.unpack n)) ty rest
-    _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " ++ show x
+    _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " <> show x
 
 nixPath :: MonadNix e t f m => m (NValue t f m)
 nixPath = fmap nvList $ flip foldNixPath [] $ \p mn ty rest ->
@@ -371,7 +371,7 @@ attrsetGet :: MonadNix e t f m => Text -> AttrSet (NValue t f m) -> m (NValue t 
 attrsetGet k s = case M.lookup k s of
   Just v -> pure v
   Nothing ->
-    throwError $ ErrorCall $ "Attribute '" ++ Text.unpack k ++ "' required"
+    throwError $ ErrorCall $ "Attribute '" <> Text.unpack k <> "' required"
 
 hasContext :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 hasContext = toValue . stringHasContext <=< fromValue
@@ -401,7 +401,7 @@ unsafeGetAttrPos x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
     throwError
       $  ErrorCall
       $  "Invalid types for builtins.unsafeGetAttrPos: "
-      ++ show (x, y)
+      <> show (x, y)
 
 -- This function is a bit special in that it doesn't care about the contents
 -- of the list.
@@ -665,7 +665,7 @@ thunkStr s = nvStr (makeNixStringWithoutContext (decodeUtf8 s))
 substring :: forall e t f m. MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
 substring start len str = Prim $
   if start < 0
-  then throwError $ ErrorCall $ "builtins.substring: negative start position: " ++ show start
+  then throwError $ ErrorCall $ "builtins.substring: negative start position: " <> show start
   else pure $ modifyNixContents (take . Text.drop start) str
  where
   --NOTE: negative values of 'len' are OK, and mean "take everything"
@@ -789,7 +789,7 @@ dirOf x = demand x $ \case
     (modifyNixContents (Text.pack . takeDirectory . Text.unpack) ns)
   NVPath path -> pure $ nvPath $ takeDirectory path
   v ->
-    throwError $ ErrorCall $ "dirOf: expected string or path, got " ++ show v
+    throwError $ ErrorCall $ "dirOf: expected string or path, got " <> show v
 
 -- jww (2018-04-28): This should only be a string argument, and not coerced?
 unsafeDiscardStringContext
@@ -839,9 +839,9 @@ elemAt_ xs n = fromValue n >>= \n' -> fromValue xs >>= \xs' ->
       throwError
         $  ErrorCall
         $  "builtins.elem: Index "
-        ++ show n'
-        ++ " too large for list of length "
-        ++ show (length xs')
+        <> show n'
+        <> " too large for list of length "
+        <> show (length xs')
 
 genList
   :: forall e t f m
@@ -855,7 +855,7 @@ genList f = fromValue @Integer >=> \n -> if n >= 0
     throwError
     $  ErrorCall
     $  "builtins.genList: Expected a non-negative number, got "
-    ++ show n
+    <> show n
 
 -- We wrap values solely to provide an Ord instance for genericClosure
 newtype WValue t f m = WValue (NValue t f m)
@@ -892,7 +892,7 @@ genericClosure = fromValue @(AttrSet (NValue t f m)) >=> \s ->
       throwError
         $  ErrorCall
         $  "builtins.genericClosure: "
-        ++ "Attributes 'startSet' and 'operator' required"
+        <> "Attributes 'startSet' and 'operator' required"
     (Nothing, Just _) ->
       throwError
         $ ErrorCall
@@ -921,7 +921,7 @@ genericClosure = fromValue @(AttrSet (NValue t f m)) >=> \s ->
           case S.toList ks of
             []           -> checkComparable k' k'
             WValue j : _ -> checkComparable k' j
-          fmap (t :) <$> go op (ts ++ ys) (S.insert (WValue k') ks)
+          fmap (t :) <$> go op (ts <> ys) (S.insert (WValue k') ks)
 
 replaceStrings
   :: MonadNix e t f m
@@ -937,7 +937,7 @@ replaceStrings tfrom tto ts = fromValue (Deeper tfrom) >>= \(nsFrom :: [NixStrin
         $  throwError
         $  ErrorCall
         $  "'from' and 'to' arguments to 'replaceStrings'"
-        ++ " have different lengths"
+        <> " have different lengths"
       let
         lookupPrefix s = do
           (prefix, replacement) <- find ((`Text.isPrefixOf` s) . fst)
@@ -1008,7 +1008,7 @@ functionArgs fun = demand fun $ \case
     throwError
       $  ErrorCall
       $  "builtins.functionArgs: expected function, got "
-      ++ show v
+      <> show v
 
 toFile
   :: MonadNix e t f m
@@ -1035,7 +1035,7 @@ pathExists_ path = demand path $ \case
     throwError
       $  ErrorCall
       $  "builtins.pathExists: expected path, got "
-      ++ show v
+      <> show v
 
 hasKind
   :: forall a e t f m
@@ -1105,7 +1105,7 @@ scopedImport asetArg pathArg = fromValue @(AttrSet (NValue t f m)) asetArg >>= \
         traceM "No known current directory"
         pure path
       Just p -> demand p $ fromValue >=> \(Path p') -> do
-        traceM $ "Current file being evaluated is: " ++ show p'
+        traceM $ "Current file being evaluated is: " <> show p'
         pure $ takeDirectory p' </> path
     clearScopes @(NValue t f m)
       $ withNixContext (Just path')
@@ -1144,10 +1144,10 @@ lessThan ta tb = demand ta $ \va -> demand tb $ \vb -> do
         throwError
           $  ErrorCall
           $  "builtins.lessThan: expected two numbers or two strings, "
-          ++ "got "
-          ++ show va
-          ++ " and "
-          ++ show vb
+          <> "got "
+          <> show va
+          <> " and "
+          <> show vb
   nvConstant . NBool <$> case (va, vb) of
     (NVConstant ca, NVConstant cb) -> case (ca, cb) of
       (NInt   a, NInt b  ) -> pure $ a < b
@@ -1221,8 +1221,8 @@ hashString nsAlgo ns = Prim $ do
       throwError
         $  ErrorCall
         $  "builtins.hashString: "
-        ++ "expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got "
-        ++ show algo
+        <> "expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got "
+        <> show algo
 
 placeHolder :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
@@ -1253,11 +1253,11 @@ absolutePathFromValue = \case
       $  throwError
       $  ErrorCall
       $  "string "
-      ++ show path
-      ++ " doesn't represent an absolute path"
+      <> show path
+      <> " doesn't represent an absolute path"
     pure path
   NVPath path -> pure path
-  v           -> throwError $ ErrorCall $ "expected a path, got " ++ show v
+  v           -> throwError $ ErrorCall $ "expected a path, got " <> show v
 
 readFile_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 readFile_ path = demand path $
@@ -1275,10 +1275,10 @@ findFile_ aset filePath = demand aset $ \aset' -> demand filePath $ \filePath' -
       mres <- findPath @t @f @m x (Text.unpack (stringIgnoreContext ns))
       pure $ nvPath mres
     (NVList _, y) ->
-      throwError $ ErrorCall $ "expected a string, got " ++ show y
-    (x, NVStr _) -> throwError $ ErrorCall $ "expected a list, got " ++ show x
+      throwError $ ErrorCall $ "expected a string, got " <> show y
+    (x, NVStr _) -> throwError $ ErrorCall $ "expected a list, got " <> show x
     (x, y) ->
-      throwError $ ErrorCall $ "Invalid types for builtins.findFile: " ++ show
+      throwError $ ErrorCall $ "Invalid types for builtins.findFile: " <> show
         (x, y)
 
 data FileType
@@ -1315,7 +1315,7 @@ fromJSON
 fromJSON arg = demand arg $ fromValue >=> fromStringNoContext >=> \encoded ->
   case A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded of
     Left jsonError ->
-      throwError $ ErrorCall $ "builtins.fromJSON: " ++ jsonError
+      throwError $ ErrorCall $ "builtins.fromJSON: " <> jsonError
     Right v -> jsonToNValue v
  where
   jsonToNValue = \case
@@ -1404,7 +1404,7 @@ fetchurl v = demand v $ \case
     throwError
       $  ErrorCall
       $  "builtins.fetchurl: Expected URI or set, got "
-      ++ show v
+      <> show v
  where
   go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
   go _msha = \case
@@ -1415,7 +1415,7 @@ fetchurl v = demand v $ \case
       throwError
         $  ErrorCall
         $  "builtins.fetchurl: Expected URI or string, got "
-        ++ show v
+        <> show v
 
   noContextAttrs ns = case getStringNoContext ns of
     Nothing ->
@@ -1462,7 +1462,7 @@ getContext x = demand x $ \case
     valued :: M.HashMap Text (NValue t f m) <- sequenceA $ M.map toValue context
     pure $ nvSet valued M.empty
   x ->
-    throwError $ ErrorCall $ "Invalid type for builtins.getContext: " ++ show x
+    throwError $ ErrorCall $ "Invalid type for builtins.getContext: " <> show x
 
 appendContext
   :: forall e t f m
@@ -1488,13 +1488,13 @@ appendContext x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
               throwError
                 $ ErrorCall
                 $ "Invalid types for context value outputs in builtins.appendContext: "
-                ++ show x
+                <> show x
         pure $ NixLikeContextValue path allOutputs outputs
       x ->
         throwError
           $  ErrorCall
           $  "Invalid types for context value in builtins.appendContext: "
-          ++ show x
+          <> show x
     toValue
       $ makeNixString (stringIgnoreContext ns)
       $ fromNixLikeContext
@@ -1507,7 +1507,7 @@ appendContext x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
     throwError
       $  ErrorCall
       $  "Invalid types for builtins.appendContext: "
-      ++ show (x, y)
+      <> show (x, y)
 
 newtype Prim m a = Prim { runPrim :: m a }
 

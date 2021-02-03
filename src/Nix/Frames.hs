@@ -36,7 +36,7 @@ data NixFrame = NixFrame
 
 instance Show NixFrame where
   show (NixFrame level f) =
-    "Nix frame at level " ++ show level ++ ": " ++ show f
+    "Nix frame at level " <> show level <> ": " <> show f
 
 type Frames = [NixFrame]
 

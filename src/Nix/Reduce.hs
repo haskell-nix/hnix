@@ -96,11 +96,11 @@ staticImport pann path = do
     Nothing   -> go path'
  where
   go path = do
-    liftIO $ putStrLn $ "Importing file " ++ path
+    liftIO $ putStrLn $ "Importing file " <> path
 
     eres <- liftIO $ parseNixFileLoc path
     case eres of
-      Failure err -> error $ "Parse failed: " ++ show err
+      Failure err -> error $ "Parse failed: " <> show err
       Success x   -> do
         let
           pos  = SourcePos "Reduce.hs" (mkPos 1) (mkPos 1)

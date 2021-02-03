@@ -99,28 +99,28 @@ instance MonadExec IO where
     (prog : args) -> do
       (exitCode, out, _) <- liftIO $ readProcessWithExitCode prog args ""
       let t    = T.strip (T.pack out)
-      let emsg = "program[" ++ prog ++ "] args=" ++ show args
+      let emsg = "program[" <> prog <> "] args=" <> show args
       case exitCode of
         ExitSuccess -> if T.null t
-          then pure $ Left $ ErrorCall $ "exec has no output :" ++ emsg
+          then pure $ Left $ ErrorCall $ "exec has no output :" <> emsg
           else case parseNixTextLoc t of
             Failure err ->
               pure
                 $  Left
                 $  ErrorCall
                 $  "Error parsing output of exec: "
-                ++ show err
-                ++ " "
-                ++ emsg
+                <> show err
+                <> " "
+                <> emsg
             Success v -> pure $ Right v
         err ->
           pure
             $  Left
             $  ErrorCall
             $  "exec  failed: "
-            ++ show err
-            ++ " "
-            ++ emsg
+            <> show err
+            <> " "
+            <> emsg
 
 class Monad m => MonadInstantiate m where
     instantiateExpr :: String -> m (Either ErrorCall NExprLoc)
@@ -129,7 +129,7 @@ class Monad m => MonadInstantiate m where
 
 instance MonadInstantiate IO where
   instantiateExpr expr = do
-    traceM $ "Executing: " ++ show
+    traceM $ "Executing: " <> show
       ["nix-instantiate", "--eval", "--expr ", expr]
     (exitCode, out, err) <- readProcessWithExitCode "nix-instantiate"
                                                     ["--eval", "--expr", expr]
@@ -141,16 +141,16 @@ instance MonadInstantiate IO where
             $  Left
             $  ErrorCall
             $  "Error parsing output of nix-instantiate: "
-            ++ show e
+            <> show e
         Success v -> pure $ Right v
       status ->
         pure
           $  Left
           $  ErrorCall
           $  "nix-instantiate failed: "
-          ++ show status
-          ++ ": "
-          ++ err
+          <> show status
+          <> ": "
+          <> err
 
 pathExists :: MonadFile m => FilePath -> m Bool
 pathExists = doesPathExist
@@ -192,7 +192,7 @@ class Monad m => MonadHttp m where
 instance MonadHttp IO where
   getURL url = do
     let urlstr = T.unpack url
-    traceM $ "fetching HTTP URL: " ++ urlstr
+    traceM $ "fetching HTTP URL: " <> urlstr
     req     <- parseRequest urlstr
     manager <- if secure req
       then newTlsManager
@@ -206,16 +206,16 @@ instance MonadHttp IO where
         $  Left
         $  ErrorCall
         $  "fail, got "
-        ++ show status
-        ++ " when fetching url:"
-        ++ urlstr
+        <> show status
+        <> " when fetching url:"
+        <> urlstr
       else -- do
         -- let bstr = responseBody response
         pure
         $  Left
         $  ErrorCall
         $  "success in downloading but hnix-store is not yet ready; url = "
-        ++ urlstr
+        <> urlstr
 
 
 class Monad m => MonadPutStr m where
@@ -226,7 +226,7 @@ class Monad m => MonadPutStr m where
     putStr = lift . putStr
 
 putStrLn :: MonadPutStr m => String -> m ()
-putStrLn = putStr . (++ "\n")
+putStrLn = putStr . (<> "\n")
 
 print :: (MonadPutStr m, Show a) => a -> m ()
 print = putStrLn . show
@@ -258,13 +258,13 @@ class Monad m => MonadStore m where
 
 parseStoreResult :: Monad m => String -> (Either String a, [Store.Logger]) -> m (Either ErrorCall a)
 parseStoreResult name res = case res of
-  (Left msg, logs) -> return $ Left $ ErrorCall $ "Failed to execute '" ++ name ++ "': " ++ msg ++ "\n" ++ show logs
+  (Left msg, logs) -> return $ Left $ ErrorCall $ "Failed to execute '" <> name <> "': " <> msg <> "\n" <> show logs
   (Right result, _) -> return $ Right result
 
 instance MonadStore IO where
 
   addToStore name path recursive repair = case Store.makeStorePathName name of
-    Left err -> return $ Left $ ErrorCall $ "String '" ++ show name ++ "' is not a valid path name: " ++ err
+    Left err -> return $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> err
     Right pathName -> do
       -- TODO: redesign the filter parameter
       res <- Store.runStore $ Store.addToStore @'Store.SHA256 pathName path recursive (const False) repair

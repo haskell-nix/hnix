@@ -149,7 +149,7 @@ prettyParamSet args var = encloseSep
   (lbrace <> space)
   (align (space <> rbrace))
   sep
-  (map prettySetArg args ++ prettyVariadic)
+  (map prettySetArg args <> prettyVariadic)
  where
   prettySetArg (n, maybeDef) = case maybeDef of
     Nothing -> pretty (unpack n)
@@ -273,7 +273,7 @@ exprFNixDoc = \case
     ordoc = maybe mempty (((space <> "or") <+>) . wrapParens appOpNonAssoc) o
   NHasAttr r attr ->
     mkNixDoc (wrapParens hasAttrOp r <+> "?" <+> prettySelector attr) hasAttrOp
-  NEnvPath     p -> simpleExpr $ pretty ("<" ++ p ++ ">")
+  NEnvPath     p -> simpleExpr $ pretty ("<" <> p <> ">")
   NLiteralPath p -> pathExpr $ pretty $ case p of
     "./"  -> "./."
     "../" -> "../."
@@ -282,7 +282,7 @@ exprFNixDoc = \case
         | "~/" `isPrefixOf` txt  -> txt
         | "./" `isPrefixOf` txt  -> txt
         | "../" `isPrefixOf` txt -> txt
-        | otherwise              -> "./" ++ txt
+        | otherwise              -> "./" <> txt
   NSym name -> simpleExpr $ pretty (unpack name)
   NLet binds body ->
     leastPrecedence
@@ -327,7 +327,7 @@ valueToExpr = iterNValue (\_ _ -> thk) phi
     ]
   phi (NVClosure' _ _   ) = Fix . NSym . pack $ "<closure>"
   phi (NVPath' p        ) = Fix $ NLiteralPath p
-  phi (NVBuiltin' name _) = Fix . NSym . pack $ "builtins." ++ name
+  phi (NVBuiltin' name _) = Fix . NSym . pack $ "builtins." <> name
   phi _                   = error "Pattern synonyms foil completeness check"
 
   mkStr ns = Fix $ NStr $ DoubleQuoted [Plain (stringIgnoreContext ns)]
@@ -391,22 +391,22 @@ printNix = iterNValue (\_ _ -> thk) phi
   phi :: NValue' t f m String -> String
   phi (NVConstant' a ) = unpack $ atomText a
   phi (NVStr'      ns) = show $ stringIgnoreContext ns
-  phi (NVList'     l ) = "[ " ++ unwords l ++ " ]"
+  phi (NVList'     l ) = "[ " <> unwords l <> " ]"
   phi (NVSet' s _) =
     "{ "
-      ++ concat
-           [ check (unpack k) ++ " = " ++ v ++ "; "
+      <> concat
+           [ check (unpack k) <> " = " <> v <> "; "
            | (k, v) <- sort $ toList s
            ]
-      ++ "}"
+      <> "}"
    where
     check v = fromMaybe
       v
       (   fmap (surround . show) (readMaybe v :: Maybe Int)
       <|> fmap (surround . show) (readMaybe v :: Maybe Float)
       )
-      where surround s = "\"" ++ s ++ "\""
+      where surround s = "\"" <> s <> "\""
   phi NVClosure'{}        = "<<lambda>>"
   phi (NVPath' fp       ) = fp
-  phi (NVBuiltin' name _) = "<<builtin " ++ name ++ ">>"
+  phi (NVBuiltin' name _) = "<<builtin " <> name <> ">>"
   phi _                   = error "Pattern synonyms foil completeness check"

@@ -51,7 +51,7 @@ renderFrames (x : xs) = do
     | verbose opts <= ErrorsOnly -> renderFrame @v @t @f x
     | verbose opts <= Informational -> do
       f <- renderFrame @v @t @f x
-      pure $ concatMap go (reverse xs) ++ f
+      pure $ concatMap go (reverse xs) <> f
     | otherwise -> concat <$> mapM (renderFrame @v @t @f) (reverse (x : xs))
   pure $ case frames of
     [] -> mempty
@@ -92,7 +92,7 @@ renderFrame (NixFrame level f)
   | Just (e :: ExecFrame t f m) <- fromException f = renderExecFrame level e
   | Just (e :: ErrorCall) <- fromException f = pure [pretty (show e)]
   | Just (e :: SynHoleInfo m v) <- fromException f = pure [pretty (show e)]
-  | otherwise = error $ "Unrecognized frame: " ++ show f
+  | otherwise = error $ "Unrecognized frame: " <> show f
 
 wrapExpr :: NExprF r -> NExpr
 wrapExpr x = Fix (Fix (NSym "<?>") <$ x)
@@ -108,7 +108,7 @@ renderEvalFrame level f = do
     EvaluatingExpr scope e@(Fix (Compose (Ann ann _))) -> do
       let scopeInfo | showScopes opts = [pretty $ show scope]
                     | otherwise   = []
-      fmap (\x -> scopeInfo ++ [x])
+      fmap (\x -> scopeInfo <> [x])
         $   renderLocation ann
         =<< renderExpr level "While evaluating" "Expression" e
 
@@ -154,7 +154,7 @@ renderExpr _level longLabel shortLabel e@(Fix (Compose (Ann _ x))) = do
           | otherwise = prettyNix (Fix (Fix (NSym "<?>") <$ x))
   pure $ if verbose opts >= Chatty
     then
-      vsep [pretty (longLabel ++ ":\n>>>>>>>>"), indent 2 rendered, "<<<<<<<<"]
+      vsep [pretty (longLabel <> ":\n>>>>>>>>"), indent 2 rendered, "<<<<<<<<"]
     else pretty shortLabel <> fillSep [": ", rendered]
 
 renderValueFrame
@@ -218,7 +218,7 @@ renderThunkLoop
   -> ThunkLoop
   -> m [Doc ann]
 renderThunkLoop _level = pure . (: []) . \case
-  ThunkLoop n -> pretty $ "Infinite recursion in thunk " ++ n
+  ThunkLoop n -> pretty $ "Infinite recursion in thunk " <> n
 
 renderNormalLoop
   :: (MonadReader e m, Has e Options, MonadFile m, MonadCitedThunks t f m)

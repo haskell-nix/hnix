@@ -31,7 +31,7 @@ removePlainEmpty = filter f where
   -- trimEnd xs
   --     | null xs = xs
   --     | otherwise = case last xs of
-  --           Plain x -> init xs ++ [Plain (T.dropWhileEnd (== ' ') x)]
+  --           Plain x -> init xs <> [Plain (T.dropWhileEnd (== ' ') x)]
   --           _ -> xs
 
 -- | Equivalent to case splitting on 'Antiquoted' strings.

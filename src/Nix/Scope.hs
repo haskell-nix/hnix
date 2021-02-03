@@ -37,7 +37,7 @@ data Scopes m a = Scopes
 
 instance Show (Scopes m a) where
   show (Scopes m a) =
-    "Scopes: " ++ show m ++ ", and " ++ show (length a) ++ " with-scopes"
+    "Scopes: " <> show m <> ", and " <> show (length a) <> " with-scopes"
 
 instance Semigroup (Scopes m a) where
   Scopes ls lw <> Scopes rs rw = Scopes (ls <> rs) (lw <> rw)
