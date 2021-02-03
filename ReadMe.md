@@ -129,7 +129,21 @@ To build `hnix` with profiling enabled:
 ```shell
 cabal v2-run hnix --enable-profiling --flags=profiling -- <args> +RTS -p
 ```
-where "RTS" stands for "RunTime System" and has a lot of options, GHC User Manual has ["Running a compiled program"/"Setting RTS options"](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/runtime_control.html) sections describing them.
+
+Or to put simply:
+```shell
+# Run profiling for evaluation of a Firefox package.
+# Generate:
+#  * for all functions
+#  * time profiling data
+#  * memory allocation profiling data
+#  * in the JSON profiling format
+cabal v2-run --enable-profiling --flags=profiling --enable-library-profiling --profiling-detail='all-functions' hnix -- --eval --expr '(import <nixpkgs> {}).firefox.outPath' +RTS -Pj
+
+# Then, upload the `hnix.prof` to the https://www.speedscope.app/ to analyze it.
+```
+
+"RTS" stands for "RunTime System" and has a lot of options, GHC User Manual has ["Running a compiled program"/"Setting RTS options"](https://ghc.gitlab.haskell.org/ghc/doc/users_guide/runtime_control.html) sections describing them.
 
 ##### Full debug info
 
