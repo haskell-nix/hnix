@@ -60,11 +60,15 @@ git clone --recursive 'https://github.com/haskell-nix/hnix.git' && cd hnix
 ```
 
 
-### Cachix prebuild binary caches
+### (optional) Cachix prebuild binary caches
 
-If you opt in to use of Nix environment, please enable the official HNix Cachix binary cache:
+If you would use our Nix-shell environment for development, you can connect to our Cachix HNix build caches:
 
-1. Go through https://cachix.org/ and set it up.
+1. Run:
+    ```shell
+    nix-env -iA cachix -f https://cachix.org/api/v1/install
+    ```
+
 
 2. Run: `cachix use hnix`
 
