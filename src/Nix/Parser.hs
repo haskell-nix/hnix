@@ -67,8 +67,7 @@ import qualified Data.HashSet                  as HashSet
 import           Data.List.NonEmpty             ( NonEmpty(..) )
 import qualified Data.List.NonEmpty            as NE
 import qualified Data.Map                      as Map
-import           Data.Text               hiding ( map
-                                                , foldr1
+import           Data.Text               hiding ( foldr1
                                                 , concat
                                                 , concatMap
                                                 , zipWith
@@ -94,7 +93,7 @@ infixl 3 <+>
 ---------------------------------------------------------------------------------
 
 nixExpr :: Parser NExprLoc
-nixExpr = makeExprParser nixTerm $ map (map snd) (nixOperators nixSelector)
+nixExpr = makeExprParser nixTerm $ fmap (fmap snd) (nixOperators nixSelector)
 
 antiStart :: Parser Text
 antiStart = symbol "${" <?> show ("${" :: String)

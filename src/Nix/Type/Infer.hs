@@ -142,7 +142,7 @@ instance Substitutable Constraint where
     ImpInstConst (apply s t1) (apply s ms) (apply s t2)
 
 instance Substitutable a => Substitutable [a] where
-  apply = map . apply
+  apply = fmap . apply
 
 instance (Ord a, Substitutable a) => Substitutable (Set.Set a) where
   apply = Set.map . apply
@@ -253,7 +253,7 @@ inferType env ex = do
 inferExpr :: Env -> NExpr -> Either InferError [Scheme]
 inferExpr env ex = case runInfer (inferType env ex) of
   Left  err -> Left err
-  Right xs  -> Right $ map (\(subst, ty) -> closeOver (subst `apply` ty)) xs
+  Right xs  -> Right $ fmap (\(subst, ty) -> closeOver (subst `apply` ty)) xs
 
 -- | Canonicalize and return the polymorphic toplevel type.
 closeOver :: Type -> Scheme
@@ -505,7 +505,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
             (as1 `As.merge` As.singleton k t, M.insert k t t1)
         arg   = pure $ Judgment env [] (TSet True tys)
         call  = k arg $ \args b -> (args, ) <$> b
-        names = map fst js
+        names = fmap fst js
 
     (args, Judgment as cs t) <- foldr (\(_, TVar a) -> extendMSet a) call js
 

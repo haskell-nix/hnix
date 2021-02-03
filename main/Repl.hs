@@ -348,7 +348,7 @@ completeFunc reversedPrev word
   -- Commands
   | reversedPrev == ":"
   = pure . listCompletion
-      $ map helpOptionName (helpOptions :: HelpOptions e t f m)
+      $ fmap helpOptionName (helpOptions :: HelpOptions e t f m)
 
   -- Files
   | any (`Data.List.isPrefixOf` word) [ "/", "./", "../", "~/" ]
@@ -364,7 +364,7 @@ completeFunc reversedPrev word
       Just binding -> do
         candidates <- lift $ algebraicComplete subFields binding
         pure
-          $ map notFinished
+          $ fmap notFinished
           $ listCompletion (Data.Text.unpack . (var <>) <$> candidates)
 
   -- Builtins, context variables
@@ -381,7 +381,7 @@ completeFunc reversedPrev word
       ++ (Data.Text.unpack <$> shortBuiltins)
 
   where
-    listCompletion = map simpleCompletion . filter (word `Data.List.isPrefixOf`)
+    listCompletion = fmap simpleCompletion . filter (word `Data.List.isPrefixOf`)
 
     notFinished x = x { isFinished = False }
 
@@ -508,7 +508,7 @@ renderSetOptions :: [HelpSetOption] -> Doc ()
 renderSetOptions so =
   Prettyprinter.indent 4
     $ Prettyprinter.vsep
-    $ flip map so
+    $ flip fmap so
     $ \h ->
              Prettyprinter.pretty (helpSetOptionName h)
          <+> helpSetOptionSyntax h

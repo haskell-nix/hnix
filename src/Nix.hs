@@ -107,7 +107,7 @@ evaluateExpression
   -> m a
 evaluateExpression mpath evaluator handler expr = do
   opts :: Options <- asks (view hasLens)
-  args <- traverse (traverse eval') $ map (second parseArg) (arg opts) ++ map
+  args <- traverse (traverse eval') $ fmap (second parseArg) (arg opts) ++ fmap
     (second mkStr)
     (argstr opts)
   evaluator mpath expr >>= \f -> demand f $ \f' ->

@@ -257,7 +257,7 @@ evalBinds recursive binds = do
   go _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
     finalValue >>= fromValue >>= \(o', p') ->
           -- jww (2018-05-09): What to do with the key position here?
-                                              pure $ map
+                                              pure $ fmap
       (\(k, v) -> ([k], fromMaybe pos (M.lookup k p'), demand v pure))
       (M.toList o')
 

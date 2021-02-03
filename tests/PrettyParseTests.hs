@@ -165,7 +165,7 @@ normalize = foldFix $ \case
     :: Antiquoted (NString NExpr) NExpr -> Antiquoted (NString NExpr) NExpr
   normAntiquotedString (Plain (DoubleQuoted [EscapedNewline])) = EscapedNewline
   normAntiquotedString (Plain (DoubleQuoted strs)) =
-    let strs' = map normAntiquotedText strs
+    let strs' = fmap normAntiquotedText strs
     in  if strs == strs'
           then Plain (DoubleQuoted strs)
           else normAntiquotedString (Plain (DoubleQuoted strs'))
@@ -216,7 +216,7 @@ prop_prettyparse p = do
  where
   parse     = parseNixText
 
-  normalise = unlines . map (reverse . dropWhile isSpace . reverse) . lines
+  normalise = unlines . fmap (reverse . dropWhile isSpace . reverse) . lines
 
   ldiff :: String -> String -> [Diff [String]]
   ldiff s1 s2 = getDiff (map (: []) (lines s1)) (map (: []) (lines s2))

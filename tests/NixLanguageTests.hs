@@ -60,7 +60,7 @@ From (git://nix)/tests/lang.sh we see that
 -}
 
 groupBy :: Ord k => (v -> k) -> [v] -> Map k [v]
-groupBy key = Map.fromListWith (++) . map (key &&& pure)
+groupBy key = Map.fromListWith (++) . fmap (key &&& pure)
 
 -- | New tests, which have never yet passed.  Once any of these is passing,
 -- please remove it from this list.  Do not add tests to this list if they have
@@ -85,14 +85,14 @@ genTests = do
     <$> globDir1 (compile "*-*-*.*") "data/nix/tests/lang"
   let testsByName = groupBy (takeFileName . dropExtensions) testFiles
   let testsByType = groupBy testType (Map.toList testsByName)
-  let testGroups  = map mkTestGroup (Map.toList testsByType)
+  let testGroups  = fmap mkTestGroup (Map.toList testsByType)
   pure $ localOption (mkTimeout 2000000) $ testGroup
     "Nix (upstream) language tests"
     testGroups
  where
   testType (fullpath, _files) = take 2 $ splitOn "-" $ takeFileName fullpath
   mkTestGroup (kind, tests) =
-    testGroup (unwords kind) $ map (mkTestCase kind) tests
+    testGroup (unwords kind) $ fmap (mkTestCase kind) tests
   mkTestCase kind (basename, files) = testCase (takeFileName basename) $ do
     time <- liftIO getCurrentTime
     let opts = defaultOptions time
@@ -143,7 +143,7 @@ assertEval :: Options -> [FilePath] -> Assertion
 assertEval _opts files = do
   time <- liftIO getCurrentTime
   let opts = defaultOptions time
-  case delete ".nix" $ sort $ map takeExtensions files of
+  case delete ".nix" $ sort $ fmap takeExtensions files of
     []                 -> () <$ hnixEvalFile opts (name ++ ".nix")
     [".exp"         ]  -> assertLangOk opts name
     [".exp.xml"     ]  -> assertLangOkXml opts name

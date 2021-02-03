@@ -102,7 +102,7 @@ withNixContext
 withNixContext mpath action = do
   base            <- builtins
   opts :: Options <- asks (view hasLens)
-  let i = nvList $ map
+  let i = nvList $ fmap
         ( nvStr
         . makeNixStringWithoutContext
         . Text.pack
@@ -122,10 +122,10 @@ builtins = do
   lst <- ([("builtins", ref)] ++) <$> topLevelBuiltins
   pushScope (M.fromList lst) currentScopes
  where
-  buildMap         = M.fromList . map mapping <$> builtinsList
-  topLevelBuiltins = map mapping <$> fullBuiltinsList
+  buildMap         = M.fromList . fmap mapping <$> builtinsList
+  topLevelBuiltins = fmap mapping <$> fullBuiltinsList
 
-  fullBuiltinsList = map go <$> builtinsList
+  fullBuiltinsList = fmap go <$> builtinsList
    where
     go b@(Builtin TopLevel _) = b
     go (Builtin Normal (name, builtin)) =
@@ -322,7 +322,7 @@ foldNixPath f z = do
   mDataDir <- getEnvVar "NIX_DATA_DIR"
   dataDir <- maybe getDataDir pure mDataDir
   foldrM go z
-    $  map (fromInclude . stringIgnoreContext) dirs
+    $  fmap (fromInclude . stringIgnoreContext) dirs
     ++ case mPath of
          Nothing  -> []
          Just str -> uriAwareSplit (Text.pack str)
@@ -538,7 +538,7 @@ splitVersion_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 splitVersion_ = fromValue >=> fromStringNoContext >=> \s ->
   pure
     $ nvList
-    $ flip map (splitVersion s)
+    $ flip fmap (splitVersion s)
     $ nvStr
     . makeNixStringWithoutContext
     . versionComponentToString
@@ -615,7 +615,7 @@ match_ pat str = fromValue pat >>= fromStringNoContext >>= \p ->
             otherwise   = toValue $ makeNixStringWithoutContext t
     case matchOnceText re (encodeUtf8 s) of
       Just ("", sarr, "") -> do
-        let s = map fst (elems sarr)
+        let s = fmap fst (elems sarr)
         nvList <$> traverse (mkMatch . decodeUtf8)
                             (if length s > 1 then tail s else s)
       _ -> pure $ nvConstant NNull
@@ -677,7 +677,7 @@ attrNames =
   fromValue @(AttrSet (NValue t f m))
     >=> fmap getDeeper
     .   toValue
-    .   map makeNixStringWithoutContext
+    .   fmap makeNixStringWithoutContext
     .   sort
     .   M.keys
 
@@ -932,7 +932,7 @@ replaceStrings
 replaceStrings tfrom tto ts = fromValue (Deeper tfrom) >>= \(nsFrom :: [NixString]) ->
   fromValue (Deeper tto) >>= \(nsTo :: [NixString]) ->
     fromValue ts >>= \(ns :: NixString) -> do
-      let from = map stringIgnoreContext nsFrom
+      let from = fmap stringIgnoreContext nsFrom
       when (length nsFrom /= length nsTo)
         $  throwError
         $  ErrorCall
@@ -1432,7 +1432,7 @@ partition_ f = fromValue @[NValue t f m] >=> \l -> do
   let match t = f `callFunc` t >>= fmap (, t) . fromValue
   selection <- traverse match l
   let (right, wrong) = partition fst selection
-  let makeSide       = nvList . map snd
+  let makeSide       = nvList . fmap snd
   toValue @(AttrSet (NValue t f m))
     $ M.fromList [("right", makeSide right), ("wrong", makeSide wrong)]
 

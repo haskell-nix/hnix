@@ -139,7 +139,7 @@ getContext = nsContext
 
 fromNixLikeContext :: NixLikeContext -> S.HashSet StringContext
 fromNixLikeContext =
-  S.fromList . join . map toStringContexts . M.toList . getNixLikeContext
+  S.fromList . join . fmap toStringContexts . M.toList . getNixLikeContext
 
 -- | Extract the string contents from a NixString that has no context
 getStringNoContext :: NixString -> Maybe Text
@@ -164,7 +164,7 @@ toStringContexts (path, nlcv) = case nlcv of
   NixLikeContextValue _ True _ -> StringContext path AllOutputs
     : toStringContexts (path, nlcv { nlcvAllOutputs = False })
   NixLikeContextValue _ _ ls | not (null ls) ->
-    map (StringContext path . DerivationOutput) ls
+    fmap (StringContext path . DerivationOutput) ls
   _ -> []
 
 toNixLikeContextValue :: StringContext -> (Text, NixLikeContextValue)
@@ -222,5 +222,5 @@ intercalateNixString _   [ns] = ns
 intercalateNixString sep nss  = NixString contents ctx
  where
   contents = Text.intercalate (nsContents sep) (map nsContents nss)
-  ctx      = S.unions (nsContext sep : map nsContext nss)
+  ctx      = S.unions (nsContext sep : fmap nsContext nss)
 

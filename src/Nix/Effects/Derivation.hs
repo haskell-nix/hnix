@@ -130,7 +130,7 @@ hashDerivationModulo drv@(Derivation {inputs = (inputSrcs, inputDrvs)}) = do
 unparseDrv :: Derivation -> Text
 unparseDrv (Derivation {..}) = Text.append "Derive" $ parens
     [ -- outputs: [("out", "/nix/store/.....-out", "", ""), ...]
-      list $ flip map (Map.toList outputs) (\(outputName, outputPath) ->
+      list $ flip fmap (Map.toList outputs) (\(outputName, outputPath) ->
         let prefix = if hashMode == Recursive then "r:" else "" in
         case mFixed of
           Nothing -> parens [s outputName, s outputPath, s "", s ""]
@@ -138,16 +138,16 @@ unparseDrv (Derivation {..}) = Text.append "Derive" $ parens
             parens [s outputName, s outputPath, s $ prefix <> Store.algoName @hashType, s $ Store.encodeInBase Store.Base16 digest]
         )
     , -- inputDrvs
-      list $ flip map (Map.toList $ snd inputs) (\(path, outs) ->
-        parens [s path, list $ map s $ sort outs])
+      list $ flip fmap (Map.toList $ snd inputs) (\(path, outs) ->
+        parens [s path, list $ fmap s $ sort outs])
     , -- inputSrcs
       list (map s $ Set.toList $ fst inputs)
     , s platform
     , s builder
     , -- run script args
-      list $ map s args
+      list $ fmap s args
     , -- env (key value pairs)
-      list $ flip map (Map.toList env) (\(k, v) ->
+      list $ flip fmap (Map.toList env) (\(k, v) ->
         parens [s k, s v])
     ]
   where
@@ -192,7 +192,7 @@ derivationParser = do
   _ <- ")"
   eof
 
-  let outputs = Map.fromList $ map (\(a, b, _, _) -> (a, b)) fullOutputs
+  let outputs = Map.fromList $ fmap (\(a, b, _, _) -> (a, b)) fullOutputs
   let (mFixed, hashMode) = parseFixed fullOutputs
   let name = "" -- FIXME (extract from file path ?)
   let useJson = ["__json"] == Map.keys env
@@ -332,7 +332,7 @@ buildDerivationWithContext drvAttrs = do
 
       return $ defaultDerivation { platform, builder, args, env,  hashMode, useJson
         , name = drvName
-        , outputs = Map.fromList $ map (\o -> (o, "")) outputs
+        , outputs = Map.fromList $ fmap (\o -> (o, "")) outputs
         , mFixed = mFixedOutput
         }
   where

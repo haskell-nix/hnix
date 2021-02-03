@@ -114,7 +114,7 @@ sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unP
     let beg' = max 1 (min begLine (begLine - 3))
         end' = max endLine (endLine + 3)
     ls <-
-      map pretty
+      fmap pretty
       .   take (end' - beg')
       .   drop (pred beg')
       .   T.lines
@@ -123,7 +123,7 @@ sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unP
     let
       nums    = zipWith (curry (show . fst)) [beg' ..] ls
       longest = maximum (map length nums)
-      nums'   = flip map nums $ \n -> replicate (longest - length n) ' ' ++ n
+      nums'   = flip fmap nums $ \n -> replicate (longest - length n) ' ' ++ n
       pad n | read n == begLine = "==> " ++ n
             | otherwise         = "    " ++ n
       ls' = zipWith (<+>)

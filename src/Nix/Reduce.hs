@@ -278,7 +278,7 @@ reduce (NAbs_ ann params body) = do
   let args = case params' of
         Param name -> M.singleton name (Fix (NSym_ ann name))
         ParamSet pset _ _ ->
-          M.fromList $ map (\(k, _) -> (k, Fix (NSym_ ann k))) pset
+          M.fromList $ fmap (\(k, _) -> (k, Fix (NSym_ ann k))) pset
   Fix . NAbs_ ann params' <$> pushScope args body
 
 reduce v = Fix <$> sequence v

@@ -74,4 +74,4 @@ paramsXML (ParamSet s b mname) =
   nattr = maybe [] ((: []) . Attr (unqual "name") . Text.unpack) mname
 
 paramSetXML :: ParamSet r -> [Content]
-paramSetXML = map (\(k, _) -> Elem $ mkElem "attr" "name" (Text.unpack k))
+paramSetXML = fmap (\(k, _) -> Elem $ mkElem "attr" "name" (Text.unpack k))

@@ -116,7 +116,7 @@ wrapPath op sub = if wasPath sub
   else wrapParens op sub
 
 prettyString :: NString (NixDoc ann) -> Doc ann
-prettyString (DoubleQuoted parts) = dquotes . hcat . map prettyPart $ parts
+prettyString (DoubleQuoted parts) = dquotes . hcat . fmap prettyPart $ parts
  where
   prettyPart (Plain t)      = pretty . concatMap escape . unpack $ t
   prettyPart EscapedNewline = "''\\n"
@@ -127,11 +127,11 @@ prettyString (Indented _ parts) = group $ nest 2 $ vcat
   [dsquote, content, dsquote]
  where
   dsquote = squote <> squote
-  content = vsep . map prettyLine . stripLastIfEmpty . splitLines $ parts
+  content = vsep . fmap prettyLine . stripLastIfEmpty . splitLines $ parts
   stripLastIfEmpty = reverse . f . reverse   where
     f ([Plain t] : xs) | Text.null (strip t) = xs
     f xs = xs
-  prettyLine = hcat . map prettyPart
+  prettyLine = hcat . fmap prettyPart
   prettyPart (Plain t) =
     pretty . unpack . replace "${" "''${" . replace "''" "'''" $ t
   prettyPart EscapedNewline = "\\n"
@@ -176,7 +176,7 @@ prettyKeyName (DynamicKey key) = runAntiquoted
   key
 
 prettySelector :: NAttrPath (NixDoc ann) -> Doc ann
-prettySelector = hcat . punctuate dot . map prettyKeyName . NE.toList
+prettySelector = hcat . punctuate dot . fmap prettyKeyName . NE.toList
 
 prettyAtom :: NAtom -> NixDoc ann
 prettyAtom atom = simpleExpr $ pretty $ unpack $ atomText atom
@@ -225,7 +225,7 @@ exprFNixDoc = \case
       $ nest 2
       $ vsep
       $ concat
-      $ [[lbracket], map (wrapParens appOpNonAssoc) xs, [rbracket]]
+      $ [[lbracket], fmap (wrapParens appOpNonAssoc) xs, [rbracket]]
   NSet NNonRecursive [] -> simpleExpr $ lbrace <> rbrace
   NSet NNonRecursive xs ->
     simpleExpr
@@ -233,7 +233,7 @@ exprFNixDoc = \case
       $ nest 2
       $ vsep
       $ concat
-      $ [[lbrace], map prettyBind xs, [rbrace]]
+      $ [[lbrace], fmap prettyBind xs, [rbrace]]
   NSet NRecursive [] -> simpleExpr $ recPrefix <> lbrace <> rbrace
   NSet NRecursive xs ->
     simpleExpr
@@ -241,7 +241,7 @@ exprFNixDoc = \case
       $ nest 2
       $ vsep
       $ concat
-      $ [[recPrefix <> lbrace], map prettyBind xs, [rbrace]]
+      $ [[recPrefix <> lbrace], fmap prettyBind xs, [rbrace]]
   NAbs args body ->
     leastPrecedence
       $ nest 2
@@ -357,7 +357,7 @@ prettyNValueProv v = do
         $ parens
         $ mconcat
         $ "from: "
-        : map (prettyOriginExpr . _originExpr) ps
+        : fmap (prettyOriginExpr . _originExpr) ps
         ]
 
 prettyNThunk
@@ -379,7 +379,7 @@ prettyNThunk t = do
       $ parens
       $ mconcat
       $ "thunk from: "
-      : map (prettyOriginExpr . _originExpr) ps
+      : fmap (prettyOriginExpr . _originExpr) ps
       ]
 
 -- | This function is used only by the testing code.
