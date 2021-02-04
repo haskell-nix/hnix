@@ -18,6 +18,7 @@
 
 module Nix.Value where
 
+import           Data.Bool                      ( bool )
 import           Control.Comonad                ( Comonad, extract )
 import           Control.Exception              ( Exception )
 import           Control.Monad                  ( (<=<) )
@@ -83,14 +84,17 @@ instance Foldable (NValueF p m) where
     NVBuiltinF _ _ -> mempty
 
 instance Show r => Show (NValueF p m r) where
-  showsPrec = flip go   where
-    go (NVConstantF atom  ) = showsCon1 "NVConstant" atom
-    go (NVStrF      ns    ) = showsCon1 "NVStr" (stringIgnoreContext ns)
-    go (NVListF     lst   ) = showsCon1 "NVList" lst
-    go (NVSetF     attrs _) = showsCon1 "NVSet" attrs
-    go (NVClosureF p     _) = showsCon1 "NVClosure" p
-    go (NVPathF p         ) = showsCon1 "NVPath" p
-    go (NVBuiltinF name _ ) = showsCon1 "NVBuiltin" name
+  showsPrec = flip go
+   where
+    go :: NValueF p m r -> Int -> String -> String
+    go = \case
+      (NVConstantF atom     ) -> showsCon1 "NVConstant" atom
+      (NVStrF      ns       ) -> showsCon1 "NVStr" (stringIgnoreContext ns)
+      (NVListF     lst      ) -> showsCon1 "NVList" lst
+      (NVSetF      attrs  _ ) -> showsCon1 "NVSet" attrs
+      (NVClosureF  params _ ) -> showsCon1 "NVClosure" params
+      (NVPathF     path     ) -> showsCon1 "NVPath" path
+      (NVBuiltinF  name   _ ) -> showsCon1 "NVBuiltin" name
 
     showsCon1 :: Show a => String -> a -> Int -> String -> String
     showsCon1 con a d =
@@ -208,7 +212,7 @@ hoistNValue'
   -> NValue' t f m a
   -> NValue' t f n a
 hoistNValue' run lft (NValue v) =
-    NValue (fmap (lmapNValueF (hoistNValue lft run) . hoistNValueF lft) v)
+    NValue $ lmapNValueF (hoistNValue lft run) . hoistNValueF lft <$> v
 
 liftNValue'
   :: (MonadTrans u, Monad m, Functor (u m), Functor f)
@@ -219,10 +223,10 @@ liftNValue' run = hoistNValue' run lift
 
 unliftNValue'
   :: (MonadTrans u, Monad m, Functor (u m), Functor f)
-  => (forall x . u m x -> m x)
+  => (forall x . u m x -> m x) -- aka "run"
   -> NValue' t f (u m) a
   -> NValue' t f m a
-unliftNValue' run = hoistNValue' lift run
+unliftNValue' = hoistNValue' lift
 
 iterNValue'
   :: forall t f m a r
@@ -261,10 +265,10 @@ liftNValue run = hoistNValue run lift
 
 unliftNValue
   :: (MonadTrans u, Monad m, Functor (u m), Functor f)
-  => (forall x . u m x -> m x)
+  => (forall x . u m x -> m x)  -- aka "run"
   -> NValue t f (u m)
   -> NValue t f m
-unliftNValue run = hoistNValue lift run
+unliftNValue = hoistNValue lift
 
 iterNValue
   :: forall t f m r
@@ -406,8 +410,12 @@ valueType = \case
     NFloat _ -> TFloat
     NBool  _ -> TBool
     NNull    -> TNull
-  NVStrF ns | stringHasContext ns -> TString HasContext
-            | otherwise           -> TString NoContext
+  NVStrF ns  ->
+    TString $
+      bool
+        NoContext
+        HasContext
+        $ stringHasContext ns
   NVListF{}    -> TList
   NVSetF{}     -> TSet
   NVClosureF{} -> TClosure
