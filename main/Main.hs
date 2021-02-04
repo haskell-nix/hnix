@@ -55,9 +55,9 @@ main = do
     Nothing -> case expression opts of
       Just s  -> handleResult opts Nothing (parseNixTextLoc s)
       Nothing -> case fromFile opts of
-        Just "-" -> mapM_ (processFile opts) =<< (lines <$> liftIO getContents)
+        Just "-" -> mapM_ (processFile opts) . lines =<< liftIO getContents
         Just path ->
-          mapM_ (processFile opts) =<< (lines <$> liftIO (readFile path))
+          mapM_ (processFile opts) . lines =<< liftIO (readFile path)
         Nothing -> case filePaths opts of
           [] -> withNixContext Nothing Repl.main
           ["-"] ->
