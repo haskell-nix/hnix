@@ -30,21 +30,24 @@ module Nix.String
   )
 where
 
-import           Control.Monad.Writer
-import           Data.Functor.Identity
+
+
+
+import           Control.Monad.Writer           ( WriterT(..), MonadWriter(tell), MonadTrans, (<=<))
+import           Data.Functor.Identity          ( Identity(runIdentity) )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.HashSet                  as S
-import           Data.Hashable
+import           Data.Hashable                  ( Hashable )
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
-import           GHC.Generics
+import           GHC.Generics                   ( Generic )
 
 
 -- * Types
 
 -- ** Context
 
--- | A 'StringContext' ...
+-- | A Nix 'StringContext' ...
 data StringContext =
   StringContext { scPath :: !Text
                 , scFlavor :: !ContextFlavor
@@ -139,7 +142,7 @@ getContext = nsContext
 
 fromNixLikeContext :: NixLikeContext -> S.HashSet StringContext
 fromNixLikeContext =
-  S.fromList . join . fmap toStringContexts . M.toList . getNixLikeContext
+  S.fromList . (toStringContexts <=< (M.toList . getNixLikeContext))
 
 -- | Extract the string contents from a NixString that has no context
 getStringNoContext :: NixString -> Maybe Text
