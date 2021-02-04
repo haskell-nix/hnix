@@ -363,9 +363,7 @@ completeFunc reversedPrev word
       Nothing -> pure []
       Just binding -> do
         candidates <- lift $ algebraicComplete subFields binding
-        pure
-          $ fmap notFinished
-          $ listCompletion (Data.Text.unpack . (var <>) <$> candidates)
+        pure $ notFinished <$> listCompletion (Data.Text.unpack . (var <>) <$> candidates)
 
   -- Builtins, context variables
   | otherwise
@@ -377,8 +375,8 @@ completeFunc reversedPrev word
 
     pure $ listCompletion
       $ ["__includes"]
-      ++ (Data.Text.unpack <$> contextKeys)
-      ++ (Data.Text.unpack <$> shortBuiltins)
+      <> (Data.Text.unpack <$> contextKeys)
+      <> (Data.Text.unpack <$> shortBuiltins)
 
   where
     listCompletion = fmap simpleCompletion . filter (word `Data.List.isPrefixOf`)
@@ -401,7 +399,7 @@ completeFunc reversedPrev word
                   Nothing -> pure []
                   Just e ->
                     demand e
-                    (\e' -> fmap (("." <> f) <>) <$> algebraicComplete fs e')
+                      (\e' -> (fmap . fmap) (("." <> f) <>) $ algebraicComplete fs e')
 
       in case val of
         NVSet xs _ -> withMap xs
