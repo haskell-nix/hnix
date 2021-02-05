@@ -203,9 +203,10 @@ hoistNValueF lft = \case
 -- | At the time of constructor, the expected arguments to closures are values
 --   that may contain thunks. The type of such thunks are fixed at that time.
 newtype NValue' t f m a =
-  -- | Applying F-algebra functor (@NValueF@) to the F-algebra carrier (forming the \( F(A) \)).
   NValue
-    { _nValue :: f (NValueF (NValue t f m) m a)
+    {
+    -- | Applying F-algebra functor (@NValueF@) to the F-algebra carrier (forming the \( F(A) \)).
+    _nValue :: f (NValueF (NValue t f m) m a)
     }
   deriving (Generic, Typeable, Functor, Foldable, Eq1)
 
