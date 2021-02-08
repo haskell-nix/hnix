@@ -13,6 +13,9 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 
+{-# OPTIONS_GHC -Wno-orphans #-}
+
+
 module Nix.Effects where
 
 import           Prelude                 hiding ( putStr
