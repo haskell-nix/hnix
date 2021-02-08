@@ -198,14 +198,14 @@ hoistNValueF lft = \case
   NVBuiltinF s g -> NVBuiltinF s (lft . g)
 
 
--- * @__NValue'__@: F(A) of the F-Algebra
+-- * @__NValue'__@: forming the (F(A))
 
 -- | At the time of constructor, the expected arguments to closures are values
 --   that may contain thunks. The type of such thunks are fixed at that time.
 newtype NValue' t f m a =
   NValue
     {
-    -- | Applying F-algebra functor (@NValueF@) to the F-algebra carrier (forming the \( F(A) \)).
+    -- | Applying F-algebra carrier (@NValue@) to the F-algebra Base functor data type (@NValueF@), forming the \( F(A)-> A \)).
     _nValue :: f (NValueF (NValue t f m) m a)
     }
   deriving (Generic, Typeable, Functor, Foldable, Eq1)
@@ -312,15 +312,25 @@ unliftNValue'
 unliftNValue' = hoistNValue' lift
 
 
--- ** Methods @F: Hask → NValue'@
+-- ** Bijective Hask subcategory <-> @NValue'@
+-- *** @F: Hask subcategory → NValue'@
 --
 -- #mantra#
 -- $Methods @F: Hask → NValue'@
 --
 -- Since Haskell and Nix are both recursive purely functional lazy languages.
--- And since recursion-schemes also make easier just that.
--- It is quite possible to create a functor between the Hask and Nix categories.
+-- And since recursion-schemes.
+-- It is possible to create a direct functor between the Hask and Nix categories.
 -- Or make Nix a DLS language of Haskell, embed it into a Hask, if you would like.
+-- Of course, we mean: pick Hask subcategory and form Nix Category from it.
+-- Take subcategory of Hask, and by applying functor to it - have a Nix Category.
+-- Wouldn't it be cool and fast?
+--
+-- In fact - it is what we do here.
+--
+-- Since it is a proper way of scientific implementation, we would eventually form a
+-- lawful functor.
+--
 -- Facts of which are seen below:
 
 
@@ -332,24 +342,24 @@ nvConstant' :: Applicative f
 nvConstant' = NValue . pure . NVConstantF
 
 
--- | Haskell string & context to the Nix string & context,
 pattern NVStr' ns <- NValue (extract -> NVStrF ns)
+-- | Haskell text & context to the Nix text & context,
 nvStr' :: Applicative f
   => NixString
   -> NValue' t f m r
 nvStr' = NValue . pure . NVStrF
 
 
--- | Haskell FilePath to the Nix path,
 pattern NVPath' x <- NValue (extract -> NVPathF x)
+-- | Haskell @FilePath@ to the Nix path,
 nvPath' :: Applicative f
   => FilePath
   -> NValue' t f m r
 nvPath' = NValue . pure . NVPathF
 
 
--- | Haskell [] to the Nix [],
 pattern NVList' l <- NValue (extract -> NVListF l)
+-- | Haskell @[]@ to the Nix @[]@,
 nvList' :: Applicative f
   => [r]
   -> NValue' t f m r
@@ -384,6 +394,9 @@ nvBuiltin' :: (Applicative f, Functor m)
   -> NValue' t f m r
 nvBuiltin' name f = NValue $ pure $ NVBuiltinF name f
 
+
+-- So above we have maps of Hask subcategory objects to Nix objects,
+-- and Hask subcategory morphisms to Nix morphisms.
 
 -- * @__NValue__@: Nix language values
 
