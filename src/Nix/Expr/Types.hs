@@ -27,7 +27,7 @@
 module Nix.Expr.Types where
 
 #ifdef MIN_VERSION_serialise
-import qualified Codec.Serialise                ( Serialise(decode, encode) )  -- For instance implementation function disamburgation
+import qualified Codec.Serialise                as Serialise
 import           Codec.Serialise                ( Serialise )
 #endif
 import           Control.Applicative
@@ -35,8 +35,8 @@ import           Control.DeepSeq
 import           Control.Monad
 import           Data.Aeson
 import           Data.Aeson.TH
+import qualified Data.Binary                   as Binary
 import           Data.Binary                    ( Binary )
-import qualified Data.Binary                   as Bin
 import           Data.Data
 import           Data.Eq.Deriving
 import           Data.Fix
@@ -65,8 +65,8 @@ import           Nix.Utils
 import           Text.Megaparsec.Pos
 import           Text.Read.Deriving
 import           Text.Show.Deriving
-import           Type.Reflection                ( eqTypeRep )
 import qualified Type.Reflection               as Reflection
+import           Type.Reflection                ( eqTypeRep )
 
 type VarName = Text
 
@@ -347,16 +347,16 @@ data NKeyName r
 instance Serialise r => Serialise (NKeyName r)
 
 instance Serialise Pos where
-  encode x = Codec.Serialise.encode (unPos x)
-  decode = mkPos <$> Codec.Serialise.decode
+  encode = Serialise.encode . unPos
+  decode = mkPos <$> Serialise.decode
 
 instance Serialise SourcePos where
-  encode (SourcePos f l c) = Codec.Serialise.encode f <> Codec.Serialise.encode l <> Codec.Serialise.encode c
-  decode = SourcePos <$> Codec.Serialise.decode <*> Codec.Serialise.decode <*> Codec.Serialise.decode
+  encode (SourcePos f l c) = Serialise.encode f <> Serialise.encode l <> Serialise.encode c
+  decode = SourcePos <$> Serialise.decode <*> Serialise.decode <*> Serialise.decode
 #endif
 
 instance Hashable Pos where
-  hashWithSalt salt x = hashWithSalt salt (unPos x)
+  hashWithSalt salt = hashWithSalt salt . unPos
 
 instance Hashable SourcePos where
   hashWithSalt salt (SourcePos f l c) =
@@ -418,7 +418,7 @@ instance Traversable NKeyName where
     DynamicKey (Plain      str) -> DynamicKey . Plain <$> traverse f str
     DynamicKey (Antiquoted e  ) -> DynamicKey . Antiquoted <$> f e
     DynamicKey EscapedNewline   -> pure $ DynamicKey EscapedNewline
-    StaticKey  key              -> pure (StaticKey key)
+    StaticKey  key              -> pure $ StaticKey key
 
 -- | A selector (for example in a @let@ or an attribute set) is made up
 -- of strung-together key names.
@@ -518,8 +518,8 @@ instance (Binary v, Binary a) => Binary (Antiquoted v a)
 instance Binary a => Binary (NString a)
 instance Binary a => Binary (Binding a)
 instance Binary Pos where
-  put x = Bin.put (unPos x)
-  get = mkPos <$> Bin.get
+  put = Binary.put . unPos
+  get = mkPos <$> Binary.get
 instance Binary SourcePos
 instance Binary a => Binary (NKeyName a)
 instance Binary a => Binary (Params a)
@@ -532,7 +532,7 @@ instance (ToJSON v, ToJSON a) => ToJSON (Antiquoted v a)
 instance ToJSON a => ToJSON (NString a)
 instance ToJSON a => ToJSON (Binding a)
 instance ToJSON Pos where
-  toJSON x = toJSON (unPos x)
+  toJSON = toJSON . unPos
 instance ToJSON SourcePos
 instance ToJSON a => ToJSON (NKeyName a)
 instance ToJSON a => ToJSON (Params a)
@@ -566,8 +566,8 @@ $(makeTraversals ''NBinaryOp)
 --x $(makeLenses ''Fix)
 
 class NExprAnn ann g | g -> ann where
-    fromNExpr :: g r -> (NExprF r, ann)
-    toNExpr :: (NExprF r, ann) -> g r
+  fromNExpr :: g r -> (NExprF r, ann)
+  toNExpr :: (NExprF r, ann) -> g r
 
 ekey
   :: NExprAnn ann g
@@ -599,7 +599,7 @@ ekey _ _ f e = fromMaybe e <$> f Nothing
 stripPositionInfo :: NExpr -> NExpr
 stripPositionInfo = transport phi
  where
-  phi (NSet recur binds) = NSet recur (fmap go binds)
+  phi (NSet recur binds) = NSet recur $ fmap go binds
   phi (NLet binds body) = NLet (fmap go binds) body
   phi x                 = x
 
