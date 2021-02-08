@@ -335,14 +335,12 @@ unliftNValue' = hoistNValue' lift
 
 
 -- | Haskell constant to the Nix constant,
-pattern NVConstant' x <- NValue (extract -> NVConstantF x)
 nvConstant' :: Applicative f
   => NAtom
   -> NValue' t f m r
 nvConstant' = NValue . pure . NVConstantF
 
 
-pattern NVStr' ns <- NValue (extract -> NVStrF ns)
 -- | Haskell text & context to the Nix text & context,
 nvStr' :: Applicative f
   => NixString
@@ -350,7 +348,6 @@ nvStr' :: Applicative f
 nvStr' = NValue . pure . NVStrF
 
 
-pattern NVPath' x <- NValue (extract -> NVPathF x)
 -- | Haskell @FilePath@ to the Nix path,
 nvPath' :: Applicative f
   => FilePath
@@ -358,7 +355,6 @@ nvPath' :: Applicative f
 nvPath' = NValue . pure . NVPathF
 
 
-pattern NVList' l <- NValue (extract -> NVListF l)
 -- | Haskell @[]@ to the Nix @[]@,
 nvList' :: Applicative f
   => [r]
@@ -367,7 +363,6 @@ nvList' = NValue . pure . NVListF
 
 
 -- | Haskell key-value to the Nix key-value,
-pattern NVSet' s x <- NValue (extract -> NVSetF s x)
 nvSet' :: Applicative f
   => HashMap Text r
   -> HashMap Text SourcePos
@@ -376,7 +371,6 @@ nvSet' s x = NValue $ pure $ NVSetF s x
 
 
 -- | Haskell closure to the Nix closure,
-pattern NVClosure' x f <- NValue (extract -> NVClosureF x f)
 nvClosure' :: (Applicative f, Functor m)
   => Params ()
   -> (NValue t f m
@@ -387,7 +381,6 @@ nvClosure' x f = NValue $ pure $ NVClosureF x f
 
 
 -- | Haskell functions to the Nix functions!
-pattern NVBuiltin' name f <- NValue (extract -> NVBuiltinF name f)
 nvBuiltin' :: (Applicative f, Functor m)
   => String
   -> (NValue t f m -> m r)
@@ -397,6 +390,24 @@ nvBuiltin' name f = NValue $ pure $ NVBuiltinF name f
 
 -- So above we have maps of Hask subcategory objects to Nix objects,
 -- and Hask subcategory morphisms to Nix morphisms.
+
+-- *** @F: NValue -> Nvalue'
+
+-- | Module pattens use @language PatternSynonyms@: unidirectional synonyms (@<-@),
+-- and @ViewPatterns@: (@->@) at the same time.
+-- @ViewPatterns Control.Comonad.extract@ extracts
+-- from the @NValue (Free (NValueF a))@
+-- the @NValueF a@. Which is @NValueF p m r@. Since it extracted from the
+-- @NValue@, which is formed by \( (F a -> a) F a \) in the first place.
+-- So @NValueF p m r@ which is extracted here, internally holds the next NValue.
+pattern NVConstant' x <- NValue (extract -> NVConstantF x)
+pattern NVStr' ns <- NValue (extract -> NVStrF ns)
+pattern NVPath' x <- NValue (extract -> NVPathF x)
+pattern NVList' l <- NValue (extract -> NVListF l)
+pattern NVSet' s x <- NValue (extract -> NVSetF s x)
+pattern NVClosure' x f <- NValue (extract -> NVClosureF x f)
+pattern NVBuiltin' name f <- NValue (extract -> NVBuiltinF name f)
+
 
 -- * @__NValue__@: Nix language values
 
