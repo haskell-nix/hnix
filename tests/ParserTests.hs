@@ -122,7 +122,7 @@ case_inherit_selector = do
 case_int_list = assertParseText "[1 2 3]" $ Fix $ NList
   [ mkInt i | i <- [1,2,3] ]
 
-case_int_null_list = assertParseText "[1 2 3 null 4]" $ Fix (NList (map (Fix . NConstant) [NInt 1, NInt 2, NInt 3, NNull, NInt 4]))
+case_int_null_list = assertParseText "[1 2 3 null 4]" $ Fix (NList (fmap (Fix . NConstant) [NInt 1, NInt 2, NInt 3, NNull, NInt 4]))
 
 case_mixed_list = do
   assertParseText "[{a = 3;}.a (if true then null else false) null false 4 [] c.d or null]" $ Fix $ NList

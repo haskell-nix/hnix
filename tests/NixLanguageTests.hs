@@ -158,7 +158,7 @@ assertEval _opts files = do
           Opts.execParserPure
             Opts.defaultPrefs
             (nixOptionsInfo time)
-            (fixup (map Text.unpack (Text.splitOn " " flags')))
+            (fixup (fmap Text.unpack (Text.splitOn " " flags')))
         of
           Opts.Failure err ->
             errorWithoutStackTrace
@@ -171,7 +171,7 @@ assertEval _opts files = do
     _ -> assertFailure $ "Unknown test type " ++ show files
  where
   name =
-    "data/nix/tests/lang/" ++ the (map (takeFileName . dropExtensions) files)
+    "data/nix/tests/lang/" ++ the (fmap (takeFileName . dropExtensions) files)
 
   fixup ("--arg"    : x : y : rest) = "--arg" : (x ++ "=" ++ y) : fixup rest
   fixup ("--argstr" : x : y : rest) = "--argstr" : (x ++ "=" ++ y) : fixup rest
