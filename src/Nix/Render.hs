@@ -97,11 +97,11 @@ renderLocation (SrcSpan (SourcePos file begLine begCol) (SourcePos file' endLine
 renderLocation (SrcSpan beg end) msg =
   fail
     $  "Don't know how to render range from "
-    ++ show beg
-    ++ " to "
-    ++ show end
-    ++ " for error: "
-    ++ show msg
+    <> show beg
+    <> " to "
+    <> show end
+    <> " for error: "
+    <> show msg
 
 errorContext :: FilePath -> Pos -> Pos -> Pos -> Pos -> Doc a
 errorContext path bl bc _el _ec =
@@ -114,7 +114,7 @@ sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unP
     let beg' = max 1 (min begLine (begLine - 3))
         end' = max endLine (endLine + 3)
     ls <-
-      map pretty
+      fmap pretty
       .   take (end' - beg')
       .   drop (pred beg')
       .   T.lines
@@ -122,11 +122,11 @@ sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unP
       <$> readFile path
     let
       nums    = zipWith (curry (show . fst)) [beg' ..] ls
-      longest = maximum (map length nums)
-      nums'   = flip map nums $ \n -> replicate (longest - length n) ' ' ++ n
-      pad n | read n == begLine = "==> " ++ n
-            | otherwise         = "    " ++ n
+      longest = maximum (fmap length nums)
+      nums'   = flip fmap nums $ \n -> replicate (longest - length n) ' ' <> n
+      pad n | read n == begLine = "==> " <> n
+            | otherwise         = "    " <> n
       ls' = zipWith (<+>)
-                    (map (pretty . pad) nums')
-                    (map ("| " <+>) ls)
-    pure $ vsep $ ls' ++ [msg]
+                    (fmap (pretty . pad) nums')
+                    (fmap ("| " <+>) ls)
+    pure $ vsep $ ls' <> [msg]

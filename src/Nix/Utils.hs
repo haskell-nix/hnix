@@ -48,7 +48,7 @@ traceM :: Monad m => String -> m ()
 traceM = const (pure ())
 #endif
 
-$(makeLensesBy (\n -> Just ("_" ++ n)) ''Fix)
+$(makeLensesBy (\n -> Just ("_" <> n)) ''Fix)
 
 type DList a = Endo [a]
 

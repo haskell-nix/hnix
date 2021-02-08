@@ -67,8 +67,7 @@ import qualified Data.HashSet                  as HashSet
 import           Data.List.NonEmpty             ( NonEmpty(..) )
 import qualified Data.List.NonEmpty            as NE
 import qualified Data.Map                      as Map
-import           Data.Text               hiding ( map
-                                                , foldr1
+import           Data.Text               hiding ( foldr1
                                                 , concat
                                                 , concatMap
                                                 , zipWith
@@ -94,7 +93,7 @@ infixl 3 <+>
 ---------------------------------------------------------------------------------
 
 nixExpr :: Parser NExprLoc
-nixExpr = makeExprParser nixTerm $ map (map snd) (nixOperators nixSelector)
+nixExpr = makeExprParser nixTerm $ fmap (fmap snd) (nixOperators nixSelector)
 
 antiStart :: Parser Text
 antiStart = symbol "${" <?> show ("${" :: String)
@@ -163,14 +162,14 @@ nixTerm = do
     _ ->
       msum
         $  [ nixSelect nixSet | c == 'r' ]
-        ++ [ nixPath | pathChar c ]
-        ++ if isDigit c
+        <> [ nixPath | pathChar c ]
+        <> if isDigit c
              then [nixFloat, nixInt]
              else
                [ nixUri | isAlpha c ]
-               ++ [ nixBool | c == 't' || c == 'f' ]
-               ++ [ nixNull | c == 'n' ]
-               ++ [nixSelect nixSym]
+               <> [ nixBool | c == 't' || c == 'f' ]
+               <> [ nixNull | c == 'n' ]
+               <> [nixSelect nixSym]
 
 nixToplevelForm :: Parser NExprLoc
 nixToplevelForm = keywords <+> nixLambda <+> nixExpr
@@ -240,7 +239,7 @@ nixSearchPath = annotateLocation1
 
 pathStr :: Parser FilePath
 pathStr = lexeme $ liftM2
-  (++)
+  (<>)
   (many (satisfy pathChar))
   (Prelude.concat <$> some (liftM2 (:) slash (some (satisfy pathChar))))
 
@@ -394,7 +393,7 @@ argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
         -- Get an argument name and an optional default.
       pair <- liftM2 (,) identifier (optional $ question *> nixToplevelForm)
       -- Either return this, or attempt to get a comma and restart.
-      option (acc ++ [pair], False) $ comma >> go (acc ++ [pair])
+      option (acc <> [pair], False) $ comma >> go (acc <> [pair])
 
 nixBinders :: Parser [Binding NExprLoc]
 nixBinders = (inherit <+> namedVar) `endBy` semi where

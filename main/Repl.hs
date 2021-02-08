@@ -348,7 +348,7 @@ completeFunc reversedPrev word
   -- Commands
   | reversedPrev == ":"
   = pure . listCompletion
-      $ map helpOptionName (helpOptions :: HelpOptions e t f m)
+      $ fmap helpOptionName (helpOptions :: HelpOptions e t f m)
 
   -- Files
   | any (`Data.List.isPrefixOf` word) [ "/", "./", "../", "~/" ]
@@ -363,9 +363,7 @@ completeFunc reversedPrev word
       Nothing -> pure []
       Just binding -> do
         candidates <- lift $ algebraicComplete subFields binding
-        pure
-          $ map notFinished
-          $ listCompletion (Data.Text.unpack . (var <>) <$> candidates)
+        pure $ notFinished <$> listCompletion (Data.Text.unpack . (var <>) <$> candidates)
 
   -- Builtins, context variables
   | otherwise
@@ -377,11 +375,11 @@ completeFunc reversedPrev word
 
     pure $ listCompletion
       $ ["__includes"]
-      ++ (Data.Text.unpack <$> contextKeys)
-      ++ (Data.Text.unpack <$> shortBuiltins)
+      <> (Data.Text.unpack <$> contextKeys)
+      <> (Data.Text.unpack <$> shortBuiltins)
 
   where
-    listCompletion = map simpleCompletion . filter (word `Data.List.isPrefixOf`)
+    listCompletion = fmap simpleCompletion . filter (word `Data.List.isPrefixOf`)
 
     notFinished x = x { isFinished = False }
 
@@ -401,7 +399,7 @@ completeFunc reversedPrev word
                   Nothing -> pure []
                   Just e ->
                     demand e
-                    (\e' -> fmap (("." <> f) <>) <$> algebraicComplete fs e')
+                      (\e' -> (fmap . fmap) (("." <> f) <>) $ algebraicComplete fs e')
 
       in case val of
         NVSet xs _ -> withMap xs
@@ -508,7 +506,7 @@ renderSetOptions :: [HelpSetOption] -> Doc ()
 renderSetOptions so =
   Prettyprinter.indent 4
     $ Prettyprinter.vsep
-    $ flip map so
+    $ flip fmap so
     $ \h ->
              Prettyprinter.pretty (helpSetOptionName h)
          <+> helpSetOptionSyntax h

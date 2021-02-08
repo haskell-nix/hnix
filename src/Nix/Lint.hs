@@ -139,18 +139,18 @@ renderSymbolic = unpackSymbolic >=> \case
     TStr    -> pure "string"
     TList r -> do
       x <- demand r renderSymbolic
-      pure $ "[" ++ x ++ "]"
+      pure $ "[" <> x <> "]"
     TSet Nothing  -> pure "<any set>"
     TSet (Just s) -> do
       x <- traverse (`demand` renderSymbolic) s
-      pure $ "{" ++ show x ++ "}"
+      pure $ "{" <> show x <> "}"
     f@(TClosure p) -> do
       (args, sym) <- do
         f' <- mkSymbolic [f]
         lintApp (NAbs (void p) ()) f' everyPossible
       args' <- traverse renderSymbolic args
       sym'  <- renderSymbolic sym
-      pure $ "(" ++ show args' ++ " -> " ++ sym' ++ ")"
+      pure $ "(" <> show args' <> " -> " <> sym' <> ")"
     TPath          -> pure "path"
     TBuiltin _n _f -> pure "<builtin function>"
 
@@ -242,8 +242,8 @@ unify context (SV x) (SV y) = do
               -- x' <- renderSymbolic (Symbolic x)
               -- y' <- renderSymbolic (Symbolic y)
           throwError $ ErrorCall "Cannot unify "
-                  -- ++ show x' ++ " with " ++ show y'
-                  --  ++ " in context: " ++ show context
+                  -- <> show x' <> " with " <> show y'
+                  --  <> " in context: " <> show context
         else do
           writeVar x (NMany m)
           writeVar y (NMany m)
@@ -270,21 +270,21 @@ instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
   demand (SV v) f = f (SV v)
 
 instance MonadLint e m => MonadEval (Symbolic m) m where
-  freeVariable var = symerr $ "Undefined variable '" ++ Text.unpack var ++ "'"
+  freeVariable var = symerr $ "Undefined variable '" <> Text.unpack var <> "'"
 
   attrMissing ks Nothing =
     evalError @(Symbolic m)
       $  ErrorCall
       $  "Inheriting unknown attribute: "
-      ++ intercalate "." (map Text.unpack (NE.toList ks))
+      <> intercalate "." (fmap Text.unpack (NE.toList ks))
 
   attrMissing ks (Just s) =
     evalError @(Symbolic m)
       $  ErrorCall
       $  "Could not look up attribute "
-      ++ intercalate "." (map Text.unpack (NE.toList ks))
-      ++ " in "
-      ++ show s
+      <> intercalate "." (fmap Text.unpack (NE.toList ks))
+      <> " in "
+      <> show s
 
   evalCurPos = do
     f <- mkSymbolic [TPath]

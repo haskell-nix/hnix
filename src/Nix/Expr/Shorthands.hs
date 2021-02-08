@@ -135,8 +135,8 @@ mkDots e [] = e
 mkDots (Fix (NSelect e keys' x)) keys =
   -- Special case: if the expression in the first argument is already
   -- a dotted expression, just extend it.
-  Fix (NSelect e (keys' <> map (StaticKey ?? Nothing) keys) x)
-mkDots e keys = Fix $ NSelect e (map (StaticKey ?? Nothing) keys) Nothing
+  Fix (NSelect e (keys' <> fmap (StaticKey ?? Nothing) keys) x)
+mkDots e keys = Fix $ NSelect e (fmap (StaticKey ?? Nothing) keys) Nothing
 -}
 
 -- | An `inherit` clause without an expression to pull from.
@@ -174,7 +174,7 @@ modifyFunctionBody f (Fix e) = case e of
 
 -- | A let statement with multiple assignments.
 letsE :: [(Text, NExpr)] -> NExpr -> NExpr
-letsE pairs = Fix . NLet (map (uncurry bindTo) pairs)
+letsE pairs = Fix . NLet (fmap (uncurry bindTo) pairs)
 
 -- | Wrapper for a single-variable @let@.
 letE :: Text -> NExpr -> NExpr -> NExpr
@@ -182,11 +182,11 @@ letE varName varExpr = letsE [(varName, varExpr)]
 
 -- | Make an attribute set (non-recursive).
 attrsE :: [(Text, NExpr)] -> NExpr
-attrsE pairs = Fix $ NSet NNonRecursive (map (uncurry bindTo) pairs)
+attrsE pairs = Fix $ NSet NNonRecursive (fmap (uncurry bindTo) pairs)
 
 -- | Make an attribute set (recursive).
 recAttrsE :: [(Text, NExpr)] -> NExpr
-recAttrsE pairs = Fix $ NSet NRecursive (map (uncurry bindTo) pairs)
+recAttrsE pairs = Fix $ NSet NRecursive (fmap (uncurry bindTo) pairs)
 
 -- | Logical negation.
 mkNot :: NExpr -> NExpr

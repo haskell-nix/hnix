@@ -116,7 +116,7 @@ wrapPath op sub = if wasPath sub
   else wrapParens op sub
 
 prettyString :: NString (NixDoc ann) -> Doc ann
-prettyString (DoubleQuoted parts) = dquotes . hcat . map prettyPart $ parts
+prettyString (DoubleQuoted parts) = dquotes . hcat . fmap prettyPart $ parts
  where
   prettyPart (Plain t)      = pretty . concatMap escape . unpack $ t
   prettyPart EscapedNewline = "''\\n"
@@ -127,11 +127,11 @@ prettyString (Indented _ parts) = group $ nest 2 $ vcat
   [dsquote, content, dsquote]
  where
   dsquote = squote <> squote
-  content = vsep . map prettyLine . stripLastIfEmpty . splitLines $ parts
+  content = vsep . fmap prettyLine . stripLastIfEmpty . splitLines $ parts
   stripLastIfEmpty = reverse . f . reverse   where
     f ([Plain t] : xs) | Text.null (strip t) = xs
     f xs = xs
-  prettyLine = hcat . map prettyPart
+  prettyLine = hcat . fmap prettyPart
   prettyPart (Plain t) =
     pretty . unpack . replace "${" "''${" . replace "''" "'''" $ t
   prettyPart EscapedNewline = "\\n"
@@ -149,7 +149,7 @@ prettyParamSet args var = encloseSep
   (lbrace <> space)
   (align (space <> rbrace))
   sep
-  (map prettySetArg args ++ prettyVariadic)
+  (fmap prettySetArg args <> prettyVariadic)
  where
   prettySetArg (n, maybeDef) = case maybeDef of
     Nothing -> pretty (unpack n)
@@ -161,7 +161,7 @@ prettyBind :: Binding (NixDoc ann) -> Doc ann
 prettyBind (NamedVar n v _p) =
   prettySelector n <+> equals <+> withoutParens v <> semi
 prettyBind (Inherit s ns _p) =
-  "inherit" <+> scope <> align (fillSep (map prettyKeyName ns)) <> semi
+  "inherit" <+> scope <> align (fillSep (fmap prettyKeyName ns)) <> semi
   where scope = maybe mempty ((<> space) . parens . withoutParens) s
 
 prettyKeyName :: NKeyName (NixDoc ann) -> Doc ann
@@ -176,7 +176,7 @@ prettyKeyName (DynamicKey key) = runAntiquoted
   key
 
 prettySelector :: NAttrPath (NixDoc ann) -> Doc ann
-prettySelector = hcat . punctuate dot . map prettyKeyName . NE.toList
+prettySelector = hcat . punctuate dot . fmap prettyKeyName . NE.toList
 
 prettyAtom :: NAtom -> NixDoc ann
 prettyAtom atom = simpleExpr $ pretty $ unpack $ atomText atom
@@ -225,7 +225,7 @@ exprFNixDoc = \case
       $ nest 2
       $ vsep
       $ concat
-      $ [[lbracket], map (wrapParens appOpNonAssoc) xs, [rbracket]]
+      $ [[lbracket], fmap (wrapParens appOpNonAssoc) xs, [rbracket]]
   NSet NNonRecursive [] -> simpleExpr $ lbrace <> rbrace
   NSet NNonRecursive xs ->
     simpleExpr
@@ -233,7 +233,7 @@ exprFNixDoc = \case
       $ nest 2
       $ vsep
       $ concat
-      $ [[lbrace], map prettyBind xs, [rbrace]]
+      $ [[lbrace], fmap prettyBind xs, [rbrace]]
   NSet NRecursive [] -> simpleExpr $ recPrefix <> lbrace <> rbrace
   NSet NRecursive xs ->
     simpleExpr
@@ -241,7 +241,7 @@ exprFNixDoc = \case
       $ nest 2
       $ vsep
       $ concat
-      $ [[recPrefix <> lbrace], map prettyBind xs, [rbrace]]
+      $ [[recPrefix <> lbrace], fmap prettyBind xs, [rbrace]]
   NAbs args body ->
     leastPrecedence
       $ nest 2
@@ -273,7 +273,7 @@ exprFNixDoc = \case
     ordoc = maybe mempty (((space <> "or") <+>) . wrapParens appOpNonAssoc) o
   NHasAttr r attr ->
     mkNixDoc (wrapParens hasAttrOp r <+> "?" <+> prettySelector attr) hasAttrOp
-  NEnvPath     p -> simpleExpr $ pretty ("<" ++ p ++ ">")
+  NEnvPath     p -> simpleExpr $ pretty ("<" <> p <> ">")
   NLiteralPath p -> pathExpr $ pretty $ case p of
     "./"  -> "./."
     "../" -> "../."
@@ -282,14 +282,14 @@ exprFNixDoc = \case
         | "~/" `isPrefixOf` txt  -> txt
         | "./" `isPrefixOf` txt  -> txt
         | "../" `isPrefixOf` txt -> txt
-        | otherwise              -> "./" ++ txt
+        | otherwise              -> "./" <> txt
   NSym name -> simpleExpr $ pretty (unpack name)
   NLet binds body ->
     leastPrecedence
       $ group
       $ vsep
       $ [ "let"
-        , indent 2 (vsep (map prettyBind binds))
+        , indent 2 (vsep (fmap prettyBind binds))
         , "in" <+> withoutParens body
         ]
   NIf cond trueBody falseBody ->
@@ -327,7 +327,7 @@ valueToExpr = iterNValue (\_ _ -> thk) phi
     ]
   phi (NVClosure' _ _   ) = Fix . NSym . pack $ "<closure>"
   phi (NVPath' p        ) = Fix $ NLiteralPath p
-  phi (NVBuiltin' name _) = Fix . NSym . pack $ "builtins." ++ name
+  phi (NVBuiltin' name _) = Fix . NSym . pack $ "builtins." <> name
   phi _                   = error "Pattern synonyms foil completeness check"
 
   mkStr ns = Fix $ NStr $ DoubleQuoted [Plain (stringIgnoreContext ns)]
@@ -357,7 +357,7 @@ prettyNValueProv v = do
         $ parens
         $ mconcat
         $ "from: "
-        : map (prettyOriginExpr . _originExpr) ps
+        : fmap (prettyOriginExpr . _originExpr) ps
         ]
 
 prettyNThunk
@@ -379,7 +379,7 @@ prettyNThunk t = do
       $ parens
       $ mconcat
       $ "thunk from: "
-      : map (prettyOriginExpr . _originExpr) ps
+      : fmap (prettyOriginExpr . _originExpr) ps
       ]
 
 -- | This function is used only by the testing code.
@@ -391,22 +391,22 @@ printNix = iterNValue (\_ _ -> thk) phi
   phi :: NValue' t f m String -> String
   phi (NVConstant' a ) = unpack $ atomText a
   phi (NVStr'      ns) = show $ stringIgnoreContext ns
-  phi (NVList'     l ) = "[ " ++ unwords l ++ " ]"
+  phi (NVList'     l ) = "[ " <> unwords l <> " ]"
   phi (NVSet' s _) =
     "{ "
-      ++ concat
-           [ check (unpack k) ++ " = " ++ v ++ "; "
+      <> concat
+           [ check (unpack k) <> " = " <> v <> "; "
            | (k, v) <- sort $ toList s
            ]
-      ++ "}"
+      <> "}"
    where
     check v = fromMaybe
       v
       (   fmap (surround . show) (readMaybe v :: Maybe Int)
       <|> fmap (surround . show) (readMaybe v :: Maybe Float)
       )
-      where surround s = "\"" ++ s ++ "\""
+      where surround s = "\"" <> s <> "\""
   phi NVClosure'{}        = "<<lambda>>"
   phi (NVPath' fp       ) = fp
-  phi (NVBuiltin' name _) = "<<builtin " ++ name ++ ">>"
+  phi (NVBuiltin' name _) = "<<builtin " <> name <> ">>"
   phi _                   = error "Pattern synonyms foil completeness check"

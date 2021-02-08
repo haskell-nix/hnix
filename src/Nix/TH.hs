@@ -66,7 +66,7 @@ freeVars e = case unFix e of
       `Set.union` Set.unions (mapMaybe (fmap freeVars . snd) set)
     -- But remove the argument name if existing, and all arguments in the parameter set
       \\          maybe Set.empty Set.singleton varname
-      \\          Set.fromList (map fst set)
+      \\          Set.fromList (fmap fst set)
   (NLet bindings expr) ->
     freeVars expr
       `Set.union` foldMap bindFree bindings

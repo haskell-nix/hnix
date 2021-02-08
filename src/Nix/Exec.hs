@@ -158,8 +158,8 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     nverr @e @t @f
       $  ErrorCall
       $  "Undefined variable '"
-      ++ Text.unpack var
-      ++ "'"
+      <> Text.unpack var
+      <> "'"
 
   synHole name = do
     span  <- currentPos
@@ -173,15 +173,15 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     evalError @(NValue t f m)
       $  ErrorCall
       $  "Inheriting unknown attribute: "
-      ++ intercalate "." (map Text.unpack (NE.toList ks))
+      <> intercalate "." (fmap Text.unpack (NE.toList ks))
 
   attrMissing ks (Just s) =
     evalError @(NValue t f m)
       $  ErrorCall
       $  "Could not look up attribute "
-      ++ intercalate "." (map Text.unpack (NE.toList ks))
-      ++ " in "
-      ++ show (prettyNValue s)
+      <> intercalate "." (fmap Text.unpack (NE.toList ks))
+      <> " in "
+      <> show (prettyNValue s)
 
   evalCurPos = do
     scope                  <- currentScopes
@@ -303,7 +303,7 @@ callFunc fun arg = demand fun $ \fun' -> do
       withFrame Info (Calling @m @(NValue t f m) name span) (f arg)
     s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
       demand f $ (`callFunc` s) >=> (`callFunc` arg)
-    x -> throwError $ ErrorCall $ "Attempt to call non-function: " ++ show x
+    x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show x
 
 execUnaryOp
   :: (Framed e m, MonadCited t f m, Show t)
@@ -322,13 +322,13 @@ execUnaryOp scope span op arg = do
         throwError
           $  ErrorCall
           $  "unsupported argument type for unary operator "
-          ++ show op
+          <> show op
     x ->
       throwError
         $  ErrorCall
         $  "argument to unary operator"
-        ++ " must evaluate to an atomic type: "
-        ++ show x
+        <> " must evaluate to an atomic type: "
+        <> show x
  where
   unaryOp = pure . nvConstantP (Provenance scope (NUnary_ span op (Just arg)))
 
@@ -387,7 +387,7 @@ execBinaryOpForced scope span op lval rval = case op of
   NMult  -> numBinOp (*)
   NDiv   -> numBinOp' div (/)
   NConcat -> case (lval, rval) of
-    (NVList ls, NVList rs) -> pure $ nvListP prov $ ls ++ rs
+    (NVList ls, NVList rs) -> pure $ nvListP prov $ ls <> rs
     _ -> unsupportedTypes
 
   NUpdate -> case (lval, rval) of
@@ -408,7 +408,7 @@ execBinaryOpForced scope span op lval rval = case op of
       Nothing -> throwError $ ErrorCall $
         -- data/nix/src/libexpr/eval.cc:1412
         "A string that refers to a store path cannot be appended to a path."
-    (NVPath ls, NVPath rs) -> nvPathP prov <$> makeAbsolutePath @t @f (ls ++ rs)
+    (NVPath ls, NVPath rs) -> nvPathP prov <$> makeAbsolutePath @t @f (ls <> rs)
 
     (ls@NVSet{}, NVStr rs) ->
       (\ls2 -> nvStrP prov (ls2 `mappend` rs))
@@ -458,23 +458,23 @@ execBinaryOpForced scope span op lval rval = case op of
 
   unsupportedTypes = throwError $ ErrorCall $
     "Unsupported argument types for binary operator "
-      ++ show op
-      ++ ": "
-      ++ show lval
-      ++ ", "
-      ++ show rval
+      <> show op
+      <> ": "
+      <> show lval
+      <> ", "
+      <> show rval
 
   alreadyHandled = throwError $ ErrorCall $
     "This cannot happen: operator "
-      ++ show op
-      ++ " should have been handled in execBinaryOp."
+      <> show op
+      <> " should have been handled in execBinaryOp."
 
 -- This function is here, rather than in 'Nix.String', because of the need to
 -- use 'throwError'.
 fromStringNoContext :: Framed e m => NixString -> m Text
 fromStringNoContext ns = case getStringNoContext ns of
   Just str -> pure str
-  Nothing  -> throwError $ ErrorCall $ "expected string with no context, but got " ++ show ns
+  Nothing  -> throwError $ ErrorCall $ "expected string with no context, but got " <> show ns
 
 addTracing
   :: (MonadNix e t f m, Has e Options, MonadReader Int n, Alternative n)
@@ -494,7 +494,7 @@ addTracing k v = do
             then pretty $ show (void x)
 #endif
             else prettyNix (Fix (Fix (NSym "?") <$ x))
-          msg x = pretty ("eval: " ++ replicate depth ' ') <> x
+          msg x = pretty ("eval: " <> replicate depth ' ') <> x
       loc <- renderLocation span (msg rendered <> " ...\n")
       putStr $ show loc
       res <- k v'

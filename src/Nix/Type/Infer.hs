@@ -126,10 +126,10 @@ instance Substitutable TVar where
 instance Substitutable Type where
   apply _         (  TCon a   ) = TCon a
   apply s         (  TSet b a ) = TSet b (M.map (apply s) a)
-  apply s         (  TList a  ) = TList (map (apply s) a)
+  apply s         (  TList a  ) = TList (fmap (apply s) a)
   apply (Subst s) t@(TVar  a  ) = Map.findWithDefault t a s
   apply s         (  t1 :~> t2) = apply s t1 :~> apply s t2
-  apply s         (  TMany ts ) = TMany (map (apply s) ts)
+  apply s         (  TMany ts ) = TMany (fmap (apply s) ts)
 
 instance Substitutable Scheme where
   apply (Subst s) (Forall as t) = Forall as $ apply s' t
@@ -142,7 +142,7 @@ instance Substitutable Constraint where
     ImpInstConst (apply s t1) (apply s ms) (apply s t2)
 
 instance Substitutable a => Substitutable [a] where
-  apply = map . apply
+  apply = fmap . apply
 
 instance (Ord a, Substitutable a) => Substitutable (Set.Set a) where
   apply = Set.map . apply
@@ -154,10 +154,10 @@ class FreeTypeVars a where
 instance FreeTypeVars Type where
   ftv TCon{}      = Set.empty
   ftv (TVar a   ) = Set.singleton a
-  ftv (TSet _ a ) = Set.unions (map ftv (M.elems a))
-  ftv (TList a  ) = Set.unions (map ftv a)
+  ftv (TSet _ a ) = Set.unions (fmap ftv (M.elems a))
+  ftv (TList a  ) = Set.unions (fmap ftv a)
   ftv (t1 :~> t2) = ftv t1 `Set.union` ftv t2
-  ftv (TMany ts ) = Set.unions (map ftv ts)
+  ftv (TMany ts ) = Set.unions (fmap ftv ts)
 
 instance FreeTypeVars TVar where
   ftv = Set.singleton
@@ -243,7 +243,7 @@ inferType env ex = do
         ]
   inferState <- get
   let eres = (`evalState` inferState) $ runSolver $ do
-        subst <- solve (cs ++ cs')
+        subst <- solve (cs <> cs')
         return (subst, subst `apply` t)
   case eres of
     Left  errs -> throwError $ TypeInferenceErrors errs
@@ -253,7 +253,7 @@ inferType env ex = do
 inferExpr :: Env -> NExpr -> Either InferError [Scheme]
 inferExpr env ex = case runInfer (inferType env ex) of
   Left  err -> Left err
-  Right xs  -> Right $ map (\(subst, ty) -> closeOver (subst `apply` ty)) xs
+  Right xs  -> Right $ fmap (\(subst, ty) -> closeOver (subst `apply` ty)) xs
 
 -- | Canonicalize and return the polymorphic toplevel type.
 closeOver :: Type -> Scheme
@@ -389,10 +389,10 @@ instance Monad m => MonadThrow (InferT s m) where
 instance Monad m => MonadCatch (InferT s m) where
   catch m h = catchError m $ \case
     EvaluationError e -> maybe
-      (error $ "Exception was not an exception: " ++ show e)
+      (error $ "Exception was not an exception: " <> show e)
       h
       (fromException (toException e))
-    err -> error $ "Unexpected error: " ++ show err
+    err -> error $ "Unexpected error: " <> show err
 
 type MonadInfer m
   = ({- MonadThunkId m,-}
@@ -454,13 +454,13 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
 
   evalUnary op (Judgment as1 cs1 t1) = do
     tv <- fresh
-    return $ Judgment as1 (cs1 ++ unops (t1 :~> tv) op) tv
+    return $ Judgment as1 (cs1 <> unops (t1 :~> tv) op) tv
 
   evalBinary op (Judgment as1 cs1 t1) e2 = do
     Judgment as2 cs2 t2 <- e2
     tv                  <- fresh
     return $ Judgment (as1 `As.merge` as2)
-                      (cs1 ++ cs2 ++ binops (t1 :~> t2 :~> tv) op)
+                      (cs1 <> cs2 <> binops (t1 :~> t2 :~> tv) op)
                       tv
 
   evalWith = Eval.evalWithAttrSet
@@ -470,19 +470,19 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     Judgment as3 cs3 t3 <- f
     return $ Judgment
       (as1 `As.merge` as2 `As.merge` as3)
-      (cs1 ++ cs2 ++ cs3 ++ [EqConst t1 typeBool, EqConst t2 t3])
+      (cs1 <> cs2 <> cs3 <> [EqConst t1 typeBool, EqConst t2 t3])
       t2
 
   evalAssert (Judgment as1 cs1 t1) body = do
     Judgment as2 cs2 t2 <- body
     return
-      $ Judgment (as1 `As.merge` as2) (cs1 ++ cs2 ++ [EqConst t1 typeBool]) t2
+      $ Judgment (as1 `As.merge` as2) (cs1 <> cs2 <> [EqConst t1 typeBool]) t2
 
   evalApp (Judgment as1 cs1 t1) e2 = do
     Judgment as2 cs2 t2 <- e2
     tv                  <- fresh
     return $ Judgment (as1 `As.merge` as2)
-                      (cs1 ++ cs2 ++ [EqConst t1 (t2 :~> tv)])
+                      (cs1 <> cs2 <> [EqConst t1 (t2 :~> tv)])
                       tv
 
   evalAbs (Param x) k = do
@@ -492,7 +492,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
       a
       (k (pure (Judgment (As.singleton x tv) [] tv)) (\_ b -> ((), ) <$> b))
     return $ Judgment (as `As.remove` x)
-                      (cs ++ [ EqConst t' tv | t' <- As.lookup x as ])
+                      (cs <> [ EqConst t' tv | t' <- As.lookup x as ])
                       (tv :~> t)
 
   evalAbs (ParamSet ps variadic _mname) k = do
@@ -505,7 +505,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
             (as1 `As.merge` As.singleton k t, M.insert k t t1)
         arg   = pure $ Judgment env [] (TSet True tys)
         call  = k arg $ \args b -> (args, ) <$> b
-        names = map fst js
+        names = fmap fst js
 
     (args, Judgment as cs t) <- foldr (\(_, TVar a) -> extendMSet a) call js
 
@@ -513,7 +513,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
 
     return $ Judgment
       (foldl' As.remove as names)
-      (cs ++ [ EqConst t' (tys M.! x) | x <- names, t' <- As.lookup x as ])
+      (cs <> [ EqConst t' (tys M.! x) | x <- names, t' <- As.lookup x as ])
       (ty :~> t)
 
   evalError = throwError . EvaluationError
@@ -571,12 +571,12 @@ inferTop env ((name, ex) : xs) = case inferExpr env ex of
   Right ty  -> inferTop (extend env (name, ty)) xs
 
 normalizeScheme :: Scheme -> Scheme
-normalizeScheme (Forall _ body) = Forall (map snd ord) (normtype body)
+normalizeScheme (Forall _ body) = Forall (fmap snd ord) (normtype body)
  where
-  ord = zip (nub $ fv body) (map TV letters)
+  ord = zip (nub $ fv body) (fmap TV letters)
 
   fv (TVar a  ) = [a]
-  fv (a :~> b ) = fv a ++ fv b
+  fv (a :~> b ) = fv a <> fv b
   fv (TCon _  ) = []
   fv (TSet _ a) = concatMap fv (M.elems a)
   fv (TList a ) = concatMap fv a
@@ -585,8 +585,8 @@ normalizeScheme (Forall _ body) = Forall (map snd ord) (normtype body)
   normtype (a :~> b ) = normtype a :~> normtype b
   normtype (TCon a  ) = TCon a
   normtype (TSet b a) = TSet b (M.map normtype a)
-  normtype (TList a ) = TList (map normtype a)
-  normtype (TMany ts) = TMany (map normtype ts)
+  normtype (TList a ) = TList (fmap normtype a)
+  normtype (TMany ts) = TMany (fmap normtype ts)
   normtype (TVar  a ) = case Prelude.lookup a ord of
     Just x  -> TVar x
     Nothing -> error "type variable not in signature"

@@ -96,11 +96,11 @@ staticImport pann path = do
     Nothing   -> go path'
  where
   go path = do
-    liftIO $ putStrLn $ "Importing file " ++ path
+    liftIO $ putStrLn $ "Importing file " <> path
 
     eres <- liftIO $ parseNixFileLoc path
     case eres of
-      Failure err -> error $ "Parse failed: " ++ show err
+      Failure err -> error $ "Parse failed: " <> show err
       Success x   -> do
         let
           pos  = SourcePos "Reduce.hs" (mkPos 1) (mkPos 1)
@@ -278,7 +278,7 @@ reduce (NAbs_ ann params body) = do
   let args = case params' of
         Param name -> M.singleton name (Fix (NSym_ ann name))
         ParamSet pset _ _ ->
-          M.fromList $ map (\(k, _) -> (k, Fix (NSym_ ann k))) pset
+          M.fromList $ fmap (\(k, _) -> (k, Fix (NSym_ ann k))) pset
   Fix . NAbs_ ann params' <$> pushScope args body
 
 reduce v = Fix <$> sequence v
@@ -313,10 +313,10 @@ pruneTree opts = foldFixM $ \(FlaggedF (b, Compose x)) -> do
     NAbs params (Just body) -> Just $ NAbs (pruneParams params) body
 
     NList l | reduceLists opts -> Just $ NList (catMaybes l)
-            | otherwise        -> Just $ NList (map (fromMaybe nNull) l)
+            | otherwise        -> Just $ NList (fmap (fromMaybe nNull) l)
     NSet recur binds
       | reduceSets opts -> Just $ NSet recur (mapMaybe sequence binds)
-      | otherwise -> Just $ NSet recur (map (fmap (fromMaybe nNull)) binds)
+      | otherwise -> Just $ NSet recur (fmap (fmap (fromMaybe nNull)) binds)
 
     NLet binds (Just body@(Fix (Compose (Ann _ x)))) ->
       Just $ case mapMaybe pruneBinding binds of
@@ -386,10 +386,10 @@ pruneTree opts = foldFixM $ \(FlaggedF (b, Compose x)) -> do
   pruneParams (Param n) = Param n
   pruneParams (ParamSet xs b n)
     | reduceSets opts = ParamSet
-      (map (second (maybe (Just nNull) (Just . fromMaybe nNull))) xs)
+      (fmap (second (maybe (Just nNull) (Just . fromMaybe nNull))) xs)
       b
       n
-    | otherwise = ParamSet (map (second (fmap (fromMaybe nNull))) xs) b n
+    | otherwise = ParamSet (fmap (second (fmap (fromMaybe nNull))) xs) b n
 
   pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
   pruneBinding (NamedVar _ Nothing _) = Nothing
@@ -398,7 +398,7 @@ pruneTree opts = foldFixM $ \(FlaggedF (b, Compose x)) -> do
   pruneBinding (Inherit _                 [] _) = Nothing
   pruneBinding (Inherit (join -> Nothing) _  _) = Nothing
   pruneBinding (Inherit (join -> m) xs pos) =
-    Just (Inherit m (map pruneKeyName xs) pos)
+    Just (Inherit m (fmap pruneKeyName xs) pos)
 
 reducingEvalExpr
   :: (Framed e m, Has e Options, Exception r, MonadCatch m, MonadIO m)

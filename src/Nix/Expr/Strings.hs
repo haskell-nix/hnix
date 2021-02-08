@@ -31,7 +31,7 @@ removePlainEmpty = filter f where
   -- trimEnd xs
   --     | null xs = xs
   --     | otherwise = case last xs of
-  --           Plain x -> init xs ++ [Plain (T.dropWhileEnd (== ' ') x)]
+  --           Plain x -> init xs <> [Plain (T.dropWhileEnd (== ' ') x)]
   --           _ -> xs
 
 -- | Equivalent to case splitting on 'Antiquoted' strings.
@@ -62,7 +62,7 @@ stripIndent xs =
   Indented minIndent
     . removePlainEmpty
     . mergePlain
-    . map snd
+    . fmap snd
     . dropWhileEnd cleanup
     . (\ys -> zip
         (map
@@ -78,11 +78,11 @@ stripIndent xs =
     $ ls'
  where
   ls        = stripEmptyOpening $ splitLines xs
-  ls'       = map (dropSpaces minIndent) ls
+  ls'       = fmap (dropSpaces minIndent) ls
 
   minIndent = case stripEmptyLines ls of
     []         -> 0
-    nonEmptyLs -> minimum $ map (countSpaces . mergePlain) nonEmptyLs
+    nonEmptyLs -> minimum $ fmap (countSpaces . mergePlain) nonEmptyLs
 
   stripEmptyLines = filter $ \case
     [Plain t] -> not $ T.null $ T.strip t
@@ -109,7 +109,7 @@ escapeCodes =
   [('\n', 'n'), ('\r', 'r'), ('\t', 't'), ('\\', '\\'), ('$', '$'), ('"', '"')]
 
 fromEscapeCode :: Char -> Maybe Char
-fromEscapeCode = (`lookup` map swap escapeCodes)
+fromEscapeCode = (`lookup` fmap swap escapeCodes)
 
 toEscapeCode :: Char -> Maybe Char
 toEscapeCode = (`lookup` escapeCodes)

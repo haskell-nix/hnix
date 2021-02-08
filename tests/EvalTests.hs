@@ -444,7 +444,7 @@ genEvalCompareTests = do
     let unmaskedFiles = filter ((==".nix") . takeExtension) td
     let files = unmaskedFiles \\ maskedFiles
 
-    pure $ testGroup "Eval comparison tests" $ map (mkTestCase testDir) files
+    pure $ testGroup "Eval comparison tests" $ fmap (mkTestCase testDir) files
   where
     mkTestCase td f = testCase f $ assertEvalFileMatchesNix (td </> f)
 

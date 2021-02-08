@@ -30,10 +30,10 @@ remove :: Assumption -> Name -> Assumption
 remove (Assumption a) var = Assumption (filter (\(n, _) -> n /= var) a)
 
 lookup :: Name -> Assumption -> [Type]
-lookup key (Assumption a) = map snd (filter (\(n, _) -> n == key) a)
+lookup key (Assumption a) = fmap snd (filter (\(n, _) -> n == key) a)
 
 merge :: Assumption -> Assumption -> Assumption
-merge (Assumption a) (Assumption b) = Assumption (a ++ b)
+merge (Assumption a) (Assumption b) = Assumption (a <> b)
 
 mergeAssumptions :: [Assumption] -> Assumption
 mergeAssumptions = foldl' merge empty
@@ -42,4 +42,4 @@ singleton :: Name -> Type -> Assumption
 singleton x y = Assumption [(x, y)]
 
 keys :: Assumption -> [Name]
-keys (Assumption a) = map fst a
+keys (Assumption a) = fmap fst a

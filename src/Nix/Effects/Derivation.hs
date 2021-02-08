@@ -85,12 +85,12 @@ data HashMode = Flat | Recursive
 
 makeStorePathName :: (Framed e m) => Text -> m Store.StorePathName
 makeStorePathName name = case Store.makeStorePathName name of
-  Left err -> throwError $ ErrorCall $ "Invalid name '" ++ show name ++ "' for use in a store path: " ++ err
+  Left err -> throwError $ ErrorCall $ "Invalid name '" <> show name <> "' for use in a store path: " <> err
   Right spname -> return spname
 
 parsePath :: (Framed e m) => Text -> m Store.StorePath
 parsePath p = case Store.parsePath "/nix/store" (Text.encodeUtf8 p) of
-  Left err -> throwError $ ErrorCall $ "Cannot parse store path " ++ show p ++ ":\n" ++ show err
+  Left err -> throwError $ ErrorCall $ "Cannot parse store path " <> show p <> ":\n" <> show err
   Right path -> return path
 
 writeDerivation :: (Framed e m, MonadStore m) => Derivation -> m Store.StorePath
@@ -114,7 +114,7 @@ hashDerivationModulo (Derivation {
       <> ":" <> (Store.algoName @hashType)
       <> ":" <> (Store.encodeInBase Store.Base16 digest)
       <> ":" <> path
-    outputsList -> throwError $ ErrorCall $ "This is weird. A fixed output drv should only have one output named 'out'. Got " ++ show outputsList
+    outputsList -> throwError $ ErrorCall $ "This is weird. A fixed output drv should only have one output named 'out'. Got " <> show outputsList
 hashDerivationModulo drv@(Derivation {inputs = (inputSrcs, inputDrvs)}) = do
   cache <- gets snd
   inputsModulo <- Map.fromList <$> forM (Map.toList inputDrvs) (\(path, outs) ->
@@ -130,7 +130,7 @@ hashDerivationModulo drv@(Derivation {inputs = (inputSrcs, inputDrvs)}) = do
 unparseDrv :: Derivation -> Text
 unparseDrv (Derivation {..}) = Text.append "Derive" $ parens
     [ -- outputs: [("out", "/nix/store/.....-out", "", ""), ...]
-      list $ flip map (Map.toList outputs) (\(outputName, outputPath) ->
+      list $ flip fmap (Map.toList outputs) (\(outputName, outputPath) ->
         let prefix = if hashMode == Recursive then "r:" else "" in
         case mFixed of
           Nothing -> parens [s outputName, s outputPath, s "", s ""]
@@ -138,16 +138,16 @@ unparseDrv (Derivation {..}) = Text.append "Derive" $ parens
             parens [s outputName, s outputPath, s $ prefix <> Store.algoName @hashType, s $ Store.encodeInBase Store.Base16 digest]
         )
     , -- inputDrvs
-      list $ flip map (Map.toList $ snd inputs) (\(path, outs) ->
-        parens [s path, list $ map s $ sort outs])
+      list $ flip fmap (Map.toList $ snd inputs) (\(path, outs) ->
+        parens [s path, list $ fmap s $ sort outs])
     , -- inputSrcs
-      list (map s $ Set.toList $ fst inputs)
+      list (fmap s $ Set.toList $ fst inputs)
     , s platform
     , s builder
     , -- run script args
-      list $ map s args
+      list $ fmap s args
     , -- env (key value pairs)
-      list $ flip map (Map.toList env) (\(k, v) ->
+      list $ flip fmap (Map.toList env) (\(k, v) ->
         parens [s k, s v])
     ]
   where
@@ -168,7 +168,7 @@ readDerivation :: (Framed e m, MonadFile m) => FilePath -> m Derivation
 readDerivation path = do
   content <- Text.decodeUtf8 <$> readFile path
   case parse derivationParser path content of
-    Left err -> throwError $ ErrorCall $ "Failed to parse " ++ show path ++ ":\n" ++ show err
+    Left err -> throwError $ ErrorCall $ "Failed to parse " <> show path <> ":\n" <> show err
     Right drv -> return drv
 
 derivationParser :: Parsec () Text Derivation
@@ -192,7 +192,7 @@ derivationParser = do
   _ <- ")"
   eof
 
-  let outputs = Map.fromList $ map (\(a, b, _, _) -> (a, b)) fullOutputs
+  let outputs = Map.fromList $ fmap (\(a, b, _, _) -> (a, b)) fullOutputs
   let (mFixed, hashMode) = parseFixed fullOutputs
   let name = "" -- FIXME (extract from file path ?)
   let useJson = ["__json"] == Map.keys env
@@ -219,10 +219,10 @@ derivationParser = do
       let (hashType, hashMode) = case Text.splitOn ":" rht of
             ["r", ht] -> (ht, Recursive)
             [ht] ->      (ht, Flat)
-            _ -> error $ "Unsupported hash type for output of fixed-output derivation in .drv file: " ++ show fullOutputs
+            _ -> error $ "Unsupported hash type for output of fixed-output derivation in .drv file: " <> show fullOutputs
       in case Store.mkNamedDigest hashType hash of
         Right digest -> (Just digest, hashMode)
-        Left err -> error $ "Unsupported hash " ++ show (hashType <> ":" <> hash) ++ "in .drv file: " ++ err
+        Left err -> error $ "Unsupported hash " <> show (hashType <> ":" <> hash) <> "in .drv file: " <> err
     _ -> (Nothing, Flat)
 
 
@@ -278,7 +278,7 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
     toStorePaths ctx = foldl (flip addToInputs) (Set.empty, Map.empty) ctx
     addToInputs (StringContext path kind) = case kind of
       DirectPath -> first (Set.insert path)
-      DerivationOutput o -> second (Map.insertWith (++) path [o])
+      DerivationOutput o -> second (Map.insertWith (<>) path [o])
       AllOutputs ->
         -- TODO: recursive lookup. See prim_derivationStrict
         -- XXX: When is this really used ?
@@ -292,7 +292,7 @@ buildDerivationWithContext :: forall e t f m. (MonadNix e t f m) => AttrSet (NVa
 buildDerivationWithContext drvAttrs = do
     -- Parse name first, so we can add an informative frame
     drvName     <- getAttr   "name"                      $ extractNixString >=> assertDrvStoreName
-    withFrame' Info (ErrorCall $ "While evaluating derivation " ++ show drvName) $ do
+    withFrame' Info (ErrorCall $ "While evaluating derivation " <> show drvName) $ do
 
       useJson     <- getAttrOr "__structuredAttrs" False   $ return
       ignoreNulls <- getAttrOr "__ignoreNulls"     False   $ return
@@ -332,7 +332,7 @@ buildDerivationWithContext drvAttrs = do
 
       return $ defaultDerivation { platform, builder, args, env,  hashMode, useJson
         , name = drvName
-        , outputs = Map.fromList $ map (\o -> (o, "")) outputs
+        , outputs = Map.fromList $ fmap (\o -> (o, "")) outputs
         , mFixed = mFixedOutput
         }
   where
@@ -353,19 +353,19 @@ buildDerivationWithContext drvAttrs = do
       => Text -> m a -> (v -> WithStringContextT m a) -> WithStringContextT m a
     getAttrOr' n d f = case M.lookup n drvAttrs of
       Nothing -> lift d
-      Just v  -> withFrame' Info (ErrorCall $ "While evaluating attribute '" ++ show n ++ "'") $
+      Just v  -> withFrame' Info (ErrorCall $ "While evaluating attribute '" <> show n <> "'") $
                    fromValue' v >>= f
 
     getAttrOr n d f = getAttrOr' n (return d) f
 
-    getAttr n = getAttrOr' n (throwError $ ErrorCall $ "Required attribute '" ++ show n ++ "' not found.")
+    getAttr n = getAttrOr' n (throwError $ ErrorCall $ "Required attribute '" <> show n <> "' not found.")
 
     -- Test validity for fields
 
     assertDrvStoreName :: MonadNix e t f m => Text -> WithStringContextT m Text
     assertDrvStoreName name = lift $ do
       let invalid c = not $ isAscii c && (isAlphaNum c || c `elem` ("+-._?=" :: String)) -- isAlphaNum allows non-ascii chars.
-      let failWith reason = throwError $ ErrorCall $ "Store name " ++ show name ++ " " ++ reason
+      let failWith reason = throwError $ ErrorCall $ "Store name " <> show name <> " " <> reason
       when ("." `Text.isPrefixOf` name)    $ failWith "cannot start with a period"
       when (Text.length name > 211)        $ failWith "must be no longer than 211 characters"
       when (Text.any invalid name)         $ failWith "contains some invalid character"
@@ -374,7 +374,7 @@ buildDerivationWithContext drvAttrs = do
 
     extractNoCtx :: MonadNix e t f m => NixString -> WithStringContextT m Text
     extractNoCtx ns = case getStringNoContext ns of
-      Nothing -> lift $ throwError $ ErrorCall $ "The string " ++ show ns ++ " is not allowed to have a context."
+      Nothing -> lift $ throwError $ ErrorCall $ "The string " <> show ns <> " is not allowed to have a context."
       Just v -> return v
 
     assertNonNull :: MonadNix e t f m => Text -> WithStringContextT m Text
@@ -386,7 +386,7 @@ buildDerivationWithContext drvAttrs = do
     parseHashMode = \case
       "flat" ->      return Flat
       "recursive" -> return Recursive
-      other -> lift $ throwError $ ErrorCall $ "Hash mode " ++ show other ++ " is not valid. It must be either 'flat' or 'recursive'"
+      other -> lift $ throwError $ ErrorCall $ "Hash mode " <> show other <> " is not valid. It must be either 'flat' or 'recursive'"
 
     -- Other helpers
 

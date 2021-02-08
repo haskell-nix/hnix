@@ -234,7 +234,7 @@ desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
   go (Left  x) = do
     maybeValue <- gets (M.lookup x)
     case maybeValue of
-      Nothing     -> error ("No binding " ++ show x)
+      Nothing     -> error ("No binding " <> show x)
       Just (p, v) -> pure $ NamedVar (StaticKey x :| []) (embed v) p
 
 evalBinds
@@ -247,7 +247,7 @@ evalBinds recursive binds = do
   scope <- currentScopes :: m (Scopes m v)
   buildResult scope . concat =<< mapM (go scope) (moveOverridesLast binds)
  where
-  moveOverridesLast = uncurry (++) . partition
+  moveOverridesLast = uncurry (<>) . partition
     (\case
       NamedVar (StaticKey "__overrides" :| []) _ _pos -> False
       _ -> True
@@ -257,7 +257,7 @@ evalBinds recursive binds = do
   go _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
     finalValue >>= fromValue >>= \(o', p') ->
           -- jww (2018-05-09): What to do with the key position here?
-                                              pure $ map
+                                              pure $ fmap
       (\(k, v) -> ([k], fromMaybe pos (M.lookup k p'), demand v pure))
       (M.toList o')
 
@@ -403,7 +403,7 @@ buildArgument params arg = do
         $  evalError @v
         $  ErrorCall
         $  "Missing value for parameter: "
-        ++ show k
+        <> show k
     That (Just f) ->
       Just $ \args -> defer $ withScopes scope $ pushScope args f
     This _
@@ -415,7 +415,7 @@ buildArgument params arg = do
         $  evalError @v
         $  ErrorCall
         $  "Unexpected parameter: "
-        ++ show k
+        <> show k
     These x _ -> Just (const (pure x))
 
 addSourcePositions
