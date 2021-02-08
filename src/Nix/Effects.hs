@@ -44,7 +44,7 @@ import qualified System.Info
 import           System.Process
 
 import qualified System.Nix.Hash               as Store
-import qualified System.Nix.Store.Remote       as Store
+import qualified System.Nix.Store.Remote       as Store.Remote
 import qualified System.Nix.StorePath          as Store
 
 -- | A path into the nix store
@@ -227,11 +227,11 @@ instance MonadHttp IO where
 
 
 class Monad m => MonadPutStr m where
-    --TODO: Should this be used *only* when the Nix to be evaluated invokes a
-    --`trace` operation?
-    putStr :: String -> m ()
-    default putStr :: (MonadTrans t, MonadPutStr m', m ~ t m') => String -> m ()
-    putStr = lift . putStr
+  --TODO: Should this be used *only* when the Nix to be evaluated invokes a
+  --`trace` operation?
+  putStr :: String -> m ()
+  default putStr :: (MonadTrans t, MonadPutStr m', m ~ t m') => String -> m ()
+  putStr = lift . putStr
 
 putStrLn :: MonadPutStr m => String -> m ()
 putStrLn = putStr . (<> "\n")
@@ -251,20 +251,20 @@ type StorePathSet = HS.HashSet StorePath
 
 class Monad m => MonadStore m where
 
-    -- | Copy the contents of a local path to the store.  The resulting store
-    -- path is returned.  Note: This does not support yet support the expected
-    -- `filter` function that allows excluding some files.
-    addToStore :: StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
-    default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
-    addToStore a b c d = lift $ addToStore a b c d
+  -- | Copy the contents of a local path to the store.  The resulting store
+  -- path is returned.  Note: This does not support yet support the expected
+  -- `filter` function that allows excluding some files.
+  addToStore :: StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
+  default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
+  addToStore a b c d = lift $ addToStore a b c d
 
-    -- | Like addToStore, but the contents written to the output path is a
-    -- regular file containing the given string.
-    addTextToStore' :: StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
-    default addTextToStore' :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
-    addTextToStore' a b c d = lift $ addTextToStore' a b c d
+  -- | Like addToStore, but the contents written to the output path is a
+  -- regular file containing the given string.
+  addTextToStore' :: StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
+  default addTextToStore' :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
+  addTextToStore' a b c d = lift $ addTextToStore' a b c d
 
-parseStoreResult :: Monad m => String -> (Either String a, [Store.Logger]) -> m (Either ErrorCall a)
+parseStoreResult :: Monad m => String -> (Either String a, [Store.Remote.Logger]) -> m (Either ErrorCall a)
 parseStoreResult name res = case res of
   (Left msg, logs) -> return $ Left $ ErrorCall $ "Failed to execute '" <> name <> "': " <> msg <> "\n" <> show logs
   (Right result, _) -> return $ Right result
@@ -275,13 +275,13 @@ instance MonadStore IO where
     Left err -> return $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> err
     Right pathName -> do
       -- TODO: redesign the filter parameter
-      res <- Store.runStore $ Store.addToStore @'Store.SHA256 pathName path recursive (const False) repair
+      res <- Store.Remote.runStore $ Store.Remote.addToStore @'Store.SHA256 pathName path recursive (const False) repair
       parseStoreResult "addToStore" res >>= \case
         Left err -> return $ Left err
         Right storePath -> return $ Right $ StorePath $ T.unpack $ T.decodeUtf8 $ Store.storePathToRawFilePath storePath
 
   addTextToStore' name text references repair = do
-    res <- Store.runStore $ Store.addTextToStore name text references repair
+    res <- Store.Remote.runStore $ Store.Remote.addTextToStore name text references repair
     parseStoreResult "addTextToStore" res >>= \case
       Left err -> return $ Left err
       Right path -> return $ Right $ StorePath $ T.unpack $ T.decodeUtf8 $ Store.storePathToRawFilePath path

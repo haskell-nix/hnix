@@ -50,14 +50,16 @@ instance MonadTrans (FreshIdT i) where
 instance MonadBase b m => MonadBase b (FreshIdT i m) where
   liftBase = FreshIdT . liftBase
 
-instance ( MonadVar m
-         , Eq i
-         , Ord i
-         , Show i
-         , Enum i
-         , Typeable i
-         )
-         => MonadThunkId (FreshIdT i m) where
+instance
+  ( MonadVar m
+  , Eq i
+  , Ord i
+  , Show i
+  , Enum i
+  , Typeable i
+  )
+  => MonadThunkId (FreshIdT i m)
+ where
   type ThunkId (FreshIdT i m) = i
   freshId = FreshIdT $ do
     v <- ask
@@ -69,6 +71,7 @@ runFreshIdT i m = runReaderT (unFreshIdT m) i
 -- Orphan instance needed by Infer.hs and Lint.hs
 
 -- Since there's no forking, it's automatically atomic.
+--  NOTE: MonadAtomicRef (ST s) can be upstreamed to `ref-tf`
 instance MonadAtomicRef (ST s) where
   atomicModifyRef r f = do
     v <- readRef r

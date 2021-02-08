@@ -20,6 +20,7 @@ import           Nix.Value
 
 type StdIdT = FreshIdT Int
 
+-- NOTE: These would be removed by: https://github.com/haskell-nix/hnix/pull/804
 instance (MonadFail m, MonadFile m) => MonadFile (StdIdT m)
 instance MonadIntrospect m => MonadIntrospect (StdIdT m)
 instance MonadStore m => MonadStore (StdIdT m)
@@ -45,6 +46,6 @@ instance (MonadEffects t f m, MonadDataContext f m)
   pathToDefaultNix = lift . pathToDefaultNix @t @f @m
   derivationStrict v = do
     i <- FreshIdT ask
-    p <- lift $ derivationStrict @t @f @m (unliftNValue (runFreshIdT i) v)
+    p <- lift $ derivationStrict @t @f @m $ unliftNValue (runFreshIdT i) v
     return $ liftNValue (runFreshIdT i) p
   traceEffect = lift . traceEffect @t @f @m
