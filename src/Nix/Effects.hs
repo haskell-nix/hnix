@@ -24,6 +24,8 @@ import           Prelude                 hiding ( putStr
                                                 )
 import qualified Prelude
 
+import           Control.Monad.Trans.Reader
+import           Control.Monad.Trans.State
 import           Control.Monad.Trans
 import qualified Data.HashSet                  as HS
 import           Data.Text                      ( Text )
@@ -37,6 +39,7 @@ import           Nix.Expr
 import           Nix.Frames              hiding ( Proxy )
 import           Nix.Parser
 import           Nix.Render
+import           Nix.Scope.Basic
 import           Nix.Utils
 import           Nix.Value
 import qualified Paths_hnix
@@ -61,25 +64,22 @@ class (MonadFile m,
        MonadPaths m,
        MonadInstantiate m,
        MonadExec m,
-       MonadIntrospect m) => MonadEffects t f m where
+       MonadIntrospect m) => MonadEffects f m where
   -- | Determine the absolute path of relative path in the current context
   makeAbsolutePath :: FilePath -> m FilePath
   findEnvPath :: String -> m FilePath
 
   -- | Having an explicit list of sets corresponding to the NIX_PATH
   -- and a file path try to find an existing path
-  findPath :: [NValue t f m] -> FilePath -> m FilePath
+  findPath :: [NValue f m] -> FilePath -> m FilePath
 
-  importPath :: FilePath -> m (NValue t f m)
+  importPath :: FilePath -> m (NValue f m)
   pathToDefaultNix :: FilePath -> m FilePath
 
-  derivationStrict :: NValue t f m -> m (NValue t f m)
+  derivationStrict :: NValue f m -> m (NValue f m)
 
   traceEffect :: String -> m ()
 
-instance (MonadFix1T t m, MonadStore m) => MonadStore (Fix1T t m) where
-  addToStore a b c d = lift $ addToStore a b c d
-  addTextToStore' a b c d = lift $ addTextToStore' a b c d
 
 class Monad m => MonadIntrospect m where
   recursiveSize :: a -> m Word
@@ -298,7 +298,11 @@ addPath p = either throwError return =<< addToStore (T.pack $ takeFileName p) p 
 toFile_ :: (Framed e m, MonadStore m) => FilePath -> String -> m StorePath
 toFile_ p contents = addTextToStore (T.pack p) (T.pack contents) HS.empty False
 
--- All of the following type classes defer to the underlying 'm'.
+-- | All of the following type classes defer to the underlying 'm'.
+
+instance MonadStore m => MonadStore (ReaderT r m)
+deriving instance MonadStore m => MonadStore (ScopeT binding r m)
+instance MonadStore m => MonadStore (StateT s m)
 
 deriving instance MonadPutStr (t (Fix1 t)) => MonadPutStr (Fix1 t)
 deriving instance MonadHttp (t (Fix1 t)) => MonadHttp (Fix1 t)
@@ -308,10 +312,11 @@ deriving instance MonadInstantiate (t (Fix1 t)) => MonadInstantiate (Fix1 t)
 deriving instance MonadExec (t (Fix1 t)) => MonadExec (Fix1 t)
 deriving instance MonadIntrospect (t (Fix1 t)) => MonadIntrospect (Fix1 t)
 
-deriving instance MonadPutStr (t (Fix1T t m) m) => MonadPutStr (Fix1T t m)
-deriving instance MonadHttp (t (Fix1T t m) m) => MonadHttp (Fix1T t m)
 deriving instance MonadEnv (t (Fix1T t m) m) => MonadEnv (Fix1T t m)
-deriving instance MonadPaths (t (Fix1T t m) m) => MonadPaths (Fix1T t m)
-deriving instance MonadInstantiate (t (Fix1T t m) m) => MonadInstantiate (Fix1T t m)
 deriving instance MonadExec (t (Fix1T t m) m) => MonadExec (Fix1T t m)
+deriving instance MonadHttp (t (Fix1T t m) m) => MonadHttp (Fix1T t m)
+deriving instance MonadInstantiate (t (Fix1T t m) m) => MonadInstantiate (Fix1T t m)
 deriving instance MonadIntrospect (t (Fix1T t m) m) => MonadIntrospect (Fix1T t m)
+deriving instance MonadPaths (t (Fix1T t m) m) => MonadPaths (Fix1T t m)
+deriving instance MonadPutStr (t (Fix1T t m) m) => MonadPutStr (Fix1T t m)
+deriving instance MonadStore (t (Fix1T t m) m) => MonadStore (Fix1T t m)
