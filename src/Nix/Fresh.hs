@@ -1,10 +1,8 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -13,20 +11,34 @@
 
 module Nix.Fresh where
 
-import           Control.Applicative
-import           Control.Monad.Base
-import           Control.Monad.Catch
+import           Control.Applicative        ( Alternative )
+import           Control.Monad.Base   ( MonadBase(..) )
+import           Control.Monad.Catch  ( MonadCatch
+                              , MonadMask
+                              , MonadThrow
+                              )
 import           Control.Monad.Except
+                              ( MonadFix
+                              , MonadIO
+                              , MonadPlus
+                              , MonadTrans(..)
+                              )
 #if !MIN_VERSION_base(4,13,0)
 import           Control.Monad.Fail
 #endif
-import           Control.Monad.Reader
+import           Control.Monad.Reader ( ReaderT(..)
+                              , MonadReader(ask)
+                              )
 import           Control.Monad.Ref
-import           Control.Monad.ST
-import           Data.Typeable
+                              ( MonadAtomicRef(..)
+                              , MonadRef(writeRef, readRef)
+                              )
+import           Control.Monad.ST     ( ST )
+import           Data.Typeable     ( Typeable )
 
 import           Nix.Var
 import           Nix.Thunk
+
 
 newtype FreshIdT i m a = FreshIdT { unFreshIdT :: ReaderT (Var m i) m a }
   deriving
@@ -72,7 +84,7 @@ runFreshIdT i m = runReaderT (unFreshIdT m) i
 -- Orphan instance needed by Infer.hs and Lint.hs
 
 -- Since there's no forking, it's automatically atomic.
---  NOTE: MonadAtomicRef (ST s) can be upstreamed to `ref-tf`
+--  2021-02-09: NOTE: Submitted upstream: https://github.com/mainland/ref-tf/pull/4
 instance MonadAtomicRef (ST s) where
   atomicModifyRef r f = do
     v <- readRef r
