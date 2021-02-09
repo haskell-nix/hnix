@@ -111,8 +111,8 @@ valueFEq
   -> NValueF p m a
   -> Bool
 valueFEq attrsEq eq x y = runIdentity $ valueFEqM
-  (\x' y' -> Identity (attrsEq x' y'))
-  (\x' y' -> Identity (eq x' y'))
+  (\x' y' -> Identity $ attrsEq x' y')
+  (\x' y' -> Identity $ eq x' y')
   x
   y
 
@@ -141,7 +141,7 @@ compareAttrSets
   -> AttrSet t
   -> Bool
 compareAttrSets f eq lm rm = runIdentity
-  $ compareAttrSetsM (\t -> Identity (f t)) (\x y -> Identity (eq x y)) lm rm
+  $ compareAttrSetsM (Identity . f) (\x y -> Identity (eq x y)) lm rm
 
 valueEqM
   :: forall t f m
