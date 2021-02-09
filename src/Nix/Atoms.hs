@@ -21,12 +21,19 @@ import           Data.Text                      ( Text
 import           GHC.Generics                   ( Generic )
 import           Data.Binary                    ( Binary )
 import           Data.Aeson.Types               ( FromJSON
-                                           , ToJSON
-                                           )
+                                                , ToJSON
+                                                )
 
--- | Atoms are values that evaluate to themselves. This means that
+-- | Atoms are values that evaluate to themselves.
+-- In other words - this is a constructors that are literals in Nix.
+-- This means that
 -- they appear in both the parsed AST (in the form of literals) and
--- the evaluated form.
+-- the evaluated form as themselves.
+-- Once HNix parsed or evaluated into atom - that is a literal
+-- further after, for any further evaluation it is in all cases stays
+-- constantly itself.
+-- "atom", Ancient Greek \( atomos \) - "indivisible" particle,
+-- indivisible expression.
 data NAtom
   -- | An URI like @https://example.com@.
   = NURI Text
