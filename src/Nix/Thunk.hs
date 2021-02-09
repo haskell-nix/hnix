@@ -1,3 +1,7 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE LambdaCase #-}
@@ -18,6 +22,8 @@ import           Control.Monad.Trans.State
 import           Control.Monad.Trans.Writer
 import           Data.Typeable                  ( Typeable )
 import           Nix.Utils.Fix1
+import           Data.Constraint                ( (\\) )
+import           Data.Constraint.Forall         ( Forall, inst )
 
 class MonadTransWrap t where
   --TODO: Can we enforce that the resulting function is as linear as the provided one?
@@ -47,8 +53,13 @@ instance MonadTransWrap (StateT s) where
     put new
     pure result
 
-instance (forall m. MonadTransWrap (t (Fix1T t m))) => MonadTransWrap (Fix1T t) where
-  liftWrap f (Fix1T a) = Fix1T $ liftWrap f a
+
+class MonadTransWrap (t (Fix1T t m)) => TransWrapAtFix1T t m
+
+instance MonadTransWrap (t (Fix1T t m)) => TransWrapAtFix1T t m
+
+instance Forall (TransWrapAtFix1T t) => MonadTransWrap (Fix1T t) where
+  liftWrap (f :: forall x. m x -> m x) (Fix1T (a :: (t (Fix1T t m) m a))) = Fix1T $ liftWrap f a \\ inst @(TransWrapAtFix1T t) @m
 
 
 class ( Monad m
