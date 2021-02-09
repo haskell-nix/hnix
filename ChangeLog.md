@@ -23,6 +23,39 @@
       * `principledMakeNixStringWithSingletonContext` -> `makeNixStringWithSingletonContext`.
       * `principledModifyNixContents` -> `modifyNixContents`.
 
+  * [(link)](https://github.com/haskell-nix/hnix/pull/805/files):
+    * Data type: `MonadFix1T t m`: `Nix.Standard` -> `Nix.Utils.Fix1`
+    * Children found their parents:
+      * `Binary NAtom`: `Nix.Expr.Types` -> `Nix.Atoms`
+      * `Eq1 (NValue' t f m a)`: `Nix.Value.Equal` -> `Nix.Value` - instance was TH, become regular derivable
+      * `Eq1 (NValueF p m)`: `Nix.Value.Equal` -> `Nix.Value`
+      * `FromJSON NAtom`: `Nix.Expr.Types` -> `Nix.Atoms`
+      * `ToJSON NAtom`: `Nix.Expr.Types` -> `Nix.Atoms`
+      * `HasCitations m v (NValue t f m)`: `Nix.Pretty` -> `Nix.Cited`
+      * `HasCitations m v (NValue' t f m a)`: `Nix.Pretty` -> `Nix.Cited`
+      * `Hashable1 Binding`: `Nix.Expr.Types` -> `Void` - please, report if it is needed
+      * `Hashable1 NExprF`: `Nix.Expr.Types` -> `Void` - please, report if it is needed
+      * `Hashable1 NonEmpty`: `Nix.Expr.Types` -> `Void` - please, report if it is needed
+      * `MonadAtomicRef (Fix1T t m)`: `Nix.Standard` -> `Nix.Utils.Fix1`
+      * `MonadEnv (Fix1 t)`: `Nix.Standard` -> `Nix.Efffects`
+      * `MonadEnv (Fix1T t m)`: `Nix.Standard` -> `Nix.Efffects`
+      * `MonadExec (Fix1 t)`: `Nix.Standard` -> `Nix.Efffects`
+      * `MonadExec (Fix1T t m)`: `Nix.Standard` -> `Nix.Efffects`
+      * `MonadFile (Fix1T t m)`: `Nix.Standard` -> `Nix.Render`
+      * `MonadHttp (Fix1 t)`: `Nix.Standard` -> `Nix.Efffects`
+      * `MonadHttp (Fix1T t m)`: `Nix.Standard` -> `Nix.Efffects`
+      * `MonadInstantiate (Fix1 t)`: `Nix.Standard` -> `Nix.Efffects`
+      * `MonadInstantiate (Fix1T t m)`: `Nix.Standard` -> `Nix.Efffects`
+      * `MonadIntrospect (Fix1 t)`: `Nix.Standard` -> `Nix.Efffects`
+      * `MonadIntrospect (Fix1T t m)`: `Nix.Standard` -> `Nix.Efffects`
+      * `MonadPaths (Fix1 t)`: `Nix.Standard` -> `Nix.Efffects`
+      * `MonadPaths (Fix1T t m)`: `Nix.Standard` -> `Nix.Efffects`
+      * `MonadPutStr (Fix1 t)`: `Nix.Standard` -> `Nix.Effects`
+      * `MonadPutStr (Fix1T t m)`: `Nix.Standard` -> `Nix.Efffects`
+      * `MonadRef (Fix1T t m)`: `Nix.Standard` -> `Nix.Utils.Fix1`
+      * `MonadStore (Fix1T t m)`: `Nix.Standard` -> `Nix.Efffects`
+  
+
 * Additional:
   * [(link)](https://github.com/haskell-nix/hnix/commit/7e6cd97bf3288cb584241611fdb25bf85d7e0ba7) `cabal.project`: freed from the `cryptohash-sha512` override, Hackage trustees made a revision.
   * [(link)](https://github.com/haskell-nix/hnix/pull/824/commits/4422eb10959115f21045f39e302314a77df4b775) To be more approachable for user understanding, the thunk representation in outputs changed from `"<CYCLE>" -> "<expr>"`.

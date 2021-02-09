@@ -10,7 +10,7 @@
 {-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
+
 
 module Nix.Pretty where
 
@@ -183,18 +183,6 @@ prettyAtom atom = simpleExpr $ pretty $ unpack $ atomText atom
 
 prettyNix :: NExpr -> Doc ann
 prettyNix = withoutParens . foldFix exprFNixDoc
-
-instance HasCitations1 m v f
-  => HasCitations m v (NValue' t f m a) where
-  citations (NValue f) = citations1 f
-  addProvenance x (NValue f) = NValue (addProvenance1 x f)
-
-instance (HasCitations1 m v f, HasCitations m v t)
-  => HasCitations m v (NValue t f m) where
-  citations (Pure t) = citations t
-  citations (Free v) = citations v
-  addProvenance x (Pure t) = Pure (addProvenance x t)
-  addProvenance x (Free v) = Free (addProvenance x v)
 
 prettyOriginExpr
   :: forall t f m ann

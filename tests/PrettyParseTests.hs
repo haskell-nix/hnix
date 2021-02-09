@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 
+
 module PrettyParseTests where
 
 import           Data.Algorithm.Diff
@@ -147,8 +148,8 @@ normalize = foldFix $ \case
   NConstant (NFloat n) | n < 0 ->
     Fix (NUnary NNeg (Fix (NConstant (NFloat (negate n)))))
 
-  NSet recur binds -> Fix (NSet recur (map normBinding binds))
-  NLet binds  r -> Fix (NLet (map normBinding binds) r)
+  NSet recur binds -> Fix (NSet recur (fmap normBinding binds))
+  NLet binds  r -> Fix (NLet (fmap normBinding binds) r)
 
   NAbs params r -> Fix (NAbs (normParams params) r)
 
@@ -156,7 +157,7 @@ normalize = foldFix $ \case
 
  where
   normBinding (NamedVar path r     pos) = NamedVar (NE.map normKey path) r pos
-  normBinding (Inherit  mr   names pos) = Inherit mr (map normKey names) pos
+  normBinding (Inherit  mr   names pos) = Inherit mr (fmap normKey names) pos
 
   normKey (DynamicKey quoted) = DynamicKey (normAntiquotedString quoted)
   normKey (StaticKey  name  ) = StaticKey name
@@ -219,7 +220,7 @@ prop_prettyparse p = do
   normalise = unlines . fmap (reverse . dropWhile isSpace . reverse) . lines
 
   ldiff :: String -> String -> [Diff [String]]
-  ldiff s1 s2 = getDiff (map (: []) (lines s1)) (map (: []) (lines s2))
+  ldiff s1 s2 = getDiff (fmap (: []) (lines s1)) (fmap (: []) (lines s2))
 
 tests :: TestLimit -> TestTree
 tests n = testProperty "Pretty/Parse Property" $ withTests n $ property $ do

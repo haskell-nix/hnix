@@ -1,20 +1,19 @@
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
+
 
 module Nix.Standard where
 
@@ -53,42 +52,6 @@ import           Nix.Value
 import           Nix.Value.Monad
 import           Nix.Var
 
--- All of the following type classes defer to the underlying 'm'.
-
-deriving instance MonadPutStr (t (Fix1 t)) => MonadPutStr (Fix1 t)
-deriving instance MonadHttp (t (Fix1 t)) => MonadHttp (Fix1 t)
-deriving instance MonadEnv (t (Fix1 t)) => MonadEnv (Fix1 t)
-deriving instance MonadPaths (t (Fix1 t)) => MonadPaths (Fix1 t)
-deriving instance MonadInstantiate (t (Fix1 t)) => MonadInstantiate (Fix1 t)
-deriving instance MonadExec (t (Fix1 t)) => MonadExec (Fix1 t)
-deriving instance MonadIntrospect (t (Fix1 t)) => MonadIntrospect (Fix1 t)
-
-deriving instance MonadPutStr (t (Fix1T t m) m) => MonadPutStr (Fix1T t m)
-deriving instance MonadHttp (t (Fix1T t m) m) => MonadHttp (Fix1T t m)
-deriving instance MonadEnv (t (Fix1T t m) m) => MonadEnv (Fix1T t m)
-deriving instance MonadPaths (t (Fix1T t m) m) => MonadPaths (Fix1T t m)
-deriving instance MonadInstantiate (t (Fix1T t m) m) => MonadInstantiate (Fix1T t m)
-deriving instance MonadExec (t (Fix1T t m) m) => MonadExec (Fix1T t m)
-deriving instance MonadIntrospect (t (Fix1T t m) m) => MonadIntrospect (Fix1T t m)
-
-type MonadFix1T t m = (MonadTrans (Fix1T t), Monad (t (Fix1T t m) m))
-
-instance (MonadFix1T t m, MonadRef m) => MonadRef (Fix1T t m) where
-  type Ref (Fix1T t m) = Ref m
-  newRef  = lift . newRef
-  readRef = lift . readRef
-  writeRef r = lift . writeRef r
-
-instance (MonadFix1T t m, MonadAtomicRef m) => MonadAtomicRef (Fix1T t m) where
-  atomicModifyRef r = lift . atomicModifyRef r
-
-instance (MonadFix1T t m, MonadFail (Fix1T t m), MonadFile m) => MonadFile (Fix1T t m)
-
-instance (MonadFix1T t m, MonadStore m) => MonadStore (Fix1T t m) where
-  addToStore a b c d = lift $ addToStore a b c d
-  addTextToStore' a b c d = lift $ addTextToStore' a b c d
-
----------------------------------------------------------------------------------
 
 newtype StdCited m a = StdCited
   { _stdCited :: Cited (StdThunk m) (StdCited m) m a }

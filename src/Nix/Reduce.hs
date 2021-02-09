@@ -17,7 +17,7 @@
 {-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
+
 
 -- | This module provides a "reducing" expression evaluator, which reduces
 --   away pure, non self-referential aspects of an expression tree, yielding a

@@ -18,6 +18,7 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
+
 module Nix.Exec where
 
 import           Prelude                 hiding ( putStr
@@ -153,6 +154,8 @@ currentPos = asks (view hasLens)
 wrapExprLoc :: SrcSpan -> NExprLocF r -> NExprLoc
 wrapExprLoc span x = Fix (Fix (NSym_ span "<?>") <$ x)
 
+--  2021-01-07: NOTE: This instance belongs to be beside MonadEval type class.
+-- Currently instance is stuck in orphanage between the requirements to be MonadEval, aka Eval stage, and emposed requirement to be MonadNix (Execution stage). MonadNix constraint tries to put the cart before horse and seems superflous, since Eval in Nix also needs and can throw exceptions. It is between `nverr` and `evalError`.
 instance MonadNix e t f m => MonadEval (NValue t f m) m where
   freeVariable var =
     nverr @e @t @f

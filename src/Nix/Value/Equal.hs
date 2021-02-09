@@ -20,7 +20,6 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
 
 module Nix.Value.Equal where
@@ -31,8 +30,6 @@ import           Control.Monad.Free
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import           Data.Align
-import           Data.Eq.Deriving
-import           Data.Functor.Classes
 import           Data.Functor.Identity
 import qualified Data.HashMap.Lazy             as M
 import           Data.These
@@ -114,8 +111,8 @@ valueFEq
   -> NValueF p m a
   -> Bool
 valueFEq attrsEq eq x y = runIdentity $ valueFEqM
-  (\x' y' -> Identity (attrsEq x' y'))
-  (\x' y' -> Identity (eq x' y'))
+  (\x' y' -> Identity $ attrsEq x' y')
+  (\x' y' -> Identity $ eq x' y')
   x
   y
 
@@ -144,7 +141,7 @@ compareAttrSets
   -> AttrSet t
   -> Bool
 compareAttrSets f eq lm rm = runIdentity
-  $ compareAttrSetsM (\t -> Identity (f t)) (\x y -> Identity (eq x y)) lm rm
+  $ compareAttrSetsM (Identity . f) (\x y -> Identity (eq x y)) lm rm
 
 valueEqM
   :: forall t f m
@@ -175,13 +172,3 @@ thunkEqM lt rt = force lt $ \lv -> force rt $ \rv ->
         (NVList _     , NVList _     ) -> unsafePtrEq
         (NVSet _ _    , NVSet _ _    ) -> unsafePtrEq
         _                              -> valueEqM lv rv
-
-instance Eq1 (NValueF p m) where
-  liftEq _  (NVConstantF x) (NVConstantF y) = x == y
-  liftEq _  (NVStrF      x) (NVStrF      y) = x == y
-  liftEq eq (NVListF     x) (NVListF     y) = liftEq eq x y
-  liftEq eq (NVSetF x _   ) (NVSetF y _   ) = liftEq eq x y
-  liftEq _  (NVPathF x    ) (NVPathF y    ) = x == y
-  liftEq _  _               _               = False
-
-$(deriveEq1 ''NValue')

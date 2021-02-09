@@ -100,7 +100,7 @@ main' iniVal = initState iniVal >>= \s -> flip evalStateT s
 
   rcFile = do
     f <- liftIO $ Data.Text.IO.readFile ".hnixrc" `catch` handleMissing
-    forM_ (map (words . Data.Text.unpack) $ Data.Text.lines f) $ \case
+    forM_ (fmap (words . Data.Text.unpack) $ Data.Text.lines f) $ \case
       ((prefix:command) : xs) | prefix == commandPrefix -> do
         let arguments = unwords xs
         optMatcher command options arguments

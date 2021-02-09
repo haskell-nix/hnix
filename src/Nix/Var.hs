@@ -5,6 +5,7 @@
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
+
 module Nix.Var where
 
 import           Control.Monad.Ref
@@ -15,6 +16,7 @@ import           Data.STRef
 import           Type.Reflection ((:~:)(Refl))
 
 import           Unsafe.Coerce
+import           Data.Bool          ( bool )
 
 type Var m = Ref m
 
@@ -37,7 +39,15 @@ atomicModifyVar = atomicModifyRef
 
 --TODO: Upstream GEq instances
 instance GEq IORef where
-  a `geq` b = if a == unsafeCoerce b then Just $ unsafeCoerce Refl else Nothing
+  a `geq` b =
+    bool
+      Nothing
+      (pure $ unsafeCoerce Refl)
+      (a == unsafeCoerce b )
 
 instance GEq (STRef s) where
-  a `geq` b = if a == unsafeCoerce b then Just $ unsafeCoerce Refl else Nothing
+  a `geq` b =
+    bool
+      Nothing
+      (pure $ unsafeCoerce Refl )
+      (a == unsafeCoerce b)

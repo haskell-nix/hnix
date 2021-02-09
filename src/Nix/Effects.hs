@@ -9,6 +9,12 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
+
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 
 module Nix.Effects where
 
@@ -26,6 +32,7 @@ import qualified Data.Text.Encoding            as T
 import           Network.HTTP.Client     hiding ( path, Proxy )
 import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
+import           Nix.Utils.Fix1
 import           Nix.Expr
 import           Nix.Frames              hiding ( Proxy )
 import           Nix.Parser
@@ -40,7 +47,7 @@ import qualified System.Info
 import           System.Process
 
 import qualified System.Nix.Hash               as Store
-import qualified System.Nix.Store.Remote       as Store
+import qualified System.Nix.Store.Remote       as Store.Remote
 import qualified System.Nix.StorePath          as Store
 
 -- | A path into the nix store
@@ -69,6 +76,10 @@ class (MonadFile m,
   derivationStrict :: NValue t f m -> m (NValue t f m)
 
   traceEffect :: String -> m ()
+
+instance (MonadFix1T t m, MonadStore m) => MonadStore (Fix1T t m) where
+  addToStore a b c d = lift $ addToStore a b c d
+  addTextToStore' a b c d = lift $ addTextToStore' a b c d
 
 class Monad m => MonadIntrospect m where
   recursiveSize :: a -> m Word
@@ -219,11 +230,11 @@ instance MonadHttp IO where
 
 
 class Monad m => MonadPutStr m where
-    --TODO: Should this be used *only* when the Nix to be evaluated invokes a
-    --`trace` operation?
-    putStr :: String -> m ()
-    default putStr :: (MonadTrans t, MonadPutStr m', m ~ t m') => String -> m ()
-    putStr = lift . putStr
+  --TODO: Should this be used *only* when the Nix to be evaluated invokes a
+  --`trace` operation?
+  putStr :: String -> m ()
+  default putStr :: (MonadTrans t, MonadPutStr m', m ~ t m') => String -> m ()
+  putStr = lift . putStr
 
 putStrLn :: MonadPutStr m => String -> m ()
 putStrLn = putStr . (<> "\n")
@@ -243,20 +254,20 @@ type StorePathSet = HS.HashSet StorePath
 
 class Monad m => MonadStore m where
 
-    -- | Copy the contents of a local path to the store.  The resulting store
-    -- path is returned.  Note: This does not support yet support the expected
-    -- `filter` function that allows excluding some files.
-    addToStore :: StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
-    default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
-    addToStore a b c d = lift $ addToStore a b c d
+  -- | Copy the contents of a local path to the store.  The resulting store
+  -- path is returned.  Note: This does not support yet support the expected
+  -- `filter` function that allows excluding some files.
+  addToStore :: StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
+  default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
+  addToStore a b c d = lift $ addToStore a b c d
 
-    -- | Like addToStore, but the contents written to the output path is a
-    -- regular file containing the given string.
-    addTextToStore' :: StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
-    default addTextToStore' :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
-    addTextToStore' a b c d = lift $ addTextToStore' a b c d
+  -- | Like addToStore, but the contents written to the output path is a
+  -- regular file containing the given string.
+  addTextToStore' :: StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
+  default addTextToStore' :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m (Either ErrorCall StorePath)
+  addTextToStore' a b c d = lift $ addTextToStore' a b c d
 
-parseStoreResult :: Monad m => String -> (Either String a, [Store.Logger]) -> m (Either ErrorCall a)
+parseStoreResult :: Monad m => String -> (Either String a, [Store.Remote.Logger]) -> m (Either ErrorCall a)
 parseStoreResult name res = case res of
   (Left msg, logs) -> return $ Left $ ErrorCall $ "Failed to execute '" <> name <> "': " <> msg <> "\n" <> show logs
   (Right result, _) -> return $ Right result
@@ -267,13 +278,13 @@ instance MonadStore IO where
     Left err -> return $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> err
     Right pathName -> do
       -- TODO: redesign the filter parameter
-      res <- Store.runStore $ Store.addToStore @'Store.SHA256 pathName path recursive (const False) repair
+      res <- Store.Remote.runStore $ Store.Remote.addToStore @'Store.SHA256 pathName path recursive (const False) repair
       parseStoreResult "addToStore" res >>= \case
         Left err -> return $ Left err
         Right storePath -> return $ Right $ StorePath $ T.unpack $ T.decodeUtf8 $ Store.storePathToRawFilePath storePath
 
   addTextToStore' name text references repair = do
-    res <- Store.runStore $ Store.addTextToStore name text references repair
+    res <- Store.Remote.runStore $ Store.Remote.addTextToStore name text references repair
     parseStoreResult "addTextToStore" res >>= \case
       Left err -> return $ Left err
       Right path -> return $ Right $ StorePath $ T.unpack $ T.decodeUtf8 $ Store.storePathToRawFilePath path
@@ -286,3 +297,21 @@ addPath p = either throwError return =<< addToStore (T.pack $ takeFileName p) p 
 
 toFile_ :: (Framed e m, MonadStore m) => FilePath -> String -> m StorePath
 toFile_ p contents = addTextToStore (T.pack p) (T.pack contents) HS.empty False
+
+-- All of the following type classes defer to the underlying 'm'.
+
+deriving instance MonadPutStr (t (Fix1 t)) => MonadPutStr (Fix1 t)
+deriving instance MonadHttp (t (Fix1 t)) => MonadHttp (Fix1 t)
+deriving instance MonadEnv (t (Fix1 t)) => MonadEnv (Fix1 t)
+deriving instance MonadPaths (t (Fix1 t)) => MonadPaths (Fix1 t)
+deriving instance MonadInstantiate (t (Fix1 t)) => MonadInstantiate (Fix1 t)
+deriving instance MonadExec (t (Fix1 t)) => MonadExec (Fix1 t)
+deriving instance MonadIntrospect (t (Fix1 t)) => MonadIntrospect (Fix1 t)
+
+deriving instance MonadPutStr (t (Fix1T t m) m) => MonadPutStr (Fix1T t m)
+deriving instance MonadHttp (t (Fix1T t m) m) => MonadHttp (Fix1T t m)
+deriving instance MonadEnv (t (Fix1T t m) m) => MonadEnv (Fix1T t m)
+deriving instance MonadPaths (t (Fix1T t m) m) => MonadPaths (Fix1T t m)
+deriving instance MonadInstantiate (t (Fix1T t m) m) => MonadInstantiate (Fix1T t m)
+deriving instance MonadExec (t (Fix1T t m) m) => MonadExec (Fix1T t m)
+deriving instance MonadIntrospect (t (Fix1T t m) m) => MonadIntrospect (Fix1T t m)
