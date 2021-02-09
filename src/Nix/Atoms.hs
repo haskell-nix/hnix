@@ -7,18 +7,22 @@
 module Nix.Atoms where
 
 #ifdef MIN_VERSION_serialise
-import Codec.Serialise
+import           Codec.Serialise                ( Serialise )
 #endif
-import           Control.DeepSeq
-import           Data.Data
+
+import           Control.DeepSeq                ( NFData )
+import           Data.Data                      ( Typeable
+                                           , Data)
 import           Data.Fixed                     ( mod' )
-import           Data.Hashable
+import           Data.Hashable                  ( Hashable )
 import           Data.Text                      ( Text
                                                 , pack
                                                 )
-import           GHC.Generics
+import           GHC.Generics                   ( Generic )
 import           Data.Binary                    ( Binary )
-import           Data.Aeson.Types               ( FromJSON, ToJSON )
+import           Data.Aeson.Types               ( FromJSON
+                                           , ToJSON
+                                           )
 
 -- | Atoms are values that evaluate to themselves. This means that
 -- they appear in both the parsed AST (in the form of literals) and
@@ -35,8 +39,17 @@ data NAtom
   | NBool Bool
   -- | Null values. There's only one of this variant: @null@.
   | NNull
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData,
-            Hashable)
+  deriving
+    ( Eq
+    , Ord
+    , Generic
+    , Typeable
+    , Data
+    , Show
+    , Read
+    , NFData
+    , Hashable
+    )
 
 #ifdef MIN_VERSION_serialise
 instance Serialise NAtom
@@ -46,7 +59,7 @@ instance Binary NAtom
 instance ToJSON NAtom
 instance FromJSON NAtom
 
--- | Translate an atom into its nix representation.
+-- | Translate an atom into its Nix representation.
 atomText :: NAtom -> Text
 atomText (NURI   t) = t
 atomText (NInt   i) = pack (show i)
