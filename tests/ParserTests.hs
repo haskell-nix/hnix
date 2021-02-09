@@ -4,6 +4,7 @@
 {-# LANGUAGE RankNTypes #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# OPTIONS_GHC -Wno-missing-signatures #-}
 
 
 module ParserTests (tests) where
