@@ -31,7 +31,7 @@ import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
 import           Data.Align
 import           Data.Functor.Identity
-import qualified Data.HashMap.Lazy             as M
+import qualified Data.HashMap.Lazy             as HashMap.Lazy
 import           Data.These
 import           Nix.Atoms
 import           Nix.Frames
@@ -73,7 +73,7 @@ alignEq :: (Align f, Traversable f) => (a -> b -> Bool) -> f a -> f b -> Bool
 alignEq eq fa fb = runIdentity $ alignEqM (\x y -> Identity (eq x y)) fa fb
 
 isDerivationM :: Monad m => (t -> m (Maybe NixString)) -> AttrSet t -> m Bool
-isDerivationM f m = case M.lookup "type" m of
+isDerivationM f m = case HashMap.Lazy.lookup "type" m of
   Nothing -> pure False
   Just t  -> do
     mres <- f t
@@ -127,7 +127,7 @@ compareAttrSetsM f eq lm rm = do
   isDerivationM f lm >>= \case
     True -> isDerivationM f rm >>= \case
       True
-        | Just lp <- M.lookup "outPath" lm, Just rp <- M.lookup "outPath" rm -> eq
+        | Just lp <- HashMap.Lazy.lookup "outPath" lm, Just rp <- HashMap.Lazy.lookup "outPath" rm -> eq
           lp
           rp
       _ -> compareAttrs
