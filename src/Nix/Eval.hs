@@ -9,7 +9,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+
 
 module Nix.Eval where
 
@@ -262,21 +262,23 @@ evalBinds recursive binds = do
       (M.toList o')
 
   go _ (NamedVar pathExpr finalValue pos) = do
-    let go :: NAttrPath (m v) -> m ([Text], SourcePos, m v)
-        go = \case
-          h :| t -> evalSetterKeyName h >>= \case
-            Nothing ->
-              pure
-                ( mempty
-                , nullPos
-                , toValue @(AttrSet v, AttrSet SourcePos) (mempty, mempty)
-                )
-            Just k -> case t of
-              []     -> pure ([k], pos, finalValue)
-              x : xs -> do
-                (restOfPath, _, v) <- go (x :| xs)
-                pure (k : restOfPath, pos, v)
-    go pathExpr <&> \case
+    let
+      gogo :: NAttrPath (m v) -> m ([Text], SourcePos, m v)
+      gogo = \case
+        h :| t -> evalSetterKeyName h >>= \case
+          Nothing ->
+            pure
+              ( mempty
+              , nullPos
+              , toValue @(AttrSet v, AttrSet SourcePos) (mempty, mempty)
+              )
+          Just k -> case t of
+            []     -> pure ([k], pos, finalValue)
+            x : xs -> do
+              (restOfPath, _, v) <- gogo (x :| xs)
+              pure (k : restOfPath, pos, v)
+
+    gogo pathExpr <&> \case
         -- When there are no path segments, e.g. `${null} = 5;`, we don't
         -- bind anything
       ([], _, _) -> mempty
@@ -292,8 +294,8 @@ evalBinds recursive binds = do
           mv <- case ms of
             Nothing -> withScopes scope $ lookupVar key
             Just s ->
-              s >>= fromValue @(AttrSet v, AttrSet SourcePos) >>= \(s, _) ->
-                clearScopes @v $ pushScope s $ lookupVar key
+              s >>= fromValue @(AttrSet v, AttrSet SourcePos) >>= \(attrset, _) ->
+                clearScopes @v $ pushScope attrset $ lookupVar key
           case mv of
             Nothing -> attrMissing (key :| []) Nothing
             Just v  -> demand v pure
