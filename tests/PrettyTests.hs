@@ -35,4 +35,4 @@ tests = $testGroupGenerator
 ---------------------------------------------------------------------------------
 assertPretty :: NExpr -> String -> Assertion
 assertPretty e s =
-  assertEqual ("When pretty-printing " ++ show e) s . show $ prettyNix e
+  assertEqual ("When pretty-printing " <> show e) s . show $ prettyNix e

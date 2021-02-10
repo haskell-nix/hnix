@@ -107,7 +107,7 @@ evaluateExpression
   -> m a
 evaluateExpression mpath evaluator handler expr = do
   opts :: Options <- asks (view hasLens)
-  args <- traverse (traverse eval') $ fmap (second parseArg) (arg opts) ++ fmap
+  args <- traverse (traverse eval') $ fmap (second parseArg) (arg opts) <> fmap
     (second mkStr)
     (argstr opts)
   evaluator mpath expr >>= \f -> demand f $ \f' ->
@@ -144,22 +144,22 @@ processResult h val = do
     _ ->
       errorWithoutStackTrace
         $  "Expected a list for selector '"
-        ++ show n
-        ++ "', but got: "
-        ++ show v
+        <> show n
+        <> "', but got: "
+        <> show v
   go (k : ks) v = demand v $ \case
     NVSet xs _ -> case M.lookup k xs of
       Nothing ->
         errorWithoutStackTrace
           $  "Set does not contain key '"
-          ++ Text.unpack k
-          ++ "'"
+          <> Text.unpack k
+          <> "'"
       Just v' -> case ks of
         [] -> h v'
         _  -> go ks v'
     _ ->
       errorWithoutStackTrace
         $  "Expected a set for selector '"
-        ++ Text.unpack k
-        ++ "', but got: "
-        ++ show v
+        <> Text.unpack k
+        <> "', but got: "
+        <> show v

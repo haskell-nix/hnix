@@ -27,7 +27,7 @@ hnixEvalFile opts file = do
   parseResult <- parseNixFileLoc file
   case parseResult of
     Failure err ->
-      error $ "Parsing failed for file `" ++ file ++ "`.\n" ++ show err
+      error $ "Parsing failed for file `" <> file <> "`.\n" <> show err
     Success expr -> do
       setEnv "TEST_VAR" "foo"
       runWithBasicEffects opts
@@ -45,9 +45,9 @@ hnixEvalText opts src = case parseNixText src of
   Failure err ->
     error
       $  "Parsing failed for expression `"
-      ++ unpack src
-      ++ "`.\n"
-      ++ show err
+      <> unpack src
+      <> "`.\n"
+      <> show err
   Success expr ->
     runWithBasicEffects opts $ normalForm =<< nixEvalExpr Nothing expr
 
@@ -66,14 +66,14 @@ nixEvalFile fp = readProcess "nix-instantiate" ["--eval", "--strict", fp] ""
 assertEvalFileMatchesNix :: FilePath -> Assertion
 assertEvalFileMatchesNix fp = do
   time    <- liftIO getCurrentTime
-  hnixVal <- (++ "\n") . printNix <$> hnixEvalFile (defaultOptions time) fp
+  hnixVal <- (<> "\n") . printNix <$> hnixEvalFile (defaultOptions time) fp
   nixVal  <- nixEvalFile fp
   assertEqual fp nixVal hnixVal
 
 assertEvalMatchesNix :: Text -> Assertion
 assertEvalMatchesNix expr = do
   time    <- liftIO getCurrentTime
-  hnixVal <- (++ "\n") . printNix <$> hnixEvalText (defaultOptions time) expr
+  hnixVal <- (<> "\n") . printNix <$> hnixEvalText (defaultOptions time) expr
   nixVal  <- nixEvalString expr'
   assertEqual expr' nixVal hnixVal
   where expr' = unpack expr

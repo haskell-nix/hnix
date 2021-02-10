@@ -119,7 +119,7 @@ main' iniVal = initState iniVal >>= \s -> flip evalStateT s
              -> System.Console.Repline.Options m
              -> String
              -> m ()
-  optMatcher s [] _ = liftIO $ putStrLn $ "No such command :" ++ s
+  optMatcher s [] _ = liftIO $ putStrLn $ "No such command :" <> s
   optMatcher s ((x, m) : xs) args
     | s `Data.List.isPrefixOf` x = m args
     | otherwise = optMatcher s xs args
@@ -166,7 +166,7 @@ initState mIni = do
   where
     evalText :: (MonadNix e t f m) => Text -> m (NValue t f m)
     evalText expr = case parseNixTextLoc expr of
-      Failure e -> error $ "Impossible happened: Unable to parse expression - '" ++ Data.Text.unpack expr ++ "' error was " ++ show e
+      Failure e -> error $ "Impossible happened: Unable to parse expression - '" <> Data.Text.unpack expr <> "' error was " <> show e
       Success e -> do evalExprLoc e
 
 type Repl e t f m = HaskelineT (StateT (IState t f m) m)

@@ -367,27 +367,27 @@ tests = $testGroupGenerator
 assertParseText :: Text -> NExpr -> Assertion
 assertParseText str expected = case parseNixText str of
   Success actual ->
-      assertEqual ("When parsing " ++ unpack str)
+      assertEqual ("When parsing " <> unpack str)
           (stripPositionInfo expected) (stripPositionInfo actual)
   Failure err    ->
-      assertFailure $ "Unexpected error parsing `" ++ unpack str ++ "':\n" ++ show err
+      assertFailure $ "Unexpected error parsing `" <> unpack str <> "':\n" <> show err
 
 assertParseFile :: FilePath -> NExpr -> Assertion
 assertParseFile file expected = do
-  res <- parseNixFile $ "data/" ++ file
+  res <- parseNixFile $ "data/" <> file
   case res of
-    Success actual -> assertEqual ("Parsing data file " ++ file)
+    Success actual -> assertEqual ("Parsing data file " <> file)
           (stripPositionInfo expected) (stripPositionInfo actual)
     Failure err    ->
         assertFailure $ "Unexpected error parsing data file `"
-            ++ file ++ "':\n" ++ show err
+            <> file <> "':\n" <> show err
 
 assertParseFail :: Text -> Assertion
 assertParseFail str = case parseNixText str of
   Failure _ -> pure ()
   Success r ->
       assertFailure $ "Unexpected success parsing `"
-          ++ unpack str ++ ":\nParsed value: " ++ show r
+          <> unpack str <> ":\nParsed value: " <> show r
 
 -- assertRoundTrip :: Text -> Assertion
 -- assertRoundTrip src = assertParsePrint src src

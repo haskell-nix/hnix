@@ -42,7 +42,7 @@ ensureLangTestsPresent = do
     errorWithoutStackTrace $ unlines
       [ "Directory data/nix does not have any files."
       , "Did you forget to run"
-          ++ " \"git submodule update --init --recursive\"?" ]
+          <> " \"git submodule update --init --recursive\"?" ]
 
 ensureNixpkgsCanParse :: Assertion
 ensureNixpkgsCanParse =
@@ -63,11 +63,11 @@ ensureNixpkgsCanParse =
         exists <- fileExist (unpack dir)
         unless exists $
           errorWithoutStackTrace $
-            "Directory " ++ show dir ++ " does not exist"
+            "Directory " <> show dir <> " does not exist"
         files <- globDir1 (compile "**/*.nix") (unpack dir)
         when (null files) $
           errorWithoutStackTrace $
-            "Directory " ++ show dir ++ " does not have any files"
+            "Directory " <> show dir <> " does not have any files"
         forM_ files $ \file -> do
           unless ("azure-cli/default.nix" `isSuffixOf` file ||
                   "os-specific/linux/udisks/2-default.nix"  `isSuffixOf` file) $ do
@@ -75,7 +75,7 @@ ensureNixpkgsCanParse =
             -- parser is fully executed.
             _ <- consider file (parseNixFileLoc file) $ Exc.evaluate . force
             pure ()
-    v -> error $ "Unexpected parse from default.nix: " ++ show v
+    v -> error $ "Unexpected parse from default.nix: " <> show v
  where
   getExpr   k m = let Just (Just r) = lookup k m in r
   getString k m =
@@ -83,7 +83,7 @@ ensureNixpkgsCanParse =
 
   consider path action k = action >>= \case
     Failure err -> errorWithoutStackTrace $
-      "Parsing " ++ path ++ " failed: " ++ show err
+      "Parsing " <> path <> " failed: " <> show err
     Success expr -> k expr
 
 main :: IO ()
@@ -95,18 +95,18 @@ main = do
   prettyTestsEnv      <- lookupEnv "PRETTY_TESTS"
 
   pwd <- getCurrentDirectory
-  setEnv "NIX_REMOTE" (pwd ++ "/real-store")
-  setEnv "NIX_DATA_DIR" (pwd ++ "/data")
+  setEnv "NIX_REMOTE" (pwd <> "/real-store")
+  setEnv "NIX_DATA_DIR" (pwd <> "/data")
 
   defaultMain $ testGroup "hnix" $
     [ ParserTests.tests
     , EvalTests.tests
     , PrettyTests.tests
-    , ReduceExprTests.tests] ++
+    , ReduceExprTests.tests] <>
     [ PrettyParseTests.tests
-        (fromIntegral (read (fromMaybe "0" prettyTestsEnv) :: Int)) ] ++
-    [ evalComparisonTests ] ++
+        (fromIntegral (read (fromMaybe "0" prettyTestsEnv) :: Int)) ] <>
+    [ evalComparisonTests ] <>
     [ testCase "Nix language tests present" ensureLangTestsPresent
-    , nixLanguageTests ] ++
+    , nixLanguageTests ] <>
     [ testCase "Nixpkgs parses without errors" ensureNixpkgsCanParse
       | isJust nixpkgsTestsEnv ]

@@ -77,14 +77,14 @@ main = do
           else errorWithoutStackTrace
         )
         $  "Parse failed: "
-        ++ show err
+        <> show err
 
     Success expr -> do
       when (check opts) $ do
         expr' <- liftIO (reduceExpr mpath expr)
         case HM.inferTop Env.empty [("it", stripAnnotation expr')] of
-          Left  err -> errorWithoutStackTrace $ "Type error: " ++ PS.ppShow err
-          Right ty  -> liftIO $ putStrLn $ "Type of expression: " ++ PS.ppShow
+          Left  err -> errorWithoutStackTrace $ "Type error: " <> PS.ppShow err
+          Right ty  -> liftIO $ putStrLn $ "Type of expression: " <> PS.ppShow
             (fromJust (Map.lookup "it" (Env.types ty)))
 
           -- liftIO $ putStrLn $ runST $
@@ -167,7 +167,7 @@ main = do
           xs <- forM (sortOn fst (M.toList s)) $ \(k, nv) -> case nv of
             Free v -> pure (k, Just (Free v))
             Pure (StdThunk (extract -> Thunk _ _ ref)) -> do
-              let path         = prefix ++ Text.unpack k
+              let path         = prefix <> Text.unpack k
                   (_, descend) = filterEntry path k
               val <- readVar @(StandardT (StdIdT IO)) ref
               case val of
@@ -176,14 +176,14 @@ main = do
                   | otherwise -> pure (k, Nothing)
 
           forM_ xs $ \(k, mv) -> do
-            let path              = prefix ++ Text.unpack k
+            let path              = prefix <> Text.unpack k
                 (report, descend) = filterEntry path k
             when report $ do
               liftIO $ putStrLn path
               when descend $ case mv of
                 Nothing -> pure ()
                 Just v  -> case v of
-                  NVSet s' _ -> go (path ++ ".") s'
+                  NVSet s' _ -> go (path <> ".") s'
                   _          -> pure ()
          where
           filterEntry path k = case (path, k) of
@@ -207,9 +207,9 @@ main = do
             catch (Just <$> demand v pure) $ \(NixException frames) -> do
               liftIO
                 .   putStrLn
-                .   ("Exception forcing " ++)
-                .   (k ++)
-                .   (": " ++)
+                .   ("Exception forcing " <>)
+                .   (k <>)
+                .   (": " <>)
                 .   show
                 =<< renderFrames @(StdValue (StandardT (StdIdT IO)))
                       @(StdThunk (StandardT (StdIdT IO)))
@@ -228,7 +228,7 @@ main = do
     -> m (NValue t f m)
   handleReduced path (expr', eres) = do
     liftIO $ do
-      putStrLn $ "Wrote winnowed expression tree to " ++ path
+      putStrLn $ "Wrote winnowed expression tree to " <> path
       writeFile path $ show $ prettyNix (stripAnnotation expr')
     case eres of
       Left  err -> throwM err
