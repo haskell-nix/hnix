@@ -92,14 +92,14 @@ renderLocation (SrcSpan (SourcePos file begLine begCol) (SourcePos file' endLine
     if exist
       then do
         txt <- sourceContext file begLine begCol endLine endCol msg
-        return
+        pure
           $ vsep
               [ "In file "
               <> errorContext file begLine begCol endLine endCol
               <> ":"
               , txt
               ]
-      else return msg
+      else pure msg
 renderLocation (SrcSpan beg end) msg =
   fail
     $  "Don't know how to render range from "

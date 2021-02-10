@@ -608,7 +608,7 @@ nixOperators selector =
     --             Postfix $ do
     --                    sel <- seldot *> selector
     --                    mor <- optional (reserved "or" *> term)
-    --                    return $ \x -> nSelectLoc x sel mor) ]
+    --                    pure $ \x -> nSelectLoc x sel mor) ]
 
     {-  2 -}
     [ ( NBinaryDef " " NApp NAssocLeft

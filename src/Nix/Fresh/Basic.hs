@@ -43,10 +43,10 @@ instance (MonadEffects t f m, MonadDataContext f m)
   importPath path = do
     i <- FreshIdT ask
     p <- lift $ importPath @t @f @m path
-    return $ liftNValue (runFreshIdT i) p
+    pure $ liftNValue (runFreshIdT i) p
   pathToDefaultNix = lift . pathToDefaultNix @t @f @m
   derivationStrict v = do
     i <- FreshIdT ask
     p <- lift $ derivationStrict @t @f @m $ unliftNValue (runFreshIdT i) v
-    return $ liftNValue (runFreshIdT i) p
+    pure $ liftNValue (runFreshIdT i) p
   traceEffect = lift . traceEffect @t @f @m

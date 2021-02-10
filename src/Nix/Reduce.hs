@@ -113,7 +113,7 @@ staticImport pann path = do
         local (const (pure path, emptyScopes @m @NExprLoc)) $ do
           x'' <- foldFix reduce x'
           modify (\(a, b) -> (M.insert path x'' a, b))
-          return x''
+          pure x''
 
 -- gatherNames :: NExprLoc -> HashSet VarName
 -- gatherNames = foldFix $ \case
@@ -148,10 +148,10 @@ reduce (NSym_ ann var) = lookupVar var <&> \case
 -- | Reduce binary and integer negation.
 reduce (NUnary_ uann op arg) = arg >>= \x -> case (op, x) of
   (NNeg, Fix (NConstant_ cann (NInt n))) ->
-    return $ Fix $ NConstant_ cann (NInt (negate n))
+    pure $ Fix $ NConstant_ cann (NInt (negate n))
   (NNot, Fix (NConstant_ cann (NBool b))) ->
-    return $ Fix $ NConstant_ cann (NBool (not b))
-  _ -> return $ Fix $ NUnary_ uann op x
+    pure $ Fix $ NConstant_ cann (NBool (not b))
+  _ -> pure $ Fix $ NUnary_ uann op x
 
 -- | Reduce function applications.
 --
@@ -163,7 +163,7 @@ reduce (NBinary_ bann NApp fun arg) = fun >>= \case
   f@(Fix (NSym_ _ "import")) -> arg >>= \case
       -- Fix (NEnvPath_     pann origPath) -> staticImport pann origPath
     Fix (NLiteralPath_ pann origPath) -> staticImport pann origPath
-    v -> return $ Fix $ NBinary_ bann NApp f v
+    v -> pure $ Fix $ NBinary_ bann NApp f v
 
   Fix (NAbs_ _ (Param name) body) -> do
     x <- arg
@@ -177,7 +177,7 @@ reduce (NBinary_ bann op larg rarg) = do
   rval <- rarg
   case (op, lval, rval) of
     (NPlus, Fix (NConstant_ ann (NInt x)), Fix (NConstant_ _ (NInt y))) ->
-      return $ Fix (NConstant_ ann (NInt (x + y)))
+      pure $ Fix (NConstant_ ann (NInt (x + y)))
     _ -> pure $ Fix $ NBinary_ bann op lval rval
 
 -- | Reduce a select on a Set by substituting the set to the selected value.
@@ -411,7 +411,7 @@ reducingEvalExpr eval mpath expr = do
   eres <- catch (Right <$> foldFix (addEvalFlags eval) expr') (pure . Left)
   opts :: Options <- asks (view hasLens)
   expr''          <- pruneTree opts expr'
-  return (fromMaybe nNull expr'', eres)
+  pure (fromMaybe nNull expr'', eres)
   where addEvalFlags k (FlaggedF (b, x)) = liftIO (writeIORef b True) *> k x
 
 instance Monad m => Scoped NExprLoc (Reducer m) where

@@ -105,7 +105,7 @@ findEnvPathM name = do
     isDir   <- doesDirectoryExist absPath
     absFile <- if isDir
       then makeAbsolutePath @t @f $ absPath </> "default.nix"
-      else return absPath
+      else pure absPath
     exists <- doesFileExist absFile
     pure $ if exists then pure absFile else Nothing
 

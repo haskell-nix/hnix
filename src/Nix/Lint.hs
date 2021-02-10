@@ -202,12 +202,12 @@ merge context = go
     mergeFunctions pl nl fl pr fr xs ys = do
         m <- sequenceA $ M.intersectionWith
             (\i j -> i >>= \i' -> j >>= \j' -> case (i', j') of
-                    (Nothing, Nothing) -> return $ pure Nothing
+                    (Nothing, Nothing) -> pure $ pure Nothing
                     (_, Nothing) -> pure Nothing
                     (Nothing, _) -> pure Nothing
                     (Just i'', Just j'') ->
                         pure . pure <$> unify context i'' j'')
-            (return <$> pl) (return <$> pr)
+            (pure <$> pl) (pure <$> pr)
         let Just m' = sequenceA $ M.filter isJust m
         if M.null m'
             then go xs ys

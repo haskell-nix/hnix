@@ -24,13 +24,13 @@ readCache path = do
     eres <- C.unsafeReadCompact path
     case eres of
         Left err -> error $ "Error reading cache file: " <> err
-        Right expr -> return $ C.getCompact expr
+        Right expr -> pure $ C.getCompact expr
 #else
 #ifdef MIN_VERSION_serialise
   eres <- S.deserialiseOrFail <$> BS.readFile path
   case eres of
     Left  err  -> error $ "Error reading cache file: " <> show err
-    Right expr -> return expr
+    Right expr -> pure expr
 #else
     error "readCache not implemented for this platform"
 #endif

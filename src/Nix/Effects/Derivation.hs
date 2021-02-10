@@ -86,12 +86,12 @@ data HashMode = Flat | Recursive
 makeStorePathName :: (Framed e m) => Text -> m Store.StorePathName
 makeStorePathName name = case Store.makeStorePathName name of
   Left err -> throwError $ ErrorCall $ "Invalid name '" <> show name <> "' for use in a store path: " <> err
-  Right spname -> return spname
+  Right spname -> pure spname
 
 parsePath :: (Framed e m) => Text -> m Store.StorePath
 parsePath p = case Store.parsePath "/nix/store" (Text.encodeUtf8 p) of
   Left err -> throwError $ ErrorCall $ "Cannot parse store path " <> show p <> ":\n" <> show err
-  Right path -> return path
+  Right path -> pure path
 
 writeDerivation :: (Framed e m, MonadStore m) => Derivation -> m Store.StorePath
 writeDerivation drv@Derivation{inputs, name} = do
@@ -108,7 +108,7 @@ hashDerivationModulo (Derivation {
     outputs,
     hashMode
   }) = case Map.toList outputs of
-    [("out", path)] -> return $ Store.hash @'Store.SHA256 $ Text.encodeUtf8
+    [("out", path)] -> pure $ Store.hash @'Store.SHA256 $ Text.encodeUtf8
       $  "fixed:out"
       <> (if hashMode == Recursive then ":r" else "")
       <> ":" <> (Store.algoName @hashType)
@@ -119,13 +119,13 @@ hashDerivationModulo drv@Derivation{inputs = (inputSrcs, inputDrvs)} = do
   cache <- gets snd
   inputsModulo <- Map.fromList <$> forM (Map.toList inputDrvs) (\(path, outs) ->
     case MS.lookup path cache of
-      Just hash -> return (hash, outs)
+      Just hash -> pure (hash, outs)
       Nothing -> do
         drv' <- readDerivation $ Text.unpack path
         hash <- Store.encodeInBase Store.Base16 <$> hashDerivationModulo drv'
-        return (hash, outs)
+        pure (hash, outs)
     )
-  return $ Store.hash @'Store.SHA256 $ Text.encodeUtf8 $ unparseDrv (drv {inputs = (inputSrcs, inputsModulo)})
+  pure $ Store.hash @'Store.SHA256 $ Text.encodeUtf8 $ unparseDrv (drv {inputs = (inputSrcs, inputsModulo)})
 
 unparseDrv :: Derivation -> Text
 unparseDrv Derivation{..} = Text.append "Derive" $ parens
@@ -169,7 +169,7 @@ readDerivation path = do
   content <- Text.decodeUtf8 <$> readFile path
   case parse derivationParser path content of
     Left err -> throwError $ ErrorCall $ "Failed to parse " <> show path <> ":\n" <> show err
-    Right drv -> return drv
+    Right drv -> pure drv
 
 derivationParser :: Parsec () Text Derivation
 derivationParser = do
@@ -197,7 +197,7 @@ derivationParser = do
   let name = "" -- FIXME (extract from file path ?)
   let useJson = ["__json"] == Map.keys env
 
-  return $ Derivation {inputs = (inputSrcs, inputDrvs), ..}
+  pure $ Derivation {inputs = (inputSrcs, inputDrvs), ..}
  where
   s :: Parsec () Text Text
   s = fmap Text.pack $ string "\"" *> manyTill (escaped <|> regular) (string "\"")
@@ -238,7 +238,7 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
       Just (Store.SomeDigest digest) -> do
         let out = pathToText $ Store.makeFixedOutputPath "/nix/store" (hashMode drv == Recursive) digest drvName
         let env' = if useJson drv then env drv else Map.insert "out" out (env drv)
-        return $ drv { inputs, env = env', outputs = Map.singleton "out" out }
+        pure $ drv { inputs, env = env', outputs = Map.singleton "out" out }
 
       Nothing -> do
         hash <- hashDerivationModulo $ drv
@@ -248,7 +248,7 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
                   else foldl' (\m k -> Map.insert k "" m) (env drv) (Map.keys $ outputs drv)
           }
         outputs' <- sequence $ Map.mapWithKey (\o _ -> makeOutputPath o hash drvName) (outputs drv)
-        return $ drv
+        pure $ drv
           { inputs
           , outputs = outputs'
           , env = if useJson drv then env drv else Map.union outputs' (env drv)
@@ -265,7 +265,7 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
         attrSet = M.map nvStr $ M.fromList $ ("drvPath", drvPathWithContext): Map.toList outputsWithContext
     -- TODO: Add location information for all the entries.
     --              here --v
-    return $ nvSet attrSet M.empty
+    pure $ nvSet attrSet M.empty
 
   where
 
@@ -273,7 +273,7 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
 
     makeOutputPath o h n = do
       name <- makeStorePathName (Store.unStorePathName n <> if o == "out" then "" else "-" <> o)
-      return $ pathToText $ Store.makeStorePath "/nix/store" ("output:" <> Text.encodeUtf8 o) h name
+      pure $ pathToText $ Store.makeStorePath "/nix/store" ("output:" <> Text.encodeUtf8 o) h name
 
     toStorePaths ctx = foldl (flip addToInputs) (Set.empty, Map.empty) ctx
     addToInputs (StringContext path kind) = case kind of
@@ -294,30 +294,30 @@ buildDerivationWithContext drvAttrs = do
     drvName     <- getAttr   "name"                      $ extractNixString >=> assertDrvStoreName
     withFrame' Info (ErrorCall $ "While evaluating derivation " <> show drvName) $ do
 
-      useJson     <- getAttrOr "__structuredAttrs" False   $ return
-      ignoreNulls <- getAttrOr "__ignoreNulls"     False   $ return
+      useJson     <- getAttrOr "__structuredAttrs" False   $ pure
+      ignoreNulls <- getAttrOr "__ignoreNulls"     False   $ pure
 
       args        <- getAttrOr "args"              []      $ mapM (fromValue' >=> extractNixString)
       builder     <- getAttr   "builder"                   $ extractNixString
       platform    <- getAttr   "system"                    $ extractNoCtx >=> assertNonNull
-      mHash       <- getAttrOr "outputHash"        Nothing $ extractNoCtx >=> (return . pure)
+      mHash       <- getAttrOr "outputHash"        Nothing $ extractNoCtx >=> (pure . pure)
       hashMode    <- getAttrOr "outputHashMode"    Flat    $ extractNoCtx >=> parseHashMode
       outputs     <- getAttrOr "outputs"           ["out"] $ mapM (fromValue' >=> extractNoCtx)
 
       mFixedOutput <- case mHash of
-        Nothing -> return Nothing
+        Nothing -> pure Nothing
         Just hash -> do
           when (outputs /= ["out"]) $ lift $ throwError $ ErrorCall $ "Multiple outputs are not supported for fixed-output derivations"
           hashType <- getAttr "outputHashAlgo" $ extractNoCtx
-          digest <- lift $ either (throwError . ErrorCall) return $ Store.mkNamedDigest hashType hash
-          return $ pure digest
+          digest <- lift $ either (throwError . ErrorCall) pure $ Store.mkNamedDigest hashType hash
+          pure $ pure digest
 
       -- filter out null values if needed.
       attrs <- if not ignoreNulls
-        then return drvAttrs
+        then pure drvAttrs
         else M.mapMaybe id <$> forM drvAttrs (demand' ?? (\case
-            NVConstant NNull -> return Nothing
-            value -> return $ pure value
+            NVConstant NNull -> pure Nothing
+            value -> pure $ pure value
           ))
 
       env <- if useJson
@@ -325,12 +325,12 @@ buildDerivationWithContext drvAttrs = do
           jsonString :: NixString <- lift $ nvalueToJSONNixString $ flip nvSet M.empty $
             deleteKeys [ "args", "__ignoreNulls", "__structuredAttrs" ] attrs
           rawString :: Text <- extractNixString jsonString
-          return $ Map.singleton "__json" rawString
+          pure $ Map.singleton "__json" rawString
         else
           mapM (lift . coerceToString callFunc CopyToStore CoerceAny >=> extractNixString) $
             Map.fromList $ M.toList $ deleteKeys [ "args", "__ignoreNulls" ] attrs
 
-      return $ defaultDerivation { platform, builder, args, env,  hashMode, useJson
+      pure $ defaultDerivation { platform, builder, args, env,  hashMode, useJson
         , name = drvName
         , outputs = Map.fromList $ fmap (\o -> (o, "")) outputs
         , mFixed = mFixedOutput
@@ -339,13 +339,13 @@ buildDerivationWithContext drvAttrs = do
     -- common functions, lifted to WithStringContextT
 
     demand' :: NValue t f m -> (NValue t f m -> WithStringContextT m a) -> WithStringContextT m a
-    demand' v f = join $ lift $ demand v (return . f)
+    demand' v f = join $ lift $ demand v (pure . f)
 
     fromValue' :: (FromValue a m (NValue' t f m (NValue t f m)), MonadNix e t f m) => NValue t f m -> WithStringContextT m a
     fromValue' = lift . fromValue
 
     withFrame' :: (Framed e m, Exception s) => NixLevel -> s -> WithStringContextT m a -> WithStringContextT m a
-    withFrame' level f = join . lift . withFrame level f . return
+    withFrame' level f = join . lift . withFrame level f . pure
 
     -- shortcuts to get the (forced) value of an AttrSet field
 
@@ -356,7 +356,7 @@ buildDerivationWithContext drvAttrs = do
       Just v  -> withFrame' Info (ErrorCall $ "While evaluating attribute '" <> show n <> "'") $
                    fromValue' v >>= f
 
-    getAttrOr n d f = getAttrOr' n (return d) f
+    getAttrOr n d f = getAttrOr' n (pure d) f
 
     getAttr n = getAttrOr' n (throwError $ ErrorCall $ "Required attribute '" <> show n <> "' not found.")
 
@@ -370,22 +370,22 @@ buildDerivationWithContext drvAttrs = do
       when (Text.length name > 211)        $ failWith "must be no longer than 211 characters"
       when (Text.any invalid name)         $ failWith "contains some invalid character"
       when (".drv" `Text.isSuffixOf` name) $ failWith "is not allowed to end in '.drv'"
-      return name
+      pure name
 
     extractNoCtx :: MonadNix e t f m => NixString -> WithStringContextT m Text
     extractNoCtx ns = case getStringNoContext ns of
       Nothing -> lift $ throwError $ ErrorCall $ "The string " <> show ns <> " is not allowed to have a context."
-      Just v -> return v
+      Just v -> pure v
 
     assertNonNull :: MonadNix e t f m => Text -> WithStringContextT m Text
     assertNonNull t = do
       when (Text.null t) $ lift $ throwError $ ErrorCall "Value must not be empty"
-      return t
+      pure t
 
     parseHashMode :: MonadNix e t f m => Text -> WithStringContextT m HashMode
     parseHashMode = \case
-      "flat" ->      return Flat
-      "recursive" -> return Recursive
+      "flat" ->      pure Flat
+      "recursive" -> pure Recursive
       other -> lift $ throwError $ ErrorCall $ "Hash mode " <> show other <> " is not valid. It must be either 'flat' or 'recursive'"
 
     -- Other helpers
