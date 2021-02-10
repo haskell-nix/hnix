@@ -204,7 +204,7 @@ data Binding r
   --   the first member of the list in the second argument.
   --
   -- > Inherit Nothing  [StaticKey "x"] SourcePos{}               ~  inherit x;
-  -- > Inherit (pure x) []              SourcePos{}               ~  inherit (x);
+  -- > Inherit (pure x) mempty          SourcePos{}               ~  inherit (x);
   deriving (Generic, Generic1, Typeable, Data, Ord, Eq, Functor,
             Foldable, Traversable, Show, NFData, Hashable)
 
@@ -310,7 +310,7 @@ instance Serialise r => Serialise (NString r)
 
 -- | For the the 'IsString' instance, we use a plain doublequoted string.
 instance IsString (NString r) where
-  fromString ""     = DoubleQuoted []
+  fromString ""     = DoubleQuoted mempty
   fromString string = DoubleQuoted [Plain $ pack string]
 
 -- | A 'KeyName' is something that can appear on the left side of an

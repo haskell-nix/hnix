@@ -267,7 +267,7 @@ evalBinds recursive binds = do
           h :| t -> evalSetterKeyName h >>= \case
             Nothing ->
               pure
-                ( []
+                ( mempty
                 , nullPos
                 , toValue @(AttrSet v, AttrSet SourcePos) (mempty, mempty)
                 )
@@ -279,7 +279,7 @@ evalBinds recursive binds = do
     go pathExpr <&> \case
         -- When there are no path segments, e.g. `${null} = 5;`, we don't
         -- bind anything
-      ([], _, _) -> []
+      ([], _, _) -> mempty
       result     -> [result]
 
   go scope (Inherit ms names pos) =

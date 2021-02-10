@@ -61,7 +61,7 @@ renderFrames (x : xs) = do
   go f = case framePos @v @m f of
     Just pos ->
       ["While evaluating at " <> pretty (sourcePosPretty pos) <> colon]
-    Nothing -> []
+    Nothing -> mempty
 
 framePos
   :: forall v (m :: * -> *)
@@ -107,18 +107,18 @@ renderEvalFrame level f = do
   case f of
     EvaluatingExpr scope e@(Fix (Compose (Ann ann _))) -> do
       let scopeInfo | showScopes opts = [pretty $ show scope]
-                    | otherwise   = []
+                    | otherwise   = mempty
       fmap (\x -> scopeInfo <> [x])
         $   renderLocation ann
         =<< renderExpr level "While evaluating" "Expression" e
 
     ForcingExpr _scope e@(Fix (Compose (Ann ann _))) | thunks opts ->
-      fmap (: [])
+      fmap (: mempty)
         $   renderLocation ann
         =<< renderExpr level "While forcing thunk from" "Forcing thunk" e
 
     Calling name ann ->
-      fmap (: [])
+      fmap (: mempty)
         $  renderLocation ann
         $  "While calling builtins."
         <> pretty name
@@ -131,7 +131,7 @@ renderEvalFrame level f = do
               , pure $ pretty $ show (_synHoleInfo_scope synfo)
               ]
 
-    ForcingExpr _ _ -> pure []
+    ForcingExpr _ _ -> pure mempty
 
 
 renderExpr
@@ -163,7 +163,7 @@ renderValueFrame
   => NixLevel
   -> ValueFrame t f m
   -> m [Doc ann]
-renderValueFrame level = fmap (: []) . \case
+renderValueFrame level = fmap (: mempty) . \case
   ForcingThunk    _t -> pure "ForcingThunk" -- jww (2019-03-18): NYI
   ConcerningValue _v -> pure "ConcerningValue"
   Comparison     _ _ -> pure "Comparing"
@@ -206,7 +206,7 @@ renderExecFrame
   -> m [Doc ann]
 renderExecFrame level = \case
   Assertion ann v ->
-    fmap (: [])
+    fmap (: mempty)
       $   renderLocation ann
       =<< (   (\d -> fillSep ["Assertion failed:", d])
           <$> renderValue level "" "" v
@@ -217,7 +217,7 @@ renderThunkLoop
   => NixLevel
   -> ThunkLoop
   -> m [Doc ann]
-renderThunkLoop _level = pure . (: []) . \case
+renderThunkLoop _level = pure . (: mempty) . \case
   ThunkLoop n -> pretty $ "Infinite recursion in thunk " <> n
 
 renderNormalLoop
@@ -225,7 +225,7 @@ renderNormalLoop
   => NixLevel
   -> NormalLoop t f m
   -> m [Doc ann]
-renderNormalLoop level = fmap (: []) . \case
+renderNormalLoop level = fmap (: mempty) . \case
   NormalLoop v -> do
     v' <- renderValue level "" "" v
     pure $ "Infinite recursion during normalization forcing " <> v'

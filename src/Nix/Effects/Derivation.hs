@@ -73,7 +73,7 @@ defaultDerivation = Derivation
   , inputs      = (Set.empty, Map.empty)
   , platform    = undefined
   , builder     = undefined
-  , args        = []
+  , args        = mempty
   , env         = Map.empty
   , mFixed      = Nothing
   , hashMode    = Flat
@@ -297,7 +297,7 @@ buildDerivationWithContext drvAttrs = do
       useJson     <- getAttrOr "__structuredAttrs" False   $ pure
       ignoreNulls <- getAttrOr "__ignoreNulls"     False   $ pure
 
-      args        <- getAttrOr "args"              []      $ mapM (fromValue' >=> extractNixString)
+      args        <- getAttrOr "args"              mempty  $ mapM (fromValue' >=> extractNixString)
       builder     <- getAttr   "builder"                   $ extractNixString
       platform    <- getAttr   "system"                    $ extractNoCtx >=> assertNonNull
       mHash       <- getAttrOr "outputHash"        Nothing $ extractNoCtx >=> (pure . pure)

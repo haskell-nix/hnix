@@ -21,7 +21,7 @@ case_string_antiquotation = do
 
 case_function_params :: Assertion
 case_function_params =
-  assertPretty (mkFunction (mkParamset [] True) (mkInt 3)) "{ ... }:\n  3"
+  assertPretty (mkFunction (mkParamset mempty True) (mkInt 3)) "{ ... }:\n  3"
 
 case_paths :: Assertion
 case_paths = do

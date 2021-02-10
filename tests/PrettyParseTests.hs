@@ -220,7 +220,7 @@ prop_prettyparse p = do
   normalise = unlines . fmap (reverse . dropWhile isSpace . reverse) . lines
 
   ldiff :: String -> String -> [Diff [String]]
-  ldiff s1 s2 = getDiff (fmap (: []) (lines s1)) (fmap (: []) (lines s2))
+  ldiff s1 s2 = getDiff (fmap (: mempty) (lines s1)) (fmap (: mempty) (lines s2))
 
 tests :: TestLimit -> TestTree
 tests n = testProperty "Pretty/Parse Property" $ withTests n $ property $ do

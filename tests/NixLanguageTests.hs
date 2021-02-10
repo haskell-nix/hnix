@@ -176,7 +176,7 @@ assertEval _opts files = do
   fixup ("--arg"    : x : y : rest) = "--arg" : (x <> "=" <> y) : fixup rest
   fixup ("--argstr" : x : y : rest) = "--argstr" : (x <> "=" <> y) : fixup rest
   fixup (x                  : rest) = x : fixup rest
-  fixup []                          = []
+  fixup []                          = mempty
 
 assertEvalFail :: FilePath -> Assertion
 assertEvalFail file = catch ?? (\(_ :: SomeException) -> pure ()) $ do

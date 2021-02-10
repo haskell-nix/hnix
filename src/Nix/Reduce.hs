@@ -105,7 +105,7 @@ staticImport pann path = do
         let
           pos  = SourcePos "Reduce.hs" (mkPos 1) (mkPos 1)
           span = SrcSpan pos pos
-          cur  = NamedVar (StaticKey "__cur_file" :| [])
+          cur  = NamedVar (StaticKey "__cur_file" :| mempty)
                           (Fix (NLiteralPath_ pann path))
                           pos
           x' = Fix (NLet_ span [cur] x)
@@ -196,10 +196,10 @@ reduce base@(NSelect_ _ _ attrs _)
   sId = Fix <$> sequence base
   -- The selection AttrPath is composed of StaticKeys.
   sAttrPath (StaticKey _ : xs) = sAttrPath xs
-  sAttrPath []                 = True
+  sAttrPath []             = True
   sAttrPath _                  = False
   -- Find appropriate bind in set's binds.
-  findBind []       _              = Nothing
+  findBind []   _              = Nothing
   findBind (x : xs) attrs@(a :| _) = case x of
     n@(NamedVar (a' :| _) _ _) | a' == a -> pure n
     _ -> findBind xs attrs
@@ -247,14 +247,14 @@ reduce (NLet_ ann binds body) = do
   binds' <- traverse sequence binds
   -- let names = gatherNames body'
   -- binds' <- traverse sequence binds <&> \b -> flip filter b $ \case
-  --     NamedVar (StaticKey name _ :| []) _ ->
+  --     NamedVar (StaticKey name _ :| mempty) _ ->
   --         name `S.member` names
   --     _ -> True
   pure $ Fix $ NLet_ ann binds' body'
   -- where
   --   go m [] = pure m
   --   go m (x:xs) = case x of
-  --       NamedVar (StaticKey name _ :| []) def -> do
+  --       NamedVar (StaticKey name _ :| mempty) def -> do
   --           v <- pushScope m def
   --           go (M.insert name v m) xs
   --       _ -> go m xs

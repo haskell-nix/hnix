@@ -15,7 +15,7 @@ import           Nix.Expr
 
 -- | Merge adjacent 'Plain' values with 'mappend'.
 mergePlain :: [Antiquoted Text r] -> [Antiquoted Text r]
-mergePlain [] = []
+mergePlain [] = mempty
 mergePlain (Plain a : EscapedNewline : Plain b : xs) =
   mergePlain (Plain (a <> "\n" <> b) : xs)
 mergePlain (Plain a : Plain b : xs) = mergePlain (Plain (a <> b) : xs)
@@ -45,10 +45,10 @@ splitLines :: [Antiquoted Text r] -> [[Antiquoted Text r]]
 splitLines = uncurry (flip (:)) . go where
   go (Plain t : xs) = (Plain l :) <$> foldr f (go xs) ls   where
     (l : ls) = T.split (== '\n') t
-    f prefix (finished, current) = ((Plain prefix : current) : finished, [])
+    f prefix (finished, current) = ((Plain prefix : current) : finished, mempty)
   go (Antiquoted a   : xs) = (Antiquoted a :) <$> go xs
   go (EscapedNewline : xs) = (EscapedNewline :) <$> go xs
-  go []                    = ([], [])
+  go []                    = (mempty, mempty)
 
 -- | Join a stream of strings containing antiquotes again. This is the inverse
 -- of 'splitLines'.
@@ -57,7 +57,7 @@ unsplitLines = intercalate [Plain "\n"]
 
 -- | Form an indented string by stripping spaces equal to the minimal indent.
 stripIndent :: [Antiquoted Text r] -> NString r
-stripIndent [] = Indented 0 []
+stripIndent [] = Indented 0 mempty
 stripIndent xs =
   Indented minIndent
     . removePlainEmpty

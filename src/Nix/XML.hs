@@ -25,7 +25,7 @@ toXML = runWithStringContext . fmap pp . iterNValue (\_ _ -> cyc) phi
       . (<> "\n")
       . Text.pack
       . ppElement
-      . (\e -> Element (unqual "expr") [] [Elem e] Nothing)
+      . (\e -> Element (unqual "expr") mempty [Elem e] Nothing)
 
   phi :: NValue' t f m (WithStringContext Element) -> WithStringContext Element
   phi = \case
@@ -34,16 +34,16 @@ toXML = runWithStringContext . fmap pp . iterNValue (\_ _ -> cyc) phi
       NInt   n -> pure $ mkElem "int" "value" (show n)
       NFloat f -> pure $ mkElem "float" "value" (show f)
       NBool  b -> pure $ mkElem "bool" "value" (if b then "true" else "false")
-      NNull    -> pure $ Element (unqual "null") [] [] Nothing
+      NNull    -> pure $ Element (unqual "null") mempty mempty Nothing
 
     NVStr' str ->
       mkElem "string" "value" . Text.unpack <$> extractNixString str
     NVList' l -> sequence l
-      >>= \els -> pure $ Element (unqual "list") [] (Elem <$> els) Nothing
+      >>= \els -> pure $ Element (unqual "list") mempty (Elem <$> els) Nothing
 
     NVSet' s _ -> sequence s >>= \kvs -> pure $ Element
       (unqual "attrs")
-      []
+      mempty
       (map
         (\(k, v) -> Elem
           (Element (unqual "attr")
@@ -57,13 +57,13 @@ toXML = runWithStringContext . fmap pp . iterNValue (\_ _ -> cyc) phi
       Nothing
 
     NVClosure' p _ ->
-      pure $ Element (unqual "function") [] (paramsXML p) Nothing
+      pure $ Element (unqual "function") mempty (paramsXML p) Nothing
     NVPath' fp        -> pure $ mkElem "path" "value" fp
     NVBuiltin' name _ -> pure $ mkElem "function" "name" name
     _                 -> error "Pattern synonyms mask coverage"
 
 mkElem :: String -> String -> String -> Element
-mkElem n a v = Element (unqual n) [Attr (unqual a) v] [] Nothing
+mkElem n a v = Element (unqual n) [Attr (unqual a) v] mempty Nothing
 
 paramsXML :: Params r -> [Content]
 paramsXML (Param name) = [Elem $ mkElem "varpat" "name" (Text.unpack name)]
@@ -71,7 +71,7 @@ paramsXML (ParamSet s b mname) =
   [Elem $ Element (unqual "attrspat") (battr <> nattr) (paramSetXML s) Nothing]
  where
   battr = [ Attr (unqual "ellipsis") "1" | b ]
-  nattr = maybe [] ((: []) . Attr (unqual "name") . Text.unpack) mname
+  nattr = maybe mempty ((: mempty) . Attr (unqual "name") . Text.unpack) mname
 
 paramSetXML :: ParamSet r -> [Content]
 paramSetXML = fmap (\(k, _) -> Elem $ mkElem "attr" "name" (Text.unpack k))

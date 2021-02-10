@@ -168,8 +168,8 @@ merge context = go
     :: [NTypeF m (Symbolic m)]
     -> [NTypeF m (Symbolic m)]
     -> m [NTypeF m (Symbolic m)]
-  go []       _        = pure []
-  go _        []       = pure []
+  go []       _        = pure mempty
+  go _        []       = pure mempty
   go (x : xs) (y : ys) = case (x, y) of
     (TStr , TStr ) -> (TStr :) <$> go xs ys
     (TPath, TPath) -> (TPath :) <$> go xs ys
@@ -217,7 +217,7 @@ merge context = go
                     <$> go xs ys
 -}
 
--- | unify raises an error if the result is would be 'NMany []'.
+-- | unify raises an error if the result is would be 'NMany mempty'.
 unify
   :: forall e m
    . MonadLint e m

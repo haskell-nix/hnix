@@ -47,7 +47,7 @@ instance Monoid (Scopes m a) where
   mappend = (<>)
 
 emptyScopes :: forall m a . Scopes m a
-emptyScopes = Scopes [] []
+emptyScopes = Scopes mempty mempty
 
 class Scoped a m | m -> a where
   currentScopes :: m (Scopes m a)
@@ -64,10 +64,10 @@ clearScopesReader
 clearScopesReader = local (set hasLens (emptyScopes @m @a))
 
 pushScope :: Scoped a m => AttrSet a -> m r -> m r
-pushScope s = pushScopes (Scopes [Scope s] [])
+pushScope s = pushScopes (Scopes [Scope s] mempty)
 
 pushWeakScope :: (Functor m, Scoped a m) => m (AttrSet a) -> m r -> m r
-pushWeakScope s = pushScopes (Scopes [] [Scope <$> s])
+pushWeakScope s = pushScopes (Scopes mempty [Scope <$> s])
 
 pushScopesReader
   :: (MonadReader e m, Has e (Scopes m a)) => Scopes m a -> m r -> m r

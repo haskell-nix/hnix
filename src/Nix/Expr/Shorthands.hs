@@ -32,13 +32,13 @@ mkFloatF = NConstant . NFloat
 -- | Make a regular (double-quoted) string.
 mkStr :: Text -> NExpr
 mkStr = Fix . NStr . DoubleQuoted . \case
-  "" -> []
+  "" -> mempty
   x  -> [Plain x]
 
 -- | Make an indented string.
 mkIndentedStr :: Int -> Text -> NExpr
 mkIndentedStr w = Fix . NStr . Indented w . \case
-  "" -> []
+  "" -> mempty
   x  -> [Plain x]
 
 -- | Make a path. Use 'True' if the path should be read from the
@@ -78,7 +78,7 @@ mkSynHoleF :: Text -> NExprF a
 mkSynHoleF = NSynHole
 
 mkSelector :: Text -> NAttrPath NExpr
-mkSelector = (:| []) . StaticKey
+mkSelector = (:| mempty) . StaticKey
 
 mkBool :: Bool -> NExpr
 mkBool = Fix . mkBoolF
@@ -231,5 +231,5 @@ infixl 1 @@
 infixr 1 ==>
 
 (@.) :: NExpr -> Text -> NExpr
-obj @. name = Fix (NSelect obj (StaticKey name :| []) Nothing)
+obj @. name = Fix (NSelect obj (StaticKey name :| mempty) Nothing)
 infixl 2 @.

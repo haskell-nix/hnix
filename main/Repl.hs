@@ -360,7 +360,7 @@ completeFunc reversedPrev word
   = do
     s <- get
     case Data.HashMap.Lazy.lookup var (replCtx s) of
-      Nothing -> pure []
+      Nothing -> pure mempty
       Just binding -> do
         candidates <- lift $ algebraicComplete subFields binding
         pure $ notFinished <$> listCompletion (Data.Text.unpack . (var <>) <$> candidates)
@@ -396,14 +396,14 @@ completeFunc reversedPrev word
               [_] -> pure $ keys m
               f:fs ->
                 case Data.HashMap.Lazy.lookup f m of
-                  Nothing -> pure []
+                  Nothing -> pure mempty
                   Just e ->
                     demand e
                       (\e' -> (fmap . fmap) (("." <> f) <>) $ algebraicComplete fs e')
 
       in case val of
         NVSet xs _ -> withMap xs
-        _          -> pure []
+        _          -> pure mempty
 
 -- HelpOption inspired by Dhall Repl
 -- with `Doc` instead of String for syntax and doc

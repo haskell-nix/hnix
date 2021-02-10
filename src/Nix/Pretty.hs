@@ -122,7 +122,7 @@ prettyString (DoubleQuoted parts) = dquotes . hcat . fmap prettyPart $ parts
   prettyPart EscapedNewline = "''\\n"
   prettyPart (Antiquoted r) = "$" <> braces (withoutParens r)
   escape '"' = "\\\""
-  escape x   = maybe [x] (('\\' :) . (: [])) $ toEscapeCode x
+  escape x   = maybe [x] (('\\' :) . (: mempty)) $ toEscapeCode x
 prettyString (Indented _ parts) = group $ nest 2 $ vcat
   [dsquote, content, dsquote]
  where
@@ -310,7 +310,7 @@ valueToExpr = iterNValue (\_ _ -> thk) phi
   phi (NVStr'      ns) = mkStr ns
   phi (NVList'     l ) = Fix $ NList l
   phi (NVSet' s p    ) = Fix $ NSet NNonRecursive
-    [ NamedVar (StaticKey k :| []) v (fromMaybe nullPos (M.lookup k p))
+    [ NamedVar (StaticKey k :| mempty) v (fromMaybe nullPos (M.lookup k p))
     | (k, v) <- toList s
     ]
   phi (NVClosure' _ _   ) = Fix . NSym . pack $ "<closure>"

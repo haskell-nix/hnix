@@ -66,11 +66,11 @@ instance ( Has e Options
                              (Fix (Compose (Ann s e))))) =
                 let e' = Compose (Ann s (Nothing <$ e))
                 in [Provenance scope e']
-            go _ = []
+            go _ = mempty
             ps = concatMap (go . frame) frames
 
         fmap (Cited . NCited ps) . thunk $ mv
-      else fmap (Cited . NCited []) . thunk $ mv
+      else fmap (Cited . NCited mempty) . thunk $ mv
 
   thunkId (Cited (NCited _ t)) = thunkId @_ @m t
 

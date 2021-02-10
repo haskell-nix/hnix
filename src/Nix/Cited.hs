@@ -38,7 +38,7 @@ data NCited m v a = NCited
     deriving (Generic, Typeable, Functor, Foldable, Traversable, Show)
 
 instance Applicative (NCited m v) where
-  pure = NCited []
+  pure = NCited mempty
   NCited xs f <*> NCited ys x = NCited (xs <> ys) (f x)
 
 instance Comonad (NCited m v) where

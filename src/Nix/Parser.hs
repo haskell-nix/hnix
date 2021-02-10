@@ -253,7 +253,7 @@ nixLet = annotateLocation1
   letBinders = NLet <$> nixBinders <*> (reserved "in" *> nixToplevelForm)
   -- Let expressions `let {..., body = ...}' are just desugared
   -- into `(rec {..., body = ...}).body'.
-  letBody    = (\x -> NSelect x (StaticKey "body" :| []) Nothing) <$> aset
+  letBody    = (\x -> NSelect x (StaticKey "body" :| mempty) Nothing) <$> aset
   aset       = annotateLocation1 $ NSet NRecursive <$> braces nixBinders
 
 nixIf :: Parser NExprLoc
@@ -381,7 +381,7 @@ argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
   -- Collects the parameters within curly braces. Returns the parameters and
   -- a boolean indicating if the parameters are variadic.
   getParams :: Parser ([(Text, Maybe NExprLoc)], Bool)
-  getParams = go []   where
+  getParams = go mempty   where
     -- Attempt to parse `...`. If this succeeds, stop and return True.
     -- Otherwise, attempt to parse an argument, optionally with a
     -- default. If this fails, then return what has been accumulated
@@ -659,7 +659,7 @@ getUnaryOperator = (m Map.!) where
                                       (nixOperators (error "unused"))
   buildEntry i = concatMap $ \case
     (NUnaryDef name op, _) -> [(op, OperatorInfo i NAssocNone name)]
-    _                      -> []
+    _                      -> mempty
 
 getBinaryOperator :: NBinaryOp -> OperatorInfo
 getBinaryOperator = (m Map.!) where
@@ -668,7 +668,7 @@ getBinaryOperator = (m Map.!) where
                                       (nixOperators (error "unused"))
   buildEntry i = concatMap $ \case
     (NBinaryDef name op assoc, _) -> [(op, OperatorInfo i assoc name)]
-    _                             -> []
+    _                             -> mempty
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
 getSpecialOperator NSelectOp = OperatorInfo 1 NAssocLeft "."
@@ -678,4 +678,4 @@ getSpecialOperator o         = m Map.! o where
                                       (nixOperators (error "unused"))
   buildEntry i = concatMap $ \case
     (NSpecialDef name op assoc, _) -> [(op, OperatorInfo i assoc name)]
-    _                              -> []
+    _                              -> mempty

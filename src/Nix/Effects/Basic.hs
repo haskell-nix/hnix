@@ -73,7 +73,7 @@ expandHomePath p          = pure p
 --   parent may be a different directory from @a@. See the discussion at
 --   https://hackage.haskell.org/package/directory-1.3.1.5/docs/System-Directory.html#v:canonicalizePath
 removeDotDotIndirections :: FilePath -> FilePath
-removeDotDotIndirections = intercalate "/" . go [] . splitOn "/"
+removeDotDotIndirections = intercalate "/" . go mempty . splitOn "/"
  where
   go s       []            = reverse s
   go (_ : s) (".." : rest) = go s rest

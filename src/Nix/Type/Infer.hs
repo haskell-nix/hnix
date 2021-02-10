@@ -295,12 +295,12 @@ unops u1 = \case
 
 binops :: Type -> NBinaryOp -> [Constraint]
 binops u1 = \case
-  NApp  -> []                -- this is handled separately
+  NApp  -> mempty                -- this is handled separately
 
   -- Equality tells you nothing about the types, because any two types are
   -- allowed.
-  NEq   -> []
-  NNEq  -> []
+  NEq   -> mempty
+  NNEq  -> mempty
 
   NGt   -> inequality
   NGte  -> inequality
@@ -414,32 +414,32 @@ instance MonadInfer m
   -- If we have a thunk loop, we just don't know the type.
   force (JThunk t) f = catch (force t f)
     $ \(_ :: ThunkLoop) ->
-                           f =<< Judgment As.empty [] <$> fresh
+                           f =<< Judgment As.empty mempty <$> fresh
 
   -- If we have a thunk loop, we just don't know the type.
   forceEff (JThunk t) f = catch (forceEff t f)
     $ \(_ :: ThunkLoop) ->
-                           f =<< Judgment As.empty [] <$> fresh
+                           f =<< Judgment As.empty mempty <$> fresh
 -}
 
 instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
   freeVariable var = do
     tv <- fresh
-    pure $ Judgment (As.singleton var tv) [] tv
+    pure $ Judgment (As.singleton var tv) mempty tv
 
   synHole var = do
     tv <- fresh
-    pure $ Judgment (As.singleton var tv) [] tv
+    pure $ Judgment (As.singleton var tv) mempty tv
 
 -- If we fail to look up an attribute, we just don't know the type.
-  attrMissing _ _ = Judgment As.empty [] <$> fresh
+  attrMissing _ _ = Judgment As.empty mempty <$> fresh
 
   evaledSym _ = pure
 
-  evalCurPos = pure $ Judgment As.empty [] $ TSet False $ M.fromList
+  evalCurPos = pure $ Judgment As.empty mempty $ TSet False $ M.fromList
     [("file", typePath), ("line", typeInt), ("col", typeInt)]
 
-  evalConstant c = pure $ Judgment As.empty [] (go c)
+  evalConstant c = pure $ Judgment As.empty mempty (go c)
    where
     go = \case
       NURI   _ -> typeString
@@ -448,9 +448,9 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
       NBool  _ -> typeBool
       NNull    -> typeNull
 
-  evalString      = const $ pure $ Judgment As.empty [] typeString
-  evalLiteralPath = const $ pure $ Judgment As.empty [] typePath
-  evalEnvPath     = const $ pure $ Judgment As.empty [] typePath
+  evalString      = const $ pure $ Judgment As.empty mempty typeString
+  evalLiteralPath = const $ pure $ Judgment As.empty mempty typePath
+  evalEnvPath     = const $ pure $ Judgment As.empty mempty typePath
 
   evalUnary op (Judgment as1 cs1 t1) = do
     tv <- fresh
@@ -490,7 +490,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     let tv = TVar a
     ((), Judgment as cs t) <- extendMSet
       a
-      (k (pure (Judgment (As.singleton x tv) [] tv)) (\_ b -> ((), ) <$> b))
+      (k (pure (Judgment (As.singleton x tv) mempty tv)) (\_ b -> ((), ) <$> b))
     pure $ Judgment (as `As.remove` x)
                       (cs <> [ EqConst t' tv | t' <- As.lookup x as ])
                       (tv :~> t)
@@ -503,7 +503,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     let (env, tys) =
           (\f -> foldl' f (As.empty, M.empty) js) $ \(as1, t1) (k, t) ->
             (as1 `As.merge` As.singleton k t, M.insert k t t1)
-        arg   = pure $ Judgment env [] (TSet True tys)
+        arg   = pure $ Judgment env mempty (TSet True tys)
         call  = k arg $ \args b -> (args, ) <$> b
         names = fmap fst js
 
@@ -533,7 +533,7 @@ instance MonadInfer m
   => FromValue (AttrSet (Judgment s), AttrSet SourcePos)
               (InferT s m) (Judgment s) where
   fromValueMay (Judgment _ _ (TSet _ xs)) = do
-    let sing _ = Judgment As.empty []
+    let sing _ = Judgment As.empty mempty
     pure $ pure (M.mapWithKey sing xs, M.empty)
   fromValueMay _ = pure Nothing
   fromValue = fromValueMay >=> \case
@@ -559,7 +559,7 @@ instance MonadInfer m => ToValue [Judgment s] (InferT s m) (Judgment s) where
     where go x rest = demand x $ \x' -> pure $ As.merge (assumptions x') rest
 
 instance MonadInfer m => ToValue Bool (InferT s m) (Judgment s) where
-  toValue _ = pure $ Judgment As.empty [] typeBool
+  toValue _ = pure $ Judgment As.empty mempty typeBool
 
 infer :: MonadInfer m => NExpr -> InferT s m (Judgment s)
 infer = foldFix Eval.eval
@@ -577,7 +577,7 @@ normalizeScheme (Forall _ body) = Forall (fmap snd ord) (normtype body)
 
   fv (TVar a  ) = [a]
   fv (a :~> b ) = fv a <> fv b
-  fv (TCon _  ) = []
+  fv (TCon _  ) = mempty
   fv (TSet _ a) = concatMap fv (M.elems a)
   fv (TList a ) = concatMap fv a
   fv (TMany ts) = concatMap fv ts
@@ -608,7 +608,7 @@ instance Monad m => MonadError TypeError (Solver m) where
 
 runSolver :: Monad m => Solver m a -> m (Either [TypeError] [a])
 runSolver (Solver s) = do
-  res <- runStateT (observeAllT s) []
+  res <- runStateT (observeAllT s) mempty
   pure $ case res of
     (x : xs, _ ) -> Right (x : xs)
     (_     , es) -> Left (nub es)

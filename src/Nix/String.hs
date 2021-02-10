@@ -82,7 +82,7 @@ instance Semigroup NixLikeContextValue where
     }
 
 instance Monoid NixLikeContextValue where
-  mempty = NixLikeContextValue False False []
+  mempty = NixLikeContextValue False False mempty
 
 
 -- ** StringContext accumulator
@@ -168,12 +168,12 @@ toStringContexts (path, nlcv) = case nlcv of
     : toStringContexts (path, nlcv { nlcvAllOutputs = False })
   NixLikeContextValue _ _ ls | not (null ls) ->
     fmap (StringContext path . DerivationOutput) ls
-  _ -> []
+  _ -> mempty
 
 toNixLikeContextValue :: StringContext -> (Text, NixLikeContextValue)
 toNixLikeContextValue sc = (,) (scPath sc) $ case scFlavor sc of
-  DirectPath         -> NixLikeContextValue True False []
-  AllOutputs         -> NixLikeContextValue False True []
+  DirectPath         -> NixLikeContextValue True False mempty
+  AllOutputs         -> NixLikeContextValue False True mempty
   DerivationOutput t -> NixLikeContextValue False False [t]
 
 toNixLikeContext :: S.HashSet StringContext -> NixLikeContext

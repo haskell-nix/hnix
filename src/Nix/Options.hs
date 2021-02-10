@@ -55,18 +55,18 @@ defaultOptions current = Options { verbose      = ErrorsOnly
                                  , json         = False
                                  , xml          = False
                                  , attr         = Nothing
-                                 , include      = []
+                                 , include      = mempty
                                  , check        = False
                                  , readFrom     = Nothing
                                  , cache        = False
                                  , repl         = False
                                  , ignoreErrors = False
                                  , expression   = Nothing
-                                 , arg          = []
-                                 , argstr       = []
+                                 , arg          = mempty
+                                 , argstr       = mempty
                                  , fromFile     = Nothing
                                  , currentTime  = current
-                                 , filePaths    = []
+                                 , filePaths    = mempty
                                  }
 
 data Verbosity
