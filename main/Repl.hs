@@ -79,7 +79,7 @@ main' iniVal = initState iniVal >>= \s -> flip evalStateT s
         (pure commandPrefix)
         (pure "paste")
         completion
-        (rcFile >> greeter)
+        (rcFile *> greeter)
         finalizer
  where
   commandPrefix = ':'

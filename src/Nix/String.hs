@@ -155,7 +155,7 @@ stringIgnoreContext (NixString s _) = s
 
 -- | Get the contents of a 'NixString' and write its context into the resulting set.
 extractNixString :: Monad m => NixString -> WithStringContextT m Text
-extractNixString (NixString s c) = WithStringContextT $ tell c >> pure s
+extractNixString (NixString s c) = WithStringContextT $ tell c *> pure s
 
 
 -- ** Setters

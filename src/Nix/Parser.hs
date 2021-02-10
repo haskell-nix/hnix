@@ -179,7 +179,7 @@ nixSym :: Parser NExprLoc
 nixSym = annotateLocation1 $ mkSymF <$> identifier
 
 nixSynHole :: Parser NExprLoc
-nixSynHole = annotateLocation1 $ mkSynHoleF <$> (char '^' >> identifier)
+nixSynHole = annotateLocation1 $ mkSynHoleF <$> (char '^' *> identifier)
 
 nixInt :: Parser NExprLoc
 nixInt = annotateLocation1 (mkIntF <$> integer <?> "integer")
@@ -357,7 +357,7 @@ argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
   -- there's a valid URI parse here.
   onlyname =
     msum
-      [ nixUri >> unexpected (Label ('v' NE.:| "alid uri"))
+      [ nixUri *> unexpected (Label ('v' NE.:| "alid uri"))
       , Param <$> identifier
       ]
 
@@ -393,7 +393,7 @@ argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
         -- Get an argument name and an optional default.
       pair <- liftM2 (,) identifier (optional $ question *> nixToplevelForm)
       -- Either return this, or attempt to get a comma and restart.
-      option (acc <> [pair], False) $ comma >> go (acc <> [pair])
+      option (acc <> [pair], False) $ comma *> go (acc <> [pair])
 
 nixBinders :: Parser [Binding NExprLoc]
 nixBinders = (inherit <+> namedVar) `endBy` semi where
