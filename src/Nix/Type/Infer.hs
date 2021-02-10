@@ -526,7 +526,7 @@ data Judgment s = Judgment
     deriving Show
 
 instance Monad m => FromValue NixString (InferT s m) (Judgment s) where
-  fromValueMay _ = pure Nothing
+  fromValueMay _ = pure mempty
   fromValue _ = error "Unused"
 
 instance MonadInfer m
@@ -535,7 +535,7 @@ instance MonadInfer m
   fromValueMay (Judgment _ _ (TSet _ xs)) = do
     let sing _ = Judgment As.empty mempty
     pure $ pure (M.mapWithKey sing xs, M.empty)
-  fromValueMay _ = pure Nothing
+  fromValueMay _ = pure mempty
   fromValue = fromValueMay >=> \case
     Just v  -> pure v
     Nothing -> pure (M.empty, M.empty)

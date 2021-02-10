@@ -83,7 +83,7 @@ freeVars e = case unFix e of
 
   staticKey :: NKeyName r -> Maybe VarName
   staticKey (StaticKey  varname) = pure varname
-  staticKey (DynamicKey _      ) = Nothing
+  staticKey (DynamicKey _      ) = mempty
 
   bindDefs :: Binding r -> Set VarName
   bindDefs (Inherit  Nothing                   _    _) = Set.empty

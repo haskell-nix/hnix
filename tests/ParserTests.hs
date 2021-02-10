@@ -150,9 +150,9 @@ case_lambda_or_uri = do
 
 case_lambda_pattern = do
   assertParseText "{b, c ? 1}: b" $
-    Fix $ NAbs (fixed args Nothing) (mkSym "b")
+    Fix $ NAbs (fixed args mempty) (mkSym "b")
   assertParseText "{ b ? x: x  }: b" $
-    Fix $ NAbs (fixed args2 Nothing) (mkSym "b")
+    Fix $ NAbs (fixed args2 mempty) (mkSym "b")
   assertParseText "a@{b,c ? 1}: b" $
     Fix $ NAbs (fixed args (pure "a")) (mkSym "b")
   assertParseText "{b,c?1}@a: c" $
@@ -160,7 +160,7 @@ case_lambda_pattern = do
   assertParseText "{b,c?1,...}@a: c" $
     Fix $ NAbs (variadic vargs (pure "a")) (mkSym "c")
   assertParseText "{...}: 1" $
-    Fix $ NAbs (variadic mempty Nothing) (mkInt 1)
+    Fix $ NAbs (variadic mempty mempty) (mkInt 1)
   assertParseFail "a@b: a"
   assertParseFail "{a}@{b}: a"
  where

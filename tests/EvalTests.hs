@@ -455,8 +455,8 @@ constantEqual expected actual = do
     let opts = defaultOptions time
     -- putStrLn =<< lint (stripAnnotation a)
     (eq, expectedNF, actualNF) <- runWithBasicEffectsIO opts $ do
-        expectedNF <- normalForm =<< nixEvalExprLoc Nothing expected
-        actualNF <- normalForm =<< nixEvalExprLoc Nothing actual
+        expectedNF <- normalForm =<< nixEvalExprLoc mempty expected
+        actualNF <- normalForm =<< nixEvalExprLoc mempty actual
         eq <- valueEqM expectedNF actualNF
         pure (eq, expectedNF, actualNF)
     let message =
@@ -485,7 +485,7 @@ assertNixEvalThrows a = do
   let opts = defaultOptions time
   errored <- catch
       (False <$ runWithBasicEffectsIO opts
-         (normalForm =<< nixEvalExprLoc Nothing a'))
+         (normalForm =<< nixEvalExprLoc mempty a'))
       (\(_ :: NixException) -> pure True)
   unless errored $
     assertFailure "Did not catch nix exception"

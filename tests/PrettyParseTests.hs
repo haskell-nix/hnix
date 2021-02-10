@@ -78,7 +78,7 @@ genParams = Gen.choice
   , ParamSet
   <$> Gen.list (Range.linear 0 10) ((,) <$> asciiText <*> Gen.maybe genExpr)
   <*> Gen.bool
-  <*> Gen.choice [pure Nothing, pure <$> asciiText]
+  <*> Gen.choice [pure mempty, pure <$> asciiText]
   ]
 
 genAtom :: Gen NAtom
@@ -177,7 +177,7 @@ normalize = foldFix $ \case
   normAntiquotedText (Plain "''\n") = EscapedNewline
   normAntiquotedText r              = r
 
-  normParams (ParamSet binds var (Just "")) = ParamSet binds var Nothing
+  normParams (ParamSet binds var (Just "")) = ParamSet binds var mempty
   normParams r                              = r
 
 -- | Test that parse . pretty == id up to attribute position information.

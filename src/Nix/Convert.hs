@@ -99,7 +99,7 @@ instance Convertible e t f m
   => FromValue () m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
     NVConstant' NNull -> pure $ pure ()
-    _                 -> pure Nothing
+    _                 -> pure mempty
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
     _      -> throwError $ Expectation @t @f @m TNull (Free v)
@@ -155,9 +155,9 @@ instance ( Convertible e t f m
         .   unStorePath
         <$> addPath p
     NVSet' s _ -> case M.lookup "outPath" s of
-      Nothing -> pure Nothing
+      Nothing -> pure mempty
       Just p  -> fromValueMay p
-    _ -> pure Nothing
+    _ -> pure mempty
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
     _      -> throwError $ Expectation @t @f @m (TString NoContext) (Free v)
@@ -166,7 +166,7 @@ instance Convertible e t f m
   => FromValue ByteString m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
     NVStr' ns -> pure $ encodeUtf8 <$> getStringNoContext  ns
-    _         -> pure Nothing
+    _         -> pure mempty
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
     _      -> throwError $ Expectation @t @f @m (TString NoContext) (Free v)
@@ -193,7 +193,7 @@ instance Convertible e t f m
   => FromValue [NValue t f m] m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
     NVList' l -> pure $ pure l
-    _         -> pure Nothing
+    _         -> pure mempty
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
     _      -> throwError $ Expectation @t @f @m TList (Free v)
@@ -204,7 +204,7 @@ instance ( Convertible e t f m
   => FromValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
   fromValueMay = \case
     Deeper (NVList' l) -> sequence <$> traverse fromValueMay l
-    _                  -> pure Nothing
+    _                  -> pure mempty
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
     _      -> throwError $ Expectation @t @f @m TList (Free (getDeeper v))
@@ -213,7 +213,7 @@ instance Convertible e t f m
   => FromValue (AttrSet (NValue t f m)) m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
     NVSet' s _ -> pure $ pure s
-    _          -> pure Nothing
+    _          -> pure mempty
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
     _      -> throwError $ Expectation @t @f @m TSet (Free v)
@@ -224,7 +224,7 @@ instance ( Convertible e t f m
   => FromValue (AttrSet a) m (Deeper (NValue' t f m (NValue t f m))) where
   fromValueMay = \case
     Deeper (NVSet' s _) -> sequence <$> traverse fromValueMay s
-    _                   -> pure Nothing
+    _                   -> pure mempty
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
     _      -> throwError $ Expectation @t @f @m TSet (Free (getDeeper v))
@@ -234,7 +234,7 @@ instance Convertible e t f m
               (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
     NVSet' s p -> pure $ pure (s, p)
-    _          -> pure Nothing
+    _          -> pure mempty
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
     _      -> throwError $ Expectation @t @f @m TSet (Free v)
@@ -246,7 +246,7 @@ instance ( Convertible e t f m
               (Deeper (NValue' t f m (NValue t f m))) where
   fromValueMay = \case
     Deeper (NVSet' s p) -> fmap (, p) . sequence <$> traverse fromValueMay s
-    _                   -> pure Nothing
+    _                   -> pure mempty
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
     _      -> throwError $ Expectation @t @f @m TSet (Free (getDeeper v))

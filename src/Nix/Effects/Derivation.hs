@@ -300,7 +300,7 @@ buildDerivationWithContext drvAttrs = do
       args        <- getAttrOr "args"              mempty  $ mapM (fromValue' >=> extractNixString)
       builder     <- getAttr   "builder"                   $ extractNixString
       platform    <- getAttr   "system"                    $ extractNoCtx >=> assertNonNull
-      mHash       <- getAttrOr "outputHash"        Nothing $ extractNoCtx >=> (pure . pure)
+      mHash       <- getAttrOr "outputHash"        mempty  $ extractNoCtx >=> (pure . pure)
       hashMode    <- getAttrOr "outputHashMode"    Flat    $ extractNoCtx >=> parseHashMode
       outputs     <- getAttrOr "outputs"           ["out"] $ mapM (fromValue' >=> extractNoCtx)
 

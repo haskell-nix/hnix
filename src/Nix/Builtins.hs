@@ -331,7 +331,7 @@ foldNixPath f z = do
   fromInclude x | "://" `Text.isInfixOf` x = (x, PathEntryURI)
                 | otherwise                = (x, PathEntryPath)
   go (x, ty) rest = case Text.splitOn "=" x of
-    [p] -> f (Text.unpack p) Nothing ty rest
+    [p] -> f (Text.unpack p) mempty ty rest
     [n, p] -> f (Text.unpack p) (pure (Text.unpack n)) ty rest
     _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " <> show x
 

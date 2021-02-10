@@ -107,7 +107,7 @@ findEnvPathM name = do
       then makeAbsolutePath @t @f $ absPath </> "default.nix"
       else pure absPath
     exists <- doesFileExist absFile
-    pure $ if exists then pure absFile else Nothing
+    pure $ if exists then pure absFile else mempty
 
 findPathBy
   :: forall e t f m
@@ -117,7 +117,7 @@ findPathBy
   -> FilePath
   -> m FilePath
 findPathBy finder ls name = do
-  mpath <- foldM go Nothing ls
+  mpath <- foldM go mempty ls
   case mpath of
     Nothing ->
       throwError
@@ -134,14 +134,14 @@ findPathBy finder ls name = do
     demand l $ fromValue >=> \(s :: HashMap Text (NValue t f m)) -> do
       p <- resolvePath s
       demand p $ fromValue >=> \(Path path) -> case M.lookup "prefix" s of
-        Nothing -> tryPath path Nothing
+        Nothing -> tryPath path mempty
         Just pf -> demand pf $ fromValueMay >=> \case
           Just (nsPfx :: NixString) ->
             let pfx = stringIgnoreContext nsPfx
             in  if not (Text.null pfx)
                   then tryPath path (pure (Text.unpack pfx))
-                  else tryPath path Nothing
-          _ -> tryPath path Nothing
+                  else tryPath path mempty
+          _ -> tryPath path mempty
 
   tryPath p (Just n) | n' : ns <- splitDirectories name, n == n' =
     finder $ p <///> joinPath ns
@@ -222,7 +222,7 @@ findPathM = findPathBy existingPath
   existingPath path = do
     apath  <- makeAbsolutePath @t @f path
     exists <- doesPathExist apath
-    pure $ if exists then pure apath else Nothing
+    pure $ if exists then pure apath else mempty
 
 defaultImportPath
   :: (MonadNix e t f m, MonadState (HashMap FilePath NExprLoc, b) m)

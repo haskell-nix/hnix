@@ -492,7 +492,7 @@ identifier = lexeme $ try $ do
   ident <-
     cons
     <$> satisfy (\x -> isAlpha x || x == '_')
-    <*> takeWhileP Nothing identLetter
+    <*> takeWhileP mempty identLetter
   guard (not (ident `HashSet.member` reservedNames))
   pure ident
  where

@@ -49,7 +49,7 @@ hnixEvalText opts src = case parseNixText src of
       <> "`.\n"
       <> show err
   Success expr ->
-    runWithBasicEffects opts $ normalForm =<< nixEvalExpr Nothing expr
+    runWithBasicEffects opts $ normalForm =<< nixEvalExpr mempty expr
 
 nixEvalString :: String -> IO String
 nixEvalString expr = do

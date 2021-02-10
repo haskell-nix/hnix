@@ -99,7 +99,7 @@ mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkOper2 op a = Fix . NBinary op a
 
 mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
-mkParamset params variadic = ParamSet params variadic Nothing
+mkParamset params variadic = ParamSet params variadic mempty
 
 mkRecSet :: [Binding NExpr] -> NExpr
 mkRecSet = Fix . NSet NRecursive

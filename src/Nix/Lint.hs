@@ -372,7 +372,7 @@ lintBinaryOp op lsym rarg = do
     NMult   -> check lsym rsym [TConstant [TInt]]
     NDiv    -> check lsym rsym [TConstant [TInt]]
 
-    NUpdate -> check lsym rsym [TSet Nothing]
+    NUpdate -> check lsym rsym [TSet mempty]
 
     NConcat -> check lsym rsym [TList y]
  where

@@ -28,7 +28,9 @@ newScope = Scope
 
 scopeLookup :: Text -> [Scope a] -> Maybe a
 scopeLookup key = foldr go Nothing
-  where go (Scope m) rest = M.lookup key m <|> rest
+ where
+  go :: Scope a -> Maybe a -> Maybe a
+  go (Scope m) rest = M.lookup key m <|> rest
 
 data Scopes m a = Scopes
     { lexicalScopes :: [Scope a]

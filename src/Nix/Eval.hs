@@ -358,7 +358,7 @@ evalSetterKeyName = \case
   DynamicKey k ->
     runAntiquoted "\n" assembleString (>>= fromValueMay) k <&> \case
       Just ns -> Just (stringIgnoreContext ns)
-      _       -> Nothing
+      _       -> mempty
 
 assembleString
   :: forall v m

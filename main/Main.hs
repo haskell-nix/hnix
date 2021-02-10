@@ -53,15 +53,15 @@ main = do
       let file = addExtension (dropExtension path) "nixc"
       process opts (pure file) =<< liftIO (readCache path)
     Nothing -> case expression opts of
-      Just s  -> handleResult opts Nothing (parseNixTextLoc s)
+      Just s  -> handleResult opts mempty (parseNixTextLoc s)
       Nothing -> case fromFile opts of
         Just "-" -> mapM_ (processFile opts) . lines =<< liftIO getContents
         Just path ->
           mapM_ (processFile opts) . lines =<< liftIO (readFile path)
         Nothing -> case filePaths opts of
-          [] -> withNixContext Nothing Repl.main
+          [] -> withNixContext mempty Repl.main
           ["-"] ->
-            handleResult opts Nothing
+            handleResult opts mempty
               .   parseNixTextLoc
               =<< liftIO Text.getContents
           paths -> mapM_ (processFile opts) paths
@@ -102,8 +102,8 @@ main = do
         if evaluate opts
           then do
             val <- Nix.nixEvalExprLoc mpath expr
-            withNixContext Nothing (Repl.main' $ pure val)
-          else withNixContext Nothing Repl.main
+            withNixContext mempty (Repl.main' $ pure val)
+          else withNixContext mempty Repl.main
 
   process opts mpath expr
     | evaluate opts
