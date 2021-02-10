@@ -94,9 +94,9 @@ parsePath p = case Store.parsePath "/nix/store" (Text.encodeUtf8 p) of
   Right path -> return path
 
 writeDerivation :: (Framed e m, MonadStore m) => Derivation -> m Store.StorePath
-writeDerivation (drv@Derivation {inputs, name}) = do
+writeDerivation drv@Derivation{inputs, name} = do
   let (inputSrcs, inputDrvs) = inputs
-  references <- Set.fromList <$> (mapM parsePath $ Set.toList $ inputSrcs `Set.union` (Set.fromList $ Map.keys inputDrvs))
+  references <- fmap Set.fromList $ mapM parsePath $ Set.toList $ Set.union inputSrcs $ Set.fromList $ Map.keys inputDrvs
   path <- addTextToStore (Text.append name ".drv") (unparseDrv drv) (S.fromList $ Set.toList references) False
   parsePath $ Text.pack $ unStorePath path
 
@@ -112,10 +112,10 @@ hashDerivationModulo (Derivation {
       $  "fixed:out"
       <> (if hashMode == Recursive then ":r" else "")
       <> ":" <> (Store.algoName @hashType)
-      <> ":" <> (Store.encodeInBase Store.Base16 digest)
+      <> ":" <> Store.encodeInBase Store.Base16 digest
       <> ":" <> path
     outputsList -> throwError $ ErrorCall $ "This is weird. A fixed output drv should only have one output named 'out'. Got " <> show outputsList
-hashDerivationModulo drv@(Derivation {inputs = (inputSrcs, inputDrvs)}) = do
+hashDerivationModulo drv@Derivation{inputs = (inputSrcs, inputDrvs)} = do
   cache <- gets snd
   inputsModulo <- Map.fromList <$> forM (Map.toList inputDrvs) (\(path, outs) ->
     case MS.lookup path cache of
@@ -128,7 +128,7 @@ hashDerivationModulo drv@(Derivation {inputs = (inputSrcs, inputDrvs)}) = do
   return $ Store.hash @'Store.SHA256 $ Text.encodeUtf8 $ unparseDrv (drv {inputs = (inputSrcs, inputsModulo)})
 
 unparseDrv :: Derivation -> Text
-unparseDrv (Derivation {..}) = Text.append "Derive" $ parens
+unparseDrv Derivation{..} = Text.append "Derive" $ parens
     [ -- outputs: [("out", "/nix/store/.....-out", "", ""), ...]
       list $ flip fmap (Map.toList outputs) (\(outputName, outputPath) ->
         let prefix = if hashMode == Recursive then "r:" else "" in
