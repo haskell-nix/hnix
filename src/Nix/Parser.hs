@@ -365,7 +365,7 @@ argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
   atLeft = try $ do
     name               <- identifier <* symbol "@"
     (variadic, params) <- params
-    pure $ ParamSet params variadic (Just name)
+    pure $ ParamSet params variadic (pure name)
 
   -- Parameters named by an identifier on the right, or none (`{x, y} @ args`)
   atRight = do
@@ -440,7 +440,7 @@ parseNixTextLoc = parseFromText (whiteSpace *> nixToplevelForm <* eof)
 
 skipLineComment' :: Tokens Text -> Parser ()
 skipLineComment' prefix = string prefix
-  *> void (takeWhileP (Just "character") (\x -> x /= '\n' && x /= '\r'))
+  *> void (takeWhileP (pure "character") (\x -> x /= '\n' && x /= '\r'))
 
 whiteSpace :: Parser ()
 whiteSpace = do

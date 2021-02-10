@@ -156,10 +156,10 @@ valueEqM (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
   valueFEqM (compareAttrSetsM f valueEqM) valueEqM x y
  where
   f (Pure t) = force t $ \case
-    NVStr s -> pure $ Just s
+    NVStr s -> pure $ pure s
     _       -> pure Nothing
   f (Free v) = case v of
-    NVStr' s -> pure $ Just s
+    NVStr' s -> pure $ pure s
     _        -> pure Nothing
 
 thunkEqM :: (MonadThunk t m (NValue t f m), Comonad f) => t -> t -> m Bool

@@ -332,7 +332,7 @@ foldNixPath f z = do
                 | otherwise                = (x, PathEntryPath)
   go (x, ty) rest = case Text.splitOn "=" x of
     [p] -> f (Text.unpack p) Nothing ty rest
-    [n, p] -> f (Text.unpack p) (Just (Text.unpack n)) ty rest
+    [n, p] -> f (Text.unpack p) (pure (Text.unpack n)) ty rest
     _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " <> show x
 
 nixPath :: MonadNix e t f m => m (NValue t f m)
@@ -825,7 +825,7 @@ elem_ x = toValue <=< anyM (valueEqM x) <=< fromValue
 elemAt :: [a] -> Int -> Maybe a
 elemAt ls i = case drop i ls of
   []    -> Nothing
-  a : _ -> Just a
+  a : _ -> pure a
 
 elemAt_
   :: MonadNix e t f m
@@ -1108,7 +1108,7 @@ scopedImport asetArg pathArg = fromValue @(AttrSet (NValue t f m)) asetArg >>= \
         traceM $ "Current file being evaluated is: " <> show p'
         pure $ takeDirectory p' </> path
     clearScopes @(NValue t f m)
-      $ withNixContext (Just path')
+      $ withNixContext (pure path')
       $ pushScope s
       $ importPath @t @f @m path'
 

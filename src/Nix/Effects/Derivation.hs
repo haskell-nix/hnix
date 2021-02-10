@@ -221,7 +221,7 @@ derivationParser = do
             [ht] ->      (ht, Flat)
             _ -> error $ "Unsupported hash type for output of fixed-output derivation in .drv file: " <> show fullOutputs
       in case Store.mkNamedDigest hashType hash of
-        Right digest -> (Just digest, hashMode)
+        Right digest -> (pure digest, hashMode)
         Left err -> error $ "Unsupported hash " <> show (hashType <> ":" <> hash) <> "in .drv file: " <> err
     _ -> (Nothing, Flat)
 
@@ -300,7 +300,7 @@ buildDerivationWithContext drvAttrs = do
       args        <- getAttrOr "args"              []      $ mapM (fromValue' >=> extractNixString)
       builder     <- getAttr   "builder"                   $ extractNixString
       platform    <- getAttr   "system"                    $ extractNoCtx >=> assertNonNull
-      mHash       <- getAttrOr "outputHash"        Nothing $ extractNoCtx >=> (return . Just)
+      mHash       <- getAttrOr "outputHash"        Nothing $ extractNoCtx >=> (return . pure)
       hashMode    <- getAttrOr "outputHashMode"    Flat    $ extractNoCtx >=> parseHashMode
       outputs     <- getAttrOr "outputs"           ["out"] $ mapM (fromValue' >=> extractNoCtx)
 
@@ -310,14 +310,14 @@ buildDerivationWithContext drvAttrs = do
           when (outputs /= ["out"]) $ lift $ throwError $ ErrorCall $ "Multiple outputs are not supported for fixed-output derivations"
           hashType <- getAttr "outputHashAlgo" $ extractNoCtx
           digest <- lift $ either (throwError . ErrorCall) return $ Store.mkNamedDigest hashType hash
-          return $ Just digest
+          return $ pure digest
 
       -- filter out null values if needed.
       attrs <- if not ignoreNulls
         then return drvAttrs
         else M.mapMaybe id <$> forM drvAttrs (demand' ?? (\case
             NVConstant NNull -> return Nothing
-            value -> return $ Just value
+            value -> return $ pure value
           ))
 
       env <- if useJson

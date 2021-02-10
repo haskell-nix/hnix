@@ -534,7 +534,7 @@ instance MonadInfer m
               (InferT s m) (Judgment s) where
   fromValueMay (Judgment _ _ (TSet _ xs)) = do
     let sing _ = Judgment As.empty []
-    pure $ Just (M.mapWithKey sing xs, M.empty)
+    pure $ pure (M.mapWithKey sing xs, M.empty)
   fromValueMay _ = pure Nothing
   fromValue = fromValueMay >=> \case
     Just v  -> pure v

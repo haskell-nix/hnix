@@ -78,14 +78,14 @@ lookupVarReader
 lookupVarReader k = do
   mres <- asks (scopeLookup k . lexicalScopes @m . view hasLens)
   case mres of
-    Just sym -> pure $ Just sym
+    Just sym -> pure $ pure sym
     Nothing  -> do
       ws <- asks (dynamicScopes . view hasLens)
       foldr
         (\x rest -> do
           mres' <- M.lookup k . getScope <$> x
           case mres' of
-            Just sym -> pure $ Just sym
+            Just sym -> pure $ pure sym
             Nothing  -> rest
         )
         (pure Nothing)

@@ -76,8 +76,8 @@ main' iniVal = initState iniVal >>= \s -> flip evalStateT s
         banner
         cmd
         options
-        (Just commandPrefix)
-        (Just "paste")
+        (pure commandPrefix)
+        (pure "paste")
         completion
         (rcFile >> greeter)
         finalizer
@@ -212,14 +212,14 @@ exec update source = do
           -- Update the interpreter state
           when (update && isBinding) $ do
             -- Set `replIt` to last entered expression
-            put st { replIt = Just expr }
+            put st { replIt = pure expr }
 
             -- If the result value is a set, update our context with it
             case val of
               NVSet xs _ -> put st { replCtx = Data.HashMap.Lazy.union xs (replCtx st) }
               _          -> pure ()
 
-          pure $ Just val
+          pure $ pure val
   where
     -- If parsing fails, turn the input into singleton attribute set
     -- and try again.
@@ -292,7 +292,7 @@ typeof
 typeof args = do
   st <- get
   mVal <- case Data.HashMap.Lazy.lookup line (replCtx st) of
-    Just val -> pure $ Just val
+    Just val -> pure $ pure val
     Nothing  -> do
       exec False line
 
@@ -329,7 +329,7 @@ completion
   :: (MonadNix e t f m, MonadIO m)
   => CompleterStyle (StateT (IState t f m) m)
 completion = System.Console.Repline.Prefix
-  (completeWordWithPrev (Just '\\') separators completeFunc)
+  (completeWordWithPrev (pure '\\') separators completeFunc)
   defaultMatcher
   where
     separators :: String

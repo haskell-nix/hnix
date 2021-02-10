@@ -51,7 +51,7 @@ main = do
   runWithBasicEffectsIO opts $ case readFrom opts of
     Just path -> do
       let file = addExtension (dropExtension path) "nixc"
-      process opts (Just file) =<< liftIO (readCache path)
+      process opts (pure file) =<< liftIO (readCache path)
     Nothing -> case expression opts of
       Just s  -> handleResult opts Nothing (parseNixTextLoc s)
       Nothing -> case fromFile opts of
@@ -68,7 +68,7 @@ main = do
  where
   processFile opts path = do
     eres <- parseNixFileLoc path
-    handleResult opts (Just path) eres
+    handleResult opts (pure path) eres
 
   handleResult opts mpath = \case
     Failure err ->
@@ -102,7 +102,7 @@ main = do
         if evaluate opts
           then do
             val <- Nix.nixEvalExprLoc mpath expr
-            withNixContext Nothing (Repl.main' $ Just val)
+            withNixContext Nothing (Repl.main' $ pure val)
           else withNixContext Nothing Repl.main
 
   process opts mpath expr
@@ -165,7 +165,7 @@ main = do
        where
         go prefix s = do
           xs <- forM (sortOn fst (M.toList s)) $ \(k, nv) -> case nv of
-            Free v -> pure (k, Just (Free v))
+            Free v -> pure (k, pure (Free v))
             Pure (StdThunk (extract -> Thunk _ _ ref)) -> do
               let path         = prefix <> Text.unpack k
                   (_, descend) = filterEntry path k
@@ -204,7 +204,7 @@ main = do
             _                              -> (True, True)
 
           forceEntry k v =
-            catch (Just <$> demand v pure) $ \(NixException frames) -> do
+            catch (pure <$> demand v pure) $ \(NixException frames) -> do
               liftIO
                 .   putStrLn
                 .   ("Exception forcing " <>)

@@ -78,7 +78,7 @@ genParams = Gen.choice
   , ParamSet
   <$> Gen.list (Range.linear 0 10) ((,) <$> asciiText <*> Gen.maybe genExpr)
   <*> Gen.bool
-  <*> Gen.choice [pure Nothing, Just <$> asciiText]
+  <*> Gen.choice [pure Nothing, pure <$> asciiText]
   ]
 
 genAtom :: Gen NAtom

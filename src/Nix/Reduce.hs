@@ -110,7 +110,7 @@ staticImport pann path = do
                           pos
           x' = Fix (NLet_ span [cur] x)
         modify (\(a, b) -> (M.insert path x' a, b))
-        local (const (Just path, emptyScopes @m @NExprLoc)) $ do
+        local (const (pure path, emptyScopes @m @NExprLoc)) $ do
           x'' <- foldFix reduce x'
           modify (\(a, b) -> (M.insert path x'' a, b))
           return x''
@@ -201,7 +201,7 @@ reduce base@(NSelect_ _ _ attrs _)
   -- Find appropriate bind in set's binds.
   findBind []       _              = Nothing
   findBind (x : xs) attrs@(a :| _) = case x of
-    n@(NamedVar (a' :| _) _ _) | a' == a -> Just n
+    n@(NamedVar (a' :| _) _ _) | a' == a -> pure n
     _ -> findBind xs attrs
   -- Follow the attrpath recursively in sets.
   inspectSet (NSet_ _ NNonRecursive binds) attrs = case findBind binds attrs of
@@ -238,9 +238,9 @@ reduce (NWith_ ann scope body) =
 reduce (NLet_ ann binds body) = do
   s <- fmap (M.fromList . catMaybes) $ forM binds $ \case
     NamedVar (StaticKey name :| []) def _pos -> def >>= \case
-      d@(Fix NAbs_{}     ) -> pure $ Just (name, d)
-      d@(Fix NConstant_{}) -> pure $ Just (name, d)
-      d@(Fix NStr_{}     ) -> pure $ Just (name, d)
+      d@(Fix NAbs_{}     ) -> pure $ pure (name, d)
+      d@(Fix NConstant_{}) -> pure $ pure (name, d)
+      d@(Fix NStr_{}     ) -> pure $ pure (name, d)
       _                    -> pure Nothing
     _ -> pure Nothing
   body'  <- pushScope s body
@@ -307,28 +307,28 @@ pruneTree opts = foldFixM $ \(FlaggedF (b, Compose x)) -> do
  where
   prune :: NExprF (Maybe NExprLoc) -> Maybe (NExprF NExprLoc)
   prune = \case
-    NStr str -> Just $ NStr (pruneString str)
+    NStr str -> pure $ NStr (pruneString str)
     NHasAttr (Just aset) attr ->
-      Just $ NHasAttr aset (NE.map pruneKeyName attr)
-    NAbs params (Just body) -> Just $ NAbs (pruneParams params) body
+      pure $ NHasAttr aset (NE.map pruneKeyName attr)
+    NAbs params (Just body) -> pure $ NAbs (pruneParams params) body
 
-    NList l | reduceLists opts -> Just $ NList (catMaybes l)
-            | otherwise        -> Just $ NList (fmap (fromMaybe nNull) l)
+    NList l | reduceLists opts -> pure $ NList (catMaybes l)
+            | otherwise        -> pure $ NList (fmap (fromMaybe nNull) l)
     NSet recur binds
-      | reduceSets opts -> Just $ NSet recur (mapMaybe sequence binds)
-      | otherwise -> Just $ NSet recur (fmap (fmap (fromMaybe nNull)) binds)
+      | reduceSets opts -> pure $ NSet recur (mapMaybe sequence binds)
+      | otherwise -> pure $ NSet recur (fmap (fmap (fromMaybe nNull)) binds)
 
     NLet binds (Just body@(Fix (Compose (Ann _ x)))) ->
-      Just $ case mapMaybe pruneBinding binds of
+      pure $ case mapMaybe pruneBinding binds of
         [] -> x
         xs -> NLet xs body
 
     NSelect (Just aset) attr alt ->
-      Just $ NSelect aset (NE.map pruneKeyName attr) (join alt)
+      pure $ NSelect aset (NE.map pruneKeyName attr) (join alt)
 
     -- These are the only short-circuiting binary operators
-    NBinary NAnd (Just (Fix (Compose (Ann _ larg)))) _ -> Just larg
-    NBinary NOr (Just (Fix (Compose (Ann _ larg)))) _ -> Just larg
+    NBinary NAnd (Just (Fix (Compose (Ann _ larg)))) _ -> pure larg
+    NBinary NOr (Just (Fix (Compose (Ann _ larg)))) _ -> pure larg
 
     -- If the function was never called, it means its argument was in a
     -- thunk that was forced elsewhere.
@@ -338,22 +338,22 @@ pruneTree opts = foldFixM $ \(FlaggedF (b, Compose x)) -> do
     -- invalid is that we're trying to emit what will reproduce whatever
     -- error the user encountered, which means providing all aspects of
     -- the evaluation path they ultimately followed.
-    NBinary op Nothing (Just rarg) -> Just $ NBinary op nNull rarg
-    NBinary op (Just larg) Nothing -> Just $ NBinary op larg nNull
+    NBinary op Nothing (Just rarg) -> pure $ NBinary op nNull rarg
+    NBinary op (Just larg) Nothing -> pure $ NBinary op larg nNull
 
     -- If the scope of a with was never referenced, it's not needed
-    NWith Nothing (Just (Fix (Compose (Ann _ body)))) -> Just body
+    NWith Nothing (Just (Fix (Compose (Ann _ body)))) -> pure body
 
     NAssert Nothing _ ->
       error "How can an assert be used, but its condition not?"
 
-    NAssert _ (Just (Fix (Compose (Ann _ body)))) -> Just body
-    NAssert (Just cond) _ -> Just $ NAssert cond nNull
+    NAssert _ (Just (Fix (Compose (Ann _ body)))) -> pure body
+    NAssert (Just cond) _ -> pure $ NAssert cond nNull
 
     NIf Nothing _ _ -> error "How can an if be used, but its condition not?"
 
-    NIf _ Nothing (Just (Fix (Compose (Ann _ f)))) -> Just f
-    NIf _ (Just (Fix (Compose (Ann _ t)))) Nothing -> Just t
+    NIf _ Nothing (Just (Fix (Compose (Ann _ f)))) -> pure f
+    NIf _ (Just (Fix (Compose (Ann _ t)))) Nothing -> pure t
 
     x                     -> sequence x
 
@@ -364,18 +364,18 @@ pruneTree opts = foldFixM $ \(FlaggedF (b, Compose x)) -> do
 
   pruneAntiquotedText
     :: Antiquoted Text (Maybe NExprLoc) -> Maybe (Antiquoted Text NExprLoc)
-  pruneAntiquotedText (Plain v)             = Just (Plain v)
-  pruneAntiquotedText EscapedNewline        = Just EscapedNewline
+  pruneAntiquotedText (Plain v)             = pure (Plain v)
+  pruneAntiquotedText EscapedNewline        = pure EscapedNewline
   pruneAntiquotedText (Antiquoted Nothing ) = Nothing
-  pruneAntiquotedText (Antiquoted (Just k)) = Just (Antiquoted k)
+  pruneAntiquotedText (Antiquoted (Just k)) = pure (Antiquoted k)
 
   pruneAntiquoted
     :: Antiquoted (NString (Maybe NExprLoc)) (Maybe NExprLoc)
     -> Maybe (Antiquoted (NString NExprLoc) NExprLoc)
-  pruneAntiquoted (Plain v)             = Just (Plain (pruneString v))
-  pruneAntiquoted EscapedNewline        = Just EscapedNewline
+  pruneAntiquoted (Plain v)             = pure (Plain (pruneString v))
+  pruneAntiquoted EscapedNewline        = pure EscapedNewline
   pruneAntiquoted (Antiquoted Nothing ) = Nothing
-  pruneAntiquoted (Antiquoted (Just k)) = Just (Antiquoted k)
+  pruneAntiquoted (Antiquoted (Just k)) = pure (Antiquoted k)
 
   pruneKeyName :: NKeyName (Maybe NExprLoc) -> NKeyName NExprLoc
   pruneKeyName (StaticKey n) = StaticKey n
@@ -386,7 +386,7 @@ pruneTree opts = foldFixM $ \(FlaggedF (b, Compose x)) -> do
   pruneParams (Param n) = Param n
   pruneParams (ParamSet xs b n)
     | reduceSets opts = ParamSet
-      (fmap (second (maybe (Just nNull) (Just . fromMaybe nNull))) xs)
+      (fmap (second (maybe (pure nNull) (pure . fromMaybe nNull))) xs)
       b
       n
     | otherwise = ParamSet (fmap (second (fmap (fromMaybe nNull))) xs) b n
@@ -394,11 +394,11 @@ pruneTree opts = foldFixM $ \(FlaggedF (b, Compose x)) -> do
   pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
   pruneBinding (NamedVar _ Nothing _) = Nothing
   pruneBinding (NamedVar xs (Just x) pos) =
-    Just (NamedVar (NE.map pruneKeyName xs) x pos)
+    pure (NamedVar (NE.map pruneKeyName xs) x pos)
   pruneBinding (Inherit _                 [] _) = Nothing
   pruneBinding (Inherit (join -> Nothing) _  _) = Nothing
   pruneBinding (Inherit (join -> m) xs pos) =
-    Just (Inherit m (fmap pruneKeyName xs) pos)
+    pure (Inherit m (fmap pruneKeyName xs) pos)
 
 reducingEvalExpr
   :: (Framed e m, Has e Options, Exception r, MonadCatch m, MonadIO m)

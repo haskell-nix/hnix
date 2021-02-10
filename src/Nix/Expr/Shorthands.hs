@@ -145,7 +145,7 @@ inherit = Inherit Nothing
 
 -- | An `inherit` clause with an expression to pull from.
 inheritFrom :: e -> [NKeyName e] -> SourcePos -> Binding e
-inheritFrom expr = Inherit (Just expr)
+inheritFrom expr = Inherit (pure expr)
 
 -- | Shorthand for producing a binding of a name to an expression.
 bindTo :: Text -> NExpr -> Binding NExpr

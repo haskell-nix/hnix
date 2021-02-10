@@ -70,7 +70,7 @@ framePos
   -> Maybe SourcePos
 framePos (NixFrame _ f)
   | Just (e :: EvalFrame m v) <- fromException f = case e of
-    EvaluatingExpr _ (Fix (Compose (Ann (SrcSpan beg _) _))) -> Just beg
+    EvaluatingExpr _ (Fix (Compose (Ann (SrcSpan beg _) _))) -> pure beg
     _ -> Nothing
   | otherwise = Nothing
 

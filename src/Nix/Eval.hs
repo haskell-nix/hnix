@@ -132,7 +132,7 @@ eval (NBinary NApp fun arg) = do
 eval (NBinary op   larg rarg) = larg >>= evalBinary op ?? rarg
 
 eval (NSelect aset attr alt ) = evalSelect aset attr >>= either go id
-  where go (s, ks) = fromMaybe (attrMissing ks (Just s)) alt
+  where go (s, ks) = fromMaybe (attrMissing ks (pure s)) alt
 
 eval (NHasAttr aset attr) = evalSelect aset attr >>= toValue . isRight
 
@@ -352,7 +352,7 @@ evalSetterKeyName
   => NKeyName (m v)
   -> m (Maybe Text)
 evalSetterKeyName = \case
-  StaticKey k -> pure (Just k)
+  StaticKey k -> pure (pure k)
   DynamicKey k ->
     runAntiquoted "\n" assembleString (>>= fromValueMay) k <&> \case
       Just ns -> Just (stringIgnoreContext ns)
@@ -370,7 +370,7 @@ assembleString = \case
   fromParts = fmap (fmap mconcat . sequence) . traverse go
 
   go = runAntiquoted "\n"
-                     (pure . Just . makeNixStringWithoutContext)
+                     (pure . pure . makeNixStringWithoutContext)
                      (>>= fromValueMay)
 
 buildArgument
@@ -398,25 +398,25 @@ buildArgument params arg = do
     -> Maybe (AttrSet v -> m v)
   assemble scope isVariadic k = \case
     That Nothing ->
-      Just
+      pure
         $  const
         $  evalError @v
         $  ErrorCall
         $  "Missing value for parameter: "
         <> show k
     That (Just f) ->
-      Just $ \args -> defer $ withScopes scope $ pushScope args f
+      pure $ \args -> defer $ withScopes scope $ pushScope args f
     This _
       | isVariadic
       -> Nothing
       | otherwise
-      -> Just
+      -> pure
         $  const
         $  evalError @v
         $  ErrorCall
         $  "Unexpected parameter: "
         <> show k
-    These x _ -> Just (const (pure x))
+    These x _ -> pure (const (pure x))
 
 addSourcePositions
   :: (MonadReader e m, Has e SrcSpan) => Transform NExprLocF (m a)

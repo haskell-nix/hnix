@@ -107,7 +107,7 @@ findEnvPathM name = do
       then makeAbsolutePath @t @f $ absPath </> "default.nix"
       else return absPath
     exists <- doesFileExist absFile
-    pure $ if exists then Just absFile else Nothing
+    pure $ if exists then pure absFile else Nothing
 
 findPathBy
   :: forall e t f m
@@ -139,7 +139,7 @@ findPathBy finder ls name = do
           Just (nsPfx :: NixString) ->
             let pfx = stringIgnoreContext nsPfx
             in  if not (Text.null pfx)
-                  then tryPath path (Just (Text.unpack pfx))
+                  then tryPath path (pure (Text.unpack pfx))
                   else tryPath path Nothing
           _ -> tryPath path Nothing
 
@@ -222,7 +222,7 @@ findPathM = findPathBy existingPath
   existingPath path = do
     apath  <- makeAbsolutePath @t @f path
     exists <- doesPathExist apath
-    pure $ if exists then Just apath else Nothing
+    pure $ if exists then pure apath else Nothing
 
 defaultImportPath
   :: (MonadNix e t f m, MonadState (HashMap FilePath NExprLoc, b) m)

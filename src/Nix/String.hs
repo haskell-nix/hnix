@@ -146,7 +146,7 @@ fromNixLikeContext =
 
 -- | Extract the string contents from a NixString that has no context
 getStringNoContext :: NixString -> Maybe Text
-getStringNoContext (NixString s c) | null c    = Just s
+getStringNoContext (NixString s c) | null c    = pure s
                                              | otherwise = Nothing
 
 -- | Extract the string contents from a NixString even if the NixString has an associated context

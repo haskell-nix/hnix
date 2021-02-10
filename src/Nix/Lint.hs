@@ -189,7 +189,7 @@ merge context = go
         )
         (pure <$> l)
         (pure <$> r)
-      if M.null m then go xs ys else (TSet (Just m) :) <$> go xs ys
+      if M.null m then go xs ys else (TSet (pure m) :) <$> go xs ys
     (TClosure{}, TClosure{}) ->
       throwError $ ErrorCall "Cannot unify functions"
     (TBuiltin _ _, TBuiltin _ _) ->
@@ -202,11 +202,11 @@ merge context = go
     mergeFunctions pl nl fl pr fr xs ys = do
         m <- sequenceA $ M.intersectionWith
             (\i j -> i >>= \i' -> j >>= \j' -> case (i', j') of
-                    (Nothing, Nothing) -> return $ Just Nothing
-                    (_, Nothing) -> return Nothing
-                    (Nothing, _) -> return Nothing
+                    (Nothing, Nothing) -> return $ pure Nothing
+                    (_, Nothing) -> pure Nothing
+                    (Nothing, _) -> pure Nothing
                     (Just i'', Just j'') ->
-                        Just . Just <$> unify context i'' j'')
+                        pure . pure <$> unify context i'' j'')
             (return <$> pl) (return <$> pr)
         let Just m' = sequenceA $ M.filter isJust m
         if M.null m'
@@ -290,7 +290,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
     f <- mkSymbolic [TPath]
     l <- mkSymbolic [TConstant [TInt]]
     c <- mkSymbolic [TConstant [TInt]]
-    mkSymbolic [TSet (Just (M.fromList (go f l c)))]
+    mkSymbolic [TSet (pure (M.fromList (go f l c)))]
    where
     go f l c =
       [(Text.pack "file", f), (Text.pack "line", l), (Text.pack "col", c)]

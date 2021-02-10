@@ -31,7 +31,7 @@ hnixEvalFile opts file = do
     Success expr -> do
       setEnv "TEST_VAR" "foo"
       runWithBasicEffects opts
-        $ catch (evaluateExpression (Just file) nixEvalExprLoc normalForm expr)
+        $ catch (evaluateExpression (pure file) nixEvalExprLoc normalForm expr)
         $ \case
             NixException frames ->
               errorWithoutStackTrace

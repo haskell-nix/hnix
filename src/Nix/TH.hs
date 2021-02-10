@@ -29,7 +29,7 @@ quoteExprExp s = do
     Failure err -> fail $ show err
     Success e   -> pure e
   dataToExpQ
-    (const Nothing `extQ` metaExp (freeVars expr) `extQ` (Just . liftText))
+    (const Nothing `extQ` metaExp (freeVars expr) `extQ` (pure . liftText))
     expr
  where
   liftText :: Text.Text -> Q Exp
@@ -82,7 +82,7 @@ freeVars e = case unFix e of
  where
 
   staticKey :: NKeyName r -> Maybe VarName
-  staticKey (StaticKey  varname) = Just varname
+  staticKey (StaticKey  varname) = pure varname
   staticKey (DynamicKey _      ) = Nothing
 
   bindDefs :: Binding r -> Set VarName
@@ -120,12 +120,12 @@ instance ToExpr Float where
 
 metaExp :: Set VarName -> NExprLoc -> Maybe ExpQ
 metaExp fvs (Fix (NSym_ _ x)) | x `Set.member` fvs =
-  Just [| toExpr $(varE (mkName (Text.unpack x))) |]
+  pure [| toExpr $(varE (mkName (Text.unpack x))) |]
 metaExp _ _ = Nothing
 
 metaPat :: Set VarName -> NExprLoc -> Maybe PatQ
 metaPat fvs (Fix (NSym_ _ x)) | x `Set.member` fvs =
-  Just (varP (mkName (Text.unpack x)))
+  pure (varP (mkName (Text.unpack x)))
 metaPat _ _ = Nothing
 
 nix :: QuasiQuoter

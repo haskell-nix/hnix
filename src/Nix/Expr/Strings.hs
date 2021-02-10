@@ -68,7 +68,7 @@ stripIndent xs =
         (map
           (\case
             [] -> Nothing
-            x  -> Just (last x)
+            x  -> pure (last x)
           )
           (inits ys)
         )

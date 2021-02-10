@@ -98,7 +98,7 @@ instance ( Convertible e t f m
 instance Convertible e t f m
   => FromValue () m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
-    NVConstant' NNull -> pure $ Just ()
+    NVConstant' NNull -> pure $ pure ()
     _                 -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
@@ -107,7 +107,7 @@ instance Convertible e t f m
 instance Convertible e t f m
   => FromValue Bool m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
-    NVConstant' (NBool b) -> pure $ Just b
+    NVConstant' (NBool b) -> pure $ pure b
     _                     -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
@@ -116,7 +116,7 @@ instance Convertible e t f m
 instance Convertible e t f m
   => FromValue Int m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
-    NVConstant' (NInt b) -> pure $ Just (fromInteger b)
+    NVConstant' (NInt b) -> pure $ pure (fromInteger b)
     _                    -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
@@ -125,7 +125,7 @@ instance Convertible e t f m
 instance Convertible e t f m
   => FromValue Integer m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
-    NVConstant' (NInt b) -> pure $ Just b
+    NVConstant' (NInt b) -> pure $ pure b
     _                    -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
@@ -134,8 +134,8 @@ instance Convertible e t f m
 instance Convertible e t f m
   => FromValue Float m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
-    NVConstant' (NFloat b) -> pure $ Just b
-    NVConstant' (NInt   i) -> pure $ Just (fromInteger i)
+    NVConstant' (NFloat b) -> pure $ pure b
+    NVConstant' (NInt   i) -> pure $ pure (fromInteger i)
     _                      -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
@@ -147,9 +147,9 @@ instance ( Convertible e t f m
          )
   => FromValue NixString m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
-    NVStr' ns -> pure $ Just ns
+    NVStr' ns -> pure $ pure ns
     NVPath' p ->
-      Just
+      pure
         .   (\s -> makeNixStringWithSingletonContext s (StringContext s DirectPath))
         .   Text.pack
         .   unStorePath
@@ -179,7 +179,7 @@ instance ( Convertible e t f m
          )
   => FromValue Path m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
-    NVPath' p  -> pure $ Just (Path p)
+    NVPath' p  -> pure $ pure (Path p)
     NVStr'  ns -> pure $ Path . Text.unpack <$> getStringNoContext  ns
     NVSet' s _ -> case M.lookup "outPath" s of
       Nothing -> pure Nothing
@@ -192,7 +192,7 @@ instance ( Convertible e t f m
 instance Convertible e t f m
   => FromValue [NValue t f m] m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
-    NVList' l -> pure $ Just l
+    NVList' l -> pure $ pure l
     _         -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
@@ -212,7 +212,7 @@ instance ( Convertible e t f m
 instance Convertible e t f m
   => FromValue (AttrSet (NValue t f m)) m (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
-    NVSet' s _ -> pure $ Just s
+    NVSet' s _ -> pure $ pure s
     _          -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
@@ -233,7 +233,7 @@ instance Convertible e t f m
   => FromValue (AttrSet (NValue t f m), AttrSet SourcePos) m
               (NValue' t f m (NValue t f m)) where
   fromValueMay = \case
-    NVSet' s p -> pure $ Just (s, p)
+    NVSet' s p -> pure $ pure (s, p)
     _          -> pure Nothing
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
@@ -352,9 +352,9 @@ instance (Convertible e t f m, ToValue a m (NValue t f m))
 instance Convertible e t f m
   => ToValue NixLikeContextValue m (NValue' t f m (NValue t f m)) where
   toValue nlcv = do
-    path <- if nlcvPath nlcv then Just <$> toValue True else pure Nothing
+    path <- if nlcvPath nlcv then pure <$> toValue True else pure Nothing
     allOutputs <- if nlcvAllOutputs nlcv
-      then Just <$> toValue True
+      then pure <$> toValue True
       else pure Nothing
     outputs <- do
       let outputs =
@@ -362,7 +362,7 @@ instance Convertible e t f m
       ts :: [NValue t f m] <- traverse toValue outputs
       case ts of
         [] -> pure Nothing
-        _  -> Just <$> toValue ts
+        _  -> pure <$> toValue ts
     pure $ flip nvSet' M.empty $ M.fromList $ catMaybes
       [ ("path",) <$> path
       , ("allOutputs",) <$> allOutputs
