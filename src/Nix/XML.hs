@@ -44,7 +44,7 @@ toXML = runWithStringContext . fmap pp . iterNValue (\_ _ -> cyc) phi
     NVSet' s _ -> sequence s >>= \kvs -> pure $ Element
       (unqual "attrs")
       mempty
-      (map
+      (fmap
         (\(k, v) -> Elem
           (Element (unqual "attr")
                    [Attr (unqual "name") (Text.unpack k)]

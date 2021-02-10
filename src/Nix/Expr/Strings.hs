@@ -65,7 +65,7 @@ stripIndent xs =
     . fmap snd
     . dropWhileEnd cleanup
     . (\ys -> zip
-        (map
+        (fmap
           (\case
             [] -> Nothing
             x  -> pure (last x)
