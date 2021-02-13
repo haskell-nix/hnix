@@ -68,7 +68,7 @@ import           System.FilePath
 newtype Reducer m a = Reducer
     { runReducer :: ReaderT (Maybe FilePath, Scopes (Reducer m) NExprLoc)
                            (StateT (HashMap FilePath NExprLoc, MS.HashMap Text Text) m) a }
-    deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
+    deriving (Functor, Applicative, Alternative, Monad,
               MonadFix, MonadIO, MonadFail,
               MonadReader (Maybe FilePath, Scopes (Reducer m) NExprLoc),
               MonadState (HashMap FilePath NExprLoc, MS.HashMap Text Text))

@@ -28,6 +28,7 @@ module Nix.Type.Infer
 where
 
 import           Control.Applicative
+import qualified Control.Applicative as Applicative
 import           Control.Arrow
 import           Control.Monad.Catch
 import           Control.Monad.Except
@@ -84,7 +85,6 @@ newtype InferT s m a = InferT
         , Applicative
         , Alternative
         , Monad
-        , MonadPlus
         , MonadFix
         , MonadReader (Set.Set TVar, Scopes (InferT s m) (Judgment s))
         , MonadFail
@@ -596,14 +596,14 @@ normalizeScheme (Forall _ body) = Forall (fmap snd ord) (normtype body)
 ---------------------------------------------------------------------------------
 
 newtype Solver m a = Solver (LogicT (StateT [TypeError] m) a)
-    deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
+    deriving (Functor, Applicative, Alternative, Monad,
               MonadLogic, MonadState [TypeError])
 
 instance MonadTrans Solver where
   lift = Solver . lift . lift
 
 instance Monad m => MonadError TypeError (Solver m) where
-  throwError err = Solver $ lift (modify (err :)) *> mzero
+  throwError err = Solver $ lift (modify (err :)) *> Applicative.empty
   catchError _ _ = error "This is never used"
 
 runSolver :: Monad m => Solver m a -> m (Either [TypeError] [a])

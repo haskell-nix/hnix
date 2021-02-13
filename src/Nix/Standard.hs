@@ -88,7 +88,8 @@ instance MonadReader (Context m (StdValue m)) m => Scoped (StdValue m) m where
   pushScopes    = pushScopesReader
   lookupVar     = lookupVarReader
 
-instance ( MonadFix m
+instance ( Alternative m
+         , MonadFix m
          , MonadFile m
          , MonadCatch m
          , MonadEnv m
@@ -97,7 +98,6 @@ instance ( MonadFix m
          , MonadHttp m
          , MonadInstantiate m
          , MonadIntrospect m
-         , MonadPlus m
          , MonadPutStr m
          , MonadStore m
          , MonadAtomicRef m
@@ -164,7 +164,6 @@ newtype StandardTF r m a
     , Alternative
     , Monad
     , MonadFail
-    , MonadPlus
     , MonadFix
     , MonadIO
     , MonadCatch

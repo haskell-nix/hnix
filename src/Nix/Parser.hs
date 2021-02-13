@@ -87,8 +87,8 @@ import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer    as L
 
 infixl 3 <+>
-(<+>) :: MonadPlus m => m a -> m a -> m a
-(<+>) = mplus
+(<+>) :: Alternative m => m a -> m a -> m a
+(<+>) = (<|>)
 
 ---------------------------------------------------------------------------------
 

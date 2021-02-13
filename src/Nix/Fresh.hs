@@ -20,7 +20,6 @@ import           Control.Monad.Catch  ( MonadCatch
 import           Control.Monad.Except
                               ( MonadFix
                               , MonadIO
-                              , MonadPlus
                               , MonadTrans(..)
                               )
 #if !MIN_VERSION_base(4,13,0)
@@ -47,7 +46,6 @@ newtype FreshIdT i m a = FreshIdT { unFreshIdT :: ReaderT (Var m i) m a }
     , Alternative
     , Monad
     , MonadFail
-    , MonadPlus
     , MonadFix
     , MonadRef
     , MonadAtomicRef
