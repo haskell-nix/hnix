@@ -26,7 +26,7 @@ typeSet :: Type
 typeSet = TSet True M.empty
 
 typeList :: Type
-typeList = TList []
+typeList = TList mempty
 
 infixr 1 :~>
 

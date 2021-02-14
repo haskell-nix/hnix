@@ -241,7 +241,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalWith c b = do
     scope <- currentScopes
     span  <- currentPos
-    (\b -> addProvenance (Provenance scope (NWith_ span Nothing (Just b))) b)
+    (\b -> addProvenance (Provenance scope (NWith_ span Nothing (pure b))) b)
       <$> evalWithAttrSet c b
 
   evalIf c t f = do
@@ -250,13 +250,13 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     fromValue c >>= \b -> if b
       then
         (\t -> addProvenance
-            (Provenance scope (NIf_ span (Just c) (Just t) Nothing))
+            (Provenance scope (NIf_ span (pure c) (pure t) Nothing))
             t
           )
           <$> t
       else
         (\f -> addProvenance
-            (Provenance scope (NIf_ span (Just c) Nothing (Just f)))
+            (Provenance scope (NIf_ span (pure c) Nothing (pure f)))
             f
           )
           <$> f
@@ -267,7 +267,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
       then do
         scope <- currentScopes
         (\b ->
-            addProvenance (Provenance scope (NAssert_ span (Just c) (Just b))) b
+            addProvenance (Provenance scope (NAssert_ span (pure c) (pure b))) b
           )
           <$> body
       else nverr $ Assertion span c
@@ -275,7 +275,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalApp f x = do
     scope <- currentScopes
     span  <- currentPos
-    addProvenance (Provenance scope (NBinary_ span NApp (Just f) Nothing))
+    addProvenance (Provenance scope (NBinary_ span NApp (pure f) Nothing))
       <$> (callFunc f =<< defer x)
 
   evalAbs p k = do
@@ -333,7 +333,7 @@ execUnaryOp scope span op arg = do
         <> " must evaluate to an atomic type: "
         <> show x
  where
-  unaryOp = pure . nvConstantP (Provenance scope (NUnary_ span op (Just arg)))
+  unaryOp = pure . nvConstantP (Provenance scope (NUnary_ span op (pure arg)))
 
 execBinaryOp
   :: forall e t f m
@@ -365,9 +365,9 @@ execBinaryOp scope span op lval rarg = case op of
  where
   toBoolOp :: Maybe (NValue t f m) -> Bool -> m (NValue t f m)
   toBoolOp r b = pure $ nvConstantP
-    (Provenance scope (NBinary_ span op (Just lval) r))
+    (Provenance scope (NBinary_ span op (pure lval) r))
     (NBool b)
-  boolOp rval = toBoolOp (Just rval)
+  boolOp rval = toBoolOp (pure rval)
   bypass      = toBoolOp Nothing
 
 
@@ -430,7 +430,7 @@ execBinaryOpForced scope span op lval rval = case op of
 
  where
   prov :: Provenance m (NValue t f m)
-  prov = Provenance scope (NBinary_ span op (Just lval) (Just rval))
+  prov = Provenance scope (NBinary_ span op (pure lval) (pure rval))
 
   toBool = pure . nvConstantP prov . NBool
   compare :: (forall a. Ord a => a -> a -> Bool) -> m (NValue t f m)

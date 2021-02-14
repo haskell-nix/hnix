@@ -32,13 +32,13 @@ mkFloatF = NConstant . NFloat
 -- | Make a regular (double-quoted) string.
 mkStr :: Text -> NExpr
 mkStr = Fix . NStr . DoubleQuoted . \case
-  "" -> []
+  "" -> mempty
   x  -> [Plain x]
 
 -- | Make an indented string.
 mkIndentedStr :: Int -> Text -> NExpr
 mkIndentedStr w = Fix . NStr . Indented w . \case
-  "" -> []
+  "" -> mempty
   x  -> [Plain x]
 
 -- | Make a path. Use 'True' if the path should be read from the
@@ -78,7 +78,7 @@ mkSynHoleF :: Text -> NExprF a
 mkSynHoleF = NSynHole
 
 mkSelector :: Text -> NAttrPath NExpr
-mkSelector = (:| []) . StaticKey
+mkSelector = (:| mempty) . StaticKey
 
 mkBool :: Bool -> NExpr
 mkBool = Fix . mkBoolF
@@ -99,7 +99,7 @@ mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkOper2 op a = Fix . NBinary op a
 
 mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
-mkParamset params variadic = ParamSet params variadic Nothing
+mkParamset params variadic = ParamSet params variadic mempty
 
 mkRecSet :: [Binding NExpr] -> NExpr
 mkRecSet = Fix . NSet NRecursive
@@ -145,7 +145,7 @@ inherit = Inherit Nothing
 
 -- | An `inherit` clause with an expression to pull from.
 inheritFrom :: e -> [NKeyName e] -> SourcePos -> Binding e
-inheritFrom expr = Inherit (Just expr)
+inheritFrom expr = Inherit (pure expr)
 
 -- | Shorthand for producing a binding of a name to an expression.
 bindTo :: Text -> NExpr -> Binding NExpr
@@ -231,5 +231,5 @@ infixl 1 @@
 infixr 1 ==>
 
 (@.) :: NExpr -> Text -> NExpr
-obj @. name = Fix (NSelect obj (StaticKey name :| []) Nothing)
+obj @. name = Fix (NSelect obj (StaticKey name :| mempty) Nothing)
 infixl 2 @.

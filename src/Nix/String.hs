@@ -82,7 +82,7 @@ instance Semigroup NixLikeContextValue where
     }
 
 instance Monoid NixLikeContextValue where
-  mempty = NixLikeContextValue False False []
+  mempty = NixLikeContextValue False False mempty
 
 
 -- ** StringContext accumulator
@@ -146,8 +146,8 @@ fromNixLikeContext =
 
 -- | Extract the string contents from a NixString that has no context
 getStringNoContext :: NixString -> Maybe Text
-getStringNoContext (NixString s c) | null c    = Just s
-                                             | otherwise = Nothing
+getStringNoContext (NixString s c) | null c    = pure s
+                                             | otherwise = mempty
 
 -- | Extract the string contents from a NixString even if the NixString has an associated context
 stringIgnoreContext :: NixString -> Text
@@ -155,7 +155,7 @@ stringIgnoreContext (NixString s _) = s
 
 -- | Get the contents of a 'NixString' and write its context into the resulting set.
 extractNixString :: Monad m => NixString -> WithStringContextT m Text
-extractNixString (NixString s c) = WithStringContextT $ tell c >> pure s
+extractNixString (NixString s c) = WithStringContextT $ tell c *> pure s
 
 
 -- ** Setters
@@ -168,12 +168,12 @@ toStringContexts (path, nlcv) = case nlcv of
     : toStringContexts (path, nlcv { nlcvAllOutputs = False })
   NixLikeContextValue _ _ ls | not (null ls) ->
     fmap (StringContext path . DerivationOutput) ls
-  _ -> []
+  _ -> mempty
 
 toNixLikeContextValue :: StringContext -> (Text, NixLikeContextValue)
 toNixLikeContextValue sc = (,) (scPath sc) $ case scFlavor sc of
-  DirectPath         -> NixLikeContextValue True False []
-  AllOutputs         -> NixLikeContextValue False True []
+  DirectPath         -> NixLikeContextValue True False mempty
+  AllOutputs         -> NixLikeContextValue False True mempty
   DerivationOutput t -> NixLikeContextValue False False [t]
 
 toNixLikeContext :: S.HashSet StringContext -> NixLikeContext

@@ -45,7 +45,7 @@ class MonadThunkId m => MonadThunk t m a | t -> m, t -> a where
 
   -- | Return an identifier for the thunk unless it is a pure value (i.e.,
   --   strictly an encapsulation of some 'a' without any additional
-  --   structure). For pure values represented as thunks, returns Nothing.
+  --   structure). For pure values represented as thunks, returns mempty.
   thunkId :: t -> ThunkId m
 
   queryM :: t -> m r -> (a -> m r) -> m r

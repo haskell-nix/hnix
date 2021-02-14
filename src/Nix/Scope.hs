@@ -28,7 +28,9 @@ newScope = Scope
 
 scopeLookup :: Text -> [Scope a] -> Maybe a
 scopeLookup key = foldr go Nothing
-  where go (Scope m) rest = M.lookup key m <|> rest
+ where
+  go :: Scope a -> Maybe a -> Maybe a
+  go (Scope m) rest = M.lookup key m <|> rest
 
 data Scopes m a = Scopes
     { lexicalScopes :: [Scope a]
@@ -47,7 +49,7 @@ instance Monoid (Scopes m a) where
   mappend = (<>)
 
 emptyScopes :: forall m a . Scopes m a
-emptyScopes = Scopes [] []
+emptyScopes = Scopes mempty mempty
 
 class Scoped a m | m -> a where
   currentScopes :: m (Scopes m a)
@@ -64,10 +66,10 @@ clearScopesReader
 clearScopesReader = local (set hasLens (emptyScopes @m @a))
 
 pushScope :: Scoped a m => AttrSet a -> m r -> m r
-pushScope s = pushScopes (Scopes [Scope s] [])
+pushScope s = pushScopes (Scopes [Scope s] mempty)
 
 pushWeakScope :: (Functor m, Scoped a m) => m (AttrSet a) -> m r -> m r
-pushWeakScope s = pushScopes (Scopes [] [Scope <$> s])
+pushWeakScope s = pushScopes (Scopes mempty [Scope <$> s])
 
 pushScopesReader
   :: (MonadReader e m, Has e (Scopes m a)) => Scopes m a -> m r -> m r
@@ -78,14 +80,14 @@ lookupVarReader
 lookupVarReader k = do
   mres <- asks (scopeLookup k . lexicalScopes @m . view hasLens)
   case mres of
-    Just sym -> pure $ Just sym
+    Just sym -> pure $ pure sym
     Nothing  -> do
       ws <- asks (dynamicScopes . view hasLens)
       foldr
         (\x rest -> do
           mres' <- M.lookup k . getScope <$> x
           case mres' of
-            Just sym -> pure $ Just sym
+            Just sym -> pure $ pure sym
             Nothing  -> rest
         )
         (pure Nothing)

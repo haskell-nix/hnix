@@ -76,10 +76,10 @@ main' iniVal = initState iniVal >>= \s -> flip evalStateT s
         banner
         cmd
         options
-        (Just commandPrefix)
-        (Just "paste")
+        (pure commandPrefix)
+        (pure "paste")
         completion
-        (rcFile >> greeter)
+        (rcFile *> greeter)
         finalizer
  where
   commandPrefix = ':'
@@ -119,7 +119,7 @@ main' iniVal = initState iniVal >>= \s -> flip evalStateT s
              -> System.Console.Repline.Options m
              -> String
              -> m ()
-  optMatcher s [] _ = liftIO $ putStrLn $ "No such command :" ++ s
+  optMatcher s [] _ = liftIO $ putStrLn $ "No such command :" <> s
   optMatcher s ((x, m) : xs) args
     | s `Data.List.isPrefixOf` x = m args
     | otherwise = optMatcher s xs args
@@ -166,7 +166,7 @@ initState mIni = do
   where
     evalText :: (MonadNix e t f m) => Text -> m (NValue t f m)
     evalText expr = case parseNixTextLoc expr of
-      Failure e -> error $ "Impossible happened: Unable to parse expression - '" ++ Data.Text.unpack expr ++ "' error was " ++ show e
+      Failure e -> error $ "Impossible happened: Unable to parse expression - '" <> Data.Text.unpack expr <> "' error was " <> show e
       Success e -> do evalExprLoc e
 
 type Repl e t f m = HaskelineT (StateT (IState t f m) m)
@@ -212,14 +212,14 @@ exec update source = do
           -- Update the interpreter state
           when (update && isBinding) $ do
             -- Set `replIt` to last entered expression
-            put st { replIt = Just expr }
+            put st { replIt = pure expr }
 
             -- If the result value is a set, update our context with it
             case val of
               NVSet xs _ -> put st { replCtx = Data.HashMap.Lazy.union xs (replCtx st) }
               _          -> pure ()
 
-          pure $ Just val
+          pure $ pure val
   where
     -- If parsing fails, turn the input into singleton attribute set
     -- and try again.
@@ -292,7 +292,7 @@ typeof
 typeof args = do
   st <- get
   mVal <- case Data.HashMap.Lazy.lookup line (replCtx st) of
-    Just val -> pure $ Just val
+    Just val -> pure $ pure val
     Nothing  -> do
       exec False line
 
@@ -329,7 +329,7 @@ completion
   :: (MonadNix e t f m, MonadIO m)
   => CompleterStyle (StateT (IState t f m) m)
 completion = System.Console.Repline.Prefix
-  (completeWordWithPrev (Just '\\') separators completeFunc)
+  (completeWordWithPrev (pure '\\') separators completeFunc)
   defaultMatcher
   where
     separators :: String
@@ -360,7 +360,7 @@ completeFunc reversedPrev word
   = do
     s <- get
     case Data.HashMap.Lazy.lookup var (replCtx s) of
-      Nothing -> pure []
+      Nothing -> pure mempty
       Just binding -> do
         candidates <- lift $ algebraicComplete subFields binding
         pure $ notFinished <$> listCompletion (Data.Text.unpack . (var <>) <$> candidates)
@@ -396,14 +396,14 @@ completeFunc reversedPrev word
               [_] -> pure $ keys m
               f:fs ->
                 case Data.HashMap.Lazy.lookup f m of
-                  Nothing -> pure []
+                  Nothing -> pure mempty
                   Just e ->
                     demand e
                       (\e' -> (fmap . fmap) (("." <> f) <>) $ algebraicComplete fs e')
 
       in case val of
         NVSet xs _ -> withMap xs
-        _          -> pure []
+        _          -> pure mempty
 
 -- HelpOption inspired by Dhall Repl
 -- with `Doc` instead of String for syntax and doc

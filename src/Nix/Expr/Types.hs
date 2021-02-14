@@ -123,7 +123,7 @@ data NExprF r
   -- alternative if the key doesn't exist.
   --
   -- > NSelect s (x :| []) Nothing                 ~  s.x
-  -- > NSelect s (x :| []) (Just y)                ~  s.x or y
+  -- > NSelect s (x :| []) (pure y)                ~  s.x or y
   | NHasAttr !r !(NAttrPath r)
   -- ^ Ask if a set contains a given attribute path.
   --
@@ -174,7 +174,7 @@ instance IsString NExpr where
 instance Lift (Fix NExprF) where
   lift = dataToExpQ $ \b ->
     case Reflection.typeOf b `eqTypeRep` Reflection.typeRep @Text of
-      Just HRefl -> Just [| pack $(liftString $ unpack b) |]
+      Just HRefl -> pure [| pack $(liftString $ unpack b) |]
       Nothing    -> Nothing
 
 #if MIN_VERSION_template_haskell(2,17,0)
@@ -204,7 +204,7 @@ data Binding r
   --   the first member of the list in the second argument.
   --
   -- > Inherit Nothing  [StaticKey "x"] SourcePos{}               ~  inherit x;
-  -- > Inherit (Just x) []              SourcePos{}               ~  inherit (x);
+  -- > Inherit (pure x) mempty          SourcePos{}               ~  inherit (x);
   deriving (Generic, Generic1, Typeable, Data, Ord, Eq, Functor,
             Foldable, Traversable, Show, NFData, Hashable)
 
@@ -227,7 +227,7 @@ data Params r
   -- variadic or not.
   --
   -- > ParamSet [("x",Nothing)] False Nothing     ~  { x }
-  -- > ParamSet [("x",Just y)]  True  (Just "s")  ~  s@{ x ? y, ... }
+  -- > ParamSet [("x",pure y)]  True  (pure "s")  ~  s@{ x ? y, ... }
   deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Show,
             Foldable, Traversable, NFData, Hashable)
 
@@ -310,7 +310,7 @@ instance Serialise r => Serialise (NString r)
 
 -- | For the the 'IsString' instance, we use a plain doublequoted string.
 instance IsString (NString r) where
-  fromString ""     = DoubleQuoted []
+  fromString ""     = DoubleQuoted mempty
   fromString string = DoubleQuoted [Plain $ pack string]
 
 -- | A 'KeyName' is something that can appear on the left side of an
@@ -478,7 +478,7 @@ instance Serialise NRecordType
 
 -- | Get the name out of the parameter (there might be none).
 paramName :: Params r -> Maybe VarName
-paramName (Param n       ) = Just n
+paramName (Param n       ) = pure n
 paramName (ParamSet _ _ n) = n
 
 $(deriveEq1 ''NExprF)
@@ -575,7 +575,7 @@ ekey
   -> SourcePos
   -> Lens' (Fix g) (Maybe (Fix g))
 ekey keys pos f e@(Fix x) | (NSet NNonRecursive xs, ann) <- fromNExpr x = case go xs of
-  ((v, []      ) : _) -> fromMaybe e <$> f (Just v)
+  ((v, []      ) : _) -> fromMaybe e <$> f (pure v)
   ((v, r : rest) : _) -> ekey (r :| rest) pos f v
 
   _                   -> f Nothing <&> \case

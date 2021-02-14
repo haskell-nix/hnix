@@ -21,7 +21,7 @@ newtype Assumption = Assumption { assumptions :: [(Name, Type)] }
   deriving (Eq, Show)
 
 empty :: Assumption
-empty = Assumption []
+empty = Assumption mempty
 
 extend :: Assumption -> (Name, Type) -> Assumption
 extend (Assumption a) (x, s) = Assumption ((x, s) : a)

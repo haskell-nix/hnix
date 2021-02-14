@@ -43,30 +43,30 @@ defaultOptions current = Options { verbose      = ErrorsOnly
                                  , thunks       = False
                                  , values       = False
                                  , showScopes   = False
-                                 , reduce       = Nothing
+                                 , reduce       = mempty
                                  , reduceSets   = False
                                  , reduceLists  = False
                                  , parse        = False
                                  , parseOnly    = False
                                  , finder       = False
-                                 , findFile     = Nothing
+                                 , findFile     = mempty
                                  , strict       = False
                                  , evaluate     = False
                                  , json         = False
                                  , xml          = False
-                                 , attr         = Nothing
-                                 , include      = []
+                                 , attr         = mempty
+                                 , include      = mempty
                                  , check        = False
-                                 , readFrom     = Nothing
+                                 , readFrom     = mempty
                                  , cache        = False
                                  , repl         = False
                                  , ignoreErrors = False
-                                 , expression   = Nothing
-                                 , arg          = []
-                                 , argstr       = []
-                                 , fromFile     = Nothing
+                                 , expression   = mempty
+                                 , arg          = mempty
+                                 , argstr       = mempty
+                                 , fromFile     = mempty
                                  , currentTime  = current
-                                 , filePaths    = []
+                                 , filePaths    = mempty
                                  }
 
 data Verbosity

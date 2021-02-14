@@ -60,7 +60,7 @@ From (git://nix)/tests/lang.sh we see that
 -}
 
 groupBy :: Ord k => (v -> k) -> [v] -> Map k [v]
-groupBy key = Map.fromListWith (++) . fmap (key &&& pure)
+groupBy key = Map.fromListWith (<>) . fmap (key &&& pure)
 
 -- | New tests, which have never yet passed.  Once any of these is passing,
 -- please remove it from this list.  Do not add tests to this list if they have
@@ -101,13 +101,13 @@ genTests = do
       ["parse", "fail"] -> assertParseFail opts $ the files
       ["eval" , "okay"] -> assertEval opts files
       ["eval" , "fail"] -> assertEvalFail $ the files
-      _                 -> error $ "Unexpected: " ++ show kind
+      _                 -> error $ "Unexpected: " <> show kind
 
 assertParse :: Options -> FilePath -> Assertion
 assertParse _opts file = parseNixFileLoc file >>= \case
   Success _expr -> pure () -- pure $! runST $ void $ lint opts expr
   Failure err ->
-    assertFailure $ "Failed to parse " ++ file ++ ":\n" ++ show err
+    assertFailure $ "Failed to parse " <> file <> ":\n" <> show err
 
 assertParseFail :: Options -> FilePath -> Assertion
 assertParseFail opts file = do
@@ -118,25 +118,25 @@ assertParseFail opts file = do
           _ <- pure $! runST $ void $ lint opts expr
           assertFailure
             $  "Unexpected success parsing `"
-            ++ file
-            ++ ":\nParsed value: "
-            ++ show expr
+            <> file
+            <> ":\nParsed value: "
+            <> show expr
         Failure _ -> pure ()
       )
     $ \(_ :: SomeException) -> pure ()
 
 assertLangOk :: Options -> FilePath -> Assertion
 assertLangOk opts file = do
-  actual   <- printNix <$> hnixEvalFile opts (file ++ ".nix")
-  expected <- Text.readFile $ file ++ ".exp"
-  assertEqual "" expected $ Text.pack (actual ++ "\n")
+  actual   <- printNix <$> hnixEvalFile opts (file <> ".nix")
+  expected <- Text.readFile $ file <> ".exp"
+  assertEqual "" expected $ Text.pack (actual <> "\n")
 
 assertLangOkXml :: Options -> FilePath -> Assertion
 assertLangOkXml opts file = do
   actual <- stringIgnoreContext . toXML <$> hnixEvalFile
     opts
-    (file ++ ".nix")
-  expected <- Text.readFile $ file ++ ".exp.xml"
+    (file <> ".nix")
+  expected <- Text.readFile $ file <> ".exp.xml"
   assertEqual "" expected actual
 
 assertEval :: Options -> [FilePath] -> Assertion
@@ -144,14 +144,14 @@ assertEval _opts files = do
   time <- liftIO getCurrentTime
   let opts = defaultOptions time
   case delete ".nix" $ sort $ fmap takeExtensions files of
-    []                 -> () <$ hnixEvalFile opts (name ++ ".nix")
+    []                 -> () <$ hnixEvalFile opts (name <> ".nix")
     [".exp"         ]  -> assertLangOk opts name
     [".exp.xml"     ]  -> assertLangOkXml opts name
     [".exp.disabled"]  -> pure ()
     [".exp-disabled"]  -> pure ()
     [".exp", ".flags"] -> do
       liftIO $ setEnv "NIX_PATH" "lang/dir4:lang/dir5"
-      flags <- Text.readFile (name ++ ".flags")
+      flags <- Text.readFile (name <> ".flags")
       let flags' | Text.last flags == '\n' = Text.init flags
                  | otherwise               = flags
       case
@@ -163,20 +163,20 @@ assertEval _opts files = do
           Opts.Failure err ->
             errorWithoutStackTrace
               $  "Error parsing flags from "
-              ++ name
-              ++ ".flags: "
-              ++ show err
+              <> name
+              <> ".flags: "
+              <> show err
           Opts.Success opts' -> assertLangOk opts' name
           Opts.CompletionInvoked _ -> error "unused"
-    _ -> assertFailure $ "Unknown test type " ++ show files
+    _ -> assertFailure $ "Unknown test type " <> show files
  where
   name =
-    "data/nix/tests/lang/" ++ the (fmap (takeFileName . dropExtensions) files)
+    "data/nix/tests/lang/" <> the (fmap (takeFileName . dropExtensions) files)
 
-  fixup ("--arg"    : x : y : rest) = "--arg" : (x ++ "=" ++ y) : fixup rest
-  fixup ("--argstr" : x : y : rest) = "--argstr" : (x ++ "=" ++ y) : fixup rest
+  fixup ("--arg"    : x : y : rest) = "--arg" : (x <> "=" <> y) : fixup rest
+  fixup ("--argstr" : x : y : rest) = "--argstr" : (x <> "=" <> y) : fixup rest
   fixup (x                  : rest) = x : fixup rest
-  fixup []                          = []
+  fixup []                          = mempty
 
 assertEvalFail :: FilePath -> Assertion
 assertEvalFail file = catch ?? (\(_ :: SomeException) -> pure ()) $ do
@@ -185,6 +185,6 @@ assertEvalFail file = catch ?? (\(_ :: SomeException) -> pure ()) $ do
   evalResult
     `seq` assertFailure
     $     file
-    ++    " should not evaluate.\nThe evaluation result was `"
-    ++    evalResult
-    ++    "`."
+    <>    " should not evaluate.\nThe evaluation result was `"
+    <>    evalResult
+    <>    "`."

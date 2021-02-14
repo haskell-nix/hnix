@@ -168,8 +168,8 @@ merge context = go
     :: [NTypeF m (Symbolic m)]
     -> [NTypeF m (Symbolic m)]
     -> m [NTypeF m (Symbolic m)]
-  go []       _        = pure []
-  go _        []       = pure []
+  go []       _        = pure mempty
+  go _        []       = pure mempty
   go (x : xs) (y : ys) = case (x, y) of
     (TStr , TStr ) -> (TStr :) <$> go xs ys
     (TPath, TPath) -> (TPath :) <$> go xs ys
@@ -189,7 +189,7 @@ merge context = go
         )
         (pure <$> l)
         (pure <$> r)
-      if M.null m then go xs ys else (TSet (Just m) :) <$> go xs ys
+      if M.null m then go xs ys else (TSet (pure m) :) <$> go xs ys
     (TClosure{}, TClosure{}) ->
       throwError $ ErrorCall "Cannot unify functions"
     (TBuiltin _ _, TBuiltin _ _) ->
@@ -202,12 +202,12 @@ merge context = go
     mergeFunctions pl nl fl pr fr xs ys = do
         m <- sequenceA $ M.intersectionWith
             (\i j -> i >>= \i' -> j >>= \j' -> case (i', j') of
-                    (Nothing, Nothing) -> return $ Just Nothing
-                    (_, Nothing) -> return Nothing
-                    (Nothing, _) -> return Nothing
+                    (Nothing, Nothing) -> pure $ pure Nothing
+                    (_, Nothing) -> pure Nothing
+                    (Nothing, _) -> pure Nothing
                     (Just i'', Just j'') ->
-                        Just . Just <$> unify context i'' j'')
-            (return <$> pl) (return <$> pr)
+                        pure . pure <$> unify context i'' j'')
+            (pure <$> pl) (pure <$> pr)
         let Just m' = sequenceA $ M.filter isJust m
         if M.null m'
             then go xs ys
@@ -217,7 +217,7 @@ merge context = go
                     <$> go xs ys
 -}
 
--- | unify raises an error if the result is would be 'NMany []'.
+-- | unify raises an error if the result is would be 'NMany mempty'.
 unify
   :: forall e m
    . MonadLint e m
@@ -290,7 +290,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
     f <- mkSymbolic [TPath]
     l <- mkSymbolic [TConstant [TInt]]
     c <- mkSymbolic [TConstant [TInt]]
-    mkSymbolic [TSet (Just (M.fromList (go f l c)))]
+    mkSymbolic [TSet (pure (M.fromList (go f l c)))]
    where
     go f l c =
       [(Text.pack "file", f), (Text.pack "line", l), (Text.pack "col", c)]
@@ -372,7 +372,7 @@ lintBinaryOp op lsym rarg = do
     NMult   -> check lsym rsym [TConstant [TInt]]
     NDiv    -> check lsym rsym [TConstant [TInt]]
 
-    NUpdate -> check lsym rsym [TSet Nothing]
+    NUpdate -> check lsym rsym [TSet mempty]
 
     NConcat -> check lsym rsym [TList y]
  where

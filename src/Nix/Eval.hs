@@ -9,7 +9,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+
 
 module Nix.Eval where
 
@@ -132,7 +132,7 @@ eval (NBinary NApp fun arg) = do
 eval (NBinary op   larg rarg) = larg >>= evalBinary op ?? rarg
 
 eval (NSelect aset attr alt ) = evalSelect aset attr >>= either go id
-  where go (s, ks) = fromMaybe (attrMissing ks (Just s)) alt
+  where go (s, ks) = fromMaybe (attrMissing ks (pure s)) alt
 
 eval (NHasAttr aset attr) = evalSelect aset attr >>= toValue . isRight
 
@@ -262,24 +262,26 @@ evalBinds recursive binds = do
       (M.toList o')
 
   go _ (NamedVar pathExpr finalValue pos) = do
-    let go :: NAttrPath (m v) -> m ([Text], SourcePos, m v)
-        go = \case
-          h :| t -> evalSetterKeyName h >>= \case
-            Nothing ->
-              pure
-                ( []
-                , nullPos
-                , toValue @(AttrSet v, AttrSet SourcePos) (mempty, mempty)
-                )
-            Just k -> case t of
-              []     -> pure ([k], pos, finalValue)
-              x : xs -> do
-                (restOfPath, _, v) <- go (x :| xs)
-                pure (k : restOfPath, pos, v)
-    go pathExpr <&> \case
+    let
+      gogo :: NAttrPath (m v) -> m ([Text], SourcePos, m v)
+      gogo = \case
+        h :| t -> evalSetterKeyName h >>= \case
+          Nothing ->
+            pure
+              ( mempty
+              , nullPos
+              , toValue @(AttrSet v, AttrSet SourcePos) (mempty, mempty)
+              )
+          Just k -> case t of
+            []     -> pure ([k], pos, finalValue)
+            x : xs -> do
+              (restOfPath, _, v) <- gogo (x :| xs)
+              pure (k : restOfPath, pos, v)
+
+    gogo pathExpr <&> \case
         -- When there are no path segments, e.g. `${null} = 5;`, we don't
         -- bind anything
-      ([], _, _) -> []
+      ([], _, _) -> mempty
       result     -> [result]
 
   go scope (Inherit ms names pos) =
@@ -292,8 +294,8 @@ evalBinds recursive binds = do
           mv <- case ms of
             Nothing -> withScopes scope $ lookupVar key
             Just s ->
-              s >>= fromValue @(AttrSet v, AttrSet SourcePos) >>= \(s, _) ->
-                clearScopes @v $ pushScope s $ lookupVar key
+              s >>= fromValue @(AttrSet v, AttrSet SourcePos) >>= \(attrset, _) ->
+                clearScopes @v $ pushScope attrset $ lookupVar key
           case mv of
             Nothing -> attrMissing (key :| []) Nothing
             Just v  -> demand v pure
@@ -352,11 +354,11 @@ evalSetterKeyName
   => NKeyName (m v)
   -> m (Maybe Text)
 evalSetterKeyName = \case
-  StaticKey k -> pure (Just k)
+  StaticKey k -> pure (pure k)
   DynamicKey k ->
     runAntiquoted "\n" assembleString (>>= fromValueMay) k <&> \case
       Just ns -> Just (stringIgnoreContext ns)
-      _       -> Nothing
+      _       -> mempty
 
 assembleString
   :: forall v m
@@ -370,7 +372,7 @@ assembleString = \case
   fromParts = fmap (fmap mconcat . sequence) . traverse go
 
   go = runAntiquoted "\n"
-                     (pure . Just . makeNixStringWithoutContext)
+                     (pure . pure . makeNixStringWithoutContext)
                      (>>= fromValueMay)
 
 buildArgument
@@ -398,25 +400,25 @@ buildArgument params arg = do
     -> Maybe (AttrSet v -> m v)
   assemble scope isVariadic k = \case
     That Nothing ->
-      Just
+      pure
         $  const
         $  evalError @v
         $  ErrorCall
         $  "Missing value for parameter: "
         <> show k
     That (Just f) ->
-      Just $ \args -> defer $ withScopes scope $ pushScope args f
+      pure $ \args -> defer $ withScopes scope $ pushScope args f
     This _
       | isVariadic
       -> Nothing
       | otherwise
-      -> Just
+      -> pure
         $  const
         $  evalError @v
         $  ErrorCall
         $  "Unexpected parameter: "
         <> show k
-    These x _ -> Just (const (pure x))
+    These x _ -> pure (const (pure x))
 
 addSourcePositions
   :: (MonadReader e m, Has e SrcSpan) => Transform NExprLocF (m a)

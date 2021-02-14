@@ -90,9 +90,9 @@ instance MonadAtomicRef (ST s) where
     v <- readRef r
     let (a, b) = f v
     writeRef r a
-    return b
+    pure b
   atomicModifyRef' r f = do
     v <- readRef r
     let (a, b) = f v
     writeRef r $! a
-    return b
+    pure b

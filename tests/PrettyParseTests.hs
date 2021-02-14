@@ -78,7 +78,7 @@ genParams = Gen.choice
   , ParamSet
   <$> Gen.list (Range.linear 0 10) ((,) <$> asciiText <*> Gen.maybe genExpr)
   <*> Gen.bool
-  <*> Gen.choice [pure Nothing, Just <$> asciiText]
+  <*> Gen.choice [pure mempty, pure <$> asciiText]
   ]
 
 genAtom :: Gen NAtom
@@ -118,7 +118,7 @@ genExpr = Gen.sized $ \(Size n) -> Fix <$> if n < 2
   genList        = NList <$> fairList genExpr
   genSet         = NSet NNonRecursive <$> fairList genBinding
   genRecSet      = NSet NRecursive <$> fairList genBinding
-  genLiteralPath = NLiteralPath . ("./" ++) <$> asciiString
+  genLiteralPath = NLiteralPath . ("./" <>) <$> asciiString
   genEnvPath     = NEnvPath <$> asciiString
   genUnary       = NUnary <$> Gen.enumBounded <*> genExpr
   genBinary      = NBinary <$> Gen.enumBounded <*> genExpr <*> genExpr
@@ -177,7 +177,7 @@ normalize = foldFix $ \case
   normAntiquotedText (Plain "''\n") = EscapedNewline
   normAntiquotedText r              = r
 
-  normParams (ParamSet binds var (Just "")) = ParamSet binds var Nothing
+  normParams (ParamSet binds var (Just "")) = ParamSet binds var mempty
   normParams r                              = r
 
 -- | Test that parse . pretty == id up to attribute position information.
@@ -220,7 +220,7 @@ prop_prettyparse p = do
   normalise = unlines . fmap (reverse . dropWhile isSpace . reverse) . lines
 
   ldiff :: String -> String -> [Diff [String]]
-  ldiff s1 s2 = getDiff (fmap (: []) (lines s1)) (fmap (: []) (lines s2))
+  ldiff s1 s2 = getDiff (fmap (: mempty) (lines s1)) (fmap (: mempty) (lines s2))
 
 tests :: TestLimit -> TestTree
 tests n = testProperty "Pretty/Parse Property" $ withTests n $ property $ do

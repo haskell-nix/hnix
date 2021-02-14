@@ -32,13 +32,13 @@ assertSucc (Failure d) = assertFailure $ show d
 cmpReduceResult :: Result NExprLoc -> NExpr -> Assertion
 cmpReduceResult r e = do
   r <- assertSucc r
-  r <- stripAnnotation <$> reduceExpr Nothing r
+  r <- stripAnnotation <$> reduceExpr mempty r
   r @?= e
 
 shouldntReduce :: Result NExprLoc -> Assertion
 shouldntReduce r = do
   r        <- assertSucc r
-  rReduced <- reduceExpr Nothing r
+  rReduced <- reduceExpr mempty r
   r @?= rReduced
 
 selectBasic :: Result NExprLoc

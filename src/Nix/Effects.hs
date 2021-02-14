@@ -92,7 +92,7 @@ instance MonadIntrospect IO where
 #if MIN_VERSION_ghc_datasize(0,2,0)
 recursiveSize
 #else
-\_ -> return 0
+\_ -> pure 0
 #endif
 #else
     \_ -> pure 0
@@ -269,31 +269,31 @@ class Monad m => MonadStore m where
 
 parseStoreResult :: Monad m => String -> (Either String a, [Store.Remote.Logger]) -> m (Either ErrorCall a)
 parseStoreResult name res = case res of
-  (Left msg, logs) -> return $ Left $ ErrorCall $ "Failed to execute '" <> name <> "': " <> msg <> "\n" <> show logs
-  (Right result, _) -> return $ Right result
+  (Left msg, logs) -> pure $ Left $ ErrorCall $ "Failed to execute '" <> name <> "': " <> msg <> "\n" <> show logs
+  (Right result, _) -> pure $ Right result
 
 instance MonadStore IO where
 
   addToStore name path recursive repair = case Store.makeStorePathName name of
-    Left err -> return $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> err
+    Left err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> err
     Right pathName -> do
       -- TODO: redesign the filter parameter
       res <- Store.Remote.runStore $ Store.Remote.addToStore @'Store.SHA256 pathName path recursive (const False) repair
       parseStoreResult "addToStore" res >>= \case
-        Left err -> return $ Left err
-        Right storePath -> return $ Right $ StorePath $ T.unpack $ T.decodeUtf8 $ Store.storePathToRawFilePath storePath
+        Left err -> pure $ Left err
+        Right storePath -> pure $ Right $ StorePath $ T.unpack $ T.decodeUtf8 $ Store.storePathToRawFilePath storePath
 
   addTextToStore' name text references repair = do
     res <- Store.Remote.runStore $ Store.Remote.addTextToStore name text references repair
     parseStoreResult "addTextToStore" res >>= \case
-      Left err -> return $ Left err
-      Right path -> return $ Right $ StorePath $ T.unpack $ T.decodeUtf8 $ Store.storePathToRawFilePath path
+      Left err -> pure $ Left err
+      Right path -> pure $ Right $ StorePath $ T.unpack $ T.decodeUtf8 $ Store.storePathToRawFilePath path
 
 addTextToStore :: (Framed e m, MonadStore m) => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m StorePath
-addTextToStore a b c d = either throwError return =<< addTextToStore' a b c d
+addTextToStore a b c d = either throwError pure =<< addTextToStore' a b c d
 
 addPath :: (Framed e m, MonadStore m) => FilePath -> m StorePath
-addPath p = either throwError return =<< addToStore (T.pack $ takeFileName p) p True False
+addPath p = either throwError pure =<< addToStore (T.pack $ takeFileName p) p True False
 
 toFile_ :: (Framed e m, MonadStore m) => FilePath -> String -> m StorePath
 toFile_ p contents = addTextToStore (T.pack p) (T.pack contents) HS.empty False

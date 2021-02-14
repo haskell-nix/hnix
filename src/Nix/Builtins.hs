@@ -316,7 +316,7 @@ foldNixPath
 foldNixPath f z = do
   mres <- lookupVar "__includes"
   dirs <- case mres of
-    Nothing -> pure []
+    Nothing -> pure mempty
     Just v  -> demand v $ fromValue . Deeper
   mPath <- getEnvVar "NIX_PATH"
   mDataDir <- getEnvVar "NIX_DATA_DIR"
@@ -324,19 +324,19 @@ foldNixPath f z = do
   foldrM go z
     $  fmap (fromInclude . stringIgnoreContext) dirs
     <> case mPath of
-         Nothing  -> []
+         Nothing  -> mempty
          Just str -> uriAwareSplit (Text.pack str)
     <> [ fromInclude $ Text.pack $ "nix=" <> dataDir <> "/nix/corepkgs" ]
  where
   fromInclude x | "://" `Text.isInfixOf` x = (x, PathEntryURI)
                 | otherwise                = (x, PathEntryPath)
   go (x, ty) rest = case Text.splitOn "=" x of
-    [p] -> f (Text.unpack p) Nothing ty rest
-    [n, p] -> f (Text.unpack p) (Just (Text.unpack n)) ty rest
+    [p] -> f (Text.unpack p) mempty ty rest
+    [n, p] -> f (Text.unpack p) (pure (Text.unpack n)) ty rest
     _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " <> show x
 
 nixPath :: MonadNix e t f m => m (NValue t f m)
-nixPath = fmap nvList $ flip foldNixPath [] $ \p mn ty rest ->
+nixPath = fmap nvList $ flip foldNixPath mempty $ \p mn ty rest ->
   pure
     $ flip nvSet mempty ( M.fromList
         [ case ty of
@@ -512,7 +512,7 @@ versionComponentSeparators = ".-"
 
 splitVersion :: Text -> [VersionComponent]
 splitVersion s = case Text.uncons s of
-  Nothing -> []
+  Nothing -> mempty
   Just (h, t)
     | h `elem` versionComponentSeparators
     -> splitVersion t
@@ -575,7 +575,7 @@ splitDrvName s =
     breakAfterFirstItem :: (a -> Bool) -> [a] -> ([a], [a])
     breakAfterFirstItem f = \case
       h : t -> let (a, b) = break f t in (h : a, b)
-      []    -> ([], [])
+      []    -> (mempty, mempty)
     (namePieces, versionPieces) =
       breakAfterFirstItem isFirstVersionPiece pieces
   in
@@ -825,7 +825,7 @@ elem_ x = toValue <=< anyM (valueEqM x) <=< fromValue
 elemAt :: [a] -> Int -> Maybe a
 elemAt ls i = case drop i ls of
   []    -> Nothing
-  a : _ -> Just a
+  a : _ -> pure a
 
 elemAt_
   :: MonadNix e t f m
@@ -910,7 +910,7 @@ genericClosure = fromValue @(AttrSet (NValue t f m)) >=> \s ->
     -> [NValue t f m]
     -> Set (WValue t f m)
     -> m (Set (WValue t f m), [NValue t f m])
-  go _  []       ks = pure (ks, [])
+  go _  []       ks = pure (ks, mempty)
   go op (t : ts) ks = demand t $ \v -> fromValue @(AttrSet (NValue t f m)) v >>= \s -> do
     k <- attrsetGet "key" s
     demand k $ \k' -> do
@@ -1108,7 +1108,7 @@ scopedImport asetArg pathArg = fromValue @(AttrSet (NValue t f m)) asetArg >>= \
         traceM $ "Current file being evaluated is: " <> show p'
         pure $ takeDirectory p' </> path
     clearScopes @(NValue t f m)
-      $ withNixContext (Just path')
+      $ withNixContext (pure path')
       $ pushScope s
       $ importPath @t @f @m path'
 
@@ -1480,7 +1480,7 @@ appendContext x y = demand x $ \x' -> demand y $ \y' -> case (x', y') of
         allOutputs <- maybe (pure False) (demand ?? fromValue)
           $ M.lookup "allOutputs" attrs
         outputs <- case M.lookup "outputs" attrs of
-          Nothing -> pure []
+          Nothing -> pure mempty
           Just os -> demand os $ \case
             NVList vs ->
               forM vs $ fmap stringIgnoreContext . fromValue

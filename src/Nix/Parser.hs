@@ -179,7 +179,7 @@ nixSym :: Parser NExprLoc
 nixSym = annotateLocation1 $ mkSymF <$> identifier
 
 nixSynHole :: Parser NExprLoc
-nixSynHole = annotateLocation1 $ mkSynHoleF <$> (char '^' >> identifier)
+nixSynHole = annotateLocation1 $ mkSynHoleF <$> (char '^' *> identifier)
 
 nixInt :: Parser NExprLoc
 nixInt = annotateLocation1 (mkIntF <$> integer <?> "integer")
@@ -253,7 +253,7 @@ nixLet = annotateLocation1
   letBinders = NLet <$> nixBinders <*> (reserved "in" *> nixToplevelForm)
   -- Let expressions `let {..., body = ...}' are just desugared
   -- into `(rec {..., body = ...}).body'.
-  letBody    = (\x -> NSelect x (StaticKey "body" :| []) Nothing) <$> aset
+  letBody    = (\x -> NSelect x (StaticKey "body" :| mempty) Nothing) <$> aset
   aset       = annotateLocation1 $ NSet NRecursive <$> braces nixBinders
 
 nixIf :: Parser NExprLoc
@@ -357,7 +357,7 @@ argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
   -- there's a valid URI parse here.
   onlyname =
     msum
-      [ nixUri >> unexpected (Label ('v' NE.:| "alid uri"))
+      [ nixUri *> unexpected (Label ('v' NE.:| "alid uri"))
       , Param <$> identifier
       ]
 
@@ -365,7 +365,7 @@ argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
   atLeft = try $ do
     name               <- identifier <* symbol "@"
     (variadic, params) <- params
-    pure $ ParamSet params variadic (Just name)
+    pure $ ParamSet params variadic (pure name)
 
   -- Parameters named by an identifier on the right, or none (`{x, y} @ args`)
   atRight = do
@@ -381,7 +381,7 @@ argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
   -- Collects the parameters within curly braces. Returns the parameters and
   -- a boolean indicating if the parameters are variadic.
   getParams :: Parser ([(Text, Maybe NExprLoc)], Bool)
-  getParams = go []   where
+  getParams = go mempty   where
     -- Attempt to parse `...`. If this succeeds, stop and return True.
     -- Otherwise, attempt to parse an argument, optionally with a
     -- default. If this fails, then return what has been accumulated
@@ -393,7 +393,7 @@ argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
         -- Get an argument name and an optional default.
       pair <- liftM2 (,) identifier (optional $ question *> nixToplevelForm)
       -- Either return this, or attempt to get a comma and restart.
-      option (acc <> [pair], False) $ comma >> go (acc <> [pair])
+      option (acc <> [pair], False) $ comma *> go (acc <> [pair])
 
 nixBinders :: Parser [Binding NExprLoc]
 nixBinders = (inherit <+> namedVar) `endBy` semi where
@@ -440,7 +440,7 @@ parseNixTextLoc = parseFromText (whiteSpace *> nixToplevelForm <* eof)
 
 skipLineComment' :: Tokens Text -> Parser ()
 skipLineComment' prefix = string prefix
-  *> void (takeWhileP (Just "character") (\x -> x /= '\n' && x /= '\r'))
+  *> void (takeWhileP (pure "character") (\x -> x /= '\n' && x /= '\r'))
 
 whiteSpace :: Parser ()
 whiteSpace = do
@@ -492,7 +492,7 @@ identifier = lexeme $ try $ do
   ident <-
     cons
     <$> satisfy (\x -> isAlpha x || x == '_')
-    <*> takeWhileP Nothing identLetter
+    <*> takeWhileP mempty identLetter
   guard (not (ident `HashSet.member` reservedNames))
   pure ident
  where
@@ -608,7 +608,7 @@ nixOperators selector =
     --             Postfix $ do
     --                    sel <- seldot *> selector
     --                    mor <- optional (reserved "or" *> term)
-    --                    return $ \x -> nSelectLoc x sel mor) ]
+    --                    pure $ \x -> nSelectLoc x sel mor) ]
 
     {-  2 -}
     [ ( NBinaryDef " " NApp NAssocLeft
@@ -659,7 +659,7 @@ getUnaryOperator = (m Map.!) where
                                       (nixOperators (error "unused"))
   buildEntry i = concatMap $ \case
     (NUnaryDef name op, _) -> [(op, OperatorInfo i NAssocNone name)]
-    _                      -> []
+    _                      -> mempty
 
 getBinaryOperator :: NBinaryOp -> OperatorInfo
 getBinaryOperator = (m Map.!) where
@@ -668,7 +668,7 @@ getBinaryOperator = (m Map.!) where
                                       (nixOperators (error "unused"))
   buildEntry i = concatMap $ \case
     (NBinaryDef name op assoc, _) -> [(op, OperatorInfo i assoc name)]
-    _                             -> []
+    _                             -> mempty
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
 getSpecialOperator NSelectOp = OperatorInfo 1 NAssocLeft "."
@@ -678,4 +678,4 @@ getSpecialOperator o         = m Map.! o where
                                       (nixOperators (error "unused"))
   buildEntry i = concatMap $ \case
     (NSpecialDef name op assoc, _) -> [(op, OperatorInfo i assoc name)]
-    _                              -> []
+    _                              -> mempty

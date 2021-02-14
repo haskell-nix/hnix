@@ -32,4 +32,4 @@ instance Has (Context m t) Options where
   hasLens f a = (\x -> a { options = x }) <$> f (options a)
 
 newContext :: Options -> Context m t
-newContext = Context emptyScopes nullSpan []
+newContext = Context emptyScopes nullSpan mempty

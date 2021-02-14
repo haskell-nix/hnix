@@ -83,12 +83,12 @@ case_set_inherit = do
     [ NamedVar (mkSelector "e") (mkInt 3) nullPos
     , Inherit Nothing (StaticKey <$> ["a", "b"]) nullPos
     ]
-  assertParseText "{ inherit; }" $ Fix $ NSet NNonRecursive [ Inherit Nothing [] nullPos ]
+  assertParseText "{ inherit; }" $ Fix $ NSet NNonRecursive [ Inherit Nothing mempty nullPos ]
 
 case_set_scoped_inherit = assertParseText "{ inherit (a) b c; e = 4; inherit(a)b c; }" $ Fix $ NSet NNonRecursive
-  [ Inherit (Just (mkSym "a")) (StaticKey <$> ["b", "c"]) nullPos
+  [ Inherit (pure (mkSym "a")) (StaticKey <$> ["b", "c"]) nullPos
   , NamedVar (mkSelector "e") (mkInt 4) nullPos
-  , Inherit (Just (mkSym "a")) (StaticKey <$> ["b", "c"]) nullPos
+  , Inherit (pure (mkSym "a")) (StaticKey <$> ["b", "c"]) nullPos
   ]
 
 case_set_rec = assertParseText "rec { a = 3; b = a; }" $ Fix $ NSet NRecursive
@@ -98,13 +98,13 @@ case_set_rec = assertParseText "rec { a = 3; b = a; }" $ Fix $ NSet NRecursive
 
 case_set_complex_keynames = do
   assertParseText "{ \"\" = null; }" $ Fix $ NSet NNonRecursive
-    [ NamedVar (DynamicKey (Plain (DoubleQuoted [])) :| []) mkNull nullPos ]
+    [ NamedVar (DynamicKey (Plain (DoubleQuoted mempty)) :| mempty) mkNull nullPos ]
   assertParseText "{ a.b = 3; a.c = 4; }" $ Fix $ NSet NNonRecursive
     [ NamedVar (StaticKey "a" :| [StaticKey "b"]) (mkInt 3) nullPos
     , NamedVar (StaticKey "a" :| [StaticKey "c"]) (mkInt 4) nullPos
     ]
   assertParseText "{ ${let a = \"b\"; in a} = 4; }" $ Fix $ NSet NNonRecursive
-    [ NamedVar (DynamicKey (Antiquoted letExpr) :| []) (mkInt 4) nullPos ]
+    [ NamedVar (DynamicKey (Antiquoted letExpr) :| mempty) (mkInt 4) nullPos ]
   assertParseText "{ \"a${let a = \"b\"; in a}c\".e = 4; }" $ Fix $ NSet NNonRecursive
     [ NamedVar (DynamicKey (Plain str) :| [StaticKey "e"]) (mkInt 4) nullPos ]
  where
@@ -112,7 +112,7 @@ case_set_complex_keynames = do
   str = DoubleQuoted [Plain "a", Antiquoted letExpr, Plain "c"]
 
 case_set_inherit_direct = assertParseText "{ inherit ({a = 3;}); }" $ Fix $ NSet NNonRecursive
-  [ Inherit (Just $ Fix $ NSet NNonRecursive [NamedVar (mkSelector "a") (mkInt 3) nullPos]) [] nullPos
+  [ Inherit (pure $ Fix $ NSet NNonRecursive [NamedVar (mkSelector "a") (mkInt 3) nullPos]) mempty nullPos
   ]
 
 case_inherit_selector = do
@@ -130,8 +130,8 @@ case_mixed_list = do
     [ Fix (NSelect (Fix (NSet NNonRecursive [NamedVar (mkSelector "a") (mkInt 3) nullPos]))
                    (mkSelector "a") Nothing)
     , Fix (NIf (mkBool True) mkNull (mkBool False))
-    , mkNull, mkBool False, mkInt 4, Fix (NList [])
-    , Fix (NSelect (mkSym "c") (mkSelector "d") (Just mkNull))
+    , mkNull, mkBool False, mkInt 4, Fix (NList mempty)
+    , Fix (NSelect (mkSym "c") (mkSelector "d") (pure mkNull))
     ]
   assertParseFail "[if true then null else null]"
   assertParseFail "[a ? b]"
@@ -144,31 +144,31 @@ case_lambda_or_uri = do
   assertParseText "a :b" $ Fix $ NAbs (Param "a") (mkSym "b")
   assertParseText "a c:def" $ Fix $ NBinary NApp (mkSym "a") (mkStr "c:def")
   assertParseText "c:def: c" $ Fix $ NBinary NApp (mkStr "c:def:") (mkSym "c")
-  assertParseText "a:{}" $ Fix $ NAbs (Param "a") $ Fix $ NSet NNonRecursive []
+  assertParseText "a:{}" $ Fix $ NAbs (Param "a") $ Fix $ NSet NNonRecursive mempty
   assertParseText "a:[a]" $ Fix $ NAbs (Param "a") $ Fix $ NList [mkSym "a"]
   assertParseFail "def:"
 
 case_lambda_pattern = do
   assertParseText "{b, c ? 1}: b" $
-    Fix $ NAbs (fixed args Nothing) (mkSym "b")
+    Fix $ NAbs (fixed args mempty) (mkSym "b")
   assertParseText "{ b ? x: x  }: b" $
-    Fix $ NAbs (fixed args2 Nothing) (mkSym "b")
+    Fix $ NAbs (fixed args2 mempty) (mkSym "b")
   assertParseText "a@{b,c ? 1}: b" $
-    Fix $ NAbs (fixed args (Just "a")) (mkSym "b")
+    Fix $ NAbs (fixed args (pure "a")) (mkSym "b")
   assertParseText "{b,c?1}@a: c" $
-    Fix $ NAbs (fixed args (Just "a")) (mkSym "c")
+    Fix $ NAbs (fixed args (pure "a")) (mkSym "c")
   assertParseText "{b,c?1,...}@a: c" $
-    Fix $ NAbs (variadic vargs (Just "a")) (mkSym "c")
+    Fix $ NAbs (variadic vargs (pure "a")) (mkSym "c")
   assertParseText "{...}: 1" $
-    Fix $ NAbs (variadic mempty Nothing) (mkInt 1)
+    Fix $ NAbs (variadic mempty mempty) (mkInt 1)
   assertParseFail "a@b: a"
   assertParseFail "{a}@{b}: a"
  where
   fixed args = ParamSet args False
   variadic args = ParamSet args True
-  args = [("b", Nothing), ("c", Just $ mkInt 1)]
-  vargs = [("b", Nothing), ("c", Just $ mkInt 1)]
-  args2 = [("b", Just lam)]
+  args = [("b", Nothing), ("c", pure $ mkInt 1)]
+  vargs = [("b", Nothing), ("c", pure $ mkInt 1)]
+  args2 = [("b", pure lam)]
   lam = Fix $ NAbs (Param "x") (mkSym "x")
 
 case_lambda_app_int = assertParseText "(a: a) 3" $ Fix (NBinary NApp lam int) where
@@ -196,7 +196,7 @@ case_nested_let = do
 case_let_scoped_inherit = do
   assertParseText "let a = null; inherit (b) c; in c" $ Fix $ NLet
     [ NamedVar (mkSelector "a") mkNull nullPos
-    , Inherit (Just $ mkSym "b") [StaticKey "c"] nullPos ]
+    , Inherit (pure $ mkSym "b") [StaticKey "c"] nullPos ]
     (mkSym "c")
   assertParseFail "let inherit (b) c in c"
 
@@ -255,24 +255,24 @@ case_select = do
     Nothing
   assertParseText "a.e . d    or null" $ Fix $ NSelect (mkSym "a")
     (StaticKey "e" :| [StaticKey "d"])
-    (Just mkNull)
-  assertParseText "{}.\"\"or null" $ Fix $ NSelect (Fix (NSet NNonRecursive []))
-    (DynamicKey (Plain (DoubleQuoted [])) :| []) (Just mkNull)
+    (pure mkNull)
+  assertParseText "{}.\"\"or null" $ Fix $ NSelect (Fix (NSet NNonRecursive mempty))
+    (DynamicKey (Plain (DoubleQuoted mempty)) :| mempty) (pure mkNull)
   assertParseText "{ a = [1]; }.a or [2] ++ [3]" $ Fix $ NBinary NConcat
       (Fix (NSelect
-                (Fix (NSet NNonRecursive [NamedVar (StaticKey "a" :| [])
+                (Fix (NSet NNonRecursive [NamedVar (StaticKey "a" :| mempty)
                                      (Fix (NList [Fix (NConstant (NInt 1))]))
                                      nullPos]))
-                (StaticKey "a" :| [])
-                (Just (Fix (NList [Fix (NConstant (NInt 2))])))))
+                (StaticKey "a" :| mempty)
+                (pure (Fix (NList [Fix (NConstant (NInt 2))])))))
       (Fix (NList [Fix (NConstant (NInt 3))]))
 
 case_select_path = do
   assertParseText "f ./." $ Fix $ NBinary NApp (mkSym "f") (mkPath False "./.")
   assertParseText "f.b ../a" $ Fix $ NBinary NApp select (mkPath False "../a")
-  assertParseText "{}./def" $ Fix $ NBinary NApp (Fix (NSet NNonRecursive [])) (mkPath False "./def")
+  assertParseText "{}./def" $ Fix $ NBinary NApp (Fix (NSet NNonRecursive mempty)) (mkPath False "./def")
   assertParseText "{}.\"\"./def" $ Fix $ NBinary NApp
-    (Fix $ NSelect (Fix (NSet NNonRecursive [])) (DynamicKey (Plain (DoubleQuoted [])) :| []) Nothing)
+    (Fix $ NSelect (Fix (NSet NNonRecursive mempty)) (DynamicKey (Plain (DoubleQuoted mempty)) :| mempty) Nothing)
     (mkPath False "./def")
  where select = Fix $ NSelect (mkSym "f") (mkSelector "b") Nothing
 
@@ -282,7 +282,7 @@ case_select_keyword = do
 case_fun_app = do
   assertParseText "f a b" $ Fix $ NBinary NApp (Fix $ NBinary NApp (mkSym "f") (mkSym "a")) (mkSym "b")
   assertParseText "f a.x or null" $ Fix $ NBinary NApp (mkSym "f") $ Fix $
-    NSelect (mkSym "a") (mkSelector "x") (Just mkNull)
+    NSelect (mkSym "a") (mkSelector "x") (pure mkNull)
   assertParseFail "f if true then null else null"
 
 case_indented_string = do
@@ -367,27 +367,27 @@ tests = $testGroupGenerator
 assertParseText :: Text -> NExpr -> Assertion
 assertParseText str expected = case parseNixText str of
   Success actual ->
-      assertEqual ("When parsing " ++ unpack str)
+      assertEqual ("When parsing " <> unpack str)
           (stripPositionInfo expected) (stripPositionInfo actual)
   Failure err    ->
-      assertFailure $ "Unexpected error parsing `" ++ unpack str ++ "':\n" ++ show err
+      assertFailure $ "Unexpected error parsing `" <> unpack str <> "':\n" <> show err
 
 assertParseFile :: FilePath -> NExpr -> Assertion
 assertParseFile file expected = do
-  res <- parseNixFile $ "data/" ++ file
+  res <- parseNixFile $ "data/" <> file
   case res of
-    Success actual -> assertEqual ("Parsing data file " ++ file)
+    Success actual -> assertEqual ("Parsing data file " <> file)
           (stripPositionInfo expected) (stripPositionInfo actual)
     Failure err    ->
         assertFailure $ "Unexpected error parsing data file `"
-            ++ file ++ "':\n" ++ show err
+            <> file <> "':\n" <> show err
 
 assertParseFail :: Text -> Assertion
 assertParseFail str = case parseNixText str of
   Failure _ -> pure ()
   Success r ->
       assertFailure $ "Unexpected success parsing `"
-          ++ unpack str ++ ":\nParsed value: " ++ show r
+          <> unpack str <> ":\nParsed value: " <> show r
 
 -- assertRoundTrip :: Text -> Assertion
 -- assertRoundTrip src = assertParsePrint src src
