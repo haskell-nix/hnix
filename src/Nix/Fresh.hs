@@ -12,6 +12,7 @@
 module Nix.Fresh where
 
 import           Control.Applicative        ( Alternative )
+import           Control.Monad
 import           Control.Monad.Base   ( MonadBase(..) )
 import           Control.Monad.Catch  ( MonadCatch
                               , MonadMask
@@ -47,6 +48,9 @@ newtype FreshIdT i m a = FreshIdT { unFreshIdT :: ReaderT (Var m i) m a }
     , Monad
     , MonadFail
     , MonadFix
+    -- The only MonadPlus instance that can't be replaced easily.
+    -- See https://github.com/haskell-nix/hnix/pull/851 for details.
+    , MonadPlus
     , MonadRef
     , MonadAtomicRef
     , MonadIO
