@@ -62,6 +62,7 @@ import           Data.Char                      ( isAlpha
 import           Data.Data                      ( Data(..) )
 import           Data.Fix                       ( Fix(..) )
 import           Data.Functor
+import           Data.Foldable                  ( asum )
 import           Data.HashSet                   ( HashSet )
 import qualified Data.HashSet                  as HashSet
 import           Data.List.NonEmpty             ( NonEmpty(..) )
@@ -160,7 +161,7 @@ nixTerm = do
     '\'' -> nixString
     '^'  -> nixSynHole
     _ ->
-      msum
+      asum
         $  [ nixSelect nixSet | c == 'r' ]
         <> [ nixPath | pathChar c ]
         <> if isDigit c
@@ -346,17 +347,17 @@ nixString' = lexeme (doubleQuoted <+> indented <?> "string")
     plainChar =
       notFollowedBy (end <+> void (char '$') <+> escStart) *> anySingle
 
-  escapeCode = msum [ c <$ char e | (c, e) <- escapeCodes ] <+> anySingle
+  escapeCode = asum [ c <$ char e | (c, e) <- escapeCodes ] <+> anySingle
 
 -- | Gets all of the arguments for a function.
 argExpr :: Parser (Params NExprLoc)
-argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
+argExpr = asum [atLeft, onlyname, atRight] <* symbol ":" where
   -- An argument not in curly braces. There's some potential ambiguity
   -- in the case of, for example `x:y`. Is it a lambda function `x: y`, or
   -- a URI `x:y`? Nix syntax says it's the latter. So we need to fail if
   -- there's a valid URI parse here.
   onlyname =
-    msum
+    asum
       [ nixUri *> unexpected (Label ('v' NE.:| "alid uri"))
       , Param <$> identifier
       ]
