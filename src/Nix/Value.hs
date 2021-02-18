@@ -391,7 +391,7 @@ nvBuiltin' name f = NValue $ pure $ NVBuiltinF name f
 -- So above we have maps of Hask subcategory objects to Nix objects,
 -- and Hask subcategory morphisms to Nix morphisms.
 
--- *** @F: NValue -> Nvalue'
+-- *** @F: NValue -> NValue'@
 
 -- | Module pattens use @language PatternSynonyms@: unidirectional synonyms (@<-@),
 -- and @ViewPatterns@: (@->@) at the same time.
@@ -497,7 +497,6 @@ unliftNValue = hoistNValue lift
 
 
 -- | Life of a Haskell thunk to the life of a Nix thunk,
-pattern NVThunk t <- Pure t
 nvThunk :: Applicative f
   => t
   -> NValue t f m
@@ -505,7 +504,6 @@ nvThunk = Pure
 
 
 -- | Life of a Haskell constant to the life of a Nix constant,
-pattern NVConstant x <- Free (NVConstant' x)
 nvConstant :: Applicative f
   => NAtom
   -> NValue t f m
@@ -513,7 +511,6 @@ nvConstant = Free . nvConstant'
 
 
 -- | Life of a Haskell sting & context to the life of a Nix string & context,
-pattern NVStr ns <- Free (NVStr' ns)
 nvStr :: Applicative f
   => NixString
   -> NValue t f m
@@ -521,21 +518,18 @@ nvStr = Free . nvStr'
 
 
 -- | Life of a Haskell FilePath to the life of a Nix path
-pattern NVPath x <- Free (NVPath' x)
 nvPath :: Applicative f
   => FilePath
   -> NValue t f m
 nvPath = Free . nvPath'
 
 
-pattern NVList l <- Free (NVList' l)
 nvList :: Applicative f
   => [NValue t f m]
   -> NValue t f m
 nvList = Free . nvList'
 
 
-pattern NVSet s x <- Free (NVSet' s x)
 nvSet :: Applicative f
   => HashMap Text (NValue t f m)
   -> HashMap Text SourcePos
@@ -543,7 +537,6 @@ nvSet :: Applicative f
 nvSet s x = Free $ nvSet' s x
 
 
-pattern NVClosure x f <- Free (NVClosure' x f)
 nvClosure :: (Applicative f, Functor m)
   => Params ()
   -> (NValue t f m
@@ -553,7 +546,6 @@ nvClosure :: (Applicative f, Functor m)
 nvClosure x f = Free $ nvClosure' x f
 
 
-pattern NVBuiltin name f <- Free (NVBuiltin' name f)
 nvBuiltin :: (Applicative f, Functor m)
   => String
   -> (NValue t f m
@@ -595,6 +587,17 @@ builtin3
   -> m (NValue t f m)
 builtin3 name f =
   builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
+
+-- *** @F: Evaluation -> NValue@
+
+pattern NVThunk t <- Pure t
+pattern NVConstant x <- Free (NVConstant' x)
+pattern NVStr ns <- Free (NVStr' ns)
+pattern NVPath x <- Free (NVPath' x)
+pattern NVList l <- Free (NVList' l)
+pattern NVSet s x <- Free (NVSet' s x)
+pattern NVClosure x f <- Free (NVClosure' x f)
+pattern NVBuiltin name f <- Free (NVBuiltin' name f)
 
 
 -- * @TStringContext@
