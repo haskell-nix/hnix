@@ -953,7 +953,7 @@ replaceStrings tfrom tto ts =
       --  And moreover, the `passOneCharNgo` passively passes the context, to context can be removed from it and inherited directly.
       --  Then the solution would've been elegant, but the Nix bug prevents elegant implementation.
       go remaining processed ctx =
-        case maybePrefixMatch remaining of
+        case maybePrefixMatch of
           Nothing ->
             -- Pass the chars until match
             passOneCharNgo remaining processed ctx
@@ -983,16 +983,18 @@ replaceStrings tfrom tto ts =
 
        where
         -- When prefix matched something - returns (match, replacement, reminder)
-        maybePrefixMatch :: Text -> Maybe (Text, NixString, Text)
-        maybePrefixMatch src = (\(m, r) -> (m, r, Text.drop (Text.length m) src)) <$> find ((`Text.isPrefixOf` src) . fst) fromKeysToValsMap
+        maybePrefixMatch :: Maybe (Text, NixString, Text)
+        maybePrefixMatch = formMatchReplaceNTail <$> find ((`Text.isPrefixOf` remaining) . fst) fromKeysToValsMap
+
+        formMatchReplaceNTail = (\(m, r) -> (m, r, Text.drop (Text.length m) remaining))
 
         fromKeysToValsMap = zip (fmap stringIgnoreContext fromKeys) toVals
 
-        passOneCharNgo text result =
+        passOneCharNgo input output =
           maybe
-            (finish result)  -- The base case - there is no chars left to process -> finish
-            (\(c, t) -> go t (result <> Builder.singleton c)) -- If there are chars - pass one char & continue
-            (Text.uncons text)  -- chip first char
+            (finish output)  -- The base case - there is no chars left to process -> finish
+            (\(c, t) -> go t (output <> Builder.singleton c)) -- If there are chars - pass one char & continue
+            (Text.uncons input)  -- chip first char
 
         finish = makeNixString . LazyText.toStrict . Builder.toLazyText
 
