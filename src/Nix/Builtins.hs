@@ -956,15 +956,16 @@ replaceStrings tfrom tto ts =
         case maybePrefixMatch of
           Nothing ->
             -- Passively pass the chars
-            realPassOneChar
+            passOneChar
 
           Just (matched, replacementNS, unprocessedInput) ->
-            sendReplaceToOutput
+            replace
 
            where
-            sendReplaceToOutput = sendReplaceToOutputWithNixBug unprocessedInput updatedOutput
-            sendReplaceToOutputWithNixBug =
+            replace = replaceWithNixBug unprocessedInput updatedOutput
+            replaceWithNixBug =
               bool
+                (go updatedCtx)  -- tail recursion
                 -- Allowing match on "" is a inherited bug of Nix,
                 -- when "" is checked - it always matches. And so - when it checks - it always insers a replacement, and then process simply passesthrough the char that was under match.
                 --
@@ -972,7 +973,6 @@ replaceStrings tfrom tto ts =
                 -- " H e l l o   w o r l d "
                 -- repl> builtins.replaceStrings ["ll" ""] [" " "i"] "Hello world"
                 -- "iHie ioi iwioirilidi"
-                (go updatedCtx)  -- true tail recursion
                 bugPassOneChar  -- augmented recursion
                 isNixBugCase
 
@@ -991,7 +991,7 @@ replaceStrings tfrom tto ts =
             bugPassOneChar input output =
               maybe
                 (finish updatedCtx output)  -- The base case - there is no chars left to process -> finish
-                (\(c, i) -> go updatedCtx  i (output <> Builder.singleton c)) -- If there are chars - pass one char & continue
+                (\(c, i) -> go updatedCtx i (output <> Builder.singleton c)) -- If there are chars - pass one char & continue
                 (Text.uncons input)  -- chip first char
        where
         -- When prefix matched something - returns (match, replacement, reminder)
@@ -1003,7 +1003,7 @@ replaceStrings tfrom tto ts =
           fromKeysToValsMap = zip (fmap stringIgnoreContext fromKeys) toVals
 
         -- Not passing args => It is constant that gets embedded into `go` => It is simple `go` tail recursion
-        realPassOneChar =
+        passOneChar =
           maybe
             (finish ctx output)  -- The base case - there is no chars left to process -> finish
             (\(c, i) -> go ctx i (output <> Builder.singleton c)) -- If there are chars - pass one char & continue
