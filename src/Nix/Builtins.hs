@@ -924,11 +924,10 @@ genericClosure = fromValue @(AttrSet (NValue t f m)) >=> \s ->
           fmap (t :) <$> go op (ts <> ys) (S.insert (WValue k') ks)
 
 -- | Takes:
--- 1. List of expressions to replace.
--- (finds the occurances of them)
--- 2. List of expressions to replace corresponding occurance. (arg 1 & 2 lists matched by index)
--- 3. Expression to process
--- -> returns the expression with requested replacements.
+-- 1. List of strings to match.
+-- 2. List of strings to replace corresponding match occurance. (arg 1 & 2 lists matched by index)
+-- 3. String to process
+-- -> returns the string with requested replacements.
 -- 
 -- Example:
 -- builtins.replaceStrings ["ll" "e"] [" " "i"] "Hello world" == "Hi o world".
@@ -940,57 +939,51 @@ replaceStrings
   -> m (NValue t f m)
 replaceStrings tfrom tto ts =
   do
-    -- `ns*` goes for NixString here, which are with context - remember
-    (nsListMatch :: [NixString]) <- fromValue (Deeper tfrom)
-    (nsListReplace   :: [NixString]) <- fromValue (Deeper tto)
-    (ns     ::  NixString ) <- fromValue ts
+    -- NixStrings have context - remember
+    (nsFromKeys     :: [NixString]) <- fromValue (Deeper tfrom)
+    (nsToVals   :: [NixString]) <- fromValue (Deeper tto)
+    (ns              ::  NixString ) <- fromValue ts
 
-    when (length nsListMatch /= length nsListReplace)
-      $ throwError $ ErrorCall "builtins.replaceStrings: Arguments `from`&`to` are lists `from` what replace `to` what, so the number of their inhabitanting elements must always match."
+    when (length nsFromKeys /= length nsToVals) $ throwError $ ErrorCall "builtins.replaceStrings: Arguments `from`&`to` construct a key-value map, so the number of their elements must always match."
 
     let
-      go remainder processedAccum ctx =
-        case maybePrefixMatches nsListMatch remainder of
+      go remainder processed ctx =
+        case maybePrefixMatch remainder of
           Nothing ->
-            process remainder processedAccum ctx
+            -- Chip away chars until match
+            stepOneCharNgo remainder processed ctx
           Just (matched, replacementNS, rest) ->
             -- Allowing match on "" is a bug-quirk of Nix,
-            -- when "" is checked - it always matches. And so - if there is no previous matches the "" is replaced with " " and the process simply passesthrough the next char.
+            -- when "" is checked - it always matches. And so - when it checks - it always insers a replacement, and then process simply passesthrough the char that was under match.
             --
             -- repl> builtins.replaceStrings ["" "e"] [" " "i"] "Hello world"
             -- " H e l l o   w o r l d "
             -- repl> builtins.replaceStrings ["ll" ""] [" " "i"] "Hello world"
             -- "iHie ioi iwioirilidi"
-            (if matched == mempty then process else go) rest updProcessedAccum newCtx
+            (if matched == mempty then stepOneCharNgo else go) rest updProcessed updCtx
 
            where
-            newReplacement    = Builder.fromText $ stringIgnoreContext replacementNS
-            updProcessedAccum = processedAccum <> newReplacement
-            additionalCtx  = NixString.getContext replacementNS
-            newCtx         = ctx <> additionalCtx
+            replacement    = Builder.fromText $ stringIgnoreContext replacementNS
+            updProcessed   = processed <> replacement
+
+            replacementCtx = NixString.getContext replacementNS
+            updCtx         = ctx <> replacementCtx
 
        where
-        process text result =
-          maybe -- chip one char from text
-            (finish result)
+        stepOneCharNgo text result =
+          maybe
+            (finish result)  -- The base case - there is no chars left to process -> finish
             (\(c, t) -> go t (result <> Builder.singleton c))
-            (Text.uncons text)
+            (Text.uncons text)  -- chip one char
 
         finish = makeNixString . LazyText.toStrict . Builder.toLazyText
 
-        maybePrefixMatches nsListMatch src =
-          do  -- monadic context handles Maybe result here, aka if Nothing returned
-            (from, to) <- find ((`Text.isPrefixOf` src) . fst) matchReplaceMap
-            let rest = Text.drop (Text.length from) src
-            pure (from, to, rest)
+        -- When prefix matched something - returns (match, replacement, reminder)
+        maybePrefixMatch src = (\(m, r) -> (m, r, Text.drop (Text.length m) src)) <$> find ((`Text.isPrefixOf` src) . fst) matchReplaceMap
 
-         where
-          textListMatch = fmap stringIgnoreContext nsListMatch
-          matchReplaceMap = zip textListMatch nsListReplace
+        matchReplaceMap = zip (fmap stringIgnoreContext nsFromKeys) nsToVals
 
-    toValue
-       $ go (stringIgnoreContext ns) mempty
-      $ NixString.getContext ns
+    toValue $ go (stringIgnoreContext ns) mempty $ NixString.getContext ns
 
 removeAttrs
   :: forall e t f m
