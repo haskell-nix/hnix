@@ -923,6 +923,15 @@ genericClosure = fromValue @(AttrSet (NValue t f m)) >=> \s ->
             WValue j : _ -> checkComparable k' j
           fmap (t :) <$> go op (ts <> ys) (S.insert (WValue k') ks)
 
+-- | Takes:
+-- 1. List of expressions to replace.
+-- (finds the occurances of them)
+-- 2. List of expressions to replace corresponding occurance. (arg 1 & 2 lists matched by index)
+-- 3. Expression to process
+-- -> returns the expression with requested replacements.
+-- 
+-- Example:
+-- builtins.replaceStrings ["ll" "e"] [" " "i"] "Hello world" == "Hi o world".
 replaceStrings
   :: MonadNix e t f m
   => NValue t f m
