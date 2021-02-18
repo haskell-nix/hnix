@@ -5,6 +5,7 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}  -- @key@ in Aeson reports: @key@ often has better inference than @ix@ when used with OverloadedStrings.
 {-# LANGUAGE PatternSynonyms #-}
@@ -12,6 +13,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
@@ -202,21 +204,21 @@ hoistNValueF lft = \case
 
 -- | At the time of constructor, the expected arguments to closures are values
 --   that may contain thunks. The type of such thunks are fixed at that time.
-newtype NValue' t f m a =
+newtype NValue' f m a =
   NValue
     {
     -- | Applying F-algebra carrier (@NValue@) to the F-algebra Base functor data type (@NValueF@), forming the \( F(A)-> A \)).
-    _nValue :: f (NValueF (NValue t f m) m a)
+    _nValue :: f (NValueF (NValue f m) m a)
     }
   deriving (Generic, Typeable, Functor, Foldable, Eq1)
 
-instance (Comonad f, Show a) => Show (NValue' t f m a) where
+instance (Comonad f, Show a) => Show (NValue' f m a) where
   show (NValue (extract -> v)) = show v
 
 
 -- ** Show1
 
-instance Comonad f => Show1 (NValue' t f m) where
+instance Comonad f => Show1 (NValue' f m) where
   liftShowsPrec sp sl p = \case
     NVConstant' atom  -> showsUnaryWith showsPrec "NVConstantF" p atom
     NVStr' ns ->
@@ -235,8 +237,8 @@ instance Comonad f => Show1 (NValue' t f m) where
 sequenceNValue'
   :: (Functor n, Traversable f, Monad m, Applicative n)
   => (forall x . n x -> m x)
-  -> NValue' t f m (n a)
-  -> n (NValue' t f m a)
+  -> NValue' f m (n a)
+  -> n (NValue' f m a)
 sequenceNValue' transform (NValue v) =
   NValue <$> traverse (sequenceNValueF transform) v
 
@@ -259,22 +261,22 @@ lmapNValueF f = \case
 
 -- | @iter@
 iterNValue'
-  :: forall t f m a r
+  :: forall f m a r
    . MonadDataContext f m
-  => (a -> (NValue' t f m a -> r) -> r)
-  -> (NValue' t f m r -> r)
-  -> NValue' t f m a
+  => (a -> (NValue' f m a -> r) -> r)
+  -> (NValue' f m r -> r)
+  -> NValue' f m a
   -> r
 iterNValue' k f = f . fmap (\a -> k a (iterNValue' k f))
 
 
 -- | @hoistFree@: Back & forth hoisting in the monad stack
 hoistNValue'
-  :: (Functor m, Functor n, Functor f)
+  :: (Functor m, Functor n, Functor f, Thunk m ~ Thunk n)
   => (forall x . n x -> m x)
   -> (forall x . m x -> n x)
-  -> NValue' t f m a
-  -> NValue' t f n a
+  -> NValue' f m a
+  -> NValue' f n a
 hoistNValue' run lft (NValue v) =
     NValue $ lmapNValueF (hoistNValue lft run) . hoistNValueF lft <$> v
 
@@ -286,8 +288,8 @@ bindNValue'
   :: (Traversable f, Monad m, Monad n)
   => (forall x . n x -> m x)
   -> (a -> n b)
-  -> NValue' t f m a
-  -> n (NValue' t f m b)
+  -> NValue' f m a
+  -> n (NValue' f m b)
 bindNValue' transform f (NValue v) =
   NValue <$> traverse (bindNValueF transform f) v
 
@@ -295,20 +297,20 @@ bindNValue' transform f (NValue v) =
 
 -- | @lift@
 liftNValue'
-  :: (MonadTrans u, Monad m, Functor (u m), Functor f)
+  :: (MonadTrans u, Monad m, Functor (u m), Functor f, Thunk m ~ Thunk (u m))
   => (forall x . u m x -> m x)
-  -> NValue' t f m a
-  -> NValue' t f (u m) a
+  -> NValue' f m a
+  -> NValue' f (u m) a
 liftNValue' run = hoistNValue' run lift
 
 -- **** MonadTransUnlift
 
 -- | @unlift@
 unliftNValue'
-  :: (MonadTrans u, Monad m, Functor (u m), Functor f)
+  :: (MonadTrans u, Monad m, Functor (u m), Functor f, Thunk m ~ Thunk (u m))
   => (forall x . u m x -> m x) -- aka "run"
-  -> NValue' t f (u m) a
-  -> NValue' t f m a
+  -> NValue' f (u m) a
+  -> NValue' f m a
 unliftNValue' = hoistNValue' lift
 
 
@@ -337,28 +339,26 @@ unliftNValue' = hoistNValue' lift
 -- | Haskell constant to the Nix constant,
 nvConstant' :: Applicative f
   => NAtom
-  -> NValue' t f m r
+  -> NValue' f m r
 nvConstant' = NValue . pure . NVConstantF
-
 
 -- | Haskell text & context to the Nix text & context,
 nvStr' :: Applicative f
   => NixString
-  -> NValue' t f m r
+  -> NValue' f m r
 nvStr' = NValue . pure . NVStrF
-
 
 -- | Haskell @FilePath@ to the Nix path,
 nvPath' :: Applicative f
   => FilePath
-  -> NValue' t f m r
+  -> NValue' f m r
 nvPath' = NValue . pure . NVPathF
 
 
 -- | Haskell @[]@ to the Nix @[]@,
 nvList' :: Applicative f
   => [r]
-  -> NValue' t f m r
+  -> NValue' f m r
 nvList' = NValue . pure . NVListF
 
 
@@ -366,25 +366,25 @@ nvList' = NValue . pure . NVListF
 nvSet' :: Applicative f
   => HashMap Text r
   -> HashMap Text SourcePos
-  -> NValue' t f m r
+  -> NValue' f m r
 nvSet' s x = NValue $ pure $ NVSetF s x
 
 
 -- | Haskell closure to the Nix closure,
 nvClosure' :: (Applicative f, Functor m)
   => Params ()
-  -> (NValue t f m
+  -> (NValue f m
       -> m r
     )
-  -> NValue' t f m r
+  -> NValue' f m r
 nvClosure' x f = NValue $ pure $ NVClosureF x f
 
 
 -- | Haskell functions to the Nix functions!
 nvBuiltin' :: (Applicative f, Functor m)
   => String
-  -> (NValue t f m -> m r)
-  -> NValue' t f m r
+  -> (NValue f m -> m r)
+  -> NValue' f m r
 nvBuiltin' name f = NValue $ pure $ NVBuiltinF name f
 
 
@@ -411,12 +411,12 @@ pattern NVBuiltin' name f <- NValue (extract -> NVBuiltinF name f)
 
 -- * @__NValue__@: Nix language values
 
--- | 'NValue t f m' is
+-- | 'NValue f m' is
 --   a value in head normal form (it means only the tip of it has been
 --   evaluated to the normal form, while the rest of it is in lazy
 --   not evaluated form (thunk), this known as WHNF).
 --
---   An action 'm (NValue t f m)' is a pending evaluation that
+--   An action 'm (NValue f m)' is a pending evaluation that
 --   has yet to be performed.
 --
 --   An 't' is either:
@@ -426,18 +426,19 @@ pattern NVBuiltin' name f <- NValue (extract -> NVBuiltinF name f)
 --   The 'Free' structure is used here to represent the possibility that
 --   Nix language allows cycles that may appear during normalization.
 
-type NValue t f m = Free (NValue' t f m) t
+--TODO: What does the `f` represent
+type NValue f m = Free (NValue' f m) (Thunk m)
 
 
 -- ** Free
 
 -- | @iter@
 iterNValue
-  :: forall t f m r
+  :: forall f m r
    . MonadDataContext f m
-  => (t -> (NValue t f m -> r) -> r)
-  -> (NValue' t f m r -> r)
-  -> NValue t f m
+  => (Thunk m -> (NValue f m -> r) -> r)
+  -> (NValue' f m r -> r)
+  -> NValue f m
   -> r
 iterNValue k f = iter f . fmap (\t -> k t (iterNValue k f))
 
@@ -446,9 +447,9 @@ iterNValue k f = iter f . fmap (\t -> k t (iterNValue k f))
 iterNValueM
   :: (MonadDataContext f m, Monad n)
   => (forall x . n x -> m x)
-  -> (t -> (NValue t f m -> n r) -> n r)
-  -> (NValue' t f m (n r) -> n r)
-  -> NValue t f m
+  -> (Thunk m -> (NValue f m -> n r) -> n r)
+  -> (NValue' f m (n r) -> n r)
+  -> NValue f m
   -> n r
 iterNValueM transform k f =
     iterM f <=< go . fmap (\t -> k t (iterNValueM transform k f))
@@ -459,34 +460,33 @@ iterNValueM transform k f =
 
 -- | @hoistFree@, Back & forth hoisting in the monad stack
 hoistNValue
-  :: (Functor m, Functor n, Functor f)
+  :: (Functor m, Functor n, Functor f, Thunk m ~ Thunk n)
   => (forall x . n x -> m x)
   -> (forall x . m x -> n x)
-  -> NValue t f m
-  -> NValue t f n
+  -> NValue f m
+  -> NValue f n
 hoistNValue run lft = hoistFree (hoistNValue' run lft)
-
 
 -- ** MonadTrans
 
 -- | @lift@
 liftNValue
-  :: (MonadTrans u, Monad m, Functor (u m), Functor f)
+  :: (MonadTrans u, Monad m, Functor (u m), Functor f, Thunk m ~ Thunk (u m))
   => (forall x . u m x -> m x)
-  -> NValue t f m
-  -> NValue t f (u m)
+  -> NValue f m
+  -> NValue f (u m)
 liftNValue run = hoistNValue run lift
+
 
 
 -- *** MonadTransUnlift
 -- | @unlift@
 unliftNValue
-  :: (MonadTrans u, Monad m, Functor (u m), Functor f)
+  :: (MonadTrans u, Monad m, Functor (u m), Functor f, Thunk m ~ Thunk (u m))
   => (forall x . u m x -> m x)  -- aka "run"
-  -> NValue t f (u m)
-  -> NValue t f m
+  -> NValue f (u m)
+  -> NValue f m
 unliftNValue = hoistNValue lift
-
 
 -- ** Methods @F: Hask → NValue@
 --
@@ -499,8 +499,8 @@ unliftNValue = hoistNValue lift
 -- | Life of a Haskell thunk to the life of a Nix thunk,
 pattern NVThunk t <- Pure t
 nvThunk :: Applicative f
-  => t
-  -> NValue t f m
+  => Thunk m
+  -> NValue f m
 nvThunk = Pure
 
 
@@ -508,7 +508,7 @@ nvThunk = Pure
 pattern NVConstant x <- Free (NVConstant' x)
 nvConstant :: Applicative f
   => NAtom
-  -> NValue t f m
+  -> NValue f m
 nvConstant = Free . nvConstant'
 
 
@@ -516,7 +516,7 @@ nvConstant = Free . nvConstant'
 pattern NVStr ns <- Free (NVStr' ns)
 nvStr :: Applicative f
   => NixString
-  -> NValue t f m
+  -> NValue f m
 nvStr = Free . nvStr'
 
 
@@ -524,75 +524,75 @@ nvStr = Free . nvStr'
 pattern NVPath x <- Free (NVPath' x)
 nvPath :: Applicative f
   => FilePath
-  -> NValue t f m
+  -> NValue f m
 nvPath = Free . nvPath'
 
 
 pattern NVList l <- Free (NVList' l)
 nvList :: Applicative f
-  => [NValue t f m]
-  -> NValue t f m
+  => [NValue f m]
+  -> NValue f m
 nvList = Free . nvList'
 
 
 pattern NVSet s x <- Free (NVSet' s x)
 nvSet :: Applicative f
-  => HashMap Text (NValue t f m)
+  => HashMap Text (NValue f m)
   -> HashMap Text SourcePos
-  -> NValue t f m
+  -> NValue f m
 nvSet s x = Free $ nvSet' s x
 
 
 pattern NVClosure x f <- Free (NVClosure' x f)
 nvClosure :: (Applicative f, Functor m)
   => Params ()
-  -> (NValue t f m
-      -> m (NValue t f m)
+  -> (NValue f m
+      -> m (NValue f m)
     )
-  -> NValue t f m
+  -> NValue f m
 nvClosure x f = Free $ nvClosure' x f
 
 
 pattern NVBuiltin name f <- Free (NVBuiltin' name f)
 nvBuiltin :: (Applicative f, Functor m)
   => String
-  -> (NValue t f m
-    -> m (NValue t f m)
+  -> (NValue f m
+    -> m (NValue f m)
     )
-  -> NValue t f m
+  -> NValue f m
 nvBuiltin name f = Free $ nvBuiltin' name f
 
 
 builtin
-  :: forall m f t
-   . (MonadThunk t m (NValue t f m), MonadDataContext f m)
+  :: forall m f
+   . (MonadThunk m, ThunkValue m ~ NValue f m, MonadDataContext f m)
   => String
-  -> (NValue t f m
-      -> m (NValue t f m)
+  -> (NValue f m
+      -> m (NValue f m)
     )
-  -> m (NValue t f m)
+  -> m (NValue f m)
 builtin name f = pure $ nvBuiltin name $ \a -> f a
 
 
 builtin2
-  :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
+  :: (MonadThunk m, ThunkValue m ~ NValue f m, MonadDataContext f m)
   => String
-  -> (NValue t f m -> NValue t f m
-      -> m (NValue t f m)
+  -> (NValue f m -> NValue f m
+      -> m (NValue f m)
     )
-  -> m (NValue t f m)
+  -> m (NValue f m)
 builtin2 name f = builtin name $ \a -> builtin name $ \b -> f a b
 
 
 builtin3
-  :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
+  :: (MonadThunk m, ThunkValue m ~ NValue f m, MonadDataContext f m)
   => String
-  -> (  NValue t f m
-     -> NValue t f m
-     -> NValue t f m
-     -> m (NValue t f m)
+  -> (  NValue f m
+     -> NValue f m
+     -> NValue f m
+     -> m (NValue f m)
      )
-  -> m (NValue t f m)
+  -> m (NValue f m)
 builtin3 name f =
   builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
 
@@ -656,8 +656,8 @@ describeValue = \case
   TBuiltin           -> "a builtin function"
 
 
-showValueType :: (MonadThunk t m (NValue t f m), Comonad f)
-  => NValue t f m
+showValueType :: (MonadThunk m, Thunk m ~ t, ThunkValue m ~ NValue f m, Comonad f)
+  => NValue f m
   -> m String
 showValueType (Pure t) = force t showValueType
 showValueType (Free (NValue (extract -> v))) =
@@ -666,20 +666,20 @@ showValueType (Free (NValue (extract -> v))) =
 
 -- * @ValueFrame@
 
-data ValueFrame t f m
-    = ForcingThunk t
-    | ConcerningValue (NValue t f m)
-    | Comparison (NValue t f m) (NValue t f m)
-    | Addition (NValue t f m) (NValue t f m)
-    | Multiplication (NValue t f m) (NValue t f m)
-    | Division (NValue t f m) (NValue t f m)
+data ValueFrame f m
+    = ForcingThunk (Thunk m)
+    | ConcerningValue (NValue f m)
+    | Comparison (NValue f m) (NValue f m)
+    | Addition (NValue f m) (NValue f m)
+    | Multiplication (NValue f m) (NValue f m)
+    | Division (NValue f m) (NValue f m)
     | Coercion ValueType ValueType
-    | CoercionToJson (NValue t f m)
+    | CoercionToJson (NValue f m)
     | CoercionFromJson Aeson.Value
-    | Expectation ValueType (NValue t f m)
+    | Expectation ValueType (NValue f m)
     deriving Typeable
 
-deriving instance (Comonad f, Show t) => Show (ValueFrame t f m)
+deriving instance (Comonad f, Show (Thunk m)) => Show (ValueFrame f m)
 
 
 -- * @MonadDataContext@
@@ -690,10 +690,10 @@ type MonadDataContext f (m :: * -> *)
 
 -- * @MonadDataErrorContext@
 
-type MonadDataErrorContext t f m
-  = (Show t, Typeable t, Typeable m, Typeable f, MonadDataContext f m)
+type MonadDataErrorContext f m
+  = (Show (Thunk m), Typeable (Thunk m), Typeable m, Typeable f, MonadDataContext f m)
 
-instance MonadDataErrorContext t f m => Exception (ValueFrame t f m)
+instance MonadDataErrorContext f m => Exception (ValueFrame f m)
 
 
 -- ** NValue' traversals, getter & setters
@@ -710,5 +710,5 @@ $(makeLenses ''NValue')
 key
   :: (Traversable f, Applicative g)
   => VarName
-  -> LensLike' g (NValue' t f m a) (Maybe a)
+  -> LensLike' g (NValue' f m a) (Maybe a)
 key k = nValue . traverse . _NVSetF . _1 . hashAt k
