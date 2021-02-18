@@ -943,10 +943,7 @@ replaceStrings tfrom tto ts = fromValue (Deeper tfrom) >>= \(nsFrom :: [NixStrin
   fromValue (Deeper tto) >>= \(nsTo :: [NixString]) ->
     fromValue ts >>= \(ns :: NixString) -> do
       when (length nsFrom /= length nsTo)
-        $  throwError
-        $  ErrorCall
-        $  "'from' and 'to' arguments to 'replaceStrings'"
-        <> " have different lengths"
+        $ throwError $ ErrorCall "builtins.replaceStrings: Arguments `from`&`to` are lists `from` what replace `to` what, so the number of their inhabitanting elements must always match."
       let
 
         from = fmap stringIgnoreContext nsFrom
