@@ -940,20 +940,21 @@ replaceStrings
 replaceStrings tfrom tto ts =
   do
     -- NixStrings have context - remember
-    (fromKeys     :: [NixString]) <- fromValue (Deeper tfrom)
+    (fromKeys :: [NixString]) <- fromValue (Deeper tfrom)
     (toVals   :: [NixString]) <- fromValue (Deeper tto)
-    (string              ::  NixString ) <- fromValue ts
+    (string   ::  NixString ) <- fromValue ts
 
     when (length fromKeys /= length toVals) $ throwError $ ErrorCall "builtins.replaceStrings: Arguments `from`&`to` construct a key-value map, so the number of their elements must always match."
 
     let
       --  2021-02-18: NOTE: if there is no match - the process does not changes the context, but walks the string.
-      --  So it should be more effective to have context as the first argument.
+      --  So it should be more effective to pass the context as the first argument.
+      --  And moreover, the `passOneCharNgo` passively passes the context, to context can be removed from it and inherited directly.
       go remaining processed ctx =
         case maybePrefixMatch remaining of
           Nothing ->
-            -- Chip away chars until match
-            stepOneCharNgo remaining processed ctx
+            -- Pass the chars until match
+            passOneCharNgo remaining processed ctx
           Just (matched, replacementNS, tailNS) ->
             -- Allowing match on "" is a bug-quirk of Nix,
             -- when "" is checked - it always matches. And so - when it checks - it always insers a replacement, and then process simply passesthrough the char that was under match.
@@ -962,7 +963,7 @@ replaceStrings tfrom tto ts =
             -- " H e l l o   w o r l d "
             -- repl> builtins.replaceStrings ["ll" ""] [" " "i"] "Hello world"
             -- "iHie ioi iwioirilidi"
-            (if matched == mempty then stepOneCharNgo else go) tailNS updatedProcessed updatedCtx
+            (if matched == mempty then passOneCharNgo else go) tailNS updatedProcessed updatedCtx
 
            where
             updatedProcessed   = processed <> replacement
@@ -978,7 +979,7 @@ replaceStrings tfrom tto ts =
 
         fromKeysToValsMap = zip (fmap stringIgnoreContext fromKeys) toVals
 
-        stepOneCharNgo text result =
+        passOneCharNgo text result =
           maybe
             (finish result)  -- The base case - there is no chars left to process -> finish
             (\(c, t) -> go t (result <> Builder.singleton c)) -- If there are chars - pass one char & continue
