@@ -979,7 +979,7 @@ replaceStrings tfrom tto ts =
         --  Maybe `text-builder`, `text-show`?
         finish ctx output = makeNixString (LazyText.toStrict $ Builder.toLazyText output) ctx
 
-        replace (matched, replacementNS, unprocessedInput) = replaceWithNixBug unprocessedInput updatedOutput
+        replace (key, replacementNS, unprocessedInput) = replaceWithNixBug unprocessedInput updatedOutput
 
          where
           replaceWithNixBug =
@@ -992,15 +992,16 @@ replaceStrings tfrom tto ts =
               -- " H e l l o   w o r l d "
               -- repl> builtins.replaceStrings ["ll" ""] [" " "i"] "Hello world"
               -- "iHie ioi iwioirilidi"
+              --  2021-02-18: NOTE: There is no tests for this
               bugPassOneChar  -- augmented recursion
               isNixBugCase
 
-          isNixBugCase = matched == mempty
+          isNixBugCase = key == mempty
 
           updatedOutput  = output <> replacement
-          replacement    = Builder.fromText $ stringIgnoreContext replacementNS
-
           updatedCtx     = ctx <> replacementCtx
+
+          replacement    = Builder.fromText $ stringIgnoreContext replacementNS
           replacementCtx = NixString.getContext replacementNS
 
           -- The bug modifies the content => bug demands `pass` to be a real function =>
