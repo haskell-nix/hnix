@@ -940,47 +940,57 @@ replaceStrings
   -> m (NValue t f m)
 replaceStrings tfrom tto ts =
   do
-      -- `ns*` goes for NixString here, which are with context - remember
-      (nsFrom :: [NixString]) <- fromValue (Deeper tfrom)
-      (nsTo   :: [NixString]) <- fromValue (Deeper tto)
-      (ns     ::  NixString ) <- fromValue ts
+    -- `ns*` goes for NixString here, which are with context - remember
+    (nsListMatch :: [NixString]) <- fromValue (Deeper tfrom)
+    (nsListReplace   :: [NixString]) <- fromValue (Deeper tto)
+    (ns     ::  NixString ) <- fromValue ts
 
-      when (length nsFrom /= length nsTo)
-        $ throwError $ ErrorCall "builtins.replaceStrings: Arguments `from`&`to` are lists `from` what replace `to` what, so the number of their inhabitanting elements must always match."
-      let
+    when (length nsListMatch /= length nsListReplace)
+      $ throwError $ ErrorCall "builtins.replaceStrings: Arguments `from`&`to` are lists `from` what replace `to` what, so the number of their inhabitanting elements must always match."
 
-        go source resultAccum ctx =
-          case lookupPrefix source of
-            Nothing ->
-              process source resultAccum ctx
-            Just (prefix, replacementNS, rest) ->
-              (if prefix == mempty then process else go) rest newResultAccum newCtx
-             where
-              replacement    = Builder.fromText $ stringIgnoreContext replacementNS
-              newResultAccum = resultAccum <> replacement
-              additionalCtx  = NixString.getContext replacementNS
-              newCtx         = ctx <> additionalCtx
+    let
+      go remainder processedAccum ctx =
+        case maybePrefixMatches nsListMatch remainder of
+          Nothing ->
+            process remainder processedAccum ctx
+          Just (matched, replacementNS, rest) ->
+            -- Allowing match on "" is a bug-quirk of Nix,
+            -- when "" is checked - it always matches. And so - if there is no previous matches the "" is replaced with " " and the process simply passesthrough the next char.
+            --
+            -- repl> builtins.replaceStrings ["" "e"] [" " "i"] "Hello world"
+            -- " H e l l o   w o r l d "
+            -- repl> builtins.replaceStrings ["ll" ""] [" " "i"] "Hello world"
+            -- "iHie ioi iwioirilidi"
+            (if matched == mempty then process else go) rest updProcessedAccum newCtx
+
+           where
+            newReplacement    = Builder.fromText $ stringIgnoreContext replacementNS
+            updProcessedAccum = processedAccum <> newReplacement
+            additionalCtx  = NixString.getContext replacementNS
+            newCtx         = ctx <> additionalCtx
+
+       where
+        process text result =
+          maybe -- chip one char from text
+            (finish result)
+            (\(c, t) -> go t (result <> Builder.singleton c))
+            (Text.uncons text)
+
+        finish = makeNixString . LazyText.toStrict . Builder.toLazyText
+
+        maybePrefixMatches nsListMatch src =
+          do  -- monadic context handles Maybe result here, aka if Nothing returned
+            (from, to) <- find ((`Text.isPrefixOf` src) . fst) matchReplaceMap
+            let rest = Text.drop (Text.length from) src
+            pure (from, to, rest)
+
          where
-          process text result =
-            maybe
-              (finish result)
-              (\(h, t) -> go t (result <> Builder.singleton h))
-              (Text.uncons text)
-           where
-            finish = makeNixString . LazyText.toStrict . Builder.toLazyText
+          textListMatch = fmap stringIgnoreContext nsListMatch
+          matchReplaceMap = zip textListMatch nsListReplace
 
-          lookupPrefix src =
-            do  -- monadic context handles Maybe result here, aka if Nothing returned
-              (prefix, replacement) <- find ((`Text.isPrefixOf` src) . fst)
-                $ zip from nsTo
-              let rest = Text.drop (Text.length prefix) src
-              pure (prefix, replacement, rest)
-           where
-            from = fmap stringIgnoreContext nsFrom
-
-      toValue
-        $ go (stringIgnoreContext ns) mempty
-        $ NixString.getContext ns
+    toValue
+       $ go (stringIgnoreContext ns) mempty
+      $ NixString.getContext ns
 
 removeAttrs
   :: forall e t f m
