@@ -38,6 +38,7 @@ import qualified Data.Aeson                    as A
 import           Data.Align                     ( alignWith )
 import           Data.Array
 import           Data.Bits
+import           Data.Bool                         ( bool )
 import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString               as B
 import           Data.ByteString.Base16        as Base16
@@ -923,56 +924,96 @@ genericClosure = fromValue @(AttrSet (NValue t f m)) >=> \s ->
             WValue j : _ -> checkComparable k' j
           fmap (t :) <$> go op (ts <> ys) (S.insert (WValue k') ks)
 
+-- | Takes:
+-- 1. List of strings to match.
+-- 2. List of strings to replace corresponding match occurance. (arg 1 & 2 lists matched by index)
+-- 3. String to process
+-- -> returns the string with requested replacements.
+--
+-- Example:
+-- builtins.replaceStrings ["ll" "e"] [" " "i"] "Hello world" == "Hi o world".
 replaceStrings
   :: MonadNix e t f m
   => NValue t f m
   -> NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-replaceStrings tfrom tto ts = fromValue (Deeper tfrom) >>= \(nsFrom :: [NixString]) ->
-  fromValue (Deeper tto) >>= \(nsTo :: [NixString]) ->
-    fromValue ts >>= \(ns :: NixString) -> do
-      let from = fmap stringIgnoreContext nsFrom
-      when (length nsFrom /= length nsTo)
-        $  throwError
-        $  ErrorCall
-        $  "'from' and 'to' arguments to 'replaceStrings'"
-        <> " have different lengths"
-      let
-        lookupPrefix s = do
-          (prefix, replacement) <- find ((`Text.isPrefixOf` s) . fst)
-            $ zip from nsTo
-          let rest = Text.drop (Text.length prefix) s
-          pure (prefix, replacement, rest)
-        finish b =
-          makeNixString (LazyText.toStrict $ Builder.toLazyText b)
-        go orig result ctx = case lookupPrefix orig of
-          Nothing -> case Text.uncons orig of
-            Nothing     -> finish result ctx
-            Just (h, t) -> go t (result <> Builder.singleton h) ctx
-          Just (prefix, replacementNS, rest) ->
-            let replacement = stringIgnoreContext replacementNS
-                newCtx      = NixString.getContext replacementNS
-            in  case prefix of
-                  "" -> case Text.uncons rest of
-                    Nothing -> finish
-                      (result <> Builder.fromText replacement)
-                      (ctx <> newCtx)
-                    Just (h, t) -> go
-                      t
-                      (mconcat
-                        [ result
-                        , Builder.fromText replacement
-                        , Builder.singleton h
-                        ]
-                      )
-                      (ctx <> newCtx)
-                  _ -> go rest
-                          (result <> Builder.fromText replacement)
-                          (ctx <> newCtx)
-      toValue
-        $ go (stringIgnoreContext ns) mempty
-        $ NixString.getContext ns
+replaceStrings tfrom tto ts =
+  do
+    -- NixStrings have context - remember
+    (fromKeys :: [NixString]) <- fromValue (Deeper tfrom)
+    (toVals   :: [NixString]) <- fromValue (Deeper tto)
+    (string   ::  NixString ) <- fromValue ts
+
+    when (length fromKeys /= length toVals) $ throwError $ ErrorCall "builtins.replaceStrings: Arguments `from`&`to` construct a key-value map, so the number of their elements must always match."
+
+    let
+      --  2021-02-18: NOTE: if there is no match - the process does not changes the context, simply slides along the string.
+      --  So it isbe more effective to pass the context as the first argument.
+      --  And moreover, the `passOneCharNgo` passively passes the context, to context can be removed from it and inherited directly.
+      --  Then the solution would've been elegant, but the Nix bug prevents elegant implementation.
+      go ctx input output =
+        maybe
+            -- Passively pass the chars
+          passOneChar
+          replace
+          maybePrefixMatch
+
+       where
+        -- When prefix matched something - returns (match, replacement, reminder)
+        maybePrefixMatch :: Maybe (Text, NixString, Text)
+        maybePrefixMatch = formMatchReplaceTailInfo <$> find ((`Text.isPrefixOf` input) . fst) fromKeysToValsMap
+         where
+          formMatchReplaceTailInfo = (\(m, r) -> (m, r, Text.drop (Text.length m) input))
+
+          fromKeysToValsMap = zip (fmap stringIgnoreContext fromKeys) toVals
+
+        -- Not passing args => It is constant that gets embedded into `go` => It is simple `go` tail recursion
+        passOneChar =
+          maybe
+            (finish ctx output)  -- The base case - there is no chars left to process -> finish
+            (\(c, i) -> go ctx i (output <> Builder.singleton c)) -- If there are chars - pass one char & continue
+            (Text.uncons input)  -- chip first char
+
+        --  2021-02-18: NOTE: rly?: toStrict . toLazyText
+        --  Maybe `text-builder`, `text-show`?
+        finish ctx output = makeNixString (LazyText.toStrict $ Builder.toLazyText output) ctx
+
+        replace (key, replacementNS, unprocessedInput) = replaceWithNixBug unprocessedInput updatedOutput
+
+         where
+          replaceWithNixBug =
+            bool
+              (go updatedCtx)  -- tail recursion
+              -- Allowing match on "" is a inherited bug of Nix,
+              -- when "" is checked - it always matches. And so - when it checks - it always insers a replacement, and then process simply passesthrough the char that was under match.
+              --
+              -- repl> builtins.replaceStrings ["" "e"] [" " "i"] "Hello world"
+              -- " H e l l o   w o r l d "
+              -- repl> builtins.replaceStrings ["ll" ""] [" " "i"] "Hello world"
+              -- "iHie ioi iwioirilidi"
+              --  2021-02-18: NOTE: There is no tests for this
+              bugPassOneChar  -- augmented recursion
+              isNixBugCase
+
+          isNixBugCase = key == mempty
+
+          updatedOutput  = output <> replacement
+          updatedCtx     = ctx <> replacementCtx
+
+          replacement    = Builder.fromText $ stringIgnoreContext replacementNS
+          replacementCtx = NixString.getContext replacementNS
+
+          -- The bug modifies the content => bug demands `pass` to be a real function =>
+          -- `go` calls `pass` function && `pass` calls `go` function
+          -- => mutual recusion case, so placed separately.
+          bugPassOneChar input output =
+            maybe
+              (finish updatedCtx output)  -- The base case - there is no chars left to process -> finish
+              (\(c, i) -> go updatedCtx i (output <> Builder.singleton c)) -- If there are chars - pass one char & continue
+              (Text.uncons input)  -- chip first char
+
+    toValue $ go (NixString.getContext string) (stringIgnoreContext string) mempty
 
 removeAttrs
   :: forall e t f m
