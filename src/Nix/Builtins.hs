@@ -929,7 +929,7 @@ genericClosure = fromValue @(AttrSet (NValue t f m)) >=> \s ->
 -- 2. List of strings to replace corresponding match occurance. (arg 1 & 2 lists matched by index)
 -- 3. String to process
 -- -> returns the string with requested replacements.
--- 
+--
 -- Example:
 -- builtins.replaceStrings ["ll" "e"] [" " "i"] "Hello world" == "Hi o world".
 replaceStrings
@@ -952,16 +952,17 @@ replaceStrings tfrom tto ts =
       --  So it should be more effective to pass the context as the first argument.
       --  And moreover, the `passOneCharNgo` passively passes the context, to context can be removed from it and inherited directly.
       --  Then the solution would've been elegant, but the Nix bug prevents elegant implementation.
-      go remaining processed ctx =
+      go input output ctx =
         case maybePrefixMatch of
           Nothing ->
             -- Pass the chars until match
-            passOneCharNgo remaining processed ctx
-          Just (matched, replacementNS, tailNS) -> replace
+            passOneCharNgo input output ctx
+          Just (matched, replacementNS, unprocessedInput) ->
+            sendReplaceToOutput
 
            where
-            replace = replaceWithNixBug tailNS updatedProcessed updatedCtx
-            replaceWithNixBug =
+            sendReplaceToOutput = withNixBug unprocessedInput updatedOutput updatedCtx
+            withNixBug =
               bool
                 go
 
@@ -975,18 +976,18 @@ replaceStrings tfrom tto ts =
                 passOneCharNgo
                 (matched == mempty)
 
-            updatedProcessed   = processed <> replacement
+            updatedOutput  = output <> replacement
             replacement    = Builder.fromText $ stringIgnoreContext replacementNS
 
-            updatedCtx         = ctx <> replacementCtx
+            updatedCtx     = ctx <> replacementCtx
             replacementCtx = NixString.getContext replacementNS
 
        where
         -- When prefix matched something - returns (match, replacement, reminder)
         maybePrefixMatch :: Maybe (Text, NixString, Text)
-        maybePrefixMatch = formMatchReplaceNTail <$> find ((`Text.isPrefixOf` remaining) . fst) fromKeysToValsMap
+        maybePrefixMatch = formMatchReplaceTailInfo <$> find ((`Text.isPrefixOf` input) . fst) fromKeysToValsMap
 
-        formMatchReplaceNTail = (\(m, r) -> (m, r, Text.drop (Text.length m) remaining))
+        formMatchReplaceTailInfo = (\(m, r) -> (m, r, Text.drop (Text.length m) input))
 
         fromKeysToValsMap = zip (fmap stringIgnoreContext fromKeys) toVals
 
@@ -996,6 +997,8 @@ replaceStrings tfrom tto ts =
             (\(c, t) -> go t (output <> Builder.singleton c)) -- If there are chars - pass one char & continue
             (Text.uncons input)  -- chip first char
 
+        --  2021-02-18: NOTE: rly?: toStrict . toLazyText
+        --  Maybe `text-builder`, `text-show`?
         finish = makeNixString . LazyText.toStrict . Builder.toLazyText
 
     toValue $ go (stringIgnoreContext string) mempty $ NixString.getContext string
