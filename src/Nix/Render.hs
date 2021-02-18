@@ -1,3 +1,4 @@
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
@@ -9,6 +10,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Nix.Render where
 
@@ -24,8 +26,7 @@ import qualified Data.Set                      as Set
 import qualified Data.Text                     as T
 import qualified Data.Text.Encoding            as T
 import           Data.Void
-import           Nix.Utils.Fix1                 ( Fix1T
-                                                , MonadFix1T )
+import           Nix.Utils.Fix1
 import           Nix.Expr.Types.Annotated
 import           Prettyprinter
 import qualified System.Directory              as S
@@ -73,8 +74,7 @@ instance MonadFile IO where
   doesDirectoryExist    = S.doesDirectoryExist
   getSymbolicLinkStatus = S.getSymbolicLinkStatus
 
-
-instance (MonadFix1T t m, MonadFail (Fix1T t m), MonadFile m) => MonadFile (Fix1T t m)
+deriving instance MonadFile (t (Fix1T t m) m) => MonadFile (Fix1T t m)
 
 posAndMsg :: SourcePos -> Doc a -> ParseError s Void
 posAndMsg (SourcePos _ lineNo _) msg = FancyError
