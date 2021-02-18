@@ -38,6 +38,7 @@ import qualified Data.Aeson                    as A
 import           Data.Align                     ( alignWith )
 import           Data.Array
 import           Data.Bits
+import           Data.Bool                         ( bool )
 import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString               as B
 import           Data.ByteString.Base16        as Base16
@@ -947,25 +948,33 @@ replaceStrings tfrom tto ts =
     when (length fromKeys /= length toVals) $ throwError $ ErrorCall "builtins.replaceStrings: Arguments `from`&`to` construct a key-value map, so the number of their elements must always match."
 
     let
-      --  2021-02-18: NOTE: if there is no match - the process does not changes the context, but walks the string.
+      --  2021-02-18: NOTE: if there is no match - the process does not changes the context, simply slides along the string.
       --  So it should be more effective to pass the context as the first argument.
       --  And moreover, the `passOneCharNgo` passively passes the context, to context can be removed from it and inherited directly.
+      --  Then the solution would've been elegant, but the Nix bug prevents elegant implementation.
       go remaining processed ctx =
         case maybePrefixMatch remaining of
           Nothing ->
             -- Pass the chars until match
             passOneCharNgo remaining processed ctx
-          Just (matched, replacementNS, tailNS) ->
-            -- Allowing match on "" is a bug-quirk of Nix,
-            -- when "" is checked - it always matches. And so - when it checks - it always insers a replacement, and then process simply passesthrough the char that was under match.
-            --
-            -- repl> builtins.replaceStrings ["" "e"] [" " "i"] "Hello world"
-            -- " H e l l o   w o r l d "
-            -- repl> builtins.replaceStrings ["ll" ""] [" " "i"] "Hello world"
-            -- "iHie ioi iwioirilidi"
-            (if matched == mempty then passOneCharNgo else go) tailNS updatedProcessed updatedCtx
+          Just (matched, replacementNS, tailNS) -> replace
 
            where
+            replace = replaceWithNixBug tailNS updatedProcessed updatedCtx
+            replaceWithNixBug =
+              bool
+                go
+
+                -- Allowing match on "" is a inherited bug of Nix,
+                -- when "" is checked - it always matches. And so - when it checks - it always insers a replacement, and then process simply passesthrough the char that was under match.
+                --
+                -- repl> builtins.replaceStrings ["" "e"] [" " "i"] "Hello world"
+                -- " H e l l o   w o r l d "
+                -- repl> builtins.replaceStrings ["ll" ""] [" " "i"] "Hello world"
+                -- "iHie ioi iwioirilidi"
+                passOneCharNgo
+                (matched == mempty)
+
             updatedProcessed   = processed <> replacement
             replacement    = Builder.fromText $ stringIgnoreContext replacementNS
 
