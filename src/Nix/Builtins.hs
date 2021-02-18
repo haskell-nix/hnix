@@ -940,19 +940,21 @@ replaceStrings
 replaceStrings tfrom tto ts =
   do
     -- NixStrings have context - remember
-    (nsFromKeys     :: [NixString]) <- fromValue (Deeper tfrom)
-    (nsToVals   :: [NixString]) <- fromValue (Deeper tto)
-    (ns              ::  NixString ) <- fromValue ts
+    (fromKeys     :: [NixString]) <- fromValue (Deeper tfrom)
+    (toVals   :: [NixString]) <- fromValue (Deeper tto)
+    (string              ::  NixString ) <- fromValue ts
 
-    when (length nsFromKeys /= length nsToVals) $ throwError $ ErrorCall "builtins.replaceStrings: Arguments `from`&`to` construct a key-value map, so the number of their elements must always match."
+    when (length fromKeys /= length toVals) $ throwError $ ErrorCall "builtins.replaceStrings: Arguments `from`&`to` construct a key-value map, so the number of their elements must always match."
 
     let
-      go remainder processed ctx =
-        case maybePrefixMatch remainder of
+      --  2021-02-18: NOTE: if there is no match - the process does not changes the context, but walks the string.
+      --  So it should be more effective to have context as the first argument.
+      go remaining processed ctx =
+        case maybePrefixMatch remaining of
           Nothing ->
             -- Chip away chars until match
-            stepOneCharNgo remainder processed ctx
-          Just (matched, replacementNS, rest) ->
+            stepOneCharNgo remaining processed ctx
+          Just (matched, replacementNS, tailNS) ->
             -- Allowing match on "" is a bug-quirk of Nix,
             -- when "" is checked - it always matches. And so - when it checks - it always insers a replacement, and then process simply passesthrough the char that was under match.
             --
@@ -960,30 +962,31 @@ replaceStrings tfrom tto ts =
             -- " H e l l o   w o r l d "
             -- repl> builtins.replaceStrings ["ll" ""] [" " "i"] "Hello world"
             -- "iHie ioi iwioirilidi"
-            (if matched == mempty then stepOneCharNgo else go) rest updProcessed updCtx
+            (if matched == mempty then stepOneCharNgo else go) tailNS updatedProcessed updatedCtx
 
            where
+            updatedProcessed   = processed <> replacement
             replacement    = Builder.fromText $ stringIgnoreContext replacementNS
-            updProcessed   = processed <> replacement
 
+            updatedCtx         = ctx <> replacementCtx
             replacementCtx = NixString.getContext replacementNS
-            updCtx         = ctx <> replacementCtx
 
        where
+        -- When prefix matched something - returns (match, replacement, reminder)
+        maybePrefixMatch :: Text -> Maybe (Text, NixString, Text)
+        maybePrefixMatch src = (\(m, r) -> (m, r, Text.drop (Text.length m) src)) <$> find ((`Text.isPrefixOf` src) . fst) fromKeysToValsMap
+
+        fromKeysToValsMap = zip (fmap stringIgnoreContext fromKeys) toVals
+
         stepOneCharNgo text result =
           maybe
             (finish result)  -- The base case - there is no chars left to process -> finish
-            (\(c, t) -> go t (result <> Builder.singleton c))
-            (Text.uncons text)  -- chip one char
+            (\(c, t) -> go t (result <> Builder.singleton c)) -- If there are chars - pass one char & continue
+            (Text.uncons text)  -- chip first char
 
         finish = makeNixString . LazyText.toStrict . Builder.toLazyText
 
-        -- When prefix matched something - returns (match, replacement, reminder)
-        maybePrefixMatch src = (\(m, r) -> (m, r, Text.drop (Text.length m) src)) <$> find ((`Text.isPrefixOf` src) . fst) matchReplaceMap
-
-        matchReplaceMap = zip (fmap stringIgnoreContext nsFromKeys) nsToVals
-
-    toValue $ go (stringIgnoreContext ns) mempty $ NixString.getContext ns
+    toValue $ go (stringIgnoreContext string) mempty $ NixString.getContext string
 
 removeAttrs
   :: forall e t f m
