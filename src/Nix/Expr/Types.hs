@@ -183,6 +183,13 @@ instance Lift (Fix NExprF) where
   liftTyped = unsafeTExpCoerce . lift
 #endif
 
+#if !MIN_VERSION_hashable(1,3,1)
+-- there was none before, remove this in year >2022
+instance Hashable1 NonEmpty
+#endif
+
+instance Hashable1 NExprF
+
 -- | The monomorphic expression type is a fixed point of the polymorphic one.
 type NExpr = Fix NExprF
 
@@ -209,6 +216,8 @@ data Binding r
             Foldable, Traversable, Show, NFData, Hashable)
 
 instance NFData1 Binding
+
+instance Hashable1 Binding
 
 #ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (Binding r)
