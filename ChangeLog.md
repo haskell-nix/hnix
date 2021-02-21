@@ -7,53 +7,80 @@
 
   * [(link)](https://github.com/haskell-nix/hnix/pull/802/commits/529095deaf6bc6b102fe5a3ac7baccfbb8852e49#) `Nix.Strings`: all `hacky*` functions replaced with lawful implemetations, because of that all functions become lawful - dropped the `principled` suffix from functions:
     * `Nix.String`:
-      * `hackyGetStringNoContext` -> `getStringNoContext`.
-      * `hackyStringIgnoreContext` -> `stringIgnoreContext`.
-      * `hackyMakeNixStringWithoutContext` -> `makeNixStringWithoutContext`.
-      * `principledStringMConcat` -> `mconcat`.
-      * `principledStringMappend` -> `mappend`.
-      * `principledStringMempty` -> `mempty`.
-      * `principledMempty` -> `mempty`.
-      * `principledGetContext` -> `getContext`.
-      * `principledMakeNixString` -> `makeNixString`.
-      * `principledIntercalateNixString` -> `intercalateNixString`.
-      * `principledGetStringNoContext` -> `getStringNoContext`.
-      * `principledStringIgnoreContext` -> `stringIgnoreContext`.
-      * `principledMakeNixStringWithoutContext` -> `makeNixStringWithoutContext`.
-      * `principledMakeNixStringWithSingletonContext` -> `makeNixStringWithSingletonContext`.
-      * `principledModifyNixContents` -> `modifyNixContents`.
+        ```haskell
+        hackyGetStringNoContext          ->
+             getStringNoContext
+        hackyStringIgnoreContext         ->
+             stringIgnoreContext
+        hackyMakeNixStringWithoutContext ->
+             makeNixStringWithoutContext
+
+        principledMempty        -> mempty
+        principledStringMempty  -> mempty
+        principledStringMConcat -> mconcat
+        principledStringMappend -> mappend
+
+        principledGetContext                        ->
+                  getContext
+        principledMakeNixString                     ->
+                  makeNixString
+        principledIntercalateNixStrin               ->
+                  intercalateNixString
+        principledGetStringNoContext                ->
+                  getStringNoContext
+        principledStringIgnoreContext               ->
+                  stringIgnoreContext
+        principledMakeNixStringWithoutContext       ->
+                  makeNixStringWithoutContext
+        principledMakeNixStringWithSingletonContext ->
+                  makeNixStringWithSingletonContext
+        principledModifyNixContents                 ->
+                  modifyNixContents
+        ```
 
   * [(link)](https://github.com/haskell-nix/hnix/pull/805/files):
     * Data type: `MonadFix1T t m`: `Nix.Standard` -> `Nix.Utils.Fix1`
     * Children found their parents:
-      * `Binary NAtom`: `Nix.Expr.Types` -> `Nix.Atoms`
-      * `Eq1 (NValue' t f m a)`: `Nix.Value.Equal` -> `Nix.Value` - instance was TH, become regular derivable
-      * `Eq1 (NValueF p m)`: `Nix.Value.Equal` -> `Nix.Value`
-      * `FromJSON NAtom`: `Nix.Expr.Types` -> `Nix.Atoms`
-      * `ToJSON NAtom`: `Nix.Expr.Types` -> `Nix.Atoms`
-      * `HasCitations m v (NValue t f m)`: `Nix.Pretty` -> `Nix.Cited`
-      * `HasCitations m v (NValue' t f m a)`: `Nix.Pretty` -> `Nix.Cited`
-      * `Hashable1 Binding`: `Nix.Expr.Types` -> `Void` - please, report if it is needed
-      * `Hashable1 NExprF`: `Nix.Expr.Types` -> `Void` - please, report if it is needed
-      * `Hashable1 NonEmpty`: `Nix.Expr.Types` -> `Void` - please, report if it is needed
-      * `MonadAtomicRef (Fix1T t m)`: `Nix.Standard` -> `Nix.Utils.Fix1`
-      * `MonadEnv (Fix1 t)`: `Nix.Standard` -> `Nix.Efffects`
-      * `MonadEnv (Fix1T t m)`: `Nix.Standard` -> `Nix.Efffects`
-      * `MonadExec (Fix1 t)`: `Nix.Standard` -> `Nix.Efffects`
-      * `MonadExec (Fix1T t m)`: `Nix.Standard` -> `Nix.Efffects`
-      * `MonadFile (Fix1T t m)`: `Nix.Standard` -> `Nix.Render`
-      * `MonadHttp (Fix1 t)`: `Nix.Standard` -> `Nix.Efffects`
-      * `MonadHttp (Fix1T t m)`: `Nix.Standard` -> `Nix.Efffects`
-      * `MonadInstantiate (Fix1 t)`: `Nix.Standard` -> `Nix.Efffects`
-      * `MonadInstantiate (Fix1T t m)`: `Nix.Standard` -> `Nix.Efffects`
-      * `MonadIntrospect (Fix1 t)`: `Nix.Standard` -> `Nix.Efffects`
-      * `MonadIntrospect (Fix1T t m)`: `Nix.Standard` -> `Nix.Efffects`
-      * `MonadPaths (Fix1 t)`: `Nix.Standard` -> `Nix.Efffects`
-      * `MonadPaths (Fix1T t m)`: `Nix.Standard` -> `Nix.Efffects`
-      * `MonadPutStr (Fix1 t)`: `Nix.Standard` -> `Nix.Effects`
-      * `MonadPutStr (Fix1T t m)`: `Nix.Standard` -> `Nix.Efffects`
-      * `MonadRef (Fix1T t m)`: `Nix.Standard` -> `Nix.Utils.Fix1`
-      * `MonadStore (Fix1T t m)`: `Nix.Standard` -> `Nix.Efffects`
+        
+        ```haskell
+        Binary   NAtom: Nix.Expr.Types -> Nix.Atoms
+        FromJSON NAtom: Nix.Expr.Types -> Nix.Atoms
+        ToJSON   NAtom: Nix.Expr.Types -> Nix.Atoms
+
+        -- | Instance was TH, now simple derivable
+        Eq1 (NValueF p m)    : Nix.Value.Equal -> Nix.Value
+
+        Eq1 (NValue' t f m a): Nix.Value.Equal -> Nix.Value 
+
+        HasCitations m v (NValue' t f m a): Nix.Pretty -> Nix.Cited
+        HasCitations m v (NValue  t f m)  : Nix.Pretty -> Nix.Cited
+
+        when
+          (package hashable >= 1.3.1) -- gained instance
+          $ Hashable1 NonEmpty: Nix.Expr.Types -> Void -- instance was upstreamed
+
+        -- | Upstreamed, going to apper in the next release of `ref-tf`.
+        MonadAtomicRef   (Fix1T t m): Nix.Standard -> Nix.Utils.Fix1
+
+        MonadRef         (Fix1T t m): Nix.Standard -> Nix.Utils.Fix1
+        MonadEnv         (Fix1T t m): Nix.Standard -> Nix.Effects
+        MonadExec        (Fix1T t m): Nix.Standard -> Nix.Effects
+        MonadHttp        (Fix1T t m): Nix.Standard -> Nix.Effects
+        MonadInstantiate (Fix1T t m): Nix.Standard -> Nix.Effects
+        MonadIntrospect  (Fix1T t m): Nix.Standard -> Nix.Effects
+        MonadPaths       (Fix1T t m): Nix.Standard -> Nix.Effects
+        MonadPutStr      (Fix1T t m): Nix.Standard -> Nix.Effects
+        MonadStore       (Fix1T t m): Nix.Standard -> Nix.Effects
+        MonadFile        (Fix1T t m): Nix.Standard -> Nix.Render
+
+        MonadEnv         (Fix1 t)   : Nix.Standard -> Nix.Effects
+        MonadExec        (Fix1 t)   : Nix.Standard -> Nix.Effects
+        MonadHttp        (Fix1 t)   : Nix.Standard -> Nix.Effects
+        MonadInstantiate (Fix1 t)   : Nix.Standard -> Nix.Effects
+        MonadIntrospect  (Fix1 t)   : Nix.Standard -> Nix.Effects
+        MonadPaths       (Fix1 t)   : Nix.Standard -> Nix.Effects
+        MonadPutStr      (Fix1 t)   : Nix.Standard -> Nix.Effects
+        ```
   
 
 * Additional:

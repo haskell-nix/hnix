@@ -68,127 +68,17 @@ import           Text.Show.Deriving
 import qualified Type.Reflection               as Reflection
 import           Type.Reflection                ( eqTypeRep )
 
+-- * Components of Nix expressions
+
+-- NExpr is a composition of
+--   * direct reuse of the Haskell types (list, FilePath, Text)
+--   * NAtom
+--   * Types in this section
+--   * Fixpoint nature
+
 type VarName = Text
 
-hashAt :: VarName -> Lens' (AttrSet v) (Maybe v)
-hashAt = flip alterF
-
--- | The main Nix expression type. As it is polimophic, has a functor,
--- which allows to traverse expressions and map functions over them.
--- The actual 'NExpr' type is a fixed point of this functor, defined
--- below.
-data NExprF r
-  = NConstant !NAtom
-  -- ^ Constants: ints, floats, bools, URIs, and null.
-  | NStr !(NString r)
-  -- ^ A string, with interpolated expressions.
-  | NSym !VarName
-  -- ^ A variable. For example, in the expression @f a@, @f@ is represented
-  -- as @NSym "f"@ and @a@ as @NSym "a"@.
-  --
-  -- > NSym "x"                                    ~  x
-  | NList ![r]
-  -- ^ A list literal.
-  --
-  -- > NList [x,y]                                 ~  [ x y ]
-  | NSet !NRecordType ![Binding r]
-  -- ^ An attribute set literal
-  --
-  -- > NSet NRecursive    [NamedVar x y _]         ~  rec { x = y; }
-  -- > NSet NNonRecursive [Inherit Nothing [x] _]  ~  { inherit x; }
-  | NLiteralPath !FilePath
-  -- ^ A path expression, which is evaluated to a store path. The path here
-  -- can be relative, in which case it's evaluated relative to the file in
-  -- which it appears.
-  --
-  -- > NLiteralPath "/x"                           ~  /x
-  -- > NLiteralPath "x/y"                          ~  x/y
-  | NEnvPath !FilePath
-  -- ^ A path which refers to something in the Nix search path (the NIX_PATH
-  -- environment variable. For example, @<nixpkgs/pkgs>@.
-  --
-  -- > NEnvPath "x"                                ~  <x>
-  | NUnary !NUnaryOp !r
-  -- ^ Application of a unary operator to an expression.
-  --
-  -- > NUnary NNeg x                               ~  - x
-  -- > NUnary NNot x                               ~  ! x
-  | NBinary !NBinaryOp !r !r
-  -- ^ Application of a binary operator to two expressions.
-  --
-  -- > NBinary NPlus x y                           ~  x + y
-  -- > NBinary NApp  f x                           ~  f x
-  | NSelect !r !(NAttrPath r) !(Maybe r)
-  -- ^ Dot-reference into an attribute set, optionally providing an
-  -- alternative if the key doesn't exist.
-  --
-  -- > NSelect s (x :| []) Nothing                 ~  s.x
-  -- > NSelect s (x :| []) (pure y)                ~  s.x or y
-  | NHasAttr !r !(NAttrPath r)
-  -- ^ Ask if a set contains a given attribute path.
-  --
-  -- > NHasAttr s (x :| [])                        ~  s ? x
-  | NAbs !(Params r) !r
-  -- ^ A function literal (lambda abstraction).
-  --
-  -- > NAbs (Param "x") y                          ~  x: y
-  | NLet ![Binding r] !r
-  -- ^ Evaluate the second argument after introducing the bindings.
-  --
-  -- > NLet []                    x                ~  let in x
-  -- > NLet [NamedVar x y _]      z                ~  let x = y; in z
-  -- > NLet [Inherit Nothing x _] y                ~  let inherit x; in y
-  | NIf !r !r !r
-  -- ^ If-then-else statement.
-  --
-  -- > NIf x y z                                   ~  if x then y else z
-  | NWith !r !r
-  -- ^ Evaluate an attribute set, bring its bindings into scope, and
-  -- evaluate the second argument.
-  --
-  -- > NWith x y                                   ~  with x; y
-  | NAssert !r !r
-  -- ^ Assert that the first returns @true@ before evaluating the second.
-  --
-  -- > NAssert x y                                 ~  assert x; y
-  | NSynHole !VarName
-  -- ^ Syntactic hole.
-  --
-  -- See <https://github.com/haskell-nix/hnix/issues/197> for context.
-  --
-  -- > NSynHole "x"                                ~  ^x
-  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
-            Foldable, Traversable, Show, NFData, Hashable)
-
-instance NFData1 NExprF
-
-#ifdef MIN_VERSION_serialise
-instance Serialise r => Serialise (NExprF r)
-#endif
-
--- | We make an `IsString` for expressions, where the string is interpreted
--- as an identifier. This is the most common use-case...
-instance IsString NExpr where
-  fromString = Fix . NSym . fromString
-
-instance Lift (Fix NExprF) where
-  lift = dataToExpQ $ \b ->
-    case Reflection.typeOf b `eqTypeRep` Reflection.typeRep @Text of
-      Just HRefl -> pure [| pack $(liftString $ unpack b) |]
-      Nothing    -> Nothing
-
-#if MIN_VERSION_template_haskell(2,17,0)
-  liftTyped = unsafeCodeCoerce . lift
-#elif MIN_VERSION_template_haskell(2,16,0)
-  liftTyped = unsafeTExpCoerce . lift
-#endif
-
--- | The monomorphic expression type is a fixed point of the polymorphic one.
-type NExpr = Fix NExprF
-
-#ifdef MIN_VERSION_serialise
-instance Serialise NExpr
-#endif
+-- ** @Binding@
 
 -- | A single line of the bindings section of a let expression or of a set.
 data Binding r
@@ -210,9 +100,14 @@ data Binding r
 
 instance NFData1 Binding
 
+instance Hashable1 Binding
+
 #ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (Binding r)
 #endif
+
+
+-- ** @Params@
 
 -- | @Params@ represents all the ways the formal parameters to a
 -- function can be represented.
@@ -239,12 +134,17 @@ instance NFData1 Params
 instance Serialise r => Serialise (Params r)
 #endif
 
+instance IsString (Params r) where
+  fromString = Param . fromString
+
+-- *** @ParamSet@
+
 -- This uses an association list because nix XML serialization preserves the
 -- order of the param set.
 type ParamSet r = [(VarName, Maybe r)]
 
-instance IsString (Params r) where
-  fromString = Param . fromString
+
+-- ** @Antiquoted@
 
 -- | 'Antiquoted' represents an expression that is either
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
@@ -265,16 +165,18 @@ data Antiquoted (v :: *) (r :: *)
 instance Hashable v => Hashable1 (Antiquoted v)
 
 instance Hashable2 Antiquoted where
-  liftHashWithSalt2 ha _ salt (Plain a) = ha (salt `hashWithSalt` (0 :: Int)) a
-  liftHashWithSalt2 _ _ salt EscapedNewline = salt `hashWithSalt` (1 :: Int)
-  liftHashWithSalt2 _ hb salt (Antiquoted b) =
-    hb (salt `hashWithSalt` (2 :: Int)) b
+  liftHashWithSalt2 ha _  salt (Plain a)      = ha (salt `hashWithSalt` (0 :: Int)) a
+  liftHashWithSalt2 _  _  salt EscapedNewline =     salt `hashWithSalt` (1 :: Int)
+  liftHashWithSalt2 _  hb salt (Antiquoted b) = hb (salt `hashWithSalt` (2 :: Int)) b
 
 instance NFData v => NFData1 (Antiquoted v)
 
 #ifdef MIN_VERSION_serialise
 instance (Serialise v, Serialise r) => Serialise (Antiquoted v r)
 #endif
+
+
+-- ** @NString@
 
 -- | An 'NString' is a list of things that are either a plain string
 -- or an antiquoted expression. After the antiquotes have been evaluated,
@@ -312,6 +214,9 @@ instance Serialise r => Serialise (NString r)
 instance IsString (NString r) where
   fromString ""     = DoubleQuoted mempty
   fromString string = DoubleQuoted [Plain $ pack string]
+
+
+-- ** @NKeyName@
 
 -- | A 'KeyName' is something that can appear on the left side of an
 -- equals sign. For example, @a@ is a 'KeyName' in @{ a = 3; }@, @let a = 3;
@@ -420,11 +325,16 @@ instance Traversable NKeyName where
     DynamicKey EscapedNewline   -> pure $ DynamicKey EscapedNewline
     StaticKey  key              -> pure $ StaticKey key
 
+
+-- ** @NAttrPath@
+
 -- | A selector (for example in a @let@ or an attribute set) is made up
 -- of strung-together key names.
 --
 -- > StaticKey "x" :| [DynamicKey (Antiquoted y)]  ~  x.${y}
 type NAttrPath r = NonEmpty (NKeyName r)
+
+-- ** @NUnaryOp
 
 -- | There are two unary operations: logical not and integer negation.
 data NUnaryOp
@@ -436,6 +346,9 @@ data NUnaryOp
 #ifdef MIN_VERSION_serialise
 instance Serialise NUnaryOp
 #endif
+
+
+-- ** @NBinaryOp@
 
 -- | Binary operators expressible in the nix language.
 data NBinaryOp
@@ -464,6 +377,9 @@ data NBinaryOp
 instance Serialise NBinaryOp
 #endif
 
+
+-- ** @NRecordType@
+
 -- | 'NRecordType' distinguishes between recursive and non-recursive attribute
 -- sets.
 data NRecordType
@@ -476,10 +392,143 @@ data NRecordType
 instance Serialise NRecordType
 #endif
 
--- | Get the name out of the parameter (there might be none).
-paramName :: Params r -> Maybe VarName
-paramName (Param n       ) = pure n
-paramName (ParamSet _ _ n) = n
+-- * @NExprF@ - Nix expressions, base functor
+
+-- | The main Nix expression type. As it is polimophic, has a functor,
+-- which allows to traverse expressions and map functions over them.
+-- The actual 'NExpr' type is a fixed point of this functor, defined
+-- below.
+data NExprF r
+  = NConstant !NAtom
+  -- ^ Constants: ints, floats, bools, URIs, and null.
+  | NStr !(NString r)
+  -- ^ A string, with interpolated expressions.
+  | NSym !VarName
+  -- ^ A variable. For example, in the expression @f a@, @f@ is represented
+  -- as @NSym "f"@ and @a@ as @NSym "a"@.
+  --
+  -- > NSym "x"                                    ~  x
+  | NList ![r]
+  -- ^ A list literal.
+  --
+  -- > NList [x,y]                                 ~  [ x y ]
+  | NSet !NRecordType ![Binding r]
+  -- ^ An attribute set literal
+  --
+  -- > NSet NRecursive    [NamedVar x y _]         ~  rec { x = y; }
+  -- > NSet NNonRecursive [Inherit Nothing [x] _]  ~  { inherit x; }
+  | NLiteralPath !FilePath
+  -- ^ A path expression, which is evaluated to a store path. The path here
+  -- can be relative, in which case it's evaluated relative to the file in
+  -- which it appears.
+  --
+  -- > NLiteralPath "/x"                           ~  /x
+  -- > NLiteralPath "x/y"                          ~  x/y
+  | NEnvPath !FilePath
+  -- ^ A path which refers to something in the Nix search path (the NIX_PATH
+  -- environment variable. For example, @<nixpkgs/pkgs>@.
+  --
+  -- > NEnvPath "x"                                ~  <x>
+  | NUnary !NUnaryOp !r
+  -- ^ Application of a unary operator to an expression.
+  --
+  -- > NUnary NNeg x                               ~  - x
+  -- > NUnary NNot x                               ~  ! x
+  | NBinary !NBinaryOp !r !r
+  -- ^ Application of a binary operator to two expressions.
+  --
+  -- > NBinary NPlus x y                           ~  x + y
+  -- > NBinary NApp  f x                           ~  f x
+  | NSelect !r !(NAttrPath r) !(Maybe r)
+  -- ^ Dot-reference into an attribute set, optionally providing an
+  -- alternative if the key doesn't exist.
+  --
+  -- > NSelect s (x :| []) Nothing                 ~  s.x
+  -- > NSelect s (x :| []) (pure y)                ~  s.x or y
+  | NHasAttr !r !(NAttrPath r)
+  -- ^ Ask if a set contains a given attribute path.
+  --
+  -- > NHasAttr s (x :| [])                        ~  s ? x
+  | NAbs !(Params r) !r
+  -- ^ A function literal (lambda abstraction).
+  --
+  -- > NAbs (Param "x") y                          ~  x: y
+  | NLet ![Binding r] !r
+  -- ^ Evaluate the second argument after introducing the bindings.
+  --
+  -- > NLet []                    x                ~  let in x
+  -- > NLet [NamedVar x y _]      z                ~  let x = y; in z
+  -- > NLet [Inherit Nothing x _] y                ~  let inherit x; in y
+  | NIf !r !r !r
+  -- ^ If-then-else statement.
+  --
+  -- > NIf x y z                                   ~  if x then y else z
+  | NWith !r !r
+  -- ^ Evaluate an attribute set, bring its bindings into scope, and
+  -- evaluate the second argument.
+  --
+  -- > NWith x y                                   ~  with x; y
+  | NAssert !r !r
+  -- ^ Assert that the first returns @true@ before evaluating the second.
+  --
+  -- > NAssert x y                                 ~  assert x; y
+  | NSynHole !VarName
+  -- ^ Syntactic hole.
+  --
+  -- See <https://github.com/haskell-nix/hnix/issues/197> for context.
+  --
+  -- > NSynHole "x"                                ~  ^x
+  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
+            Foldable, Traversable, Show, NFData, Hashable)
+
+instance NFData1 NExprF
+
+#ifdef MIN_VERSION_serialise
+instance Serialise r => Serialise (NExprF r)
+#endif
+
+-- | We make an `IsString` for expressions, where the string is interpreted
+-- as an identifier. This is the most common use-case...
+instance IsString NExpr where
+  fromString = Fix . NSym . fromString
+
+instance Lift (Fix NExprF) where
+  lift = dataToExpQ $ \b ->
+    case Reflection.typeOf b `eqTypeRep` Reflection.typeRep @Text of
+      Just HRefl -> pure [| pack $(liftString $ unpack b) |]
+      Nothing    -> Nothing
+#if MIN_VERSION_template_haskell(2,17,0)
+  liftTyped = unsafeCodeCoerce . lift
+#elif MIN_VERSION_template_haskell(2,16,0)
+  liftTyped = unsafeTExpCoerce . lift
+#endif
+
+#if !MIN_VERSION_hashable(1,3,1)
+-- there was none before, remove this in year >2022
+instance Hashable1 NonEmpty
+#endif
+
+instance Hashable1 NExprF
+
+
+-- *** @NExpr@
+
+-- | The monomorphic expression type is a fixed point of the polymorphic one.
+type NExpr = Fix NExprF
+
+#ifdef MIN_VERSION_serialise
+instance Serialise NExpr
+#endif
+
+
+-- ** @class NExprAnn@
+
+class NExprAnn ann g | g -> ann where
+  fromNExpr :: g r -> (NExprF r, ann)
+  toNExpr :: (NExprF r, ann) -> g r
+
+
+-- ** Additional instances
 
 $(deriveEq1 ''NExprF)
 $(deriveEq1 ''NString)
@@ -565,9 +614,16 @@ $(makeTraversals ''NBinaryOp)
 
 --x $(makeLenses ''Fix)
 
-class NExprAnn ann g | g -> ann where
-  fromNExpr :: g r -> (NExprF r, ann)
-  toNExpr :: (NExprF r, ann) -> g r
+
+-- ** Methods
+
+hashAt :: VarName -> Lens' (AttrSet v) (Maybe v)
+hashAt = flip alterF
+
+-- | Get the name out of the parameter (there might be none).
+paramName :: Params r -> Maybe VarName
+paramName (Param n       ) = pure n
+paramName (ParamSet _ _ n) = n
 
 ekey
   :: NExprAnn ann g
