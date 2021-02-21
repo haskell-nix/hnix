@@ -68,10 +68,331 @@ import           Text.Show.Deriving
 import qualified Type.Reflection               as Reflection
 import           Type.Reflection                ( eqTypeRep )
 
+-- * Components of Nix expressions
+
+-- NExpr is a composition of
+--   * direct reuse of the Haskell types (list, FilePath, Text)
+--   * NAtom
+--   * Types in this section
+--   * Fixpoint nature
+
 type VarName = Text
 
-hashAt :: VarName -> Lens' (AttrSet v) (Maybe v)
-hashAt = flip alterF
+-- ** @Binding@
+
+-- | A single line of the bindings section of a let expression or of a set.
+data Binding r
+  = NamedVar !(NAttrPath r) !r !SourcePos
+  -- ^ An explicit naming.
+  --
+  -- > NamedVar (StaticKey "x" :| [StaticKey "y"]) z SourcePos{}  ~  x.y = z;
+  | Inherit !(Maybe r) ![NKeyName r] !SourcePos
+  -- ^ Using a name already in scope, such as @inherit x;@ which is shorthand
+  --   for @x = x;@ or @inherit (x) y;@ which means @y = x.y;@. The
+  --   @unsafeGetAttrPos@ for every name so inherited is the position of the
+  --   first name, whether that be the first argument to this constructor, or
+  --   the first member of the list in the second argument.
+  --
+  -- > Inherit Nothing  [StaticKey "x"] SourcePos{}               ~  inherit x;
+  -- > Inherit (pure x) mempty          SourcePos{}               ~  inherit (x);
+  deriving (Generic, Generic1, Typeable, Data, Ord, Eq, Functor,
+            Foldable, Traversable, Show, NFData, Hashable)
+
+instance NFData1 Binding
+
+instance Hashable1 Binding
+
+#ifdef MIN_VERSION_serialise
+instance Serialise r => Serialise (Binding r)
+#endif
+
+
+-- ** @Params@
+
+-- | @Params@ represents all the ways the formal parameters to a
+-- function can be represented.
+data Params r
+  = Param !VarName
+  -- ^ For functions with a single named argument, such as @x: x + 1@.
+  --
+  -- > Param "x"                                  ~  x
+  | ParamSet !(ParamSet r) !Bool !(Maybe VarName)
+  -- ^ Explicit parameters (argument must be a set). Might specify a name to
+  -- bind to the set in the function body. The bool indicates whether it is
+  -- variadic or not.
+  --
+  -- > ParamSet [("x",Nothing)] False Nothing     ~  { x }
+  -- > ParamSet [("x",pure y)]  True  (pure "s")  ~  s@{ x ? y, ... }
+  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Show,
+            Foldable, Traversable, NFData, Hashable)
+
+instance Hashable1 Params
+
+instance NFData1 Params
+
+#ifdef MIN_VERSION_serialise
+instance Serialise r => Serialise (Params r)
+#endif
+
+instance IsString (Params r) where
+  fromString = Param . fromString
+
+-- *** @ParamSet@
+
+-- This uses an association list because nix XML serialization preserves the
+-- order of the param set.
+type ParamSet r = [(VarName, Maybe r)]
+
+
+-- ** @Antiquoted@
+
+-- | 'Antiquoted' represents an expression that is either
+-- antiquoted (surrounded by ${...}) or plain (not antiquoted).
+data Antiquoted (v :: *) (r :: *)
+  = Plain !v
+  | EscapedNewline
+  -- ^ 'EscapedNewline' corresponds to the special newline form
+  --
+  -- > ''\n
+  --
+  -- in an indented string. It is equivalent to a single newline character:
+  --
+  -- > ''''\n''  ≡  "\n"
+  | Antiquoted !r
+  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Foldable,
+            Traversable, Show, Read, NFData, Hashable)
+
+instance Hashable v => Hashable1 (Antiquoted v)
+
+instance Hashable2 Antiquoted where
+  liftHashWithSalt2 ha _  salt (Plain a)      = ha (salt `hashWithSalt` (0 :: Int)) a
+  liftHashWithSalt2 _  _  salt EscapedNewline =     salt `hashWithSalt` (1 :: Int)
+  liftHashWithSalt2 _  hb salt (Antiquoted b) = hb (salt `hashWithSalt` (2 :: Int)) b
+
+instance NFData v => NFData1 (Antiquoted v)
+
+#ifdef MIN_VERSION_serialise
+instance (Serialise v, Serialise r) => Serialise (Antiquoted v r)
+#endif
+
+
+-- ** @NString@
+
+-- | An 'NString' is a list of things that are either a plain string
+-- or an antiquoted expression. After the antiquotes have been evaluated,
+-- the final string is constructed by concatenating all the parts.
+data NString r
+  = DoubleQuoted ![Antiquoted Text r]
+  -- ^ Strings wrapped with double-quotes (") can contain literal newline
+  -- characters, but the newlines are preserved and no indentation is stripped.
+  --
+  -- > DoubleQuoted [Plain "x",Antiquoted y]   ~  "x${y}"
+  | Indented !Int ![Antiquoted Text r]
+  -- ^ Strings wrapped with two single quotes ('') can contain newlines, and
+  --   their indentation will be stripped, but the amount stripped is
+  --   remembered.
+  --
+  -- > Indented 1 [Plain "x"]                  ~  '' x''
+  -- >
+  -- > Indented 0 [EscapedNewline]             ~  ''''\n''
+  -- >
+  -- > Indented 0 [Plain "x\n ",Antiquoted y]  ~  ''
+  -- >                                            x
+  -- >                                             ${y}''
+  deriving (Eq, Ord, Generic, Generic1, Typeable, Data, Functor, Foldable,
+            Traversable, Show, Read, NFData, Hashable)
+
+instance Hashable1 NString
+
+instance NFData1 NString
+
+#ifdef MIN_VERSION_serialise
+instance Serialise r => Serialise (NString r)
+#endif
+
+-- | For the the 'IsString' instance, we use a plain doublequoted string.
+instance IsString (NString r) where
+  fromString ""     = DoubleQuoted mempty
+  fromString string = DoubleQuoted [Plain $ pack string]
+
+
+-- ** @NKeyName@
+
+-- | A 'KeyName' is something that can appear on the left side of an
+-- equals sign. For example, @a@ is a 'KeyName' in @{ a = 3; }@, @let a = 3;
+-- in ...@, @{}.a@ or @{} ? a@.
+--
+-- Nix supports both static keynames (just an identifier) and dynamic
+-- identifiers. Dynamic identifiers can be either a string (e.g.:
+-- @{ "a" = 3; }@) or an antiquotation (e.g.: @let a = "example";
+-- in { ${a} = 3; }.example@).
+--
+-- Note: There are some places where a dynamic keyname is not allowed.
+-- In particular, those include:
+--
+--   * The RHS of a @binding@ inside @let@: @let ${"a"} = 3; in ...@
+--     produces a syntax error.
+--   * The attribute names of an 'inherit': @inherit ${"a"};@ is forbidden.
+--
+-- Note: In Nix, a simple string without antiquotes such as @"foo"@ is
+-- allowed even if the context requires a static keyname, but the
+-- parser still considers it a 'DynamicKey' for simplicity.
+data NKeyName r
+  = DynamicKey !(Antiquoted (NString r) r)
+  -- ^
+  -- > DynamicKey (Plain (DoubleQuoted [Plain "x"]))     ~  "x"
+  -- > DynamicKey (Antiquoted x)                         ~  ${x}
+  -- > DynamicKey (Plain (DoubleQuoted [Antiquoted x]))  ~  "${x}"
+  | StaticKey !VarName
+  -- ^
+  -- > StaticKey "x"                                     ~  x
+  deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData, Hashable)
+
+#ifdef MIN_VERSION_serialise
+instance Serialise r => Serialise (NKeyName r)
+
+instance Serialise Pos where
+  encode = Serialise.encode . unPos
+  decode = mkPos <$> Serialise.decode
+
+instance Serialise SourcePos where
+  encode (SourcePos f l c) = Serialise.encode f <> Serialise.encode l <> Serialise.encode c
+  decode = SourcePos <$> Serialise.decode <*> Serialise.decode <*> Serialise.decode
+#endif
+
+instance Hashable Pos where
+  hashWithSalt salt = hashWithSalt salt . unPos
+
+instance Hashable SourcePos where
+  hashWithSalt salt (SourcePos f l c) =
+    salt `hashWithSalt` f `hashWithSalt` l `hashWithSalt` c
+
+instance NFData1 NKeyName where
+  liftRnf _ (StaticKey  !_            ) = ()
+  liftRnf _ (DynamicKey (Plain !_)    ) = ()
+  liftRnf _ (DynamicKey EscapedNewline) = ()
+  liftRnf k (DynamicKey (Antiquoted r)) = k r
+
+-- | Most key names are just static text, so this instance is convenient.
+instance IsString (NKeyName r) where
+  fromString = StaticKey . fromString
+
+instance Eq1 NKeyName where
+  liftEq eq (DynamicKey a) (DynamicKey b) = liftEq2 (liftEq eq) eq a b
+  liftEq _  (StaticKey  a) (StaticKey  b) = a == b
+  liftEq _  _              _              = False
+
+-- | @since 0.10.1
+instance Ord1 NKeyName where
+  liftCompare cmp (DynamicKey a) (DynamicKey b) = liftCompare2 (liftCompare cmp) cmp a b
+  liftCompare _   (DynamicKey _) (StaticKey _)  = LT
+  liftCompare _   (StaticKey _)  (DynamicKey _) = GT
+  liftCompare _   (StaticKey a)  (StaticKey b)  = compare a b
+
+instance Hashable1 NKeyName where
+  liftHashWithSalt h salt (DynamicKey a) =
+    liftHashWithSalt2 (liftHashWithSalt h) h (salt `hashWithSalt` (0 :: Int)) a
+  liftHashWithSalt _ salt (StaticKey n) =
+    salt `hashWithSalt` (1 :: Int) `hashWithSalt` n
+
+-- Deriving this instance automatically is not possible because @r@
+-- occurs not only as last argument in @Antiquoted (NString r) r@
+instance Show1 NKeyName where
+  liftShowsPrec sp sl p = \case
+    DynamicKey a -> showsUnaryWith
+      (liftShowsPrec2 (liftShowsPrec sp sl) (liftShowList sp sl) sp sl)
+      "DynamicKey"
+      p
+      a
+    StaticKey t -> showsUnaryWith showsPrec "StaticKey" p t
+
+-- Deriving this instance automatically is not possible because @r@
+-- occurs not only as last argument in @Antiquoted (NString r) r@
+instance Functor NKeyName where
+  fmap = fmapDefault
+
+-- Deriving this instance automatically is not possible because @r@
+-- occurs not only as last argument in @Antiquoted (NString r) r@
+instance Foldable NKeyName where
+  foldMap = foldMapDefault
+
+-- Deriving this instance automatically is not possible because @r@
+-- occurs not only as last argument in @Antiquoted (NString r) r@
+instance Traversable NKeyName where
+  traverse f = \case
+    DynamicKey (Plain      str) -> DynamicKey . Plain <$> traverse f str
+    DynamicKey (Antiquoted e  ) -> DynamicKey . Antiquoted <$> f e
+    DynamicKey EscapedNewline   -> pure $ DynamicKey EscapedNewline
+    StaticKey  key              -> pure $ StaticKey key
+
+
+-- ** @NAttrPath@
+
+-- | A selector (for example in a @let@ or an attribute set) is made up
+-- of strung-together key names.
+--
+-- > StaticKey "x" :| [DynamicKey (Antiquoted y)]  ~  x.${y}
+type NAttrPath r = NonEmpty (NKeyName r)
+
+-- ** @NUnaryOp
+
+-- | There are two unary operations: logical not and integer negation.
+data NUnaryOp
+  = NNeg  -- ^ @-@
+  | NNot  -- ^ @!@
+  deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
+            NFData, Hashable)
+
+#ifdef MIN_VERSION_serialise
+instance Serialise NUnaryOp
+#endif
+
+
+-- ** @NBinaryOp@
+
+-- | Binary operators expressible in the nix language.
+data NBinaryOp
+  = NEq      -- ^ Equality (@==@)
+  | NNEq     -- ^ Inequality (@!=@)
+  | NLt      -- ^ Less than (@<@)
+  | NLte     -- ^ Less than or equal (@<=@)
+  | NGt      -- ^ Greater than (@>@)
+  | NGte     -- ^ Greater than or equal (@>=@)
+  | NAnd     -- ^ Logical and (@&&@)
+  | NOr      -- ^ Logical or (@||@)
+  | NImpl    -- ^ Logical implication (@->@)
+  | NUpdate  -- ^ Joining two attribute sets (@//@)
+  | NPlus    -- ^ Addition (@+@)
+  | NMinus   -- ^ Subtraction (@-@)
+  | NMult    -- ^ Multiplication (@*@)
+  | NDiv     -- ^ Division (@/@)
+  | NConcat  -- ^ List concatenation (@++@)
+  | NApp     -- ^ Apply a function to an argument.
+             --
+             -- > NBinary NApp f x  ~  f x
+  deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
+            NFData, Hashable)
+
+#ifdef MIN_VERSION_serialise
+instance Serialise NBinaryOp
+#endif
+
+
+-- ** @NRecordType@
+
+-- | 'NRecordType' distinguishes between recursive and non-recursive attribute
+-- sets.
+data NRecordType
+  = NNonRecursive  -- ^ >     { ... }
+  | NRecursive     -- ^ > rec { ... }
+  deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
+            NFData, Hashable)
+
+#ifdef MIN_VERSION_serialise
+instance Serialise NRecordType
+#endif
+
+-- * @NExprF@ - Nix expressions, base functor
 
 -- | The main Nix expression type. As it is polimophic, has a functor,
 -- which allows to traverse expressions and map functions over them.
@@ -189,6 +510,9 @@ instance Hashable1 NonEmpty
 
 instance Hashable1 NExprF
 
+
+-- *** @NExpr@
+
 -- | The monomorphic expression type is a fixed point of the polymorphic one.
 type NExpr = Fix NExprF
 
@@ -196,297 +520,15 @@ type NExpr = Fix NExprF
 instance Serialise NExpr
 #endif
 
--- | A single line of the bindings section of a let expression or of a set.
-data Binding r
-  = NamedVar !(NAttrPath r) !r !SourcePos
-  -- ^ An explicit naming.
-  --
-  -- > NamedVar (StaticKey "x" :| [StaticKey "y"]) z SourcePos{}  ~  x.y = z;
-  | Inherit !(Maybe r) ![NKeyName r] !SourcePos
-  -- ^ Using a name already in scope, such as @inherit x;@ which is shorthand
-  --   for @x = x;@ or @inherit (x) y;@ which means @y = x.y;@. The
-  --   @unsafeGetAttrPos@ for every name so inherited is the position of the
-  --   first name, whether that be the first argument to this constructor, or
-  --   the first member of the list in the second argument.
-  --
-  -- > Inherit Nothing  [StaticKey "x"] SourcePos{}               ~  inherit x;
-  -- > Inherit (pure x) mempty          SourcePos{}               ~  inherit (x);
-  deriving (Generic, Generic1, Typeable, Data, Ord, Eq, Functor,
-            Foldable, Traversable, Show, NFData, Hashable)
 
-instance NFData1 Binding
+-- ** @class NExprAnn@
 
-instance Hashable1 Binding
+class NExprAnn ann g | g -> ann where
+  fromNExpr :: g r -> (NExprF r, ann)
+  toNExpr :: (NExprF r, ann) -> g r
 
-#ifdef MIN_VERSION_serialise
-instance Serialise r => Serialise (Binding r)
-#endif
 
--- | @Params@ represents all the ways the formal parameters to a
--- function can be represented.
-data Params r
-  = Param !VarName
-  -- ^ For functions with a single named argument, such as @x: x + 1@.
-  --
-  -- > Param "x"                                  ~  x
-  | ParamSet !(ParamSet r) !Bool !(Maybe VarName)
-  -- ^ Explicit parameters (argument must be a set). Might specify a name to
-  -- bind to the set in the function body. The bool indicates whether it is
-  -- variadic or not.
-  --
-  -- > ParamSet [("x",Nothing)] False Nothing     ~  { x }
-  -- > ParamSet [("x",pure y)]  True  (pure "s")  ~  s@{ x ? y, ... }
-  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Show,
-            Foldable, Traversable, NFData, Hashable)
-
-instance Hashable1 Params
-
-instance NFData1 Params
-
-#ifdef MIN_VERSION_serialise
-instance Serialise r => Serialise (Params r)
-#endif
-
--- This uses an association list because nix XML serialization preserves the
--- order of the param set.
-type ParamSet r = [(VarName, Maybe r)]
-
-instance IsString (Params r) where
-  fromString = Param . fromString
-
--- | 'Antiquoted' represents an expression that is either
--- antiquoted (surrounded by ${...}) or plain (not antiquoted).
-data Antiquoted (v :: *) (r :: *)
-  = Plain !v
-  | EscapedNewline
-  -- ^ 'EscapedNewline' corresponds to the special newline form
-  --
-  -- > ''\n
-  --
-  -- in an indented string. It is equivalent to a single newline character:
-  --
-  -- > ''''\n''  ≡  "\n"
-  | Antiquoted !r
-  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Foldable,
-            Traversable, Show, Read, NFData, Hashable)
-
-instance Hashable v => Hashable1 (Antiquoted v)
-
-instance Hashable2 Antiquoted where
-  liftHashWithSalt2 ha _  salt (Plain a)      = ha (salt `hashWithSalt` (0 :: Int)) a
-  liftHashWithSalt2 _  _  salt EscapedNewline =     salt `hashWithSalt` (1 :: Int)
-  liftHashWithSalt2 _  hb salt (Antiquoted b) = hb (salt `hashWithSalt` (2 :: Int)) b
-
-instance NFData v => NFData1 (Antiquoted v)
-
-#ifdef MIN_VERSION_serialise
-instance (Serialise v, Serialise r) => Serialise (Antiquoted v r)
-#endif
-
--- | An 'NString' is a list of things that are either a plain string
--- or an antiquoted expression. After the antiquotes have been evaluated,
--- the final string is constructed by concatenating all the parts.
-data NString r
-  = DoubleQuoted ![Antiquoted Text r]
-  -- ^ Strings wrapped with double-quotes (") can contain literal newline
-  -- characters, but the newlines are preserved and no indentation is stripped.
-  --
-  -- > DoubleQuoted [Plain "x",Antiquoted y]   ~  "x${y}"
-  | Indented !Int ![Antiquoted Text r]
-  -- ^ Strings wrapped with two single quotes ('') can contain newlines, and
-  --   their indentation will be stripped, but the amount stripped is
-  --   remembered.
-  --
-  -- > Indented 1 [Plain "x"]                  ~  '' x''
-  -- >
-  -- > Indented 0 [EscapedNewline]             ~  ''''\n''
-  -- >
-  -- > Indented 0 [Plain "x\n ",Antiquoted y]  ~  ''
-  -- >                                            x
-  -- >                                             ${y}''
-  deriving (Eq, Ord, Generic, Generic1, Typeable, Data, Functor, Foldable,
-            Traversable, Show, Read, NFData, Hashable)
-
-instance Hashable1 NString
-
-instance NFData1 NString
-
-#ifdef MIN_VERSION_serialise
-instance Serialise r => Serialise (NString r)
-#endif
-
--- | For the the 'IsString' instance, we use a plain doublequoted string.
-instance IsString (NString r) where
-  fromString ""     = DoubleQuoted mempty
-  fromString string = DoubleQuoted [Plain $ pack string]
-
--- | A 'KeyName' is something that can appear on the left side of an
--- equals sign. For example, @a@ is a 'KeyName' in @{ a = 3; }@, @let a = 3;
--- in ...@, @{}.a@ or @{} ? a@.
---
--- Nix supports both static keynames (just an identifier) and dynamic
--- identifiers. Dynamic identifiers can be either a string (e.g.:
--- @{ "a" = 3; }@) or an antiquotation (e.g.: @let a = "example";
--- in { ${a} = 3; }.example@).
---
--- Note: There are some places where a dynamic keyname is not allowed.
--- In particular, those include:
---
---   * The RHS of a @binding@ inside @let@: @let ${"a"} = 3; in ...@
---     produces a syntax error.
---   * The attribute names of an 'inherit': @inherit ${"a"};@ is forbidden.
---
--- Note: In Nix, a simple string without antiquotes such as @"foo"@ is
--- allowed even if the context requires a static keyname, but the
--- parser still considers it a 'DynamicKey' for simplicity.
-data NKeyName r
-  = DynamicKey !(Antiquoted (NString r) r)
-  -- ^
-  -- > DynamicKey (Plain (DoubleQuoted [Plain "x"]))     ~  "x"
-  -- > DynamicKey (Antiquoted x)                         ~  ${x}
-  -- > DynamicKey (Plain (DoubleQuoted [Antiquoted x]))  ~  "${x}"
-  | StaticKey !VarName
-  -- ^
-  -- > StaticKey "x"                                     ~  x
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData, Hashable)
-
-#ifdef MIN_VERSION_serialise
-instance Serialise r => Serialise (NKeyName r)
-
-instance Serialise Pos where
-  encode = Serialise.encode . unPos
-  decode = mkPos <$> Serialise.decode
-
-instance Serialise SourcePos where
-  encode (SourcePos f l c) = Serialise.encode f <> Serialise.encode l <> Serialise.encode c
-  decode = SourcePos <$> Serialise.decode <*> Serialise.decode <*> Serialise.decode
-#endif
-
-instance Hashable Pos where
-  hashWithSalt salt = hashWithSalt salt . unPos
-
-instance Hashable SourcePos where
-  hashWithSalt salt (SourcePos f l c) =
-    salt `hashWithSalt` f `hashWithSalt` l `hashWithSalt` c
-
-instance NFData1 NKeyName where
-  liftRnf _ (StaticKey  !_            ) = ()
-  liftRnf _ (DynamicKey (Plain !_)    ) = ()
-  liftRnf _ (DynamicKey EscapedNewline) = ()
-  liftRnf k (DynamicKey (Antiquoted r)) = k r
-
--- | Most key names are just static text, so this instance is convenient.
-instance IsString (NKeyName r) where
-  fromString = StaticKey . fromString
-
-instance Eq1 NKeyName where
-  liftEq eq (DynamicKey a) (DynamicKey b) = liftEq2 (liftEq eq) eq a b
-  liftEq _  (StaticKey  a) (StaticKey  b) = a == b
-  liftEq _  _              _              = False
-
--- | @since 0.10.1
-instance Ord1 NKeyName where
-  liftCompare cmp (DynamicKey a) (DynamicKey b) = liftCompare2 (liftCompare cmp) cmp a b
-  liftCompare _   (DynamicKey _) (StaticKey _)  = LT
-  liftCompare _   (StaticKey _)  (DynamicKey _) = GT
-  liftCompare _   (StaticKey a)  (StaticKey b)  = compare a b
-
-instance Hashable1 NKeyName where
-  liftHashWithSalt h salt (DynamicKey a) =
-    liftHashWithSalt2 (liftHashWithSalt h) h (salt `hashWithSalt` (0 :: Int)) a
-  liftHashWithSalt _ salt (StaticKey n) =
-    salt `hashWithSalt` (1 :: Int) `hashWithSalt` n
-
--- Deriving this instance automatically is not possible because @r@
--- occurs not only as last argument in @Antiquoted (NString r) r@
-instance Show1 NKeyName where
-  liftShowsPrec sp sl p = \case
-    DynamicKey a -> showsUnaryWith
-      (liftShowsPrec2 (liftShowsPrec sp sl) (liftShowList sp sl) sp sl)
-      "DynamicKey"
-      p
-      a
-    StaticKey t -> showsUnaryWith showsPrec "StaticKey" p t
-
--- Deriving this instance automatically is not possible because @r@
--- occurs not only as last argument in @Antiquoted (NString r) r@
-instance Functor NKeyName where
-  fmap = fmapDefault
-
--- Deriving this instance automatically is not possible because @r@
--- occurs not only as last argument in @Antiquoted (NString r) r@
-instance Foldable NKeyName where
-  foldMap = foldMapDefault
-
--- Deriving this instance automatically is not possible because @r@
--- occurs not only as last argument in @Antiquoted (NString r) r@
-instance Traversable NKeyName where
-  traverse f = \case
-    DynamicKey (Plain      str) -> DynamicKey . Plain <$> traverse f str
-    DynamicKey (Antiquoted e  ) -> DynamicKey . Antiquoted <$> f e
-    DynamicKey EscapedNewline   -> pure $ DynamicKey EscapedNewline
-    StaticKey  key              -> pure $ StaticKey key
-
--- | A selector (for example in a @let@ or an attribute set) is made up
--- of strung-together key names.
---
--- > StaticKey "x" :| [DynamicKey (Antiquoted y)]  ~  x.${y}
-type NAttrPath r = NonEmpty (NKeyName r)
-
--- | There are two unary operations: logical not and integer negation.
-data NUnaryOp
-  = NNeg  -- ^ @-@
-  | NNot  -- ^ @!@
-  deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
-            NFData, Hashable)
-
-#ifdef MIN_VERSION_serialise
-instance Serialise NUnaryOp
-#endif
-
--- | Binary operators expressible in the nix language.
-data NBinaryOp
-  = NEq      -- ^ Equality (@==@)
-  | NNEq     -- ^ Inequality (@!=@)
-  | NLt      -- ^ Less than (@<@)
-  | NLte     -- ^ Less than or equal (@<=@)
-  | NGt      -- ^ Greater than (@>@)
-  | NGte     -- ^ Greater than or equal (@>=@)
-  | NAnd     -- ^ Logical and (@&&@)
-  | NOr      -- ^ Logical or (@||@)
-  | NImpl    -- ^ Logical implication (@->@)
-  | NUpdate  -- ^ Joining two attribute sets (@//@)
-  | NPlus    -- ^ Addition (@+@)
-  | NMinus   -- ^ Subtraction (@-@)
-  | NMult    -- ^ Multiplication (@*@)
-  | NDiv     -- ^ Division (@/@)
-  | NConcat  -- ^ List concatenation (@++@)
-  | NApp     -- ^ Apply a function to an argument.
-             --
-             -- > NBinary NApp f x  ~  f x
-  deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
-            NFData, Hashable)
-
-#ifdef MIN_VERSION_serialise
-instance Serialise NBinaryOp
-#endif
-
--- | 'NRecordType' distinguishes between recursive and non-recursive attribute
--- sets.
-data NRecordType
-  = NNonRecursive  -- ^ >     { ... }
-  | NRecursive     -- ^ > rec { ... }
-  deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
-            NFData, Hashable)
-
-#ifdef MIN_VERSION_serialise
-instance Serialise NRecordType
-#endif
-
--- | Get the name out of the parameter (there might be none).
-paramName :: Params r -> Maybe VarName
-paramName (Param n       ) = pure n
-paramName (ParamSet _ _ n) = n
+-- ** Additional instances
 
 $(deriveEq1 ''NExprF)
 $(deriveEq1 ''NString)
@@ -572,9 +614,16 @@ $(makeTraversals ''NBinaryOp)
 
 --x $(makeLenses ''Fix)
 
-class NExprAnn ann g | g -> ann where
-  fromNExpr :: g r -> (NExprF r, ann)
-  toNExpr :: (NExprF r, ann) -> g r
+
+-- ** Methods
+
+hashAt :: VarName -> Lens' (AttrSet v) (Maybe v)
+hashAt = flip alterF
+
+-- | Get the name out of the parameter (there might be none).
+paramName :: Params r -> Maybe VarName
+paramName (Param n       ) = pure n
+paramName (ParamSet _ _ n) = n
 
 ekey
   :: NExprAnn ann g
