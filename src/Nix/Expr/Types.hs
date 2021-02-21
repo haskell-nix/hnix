@@ -176,7 +176,6 @@ instance Lift (Fix NExprF) where
     case Reflection.typeOf b `eqTypeRep` Reflection.typeRep @Text of
       Just HRefl -> pure [| pack $(liftString $ unpack b) |]
       Nothing    -> Nothing
-
 #if MIN_VERSION_template_haskell(2,17,0)
   liftTyped = unsafeCodeCoerce . lift
 #elif MIN_VERSION_template_haskell(2,16,0)
@@ -274,10 +273,9 @@ data Antiquoted (v :: *) (r :: *)
 instance Hashable v => Hashable1 (Antiquoted v)
 
 instance Hashable2 Antiquoted where
-  liftHashWithSalt2 ha _ salt (Plain a) = ha (salt `hashWithSalt` (0 :: Int)) a
-  liftHashWithSalt2 _ _ salt EscapedNewline = salt `hashWithSalt` (1 :: Int)
-  liftHashWithSalt2 _ hb salt (Antiquoted b) =
-    hb (salt `hashWithSalt` (2 :: Int)) b
+  liftHashWithSalt2 ha _  salt (Plain a)      = ha (salt `hashWithSalt` (0 :: Int)) a
+  liftHashWithSalt2 _  _  salt EscapedNewline =     salt `hashWithSalt` (1 :: Int)
+  liftHashWithSalt2 _  hb salt (Antiquoted b) = hb (salt `hashWithSalt` (2 :: Int)) b
 
 instance NFData v => NFData1 (Antiquoted v)
 
