@@ -8,6 +8,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE InstanceSigs #-}
 
 module Nix.Cited.Basic where
 
@@ -52,6 +53,8 @@ instance ( Has e Options
          , MonadCatch m
          )
   => MonadThunk (Cited u f m t) m v where
+
+  thunk :: m v -> m (Cited u f m t)
   thunk mv = do
     opts :: Options <- asks (view hasLens)
 
@@ -72,14 +75,17 @@ instance ( Has e Options
         fmap (Cited . NCited ps) . thunk $ mv
       else fmap (Cited . NCited mempty) . thunk $ mv
 
+  thunkId :: Cited u f m t -> ThunkId m
   thunkId (Cited (NCited _ t)) = thunkId @_ @m t
 
+  queryM :: Cited u f m t -> m r -> (v -> m r) -> m r
   queryM (Cited (NCited _ t)) = queryM t
 
   -- | The ThunkLoop exception is thrown as an exception with MonadThrow,
   --   which does not capture the current stack frame information to provide
   --   it in a NixException, so we catch and re-throw it here using
   --   'throwError' from Frames.hs.
+  force :: (v -> m r) -> Cited u f m t -> m r
   force f (Cited (NCited ps t)) =
     catch go (throwError @ThunkLoop)
    where
@@ -88,6 +94,7 @@ instance ( Has e Options
       Provenance scope e@(Compose (Ann s _)) : _ ->
         withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (force f t)
 
+  forceEff :: (v -> m r) -> Cited u f m t -> m r
   forceEff f (Cited (NCited ps t)) = catch
     go
     (throwError @ThunkLoop)
@@ -97,4 +104,5 @@ instance ( Has e Options
       Provenance scope e@(Compose (Ann s _)) : _ ->
         withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceEff f t)
 
+  further :: Cited u f m t -> (m v -> m v) -> m (Cited u f m t)
   further (Cited (NCited ps t)) f = Cited . NCited ps <$> further t f

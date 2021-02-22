@@ -12,6 +12,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE InstanceSigs #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-missing-methods #-}
@@ -265,7 +266,11 @@ instance ToValue (AttrSet (Symbolic m), AttrSet SourcePos) m (Symbolic m) where
 
 instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
   => MonadValue (Symbolic m) m where
+
+  defer :: m (Symbolic m) -> m (Symbolic m)
   defer = fmap ST . thunk
+
+  demand :: Symbolic m -> (Symbolic m -> m r) -> m r
   demand (ST v) f = force (`demand` f) v
   demand (SV v) f = f (SV v)
 
