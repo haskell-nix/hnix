@@ -43,7 +43,7 @@ normalizeValue
   => (forall r . t -> (NValue t f m -> m r) -> m r)
   -> NValue t f m
   -> m (NValue t f m)
-normalizeValue f = run . iterNValueM run go (fmap Free . sequenceNValue' run)
+normalizeValue f tnk = run $ iterNValueM run go (fmap Free . sequenceNValue' run) tnk
  where
   start = 0 :: Int
   table = mempty
@@ -84,7 +84,8 @@ normalForm
      )
   => NValue t f m
   -> m (NValue t f m)
-normalForm = fmap stubCycles . normalizeValue force
+--  2021-02-22: NOTE: `normalizeValue` should be adopted to work without flip, but currently was recieving infinite type.
+normalForm t = stubCycles <$> (flip force `normalizeValue` t)
 
 normalForm_
   :: ( Framed e m
@@ -94,7 +95,8 @@ normalForm_
      )
   => NValue t f m
   -> m ()
-normalForm_ = void <$> normalizeValue forceEff
+--  2021-02-22: NOTE: `normalizeValue` should be adopted to work without flip, but currently was recieving infinite type.
+normalForm_ t = void (flip forceEff `normalizeValue` t)
 
 stubCycles
   :: forall t f m

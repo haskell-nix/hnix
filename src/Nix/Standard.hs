@@ -129,8 +129,8 @@ instance ( MonadAtomicRef m
   thunk   = fmap (StdThunk . StdCited) . thunk
   thunkId = thunkId . _stdCited . _stdThunk
   queryM x b f = queryM (_stdCited (_stdThunk x)) b f
-  force    = force . _stdCited . _stdThunk
-  forceEff = forceEff . _stdCited . _stdThunk
+  force f t = force f (_stdCited $ _stdThunk t)
+  forceEff f t = forceEff f (_stdCited $ _stdThunk t)
   further  = (fmap (StdThunk . StdCited) .) . further . _stdCited . _stdThunk
 
 instance ( MonadAtomicRef m
@@ -151,7 +151,7 @@ instance ( MonadAtomicRef m
       -> m r
       )
     -> m r
-  demand (Pure v) f = force v (flip demand f)
+  demand (Pure v) f = force (`demand` f) v
   demand (Free v) f = f (Free v)
 
   inform

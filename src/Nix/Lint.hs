@@ -266,7 +266,7 @@ instance ToValue (AttrSet (Symbolic m), AttrSet SourcePos) m (Symbolic m) where
 instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
   => MonadValue (Symbolic m) m where
   defer = fmap ST . thunk
-  demand (ST v) f = force v (flip demand f)
+  demand (ST v) f = force (`demand` f) v
   demand (SV v) f = f (SV v)
 
 instance MonadLint e m => MonadEval (Symbolic m) m where

@@ -49,8 +49,8 @@ class MonadThunkId m => MonadThunk t m a | t -> m, t -> a where
   thunkId :: t -> ThunkId m
 
   queryM :: t -> m r -> (a -> m r) -> m r
-  force :: t -> (a -> m r) -> m r
-  forceEff :: t -> (a -> m r) -> m r
+  force :: (a -> m r) -> t -> m r
+  forceEff :: (a -> m r) -> t -> m r
 
   -- | Modify the action to be performed by the thunk. For some implicits
   --   this modifies the thunk, for others it may create a new thunk.

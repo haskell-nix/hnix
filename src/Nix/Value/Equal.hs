@@ -155,7 +155,7 @@ valueEqM x@(Free _) (  Pure y) = thunkEqM ?? y =<< thunk (pure x)
 valueEqM (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
   valueFEqM (compareAttrSetsM f valueEqM) valueEqM x y
  where
-  f (Pure t) = force t $ \case
+  f (Pure t) = (`force` t) $ \case
     NVStr s -> pure $ pure s
     _       -> pure mempty
   f (Free v) = case v of
@@ -163,7 +163,7 @@ valueEqM (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
     _        -> pure mempty
 
 thunkEqM :: (MonadThunk t m (NValue t f m), Comonad f) => t -> t -> m Bool
-thunkEqM lt rt = force lt $ \lv -> force rt $ \rv ->
+thunkEqM lt rt = (`force` lt) $ \lv -> (`force` rt) $ \rv ->
   let unsafePtrEq = case (lt, rt) of
         (thunkId -> lid, thunkId -> rid) | lid == rid -> pure True
         _ -> valueEqM lv rv

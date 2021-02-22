@@ -62,10 +62,10 @@ queryThunk (Thunk _ active ref) n k = do
 forceThunk
   :: forall m v a
    . (MonadVar m, MonadThrow m, MonadCatch m, Show (ThunkId m))
-  => NThunkF m v
-  -> (v -> m a)
+  => (v -> m a)
+  -> NThunkF m v
   -> m a
-forceThunk (Thunk n active ref) k = do
+forceThunk k (Thunk n active ref) = do
   eres <- readVar ref
   case eres of
     Computed v      -> k v
@@ -81,8 +81,8 @@ forceThunk (Thunk n active ref) k = do
           writeVar ref (Computed v)
           k v
 
-forceEffects :: MonadVar m => NThunkF m v -> (v -> m r) -> m r
-forceEffects (Thunk _ active ref) k = do
+forceEffects :: MonadVar m => (v -> m r) -> NThunkF m v -> m r
+forceEffects k (Thunk _ active ref) = do
   nowActive <- atomicModifyVar active (True, )
   if nowActive
     then pure $ error "Loop detected"
