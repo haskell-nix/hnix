@@ -8,6 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE TypeFamilies #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
@@ -185,16 +186,16 @@ prettyNix :: NExpr -> Doc ann
 prettyNix = withoutParens . foldFix exprFNixDoc
 
 prettyOriginExpr
-  :: forall t f m ann
-   . HasCitations1 m (NValue t f m) f
-  => NExprLocF (Maybe (NValue t f m))
+  :: forall f m ann
+   . HasCitations1 m (NValue f m) f
+  => NExprLocF (Maybe (NValue f m))
   -> Doc ann
 prettyOriginExpr = withoutParens . go
  where
   go = exprFNixDoc . annotated . getCompose . fmap render
 
-  render :: Maybe (NValue t f m) -> NixDoc ann
-  render Nothing = simpleExpr "_"
+  render :: Maybe (NValue f m) -> NixDoc ann
+  render Nothing = simpleExpr $ "_"
   render (Just (Free (reverse . citations @m -> p:_))) = go (_originExpr p)
   render _       = simpleExpr "?"
     -- render (Just (NValue (citations -> ps))) =
@@ -300,12 +301,12 @@ exprFNixDoc = \case
   NSynHole name -> simpleExpr $ pretty ("^" <> unpack name)
   where recPrefix = "rec" <> space
 
-valueToExpr :: forall t f m . MonadDataContext f m => NValue t f m -> NExpr
+valueToExpr :: forall f m . MonadDataContext f m => NValue f m -> NExpr
 valueToExpr = iterNValue (\_ _ -> thk) phi
  where
   thk = Fix . NSym . pack $ "<expr>"
 
-  phi :: NValue' t f m NExpr -> NExpr
+  phi :: NValue' f m NExpr -> NExpr
   phi (NVConstant' a ) = Fix $ NConstant a
   phi (NVStr'      ns) = mkStr ns
   phi (NVList'     l ) = Fix $ NList l
@@ -321,20 +322,20 @@ valueToExpr = iterNValue (\_ _ -> thk) phi
   mkStr ns = Fix $ NStr $ DoubleQuoted [Plain (stringIgnoreContext ns)]
 
 prettyNValue
-  :: forall t f m ann . MonadDataContext f m => NValue t f m -> Doc ann
+  :: forall f m ann . MonadDataContext f m => NValue f m -> Doc ann
 prettyNValue = prettyNix . valueToExpr
 
 prettyNValueProv
   :: forall t f m ann
-   . ( HasCitations m (NValue t f m) t
-     , HasCitations1 m (NValue t f m) f
-     , MonadThunk t m (NValue t f m)
+   . ( HasCitations m (NValue f m) t
+     , HasCitations1 m (NValue f m) f
+     , MonadThunk m, Thunk m ~ t, ThunkValue m ~ NValue f m
      , MonadDataContext f m
      )
-  => NValue t f m
+  => NValue f m
   -> Doc ann
 prettyNValueProv v = do
-  let ps = citations @m @(NValue t f m) v
+  let ps = citations @m @(NValue f m) v
   case ps of
     [] -> prettyNValue v
     ps ->
@@ -350,15 +351,15 @@ prettyNValueProv v = do
 
 prettyNThunk
   :: forall t f m ann
-   . ( HasCitations m (NValue t f m) t
-     , HasCitations1 m (NValue t f m) f
-     , MonadThunk t m (NValue t f m)
+   . ( HasCitations m (NValue f m) t
+     , HasCitations1 m (NValue f m) f
+     , MonadThunk m, Thunk m ~ t, ThunkValue m ~ NValue f m
      , MonadDataContext f m
      )
   => t
   -> m (Doc ann)
 prettyNThunk t = do
-  let ps = citations @m @(NValue t f m) @t t
+  let ps = citations @m @(NValue f m) @t t
   v' <- prettyNValue <$> dethunk t
   pure
     $ fillSep
@@ -371,12 +372,12 @@ prettyNThunk t = do
       ]
 
 -- | This function is used only by the testing code.
-printNix :: forall t f m . MonadDataContext f m => NValue t f m -> String
+printNix :: forall f m . MonadDataContext f m => NValue f m -> String
 printNix = iterNValue (\_ _ -> thk) phi
  where
   thk = "<thunk>"
 
-  phi :: NValue' t f m String -> String
+  phi :: NValue' f m String -> String
   phi (NVConstant' a ) = unpack $ atomText a
   phi (NVStr'      ns) = show $ stringIgnoreContext ns
   phi (NVList'     l ) = "[ " <> unwords l <> " ]"

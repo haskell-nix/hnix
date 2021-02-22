@@ -7,7 +7,9 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Nix.Utils.Fix1 where
@@ -29,6 +31,8 @@ import           Control.Monad.Catch            ( MonadCatch
 import           Control.Monad.Reader           ( MonadReader )
 import           Control.Monad.State            ( MonadState )
 
+
+
 -- | The fixpoint combinator, courtesy of Gregory Malecha.
 --   https://gist.github.com/gmalecha/ceb3778b9fdaa4374976e325ac8feced
 newtype Fix1 (t :: (k -> *) -> k -> *) (a :: k) = Fix1 { unFix1 :: t (Fix1 t) a }
@@ -49,6 +53,8 @@ deriving instance MonadState s (t (Fix1 t)) => MonadState s (Fix1 t)
 newtype Fix1T (t :: (k -> *) -> (* -> *) -> k -> *) (m :: * -> *) (a :: k)
   = Fix1T { unFix1T :: t (Fix1T t m) m a }
 
+type MonadFix1T t m = (MonadTrans (Fix1T t), Monad (t (Fix1T t m) m))
+
 deriving instance Functor (t (Fix1T t m) m) => Functor (Fix1T t m)
 deriving instance Applicative (t (Fix1T t m) m) => Applicative (Fix1T t m)
 deriving instance Alternative (t (Fix1T t m) m) => Alternative (Fix1T t m)
@@ -64,19 +70,14 @@ deriving instance MonadMask (t (Fix1T t m) m) => MonadMask (Fix1T t m)
 deriving instance MonadReader e (t (Fix1T t m) m) => MonadReader e (Fix1T t m)
 deriving instance MonadState s (t (Fix1T t m) m) => MonadState s (Fix1T t m)
 
-
-type MonadFix1T t m = (MonadTrans (Fix1T t), Monad (t (Fix1T t m) m))
-
 instance (MonadFix1T t m, MonadRef m) => MonadRef (Fix1T t m) where
   type Ref (Fix1T t m) = Ref m
   newRef  = lift . newRef
   readRef = lift . readRef
   writeRef r = lift . writeRef r
 
-
 instance (MonadFix1T t m, MonadAtomicRef m) => MonadAtomicRef (Fix1T t m) where
   atomicModifyRef r = lift . atomicModifyRef r
-
 {-
 
 newtype Flip (f :: i -> j -> *) (a :: j) (b :: i) = Flip { unFlip :: f b a }
