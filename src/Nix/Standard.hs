@@ -11,6 +11,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE InstanceSigs #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -139,11 +140,26 @@ instance ( MonadAtomicRef m
          , MonadThunkId m
          )
   => MonadValue (StdValue m) m where
+  defer
+    :: m (StdValue m)
+    -> m (StdValue m)
   defer = fmap Pure . thunk
 
+  demand
+    :: StdValue m
+    -> ( StdValue m
+      -> m r
+      )
+    -> m r
   demand (Pure v) f = force v (flip demand f)
   demand (Free v) f = f (Free v)
 
+  inform
+    :: StdValue m
+    -> ( m (StdValue m)
+      -> m (StdValue m)
+      )
+    -> m (StdValue m)
   inform (Pure t) f = Pure <$> further t f
   inform (Free v) f = Free <$> bindNValue' id (flip inform f) v
 

@@ -15,6 +15,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE InstanceSigs #-}
 
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
@@ -398,9 +399,26 @@ type MonadInfer m
   = ({- MonadThunkId m,-}
      MonadVar m, MonadFix m)
 
+--  2021-02-22: NOTE: Seems like suporflous instance
 instance Monad m => MonadValue (Judgment s) (InferT s m) where
+  defer
+    :: InferT s m (Judgment s)
+    -> InferT s m (Judgment s)
   defer  = id
+
+  demand
+    :: Judgment s
+    -> ( Judgment s
+      -> InferT s m r)
+    -> InferT s m r
   demand = flip ($)
+
+  inform
+    :: Judgment s
+    -> ( InferT s m (Judgment s)
+      -> InferT s m (Judgment s)
+      )
+    -> InferT s m (Judgment s)
   inform j f = f (pure j)
 
 {-
