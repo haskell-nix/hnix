@@ -104,5 +104,5 @@ instance ( Has e Options
       Provenance scope e@(Compose (Ann s _)) : _ ->
         withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceEff f t)
 
-  further :: Cited u f m t -> (m v -> m v) -> m (Cited u f m t)
-  further (Cited (NCited ps t)) f = Cited . NCited ps <$> further t f
+  further :: (m v -> m v) -> Cited u f m t -> m (Cited u f m t)
+  further f (Cited (NCited ps t)) = Cited . NCited ps <$> further f t

@@ -104,10 +104,10 @@ forceEffects k (Thunk _ active ref) = do
           k v
 
 furtherThunk :: MonadVar m
-  => NThunkF m v
-  -> (m v -> m v)
+  => (m v -> m v)
+  -> NThunkF m v
   -> m (NThunkF m v)
-furtherThunk t@(Thunk _ _ ref) k = do
+furtherThunk k t@(Thunk _ _ ref) = do
   _ <- atomicModifyVar ref $ \x -> case x of
     Computed _ -> (x, x)
     Deferred d -> (Deferred (k d), x)

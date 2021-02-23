@@ -128,7 +128,7 @@ instance ( MonadAtomicRef m
   => MonadThunk (StdThunk m) m (StdValue m) where
 
   thunk :: m (StdValue m) -> m (StdThunk m)
-  thunk = fmap (StdThunk . StdCited) . thunk
+  thunk v = StdThunk . StdCited <$> thunk v
 
   thunkId :: StdThunk m -> ThunkId m
   thunkId = thunkId . _stdCited . _stdThunk
@@ -142,8 +142,8 @@ instance ( MonadAtomicRef m
   forceEff :: (StdValue m -> m r) -> StdThunk m -> m r
   forceEff f t = forceEff f (_stdCited $ _stdThunk t)
 
-  further :: StdThunk m -> (m (StdValue m) -> m (StdValue m)) -> m (StdThunk m)
-  further t f = ((fmap (StdThunk . StdCited) .) $ further $ _stdCited $ _stdThunk t) f
+  further :: (m (StdValue m) -> m (StdValue m)) ->  StdThunk m -> m (StdThunk m)
+  further f t = StdThunk . StdCited <$> further f (_stdCited $ _stdThunk t)
 
 instance ( MonadAtomicRef m
          , MonadCatch m
@@ -172,7 +172,7 @@ instance ( MonadAtomicRef m
       -> m (StdValue m)
       )
     -> m (StdValue m)
-  inform (Pure t) f = Pure <$> further t f
+  inform (Pure t) f = Pure <$> further f t
   inform (Free v) f = Free <$> bindNValue' id (`inform` f) v
 
 {------------------------------------------------------------------------}
