@@ -5,6 +5,11 @@
 
 * Breaking:
 
+  * [(link)](https://github.com/haskell-nix/hnix/pull/859/files#diff-ed4fba9b7db93932de22f4ef09d04b07a2ba88888e42207eb9abe6ff10b7ca2b) `Nix.Thunk`: `class MonadThunk t m a | t -> m, t -> a` : `force{,Eff}` unflipped the arguments. All their implementations tail recurse.
+    * If some of the `force`, `forceEff`, `forceThunk`, `forceEffects` are used - simply flip the arguments for them.
+
+  * [(link)](https://github.com/haskell-nix/hnix/pull/859/commits/8e043bcbda13ea4fd66d3eefd6da690bb3923edd) `Nix.Value.Equal`: `valueEqM`: freed from `RankNTypes: forall t f m .`.
+
   * [(link)](https://github.com/haskell-nix/hnix/pull/802/commits/529095deaf6bc6b102fe5a3ac7baccfbb8852e49#) `Nix.Strings`: all `hacky*` functions replaced with lawful implemetations, because of that all functions become lawful - dropped the `principled` suffix from functions:
     * `Nix.String`:
         ```haskell
