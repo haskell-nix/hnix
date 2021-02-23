@@ -46,7 +46,11 @@ buildThunk action = do
   freshThunkId <- freshId
   Thunk freshThunkId <$> newVar False <*> newVar (Deferred action)
 
-queryThunk :: MonadVar m => NThunkF m v -> m a -> (v -> m a) -> m a
+queryThunk :: MonadVar m
+  => NThunkF m v
+  -> m a
+  -> (v -> m a)
+  -> m a
 queryThunk (Thunk _ active ref) n k = do
   nowActive <- atomicModifyVar active (True, )
   if nowActive
@@ -81,7 +85,10 @@ forceThunk k (Thunk n active ref) = do
           writeVar ref (Computed v)
           k v
 
-forceEffects :: MonadVar m => (v -> m r) -> NThunkF m v -> m r
+forceEffects :: MonadVar m
+  => (v -> m r)
+  -> NThunkF m v
+  -> m r
 forceEffects k (Thunk _ active ref) = do
   nowActive <- atomicModifyVar active (True, )
   if nowActive
@@ -96,7 +103,10 @@ forceEffects k (Thunk _ active ref) = do
           _ <- atomicModifyVar active (False, )
           k v
 
-furtherThunk :: MonadVar m => NThunkF m v -> (m v -> m v) -> m (NThunkF m v)
+furtherThunk :: MonadVar m
+  => NThunkF m v
+  -> (m v -> m v)
+  -> m (NThunkF m v)
 furtherThunk t@(Thunk _ _ ref) k = do
   _ <- atomicModifyVar ref $ \x -> case x of
     Computed _ -> (x, x)
