@@ -5,8 +5,14 @@
 
 * Breaking:
 
-  * [(link)](https://github.com/haskell-nix/hnix/pull/859/files#diff-ed4fba9b7db93932de22f4ef09d04b07a2ba88888e42207eb9abe6ff10b7ca2b) `Nix.Thunk`: `class MonadThunk t m a | t -> m, t -> a` : `force{,Eff}` unflipped the arguments. All their implementations tail recurse.
-    * If some of the `force`, `forceEff`, `forceThunk`, `forceEffects` are used - simply flip the arguments for them.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/859/files#diff-ed4fba9b7db93932de22f4ef09d04b07a2ba88888e42207eb9abe6ff10b7ca2b) `Nix.Thunk`: `class MonadThunk t m a | t -> m, t -> a` : `force{,Eff}` unflipped the arguments. All their implementations got more straigh-forward to use and `force*`s now tail recurse.
+    * Simply flip the first two arguments for:
+      * `force`
+      * `forceEff`
+      * `forceThunk`
+      * `forceEffects`
+      * `further`
+      * `furtherThunk`
 
   * [(link)](https://github.com/haskell-nix/hnix/pull/859/commits/8e043bcbda13ea4fd66d3eefd6da690bb3923edd) `Nix.Value.Equal`: `valueEqM`: freed from `RankNTypes: forall t f m .`.
 
