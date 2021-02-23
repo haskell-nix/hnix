@@ -172,7 +172,7 @@ instance ( MonadAtomicRef m
       )
     -> m (StdValue m)
   inform (Pure t) f = Pure <$> further t f
-  inform (Free v) f = Free <$> bindNValue' id (flip inform f) v
+  inform (Free v) f = Free <$> bindNValue' id (`inform` f) v
 
 {------------------------------------------------------------------------}
 
