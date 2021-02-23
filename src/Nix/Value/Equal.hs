@@ -97,8 +97,7 @@ valueFEqM attrsEq eq = curry $ \case
   (NVConstantF (NFloat x), NVConstantF (NInt y)  ) -> pure $ x == fromInteger y
   (NVConstantF (NInt   x), NVConstantF (NFloat y)) -> pure $ fromInteger x == y
   (NVConstantF lc        , NVConstantF rc        ) -> pure $ lc == rc
-  (NVStrF ls, NVStrF rs) ->
-    pure $ stringIgnoreContext ls == stringIgnoreContext rs
+  (NVStrF ls, NVStrF rs)     -> pure $ (\i -> i ls == i rs) stringIgnoreContext
   (NVListF ls , NVListF rs ) -> alignEqM eq ls rs
   (NVSetF lm _, NVSetF rm _) -> attrsEq lm rm
   (NVPathF lp , NVPathF rp ) -> pure $ lp == rp
@@ -144,8 +143,7 @@ compareAttrSets f eq lm rm = runIdentity
   $ compareAttrSetsM (Identity . f) (\x y -> Identity (eq x y)) lm rm
 
 valueEqM
-  :: forall t f m
-   . (MonadThunk t m (NValue t f m), Comonad f)
+  :: (MonadThunk t m (NValue t f m), Comonad f)
   => NValue t f m
   -> NValue t f m
   -> m Bool
