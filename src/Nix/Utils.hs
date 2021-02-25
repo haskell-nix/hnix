@@ -176,3 +176,11 @@ alterF f k m =
       (\ v -> M.insert k v m)
     )
     $ f $ M.lookup k m
+
+
+-- | Lambda analog of @maybe@ or @either@ for Free monad.
+free :: (a -> b) -> (f (Free f a) -> b) -> Free f a -> b
+free fP fF m =
+  case m of
+    Pure a -> fP a
+    Free fa -> fF fa
