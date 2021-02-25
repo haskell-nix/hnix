@@ -169,6 +169,10 @@ alterF
   -> k
   -> HashMap k v
   -> f (HashMap k v)
-alterF f k m = f (M.lookup k m) <&> \case
-  Nothing -> M.delete k m
-  Just v  -> M.insert k v m
+alterF f k m =
+  fmap
+    (maybe
+      (M.delete k m)
+      (\ v -> M.insert k v m)
+    )
+    $ f $ M.lookup k m
