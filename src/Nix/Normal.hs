@@ -40,7 +40,7 @@ normalizeValue
      , MonadDataErrorContext t f m
      , Ord (ThunkId m)
      )
-  => (forall r . t -> (NValue t f m -> m r) -> m r)
+  => (forall r . (NValue t f m -> m r) -> t -> m r)
   -> NValue t f m
   -> m (NValue t f m)
 normalizeValue f tnk = run $ iterNValueM run go (fmap Free . sequenceNValue' run) tnk
@@ -65,7 +65,8 @@ normalizeValue f tnk = run $ iterNValueM run go (fmap Free . sequenceNValue' run
         i <- ask
         when (i > 2000)
           $ error "Exceeded maximum normalization depth of 2000 levels"
-        lifted (lifted (f t)) $ local succ . k
+        --  2021-02-22: NOTE: `normalizeValue` should be adopted to work without fliping of the force (f)
+        lifted (lifted (`f` t)) $ local succ . k
 
   seen t = do
     let tid = thunkId t
@@ -84,8 +85,7 @@ normalForm
      )
   => NValue t f m
   -> m (NValue t f m)
---  2021-02-22: NOTE: `normalizeValue` should be adopted to work without flip, but currently was recieving infinite type.
-normalForm t = stubCycles <$> (flip force `normalizeValue` t)
+normalForm t = stubCycles <$> (force `normalizeValue` t)
 
 normalForm_
   :: ( Framed e m
@@ -95,8 +95,7 @@ normalForm_
      )
   => NValue t f m
   -> m ()
---  2021-02-22: NOTE: `normalizeValue` should be adopted to work without flip, but currently was recieving infinite type.
-normalForm_ t = void (flip forceEff `normalizeValue` t)
+normalForm_ t = void (forceEff `normalizeValue` t)
 
 stubCycles
   :: forall t f m
