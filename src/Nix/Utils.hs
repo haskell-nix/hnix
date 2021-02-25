@@ -100,8 +100,10 @@ lifted f k = liftWith (\run -> f (run . k)) >>= restoreT . pure
 freeToFix :: Functor f => (a -> Fix f) -> Free f a -> Fix f
 freeToFix f = go
  where
-  go (Pure a) = f a
-  go (Free v) = Fix (fmap go v)
+  go =
+    free
+      f
+      (Fix . fmap go)
 
 fixToFree :: Functor f => Fix f -> Free f a
 fixToFree = Free . go where go (Fix f) = fmap (Free . go) f
