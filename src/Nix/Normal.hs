@@ -122,7 +122,8 @@ removeEffects
 removeEffects =
   iterNValueM
     id
-    (`queryM` pure opaque)
+    --  2021-02-25: NOTE: Please, unflip this up the stack
+    (\ t f -> queryM f (pure opaque) t)
     (fmap Free . sequenceNValue' id)
 
 opaque :: Applicative f => NValue t f m
@@ -132,4 +133,4 @@ dethunk
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
   => t
   -> m (NValue t f m)
-dethunk t = queryM t (pure opaque) removeEffects
+dethunk t = queryM removeEffects (pure opaque) t

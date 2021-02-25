@@ -427,15 +427,15 @@ instance MonadInfer m
   thunk = fmap JThunk . thunk
   thunkId (JThunk x) = thunkId x
 
-  queryM (JThunk x) b f = queryM x b f
+  queryM f b (JThunk x) = queryM f b x
 
   -- If we have a thunk loop, we just don't know the type.
-  force (JThunk t) f = catch (force t f)
+  force f (JThunk t) = catch (force t f)
     $ \(_ :: ThunkLoop) ->
                            f =<< Judgment As.empty mempty <$> fresh
 
   -- If we have a thunk loop, we just don't know the type.
-  forceEff (JThunk t) f = catch (forceEff t f)
+  forceEff f (JThunk t) = catch (forceEff f t)
     $ \(_ :: ThunkLoop) ->
                            f =<< Judgment As.empty mempty <$> fresh
 -}

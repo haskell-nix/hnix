@@ -133,8 +133,8 @@ instance ( MonadAtomicRef m
   thunkId :: StdThunk m -> ThunkId m
   thunkId = thunkId . _stdCited . _stdThunk
 
-  queryM :: StdThunk m -> m r -> (StdValue m -> m r) -> m r
-  queryM x b f = queryM (_stdCited (_stdThunk x)) b f
+  queryM :: (StdValue m -> m r) -> m r -> StdThunk m -> m r
+  queryM f b x = queryM f b (_stdCited (_stdThunk x))
 
   force :: (StdValue m -> m r) -> StdThunk m -> m r
   force f t = force f (_stdCited $ _stdThunk t)

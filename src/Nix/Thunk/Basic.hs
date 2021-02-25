@@ -16,6 +16,7 @@ import           Control.Monad.Catch
 
 import           Nix.Thunk
 import           Nix.Var
+import Data.Bool (bool)
 
 data Deferred m v = Deferred (m v) | Computed v
     deriving (Functor, Foldable, Traversable)
@@ -46,20 +47,29 @@ buildThunk action = do
   freshThunkId <- freshId
   Thunk freshThunkId <$> newVar False <*> newVar (Deferred action)
 
+--  2021-02-25: NOTE: Please, look into thread handling of this.
+-- Locking system was not implemented at the time.
+-- How query operates? Is it normal that query on request if the thunk is locked - returns the thunk
+-- and when the value calculation is deferred - returns the thunk, it smells fishy.
+-- And because the query's impemetation are not used, only API - they pretty much could survive being that fishy.
 queryThunk :: MonadVar m
-  => NThunkF m v
+  => (v -> m a)
   -> m a
-  -> (v -> m a)
+  -> NThunkF m v
   -> m a
-queryThunk (Thunk _ active ref) n k = do
-  nowActive <- atomicModifyVar active (True, )
-  if nowActive
-    then n
-    else do
+queryThunk k n (Thunk _ active ref) = do
+  thunkIsAvaliable <- not <$> atomicModifyVar active (True, )
+  bool
+    n
+    go
+    thunkIsAvaliable
+   where
+    go = do
       eres <- readVar ref
-      res  <- case eres of
-        Computed v -> k v
-        _          -> n
+      res  <-
+        case eres of
+          Computed v   -> k v
+          Deferred _mv -> n
       _ <- atomicModifyVar active (False, )
       pure res
 

@@ -13,6 +13,9 @@
       * `forceEffects`
       * `further`
       * `furtherThunk`
+    * Simply switch the 1<->3 arguments in:
+      * `querryM`
+      * `querryThunk`
 
   * [(link)](https://github.com/haskell-nix/hnix/pull/859/commits/8e043bcbda13ea4fd66d3eefd6da690bb3923edd) `Nix.Value.Equal`: `valueEqM`: freed from `RankNTypes: forall t f m .`.
 
