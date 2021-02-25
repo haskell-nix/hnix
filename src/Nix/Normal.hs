@@ -60,7 +60,7 @@ normalizeValue f tnk = run $ iterNValueM run go (fmap Free . sequenceNValue' run
   go t k = do
     b <- seen t
     if b
-      then pure $ Pure t
+      then pure $ pure t
       else do
         i <- ask
         when (i > 2000)

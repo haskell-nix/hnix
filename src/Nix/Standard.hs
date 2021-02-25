@@ -155,7 +155,7 @@ instance ( MonadAtomicRef m
   defer
     :: m (StdValue m)
     -> m (StdValue m)
-  defer = fmap Pure . thunk
+  defer = fmap pure . thunk
 
   demand
     :: StdValue m
