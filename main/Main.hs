@@ -16,6 +16,7 @@ import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.Free
 import           Control.Monad.IO.Class
+import           Data.Bool                      ( bool )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Map                      as Map
 import           Data.List                      ( sortOn )
@@ -48,23 +49,24 @@ main :: IO ()
 main = do
   time <- getCurrentTime
   opts <- execParser (nixOptionsInfo time)
-  runWithBasicEffectsIO opts $ case readFrom opts of
-    Just path -> do
-      let file = addExtension (dropExtension path) "nixc"
-      process opts (pure file) =<< liftIO (readCache path)
-    Nothing -> case expression opts of
-      Just s  -> handleResult opts mempty (parseNixTextLoc s)
-      Nothing -> case fromFile opts of
-        Just "-" -> mapM_ (processFile opts) . lines =<< liftIO getContents
-        Just path ->
-          mapM_ (processFile opts) . lines =<< liftIO (readFile path)
-        Nothing -> case filePaths opts of
-          [] -> withNixContext mempty Repl.main
-          ["-"] ->
-            handleResult opts mempty
-              .   parseNixTextLoc
-              =<< liftIO Text.getContents
-          paths -> mapM_ (processFile opts) paths
+  runWithBasicEffectsIO opts $
+    case readFrom opts of
+      Nothing -> case expression opts of
+        Nothing -> case fromFile opts of
+          Nothing -> case filePaths opts of
+            [] -> withNixContext mempty Repl.main
+            ["-"] ->
+              handleResult opts mempty
+                .   parseNixTextLoc
+                =<< liftIO Text.getContents
+            paths -> mapM_ (processFile opts) paths
+          Just "-" -> mapM_ (processFile opts) . lines =<< liftIO getContents
+          Just path ->
+            mapM_ (processFile opts) . lines =<< liftIO (readFile path)
+        Just s  -> handleResult opts mempty (parseNixTextLoc s)
+      Just path -> do
+        let file = addExtension (dropExtension path) "nixc"
+        process opts (pure file) =<< liftIO (readCache path)
  where
   processFile opts path = do
     eres <- parseNixFileLoc path
@@ -72,9 +74,10 @@ main = do
 
   handleResult opts mpath = \case
     Failure err ->
-      (if ignoreErrors opts
-          then liftIO . hPutStrLn stderr
-          else errorWithoutStackTrace
+      (bool
+        errorWithoutStackTrace
+        (liftIO . hPutStrLn stderr)
+        (ignoreErrors opts)
         )
         $  "Parse failed: "
         <> show err
@@ -82,10 +85,12 @@ main = do
     Success expr -> do
       when (check opts) $ do
         expr' <- liftIO (reduceExpr mpath expr)
-        case HM.inferTop Env.empty [("it", stripAnnotation expr')] of
-          Left  err -> errorWithoutStackTrace $ "Type error: " <> PS.ppShow err
-          Right ty  -> liftIO $ putStrLn $ "Type of expression: " <> PS.ppShow
-            (fromJust (Map.lookup "it" (Env.types ty)))
+        either
+          (\ err -> errorWithoutStackTrace $ "Type error: " <> PS.ppShow err)
+          (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <> PS.ppShow
+            (fromJust $ Map.lookup "it" $ Env.types ty)
+          )
+          (HM.inferTop Env.empty [("it", stripAnnotation expr')])
 
           -- liftIO $ putStrLn $ runST $
           --     runLintM opts . renderSymbolic =<< lint opts expr
@@ -99,11 +104,14 @@ main = do
                   frames
 
       when (repl opts) $
-        if evaluate opts
-          then do
-            val <- Nix.nixEvalExprLoc mpath expr
-            withNixContext mempty (Repl.main' $ pure val)
-          else withNixContext mempty Repl.main
+        withNixContext mempty $
+          bool
+            Repl.main
+            (do
+              val <- Nix.nixEvalExprLoc mpath expr
+              Repl.main' $ pure val
+            )
+            (evaluate opts)
 
   process opts mpath expr
     | evaluate opts
@@ -161,30 +169,35 @@ main = do
       findAttrs
         :: AttrSet (StdValue (StandardT (StdIdT IO)))
         -> StandardT (StdIdT IO) ()
-      findAttrs = go ""
+      findAttrs = go mempty
        where
         go prefix s = do
-          xs <- forM (sortOn fst (M.toList s)) $ \(k, nv) -> case nv of
-            Free v -> pure (k, pure (Free v))
-            Pure (StdThunk (extract -> Thunk _ _ ref)) -> do
-              let path         = prefix <> Text.unpack k
-                  (_, descend) = filterEntry path k
-              val <- readVar @(StandardT (StdIdT IO)) ref
-              case val of
-                Computed _ -> pure (k, Nothing)
-                _ | descend   -> (k, ) <$> forceEntry path nv
-                  | otherwise -> pure (k, Nothing)
-
+          xs <- forM (sortOn fst (M.toList s)) $ \(k, nv) ->
+            free
+              (\ (StdThunk (extract -> Thunk _ _ ref)) -> do
+                let path         = prefix <> Text.unpack k
+                    (_, descend) = filterEntry path k
+                val <- readVar @(StandardT (StdIdT IO)) ref
+                case val of
+                  Computed _    -> pure (k, Nothing)
+                  _ | descend   -> fmap (k,        ) $ forceEntry path nv
+                    | otherwise -> pure (k, Nothing)
+              )
+              (\ v -> pure (k, pure (Free v)))
+              nv
           forM_ xs $ \(k, mv) -> do
             let path              = prefix <> Text.unpack k
                 (report, descend) = filterEntry path k
             when report $ do
               liftIO $ putStrLn path
-              when descend $ case mv of
-                Nothing -> pure ()
-                Just v  -> case v of
-                  NVSet s' _ -> go (path <> ".") s'
-                  _          -> pure ()
+              when descend $
+                maybe
+                  (pure ())
+                  (\case
+                    NVSet s' _ -> go (path <> ".") s'
+                    _          -> pure ()
+                  )
+                  mv
          where
           filterEntry path k = case (path, k) of
             ("stdenv", "stdenv"          ) -> (True, True)
@@ -230,6 +243,7 @@ main = do
     liftIO $ do
       putStrLn $ "Wrote winnowed expression tree to " <> path
       writeFile path $ show $ prettyNix (stripAnnotation expr')
-    case eres of
-      Left  err -> throwM err
-      Right v   -> pure v
+    either
+      throwM
+      pure
+      eres
