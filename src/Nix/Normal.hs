@@ -40,10 +40,10 @@ normalizeValue
      , MonadDataErrorContext t f m
      , Ord (ThunkId m)
      )
-  => (forall r . t -> (NValue t f m -> m r) -> m r)
+  => (forall r . (NValue t f m -> m r) -> t -> m r)
   -> NValue t f m
   -> m (NValue t f m)
-normalizeValue f = run . iterNValueM run go (fmap Free . sequenceNValue' run)
+normalizeValue f tnk = run $ iterNValueM run go (fmap Free . sequenceNValue' run) tnk
  where
   start = 0 :: Int
   table = mempty
@@ -60,12 +60,13 @@ normalizeValue f = run . iterNValueM run go (fmap Free . sequenceNValue' run)
   go t k = do
     b <- seen t
     if b
-      then pure $ Pure t
+      then pure $ pure t
       else do
         i <- ask
         when (i > 2000)
           $ error "Exceeded maximum normalization depth of 2000 levels"
-        lifted (lifted (f t)) $ local succ . k
+        --  2021-02-22: NOTE: `normalizeValue` should be adopted to work without fliping of the force (f)
+        lifted (lifted (`f` t)) $ local succ . k
 
   seen t = do
     let tid = thunkId t
@@ -84,7 +85,7 @@ normalForm
      )
   => NValue t f m
   -> m (NValue t f m)
-normalForm = fmap stubCycles . normalizeValue force
+normalForm t = stubCycles <$> (force `normalizeValue` t)
 
 normalForm_
   :: ( Framed e m
@@ -94,7 +95,7 @@ normalForm_
      )
   => NValue t f m
   -> m ()
-normalForm_ = void <$> normalizeValue forceEff
+normalForm_ t = void (forceEff `normalizeValue` t)
 
 stubCycles
   :: forall t f m
@@ -120,7 +121,8 @@ removeEffects
 removeEffects =
   iterNValueM
     id
-    (`queryM` pure opaque)
+    --  2021-02-25: NOTE: Please, unflip this up the stack
+    (\ t f -> queryM f (pure opaque) t)
     (fmap Free . sequenceNValue' id)
 
 opaque :: Applicative f => NValue t f m
@@ -130,4 +132,4 @@ dethunk
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
   => t
   -> m (NValue t f m)
-dethunk t = queryM t (pure opaque) removeEffects
+dethunk t = queryM removeEffects (pure opaque) t

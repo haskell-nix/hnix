@@ -11,6 +11,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE InstanceSigs #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -125,12 +126,24 @@ instance ( MonadAtomicRef m
          , MonadThunkId m
          )
   => MonadThunk (StdThunk m) m (StdValue m) where
-  thunk   = fmap (StdThunk . StdCited) . thunk
+
+  thunk :: m (StdValue m) -> m (StdThunk m)
+  thunk v = StdThunk . StdCited <$> thunk v
+
+  thunkId :: StdThunk m -> ThunkId m
   thunkId = thunkId . _stdCited . _stdThunk
-  queryM x b f = queryM (_stdCited (_stdThunk x)) b f
-  force    = force . _stdCited . _stdThunk
-  forceEff = forceEff . _stdCited . _stdThunk
-  further  = (fmap (StdThunk . StdCited) .) . further . _stdCited . _stdThunk
+
+  queryM :: (StdValue m -> m r) -> m r -> StdThunk m -> m r
+  queryM f b x = queryM f b (_stdCited (_stdThunk x))
+
+  force :: (StdValue m -> m r) -> StdThunk m -> m r
+  force f t = force f (_stdCited $ _stdThunk t)
+
+  forceEff :: (StdValue m -> m r) -> StdThunk m -> m r
+  forceEff f t = forceEff f (_stdCited $ _stdThunk t)
+
+  further :: (m (StdValue m) -> m (StdValue m)) ->  StdThunk m -> m (StdThunk m)
+  further f t = StdThunk . StdCited <$> further f (_stdCited $ _stdThunk t)
 
 instance ( MonadAtomicRef m
          , MonadCatch m
@@ -139,13 +152,28 @@ instance ( MonadAtomicRef m
          , MonadThunkId m
          )
   => MonadValue (StdValue m) m where
-  defer = fmap Pure . thunk
+  defer
+    :: m (StdValue m)
+    -> m (StdValue m)
+  defer = fmap pure . thunk
 
-  demand (Pure v) f = force v (flip demand f)
+  demand
+    :: StdValue m
+    -> ( StdValue m
+      -> m r
+      )
+    -> m r
+  demand (Pure v) f = force (`demand` f) v
   demand (Free v) f = f (Free v)
 
-  inform (Pure t) f = Pure <$> further t f
-  inform (Free v) f = Free <$> bindNValue' id (flip inform f) v
+  inform
+    :: StdValue m
+    -> ( m (StdValue m)
+      -> m (StdValue m)
+      )
+    -> m (StdValue m)
+  inform (Pure t) f = Pure <$> further f t
+  inform (Free v) f = Free <$> bindNValue' id (`inform` f) v
 
 {------------------------------------------------------------------------}
 

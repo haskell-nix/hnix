@@ -15,6 +15,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE InstanceSigs #-}
 
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
@@ -398,9 +399,26 @@ type MonadInfer m
   = ({- MonadThunkId m,-}
      MonadVar m, MonadFix m)
 
+--  2021-02-22: NOTE: Seems like suporflous instance
 instance Monad m => MonadValue (Judgment s) (InferT s m) where
+  defer
+    :: InferT s m (Judgment s)
+    -> InferT s m (Judgment s)
   defer  = id
+
+  demand
+    :: Judgment s
+    -> ( Judgment s
+      -> InferT s m r)
+    -> InferT s m r
   demand = flip ($)
+
+  inform
+    :: Judgment s
+    -> ( InferT s m (Judgment s)
+      -> InferT s m (Judgment s)
+      )
+    -> InferT s m (Judgment s)
   inform j f = f (pure j)
 
 {-
@@ -409,15 +427,15 @@ instance MonadInfer m
   thunk = fmap JThunk . thunk
   thunkId (JThunk x) = thunkId x
 
-  queryM (JThunk x) b f = queryM x b f
+  queryM f b (JThunk x) = queryM f b x
 
   -- If we have a thunk loop, we just don't know the type.
-  force (JThunk t) f = catch (force t f)
+  force f (JThunk t) = catch (force t f)
     $ \(_ :: ThunkLoop) ->
                            f =<< Judgment As.empty mempty <$> fresh
 
   -- If we have a thunk loop, we just don't know the type.
-  forceEff (JThunk t) f = catch (forceEff t f)
+  forceEff f (JThunk t) = catch (forceEff f t)
     $ \(_ :: ThunkLoop) ->
                            f =<< Judgment As.empty mempty <$> fresh
 -}

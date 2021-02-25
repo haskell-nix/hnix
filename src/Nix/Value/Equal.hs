@@ -1,23 +1,12 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
@@ -97,8 +86,7 @@ valueFEqM attrsEq eq = curry $ \case
   (NVConstantF (NFloat x), NVConstantF (NInt y)  ) -> pure $ x == fromInteger y
   (NVConstantF (NInt   x), NVConstantF (NFloat y)) -> pure $ fromInteger x == y
   (NVConstantF lc        , NVConstantF rc        ) -> pure $ lc == rc
-  (NVStrF ls, NVStrF rs) ->
-    pure $ stringIgnoreContext ls == stringIgnoreContext rs
+  (NVStrF ls, NVStrF rs)     -> pure $ (\i -> i ls == i rs) stringIgnoreContext
   (NVListF ls , NVListF rs ) -> alignEqM eq ls rs
   (NVSetF lm _, NVSetF rm _) -> attrsEq lm rm
   (NVPathF lp , NVPathF rp ) -> pure $ lp == rp
@@ -144,8 +132,7 @@ compareAttrSets f eq lm rm = runIdentity
   $ compareAttrSetsM (Identity . f) (\x y -> Identity (eq x y)) lm rm
 
 valueEqM
-  :: forall t f m
-   . (MonadThunk t m (NValue t f m), Comonad f)
+  :: (MonadThunk t m (NValue t f m), Comonad f)
   => NValue t f m
   -> NValue t f m
   -> m Bool
@@ -155,7 +142,7 @@ valueEqM x@(Free _) (  Pure y) = thunkEqM ?? y =<< thunk (pure x)
 valueEqM (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
   valueFEqM (compareAttrSetsM f valueEqM) valueEqM x y
  where
-  f (Pure t) = force t $ \case
+  f (Pure t) = (`force` t) $ \case
     NVStr s -> pure $ pure s
     _       -> pure mempty
   f (Free v) = case v of
@@ -163,7 +150,7 @@ valueEqM (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
     _        -> pure mempty
 
 thunkEqM :: (MonadThunk t m (NValue t f m), Comonad f) => t -> t -> m Bool
-thunkEqM lt rt = force lt $ \lv -> force rt $ \rv ->
+thunkEqM lt rt = (`force` lt) $ \lv -> (`force` rt) $ \rv ->
   let unsafePtrEq = case (lt, rt) of
         (thunkId -> lid, thunkId -> rid) | lid == rid -> pure True
         _ -> valueEqM lv rv

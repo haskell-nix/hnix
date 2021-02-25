@@ -16,6 +16,7 @@ import           Control.Monad.Catch
 
 import           Nix.Thunk
 import           Nix.Var
+import Data.Bool (bool)
 
 data Deferred m v = Deferred (m v) | Computed v
     deriving (Functor, Foldable, Traversable)
@@ -46,26 +47,39 @@ buildThunk action = do
   freshThunkId <- freshId
   Thunk freshThunkId <$> newVar False <*> newVar (Deferred action)
 
-queryThunk :: MonadVar m => NThunkF m v -> m a -> (v -> m a) -> m a
-queryThunk (Thunk _ active ref) n k = do
-  nowActive <- atomicModifyVar active (True, )
-  if nowActive
-    then n
-    else do
+--  2021-02-25: NOTE: Please, look into thread handling of this.
+-- Locking system was not implemented at the time.
+-- How query operates? Is it normal that query on request if the thunk is locked - returns the thunk
+-- and when the value calculation is deferred - returns the thunk, it smells fishy.
+-- And because the query's impemetation are not used, only API - they pretty much could survive being that fishy.
+queryThunk :: MonadVar m
+  => (v -> m a)
+  -> m a
+  -> NThunkF m v
+  -> m a
+queryThunk k n (Thunk _ active ref) = do
+  thunkIsAvaliable <- not <$> atomicModifyVar active (True, )
+  bool
+    n
+    go
+    thunkIsAvaliable
+   where
+    go = do
       eres <- readVar ref
-      res  <- case eres of
-        Computed v -> k v
-        _          -> n
+      res  <-
+        case eres of
+          Computed v   -> k v
+          Deferred _mv -> n
       _ <- atomicModifyVar active (False, )
       pure res
 
 forceThunk
   :: forall m v a
    . (MonadVar m, MonadThrow m, MonadCatch m, Show (ThunkId m))
-  => NThunkF m v
-  -> (v -> m a)
+  => (v -> m a)
+  -> NThunkF m v
   -> m a
-forceThunk (Thunk n active ref) k = do
+forceThunk k (Thunk n active ref) = do
   eres <- readVar ref
   case eres of
     Computed v      -> k v
@@ -81,8 +95,11 @@ forceThunk (Thunk n active ref) k = do
           writeVar ref (Computed v)
           k v
 
-forceEffects :: MonadVar m => NThunkF m v -> (v -> m r) -> m r
-forceEffects (Thunk _ active ref) k = do
+forceEffects :: MonadVar m
+  => (v -> m r)
+  -> NThunkF m v
+  -> m r
+forceEffects k (Thunk _ active ref) = do
   nowActive <- atomicModifyVar active (True, )
   if nowActive
     then pure $ error "Loop detected"
@@ -96,8 +113,11 @@ forceEffects (Thunk _ active ref) k = do
           _ <- atomicModifyVar active (False, )
           k v
 
-furtherThunk :: MonadVar m => NThunkF m v -> (m v -> m v) -> m (NThunkF m v)
-furtherThunk t@(Thunk _ _ ref) k = do
+furtherThunk :: MonadVar m
+  => (m v -> m v)
+  -> NThunkF m v
+  -> m (NThunkF m v)
+furtherThunk k t@(Thunk _ _ ref) = do
   _ <- atomicModifyVar ref $ \x -> case x of
     Computed _ -> (x, x)
     Deferred d -> (Deferred (k d), x)

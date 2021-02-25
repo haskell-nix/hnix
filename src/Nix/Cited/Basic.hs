@@ -8,6 +8,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE InstanceSigs #-}
 
 module Nix.Cited.Basic where
 
@@ -52,6 +53,8 @@ instance ( Has e Options
          , MonadCatch m
          )
   => MonadThunk (Cited u f m t) m v where
+
+  thunk :: m v -> m (Cited u f m t)
   thunk mv = do
     opts :: Options <- asks (view hasLens)
 
@@ -72,29 +75,34 @@ instance ( Has e Options
         fmap (Cited . NCited ps) . thunk $ mv
       else fmap (Cited . NCited mempty) . thunk $ mv
 
+  thunkId :: Cited u f m t -> ThunkId m
   thunkId (Cited (NCited _ t)) = thunkId @_ @m t
 
-  queryM (Cited (NCited _ t)) = queryM t
+  queryM :: (v -> m r) -> m r -> Cited u f m t -> m r
+  queryM f m (Cited (NCited _ t)) = queryM f m t
 
   -- | The ThunkLoop exception is thrown as an exception with MonadThrow,
   --   which does not capture the current stack frame information to provide
   --   it in a NixException, so we catch and re-throw it here using
   --   'throwError' from Frames.hs.
-  force (Cited (NCited ps t)) f =
+  force :: (v -> m r) -> Cited u f m t -> m r
+  force f (Cited (NCited ps t)) =
     catch go (throwError @ThunkLoop)
    where
     go = case ps of
-      [] -> force t f
+      [] -> force f t
       Provenance scope e@(Compose (Ann s _)) : _ ->
-        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (force t f)
+        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (force f t)
 
-  forceEff (Cited (NCited ps t)) f = catch
+  forceEff :: (v -> m r) -> Cited u f m t -> m r
+  forceEff f (Cited (NCited ps t)) = catch
     go
     (throwError @ThunkLoop)
    where
     go = case ps of
-      [] -> forceEff t f
+      [] -> forceEff f t
       Provenance scope e@(Compose (Ann s _)) : _ ->
-        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceEff t f)
+        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceEff f t)
 
-  further (Cited (NCited ps t)) f = Cited . NCited ps <$> further t f
+  further :: (m v -> m v) -> Cited u f m t -> m (Cited u f m t)
+  further f (Cited (NCited ps t)) = Cited . NCited ps <$> further f t
