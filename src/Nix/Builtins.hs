@@ -851,13 +851,11 @@ genList
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-genList f = fromValue @Integer >=> \n -> if n >= 0
-  then toValue =<< forM [0 .. n - 1] (\i -> defer $ (f `callFunc`) =<< toValue i)
-  else
-    throwError
-    $  ErrorCall
-    $  "builtins.genList: Expected a non-negative number, got "
-    <> show n
+genList f = fromValue @Integer >=> \n ->
+  bool
+    (throwError $ ErrorCall $ "builtins.genList: Expected a non-negative number, got " <> show n)
+    (toValue =<< forM [0 .. n - 1] (\i -> defer $ (f `callFunc`) =<< toValue i))
+    (n >= 0)
 
 -- We wrap values solely to provide an Ord instance for genericClosure
 newtype WValue t f m = WValue (NValue t f m)
