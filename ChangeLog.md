@@ -5,19 +5,21 @@
 
 * Breaking:
 
-  * [(link)](https://github.com/haskell-nix/hnix/pull/859/files#diff-ed4fba9b7db93932de22f4ef09d04b07a2ba88888e42207eb9abe6ff10b7ca2b) `Nix.Thunk`: `class MonadThunk t m a | t -> m, t -> a` : `force{,Eff}` unflipped the arguments. All their implementations got more straigh-forward to use and `force*`s now tail recurse.
-    * Simply flip the first two arguments for:
+  * [(link)](https://github.com/haskell-nix/hnix/pull/863/files) `Nix.Thunk`: `class MonadThunk t m a | t -> m, t -> a` : `force{,Eff}`. Moved the functional argument out of the function. Now it only accepts and forces thunk. Please use `=<< force t` or `<=< force` for the nice code. All their implementations got more straigh-forward to use and `force*`s now tail recurse.
       * `force`
-      * `forceEff`
       * `forceThunk`
+      * `forceEff`
       * `forceEffects`
+
+  * [(link)](https://github.com/haskell-nix/hnix/pull/859/files) `Nix.Thunk`: `class MonadThunk t m a | t -> m, t -> a` : unflipped the arguments. All their implementations got more straigh-forward to use and some functions now tail recurse.
+    * Simply flip the first two arguments for:
       * `further`
       * `furtherThunk`
     * Simply switch the 1<->3 arguments in:
       * `querryM`
       * `querryThunk`
 
-  * [(link)](https://github.com/haskell-nix/hnix/pull/862/files#diff-caa5d6592de00a0b23b2996143181d5cb60ebe00abcd0ba39b271caa764aa086) `Nix.Value.Monad`: `class MonadValue v m`: `demand` unflipped the arguments. All its implementations got more straigh-forward to use and `demand` now tail recurse.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/862/files) `Nix.Value.Monad`: `class MonadValue v m`: `demand` unflipped the arguments. All its implementations got more straigh-forward to use and `demand` now tail recurse.
 
   * [(link)](https://github.com/haskell-nix/hnix/pull/859/commits/8e043bcbda13ea4fd66d3eefd6da690bb3923edd) `Nix.Value.Equal`: `valueEqM`: freed from `RankNTypes: forall t f m .`.
 
