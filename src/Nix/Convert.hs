@@ -24,6 +24,7 @@
 
 module Nix.Convert where
 
+import           Control.Monad                  ( (<=<) )
 import           Control.Monad.Free
 import           Data.ByteString
 import qualified Data.HashMap.Lazy             as M
@@ -77,10 +78,10 @@ instance ( Convertible e t f m
          )
   => FromValue a m (NValue t f m) where
   fromValueMay = demand $ \case
-    Pure t -> force fromValueMay t
+    Pure t -> fromValueMay =<< force t
     Free v -> fromValueMay v
   fromValue = demand $ \case
-    Pure t -> force fromValue t
+    Pure t -> fromValue =<< force t
     Free v -> fromValue v
 
 instance ( Convertible e t f m
@@ -91,14 +92,14 @@ instance ( Convertible e t f m
   fromValueMay (Deeper v) =
     demand
       (free
-        (force $ fromValueMay . Deeper)
+        ((fromValueMay . Deeper) <=< force)
         (fromValueMay . Deeper)
       )
       v
   fromValue (Deeper v) =
     demand
       (free
-        (force $ fromValue . Deeper)
+        ((fromValue . Deeper) <=< force)
         (fromValue . Deeper)
       )
       v

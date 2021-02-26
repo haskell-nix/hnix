@@ -137,11 +137,11 @@ instance ( MonadAtomicRef m
   queryM :: (StdValue m -> m r) -> m r -> StdThunk m -> m r
   queryM f b x = queryM f b (_stdCited (_stdThunk x))
 
-  force :: (StdValue m -> m r) -> StdThunk m -> m r
-  force f t = force f (_stdCited $ _stdThunk t)
+  force :: StdThunk m -> m (StdValue m)
+  force t = force (_stdCited $ _stdThunk t)
 
-  forceEff :: (StdValue m -> m r) -> StdThunk m -> m r
-  forceEff f t = forceEff f (_stdCited $ _stdThunk t)
+  forceEff :: StdThunk m -> m (StdValue m)
+  forceEff t = forceEff (_stdCited $ _stdThunk t)
 
   further :: (m (StdValue m) -> m (StdValue m)) ->  StdThunk m -> m (StdThunk m)
   further f t = StdThunk . StdCited <$> further f (_stdCited $ _stdThunk t)
@@ -166,7 +166,7 @@ instance ( MonadAtomicRef m
     -> m r
   demand f v =
     free
-      (force (demand f))
+      ((demand f) <=< force)
       (const $ f v)
       v
 

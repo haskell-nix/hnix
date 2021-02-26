@@ -287,7 +287,7 @@ instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
   defer = fmap ST . thunk
 
   demand :: (Symbolic m -> m r) -> Symbolic m -> m r
-  demand f (ST v)= force (demand f) v
+  demand f (ST v)= (demand f) =<< force v
   demand f (SV v)= f (SV v)
 
 instance MonadLint e m => MonadEval (Symbolic m) m where

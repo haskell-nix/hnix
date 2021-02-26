@@ -85,24 +85,24 @@ instance ( Has e Options
   --   which does not capture the current stack frame information to provide
   --   it in a NixException, so we catch and re-throw it here using
   --   'throwError' from Frames.hs.
-  force :: (v -> m r) -> Cited u f m t -> m r
-  force f (Cited (NCited ps t)) =
+  force :: Cited u f m t -> m v
+  force (Cited (NCited ps t)) =
     catch go (throwError @ThunkLoop)
    where
     go = case ps of
-      [] -> force f t
+      [] -> force t
       Provenance scope e@(Compose (Ann s _)) : _ ->
-        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (force f t)
+        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (force t)
 
-  forceEff :: (v -> m r) -> Cited u f m t -> m r
-  forceEff f (Cited (NCited ps t)) = catch
+  forceEff :: Cited u f m t -> m v
+  forceEff (Cited (NCited ps t)) = catch
     go
     (throwError @ThunkLoop)
    where
     go = case ps of
-      [] -> forceEff f t
+      [] -> forceEff t
       Provenance scope e@(Compose (Ann s _)) : _ ->
-        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceEff f t)
+        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceEff t)
 
   further :: (m v -> m v) -> Cited u f m t -> m (Cited u f m t)
   further f (Cited (NCited ps t)) = Cited . NCited ps <$> further f t
