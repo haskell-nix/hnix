@@ -316,12 +316,18 @@ buildDerivationWithContext drvAttrs = do
           mHash
 
       -- filter out null values if needed.
-      attrs <- if not ignoreNulls
-        then pure drvAttrs
-        else M.mapMaybe id <$> forM drvAttrs (demand' ?? (\case
-            NVConstant NNull -> pure Nothing
-            value -> pure $ pure value
-          ))
+      attrs <-
+        bool
+          (pure drvAttrs)
+          (M.mapMaybe id <$> forM drvAttrs
+            (demand'
+              (pure . \case
+                NVConstant NNull -> Nothing
+                value -> pure value
+              )
+            )
+          )
+          ignoreNulls
 
       env <- if useJson
         then do
