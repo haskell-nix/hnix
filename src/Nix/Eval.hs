@@ -115,9 +115,10 @@ eval (NSym "__curPos") = evalCurPos
 
 eval (NSym var       ) = do
   mres <- lookupVar var
-  case mres of
-    Just x  -> demand x $ evaledSym var
-    Nothing -> freeVariable var
+  maybe
+    (freeVariable var)
+    (demand (evaledSym var))
+    mres
 
 eval (NConstant    x      ) = evalConstant x
 eval (NStr         str    ) = evalString str
@@ -188,9 +189,7 @@ attrSetAlter
   -> AttrSet SourcePos
   -> m v
   -> m (AttrSet (m v), AttrSet SourcePos)
-attrSetAlter [] _ _ _ _ =
-  evalError @v $ ErrorCall "invalid selector with no components"
-
+attrSetAlter [] _ _ _ _ = evalError @v $ ErrorCall "invalid selector with no components"
 attrSetAlter (k : ks) pos m p val = case M.lookup k m of
   Nothing | null ks   -> go
           | otherwise -> recurse M.empty M.empty
