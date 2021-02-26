@@ -789,7 +789,7 @@ builtinsBuiltin
   :: forall e t f m
    . MonadNix e t f m
   => m (NValue t f m)
-builtinsBuiltin = (throwError $ ErrorCall "HNix does not provide builtins.builtins at the moment. Using builtins directly should be preferred")
+builtinsBuiltin = throwError $ ErrorCall "HNix does not provide builtins.builtins at the moment. Using builtins directly should be preferred"
 
 dirOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 dirOf x = demand x $ \case
@@ -804,8 +804,7 @@ unsafeDiscardStringContext
   :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 unsafeDiscardStringContext mnv = do
   ns <- fromValue mnv
-  toValue $ makeNixStringWithoutContext $ stringIgnoreContext
-    ns
+  toValue $ makeNixStringWithoutContext $ stringIgnoreContext ns
 
 seq_
   :: MonadNix e t f m
@@ -1163,7 +1162,7 @@ scopedImport asetArg pathArg = fromValue @(AttrSet (NValue t f m)) asetArg >>= \
 getEnv_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 getEnv_ = fromValue >=> fromStringNoContext >=> \s -> do
   mres <- getEnvVar (Text.unpack s)
-  toValue $ makeNixStringWithoutContext $ maybe "" Text.pack mres
+  toValue $ makeNixStringWithoutContext $ maybe mempty Text.pack mres
 
 sort_
   :: MonadNix e t f m
@@ -1297,12 +1296,7 @@ absolutePathFromValue :: MonadNix e t f m => NValue t f m -> m FilePath
 absolutePathFromValue = \case
   NVStr ns -> do
     let path = Text.unpack $ stringIgnoreContext ns
-    unless (isAbsolute path)
-      $  throwError
-      $  ErrorCall
-      $  "string "
-      <> show path
-      <> " doesn't represent an absolute path"
+    unless (isAbsolute path) $ throwError $ ErrorCall $ "string " <> show path <> " doesn't represent an absolute path"
     pure path
   NVPath path -> pure path
   v           -> throwError $ ErrorCall $ "expected a path, got " <> show v
