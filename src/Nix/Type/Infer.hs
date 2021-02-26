@@ -50,7 +50,7 @@ import           Data.List                      ( delete
                                                 )
 import           Data.Map                       ( Map )
 import qualified Data.Map                      as Map
-import           Data.Maybe                     ( fromJust )
+import           Data.Maybe                     ( fromJust, fromMaybe )
 import qualified Data.Set                      as Set
 import           Data.Text                      ( Text )
 import           Nix.Atoms
@@ -554,9 +554,9 @@ instance MonadInfer m
     let sing _ = Judgment As.empty mempty
     pure $ pure (M.mapWithKey sing xs, M.empty)
   fromValueMay _ = pure mempty
-  fromValue = fromValueMay >=> \case
-    Just v  -> pure v
-    Nothing -> pure (M.empty, M.empty)
+  fromValue = fromValueMay >=>
+    pure . fromMaybe
+      (M.empty, M.empty)
 
 instance MonadInfer m
   => ToValue (AttrSet (Judgment s), AttrSet SourcePos)
