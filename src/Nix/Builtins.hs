@@ -888,19 +888,9 @@ genericClosure
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 genericClosure = fromValue @(AttrSet (NValue t f m)) >=> \s ->
   case (M.lookup "startSet" s, M.lookup "operator" s) of
-    (Nothing, Nothing) ->
-      throwError
-        $  ErrorCall
-        $  "builtins.genericClosure: "
-        <> "Attributes 'startSet' and 'operator' required"
-    (Nothing, Just _) ->
-      throwError
-        $ ErrorCall
-        $ "builtins.genericClosure: Attribute 'startSet' required"
-    (Just _, Nothing) ->
-      throwError
-        $ ErrorCall
-        $ "builtins.genericClosure: Attribute 'operator' required"
+    (Nothing    , Nothing        ) -> throwError $ ErrorCall $ "builtins.genericClosure: Attributes 'startSet' and 'operator' required"
+    (Nothing    , Just _         ) -> throwError $ ErrorCall $ "builtins.genericClosure: Attribute 'startSet' required"
+    (Just _     , Nothing        ) -> throwError $ ErrorCall $ "builtins.genericClosure: Attribute 'operator' required"
     (Just startSet, Just operator) ->
       demand startSet $ fromValue @[NValue t f m] >=> \ss ->
         demand operator $ \op -> toValue @[NValue t f m] =<< snd <$> go op ss S.empty
