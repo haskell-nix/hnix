@@ -1173,13 +1173,16 @@ sort_ comp = fromValue >=> sortByM (cmp comp) >=> toValue
  where
   cmp f a b = do
     isLessThan <- f `callFunc` a >>= (`callFunc` b)
-    fromValue isLessThan >>= \case
-      True  -> pure LT
-      False -> do
-        isGreaterThan <- f `callFunc` b >>= (`callFunc` a)
-        fromValue isGreaterThan <&> \case
-          True  -> GT
-          False -> EQ
+    fromValue isLessThan >>=
+      bool
+        (do
+          isGreaterThan <- f `callFunc` b >>= (`callFunc` a)
+          fromValue isGreaterThan <&>
+            bool
+              EQ
+              GT
+        )
+        (pure LT)
 
 lessThan
   :: MonadNix e t f m
