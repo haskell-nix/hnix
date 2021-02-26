@@ -583,10 +583,12 @@ infer :: MonadInfer m => NExpr -> InferT s m (Judgment s)
 infer = foldFix Eval.eval
 
 inferTop :: Env -> [(Text, NExpr)] -> Either InferError Env
-inferTop env []                = Right env
-inferTop env ((name, ex) : xs) = case inferExpr env ex of
-  Left  err -> Left err
-  Right ty  -> inferTop (extend env (name, ty)) xs
+inferTop env []                = pure env
+inferTop env ((name, ex) : xs) =
+  either
+    Left
+    (\ ty -> inferTop (extend env (name, ty)) xs)
+    (inferExpr env ex)
 
 normalizeScheme :: Scheme -> Scheme
 normalizeScheme (Forall _ body) = Forall (fmap snd ord) (normtype body)
@@ -628,7 +630,7 @@ runSolver :: Monad m => Solver m a -> m (Either [TypeError] [a])
 runSolver (Solver s) = do
   res <- runStateT (observeAllT s) mempty
   pure $ case res of
-    (x : xs, _ ) -> Right (x : xs)
+    (x : xs, _ ) -> pure (x : xs)
     (_     , es) -> Left (nub es)
 
 -- | The empty substitution
