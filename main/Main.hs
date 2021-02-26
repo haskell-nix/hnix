@@ -74,13 +74,11 @@ main = do
 
   handleResult opts mpath = \case
     Failure err ->
-      (bool
+      bool
         errorWithoutStackTrace
         (liftIO . hPutStrLn stderr)
         (ignoreErrors opts)
-        )
-        $  "Parse failed: "
-        <> show err
+        $ "Parse failed: " <> show err
 
     Success expr -> do
       when (check opts) $ do
