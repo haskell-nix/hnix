@@ -222,7 +222,11 @@ findPathM = findPathBy existingPath
   existingPath path = do
     apath  <- makeAbsolutePath @t @f path
     exists <- doesPathExist apath
-    pure $ if exists then pure apath else mempty
+    pure $
+      bool
+        mempty
+        (pure apath)
+        exists
 
 defaultImportPath
   :: (MonadNix e t f m, MonadState (HashMap FilePath NExprLoc, b) m)
