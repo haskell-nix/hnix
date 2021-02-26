@@ -103,11 +103,17 @@ findEnvPathM name = do
   nixFilePath path = do
     absPath <- makeAbsolutePath @t @f path
     isDir   <- doesDirectoryExist absPath
-    absFile <- if isDir
-      then makeAbsolutePath @t @f $ absPath </> "default.nix"
-      else pure absPath
+    absFile <-
+      bool
+        (pure absPath)
+        (makeAbsolutePath @t @f $ absPath </> "default.nix")
+        isDir
     exists <- doesFileExist absFile
-    pure $ if exists then pure absFile else mempty
+    pure $
+      bool
+        mempty
+        (pure absFile)
+        exists
 
 findPathBy
   :: forall e t f m
@@ -118,15 +124,10 @@ findPathBy
   -> m FilePath
 findPathBy finder ls name = do
   mpath <- foldM go mempty ls
-  case mpath of
-    Nothing ->
-      throwError
-        $  ErrorCall
-        $  "file '"
-        <> name
-        <> "' was not found in the Nix search path"
-        <> " (add it's using $NIX_PATH or -I)"
-    Just path -> pure path
+  maybe
+    (throwError $ ErrorCall $ "file '" <> name <> "' was not found in the Nix search path (add it's using $NIX_PATH or -I)")
+    pure
+    mpath
  where
   go :: Maybe FilePath -> NValue t f m -> m (Maybe FilePath)
   go p@(Just _) _ = pure p
@@ -147,16 +148,15 @@ findPathBy finder ls name = do
     finder $ p <///> joinPath ns
   tryPath p _ = finder $ p <///> name
 
-  resolvePath s = case M.lookup "path" s of
-    Just t  -> pure t
-    Nothing -> case M.lookup "uri" s of
-      Just ut -> defer $ fetchTarball ut
-      Nothing ->
-        throwError
-          $  ErrorCall
-          $  "__nixPath must be a list of attr sets"
-          <> " with 'path' elements, but received: "
-          <> show s
+  resolvePath s =
+    maybe
+      (maybe
+        (throwError $ ErrorCall $ "__nixPath must be a list of attr sets with 'path' elements, but received: " <> show s)
+        (defer . fetchTarball)
+        (M.lookup "uri" s)
+      )
+      pure
+      (M.lookup "path" s)
 
 fetchTarball
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
