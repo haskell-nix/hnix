@@ -369,10 +369,11 @@ hasAttr x y = fromValue x >>= fromStringNoContext >>= \key ->
     >>= \(aset, _) -> toValue $ M.member key aset
 
 attrsetGet :: MonadNix e t f m => Text -> AttrSet (NValue t f m) -> m (NValue t f m)
-attrsetGet k s = case M.lookup k s of
-  Just v -> pure v
-  Nothing ->
-    throwError $ ErrorCall $ "Attribute '" <> Text.unpack k <> "' required"
+attrsetGet k s =
+  maybe
+    (throwError $ ErrorCall $ "Attribute '" <> Text.unpack k <> "' required")
+    pure
+    (M.lookup k s)
 
 hasContext :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 hasContext = toValue . stringHasContext <=< fromValue
@@ -453,7 +454,10 @@ anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 anyM _ []       = pure False
 anyM p (x : xs) = do
   q <- p x
-  if q then pure True else anyM p xs
+  bool
+    (anyM p xs)
+    (pure True)
+    q
 
 any_
   :: MonadNix e t f m
@@ -466,7 +470,10 @@ allM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 allM _ []       = pure True
 allM p (x : xs) = do
   q <- p x
-  if q then allM p xs else pure False
+  bool
+    (pure False)
+    (allM p xs)
+    q
 
 all_
   :: MonadNix e t f m
@@ -637,7 +644,7 @@ split_ pat str = fromValue pat >>= fromStringNoContext >>= \p ->
     let re       = makeRegex (encodeUtf8 p) :: Regex
         haystack = encodeUtf8 s
     pure $ nvList $ splitMatches 0
-                                   (fmap elems $ matchAllText re haystack)
+                                   (elems <$> matchAllText re haystack)
                                    haystack
 
 splitMatches
