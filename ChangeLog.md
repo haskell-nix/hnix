@@ -21,6 +21,8 @@
 
   * [(link)](https://github.com/haskell-nix/hnix/pull/862/files) `Nix.Value.Monad`: `class MonadValue v m`: `demand` unflipped the arguments. All its implementations got more straigh-forward to use and `demand` now tail recurse.
 
+  * [(link)](https://github.com/haskell-nix/hnix/pull/863/files) `Nix.Normal`: `normalizeValue` removed first functional argument that was passing the function that did the thunk forcing. Now function provides the thunk forcing. Now to normalize simply use `normalizeValue v`.
+
   * [(link)](https://github.com/haskell-nix/hnix/pull/859/commits/8e043bcbda13ea4fd66d3eefd6da690bb3923edd) `Nix.Value.Equal`: `valueEqM`: freed from `RankNTypes: forall t f m .`.
 
   * [(link)](https://github.com/haskell-nix/hnix/pull/802/commits/529095deaf6bc6b102fe5a3ac7baccfbb8852e49#) `Nix.Strings`: all `hacky*` functions replaced with lawful implemetations, because of that all functions become lawful - dropped the `principled` suffix from functions:

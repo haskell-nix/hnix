@@ -43,8 +43,7 @@ normalizeValue
      )
   => NValue t f m
   -> m (NValue t f m)
--- normalizeValue tnk = undefined
-normalizeValue tnk = run $ iterNValueM run go (fmap Free . sequenceNValue' run) tnk
+normalizeValue v = run $ iterNValueM run go (fmap Free . sequenceNValue' run) v
  where
   start = 0 :: Int
   table = mempty
