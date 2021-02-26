@@ -19,7 +19,6 @@
 
 module Repl
   ( main
-  , main'
   ) where
 
 import           Nix                     hiding ( exec
@@ -30,7 +29,6 @@ import           Nix.Utils
 import           Nix.Value.Monad                (demand)
 
 import qualified Data.List
-import qualified Data.Maybe
 import qualified Data.HashMap.Lazy
 import           Data.Text                      (Text)
 import qualified Data.Text
@@ -65,13 +63,7 @@ import qualified System.IO.Error
 
 -- | Repl entry point
 main :: (MonadNix e t f m, MonadIO m, MonadMask m) =>  m ()
-main = main' Nothing
-
--- | Principled version allowing to pass initial value for context.
---
--- Passed value is stored in context with "input" key.
-main' :: (MonadNix e t f m, MonadIO m, MonadMask m) => Maybe (NValue t f m) -> m ()
-main' iniVal = initState iniVal >>= \s -> flip evalStateT s
+main = initState >>= \s -> flip evalStateT s
     $ System.Console.Repline.evalRepl
         banner
         cmd
@@ -148,8 +140,8 @@ defReplConfig = ReplConfig
   }
 
 -- | Create initial IState for REPL
-initState :: MonadNix e t f m => Maybe (NValue t f m) -> m (IState t f m)
-initState mIni = do
+initState :: MonadNix e t f m => m (IState t f m)
+initState = do
 
   builtins <- evalText "builtins"
 
@@ -157,8 +149,7 @@ initState mIni = do
 
   pure $ IState
     Nothing
-    (Data.HashMap.Lazy.fromList
-      $ ("builtins", builtins) : fmap ("input",) (Data.Maybe.maybeToList mIni))
+    (Data.HashMap.Lazy.fromList $ pure ("builtins", builtins))
     defReplConfig
       { cfgStrict = strict opts
       , cfgValues = values opts

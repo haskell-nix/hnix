@@ -29,6 +29,7 @@ import qualified Nix.Eval                      as Eval
 import           Nix.Fresh.Basic
 import           Nix.Json
 import           Nix.Options.Parser
+import           Nix.Scope
 import           Nix.Standard
 import           Nix.Thunk.Basic
 import qualified Nix.Type.Env                  as Env
@@ -102,7 +103,19 @@ main = do
         if evaluate opts
           then do
             val <- Nix.nixEvalExprLoc mpath expr
-            withNixContext mempty (Repl.main' $ pure val)
+            fromValueMay val >>= \case
+              -- val is an AttrsSet, use pushScope to pass it to repl
+              -- XXX: be explicit about this? infered via pushScope
+              --Just (as :: AttrSet (StdValue (StandardT (StdIdT IO)))) -> do
+              Just as ->
+                withNixContext mempty
+                  $ pushScope as
+                  $ Repl.main
+              Nothing ->
+                -- pass value as `input`
+                withNixContext mempty
+                  $ pushScope (M.singleton "input" val)
+                  $ Repl.main
           else withNixContext mempty Repl.main
 
   process opts mpath expr
