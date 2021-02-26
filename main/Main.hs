@@ -180,7 +180,7 @@ main = do
                 val <- readVar @(StandardT (StdIdT IO)) ref
                 case val of
                   Computed _    -> pure (k, Nothing)
-                  _ | descend   -> fmap (k,        ) $ forceEntry path nv
+                  _ | descend   -> (k,        ) <$> forceEntry path nv
                     | otherwise -> pure (k, Nothing)
               )
               (\ v -> pure (k, pure (Free v)))
