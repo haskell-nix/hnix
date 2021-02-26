@@ -116,7 +116,7 @@ unpackSymbolic
   :: (MonadVar m, MonadThunkId m, MonadCatch m)
   => Symbolic m
   -> m (NSymbolicF (NTypeF m (Symbolic m)))
-unpackSymbolic = flip demand $ readVar . getSV
+unpackSymbolic = demand $ readVar . getSV
 
 type MonadLint e m
   = ( Scoped (Symbolic m) m
@@ -140,11 +140,11 @@ renderSymbolic = unpackSymbolic >=> \case
       TNull  -> "null"
     TStr    -> pure "string"
     TList r -> do
-      x <- demand r renderSymbolic
+      x <- demand renderSymbolic r
       pure $ "[" <> x <> "]"
     TSet Nothing  -> pure "<any set>"
     TSet (Just s) -> do
-      x <- traverse (`demand` renderSymbolic) s
+      x <- traverse (demand renderSymbolic) s
       pure $ "{" <> show x <> "}"
     f@(TClosure p) -> do
       (args, sym) <- do
@@ -177,17 +177,30 @@ merge context = go
     (TPath, TPath) -> (TPath :) <$> go xs ys
     (TConstant ls, TConstant rs) ->
       (TConstant (ls `intersect` rs) :) <$> go xs ys
-    (TList l, TList r) -> demand l $ \l' -> demand r $ \r' -> do
-      m <- defer $ unify context l' r'
-      (TList m :) <$> go xs ys
+    (TList l, TList r) ->
+      demand
+        (\l' ->
+          demand
+            (\r' -> do
+              m <- defer $ unify context l' r'
+              (TList m :) <$> go xs ys
+            )
+            r
+        )
+        l
     (TSet x       , TSet Nothing ) -> (TSet x :) <$> go xs ys
     (TSet Nothing , TSet x       ) -> (TSet x :) <$> go xs ys
     (TSet (Just l), TSet (Just r)) -> do
       m <- sequenceA $ M.intersectionWith
         (\i j -> i >>= \i' ->
-          j
-            >>= \j' -> demand i'
-                  $ \i'' -> demand j' $ \j'' -> defer $ unify context i'' j''
+          j >>= \j' ->
+            demand
+              (\i'' ->
+                demand
+                  (defer . unify context i'')
+                  j'
+              )
+              i'
         )
         (pure <$> l)
         (pure <$> r)
@@ -273,9 +286,9 @@ instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
   defer :: m (Symbolic m) -> m (Symbolic m)
   defer = fmap ST . thunk
 
-  demand :: Symbolic m -> (Symbolic m -> m r) -> m r
-  demand (ST v) f = force (`demand` f) v
-  demand (SV v) f = f (SV v)
+  demand :: (Symbolic m -> m r) -> Symbolic m -> m r
+  demand f (ST v)= force (demand f) v
+  demand f (SV v)= f (SV v)
 
 instance MonadLint e m => MonadEval (Symbolic m) m where
   freeVariable var = symerr $ "Undefined variable '" <> Text.unpack var <> "'"
@@ -327,10 +340,13 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
   -- computed once.
   evalWith scope body = do
     s <- defer scope
-    pushWeakScope ?? body $ demand s $ unpackSymbolic >=> \case
-      NMany [TSet (Just s')] -> pure s'
-      NMany [TSet Nothing] -> error "NYI: with unknown"
-      _ -> throwError $ ErrorCall "scope must be a set in with statement"
+    pushWeakScope ?? body $
+      demand
+        (unpackSymbolic >=> \case
+          NMany [TSet (Just s')] -> pure s'
+          NMany [TSet Nothing] -> error "NYI: with unknown"
+          _ -> throwError $ ErrorCall "scope must be a set in with statement")
+        s
 
   evalIf cond t f = do
     t' <- t

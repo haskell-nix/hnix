@@ -12,6 +12,7 @@ module Nix.Effects.Basic where
 
 import           Control.Monad
 import           Control.Monad.State.Strict
+import           Data.Bool                      ( bool )
 import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List
@@ -45,23 +46,24 @@ import           GHC.DataSize
 defaultMakeAbsolutePath :: MonadNix e t f m => FilePath -> m FilePath
 defaultMakeAbsolutePath origPath = do
   origPathExpanded <- expandHomePath origPath
-  absPath          <- if isAbsolute origPathExpanded
-    then pure origPathExpanded
-    else do
-      cwd <- do
-        mres <- lookupVar "__cur_file"
-        case mres of
-          Nothing -> getCurrentDirectory
-          Just v  -> demand v $ \case
-            NVPath s -> pure $ takeDirectory s
-            val ->
-              throwError
-                $  ErrorCall
-                $  "when resolving relative path,"
-                <> " __cur_file is in scope,"
-                <> " but is not a path; it is: "
-                <> show val
-      pure $ cwd <///> origPathExpanded
+  absPath          <-
+    bool
+      (do
+        cwd <- do
+          mres <- lookupVar "__cur_file"
+          maybe
+            getCurrentDirectory
+            (demand
+              (\case
+                NVPath s -> pure $ takeDirectory s
+                val -> throwError $ ErrorCall $ "when resolving relative path, __cur_file is in scope, but is not a path; it is: " <> show val
+              )
+            )
+            mres
+        pure $ cwd <///> origPathExpanded
+      )
+      (pure origPathExpanded)
+      (isAbsolute origPathExpanded)
   removeDotDotIndirections <$> canonicalizePath absPath
 
 expandHomePath :: MonadFile m => FilePath -> m FilePath
@@ -94,10 +96,11 @@ defaultFindEnvPath = findEnvPathM
 findEnvPathM :: forall e t f m . MonadNix e t f m => FilePath -> m FilePath
 findEnvPathM name = do
   mres <- lookupVar "__nixPath"
-  case mres of
-    Nothing -> error "impossible"
-    Just x  -> demand x $ fromValue >=> \(l :: [NValue t f m]) ->
-      findPathBy nixFilePath l name
+  maybe
+    (error "impossible")
+    (demand (fromValue >=> \(l :: [NValue t f m]) ->
+      findPathBy nixFilePath l name))
+    mres
  where
   nixFilePath :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
   nixFilePath path = do
@@ -130,19 +133,33 @@ findPathBy finder ls name = do
     mpath
  where
   go :: Maybe FilePath -> NValue t f m -> m (Maybe FilePath)
-  go p@(Just _) _ = pure p
-  go Nothing l =
-    demand l $ fromValue >=> \(s :: HashMap Text (NValue t f m)) -> do
-      p <- resolvePath s
-      demand p $ fromValue >=> \(Path path) -> case M.lookup "prefix" s of
-        Nothing -> tryPath path mempty
-        Just pf -> demand pf $ fromValueMay >=> \case
-          Just (nsPfx :: NixString) ->
-            let pfx = stringIgnoreContext nsPfx
-            in  if not (Text.null pfx)
-                  then tryPath path (pure (Text.unpack pfx))
-                  else tryPath path mempty
-          _ -> tryPath path mempty
+  go p =
+    maybe
+      (demand
+        (fromValue >=> \(s :: HashMap Text (NValue t f m)) -> do
+          p <- resolvePath s
+          demand
+            (fromValue >=> \(Path path) ->
+              maybe
+                (tryPath path mempty)
+                (demand (
+                    fromValueMay >=> \case
+                      Just (nsPfx :: NixString) ->
+                        let pfx = stringIgnoreContext nsPfx
+                        in bool
+                            (tryPath path mempty)
+                            (tryPath path (pure (Text.unpack pfx)))
+                            (not $ Text.null pfx)
+                      _ -> tryPath path mempty
+                    )
+                )
+                (M.lookup "prefix" s)
+            )
+            p
+        )
+      )
+      (const . pure . pure)
+      p
 
   tryPath p (Just n) | n' : ns <- splitDirectories name, n == n' =
     finder $ p <///> joinPath ns
@@ -160,11 +177,11 @@ findPathBy finder ls name = do
 
 fetchTarball
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-fetchTarball = flip demand $ \case
+fetchTarball = demand $ \case
   NVSet s _ -> case M.lookup "url" s of
     Nothing ->
       throwError $ ErrorCall "builtins.fetchTarball: Missing url attribute"
-    Just url -> demand url $ go (M.lookup "sha256" s)
+    Just url -> demand (go (M.lookup "sha256" s)) url
   v@NVStr{} -> go Nothing v
   v ->
     throwError
@@ -196,16 +213,14 @@ fetchTarball = flip demand $ \case
   fetch :: Text -> Maybe (NValue t f m) -> m (NValue t f m)
   fetch uri Nothing =
     nixInstantiateExpr $ "builtins.fetchTarball \"" <> Text.unpack uri <> "\""
-  fetch url (Just t) = demand t $ fromValue >=> \nsSha ->
-    let sha = stringIgnoreContext nsSha
-    in  nixInstantiateExpr
-          $  "builtins.fetchTarball { "
-          <> "url    = \""
-          <> Text.unpack url
-          <> "\"; "
-          <> "sha256 = \""
-          <> Text.unpack sha
-          <> "\"; }"
+  fetch url (Just t) =
+    demand
+      (fromValue >=> \nsSha ->
+        let sha = stringIgnoreContext nsSha
+        in  nixInstantiateExpr
+          $ "builtins.fetchTarball { " <> "url    = \"" <> Text.unpack url <> "\"; " <> "sha256 = \"" <> Text.unpack sha <> "\"; }"
+      )
+      t
 
 defaultFindPath :: MonadNix e t f m => [NValue t f m] -> FilePath -> m FilePath
 defaultFindPath = findPathM

@@ -407,11 +407,11 @@ instance Monad m => MonadValue (Judgment s) (InferT s m) where
   defer  = id
 
   demand
-    :: Judgment s
-    -> ( Judgment s
+    :: ( Judgment s
       -> InferT s m r)
+    -> Judgment s
     -> InferT s m r
-  demand = flip ($)
+  demand = ($)
 
   inform
     :: Judgment s
@@ -564,17 +564,17 @@ instance MonadInfer m
   toValue (xs, _) =
     Judgment
       <$> foldrM go As.empty xs
-      <*> (concat <$> traverse (`demand` (pure . typeConstraints)) xs)
-      <*> (TSet True <$> traverse (`demand` (pure . inferredType)) xs)
-    where go x rest = demand x $ \x' -> pure $ As.merge (assumptions x') rest
+      <*> (concat <$> traverse (demand (pure . typeConstraints)) xs)
+      <*> (TSet True <$> traverse (demand (pure . inferredType)) xs)
+    where go x rest = demand (\x' -> pure $ As.merge (assumptions x') rest) x
 
 instance MonadInfer m => ToValue [Judgment s] (InferT s m) (Judgment s) where
   toValue xs =
     Judgment
       <$> foldrM go As.empty xs
-      <*> (concat <$> traverse (`demand` (pure . typeConstraints)) xs)
-      <*> (TList <$> traverse (`demand` (pure . inferredType)) xs)
-    where go x rest = demand x $ \x' -> pure $ As.merge (assumptions x') rest
+      <*> (concat <$> traverse (demand (pure . typeConstraints)) xs)
+      <*> (TList <$> traverse (demand (pure . inferredType)) xs)
+    where go x rest = demand (\x' -> pure $ As.merge (assumptions x') rest) x
 
 instance MonadInfer m => ToValue Bool (InferT s m) (Judgment s) where
   toValue _ = pure $ Judgment As.empty mempty typeBool

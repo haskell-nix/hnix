@@ -295,19 +295,22 @@ callFunc
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-callFunc fun arg = demand fun $ \fun' -> do
-  frames :: Frames <- asks (view hasLens)
-  when (length frames > 2000) $ throwError $ ErrorCall
-    "Function call stack exhausted"
-  case fun' of
-    NVClosure _params f -> do
-      f arg
-    NVBuiltin name f -> do
-      span <- currentPos
-      withFrame Info (Calling @m @(NValue t f m) name span) (f arg)
-    s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
-      demand f $ (`callFunc` s) >=> (`callFunc` arg)
-    x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show x
+callFunc fun arg =
+  demand
+    (\fun' -> do
+    frames :: Frames <- asks (view hasLens)
+    when (length frames > 2000) $ throwError $ ErrorCall "Function call stack exhausted"
+    case fun' of
+      NVClosure _params f -> do
+        f arg
+      NVBuiltin name f -> do
+        span <- currentPos
+        withFrame Info (Calling @m @(NValue t f m) name span) (f arg)
+      s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
+        demand ((`callFunc` s) >=> (`callFunc` arg)) f
+      x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show x
+    )
+    fun
 
 execUnaryOp
   :: (Framed e m, MonadCited t f m, Show t)

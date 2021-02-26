@@ -48,6 +48,7 @@ import           Nix.Render
 import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Thunk.Basic
+import           Nix.Utils                      ( free )
 import           Nix.Utils.Fix1
 import           Nix.Value
 import           Nix.Value.Monad
@@ -158,13 +159,16 @@ instance ( MonadAtomicRef m
   defer = fmap pure . thunk
 
   demand
-    :: StdValue m
-    -> ( StdValue m
+    :: ( StdValue m
       -> m r
       )
+    -> StdValue m
     -> m r
-  demand (Pure v) f = force (`demand` f) v
-  demand (Free v) f = f (Free v)
+  demand f v =
+    free
+      (force (demand f))
+      (const $ f v)
+      v
 
   inform
     :: StdValue m

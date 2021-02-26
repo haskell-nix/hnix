@@ -27,7 +27,7 @@ import           Nix                     hiding ( exec
                                                 )
 import           Nix.Scope
 import           Nix.Utils
-import           Nix.Value.Monad                (demand)
+import           Nix.Value.Monad                ( demand )
 
 import qualified Data.List
 import qualified Data.Maybe
@@ -395,11 +395,10 @@ completeFunc reversedPrev word
               -- Stop on last subField (we care about the keys at this level)
               [_] -> pure $ keys m
               f:fs ->
-                case Data.HashMap.Lazy.lookup f m of
-                  Nothing -> pure mempty
-                  Just e ->
-                    demand e
-                      (\e' -> (fmap . fmap) (("." <> f) <>) $ algebraicComplete fs e')
+                maybe
+                  (pure mempty)
+                  (demand (\e' -> (fmap . fmap) (("." <> f) <>) $ algebraicComplete fs e'))
+                  (Data.HashMap.Lazy.lookup f m)
 
       in case val of
         NVSet xs _ -> withMap xs

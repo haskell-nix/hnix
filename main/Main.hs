@@ -215,7 +215,7 @@ main = do
             _                              -> (True, True)
 
           forceEntry k v =
-            catch (pure <$> demand v pure) $ \(NixException frames) -> do
+            catch (pure <$> demand pure v) $ \(NixException frames) -> do
               liftIO
                 .   putStrLn
                 .   ("Exception forcing " <>)
