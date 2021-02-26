@@ -1449,19 +1449,21 @@ fetchurl v = demand v $ \case
  where
   go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
   go _msha = \case
-    NVStr ns -> noContextAttrs ns >>= getURL >>= \case -- msha
-      Left  e -> throwError e
-      Right p -> toValue p
+    NVStr ns -> noContextAttrs ns >>= getURL >>=
+      either -- msha
+        throwError
+        toValue
     v ->
       throwError
         $  ErrorCall
         $  "builtins.fetchurl: Expected URI or string, got "
         <> show v
 
-  noContextAttrs ns = case getStringNoContext ns of
-    Nothing ->
-      throwError $ ErrorCall $ "builtins.fetchurl: unsupported arguments to url"
-    Just t -> pure t
+  noContextAttrs ns =
+    maybe
+      (throwError $ ErrorCall $ "builtins.fetchurl: unsupported arguments to url")
+      pure
+      (getStringNoContext ns)
 
 partition_
   :: forall e t f m
