@@ -840,15 +840,10 @@ elemAt_
   -> NValue t f m
   -> m (NValue t f m)
 elemAt_ xs n = fromValue n >>= \n' -> fromValue xs >>= \xs' ->
-  case elemAt xs' n' of
-    Just a -> pure a
-    Nothing ->
-      throwError
-        $  ErrorCall
-        $  "builtins.elem: Index "
-        <> show n'
-        <> " too large for list of length "
-        <> show (length xs')
+  maybe
+    (throwError $ ErrorCall $ "builtins.elem: Index " <> show n' <> " too large for list of length " <> show (length xs'))
+    pure
+    (elemAt xs' n')
 
 genList
   :: forall e t f m
