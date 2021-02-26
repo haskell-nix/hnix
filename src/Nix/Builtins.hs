@@ -337,23 +337,26 @@ foldNixPath f z = do
     _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " <> show x
 
 nixPath :: MonadNix e t f m => m (NValue t f m)
-nixPath = fmap nvList $ flip foldNixPath mempty $ \p mn ty rest ->
-  pure
-    $ flip nvSet mempty ( M.fromList
-        [ case ty of
-          PathEntryPath -> ("path", nvPath p)
-          PathEntryURI ->
-            ( "uri"
-            , nvStr $ makeNixStringWithoutContext $ Text.pack p
-            )
+nixPath = fmap nvList $ flip foldNixPath mempty $
+  \p mn ty rest ->
+    pure $
+      flip nvSet
+        mempty
+        (M.fromList
+          [ case ty of
+            PathEntryPath -> ("path", nvPath p)
+            PathEntryURI ->
+              ( "uri"
+              , nvStr $ makeNixStringWithoutContext $ Text.pack p
+              )
 
-        , ( "prefix"
-          , nvStr
-            $ makeNixStringWithoutContext $ Text.pack $ fromMaybe "" mn
-          )
-        ]
-      )
-    : rest
+          , ( "prefix"
+            , nvStr
+              $ makeNixStringWithoutContext $ Text.pack $ fromMaybe "" mn
+            )
+          ]
+        )
+      : rest
 
 toString :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toString = coerceToString callFunc DontCopyToStore CoerceAny >=> toValue
