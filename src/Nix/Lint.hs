@@ -26,6 +26,7 @@ import           Control.Monad.Reader           ( MonadReader )
 import           Control.Monad.Ref
 import           Control.Monad.ST
 import           Control.Monad.Trans.Reader
+import           Data.Bool                      ( bool )
 import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List
@@ -132,11 +133,11 @@ renderSymbolic :: MonadLint e m => Symbolic m -> m String
 renderSymbolic = unpackSymbolic >=> \case
   NAny     -> pure "<any>"
   NMany xs -> fmap (intercalate ", ") $ forM xs $ \case
-    TConstant ys -> fmap (intercalate ", ") $ forM ys $ \case
-      TInt   -> pure "int"
-      TFloat -> pure "float"
-      TBool  -> pure "bool"
-      TNull  -> pure "null"
+    TConstant ys -> fmap (intercalate ", ") $ forM ys $ pure . \case
+      TInt   -> "int"
+      TFloat -> "float"
+      TBool  -> "bool"
+      TNull  -> "null"
     TStr    -> pure "string"
     TList r -> do
       x <- demand r renderSymbolic
@@ -238,17 +239,19 @@ unify context (SV x) (SV y) = do
       pure $ SV x
     (NMany xs, NMany ys) -> do
       m <- merge context xs ys
-      if null m
-        then do
+      bool
+        (do
+          writeVar x (NMany m)
+          writeVar y (NMany m)
+          packSymbolic (NMany m))
+        (do
               -- x' <- renderSymbolic (Symbolic x)
               -- y' <- renderSymbolic (Symbolic y)
           throwError $ ErrorCall "Cannot unify "
                   -- <> show x' <> " with " <> show y'
                   --  <> " in context: " <> show context
-        else do
-          writeVar x (NMany m)
-          writeVar y (NMany m)
-          packSymbolic (NMany m)
+        )
+        (null m)
 unify _ _ _ = error "The unexpected hath transpired!"
 
 -- These aren't worth defining yet, because once we move to Hindley-Milner,
