@@ -180,13 +180,6 @@ alterF f k m =
     $ f $ M.lookup k m
 
 
--- | Lambda analog of @maybe@ or @either@ for Free monad.
-free :: (a -> b) -> (f (Free f a) -> b) -> Free f a -> b
-free fP fF m =
-  case m of
-    Pure a -> fP a
-    Free fa -> fF fa
-
 list
   :: Foldable t
   => b -> (t a -> b) -> t a -> b
@@ -194,3 +187,7 @@ list e f l =
   if null l
     then e
     else f l
+-- | Lambda analog of @maybe@ or @either@ for Free monad.
+free :: (a -> b) -> (f (Free f a) -> b) -> Free f a -> b
+free fP _  (Pure a ) = fP a
+free _  fF (Free fa) = fF fa
