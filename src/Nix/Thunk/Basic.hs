@@ -21,7 +21,7 @@ import           Control.Monad.Catch
 
 import           Nix.Thunk
 import           Nix.Var
-import Data.Bool (bool)
+import           Nix.Utils          ( bool )
 
 data Deferred m v = Deferred (m v) | Computed v
     deriving (Functor, Foldable, Traversable)

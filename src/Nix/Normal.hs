@@ -26,7 +26,6 @@ import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
 import           Nix.Utils
-import Data.Bool (bool)
 
 newtype NormalLoop t f m = NormalLoop (NValue t f m)
     deriving Show

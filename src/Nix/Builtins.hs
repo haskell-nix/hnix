@@ -38,7 +38,6 @@ import qualified Data.Aeson                    as A
 import           Data.Align                     ( alignWith )
 import           Data.Array
 import           Data.Bits
-import           Data.Bool                         ( bool )
 import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString               as B
 import           Data.ByteString.Base16        as Base16

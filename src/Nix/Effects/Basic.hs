@@ -12,7 +12,6 @@ module Nix.Effects.Basic where
 
 import           Control.Monad
 import           Control.Monad.State.Strict
-import           Data.Bool                      ( bool )
 import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List

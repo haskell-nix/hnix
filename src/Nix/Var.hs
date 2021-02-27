@@ -16,7 +16,7 @@ import           Data.STRef
 import           Type.Reflection ((:~:)(Refl))
 
 import           Unsafe.Coerce
-import           Data.Bool          ( bool )
+import           Nix.Utils          ( bool )
 
 type Var m = Ref m
 

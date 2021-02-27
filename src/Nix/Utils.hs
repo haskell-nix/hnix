@@ -179,14 +179,21 @@ alterF f k m =
     )
     $ f $ M.lookup k m
 
+-- | From @Data.Bool ( bool )@.
+bool :: a -> a -> Bool -> a
+bool f _ False = f
+bool _ t True  = t
 
+-- | Analog for @bool@ or @maybe@, for list-like cons structures.
 list
   :: Foldable t
   => b -> (t a -> b) -> t a -> b
 list e f l =
-  if null l
-    then e
-    else f l
+  bool
+    (f l)
+    e
+    (null l)
+
 -- | Lambda analog of @maybe@ or @either@ for Free monad.
 free :: (a -> b) -> (f (Free f a) -> b) -> Free f a -> b
 free fP _  (Pure a ) = fP a
