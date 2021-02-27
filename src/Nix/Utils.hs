@@ -186,3 +186,11 @@ free fP fF m =
   case m of
     Pure a -> fP a
     Free fa -> fF fa
+
+list
+  :: Foldable t
+  => b -> (t a -> b) -> t a -> b
+list e f l =
+  if null l
+    then e
+    else f l

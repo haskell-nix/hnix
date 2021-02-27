@@ -104,5 +104,58 @@ instance ( Has e Options
       Provenance scope e@(Compose (Ann s _)) : _ ->
         withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceEff t)
 
-  further :: (m v -> m v) -> Cited u f m t -> m (Cited u f m t)
-  further f (Cited (NCited ps t)) = Cited . NCited ps <$> further f t
+  further :: Cited u f m t -> m (Cited u f m t)
+  further (Cited (NCited ps t)) = Cited . NCited ps <$> further t
+
+
+-- * Kleisli functor HOFs
+
+instance ( Has e Options
+         , Framed e m
+         , MonadThunkF t m v
+         , Typeable m
+         , Typeable f
+         , Typeable u
+         , MonadCatch m
+         )
+  => MonadThunkF (Cited u f m t) m v where
+
+  furtherF
+    :: ( Has e Options
+      , Framed e m
+      , MonadThunkF t m v
+      , Typeable m
+      , Typeable f
+      , Typeable u
+      , MonadCatch m
+      )
+    => (m v -> m v)
+    -> Cited u f m t
+    -> m (Cited u f m t)
+  furtherF k (Cited (NCited ps t)) = Cited . NCited ps <$> furtherF k t
+
+  queryMF :: (v -> m r) -> m r -> Cited u f m t -> m r
+  queryMF k m (Cited (NCited _ t)) = queryMF k m t
+
+  forceF :: (v -> m r) -> Cited u f m t -> m r
+  forceF k (Cited (NCited ps t)) =
+    catch go (throwError @ThunkLoop)
+   where
+    go =
+      list
+        (forceF k t)
+        (\ (Provenance scope e@(Compose (Ann s _)) : _) ->
+          withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceF k t))
+          ps
+
+  forceEffF :: (v -> m r) -> Cited u f m t -> m r
+  forceEffF k (Cited (NCited ps t)) = catch
+    go
+    (throwError @ThunkLoop)
+   where
+    go =
+      list
+        (forceEffF k t)
+        (\ (Provenance scope e@(Compose (Ann s _)) : _) ->
+          withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceEffF k t))
+        ps

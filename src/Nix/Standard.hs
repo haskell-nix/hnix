@@ -143,8 +143,34 @@ instance ( MonadAtomicRef m
   forceEff :: StdThunk m -> m (StdValue m)
   forceEff t = forceEff (_stdCited $ _stdThunk t)
 
-  further :: (m (StdValue m) -> m (StdValue m)) ->  StdThunk m -> m (StdThunk m)
-  further f t = StdThunk . StdCited <$> further f (_stdCited $ _stdThunk t)
+  further :: StdThunk m -> m (StdThunk m)
+  further t = StdThunk . StdCited <$> further (_stdCited $ _stdThunk t)
+
+
+-- * @instance MonadThunkF@ (Kleisli functor HOFs)
+
+instance ( MonadAtomicRef m
+         , MonadCatch m
+         , Typeable m
+         , MonadReader (Context m (StdValue m)) m
+         , MonadThunkId m
+         )
+  => MonadThunkF (StdThunk m) m (StdValue m) where
+
+  queryMF :: (StdValue m -> m r) -> m r -> StdThunk m -> m r
+  queryMF k b x = queryMF k b (_stdCited (_stdThunk x))
+
+  forceF :: (StdValue m -> m r) -> StdThunk m -> m r
+  forceF k t = forceF k (_stdCited $ _stdThunk t)
+
+  forceEffF :: (StdValue m -> m r) -> StdThunk m -> m r
+  forceEffF k t = forceEffF k (_stdCited $ _stdThunk t)
+
+  furtherF :: (m (StdValue m) -> m (StdValue m)) ->  StdThunk m -> m (StdThunk m)
+  furtherF k t = StdThunk . StdCited <$> furtherF k (_stdCited $ _stdThunk t)
+
+
+-- * @instance MonadValue@
 
 instance ( MonadAtomicRef m
          , MonadCatch m
@@ -176,8 +202,9 @@ instance ( MonadAtomicRef m
       -> m (StdValue m)
       )
     -> m (StdValue m)
-  inform (Pure t) f = Pure <$> further f t
+  inform (Pure t) f = Pure <$> furtherF f t
   inform (Free v) f = Free <$> bindNValue' id (`inform` f) v
+
 
 {------------------------------------------------------------------------}
 
