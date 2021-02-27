@@ -58,22 +58,24 @@ instance ( Has e Options
   thunk mv = do
     opts :: Options <- asks (view hasLens)
 
-    if thunks opts
-      then do
+    bool
+      (fmap (Cited . NCited mempty) . thunk $ mv)
+      (do
         frames :: Frames <- asks (view hasLens)
 
         -- Gather the current evaluation context at the time of thunk
         -- creation, and record it along with the thunk.
         let go (fromException ->
                     Just (EvaluatingExpr scope
-                             (Fix (Compose (Ann s e))))) =
+                              (Fix (Compose (Ann s e))))) =
                 let e' = Compose (Ann s (Nothing <$ e))
                 in [Provenance scope e']
             go _ = mempty
             ps = concatMap (go . frame) frames
 
         fmap (Cited . NCited ps) . thunk $ mv
-      else fmap (Cited . NCited mempty) . thunk $ mv
+      )
+      (thunks opts)
 
   thunkId :: Cited u f m t -> ThunkId m
   thunkId (Cited (NCited _ t)) = thunkId @_ @m t
