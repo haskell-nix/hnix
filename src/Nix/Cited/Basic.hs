@@ -88,23 +88,10 @@ instance ( Has e Options
   --   it in a NixException, so we catch and re-throw it here using
   --   'throwError' from Frames.hs.
   force :: Cited u f m t -> m v
-  force (Cited (NCited ps t)) =
-    catch go (throwError @ThunkLoop)
-   where
-    go = case ps of
-      [] -> force t
-      Provenance scope e@(Compose (Ann s _)) : _ ->
-        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (force t)
+  force (Cited (NCited ps t)) = handleDisplayProvenance ps $ force t
 
   forceEff :: Cited u f m t -> m v
-  forceEff (Cited (NCited ps t)) = catch
-    go
-    (throwError @ThunkLoop)
-   where
-    go = case ps of
-      [] -> forceEff t
-      Provenance scope e@(Compose (Ann s _)) : _ ->
-        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceEff t)
+  forceEff (Cited (NCited ps t)) = handleDisplayProvenance ps $ forceEff t
 
   further :: Cited u f m t -> m (Cited u f m t)
   further (Cited (NCited ps t)) = Cited . NCited ps <$> further t
@@ -122,42 +109,46 @@ instance ( Has e Options
          )
   => MonadThunkF (Cited u f m t) m v where
 
-  furtherF
-    :: ( Has e Options
-      , Framed e m
-      , MonadThunkF t m v
-      , Typeable m
-      , Typeable f
-      , Typeable u
-      , MonadCatch m
-      )
-    => (m v -> m v)
-    -> Cited u f m t
-    -> m (Cited u f m t)
-  furtherF k (Cited (NCited ps t)) = Cited . NCited ps <$> furtherF k t
-
   queryMF :: (v -> m r) -> m r -> Cited u f m t -> m r
   queryMF k m (Cited (NCited _ t)) = queryMF k m t
 
   forceF :: (v -> m r) -> Cited u f m t -> m r
-  forceF k (Cited (NCited ps t)) =
-    catch go (throwError @ThunkLoop)
-   where
-    go =
-      list
-        (forceF k t)
-        (\ (Provenance scope e@(Compose (Ann s _)) : _) ->
-          withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceF k t))
-          ps
+  forceF k (Cited (NCited ps t)) = handleDisplayProvenance ps $ forceF k t
 
   forceEffF :: (v -> m r) -> Cited u f m t -> m r
-  forceEffF k (Cited (NCited ps t)) = catch
-    go
+  forceEffF k (Cited (NCited ps t)) = handleDisplayProvenance ps $ forceEffF k t
+-- ** Utils
+
+handleDisplayProvenance
+  :: (MonadCatch m
+    , Typeable m
+    , Typeable v
+    , Has e Frames
+    , MonadReader e m
+    )
+  => [Provenance m v]
+  -> m a
+  -> m a
+handleDisplayProvenance ps f =
+  catch
+    (displayProvenance ps f)
     (throwError @ThunkLoop)
-   where
-    go =
-      list
-        (forceEffF k t)
-        (\ (Provenance scope e@(Compose (Ann s _)) : _) ->
-          withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceEffF k t))
-        ps
+
+displayProvenance
+  :: (MonadThrow m
+    , MonadReader e m
+    , Has e Frames
+    , Typeable m
+    , Typeable v
+    )
+  => [Provenance m v]
+  -> m a
+  -> m a
+displayProvenance ps f =
+  list
+    id
+    (\ (Provenance scope e@(Compose (Ann s _)) : _) ->
+      withFrame Info (ForcingExpr scope (wrapExprLoc s e))
+    )
+    ps
+    f
