@@ -48,7 +48,7 @@ class MonadThunkId m => MonadThunk t m a | t -> m, t -> a where
   --   structure). For pure values represented as thunks, returns mempty.
   thunkId  :: t -> ThunkId m
 
-  queryM   :: (a -> m r) -> m r -> t -> m r
+  queryM   :: m a -> t -> m a
   force    :: t -> m a
   forceEff :: t -> m a
 

@@ -42,7 +42,9 @@ instance (MonadBasicThunk m, MonadCatch m)
   => MonadThunk (NThunkF m v) m v where
   thunk = buildThunk
   thunkId (Thunk n _ _) = n
-  queryM   = queryThunk
+  queryM :: m v -> NThunkF m v -> m v
+  queryM = queryThunk
+
   force    = forceThunk
   forceEff = forceEffects
   further  = furtherThunk
@@ -64,26 +66,12 @@ buildThunk action = do
 -- How query operates? Is it normal that query on request if the thunk is locked - returns the thunk
 -- and when the value calculation is deferred - returns the thunk, it smells fishy.
 -- And because the query's impemetation are not used, only API - they pretty much could survive being that fishy.
-queryThunk :: MonadVar m
-  => (v -> m a)
-  -> m a
+queryThunk
+  :: (MonadVar m, MonadCatch m, Show (ThunkId m))
+  => m v
   -> NThunkF m v
-  -> m a
-queryThunk k n (Thunk _ active ref) = do
-  thunkIsAvaliable <- not <$> atomicModifyVar active (True, )
-  bool
-    n
-    go
-    thunkIsAvaliable
-   where
-    go = do
-      eres <- readVar ref
-      res  <-
-        case eres of
-          Computed v   -> k v
-          Deferred _mv -> n
-      _ <- atomicModifyVar active (False, )
-      pure res
+  -> m v
+queryThunk = queryMF pure
 
 forceThunk :: (MonadVar m, MonadCatch m, Show (ThunkId m))
   => NThunkF m v
@@ -108,25 +96,25 @@ instance (MonadVar m, MonadCatch m, Show (ThunkId m))
 
   queryMF
     :: ()
-    => (v -> m a)
-    -> m a
+    => (v -> m r)
+    -> m r
     -> NThunkF m v
-    -> m a
+    -> m r
   queryMF k n (Thunk _ active ref) = do
     thunkIsAvaliable <- not <$> atomicModifyVar active (True, )
     bool
       n
       go
       thunkIsAvaliable
-    where
-      go = do
-        eres <- readVar ref
-        res  <-
-          case eres of
-            Computed v   -> k v
-            Deferred _mv -> n
-        _ <- atomicModifyVar active (False, )
-        pure res
+   where
+    go = do
+      eres <- readVar ref
+      res  <-
+        case eres of
+          Computed v   -> k v
+          Deferred _mv -> n
+      _ <- atomicModifyVar active (False, )
+      pure res
 
   forceF
     :: (MonadCatch m, Show (ThunkId m))
