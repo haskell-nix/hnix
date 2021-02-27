@@ -9,7 +9,13 @@
 
 
 
-module Nix.Thunk.Basic (NThunkF(..), Deferred(..), MonadBasicThunk) where
+module Nix.Thunk.Basic
+  ( NThunkF(..)
+  , Deferred(..)
+  , MonadBasicThunk
+  , forceF
+  , forceEffF
+  ) where
 
 import           Control.Exception       hiding ( catch )
 import           Control.Monad.Catch
@@ -74,46 +80,15 @@ queryThunk k n (Thunk _ active ref) = do
       pure res
 
 forceThunk
-  :: forall m v
-   . (MonadVar m, MonadThrow m, MonadCatch m, Show (ThunkId m))
+  :: (MonadVar m, MonadThrow m, MonadCatch m, Show (ThunkId m))
   => NThunkF m v
   -> m v
-forceThunk (Thunk n active ref) = do
-  eres <- readVar ref
-  case eres of
-    Computed v      -> pure v
-    Deferred action -> do
-      nowActive <- atomicModifyVar active (True, )
-      bool
-        (do
-          v <- catch action $ \(e :: SomeException) -> do
-            _ <- atomicModifyVar active (False, )
-            throwM e
-          _ <- atomicModifyVar active (False, )
-          writeVar ref (Computed v)
-          pure v
-        )
-        (throwM $ ThunkLoop $ show n)
-        nowActive
+forceThunk = forceF pure
 
 forceEffects :: MonadVar m
   => NThunkF m v
   -> m v
-forceEffects (Thunk _ active ref) = do
-  nowActive <- atomicModifyVar active (True, )
-  bool
-    (do
-      eres <- readVar ref
-      case eres of
-        Computed v      -> pure v
-        Deferred action -> do
-          v <- action
-          writeVar ref (Computed v)
-          _ <- atomicModifyVar active (False, )
-          pure v
-    )
-    (pure $ error "Loop detected")
-    nowActive
+forceEffects = forceEffF pure
 
 furtherThunk :: MonadVar m
   => (m v -> m v)
@@ -124,3 +99,50 @@ furtherThunk k t@(Thunk _ _ ref) = do
     Computed _ -> (x, x)
     Deferred d -> (Deferred (k d), x)
   pure t
+
+
+-- * Kleisli functor HOFs
+
+forceF
+  :: forall m v a
+   . (MonadVar m, MonadThrow m, MonadCatch m, Show (ThunkId m))
+  => (v -> m a)
+  -> NThunkF m v
+  -> m a
+forceF k (Thunk n active ref) = do
+  eres <- readVar ref
+  case eres of
+    Computed v      -> k v
+    Deferred action -> do
+      nowActive <- atomicModifyVar active (True, )
+      bool
+        (do
+          v <- catch action $ \(e :: SomeException) -> do
+            _ <- atomicModifyVar active (False, )
+            throwM e
+          _ <- atomicModifyVar active (False, )
+          writeVar ref (Computed v)
+          k v
+        )
+        (throwM $ ThunkLoop $ show n)
+        nowActive
+
+forceEffF :: MonadVar m
+  => (v -> m r)
+  -> NThunkF m v
+  -> m r
+forceEffF k (Thunk _ active ref) = do
+  nowActive <- atomicModifyVar active (True, )
+  bool
+    (do
+      eres <- readVar ref
+      case eres of
+        Computed v      -> k v
+        Deferred action -> do
+          v <- action
+          writeVar ref (Computed v)
+          _ <- atomicModifyVar active (False, )
+          k v
+    )
+    (pure $ error "Loop detected")
+    nowActive
