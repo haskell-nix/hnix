@@ -8,13 +8,14 @@
   * [(link)](https://github.com/haskell-nix/hnix/pull/863/files) `Nix.Thunk`: `class MonadThunk t m a | t -> m, t -> a` : `force{,Eff}`. Moved the functional argument out of the function. Now it only accepts and forces thunk. Please use `=<< force t` or `<=< force` for the nice code. All their implementations got more straigh-forward to use and `force*`s now tail recurse.
       * `force`
       * `forceThunk`
-      * `forceEff`
-      * `forceEffects`
+      
+      If still want to use old `force*` - the `force{,Eff}F` are provided.
+      
 
   * [(link)](https://github.com/haskell-nix/hnix/pull/859/files) `Nix.Thunk`: `class MonadThunk t m a | t -> m, t -> a` : unflipped the arguments. All their implementations got more straigh-forward to use and some functions now tail recurse.
     * Simply flip the first two arguments for:
       * `further`
-      * `furtherThunk`
+      * `furtherEff`
     * Simply switch the 1<->3 arguments in:
       * `querryM`
       * `querryThunk`
