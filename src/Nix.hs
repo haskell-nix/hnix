@@ -28,10 +28,13 @@ module Nix
   )
 where
 
-import           Control.Applicative
+import           Control.Applicative            ( Alternative )
 import           Control.Arrow                  ( second )
-import           Control.Monad.Reader
-import           Data.Fix
+import           Control.Monad.Reader           ( MonadIO
+                                                , asks
+                                                , (<=<)
+                                                )
+import           Data.Fix                       ( Fix )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Text                     as Text
 import qualified Data.Text.Read                as Text
