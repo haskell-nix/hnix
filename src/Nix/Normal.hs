@@ -26,6 +26,7 @@ import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
 import           Nix.Utils
+import Data.Bool (bool)
 
 newtype NormalLoop t f m = NormalLoop (NValue t f m)
     deriving Show
@@ -40,10 +41,9 @@ normalizeValue
      , MonadDataErrorContext t f m
      , Ord (ThunkId m)
      )
-  => (forall r . (NValue t f m -> m r) -> t -> m r)
-  -> NValue t f m
+  => NValue t f m
   -> m (NValue t f m)
-normalizeValue f tnk = run $ iterNValueM run go (fmap Free . sequenceNValue' run) tnk
+normalizeValue v = run $ iterNValueM run go (fmap Free . sequenceNValue' run) v
  where
   start = 0 :: Int
   table = mempty
@@ -59,14 +59,16 @@ normalizeValue f tnk = run $ iterNValueM run go (fmap Free . sequenceNValue' run
     -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValue t f m)
   go t k = do
     b <- seen t
-    if b
-      then pure $ pure t
-      else do
+    bool
+      (do
         i <- ask
         when (i > 2000)
           $ error "Exceeded maximum normalization depth of 2000 levels"
         --  2021-02-22: NOTE: `normalizeValue` should be adopted to work without fliping of the force (f)
-        lifted (lifted (`f` t)) $ local succ . k
+        lifted (lifted $ \f -> f =<< force t) $ local succ . k
+      )
+      (pure $ pure t)
+      b
 
   seen t = do
     let tid = thunkId t
@@ -85,7 +87,7 @@ normalForm
      )
   => NValue t f m
   -> m (NValue t f m)
-normalForm t = stubCycles <$> (force `normalizeValue` t)
+normalForm t = stubCycles <$> normalizeValue t
 
 normalForm_
   :: ( Framed e m
@@ -95,7 +97,7 @@ normalForm_
      )
   => NValue t f m
   -> m ()
-normalForm_ t = void (forceEff `normalizeValue` t)
+normalForm_ t = void (normalizeValue t)
 
 stubCycles
   :: forall t f m

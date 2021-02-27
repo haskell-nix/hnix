@@ -662,7 +662,7 @@ describeValue = \case
 showValueType :: (MonadThunk t m (NValue t f m), Comonad f)
   => NValue t f m
   -> m String
-showValueType (Pure t) = force showValueType t
+showValueType (Pure t) = showValueType =<< force t
 showValueType (Free (NValue (extract -> v))) =
   pure $ describeValue $ valueType v
 
