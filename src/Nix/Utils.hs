@@ -100,8 +100,10 @@ lifted f k = liftWith (\run -> f (run . k)) >>= restoreT . pure
 freeToFix :: Functor f => (a -> Fix f) -> Free f a -> Fix f
 freeToFix f = go
  where
-  go (Pure a) = f a
-  go (Free v) = Fix (fmap go v)
+  go =
+    free
+      f
+      (Fix . fmap go)
 
 fixToFree :: Functor f => Fix f -> Free f a
 fixToFree = Free . go where go (Fix f) = fmap (Free . go) f
@@ -169,6 +171,18 @@ alterF
   -> k
   -> HashMap k v
   -> f (HashMap k v)
-alterF f k m = f (M.lookup k m) <&> \case
-  Nothing -> M.delete k m
-  Just v  -> M.insert k v m
+alterF f k m =
+  fmap
+    (maybe
+      (M.delete k m)
+      (\ v -> M.insert k v m)
+    )
+    $ f $ M.lookup k m
+
+
+-- | Lambda analog of @maybe@ or @either@ for Free monad.
+free :: (a -> b) -> (f (Free f a) -> b) -> Free f a -> b
+free fP fF m =
+  case m of
+    Pure a -> fP a
+    Free fa -> fF fa

@@ -115,9 +115,10 @@ eval (NSym "__curPos") = evalCurPos
 
 eval (NSym var       ) = do
   mres <- lookupVar var
-  case mres of
-    Just x  -> demand x $ evaledSym var
-    Nothing -> freeVariable var
+  maybe
+    (freeVariable var)
+    (demand (evaledSym var))
+    mres
 
 eval (NConstant    x      ) = evalConstant x
 eval (NStr         str    ) = evalString str
@@ -176,7 +177,7 @@ evalWithAttrSet aset body = do
   -- computed once.
   scope <- currentScopes :: m (Scopes m v)
   s     <- defer $ withScopes scope aset
-  let s' = demand s $ fmap fst . fromValue @(AttrSet v, AttrSet SourcePos)
+  let s' = demand (fmap fst . fromValue @(AttrSet v, AttrSet SourcePos)) s
   pushWeakScope s' body
 
 attrSetAlter
@@ -188,9 +189,7 @@ attrSetAlter
   -> AttrSet SourcePos
   -> m v
   -> m (AttrSet (m v), AttrSet SourcePos)
-attrSetAlter [] _ _ _ _ =
-  evalError @v $ ErrorCall "invalid selector with no components"
-
+attrSetAlter [] _ _ _ _ = evalError @v $ ErrorCall "invalid selector with no components"
 attrSetAlter (k : ks) pos m p val = case M.lookup k m of
   Nothing | null ks   -> go
           | otherwise -> recurse M.empty M.empty
@@ -199,7 +198,7 @@ attrSetAlter (k : ks) pos m p val = case M.lookup k m of
     -> go
     | otherwise
     -> x >>= fromValue @(AttrSet v, AttrSet SourcePos) >>= \(st, sp) ->
-      recurse (demand ?? pure <$> st) sp
+      recurse (demand pure <$> st) sp
  where
   go = pure (M.insert k val m, M.insert k pos p)
 
@@ -258,7 +257,7 @@ evalBinds recursive binds = do
     finalValue >>= fromValue >>= \(o', p') ->
           -- jww (2018-05-09): What to do with the key position here?
                                               pure $ fmap
-      (\(k, v) -> ([k], fromMaybe pos (M.lookup k p'), demand v pure))
+      (\(k, v) -> ([k], fromMaybe pos (M.lookup k p'), demand pure v))
       (M.toList o')
 
   go _ (NamedVar pathExpr finalValue pos) = do
@@ -285,21 +284,29 @@ evalBinds recursive binds = do
       result     -> [result]
 
   go scope (Inherit ms names pos) =
-    fmap catMaybes $ forM names $ evalSetterKeyName >=> \case
-      Nothing  -> pure Nothing
-      Just key -> pure $ Just
-        ( [key]
-        , pos
-        , do
-          mv <- case ms of
-            Nothing -> withScopes scope $ lookupVar key
-            Just s ->
-              s >>= fromValue @(AttrSet v, AttrSet SourcePos) >>= \(attrset, _) ->
-                clearScopes @v $ pushScope attrset $ lookupVar key
-          case mv of
-            Nothing -> attrMissing (key :| []) Nothing
-            Just v  -> demand v pure
+    fmap catMaybes $ forM names $ evalSetterKeyName >=>
+      (pure . maybe
+        Nothing
+        (\ key -> pure
+          ([key]
+          , pos
+          , do
+            mv <-
+              maybe
+                (withScopes scope $ lookupVar key)
+                (\ s ->
+                    --  2021-02-25: NOTE: This is obviously a do block.
+                    -- In the middle of the huge move, can not test refactor compilation.
+                  s >>= fromValue @(AttrSet v, AttrSet SourcePos) >>= \(attrset, _) ->
+                    clearScopes @v $ pushScope attrset $ lookupVar key)
+                ms
+            maybe
+              (attrMissing (key :| []) Nothing)
+              (demand pure)
+              mv
+          )
         )
+      )
 
   buildResult
     :: Scopes m v
@@ -330,8 +337,8 @@ evalSelect aset attr = do
   extract x path@(k :| ks) = fromValueMay x >>= \case
     Just (s :: AttrSet v, p :: AttrSet SourcePos)
       | Just t <- M.lookup k s -> case ks of
-        []     -> pure $ Right $ demand t pure
-        y : ys -> demand t $ extract ?? (y :| ys)
+        []     -> pure $ pure $ demand pure t
+        y : ys -> demand (extract ?? (y :| ys)) t
       | otherwise -> Left . (, path) <$> toValue (s, p)
     Nothing -> pure $ Left (x, path)
 
@@ -342,10 +349,10 @@ evalGetterKeyName
    . (MonadEval v m, FromValue NixString m v)
   => NKeyName (m v)
   -> m Text
-evalGetterKeyName = evalSetterKeyName >=> \case
-  Just k -> pure k
-  Nothing ->
-    evalError @v $ ErrorCall "value is null while a string was expected"
+evalGetterKeyName = evalSetterKeyName >=>
+  maybe
+    (evalError @v $ ErrorCall "value is null while a string was expected")
+    pure
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *binding* a value
@@ -356,9 +363,10 @@ evalSetterKeyName
 evalSetterKeyName = \case
   StaticKey k -> pure (pure k)
   DynamicKey k ->
-    runAntiquoted "\n" assembleString (>>= fromValueMay) k <&> \case
-      Just ns -> Just (stringIgnoreContext ns)
-      _       -> mempty
+    runAntiquoted "\n" assembleString (>>= fromValueMay) k <&>
+      maybe
+        mempty
+        (pure . stringIgnoreContext)
 
 assembleString
   :: forall v m

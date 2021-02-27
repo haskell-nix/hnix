@@ -110,10 +110,14 @@ evaluateExpression mpath evaluator handler expr = do
   args <- traverse (traverse eval') $ fmap (second parseArg) (arg opts) <> fmap
     (second mkStr)
     (argstr opts)
-  evaluator mpath expr >>= \f -> demand f $ \f' ->
-    processResult handler =<< case f' of
-      NVClosure _ g -> g (argmap args)
-      _             -> pure f
+  evaluator mpath expr >>= \f ->
+    demand
+      (\f' ->
+        processResult handler =<< case f' of
+          NVClosure _ g -> g (argmap args)
+          _             -> pure f
+      )
+      f
  where
   parseArg s = case parseNixText s of
     Success x   -> x
@@ -137,29 +141,26 @@ processResult h val = do
  where
   go :: [Text.Text] -> NValue t f m -> m a
   go [] v = h v
-  go ((Text.decimal -> Right (n,"")) : ks) v = demand v $ \case
-    NVList xs -> case ks of
-      [] -> h (xs !! n)
-      _  -> go ks (xs !! n)
-    _ ->
-      errorWithoutStackTrace
-        $  "Expected a list for selector '"
-        <> show n
-        <> "', but got: "
-        <> show v
-  go (k : ks) v = demand v $ \case
-    NVSet xs _ -> case M.lookup k xs of
-      Nothing ->
-        errorWithoutStackTrace
-          $  "Set does not contain key '"
-          <> Text.unpack k
-          <> "'"
-      Just v' -> case ks of
-        [] -> h v'
-        _  -> go ks v'
-    _ ->
-      errorWithoutStackTrace
-        $  "Expected a set for selector '"
-        <> Text.unpack k
-        <> "', but got: "
-        <> show v
+  go ((Text.decimal -> Right (n,"")) : ks) v =
+    demand
+      (\case
+        NVList xs ->
+          case ks of
+            [] -> h (xs !! n)
+            _  -> go ks (xs !! n)
+        _ -> errorWithoutStackTrace $ "Expected a list for selector '" <> show n <> "', but got: " <> show v
+      )
+      v
+  go (k : ks) v =
+    demand
+      (\case
+        NVSet xs _ ->
+          maybe
+            (errorWithoutStackTrace $ "Set does not contain key '" <> Text.unpack k <> "'")
+            (case ks of
+              [] -> h
+              _  -> go ks)
+          (M.lookup k xs)
+        _ -> errorWithoutStackTrace $ "Expected a set for selector '" <> Text.unpack k <> "', but got: " <> show v
+      )
+      v

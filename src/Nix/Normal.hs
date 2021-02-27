@@ -132,4 +132,4 @@ dethunk
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
   => t
   -> m (NValue t f m)
-dethunk t = queryM removeEffects (pure opaque) t
+dethunk = queryM removeEffects (pure opaque)

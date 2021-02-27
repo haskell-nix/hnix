@@ -50,7 +50,7 @@ import           Data.List                      ( delete
                                                 )
 import           Data.Map                       ( Map )
 import qualified Data.Map                      as Map
-import           Data.Maybe                     ( fromJust )
+import           Data.Maybe                     ( fromJust, fromMaybe )
 import qualified Data.Set                      as Set
 import           Data.Text                      ( Text )
 import           Nix.Atoms
@@ -407,11 +407,11 @@ instance Monad m => MonadValue (Judgment s) (InferT s m) where
   defer  = id
 
   demand
-    :: Judgment s
-    -> ( Judgment s
+    :: ( Judgment s
       -> InferT s m r)
+    -> Judgment s
     -> InferT s m r
-  demand = flip ($)
+  demand = ($)
 
   inform
     :: Judgment s
@@ -554,9 +554,9 @@ instance MonadInfer m
     let sing _ = Judgment As.empty mempty
     pure $ pure (M.mapWithKey sing xs, M.empty)
   fromValueMay _ = pure mempty
-  fromValue = fromValueMay >=> \case
-    Just v  -> pure v
-    Nothing -> pure (M.empty, M.empty)
+  fromValue = fromValueMay >=>
+    pure . fromMaybe
+      (M.empty, M.empty)
 
 instance MonadInfer m
   => ToValue (AttrSet (Judgment s), AttrSet SourcePos)
@@ -564,17 +564,17 @@ instance MonadInfer m
   toValue (xs, _) =
     Judgment
       <$> foldrM go As.empty xs
-      <*> (concat <$> traverse (`demand` (pure . typeConstraints)) xs)
-      <*> (TSet True <$> traverse (`demand` (pure . inferredType)) xs)
-    where go x rest = demand x $ \x' -> pure $ As.merge (assumptions x') rest
+      <*> (concat <$> traverse (demand (pure . typeConstraints)) xs)
+      <*> (TSet True <$> traverse (demand (pure . inferredType)) xs)
+    where go x rest = demand (\x' -> pure $ As.merge (assumptions x') rest) x
 
 instance MonadInfer m => ToValue [Judgment s] (InferT s m) (Judgment s) where
   toValue xs =
     Judgment
       <$> foldrM go As.empty xs
-      <*> (concat <$> traverse (`demand` (pure . typeConstraints)) xs)
-      <*> (TList <$> traverse (`demand` (pure . inferredType)) xs)
-    where go x rest = demand x $ \x' -> pure $ As.merge (assumptions x') rest
+      <*> (concat <$> traverse (demand (pure . typeConstraints)) xs)
+      <*> (TList <$> traverse (demand (pure . inferredType)) xs)
+    where go x rest = demand (\x' -> pure $ As.merge (assumptions x') rest) x
 
 instance MonadInfer m => ToValue Bool (InferT s m) (Judgment s) where
   toValue _ = pure $ Judgment As.empty mempty typeBool
@@ -583,10 +583,12 @@ infer :: MonadInfer m => NExpr -> InferT s m (Judgment s)
 infer = foldFix Eval.eval
 
 inferTop :: Env -> [(Text, NExpr)] -> Either InferError Env
-inferTop env []                = Right env
-inferTop env ((name, ex) : xs) = case inferExpr env ex of
-  Left  err -> Left err
-  Right ty  -> inferTop (extend env (name, ty)) xs
+inferTop env []                = pure env
+inferTop env ((name, ex) : xs) =
+  either
+    Left
+    (\ ty -> inferTop (extend env (name, ty)) xs)
+    (inferExpr env ex)
 
 normalizeScheme :: Scheme -> Scheme
 normalizeScheme (Forall _ body) = Forall (fmap snd ord) (normtype body)
@@ -628,7 +630,7 @@ runSolver :: Monad m => Solver m a -> m (Either [TypeError] [a])
 runSolver (Solver s) = do
   res <- runStateT (observeAllT s) mempty
   pure $ case res of
-    (x : xs, _ ) -> Right (x : xs)
+    (x : xs, _ ) -> pure (x : xs)
     (_     , es) -> Left (nub es)
 
 -- | The empty substitution

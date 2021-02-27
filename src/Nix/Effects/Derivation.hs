@@ -7,7 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
- 
+
 
 module Nix.Effects.Derivation ( defaultDerivationStrict ) where
 
@@ -18,6 +18,7 @@ import           Control.Monad                  ( (>=>), forM, when )
 import           Control.Monad.Writer           ( join, lift )
 import           Control.Monad.State            ( MonadState, gets, modify )
 
+import           Data.Bool                      ( bool )
 import           Data.Char                      ( isAscii, isAlphaNum )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.HashMap.Strict           as MS
@@ -304,21 +305,29 @@ buildDerivationWithContext drvAttrs = do
       hashMode    <- getAttrOr "outputHashMode"    Flat    $ extractNoCtx >=> parseHashMode
       outputs     <- getAttrOr "outputs"           ["out"] $ mapM (fromValue' >=> extractNoCtx)
 
-      mFixedOutput <- case mHash of
-        Nothing -> pure Nothing
-        Just hash -> do
-          when (outputs /= ["out"]) $ lift $ throwError $ ErrorCall $ "Multiple outputs are not supported for fixed-output derivations"
-          hashType <- getAttr "outputHashAlgo" $ extractNoCtx
-          digest <- lift $ either (throwError . ErrorCall) pure $ Store.mkNamedDigest hashType hash
-          pure $ pure digest
+      mFixedOutput <-
+        maybe
+          (pure Nothing)
+          (\ hash -> do
+            when (outputs /= ["out"]) $ lift $ throwError $ ErrorCall $ "Multiple outputs are not supported for fixed-output derivations"
+            hashType <- getAttr "outputHashAlgo" extractNoCtx
+            digest <- lift $ either (throwError . ErrorCall) pure $ Store.mkNamedDigest hashType hash
+            pure $ pure digest)
+          mHash
 
       -- filter out null values if needed.
-      attrs <- if not ignoreNulls
-        then pure drvAttrs
-        else M.mapMaybe id <$> forM drvAttrs (demand' ?? (\case
-            NVConstant NNull -> pure Nothing
-            value -> pure $ pure value
-          ))
+      attrs <-
+        bool
+          (pure drvAttrs)
+          (M.mapMaybe id <$> forM drvAttrs
+            (demand'
+              (pure . \case
+                NVConstant NNull -> Nothing
+                value -> pure value
+              )
+            )
+          )
+          ignoreNulls
 
       env <- if useJson
         then do
@@ -332,14 +341,15 @@ buildDerivationWithContext drvAttrs = do
 
       pure $ defaultDerivation { platform, builder, args, env,  hashMode, useJson
         , name = drvName
-        , outputs = Map.fromList $ fmap (\o -> (o, "")) outputs
+        , outputs = Map.fromList $ fmap (, mempty) outputs
         , mFixed = mFixedOutput
         }
   where
+
     -- common functions, lifted to WithStringContextT
 
-    demand' :: NValue t f m -> (NValue t f m -> WithStringContextT m a) -> WithStringContextT m a
-    demand' v f = join $ lift $ demand v (pure . f)
+    demand' :: (NValue t f m -> WithStringContextT m a) -> NValue t f m -> WithStringContextT m a
+    demand' f v = join $ lift $ demand (pure . f) v
 
     fromValue' :: (FromValue a m (NValue' t f m (NValue t f m)), MonadNix e t f m) => NValue t f m -> WithStringContextT m a
     fromValue' = lift . fromValue
@@ -373,9 +383,11 @@ buildDerivationWithContext drvAttrs = do
       pure name
 
     extractNoCtx :: MonadNix e t f m => NixString -> WithStringContextT m Text
-    extractNoCtx ns = case getStringNoContext ns of
-      Nothing -> lift $ throwError $ ErrorCall $ "The string " <> show ns <> " is not allowed to have a context."
-      Just v -> pure v
+    extractNoCtx ns =
+      maybe
+        (lift $ throwError $ ErrorCall $ "The string " <> show ns <> " is not allowed to have a context.")
+        pure
+        (getStringNoContext ns)
 
     assertNonNull :: MonadNix e t f m => Text -> WithStringContextT m Text
     assertNonNull t = do

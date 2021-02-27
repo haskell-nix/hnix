@@ -76,10 +76,10 @@ instance ( Convertible e t f m
          , FromValue a m (NValue' t f m (NValue t f m))
          )
   => FromValue a m (NValue t f m) where
-  fromValueMay = flip demand $ \case
+  fromValueMay = demand $ \case
     Pure t -> force fromValueMay t
     Free v -> fromValueMay v
-  fromValue = flip demand $ \case
+  fromValue = demand $ \case
     Pure t -> force fromValue t
     Free v -> fromValue v
 
@@ -88,12 +88,20 @@ instance ( Convertible e t f m
          , FromValue a m (Deeper (NValue' t f m (NValue t f m)))
          )
   => FromValue a m (Deeper (NValue t f m)) where
-  fromValueMay (Deeper v) = demand v $ \case
-    Pure t -> force (fromValueMay . Deeper) t
-    Free v -> fromValueMay (Deeper v)
-  fromValue (Deeper v) = demand v $ \case
-    Pure t -> force (fromValue . Deeper) t
-    Free v -> fromValue (Deeper v)
+  fromValueMay (Deeper v) =
+    demand
+      (free
+        (force $ fromValueMay . Deeper)
+        (fromValueMay . Deeper)
+      )
+      v
+  fromValue (Deeper v) =
+    demand
+      (free
+        (force $ fromValue . Deeper)
+        (fromValue . Deeper)
+      )
+      v
 
 instance Convertible e t f m
   => FromValue () m (NValue' t f m (NValue t f m)) where

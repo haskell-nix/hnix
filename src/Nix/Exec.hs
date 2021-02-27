@@ -31,6 +31,7 @@ import           Control.Monad
 import           Control.Monad.Catch     hiding ( catchJust )
 import           Control.Monad.Fix
 import           Control.Monad.Reader
+import           Data.Bool                      ( bool )
 import           Data.Fix
 import qualified Data.HashMap.Lazy             as M
 import           Data.List
@@ -294,19 +295,22 @@ callFunc
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-callFunc fun arg = demand fun $ \fun' -> do
-  frames :: Frames <- asks (view hasLens)
-  when (length frames > 2000) $ throwError $ ErrorCall
-    "Function call stack exhausted"
-  case fun' of
-    NVClosure _params f -> do
-      f arg
-    NVBuiltin name f -> do
-      span <- currentPos
-      withFrame Info (Calling @m @(NValue t f m) name span) (f arg)
-    s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
-      demand f $ (`callFunc` s) >=> (`callFunc` arg)
-    x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show x
+callFunc fun arg =
+  demand
+    (\fun' -> do
+    frames :: Frames <- asks (view hasLens)
+    when (length frames > 2000) $ throwError $ ErrorCall "Function call stack exhausted"
+    case fun' of
+      NVClosure _params f -> do
+        f arg
+      NVBuiltin name f -> do
+        span <- currentPos
+        withFrame Info (Calling @m @(NValue t f m) name span) (f arg)
+      s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
+        demand ((`callFunc` s) >=> (`callFunc` arg)) f
+      x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show x
+    )
+    fun
 
 execUnaryOp
   :: (Framed e m, MonadCited t f m, Show t)
@@ -344,32 +348,46 @@ execBinaryOp
   -> NValue t f m
   -> m (NValue t f m)
   -> m (NValue t f m)
-
+--  2021-02-25: NOTE: These are do blocks. Currently in the middle of the big rewrite, can not check their refactor. Please help.
 execBinaryOp scope span op lval rarg = case op of
-  NEq   -> rarg >>= \rval -> valueEqM lval rval >>= boolOp rval
-  NNEq  -> rarg >>= \rval -> valueEqM lval rval >>= boolOp rval . not
-  NOr   -> fromValue lval >>= \l -> if l
-             then bypass True
-             else rarg >>= \rval -> fromValue rval >>= boolOp rval
-  NAnd  -> fromValue lval >>= \l -> if l
-             then rarg >>= \rval -> fromValue rval >>= boolOp rval
-             else bypass False
-  NImpl -> fromValue lval >>= \l -> if l
-             then rarg >>= \rval -> fromValue rval >>= boolOp rval
-             else bypass True
-  _     -> rarg >>= \rval ->
-             demand rval $ \rval' ->
-               demand lval $ \lval' ->
-                 execBinaryOpForced scope span op lval' rval'
+  NEq   -> helperEq id
+  NNEq  -> helperEq not
+  NOr   ->
+    helperLogic flip True
+  NAnd  ->
+    helperLogic id False
+  NImpl ->
+    helperLogic id True
+  _     -> rarg >>=
+    (\rval ->
+      demand
+      (\rval' ->
+        demand
+          (\lval' -> execBinaryOpForced scope span op lval' rval')
+          lval
+      )
+      rval)
 
  where
-  toBoolOp :: Maybe (NValue t f m) -> Bool -> m (NValue t f m)
-  toBoolOp r b = pure $ nvConstantP
-    (Provenance scope (NBinary_ span op (pure lval) r))
-    (NBool b)
+
+  helperEq flag = rarg >>= \rval -> valueEqM lval rval >>= boolOp rval . flag
+
+  helperLogic flp flag =
+    fromValue lval >>=
+      flp bool
+        (bypass flag)
+        (rarg >>= \rval -> fromValue rval >>= boolOp rval)
+
   boolOp rval = toBoolOp (pure rval)
+
   bypass      = toBoolOp Nothing
 
+  toBoolOp :: Maybe (NValue t f m) -> Bool -> m (NValue t f m)
+  toBoolOp r b =
+    pure $
+      nvConstantP
+        (Provenance scope (NBinary_ span op (pure lval) r))
+        (NBool b)
 
 execBinaryOpForced
   :: forall e t f m

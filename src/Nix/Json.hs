@@ -38,17 +38,17 @@ nvalueToJSON = \case
   NVConstant (NInt   n) -> pure $ A.toJSON n
   NVConstant (NFloat n) -> pure $ A.toJSON n
   NVConstant (NBool  b) -> pure $ A.toJSON b
-  NVConstant NNull      -> pure $ A.Null
+  NVConstant NNull      -> pure   A.Null
   NVStr      ns         -> A.toJSON <$> extractNixString ns
   NVList l ->
     A.Array
       .   V.fromList
-      <$> traverse (join . lift . flip demand (pure . nvalueToJSON)) l
-  NVSet m _ -> case HM.lookup "outPath" m of
-    Nothing ->
-      A.Object
-        <$> traverse (join . lift . flip demand (pure . nvalueToJSON)) m
-    Just outPath -> join $ lift $ demand outPath (pure . nvalueToJSON)
+      <$> traverse (join . lift . demand (pure . nvalueToJSON)) l
+  NVSet m _ ->
+    maybe
+      (A.Object <$> traverse (join . lift . demand (pure . nvalueToJSON)) m)
+      (join . lift . demand (pure . nvalueToJSON))
+      (HM.lookup "outPath" m)
   NVPath p -> do
     fp <- lift $ unStorePath <$> addPath p
     addSingletonStringContext $ StringContext (Text.pack fp) DirectPath
