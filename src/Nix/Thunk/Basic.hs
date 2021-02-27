@@ -40,13 +40,23 @@ type MonadBasicThunk m = (MonadThunkId m, MonadVar m)
 
 instance (MonadBasicThunk m, MonadCatch m)
   => MonadThunk (NThunkF m v) m v where
-  thunk = buildThunk
+
+  thunkId :: NThunkF m v -> ThunkId m
   thunkId (Thunk n _ _) = n
+
+  thunk :: m v -> m (NThunkF m v)
+  thunk    = buildThunk
+
   queryM :: m v -> NThunkF m v -> m v
   queryM = queryThunk
 
+  force :: NThunkF m v -> m v
   force    = forceThunk
+
+  forceEff :: NThunkF m v -> m v
   forceEff = forceEffects
+
+  further :: NThunkF m v -> m (NThunkF m v)
   further  = furtherThunk
 
 

@@ -128,27 +128,28 @@ instance ( MonadAtomicRef m
          )
   => MonadThunk (StdThunk m) m (StdValue m) where
 
-  thunk :: m (StdValue m) -> m (StdThunk m)
-  thunk v = StdThunk . StdCited <$> thunk v
-
   thunkId :: StdThunk m -> ThunkId m
   thunkId = thunkId . _stdCited . _stdThunk
+
+  thunk :: m (StdValue m) -> m (StdThunk m)
+  thunk = fmap (StdThunk . StdCited) . thunk
 
   queryM ::  m (StdValue m) -> StdThunk m -> m (StdValue m)
   queryM b = queryM b . _stdCited . _stdThunk
 
   force :: StdThunk m -> m (StdValue m)
-  force t = force (_stdCited $ _stdThunk t)
+  force = force . _stdCited . _stdThunk
 
   forceEff :: StdThunk m -> m (StdValue m)
-  forceEff t = forceEff (_stdCited $ _stdThunk t)
+  forceEff = forceEff . _stdCited . _stdThunk
 
   further :: StdThunk m -> m (StdThunk m)
-  further t = StdThunk . StdCited <$> further (_stdCited $ _stdThunk t)
+  further = fmap (StdThunk . StdCited) . further . _stdCited . _stdThunk
 
 
 -- * @instance MonadThunkF@ (Kleisli functor HOFs)
 
+-- Please do not use MonadThunkF instances to define MonadThunk. as MonadThunk uses specialized functions.
 instance ( MonadAtomicRef m
          , MonadCatch m
          , Typeable m
@@ -202,6 +203,7 @@ instance ( MonadAtomicRef m
       -> m (StdValue m)
       )
     -> m (StdValue m)
+  --  2021-02-27: NOTE: When swapping, switch to `further`.
   inform (Pure t) f = Pure <$> furtherF f t
   inform (Free v) f = Free <$> bindNValue' id (`inform` f) v
 

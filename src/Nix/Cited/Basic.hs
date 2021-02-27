@@ -99,6 +99,7 @@ instance ( Has e Options
 
 -- * Kleisli functor HOFs
 
+-- Please, do not use MonadThunkF for MonadThunk, later uses more straight-forward specialized line of functions.
 instance ( Has e Options
          , Framed e m
          , MonadThunkF t m v
@@ -117,6 +118,11 @@ instance ( Has e Options
 
   forceEffF :: (v -> m r) -> Cited u f m t -> m r
   forceEffF k (Cited (NCited ps t)) = handleDisplayProvenance ps $ forceEffF k t
+
+  furtherF :: (m v -> m v) -> Cited u f m t -> m (Cited u f m t)
+  furtherF k (Cited (NCited ps t)) = Cited . NCited ps <$> furtherF k t
+
+
 -- ** Utils
 
 handleDisplayProvenance

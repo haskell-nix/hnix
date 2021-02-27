@@ -424,13 +424,15 @@ instance Monad m => MonadValue (Judgment s) (InferT s m) where
 {-
 instance MonadInfer m
   => MonadThunk (JThunkT s m) (InferT s m) (Judgment s) where
-  thunk = fmap JThunk . thunk
+
   thunkId (JThunk x) = thunkId x
+
+  thunk = fmap JThunk . thunk
 
   queryM b (JThunk x) = queryM b x
 
   -- If we have a thunk loop, we just don't know the type.
-  force (JThunk t) = catch (force f)
+  force (JThunk t) = catch (force t)
     $ \(_ :: ThunkLoop) ->
                            f =<< Judgment As.empty mempty <$> fresh
 
