@@ -369,25 +369,26 @@ evalSetterKeyName
 evalSetterKeyName = \case
   StaticKey k -> pure (pure k)
   DynamicKey k ->
-    runAntiquoted "\n" assembleString (>>= fromValueMay) k <&>
-      maybe
-        mempty
-        (pure . stringIgnoreContext)
+    ((pure . stringIgnoreContext) `ifJust`) <$>runAntiquoted "\n" assembleString (fromValueMay =<<) k
 
 assembleString
   :: forall v m
    . (MonadEval v m, FromValue NixString m v)
   => NString (m v)
   -> m (Maybe NixString)
-assembleString = \case
-  Indented _ parts   -> fromParts parts
-  DoubleQuoted parts -> fromParts parts
+assembleString =
+  fromParts .
+    \case
+      Indented _ parts   -> parts
+      DoubleQuoted parts -> parts
  where
   fromParts = fmap (fmap mconcat . sequence) . traverse go
 
-  go = runAntiquoted "\n"
-                     (pure . pure . makeNixStringWithoutContext)
-                     (>>= fromValueMay)
+  go =
+    runAntiquoted
+      "\n"
+      (pure . pure . makeNixStringWithoutContext)
+      (fromValueMay =<<)
 
 buildArgument
   :: forall v m . MonadNixEval v m => Params (m v) -> m v -> m (AttrSet v)
@@ -396,14 +397,22 @@ buildArgument params arg = do
   case params of
     Param name -> M.singleton name <$> defer (withScopes scope arg)
     ParamSet s isVariadic m ->
-      arg >>= fromValue @(AttrSet v, AttrSet SourcePos) >>= \(args, _) -> do
-        let inject = case m of
-              Nothing -> id
-              Just n  -> M.insert n $ const $ defer (withScopes scope arg)
+      do
+        (args, _) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< arg
+        let
+          inject =
+            maybe
+              id
+              (\ n -> M.insert n $ const $ defer (withScopes scope arg))
+              m
         loebM
-          (inject $ M.mapMaybe id $ ialignWith (assemble scope isVariadic)
-                                               args
-                                               (M.fromList s)
+          (inject $
+              M.mapMaybe
+                id
+                $ ialignWith
+                  (assemble scope isVariadic)
+                  args
+                  (M.fromList s)
           )
  where
   assemble
