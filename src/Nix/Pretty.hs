@@ -45,6 +45,7 @@ import           Nix.Thunk
 import           Nix.Value
 import           Prettyprinter
 import           Text.Read                      ( readMaybe )
+import           Nix.Utils
 
 -- | This type represents a pretty printed nix expression
 -- together with some information about the expression.
@@ -122,7 +123,11 @@ prettyString (DoubleQuoted parts) = dquotes . hcat . fmap prettyPart $ parts
   prettyPart EscapedNewline = "''\\n"
   prettyPart (Antiquoted r) = "$" <> braces (withoutParens r)
   escape '"' = "\\\""
-  escape x   = maybe [x] (('\\' :) . (: mempty)) $ toEscapeCode x
+  escape x   =
+    maybe
+      [x]
+      (('\\' :) . (: mempty))
+      (toEscapeCode x)
 prettyString (Indented _ parts) = group $ nest 2 $ vcat
   [dsquote, content, dsquote]
  where
@@ -139,10 +144,8 @@ prettyString (Indented _ parts) = group $ nest 2 $ vcat
 
 prettyParams :: Params (NixDoc ann) -> Doc ann
 prettyParams (Param n           ) = pretty $ unpack n
-prettyParams (ParamSet s v mname) = prettyParamSet s v <> case mname of
-  Nothing -> mempty
-  Just name | Text.null name -> mempty
-            | otherwise      -> "@" <> pretty (unpack name)
+prettyParams (ParamSet s v mname) = prettyParamSet s v <>
+    (\ name -> ("@" <> pretty (unpack name)) `ifTrue` not (Text.null name)) `ifJust` mname
 
 prettyParamSet :: ParamSet (NixDoc ann) -> Bool -> Doc ann
 prettyParamSet args var = encloseSep
