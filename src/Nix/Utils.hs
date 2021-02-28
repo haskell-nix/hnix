@@ -198,3 +198,56 @@ list e f l =
 free :: (a -> b) -> (f (Free f a) -> b) -> Free f a -> b
 free fP _  (Pure a ) = fP a
 free _  fF (Free fa) = fF fa
+
+ifTrue :: (Monoid a)
+  => a -> Bool -> a
+ifTrue =
+  bool
+    mempty
+
+ifFalse :: (Monoid a)
+  => a  -> Bool  -> a
+ifFalse f =
+  bool
+    f
+    mempty
+
+ifJust :: (Monoid b)
+  => (a -> b)  -> Maybe a  -> b
+ifJust =
+  maybe
+    mempty
+
+
+ifNothing  :: (Monoid b)
+  => b  -> Maybe a  -> b
+ifNothing f =
+  maybe
+    f
+    mempty
+
+ifRight :: (Monoid c)
+  => (b -> c) -> Either a b -> c
+ifRight =
+  either
+    mempty
+
+ifLeft :: (Monoid c)
+  => (a -> c) -> Either a b -> c
+ifLeft f =
+  either
+    f
+    mempty
+
+ifFree :: (Monoid b)
+  => (f (Free f a) -> b) -> Free f a -> b
+ifFree =
+  free
+    mempty
+
+ifPure :: (Monoid b)
+  => (a -> b) -> Free f a -> b
+ifPure f =
+  free
+    f
+    mempty
