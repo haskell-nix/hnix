@@ -190,15 +190,23 @@ attrSetAlter
   -> m v
   -> m (AttrSet (m v), AttrSet SourcePos)
 attrSetAlter [] _ _ _ _ = evalError @v $ ErrorCall "invalid selector with no components"
-attrSetAlter (k : ks) pos m p val = case M.lookup k m of
-  Nothing | null ks   -> go
-          | otherwise -> recurse M.empty M.empty
-  Just x
-    | null ks
-    -> go
-    | otherwise
-    -> x >>= fromValue @(AttrSet v, AttrSet SourcePos) >>= \(st, sp) ->
-      recurse (demand pure <$> st) sp
+attrSetAlter (k : ks) pos m p val =
+  maybe
+    (bool
+      (recurse M.empty M.empty)
+      go
+      (null ks)
+    )
+    (\ x ->
+      bool
+        (do
+         (st, sp) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< x
+         recurse (demand pure <$> st) sp
+        )
+        go
+        (null ks)
+    )
+    (M.lookup k m)
  where
   go = pure (M.insert k val m, M.insert k pos p)
 
