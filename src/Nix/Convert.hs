@@ -77,18 +77,25 @@ instance ( Convertible e t f m
          , FromValue a m (NValue' t f m (NValue t f m))
          )
   => FromValue a m (NValue t f m) where
-  fromValueMay = demand $ \case
-    Pure t -> fromValueMay =<< force t
-    Free v -> fromValueMay v
-  fromValue = demand $ \case
-    Pure t -> fromValue =<< force t
-    Free v -> fromValue v
+
+  fromValueMay =
+    demand $
+      free
+        (fromValueMay <=< force)
+        fromValueMay
+
+  fromValue =
+    demand $
+      free
+        (fromValue <=< force)
+        fromValue
 
 instance ( Convertible e t f m
          , MonadValue (NValue t f m) m
          , FromValue a m (Deeper (NValue' t f m (NValue t f m)))
          )
   => FromValue a m (Deeper (NValue t f m)) where
+
   fromValueMay (Deeper v) =
     demand
       (free
@@ -96,6 +103,7 @@ instance ( Convertible e t f m
         (fromValueMay . Deeper)
       )
       v
+
   fromValue (Deeper v) =
     demand
       (free
@@ -106,27 +114,42 @@ instance ( Convertible e t f m
 
 instance Convertible e t f m
   => FromValue () m (NValue' t f m (NValue t f m)) where
-  fromValueMay = \case
-    NVConstant' NNull -> pure $ pure ()
-    _                 -> pure mempty
-  fromValue v = fromValueMay v >>= \case
-    Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m TNull (Free v)
+
+  fromValueMay =
+    pure .
+      \case
+        NVConstant' NNull -> pure ()
+        _                 -> mempty
+
+  fromValue v =
+    maybe
+      (throwError $ Expectation @t @f @m TNull (Free v))
+      pure
+      =<< fromValueMay v
 
 instance Convertible e t f m
   => FromValue Bool m (NValue' t f m (NValue t f m)) where
-  fromValueMay = \case
-    NVConstant' (NBool b) -> pure $ pure b
-    _                     -> pure Nothing
-  fromValue v = fromValueMay v >>= \case
-    Just b -> pure b
-    _      -> throwError $ Expectation @t @f @m TBool (Free v)
+
+  fromValueMay =
+    pure .
+      \case
+        NVConstant' (NBool b) -> pure b
+        _                     -> Nothing
+
+  fromValue v = fromValueMay v >>=
+    maybe
+      (throwError $ Expectation @t @f @m TBool (Free v))
+      pure
 
 instance Convertible e t f m
   => FromValue Int m (NValue' t f m (NValue t f m)) where
-  fromValueMay = \case
-    NVConstant' (NInt b) -> pure $ pure (fromInteger b)
-    _                    -> pure Nothing
+
+  fromValueMay =
+    pure .
+      \case
+        NVConstant' (NInt b) -> pure (fromInteger b)
+        _                    -> Nothing
+
   fromValue v = fromValueMay v >>= \case
     Just b -> pure b
     _      -> throwError $ Expectation @t @f @m TInt (Free v)
