@@ -203,7 +203,7 @@ attrSetAlter (k : ks) pos m p val = case M.lookup k m of
   go = pure (M.insert k val m, M.insert k pos p)
 
   recurse st sp = attrSetAlter ks pos st sp val <&> \(st', _) ->
-    ( M.insert
+    (M.insert
       k
       (toValue @(AttrSet v, AttrSet SourcePos) =<< (, mempty) <$> sequence st')
       m
@@ -220,11 +220,13 @@ desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
          (Either VarName (Binding r))
   collect (NamedVar (StaticKey x :| y : ys) val p) = do
     m <- get
-    put $ M.insert x ?? m $ case M.lookup x m of
-      Nothing     -> (p, [NamedVar (y :| ys) val p])
-      Just (q, v) -> (q, NamedVar (y :| ys) val q : v)
+    put $ M.insert x ?? m $
+      maybe
+        (p, [NamedVar (y :| ys) val p])
+        (\ (q, v) -> (q, NamedVar (y :| ys) val q : v))
+        (M.lookup x m)
     pure $ Left x
-  collect x = pure $ Right x
+  collect x = pure $ pure x
 
   go
     :: Either VarName (Binding r)
