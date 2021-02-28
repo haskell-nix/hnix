@@ -409,25 +409,11 @@ buildArgument params arg = do
     -> These v (Maybe (m v))
     -> Maybe (AttrSet v -> m v)
   assemble scope isVariadic k = \case
-    That Nothing ->
-      pure
-        $  const
-        $  evalError @v
-        $  ErrorCall
-        $  "Missing value for parameter: "
-        <> show k
-    That (Just f) ->
-      pure $ \args -> defer $ withScopes scope $ pushScope args f
+    That Nothing -> pure $ const $ evalError @v $ ErrorCall $ "Missing value for parameter: " <>show k
+    That (Just f) -> pure $ \args -> defer $ withScopes scope $ pushScope args f
     This _
-      | isVariadic
-      -> Nothing
-      | otherwise
-      -> pure
-        $  const
-        $  evalError @v
-        $  ErrorCall
-        $  "Unexpected parameter: "
-        <> show k
+      | isVariadic -> Nothing
+      | otherwise  -> pure $ const $ evalError @v $ ErrorCall $ "Unexpected parameter: " <> show k
     These x _ -> pure (const (pure x))
 
 addSourcePositions
