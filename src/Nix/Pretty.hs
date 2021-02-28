@@ -148,24 +148,28 @@ prettyParams (ParamSet s v mname) = prettyParamSet s v <>
     (\ name -> ("@" <> pretty (unpack name)) `ifTrue` not (Text.null name)) `ifJust` mname
 
 prettyParamSet :: ParamSet (NixDoc ann) -> Bool -> Doc ann
-prettyParamSet args var = encloseSep
-  (lbrace <> space)
-  (align (space <> rbrace))
-  sep
-  (fmap prettySetArg args <> prettyVariadic)
+prettyParamSet args var =
+  encloseSep
+    (lbrace <> space)
+    (align (space <> rbrace))
+    sep
+    (fmap prettySetArg args <> prettyVariadic)
  where
-  prettySetArg (n, maybeDef) = case maybeDef of
-    Nothing -> pretty (unpack n)
-    Just v  -> pretty (unpack n) <+> "?" <+> withoutParens v
+  prettySetArg (n, maybeDef) =
+    maybe
+      (pretty (unpack n))
+      (\x -> pretty (unpack n) <> " ? " <> withoutParens x)
+      maybeDef
   prettyVariadic = [ "..." | var ]
   sep            = align (comma <> space)
 
 prettyBind :: Binding (NixDoc ann) -> Doc ann
 prettyBind (NamedVar n v _p) =
-  prettySelector n <+> equals <+> withoutParens v <> semi
+  prettySelector n <>" " <> equals <> " " <> withoutParens v <> semi
 prettyBind (Inherit s ns _p) =
-  "inherit" <+> scope <> align (fillSep (fmap prettyKeyName ns)) <> semi
-  where scope = maybe mempty ((<> space) . parens . withoutParens) s
+  "inherit " <>scope <> align (fillSep (fmap prettyKeyName ns)) <> semi
+  where
+    scope = ((<> space) . parens . withoutParens) `ifJust` s
 
 prettyKeyName :: NKeyName (NixDoc ann) -> Doc ann
 prettyKeyName (StaticKey "") = dquotes ""
