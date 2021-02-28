@@ -191,32 +191,30 @@ attrSetAlter
   -> m (AttrSet (m v), AttrSet SourcePos)
 attrSetAlter [] _ _ _ _ = evalError @v $ ErrorCall "invalid selector with no components"
 attrSetAlter (k : ks) pos m p val =
-  maybe
-    (bool
+  bool
+    go
+    (maybe
       (recurse M.empty M.empty)
-      go
-      (null ks)
+      (\x ->
+        do
+          (st, sp) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< x
+          recurse (demand pure <$> st) sp
+      )
+      (M.lookup k m)
     )
-    (\ x ->
-      bool
-        (do
-         (st, sp) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< x
-         recurse (demand pure <$> st) sp
-        )
-        go
-        (null ks)
-    )
-    (M.lookup k m)
+    (not $ null ks)
  where
   go = pure (M.insert k val m, M.insert k pos p)
 
-  recurse st sp = attrSetAlter ks pos st sp val <&> \(st', _) ->
-    (M.insert
-      k
-      (toValue @(AttrSet v, AttrSet SourcePos) =<< (, mempty) <$> sequence st')
-      m
-    , M.insert k pos p
-    )
+  recurse st sp =
+    (\(st', _) ->
+      (M.insert
+        k
+        (toValue @(AttrSet v, AttrSet SourcePos) =<< (, mempty) <$> sequence st')
+        m
+      , M.insert k pos p
+      )
+    ) <$> attrSetAlter ks pos st sp val
 
 desugarBinds :: forall r . ([Binding r] -> r) -> [Binding r] -> [Binding r]
 desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
