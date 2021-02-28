@@ -165,7 +165,7 @@ prettyParamSet args var =
 
 prettyBind :: Binding (NixDoc ann) -> Doc ann
 prettyBind (NamedVar n v _p) =
-  prettySelector n <>" " <> equals <> " " <> withoutParens v <> semi
+  prettySelector n <> space <> equals <> space <> withoutParens v <> semi
 prettyBind (Inherit s ns _p) =
   "inherit " <>scope <> align (fillSep (fmap prettyKeyName ns)) <> semi
   where
@@ -243,7 +243,7 @@ exprFNixDoc = \case
       $ vsep
       $ [prettyParams args <> colon, withoutParens body]
   NBinary NApp fun arg ->
-    mkNixDoc (wrapParens appOp fun <+> wrapParens appOpNonAssoc arg) appOp
+    mkNixDoc (wrapParens appOp fun <> space <> wrapParens appOpNonAssoc arg) appOp
   NBinary op r1 r2 -> flip mkNixDoc opInfo $ hsep
     [ wrapParens (f NAssocLeft) r1
     , pretty $ unpack $ operatorName opInfo
@@ -265,9 +265,9 @@ exprFNixDoc = \case
       <> ordoc
    where
     r     = flip mkNixDoc selectOp $ wrapParens appOpNonAssoc r'
-    ordoc = maybe mempty (((space <> "or") <+>) . wrapParens appOpNonAssoc) o
+    ordoc = maybe mempty (((space <> "or ") <>) . wrapParens appOpNonAssoc) o
   NHasAttr r attr ->
-    mkNixDoc (wrapParens hasAttrOp r <+> "?" <+> prettySelector attr) hasAttrOp
+    mkNixDoc (wrapParens hasAttrOp r <> " ? " <> prettySelector attr) hasAttrOp
   NEnvPath     p -> simpleExpr $ pretty ("<" <> p <> ">")
   NLiteralPath p -> pathExpr $ pretty $ case p of
     "./"  -> "./."
@@ -285,25 +285,25 @@ exprFNixDoc = \case
       $ vsep
       $ [ "let"
         , indent 2 (vsep (fmap prettyBind binds))
-        , "in" <+> withoutParens body
+        , "in " <> withoutParens body
         ]
   NIf cond trueBody falseBody ->
     leastPrecedence
       $ group
       $ nest 2
       $ vsep
-      $ [ "if" <+> withoutParens cond
-        , align ("then" <+> withoutParens trueBody)
-        , align ("else" <+> withoutParens falseBody)
+      $ [ "if " <> withoutParens cond
+        , align ("then " <> withoutParens trueBody)
+        , align ("else " <> withoutParens falseBody)
         ]
   NWith scope body ->
     leastPrecedence
       $ vsep
-      $ ["with" <+> withoutParens scope <> semi, align $ withoutParens body]
+      $ ["with " <> withoutParens scope <> semi, align $ withoutParens body]
   NAssert cond body ->
     leastPrecedence
       $ vsep
-      $ ["assert" <+> withoutParens cond <> semi, align $ withoutParens body]
+      $ ["assert " <> withoutParens cond <> semi, align $ withoutParens body]
   NSynHole name -> simpleExpr $ pretty ("^" <> unpack name)
   where recPrefix = "rec" <> space
 

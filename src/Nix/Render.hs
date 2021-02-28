@@ -132,7 +132,7 @@ sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unP
       nums'   = flip fmap nums $ \n -> replicate (longest - length n) ' ' <> n
       pad n | read n == begLine = "==> " <> n
             | otherwise         = "    " <> n
-      ls' = zipWith (<+>)
+      ls' = zipWith (\ a b -> a <> space <> b)
                     (fmap (pretty . pad) nums')
-                    (fmap ("| " <+>) ls)
+                    (fmap ("|  " <>) ls)
     pure $ vsep $ ls' <> [msg]

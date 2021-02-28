@@ -43,7 +43,9 @@ import           Control.Monad.Identity
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
 
-import           Prettyprinter                  (Doc, (<+>))
+import           Prettyprinter                  ( Doc
+                                                , space
+                                                )
 import qualified Prettyprinter
 import qualified Prettyprinter.Render.Text
 
@@ -450,7 +452,7 @@ helpOptions =
   , HelpOption
       "set"
       ""
-      (    "Set REPL option"
+      ("Set REPL option"
         <> Prettyprinter.line
         <> "Available options:"
         <> Prettyprinter.line
@@ -503,14 +505,14 @@ helpSetOptions =
 
 renderSetOptions :: [HelpSetOption] -> Doc ()
 renderSetOptions so =
-  Prettyprinter.indent 4
-    $ Prettyprinter.vsep
-    $ flip fmap so
-    $ \h ->
-             Prettyprinter.pretty (helpSetOptionName h)
-         <+> helpSetOptionSyntax h
-         <>  Prettyprinter.line
-         <>  Prettyprinter.indent 4 (helpSetOptionDoc h)
+  Prettyprinter.indent 4 $
+    Prettyprinter.vsep $
+      (\h ->
+        Prettyprinter.pretty (helpSetOptionName h) <> space
+        <> helpSetOptionSyntax h
+        <> Prettyprinter.line
+        <> Prettyprinter.indent 4 (helpSetOptionDoc h)
+      ) <$> so
 
 help :: (MonadNix e t f m, MonadIO m)
      => HelpOptions e t f m
@@ -519,16 +521,15 @@ help :: (MonadNix e t f m, MonadIO m)
 help hs _ = do
   liftIO $ putStrLn "Available commands:\n"
   forM_ hs $ \h ->
-      liftIO
-    . Data.Text.IO.putStrLn
-    . Prettyprinter.Render.Text.renderStrict
-    . Prettyprinter.layoutPretty
-        Prettyprinter.defaultLayoutOptions
-    $     ":"
-       <>  Prettyprinter.pretty (helpOptionName h)
-       <+> helpOptionSyntax h
-       <>  Prettyprinter.line
-       <>  Prettyprinter.indent 4 (helpOptionDoc h)
+    liftIO .
+      Data.Text.IO.putStrLn .
+        Prettyprinter.Render.Text.renderStrict .
+          Prettyprinter.layoutPretty Prettyprinter.defaultLayoutOptions $
+            ":"
+            <> Prettyprinter.pretty (helpOptionName h) <> space
+            <> helpOptionSyntax h
+            <> Prettyprinter.line
+            <> Prettyprinter.indent 4 (helpOptionDoc h)
 
 options
   :: (MonadNix e t f m, MonadIO m)
