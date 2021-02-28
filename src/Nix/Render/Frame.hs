@@ -28,7 +28,7 @@ import           Nix.Render
 import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
-import           Prettyprinter
+import           Prettyprinter hiding (list)
 import           Text.Megaparsec.Pos
 #ifdef MIN_VERSION_pretty_show
 import qualified Text.Show.Pretty as PS
@@ -53,15 +53,18 @@ renderFrames (x : xs) = do
       f <- renderFrame @v @t @f x
       pure $ concatMap go (reverse xs) <> f
     | otherwise -> concat <$> mapM (renderFrame @v @t @f) (reverse (x : xs))
-  pure $ case frames of
-    [] -> mempty
-    _  -> vsep frames
+  pure $
+    list
+      mempty
+      vsep
+      frames
  where
   go :: NixFrame -> [Doc ann]
-  go f = case framePos @v @m f of
-    Just pos ->
-      ["While evaluating at " <> pretty (sourcePosPretty pos) <> colon]
-    Nothing -> mempty
+  go f =
+    maybe
+      mempty
+      (\ pos -> ["While evaluating at " <> pretty (sourcePosPretty pos) <> colon])
+      (framePos @v @m f)
 
 framePos
   :: forall v (m :: * -> *)
@@ -152,10 +155,11 @@ renderExpr _level longLabel shortLabel e@(Fix (Compose (Ann _ x))) = do
 #endif
           | verbose opts >= Chatty = prettyNix (stripAnnotation e)
           | otherwise = prettyNix (Fix (Fix (NSym "<?>") <$ x))
-  pure $ if verbose opts >= Chatty
-    then
-      vsep [pretty (longLabel <> ":\n>>>>>>>>"), indent 2 rendered, "<<<<<<<<"]
-    else pretty shortLabel <> fillSep [": ", rendered]
+  pure $
+    bool
+      (pretty shortLabel <> fillSep [": ", rendered])
+      (vsep [pretty (longLabel <> ":\n>>>>>>>>"), indent 2 rendered, "<<<<<<<<"])
+      (verbose opts >= Chatty)
 
 renderValueFrame
   :: forall e t f m ann
@@ -195,10 +199,11 @@ renderValue
   -> m (Doc ann)
 renderValue _level _longLabel _shortLabel v = do
   opts :: Options <- asks (view hasLens)
-  (if values opts
-     then prettyNValueProv
-     else prettyNValue) <$> removeEffects v
-
+  bool
+    prettyNValue
+    prettyNValueProv
+    (values opts)
+    <$> removeEffects v
 renderExecFrame
   :: (MonadReader e m, Has e Options, MonadFile m, MonadCitedThunks t f m)
   => NixLevel
@@ -206,11 +211,10 @@ renderExecFrame
   -> m [Doc ann]
 renderExecFrame level = \case
   Assertion ann v ->
-    fmap (: mempty)
-      $   renderLocation ann
-      =<< (   (\d -> fillSep ["Assertion failed:", d])
-          <$> renderValue level "" "" v
-          )
+    fmap (: mempty) $
+      do
+        d <- renderValue level "" "" v
+        renderLocation ann $ fillSep ["Assertion failed:", d]
 
 renderThunkLoop
   :: (MonadReader e m, Has e Options, MonadFile m, Show (ThunkId m))
