@@ -231,12 +231,16 @@ desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
   go
     :: Either VarName (Binding r)
     -> State (HashMap VarName (SourcePos, [Binding r])) (Binding r)
-  go (Right x) = pure x
-  go (Left  x) = do
-    maybeValue <- gets (M.lookup x)
-    case maybeValue of
-      Nothing     -> error ("No binding " <> show x)
-      Just (p, v) -> pure $ NamedVar (StaticKey x :| []) (embed v) p
+  go =
+    either
+      (\ x -> do
+        maybeValue <- gets (M.lookup x)
+        maybe
+          (error $ "No binding " <> show x)
+          (\ (p, v) -> pure $ NamedVar (StaticKey x :| []) (embed v) p)
+          maybeValue
+      )
+      pure
 
 evalBinds
   :: forall v m
