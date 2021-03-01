@@ -63,9 +63,11 @@ type AlgM f m a = f a -> m a
 -- | "Transform" here means a modification of a catamorphism.
 type Transform f a = (Fix f -> a) -> Fix f -> a
 
+{-# inline (<&>)#-}
 (<&>) :: Functor f => f a -> (a -> c) -> f c
 (<&>) = flip (<$>)
 
+{-# inline (??)#-}
 (??) :: Functor f => f (a -> b) -> a -> f b
 fab ?? a = fmap ($ a) fab
 
@@ -179,11 +181,15 @@ alterF f k m =
     )
     $ f $ M.lookup k m
 
+{-# inline bool #-}
 -- | From @Data.Bool ( bool )@.
 bool :: a -> a -> Bool -> a
-bool f _ False = f
-bool _ t True  = t
+bool f t b =
+  if b
+    then t
+    else f
 
+{-# inline list #-}
 -- | Analog for @bool@ or @maybe@, for list-like cons structures.
 list
   :: Foldable t
@@ -194,17 +200,22 @@ list e f l =
     e
     (null l)
 
+{-# inline free #-}
 -- | Lambda analog of @maybe@ or @either@ for Free monad.
 free :: (a -> b) -> (f (Free f a) -> b) -> Free f a -> b
-free fP _  (Pure a ) = fP a
-free _  fF (Free fa) = fF fa
+free fP fF fr =
+  case fr of
+    Pure a -> fP a
+    Free fa -> fF fa
 
+{-# inline ifTrue #-}
 ifTrue :: (Monoid a)
   => a -> Bool -> a
 ifTrue =
   bool
     mempty
 
+{-# inline ifFalse #-}
 ifFalse :: (Monoid a)
   => a  -> Bool  -> a
 ifFalse f =
@@ -212,13 +223,14 @@ ifFalse f =
     f
     mempty
 
+{-# inline ifJust #-}
 ifJust :: (Monoid b)
   => (a -> b)  -> Maybe a  -> b
 ifJust =
   maybe
     mempty
 
-
+{-# inline ifNothing #-}
 ifNothing  :: (Monoid b)
   => b  -> Maybe a  -> b
 ifNothing f =
@@ -226,12 +238,14 @@ ifNothing f =
     f
     mempty
 
+{-# inline ifRight #-}
 ifRight :: (Monoid c)
   => (b -> c) -> Either a b -> c
 ifRight =
   either
     mempty
 
+{-# inline ifLeft #-}
 ifLeft :: (Monoid c)
   => (a -> c) -> Either a b -> c
 ifLeft f =
@@ -239,12 +253,14 @@ ifLeft f =
     f
     mempty
 
+{-# inline ifFree #-}
 ifFree :: (Monoid b)
   => (f (Free f a) -> b) -> Free f a -> b
 ifFree =
   free
     mempty
 
+{-# inline ifPure #-}
 ifPure :: (Monoid b)
   => (a -> b) -> Free f a -> b
 ifPure f =
