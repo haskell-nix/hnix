@@ -144,6 +144,7 @@ instance
     :: StdThunk m
     -> ThunkId  m
   thunkId = thunkId . _stdCited . _stdThunk
+  {-# inline thunkId #-}
 
   thunk
     :: m (StdValue m)
@@ -284,6 +285,7 @@ newtype StandardTF r m a
 
 instance MonadTrans (StandardTF r) where
   lift = StandardTF . lift . lift
+  {-# inline lift #-}
 
 instance (MonadPutStr r, MonadPutStr m)
   => MonadPutStr (StandardTF r m)
