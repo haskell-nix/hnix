@@ -34,6 +34,7 @@ where
 
 
 import           Control.Monad.Writer           ( WriterT(..), MonadWriter(tell), MonadTrans, (<=<))
+import           Data.Functor                   ( ($>) )
 import           Data.Functor.Identity          ( Identity(runIdentity) )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.HashSet                  as S
@@ -116,12 +117,12 @@ instance Hashable NixString
 
 -- | Constructs NixString without a context
 makeNixStringWithoutContext :: Text -> NixString
-makeNixStringWithoutContext = flip NixString mempty
+makeNixStringWithoutContext = (`NixString` mempty)
 
 -- | Create NixString using a singleton context
 makeNixStringWithSingletonContext
   :: Text -> StringContext -> NixString
-makeNixStringWithSingletonContext s c = NixString s (S.singleton c)
+makeNixStringWithSingletonContext s c = NixString s $ S.singleton c
 
 -- | Create NixString from a Text and context
 makeNixString :: Text -> S.HashSet StringContext -> NixString
@@ -155,7 +156,7 @@ stringIgnoreContext (NixString s _) = s
 
 -- | Get the contents of a 'NixString' and write its context into the resulting set.
 extractNixString :: Monad m => NixString -> WithStringContextT m Text
-extractNixString (NixString s c) = WithStringContextT $ tell c *> pure s
+extractNixString (NixString s c) = WithStringContextT $ tell c $> s
 
 
 -- ** Setters
