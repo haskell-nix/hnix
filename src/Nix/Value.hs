@@ -21,12 +21,19 @@
 module Nix.Value
 where
 
-import           Control.Comonad                ( Comonad, extract )
+import           Control.Comonad                ( Comonad
+                                                , extract
+                                                )
 import           Control.Exception              ( Exception )
 import           Control.Monad                  ( (<=<) )
 import           Control.Monad.Free             ( Free(..)
-                                                , hoistFree, iter, iterM )
-import           Control.Monad.Trans.Class      ( MonadTrans, lift )
+                                                , hoistFree
+                                                , iter
+                                                , iterM
+                                                )
+import           Control.Monad.Trans.Class      ( MonadTrans
+                                                , lift
+                                                )
 import qualified Data.Aeson                    as Aeson
 import           Data.Functor.Classes           ( Show1
                                                 , liftShowsPrec
@@ -38,7 +45,8 @@ import           Data.Typeable                  ( Typeable )
 import           GHC.Generics                   ( Generic )
 import           Lens.Family2.Stock             ( _1 )
 import           Lens.Family2.TH                ( makeTraversals
-                                                , makeLenses )
+                                                , makeLenses
+                                                )
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
@@ -187,15 +195,22 @@ hoistNValueF
   :: (forall x . m x -> n x)
   -> NValueF p m a
   -> NValueF p n a
-hoistNValueF lft = \case
-  NVConstantF a  -> NVConstantF a
-  NVStrF      s  -> NVStrF s
-  NVPathF     p  -> NVPathF p
-  NVListF     l  -> NVListF l
-  NVSetF     s p -> NVSetF s p
-  NVClosureF p g -> NVClosureF p (lft . g)
-  NVBuiltinF s g -> NVBuiltinF s (lft . g)
-
+hoistNValueF lft =
+  \case
+    -- Pass-through the:
+    --   [ NVConstantF a
+    --   , NVStrF s
+    --   , NVPathF p
+    --   , NVListF l
+    --   , NVSetF s p
+    --   ]
+    NVConstantF a  -> NVConstantF a
+    NVStrF      s  -> NVStrF s
+    NVPathF     p  -> NVPathF p
+    NVListF     l  -> NVListF l
+    NVSetF     s p -> NVSetF s p
+    NVBuiltinF s g -> NVBuiltinF s (lft . g)
+    NVClosureF p g -> NVClosureF p (lft . g)
 {-# inline hoistNValueF #-}
 
 -- * @__NValue'__@: forming the (F(A))
@@ -625,40 +640,43 @@ data ValueType
 
 -- | Determine type of a value
 valueType :: NValueF a m r -> ValueType
-valueType = \case
-  NVConstantF a -> case a of
-    NURI   _ -> TString NoContext
-    NInt   _ -> TInt
-    NFloat _ -> TFloat
-    NBool  _ -> TBool
-    NNull    -> TNull
-  NVStrF ns  ->
-    TString $
-      bool
-        NoContext
-        HasContext
-        $ stringHasContext ns
-  NVListF{}    -> TList
-  NVSetF{}     -> TSet
-  NVClosureF{} -> TClosure
-  NVPathF{}    -> TPath
-  NVBuiltinF{} -> TBuiltin
+valueType =
+  \case
+    NVConstantF a ->
+      case a of
+        NURI   _ -> TString NoContext
+        NInt   _ -> TInt
+        NFloat _ -> TFloat
+        NBool  _ -> TBool
+        NNull    -> TNull
+    NVStrF ns  ->
+      TString $
+        bool
+          NoContext
+          HasContext
+          (stringHasContext ns)
+    NVListF{}    -> TList
+    NVSetF{}     -> TSet
+    NVClosureF{} -> TClosure
+    NVPathF{}    -> TPath
+    NVBuiltinF{} -> TBuiltin
 
 
 -- | Describe type value
 describeValue :: ValueType -> String
-describeValue = \case
-  TInt               -> "an integer"
-  TFloat             -> "a float"
-  TBool              -> "a boolean"
-  TNull              -> "a null"
-  TString NoContext  -> "a string"
-  TString HasContext -> "a string with context"
-  TList              -> "a list"
-  TSet               -> "an attr set"
-  TClosure           -> "a function"
-  TPath              -> "a path"
-  TBuiltin           -> "a builtin function"
+describeValue =
+  \case
+    TInt               -> "an integer"
+    TFloat             -> "a float"
+    TBool              -> "a boolean"
+    TNull              -> "a null"
+    TString NoContext  -> "a string"
+    TString HasContext -> "a string with context"
+    TList              -> "a list"
+    TSet               -> "an attr set"
+    TClosure           -> "a function"
+    TPath              -> "a path"
+    TBuiltin           -> "a builtin function"
 
 
 showValueType :: (MonadThunk t m (NValue t f m), Comonad f)
