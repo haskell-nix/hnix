@@ -196,6 +196,7 @@ hoistNValueF lft = \case
   NVClosureF p g -> NVClosureF p (lft . g)
   NVBuiltinF s g -> NVBuiltinF s (lft . g)
 
+{-# inline hoistNValueF #-}
 
 -- * @__NValue'__@: forming the (F(A))
 
@@ -266,6 +267,7 @@ iterNValue'
   -> r
 iterNValue' k f = f . fmap (\a -> k a (iterNValue' k f))
 
+-- *** Utils
 
 -- | @hoistFree@: Back & forth hoisting in the monad stack
 hoistNValue'
@@ -276,7 +278,7 @@ hoistNValue'
   -> NValue' t f n a
 hoistNValue' run lft (NValue v) =
     NValue $ lmapNValueF (hoistNValue lft run) . hoistNValueF lft <$> v
-
+{-# inline hoistNValue' #-}
 
 -- ** Monad
 
@@ -455,6 +457,7 @@ iterNValueM transform k f =
     go (Pure x) = Pure <$> x
     go (Free fa) = Free <$> bindNValue' transform go fa
 
+-- *** Utils
 
 -- | @hoistFree@, Back & forth hoisting in the monad stack
 hoistNValue
@@ -464,7 +467,7 @@ hoistNValue
   -> NValue t f m
   -> NValue t f n
 hoistNValue run lft = hoistFree (hoistNValue' run lft)
-
+{-# inline hoistNValue #-}
 
 -- ** MonadTrans
 
