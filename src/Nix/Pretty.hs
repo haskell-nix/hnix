@@ -96,25 +96,25 @@ hasAttrOp :: OperatorInfo
 hasAttrOp = getSpecialOperator NHasAttrOp
 
 wrapParens :: OperatorInfo -> NixDoc ann -> Doc ann
-wrapParens op sub
-  | precedence (rootOp sub) < precedence op
-  = withoutParens sub
-  | precedence (rootOp sub)
-    == precedence op
-    && associativity (rootOp sub)
-    == associativity op
-    && associativity op
-    /= NAssocNone
-  = withoutParens sub
-  | otherwise
-  = parens $ withoutParens sub
+wrapParens op sub =
+  bool
+    parens
+    id
+    (precedence (rootOp sub)       < precedence op
+    || (precedence (rootOp sub)   == precedence op
+        && associativity (rootOp sub) == associativity op
+        && associativity op /= NAssocNone)
+    )
+    (withoutParens sub)
 
 -- Used in the selector case to print a path in a selector as
 -- "${./abc}"
 wrapPath :: OperatorInfo -> NixDoc ann -> Doc ann
-wrapPath op sub = if wasPath sub
-  then dquotes $ "$" <> braces (withoutParens sub)
-  else wrapParens op sub
+wrapPath op sub =
+  bool
+    (wrapParens op sub)
+    (dquotes $ "$" <> braces (withoutParens sub))
+    (wasPath sub)
 
 prettyString :: NString (NixDoc ann) -> Doc ann
 prettyString (DoubleQuoted parts) = dquotes . hcat . fmap prettyPart $ parts
