@@ -41,20 +41,28 @@ instance MonadThunkId m => MonadThunkId (StateT s m) where
   type ThunkId (StateT s m) = ThunkId m
 
 class MonadThunkId m => MonadThunk t m a | t -> m, t -> a where
-  thunk    :: m a -> m t
 
   -- | Return an identifier for the thunk unless it is a pure value (i.e.,
   --   strictly an encapsulation of some 'a' without any additional
   --   structure). For pure values represented as thunks, returns mempty.
   thunkId  :: t -> ThunkId m
 
-  queryM   :: (a -> m r) -> m r -> t -> m r
+  thunk    :: m a -> m t
+
+  queryM   :: m a -> t -> m a
   force    :: t -> m a
   forceEff :: t -> m a
 
   -- | Modify the action to be performed by the thunk. For some implicits
   --   this modifies the thunk, for others it may create a new thunk.
-  further  :: (m a -> m a) -> t -> m t
+  further  :: t -> m t
+
+-- | Class of Kleisli functors for easiness of customized implementation developlemnt.
+class MonadThunkF t m a | t -> m, t -> a where
+  queryMF   :: (a   -> m r) -> m r -> t -> m r
+  forceF    :: (a   -> m r) -> t   -> m r
+  forceEffF :: (a   -> m r) -> t   -> m r
+  furtherF  :: (m a -> m a) -> t   -> m t
 
 newtype ThunkLoop = ThunkLoop String -- contains rendering of ThunkId
   deriving Typeable

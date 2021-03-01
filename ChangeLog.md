@@ -5,23 +5,51 @@
 
 * Breaking:
 
-  * [(link)](https://github.com/haskell-nix/hnix/pull/863/files) `Nix.Thunk`: `class MonadThunk t m a | t -> m, t -> a` : `force{,Eff}`. Moved the functional argument out of the function. Now it only accepts and forces thunk. Please use `=<< force t` or `<=< force` for the nice code. All their implementations got more straigh-forward to use and `force*`s now tail recurse.
-      * `force`
-      * `forceThunk`
+  * [(link)](https://github.com/haskell-nix/hnix/pull/859/files) [(link)](https://github.com/haskell-nix/hnix/pull/863/files) [(link)](https://github.com/haskell-nix/hnix/pull/866/files) `Nix.Thunk`: `class MonadThunk t m a | t -> m, t -> a`. Class was initially designed with Kleisli arrows (`v -> m a`) in mind, which where put to have the design open and inviting customization & integration. Those functional arguments are for custom implementation, so  which in reality of the project were never used and HNax just "essentially" (simplifying, because `pure` was mixed with monadic binds to `f`) was passing `pure` into them (actually, `f <=< pure`). These Kliesli functors got arguments sorted properly and were moved to a `MonadThunkF` class and names gained `*F`. And `MonadThunk` now does only what is needed, for example `force` gets the thunk and computes it. All `MonadThunk{,F}` functions become with a classic Haskell arguments order, specialized, and got more straigh-forward to understand and use, and so now they tail recurse also.
       
-      If still want to use old `force*` - the `force{,Eff}F` are provided.
+      Now, for example, instead of `force t f` use it as `v <- force t` `f =<< force t`, or `f <=< force`.
       
-
-  * [(link)](https://github.com/haskell-nix/hnix/pull/859/files) `Nix.Thunk`: `class MonadThunk t m a | t -> m, t -> a` : unflipped the arguments. All their implementations got more straigh-forward to use and some functions now tail recurse.
-    * Simply flip the first two arguments for:
-      * `further`
-      * `furtherEff`
-    * Simply switch the 1<->3 arguments in:
-      * `querryM`
-      * `querryThunk`
-
-  * [(link)](https://github.com/haskell-nix/hnix/pull/862/files) `Nix.Value.Monad`: `class MonadValue v m`: `demand` unflipped the arguments. All its implementations got more straigh-forward to use and `demand` now tail recurse.
-
+      tl;dr: results:
+      
+      ```haskell
+      class MonadThunkId m => MonadThunk t m a | t -> m, t -> a where
+      
+        thunkId  :: t -> ThunkId m
+      
+        thunk    :: m a -> m t
+      
+        queryM   :: m a -> t -> m a
+        -- was :: t -> m r -> (a   -> m r) -> m r
+        -- old became `queryMF`
+      
+        force    :: t -> m a
+        -- was :: t   -> (a   -> m r) -> m r
+        -- old became `forceF`
+      
+        forceEff :: t -> m a
+        -- was :: t   -> (a   -> m r) -> m r
+        -- old became `forceEffF`
+      
+        further  :: t -> m t
+        -- was :: t   -> (m a -> m a) -> m t
+        -- old became `furtherF`
+      
+      
+      -- | Class of Kleisli functors for easiness of customized implementation developlemnt.
+      class MonadThunkF t m a | t -> m, t -> a where
+        queryMF   :: (a   -> m r) -> m r -> t -> m r
+        forceF    :: (a   -> m r) -> t   -> m r
+        forceEffF :: (a   -> m r) -> t   -> m r
+        furtherF  :: (m a -> m a) -> t   -> m t
+      ```
+      
+  * [(link)](https://github.com/haskell-nix/hnix/pull/862/files) `Nix.Value.Monad`: `class MonadValue v m`: `demand` unflipped the arguments into a classical order. As a result, `demand` now tail recurse.
+      
+      ```haskell
+      demand :: (v -> m r) -> v -> m r
+      -- was :: v -> (v -> m r) -> m r
+      ```
+      
   * [(link)](https://github.com/haskell-nix/hnix/pull/863/files) `Nix.Normal`: `normalizeValue` removed first functional argument that was passing the function that did the thunk forcing. Now function provides the thunk forcing. Now to normalize simply use `normalizeValue v`.
 
   * [(link)](https://github.com/haskell-nix/hnix/pull/859/commits/8e043bcbda13ea4fd66d3eefd6da690bb3923edd) `Nix.Value.Equal`: `valueEqM`: freed from `RankNTypes: forall t f m .`.
@@ -64,43 +92,43 @@
     * Children found their parents:
         
         ```haskell
-        Binary   NAtom: Nix.Expr.Types -> Nix.Atoms
-        FromJSON NAtom: Nix.Expr.Types -> Nix.Atoms
-        ToJSON   NAtom: Nix.Expr.Types -> Nix.Atoms
+        Binary   NAtom :: Nix.Expr.Types -> Nix.Atoms
+        FromJSON NAtom :: Nix.Expr.Types -> Nix.Atoms
+        ToJSON   NAtom :: Nix.Expr.Types -> Nix.Atoms
 
         -- | Instance was TH, now simple derivable
-        Eq1 (NValueF p m)    : Nix.Value.Equal -> Nix.Value
+        Eq1 (NValueF p m)     :: Nix.Value.Equal -> Nix.Value
 
-        Eq1 (NValue' t f m a): Nix.Value.Equal -> Nix.Value 
+        Eq1 (NValue' t f m a) :: Nix.Value.Equal -> Nix.Value 
 
-        HasCitations m v (NValue' t f m a): Nix.Pretty -> Nix.Cited
-        HasCitations m v (NValue  t f m)  : Nix.Pretty -> Nix.Cited
+        HasCitations m v (NValue' t f m a) :: Nix.Pretty -> Nix.Cited
+        HasCitations m v (NValue  t f m)   :: Nix.Pretty -> Nix.Cited
 
         when
           (package hashable >= 1.3.1) -- gained instance
-          $ Hashable1 NonEmpty: Nix.Expr.Types -> Void -- instance was upstreamed
+          $ Hashable1 NonEmpty:: Nix.Expr.Types -> Void -- please use upstreamed instance
 
         -- | Upstreamed, going to apper in the next release of `ref-tf`.
-        MonadAtomicRef   (Fix1T t m): Nix.Standard -> Nix.Utils.Fix1
+        MonadAtomicRef   (Fix1T t m) :: Nix.Standard -> Nix.Utils.Fix1
 
-        MonadRef         (Fix1T t m): Nix.Standard -> Nix.Utils.Fix1
-        MonadEnv         (Fix1T t m): Nix.Standard -> Nix.Effects
-        MonadExec        (Fix1T t m): Nix.Standard -> Nix.Effects
-        MonadHttp        (Fix1T t m): Nix.Standard -> Nix.Effects
-        MonadInstantiate (Fix1T t m): Nix.Standard -> Nix.Effects
-        MonadIntrospect  (Fix1T t m): Nix.Standard -> Nix.Effects
-        MonadPaths       (Fix1T t m): Nix.Standard -> Nix.Effects
-        MonadPutStr      (Fix1T t m): Nix.Standard -> Nix.Effects
-        MonadStore       (Fix1T t m): Nix.Standard -> Nix.Effects
-        MonadFile        (Fix1T t m): Nix.Standard -> Nix.Render
+        MonadRef         (Fix1T t m) :: Nix.Standard -> Nix.Utils.Fix1
+        MonadEnv         (Fix1T t m) :: Nix.Standard -> Nix.Effects
+        MonadExec        (Fix1T t m) :: Nix.Standard -> Nix.Effects
+        MonadHttp        (Fix1T t m) :: Nix.Standard -> Nix.Effects
+        MonadInstantiate (Fix1T t m) :: Nix.Standard -> Nix.Effects
+        MonadIntrospect  (Fix1T t m) :: Nix.Standard -> Nix.Effects
+        MonadPaths       (Fix1T t m) :: Nix.Standard -> Nix.Effects
+        MonadPutStr      (Fix1T t m) :: Nix.Standard -> Nix.Effects
+        MonadStore       (Fix1T t m) :: Nix.Standard -> Nix.Effects
+        MonadFile        (Fix1T t m) :: Nix.Standard -> Nix.Render
 
-        MonadEnv         (Fix1 t)   : Nix.Standard -> Nix.Effects
-        MonadExec        (Fix1 t)   : Nix.Standard -> Nix.Effects
-        MonadHttp        (Fix1 t)   : Nix.Standard -> Nix.Effects
-        MonadInstantiate (Fix1 t)   : Nix.Standard -> Nix.Effects
-        MonadIntrospect  (Fix1 t)   : Nix.Standard -> Nix.Effects
-        MonadPaths       (Fix1 t)   : Nix.Standard -> Nix.Effects
-        MonadPutStr      (Fix1 t)   : Nix.Standard -> Nix.Effects
+        MonadEnv         (Fix1 t)    :: Nix.Standard -> Nix.Effects
+        MonadExec        (Fix1 t)    :: Nix.Standard -> Nix.Effects
+        MonadHttp        (Fix1 t)    :: Nix.Standard -> Nix.Effects
+        MonadInstantiate (Fix1 t)    :: Nix.Standard -> Nix.Effects
+        MonadIntrospect  (Fix1 t)    :: Nix.Standard -> Nix.Effects
+        MonadPaths       (Fix1 t)    :: Nix.Standard -> Nix.Effects
+        MonadPutStr      (Fix1 t)    :: Nix.Standard -> Nix.Effects
         ```
   
 

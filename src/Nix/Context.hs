@@ -4,13 +4,14 @@
 
 module Nix.Context where
 
-import           Nix.Options
-import           Nix.Scope
-import           Nix.Frames
-import           Nix.Utils
+import           Nix.Options                    ( Options )
+import           Nix.Scope                      ( Scopes
+                                                , emptyScopes )
+import           Nix.Frames                     ( Frames )
 import           Nix.Expr.Types.Annotated       ( SrcSpan
                                                 , nullSpan
                                                 )
+import           Nix.Utils                      ( Has(..) )
 
 data Context m t = Context
     { scopes  :: Scopes m t

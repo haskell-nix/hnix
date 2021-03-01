@@ -26,7 +26,6 @@ import           Control.Monad.Reader           ( MonadReader )
 import           Control.Monad.Ref
 import           Control.Monad.ST
 import           Control.Monad.Trans.Reader
-import           Data.Bool                      ( bool )
 import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List

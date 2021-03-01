@@ -18,7 +18,6 @@ import           Control.Monad                  ( (>=>), forM, when )
 import           Control.Monad.Writer           ( join, lift )
 import           Control.Monad.State            ( MonadState, gets, modify )
 
-import           Data.Bool                      ( bool )
 import           Data.Char                      ( isAscii, isAlphaNum )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.HashMap.Strict           as MS

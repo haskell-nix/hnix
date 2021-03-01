@@ -12,7 +12,6 @@ import           Data.Text                      ( Text
                                                 )
 import           Data.Time
 import           Nix
-import           Nix.Exec                       ( )
 import           Nix.Standard
 import           Nix.Fresh.Basic
 import           System.Environment
@@ -26,8 +25,7 @@ hnixEvalFile :: Options -> FilePath -> IO (StdValue (StandardT (StdIdT IO)))
 hnixEvalFile opts file = do
   parseResult <- parseNixFileLoc file
   case parseResult of
-    Failure err ->
-      error $ "Parsing failed for file `" <> file <> "`.\n" <> show err
+    Failure err -> error $ "Parsing failed for file `" <> file <> "`.\n" <> show err
     Success expr -> do
       setEnv "TEST_VAR" "foo"
       runWithBasicEffects opts
@@ -42,12 +40,7 @@ hnixEvalFile opts file = do
 
 hnixEvalText :: Options -> Text -> IO (StdValue (StandardT (StdIdT IO)))
 hnixEvalText opts src = case parseNixText src of
-  Failure err ->
-    error
-      $  "Parsing failed for expression `"
-      <> unpack src
-      <> "`.\n"
-      <> show err
+  Failure err -> error $ "Parsing failed for expression `" <> unpack src <> "`.\n" <> show err
   Success expr ->
     runWithBasicEffects opts $ normalForm =<< nixEvalExpr mempty expr
 
@@ -76,4 +69,5 @@ assertEvalMatchesNix expr = do
   hnixVal <- (<> "\n") . printNix <$> hnixEvalText (defaultOptions time) expr
   nixVal  <- nixEvalString expr'
   assertEqual expr' nixVal hnixVal
-  where expr' = unpack expr
+ where
+  expr' = unpack expr

@@ -26,7 +26,6 @@ import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
 import           Nix.Utils
-import Data.Bool (bool)
 
 newtype NormalLoop t f m = NormalLoop (NValue t f m)
     deriving Show
@@ -124,7 +123,7 @@ removeEffects =
   iterNValueM
     id
     --  2021-02-25: NOTE: Please, unflip this up the stack
-    (\ t f -> queryM f (pure opaque) t)
+    (\ t f -> f =<< queryM (pure opaque) t)
     (fmap Free . sequenceNValue' id)
 
 opaque :: Applicative f => NValue t f m
@@ -134,4 +133,4 @@ dethunk
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
   => t
   -> m (NValue t f m)
-dethunk = queryM removeEffects (pure opaque)
+dethunk = removeEffects <=< queryM (pure opaque)

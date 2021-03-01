@@ -16,7 +16,6 @@ import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.Free
 import           Control.Monad.IO.Class
-import           Data.Bool                      ( bool )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Map                      as Map
 import           Data.List                      ( sortOn )

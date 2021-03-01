@@ -58,51 +58,103 @@ instance ( Has e Options
   thunk mv = do
     opts :: Options <- asks (view hasLens)
 
-    if thunks opts
-      then do
+    bool
+      (fmap (Cited . NCited mempty) . thunk $ mv)
+      (do
         frames :: Frames <- asks (view hasLens)
 
         -- Gather the current evaluation context at the time of thunk
         -- creation, and record it along with the thunk.
         let go (fromException ->
                     Just (EvaluatingExpr scope
-                             (Fix (Compose (Ann s e))))) =
+                              (Fix (Compose (Ann s e))))) =
                 let e' = Compose (Ann s (Nothing <$ e))
                 in [Provenance scope e']
             go _ = mempty
             ps = concatMap (go . frame) frames
 
         fmap (Cited . NCited ps) . thunk $ mv
-      else fmap (Cited . NCited mempty) . thunk $ mv
+      )
+      (thunks opts)
 
   thunkId :: Cited u f m t -> ThunkId m
   thunkId (Cited (NCited _ t)) = thunkId @_ @m t
 
-  queryM :: (v -> m r) -> m r -> Cited u f m t -> m r
-  queryM f m (Cited (NCited _ t)) = queryM f m t
+  queryM :: m v -> Cited u f m t -> m v
+  queryM m (Cited (NCited _ t)) = queryM m t
 
   -- | The ThunkLoop exception is thrown as an exception with MonadThrow,
   --   which does not capture the current stack frame information to provide
   --   it in a NixException, so we catch and re-throw it here using
   --   'throwError' from Frames.hs.
   force :: Cited u f m t -> m v
-  force (Cited (NCited ps t)) =
-    catch go (throwError @ThunkLoop)
-   where
-    go = case ps of
-      [] -> force t
-      Provenance scope e@(Compose (Ann s _)) : _ ->
-        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (force t)
+  force (Cited (NCited ps t)) = handleDisplayProvenance ps $ force t
 
   forceEff :: Cited u f m t -> m v
-  forceEff (Cited (NCited ps t)) = catch
-    go
-    (throwError @ThunkLoop)
-   where
-    go = case ps of
-      [] -> forceEff t
-      Provenance scope e@(Compose (Ann s _)) : _ ->
-        withFrame Info (ForcingExpr scope (wrapExprLoc s e)) (forceEff t)
+  forceEff (Cited (NCited ps t)) = handleDisplayProvenance ps $ forceEff t
 
-  further :: (m v -> m v) -> Cited u f m t -> m (Cited u f m t)
-  further f (Cited (NCited ps t)) = Cited . NCited ps <$> further f t
+  further :: Cited u f m t -> m (Cited u f m t)
+  further (Cited (NCited ps t)) = Cited . NCited ps <$> further t
+
+
+-- * Kleisli functor HOFs
+
+-- Please, do not use MonadThunkF for MonadThunk, later uses more straight-forward specialized line of functions.
+instance ( Has e Options
+         , Framed e m
+         , MonadThunkF t m v
+         , Typeable m
+         , Typeable f
+         , Typeable u
+         , MonadCatch m
+         )
+  => MonadThunkF (Cited u f m t) m v where
+
+  queryMF :: (v -> m r) -> m r -> Cited u f m t -> m r
+  queryMF k m (Cited (NCited _ t)) = queryMF k m t
+
+  forceF :: (v -> m r) -> Cited u f m t -> m r
+  forceF k (Cited (NCited ps t)) = handleDisplayProvenance ps $ forceF k t
+
+  forceEffF :: (v -> m r) -> Cited u f m t -> m r
+  forceEffF k (Cited (NCited ps t)) = handleDisplayProvenance ps $ forceEffF k t
+
+  furtherF :: (m v -> m v) -> Cited u f m t -> m (Cited u f m t)
+  furtherF k (Cited (NCited ps t)) = Cited . NCited ps <$> furtherF k t
+
+
+-- ** Utils
+
+handleDisplayProvenance
+  :: (MonadCatch m
+    , Typeable m
+    , Typeable v
+    , Has e Frames
+    , MonadReader e m
+    )
+  => [Provenance m v]
+  -> m a
+  -> m a
+handleDisplayProvenance ps f =
+  catch
+    (displayProvenance ps f)
+    (throwError @ThunkLoop)
+
+displayProvenance
+  :: (MonadThrow m
+    , MonadReader e m
+    , Has e Frames
+    , Typeable m
+    , Typeable v
+    )
+  => [Provenance m v]
+  -> m a
+  -> m a
+displayProvenance ps f =
+  list
+    id
+    (\ (Provenance scope e@(Compose (Ann s _)) : _) ->
+      withFrame Info (ForcingExpr scope (wrapExprLoc s e))
+    )
+    ps
+    f

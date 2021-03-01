@@ -18,13 +18,19 @@ module Nix.Frames
   )
 where
 
+import           Data.Typeable           hiding ( typeOf )
+import           Control.Monad.Reader           ( MonadReader(local)
+                                                , asks
+                                                )
+import           Control.Monad.Catch            ( MonadThrow(..) )
 import           Control.Exception       hiding ( catch
                                                 , evaluate
                                                 )
-import           Control.Monad.Catch
-import           Control.Monad.Reader
-import           Data.Typeable           hiding ( typeOf )
-import           Nix.Utils
+import           Nix.Utils                      ( Has(..)
+                                                , view
+                                                , over
+                                                , traceM
+                                                )
 
 data NixLevel = Fatal | Error | Warning | Info | Debug
     deriving (Ord, Eq, Bounded, Enum, Show)

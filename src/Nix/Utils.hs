@@ -179,10 +179,75 @@ alterF f k m =
     )
     $ f $ M.lookup k m
 
+-- | From @Data.Bool ( bool )@.
+bool :: a -> a -> Bool -> a
+bool f _ False = f
+bool _ t True  = t
+
+-- | Analog for @bool@ or @maybe@, for list-like cons structures.
+list
+  :: Foldable t
+  => b -> (t a -> b) -> t a -> b
+list e f l =
+  bool
+    (f l)
+    e
+    (null l)
 
 -- | Lambda analog of @maybe@ or @either@ for Free monad.
 free :: (a -> b) -> (f (Free f a) -> b) -> Free f a -> b
-free fP fF m =
-  case m of
-    Pure a -> fP a
-    Free fa -> fF fa
+free fP _  (Pure a ) = fP a
+free _  fF (Free fa) = fF fa
+
+ifTrue :: (Monoid a)
+  => a -> Bool -> a
+ifTrue =
+  bool
+    mempty
+
+ifFalse :: (Monoid a)
+  => a  -> Bool  -> a
+ifFalse f =
+  bool
+    f
+    mempty
+
+ifJust :: (Monoid b)
+  => (a -> b)  -> Maybe a  -> b
+ifJust =
+  maybe
+    mempty
+
+
+ifNothing  :: (Monoid b)
+  => b  -> Maybe a  -> b
+ifNothing f =
+  maybe
+    f
+    mempty
+
+ifRight :: (Monoid c)
+  => (b -> c) -> Either a b -> c
+ifRight =
+  either
+    mempty
+
+ifLeft :: (Monoid c)
+  => (a -> c) -> Either a b -> c
+ifLeft f =
+  either
+    f
+    mempty
+
+ifFree :: (Monoid b)
+  => (f (Free f a) -> b) -> Free f a -> b
+ifFree =
+  free
+    mempty
+
+ifPure :: (Monoid b)
+  => (a -> b) -> Free f a -> b
+ifPure f =
+  free
+    f
+    mempty

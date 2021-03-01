@@ -190,25 +190,31 @@ attrSetAlter
   -> m v
   -> m (AttrSet (m v), AttrSet SourcePos)
 attrSetAlter [] _ _ _ _ = evalError @v $ ErrorCall "invalid selector with no components"
-attrSetAlter (k : ks) pos m p val = case M.lookup k m of
-  Nothing | null ks   -> go
-          | otherwise -> recurse M.empty M.empty
-  Just x
-    | null ks
-    -> go
-    | otherwise
-    -> x >>= fromValue @(AttrSet v, AttrSet SourcePos) >>= \(st, sp) ->
-      recurse (demand pure <$> st) sp
+attrSetAlter (k : ks) pos m p val =
+  bool
+    go
+    (maybe
+      (recurse M.empty M.empty)
+      (\x ->
+        do
+          (st, sp) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< x
+          recurse (demand pure <$> st) sp
+      )
+      (M.lookup k m)
+    )
+    (not $ null ks)
  where
   go = pure (M.insert k val m, M.insert k pos p)
 
-  recurse st sp = attrSetAlter ks pos st sp val <&> \(st', _) ->
-    ( M.insert
-      k
-      (toValue @(AttrSet v, AttrSet SourcePos) =<< (, mempty) <$> sequence st')
-      m
-    , M.insert k pos p
-    )
+  recurse st sp =
+    (\(st', _) ->
+      (M.insert
+        k
+        (toValue @(AttrSet v, AttrSet SourcePos) =<< (, mempty) <$> sequence st')
+        m
+      , M.insert k pos p
+      )
+    ) <$> attrSetAlter ks pos st sp val
 
 desugarBinds :: forall r . ([Binding r] -> r) -> [Binding r] -> [Binding r]
 desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
@@ -220,21 +226,27 @@ desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
          (Either VarName (Binding r))
   collect (NamedVar (StaticKey x :| y : ys) val p) = do
     m <- get
-    put $ M.insert x ?? m $ case M.lookup x m of
-      Nothing     -> (p, [NamedVar (y :| ys) val p])
-      Just (q, v) -> (q, NamedVar (y :| ys) val q : v)
+    put $ M.insert x ?? m $
+      maybe
+        (p, [NamedVar (y :| ys) val p])
+        (\ (q, v) -> (q, NamedVar (y :| ys) val q : v))
+        (M.lookup x m)
     pure $ Left x
-  collect x = pure $ Right x
+  collect x = pure $ pure x
 
   go
     :: Either VarName (Binding r)
     -> State (HashMap VarName (SourcePos, [Binding r])) (Binding r)
-  go (Right x) = pure x
-  go (Left  x) = do
-    maybeValue <- gets (M.lookup x)
-    case maybeValue of
-      Nothing     -> error ("No binding " <> show x)
-      Just (p, v) -> pure $ NamedVar (StaticKey x :| []) (embed v) p
+  go =
+    either
+      (\ x -> do
+        maybeValue <- gets (M.lookup x)
+        maybe
+          (error $ "No binding " <> show x)
+          (\ (p, v) -> pure $ NamedVar (StaticKey x :| []) (embed v) p)
+          maybeValue
+      )
+      pure
 
 evalBinds
   :: forall v m
@@ -363,25 +375,26 @@ evalSetterKeyName
 evalSetterKeyName = \case
   StaticKey k -> pure (pure k)
   DynamicKey k ->
-    runAntiquoted "\n" assembleString (>>= fromValueMay) k <&>
-      maybe
-        mempty
-        (pure . stringIgnoreContext)
+    ((pure . stringIgnoreContext) `ifJust`) <$>runAntiquoted "\n" assembleString (fromValueMay =<<) k
 
 assembleString
   :: forall v m
    . (MonadEval v m, FromValue NixString m v)
   => NString (m v)
   -> m (Maybe NixString)
-assembleString = \case
-  Indented _ parts   -> fromParts parts
-  DoubleQuoted parts -> fromParts parts
+assembleString =
+  fromParts .
+    \case
+      Indented _ parts   -> parts
+      DoubleQuoted parts -> parts
  where
   fromParts = fmap (fmap mconcat . sequence) . traverse go
 
-  go = runAntiquoted "\n"
-                     (pure . pure . makeNixStringWithoutContext)
-                     (>>= fromValueMay)
+  go =
+    runAntiquoted
+      "\n"
+      (pure . pure . makeNixStringWithoutContext)
+      (fromValueMay =<<)
 
 buildArgument
   :: forall v m . MonadNixEval v m => Params (m v) -> m v -> m (AttrSet v)
@@ -390,14 +403,22 @@ buildArgument params arg = do
   case params of
     Param name -> M.singleton name <$> defer (withScopes scope arg)
     ParamSet s isVariadic m ->
-      arg >>= fromValue @(AttrSet v, AttrSet SourcePos) >>= \(args, _) -> do
-        let inject = case m of
-              Nothing -> id
-              Just n  -> M.insert n $ const $ defer (withScopes scope arg)
+      do
+        (args, _) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< arg
+        let
+          inject =
+            maybe
+              id
+              (\ n -> M.insert n $ const $ defer (withScopes scope arg))
+              m
         loebM
-          (inject $ M.mapMaybe id $ ialignWith (assemble scope isVariadic)
-                                               args
-                                               (M.fromList s)
+          (inject $
+              M.mapMaybe
+                id
+                $ ialignWith
+                  (assemble scope isVariadic)
+                  args
+                  (M.fromList s)
           )
  where
   assemble
@@ -407,25 +428,11 @@ buildArgument params arg = do
     -> These v (Maybe (m v))
     -> Maybe (AttrSet v -> m v)
   assemble scope isVariadic k = \case
-    That Nothing ->
-      pure
-        $  const
-        $  evalError @v
-        $  ErrorCall
-        $  "Missing value for parameter: "
-        <> show k
-    That (Just f) ->
-      pure $ \args -> defer $ withScopes scope $ pushScope args f
+    That Nothing -> pure $ const $ evalError @v $ ErrorCall $ "Missing value for parameter: " <>show k
+    That (Just f) -> pure $ \args -> defer $ withScopes scope $ pushScope args f
     This _
-      | isVariadic
-      -> Nothing
-      | otherwise
-      -> pure
-        $  const
-        $  evalError @v
-        $  ErrorCall
-        $  "Unexpected parameter: "
-        <> show k
+      | isVariadic -> Nothing
+      | otherwise  -> pure $ const $ evalError @v $ ErrorCall $ "Unexpected parameter: " <> show k
     These x _ -> pure (const (pure x))
 
 addSourcePositions

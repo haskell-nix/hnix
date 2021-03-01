@@ -28,10 +28,13 @@ module Nix
   )
 where
 
-import           Control.Applicative
+import           Control.Applicative            ( Alternative )
 import           Control.Arrow                  ( second )
-import           Control.Monad.Reader
-import           Data.Fix
+import           Control.Monad.Reader           ( MonadIO
+                                                , asks
+                                                , (<=<)
+                                                )
+import           Data.Fix                       ( Fix )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Text                     as Text
 import qualified Data.Text.Read                as Text
@@ -81,10 +84,11 @@ nixEvalExprLoc
   => Maybe FilePath
   -> NExprLoc
   -> m (NValue t f m)
-nixEvalExprLoc mpath = nixEval
-  mpath
-  (Eval.addStackFrames . Eval.addSourcePositions)
-  (Eval.eval . annotated . getCompose)
+nixEvalExprLoc mpath =
+  nixEval
+    mpath
+    (Eval.addStackFrames . Eval.addSourcePositions)
+    (Eval.eval . annotated . getCompose)
 
 -- | Evaluate a nix expression with tracing in the default context. Note that
 --   this function doesn't do any tracing itself, but 'evalExprLoc' will be
@@ -113,15 +117,17 @@ evaluateExpression mpath evaluator handler expr = do
   evaluator mpath expr >>= \f ->
     demand
       (\f' ->
-        processResult handler =<< case f' of
-          NVClosure _ g -> g (argmap args)
-          _             -> pure f
+        processResult handler =<<
+          case f' of
+            NVClosure _ g -> g (argmap args)
+            _             -> pure f
       )
       f
  where
-  parseArg s = case parseNixText s of
-    Success x   -> x
-    Failure err -> errorWithoutStackTrace (show err)
+  parseArg s =
+    case parseNixText s of
+      Success x   -> x
+      Failure err -> errorWithoutStackTrace (show err)
 
   eval' = normalForm <=< nixEvalExpr mpath
 
@@ -135,9 +141,10 @@ processResult
   -> m a
 processResult h val = do
   opts :: Options <- asks (view hasLens)
-  case attr opts of
-    Nothing                         -> h val
-    Just (Text.splitOn "." -> keys) -> go keys val
+  maybe
+    (h val)
+    (\ (Text.splitOn "." -> keys) -> go keys val)
+    (attr opts)
  where
   go :: [Text.Text] -> NValue t f m -> m a
   go [] v = h v
@@ -145,9 +152,11 @@ processResult h val = do
     demand
       (\case
         NVList xs ->
-          case ks of
-            [] -> h (xs !! n)
-            _  -> go ks (xs !! n)
+          list
+            h
+            go
+            ks
+          (xs !! n)
         _ -> errorWithoutStackTrace $ "Expected a list for selector '" <> show n <> "', but got: " <> show v
       )
       v
@@ -157,10 +166,12 @@ processResult h val = do
         NVSet xs _ ->
           maybe
             (errorWithoutStackTrace $ "Set does not contain key '" <> Text.unpack k <> "'")
-            (case ks of
-              [] -> h
-              _  -> go ks)
-          (M.lookup k xs)
+            (list
+              h
+              go
+              ks
+            )
+            (M.lookup k xs)
         _ -> errorWithoutStackTrace $ "Expected a set for selector '" <> Text.unpack k <> "', but got: " <> show v
       )
       v

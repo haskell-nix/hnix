@@ -14,6 +14,7 @@ import           Nix.Expr.Types
 import           Nix.String
 import           Nix.Value
 import           Text.XML.Light
+import           Nix.Utils
 
 toXML :: forall t f m . MonadDataContext f m => NValue t f m -> NixString
 toXML = runWithStringContext . fmap pp . iterNValue (\_ _ -> cyc) phi
@@ -71,7 +72,8 @@ paramsXML (ParamSet s b mname) =
   [Elem $ Element (unqual "attrspat") (battr <> nattr) (paramSetXML s) Nothing]
  where
   battr = [ Attr (unqual "ellipsis") "1" | b ]
-  nattr = maybe mempty ((: mempty) . Attr (unqual "name") . Text.unpack) mname
+  nattr =
+      ((: mempty) . Attr (unqual "name") . Text.unpack) `ifJust` mname
 
 paramSetXML :: ParamSet r -> [Content]
 paramSetXML = fmap (\(k, _) -> Elem $ mkElem "attr" "name" (Text.unpack k))

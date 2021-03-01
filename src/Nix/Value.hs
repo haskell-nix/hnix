@@ -21,7 +21,6 @@
 module Nix.Value
 where
 
-import           Data.Bool                      ( bool )
 import           Control.Comonad                ( Comonad, extract )
 import           Control.Exception              ( Exception )
 import           Control.Monad                  ( (<=<) )
