@@ -269,15 +269,18 @@ exprFNixDoc = \case
   NHasAttr r attr ->
     mkNixDoc (wrapParens hasAttrOp r <> " ? " <> prettySelector attr) hasAttrOp
   NEnvPath     p -> simpleExpr $ pretty ("<" <> p <> ">")
-  NLiteralPath p -> pathExpr $ pretty $ case p of
-    "./"  -> "./."
-    "../" -> "../."
-    ".."  -> "../."
-    txt | "/" `isPrefixOf` txt   -> txt
-        | "~/" `isPrefixOf` txt  -> txt
-        | "./" `isPrefixOf` txt  -> txt
-        | "../" `isPrefixOf` txt -> txt
-        | otherwise              -> "./" <> txt
+  NLiteralPath p ->
+    pathExpr $
+      pretty $
+        case p of
+          "./"  -> "./."
+          "../" -> "../."
+          ".."  -> "../."
+          _txt  ->
+            bool
+              ("./" <> _txt)
+              _txt
+              (any (`isPrefixOf` _txt) ["/", "~/", "./", "../"])
   NSym name -> simpleExpr $ pretty (unpack name)
   NLet binds body ->
     leastPrecedence
@@ -369,13 +372,11 @@ prettyNThunk t = do
   v' <- prettyNValue <$> dethunk t
   pure
     $ fillSep
-    $ [ v'
-      , indent 2
-      $ parens
-      $ mconcat
-      $ "thunk from: "
-      : fmap (prettyOriginExpr . _originExpr) ps
-      ]
+        [ v'
+        , indent 2 $
+            parens $
+              mconcat $ "thunk from: " : fmap (prettyOriginExpr . _originExpr) ps
+        ]
 
 -- | This function is used only by the testing code.
 printNix :: forall t f m . MonadDataContext f m => NValue t f m -> String
