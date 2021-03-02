@@ -907,20 +907,25 @@ elem_
 elem_ x = toValue <=< anyM (valueEqM x) <=< fromValue
 
 elemAt :: [a] -> Int -> Maybe a
-elemAt ls i = case drop i ls of
-  []    -> Nothing
-  a : _ -> pure a
+elemAt ls i =
+  list
+    Nothing
+    (pure . head)
+    (drop i ls)
 
 elemAt_
   :: MonadNix e t f m
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-elemAt_ xs n = fromValue n >>= \n' -> fromValue xs >>= \xs' ->
-  maybe
-    (throwError $ ErrorCall $ "builtins.elem: Index " <> show n' <> " too large for list of length " <> show (length xs'))
-    pure
-    (elemAt xs' n')
+elemAt_ xs n =
+  do
+    n' <- fromValue n
+    xs' <- fromValue xs
+    maybe
+      (throwError $ ErrorCall $ "builtins.elem: Index " <> show n' <> " too large for list of length " <> show (length xs'))
+      pure
+      (elemAt xs' n')
 
 genList
   :: forall e t f m
@@ -928,11 +933,13 @@ genList
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-genList f = fromValue @Integer >=> \n ->
-  bool
-    (throwError $ ErrorCall $ "builtins.genList: Expected a non-negative number, got " <> show n)
-    (toValue =<< forM [0 .. n - 1] (\i -> defer $ (f `callFunc`) =<< toValue i))
-    (n >= 0)
+genList f nixN =
+  do
+    n <- fromValue @Integer nixN
+    bool
+      (throwError $ ErrorCall $ "builtins.genList: Expected a non-negative number, got " <> show n)
+      (toValue =<< forM [0 .. n - 1] (defer . callFunc f <=< toValue))
+      (n >= 0)
 
 -- We wrap values solely to provide an Ord instance for genericClosure
 newtype WValue t f m = WValue (NValue t f m)
@@ -1107,11 +1114,14 @@ removeAttrs
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-removeAttrs set = fromValue . Deeper >=> \(nsToRemove :: [NixString]) ->
-  fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) set >>= \(m, p) -> do
+removeAttrs set v =
+  do
+    (m, p) <- fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) set
+    (nsToRemove :: [NixString]) <- fromValue $ Deeper v
     toRemove <- mapM fromStringNoContext nsToRemove
     toValue (go m toRemove, go p toRemove)
-  where go = foldl' (flip M.delete)
+ where
+  go = foldl' (flip M.delete)
 
 intersectAttrs
   :: forall e t f m
