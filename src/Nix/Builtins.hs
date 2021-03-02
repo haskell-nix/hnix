@@ -643,24 +643,35 @@ match_
   -> NValue t f m
   -> m (NValue t f m)
 match_ pat str = fromValue pat >>= fromStringNoContext >>= \p ->
-  fromValue str >>= \ns -> do
+  fromValue str >>= \ns ->
+  do
         -- NOTE: Currently prim_match in nix/src/libexpr/primops.cc ignores the
         -- context of its second argument. This is probably a bug but we're
         -- going to preserve the behavior here until it is fixed upstream.
         -- Relevant issue: https://github.com/NixOS/nix/issues/2547
-    let s  = stringIgnoreContext ns
-
-    let re = makeRegex (encodeUtf8 p) :: Regex
-    let mkMatch t
+    let
+      s  = stringIgnoreContext ns
+      re = makeRegex (encodeUtf8 p) :: Regex
+      mkMatch t
           | Text.null t = toValue ()
           | -- Shorthand for Null
             otherwise   = toValue $ makeNixStringWithoutContext t
-    case matchOnceText re (encodeUtf8 s) of
-      Just ("", sarr, "") -> do
-        let s = fmap fst (elems sarr)
-        nvList <$> traverse (mkMatch . decodeUtf8)
-                            (if length s > 1 then tail s else s)
-      _ -> pure $ nvConstant NNull
+    maybe
+      (pure $ nvConstant NNull)
+      (\case
+        ("", sarr, "") ->
+          do
+            let s = fmap fst (elems sarr)
+            nvList <$> traverse (mkMatch . decodeUtf8)
+              (bool
+                id
+                tail
+                (length s > 1)
+                s
+              )
+        _ -> (pure $ nvConstant NNull)
+      )
+      (matchOnceText re (encodeUtf8 s))
 
 split_
   :: forall e t f m
