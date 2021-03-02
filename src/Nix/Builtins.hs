@@ -320,22 +320,28 @@ foldNixPath f z = do
       (pure mempty)
       (demand (fromValue . Deeper))
       mres
-  mPath <- getEnvVar "NIX_PATH"
+  mPath    <- getEnvVar "NIX_PATH"
   mDataDir <- getEnvVar "NIX_DATA_DIR"
-  dataDir <- maybe getDataDir pure mDataDir
-  foldrM go z
-    $  fmap (fromInclude . stringIgnoreContext) dirs
-    <> case mPath of
-         Nothing  -> mempty
-         Just str -> uriAwareSplit (Text.pack str)
+  dataDir  <-
+    maybe
+      getDataDir
+      pure
+      mDataDir
+  foldrM go z $
+    (fromInclude . stringIgnoreContext <$> dirs)
+    <> ((uriAwareSplit . Text.pack) `ifJust` mPath)
     <> [ fromInclude $ Text.pack $ "nix=" <> dataDir <> "/nix/corepkgs" ]
  where
-  fromInclude x | "://" `Text.isInfixOf` x = (x, PathEntryURI)
-                | otherwise                = (x, PathEntryPath)
-  go (x, ty) rest = case Text.splitOn "=" x of
-    [p] -> f (Text.unpack p) mempty ty rest
-    [n, p] -> f (Text.unpack p) (pure (Text.unpack n)) ty rest
-    _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " <> show x
+  fromInclude x = (x, ) $
+    bool
+      PathEntryPath
+      PathEntryURI
+      ("://" `Text.isInfixOf` x)
+  go (x, ty) rest =
+    case Text.splitOn "=" x of
+      [p] -> f (Text.unpack p) mempty ty rest
+      [n, p] -> f (Text.unpack p) (pure (Text.unpack n)) ty rest
+      _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " <> show x
 
 nixPath :: MonadNix e t f m => m (NValue t f m)
 nixPath = fmap nvList $ flip foldNixPath mempty $
@@ -576,13 +582,14 @@ splitVersion s = case Text.uncons s of
        in  thisComponent : splitVersion rest
 
 splitVersion_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-splitVersion_ = fromValue >=> fromStringNoContext >=> \s ->
-  pure
-    $ nvList
-    $ flip fmap (splitVersion s)
-    $ nvStr
-    . makeNixStringWithoutContext
-    . versionComponentToString
+splitVersion_ v =
+  do
+    s <- fromStringNoContext =<< fromValue v
+    pure$
+      nvList $
+        fmap
+          (nvStr . makeNixStringWithoutContext . versionComponentToString)
+          (splitVersion s)
 
 compareVersions :: Text -> Text -> Ordering
 compareVersions s1 s2 = mconcat
@@ -596,8 +603,11 @@ compareVersions_
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-compareVersions_ t1 t2 = fromValue t1 >>= fromStringNoContext >>= \s1 ->
-  fromValue t2 >>= fromStringNoContext >>= \s2 ->
+compareVersions_ t1 t2 =
+  do
+    s1 <- fromStringNoContext =<< fromValue t1
+    s2 <- fromStringNoContext =<< fromValue t2
+
     pure $ nvConstant $ NInt $
       case compareVersions s1 s2 of
         LT -> -1
@@ -615,9 +625,10 @@ splitDrvName s =
     -- Like 'break', but always puts the first item into the first result
     -- list
     breakAfterFirstItem :: (a -> Bool) -> [a] -> ([a], [a])
-    breakAfterFirstItem f = \case
-      h : t -> let (a, b) = break f t in (h : a, b)
-      []    -> (mempty, mempty)
+    breakAfterFirstItem f =
+      list
+        (mempty, mempty)
+        (\ (h : t) -> let (a, b) = break f t in (h : a, b))
     (namePieces, versionPieces) =
       breakAfterFirstItem isFirstVersionPiece pieces
   in
@@ -945,9 +956,9 @@ genericClosure
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 genericClosure = fromValue @(AttrSet (NValue t f m)) >=> \s ->
   case (M.lookup "startSet" s, M.lookup "operator" s) of
-    (Nothing    , Nothing        ) -> throwError $ ErrorCall $ "builtins.genericClosure: Attributes 'startSet' and 'operator' required"
-    (Nothing    , Just _         ) -> throwError $ ErrorCall $ "builtins.genericClosure: Attribute 'startSet' required"
-    (Just _     , Nothing        ) -> throwError $ ErrorCall $ "builtins.genericClosure: Attribute 'operator' required"
+    (Nothing    , Nothing        ) -> throwError $ ErrorCall "builtins.genericClosure: Attributes 'startSet' and 'operator' required"
+    (Nothing    , Just _         ) -> throwError $ ErrorCall "builtins.genericClosure: Attribute 'startSet' required"
+    (Just _     , Nothing        ) -> throwError $ ErrorCall "builtins.genericClosure: Attribute 'operator' required"
     (Just startSet, Just operator) ->
       demand
         (fromValue @[NValue t f m] >=>
@@ -1443,11 +1454,13 @@ fromJSON
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 fromJSON =
   demand
-    (fromValue >=> fromStringNoContext >=> \encoded ->
-      either
-        (\ jsonError -> throwError $ ErrorCall $ "builtins.fromJSON: " <> jsonError)
-        jsonToNValue
-        (A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded)
+    (\ j ->
+      do
+        encoded <- fromStringNoContext =<< fromValue j
+        either
+          (\ jsonError -> throwError $ ErrorCall $ "builtins.fromJSON: " <> jsonError)
+          jsonToNValue
+          (A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded)
     )
  where
   jsonToNValue = \case
