@@ -598,10 +598,11 @@ compareVersions_
   -> m (NValue t f m)
 compareVersions_ t1 t2 = fromValue t1 >>= fromStringNoContext >>= \s1 ->
   fromValue t2 >>= fromStringNoContext >>= \s2 ->
-    pure $ nvConstant $ NInt $ case compareVersions s1 s2 of
-      LT -> -1
-      EQ -> 0
-      GT -> 1
+    pure $ nvConstant $ NInt $
+      case compareVersions s1 s2 of
+        LT -> -1
+        EQ -> 0
+        GT -> 1
 
 splitDrvName :: Text -> (Text, Text)
 splitDrvName s =
@@ -667,18 +668,21 @@ split_
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-split_ pat str = fromValue pat >>= fromStringNoContext >>= \p ->
-  fromValue str >>= \ns -> do
-        -- NOTE: Currently prim_split in nix/src/libexpr/primops.cc ignores the
-        -- context of its second argument. This is probably a bug but we're
-        -- going to preserve the behavior here until it is fixed upstream.
-        -- Relevant issue: https://github.com/NixOS/nix/issues/2547
-    let s = stringIgnoreContext ns
-    let re       = makeRegex (encodeUtf8 p) :: Regex
+split_ pat str =
+    do
+      s <- fromValue pat
+      p <- fromStringNoContext s
+      ns <- fromValue str
+          -- NOTE: Currently prim_split in nix/src/libexpr/primops.cc ignores the
+          -- context of its second argument. This is probably a bug but we're
+          -- going to preserve the behavior here until it is fixed upstream.
+          -- Relevant issue: https://github.com/NixOS/nix/issues/2547
+      let
+        s = stringIgnoreContext ns
+        regex       = makeRegex (encodeUtf8 p) :: Regex
         haystack = encodeUtf8 s
-    pure $ nvList $ splitMatches 0
-                                   (elems <$> matchAllText re haystack)
-                                   haystack
+
+      pure $ nvList $ splitMatches 0 (elems <$> matchAllText regex haystack) haystack
 
 splitMatches
   :: forall e t f m
