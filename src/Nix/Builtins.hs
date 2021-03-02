@@ -666,13 +666,11 @@ match_ pat str =
         ("", sarr, "") ->
           do
             let s = fmap fst (elems sarr)
-            nvList <$> traverse (mkMatch . decodeUtf8)
-              (bool
-                id
-                tail
-                (length s > 1)
-                s
-              )
+            nvList
+              <$>
+                traverse
+                  (mkMatch . decodeUtf8)
+                  ((tail `ifTrue` (length s > 1)) s) -- (length <= 1) allowed & passes-through here the full string
         _ -> (pure $ nvConstant NNull)
       )
       (matchOnceText re (encodeUtf8 s))
