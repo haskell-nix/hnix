@@ -57,7 +57,6 @@ import qualified Data.Text.Lazy                as LazyText
 import qualified Data.Text.Lazy.Builder        as Builder
 import           Data.These                     ( fromThese )
 import qualified Data.Time.Clock.POSIX         as Time
-import           Data.Traversable               ( for )
 import qualified Data.Vector                   as V
 import           NeatInterpolation              ( text )
 import           Nix.Atoms
@@ -786,14 +785,24 @@ mapAttrs_
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-mapAttrs_ f xs = fromValue @(AttrSet (NValue t f m)) xs >>= \aset -> do
-  let pairs = M.toList aset
-  values <- for pairs $ \(key, value) ->
-    defer @(NValue t f m)
-      $   withFrame Debug (ErrorCall "While applying f in mapAttrs:\n")
-      $   callFunc ?? value
-      =<< callFunc f (nvStr (makeNixStringWithoutContext key))
-  toValue . M.fromList . zip (fmap fst pairs) $ values
+mapAttrs_ f xs =
+  do
+    nixAttrset <- fromValue @(AttrSet (NValue t f m)) xs
+    let
+      keyVals = M.toList nixAttrset
+      keys = fst <$> keyVals
+
+      applyFunToKeyVal (key, val) =
+        do
+          runFunForKey <- callFunc f $ nvStr $ makeNixStringWithoutContext key
+          callFunc runFunForKey val
+
+    newVals <-
+      traverse
+        (defer @(NValue t f m) . withFrame Debug (ErrorCall "While applying f in mapAttrs:\n") . applyFunToKeyVal)
+        keyVals
+
+    toValue $ M.fromList $ zip keys newVals
 
 filter_
   :: forall e t f m
@@ -1566,7 +1575,7 @@ fetchurl =
 
   noContextAttrs ns =
     maybe
-      (throwError $ ErrorCall $ "builtins.fetchurl: unsupported arguments to url")
+      (throwError $ ErrorCall "builtins.fetchurl: unsupported arguments to url")
       pure
       (getStringNoContext ns)
 
