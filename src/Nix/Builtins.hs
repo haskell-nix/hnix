@@ -702,29 +702,35 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
   relStart       = max 0 start - numDropped
   (before, rest) = B.splitAt relStart haystack
   caps           = nvList (fmap f captures)
-  f (a, (s, _)) = if s < 0 then nvConstant NNull else thunkStr a
+  f (a, (s, _))  =
+    bool
+      (nvConstant NNull)
+      (thunkStr a)
+      (s >= 0)
 
 thunkStr :: Applicative f => ByteString -> NValue t f m
 thunkStr s = nvStr (makeNixStringWithoutContext (decodeUtf8 s))
 
 substring :: forall e t f m. MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
-substring start len str = Prim $
-  if start < 0
-  then throwError $ ErrorCall $ "builtins.substring: negative start position: " <> show start
-  else pure $ modifyNixContents (take . Text.drop start) str
+substring start len str =
+  Prim $
+    bool
+      (throwError $ ErrorCall $ "builtins.substring: negative start position: " <> show start)
+      (pure $ modifyNixContents (take . Text.drop start) str)
+      (start >= 0)
  where
-  --NOTE: negative values of 'len' are OK, and mean "take everything"
-  take = if len < 0 then id else Text.take len
+  take =
+    bool
+      id  --NOTE: negative values of 'len' are OK, and mean "take everything"
+      (Text.take len)
+      (len >= 0)
 
 attrNames
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 attrNames =
   fromValue @(AttrSet (NValue t f m))
-    >=> fmap getDeeper
-    .   toValue
-    .   fmap makeNixStringWithoutContext
-    .   sort
-    .   M.keys
+    >=>
+  (fmap getDeeper . toValue . fmap makeNixStringWithoutContext . sort . M.keys)
 
 attrValues
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
