@@ -642,13 +642,16 @@ match_
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-match_ pat str = fromValue pat >>= fromStringNoContext >>= \p ->
-  fromValue str >>= \ns ->
+match_ pat str =
   do
-        -- NOTE: Currently prim_match in nix/src/libexpr/primops.cc ignores the
-        -- context of its second argument. This is probably a bug but we're
-        -- going to preserve the behavior here until it is fixed upstream.
-        -- Relevant issue: https://github.com/NixOS/nix/issues/2547
+    s <- fromValue pat
+    p <- fromStringNoContext s
+    ns <- fromValue str
+
+    -- NOTE: 2018-11-19: Currently prim_match in nix/src/libexpr/primops.cc
+    -- ignores the context of its second argument. This is probably a bug but we're
+    -- going to preserve the behavior here until it is fixed upstream.
+    -- Relevant issue: https://github.com/NixOS/nix/issues/2547
     let
       s  = stringIgnoreContext ns
       re = makeRegex (encodeUtf8 p) :: Regex
