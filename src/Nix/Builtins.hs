@@ -655,10 +655,11 @@ match_ pat str =
     let
       s  = stringIgnoreContext ns
       re = makeRegex (encodeUtf8 p) :: Regex
-      mkMatch t
-          | Text.null t = toValue ()
-          | -- Shorthand for Null
-            otherwise   = toValue $ makeNixStringWithoutContext t
+      mkMatch t =
+        bool
+          (toValue ()) -- Shorthand for Null
+          (toValue $ makeNixStringWithoutContext t)
+          (not $ Text.null t)
     maybe
       (pure $ nvConstant NNull)
       (\case
