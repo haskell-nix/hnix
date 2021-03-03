@@ -91,20 +91,20 @@
 #   , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
 #   ...
 #   }
-, rev ? "891f607d5301d6730cb1f9dcf3618bcb1ab7f10e"
+, rev ? "0aeba64fb26e4defa0842a942757144659c6e29f"
 
 , pkgs ?
-    if builtins.compareVersions builtins.nixVersion "2.0" < 0
-    then abort "Requires Nix >= 2.0"
-    else
-      if ((rev == "") || (rev == "default") || (rev == "local"))
-        then import <nixpkgs> {}
-        # Do not guard with hash, so the project is able to use current channels (rolling `rev`) of Nixpkgs
-        else import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz") {}
-      // {
-        # Try to build dependencies even if they are marked broken.
-        config.allowBroken = true;
-      }
+    if builtins.compareVersions builtins.nixVersion "2.0" > 0
+      then
+        if ((rev == "") || (rev == "default") || (rev == "local"))
+          then import <nixpkgs> {}
+          # Do not guard with hash, so the project is able to use current channels (rolling `rev`) of Nixpkgs
+          else import (builtins.fetchTarball "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz") {}
+        // {
+          # Try to build dependencies even if they are marked broken.
+          config.allowBroken = true;
+        }
+      else abort "Requires Nix >= 2.0"
 
 , mkDerivation   ? null
 }:
@@ -185,15 +185,6 @@ let
     name = cabalName;
     # Do not include into closure the files listed in .gitignore
     root = packageRoot;
-
-    overrides = self: super: {
-
-      #  2021-01-06: NOTE:
-      # Core is on Stackage and pinned at `0.2`: https://github.com/haskell-nix/hnix-store/issues/104
-      # Stackage report: https://github.com/commercialhaskell/stackage/issues/5766
-      hnix-store-core = super.hnix-store-core_0_4_1_0;
-
-    };
 
     modifier = drv: hlib.overrideCabal drv (attrs: {
       buildTools = (attrs.buildTools or []) ++ [
