@@ -101,18 +101,19 @@ withNixContext
 withNixContext mpath action = do
   base            <- builtins
   opts :: Options <- asks (view hasLens)
-  let i = nvList $ fmap
-        ( nvStr
-        . makeNixStringWithoutContext
-        . Text.pack
-        )
-        (include opts)
-  pushScope (M.singleton "__includes" i) $ pushScopes base $ case mpath of
-    Nothing   -> action
-    Just path -> do
-      traceM $ "Setting __cur_file = " <> show path
-      let ref = nvPath path
-      pushScope (M.singleton "__cur_file" ref) action
+  let
+    i = nvList $ nvStr . makeNixStringWithoutContext . Text.pack <$> include opts
+
+  pushScope (M.singleton "__includes" i) $ pushScopes base $
+    maybe
+      action
+      (\ path ->
+        do
+          traceM $ "Setting __cur_file = " <> show path
+          let ref = nvPath path
+          pushScope (M.singleton "__cur_file" ref) action
+      )
+      mpath
 
 builtins :: (MonadNix e t f m, Scoped (NValue t f m) m)
          => m (Scopes m (NValue t f m))
@@ -121,10 +122,10 @@ builtins = do
   lst <- ([("builtins", ref)] <>) <$> topLevelBuiltins
   pushScope (M.fromList lst) currentScopes
  where
-  buildMap         = M.fromList . fmap mapping <$> builtinsList
-  topLevelBuiltins = fmap mapping <$> fullBuiltinsList
+  buildMap         =  fmap (M.fromList . fmap mapping) builtinsList
+  topLevelBuiltins = (fmap . fmap) mapping fullBuiltinsList
 
-  fullBuiltinsList = fmap go <$> builtinsList
+  fullBuiltinsList = (fmap . fmap) go builtinsList
    where
     go b@(Builtin TopLevel _) = b
     go (Builtin Normal (name, builtin)) =
@@ -139,11 +140,11 @@ data Builtin v = Builtin
 builtinsList :: forall e t f m . MonadNix e t f m => m [Builtin (NValue t f m)]
 builtinsList = sequence
   [ do
-    version <- toValue (makeNixStringWithoutContext "2.3")
-    pure $ Builtin Normal ("nixVersion", version)
+      version <- toValue (makeNixStringWithoutContext "2.3")
+      pure $ Builtin Normal ("nixVersion", version)
   , do
-    version <- toValue (5 :: Int)
-    pure $ Builtin Normal ("langVersion", version)
+      version <- toValue (5 :: Int)
+      pure $ Builtin Normal ("langVersion", version)
 
   , add  TopLevel "abort"            throw_ -- for now
   , add2 Normal   "add"              add_
@@ -257,9 +258,7 @@ builtinsList = sequence
   arity2 :: forall a b c. (a -> b -> c) -> (a -> b -> Prim m c)
   arity2 f = ((Prim . pure) .) . f
 
-  mkThunk n = defer . withFrame
-    Info
-    (ErrorCall $ "While calling builtin " <> Text.unpack n <> "\n")
+  mkThunk n = defer . withFrame Info (ErrorCall $ "While calling builtin " <> Text.unpack n <> "\n")
 
   add0 t n v = wrap t n <$> mkThunk n v
   add  t n v = wrap t n <$> mkThunk n (builtin (Text.unpack n) v)
@@ -349,23 +348,19 @@ nixPath = fmap nvList $ flip foldNixPath mempty $
       flip nvSet
         mempty
         (M.fromList
-          [ case ty of
+          [case ty of
             PathEntryPath -> ("path", nvPath p)
-            PathEntryURI ->
-              ( "uri"
-              , nvStr $ makeNixStringWithoutContext $ Text.pack p
-              )
+            PathEntryURI  -> ( "uri", mkNvStr p)
 
-          , ( "prefix"
-            , nvStr
-              $ makeNixStringWithoutContext $ Text.pack $ fromMaybe "" mn
-            )
+          , ( "prefix", mkNvStr $ fromMaybe "" mn)
           ]
         )
       : rest
+ where
+  mkNvStr = nvStr . makeNixStringWithoutContext . Text.pack
 
 toString :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-toString = coerceToString callFunc DontCopyToStore CoerceAny >=> toValue
+toString = toValue <=< coerceToString callFunc DontCopyToStore CoerceAny
 
 hasAttr
   :: forall e t f m
@@ -373,9 +368,12 @@ hasAttr
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-hasAttr x y = fromValue x >>= fromStringNoContext >>= \key ->
-  fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) y
-    >>= \(aset, _) -> toValue $ M.member key aset
+hasAttr x y =
+  do
+    key <- fromStringNoContext =<< fromValue x
+    (aset, _) <- fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) y
+
+    toValue $ M.member key aset
 
 attrsetGet :: MonadNix e t f m => Text -> AttrSet (NValue t f m) -> m (NValue t f m)
 attrsetGet k s =
@@ -393,9 +391,12 @@ getAttr
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-getAttr x y = fromValue x >>= fromStringNoContext >>= \key ->
-  fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) y
-    >>= \(aset, _) -> attrsetGet key aset
+getAttr x y =
+  do
+    key <- fromStringNoContext =<< fromValue x
+    (aset, _) <- fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) y
+
+    attrsetGet key aset
 
 unsafeGetAttrPos
   :: forall e t f m
@@ -531,14 +532,18 @@ foldl'_ f z xs = fromValue @[NValue t f m] xs >>= foldM go z
   where go b a = f `callFunc` b >>= (`callFunc` a)
 
 head_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-head_ = fromValue >=> \case
-  []    -> throwError $ ErrorCall "builtins.head: empty list"
-  h : _ -> pure h
+head_ =
+  list
+    (throwError $ ErrorCall "builtins.head: empty list")
+    (pure . head)
+    <=< fromValue
 
 tail_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-tail_ = fromValue >=> \case
-  []    -> throwError $ ErrorCall "builtins.tail: empty list"
-  _ : t -> pure $ nvList t
+tail_ =
+  list
+    (throwError $ ErrorCall "builtins.tail: empty list")
+    (pure . nvList . tail)
+    <=< fromValue
 
 data VersionComponent
    = VersionComponent_Pre -- ^ The string "pre"
@@ -586,9 +591,7 @@ splitVersion_ v =
     s <- fromStringNoContext =<< fromValue v
     pure$
       nvList $
-        fmap
-          (nvStr . makeNixStringWithoutContext . versionComponentToString)
-          (splitVersion s)
+        nvStr . makeNixStringWithoutContext . versionComponentToString <$> splitVersion s
 
 compareVersions :: Text -> Text -> Ordering
 compareVersions s1 s2 = mconcat
@@ -751,18 +754,17 @@ substring start len str =
 attrNames
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 attrNames =
-  fromValue @(AttrSet (NValue t f m))
-    >=>
   (fmap getDeeper . toValue . fmap makeNixStringWithoutContext . sort . M.keys)
+  <=< fromValue @(AttrSet (NValue t f m))
 
 attrValues
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 attrValues =
-  fromValue @(AttrSet (NValue t f m))
-    >=> toValue
-    .   fmap snd
-    .   sortOn (fst @Text @(NValue t f m))
-    .   M.toList
+  toValue
+  .   fmap snd
+  .   sortOn (fst @Text @(NValue t f m))
+  .   M.toList
+  <=< fromValue @(AttrSet (NValue t f m))
 
 map_
   :: forall e t f m
@@ -771,13 +773,13 @@ map_
   -> NValue t f m
   -> m (NValue t f m)
 map_ f =
-  toValue
-    <=< traverse
-          ( defer @(NValue t f m)
-          . withFrame Debug (ErrorCall "While applying f in map:\n")
-          . (f `callFunc`)
-          )
-    <=< fromValue @[NValue t f m]
+  toValue <=<
+    traverse
+      (defer @(NValue t f m)
+      . withFrame Debug (ErrorCall "While applying f in map:\n")
+      . callFunc f
+      )
+      <=< fromValue @[NValue t f m]
 
 mapAttrs_
   :: forall e t f m
@@ -821,8 +823,10 @@ catAttrs
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-catAttrs attrName xs = fromValue attrName >>= fromStringNoContext >>= \n ->
-  fromValue @[NValue t f m] xs >>= \l ->
+catAttrs attrName xs =
+  do
+    n <- fromStringNoContext =<< fromValue attrName
+    l <- fromValue @[NValue t f m] xs
     fmap (nvList . catMaybes)
       $ forM l
       $ fmap (M.lookup n)
@@ -831,8 +835,8 @@ catAttrs attrName xs = fromValue attrName >>= fromStringNoContext >>= \n ->
 baseNameOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 baseNameOf x = do
   ns <- coerceToString callFunc DontCopyToStore CoerceStringy x
-  pure $ nvStr
-    (modifyNixContents (Text.pack . takeFileName . Text.unpack) ns)
+  pure $ nvStr $
+    modifyNixContents (Text.pack . takeFileName . Text.unpack) ns
 
 bitAnd
   :: forall e t f m
@@ -841,7 +845,11 @@ bitAnd
   -> NValue t f m
   -> m (NValue t f m)
 bitAnd x y =
-  fromValue @Integer x >>= \a -> fromValue @Integer y >>= \b -> toValue (a .&. b)
+  do
+    a <- fromValue @Integer x
+    b <- fromValue @Integer y
+
+    toValue (a .&. b)
 
 bitOr
   :: forall e t f m
@@ -850,7 +858,11 @@ bitOr
   -> NValue t f m
   -> m (NValue t f m)
 bitOr x y =
-  fromValue @Integer x >>= \a -> fromValue @Integer y >>= \b -> toValue (a .|. b)
+  do
+    a <- fromValue @Integer x
+    b <- fromValue @Integer y
+
+    toValue (a .|. b)
 
 bitXor
   :: forall e t f m
@@ -858,8 +870,12 @@ bitXor
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-bitXor x y = fromValue @Integer x
-  >>= \a -> fromValue @Integer y >>= \b -> toValue (a `xor` b)
+bitXor x y =
+  do
+    a <- fromValue @Integer x
+    b <- fromValue @Integer y
+
+    toValue (a `xor` b)
 
 builtinsBuiltin
   :: forall e t f m
@@ -1130,9 +1146,11 @@ intersectAttrs
   -> NValue t f m
   -> m (NValue t f m)
 intersectAttrs set1 set2 =
-  fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) set1 >>= \(s1, p1) ->
-    fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) set2 >>= \(s2, p2) ->
-      pure $ nvSet (s2 `M.intersection` s1) (p2 `M.intersection` p1)
+  do
+    (s1, p1) <- fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) set1
+    (s2, p2) <- fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) set2
+
+    pure $ nvSet (s2 `M.intersection` s1) (p2 `M.intersection` p1)
 
 functionArgs
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1239,8 +1257,11 @@ scopedImport
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-scopedImport asetArg pathArg = fromValue @(AttrSet (NValue t f m)) asetArg >>= \s ->
-  fromValue pathArg >>= \(Path p) -> do
+scopedImport asetArg pathArg =
+  do
+    s        <- fromValue @(AttrSet (NValue t f m)) asetArg
+    (Path p) <- fromValue pathArg
+
     path  <- pathToDefaultNix @t @f @m p
     mres  <- lookupVar "__cur_file"
     path' <-
@@ -1250,13 +1271,15 @@ scopedImport asetArg pathArg = fromValue @(AttrSet (NValue t f m)) asetArg >>= \
           pure path
         )
         (demand
-          (fromValue >=> \(Path p') ->
+          (\ pp ->
             do
+              (Path p') <- fromValue pp
               traceM $ "Current file being evaluated is: " <> show p'
               pure $ takeDirectory p' </> path
           )
         )
         mres
+
     clearScopes @(NValue t f m)
       $ withNixContext (pure path')
       $ pushScope s
