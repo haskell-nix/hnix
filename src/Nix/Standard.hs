@@ -246,14 +246,14 @@ instance ( MonadAtomicRef m
       v
 
   inform
-    :: StdValue m
-    -> ( m (StdValue m)
+    :: ( m (StdValue m)
       -> m (StdValue m)
       )
+    -> StdValue m
     -> m (StdValue m)
   --  2021-02-27: NOTE: When swapping, switch to `further`.
-  inform (Pure t) f = Pure <$> furtherF f t
-  inform (Free v) f = Free <$> bindNValue' id (`inform` f) v
+  inform f (Pure t) = Pure <$> furtherF f t
+  inform f (Free v) = Free <$> bindNValue' id (inform f) v
 
 
 {------------------------------------------------------------------------}

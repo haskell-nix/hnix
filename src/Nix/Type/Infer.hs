@@ -414,12 +414,12 @@ instance Monad m => MonadValue (Judgment s) (InferT s m) where
   demand = ($)
 
   inform
-    :: Judgment s
-    -> ( InferT s m (Judgment s)
+    :: ( InferT s m (Judgment s)
       -> InferT s m (Judgment s)
       )
+    -> Judgment s
     -> InferT s m (Judgment s)
-  inform j f = f (pure j)
+  inform f j = f (pure j)
 
 {-
 instance MonadInfer m

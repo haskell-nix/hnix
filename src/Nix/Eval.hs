@@ -163,7 +163,7 @@ eval (NAbs    params body) = do
   scope <- currentScopes :: m (Scopes m v)
   evalAbs params $ \arg k -> withScopes scope $ do
     args <- buildArgument params arg
-    pushScope args (k (fmap (inform ?? withScopes scope) args) body)
+    pushScope args (k (fmap (inform (withScopes scope)) args) body)
 
 eval (NSynHole name) = synHole name
 
