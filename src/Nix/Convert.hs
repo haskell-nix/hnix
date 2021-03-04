@@ -66,8 +66,8 @@ Do not add these instances back!
 -- * FromValue
 
 class FromValue a m v where
-    fromValue    :: v -> m a
-    fromValueMay :: v -> m (Maybe a)
+  fromValue    :: v -> m a
+  fromValueMay :: v -> m (Maybe a)
 
 
 -- Please, hide these helper function from export, to be sure they get optimized away.

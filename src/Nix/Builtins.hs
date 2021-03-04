@@ -1413,28 +1413,30 @@ listToAttrs lst =
 -- | The result coming out of hashString is base16 encoded
 hashString
   :: forall e t f m. MonadNix e t f m => NixString -> NixString -> Prim m NixString
-hashString nsAlgo ns = Prim $ do
-  algo <- fromStringNoContext nsAlgo
-  let f g = pure $ modifyNixContents g ns
-  case algo of
-    "md5" ->
-      f $ \s ->
-                Text.pack $ show (hash (encodeUtf8 s) :: MD5.MD5)
-    "sha1" ->
-      f $ \s ->
-                Text.pack $ show (hash (encodeUtf8 s) :: SHA1.SHA1)
-    "sha256" ->
-      f $ \s ->
-                Text.pack $ show (hash (encodeUtf8 s) :: SHA256.SHA256)
-    "sha512" ->
-      f $ \s ->
-                Text.pack $ show (hash (encodeUtf8 s) :: SHA512.SHA512)
-    _ ->
-      throwError
-        $  ErrorCall
-        $  "builtins.hashString: "
-        <> "expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got "
-        <> show algo
+hashString nsAlgo ns =
+  Prim $
+    do
+      algo <- fromStringNoContext nsAlgo
+      let
+        f g = pure $ modifyNixContents g ns
+
+      case algo of
+        --  2021-03-04: Pattern can not be taken-out because hashes represented as different types
+        "md5"    -> f (toText . mkHash @MD5.MD5)
+        "sha1"   -> f (toText . mkHash @SHA1.SHA1)
+        "sha256" -> f (toText . mkHash @SHA256.SHA256)
+        "sha512" -> f (toText . mkHash @SHA512.SHA512)
+
+        _ -> throwError $ ErrorCall $ "builtins.hashString: expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got " <> show algo
+
+       where
+        -- This intermidiary `a` is only needed because of the type application
+        mkHash :: (Show a, HashAlgorithm a) => Text -> a
+        mkHash s = hash (encodeUtf8 s)
+
+        toText :: (Show a, HashAlgorithm a) => a -> Text
+        toText h = Text.pack $ show h
+
 
 placeHolder :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
