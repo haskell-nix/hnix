@@ -203,7 +203,12 @@ merge context = go
         )
         (pure <$> l)
         (pure <$> r)
-      if M.null m then go xs ys else (TSet (pure m) :) <$> go xs ys
+      bool
+        id
+        ((TSet (pure m) :) <$>)
+        (not $ M.null m)
+        (go xs ys)
+
     (TClosure{}, TClosure{}) ->
       throwError $ ErrorCall "Cannot unify functions"
     (TBuiltin _ _, TBuiltin _ _) ->
@@ -301,19 +306,9 @@ instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
 instance MonadLint e m => MonadEval (Symbolic m) m where
   freeVariable var = symerr $ "Undefined variable '" <> Text.unpack var <> "'"
 
-  attrMissing ks Nothing =
-    evalError @(Symbolic m)
-      $  ErrorCall
-      $  "Inheriting unknown attribute: "
-      <> intercalate "." (fmap Text.unpack (NE.toList ks))
+  attrMissing ks Nothing = evalError @(Symbolic m) $ ErrorCall $ "Inheriting unknown attribute: " <> intercalate "." (fmap Text.unpack (NE.toList ks))
 
-  attrMissing ks (Just s) =
-    evalError @(Symbolic m)
-      $  ErrorCall
-      $  "Could not look up attribute "
-      <> intercalate "." (fmap Text.unpack (NE.toList ks))
-      <> " in "
-      <> show s
+  attrMissing ks (Just s) = evalError @(Symbolic m) $ ErrorCall $ "Could not look up attribute " <> intercalate "." (fmap Text.unpack (NE.toList ks)) <> " in " <> show s
 
   evalCurPos = do
     f <- mkSymbolic [TPath]
@@ -353,7 +348,8 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
         (unpackSymbolic >=> \case
           NMany [TSet (Just s')] -> pure s'
           NMany [TSet Nothing] -> error "NYI: with unknown"
-          _ -> throwError $ ErrorCall "scope must be a set in with statement")
+          _ -> throwError $ ErrorCall "scope must be a set in with statement"
+        )
         s
 
   evalIf cond t f = do
