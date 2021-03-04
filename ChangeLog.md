@@ -43,11 +43,13 @@
         furtherF  :: (m a -> m a) -> t   -> m t
       ```
       
-  * [(link)](https://github.com/haskell-nix/hnix/pull/862/files) `Nix.Value.Monad`: `class MonadValue v m`: `demand` unflipped the arguments into a classical order. As a result, `demand` now tail recurse.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/862/files) [(link)](https://github.com/haskell-nix/hnix/pull/870/files) `Nix.Value.Monad`: `class MonadValue v m`: unflipped the arguments of methods into a classical order. As a result, `demand` now tail recurse.
       
       ```haskell
       demand :: (v -> m r) -> v -> m r
       -- was :: v -> (v -> m r) -> m r
+      inform :: (m v -> m v) -> v -> m v
+      -- was :: v -> (m v -> m v) -> m v
       ```
       
   * [(link)](https://github.com/haskell-nix/hnix/pull/863/files) `Nix.Normal`: `normalizeValue` removed first functional argument that was passing the function that did the thunk forcing. Now function provides the thunk forcing. Now to normalize simply use `normalizeValue v`.
