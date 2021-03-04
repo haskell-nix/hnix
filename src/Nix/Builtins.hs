@@ -1303,16 +1303,22 @@ scopedImport asetArg pathArg =
       $ importPath @t @f @m path'
 
 getEnv_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-getEnv_ = fromValue >=> fromStringNoContext >=> \s -> do
-  mres <- getEnvVar (Text.unpack s)
-  toValue $ makeNixStringWithoutContext $ maybe mempty Text.pack mres
+getEnv_ v =
+  do
+    s <- fromStringNoContext =<< fromValue v
+    mres <- getEnvVar (Text.unpack s)
+
+    toValue $ makeNixStringWithoutContext $
+      maybe
+        mempty
+        Text.pack mres
 
 sort_
   :: MonadNix e t f m
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-sort_ comp = fromValue >=> sortByM (cmp comp) >=> toValue
+sort_ comp = toValue <=< sortByM (cmp comp) <=< fromValue
  where
   cmp f a b = do
     isLessThan <- f `callFunc` a >>= (`callFunc` b)
