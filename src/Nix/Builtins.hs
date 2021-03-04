@@ -503,7 +503,7 @@ any_
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-any_ f = toValue <=< anyM fromValue <=< mapM (f `callFunc`) <=< fromValue
+any_ f = toValue <=< anyM fromValue <=< mapM (callFunc f) <=< fromValue
 
 allM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 allM _ []       = pure True
@@ -519,7 +519,7 @@ all_
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-all_ f = toValue <=< allM fromValue <=< mapM (f `callFunc`) <=< fromValue
+all_ f = toValue <=< allM fromValue <=< mapM (callFunc f) <=< fromValue
 
 foldl'_
   :: forall e t f m
@@ -528,8 +528,9 @@ foldl'_
   -> NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-foldl'_ f z xs = fromValue @[NValue t f m] xs >>= foldM go z
-  where go b a = f `callFunc` b >>= (`callFunc` a)
+foldl'_ f z xs =  foldM go z =<< fromValue @[NValue t f m] xs
+ where
+  go b a = f `callFunc` b >>= (`callFunc` a)
 
 head_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 head_ =
@@ -589,7 +590,7 @@ splitVersion_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 splitVersion_ v =
   do
     s <- fromStringNoContext =<< fromValue v
-    pure$
+    pure $
       nvList $
         nvStr . makeNixStringWithoutContext . versionComponentToString <$> splitVersion s
 
