@@ -646,16 +646,25 @@ splitDrvName s =
 
 parseDrvName
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-parseDrvName = fromValue >=> fromStringNoContext >=> \s -> do
-  let (name :: Text, version :: Text) = splitDrvName s
-  toValue @(AttrSet (NValue t f m)) $ M.fromList
-    [ ( "name" :: Text
-      , nvStr $ makeNixStringWithoutContext name
-      )
-    , ( "version"
-      , nvStr $ makeNixStringWithoutContext version
-      )
-    ]
+parseDrvName drvname =
+  do
+    s <- fromStringNoContext =<< fromValue drvname
+
+    let
+      (name :: Text, version :: Text) = splitDrvName s
+
+    toValue @(AttrSet (NValue t f m)) $
+      M.fromList
+        [ ( "name" :: Text
+          , mkNVStr name
+          )
+        , ( "version"
+          , mkNVStr version
+          )
+        ]
+
+ where
+  mkNVStr = nvStr . makeNixStringWithoutContext
 
 match_
   :: forall e t f m
@@ -1327,19 +1336,22 @@ lessThan ta tb =
   demand
     (\va ->
       demand
-        (\vb -> do
+        (\vb ->
+           do
+            let
+              badType = throwError $ ErrorCall $ "builtins.lessThan: expected two numbers or two strings, " <> "got " <> show va <> " and " <> show vb
 
-      let badType = throwError $ ErrorCall $ "builtins.lessThan: expected two numbers or two strings, " <> "got " <> show va <> " and " <> show vb
-
-      nvConstant . NBool <$> case (va, vb) of
-        (NVConstant ca, NVConstant cb) -> case (ca, cb) of
-          (NInt   a, NInt b  ) -> pure $ a < b
-          (NFloat a, NInt b  ) -> pure $ a < fromInteger b
-          (NInt   a, NFloat b) -> pure $ fromInteger a < b
-          (NFloat a, NFloat b) -> pure $ a < b
-          _                    -> badType
-        (NVStr a, NVStr b) -> pure $ stringIgnoreContext a < stringIgnoreContext b
-        _ -> badType
+            nvConstant . NBool <$>
+              case (va, vb) of
+                (NVConstant ca, NVConstant cb) ->
+                  case (ca, cb) of
+                    (NInt   a, NInt b  ) -> pure $ a < b
+                    (NFloat a, NInt b  ) -> pure $ a < fromInteger b
+                    (NInt   a, NFloat b) -> pure $ fromInteger a < b
+                    (NFloat a, NFloat b) -> pure $ a < b
+                    _                    -> badType
+                (NVStr a, NVStr b) -> pure $ stringIgnoreContext a < stringIgnoreContext b
+                _ -> badType
         )
         tb
     )
@@ -1366,9 +1378,9 @@ concatMap_ f =
     traverse
       applyFunc
       <=< fromValue @[NValue t f m]
-  where
-    applyFunc :: NValue t f m  -> m [NValue t f m]
-    applyFunc =  (callFunc f) >=> fromValue
+ where
+  applyFunc :: NValue t f m  -> m [NValue t f m]
+  applyFunc =  fromValue <=< callFunc f
 
 listToAttrs
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
