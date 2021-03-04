@@ -96,7 +96,6 @@
         FromJSON NAtom :: Nix.Expr.Types -> Nix.Atoms
         ToJSON   NAtom :: Nix.Expr.Types -> Nix.Atoms
 
-        -- | Instance was TH, now simple derivable
         Eq1 (NValueF p m)     :: Nix.Value.Equal -> Nix.Value
 
         Eq1 (NValue' t f m a) :: Nix.Value.Equal -> Nix.Value 

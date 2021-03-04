@@ -21,12 +21,19 @@
 module Nix.Value
 where
 
-import           Control.Comonad                ( Comonad, extract )
+import           Control.Comonad                ( Comonad
+                                                , extract
+                                                )
 import           Control.Exception              ( Exception )
 import           Control.Monad                  ( (<=<) )
 import           Control.Monad.Free             ( Free(..)
-                                                , hoistFree, iter, iterM )
-import           Control.Monad.Trans.Class      ( MonadTrans, lift )
+                                                , hoistFree
+                                                , iter
+                                                , iterM
+                                                )
+import           Control.Monad.Trans.Class      ( MonadTrans
+                                                , lift
+                                                )
 import qualified Data.Aeson                    as Aeson
 import           Data.Functor.Classes           ( Show1
                                                 , liftShowsPrec
@@ -38,13 +45,15 @@ import           Data.Typeable                  ( Typeable )
 import           GHC.Generics                   ( Generic )
 import           Lens.Family2.Stock             ( _1 )
 import           Lens.Family2.TH                ( makeTraversals
-                                                , makeLenses )
+                                                , makeLenses
+                                                )
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.String
 import           Nix.Thunk
 import           Nix.Utils
+import           Data.Eq.Deriving
 
 
 -- * @__NValueF__@: Base functor
@@ -187,15 +196,23 @@ hoistNValueF
   :: (forall x . m x -> n x)
   -> NValueF p m a
   -> NValueF p n a
-hoistNValueF lft = \case
-  NVConstantF a  -> NVConstantF a
-  NVStrF      s  -> NVStrF s
-  NVPathF     p  -> NVPathF p
-  NVListF     l  -> NVListF l
-  NVSetF     s p -> NVSetF s p
-  NVClosureF p g -> NVClosureF p (lft . g)
-  NVBuiltinF s g -> NVBuiltinF s (lft . g)
-
+hoistNValueF lft =
+  \case
+    -- Pass-through the:
+    --   [ NVConstantF a
+    --   , NVStrF s
+    --   , NVPathF p
+    --   , NVListF l
+    --   , NVSetF s p
+    --   ]
+    NVConstantF a  -> NVConstantF a
+    NVStrF      s  -> NVStrF s
+    NVPathF     p  -> NVPathF p
+    NVListF     l  -> NVListF l
+    NVSetF     s p -> NVSetF s p
+    NVBuiltinF s g -> NVBuiltinF s (lft . g)
+    NVClosureF p g -> NVClosureF p (lft . g)
+{-# inline hoistNValueF #-}
 
 -- * @__NValue'__@: forming the (F(A))
 
@@ -207,7 +224,7 @@ newtype NValue' t f m a =
     -- | Applying F-algebra carrier (@NValue@) to the F-algebra Base functor data type (@NValueF@), forming the \( F(A)-> A \)).
     _nValue :: f (NValueF (NValue t f m) m a)
     }
-  deriving (Generic, Typeable, Functor, Foldable, Eq1)
+  deriving (Generic, Typeable, Functor, Foldable)
 
 instance (Comonad f, Show a) => Show (NValue' t f m a) where
   show (NValue (extract -> v)) = show v
@@ -266,6 +283,7 @@ iterNValue'
   -> r
 iterNValue' k f = f . fmap (\a -> k a (iterNValue' k f))
 
+-- *** Utils
 
 -- | @hoistFree@: Back & forth hoisting in the monad stack
 hoistNValue'
@@ -276,7 +294,7 @@ hoistNValue'
   -> NValue' t f n a
 hoistNValue' run lft (NValue v) =
     NValue $ lmapNValueF (hoistNValue lft run) . hoistNValueF lft <$> v
-
+{-# inline hoistNValue' #-}
 
 -- ** Monad
 
@@ -455,6 +473,7 @@ iterNValueM transform k f =
     go (Pure x) = Pure <$> x
     go (Free fa) = Free <$> bindNValue' transform go fa
 
+-- *** Utils
 
 -- | @hoistFree@, Back & forth hoisting in the monad stack
 hoistNValue
@@ -464,7 +483,7 @@ hoistNValue
   -> NValue t f m
   -> NValue t f n
 hoistNValue run lft = hoistFree (hoistNValue' run lft)
-
+{-# inline hoistNValue #-}
 
 -- ** MonadTrans
 
@@ -599,6 +618,7 @@ pattern NVClosure x f <- Free (NVClosure' x f)
 pattern NVBuiltin name f <- Free (NVBuiltin' name f)
 
 
+
 -- * @TStringContext@
 
 data TStringContext = NoContext | HasContext
@@ -622,40 +642,43 @@ data ValueType
 
 -- | Determine type of a value
 valueType :: NValueF a m r -> ValueType
-valueType = \case
-  NVConstantF a -> case a of
-    NURI   _ -> TString NoContext
-    NInt   _ -> TInt
-    NFloat _ -> TFloat
-    NBool  _ -> TBool
-    NNull    -> TNull
-  NVStrF ns  ->
-    TString $
-      bool
-        NoContext
-        HasContext
-        $ stringHasContext ns
-  NVListF{}    -> TList
-  NVSetF{}     -> TSet
-  NVClosureF{} -> TClosure
-  NVPathF{}    -> TPath
-  NVBuiltinF{} -> TBuiltin
+valueType =
+  \case
+    NVConstantF a ->
+      case a of
+        NURI   _ -> TString NoContext
+        NInt   _ -> TInt
+        NFloat _ -> TFloat
+        NBool  _ -> TBool
+        NNull    -> TNull
+    NVStrF ns  ->
+      TString $
+        bool
+          NoContext
+          HasContext
+          (stringHasContext ns)
+    NVListF{}    -> TList
+    NVSetF{}     -> TSet
+    NVClosureF{} -> TClosure
+    NVPathF{}    -> TPath
+    NVBuiltinF{} -> TBuiltin
 
 
 -- | Describe type value
 describeValue :: ValueType -> String
-describeValue = \case
-  TInt               -> "an integer"
-  TFloat             -> "a float"
-  TBool              -> "a boolean"
-  TNull              -> "a null"
-  TString NoContext  -> "a string"
-  TString HasContext -> "a string with context"
-  TList              -> "a list"
-  TSet               -> "an attr set"
-  TClosure           -> "a function"
-  TPath              -> "a path"
-  TBuiltin           -> "a builtin function"
+describeValue =
+  \case
+    TInt               -> "an integer"
+    TFloat             -> "a float"
+    TBool              -> "a boolean"
+    TNull              -> "a null"
+    TString NoContext  -> "a string"
+    TString HasContext -> "a string with context"
+    TList              -> "a list"
+    TSet               -> "an attr set"
+    TClosure           -> "a function"
+    TPath              -> "a path"
+    TBuiltin           -> "a builtin function"
 
 
 showValueType :: (MonadThunk t m (NValue t f m), Comonad f)
@@ -689,7 +712,6 @@ deriving instance (Comonad f, Show t) => Show (ValueFrame t f m)
 type MonadDataContext f (m :: * -> *)
   = (Comonad f, Applicative f, Traversable f, Monad m)
 
-
 -- * @MonadDataErrorContext@
 
 type MonadDataErrorContext t f m
@@ -697,15 +719,20 @@ type MonadDataErrorContext t f m
 
 instance MonadDataErrorContext t f m => Exception (ValueFrame t f m)
 
+-- * @instance Eq1 NValue'@
 
--- ** NValue' traversals, getter & setters
+-- TH derivable works only after MonadDataContext
+$(deriveEq1 ''NValue')
 
+
+-- * @NValue'@ traversals, getter & setters
 
 -- | Make traversals for Nix traversable structures.
 $(makeTraversals ''NValueF)
 
 -- | Make lenses for the Nix values
 $(makeLenses ''NValue')
+
 
 -- | Lens-generated getter-setter function for a traversable NValue' key-val structures.
 --   Nix value analogue of the @Data-Aeson-Lens@:@key :: AsValue t => Text -> Traversal' t Value@.

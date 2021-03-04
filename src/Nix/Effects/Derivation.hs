@@ -130,32 +130,34 @@ hashDerivationModulo drv@Derivation{inputs = (inputSrcs, inputDrvs)} = do
 unparseDrv :: Derivation -> Text
 unparseDrv Derivation{..} = Text.append "Derive" $ parens
     [ -- outputs: [("out", "/nix/store/.....-out", "", ""), ...]
-      list $ flip fmap (Map.toList outputs) (\(outputName, outputPath) ->
+      serializeList $ flip fmap (Map.toList outputs) (\(outputName, outputPath) ->
         let prefix = if hashMode == Recursive then "r:" else "" in
-        case mFixed of
-          Nothing -> parens [s outputName, s outputPath, s "", s ""]
-          Just (Store.SomeDigest (digest :: Store.Digest hashType)) ->
+        maybe
+          (parens [s outputName, s outputPath, s "", s ""])
+          (\ (Store.SomeDigest (digest :: Store.Digest hashType)) ->
             parens [s outputName, s outputPath, s $ prefix <> Store.algoName @hashType, s $ Store.encodeInBase Store.Base16 digest]
+          )
+          mFixed
         )
     , -- inputDrvs
-      list $ flip fmap (Map.toList $ snd inputs) (\(path, outs) ->
-        parens [s path, list $ fmap s $ sort outs])
+      serializeList $ flip fmap (Map.toList $ snd inputs) (\(path, outs) ->
+        parens [s path, serializeList $ fmap s $ sort outs])
     , -- inputSrcs
-      list (fmap s $ Set.toList $ fst inputs)
+      serializeList (fmap s $ Set.toList $ fst inputs)
     , s platform
     , s builder
     , -- run script args
-      list $ fmap s args
+      serializeList $ fmap s args
     , -- env (key value pairs)
-      list $ flip fmap (Map.toList env) (\(k, v) ->
+      serializeList $ flip fmap (Map.toList env) (\(k, v) ->
         parens [s k, s v])
     ]
   where
     parens :: [Text] -> Text
     parens ts = Text.concat ["(", Text.intercalate "," ts, ")"]
-    list   :: [Text] -> Text
-    list   ls = Text.concat ["[", Text.intercalate "," ls, "]"]
-    s = (Text.cons '\"') . (flip Text.snoc '\"') . Text.concatMap escape
+    serializeList   :: [Text] -> Text
+    serializeList   ls = Text.concat ["[", Text.intercalate "," ls, "]"]
+    s = (Text.cons '\"') . (`Text.snoc` '\"') . Text.concatMap escape
     escape :: Char -> Text
     escape '\\' = "\\\\"
     escape '\"' = "\\\""
@@ -167,28 +169,29 @@ unparseDrv Derivation{..} = Text.append "Derive" $ parens
 readDerivation :: (Framed e m, MonadFile m) => FilePath -> m Derivation
 readDerivation path = do
   content <- Text.decodeUtf8 <$> readFile path
-  case parse derivationParser path content of
-    Left err -> throwError $ ErrorCall $ "Failed to parse " <> show path <> ":\n" <> show err
-    Right drv -> pure drv
+  either
+    (\ err -> throwError $ ErrorCall $ "Failed to parse " <> show path <> ":\n" <> show err)
+    pure
+    (parse derivationParser path content)
 
 derivationParser :: Parsec () Text Derivation
 derivationParser = do
   _ <- "Derive("
-  fullOutputs <- list $
+  fullOutputs <- serializeList $
     fmap (\[n, p, ht, h] -> (n, p, ht, h)) $ parens s
   _ <- ","
-  inputDrvs   <- fmap Map.fromList $ list $
-    fmap (,) ("(" *> s <* ",") <*> (list s <* ")")
+  inputDrvs   <- fmap Map.fromList $ serializeList $
+    fmap (,) ("(" *> s <* ",") <*> (serializeList s <* ")")
   _ <- ","
-  inputSrcs   <- fmap Set.fromList $ list s
+  inputSrcs   <- fmap Set.fromList $ serializeList s
   _ <- ","
   platform    <- s
   _ <- ","
   builder     <- s
   _ <- ","
-  args        <- list s
+  args        <- serializeList s
   _ <- ","
-  env         <- fmap Map.fromList $ list $ fmap (\[a, b] -> (a, b)) $ parens s
+  env         <- fmap Map.fromList $ serializeList $ fmap (\[a, b] -> (a, b)) $ parens s
   _ <- ")"
   eof
 
@@ -211,7 +214,7 @@ derivationParser = do
 
   parens :: Parsec () Text a -> Parsec () Text [a]
   parens p = (string "(") *> sepBy p (string ",") <* (string ")")
-  list   p = (string "[") *> sepBy p (string ",") <* (string "]")
+  serializeList   p = (string "[") *> sepBy p (string ",") <* (string "]")
 
   parseFixed :: [(Text, Text, Text, Text)] -> (Maybe Store.SomeNamedDigest, HashMode)
   parseFixed fullOutputs = case fullOutputs of
