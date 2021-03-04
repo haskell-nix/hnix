@@ -82,7 +82,6 @@ type MonadNixEval v m
   = ( MonadEval v m
   , Scoped v m
   , MonadValue v m
-  , MonadValueF v m
   , MonadFix m
   , ToValue Bool m v
   , ToValue [v] m v
@@ -118,7 +117,7 @@ eval (NSym var       ) = do
   mres <- lookupVar var
   maybe
     (freeVariable var)
-    (demandF (evaledSym var))
+    (evaledSym var <=< demand)
     mres
 
 eval (NConstant    x      ) = evalConstant x
@@ -178,7 +177,7 @@ evalWithAttrSet aset body = do
   -- computed once.
   scope <- currentScopes :: m (Scopes m v)
   s     <- defer $ withScopes scope aset
-  let s' = demandF (fmap fst . fromValue @(AttrSet v, AttrSet SourcePos)) s
+  let s' = (fmap fst . fromValue @(AttrSet v, AttrSet SourcePos)) =<< demand s
   pushWeakScope s' body
 
 attrSetAlter
@@ -199,7 +198,7 @@ attrSetAlter (k : ks) pos m p val =
       (\x ->
         do
           (st, sp) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< x
-          recurse (demandF pure <$> st) sp
+          recurse ((pure <=< demand) <$> st) sp
       )
       (M.lookup k m)
     )
@@ -270,7 +269,7 @@ evalBinds recursive binds = do
     finalValue >>= fromValue >>= \(o', p') ->
           -- jww (2018-05-09): What to do with the key position here?
                                               pure $ fmap
-      (\(k, v) -> ([k], fromMaybe pos (M.lookup k p'), demandF pure v))
+      (\(k, v) -> ([k], fromMaybe pos (M.lookup k p'), pure =<< demand v))
       (M.toList o')
 
   go _ (NamedVar pathExpr finalValue pos) = do
@@ -315,7 +314,7 @@ evalBinds recursive binds = do
                 ms
             maybe
               (attrMissing (key :| []) Nothing)
-              (demandF pure)
+              (pure <=< demand)
               mv
           )
         )
@@ -350,8 +349,8 @@ evalSelect aset attr = do
   extract x path@(k :| ks) = fromValueMay x >>= \case
     Just (s :: AttrSet v, p :: AttrSet SourcePos)
       | Just t <- M.lookup k s -> case ks of
-        []     -> pure $ pure $ demandF pure t
-        y : ys -> demandF (extract ?? (y :| ys)) t
+        []     -> pure $ pure $ pure =<< demand t
+        y : ys -> (extract ?? (y :| ys)) =<< demand t
       | otherwise -> Left . (, path) <$> toValue (s, p)
     Nothing -> pure $ Left (x, path)
 
