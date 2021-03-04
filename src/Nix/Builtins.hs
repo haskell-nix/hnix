@@ -1664,13 +1664,19 @@ partition_
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-partition_ f = fromValue @[NValue t f m] >=> \l -> do
-  let match t = f `callFunc` t >>= fmap (, t) . fromValue
-  selection <- traverse match l
-  let (right, wrong) = partition fst selection
-  let makeSide       = nvList . fmap snd
-  toValue @(AttrSet (NValue t f m))
-    $ M.fromList [("right", makeSide right), ("wrong", makeSide wrong)]
+partition_ f nvlst =
+  do
+    l <- fromValue @[NValue t f m] nvlst
+    let
+      match t = fmap (, t) . fromValue =<< callFunc f t
+    selection <- traverse match l
+
+    let
+      (right, wrong) = partition fst selection
+      makeSide       = nvList . fmap snd
+
+    toValue @(AttrSet (NValue t f m))
+      $ M.fromList [("right", makeSide right), ("wrong", makeSide wrong)]
 
 currentSystem :: MonadNix e t f m => m (NValue t f m)
 currentSystem = do
@@ -1755,6 +1761,7 @@ appendContext x y =
         y
     )
     x
+
 newtype Prim m a = Prim { runPrim :: m a }
 
 -- | Types that support conversion to nix in a particular monad
