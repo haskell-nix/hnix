@@ -221,12 +221,13 @@ instance
 
 -- * @instance MonadValue (StdValue m) m@
 
-instance ( MonadAtomicRef m
-         , MonadCatch m
-         , Typeable m
-         , MonadReader (Context m (StdValue m)) m
-         , MonadThunkId m
-         )
+instance
+  ( MonadAtomicRef m
+  , MonadCatch m
+  , Typeable m
+  , MonadReader (Context m (StdValue m)) m
+  , MonadThunkId m
+  )
   => MonadValue (StdValue m) m where
   defer
     :: m (StdValue m)
@@ -234,15 +235,12 @@ instance ( MonadAtomicRef m
   defer = fmap pure . thunk
 
   demand
-    :: ( StdValue m
-      -> m r
-      )
-    -> StdValue m
-    -> m r
-  demand f v =
+    :: StdValue m
+    -> m (StdValue m)
+  demand v =
     free
-      ((demand f) <=< force)
-      (const $ f v)
+      (demand <=< force)
+      (const $ pure v)
       v
 
   inform
@@ -258,12 +256,13 @@ instance ( MonadAtomicRef m
 
 -- * @instance MonadValueF (StdValue m) m@
 
-instance ( MonadAtomicRef m
-         , MonadCatch m
-         , Typeable m
-         , MonadReader (Context m (StdValue m)) m
-         , MonadThunkId m
-         )
+instance
+  ( MonadAtomicRef m
+  , MonadCatch m
+  , Typeable m
+  , MonadReader (Context m (StdValue m)) m
+  , MonadThunkId m
+  )
   => MonadValueF (StdValue m) m where
 
   demandF

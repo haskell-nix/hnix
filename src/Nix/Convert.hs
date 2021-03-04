@@ -107,31 +107,31 @@ type Convertible e t f m
   = (Framed e m, MonadDataErrorContext t f m, MonadThunk t m (NValue t f m))
 
 instance ( Convertible e t f m
-         , MonadValue (NValue t f m) m
+         , MonadValueF (NValue t f m) m
          , FromValue a m (NValue' t f m (NValue t f m))
          )
   => FromValue a m (NValue t f m) where
 
   fromValueMay =
-    demand $
+    demandF $
       free
         (fromValueMay <=< force)
         fromValueMay
 
   fromValue =
-    demand $
+    demandF $
       free
         (fromValue <=< force)
         fromValue
 
 instance ( Convertible e t f m
-         , MonadValue (NValue t f m) m
+         , MonadValueF (NValue t f m) m
          , FromValue a m (Deeper (NValue' t f m (NValue t f m)))
          )
   => FromValue a m (Deeper (NValue t f m)) where
 
   fromValueMay (Deeper v) =
-    demand
+    demandF
       (free
         ((fromValueMay . Deeper) <=< force)
         (fromValueMay . Deeper)
@@ -139,7 +139,7 @@ instance ( Convertible e t f m
       v
 
   fromValue (Deeper v) =
-    demand
+    demandF
       (free
         ((fromValue . Deeper) <=< force)
         (fromValue . Deeper)
@@ -203,7 +203,7 @@ instance Convertible e t f m
   fromValue = fromMayToValue TFloat
 
 instance ( Convertible e t f m
-         , MonadValue (NValue t f m) m
+         , MonadValueF (NValue t f m) m
          , MonadEffects t f m
          )
   => FromValue NixString m (NValue' t f m (NValue t f m)) where
@@ -239,7 +239,7 @@ newtype Path = Path { getPath :: FilePath }
     deriving Show
 
 instance ( Convertible e t f m
-         , MonadValue (NValue t f m) m
+         , MonadValueF (NValue t f m) m
          )
   => FromValue Path m (NValue' t f m (NValue t f m)) where
 

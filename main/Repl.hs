@@ -27,7 +27,7 @@ import           Nix                     hiding ( exec
                                                 )
 import           Nix.Scope
 import           Nix.Utils
-import           Nix.Value.Monad                ( demand )
+import           Nix.Value.Monad                ( demandF )
 
 import qualified Data.List
 import qualified Data.Maybe
@@ -340,7 +340,7 @@ completion = System.Console.Repline.Prefix
 -- | Main completion function
 --
 -- Heavily inspired by Dhall Repl, with `algebraicComplete`
--- adjusted to monadic variant able to `demand` thunks.
+-- adjusted to monadic variant able to `demandF` thunks.
 completeFunc
   :: forall e t f m . (MonadNix e t f m, MonadIO m)
   => String
@@ -399,7 +399,7 @@ completeFunc reversedPrev word
               f:fs ->
                 maybe
                   (pure mempty)
-                  (demand (\e' -> (fmap . fmap) (("." <> f) <>) $ algebraicComplete fs e'))
+                  (demandF (\e' -> (fmap . fmap) (("." <> f) <>) $ algebraicComplete fs e'))
                   (Data.HashMap.Lazy.lookup f m)
 
       in case val of
