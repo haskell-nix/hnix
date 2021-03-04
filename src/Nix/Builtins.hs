@@ -1320,18 +1320,19 @@ sort_
   -> m (NValue t f m)
 sort_ comp = toValue <=< sortByM (cmp comp) <=< fromValue
  where
-  cmp f a b = do
-    isLessThan <- f `callFunc` a >>= (`callFunc` b)
-    fromValue isLessThan >>=
+  cmp f a b =
+    do
+      isLessThan <- (`callFunc` b) =<< callFunc f a
       bool
         (do
-          isGreaterThan <- f `callFunc` b >>= (`callFunc` a)
+          isGreaterThan <- (`callFunc` a) =<< callFunc f b
           fromValue isGreaterThan <&>
             bool
               EQ
               GT
         )
         (pure LT)
+        =<< fromValue isLessThan
 
 lessThan
   :: MonadNix e t f m
