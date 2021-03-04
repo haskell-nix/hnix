@@ -136,31 +136,40 @@ findPathBy finder ls name = do
   go mp =
     maybe
       (demand
-        (fromValue >=> \(s :: HashMap Text (NValue t f m)) -> do
-          p <- resolvePath s
-          demand
-            (fromValue >=> \(Path path) ->
-              maybe
-                (tryPath path mempty)
-                (demand (
-                    fromValueMay >=> \case
-                      Just (nsPfx :: NixString) ->
-                        let pfx = stringIgnoreContext nsPfx
-                        in bool
+        (\ nvhmt ->
+          do
+            (s :: HashMap Text (NValue t f m)) <- fromValue nvhmt
+            p <- resolvePath s
+
+            demand
+              (\ nvpath ->
+                do
+                (Path path) <- fromValue nvpath
+                maybe
+                  (tryPath path mempty)
+                  (demand
+                    (\ nvmns ->
+                      do
+                      (\case
+                        Just (nsPfx :: NixString) ->
+                          let pfx = stringIgnoreContext nsPfx in
+                          bool
                             (tryPath path mempty)
                             (tryPath path (pure (Text.unpack pfx)))
                             (not $ Text.null pfx)
-                      _ -> tryPath path mempty
+                        _ -> tryPath path mempty
+                       ) =<< fromValueMay nvmns
                     )
-                )
-                (M.lookup "prefix" s)
-            )
-            p
+                  )
+                  (M.lookup "prefix" s)
+              )
+              p
         )
       )
       (const . pure . pure)
       mp
 
+  tryPath :: FilePath -> Maybe FilePath -> m (Maybe FilePath)
   tryPath p (Just n) | n' : ns <- splitDirectories name, n == n' =
     finder $ p <///> joinPath ns
   tryPath p _ = finder $ p <///> name
