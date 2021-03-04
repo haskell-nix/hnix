@@ -563,28 +563,31 @@ versionComponentSeparators :: String
 versionComponentSeparators = ".-"
 
 splitVersion :: Text -> [VersionComponent]
-splitVersion s = case Text.uncons s of
-  Nothing -> mempty
-  Just (h, t)
-    | h `elem` versionComponentSeparators
-    -> splitVersion t
-    | isDigit h
-    -> let (digits, rest) = Text.span isDigit s
-       in
-         VersionComponent_Number
-             (fromMaybe (error $ "splitVersion: couldn't parse " <> show digits)
-             $ readMaybe
-             $ Text.unpack digits
-             )
-           : splitVersion rest
-    | otherwise
-    -> let (chars, rest) = Text.span
-             (\c -> not $ isDigit c || c `elem` versionComponentSeparators)
-             s
-           thisComponent = case chars of
-             "pre" -> VersionComponent_Pre
-             x     -> VersionComponent_String x
-       in  thisComponent : splitVersion rest
+splitVersion s =
+  case Text.uncons s of
+    Nothing -> mempty
+    Just (h, t)
+
+      | h `elem` versionComponentSeparators -> splitVersion t
+
+      | isDigit h ->
+        let (digits, rest) = Text.span isDigit s
+        in
+        VersionComponent_Number
+            (fromMaybe (error $ "splitVersion: couldn't parse " <> show digits) $ readMaybe $ Text.unpack digits) : splitVersion rest
+
+      | otherwise ->
+        let
+          (chars, rest) =
+            Text.span
+              (\c -> not $ isDigit c || c `elem` versionComponentSeparators)
+              s
+          thisComponent =
+            case chars of
+              "pre" -> VersionComponent_Pre
+              x     -> VersionComponent_String x
+        in
+        thisComponent : splitVersion rest
 
 splitVersion_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 splitVersion_ v =
