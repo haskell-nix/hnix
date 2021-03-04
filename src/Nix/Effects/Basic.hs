@@ -150,15 +150,16 @@ findPathBy finder ls name = do
                   (demand
                     (\ nvmns ->
                       do
-                      (\case
-                        Just (nsPfx :: NixString) ->
-                          let pfx = stringIgnoreContext nsPfx in
-                          tryPath path $ bool
-                            mempty
-                            (pure (Text.unpack pfx))
-                            (not $ Text.null pfx)
-                        _ -> tryPath path mempty
-                       ) =<< fromValueMay nvmns
+                        mns <- fromValueMay nvmns
+                        tryPath path $
+                          case mns of
+                            Just (nsPfx :: NixString) ->
+                              let pfx = stringIgnoreContext nsPfx in
+                              bool
+                                mempty
+                                (pure (Text.unpack pfx))
+                                (not $ Text.null pfx)
+                            _ -> mempty
                     )
                   )
                   (M.lookup "prefix" s)
