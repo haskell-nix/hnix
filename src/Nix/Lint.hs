@@ -289,6 +289,15 @@ instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
   demand f (ST v)= (demand f) =<< force v
   demand f (SV v)= f (SV v)
 
+
+instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
+  => MonadValueF (Symbolic m) m where
+
+  demandF :: (Symbolic m -> m r) -> Symbolic m -> m r
+  demandF f (ST v)= (demandF f) =<< force v
+  demandF f (SV v)= f (SV v)
+
+
 instance MonadLint e m => MonadEval (Symbolic m) m where
   freeVariable var = symerr $ "Undefined variable '" <> Text.unpack var <> "'"
 
