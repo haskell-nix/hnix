@@ -102,27 +102,28 @@ withNixContext
   => Maybe FilePath
   -> m r
   -> m r
-withNixContext mpath action = do
-  base            <- builtins
-  opts :: Options <- asks (view hasLens)
-  let
-    i = nvList $ nvStr . makeNixStringWithoutContext . Text.pack <$> include opts
+withNixContext mpath action =
+  do
+    base            <- builtins
+    opts :: Options <- asks $ view hasLens
+    let
+      i = nvList $ nvStr . makeNixStringWithoutContext . Text.pack <$> include opts
 
-  pushScope (M.singleton "__includes" i) $ pushScopes base $
-    maybe
-      action
-      (\ path ->
-        do
-          traceM $ "Setting __cur_file = " <> show path
-          let ref = nvPath path
-          pushScope (M.singleton "__cur_file" ref) action
-      )
-      mpath
+    pushScope (M.singleton "__includes" i) $ pushScopes base $
+      maybe
+        action
+        (\ path ->
+          do
+            traceM $ "Setting __cur_file = " <> show path
+            let ref = nvPath path
+            pushScope (M.singleton "__cur_file" ref) action
+        )
+        mpath
 
 builtins :: (MonadNix e t f m, Scoped (NValue t f m) m)
          => m (Scopes m (NValue t f m))
 builtins = do
-  ref <- defer $ flip nvSet M.empty <$> buildMap
+  ref <- defer $ (`nvSet` M.empty) <$> buildMap
   lst <- ([("builtins", ref)] <>) <$> topLevelBuiltins
   pushScope (M.fromList lst) currentScopes
  where
@@ -534,12 +535,11 @@ div_ x y =
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 anyM _ []       = pure False
-anyM p (x : xs) = do
-  q <- p x
+anyM p (x : xs) =
   bool
     (anyM p xs)
     (pure True)
-    q
+    =<< p x
 
 any_
   :: MonadNix e t f m
@@ -550,12 +550,11 @@ any_ f = toValue <=< anyM fromValue <=< mapM (callFunc f) <=< fromValue
 
 allM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 allM _ []       = pure True
-allM p (x : xs) = do
-  q <- p x
+allM p (x : xs) =
   bool
     (pure False)
     (allM p xs)
-    q
+    =<< p x
 
 all_
   :: MonadNix e t f m
@@ -635,10 +634,10 @@ splitVersion s =
 splitVersion_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 splitVersion_ v =
   do
-    s <- fromStringNoContext =<< fromValue v
+    version <- fromStringNoContext =<< fromValue v
     pure $
       nvList $
-        nvStr . makeNixStringWithoutContext . versionComponentToString <$> splitVersion s
+        nvStr . makeNixStringWithoutContext . versionComponentToString <$> splitVersion version
 
 compareVersions :: Text -> Text -> Ordering
 compareVersions s1 s2 =
@@ -654,8 +653,8 @@ compareVersions_
   -> m (NValue t f m)
 compareVersions_ t1 t2 =
   do
-    s1 <- fromStringNoContext =<< fromValue t1
-    s2 <- fromStringNoContext =<< fromValue t2
+    s1 <- mkText t1
+    s2 <- mkText t2
 
     let
       cmpVers =
@@ -665,6 +664,9 @@ compareVersions_ t1 t2 =
           GT -> 1
 
     pure $ nvConstant $ NInt cmpVers
+
+ where
+  mkText = fromStringNoContext <=< fromValue
 
 splitDrvName :: Text -> (Text, Text)
 splitDrvName s =
@@ -717,8 +719,7 @@ match_
   -> m (NValue t f m)
 match_ pat str =
   do
-    s <- fromValue pat
-    p <- fromStringNoContext s
+    p <- fromStringNoContext =<< fromValue pat
     ns <- fromValue str
 
     -- NOTE: 2018-11-19: Currently prim_match in nix/src/libexpr/primops.cc
@@ -743,7 +744,12 @@ match_ pat str =
               <$>
                 traverse
                   (mkMatch . decodeUtf8)
-                  ((tail `ifTrue` (length s > 1)) s) -- (length <= 1) allowed & passes-through here the full string
+                  (bool
+                      id -- (length <= 1) allowed & passes-through here the full string
+                      tail
+                      (length s > 1)
+                      s
+                  )
         _ -> (pure $ nvConstant NNull)
       )
       (matchOnceText re (encodeUtf8 s))
@@ -756,8 +762,7 @@ split_
   -> m (NValue t f m)
 split_ pat str =
     do
-      s <- fromValue pat
-      p <- fromStringNoContext s
+      p <- fromStringNoContext =<< fromValue pat
       ns <- fromValue str
           -- NOTE: Currently prim_split in nix/src/libexpr/primops.cc ignores the
           -- context of its second argument. This is probably a bug but we're
@@ -887,10 +892,10 @@ catAttrs attrName xs =
   do
     n <- fromStringNoContext =<< fromValue attrName
     l <- fromValue @[NValue t f m] xs
-    fmap (nvList . catMaybes)
-      $ forM l
-      $ fmap (M.lookup n)
-      . demand fromValue
+
+    fmap (nvList . catMaybes) $
+      forM l $
+        fmap (M.lookup n) . demand fromValue
 
 baseNameOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 baseNameOf x = do
