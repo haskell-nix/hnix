@@ -22,7 +22,11 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 -- | Code that implements Nix builtins. Lists the functions that are built into the Nix expression evaluator. Some built-ins (aka `derivation`), are always in the scope, so they can be accessed by the name. To keap the namespace clean, most built-ins are inside the `builtins` scope - a set that contains all what is a built-in.
-module Nix.Builtins (withNixContext, builtins) where
+module Nix.Builtins
+  ( withNixContext
+  , builtins
+  )
+where
 
 import           Control.Comonad
 import           Control.Monad
@@ -74,7 +78,7 @@ import           Nix.Options
 import           Nix.Parser              hiding ( nixPath )
 import           Nix.Render
 import           Nix.Scope
-import           Nix.String              hiding (getContext)
+import           Nix.String              hiding ( getContext )
 import qualified Nix.String                    as NixString
 import           Nix.String.Coerce
 import           Nix.Utils
@@ -530,7 +534,7 @@ foldl'_
   -> m (NValue t f m)
 foldl'_ f z xs =  foldM go z =<< fromValue @[NValue t f m] xs
  where
-  go b a = f `callFunc` b >>= (`callFunc` a)
+  go b a = (`callFunc` a) =<< callFunc f b
 
 head_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 head_ =
@@ -1027,14 +1031,15 @@ genericClosure = fromValue @(AttrSet (NValue t f m)) >=> \s ->
   go _  ks []       = pure (ks, mempty)
   go op ks (t : ts) =
     demand
-      (\v -> fromValue @(AttrSet (NValue t f m)) v >>=
-        (\s -> do
+      (\v ->
+        (do
+          s <- fromValue @(AttrSet (NValue t f m)) v
           k <- attrsetGet "key" s
           demand
             (\k' -> do
               bool
                 (do
-                  ys <- fromValue @[NValue t f m] =<< (op `callFunc` v)
+                  ys <- fromValue @[NValue t f m] =<< callFunc op v
                   checkComparable k'
                     (case S.toList ks of
                       []           -> k'
