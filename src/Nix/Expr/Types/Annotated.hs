@@ -33,7 +33,8 @@ import           Data.Aeson.TH
 import           Data.Binary                    ( Binary(..) )
 import           Data.Data
 import           Data.Eq.Deriving
-import           Data.Fix                       ( Fix(..), unfoldFix )
+import           Data.Fix                       ( Fix(..)
+                                                , unfoldFix )
 import           Data.Function                  ( on )
 import           Data.Functor.Compose
 import           Data.Hashable

@@ -12,6 +12,7 @@ module Nix.Effects.Basic where
 
 import           Control.Monad
 import           Control.Monad.State.Strict
+import           Data.Bifunctor                 ( first )
 import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List
@@ -250,18 +251,19 @@ defaultImportPath path = do
   traceM $ "Importing file " <> path
   withFrame Info (ErrorCall $ "While importing file " <> show path) $ do
     imports <- gets fst
-    evalExprLoc =<< case M.lookup path imports of
-      Just expr -> pure expr
-      Nothing   -> do
-        eres <- parseNixFileLoc path
-        case eres of
-          Failure err ->
-            throwError
-              $ ErrorCall
-              . show $ fillSep ["Parse during import failed:", err]
-          Success expr -> do
-            modify (\(a, b) -> (M.insert path expr a, b))
-            pure expr
+    evalExprLoc =<<
+      maybe
+        (do
+          eres <- parseNixFileLoc path
+          case eres of
+            Failure err -> throwError $ ErrorCall . show $ fillSep ["Parse during import failed:", err]
+            Success expr ->
+              do
+                modify (first (M.insert path expr))
+                pure expr
+        )
+        pure  -- return expr
+        (M.lookup path imports)
 
 defaultPathToDefaultNix :: MonadNix e t f m => FilePath -> m FilePath
 defaultPathToDefaultNix = pathToDefaultNixFile
@@ -270,7 +272,7 @@ defaultPathToDefaultNix = pathToDefaultNixFile
 pathToDefaultNixFile :: MonadFile m => FilePath -> m FilePath
 pathToDefaultNixFile p = do
   isDir <- doesDirectoryExist p
-  pure $ if isDir then p </> "default.nix" else p
+  pure $ p </> ifTrue "default.nix" isDir
 
 defaultTraceEffect :: MonadPutStr m => String -> m ()
 defaultTraceEffect = Nix.Effects.putStrLn
