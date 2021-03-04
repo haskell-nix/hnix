@@ -107,44 +107,40 @@ type Convertible e t f m
   = (Framed e m, MonadDataErrorContext t f m, MonadThunk t m (NValue t f m))
 
 instance ( Convertible e t f m
-         , MonadValueF (NValue t f m) m
+         , MonadValue (NValue t f m) m
          , FromValue a m (NValue' t f m (NValue t f m))
          )
   => FromValue a m (NValue t f m) where
 
   fromValueMay =
-    demandF $
-      free
-        (fromValueMay <=< force)
-        fromValueMay
+    free
+      (fromValueMay <=< force)
+      fromValueMay
+      <=< demand
 
   fromValue =
-    demandF $
-      free
-        (fromValue <=< force)
-        fromValue
+    free
+      (fromValue <=< force)
+      fromValue
+      <=< demand
 
 instance ( Convertible e t f m
-         , MonadValueF (NValue t f m) m
+         , MonadValue (NValue t f m) m
          , FromValue a m (Deeper (NValue' t f m (NValue t f m)))
          )
   => FromValue a m (Deeper (NValue t f m)) where
 
   fromValueMay (Deeper v) =
-    demandF
-      (free
-        ((fromValueMay . Deeper) <=< force)
-        (fromValueMay . Deeper)
-      )
-      v
+    free
+      ((fromValueMay . Deeper) <=< force)
+      (fromValueMay . Deeper)
+      =<< demand v
 
   fromValue (Deeper v) =
-    demandF
-      (free
-        ((fromValue . Deeper) <=< force)
-        (fromValue . Deeper)
-      )
-      v
+    free
+      ((fromValue . Deeper) <=< force)
+      (fromValue . Deeper)
+      =<< demand v
 
 instance Convertible e t f m
   => FromValue () m (NValue' t f m (NValue t f m)) where
@@ -203,7 +199,7 @@ instance Convertible e t f m
   fromValue = fromMayToValue TFloat
 
 instance ( Convertible e t f m
-         , MonadValueF (NValue t f m) m
+         , MonadValue (NValue t f m) m
          , MonadEffects t f m
          )
   => FromValue NixString m (NValue' t f m (NValue t f m)) where
@@ -239,7 +235,7 @@ newtype Path = Path { getPath :: FilePath }
     deriving Show
 
 instance ( Convertible e t f m
-         , MonadValueF (NValue t f m) m
+         , MonadValue (NValue t f m) m
          )
   => FromValue Path m (NValue' t f m (NValue t f m)) where
 
