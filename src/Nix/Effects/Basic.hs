@@ -67,7 +67,7 @@ defaultMakeAbsolutePath origPath = do
   removeDotDotIndirections <$> canonicalizePath absPath
 
 expandHomePath :: MonadFile m => FilePath -> m FilePath
-expandHomePath ('~' : xs) = flip (<>) xs <$> getHomeDirectory
+expandHomePath ('~' : xs) = (<> xs) <$> getHomeDirectory
 expandHomePath p          = pure p
 
 -- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
@@ -96,11 +96,18 @@ defaultFindEnvPath = findEnvPathM
 findEnvPathM :: forall e t f m . MonadNix e t f m => FilePath -> m FilePath
 findEnvPathM name = do
   mres <- lookupVar "__nixPath"
+
   maybe
     (error "impossible")
-    (demand (fromValue >=> \(l :: [NValue t f m]) ->
-      findPathBy nixFilePath l name))
+    (demand
+      (\ nv ->
+        do
+          (l :: [NValue t f m]) <- fromValue nv
+          findPathBy nixFilePath l name
+      )
+    )
     mres
+
  where
   nixFilePath :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
   nixFilePath path = do
@@ -219,9 +226,12 @@ fetchTarball = demand $ \case
     nixInstantiateExpr $ "builtins.fetchTarball \"" <> Text.unpack uri <> "\""
   fetch url (Just t) =
     demand
-      (fromValue >=> \nsSha ->
+      (\nv -> do
+        nsSha <- fromValue nv
+
         let sha = stringIgnoreContext nsSha
-        in  nixInstantiateExpr
+
+        nixInstantiateExpr
           $ "builtins.fetchTarball { " <> "url    = \"" <> Text.unpack url <> "\"; " <> "sha256 = \"" <> Text.unpack sha <> "\"; }"
       )
       t
