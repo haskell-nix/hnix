@@ -595,8 +595,8 @@ splitVersion_ v =
         nvStr . makeNixStringWithoutContext . versionComponentToString <$> splitVersion s
 
 compareVersions :: Text -> Text -> Ordering
-compareVersions s1 s2 = mconcat
-  $ alignWith f (splitVersion s1) (splitVersion s2)
+compareVersions s1 s2 =
+  mconcat $ alignWith f (splitVersion s1) (splitVersion s2)
  where
   z = VersionComponent_String ""
   f = uncurry compare . fromThese z z
@@ -611,20 +611,24 @@ compareVersions_ t1 t2 =
     s1 <- fromStringNoContext =<< fromValue t1
     s2 <- fromStringNoContext =<< fromValue t2
 
-    pure $ nvConstant $ NInt $
-      case compareVersions s1 s2 of
-        LT -> -1
-        EQ -> 0
-        GT -> 1
+    let
+      cmpVers =
+        case compareVersions s1 s2 of
+          LT -> -1
+          EQ -> 0
+          GT -> 1
+
+    pure $ nvConstant $ NInt $ cmpVers
 
 splitDrvName :: Text -> (Text, Text)
 splitDrvName s =
   let
     sep    = "-"
     pieces = Text.splitOn sep s
-    isFirstVersionPiece p = case Text.uncons p of
-      Just (h, _) | isDigit h -> True
-      _                       -> False
+    isFirstVersionPiece p =
+      case Text.uncons p of
+        Just (h, _) | isDigit h -> True
+        _                       -> False
     -- Like 'break', but always puts the first item into the first result
     -- list
     breakAfterFirstItem :: (a -> Bool) -> [a] -> ([a], [a])
@@ -1341,10 +1345,12 @@ lessThan ta tb =
 concatLists
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 concatLists =
-  fromValue @[NValue t f m]
-    >=> mapM (demand $ fromValue @[NValue t f m] >=> pure)
-    >=> toValue
-    .   concat
+  toValue . concat <=<
+    mapM
+      (pure <=<
+        demand $ fromValue @[NValue t f m]
+      )
+      <=< fromValue @[NValue t f m]
 
 concatMap_
   :: forall e t f m
@@ -1353,12 +1359,13 @@ concatMap_
   -> NValue t f m
   -> m (NValue t f m)
 concatMap_ f =
-  fromValue @[NValue t f m]
-    >=> traverse applyFunc
-    >=> toValue . concat
+  toValue . concat <=<
+    traverse
+      applyFunc
+      <=< fromValue @[NValue t f m]
   where
     applyFunc :: NValue t f m  -> m [NValue t f m]
-    applyFunc =  (f `callFunc`) >=> fromValue
+    applyFunc =  (callFunc f) >=> fromValue
 
 listToAttrs
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1726,4 +1733,4 @@ instance ( MonadNix e t f m
          )
          => ToBuiltin t f m (a -> b) where
   toBuiltin name f =
-    pure $ nvBuiltin name (fromValue . Deeper >=> toBuiltin name . f)
+    pure $ nvBuiltin name (toBuiltin name . f <=< fromValue . Deeper)
