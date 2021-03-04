@@ -1467,16 +1467,21 @@ placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
     text h = encodeUtf8 $ stringIgnoreContext h
 
 absolutePathFromValue :: MonadNix e t f m => NValue t f m -> m FilePath
-absolutePathFromValue = \case
-  NVStr ns -> do
-    let path = Text.unpack $ stringIgnoreContext ns
-    unless (isAbsolute path) $ throwError $ ErrorCall $ "string " <> show path <> " doesn't represent an absolute path"
-    pure path
-  NVPath path -> pure path
-  v           -> throwError $ ErrorCall $ "expected a path, got " <> show v
+absolutePathFromValue =
+  \case
+    NVStr ns ->
+      do
+        let
+          path = Text.unpack $ stringIgnoreContext ns
+
+        unless (isAbsolute path) $ throwError $ ErrorCall $ "string " <> show path <> " doesn't represent an absolute path"
+        pure path
+
+    NVPath path -> pure path
+    v           -> throwError $ ErrorCall $ "expected a path, got " <> show v
 
 readFile_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-readFile_ = demand (absolutePathFromValue >=> Nix.Render.readFile >=> toValue)
+readFile_ = demand (toValue <=< Nix.Render.readFile <=< absolutePathFromValue)
 
 findFile_
   :: forall e t f m
