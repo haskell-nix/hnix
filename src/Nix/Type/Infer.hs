@@ -421,6 +421,25 @@ instance Monad m => MonadValue (Judgment s) (InferT s m) where
     -> InferT s m (Judgment s)
   inform f j = f (pure j)
 
+
+--  2021-02-22: NOTE: Seems like suporflous instance
+instance Monad m => MonadValueF (Judgment s) (InferT s m) where
+
+  demandF
+    :: ( Judgment s
+      -> InferT s m r)
+    -> Judgment s
+    -> InferT s m r
+  demandF = ($)
+
+  informF
+    :: ( InferT s m (Judgment s)
+      -> InferT s m (Judgment s)
+      )
+    -> Judgment s
+    -> InferT s m (Judgment s)
+  informF f j = f (pure j)
+
 {-
 instance MonadInfer m
   => MonadThunk (JThunkT s m) (InferT s m) (Judgment s) where

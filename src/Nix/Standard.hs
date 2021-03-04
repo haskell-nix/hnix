@@ -219,7 +219,7 @@ instance
   furtherF k t = StdThunk . StdCited <$> furtherF k (_stdCited $ _stdThunk t)
 
 
--- * @instance MonadValue@
+-- * @instance MonadValue (StdValue m) m@
 
 instance ( MonadAtomicRef m
          , MonadCatch m
@@ -254,6 +254,39 @@ instance ( MonadAtomicRef m
   --  2021-02-27: NOTE: When swapping, switch to `further`.
   inform f (Pure t) = Pure <$> furtherF f t
   inform f (Free v) = Free <$> bindNValue' id (inform f) v
+
+
+-- * @instance MonadValueF (StdValue m) m@
+
+instance ( MonadAtomicRef m
+         , MonadCatch m
+         , Typeable m
+         , MonadReader (Context m (StdValue m)) m
+         , MonadThunkId m
+         )
+  => MonadValueF (StdValue m) m where
+
+  demandF
+    :: ( StdValue m
+      -> m r
+      )
+    -> StdValue m
+    -> m r
+  demandF f v =
+    free
+      ((demandF f) <=< force)
+      (const $ f v)
+      v
+
+  informF
+    :: ( m (StdValue m)
+      -> m (StdValue m)
+      )
+    -> StdValue m
+    -> m (StdValue m)
+  --  2021-02-27: NOTE: When swapping, switch to `further`.
+  informF f (Pure t) = Pure <$> furtherF f t
+  informF f (Free v) = Free <$> bindNValue' id (informF f) v
 
 
 {------------------------------------------------------------------------}
