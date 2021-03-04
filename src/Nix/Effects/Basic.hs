@@ -178,25 +178,18 @@ findPathBy finder ls name = do
 fetchTarball
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 fetchTarball = demand $ \case
-  NVSet s _ -> case M.lookup "url" s of
-    Nothing ->
-      throwError $ ErrorCall "builtins.fetchTarball: Missing url attribute"
-    Just url -> demand (go (M.lookup "sha256" s)) url
+  NVSet s _ ->
+    maybe
+      (throwError $ ErrorCall "builtins.fetchTarball: Missing url attribute")
+      (demand (go (M.lookup "sha256" s)))
+      (M.lookup "url" s)
   v@NVStr{} -> go Nothing v
-  v ->
-    throwError
-      $  ErrorCall
-      $  "builtins.fetchTarball: Expected URI or set, got "
-      <> show v
+  v -> throwError $ ErrorCall $ "builtins.fetchTarball: Expected URI or set, got " <> show v
  where
   go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
   go msha = \case
     NVStr ns -> fetch (stringIgnoreContext ns) msha
-    v ->
-      throwError
-        $  ErrorCall
-        $  "builtins.fetchTarball: Expected URI or string, got "
-        <> show v
+    v -> throwError $ ErrorCall $ "builtins.fetchTarball: Expected URI or string, got " <> show v
 
 {- jww (2018-04-11): This should be written using pipes in another module
     fetch :: Text -> Maybe (NThunk m) -> m (NValue t f m)
@@ -234,14 +227,11 @@ findPathM
 findPathM = findPathBy existingPath
  where
   existingPath :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
-  existingPath path = do
-    apath  <- makeAbsolutePath @t @f path
-    exists <- doesPathExist apath
-    pure $
-      bool
-        mempty
-        (pure apath)
-        exists
+  existingPath path =
+    do
+      apath  <- makeAbsolutePath @t @f path
+      doesExist <- doesPathExist apath
+      pure $ ifTrue (pure apath) doesExist
 
 defaultImportPath
   :: (MonadNix e t f m, MonadState (HashMap FilePath NExprLoc, b) m)
