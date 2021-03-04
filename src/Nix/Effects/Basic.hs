@@ -153,9 +153,9 @@ findPathBy finder ls name = do
                       (\case
                         Just (nsPfx :: NixString) ->
                           let pfx = stringIgnoreContext nsPfx in
-                          bool
-                            (tryPath path mempty)
-                            (tryPath path (pure (Text.unpack pfx)))
+                          tryPath path $ bool
+                            mempty
+                            (pure (Text.unpack pfx))
                             (not $ Text.null pfx)
                         _ -> tryPath path mempty
                        ) =<< fromValueMay nvmns
