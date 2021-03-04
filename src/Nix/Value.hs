@@ -53,6 +53,7 @@ import           Nix.Expr.Types.Annotated
 import           Nix.String
 import           Nix.Thunk
 import           Nix.Utils
+import           Data.Eq.Deriving
 
 
 -- * @__NValueF__@: Base functor
@@ -223,7 +224,7 @@ newtype NValue' t f m a =
     -- | Applying F-algebra carrier (@NValue@) to the F-algebra Base functor data type (@NValueF@), forming the \( F(A)-> A \)).
     _nValue :: f (NValueF (NValue t f m) m a)
     }
-  deriving (Generic, Typeable, Functor, Foldable, Eq1)
+  deriving (Generic, Typeable, Functor, Foldable)
 
 instance (Comonad f, Show a) => Show (NValue' t f m a) where
   show (NValue (extract -> v)) = show v
@@ -617,6 +618,7 @@ pattern NVClosure x f <- Free (NVClosure' x f)
 pattern NVBuiltin name f <- Free (NVBuiltin' name f)
 
 
+
 -- * @TStringContext@
 
 data TStringContext = NoContext | HasContext
@@ -710,7 +712,6 @@ deriving instance (Comonad f, Show t) => Show (ValueFrame t f m)
 type MonadDataContext f (m :: * -> *)
   = (Comonad f, Applicative f, Traversable f, Monad m)
 
-
 -- * @MonadDataErrorContext@
 
 type MonadDataErrorContext t f m
@@ -718,15 +719,20 @@ type MonadDataErrorContext t f m
 
 instance MonadDataErrorContext t f m => Exception (ValueFrame t f m)
 
+-- * @instance Eq1 NValue'@
 
--- ** NValue' traversals, getter & setters
+-- TH derivable works only after MonadDataContext
+$(deriveEq1 ''NValue')
 
+
+-- * @NValue'@ traversals, getter & setters
 
 -- | Make traversals for Nix traversable structures.
 $(makeTraversals ''NValueF)
 
 -- | Make lenses for the Nix values
 $(makeLenses ''NValue')
+
 
 -- | Lens-generated getter-setter function for a traversable NValue' key-val structures.
 --   Nix value analogue of the @Data-Aeson-Lens@:@key :: AsValue t => Text -> Traversal' t Value@.
