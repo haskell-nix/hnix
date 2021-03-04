@@ -132,7 +132,7 @@ findPathBy finder ls name = do
     mpath
  where
   go :: Maybe FilePath -> NValue t f m -> m (Maybe FilePath)
-  go p =
+  go mp =
     maybe
       (demand
         (fromValue >=> \(s :: HashMap Text (NValue t f m)) -> do
@@ -158,7 +158,7 @@ findPathBy finder ls name = do
         )
       )
       (const . pure . pure)
-      p
+      mp
 
   tryPath p (Just n) | n' : ns <- splitDirectories name, n == n' =
     finder $ p <///> joinPath ns
