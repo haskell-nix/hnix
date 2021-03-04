@@ -1551,12 +1551,16 @@ fromJSON =
     )
  where
   jsonToNValue = \case
-    A.Object m -> flip nvSet M.empty <$> traverse jsonToNValue m
+    A.Object m -> (`nvSet` M.empty) <$> traverse jsonToNValue m
     A.Array  l -> nvList <$> traverse jsonToNValue (V.toList l)
     A.String s -> pure $ nvStr $ makeNixStringWithoutContext s
-    A.Number n -> pure $ nvConstant $ case floatingOrInteger n of
-      Left  r -> NFloat r
-      Right i -> NInt i
+    A.Number n ->
+      pure $
+        nvConstant $
+          either
+            NFloat
+            NInt
+            (floatingOrInteger n)
     A.Bool   b -> pure $ nvConstant $ NBool b
     A.Null     -> pure $ nvConstant NNull
 
@@ -1603,14 +1607,12 @@ trace_
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-trace_ msg action = do
-  traceEffect @t @f @m
-    .   Text.unpack
-    .   stringIgnoreContext
-    =<< fromValue msg
-  pure action
+trace_ msg action =
+  do
+    traceEffect @t @f @m . Text.unpack . stringIgnoreContext =<< fromValue msg
+    pure action
 
--- TODO: remember error context
+-- 2018-09-08: NOTE: Remember of error context is so far not implemented
 addErrorContext
   :: forall e t f m
    . MonadNix e t f m
@@ -1624,7 +1626,7 @@ exec_
 exec_ xs = do
   ls <- fromValue @[NValue t f m] xs
   xs <- traverse (coerceToString callFunc DontCopyToStore CoerceStringy) ls
-  -- TODO Still need to do something with the context here
+  -- 2018-11-19: NOTE: Still need to do something with the context here
   -- See prim_exec in nix/src/libexpr/primops.cc
   -- Requires the implementation of EvalState::realiseContext
   exec (fmap (Text.unpack . stringIgnoreContext) xs)
@@ -1634,22 +1636,21 @@ fetchurl
 fetchurl =
   demand
     (\case
-      NVSet s _ -> attrsetGet "url" s >>= demand (go (M.lookup "sha256" s))
+      NVSet s _ -> demand (go (M.lookup "sha256" s)) =<< attrsetGet "url" s
       v@NVStr{} -> go Nothing v
       v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI or set, got " <> show v
     )
  where
   go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
-  go _msha = \case
-    NVStr ns -> noContextAttrs ns >>= getURL >>=
-      either -- msha
-        throwError
-        toValue
-    v ->
-      throwError
-        $  ErrorCall
-        $  "builtins.fetchurl: Expected URI or string, got "
-        <> show v
+  go _msha =
+    \case
+      NVStr ns ->
+        either -- msha
+          throwError
+          toValue
+          =<< getURL =<< noContextAttrs ns
+
+      v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI or string, got " <> show v
 
   noContextAttrs ns =
     maybe
