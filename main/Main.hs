@@ -214,17 +214,18 @@ main = do
             _                              -> (True, True)
 
           forceEntry k v =
-            catch (pure <$> demandF pure v) $ \(NixException frames) -> do
-              liftIO
-                .   putStrLn
-                .   ("Exception forcing " <>)
-                .   (k <>)
-                .   (": " <>)
-                .   show
-                =<< renderFrames @(StdValue (StandardT (StdIdT IO)))
-                      @(StdThunk (StandardT (StdIdT IO)))
-                      frames
-              pure Nothing
+            catch (pure <$> (pure =<< demand v)) $ \(NixException frames) ->
+              do
+                liftIO
+                  . putStrLn
+                  . ("Exception forcing " <>)
+                  . (k <>)
+                  . (": " <>)
+                  . show
+                  =<< renderFrames @(StdValue (StandardT (StdIdT IO)))
+                        @(StdThunk (StandardT (StdIdT IO)))
+                        frames
+                pure Nothing
 
   reduction path mp x = do
     eres <- Nix.withNixContext mp

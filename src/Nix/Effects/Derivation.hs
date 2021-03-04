@@ -351,7 +351,7 @@ buildDerivationWithContext drvAttrs = do
     -- common functions, lifted to WithStringContextT
 
     demandF' :: (NValue t f m -> WithStringContextT m a) -> NValue t f m -> WithStringContextT m a
-    demandF' f v = join $ lift $ demandF (pure . f) v
+    demandF' f v = join $ lift $ f <$> demand v
 
     fromValue' :: (FromValue a m (NValue' t f m (NValue t f m)), MonadNix e t f m) => NValue t f m -> WithStringContextT m a
     fromValue' = lift . fromValue

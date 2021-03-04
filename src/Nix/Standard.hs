@@ -273,7 +273,7 @@ instance
     -> m r
   demandF f v =
     free
-      ((demandF f) <=< force)
+      (f <=< demand <=< force)
       (const $ f v)
       v
 

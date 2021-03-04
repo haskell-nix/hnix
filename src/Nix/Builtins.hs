@@ -360,7 +360,7 @@ foldNixPath f z = do
   dirs <-
     maybe
       (pure mempty)
-      (demandF (fromValue . Deeper))
+      ((fromValue . Deeper) <=< demand)
       mres
   mPath    <- getEnvVar "NIX_PATH"
   mDataDir <- getEnvVar "NIX_DATA_DIR"
@@ -449,20 +449,16 @@ unsafeGetAttrPos
   -> NValue t f m
   -> m (NValue t f m)
 unsafeGetAttrPos x y =
-  demandF
-    (\x' ->
-       demandF
-        (\y' -> case (x', y') of
-          (NVStr ns, NVSet _ apos) ->
-            maybe
-              (pure $ nvConstant NNull)
-              toValue
-              (M.lookup (stringIgnoreContext ns) apos)
-          (x, y) -> throwError $ ErrorCall $ "Invalid types for builtins.unsafeGetAttrPos: " <> show (x, y)
-        )
-        y
-    )
-    x
+  (\x' ->
+    (\y' -> case (x', y') of
+        (NVStr ns, NVSet _ apos) ->
+          maybe
+            (pure $ nvConstant NNull)
+            toValue
+            (M.lookup (stringIgnoreContext ns) apos)
+        (x, y) -> throwError $ ErrorCall $ "Invalid types for builtins.unsafeGetAttrPos: " <> show (x, y)
+      ) =<< demand y
+  ) =<< demand x
 
 -- This function is a bit special in that it doesn't care about the contents
 -- of the list.
@@ -476,20 +472,16 @@ add_
   -> NValue t f m
   -> m (NValue t f m)
 add_ x y =
-  demandF
-    (\x' ->
-      demandF
-        (\y' ->
-          case (x', y') of
-            (NVConstant (NInt   x), NVConstant (NInt   y)) -> toValue (x + y :: Integer)
-            (NVConstant (NFloat x), NVConstant (NInt   y)) -> toValue (x + fromInteger y)
-            (NVConstant (NInt   x), NVConstant (NFloat y)) -> toValue (fromInteger x + y)
-            (NVConstant (NFloat x), NVConstant (NFloat y)) -> toValue (x + y)
-            (_                    , _                    ) -> throwError $ Addition x' y'
-        )
-        y
-    )
-    x
+  (\x' ->
+    (\y' ->
+      case (x', y') of
+        (NVConstant (NInt   x), NVConstant (NInt   y)) -> toValue (x + y :: Integer)
+        (NVConstant (NFloat x), NVConstant (NInt   y)) -> toValue (x + fromInteger y)
+        (NVConstant (NInt   x), NVConstant (NFloat y)) -> toValue (fromInteger x + y)
+        (NVConstant (NFloat x), NVConstant (NFloat y)) -> toValue (x + y)
+        (_                    , _                    ) -> throwError $ Addition x' y'
+    ) =<< demand y
+  ) =<< demand x
 
 mul_
   :: MonadNix e t f m
@@ -497,20 +489,16 @@ mul_
   -> NValue t f m
   -> m (NValue t f m)
 mul_ x y =
-  demandF
-    (\x' ->
-      demandF
-        (\y' ->
-          case (x', y') of
-            (NVConstant (NInt   x), NVConstant (NInt y)  ) -> toValue (x * y :: Integer)
-            (NVConstant (NFloat x), NVConstant (NInt y)  ) -> toValue (x * fromInteger y)
-            (NVConstant (NInt   x), NVConstant (NFloat y)) -> toValue (fromInteger x * y)
-            (NVConstant (NFloat x), NVConstant (NFloat y)) -> toValue (x * y)
-            (_, _) -> throwError $ Multiplication x' y'
-        )
-        y
-    )
-    x
+  (\x' ->
+    (\y' ->
+      case (x', y') of
+        (NVConstant (NInt   x), NVConstant (NInt y)  ) -> toValue (x * y :: Integer)
+        (NVConstant (NFloat x), NVConstant (NInt y)  ) -> toValue (x * fromInteger y)
+        (NVConstant (NInt   x), NVConstant (NFloat y)) -> toValue (fromInteger x * y)
+        (NVConstant (NFloat x), NVConstant (NFloat y)) -> toValue (x * y)
+        (_, _) -> throwError $ Multiplication x' y'
+    ) =<< demand y
+  ) =<< demand x
 
 div_
   :: MonadNix e t f m
@@ -518,20 +506,16 @@ div_
   -> NValue t f m
   -> m (NValue t f m)
 div_ x y =
-  demandF
-    (\x' ->
-      demandF
-        (\y' ->
-          case (x', y') of
-            (NVConstant (NInt   x), NVConstant (NInt   y)) | y /= 0 -> toValue $ (floor (fromInteger x / fromInteger y :: Double) :: Integer)
-            (NVConstant (NFloat x), NVConstant (NInt   y)) | y /= 0 -> toValue $                     x / fromInteger y
-            (NVConstant (NInt   x), NVConstant (NFloat y)) | y /= 0 -> toValue $         fromInteger x / y
-            (NVConstant (NFloat x), NVConstant (NFloat y)) | y /= 0 -> toValue $                     x / y
-            (x'                   , y'                   )          -> throwError $ Division x' y'
-        )
-        y
-    )
-    x
+  (\x' ->
+    (\y' ->
+      case (x', y') of
+        (NVConstant (NInt   x), NVConstant (NInt   y)) | y /= 0 -> toValue $ (floor (fromInteger x / fromInteger y :: Double) :: Integer)
+        (NVConstant (NFloat x), NVConstant (NInt   y)) | y /= 0 -> toValue $                     x / fromInteger y
+        (NVConstant (NInt   x), NVConstant (NFloat y)) | y /= 0 -> toValue $         fromInteger x / y
+        (NVConstant (NFloat x), NVConstant (NFloat y)) | y /= 0 -> toValue $                     x / y
+        (x'                   , y'                   )          -> throwError $ Division x' y'
+    ) =<< demand y
+  ) =<< demand x
 
 anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 anyM _ []       = pure False
@@ -895,7 +879,7 @@ catAttrs attrName xs =
 
     fmap (nvList . catMaybes) $
       forM l $
-        fmap (M.lookup n) . demandF fromValue
+        fmap (M.lookup n) . fromValue <=< demand
 
 baseNameOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 baseNameOf x = do
@@ -950,12 +934,11 @@ builtinsBuiltin = throwError $ ErrorCall "HNix does not provide builtins.builtin
 
 dirOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 dirOf =
-  demandF
-    (\case
-      NVStr ns -> pure $ nvStr $ modifyNixContents (Text.pack . takeDirectory . Text.unpack) ns
-      NVPath path -> pure $ nvPath $ takeDirectory path
-      v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " <> show v
-    )
+  (\case
+    NVStr ns -> pure $ nvStr $ modifyNixContents (Text.pack . takeDirectory . Text.unpack) ns
+    NVPath path -> pure $ nvPath $ takeDirectory path
+    v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " <> show v
+  ) <=< demand
 
 -- jww (2018-04-28): This should only be a string argument, and not coerced?
 unsafeDiscardStringContext
@@ -969,7 +952,7 @@ seq_
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-seq_ a b = demandF (const $ pure b) a
+seq_ a b = const (pure b) =<< demand a
 
 -- | We evaluate 'a' only for its effects, so data cycles are ignored.
 deepSeq
@@ -1057,15 +1040,11 @@ genericClosure = fromValue @(AttrSet (NValue t f m)) >=> \s ->
     (Nothing    , Just _         ) -> throwError $ ErrorCall "builtins.genericClosure: Attribute 'startSet' required"
     (Just _     , Nothing        ) -> throwError $ ErrorCall "builtins.genericClosure: Attribute 'operator' required"
     (Just startSet, Just operator) ->
-      demandF
-        (fromValue @[NValue t f m] >=>
-         (\ss ->
-          demandF
-            (\op -> toValue @[NValue t f m] =<< snd <$> go op S.empty ss)
-            operator
-         )
+      (fromValue @[NValue t f m] >=>
+        (\ss ->
+        (\op -> toValue @[NValue t f m] =<< snd <$> go op S.empty ss) =<< demand operator
         )
-        startSet
+      ) =<< demand startSet
  where
   go
     :: NValue t f m
@@ -1074,30 +1053,26 @@ genericClosure = fromValue @(AttrSet (NValue t f m)) >=> \s ->
     -> m (Set (WValue t f m), [NValue t f m])
   go _  ks []       = pure (ks, mempty)
   go op ks (t : ts) =
-    demandF
-      (\v ->
-        (do
-          s <- fromValue @(AttrSet (NValue t f m)) v
-          k <- attrsetGet "key" s
-          demandF
-            (\k' -> do
-              bool
-                (do
-                  ys <- fromValue @[NValue t f m] =<< callFunc op v
-                  checkComparable k'
-                    (case S.toList ks of
-                      []           -> k'
-                      WValue j : _ -> j
-                    )
-                  fmap (t :) <$> go op (S.insert (WValue k') ks) (ts <> ys)
+    (\v ->
+      (do
+        s <- fromValue @(AttrSet (NValue t f m)) v
+        k <- attrsetGet "key" s
+        (\k' -> do
+          bool
+            (do
+              ys <- fromValue @[NValue t f m] =<< callFunc op v
+              checkComparable k'
+                (case S.toList ks of
+                  []           -> k'
+                  WValue j : _ -> j
                 )
-                (go op ks ts)
-                (S.member (WValue k') ks)
-              )
-              k
-        )
+              fmap (t :) <$> go op (S.insert (WValue k') ks) (ts <> ys)
+            )
+            (go op ks ts)
+            (S.member (WValue k') ks)
+          ) =<< demand k
       )
-      t
+    ) =<< demand t
 
 -- | Takes:
 -- 1. List of strings to match.
@@ -1221,16 +1196,14 @@ intersectAttrs set1 set2 =
 functionArgs
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 functionArgs fun =
-  demandF
-    (\case
-      NVClosure p _ ->
-        toValue @(AttrSet (NValue t f m)) $ nvConstant . NBool <$>
-          case p of
-            Param name     -> M.singleton name False
-            ParamSet s _ _ -> isJust <$> M.fromList s
-      v -> throwError $ ErrorCall $ "builtins.functionArgs: expected function, got " <> show v
-    )
-    fun
+  (\case
+    NVClosure p _ ->
+      toValue @(AttrSet (NValue t f m)) $ nvConstant . NBool <$>
+        case p of
+          Param name     -> M.singleton name False
+          ParamSet s _ _ -> isJust <$> M.fromList s
+    v -> throwError $ ErrorCall $ "builtins.functionArgs: expected function, got " <> show v
+  ) =<< demand fun
 
 toFile
   :: MonadNix e t f m
@@ -1251,13 +1224,12 @@ toPath = fromValue @Path >=> toValue @Path
 
 pathExists_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 pathExists_ =
-  demandF
-    (
-     \case
-      NVPath p  -> toValue =<< pathExists p
-      NVStr  ns -> toValue =<< pathExists (Text.unpack $ stringIgnoreContext ns)
-      v -> throwError $ ErrorCall $ "builtins.pathExists: expected path, got " <> show v
-    )
+  (
+    \case
+    NVPath p  -> toValue =<< pathExists p
+    NVStr  ns -> toValue =<< pathExists (Text.unpack $ stringIgnoreContext ns)
+    v -> throwError $ ErrorCall $ "builtins.pathExists: expected path, got " <> show v
+  ) <=< demand
 
 hasKind
   :: forall a e t f m
@@ -1295,19 +1267,17 @@ isNull = hasKind @()
 -- isString cannot use `hasKind` because it coerces derivations to strings.
 isString :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isString =
-  demandF
-    (toValue . \case
-      NVStr{} -> True
-      _       -> False
-    )
+  (toValue . \case
+    NVStr{} -> True
+    _       -> False
+  ) <=< demand
 
 isFunction :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isFunction =
-  demandF
-    (toValue . \case
-      NVClosure{} -> True
-      _           -> False
-    )
+  (toValue . \case
+    NVClosure{} -> True
+    _           -> False
+  ) <=< demand
 
 throw_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 throw_ mnv = do
@@ -1337,13 +1307,13 @@ scopedImport asetArg pathArg =
           traceM "No known current directory"
           pure path
         )
-        (demandF
-          (\ pp ->
-            do
-              (Path p') <- fromValue pp
-              traceM $ "Current file being evaluated is: " <> show p'
-              pure $ takeDirectory p' </> path
-          )
+        (
+        (\ pp ->
+          do
+            (Path p') <- fromValue pp
+            traceM $ "Current file being evaluated is: " <> show p'
+            pure $ takeDirectory p' </> path
+        ) <=< demand
         )
         mres
 
@@ -1390,29 +1360,25 @@ lessThan
   -> NValue t f m
   -> m (NValue t f m)
 lessThan ta tb =
-  demandF
-    (\va ->
-      demandF
-        (\vb ->
-           do
-            let
-              badType = throwError $ ErrorCall $ "builtins.lessThan: expected two numbers or two strings, " <> "got " <> show va <> " and " <> show vb
+  (\va ->
+    (\vb ->
+        do
+        let
+          badType = throwError $ ErrorCall $ "builtins.lessThan: expected two numbers or two strings, " <> "got " <> show va <> " and " <> show vb
 
-            nvConstant . NBool <$>
-              case (va, vb) of
-                (NVConstant ca, NVConstant cb) ->
-                  case (ca, cb) of
-                    (NInt   a, NInt b  ) -> pure $ a < b
-                    (NFloat a, NInt b  ) -> pure $ a < fromInteger b
-                    (NInt   a, NFloat b) -> pure $ fromInteger a < b
-                    (NFloat a, NFloat b) -> pure $ a < b
-                    _                    -> badType
-                (NVStr a, NVStr b) -> pure $ stringIgnoreContext a < stringIgnoreContext b
-                _ -> badType
-        )
-        tb
-    )
-    ta
+        nvConstant . NBool <$>
+          case (va, vb) of
+            (NVConstant ca, NVConstant cb) ->
+              case (ca, cb) of
+                (NInt   a, NInt b  ) -> pure $ a < b
+                (NFloat a, NInt b  ) -> pure $ a < fromInteger b
+                (NInt   a, NFloat b) -> pure $ fromInteger a < b
+                (NFloat a, NFloat b) -> pure $ a < b
+                _                    -> badType
+            (NVStr a, NVStr b) -> pure $ stringIgnoreContext a < stringIgnoreContext b
+            _ -> badType
+    ) =<< demand tb
+  ) =<< demand ta
 
 concatLists
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1420,7 +1386,7 @@ concatLists =
   toValue . concat <=<
     mapM
       (pure <=<
-        demandF $ fromValue @[NValue t f m]
+        (fromValue @[NValue t f m]) <=< demand
       )
       <=< fromValue @[NValue t f m]
 
@@ -1447,21 +1413,15 @@ listToAttrs lst =
     fmap
       ((`nvSet` M.empty) . M.fromList . reverse)
       (forM l $
-        demandF
-          (\ nvattrset ->
-            do
-              a <- fromValue @(AttrSet (NValue t f m)) nvattrset
-              t <- attrsetGet "name" a
-              demandF
-                (\ nvstr ->
-                  do
-                    n <- fromValue nvstr
-                    name <- fromStringNoContext n
-                    val  <- attrsetGet "value" a
-                    pure (name, val)
-                )
-                t
-          )
+        (\ nvattrset ->
+          do
+            a <- fromValue @(AttrSet (NValue t f m)) nvattrset
+            n <- fromValue =<< demand =<< attrsetGet "name" a
+            name <- fromStringNoContext n
+            val  <- attrsetGet "value" a
+
+            pure (name, val)
+        ) <=< demand
       )
 
 -- prim_hashString from nix/src/libexpr/primops.cc
@@ -1531,7 +1491,7 @@ absolutePathFromValue =
     v           -> throwError $ ErrorCall $ "expected a path, got " <> show v
 
 readFile_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-readFile_ = demandF (toValue <=< Nix.Render.readFile <=< absolutePathFromValue)
+readFile_ = (toValue <=< Nix.Render.readFile <=< absolutePathFromValue) <=< demand
 
 findFile_
   :: forall e t f m
@@ -1540,21 +1500,17 @@ findFile_
   -> NValue t f m
   -> m (NValue t f m)
 findFile_ aset filePath =
-  demandF
-    (\aset' ->
-      demandF
-        (\filePath' ->
-          case (aset', filePath') of
-            (NVList x, NVStr ns) -> do
-              mres <- findPath @t @f @m x (Text.unpack (stringIgnoreContext ns))
-              pure $ nvPath mres
-            (NVList _, y) -> throwError $ ErrorCall $ "expected a string, got " <> show y
-            (x, NVStr _) -> throwError $ ErrorCall $ "expected a list, got " <> show x
-            (x, y) -> throwError $ ErrorCall $ "Invalid types for builtins.findFile: " <> show (x, y)
-        )
-        filePath
-    )
-    aset
+  (\aset' ->
+    (\filePath' ->
+      case (aset', filePath') of
+        (NVList x, NVStr ns) -> do
+          mres <- findPath @t @f @m x (Text.unpack (stringIgnoreContext ns))
+          pure $ nvPath mres
+        (NVList _, y) -> throwError $ ErrorCall $ "expected a string, got " <> show y
+        (x, NVStr _) -> throwError $ ErrorCall $ "expected a list, got " <> show x
+        (x, y) -> throwError $ ErrorCall $ "Invalid types for builtins.findFile: " <> show (x, y)
+    ) =<< demand filePath
+  ) =<< demand aset
 
 data FileType
    = FileTypeRegular
@@ -1573,32 +1529,30 @@ instance Convertible e t f m => ToValue FileType m (NValue t f m) where
 readDir_
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 readDir_ =
-  demandF
-    (\path' -> do
-      path           <- absolutePathFromValue path'
-      items          <- listDirectory path
-      itemsWithTypes <- forM items $ \item -> do
-        s <- getSymbolicLinkStatus $ path </> item
-        let t = if
-              | isRegularFile s  -> FileTypeRegular
-              | isDirectory s    -> FileTypeDirectory
-              | isSymbolicLink s -> FileTypeSymlink
-              | otherwise        -> FileTypeUnknown
-        pure (Text.pack item, t)
-      getDeeper <$> toValue (M.fromList itemsWithTypes))
+  (\path' -> do
+    path           <- absolutePathFromValue path'
+    items          <- listDirectory path
+    itemsWithTypes <- forM items $ \item -> do
+      s <- getSymbolicLinkStatus $ path </> item
+      let t = if
+            | isRegularFile s  -> FileTypeRegular
+            | isDirectory s    -> FileTypeDirectory
+            | isSymbolicLink s -> FileTypeSymlink
+            | otherwise        -> FileTypeUnknown
+      pure (Text.pack item, t)
+    getDeeper <$> toValue (M.fromList itemsWithTypes)) <=< demand
 
 fromJSON
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 fromJSON =
-  demandF
-    (\ j ->
-      do
-        encoded <- fromStringNoContext =<< fromValue j
-        either
-          (\ jsonError -> throwError $ ErrorCall $ "builtins.fromJSON: " <> jsonError)
-          jsonToNValue
-          (A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded)
-    )
+  (\ j ->
+    do
+      encoded <- fromStringNoContext =<< fromValue j
+      either
+        (\ jsonError -> throwError $ ErrorCall $ "builtins.fromJSON: " <> jsonError)
+        jsonToNValue
+        (A.eitherDecodeStrict' @A.Value $ encodeUtf8 encoded)
+  ) <=< demand
  where
   jsonToNValue = \case
     A.Object m -> (`nvSet` M.empty) <$> traverse jsonToNValue m
@@ -1615,13 +1569,13 @@ fromJSON =
     A.Null     -> pure $ nvConstant NNull
 
 prim_toJSON :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-prim_toJSON = demandF (fmap nvStr . nvalueToJSONNixString)
+prim_toJSON = (fmap nvStr . nvalueToJSONNixString) <=< demand
 
 toXML_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-toXML_ = demandF (fmap (nvStr . toXML) . normalForm)
+toXML_ = (fmap (nvStr . toXML) . normalForm) <=< demand
 
 typeOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-typeOf = demandF
+typeOf =
   (toValue . makeNixStringWithoutContext . \case
     NVConstant a -> case a of
       NURI   _ -> "string"
@@ -1636,11 +1590,11 @@ typeOf = demandF
     NVPath _      -> "path"
     NVBuiltin _ _ -> "lambda"
     _             -> error "Pattern synonyms obscure complete patterns"
-  )
+  ) <=< demand
 
 tryEval
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-tryEval e = catch (demandF (pure . onSuccess) e) (pure . onError)
+tryEval e = catch (onSuccess <$> demand e) (pure . onError)
  where
   onSuccess v = flip nvSet M.empty $ M.fromList
     [("success", nvConstant (NBool True)), ("value", v)]
@@ -1684,12 +1638,11 @@ exec_ xs = do
 fetchurl
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 fetchurl =
-  demandF
-    (\case
-      NVSet s _ -> demandF (go (M.lookup "sha256" s)) =<< attrsetGet "url" s
-      v@NVStr{} -> go Nothing v
-      v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI or set, got " <> show v
-    )
+  (\case
+    NVSet s _ -> go (M.lookup "sha256" s) =<< demand =<< attrsetGet "url" s
+    v@NVStr{} -> go Nothing v
+    v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI or set, got " <> show v
+  ) <=< demand
  where
   go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
   go _msha =
@@ -1748,13 +1701,12 @@ getRecursiveSize = fmap (nvConstant . NInt . fromIntegral) . recursiveSize
 getContext
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 getContext =
-  demandF
-    (\case
-      (NVStr ns) -> do
-        let context = getNixLikeContext $ toNixLikeContext $ NixString.getContext ns
-        valued :: M.HashMap Text (NValue t f m) <- sequenceA $ M.map toValue context
-        pure $ nvSet valued M.empty
-      x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: " <> show x)
+  (\case
+    (NVStr ns) -> do
+      let context = getNixLikeContext $ toNixLikeContext $ NixString.getContext ns
+      valued :: M.HashMap Text (NValue t f m) <- sequenceA $ M.map toValue context
+      pure $ nvSet valued M.empty
+    x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: " <> show x) <=< demand
 
 appendContext
   :: forall e t f m
@@ -1763,54 +1715,49 @@ appendContext
   -> NValue t f m
   -> m (NValue t f m)
 appendContext x y =
-  demandF
-    (\x' ->
-      demandF
-        (\y' ->
-          (case (x', y') of
-            (NVStr ns, NVSet attrs _) -> do
-              newContextValues <- forM attrs $
-                demandF
-                  (\case
-                    NVSet attrs _ -> do
-                      -- TODO: Fail for unexpected keys.
-                      path <-
-                        maybe
-                          (pure False)
-                          (demandF fromValue)
-                          (M.lookup "path" attrs)
-                      allOutputs <-
-                        maybe
-                          (pure False)
-                          (demandF fromValue)
-                          (M.lookup "allOutputs" attrs)
-                      outputs <-
-                        maybe
-                          (pure mempty)
-                          (demandF
-                            (\case
-                              NVList vs -> forM vs $ fmap stringIgnoreContext . fromValue
-                              x -> throwError $ ErrorCall $ "Invalid types for context value outputs in builtins.appendContext: " <> show x
-                            )
-                          )
-                        (M.lookup "outputs" attrs)
-                      pure $ NixLikeContextValue path allOutputs outputs
-                    x -> throwError $ ErrorCall $ "Invalid types for context value in builtins.appendContext: " <> show x
+  (\x' ->
+    (\y' ->
+      (case (x', y') of
+        (NVStr ns, NVSet attrs _) -> do
+          newContextValues <- forM attrs $
+            (\case
+              NVSet attrs _ -> do
+                -- TODO: Fail for unexpected keys.
+                path <-
+                  maybe
+                    (pure False)
+                    (fromValue <=< demand)
+                    (M.lookup "path" attrs)
+                allOutputs <-
+                  maybe
+                    (pure False)
+                    (fromValue <=< demand)
+                    (M.lookup "allOutputs" attrs)
+                outputs <-
+                  maybe
+                    (pure mempty)
+                    (
+                    (\case
+                      NVList vs -> forM vs $ fmap stringIgnoreContext . fromValue
+                      x -> throwError $ ErrorCall $ "Invalid types for context value outputs in builtins.appendContext: " <> show x
+                    ) <=< demand
                     )
-              toValue
-                $ makeNixString (stringIgnoreContext ns)
-                $ fromNixLikeContext
-                $ NixLikeContext
-                $ M.unionWith (<>) newContextValues
-                $ getNixLikeContext
-                $ toNixLikeContext
-                $ NixString.getContext ns
-            (x, y) -> throwError $ ErrorCall $ "Invalid types for builtins.appendContext: " <> show (x, y)
-          )
-        )
-        y
-    )
-    x
+                  (M.lookup "outputs" attrs)
+                pure $ NixLikeContextValue path allOutputs outputs
+              x -> throwError $ ErrorCall $ "Invalid types for context value in builtins.appendContext: " <> show x
+              ) <=< demand
+          toValue
+            $ makeNixString (stringIgnoreContext ns)
+            $ fromNixLikeContext
+            $ NixLikeContext
+            $ M.unionWith (<>) newContextValues
+            $ getNixLikeContext
+            $ toNixLikeContext
+            $ NixString.getContext ns
+        (x, y) -> throwError $ ErrorCall $ "Invalid types for builtins.appendContext: " <> show (x, y)
+      )
+    ) =<< demand y
+  ) =<< demand x
 
 newtype Prim m a = Prim { runPrim :: m a }
 

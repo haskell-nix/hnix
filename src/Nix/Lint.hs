@@ -115,7 +115,7 @@ unpackSymbolic
   :: (MonadVar m, MonadThunkId m, MonadCatch m)
   => Symbolic m
   -> m (NSymbolicF (NTypeF m (Symbolic m)))
-unpackSymbolic = demandF $ readVar . getSV
+unpackSymbolic = readVar . getSV <=< demand
 
 type MonadLint e m
   = ( Scoped (Symbolic m) m
@@ -139,11 +139,11 @@ renderSymbolic = unpackSymbolic >=> \case
       TNull  -> "null"
     TStr    -> pure "string"
     TList r -> do
-      x <- demandF renderSymbolic r
+      x <- renderSymbolic =<< demand r
       pure $ "[" <> x <> "]"
     TSet Nothing  -> pure "<any set>"
     TSet (Just s) -> do
-      x <- traverse (demandF renderSymbolic) s
+      x <- traverse (renderSymbolic <=< demand) s
       pure $ "{" <> show x <> "}"
     f@(TClosure p) -> do
       (args, sym) <- do
@@ -177,29 +177,21 @@ merge context = go
     (TConstant ls, TConstant rs) ->
       (TConstant (ls `intersect` rs) :) <$> go xs ys
     (TList l, TList r) ->
-      demandF
-        (\l' ->
-          demandF
-            (\r' -> do
-              m <- defer $ unify context l' r'
-              (TList m :) <$> go xs ys
-            )
-            r
-        )
-        l
+      (\l' ->
+        (\r' -> do
+          m <- defer $ unify context l' r'
+          (TList m :) <$> go xs ys
+        ) =<< demand r
+      ) =<< demand l
     (TSet x       , TSet Nothing ) -> (TSet x :) <$> go xs ys
     (TSet Nothing , TSet x       ) -> (TSet x :) <$> go xs ys
     (TSet (Just l), TSet (Just r)) -> do
       m <- sequenceA $ M.intersectionWith
         (\i j -> i >>= \i' ->
           j >>= \j' ->
-            demandF
               (\i'' ->
-                demandF
-                  (defer . unify context i'')
-                  j'
-              )
-              i'
+                  (defer . unify context i'') =<< demand j'
+              ) =<< demand i'
         )
         (pure <$> l)
         (pure <$> r)
@@ -345,13 +337,11 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
   evalWith scope body = do
     s <- defer scope
     pushWeakScope ?? body $
-      demandF
-        (unpackSymbolic >=> \case
-          NMany [TSet (Just s')] -> pure s'
-          NMany [TSet Nothing] -> error "NYI: with unknown"
-          _ -> throwError $ ErrorCall "scope must be a set in with statement"
-        )
-        s
+      (unpackSymbolic >=> \case
+        NMany [TSet (Just s')] -> pure s'
+        NMany [TSet Nothing] -> error "NYI: with unknown"
+        _ -> throwError $ ErrorCall "scope must be a set in with statement"
+      ) =<< demand s
 
   evalIf cond t f = do
     t' <- t
