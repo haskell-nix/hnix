@@ -1384,20 +1384,28 @@ concatMap_ f =
 
 listToAttrs
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-listToAttrs = fromValue @[NValue t f m] >=> \l ->
-  fmap (flip nvSet M.empty . M.fromList . reverse)
-    $   forM l
-    $   demand
-    $   fromValue @(AttrSet (NValue t f m))
-    >=> \s -> do
-          t <- attrsetGet "name" s
-          demand
-            (fromValue >=> \n -> do
-              name <- fromStringNoContext n
-              val  <- attrsetGet "value" s
-              pure (name, val)
-            )
-            t
+listToAttrs lst =
+  do
+    l <- fromValue @[NValue t f m] lst
+    fmap
+      ((`nvSet` M.empty) . M.fromList . reverse)
+      (forM l $
+        demand
+          (\ nvattrset ->
+            do
+              a <- fromValue @(AttrSet (NValue t f m)) nvattrset
+              t <- attrsetGet "name" a
+              demand
+                (\ nvstr ->
+                  do
+                    n <- fromValue nvstr
+                    name <- fromStringNoContext n
+                    val  <- attrsetGet "value" a
+                    pure (name, val)
+                )
+                t
+          )
+      )
 
 -- prim_hashString from nix/src/libexpr/primops.cc
 -- fail if context in the algo arg
