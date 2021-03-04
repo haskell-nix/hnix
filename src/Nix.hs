@@ -115,7 +115,7 @@ evaluateExpression mpath evaluator handler expr = do
     (second mkStr)
     (argstr opts)
   evaluator mpath expr >>= \f ->
-    demand
+    demandF
       (\f' ->
         processResult handler =<<
           case f' of
@@ -149,7 +149,7 @@ processResult h val = do
   go :: [Text.Text] -> NValue t f m -> m a
   go [] v = h v
   go ((Text.decimal -> Right (n,"")) : ks) v =
-    demand
+    demandF
       (\case
         NVList xs ->
           list
@@ -161,7 +161,7 @@ processResult h val = do
       )
       v
   go (k : ks) v =
-    demand
+    demandF
       (\case
         NVSet xs _ ->
           maybe

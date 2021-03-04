@@ -138,6 +138,7 @@ type MonadNix e t f m
   , MonadEffects t f m
   , MonadCitedThunks t f m
   , MonadValue (NValue t f m) m
+  , MonadValueF (NValue t f m) m
   )
 
 data ExecFrame t f m = Assertion SrcSpan (NValue t f m)
@@ -296,7 +297,7 @@ callFunc
   -> NValue t f m
   -> m (NValue t f m)
 callFunc fun arg =
-  demand
+  demandF
     (\fun' -> do
     frames :: Frames <- asks (view hasLens)
     when (length frames > 2000) $ throwError $ ErrorCall "Function call stack exhausted"
@@ -307,7 +308,7 @@ callFunc fun arg =
         span <- currentPos
         withFrame Info (Calling @m @(NValue t f m) name span) (f arg)
       s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
-        demand ((`callFunc` s) >=> (`callFunc` arg)) f
+        demandF ((`callFunc` s) >=> (`callFunc` arg)) f
       x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show x
     )
     fun
@@ -360,9 +361,9 @@ execBinaryOp scope span op lval rarg = case op of
     helperLogic id True
   _     -> rarg >>=
     (\rval ->
-      demand
+      demandF
       (\rval' ->
-        demand
+        demandF
           (\lval' -> execBinaryOpForced scope span op lval' rval')
           lval
       )

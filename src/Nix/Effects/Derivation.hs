@@ -322,7 +322,7 @@ buildDerivationWithContext drvAttrs = do
         bool
           (pure drvAttrs)
           (M.mapMaybe id <$> forM drvAttrs
-            (demand'
+            (demandF'
               (pure . \case
                 NVConstant NNull -> Nothing
                 value -> pure value
@@ -350,8 +350,8 @@ buildDerivationWithContext drvAttrs = do
 
     -- common functions, lifted to WithStringContextT
 
-    demand' :: (NValue t f m -> WithStringContextT m a) -> NValue t f m -> WithStringContextT m a
-    demand' f v = join $ lift $ demand (pure . f) v
+    demandF' :: (NValue t f m -> WithStringContextT m a) -> NValue t f m -> WithStringContextT m a
+    demandF' f v = join $ lift $ demandF (pure . f) v
 
     fromValue' :: (FromValue a m (NValue' t f m (NValue t f m)), MonadNix e t f m) => NValue t f m -> WithStringContextT m a
     fromValue' = lift . fromValue

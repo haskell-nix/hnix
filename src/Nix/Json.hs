@@ -43,11 +43,11 @@ nvalueToJSON = \case
   NVList l ->
     A.Array
       .   V.fromList
-      <$> traverse (join . lift . demand (pure . nvalueToJSON)) l
+      <$> traverse (join . lift . demandF (pure . nvalueToJSON)) l
   NVSet m _ ->
     maybe
-      (A.Object <$> traverse (join . lift . demand (pure . nvalueToJSON)) m)
-      (join . lift . demand (pure . nvalueToJSON))
+      (A.Object <$> traverse (join . lift . demandF (pure . nvalueToJSON)) m)
+      (join . lift . demandF (pure . nvalueToJSON))
       (HM.lookup "outPath" m)
   NVPath p -> do
     fp <- lift $ unStorePath <$> addPath p

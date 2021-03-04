@@ -53,7 +53,7 @@ defaultMakeAbsolutePath origPath = do
           mres <- lookupVar "__cur_file"
           maybe
             getCurrentDirectory
-            (demand
+            (demandF
               (\case
                 NVPath s -> pure $ takeDirectory s
                 val -> throwError $ ErrorCall $ "when resolving relative path, __cur_file is in scope, but is not a path; it is: " <> show val
@@ -99,7 +99,7 @@ findEnvPathM name = do
 
   maybe
     (error "impossible")
-    (demand
+    (demandF
       (\ nv ->
         do
           (l :: [NValue t f m]) <- fromValue nv
@@ -142,20 +142,20 @@ findPathBy finder ls name = do
   go :: Maybe FilePath -> NValue t f m -> m (Maybe FilePath)
   go mp =
     maybe
-      (demand
+      (demandF
         (\ nvhmt ->
           do
             (s :: HashMap Text (NValue t f m)) <- fromValue nvhmt
             p <- resolvePath s
 
-            demand
+            demandF
               (\ nvpath ->
                 do
                   (Path path) <- fromValue nvpath
 
                   maybe
                     (tryPath path mempty)
-                    (demand
+                    (demandF
                       (\ nvmns ->
                         do
                           mns <- fromValueMay nvmns
@@ -195,11 +195,11 @@ findPathBy finder ls name = do
 
 fetchTarball
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-fetchTarball = demand $ \case
+fetchTarball = demandF $ \case
   NVSet s _ ->
     maybe
       (throwError $ ErrorCall "builtins.fetchTarball: Missing url attribute")
-      (demand (go (M.lookup "sha256" s)))
+      (demandF (go (M.lookup "sha256" s)))
       (M.lookup "url" s)
   v@NVStr{} -> go Nothing v
   v -> throwError $ ErrorCall $ "builtins.fetchTarball: Expected URI or set, got " <> show v
@@ -225,7 +225,7 @@ fetchTarball = demand $ \case
   fetch uri Nothing =
     nixInstantiateExpr $ "builtins.fetchTarball \"" <> Text.unpack uri <> "\""
   fetch url (Just t) =
-    demand
+    demandF
       (\nv -> do
         nsSha <- fromValue nv
 

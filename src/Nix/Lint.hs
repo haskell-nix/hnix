@@ -115,7 +115,7 @@ unpackSymbolic
   :: (MonadVar m, MonadThunkId m, MonadCatch m)
   => Symbolic m
   -> m (NSymbolicF (NTypeF m (Symbolic m)))
-unpackSymbolic = demand $ readVar . getSV
+unpackSymbolic = demandF $ readVar . getSV
 
 type MonadLint e m
   = ( Scoped (Symbolic m) m
@@ -139,11 +139,11 @@ renderSymbolic = unpackSymbolic >=> \case
       TNull  -> "null"
     TStr    -> pure "string"
     TList r -> do
-      x <- demand renderSymbolic r
+      x <- demandF renderSymbolic r
       pure $ "[" <> x <> "]"
     TSet Nothing  -> pure "<any set>"
     TSet (Just s) -> do
-      x <- traverse (demand renderSymbolic) s
+      x <- traverse (demandF renderSymbolic) s
       pure $ "{" <> show x <> "}"
     f@(TClosure p) -> do
       (args, sym) <- do
@@ -177,9 +177,9 @@ merge context = go
     (TConstant ls, TConstant rs) ->
       (TConstant (ls `intersect` rs) :) <$> go xs ys
     (TList l, TList r) ->
-      demand
+      demandF
         (\l' ->
-          demand
+          demandF
             (\r' -> do
               m <- defer $ unify context l' r'
               (TList m :) <$> go xs ys
@@ -193,9 +193,9 @@ merge context = go
       m <- sequenceA $ M.intersectionWith
         (\i j -> i >>= \i' ->
           j >>= \j' ->
-            demand
+            demandF
               (\i'' ->
-                demand
+                demandF
                   (defer . unify context i'')
                   j'
               )
@@ -290,9 +290,10 @@ instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
   defer :: m (Symbolic m) -> m (Symbolic m)
   defer = fmap ST . thunk
 
-  demand :: (Symbolic m -> m r) -> Symbolic m -> m r
-  demand f (ST v)= (demand f) =<< force v
-  demand f (SV v)= f (SV v)
+  demand :: Symbolic m -> m (Symbolic m)
+  demand = undefined
+  -- demand (ST v)= demand =<< force v
+  -- demand (SV v)= f (SV v)
 
 
 instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
@@ -344,7 +345,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
   evalWith scope body = do
     s <- defer scope
     pushWeakScope ?? body $
-      demand
+      demandF
         (unpackSymbolic >=> \case
           NMany [TSet (Just s')] -> pure s'
           NMany [TSet Nothing] -> error "NYI: with unknown"

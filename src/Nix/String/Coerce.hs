@@ -43,7 +43,7 @@ coerceToString
      , MonadStore m
      , MonadThrow m
      , MonadDataErrorContext t f m
-     , MonadValue (NValue t f m) m
+     , MonadValueF (NValue t f m) m
      )
   => (NValue t f m -> NValue t f m -> m (NValue t f m))
   -> CopyToStoreMode
@@ -53,7 +53,7 @@ coerceToString
 coerceToString call ctsm clevel = go
  where
   go x =
-    demand
+    demandF
       (\case
         NVConstant (NBool b)
           |
@@ -72,12 +72,12 @@ coerceToString call ctsm clevel = go
           | ctsm == CopyToStore -> storePathToNixString <$> addPath p
           | otherwise -> pure $ makeNixStringWithoutContext $ Text.pack p
         NVList l | clevel == CoerceAny ->
-          nixStringUnwords <$> traverse (demand go) l
+          nixStringUnwords <$> traverse (demandF go) l
 
         v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
-          demand ((`call` v) >=> go) p
+          demandF ((`call` v) >=> go) p
 
-        NVSet s _ | Just p <- M.lookup "outPath" s -> demand go p
+        NVSet s _ | Just p <- M.lookup "outPath" s -> demandF go p
 
         v -> throwError $ ErrorCall $ "Expected a string, but saw: " <> show v
       )
