@@ -254,24 +254,63 @@ builtinsList = sequence
   , add  Normal   "valueSize"        getRecursiveSize
   ]
  where
-  wrap :: BuiltinType -> Text -> v -> Builtin v
-  wrap t n f = Builtin t (n, f)
-
   arity1 :: forall a b. (a -> b) -> (a -> Prim m b)
   arity1 f = Prim . pure . f
   arity2 :: forall a b c. (a -> b -> c) -> (a -> b -> Prim m c)
   arity2 f = ((Prim . pure) .) . f
 
+  mkThunk :: Text -> m (NValue t f m) -> m (NValue t f m)
   mkThunk n = defer . withFrame Info (ErrorCall $ "While calling builtin " <> Text.unpack n <> "\n")
+  wrap :: BuiltinType -> Text -> v -> Builtin v
+  wrap t n f = Builtin t (n, f)
+  mkBuiltin :: BuiltinType -> Text -> m (NValue t f m) -> m (Builtin (NValue t f m))
+  mkBuiltin t n v = wrap t n <$> mkThunk n v
 
-  add0 t n v = wrap t n <$> mkThunk n v
-  add  t n v = wrap t n <$> mkThunk n (builtin (Text.unpack n) v)
-  add2 t n v = wrap t n <$> mkThunk n (builtin2 (Text.unpack n) v)
-  add3 t n v = wrap t n <$> mkThunk n (builtin3 (Text.unpack n) v)
+  add0
+    :: BuiltinType
+    -> Text
+    -> m (NValue t f m)
+    -> m (Builtin (NValue t f m))
+  add0 t n v = mkBuiltin t n v
 
-  add' :: forall a. ToBuiltin t f m a
-       => BuiltinType -> Text -> a -> m (Builtin (NValue t f m))
-  add' t n v = wrap t n <$> mkThunk n (toBuiltin (Text.unpack n) v)
+  add
+    :: BuiltinType
+    -> Text
+    -> ( NValue t f m
+      -> m (NValue t f m)
+      )
+    -> m (Builtin (NValue t f m))
+  add  t n v = mkBuiltin t n (builtin (Text.unpack n) v)
+
+  add2
+    :: BuiltinType
+    -> Text
+    -> ( NValue t f m
+      -> NValue t f m
+      -> m (NValue t f m)
+      )
+    -> m (Builtin (NValue t f m))
+  add2 t n v = mkBuiltin t n (builtin2 (Text.unpack n) v)
+
+  add3
+    :: BuiltinType
+    -> Text
+    -> ( NValue t f m
+      -> NValue t f m
+      -> NValue t f m
+      -> m (NValue t f m)
+      )
+    -> m (Builtin (NValue t f m))
+  add3 t n v = mkBuiltin t n (builtin3 (Text.unpack n) v)
+
+  add'
+    :: forall a
+    . ToBuiltin t f m a
+    => BuiltinType
+    -> Text
+    -> a
+    -> m (Builtin (NValue t f m))
+  add' t n v = mkBuiltin t n (toBuiltin (Text.unpack n) v)
 
 -- Primops
 
@@ -625,7 +664,7 @@ compareVersions_ t1 t2 =
           EQ -> 0
           GT -> 1
 
-    pure $ nvConstant $ NInt $ cmpVers
+    pure $ nvConstant $ NInt cmpVers
 
 splitDrvName :: Text -> (Text, Text)
 splitDrvName s =
@@ -1180,9 +1219,10 @@ functionArgs fun =
   demand
     (\case
       NVClosure p _ ->
-        toValue @(AttrSet (NValue t f m)) $ nvConstant . NBool <$> case p of
-          Param name     -> M.singleton name False
-          ParamSet s _ _ -> isJust <$> M.fromList s
+        toValue @(AttrSet (NValue t f m)) $ nvConstant . NBool <$>
+          case p of
+            Param name     -> M.singleton name False
+            ParamSet s _ _ -> isJust <$> M.fromList s
       v -> throwError $ ErrorCall $ "builtins.functionArgs: expected function, got " <> show v
     )
     fun
