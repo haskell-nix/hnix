@@ -43,13 +43,19 @@
         furtherF  :: (m a -> m a) -> t   -> m t
       ```
       
-  * [(link)](https://github.com/haskell-nix/hnix/pull/862/files) [(link)](https://github.com/haskell-nix/hnix/pull/870/files) `Nix.Value.Monad`: `class MonadValue v m`: unflipped the arguments of methods into a classical order. As a result, `demand` now tail recurse.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/862/files) [(link)](https://github.com/haskell-nix/hnix/pull/870/files) [(link)](https://github.com/haskell-nix/hnix/pull/871/files)  [(link)](https://github.com/haskell-nix/hnix/pull/872/files) [(link)](https://github.com/haskell-nix/hnix/pull/873/files) `Nix.Value.Monad`: `class MonadValue v m`: instances became specialized, Kleisli versions unflipped the arguments of methods into a classical order and moved to the `class MonadValueF`. As a result, `demand` now gets optimized by GHC and also tail recurse. Please, use `f =<< demand t`, or just use `demandF`, while `demandF` in fact just `kleisli =<< demand t`.
       
       ```haskell
-      demand :: (v -> m r) -> v -> m r
-      -- was :: v -> (v -> m r) -> m r
-      inform :: (m v -> m v) -> v -> m v
-      -- was :: v -> (m v -> m v) -> m v
+      class MonadValue v m where
+      
+        demand :: v       ->         m v
+        -- was :: v -> (v -> m r) -> m r
+      
+      class MonadValueF v m where
+        demandF :: (v -> m r) -> v -> m r
+        -- was :: v -> (v -> m r) -> m r
+        informF :: (m v -> m v) -> v -> m v
+        -- was :: v -> (m v -> m v) -> m v
       ```
       
   * [(link)](https://github.com/haskell-nix/hnix/pull/863/files) `Nix.Normal`: `normalizeValue` removed first functional argument that was passing the function that did the thunk forcing. Now function provides the thunk forcing. Now to normalize simply use `normalizeValue v`.
