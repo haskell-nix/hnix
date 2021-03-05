@@ -244,14 +244,10 @@ instance
       v
 
   inform
-    :: ( m (StdValue m)
-      -> m (StdValue m)
-      )
-    -> StdValue m
+    :: StdValue m
     -> m (StdValue m)
-  --  2021-02-27: NOTE: When swapping, switch to `further`.
-  inform f (Pure t) = Pure <$> furtherF f t
-  inform f (Free v) = Free <$> bindNValue' id (inform f) v
+  inform (Pure t) = Pure <$> further t
+  inform (Free v) = Free <$> bindNValue' id inform v
 
 
 -- * @instance MonadValueF (StdValue m) m@
@@ -283,7 +279,7 @@ instance
       )
     -> StdValue m
     -> m (StdValue m)
-  --  2021-02-27: NOTE: When swapping, switch to `further`.
+  --  2021-02-27: NOTE: Switch to `further` and `inform`. Probably just informF f = f <=< inform
   informF f (Pure t) = Pure <$> furtherF f t
   informF f (Free v) = Free <$> bindNValue' id (informF f) v
 
