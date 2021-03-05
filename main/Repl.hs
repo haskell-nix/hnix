@@ -27,7 +27,7 @@ import           Nix                     hiding ( exec
                                                 )
 import           Nix.Scope
 import           Nix.Utils
-import           Nix.Value.Monad                ( demandF )
+import           Nix.Value.Monad                ( demand )
 
 import qualified Data.List
 import qualified Data.Maybe
@@ -340,7 +340,7 @@ completion = System.Console.Repline.Prefix
 -- | Main completion function
 --
 -- Heavily inspired by Dhall Repl, with `algebraicComplete`
--- adjusted to monadic variant able to `demandF` thunks.
+-- adjusted to monadic variant able to `demand` thunks.
 completeFunc
   :: forall e t f m . (MonadNix e t f m, MonadIO m)
   => String
@@ -348,61 +348,66 @@ completeFunc
   -> (StateT (IState t f m) m) [Completion]
 completeFunc reversedPrev word
   -- Commands
-  | reversedPrev == ":"
-  = pure . listCompletion
+  | reversedPrev == ":" =
+    pure . listCompletion
       $ fmap helpOptionName (helpOptions :: HelpOptions e t f m)
 
   -- Files
-  | any (`Data.List.isPrefixOf` word) [ "/", "./", "../", "~/" ]
-  = listFiles word
+  | any (`Data.List.isPrefixOf` word) [ "/", "./", "../", "~/" ] =
+    listFiles word
 
   -- Attributes of sets in REPL context
-  | var : subFields <- Data.Text.split (== '.') (Data.Text.pack word)
-  , not $ null subFields
-  = do
-    s <- get
-    case Data.HashMap.Lazy.lookup var (replCtx s) of
-      Nothing -> pure mempty
-      Just binding -> do
-        candidates <- lift $ algebraicComplete subFields binding
-        pure $ notFinished <$> listCompletion (Data.Text.unpack . (var <>) <$> candidates)
+  | var : subFields <- Data.Text.split (== '.') (Data.Text.pack word) , not $ null subFields =
+    do
+      s <- get
+      maybe
+        (pure mempty)
+        (\ binding ->
+          do
+            candidates <- lift $ algebraicComplete subFields binding
+            pure $ notFinished <$> listCompletion (Data.Text.unpack . (var <>) <$> candidates)
+        )
+        (Data.HashMap.Lazy.lookup var (replCtx s))
 
   -- Builtins, context variables
-  | otherwise
-  = do
-    s <- get
-    let contextKeys = Data.HashMap.Lazy.keys (replCtx s)
-        (Just (NVSet builtins _)) = Data.HashMap.Lazy.lookup "builtins" (replCtx s)
-        shortBuiltins = Data.HashMap.Lazy.keys builtins
+  | otherwise =
+    do
+      s <- get
+      let contextKeys = Data.HashMap.Lazy.keys (replCtx s)
+          (Just (NVSet builtins _)) = Data.HashMap.Lazy.lookup "builtins" (replCtx s)
+          shortBuiltins = Data.HashMap.Lazy.keys builtins
 
-    pure $ listCompletion
-      $ ["__includes"]
-      <> (Data.Text.unpack <$> contextKeys)
-      <> (Data.Text.unpack <$> shortBuiltins)
+      pure $ listCompletion
+        $ ["__includes"]
+        <> (Data.Text.unpack <$> contextKeys)
+        <> (Data.Text.unpack <$> shortBuiltins)
 
   where
     listCompletion = fmap simpleCompletion . filter (word `Data.List.isPrefixOf`)
 
     notFinished x = x { isFinished = False }
 
-    algebraicComplete :: (MonadNix e t f m)
-                      => [Text]
-                      -> NValue t f m
-                      -> m [Text]
+    algebraicComplete
+      :: (MonadNix e t f m)
+      => [Text]
+      -> NValue t f m
+      -> m [Text]
     algebraicComplete subFields val =
-      let keys = fmap ("." <>) . Data.HashMap.Lazy.keys
-          withMap m =
-            case subFields of
-              [] -> pure $ keys m
-              -- Stop on last subField (we care about the keys at this level)
-              [_] -> pure $ keys m
-              f:fs ->
-                maybe
-                  (pure mempty)
-                  (demandF (\e' -> (fmap . fmap) (("." <> f) <>) $ algebraicComplete fs e'))
-                  (Data.HashMap.Lazy.lookup f m)
+      let
+        keys = fmap ("." <>) . Data.HashMap.Lazy.keys
 
-      in case val of
+        withMap m =
+          case subFields of
+            [] -> pure $ keys m
+            -- Stop on last subField (we care about the keys at this level)
+            [_] -> pure $ keys m
+            f:fs ->
+              maybe
+                (pure mempty)
+                (((fmap . fmap) (("." <> f) <>) . algebraicComplete fs) <=< demand)
+                (Data.HashMap.Lazy.lookup f m)
+      in
+      case val of
         NVSet xs _ -> withMap xs
         _          -> pure mempty
 

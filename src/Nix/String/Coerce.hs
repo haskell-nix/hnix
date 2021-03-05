@@ -43,7 +43,7 @@ coerceToString
      , MonadStore m
      , MonadThrow m
      , MonadDataErrorContext t f m
-     , MonadValueF (NValue t f m) m
+     , MonadValue (NValue t f m) m
      )
   => (NValue t f m -> NValue t f m -> m (NValue t f m))
   -> CopyToStoreMode
@@ -53,35 +53,34 @@ coerceToString
 coerceToString call ctsm clevel = go
  where
   go x =
-    demandF
-      (\case
-        NVConstant (NBool b)
-          |
-            -- TODO Return a singleton for "" and "1"
-            b && clevel == CoerceAny -> pure
-          $  makeNixStringWithoutContext "1"
-          | clevel == CoerceAny -> pure $ makeNixStringWithoutContext ""
-        NVConstant (NInt n) | clevel == CoerceAny ->
-          pure $ makeNixStringWithoutContext $ Text.pack $ show n
-        NVConstant (NFloat n) | clevel == CoerceAny ->
-          pure $ makeNixStringWithoutContext $ Text.pack $ show n
-        NVConstant NNull | clevel == CoerceAny ->
-          pure $ makeNixStringWithoutContext ""
-        NVStr ns -> pure ns
-        NVPath p
-          | ctsm == CopyToStore -> storePathToNixString <$> addPath p
-          | otherwise -> pure $ makeNixStringWithoutContext $ Text.pack p
-        NVList l | clevel == CoerceAny ->
-          nixStringUnwords <$> traverse (demandF go) l
+    (\case
+      NVConstant (NBool b)
+        |
+          -- TODO Return a singleton for "" and "1"
+          b && clevel == CoerceAny -> pure
+        $  makeNixStringWithoutContext "1"
+        | clevel == CoerceAny -> pure $ makeNixStringWithoutContext ""
+      NVConstant (NInt n) | clevel == CoerceAny ->
+        pure $ makeNixStringWithoutContext $ Text.pack $ show n
+      NVConstant (NFloat n) | clevel == CoerceAny ->
+        pure $ makeNixStringWithoutContext $ Text.pack $ show n
+      NVConstant NNull | clevel == CoerceAny ->
+        pure $ makeNixStringWithoutContext ""
+      NVStr ns -> pure ns
+      NVPath p
+        | ctsm == CopyToStore -> storePathToNixString <$> addPath p
+        | otherwise -> pure $ makeNixStringWithoutContext $ Text.pack p
+      NVList l | clevel == CoerceAny ->
+        nixStringUnwords <$> traverse (go <=< demand) l
 
-        v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
-          demandF ((`call` v) >=> go) p
+      v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
+        (go <=< (`call` v)) =<< demand p
 
-        NVSet s _ | Just p <- M.lookup "outPath" s -> demandF go p
+      NVSet s _ | Just p <- M.lookup "outPath" s -> go =<< demand p
 
-        v -> throwError $ ErrorCall $ "Expected a string, but saw: " <> show v
-      )
-      x
+      v -> throwError $ ErrorCall $ "Expected a string, but saw: " <> show v
+    ) =<< demand x
+
   nixStringUnwords =
     intercalateNixString (makeNixStringWithoutContext " ")
   storePathToNixString :: StorePath -> NixString

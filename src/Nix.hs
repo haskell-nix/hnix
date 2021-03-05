@@ -115,14 +115,12 @@ evaluateExpression mpath evaluator handler expr = do
     (second mkStr)
     (argstr opts)
   evaluator mpath expr >>= \f ->
-    demandF
-      (\f' ->
-        processResult handler =<<
-          case f' of
-            NVClosure _ g -> g (argmap args)
-            _             -> pure f
-      )
-      f
+    (\f' ->
+      processResult handler =<<
+        case f' of
+          NVClosure _ g -> g (argmap args)
+          _             -> pure f
+    ) =<< demand f
  where
   parseArg s =
     case parseNixText s of
@@ -149,29 +147,25 @@ processResult h val = do
   go :: [Text.Text] -> NValue t f m -> m a
   go [] v = h v
   go ((Text.decimal -> Right (n,"")) : ks) v =
-    demandF
-      (\case
-        NVList xs ->
-          list
+    (\case
+      NVList xs ->
+        list
+          h
+          go
+          ks
+        (xs !! n)
+      _ -> errorWithoutStackTrace $ "Expected a list for selector '" <> show n <> "', but got: " <> show v
+    ) =<< demand v
+  go (k : ks) v =
+    (\case
+      NVSet xs _ ->
+        maybe
+          (errorWithoutStackTrace $ "Set does not contain key '" <> Text.unpack k <> "'")
+          (list
             h
             go
             ks
-          (xs !! n)
-        _ -> errorWithoutStackTrace $ "Expected a list for selector '" <> show n <> "', but got: " <> show v
-      )
-      v
-  go (k : ks) v =
-    demandF
-      (\case
-        NVSet xs _ ->
-          maybe
-            (errorWithoutStackTrace $ "Set does not contain key '" <> Text.unpack k <> "'")
-            (list
-              h
-              go
-              ks
-            )
-            (M.lookup k xs)
-        _ -> errorWithoutStackTrace $ "Expected a set for selector '" <> Text.unpack k <> "', but got: " <> show v
-      )
-      v
+          )
+          (M.lookup k xs)
+      _ -> errorWithoutStackTrace $ "Expected a set for selector '" <> Text.unpack k <> "', but got: " <> show v
+    ) =<< demand v

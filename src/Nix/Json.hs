@@ -24,14 +24,15 @@ import           Nix.Value.Monad
 
 nvalueToJSONNixString :: MonadNix e t f m => NValue t f m -> m NixString
 nvalueToJSONNixString =
-  runWithStringContextT
-    . fmap
-        ( TL.toStrict
-        . TL.decodeUtf8
-        . A.encodingToLazyByteString
-        . toEncodingSorted
-        )
-    . nvalueToJSON
+  runWithStringContextT .
+    fmap
+      ( TL.toStrict
+      . TL.decodeUtf8
+      . A.encodingToLazyByteString
+      . toEncodingSorted
+      )
+
+      . nvalueToJSON
 
 nvalueToJSON :: MonadNix e t f m => NValue t f m -> WithStringContextT m A.Value
 nvalueToJSON = \case
@@ -40,17 +41,18 @@ nvalueToJSON = \case
   NVConstant (NBool  b) -> pure $ A.toJSON b
   NVConstant NNull      -> pure   A.Null
   NVStr      ns         -> A.toJSON <$> extractNixString ns
-  NVList l ->
-    A.Array
-      .   V.fromList
-      <$> traverse (join . lift . demandF (pure . nvalueToJSON)) l
+  NVList l -> A.Array . V.fromList <$> traverse intoJson l
   NVSet m _ ->
     maybe
-      (A.Object <$> traverse (join . lift . demandF (pure . nvalueToJSON)) m)
-      (join . lift . demandF (pure . nvalueToJSON))
+      (A.Object <$> traverse intoJson m)
+      intoJson
       (HM.lookup "outPath" m)
-  NVPath p -> do
-    fp <- lift $ unStorePath <$> addPath p
-    addSingletonStringContext $ StringContext (Text.pack fp) DirectPath
-    pure $ A.toJSON fp
+  NVPath p ->
+    do
+      fp <- lift $ unStorePath <$> addPath p
+      addSingletonStringContext $ StringContext (Text.pack fp) DirectPath
+      pure $ A.toJSON fp
   v -> lift $ throwError $ CoercionToJson v
+
+ where
+  intoJson nv = join $ lift $ nvalueToJSON <$> demand nv

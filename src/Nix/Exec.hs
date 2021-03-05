@@ -138,7 +138,6 @@ type MonadNix e t f m
   , MonadEffects t f m
   , MonadCitedThunks t f m
   , MonadValue (NValue t f m) m
-  , MonadValueF (NValue t f m) m
   )
 
 data ExecFrame t f m = Assertion SrcSpan (NValue t f m)
@@ -297,21 +296,19 @@ callFunc
   -> NValue t f m
   -> m (NValue t f m)
 callFunc fun arg =
-  demandF
-    (\fun' -> do
-    frames :: Frames <- asks (view hasLens)
-    when (length frames > 2000) $ throwError $ ErrorCall "Function call stack exhausted"
-    case fun' of
-      NVClosure _params f -> do
-        f arg
-      NVBuiltin name f -> do
-        span <- currentPos
-        withFrame Info (Calling @m @(NValue t f m) name span) (f arg)
-      s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
-        demandF ((`callFunc` s) >=> (`callFunc` arg)) f
-      x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show x
-    )
-    fun
+  (\fun' -> do
+  frames :: Frames <- asks (view hasLens)
+  when (length frames > 2000) $ throwError $ ErrorCall "Function call stack exhausted"
+  case fun' of
+    NVClosure _params f -> do
+      f arg
+    NVBuiltin name f -> do
+      span <- currentPos
+      withFrame Info (Calling @m @(NValue t f m) name span) (f arg)
+    s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
+      ((`callFunc` arg) <=< (`callFunc` s)) =<< demand f
+    x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show x
+  ) =<< demand fun
 
 execUnaryOp
   :: (Framed e m, MonadCited t f m, Show t)
@@ -350,24 +347,23 @@ execBinaryOp
   -> m (NValue t f m)
   -> m (NValue t f m)
 --  2021-02-25: NOTE: These are do blocks. Currently in the middle of the big rewrite, can not check their refactor. Please help.
-execBinaryOp scope span op lval rarg = case op of
-  NEq   -> helperEq id
-  NNEq  -> helperEq not
-  NOr   ->
-    helperLogic flip True
-  NAnd  ->
-    helperLogic id False
-  NImpl ->
-    helperLogic id True
-  _     -> rarg >>=
-    (\rval ->
-      demandF
-      (\rval' ->
-        demandF
-          (\lval' -> execBinaryOpForced scope span op lval' rval')
-          lval
-      )
-      rval)
+execBinaryOp scope span op lval rarg =
+  case op of
+    NEq   -> helperEq id
+    NNEq  -> helperEq not
+    NOr   ->
+      helperLogic flip True
+    NAnd  ->
+      helperLogic id False
+    NImpl ->
+      helperLogic id True
+    _     ->
+      do
+        rval <- rarg
+        rval' <- demand rval
+        lval' <- demand lval
+
+        execBinaryOpForced scope span op lval' rval'
 
  where
 

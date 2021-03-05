@@ -53,11 +53,11 @@ defaultMakeAbsolutePath origPath = do
           mres <- lookupVar "__cur_file"
           maybe
             getCurrentDirectory
-            (demandF
+            (
               (\case
                 NVPath s -> pure $ takeDirectory s
                 val -> throwError $ ErrorCall $ "when resolving relative path, __cur_file is in scope, but is not a path; it is: " <> show val
-              )
+              ) <=< demand
             )
             mres
         pure $ cwd <///> origPathExpanded
@@ -99,12 +99,12 @@ findEnvPathM name = do
 
   maybe
     (error "impossible")
-    (demandF
+    (
       (\ nv ->
         do
           (l :: [NValue t f m]) <- fromValue nv
           findPathBy nixFilePath l name
-      )
+      ) <=< demand
     )
     mres
 
@@ -142,38 +142,29 @@ findPathBy finder ls name = do
   go :: Maybe FilePath -> NValue t f m -> m (Maybe FilePath)
   go mp =
     maybe
-      (demandF
-        (\ nvhmt ->
-          do
-            (s :: HashMap Text (NValue t f m)) <- fromValue nvhmt
-            p <- resolvePath s
+      (\ nv ->
+        do
+          (s :: HashMap Text (NValue t f m)) <- fromValue =<< demand nv
+          p <- resolvePath s
+          nvpath <- demand p
+          (Path path) <- fromValue nvpath
 
-            demandF
-              (\ nvpath ->
-                do
-                  (Path path) <- fromValue nvpath
-
-                  maybe
-                    (tryPath path mempty)
-                    (demandF
-                      (\ nvmns ->
-                        do
-                          mns <- fromValueMay nvmns
-                          tryPath path $
-                            case mns of
-                              Just (nsPfx :: NixString) ->
-                                let pfx = stringIgnoreContext nsPfx in
-                                bool
-                                  mempty
-                                  (pure (Text.unpack pfx))
-                                  (not $ Text.null pfx)
-                              _ -> mempty
-                      )
-                    )
-                    (M.lookup "prefix" s)
-              )
-              p
-        )
+          maybe
+            (tryPath path mempty)
+            (\ nv' ->
+              do
+                mns <- fromValueMay =<< demand nv'
+                tryPath path $
+                  case mns of
+                    Just (nsPfx :: NixString) ->
+                      let pfx = stringIgnoreContext nsPfx in
+                      bool
+                        mempty
+                        (pure (Text.unpack pfx))
+                        (not $ Text.null pfx)
+                    _ -> mempty
+            )
+            (M.lookup "prefix" s)
       )
       (const . pure . pure)
       mp
@@ -195,14 +186,16 @@ findPathBy finder ls name = do
 
 fetchTarball
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-fetchTarball = demandF $ \case
-  NVSet s _ ->
-    maybe
-      (throwError $ ErrorCall "builtins.fetchTarball: Missing url attribute")
-      (demandF (go (M.lookup "sha256" s)))
-      (M.lookup "url" s)
-  v@NVStr{} -> go Nothing v
-  v -> throwError $ ErrorCall $ "builtins.fetchTarball: Expected URI or set, got " <> show v
+fetchTarball =
+  \case
+    NVSet s _ ->
+      maybe
+        (throwError $ ErrorCall "builtins.fetchTarball: Missing url attribute")
+        (go (M.lookup "sha256" s) <=< demand)
+        (M.lookup "url" s)
+    v@NVStr{} -> go Nothing v
+    v -> throwError $ ErrorCall $ "builtins.fetchTarball: Expected URI or set, got " <> show v
+  <=< demand
  where
   go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
   go msha = \case
@@ -225,7 +218,6 @@ fetchTarball = demandF $ \case
   fetch uri Nothing =
     nixInstantiateExpr $ "builtins.fetchTarball \"" <> Text.unpack uri <> "\""
   fetch url (Just t) =
-    demandF
       (\nv -> do
         nsSha <- fromValue nv
 
@@ -233,8 +225,7 @@ fetchTarball = demandF $ \case
 
         nixInstantiateExpr
           $ "builtins.fetchTarball { " <> "url    = \"" <> Text.unpack url <> "\"; " <> "sha256 = \"" <> Text.unpack sha <> "\"; }"
-      )
-      t
+      ) =<< demand t
 
 defaultFindPath :: MonadNix e t f m => [NValue t f m] -> FilePath -> m FilePath
 defaultFindPath = findPathM
