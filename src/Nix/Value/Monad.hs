@@ -10,7 +10,7 @@ class MonadValue v m where
   -- | If 'v' is a thunk, 'inform' allows us to modify the action to be
   --   performed by the thunk, perhaps by enriching it with scope info, for
   --   example.
-  inform :: (m v -> m v) -> v -> m v
+  inform :: v -> m v
 
 
 -- * @MonadValueF@ - a Kleisli-able customization class

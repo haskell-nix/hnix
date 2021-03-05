@@ -163,7 +163,7 @@ eval (NAbs    params body) = do
   scope <- currentScopes :: m (Scopes m v)
   evalAbs params $ \arg k -> withScopes scope $ do
     args <- buildArgument params arg
-    pushScope args (k (fmap (inform (withScopes scope)) args) body)
+    pushScope args (k (fmap (withScopes scope . inform) args) body)
 
 eval (NSynHole name) = synHole name
 
@@ -427,13 +427,14 @@ buildArgument params arg = do
     -> Text
     -> These v (Maybe (m v))
     -> Maybe (AttrSet v -> m v)
-  assemble scope isVariadic k = \case
-    That Nothing -> pure $ const $ evalError @v $ ErrorCall $ "Missing value for parameter: " <>show k
-    That (Just f) -> pure $ \args -> defer $ withScopes scope $ pushScope args f
-    This _
-      | isVariadic -> Nothing
-      | otherwise  -> pure $ const $ evalError @v $ ErrorCall $ "Unexpected parameter: " <> show k
-    These x _ -> pure (const (pure x))
+  assemble scope isVariadic k =
+    \case
+      That Nothing -> pure $ const $ evalError @v $ ErrorCall $ "Missing value for parameter: " <>show k
+      That (Just f) -> pure $ \args -> defer $ withScopes scope $ pushScope args f
+      This _
+        | isVariadic -> Nothing
+        | otherwise  -> pure $ const $ evalError @v $ ErrorCall $ "Unexpected parameter: " <> show k
+      These x _ -> pure (const (pure x))
 
 addSourcePositions
   :: (MonadReader e m, Has e SrcSpan) => Transform NExprLocF (m a)

@@ -388,12 +388,15 @@ instance Monad m => MonadThrow (InferT s m) where
   throwM = throwError . EvaluationError
 
 instance Monad m => MonadCatch (InferT s m) where
-  catch m h = catchError m $ \case
-    EvaluationError e -> maybe
-      (error $ "Exception was not an exception: " <> show e)
-      h
-      (fromException (toException e))
-    err -> error $ "Unexpected error: " <> show err
+  catch m h =
+    catchError m $
+      \case
+        EvaluationError e ->
+          maybe
+            (error $ "Exception was not an exception: " <> show e)
+            h
+            (fromException (toException e))
+        err -> error $ "Unexpected error: " <> show err
 
 type MonadInfer m
   = ({- MonadThunkId m,-}
@@ -409,15 +412,12 @@ instance Monad m => MonadValue (Judgment s) (InferT s m) where
   demand
     :: Judgment s
     -> InferT s m (Judgment s)
-  demand = demandF pure
+  demand = pure
 
   inform
-    :: ( InferT s m (Judgment s)
-      -> InferT s m (Judgment s)
-      )
-    -> Judgment s
+    :: Judgment s
     -> InferT s m (Judgment s)
-  inform f j = f (pure j)
+  inform = pure
 
 
 --  2021-02-22: NOTE: Seems like suporflous instance
@@ -428,7 +428,7 @@ instance Monad m => MonadValueF (Judgment s) (InferT s m) where
       -> InferT s m r)
     -> Judgment s
     -> InferT s m r
-  demandF = ($)
+  demandF f a = f a
 
   informF
     :: ( InferT s m (Judgment s)
@@ -436,7 +436,7 @@ instance Monad m => MonadValueF (Judgment s) (InferT s m) where
       )
     -> Judgment s
     -> InferT s m (Judgment s)
-  informF f j = f (pure j)
+  informF f j = f $ pure j
 
 {-
 instance MonadInfer m
