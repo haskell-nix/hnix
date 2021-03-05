@@ -318,18 +318,13 @@ buildDerivationWithContext drvAttrs = do
           mHash
 
       -- filter out null values if needed.
-      attrs <-
-        bool
-          (pure drvAttrs)
-          (M.mapMaybe id <$> forM drvAttrs
-            (demandF'
-              (pure . \case
-                NVConstant NNull -> Nothing
-                value -> pure value
-              )
-            )
+      attrs <- lift $ if not ignoreNulls
+        then pure drvAttrs
+        else M.mapMaybe id <$> forM drvAttrs (
+            demand >=> \case
+                NVConstant NNull -> pure Nothing
+                value            -> pure $ Just value
           )
-          ignoreNulls
 
       env <- if useJson
         then do
@@ -349,9 +344,6 @@ buildDerivationWithContext drvAttrs = do
   where
 
     -- common functions, lifted to WithStringContextT
-
-    demandF' :: (NValue t f m -> WithStringContextT m a) -> NValue t f m -> WithStringContextT m a
-    demandF' f v = join $ lift $ f <$> demand v
 
     fromValue' :: (FromValue a m (NValue' t f m (NValue t f m)), MonadNix e t f m) => NValue t f m -> WithStringContextT m a
     fromValue' = lift . fromValue
