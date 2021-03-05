@@ -436,7 +436,7 @@ instance Monad m => MonadValueF (Judgment s) (InferT s m) where
       )
     -> Judgment s
     -> InferT s m (Judgment s)
-  informF f j = f $ pure j
+  informF f = f . pure
 
 {-
 instance MonadInfer m

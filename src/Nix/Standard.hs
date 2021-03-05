@@ -267,11 +267,7 @@ instance
       )
     -> StdValue m
     -> m r
-  demandF f v =
-    free
-      (f <=< demand <=< force)
-      (const $ f v)
-      v
+  demandF f = f <=< demand
 
   informF
     :: ( m (StdValue m)
@@ -279,9 +275,7 @@ instance
       )
     -> StdValue m
     -> m (StdValue m)
-  --  2021-02-27: NOTE: Switch to `further` and `inform`. Probably just informF f = f <=< inform
-  informF f (Pure t) = Pure <$> furtherF f t
-  informF f (Free v) = Free <$> bindNValue' id (informF f) v
+  informF f = f . inform
 
 
 {------------------------------------------------------------------------}
