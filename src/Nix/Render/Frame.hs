@@ -52,7 +52,7 @@ renderFrames (x : xs) = do
     | verbose opts <= Informational -> do
       f <- renderFrame @v @t @f x
       pure $ concatMap go (reverse xs) <> f
-    | otherwise -> concat <$> mapM (renderFrame @v @t @f) (reverse (x : xs))
+    | otherwise -> concat <$> traverse (renderFrame @v @t @f) (reverse (x : xs))
   pure $
     list
       mempty

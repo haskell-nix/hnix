@@ -535,7 +535,7 @@ any_
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-any_ f = toValue <=< anyM fromValue <=< mapM (callFunc f) <=< fromValue
+any_ f = toValue <=< anyM fromValue <=< traverse (callFunc f) <=< fromValue
 
 allM :: Monad m => (a -> m Bool) -> [a] -> m Bool
 allM _ []       = pure True
@@ -550,7 +550,7 @@ all_
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-all_ f = toValue <=< allM fromValue <=< mapM (callFunc f) <=< fromValue
+all_ f = toValue <=< allM fromValue <=< traverse (callFunc f) <=< fromValue
 
 foldl'_
   :: forall e t f m
@@ -1179,7 +1179,7 @@ removeAttrs set v =
   do
     (m, p) <- fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) set
     (nsToRemove :: [NixString]) <- fromValue $ Deeper v
-    toRemove <- mapM fromStringNoContext nsToRemove
+    toRemove <- traverse fromStringNoContext nsToRemove
     toValue (go m toRemove, go p toRemove)
  where
   go = foldl' (flip M.delete)
@@ -1406,7 +1406,7 @@ concatLists
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 concatLists =
   toValue . concat <=<
-    mapM
+    traverse
       (pure <=<
         (fromValue @[NValue t f m]) <=< demand
       )

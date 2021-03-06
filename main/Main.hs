@@ -16,6 +16,7 @@ import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.Free
 import           Control.Monad.IO.Class
+import           Data.Foldable                  ( traverse_ )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Map                      as Map
 import           Data.List                      ( sortOn )
@@ -58,10 +59,10 @@ main = do
               handleResult opts mempty
                 .   parseNixTextLoc
                 =<< liftIO Text.getContents
-            paths -> mapM_ (processFile opts) paths
-          Just "-" -> mapM_ (processFile opts) . lines =<< liftIO getContents
+            paths -> traverse_ (processFile opts) paths
+          Just "-" -> traverse_ (processFile opts) . lines =<< liftIO getContents
           Just path ->
-            mapM_ (processFile opts) . lines =<< liftIO (readFile path)
+            traverse_ (processFile opts) . lines =<< liftIO (readFile path)
         Just s  -> handleResult opts mempty (parseNixTextLoc s)
       Just path -> do
         let file = addExtension (dropExtension path) "nixc"

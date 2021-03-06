@@ -228,7 +228,7 @@ attrSetAlter (k : ks) pos m p val =
     ) <$> attrSetAlter ks pos st sp val
 
 desugarBinds :: forall r . ([Binding r] -> r) -> [Binding r] -> [Binding r]
-desugarBinds embed binds = evalState (mapM (go <=< collect) binds) M.empty
+desugarBinds embed binds = evalState (traverse (go <=< collect) binds) M.empty
  where
   collect
     :: Binding r
@@ -268,7 +268,7 @@ evalBinds
   -> m (AttrSet v, AttrSet SourcePos)
 evalBinds recursive binds = do
   scope <- currentScopes :: m (Scopes m v)
-  buildResult scope . concat =<< mapM (go scope) (moveOverridesLast binds)
+  buildResult scope . concat =<< traverse (go scope) (moveOverridesLast binds)
  where
   moveOverridesLast = uncurry (<>) . partition
     (\case

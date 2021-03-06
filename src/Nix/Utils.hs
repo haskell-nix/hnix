@@ -75,7 +75,7 @@ loeb :: Functor f => f (f a -> a) -> f a
 loeb x = go where go = fmap ($ go) x
 
 loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
-loebM f = mfix $ \a -> mapM ($ a) f
+loebM f = mfix $ \a -> traverse ($ a) f
 
 para :: Functor f => (f (Fix f, a) -> a) -> Fix f -> a
 para f = f . fmap (id &&& para f) . unFix

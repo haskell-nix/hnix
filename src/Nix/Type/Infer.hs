@@ -277,7 +277,7 @@ fresh = TVar <$> freshTVar
 
 instantiate :: MonadState InferState m => Scheme -> m Type
 instantiate (Forall as t) = do
-  as' <- mapM (const fresh) as
+  as' <- traverse (const fresh) as
   let s = Subst $ Map.fromList $ zip as as'
   pure $ apply s t
 
