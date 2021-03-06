@@ -38,7 +38,7 @@ import           Nix.Utils
 import           Nix.Var
 import           Nix.Value.Monad
 import           Options.Applicative     hiding ( ParserResult(..) )
-import           Prettyprinter            hiding (list)
+import           Prettyprinter            hiding ( list )
 import           Prettyprinter.Render.Text
 import qualified Repl
 import           System.FilePath
@@ -49,24 +49,29 @@ main :: IO ()
 main = do
   time <- getCurrentTime
   opts <- execParser (nixOptionsInfo time)
-  runWithBasicEffectsIO opts $
+
+  runWithBasicEffectsIO opts $ execContentsFilesOrRepl opts
+
+ where
+  execContentsFilesOrRepl opts =
     maybe
       (maybe
         (maybe
           (list
-            (withNixContext mempty Repl.main)
+            (withNixContext mempty Repl.main) -- run REPL
             (\case
-              ["-"] ->
-                handleResult opts mempty
-                  .   parseNixTextLoc
-                  =<< liftIO Text.getContents
+              ["-"] -> handleResult opts mempty . parseNixTextLoc =<< liftIO Text.getContents
               _paths -> traverse_ (processFile opts) _paths
             )
             (filePaths opts)
           )
-          (\case
-            "-" -> traverse_ (processFile opts) . lines =<< liftIO getContents
-            _path -> traverse_ (processFile opts) . lines =<< liftIO (readFile _path)
+          (\ x ->
+            -- use Text as in the base case, requires changing FilePath -> Text
+            traverse_ (processFile opts) . lines =<< liftIO
+              (case x of
+                "-" ->  getContents  -- get user input
+                _path -> readFile _path
+              )
           )
           (fromFile opts)
         )
@@ -79,7 +84,7 @@ main = do
           process opts (pure file) =<< liftIO (readCache path)
       )
       (readFrom opts)
- where
+
   processFile opts path = do
     eres <- parseNixFileLoc path
     handleResult opts (pure path) eres
