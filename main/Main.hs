@@ -38,7 +38,7 @@ import           Nix.Utils
 import           Nix.Var
 import           Nix.Value.Monad
 import           Options.Applicative     hiding ( ParserResult(..) )
-import           Prettyprinter
+import           Prettyprinter            hiding (list)
 import           Prettyprinter.Render.Text
 import qualified Repl
 import           System.FilePath
@@ -50,23 +50,35 @@ main = do
   time <- getCurrentTime
   opts <- execParser (nixOptionsInfo time)
   runWithBasicEffectsIO opts $
-    case readFrom opts of
-      Nothing -> case expression opts of
-        Nothing -> case fromFile opts of
-          Nothing -> case filePaths opts of
-            [] -> withNixContext mempty Repl.main
-            ["-"] ->
-              handleResult opts mempty
-                .   parseNixTextLoc
-                =<< liftIO Text.getContents
-            paths -> traverse_ (processFile opts) paths
-          Just "-" -> traverse_ (processFile opts) . lines =<< liftIO getContents
-          Just path ->
-            traverse_ (processFile opts) . lines =<< liftIO (readFile path)
-        Just s  -> handleResult opts mempty (parseNixTextLoc s)
-      Just path -> do
-        let file = addExtension (dropExtension path) "nixc"
-        process opts (pure file) =<< liftIO (readCache path)
+    maybe
+      (maybe
+        (maybe
+          (list
+            (withNixContext mempty Repl.main)
+            (\case
+              ["-"] ->
+                handleResult opts mempty
+                  .   parseNixTextLoc
+                  =<< liftIO Text.getContents
+              _paths -> traverse_ (processFile opts) _paths
+            )
+            (filePaths opts)
+          )
+          (\case
+            "-" -> traverse_ (processFile opts) . lines =<< liftIO getContents
+            _path -> traverse_ (processFile opts) . lines =<< liftIO (readFile _path)
+          )
+          (fromFile opts)
+        )
+        (handleResult opts mempty . parseNixTextLoc)
+        (expression opts)
+      )
+      (\ path ->
+        do
+          let file = addExtension (dropExtension path) "nixc"
+          process opts (pure file) =<< liftIO (readCache path)
+      )
+      (readFrom opts)
  where
   processFile opts path = do
     eres <- parseNixFileLoc path
