@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -66,7 +67,7 @@ main = do
             (filePaths opts)
           )
           (\ x ->
-            -- use Text as in the base case, requires changing FilePath -> Text
+            -- We can start use Text as in the base case, requires changing FilePath -> Text
             traverse_ (processFile opts) . lines =<< liftIO
               (case x of
                 "-" ->  getContents  -- get user input
@@ -129,57 +130,36 @@ main = do
             (evaluate opts)
 
   process opts mpath expr
-    | evaluate opts
-    , tracing opts
-    = evaluateExpression mpath Nix.nixTracingEvalExprLoc printer expr
-    | evaluate opts
-    , Just path <- reduce opts
-    = evaluateExpression mpath (reduction path) printer expr
-    | evaluate opts
-    , not (null (arg opts) && null (argstr opts))
-    = evaluateExpression mpath Nix.nixEvalExprLoc printer expr
-    | evaluate opts
-    = processResult printer =<< Nix.nixEvalExprLoc mpath expr
-    | xml opts
-    = error "Rendering expression trees to XML is not yet implemented"
-    | json opts
-    = error "Rendering expression trees to JSON is not implemented"
-    | verbose opts >= DebugInfo
-    = liftIO $ putStr $ PS.ppShow $ stripAnnotation expr
+    | evaluate opts =
+      if
+        | tracing opts             -> evaluateExpression mpath Nix.nixTracingEvalExprLoc printer expr
+        | Just path <- reduce opts -> evaluateExpression mpath (reduction path) printer expr
+        | not (  null (arg opts)
+              && null (argstr opts)
+              )                    -> evaluateExpression mpath Nix.nixEvalExprLoc printer expr
+        | otherwise                -> processResult printer =<< Nix.nixEvalExprLoc mpath expr
+    | xml opts                     =  error "Rendering expression trees to XML is not yet implemented"
+    | json opts                    =  error "Rendering expression trees to JSON is not implemented"
+    | verbose opts >= DebugInfo    =  liftIO $ putStr $ PS.ppShow $ stripAnnotation expr
     | cache opts
-    , Just path <- mpath
-    = liftIO $ writeCache (addExtension (dropExtension path) "nixc") expr
-    | parseOnly opts
-    = void $ liftIO $ Exc.evaluate $ Deep.force expr
-    | otherwise
-    = liftIO
-      $ renderIO stdout
-      . layoutPretty (LayoutOptions $ AvailablePerLine 80 0.4)
-      . prettyNix
-      . stripAnnotation
-      $ expr
+      , Just path <- mpath         =  liftIO $ writeCache (addExtension (dropExtension path) "nixc") expr
+    | parseOnly opts               =  void $ liftIO $ Exc.evaluate $ Deep.force expr
+    | otherwise                    =
+      liftIO $
+        renderIO
+          stdout
+          . layoutPretty (LayoutOptions $ AvailablePerLine 80 0.4)
+          . prettyNix
+          . stripAnnotation $
+            expr
    where
     printer
-      | finder opts
-      = fromValue @(AttrSet (StdValue (StandardT (StdIdT IO)))) >=> findAttrs
-      | xml opts
-      = liftIO
-        .   putStrLn
-        .   Text.unpack
-        .   stringIgnoreContext
-        .   toXML
-        <=< normalForm
-      | json opts
-      = liftIO
-        .   Text.putStrLn
-        .   stringIgnoreContext
-        <=< nvalueToJSONNixString
-      | strict opts
-      = liftIO . print . prettyNValue <=< normalForm
-      | values opts
-      = liftIO . print . prettyNValueProv <=< removeEffects
-      | otherwise
-      = liftIO . print . prettyNValue <=< removeEffects
+      | finder opts = findAttrs <=< fromValue @(AttrSet (StdValue (StandardT (StdIdT IO))))
+      | xml    opts = liftIO . putStrLn . Text.unpack . stringIgnoreContext . toXML <=< normalForm
+      | json   opts = liftIO . Text.putStrLn . stringIgnoreContext <=< nvalueToJSONNixString
+      | strict opts = liftIO . print . prettyNValue <=< normalForm
+      | values opts = liftIO . print . prettyNValueProv <=< removeEffects
+      | otherwise   = liftIO . print . prettyNValue <=< removeEffects
      where
       findAttrs
         :: AttrSet (StdValue (StandardT (StdIdT IO)))
