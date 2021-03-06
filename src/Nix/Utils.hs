@@ -97,7 +97,7 @@ lifted
   => ((a -> m (StT u b)) -> m (StT u b))
   -> (a -> u m b)
   -> u m b
-lifted f k = liftWith (\run -> f (run . k)) >>= restoreT . pure
+lifted f k = restoreT . pure =<< liftWith (\run -> f (run . k))
 
 freeToFix :: Functor f => (a -> Fix f) -> Free f a -> Fix f
 freeToFix f = go
@@ -159,13 +159,11 @@ uriAwareSplit :: Text -> [(Text, NixPathEntryType)]
 uriAwareSplit = go where
   go str = case Text.break (== ':') str of
     (e1, e2)
-      | Text.null e2
-      -> [(e1, PathEntryPath)]
-      | Text.pack "://" `Text.isPrefixOf` e2
-      -> let ((suffix, _) : path) = go (Text.drop 3 e2)
-         in  (e1 <> Text.pack "://" <> suffix, PathEntryURI) : path
-      | otherwise
-      -> (e1, PathEntryPath) : go (Text.drop 1 e2)
+      | Text.null e2                              -> [(e1, PathEntryPath)]
+      | Text.pack "://" `Text.isPrefixOf` e2      ->
+        let ((suffix, _) : path) = go (Text.drop 3 e2) in
+        (e1 <> Text.pack "://" <> suffix, PathEntryURI) : path
+      | otherwise                                 -> (e1, PathEntryPath) : go (Text.drop 1 e2)
 
 alterF
   :: (Eq k, Hashable k, Functor f)
