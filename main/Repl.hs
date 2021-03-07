@@ -260,7 +260,7 @@ printValue val = do
 
 -- * Commands
 
--- :browse command
+-- | @:browse@ command
 browse :: (MonadNix e t f m, MonadIO m)
        => String
        -> Repl e t f m ()
@@ -270,7 +270,7 @@ browse _ = do
     liftIO $ putStr $ Data.Text.unpack $ k <> " = "
     printValue v
 
--- :load command
+-- | @:load@ command
 load
   :: (MonadNix e t f m, MonadIO m)
   => String
@@ -283,7 +283,7 @@ load args = do
     $ Data.Text.pack args
   void $ exec True contents
 
--- :type command
+-- | @:type@ command
 typeof
   :: (MonadNix e t f m, MonadIO m)
   => String
@@ -305,11 +305,11 @@ typeof args = do
       liftIO $ putStrLn s
 
 
--- :quit command
+-- | @:quit@ command
 quit :: (MonadNix e t f m, MonadIO m) => a -> Repl e t f m ()
 quit _ = liftIO System.Exit.exitSuccess
 
--- :set command
+-- | @:set@ command
 setConfig :: (MonadNix e t f m, MonadIO m) => String -> Repl e t f m ()
 setConfig args = case words args of
   []       -> liftIO $ putStrLn "No option to set specified"
@@ -321,7 +321,7 @@ setConfig args = case words args of
 
 -- * Interactive Shell
 
--- Prefix tab completer
+-- | Prefix tab completer
 defaultMatcher :: MonadIO m => [(String, CompletionFunc m)]
 defaultMatcher =
   [ (":load", System.Console.Repline.fileCompleter)
@@ -411,7 +411,7 @@ completeFunc reversedPrev word
         NVSet xs _ -> withMap xs
         _          -> pure mempty
 
--- HelpOption inspired by Dhall Repl
+-- | HelpOption inspired by Dhall Repl
 -- with `Doc` instead of String for syntax and doc
 data HelpOption e t f m = HelpOption
   { helpOptionName     :: String
@@ -466,7 +466,7 @@ helpOptions =
       setConfig
   ]
 
--- Options for :set
+-- | Options for :set
 data HelpSetOption = HelpSetOption
   { helpSetOptionName     :: String
   , helpSetOptionSyntax   :: Doc ()
