@@ -265,3 +265,15 @@ ifPure f =
   free
     f
     mempty
+
+-- From @base@ @Data.Foldable@
+traverse_ :: (Foldable t, Applicative f) => (a -> f b) -> t a -> f ()
+traverse_ f = foldr c (pure ())
+  -- See Note [List fusion and continuations in 'c']
+  where c x k = f x *> k
+        {-# inline c #-}
+
+-- From @base@ @Data.Foldable@
+for_ :: (Foldable t, Applicative f) => t a -> (a -> f b) -> f ()
+for_ = flip traverse_
+{-# inline for_ #-}

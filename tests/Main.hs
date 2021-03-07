@@ -23,6 +23,7 @@ import           Nix.Options
 import           Nix.Parser
 import           Nix.Standard
 import           Nix.Value
+import           Nix.Utils
 import qualified NixLanguageTests
 import qualified ParserTests
 import qualified PrettyTests
@@ -68,7 +69,7 @@ ensureNixpkgsCanParse =
         when (null files) $
           errorWithoutStackTrace $
             "Directory " <> show dir <> " does not have any files"
-        forM_ files $ \file -> do
+        for_ files $ \file -> do
           unless ("azure-cli/default.nix" `isSuffixOf` file ||
                   "os-specific/linux/udisks/2-default.nix"  `isSuffixOf` file) $ do
             -- Parse and deepseq the resulting expression tree, to ensure the

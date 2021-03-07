@@ -17,7 +17,6 @@ import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.Free
 import           Control.Monad.IO.Class
-import           Data.Foldable                  ( traverse_ )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Map                      as Map
 import           Data.List                      ( sortOn )
@@ -180,7 +179,7 @@ main = do
               )
               (\ v -> pure (k, pure (Free v)))
               nv
-          forM_ xs $ \(k, mv) -> do
+          for_ xs $ \(k, mv) -> do
             let path              = prefix <> Text.unpack k
                 (report, descend) = filterEntry path k
             when report $ do

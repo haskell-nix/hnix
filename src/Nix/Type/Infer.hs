@@ -41,7 +41,10 @@ import           Control.Monad.Ref
 import           Control.Monad.ST
 import           Control.Monad.State.Strict
 import           Data.Fix                       ( foldFix )
-import           Data.Foldable
+import           Data.Foldable                  ( foldl'
+                                                , foldrM
+                                                , find
+                                                )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List                      ( delete
                                                 , nub

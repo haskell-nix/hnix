@@ -22,7 +22,7 @@ import Prettyprinter.Render.Text
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.TH
-import Data.Foldable (traverse_)
+import Nix.Utils
 
 case_constant_int = assertParseText "234" $ mkInt 234
 

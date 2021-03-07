@@ -56,7 +56,7 @@ alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
   pairs <- forM (Data.Align.align fa fb) $ \case
     These a b -> pure (a, b)
     _         -> throwE ()
-  forM_ pairs $ \(a, b) -> guard =<< lift (eq a b)
+  for_ pairs $ \(a, b) -> guard =<< lift (eq a b)
 
 alignEq :: (Align f, Traversable f) => (a -> b -> Bool) -> f a -> f b -> Bool
 alignEq eq fa fb = runIdentity $ alignEqM (\x y -> Identity (eq x y)) fa fb

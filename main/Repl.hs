@@ -102,7 +102,7 @@ main' iniVal = initState iniVal >>= \s -> flip evalStateT s
 
   rcFile = do
     f <- liftIO $ Data.Text.IO.readFile ".hnixrc" `catch` handleMissing
-    forM_ (fmap (words . Data.Text.unpack) $ Data.Text.lines f) $ \case
+    for_ (words . Data.Text.unpack <$> Data.Text.lines f) $ \case
       ((prefix:command) : xs) | prefix == commandPrefix -> do
         let arguments = unwords xs
         optMatcher command options arguments
@@ -269,7 +269,7 @@ browse :: (MonadNix e t f m, MonadIO m)
        -> Repl e t f m ()
 browse _ = do
   st <- get
-  forM_ (Data.HashMap.Lazy.toList $ replCtx st) $ \(k, v) -> do
+  for_ (Data.HashMap.Lazy.toList $ replCtx st) $ \(k, v) -> do
     liftIO $ putStr $ Data.Text.unpack $ k <> " = "
     printValue v
 
@@ -298,7 +298,7 @@ typeof args = do
     Nothing  -> do
       exec False line
 
-  forM_ mVal $ \val -> do
+  for_ mVal $ \val -> do
     s <- lift . lift . showValueType $ val
     liftIO $ putStrLn s
 
@@ -525,7 +525,7 @@ help :: (MonadNix e t f m, MonadIO m)
      -> Repl e t f m ()
 help hs _ = do
   liftIO $ putStrLn "Available commands:\n"
-  forM_ hs $ \h ->
+  for_ hs $ \h ->
     liftIO .
       Data.Text.IO.putStrLn .
         Prettyprinter.Render.Text.renderStrict .
