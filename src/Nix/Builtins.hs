@@ -1644,7 +1644,8 @@ tryEval
 tryEval e = catch (onSuccess <$> demand e) (pure . onError)
  where
   onSuccess v = flip nvSet M.empty $ M.fromList
-    [("success", nvConstant (NBool True)), ("value", v)]
+    [ ("success", nvConstant (NBool True))
+    , ("value", v)]
 
   onError :: SomeException -> NValue t f m
   onError _ = flip nvSet M.empty $ M.fromList

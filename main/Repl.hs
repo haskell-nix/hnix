@@ -126,9 +126,8 @@ main' iniVal = initState iniVal >>= \s -> flip evalStateT s
     | s `Data.List.isPrefixOf` x = m args
     | otherwise = optMatcher s xs args
 
----------------------------------------------------------------------------------
+
 -- * Types
----------------------------------------------------------------------------------
 
 data IState t f m = IState
   { replIt  :: Maybe NExprLoc          -- ^ Last expression entered
@@ -173,9 +172,8 @@ initState mIni = do
 
 type Repl e t f m = HaskelineT (StateT (IState t f m) m)
 
----------------------------------------------------------------------------------
+
 -- * Execution
----------------------------------------------------------------------------------
 
 exec
   :: forall e t f m
@@ -259,9 +257,8 @@ printValue val = do
       | cfgValues cfg -> liftIO . print . prettyNValueProv =<< removeEffects val
       | otherwise     -> liftIO . print . prettyNValue =<< removeEffects val
 
----------------------------------------------------------------------------------
+
 -- * Commands
----------------------------------------------------------------------------------
 
 -- :browse command
 browse :: (MonadNix e t f m, MonadIO m)
@@ -293,16 +290,20 @@ typeof
   -> Repl e t f m ()
 typeof args = do
   st <- get
-  mVal <- case Data.HashMap.Lazy.lookup line (replCtx st) of
-    Just val -> pure $ pure val
-    Nothing  -> do
-      exec False line
+  mVal <-
+    case Data.HashMap.Lazy.lookup line (replCtx st) of
+      Nothing  -> exec False line
+      Just val -> pure $ pure val
 
-  for_ mVal $ \val -> do
-    s <- lift . lift . showValueType $ val
-    liftIO $ putStrLn s
+  traverse_ printValueType mVal
 
-  where line = Data.Text.pack args
+ where
+  line = Data.Text.pack args
+  printValueType val =
+    do
+      s <- lift . lift . showValueType $ val
+      liftIO $ putStrLn s
+
 
 -- :quit command
 quit :: (MonadNix e t f m, MonadIO m) => a -> Repl e t f m ()
@@ -317,9 +318,8 @@ setConfig args = case words args of
       [opt] -> modify (\s -> s { replCfg = helpSetOptionFunction opt (replCfg s) })
       _     -> liftIO $ putStrLn "No such option"
 
----------------------------------------------------------------------------------
+
 -- * Interactive Shell
----------------------------------------------------------------------------------
 
 -- Prefix tab completer
 defaultMatcher :: MonadIO m => [(String, CompletionFunc m)]
