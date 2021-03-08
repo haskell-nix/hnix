@@ -124,7 +124,7 @@ builtins :: (MonadNix e t f m, Scoped (NValue t f m) m)
          => m (Scopes m (NValue t f m))
 builtins =
   do
-    ref <- defer $ (`nvSet` M.empty) <$> buildMap
+    ref <- defer $ (nvSet M.empty) <$> buildMap
     lst <- ([("builtins", ref)] <>) <$> topLevelBuiltins
     pushScope (M.fromList lst) currentScopes
  where
@@ -394,7 +394,7 @@ nixPath :: MonadNix e t f m => m (NValue t f m)
 nixPath = fmap nvList $ flip foldNixPath mempty $
   \p mn ty rest ->
     pure $
-      flip nvSet
+      nvSet
         mempty
         (M.fromList
           [case ty of
@@ -1195,7 +1195,7 @@ intersectAttrs set1 set2 =
     (s1, p1) <- fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) set1
     (s2, p2) <- fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) set2
 
-    pure $ nvSet (s2 `M.intersection` s1) (p2 `M.intersection` p1)
+    pure $ nvSet (p2 `M.intersection` p1) (s2 `M.intersection` s1)
 
 functionArgs
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1433,7 +1433,7 @@ listToAttrs lst =
   do
     l <- fromValue @[NValue t f m] lst
     fmap
-      ((`nvSet` M.empty) . M.fromList . reverse)
+      ((nvSet M.empty) . M.fromList . reverse)
       (forM l $
         (\ nvattrset ->
           do
@@ -1596,7 +1596,7 @@ fromJSON nvjson =
 
  where
   jsonToNValue = \case
-    A.Object m -> (`nvSet` M.empty) <$> traverse jsonToNValue m
+    A.Object m -> (nvSet M.empty) <$> traverse jsonToNValue m
     A.Array  l -> nvList <$> traverse jsonToNValue (V.toList l)
     A.String s -> pure $ nvStr $ makeNixStringWithoutContext s
     A.Number n ->
@@ -1643,12 +1643,12 @@ tryEval
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 tryEval e = catch (onSuccess <$> demand e) (pure . onError)
  where
-  onSuccess v = flip nvSet M.empty $ M.fromList
+  onSuccess v = nvSet M.empty $ M.fromList
     [ ("success", nvConstant (NBool True))
     , ("value", v)]
 
   onError :: SomeException -> NValue t f m
-  onError _ = flip nvSet M.empty $ M.fromList
+  onError _ = nvSet M.empty $ M.fromList
     [ ("success", nvConstant (NBool False))
     , ("value"  , nvConstant (NBool False))
     ]
@@ -1755,7 +1755,7 @@ getContext =
     (NVStr ns) -> do
       let context = getNixLikeContext $ toNixLikeContext $ NixString.getContext ns
       valued :: M.HashMap Text (NValue t f m) <- sequenceA $ M.map toValue context
-      pure $ nvSet valued M.empty
+      pure $ nvSet M.empty valued
     x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: " <> show x) <=< demand
 
 appendContext

@@ -381,10 +381,10 @@ nvList' = NValue . pure . NVListF
 
 -- | Haskell key-value to the Nix key-value,
 nvSet' :: Applicative f
-  => HashMap Text r
-  -> HashMap Text SourcePos
+  => HashMap Text SourcePos
+  -> HashMap Text r
   -> NValue' t f m r
-nvSet' s x = NValue $ pure $ NVSetF s x
+nvSet' x s = NValue $ pure $ NVSetF s x
 
 
 -- | Haskell closure to the Nix closure,
@@ -549,10 +549,10 @@ nvList = Free . nvList'
 
 
 nvSet :: Applicative f
-  => HashMap Text (NValue t f m)
-  -> HashMap Text SourcePos
+  => HashMap Text SourcePos
+  -> HashMap Text (NValue t f m)
   -> NValue t f m
-nvSet s x = Free $ nvSet' s x
+nvSet x s = Free $ nvSet' x s
 
 
 nvClosure :: (Applicative f, Functor m)

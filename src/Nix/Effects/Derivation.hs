@@ -261,14 +261,14 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
 
     -- Memoize here, as it may be our last chance in case of readonly stores.
     drvHash <- Store.encodeInBase Store.Base16 <$> hashDerivationModulo drv'
-    modify (\(a, b) -> (a, MS.insert drvPath drvHash b))
+    modify (second (MS.insert drvPath drvHash))
 
     let outputsWithContext = Map.mapWithKey (\out path -> makeNixStringWithSingletonContext path (StringContext drvPath (DerivationOutput out))) (outputs drv')
         drvPathWithContext = makeNixStringWithSingletonContext drvPath (StringContext drvPath AllOutputs)
         attrSet = M.map nvStr $ M.fromList $ ("drvPath", drvPathWithContext): Map.toList outputsWithContext
     -- TODO: Add location information for all the entries.
     --              here --v
-    pure $ nvSet attrSet M.empty
+    pure $ nvSet M.empty attrSet
 
   where
 
@@ -328,7 +328,7 @@ buildDerivationWithContext drvAttrs = do
 
       env <- if useJson
         then do
-          jsonString :: NixString <- lift $ nvalueToJSONNixString $ flip nvSet M.empty $
+          jsonString :: NixString <- lift $ nvalueToJSONNixString $ nvSet M.empty $
             deleteKeys [ "args", "__ignoreNulls", "__structuredAttrs" ] attrs
           rawString :: Text <- extractNixString jsonString
           pure $ Map.singleton "__json" rawString

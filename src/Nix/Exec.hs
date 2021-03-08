@@ -101,7 +101,7 @@ nvSetP
   -> AttrSet (NValue t f m)
   -> AttrSet SourcePos
   -> NValue t f m
-nvSetP p s x = addProvenance p (nvSet s x)
+nvSetP p s x = addProvenance p (nvSet x s)
 
 nvClosureP
   :: MonadCited t f m

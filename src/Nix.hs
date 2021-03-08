@@ -129,7 +129,7 @@ evaluateExpression mpath evaluator handler expr = do
 
   eval' = normalForm <=< nixEvalExpr mpath
 
-  argmap args = nvSet (M.fromList args) mempty
+  argmap args = nvSet mempty (M.fromList args)
 
 processResult
   :: forall e t f m a
