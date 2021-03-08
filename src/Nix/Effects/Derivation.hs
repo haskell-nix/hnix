@@ -268,7 +268,7 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
         attrSet = M.map nvStr $ M.fromList $ ("drvPath", drvPathWithContext): Map.toList outputsWithContext
     -- TODO: Add location information for all the entries.
     --              here --v
-    pure $ nvSet M.empty attrSet
+    pure $ nvSet mempty attrSet
 
   where
 
@@ -328,7 +328,7 @@ buildDerivationWithContext drvAttrs = do
 
       env <- if useJson
         then do
-          jsonString :: NixString <- lift $ nvalueToJSONNixString $ nvSet M.empty $
+          jsonString :: NixString <- lift $ nvalueToJSONNixString $ nvSet mempty $
             deleteKeys [ "args", "__ignoreNulls", "__structuredAttrs" ] attrs
           rawString :: Text <- extractNixString jsonString
           pure $ Map.singleton "__json" rawString

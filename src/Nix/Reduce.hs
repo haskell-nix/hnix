@@ -126,7 +126,7 @@ staticImport pann path = do
 reduceExpr
   :: (MonadIO m, MonadFail m) => Maybe FilePath -> NExprLoc -> m NExprLoc
 reduceExpr mpath expr =
-  (`evalStateT` (M.empty, MS.empty))
+  (`evalStateT` (mempty, MS.empty))
     . (`runReaderT` (mpath, emptyScopes))
     . runReducer
     $ foldFix reduce expr

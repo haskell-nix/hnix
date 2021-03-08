@@ -124,7 +124,7 @@ builtins :: (MonadNix e t f m, Scoped (NValue t f m) m)
          => m (Scopes m (NValue t f m))
 builtins =
   do
-    ref <- defer $ (nvSet M.empty) <$> buildMap
+    ref <- defer $ (nvSet mempty) <$> buildMap
     lst <- ([("builtins", ref)] <>) <$> topLevelBuiltins
     pushScope (M.fromList lst) currentScopes
  where
@@ -1311,7 +1311,7 @@ throw_ mnv =
 
 import_
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-import_ = scopedImport (nvSet M.empty M.empty)
+import_ = scopedImport (nvSet mempty mempty)
 
 scopedImport
   :: forall e t f m
@@ -1433,7 +1433,7 @@ listToAttrs lst =
   do
     l <- fromValue @[NValue t f m] lst
     fmap
-      ((nvSet M.empty) . M.fromList . reverse)
+      ((nvSet mempty) . M.fromList . reverse)
       (forM l $
         (\ nvattrset ->
           do
@@ -1596,7 +1596,7 @@ fromJSON nvjson =
 
  where
   jsonToNValue = \case
-    A.Object m -> (nvSet M.empty) <$> traverse jsonToNValue m
+    A.Object m -> (nvSet mempty) <$> traverse jsonToNValue m
     A.Array  l -> nvList <$> traverse jsonToNValue (V.toList l)
     A.String s -> pure $ nvStr $ makeNixStringWithoutContext s
     A.Number n ->
@@ -1643,12 +1643,12 @@ tryEval
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 tryEval e = catch (onSuccess <$> demand e) (pure . onError)
  where
-  onSuccess v = nvSet M.empty $ M.fromList
+  onSuccess v = nvSet mempty $ M.fromList
     [ ("success", nvConstant (NBool True))
     , ("value", v)]
 
   onError :: SomeException -> NValue t f m
-  onError _ = nvSet M.empty $ M.fromList
+  onError _ = nvSet mempty $ M.fromList
     [ ("success", nvConstant (NBool False))
     , ("value"  , nvConstant (NBool False))
     ]
@@ -1755,7 +1755,7 @@ getContext =
     (NVStr ns) -> do
       let context = getNixLikeContext $ toNixLikeContext $ NixString.getContext ns
       valued :: M.HashMap Text (NValue t f m) <- sequenceA $ M.map toValue context
-      pure $ nvSet M.empty valued
+      pure $ nvSet mempty valued
     x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: " <> show x) <=< demand
 
 appendContext

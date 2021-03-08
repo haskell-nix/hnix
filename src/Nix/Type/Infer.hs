@@ -540,7 +540,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
       pure [(name, tv)]
 
     let (env, tys) =
-          (\f -> foldl' f (As.empty, M.empty) js) $ \(as1, t1) (k, t) ->
+          (\f -> foldl' f (As.empty, mempty) js) $ \(as1, t1) (k, t) ->
             (as1 `As.merge` As.singleton k t, M.insert k t t1)
         arg   = pure $ Judgment env mempty (TSet True tys)
         call  = k arg $ \args b -> (args, ) <$> b
@@ -573,11 +573,11 @@ instance MonadInfer m
               (InferT s m) (Judgment s) where
   fromValueMay (Judgment _ _ (TSet _ xs)) = do
     let sing _ = Judgment As.empty mempty
-    pure $ pure (M.mapWithKey sing xs, M.empty)
+    pure $ pure (M.mapWithKey sing xs, mempty)
   fromValueMay _ = pure mempty
   fromValue = fromValueMay >=>
     pure . fromMaybe
-      (M.empty, M.empty)
+      (mempty, mempty)
 
 instance MonadInfer m
   => ToValue (AttrSet (Judgment s), AttrSet SourcePos)

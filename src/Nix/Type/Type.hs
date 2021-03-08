@@ -1,8 +1,9 @@
 module Nix.Type.Type where
 
-import qualified Data.HashMap.Lazy             as M
 import           Data.Text                      ( Text )
 import           Nix.Utils                      ( AttrSet )
+
+type Name = Text
 
 -- | Hindrey-Milner type interface
 
@@ -23,7 +24,7 @@ data Scheme = Forall [TVar] Type -- forall a b. a -> b
 
 -- This models a set that unifies with any other set.
 typeSet :: Type
-typeSet = TSet True M.empty
+typeSet = TSet True mempty
 
 typeList :: Type
 typeList = TList mempty
@@ -34,11 +35,9 @@ typeFun :: [Type] -> Type
 typeFun = foldr1 (:~>)
 
 typeInt, typeFloat, typeBool, typeString, typePath, typeNull :: Type
-typeInt = TCon "integer"
-typeFloat = TCon "float"
-typeBool = TCon "boolean"
+typeInt    = TCon "integer"
+typeFloat  = TCon "float"
+typeBool   = TCon "boolean"
 typeString = TCon "string"
-typePath = TCon "path"
-typeNull = TCon "null"
-
-type Name = Text
+typePath   = TCon "path"
+typeNull   = TCon "null"

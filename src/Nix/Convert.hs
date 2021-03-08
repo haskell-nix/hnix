@@ -442,7 +442,7 @@ instance Convertible e t f m
         (pure Nothing)
         (fmap pure . toValue)
         ts
-    pure $ nvSet' M.empty $ M.fromList $ catMaybes
+    pure $ nvSet' mempty $ M.fromList $ catMaybes
       [ ("path",) <$> path
       , ("allOutputs",) <$> allOutputs
       , ("outputs",) <$> outputs

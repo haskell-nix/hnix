@@ -213,7 +213,7 @@ attrSetAlter (k : ks) pos m p val =
   bool
     go
     (maybe
-      (recurse M.empty M.empty)
+      (recurse mempty mempty)
       (\x ->
         do
           (st, sp) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< x
@@ -236,7 +236,7 @@ attrSetAlter (k : ks) pos m p val =
     ) <$> attrSetAlter ks pos st sp val
 
 desugarBinds :: forall r . ([Binding r] -> r) -> [Binding r] -> [Binding r]
-desugarBinds embed binds = evalState (traverse (go <=< collect) binds) M.empty
+desugarBinds embed binds = evalState (traverse (go <=< collect) binds) mempty
  where
   collect
     :: Binding r
@@ -287,7 +287,7 @@ evalBinds recursive binds =
     -> m (AttrSet v, AttrSet SourcePos)
   buildResult scope bindings =
     do
-      (s, p) <- foldM insert (M.empty, M.empty) bindings
+      (s, p) <- foldM insert (mempty, mempty) bindings
       res <-
         bool
           (traverse mkThunk s)
