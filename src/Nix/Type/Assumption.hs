@@ -15,7 +15,7 @@ import           Prelude                 hiding ( lookup )
 
 import           Nix.Type.Type
 
-import           Data.Foldable
+import           Data.Foldable                  ( foldl' )
 
 newtype Assumption = Assumption { assumptions :: [(Name, Type)] }
   deriving (Eq, Show)

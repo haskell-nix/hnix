@@ -75,7 +75,7 @@ loeb :: Functor f => f (f a -> a) -> f a
 loeb x = go where go = fmap ($ go) x
 
 loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
-loebM f = mfix $ \a -> mapM ($ a) f
+loebM f = mfix $ \a -> traverse ($ a) f
 
 para :: Functor f => (f (Fix f, a) -> a) -> Fix f -> a
 para f = f . fmap (id &&& para f) . unFix
@@ -97,7 +97,7 @@ lifted
   => ((a -> m (StT u b)) -> m (StT u b))
   -> (a -> u m b)
   -> u m b
-lifted f k = liftWith (\run -> f (run . k)) >>= restoreT . pure
+lifted f k = restoreT . pure =<< liftWith (\run -> f (run . k))
 
 freeToFix :: Functor f => (a -> Fix f) -> Free f a -> Fix f
 freeToFix f = go
@@ -159,13 +159,11 @@ uriAwareSplit :: Text -> [(Text, NixPathEntryType)]
 uriAwareSplit = go where
   go str = case Text.break (== ':') str of
     (e1, e2)
-      | Text.null e2
-      -> [(e1, PathEntryPath)]
-      | Text.pack "://" `Text.isPrefixOf` e2
-      -> let ((suffix, _) : path) = go (Text.drop 3 e2)
-         in  (e1 <> Text.pack "://" <> suffix, PathEntryURI) : path
-      | otherwise
-      -> (e1, PathEntryPath) : go (Text.drop 1 e2)
+      | Text.null e2                              -> [(e1, PathEntryPath)]
+      | Text.pack "://" `Text.isPrefixOf` e2      ->
+        let ((suffix, _) : path) = go (Text.drop 3 e2) in
+        (e1 <> Text.pack "://" <> suffix, PathEntryURI) : path
+      | otherwise                                 -> (e1, PathEntryPath) : go (Text.drop 1 e2)
 
 alterF
   :: (Eq k, Hashable k, Functor f)
@@ -267,3 +265,15 @@ ifPure f =
   free
     f
     mempty
+
+-- From @base@ @Data.Foldable@
+traverse_ :: (Foldable t, Applicative f) => (a -> f b) -> t a -> f ()
+traverse_ f = foldr c (pure ())
+  -- See Note [List fusion and continuations in 'c']
+  where c x k = f x *> k
+        {-# inline c #-}
+
+-- From @base@ @Data.Foldable@
+for_ :: (Foldable t, Applicative f) => t a -> (a -> f b) -> f ()
+for_ = flip traverse_
+{-# inline for_ #-}

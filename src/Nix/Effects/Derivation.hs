@@ -96,7 +96,7 @@ parsePath p = case Store.parsePath "/nix/store" (Text.encodeUtf8 p) of
 writeDerivation :: (Framed e m, MonadStore m) => Derivation -> m Store.StorePath
 writeDerivation drv@Derivation{inputs, name} = do
   let (inputSrcs, inputDrvs) = inputs
-  references <- fmap Set.fromList $ mapM parsePath $ Set.toList $ Set.union inputSrcs $ Set.fromList $ Map.keys inputDrvs
+  references <- fmap Set.fromList $ traverse parsePath $ Set.toList $ Set.union inputSrcs $ Set.fromList $ Map.keys inputDrvs
   path <- addTextToStore (Text.append name ".drv") (unparseDrv drv) (S.fromList $ Set.toList references) False
   parsePath $ Text.pack $ unStorePath path
 
@@ -300,12 +300,12 @@ buildDerivationWithContext drvAttrs = do
       useJson     <- getAttrOr "__structuredAttrs" False   $ pure
       ignoreNulls <- getAttrOr "__ignoreNulls"     False   $ pure
 
-      args        <- getAttrOr "args"              mempty  $ mapM (fromValue' >=> extractNixString)
+      args        <- getAttrOr "args"              mempty  $ traverse (fromValue' >=> extractNixString)
       builder     <- getAttr   "builder"                   $ extractNixString
       platform    <- getAttr   "system"                    $ extractNoCtx >=> assertNonNull
       mHash       <- getAttrOr "outputHash"        mempty  $ extractNoCtx >=> (pure . pure)
       hashMode    <- getAttrOr "outputHashMode"    Flat    $ extractNoCtx >=> parseHashMode
-      outputs     <- getAttrOr "outputs"           ["out"] $ mapM (fromValue' >=> extractNoCtx)
+      outputs     <- getAttrOr "outputs"           ["out"] $ traverse (fromValue' >=> extractNoCtx)
 
       mFixedOutput <-
         maybe
@@ -321,9 +321,9 @@ buildDerivationWithContext drvAttrs = do
       attrs <- lift $ if not ignoreNulls
         then pure drvAttrs
         else M.mapMaybe id <$> forM drvAttrs (
-            demand >=> \case
-                NVConstant NNull -> pure Nothing
-                value            -> pure $ Just value
+            demand >=> pure . \case
+              NVConstant NNull -> Nothing
+              value            -> Just value
           )
 
       env <- if useJson
@@ -333,7 +333,7 @@ buildDerivationWithContext drvAttrs = do
           rawString :: Text <- extractNixString jsonString
           pure $ Map.singleton "__json" rawString
         else
-          mapM (lift . coerceToString callFunc CopyToStore CoerceAny >=> extractNixString) $
+          traverse (lift . coerceToString callFunc CopyToStore CoerceAny >=> extractNixString) $
             Map.fromList $ M.toList $ deleteKeys [ "args", "__ignoreNulls" ] attrs
 
       pure $ defaultDerivation { platform, builder, args, env,  hashMode, useJson

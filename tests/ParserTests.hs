@@ -22,6 +22,7 @@ import Prettyprinter.Render.Text
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.TH
+import Nix.Utils
 
 case_constant_int = assertParseText "234" $ mkInt 234
 
@@ -229,9 +230,9 @@ case_identifier_keyword_prefix = do
 
 makeTextParseTest str = assertParseText ("\"" <> str <> "\"") $ mkStr str
 
-case_simple_string = mapM_ makeTextParseTest ["abcdef", "a", "A", "   a a  ", ""]
+case_simple_string = traverse_ makeTextParseTest ["abcdef", "a", "A", "   a a  ", ""]
 
-case_string_dollar = mapM_ makeTextParseTest ["a$b", "a$$b", "$cdef", "gh$i"]
+case_string_dollar = traverse_ makeTextParseTest ["a$b", "a$$b", "$cdef", "gh$i"]
 
 case_string_escape = do
   assertParseText "\"\\$\\n\\t\\r\\\\\"" $ mkStr "$\n\t\r\\"

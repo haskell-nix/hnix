@@ -18,7 +18,7 @@ import           Prelude                 hiding ( lookup )
 
 import           Nix.Type.Type
 
-import           Data.Foldable           hiding ( toList )
+import           Data.Foldable                  ( foldl' )
 import qualified Data.Map                      as Map
 
 ---------------------------------------------------------------------------------

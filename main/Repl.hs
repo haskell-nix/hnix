@@ -102,7 +102,7 @@ main' iniVal = initState iniVal >>= \s -> flip evalStateT s
 
   rcFile = do
     f <- liftIO $ Data.Text.IO.readFile ".hnixrc" `catch` handleMissing
-    forM_ (fmap (words . Data.Text.unpack) $ Data.Text.lines f) $ \case
+    for_ (words . Data.Text.unpack <$> Data.Text.lines f) $ \case
       ((prefix:command) : xs) | prefix == commandPrefix -> do
         let arguments = unwords xs
         optMatcher command options arguments
@@ -126,9 +126,8 @@ main' iniVal = initState iniVal >>= \s -> flip evalStateT s
     | s `Data.List.isPrefixOf` x = m args
     | otherwise = optMatcher s xs args
 
----------------------------------------------------------------------------------
+
 -- * Types
----------------------------------------------------------------------------------
 
 data IState t f m = IState
   { replIt  :: Maybe NExprLoc          -- ^ Last expression entered
@@ -173,9 +172,8 @@ initState mIni = do
 
 type Repl e t f m = HaskelineT (StateT (IState t f m) m)
 
----------------------------------------------------------------------------------
+
 -- * Execution
----------------------------------------------------------------------------------
 
 exec
   :: forall e t f m
@@ -259,21 +257,20 @@ printValue val = do
       | cfgValues cfg -> liftIO . print . prettyNValueProv =<< removeEffects val
       | otherwise     -> liftIO . print . prettyNValue =<< removeEffects val
 
----------------------------------------------------------------------------------
--- * Commands
----------------------------------------------------------------------------------
 
--- :browse command
+-- * Commands
+
+-- | @:browse@ command
 browse :: (MonadNix e t f m, MonadIO m)
        => String
        -> Repl e t f m ()
 browse _ = do
   st <- get
-  forM_ (Data.HashMap.Lazy.toList $ replCtx st) $ \(k, v) -> do
+  for_ (Data.HashMap.Lazy.toList $ replCtx st) $ \(k, v) -> do
     liftIO $ putStr $ Data.Text.unpack $ k <> " = "
     printValue v
 
--- :load command
+-- | @:load@ command
 load
   :: (MonadNix e t f m, MonadIO m)
   => String
@@ -286,29 +283,33 @@ load args = do
     $ Data.Text.pack args
   void $ exec True contents
 
--- :type command
+-- | @:type@ command
 typeof
   :: (MonadNix e t f m, MonadIO m)
   => String
   -> Repl e t f m ()
 typeof args = do
   st <- get
-  mVal <- case Data.HashMap.Lazy.lookup line (replCtx st) of
-    Just val -> pure $ pure val
-    Nothing  -> do
-      exec False line
+  mVal <-
+    case Data.HashMap.Lazy.lookup line (replCtx st) of
+      Nothing  -> exec False line
+      Just val -> pure $ pure val
 
-  forM_ mVal $ \val -> do
-    s <- lift . lift . showValueType $ val
-    liftIO $ putStrLn s
+  traverse_ printValueType mVal
 
-  where line = Data.Text.pack args
+ where
+  line = Data.Text.pack args
+  printValueType val =
+    do
+      s <- lift . lift . showValueType $ val
+      liftIO $ putStrLn s
 
--- :quit command
+
+-- | @:quit@ command
 quit :: (MonadNix e t f m, MonadIO m) => a -> Repl e t f m ()
 quit _ = liftIO System.Exit.exitSuccess
 
--- :set command
+-- | @:set@ command
 setConfig :: (MonadNix e t f m, MonadIO m) => String -> Repl e t f m ()
 setConfig args = case words args of
   []       -> liftIO $ putStrLn "No option to set specified"
@@ -317,11 +318,10 @@ setConfig args = case words args of
       [opt] -> modify (\s -> s { replCfg = helpSetOptionFunction opt (replCfg s) })
       _     -> liftIO $ putStrLn "No such option"
 
----------------------------------------------------------------------------------
--- * Interactive Shell
----------------------------------------------------------------------------------
 
--- Prefix tab completer
+-- * Interactive Shell
+
+-- | Prefix tab completer
 defaultMatcher :: MonadIO m => [(String, CompletionFunc m)]
 defaultMatcher =
   [ (":load", System.Console.Repline.fileCompleter)
@@ -411,7 +411,7 @@ completeFunc reversedPrev word
         NVSet xs _ -> withMap xs
         _          -> pure mempty
 
--- HelpOption inspired by Dhall Repl
+-- | HelpOption inspired by Dhall Repl
 -- with `Doc` instead of String for syntax and doc
 data HelpOption e t f m = HelpOption
   { helpOptionName     :: String
@@ -466,7 +466,7 @@ helpOptions =
       setConfig
   ]
 
--- Options for :set
+-- | Options for :set
 data HelpSetOption = HelpSetOption
   { helpSetOptionName     :: String
   , helpSetOptionSyntax   :: Doc ()
@@ -525,7 +525,7 @@ help :: (MonadNix e t f m, MonadIO m)
      -> Repl e t f m ()
 help hs _ = do
   liftIO $ putStrLn "Available commands:\n"
-  forM_ hs $ \h ->
+  for_ hs $ \h ->
     liftIO .
       Data.Text.IO.putStrLn .
         Prettyprinter.Render.Text.renderStrict .

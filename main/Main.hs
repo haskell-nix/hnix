@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -37,7 +38,7 @@ import           Nix.Utils
 import           Nix.Var
 import           Nix.Value.Monad
 import           Options.Applicative     hiding ( ParserResult(..) )
-import           Prettyprinter
+import           Prettyprinter            hiding ( list )
 import           Prettyprinter.Render.Text
 import qualified Repl
 import           System.FilePath
@@ -48,25 +49,42 @@ main :: IO ()
 main = do
   time <- getCurrentTime
   opts <- execParser (nixOptionsInfo time)
-  runWithBasicEffectsIO opts $
-    case readFrom opts of
-      Nothing -> case expression opts of
-        Nothing -> case fromFile opts of
-          Nothing -> case filePaths opts of
-            [] -> withNixContext mempty Repl.main
-            ["-"] ->
-              handleResult opts mempty
-                .   parseNixTextLoc
-                =<< liftIO Text.getContents
-            paths -> mapM_ (processFile opts) paths
-          Just "-" -> mapM_ (processFile opts) . lines =<< liftIO getContents
-          Just path ->
-            mapM_ (processFile opts) . lines =<< liftIO (readFile path)
-        Just s  -> handleResult opts mempty (parseNixTextLoc s)
-      Just path -> do
-        let file = addExtension (dropExtension path) "nixc"
-        process opts (pure file) =<< liftIO (readCache path)
+
+  runWithBasicEffectsIO opts $ execContentsFilesOrRepl opts
+
  where
+  execContentsFilesOrRepl opts =
+    maybe
+      (maybe
+        (maybe
+          (list
+            (withNixContext mempty Repl.main) -- run REPL
+            (\case
+              ["-"] -> handleResult opts mempty . parseNixTextLoc =<< liftIO Text.getContents
+              _paths -> traverse_ (processFile opts) _paths
+            )
+            (filePaths opts)
+          )
+          (\ x ->
+            -- We can start use Text as in the base case, requires changing FilePath -> Text
+            traverse_ (processFile opts) . lines =<< liftIO
+              (case x of
+                "-" ->  getContents  -- get user input
+                _path -> readFile _path
+              )
+          )
+          (fromFile opts)
+        )
+        (handleResult opts mempty . parseNixTextLoc)
+        (expression opts)
+      )
+      (\ path ->
+        do
+          let file = addExtension (dropExtension path) "nixc"
+          process opts (pure file) =<< liftIO (readCache path)
+      )
+      (readFrom opts)
+
   processFile opts path = do
     eres <- parseNixFileLoc path
     handleResult opts (pure path) eres
@@ -111,57 +129,36 @@ main = do
             (evaluate opts)
 
   process opts mpath expr
-    | evaluate opts
-    , tracing opts
-    = evaluateExpression mpath Nix.nixTracingEvalExprLoc printer expr
-    | evaluate opts
-    , Just path <- reduce opts
-    = evaluateExpression mpath (reduction path) printer expr
-    | evaluate opts
-    , not (null (arg opts) && null (argstr opts))
-    = evaluateExpression mpath Nix.nixEvalExprLoc printer expr
-    | evaluate opts
-    = processResult printer =<< Nix.nixEvalExprLoc mpath expr
-    | xml opts
-    = error "Rendering expression trees to XML is not yet implemented"
-    | json opts
-    = error "Rendering expression trees to JSON is not implemented"
-    | verbose opts >= DebugInfo
-    = liftIO $ putStr $ PS.ppShow $ stripAnnotation expr
+    | evaluate opts =
+      if
+        | tracing opts             -> evaluateExpression mpath Nix.nixTracingEvalExprLoc printer expr
+        | Just path <- reduce opts -> evaluateExpression mpath (reduction path) printer expr
+        | not (  null (arg opts)
+              && null (argstr opts)
+              )                    -> evaluateExpression mpath Nix.nixEvalExprLoc printer expr
+        | otherwise                -> processResult printer =<< Nix.nixEvalExprLoc mpath expr
+    | xml opts                     =  error "Rendering expression trees to XML is not yet implemented"
+    | json opts                    =  error "Rendering expression trees to JSON is not implemented"
+    | verbose opts >= DebugInfo    =  liftIO $ putStr $ PS.ppShow $ stripAnnotation expr
     | cache opts
-    , Just path <- mpath
-    = liftIO $ writeCache (addExtension (dropExtension path) "nixc") expr
-    | parseOnly opts
-    = void $ liftIO $ Exc.evaluate $ Deep.force expr
-    | otherwise
-    = liftIO
-      $ renderIO stdout
-      . layoutPretty (LayoutOptions $ AvailablePerLine 80 0.4)
-      . prettyNix
-      . stripAnnotation
-      $ expr
+      , Just path <- mpath         =  liftIO $ writeCache (addExtension (dropExtension path) "nixc") expr
+    | parseOnly opts               =  void $ liftIO $ Exc.evaluate $ Deep.force expr
+    | otherwise                    =
+      liftIO $
+        renderIO
+          stdout
+          . layoutPretty (LayoutOptions $ AvailablePerLine 80 0.4)
+          . prettyNix
+          . stripAnnotation $
+            expr
    where
     printer
-      | finder opts
-      = fromValue @(AttrSet (StdValue (StandardT (StdIdT IO)))) >=> findAttrs
-      | xml opts
-      = liftIO
-        .   putStrLn
-        .   Text.unpack
-        .   stringIgnoreContext
-        .   toXML
-        <=< normalForm
-      | json opts
-      = liftIO
-        .   Text.putStrLn
-        .   stringIgnoreContext
-        <=< nvalueToJSONNixString
-      | strict opts
-      = liftIO . print . prettyNValue <=< normalForm
-      | values opts
-      = liftIO . print . prettyNValueProv <=< removeEffects
-      | otherwise
-      = liftIO . print . prettyNValue <=< removeEffects
+      | finder opts = findAttrs <=< fromValue @(AttrSet (StdValue (StandardT (StdIdT IO))))
+      | xml    opts = liftIO . putStrLn . Text.unpack . stringIgnoreContext . toXML <=< normalForm
+      | json   opts = liftIO . Text.putStrLn . stringIgnoreContext <=< nvalueToJSONNixString
+      | strict opts = liftIO . print . prettyNValue <=< normalForm
+      | values opts = liftIO . print . prettyNValueProv <=< removeEffects
+      | otherwise   = liftIO . print . prettyNValue <=< removeEffects
      where
       findAttrs
         :: AttrSet (StdValue (StandardT (StdIdT IO)))
@@ -182,7 +179,7 @@ main = do
               )
               (\ v -> pure (k, pure (Free v)))
               nv
-          forM_ xs $ \(k, mv) -> do
+          for_ xs $ \(k, mv) -> do
             let path              = prefix <> Text.unpack k
                 (report, descend) = filterEntry path k
             when report $ do
