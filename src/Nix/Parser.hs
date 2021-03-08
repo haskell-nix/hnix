@@ -85,6 +85,7 @@ import           Prettyprinter                  ( Doc
 import           Text.Megaparsec         hiding ( State )
 import           Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer    as L
+import           Nix.Utils                      ( bool )
 
 infixl 3 <+>
 (<+>) :: MonadPlus m => m a -> m a -> m a
@@ -93,18 +94,23 @@ infixl 3 <+>
 ---------------------------------------------------------------------------------
 
 nixExpr :: Parser NExprLoc
-nixExpr = makeExprParser nixTerm $ fmap (fmap snd) (nixOperators nixSelector)
+nixExpr =
+  makeExprParser
+    nixTerm $
+      (fmap . fmap)
+        snd
+        (nixOperators nixSelector)
 
 antiStart :: Parser Text
 antiStart = symbol "${" <?> show ("${" :: String)
 
 nixAntiquoted :: Parser a -> Parser (Antiquoted a NExprLoc)
 nixAntiquoted p =
-  Antiquoted
-    <$> (antiStart *> nixToplevelForm <* symbol "}")
-    <+> Plain
-    <$> p
-    <?> "anti-quotation"
+  Antiquoted <$>
+    (antiStart *> nixToplevelForm <* symbol "}")
+      <+> Plain <$>
+        p
+      <?> "anti-quotation"
 
 selDot :: Parser ()
 selDot = try (symbol "." *> notFollowedBy nixPath) <?> "."
@@ -133,13 +139,18 @@ nixSelect term =
         , Maybe NExprLoc
         )
     -> NExprLoc
-  build t Nothing       = t
-  build t (Just (s, o)) = nSelectLoc t s o
+  build t mexpr =
+    maybe
+      t
+      (uncurry (nSelectLoc t))
+      mexpr
 
 nixSelector :: Parser (Ann SrcSpan (NAttrPath NExprLoc))
-nixSelector = annotateLocation $ do
-  (x : xs) <- keyName `sepBy1` selDot
-  pure $ x :| xs
+nixSelector =
+  annotateLocation $
+    do
+      (x : xs) <- keyName `sepBy1` selDot
+      pure $ x :| xs
 
 nixTerm :: Parser NExprLoc
 nixTerm = do
@@ -159,12 +170,12 @@ nixTerm = do
         $  [ nixSelect nixSet | c == 'r' ]
         <> [ nixPath | pathChar c ]
         <> if isDigit c
-             then [nixFloat, nixInt]
+             then [ nixFloat, nixInt ]
              else
                [ nixUri | isAlpha c ]
                <> [ nixBool | c == 't' || c == 'f' ]
                <> [ nixNull | c == 'n' ]
-               <> [nixSelect nixSym]
+               <> [ nixSelect nixSym ]
 
 nixToplevelForm :: Parser NExprLoc
 nixToplevelForm = keywords <+> nixLambda <+> nixExpr
@@ -216,11 +227,12 @@ slash =
 -- | A path surrounded by angle brackets, indicating that it should be
 -- looked up in the NIX_PATH environment variable at evaluation.
 nixSearchPath :: Parser NExprLoc
-nixSearchPath = annotateLocation1
-  (   mkPathF True
-  <$> try (char '<' *> many (satisfy pathChar <+> slash) <* symbol ">")
-  <?> "spath"
-  )
+nixSearchPath =
+  annotateLocation1
+    (mkPathF True <$>
+      try (char '<' *> many (satisfy pathChar <+> slash) <* symbol ">")
+      <?> "spath"
+    )
 
 pathStr :: Parser FilePath
 pathStr = lexeme $ liftM2
@@ -235,7 +247,10 @@ nixLet :: Parser NExprLoc
 nixLet = annotateLocation1
   (reserved "let" *> (letBody <+> letBinders) <?> "let block")
  where
-  letBinders = NLet <$> nixBinders <*> (reserved "in" *> nixToplevelForm)
+  letBinders =
+    NLet
+    <$> nixBinders
+    <*> (reserved "in" *> nixToplevelForm)
   -- Let expressions `let {..., body = ...}' are just desugared
   -- into `(rec {..., body = ...}).body'.
   letBody    = (\x -> NSelect x (StaticKey "body" :| mempty) Nothing) <$> aset
@@ -243,7 +258,7 @@ nixLet = annotateLocation1
 
 nixIf :: Parser NExprLoc
 nixIf = annotateLocation1
-  (   NIf
+  (NIf
   <$> (reserved "if" *> nixExpr)
   <*> (reserved "then" *> nixToplevelForm)
   <*> (reserved "else" *> nixToplevelForm)
@@ -252,7 +267,7 @@ nixIf = annotateLocation1
 
 nixAssert :: Parser NExprLoc
 nixAssert = annotateLocation1
-  (   NAssert
+  (NAssert
   <$> (reserved "assert" *> nixToplevelForm)
   <*> (semi *> nixToplevelForm)
   <?> "assert"
@@ -260,7 +275,7 @@ nixAssert = annotateLocation1
 
 nixWith :: Parser NExprLoc
 nixWith = annotateLocation1
-  (   NWith
+  (NWith
   <$> (reserved "with" *> nixToplevelForm)
   <*> (semi *> nixToplevelForm)
   <?> "with"
@@ -275,11 +290,20 @@ nixString = nStr <$> annotateLocation nixString'
 nixUri :: Parser NExprLoc
 nixUri = lexeme $ annotateLocation1 $ try $ do
   start    <- letterChar
-  protocol <- many $ satisfy $ \x ->
-    isAlpha x || isDigit x || x `elem` ("+-." :: String)
+  protocol <- many $
+    satisfy $
+      \ x ->
+        isAlpha x
+        || isDigit x
+        || (`elem` ("+-." :: String)) x
   _       <- string ":"
-  address <- some $ satisfy $ \x ->
-    isAlpha x || isDigit x || x `elem` ("%/?:@&=+$,-_.!~*'" :: String)
+  address <-
+    some $
+      satisfy $
+        \ x ->
+          isAlpha x
+          || isDigit x
+          || (`elem` ("%/?:@&=+$,-_.!~*'" :: String)) x
   pure $ NStr $ DoubleQuoted
     [Plain $ pack $ start : protocol ++ ':' : address]
 
@@ -289,12 +313,12 @@ nixString' = lexeme (doubleQuoted <+> indented <?> "string")
   doubleQuoted :: Parser (NString NExprLoc)
   doubleQuoted =
     DoubleQuoted
-      .   removePlainEmpty
-      .   mergePlain
-      <$> (  doubleQ
-          *> many (stringChar doubleQ (void $ char '\\') doubleEscape)
-          <* doubleQ
-          )
+    . removePlainEmpty
+    . mergePlain <$>
+      ( doubleQ
+      *> many (stringChar doubleQ (void $ char '\\') doubleEscape)
+      <* doubleQ
+      )
       <?> "double quoted string"
 
   doubleQ      = void (char '"')
@@ -302,41 +326,53 @@ nixString' = lexeme (doubleQuoted <+> indented <?> "string")
 
   indented :: Parser (NString NExprLoc)
   indented =
-    stripIndent
-      <$> (  indentedQ
-          *> many (stringChar indentedQ indentedQ indentedEscape)
-          <* indentedQ
-          )
+    stripIndent <$>
+      (indentedQ
+      *> many (stringChar indentedQ indentedQ indentedEscape)
+      <* indentedQ
+      )
       <?> "indented string"
 
   indentedQ      = void (string "''" <?> "\"''\"")
-  indentedEscape = try $ do
-    indentedQ
-    (Plain <$> ("''" <$ char '\'' <+> "$" <$ char '$')) <+> do
-      _ <- char '\\'
-      c <- escapeCode
-      pure $ if c == '\n' then EscapedNewline else Plain $ singleton c
+  indentedEscape =
+    try $
+      do
+        indentedQ
+        (Plain <$> ("''" <$ char '\'' <+> "$" <$ char '$')) <+>
+          do
+            _ <- char '\\'
+            c <- escapeCode
+
+            pure $
+              bool
+                EscapedNewline
+                (Plain $ singleton c)
+                (c /= '\n')
 
   stringChar end escStart esc =
-    Antiquoted
-      <$> (antiStart *> nixToplevelForm <* char '}')
-      <+> Plain
-      .   singleton
-      <$> char '$'
-      <+> esc
-      <+> Plain
-      .   pack
-      <$> some plainChar
+    Antiquoted <$>
+      (antiStart *> nixToplevelForm <* char '}')
+        <+> Plain . singleton <$>
+          char '$' <+> esc <+> Plain . pack <$>
+            some plainChar
    where
     plainChar =
       notFollowedBy (end <+> void (char '$') <+> escStart) *> anySingle
 
-  escapeCode = msum [ c <$ char e | (c, e) <- escapeCodes ] <+> anySingle
+  escapeCode =
+    msum
+      [ c <$ char e | (c, e) <- escapeCodes ]
+    <+> anySingle
 
 -- | Gets all of the arguments for a function.
 argExpr :: Parser (Params NExprLoc)
 argExpr =
-  msum [atLeft, onlyname, atRight] <* symbol ":"
+  msum
+    [ atLeft
+    , onlyname
+    , atRight
+    ]
+  <* symbol ":"
  where
   -- An argument not in curly braces. There's some potential ambiguity
   -- in the case of, for example `x:y`. Is it a lambda function `x: y`, or
@@ -394,12 +430,15 @@ nixBinders :: Parser [Binding NExprLoc]
 nixBinders = (inherit <+> namedVar) `endBy` semi where
   inherit =
     do
-        -- We can't use 'reserved' here because it would consume the whitespace
-        -- after the keyword, which is not exactly the semantics of C++ Nix.
+      -- We can't use 'reserved' here because it would consume the whitespace
+      -- after the keyword, which is not exactly the semantics of C++ Nix.
       try $ string "inherit" *> lookAhead (void (satisfy reservedEnd))
       p <- getSourcePos
       x <- whiteSpace *> optional scope
-      Inherit x <$> many keyName <*> pure p <?> "inherited binding"
+      Inherit x
+        <$> many keyName
+        <*> pure p
+        <?> "inherited binding"
   namedVar =
     do
       p <- getSourcePos
@@ -411,7 +450,8 @@ nixBinders = (inherit <+> namedVar) `endBy` semi where
   scope = nixParens <?> "inherit scope"
 
 keyName :: Parser (NKeyName NExprLoc)
-keyName = dynamicKey <+> staticKey where
+keyName = dynamicKey <+> staticKey
+ where
   staticKey  = StaticKey <$> identifier
   dynamicKey = DynamicKey <$> nixAntiquoted nixString'
 
@@ -498,8 +538,9 @@ float :: Parser Double
 float = lexeme L.float
 
 reservedNames :: HashSet Text
-reservedNames = HashSet.fromList
-  ["let", "in", "if", "then", "else", "assert", "with", "rec", "inherit"]
+reservedNames =
+  HashSet.fromList
+    ["let", "in", "if", "then", "else", "assert", "with", "rec", "inherit"]
 
 type Parser = ParsecT Void Text (State SourcePos)
 
