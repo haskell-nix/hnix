@@ -207,6 +207,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     pure $ nvConstantP (Provenance scope (NConstant_ span c)) c
 
   evalString = assembleString >=> \case
+    Nothing -> nverr $ ErrorCall "Failed to assemble string"
     Just ns -> do
       scope <- currentScopes
       span  <- currentPos
@@ -216,7 +217,6 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
           (NStr_ span (DoubleQuoted [Plain (stringIgnoreContext ns)]))
         )
         ns
-    Nothing -> nverr $ ErrorCall "Failed to assemble string"
 
   evalLiteralPath p = do
     scope <- currentScopes
@@ -248,30 +248,28 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalIf c t f = do
     scope <- currentScopes
     span  <- currentPos
-    fromValue c >>= \b -> if b
-      then
-        (\t -> addProvenance
-            (Provenance scope (NIf_ span (pure c) (pure t) Nothing))
-            t
-          )
-          <$> t
-      else
-        (\f -> addProvenance
-            (Provenance scope (NIf_ span (pure c) Nothing (pure f)))
-            f
-          )
-          <$> f
+    b <- fromValue c
 
-  evalAssert c body = fromValue c >>= \b -> do
-    span <- currentPos
-    if b
-      then do
-        scope <- currentScopes
-        (\b ->
-            addProvenance (Provenance scope (NAssert_ span (pure c) (pure b))) b
-          )
-          <$> body
-      else nverr $ Assertion span c
+    let
+      fun x y = addProvenance (Provenance scope (NIf_ span (pure c) x y))
+
+    bool
+      ( (\ f' -> fun Nothing     (pure f') f') <$> f )
+      ( (\ t' -> fun (pure t') Nothing     t') <$> t )
+      b
+
+  evalAssert c body =
+    do
+      span <- currentPos
+      b <- fromValue c
+      if b
+        then do
+          scope <- currentScopes
+          (\b ->
+              addProvenance (Provenance scope (NAssert_ span (pure c) (pure b))) b
+            )
+            <$> body
+        else nverr $ Assertion span c
 
   evalApp f x = do
     scope <- currentScopes
@@ -282,9 +280,11 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalAbs p k = do
     scope <- currentScopes
     span  <- currentPos
-    pure $ nvClosureP (Provenance scope (NAbs_ span (Nothing <$ p) Nothing))
-                      (void p)
-                      (\arg -> snd <$> k (pure arg) (\_ b -> ((), ) <$> b))
+    pure $
+      nvClosureP
+        (Provenance scope (NAbs_ span (Nothing <$ p) Nothing))
+        (void p)
+        (\arg -> snd <$> k (pure arg) (\_ b -> ((), ) <$> b))
 
   evalError = throwError
 
@@ -367,13 +367,21 @@ execBinaryOp scope span op lval rarg =
 
  where
 
-  helperEq flag = rarg >>= \rval -> valueEqM lval rval >>= boolOp rval . flag
+  helperEq flag =
+    do
+      rval <- rarg
+      eq <- valueEqM lval rval
+      boolOp rval $ flag eq
 
   helperLogic flp flag =
-    fromValue lval >>=
-      flp bool
-        (bypass flag)
-        (rarg >>= \rval -> fromValue rval >>= boolOp rval)
+    flp bool
+      (bypass flag)
+      (do
+          rval <- rarg
+          x <- fromValue rval
+          boolOp rval x
+      )
+      =<< fromValue lval
 
   boolOp rval = toBoolOp (pure rval)
 
