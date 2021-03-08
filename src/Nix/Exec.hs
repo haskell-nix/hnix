@@ -423,7 +423,7 @@ execBinaryOpForced scope span op lval rval = case op of
         <$> coerceToString callFunc CopyToStore CoerceStringy rs
     (NVPath ls, NVStr rs) -> case getStringNoContext rs of
       Just rs2 -> nvPathP prov <$> makeAbsolutePath @t @f (ls `mappend` Text.unpack rs2)
-      Nothing -> throwError $ ErrorCall $
+      Nothing -> throwError $ ErrorCall
         -- data/nix/src/libexpr/eval.cc:1412
         "A string that refers to a store path cannot be appended to a path."
     (NVPath ls, NVPath rs) -> nvPathP prov <$> makeAbsolutePath @t @f (ls <> rs)
@@ -441,7 +441,7 @@ execBinaryOpForced scope span op lval rval = case op of
   NAnd  -> alreadyHandled
   NOr   -> alreadyHandled
   NImpl -> alreadyHandled
-  NApp  -> throwError $ ErrorCall $ "NApp should be handled by evalApp"
+  NApp  -> throwError $ ErrorCall "NApp should be handled by evalApp"
 
  where
   prov :: Provenance m (NValue t f m)

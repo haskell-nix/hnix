@@ -3,7 +3,6 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
@@ -88,9 +87,6 @@ cataP f x = f x . fmap (cataP f) . unFix $ x
 
 cataPM :: (Traversable f, Monad m) => (Fix f -> f a -> m a) -> Fix f -> m a
 cataPM f x = f x <=< traverse (cataPM f) . unFix $ x
-
-transport :: Functor g => (forall x . f x -> g x) -> Fix f -> Fix g
-transport f (Fix x) = Fix $ fmap (transport f) (f x)
 
 lifted
   :: (MonadTransControl u, Monad (u m), Monad m)

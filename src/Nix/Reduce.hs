@@ -10,7 +10,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -26,7 +25,10 @@
 --   original. It should be seen as an opportunistic simplifier, but which
 --   gives up easily if faced with any potential for ambiguity in the result.
 
-module Nix.Reduce (reduceExpr, reducingEvalExpr) where
+module Nix.Reduce
+  ( reduceExpr
+  , reducingEvalExpr
+  ) where
 
 import           Control.Applicative
 import           Control.Arrow                  ( second )
@@ -39,6 +41,7 @@ import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
+import           Data.Bifunctor                 ( first )
 import           Data.Fix                       ( Fix(..), foldFix, foldFixM )
 import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
@@ -109,10 +112,10 @@ staticImport pann path = do
                           (Fix (NLiteralPath_ pann path))
                           pos
           x' = Fix (NLet_ span [cur] x)
-        modify (\(a, b) -> (M.insert path x' a, b))
+        modify (first (M.insert path x'))
         local (const (pure path, emptyScopes @m @NExprLoc)) $ do
           x'' <- foldFix reduce x'
-          modify (\(a, b) -> (M.insert path x'' a, b))
+          modify (first (M.insert path x''))
           pure x''
 
 -- gatherNames :: NExprLoc -> HashSet VarName

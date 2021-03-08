@@ -14,7 +14,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
