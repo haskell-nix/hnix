@@ -138,7 +138,7 @@ stripAnn = annotated . getCompose
 nUnary :: Ann SrcSpan NUnaryOp -> NExprLoc -> NExprLoc
 nUnary (Ann s1 u) e1@(AnnE s2 _) = AnnE (s1 <> s2) (NUnary u e1)
 nUnary _          _              = error "nUnary: unexpected"
-{-# inline nUnary#-}
+{-# inline nUnary #-}
 
 nBinary :: Ann SrcSpan NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
 nBinary (Ann s1 b) e1@(AnnE s2 _) e2@(AnnE s3 _) =
