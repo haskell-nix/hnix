@@ -30,7 +30,6 @@ module Nix.Expr.Types where
 import qualified Codec.Serialise                as Serialise
 import           Codec.Serialise                ( Serialise )
 #endif
-import           Control.Applicative
 import           Control.DeepSeq
 import           Control.Monad
 import           Data.Aeson
@@ -123,8 +122,9 @@ data Params r
   --
   -- > ParamSet [("x",Nothing)] False Nothing     ~  { x }
   -- > ParamSet [("x",pure y)]  True  (pure "s")  ~  s@{ x ? y, ... }
-  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Show,
-            Foldable, Traversable, NFData, Hashable)
+  deriving
+    (Ord, Eq, Generic, Generic1, Typeable, Data, NFData, Hashable, Show,
+    Functor, Foldable, Traversable)
 
 instance Hashable1 Params
 
@@ -649,7 +649,7 @@ ekey keys pos f e@(Fix x) | (NSet NNonRecursive xs, ann) <- fromNExpr x =
         let keys' = NE.toList keys
         (ks, rest) <- zip (inits keys') (tails keys')
         list
-          empty
+          mempty
           (\ (j : js) ->
             do
               NamedVar ns v _p <- xs
