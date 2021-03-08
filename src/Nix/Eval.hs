@@ -334,27 +334,31 @@ evalBinds recursive binds = do
       (gogo pathExpr)
 
   go scope (Inherit ms names pos) =
-    fmap catMaybes $ forM names $ evalSetterKeyName >=>
-      (pure . maybe
-        Nothing
-        (\ key -> pure
-          ([key]
-          , pos
-          , maybe
-              (attrMissing (key :| []) Nothing)
-              (pure <=< demand)
-              =<< maybe
-                  (withScopes scope $ lookupVar key)
-                  (\ s ->
-                    do
-                      (attrset, _) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< s
+    fmap catMaybes $
+      forM
+        names
+        (pure .
+          maybe
+            Nothing
+            (\ key -> pure
+              ([key]
+              , pos
+              , maybe
+                  (attrMissing (key :| []) Nothing)
+                  (pure <=< demand)
+                  =<< maybe
+                      (withScopes scope $ lookupVar key)
+                      (\ s ->
+                        do
+                          (attrset, _) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< s
 
-                      clearScopes @v $ pushScope attrset $ lookupVar key
-                  )
-                  ms
-          )
+                          clearScopes @v $ pushScope attrset $ lookupVar key
+                      )
+                      ms
+              )
+            )
+            <=< evalSetterKeyName
         )
-      )
 
   buildResult
     :: Scopes m v
