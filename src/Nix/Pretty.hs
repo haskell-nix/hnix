@@ -62,14 +62,14 @@ data NixDoc ann = NixDoc
                     -- we can add brackets appropriately
   }
 
-mkNixDoc :: Doc ann -> OperatorInfo -> NixDoc ann
-mkNixDoc d o = NixDoc { withoutParens = d, rootOp = o, wasPath = False }
+mkNixDoc :: OperatorInfo -> Doc ann -> NixDoc ann
+mkNixDoc o d = NixDoc { withoutParens = d, rootOp = o, wasPath = False }
 
 -- | A simple expression is never wrapped in parentheses. The expression
 --   behaves as if its root operator had a precedence higher than all
 --   other operators (including function application).
 simpleExpr :: Doc ann -> NixDoc ann
-simpleExpr d = mkNixDoc d (OperatorInfo minBound NAssocNone "simple expr")
+simpleExpr = mkNixDoc (OperatorInfo minBound NAssocNone "simple expr")
 
 pathExpr :: Doc ann -> NixDoc ann
 pathExpr d = (simpleExpr d) { wasPath = True }
@@ -81,7 +81,7 @@ pathExpr d = (simpleExpr d) { wasPath = True }
 --   binding).
 leastPrecedence :: Doc ann -> NixDoc ann
 leastPrecedence =
-  flip mkNixDoc $ OperatorInfo maxBound NAssocNone "least precedence"
+  mkNixDoc (OperatorInfo maxBound NAssocNone "least precedence")
 
 appOp :: OperatorInfo
 appOp = getBinaryOperator NApp
@@ -243,8 +243,8 @@ exprFNixDoc = \case
       $ vsep
       $ [prettyParams args <> colon, withoutParens body]
   NBinary NApp fun arg ->
-    mkNixDoc (wrapParens appOp fun <> space <> wrapParens appOpNonAssoc arg) appOp
-  NBinary op r1 r2 -> flip mkNixDoc opInfo $ hsep
+    mkNixDoc appOp (wrapParens appOp fun <> space <> wrapParens appOpNonAssoc arg) 
+  NBinary op r1 r2 -> mkNixDoc opInfo $ hsep
     [ wrapParens (f NAssocLeft) r1
     , pretty $ unpack $ operatorName opInfo
     , wrapParens (f NAssocRight) r2
@@ -253,21 +253,22 @@ exprFNixDoc = \case
     opInfo = getBinaryOperator op
     f x | associativity opInfo /= x = opInfo { associativity = NAssocNone }
         | otherwise                 = opInfo
-  NUnary op r1 -> mkNixDoc
-    (pretty (unpack (operatorName opInfo)) <> wrapParens opInfo r1)
-    opInfo
+  NUnary op r1 ->
+    mkNixDoc
+      opInfo
+      (pretty (unpack (operatorName opInfo)) <> wrapParens opInfo r1)
     where opInfo = getUnaryOperator op
   NSelect r' attr o ->
-    (if isJust o then leastPrecedence else flip mkNixDoc selectOp)
+    (if isJust o then leastPrecedence else mkNixDoc selectOp)
       $  wrapPath selectOp r
       <> dot
       <> prettySelector attr
       <> ordoc
    where
-    r     = flip mkNixDoc selectOp $ wrapParens appOpNonAssoc r'
+    r     = mkNixDoc selectOp (wrapParens appOpNonAssoc r')
     ordoc = maybe mempty (((space <> "or ") <>) . wrapParens appOpNonAssoc) o
   NHasAttr r attr ->
-    mkNixDoc (wrapParens hasAttrOp r <> " ? " <> prettySelector attr) hasAttrOp
+    mkNixDoc hasAttrOp (wrapParens hasAttrOp r <> " ? " <> prettySelector attr)
   NEnvPath     p -> simpleExpr $ pretty ("<" <> p <> ">")
   NLiteralPath p ->
     pathExpr $
