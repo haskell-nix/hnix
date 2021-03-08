@@ -53,6 +53,9 @@ import qualified System.Nix.StorePath          as Store
 -- | A path into the nix store
 newtype StorePath = StorePath { unStorePath :: FilePath }
 
+
+-- All of the following type classes defer to the underlying 'm'.
+
 -- * @class MonadEffects t f m@
 
 class
@@ -86,7 +89,12 @@ class
 
 -- ** Instances
 
-instance (MonadFix1T t m, MonadStore m) => MonadStore (Fix1T t m) where
+instance
+  ( MonadFix1T t m
+  , MonadStore m
+  )
+  => MonadStore (Fix1T t m)
+ where
   addToStore a b c d = lift $ addToStore a b c d
   addTextToStore' a b c d = lift $ addTextToStore' a b c d
 
@@ -94,7 +102,8 @@ instance (MonadFix1T t m, MonadStore m) => MonadStore (Fix1T t m) where
 
 class
   Monad m
-  => MonadIntrospect m where
+  => MonadIntrospect m
+ where
   recursiveSize :: a -> m Word
   default recursiveSize :: (MonadTrans t, MonadIntrospect m', m ~ t m') => a -> m Word
   recursiveSize = lift . recursiveSize
@@ -106,13 +115,23 @@ instance MonadIntrospect IO where
   recursiveSize =
 #ifdef MIN_VERSION_ghc_datasize
 #if MIN_VERSION_ghc_datasize(0,2,0)
-recursiveSize
+    recursiveSize
 #else
-\_ -> pure 0
+      \_ -> pure 0
 #endif
 #else
-    \_ -> pure 0
+      \_ -> pure 0
 #endif
+
+deriving
+  instance
+    MonadIntrospect (t (Fix1 t))
+    => MonadIntrospect (Fix1 t)
+
+deriving
+  instance
+    MonadIntrospect (t (Fix1T t m) m)
+    => MonadIntrospect (Fix1T t m)
 
 
 -- * @class MonadExec m@
@@ -146,6 +165,16 @@ instance MonadExec IO where
                 Success v -> pure $ Right v
         err -> pure $ Left $ ErrorCall $ "exec  failed: " <> show err <> " " <> emsg
 
+deriving
+  instance
+    MonadExec (t (Fix1 t))
+    => MonadExec (Fix1 t)
+
+deriving
+  instance
+    MonadExec (t (Fix1T t m) m)
+    => MonadExec (Fix1T t m)
+
 
 -- * @class MonadInstantiate m@
 
@@ -178,6 +207,17 @@ instance MonadInstantiate IO where
             Success v -> pure $ Right v
         status -> pure $ Left $ ErrorCall $ "nix-instantiate failed: " <> show status <> ": " <> err
 
+deriving
+  instance
+    MonadInstantiate (t (Fix1 t))
+    => MonadInstantiate (Fix1 t)
+
+deriving
+  instance
+    MonadInstantiate (t (Fix1T t m) m)
+    => MonadInstantiate (Fix1T t m)
+
+
 -- * @class MonadEnv m@
 
 class
@@ -209,6 +249,16 @@ instance MonadEnv IO where
     "i386" -> "i686"
     arch   -> arch
 
+deriving
+  instance
+    MonadEnv (t (Fix1 t))
+    => MonadEnv (Fix1 t)
+
+deriving
+  instance
+    MonadEnv (t (Fix1T t m) m)
+    => MonadEnv (Fix1T t m)
+
 
 -- * @class MonadPaths m@
 
@@ -224,6 +274,16 @@ class
 
 instance MonadPaths IO where
   getDataDir = Paths_hnix.getDataDir
+
+deriving
+  instance
+    MonadPaths (t (Fix1 t))
+    => MonadPaths (Fix1 t)
+
+deriving
+  instance
+    MonadPaths (t (Fix1T t m) m)
+    => MonadPaths (Fix1T t m)
 
 
 -- * @class MonadHttp m@
@@ -259,6 +319,16 @@ instance MonadHttp IO where
         -- let bstr = responseBody response
         pure $ Left $ ErrorCall $ "success in downloading but hnix-store is not yet ready; url = " <> urlstr
 
+deriving
+  instance
+    MonadHttp (t (Fix1 t))
+    => MonadHttp (Fix1 t)
+
+deriving
+  instance
+    MonadHttp (t (Fix1T t m) m)
+    => MonadHttp (Fix1T t m)
+
 
 -- * @class MonadPutStr m@
 
@@ -277,6 +347,16 @@ class
 
 instance MonadPutStr IO where
   putStr = Prelude.putStr
+
+deriving
+  instance
+    MonadPutStr (t (Fix1 t))
+    => MonadPutStr (Fix1 t)
+
+deriving
+  instance
+    MonadPutStr (t (Fix1T t m) m)
+    => MonadPutStr (Fix1T t m)
 
 
 -- ** Functions
@@ -317,7 +397,7 @@ class
   addTextToStore' a b c d = lift $ addTextToStore' a b c d
 
 
--- ** Instances
+-- *** Instances
 
 instance MonadStore IO where
 
@@ -356,23 +436,7 @@ addPath p = either throwError pure =<< addToStore (T.pack $ takeFileName p) p Tr
 toFile_ :: (Framed e m, MonadStore m) => FilePath -> String -> m StorePath
 toFile_ p contents = addTextToStore (T.pack p) (T.pack contents) HS.empty False
 
--- All of the following type classes defer to the underlying 'm'.
-
-deriving instance MonadPutStr (t (Fix1 t)) => MonadPutStr (Fix1 t)
-deriving instance MonadHttp (t (Fix1 t)) => MonadHttp (Fix1 t)
-deriving instance MonadEnv (t (Fix1 t)) => MonadEnv (Fix1 t)
-deriving instance MonadPaths (t (Fix1 t)) => MonadPaths (Fix1 t)
-deriving instance MonadInstantiate (t (Fix1 t)) => MonadInstantiate (Fix1 t)
-deriving instance MonadExec (t (Fix1 t)) => MonadExec (Fix1 t)
-deriving instance MonadIntrospect (t (Fix1 t)) => MonadIntrospect (Fix1 t)
-
-deriving instance MonadPutStr (t (Fix1T t m) m) => MonadPutStr (Fix1T t m)
-deriving instance MonadHttp (t (Fix1T t m) m) => MonadHttp (Fix1T t m)
-deriving instance MonadEnv (t (Fix1T t m) m) => MonadEnv (Fix1T t m)
-deriving instance MonadPaths (t (Fix1T t m) m) => MonadPaths (Fix1T t m)
-deriving instance MonadInstantiate (t (Fix1T t m) m) => MonadInstantiate (Fix1T t m)
-deriving instance MonadExec (t (Fix1T t m) m) => MonadExec (Fix1T t m)
-deriving instance MonadIntrospect (t (Fix1T t m) m) => MonadIntrospect (Fix1T t m)
+-- * misc
 
 
 -- Please, get rid of pathExists in favour of @doesPathExist@
