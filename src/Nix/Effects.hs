@@ -193,19 +193,21 @@ instance MonadInstantiate IO where
 
   instantiateExpr expr =
     do
-      traceM $ "Executing: " <> show
-        ["nix-instantiate", "--eval", "--expr ", expr]
+      traceM $
+        "Executing: " <> show ["nix-instantiate", "--eval", "--expr ", expr]
+
       (exitCode, out, err) <-
         readProcessWithExitCode
           "nix-instantiate"
           ["--eval", "--expr", expr]
           ""
-      case exitCode of
+
+      pure $ case exitCode of
         ExitSuccess ->
           case parseNixTextLoc (T.pack out) of
-            Failure e -> pure $ Left $ ErrorCall $ "Error parsing output of nix-instantiate: " <> show e
-            Success v -> pure $ Right v
-        status -> pure $ Left $ ErrorCall $ "nix-instantiate failed: " <> show status <> ": " <> err
+            Failure e -> Left $ ErrorCall $ "Error parsing output of nix-instantiate: " <> show e
+            Success v -> Right v
+        status -> Left $ ErrorCall $ "nix-instantiate failed: " <> show status <> ": " <> err
 
 deriving
   instance
