@@ -159,11 +159,7 @@ wrapExprLoc span x = Fix (Fix (NSym_ span "<?>") <$ x)
 -- Currently instance is stuck in orphanage between the requirements to be MonadEval, aka Eval stage, and emposed requirement to be MonadNix (Execution stage). MonadNix constraint tries to put the cart before horse and seems superflous, since Eval in Nix also needs and can throw exceptions. It is between `nverr` and `evalError`.
 instance MonadNix e t f m => MonadEval (NValue t f m) m where
   freeVariable var =
-    nverr @e @t @f
-      $  ErrorCall
-      $  "Undefined variable '"
-      <> Text.unpack var
-      <> "'"
+    nverr @e @t @f $ ErrorCall $ "Undefined variable '" <> Text.unpack var <> "'"
 
   synHole name = do
     span  <- currentPos
@@ -174,32 +170,26 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
       }
 
   attrMissing ks Nothing =
-    evalError @(NValue t f m)
-      $  ErrorCall
-      $  "Inheriting unknown attribute: "
-      <> intercalate "." (fmap Text.unpack (NE.toList ks))
+    evalError @(NValue t f m) $ ErrorCall $ "Inheriting unknown attribute: " <> intercalate "." (fmap Text.unpack (NE.toList ks))
 
   attrMissing ks (Just s) =
     evalError @(NValue t f m)
-      $  ErrorCall
-      $  "Could not look up attribute "
-      <> intercalate "." (fmap Text.unpack (NE.toList ks))
-      <> " in "
-      <> show (prettyNValue s)
+      $ ErrorCall $ "Could not look up attribute " <> intercalate "." (fmap Text.unpack (NE.toList ks)) <> " in " <> show (prettyNValue s)
 
   evalCurPos = do
     scope                  <- currentScopes
     span@(SrcSpan delta _) <- currentPos
     addProvenance @_ @_ @(NValue t f m)
-        (Provenance scope (NSym_ span "__curPos"))
+      (Provenance scope (NSym_ span "__curPos"))
       <$> toValue delta
 
   evaledSym name val = do
     scope <- currentScopes
     span  <- currentPos
-    pure $ addProvenance @_ @_ @(NValue t f m)
-      (Provenance scope (NSym_ span name))
-      val
+    pure $
+      addProvenance @_ @_ @(NValue t f m)
+        (Provenance scope (NSym_ span name))
+        val
 
   evalConstant c = do
     scope <- currentScopes
@@ -262,14 +252,16 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     do
       span <- currentPos
       b <- fromValue c
-      if b
-        then do
+      bool
+        (nverr $ Assertion span c)
+        (do
           scope <- currentScopes
           (\b ->
               addProvenance (Provenance scope (NAssert_ span (pure c) (pure b))) b
             )
             <$> body
-        else nverr $ Assertion span c
+        )
+        b
 
   evalApp f x = do
     scope <- currentScopes
@@ -324,16 +316,9 @@ execUnaryOp scope span op arg = do
       (NNeg, NFloat f) -> unaryOp $ NFloat (-f)
       (NNot, NBool b ) -> unaryOp $ NBool (not b)
       _ ->
-        throwError
-          $  ErrorCall
-          $  "unsupported argument type for unary operator "
-          <> show op
+        throwError $  ErrorCall $ "unsupported argument type for unary operator " <> show op
     x ->
-      throwError
-        $  ErrorCall
-        $  "argument to unary operator"
-        <> " must evaluate to an atomic type: "
-        <> show x
+      throwError $ ErrorCall $ "argument to unary operator must evaluate to an atomic type: " <> show x
  where
   unaryOp = pure . nvConstantP (Provenance scope (NUnary_ span op (pure arg)))
 
@@ -346,7 +331,7 @@ execBinaryOp
   -> NValue t f m
   -> m (NValue t f m)
   -> m (NValue t f m)
---  2021-02-25: NOTE: These are do blocks. Currently in the middle of the big rewrite, can not check their refactor. Please help.
+
 execBinaryOp scope span op lval rarg =
   case op of
     NEq   -> helperEq id
@@ -405,44 +390,49 @@ execBinaryOpForced
   -> m (NValue t f m)
 
 execBinaryOpForced scope span op lval rval = case op of
-  NLt  -> compare (<)
-  NLte -> compare (<=)
-  NGt  -> compare (>)
-  NGte -> compare (>=)
+  NLt    -> compare (<)
+  NLte   -> compare (<=)
+  NGt    -> compare (>)
+  NGte   -> compare (>=)
   NMinus -> numBinOp (-)
   NMult  -> numBinOp (*)
   NDiv   -> numBinOp' div (/)
-  NConcat -> case (lval, rval) of
-    (NVList ls, NVList rs) -> pure $ nvListP prov $ ls <> rs
-    _ -> unsupportedTypes
+  NConcat ->
+    case (lval, rval) of
+      (NVList ls, NVList rs) -> pure $ nvListP prov $ ls <> rs
+      _ -> unsupportedTypes
 
-  NUpdate -> case (lval, rval) of
-    (NVSet ls lp, NVSet rs rp) -> pure $ nvSetP prov (rs `M.union` ls) (rp `M.union` lp)
-    (NVSet ls lp, NVConstant NNull) -> pure $ nvSetP prov ls lp
-    (NVConstant NNull, NVSet rs rp) -> pure $ nvSetP prov rs rp
-    _ -> unsupportedTypes
+  NUpdate ->
+    case (lval, rval) of
+      (NVSet ls lp, NVSet rs rp) -> pure $ nvSetP prov (rs `M.union` ls) (rp `M.union` lp)
+      (NVSet ls lp, NVConstant NNull) -> pure $ nvSetP prov ls lp
+      (NVConstant NNull, NVSet rs rp) -> pure $ nvSetP prov rs rp
+      _ -> unsupportedTypes
 
-  NPlus -> case (lval, rval) of
-    (NVConstant _, NVConstant _) -> numBinOp (+)
+  NPlus ->
+    case (lval, rval) of
+      (NVConstant _, NVConstant _) -> numBinOp (+)
 
-    (NVStr ls, NVStr rs) -> pure $ nvStrP prov (ls `mappend` rs)
-    (NVStr ls, rs@NVPath{}) ->
-      (\rs2 -> nvStrP prov (ls `mappend` rs2))
-        <$> coerceToString callFunc CopyToStore CoerceStringy rs
-    (NVPath ls, NVStr rs) -> case getStringNoContext rs of
-      Just rs2 -> nvPathP prov <$> makeAbsolutePath @t @f (ls `mappend` Text.unpack rs2)
-      Nothing -> throwError $ ErrorCall
-        -- data/nix/src/libexpr/eval.cc:1412
-        "A string that refers to a store path cannot be appended to a path."
-    (NVPath ls, NVPath rs) -> nvPathP prov <$> makeAbsolutePath @t @f (ls <> rs)
+      (NVStr ls, NVStr rs) -> pure $ nvStrP prov (ls `mappend` rs)
+      (NVStr ls, rs@NVPath{}) ->
+        (\rs2 -> nvStrP prov (ls `mappend` rs2))
+          <$> coerceToString callFunc CopyToStore CoerceStringy rs
+      (NVPath ls, NVStr rs) ->
+        maybe
+          (throwError $ ErrorCall "A string that refers to a store path cannot be appended to a path.") -- data/nix/src/libexpr/eval.cc:1412
+          (\ rs2 ->
+             nvPathP prov <$> makeAbsolutePath @t @f (ls `mappend` Text.unpack rs2)
+          )
+          (getStringNoContext rs)
+      (NVPath ls, NVPath rs) -> nvPathP prov <$> makeAbsolutePath @t @f (ls <> rs)
 
-    (ls@NVSet{}, NVStr rs) ->
-      (\ls2 -> nvStrP prov (ls2 `mappend` rs))
-        <$> coerceToString callFunc DontCopyToStore CoerceStringy ls
-    (NVStr ls, rs@NVSet{}) ->
-      (\rs2 -> nvStrP prov (ls `mappend` rs2))
-        <$> coerceToString callFunc DontCopyToStore CoerceStringy rs
-    _ -> unsupportedTypes
+      (ls@NVSet{}, NVStr rs) ->
+        (\ls2 -> nvStrP prov (ls2 `mappend` rs))
+          <$> coerceToString callFunc DontCopyToStore CoerceStringy ls
+      (NVStr ls, rs@NVSet{}) ->
+        (\rs2 -> nvStrP prov (ls `mappend` rs2))
+          <$> coerceToString callFunc DontCopyToStore CoerceStringy rs
+      _ -> unsupportedTypes
 
   NEq   -> alreadyHandled
   NNEq  -> alreadyHandled
@@ -482,25 +472,19 @@ execBinaryOpForced scope span op lval rval = case op of
       _ -> unsupportedTypes
     _ -> unsupportedTypes
 
-  unsupportedTypes = throwError $ ErrorCall $
-    "Unsupported argument types for binary operator "
-      <> show op
-      <> ": "
-      <> show lval
-      <> ", "
-      <> show rval
+  unsupportedTypes = throwError $ ErrorCall $ "Unsupported argument types for binary operator " <> show op <> ": " <> show lval <> ", " <> show rval
 
-  alreadyHandled = throwError $ ErrorCall $
-    "This cannot happen: operator "
-      <> show op
-      <> " should have been handled in execBinaryOp."
+  alreadyHandled = throwError $ ErrorCall $ "This cannot happen: operator " <> show op <> " should have been handled in execBinaryOp."
+
 
 -- This function is here, rather than in 'Nix.String', because of the need to
 -- use 'throwError'.
 fromStringNoContext :: Framed e m => NixString -> m Text
-fromStringNoContext ns = case getStringNoContext ns of
-  Just str -> pure str
-  Nothing  -> throwError $ ErrorCall $ "expected string with no context, but got " <> show ns
+fromStringNoContext ns =
+  maybe
+    (throwError $ ErrorCall $ "expected string with no context, but got " <> show ns)
+    pure
+    (getStringNoContext ns)
 
 addTracing
   :: (MonadNix e t f m, Has e Options, MonadReader Int n, Alternative n)
@@ -530,12 +514,19 @@ addTracing k v = do
 evalExprLoc :: forall e t f m . MonadNix e t f m => NExprLoc -> m (NValue t f m)
 evalExprLoc expr = do
   opts :: Options <- asks (view hasLens)
-  if tracing opts
-    then join . (`runReaderT` (0 :: Int)) $ adi
-      (addTracing phi)
-      (raise (addStackFrames @(NValue t f m) . addSourcePositions))
-      expr
-    else adi phi (addStackFrames @(NValue t f m) . addSourcePositions) expr
+
+  bool
+    (adi
+      phi
+      (addStackFrames @(NValue t f m) . addSourcePositions)
+      )
+    (join . (`runReaderT` (0 :: Int)) .
+      adi
+        (addTracing phi)
+        (raise (addStackFrames @(NValue t f m) . addSourcePositions))
+        )
+    (tracing opts)
+    expr
  where
   phi = Eval.eval . annotated . getCompose
   raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x
