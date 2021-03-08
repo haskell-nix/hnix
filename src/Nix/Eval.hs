@@ -268,7 +268,7 @@ evalBinds
   -> m (AttrSet v, AttrSet SourcePos)
 evalBinds recursive binds = do
   scope <- currentScopes :: m (Scopes m v)
-  buildResult scope . concat =<< traverse (go scope) (moveOverridesLast binds)
+  buildResult scope . concat =<< traverse (applyBindToAdt scope) (moveOverridesLast binds)
  where
   moveOverridesLast = uncurry (<>) . partition
     (\case
@@ -276,89 +276,96 @@ evalBinds recursive binds = do
       _ -> True
     )
 
-  go :: Scopes m v -> Binding (m v) -> m [([Text], SourcePos, m v)]
-  go _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
+  applyBindToAdt :: Scopes m v -> Binding (m v) -> m [([Text], SourcePos, m v)]
+  applyBindToAdt _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
     do
       (o', p') <- fromValue =<< finalValue
       -- jww (2018-05-09): What to do with the key position here?
       pure $
         (\ (k, v) ->
-            ( [k]
-            , fromMaybe pos (M.lookup k p')
-            , pure =<< demand v
-            )
+          ( [k]
+          , fromMaybe pos (M.lookup k p')
+          , pure =<< demand v
+          )
         ) <$>
         M.toList o'
 
-  go _ (NamedVar pathExpr finalValue pos) = do
-    let
-      gogo :: NAttrPath (m v) -> m ([Text], SourcePos, m v)
-      gogo =
-        \case
-          h :| t ->
-            maybe
-              (pure
-                ( mempty
-                , nullPos
-                , toValue @(AttrSet v, AttrSet SourcePos) (mempty, mempty)
-                )
-              )
-              (\ k ->
-                list
-                  (pure
-                    ( [k]
-                    , pos
-                    , finalValue
-                    )
-                  )
-                  (\ (x : xs) ->
-                    do
-                      (restOfPath, _, v) <- gogo (x :| xs)
-                      pure
-                        ( k : restOfPath
-                        , pos
-                        , v
-                        )
-                  )
-                  t
-              )
-              =<< evalSetterKeyName h
+  applyBindToAdt _ (NamedVar pathExpr finalValue pos) =
+    do
+      fmap
+        (\case
+          -- When there are no path segments, e.g. `${null} = 5;`, we don't
+          -- bind anything
+          ([], _, _) -> mempty
+          result     -> [result]
+        )
+        (processAttrSetKeys pathExpr)
 
-    fmap
-      (\case
-        -- When there are no path segments, e.g. `${null} = 5;`, we don't
-        -- bind anything
-        ([], _, _) -> mempty
-        result     -> [result]
-      )
-      (gogo pathExpr)
-
-  go scope (Inherit ms names pos) =
-    fmap catMaybes $
-      forM
-        names
-        (pure .
+   where
+    processAttrSetKeys :: NAttrPath (m v) -> m ([Text], SourcePos, m v)
+    processAttrSetKeys =
+      \case
+        h :| t ->
           maybe
-            Nothing
-            (\ key -> pure
-              ([key]
-              , pos
-              , maybe
-                  (attrMissing (key :| []) Nothing)
-                  (pure <=< demand)
-                  =<< maybe
-                      (withScopes scope $ lookupVar key)
-                      (\ s ->
-                        do
-                          (attrset, _) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< s
-
-                          clearScopes @v $ pushScope attrset $ lookupVar key
-                      )
-                      ms
+            (pure
+              ( mempty
+              , nullPos
+              , toValue @(AttrSet v, AttrSet SourcePos) (mempty, mempty)
               )
             )
-            <=< evalSetterKeyName
+            (\ k ->
+              list
+                -- No more keys in the attrset - return the result
+                (pure
+                  ( [k]
+                  , pos
+                  , finalValue
+                  )
+                )
+                -- There are unprocessed keys in attrset - recurse appending the results
+                (\ (x : xs) ->
+                  do
+                    (restOfPath, _, v) <- processAttrSetKeys (x :| xs)
+                    pure
+                      ( k : restOfPath
+                      , pos
+                      , v
+                      )
+                )
+                t
+            )
+            =<< evalSetterKeyName h
+
+  applyBindToAdt scope (Inherit ms names pos) =
+    catMaybes <$>
+      traverse
+        processScope
+        names
+   where
+    processScope
+      :: NKeyName (m v)
+      -> m (Maybe ([Text], SourcePos, m v))
+    processScope nkeyname =
+      maybe
+        Nothing
+        (\ key -> pure
+          ([key]
+          , pos
+          , maybe
+              (attrMissing (key :| []) Nothing)
+              (pure <=< demand)
+              =<< maybe
+                  (withScopes scope $ lookupVar key)
+                  (\ s ->
+                    do
+                      (attrset, _) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< s
+
+                      clearScopes @v $ pushScope attrset $ lookupVar key
+                  )
+                  ms
+          )
         )
+        <$> evalSetterKeyName nkeyname
 
   buildResult
     :: Scopes m v
