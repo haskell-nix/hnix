@@ -413,24 +413,24 @@ execBinaryOpForced scope span op lval rval = case op of
     case (lval, rval) of
       (NVConstant _, NVConstant _) -> numBinOp (+)
 
-      (NVStr ls, NVStr rs) -> pure $ nvStrP prov (ls `mappend` rs)
+      (NVStr ls, NVStr rs) -> pure $ nvStrP prov (ls <> rs)
       (NVStr ls, rs@NVPath{}) ->
-        (\rs2 -> nvStrP prov (ls `mappend` rs2))
+        (\rs2 -> nvStrP prov (ls <> rs2))
           <$> coerceToString callFunc CopyToStore CoerceStringy rs
       (NVPath ls, NVStr rs) ->
         maybe
           (throwError $ ErrorCall "A string that refers to a store path cannot be appended to a path.") -- data/nix/src/libexpr/eval.cc:1412
           (\ rs2 ->
-             nvPathP prov <$> makeAbsolutePath @t @f (ls `mappend` Text.unpack rs2)
+             nvPathP prov <$> makeAbsolutePath @t @f (ls <> Text.unpack rs2)
           )
           (getStringNoContext rs)
       (NVPath ls, NVPath rs) -> nvPathP prov <$> makeAbsolutePath @t @f (ls <> rs)
 
       (ls@NVSet{}, NVStr rs) ->
-        (\ls2 -> nvStrP prov (ls2 `mappend` rs))
+        (\ls2 -> nvStrP prov (ls2 <> rs))
           <$> coerceToString callFunc DontCopyToStore CoerceStringy ls
       (NVStr ls, rs@NVSet{}) ->
-        (\rs2 -> nvStrP prov (ls `mappend` rs2))
+        (\rs2 -> nvStrP prov (ls <> rs2))
           <$> coerceToString callFunc DontCopyToStore CoerceStringy rs
       _ -> unsupportedTypes
 

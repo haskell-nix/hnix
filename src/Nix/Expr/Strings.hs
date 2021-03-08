@@ -13,7 +13,7 @@ import qualified Data.Text                     as T
 import           Data.Tuple                     ( swap )
 import           Nix.Expr
 
--- | Merge adjacent 'Plain' values with 'mappend'.
+-- | Merge adjacent @Plain@ values with @<>@.
 mergePlain :: [Antiquoted Text r] -> [Antiquoted Text r]
 mergePlain [] = mempty
 mergePlain (Plain a : EscapedNewline : Plain b : xs) =
