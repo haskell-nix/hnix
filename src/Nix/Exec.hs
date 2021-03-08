@@ -288,19 +288,19 @@ callFunc
   -> NValue t f m
   -> m (NValue t f m)
 callFunc fun arg =
-  (\fun' -> do
-  frames :: Frames <- asks (view hasLens)
-  when (length frames > 2000) $ throwError $ ErrorCall "Function call stack exhausted"
-  case fun' of
-    NVClosure _params f -> do
-      f arg
-    NVBuiltin name f -> do
-      span <- currentPos
-      withFrame Info (Calling @m @(NValue t f m) name span) (f arg)
-    s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
-      ((`callFunc` arg) <=< (`callFunc` s)) =<< demand f
-    x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show x
-  ) =<< demand fun
+  do
+    fun' <- demand fun
+    frames :: Frames <- asks (view hasLens)
+    when (length frames > 2000) $ throwError $ ErrorCall "Function call stack exhausted"
+    case fun' of
+      NVClosure _params f -> do
+        f arg
+      NVBuiltin name f -> do
+        span <- currentPos
+        withFrame Info (Calling @m @(NValue t f m) name span) (f arg)
+      s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
+        ((`callFunc` arg) <=< (`callFunc` s)) =<< demand f
+      x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show x
 
 execUnaryOp
   :: (Framed e m, MonadCited t f m, Show t)
@@ -336,12 +336,9 @@ execBinaryOp scope span op lval rarg =
   case op of
     NEq   -> helperEq id
     NNEq  -> helperEq not
-    NOr   ->
-      helperLogic flip True
-    NAnd  ->
-      helperLogic id False
-    NImpl ->
-      helperLogic id True
+    NOr   -> helperLogic flip True
+    NAnd  -> helperLogic id   False
+    NImpl -> helperLogic id   True
     _     ->
       do
         rval <- rarg
@@ -497,14 +494,18 @@ addTracing k v = do
     v'@(Compose (Ann span x)) <- sequence v
     pure $ do
       opts :: Options <- asks (view hasLens)
-      let rendered = if verbose opts >= Chatty
+      let
+        rendered =
+          if verbose opts >= Chatty
+            then
+              pretty $
 #ifdef MIN_VERSION_pretty_show
-                     then pretty $ PS.ppShow (void x)
+                PS.ppShow (void x)
 #else
-            then pretty $ show (void x)
+                show (void x)
 #endif
             else prettyNix (Fix (Fix (NSym "?") <$ x))
-          msg x = pretty ("eval: " <> replicate depth ' ') <> x
+        msg x = pretty ("eval: " <> replicate depth ' ') <> x
       loc <- renderLocation span (msg rendered <> " ...\n")
       putStr $ show loc
       res <- k v'
