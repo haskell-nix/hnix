@@ -58,7 +58,13 @@ class (Show v, Monad m) => MonadEval v m where
   evalAssert      :: v -> m v -> m v
   evalApp         :: v -> m v -> m v
   evalAbs         :: Params (m v)
-                  -> (forall a. m v -> (AttrSet (m v) -> m v -> m (a, v)) -> m (a, v))
+                  -> ( forall a. m v
+                    -> ( AttrSet (m v)
+                      -> m v
+                      -> m (a, v)
+                      )
+                    -> m (a, v)
+                    )
                   -> m v
 {-
   evalSelect     :: v -> NonEmpty Text -> Maybe (m v) -> m v
@@ -90,18 +96,19 @@ type MonadNixEval v m
   )
 
 data EvalFrame m v
-    = EvaluatingExpr (Scopes m v) NExprLoc
-    | ForcingExpr (Scopes m v) NExprLoc
-    | Calling String SrcSpan
-    | SynHole (SynHoleInfo m v)
-    deriving (Show, Typeable)
+  = EvaluatingExpr (Scopes m v) NExprLoc
+  | ForcingExpr (Scopes m v) NExprLoc
+  | Calling String SrcSpan
+  | SynHole (SynHoleInfo m v)
+  deriving (Show, Typeable)
 
 instance (Typeable m, Typeable v) => Exception (EvalFrame m v)
 
 data SynHoleInfo m v = SynHoleInfo
-   { _synHoleInfo_expr :: NExprLoc
-   , _synHoleInfo_scope :: Scopes m v
-   } deriving (Show, Typeable)
+  { _synHoleInfo_expr :: NExprLoc
+  , _synHoleInfo_scope :: Scopes m v
+  }
+  deriving (Show, Typeable)
 
 instance (Typeable m, Typeable v) => Exception (SynHoleInfo m v)
 
@@ -189,6 +196,7 @@ evalWithAttrSet aset body = do
   scope <- currentScopes :: m (Scopes m v)
   s     <- defer $ withScopes scope aset
   let s' = (fmap fst . fromValue @(AttrSet v, AttrSet SourcePos)) =<< demand s
+
   pushWeakScope s' body
 
 attrSetAlter
@@ -266,15 +274,34 @@ evalBinds
   => Bool
   -> [Binding (m v)]
   -> m (AttrSet v, AttrSet SourcePos)
-evalBinds recursive binds = do
-  scope <- currentScopes :: m (Scopes m v)
-  buildResult scope . concat =<< traverse (applyBindToAdt scope) (moveOverridesLast binds)
+evalBinds recursive binds =
+  do
+    scope <- currentScopes :: m (Scopes m v)
+
+    buildResult scope . concat =<< traverse (applyBindToAdt scope) (moveOverridesLast binds)
+
  where
-  moveOverridesLast = uncurry (<>) . partition
-    (\case
-      NamedVar (StaticKey "__overrides" :| []) _ _pos -> False
-      _ -> True
-    )
+  buildResult
+    :: Scopes m v
+    -> [([Text], SourcePos, m v)]
+    -> m (AttrSet v, AttrSet SourcePos)
+  buildResult scope bindings =
+    do
+      (s, p) <- foldM insert (M.empty, M.empty) bindings
+      res <-
+        bool
+          (traverse mkThunk s)
+          (loebM (encapsulate <$> s))
+          recursive
+
+      pure (res, p)
+
+   where
+    mkThunk = defer . withScopes scope
+
+    encapsulate f attrs = mkThunk . pushScope attrs $ f
+
+    insert (m, p) (path, pos, value) = attrSetAlter path pos m p value
 
   applyBindToAdt :: Scopes m v -> Binding (m v) -> m [([Text], SourcePos, m v)]
   applyBindToAdt _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
@@ -307,30 +334,17 @@ evalBinds recursive binds = do
       \case
         h :| t ->
           maybe
-            (pure
-              ( mempty
-              , nullPos
-              , toValue @(AttrSet v, AttrSet SourcePos) (mempty, mempty)
-              )
-            )
+            -- Empty attrset - return a stub.
+            (pure ( mempty, nullPos, toValue @(AttrSet v, AttrSet SourcePos) (mempty, mempty)) )
             (\ k ->
               list
                 -- No more keys in the attrset - return the result
-                (pure
-                  ( [k]
-                  , pos
-                  , finalValue
-                  )
-                )
+                (pure ( [k], pos, finalValue ) )
                 -- There are unprocessed keys in attrset - recurse appending the results
                 (\ (x : xs) ->
                   do
                     (restOfPath, _, v) <- processAttrSetKeys (x :| xs)
-                    pure
-                      ( k : restOfPath
-                      , pos
-                      , v
-                      )
+                    pure ( k : restOfPath, pos, v )
                 )
                 t
             )
@@ -367,27 +381,11 @@ evalBinds recursive binds = do
         )
         <$> evalSetterKeyName nkeyname
 
-  buildResult
-    :: Scopes m v
-    -> [([Text], SourcePos, m v)]
-    -> m (AttrSet v, AttrSet SourcePos)
-  buildResult scope bindings =
-    do
-      (s, p) <- foldM insert (M.empty, M.empty) bindings
-      res <-
-        bool
-          (traverse mkThunk s)
-          (loebM (encapsulate <$> s))
-          recursive
-
-      pure (res, p)
-
-   where
-    mkThunk = defer . withScopes scope
-
-    encapsulate f attrs = mkThunk . pushScope attrs $ f
-
-    insert (m, p) (path, pos, value) = attrSetAlter path pos m p value
+  moveOverridesLast = uncurry (<>) . partition
+    (\case
+      NamedVar (StaticKey "__overrides" :| []) _ _pos -> False
+      _ -> True
+    )
 
 evalSelect
   :: forall v m
@@ -406,7 +404,9 @@ evalSelect aset attr =
   extract x path@(k :| ks) =
     do
       x' <- fromValueMay x
+
       case x' of
+        Nothing -> pure $ Left (x, path)
         Just (s :: AttrSet v, p :: AttrSet SourcePos)
           | Just t <- M.lookup k s ->
             do
@@ -415,7 +415,6 @@ evalSelect aset attr =
                 (\ (y : ys) -> (extract ?? (y :| ys)) =<< demand t)
                 ks
           | otherwise -> Left . (, path) <$> toValue (s, p)
-        Nothing -> pure $ Left (x, path)
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value
