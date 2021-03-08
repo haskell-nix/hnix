@@ -18,7 +18,7 @@ import           Lens.Family2
 import           Nix.Utils
 
 newtype Scope a = Scope { getScope :: AttrSet a }
-    deriving (Functor, Foldable, Traversable, Eq)
+  deriving (Functor, Foldable, Traversable, Eq)
 
 instance Show (Scope a) where
   show (Scope m) = show (M.keys m)
@@ -33,9 +33,9 @@ scopeLookup key = foldr go Nothing
   go (Scope m) rest = M.lookup key m <|> rest
 
 data Scopes m a = Scopes
-    { lexicalScopes :: [Scope a]
-    , dynamicScopes :: [m (Scope a)]
-    }
+  { lexicalScopes :: [Scope a]
+  , dynamicScopes :: [m (Scope a)]
+  }
 
 instance Show (Scopes m a) where
   show (Scopes m a) =
@@ -77,21 +77,29 @@ pushScopesReader s = local (over hasLens (s <>))
 
 lookupVarReader
   :: forall m a e . (MonadReader e m, Has e (Scopes m a)) => Text -> m (Maybe a)
-lookupVarReader k = do
-  mres <- asks (scopeLookup k . lexicalScopes @m . view hasLens)
-  case mres of
-    Just sym -> pure $ pure sym
-    Nothing  -> do
-      ws <- asks (dynamicScopes . view hasLens)
-      foldr
-        (\x rest -> do
-          mres' <- M.lookup k . getScope <$> x
-          case mres' of
-            Just sym -> pure $ pure sym
-            Nothing  -> rest
-        )
-        (pure Nothing)
-        ws
+lookupVarReader k =
+  do
+    mres <- asks (scopeLookup k . lexicalScopes @m . view hasLens)
+
+    maybe
+      (do
+        ws <- asks (dynamicScopes . view hasLens)
+
+        foldr
+          (\x rest ->
+            do
+              mres' <- M.lookup k . getScope <$> x
+
+              maybe
+                rest
+                (pure . pure)
+                mres'
+          )
+          (pure Nothing)
+          ws
+      )
+      (pure . pure)
+      mres
 
 withScopes :: Scoped a m => Scopes m a -> m r -> m r
 withScopes scope = clearScopes . pushScopes scope
