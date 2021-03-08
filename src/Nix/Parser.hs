@@ -528,6 +528,7 @@ reservedNames = HashSet.fromList
 
 type Parser = ParsecT Void Text (State SourcePos)
 
+-- This is just a @Either (Doc Void) a@
 data Result a = Success a | Failure (Doc Void) deriving (Show, Functor)
 
 parseFromFileEx :: MonadFile m => Parser a -> FilePath -> m (Result a)
@@ -540,10 +541,11 @@ parseFromFileEx p path = do
 
 parseFromText :: Parser a -> Text -> Result a
 parseFromText p txt =
-  let file = "<string>"
-  in  either (Failure . pretty . errorBundlePretty) Success
-        . flip evalState (initialPos file)
-        $ runParserT p file txt
+  let file = "<string>" in
+  either
+    (Failure . pretty . errorBundlePretty)
+    Success
+    $ (`evalState` initialPos file) $ (`runParserT` file) p txt
 
 {- Parser.Operators -}
 
@@ -560,11 +562,12 @@ data NOperatorDef
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 annotateLocation :: Parser a -> Parser (Ann SrcSpan a)
-annotateLocation p = do
-  begin <- getSourcePos
-  res   <- p
-  end   <- get -- The state set before the last whitespace
-  pure $ Ann (SrcSpan begin end) res
+annotateLocation p =
+  do
+    begin <- getSourcePos
+    end   <- get -- The state set before the last whitespace
+
+    Ann (SrcSpan begin end) <$> p
 
 annotateLocation1 :: Parser (NExprF NExprLoc) -> Parser NExprLoc
 annotateLocation1 = fmap annToAnnF . annotateLocation
