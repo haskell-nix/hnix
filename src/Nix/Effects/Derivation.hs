@@ -69,12 +69,12 @@ data Derivation = Derivation
 defaultDerivation :: Derivation
 defaultDerivation = Derivation
   { name        = undefined
-  , outputs     = Map.empty
-  , inputs      = (Set.empty, Map.empty)
+  , outputs     = mempty
+  , inputs      = (mempty, mempty)
   , platform    = undefined
   , builder     = undefined
   , args        = mempty
-  , env         = Map.empty
+  , env         = mempty
   , mFixed      = Nothing
   , hashMode    = Flat
   , useJson     = False
@@ -278,7 +278,7 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
       name <- makeStorePathName (Store.unStorePathName n <> if o == "out" then "" else "-" <> o)
       pure $ pathToText $ Store.makeStorePath "/nix/store" ("output:" <> Text.encodeUtf8 o) h name
 
-    toStorePaths ctx = foldl (flip addToInputs) (Set.empty, Map.empty) ctx
+    toStorePaths ctx = foldl (flip addToInputs) (mempty, mempty) ctx
     addToInputs (StringContext path kind) = case kind of
       DirectPath -> first (Set.insert path)
       DerivationOutput o -> second (Map.insertWith (<>) path [o])

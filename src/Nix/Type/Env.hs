@@ -21,15 +21,14 @@ import           Nix.Type.Type
 import           Data.Foldable                  ( foldl' )
 import qualified Data.Map                      as Map
 
----------------------------------------------------------------------------------
+
 -- * Typing Environment
----------------------------------------------------------------------------------
 
 newtype Env = TypeEnv { types :: Map.Map Name [Scheme] }
   deriving (Eq, Show)
 
 empty :: Env
-empty = TypeEnv Map.empty
+empty = TypeEnv mempty
 
 extend :: Env -> (Name, [Scheme]) -> Env
 extend env (x, s) = env { types = Map.insert x s (types env) }

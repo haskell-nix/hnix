@@ -155,7 +155,7 @@ class FreeTypeVars a where
   ftv :: a -> Set.Set TVar
 
 instance FreeTypeVars Type where
-  ftv TCon{}      = Set.empty
+  ftv TCon{}      = mempty
   ftv (TVar a   ) = Set.singleton a
   ftv (TSet _ a ) = Set.unions (fmap ftv (M.elems a))
   ftv (TList a  ) = Set.unions (fmap ftv a)
@@ -169,10 +169,10 @@ instance FreeTypeVars Scheme where
   ftv (Forall as t) = ftv t `Set.difference` Set.fromList as
 
 instance FreeTypeVars a => FreeTypeVars [a] where
-  ftv = foldr (Set.union . ftv) Set.empty
+  ftv = foldr (Set.union . ftv) mempty
 
 instance (Ord a, FreeTypeVars a) => FreeTypeVars (Set.Set a) where
-  ftv = foldr (Set.union . ftv) Set.empty
+  ftv = foldr (Set.union . ftv) mempty
 
 
 class ActiveTypeVars a where
@@ -185,7 +185,7 @@ instance ActiveTypeVars Constraint where
   atv (ExpInstConst t s) = ftv t `Set.union` ftv s
 
 instance ActiveTypeVars a => ActiveTypeVars [a] where
-  atv = foldr (Set.union . atv) Set.empty
+  atv = foldr (Set.union . atv) mempty
 
 data TypeError
   = UnificationFail Type Type
@@ -222,7 +222,7 @@ runInfer' :: MonadInfer m => InferT s m a -> m (Either InferError a)
 runInfer' =
   runExceptT
     . (`evalStateT` initInfer)
-    . (`runReaderT` (Set.empty, emptyScopes))
+    . (`runReaderT` (mempty, emptyScopes))
     . getInfer
 
 runInfer :: (forall s . InferT s (FreshIdT Int (ST s)) a) -> Either InferError a
@@ -260,7 +260,7 @@ inferExpr env ex = case runInfer (inferType env ex) of
 
 -- | Canonicalize and return the polymorphic toplevel type.
 closeOver :: Type -> Scheme
-closeOver = normalizeScheme . generalize Set.empty
+closeOver = normalizeScheme . generalize mempty
 
 extendMSet :: Monad m => TVar -> InferT s m a -> InferT s m a
 extendMSet x = InferT . local (first (Set.insert x)) . getInfer
