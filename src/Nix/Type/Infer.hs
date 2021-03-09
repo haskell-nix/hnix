@@ -72,28 +72,28 @@ import           Nix.Utils
 import           Nix.Value.Monad
 import           Nix.Var
 
----------------------------------------------------------------------------------
+
 -- * Classes
----------------------------------------------------------------------------------
 
 -- | Inference monad
-newtype InferT s m a = InferT
+newtype InferT s m a =
+  InferT
     { getInfer ::
         ReaderT (Set.Set TVar, Scopes (InferT s m) (Judgment s))
             (StateT InferState (ExceptT InferError m)) a
     }
     deriving
-        ( Functor
-        , Applicative
-        , Alternative
-        , Monad
-        , MonadPlus
-        , MonadFix
-        , MonadReader (Set.Set TVar, Scopes (InferT s m) (Judgment s))
-        , MonadFail
-        , MonadState InferState
-        , MonadError InferError
-        )
+      ( Functor
+      , Applicative
+      , Alternative
+      , Monad
+      , MonadPlus
+      , MonadFix
+      , MonadReader (Set.Set TVar, Scopes (InferT s m) (Judgment s))
+      , MonadFail
+      , MonadState InferState
+      , MonadError InferError
+      )
 
 instance MonadTrans (InferT s) where
   lift = InferT . lift . lift . lift
@@ -109,10 +109,10 @@ initInfer :: InferState
 initInfer = InferState { count = 0 }
 
 data Constraint
-    = EqConst Type Type
-    | ExpInstConst Type Scheme
-    | ImpInstConst Type (Set.Set TVar) Type
-    deriving (Show, Eq, Ord)
+  = EqConst Type Type
+  | ExpInstConst Type Scheme
+  | ImpInstConst Type (Set.Set TVar) Type
+  deriving (Show, Eq, Ord)
 
 newtype Subst = Subst (Map TVar Type)
   deriving (Eq, Ord, Show, Semigroup, Monoid)
@@ -179,10 +179,9 @@ class ActiveTypeVars a where
   atv :: a -> Set.Set TVar
 
 instance ActiveTypeVars Constraint where
-  atv (EqConst t1 t2) = ftv t1 `Set.union` ftv t2
-  atv (ImpInstConst t1 ms t2) =
-    ftv t1 `Set.union` (ftv ms `Set.intersection` ftv t2)
-  atv (ExpInstConst t s) = ftv t `Set.union` ftv s
+  atv (EqConst      t1 t2   ) = ftv t1 `Set.union` ftv t2
+  atv (ImpInstConst t1 ms t2) = ftv t1 `Set.union` (ftv ms `Set.intersection` ftv t2)
+  atv (ExpInstConst t  s     ) = ftv t  `Set.union` ftv s
 
 instance ActiveTypeVars a => ActiveTypeVars [a] where
   atv = foldr (Set.union . atv) mempty
@@ -213,9 +212,8 @@ instance Monoid InferError where
   mempty  = TypeInferenceAborted
   mappend = (<>)
 
----------------------------------------------------------------------------------
+
 -- * Inference
----------------------------------------------------------------------------------
 
 -- | Run the inference monad
 runInfer' :: MonadInfer m => InferT s m a -> m (Either InferError a)
@@ -535,49 +533,67 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
                       (tv :~> t)
 
   evalAbs (ParamSet ps variadic _mname) k = do
-    js <- fmap concat $ forM ps $ \(name, _) -> do
-      tv <- fresh
-      pure [(name, tv)]
+    js <-
+      concat <$>
+        traverse
+          (\(name, _) ->
+            do
+              tv <- fresh
+              pure [(name, tv)]
+          )
+          ps
 
-    let (env, tys) =
-          (\f -> foldl' f (As.empty, mempty) js) $ \(as1, t1) (k, t) ->
-            (as1 `As.merge` As.singleton k t, M.insert k t t1)
-        arg   = pure $ Judgment env mempty (TSet True tys)
-        call  = k arg $ \args b -> (args, ) <$> b
-        names = fmap fst js
+    let
+      (env, tys) =
+        (\f -> foldl' f (As.empty, mempty) js) $ \(as1, t1) (k, t) ->
+          (as1 `As.merge` As.singleton k t, M.insert k t t1)
+      arg   = pure $ Judgment env mempty (TSet True tys)
+      call  = k arg $ \args b -> (args, ) <$> b
+      names = fmap fst js
 
     (args, Judgment as cs t) <- foldr (\(_, TVar a) -> extendMSet a) call js
 
     ty <- TSet variadic <$> traverse (inferredType <$>) args
 
-    pure $ Judgment
-      (foldl' As.remove as names)
-      (cs <> [ EqConst t' (tys M.! x) | x <- names, t' <- As.lookup x as ])
-      (ty :~> t)
+    pure $
+      Judgment
+        (foldl' As.remove as names)
+        (cs <> [ EqConst t' (tys M.! x) | x <- names, t' <- As.lookup x as ])
+        (ty :~> t)
 
   evalError = throwError . EvaluationError
 
-data Judgment s = Judgment
+data Judgment s =
+  Judgment
     { assumptions     :: As.Assumption
     , typeConstraints :: [Constraint]
     , inferredType    :: Type
     }
     deriving Show
 
-instance Monad m => FromValue NixString (InferT s m) (Judgment s) where
+instance
+  Monad m
+  => FromValue NixString (InferT s m) (Judgment s)
+ where
   fromValueMay _ = pure mempty
   fromValue _ = error "Unused"
 
-instance MonadInfer m
-  => FromValue (AttrSet (Judgment s), AttrSet SourcePos)
-              (InferT s m) (Judgment s) where
-  fromValueMay (Judgment _ _ (TSet _ xs)) = do
-    let sing _ = Judgment As.empty mempty
-    pure $ pure (M.mapWithKey sing xs, mempty)
+instance
+  MonadInfer m
+  => FromValue ( AttrSet (Judgment s)
+              , AttrSet SourcePos
+              ) (InferT s m) (Judgment s)
+ where
+  fromValueMay (Judgment _ _ (TSet _ xs)) =
+    do
+      let sing _ = Judgment As.empty mempty
+      pure $ pure (M.mapWithKey sing xs, mempty)
   fromValueMay _ = pure mempty
-  fromValue = fromValueMay >=>
-    pure . fromMaybe
+  fromValue =
+    pure .
+      fromMaybe
       (mempty, mempty)
+      <=< fromValueMay
 
 instance MonadInfer m
   => ToValue (AttrSet (Judgment s), AttrSet SourcePos)
@@ -585,7 +601,7 @@ instance MonadInfer m
   toValue (xs, _) =
     Judgment
       <$> foldrM go As.empty xs
-      <*> (concat <$> traverse ((pure . typeConstraints) <=< demand ) xs)
+      <*> (concat <$> traverse ((pure . typeConstraints) <=< demand) xs)
       <*> (TSet True <$> traverse ((pure . inferredType) <=< demand) xs)
    where
     go x rest =
@@ -636,13 +652,14 @@ normalizeScheme (Forall _ body) = Forall (fmap snd ord) (normtype body)
   normtype (TSet b a) = TSet b (M.map normtype a)
   normtype (TList a ) = TList (fmap normtype a)
   normtype (TMany ts) = TMany (fmap normtype ts)
-  normtype (TVar  a ) = case Prelude.lookup a ord of
-    Just x  -> TVar x
-    Nothing -> error "type variable not in signature"
+  normtype (TVar  a ) =
+    maybe
+      (error "type variable not in signature")
+      TVar
+      (Prelude.lookup a ord)
 
----------------------------------------------------------------------------------
+
 -- * Constraint Solver
----------------------------------------------------------------------------------
 
 newtype Solver m a = Solver (LogicT (StateT [TypeError] m) a)
     deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
@@ -743,7 +760,9 @@ solve cs = solve' (nextSolvable cs)
     s' <- lift $ instantiate s
     solve (EqConst t s' : cs)
 
-instance Monad m => Scoped (Judgment s) (InferT s m) where
+instance
+  Monad m
+  => Scoped (Judgment s) (InferT s m) where
   currentScopes = currentScopesReader
   clearScopes   = clearScopesReader @(InferT s m) @(Judgment s)
   pushScopes    = pushScopesReader
