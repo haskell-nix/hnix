@@ -218,13 +218,20 @@ reduce base@(NSelect_ _ _ attrs _)
 
 -- | Reduce a set by inlining its binds outside of the set
 --   if none of the binds inherit the super set.
-reduce e@(NSet_ ann NNonRecursive binds) = do
-  let usesInherit = flip any binds $ \case
-        Inherit{} -> True
-        _         -> False
-  if usesInherit
-    then clearScopes @NExprLoc $ Fix . NSet_ ann NNonRecursive <$> traverse sequence binds
-    else Fix <$> sequence e
+reduce e@(NSet_ ann NNonRecursive binds) =
+  do
+    let
+      usesInherit =
+        any
+          (\case
+            Inherit{} -> True
+            _         -> False
+          )
+          binds
+
+    if usesInherit
+      then clearScopes @NExprLoc $ Fix . NSet_ ann NNonRecursive <$> traverse sequence binds
+      else Fix <$> sequence e
 
 -- Encountering a 'rec set' construction eliminates any hope of inlining
 -- definitions.
