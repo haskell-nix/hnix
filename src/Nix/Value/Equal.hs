@@ -52,45 +52,76 @@ alignEqM
   -> f a
   -> f b
   -> m Bool
-alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $ do
-  pairs <- forM (Data.Align.align fa fb) $ \case
-    These a b -> pure (a, b)
-    _         -> throwE ()
-  for_ pairs $ \(a, b) -> guard =<< lift (eq a b)
+alignEqM eq fa fb = fmap (either (const False) (const True)) $ runExceptT $
+  do
+    pairs <-
+      traverse
+        (\case
+          These a b -> pure (a, b)
+          _         -> throwE ()
+        )
+        (Data.Align.align fa fb)
+    traverse_ (\ (a, b) -> guard =<< lift (eq a b)) pairs
 
 alignEq :: (Align f, Traversable f) => (a -> b -> Bool) -> f a -> f b -> Bool
 alignEq eq fa fb = runIdentity $ alignEqM (\x y -> Identity (eq x y)) fa fb
 
-isDerivationM :: Monad m => (t -> m (Maybe NixString)) -> AttrSet t -> m Bool
-isDerivationM f m = case HashMap.Lazy.lookup "type" m of
-  Nothing -> pure False
-  Just t  -> do
-    mres <- f t
-    case mres of
-        -- We should probably really make sure the context is empty here
-        -- but the C++ implementation ignores it.
-      Just s  -> pure $ stringIgnoreContext s == "derivation"
-      Nothing -> pure False
+isDerivationM
+  :: Monad m
+  => ( t
+     -> m (Maybe NixString)
+     )
+  -> AttrSet t
+  -> m Bool
+isDerivationM f m =
+  maybe
+    (pure False)
+    (\ t ->
+      do
+        mres <- f t
 
-isDerivation :: Monad m => (t -> Maybe NixString) -> AttrSet t -> Bool
+        maybe
+          -- We should probably really make sure the context is empty here
+          -- but the C++ implementation ignores it.
+          (pure False)
+          (pure . (==) "derivation" . stringIgnoreContext)
+          mres
+    )
+    (HashMap.Lazy.lookup "type" m)
+
+isDerivation
+  :: Monad m
+  => ( t
+     -> Maybe NixString
+     )
+  -> AttrSet t
+  -> Bool
 isDerivation f = runIdentity . isDerivationM (Identity . f)
 
 valueFEqM
   :: Monad n
-  => (AttrSet a -> AttrSet a -> n Bool)
-  -> (a -> a -> n Bool)
+  => (  AttrSet a
+     -> AttrSet a
+     -> n Bool
+     )
+  -> (  a
+     -> a
+     -> n Bool
+     )
   -> NValueF p m a
   -> NValueF p m a
   -> n Bool
-valueFEqM attrsEq eq = curry $ \case
-  (NVConstantF (NFloat x), NVConstantF (NInt y)  ) -> pure $ x == fromInteger y
-  (NVConstantF (NInt   x), NVConstantF (NFloat y)) -> pure $ fromInteger x == y
-  (NVConstantF lc        , NVConstantF rc        ) -> pure $ lc == rc
-  (NVStrF ls, NVStrF rs)     -> pure $ (\i -> i ls == i rs) stringIgnoreContext
-  (NVListF ls , NVListF rs ) -> alignEqM eq ls rs
-  (NVSetF lm _, NVSetF rm _) -> attrsEq lm rm
-  (NVPathF lp , NVPathF rp ) -> pure $ lp == rp
-  _                          -> pure False
+valueFEqM attrsEq eq =
+  curry $
+    \case
+      (NVConstantF (NFloat x), NVConstantF (NInt   y)) -> pure $ x == fromInteger y
+      (NVConstantF (NInt   x), NVConstantF (NFloat y)) -> pure $ fromInteger x == y
+      (NVConstantF lc        , NVConstantF rc        ) -> pure $ lc == rc
+      (NVStrF      ls        , NVStrF      rs        ) -> pure $ (\i -> i ls == i rs) stringIgnoreContext
+      (NVListF     ls        , NVListF     rs        ) -> alignEqM eq ls rs
+      (NVSetF      lm _      , NVSetF      rm _      ) -> attrsEq lm rm
+      (NVPathF     lp        , NVPathF     rp        ) -> pure $ lp == rp
+      _                                                -> pure False
 
 valueFEq
   :: (AttrSet a -> AttrSet a -> Bool)
@@ -98,11 +129,13 @@ valueFEq
   -> NValueF p m a
   -> NValueF p m a
   -> Bool
-valueFEq attrsEq eq x y = runIdentity $ valueFEqM
-  (\x' y' -> Identity $ attrsEq x' y')
-  (\x' y' -> Identity $ eq x' y')
-  x
-  y
+valueFEq attrsEq eq x y =
+  runIdentity $
+    valueFEqM
+      (\x' y' -> Identity $ attrsEq x' y')
+      (\x' y' -> Identity $ eq x' y')
+      x
+      y
 
 compareAttrSetsM
   :: Monad m
@@ -111,16 +144,24 @@ compareAttrSetsM
   -> AttrSet t
   -> AttrSet t
   -> m Bool
-compareAttrSetsM f eq lm rm = do
-  isDerivationM f lm >>= \case
-    True -> isDerivationM f rm >>= \case
-      True
-        | Just lp <- HashMap.Lazy.lookup "outPath" lm, Just rp <- HashMap.Lazy.lookup "outPath" rm -> eq
-          lp
-          rp
-      _ -> compareAttrs
-    _ -> compareAttrs
-  where compareAttrs = alignEqM eq lm rm
+compareAttrSetsM f eq lm rm =
+  do
+    l <- isDerivationM f lm
+    bool
+      compareAttrs
+      (do
+        r <- isDerivationM f rm
+        case r of
+          True
+            | Just lp <- HashMap.Lazy.lookup "outPath" lm, Just rp <- HashMap.Lazy.lookup "outPath" rm ->
+                eq
+                  lp
+                  rp
+          _ -> compareAttrs
+      )
+      l
+ where
+  compareAttrs = alignEqM eq lm rm
 
 compareAttrSets
   :: (t -> Maybe NixString)
@@ -144,23 +185,32 @@ valueEqM (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
  where
   f =
     free
-      (pure . (\case
+      (pure .
+        (\case
           NVStr s -> pure s
           _       -> mempty
         ) <=< force
       )
-      (pure . \case
-        NVStr' s -> pure s
-        _        -> mempty
+      (pure .
+        \case
+          NVStr' s -> pure s
+          _        -> mempty
       )
 
 thunkEqM :: (MonadThunk t m (NValue t f m), Comonad f) => t -> t -> m Bool
-thunkEqM lt rt = (=<< force lt) $ \lv -> (=<< force rt) $ \rv ->
-  let unsafePtrEq = case (lt, rt) of
-        (thunkId -> lid, thunkId -> rid) | lid == rid -> pure True
-        _ -> valueEqM lv rv
-  in  case (lv, rv) of
-        (NVClosure _ _, NVClosure _ _) -> unsafePtrEq
-        (NVList _     , NVList _     ) -> unsafePtrEq
-        (NVSet _ _    , NVSet _ _    ) -> unsafePtrEq
-        _                              -> valueEqM lv rv
+thunkEqM lt rt =
+  do
+    lv <- force lt
+    rv <- force rt
+
+    let
+      unsafePtrEq =
+        case (lt, rt) of
+          (thunkId -> lid, thunkId -> rid) | lid == rid -> pure True
+          _                                             -> valueEqM lv rv
+
+    case (lv, rv) of
+      (NVClosure _ _, NVClosure _ _) -> unsafePtrEq
+      (NVList _     , NVList _     ) -> unsafePtrEq
+      (NVSet _ _    , NVSet _ _    ) -> unsafePtrEq
+      _                              -> valueEqM lv rv
