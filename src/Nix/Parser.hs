@@ -105,7 +105,7 @@ import           Text.Megaparsec.Char           ( space1
                                                 , letterChar
                                                 , char
                                                 )
-import qualified Text.Megaparsec.Char.Lexer    as L
+import qualified Text.Megaparsec.Char.Lexer    as Lexer
 
 infixl 3 <+>
 (<+>) :: MonadPlus m => m a -> m a -> m a
@@ -199,7 +199,8 @@ nixTerm = do
 
 nixToplevelForm :: Parser NExprLoc
 nixToplevelForm = keywords <+> nixLambda <+> nixExpr
-  where keywords = nixLet <+> nixIf <+> nixAssert <+> nixWith
+ where
+  keywords = nixLet <+> nixIf <+> nixAssert <+> nixWith
 
 nixSym :: Parser NExprLoc
 nixSym = annotateLocation1 $ mkSymF <$> identifier
@@ -503,10 +504,10 @@ skipLineComment' prefix =
 whiteSpace :: Parser ()
 whiteSpace = do
   put =<< getSourcePos
-  L.space space1 lineCmnt blockCmnt
+  Lexer.space space1 lineCmnt blockCmnt
  where
   lineCmnt  = skipLineComment' "#"
-  blockCmnt = L.skipBlockComment "/*" "*/"
+  blockCmnt = Lexer.skipBlockComment "/*" "*/"
 
 lexeme :: Parser a -> Parser a
 lexeme p = p <* whiteSpace
@@ -552,10 +553,10 @@ equals   = symbol "="
 question = symbol "?"
 
 integer :: Parser Integer
-integer = lexeme L.decimal
+integer = lexeme Lexer.decimal
 
 float :: Parser Double
-float = lexeme L.float
+float = lexeme Lexer.float
 
 reservedNames :: HashSet Text
 reservedNames =
