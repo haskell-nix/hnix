@@ -48,44 +48,64 @@ where
 
 import           Prelude                 hiding ( readFile )
 
-import           Control.Applicative     hiding ( many
-                                                , some
+import           Control.DeepSeq                ( NFData )
+import           Control.Monad                  ( guard
+                                                , void
+                                                , liftM2
+                                                , msum
+                                                , MonadPlus(mplus)
                                                 )
-import           Control.DeepSeq
-import           Control.Monad
-import           Control.Monad.Combinators.Expr
-import           Control.Monad.State.Strict
+import           Control.Monad.Combinators.Expr ( makeExprParser
+                                                , Operator( Postfix
+                                                          , InfixN
+                                                          , InfixR
+                                                          , Prefix
+                                                          , InfixL
+                                                          )
+                                                )
+import           Control.Monad.State.Strict     ( evalState
+                                                , MonadState(get, put)
+                                                , State
+                                                )
 import           Data.Char                      ( isAlpha
                                                 , isDigit
                                                 , isSpace
                                                 )
 import           Data.Data                      ( Data(..) )
 import           Data.Fix                       ( Fix(..) )
-import           Data.Functor
+import           Data.Functor                   ( ($>) )
 import           Data.HashSet                   ( HashSet )
 import qualified Data.HashSet                  as HashSet
 import           Data.List.NonEmpty             ( NonEmpty(..) )
 import qualified Data.List.NonEmpty            as NE
 import qualified Data.Map                      as Map
-import           Data.Text               hiding ( foldr1
-                                                , concat
-                                                , concatMap
-                                                , zipWith
+import           Data.Text                      ( Text
+                                                , cons
+                                                , singleton
+                                                , pack
                                                 )
-import           Data.Text.Encoding
+import           Data.Text.Encoding             ( decodeUtf8 )
 import           Data.Typeable                  ( Typeable )
-import           Data.Void
-import           GHC.Generics            hiding ( Prefix )
+import           Data.Void                      ( Void )
+import           GHC.Generics                   ( Generic )
 import           Nix.Expr                hiding ( ($>) )
-import           Nix.Expr.Strings
-import           Nix.Render
+import           Nix.Expr.Strings               ( escapeCodes
+                                                , stripIndent
+                                                , mergePlain
+                                                , removePlainEmpty
+                                                )
+import           Nix.Render                     ( MonadFile(readFile) )
+import           Nix.Utils                      ( bool )
 import           Prettyprinter                  ( Doc
                                                 , pretty
                                                 )
 import           Text.Megaparsec         hiding ( State )
-import           Text.Megaparsec.Char
+import           Text.Megaparsec.Char           ( space1
+                                                , string
+                                                , letterChar
+                                                , char
+                                                )
 import qualified Text.Megaparsec.Char.Lexer    as L
-import           Nix.Utils                      ( bool )
 
 infixl 3 <+>
 (<+>) :: MonadPlus m => m a -> m a -> m a
