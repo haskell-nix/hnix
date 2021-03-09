@@ -124,7 +124,7 @@ builtins :: (MonadNix e t f m, Scoped (NValue t f m) m)
          => m (Scopes m (NValue t f m))
 builtins =
   do
-    ref <- defer $ (nvSet mempty) <$> buildMap
+    ref <- defer $ nvSet mempty <$> buildMap
     lst <- ([("builtins", ref)] <>) <$> topLevelBuiltins
     pushScope (M.fromList lst) currentScopes
  where
@@ -883,9 +883,10 @@ catAttrs attrName xs =
     n <- fromStringNoContext =<< fromValue attrName
     l <- fromValue @[NValue t f m] xs
 
-    fmap (nvList . catMaybes) $
-      forM l $
-        fmap (M.lookup n) . fromValue <=< demand
+    nvList . catMaybes <$>
+      traverse
+        (fmap (M.lookup n) . fromValue <=< demand)
+        l
 
 baseNameOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 baseNameOf x = do
@@ -1010,7 +1011,7 @@ genList f nixN =
     n <- fromValue @Integer nixN
     bool
       (throwError $ ErrorCall $ "builtins.genList: Expected a non-negative number, got " <> show n)
-      (toValue =<< forM [0 .. n - 1] (defer . callFunc f <=< toValue))
+      (toValue =<< traverse (defer . callFunc f <=< toValue) [0 .. n - 1])
       (n >= 0)
 
 -- We wrap values solely to provide an Ord instance for genericClosure
@@ -1433,17 +1434,17 @@ listToAttrs lst =
   do
     l <- fromValue @[NValue t f m] lst
     fmap
-      ((nvSet mempty) . M.fromList . reverse)
-      (forM l $
+      (nvSet mempty . M.fromList . reverse)
+      (traverse
         (\ nvattrset ->
           do
-            a <- fromValue @(AttrSet (NValue t f m)) nvattrset
-            n <- fromValue =<< demand =<< attrsetGet "name" a
-            name <- fromStringNoContext n
+            a <- fromValue @(AttrSet (NValue t f m)) =<< demand nvattrset
+            name <- fromStringNoContext =<< fromValue =<< demand =<< attrsetGet "name" a
             val  <- attrsetGet "value" a
 
             pure (name, val)
-        ) <=< demand
+        )
+        l
       )
 
 -- prim_hashString from nix/src/libexpr/primops.cc
@@ -1596,7 +1597,7 @@ fromJSON nvjson =
 
  where
   jsonToNValue = \case
-    A.Object m -> (nvSet mempty) <$> traverse jsonToNValue m
+    A.Object m -> nvSet mempty <$> traverse jsonToNValue m
     A.Array  l -> nvList <$> traverse jsonToNValue (V.toList l)
     A.String s -> pure $ nvStr $ makeNixStringWithoutContext s
     A.Number n ->
@@ -1664,7 +1665,7 @@ trace_ msg action =
     traceEffect @t @f @m . Text.unpack . stringIgnoreContext =<< fromValue msg
     pure action
 
--- 2018-09-08: NOTE: Remember of error context is so far not implemented
+-- Please, can function remember error context
 addErrorContext
   :: forall e t f m
    . MonadNix e t f m
