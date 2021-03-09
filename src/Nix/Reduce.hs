@@ -247,8 +247,9 @@ reduce (NWith_ ann scope body) =
 --   constants and strings to the body scope.
 reduce (NLet_ ann binds body) =
   do
-    s <-
-      M.fromList . catMaybes <$>
+    binds' <- traverse sequence binds
+    body'  <-
+      (`pushScope` body) . M.fromList . catMaybes =<<
         traverse
           (\case
             NamedVar (StaticKey name :| []) def _pos ->
@@ -264,10 +265,10 @@ reduce (NLet_ ann binds body) =
 
             _ -> pure Nothing
 
+
           )
           binds
-    body'  <- pushScope s body
-    binds' <- traverse sequence binds
+
     -- let names = gatherNames body'
     -- binds' <- traverse sequence binds <&> \b -> flip filter b $ \case
     --     NamedVar (StaticKey name _ :| mempty) _ ->
