@@ -120,8 +120,11 @@ withNixContext mpath action =
         )
         mpath
 
-builtins :: (MonadNix e t f m, Scoped (NValue t f m) m)
-         => m (Scopes m (NValue t f m))
+builtins
+  :: ( MonadNix e t f m
+     , Scoped (NValue t f m) m
+     )
+  => m (Scopes m (NValue t f m))
 builtins =
   do
     ref <- defer $ nvSet mempty <$> buildMap

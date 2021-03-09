@@ -360,26 +360,27 @@ evalBinds recursive binds =
       :: NKeyName (m v)
       -> m (Maybe ([Text], SourcePos, m v))
     processScope nkeyname =
-      maybe
-        Nothing
-        (\ key -> pure
-          ([key]
-          , pos
-          , maybe
-              (attrMissing (key :| []) Nothing)
-              (pure <=< demand)
-              =<< maybe
-                  (withScopes scope $ lookupVar key)
-                  (\ s ->
-                    do
-                      (attrset, _) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< s
+      (\ mkey ->
+        do
+          key <- mkey
+          pure
+            ([key]
+            , pos
+            , maybe
+                (attrMissing (key :| []) Nothing)
+                (pure <=< demand)
+                =<< maybe
+                    (withScopes scope $ lookupVar key)
+                    (\ s ->
+                      do
+                        (attrset, _) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< s
 
-                      clearScopes @v $ pushScope attrset $ lookupVar key
-                  )
-                  ms
-          )
-        )
-        <$> evalSetterKeyName nkeyname
+                        clearScopes @v $ pushScope attrset $ lookupVar key
+                    )
+                    ms
+            )
+      ) <$>
+        evalSetterKeyName nkeyname
 
   moveOverridesLast = uncurry (<>) . partition
     (\case
@@ -435,10 +436,11 @@ evalSetterKeyName
   :: (MonadEval v m, FromValue NixString m v)
   => NKeyName (m v)
   -> m (Maybe Text)
-evalSetterKeyName = \case
-  StaticKey k -> pure (pure k)
-  DynamicKey k ->
-    ((pure . stringIgnoreContext) `ifJust`) <$> runAntiquoted "\n" assembleString (fromValueMay =<<) k
+evalSetterKeyName =
+  \case
+    StaticKey k -> pure (pure k)
+    DynamicKey k ->
+      ((pure . stringIgnoreContext) `ifJust`) <$> runAntiquoted "\n" assembleString (fromValueMay =<<) k
 
 assembleString
   :: forall v m
@@ -448,7 +450,7 @@ assembleString
 assembleString =
   fromParts .
     \case
-      Indented _ parts   -> parts
+      Indented   _ parts -> parts
       DoubleQuoted parts -> parts
  where
   fromParts = fmap (fmap mconcat . sequence) . traverse go
