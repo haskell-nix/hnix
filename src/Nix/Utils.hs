@@ -125,7 +125,7 @@ adiM
 adiM f g = g ((f <=< traverse (adiM f g)) . unFix)
 
 class Has a b where
-    hasLens :: Lens' a b
+  hasLens :: Lens' a b
 
 instance Has a a where
   hasLens f = f

@@ -509,9 +509,14 @@ addStackFrames
   :: forall v e m a
    . (Scoped v m, Framed e m, Typeable v, Typeable m)
   => Transform NExprLocF (m a)
-addStackFrames f v = do
-  scopes <- currentScopes :: m (Scopes m v)
-  withFrame Info (EvaluatingExpr scopes v) (f v)
+addStackFrames f v =
+  do
+    scopes <- currentScopes :: m (Scopes m v)
+
+    -- sectioning gives GHC optimization
+    (`withFrameInfo` f v) $ (`EvaluatingExpr` v) scopes
+ where
+  withFrameInfo = withFrame Info
 
 framedEvalExprLoc
   :: forall e v m
