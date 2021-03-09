@@ -214,40 +214,53 @@ exprFNixDoc = \case
   NStr      str  -> simpleExpr $ prettyString str
   NList     []   -> simpleExpr $ lbracket <> rbracket
   NList xs ->
-    simpleExpr
-      $ group
-      $ nest 2
-      $ vsep
-      $ concat
-      $ [[lbracket], fmap (wrapParens appOpNonAssoc) xs, [rbracket]]
+    simpleExpr $
+      group $
+        nest 2 $
+          vsep $
+            concat
+              [ [lbracket]
+              , wrapParens appOpNonAssoc <$>
+                  xs
+              , [rbracket]]
   NSet NNonRecursive [] -> simpleExpr $ lbrace <> rbrace
   NSet NNonRecursive xs ->
-    simpleExpr
-      $ group
-      $ nest 2
-      $ vsep
-      $ concat
-      $ [[lbrace], fmap prettyBind xs, [rbrace]]
+    simpleExpr $
+      group $
+        nest 2 $
+          vsep $
+            concat
+              [ [lbrace]
+              , prettyBind <$> xs
+              , [rbrace]
+              ]
   NSet NRecursive [] -> simpleExpr $ recPrefix <> lbrace <> rbrace
   NSet NRecursive xs ->
-    simpleExpr
-      $ group
-      $ nest 2
-      $ vsep
-      $ concat
-      $ [[recPrefix <> lbrace], fmap prettyBind xs, [rbrace]]
+    simpleExpr $
+      group $
+        nest 2 $
+          vsep $
+            concat
+              [ [recPrefix <> lbrace]
+              , prettyBind <$> xs
+              , [rbrace]
+              ]
   NAbs args body ->
-    leastPrecedence
-      $ nest 2
-      $ vsep
-      $ [prettyParams args <> colon, withoutParens body]
+    leastPrecedence $
+      nest 2 $
+        vsep
+          [ prettyParams args <> colon
+          , withoutParens body
+          ]
   NBinary NApp fun arg ->
-    mkNixDoc appOp (wrapParens appOp fun <> space <> wrapParens appOpNonAssoc arg) 
-  NBinary op r1 r2 -> mkNixDoc opInfo $ hsep
-    [ wrapParens (f NAssocLeft) r1
-    , pretty $ unpack $ operatorName opInfo
-    , wrapParens (f NAssocRight) r2
-    ]
+    mkNixDoc appOp (wrapParens appOp fun <> space <> wrapParens appOpNonAssoc arg)
+  NBinary op r1 r2 ->
+    mkNixDoc opInfo $
+      hsep
+        [ wrapParens (f NAssocLeft) r1
+        , pretty $ unpack $ operatorName opInfo
+        , wrapParens (f NAssocRight) r2
+        ]
    where
     opInfo = getBinaryOperator op
     f x | associativity opInfo /= x = opInfo { associativity = NAssocNone }
@@ -283,32 +296,33 @@ exprFNixDoc = \case
               (any (`isPrefixOf` _txt) ["/", "~/", "./", "../"])
   NSym name -> simpleExpr $ pretty (unpack name)
   NLet binds body ->
-    leastPrecedence
-      $ group
-      $ vsep
-      $ [ "let"
-        , indent 2 (vsep (fmap prettyBind binds))
-        , "in " <> withoutParens body
-        ]
+    leastPrecedence $
+      group $
+        vsep
+          [ "let"
+          , indent 2 (vsep (fmap prettyBind binds))
+          , "in " <> withoutParens body
+          ]
   NIf cond trueBody falseBody ->
-    leastPrecedence
-      $ group
-      $ nest 2
-      $ vsep
-      $ [ "if " <> withoutParens cond
-        , align ("then " <> withoutParens trueBody)
-        , align ("else " <> withoutParens falseBody)
-        ]
+    leastPrecedence $
+      group $
+        nest 2 $
+          sep
+            [ "if " <> withoutParens cond
+            , align ("then " <> withoutParens trueBody)
+            , align ("else " <> withoutParens falseBody)
+            ]
   NWith scope body ->
-    leastPrecedence
-      $ vsep
-      $ ["with " <> withoutParens scope <> semi, align $ withoutParens body]
+    leastPrecedence $
+      vsep
+        ["with " <> withoutParens scope <> semi, align $ withoutParens body]
   NAssert cond body ->
-    leastPrecedence
-      $ vsep
-      $ ["assert " <> withoutParens cond <> semi, align $ withoutParens body]
+    leastPrecedence $
+      vsep
+        ["assert " <> withoutParens cond <> semi, align $ withoutParens body]
   NSynHole name -> simpleExpr $ pretty ("^" <> unpack name)
-  where recPrefix = "rec" <> space
+ where
+  recPrefix = "rec" <> space
 
 valueToExpr :: forall t f m . MonadDataContext f m => NValue t f m -> NExpr
 valueToExpr = iterNValue (\_ _ -> thk) phi

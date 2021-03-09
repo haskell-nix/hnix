@@ -516,6 +516,8 @@ addStackFrames f v =
     scopes <- currentScopes :: m (Scopes m v)
 
     -- sectioning gives GHC optimization
+    -- If opimization question would arrive again, check the @(`withFrameInfo` f v) $ EvaluatingExpr scopes v@
+    -- for possible @scopes@ implementation @v@ type arguments sharing between runs.
     (`withFrameInfo` f v) $ (`EvaluatingExpr` v) scopes
  where
   withFrameInfo = withFrame Info
