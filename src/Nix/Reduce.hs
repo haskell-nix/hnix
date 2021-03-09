@@ -245,29 +245,42 @@ reduce (NWith_ ann scope body) =
 
 -- | Reduce a let binds section by pushing lambdas,
 --   constants and strings to the body scope.
-reduce (NLet_ ann binds body) = do
-  s <- fmap (M.fromList . catMaybes) $ forM binds $ \case
-    NamedVar (StaticKey name :| []) def _pos -> def >>= \case
-      d@(Fix NAbs_{}     ) -> pure $ pure (name, d)
-      d@(Fix NConstant_{}) -> pure $ pure (name, d)
-      d@(Fix NStr_{}     ) -> pure $ pure (name, d)
-      _                    -> pure Nothing
-    _ -> pure Nothing
-  body'  <- pushScope s body
-  binds' <- traverse sequence binds
-  -- let names = gatherNames body'
-  -- binds' <- traverse sequence binds <&> \b -> flip filter b $ \case
-  --     NamedVar (StaticKey name _ :| mempty) _ ->
-  --         name `S.member` names
-  --     _ -> True
-  pure $ Fix $ NLet_ ann binds' body'
-  -- where
-  --   go m [] = pure m
-  --   go m (x:xs) = case x of
-  --       NamedVar (StaticKey name _ :| mempty) def -> do
-  --           v <- pushScope m def
-  --           go (M.insert name v m) xs
-  --       _ -> go m xs
+reduce (NLet_ ann binds body) =
+  do
+    s <-
+      M.fromList . catMaybes <$>
+        traverse
+          (\case
+            NamedVar (StaticKey name :| []) def _pos ->
+              let
+                defcase =
+                  \case
+                    d@(Fix NAbs_{}     ) -> pure (name, d)
+                    d@(Fix NConstant_{}) -> pure (name, d)
+                    d@(Fix NStr_{}     ) -> pure (name, d)
+                    _                    -> Nothing
+              in
+              defcase <$> def
+
+            _ -> pure Nothing
+
+          )
+          binds
+    body'  <- pushScope s body
+    binds' <- traverse sequence binds
+    -- let names = gatherNames body'
+    -- binds' <- traverse sequence binds <&> \b -> flip filter b $ \case
+    --     NamedVar (StaticKey name _ :| mempty) _ ->
+    --         name `S.member` names
+    --     _ -> True
+    pure $ Fix $ NLet_ ann binds' body'
+    -- where
+    --   go m [] = pure m
+    --   go m (x:xs) = case x of
+    --       NamedVar (StaticKey name _ :| mempty) def -> do
+    --           v <- pushScope m def
+    --           go (M.insert name v m) xs
+    --       _ -> go m xs
 
 -- | Reduce an if to the relevant path if
 --   the condition is a boolean constant.
