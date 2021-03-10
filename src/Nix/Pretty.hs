@@ -41,7 +41,7 @@ import           Nix.Parser
 import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
-import           Prettyprinter
+import           Prettyprinter           hiding ( list )
 import           Text.Read                      ( readMaybe )
 import           Nix.Utils
 
@@ -212,18 +212,12 @@ exprFNixDoc :: NExprF (NixDoc ann) -> NixDoc ann
 exprFNixDoc = \case
   NConstant atom -> prettyAtom atom
   NStr      str  -> simpleExpr $ prettyString str
-  NList     []   -> simpleExpr "[]"
   NList xs ->
-    prettyContainer $
-      ["["] <> (wrapParens appOpNonAssoc <$> xs) <> ["]"]
-  NSet NNonRecursive [] -> simpleExpr "{}"
+    prettyContainer "[" (wrapParens appOpNonAssoc) "]" xs
   NSet NNonRecursive xs ->
-    prettyContainer $
-      ["{"] <> (prettyBind <$> xs) <> ["}"]
-  NSet NRecursive [] -> simpleExpr "rec {}"
+    prettyContainer "{" prettyBind "}" xs
   NSet NRecursive xs ->
-    prettyContainer $
-      ["rec {"] <> (prettyBind <$> xs) <> ["}"]
+    prettyContainer "rec {" prettyBind "}" xs
   NAbs args body ->
     leastPrecedence $
       nest 2 $
@@ -302,8 +296,11 @@ exprFNixDoc = \case
         ["assert " <> withoutParens cond <> ";", align $ withoutParens body]
   NSynHole name -> simpleExpr $ pretty ("^" <> name)
  where
-  prettyContainer =
-    simpleExpr . group . nest 2 . vsep
+  prettyContainer h f t c =
+    list
+      (simpleExpr (h <> t))
+      (const $ simpleExpr $ group $ nest 2 $ vsep $ [h] <> (f <$> c) <> [t])
+      c
 
 
 valueToExpr :: forall t f m . MonadDataContext f m => NValue t f m -> NExpr
