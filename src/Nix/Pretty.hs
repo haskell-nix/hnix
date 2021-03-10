@@ -287,13 +287,9 @@ exprFNixDoc = \case
             , align ("else " <> withoutParens falseBody)
             ]
   NWith scope body ->
-    leastPrecedence $
-      vsep
-        ["with " <> withoutParens scope <> ";", align $ withoutParens body]
+    prettyAddScope "with " scope body
   NAssert cond body ->
-    leastPrecedence $
-      vsep
-        ["assert " <> withoutParens cond <> ";", align $ withoutParens body]
+    prettyAddScope "assert " cond body
   NSynHole name -> simpleExpr $ pretty ("^" <> name)
  where
   prettyContainer h f t c =
@@ -301,6 +297,11 @@ exprFNixDoc = \case
       (simpleExpr (h <> t))
       (const $ simpleExpr $ group $ nest 2 $ vsep $ [h] <> (f <$> c) <> [t])
       c
+
+  prettyAddScope h c b =
+    leastPrecedence $
+      vsep
+        [h <> withoutParens c <> ";", align $ withoutParens b]
 
 
 valueToExpr :: forall t f m . MonadDataContext f m => NValue t f m -> NExpr
