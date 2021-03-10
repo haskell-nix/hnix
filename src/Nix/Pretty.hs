@@ -25,9 +25,7 @@ import           Data.List                      ( isPrefixOf
                                                 )
 import           Data.List.NonEmpty             ( NonEmpty(..) )
 import qualified Data.List.NonEmpty            as NE
-import           Data.Maybe                     ( isJust
-                                                , fromMaybe
-                                                )
+import           Data.Maybe                     ( fromMaybe )
 import           Data.Text                      ( pack
                                                 , unpack
                                                 , replace
@@ -216,38 +214,16 @@ exprFNixDoc = \case
   NStr      str  -> simpleExpr $ prettyString str
   NList     []   -> simpleExpr "[]"
   NList xs ->
-    simpleExpr $
-      group $
-        nest 2 $
-          vsep $
-            concat
-              [ ["["]
-              , wrapParens appOpNonAssoc <$>
-                  xs
-              , ["]"]
-              ]
+    prettyContainer $
+      ["["] <> (wrapParens appOpNonAssoc <$> xs) <> ["]"]
   NSet NNonRecursive [] -> simpleExpr "{}"
   NSet NNonRecursive xs ->
-    simpleExpr $
-      group $
-        nest 2 $
-          vsep $
-            concat
-              [ ["{"]
-              , prettyBind <$> xs
-              , ["}"]
-              ]
+    prettyContainer $
+      ["{"] <> (prettyBind <$> xs) <> ["}"]
   NSet NRecursive [] -> simpleExpr "rec {}"
   NSet NRecursive xs ->
-    simpleExpr $
-      group $
-        nest 2 $
-          vsep $
-            concat
-              [ ["rec {"]
-              , prettyBind <$> xs
-              , ["}"]
-              ]
+    prettyContainer $
+      ["rec {"] <> (prettyBind <$> xs) <> ["}"]
   NAbs args body ->
     leastPrecedence $
       nest 2 $
@@ -258,7 +234,8 @@ exprFNixDoc = \case
   NBinary NApp fun arg ->
     mkNixDoc appOp (wrapParens appOp fun <> " " <> wrapParens appOpNonAssoc arg)
   NBinary op r1 r2 ->
-    mkNixDoc opInfo $
+    mkNixDoc
+      opInfo $
       hsep
         [ wrapParens (f NAssocLeft) r1
         , pretty $ operatorName opInfo
@@ -274,14 +251,14 @@ exprFNixDoc = \case
       (pretty (operatorName opInfo) <> wrapParens opInfo r1)
     where opInfo = getUnaryOperator op
   NSelect r' attr o ->
-    (if isJust o then leastPrecedence else mkNixDoc selectOp)
-      $  wrapPath selectOp r
-      <> "."
-      <> prettySelector attr
-      <> ordoc
+    maybe
+      (mkNixDoc selectOp)
+      (const leastPrecedence)
+      o
+      $ wrapPath selectOp r <> "." <> prettySelector attr <> ordoc
    where
     r     = mkNixDoc selectOp (wrapParens appOpNonAssoc r')
-    ordoc = maybe mempty ((" or " <>) . wrapParens appOpNonAssoc) o
+    ordoc = ((" or " <>) . wrapParens appOpNonAssoc) `ifJust` o
   NHasAttr r attr ->
     mkNixDoc hasAttrOp (wrapParens hasAttrOp r <> " ? " <> prettySelector attr)
   NEnvPath     p -> simpleExpr $ pretty ("<" <> p <> ">")
@@ -324,6 +301,10 @@ exprFNixDoc = \case
       vsep
         ["assert " <> withoutParens cond <> ";", align $ withoutParens body]
   NSynHole name -> simpleExpr $ pretty ("^" <> name)
+ where
+  prettyContainer =
+    simpleExpr . group . nest 2 . vsep
+
 
 valueToExpr :: forall t f m . MonadDataContext f m => NValue t f m -> NExpr
 valueToExpr = iterNValue (\_ _ -> thk) phi
@@ -365,14 +346,7 @@ prettyNValueProv v =
       fillSep
         [ prettyNVal
         , indent 2 $
-          "(" <>
-            mconcat (
-              "from: "
-              :
-                fmap
-                  (prettyOriginExpr . _originExpr)
-                  ps
-            ) <> ")"
+          "(" <> mconcat ("from: ":(prettyOriginExpr . _originExpr <$> ps)) <> ")"
         ]
  where
   prettyNVal = prettyNValue v
@@ -394,7 +368,7 @@ prettyNThunk t =
       $ fillSep
           [ v'
           , indent 2 $
-              "("<> mconcat ( "thunk from: " : fmap (prettyOriginExpr . _originExpr) ps) <> ")"
+              "(" <> mconcat ( "thunk from: " : fmap (prettyOriginExpr . _originExpr) ps) <> ")"
           ]
 
 -- | This function is used only by the testing code.
