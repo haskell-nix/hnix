@@ -212,48 +212,49 @@ exprFNixDoc :: NExprF (NixDoc ann) -> NixDoc ann
 exprFNixDoc = \case
   NConstant atom -> prettyAtom atom
   NStr      str  -> simpleExpr $ prettyString str
-  NList     []   -> simpleExpr $ lbracket <> rbracket
+  NList     []   -> simpleExpr "[]"
   NList xs ->
     simpleExpr $
       group $
         nest 2 $
           vsep $
             concat
-              [ [lbracket]
+              [ ["["]
               , wrapParens appOpNonAssoc <$>
                   xs
-              , [rbracket]]
-  NSet NNonRecursive [] -> simpleExpr $ lbrace <> rbrace
+              , ["]"]
+              ]
+  NSet NNonRecursive [] -> simpleExpr "{}"
   NSet NNonRecursive xs ->
     simpleExpr $
       group $
         nest 2 $
           vsep $
             concat
-              [ [lbrace]
+              [ ["{"]
               , prettyBind <$> xs
-              , [rbrace]
+              , ["}"]
               ]
-  NSet NRecursive [] -> simpleExpr $ recPrefix <> lbrace <> rbrace
+  NSet NRecursive [] -> simpleExpr "rec {}"
   NSet NRecursive xs ->
     simpleExpr $
       group $
         nest 2 $
           vsep $
             concat
-              [ [recPrefix <> lbrace]
+              [ ["rec {"]
               , prettyBind <$> xs
-              , [rbrace]
+              , ["}"]
               ]
   NAbs args body ->
     leastPrecedence $
       nest 2 $
         vsep
-          [ prettyParams args <> colon
+          [ prettyParams args <> ":"
           , withoutParens body
           ]
   NBinary NApp fun arg ->
-    mkNixDoc appOp (wrapParens appOp fun <> space <> wrapParens appOpNonAssoc arg)
+    mkNixDoc appOp (wrapParens appOp fun <> " " <> wrapParens appOpNonAssoc arg)
   NBinary op r1 r2 ->
     mkNixDoc opInfo $
       hsep
@@ -321,8 +322,6 @@ exprFNixDoc = \case
       vsep
         ["assert " <> withoutParens cond <> semi, align $ withoutParens body]
   NSynHole name -> simpleExpr $ pretty ("^" <> unpack name)
- where
-  recPrefix = "rec" <> space
 
 valueToExpr :: forall t f m . MonadDataContext f m => NValue t f m -> NExpr
 valueToExpr = iterNValue (\_ _ -> thk) phi
@@ -381,16 +380,17 @@ prettyNThunk
      )
   => t
   -> m (Doc ann)
-prettyNThunk t = do
-  let ps = citations @m @(NValue t f m) @t t
-  v' <- prettyNValue <$> dethunk t
-  pure
-    $ fillSep
-        [ v'
-        , indent 2 $
-            parens $
-              mconcat $ "thunk from: " : fmap (prettyOriginExpr . _originExpr) ps
-        ]
+prettyNThunk t =
+  do
+    let ps = citations @m @(NValue t f m) @t t
+    v' <- prettyNValue <$> dethunk t
+    pure
+      $ fillSep
+          [ v'
+          , indent 2 $
+              parens $
+                mconcat $ "thunk from: " : fmap (prettyOriginExpr . _originExpr) ps
+          ]
 
 -- | This function is used only by the testing code.
 printNix :: forall t f m . MonadDataContext f m => NValue t f m -> String
@@ -403,18 +403,18 @@ printNix = iterNValue (\_ _ -> thk) phi
   phi (NVStr'      ns) = show $ stringIgnoreContext ns
   phi (NVList'     l ) = "[ " <> unwords l <> " ]"
   phi (NVSet' s _) =
-    "{ "
-      <> concat
-           [ check (unpack k) <> " = " <> v <> "; "
-           | (k, v) <- sort $ toList s
-           ]
-      <> "}"
+    "{ " <>
+      concat
+        [ check (unpack k) <> " = " <> v <> "; "
+        | (k, v) <- sort $ toList s
+        ] <> "}"
    where
-    check v = fromMaybe
-      v
-      (   fmap (surround . show) (readMaybe v :: Maybe Int)
-      <|> fmap (surround . show) (readMaybe v :: Maybe Float)
-      )
+    check v =
+      fromMaybe
+        v
+        (fmap (surround . show) (readMaybe v :: Maybe Int)
+        <|> fmap (surround . show) (readMaybe v :: Maybe Float)
+        )
       where surround s = "\"" <> s <> "\""
   phi NVClosure'{}        = "<<lambda>>"
   phi (NVPath' fp       ) = fp
