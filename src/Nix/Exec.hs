@@ -98,10 +98,10 @@ nvListP p l = addProvenance p (nvList l)
 nvSetP
   :: MonadCited t f m
   => Provenance m (NValue t f m)
-  -> AttrSet (NValue t f m)
   -> AttrSet SourcePos
+  -> AttrSet (NValue t f m)
   -> NValue t f m
-nvSetP p s x = addProvenance p (nvSet x s)
+nvSetP p x s = addProvenance p (nvSet x s)
 
 nvClosureP
   :: MonadCited t f m
@@ -401,9 +401,9 @@ execBinaryOpForced scope span op lval rval = case op of
 
   NUpdate ->
     case (lval, rval) of
-      (NVSet ls lp, NVSet rs rp) -> pure $ nvSetP prov (rs `M.union` ls) (rp `M.union` lp)
-      (NVSet ls lp, NVConstant NNull) -> pure $ nvSetP prov ls lp
-      (NVConstant NNull, NVSet rs rp) -> pure $ nvSetP prov rs rp
+      (NVSet ls lp, NVSet rs rp) -> pure $ nvSetP prov (rp `M.union` lp) (rs `M.union` ls)
+      (NVSet ls lp, NVConstant NNull) -> pure $ nvSetP prov lp ls
+      (NVConstant NNull, NVSet rs rp) -> pure $ nvSetP prov rp rs
       _ -> unsupportedTypes
 
   NPlus ->
