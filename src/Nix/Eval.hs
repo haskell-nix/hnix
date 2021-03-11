@@ -58,7 +58,13 @@ class (Show v, Monad m) => MonadEval v m where
   evalAssert      :: v -> m v -> m v
   evalApp         :: v -> m v -> m v
   evalAbs         :: Params (m v)
-                  -> (forall a. m v -> (AttrSet (m v) -> m v -> m (a, v)) -> m (a, v))
+                  -> ( forall a. m v
+                    -> ( AttrSet (m v)
+                      -> m v
+                      -> m (a, v)
+                      )
+                    -> m (a, v)
+                    )
                   -> m v
 {-
   evalSelect     :: v -> NonEmpty Text -> Maybe (m v) -> m v
@@ -90,18 +96,19 @@ type MonadNixEval v m
   )
 
 data EvalFrame m v
-    = EvaluatingExpr (Scopes m v) NExprLoc
-    | ForcingExpr (Scopes m v) NExprLoc
-    | Calling String SrcSpan
-    | SynHole (SynHoleInfo m v)
-    deriving (Show, Typeable)
+  = EvaluatingExpr (Scopes m v) NExprLoc
+  | ForcingExpr (Scopes m v) NExprLoc
+  | Calling String SrcSpan
+  | SynHole (SynHoleInfo m v)
+  deriving (Show, Typeable)
 
 instance (Typeable m, Typeable v) => Exception (EvalFrame m v)
 
 data SynHoleInfo m v = SynHoleInfo
-   { _synHoleInfo_expr :: NExprLoc
-   , _synHoleInfo_scope :: Scopes m v
-   } deriving (Show, Typeable)
+  { _synHoleInfo_expr :: NExprLoc
+  , _synHoleInfo_scope :: Scopes m v
+  }
+  deriving (Show, Typeable)
 
 instance (Typeable m, Typeable v) => Exception (SynHoleInfo m v)
 
@@ -189,6 +196,7 @@ evalWithAttrSet aset body = do
   scope <- currentScopes :: m (Scopes m v)
   s     <- defer $ withScopes scope aset
   let s' = (fmap fst . fromValue @(AttrSet v, AttrSet SourcePos)) =<< demand s
+
   pushWeakScope s' body
 
 attrSetAlter
@@ -205,7 +213,7 @@ attrSetAlter (k : ks) pos m p val =
   bool
     go
     (maybe
-      (recurse M.empty M.empty)
+      (recurse mempty mempty)
       (\x ->
         do
           (st, sp) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< x
@@ -228,7 +236,7 @@ attrSetAlter (k : ks) pos m p val =
     ) <$> attrSetAlter ks pos st sp val
 
 desugarBinds :: forall r . ([Binding r] -> r) -> [Binding r] -> [Binding r]
-desugarBinds embed binds = evalState (traverse (go <=< collect) binds) M.empty
+desugarBinds embed binds = evalState (traverse (go <=< collect) binds) mempty
  where
   collect
     :: Binding r
@@ -266,103 +274,20 @@ evalBinds
   => Bool
   -> [Binding (m v)]
   -> m (AttrSet v, AttrSet SourcePos)
-evalBinds recursive binds = do
-  scope <- currentScopes :: m (Scopes m v)
-  buildResult scope . concat =<< traverse (go scope) (moveOverridesLast binds)
+evalBinds recursive binds =
+  do
+    scope <- currentScopes :: m (Scopes m v)
+
+    buildResult scope . concat =<< traverse (applyBindToAdt scope) (moveOverridesLast binds)
+
  where
-  moveOverridesLast = uncurry (<>) . partition
-    (\case
-      NamedVar (StaticKey "__overrides" :| []) _ _pos -> False
-      _ -> True
-    )
-
-  go :: Scopes m v -> Binding (m v) -> m [([Text], SourcePos, m v)]
-  go _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
-    do
-      (o', p') <- fromValue =<< finalValue
-      -- jww (2018-05-09): What to do with the key position here?
-      pure $
-        (\ (k, v) ->
-            ( [k]
-            , fromMaybe pos (M.lookup k p')
-            , pure =<< demand v
-            )
-        ) <$>
-        M.toList o'
-
-  go _ (NamedVar pathExpr finalValue pos) = do
-    let
-      gogo :: NAttrPath (m v) -> m ([Text], SourcePos, m v)
-      gogo =
-        \case
-          h :| t ->
-            maybe
-              (pure
-                ( mempty
-                , nullPos
-                , toValue @(AttrSet v, AttrSet SourcePos) (mempty, mempty)
-                )
-              )
-              (\ k ->
-                list
-                  (pure
-                    ( [k]
-                    , pos
-                    , finalValue
-                    )
-                  )
-                  (\ (x : xs) ->
-                    do
-                      (restOfPath, _, v) <- gogo (x :| xs)
-                      pure
-                        ( k : restOfPath
-                        , pos
-                        , v
-                        )
-                  )
-                  t
-              )
-              =<< evalSetterKeyName h
-
-    fmap
-      (\case
-        -- When there are no path segments, e.g. `${null} = 5;`, we don't
-        -- bind anything
-        ([], _, _) -> mempty
-        result     -> [result]
-      )
-      (gogo pathExpr)
-
-  go scope (Inherit ms names pos) =
-    fmap catMaybes $ forM names $ evalSetterKeyName >=>
-      (pure . maybe
-        Nothing
-        (\ key -> pure
-          ([key]
-          , pos
-          , maybe
-              (attrMissing (key :| []) Nothing)
-              (pure <=< demand)
-              =<< maybe
-                  (withScopes scope $ lookupVar key)
-                  (\ s ->
-                    do
-                      (attrset, _) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< s
-
-                      clearScopes @v $ pushScope attrset $ lookupVar key
-                  )
-                  ms
-          )
-        )
-      )
-
   buildResult
     :: Scopes m v
     -> [([Text], SourcePos, m v)]
     -> m (AttrSet v, AttrSet SourcePos)
   buildResult scope bindings =
     do
-      (s, p) <- foldM insert (M.empty, M.empty) bindings
+      (s, p) <- foldM insert (mempty, mempty) bindings
       res <-
         bool
           (traverse mkThunk s)
@@ -377,6 +302,91 @@ evalBinds recursive binds = do
     encapsulate f attrs = mkThunk . pushScope attrs $ f
 
     insert (m, p) (path, pos, value) = attrSetAlter path pos m p value
+
+  applyBindToAdt :: Scopes m v -> Binding (m v) -> m [([Text], SourcePos, m v)]
+  applyBindToAdt _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
+    do
+      (o', p') <- fromValue =<< finalValue
+      -- jww (2018-05-09): What to do with the key position here?
+      pure $
+        (\ (k, v) ->
+          ( [k]
+          , fromMaybe pos (M.lookup k p')
+          , pure =<< demand v
+          )
+        ) <$>
+        M.toList o'
+
+  applyBindToAdt _ (NamedVar pathExpr finalValue pos) =
+    do
+      fmap
+        (\case
+          -- When there are no path segments, e.g. `${null} = 5;`, we don't
+          -- bind anything
+          ([], _, _) -> mempty
+          result     -> [result]
+        )
+        (processAttrSetKeys pathExpr)
+
+   where
+    processAttrSetKeys :: NAttrPath (m v) -> m ([Text], SourcePos, m v)
+    processAttrSetKeys =
+      \case
+        h :| t ->
+          maybe
+            -- Empty attrset - return a stub.
+            (pure ( mempty, nullPos, toValue @(AttrSet v, AttrSet SourcePos) (mempty, mempty)) )
+            (\ k ->
+              list
+                -- No more keys in the attrset - return the result
+                (pure ( [k], pos, finalValue ) )
+                -- There are unprocessed keys in attrset - recurse appending the results
+                (\ (x : xs) ->
+                  do
+                    (restOfPath, _, v) <- processAttrSetKeys (x :| xs)
+                    pure ( k : restOfPath, pos, v )
+                )
+                t
+            )
+            =<< evalSetterKeyName h
+
+  applyBindToAdt scope (Inherit ms names pos) =
+    catMaybes <$>
+      traverse
+        processScope
+        names
+   where
+    processScope
+      :: NKeyName (m v)
+      -> m (Maybe ([Text], SourcePos, m v))
+    processScope nkeyname =
+      (\ mkey ->
+        do
+          key <- mkey
+          pure
+            ([key]
+            , pos
+            , maybe
+                (attrMissing (key :| []) Nothing)
+                (pure <=< demand)
+                =<< maybe
+                    (withScopes scope $ lookupVar key)
+                    (\ s ->
+                      do
+                        (attrset, _) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< s
+
+                        clearScopes @v $ pushScope attrset $ lookupVar key
+                    )
+                    ms
+            )
+      ) <$>
+        evalSetterKeyName nkeyname
+
+  moveOverridesLast = uncurry (<>) . partition
+    (\case
+      NamedVar (StaticKey "__overrides" :| []) _ _pos -> False
+      _ -> True
+    )
 
 evalSelect
   :: forall v m
@@ -395,7 +405,9 @@ evalSelect aset attr =
   extract x path@(k :| ks) =
     do
       x' <- fromValueMay x
+
       case x' of
+        Nothing -> pure $ Left (x, path)
         Just (s :: AttrSet v, p :: AttrSet SourcePos)
           | Just t <- M.lookup k s ->
             do
@@ -404,7 +416,6 @@ evalSelect aset attr =
                 (\ (y : ys) -> (extract ?? (y :| ys)) =<< demand t)
                 ks
           | otherwise -> Left . (, path) <$> toValue (s, p)
-        Nothing -> pure $ Left (x, path)
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value
@@ -425,10 +436,11 @@ evalSetterKeyName
   :: (MonadEval v m, FromValue NixString m v)
   => NKeyName (m v)
   -> m (Maybe Text)
-evalSetterKeyName = \case
-  StaticKey k -> pure (pure k)
-  DynamicKey k ->
-    ((pure . stringIgnoreContext) `ifJust`) <$> runAntiquoted "\n" assembleString (fromValueMay =<<) k
+evalSetterKeyName =
+  \case
+    StaticKey k -> pure (pure k)
+    DynamicKey k ->
+      ((pure . stringIgnoreContext) `ifJust`) <$> runAntiquoted "\n" assembleString (fromValueMay =<<) k
 
 assembleString
   :: forall v m
@@ -438,7 +450,7 @@ assembleString
 assembleString =
   fromParts .
     \case
-      Indented _ parts   -> parts
+      Indented   _ parts -> parts
       DoubleQuoted parts -> parts
  where
   fromParts = fmap (fmap mconcat . sequence) . traverse go
@@ -499,9 +511,16 @@ addStackFrames
   :: forall v e m a
    . (Scoped v m, Framed e m, Typeable v, Typeable m)
   => Transform NExprLocF (m a)
-addStackFrames f v = do
-  scopes <- currentScopes :: m (Scopes m v)
-  withFrame Info (EvaluatingExpr scopes v) (f v)
+addStackFrames f v =
+  do
+    scopes <- currentScopes :: m (Scopes m v)
+
+    -- sectioning gives GHC optimization
+    -- If opimization question would arrive again, check the @(`withFrameInfo` f v) $ EvaluatingExpr scopes v@
+    -- for possible @scopes@ implementation @v@ type arguments sharing between runs.
+    (`withFrameInfo` f v) $ (`EvaluatingExpr` v) scopes
+ where
+  withFrameInfo = withFrame Info
 
 framedEvalExprLoc
   :: forall e v m

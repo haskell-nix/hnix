@@ -30,7 +30,6 @@ module Nix.Expr.Types where
 import qualified Codec.Serialise                as Serialise
 import           Codec.Serialise                ( Serialise )
 #endif
-import           Control.Applicative
 import           Control.DeepSeq
 import           Control.Monad
 import           Data.Aeson
@@ -123,8 +122,9 @@ data Params r
   --
   -- > ParamSet [("x",Nothing)] False Nothing     ~  { x }
   -- > ParamSet [("x",pure y)]  True  (pure "s")  ~  s@{ x ? y, ... }
-  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Show,
-            Foldable, Traversable, NFData, Hashable)
+  deriving
+    (Ord, Eq, Generic, Generic1, Typeable, Data, NFData, Hashable, Show,
+    Functor, Foldable, Traversable)
 
 instance Hashable1 Params
 
@@ -630,31 +630,41 @@ ekey
   => NonEmpty Text
   -> SourcePos
   -> Lens' (Fix g) (Maybe (Fix g))
-ekey keys pos f e@(Fix x) | (NSet NNonRecursive xs, ann) <- fromNExpr x = case go xs of
-  ((v, []      ) : _) -> fromMaybe e <$> f (pure v)
-  ((v, r : rest) : _) -> ekey (r :| rest) pos f v
+ekey keys pos f e@(Fix x) | (NSet NNonRecursive xs, ann) <- fromNExpr x =
+  case go xs of
+    ((v, []      ) : _) -> fromMaybe e <$> f (pure v)
+    ((v, r : rest) : _) -> ekey (r :| rest) pos f v
 
-  _                   -> f Nothing <&> \case
-    Nothing -> e
-    Just v ->
-      let entry = NamedVar (NE.map StaticKey keys) v pos
-      in  Fix (toNExpr (NSet NNonRecursive (entry : xs), ann))
- where
-  go xs = do
-    let keys' = NE.toList keys
-    (ks, rest) <- zip (inits keys') (tails keys')
-    case ks of
-      []     -> empty
-      j : js -> do
-        NamedVar ns v _p <- xs
-        guard $ (j : js) == (NE.toList ns ^.. traverse . _StaticKey)
-        pure (v, rest)
+    _                   ->
+      maybe
+        e
+        (\ v ->
+          let entry = NamedVar (NE.map StaticKey keys) v pos in
+          Fix (toNExpr (NSet NNonRecursive (entry : xs), ann)))
+      <$>
+        f Nothing
+  where
+    go xs =
+      do
+        let keys' = NE.toList keys
+        (ks, rest) <- zip (inits keys') (tails keys')
+        list
+          mempty
+          (\ (j : js) ->
+            do
+              NamedVar ns v _p <- xs
+              guard $ (j : js) == (NE.toList ns ^.. traverse . _StaticKey)
+              pure (v, rest)
+          )
+          ks
 
 ekey _ _ f e = fromMaybe e <$> f Nothing
 
 stripPositionInfo :: NExpr -> NExpr
 stripPositionInfo = transport phi
  where
+  transport f (Fix x) = Fix $ fmap (transport f) (f x)
+
   phi (NSet recur binds) = NSet recur $ fmap go binds
   phi (NLet binds body) = NLet (fmap go binds) body
   phi x                 = x

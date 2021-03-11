@@ -44,20 +44,20 @@ quoteExprPat s = do
 
 freeVars :: NExpr -> Set VarName
 freeVars e = case unFix e of
-  (NConstant    _       ) -> Set.empty
+  (NConstant    _       ) -> mempty
   (NStr         string  ) -> foldMap freeVars string
   (NSym         var     ) -> Set.singleton var
   (NList        list    ) -> foldMap freeVars list
   (NSet NNonRecursive bindings) -> foldMap bindFree bindings
   (NSet NRecursive bindings) -> foldMap bindFree bindings \\ foldMap bindDefs bindings
-  (NLiteralPath _       ) -> Set.empty
-  (NEnvPath     _       ) -> Set.empty
+  (NLiteralPath _       ) -> mempty
+  (NEnvPath     _       ) -> mempty
   (NUnary _ expr        ) -> freeVars expr
   (NBinary _ left right ) -> freeVars left `Set.union` freeVars right
   (NSelect expr path orExpr) ->
     freeVars expr
       `Set.union` pathFree path
-      `Set.union` maybe Set.empty freeVars orExpr
+      `Set.union` maybe mempty freeVars orExpr
   (NHasAttr expr            path) -> freeVars expr `Set.union` pathFree path
   (NAbs     (Param varname) expr) -> Set.delete varname (freeVars expr)
   (NAbs (ParamSet set _ varname) expr) ->
@@ -65,7 +65,7 @@ freeVars e = case unFix e of
     freeVars expr
       `Set.union` Set.unions (mapMaybe (fmap freeVars . snd) set)
     -- But remove the argument name if existing, and all arguments in the parameter set
-      \\          maybe Set.empty Set.singleton varname
+      \\          maybe mempty Set.singleton varname
       \\          Set.fromList (fmap fst set)
   (NLet bindings expr) ->
     freeVars expr
@@ -77,7 +77,7 @@ freeVars e = case unFix e of
   -- This also makes sense because its value can be overridden by `x: with y; x`
   (NWith   set       expr) -> freeVars set `Set.union` freeVars expr
   (NAssert assertion expr) -> freeVars assertion `Set.union` freeVars expr
-  (NSynHole _            ) -> Set.empty
+  (NSynHole _            ) -> mempty
 
  where
 
@@ -86,10 +86,10 @@ freeVars e = case unFix e of
   staticKey (DynamicKey _      ) = mempty
 
   bindDefs :: Binding r -> Set VarName
-  bindDefs (Inherit  Nothing                   _    _) = Set.empty
+  bindDefs (Inherit  Nothing                   _    _) = mempty
   bindDefs (Inherit (Just _) keys _) = Set.fromList $ mapMaybe staticKey keys
   bindDefs (NamedVar (StaticKey  varname :| _) _    _) = Set.singleton varname
-  bindDefs (NamedVar (DynamicKey _       :| _) _    _) = Set.empty
+  bindDefs (NamedVar (DynamicKey _       :| _) _    _) = mempty
 
   bindFree :: Binding NExpr -> Set VarName
   bindFree (Inherit Nothing keys _) = Set.fromList $ mapMaybe staticKey keys

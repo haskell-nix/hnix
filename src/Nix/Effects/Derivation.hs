@@ -69,12 +69,12 @@ data Derivation = Derivation
 defaultDerivation :: Derivation
 defaultDerivation = Derivation
   { name        = undefined
-  , outputs     = Map.empty
-  , inputs      = (Set.empty, Map.empty)
+  , outputs     = mempty
+  , inputs      = (mempty, mempty)
   , platform    = undefined
   , builder     = undefined
   , args        = mempty
-  , env         = Map.empty
+  , env         = mempty
   , mFixed      = Nothing
   , hashMode    = Flat
   , useJson     = False
@@ -261,14 +261,14 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
 
     -- Memoize here, as it may be our last chance in case of readonly stores.
     drvHash <- Store.encodeInBase Store.Base16 <$> hashDerivationModulo drv'
-    modify (\(a, b) -> (a, MS.insert drvPath drvHash b))
+    modify (second (MS.insert drvPath drvHash))
 
     let outputsWithContext = Map.mapWithKey (\out path -> makeNixStringWithSingletonContext path (StringContext drvPath (DerivationOutput out))) (outputs drv')
         drvPathWithContext = makeNixStringWithSingletonContext drvPath (StringContext drvPath AllOutputs)
         attrSet = M.map nvStr $ M.fromList $ ("drvPath", drvPathWithContext): Map.toList outputsWithContext
     -- TODO: Add location information for all the entries.
     --              here --v
-    pure $ nvSet attrSet M.empty
+    pure $ nvSet mempty attrSet
 
   where
 
@@ -278,7 +278,7 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
       name <- makeStorePathName (Store.unStorePathName n <> if o == "out" then "" else "-" <> o)
       pure $ pathToText $ Store.makeStorePath "/nix/store" ("output:" <> Text.encodeUtf8 o) h name
 
-    toStorePaths ctx = foldl (flip addToInputs) (Set.empty, Map.empty) ctx
+    toStorePaths ctx = foldl (flip addToInputs) (mempty, mempty) ctx
     addToInputs (StringContext path kind) = case kind of
       DirectPath -> first (Set.insert path)
       DerivationOutput o -> second (Map.insertWith (<>) path [o])
@@ -328,7 +328,7 @@ buildDerivationWithContext drvAttrs = do
 
       env <- if useJson
         then do
-          jsonString :: NixString <- lift $ nvalueToJSONNixString $ flip nvSet M.empty $
+          jsonString :: NixString <- lift $ nvalueToJSONNixString $ nvSet mempty $
             deleteKeys [ "args", "__ignoreNulls", "__structuredAttrs" ] attrs
           rawString :: Text <- extractNixString jsonString
           pure $ Map.singleton "__json" rawString

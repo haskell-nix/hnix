@@ -18,7 +18,7 @@ import           Lens.Family2
 import           Nix.Utils
 
 newtype Scope a = Scope { getScope :: AttrSet a }
-    deriving (Functor, Foldable, Traversable, Eq)
+  deriving (Functor, Foldable, Traversable, Eq)
 
 instance Show (Scope a) where
   show (Scope m) = show (M.keys m)
@@ -29,10 +29,14 @@ newScope = Scope
 scopeLookup :: Text -> [Scope a] -> Maybe a
 scopeLookup key = foldr go Nothing
  where
-  go :: Scope a -> Maybe a -> Maybe a
+  go
+    :: Scope a
+    -> Maybe a
+    -> Maybe a
   go (Scope m) rest = M.lookup key m <|> rest
 
-data Scopes m a = Scopes
+data Scopes m a =
+  Scopes
     { lexicalScopes :: [Scope a]
     , dynamicScopes :: [m (Scope a)]
     }
@@ -53,45 +57,86 @@ emptyScopes = Scopes mempty mempty
 
 class Scoped a m | m -> a where
   currentScopes :: m (Scopes m a)
-  clearScopes :: m r -> m r
-  pushScopes :: Scopes m a -> m r -> m r
-  lookupVar :: Text -> m (Maybe a)
+  clearScopes   :: m r -> m r
+  pushScopes    :: Scopes m a -> m r -> m r
+  lookupVar     :: Text -> m (Maybe a)
 
 currentScopesReader
-  :: forall m a e . (MonadReader e m, Has e (Scopes m a)) => m (Scopes m a)
+  :: forall m a e
+  . ( MonadReader e m
+    , Has e (Scopes m a)
+    )
+  => m (Scopes m a)
 currentScopesReader = asks (view hasLens)
 
 clearScopesReader
-  :: forall m a e r . (MonadReader e m, Has e (Scopes m a)) => m r -> m r
+  :: forall m a e r
+  . ( MonadReader e m
+    , Has e (Scopes m a)
+    )
+  => m r
+  -> m r
 clearScopesReader = local (set hasLens (emptyScopes @m @a))
 
-pushScope :: Scoped a m => AttrSet a -> m r -> m r
+pushScope
+  :: Scoped a m
+  => AttrSet a
+  -> m r
+  -> m r
 pushScope s = pushScopes (Scopes [Scope s] mempty)
 
-pushWeakScope :: (Functor m, Scoped a m) => m (AttrSet a) -> m r -> m r
+pushWeakScope
+  :: ( Functor m
+     , Scoped a m
+     )
+  => m (AttrSet a)
+  -> m r
+  -> m r
 pushWeakScope s = pushScopes (Scopes mempty [Scope <$> s])
 
 pushScopesReader
-  :: (MonadReader e m, Has e (Scopes m a)) => Scopes m a -> m r -> m r
+  :: ( MonadReader e m
+     , Has e (Scopes m a)
+     )
+  => Scopes m a
+  -> m r
+  -> m r
 pushScopesReader s = local (over hasLens (s <>))
 
 lookupVarReader
-  :: forall m a e . (MonadReader e m, Has e (Scopes m a)) => Text -> m (Maybe a)
-lookupVarReader k = do
-  mres <- asks (scopeLookup k . lexicalScopes @m . view hasLens)
-  case mres of
-    Just sym -> pure $ pure sym
-    Nothing  -> do
-      ws <- asks (dynamicScopes . view hasLens)
-      foldr
-        (\x rest -> do
-          mres' <- M.lookup k . getScope <$> x
-          case mres' of
-            Just sym -> pure $ pure sym
-            Nothing  -> rest
-        )
-        (pure Nothing)
-        ws
+  :: forall m a e
+  . ( MonadReader e m
+    , Has e (Scopes m a)
+    )
+  => Text
+  -> m (Maybe a)
+lookupVarReader k =
+  do
+    mres <- asks (scopeLookup k . lexicalScopes @m . view hasLens)
 
-withScopes :: Scoped a m => Scopes m a -> m r -> m r
+    maybe
+      (do
+        ws <- asks (dynamicScopes . view hasLens)
+
+        foldr
+          (\ x rest ->
+            do
+              mres' <- M.lookup k . getScope <$> x
+
+              maybe
+                rest
+                (pure . pure)
+                mres'
+          )
+          (pure Nothing)
+          ws
+      )
+      (pure . pure)
+      mres
+
+withScopes
+  :: Scoped a m
+  => Scopes m a
+  -> m r
+  -> m r
 withScopes scope = clearScopes . pushScopes scope

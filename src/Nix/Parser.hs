@@ -5,6 +5,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ApplicativeDo #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
@@ -48,43 +49,64 @@ where
 
 import           Prelude                 hiding ( readFile )
 
-import           Control.Applicative     hiding ( many
-                                                , some
+import           Control.DeepSeq                ( NFData )
+import           Control.Monad                  ( guard
+                                                , void
+                                                , liftM2
+                                                , msum
+                                                , MonadPlus(mplus)
                                                 )
-import           Control.DeepSeq
-import           Control.Monad
-import           Control.Monad.Combinators.Expr
-import           Control.Monad.State.Strict
+import           Control.Monad.Combinators.Expr ( makeExprParser
+                                                , Operator( Postfix
+                                                          , InfixN
+                                                          , InfixR
+                                                          , Prefix
+                                                          , InfixL
+                                                          )
+                                                )
+import           Control.Monad.State.Strict     ( evalState
+                                                , MonadState(get, put)
+                                                , State
+                                                )
 import           Data.Char                      ( isAlpha
                                                 , isDigit
                                                 , isSpace
                                                 )
 import           Data.Data                      ( Data(..) )
 import           Data.Fix                       ( Fix(..) )
-import           Data.Functor
+import           Data.Functor                   ( ($>) )
 import           Data.HashSet                   ( HashSet )
 import qualified Data.HashSet                  as HashSet
 import           Data.List.NonEmpty             ( NonEmpty(..) )
 import qualified Data.List.NonEmpty            as NE
 import qualified Data.Map                      as Map
-import           Data.Text               hiding ( foldr1
-                                                , concat
-                                                , concatMap
-                                                , zipWith
+import           Data.Text                      ( Text
+                                                , cons
+                                                , singleton
+                                                , pack
                                                 )
-import           Data.Text.Encoding
+import           Data.Text.Encoding             ( decodeUtf8 )
 import           Data.Typeable                  ( Typeable )
-import           Data.Void
-import           GHC.Generics            hiding ( Prefix )
+import           Data.Void                      ( Void )
+import           GHC.Generics                   ( Generic )
 import           Nix.Expr                hiding ( ($>) )
-import           Nix.Expr.Strings
-import           Nix.Render
+import           Nix.Expr.Strings               ( escapeCodes
+                                                , stripIndent
+                                                , mergePlain
+                                                , removePlainEmpty
+                                                )
+import           Nix.Render                     ( MonadFile(readFile) )
+import           Nix.Utils                      ( bool )
 import           Prettyprinter                  ( Doc
                                                 , pretty
                                                 )
 import           Text.Megaparsec         hiding ( State )
-import           Text.Megaparsec.Char
-import qualified Text.Megaparsec.Char.Lexer    as L
+import           Text.Megaparsec.Char           ( space1
+                                                , string
+                                                , letterChar
+                                                , char
+                                                )
+import qualified Text.Megaparsec.Char.Lexer    as Lexer
 
 infixl 3 <+>
 (<+>) :: MonadPlus m => m a -> m a -> m a
@@ -93,63 +115,68 @@ infixl 3 <+>
 ---------------------------------------------------------------------------------
 
 nixExpr :: Parser NExprLoc
-nixExpr = makeExprParser nixTerm $ fmap (fmap snd) (nixOperators nixSelector)
+nixExpr =
+  makeExprParser
+    nixTerm $
+      (fmap . fmap)
+        snd
+        (nixOperators nixSelector)
 
 antiStart :: Parser Text
 antiStart = symbol "${" <?> show ("${" :: String)
 
 nixAntiquoted :: Parser a -> Parser (Antiquoted a NExprLoc)
 nixAntiquoted p =
-  Antiquoted
-    <$> (antiStart *> nixToplevelForm <* symbol "}")
-    <+> Plain
-    <$> p
-    <?> "anti-quotation"
+  Antiquoted <$>
+    (antiStart *> nixToplevelForm <* symbol "}")
+      <+> Plain <$>
+        p
+      <?> "anti-quotation"
 
 selDot :: Parser ()
 selDot = try (symbol "." *> notFollowedBy nixPath) <?> "."
 
 nixSelect :: Parser NExprLoc -> Parser NExprLoc
-nixSelect term = do
-  res <- build <$> term <*> optional
-    ((,) <$> (selDot *> nixSelector) <*> optional (reserved "or" *> nixTerm))
-  continues <- optional $ lookAhead selDot
-  case continues of
-    Nothing -> pure res
-    Just _  -> nixSelect (pure res)
+nixSelect term =
+  do
+    res <-
+      build
+      <$> term
+      <*> optional
+        ( (,)
+        <$> (selDot *> nixSelector)
+        <*> optional (reserved "or" *> nixTerm)
+        )
+    continues <- optional $ lookAhead selDot
+
+    maybe
+      (pure res)
+      (const $ nixSelect (pure res))
+      continues
  where
   build
     :: NExprLoc
-    -> Maybe (Ann SrcSpan (NAttrPath NExprLoc), Maybe NExprLoc)
+    -> Maybe ( Ann SrcSpan (NAttrPath NExprLoc)
+        , Maybe NExprLoc
+        )
     -> NExprLoc
-  build t Nothing       = t
-  build t (Just (s, o)) = nSelectLoc t s o
+  build t mexpr =
+    maybe
+      t
+      (uncurry (nSelectLoc t))
+      mexpr
 
 nixSelector :: Parser (Ann SrcSpan (NAttrPath NExprLoc))
-nixSelector = annotateLocation $ do
-  (x : xs) <- keyName `sepBy1` selDot
-  pure $ x :| xs
+nixSelector =
+  annotateLocation $
+    do
+      (x : xs) <- keyName `sepBy1` selDot
+      pure $ x :| xs
 
 nixTerm :: Parser NExprLoc
 nixTerm = do
   c <- try $ lookAhead $ satisfy $ \x ->
-    pathChar x
-      || x
-      == '('
-      || x
-      == '{'
-      || x
-      == '['
-      || x
-      == '<'
-      || x
-      == '/'
-      || x
-      == '"'
-      || x
-      == '\''
-      || x
-      == '^'
+    pathChar x || (`elem` ("({[</\"'^" :: String)) x
   case c of
     '('  -> nixSelect nixParens
     '{'  -> nixSelect nixSet
@@ -164,16 +191,17 @@ nixTerm = do
         $  [ nixSelect nixSet | c == 'r' ]
         <> [ nixPath | pathChar c ]
         <> if isDigit c
-             then [nixFloat, nixInt]
+             then [ nixFloat, nixInt ]
              else
                [ nixUri | isAlpha c ]
                <> [ nixBool | c == 't' || c == 'f' ]
                <> [ nixNull | c == 'n' ]
-               <> [nixSelect nixSym]
+               <> [ nixSelect nixSym ]
 
 nixToplevelForm :: Parser NExprLoc
 nixToplevelForm = keywords <+> nixLambda <+> nixExpr
-  where keywords = nixLet <+> nixIf <+> nixAssert <+> nixWith
+ where
+  keywords = nixLet <+> nixIf <+> nixAssert <+> nixWith
 
 nixSym :: Parser NExprLoc
 nixSym = annotateLocation1 $ mkSymF <$> identifier
@@ -191,7 +219,8 @@ nixFloat =
 nixBool :: Parser NExprLoc
 nixBool =
   annotateLocation1 (bool "true" True <+> bool "false" False) <?> "bool"
-  where bool str b = mkBoolF b <$ reserved str
+ where
+  bool str b = mkBoolF b <$ reserved str
 
 nixNull :: Parser NExprLoc
 nixNull = annotateLocation1 (mkNullF <$ reserved "null" <?> "null")
@@ -207,35 +236,25 @@ nixList = annotateLocation1 (brackets (NList <$> many nixTerm) <?> "list")
 
 pathChar :: Char -> Bool
 pathChar x =
-  isAlpha x
-    || isDigit x
-    || x
-    == '.'
-    || x
-    == '_'
-    || x
-    == '-'
-    || x
-    == '+'
-    || x
-    == '~'
+  isAlpha x || isDigit x || (`elem` ("._-+~" :: String)) x
 
 slash :: Parser Char
 slash =
   try
-      (  char '/'
-      <* notFollowedBy (satisfy (\x -> x == '/' || x == '*' || isSpace x))
-      )
+    (  char '/'
+    <* notFollowedBy (satisfy (\x -> x == '/' || x == '*' || isSpace x))
+    )
     <?> "slash"
 
 -- | A path surrounded by angle brackets, indicating that it should be
 -- looked up in the NIX_PATH environment variable at evaluation.
 nixSearchPath :: Parser NExprLoc
-nixSearchPath = annotateLocation1
-  (   mkPathF True
-  <$> try (char '<' *> many (satisfy pathChar <+> slash) <* symbol ">")
-  <?> "spath"
-  )
+nixSearchPath =
+  annotateLocation1
+    (mkPathF True <$>
+      try (char '<' *> many (satisfy pathChar <+> slash) <* symbol ">")
+      <?> "spath"
+    )
 
 pathStr :: Parser FilePath
 pathStr = lexeme $ liftM2
@@ -250,7 +269,10 @@ nixLet :: Parser NExprLoc
 nixLet = annotateLocation1
   (reserved "let" *> (letBody <+> letBinders) <?> "let block")
  where
-  letBinders = NLet <$> nixBinders <*> (reserved "in" *> nixToplevelForm)
+  letBinders =
+    NLet
+    <$> nixBinders
+    <*> (reserved "in" *> nixToplevelForm)
   -- Let expressions `let {..., body = ...}' are just desugared
   -- into `(rec {..., body = ...}).body'.
   letBody    = (\x -> NSelect x (StaticKey "body" :| mempty) Nothing) <$> aset
@@ -258,7 +280,7 @@ nixLet = annotateLocation1
 
 nixIf :: Parser NExprLoc
 nixIf = annotateLocation1
-  (   NIf
+  (NIf
   <$> (reserved "if" *> nixExpr)
   <*> (reserved "then" *> nixToplevelForm)
   <*> (reserved "else" *> nixToplevelForm)
@@ -267,7 +289,7 @@ nixIf = annotateLocation1
 
 nixAssert :: Parser NExprLoc
 nixAssert = annotateLocation1
-  (   NAssert
+  (NAssert
   <$> (reserved "assert" *> nixToplevelForm)
   <*> (semi *> nixToplevelForm)
   <?> "assert"
@@ -275,7 +297,7 @@ nixAssert = annotateLocation1
 
 nixWith :: Parser NExprLoc
 nixWith = annotateLocation1
-  (   NWith
+  (NWith
   <$> (reserved "with" *> nixToplevelForm)
   <*> (semi *> nixToplevelForm)
   <?> "with"
@@ -290,11 +312,20 @@ nixString = nStr <$> annotateLocation nixString'
 nixUri :: Parser NExprLoc
 nixUri = lexeme $ annotateLocation1 $ try $ do
   start    <- letterChar
-  protocol <- many $ satisfy $ \x ->
-    isAlpha x || isDigit x || x `elem` ("+-." :: String)
+  protocol <- many $
+    satisfy $
+      \ x ->
+        isAlpha x
+        || isDigit x
+        || (`elem` ("+-." :: String)) x
   _       <- string ":"
-  address <- some $ satisfy $ \x ->
-    isAlpha x || isDigit x || x `elem` ("%/?:@&=+$,-_.!~*'" :: String)
+  address <-
+    some $
+      satisfy $
+        \ x ->
+          isAlpha x
+          || isDigit x
+          || (`elem` ("%/?:@&=+$,-_.!~*'" :: String)) x
   pure $ NStr $ DoubleQuoted
     [Plain $ pack $ start : protocol ++ ':' : address]
 
@@ -304,12 +335,12 @@ nixString' = lexeme (doubleQuoted <+> indented <?> "string")
   doubleQuoted :: Parser (NString NExprLoc)
   doubleQuoted =
     DoubleQuoted
-      .   removePlainEmpty
-      .   mergePlain
-      <$> (  doubleQ
-          *> many (stringChar doubleQ (void $ char '\\') doubleEscape)
-          <* doubleQ
-          )
+    . removePlainEmpty
+    . mergePlain <$>
+      ( doubleQ
+      *> many (stringChar doubleQ (void $ char '\\') doubleEscape)
+      <* doubleQ
+      )
       <?> "double quoted string"
 
   doubleQ      = void (char '"')
@@ -317,40 +348,54 @@ nixString' = lexeme (doubleQuoted <+> indented <?> "string")
 
   indented :: Parser (NString NExprLoc)
   indented =
-    stripIndent
-      <$> (  indentedQ
-          *> many (stringChar indentedQ indentedQ indentedEscape)
-          <* indentedQ
-          )
+    stripIndent <$>
+      (indentedQ
+      *> many (stringChar indentedQ indentedQ indentedEscape)
+      <* indentedQ
+      )
       <?> "indented string"
 
   indentedQ      = void (string "''" <?> "\"''\"")
-  indentedEscape = try $ do
-    indentedQ
-    (Plain <$> ("''" <$ char '\'' <+> "$" <$ char '$')) <+> do
-      _ <- char '\\'
-      c <- escapeCode
-      pure $ if c == '\n' then EscapedNewline else Plain $ singleton c
+  indentedEscape =
+    try $
+      do
+        indentedQ
+        (Plain <$> ("''" <$ char '\'' <+> "$" <$ char '$')) <+>
+          do
+            _ <- char '\\'
+            c <- escapeCode
+
+            pure $
+              bool
+                EscapedNewline
+                (Plain $ singleton c)
+                (c /= '\n')
 
   stringChar end escStart esc =
-    Antiquoted
-      <$> (antiStart *> nixToplevelForm <* char '}')
-      <+> Plain
-      .   singleton
-      <$> char '$'
-      <+> esc
-      <+> Plain
-      .   pack
-      <$> some plainChar
+    Antiquoted <$>
+      (antiStart *> nixToplevelForm <* char '}')
+        <+> Plain . singleton <$>
+          char '$' <+> esc <+> Plain . pack <$>
+            some plainChar
    where
     plainChar =
       notFollowedBy (end <+> void (char '$') <+> escStart) *> anySingle
 
-  escapeCode = msum [ c <$ char e | (c, e) <- escapeCodes ] <+> anySingle
+  escapeCode =
+    msum
+      [ c <$ char e | (c, e) <- escapeCodes ]
+    <+> anySingle
 
 -- | Gets all of the arguments for a function.
 argExpr :: Parser (Params NExprLoc)
-argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
+argExpr =
+  msum
+    [ atLeft
+    , onlyname
+    , atRight
+    ]
+  <* symbol ":"
+ where
   -- An argument not in curly braces. There's some potential ambiguity
   -- in the case of, for example `x:y`. Is it a lambda function `x: y`, or
   -- a URI `x:y`? Nix syntax says it's the latter. So we need to fail if
@@ -362,65 +407,80 @@ argExpr = msum [atLeft, onlyname, atRight] <* symbol ":" where
       ]
 
   -- Parameters named by an identifier on the left (`args @ {x, y}`)
-  atLeft = try $ do
-    name               <- identifier <* symbol "@"
-    (variadic, params) <- params
-    pure $ ParamSet params variadic (pure name)
+  atLeft =
+    try $
+      do
+        name               <- identifier <* symbol "@"
+        (variadic, params) <- params
+        pure $ ParamSet params variadic (pure name)
 
   -- Parameters named by an identifier on the right, or none (`{x, y} @ args`)
-  atRight = do
-    (variadic, params) <- params
-    name               <- optional $ symbol "@" *> identifier
-    pure $ ParamSet params variadic name
+  atRight =
+    do
+      (variadic, params) <- params
+      name               <- optional $ symbol "@" *> identifier
+      pure $ ParamSet params variadic name
 
   -- Return the parameters set.
-  params = do
-    (args, dotdots) <- braces getParams
-    pure (dotdots, args)
+  params =
+    do
+      (args, dotdots) <- braces getParams
+      pure (dotdots, args)
 
   -- Collects the parameters within curly braces. Returns the parameters and
   -- a boolean indicating if the parameters are variadic.
   getParams :: Parser ([(Text, Maybe NExprLoc)], Bool)
-  getParams = go mempty   where
+  getParams = go mempty
+   where
     -- Attempt to parse `...`. If this succeeds, stop and return True.
     -- Otherwise, attempt to parse an argument, optionally with a
     -- default. If this fails, then return what has been accumulated
     -- so far.
     go acc = ((acc, True) <$ symbol "...") <+> getMore acc
+
     getMore acc =
       -- Could be nothing, in which just return what we have so far.
-                  option (acc, False) $ do
-        -- Get an argument name and an optional default.
-      pair <- liftM2 (,) identifier (optional $ question *> nixToplevelForm)
-      -- Either return this, or attempt to get a comma and restart.
-      option (acc <> [pair], False) $ comma *> go (acc <> [pair])
+      option (acc, False) $
+        do
+          -- Get an argument name and an optional default.
+          pair <- liftM2 (,) identifier (optional $ question *> nixToplevelForm)
+
+          -- Either return this, or attempt to get a comma and restart.
+          option (acc <> [pair], False) $ comma *> go (acc <> [pair])
 
 nixBinders :: Parser [Binding NExprLoc]
 nixBinders = (inherit <+> namedVar) `endBy` semi where
-  inherit = do
+  inherit =
+    do
       -- We can't use 'reserved' here because it would consume the whitespace
       -- after the keyword, which is not exactly the semantics of C++ Nix.
-    try $ string "inherit" *> lookAhead (void (satisfy reservedEnd))
-    p <- getSourcePos
-    x <- whiteSpace *> optional scope
-    Inherit x <$> many keyName <*> pure p <?> "inherited binding"
-  namedVar = do
-    p <- getSourcePos
-    NamedVar
-      <$> (annotated <$> nixSelector)
-      <*> (equals *> nixToplevelForm)
-      <*> pure p
-      <?> "variable binding"
+      try $ string "inherit" *> lookAhead (void (satisfy reservedEnd))
+      p <- getSourcePos
+      x <- whiteSpace *> optional scope
+      Inherit x
+        <$> many keyName
+        <*> pure p
+        <?> "inherited binding"
+  namedVar =
+    do
+      p <- getSourcePos
+      NamedVar
+        <$> (annotated <$> nixSelector)
+        <*> (equals *> nixToplevelForm)
+        <*> pure p
+        <?> "variable binding"
   scope = nixParens <?> "inherit scope"
 
 keyName :: Parser (NKeyName NExprLoc)
-keyName = dynamicKey <+> staticKey where
+keyName = dynamicKey <+> staticKey
+ where
   staticKey  = StaticKey <$> identifier
   dynamicKey = DynamicKey <$> nixAntiquoted nixString'
 
 nixSet :: Parser NExprLoc
 nixSet = annotateLocation1 ((isRec <*> braces nixBinders) <?> "set")
-  where isRec = (reserved "rec" $> NSet NRecursive <?> "recursive set") <+> pure (NSet NNonRecursive)
+ where
+  isRec = (reserved "rec" $> NSet NRecursive <?> "recursive set") <+> pure (NSet NNonRecursive)
 
 parseNixFile :: MonadFile m => FilePath -> m (Result NExpr)
 parseNixFile =
@@ -439,16 +499,16 @@ parseNixTextLoc = parseFromText (whiteSpace *> nixToplevelForm <* eof)
 {- Parser.Library -}
 
 skipLineComment' :: Tokens Text -> Parser ()
-skipLineComment' prefix = string prefix
-  *> void (takeWhileP (pure "character") (\x -> x /= '\n' && x /= '\r'))
+skipLineComment' prefix =
+  string prefix *> void (takeWhileP (pure "character") (\x -> x /= '\n' && x /= '\r'))
 
 whiteSpace :: Parser ()
 whiteSpace = do
   put =<< getSourcePos
-  L.space space1 lineCmnt blockCmnt
+  Lexer.space space1 lineCmnt blockCmnt
  where
   lineCmnt  = skipLineComment' "#"
-  blockCmnt = L.skipBlockComment "/*" "*/"
+  blockCmnt = Lexer.skipBlockComment "/*" "*/"
 
 lexeme :: Parser a -> Parser a
 lexeme p = p <* whiteSpace
@@ -458,31 +518,8 @@ symbol = lexeme . string
 
 reservedEnd :: Char -> Bool
 reservedEnd x =
-  isSpace x
-    || x
-    == '{'
-    || x
-    == '('
-    || x
-    == '['
-    || x
-    == '}'
-    || x
-    == ')'
-    || x
-    == ']'
-    || x
-    == ';'
-    || x
-    == ':'
-    || x
-    == '.'
-    || x
-    == '"'
-    || x
-    == '\''
-    || x
-    == ','
+  isSpace x || (`elem` ("{([})];:.\"'," :: String)) x
+{-# inline reservedEnd #-}
 
 reserved :: Text -> Parser ()
 reserved n =
@@ -505,45 +542,51 @@ identifier = lexeme $ try $ do
 -- Braces and angles in hnix don't enclose a single expression so this type
 -- restriction would not be useful.
 parens, brackets :: Parser (NExprF f) -> Parser (NExprF f)
-parens = between (symbol "(") (symbol ")")
-braces = between (symbol "{") (symbol "}")
+parens   = between (symbol "(") (symbol ")")
+braces   = between (symbol "{") (symbol "}")
 -- angles    = between (symbol "<") (symbol ">")
 brackets = between (symbol "[") (symbol "]")
-semi = symbol ";"
-comma = symbol ","
+semi     = symbol ";"
+comma    = symbol ","
 -- colon     = symbol ":"
 -- dot       = symbol "."
-equals = symbol "="
+equals   = symbol "="
 question = symbol "?"
 
 integer :: Parser Integer
-integer = lexeme L.decimal
+integer = lexeme Lexer.decimal
 
 float :: Parser Double
-float = lexeme L.float
+float = lexeme Lexer.float
 
 reservedNames :: HashSet Text
-reservedNames = HashSet.fromList
-  ["let", "in", "if", "then", "else", "assert", "with", "rec", "inherit"]
+reservedNames =
+  HashSet.fromList
+    ["let", "in", "if", "then", "else", "assert", "with", "rec", "inherit"]
 
 type Parser = ParsecT Void Text (State SourcePos)
 
+-- This is just a @Either (Doc Void) a@
 data Result a = Success a | Failure (Doc Void) deriving (Show, Functor)
 
 parseFromFileEx :: MonadFile m => Parser a -> FilePath -> m (Result a)
-parseFromFileEx p path = do
-  txt <- decodeUtf8 <$> readFile path
-  pure
-    $ either (Failure . pretty . errorBundlePretty) Success
-    . flip evalState (initialPos path)
-    $ runParserT p path txt
+parseFromFileEx p path =
+  do
+    txt <- decodeUtf8 <$> readFile path
+
+    pure $
+      either
+        (Failure . pretty . errorBundlePretty)
+        Success
+        $ (`evalState` initialPos path) $ runParserT p path txt
 
 parseFromText :: Parser a -> Text -> Result a
 parseFromText p txt =
-  let file = "<string>"
-  in  either (Failure . pretty . errorBundlePretty) Success
-        . flip evalState (initialPos file)
-        $ runParserT p file txt
+  let file = "<string>" in
+  either
+    (Failure . pretty . errorBundlePretty)
+    Success
+    $ (`evalState` initialPos file) $ (`runParserT` file) p txt
 
 {- Parser.Operators -}
 
@@ -560,28 +603,38 @@ data NOperatorDef
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 annotateLocation :: Parser a -> Parser (Ann SrcSpan a)
-annotateLocation p = do
-  begin <- getSourcePos
-  res   <- p
-  end   <- get -- The state set before the last whitespace
-  pure $ Ann (SrcSpan begin end) res
+annotateLocation p =
+  do
+    begin <- getSourcePos
+    end   <- get -- The state set before the last whitespace
+
+    Ann (SrcSpan begin end) <$> p
 
 annotateLocation1 :: Parser (NExprF NExprLoc) -> Parser NExprLoc
 annotateLocation1 = fmap annToAnnF . annotateLocation
 
 manyUnaryOp f = foldr1 (.) <$> some f
 
-operator "-" = lexeme . try $ string "-" <* notFollowedBy (char '>')
-operator "/" = lexeme . try $ string "/" <* notFollowedBy (char '/')
-operator "<" = lexeme . try $ string "<" <* notFollowedBy (char '=')
-operator ">" = lexeme . try $ string ">" <* notFollowedBy (char '=')
-operator n   = symbol n
+operator op =
+  case op of
+    "-" -> tuneLexer "-" '>'
+    "/" -> tuneLexer "/" '/'
+    "<" -> tuneLexer "<" '='
+    ">" -> tuneLexer ">" '='
+    n   -> symbol n
+ where
+  tuneLexer opchar nonextchar =
+    lexeme . try $ string opchar <* notFollowedBy (char nonextchar)
 
 opWithLoc :: Text -> o -> (Ann SrcSpan o -> a) -> Parser a
-opWithLoc name op f = do
-  Ann ann _ <- annotateLocation $ {- dbg (unpack name) $ -}
-                                  operator name
-  pure $ f (Ann ann op)
+opWithLoc name op f =
+  do
+    Ann ann _ <-
+      annotateLocation $
+        {- dbg (unpack name) $ -}
+        operator name
+
+    pure $ f (Ann ann op)
 
 binaryN name op =
   (NBinaryDef name op NAssocNone, InfixN (opWithLoc name op nBinary))
@@ -613,37 +666,47 @@ nixOperators selector =
     {-  2 -}
     [ ( NBinaryDef " " NApp NAssocLeft
       ,
-                -- Thanks to Brent Yorgey for showing me this trick!
+        -- Thanks to Brent Yorgey for showing me this trick!
         InfixL $ nApp <$ symbol ""
       )
     ]
   , {-  3 -}
-    [prefix "-" NNeg]
+    [ prefix  "-"  NNeg ]
   , {-  4 -}
     [ ( NSpecialDef "?" NHasAttrOp NAssocLeft
       , Postfix $ symbol "?" *> (flip nHasAttr <$> selector)
       )
     ]
   , {-  5 -}
-    [binaryR "++" NConcat]
+    [ binaryR "++" NConcat ]
   , {-  6 -}
-    [binaryL "*" NMult, binaryL "/" NDiv]
+    [ binaryL "*"  NMult
+    , binaryL "/"  NDiv
+    ]
   , {-  7 -}
-    [binaryL "+" NPlus, binaryL "-" NMinus]
+    [ binaryL "+"  NPlus
+    , binaryL "-"  NMinus
+    ]
   , {-  8 -}
-    [prefix "!" NNot]
+    [ prefix  "!"  NNot ]
   , {-  9 -}
-    [binaryR "//" NUpdate]
+    [ binaryR "//" NUpdate ]
   , {- 10 -}
-    [binaryL "<" NLt, binaryL ">" NGt, binaryL "<=" NLte, binaryL ">=" NGte]
+    [ binaryL "<"  NLt
+    , binaryL ">"  NGt
+    , binaryL "<=" NLte
+    , binaryL ">=" NGte
+    ]
   , {- 11 -}
-    [binaryN "==" NEq, binaryN "!=" NNEq]
+    [ binaryN "==" NEq
+    , binaryN "!=" NNEq
+    ]
   , {- 12 -}
-    [binaryL "&&" NAnd]
+    [ binaryL "&&" NAnd ]
   , {- 13 -}
-    [binaryL "||" NOr]
+    [ binaryL "||" NOr ]
   , {- 14 -}
-    [binaryR "->" NImpl]
+    [ binaryR "->" NImpl ]
   ]
 
 data OperatorInfo = OperatorInfo
@@ -653,29 +716,53 @@ data OperatorInfo = OperatorInfo
   } deriving (Eq, Ord, Generic, Typeable, Data, Show)
 
 getUnaryOperator :: NUnaryOp -> OperatorInfo
-getUnaryOperator = (m Map.!) where
-  m = Map.fromList $ concat $ zipWith buildEntry
-                                      [1 ..]
-                                      (nixOperators (error "unused"))
-  buildEntry i = concatMap $ \case
-    (NUnaryDef name op, _) -> [(op, OperatorInfo i NAssocNone name)]
-    _                      -> mempty
+getUnaryOperator = (m Map.!)
+ where
+  m =
+    Map.fromList $
+      concat $
+        zipWith
+          buildEntry
+          [1 ..]
+          (nixOperators (error "unused"))
+
+  buildEntry i =
+    concatMap $
+      \case
+        (NUnaryDef name op, _) -> [(op, OperatorInfo i NAssocNone name)]
+        _                      -> mempty
 
 getBinaryOperator :: NBinaryOp -> OperatorInfo
-getBinaryOperator = (m Map.!) where
-  m = Map.fromList $ concat $ zipWith buildEntry
-                                      [1 ..]
-                                      (nixOperators (error "unused"))
-  buildEntry i = concatMap $ \case
-    (NBinaryDef name op assoc, _) -> [(op, OperatorInfo i assoc name)]
-    _                             -> mempty
+getBinaryOperator = (m Map.!)
+ where
+  m =
+    Map.fromList $
+      concat $
+        zipWith
+          buildEntry
+          [1 ..]
+          (nixOperators (error "unused"))
+
+  buildEntry i =
+    concatMap $
+      \case
+        (NBinaryDef name op assoc, _) -> [(op, OperatorInfo i assoc name)]
+        _                             -> mempty
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
 getSpecialOperator NSelectOp = OperatorInfo 1 NAssocLeft "."
-getSpecialOperator o         = m Map.! o where
-  m = Map.fromList $ concat $ zipWith buildEntry
-                                      [1 ..]
-                                      (nixOperators (error "unused"))
-  buildEntry i = concatMap $ \case
-    (NSpecialDef name op assoc, _) -> [(op, OperatorInfo i assoc name)]
-    _                              -> mempty
+getSpecialOperator o         = m Map.! o
+ where
+  m =
+    Map.fromList $
+      concat $
+        zipWith
+          buildEntry
+          [1 ..]
+          (nixOperators (error "unused"))
+
+  buildEntry i =
+    concatMap $
+      \case
+        (NSpecialDef name op assoc, _) -> [(op, OperatorInfo i assoc name)]
+        _                              -> mempty

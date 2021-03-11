@@ -10,7 +10,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -26,7 +25,10 @@
 --   original. It should be seen as an opportunistic simplifier, but which
 --   gives up easily if faced with any potential for ambiguity in the result.
 
-module Nix.Reduce (reduceExpr, reducingEvalExpr) where
+module Nix.Reduce
+  ( reduceExpr
+  , reducingEvalExpr
+  ) where
 
 import           Control.Applicative
 import           Control.Arrow                  ( second )
@@ -39,6 +41,7 @@ import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
+import           Data.Bifunctor                 ( first )
 import           Data.Fix                       ( Fix(..), foldFix, foldFixM )
 import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
@@ -109,10 +112,10 @@ staticImport pann path = do
                           (Fix (NLiteralPath_ pann path))
                           pos
           x' = Fix (NLet_ span [cur] x)
-        modify (\(a, b) -> (M.insert path x' a, b))
+        modify (first (M.insert path x'))
         local (const (pure path, emptyScopes @m @NExprLoc)) $ do
           x'' <- foldFix reduce x'
-          modify (\(a, b) -> (M.insert path x'' a, b))
+          modify (first (M.insert path x''))
           pure x''
 
 -- gatherNames :: NExprLoc -> HashSet VarName
@@ -123,7 +126,7 @@ staticImport pann path = do
 reduceExpr
   :: (MonadIO m, MonadFail m) => Maybe FilePath -> NExprLoc -> m NExprLoc
 reduceExpr mpath expr =
-  (`evalStateT` (M.empty, MS.empty))
+  (`evalStateT` (mempty, MS.empty))
     . (`runReaderT` (mpath, emptyScopes))
     . runReducer
     $ foldFix reduce expr
@@ -215,13 +218,20 @@ reduce base@(NSelect_ _ _ attrs _)
 
 -- | Reduce a set by inlining its binds outside of the set
 --   if none of the binds inherit the super set.
-reduce e@(NSet_ ann NNonRecursive binds) = do
-  let usesInherit = flip any binds $ \case
-        Inherit{} -> True
-        _         -> False
-  if usesInherit
-    then clearScopes @NExprLoc $ Fix . NSet_ ann NNonRecursive <$> traverse sequence binds
-    else Fix <$> sequence e
+reduce e@(NSet_ ann NNonRecursive binds) =
+  do
+    let
+      usesInherit =
+        any
+          (\case
+            Inherit{} -> True
+            _         -> False
+          )
+          binds
+
+    if usesInherit
+      then clearScopes @NExprLoc $ Fix . NSet_ ann NNonRecursive <$> traverse sequence binds
+      else Fix <$> sequence e
 
 -- Encountering a 'rec set' construction eliminates any hope of inlining
 -- definitions.
@@ -235,29 +245,43 @@ reduce (NWith_ ann scope body) =
 
 -- | Reduce a let binds section by pushing lambdas,
 --   constants and strings to the body scope.
-reduce (NLet_ ann binds body) = do
-  s <- fmap (M.fromList . catMaybes) $ forM binds $ \case
-    NamedVar (StaticKey name :| []) def _pos -> def >>= \case
-      d@(Fix NAbs_{}     ) -> pure $ pure (name, d)
-      d@(Fix NConstant_{}) -> pure $ pure (name, d)
-      d@(Fix NStr_{}     ) -> pure $ pure (name, d)
-      _                    -> pure Nothing
-    _ -> pure Nothing
-  body'  <- pushScope s body
-  binds' <- traverse sequence binds
-  -- let names = gatherNames body'
-  -- binds' <- traverse sequence binds <&> \b -> flip filter b $ \case
-  --     NamedVar (StaticKey name _ :| mempty) _ ->
-  --         name `S.member` names
-  --     _ -> True
-  pure $ Fix $ NLet_ ann binds' body'
-  -- where
-  --   go m [] = pure m
-  --   go m (x:xs) = case x of
-  --       NamedVar (StaticKey name _ :| mempty) def -> do
-  --           v <- pushScope m def
-  --           go (M.insert name v m) xs
-  --       _ -> go m xs
+reduce (NLet_ ann binds body) =
+  do
+    binds' <- traverse sequence binds
+    body'  <-
+      (`pushScope` body) . M.fromList . catMaybes =<<
+        traverse
+          (\case
+            NamedVar (StaticKey name :| []) def _pos ->
+              let
+                defcase =
+                  \case
+                    d@(Fix NAbs_{}     ) -> pure (name, d)
+                    d@(Fix NConstant_{}) -> pure (name, d)
+                    d@(Fix NStr_{}     ) -> pure (name, d)
+                    _                    -> Nothing
+              in
+              defcase <$> def
+
+            _ -> pure Nothing
+
+
+          )
+          binds
+
+    -- let names = gatherNames body'
+    -- binds' <- traverse sequence binds <&> \b -> flip filter b $ \case
+    --     NamedVar (StaticKey name _ :| mempty) _ ->
+    --         name `S.member` names
+    --     _ -> True
+    pure $ Fix $ NLet_ ann binds' body'
+    -- where
+    --   go m [] = pure m
+    --   go m (x:xs) = case x of
+    --       NamedVar (StaticKey name _ :| mempty) def -> do
+    --           v <- pushScope m def
+    --           go (M.insert name v m) xs
+    --       _ -> go m xs
 
 -- | Reduce an if to the relevant path if
 --   the condition is a boolean constant.

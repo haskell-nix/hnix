@@ -391,7 +391,7 @@ instance ( Convertible e t f m
     l' <- toValue (unPos l)
     c' <- toValue (unPos c)
     let pos = M.fromList [("file" :: Text, f'), ("line", l'), ("column", c')]
-    pure $ nvSet' pos mempty
+    pure $ nvSet' mempty pos
 
 -- | With 'ToValue', we can always act recursively
 instance Convertible e t f m
@@ -404,33 +404,35 @@ instance (Convertible e t f m, ToValue a m (NValue t f m))
 
 instance Convertible e t f m
   => ToValue (AttrSet (NValue t f m)) m (NValue' t f m (NValue t f m)) where
-  toValue s = pure $ nvSet' s mempty
+  toValue s = pure $ nvSet' mempty s
 
 instance (Convertible e t f m, ToValue a m (NValue t f m))
   => ToValue (AttrSet a) m (Deeper (NValue' t f m (NValue t f m))) where
-  toValue s = (Deeper .) . nvSet' <$> traverse toValue s <*> pure mempty
+  toValue s = (\ v s -> Deeper $ nvSet' s v) <$> (traverse (toValue) s) <*> pure mempty
 
 instance Convertible e t f m
   => ToValue (AttrSet (NValue t f m), AttrSet SourcePos) m
             (NValue' t f m (NValue t f m)) where
-  toValue (s, p) = pure $ nvSet' s p
+  toValue (s, p) = pure $ nvSet' p s
 
 instance (Convertible e t f m, ToValue a m (NValue t f m))
   => ToValue (AttrSet a, AttrSet SourcePos) m
             (Deeper (NValue' t f m (NValue t f m))) where
-  toValue (s, p) = (Deeper .) . nvSet' <$> traverse toValue s <*> pure p
+  toValue (s, p) = (\ v s -> Deeper $ nvSet' s v) <$> (traverse (toValue) s) <*> pure p
 
 instance Convertible e t f m
   => ToValue NixLikeContextValue m (NValue' t f m (NValue t f m)) where
   toValue nlcv = do
     path <-
-      if nlcvPath nlcv
-        then pure <$> toValue True
-        else pure Nothing
+      bool
+        (pure Nothing)
+        (pure <$> toValue True)
+        (nlcvPath nlcv)
     allOutputs <-
-      if nlcvAllOutputs nlcv
-        then pure <$> toValue True
-        else pure Nothing
+      bool
+        (pure Nothing)
+        (pure <$> toValue True)
+        (nlcvAllOutputs nlcv)
     outputs <- do
       let
         outputs = makeNixStringWithoutContext <$> nlcvOutputs nlcv
@@ -440,7 +442,7 @@ instance Convertible e t f m
         (pure Nothing)
         (fmap pure . toValue)
         ts
-    pure $ flip nvSet' M.empty $ M.fromList $ catMaybes
+    pure $ nvSet' mempty $ M.fromList $ catMaybes
       [ ("path",) <$> path
       , ("allOutputs",) <$> allOutputs
       , ("outputs",) <$> outputs

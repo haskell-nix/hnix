@@ -120,11 +120,14 @@ withNixContext mpath action =
         )
         mpath
 
-builtins :: (MonadNix e t f m, Scoped (NValue t f m) m)
-         => m (Scopes m (NValue t f m))
+builtins
+  :: ( MonadNix e t f m
+     , Scoped (NValue t f m) m
+     )
+  => m (Scopes m (NValue t f m))
 builtins =
   do
-    ref <- defer $ (`nvSet` M.empty) <$> buildMap
+    ref <- defer $ nvSet mempty <$> buildMap
     lst <- ([("builtins", ref)] <>) <$> topLevelBuiltins
     pushScope (M.fromList lst) currentScopes
  where
@@ -394,7 +397,7 @@ nixPath :: MonadNix e t f m => m (NValue t f m)
 nixPath = fmap nvList $ flip foldNixPath mempty $
   \p mn ty rest ->
     pure $
-      flip nvSet
+      nvSet
         mempty
         (M.fromList
           [case ty of
@@ -883,9 +886,10 @@ catAttrs attrName xs =
     n <- fromStringNoContext =<< fromValue attrName
     l <- fromValue @[NValue t f m] xs
 
-    fmap (nvList . catMaybes) $
-      forM l $
-        fmap (M.lookup n) . fromValue <=< demand
+    nvList . catMaybes <$>
+      traverse
+        (fmap (M.lookup n) . fromValue <=< demand)
+        l
 
 baseNameOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 baseNameOf x = do
@@ -1010,7 +1014,7 @@ genList f nixN =
     n <- fromValue @Integer nixN
     bool
       (throwError $ ErrorCall $ "builtins.genList: Expected a non-negative number, got " <> show n)
-      (toValue =<< forM [0 .. n - 1] (defer . callFunc f <=< toValue))
+      (toValue =<< traverse (defer . callFunc f <=< toValue) [0 .. n - 1])
       (n >= 0)
 
 -- We wrap values solely to provide an Ord instance for genericClosure
@@ -1195,7 +1199,7 @@ intersectAttrs set1 set2 =
     (s1, p1) <- fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) set1
     (s2, p2) <- fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) set2
 
-    pure $ nvSet (s2 `M.intersection` s1) (p2 `M.intersection` p1)
+    pure $ nvSet (p2 `M.intersection` p1) (s2 `M.intersection` s1)
 
 functionArgs
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1311,7 +1315,7 @@ throw_ mnv =
 
 import_
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-import_ = scopedImport (nvSet M.empty M.empty)
+import_ = scopedImport (nvSet mempty mempty)
 
 scopedImport
   :: forall e t f m
@@ -1433,17 +1437,17 @@ listToAttrs lst =
   do
     l <- fromValue @[NValue t f m] lst
     fmap
-      ((`nvSet` M.empty) . M.fromList . reverse)
-      (forM l $
+      (nvSet mempty . M.fromList . reverse)
+      (traverse
         (\ nvattrset ->
           do
-            a <- fromValue @(AttrSet (NValue t f m)) nvattrset
-            n <- fromValue =<< demand =<< attrsetGet "name" a
-            name <- fromStringNoContext n
+            a <- fromValue @(AttrSet (NValue t f m)) =<< demand nvattrset
+            name <- fromStringNoContext =<< fromValue =<< demand =<< attrsetGet "name" a
             val  <- attrsetGet "value" a
 
             pure (name, val)
-        ) <=< demand
+        )
+        l
       )
 
 -- prim_hashString from nix/src/libexpr/primops.cc
@@ -1596,7 +1600,7 @@ fromJSON nvjson =
 
  where
   jsonToNValue = \case
-    A.Object m -> (`nvSet` M.empty) <$> traverse jsonToNValue m
+    A.Object m -> nvSet mempty <$> traverse jsonToNValue m
     A.Array  l -> nvList <$> traverse jsonToNValue (V.toList l)
     A.String s -> pure $ nvStr $ makeNixStringWithoutContext s
     A.Number n ->
@@ -1643,12 +1647,12 @@ tryEval
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 tryEval e = catch (onSuccess <$> demand e) (pure . onError)
  where
-  onSuccess v = flip nvSet M.empty $ M.fromList
+  onSuccess v = nvSet mempty $ M.fromList
     [ ("success", nvConstant (NBool True))
     , ("value", v)]
 
   onError :: SomeException -> NValue t f m
-  onError _ = flip nvSet M.empty $ M.fromList
+  onError _ = nvSet mempty $ M.fromList
     [ ("success", nvConstant (NBool False))
     , ("value"  , nvConstant (NBool False))
     ]
@@ -1664,7 +1668,7 @@ trace_ msg action =
     traceEffect @t @f @m . Text.unpack . stringIgnoreContext =<< fromValue msg
     pure action
 
--- 2018-09-08: NOTE: Remember of error context is so far not implemented
+-- Please, can function remember error context
 addErrorContext
   :: forall e t f m
    . MonadNix e t f m
@@ -1755,7 +1759,7 @@ getContext =
     (NVStr ns) -> do
       let context = getNixLikeContext $ toNixLikeContext $ NixString.getContext ns
       valued :: M.HashMap Text (NValue t f m) <- sequenceA $ M.map toValue context
-      pure $ nvSet valued M.empty
+      pure $ nvSet mempty valued
     x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: " <> show x) <=< demand
 
 appendContext

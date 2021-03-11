@@ -13,6 +13,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE ApplicativeDo #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-missing-methods #-}
@@ -57,14 +58,14 @@ data TAtom
   deriving (Show, Eq, Ord)
 
 data NTypeF (m :: * -> *) r
-    = TConstant [TAtom]
-    | TStr
-    | TList r
-    | TSet (Maybe (HashMap Text r))
-    | TClosure (Params ())
-    | TPath
-    | TBuiltin String (Symbolic m -> m r)
-    deriving Functor
+  = TConstant [TAtom]
+  | TStr
+  | TList r
+  | TSet (Maybe (HashMap Text r))
+  | TClosure (Params ())
+  | TPath
+  | TBuiltin String (Symbolic m -> m r)
+  deriving Functor
 
 compareTypes :: NTypeF m r -> NTypeF m r -> Ordering
 compareTypes (TConstant _)  (TConstant _)  = EQ
@@ -88,9 +89,9 @@ compareTypes _              TPath          = GT
 compareTypes (TBuiltin _ _) (TBuiltin _ _) = EQ
 
 data NSymbolicF r
-    = NAny
-    | NMany [r]
-    deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+  = NAny
+  | NMany [r]
+  deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
 type SThunk (m :: * -> *) = NThunkF m (Symbolic m)
 
@@ -101,14 +102,21 @@ data Symbolic m = SV { getSV :: SValue m } | ST { getST :: SThunk m }
 instance Show (Symbolic m) where
   show _ = "<symbolic>"
 
-everyPossible :: MonadVar m => m (Symbolic m)
+everyPossible
+  :: MonadVar m
+  => m (Symbolic m)
 everyPossible = packSymbolic NAny
 
-mkSymbolic :: MonadVar m => [NTypeF m (Symbolic m)] -> m (Symbolic m)
+mkSymbolic
+  :: MonadVar m
+  => [NTypeF m (Symbolic m)]
+  -> m (Symbolic m)
 mkSymbolic xs = packSymbolic (NMany xs)
 
 packSymbolic
-  :: MonadVar m => NSymbolicF (NTypeF m (Symbolic m)) -> m (Symbolic m)
+  :: MonadVar m
+  => NSymbolicF (NTypeF m (Symbolic m))
+  -> m (Symbolic m)
 packSymbolic = fmap SV . newVar
 
 unpackSymbolic
@@ -333,27 +341,33 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
   -- each time a name is looked up within the weak scope, and we want to be
   -- sure the action it evaluates is to force a thunk, so its value is only
   -- computed once.
-  evalWith scope body = do
-    s <- defer scope
-    pushWeakScope ?? body $
-      (unpackSymbolic >=> \case
-        NMany [TSet (Just s')] -> pure s'
-        NMany [TSet Nothing] -> error "NYI: with unknown"
-        _ -> throwError $ ErrorCall "scope must be a set in with statement"
-      ) =<< demand s
+  evalWith scope body =
+    do
+      s <- unpackSymbolic =<< demand =<< defer scope
 
-  evalIf cond t f = do
-    t' <- t
-    f' <- f
-    let e = NIf cond t' f'
-    _ <- unify (void e) cond =<< mkSymbolic [TConstant [TBool]]
-    unify (void e) t' f'
+      pushWeakScope
+        (case s of
+          NMany [TSet (Just s')] -> pure s'
+          NMany [TSet Nothing] -> error "NYI: with unknown"
+          _ -> throwError $ ErrorCall "scope must be a set in with statement"
+        )
+        body
 
-  evalAssert cond body = do
-    body' <- body
-    let e = NAssert cond body'
-    _ <- unify (void e) cond =<< mkSymbolic [TConstant [TBool]]
-    pure body'
+  evalIf cond t f =
+    do
+      t' <- t
+      f' <- f
+      let e = NIf cond t' f'
+
+      _ <- unify (void e) cond =<< mkSymbolic [TConstant [TBool]]
+      unify (void e) t' f'
+
+  evalAssert cond body =
+    do
+      body' <- body
+      let e = NAssert cond body'
+      _ <- unify (void e) cond =<< mkSymbolic [TConstant [TBool]]
+      pure body'
 
   evalApp = (fmap snd .) . lintApp (NBinary NApp () ())
   evalAbs params _ = mkSymbolic [TClosure (void params)]
@@ -367,39 +381,47 @@ lintBinaryOp
   -> Symbolic m
   -> m (Symbolic m)
   -> m (Symbolic m)
-lintBinaryOp op lsym rarg = do
-  rsym <- rarg
-  y    <- defer everyPossible
-  case op of
-    NApp    -> symerr "lintBinaryOp:NApp: should never get here"
-    NEq     -> check lsym rsym [TConstant [TInt, TBool, TNull], TStr, TList y]
-    NNEq    -> check lsym rsym [TConstant [TInt, TBool, TNull], TStr, TList y]
+lintBinaryOp op lsym rarg =
+  do
+    rsym <- rarg
+    y    <- defer everyPossible
 
-    NLt     -> check lsym rsym [TConstant [TInt, TBool, TNull]]
-    NLte    -> check lsym rsym [TConstant [TInt, TBool, TNull]]
-    NGt     -> check lsym rsym [TConstant [TInt, TBool, TNull]]
-    NGte    -> check lsym rsym [TConstant [TInt, TBool, TNull]]
+    case op of
+      NApp    -> symerr "lintBinaryOp:NApp: should never get here"
+      _ -> check lsym rsym $
+        case op of
+          NEq     -> [TConstant [TInt, TBool, TNull], TStr, TList y]
+          NNEq    -> [TConstant [TInt, TBool, TNull], TStr, TList y]
 
-    NAnd    -> check lsym rsym [TConstant [TBool]]
-    NOr     -> check lsym rsym [TConstant [TBool]]
-    NImpl   -> check lsym rsym [TConstant [TBool]]
+          NLt     -> [TConstant [TInt, TBool, TNull]]
+          NLte    -> [TConstant [TInt, TBool, TNull]]
+          NGt     -> [TConstant [TInt, TBool, TNull]]
+          NGte    -> [TConstant [TInt, TBool, TNull]]
 
-    -- jww (2018-04-01): NYI: Allow Path + Str
-    NPlus   -> check lsym rsym [TConstant [TInt], TStr, TPath]
-    NMinus  -> check lsym rsym [TConstant [TInt]]
-    NMult   -> check lsym rsym [TConstant [TInt]]
-    NDiv    -> check lsym rsym [TConstant [TInt]]
+          NAnd    -> [TConstant [TBool]]
+          NOr     -> [TConstant [TBool]]
+          NImpl   -> [TConstant [TBool]]
 
-    NUpdate -> check lsym rsym [TSet mempty]
+          -- jww (2018-04-01): NYI: Allow Path + Str
+          NPlus   -> [TConstant [TInt], TStr, TPath]
+          NMinus  -> [TConstant [TInt]]
+          NMult   -> [TConstant [TInt]]
+          NDiv    -> [TConstant [TInt]]
 
-    NConcat -> check lsym rsym [TList y]
+          NUpdate -> [TSet mempty]
+
+          NConcat -> [TList y]
+
+          _ -> error "Should not be possible"  -- symerr or this fun signature should be changed to work in type scope
  where
-  check lsym rsym xs = do
-    let e = NBinary op lsym rsym
-    m <- mkSymbolic xs
-    _ <- unify (void e) lsym m
-    _ <- unify (void e) rsym m
-    unify (void e) lsym rsym
+  check lsym rsym xs =
+    do
+      let e = NBinary op lsym rsym
+
+      m <- mkSymbolic xs
+      _ <- unify (void e) lsym m
+      _ <- unify (void e) rsym m
+      unify (void e) lsym rsym
 
 infixl 1 `lintApp`
 lintApp
@@ -451,21 +473,29 @@ instance MonadCatch (Lint s) where
 runLintM :: Options -> Lint s a -> ST s a
 runLintM opts action = do
   i <- newVar (1 :: Int)
-  runFreshIdT i $ flip runReaderT (newContext opts) $ runLint action
+  runFreshIdT i $ (`runReaderT` newContext opts) $ runLint action
 
-symbolicBaseEnv :: Monad m => m (Scopes m (Symbolic m))
+symbolicBaseEnv
+  :: Monad m
+  => m (Scopes m (Symbolic m))
 symbolicBaseEnv = pure emptyScopes
 
 lint :: Options -> NExprLoc -> ST s (Symbolic (Lint s))
 lint opts expr =
-  runLintM opts
-    $   symbolicBaseEnv
-    >>= (`pushScopes` adi (Eval.eval . annotated . getCompose)
-                          Eval.addSourcePositions
-                          expr
+  runLintM opts $
+    do
+      basis <- symbolicBaseEnv
+
+      pushScopes
+        basis
+        (adi
+          (Eval.eval . annotated . getCompose)
+          Eval.addSourcePositions
+          expr
         )
 
-instance Scoped (Symbolic (Lint s)) (Lint s) where
+instance
+  Scoped (Symbolic (Lint s)) (Lint s) where
   currentScopes = currentScopesReader
   clearScopes   = clearScopesReader @(Lint s) @(Symbolic (Lint s))
   pushScopes    = pushScopesReader
