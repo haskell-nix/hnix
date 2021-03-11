@@ -85,9 +85,10 @@ main = do
       )
       (readFrom opts)
 
-  processFile opts path = do
-    eres <- parseNixFileLoc path
-    handleResult opts (pure path) eres
+  processFile opts path =
+    do
+      eres <- parseNixFileLoc path
+      handleResult opts (pure path) eres
 
   handleResult opts mpath = \case
     Failure err ->
@@ -97,36 +98,39 @@ main = do
         (ignoreErrors opts)
         $ "Parse failed: " <> show err
 
-    Success expr -> do
-      when (check opts) $ do
-        expr' <- liftIO (reduceExpr mpath expr)
-        either
-          (\ err -> errorWithoutStackTrace $ "Type error: " <> PS.ppShow err)
-          (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <> PS.ppShow
-            (fromJust $ Map.lookup "it" $ Env.types ty)
-          )
-          (HM.inferTop Env.empty [("it", stripAnnotation expr')])
+      (\ expr ->
+        do
+          when (check opts) $
+            do
+              expr' <- liftIO (reduceExpr mpath expr)
+              either
+                (\ err -> errorWithoutStackTrace $ "Type error: " <> PS.ppShow err)
+                (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <> PS.ppShow
+                  (fromJust $ Map.lookup "it" $ Env.types ty)
+                )
+                (HM.inferTop Env.empty [("it", stripAnnotation expr')])
 
-          -- liftIO $ putStrLn $ runST $
-          --     runLintM opts . renderSymbolic =<< lint opts expr
+                -- liftIO $ putStrLn $ runST $
+                --     runLintM opts . renderSymbolic =<< lint opts expr
 
-      catch (process opts mpath expr) $ \case
-        NixException frames ->
-          errorWithoutStackTrace
-            .   show
-            =<< renderFrames @(StdValue (StandardT (StdIdT IO)))
-                  @(StdThunk (StandardT (StdIdT IO)))
-                  frames
+          catch (process opts mpath expr) $
+            \case
+              NixException frames ->
+                errorWithoutStackTrace . show
+                  =<< renderFrames @(StdValue (StandardT (StdIdT IO)))
+                        @(StdThunk (StandardT (StdIdT IO)))
+                        frames
 
-      when (repl opts) $
-        withNixContext mempty $
-          bool
-            Repl.main
-            (do
-              val <- Nix.nixEvalExprLoc mpath expr
-              Repl.main' $ pure val
-            )
-            (evaluate opts)
+          when (repl opts) $
+            withNixContext mempty $
+              bool
+                Repl.main
+                (do
+                  val <- Nix.nixEvalExprLoc mpath expr
+                  Repl.main' $ pure val
+                )
+                (evaluate opts)
+      )
 
   process opts mpath expr
     | evaluate opts =
