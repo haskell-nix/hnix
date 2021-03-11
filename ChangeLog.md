@@ -139,6 +139,7 @@
         ```
   * [(link)](https://github.com/haskell-nix/hnix/pull/878/files) `nvSet{,',P}`: got unflipped, now accept source position argument before the value.
   
+  * [(link)](https://github.com/haskell-nix/hnix/pull/878/files) `mkNixDoc`: got unflipped.
 
 * Additional:
   * [(link)](https://github.com/haskell-nix/hnix/commit/7e6cd97bf3288cb584241611fdb25bf85d7e0ba7) `cabal.project`: freed from the `cryptohash-sha512` override, Hackage trustees made a revision.
