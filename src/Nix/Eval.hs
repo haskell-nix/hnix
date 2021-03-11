@@ -440,7 +440,7 @@ evalSetterKeyName =
   \case
     StaticKey k -> pure (pure k)
     DynamicKey k ->
-      ((pure . stringIgnoreContext) `ifJust`) <$> runAntiquoted "\n" assembleString (fromValueMay =<<) k
+      ((pure . stringIgnoreContext) `whenJust`) <$> runAntiquoted "\n" assembleString (fromValueMay =<<) k
 
 assembleString
   :: forall v m

@@ -202,62 +202,62 @@ free fP fF fr =
     Pure a -> fP a
     Free fa -> fF fa
 
-{-# inline ifTrue #-}
-ifTrue :: (Monoid a)
+{-# inline whenTrue #-}
+whenTrue :: (Monoid a)
   => a -> Bool -> a
-ifTrue =
+whenTrue =
   bool
     mempty
 
-{-# inline ifFalse #-}
-ifFalse :: (Monoid a)
+{-# inline whenFalse #-}
+whenFalse :: (Monoid a)
   => a  -> Bool  -> a
-ifFalse f =
+whenFalse f =
   bool
     f
     mempty
 
-{-# inline ifJust #-}
-ifJust :: (Monoid b)
+{-# inline whenJust #-}
+whenJust :: (Monoid b)
   => (a -> b)  -> Maybe a  -> b
-ifJust =
+whenJust =
   maybe
     mempty
 
-{-# inline ifNothing #-}
-ifNothing  :: (Monoid b)
+{-# inline whenNothing #-}
+whenNothing  :: (Monoid b)
   => b  -> Maybe a  -> b
-ifNothing f =
+whenNothing f =
   maybe
     f
     mempty
 
-{-# inline ifRight #-}
-ifRight :: (Monoid c)
+{-# inline whenRight #-}
+whenRight :: (Monoid c)
   => (b -> c) -> Either a b -> c
-ifRight =
+whenRight =
   either
     mempty
 
-{-# inline ifLeft #-}
-ifLeft :: (Monoid c)
+{-# inline whenLeft #-}
+whenLeft :: (Monoid c)
   => (a -> c) -> Either a b -> c
-ifLeft f =
+whenLeft f =
   either
     f
     mempty
 
-{-# inline ifFree #-}
-ifFree :: (Monoid b)
+{-# inline whenFree #-}
+whenFree :: (Monoid b)
   => (f (Free f a) -> b) -> Free f a -> b
-ifFree =
+whenFree =
   free
     mempty
 
-{-# inline ifPure #-}
-ifPure :: (Monoid b)
+{-# inline whenPure #-}
+whenPure :: (Monoid b)
   => (a -> b) -> Free f a -> b
-ifPure f =
+whenPure f =
   free
     f
     mempty

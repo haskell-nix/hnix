@@ -144,7 +144,7 @@ prettyString (Indented _ parts) = group $ nest 2 $ vcat
 prettyParams :: Params (NixDoc ann) -> Doc ann
 prettyParams (Param n           ) = pretty n
 prettyParams (ParamSet s v mname) = prettyParamSet s v <>
-    (\ name -> ("@" <> pretty name) `ifTrue` not (Text.null name)) `ifJust` mname
+    (\ name -> ("@" <> pretty name) `whenTrue` not (Text.null name)) `whenJust` mname
 
 prettyParamSet :: ParamSet (NixDoc ann) -> Bool -> Doc ann
 prettyParamSet args var =
@@ -168,7 +168,7 @@ prettyBind (NamedVar n v _p) =
 prettyBind (Inherit s ns _p) =
   "inherit " <> scope <> align (fillSep (fmap prettyKeyName ns)) <> ";"
   where
-    scope = ((<> " ") . parens . withoutParens) `ifJust` s
+    scope = ((<> " ") . parens . withoutParens) `whenJust` s
 
 prettyKeyName :: NKeyName (NixDoc ann) -> Doc ann
 prettyKeyName (StaticKey "") = "\"\""
@@ -252,7 +252,7 @@ exprFNixDoc = \case
       $ wrapPath selectOp r <> "." <> prettySelector attr <> ordoc
    where
     r     = mkNixDoc selectOp (wrapParens appOpNonAssoc r')
-    ordoc = ((" or " <>) . wrapParens appOpNonAssoc) `ifJust` o
+    ordoc = ((" or " <>) . wrapParens appOpNonAssoc) `whenJust` o
   NHasAttr r attr ->
     mkNixDoc hasAttrOp (wrapParens hasAttrOp r <> " ? " <> prettySelector attr)
   NEnvPath     p -> simpleExpr $ pretty ("<" <> p <> ">")

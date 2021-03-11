@@ -379,7 +379,7 @@ foldNixPath f z =
 
     foldrM go z $
       (fromInclude . stringIgnoreContext <$> dirs)
-      <> ((uriAwareSplit . Text.pack) `ifJust` mPath)
+      <> ((uriAwareSplit . Text.pack) `whenJust` mPath)
       <> [ fromInclude $ Text.pack $ "nix=" <> dataDir <> "/nix/corepkgs" ]
  where
   fromInclude x = (x, ) $

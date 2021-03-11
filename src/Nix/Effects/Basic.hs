@@ -243,7 +243,7 @@ findPathM = findPathBy existingPath
     do
       apath  <- makeAbsolutePath @t @f path
       doesExist <- doesPathExist apath
-      pure $ ifTrue (pure apath) doesExist
+      pure $ pure apath `whenTrue` doesExist
 
 defaultImportPath
   :: (MonadNix e t f m, MonadState (HashMap FilePath NExprLoc, b) m)
@@ -274,7 +274,7 @@ defaultPathToDefaultNix = pathToDefaultNixFile
 pathToDefaultNixFile :: MonadFile m => FilePath -> m FilePath
 pathToDefaultNixFile p = do
   isDir <- doesDirectoryExist p
-  pure $ p </> ifTrue "default.nix" isDir
+  pure $ p </> "default.nix" `whenTrue` isDir
 
 defaultTraceEffect :: MonadPutStr m => String -> m ()
 defaultTraceEffect = Nix.Effects.putStrLn
