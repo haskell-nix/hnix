@@ -137,6 +137,7 @@
         MonadPaths       (Fix1 t)    :: Nix.Standard -> Nix.Effects
         MonadPutStr      (Fix1 t)    :: Nix.Standard -> Nix.Effects
         ```
+  * [(link)](https://github.com/haskell-nix/hnix/pull/878/files) `nvSet{,',P}`: got unflipped, now accept source position argument before the value.
   
 
 * Additional:
