@@ -62,13 +62,13 @@ type AlgM f m a = f a -> m a
 -- | "Transform" here means a modification of a catamorphism.
 type Transform f a = (Fix f -> a) -> Fix f -> a
 
-{-# inline (<&>)#-}
 (<&>) :: Functor f => f a -> (a -> c) -> f c
 (<&>) = flip (<$>)
+{-# inline (<&>)#-}
 
-{-# inline (??)#-}
 (??) :: Functor f => f (a -> b) -> a -> f b
 fab ?? a = fmap ($ a) fab
+{-# inline (??)#-}
 
 loeb :: Functor f => f (f a -> a) -> f a
 loeb x = go where go = fmap ($ go) x
@@ -175,15 +175,14 @@ alterF f k m =
     )
     $ f $ M.lookup k m
 
-{-# inline bool #-}
 -- | From @Data.Bool ( bool )@.
 bool :: a -> a -> Bool -> a
 bool f t b =
   if b
     then t
     else f
+{-# inline bool #-}
 
-{-# inline list #-}
 -- | Analog for @bool@ or @maybe@, for list-like cons structures.
 list
   :: Foldable t
@@ -193,76 +192,78 @@ list e f l =
     (f l)
     e
     (null l)
+{-# inline list #-}
 
-{-# inline free #-}
 -- | Lambda analog of @maybe@ or @either@ for Free monad.
 free :: (a -> b) -> (f (Free f a) -> b) -> Free f a -> b
 free fP fF fr =
   case fr of
     Pure a -> fP a
     Free fa -> fF fa
+{-# inline free #-}
 
-{-# inline whenTrue #-}
+
 whenTrue :: (Monoid a)
   => a -> Bool -> a
 whenTrue =
   bool
     mempty
+{-# inline whenTrue #-}
 
-{-# inline whenFalse #-}
 whenFalse :: (Monoid a)
   => a  -> Bool  -> a
 whenFalse f =
   bool
     f
     mempty
+{-# inline whenFalse #-}
 
-{-# inline whenJust #-}
 whenJust :: (Monoid b)
   => (a -> b)  -> Maybe a  -> b
 whenJust =
   maybe
     mempty
+{-# inline whenJust #-}
 
-{-# inline whenNothing #-}
 whenNothing  :: (Monoid b)
   => b  -> Maybe a  -> b
 whenNothing f =
   maybe
     f
     mempty
+{-# inline whenNothing #-}
 
-{-# inline whenRight #-}
 whenRight :: (Monoid c)
   => (b -> c) -> Either a b -> c
 whenRight =
   either
     mempty
+{-# inline whenRight #-}
 
-{-# inline whenLeft #-}
 whenLeft :: (Monoid c)
   => (a -> c) -> Either a b -> c
 whenLeft f =
   either
     f
     mempty
+{-# inline whenLeft #-}
 
-{-# inline whenFree #-}
 whenFree :: (Monoid b)
   => (f (Free f a) -> b) -> Free f a -> b
 whenFree =
   free
     mempty
+{-# inline whenFree #-}
 
-{-# inline whenPure #-}
 whenPure :: (Monoid b)
   => (a -> b) -> Free f a -> b
 whenPure f =
   free
     f
     mempty
+{-# inline whenPure #-}
 
--- From @base@ @Data.Foldable@
+-- | From @base@ @Data.Foldable@
 traverse_ :: (Foldable t, Applicative f) => (a -> f b) -> t a -> f ()
 traverse_ f = foldr c (pure ())
   -- See Note [List fusion and continuations in 'c']
@@ -273,3 +274,12 @@ traverse_ f = foldr c (pure ())
 for_ :: (Foldable t, Applicative f) => t a -> (a -> f b) -> f ()
 for_ = flip traverse_
 {-# inline for_ #-}
+
+-- | Apply a single function to both components of a pair.
+--
+-- > both succ (1,2) == (2,3)
+--
+-- Taken From package @extra@
+both :: (a -> b) -> (a, a) -> (b, b)
+both f (x,y) = (f x, f y)
+{-# inline both #-}
