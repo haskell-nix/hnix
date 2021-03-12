@@ -235,9 +235,10 @@ reduce e@(NSet_ ann NNonRecursive binds) =
           )
           binds
 
-    if usesInherit
-      then clearScopes @NExprLoc $ Fix . NSet_ ann NNonRecursive <$> traverse sequence binds
-      else Fix <$> sequence e
+    bool
+      (Fix <$> sequence e)
+      (clearScopes @NExprLoc $ Fix . NSet_ ann NNonRecursive <$> traverse sequence binds)
+      usesInherit
 
 -- Encountering a 'rec set' construction eliminates any hope of inlining
 -- definitions.
