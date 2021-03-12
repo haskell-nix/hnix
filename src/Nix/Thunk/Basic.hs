@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -7,6 +8,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE ApplicativeDo #-}
 
 
 
@@ -30,7 +32,7 @@ data Deferred m v = Deferred (m v) | Computed v
 
 -- | The type of very basic thunks
 data NThunkF m v
-    = Thunk (ThunkId m) (Var m Bool) (Var m (Deferred m v))
+  = Thunk (ThunkId m) (Var m Bool) (Var m (Deferred m v))
 
 instance (Eq v, Eq (ThunkId m)) => Eq (NThunkF m v) where
   Thunk x _ _ == Thunk y _ _ = x == y
@@ -51,24 +53,24 @@ instance (MonadBasicThunk m, MonadCatch m)
     do
       freshThunkId <- freshId
       Thunk freshThunkId <$> newVar False <*> newVar (Deferred action)
-
   queryM :: m v -> NThunkF m v -> m v
   queryM n (Thunk _ active ref) =
     do
-      thunkIsAvaliable <- not <$> atomicModifyVar active (True, )
+      seizeThunk <- atomicModifyVar active (True, )
       bool
         n
         go
-        thunkIsAvaliable
-    where
-      go = do
-        eres <- readVar ref
-        res  <-
-          case eres of
-            Computed v   -> pure v
-            Deferred _mv -> n
-        _ <- atomicModifyVar active (False, )
-        pure res
+        (not seizeThunk)
+   where
+    go = do
+      eres <- readVar ref
+      res  <-
+        case eres of
+          Computed v   -> pure v
+          Deferred _mv -> n
+      _releaseThunk <- atomicModifyVar active (False, )
+      pure res
+
 
   force :: NThunkF m v -> m v
   force (Thunk n active ref) =
@@ -78,46 +80,51 @@ instance (MonadBasicThunk m, MonadCatch m)
         Computed v      -> pure v
         Deferred action ->
           do
-            nowActive <- atomicModifyVar active (True, )
+            seizeThunk <- atomicModifyVar active (True, )
             bool
+              (throwM $ ThunkLoop $ show n)
               (do
                 v <- catch action $ \(e :: SomeException) ->
                   do
                     _ <- atomicModifyVar active (False, )
                     throwM e
                 writeVar ref (Computed v)
-                _ <- atomicModifyVar active (False, )
+                _freeThunk <- atomicModifyVar active (False, )
                 pure v
               )
-              (throwM $ ThunkLoop $ show n)
-              nowActive
+              (not seizeThunk)
 
   forceEff :: NThunkF m v -> m v
   forceEff (Thunk _ active ref) =
     do
-      nowActive <- atomicModifyVar active (True, )
-      bool
-        (do
-          eres <- readVar ref
-          case eres of
-            Computed v      -> pure v
-            Deferred action ->
-              do
+      eres <- readVar ref
+      case eres of
+        Computed v      -> pure v
+        Deferred action ->
+          do
+            seizeThunk <- atomicModifyVar active (True, )
+            bool
+              (pure $ error "Loop detected")
+              (do
                 v <- action
                 writeVar ref (Computed v)
-                _ <- atomicModifyVar active (False, )
+                _freeThunk <- atomicModifyVar active (False, )
                 pure v
-        )
-        (pure $ error "Loop detected")
-        nowActive
+              )
+              (not seizeThunk)
 
   further :: NThunkF m v -> m (NThunkF m v)
-  further t@(Thunk _ _ ref) = do
-    _ <- atomicModifyVar ref $
-      \x -> case x of
-        Computed _ -> (x, x)
-        Deferred d -> (Deferred d, x)
-    pure t
+  further t@(Thunk _ _ ref) =
+    do
+      _ <-
+        atomicModifyVar
+          ref
+          (\ x ->
+            case x of
+              Computed _ -> (x, x)
+              _deferred -> (_deferred, x)
+          )
+      pure t
 
 
 -- * Kleisli functor HOFs
