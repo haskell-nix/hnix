@@ -257,12 +257,14 @@ defaultImportPath path = do
       maybe
         (do
           eres <- parseNixFileLoc path
-          case eres of
-            Failure err -> throwError $ ErrorCall . show $ fillSep ["Parse during import failed:", err]
-            Success expr ->
+          either
+            (\ err -> throwError $ ErrorCall . show $ fillSep ["Parse during import failed:", err])
+            (\ expr ->
               do
                 modify (first (M.insert path expr))
                 pure expr
+            )
+            eres
         )
         pure  -- return expr
         (M.lookup path imports)

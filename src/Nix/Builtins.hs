@@ -326,7 +326,7 @@ derivation
   => m (NValue t f m)
 derivation = foldFix Eval.eval $$(do
     -- This is compiled in so that we only parse it once at compile-time.
-    let Success expr = parseNixText [text|
+    let Right expr = parseNixText [text|
       drvAttrs @ { outputs ? [ "out" ], ... }:
 
       let

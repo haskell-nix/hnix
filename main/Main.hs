@@ -90,13 +90,15 @@ main = do
       eres <- parseNixFileLoc path
       handleResult opts (pure path) eres
 
-  handleResult opts mpath = \case
-    Failure err ->
-      bool
-        errorWithoutStackTrace
-        (liftIO . hPutStrLn stderr)
-        (ignoreErrors opts)
-        $ "Parse failed: " <> show err
+  handleResult opts mpath =
+    either
+      (\ err ->
+        bool
+          errorWithoutStackTrace
+          (liftIO . hPutStrLn stderr)
+          (ignoreErrors opts)
+          $ "Parse failed: " <> show err
+      )
 
       (\ expr ->
         do

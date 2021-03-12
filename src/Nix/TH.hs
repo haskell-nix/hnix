@@ -25,9 +25,11 @@ import           Nix.Parser
 
 quoteExprExp :: String -> ExpQ
 quoteExprExp s = do
-  expr <- case parseNixText (Text.pack s) of
-    Failure err -> fail $ show err
-    Success e   -> pure e
+  expr <-
+    either
+      (fail . show)
+      pure
+      (parseNixText (Text.pack s))
   dataToExpQ
     (const Nothing `extQ` metaExp (freeVars expr) `extQ` (pure . liftText))
     expr
@@ -37,10 +39,14 @@ quoteExprExp s = do
 
 quoteExprPat :: String -> PatQ
 quoteExprPat s = do
-  expr <- case parseNixText (Text.pack s) of
-    Failure err -> fail $ show err
-    Success e   -> pure e
-  dataToPatQ (const Nothing `extQ` metaPat (freeVars expr)) expr
+  expr <-
+    either
+      (fail . show)
+      pure
+      (parseNixText (Text.pack s))
+  dataToPatQ
+    (const Nothing `extQ` metaPat (freeVars expr))
+    expr
 
 freeVars :: NExpr -> Set VarName
 freeVars e = case unFix e of

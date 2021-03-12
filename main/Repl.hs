@@ -182,9 +182,11 @@ initState mIni = do
         }
   where
     evalText :: (MonadNix e t f m) => Text -> m (NValue t f m)
-    evalText expr = case parseNixTextLoc expr of
-      Failure e -> error $ "Impossible happened: Unable to parse expression - '" <> Text.unpack expr <> "' error was " <> show e
-      Success e -> do evalExprLoc e
+    evalText expr =
+      either
+      (\ e -> error $ "Impossible happened: Unable to parse expression - '" <> Text.unpack expr <> "' error was " <> show e)
+      (\ e -> do evalExprLoc e)
+      (parseNixTextLoc expr)
 
 type Repl e t f m = HaskelineT (StateT (IState t f m) m)
 
@@ -205,10 +207,10 @@ exec update source = do
 
   -- Parser ( returns AST as `NExprLoc` )
   case parseExprOrBinding source of
-    (Failure err, _) -> do
+    (Left err, _) -> do
       liftIO $ print err
       pure Nothing
-    (Success expr, isBinding) -> do
+    (Right expr, isBinding) -> do
 
       -- Type Inference ( returns Typing Environment )
       --
@@ -245,12 +247,14 @@ exec update source = do
     -- This allows us to handle assignments like @a = 42@
     -- which get turned into @{ a = 42; }@
     parseExprOrBinding i =
-      case parseNixTextLoc i of
-        Success expr -> (Success expr, False)
-        Failure e    ->
-          case parseNixTextLoc $ toAttrSet i of
-            Failure _  -> (Failure e, False) -- return the first parsing failure
-            Success e' -> (Success e', True)
+      either
+        (\ e    ->
+          either
+            (const (Left e, False)) -- return the first parsing failure
+            (\ e' -> (pure e', True))
+            (parseNixTextLoc $ toAttrSet i))
+        (\ expr -> (pure expr, False))
+        (parseNixTextLoc i)
 
     toAttrSet i =
       "{" <> i <> bool ";" mempty (Text.isSuffixOf ";" i) <> "}"

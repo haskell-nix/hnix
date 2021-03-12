@@ -19,7 +19,7 @@ module Nix.Parser
   , parseFromFileEx
   , Parser
   , parseFromText
-  , Result(..)
+  , Result
   , reservedNames
   , OperatorInfo(..)
   , NSpecialOp(..)
@@ -566,8 +566,8 @@ reservedNames =
 
 type Parser = ParsecT Void Text (State SourcePos)
 
--- This is just a @Either (Doc Void) a@
-data Result a = Success a | Failure (Doc Void) deriving (Show, Functor)
+type Result a = Either (Doc Void) a
+
 
 parseFromFileEx :: MonadFile m => Parser a -> FilePath -> m (Result a)
 parseFromFileEx p path =
@@ -576,16 +576,16 @@ parseFromFileEx p path =
 
     pure $
       either
-        (Failure . pretty . errorBundlePretty)
-        Success
+        (Left . pretty . errorBundlePretty)
+        Right
         $ (`evalState` initialPos path) $ runParserT p path txt
 
 parseFromText :: Parser a -> Text -> Result a
 parseFromText p txt =
   let file = "<string>" in
   either
-    (Failure . pretty . errorBundlePretty)
-    Success
+    (Left . pretty . errorBundlePretty)
+    Right
     $ (`evalState` initialPos file) $ (`runParserT` file) p txt
 
 {- Parser.Operators -}

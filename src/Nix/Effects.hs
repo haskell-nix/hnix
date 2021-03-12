@@ -160,9 +160,10 @@ instance MonadExec IO where
           if T.null t
             then pure $ Left $ ErrorCall $ "exec has no output :" <> emsg
             else
-              case parseNixTextLoc t of
-                Failure err -> pure $ Left $ ErrorCall $ "Error parsing output of exec: " <> show err <> " " <> emsg
-                Success v -> pure $ Right v
+              either
+                (\ err -> pure $ Left $ ErrorCall $ "Error parsing output of exec: " <> show err <> " " <> emsg)
+                (pure . pure)
+                (parseNixTextLoc t)
         err -> pure $ Left $ ErrorCall $ "exec  failed: " <> show err <> " " <> emsg
 
 deriving
@@ -204,9 +205,10 @@ instance MonadInstantiate IO where
 
       pure $ case exitCode of
         ExitSuccess ->
-          case parseNixTextLoc (T.pack out) of
-            Failure e -> Left $ ErrorCall $ "Error parsing output of nix-instantiate: " <> show e
-            Success v -> Right v
+          either
+            (\ e -> Left $ ErrorCall $ "Error parsing output of nix-instantiate: " <> show e)
+            pure
+            (parseNixTextLoc (T.pack out))
         status -> Left $ ErrorCall $ "nix-instantiate failed: " <> show status <> ": " <> err
 
 deriving

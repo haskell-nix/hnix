@@ -185,35 +185,38 @@ prop_prettyparse :: Monad m => NExpr -> PropertyT m ()
 prop_prettyparse p = do
   let prog = show (prettyNix p)
   case parse (pack prog) of
-    Failure s -> do
+    Left s -> do
       footnote $ show $ vsep
         [fillSep ["Parse failed:", pretty (show s)], indent 2 (prettyNix p)]
       discard
-    Success v
+    Right v
       | equivUpToNormalization p v -> success
-      | otherwise -> do
-        let pp = normalise prog
+      | otherwise ->
+        do
+          let
+            pp = normalise prog
             pv = normalise (show (prettyNix v))
-        footnote
-          $ show
-          $ vsep
-          $ [ "----------------------------------------"
-            , vsep ["Expr before:", indent 2 (pretty (PS.ppShow p))]
-            , "----------------------------------------"
-            , vsep ["Expr after:", indent 2 (pretty (PS.ppShow v))]
-            , "----------------------------------------"
-            , vsep ["Pretty before:", indent 2 (pretty prog)]
-            , "----------------------------------------"
-            , vsep ["Pretty after:", indent 2 (prettyNix v)]
-            , "----------------------------------------"
-            , vsep ["Normalised before:", indent 2 (pretty pp)]
-            , "----------------------------------------"
-            , vsep ["Normalised after:", indent 2 (pretty pv)]
-            , "========================================"
-            , vsep ["Normalised diff:", pretty (ppDiff (ldiff pp pv))]
-            , "========================================"
-            ]
-        assert (pp == pv)
+
+          footnote $
+            show $
+              vsep
+                [ "----------------------------------------"
+                , vsep ["Expr before:", indent 2 (pretty (PS.ppShow p))]
+                , "----------------------------------------"
+                , vsep ["Expr after:", indent 2 (pretty (PS.ppShow v))]
+                , "----------------------------------------"
+                , vsep ["Pretty before:", indent 2 (pretty prog)]
+                , "----------------------------------------"
+                , vsep ["Pretty after:", indent 2 (prettyNix v)]
+                , "----------------------------------------"
+                , vsep ["Normalised before:", indent 2 (pretty pp)]
+                , "----------------------------------------"
+                , vsep ["Normalised after:", indent 2 (pretty pv)]
+                , "========================================"
+                , vsep ["Normalised diff:", pretty (ppDiff (ldiff pp pv))]
+                , "========================================"
+                ]
+          assert (pp == pv)
  where
   parse     = parseNixText
 

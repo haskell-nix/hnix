@@ -104,26 +104,32 @@ genTests = do
       _                 -> error $ "Unexpected: " <> show kind
 
 assertParse :: Options -> FilePath -> Assertion
-assertParse _opts file = parseNixFileLoc file >>= \case
-  Success _expr -> pure () -- pure $! runST $ void $ lint opts expr
-  Failure err ->
-    assertFailure $ "Failed to parse " <> file <> ":\n" <> show err
+assertParse _opts file =
+  do
+    x <- parseNixFileLoc file
+    either
+      (\ err -> assertFailure $ "Failed to parse " <> file <> ":\n" <> show err)
+      (const $ pure ())  -- pure $! runST $ void $ lint opts expr
+      x
 
 assertParseFail :: Options -> FilePath -> Assertion
 assertParseFail opts file = do
   eres <- parseNixFileLoc file
   catch
-      (case eres of
-        Success expr -> do
-          _ <- pure $! runST $ void $ lint opts expr
-          assertFailure
-            $  "Unexpected success parsing `"
-            <> file
-            <> ":\nParsed value: "
-            <> show expr
-        Failure _ -> pure ()
+      (either
+        (const $ pure ())
+        (\ expr ->
+          do
+            _ <- pure $! runST $ void $ lint opts expr
+            assertFailure $
+              "Unexpected success parsing `"
+              <> file
+              <> ":\nParsed value: "
+              <> show expr
+        )
+        eres
       )
-    $ \(_ :: SomeException) -> pure ()
+      $ \(_ :: SomeException) -> pure ()
 
 assertLangOk :: Options -> FilePath -> Assertion
 assertLangOk opts file = do

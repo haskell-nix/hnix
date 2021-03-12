@@ -82,10 +82,13 @@ ensureNixpkgsCanParse =
   getString k m =
       let Fix (NStr (DoubleQuoted [Plain str])) = getExpr k m in str
 
-  consider path action k = action >>= \case
-    Failure err -> errorWithoutStackTrace $
-      "Parsing " <> path <> " failed: " <> show err
-    Success expr -> k expr
+  consider path action k =
+    do
+      x <- action
+      either
+        (\ err -> errorWithoutStackTrace $ "Parsing " <> path <> " failed: " <> show err)
+        k
+        x
 
 main :: IO ()
 main = do

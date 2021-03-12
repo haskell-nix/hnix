@@ -94,29 +94,35 @@ staticImport pann path = do
     (maybe path (\p -> takeDirectory p </> path) mfile)
 
   imports <- gets fst
-  case M.lookup path' imports of
-    Just expr -> pure expr
-    Nothing   -> go path'
+  maybe
+    (go path')
+    pure
+    (M.lookup path' imports)
  where
   go path = do
     liftIO $ putStrLn $ "Importing file " <> path
 
     eres <- liftIO $ parseNixFileLoc path
-    case eres of
-      Failure err -> error $ "Parse failed: " <> show err
-      Success x   -> do
+    either
+      (\ err -> error $ "Parse failed: " <> show err)
+      (\ x -> do
         let
           pos  = SourcePos "Reduce.hs" (mkPos 1) (mkPos 1)
           span = SrcSpan pos pos
-          cur  = NamedVar (StaticKey "__cur_file" :| mempty)
-                          (Fix (NLiteralPath_ pann path))
-                          pos
+          cur  =
+            NamedVar
+              (StaticKey "__cur_file" :| mempty)
+              (Fix (NLiteralPath_ pann path))
+              pos
           x' = Fix (NLet_ span [cur] x)
         modify (first (M.insert path x'))
-        local (const (pure path, emptyScopes @m @NExprLoc)) $ do
-          x'' <- foldFix reduce x'
-          modify (first (M.insert path x''))
-          pure x''
+        local (const (pure path, emptyScopes @m @NExprLoc)) $
+          do
+            x'' <- foldFix reduce x'
+            modify (first (M.insert path x''))
+            pure x''
+      )
+      eres
 
 -- gatherNames :: NExprLoc -> HashSet VarName
 -- gatherNames = foldFix $ \case

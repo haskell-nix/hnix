@@ -26,8 +26,10 @@ tests = testGroup
   ]
 
 assertSucc :: Result a -> IO a
-assertSucc (Success a) = pure a
-assertSucc (Failure d) = assertFailure $ show d
+assertSucc =
+  either
+    (assertFailure . show)
+    pure
 
 cmpReduceResult :: Result NExprLoc -> NExpr -> Assertion
 cmpReduceResult r e = do
