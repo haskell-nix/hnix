@@ -150,9 +150,8 @@ reduce
 
 -- | Reduce the variable to its value if defined.
 --   Leave it as it is otherwise.
-reduce (NSym_ ann var) = lookupVar var <&> \case
-  Nothing -> Fix (NSym_ ann var)
-  Just v  -> v
+reduce (NSym_ ann var) =
+  fromMaybe (Fix (NSym_ ann var)) <$> lookupVar var
 
 -- | Reduce binary and integer negation.
 reduce (NUnary_ uann op arg) = arg >>= \x -> case (op, x) of
