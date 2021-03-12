@@ -53,24 +53,14 @@ instance (MonadBasicThunk m, MonadCatch m)
     do
       freshThunkId <- freshId
       Thunk freshThunkId <$> newVar False <*> newVar (Deferred action)
-  queryM :: m v -> NThunkF m v -> m v
-  queryM n (Thunk _ active ref) =
-    do
-      seizeThunk <- atomicModifyVar active (True, )
-      bool
-        n
-        go
-        (not seizeThunk)
-   where
-    go = do
-      eres <- readVar ref
-      res  <-
-        case eres of
-          Computed v   -> pure v
-          Deferred _mv -> n
-      _releaseThunk <- atomicModifyVar active (False, )
-      pure res
 
+  queryM :: m v -> NThunkF m v -> m v
+  queryM n (Thunk _ _ ref) =
+    do
+      (\case
+          Computed v -> pure v
+          _deferred -> n
+        ) =<< readVar ref
 
   force :: NThunkF m v -> m v
   force (Thunk n active ref) =
