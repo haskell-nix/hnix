@@ -8,7 +8,10 @@ import           Data.Char                      ( isDigit )
 import           Data.Maybe                     ( fromMaybe )
 import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
-import           Data.Time
+import           Data.Time                      ( UTCTime
+                                                , defaultTimeLocale
+                                                , parseTimeOrError
+                                                )
 import           Nix.Options
 import           Options.Applicative     hiding ( ParserResult(..) )
 import           Data.Version                   ( showVersion )
@@ -16,6 +19,7 @@ import           Development.GitRev             ( gitCommitDate
                                                 , gitBranch
                                                 , gitHash )
 import           Paths_hnix                     ( version )
+import           Nix.Utils                      ( bool )
 
 decodeVerbosity :: Int -> Verbosity
 decodeVerbosity 0 = ErrorsOnly
@@ -26,32 +30,37 @@ decodeVerbosity 4 = DebugInfo
 decodeVerbosity _ = Vomit
 
 argPair :: Mod OptionFields (Text, Text) -> Parser (Text, Text)
-argPair = option $ str >>= \s -> case Text.findIndex (== '=') s of
-  Nothing ->
-    errorWithoutStackTrace "Format of --arg/--argstr in hnix is: name=expr"
-  Just i -> pure $ second Text.tail $ Text.splitAt i s
+argPair =
+  option $
+    do
+      s <- str
+      maybe
+        (errorWithoutStackTrace "Format of --arg/--argstr in hnix is: name=expr")
+        (pure . second Text.tail . (`Text.splitAt` s))
+        (Text.findIndex (== '=') s)
 
 nixOptions :: UTCTime -> Parser Options
 nixOptions current =
-  Options
-    <$> (fromMaybe Informational <$>
-        optional
-          (option
+  Options <$>
+    (fromMaybe Informational <$>
+      optional
+        (option
 
-            (do
-              a <- str
-              if all isDigit a
-                then pure $ decodeVerbosity (read a)
-                else fail "Argument to -v/--verbose must be a number"
-            )
-
-            (  short 'v'
-            <> long "verbose"
-            <> help "Verbose output"
-            )
-
+          (do
+            a <- str
+            bool
+              (fail "Argument to -v/--verbose must be a number")
+              (pure $ decodeVerbosity $ read a)
+              (all isDigit a)
           )
+
+          (  short 'v'
+          <> long "verbose"
+          <> help "Verbose output"
+          )
+
         )
+      )
     <*> switch
         (  long "trace"
         <> help "Enable tracing code (even more can be seen if built with --flags=tracing)"
@@ -194,26 +203,30 @@ versionOpt :: Parser (a -> a)
 versionOpt = shortVersionOpt <*> debugVersionOpt
  where
   shortVersionOpt :: Parser (a -> a)
-  shortVersionOpt = infoOption
-    (showVersion version)
-    (  long "version"
-    <> help "Show release version"
-    )
+  shortVersionOpt =
+    infoOption
+      (showVersion version)
+      (  long "version"
+      <> help "Show release version"
+      )
 
   --  2020-09-13: NOTE: Does not work for direct `nix-build`s, works for `nix-shell` `cabal` builds.
   debugVersionOpt :: Parser (a -> a)
-  debugVersionOpt = infoOption
-    ( concat
-        [ "Version: ", showVersion version
-        , "\nCommit: ", $(gitHash)
-        , "\n  date: ", $(gitCommitDate)
-        , "\n  branch: ", $(gitBranch)
-        ]
-    )
-    (  long "long-version"
-    <> help "Show long debug version form"
-    )
+  debugVersionOpt =
+    infoOption
+      ( concat
+          [ "Version: ", showVersion version
+          , "\nCommit: ", $(gitHash)
+          , "\n  date: ", $(gitCommitDate)
+          , "\n  branch: ", $(gitBranch)
+          ]
+      )
+      (  long "long-version"
+      <> help "Show long debug version form"
+      )
 
 nixOptionsInfo :: UTCTime -> ParserInfo Options
-nixOptionsInfo current = info (helper <*> versionOpt <*> nixOptions current)
-                              (fullDesc <> progDesc "" <> header "hnix")
+nixOptionsInfo current =
+  info
+    (helper <*> versionOpt <*> nixOptions current)
+    (fullDesc <> progDesc "" <> header "hnix")
