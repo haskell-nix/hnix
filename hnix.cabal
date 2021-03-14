@@ -332,7 +332,7 @@ source-repository head
 flag optimize
   description: Enable all optimization flags
   manual: True
-  default: False
+  default: True
 
 flag profiling
   description: Enable profiling
