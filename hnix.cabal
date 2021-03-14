@@ -450,6 +450,8 @@ library
     , xml >= 1.3.14 && < 1.4
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
+    default-extensions:
+      ApplicativeDo
   if !impl(ghcjs)
     exposed-modules:
         Nix.Options.Parser
@@ -463,6 +465,8 @@ library
   default-language: Haskell2010
 
 executable hnix
+  default-extensions:
+    ApplicativeDo
   main-is: Main.hs
   other-modules:
       Repl
@@ -498,6 +502,8 @@ executable hnix
     , unordered-containers
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
+    default-extensions:
+      ApplicativeDo
   if impl(ghc < 8.10)
     -- GHC < 8.10 comes with haskeline < 0.8, which we don't support.
     -- To simplify CI, we just disable the component.
@@ -556,6 +562,8 @@ test-suite hnix-tests
     , unordered-containers
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
+    default-extensions:
+      ApplicativeDo
   if impl(ghcjs)
     buildable: False
   default-language: Haskell2010
@@ -590,6 +598,8 @@ benchmark hnix-benchmarks
     , unordered-containers
   if flag(optimize)
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
+    default-extensions:
+      ApplicativeDo
   if impl(ghcjs)
     buildable: False
   default-language: Haskell2010
