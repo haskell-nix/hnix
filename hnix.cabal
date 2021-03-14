@@ -469,9 +469,9 @@ executable hnix
     main
   main-is: Main.hs
   other-modules:
-  ghc-options: -Wall -rtsopts
     Repl
     Paths_hnix
+  ghc-options: -Wall
   build-depends:
       aeson
     , base
