@@ -40,7 +40,12 @@ import           Control.Monad.Fail
 import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
-import           Control.Monad.State.Strict
+import           Control.Monad.State.Strict     ( MonadState
+                                                , StateT
+                                                , gets
+                                                , modify
+                                                , evalStateT
+                                                )
 import           Data.Bifunctor                 ( first )
 import           Data.Fix                       ( Fix(..), foldFix, foldFixM )
 import           Data.HashMap.Lazy              ( HashMap )
