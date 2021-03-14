@@ -64,17 +64,19 @@ type Transform f a = (Fix f -> a) -> Fix f -> a
 
 (<&>) :: Functor f => f a -> (a -> c) -> f c
 (<&>) = flip (<$>)
-{-# inline (<&>)#-}
+{-# inline (<&>) #-}
 
 (??) :: Functor f => f (a -> b) -> a -> f b
 fab ?? a = fmap ($ a) fab
-{-# inline (??)#-}
+{-# inline (??) #-}
 
 loeb :: Functor f => f (f a -> a) -> f a
 loeb x = go where go = fmap ($ go) x
 
 loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
-loebM f = mfix $ \a -> traverse ($ a) f
+-- Sectioning here insures optimization happening.
+loebM f = mfix $ \a -> (`traverse` f) ($ a)
+{-# inline loebM #-}
 
 para :: Functor f => (f (Fix f, a) -> a) -> Fix f -> a
 para f = f . fmap (id &&& para f) . unFix
