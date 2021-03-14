@@ -116,9 +116,10 @@ instance (MonadBasicThunk m, MonadCatch m)
         atomicModifyVar
           ref
           (\ x ->
-            case x of
-              Computed _ -> (x, x)
-              _deferred -> (_deferred, x)
+             deferred
+               (const (x, x))
+               (const (x, x))
+               x
           )
       pure t
 
@@ -179,7 +180,7 @@ instance (MonadBasicThunk m, MonadCatch m)
 
 
 -- | @either@ for @Deferred@ data type
-deferred :: (v -> m v) -> (m v -> m v) -> Deferred m v -> m v
+deferred :: (v -> b) -> (m v -> b) -> Deferred m v -> b
 deferred f1 f2 def =
   case def of
     Computed v -> f1 v
