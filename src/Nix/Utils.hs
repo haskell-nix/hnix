@@ -40,6 +40,9 @@ import           Prelude                       as X
                                          hiding ( putStr
                                                 , putStrLn
                                                 , print
+#if !MIN_VERSION_base(4,13,0)
+                                                , fail
+#endif
                                                 )
 trace :: String -> a -> a
 trace = const id

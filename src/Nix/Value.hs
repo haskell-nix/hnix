@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE ConstraintKinds #-}
@@ -34,6 +35,9 @@ import           Control.Monad.Free             ( Free(..)
 import           Control.Monad.Trans.Class      ( MonadTrans
                                                 , lift
                                                 )
+#if !MIN_VERSION_base(4,13,0)
+import           Control.Monad.Fail
+#endif
 import qualified Data.Aeson                    as Aeson
 import           Data.Functor.Classes           ( Show1
                                                 , liftShowsPrec
