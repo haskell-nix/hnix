@@ -18,7 +18,7 @@ import           Lens.Family2.TH
 
 import           Nix.Expr.Types.Annotated
 import           Nix.Scope
-import           Nix.Value                      ( NValue, NValue'(NValue) )
+import           Nix.Value                      ( NValue, NValue'(NValue') )
 import           Control.Monad.Free             ( Free(Pure, Free) )
 
 data Provenance m v = Provenance
@@ -65,8 +65,8 @@ class HasCitations1 m v f where
 
 instance HasCitations1 m v f
   => HasCitations m v (NValue' t f m a) where
-  citations (NValue f) = citations1 f
-  addProvenance x (NValue f) = NValue (addProvenance1 x f)
+  citations (NValue' f) = citations1 f
+  addProvenance x (NValue' f) = NValue' (addProvenance1 x f)
 
 instance (HasCitations1 m v f, HasCitations m v t)
   => HasCitations m v (NValue t f m) where

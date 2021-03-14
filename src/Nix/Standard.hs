@@ -81,6 +81,7 @@ newtype StdCited m a = StdCited
 newtype StdThunk (m :: * -> *) = StdThunk
   { _stdThunk :: StdCited m (NThunkF m (StdValue m)) }
 
+type StdValue' m = NValue' (StdThunk m) (StdCited m) m (StdValue m)
 type StdValue m = NValue (StdThunk m) (StdCited m) m
 
 instance Show (StdThunk m) where

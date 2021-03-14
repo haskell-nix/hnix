@@ -189,7 +189,7 @@ valueEqM
 valueEqM (  Pure x) (  Pure y) = thunkEqM x y
 valueEqM (  Pure x) y@(Free _) = thunkEqM x =<< thunk (pure y)
 valueEqM x@(Free _) (  Pure y) = (`thunkEqM` y) =<< thunk (pure x)
-valueEqM (Free (NValue (extract -> x))) (Free (NValue (extract -> y))) =
+valueEqM (Free (NValue' (extract -> x))) (Free (NValue' (extract -> y))) =
   valueFEqM
     (compareAttrSetsM f valueEqM)
     valueEqM
