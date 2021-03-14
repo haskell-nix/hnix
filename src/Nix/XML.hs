@@ -61,7 +61,6 @@ toXML = runWithStringContext . fmap pp . iterNValue (\_ _ -> cyc) phi
       pure $ Element (unqual "function") mempty (paramsXML p) Nothing
     NVPath' fp        -> pure $ mkElem "path" "value" fp
     NVBuiltin' name _ -> pure $ mkElem "function" "name" name
-    _                 -> error "Pattern synonyms mask coverage"
 
 mkElem :: String -> String -> String -> Element
 mkElem n a v = Element (unqual n) [Attr (unqual a) v] mempty Nothing
