@@ -29,13 +29,32 @@ import           Nix.Utils                      ( bool
                                                 , dup
                                                 )
 
+
+-- * Data type @Deferred@
+
+-- | Data is computed OR in a lazy thunk state which
+-- is still not evaluated.
 data Deferred m v = Computed v | Deferred (m v)
   deriving (Functor, Foldable, Traversable)
 
--- | It is a reference (@ref-tf: Ref m@), and as such also holds @Bool@ lock.
+-- ** Utils
+
+-- | @Deferred (Computed|Deferred)@ analog of @either@.
+deferred :: (v -> b) -> (m v -> b) -> Deferred m v -> b
+deferred f1 f2 def =
+  case def of
+    Computed v -> f1 v
+    Deferred action -> f2 action
+{-# inline deferred #-}
+
+
+-- * Thunk references & lock handling
+
+-- | Thunk resource reference (@ref-tf: Ref m@), and as such also also hold
+-- a @Bool@ lock flag.
 type ThunkRef m = (Var m Bool)
 
--- | Reference (@ref-tf: Ref m v@) to a value that thunk holds.
+-- | Reference (@ref-tf: Ref m v@) to a value that the thunk holds.
 type ThunkValueRef m v = Var m (Deferred m v)
 
 -- | @ref-tf@ lock instruction for @Ref m@ (@ThunkRef@).
@@ -45,6 +64,25 @@ lock = (True, )
 -- | @ref-tf@ unlock instruction for @Ref m@ (@ThunkRef@).
 unlock :: Bool -> (Bool, Bool)
 unlock = (False, )
+
+-- | Takes @ref-tf: Ref m@ reference, returns Bool result of the operation.
+lockThunk
+  :: ( MonadBasicThunk m
+    , MonadCatch m
+    )
+  => ThunkRef m
+  -> m Bool
+lockThunk r = atomicModifyVar r lock
+
+-- | Takes @ref-tf: Ref m@ reference, returns Bool result of the operation.
+unlockThunk
+  :: ( MonadBasicThunk m
+    , MonadCatch m
+    )
+  => ThunkRef m
+  -> m Bool
+unlockThunk r = atomicModifyVar r unlock
+
 
 -- * Data type for thunks: @NThunkF@
 
@@ -118,16 +156,16 @@ forceMain (Thunk n thunkRef thunkValRef) =
       pure
       (\ action ->
         do
-          lockedIt <- atomicModifyVar thunkRef lock
+          lockedIt <- lockThunk thunkRef
           bool
             (throwM $ ThunkLoop $ show n)
             (do
               v <- catch action $ \(e :: SomeException) ->
                 do
-                  _unlockedIt <- atomicModifyVar thunkRef unlock
+                  _unlockedIt <- unlockThunk thunkRef
                   throwM e
               writeVar thunkValRef (Computed v)
-              _unlockedIt <- atomicModifyVar thunkRef unlock
+              _unlockedIt <- unlockThunk thunkRef
               pure v
             )
             (not lockedIt)
@@ -149,7 +187,7 @@ instance (MonadBasicThunk m, MonadCatch m)
     -> m r
   queryMF k n (Thunk _ thunkRef thunkValRef) =
     do
-      lockedIt <- atomicModifyVar thunkRef (True, )
+      lockedIt <- lockThunk thunkRef
       bool
         n
         go
@@ -163,7 +201,7 @@ instance (MonadBasicThunk m, MonadCatch m)
               k
               (const n)
               eres
-          _unlockedIt <- atomicModifyVar thunkRef (False, )
+          _unlockedIt <- unlockThunk thunkRef
           pure res
 
   forceF
@@ -193,12 +231,3 @@ instance (MonadBasicThunk m, MonadCatch m)
       pure t
 
 
--- ** Utils
-
--- | @either@ for @Deferred@ data type
-deferred :: (v -> b) -> (m v -> b) -> Deferred m v -> b
-deferred f1 f2 def =
-  case def of
-    Computed v -> f1 v
-    Deferred action -> f2 action
-{-# inline deferred #-}

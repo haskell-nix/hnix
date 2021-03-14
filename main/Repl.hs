@@ -184,9 +184,9 @@ initState mIni = do
     evalText :: (MonadNix e t f m) => Text -> m (NValue t f m)
     evalText expr =
       either
-      (\ e -> fail $ "Impossible happened: Unable to parse expression - '" <> Text.unpack expr <> "' fail was " <> show e)
-      (\ e -> do evalExprLoc e)
-      (parseNixTextLoc expr)
+        (\ e -> fail $ "Impossible happened: Unable to parse expression - '" <> Text.unpack expr <> "' fail was " <> show e)
+        (\ e -> do evalExprLoc e)
+        (parseNixTextLoc expr)
 
 type Repl e t f m = HaskelineT (StateT (IState t f m) m)
 
