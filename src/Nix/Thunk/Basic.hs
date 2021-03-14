@@ -32,6 +32,8 @@ import           Nix.Utils                      ( bool
 data Deferred m v = Computed v | Deferred (m v)
   deriving (Functor, Foldable, Traversable)
 
+-- * Data type for thunks: @NThunkF@
+
 -- | The type of very basic thunks
 data NThunkF m v
   = Thunk (ThunkId m) (Var m Bool) (Var m (Deferred m v))
@@ -43,6 +45,9 @@ instance Show (NThunkF m v) where
   show Thunk{} = "<thunk>"
 
 type MonadBasicThunk m = (MonadThunkId m, MonadVar m)
+
+
+-- ** @instance MonadThunk NThunkF@
 
 instance (MonadBasicThunk m, MonadCatch m)
   => MonadThunk (NThunkF m v) m v where
@@ -66,50 +71,10 @@ instance (MonadBasicThunk m, MonadCatch m)
         =<< readVar ref
 
   force :: NThunkF m v -> m v
-  force (Thunk n active ref) =
-    do
-      deferred
-        pure
-        (\ action ->
-          do
-            lockThunk <- atomicModifyVar active (True, )
-            bool
-              (throwM $ ThunkLoop $ show n)
-              (do
-                v <- catch action $ \(e :: SomeException) ->
-                  do
-                    _ <- atomicModifyVar active (False, )
-                    throwM e
-                writeVar ref (Computed v)
-                _unlockThunk <- atomicModifyVar active (False, )
-                pure v
-              )
-              (not lockThunk)
-        )
-        =<< readVar ref
+  force = forceMain
 
   forceEff :: NThunkF m v -> m v
-  forceEff (Thunk n active ref) =
-    do
-      deferred
-        pure
-        (\ action ->
-          do
-            lockThunk <- atomicModifyVar active (True, )
-            bool
-              (throwM $ ThunkLoop $ show n)
-              (do
-                v <- catch action $ \(e :: SomeException) ->
-                  do
-                    _ <- atomicModifyVar active (False, )
-                    throwM e
-                writeVar ref (Computed v)
-                _unlockThunk <- atomicModifyVar active (False, )
-                pure v
-              )
-              (not lockThunk)
-        )
-        =<< readVar ref
+  forceEff = forceMain
 
   further :: NThunkF m v -> m (NThunkF m v)
   further t@(Thunk _ _ ref) =
@@ -121,7 +86,40 @@ instance (MonadBasicThunk m, MonadCatch m)
       pure t
 
 
--- * Kleisli functor HOFs
+-- *** United body of `force*`
+
+forceMain
+  :: ( MonadBasicThunk m
+    , MonadCatch m
+    )
+  => NThunkF m v
+  -> m v
+forceMain (Thunk n active ref) =
+  do
+    deferred
+      pure
+      (\ action ->
+        do
+          lockThunk <- atomicModifyVar active (True, )
+          bool
+            (throwM $ ThunkLoop $ show n)
+            (do
+              v <- catch action $ \(e :: SomeException) ->
+                do
+                  _ <- atomicModifyVar active (False, )
+                  throwM e
+              writeVar ref (Computed v)
+              _unlockThunk <- atomicModifyVar active (False, )
+              pure v
+            )
+            (not lockThunk)
+      )
+      =<< readVar ref
+{-# inline forceMain #-} -- it is big function, but internal, and look at its use.
+
+
+
+-- ** Kleisli functor HOFs: @instance MonadThunkF NThunkF@
 
 instance (MonadBasicThunk m, MonadCatch m)
   => MonadThunkF (NThunkF m v) m v where
@@ -173,8 +171,8 @@ instance (MonadBasicThunk m, MonadCatch m)
           Deferred d -> (Deferred (k d), x)
       pure t
 
--- ** Utils
 
+-- ** Utils
 
 -- | @either@ for @Deferred@ data type
 deferred :: (v -> b) -> (m v -> b) -> Deferred m v -> b
