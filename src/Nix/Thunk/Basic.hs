@@ -54,6 +54,7 @@ instance (MonadBasicThunk m, MonadCatch m)
       freshThunkId <- freshId
       Thunk freshThunkId <$> newVar False <*> newVar (Deferred action)
 
+  -- | Non-blocking query
   queryM :: m v -> NThunkF m v -> m v
   queryM n (Thunk _ _ ref) =
     do
@@ -70,7 +71,7 @@ instance (MonadBasicThunk m, MonadCatch m)
         Computed v      -> pure v
         Deferred action ->
           do
-            seizeThunk <- atomicModifyVar active (True, )
+            lockThunk <- atomicModifyVar active (True, )
             bool
               (throwM $ ThunkLoop $ show n)
               (do
@@ -82,26 +83,29 @@ instance (MonadBasicThunk m, MonadCatch m)
                 _freeThunk <- atomicModifyVar active (False, )
                 pure v
               )
-              (not seizeThunk)
+              (not lockThunk)
 
   forceEff :: NThunkF m v -> m v
-  forceEff (Thunk _ active ref) =
+  forceEff (Thunk n active ref) =
     do
       eres <- readVar ref
       case eres of
         Computed v      -> pure v
         Deferred action ->
           do
-            seizeThunk <- atomicModifyVar active (True, )
+            lockThunk <- atomicModifyVar active (True, )
             bool
-              (pure $ error "Loop detected")
+              (throwM $ ThunkLoop $ show n)
               (do
-                v <- action
+                v <- catch action $ \(e :: SomeException) ->
+                  do
+                    _ <- atomicModifyVar active (False, )
+                    throwM e
                 writeVar ref (Computed v)
-                _freeThunk <- atomicModifyVar active (False, )
+                _unlockThunk <- atomicModifyVar active (False, )
                 pure v
               )
-              (not seizeThunk)
+              (not lockThunk)
 
   further :: NThunkF m v -> m (NThunkF m v)
   further t@(Thunk _ _ ref) =
@@ -168,4 +172,3 @@ instance (MonadBasicThunk m, MonadCatch m)
           Computed _ -> (x, x)
           Deferred d -> (Deferred (k d), x)
       pure t
-
