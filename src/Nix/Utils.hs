@@ -283,3 +283,9 @@ for_ = flip traverse_
 both :: (a -> b) -> (a, a) -> (b, b)
 both f (x,y) = (f x, f y)
 {-# inline both #-}
+
+
+-- | Duplicates object into a tuple.
+dup :: a -> (a, a)
+dup x = (x, x)
+{-# inline dup #-}

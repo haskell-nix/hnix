@@ -25,7 +25,9 @@ import           Control.Monad.Catch            ( MonadCatch(..)
                                                 )
 import           Nix.Thunk
 import           Nix.Var
-import           Nix.Utils                      ( bool )
+import           Nix.Utils                      ( bool
+                                                , dup
+                                                )
 
 data Deferred m v = Computed v | Deferred (m v)
   deriving (Functor, Foldable, Traversable)
@@ -115,12 +117,7 @@ instance (MonadBasicThunk m, MonadCatch m)
       _ <-
         atomicModifyVar
           ref
-          (\ x ->
-             deferred
-               (const (x, x))
-               (const (x, x))
-               x
-          )
+          dup
       pure t
 
 
