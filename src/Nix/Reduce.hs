@@ -185,12 +185,14 @@ reduce (NSym_ ann var) =
   fromMaybe (Fix (NSym_ ann var)) <$> lookupVar var
 
 -- | Reduce binary and integer negation.
-reduce (NUnary_ uann op arg) = arg >>= \x -> case (op, x) of
-  (NNeg, Fix (NConstant_ cann (NInt n))) ->
-    pure $ Fix $ NConstant_ cann (NInt (negate n))
-  (NNot, Fix (NConstant_ cann (NBool b))) ->
-    pure $ Fix $ NConstant_ cann (NBool (not b))
-  _ -> pure $ Fix $ NUnary_ uann op x
+reduce (NUnary_ uann op arg) =
+  do
+    x <- arg
+    pure $ Fix $
+      case (op, x) of
+        (NNeg, Fix (NConstant_ cann (NInt  n))) -> NConstant_ cann (NInt (negate n))
+        (NNot, Fix (NConstant_ cann (NBool b))) -> NConstant_ cann (NBool (not b))
+        _                                       -> NUnary_    uann op x
 
 -- | Reduce function applications.
 --
@@ -199,25 +201,31 @@ reduce (NUnary_ uann op arg) = arg >>= \x -> case (op, x) of
 --     * Reduce a lambda function by adding its name to the local
 --       scope and recursively reducing its body.
 reduce (NBinary_ bann NApp fun arg) = fun >>= \case
-  f@(Fix (NSym_ _ "import")) -> arg >>= \case
-      -- Fix (NEnvPath_     pann origPath) -> staticImport pann origPath
-    Fix (NLiteralPath_ pann origPath) -> staticImport pann origPath
-    v -> pure $ Fix $ NBinary_ bann NApp f v
+  f@(Fix (NSym_ _ "import")) ->
+    (\case
+        -- Fix (NEnvPath_     pann origPath) -> staticImport pann origPath
+      Fix (NLiteralPath_ pann origPath) -> staticImport pann origPath
+      v -> pure $ Fix $ NBinary_ bann NApp f v
+    ) =<< arg
 
-  Fix (NAbs_ _ (Param name) body) -> do
-    x <- arg
-    pushScope (M.singleton name x) (foldFix reduce body)
+  Fix (NAbs_ _ (Param name) body) ->
+    do
+      x <- arg
+      pushScope
+        (M.singleton name x)
+        (foldFix reduce body)
 
   f -> Fix . NBinary_ bann NApp f <$> arg
 
 -- | Reduce an integer addition to its result.
-reduce (NBinary_ bann op larg rarg) = do
-  lval <- larg
-  rval <- rarg
-  case (op, lval, rval) of
-    (NPlus, Fix (NConstant_ ann (NInt x)), Fix (NConstant_ _ (NInt y))) ->
-      pure $ Fix (NConstant_ ann (NInt (x + y)))
-    _ -> pure $ Fix $ NBinary_ bann op lval rval
+reduce (NBinary_ bann op larg rarg) =
+  do
+    lval <- larg
+    rval <- rarg
+    pure $ Fix $
+      case (op, lval, rval) of
+        (NPlus, Fix (NConstant_ ann (NInt x)), Fix (NConstant_ _ (NInt y))) -> NConstant_ ann  (NInt (x + y))
+        _                                                                   -> NBinary_   bann op lval rval
 
 -- | Reduce a select on a Set by substituting the set to the selected value.
 --
@@ -235,7 +243,7 @@ reduce base@(NSelect_ _ _ attrs _)
   sId = Fix <$> sequence base
   -- The selection AttrPath is composed of StaticKeys.
   sAttrPath (StaticKey _ : xs) = sAttrPath xs
-  sAttrPath []             = True
+  sAttrPath []                 = True
   sAttrPath _                  = False
   -- Find appropriate bind in set's binds.
   findBind []   _              = Nothing
@@ -322,22 +330,28 @@ reduce (NLet_ ann binds body) =
 
 -- | Reduce an if to the relevant path if
 --   the condition is a boolean constant.
-reduce e@(NIf_ _ b t f) = b >>= \case
-  Fix (NConstant_ _ (NBool b')) -> if b' then t else f
-  _                             -> Fix <$> sequence e
+reduce e@(NIf_ _ b t f) =
+  (\case
+    Fix (NConstant_ _ (NBool b')) -> if b' then t else f
+    _                             -> Fix <$> sequence e
+  ) =<< b
 
 -- | Reduce an assert atom to its encapsulated
 --   symbol if the assertion is a boolean constant.
-reduce e@(NAssert_ _ b body) = b >>= \case
-  Fix (NConstant_ _ (NBool b')) | b' -> body
-  _ -> Fix <$> sequence e
+reduce e@(NAssert_ _ b body) =
+  (\case
+    Fix (NConstant_ _ (NBool b')) | b' -> body
+    _ -> Fix <$> sequence e
+  ) =<< b
 
 reduce (NAbs_ ann params body) = do
   params' <- sequence params
   -- Make sure that variable definitions in scope do not override function
   -- arguments.
-  let args = case params' of
-        Param name -> M.singleton name (Fix (NSym_ ann name))
+  let
+    args =
+      case params' of
+        Param    name     -> M.singleton name (Fix (NSym_ ann name))
         ParamSet pset _ _ ->
           M.fromList $ fmap (\(k, _) -> (k, Fix (NSym_ ann k))) pset
   Fix . NAbs_ ann params' <$> pushScope args body
@@ -346,7 +360,7 @@ reduce v = Fix <$> sequence v
 
 -- newtype FlaggedF f r = FlaggedF { flagged :: (IORef Bool, f r) }
 newtype FlaggedF f r = FlaggedF (IORef Bool, f r)
-    deriving (Functor, Foldable, Traversable)
+  deriving (Functor, Foldable, Traversable)
 
 instance Show (f r) => Show (FlaggedF f r) where
   show (FlaggedF (_, x)) = show x
@@ -362,9 +376,16 @@ flagExprLoc = foldFixM $ \x -> do
 -- stripFlags = foldFix $ Fix . snd . flagged
 
 pruneTree :: MonadIO n => Options -> Flagged NExprLocF -> n (Maybe NExprLoc)
-pruneTree opts = foldFixM $ \(FlaggedF (b, Compose x)) -> do
-  used <- liftIO $ readIORef b
-  pure $ if used then Fix . Compose <$> traverse prune x else Nothing
+pruneTree opts =
+  foldFixM $
+    \(FlaggedF (b, Compose x)) ->
+      do
+        used <- liftIO $ readIORef b
+        pure $
+          bool
+            Nothing
+            (Fix . Compose <$> traverse prune x)
+            used
  where
   prune :: NExprF (Maybe NExprLoc) -> Maybe (NExprF NExprLoc)
   prune = \case
@@ -389,7 +410,7 @@ pruneTree opts = foldFixM $ \(FlaggedF (b, Compose x)) -> do
 
     -- These are the only short-circuiting binary operators
     NBinary NAnd (Just (Fix (Compose (Ann _ larg)))) _ -> pure larg
-    NBinary NOr (Just (Fix (Compose (Ann _ larg)))) _ -> pure larg
+    NBinary NOr  (Just (Fix (Compose (Ann _ larg)))) _ -> pure larg
 
     -- If the function was never called, it means its argument was in a
     -- thunk that was forced elsewhere.
@@ -427,16 +448,16 @@ pruneTree opts = foldFixM $ \(FlaggedF (b, Compose x)) -> do
     :: Antiquoted Text (Maybe NExprLoc) -> Maybe (Antiquoted Text NExprLoc)
   pruneAntiquotedText (Plain v)             = pure (Plain v)
   pruneAntiquotedText EscapedNewline        = pure EscapedNewline
-  pruneAntiquotedText (Antiquoted Nothing ) = Nothing
   pruneAntiquotedText (Antiquoted (Just k)) = pure (Antiquoted k)
+  pruneAntiquotedText (Antiquoted Nothing ) = Nothing
 
   pruneAntiquoted
     :: Antiquoted (NString (Maybe NExprLoc)) (Maybe NExprLoc)
     -> Maybe (Antiquoted (NString NExprLoc) NExprLoc)
   pruneAntiquoted (Plain v)             = pure (Plain (pruneString v))
   pruneAntiquoted EscapedNewline        = pure EscapedNewline
-  pruneAntiquoted (Antiquoted Nothing ) = Nothing
   pruneAntiquoted (Antiquoted (Just k)) = pure (Antiquoted k)
+  pruneAntiquoted (Antiquoted Nothing ) = Nothing
 
   pruneKeyName :: NKeyName (Maybe NExprLoc) -> NKeyName NExprLoc
   pruneKeyName (StaticKey n) = StaticKey n
@@ -453,12 +474,12 @@ pruneTree opts = foldFixM $ \(FlaggedF (b, Compose x)) -> do
     | otherwise = ParamSet (fmap (second (fmap (fromMaybe nNull))) xs) b n
 
   pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
-  pruneBinding (NamedVar _ Nothing _) = Nothing
-  pruneBinding (NamedVar xs (Just x) pos) =
+  pruneBinding (NamedVar _ Nothing _)           = Nothing
+  pruneBinding (NamedVar xs (Just x) pos)       =
     pure (NamedVar (NE.map pruneKeyName xs) x pos)
   pruneBinding (Inherit _                 [] _) = Nothing
-  pruneBinding (Inherit (join -> Nothing) _  _) = Nothing
-  pruneBinding (Inherit (join -> m) xs pos) =
+  pruneBinding (Inherit (join -> Nothing) _  _)  = Nothing
+  pruneBinding (Inherit (join -> m) xs pos)      =
     pure (Inherit m (fmap pruneKeyName xs) pos)
 
 reducingEvalExpr
