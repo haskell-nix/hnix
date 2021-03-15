@@ -60,7 +60,7 @@ renderFrames (x : xs) = do
       frames
  where
   go :: NixFrame -> [Doc ann]
-  go f = (\ pos -> ["While evaluating at " <> pretty (sourcePosPretty pos) <> colon]) `ifJust` framePos @v @m f
+  go f = (\ pos -> ["While evaluating at " <> pretty (sourcePosPretty pos) <> colon]) `whenJust` framePos @v @m f
 
 framePos
   :: forall v (m :: * -> *)
@@ -91,7 +91,7 @@ renderFrame (NixFrame level f)
   | Just (e :: ExecFrame t f m) <- fromException f = renderExecFrame level e
   | Just (e :: ErrorCall) <- fromException f = pure [pretty (show e)]
   | Just (e :: SynHoleInfo m v) <- fromException f = pure [pretty (show e)]
-  | otherwise = error $ "Unrecognized frame: " <> show f
+  | otherwise = fail $ "Unrecognized frame: " <> show f
 
 wrapExpr :: NExprF r -> NExpr
 wrapExpr x = Fix (Fix (NSym "<?>") <$ x)

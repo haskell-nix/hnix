@@ -76,16 +76,19 @@ ensureNixpkgsCanParse =
             -- parser is fully executed.
             _ <- consider file (parseNixFileLoc file) $ Exc.evaluate . force
             pure ()
-    v -> error $ "Unexpected parse from default.nix: " <> show v
+    v -> fail $ "Unexpected parse from default.nix: " <> show v
  where
   getExpr   k m = let Just (Just r) = lookup k m in r
   getString k m =
       let Fix (NStr (DoubleQuoted [Plain str])) = getExpr k m in str
 
-  consider path action k = action >>= \case
-    Failure err -> errorWithoutStackTrace $
-      "Parsing " <> path <> " failed: " <> show err
-    Success expr -> k expr
+  consider path action k =
+    do
+      x <- action
+      either
+        (\ err -> errorWithoutStackTrace $ "Parsing " <> path <> " failed: " <> show err)
+        k
+        x
 
 main :: IO ()
 main = do

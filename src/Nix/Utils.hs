@@ -40,6 +40,9 @@ import           Prelude                       as X
                                          hiding ( putStr
                                                 , putStrLn
                                                 , print
+#if !MIN_VERSION_base(4,13,0)
+                                                , fail
+#endif
                                                 )
 trace :: String -> a -> a
 trace = const id
@@ -62,19 +65,21 @@ type AlgM f m a = f a -> m a
 -- | "Transform" here means a modification of a catamorphism.
 type Transform f a = (Fix f -> a) -> Fix f -> a
 
-{-# inline (<&>)#-}
 (<&>) :: Functor f => f a -> (a -> c) -> f c
 (<&>) = flip (<$>)
+{-# inline (<&>) #-}
 
-{-# inline (??)#-}
 (??) :: Functor f => f (a -> b) -> a -> f b
 fab ?? a = fmap ($ a) fab
+{-# inline (??) #-}
 
 loeb :: Functor f => f (f a -> a) -> f a
 loeb x = go where go = fmap ($ go) x
 
 loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
-loebM f = mfix $ \a -> traverse ($ a) f
+-- Sectioning here insures optimization happening.
+loebM f = mfix $ \a -> (`traverse` f) ($ a)
+{-# inline loebM #-}
 
 para :: Functor f => (f (Fix f, a) -> a) -> Fix f -> a
 para f = f . fmap (id &&& para f) . unFix
@@ -175,15 +180,14 @@ alterF f k m =
     )
     $ f $ M.lookup k m
 
-{-# inline bool #-}
 -- | From @Data.Bool ( bool )@.
 bool :: a -> a -> Bool -> a
 bool f t b =
   if b
     then t
     else f
+{-# inline bool #-}
 
-{-# inline list #-}
 -- | Analog for @bool@ or @maybe@, for list-like cons structures.
 list
   :: Foldable t
@@ -193,76 +197,78 @@ list e f l =
     (f l)
     e
     (null l)
+{-# inline list #-}
 
-{-# inline free #-}
 -- | Lambda analog of @maybe@ or @either@ for Free monad.
 free :: (a -> b) -> (f (Free f a) -> b) -> Free f a -> b
 free fP fF fr =
   case fr of
     Pure a -> fP a
     Free fa -> fF fa
+{-# inline free #-}
 
-{-# inline ifTrue #-}
-ifTrue :: (Monoid a)
+
+whenTrue :: (Monoid a)
   => a -> Bool -> a
-ifTrue =
+whenTrue =
   bool
     mempty
+{-# inline whenTrue #-}
 
-{-# inline ifFalse #-}
-ifFalse :: (Monoid a)
+whenFalse :: (Monoid a)
   => a  -> Bool  -> a
-ifFalse f =
+whenFalse f =
   bool
     f
     mempty
+{-# inline whenFalse #-}
 
-{-# inline ifJust #-}
-ifJust :: (Monoid b)
+whenJust :: (Monoid b)
   => (a -> b)  -> Maybe a  -> b
-ifJust =
+whenJust =
   maybe
     mempty
+{-# inline whenJust #-}
 
-{-# inline ifNothing #-}
-ifNothing  :: (Monoid b)
+whenNothing  :: (Monoid b)
   => b  -> Maybe a  -> b
-ifNothing f =
+whenNothing f =
   maybe
     f
     mempty
+{-# inline whenNothing #-}
 
-{-# inline ifRight #-}
-ifRight :: (Monoid c)
+whenRight :: (Monoid c)
   => (b -> c) -> Either a b -> c
-ifRight =
+whenRight =
   either
     mempty
+{-# inline whenRight #-}
 
-{-# inline ifLeft #-}
-ifLeft :: (Monoid c)
+whenLeft :: (Monoid c)
   => (a -> c) -> Either a b -> c
-ifLeft f =
+whenLeft f =
   either
     f
     mempty
+{-# inline whenLeft #-}
 
-{-# inline ifFree #-}
-ifFree :: (Monoid b)
+whenFree :: (Monoid b)
   => (f (Free f a) -> b) -> Free f a -> b
-ifFree =
+whenFree =
   free
     mempty
+{-# inline whenFree #-}
 
-{-# inline ifPure #-}
-ifPure :: (Monoid b)
+whenPure :: (Monoid b)
   => (a -> b) -> Free f a -> b
-ifPure f =
+whenPure f =
   free
     f
     mempty
+{-# inline whenPure #-}
 
--- From @base@ @Data.Foldable@
+-- | From @base@ @Data.Foldable@
 traverse_ :: (Foldable t, Applicative f) => (a -> f b) -> t a -> f ()
 traverse_ f = foldr c (pure ())
   -- See Note [List fusion and continuations in 'c']
@@ -273,3 +279,18 @@ traverse_ f = foldr c (pure ())
 for_ :: (Foldable t, Applicative f) => t a -> (a -> f b) -> f ()
 for_ = flip traverse_
 {-# inline for_ #-}
+
+-- | Apply a single function to both components of a pair.
+--
+-- > both succ (1,2) == (2,3)
+--
+-- Taken From package @extra@
+both :: (a -> b) -> (a, a) -> (b, b)
+both f (x,y) = (f x, f y)
+{-# inline both #-}
+
+
+-- | Duplicates object into a tuple.
+dup :: a -> (a, a)
+dup x = (x, x)
+{-# inline dup #-}

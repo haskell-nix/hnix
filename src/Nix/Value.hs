@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE ConstraintKinds #-}
@@ -34,6 +35,9 @@ import           Control.Monad.Free             ( Free(..)
 import           Control.Monad.Trans.Class      ( MonadTrans
                                                 , lift
                                                 )
+#if !MIN_VERSION_base(4,13,0)
+import           Control.Monad.Fail
+#endif
 import qualified Data.Aeson                    as Aeson
 import           Data.Functor.Classes           ( Show1
                                                 , liftShowsPrec
@@ -54,6 +58,9 @@ import           Nix.String
 import           Nix.Thunk
 import           Nix.Utils
 import           Data.Eq.Deriving
+
+
+-- * @__NValueF__@: Base functor
 
 -- | An NValueF p m r represents all the possible types of Nix values.
 --
@@ -118,8 +125,6 @@ import           Data.Eq.Deriving
 --   all the NValueF constructors. The non primed version also has an NVThunk t
 --   pattern to account for the possibility of an NValue to no be fully
 --   evaluated yet, as opposed to an NValue'.
-
--- * @__NValueF__@: Base functor
 
 data NValueF p m r
     = NVConstantF NAtom
@@ -778,7 +783,7 @@ type MonadDataContext f (m :: * -> *)
 -- * @MonadDataErrorContext@
 
 type MonadDataErrorContext t f m
-  = (Show t, Typeable t, Typeable m, Typeable f, MonadDataContext f m)
+  = (Show t, Typeable t, Typeable m, Typeable f, MonadDataContext f m, MonadFail m)
 
 instance MonadDataErrorContext t f m => Exception (ValueFrame t f m)
 

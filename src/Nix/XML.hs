@@ -72,7 +72,7 @@ paramsXML (ParamSet s b mname) =
  where
   battr = [ Attr (unqual "ellipsis") "1" | b ]
   nattr =
-      ((: mempty) . Attr (unqual "name") . Text.unpack) `ifJust` mname
+      ((: mempty) . Attr (unqual "name") . Text.unpack) `whenJust` mname
 
 paramSetXML :: ParamSet r -> [Content]
 paramSetXML = fmap (\(k, _) -> Elem $ mkElem "attr" "name" (Text.unpack k))

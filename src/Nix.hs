@@ -123,9 +123,10 @@ evaluateExpression mpath evaluator handler expr = do
     ) =<< demand f
  where
   parseArg s =
-    case parseNixText s of
-      Success x   -> x
-      Failure err -> errorWithoutStackTrace (show err)
+    either
+      (errorWithoutStackTrace . show)
+      id
+      (parseNixText s)
 
   eval' = normalForm <=< nixEvalExpr mpath
 

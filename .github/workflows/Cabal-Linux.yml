@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ghc: [ "8.10", "8.4" ]
+        ghc: [ "8.10", "8.6" ]
     steps:
 
       - name: "Git checkout"

@@ -85,48 +85,54 @@ main = do
       )
       (readFrom opts)
 
-  processFile opts path = do
-    eres <- parseNixFileLoc path
-    handleResult opts (pure path) eres
+  processFile opts path =
+    do
+      eres <- parseNixFileLoc path
+      handleResult opts (pure path) eres
 
-  handleResult opts mpath = \case
-    Failure err ->
-      bool
-        errorWithoutStackTrace
-        (liftIO . hPutStrLn stderr)
-        (ignoreErrors opts)
-        $ "Parse failed: " <> show err
-
-    Success expr -> do
-      when (check opts) $ do
-        expr' <- liftIO (reduceExpr mpath expr)
-        either
-          (\ err -> errorWithoutStackTrace $ "Type error: " <> PS.ppShow err)
-          (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <> PS.ppShow
-            (fromJust $ Map.lookup "it" $ Env.types ty)
-          )
-          (HM.inferTop Env.empty [("it", stripAnnotation expr')])
-
-          -- liftIO $ putStrLn $ runST $
-          --     runLintM opts . renderSymbolic =<< lint opts expr
-
-      catch (process opts mpath expr) $ \case
-        NixException frames ->
+  handleResult opts mpath =
+    either
+      (\ err ->
+        bool
           errorWithoutStackTrace
-            .   show
-            =<< renderFrames @(StdValue (StandardT (StdIdT IO)))
-                  @(StdThunk (StandardT (StdIdT IO)))
-                  frames
+          (liftIO . hPutStrLn stderr)
+          (ignoreErrors opts)
+          $ "Parse failed: " <> show err
+      )
 
-      when (repl opts) $
-        withNixContext mempty $
-          bool
-            Repl.main
-            (do
-              val <- Nix.nixEvalExprLoc mpath expr
-              Repl.main' $ pure val
-            )
-            (evaluate opts)
+      (\ expr ->
+        do
+          when (check opts) $
+            do
+              expr' <- liftIO (reduceExpr mpath expr)
+              either
+                (\ err -> errorWithoutStackTrace $ "Type error: " <> PS.ppShow err)
+                (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <> PS.ppShow
+                  (fromJust $ Map.lookup "it" $ Env.types ty)
+                )
+                (HM.inferTop Env.empty [("it", stripAnnotation expr')])
+
+                -- liftIO $ putStrLn $ runST $
+                --     runLintM opts . renderSymbolic =<< lint opts expr
+
+          catch (process opts mpath expr) $
+            \case
+              NixException frames ->
+                errorWithoutStackTrace . show
+                  =<< renderFrames @(StdValue (StandardT (StdIdT IO)))
+                        @(StdThunk (StandardT (StdIdT IO)))
+                        frames
+
+          when (repl opts) $
+            withNixContext mempty $
+              bool
+                Repl.main
+                (do
+                  val <- Nix.nixEvalExprLoc mpath expr
+                  Repl.main' $ pure val
+                )
+                (evaluate opts)
+      )
 
   process opts mpath expr
     | evaluate opts =
@@ -137,8 +143,8 @@ main = do
               && null (argstr opts)
               )                    -> evaluateExpression mpath Nix.nixEvalExprLoc printer expr
         | otherwise                -> processResult printer =<< Nix.nixEvalExprLoc mpath expr
-    | xml opts                     =  error "Rendering expression trees to XML is not yet implemented"
-    | json opts                    =  error "Rendering expression trees to JSON is not implemented"
+    | xml opts                     =  fail "Rendering expression trees to XML is not yet implemented"
+    | json opts                    =  fail "Rendering expression trees to JSON is not implemented"
     | verbose opts >= DebugInfo    =  liftIO $ putStr $ PS.ppShow $ stripAnnotation expr
     | cache opts
       , Just path <- mpath         =  liftIO $ writeCache (addExtension (dropExtension path) "nixc") expr

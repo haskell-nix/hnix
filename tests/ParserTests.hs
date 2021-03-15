@@ -325,10 +325,11 @@ case_operators = do
   assertParseFail "+ 3"
   assertParseFail "foo +"
 
-case_comments = do
-  Success expected <- parseNixFile "data/let.nix"
-  assertParseFile "let-comments-multiline.nix" expected
-  assertParseFile "let-comments.nix" expected
+case_comments =
+  do
+    Right expected <- parseNixFile "data/let.nix"
+    assertParseFile "let-comments-multiline.nix" expected
+    assertParseFile "let-comments.nix" expected
 
 case_select_or_precedence =
     assertParsePrint [text|let
@@ -366,39 +367,53 @@ tests = $testGroupGenerator
 ---------------------------------------------------------------------------------
 
 assertParseText :: Text -> NExpr -> Assertion
-assertParseText str expected = case parseNixText str of
-  Success actual ->
-      assertEqual ("When parsing " <> unpack str)
-          (stripPositionInfo expected) (stripPositionInfo actual)
-  Failure err    ->
-      assertFailure $ "Unexpected error parsing `" <> unpack str <> "':\n" <> show err
+assertParseText str expected =
+  either
+    (\ err ->
+      assertFailure $ "Unexpected fail parsing `" <> unpack str <> "':\n" <> show err
+    )
+    (assertEqual
+      ("When parsing " <> unpack str)
+      (stripPositionInfo expected)
+      . stripPositionInfo
+    )
+    (parseNixText str)
 
 assertParseFile :: FilePath -> NExpr -> Assertion
-assertParseFile file expected = do
+assertParseFile file expected =
+  do
   res <- parseNixFile $ "data/" <> file
-  case res of
-    Success actual -> assertEqual ("Parsing data file " <> file)
-          (stripPositionInfo expected) (stripPositionInfo actual)
-    Failure err    ->
-        assertFailure $ "Unexpected error parsing data file `"
-            <> file <> "':\n" <> show err
+  either
+    (\ err ->
+      assertFailure $ "Unexpected fail parsing data file `" <> file <> "':\n" <> show err
+    )
+    (assertEqual
+      ("Parsing data file " <> file)
+      (stripPositionInfo expected)
+      . stripPositionInfo
+    )
+    res
 
 assertParseFail :: Text -> Assertion
-assertParseFail str = case parseNixText str of
-  Failure _ -> pure ()
-  Success r ->
-      assertFailure $ "Unexpected success parsing `"
-          <> unpack str <> ":\nParsed value: " <> show r
+assertParseFail str =
+  either
+    (const $ pure ())
+    (\ r ->
+      assertFailure $ "Unexpected success parsing `" <> unpack str <> ":\nParsed value: " <> show r
+    )
+    (parseNixText str)
 
 -- assertRoundTrip :: Text -> Assertion
 -- assertRoundTrip src = assertParsePrint src src
 
 assertParsePrint :: Text -> Text -> Assertion
 assertParsePrint src expect =
-  let Success expr = parseNixTextLoc src
-      result = renderStrict
-             . layoutPretty (LayoutOptions $ AvailablePerLine 80 0.4)
-             . prettyNix
-             . stripAnnotation
-             $ expr
+  let
+    Right expr = parseNixTextLoc src
+    result =
+      renderStrict
+      . layoutPretty (LayoutOptions $ AvailablePerLine 80 0.4)
+      . prettyNix
+      . stripAnnotation $
+        expr
   in assertEqual "" expect result

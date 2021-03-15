@@ -19,9 +19,11 @@ import           Control.Monad                  ( MonadPlus )
 import           Control.Monad.Fix              ( MonadFix )
 import           Control.Monad.IO.Class         ( MonadIO )
 import           Control.Monad.Trans.Class      ( MonadTrans
-                                                , lift )
+                                                , lift
+                                                )
 import           Control.Monad.Ref              ( MonadAtomicRef(..)
-                                                , MonadRef(..) )
+                                                , MonadRef(..)
+                                                )
 import           Control.Monad.Catch            ( MonadCatch
                                                 , MonadMask
                                                 , MonadThrow )
@@ -90,16 +92,25 @@ deriving instance MonadState s (t (Fix1T t m) m)
 
 type MonadFix1T t m = (MonadTrans (Fix1T t), Monad (t (Fix1T t m) m))
 
-instance (MonadFix1T t m, MonadRef m)
-  => MonadRef (Fix1T t m) where
+instance
+  ( MonadFix1T t m
+  , MonadRef m
+  )
+  => MonadRef (Fix1T t m)
+ where
   type Ref (Fix1T t m) = Ref m
+
   newRef  = lift . newRef
   readRef = lift . readRef
   writeRef r = lift . writeRef r
 
 
-instance (MonadFix1T t m, MonadAtomicRef m)
-  => MonadAtomicRef (Fix1T t m) where
+instance
+  ( MonadFix1T t m
+  , MonadAtomicRef m
+  )
+  => MonadAtomicRef (Fix1T t m)
+ where
   atomicModifyRef r = lift . atomicModifyRef r
 
 {-

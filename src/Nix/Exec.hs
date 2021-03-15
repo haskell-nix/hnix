@@ -1,5 +1,4 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -289,17 +288,18 @@ callFunc
   -> m (NValue t f m)
 callFunc fun arg =
   do
-    fun' <- demand fun
     frames :: Frames <- asks (view hasLens)
     when (length frames > 2000) $ throwError $ ErrorCall "Function call stack exhausted"
+
+    fun' <- demand fun
     case fun' of
-      NVClosure _params f -> do
-        f arg
-      NVBuiltin name f -> do
-        span <- currentPos
-        withFrame Info (Calling @m @(NValue t f m) name span) (f arg)
-      s@(NVSet m _) | Just f <- M.lookup "__functor" m -> do
-        ((`callFunc` arg) <=< (`callFunc` s)) =<< demand f
+      NVClosure _params f -> f arg
+      NVBuiltin name f ->
+        do
+          span <- currentPos
+          withFrame Info ((Calling @m @(NValue t f m)) name span) (f arg)
+      (NVSet m _) | Just f <- M.lookup "__functor" m ->
+        ((`callFunc` arg) <=< (`callFunc` fun')) =<< demand f
       x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show x
 
 execUnaryOp
@@ -311,12 +311,13 @@ execUnaryOp
   -> m (NValue t f m)
 execUnaryOp scope span op arg = do
   case arg of
-    NVConstant c -> case (op, c) of
-      (NNeg, NInt i  ) -> unaryOp $ NInt (-i)
-      (NNeg, NFloat f) -> unaryOp $ NFloat (-f)
-      (NNot, NBool b ) -> unaryOp $ NBool (not b)
-      _ ->
-        throwError $  ErrorCall $ "unsupported argument type for unary operator " <> show op
+    NVConstant c ->
+      case (op, c) of
+        (NNeg, NInt i  ) -> unaryOp $ NInt (-i)
+        (NNeg, NFloat f) -> unaryOp $ NFloat (-f)
+        (NNot, NBool b ) -> unaryOp $ NBool (not b)
+        _ ->
+          throwError $  ErrorCall $ "unsupported argument type for unary operator " <> show op
     x ->
       throwError $ ErrorCall $ "argument to unary operator must evaluate to an atomic type: " <> show x
  where

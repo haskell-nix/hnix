@@ -98,7 +98,7 @@ stripIndent xs =
 
   dropSpaces 0 x              = x
   dropSpaces n (Plain t : cs) = Plain (T.drop n t) : cs
-  dropSpaces _ _              = error "stripIndent: impossible"
+  dropSpaces _ _              = fail "stripIndent: impossible"
 
   cleanup (Nothing, Plain y) = T.all (== ' ') y
   cleanup (Just (Plain x), Plain y) | "\n" `T.isSuffixOf` x = T.all (== ' ') y

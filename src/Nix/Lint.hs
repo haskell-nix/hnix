@@ -13,7 +13,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE ApplicativeDo #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-missing-methods #-}
@@ -236,7 +235,7 @@ merge context = go
                     <$> go xs ys
 -}
 
--- | unify raises an error if the result is would be 'NMany mempty'.
+-- | unify raises an fail if the result is would be 'NMany mempty'.
 unify
   :: forall e m
    . MonadLint e m
@@ -412,7 +411,7 @@ lintBinaryOp op lsym rarg =
 
           NConcat -> [TList y]
 
-          _ -> error "Should not be possible"  -- symerr or this fun signature should be changed to work in type scope
+          _ -> fail "Should not be possible"  -- symerr or this fun signature should be changed to work in type scope
  where
   check lsym rsym xs =
     do
@@ -468,7 +467,7 @@ instance MonadThrow (Lint s) where
   throwM e = Lint $ ReaderT $ \_ -> throw e
 
 instance MonadCatch (Lint s) where
-  catch _m _h = Lint $ ReaderT $ \_ -> error "Cannot catch in 'Lint s'"
+  catch _m _h = Lint $ ReaderT $ \_ -> fail "Cannot catch in 'Lint s'"
 
 runLintM :: Options -> Lint s a -> ST s a
 runLintM opts action = do

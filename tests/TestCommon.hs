@@ -22,27 +22,34 @@ import           System.Process
 import           Test.Tasty.HUnit
 
 hnixEvalFile :: Options -> FilePath -> IO (StdValue (StandardT (StdIdT IO)))
-hnixEvalFile opts file = do
-  parseResult <- parseNixFileLoc file
-  case parseResult of
-    Failure err -> error $ "Parsing failed for file `" <> file <> "`.\n" <> show err
-    Success expr -> do
-      setEnv "TEST_VAR" "foo"
-      runWithBasicEffects opts
-        $ catch (evaluateExpression (pure file) nixEvalExprLoc normalForm expr)
-        $ \case
-            NixException frames ->
-              errorWithoutStackTrace
-                .   show
-                =<< renderFrames @(StdValue (StandardT (StdIdT IO)))
-                      @(StdThunk (StandardT (StdIdT IO)))
-                      frames
+hnixEvalFile opts file =
+  do
+    parseResult <- parseNixFileLoc file
+    either
+      (\ err -> fail $ "Parsing failed for file `" <> file <> "`.\n" <> show err)
+      (\ expr ->
+        do
+          setEnv "TEST_VAR" "foo"
+          runWithBasicEffects opts $
+            catch (evaluateExpression (pure file) nixEvalExprLoc normalForm expr) $
+            \case
+              NixException frames ->
+                errorWithoutStackTrace . show
+                  =<< renderFrames
+                        @(StdValue (StandardT (StdIdT IO)))
+                        @(StdThunk (StandardT (StdIdT IO)))
+                        frames
+      )
+      parseResult
 
 hnixEvalText :: Options -> Text -> IO (StdValue (StandardT (StdIdT IO)))
-hnixEvalText opts src = case parseNixText src of
-  Failure err -> error $ "Parsing failed for expression `" <> unpack src <> "`.\n" <> show err
-  Success expr ->
-    runWithBasicEffects opts $ normalForm =<< nixEvalExpr mempty expr
+hnixEvalText opts src =
+  either
+    (\ err -> fail $ "Parsing failed for expression `" <> unpack src <> "`.\n" <> show err)
+    (\ expr ->
+      runWithBasicEffects opts $ normalForm =<< nixEvalExpr mempty expr
+    )
+    (parseNixText src)
 
 nixEvalString :: String -> IO String
 nixEvalString expr = do

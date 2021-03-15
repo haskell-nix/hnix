@@ -1,4 +1,3 @@
-{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
@@ -98,7 +97,7 @@ findEnvPathM name = do
   mres <- lookupVar "__nixPath"
 
   maybe
-    (error "impossible")
+    (fail "impossible")
     (
       (\ nv ->
         do
@@ -243,7 +242,7 @@ findPathM = findPathBy existingPath
     do
       apath  <- makeAbsolutePath @t @f path
       doesExist <- doesPathExist apath
-      pure $ ifTrue (pure apath) doesExist
+      pure $ pure apath `whenTrue` doesExist
 
 defaultImportPath
   :: (MonadNix e t f m, MonadState (HashMap FilePath NExprLoc, b) m)
@@ -257,12 +256,14 @@ defaultImportPath path = do
       maybe
         (do
           eres <- parseNixFileLoc path
-          case eres of
-            Failure err -> throwError $ ErrorCall . show $ fillSep ["Parse during import failed:", err]
-            Success expr ->
+          either
+            (\ err -> throwError $ ErrorCall . show $ fillSep ["Parse during import failed:", err])
+            (\ expr ->
               do
                 modify (first (M.insert path expr))
                 pure expr
+            )
+            eres
         )
         pure  -- return expr
         (M.lookup path imports)
@@ -274,7 +275,7 @@ defaultPathToDefaultNix = pathToDefaultNixFile
 pathToDefaultNixFile :: MonadFile m => FilePath -> m FilePath
 pathToDefaultNixFile p = do
   isDir <- doesDirectoryExist p
-  pure $ p </> ifTrue "default.nix" isDir
+  pure $ p </> "default.nix" `whenTrue` isDir
 
 defaultTraceEffect :: MonadPutStr m => String -> m ()
 defaultTraceEffect = Nix.Effects.putStrLn

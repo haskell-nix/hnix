@@ -9,9 +9,7 @@
 
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -29,12 +27,14 @@ import           Nix.Scope
 import           Nix.Utils
 import           Nix.Value.Monad                ( demand )
 
-import qualified Data.List
-import qualified Data.Maybe
+import qualified Data.List                   as List
+import qualified Data.Maybe                  as Maybe
 import qualified Data.HashMap.Lazy
-import           Data.Text                      (Text)
-import qualified Data.Text
-import qualified Data.Text.IO
+import           Data.Char                      ( isSpace )
+import           Data.List                      ( dropWhileEnd )
+import           Data.Text                      ( Text )
+import qualified Data.Text                   as Text
+import qualified Data.Text.IO                as Text.IO
 import           Data.Version                   ( showVersion )
 import           Paths_hnix                     ( version )
 
@@ -47,7 +47,7 @@ import           Prettyprinter                  ( Doc
                                                 , space
                                                 )
 import qualified Prettyprinter
-import qualified Prettyprinter.Render.Text
+import qualified Prettyprinter.Render.Text    as Prettyprinter
 
 import           System.Console.Haskeline.Completion
                                                 ( Completion(isFinished)
@@ -57,13 +57,15 @@ import           System.Console.Haskeline.Completion
                                                 )
 import           System.Console.Repline         ( Cmd
                                                 , CompletionFunc
-                                                , CompleterStyle (Prefix)
+                                                , CompleterStyle(Prefix)
+                                                , MultiLine(SingleLine, MultiLine)
                                                 , ExitDecision(Exit)
                                                 , HaskelineT
+                                                , evalRepl
                                                 )
-import qualified System.Console.Repline
-import qualified System.Exit
-import qualified System.IO.Error
+import qualified System.Console.Repline      as Console
+import qualified System.Exit                 as Exit
+import qualified System.IO.Error             as Error
 
 -- | Repl entry point
 main :: (MonadNix e t f m, MonadIO m, MonadMask m) =>  m ()
@@ -73,8 +75,12 @@ main = main' Nothing
 --
 -- Passed value is stored in context with "input" key.
 main' :: (MonadNix e t f m, MonadIO m, MonadMask m) => Maybe (NValue t f m) -> m ()
-main' iniVal = initState iniVal >>= \s -> flip evalStateT s
-    $ System.Console.Repline.evalRepl
+main' iniVal =
+  do
+    s <- initState iniVal
+
+    evalStateT
+      (evalRepl
         banner
         cmd
         options
@@ -83,33 +89,41 @@ main' iniVal = initState iniVal >>= \s -> flip evalStateT s
         completion
         (rcFile *> greeter)
         finalizer
+      )
+      s
  where
   commandPrefix = ':'
 
   banner = pure . \case
-    System.Console.Repline.SingleLine -> "hnix> "
-    System.Console.Repline.MultiLine  -> "| "
+    SingleLine -> "hnix> "
+    MultiLine  -> "| "
 
   greeter =
-    liftIO
-      $  putStrLn
-      $  "Welcome to hnix "
-      <> showVersion version
-      <> ". For help type :help\n"
+    liftIO $
+      putStrLn $
+        "Welcome to hnix "
+        <> showVersion version
+        <> ". For help type :help\n"
   finalizer = do
     liftIO $ putStrLn "Goodbye."
     pure Exit
 
-  rcFile = do
-    f <- liftIO $ Data.Text.IO.readFile ".hnixrc" `catch` handleMissing
-    for_ (words . Data.Text.unpack <$> Data.Text.lines f) $ \case
-      ((prefix:command) : xs) | prefix == commandPrefix -> do
-        let arguments = unwords xs
-        optMatcher command options arguments
-      x -> cmd $ unwords x
+  rcFile =
+    do
+      f <- liftIO $ Text.IO.readFile ".hnixrc" `catch` handleMissing
+
+      traverse_
+        (\case
+          ((prefix:command) : xs) | prefix == commandPrefix ->
+            do
+              let arguments = unwords xs
+              optMatcher command options arguments
+          x -> cmd $ unwords x
+        )
+        (words . Text.unpack <$> Text.lines f)
 
   handleMissing e
-    | System.IO.Error.isDoesNotExistError e = pure ""
+    | Error.isDoesNotExistError e = pure ""
     | otherwise = throwIO e
 
   -- Replicated and slightly adjusted `optMatcher` from `System.Console.Repline`
@@ -118,12 +132,12 @@ main' iniVal = initState iniVal >>= \s -> flip evalStateT s
   -- * @putStrLn@ instead of @outputStrLn@
   optMatcher :: MonadIO m
              => String
-             -> System.Console.Repline.Options m
+             -> Console.Options m
              -> String
              -> m ()
   optMatcher s [] _ = liftIO $ putStrLn $ "No such command :" <> s
   optMatcher s ((x, m) : xs) args
-    | s `Data.List.isPrefixOf` x = m args
+    | s `List.isPrefixOf` x = m args
     | otherwise = optMatcher s xs args
 
 
@@ -156,19 +170,23 @@ initState mIni = do
 
   opts :: Nix.Options <- asks (view hasLens)
 
-  pure $ IState
-    Nothing
-    (Data.HashMap.Lazy.fromList
-      $ ("builtins", builtins) : fmap ("input",) (Data.Maybe.maybeToList mIni))
-    defReplConfig
-      { cfgStrict = strict opts
-      , cfgValues = values opts
-      }
+  pure $
+    IState
+      Nothing
+      (Data.HashMap.Lazy.fromList $
+        ("builtins", builtins) : fmap ("input",) (Maybe.maybeToList mIni)
+      )
+      defReplConfig
+        { cfgStrict = strict opts
+        , cfgValues = values opts
+        }
   where
     evalText :: (MonadNix e t f m) => Text -> m (NValue t f m)
-    evalText expr = case parseNixTextLoc expr of
-      Failure e -> error $ "Impossible happened: Unable to parse expression - '" <> Data.Text.unpack expr <> "' error was " <> show e
-      Success e -> do evalExprLoc e
+    evalText expr =
+      either
+        (\ e -> fail $ "Impossible happened: Unable to parse expression - '" <> Text.unpack expr <> "' fail was " <> show e)
+        (\ e -> do evalExprLoc e)
+        (parseNixTextLoc expr)
 
 type Repl e t f m = HaskelineT (StateT (IState t f m) m)
 
@@ -189,10 +207,10 @@ exec update source = do
 
   -- Parser ( returns AST as `NExprLoc` )
   case parseExprOrBinding source of
-    (Failure err, _) -> do
+    (Left err, _) -> do
       liftIO $ print err
       pure Nothing
-    (Success expr, isBinding) -> do
+    (Right expr, isBinding) -> do
 
       -- Type Inference ( returns Typing Environment )
       --
@@ -204,11 +222,11 @@ exec update source = do
 
       mVal <- lift $ lift $ try $ pushScope (replCtx st) (evalExprLoc expr)
 
-      case mVal of
-        Left (NixException frames) -> do
+      either
+        (\ (NixException frames) -> do
           lift $ lift $ liftIO . print =<< renderFrames @(NValue t f m) @t frames
-          pure Nothing
-        Right val -> do
+          pure Nothing)
+        (\ val -> do
           -- Update the interpreter state
           when (update && isBinding) $ do
             -- Set `replIt` to last entered expression
@@ -220,6 +238,8 @@ exec update source = do
               _          -> pure ()
 
           pure $ pure val
+        )
+        mVal
   where
     -- If parsing fails, turn the input into singleton attribute set
     -- and try again.
@@ -227,24 +247,29 @@ exec update source = do
     -- This allows us to handle assignments like @a = 42@
     -- which get turned into @{ a = 42; }@
     parseExprOrBinding i =
-      case parseNixTextLoc i of
-        Success expr -> (Success expr, False)
-        Failure e    ->
-          case parseNixTextLoc $ toAttrSet i of
-            Failure _  -> (Failure e, False) -- return the first parsing failure
-            Success e' -> (Success e', True)
+      either
+        (\ e    ->
+          either
+            (const (Left e, False)) -- return the first parsing failure
+            (\ e' -> (pure e', True))
+            (parseNixTextLoc $ toAttrSet i))
+        (\ expr -> (pure expr, False))
+        (parseNixTextLoc i)
 
-    toAttrSet i = "{" <> i <> (if Data.Text.isSuffixOf ";" i then mempty else ";") <> "}"
+    toAttrSet i =
+      "{" <> i <> bool ";" mempty (Text.isSuffixOf ";" i) <> "}"
 
 cmd
   :: (MonadNix e t f m, MonadIO m)
   => String
   -> Repl e t f m ()
-cmd source = do
-  mVal <- exec True (Data.Text.pack source)
-  case mVal of
-    Nothing -> pure ()
-    Just val -> printValue val
+cmd source =
+  do
+    mVal <- exec True (Text.pack source)
+    maybe
+      (pure ())
+      printValue
+      mVal
 
 printValue :: (MonadNix e t f m, MonadIO m)
            => NValue t f m
@@ -267,7 +292,7 @@ browse :: (MonadNix e t f m, MonadIO m)
 browse _ = do
   st <- get
   for_ (Data.HashMap.Lazy.toList $ replCtx st) $ \(k, v) -> do
-    liftIO $ putStr $ Data.Text.unpack $ k <> " = "
+    liftIO $ putStr $ Text.unpack $ k <> " = "
     printValue v
 
 -- | @:load@ command
@@ -275,13 +300,14 @@ load
   :: (MonadNix e t f m, MonadIO m)
   => String
   -> Repl e t f m ()
-load args = do
-  contents <- liftIO
-    $ Data.Text.IO.readFile
-    $ Data.Text.unpack
-    $ Data.Text.strip
-    $ Data.Text.pack args
-  void $ exec True contents
+load args =
+  do
+    contents <- liftIO
+      $ Text.IO.readFile
+      $ trim args
+    void $ exec True contents
+ where
+  trim = dropWhileEnd isSpace . dropWhile isSpace
 
 -- | @:type@ command
 typeof
@@ -291,14 +317,15 @@ typeof
 typeof args = do
   st <- get
   mVal <-
-    case Data.HashMap.Lazy.lookup line (replCtx st) of
-      Nothing  -> exec False line
-      Just val -> pure $ pure val
+    maybe
+      (exec False line)
+      (pure . pure)
+      (Data.HashMap.Lazy.lookup line (replCtx st))
 
   traverse_ printValueType mVal
 
  where
-  line = Data.Text.pack args
+  line = Text.pack args
   printValueType val =
     do
       s <- lift . lift . showValueType $ val
@@ -307,7 +334,7 @@ typeof args = do
 
 -- | @:quit@ command
 quit :: (MonadNix e t f m, MonadIO m) => a -> Repl e t f m ()
-quit _ = liftIO System.Exit.exitSuccess
+quit _ = liftIO Exit.exitSuccess
 
 -- | @:set@ command
 setConfig :: (MonadNix e t f m, MonadIO m) => String -> Repl e t f m ()
@@ -324,7 +351,7 @@ setConfig args = case words args of
 -- | Prefix tab completer
 defaultMatcher :: MonadIO m => [(String, CompletionFunc m)]
 defaultMatcher =
-  [ (":load", System.Console.Repline.fileCompleter)
+  [ (":load", Console.fileCompleter)
   ]
 
 completion
@@ -353,11 +380,11 @@ completeFunc reversedPrev word
       $ fmap helpOptionName (helpOptions :: HelpOptions e t f m)
 
   -- Files
-  | any (`Data.List.isPrefixOf` word) [ "/", "./", "../", "~/" ] =
+  | any (`List.isPrefixOf` word) [ "/", "./", "../", "~/" ] =
     listFiles word
 
   -- Attributes of sets in REPL context
-  | var : subFields <- Data.Text.split (== '.') (Data.Text.pack word) , not $ null subFields =
+  | var : subFields <- Text.split (== '.') (Text.pack word) , not $ null subFields =
     do
       s <- get
       maybe
@@ -365,7 +392,7 @@ completeFunc reversedPrev word
         (\ binding ->
           do
             candidates <- lift $ algebraicComplete subFields binding
-            pure $ notFinished <$> listCompletion (Data.Text.unpack . (var <>) <$> candidates)
+            pure $ notFinished <$> listCompletion (Text.unpack . (var <>) <$> candidates)
         )
         (Data.HashMap.Lazy.lookup var (replCtx s))
 
@@ -379,11 +406,11 @@ completeFunc reversedPrev word
 
       pure $ listCompletion
         $ ["__includes"]
-        <> (Data.Text.unpack <$> contextKeys)
-        <> (Data.Text.unpack <$> shortBuiltins)
+        <> (Text.unpack <$> contextKeys)
+        <> (Text.unpack <$> shortBuiltins)
 
   where
-    listCompletion = fmap simpleCompletion . filter (word `Data.List.isPrefixOf`)
+    listCompletion = fmap simpleCompletion . filter (word `List.isPrefixOf`)
 
     notFinished x = x { isFinished = False }
 
@@ -527,8 +554,8 @@ help hs _ = do
   liftIO $ putStrLn "Available commands:\n"
   for_ hs $ \h ->
     liftIO .
-      Data.Text.IO.putStrLn .
-        Prettyprinter.Render.Text.renderStrict .
+      Text.IO.putStrLn .
+        Prettyprinter.renderStrict .
           Prettyprinter.layoutPretty Prettyprinter.defaultLayoutOptions $
             ":"
             <> Prettyprinter.pretty (helpOptionName h) <> space
@@ -538,5 +565,5 @@ help hs _ = do
 
 options
   :: (MonadNix e t f m, MonadIO m)
-  => System.Console.Repline.Options (Repl e t f m)
+  => Console.Options (Repl e t f m)
 options = (\h -> (helpOptionName h, helpOptionFunction h)) <$> helpOptions

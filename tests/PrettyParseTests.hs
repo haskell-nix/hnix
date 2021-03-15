@@ -30,6 +30,9 @@ import           Test.Tasty
 import           Test.Tasty.Hedgehog
 import           Text.Megaparsec                ( Pos )
 import qualified Text.Show.Pretty              as PS
+import           Options.Applicative            ( Applicative(liftA2)
+                                                , liftA3
+                                                )
 
 asciiString :: MonadGen m => m String
 asciiString = Gen.list (Range.linear 1 15) Gen.lower
@@ -112,23 +115,23 @@ genExpr = Gen.sized $ \(Size n) -> Fix <$> if n < 2
     , (1, Gen.resize (Size (n `div` 2)) genAssert)
     ]
  where
-  genConstant    = NConstant <$> genAtom
-  genStr         = NStr <$> genString
-  genSym         = NSym <$> asciiText
-  genList        = NList <$> fairList genExpr
-  genSet         = NSet NNonRecursive <$> fairList genBinding
-  genRecSet      = NSet NRecursive <$> fairList genBinding
+  genConstant    = NConstant                <$> genAtom
+  genStr         = NStr                     <$> genString
+  genSym         = NSym                     <$> asciiText
+  genList        = NList                    <$> fairList genExpr
+  genSet         = NSet NNonRecursive       <$> fairList genBinding
+  genRecSet      = NSet NRecursive          <$> fairList genBinding
   genLiteralPath = NLiteralPath . ("./" <>) <$> asciiString
-  genEnvPath     = NEnvPath <$> asciiString
-  genUnary       = NUnary <$> Gen.enumBounded <*> genExpr
-  genBinary      = NBinary <$> Gen.enumBounded <*> genExpr <*> genExpr
-  genSelect      = NSelect <$> genExpr <*> genAttrPath <*> Gen.maybe genExpr
-  genHasAttr     = NHasAttr <$> genExpr <*> genAttrPath
-  genAbs         = NAbs <$> genParams <*> genExpr
-  genLet         = NLet <$> fairList genBinding <*> genExpr
-  genIf          = NIf <$> genExpr <*> genExpr <*> genExpr
-  genWith        = NWith <$> genExpr <*> genExpr
-  genAssert      = NAssert <$> genExpr <*> genExpr
+  genEnvPath     = NEnvPath                 <$> asciiString
+  genUnary       = liftA2 NUnary   Gen.enumBounded       genExpr
+  genBinary      = liftA3 NBinary  Gen.enumBounded       genExpr     genExpr
+  genSelect      = liftA3 NSelect  genExpr               genAttrPath (Gen.maybe genExpr)
+  genHasAttr     = liftA2 NHasAttr genExpr               genAttrPath
+  genAbs         = liftA2 NAbs     genParams             genExpr
+  genLet         = liftA2 NLet     (fairList genBinding) genExpr
+  genIf          = liftA3 NIf      genExpr               genExpr     genExpr
+  genWith        = liftA2 NWith    genExpr               genExpr
+  genAssert      = liftA2 NAssert  genExpr               genExpr
 
 -- | Useful when there are recursive positions at each element of the list as
 --   it divides the size by the length of the generated list.
@@ -185,35 +188,38 @@ prop_prettyparse :: Monad m => NExpr -> PropertyT m ()
 prop_prettyparse p = do
   let prog = show (prettyNix p)
   case parse (pack prog) of
-    Failure s -> do
+    Left s -> do
       footnote $ show $ vsep
         [fillSep ["Parse failed:", pretty (show s)], indent 2 (prettyNix p)]
       discard
-    Success v
+    Right v
       | equivUpToNormalization p v -> success
-      | otherwise -> do
-        let pp = normalise prog
+      | otherwise ->
+        do
+          let
+            pp = normalise prog
             pv = normalise (show (prettyNix v))
-        footnote
-          $ show
-          $ vsep
-          $ [ "----------------------------------------"
-            , vsep ["Expr before:", indent 2 (pretty (PS.ppShow p))]
-            , "----------------------------------------"
-            , vsep ["Expr after:", indent 2 (pretty (PS.ppShow v))]
-            , "----------------------------------------"
-            , vsep ["Pretty before:", indent 2 (pretty prog)]
-            , "----------------------------------------"
-            , vsep ["Pretty after:", indent 2 (prettyNix v)]
-            , "----------------------------------------"
-            , vsep ["Normalised before:", indent 2 (pretty pp)]
-            , "----------------------------------------"
-            , vsep ["Normalised after:", indent 2 (pretty pv)]
-            , "========================================"
-            , vsep ["Normalised diff:", pretty (ppDiff (ldiff pp pv))]
-            , "========================================"
-            ]
-        assert (pp == pv)
+
+          footnote $
+            show $
+              vsep
+                [ "----------------------------------------"
+                , vsep ["Expr before:", indent 2 (pretty (PS.ppShow p))]
+                , "----------------------------------------"
+                , vsep ["Expr after:", indent 2 (pretty (PS.ppShow v))]
+                , "----------------------------------------"
+                , vsep ["Pretty before:", indent 2 (pretty prog)]
+                , "----------------------------------------"
+                , vsep ["Pretty after:", indent 2 (prettyNix v)]
+                , "----------------------------------------"
+                , vsep ["Normalised before:", indent 2 (pretty pp)]
+                , "----------------------------------------"
+                , vsep ["Normalised after:", indent 2 (pretty pv)]
+                , "========================================"
+                , vsep ["Normalised diff:", pretty (ppDiff (ldiff pp pv))]
+                , "========================================"
+                ]
+          assert (pp == pv)
  where
   parse     = parseNixText
 

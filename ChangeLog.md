@@ -142,6 +142,11 @@
   * [(link)](https://github.com/haskell-nix/hnix/pull/878/files) `Nix.Pretty`: `mkNixDoc`: got unflipped.
   
   * [(link)](https://github.com/haskell-nix/hnix/pull/886/commits/381b0e5df9cc620a25533ff1c84045a4ea37a833) `Nix.Value`: Data constructor for `NValue' t f m a` changed (`NValue -> NValue'`).
+  
+  * [(link)](https://github.com/haskell-nix/hnix/pull/884/files) `Nix.Parser`: `Parser`: Data type was equivalent to `Either`, so became a type synonim for `Either`.
+
+  * [(link)](https://github.com/haskell-nix/hnix/pull/884/files) `Nix.Thunk.Basic`: `instance MonadThunk (NThunkF m v) m v`: `queryM`: implementation no longer blocks the thunk resource it only reads from.
+  
 
 * Additional:
   * [(link)](https://github.com/haskell-nix/hnix/commit/7e6cd97bf3288cb584241611fdb25bf85d7e0ba7) `cabal.project`: freed from the `cryptohash-sha512` override, Hackage trustees made a revision.

@@ -61,7 +61,7 @@ normalizeValue v = run $ iterNValueM run go (fmap Free . sequenceNValue' run) v
       (do
         i <- ask
         when (i > 2000)
-          $ error "Exceeded maximum normalization depth of 2000 levels"
+          $ fail "Exceeded maximum normalization depth of 2000 levels"
         --  2021-02-22: NOTE: `normalizeValue` should be adopted to work without fliping of the force (f)
         lifted (lifted $ \f -> f =<< force t) $ local succ . k
       )

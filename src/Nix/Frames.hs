@@ -61,5 +61,5 @@ throwError
   :: forall s e m a . (Framed e m, Exception s, MonadThrow m) => s -> m a
 throwError err = do
   context <- asks (view hasLens)
-  traceM "Throwing error..."
+  traceM "Throwing fail..."
   throwM $ NixException (NixFrame Error (toException err) : context)

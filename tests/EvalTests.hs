@@ -23,6 +23,7 @@ import           Nix
 import           Nix.Standard
 import           Nix.TH
 import           Nix.Value.Equal
+import           Nix.Utils
 import qualified System.Directory as D
 import           System.Environment
 import           System.FilePath
@@ -466,10 +467,10 @@ constantEqual expected actual = do
     assertBool message eq
 
 constantEqualText' :: Text -> Text -> Assertion
-constantEqualText' expected actual = do
-  let Success expected' = parseNixTextLoc expected
-      Success actual' = parseNixTextLoc actual
-  constantEqual expected' actual'
+constantEqualText' expected actual =
+  do
+    let (Right expected', Right actual') = both parseNixTextLoc (expected, actual)
+    constantEqual expected' actual'
 
 constantEqualText :: Text -> Text -> Assertion
 constantEqualText expected actual = do
@@ -479,23 +480,30 @@ constantEqualText expected actual = do
       assertEvalMatchesNix actual
 
 assertNixEvalThrows :: Text -> Assertion
-assertNixEvalThrows a = do
-  let Success a' = parseNixTextLoc a
-  time <- getCurrentTime
-  let opts = defaultOptions time
-  errored <- catch
-      (False <$ runWithBasicEffectsIO opts
-         (normalForm =<< nixEvalExprLoc mempty a'))
-      (\(_ :: NixException) -> pure True)
-  unless errored $
-    assertFailure "Did not catch nix exception"
+assertNixEvalThrows a =
+  do
+    time <- getCurrentTime
+    let
+      opts = defaultOptions time
+      Right a' = parseNixTextLoc a
+    errored <-
+      catch
+        (False <$
+          runWithBasicEffectsIO
+            opts
+            (normalForm =<< nixEvalExprLoc mempty a')
+        )
+        (\(_ :: NixException) -> pure True)
+    unless errored $ assertFailure "Did not catch nix exception"
 
 freeVarsEqual :: Text -> [VarName] -> Assertion
-freeVarsEqual a xs = do
-  let Success a' = parseNixText a
+freeVarsEqual a xs =
+  do
+    let
+      Right a' = parseNixText a
       xs' = S.fromList xs
-      free = freeVars a'
-  assertEqual "" xs' free
+      free' = freeVars a'
+    assertEqual "" xs' free'
 
 maskedFiles :: [FilePath]
 maskedFiles =
