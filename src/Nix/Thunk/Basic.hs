@@ -8,7 +8,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE ApplicativeDo #-}
 
 
 
