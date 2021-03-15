@@ -132,7 +132,7 @@ nixOptions current =
         )
     <*> switch
         (  long "check"
-        <> help "Whether to check for syntax errors after parsing"
+        <> help "Whether to check for syntax fails after parsing"
         )
     <*> optional
         (strOption
@@ -149,8 +149,8 @@ nixOptions current =
         <> help "After performing any indicated actions, enter the REPL"
         )
     <*> switch
-        (  long "ignore-errors"
-        <> help "Continue parsing files, even if there are errors"
+        (  long "ignore-fails"
+        <> help "Continue parsing files, even if there are fails"
         )
     <*> optional
         (strOption

@@ -231,7 +231,7 @@ instance IsString (NString r) where
 -- In particular, those include:
 --
 --   * The RHS of a @binding@ inside @let@: @let ${"a"} = 3; in ...@
---     produces a syntax error.
+--     produces a syntax fail.
 --   * The attribute names of an 'inherit': @inherit ${"a"};@ is forbidden.
 --
 -- Note: In Nix, a simple string without antiquotes such as @"foo"@ is

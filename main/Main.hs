@@ -143,8 +143,8 @@ main = do
               && null (argstr opts)
               )                    -> evaluateExpression mpath Nix.nixEvalExprLoc printer expr
         | otherwise                -> processResult printer =<< Nix.nixEvalExprLoc mpath expr
-    | xml opts                     =  error "Rendering expression trees to XML is not yet implemented"
-    | json opts                    =  error "Rendering expression trees to JSON is not implemented"
+    | xml opts                     =  fail "Rendering expression trees to XML is not yet implemented"
+    | json opts                    =  fail "Rendering expression trees to JSON is not implemented"
     | verbose opts >= DebugInfo    =  liftIO $ putStr $ PS.ppShow $ stripAnnotation expr
     | cache opts
       , Just path <- mpath         =  liftIO $ writeCache (addExtension (dropExtension path) "nixc") expr

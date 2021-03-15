@@ -777,7 +777,7 @@ splitMatches
   -> [NValue t f m]
 splitMatches _ [] haystack = [thunkStr haystack]
 splitMatches _ ([] : _) _ =
-  error "Error in splitMatches: this should never happen!"
+  fail "Fail in splitMatches: this should never happen!"
 splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
   thunkStr before : caps : splitMatches (numDropped + relStart + len)
                                         mts
@@ -1494,7 +1494,7 @@ placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
     $ case Base16.decode (text h) of -- The result coming out of hashString is base16 encoded
 #if MIN_VERSION_base16_bytestring(1,0,0)
       Right d -> d
-      Left e -> error $ "Couldn't Base16 decode the text: '" <> show (text h) <> "'.\nThe Left error content: '" <> e <> "'."
+      Left e -> error $ "Couldn't Base16 decode the text: '" <> show (text h) <> "'.\nThe Left fail content: '" <> e <> "'."
 #else
       (d, "") -> d
       (_, e) -> error $ "Couldn't Base16 decode the text: '" <> show (text h) <> "'.\nUndecodable remainder: '" <> show e <> "'."
@@ -1668,7 +1668,7 @@ trace_ msg action =
     traceEffect @t @f @m . Text.unpack . stringIgnoreContext =<< fromValue msg
     pure action
 
--- Please, can function remember error context
+-- Please, can function remember fail context
 addErrorContext
   :: forall e t f m
    . MonadNix e t f m

@@ -150,11 +150,9 @@ displayProvenance
   => [Provenance m v]
   -> m a
   -> m a
-displayProvenance ps f =
+displayProvenance =
   list
     id
     (\ (Provenance scope e@(Compose (Ann s _)) : _) ->
       withFrame Info (ForcingExpr scope (wrapExprLoc s e))
     )
-    ps
-    f

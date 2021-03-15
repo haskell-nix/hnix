@@ -140,8 +140,8 @@ unparseDrv Derivation{..} = Text.append "Derive" $ parens
           mFixed
         )
     , -- inputDrvs
-      serializeList $ flip fmap (Map.toList $ snd inputs) (\(path, outs) ->
-        parens [s path, serializeList $ fmap s $ sort outs])
+      serializeList $ (\(path, outs) ->
+        parens [s path, serializeList $ s <$> sort outs]) <$> Map.toList (snd inputs)
     , -- inputSrcs
       serializeList (fmap s $ Set.toList $ fst inputs)
     , s platform
@@ -149,15 +149,14 @@ unparseDrv Derivation{..} = Text.append "Derive" $ parens
     , -- run script args
       serializeList $ fmap s args
     , -- env (key value pairs)
-      serializeList $ flip fmap (Map.toList env) (\(k, v) ->
-        parens [s k, s v])
+      serializeList $ (\(k, v) -> parens [s k, s v]) <$> Map.toList env
     ]
   where
     parens :: [Text] -> Text
     parens ts = Text.concat ["(", Text.intercalate "," ts, ")"]
     serializeList   :: [Text] -> Text
     serializeList   ls = Text.concat ["[", Text.intercalate "," ls, "]"]
-    s = (Text.cons '\"') . (`Text.snoc` '\"') . Text.concatMap escape
+    s = Text.cons '\"' . (`Text.snoc` '\"') . Text.concatMap escape
     escape :: Char -> Text
     escape '\\' = "\\\\"
     escape '\"' = "\\\""
@@ -178,12 +177,12 @@ derivationParser :: Parsec () Text Derivation
 derivationParser = do
   _ <- "Derive("
   fullOutputs <- serializeList $
-    fmap (\[n, p, ht, h] -> (n, p, ht, h)) $ parens s
+    (\[n, p, ht, h] -> (n, p, ht, h)) <$> parens s
   _ <- ","
   inputDrvs   <- fmap Map.fromList $ serializeList $
     fmap (,) ("(" *> s <* ",") <*> (serializeList s <* ")")
   _ <- ","
-  inputSrcs   <- fmap Set.fromList $ serializeList s
+  inputSrcs   <- Set.fromList <$> serializeList s
   _ <- ","
   platform    <- s
   _ <- ","
@@ -191,7 +190,7 @@ derivationParser = do
   _ <- ","
   args        <- serializeList s
   _ <- ","
-  env         <- fmap Map.fromList $ serializeList $ fmap (\[a, b] -> (a, b)) $ parens s
+  env         <- fmap Map.fromList $ serializeList $ (\[a, b] -> (a, b)) <$> parens s
   _ <- ")"
   eof
 
@@ -213,7 +212,8 @@ derivationParser = do
   regular = noneOf ['\\', '"']
 
   parens :: Parsec () Text a -> Parsec () Text [a]
-  parens p = (string "(") *> sepBy p (string ",") <* (string ")")
+  parens p =
+    (string "(") *> sepBy p (string ",") <* (string ")")
   serializeList   p = (string "[") *> sepBy p (string ",") <* (string "]")
 
   parseFixed :: [(Text, Text, Text, Text)] -> (Maybe Store.SomeNamedDigest, HashMode)
@@ -297,11 +297,11 @@ buildDerivationWithContext drvAttrs = do
     drvName     <- getAttr   "name"                      $ extractNixString >=> assertDrvStoreName
     withFrame' Info (ErrorCall $ "While evaluating derivation " <> show drvName) $ do
 
-      useJson     <- getAttrOr "__structuredAttrs" False   $ pure
-      ignoreNulls <- getAttrOr "__ignoreNulls"     False   $ pure
+      useJson     <- getAttrOr "__structuredAttrs" False     pure
+      ignoreNulls <- getAttrOr "__ignoreNulls"     False     pure
 
       args        <- getAttrOr "args"              mempty  $ traverse (fromValue' >=> extractNixString)
-      builder     <- getAttr   "builder"                   $ extractNixString
+      builder     <- getAttr   "builder"                     extractNixString
       platform    <- getAttr   "system"                    $ extractNoCtx >=> assertNonNull
       mHash       <- getAttrOr "outputHash"        mempty  $ extractNoCtx >=> (pure . pure)
       hashMode    <- getAttrOr "outputHashMode"    Flat    $ extractNoCtx >=> parseHashMode
@@ -311,7 +311,7 @@ buildDerivationWithContext drvAttrs = do
         maybe
           (pure Nothing)
           (\ hash -> do
-            when (outputs /= ["out"]) $ lift $ throwError $ ErrorCall $ "Multiple outputs are not supported for fixed-output derivations"
+            when (outputs /= ["out"]) $ lift $ throwError $ ErrorCall "Multiple outputs are not supported for fixed-output derivations"
             hashType <- getAttr "outputHashAlgo" extractNoCtx
             digest <- lift $ either (throwError . ErrorCall) pure $ Store.mkNamedDigest hashType hash
             pure $ pure digest)

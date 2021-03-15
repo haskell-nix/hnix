@@ -101,7 +101,7 @@ genTests = do
       ["parse", "fail"] -> assertParseFail opts $ the files
       ["eval" , "okay"] -> assertEval opts files
       ["eval" , "fail"] -> assertEvalFail $ the files
-      _                 -> error $ "Unexpected: " <> show kind
+      _                 -> fail $ "Unexpected: " <> show kind
 
 assertParse :: Options -> FilePath -> Assertion
 assertParse _opts file =
@@ -173,7 +173,7 @@ assertEval _opts files = do
               <> ".flags: "
               <> show err
           Opts.Success opts' -> assertLangOk opts' name
-          Opts.CompletionInvoked _ -> error "unused"
+          Opts.CompletionInvoked _ -> fail "unused"
     _ -> assertFailure $ "Unknown test type " <> show files
  where
   name =

@@ -370,7 +370,7 @@ assertParseText :: Text -> NExpr -> Assertion
 assertParseText str expected =
   either
     (\ err ->
-      assertFailure $ "Unexpected error parsing `" <> unpack str <> "':\n" <> show err
+      assertFailure $ "Unexpected fail parsing `" <> unpack str <> "':\n" <> show err
     )
     (assertEqual
       ("When parsing " <> unpack str)
@@ -385,7 +385,7 @@ assertParseFile file expected =
   res <- parseNixFile $ "data/" <> file
   either
     (\ err ->
-      assertFailure $ "Unexpected error parsing data file `" <> file <> "':\n" <> show err
+      assertFailure $ "Unexpected fail parsing data file `" <> file <> "':\n" <> show err
     )
     (assertEqual
       ("Parsing data file " <> file)

@@ -23,16 +23,16 @@ readCache path = do
 #if USE_COMPACT
     eres <- C.unsafeReadCompact path
     case eres of
-        Left err -> error $ "Error reading cache file: " <> err
+        Left err -> fail $ "Error reading cache file: " <> err
         Right expr -> pure $ C.getCompact expr
 #else
 #ifdef MIN_VERSION_serialise
   eres <- S.deserialiseOrFail <$> BS.readFile path
   case eres of
-    Left  err  -> error $ "Error reading cache file: " <> show err
+    Left  err  -> fail $ "Error reading cache file: " <> show err
     Right expr -> pure expr
 #else
-    error "readCache not implemented for this platform"
+    fail "readCache not implemented for this platform"
 #endif
 #endif
 
@@ -44,6 +44,6 @@ writeCache path expr =
 #ifdef MIN_VERSION_serialise
   BS.writeFile path (S.serialise expr)
 #else
-    error "writeCache not implemented for this platform"
+    fail "writeCache not implemented for this platform"
 #endif
 #endif

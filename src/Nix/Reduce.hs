@@ -104,7 +104,7 @@ staticImport pann path = do
 
     eres <- liftIO $ parseNixFileLoc path
     either
-      (\ err -> error $ "Parse failed: " <> show err)
+      (\ err -> fail $ "Parse failed: " <> show err)
       (\ x -> do
         let
           pos  = SourcePos "Reduce.hs" (mkPos 1) (mkPos 1)
@@ -366,7 +366,7 @@ pruneTree opts = foldFixM $ \(FlaggedF (b, Compose x)) -> do
 
     -- The idea behind emitted a binary operator where one side may be
     -- invalid is that we're trying to emit what will reproduce whatever
-    -- error the user encountered, which means providing all aspects of
+    -- fail the user encountered, which means providing all aspects of
     -- the evaluation path they ultimately followed.
     NBinary op Nothing (Just rarg) -> pure $ NBinary op nNull rarg
     NBinary op (Just larg) Nothing -> pure $ NBinary op larg nNull
@@ -375,12 +375,12 @@ pruneTree opts = foldFixM $ \(FlaggedF (b, Compose x)) -> do
     NWith Nothing (Just (Fix (Compose (Ann _ body)))) -> pure body
 
     NAssert Nothing _ ->
-      error "How can an assert be used, but its condition not?"
+      fail "How can an assert be used, but its condition not?"
 
     NAssert _ (Just (Fix (Compose (Ann _ body)))) -> pure body
     NAssert (Just cond) _ -> pure $ NAssert cond nNull
 
-    NIf Nothing _ _ -> error "How can an if be used, but its condition not?"
+    NIf Nothing _ _ -> fail "How can an if be used, but its condition not?"
 
     NIf _ Nothing (Just (Fix (Compose (Ann _ f)))) -> pure f
     NIf _ (Just (Fix (Compose (Ann _ t)))) Nothing -> pure t

@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveFunctor      #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -724,7 +723,7 @@ getUnaryOperator = (m Map.!)
         zipWith
           buildEntry
           [1 ..]
-          (nixOperators (error "unused"))
+          (nixOperators (fail "unused"))
 
   buildEntry i =
     concatMap $
@@ -741,7 +740,7 @@ getBinaryOperator = (m Map.!)
         zipWith
           buildEntry
           [1 ..]
-          (nixOperators (error "unused"))
+          (nixOperators (fail "unused"))
 
   buildEntry i =
     concatMap $
@@ -759,7 +758,7 @@ getSpecialOperator o         = m Map.! o
         zipWith
           buildEntry
           [1 ..]
-          (nixOperators (error "unused"))
+          (nixOperators (fail "unused"))
 
   buildEntry i =
     concatMap $

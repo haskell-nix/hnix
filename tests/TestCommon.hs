@@ -26,7 +26,7 @@ hnixEvalFile opts file =
   do
     parseResult <- parseNixFileLoc file
     either
-      (\ err -> error $ "Parsing failed for file `" <> file <> "`.\n" <> show err)
+      (\ err -> fail $ "Parsing failed for file `" <> file <> "`.\n" <> show err)
       (\ expr ->
         do
           setEnv "TEST_VAR" "foo"
@@ -45,7 +45,7 @@ hnixEvalFile opts file =
 hnixEvalText :: Options -> Text -> IO (StdValue (StandardT (StdIdT IO)))
 hnixEvalText opts src =
   either
-    (\ err -> error $ "Parsing failed for expression `" <> unpack src <> "`.\n" <> show err)
+    (\ err -> fail $ "Parsing failed for expression `" <> unpack src <> "`.\n" <> show err)
     (\ expr ->
       runWithBasicEffects opts $ normalForm =<< nixEvalExpr mempty expr
     )

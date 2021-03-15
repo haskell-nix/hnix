@@ -98,7 +98,7 @@ findEnvPathM name = do
   mres <- lookupVar "__nixPath"
 
   maybe
-    (error "impossible")
+    (fail "impossible")
     (
       (\ nv ->
         do

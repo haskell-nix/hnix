@@ -184,7 +184,7 @@ initState mIni = do
     evalText :: (MonadNix e t f m) => Text -> m (NValue t f m)
     evalText expr =
       either
-      (\ e -> error $ "Impossible happened: Unable to parse expression - '" <> Text.unpack expr <> "' error was " <> show e)
+      (\ e -> fail $ "Impossible happened: Unable to parse expression - '" <> Text.unpack expr <> "' fail was " <> show e)
       (\ e -> do evalExprLoc e)
       (parseNixTextLoc expr)
 
