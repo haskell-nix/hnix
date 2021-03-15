@@ -56,7 +56,7 @@ import           Nix.Utils
 import           Data.Eq.Deriving
 
 -- | An NValueF p m r represents all the possible types of Nix values.
---   
+--
 --   Is is the base functor to form the Free monad of nix expressions.
 --   The parameter `r` represents Nix values in their final form (NValue).
 --   The parameter `p` represents exactly the same type, but is kept separate
@@ -77,7 +77,7 @@ import           Data.Eq.Deriving
 --
 --   `t` is not really used here, but is needed to type the (NValue t f m)
 --   used to tie the knot of the `p` parameter in the inner NValueF.
---  
+--
 --   `a` is will be an `NValue t f m` when NValue' functor is turned into a
 --   Free monad.
 
@@ -86,7 +86,7 @@ import           Data.Eq.Deriving
 --   functor and into the Free recursive construction.
 --
 --   Concretely, an NValue t f m can either be a thunk, representing a value
---   yet to be evaluated (Pure t), or a know value in WHNF 
+--   yet to be evaluated (Pure t), or a know value in WHNF
 --   (Free (NValue' t f m (NValue t f m))) = (Free (f (NValueF NValue m NValue))
 --   That is, a base value type, wrapped into the generic `f`
 --   functor, and based on other NValue's, which can in turn be either thunks,
@@ -281,7 +281,7 @@ hoistNValueF lft =
 newtype NValue' t f m a =
   NValue'
     {
-    -- | Applying F-algebra carrier (@NValue@) to the F-algebra Base functor data type (@NValueF@), forming the \( F(A)-> A \)).
+    -- | Applying F-algebra Base functor data type (@NValueF@) to the F-algebra carrier (@NValue@), forming the \( F(A)-> A \)).
     _nValue :: f (NValueF (NValue t f m) m a)
     }
   deriving (Generic, Typeable, Functor, Foldable)
