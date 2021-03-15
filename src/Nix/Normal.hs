@@ -107,12 +107,12 @@ stubCycles
   -> NValue t f m
 stubCycles = flip iterNValue Free $ \t _ ->
   Free
-    $ NValue
+    $ NValue'
     $ Prelude.foldr (addProvenance1 @m @(NValue t f m)) cyc
     $ reverse
     $ citations @m @(NValue t f m) t
  where
-  Free (NValue cyc) = opaque
+  Free (NValue' cyc) = opaque
 
 removeEffects
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)

@@ -55,12 +55,72 @@ import           Nix.Thunk
 import           Nix.Utils
 import           Data.Eq.Deriving
 
+-- | An NValueF p m r represents all the possible types of Nix values.
+--
+--   Is is the base functor to form the Free monad of nix expressions.
+--   The parameter `r` represents Nix values in their final form (NValue).
+--   The parameter `p` represents exactly the same type, but is kept separate
+--   or it would prevent NValueF from being a proper functor.
+--   It is intended to be hard-coded to the same final type as r.
+--   `m` is the monad in which evaluations will run.
+
+-- | An NValue' t f m a is a magic layer between NValueF and the Free monad construction.
+--
+--   It fixes the `p` parameter of NValueF to the final NValue type, making the
+--   definition of NValue' and NValue depend on each other in a recursive
+--   fashion.
+--
+--   It also introduces a `f` parameter for a custom functor that can be used
+--   to wrap each intermediate value in the reduced expression tree.
+--   This is where expression evaluations can store annotations and other
+--   useful information.
+--
+--   `t` is not really used here, but is needed to type the (NValue t f m)
+--   used to tie the knot of the `p` parameter in the inner NValueF.
+--
+--   `a` is will be an `NValue t f m` when NValue' functor is turned into a
+--   Free monad.
+
+-- | 'NValue t f m' is the most reduced form of a 'NExpr' after evaluation is
+--   completed. It is a layer cake of NValueF base values, wrapped in the f
+--   functor and into the Free recursive construction.
+--
+--   Concretely, an NValue t f m can either be a thunk, representing a value
+--   yet to be evaluated (Pure t), or a know value in WHNF
+--   (Free (NValue' t f m (NValue t f m))) = (Free (f (NValueF NValue m NValue))
+--   That is, a base value type, wrapped into the generic `f`
+--   functor, and based on other NValue's, which can in turn be either thunks,
+--   or more already WHNF evaluated values.
+--
+--   As an example, the value `[1]` will be represented as
+--
+--   Free (f (NVListF [
+--      (Free (f (NVConstantF (NInt 1))))
+--   ]))
+--
+--   Should this 1 be a laziy and yet unevaluated value, it would be represented as
+--
+--   Free (f (NVListF [ (Pure t) ]))
+--
+--   Where the t is evaluator dependant, and should contain anough information
+--   to be evaluated to an NValue when needed. `demand` of `force` are used to
+--   turn a potential thunk into a `m (NValue t f m)`.
+--
+--   Of course, trees can be much bigger.
+--
+--   The number of layers and type aliases for similar things is huge, so
+--   this module provides ViewPatterns for each NValueF constructor.
+--
+--   For example, the pattern NVStr' ns matches a NValue' containing an NVStrF,
+--   and bind that NVStrF to ns, ignoring the f functor inside.
+--   Similarly, the pattern NVStr ns (without prime mark) will match the inner
+--   NVstrF value inside an NValue. Of course, the patterns are declined for
+--   all the NValueF constructors. The non primed version also has an NVThunk t
+--   pattern to account for the possibility of an NValue to no be fully
+--   evaluated yet, as opposed to an NValue'.
 
 -- * @__NValueF__@: Base functor
 
--- | 'NValue' is the most reduced form of a 'NExpr' after evaluation is
---   completed. 's' is related to the type of errors that might occur during
---   construction or use of a value.
 data NValueF p m r
     = NVConstantF NAtom
      -- | A string has a value and a context, which can be used to record what a
@@ -219,15 +279,15 @@ hoistNValueF lft =
 -- | At the time of constructor, the expected arguments to closures are values
 --   that may contain thunks. The type of such thunks are fixed at that time.
 newtype NValue' t f m a =
-  NValue
+  NValue'
     {
-    -- | Applying F-algebra carrier (@NValue@) to the F-algebra Base functor data type (@NValueF@), forming the \( F(A)-> A \)).
+    -- | Applying F-algebra Base functor data type (@NValueF@) to the F-algebra carrier (@NValue@), forming the \( F(A)-> A \)).
     _nValue :: f (NValueF (NValue t f m) m a)
     }
   deriving (Generic, Typeable, Functor, Foldable)
 
 instance (Comonad f, Show a) => Show (NValue' t f m a) where
-  show (NValue (extract -> v)) = show v
+  show (NValue' (extract -> v)) = show v
 
 
 -- ** Show1
@@ -242,7 +302,6 @@ instance Comonad f => Show1 (NValue' t f m) where
     NVPath' path      -> showsUnaryWith showsPrec "NVPathF" p path
     NVClosure' c    _ -> showsUnaryWith showsPrec "NVClosureF" p c
     NVBuiltin' name _ -> showsUnaryWith showsPrec "NVBuiltinF" p name
-    _                 -> error "Pattern synonyms mask coverage"
 
 
 -- ** Traversable
@@ -253,8 +312,8 @@ sequenceNValue'
   => (forall x . n x -> m x)
   -> NValue' t f m (n a)
   -> n (NValue' t f m a)
-sequenceNValue' transform (NValue v) =
-  NValue <$> traverse (sequenceNValueF transform) v
+sequenceNValue' transform (NValue' v) =
+  NValue' <$> traverse (sequenceNValueF transform) v
 
 
 -- ** Profunctor
@@ -292,8 +351,8 @@ hoistNValue'
   -> (forall x . m x -> n x)
   -> NValue' t f m a
   -> NValue' t f n a
-hoistNValue' run lft (NValue v) =
-    NValue $ lmapNValueF (hoistNValue lft run) . hoistNValueF lft <$> v
+hoistNValue' run lft (NValue' v) =
+    NValue' $ lmapNValueF (hoistNValue lft run) . hoistNValueF lft <$> v
 {-# inline hoistNValue' #-}
 
 -- ** Monad
@@ -305,8 +364,8 @@ bindNValue'
   -> (a -> n b)
   -> NValue' t f m a
   -> n (NValue' t f m b)
-bindNValue' transform f (NValue v) =
-  NValue <$> traverse (bindNValueF transform f) v
+bindNValue' transform f (NValue' v) =
+  NValue' <$> traverse (bindNValueF transform f) v
 
 -- *** MonadTrans
 
@@ -355,28 +414,28 @@ unliftNValue' = hoistNValue' lift
 nvConstant' :: Applicative f
   => NAtom
   -> NValue' t f m r
-nvConstant' = NValue . pure . NVConstantF
+nvConstant' = NValue' . pure . NVConstantF
 
 
 -- | Haskell text & context to the Nix text & context,
 nvStr' :: Applicative f
   => NixString
   -> NValue' t f m r
-nvStr' = NValue . pure . NVStrF
+nvStr' = NValue' . pure . NVStrF
 
 
 -- | Haskell @FilePath@ to the Nix path,
 nvPath' :: Applicative f
   => FilePath
   -> NValue' t f m r
-nvPath' = NValue . pure . NVPathF
+nvPath' = NValue' . pure . NVPathF
 
 
 -- | Haskell @[]@ to the Nix @[]@,
 nvList' :: Applicative f
   => [r]
   -> NValue' t f m r
-nvList' = NValue . pure . NVListF
+nvList' = NValue' . pure . NVListF
 
 
 -- | Haskell key-value to the Nix key-value,
@@ -384,7 +443,7 @@ nvSet' :: Applicative f
   => HashMap Text SourcePos
   -> HashMap Text r
   -> NValue' t f m r
-nvSet' x s = NValue $ pure $ NVSetF s x
+nvSet' x s = NValue' $ pure $ NVSetF s x
 
 
 -- | Haskell closure to the Nix closure,
@@ -394,7 +453,7 @@ nvClosure' :: (Applicative f, Functor m)
       -> m r
     )
   -> NValue' t f m r
-nvClosure' x f = NValue $ pure $ NVClosureF x f
+nvClosure' x f = NValue' $ pure $ NVClosureF x f
 
 
 -- | Haskell functions to the Nix functions!
@@ -402,7 +461,7 @@ nvBuiltin' :: (Applicative f, Functor m)
   => String
   -> (NValue t f m -> m r)
   -> NValue' t f m r
-nvBuiltin' name f = NValue $ pure $ NVBuiltinF name f
+nvBuiltin' name f = NValue' $ pure $ NVBuiltinF name f
 
 
 -- So above we have maps of Hask subcategory objects to Nix objects,
@@ -417,13 +476,14 @@ nvBuiltin' name f = NValue $ pure $ NVBuiltinF name f
 -- the @NValueF a@. Which is @NValueF p m r@. Since it extracted from the
 -- @NValue@, which is formed by \( (F a -> a) F a \) in the first place.
 -- So @NValueF p m r@ which is extracted here, internally holds the next NValue.
-pattern NVConstant' x <- NValue (extract -> NVConstantF x)
-pattern NVStr' ns <- NValue (extract -> NVStrF ns)
-pattern NVPath' x <- NValue (extract -> NVPathF x)
-pattern NVList' l <- NValue (extract -> NVListF l)
-pattern NVSet' s x <- NValue (extract -> NVSetF s x)
-pattern NVClosure' x f <- NValue (extract -> NVClosureF x f)
-pattern NVBuiltin' name f <- NValue (extract -> NVBuiltinF name f)
+pattern NVConstant' x <- NValue' (extract -> NVConstantF x)
+pattern NVStr' ns <- NValue' (extract -> NVStrF ns)
+pattern NVPath' x <- NValue' (extract -> NVPathF x)
+pattern NVList' l <- NValue' (extract -> NVListF l)
+pattern NVSet' s x <- NValue' (extract -> NVSetF s x)
+pattern NVClosure' x f <- NValue' (extract -> NVClosureF x f)
+pattern NVBuiltin' name f <- NValue' (extract -> NVBuiltinF name f)
+{-# COMPLETE NVConstant', NVStr', NVPath', NVList', NVSet', NVClosure', NVBuiltin' #-}
 
 
 -- * @__NValue__@: Nix language values
@@ -609,6 +669,8 @@ builtin3 name f =
 -- *** @F: Evaluation -> NValue@
 
 pattern NVThunk t <- Pure t
+pattern NVValue v <- Free v
+{-# COMPLETE NVThunk, NVValue #-}
 pattern NVConstant x <- Free (NVConstant' x)
 pattern NVStr ns <- Free (NVStr' ns)
 pattern NVPath x <- Free (NVPath' x)
@@ -616,6 +678,7 @@ pattern NVList l <- Free (NVList' l)
 pattern NVSet s x <- Free (NVSet' s x)
 pattern NVClosure x f <- Free (NVClosure' x f)
 pattern NVBuiltin name f <- Free (NVBuiltin' name f)
+{-# COMPLETE NVThunk, NVConstant, NVStr, NVPath, NVList, NVSet, NVClosure, NVBuiltin #-}
 
 
 
@@ -685,7 +748,7 @@ showValueType :: (MonadThunk t m (NValue t f m), Comonad f)
   => NValue t f m
   -> m String
 showValueType (Pure t) = showValueType =<< force t
-showValueType (Free (NValue (extract -> v))) =
+showValueType (Free (NValue' (extract -> v))) =
   pure $ describeValue $ valueType v
 
 

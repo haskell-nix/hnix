@@ -320,7 +320,6 @@ valueToExpr = iterNValue (\_ _ -> thk) phi
   phi (NVClosure' _ _   ) = Fix . NSym $ "<closure>"
   phi (NVPath' p        ) = Fix $ NLiteralPath p
   phi (NVBuiltin' name _) = Fix . NSym $ "builtins." <> pack name
-  phi _                   = error "Pattern synonyms foil completeness check"
 
   mkStr ns = Fix $ NStr $ DoubleQuoted [Plain (stringIgnoreContext ns)]
 
@@ -396,4 +395,3 @@ printNix = iterNValue (\_ _ -> thk) phi
   phi NVClosure'{}        = "<<lambda>>"
   phi (NVPath' fp       ) = fp
   phi (NVBuiltin' name _) = "<<builtin " <> name <> ">>"
-  phi _                   = error "Pattern synonyms foil completeness check"
