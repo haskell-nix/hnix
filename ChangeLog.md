@@ -137,9 +137,11 @@
         MonadPaths       (Fix1 t)    :: Nix.Standard -> Nix.Effects
         MonadPutStr      (Fix1 t)    :: Nix.Standard -> Nix.Effects
         ```
-  * [(link)](https://github.com/haskell-nix/hnix/pull/878/files) `nvSet{,',P}`: got unflipped, now accept source position argument before the value.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/878/files) `Nix.Value`: `nvSet{,',P}`: got unflipped, now accept source position argument before the value.
   
-  * [(link)](https://github.com/haskell-nix/hnix/pull/878/files) `mkNixDoc`: got unflipped.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/878/files) `Nix.Pretty`: `mkNixDoc`: got unflipped.
+  
+  * [(link)](https://github.com/haskell-nix/hnix/pull/886/commits/381b0e5df9cc620a25533ff1c84045a4ea37a833) `Nix.Value`: Data constructor for `NValue' t f m a` changed (`NValue -> NValue'`).
 
 * Additional:
   * [(link)](https://github.com/haskell-nix/hnix/commit/7e6cd97bf3288cb584241611fdb25bf85d7e0ba7) `cabal.project`: freed from the `cryptohash-sha512` override, Hackage trustees made a revision.
