@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
@@ -33,6 +34,7 @@ import           Control.Arrow
 import           Control.Monad.Catch
 import           Control.Monad.Except
 #if !MIN_VERSION_base(4,13,0)
+import           Prelude                 hiding ( fail )
 import           Control.Monad.Fail
 #endif
 import           Control.Monad.Logic
@@ -302,77 +304,61 @@ unops u1 op =
   ]
 
 binops :: Type -> NBinaryOp -> [Constraint]
-binops u1 = \case
-  NApp  -> mempty                -- this is handled separately
+binops u1 op =
+  if
+    -- NApp in fact is handled separately
+    -- Equality tells nothing about the types, because any two types are allowed.
+    | op `elem` [ NApp  , NEq  , NNEq        ] -> mempty
+    | op `elem` [ NGt   , NGte , NLt  , NLte ] -> inequality
+    | op `elem` [ NAnd  , NOr  , NImpl       ] -> gate
+    | op ==       NConcat                      -> concatenation
+    | op `elem` [ NMinus, NMult, NDiv        ] -> arithmetic
+    | op ==       NUpdate                      -> rUnion
+    | op ==       NPlus                        -> addition
+    | otherwise -> fail "GHC so far can not infer that this pattern match is full, so make it happy."
 
-  -- Equality tells you nothing about the types, because any two types are
-  -- allowed.
-  NEq   -> mempty
-  NNEq  -> mempty
-
-  NGt   -> inequality
-  NGte  -> inequality
-  NLt   -> inequality
-  NLte  -> inequality
-
-  NAnd  -> [EqConst u1 (typeFun [typeBool, typeBool, typeBool])]
-  NOr   -> [EqConst u1 (typeFun [typeBool, typeBool, typeBool])]
-  NImpl -> [EqConst u1 (typeFun [typeBool, typeBool, typeBool])]
-
-  NConcat -> [EqConst u1 (typeFun [typeList, typeList, typeList])]
-
-  NUpdate ->
-    [ EqConst
-        u1
-        (TMany
-          [ typeFun [typeSet, typeSet, typeSet]
-          , typeFun [typeSet, typeNull, typeSet]
-          , typeFun [typeNull, typeSet, typeSet]
-          ]
-        )
-    ]
-
-  NPlus ->
-    [ EqConst
-        u1
-        (TMany
-          [ typeFun [typeInt, typeInt, typeInt]
-          , typeFun [typeFloat, typeFloat, typeFloat]
-          , typeFun [typeInt, typeFloat, typeFloat]
-          , typeFun [typeFloat, typeInt, typeFloat]
-          , typeFun [typeString, typeString, typeString]
-          , typeFun [typePath, typePath, typePath]
-          , typeFun [typeString, typeString, typePath]
-          ]
-        )
-    ]
-  NMinus -> arithmetic
-  NMult  -> arithmetic
-  NDiv   -> arithmetic
  where
+
+  gate          = eqCnst [typeBool, typeBool, typeBool]
+  concatenation = eqCnst [typeList, typeList, typeList]
+
+  eqCnst l = [EqConst u1 (typeFun l)]
+
   inequality =
-    [ EqConst
-        u1
-        (TMany
-          [ typeFun [typeInt, typeInt, typeBool]
-          , typeFun [typeFloat, typeFloat, typeBool]
-          , typeFun [typeInt, typeFloat, typeBool]
-          , typeFun [typeFloat, typeInt, typeBool]
-          ]
-        )
-    ]
+    eqCnstMtx
+      [ [typeInt  , typeInt  , typeBool]
+      , [typeFloat, typeFloat, typeBool]
+      , [typeInt  , typeFloat, typeBool]
+      , [typeFloat, typeInt  , typeBool]
+      ]
 
   arithmetic =
-    [ EqConst
-        u1
-        (TMany
-          [ typeFun [typeInt, typeInt, typeInt]
-          , typeFun [typeFloat, typeFloat, typeFloat]
-          , typeFun [typeInt, typeFloat, typeFloat]
-          , typeFun [typeFloat, typeInt, typeFloat]
-          ]
-        )
-    ]
+    eqCnstMtx
+      [ [typeInt  , typeInt  , typeInt  ]
+      , [typeFloat, typeFloat, typeFloat]
+      , [typeInt  , typeFloat, typeFloat]
+      , [typeFloat, typeInt  , typeFloat]
+      ]
+
+  rUnion =
+    eqCnstMtx
+      [ [typeSet , typeSet , typeSet]
+      , [typeSet , typeNull, typeSet]
+      , [typeNull, typeSet , typeSet]
+      ]
+
+  addition =
+    eqCnstMtx
+      [ [typeInt   , typeInt   , typeInt   ]
+      , [typeFloat , typeFloat , typeFloat ]
+      , [typeInt   , typeFloat , typeFloat ]
+      , [typeFloat , typeInt   , typeFloat ]
+      , [typeString, typeString, typeString]
+      , [typePath  , typePath  , typePath  ]
+      , [typeString, typeString, typePath  ]
+      ]
+
+  eqCnstMtx mtx = [EqConst u1 (TMany (typeFun <$> mtx))]
 
 liftInfer :: Monad m => m a -> InferT s m a
 liftInfer = InferT . lift . lift . lift
