@@ -28,20 +28,36 @@ module Nix.Type.Infer
   )
 where
 
-import           Control.Applicative
-import qualified Control.Applicative           as Applicative
-import           Control.Arrow
-import           Control.Monad.Catch
-import           Control.Monad.Except
+import           Control.Applicative            ( Alternative
+                                                , empty
+                                                )
+import           Data.Bifunctor                 ( Bifunctor(first) )
+import           Control.Monad.Catch            ( Exception(fromException, toException)
+                                                , MonadThrow(..)
+                                                , MonadCatch(..)
+                                                )
+import           Control.Monad.Except           ( ExceptT
+                                                , MonadError(..), runExceptT
+                                                )
 #if !MIN_VERSION_base(4,13,0)
 import           Prelude                 hiding ( fail )
 import           Control.Monad.Fail
 #endif
-import           Control.Monad.Logic
-import           Control.Monad.Reader
+import           Control.Monad.Logic     hiding ( fail )
+import           Control.Monad.Reader           ( MonadReader(local)
+                                                , ReaderT(..)
+                                                , MonadFix
+                                                )
 import           Control.Monad.Ref
-import           Control.Monad.ST
-import           Control.Monad.State.Strict
+import           Control.Monad.ST               ( ST
+                                                , runST
+                                                )
+import           Control.Monad.State.Strict     ( modify
+                                                , evalState
+                                                , evalStateT
+                                                , MonadState(put, get)
+                                                , StateT(runStateT)
+                                                )
 import           Data.Fix                       ( foldFix )
 import           Data.Foldable                  ( foldl'
                                                 , foldrM
@@ -68,7 +84,7 @@ import           Nix.Fresh
 import           Nix.String
 import           Nix.Scope
 import qualified Nix.Type.Assumption           as As
-import           Nix.Type.Env
+import           Nix.Type.Env            hiding ( empty )
 import qualified Nix.Type.Env                  as Env
 import           Nix.Type.Type
 import           Nix.Utils
@@ -82,8 +98,10 @@ import           Nix.Var
 newtype InferT s m a =
   InferT
     { getInfer ::
-        ReaderT (Set.Set TVar, Scopes (InferT s m) (Judgment s))
-            (StateT InferState (ExceptT InferError m)) a
+        ReaderT
+          (Set.Set TVar, Scopes (InferT s m) (Judgment s))
+          (StateT InferState (ExceptT InferError m))
+          a
     }
     deriving
       ( Functor
@@ -664,7 +682,7 @@ instance MonadTrans Solver where
   lift = Solver . lift . lift
 
 instance Monad m => MonadError TypeError (Solver m) where
-  throwError err = Solver $ lift (modify (err :)) *> Applicative.empty
+  throwError err = Solver $ lift (modify (err :)) *> empty
   catchError _ _ = error "This is never used"
 
 runSolver :: Monad m => Solver m a -> m (Either [TypeError] [a])
