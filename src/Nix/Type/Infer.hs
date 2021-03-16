@@ -294,13 +294,13 @@ generalize free t = Forall as t
   as = Set.toList $ ftv t `Set.difference` free
 
 unops :: Type -> NUnaryOp -> [Constraint]
-unops u1 = \case
-  NNot -> [EqConst u1 (typeFun [typeBool, typeBool])]
-  NNeg ->
-    [ EqConst
-        u1
-        (TMany [typeFun [typeInt, typeInt], typeFun [typeFloat, typeFloat]])
-    ]
+unops u1 op =
+  [ EqConst u1
+   (case op of
+      NNot -> typeFun [typeBool                   , typeBool                       ]
+      NNeg -> TMany   [typeFun  [typeInt, typeInt], typeFun  [typeFloat, typeFloat]]
+    )
+  ]
 
 binops :: Type -> NBinaryOp -> [Constraint]
 binops u1 = \case
