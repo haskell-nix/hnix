@@ -237,19 +237,23 @@ inferType env ex = do
         Set.fromList (As.keys as) `Set.difference` Set.fromList (Env.keys env)
   unless (Set.null unbounds) $ typeError $ UnboundVariables
     (nub (Set.toList unbounds))
-  let cs' =
-        [ ExpInstConst t s
-        | (x, ss) <- Env.toList env
-        , s       <- ss
-        , t       <- As.lookup x as
-        ]
+  let
+    cs' =
+      [ ExpInstConst t s
+          | (x, ss) <- Env.toList env
+          , s       <- ss
+          , t       <- As.lookup x as
+      ]
   inferState <- get
-  let eres = (`evalState` inferState) $ runSolver $ do
+  let
+    eres = (`evalState` inferState) $ runSolver $
+      do
         subst <- solve (cs <> cs')
         pure (subst, subst `apply` t)
-  case eres of
-    Left  errs -> throwError $ TypeInferenceErrors errs
-    Right xs   -> pure xs
+  either
+    (throwError . TypeInferenceErrors)
+    pure
+    eres
 
 -- | Solve for the toplevel type of an expression in a given environment
 inferExpr :: Env -> NExpr -> Either InferError [Scheme]
@@ -268,23 +272,26 @@ letters :: [String]
 letters = [1 ..] >>= flip replicateM ['a' .. 'z']
 
 freshTVar :: MonadState InferState m => m TVar
-freshTVar = do
-  s <- get
-  put s { count = count s + 1 }
-  pure $ TV (letters !! count s)
+freshTVar =
+  do
+    s <- get
+    put s { count = count s + 1 }
+    pure $ TV (letters !! count s)
 
 fresh :: MonadState InferState m => m Type
 fresh = TVar <$> freshTVar
 
 instantiate :: MonadState InferState m => Scheme -> m Type
-instantiate (Forall as t) = do
-  as' <- traverse (const fresh) as
-  let s = Subst $ Map.fromList $ zip as as'
-  pure $ apply s t
+instantiate (Forall as t) =
+  do
+    as' <- traverse (const fresh) as
+    let s = Subst $ Map.fromList $ zip as as'
+    pure $ apply s t
 
 generalize :: Set.Set TVar -> Type -> Scheme
 generalize free t = Forall as t
-  where as = Set.toList $ ftv t `Set.difference` free
+ where
+  as = Set.toList $ ftv t `Set.difference` free
 
 unops :: Type -> NUnaryOp -> [Constraint]
 unops u1 = \case
@@ -378,10 +385,12 @@ instance MonadRef m => MonadRef (InferT s m) where
   writeRef x y = liftInfer $ writeRef x y
 
 instance MonadAtomicRef m => MonadAtomicRef (InferT s m) where
-  atomicModifyRef x f = liftInfer $ do
-    res <- snd . f <$> readRef x
-    _   <- modifyRef x (fst . f)
-    pure res
+  atomicModifyRef x f =
+    liftInfer $
+      do
+        res <- snd . f <$> readRef x
+        _   <- modifyRef x (fst . f)
+        pure res
 
 -- newtype JThunkT s m = JThunk (NThunkF (InferT s m) (Judgment s))
 
