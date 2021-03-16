@@ -28,6 +28,7 @@ module Nix.Type.Infer
 where
 
 import           Control.Applicative
+import qualified Control.Applicative           as Applicative
 import           Control.Arrow
 import           Control.Monad.Catch
 import           Control.Monad.Except
@@ -669,7 +670,7 @@ instance MonadTrans Solver where
   lift = Solver . lift . lift
 
 instance Monad m => MonadError TypeError (Solver m) where
-  throwError err = Solver $ lift (modify (err :)) *> mzero
+  throwError err = Solver $ lift (modify (err :)) *> Applicative.empty
   catchError _ _ = error "This is never used"
 
 runSolver :: Monad m => Solver m a -> m (Either [TypeError] [a])
