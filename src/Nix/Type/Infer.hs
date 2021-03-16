@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
@@ -27,18 +28,36 @@ module Nix.Type.Infer
   )
 where
 
-import           Control.Applicative
-import           Control.Arrow
-import           Control.Monad.Catch
-import           Control.Monad.Except
+import           Control.Applicative            ( Alternative
+                                                , empty
+                                                )
+import           Data.Bifunctor                 ( Bifunctor(first) )
+import           Control.Monad.Catch            ( Exception(fromException, toException)
+                                                , MonadThrow(..)
+                                                , MonadCatch(..)
+                                                )
+import           Control.Monad.Except           ( ExceptT
+                                                , MonadError(..), runExceptT
+                                                )
 #if !MIN_VERSION_base(4,13,0)
+import           Prelude                 hiding ( fail )
 import           Control.Monad.Fail
 #endif
-import           Control.Monad.Logic
-import           Control.Monad.Reader
+import           Control.Monad.Logic     hiding ( fail )
+import           Control.Monad.Reader           ( MonadReader(local)
+                                                , ReaderT(..)
+                                                , MonadFix
+                                                )
 import           Control.Monad.Ref
-import           Control.Monad.ST
-import           Control.Monad.State.Strict
+import           Control.Monad.ST               ( ST
+                                                , runST
+                                                )
+import           Control.Monad.State.Strict     ( modify
+                                                , evalState
+                                                , evalStateT
+                                                , MonadState(put, get)
+                                                , StateT(runStateT)
+                                                )
 import           Data.Fix                       ( foldFix )
 import           Data.Foldable                  ( foldl'
                                                 , foldrM
@@ -65,7 +84,7 @@ import           Nix.Fresh
 import           Nix.String
 import           Nix.Scope
 import qualified Nix.Type.Assumption           as As
-import           Nix.Type.Env
+import           Nix.Type.Env            hiding ( empty )
 import qualified Nix.Type.Env                  as Env
 import           Nix.Type.Type
 import           Nix.Utils
@@ -79,8 +98,10 @@ import           Nix.Var
 newtype InferT s m a =
   InferT
     { getInfer ::
-        ReaderT (Set.Set TVar, Scopes (InferT s m) (Judgment s))
-            (StateT InferState (ExceptT InferError m)) a
+        ReaderT
+          (Set.Set TVar, Scopes (InferT s m) (Judgment s))
+          (StateT InferState (ExceptT InferError m))
+          a
     }
     deriving
       ( Functor
@@ -236,25 +257,28 @@ inferType env ex = do
         Set.fromList (As.keys as) `Set.difference` Set.fromList (Env.keys env)
   unless (Set.null unbounds) $ typeError $ UnboundVariables
     (nub (Set.toList unbounds))
-  let cs' =
-        [ ExpInstConst t s
-        | (x, ss) <- Env.toList env
-        , s       <- ss
-        , t       <- As.lookup x as
-        ]
+  let
+    cs' =
+      [ ExpInstConst t s
+          | (x, ss) <- Env.toList env
+          , s       <- ss
+          , t       <- As.lookup x as
+      ]
   inferState <- get
-  let eres = (`evalState` inferState) $ runSolver $ do
+  let
+    eres = (`evalState` inferState) $ runSolver $
+      do
         subst <- solve (cs <> cs')
         pure (subst, subst `apply` t)
-  case eres of
-    Left  errs -> throwError $ TypeInferenceErrors errs
-    Right xs   -> pure xs
+  either
+    (throwError . TypeInferenceErrors)
+    pure
+    eres
 
 -- | Solve for the toplevel type of an expression in a given environment
 inferExpr :: Env -> NExpr -> Either InferError [Scheme]
-inferExpr env ex = case runInfer (inferType env ex) of
-  Left  err -> Left err
-  Right xs  -> Right $ fmap (\(subst, ty) -> closeOver (subst `apply` ty)) xs
+inferExpr env ex =
+  (fmap . fmap) (\(subst, ty) -> closeOver (subst `apply` ty)) $ runInfer $ inferType env ex
 
 -- | Canonicalize and return the polymorphic toplevel type.
 closeOver :: Type -> Scheme
@@ -267,105 +291,92 @@ letters :: [String]
 letters = [1 ..] >>= flip replicateM ['a' .. 'z']
 
 freshTVar :: MonadState InferState m => m TVar
-freshTVar = do
-  s <- get
-  put s { count = count s + 1 }
-  pure $ TV (letters !! count s)
+freshTVar =
+  do
+    s <- get
+    put s { count = count s + 1 }
+    pure $ TV (letters !! count s)
 
 fresh :: MonadState InferState m => m Type
 fresh = TVar <$> freshTVar
 
 instantiate :: MonadState InferState m => Scheme -> m Type
-instantiate (Forall as t) = do
-  as' <- traverse (const fresh) as
-  let s = Subst $ Map.fromList $ zip as as'
-  pure $ apply s t
+instantiate (Forall as t) =
+  do
+    as' <- traverse (const fresh) as
+    let s = Subst $ Map.fromList $ zip as as'
+    pure $ apply s t
 
 generalize :: Set.Set TVar -> Type -> Scheme
 generalize free t = Forall as t
-  where as = Set.toList $ ftv t `Set.difference` free
+ where
+  as = Set.toList $ ftv t `Set.difference` free
 
 unops :: Type -> NUnaryOp -> [Constraint]
-unops u1 = \case
-  NNot -> [EqConst u1 (typeFun [typeBool, typeBool])]
-  NNeg ->
-    [ EqConst
-        u1
-        (TMany [typeFun [typeInt, typeInt], typeFun [typeFloat, typeFloat]])
-    ]
+unops u1 op =
+  [ EqConst u1
+   (case op of
+      NNot -> typeFun [typeBool                   , typeBool                       ]
+      NNeg -> TMany   [typeFun  [typeInt, typeInt], typeFun  [typeFloat, typeFloat]]
+    )
+  ]
 
 binops :: Type -> NBinaryOp -> [Constraint]
-binops u1 = \case
-  NApp  -> mempty                -- this is handled separately
+binops u1 op =
+  if
+    -- NApp in fact is handled separately
+    -- Equality tells nothing about the types, because any two types are allowed.
+    | op `elem` [ NApp  , NEq  , NNEq        ] -> mempty
+    | op `elem` [ NGt   , NGte , NLt  , NLte ] -> inequality
+    | op `elem` [ NAnd  , NOr  , NImpl       ] -> gate
+    | op ==       NConcat                      -> concatenation
+    | op `elem` [ NMinus, NMult, NDiv        ] -> arithmetic
+    | op ==       NUpdate                      -> rUnion
+    | op ==       NPlus                        -> addition
+    | otherwise -> fail "GHC so far can not infer that this pattern match is full, so make it happy."
 
-  -- Equality tells you nothing about the types, because any two types are
-  -- allowed.
-  NEq   -> mempty
-  NNEq  -> mempty
-
-  NGt   -> inequality
-  NGte  -> inequality
-  NLt   -> inequality
-  NLte  -> inequality
-
-  NAnd  -> [EqConst u1 (typeFun [typeBool, typeBool, typeBool])]
-  NOr   -> [EqConst u1 (typeFun [typeBool, typeBool, typeBool])]
-  NImpl -> [EqConst u1 (typeFun [typeBool, typeBool, typeBool])]
-
-  NConcat -> [EqConst u1 (typeFun [typeList, typeList, typeList])]
-
-  NUpdate ->
-    [ EqConst
-        u1
-        (TMany
-          [ typeFun [typeSet, typeSet, typeSet]
-          , typeFun [typeSet, typeNull, typeSet]
-          , typeFun [typeNull, typeSet, typeSet]
-          ]
-        )
-    ]
-
-  NPlus ->
-    [ EqConst
-        u1
-        (TMany
-          [ typeFun [typeInt, typeInt, typeInt]
-          , typeFun [typeFloat, typeFloat, typeFloat]
-          , typeFun [typeInt, typeFloat, typeFloat]
-          , typeFun [typeFloat, typeInt, typeFloat]
-          , typeFun [typeString, typeString, typeString]
-          , typeFun [typePath, typePath, typePath]
-          , typeFun [typeString, typeString, typePath]
-          ]
-        )
-    ]
-  NMinus -> arithmetic
-  NMult  -> arithmetic
-  NDiv   -> arithmetic
  where
+
+  gate          = eqCnst [typeBool, typeBool, typeBool]
+  concatenation = eqCnst [typeList, typeList, typeList]
+
+  eqCnst l = [EqConst u1 (typeFun l)]
+
   inequality =
-    [ EqConst
-        u1
-        (TMany
-          [ typeFun [typeInt, typeInt, typeBool]
-          , typeFun [typeFloat, typeFloat, typeBool]
-          , typeFun [typeInt, typeFloat, typeBool]
-          , typeFun [typeFloat, typeInt, typeBool]
-          ]
-        )
-    ]
+    eqCnstMtx
+      [ [typeInt  , typeInt  , typeBool]
+      , [typeFloat, typeFloat, typeBool]
+      , [typeInt  , typeFloat, typeBool]
+      , [typeFloat, typeInt  , typeBool]
+      ]
 
   arithmetic =
-    [ EqConst
-        u1
-        (TMany
-          [ typeFun [typeInt, typeInt, typeInt]
-          , typeFun [typeFloat, typeFloat, typeFloat]
-          , typeFun [typeInt, typeFloat, typeFloat]
-          , typeFun [typeFloat, typeInt, typeFloat]
-          ]
-        )
-    ]
+    eqCnstMtx
+      [ [typeInt  , typeInt  , typeInt  ]
+      , [typeFloat, typeFloat, typeFloat]
+      , [typeInt  , typeFloat, typeFloat]
+      , [typeFloat, typeInt  , typeFloat]
+      ]
+
+  rUnion =
+    eqCnstMtx
+      [ [typeSet , typeSet , typeSet]
+      , [typeSet , typeNull, typeSet]
+      , [typeNull, typeSet , typeSet]
+      ]
+
+  addition =
+    eqCnstMtx
+      [ [typeInt   , typeInt   , typeInt   ]
+      , [typeFloat , typeFloat , typeFloat ]
+      , [typeInt   , typeFloat , typeFloat ]
+      , [typeFloat , typeInt   , typeFloat ]
+      , [typeString, typeString, typeString]
+      , [typePath  , typePath  , typePath  ]
+      , [typeString, typeString, typePath  ]
+      ]
+
+  eqCnstMtx mtx = [EqConst u1 (TMany (typeFun <$> mtx))]
 
 liftInfer :: Monad m => m a -> InferT s m a
 liftInfer = InferT . lift . lift . lift
@@ -377,10 +388,12 @@ instance MonadRef m => MonadRef (InferT s m) where
   writeRef x y = liftInfer $ writeRef x y
 
 instance MonadAtomicRef m => MonadAtomicRef (InferT s m) where
-  atomicModifyRef x f = liftInfer $ do
-    res <- snd . f <$> readRef x
-    _   <- modifyRef x (fst . f)
-    pure res
+  atomicModifyRef x f =
+    liftInfer $
+      do
+        res <- snd . f <$> readRef x
+        _   <- modifyRef x (fst . f)
+        pure res
 
 -- newtype JThunkT s m = JThunk (NThunkF (InferT s m) (Judgment s))
 
@@ -669,7 +682,7 @@ instance MonadTrans Solver where
   lift = Solver . lift . lift
 
 instance Monad m => MonadError TypeError (Solver m) where
-  throwError err = Solver $ lift (modify (err :)) *> mzero
+  throwError err = Solver $ lift (modify (err :)) *> empty
   catchError _ _ = error "This is never used"
 
 runSolver :: Monad m => Solver m a -> m (Either [TypeError] [a])
