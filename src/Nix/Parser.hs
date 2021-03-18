@@ -6,7 +6,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
 
 -- | Main module for parsing Nix expressions.
 module Nix.Parser
@@ -523,6 +522,7 @@ reserved :: Text -> Parser ()
 reserved n =
   lexeme $ try $ string n *> lookAhead (void (satisfy reservedEnd) <|> eof)
 
+identifier :: Parser Text
 identifier = lexeme $ try $ do
   ident <-
     cons
@@ -539,16 +539,22 @@ identifier = lexeme $ try $ do
 --
 -- Braces and angles in hnix don't enclose a single expression so this type
 -- restriction would not be useful.
-parens, brackets :: Parser (NExprF f) -> Parser (NExprF f)
+parens :: Parser (NExprF f) -> Parser (NExprF f)
 parens   = between (symbol "(") (symbol ")")
+braces :: ParsecT Void Text (State SourcePos) a -> ParsecT Void Text (State SourcePos) a
 braces   = between (symbol "{") (symbol "}")
 -- angles    = between (symbol "<") (symbol ">")
+brackets :: Parser (NExprF f) -> Parser (NExprF f)
 brackets = between (symbol "[") (symbol "]")
+semi :: Parser Text
 semi     = symbol ";"
+comma :: Parser Text
 comma    = symbol ","
 -- colon     = symbol ":"
 -- dot       = symbol "."
+equals :: Parser Text
 equals   = symbol "="
+question :: Parser Text
 question = symbol "?"
 
 integer :: Parser Integer
@@ -611,8 +617,10 @@ annotateLocation p =
 annotateLocation1 :: Parser (NExprF NExprLoc) -> Parser NExprLoc
 annotateLocation1 = fmap annToAnnF . annotateLocation
 
+manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
 manyUnaryOp f = foldr1 (.) <$> some f
 
+operator :: Text -> Parser Text
 operator op =
   case op of
     "-" -> tuneLexer "-" '>'
@@ -634,12 +642,16 @@ opWithLoc name op f =
 
     pure $ f (Ann ann op)
 
+binaryN :: Text -> NBinaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 binaryN name op =
   (NBinaryDef name op NAssocNone, InfixN (opWithLoc name op nBinary))
+binaryL :: Text -> NBinaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 binaryL name op =
   (NBinaryDef name op NAssocLeft, InfixL (opWithLoc name op nBinary))
+binaryR :: Text -> NBinaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 binaryR name op =
   (NBinaryDef name op NAssocRight, InfixR (opWithLoc name op nBinary))
+prefix :: Text -> NUnaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 prefix name op =
   (NUnaryDef name op, Prefix (manyUnaryOp (opWithLoc name op nUnary)))
 -- postfix name op = (NUnaryDef name op,
