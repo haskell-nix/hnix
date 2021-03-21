@@ -7,7 +7,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}  -- @key@ in Aeson reports: @key@ often has better inference than @ix@ when used with OverloadedStrings.
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -22,31 +21,27 @@
 module Nix.Value
 where
 
+import           Prelude                 hiding ( force )
+import           Nix.Utils
 import           Control.Comonad                ( Comonad
                                                 , extract
                                                 )
-import           Control.Exception              ( Exception )
-import           Control.Monad                  ( (<=<) )
 import           Control.Monad.Free             ( Free(..)
                                                 , hoistFree
                                                 , iter
                                                 , iterM
                                                 )
-import           Control.Monad.Trans.Class      ( MonadTrans
-                                                , lift
-                                                )
-#if !MIN_VERSION_base(4,13,0)
-import           Control.Monad.Fail
-#endif
 import qualified Data.Aeson                    as Aeson
 import           Data.Functor.Classes           ( Show1
                                                 , liftShowsPrec
                                                 , showsUnaryWith
                                                 , Eq1(liftEq) )
-import           Data.HashMap.Lazy              ( HashMap )
-import           Data.Text                      ( Text )
-import           Data.Typeable                  ( Typeable )
-import           GHC.Generics                   ( Generic )
+import           Data.Eq.Deriving
+import qualified Text.Show
+import           Text.Show                      ( showsPrec
+                                                , showString
+                                                , showParen
+                                                )
 import           Lens.Family2.Stock             ( _1 )
 import           Lens.Family2.TH                ( makeTraversals
                                                 , makeLenses
@@ -56,8 +51,6 @@ import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.String
 import           Nix.Thunk
-import           Nix.Utils
-import           Data.Eq.Deriving
 
 
 -- * @__NValueF__@: Base functor

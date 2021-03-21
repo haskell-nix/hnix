@@ -1,5 +1,4 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 -- | A bunch of shorthands for making nix expressions.
 --
@@ -8,8 +7,6 @@
 module Nix.Expr.Shorthands where
 
 import           Data.Fix
-import           Data.List.NonEmpty             ( NonEmpty(..) )
-import           Data.Text                      ( Text )
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Text.Megaparsec.Pos            ( SourcePos )

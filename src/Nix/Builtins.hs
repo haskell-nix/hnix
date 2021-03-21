@@ -8,7 +8,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -28,11 +27,24 @@ module Nix.Builtins
   )
 where
 
-import           Control.Comonad
-import           Control.Monad
-import           Control.Monad.Catch
+import           Prelude                 hiding ( traceM
+                                                , toString
+                                                , anyM
+                                                , allM
+                                                )
+import           Relude.Unsafe                 as Unsafe
+import           Relude.Extra                   ( view )
+import           Nix.Utils                      ( AttrSet
+                                                , Has(hasLens)
+                                                , NixPathEntryType (PathEntryPath, PathEntryURI)
+                                                , uriAwareSplit
+                                                , list
+                                                , traceM
+                                                )
+import           Control.Comonad                ( Comonad )
+import           Control.Monad                  ( foldM )
+import           Control.Monad.Catch            ( MonadCatch(catch) )
 import           Control.Monad.ListM            ( sortByM )
-import           Control.Monad.Reader           ( asks )
 import           Crypto.Hash
 import qualified Crypto.Hash.MD5               as MD5
 import qualified Crypto.Hash.SHA1              as SHA1
@@ -42,21 +54,16 @@ import qualified Data.Aeson                    as A
 import           Data.Align                     ( alignWith )
 import           Data.Array
 import           Data.Bits
-import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString               as B
 import           Data.ByteString.Base16        as Base16
 import           Data.Char                      ( isDigit )
-import           Data.Fix                       ( foldFix )
 import           Data.Foldable                  ( foldrM )
+import           Data.Fix                       ( foldFix )
+import           Data.List                      ( partition )
 import qualified Data.HashMap.Lazy             as M
-import           Data.List
-import           Data.Maybe
 import           Data.Scientific
-import           Data.Set                       ( Set )
 import qualified Data.Set                      as S
-import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
-import           Data.Text.Encoding
 import qualified Data.Text.Lazy                as LazyText
 import qualified Data.Text.Lazy.Builder        as Builder
 import           Data.These                     ( fromThese )
@@ -67,10 +74,10 @@ import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Effects
 import           Nix.Effects.Basic              ( fetchTarball )
-import qualified Nix.Eval                      as Eval
 import           Nix.Exec
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
+import qualified Nix.Eval                      as Eval
 import           Nix.Frames
 import           Nix.Json
 import           Nix.Normal
@@ -78,10 +85,9 @@ import           Nix.Options
 import           Nix.Parser              hiding ( nixPath )
 import           Nix.Render
 import           Nix.Scope
-import           Nix.String              hiding ( getContext )
 import qualified Nix.String                    as NixString
+import           Nix.String              hiding ( getContext )
 import           Nix.String.Coerce
-import           Nix.Utils
 import           Nix.Value
 import           Nix.Value.Equal
 import           Nix.Value.Monad
@@ -92,7 +98,6 @@ import           System.Posix.Files             ( isRegularFile
                                                 , isDirectory
                                                 , isSymbolicLink
                                                 )
-import           Text.Read
 import           Text.Regex.TDFA
 
 -- | Evaluate a nix expression in the default context
@@ -379,7 +384,7 @@ foldNixPath f z =
 
     foldrM go z $
       (fromInclude . stringIgnoreContext <$> dirs)
-      <> ((uriAwareSplit . Text.pack) `whenJust` mPath)
+      <> maybe mempty (uriAwareSplit . Text.pack) mPath
       <> [ fromInclude $ Text.pack $ "nix=" <> dataDir <> "/nix/corepkgs" ]
  where
   fromInclude x = (x, ) $
@@ -570,14 +575,14 @@ head_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 head_ =
   list
     (throwError $ ErrorCall "builtins.head: empty list")
-    (pure . head)
+    (pure . Unsafe.head)
     <=< fromValue
 
 tail_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 tail_ =
   list
     (throwError $ ErrorCall "builtins.tail: empty list")
-    (pure . nvList . tail)
+    (pure . nvList . Unsafe.tail)
     <=< fromValue
 
 data VersionComponent
@@ -720,7 +725,7 @@ match_ pat str =
     -- Relevant issue: https://github.com/NixOS/nix/issues/2547
     let
       s  = stringIgnoreContext ns
-      re = makeRegex (encodeUtf8 p) :: Regex
+      re = makeRegex p :: Regex
       mkMatch t =
         bool
           (toValue ()) -- Shorthand for Null
@@ -736,16 +741,16 @@ match_ pat str =
             nvList
               <$>
                 traverse
-                  (mkMatch . decodeUtf8)
+                  mkMatch
                   (bool
                       id -- (length <= 1) allowed & passes-through here the full string
-                      tail
+                      Unsafe.tail
                       (length s > 1)
                       s
                   )
         _ -> (pure $ nvConstant NNull)
       )
-      (matchOnceText re (encodeUtf8 s))
+      (matchOnceText re s)
 
 split_
   :: forall e t f m
@@ -763,7 +768,7 @@ split_ pat str =
           -- Relevant issue: https://github.com/NixOS/nix/issues/2547
       let
         s = stringIgnoreContext ns
-        regex       = makeRegex (encodeUtf8 p) :: Regex
+        regex       = makeRegex p :: Regex
         haystack = encodeUtf8 s
 
       pure $ nvList $ splitMatches 0 (elems <$> matchAllText regex haystack) haystack
@@ -986,7 +991,7 @@ elemAt :: [a] -> Int -> Maybe a
 elemAt ls i =
   list
     Nothing
-    (pure . head)
+    (pure . Unsafe.head)
     (drop i ls)
 
 elemAt_
@@ -1491,16 +1496,21 @@ placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
     $ makeNixStringWithoutContext
     $ Text.cons '/'
     $ Base32.encode
-    $ case Base16.decode (text h) of -- The result coming out of hashString is base16 encoded
+    -- Please, stop Text -> Bytestring here after migration to Text
+    $ case Base16.decode (bytes h) of -- The result coming out of hashString is base16 encoded
 #if MIN_VERSION_base16_bytestring(1,0,0)
+      -- Please, stop Text -> String here after migration to Text
       Right d -> d
-      Left e -> error $ "Couldn't Base16 decode the text: '" <> show (text h) <> "'.\nThe Left fail content: '" <> e <> "'."
+      Left e -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nThe Left fail content: '" <> show e <> "'."
 #else
       (d, "") -> d
-      (_, e) -> error $ "Couldn't Base16 decode the text: '" <> show (text h) <> "'.\nUndecodable remainder: '" <> show e <> "'."
+      (_, e) -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nUndecodable remainder: '" <> show e <> "'."
 #endif
    where
-    text h = encodeUtf8 $ stringIgnoreContext h
+    bytes :: NixString -> ByteString
+    bytes = encodeUtf8 . body
+
+    body h = stringIgnoreContext h
 
 absolutePathFromValue :: MonadNix e t f m => NValue t f m -> m FilePath
 absolutePathFromValue =
@@ -1673,9 +1683,9 @@ addErrorContext
   :: forall e t f m
    . MonadNix e t f m
   => NValue t f m
-  -> NValue t f m
+  -> NValue t f m  -- action
   -> m (NValue t f m)
-addErrorContext _ action = pure action
+addErrorContext _ = pure
 
 exec_
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)

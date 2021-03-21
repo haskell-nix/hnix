@@ -83,7 +83,8 @@ jobs:
 
 
   build20:
-    name: "GHC 8.10, strict quality build, SDist, Optimizations, Benchmark, Haddock, Completions"
+    # name: "GHC 8.10, strict quality build, SDist, Optimizations, Benchmark, Haddock, Completions"
+    name: "GHC 8.10, SDist, Optimizations, Benchmark, Haddock, Completions"
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -104,7 +105,7 @@ jobs:
       env:
         compiler: "ghc8103"
         buildFromSdist: "true"
-        buildStrictly: "true"
+        buildStrictly: "false"
         linkWithGold: "true"
         doHaddock: "true"
         doHyperlinkSource: "true"

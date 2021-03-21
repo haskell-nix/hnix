@@ -3,10 +3,8 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
 
 -- | Main module for parsing Nix expressions.
 module Nix.Parser
@@ -45,14 +43,14 @@ module Nix.Parser
   )
 where
 
-import           Prelude                 hiding ( readFile )
+import           Prelude                 hiding ( some
+                                                , many
+                                                , readFile
+                                                )
+import           Data.Foldable                  ( foldr1 )
 
-import           Control.DeepSeq                ( NFData )
-import           Control.Monad                  ( guard
-                                                , void
-                                                , liftM2
+import           Control.Monad                  ( liftM2
                                                 , msum
-                                                , MonadPlus(mplus)
                                                 )
 import           Control.Monad.Combinators.Expr ( makeExprParser
                                                 , Operator( Postfix
@@ -62,31 +60,19 @@ import           Control.Monad.Combinators.Expr ( makeExprParser
                                                           , InfixL
                                                           )
                                                 )
-import           Control.Monad.State.Strict     ( evalState
-                                                , MonadState(get, put)
-                                                , State
-                                                )
 import           Data.Char                      ( isAlpha
                                                 , isDigit
                                                 , isSpace
                                                 )
 import           Data.Data                      ( Data(..) )
 import           Data.Fix                       ( Fix(..) )
-import           Data.Functor                   ( ($>) )
-import           Data.HashSet                   ( HashSet )
 import qualified Data.HashSet                  as HashSet
-import           Data.List.NonEmpty             ( NonEmpty(..) )
 import qualified Data.List.NonEmpty            as NE
 import qualified Data.Map                      as Map
-import           Data.Text                      ( Text
-                                                , cons
+import           Data.Text                      ( cons
                                                 , singleton
                                                 , pack
                                                 )
-import           Data.Text.Encoding             ( decodeUtf8 )
-import           Data.Typeable                  ( Typeable )
-import           Data.Void                      ( Void )
-import           GHC.Generics                   ( Generic )
 import           Nix.Expr                hiding ( ($>) )
 import           Nix.Expr.Strings               ( escapeCodes
                                                 , stripIndent
@@ -94,10 +80,11 @@ import           Nix.Expr.Strings               ( escapeCodes
                                                 , removePlainEmpty
                                                 )
 import           Nix.Render                     ( MonadFile(readFile) )
-import           Nix.Utils                      ( bool )
 import           Prettyprinter                  ( Doc
                                                 , pretty
                                                 )
+-- `parser-combinators` ships performance enhanced & MonadPlus-aware combinators.
+-- For example `smome` and `many` impoted here.
 import           Text.Megaparsec         hiding ( State )
 import           Text.Megaparsec.Char           ( space1
                                                 , string
@@ -523,6 +510,7 @@ reserved :: Text -> Parser ()
 reserved n =
   lexeme $ try $ string n *> lookAhead (void (satisfy reservedEnd) <|> eof)
 
+identifier :: Parser Text
 identifier = lexeme $ try $ do
   ident <-
     cons
@@ -539,16 +527,22 @@ identifier = lexeme $ try $ do
 --
 -- Braces and angles in hnix don't enclose a single expression so this type
 -- restriction would not be useful.
-parens, brackets :: Parser (NExprF f) -> Parser (NExprF f)
+parens :: Parser (NExprF f) -> Parser (NExprF f)
 parens   = between (symbol "(") (symbol ")")
+braces :: ParsecT Void Text (State SourcePos) a -> ParsecT Void Text (State SourcePos) a
 braces   = between (symbol "{") (symbol "}")
 -- angles    = between (symbol "<") (symbol ">")
+brackets :: Parser (NExprF f) -> Parser (NExprF f)
 brackets = between (symbol "[") (symbol "]")
+semi :: Parser Text
 semi     = symbol ";"
+comma :: Parser Text
 comma    = symbol ","
 -- colon     = symbol ":"
 -- dot       = symbol "."
+equals :: Parser Text
 equals   = symbol "="
+question :: Parser Text
 question = symbol "?"
 
 integer :: Parser Integer
@@ -565,7 +559,6 @@ reservedNames =
 type Parser = ParsecT Void Text (State SourcePos)
 
 type Result a = Either (Doc Void) a
-
 
 parseFromFileEx :: MonadFile m => Parser a -> FilePath -> m (Result a)
 parseFromFileEx p path =
@@ -611,8 +604,10 @@ annotateLocation p =
 annotateLocation1 :: Parser (NExprF NExprLoc) -> Parser NExprLoc
 annotateLocation1 = fmap annToAnnF . annotateLocation
 
+manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
 manyUnaryOp f = foldr1 (.) <$> some f
 
+operator :: Text -> Parser Text
 operator op =
   case op of
     "-" -> tuneLexer "-" '>'
@@ -634,12 +629,16 @@ opWithLoc name op f =
 
     pure $ f (Ann ann op)
 
+binaryN :: Text -> NBinaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 binaryN name op =
   (NBinaryDef name op NAssocNone, InfixN (opWithLoc name op nBinary))
+binaryL :: Text -> NBinaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 binaryL name op =
   (NBinaryDef name op NAssocLeft, InfixL (opWithLoc name op nBinary))
+binaryR :: Text -> NBinaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 binaryR name op =
   (NBinaryDef name op NAssocRight, InfixR (opWithLoc name op nBinary))
+prefix :: Text -> NUnaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 prefix name op =
   (NUnaryDef name op, Prefix (manyUnaryOp (opWithLoc name op nUnary)))
 -- postfix name op = (NUnaryDef name op,

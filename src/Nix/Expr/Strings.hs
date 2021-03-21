@@ -1,16 +1,16 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 -- | Functions for manipulating nix strings.
 module Nix.Expr.Strings where
 
-import           Data.List                      ( intercalate
-                                                , dropWhileEnd
-                                                , inits
+import           Nix.Utils
+import           Relude.Unsafe                 as Unsafe
+-- Please, switch things to NonEmpty
+import           Data.List                      ( dropWhileEnd
+                                                , minimum
+                                                , lookup
                                                 )
-import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
-import           Data.Tuple                     ( swap )
 import           Nix.Expr
 
 -- | Merge adjacent @Plain@ values with @<>@.
@@ -66,9 +66,9 @@ stripIndent xs =
     . dropWhileEnd cleanup
     . (\ys -> zip
         (fmap
-          (\case
-            [] -> Nothing
-            x  -> pure (last x)
+          (list
+            Nothing
+            (pure . Unsafe.last)
           )
           (inits ys)
         )

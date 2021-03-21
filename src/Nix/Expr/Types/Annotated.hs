@@ -6,7 +6,6 @@
 {-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE KindSignatures     #-}
 {-# LANGUAGE LambdaCase         #-}
-{-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE PatternSynonyms    #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE TemplateHaskell    #-}
@@ -35,14 +34,10 @@ import           Data.Data
 import           Data.Eq.Deriving
 import           Data.Fix                       ( Fix(..)
                                                 , unfoldFix )
-import           Data.Function                  ( on )
 import           Data.Functor.Compose
-import           Data.Hashable
 import           Data.Hashable.Lifted
 import           Data.Ord.Deriving
-import           Data.Text                      ( Text
-                                                , pack
-                                                )
+import           Data.Text                      ( pack )
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr.Types

@@ -1,6 +1,7 @@
 module Nix.Type.Type where
 
-import           Data.Text                      ( Text )
+import           Prelude                 hiding ( Type, TVar )
+import           Data.Foldable                  ( foldr1 )
 import           Nix.Utils                      ( AttrSet )
 
 type Name = Text
@@ -32,6 +33,7 @@ typeList = TList mempty
 infixr 1 :~>
 
 typeFun :: [Type] -> Type
+-- Please, replace with safe analog to `foldr1`
 typeFun = foldr1 (:~>)
 
 typeInt, typeFloat, typeBool, typeString, typePath, typeNull :: Type

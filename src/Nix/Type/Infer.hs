@@ -8,7 +8,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -28,52 +27,36 @@ module Nix.Type.Infer
   )
 where
 
-import           Control.Applicative            ( Alternative
-                                                , empty
-                                                )
-import           Data.Bifunctor                 ( Bifunctor(first) )
-import           Control.Monad.Catch            ( Exception(fromException, toException)
-                                                , MonadThrow(..)
+import           Control.Monad.Catch            ( MonadThrow(..)
                                                 , MonadCatch(..)
                                                 )
-import           Control.Monad.Except           ( ExceptT
-                                                , MonadError(..), runExceptT
+import           Control.Monad.Except           ( MonadError(..)
                                                 )
-#if !MIN_VERSION_base(4,13,0)
-import           Prelude                 hiding ( fail )
-import           Control.Monad.Fail
-#endif
+import           Prelude                 hiding ( Type
+                                                , TVar
+                                                , Constraint
+                                                )
+import           Nix.Utils
 import           Control.Monad.Logic     hiding ( fail )
-import           Control.Monad.Reader           ( MonadReader(local)
-                                                , ReaderT(..)
-                                                , MonadFix
+import           Control.Monad.Reader           ( MonadFix
                                                 )
 import           Control.Monad.Ref
 import           Control.Monad.ST               ( ST
                                                 , runST
                                                 )
-import           Control.Monad.State.Strict     ( modify
-                                                , evalState
-                                                , evalStateT
-                                                , MonadState(put, get)
-                                                , StateT(runStateT)
-                                                )
 import           Data.Fix                       ( foldFix )
-import           Data.Foldable                  ( foldl'
-                                                , foldrM
-                                                , find
-                                                )
+import           Data.Foldable                  ( foldrM )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List                      ( delete
                                                 , nub
                                                 , intersect
                                                 , (\\)
+                                                , (!!)
                                                 )
-import           Data.Map                       ( Map )
+import qualified Data.List                     as List
 import qualified Data.Map                      as Map
-import           Data.Maybe                     ( fromJust, fromMaybe )
+import           Data.Maybe                     ( fromJust )
 import qualified Data.Set                      as Set
-import           Data.Text                      ( Text )
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Eval                       ( MonadEval(..) )
@@ -87,7 +70,6 @@ import qualified Nix.Type.Assumption           as As
 import           Nix.Type.Env            hiding ( empty )
 import qualified Nix.Type.Env                  as Env
 import           Nix.Type.Type
-import           Nix.Utils
 import           Nix.Value.Monad
 import           Nix.Var
 
@@ -669,7 +651,7 @@ normalizeScheme (Forall _ body) = Forall (fmap snd ord) (normtype body)
     maybe
       (error "type variable not in signature")
       TVar
-      (Prelude.lookup a ord)
+      (List.lookup a ord)
 
 
 -- * Constraint Solver

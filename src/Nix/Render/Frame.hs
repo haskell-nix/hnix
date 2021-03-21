@@ -5,7 +5,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -14,9 +13,9 @@
 -- | Code for rendering/representation of the messages packaged with their context (Frames).
 module Nix.Render.Frame where
 
-import           Control.Monad.Reader
-import           Data.Fix
-import           Data.Typeable
+import           Prelude             hiding ( Comparison )
+import           Nix.Utils
+import           Data.Fix                   ( Fix(..) )
 import           Nix.Eval
 import           Nix.Exec
 import           Nix.Expr
@@ -26,12 +25,12 @@ import           Nix.Options
 import           Nix.Pretty
 import           Nix.Render
 import           Nix.Thunk
-import           Nix.Utils
 import           Nix.Value
-import           Prettyprinter hiding (list)
-import           Text.Megaparsec.Pos
+import           Prettyprinter       hiding ( list )
+import qualified Text.Show                 as Text
+import           Text.Megaparsec.Pos        ( sourcePosPretty)
 #ifdef MIN_VERSION_pretty_show
-import qualified Text.Show.Pretty as PS
+import qualified Text.Show.Pretty          as PS
 #endif
 
 renderFrames
@@ -60,7 +59,11 @@ renderFrames (x : xs) = do
       frames
  where
   go :: NixFrame -> [Doc ann]
-  go f = (\ pos -> ["While evaluating at " <> pretty (sourcePosPretty pos) <> colon]) `whenJust` framePos @v @m f
+  go f =
+    maybe
+      mempty
+      (\ pos -> ["While evaluating at " <> pretty (sourcePosPretty pos) <> colon])
+      (framePos @v @m f)
 
 framePos
   :: forall v (m :: * -> *)
@@ -89,8 +92,8 @@ renderFrame (NixFrame level f)
   | Just (e :: ValueFrame t f m) <- fromException f = renderValueFrame level e
   | Just (e :: NormalLoop t f m) <- fromException f = renderNormalLoop level e
   | Just (e :: ExecFrame t f m) <- fromException f = renderExecFrame level e
-  | Just (e :: ErrorCall) <- fromException f = pure [pretty (show e)]
-  | Just (e :: SynHoleInfo m v) <- fromException f = pure [pretty (show e)]
+  | Just (e :: ErrorCall) <- fromException f = pure [pretty (Text.show e)]
+  | Just (e :: SynHoleInfo m v) <- fromException f = pure [pretty (Text.show e)]
   | otherwise = fail $ "Unrecognized frame: " <> show f
 
 wrapExpr :: NExprF r -> NExpr
@@ -105,7 +108,7 @@ renderEvalFrame level f = do
   opts :: Options <- asks (view hasLens)
   case f of
     EvaluatingExpr scope e@(Fix (Compose (Ann ann _))) -> do
-      let scopeInfo | showScopes opts = [pretty $ show scope]
+      let scopeInfo | showScopes opts = [pretty $ Text.show scope]
                     | otherwise   = mempty
       fmap (\x -> scopeInfo <> [x])
         $   renderLocation ann
@@ -127,7 +130,7 @@ renderEvalFrame level f = do
         $ let e@(Fix (Compose (Ann ann _))) = _synHoleInfo_expr synfo
           in  [ renderLocation ann
                 =<< renderExpr level "While evaluating" "Syntactic Hole" e
-              , pure $ pretty $ show (_synHoleInfo_scope synfo)
+              , pure $ pretty $ Text.show (_synHoleInfo_scope synfo)
               ]
 
     ForcingExpr _ _ -> pure mempty

@@ -1,8 +1,5 @@
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -21,29 +18,18 @@ module Nix.Standard where
 import           Control.Applicative
 import           Control.Comonad                ( Comonad )
 import           Control.Comonad.Env            ( ComonadEnv )
-import           Control.Monad.Catch     hiding ( catchJust )
+import           Control.Monad.Catch            ( MonadThrow
+                                                , MonadCatch
+                                                , MonadMask
+                                                )
 #if !MIN_VERSION_base(4,13,0)
 import           Control.Monad.Fail             ( MonadFail )
 #endif
 import           Control.Monad.Free             ( Free(Pure, Free) )
-import           Control.Monad.Reader           ( (<=<)
-                                                , MonadReader
-                                                , ReaderT(runReaderT)
-                                                , MonadIO
-                                                , MonadPlus
-                                                , MonadFix
-                                                , MonadTrans(lift)
-                                                )
+import           Control.Monad.Reader           ( MonadFix )
 import           Control.Monad.Ref              ( MonadAtomicRef )
-import           Control.Monad.State            ( MonadState
-                                                , StateT
-                                                , evalStateT
-                                                )
-import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Strict
-import           Data.Text                      ( Text )
-import           Data.Typeable                  ( Typeable )
-import           GHC.Generics                   ( Generic )
+import qualified Text.Show
 import           Nix.Cited
 import           Nix.Cited.Basic
 import           Nix.Context
@@ -63,6 +49,7 @@ import           Nix.Utils.Fix1                 ( Fix1T(Fix1T) )
 import           Nix.Value
 import           Nix.Value.Monad
 import           Nix.Var
+import Prelude hiding (force)
 
 
 newtype StdCited m a = StdCited

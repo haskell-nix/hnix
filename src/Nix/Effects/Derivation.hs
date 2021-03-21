@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -11,36 +10,34 @@
 
 module Nix.Effects.Derivation ( defaultDerivationStrict ) where
 
-import           Prelude                 hiding ( readFile )
-
-import           Control.Arrow                  ( first, second )
-import           Control.Monad                  ( (>=>), forM, when )
-import           Control.Monad.Writer           ( join, lift )
-import           Control.Monad.State            ( MonadState, gets, modify )
-
-import           Data.Char                      ( isAscii, isAlphaNum )
+import           Prelude                 hiding ( elem
+                                                , readFile
+                                                )
+import           Nix.Utils
+import           Data.Char                      ( isAscii
+                                                , isAlphaNum
+                                                )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.HashMap.Strict           as MS
 import qualified Data.HashSet                  as S
+-- Please, move to NonEmpty
 import           Data.List
 import qualified Data.Map.Strict               as Map
-import           Data.Map.Strict                ( Map )
 import qualified Data.Set                      as Set
-import           Data.Set                       ( Set )
-import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
 import qualified Data.Text.Encoding            as Text
 
 import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Effects
-import           Nix.Exec                       ( MonadNix , callFunc)
+import           Nix.Exec                       ( MonadNix
+                                                , callFunc
+                                                )
 import           Nix.Frames
 import           Nix.Json                       ( nvalueToJSONNixString )
 import           Nix.Render
 import           Nix.String
 import           Nix.String.Coerce
-import           Nix.Utils               hiding ( readFile )
 import           Nix.Value
 import           Nix.Value.Monad
 
@@ -219,13 +216,17 @@ derivationParser = do
   parseFixed :: [(Text, Text, Text, Text)] -> (Maybe Store.SomeNamedDigest, HashMode)
   parseFixed fullOutputs = case fullOutputs of
     [("out", _path, rht, hash)] | rht /= "" && hash /= "" ->
-      let (hashType, hashMode) = case Text.splitOn ":" rht of
-            ["r", ht] -> (ht, Recursive)
-            [ht] ->      (ht, Flat)
-            _ -> error $ "Unsupported hash type for output of fixed-output derivation in .drv file: " <> show fullOutputs
-      in case Store.mkNamedDigest hashType hash of
-        Right digest -> (pure digest, hashMode)
-        Left err -> error $ "Unsupported hash " <> show (hashType <> ":" <> hash) <> "in .drv file: " <> err
+      let
+        (hashType, hashMode) = case Text.splitOn ":" rht of
+          ["r", ht] -> (ht, Recursive)
+          [ht] ->      (ht, Flat)
+          _ -> error $ "Unsupported hash type for output of fixed-output derivation in .drv file: " <> show fullOutputs
+      in
+        either
+          -- Please, no longer `error show` after migrating to Text
+          (\ err -> error $ show $ "Unsupported hash " <> show (hashType <> ":" <> hash) <> "in .drv file: " <> err)
+          (\ digest -> (pure digest, hashMode))
+          (Store.mkNamedDigest hashType hash)
     _ -> (Nothing, Flat)
 
 

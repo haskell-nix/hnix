@@ -6,7 +6,6 @@
 {-# LANGUAGE IncoherentInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
@@ -25,16 +24,10 @@
 
 module Nix.Convert where
 
-import           Control.Monad                  ( (<=<) )
+import           Prelude                 hiding ( force )
 import           Control.Monad.Free
-import           Data.ByteString
 import qualified Data.HashMap.Lazy             as M
-import           Data.Maybe
-import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
-import           Data.Text.Encoding             ( encodeUtf8
-                                                , decodeUtf8
-                                                )
 import           Nix.Atoms
 import           Nix.Effects
 import           Nix.Expr.Types
@@ -408,7 +401,7 @@ instance Convertible e t f m
 
 instance (Convertible e t f m, ToValue a m (NValue t f m))
   => ToValue (AttrSet a) m (Deeper (NValue' t f m (NValue t f m))) where
-  toValue s = (\ v s -> Deeper $ nvSet' s v) <$> (traverse (toValue) s) <*> pure mempty
+  toValue s = (\ v s -> Deeper $ nvSet' s v) <$> traverse toValue s <*> pure mempty
 
 instance Convertible e t f m
   => ToValue (AttrSet (NValue t f m), AttrSet SourcePos) m
@@ -418,7 +411,7 @@ instance Convertible e t f m
 instance (Convertible e t f m, ToValue a m (NValue t f m))
   => ToValue (AttrSet a, AttrSet SourcePos) m
             (Deeper (NValue' t f m (NValue t f m))) where
-  toValue (s, p) = (\ v s -> Deeper $ nvSet' s v) <$> (traverse (toValue) s) <*> pure p
+  toValue (s, p) = (\ v s -> Deeper $ nvSet' s v) <$> traverse toValue s <*> pure p
 
 instance Convertible e t f m
   => ToValue NixLikeContextValue m (NValue' t f m (NValue t f m)) where

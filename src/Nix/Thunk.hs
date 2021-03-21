@@ -5,13 +5,9 @@
 
 module Nix.Thunk where
 
-import           Control.Exception              ( Exception )
-import           Control.Monad.Trans.Class      ( MonadTrans(..) )
-import           Control.Monad.Trans.Except
-import           Control.Monad.Trans.Reader
-import           Control.Monad.Trans.State
-import           Control.Monad.Trans.Writer
-import           Data.Typeable                  ( Typeable )
+import           Control.Monad.Trans.Writer ( WriterT )
+import qualified Text.Show
+
 
 class ( Monad m
       , Eq (ThunkId m)

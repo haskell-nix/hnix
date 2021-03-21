@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -13,25 +12,22 @@
 
 module Nix.Pretty where
 
-import           Control.Applicative            ( (<|>) )
+import           Prelude                  hiding ( toList, group )
+import           Nix.Utils
 import           Control.Monad.Free             ( Free(Free) )
 import           Data.Fix                       ( Fix(..)
                                                 , foldFix )
 import           Data.HashMap.Lazy              ( toList )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.HashSet                  as HashSet
-import           Data.List                      ( isPrefixOf
-                                                , sort
-                                                )
-import           Data.List.NonEmpty             ( NonEmpty(..) )
 import qualified Data.List.NonEmpty            as NE
-import           Data.Maybe                     ( fromMaybe )
 import           Data.Text                      ( pack
                                                 , unpack
                                                 , replace
                                                 , strip
                                                 )
 import qualified Data.Text                     as Text
+import           Prettyprinter           hiding ( list )
 import           Nix.Atoms
 import           Nix.Cited
 import           Nix.Expr
@@ -41,9 +37,6 @@ import           Nix.Parser
 import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
-import           Prettyprinter           hiding ( list )
-import           Text.Read                      ( readMaybe )
-import           Nix.Utils
 
 -- | This type represents a pretty printed nix expression
 -- together with some information about the expression.
@@ -144,7 +137,15 @@ prettyString (Indented _ parts) = group $ nest 2 $ vcat
 prettyParams :: Params (NixDoc ann) -> Doc ann
 prettyParams (Param n           ) = pretty n
 prettyParams (ParamSet s v mname) = prettyParamSet s v <>
-    (\ name -> ("@" <> pretty name) `whenTrue` not (Text.null name)) `whenJust` mname
+  maybe
+    mempty
+    (\ name ->
+       bool
+         mempty
+         ("@" <> pretty name)
+         (not (Text.null name))
+    )
+    mname
 
 prettyParamSet :: ParamSet (NixDoc ann) -> Bool -> Doc ann
 prettyParamSet args var =
@@ -168,7 +169,11 @@ prettyBind (NamedVar n v _p) =
 prettyBind (Inherit s ns _p) =
   "inherit " <> scope <> align (fillSep (fmap prettyKeyName ns)) <> ";"
   where
-    scope = ((<> " ") . parens . withoutParens) `whenJust` s
+    scope =
+      maybe
+        mempty
+        ((<> " ") . parens . withoutParens)
+        s
 
 prettyKeyName :: NKeyName (NixDoc ann) -> Doc ann
 prettyKeyName (StaticKey "") = "\"\""
@@ -176,10 +181,10 @@ prettyKeyName (StaticKey key) | HashSet.member key reservedNames = "\"" <> prett
 prettyKeyName (StaticKey  key) = pretty key
 prettyKeyName (DynamicKey key) =
   runAntiquoted
-      (DoubleQuoted [Plain "\n"])
-      prettyString
-      (\ x -> "${" <> withoutParens x <> "}")
-      key
+    (DoubleQuoted [Plain "\n"])
+    prettyString
+    (\ x -> "${" <> withoutParens x <> "}")
+    key
 
 prettySelector :: NAttrPath (NixDoc ann) -> Doc ann
 prettySelector = hcat . punctuate "." . fmap prettyKeyName . NE.toList
@@ -252,7 +257,11 @@ exprFNixDoc = \case
       $ wrapPath selectOp r <> "." <> prettySelector attr <> ordoc
    where
     r     = mkNixDoc selectOp (wrapParens appOpNonAssoc r')
-    ordoc = ((" or " <>) . wrapParens appOpNonAssoc) `whenJust` o
+    ordoc =
+      maybe
+        mempty
+        ((" or " <>) . wrapParens appOpNonAssoc)
+        o
   NHasAttr r attr ->
     mkNixDoc hasAttrOp (wrapParens hasAttrOp r <> " ? " <> prettySelector attr)
   NEnvPath     p -> simpleExpr $ pretty ("<" <> p <> ">")
@@ -374,10 +383,11 @@ printNix = iterNValue (\_ _ -> thk) phi
  where
   thk = "<thunk>"
 
+  -- Please, reduce this horrifying String -> Text -> String marshaling in favour of Text
   phi :: NValue' t f m String -> String
   phi (NVConstant' a ) = unpack $ atomText a
   phi (NVStr'      ns) = show $ stringIgnoreContext ns
-  phi (NVList'     l ) = "[ " <> unwords l <> " ]"
+  phi (NVList'     l ) = unpack $ "[ " <> unwords (fmap pack l) <> " ]"
   phi (NVSet' s _) =
     "{ " <>
       concat
@@ -385,6 +395,7 @@ printNix = iterNValue (\_ _ -> thk) phi
         | (k, v) <- sort $ toList s
         ] <> "}"
    where
+    check :: [Char] -> [Char]
     check v =
       fromMaybe
         v

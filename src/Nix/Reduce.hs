@@ -7,7 +7,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -29,48 +28,20 @@ module Nix.Reduce
   , reducingEvalExpr
   ) where
 
-import           Control.Applicative
-import           Control.Arrow                  ( second )
-import           Control.Monad                  ( MonadPlus
-                                                , join
-                                                )
 import           Control.Monad.Catch            ( MonadCatch(catch) )
 #if !MIN_VERSION_base(4,13,0)
 import           Prelude                 hiding ( fail )
 import           Control.Monad.Fail
 #endif
 import           Control.Monad.Fix              ( MonadFix )
-import           Control.Monad.IO.Class         ( MonadIO(liftIO) )
-import           Control.Monad.Reader           ( MonadReader(local)
-                                                , ReaderT(runReaderT)
-                                                , asks
-                                                )
-import           Control.Monad.State.Strict     ( MonadState
-                                                , StateT
-                                                , gets
-                                                , modify
-                                                , evalStateT
-                                                )
-import           Data.Bifunctor                 ( first )
 import           Data.Fix                       ( Fix(..)
                                                 , foldFix
                                                 , foldFixM
                                                 )
-import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.HashMap.Strict           as MS
-import           Data.IORef                     ( IORef
-                                                , newIORef
-                                                , readIORef
-                                                , writeIORef
-                                                )
-import           Data.List.NonEmpty             ( NonEmpty(..) )
 import qualified Data.List.NonEmpty            as NE
-import           Data.Maybe                     ( fromMaybe
-                                                , mapMaybe
-                                                , catMaybes
-                                                )
-import           Data.Text                      ( Text )
+import qualified Text.Show
 import           Nix.Atoms
 import           Nix.Effects.Basic              ( pathToDefaultNixFile )
 import           Nix.Expr

@@ -1,22 +1,15 @@
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module NixLanguageTests (genTests) where
 
-import           Control.Arrow                  ( (&&&) )
 import           Control.Exception
-import           Control.Monad
-import           Control.Monad.IO.Class
+import           GHC.Err                        ( errorWithoutStackTrace )
 import           Control.Monad.ST
-import           Data.List                      ( delete
-                                                , sort
-                                                )
+import           Data.List                      ( delete )
 import           Data.List.Split                ( splitOn )
-import           Data.Map                       ( Map )
 import qualified Data.Map                      as Map
-import           Data.Set                       ( Set )
 import qualified Data.Set                      as Set
+import qualified Data.String                   as String
 import qualified Data.Text                     as Text
 import qualified Data.Text.IO                  as Text
 import           Data.Time
@@ -27,7 +20,6 @@ import           Nix.Options.Parser
 import           Nix.Parser
 import           Nix.Pretty
 import           Nix.String
-import           Nix.Utils
 import           Nix.XML
 import qualified Options.Applicative           as Opts
 import           System.Environment
@@ -92,7 +84,7 @@ genTests = do
  where
   testType (fullpath, _files) = take 2 $ splitOn "-" $ takeFileName fullpath
   mkTestGroup (kind, tests) =
-    testGroup (unwords kind) $ fmap (mkTestCase kind) tests
+    testGroup (String.unwords kind) $ fmap (mkTestCase kind) tests
   mkTestCase kind (basename, files) = testCase (takeFileName basename) $ do
     time <- liftIO getCurrentTime
     let opts = defaultOptions time

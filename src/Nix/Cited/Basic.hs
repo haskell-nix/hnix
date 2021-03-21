@@ -12,12 +12,11 @@
 
 module Nix.Cited.Basic where
 
+import           Prelude                 hiding ( force )
 import           Control.Comonad                ( Comonad )
 import           Control.Comonad.Env            ( ComonadEnv )
 import           Control.Monad.Catch     hiding ( catchJust )
-import           Control.Monad.Reader
 import           Data.Fix
-import           GHC.Generics
 import           Nix.Cited
 import           Nix.Eval                      as Eval
 import           Nix.Exec

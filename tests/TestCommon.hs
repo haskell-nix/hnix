@@ -5,11 +5,9 @@
 
 module TestCommon where
 
+import           GHC.Err                        ( errorWithoutStackTrace )
 import           Control.Monad.Catch
-import           Control.Monad.IO.Class
-import           Data.Text                      ( Text
-                                                , unpack
-                                                )
+import           Data.Text                      ( unpack )
 import           Data.Time
 import           Nix
 import           Nix.Standard

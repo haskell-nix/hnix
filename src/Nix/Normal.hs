@@ -3,7 +3,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -13,18 +12,15 @@
 -- And so do not converge into a normal form.
 module Nix.Normal where
 
-import           Control.Monad
-import           Control.Monad.Free
-import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Reader
-import           Control.Monad.Trans.State
+import           Prelude            hiding ( force )
+import           Nix.Utils
+import           Control.Monad.Free        ( Free(..) )
 import           Data.Set
 import           Nix.Cited
 import           Nix.Frames
 import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
-import           Nix.Utils
 
 newtype NormalLoop t f m = NormalLoop (NValue t f m)
     deriving Show

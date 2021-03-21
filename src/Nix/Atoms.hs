@@ -2,7 +2,6 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 module Nix.Atoms where
 
@@ -10,15 +9,10 @@ module Nix.Atoms where
 import           Codec.Serialise                ( Serialise )
 #endif
 
-import           Control.DeepSeq                ( NFData )
-import           Data.Data                      ( Typeable
-                                           , Data)
+import           Data.Data                      ( Data)
 import           Data.Fixed                     ( mod' )
-import           Data.Hashable                  ( Hashable )
-import           Data.Text                      ( Text
-                                                , pack
+import           Data.Text                      ( pack
                                                 )
-import           GHC.Generics                   ( Generic )
 import           Data.Binary                    ( Binary )
 import           Data.Aeson.Types               ( FromJSON
                                                 , ToJSON

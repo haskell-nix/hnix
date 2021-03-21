@@ -1,7 +1,6 @@
 -- | Definitions & defaults for the CLI options
 module Nix.Options where
 
-import           Data.Text                      ( Text )
 import           Data.Time
 
 data Options = Options

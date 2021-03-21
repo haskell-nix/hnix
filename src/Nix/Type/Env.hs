@@ -14,11 +14,13 @@ module Nix.Type.Env
   )
 where
 
-import           Prelude                 hiding ( lookup )
+import           Prelude                 hiding ( empty
+                                                , toList
+                                                , fromList
+                                                )
 
 import           Nix.Type.Type
 
-import           Data.Foldable                  ( foldl' )
 import qualified Data.Map                      as Map
 
 
