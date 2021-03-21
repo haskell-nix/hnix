@@ -27,12 +27,8 @@ module Nix
   )
 where
 
-import           Control.Applicative            ( Alternative )
-import           Control.Arrow                  ( second )
-import           Control.Monad.Reader           ( MonadIO
-                                                , asks
-                                                , (<=<)
-                                                )
+import           Relude.Unsafe                  ( (!!) )
+import           GHC.Err                        ( errorWithoutStackTrace )
 import           Data.Fix                       ( Fix )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Text                     as Text

@@ -11,30 +11,16 @@
 
 module Nix.Fresh where
 
-import           Control.Applicative        ( Alternative )
 import           Control.Monad.Base   ( MonadBase(..) )
 import           Control.Monad.Catch  ( MonadCatch
-                              , MonadMask
-                              , MonadThrow
-                              )
-import           Control.Monad.Except
-                              ( MonadFix
-                              , MonadIO
-                              , MonadPlus
-                              , MonadTrans(..)
-                              )
-#if !MIN_VERSION_base(4,13,0)
-import           Control.Monad.Fail
-#endif
-import           Control.Monad.Reader ( ReaderT(..)
-                              , MonadReader(ask)
-                              )
-import           Control.Monad.Ref
-                              ( MonadAtomicRef(..)
-                              , MonadRef(writeRef, readRef)
-                              )
+                                      , MonadMask
+                                      , MonadThrow
+                                      )
+import           Control.Monad.Except ( MonadFix )
+import           Control.Monad.Ref    ( MonadAtomicRef(..)
+                                      , MonadRef(writeRef, readRef)
+                                      )
 import           Control.Monad.ST     ( ST )
-import           Data.Typeable     ( Typeable )
 
 import           Nix.Var
 import           Nix.Thunk

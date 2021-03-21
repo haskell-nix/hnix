@@ -33,15 +33,10 @@ where
 
 
 
-import           Control.Monad.Writer           ( WriterT(..), MonadWriter(tell), MonadTrans, (<=<))
-import           Data.Functor                   ( ($>) )
-import           Data.Functor.Identity          ( Identity(runIdentity) )
+import           Control.Monad.Writer           ( WriterT(..), MonadWriter(tell))
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.HashSet                  as S
-import           Data.Hashable                  ( Hashable )
-import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
-import           GHC.Generics                   ( Generic )
 
 
 -- * Types

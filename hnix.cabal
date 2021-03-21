@@ -1,3 +1,4 @@
+cabal-version:  2.2
 name:           hnix
 version:        0.12.0.1
 synopsis:       Haskell implementation of the Nix language
@@ -7,10 +8,9 @@ homepage:       https://github.com/haskell-nix/hnix#readme
 bug-reports:    https://github.com/haskell-nix/hnix/issues
 author:         John Wiegley
 maintainer:     johnw@newartisans.com
-license:        BSD3
+license:        BSD-3-Clause
 license-file:   License
 build-type:     Simple
-cabal-version:  >= 1.10
 data-dir:       data/
 data-files:
   nix/corepkgs/buildenv.nix
@@ -393,6 +393,10 @@ library
     Paths_hnix
   hs-source-dirs:
     src
+  mixins:
+      base hiding (Prelude)
+    , relude
+    , relude (Relude as Prelude)
   ghc-options: -Wall -fprint-potential-instances
   build-depends:
       aeson >= 1.4.2 && < 1.6
@@ -432,6 +436,7 @@ library
     , process >= 1.6.3 && < 1.7
     , ref-tf >= 0.4.0 && <= 0.4.0.2
     , regex-tdfa >= 1.2.3 && < 1.4
+    , relude
     , scientific >= 0.3.6 && < 0.4
     , semialign >= 1 && < 1.2
     , semialign-indexed >= 1 && < 1.2
@@ -493,6 +498,7 @@ executable hnix
     , pretty-show
     , prettyprinter
     , ref-tf
+    , relude
     , repline >= 0.4.0.0 && < 0.5
     , serialise
     , template-haskell
@@ -500,6 +506,10 @@ executable hnix
     , time
     , transformers
     , unordered-containers
+  mixins:
+      base hiding (Prelude)
+    , relude
+    , relude (Relude as Prelude)
   default-extensions:
     OverloadedStrings
   if flag(optimize)
@@ -526,6 +536,10 @@ test-suite hnix-tests
     ReduceExprTests
     TestCommon
     Paths_hnix
+  mixins:
+      base hiding (Prelude)
+    , relude
+    , relude (Relude as Prelude)
   hs-source-dirs:
     tests
   ghc-options: -Wall -threaded
@@ -550,6 +564,7 @@ test-suite hnix-tests
     , pretty-show
     , prettyprinter
     , process
+    , relude
     , split
     , tasty
     , tasty-hedgehog
@@ -580,6 +595,10 @@ benchmark hnix-benchmarks
     Paths_hnix
   hs-source-dirs:
     benchmarks
+  mixins:
+      base hiding (Prelude)
+    , relude
+    , relude (Relude as Prelude)
   ghc-options: -Wall
   build-depends:
       base
@@ -594,6 +613,7 @@ benchmark hnix-benchmarks
     , hnix
     , mtl
     , optparse-applicative
+    , relude
     , serialise
     , template-haskell
     , text

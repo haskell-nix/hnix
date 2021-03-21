@@ -17,16 +17,14 @@ module Nix.Thunk.Basic
   , MonadBasicThunk
   ) where
 
-import           Control.Exception              ( SomeException )
-import           Control.Monad                  ( (<=<) )
+import           Prelude                 hiding ( force )
+import           Relude.Extra                   ( dup )
 import           Control.Monad.Catch            ( MonadCatch(..)
                                                 , MonadThrow(throwM)
                                                 )
+import qualified Text.Show
 import           Nix.Thunk
 import           Nix.Var
-import           Nix.Utils                      ( bool
-                                                , dup
-                                                )
 
 
 -- * Data type @Deferred@

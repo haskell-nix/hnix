@@ -5,15 +5,17 @@
 module Nix.XML (toXML) where
 
 import qualified Data.HashMap.Lazy             as M
-import           Data.List
-import           Data.Ord
 import qualified Data.Text                     as Text
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.String
 import           Nix.Value
-import           Text.XML.Light
-import           Nix.Utils
+import           Text.XML.Light                 ( Element(Element)
+                                                , Attr(Attr)
+                                                , Content(Elem)
+                                                , unqual
+                                                , ppElement
+                                                )
 
 toXML :: forall t f m . MonadDataContext f m => NValue t f m -> NixString
 toXML = runWithStringContext . fmap pp . iterNValue (\_ _ -> cyc) phi
@@ -29,12 +31,13 @@ toXML = runWithStringContext . fmap pp . iterNValue (\_ _ -> cyc) phi
 
   phi :: NValue' t f m (WithStringContext Element) -> WithStringContext Element
   phi = \case
-    NVConstant' a -> case a of
-      NURI   t -> pure $ mkElem "string" "value" (Text.unpack t)
-      NInt   n -> pure $ mkElem "int" "value" (show n)
-      NFloat f -> pure $ mkElem "float" "value" (show f)
-      NBool  b -> pure $ mkElem "bool" "value" (if b then "true" else "false")
-      NNull    -> pure $ Element (unqual "null") mempty mempty Nothing
+    NVConstant' a ->
+      pure $ case a of
+      NURI   t -> mkElem "string" "value" (Text.unpack t)
+      NInt   n -> mkElem "int" "value" (show n)
+      NFloat f -> mkElem "float" "value" (show f)
+      NBool  b -> mkElem "bool" "value" (if b then "true" else "false")
+      NNull    -> Element (unqual "null") mempty mempty Nothing
 
     NVStr' str ->
       mkElem "string" "value" . Text.unpack <$> extractNixString str
@@ -71,7 +74,10 @@ paramsXML (ParamSet s b mname) =
  where
   battr = [ Attr (unqual "ellipsis") "1" | b ]
   nattr =
-      ((: mempty) . Attr (unqual "name") . Text.unpack) `whenJust` mname
+      maybe
+        mempty
+        ((: mempty) . Attr (unqual "name") . Text.unpack)
+        mname
 
 paramSetXML :: ParamSet r -> [Content]
 paramSetXML = fmap (\(k, _) -> Elem $ mkElem "attr" "name" (Text.unpack k))

@@ -12,8 +12,6 @@ module Nix.Cited where
 
 import           Control.Comonad
 import           Control.Comonad.Env
-import           Data.Typeable                  ( Typeable )
-import           GHC.Generics
 import           Lens.Family2.TH
 
 import           Nix.Expr.Types.Annotated
@@ -21,7 +19,8 @@ import           Nix.Scope
 import           Nix.Value                      ( NValue, NValue'(NValue') )
 import           Control.Monad.Free             ( Free(Pure, Free) )
 
-data Provenance m v = Provenance
+data Provenance m v =
+  Provenance
     { _lexicalScope :: Scopes m v
     , _originExpr   :: NExprLocF (Maybe v)
       -- ^ When calling the function x: x + 2 with argument x = 3, the
@@ -52,16 +51,16 @@ $(makeLenses ''Provenance)
 $(makeLenses ''NCited)
 
 class HasCitations m v a where
-    citations :: a -> [Provenance m v]
-    addProvenance :: Provenance m v -> a -> a
+  citations :: a -> [Provenance m v]
+  addProvenance :: Provenance m v -> a -> a
 
 instance HasCitations m v (NCited m v a) where
   citations = _provenance
   addProvenance x (NCited p v) = NCited (x : p) v
 
 class HasCitations1 m v f where
-    citations1 :: f a -> [Provenance m v]
-    addProvenance1 :: Provenance m v -> f a -> f a
+  citations1 :: f a -> [Provenance m v]
+  addProvenance1 :: Provenance m v -> f a -> f a
 
 instance HasCitations1 m v f
   => HasCitations m v (NValue' t f m a) where

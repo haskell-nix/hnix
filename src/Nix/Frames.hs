@@ -18,14 +18,13 @@ module Nix.Frames
   )
 where
 
+import           Prelude                 hiding ( traceM )
 import           Data.Typeable           hiding ( typeOf )
-import           Control.Monad.Reader           ( MonadReader(local)
-                                                , asks
-                                                )
 import           Control.Monad.Catch            ( MonadThrow(..) )
 import           Control.Exception       hiding ( catch
                                                 , evaluate
                                                 )
+import qualified Text.Show
 import           Nix.Utils                      ( Has(..)
                                                 , view
                                                 , over

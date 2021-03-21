@@ -30,7 +30,6 @@ import qualified Codec.Serialise                as Serialise
 import           Codec.Serialise                ( Serialise )
 #endif
 import           Control.DeepSeq
-import           Control.Monad
 import           Data.Aeson
 import           Data.Aeson.TH
 import qualified Data.Binary                   as Binary
@@ -39,21 +38,14 @@ import           Data.Data
 import           Data.Eq.Deriving
 import           Data.Fix
 import           Data.Functor.Classes
-import           Data.Hashable
 import           Data.Hashable.Lifted
-import           Data.List                      ( inits
-                                                , tails
-                                                )
-import           Data.List.NonEmpty             ( NonEmpty(..) )
 import qualified Data.List.NonEmpty            as NE
-import           Data.Maybe                     ( fromMaybe )
 import           Data.Ord.Deriving
-import           Data.Text                      ( Text
-                                                , pack
+import qualified Text.Show
+import           Data.Text                      ( pack
                                                 , unpack
                                                 )
 import           Data.Traversable
-import           GHC.Exts
 import           GHC.Generics
 import           Language.Haskell.TH.Syntax
 import           Lens.Family2
@@ -303,7 +295,7 @@ instance Show1 NKeyName where
       "DynamicKey"
       p
       a
-    StaticKey t -> showsUnaryWith showsPrec "StaticKey" p t
+    StaticKey t -> showsUnaryWith Text.Show.showsPrec "StaticKey" p t
 
 -- Deriving this instance automatically is not possible because @r@
 -- occurs not only as last argument in @Antiquoted (NString r) r@
@@ -499,7 +491,7 @@ instance Lift (Fix NExprF) where
 #if MIN_VERSION_template_haskell(2,17,0)
   liftTyped = unsafeCodeCoerce . lift
 #elif MIN_VERSION_template_haskell(2,16,0)
-  liftTyped = unsafeTExpCoerce . lift
+  liftTyped = unsafeTExpCoerce . Language.Haskell.TH.Syntax.lift
 #endif
 
 #if !MIN_VERSION_hashable(1,3,1)

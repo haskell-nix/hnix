@@ -14,19 +14,10 @@ module Nix.Eval where
 
 import           Control.Monad
 import           Control.Monad.Fix
-import           Control.Monad.Reader
-import           Control.Monad.State.Strict
 import           Data.Semialign.Indexed         ( ialignWith )
-import           Data.Either                    ( isRight )
 import           Data.Fix                       ( Fix(Fix) )
-import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List                      ( partition )
-import           Data.List.NonEmpty             ( NonEmpty(..) )
-import           Data.Maybe                     ( fromMaybe
-                                                , catMaybes
-                                                )
-import           Data.Text                      ( Text )
 import           Data.These                     ( These(..) )
 import           Nix.Atoms
 import           Nix.Convert
@@ -439,7 +430,10 @@ evalSetterKeyName =
   \case
     StaticKey k -> pure (pure k)
     DynamicKey k ->
-      ((pure . stringIgnoreContext) `whenJust`) <$> runAntiquoted "\n" assembleString (fromValueMay =<<) k
+      maybe
+        mempty
+        (pure . stringIgnoreContext)
+        <$> runAntiquoted "\n" assembleString (fromValueMay =<<) k
 
 assembleString
   :: forall v m

@@ -12,20 +12,22 @@
 
 module Nix.Value.Equal where
 
+import           Prelude                 hiding ( Comparison
+                                                , force
+                                                )
+import           Nix.Utils
 import           Control.Comonad
-import           Control.Monad
 import           Control.Monad.Free
-import           Control.Monad.Trans.Class
-import           Control.Monad.Trans.Except
-import           Data.Align
-import           Data.Functor.Identity
+import           Control.Monad.Trans.Except     ( throwE )
+import           Data.Semialign                 ( Align
+                                                , Semialign(align)
+                                                )
 import qualified Data.HashMap.Lazy             as HashMap.Lazy
-import           Data.These
+import           Data.These                     ( These(These) )
 import           Nix.Atoms
 import           Nix.Frames
 import           Nix.String
 import           Nix.Thunk
-import           Nix.Utils
 import           Nix.Value
 
 checkComparable
@@ -68,7 +70,7 @@ alignEqM eq fa fb =
               These a b -> pure (a, b)
               _         -> throwE ()
             )
-            (Data.Align.align fa fb)
+            (Data.Semialign.align fa fb)
         traverse_ (\ (a, b) -> guard =<< lift (eq a b)) pairs
 
 alignEq :: (Align f, Traversable f) => (a -> b -> Bool) -> f a -> f b -> Bool

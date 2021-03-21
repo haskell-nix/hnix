@@ -4,13 +4,12 @@
 
 module Main where
 
-import           Control.DeepSeq
+import           Relude.Unsafe (read)
 import qualified Control.Exception as Exc
-import           Control.Applicative ((<|>))
-import           Control.Monad
+import           GHC.Err (errorWithoutStackTrace)
 import           Data.Fix
-import           Data.List (isSuffixOf)
-import           Data.Maybe
+import           Data.List (isSuffixOf, lookup)
+import qualified Data.String as String
 import           Data.Text (unpack)
 import           Data.Time
 import qualified EvalTests
@@ -22,14 +21,13 @@ import           Nix.Options
 import           Nix.Parser
 import           Nix.Standard
 import           Nix.Value
-import           Nix.Utils
 import qualified NixLanguageTests
 import qualified ParserTests
 import qualified PrettyTests
 import qualified ReduceExprTests
 import qualified PrettyParseTests
 import           System.Directory
-import           System.Environment
+import           System.Environment (setEnv)
 import           System.FilePath.Glob
 import           System.Posix.Files
 import           Test.Tasty
@@ -39,7 +37,7 @@ ensureLangTestsPresent :: Assertion
 ensureLangTestsPresent = do
   exist <- fileExist "data/nix/tests/local.mk"
   unless exist $
-    errorWithoutStackTrace $ unlines
+    errorWithoutStackTrace $ String.unlines
       [ "Directory data/nix does not have any files."
       , "Did you forget to run"
           <> " \"git submodule update --init --recursive\"?" ]

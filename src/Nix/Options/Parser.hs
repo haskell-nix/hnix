@@ -3,10 +3,9 @@
 -- | Code that configures presentation parser for the CLI options
 module Nix.Options.Parser where
 
-import           Control.Arrow                  ( second )
+import           Relude.Unsafe                  ( read )
+import           GHC.Err                        ( errorWithoutStackTrace )
 import           Data.Char                      ( isDigit )
-import           Data.Maybe                     ( fromMaybe )
-import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
 import           Data.Time                      ( UTCTime
                                                 , defaultTimeLocale
@@ -19,7 +18,6 @@ import           Development.GitRev             ( gitCommitDate
                                                 , gitBranch
                                                 , gitHash )
 import           Paths_hnix                     ( version )
-import           Nix.Utils                      ( bool )
 
 decodeVerbosity :: Int -> Verbosity
 decodeVerbosity 0 = ErrorsOnly

@@ -9,13 +9,9 @@ module Nix.TH where
 
 import           Data.Fix
 import           Data.Generics.Aliases
-import           Data.Set                       ( Set
-                                                , (\\)
-                                                )
+import           Data.Set                       ( (\\) )
 import qualified Data.Set                      as Set
 import qualified Data.Text                     as Text
-import           Data.List.NonEmpty             ( NonEmpty(..) )
-import           Data.Maybe                     ( mapMaybe )
 import           Language.Haskell.TH
 import           Language.Haskell.TH.Syntax     ( liftString )
 import           Language.Haskell.TH.Quote

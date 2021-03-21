@@ -8,14 +8,14 @@
 
 module Nix.Effects.Basic where
 
-import           Control.Monad
-import           Control.Monad.State.Strict
-import           Data.Bifunctor                 ( first )
-import           Data.HashMap.Lazy              ( HashMap )
+import           Prelude                 hiding ( traceM
+                                                , head
+                                                )
+import           Nix.Utils
+import           Control.Monad                  ( foldM )
 import qualified Data.HashMap.Lazy             as M
-import           Data.List
+import           Data.List               hiding ( elem )
 import           Data.List.Split
-import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
 import           Data.Text.Prettyprint.Doc
 import           Nix.Convert
@@ -30,7 +30,6 @@ import           Nix.Parser
 import           Nix.Render
 import           Nix.Scope
 import           Nix.String
-import           Nix.Utils
 import           Nix.Value
 import           Nix.Value.Monad
 import           System.FilePath

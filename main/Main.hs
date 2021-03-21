@@ -9,17 +9,18 @@
 
 module Main where
 
+import           Nix.Utils
 import           Control.Comonad                ( extract )
 import qualified Control.DeepSeq               as Deep
 import qualified Control.Exception             as Exc
-import           Control.Monad
+import           GHC.Err                        ( errorWithoutStackTrace )
 import           Control.Monad.Catch
+import           System.IO                      ( hPutStrLn, getContents )
 import           Control.Monad.Free
-import           Control.Monad.IO.Class
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Map                      as Map
-import           Data.List                      ( sortOn )
 import           Data.Maybe                     ( fromJust )
+import qualified Data.String                   as String
 import           Data.Time
 import qualified Data.Text                     as Text
 import qualified Data.Text.IO                  as Text
@@ -33,7 +34,6 @@ import           Nix.Standard
 import           Nix.Thunk.Basic
 import qualified Nix.Type.Env                  as Env
 import qualified Nix.Type.Infer                as HM
-import           Nix.Utils
 import           Nix.Var
 import           Nix.Value.Monad
 import           Options.Applicative     hiding ( ParserResult(..) )
@@ -41,7 +41,6 @@ import           Prettyprinter            hiding ( list )
 import           Prettyprinter.Render.Text
 import qualified Repl
 import           System.FilePath
-import           System.IO
 import qualified Text.Show.Pretty              as PS
 
 main :: IO ()
@@ -66,7 +65,7 @@ main = do
           )
           (\ x ->
             -- We can start use Text as in the base case, requires changing FilePath -> Text
-            traverse_ (processFile opts) . lines =<< liftIO
+            traverse_ (processFile opts) . String.lines =<< liftIO
               (case x of
                 "-" ->  getContents  -- get user input
                 _path -> readFile _path

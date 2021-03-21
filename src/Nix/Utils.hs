@@ -10,23 +10,16 @@
 
 module Nix.Utils (module Nix.Utils, module X) where
 
-import           Control.Arrow                  ( (&&&) )
-import           Control.Monad                  ( (<=<) )
 import           Control.Monad.Fix              ( MonadFix(..) )
 import           Control.Monad.Free             ( Free(..) )
 import           Control.Monad.Trans.Control    ( MonadTransControl(..) )
 import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Encoding           as A
 import           Data.Fix                       ( Fix(..) )
-import           Data.Hashable                  ( Hashable )
-import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
-import           Data.List                      ( sortOn )
-import           Data.Monoid                    ( Endo )
-import           Data.Text                      ( Text )
 import qualified Data.Text                     as Text
 import qualified Data.Vector                   as V
-import           Lens.Family2                  as X
+import           Lens.Family2                  as X hiding ((&))
 import           Lens.Family2.Stock             ( _1
                                                 , _2
                                                 )
@@ -35,14 +28,6 @@ import           Lens.Family2.TH                ( makeLensesBy )
 #if ENABLE_TRACING
 import           Debug.Trace as X
 #else
-import           Prelude                       as X
-                                         hiding ( putStr
-                                                , putStrLn
-                                                , print
-#if !MIN_VERSION_base(4,13,0)
-                                                , fail
-#endif
-                                                )
 trace :: String -> a -> a
 trace = const id
 traceM :: Monad m => String -> m ()
@@ -50,8 +35,6 @@ traceM = const (pure ())
 #endif
 
 $(makeLensesBy (\n -> pure ("_" <> n)) ''Fix)
-
-type DList a = Endo [a]
 
 type AttrSet = HashMap Text
 
@@ -63,14 +46,6 @@ type AlgM f m a = f a -> m a
 
 -- | "Transform" here means a modification of a catamorphism.
 type Transform f a = (Fix f -> a) -> Fix f -> a
-
-(<&>) :: Functor f => f a -> (a -> c) -> f c
-(<&>) = flip (<$>)
-{-# inline (<&>) #-}
-
-(??) :: Functor f => f (a -> b) -> a -> f b
-fab ?? a = fmap ($ a) fab
-{-# inline (??) #-}
 
 loeb :: Functor f => f (f a -> a) -> f a
 loeb x = go where go = fmap ($ go) x
@@ -179,13 +154,6 @@ alterF f k m =
     )
     $ f $ M.lookup k m
 
--- | From @Data.Bool ( bool )@.
-bool :: a -> a -> Bool -> a
-bool f t b =
-  if b
-    then t
-    else f
-{-# inline bool #-}
 
 -- | Analog for @bool@ or @maybe@, for list-like cons structures.
 list
@@ -222,36 +190,6 @@ whenFalse f =
     mempty
 {-# inline whenFalse #-}
 
-whenJust :: (Monoid b)
-  => (a -> b)  -> Maybe a  -> b
-whenJust =
-  maybe
-    mempty
-{-# inline whenJust #-}
-
-whenNothing  :: (Monoid b)
-  => b  -> Maybe a  -> b
-whenNothing f =
-  maybe
-    f
-    mempty
-{-# inline whenNothing #-}
-
-whenRight :: (Monoid c)
-  => (b -> c) -> Either a b -> c
-whenRight =
-  either
-    mempty
-{-# inline whenRight #-}
-
-whenLeft :: (Monoid c)
-  => (a -> c) -> Either a b -> c
-whenLeft f =
-  either
-    f
-    mempty
-{-# inline whenLeft #-}
-
 whenFree :: (Monoid b)
   => (f (Free f a) -> b) -> Free f a -> b
 whenFree =
@@ -267,17 +205,6 @@ whenPure f =
     mempty
 {-# inline whenPure #-}
 
--- | From @base@ @Data.Foldable@
-traverse_ :: (Foldable t, Applicative f) => (a -> f b) -> t a -> f ()
-traverse_ f = foldr c (pure ())
-  -- See Note [List fusion and continuations in 'c']
-  where c x k = f x *> k
-        {-# inline c #-}
-
--- From @base@ @Data.Foldable@
-for_ :: (Foldable t, Applicative f) => t a -> (a -> f b) -> f ()
-for_ = flip traverse_
-{-# inline for_ #-}
 
 -- | Apply a single function to both components of a pair.
 --

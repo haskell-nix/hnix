@@ -8,14 +8,9 @@
 
 module EvalTests (tests, genEvalCompareTests) where
 
-import           Control.Applicative ((<|>))
-import           Control.Monad (when, unless)
 import           Control.Monad.Catch
-import           Control.Monad.IO.Class
 import           Data.List ((\\))
-import           Data.Maybe (isJust)
 import qualified Data.Set as S
-import           Data.Text (Text)
 import           Data.Time
 import           NeatInterpolation (text)
 import           Nix
@@ -24,7 +19,6 @@ import           Nix.TH
 import           Nix.Value.Equal
 import           Nix.Utils
 import qualified System.Directory as D
-import           System.Environment
 import           System.FilePath
 import           Test.Tasty
 import           Test.Tasty.HUnit

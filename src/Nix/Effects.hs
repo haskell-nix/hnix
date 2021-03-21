@@ -17,15 +17,14 @@
 
 module Nix.Effects where
 
-import           Prelude                 hiding ( putStr
+import           Prelude                 hiding ( traceM
+                                                , putStr
                                                 , putStrLn
                                                 , print
                                                 )
 import qualified Prelude
-
-import           Control.Monad.Trans
+import           Nix.Utils
 import qualified Data.HashSet                  as HS
-import           Data.Text                      ( Text )
 import qualified Data.Text                     as T
 import qualified Data.Text.Encoding            as T
 import           Network.HTTP.Client     hiding ( path, Proxy )
@@ -36,11 +35,10 @@ import           Nix.Expr
 import           Nix.Frames              hiding ( Proxy )
 import           Nix.Parser
 import           Nix.Render
-import           Nix.Utils
 import           Nix.Value
 import qualified Paths_hnix
-import           System.Environment
 import           System.Exit
+import qualified System.Environment            as Env
 import           System.FilePath                ( takeFileName )
 import qualified System.Info
 import           System.Process
@@ -243,7 +241,7 @@ class
 -- ** Instances
 
 instance MonadEnv IO where
-  getEnvVar            = lookupEnv
+  getEnvVar            = Env.lookupEnv
 
   getCurrentSystemOS   = pure $ T.pack System.Info.os
 

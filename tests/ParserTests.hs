@@ -9,8 +9,7 @@
 module ParserTests (tests) where
 
 import Data.Fix
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Text (Text, unpack)
+import Data.Text (unpack)
 import NeatInterpolation (text)
 import Nix.Atoms
 import Nix.Expr
@@ -21,7 +20,6 @@ import Prettyprinter.Render.Text
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.TH
-import Nix.Utils
 
 case_constant_int = assertParseText "234" $ mkInt 234
 

@@ -19,18 +19,20 @@
 
 module Nix.Lint where
 
-import           Control.Monad
+import           Prelude                 hiding ( head
+                                                , force
+                                                )
+import           Nix.Utils
+import           Control.Monad                  ( foldM )
 import           Control.Monad.Catch
 import           Control.Monad.Fix
-import           Control.Monad.Reader           ( MonadReader )
 import           Control.Monad.Ref
 import           Control.Monad.ST
-import           Control.Monad.Trans.Reader
-import           Data.HashMap.Lazy              ( HashMap )
 import qualified Data.HashMap.Lazy             as M
+-- Plese, use NonEmpty
 import           Data.List
 import qualified Data.List.NonEmpty            as NE
-import           Data.Text                      ( Text )
+import qualified Text.Show
 import qualified Data.Text                     as Text
 import           Nix.Atoms
 import           Nix.Context
@@ -45,7 +47,6 @@ import           Nix.Options
 import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Thunk.Basic
-import           Nix.Utils
 import           Nix.Var
 import           Nix.Value.Monad
 

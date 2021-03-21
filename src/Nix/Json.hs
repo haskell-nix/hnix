@@ -3,8 +3,6 @@
 
 module Nix.Json where
 
-import           Control.Monad
-import           Control.Monad.Trans
 import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Encoding           as A
 import qualified Data.HashMap.Lazy             as HM

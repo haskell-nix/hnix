@@ -31,16 +31,13 @@ import qualified Data.Maybe                  as Maybe
 import qualified Data.HashMap.Lazy
 import           Data.Char                      ( isSpace )
 import           Data.List                      ( dropWhileEnd )
-import           Data.Text                      ( Text )
+import qualified Data.String                 as String
 import qualified Data.Text                   as Text
 import qualified Data.Text.IO                as Text.IO
 import           Data.Version                   ( showVersion )
 import           Paths_hnix                     ( version )
 
 import           Control.Monad.Catch
-import           Control.Monad.Identity
-import           Control.Monad.Reader
-import           Control.Monad.State.Strict
 
 import           Prettyprinter                  ( Doc
                                                 , space
@@ -115,11 +112,11 @@ main' iniVal =
         (\case
           ((prefix:command) : xs) | prefix == commandPrefix ->
             do
-              let arguments = unwords xs
+              let arguments = String.unwords xs
               optMatcher command options arguments
-          x -> cmd $ unwords x
+          x -> cmd $ String.unwords x
         )
-        (words . Text.unpack <$> Text.lines f)
+        (String.words . Text.unpack <$> Text.lines f)
 
   handleMissing e
     | Error.isDoesNotExistError e = pure ""
@@ -337,7 +334,7 @@ quit _ = liftIO Exit.exitSuccess
 
 -- | @:set@ command
 setConfig :: (MonadNix e t f m, MonadIO m) => String -> Repl e t f m ()
-setConfig args = case words args of
+setConfig args = case String.words args of
   []       -> liftIO $ putStrLn "No option to set specified"
   (x:_xs)  ->
     case filter ((==x) . helpSetOptionName) helpSetOptions of

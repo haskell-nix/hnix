@@ -14,8 +14,8 @@ import           Data.Algorithm.DiffOutput
 import           Data.Char
 import           Data.Fix
 import qualified Data.List.NonEmpty            as NE
-import           Data.Text                      ( Text
-                                                , pack
+import qualified Data.String                   as String
+import           Data.Text                      ( pack
                                                 )
 import           Hedgehog
 import qualified Hedgehog.Gen                  as Gen
@@ -29,9 +29,6 @@ import           Test.Tasty
 import           Test.Tasty.Hedgehog
 import           Text.Megaparsec                ( Pos )
 import qualified Text.Show.Pretty              as PS
-import           Options.Applicative            ( Applicative(liftA2)
-                                                , liftA3
-                                                )
 
 asciiString :: MonadGen m => m String
 asciiString = Gen.list (Range.linear 1 15) Gen.lower
@@ -189,7 +186,8 @@ prop_prettyparse p = do
   case parse (pack prog) of
     Left s -> do
       footnote $ show $ vsep
-        [fillSep ["Parse failed:", pretty (show s)], indent 2 (prettyNix p)]
+        -- Remove :: Text type annotation after String -> Text migration.
+        [fillSep ["Parse failed:", pretty ((show s) :: Text)], indent 2 (prettyNix p)]
       discard
     Right v
       | equivUpToNormalization p v -> success
@@ -222,10 +220,10 @@ prop_prettyparse p = do
  where
   parse     = parseNixText
 
-  normalise = unlines . fmap (reverse . dropWhile isSpace . reverse) . lines
+  normalise = String.unlines . fmap (reverse . dropWhile isSpace . reverse) . String.lines
 
   ldiff :: String -> String -> [Diff [String]]
-  ldiff s1 s2 = getDiff (fmap (: mempty) (lines s1)) (fmap (: mempty) (lines s2))
+  ldiff s1 s2 = getDiff (fmap (: mempty) (String.lines s1)) (fmap (: mempty) (String.lines s2))
 
 tests :: TestLimit -> TestTree
 tests n = testProperty "Pretty/Parse Property" $ withTests n $ property $ do

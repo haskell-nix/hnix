@@ -43,14 +43,14 @@ module Nix.Parser
   )
 where
 
-import           Prelude                 hiding ( readFile )
+import           Prelude                 hiding ( some
+                                                , many
+                                                , readFile
+                                                )
+import           Data.Foldable                  ( foldr1 )
 
-import           Control.DeepSeq                ( NFData )
-import           Control.Monad                  ( guard
-                                                , void
-                                                , liftM2
+import           Control.Monad                  ( liftM2
                                                 , msum
-                                                , MonadPlus(mplus)
                                                 )
 import           Control.Monad.Combinators.Expr ( makeExprParser
                                                 , Operator( Postfix
@@ -60,31 +60,19 @@ import           Control.Monad.Combinators.Expr ( makeExprParser
                                                           , InfixL
                                                           )
                                                 )
-import           Control.Monad.State.Strict     ( evalState
-                                                , MonadState(get, put)
-                                                , State
-                                                )
 import           Data.Char                      ( isAlpha
                                                 , isDigit
                                                 , isSpace
                                                 )
 import           Data.Data                      ( Data(..) )
 import           Data.Fix                       ( Fix(..) )
-import           Data.Functor                   ( ($>) )
-import           Data.HashSet                   ( HashSet )
 import qualified Data.HashSet                  as HashSet
-import           Data.List.NonEmpty             ( NonEmpty(..) )
 import qualified Data.List.NonEmpty            as NE
 import qualified Data.Map                      as Map
-import           Data.Text                      ( Text
-                                                , cons
+import           Data.Text                      ( cons
                                                 , singleton
                                                 , pack
                                                 )
-import           Data.Text.Encoding             ( decodeUtf8 )
-import           Data.Typeable                  ( Typeable )
-import           Data.Void                      ( Void )
-import           GHC.Generics                   ( Generic )
 import           Nix.Expr                hiding ( ($>) )
 import           Nix.Expr.Strings               ( escapeCodes
                                                 , stripIndent
@@ -92,10 +80,11 @@ import           Nix.Expr.Strings               ( escapeCodes
                                                 , removePlainEmpty
                                                 )
 import           Nix.Render                     ( MonadFile(readFile) )
-import           Nix.Utils                      ( bool )
 import           Prettyprinter                  ( Doc
                                                 , pretty
                                                 )
+-- `parser-combinators` ships performance enhanced & MonadPlus-aware combinators.
+-- For example `smome` and `many` impoted here.
 import           Text.Megaparsec         hiding ( State )
 import           Text.Megaparsec.Char           ( space1
                                                 , string
@@ -570,7 +559,6 @@ reservedNames =
 type Parser = ParsecT Void Text (State SourcePos)
 
 type Result a = Either (Doc Void) a
-
 
 parseFromFileEx :: MonadFile m => Parser a -> FilePath -> m (Result a)
 parseFromFileEx p path =

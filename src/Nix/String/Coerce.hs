@@ -4,8 +4,7 @@
 
 module Nix.String.Coerce where
 
-import           Control.Monad
-import           Control.Monad.Catch     hiding ( catchJust )
+import           Control.Monad.Catch            ( MonadThrow )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Text                     as Text
 import           Nix.Atoms

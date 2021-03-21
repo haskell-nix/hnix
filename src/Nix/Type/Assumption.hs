@@ -11,11 +11,11 @@ module Nix.Type.Assumption
   )
 where
 
-import           Prelude                 hiding ( lookup )
+import           Prelude                 hiding ( Type
+                                                , empty
+                                                )
 
 import           Nix.Type.Type
-
-import           Data.Foldable                  ( foldl' )
 
 newtype Assumption = Assumption { assumptions :: [(Name, Type)] }
   deriving (Eq, Show)

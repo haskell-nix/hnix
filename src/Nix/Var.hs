@@ -10,13 +10,10 @@ module Nix.Var where
 
 import           Control.Monad.Ref
 import           Data.GADT.Compare  ( GEq(..) )
-import           Data.IORef         ( IORef )
-import           Data.Maybe         ( isJust )
 import           Data.STRef         ( STRef )
 import           Type.Reflection    ( (:~:)(Refl) )
 
 import           Unsafe.Coerce      ( unsafeCoerce )
-import           Nix.Utils          ( bool )
 
 type Var m = Ref m
 
