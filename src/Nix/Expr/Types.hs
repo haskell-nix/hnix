@@ -42,9 +42,7 @@ import           Data.Hashable.Lifted
 import qualified Data.List.NonEmpty            as NE
 import           Data.Ord.Deriving
 import qualified Text.Show
-import           Data.Text                      ( pack
-                                                , unpack
-                                                )
+import           Data.Text                      ( pack )
 import           Data.Traversable
 import           GHC.Generics
 import           Language.Haskell.TH.Syntax
@@ -486,7 +484,7 @@ instance IsString NExpr where
 instance Lift (Fix NExprF) where
   lift = dataToExpQ $ \b ->
     case Reflection.typeOf b `eqTypeRep` Reflection.typeRep @Text of
-      Just HRefl -> pure [| pack $(liftString $ unpack b) |]
+      Just HRefl -> pure [| pack $(liftString $ toString b) |]
       Nothing    -> Nothing
 #if MIN_VERSION_template_haskell(2,17,0)
   liftTyped = unsafeCodeCoerce . lift

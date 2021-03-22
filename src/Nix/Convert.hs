@@ -235,7 +235,7 @@ instance ( Convertible e t f m
   fromValueMay =
     \case
       NVPath' p  -> pure $ pure $ Path p
-      NVStr'  ns -> pure $ Path . Text.unpack <$> getStringNoContext  ns
+      NVStr'  ns -> pure $ Path . toString <$> getStringNoContext  ns
       NVSet' s _ ->
         maybe
           (pure Nothing)

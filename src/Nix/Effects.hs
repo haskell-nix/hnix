@@ -302,7 +302,7 @@ class
 
 instance MonadHttp IO where
   getURL url = do
-    let urlstr = T.unpack url
+    let urlstr = toString url
     traceM $ "fetching HTTP URL: " <> urlstr
     req     <- parseRequest urlstr
     manager <-
@@ -411,13 +411,13 @@ instance MonadStore IO where
           res <- Store.Remote.runStore $ Store.Remote.addToStore @'Store.SHA256 pathName path recursive (const False) repair
           parseStoreResult "addToStore" res >>= \case
             Left err -> pure $ Left err
-            Right storePath -> pure $ Right $ StorePath $ T.unpack $ T.decodeUtf8 $ Store.storePathToRawFilePath storePath
+            Right storePath -> pure $ Right $ StorePath $ toString $ T.decodeUtf8 $ Store.storePathToRawFilePath storePath
 
   addTextToStore' name text references repair = do
     res <- Store.Remote.runStore $ Store.Remote.addTextToStore name text references repair
     parseStoreResult "addTextToStore" res >>= \case
       Left err -> pure $ Left err
-      Right path -> pure $ Right $ StorePath $ T.unpack $ T.decodeUtf8 $ Store.storePathToRawFilePath path
+      Right path -> pure $ Right $ StorePath $ toString $ T.decodeUtf8 $ Store.storePathToRawFilePath path
 
 
 -- ** Functions

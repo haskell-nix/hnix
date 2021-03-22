@@ -624,7 +624,7 @@ opWithLoc name op f =
   do
     Ann ann _ <-
       annotateLocation $
-        {- dbg (unpack name) $ -}
+        {- dbg (toString name) $ -}
         operator name
 
     pure $ f (Ann ann op)

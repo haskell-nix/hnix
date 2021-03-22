@@ -156,7 +156,7 @@ assertEval _opts files = do
           Opts.execParserPure
             Opts.defaultPrefs
             (nixOptionsInfo time)
-            (fixup (fmap Text.unpack (Text.splitOn " " flags')))
+            (fixup (fmap toString (Text.splitOn " " flags')))
         of
           Opts.Failure err ->
             errorWithoutStackTrace

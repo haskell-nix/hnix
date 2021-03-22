@@ -158,7 +158,7 @@ main = do
    where
     printer
       | finder opts = findAttrs <=< fromValue @(AttrSet (StdValue (StandardT (StdIdT IO))))
-      | xml    opts = liftIO . putStrLn . Text.unpack . stringIgnoreContext . toXML <=< normalForm
+      | xml    opts = liftIO . putStrLn . toString . stringIgnoreContext . toXML <=< normalForm
       | json   opts = liftIO . Text.putStrLn . stringIgnoreContext <=< nvalueToJSONNixString
       | strict opts = liftIO . print . prettyNValue <=< normalForm
       | values opts = liftIO . print . prettyNValueProv <=< removeEffects
@@ -173,7 +173,7 @@ main = do
           xs <- forM (sortOn fst (M.toList s)) $ \(k, nv) ->
             free
               (\ (StdThunk (extract -> Thunk _ _ ref)) -> do
-                let path         = prefix <> Text.unpack k
+                let path         = prefix <> toString k
                     (_, descend) = filterEntry path k
                 val <- readVar @(StandardT (StdIdT IO)) ref
                 case val of
@@ -184,7 +184,7 @@ main = do
               (\ v -> pure (k, pure (Free v)))
               nv
           for_ xs $ \(k, mv) -> do
-            let path              = prefix <> Text.unpack k
+            let path              = prefix <> toString k
                 (report, descend) = filterEntry path k
             when report $ do
               liftIO $ putStrLn path

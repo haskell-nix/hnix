@@ -9,7 +9,6 @@
 module ParserTests (tests) where
 
 import Data.Fix
-import Data.Text (unpack)
 import NeatInterpolation (text)
 import Nix.Atoms
 import Nix.Expr
@@ -367,10 +366,10 @@ assertParseText :: Text -> NExpr -> Assertion
 assertParseText str expected =
   either
     (\ err ->
-      assertFailure $ "Unexpected fail parsing `" <> unpack str <> "':\n" <> show err
+      assertFailure $ toString $ "Unexpected fail parsing `" <> str <> "':\n" <> show err
     )
     (assertEqual
-      ("When parsing " <> unpack str)
+      ("When parsing " <> toString str)
       (stripPositionInfo expected)
       . stripPositionInfo
     )
@@ -396,7 +395,7 @@ assertParseFail str =
   either
     (const $ pure ())
     (\ r ->
-      assertFailure $ "Unexpected success parsing `" <> unpack str <> ":\nParsed value: " <> show r
+      assertFailure $ toString $ "Unexpected success parsing `" <> str <> ":\nParsed value: " <> show r
     )
     (parseNixText str)
 

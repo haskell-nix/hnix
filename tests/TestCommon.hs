@@ -7,7 +7,6 @@ module TestCommon where
 
 import           GHC.Err                        ( errorWithoutStackTrace )
 import           Control.Monad.Catch
-import           Data.Text                      ( unpack )
 import           Data.Time
 import           Nix
 import           Nix.Standard
@@ -43,7 +42,7 @@ hnixEvalFile opts file =
 hnixEvalText :: Options -> Text -> IO (StdValue (StandardT (StdIdT IO)))
 hnixEvalText opts src =
   either
-    (\ err -> fail $ "Parsing failed for expression `" <> unpack src <> "`.\n" <> show err)
+    (\ err -> fail $ toString $ "Parsing failed for expression `" <> src <> "`.\n" <> show err)
     (\ expr ->
       runWithBasicEffects opts $ normalForm =<< nixEvalExpr mempty expr
     )
@@ -75,4 +74,4 @@ assertEvalMatchesNix expr = do
   nixVal  <- nixEvalString expr'
   assertEqual expr' nixVal hnixVal
  where
-  expr' = unpack expr
+  expr' = toString expr

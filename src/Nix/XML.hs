@@ -110,10 +110,10 @@ paramsXML (ParamSet s b mname) =
  where
   battr = [ Attr (unqual "ellipsis") "1" | b ]
   nattr =
-      maybe
-        mempty
-        ((: mempty) . Attr (unqual "name") . toString)
-        mname
+    maybe
+      mempty
+      ((: mempty) . Attr (unqual "name") . toString)
+      mname
 
 paramSetXML :: ParamSet r -> [Content]
 paramSetXML = fmap (\(k, _) -> Elem $ mkEName "attr" (toString k))

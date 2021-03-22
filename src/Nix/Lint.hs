@@ -304,11 +304,11 @@ instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
 
 
 instance MonadLint e m => MonadEval (Symbolic m) m where
-  freeVariable var = symerr $ "Undefined variable '" <> Text.unpack var <> "'"
+  freeVariable var = symerr $ "Undefined variable '" <> toString var <> "'"
 
-  attrMissing ks Nothing = evalError @(Symbolic m) $ ErrorCall $ "Inheriting unknown attribute: " <> intercalate "." (fmap Text.unpack (NE.toList ks))
+  attrMissing ks Nothing = evalError @(Symbolic m) $ ErrorCall $ "Inheriting unknown attribute: " <> intercalate "." (fmap toString (NE.toList ks))
 
-  attrMissing ks (Just s) = evalError @(Symbolic m) $ ErrorCall $ "Could not look up attribute " <> intercalate "." (fmap Text.unpack (NE.toList ks)) <> " in " <> show s
+  attrMissing ks (Just s) = evalError @(Symbolic m) $ ErrorCall $ "Could not look up attribute " <> intercalate "." (fmap toString (NE.toList ks)) <> " in " <> show s
 
   evalCurPos = do
     f <- mkSymbolic [TPath]

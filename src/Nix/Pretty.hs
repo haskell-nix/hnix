@@ -22,7 +22,6 @@ import qualified Data.HashMap.Lazy             as M
 import qualified Data.HashSet                  as HashSet
 import qualified Data.List.NonEmpty            as NE
 import           Data.Text                      ( pack
-                                                , unpack
                                                 , replace
                                                 , strip
                                                 )
@@ -110,9 +109,9 @@ wrapPath op sub =
 prettyString :: NString (NixDoc ann) -> Doc ann
 prettyString (DoubleQuoted parts) = "\"" <> (mconcat . fmap prettyPart $ parts) <> "\""
  where
-  -- It serializes (@unpack@) Text -> String, because the helper code is done for String,
+  -- It serializes Text -> String, because the helper code is done for String,
   -- please, can someone break that code.
-  prettyPart (Plain t)      = pretty . concatMap escape . unpack $ t
+  prettyPart (Plain t)      = pretty . concatMap escape . toString $ t
   prettyPart EscapedNewline = "''\\n"
   prettyPart (Antiquoted r) = "${" <> withoutParens r <> "}"
   escape '"' = "\\\""
@@ -385,13 +384,13 @@ printNix = iterNValue (\_ _ -> thk) phi
 
   -- Please, reduce this horrifying String -> Text -> String marshaling in favour of Text
   phi :: NValue' t f m String -> String
-  phi (NVConstant' a ) = unpack $ atomText a
+  phi (NVConstant' a ) = toString $ atomText a
   phi (NVStr'      ns) = show $ stringIgnoreContext ns
-  phi (NVList'     l ) = unpack $ "[ " <> unwords (fmap pack l) <> " ]"
+  phi (NVList'     l ) = toString $ "[ " <> unwords (fmap pack l) <> " ]"
   phi (NVSet' s _) =
     "{ " <>
       concat
-        [ check (unpack k) <> " = " <> v <> "; "
+        [ check (toString k) <> " = " <> v <> "; "
         | (k, v) <- sort $ toList s
         ] <> "}"
    where

@@ -150,7 +150,7 @@ wrapExprLoc span x = Fix (Fix (NSym_ span "<?>") <$ x)
 -- Currently instance is stuck in orphanage between the requirements to be MonadEval, aka Eval stage, and emposed requirement to be MonadNix (Execution stage). MonadNix constraint tries to put the cart before horse and seems superflous, since Eval in Nix also needs and can throw exceptions. It is between `nverr` and `evalError`.
 instance MonadNix e t f m => MonadEval (NValue t f m) m where
   freeVariable var =
-    nverr @e @t @f $ ErrorCall $ "Undefined variable '" <> Text.unpack var <> "'"
+    nverr @e @t @f $ ErrorCall $ "Undefined variable '" <> toString var <> "'"
 
   synHole name = do
     span  <- currentPos
@@ -161,11 +161,11 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
       }
 
   attrMissing ks Nothing =
-    evalError @(NValue t f m) $ ErrorCall $ "Inheriting unknown attribute: " <> intercalate "." (fmap Text.unpack (NE.toList ks))
+    evalError @(NValue t f m) $ ErrorCall $ "Inheriting unknown attribute: " <> intercalate "." (fmap toString (NE.toList ks))
 
   attrMissing ks (Just s) =
     evalError @(NValue t f m)
-      $ ErrorCall $ "Could not look up attribute " <> intercalate "." (fmap Text.unpack (NE.toList ks)) <> " in " <> show (prettyNValue s)
+      $ ErrorCall $ "Could not look up attribute " <> intercalate "." (fmap toString (NE.toList ks)) <> " in " <> show (prettyNValue s)
 
   evalCurPos = do
     scope                  <- currentScopes
@@ -416,7 +416,7 @@ execBinaryOpForced scope span op lval rval = case op of
         maybe
           (throwError $ ErrorCall "A string that refers to a store path cannot be appended to a path.") -- data/nix/src/libexpr/eval.cc:1412
           (\ rs2 ->
-             nvPathP prov <$> makeAbsolutePath @t @f (ls <> Text.unpack rs2)
+             nvPathP prov <$> makeAbsolutePath @t @f (ls <> toString rs2)
           )
           (getStringNoContext rs)
       (NVPath ls, NVPath rs) -> nvPathP prov <$> makeAbsolutePath @t @f (ls <> rs)

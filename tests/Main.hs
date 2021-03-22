@@ -10,7 +10,6 @@ import           GHC.Err (errorWithoutStackTrace)
 import           Data.Fix
 import           Data.List (isSuffixOf, lookup)
 import qualified Data.String as String
-import           Data.Text (unpack)
 import           Data.Time
 import qualified EvalTests
 import           NeatInterpolation (text)
@@ -58,11 +57,11 @@ ensureNixpkgsCanParse =
           runWithBasicEffectsIO (defaultOptions time) $
             Nix.nixEvalExprLoc mempty expr
         let dir = stringIgnoreContext ns
-        exists <- fileExist (unpack dir)
+        exists <- fileExist $ toString dir
         unless exists $
           errorWithoutStackTrace $
             "Directory " <> show dir <> " does not exist"
-        files <- globDir1 (compile "**/*.nix") (unpack dir)
+        files <- globDir1 (compile "**/*.nix") $ toString dir
         when (null files) $
           errorWithoutStackTrace $
             "Directory " <> show dir <> " does not have any files"

@@ -118,7 +118,7 @@ hashDerivationModulo drv@Derivation{inputs = (inputSrcs, inputDrvs)} = do
     case MS.lookup path cache of
       Just hash -> pure (hash, outs)
       Nothing -> do
-        drv' <- readDerivation $ Text.unpack path
+        drv' <- readDerivation $ toString path
         hash <- Store.encodeInBase Store.Base16 <$> hashDerivationModulo drv'
         pure (hash, outs)
     )
