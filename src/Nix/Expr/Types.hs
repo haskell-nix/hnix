@@ -42,7 +42,6 @@ import           Data.Hashable.Lifted
 import qualified Data.List.NonEmpty            as NE
 import           Data.Ord.Deriving
 import qualified Text.Show
-import           Data.Text                      ( pack )
 import           Data.Traversable
 import           GHC.Generics
 import           Language.Haskell.TH.Syntax
@@ -202,7 +201,7 @@ instance Serialise r => Serialise (NString r)
 -- | For the the 'IsString' instance, we use a plain doublequoted string.
 instance IsString (NString r) where
   fromString ""     = DoubleQuoted mempty
-  fromString string = DoubleQuoted [Plain $ pack string]
+  fromString string = DoubleQuoted [Plain $ toText string]
 
 
 -- ** @NKeyName@
@@ -484,8 +483,8 @@ instance IsString NExpr where
 instance Lift (Fix NExprF) where
   lift = dataToExpQ $ \b ->
     case Reflection.typeOf b `eqTypeRep` Reflection.typeRep @Text of
-      Just HRefl -> pure [| pack $(liftString $ toString b) |]
       Nothing    -> Nothing
+      Just HRefl -> pure [| (toText :: String -> Text) $(liftString $ toString b) |]
 #if MIN_VERSION_template_haskell(2,17,0)
   liftTyped = unsafeCodeCoerce . lift
 #elif MIN_VERSION_template_haskell(2,16,0)

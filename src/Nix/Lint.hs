@@ -314,19 +314,17 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
     f <- mkSymbolic [TPath]
     l <- mkSymbolic [TConstant [TInt]]
     c <- mkSymbolic [TConstant [TInt]]
-    mkSymbolic [TSet (pure (M.fromList (go f l c)))]
-   where
-    go f l c =
-      [(Text.pack "file", f), (Text.pack "line", l), (Text.pack "col", c)]
+    mkSymbolic [TSet (pure (M.fromList [("file", f), ("line", l), ("col", c)]))]
 
   evalConstant c = mkSymbolic [go c]
    where
-    go = \case
-      NURI   _ -> TStr
-      NInt   _ -> TConstant [TInt]
-      NFloat _ -> TConstant [TFloat]
-      NBool  _ -> TConstant [TBool]
-      NNull    -> TConstant [TNull]
+    go =
+      \case
+        NURI   _ -> TStr
+        NInt   _ -> TConstant [TInt]
+        NFloat _ -> TConstant [TFloat]
+        NBool  _ -> TConstant [TBool]
+        NNull    -> TConstant [TNull]
 
   evalString      = const $ mkSymbolic [TStr]
   evalLiteralPath = const $ mkSymbolic [TPath]

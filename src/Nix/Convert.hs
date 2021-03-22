@@ -27,7 +27,6 @@ module Nix.Convert where
 import           Prelude                 hiding ( force )
 import           Control.Monad.Free
 import qualified Data.HashMap.Lazy             as M
-import qualified Data.Text                     as Text
 import           Nix.Atoms
 import           Nix.Effects
 import           Nix.Expr.Types
@@ -202,7 +201,7 @@ instance ( Convertible e t f m
       NVStr' ns -> pure $ pure ns
       NVPath' p ->
         fmap
-          (pure . (\s -> makeNixStringWithSingletonContext s (StringContext s DirectPath)) . Text.pack . unStorePath)
+          (pure . (\s -> makeNixStringWithSingletonContext s (StringContext s DirectPath)) . toText . unStorePath)
           (addPath p)
       NVSet' s _ ->
         maybe
@@ -380,7 +379,7 @@ instance ( Convertible e t f m
          )
   => ToValue SourcePos m (NValue' t f m (NValue t f m)) where
   toValue (SourcePos f l c) = do
-    f' <- toValue (makeNixStringWithoutContext (Text.pack f))
+    f' <- toValue (makeNixStringWithoutContext (toText f))
     l' <- toValue (unPos l)
     c' <- toValue (unPos c)
     let pos = M.fromList [("file" :: Text, f'), ("line", l'), ("column", c')]

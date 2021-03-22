@@ -261,7 +261,7 @@ cmd
   -> Repl e t f m ()
 cmd source =
   do
-    mVal <- exec True (Text.pack source)
+    mVal <- exec True $ toText source
     maybe
       (pure ())
       printValue
@@ -321,7 +321,7 @@ typeof args = do
   traverse_ printValueType mVal
 
  where
-  line = Text.pack args
+  line = toText args
   printValueType val =
     do
       s <- lift . lift . showValueType $ val
@@ -380,7 +380,7 @@ completeFunc reversedPrev word
     listFiles word
 
   -- Attributes of sets in REPL context
-  | var : subFields <- Text.split (== '.') (Text.pack word) , not $ null subFields =
+  | var : subFields <- Text.split (== '.') (toText word) , not $ null subFields =
     do
       s <- get
       maybe

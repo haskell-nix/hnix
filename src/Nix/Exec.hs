@@ -28,7 +28,6 @@ import           Control.Monad.Fix
 import           Data.Fix
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.List.NonEmpty            as NE
-import qualified Data.Text                     as Text
 import           Nix.Atoms
 import           Nix.Cited
 import           Nix.Convert

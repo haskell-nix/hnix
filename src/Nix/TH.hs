@@ -25,7 +25,7 @@ quoteExprExp s = do
     either
       (fail . show)
       pure
-      (parseNixText (Text.pack s))
+      (parseNixText $ toText s)
   dataToExpQ
     (const Nothing `extQ` metaExp (freeVars expr) `extQ` (pure . liftText))
     expr
@@ -39,7 +39,7 @@ quoteExprPat s = do
     either
       (fail . show)
       pure
-      (parseNixText (Text.pack s))
+      (parseNixText $ toText s)
   dataToPatQ
     (const Nothing `extQ` metaPat (freeVars expr))
     expr

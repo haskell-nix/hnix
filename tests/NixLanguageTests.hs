@@ -127,7 +127,7 @@ assertLangOk :: Options -> FilePath -> Assertion
 assertLangOk opts file = do
   actual   <- printNix <$> hnixEvalFile opts (file <> ".nix")
   expected <- Text.readFile $ file <> ".exp"
-  assertEqual "" expected $ Text.pack (actual <> "\n")
+  assertEqual "" expected $ toText (actual <> "\n")
 
 assertLangOkXml :: Options -> FilePath -> Assertion
 assertLangOkXml opts file = do

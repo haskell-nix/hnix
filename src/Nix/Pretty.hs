@@ -21,8 +21,7 @@ import           Data.HashMap.Lazy              ( toList )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.HashSet                  as HashSet
 import qualified Data.List.NonEmpty            as NE
-import           Data.Text                      ( pack
-                                                , replace
+import           Data.Text                      ( replace
                                                 , strip
                                                 )
 import qualified Data.Text                     as Text
@@ -327,7 +326,7 @@ valueToExpr = iterNValue (\_ _ -> thk) phi
     ]
   phi (NVClosure' _ _   ) = Fix . NSym $ "<closure>"
   phi (NVPath' p        ) = Fix $ NLiteralPath p
-  phi (NVBuiltin' name _) = Fix . NSym $ "builtins." <> pack name
+  phi (NVBuiltin' name _) = Fix . NSym $ "builtins." <> toText name
 
   mkStr ns = Fix $ NStr $ DoubleQuoted [Plain (stringIgnoreContext ns)]
 
@@ -386,7 +385,7 @@ printNix = iterNValue (\_ _ -> thk) phi
   phi :: NValue' t f m String -> String
   phi (NVConstant' a ) = toString $ atomText a
   phi (NVStr'      ns) = show $ stringIgnoreContext ns
-  phi (NVList'     l ) = toString $ "[ " <> unwords (fmap pack l) <> " ]"
+  phi (NVList'     l ) = toString $ "[ " <> unwords (fmap toText l) <> " ]"
   phi (NVSet' s _) =
     "{ " <>
       concat

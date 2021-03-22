@@ -111,7 +111,7 @@ withNixContext mpath action =
     base            <- builtins
     opts :: Options <- asks $ view hasLens
     let
-      i = nvList $ nvStr . makeNixStringWithoutContext . Text.pack <$> include opts
+      i = nvList $ nvStr . makeNixStringWithoutContext . toText <$> include opts
 
     pushScope (M.singleton "__includes" i) $ pushScopes base $
       maybe
@@ -383,8 +383,8 @@ foldNixPath f z =
 
     foldrM go z $
       (fromInclude . stringIgnoreContext <$> dirs)
-      <> maybe mempty (uriAwareSplit . Text.pack) mPath
-      <> [ fromInclude $ Text.pack $ "nix=" <> dataDir <> "/nix/corepkgs" ]
+      <> maybe mempty (uriAwareSplit . toText) mPath
+      <> [ fromInclude $ toText $ "nix=" <> dataDir <> "/nix/corepkgs" ]
  where
   fromInclude x = (x, ) $
     bool
@@ -413,7 +413,7 @@ nixPath = fmap nvList $ flip foldNixPath mempty $
         )
       : rest
  where
-  mkNvStr = nvStr . makeNixStringWithoutContext . Text.pack
+  mkNvStr = nvStr . makeNixStringWithoutContext . toText
 
 toString_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toString_ = toValue <=< coerceToString callFunc DontCopyToStore CoerceAny
@@ -594,7 +594,7 @@ versionComponentToString :: VersionComponent -> Text
 versionComponentToString = \case
   VersionComponent_Pre      -> "pre"
   VersionComponent_String s -> s
-  VersionComponent_Number n -> Text.pack $ show n
+  VersionComponent_Number n -> show n
 
 -- | Based on https://github.com/NixOS/nix/blob/4ee4fda521137fed6af0446948b3877e0c5db803/src/libexpr/names.cc#L44
 versionComponentSeparators :: String
@@ -899,7 +899,7 @@ baseNameOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 baseNameOf x = do
   ns <- coerceToString callFunc DontCopyToStore CoerceStringy x
   pure $ nvStr $
-    modifyNixContents (Text.pack . takeFileName . toString) ns
+    modifyNixContents (toText . takeFileName . toString) ns
 
 bitAnd
   :: forall e t f m
@@ -952,7 +952,7 @@ dirOf nvdir =
     dir <- demand nvdir
 
     case dir of
-      NVStr ns -> pure $ nvStr $ modifyNixContents (Text.pack . takeDirectory . toString) ns
+      NVStr ns -> pure $ nvStr $ modifyNixContents (toText . takeDirectory . toString) ns
       NVPath path -> pure $ nvPath $ takeDirectory path
       v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " <> show v
 
@@ -1233,7 +1233,7 @@ toFile name s =
         (toString $ stringIgnoreContext s')
 
     let
-      t  = Text.pack $ unStorePath mres
+      t  = toText $ unStorePath mres
       sc = StringContext t DirectPath
 
     toValue $ makeNixStringWithSingletonContext t sc
@@ -1362,7 +1362,7 @@ getEnv_ v =
     toValue $ makeNixStringWithoutContext $
       maybe
         mempty
-        Text.pack mres
+        toText mres
 
 sort_
   :: MonadNix e t f m
@@ -1469,10 +1469,10 @@ hashString nsAlgo ns =
 
       case algo of
         --  2021-03-04: Pattern can not be taken-out because hashes represented as different types
-        "md5"    -> f (toText . mkHash @MD5.MD5)
-        "sha1"   -> f (toText . mkHash @SHA1.SHA1)
-        "sha256" -> f (toText . mkHash @SHA256.SHA256)
-        "sha512" -> f (toText . mkHash @SHA512.SHA512)
+        "md5"    -> f (show . mkHash @MD5.MD5)
+        "sha1"   -> f (show . mkHash @SHA1.SHA1)
+        "sha256" -> f (show . mkHash @SHA256.SHA256)
+        "sha512" -> f (show . mkHash @SHA512.SHA512)
 
         _ -> throwError $ ErrorCall $ "builtins.hashString: expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got " <> show algo
 
@@ -1481,35 +1481,36 @@ hashString nsAlgo ns =
         mkHash :: (Show a, HashAlgorithm a) => Text -> a
         mkHash s = hash (encodeUtf8 s)
 
-        toText :: (Show a, HashAlgorithm a) => a -> Text
-        toText h = Text.pack $ show h
-
 
 placeHolder :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
-  h <- runPrim
-    (hashString (makeNixStringWithoutContext "sha256")
-                (makeNixStringWithoutContext ("nix-output:" <> t))
-    )
-  toValue
-    $ makeNixStringWithoutContext
-    $ Text.cons '/'
-    $ Base32.encode
-    -- Please, stop Text -> Bytestring here after migration to Text
-    $ case Base16.decode (bytes h) of -- The result coming out of hashString is base16 encoded
+placeHolder p =
+  do
+    t <- fromStringNoContext =<< fromValue p
+    h <-
+      runPrim
+        (hashString
+          (makeNixStringWithoutContext "sha256"           )
+          (makeNixStringWithoutContext ("nix-output:" <> t))
+        )
+    toValue
+      $ makeNixStringWithoutContext
+      $ Text.cons '/'
+      $ Base32.encode
+      -- Please, stop Text -> Bytestring here after migration to Text
+      $ case Base16.decode (bytes h) of -- The result coming out of hashString is base16 encoded
 #if MIN_VERSION_base16_bytestring(1,0,0)
-      -- Please, stop Text -> String here after migration to Text
-      Right d -> d
-      Left e -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nThe Left fail content: '" <> show e <> "'."
+        -- Please, stop Text -> String here after migration to Text
+        Left e -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nThe Left fail content: '" <> show e <> "'."
+        Right d -> d
 #else
-      (d, "") -> d
-      (_, e) -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nUndecodable remainder: '" <> show e <> "'."
+        (d, "") -> d
+        (_, e) -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nUndecodable remainder: '" <> show e <> "'."
 #endif
-   where
-    bytes :: NixString -> ByteString
-    bytes = encodeUtf8 . body
+    where
+      bytes :: NixString -> ByteString
+      bytes = encodeUtf8 . body
 
-    body h = stringIgnoreContext h
+      body h = stringIgnoreContext h
 
 absolutePathFromValue :: MonadNix e t f m => NValue t f m -> m FilePath
 absolutePathFromValue =
@@ -1585,7 +1586,7 @@ readDir_ nvpath =
                 | isSymbolicLink s -> FileTypeSymlink
                 | otherwise        -> FileTypeUnknown
 
-          pure (Text.pack item, t)
+          pure (toText item, t)
 
     itemsWithTypes <-
       traverse
