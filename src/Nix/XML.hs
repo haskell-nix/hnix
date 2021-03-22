@@ -2,10 +2,11 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Nix.XML (toXML) where
+module Nix.XML
+  ( toXML )
+where
 
 import qualified Data.HashMap.Lazy             as M
-import qualified Data.Text                     as Text
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.String
@@ -20,55 +21,90 @@ import           Text.XML.Light                 ( Element(Element)
 toXML :: forall t f m . MonadDataContext f m => NValue t f m -> NixString
 toXML = runWithStringContext . fmap pp . iterNValue (\_ _ -> cyc) phi
  where
-  cyc = pure $ mkElem "string" "value" "<expr>"
+  cyc = pure $ mkEVal "string" "<expr>"
 
-  pp =
-    ("<?xml version='1.0' encoding='utf-8'?>\n" <>)
-      . (<> "\n")
-      . Text.pack
-      . ppElement
-      . (\e -> Element (unqual "expr") mempty [Elem e] Nothing)
+  pp e =
+    heading
+    <> toText
+        (ppElement $
+          mkE
+            "expr"
+            [Elem e]
+        )
+    <> "\n"
+   where
+    heading = "<?xml version='1.0' encoding='utf-8'?>\n"
 
   phi :: NValue' t f m (WithStringContext Element) -> WithStringContext Element
   phi = \case
     NVConstant' a ->
-      pure $ case a of
-      NURI   t -> mkElem "string" "value" (Text.unpack t)
-      NInt   n -> mkElem "int" "value" (show n)
-      NFloat f -> mkElem "float" "value" (show f)
-      NBool  b -> mkElem "bool" "value" (if b then "true" else "false")
-      NNull    -> Element (unqual "null") mempty mempty Nothing
+      pure $
+        case a of
+          NURI   t -> mkEVal "string" $ toString t
+          NInt   n -> mkEVal "int"    $ show n
+          NFloat f -> mkEVal "float"  $ show f
+          NBool  b -> mkEVal "bool"   $ if b then "true" else "false"
+          NNull    -> mkE    "null"     mempty
 
     NVStr' str ->
-      mkElem "string" "value" . Text.unpack <$> extractNixString str
-    NVList' l -> sequence l
-      >>= \els -> pure $ Element (unqual "list") mempty (Elem <$> els) Nothing
+      mkEVal "string" . toString <$> extractNixString str
+    NVList' l ->
+      do
+        els <- sequence l
+        pure $
+          mkE
+            "list"
+            (Elem <$> els)
 
-    NVSet' s _ -> sequence s >>= \kvs -> pure $ Element
-      (unqual "attrs")
-      mempty
-      (fmap
-        (\(k, v) -> Elem
-          (Element (unqual "attr")
-                   [Attr (unqual "name") (Text.unpack k)]
-                   [Elem v]
-                   Nothing
-          )
-        )
-        (sortBy (comparing fst) $ M.toList kvs)
-      )
-      Nothing
+    NVSet' s _ ->
+      do
+        kvs <- sequence s
+        pure $
+          mkE
+            "attrs"
+            ((\ (k, v) ->
+                Elem $
+                  Element
+                    (unqual "attr")
+                    [Attr (unqual "name") (toString k)]
+                    [Elem v]
+                    Nothing
+              ) <$>
+                sortBy (comparing fst) (M.toList kvs)
+            )
 
     NVClosure' p _ ->
-      pure $ Element (unqual "function") mempty (paramsXML p) Nothing
-    NVPath' fp        -> pure $ mkElem "path" "value" fp
-    NVBuiltin' name _ -> pure $ mkElem "function" "name" name
+      pure $
+        mkE
+          "function"
+          (paramsXML p)
+    NVPath' fp        -> pure $ mkEVal "path" fp
+    NVBuiltin' name _ -> pure $ mkEName "function" name
+
+mkE :: String -> [Content] -> Element
+mkE n c =
+  Element
+    (unqual n)
+    mempty
+    c
+    Nothing
 
 mkElem :: String -> String -> String -> Element
-mkElem n a v = Element (unqual n) [Attr (unqual a) v] mempty Nothing
+mkElem n a v =
+  Element
+    (unqual n)
+    [Attr (unqual a) v]
+    mempty
+    Nothing
+
+mkEVal :: String -> String -> Element
+mkEVal = (`mkElem` "value")
+
+mkEName :: String -> String -> Element
+mkEName = (`mkElem` "name")
 
 paramsXML :: Params r -> [Content]
-paramsXML (Param name) = [Elem $ mkElem "varpat" "name" (Text.unpack name)]
+paramsXML (Param name) = [Elem $ mkEName "varpat" (toString name)]
 paramsXML (ParamSet s b mname) =
   [Elem $ Element (unqual "attrspat") (battr <> nattr) (paramSetXML s) Nothing]
  where
@@ -76,8 +112,8 @@ paramsXML (ParamSet s b mname) =
   nattr =
       maybe
         mempty
-        ((: mempty) . Attr (unqual "name") . Text.unpack)
+        ((: mempty) . Attr (unqual "name") . toString)
         mname
 
 paramSetXML :: ParamSet r -> [Content]
-paramSetXML = fmap (\(k, _) -> Elem $ mkElem "attr" "name" (Text.unpack k))
+paramSetXML = fmap (\(k, _) -> Elem $ mkEName "attr" (toString k))
