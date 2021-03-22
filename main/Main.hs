@@ -22,7 +22,6 @@ import qualified Data.Map                      as Map
 import           Data.Maybe                     ( fromJust )
 import qualified Data.String                   as String
 import           Data.Time
-import qualified Data.Text                     as Text
 import qualified Data.Text.IO                  as Text
 import           Nix
 import           Nix.Convert
