@@ -44,8 +44,8 @@ import qualified System.Info
 import           System.Process
 
 import qualified System.Nix.Hash               as Store
-import qualified System.Nix.Store.Remote       as Store.Remote
 import qualified System.Nix.StorePath          as Store
+import qualified System.Nix.ReadonlyStore      as Store
 
 -- | A path into the nix store
 newtype StorePath = StorePath { unStorePath :: FilePath }
@@ -400,33 +400,23 @@ class
 
 -- *** Instances
 
+toStorePath :: Store.StorePath -> StorePath
+toStorePath = StorePath . T.unpack . T.decodeUtf8 . Store.storePathToRawFilePath
+
 instance MonadStore IO where
 
-  addToStore name path recursive repair =
-    case Store.makeStorePathName name of
-      Left err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> err
-      Right pathName ->
-        do
-          -- TODO: redesign the filter parameter
-          res <- Store.Remote.runStore $ Store.Remote.addToStore @'Store.SHA256 pathName path recursive (const False) repair
-          parseStoreResult "addToStore" res >>= \case
-            Left err -> pure $ Left err
-            Right storePath -> pure $ Right $ StorePath $ toString $ T.decodeUtf8 $ Store.storePathToRawFilePath storePath
+  addToStore name path recursive repair = case Store.makeStorePathName name of
+    Left err -> return $ Left $ ErrorCall $ "String '" ++ show name ++ "' is not a valid path name: " ++ err
+    Right pathName -> do
+      -- TODO: redesign the filter parameter
+      Right . toStorePath <$> Store.computeStorePathForPath @'Store.SHA256 pathName path recursive (const False) repair
 
-  addTextToStore' name text references repair = do
-    res <- Store.Remote.runStore $ Store.Remote.addTextToStore name text references repair
-    parseStoreResult "addTextToStore" res >>= \case
-      Left err -> pure $ Left err
-      Right path -> pure $ Right $ StorePath $ toString $ T.decodeUtf8 $ Store.storePathToRawFilePath path
-
+  addTextToStore' name text references _repair = case Store.makeStorePathName name of
+    Left err -> return $ Left $ ErrorCall $ "String '" ++ show name ++ "' is not a valid path name: " ++ err
+    Right pathName -> do
+      return $ Right $ toStorePath $ Store.computeStorePathForText "/nix/store" pathName (T.encodeUtf8 text) references
 
 -- ** Functions
-
-parseStoreResult :: Monad m => String -> (Either String a, [Store.Remote.Logger]) -> m (Either ErrorCall a)
-parseStoreResult name res =
-  case res of
-    (Left msg, logs) -> pure $ Left $ ErrorCall $ "Failed to execute '" <> name <> "': " <> msg <> "\n" <> show logs
-    (Right result, _) -> pure $ Right result
 
 addTextToStore :: (Framed e m, MonadStore m) => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m StorePath
 addTextToStore a b c d = either throwError pure =<< addTextToStore' a b c d
