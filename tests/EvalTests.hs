@@ -19,6 +19,7 @@ import           Nix.TH
 import           Nix.Value.Equal
 import           Nix.Utils
 import qualified System.Directory as D
+import           System.Environment (lookupEnv)
 import           System.FilePath
 import           Test.Tasty
 import           Test.Tasty.HUnit
