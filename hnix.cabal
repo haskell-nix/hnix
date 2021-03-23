@@ -395,8 +395,8 @@ library
     src
   mixins:
       base hiding (Prelude)
-    , relude
     , relude (Relude as Prelude)
+    , relude
   ghc-options: -Wall -fprint-potential-instances
   build-depends:
       aeson >= 1.4.2 && < 1.6
@@ -436,7 +436,7 @@ library
     , process >= 1.6.3 && < 1.7
     , ref-tf >= 0.4.0 && <= 0.4.0.2
     , regex-tdfa >= 1.2.3 && < 1.4
-    , relude
+    , relude >= 0.7.0 && < 1.0.0
     , scientific >= 0.3.6 && < 0.4
     , semialign >= 1 && < 1.2
     , semialign-indexed >= 1 && < 1.2
@@ -508,8 +508,8 @@ executable hnix
     , unordered-containers
   mixins:
       base hiding (Prelude)
-    , relude
     , relude (Relude as Prelude)
+    , relude
   default-extensions:
     OverloadedStrings
   if flag(optimize)
@@ -538,8 +538,8 @@ test-suite hnix-tests
     Paths_hnix
   mixins:
       base hiding (Prelude)
-    , relude
     , relude (Relude as Prelude)
+    , relude
   hs-source-dirs:
     tests
   ghc-options: -Wall -threaded
@@ -597,8 +597,8 @@ benchmark hnix-benchmarks
     benchmarks
   mixins:
       base hiding (Prelude)
-    , relude
     , relude (Relude as Prelude)
+    , relude
   ghc-options: -Wall
   build-depends:
       base

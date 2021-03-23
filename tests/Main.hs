@@ -26,7 +26,7 @@ import qualified PrettyTests
 import qualified ReduceExprTests
 import qualified PrettyParseTests
 import           System.Directory
-import           System.Environment (setEnv)
+import           System.Environment (setEnv, lookupEnv)
 import           System.FilePath.Glob
 import           System.Posix.Files
 import           Test.Tasty
