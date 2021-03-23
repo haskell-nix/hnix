@@ -33,7 +33,6 @@ import qualified Data.HashMap.Lazy             as M
 import           Data.List
 import qualified Data.List.NonEmpty            as NE
 import qualified Text.Show
-import qualified Data.Text                     as Text
 import           Nix.Atoms
 import           Nix.Context
 import           Nix.Convert
