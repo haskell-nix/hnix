@@ -6,7 +6,6 @@ module Nix.Json where
 import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Encoding           as A
 import qualified Data.HashMap.Lazy             as HM
-import qualified Data.Text                     as Text
 import qualified Data.Text.Lazy                as TL
 import qualified Data.Text.Lazy.Encoding       as TL
 import qualified Data.Vector                   as V
@@ -47,7 +46,7 @@ nvalueToJSON = \case
   NVPath p ->
     do
       fp <- lift $ unStorePath <$> addPath p
-      addSingletonStringContext $ StringContext (Text.pack fp) DirectPath
+      addSingletonStringContext $ StringContext (toText fp) DirectPath
       pure $ A.toJSON fp
   v -> lift $ throwError $ CoercionToJson v
 

@@ -11,8 +11,6 @@ import           Codec.Serialise                ( Serialise )
 
 import           Data.Data                      ( Data)
 import           Data.Fixed                     ( mod' )
-import           Data.Text                      ( pack
-                                                )
 import           Data.Binary                    ( Binary )
 import           Data.Aeson.Types               ( FromJSON
                                                 , ToJSON
@@ -63,11 +61,14 @@ instance FromJSON NAtom
 -- | Translate an atom into its Nix representation.
 atomText :: NAtom -> Text
 atomText (NURI   t) = t
-atomText (NInt   i) = pack (show i)
-atomText (NFloat f) = pack (showNixFloat f)
+atomText (NInt   i) = show i
+atomText (NFloat f) = showNixFloat f
  where
-  showNixFloat x
-    | x `mod'` 1 /= 0 = show x
-    | otherwise       = show (truncate x :: Int)
+  showNixFloat :: Float -> Text
+  showNixFloat x =
+    bool
+      (show x)
+      (show (truncate x :: Int))
+      (x `mod'` 1 == 0)
 atomText (NBool  b) = if b then "true" else "false"
 atomText NNull      = "null"

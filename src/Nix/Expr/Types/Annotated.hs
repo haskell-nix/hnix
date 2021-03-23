@@ -37,7 +37,6 @@ import           Data.Fix                       ( Fix(..)
 import           Data.Functor.Compose
 import           Data.Hashable.Lifted
 import           Data.Ord.Deriving
-import           Data.Text                      ( pack )
 import           GHC.Generics
 import           Nix.Atoms
 import           Nix.Expr.Types
@@ -164,7 +163,7 @@ nStr :: Ann SrcSpan (NString NExprLoc) -> NExprLoc
 nStr (Ann s1 s) = AnnE s1 (NStr s)
 
 deltaInfo :: SourcePos -> (Text, Int, Int)
-deltaInfo (SourcePos fp l c) = (pack fp, unPos l, unPos c)
+deltaInfo (SourcePos fp l c) = (toText fp, unPos l, unPos c)
 
 nNull :: NExprLoc
 nNull = Fix (Compose (Ann nullSpan (NConstant NNull)))

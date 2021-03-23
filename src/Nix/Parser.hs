@@ -71,7 +71,6 @@ import qualified Data.List.NonEmpty            as NE
 import qualified Data.Map                      as Map
 import           Data.Text                      ( cons
                                                 , singleton
-                                                , pack
                                                 )
 import           Nix.Expr                hiding ( ($>) )
 import           Nix.Expr.Strings               ( escapeCodes
@@ -312,7 +311,7 @@ nixUri = lexeme $ annotateLocation1 $ try $ do
           || isDigit x
           || (`elem` ("%/?:@&=+$,-_.!~*'" :: String)) x
   pure $ NStr $ DoubleQuoted
-    [Plain $ pack $ start : protocol ++ ':' : address]
+    [Plain $ toText $ start : protocol ++ ':' : address]
 
 nixString' :: Parser (NString NExprLoc)
 nixString' = lexeme (doubleQuoted <+> indented <?> "string")
@@ -360,7 +359,7 @@ nixString' = lexeme (doubleQuoted <+> indented <?> "string")
     Antiquoted <$>
       (antiStart *> nixToplevelForm <* char '}')
         <+> Plain . singleton <$>
-          char '$' <+> esc <+> Plain . pack <$>
+          char '$' <+> esc <+> Plain . toText <$>
             some plainChar
    where
     plainChar =
@@ -624,7 +623,7 @@ opWithLoc name op f =
   do
     Ann ann _ <-
       annotateLocation $
-        {- dbg (unpack name) $ -}
+        {- dbg (toString name) $ -}
         operator name
 
     pure $ f (Ann ann op)

@@ -156,12 +156,12 @@ processResult h val = do
     (\case
       NVSet xs _ ->
         maybe
-          (errorWithoutStackTrace $ "Set does not contain key '" <> Text.unpack k <> "'")
+          (errorWithoutStackTrace $ toString $ "Set does not contain key '" <> k <> "'")
           (list
             h
             go
             ks
           )
           (M.lookup k xs)
-      _ -> errorWithoutStackTrace $ "Expected a set for selector '" <> Text.unpack k <> "', but got: " <> show v
+      _ -> errorWithoutStackTrace $ toString $ "Expected a set for selector '" <> k <> "', but got: " <> show v
     ) =<< demand v

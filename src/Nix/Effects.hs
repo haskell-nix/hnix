@@ -150,7 +150,7 @@ instance MonadExec IO where
     []            -> pure $ Left $ ErrorCall "exec: missing program"
     (prog : args) -> do
       (exitCode, out, _) <- liftIO $ readProcessWithExitCode prog args ""
-      let t    = T.strip (T.pack out)
+      let t    = T.strip (toText out)
       let emsg = "program[" <> prog <> "] args=" <> show args
       case exitCode of
         ExitSuccess ->
@@ -205,7 +205,7 @@ instance MonadInstantiate IO where
           either
             (\ e -> Left $ ErrorCall $ "Error parsing output of nix-instantiate: " <> show e)
             pure
-            (parseNixTextLoc (T.pack out))
+            (parseNixTextLoc (toText out))
         status -> Left $ ErrorCall $ "nix-instantiate failed: " <> show status <> ": " <> err
 
 deriving
@@ -243,10 +243,10 @@ class
 instance MonadEnv IO where
   getEnvVar            = Env.lookupEnv
 
-  getCurrentSystemOS   = pure $ T.pack System.Info.os
+  getCurrentSystemOS   = pure $ toText System.Info.os
 
   -- Invert the conversion done by GHC_CONVERT_CPU in GHC's aclocal.m4
-  getCurrentSystemArch = pure $ T.pack $ case System.Info.arch of
+  getCurrentSystemArch = pure $ toText $ case System.Info.arch of
     "i386" -> "i686"
     arch   -> arch
 
@@ -302,7 +302,7 @@ class
 
 instance MonadHttp IO where
   getURL url = do
-    let urlstr = T.unpack url
+    let urlstr = toString url
     traceM $ "fetching HTTP URL: " <> urlstr
     req     <- parseRequest urlstr
     manager <-
@@ -411,13 +411,13 @@ instance MonadStore IO where
           res <- Store.Remote.runStore $ Store.Remote.addToStore @'Store.SHA256 pathName path recursive (const False) repair
           parseStoreResult "addToStore" res >>= \case
             Left err -> pure $ Left err
-            Right storePath -> pure $ Right $ StorePath $ T.unpack $ T.decodeUtf8 $ Store.storePathToRawFilePath storePath
+            Right storePath -> pure $ Right $ StorePath $ toString $ T.decodeUtf8 $ Store.storePathToRawFilePath storePath
 
   addTextToStore' name text references repair = do
     res <- Store.Remote.runStore $ Store.Remote.addTextToStore name text references repair
     parseStoreResult "addTextToStore" res >>= \case
       Left err -> pure $ Left err
-      Right path -> pure $ Right $ StorePath $ T.unpack $ T.decodeUtf8 $ Store.storePathToRawFilePath path
+      Right path -> pure $ Right $ StorePath $ toString $ T.decodeUtf8 $ Store.storePathToRawFilePath path
 
 
 -- ** Functions
@@ -432,10 +432,10 @@ addTextToStore :: (Framed e m, MonadStore m) => StorePathName -> Text -> Store.S
 addTextToStore a b c d = either throwError pure =<< addTextToStore' a b c d
 
 addPath :: (Framed e m, MonadStore m) => FilePath -> m StorePath
-addPath p = either throwError pure =<< addToStore (T.pack $ takeFileName p) p True False
+addPath p = either throwError pure =<< addToStore (toText $ takeFileName p) p True False
 
 toFile_ :: (Framed e m, MonadStore m) => FilePath -> String -> m StorePath
-toFile_ p contents = addTextToStore (T.pack p) (T.pack contents) HS.empty False
+toFile_ p contents = addTextToStore (toText p) (toText contents) HS.empty False
 
 -- * misc
 

@@ -304,29 +304,27 @@ instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
 
 
 instance MonadLint e m => MonadEval (Symbolic m) m where
-  freeVariable var = symerr $ "Undefined variable '" <> Text.unpack var <> "'"
+  freeVariable var = symerr $ "Undefined variable '" <> toString var <> "'"
 
-  attrMissing ks Nothing = evalError @(Symbolic m) $ ErrorCall $ "Inheriting unknown attribute: " <> intercalate "." (fmap Text.unpack (NE.toList ks))
+  attrMissing ks Nothing = evalError @(Symbolic m) $ ErrorCall $ "Inheriting unknown attribute: " <> intercalate "." (fmap toString (NE.toList ks))
 
-  attrMissing ks (Just s) = evalError @(Symbolic m) $ ErrorCall $ "Could not look up attribute " <> intercalate "." (fmap Text.unpack (NE.toList ks)) <> " in " <> show s
+  attrMissing ks (Just s) = evalError @(Symbolic m) $ ErrorCall $ "Could not look up attribute " <> intercalate "." (fmap toString (NE.toList ks)) <> " in " <> show s
 
   evalCurPos = do
     f <- mkSymbolic [TPath]
     l <- mkSymbolic [TConstant [TInt]]
     c <- mkSymbolic [TConstant [TInt]]
-    mkSymbolic [TSet (pure (M.fromList (go f l c)))]
-   where
-    go f l c =
-      [(Text.pack "file", f), (Text.pack "line", l), (Text.pack "col", c)]
+    mkSymbolic [TSet (pure (M.fromList [("file", f), ("line", l), ("col", c)]))]
 
   evalConstant c = mkSymbolic [go c]
    where
-    go = \case
-      NURI   _ -> TStr
-      NInt   _ -> TConstant [TInt]
-      NFloat _ -> TConstant [TFloat]
-      NBool  _ -> TConstant [TBool]
-      NNull    -> TConstant [TNull]
+    go =
+      \case
+        NURI   _ -> TStr
+        NInt   _ -> TConstant [TInt]
+        NFloat _ -> TConstant [TFloat]
+        NBool  _ -> TConstant [TBool]
+        NNull    -> TConstant [TNull]
 
   evalString      = const $ mkSymbolic [TStr]
   evalLiteralPath = const $ mkSymbolic [TPath]

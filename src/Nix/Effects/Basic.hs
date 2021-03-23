@@ -157,7 +157,7 @@ findPathBy finder ls name = do
                       let pfx = stringIgnoreContext nsPfx in
                       bool
                         mempty
-                        (pure (Text.unpack pfx))
+                        (pure (toString pfx))
                         (not $ Text.null pfx)
                     _ -> mempty
             )
@@ -201,7 +201,7 @@ fetchTarball =
 
 {- jww (2018-04-11): This should be written using pipes in another module
     fetch :: Text -> Maybe (NThunk m) -> m (NValue t f m)
-    fetch uri msha = case takeExtension (Text.unpack uri) of
+    fetch uri msha = case takeExtension (toString uri) of
         ".tgz" -> undefined
         ".gz"  -> undefined
         ".bz2" -> undefined
@@ -213,7 +213,7 @@ fetchTarball =
 
   fetch :: Text -> Maybe (NValue t f m) -> m (NValue t f m)
   fetch uri Nothing =
-    nixInstantiateExpr $ "builtins.fetchTarball \"" <> Text.unpack uri <> "\""
+    nixInstantiateExpr $ "builtins.fetchTarball \"" <> toString uri <> "\""
   fetch url (Just t) =
       (\nv -> do
         nsSha <- fromValue nv
@@ -221,7 +221,7 @@ fetchTarball =
         let sha = stringIgnoreContext nsSha
 
         nixInstantiateExpr
-          $ "builtins.fetchTarball { " <> "url    = \"" <> Text.unpack url <> "\"; " <> "sha256 = \"" <> Text.unpack sha <> "\"; }"
+          $ "builtins.fetchTarball { " <> "url    = \"" <> toString url <> "\"; " <> "sha256 = \"" <> toString sha <> "\"; }"
       ) =<< demand t
 
 defaultFindPath :: MonadNix e t f m => [NValue t f m] -> FilePath -> m FilePath

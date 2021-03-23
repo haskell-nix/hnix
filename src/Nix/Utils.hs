@@ -131,14 +131,14 @@ data NixPathEntryType = PathEntryPath | PathEntryURI deriving (Show, Eq)
 -- | @NIX_PATH@ is colon-separated, but can also contain URLs, which have a colon
 -- (i.e. @https://...@)
 uriAwareSplit :: Text -> [(Text, NixPathEntryType)]
-uriAwareSplit = go where
-  go str = case Text.break (== ':') str of
+uriAwareSplit txt =
+  case Text.break (== ':') txt of
     (e1, e2)
       | Text.null e2                              -> [(e1, PathEntryPath)]
-      | Text.pack "://" `Text.isPrefixOf` e2      ->
-        let ((suffix, _) : path) = go (Text.drop 3 e2) in
-        (e1 <> Text.pack "://" <> suffix, PathEntryURI) : path
-      | otherwise                                 -> (e1, PathEntryPath) : go (Text.drop 1 e2)
+      | "://" `Text.isPrefixOf` e2      ->
+        let ((suffix, _) : path) = uriAwareSplit (Text.drop 3 e2) in
+        (e1 <> "://" <> suffix, PathEntryURI) : path
+      | otherwise                                 -> (e1, PathEntryPath) : uriAwareSplit (Text.drop 1 e2)
 
 alterF
   :: (Eq k, Hashable k, Functor f)

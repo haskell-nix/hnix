@@ -28,7 +28,6 @@ module Nix.Builtins
 where
 
 import           Prelude                 hiding ( traceM
-                                                , toString
                                                 , anyM
                                                 , allM
                                                 )
@@ -112,7 +111,7 @@ withNixContext mpath action =
     base            <- builtins
     opts :: Options <- asks $ view hasLens
     let
-      i = nvList $ nvStr . makeNixStringWithoutContext . Text.pack <$> include opts
+      i = nvList $ nvStr . makeNixStringWithoutContext . toText <$> include opts
 
     pushScope (M.singleton "__includes" i) $ pushScopes base $
       maybe
@@ -253,7 +252,7 @@ builtinsList = sequence
   , add2 Normal   "toFile"           toFile
   , add  Normal   "toJSON"           prim_toJSON
   , add  Normal   "toPath"           toPath
-  , add  TopLevel "toString"         toString
+  , add  TopLevel "toString"         toString_
   , add  Normal   "toXML"            toXML_
   , add2 TopLevel "trace"            trace_
   , add0 Normal   "true"             (pure $ nvConstant $ NBool True)
@@ -271,7 +270,7 @@ builtinsList = sequence
   arity2 f = ((Prim . pure) .) . f
 
   mkThunk :: Text -> m (NValue t f m) -> m (NValue t f m)
-  mkThunk n = defer . withFrame Info (ErrorCall $ "While calling builtin " <> Text.unpack n <> "\n")
+  mkThunk n = defer . withFrame Info (ErrorCall $ "While calling builtin " <> toString n <> "\n")
   wrap :: BuiltinType -> Text -> v -> Builtin v
   wrap t n f = Builtin t (n, f)
   mkBuiltin :: BuiltinType -> Text -> m (NValue t f m) -> m (Builtin (NValue t f m))
@@ -291,7 +290,7 @@ builtinsList = sequence
       -> m (NValue t f m)
       )
     -> m (Builtin (NValue t f m))
-  add  t n v = mkBuiltin t n (builtin (Text.unpack n) v)
+  add  t n v = mkBuiltin t n (builtin (toString n) v)
 
   add2
     :: BuiltinType
@@ -301,7 +300,7 @@ builtinsList = sequence
       -> m (NValue t f m)
       )
     -> m (Builtin (NValue t f m))
-  add2 t n v = mkBuiltin t n (builtin2 (Text.unpack n) v)
+  add2 t n v = mkBuiltin t n (builtin2 (toString n) v)
 
   add3
     :: BuiltinType
@@ -312,7 +311,7 @@ builtinsList = sequence
       -> m (NValue t f m)
       )
     -> m (Builtin (NValue t f m))
-  add3 t n v = mkBuiltin t n (builtin3 (Text.unpack n) v)
+  add3 t n v = mkBuiltin t n (builtin3 (toString n) v)
 
   add'
     :: forall a
@@ -321,7 +320,7 @@ builtinsList = sequence
     -> Text
     -> a
     -> m (Builtin (NValue t f m))
-  add' t n v = mkBuiltin t n (toBuiltin (Text.unpack n) v)
+  add' t n v = mkBuiltin t n (toBuiltin (toString n) v)
 
 
 -- * Primops
@@ -384,8 +383,8 @@ foldNixPath f z =
 
     foldrM go z $
       (fromInclude . stringIgnoreContext <$> dirs)
-      <> maybe mempty (uriAwareSplit . Text.pack) mPath
-      <> [ fromInclude $ Text.pack $ "nix=" <> dataDir <> "/nix/corepkgs" ]
+      <> maybe mempty (uriAwareSplit . toText) mPath
+      <> [ fromInclude $ toText $ "nix=" <> dataDir <> "/nix/corepkgs" ]
  where
   fromInclude x = (x, ) $
     bool
@@ -394,8 +393,8 @@ foldNixPath f z =
       ("://" `Text.isInfixOf` x)
   go (x, ty) rest =
     case Text.splitOn "=" x of
-      [p] -> f (Text.unpack p) mempty ty rest
-      [n, p] -> f (Text.unpack p) (pure (Text.unpack n)) ty rest
+      [p] -> f (toString p) mempty ty rest
+      [n, p] -> f (toString p) (pure (toString n)) ty rest
       _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " <> show x
 
 nixPath :: MonadNix e t f m => m (NValue t f m)
@@ -414,10 +413,10 @@ nixPath = fmap nvList $ flip foldNixPath mempty $
         )
       : rest
  where
-  mkNvStr = nvStr . makeNixStringWithoutContext . Text.pack
+  mkNvStr = nvStr . makeNixStringWithoutContext . toText
 
-toString :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-toString = toValue <=< coerceToString callFunc DontCopyToStore CoerceAny
+toString_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
+toString_ = toValue <=< coerceToString callFunc DontCopyToStore CoerceAny
 
 hasAttr
   :: forall e t f m
@@ -435,7 +434,7 @@ hasAttr x y =
 attrsetGet :: MonadNix e t f m => Text -> AttrSet (NValue t f m) -> m (NValue t f m)
 attrsetGet k s =
   maybe
-    (throwError $ ErrorCall $ "Attribute '" <> Text.unpack k <> "' required")
+    (throwError $ ErrorCall $ "Attribute '" <> toString k <> "' required")
     pure
     (M.lookup k s)
 
@@ -595,7 +594,7 @@ versionComponentToString :: VersionComponent -> Text
 versionComponentToString = \case
   VersionComponent_Pre      -> "pre"
   VersionComponent_String s -> s
-  VersionComponent_Number n -> Text.pack $ show n
+  VersionComponent_Number n -> show n
 
 -- | Based on https://github.com/NixOS/nix/blob/4ee4fda521137fed6af0446948b3877e0c5db803/src/libexpr/names.cc#L44
 versionComponentSeparators :: String
@@ -613,7 +612,7 @@ splitVersion s =
         let (digits, rest) = Text.span isDigit s
         in
         VersionComponent_Number
-            (fromMaybe (error $ "splitVersion: couldn't parse " <> show digits) $ readMaybe $ Text.unpack digits) : splitVersion rest
+            (fromMaybe (error $ "splitVersion: couldn't parse " <> show digits) $ readMaybe $ toString digits) : splitVersion rest
 
       | otherwise ->
         let
@@ -900,7 +899,7 @@ baseNameOf :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 baseNameOf x = do
   ns <- coerceToString callFunc DontCopyToStore CoerceStringy x
   pure $ nvStr $
-    modifyNixContents (Text.pack . takeFileName . Text.unpack) ns
+    modifyNixContents (toText . takeFileName . toString) ns
 
 bitAnd
   :: forall e t f m
@@ -953,7 +952,7 @@ dirOf nvdir =
     dir <- demand nvdir
 
     case dir of
-      NVStr ns -> pure $ nvStr $ modifyNixContents (Text.pack . takeDirectory . Text.unpack) ns
+      NVStr ns -> pure $ nvStr $ modifyNixContents (toText . takeDirectory . toString) ns
       NVPath path -> pure $ nvPath $ takeDirectory path
       v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " <> show v
 
@@ -1230,11 +1229,11 @@ toFile name s =
     s'    <- fromValue s
     mres  <-
       toFile_
-        (Text.unpack name')
-        (Text.unpack $ stringIgnoreContext s')
+        (toString name')
+        (toString $ stringIgnoreContext s')
 
     let
-      t  = Text.pack $ unStorePath mres
+      t  = toText $ unStorePath mres
       sc = StringContext t DirectPath
 
     toValue $ makeNixStringWithSingletonContext t sc
@@ -1249,7 +1248,7 @@ pathExists_ nvpath =
 
     case path of
       NVPath p  -> toValue =<< pathExists p
-      NVStr  ns -> toValue =<< pathExists (Text.unpack $ stringIgnoreContext ns)
+      NVStr  ns -> toValue =<< pathExists (toString $ stringIgnoreContext ns)
       _v -> throwError $ ErrorCall $ "builtins.pathExists: expected path, got " <> show _v
 
 hasKind
@@ -1316,7 +1315,7 @@ throw_ mnv =
   do
     ns <- coerceToString callFunc CopyToStore CoerceStringy mnv
 
-    throwError . ErrorCall . Text.unpack $ stringIgnoreContext ns
+    throwError . ErrorCall . toString $ stringIgnoreContext ns
 
 import_
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1358,12 +1357,12 @@ getEnv_ :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 getEnv_ v =
   do
     s <- fromStringNoContext =<< fromValue v
-    mres <- getEnvVar (Text.unpack s)
+    mres <- getEnvVar (toString s)
 
     toValue $ makeNixStringWithoutContext $
       maybe
         mempty
-        Text.pack mres
+        toText mres
 
 sort_
   :: MonadNix e t f m
@@ -1470,10 +1469,10 @@ hashString nsAlgo ns =
 
       case algo of
         --  2021-03-04: Pattern can not be taken-out because hashes represented as different types
-        "md5"    -> f (toText . mkHash @MD5.MD5)
-        "sha1"   -> f (toText . mkHash @SHA1.SHA1)
-        "sha256" -> f (toText . mkHash @SHA256.SHA256)
-        "sha512" -> f (toText . mkHash @SHA512.SHA512)
+        "md5"    -> f (show . mkHash @MD5.MD5)
+        "sha1"   -> f (show . mkHash @SHA1.SHA1)
+        "sha256" -> f (show . mkHash @SHA256.SHA256)
+        "sha512" -> f (show . mkHash @SHA512.SHA512)
 
         _ -> throwError $ ErrorCall $ "builtins.hashString: expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got " <> show algo
 
@@ -1482,35 +1481,36 @@ hashString nsAlgo ns =
         mkHash :: (Show a, HashAlgorithm a) => Text -> a
         mkHash s = hash (encodeUtf8 s)
 
-        toText :: (Show a, HashAlgorithm a) => a -> Text
-        toText h = Text.pack $ show h
-
 
 placeHolder :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-placeHolder = fromValue >=> fromStringNoContext >=> \t -> do
-  h <- runPrim
-    (hashString (makeNixStringWithoutContext "sha256")
-                (makeNixStringWithoutContext ("nix-output:" <> t))
-    )
-  toValue
-    $ makeNixStringWithoutContext
-    $ Text.cons '/'
-    $ Base32.encode
-    -- Please, stop Text -> Bytestring here after migration to Text
-    $ case Base16.decode (bytes h) of -- The result coming out of hashString is base16 encoded
+placeHolder p =
+  do
+    t <- fromStringNoContext =<< fromValue p
+    h <-
+      runPrim
+        (hashString
+          (makeNixStringWithoutContext "sha256"           )
+          (makeNixStringWithoutContext ("nix-output:" <> t))
+        )
+    toValue
+      $ makeNixStringWithoutContext
+      $ Text.cons '/'
+      $ Base32.encode
+      -- Please, stop Text -> Bytestring here after migration to Text
+      $ case Base16.decode (bytes h) of -- The result coming out of hashString is base16 encoded
 #if MIN_VERSION_base16_bytestring(1,0,0)
-      -- Please, stop Text -> String here after migration to Text
-      Right d -> d
-      Left e -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nThe Left fail content: '" <> show e <> "'."
+        -- Please, stop Text -> String here after migration to Text
+        Left e -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nThe Left fail content: '" <> show e <> "'."
+        Right d -> d
 #else
-      (d, "") -> d
-      (_, e) -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nUndecodable remainder: '" <> show e <> "'."
+        (d, "") -> d
+        (_, e) -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nUndecodable remainder: '" <> show e <> "'."
 #endif
-   where
-    bytes :: NixString -> ByteString
-    bytes = encodeUtf8 . body
+    where
+      bytes :: NixString -> ByteString
+      bytes = encodeUtf8 . body
 
-    body h = stringIgnoreContext h
+      body h = stringIgnoreContext h
 
 absolutePathFromValue :: MonadNix e t f m => NValue t f m -> m FilePath
 absolutePathFromValue =
@@ -1518,7 +1518,7 @@ absolutePathFromValue =
     NVStr ns ->
       do
         let
-          path = Text.unpack $ stringIgnoreContext ns
+          path = toString $ stringIgnoreContext ns
 
         unless (isAbsolute path) $ throwError $ ErrorCall $ "string " <> show path <> " doesn't represent an absolute path"
         pure path
@@ -1543,7 +1543,7 @@ findFile_ nvaset nvfilepath =
     case (aset, filePath) of
       (NVList x, NVStr ns) ->
         do
-          mres <- findPath @t @f @m x (Text.unpack (stringIgnoreContext ns))
+          mres <- findPath @t @f @m x (toString (stringIgnoreContext ns))
 
           pure $ nvPath mres
 
@@ -1586,7 +1586,7 @@ readDir_ nvpath =
                 | isSymbolicLink s -> FileTypeSymlink
                 | otherwise        -> FileTypeUnknown
 
-          pure (Text.pack item, t)
+          pure (toText item, t)
 
     itemsWithTypes <-
       traverse
@@ -1675,7 +1675,7 @@ trace_
   -> m (NValue t f m)
 trace_ msg action =
   do
-    traceEffect @t @f @m . Text.unpack . stringIgnoreContext =<< fromValue msg
+    traceEffect @t @f @m . toString . stringIgnoreContext =<< fromValue msg
     pure action
 
 -- Please, can function remember fail context
@@ -1695,7 +1695,7 @@ exec_ xs = do
   -- 2018-11-19: NOTE: Still need to do something with the context here
   -- See prim_exec in nix/src/libexpr/primops.cc
   -- Requires the implementation of EvalState::realiseContext
-  exec (fmap (Text.unpack . stringIgnoreContext) xs)
+  exec (fmap (toString . stringIgnoreContext) xs)
 
 fetchurl
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)

@@ -113,11 +113,7 @@ assertParseFail opts file = do
         (\ expr ->
           do
             _ <- pure $! runST $ void $ lint opts expr
-            assertFailure $
-              "Unexpected success parsing `"
-              <> file
-              <> ":\nParsed value: "
-              <> show expr
+            assertFailure $ "Unexpected success parsing `" <> file <> ":\nParsed value: " <> show expr
         )
         eres
       )
@@ -127,7 +123,7 @@ assertLangOk :: Options -> FilePath -> Assertion
 assertLangOk opts file = do
   actual   <- printNix <$> hnixEvalFile opts (file <> ".nix")
   expected <- Text.readFile $ file <> ".exp"
-  assertEqual "" expected $ Text.pack (actual <> "\n")
+  assertEqual "" expected $ toText (actual <> "\n")
 
 assertLangOkXml :: Options -> FilePath -> Assertion
 assertLangOkXml opts file = do
@@ -156,14 +152,9 @@ assertEval _opts files = do
           Opts.execParserPure
             Opts.defaultPrefs
             (nixOptionsInfo time)
-            (fixup (fmap Text.unpack (Text.splitOn " " flags')))
+            (fixup (fmap toString (Text.splitOn " " flags')))
         of
-          Opts.Failure err ->
-            errorWithoutStackTrace
-              $  "Error parsing flags from "
-              <> name
-              <> ".flags: "
-              <> show err
+          Opts.Failure err   -> errorWithoutStackTrace $ "Error parsing flags from " <> name <> ".flags: " <> show err
           Opts.Success opts' -> assertLangOk opts' name
           Opts.CompletionInvoked _ -> fail "unused"
     _ -> assertFailure $ "Unknown test type " <> show files
@@ -180,9 +171,9 @@ assertEvalFail :: FilePath -> Assertion
 assertEvalFail file = catch ?? (\(_ :: SomeException) -> pure ()) $ do
   time       <- liftIO getCurrentTime
   evalResult <- printNix <$> hnixEvalFile (defaultOptions time) file
-  evalResult
-    `seq` assertFailure
-    $     file
-    <>    " should not evaluate.\nThe evaluation result was `"
-    <>    evalResult
-    <>    "`."
+  evalResult `seq`
+    assertFailure $
+      file
+      <> " should not evaluate.\nThe evaluation result was `"
+      <> evalResult
+      <> "`."

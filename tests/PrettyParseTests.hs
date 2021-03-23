@@ -15,8 +15,6 @@ import           Data.Char
 import           Data.Fix
 import qualified Data.List.NonEmpty            as NE
 import qualified Data.String                   as String
-import           Data.Text                      ( pack
-                                                )
 import           Hedgehog
 import qualified Hedgehog.Gen                  as Gen
 import qualified Hedgehog.Range                as Range
@@ -34,7 +32,7 @@ asciiString :: MonadGen m => m String
 asciiString = Gen.list (Range.linear 1 15) Gen.lower
 
 asciiText :: Gen Text
-asciiText = pack <$> asciiString
+asciiText = toText <$> asciiString
 
 -- Might want to replace this instance with a constant value
 genPos :: Gen Pos
@@ -183,11 +181,11 @@ normalize = foldFix $ \case
 prop_prettyparse :: Monad m => NExpr -> PropertyT m ()
 prop_prettyparse p = do
   let prog = show (prettyNix p)
-  case parse (pack prog) of
+  case parse (toText prog) of
     Left s -> do
       footnote $ show $ vsep
         -- Remove :: Text type annotation after String -> Text migration.
-        [fillSep ["Parse failed:", pretty ((show s) :: Text)], indent 2 (prettyNix p)]
+        [fillSep ["Parse failed:", pretty (show s :: Text)], indent 2 (prettyNix p)]
       discard
     Right v
       | equivUpToNormalization p v -> success

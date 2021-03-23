@@ -25,13 +25,13 @@ quoteExprExp s = do
     either
       (fail . show)
       pure
-      (parseNixText (Text.pack s))
+      (parseNixText $ toText s)
   dataToExpQ
     (const Nothing `extQ` metaExp (freeVars expr) `extQ` (pure . liftText))
     expr
  where
   liftText :: Text.Text -> Q Exp
-  liftText txt = AppE (VarE 'Text.pack) <$> liftString (Text.unpack txt)
+  liftText txt = AppE (VarE 'toText) <$> liftString (toString txt)
 
 quoteExprPat :: String -> PatQ
 quoteExprPat s = do
@@ -39,7 +39,7 @@ quoteExprPat s = do
     either
       (fail . show)
       pure
-      (parseNixText (Text.pack s))
+      (parseNixText $ toText s)
   dataToPatQ
     (const Nothing `extQ` metaPat (freeVars expr))
     expr
@@ -122,12 +122,12 @@ instance ToExpr Float where
 
 metaExp :: Set VarName -> NExprLoc -> Maybe ExpQ
 metaExp fvs (Fix (NSym_ _ x)) | x `Set.member` fvs =
-  pure [| toExpr $(varE (mkName (Text.unpack x))) |]
+  pure [| toExpr $(varE (mkName $ toString x)) |]
 metaExp _ _ = Nothing
 
 metaPat :: Set VarName -> NExprLoc -> Maybe PatQ
 metaPat fvs (Fix (NSym_ _ x)) | x `Set.member` fvs =
-  pure (varP (mkName (Text.unpack x)))
+  pure (varP (mkName $ toString x))
 metaPat _ _ = Nothing
 
 nix :: QuasiQuoter

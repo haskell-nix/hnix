@@ -6,7 +6,6 @@ module Nix.String.Coerce where
 
 import           Control.Monad.Catch            ( MonadThrow )
 import qualified Data.HashMap.Lazy             as M
-import qualified Data.Text                     as Text
 import           Nix.Atoms
 import           Nix.Effects
 import           Nix.Frames
@@ -51,39 +50,74 @@ coerceToString
 coerceToString call ctsm clevel = go
  where
   go x =
-    (\case
-      NVConstant (NBool b)
-        |
+    do
+      x' <- demand x
+      bool
+        (coerceStringy x')
+        (coerceAny x')
+        (clevel == CoerceAny)
+     where
+
+      coerceAny x' =
+        case x' of
           -- TODO Return a singleton for "" and "1"
-          b && clevel == CoerceAny -> pure
-        $  makeNixStringWithoutContext "1"
-        | clevel == CoerceAny -> pure $ makeNixStringWithoutContext ""
-      NVConstant (NInt n) | clevel == CoerceAny ->
-        pure $ makeNixStringWithoutContext $ Text.pack $ show n
-      NVConstant (NFloat n) | clevel == CoerceAny ->
-        pure $ makeNixStringWithoutContext $ Text.pack $ show n
-      NVConstant NNull | clevel == CoerceAny ->
-        pure $ makeNixStringWithoutContext ""
-      NVStr ns -> pure ns
-      NVPath p
-        | ctsm == CopyToStore -> storePathToNixString <$> addPath p
-        | otherwise -> pure $ makeNixStringWithoutContext $ Text.pack p
-      NVList l | clevel == CoerceAny ->
-        nixStringUnwords <$> traverse (go <=< demand) l
+          NVConstant (NBool b) ->
+            castToNixString $
+              bool
+                ""
+                "1"
+                b
+          NVConstant (NInt n) ->
+            castToNixString $
+              show n
+          NVConstant (NFloat n) ->
+            castToNixString $
+              show n
+          NVConstant NNull ->
+            castToNixString ""
+          -- NVConstant: NAtom (NURI Text) is not matched
+          NVList l ->
+            nixStringUnwords <$> traverse (go <=< demand) l
+          v -> coerceStringy v
 
-      v@(NVSet s _) | Just p <- M.lookup "__toString" s ->
-        (go <=< (`call` v)) =<< demand p
+      coerceStringy x' =
+        case x' of
+          NVStr ns -> pure ns
+          NVPath p ->
+            bool
+              (castToNixString . toText)
+              (fmap storePathToNixString . addPath)
+              (ctsm == CopyToStore)
+              p
+          v@(NVSet s _) ->
+            maybe
+              (maybe
+                (err v)
+                (gosw False)
+                (M.lookup "outPath" s)
+              )
+              (gosw True)
+              (M.lookup "__toString" s)
+           where
+            gosw b p =
+              do
+                p' <- demand p
+                bool
+                  go
+                  (go <=< (`call` v))
+                  b
+                  p'
 
-      NVSet s _ | Just p <- M.lookup "outPath" s -> go =<< demand p
+          v -> err v
+      err v = throwError $ ErrorCall $ "Expected a string, but saw: " <> show v
+      castToNixString = pure . makeNixStringWithoutContext
 
-      v -> throwError $ ErrorCall $ "Expected a string, but saw: " <> show v
-    ) =<< demand x
+  nixStringUnwords = intercalateNixString (makeNixStringWithoutContext " ")
 
-  nixStringUnwords =
-    intercalateNixString (makeNixStringWithoutContext " ")
   storePathToNixString :: StorePath -> NixString
   storePathToNixString sp = makeNixStringWithSingletonContext
     t
     (StringContext t DirectPath)
-    where t = Text.pack $ unStorePath sp
+   where
+    t = toText $ unStorePath sp
 

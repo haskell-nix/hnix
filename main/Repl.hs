@@ -116,7 +116,7 @@ main' iniVal =
               optMatcher command options arguments
           x -> cmd $ String.unwords x
         )
-        (String.words . Text.unpack <$> Text.lines f)
+        (String.words . toString <$> Text.lines f)
 
   handleMissing e
     | Error.isDoesNotExistError e = pure ""
@@ -180,8 +180,8 @@ initState mIni = do
     evalText :: (MonadNix e t f m) => Text -> m (NValue t f m)
     evalText expr =
       either
-        (\ e -> fail $ "Impossible happened: Unable to parse expression - '" <> Text.unpack expr <> "' fail was " <> show e)
-        (\ e -> do evalExprLoc e)
+        (\ e -> fail $ toString $ "Impossible happened: Unable to parse expression - '" <> expr <> "' fail was " <> show e)
+        evalExprLoc
         (parseNixTextLoc expr)
 
 type Repl e t f m = HaskelineT (StateT (IState t f m) m)
@@ -261,7 +261,7 @@ cmd
   -> Repl e t f m ()
 cmd source =
   do
-    mVal <- exec True (Text.pack source)
+    mVal <- exec True $ toText source
     maybe
       (pure ())
       printValue
@@ -288,7 +288,7 @@ browse :: (MonadNix e t f m, MonadIO m)
 browse _ = do
   st <- get
   for_ (Data.HashMap.Lazy.toList $ replCtx st) $ \(k, v) -> do
-    liftIO $ putStr $ Text.unpack $ k <> " = "
+    liftIO $ putStr $ toString $ k <> " = "
     printValue v
 
 -- | @:load@ command
@@ -321,7 +321,7 @@ typeof args = do
   traverse_ printValueType mVal
 
  where
-  line = Text.pack args
+  line = toText args
   printValueType val =
     do
       s <- lift . lift . showValueType $ val
@@ -380,7 +380,7 @@ completeFunc reversedPrev word
     listFiles word
 
   -- Attributes of sets in REPL context
-  | var : subFields <- Text.split (== '.') (Text.pack word) , not $ null subFields =
+  | var : subFields <- Text.split (== '.') (toText word) , not $ null subFields =
     do
       s <- get
       maybe
@@ -388,7 +388,7 @@ completeFunc reversedPrev word
         (\ binding ->
           do
             candidates <- lift $ algebraicComplete subFields binding
-            pure $ notFinished <$> listCompletion (Text.unpack . (var <>) <$> candidates)
+            pure $ notFinished <$> listCompletion (toString . (var <>) <$> candidates)
         )
         (Data.HashMap.Lazy.lookup var (replCtx s))
 
@@ -402,8 +402,8 @@ completeFunc reversedPrev word
 
       pure $ listCompletion
         $ ["__includes"]
-        <> (Text.unpack <$> contextKeys)
-        <> (Text.unpack <$> shortBuiltins)
+        <> (toString <$> contextKeys)
+        <> (toString <$> shortBuiltins)
 
   where
     listCompletion = fmap simpleCompletion . filter (word `List.isPrefixOf`)
