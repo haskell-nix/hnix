@@ -27,19 +27,9 @@ module Nix.Builtins
   )
 where
 
-import           Prelude                 hiding ( traceM
-                                                , anyM
-                                                , allM
-                                                )
+import           Prelude                 hiding ( traceM )
 import           Relude.Unsafe                 as Unsafe
-import           Relude.Extra                   ( view )
-import           Nix.Utils                      ( AttrSet
-                                                , Has(hasLens)
-                                                , NixPathEntryType (PathEntryPath, PathEntryURI)
-                                                , uriAwareSplit
-                                                , list
-                                                , traceM
-                                                )
+import           Nix.Utils
 import           Control.Comonad                ( Comonad )
 import           Control.Monad                  ( foldM )
 import           Control.Monad.Catch            ( MonadCatch(catch) )
@@ -81,11 +71,10 @@ import           Nix.Frames
 import           Nix.Json
 import           Nix.Normal
 import           Nix.Options
-import           Nix.Parser              hiding ( nixPath )
+import           Nix.Parser
 import           Nix.Render
 import           Nix.Scope
-import qualified Nix.String                    as NixString
-import           Nix.String              hiding ( getContext )
+import           Nix.String
 import           Nix.String.Coerce
 import           Nix.Value
 import           Nix.Value.Equal
@@ -529,35 +518,36 @@ divNix nvX nvY =
       (NVConstant (NFloat x), NVConstant (NFloat y)) | y /= 0 -> toValue $                     x / y
       (_x                   , _y                   )         -> throwError $ Division _x _y
 
-anyM :: Monad m => (a -> m Bool) -> [a] -> m Bool
-anyM _ []       = pure False
-anyM p (x : xs) =
-  bool
-    (anyM p xs)
-    (pure True)
-    =<< p x
-
 anyNix
   :: MonadNix e t f m
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-anyNix f = toValue <=< anyM fromValue <=< traverse (callFunc f) <=< fromValue
+anyNix f = toValue <=< anyMNix fromValue <=< traverse (callFunc f) <=< fromValue
+ where
+  anyMNix :: Monad m => (a -> m Bool) -> [a] -> m Bool
+  anyMNix _ []       = pure False
+  anyMNix p (x : xs) =
+    bool
+      (anyMNix p xs)
+      (pure True)
+      =<< p x
 
-allM :: Monad m => (a -> m Bool) -> [a] -> m Bool
-allM _ []       = pure True
-allM p (x : xs) =
-  bool
-    (pure False)
-    (allM p xs)
-    =<< p x
 
 allNix
   :: MonadNix e t f m
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-allNix f = toValue <=< allM fromValue <=< traverse (callFunc f) <=< fromValue
+allNix f = toValue <=< allMNix fromValue <=< traverse (callFunc f) <=< fromValue
+ where
+  allMNix :: Monad m => (a -> m Bool) -> [a] -> m Bool
+  allMNix _ []       = pure True
+  allMNix p (x : xs) =
+    bool
+      (pure False)
+      (allMNix p xs)
+      =<< p x
 
 foldl'Nix
   :: forall e t f m
@@ -585,16 +575,16 @@ tailNix =
     <=< fromValue
 
 data VersionComponent
-  = VersionComponent_Pre -- ^ The string "pre"
-  | VersionComponent_String Text -- ^ A string other than "pre"
-  | VersionComponent_Number Integer -- ^ A number
+  = VersionComponentPre -- ^ The string "pre"
+  | VersionComponentString Text -- ^ A string other than "pre"
+  | VersionComponentNumber Integer -- ^ A number
   deriving (Show, Read, Eq, Ord)
 
 versionComponentToString :: VersionComponent -> Text
 versionComponentToString = \case
-  VersionComponent_Pre      -> "pre"
-  VersionComponent_String s -> s
-  VersionComponent_Number n -> show n
+  VersionComponentPre      -> "pre"
+  VersionComponentString s -> s
+  VersionComponentNumber n -> show n
 
 -- | Based on https://github.com/NixOS/nix/blob/4ee4fda521137fed6af0446948b3877e0c5db803/src/libexpr/names.cc#L44
 versionComponentSeparators :: String
@@ -611,7 +601,7 @@ splitVersion s =
       | isDigit h ->
         let (digits, rest) = Text.span isDigit s
         in
-        VersionComponent_Number
+        VersionComponentNumber
             (fromMaybe (error $ "splitVersion: couldn't parse " <> show digits) $ readMaybe $ toString digits) : splitVersion rest
 
       | otherwise ->
@@ -622,8 +612,8 @@ splitVersion s =
               s
           thisComponent =
             case chars of
-              "pre" -> VersionComponent_Pre
-              x     -> VersionComponent_String x
+              "pre" -> VersionComponentPre
+              x     -> VersionComponentString x
         in
         thisComponent : splitVersion rest
 
@@ -639,7 +629,7 @@ compareVersions :: Text -> Text -> Ordering
 compareVersions s1 s2 =
   mconcat $ alignWith f (splitVersion s1) (splitVersion s2)
  where
-  z = VersionComponent_String ""
+  z = VersionComponentString ""
   f = uncurry compare . fromThese z z
 
 compareVersionsNix
@@ -984,7 +974,15 @@ elemNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-elemNix x = toValue <=< anyM (valueEqM x) <=< fromValue
+elemNix x = toValue <=< anyMNix (valueEqM x) <=< fromValue
+ where
+  anyMNix :: Monad m => (a -> m Bool) -> [a] -> m Bool
+  anyMNix _ []       = pure False
+  anyMNix p (x : xs) =
+    bool
+      (anyMNix p xs)
+      (pure True)
+      =<< p x
 
 elemAt :: [a] -> Int -> Maybe a
 elemAt ls i =
@@ -1164,7 +1162,7 @@ replaceStringsNix tfrom tto ts =
           updatedCtx     = ctx <> replacementCtx
 
           replacement    = Builder.fromText $ stringIgnoreContext replacementNS
-          replacementCtx = NixString.getContext replacementNS
+          replacementCtx = getContext replacementNS
 
           -- The bug modifies the content => bug demands `pass` to be a real function =>
           -- `go` calls `pass` function && `pass` calls `go` function
@@ -1175,7 +1173,7 @@ replaceStringsNix tfrom tto ts =
               (\(c, i) -> go updatedCtx i (output <> Builder.singleton c)) -- If there are chars - pass one char & continue
               (Text.uncons input)  -- chip first char
 
-    toValue $ go (NixString.getContext string) (stringIgnoreContext string) mempty
+    toValue $ go (getContext string) (stringIgnoreContext string) mempty
 
 removeAttrsNix
   :: forall e t f m
@@ -1767,7 +1765,7 @@ getContextNix
 getContextNix =
   (\case
     (NVStr ns) -> do
-      let context = getNixLikeContext $ toNixLikeContext $ NixString.getContext ns
+      let context = getNixLikeContext $ toNixLikeContext $ getContext ns
       valued :: M.HashMap Text (NValue t f m) <- sequenceA $ M.map toValue context
       pure $ nvSet mempty valued
     x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: " <> show x) <=< demand
@@ -1842,7 +1840,7 @@ appendContextNix tx ty =
     $ M.unionWith (<>) newContextValues
     $ getNixLikeContext
     $ toNixLikeContext
-    $ NixString.getContext ns
+    $ getContext ns
 
 newtype Prim m a = Prim { runPrim :: m a }
 
