@@ -63,20 +63,6 @@ data Derivation = Derivation
   }
   deriving Show
 
-defaultDerivation :: Derivation
-defaultDerivation = Derivation
-  { name        = undefined
-  , outputs     = mempty
-  , inputs      = (mempty, mempty)
-  , platform    = undefined
-  , builder     = undefined
-  , args        = mempty
-  , env         = mempty
-  , mFixed      = Nothing
-  , hashMode    = Flat
-  , useJson     = False
-  }
-
 data HashMode = Flat | Recursive
   deriving (Show, Eq)
 
@@ -337,10 +323,11 @@ buildDerivationWithContext drvAttrs = do
           traverse (lift . coerceToString callFunc CopyToStore CoerceAny >=> extractNixString) $
             Map.fromList $ M.toList $ deleteKeys [ "args", "__ignoreNulls" ] attrs
 
-      pure $ defaultDerivation { platform, builder, args, env,  hashMode, useJson
+      pure $ Derivation { platform, builder, args, env,  hashMode, useJson
         , name = drvName
         , outputs = Map.fromList $ fmap (, mempty) outputs
         , mFixed = mFixedOutput
+        , inputs = (mempty, mempty) -- stub for now
         }
   where
 
