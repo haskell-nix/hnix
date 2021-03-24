@@ -93,55 +93,9 @@ import           Text.Regex.TDFA
 -- This is a big module. There is recursive reuse:
 -- @builtins -> builtinsList -> scopedImport -> withNixContext -> builtins@.
 
--- * Exported
-
--- | Evaluate a nix expression in the default context
-withNixContext
-  :: forall e t f m r
-   . (MonadNix e t f m, Has e Options)
-  => Maybe FilePath
-  -> m r
-  -> m r
-withNixContext mpath action =
-  do
-    base            <- builtins
-    opts :: Options <- asks $ view hasLens
-    let
-      i = nvList $ nvStr . makeNixStringWithoutContext . toText <$> include opts
-
-    pushScope (M.singleton "__includes" i) $ pushScopes base $
-      maybe
-        action
-        (\ path ->
-          do
-            traceM $ "Setting __cur_file = " <> show path
-            let ref = nvPath path
-            pushScope (M.singleton "__cur_file" ref) action
-        )
-        mpath
-
-builtins
-  :: ( MonadNix e t f m
-     , Scoped (NValue t f m) m
-     )
-  => m (Scopes m (NValue t f m))
-builtins =
-  do
-    ref <- defer $ nvSet mempty <$> buildMap
-    lst <- ([("builtins", ref)] <>) <$> topLevelBuiltins
-    pushScope (M.fromList lst) currentScopes
- where
-  buildMap         =  fmap (M.fromList . fmap mapping) builtinsList
-  topLevelBuiltins = (fmap . fmap) mapping fullBuiltinsList
-
-  fullBuiltinsList = (fmap . fmap) go builtinsList
-   where
-    go b@(Builtin TopLevel _) = b
-    go (Builtin Normal (name, builtin)) =
-      Builtin TopLevel ("__" <> name, builtin)
-
-
 -- * Internal
+
+-- ** Nix Builtins Haskell type level
 
 newtype Prim m a = Prim { runPrim :: m a }
 
@@ -152,216 +106,58 @@ data Builtin v =
     , mapping :: (Text, v)
     }
 
+-- *** @class ToBuiltin@ and its instances
 
--- ** @builtinsList@
+-- | Types that support conversion to nix in a particular monad
+class ToBuiltin t f m a | a -> m where
+  toBuiltin :: String -> a -> m (NValue t f m)
 
-builtinsList :: forall e t f m . MonadNix e t f m => m [Builtin (NValue t f m)]
-builtinsList = sequence
-  [ do
-      version <- toValue (makeNixStringWithoutContext "2.3")
-      pure $ Builtin Normal ("nixVersion", version)
-  , do
-      version <- toValue (5 :: Int)
-      pure $ Builtin Normal ("langVersion", version)
-
-  , add  TopLevel "abort"            throwNix -- for now
-  , add2 Normal   "add"              addNix
-  , add2 Normal   "addErrorContext"  addErrorContextNix
-  , add2 Normal   "all"              allNix
-  , add2 Normal   "any"              anyNix
-  , add2 Normal   "appendContext"    appendContextNix
-  , add  Normal   "attrNames"        attrNamesNix
-  , add  Normal   "attrValues"       attrValuesNix
-  , add  TopLevel "baseNameOf"       baseNameOfNix
-  , add2 Normal   "bitAnd"           bitAndNix
-  , add2 Normal   "bitOr"            bitOrNix
-  , add2 Normal   "bitXor"           bitXorNix
-  , add0 Normal   "builtins"         builtinsBuiltinNix
-  , add2 Normal   "catAttrs"         catAttrsNix
-  , add2 Normal   "compareVersions"  compareVersionsNix
-  , add  Normal   "concatLists"      concatListsNix
-  , add2 Normal   "concatMap"        concatMapNix
-  , add' Normal   "concatStringsSep" (arity2 intercalateNixString)
-  , add0 Normal   "currentSystem"    currentSystemNix
-  , add0 Normal   "currentTime"      currentTimeNix
-  , add2 Normal   "deepSeq"          deepSeqNix
-  , add0 TopLevel "derivation"       derivationNix
-  , add  TopLevel "derivationStrict" derivationStrictNix
-  , add  TopLevel "dirOf"            dirOfNix
-  , add2 Normal   "div"              divNix
-  , add2 Normal   "elem"             elemNix
-  , add2 Normal   "elemAt"           elemAtNix
-  , add  Normal   "exec"             execNix
-  , add0 Normal   "false"            (pure $ nvConstant $ NBool False)
-  --, add  Normal   "fetchGit"         fetchGit
-  --, add  Normal   "fetchMercurial"   fetchMercurial
-  , add  Normal   "fetchTarball"     fetchTarball
-  , add  Normal   "fetchurl"         fetchurlNix
-  , add2 Normal   "filter"           filterNix
-  --, add  Normal   "filterSource"     filterSource
-  , add2 Normal   "findFile"         findFileNix
-  , add3 Normal   "foldl'"           foldl'Nix
-  , add  Normal   "fromJSON"         fromJSONNix
-  --, add  Normal   "fromTOML"         fromTOML
-  , add  Normal   "functionArgs"     functionArgsNix
-  , add  Normal   "genericClosure"   genericClosureNix
-  , add2 Normal   "genList"          genListNix
-  , add2 Normal   "getAttr"          getAttrNix
-  , add  Normal   "getContext"       getContextNix
-  , add  Normal   "getEnv"           getEnvNix
-  , add2 Normal   "hasAttr"          hasAttrNix
-  , add  Normal   "hasContext"       hasContextNix
-  , add' Normal   "hashString"       (hashStringNix @e @t @f @m)
-  , add  Normal   "head"             headNix
-  , add  TopLevel "import"           importNix
-  , add2 Normal   "intersectAttrs"   intersectAttrsNix
-  , add  Normal   "isAttrs"          isAttrsNix
-  , add  Normal   "isBool"           isBoolNix
-  , add  Normal   "isFloat"          isFloatNix
-  , add  Normal   "isFunction"       isFunctionNix
-  , add  Normal   "isInt"            isIntNix
-  , add  Normal   "isList"           isListNix
-  , add  TopLevel "isNull"           isNullNix
-  , add  Normal   "isString"         isStringNix
-  , add  Normal   "length"           lengthNix
-  , add2 Normal   "lessThan"         lessThanNix
-  , add  Normal   "listToAttrs"      listToAttrsNix
-  , add2 TopLevel "map"              mapNix
-  , add2 TopLevel "mapAttrs"         mapAttrsNix
-  , add2 Normal   "match"            matchNix
-  , add2 Normal   "mul"              mulNix
-  , add0 Normal   "nixPath"          nixPathNix
-  , add0 Normal   "null"             (pure $ nvConstant NNull)
-  , add  Normal   "parseDrvName"     parseDrvNameNix
-  , add2 Normal   "partition"        partitionNix
-  --, add  Normal   "path"             path
-  , add  Normal   "pathExists"       pathExistsNix
-  , add  TopLevel "placeholder"      placeHolderNix
-  , add  Normal   "readDir"          readDirNix
-  , add  Normal   "readFile"         readFileNix
-  , add2 TopLevel "removeAttrs"      removeAttrsNix
-  , add3 Normal   "replaceStrings"   replaceStringsNix
-  , add2 TopLevel "scopedImport"     scopedImportNix
-  , add2 Normal   "seq"              seqNix
-  , add2 Normal   "sort"             sortNix
-  , add2 Normal   "split"            splitNix
-  , add  Normal   "splitVersion"     splitVersionNix
-  , add0 Normal   "storeDir"         (pure $ nvStr $ makeNixStringWithoutContext "/nix/store")
-  --, add  Normal   "storePath"        storePath
-  , add' Normal   "stringLength"     (arity1 $ Text.length . stringIgnoreContext)
-  , add' Normal   "sub"              (arity2 ((-) @Integer))
-  , add' Normal   "substring"        substringNix
-  , add  Normal   "tail"             tailNix
-  , add  TopLevel "throw"            throwNix
-  , add2 Normal   "toFile"           toFileNix
-  , add  Normal   "toJSON"           toJSONNix
-  , add  Normal   "toPath"           toPathNix
-  , add  TopLevel "toString"         toStringNix
-  , add  Normal   "toXML"            toXMLNix
-  , add2 TopLevel "trace"            traceNix
-  , add0 Normal   "true"             (pure $ nvConstant $ NBool True)
-  , add  Normal   "tryEval"          tryEvalNix
-  , add  Normal   "typeOf"           typeOfNix
-  --, add0 Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependency
-  , add  Normal   "unsafeDiscardStringContext"    unsafeDiscardStringContextNix
-  , add2 Normal   "unsafeGetAttrPos"              unsafeGetAttrPosNix
-  , add  Normal   "valueSize"        getRecursiveSizeNix
-  ]
- where
-  arity1 :: forall a b. (a -> b) -> (a -> Prim m b)
-  arity1 f = Prim . pure . f
-  arity2 :: forall a b c. (a -> b -> c) -> (a -> b -> Prim m c)
-  arity2 f = ((Prim . pure) .) . f
-
-  mkThunk :: Text -> m (NValue t f m) -> m (NValue t f m)
-  mkThunk n = defer . withFrame Info (ErrorCall $ "While calling builtin " <> toString n <> "\n")
-  wrap :: BuiltinType -> Text -> v -> Builtin v
-  wrap t n f = Builtin t (n, f)
-  mkBuiltin :: BuiltinType -> Text -> m (NValue t f m) -> m (Builtin (NValue t f m))
-  mkBuiltin t n v = wrap t n <$> mkThunk n v
-
-  add0
-    :: BuiltinType
-    -> Text
-    -> m (NValue t f m)
-    -> m (Builtin (NValue t f m))
-  add0 t n v = mkBuiltin t n v
-
-  add
-    :: BuiltinType
-    -> Text
-    -> ( NValue t f m
-      -> m (NValue t f m)
-      )
-    -> m (Builtin (NValue t f m))
-  add  t n v = mkBuiltin t n (builtin (toString n) v)
-
-  add2
-    :: BuiltinType
-    -> Text
-    -> ( NValue t f m
-      -> NValue t f m
-      -> m (NValue t f m)
-      )
-    -> m (Builtin (NValue t f m))
-  add2 t n v = mkBuiltin t n (builtin2 (toString n) v)
-
-  add3
-    :: BuiltinType
-    -> Text
-    -> ( NValue t f m
-      -> NValue t f m
-      -> NValue t f m
-      -> m (NValue t f m)
-      )
-    -> m (Builtin (NValue t f m))
-  add3 t n v = mkBuiltin t n (builtin3 (toString n) v)
-
-  add'
-    :: forall a
-    . ToBuiltin t f m a
-    => BuiltinType
-    -> Text
-    -> a
-    -> m (Builtin (NValue t f m))
-  add' t n v = mkBuiltin t n (toBuiltin (toString n) v)
-
-
--- ** Builtin functions
-
-derivationNix
-  :: forall e t f m. (MonadNix e t f m, Scoped (NValue t f m) m)
-  => m (NValue t f m)
-derivationNix = foldFix Eval.eval $$(do
-    -- This is compiled in so that we only parse it once at compile-time.
-    let Right expr = parseNixText [text|
-      drvAttrs @ { outputs ? [ "out" ], ... }:
-
-      let
-
-        strict = derivationStrict drvAttrs;
-
-        commonAttrs = drvAttrs
-          // (builtins.listToAttrs outputsList)
-          // { all = map (x: x.value) outputsList;
-               inherit drvAttrs;
-             };
-
-        outputToAttrListElement = outputName:
-          { name = outputName;
-            value = commonAttrs // {
-              outPath = builtins.getAttr outputName strict;
-              drvPath = strict.drvPath;
-              type = "derivation";
-              inherit outputName;
-            };
-          };
-
-        outputsList = map outputToAttrListElement outputs;
-
-      in (builtins.head outputsList).value|]
-    [|| expr ||]
+instance
+  ( MonadNix e t f m
+  , ToValue a m (NValue t f m)
   )
+  => ToBuiltin t f m (Prim m a) where
+  toBuiltin _ p = toValue =<< runPrim p
+
+instance
+  ( MonadNix e t f m
+  , FromValue a m (Deeper (NValue t f m))
+  , ToBuiltin t f m b
+  )
+  => ToBuiltin t f m (a -> b) where
+  toBuiltin name f =
+    pure $ nvBuiltin name (toBuiltin name . f <=< fromValue . Deeper)
+
+-- *** @WValue@ closure wrapper to have @Ord@
+
+-- We wrap values solely to provide an Ord instance for genericClosure
+newtype WValue t f m = WValue (NValue t f m)
+
+instance Comonad f => Eq (WValue t f m) where
+  WValue (NVConstant (NFloat x)) == WValue (NVConstant (NInt y)) =
+    x == fromInteger y
+  WValue (NVConstant (NInt   x)) == WValue (NVConstant (NFloat y)) =
+    fromInteger x == y
+  WValue (NVConstant (NInt   x)) == WValue (NVConstant (NInt   y)) = x == y
+  WValue (NVConstant (NFloat x)) == WValue (NVConstant (NFloat y)) = x == y
+  WValue (NVPath     x         ) == WValue (NVPath     y         ) = x == y
+  WValue (NVStr x) == WValue (NVStr y) =
+    stringIgnoreContext x == stringIgnoreContext y
+  _ == _ = False
+
+instance Comonad f => Ord (WValue t f m) where
+  WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NInt y)) =
+    x <= fromInteger y
+  WValue (NVConstant (NInt   x)) <= WValue (NVConstant (NFloat y)) =
+    fromInteger x <= y
+  WValue (NVConstant (NInt   x)) <= WValue (NVConstant (NInt   y)) = x <= y
+  WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NFloat y)) = x <= y
+  WValue (NVPath     x         ) <= WValue (NVPath     y         ) = x <= y
+  WValue (NVStr x) <= WValue (NVStr y) =
+    stringIgnoreContext x <= stringIgnoreContext y
+  _ <= _ = False
+
+-- ** Helpers
 
 foldNixPath
   :: forall e t f m r
@@ -406,21 +202,225 @@ foldNixPath z f =
       [n, p] -> f (toString p) (pure (toString n)) ty rest
       _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " <> show x
 
-nixPathNix :: MonadNix e t f m => m (NValue t f m)
-nixPathNix = fmap nvList $ foldNixPath mempty $
-  \p mn ty rest ->
-    pure $
-      nvSet
-        mempty
-        (M.fromList
-          [case ty of
-            PathEntryPath -> ("path", nvPath p)
-            PathEntryURI  -> ( "uri", mkNvStr p)
+attrsetGet :: MonadNix e t f m => Text -> AttrSet (NValue t f m) -> m (NValue t f m)
+attrsetGet k s =
+  maybe
+    (throwError $ ErrorCall $ "Attribute '" <> toString k <> "' required")
+    pure
+    (M.lookup k s)
 
-          , ( "prefix", mkNvStr $ fromMaybe "" mn)
-          ]
-        )
-      : rest
+data VersionComponent
+  = VersionComponentPre -- ^ The string "pre"
+  | VersionComponentString Text -- ^ A string other than "pre"
+  | VersionComponentNumber Integer -- ^ A number
+  deriving (Show, Read, Eq, Ord)
+
+versionComponentToString :: VersionComponent -> Text
+versionComponentToString =
+  \case
+    VersionComponentPre      -> "pre"
+    VersionComponentString s -> s
+    VersionComponentNumber n -> show n
+
+-- | Based on https://github.com/NixOS/nix/blob/4ee4fda521137fed6af0446948b3877e0c5db803/src/libexpr/names.cc#L44
+versionComponentSeparators :: String
+versionComponentSeparators = ".-"
+
+splitVersion :: Text -> [VersionComponent]
+splitVersion s =
+  case Text.uncons s of
+    Nothing -> mempty
+    Just (h, t)
+
+      | h `elem` versionComponentSeparators -> splitVersion t
+
+      | isDigit h ->
+        let (digits, rest) = Text.span isDigit s
+        in
+        VersionComponentNumber
+            (fromMaybe (error $ "splitVersion: couldn't parse " <> show digits) $ readMaybe $ toString digits) : splitVersion rest
+
+      | otherwise ->
+        let
+          (chars, rest) =
+            Text.span
+              (\c -> not $ isDigit c || c `elem` versionComponentSeparators)
+              s
+          thisComponent =
+            case chars of
+              "pre" -> VersionComponentPre
+              x     -> VersionComponentString x
+        in
+        thisComponent : splitVersion rest
+
+compareVersions :: Text -> Text -> Ordering
+compareVersions s1 s2 =
+  mconcat $
+    alignWith
+      f
+      (splitVersion s1)
+      (splitVersion s2)
+ where
+  z = VersionComponentString ""
+  f = uncurry compare . fromThese z z
+
+splitDrvName :: Text -> (Text, Text)
+splitDrvName s =
+  let
+    sep    = "-"
+    pieces = Text.splitOn sep s
+    isFirstVersionPiece p =
+      case Text.uncons p of
+        Just (h, _) -> isDigit h
+        _           -> False
+    -- Like 'break', but always puts the first item into the first result
+    -- list
+    breakAfterFirstItem :: (a -> Bool) -> [a] -> ([a], [a])
+    breakAfterFirstItem f =
+      list
+        (mempty, mempty)
+        (\ (h : t) -> let (a, b) = break f t in (h : a, b))
+    (namePieces, versionPieces) =
+      breakAfterFirstItem isFirstVersionPiece pieces
+  in
+  (Text.intercalate sep namePieces, Text.intercalate sep versionPieces)
+
+splitMatches
+  :: forall e t f m
+   . MonadNix e t f m
+  => Int
+  -> [[(ByteString, (Int, Int))]]
+  -> ByteString
+  -> [NValue t f m]
+splitMatches _ [] haystack = [thunkStr haystack]
+splitMatches _ ([] : _) _ =
+  fail "Fail in splitMatches: this should never happen!"
+splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
+  thunkStr before : caps : splitMatches (numDropped + relStart + len)
+                                        mts
+                                        (B.drop len rest)
+ where
+  relStart       = max 0 start - numDropped
+  (before, rest) = B.splitAt relStart haystack
+  caps           = nvList (fmap f captures)
+  f (a, (s, _))  =
+    bool
+      (nvConstant NNull)
+      (thunkStr a)
+      (s >= 0)
+
+thunkStr :: Applicative f => ByteString -> NValue t f m
+thunkStr s = nvStr $ makeNixStringWithoutContext $ decodeUtf8 s
+
+elemAt :: [a] -> Int -> Maybe a
+elemAt ls i =
+  list
+    Nothing
+    (pure . Unsafe.head)
+    (drop i ls)
+
+hasKind
+  :: forall a e t f m
+   . (MonadNix e t f m, FromValue a m (NValue t f m))
+  => NValue t f m
+  -> m (NValue t f m)
+hasKind nv =
+  do
+    v <- fromValueMay nv
+
+    toValue $
+      case v of
+        Just (_ :: a) -> True
+        _             -> False
+
+
+absolutePathFromValue :: MonadNix e t f m => NValue t f m -> m FilePath
+absolutePathFromValue =
+  \case
+    NVStr ns ->
+      do
+        let
+          path = toString $ stringIgnoreContext ns
+
+        unless (isAbsolute path) $ throwError $ ErrorCall $ "string " <> show path <> " doesn't represent an absolute path"
+        pure path
+
+    NVPath path -> pure path
+    v           -> throwError $ ErrorCall $ "expected a path, got " <> show v
+
+
+data FileType
+  = FileTypeRegular
+  | FileTypeDirectory
+  | FileTypeSymlink
+  | FileTypeUnknown
+  deriving (Show, Read, Eq, Ord)
+
+instance Convertible e t f m => ToValue FileType m (NValue t f m) where
+  toValue =
+    toValue . makeNixStringWithoutContext .
+      \case
+        FileTypeRegular   -> "regular" :: Text
+        FileTypeDirectory -> "directory"
+        FileTypeSymlink   -> "symlink"
+        FileTypeUnknown   -> "unknown"
+
+-- ** Builtin functions
+
+derivationNix
+  :: forall e t f m. (MonadNix e t f m, Scoped (NValue t f m) m)
+  => m (NValue t f m)
+derivationNix = foldFix Eval.eval $$(do
+    -- This is compiled in so that we only parse it once at compile-time.
+    let Right expr = parseNixText [text|
+      drvAttrs @ { outputs ? [ "out" ], ... }:
+
+      let
+
+        strict = derivationStrict drvAttrs;
+
+        commonAttrs = drvAttrs
+          // (builtins.listToAttrs outputsList)
+          // { all = map (x: x.value) outputsList;
+               inherit drvAttrs;
+             };
+
+        outputToAttrListElement = outputName:
+          { name = outputName;
+            value = commonAttrs // {
+              outPath = builtins.getAttr outputName strict;
+              drvPath = strict.drvPath;
+              type = "derivation";
+              inherit outputName;
+            };
+          };
+
+        outputsList = map outputToAttrListElement outputs;
+
+      in (builtins.head outputsList).value|]
+    [|| expr ||]
+  )
+
+nixPathNix :: MonadNix e t f m => m (NValue t f m)
+nixPathNix =
+  fmap
+    nvList $
+    foldNixPath mempty $
+      \p mn ty rest ->
+        pure $
+          pure
+            (nvSet
+              mempty
+              (M.fromList
+                [case ty of
+                  PathEntryPath -> ("path", nvPath p)
+                  PathEntryURI  -> ( "uri", mkNvStr p)
+
+                , ( "prefix", mkNvStr $ fromMaybe "" mn)
+                ]
+              )
+            )
+          <> rest
  where
   mkNvStr = nvStr . makeNixStringWithoutContext . toText
 
@@ -439,13 +439,6 @@ hasAttrNix x y =
     (aset, _) <- fromValue @(AttrSet (NValue t f m), AttrSet SourcePos) y
 
     toValue $ M.member key aset
-
-attrsetGet :: MonadNix e t f m => Text -> AttrSet (NValue t f m) -> m (NValue t f m)
-attrsetGet k s =
-  maybe
-    (throwError $ ErrorCall $ "Attribute '" <> toString k <> "' required")
-    pure
-    (M.lookup k s)
 
 hasContextNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 hasContextNix = toValue . stringHasContext <=< fromValue
@@ -553,7 +546,6 @@ anyNix f = toValue <=< anyMNix fromValue <=< traverse (callFunc f) <=< fromValue
       (pure True)
       =<< p x
 
-
 allNix
   :: MonadNix e t f m
   => NValue t f m
@@ -594,63 +586,14 @@ tailNix =
     (pure . nvList . Unsafe.tail)
     <=< fromValue
 
-data VersionComponent
-  = VersionComponentPre -- ^ The string "pre"
-  | VersionComponentString Text -- ^ A string other than "pre"
-  | VersionComponentNumber Integer -- ^ A number
-  deriving (Show, Read, Eq, Ord)
-
-versionComponentToString :: VersionComponent -> Text
-versionComponentToString = \case
-  VersionComponentPre      -> "pre"
-  VersionComponentString s -> s
-  VersionComponentNumber n -> show n
-
--- | Based on https://github.com/NixOS/nix/blob/4ee4fda521137fed6af0446948b3877e0c5db803/src/libexpr/names.cc#L44
-versionComponentSeparators :: String
-versionComponentSeparators = ".-"
-
-splitVersion :: Text -> [VersionComponent]
-splitVersion s =
-  case Text.uncons s of
-    Nothing -> mempty
-    Just (h, t)
-
-      | h `elem` versionComponentSeparators -> splitVersion t
-
-      | isDigit h ->
-        let (digits, rest) = Text.span isDigit s
-        in
-        VersionComponentNumber
-            (fromMaybe (error $ "splitVersion: couldn't parse " <> show digits) $ readMaybe $ toString digits) : splitVersion rest
-
-      | otherwise ->
-        let
-          (chars, rest) =
-            Text.span
-              (\c -> not $ isDigit c || c `elem` versionComponentSeparators)
-              s
-          thisComponent =
-            case chars of
-              "pre" -> VersionComponentPre
-              x     -> VersionComponentString x
-        in
-        thisComponent : splitVersion rest
-
 splitVersionNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 splitVersionNix v =
   do
     version <- fromStringNoContext =<< fromValue v
     pure $
       nvList $
-        nvStr . makeNixStringWithoutContext . versionComponentToString <$> splitVersion version
-
-compareVersions :: Text -> Text -> Ordering
-compareVersions s1 s2 =
-  mconcat $ alignWith f (splitVersion s1) (splitVersion s2)
- where
-  z = VersionComponentString ""
-  f = uncurry compare . fromThese z z
+        nvStr . makeNixStringWithoutContext . versionComponentToString <$>
+          splitVersion version
 
 compareVersionsNix
   :: MonadNix e t f m
@@ -673,27 +616,6 @@ compareVersionsNix t1 t2 =
 
  where
   mkText = fromStringNoContext <=< fromValue
-
-splitDrvName :: Text -> (Text, Text)
-splitDrvName s =
-  let
-    sep    = "-"
-    pieces = Text.splitOn sep s
-    isFirstVersionPiece p =
-      case Text.uncons p of
-        Just (h, _) -> isDigit h
-        _           -> False
-    -- Like 'break', but always puts the first item into the first result
-    -- list
-    breakAfterFirstItem :: (a -> Bool) -> [a] -> ([a], [a])
-    breakAfterFirstItem f =
-      list
-        (mempty, mempty)
-        (\ (h : t) -> let (a, b) = break f t in (h : a, b))
-    (namePieces, versionPieces) =
-      breakAfterFirstItem isFirstVersionPiece pieces
-  in
-  (Text.intercalate sep namePieces, Text.intercalate sep versionPieces)
 
 parseDrvNameNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -746,7 +668,7 @@ matchNix pat str =
       (\case
         ("", sarr, "") ->
           do
-            let s = fmap fst (elems sarr)
+            let s = fst <$> elems sarr
             nvList
               <$>
                 traverse
@@ -782,33 +704,6 @@ splitNix pat str =
 
       pure $ nvList $ splitMatches 0 (elems <$> matchAllText regex haystack) haystack
 
-splitMatches
-  :: forall e t f m
-   . MonadNix e t f m
-  => Int
-  -> [[(ByteString, (Int, Int))]]
-  -> ByteString
-  -> [NValue t f m]
-splitMatches _ [] haystack = [thunkStr haystack]
-splitMatches _ ([] : _) _ =
-  fail "Fail in splitMatches: this should never happen!"
-splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
-  thunkStr before : caps : splitMatches (numDropped + relStart + len)
-                                        mts
-                                        (B.drop len rest)
- where
-  relStart       = max 0 start - numDropped
-  (before, rest) = B.splitAt relStart haystack
-  caps           = nvList (fmap f captures)
-  f (a, (s, _))  =
-    bool
-      (nvConstant NNull)
-      (thunkStr a)
-      (s >= 0)
-
-thunkStr :: Applicative f => ByteString -> NValue t f m
-thunkStr s = nvStr (makeNixStringWithoutContext (decodeUtf8 s))
-
 substringNix :: forall e t f m. MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
 substringNix start len str =
   Prim $
@@ -831,12 +726,14 @@ attrNamesNix =
 
 attrValuesNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-attrValuesNix =
-  toValue
-  .   fmap snd
-  .   sortOn (fst @Text @(NValue t f m))
-  .   M.toList
-  <=< fromValue @(AttrSet (NValue t f m))
+attrValuesNix nvattrs =
+  do
+    attrs <- fromValue @(AttrSet (NValue t f m)) nvattrs
+    toValue $
+      snd <$>
+        sortOn
+          (fst @Text @(NValue t f m))
+          (M.toList attrs)
 
 mapNix
   :: forall e t f m
@@ -1008,13 +905,6 @@ elemNix x = toValue <=< anyMNix (valueEqM x) <=< fromValue
       (pure True)
       =<< p x
 
-elemAt :: [a] -> Int -> Maybe a
-elemAt ls i =
-  list
-    Nothing
-    (pure . Unsafe.head)
-    (drop i ls)
-
 elemAtNix
   :: MonadNix e t f m
   => NValue t f m
@@ -1043,36 +933,12 @@ genListNix f nixN =
       (toValue =<< traverse (defer . callFunc f <=< toValue) [0 .. n - 1])
       (n >= 0)
 
--- We wrap values solely to provide an Ord instance for genericClosure
-newtype WValue t f m = WValue (NValue t f m)
-
-instance Comonad f => Eq (WValue t f m) where
-  WValue (NVConstant (NFloat x)) == WValue (NVConstant (NInt y)) =
-    x == fromInteger y
-  WValue (NVConstant (NInt   x)) == WValue (NVConstant (NFloat y)) =
-    fromInteger x == y
-  WValue (NVConstant (NInt   x)) == WValue (NVConstant (NInt   y)) = x == y
-  WValue (NVConstant (NFloat x)) == WValue (NVConstant (NFloat y)) = x == y
-  WValue (NVPath     x         ) == WValue (NVPath     y         ) = x == y
-  WValue (NVStr x) == WValue (NVStr y) =
-    stringIgnoreContext x == stringIgnoreContext y
-  _ == _ = False
-
-instance Comonad f => Ord (WValue t f m) where
-  WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NInt y)) =
-    x <= fromInteger y
-  WValue (NVConstant (NInt   x)) <= WValue (NVConstant (NFloat y)) =
-    fromInteger x <= y
-  WValue (NVConstant (NInt   x)) <= WValue (NVConstant (NInt   y)) = x <= y
-  WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NFloat y)) = x <= y
-  WValue (NVPath     x         ) <= WValue (NVPath     y         ) = x <= y
-  WValue (NVStr x) <= WValue (NVStr y) =
-    stringIgnoreContext x <= stringIgnoreContext y
-  _ <= _ = False
-
 genericClosureNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-genericClosureNix = fromValue @(AttrSet (NValue t f m)) >=> \s ->
+genericClosureNix c =
+  do
+  s <- fromValue @(AttrSet (NValue t f m)) c
+
   case (M.lookup "startSet" s, M.lookup "operator" s) of
     (Nothing    , Nothing        ) -> throwError $ ErrorCall "builtins.genericClosure: Attributes 'startSet' and 'operator' required"
     (Nothing    , Just _         ) -> throwError $ ErrorCall "builtins.genericClosure: Attribute 'startSet' required"
@@ -1272,20 +1138,6 @@ pathExistsNix nvpath =
         NVPath p  -> pathExists p
         NVStr  ns -> pathExists (toString $ stringIgnoreContext ns)
         _v -> throwError $ ErrorCall $ "builtins.pathExists: expected path, got " <> show _v
-
-hasKind
-  :: forall a e t f m
-   . (MonadNix e t f m, FromValue a m (NValue t f m))
-  => NValue t f m
-  -> m (NValue t f m)
-hasKind nv =
-  do
-    v <- fromValueMay nv
-
-    toValue $
-      case v of
-        Just (_ :: a) -> True
-        _             -> False
 
 isAttrsNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1534,20 +1386,6 @@ placeHolderNix p =
 
       body h = stringIgnoreContext h
 
-absolutePathFromValue :: MonadNix e t f m => NValue t f m -> m FilePath
-absolutePathFromValue =
-  \case
-    NVStr ns ->
-      do
-        let
-          path = toString $ stringIgnoreContext ns
-
-        unless (isAbsolute path) $ throwError $ ErrorCall $ "string " <> show path <> " doesn't represent an absolute path"
-        pure path
-
-    NVPath path -> pure path
-    v           -> throwError $ ErrorCall $ "expected a path, got " <> show v
-
 readFileNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 readFileNix = toValue <=< Nix.Render.readFile <=< absolutePathFromValue <=< demand
 
@@ -1572,22 +1410,6 @@ findFileNix nvaset nvfilepath =
       (NVList _, _y     ) -> throwError $ ErrorCall $ "expected a string, got " <> show _y
       (_x      , NVStr _) -> throwError $ ErrorCall $ "expected a list, got " <> show _x
       (_x      , _y     ) -> throwError $ ErrorCall $ "Invalid types for builtins.findFile: " <> show (_x, _y)
-
-data FileType
-  = FileTypeRegular
-  | FileTypeDirectory
-  | FileTypeSymlink
-  | FileTypeUnknown
-  deriving (Show, Read, Eq, Ord)
-
-instance Convertible e t f m => ToValue FileType m (NValue t f m) where
-  toValue =
-    toValue . makeNixStringWithoutContext .
-      \case
-        FileTypeRegular   -> "regular" :: Text
-        FileTypeDirectory -> "directory"
-        FileTypeSymlink   -> "symlink"
-        FileTypeUnknown   -> "unknown"
 
 readDirNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1884,24 +1706,227 @@ appendContextNix tx ty =
             )
       )
 
--- * @class ToBuiltin@ and its instances
 
--- | Types that support conversion to nix in a particular monad
-class ToBuiltin t f m a | a -> m where
-  toBuiltin :: String -> a -> m (NValue t f m)
+-- ** @builtinsList@
 
-instance
-  ( MonadNix e t f m
-  , ToValue a m (NValue t f m)
-  )
-  => ToBuiltin t f m (Prim m a) where
-  toBuiltin _ p = toValue =<< runPrim p
+builtinsList :: forall e t f m . MonadNix e t f m => m [Builtin (NValue t f m)]
+builtinsList = sequence
+  [ do
+      version <- toValue (makeNixStringWithoutContext "2.3")
+      pure $ Builtin Normal ("nixVersion", version)
+  , do
+      version <- toValue (5 :: Int)
+      pure $ Builtin Normal ("langVersion", version)
 
-instance
-  ( MonadNix e t f m
-  , FromValue a m (Deeper (NValue t f m))
-  , ToBuiltin t f m b
-  )
-  => ToBuiltin t f m (a -> b) where
-  toBuiltin name f =
-    pure $ nvBuiltin name (toBuiltin name . f <=< fromValue . Deeper)
+  , add  TopLevel "abort"            throwNix -- for now
+  , add2 Normal   "add"              addNix
+  , add2 Normal   "addErrorContext"  addErrorContextNix
+  , add2 Normal   "all"              allNix
+  , add2 Normal   "any"              anyNix
+  , add2 Normal   "appendContext"    appendContextNix
+  , add  Normal   "attrNames"        attrNamesNix
+  , add  Normal   "attrValues"       attrValuesNix
+  , add  TopLevel "baseNameOf"       baseNameOfNix
+  , add2 Normal   "bitAnd"           bitAndNix
+  , add2 Normal   "bitOr"            bitOrNix
+  , add2 Normal   "bitXor"           bitXorNix
+  , add0 Normal   "builtins"         builtinsBuiltinNix
+  , add2 Normal   "catAttrs"         catAttrsNix
+  , add2 Normal   "compareVersions"  compareVersionsNix
+  , add  Normal   "concatLists"      concatListsNix
+  , add2 Normal   "concatMap"        concatMapNix
+  , add' Normal   "concatStringsSep" (arity2 intercalateNixString)
+  , add0 Normal   "currentSystem"    currentSystemNix
+  , add0 Normal   "currentTime"      currentTimeNix
+  , add2 Normal   "deepSeq"          deepSeqNix
+  , add0 TopLevel "derivation"       derivationNix
+  , add  TopLevel "derivationStrict" derivationStrictNix
+  , add  TopLevel "dirOf"            dirOfNix
+  , add2 Normal   "div"              divNix
+  , add2 Normal   "elem"             elemNix
+  , add2 Normal   "elemAt"           elemAtNix
+  , add  Normal   "exec"             execNix
+  , add0 Normal   "false"            (pure $ nvConstant $ NBool False)
+  --, add  Normal   "fetchGit"         fetchGit
+  --, add  Normal   "fetchMercurial"   fetchMercurial
+  , add  Normal   "fetchTarball"     fetchTarball
+  , add  Normal   "fetchurl"         fetchurlNix
+  , add2 Normal   "filter"           filterNix
+  --, add  Normal   "filterSource"     filterSource
+  , add2 Normal   "findFile"         findFileNix
+  , add3 Normal   "foldl'"           foldl'Nix
+  , add  Normal   "fromJSON"         fromJSONNix
+  --, add  Normal   "fromTOML"         fromTOML
+  , add  Normal   "functionArgs"     functionArgsNix
+  , add  Normal   "genericClosure"   genericClosureNix
+  , add2 Normal   "genList"          genListNix
+  , add2 Normal   "getAttr"          getAttrNix
+  , add  Normal   "getContext"       getContextNix
+  , add  Normal   "getEnv"           getEnvNix
+  , add2 Normal   "hasAttr"          hasAttrNix
+  , add  Normal   "hasContext"       hasContextNix
+  , add' Normal   "hashString"       (hashStringNix @e @t @f @m)
+  , add  Normal   "head"             headNix
+  , add  TopLevel "import"           importNix
+  , add2 Normal   "intersectAttrs"   intersectAttrsNix
+  , add  Normal   "isAttrs"          isAttrsNix
+  , add  Normal   "isBool"           isBoolNix
+  , add  Normal   "isFloat"          isFloatNix
+  , add  Normal   "isFunction"       isFunctionNix
+  , add  Normal   "isInt"            isIntNix
+  , add  Normal   "isList"           isListNix
+  , add  TopLevel "isNull"           isNullNix
+  , add  Normal   "isString"         isStringNix
+  , add  Normal   "length"           lengthNix
+  , add2 Normal   "lessThan"         lessThanNix
+  , add  Normal   "listToAttrs"      listToAttrsNix
+  , add2 TopLevel "map"              mapNix
+  , add2 TopLevel "mapAttrs"         mapAttrsNix
+  , add2 Normal   "match"            matchNix
+  , add2 Normal   "mul"              mulNix
+  , add0 Normal   "nixPath"          nixPathNix
+  , add0 Normal   "null"             (pure $ nvConstant NNull)
+  , add  Normal   "parseDrvName"     parseDrvNameNix
+  , add2 Normal   "partition"        partitionNix
+  --, add  Normal   "path"             path
+  , add  Normal   "pathExists"       pathExistsNix
+  , add  TopLevel "placeholder"      placeHolderNix
+  , add  Normal   "readDir"          readDirNix
+  , add  Normal   "readFile"         readFileNix
+  , add2 TopLevel "removeAttrs"      removeAttrsNix
+  , add3 Normal   "replaceStrings"   replaceStringsNix
+  , add2 TopLevel "scopedImport"     scopedImportNix
+  , add2 Normal   "seq"              seqNix
+  , add2 Normal   "sort"             sortNix
+  , add2 Normal   "split"            splitNix
+  , add  Normal   "splitVersion"     splitVersionNix
+  , add0 Normal   "storeDir"         (pure $ nvStr $ makeNixStringWithoutContext "/nix/store")
+  --, add  Normal   "storePath"        storePath
+  , add' Normal   "stringLength"     (arity1 $ Text.length . stringIgnoreContext)
+  , add' Normal   "sub"              (arity2 ((-) @Integer))
+  , add' Normal   "substring"        substringNix
+  , add  Normal   "tail"             tailNix
+  , add  TopLevel "throw"            throwNix
+  , add2 Normal   "toFile"           toFileNix
+  , add  Normal   "toJSON"           toJSONNix
+  , add  Normal   "toPath"           toPathNix
+  , add  TopLevel "toString"         toStringNix
+  , add  Normal   "toXML"            toXMLNix
+  , add2 TopLevel "trace"            traceNix
+  , add0 Normal   "true"             (pure $ nvConstant $ NBool True)
+  , add  Normal   "tryEval"          tryEvalNix
+  , add  Normal   "typeOf"           typeOfNix
+  --, add0 Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependency
+  , add  Normal   "unsafeDiscardStringContext"    unsafeDiscardStringContextNix
+  , add2 Normal   "unsafeGetAttrPos"              unsafeGetAttrPosNix
+  , add  Normal   "valueSize"        getRecursiveSizeNix
+  ]
+ where
+  arity1 :: (a -> b) -> (a -> Prim m b)
+  arity1 f = Prim . pure . f
+
+  arity2 :: (a -> b -> c) -> (a -> b -> Prim m c)
+  arity2 f = ((Prim . pure) .) . f
+
+  mkBuiltin :: BuiltinType -> Text -> m (NValue t f m) -> m (Builtin (NValue t f m))
+  mkBuiltin t n v = wrap t n <$> mkThunk n v
+   where
+    wrap :: BuiltinType -> Text -> v -> Builtin v
+    wrap t n f = Builtin t (n, f)
+
+    mkThunk :: Text -> m (NValue t f m) -> m (NValue t f m)
+    mkThunk n = defer . withFrame Info (ErrorCall $ "While calling builtin " <> toString n <> "\n")
+
+  add0
+    :: BuiltinType
+    -> Text
+    -> m (NValue t f m)
+    -> m (Builtin (NValue t f m))
+  add0 t n v = mkBuiltin t n v
+
+  add
+    :: BuiltinType
+    -> Text
+    -> ( NValue t f m
+      -> m (NValue t f m)
+      )
+    -> m (Builtin (NValue t f m))
+  add  t n v = mkBuiltin t n (builtin (toString n) v)
+
+  add2
+    :: BuiltinType
+    -> Text
+    -> ( NValue t f m
+      -> NValue t f m
+      -> m (NValue t f m)
+      )
+    -> m (Builtin (NValue t f m))
+  add2 t n v = mkBuiltin t n (builtin2 (toString n) v)
+
+  add3
+    :: BuiltinType
+    -> Text
+    -> ( NValue t f m
+      -> NValue t f m
+      -> NValue t f m
+      -> m (NValue t f m)
+      )
+    -> m (Builtin (NValue t f m))
+  add3 t n v = mkBuiltin t n (builtin3 (toString n) v)
+
+  add'
+    :: ToBuiltin t f m a
+    => BuiltinType
+    -> Text
+    -> a
+    -> m (Builtin (NValue t f m))
+  add' t n v = mkBuiltin t n (toBuiltin (toString n) v)
+
+
+-- * Exported
+
+-- | Evaluate a nix expression in the default context
+withNixContext
+  :: forall e t f m r
+   . (MonadNix e t f m, Has e Options)
+  => Maybe FilePath
+  -> m r
+  -> m r
+withNixContext mpath action =
+  do
+    base            <- builtins
+    opts :: Options <- asks $ view hasLens
+    let
+      i = nvList $ nvStr . makeNixStringWithoutContext . toText <$> include opts
+
+    pushScope (M.singleton "__includes" i) $ pushScopes base $
+      maybe
+        action
+        (\ path ->
+          do
+            traceM $ "Setting __cur_file = " <> show path
+            let ref = nvPath path
+            pushScope (M.singleton "__cur_file" ref) action
+        )
+        mpath
+
+builtins
+  :: ( MonadNix e t f m
+     , Scoped (NValue t f m) m
+     )
+  => m (Scopes m (NValue t f m))
+builtins =
+  do
+    ref <- defer $ nvSet mempty <$> buildMap
+    lst <- ([("builtins", ref)] <>) <$> topLevelBuiltins
+    pushScope (M.fromList lst) currentScopes
+ where
+  buildMap         =  fmap (M.fromList . fmap mapping) builtinsList
+  topLevelBuiltins = (fmap . fmap) mapping fullBuiltinsList
+
+  fullBuiltinsList = (fmap . fmap) go builtinsList
+   where
+    go b@(Builtin TopLevel _) = b
+    go (Builtin Normal (name, builtin)) =
+      Builtin TopLevel ("__" <> name, builtin)
+
