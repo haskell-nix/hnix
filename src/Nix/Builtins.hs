@@ -27,6 +27,7 @@ module Nix.Builtins
   )
 where
 
+
 import           Prelude                 hiding ( traceM )
 import           Relude.Unsafe                 as Unsafe
 import           Nix.Utils
@@ -88,6 +89,12 @@ import           System.Posix.Files             ( isRegularFile
                                                 )
 import           Text.Regex.TDFA
 
+
+-- This is a big module. There is recursive reuse:
+-- @builtins -> builtinsList -> scopedImport -> withNixContext -> builtins@.
+
+-- * Exported
+
 -- | Evaluate a nix expression in the default context
 withNixContext
   :: forall e t f m r
@@ -133,12 +140,20 @@ builtins =
     go (Builtin Normal (name, builtin)) =
       Builtin TopLevel ("__" <> name, builtin)
 
+
+-- * Internal
+
+newtype Prim m a = Prim { runPrim :: m a }
+
 data BuiltinType = Normal | TopLevel
 data Builtin v =
   Builtin
     { _kind   :: BuiltinType
     , mapping :: (Text, v)
     }
+
+
+-- ** @builtinsList@
 
 builtinsList :: forall e t f m . MonadNix e t f m => m [Builtin (NValue t f m)]
 builtinsList = sequence
@@ -312,7 +327,7 @@ builtinsList = sequence
   add' t n v = mkBuiltin t n (toBuiltin (toString n) v)
 
 
--- * Primops
+-- ** Builtin functions
 
 derivationNix
   :: forall e t f m. (MonadNix e t f m, Scoped (NValue t f m) m)
@@ -351,10 +366,10 @@ derivationNix = foldFix Eval.eval $$(do
 foldNixPath
   :: forall e t f m r
    . MonadNix e t f m
-  => (FilePath -> Maybe String -> NixPathEntryType -> r -> m r)
-  -> r
+  => r
+  -> (FilePath -> Maybe String -> NixPathEntryType -> r -> m r)
   -> m r
-foldNixPath f z =
+foldNixPath z f =
   do
     mres <- lookupVar "__includes"
     dirs <-
@@ -370,10 +385,15 @@ foldNixPath f z =
         pure
         mDataDir
 
-    foldrM go z $
-      (fromInclude . stringIgnoreContext <$> dirs)
-      <> maybe mempty (uriAwareSplit . toText) mPath
-      <> [ fromInclude $ toText $ "nix=" <> dataDir <> "/nix/corepkgs" ]
+    foldrM
+      go
+      z
+      $ (fromInclude . stringIgnoreContext <$> dirs)
+        <> maybe
+            mempty
+            (uriAwareSplit . toText)
+            mPath
+        <> [ fromInclude $ toText $ "nix=" <> dataDir <> "/nix/corepkgs" ]
  where
   fromInclude x = (x, ) $
     bool
@@ -387,7 +407,7 @@ foldNixPath f z =
       _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " <> show x
 
 nixPathNix :: MonadNix e t f m => m (NValue t f m)
-nixPathNix = fmap nvList $ flip foldNixPath mempty $
+nixPathNix = fmap nvList $ foldNixPath mempty $
   \p mn ty rest ->
     pure $
       nvSet
@@ -661,8 +681,8 @@ splitDrvName s =
     pieces = Text.splitOn sep s
     isFirstVersionPiece p =
       case Text.uncons p of
-        Just (h, _) | isDigit h -> True
-        _                       -> False
+        Just (h, _) -> isDigit h
+        _           -> False
     -- Like 'break', but always puts the first item into the first result
     -- list
     breakAfterFirstItem :: (a -> Bool) -> [a] -> ([a], [a])
@@ -886,10 +906,14 @@ catAttrsNix attrName xs =
         l
 
 baseNameOfNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-baseNameOfNix x = do
-  ns <- coerceToString callFunc DontCopyToStore CoerceStringy x
-  pure $ nvStr $
-    modifyNixContents (toText . takeFileName . toString) ns
+baseNameOfNix x =
+  do
+    ns <- coerceToString callFunc DontCopyToStore CoerceStringy x
+    pure $
+      nvStr $
+        modifyNixContents
+          (toText . takeFileName . toString)
+          ns
 
 bitAndNix
   :: forall e t f m
@@ -1243,11 +1267,11 @@ pathExistsNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 pathExistsNix nvpath =
   do
     path <- demand nvpath
-
-    case path of
-      NVPath p  -> toValue =<< pathExists p
-      NVStr  ns -> toValue =<< pathExists (toString $ stringIgnoreContext ns)
-      _v -> throwError $ ErrorCall $ "builtins.pathExists: expected path, got " <> show _v
+    toValue =<<
+      case path of
+        NVPath p  -> pathExists p
+        NVStr  ns -> pathExists (toString $ stringIgnoreContext ns)
+        _v -> throwError $ ErrorCall $ "builtins.pathExists: expected path, got " <> show _v
 
 hasKind
   :: forall a e t f m
@@ -1655,15 +1679,23 @@ tryEvalNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 tryEvalNix e = catch (onSuccess <$> demand e) (pure . onError)
  where
-  onSuccess v = nvSet mempty $ M.fromList
-    [ ("success", nvConstant (NBool True))
-    , ("value", v)]
+  onSuccess v =
+    nvSet
+      mempty
+      $ M.fromList
+        [ ("success", nvConstant (NBool True))
+        , ("value", v)
+        ]
 
   onError :: SomeException -> NValue t f m
-  onError _ = nvSet mempty $ M.fromList
-    [ ("success", nvConstant (NBool False))
-    , ("value"  , nvConstant (NBool False))
-    ]
+  onError _ =
+    nvSet
+      mempty
+      $ M.fromList
+        $ ($ nvConstant (NBool False)) <$>
+          [ ("success",)
+          , ("value"  ,)
+          ]
 
 traceNix
   :: forall e t f m
@@ -1687,13 +1719,14 @@ addErrorContextNix _ = pure
 
 execNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-execNix xs = do
-  ls <- fromValue @[NValue t f m] xs
-  xs <- traverse (coerceToString callFunc DontCopyToStore CoerceStringy) ls
-  -- 2018-11-19: NOTE: Still need to do something with the context here
-  -- See prim_exec in nix/src/libexpr/primops.cc
-  -- Requires the implementation of EvalState::realiseContext
-  exec (fmap (toString . stringIgnoreContext) xs)
+execNix xs =
+  do
+    ls <- fromValue @[NValue t f m] xs
+    xs <- traverse (coerceToString callFunc DontCopyToStore CoerceStringy) ls
+    -- 2018-11-19: NOTE: Still need to do something with the context here
+    -- See prim_exec in nix/src/libexpr/primops.cc
+    -- Requires the implementation of EvalState::realiseContext
+    exec (fmap (toString . stringIgnoreContext) xs)
 
 fetchurlNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1743,16 +1776,18 @@ partitionNix f nvlst =
       $ M.fromList [("right", makeSide right), ("wrong", makeSide wrong)]
 
 currentSystemNix :: MonadNix e t f m => m (NValue t f m)
-currentSystemNix = do
-  os   <- getCurrentSystemOS
-  arch <- getCurrentSystemArch
+currentSystemNix =
+  do
+    os   <- getCurrentSystemOS
+    arch <- getCurrentSystemArch
 
-  pure $ nvStr $ makeNixStringWithoutContext (arch <> "-" <> os)
+    pure $ nvStr $ makeNixStringWithoutContext (arch <> "-" <> os)
 
 currentTimeNix :: MonadNix e t f m => m (NValue t f m)
-currentTimeNix = do
-  opts :: Options <- asks (view hasLens)
-  toValue @Integer $ round $ Time.utcTimeToPOSIXSeconds (currentTime opts)
+currentTimeNix =
+  do
+    opts :: Options <- asks (view hasLens)
+    toValue @Integer $ round $ Time.utcTimeToPOSIXSeconds (currentTime opts)
 
 derivationStrictNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 derivationStrictNix = derivationStrict
@@ -1762,13 +1797,15 @@ getRecursiveSizeNix = fmap (nvConstant . NInt . fromIntegral) . recursiveSize
 
 getContextNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-getContextNix =
-  (\case
-    (NVStr ns) -> do
-      let context = getNixLikeContext $ toNixLikeContext $ getContext ns
-      valued :: M.HashMap Text (NValue t f m) <- sequenceA $ M.map toValue context
-      pure $ nvSet mempty valued
-    x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: " <> show x) <=< demand
+getContextNix v =
+  do
+    v' <- demand v
+    case v' of
+      (NVStr ns) -> do
+        let context = getNixLikeContext $ toNixLikeContext $ getContext ns
+        valued :: M.HashMap Text (NValue t f m) <- sequenceA $ M.map toValue context
+        pure $ nvSet mempty valued
+      x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: " <> show x
 
 appendContextNix
   :: forall e t f m
@@ -1834,16 +1871,18 @@ appendContextNix tx ty =
         _x -> throwError $ ErrorCall $ "Invalid types for context value in builtins.appendContext: " <> show _x
 
   addContext ns newContextValues =
-    makeNixString (stringIgnoreContext ns)
-    $ fromNixLikeContext
-    $ NixLikeContext
-    $ M.unionWith (<>) newContextValues
-    $ getNixLikeContext
-    $ toNixLikeContext
-    $ getContext ns
-
-newtype Prim m a = Prim { runPrim :: m a }
-
+    makeNixString
+      (stringIgnoreContext ns)
+      (fromNixLikeContext $
+        NixLikeContext $
+          M.unionWith
+            (<>)
+            newContextValues
+            (getNixLikeContext $
+              toNixLikeContext $
+                getContext ns
+            )
+      )
 
 -- * @class ToBuiltin@ and its instances
 
