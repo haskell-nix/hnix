@@ -10,9 +10,6 @@
 
 module Nix.Effects.Derivation ( defaultDerivationStrict ) where
 
-import           Prelude                 hiding ( elem
-                                                , readFile
-                                                )
 import           Nix.Utils
 import           Data.Char                      ( isAscii
                                                 , isAlphaNum
@@ -20,12 +17,10 @@ import           Data.Char                      ( isAscii
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.HashMap.Strict           as MS
 import qualified Data.HashSet                  as S
--- Please, move to NonEmpty
-import           Data.List
+import           Data.Foldable                  ( foldl )
 import qualified Data.Map.Strict               as Map
 import qualified Data.Set                      as Set
 import qualified Data.Text                     as Text
-import qualified Data.Text.Encoding            as Text
 
 import           Nix.Atoms
 import           Nix.Convert
@@ -47,6 +42,7 @@ import qualified System.Nix.StorePath          as Store
 
 import           Text.Megaparsec
 import           Text.Megaparsec.Char
+import Prelude hiding (readFile)
 
 
 data Derivation = Derivation
@@ -72,7 +68,7 @@ makeStorePathName name = case Store.makeStorePathName name of
   Right spname -> pure spname
 
 parsePath :: (Framed e m) => Text -> m Store.StorePath
-parsePath p = case Store.parsePath "/nix/store" (Text.encodeUtf8 p) of
+parsePath p = case Store.parsePath "/nix/store" (encodeUtf8 p) of
   Left err -> throwError $ ErrorCall $ "Cannot parse store path " <> show p <> ":\n" <> show err
   Right path -> pure path
 
@@ -86,29 +82,45 @@ writeDerivation drv@Derivation{inputs, name} = do
 -- | Traverse the graph of inputDrvs to replace fixed output derivations with their fixed output hash.
 -- this avoids propagating changes to their .drv when the output hash stays the same.
 hashDerivationModulo :: (MonadNix e t f m, MonadState (b, MS.HashMap Text Text) m) => Derivation -> m (Store.Digest 'Store.SHA256)
-hashDerivationModulo (Derivation {
-    mFixed = Just (Store.SomeDigest (digest :: Store.Digest hashType)),
-    outputs,
-    hashMode
-  }) = case Map.toList outputs of
-    [("out", path)] -> pure $ Store.hash @'Store.SHA256 $ Text.encodeUtf8
-      $  "fixed:out"
-      <> (if hashMode == Recursive then ":r" else "")
-      <> ":" <> (Store.algoName @hashType)
-      <> ":" <> Store.encodeInBase Store.Base16 digest
-      <> ":" <> path
-    outputsList -> throwError $ ErrorCall $ "This is weird. A fixed output drv should only have one output named 'out'. Got " <> show outputsList
-hashDerivationModulo drv@Derivation{inputs = (inputSrcs, inputDrvs)} = do
-  cache <- gets snd
-  inputsModulo <- Map.fromList <$> forM (Map.toList inputDrvs) (\(path, outs) ->
-    case MS.lookup path cache of
-      Just hash -> pure (hash, outs)
-      Nothing -> do
-        drv' <- readDerivation $ toString path
-        hash <- Store.encodeInBase Store.Base16 <$> hashDerivationModulo drv'
-        pure (hash, outs)
-    )
-  pure $ Store.hash @'Store.SHA256 $ Text.encodeUtf8 $ unparseDrv (drv {inputs = (inputSrcs, inputsModulo)})
+hashDerivationModulo
+  Derivation
+    { mFixed = Just (Store.SomeDigest (digest :: Store.Digest hashType))
+    , outputs
+    , hashMode
+    } =
+  case Map.toList outputs of
+    [("out", path)] -> pure $
+      Store.hash @'Store.SHA256 $
+        encodeUtf8 $
+          "fixed:out"
+          <> (if hashMode == Recursive then ":r" else "")
+          <> ":" <> (Store.algoName @hashType)
+          <> ":" <> Store.encodeInBase Store.Base16 digest
+          <> ":" <> path
+    _outputsList -> throwError $ ErrorCall $ "This is weird. A fixed output drv should only have one output named 'out'. Got " <> show _outputsList
+hashDerivationModulo
+  drv@Derivation
+    { inputs = ( inputSrcs
+               , inputDrvs
+               )
+    } =
+  do
+    cache <- gets snd
+    inputsModulo <-
+      Map.fromList <$>
+        traverse
+          (\(path, outs) ->
+            maybe
+              (do
+                drv' <- readDerivation $ toString path
+                hash <- Store.encodeInBase Store.Base16 <$> hashDerivationModulo drv'
+                pure (hash, outs)
+              )
+              (\ hash -> pure (hash, outs))
+              (MS.lookup path cache)
+          )
+          (Map.toList inputDrvs)
+    pure $ Store.hash @'Store.SHA256 $ encodeUtf8 $ unparseDrv (drv {inputs = (inputSrcs, inputsModulo)})
 
 unparseDrv :: Derivation -> Text
 unparseDrv Derivation{..} = Text.append "Derive" $ parens
@@ -150,7 +162,7 @@ unparseDrv Derivation{..} = Text.append "Derive" $ parens
 
 readDerivation :: (Framed e m, MonadFile m) => FilePath -> m Derivation
 readDerivation path = do
-  content <- Text.decodeUtf8 <$> readFile path
+  content <- decodeUtf8 <$> readFile path
   either
     (\ err -> throwError $ ErrorCall $ "Failed to parse " <> show path <> ":\n" <> show err)
     pure
@@ -259,11 +271,11 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
 
   where
 
-    pathToText = Text.decodeUtf8 . Store.storePathToRawFilePath
+    pathToText = decodeUtf8 . Store.storePathToRawFilePath
 
     makeOutputPath o h n = do
       name <- makeStorePathName (Store.unStorePathName n <> if o == "out" then "" else "-" <> o)
-      pure $ pathToText $ Store.makeStorePath "/nix/store" ("output:" <> Text.encodeUtf8 o) h name
+      pure $ pathToText $ Store.makeStorePath "/nix/store" ("output:" <> encodeUtf8 o) h name
 
     toStorePaths ctx = foldl (flip addToInputs) (mempty, mempty) ctx
     addToInputs (StringContext path kind) = case kind of

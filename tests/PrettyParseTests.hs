@@ -13,7 +13,6 @@ import           Data.Algorithm.Diff
 import           Data.Algorithm.DiffOutput
 import           Data.Char
 import           Data.Fix
-import qualified Data.List.NonEmpty            as NE
 import qualified Data.String                   as String
 import           Hedgehog
 import qualified Hedgehog.Gen                  as Gen
@@ -67,7 +66,7 @@ genString = Gen.choice
   ]
 
 genAttrPath :: Gen (NAttrPath NExpr)
-genAttrPath = (NE.:|) <$> genKeyName <*> Gen.list (Range.linear 0 4) genKeyName
+genAttrPath = (:|) <$> genKeyName <*> Gen.list (Range.linear 0 4) genKeyName
 
 genParams :: Gen (Params NExpr)
 genParams = Gen.choice
@@ -153,7 +152,7 @@ normalize = foldFix $ \case
   r             -> Fix r
 
  where
-  normBinding (NamedVar path r     pos) = NamedVar (NE.map normKey path) r pos
+  normBinding (NamedVar path r     pos) = NamedVar (fmap normKey path) r pos
   normBinding (Inherit  mr   names pos) = Inherit mr (fmap normKey names) pos
 
   normKey (DynamicKey quoted) = DynamicKey (normAntiquotedString quoted)

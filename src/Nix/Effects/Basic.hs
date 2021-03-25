@@ -11,13 +11,14 @@ module Nix.Effects.Basic where
 import           Prelude                 hiding ( traceM
                                                 , head
                                                 )
+import           Relude.Unsafe                  ( head )
 import           Nix.Utils
 import           Control.Monad                  ( foldM )
 import qualified Data.HashMap.Lazy             as M
-import           Data.List               hiding ( elem )
-import           Data.List.Split
+import           Data.List.Split                ( splitOn )
 import qualified Data.Text                     as Text
-import           Data.Text.Prettyprint.Doc
+import           Data.Text.Prettyprint.Doc      ( fillSep )
+import           System.FilePath
 import           Nix.Convert
 import           Nix.Effects
 import           Nix.Exec                       ( MonadNix
@@ -32,7 +33,6 @@ import           Nix.Scope
 import           Nix.String
 import           Nix.Value
 import           Nix.Value.Monad
-import           System.FilePath
 
 #ifdef MIN_VERSION_ghc_datasize
 #if MIN_VERSION_ghc_datasize(0,2,0)
