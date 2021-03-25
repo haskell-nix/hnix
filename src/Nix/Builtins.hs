@@ -91,7 +91,8 @@ import           Text.Regex.TDFA
 
 
 -- This is a big module. There is recursive reuse:
--- @builtins -> builtinsList -> scopedImport -> withNixContext -> builtins@.
+-- @builtins -> builtinsList -> scopedImport -> withNixContext -> builtins@,
+-- since @builtins@ is self-recursive: aka we ship @builtins.builtins.builtins...@.
 
 -- * Internal
 
@@ -315,7 +316,7 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
  where
   relStart       = max 0 start - numDropped
   (before, rest) = B.splitAt relStart haystack
-  caps           = nvList (fmap f captures)
+  caps           = nvList (f <$> captures)
   f (a, (s, _))  =
     bool
       nVNull
@@ -417,8 +418,8 @@ derivationNix = foldFix Eval.eval $$(do
 nixPathNix :: MonadNix e t f m => m (NValue t f m)
 nixPathNix =
   fmap
-    nvList $
-    foldNixPath mempty $
+    nvList
+    (foldNixPath mempty $
       \p mn ty rest ->
         pure $
           pure
@@ -434,6 +435,7 @@ nixPathNix =
               )
             )
           <> rest
+    )
  where
   mkNvStr = nvStr . makeNixStringWithoutContext . toText
 
@@ -682,16 +684,15 @@ matchNix pat str =
         ("", sarr, "") ->
           do
             let s = fst <$> elems sarr
-            nvList
-              <$>
-                traverse
-                  mkMatch
-                  (bool
-                      id -- (length <= 1) allowed & passes-through here the full string
-                      Unsafe.tail
-                      (length s > 1)
-                      s
-                  )
+            nvList <$>
+              traverse
+                mkMatch
+                (bool
+                    id -- (length <= 1) allowed & passes-through here the full string
+                    Unsafe.tail
+                    (length s > 1)
+                    s
+                )
         _ -> (pure nVNull)
       )
       (matchOnceText re s)
@@ -703,19 +704,19 @@ splitNix
   -> NValue t f m
   -> m (NValue t f m)
 splitNix pat str =
-    do
-      p <- fromStringNoContext =<< fromValue pat
-      ns <- fromValue str
-          -- NOTE: Currently prim_split in nix/src/libexpr/primops.cc ignores the
-          -- context of its second argument. This is probably a bug but we're
-          -- going to preserve the behavior here until it is fixed upstream.
-          -- Relevant issue: https://github.com/NixOS/nix/issues/2547
-      let
-        s = stringIgnoreContext ns
-        regex       = makeRegex p :: Regex
-        haystack = encodeUtf8 s
+  do
+    p <- fromStringNoContext =<< fromValue pat
+    ns <- fromValue str
+        -- NOTE: Currently prim_split in nix/src/libexpr/primops.cc ignores the
+        -- context of its second argument. This is probably a bug but we're
+        -- going to preserve the behavior here until it is fixed upstream.
+        -- Relevant issue: https://github.com/NixOS/nix/issues/2547
+    let
+      s = stringIgnoreContext ns
+      regex       = makeRegex p :: Regex
+      haystack = encodeUtf8 s
 
-      pure $ nvList $ splitMatches 0 (elems <$> matchAllText regex haystack) haystack
+    pure $ nvList $ splitMatches 0 (elems <$> matchAllText regex haystack) haystack
 
 substringNix :: forall e t f m. MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
 substringNix start len str =
@@ -795,9 +796,10 @@ filterNix
   -> NValue t f m
   -> m (NValue t f m)
 filterNix f =
-  toValue
-    <=< filterM (fromValue <=< callFunc f)
-    <=< fromValue
+  toValue <=<
+    filterM
+      (fromValue <=< callFunc f)
+      <=< fromValue
 
 catAttrsNix
   :: forall e t f m
@@ -982,7 +984,7 @@ genericClosureNix c =
               []           -> k
               WValue j : _ -> j
             )
-          fmap (t :) <$> go op (S.insert (WValue k) ks) (ts <> ys)
+          (fmap . fmap) (t :) (go op (S.insert (WValue k) ks) (ts <> ys))
         )
         (go op ks ts)
         (S.member (WValue k) ks)
@@ -1029,7 +1031,7 @@ replaceStringsNix tfrom tto ts =
          where
           formMatchReplaceTailInfo = (\(m, r) -> (m, r, Text.drop (Text.length m) input))
 
-          fromKeysToValsMap = zip (fmap stringIgnoreContext fromKeys) toVals
+          fromKeysToValsMap = zip (stringIgnoreContext <$> fromKeys) toVals
 
         -- Not passing args => It is constant that gets embedded into `go` => It is simple `go` tail recursion
         passOneChar =
@@ -1561,7 +1563,7 @@ execNix xs =
     -- 2018-11-19: NOTE: Still need to do something with the context here
     -- See prim_exec in nix/src/libexpr/primops.cc
     -- Requires the implementation of EvalState::realiseContext
-    exec (fmap (toString . stringIgnoreContext) xs)
+    exec (toString . stringIgnoreContext <$> xs)
 
 fetchurlNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1600,7 +1602,7 @@ partitionNix f nvlst =
   do
     l <- fromValue @[NValue t f m] nvlst
     let
-      match t = fmap (, t) . fromValue =<< callFunc f t
+      match t = (, t) <$> (fromValue =<< callFunc f t)
     selection <- traverse match l
 
     let
