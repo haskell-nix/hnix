@@ -159,6 +159,17 @@ instance Comonad f => Ord (WValue t f m) where
 
 -- ** Helpers
 
+nVNull
+  :: MonadNix e t f m
+  => NValue t f m
+nVNull = nvConstant NNull
+
+mkNVBool
+  :: MonadNix e t f m
+  => Bool
+  -> NValue t f m
+mkNVBool = nvConstant . NBool
+
 foldNixPath
   :: forall e t f m r
    . MonadNix e t f m
@@ -191,11 +202,13 @@ foldNixPath z f =
             mPath
         <> [ fromInclude $ toText $ "nix=" <> dataDir <> "/nix/corepkgs" ]
  where
+
   fromInclude x = (x, ) $
     bool
       PathEntryPath
       PathEntryURI
       ("://" `Text.isInfixOf` x)
+
   go (x, ty) rest =
     case Text.splitOn "=" x of
       [p] -> f (toString p) mempty ty rest
@@ -305,7 +318,7 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
   caps           = nvList (fmap f captures)
   f (a, (s, _))  =
     bool
-      (nvConstant NNull)
+      nVNull
       (thunkStr a)
       (s >= 0)
 
@@ -470,7 +483,7 @@ unsafeGetAttrPosNix nvX nvY =
     case (x, y) of
       (NVStr ns, NVSet _ apos) ->
         maybe
-          (pure $ nvConstant NNull)
+          (pure nVNull)
           toValue
           (M.lookup (stringIgnoreContext ns) apos)
       _xy -> throwError $ ErrorCall $ "Invalid types for builtins.unsafeGetAttrPosNix: " <> show _xy
@@ -664,7 +677,7 @@ matchNix pat str =
           (not $ Text.null t)
 
     maybe
-      (pure $ nvConstant NNull)
+      (pure nVNull)
       (\case
         ("", sarr, "") ->
           do
@@ -679,7 +692,7 @@ matchNix pat str =
                       (length s > 1)
                       s
                   )
-        _ -> (pure $ nvConstant NNull)
+        _ -> (pure nVNull)
       )
       (matchOnceText re s)
 
@@ -1100,7 +1113,7 @@ functionArgsNix nvfun =
     fun <- demand nvfun
     case fun of
       NVClosure p _ ->
-        toValue @(AttrSet (NValue t f m)) $ nvConstant . NBool <$>
+        toValue @(AttrSet (NValue t f m)) $ mkNVBool <$>
           case p of
             Param name     -> M.singleton name False
             ParamSet s _ _ -> isJust <$> M.fromList s
@@ -1272,7 +1285,7 @@ lessThanNix ta tb =
     let
       badType = throwError $ ErrorCall $ "builtins.lessThan: expected two numbers or two strings, " <> "got " <> show va <> " and " <> show vb
 
-    nvConstant . NBool <$>
+    mkNVBool <$>
       case (va, vb) of
         (NVConstant ca, NVConstant cb) ->
           case (ca, cb) of
@@ -1464,8 +1477,8 @@ fromJSONNix nvjson =
             NFloat
             NInt
             (floatingOrInteger n)
-    A.Bool   b -> pure $ nvConstant $ NBool b
-    A.Null     -> pure $ nvConstant NNull
+    A.Bool   b -> pure $ mkNVBool b
+    A.Null     -> pure nVNull
 
 toJSONNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toJSONNix = (fmap nvStr . nvalueToJSONNixString) <=< demand
@@ -1505,7 +1518,7 @@ tryEvalNix e = catch (onSuccess <$> demand e) (pure . onError)
     nvSet
       mempty
       $ M.fromList
-        [ ("success", nvConstant (NBool True))
+        [ ("success", mkNVBool True)
         , ("value", v)
         ]
 
@@ -1514,7 +1527,7 @@ tryEvalNix e = catch (onSuccess <$> demand e) (pure . onError)
     nvSet
       mempty
       $ M.fromList
-        $ ($ nvConstant (NBool False)) <$>
+        $ ($ mkNVBool False) <$>
           [ ("success",)
           , ("value"  ,)
           ]
@@ -1746,7 +1759,7 @@ builtinsList = sequence
   , add2 Normal   "elem"             elemNix
   , add2 Normal   "elemAt"           elemAtNix
   , add  Normal   "exec"             execNix
-  , add0 Normal   "false"            (pure $ nvConstant $ NBool False)
+  , add0 Normal   "false"            (pure $ mkNVBool False)
   --, add  Normal   "fetchGit"         fetchGit
   --, add  Normal   "fetchMercurial"   fetchMercurial
   , add  Normal   "fetchTarball"     fetchTarball
@@ -1785,7 +1798,7 @@ builtinsList = sequence
   , add2 Normal   "match"            matchNix
   , add2 Normal   "mul"              mulNix
   , add0 Normal   "nixPath"          nixPathNix
-  , add0 Normal   "null"             (pure $ nvConstant NNull)
+  , add0 Normal   "null"             (pure nVNull)
   , add  Normal   "parseDrvName"     parseDrvNameNix
   , add2 Normal   "partition"        partitionNix
   --, add  Normal   "path"             path
@@ -1813,7 +1826,7 @@ builtinsList = sequence
   , add  TopLevel "toString"         toStringNix
   , add  Normal   "toXML"            toXMLNix
   , add2 TopLevel "trace"            traceNix
-  , add0 Normal   "true"             (pure $ nvConstant $ NBool True)
+  , add0 Normal   "true"             (pure $ mkNVBool True)
   , add  Normal   "tryEval"          tryEvalNix
   , add  Normal   "typeOf"           typeOfNix
   --, add0 Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependency
