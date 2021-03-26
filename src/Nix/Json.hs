@@ -6,7 +6,6 @@ module Nix.Json where
 import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Encoding           as A
 import qualified Data.HashMap.Lazy             as HM
-import qualified Data.Text.Lazy                as TL
 import qualified Data.Text.Lazy.Encoding       as TL
 import qualified Data.Vector                   as V
 import           Nix.Atoms
@@ -22,7 +21,7 @@ nvalueToJSONNixString :: MonadNix e t f m => NValue t f m -> m NixString
 nvalueToJSONNixString =
   runWithStringContextT .
     fmap
-      ( TL.toStrict
+      ( toStrict
       . TL.decodeUtf8
       . A.encodingToLazyByteString
       . toEncodingSorted

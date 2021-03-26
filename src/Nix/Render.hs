@@ -13,14 +13,11 @@ module Nix.Render where
 
 import           Prelude                 hiding ( readFile )
 
-#if !MIN_VERSION_base(4,13,0)
-import           Control.Monad.Fail             ( MonadFail )
-#endif
+-- Please reduce Unsafe
+import           Relude.Unsafe                  ( read )
 import qualified Data.ByteString               as BS
 import qualified Data.Set                      as Set
 import           Data.List                      ( maximum )
-import qualified Data.Text                     as T
-import qualified Data.Text.Encoding            as T
 import           Nix.Utils.Fix1                 ( Fix1T
                                                 , MonadFix1T )
 import           Nix.Expr.Types.Annotated
@@ -29,8 +26,6 @@ import qualified System.Directory              as S
 import qualified System.Posix.Files            as S
 import           Text.Megaparsec.Error
 import           Text.Megaparsec.Pos
--- Please reduce Unsafe
-import           Relude.Unsafe                  ( read )
 
 class MonadFail m => MonadFile m where
     readFile :: FilePath -> m ByteString
@@ -91,13 +86,13 @@ renderLocation (SrcSpan (SourcePos file begLine begCol) (SourcePos file' endLine
     if exist
       then do
         txt <- sourceContext file begLine begCol endLine endCol msg
-        pure
-          $ vsep
-              [ "In file "
-              <> errorContext file begLine begCol endLine endCol
-              <> ":"
-              , txt
-              ]
+        pure $
+          vsep
+            [ "In file "
+            <> errorContext file begLine begCol endLine endCol
+            <> ":"
+            , txt
+            ]
       else pure msg
 renderLocation (SrcSpan beg end) msg = fail $ "Don't know how to render range from " <> show beg <>" to " <> show end <>" for fail: " <> show msg
 
@@ -115,8 +110,8 @@ sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unP
       fmap pretty
       .   take (end' - beg')
       .   drop (pred beg')
-      .   T.lines
-      .   T.decodeUtf8
+      .   lines
+      .   decodeUtf8
       <$> readFile path
     let
       nums    = zipWith (curry (show . fst)) [beg' ..] ls

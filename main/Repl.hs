@@ -26,8 +26,6 @@ import           Nix.Scope
 import           Nix.Utils
 import           Nix.Value.Monad                ( demand )
 
-import qualified Data.List                   as List
-import qualified Data.Maybe                  as Maybe
 import qualified Data.HashMap.Lazy
 import           Data.Char                      ( isSpace )
 import           Data.List                      ( dropWhileEnd )
@@ -116,7 +114,7 @@ main' iniVal =
               optMatcher command options arguments
           x -> cmd $ String.unwords x
         )
-        (String.words . toString <$> Text.lines f)
+        (String.words . toString <$> lines f)
 
   handleMissing e
     | Error.isDoesNotExistError e = pure ""
@@ -133,7 +131,7 @@ main' iniVal =
              -> m ()
   optMatcher s [] _ = liftIO $ putStrLn $ "No such command :" <> s
   optMatcher s ((x, m) : xs) args
-    | s `List.isPrefixOf` x = m args
+    | s `isPrefixOf` x = m args
     | otherwise = optMatcher s xs args
 
 
@@ -170,7 +168,7 @@ initState mIni = do
     IState
       Nothing
       (Data.HashMap.Lazy.fromList $
-        ("builtins", builtins) : fmap ("input",) (Maybe.maybeToList mIni)
+        ("builtins", builtins) : fmap ("input",) (maybeToList mIni)
       )
       defReplConfig
         { cfgStrict = strict opts
@@ -272,7 +270,7 @@ printValue :: (MonadNix e t f m, MonadIO m)
            -> Repl e t f m ()
 printValue val = do
   cfg <- replCfg <$> get
-  lift $ lift $ do
+  lift $ lift $
     if
       | cfgStrict cfg -> liftIO . print . prettyNValue =<< normalForm val
       | cfgValues cfg -> liftIO . print . prettyNValueProv =<< removeEffects val
@@ -376,7 +374,7 @@ completeFunc reversedPrev word
       $ fmap helpOptionName (helpOptions :: HelpOptions e t f m)
 
   -- Files
-  | any (`List.isPrefixOf` word) [ "/", "./", "../", "~/" ] =
+  | any (`isPrefixOf` word) [ "/", "./", "../", "~/" ] =
     listFiles word
 
   -- Attributes of sets in REPL context
@@ -406,7 +404,7 @@ completeFunc reversedPrev word
         <> (toString <$> shortBuiltins)
 
   where
-    listCompletion = fmap simpleCompletion . filter (word `List.isPrefixOf`)
+    listCompletion = fmap simpleCompletion . filter (word `isPrefixOf`)
 
     notFinished x = x { isFinished = False }
 

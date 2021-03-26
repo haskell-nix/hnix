@@ -67,7 +67,6 @@ import           Data.Char                      ( isAlpha
 import           Data.Data                      ( Data(..) )
 import           Data.Fix                       ( Fix(..) )
 import qualified Data.HashSet                  as HashSet
-import qualified Data.List.NonEmpty            as NE
 import qualified Data.Map                      as Map
 import           Data.Text                      ( cons
                                                 , singleton
@@ -386,7 +385,7 @@ argExpr =
   -- there's a valid URI parse here.
   onlyname =
     msum
-      [ nixUri *> unexpected (Label ('v' NE.:| "alid uri"))
+      [ nixUri *> unexpected (Label ('v' :| "alid uri"))
       , Param <$> identifier
       ]
 

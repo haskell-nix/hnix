@@ -12,8 +12,8 @@
 
 module Nix.Eval where
 
-import           Control.Monad
-import           Control.Monad.Fix
+import           Control.Monad                  ( foldM )
+import           Control.Monad.Fix              ( MonadFix )
 import           Data.Semialign.Indexed         ( ialignWith )
 import           Data.Fix                       ( Fix(Fix) )
 import qualified Data.HashMap.Lazy             as M
