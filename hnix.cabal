@@ -366,6 +366,7 @@ library
     Nix.Lint
     Nix.Normal
     Nix.Options
+    Nix.Options.Parser
     Nix.Parser
     Nix.Pretty
     Nix.Reduce
@@ -402,6 +403,7 @@ library
       aeson >= 1.4.2 && < 1.6
     , array >= 0.4 && < 0.6
     , base >= 4.12 && < 5
+    , base16-bytestring >= 0.1.1 && < 1.1
     , binary >= 0.8.5 && < 0.9
     , bytestring >= 0.10.8 && < 0.11
     , comonad >= 5.0.4 && < 5.1
@@ -432,6 +434,7 @@ library
     , neat-interpolation >= 0.4 && < 0.6
     , optparse-applicative >= 0.14.3 && < 0.17
     , parser-combinators >= 1.0.1 && < 1.4
+    , pretty-show >= 1.9.5 && < 1.11
     , prettyprinter >= 1.7.0 && < 1.8
     , process >= 1.6.3 && < 1.7
     , ref-tf >= 0.4.0 && <= 0.4.0.2
@@ -440,6 +443,7 @@ library
     , scientific >= 0.3.6 && < 0.4
     , semialign >= 1 && < 1.2
     , semialign-indexed >= 1 && < 1.2
+    , serialise >= 0.2.1 && < 0.3
     , some >= 1.0.1 && < 1.1
     , split >= 0.2.3 && < 0.3
     , syb >= 0.7 && < 0.8
@@ -459,13 +463,6 @@ library
     default-extensions:
       ApplicativeDo
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O3
-  if !impl(ghcjs)
-    exposed-modules:
-      Nix.Options.Parser
-    build-depends:
-        base16-bytestring >= 0.1.1 && < 1.1
-      , pretty-show >= 1.9.5 && < 1.11
-      , serialise >= 0.2.1 && < 0.3
   -- if !flag(profiling)
   --   build-depends:
   --       ghc-datasize
@@ -519,8 +516,6 @@ executable hnix
   if impl(ghc < 8.10)
     -- GHC < 8.10 comes with haskeline < 0.8, which we don't support.
     -- To simplify CI, we just disable the component.
-    buildable: False
-  if impl(ghcjs)
     buildable: False
   default-language: Haskell2010
 
@@ -583,8 +578,6 @@ test-suite hnix-tests
     default-extensions:
       ApplicativeDo
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O3
-  if impl(ghcjs)
-    buildable: False
   default-language: Haskell2010
 
 benchmark hnix-benchmarks
@@ -626,6 +619,4 @@ benchmark hnix-benchmarks
     default-extensions:
       ApplicativeDo
     ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O3
-  if impl(ghcjs)
-    buildable: False
   default-language: Haskell2010
