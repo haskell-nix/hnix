@@ -28,6 +28,7 @@ import           Lens.Family2.TH                ( makeLensesBy )
 #if ENABLE_TRACING
 import           Debug.Trace as X
 #else
+-- Well, since it is currently CPP intermingled with Debug.Trace, required to use String here.
 trace :: String -> a -> a
 trace = const id
 traceM :: Monad m => String -> m ()
