@@ -221,3 +221,8 @@ both f (x,y) = (f x, f y)
 dup :: a -> (a, a)
 dup x = (x, x)
 {-# inline dup #-}
+
+-- | From @utility-ht@ for tuple laziness.
+mapPair :: (a -> c, b -> d) -> (a,b) -> (c,d)
+mapPair ~(f,g) ~(a,b) = (f a, g b)
+{-# inline mapPair #-}
