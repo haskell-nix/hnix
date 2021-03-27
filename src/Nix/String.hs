@@ -33,6 +33,7 @@ where
 
 
 
+import           Nix.Utils
 import           Control.Monad.Writer           ( WriterT(..), MonadWriter(tell))
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.HashSet                  as S
@@ -252,8 +253,16 @@ runWithStringContext' = runIdentity . runWithStringContextT'
 intercalateNixString :: NixString -> [NixString] -> NixString
 intercalateNixString _   []   = mempty
 intercalateNixString _   [ns] = ns
-intercalateNixString sep nss  = NixString contents ctx
+intercalateNixString sep nss  =
+  uncurry NixString (mapPair intertwine unpackNss)
  where
-  contents = Text.intercalate (nsContents sep) (fmap nsContents nss)
-  ctx      = S.unions (nsContext sep : fmap nsContext nss)
+
+  intertwine =
+    ( Text.intercalate (nsContents sep)
+    , S.unions . (:)   (nsContext  sep)
+    )
+
+  unpackNss = (fnss nsContents, fnss nsContext)
+   where
+    fnss = (`fmap` nss) -- do once
 
