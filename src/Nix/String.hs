@@ -175,15 +175,25 @@ extractNixString (NixString s c) =
 
 -- ** Setters
 
+-- this really should be 2 args, then with @toStringContexts path@ laziness it would tail recurse.
+-- for now tuple dissected internaly with laziness preservation.
 toStringContexts :: (Text, NixLikeContextValue) -> [StringContext]
-toStringContexts (path, nlcv) = case nlcv of
-  NixLikeContextValue True _ _ -> StringContext path DirectPath
-    : toStringContexts (path, nlcv { nlcvPath = False })
-  NixLikeContextValue _ True _ -> StringContext path AllOutputs
-    : toStringContexts (path, nlcv { nlcvAllOutputs = False })
-  NixLikeContextValue _ _ ls | not (null ls) ->
-    fmap (StringContext path . DerivationOutput) ls
-  _ -> mempty
+toStringContexts ~(path, nlcv) =
+  go nlcv
+ where
+
+  go cv =
+    case cv of
+      NixLikeContextValue True _    _ ->
+        mkLstCtxFor DirectPath cv { nlcvPath = False }
+      NixLikeContextValue _    True _ ->
+        mkLstCtxFor AllOutputs cv { nlcvAllOutputs = False }
+      NixLikeContextValue _    _    ls | not (null ls) ->
+        fmap (mkCtxFor . DerivationOutput) ls
+      _ -> mempty
+   where
+    mkCtxFor = StringContext path
+    mkLstCtxFor t c = mkCtxFor t : go c
 
 toNixLikeContextValue :: StringContext -> (Text, NixLikeContextValue)
 toNixLikeContextValue sc = (,) (scPath sc) $ case scFlavor sc of
