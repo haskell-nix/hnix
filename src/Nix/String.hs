@@ -197,10 +197,13 @@ toStringContexts ~(path, nlcv) =
     mkLstCtxFor t c = mkCtxFor t : go c
 
 toNixLikeContextValue :: StringContext -> (Text, NixLikeContextValue)
-toNixLikeContextValue sc = (,) (scPath sc) $ case scFlavor sc of
-  DirectPath         -> NixLikeContextValue True False mempty
-  AllOutputs         -> NixLikeContextValue False True mempty
-  DerivationOutput t -> NixLikeContextValue False False [t]
+toNixLikeContextValue sc =
+  ( scPath sc
+  , case scFlavor sc of
+      DirectPath         -> NixLikeContextValue True False mempty
+      AllOutputs         -> NixLikeContextValue False True mempty
+      DerivationOutput t -> NixLikeContextValue False False [t]
+  )
 
 toNixLikeContext :: S.HashSet StringContext -> NixLikeContext
 toNixLikeContext stringContext =
