@@ -60,10 +60,10 @@ class MonadThunkF t m a | t -> m, t -> a where
   forceEffF :: (a   -> m r) -> t   -> m r
   furtherF  :: (m a -> m a) -> t   -> m t
 
-newtype ThunkLoop = ThunkLoop String -- contains rendering of ThunkId
+newtype ThunkLoop = ThunkLoop Text -- contains rendering of ThunkId
   deriving Typeable
 
 instance Show ThunkLoop where
-  show (ThunkLoop i) = "ThunkLoop " <> i
+  show (ThunkLoop i) = toString $ "ThunkLoop " <> i
 
 instance Exception ThunkLoop
