@@ -488,7 +488,7 @@ instance Lift (Fix NExprF) where
   lift = dataToExpQ $ \b ->
     case Reflection.typeOf b `eqTypeRep` Reflection.typeRep @Text of
       Nothing    -> Nothing
-      Just HRefl -> pure [| (toText :: String -> Text) $(liftString $ toString b) |]
+      Just HRefl -> pure [| $(Language.Haskell.TH.Syntax.lift b) |]
 #if MIN_VERSION_template_haskell(2,17,0)
   liftTyped = unsafeCodeCoerce . lift
 #elif MIN_VERSION_template_haskell(2,16,0)
