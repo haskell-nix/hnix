@@ -277,9 +277,9 @@ instance Eq1 NKeyName where
 -- | @since 0.10.1
 instance Ord1 NKeyName where
   liftCompare cmp (DynamicKey a) (DynamicKey b) = liftCompare2 (liftCompare cmp) cmp a b
-  liftCompare _   (DynamicKey _) (StaticKey _)  = LT
-  liftCompare _   (StaticKey _)  (DynamicKey _) = GT
-  liftCompare _   (StaticKey a)  (StaticKey b)  = compare a b
+  liftCompare _   (DynamicKey _) (StaticKey  _) = LT
+  liftCompare _   (StaticKey  _) (DynamicKey _) = GT
+  liftCompare _   (StaticKey  a) (StaticKey  b) = compare a b
 
 instance Hashable1 NKeyName where
   liftHashWithSalt h salt (DynamicKey a) =

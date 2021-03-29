@@ -87,13 +87,13 @@ renderFrame
   => NixFrame
   -> m [Doc ann]
 renderFrame (NixFrame level f)
-  | Just (e :: EvalFrame m v) <- fromException f = renderEvalFrame level e
-  | Just (e :: ThunkLoop) <- fromException f = renderThunkLoop level e
-  | Just (e :: ValueFrame t f m) <- fromException f = renderValueFrame level e
-  | Just (e :: NormalLoop t f m) <- fromException f = renderNormalLoop level e
-  | Just (e :: ExecFrame t f m) <- fromException f = renderExecFrame level e
-  | Just (e :: ErrorCall) <- fromException f = pure [pretty (Text.show e)]
-  | Just (e :: SynHoleInfo m v) <- fromException f = pure [pretty (Text.show e)]
+  | Just (e :: EvalFrame      m v) <- fromException f = renderEvalFrame  level  e
+  | Just (e :: ThunkLoop         ) <- fromException f = renderThunkLoop  level  e
+  | Just (e :: ValueFrame t f m  ) <- fromException f = renderValueFrame level  e
+  | Just (e :: NormalLoop t f m  ) <- fromException f = renderNormalLoop level  e
+  | Just (e :: ExecFrame  t f m  ) <- fromException f = renderExecFrame  level  e
+  | Just (e :: ErrorCall         ) <- fromException f = pure [pretty (Text.show e)]
+  | Just (e :: SynHoleInfo    m v) <- fromException f = pure [pretty (Text.show e)]
   | otherwise = fail $ "Unrecognized frame: " <> show f
 
 wrapExpr :: NExprF r -> NExpr
@@ -104,36 +104,45 @@ renderEvalFrame
   => NixLevel
   -> EvalFrame m v
   -> m [Doc ann]
-renderEvalFrame level f = do
-  opts :: Options <- asks (view hasLens)
-  case f of
-    EvaluatingExpr scope e@(Fix (Compose (Ann ann _))) -> do
-      let scopeInfo | showScopes opts = [pretty $ Text.show scope]
-                    | otherwise   = mempty
-      fmap (\x -> scopeInfo <> [x])
-        $   renderLocation ann
-        =<< renderExpr level "While evaluating" "Expression" e
+renderEvalFrame level f =
+  do
+    opts :: Options <- asks (view hasLens)
+    case f of
+      EvaluatingExpr scope e@(Fix (Compose (Ann ann _))) ->
+        do
+          let
+            scopeInfo =
+              bool
+                mempty
+                [pretty $ Text.show scope]
+                (showScopes opts)
+          fmap
+            (\x -> scopeInfo <> [x])
+            $ renderLocation ann =<<
+                renderExpr level "While evaluating" "Expression" e
 
-    ForcingExpr _scope e@(Fix (Compose (Ann ann _))) | thunks opts ->
-      fmap (: mempty)
-        $   renderLocation ann
-        =<< renderExpr level "While forcing thunk from" "Forcing thunk" e
+      ForcingExpr _scope e@(Fix (Compose (Ann ann _))) | thunks opts ->
+        fmap
+          (: mempty)
+          $ renderLocation ann =<<
+              renderExpr level "While forcing thunk from" "Forcing thunk" e
 
-    Calling name ann ->
-      fmap (: mempty)
-        $  renderLocation ann
-        $  "While calling builtins."
-        <> pretty name
+      Calling name ann ->
+        fmap
+          (: mempty)
+          $ renderLocation ann $
+              "While calling builtins." <> pretty name
 
-    SynHole synfo ->
-      sequence
-        $ let e@(Fix (Compose (Ann ann _))) = _synHoleInfo_expr synfo
-          in  [ renderLocation ann
-                =<< renderExpr level "While evaluating" "Syntactic Hole" e
-              , pure $ pretty $ Text.show (_synHoleInfo_scope synfo)
-              ]
+      SynHole synfo ->
+        sequence $
+          let e@(Fix (Compose (Ann ann _))) = _synHoleInfo_expr synfo in
 
-    ForcingExpr _ _ -> pure mempty
+          [ renderLocation ann =<<
+              renderExpr level "While evaluating" "Syntactic Hole" e
+          , pure $ pretty $ Text.show (_synHoleInfo_scope synfo)
+          ]
+
+      ForcingExpr _ _ -> pure mempty
 
 
 renderExpr
@@ -203,17 +212,21 @@ renderValue _level _longLabel _shortLabel v = do
     prettyNValueProv
     (values opts)
     <$> removeEffects v
+
 renderExecFrame
   :: (MonadReader e m, Has e Options, MonadFile m, MonadCitedThunks t f m)
   => NixLevel
   -> ExecFrame t f m
   -> m [Doc ann]
-renderExecFrame level = \case
-  Assertion ann v ->
-    fmap (: mempty) $
-      do
-        d <- renderValue level "" "" v
-        renderLocation ann $ fillSep ["Assertion failed:", d]
+renderExecFrame level =
+  \case
+    Assertion ann v ->
+      fmap
+        (: mempty)
+        (do
+          d <- renderValue level "" "" v
+          renderLocation ann $ fillSep ["Assertion failed:", d]
+        )
 
 renderThunkLoop
   :: (MonadReader e m, Has e Options, MonadFile m, Show (ThunkId m))
@@ -228,7 +241,11 @@ renderNormalLoop
   => NixLevel
   -> NormalLoop t f m
   -> m [Doc ann]
-renderNormalLoop level = fmap (: mempty) . \case
-  NormalLoop v -> do
-    v' <- renderValue level "" "" v
-    pure $ "Infinite recursion during normalization forcing " <> v'
+renderNormalLoop level =
+  fmap
+    (: mempty)
+    . \case
+      NormalLoop v ->
+        do
+          v' <- renderValue level "" "" v
+          pure $ "Infinite recursion during normalization forcing " <> v'
