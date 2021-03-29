@@ -44,7 +44,7 @@ import           Data.Ord.Deriving
 import qualified Text.Show
 import           Data.Traversable
 import           GHC.Generics
-import           Language.Haskell.TH.Syntax
+import qualified Language.Haskell.TH.Syntax    as TH
 import           Lens.Family2
 import           Lens.Family2.TH
 import           Nix.Atoms
@@ -484,15 +484,15 @@ instance Serialise r => Serialise (NExprF r)
 instance IsString NExpr where
   fromString = Fix . NSym . fromString
 
-instance Lift (Fix NExprF) where
-  lift = dataToExpQ $ \b ->
+instance TH.Lift (Fix NExprF) where
+  lift = TH.dataToExpQ $ \b ->
     case Reflection.typeOf b `eqTypeRep` Reflection.typeRep @Text of
       Nothing    -> Nothing
-      Just HRefl -> pure [| $(Language.Haskell.TH.Syntax.lift b) |]
+      Just HRefl -> pure [| $(TH.lift b) |]
 #if MIN_VERSION_template_haskell(2,17,0)
   liftTyped = unsafeCodeCoerce . lift
 #elif MIN_VERSION_template_haskell(2,16,0)
-  liftTyped = unsafeTExpCoerce . Language.Haskell.TH.Syntax.lift
+  liftTyped = TH.unsafeTExpCoerce . TH.lift
 #endif
 
 #if !MIN_VERSION_hashable(1,3,1)
