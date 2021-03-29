@@ -281,7 +281,7 @@ freshTVar =
   do
     s <- get
     put s { count = count s + 1 }
-    pure $ TV (letters !! count s)
+    pure $ TV (toText (letters !! count s))
 
 fresh :: MonadState InferState m => m Type
 fresh = TVar <$> freshTVar

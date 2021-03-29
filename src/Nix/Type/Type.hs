@@ -8,12 +8,12 @@ type Name = Text
 
 -- | Hindrey-Milner type interface
 
-newtype TVar = TV String
+newtype TVar = TV Text
   deriving (Show, Eq, Ord)
 
 data Type
   = TVar TVar                -- type variable
-  | TCon String              -- known type
+  | TCon Text                -- known type
   | TSet Bool (AttrSet Type) -- heterogeneous map, bool if variadic
   | TList [Type]             -- heterogeneous list
   | (:~>) Type Type          -- type -> type
