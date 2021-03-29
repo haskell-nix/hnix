@@ -192,8 +192,8 @@ renderValue
   :: forall e t f m ann
    . (MonadReader e m, Has e Options, MonadFile m, MonadCitedThunks t f m)
   => NixLevel
-  -> String
-  -> String
+  -> Text
+  -> Text
   -> NValue t f m
   -> m (Doc ann)
 renderValue _level _longLabel _shortLabel v = do
