@@ -270,7 +270,12 @@ extendMSet :: Monad m => TVar -> InferT s m a -> InferT s m a
 extendMSet x = InferT . local (first (Set.insert x)) . getInfer
 
 letters :: [String]
-letters = [1 ..] >>= flip replicateM ['a' .. 'z']
+letters =
+  do
+    l <- [1 ..]
+    replicateM
+      l
+      ['a' .. 'z']
 
 freshTVar :: MonadState InferState m => m TVar
 freshTVar =
