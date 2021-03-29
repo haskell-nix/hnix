@@ -139,8 +139,8 @@ renderEvalFrame level f = do
 renderExpr
   :: (MonadReader e m, Has e Options, MonadFile m)
   => NixLevel
-  -> String
-  -> String
+  -> Text
+  -> Text
   -> NExprLoc
   -> m (Doc ann)
 renderExpr _level longLabel shortLabel e@(Fix (Compose (Ann _ x))) = do
