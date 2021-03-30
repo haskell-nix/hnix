@@ -127,7 +127,7 @@ instance
   )
   => ToBuiltin t f m (a -> b) where
   toBuiltin name f =
-    pure $ nvBuiltin name (toBuiltin name . f <=< fromValue . Deeper)
+    pure $ nvBuiltin (toText name) (toBuiltin name . f <=< fromValue . Deeper)
 
 -- *** @WValue@ closure wrapper to have @Ord@
 

@@ -623,12 +623,12 @@ nvClosure x f = Free $ nvClosure' x f
 
 
 nvBuiltin :: (Applicative f, Functor m)
-  => String
+  => Text
   -> (NValue t f m
     -> m (NValue t f m)
     )
   -> NValue t f m
-nvBuiltin name f = Free $ nvBuiltin' (toText name) f
+nvBuiltin name f = Free $ nvBuiltin' name f
 
 
 builtin
@@ -639,7 +639,7 @@ builtin
       -> m (NValue t f m)
     )
   -> m (NValue t f m)
-builtin name f = pure $ nvBuiltin name $ \a -> f a
+builtin name f = pure $ nvBuiltin (toText name) $ \a -> f a
 
 
 builtin2
