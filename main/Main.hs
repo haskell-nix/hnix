@@ -158,10 +158,10 @@ main = do
     printer
       | finder opts = findAttrs <=< fromValue @(AttrSet (StdValue (StandardT (StdIdT IO))))
       | xml    opts = liftIO . putStrLn . toString . stringIgnoreContext . toXML <=< normalForm
-      | json   opts = liftIO . Text.putStrLn . stringIgnoreContext <=< nvalueToJSONNixString
-      | strict opts = liftIO . print . prettyNValue <=< normalForm
-      | values opts = liftIO . print . prettyNValueProv <=< removeEffects
-      | otherwise   = liftIO . print . prettyNValue <=< removeEffects
+      | json   opts = liftIO . Text.putStrLn       . stringIgnoreContext         <=< nvalueToJSONNixString
+      | strict opts = liftIO . print               . prettyNValue                <=< normalForm
+      | values opts = liftIO . print               . prettyNValueProv            <=< removeEffects
+      | otherwise   = liftIO . print               . prettyNValue                <=< removeEffects
      where
       findAttrs
         :: AttrSet (StdValue (StandardT (StdIdT IO)))
