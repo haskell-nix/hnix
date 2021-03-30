@@ -1866,7 +1866,7 @@ builtinsList = sequence
       -> m (NValue t f m)
       )
     -> m (Builtin (NValue t f m))
-  add  t n v = mkBuiltin t n (builtin (toString n) v)
+  add  t n v = mkBuiltin t n (builtin n v)
 
   add2
     :: BuiltinType
