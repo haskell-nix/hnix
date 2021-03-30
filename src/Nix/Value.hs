@@ -165,12 +165,12 @@ instance Show r => Show (NValueF p m r) where
     go :: NValueF p m r -> Int -> String -> String
     go = \case
       (NVConstantF atom     ) -> showsCon1 "NVConstant" atom
-      (NVStrF      ns       ) -> showsCon1 "NVStr" (stringIgnoreContext ns)
-      (NVListF     lst      ) -> showsCon1 "NVList" lst
-      (NVSetF      attrs  _ ) -> showsCon1 "NVSet" attrs
-      (NVClosureF  params _ ) -> showsCon1 "NVClosure" params
-      (NVPathF     path     ) -> showsCon1 "NVPath" path
-      (NVBuiltinF  name   _ ) -> showsCon1 "NVBuiltin" name
+      (NVStrF      ns       ) -> showsCon1 "NVStr"      (stringIgnoreContext ns)
+      (NVListF     lst      ) -> showsCon1 "NVList"     lst
+      (NVSetF      attrs  _ ) -> showsCon1 "NVSet"      attrs
+      (NVClosureF  params _ ) -> showsCon1 "NVClosure"  params
+      (NVPathF     path     ) -> showsCon1 "NVPath"     path
+      (NVBuiltinF  name   _ ) -> showsCon1 "NVBuiltin"  name
 
     showsCon1 :: Show a => String -> a -> Int -> String -> String
     showsCon1 con a d =
