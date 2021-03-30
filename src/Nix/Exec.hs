@@ -57,14 +57,17 @@ import           GHC.DataSize
 #endif
 #endif
 
-type MonadCited t f m
-  = ( HasCitations m (NValue t f m) t
+type MonadCited t f m =
+  ( HasCitations m (NValue t f m) t
   , HasCitations1 m (NValue t f m) f
   , MonadDataContext f m
   )
 
 nvConstantP
-  :: MonadCited t f m => Provenance m (NValue t f m) -> NAtom -> NValue t f m
+  :: MonadCited t f m
+  => Provenance m (NValue t f m)
+  -> NAtom
+  -> NValue t f m
 nvConstantP p x = addProvenance p (nvConstant x)
 
 nvStrP
@@ -75,7 +78,10 @@ nvStrP
 nvStrP p ns = addProvenance p (nvStr ns)
 
 nvPathP
-  :: MonadCited t f m => Provenance m (NValue t f m) -> FilePath -> NValue t f m
+  :: MonadCited t f m
+  => Provenance m (NValue t f m)
+  -> FilePath
+  -> NValue t f m
 nvPathP p x = addProvenance p (nvPath x)
 
 nvListP
@@ -290,10 +296,10 @@ callFunc fun arg =
     fun' <- demand fun
     case fun' of
       NVClosure _params f -> f arg
-      NVBuiltin name f ->
+      NVBuiltin name f    ->
         do
           span <- currentPos
-          withFrame Info ((Calling @m @(NValue t f m)) name span) (f arg)
+          withFrame Info ((Calling @m @(NValue t f m)) (toText name) span) (f arg)
       (NVSet m _) | Just f <- M.lookup "__functor" m ->
         ((`callFunc` arg) <=< (`callFunc` fun')) =<< demand f
       x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show x
@@ -338,7 +344,7 @@ execBinaryOp scope span op lval rarg =
     NImpl -> helperLogic id   True
     _     ->
       do
-        rval <- rarg
+        rval  <- rarg
         rval' <- demand rval
         lval' <- demand lval
 

@@ -88,7 +88,7 @@ type MonadNixEval v m
 data EvalFrame m v
   = EvaluatingExpr (Scopes m v) NExprLoc
   | ForcingExpr (Scopes m v) NExprLoc
-  | Calling String SrcSpan
+  | Calling Text SrcSpan
   | SynHole (SynHoleInfo m v)
   deriving (Show, Typeable)
 
