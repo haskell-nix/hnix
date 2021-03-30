@@ -456,7 +456,7 @@ nvClosure' x f = NValue' $ pure $ NVClosureF x f
 
 -- | Haskell functions to the Nix functions!
 nvBuiltin' :: (Applicative f, Functor m)
-  => String
+  => Text
   -> (NValue t f m -> m r)
   -> NValue' t f m r
 nvBuiltin' name f = NValue' $ pure $ NVBuiltinF (toText name) f
@@ -628,7 +628,7 @@ nvBuiltin :: (Applicative f, Functor m)
     -> m (NValue t f m)
     )
   -> NValue t f m
-nvBuiltin name f = Free $ nvBuiltin' name f
+nvBuiltin name f = Free $ nvBuiltin' (toText name) f
 
 
 builtin
