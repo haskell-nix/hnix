@@ -403,4 +403,4 @@ printNix = iterNValue (\_ _ -> thk) phi
       where surround s = "\"" <> s <> "\""
   phi NVClosure'{}        = "<<lambda>>"
   phi (NVPath' fp       ) = fp
-  phi (NVBuiltin' name _) = "<<builtin " <> name <> ">>"
+  phi (NVBuiltin' name _) = toString $ "<<builtin " <> name <> ">>"

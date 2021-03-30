@@ -139,7 +139,7 @@ data NValueF p m r
       --   Note that 'm r' is being used here because effectively a function
       --   and its set of default arguments is "never fully evaluated". This
       --   enforces in the type that it must be re-evaluated for each call.
-    | NVBuiltinF String (p -> m r)
+    | NVBuiltinF Text (p -> m r)
       -- ^ A builtin function is itself already in normal form. Also, it may
       --   or may not choose to evaluate its argument in the production of a
       --   result.
@@ -459,7 +459,7 @@ nvBuiltin' :: (Applicative f, Functor m)
   => String
   -> (NValue t f m -> m r)
   -> NValue' t f m r
-nvBuiltin' name f = NValue' $ pure $ NVBuiltinF name f
+nvBuiltin' name f = NValue' $ pure $ NVBuiltinF (toText name) f
 
 
 -- So above we have maps of Hask subcategory objects to Nix objects,

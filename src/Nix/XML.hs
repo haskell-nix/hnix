@@ -79,7 +79,7 @@ toXML = runWithStringContext . fmap pp . iterNValue (\_ _ -> cyc) phi
           "function"
           (paramsXML p)
     NVPath' fp        -> pure $ mkEVal "path" fp
-    NVBuiltin' name _ -> pure $ mkEName "function" name
+    NVBuiltin' name _ -> pure $ mkEName "function" $ toString name
 
 mkE :: String -> [Content] -> Element
 mkE n c =
