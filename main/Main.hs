@@ -169,7 +169,7 @@ main = do
       findAttrs = go mempty
        where
         go prefix s = do
-          xs <- forM (sortOn fst (M.toList s)) $ \(k, nv) ->
+          xs <- forM (sortWith fst (M.toList s)) $ \(k, nv) ->
             free
               (\ (StdThunk (extract -> Thunk _ _ ref)) -> do
                 let path         = prefix <> toString k

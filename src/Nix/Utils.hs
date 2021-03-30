@@ -122,7 +122,7 @@ toEncodingSorted = \case
     A.pairs
       . mconcat
       . fmap (\(k, v) -> A.pair k $ toEncodingSorted v)
-      . sortOn fst
+      . sortWith fst
       $ M.toList m
   A.Array l -> A.list toEncodingSorted $ V.toList l
   v         -> A.toEncoding v

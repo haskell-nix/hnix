@@ -70,7 +70,7 @@ toXML = runWithStringContext . fmap pp . iterNValue (\_ _ -> cyc) phi
                     [Elem v]
                     Nothing
               ) <$>
-                sortBy (comparing fst) (M.toList kvs)
+                sortWith fst (M.toList kvs)
             )
 
     NVClosure' p _ ->
