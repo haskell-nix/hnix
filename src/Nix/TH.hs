@@ -46,7 +46,7 @@ freeVars e = case unFix e of
   (NSym         var             ) -> Set.singleton var
   (NList        list            ) -> mapFreeVars list
   (NSet   NNonRecursive bindings) -> bindFreeVars bindings
-  (NSet   NRecursive bindings   ) -> Set.difference (bindFreeVars bindings) (bindDefs bindings)
+  (NSet   NRecursive    bindings) -> Set.difference (bindFreeVars bindings) (bindDefs bindings)
   (NLiteralPath _               ) -> mempty
   (NEnvPath     _               ) -> mempty
   (NUnary       _    expr       ) -> freeVars expr
@@ -65,26 +65,25 @@ freeVars e = case unFix e of
       (freeVars expr)
       -- But remove the argument name if existing, and all arguments in the parameter set
       (Set.difference
-        (Set.unions (mapMaybe (fmap freeVars . snd) set))
+        (Set.unions $ freeVars <$> mapMaybe snd set)
         (Set.difference
           (maybe mempty Set.singleton varname)
-          (Set.fromList (fmap fst set))
+          (Set.fromList $ fmap fst set)
         )
       )
-  (NLet            bindings expr) ->
+  (NLet         bindings expr   ) ->
     Set.union
       (freeVars expr)
       (Set.difference
         (bindFreeVars bindings)
         (bindDefs  bindings)
       )
-  (NIf          cond th   el    ) ->
-    Set.unions $ freeVars <$> [cond, th, el]
+  (NIf          cond th   el    ) -> Set.unions $ freeVars <$> [cond, th, el]
   -- Evaluation is needed to find out whether x is a "real" free variable in `with y; x`, we just include it
   -- This also makes sense because its value can be overridden by `x: with y; x`
   (NWith        set  expr       ) -> Set.union (freeVars set      ) (freeVars expr)
   (NAssert      assertion expr  ) -> Set.union (freeVars assertion) (freeVars expr)
-  (NSynHole _                   ) -> mempty
+  (NSynHole     _               ) -> mempty
 
  where
 
@@ -141,7 +140,7 @@ metaExp _ _ = Nothing
 
 metaPat :: Set VarName -> NExprLoc -> Maybe PatQ
 metaPat fvs (Fix (NSym_ _ x)) | x `Set.member` fvs =
-  pure (varP (mkName $ toString x))
+  pure $ varP $ mkName $ toString x
 metaPat _ _ = Nothing
 
 -- Use of @QuasiQuoter@ requires @String@.
