@@ -25,11 +25,8 @@ quoteExprExp s = do
       pure
       (parseNixText $ toText s)
   dataToExpQ
-    (const Nothing `extQ` metaExp (freeVars expr) `extQ` (pure . liftText))
+    (const Nothing `extQ` metaExp (freeVars expr) `extQ` (pure . (TH.lift :: Text -> Q Exp)))
     expr
- where
-  liftText :: Text -> Q Exp
-  liftText txt = AppE (VarE 'id) <$> TH.lift txt
 
 quoteExprPat :: String -> PatQ
 quoteExprPat s = do
