@@ -42,11 +42,11 @@ quoteExprPat s = do
 freeVars :: NExpr -> Set VarName
 freeVars e = case unFix e of
   (NConstant    _               ) -> mempty
-  (NStr         string          ) -> foldMap freeVars string
+  (NStr         string          ) -> mapFreeVars string
   (NSym         var             ) -> Set.singleton var
-  (NList        list            ) -> foldMap freeVars list
-  (NSet   NNonRecursive bindings) -> foldMap bindFree bindings
-  (NSet   NRecursive bindings   ) -> Set.difference (foldMap bindFree bindings) (foldMap bindDefs bindings)
+  (NList        list            ) -> mapFreeVars list
+  (NSet   NNonRecursive bindings) -> bindFreeVars bindings
+  (NSet   NRecursive bindings   ) -> Set.difference (bindFreeVars bindings) (bindDefs bindings)
   (NLiteralPath _               ) -> mempty
   (NEnvPath     _               ) -> mempty
   (NUnary       _    expr       ) -> freeVars expr
@@ -75,8 +75,8 @@ freeVars e = case unFix e of
     Set.union
       (freeVars expr)
       (Set.difference
-        (foldMap bindFree bindings)
-        (foldMap bindDefs bindings)
+        (bindFreeVars bindings)
+        (bindDefs  bindings)
       )
   (NIf          cond th   el    ) ->
     Set.unions $ freeVars <$> [cond, th, el]
@@ -88,23 +88,32 @@ freeVars e = case unFix e of
 
  where
 
+  bindDefs :: Foldable t => t (Binding NExpr) -> Set VarName
+  bindDefs = foldMap bind1Def
+   where
+    bind1Def :: Binding r -> Set VarName
+    bind1Def (Inherit   Nothing                  _    _) = mempty
+    bind1Def (Inherit  (Just _                 ) keys _) = Set.fromList $ mapMaybe staticKey keys
+    bind1Def (NamedVar (StaticKey  varname :| _) _    _) = Set.singleton varname
+    bind1Def (NamedVar (DynamicKey _       :| _) _    _) = mempty
+
+  bindFreeVars :: Foldable t => t (Binding NExpr) -> Set VarName
+  bindFreeVars = foldMap bind1Free
+   where
+    bind1Free :: Binding NExpr -> Set VarName
+    bind1Free (Inherit  Nothing     keys _) = Set.fromList $ mapMaybe staticKey keys
+    bind1Free (Inherit (Just scope) _    _) = freeVars scope
+    bind1Free (NamedVar path        expr _) = Set.union (pathFree path) (freeVars expr)
+
   staticKey :: NKeyName r -> Maybe VarName
   staticKey (StaticKey  varname) = pure varname
   staticKey (DynamicKey _      ) = mempty
 
-  bindDefs :: Binding r -> Set VarName
-  bindDefs (Inherit   Nothing                  _    _) = mempty
-  bindDefs (Inherit  (Just _                 ) keys _) = Set.fromList $ mapMaybe staticKey keys
-  bindDefs (NamedVar (StaticKey  varname :| _) _    _) = Set.singleton varname
-  bindDefs (NamedVar (DynamicKey _       :| _) _    _) = mempty
-
-  bindFree :: Binding NExpr -> Set VarName
-  bindFree (Inherit  Nothing     keys _) = Set.fromList $ mapMaybe staticKey keys
-  bindFree (Inherit (Just scope) _    _) = freeVars scope
-  bindFree (NamedVar path        expr _) = Set.union (pathFree path) (freeVars expr)
-
   pathFree :: NAttrPath NExpr -> Set VarName
-  pathFree = foldMap (foldMap freeVars)
+  pathFree = foldMap mapFreeVars
+
+  mapFreeVars :: Foldable t => t NExpr -> Set VarName
+  mapFreeVars = foldMap freeVars
 
 
 class ToExpr a where
