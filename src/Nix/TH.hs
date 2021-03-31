@@ -11,9 +11,8 @@ import           Data.Fix
 import           Data.Generics.Aliases
 import           Data.Set                       ( (\\) )
 import qualified Data.Set                      as Set
-import qualified Data.Text                     as Text
 import           Language.Haskell.TH
-import           Language.Haskell.TH.Syntax     ( liftString )
+import qualified Language.Haskell.TH.Syntax    as TH
 import           Language.Haskell.TH.Quote
 import           Nix.Atoms
 import           Nix.Expr
@@ -30,8 +29,8 @@ quoteExprExp s = do
     (const Nothing `extQ` metaExp (freeVars expr) `extQ` (pure . liftText))
     expr
  where
-  liftText :: Text.Text -> Q Exp
-  liftText txt = AppE (VarE 'toText) <$> liftString (toString txt)
+  liftText :: Text -> Q Exp
+  liftText txt = AppE (VarE 'id) <$> TH.lift txt
 
 quoteExprPat :: String -> PatQ
 quoteExprPat s = do
