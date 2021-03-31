@@ -127,7 +127,7 @@ instance
   )
   => ToBuiltin t f m (a -> b) where
   toBuiltin name f =
-    pure $ nvBuiltin name (toBuiltin name . f <=< fromValue . Deeper)
+    pure $ nvBuiltin (toText name) (toBuiltin name . f <=< fromValue . Deeper)
 
 -- *** @WValue@ closure wrapper to have @Ord@
 
@@ -1866,7 +1866,7 @@ builtinsList = sequence
       -> m (NValue t f m)
       )
     -> m (Builtin (NValue t f m))
-  add  t n v = mkBuiltin t n (builtin (toString n) v)
+  add  t n v = mkBuiltin t n (builtin n v)
 
   add2
     :: BuiltinType
@@ -1876,7 +1876,7 @@ builtinsList = sequence
       -> m (NValue t f m)
       )
     -> m (Builtin (NValue t f m))
-  add2 t n v = mkBuiltin t n (builtin2 (toString n) v)
+  add2 t n v = mkBuiltin t n (builtin2 n v)
 
   add3
     :: BuiltinType
@@ -1887,7 +1887,7 @@ builtinsList = sequence
       -> m (NValue t f m)
       )
     -> m (Builtin (NValue t f m))
-  add3 t n v = mkBuiltin t n (builtin3 (toString n) v)
+  add3 t n v = mkBuiltin t n (builtin3 n v)
 
   add'
     :: ToBuiltin t f m a

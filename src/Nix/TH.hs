@@ -130,5 +130,7 @@ metaPat fvs (Fix (NSym_ _ x)) | x `Set.member` fvs =
   pure (varP (mkName $ toString x))
 metaPat _ _ = Nothing
 
+-- Use of @QuasiQuoter@ requires @String@.
+-- After @Text -> String@ migrations done, _maybe_ think to use @QuasiText@.
 nix :: QuasiQuoter
 nix = QuasiQuoter { quoteExp = quoteExprExp, quotePat = quoteExprPat }

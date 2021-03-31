@@ -44,7 +44,7 @@ import           Data.Ord.Deriving
 import qualified Text.Show
 import           Data.Traversable
 import           GHC.Generics
-import           Language.Haskell.TH.Syntax
+import qualified Language.Haskell.TH.Syntax    as TH
 import           Lens.Family2
 import           Lens.Family2.TH
 import           Nix.Atoms
@@ -54,6 +54,10 @@ import           Text.Read.Deriving
 import           Text.Show.Deriving
 import qualified Type.Reflection               as Reflection
 import           Type.Reflection                ( eqTypeRep )
+#if !MIN_VERSION_base(4,13,0)
+-- NOTE: Remove package @th-lift-instances@ removing this
+import           Instances.TH.Lift              ()  -- importing Lift Text fo GHC 8.6
+#endif
 
 -- * Components of Nix expressions
 
@@ -273,9 +277,9 @@ instance Eq1 NKeyName where
 -- | @since 0.10.1
 instance Ord1 NKeyName where
   liftCompare cmp (DynamicKey a) (DynamicKey b) = liftCompare2 (liftCompare cmp) cmp a b
-  liftCompare _   (DynamicKey _) (StaticKey _)  = LT
-  liftCompare _   (StaticKey _)  (DynamicKey _) = GT
-  liftCompare _   (StaticKey a)  (StaticKey b)  = compare a b
+  liftCompare _   (DynamicKey _) (StaticKey  _) = LT
+  liftCompare _   (StaticKey  _) (DynamicKey _) = GT
+  liftCompare _   (StaticKey  a) (StaticKey  b) = compare a b
 
 instance Hashable1 NKeyName where
   liftHashWithSalt h salt (DynamicKey a) =
@@ -480,15 +484,22 @@ instance Serialise r => Serialise (NExprF r)
 instance IsString NExpr where
   fromString = Fix . NSym . fromString
 
-instance Lift (Fix NExprF) where
-  lift = dataToExpQ $ \b ->
-    case Reflection.typeOf b `eqTypeRep` Reflection.typeRep @Text of
-      Nothing    -> Nothing
-      Just HRefl -> pure [| (toText :: String -> Text) $(liftString $ toString b) |]
+instance TH.Lift (Fix NExprF) where
+  lift =
+    TH.dataToExpQ
+      (\b ->
+        do
+          -- Binding on constructor ensures type match and gives type inference to TH
+          HRefl <-
+            eqTypeRep
+              (Reflection.typeRep @Text)
+              (Reflection.typeOf  b    )
+          pure [| $(TH.lift b) |]
+      )
 #if MIN_VERSION_template_haskell(2,17,0)
   liftTyped = unsafeCodeCoerce . lift
 #elif MIN_VERSION_template_haskell(2,16,0)
-  liftTyped = unsafeTExpCoerce . Language.Haskell.TH.Syntax.lift
+  liftTyped = TH.unsafeTExpCoerce . TH.lift
 #endif
 
 #if !MIN_VERSION_hashable(1,3,1)

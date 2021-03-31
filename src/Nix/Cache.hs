@@ -7,12 +7,13 @@ import qualified Data.ByteString.Lazy          as BS
 import           Nix.Expr.Types.Annotated
 
 #if defined (__linux__)
+-- This is about: https://hackage.haskell.org/package/compact
 #define USE_COMPACT 1
 #endif
 
 #ifdef USE_COMPACT
-import qualified Data.Compact as C
-import qualified Data.Compact.Serialize as C
+import qualified Data.Compact                  as C
+import qualified Data.Compact.Serialize        as C
 #endif
 #ifdef MIN_VERSION_serialise
 import qualified Codec.Serialise               as S
@@ -21,16 +22,18 @@ import qualified Codec.Serialise               as S
 readCache :: FilePath -> IO NExprLoc
 readCache path = do
 #if USE_COMPACT
-    eres <- C.unsafeReadCompact path
-    case eres of
-        Left err -> fail $ "Error reading cache file: " <> err
-        Right expr -> pure $ C.getCompact expr
+  eres <- C.unsafeReadCompact path
+  either
+    (\ err  -> fail $ "Error reading cache file: " <> err)
+    (\ expr -> pure $ C.getCompact expr)
+    eres
 #else
 #ifdef MIN_VERSION_serialise
   eres <- S.deserialiseOrFail <$> BS.readFile path
-  case eres of
-    Left  err  -> fail $ "Error reading cache file: " <> show err
-    Right expr -> pure expr
+  either
+    (\ err  -> fail $ "Error reading cache file: " <> show err)
+    pure
+    eres
 #else
     fail "readCache not implemented for this platform"
 #endif
@@ -44,6 +47,6 @@ writeCache path expr =
 #ifdef MIN_VERSION_serialise
   BS.writeFile path (S.serialise expr)
 #else
-    fail "writeCache not implemented for this platform"
+  fail "writeCache not implemented for this platform"
 #endif
 #endif

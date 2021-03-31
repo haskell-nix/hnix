@@ -48,7 +48,6 @@ import           Data.Fix                       ( foldFix )
 import           Data.Foldable                  ( foldrM )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List                      ( delete
-                                                , nub
                                                 , intersect
                                                 , (\\)
                                                 , (!!)
@@ -195,7 +194,7 @@ data TypeError
   | UnboundVariables [Text]
   | Ambigious [Constraint]
   | UnificationMismatch [Type] [Type]
-  deriving (Eq, Show)
+  deriving (Eq, Show, Ord)
 
 data InferError
   = TypeInferenceErrors [TypeError]
@@ -238,7 +237,7 @@ inferType env ex = do
   let unbounds =
         Set.fromList (As.keys as) `Set.difference` Set.fromList (Env.keys env)
   unless (Set.null unbounds) $ typeError $ UnboundVariables
-    (nub (Set.toList unbounds))
+    (ordNub (Set.toList unbounds))
   let
     cs' =
       [ ExpInstConst t s
@@ -270,14 +269,19 @@ extendMSet :: Monad m => TVar -> InferT s m a -> InferT s m a
 extendMSet x = InferT . local (first (Set.insert x)) . getInfer
 
 letters :: [String]
-letters = [1 ..] >>= flip replicateM ['a' .. 'z']
+letters =
+  do
+    l <- [1 ..]
+    replicateM
+      l
+      ['a' .. 'z']
 
 freshTVar :: MonadState InferState m => m TVar
 freshTVar =
   do
     s <- get
     put s { count = count s + 1 }
-    pure $ TV (letters !! count s)
+    pure $ TV (toText (letters !! count s))
 
 fresh :: MonadState InferState m => m Type
 fresh = TVar <$> freshTVar
@@ -633,7 +637,7 @@ inferTop env ((name, ex) : xs) =
 normalizeScheme :: Scheme -> Scheme
 normalizeScheme (Forall _ body) = Forall (fmap snd ord) (normtype body)
  where
-  ord = zip (nub $ fv body) (fmap TV letters)
+  ord = zip (ordNub $ fv body) (fmap (TV . toText) letters)
 
   fv (TVar a  ) = [a]
   fv (a :~> b ) = fv a <> fv b
@@ -672,7 +676,7 @@ runSolver (Solver s) = do
   res <- runStateT (observeAllT s) mempty
   pure $ case res of
     (x : xs, _ ) -> pure (x : xs)
-    (_     , es) -> Left (nub es)
+    (_     , es) -> Left (ordNub es)
 
 -- | The empty substitution
 emptySubst :: Subst

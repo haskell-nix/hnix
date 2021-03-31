@@ -139,7 +139,7 @@ data NValueF p m r
       --   Note that 'm r' is being used here because effectively a function
       --   and its set of default arguments is "never fully evaluated". This
       --   enforces in the type that it must be re-evaluated for each call.
-    | NVBuiltinF String (p -> m r)
+    | NVBuiltinF Text (p -> m r)
       -- ^ A builtin function is itself already in normal form. Also, it may
       --   or may not choose to evaluate its argument in the production of a
       --   result.
@@ -165,12 +165,12 @@ instance Show r => Show (NValueF p m r) where
     go :: NValueF p m r -> Int -> String -> String
     go = \case
       (NVConstantF atom     ) -> showsCon1 "NVConstant" atom
-      (NVStrF      ns       ) -> showsCon1 "NVStr" (stringIgnoreContext ns)
-      (NVListF     lst      ) -> showsCon1 "NVList" lst
-      (NVSetF      attrs  _ ) -> showsCon1 "NVSet" attrs
-      (NVClosureF  params _ ) -> showsCon1 "NVClosure" params
-      (NVPathF     path     ) -> showsCon1 "NVPath" path
-      (NVBuiltinF  name   _ ) -> showsCon1 "NVBuiltin" name
+      (NVStrF      ns       ) -> showsCon1 "NVStr"      (stringIgnoreContext ns)
+      (NVListF     lst      ) -> showsCon1 "NVList"     lst
+      (NVSetF      attrs  _ ) -> showsCon1 "NVSet"      attrs
+      (NVClosureF  params _ ) -> showsCon1 "NVClosure"  params
+      (NVPathF     path     ) -> showsCon1 "NVPath"     path
+      (NVBuiltinF  name   _ ) -> showsCon1 "NVBuiltin"  name
 
     showsCon1 :: Show a => String -> a -> Int -> String -> String
     showsCon1 con a d =
@@ -456,10 +456,10 @@ nvClosure' x f = NValue' $ pure $ NVClosureF x f
 
 -- | Haskell functions to the Nix functions!
 nvBuiltin' :: (Applicative f, Functor m)
-  => String
+  => Text
   -> (NValue t f m -> m r)
   -> NValue' t f m r
-nvBuiltin' name f = NValue' $ pure $ NVBuiltinF name f
+nvBuiltin' name f = NValue' $ pure $ NVBuiltinF (toText name) f
 
 
 -- So above we have maps of Hask subcategory objects to Nix objects,
@@ -623,7 +623,7 @@ nvClosure x f = Free $ nvClosure' x f
 
 
 nvBuiltin :: (Applicative f, Functor m)
-  => String
+  => Text
   -> (NValue t f m
     -> m (NValue t f m)
     )
@@ -634,9 +634,9 @@ nvBuiltin name f = Free $ nvBuiltin' name f
 builtin
   :: forall m f t
    . (MonadThunk t m (NValue t f m), MonadDataContext f m)
-  => String
-  -> (NValue t f m
-      -> m (NValue t f m)
+  => Text
+  -> ( NValue t f m
+    -> m (NValue t f m)
     )
   -> m (NValue t f m)
 builtin name f = pure $ nvBuiltin name $ \a -> f a
@@ -644,9 +644,10 @@ builtin name f = pure $ nvBuiltin name $ \a -> f a
 
 builtin2
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
-  => String
-  -> (NValue t f m -> NValue t f m
-      -> m (NValue t f m)
+  => Text
+  -> ( NValue t f m
+    -> NValue t f m
+    -> m (NValue t f m)
     )
   -> m (NValue t f m)
 builtin2 name f = builtin name $ \a -> builtin name $ \b -> f a b
@@ -654,12 +655,12 @@ builtin2 name f = builtin name $ \a -> builtin name $ \b -> f a b
 
 builtin3
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
-  => String
-  -> (  NValue t f m
-     -> NValue t f m
-     -> NValue t f m
-     -> m (NValue t f m)
-     )
+  => Text
+  -> ( NValue t f m
+    -> NValue t f m
+    -> NValue t f m
+    -> m (NValue t f m)
+    )
   -> m (NValue t f m)
 builtin3 name f =
   builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c

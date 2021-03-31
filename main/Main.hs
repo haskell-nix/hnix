@@ -36,18 +36,19 @@ import qualified Nix.Type.Infer                as HM
 import           Nix.Var
 import           Nix.Value.Monad
 import           Options.Applicative     hiding ( ParserResult(..) )
-import           Prettyprinter            hiding ( list )
+import           Prettyprinter           hiding ( list )
 import           Prettyprinter.Render.Text
 import qualified Repl
 import           System.FilePath
 import qualified Text.Show.Pretty              as PS
 
 main :: IO ()
-main = do
-  time <- getCurrentTime
-  opts <- execParser (nixOptionsInfo time)
+main =
+  do
+    time <- getCurrentTime
+    opts <- execParser (nixOptionsInfo time)
 
-  runWithBasicEffectsIO opts $ execContentsFilesOrRepl opts
+    runWithBasicEffectsIO opts $ execContentsFilesOrRepl opts
 
  where
   execContentsFilesOrRepl opts =
@@ -115,10 +116,11 @@ main = do
           catch (process opts mpath expr) $
             \case
               NixException frames ->
-                errorWithoutStackTrace . show
-                  =<< renderFrames @(StdValue (StandardT (StdIdT IO)))
-                        @(StdThunk (StandardT (StdIdT IO)))
-                        frames
+                errorWithoutStackTrace . show =<<
+                  renderFrames
+                    @(StdValue (StandardT (StdIdT IO)))
+                    @(StdThunk (StandardT (StdIdT IO)))
+                    frames
 
           when (repl opts) $
             withNixContext mempty $
@@ -158,90 +160,119 @@ main = do
     printer
       | finder opts = findAttrs <=< fromValue @(AttrSet (StdValue (StandardT (StdIdT IO))))
       | xml    opts = liftIO . putStrLn . toString . stringIgnoreContext . toXML <=< normalForm
-      | json   opts = liftIO . Text.putStrLn . stringIgnoreContext <=< nvalueToJSONNixString
-      | strict opts = liftIO . print . prettyNValue <=< normalForm
-      | values opts = liftIO . print . prettyNValueProv <=< removeEffects
-      | otherwise   = liftIO . print . prettyNValue <=< removeEffects
+      | json   opts = liftIO . Text.putStrLn       . stringIgnoreContext         <=< nvalueToJSONNixString
+      | strict opts = liftIO . print               . prettyNValue                <=< normalForm
+      | values opts = liftIO . print               . prettyNValueProv            <=< removeEffects
+      | otherwise   = liftIO . print               . prettyNValue                <=< removeEffects
      where
       findAttrs
         :: AttrSet (StdValue (StandardT (StdIdT IO)))
         -> StandardT (StdIdT IO) ()
       findAttrs = go mempty
        where
-        go prefix s = do
-          xs <- forM (sortOn fst (M.toList s)) $ \(k, nv) ->
-            free
-              (\ (StdThunk (extract -> Thunk _ _ ref)) -> do
-                let path         = prefix <> toString k
-                    (_, descend) = filterEntry path k
-                val <- readVar @(StandardT (StdIdT IO)) ref
-                case val of
-                  Computed _    -> pure (k, Nothing)
-                  _ | descend   -> (k,        ) <$> forceEntry path nv
-                    | otherwise -> pure (k, Nothing)
-              )
-              (\ v -> pure (k, pure (Free v)))
-              nv
-          for_ xs $ \(k, mv) -> do
-            let path              = prefix <> toString k
-                (report, descend) = filterEntry path k
-            when report $ do
-              liftIO $ putStrLn path
-              when descend $
-                maybe
-                  (pure ())
-                  (\case
-                    NVSet s' _ -> go (path <> ".") s'
-                    _          -> pure ()
+        go prefix s =
+          do
+            xs <-
+              traverse
+                (\ (k, nv) ->
+                  (free
+                    (\ (StdThunk (extract -> Thunk _ _ ref)) ->
+                      do
+                        let
+                          path         = prefix <> toString k
+                          (_, descend) = filterEntry path k
+
+                        val <- readVar @(StandardT (StdIdT IO)) ref
+                        case val of
+                          Computed _    -> pure (k, Nothing)
+                          _ ->
+                            bool
+                              (pure (k, Nothing))
+                              ((k, ) <$> forceEntry path nv)
+                              descend
+                    )
+                    (\ v -> pure (k, pure (Free v)))
+                    nv
                   )
-                  mv
+                )
+                (sortWith fst (M.toList s))
+            traverse_
+              (\ (k, mv) ->
+                do
+                  let
+                    path              = prefix <> toString k
+                    (report, descend) = filterEntry path k
+                  when report $
+                    do
+                      liftIO $ putStrLn path
+                      when descend $
+                        maybe
+                          (pure ())
+                          (\case
+                            NVSet s' _ -> go (path <> ".") s'
+                            _          -> pure ()
+                          )
+                          mv
+              )
+              xs
          where
           filterEntry path k = case (path, k) of
-            ("stdenv", "stdenv"          ) -> (True, True)
+            ("stdenv", "stdenv"          ) -> (True , True )
             (_       , "stdenv"          ) -> (False, False)
-            (_       , "out"             ) -> (True, False)
-            (_       , "src"             ) -> (True, False)
-            (_       , "mirrorsFile"     ) -> (True, False)
-            (_       , "buildPhase"      ) -> (True, False)
+            (_       , "out"             ) -> (True , False)
+            (_       , "src"             ) -> (True , False)
+            (_       , "mirrorsFile"     ) -> (True , False)
+            (_       , "buildPhase"      ) -> (True , False)
             (_       , "builder"         ) -> (False, False)
             (_       , "drvPath"         ) -> (False, False)
             (_       , "outPath"         ) -> (False, False)
             (_       , "__impureHostDeps") -> (False, False)
             (_       , "__sandboxProfile") -> (False, False)
-            ("pkgs"  , "pkgs"            ) -> (True, True)
+            ("pkgs"  , "pkgs"            ) -> (True , True )
             (_       , "pkgs"            ) -> (False, False)
             (_       , "drvAttrs"        ) -> (False, False)
-            _                              -> (True, True)
+            _                              -> (True , True )
 
           forceEntry k v =
-            catch (pure <$> (pure =<< demand v)) $ \(NixException frames) ->
-              do
-                liftIO
-                  . putStrLn
-                  . ("Exception forcing " <>)
-                  . (k <>)
-                  . (": " <>)
-                  . show
-                  =<< renderFrames @(StdValue (StandardT (StdIdT IO)))
+            catch
+              (pure <$> (pure =<< demand v))
+              (\ (NixException frames) ->
+                do
+                  liftIO
+                    . putStrLn
+                    . ("Exception forcing " <>) . (k <>) . (": " <>)
+                    . show =<<
+                      renderFrames
+                        @(StdValue (StandardT (StdIdT IO)))
                         @(StdThunk (StandardT (StdIdT IO)))
                         frames
-                pure Nothing
+                  pure Nothing
+              )
 
-  reduction path mp x = do
-    eres <- Nix.withNixContext mp
-      $ Nix.reducingEvalExpr (Eval.eval . annotated . getCompose) mp x
-    handleReduced path eres
+  reduction path mp x =
+    do
+      eres <-
+        Nix.withNixContext
+          mp
+          (Nix.reducingEvalExpr
+            (Eval.eval . annotated . getCompose)
+            mp
+            x
+          )
+      handleReduced path eres
 
   handleReduced
     :: (MonadThrow m, MonadIO m)
     => FilePath
     -> (NExprLoc, Either SomeException (NValue t f m))
     -> m (NValue t f m)
-  handleReduced path (expr', eres) = do
-    liftIO $ do
-      putStrLn $ "Wrote winnowed expression tree to " <> path
-      writeFile path $ show $ prettyNix (stripAnnotation expr')
-    either
-      throwM
-      pure
-      eres
+  handleReduced path (expr', eres) =
+    do
+      liftIO $
+        do
+          putStrLn $ "Wrote winnowed expression tree to " <> path
+          writeFile path $ show $ prettyNix (stripAnnotation expr')
+      either
+        throwM
+        pure
+        eres

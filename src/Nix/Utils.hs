@@ -28,6 +28,7 @@ import           Lens.Family2.TH                ( makeLensesBy )
 #if ENABLE_TRACING
 import           Debug.Trace as X
 #else
+-- Well, since it is currently CPP intermingled with Debug.Trace, required to use String here.
 trace :: String -> a -> a
 trace = const id
 traceM :: Monad m => String -> m ()
@@ -121,7 +122,7 @@ toEncodingSorted = \case
     A.pairs
       . mconcat
       . fmap (\(k, v) -> A.pair k $ toEncodingSorted v)
-      . sortOn fst
+      . sortWith fst
       $ M.toList m
   A.Array l -> A.list toEncodingSorted $ V.toList l
   v         -> A.toEncoding v
@@ -220,3 +221,8 @@ both f (x,y) = (f x, f y)
 dup :: a -> (a, a)
 dup x = (x, x)
 {-# inline dup #-}
+
+-- | From @utility-ht@ for tuple laziness.
+mapPair :: (a -> c, b -> d) -> (a,b) -> (c,d)
+mapPair ~(f,g) ~(a,b) = (f a, g b)
+{-# inline mapPair #-}

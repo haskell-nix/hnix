@@ -33,6 +33,7 @@ where
 
 
 
+import           Nix.Utils
 import           Control.Monad.Writer           ( WriterT(..), MonadWriter(tell))
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.HashSet                  as S
@@ -45,37 +46,44 @@ import qualified Data.Text                     as Text
 
 -- | A Nix 'StringContext' ...
 data StringContext =
-  StringContext { scPath :: !Text
-                , scFlavor :: !ContextFlavor
-                } deriving (Eq, Ord, Show, Generic)
+  StringContext
+    { scPath :: !Text
+    , scFlavor :: !ContextFlavor
+    }
+  deriving (Eq, Ord, Show, Generic)
 
 instance Hashable StringContext
 
 -- | A 'ContextFlavor' describes the sum of possible derivations for string contexts
-data ContextFlavor =
-    DirectPath
+data ContextFlavor
+  = DirectPath
   | AllOutputs
   | DerivationOutput !Text
   deriving (Show, Eq, Ord, Generic)
 
 instance Hashable ContextFlavor
 
-newtype NixLikeContext = NixLikeContext
-  { getNixLikeContext :: M.HashMap Text NixLikeContextValue
-  } deriving (Eq, Ord, Show, Generic)
+newtype NixLikeContext =
+  NixLikeContext
+    { getNixLikeContext :: M.HashMap Text NixLikeContextValue
+    }
+  deriving (Eq, Ord, Show, Generic)
 
-data NixLikeContextValue = NixLikeContextValue
-  { nlcvPath :: !Bool
-  , nlcvAllOutputs :: !Bool
-  , nlcvOutputs :: ![Text]
-  } deriving (Show, Eq, Ord, Generic)
+data NixLikeContextValue =
+  NixLikeContextValue
+    { nlcvPath :: !Bool
+    , nlcvAllOutputs :: !Bool
+    , nlcvOutputs :: ![Text]
+    }
+  deriving (Show, Eq, Ord, Generic)
 
 instance Semigroup NixLikeContextValue where
-  a <> b = NixLikeContextValue
-    { nlcvPath       = nlcvPath a || nlcvPath b
-    , nlcvAllOutputs = nlcvAllOutputs a || nlcvAllOutputs b
-    , nlcvOutputs    = nlcvOutputs a <> nlcvOutputs b
-    }
+  a <> b =
+    NixLikeContextValue
+      { nlcvPath       = nlcvPath       a || nlcvPath       b
+      , nlcvAllOutputs = nlcvAllOutputs a || nlcvAllOutputs b
+      , nlcvOutputs    = nlcvOutputs    a <> nlcvOutputs    b
+      }
 
 instance Monoid NixLikeContextValue where
   mempty = NixLikeContextValue False False mempty
@@ -84,7 +92,13 @@ instance Monoid NixLikeContextValue where
 -- ** StringContext accumulator
 
 -- | A monad for accumulating string context while producing a result string.
-newtype WithStringContextT m a = WithStringContextT (WriterT (S.HashSet StringContext) m a)
+newtype WithStringContextT m a =
+  WithStringContextT
+    (WriterT
+       (S.HashSet StringContext)
+       m
+       a
+    )
   deriving (Functor, Applicative, Monad, MonadTrans, MonadWriter (S.HashSet StringContext))
 
 type WithStringContext = WithStringContextT Identity
@@ -92,10 +106,12 @@ type WithStringContext = WithStringContextT Identity
 
 -- ** NixString
 
-data NixString = NixString
-  { nsContents :: !Text
-  , nsContext :: !(S.HashSet StringContext)
-  } deriving (Eq, Ord, Show, Generic)
+data NixString =
+  NixString
+    { nsContents :: !Text
+    , nsContext :: !(S.HashSet StringContext)
+    }
+  deriving (Eq, Ord, Show, Generic)
 
 instance Semigroup NixString where
   NixString s1 t1 <> NixString s2 t2 = NixString (s1 <> s2) (t1 <> t2)
@@ -142,8 +158,9 @@ fromNixLikeContext =
 
 -- | Extract the string contents from a NixString that has no context
 getStringNoContext :: NixString -> Maybe Text
-getStringNoContext (NixString s c) | null c    = pure s
-                                             | otherwise = mempty
+getStringNoContext (NixString s c)
+  | null c    = pure s
+  | otherwise = mempty
 
 -- | Extract the string contents from a NixString even if the NixString has an associated context
 stringIgnoreContext :: NixString -> Text
@@ -151,33 +168,54 @@ stringIgnoreContext (NixString s _) = s
 
 -- | Get the contents of a 'NixString' and write its context into the resulting set.
 extractNixString :: Monad m => NixString -> WithStringContextT m Text
-extractNixString (NixString s c) = WithStringContextT $ tell c $> s
+extractNixString (NixString s c) =
+  WithStringContextT $
+    tell c $>
+      s
 
 
 -- ** Setters
 
+-- this really should be 2 args, then with @toStringContexts path@ laziness it would tail recurse.
+-- for now tuple dissected internaly with laziness preservation.
 toStringContexts :: (Text, NixLikeContextValue) -> [StringContext]
-toStringContexts (path, nlcv) = case nlcv of
-  NixLikeContextValue True _ _ -> StringContext path DirectPath
-    : toStringContexts (path, nlcv { nlcvPath = False })
-  NixLikeContextValue _ True _ -> StringContext path AllOutputs
-    : toStringContexts (path, nlcv { nlcvAllOutputs = False })
-  NixLikeContextValue _ _ ls | not (null ls) ->
-    fmap (StringContext path . DerivationOutput) ls
-  _ -> mempty
+toStringContexts ~(path, nlcv) =
+  go nlcv
+ where
+
+  go cv =
+    case cv of
+      NixLikeContextValue True _    _ ->
+        mkLstCtxFor DirectPath cv { nlcvPath = False }
+      NixLikeContextValue _    True _ ->
+        mkLstCtxFor AllOutputs cv { nlcvAllOutputs = False }
+      NixLikeContextValue _    _    ls | not (null ls) ->
+        fmap (mkCtxFor . DerivationOutput) ls
+      _ -> mempty
+   where
+    mkCtxFor = StringContext path
+    mkLstCtxFor t c = mkCtxFor t : go c
 
 toNixLikeContextValue :: StringContext -> (Text, NixLikeContextValue)
-toNixLikeContextValue sc = (,) (scPath sc) $ case scFlavor sc of
-  DirectPath         -> NixLikeContextValue True False mempty
-  AllOutputs         -> NixLikeContextValue False True mempty
-  DerivationOutput t -> NixLikeContextValue False False [t]
+toNixLikeContextValue sc =
+  ( scPath sc
+  , case scFlavor sc of
+      DirectPath         -> NixLikeContextValue True False mempty
+      AllOutputs         -> NixLikeContextValue False True mempty
+      DerivationOutput t -> NixLikeContextValue False False [t]
+  )
 
 toNixLikeContext :: S.HashSet StringContext -> NixLikeContext
-toNixLikeContext stringContext = NixLikeContext
-  $ S.foldr go mempty stringContext
+toNixLikeContext stringContext =
+  NixLikeContext $
+    S.foldr
+      go
+      mempty
+      stringContext
  where
   go sc hm =
-    let (t, nlcv) = toNixLikeContextValue sc in M.insertWith (<>) t nlcv hm
+    let (t, nlcv) = toNixLikeContextValue sc in
+    M.insertWith (<>) t nlcv hm
 
 -- | Add 'StringContext's into the resulting set.
 addStringContext
@@ -218,8 +256,16 @@ runWithStringContext' = runIdentity . runWithStringContextT'
 intercalateNixString :: NixString -> [NixString] -> NixString
 intercalateNixString _   []   = mempty
 intercalateNixString _   [ns] = ns
-intercalateNixString sep nss  = NixString contents ctx
+intercalateNixString sep nss  =
+  uncurry NixString (mapPair intertwine unpackNss)
  where
-  contents = Text.intercalate (nsContents sep) (fmap nsContents nss)
-  ctx      = S.unions (nsContext sep : fmap nsContext nss)
+
+  intertwine =
+    ( Text.intercalate (nsContents sep)
+    , S.unions . (:)   (nsContext  sep)
+    )
+
+  unpackNss = (fnss nsContents, fnss nsContext)
+   where
+    fnss = (`fmap` nss) -- do once
 
