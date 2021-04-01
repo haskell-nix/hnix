@@ -201,7 +201,7 @@ fetchTarball =
 
 {- jww (2018-04-11): This should be written using pipes in another module
     fetch :: Text -> Maybe (NThunk m) -> m (NValue t f m)
-    fetch uri msha = case takeExtension (toString uri) of
+    fetch uri msha = case takeExtension uri of
         ".tgz" -> undefined
         ".gz"  -> undefined
         ".bz2" -> undefined
@@ -213,7 +213,7 @@ fetchTarball =
 
   fetch :: Text -> Maybe (NValue t f m) -> m (NValue t f m)
   fetch uri Nothing =
-    nixInstantiateExpr $ "builtins.fetchTarball \"" <> toString uri <> "\""
+    nixInstantiateExpr $ "builtins.fetchTarball \"" <> uri <> "\""
   fetch url (Just t) =
       (\nv -> do
         nsSha <- fromValue nv
@@ -221,7 +221,7 @@ fetchTarball =
         let sha = stringIgnoreContext nsSha
 
         nixInstantiateExpr
-          $ "builtins.fetchTarball { " <> "url    = \"" <> toString url <> "\"; " <> "sha256 = \"" <> toString sha <> "\"; }"
+          $ "builtins.fetchTarball { " <> "url    = \"" <> url <> "\"; " <> "sha256 = \"" <> sha <> "\"; }"
       ) =<< demand t
 
 defaultFindPath :: MonadNix e t f m => [NValue t f m] -> FilePath -> m FilePath
