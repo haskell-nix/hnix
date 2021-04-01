@@ -110,10 +110,10 @@ nvClosureP p x f = addProvenance p (nvClosure x f)
 nvBuiltinP
   :: MonadCited t f m
   => Provenance m (NValue t f m)
-  -> String
+  -> Text
   -> (NValue t f m -> m (NValue t f m))
   -> NValue t f m
-nvBuiltinP p name f = addProvenance p (nvBuiltin (toText name) f)
+nvBuiltinP p name f = addProvenance p (nvBuiltin name f)
 
 type MonadCitedThunks t f m
   = ( MonadThunk t m (NValue t f m)
