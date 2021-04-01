@@ -1563,7 +1563,7 @@ execNix xs =
     -- 2018-11-19: NOTE: Still need to do something with the context here
     -- See prim_exec in nix/src/libexpr/primops.cc
     -- Requires the implementation of EvalState::realiseContext
-    exec (toString . stringIgnoreContext <$> xs)
+    exec (stringIgnoreContext <$> xs)
 
 fetchurlNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
