@@ -545,7 +545,7 @@ evalExprLoc expr = do
   raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x
 
 exec :: (MonadNix e t f m, MonadInstantiate m) => [String] -> m (NValue t f m)
-exec args = either throwError evalExprLoc =<< exec' args
+exec args = either throwError evalExprLoc =<< exec' (toText <$> args)
 
 nixInstantiateExpr
   :: (MonadNix e t f m, MonadInstantiate m) => Text -> m (NValue t f m)

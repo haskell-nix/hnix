@@ -26,7 +26,6 @@ import qualified Prelude
 import           Nix.Utils
 import qualified Data.HashSet                  as HS
 import qualified Data.Text                     as T
-import qualified Data.Text.Encoding            as T
 import           Network.HTTP.Client     hiding ( path, Proxy )
 import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
@@ -137,9 +136,9 @@ class
   Monad m
   => MonadExec m where
 
-    exec' :: [String] -> m (Either ErrorCall NExprLoc)
+    exec' :: [Text] -> m (Either ErrorCall NExprLoc)
     default exec' :: (MonadTrans t, MonadExec m', m ~ t m')
-                  => [String] -> m (Either ErrorCall NExprLoc)
+                  => [Text] -> m (Either ErrorCall NExprLoc)
     exec' = lift . exec'
 
 
@@ -149,19 +148,19 @@ instance MonadExec IO where
   exec' = \case
     []            -> pure $ Left $ ErrorCall "exec: missing program"
     (prog : args) -> do
-      (exitCode, out, _) <- liftIO $ readProcessWithExitCode prog args ""
+      (exitCode, out, _) <- liftIO $ readProcessWithExitCode (toString prog) (toString <$> args) ""
       let t    = T.strip (toText out)
       let emsg = "program[" <> prog <> "] args=" <> show args
       case exitCode of
         ExitSuccess ->
           if T.null t
-            then pure $ Left $ ErrorCall $ "exec has no output :" <> emsg
+            then pure $ Left $ ErrorCall $ toString $ "exec has no output :" <> emsg
             else
               either
-                (\ err -> pure $ Left $ ErrorCall $ "Error parsing output of exec: " <> show err <> " " <> emsg)
+                (\ err -> pure $ Left $ ErrorCall $ toString $ "Error parsing output of exec: " <> show err <> " " <> emsg)
                 (pure . pure)
                 (parseNixTextLoc t)
-        err -> pure $ Left $ ErrorCall $ "exec  failed: " <> show err <> " " <> emsg
+        err -> pure $ Left $ ErrorCall $ toString $ "exec  failed: " <> show err <> " " <> emsg
 
 deriving
   instance
@@ -340,6 +339,7 @@ class
 
   --TODO: Should this be used *only* when the Nix to be evaluated invokes a
   --`trace` operation?
+  --  2021-04-01: Due to trace operation here, leaving it as String.
   putStr :: String -> m ()
   default putStr :: (MonadTrans t, MonadPutStr m', m ~ t m') => String -> m ()
   putStr = lift . putStr
@@ -412,13 +412,13 @@ instance MonadStore IO where
           res <- Store.Remote.runStore $ Store.Remote.addToStore @'Store.SHA256 pathName path recursive (const False) repair
           parseStoreResult "addToStore" res >>= \case
             Left err -> pure $ Left err
-            Right storePath -> pure $ Right $ StorePath $ toString $ T.decodeUtf8 $ Store.storePathToRawFilePath storePath
+            Right storePath -> pure $ Right $ StorePath $ decodeUtf8 $ Store.storePathToRawFilePath storePath
 
   addTextToStore' name text references repair = do
     res <- Store.Remote.runStore $ Store.Remote.addTextToStore name text references repair
     parseStoreResult "addTextToStore" res >>= \case
       Left err -> pure $ Left err
-      Right path -> pure $ Right $ StorePath $ toString $ T.decodeUtf8 $ Store.storePathToRawFilePath path
+      Right path -> pure $ Right $ StorePath $ decodeUtf8 $ Store.storePathToRawFilePath path
 
 
 -- ** Functions
@@ -438,8 +438,8 @@ addPath p = either throwError pure =<< addToStore (toText $ takeFileName p) p Tr
 toFile_ :: (Framed e m, MonadStore m) => FilePath -> String -> m StorePath
 toFile_ p contents = addTextToStore (toText p) (toText contents) HS.empty False
 
--- * misc
 
+-- * misc
 
 -- Please, get rid of pathExists in favour of @doesPathExist@
 pathExists :: MonadFile m => FilePath -> m Bool
