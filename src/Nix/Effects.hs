@@ -180,8 +180,8 @@ class
   Monad m
   => MonadInstantiate m where
 
-    instantiateExpr :: String -> m (Either ErrorCall NExprLoc)
-    default instantiateExpr :: (MonadTrans t, MonadInstantiate m', m ~ t m') => String -> m (Either ErrorCall NExprLoc)
+    instantiateExpr :: Text -> m (Either ErrorCall NExprLoc)
+    default instantiateExpr :: (MonadTrans t, MonadInstantiate m', m ~ t m') => Text -> m (Either ErrorCall NExprLoc)
     instantiateExpr = lift . instantiateExpr
 
 
@@ -197,16 +197,17 @@ instance MonadInstantiate IO where
       (exitCode, out, err) <-
         readProcessWithExitCode
           "nix-instantiate"
-          ["--eval", "--expr", expr]
+          ["--eval", "--expr", toString expr]
           ""
 
-      pure $ case exitCode of
-        ExitSuccess ->
-          either
-            (\ e -> Left $ ErrorCall $ "Error parsing output of nix-instantiate: " <> show e)
-            pure
-            (parseNixTextLoc (toText out))
-        status -> Left $ ErrorCall $ "nix-instantiate failed: " <> show status <> ": " <> err
+      pure $
+        case exitCode of
+          ExitSuccess ->
+            either
+              (\ e -> Left $ ErrorCall $ "Error parsing output of nix-instantiate: " <> show e)
+              pure
+              (parseNixTextLoc (toText out))
+          status -> Left $ ErrorCall $ "nix-instantiate failed: " <> show status <> ": " <> err
 
 deriving
   instance
