@@ -411,20 +411,20 @@ instance MonadStore IO where
         do
           -- TODO: redesign the filter parameter
           res <- Store.Remote.runStore $ Store.Remote.addToStore @'Store.SHA256 pathName path recursive (const False) repair
-          pure . either
+          either
             Left -- err
             (pure . StorePath . decodeUtf8 . Store.storePathToRawFilePath) -- store path
-            =<< parseStoreResult "addToStore" res
+            <$> parseStoreResult "addToStore" res
       )
       (Store.makeStorePathName name)
 
   addTextToStore' name text references repair =
     do
       res <- Store.Remote.runStore $ Store.Remote.addTextToStore name text references repair
-      pure . either
+      either
         Left -- err
         (pure . StorePath . decodeUtf8 . Store.storePathToRawFilePath) -- path
-        =<< parseStoreResult "addTextToStore" res
+        <$> parseStoreResult "addTextToStore" res
 
 
 -- ** Functions
