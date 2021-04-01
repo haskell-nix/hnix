@@ -80,6 +80,7 @@ class
 
   derivationStrict :: NValue t f m -> m (NValue t f m)
 
+  --  2021-04-01: for trace, so leaving String here
   traceEffect :: String -> m ()
 
 
@@ -312,13 +313,13 @@ instance MonadHttp IO where
     -- print req
     response <- httpLbs (req { method = "GET" }) manager
     let status = statusCode (responseStatus response)
-    if status /= 200
+    pure $ Left $ ErrorCall $ if status /= 200
       then
-        pure $ Left $ ErrorCall $ "fail, got " <> show status <> " when fetching url:" <> urlstr
+        "fail, got " <> show status <> " when fetching url:" <> urlstr
       else
         -- do
         -- let bstr = responseBody response
-        pure $ Left $ ErrorCall $ "success in downloading but hnix-store is not yet ready; url = " <> urlstr
+        "success in downloading but hnix-store is not yet ready; url = " <> urlstr
 
 deriving
   instance
@@ -404,36 +405,48 @@ class
 instance MonadStore IO where
 
   addToStore name path recursive repair =
-    case Store.makeStorePathName name of
-      Left err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> err
-      Right pathName ->
+    either
+      (\ err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> err)
+      (\ pathName ->
         do
           -- TODO: redesign the filter parameter
           res <- Store.Remote.runStore $ Store.Remote.addToStore @'Store.SHA256 pathName path recursive (const False) repair
-          parseStoreResult "addToStore" res >>= \case
-            Left err -> pure $ Left err
-            Right storePath -> pure $ Right $ StorePath $ decodeUtf8 $ Store.storePathToRawFilePath storePath
+          pure . either
+            Left -- err
+            (pure . StorePath . decodeUtf8 . Store.storePathToRawFilePath) -- store path
+            =<< parseStoreResult "addToStore" res
+      )
+      (Store.makeStorePathName name)
 
-  addTextToStore' name text references repair = do
-    res <- Store.Remote.runStore $ Store.Remote.addTextToStore name text references repair
-    parseStoreResult "addTextToStore" res >>= \case
-      Left err -> pure $ Left err
-      Right path -> pure $ Right $ StorePath $ decodeUtf8 $ Store.storePathToRawFilePath path
+  addTextToStore' name text references repair =
+    do
+      res <- Store.Remote.runStore $ Store.Remote.addTextToStore name text references repair
+      pure . either
+        Left -- err
+        (pure . StorePath . decodeUtf8 . Store.storePathToRawFilePath) -- path
+        =<< parseStoreResult "addTextToStore" res
 
 
 -- ** Functions
 
-parseStoreResult :: Monad m => String -> (Either String a, [Store.Remote.Logger]) -> m (Either ErrorCall a)
+parseStoreResult :: Monad m => Text -> (Either String a, [Store.Remote.Logger]) -> m (Either ErrorCall a)
 parseStoreResult name res =
-  case res of
-    (Left msg, logs) -> pure $ Left $ ErrorCall $ "Failed to execute '" <> name <> "': " <> msg <> "\n" <> show logs
-    (Right result, _) -> pure $ Right result
+  pure $ either
+    (\ msg -> Left $ ErrorCall $ "Failed to execute '" <> toString name <> "': " <> msg <> "\n" <> show logs)
+    pure -- result
+    (fst res)
+ where
+  logs = snd res
 
 addTextToStore :: (Framed e m, MonadStore m) => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m StorePath
 addTextToStore a b c d = either throwError pure =<< addTextToStore' a b c d
 
 addPath :: (Framed e m, MonadStore m) => FilePath -> m StorePath
-addPath p = either throwError pure =<< addToStore (toText $ takeFileName p) p True False
+addPath p =
+  either
+    throwError
+    pure
+    =<< addToStore (toText $ takeFileName p) p True False
 
 toFile_ :: (Framed e m, MonadStore m) => FilePath -> String -> m StorePath
 toFile_ p contents = addTextToStore (toText p) (toText contents) HS.empty False
