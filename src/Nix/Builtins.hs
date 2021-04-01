@@ -190,7 +190,7 @@ foldNixPath z f =
     dataDir  <-
       maybe
         getDataDir
-        pure
+        (pure . toString)
         mDataDir
 
     foldrM
@@ -1246,7 +1246,7 @@ getEnvNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 getEnvNix v =
   do
     s <- fromStringNoContext =<< fromValue v
-    mres <- getEnvVar (toString s)
+    mres <- getEnvVar s
 
     toValue $ makeNixStringWithoutContext $
       maybe

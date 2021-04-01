@@ -226,8 +226,8 @@ class
   Monad m
   => MonadEnv m where
 
-  getEnvVar :: String -> m (Maybe String)
-  default getEnvVar :: (MonadTrans t, MonadEnv m', m ~ t m') => String -> m (Maybe String)
+  getEnvVar :: Text -> m (Maybe Text)
+  default getEnvVar :: (MonadTrans t, MonadEnv m', m ~ t m') => Text -> m (Maybe Text)
   getEnvVar = lift . getEnvVar
 
   getCurrentSystemOS :: m Text
@@ -242,7 +242,7 @@ class
 -- ** Instances
 
 instance MonadEnv IO where
-  getEnvVar            = Env.lookupEnv
+  getEnvVar            = (fmap . fmap) toText . Env.lookupEnv . toString
 
   getCurrentSystemOS   = pure $ toText System.Info.os
 
