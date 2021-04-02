@@ -368,7 +368,7 @@ pruneTree opts =
             | otherwise        -> pure $ NList (fmap (fromMaybe nNull) l)
     NSet recur binds
       | reduceSets opts -> pure $ NSet recur (mapMaybe sequence binds)
-      | otherwise -> pure $ NSet recur (fmap (fmap (fromMaybe nNull)) binds)
+      | otherwise -> pure $ NSet recur ((fmap . fmap) (fromMaybe nNull) binds)
 
     NLet binds (Just body@(Fix (Compose (Ann _ x)))) ->
       pure $ case mapMaybe pruneBinding binds of
@@ -438,7 +438,7 @@ pruneTree opts =
   pruneParams (Param n) = Param n
   pruneParams (ParamSet xs b n)
     | reduceSets opts = ParamSet
-      (fmap (second (maybe (pure nNull) (pure . fromMaybe nNull))) xs)
+      (fmap (second (pure . (maybe nNull (fromMaybe nNull)))) xs)
       b
       n
     | otherwise = ParamSet (fmap (second (fmap (fromMaybe nNull))) xs) b n
