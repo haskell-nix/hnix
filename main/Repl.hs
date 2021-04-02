@@ -76,7 +76,7 @@ main' iniVal =
     evalStateT
       (evalRepl
         banner
-        cmd
+        (cmd . toText)
         options
         (pure commandPrefix)
         (pure "paste")
@@ -108,13 +108,15 @@ main' iniVal =
 
       traverse_
         (\case
-          ((prefix:command) : xs) | prefix == commandPrefix ->
+          (prefixedCommand : xs) | Text.head prefixedCommand == commandPrefix ->
             do
-              let arguments = String.unwords xs
-              optMatcher (toText command) options (toText arguments)
-          x -> cmd $ String.unwords x
+              let
+                arguments = Text.unwords $ xs
+                command = Text.tail prefixedCommand
+              optMatcher command options arguments
+          x -> cmd $ Text.unwords x
         )
-        (String.words . toString <$> lines f)
+        (Text.words <$> lines f)
 
   handleMissing e
     | Error.isDoesNotExistError e = pure ""
@@ -255,11 +257,11 @@ exec update source = do
 
 cmd
   :: (MonadNix e t f m, MonadIO m)
-  => String
+  => Text
   -> Repl e t f m ()
 cmd source =
   do
-    mVal <- exec True $ toText source
+    mVal <- exec True source
     maybe
       (pure ())
       printValue
@@ -271,10 +273,11 @@ printValue :: (MonadNix e t f m, MonadIO m)
 printValue val = do
   cfg <- replCfg <$> get
   lift $ lift $
-    if
-      | cfgStrict cfg -> liftIO . print . prettyNValue =<< normalForm val
-      | cfgValues cfg -> liftIO . print . prettyNValueProv =<< removeEffects val
-      | otherwise     -> liftIO . print . prettyNValue =<< removeEffects val
+    (if
+      | cfgStrict cfg -> liftIO . print . prettyNValue     <=< normalForm
+      | cfgValues cfg -> liftIO . print . prettyNValueProv <=< removeEffects
+      | otherwise     -> liftIO . print . prettyNValue     <=< removeEffects
+    ) val
 
 
 -- * Commands
@@ -286,7 +289,7 @@ browse :: (MonadNix e t f m, MonadIO m)
 browse _ = do
   st <- get
   for_ (Data.HashMap.Lazy.toList $ replCtx st) $ \(k, v) -> do
-    liftIO $ putStr $ toString $ k <> " = "
+    liftIO $ Text.IO.putStr $ k <> " = "
     printValue v
 
 -- | @:load@ command
