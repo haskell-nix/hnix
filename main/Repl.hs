@@ -368,6 +368,8 @@ completion = System.Console.Repline.Prefix
 -- adjusted to monadic variant able to `demand` thunks.
 completeFunc
   :: forall e t f m . (MonadNix e t f m, MonadIO m)
+  -- 2021-04-02: So far conversiton to Text here is not productive,
+  -- since Haskeline uses String of all this.
   => String
   -> String
   -> (StateT (IState t f m) m) [Completion]
@@ -375,7 +377,7 @@ completeFunc reversedPrev word
   -- Commands
   | reversedPrev == ":" =
     pure . listCompletion
-      $ fmap helpOptionName (helpOptions :: HelpOptions e t f m)
+      $ fmap (toString . helpOptionName) (helpOptions :: HelpOptions e t f m)
 
   -- Files
   | any (`isPrefixOf` word) [ "/", "./", "../", "~/" ] =
@@ -439,7 +441,7 @@ completeFunc reversedPrev word
 -- | HelpOption inspired by Dhall Repl
 -- with `Doc` instead of String for syntax and doc
 data HelpOption e t f m = HelpOption
-  { helpOptionName     :: String
+  { helpOptionName     :: Text
   , helpOptionSyntax   :: Doc ()
   , helpOptionDoc      :: Doc ()
   , helpOptionFunction :: Cmd (Repl e t f m)
@@ -453,7 +455,7 @@ helpOptions =
       "help"
       ""
       "Print help text"
-      ((help helpOptions) . toText)
+      (help helpOptions . toText)
   , HelpOption
       "paste"
       ""
@@ -493,7 +495,7 @@ helpOptions =
 
 -- | Options for :set
 data HelpSetOption = HelpSetOption
-  { helpSetOptionName     :: String
+  { helpSetOptionName     :: Text
   , helpSetOptionSyntax   :: Doc ()
   , helpSetOptionDoc      :: Doc ()
   , helpSetOptionFunction :: ReplConfig -> ReplConfig
@@ -564,4 +566,4 @@ help hs _ = do
 options
   :: (MonadNix e t f m, MonadIO m)
   => Console.Options (Repl e t f m)
-options = (\h -> (helpOptionName h, helpOptionFunction h)) <$> helpOptions
+options = (\h -> (toString $ helpOptionName h, helpOptionFunction h)) <$> helpOptions
