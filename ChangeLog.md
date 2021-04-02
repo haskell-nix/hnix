@@ -148,11 +148,19 @@
   * [(link)](https://github.com/haskell-nix/hnix/pull/884/files) `Nix.Thunk.Basic`: `instance MonadThunk (NThunkF m v) m v`: `queryM`: implementation no longer blocks the thunk resource it only reads from.
   
   * [(link)](https://github.com/haskell-nix/hnix/pull/908/files): Migrated `(String -> Text)`:
-    * `Nix.Value`: `{NValueF, nvBuiltin{,'}, builtin{,2,3}`
+    * `Nix.Value`: `{NValueF, nvBuiltin{,'}, builtin{,2,3}}`
     * `Nix.Eval`: `MonadNixEval`
     * `Nix.Render.Frame`: `render{Expr,Value}`
     * `Nix.Type`: `TVar`
     * `Nix.Thunk`: `ThunkLoop`
+    * `Nix.Exec`: `{nvBuiltinP, nixInstantiateExpr, exec}`
+    * `Nix.Effects`:
+      * `class`:
+        * `MonadExec: exec'`
+        * `MonadEnv: getEnvVar`
+        * `MonadInstantiate: instatiateExpr`
+      * `parseStoreResult`
+    * `Nix.Effects.Derivation`: `renderSymbolic`
 
 * Additional:
   * [(link)](https://github.com/haskell-nix/hnix/commit/7e6cd97bf3288cb584241611fdb25bf85d7e0ba7) `cabal.project`: freed from the `cryptohash-sha512` override, Hackage trustees made a revision.
