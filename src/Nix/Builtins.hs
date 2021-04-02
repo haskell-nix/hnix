@@ -175,7 +175,7 @@ foldNixPath
   :: forall e t f m r
    . MonadNix e t f m
   => r
-  -> (FilePath -> Maybe String -> NixPathEntryType -> r -> m r)
+  -> (FilePath -> Maybe Text -> NixPathEntryType -> r -> m r)
   -> m r
 foldNixPath z f =
   do
@@ -201,7 +201,7 @@ foldNixPath z f =
             mempty
             (uriAwareSplit . toText)
             mPath
-        <> [ fromInclude $ toText $ "nix=" <> dataDir <> "/nix/corepkgs" ]
+        <> [ fromInclude $ "nix=" <> toText dataDir <> "/nix/corepkgs" ]
  where
 
   fromInclude x = (x, ) $
@@ -213,7 +213,7 @@ foldNixPath z f =
   go (x, ty) rest =
     case Text.splitOn "=" x of
       [p] -> f (toString p) mempty ty rest
-      [n, p] -> f (toString p) (pure (toString n)) ty rest
+      [n, p] -> f (toString p) (pure n) ty rest
       _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " <> show x
 
 attrsetGet :: MonadNix e t f m => Text -> AttrSet (NValue t f m) -> m (NValue t f m)
@@ -430,7 +430,7 @@ nixPathNix =
                   PathEntryPath -> ("path", nvPath p)
                   PathEntryURI  -> ( "uri", mkNvStr p)
 
-                , ( "prefix", mkNvStr $ fromMaybe "" mn)
+                , ( "prefix", mkNvStr $ toString $ fromMaybe "" mn)
                 ]
               )
             )
