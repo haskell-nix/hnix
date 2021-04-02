@@ -29,7 +29,6 @@ import           Nix.Value.Monad                ( demand )
 import qualified Data.HashMap.Lazy
 import           Data.Char                      ( isSpace )
 import           Data.List                      ( dropWhileEnd )
-import qualified Data.String                 as String
 import qualified Data.Text                   as Text
 import qualified Data.Text.IO                as Text.IO
 import           Data.Version                   ( showVersion )
@@ -284,7 +283,7 @@ printValue val = do
 
 -- | @:browse@ command
 browse :: (MonadNix e t f m, MonadIO m)
-       => String
+       => Text
        -> Repl e t f m ()
 browse _ = do
   st <- get
@@ -295,6 +294,7 @@ browse _ = do
 -- | @:load@ command
 load
   :: (MonadNix e t f m, MonadIO m)
+  -- This one does I String -> O String pretty fast, it is ugly to double marshall here.
   => String
   -> Repl e t f m ()
 load args =
@@ -309,7 +309,7 @@ load args =
 -- | @:type@ command
 typeof
   :: (MonadNix e t f m, MonadIO m)
-  => String
+  => Text
   -> Repl e t f m ()
 typeof args = do
   st <- get
@@ -322,7 +322,7 @@ typeof args = do
   traverse_ printValueType mVal
 
  where
-  line = toText args
+  line = args
   printValueType val =
     do
       s <- lift . lift . showValueType $ val
@@ -334,13 +334,14 @@ quit :: (MonadNix e t f m, MonadIO m) => a -> Repl e t f m ()
 quit _ = liftIO Exit.exitSuccess
 
 -- | @:set@ command
-setConfig :: (MonadNix e t f m, MonadIO m) => String -> Repl e t f m ()
-setConfig args = case String.words args of
-  []       -> liftIO $ putStrLn "No option to set specified"
-  (x:_xs)  ->
-    case filter ((==x) . helpSetOptionName) helpSetOptions of
-      [opt] -> modify (\s -> s { replCfg = helpSetOptionFunction opt (replCfg s) })
-      _     -> liftIO $ putStrLn "No such option"
+setConfig :: (MonadNix e t f m, MonadIO m) => Text -> Repl e t f m ()
+setConfig args =
+  case Text.words args of
+    []       -> liftIO $ putStrLn "No option to set specified"
+    (x:_xs)  ->
+      case filter ((==x) . (toText . helpSetOptionName)) helpSetOptions of
+        [opt] -> modify (\s -> s { replCfg = helpSetOptionFunction opt (replCfg s) })
+        _     -> liftIO $ putStrLn "No such option"
 
 
 -- * Interactive Shell
@@ -452,7 +453,7 @@ helpOptions =
       "help"
       ""
       "Print help text"
-      (help helpOptions)
+      ((help helpOptions) . toText)
   , HelpOption
       "paste"
       ""
@@ -467,12 +468,12 @@ helpOptions =
       "browse"
       ""
       "Browse bindings in interpreter context"
-      browse
+      (browse . toText)
   , HelpOption
       "type"
       "EXPRESSION"
       "Evaluate expression or binding from context and print the type of the result value"
-      typeof
+      (typeof . toText)
   , HelpOption
       "quit"
       ""
@@ -487,7 +488,7 @@ helpOptions =
         <> Prettyprinter.line
         <> renderSetOptions helpSetOptions
       )
-      setConfig
+      (setConfig . toText)
   ]
 
 -- | Options for :set
@@ -545,7 +546,7 @@ renderSetOptions so =
 
 help :: (MonadNix e t f m, MonadIO m)
      => HelpOptions e t f m
-     -> String
+     -> Text
      -> Repl e t f m ()
 help hs _ = do
   liftIO $ putStrLn "Available commands:\n"
