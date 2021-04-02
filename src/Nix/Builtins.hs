@@ -111,7 +111,7 @@ data Builtin v =
 
 -- | Types that support conversion to nix in a particular monad
 class ToBuiltin t f m a | a -> m where
-  toBuiltin :: String -> a -> m (NValue t f m)
+  toBuiltin :: Text -> a -> m (NValue t f m)
 
 instance
   ( MonadNix e t f m
@@ -127,7 +127,7 @@ instance
   )
   => ToBuiltin t f m (a -> b) where
   toBuiltin name f =
-    pure $ nvBuiltin (toText name) (toBuiltin name . f <=< fromValue . Deeper)
+    pure $ nvBuiltin name (toBuiltin name . f <=< fromValue . Deeper)
 
 -- *** @WValue@ closure wrapper to have @Ord@
 
@@ -1895,7 +1895,7 @@ builtinsList = sequence
     -> Text
     -> a
     -> m (Builtin (NValue t f m))
-  add' t n v = mkBuiltin t n (toBuiltin (toString n) v)
+  add' t n v = mkBuiltin t n (toBuiltin n v)
 
 
 -- * Exported
