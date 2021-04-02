@@ -64,7 +64,7 @@ data NTypeF (m :: * -> *) r
   | TSet (Maybe (HashMap Text r))
   | TClosure (Params ())
   | TPath
-  | TBuiltin String (Symbolic m -> m r)
+  | TBuiltin Text (Symbolic m -> m r)
   deriving Functor
 
 compareTypes :: NTypeF m r -> NTypeF m r -> Ordering
@@ -195,11 +195,11 @@ merge context = go
     (TSet Nothing , TSet x       ) -> (TSet x :) <$> go xs ys
     (TSet (Just l), TSet (Just r)) -> do
       m <- sequenceA $ M.intersectionWith
-        (\i j -> i >>= \i' ->
-          j >>= \j' ->
-              (\i'' ->
-                  (defer . unify context i'') =<< demand j'
-              ) =<< demand i'
+        (\ i j ->
+          do
+            i'' <- demand =<< i
+            j'' <- demand =<< j
+            (defer . unify context i'') j''
         )
         (pure <$> l)
         (pure <$> r)
