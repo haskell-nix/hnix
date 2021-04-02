@@ -133,8 +133,8 @@ type MonadLint e m =
   , MonadThunkId m
   )
 
-symerr :: forall e m a . MonadLint e m => String -> m a
-symerr = evalError @(Symbolic m) . ErrorCall
+symerr :: forall e m a . MonadLint e m => Text -> m a
+symerr = evalError @(Symbolic m) . ErrorCall . toString
 
 renderSymbolic :: MonadLint e m => Symbolic m -> m Text
 renderSymbolic = unpackSymbolic >=> \case
@@ -304,11 +304,16 @@ instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
 
 
 instance MonadLint e m => MonadEval (Symbolic m) m where
-  freeVariable var = symerr $ "Undefined variable '" <> toString var <> "'"
+  freeVariable var = symerr $ "Undefined variable '" <> var <> "'"
 
-  attrMissing ks Nothing = evalError @(Symbolic m) $ ErrorCall $ toString $ "Inheriting unknown attribute: " <> Text.intercalate "." (NE.toList ks)
-
-  attrMissing ks (Just s) = evalError @(Symbolic m) $ ErrorCall $ toString $ "Could not look up attribute " <> Text.intercalate "." (NE.toList ks) <> " in " <> show s
+  attrMissing ks ms =
+    evalError @(Symbolic m) $ ErrorCall $ toString $
+      maybe
+        ("Inheriting unknown attribute: " <> attr)
+        (\ s ->  "Could not look up attribute " <> attr <> " in " <> show s)
+        ms
+   where
+    attr = Text.intercalate "." (NE.toList ks)
 
   evalCurPos = do
     f <- mkSymbolic [TPath]
