@@ -111,7 +111,7 @@ main' iniVal =
           ((prefix:command) : xs) | prefix == commandPrefix ->
             do
               let arguments = String.unwords xs
-              optMatcher command options arguments
+              optMatcher (toText command) options (toText arguments)
           x -> cmd $ String.unwords x
         )
         (String.words . toString <$> lines f)
@@ -125,13 +125,13 @@ main' iniVal =
   -- * @MonadIO m@ instead of @MonadHaskeline m@
   -- * @putStrLn@ instead of @outputStrLn@
   optMatcher :: MonadIO m
-             => String
+             => Text
              -> Console.Options m
-             -> String
+             -> Text
              -> m ()
-  optMatcher s [] _ = liftIO $ putStrLn $ "No such command :" <> s
+  optMatcher s [] _ = liftIO $ Text.IO.putStrLn $ "No such command :" <> s
   optMatcher s ((x, m) : xs) args
-    | s `isPrefixOf` x = m args
+    | s `Text.isPrefixOf` toText x = m $ toString args
     | otherwise = optMatcher s xs args
 
 
