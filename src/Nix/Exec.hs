@@ -28,6 +28,7 @@ import           Control.Monad.Fix
 import           Data.Fix
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.List.NonEmpty            as NE
+import qualified Data.Text                     as Text
 import           Nix.Atoms
 import           Nix.Cited
 import           Nix.Convert
@@ -48,7 +49,7 @@ import           Nix.Value.Equal
 import           Nix.Value.Monad
 import           Prettyprinter
 #ifdef MIN_VERSION_pretty_show
-import qualified Text.Show.Pretty as PS
+import qualified Text.Show.Pretty              as PS
 #endif
 
 #ifdef MIN_VERSION_ghc_datasize
@@ -110,10 +111,10 @@ nvClosureP p x f = addProvenance p (nvClosure x f)
 nvBuiltinP
   :: MonadCited t f m
   => Provenance m (NValue t f m)
-  -> String
+  -> Text
   -> (NValue t f m -> m (NValue t f m))
   -> NValue t f m
-nvBuiltinP p name f = addProvenance p (nvBuiltin (toText name) f)
+nvBuiltinP p name f = addProvenance p (nvBuiltin name f)
 
 type MonadCitedThunks t f m
   = ( MonadThunk t m (NValue t f m)
@@ -137,7 +138,7 @@ type MonadNix e t f m
   )
 
 data ExecFrame t f m = Assertion SrcSpan (NValue t f m)
-    deriving (Show, Typeable)
+  deriving (Show, Typeable)
 
 instance MonadDataErrorContext t f m => Exception (ExecFrame t f m)
 
@@ -160,24 +161,30 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   synHole name = do
     span  <- currentPos
     scope <- currentScopes
-    evalError @(NValue t f m) $ SynHole $ SynHoleInfo
-      { _synHoleInfo_expr  = Fix $ NSynHole_ span name
-      , _synHoleInfo_scope = scope
-      }
+    evalError @(NValue t f m) $ SynHole $
+      SynHoleInfo
+        { _synHoleInfo_expr  = Fix $ NSynHole_ span name
+        , _synHoleInfo_scope = scope
+        }
 
-  attrMissing ks Nothing =
-    evalError @(NValue t f m) $ ErrorCall $ "Inheriting unknown attribute: " <> intercalate "." (fmap toString (NE.toList ks))
 
-  attrMissing ks (Just s) =
-    evalError @(NValue t f m)
-      $ ErrorCall $ "Could not look up attribute " <> intercalate "." (fmap toString (NE.toList ks)) <> " in " <> show (prettyNValue s)
+  attrMissing ks ms =
+    evalError @(NValue t f m) $ ErrorCall $ toString $
+      maybe
+        ("Inheriting unknown attribute: " <> attr)
+        (\ s ->
+          "Could not look up attribute " <> attr <> " in " <> show (prettyNValue s)
+        )
+        ms
+       where
+        attr = Text.intercalate "." (NE.toList ks)
 
   evalCurPos = do
     scope                  <- currentScopes
     span@(SrcSpan delta _) <- currentPos
     addProvenance @_ @_ @(NValue t f m)
-      (Provenance scope (NSym_ span "__curPos"))
-      <$> toValue delta
+      (Provenance scope (NSym_ span "__curPos")) <$>
+        toValue delta
 
   evaledSym name val = do
     scope <- currentScopes
@@ -212,13 +219,14 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalLiteralPath p = do
     scope <- currentScopes
     span  <- currentPos
-    nvPathP (Provenance scope (NLiteralPath_ span p))
-      <$> makeAbsolutePath @t @f @m p
+    nvPathP (Provenance scope (NLiteralPath_ span p)) <$>
+      makeAbsolutePath @t @f @m p
 
   evalEnvPath p = do
     scope <- currentScopes
     span  <- currentPos
-    nvPathP (Provenance scope (NEnvPath_ span p)) <$> findEnvPath @t @f @m p
+    nvPathP (Provenance scope (NEnvPath_ span p)) <$>
+      findEnvPath @t @f @m p
 
   evalUnary op arg = do
     scope <- currentScopes
@@ -259,16 +267,16 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
           scope <- currentScopes
           (\b ->
               addProvenance (Provenance scope (NAssert_ span (pure c) (pure b))) b
-            )
-            <$> body
+            ) <$>
+            body
         )
         b
 
   evalApp f x = do
     scope <- currentScopes
     span  <- currentPos
-    addProvenance (Provenance scope (NBinary_ span NApp (pure f) Nothing))
-      <$> (callFunc f =<< defer x)
+    addProvenance (Provenance scope (NBinary_ span NApp (pure f) Nothing)) <$>
+      (callFunc f =<< defer x)
 
   evalAbs p k = do
     scope <- currentScopes
@@ -415,23 +423,24 @@ execBinaryOpForced scope span op lval rval = case op of
 
       (NVStr ls, NVStr rs) -> pure $ nvStrP prov (ls <> rs)
       (NVStr ls, rs@NVPath{}) ->
-        (\rs2 -> nvStrP prov (ls <> rs2))
-          <$> coerceToString callFunc CopyToStore CoerceStringy rs
+        (\rs2 -> nvStrP prov (ls <> rs2)) <$>
+          coerceToString callFunc CopyToStore CoerceStringy rs
       (NVPath ls, NVStr rs) ->
         maybe
           (throwError $ ErrorCall "A string that refers to a store path cannot be appended to a path.") -- data/nix/src/libexpr/eval.cc:1412
           (\ rs2 ->
-             nvPathP prov <$> makeAbsolutePath @t @f (ls <> toString rs2)
+            nvPathP prov <$>
+              makeAbsolutePath @t @f (ls <> toString rs2)
           )
           (getStringNoContext rs)
       (NVPath ls, NVPath rs) -> nvPathP prov <$> makeAbsolutePath @t @f (ls <> rs)
 
       (ls@NVSet{}, NVStr rs) ->
-        (\ls2 -> nvStrP prov (ls2 <> rs))
-          <$> coerceToString callFunc DontCopyToStore CoerceStringy ls
+        (\ls2 -> nvStrP prov (ls2 <> rs)) <$>
+          coerceToString callFunc DontCopyToStore CoerceStringy ls
       (NVStr ls, rs@NVSet{}) ->
-        (\rs2 -> nvStrP prov (ls <> rs2))
-          <$> coerceToString callFunc DontCopyToStore CoerceStringy rs
+        (\rs2 -> nvStrP prov (ls <> rs2)) <$>
+          coerceToString callFunc DontCopyToStore CoerceStringy rs
       _ -> unsupportedTypes
 
   NEq   -> alreadyHandled
@@ -535,9 +544,9 @@ evalExprLoc expr = do
   phi = Eval.eval . annotated . getCompose
   raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x
 
-exec :: (MonadNix e t f m, MonadInstantiate m) => [String] -> m (NValue t f m)
+exec :: (MonadNix e t f m, MonadInstantiate m) => [Text] -> m (NValue t f m)
 exec args = either throwError evalExprLoc =<< exec' args
 
 nixInstantiateExpr
-  :: (MonadNix e t f m, MonadInstantiate m) => String -> m (NValue t f m)
+  :: (MonadNix e t f m, MonadInstantiate m) => Text -> m (NValue t f m)
 nixInstantiateExpr s = either throwError evalExprLoc =<< instantiateExpr s

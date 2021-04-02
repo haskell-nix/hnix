@@ -26,7 +26,6 @@ import qualified Prelude
 import           Nix.Utils
 import qualified Data.HashSet                  as HS
 import qualified Data.Text                     as T
-import qualified Data.Text.Encoding            as T
 import           Network.HTTP.Client     hiding ( path, Proxy )
 import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
@@ -81,6 +80,7 @@ class
 
   derivationStrict :: NValue t f m -> m (NValue t f m)
 
+  --  2021-04-01: for trace, so leaving String here
   traceEffect :: String -> m ()
 
 
@@ -137,9 +137,9 @@ class
   Monad m
   => MonadExec m where
 
-    exec' :: [String] -> m (Either ErrorCall NExprLoc)
+    exec' :: [Text] -> m (Either ErrorCall NExprLoc)
     default exec' :: (MonadTrans t, MonadExec m', m ~ t m')
-                  => [String] -> m (Either ErrorCall NExprLoc)
+                  => [Text] -> m (Either ErrorCall NExprLoc)
     exec' = lift . exec'
 
 
@@ -149,19 +149,19 @@ instance MonadExec IO where
   exec' = \case
     []            -> pure $ Left $ ErrorCall "exec: missing program"
     (prog : args) -> do
-      (exitCode, out, _) <- liftIO $ readProcessWithExitCode prog args ""
+      (exitCode, out, _) <- liftIO $ readProcessWithExitCode (toString prog) (toString <$> args) ""
       let t    = T.strip (toText out)
       let emsg = "program[" <> prog <> "] args=" <> show args
       case exitCode of
         ExitSuccess ->
           if T.null t
-            then pure $ Left $ ErrorCall $ "exec has no output :" <> emsg
+            then pure $ Left $ ErrorCall $ toString $ "exec has no output :" <> emsg
             else
               either
-                (\ err -> pure $ Left $ ErrorCall $ "Error parsing output of exec: " <> show err <> " " <> emsg)
+                (\ err -> pure $ Left $ ErrorCall $ toString $ "Error parsing output of exec: " <> show err <> " " <> emsg)
                 (pure . pure)
                 (parseNixTextLoc t)
-        err -> pure $ Left $ ErrorCall $ "exec  failed: " <> show err <> " " <> emsg
+        err -> pure $ Left $ ErrorCall $ toString $ "exec  failed: " <> show err <> " " <> emsg
 
 deriving
   instance
@@ -180,8 +180,8 @@ class
   Monad m
   => MonadInstantiate m where
 
-    instantiateExpr :: String -> m (Either ErrorCall NExprLoc)
-    default instantiateExpr :: (MonadTrans t, MonadInstantiate m', m ~ t m') => String -> m (Either ErrorCall NExprLoc)
+    instantiateExpr :: Text -> m (Either ErrorCall NExprLoc)
+    default instantiateExpr :: (MonadTrans t, MonadInstantiate m', m ~ t m') => Text -> m (Either ErrorCall NExprLoc)
     instantiateExpr = lift . instantiateExpr
 
 
@@ -197,16 +197,17 @@ instance MonadInstantiate IO where
       (exitCode, out, err) <-
         readProcessWithExitCode
           "nix-instantiate"
-          ["--eval", "--expr", expr]
+          ["--eval", "--expr", toString expr]
           ""
 
-      pure $ case exitCode of
-        ExitSuccess ->
-          either
-            (\ e -> Left $ ErrorCall $ "Error parsing output of nix-instantiate: " <> show e)
-            pure
-            (parseNixTextLoc (toText out))
-        status -> Left $ ErrorCall $ "nix-instantiate failed: " <> show status <> ": " <> err
+      pure $
+        case exitCode of
+          ExitSuccess ->
+            either
+              (\ e -> Left $ ErrorCall $ "Error parsing output of nix-instantiate: " <> show e)
+              pure
+              (parseNixTextLoc (toText out))
+          status -> Left $ ErrorCall $ "nix-instantiate failed: " <> show status <> ": " <> err
 
 deriving
   instance
@@ -225,8 +226,8 @@ class
   Monad m
   => MonadEnv m where
 
-  getEnvVar :: String -> m (Maybe String)
-  default getEnvVar :: (MonadTrans t, MonadEnv m', m ~ t m') => String -> m (Maybe String)
+  getEnvVar :: Text -> m (Maybe Text)
+  default getEnvVar :: (MonadTrans t, MonadEnv m', m ~ t m') => Text -> m (Maybe Text)
   getEnvVar = lift . getEnvVar
 
   getCurrentSystemOS :: m Text
@@ -241,7 +242,7 @@ class
 -- ** Instances
 
 instance MonadEnv IO where
-  getEnvVar            = Env.lookupEnv
+  getEnvVar            = (fmap . fmap) toText . Env.lookupEnv . toString
 
   getCurrentSystemOS   = pure $ toText System.Info.os
 
@@ -312,13 +313,13 @@ instance MonadHttp IO where
     -- print req
     response <- httpLbs (req { method = "GET" }) manager
     let status = statusCode (responseStatus response)
-    if status /= 200
+    pure $ Left $ ErrorCall $ if status /= 200
       then
-        pure $ Left $ ErrorCall $ "fail, got " <> show status <> " when fetching url:" <> urlstr
+        "fail, got " <> show status <> " when fetching url:" <> urlstr
       else
         -- do
         -- let bstr = responseBody response
-        pure $ Left $ ErrorCall $ "success in downloading but hnix-store is not yet ready; url = " <> urlstr
+        "success in downloading but hnix-store is not yet ready; url = " <> urlstr
 
 deriving
   instance
@@ -339,6 +340,7 @@ class
 
   --TODO: Should this be used *only* when the Nix to be evaluated invokes a
   --`trace` operation?
+  --  2021-04-01: Due to trace operation here, leaving it as String.
   putStr :: String -> m ()
   default putStr :: (MonadTrans t, MonadPutStr m', m ~ t m') => String -> m ()
   putStr = lift . putStr
@@ -403,42 +405,54 @@ class
 instance MonadStore IO where
 
   addToStore name path recursive repair =
-    case Store.makeStorePathName name of
-      Left err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> err
-      Right pathName ->
+    either
+      (\ err -> pure $ Left $ ErrorCall $ "String '" <> show name <> "' is not a valid path name: " <> err)
+      (\ pathName ->
         do
           -- TODO: redesign the filter parameter
           res <- Store.Remote.runStore $ Store.Remote.addToStore @'Store.SHA256 pathName path recursive (const False) repair
-          parseStoreResult "addToStore" res >>= \case
-            Left err -> pure $ Left err
-            Right storePath -> pure $ Right $ StorePath $ toString $ T.decodeUtf8 $ Store.storePathToRawFilePath storePath
+          either
+            Left -- err
+            (pure . StorePath . decodeUtf8 . Store.storePathToRawFilePath) -- store path
+            <$> parseStoreResult "addToStore" res
+      )
+      (Store.makeStorePathName name)
 
-  addTextToStore' name text references repair = do
-    res <- Store.Remote.runStore $ Store.Remote.addTextToStore name text references repair
-    parseStoreResult "addTextToStore" res >>= \case
-      Left err -> pure $ Left err
-      Right path -> pure $ Right $ StorePath $ toString $ T.decodeUtf8 $ Store.storePathToRawFilePath path
+  addTextToStore' name text references repair =
+    do
+      res <- Store.Remote.runStore $ Store.Remote.addTextToStore name text references repair
+      either
+        Left -- err
+        (pure . StorePath . decodeUtf8 . Store.storePathToRawFilePath) -- path
+        <$> parseStoreResult "addTextToStore" res
 
 
 -- ** Functions
 
-parseStoreResult :: Monad m => String -> (Either String a, [Store.Remote.Logger]) -> m (Either ErrorCall a)
+parseStoreResult :: Monad m => Text -> (Either String a, [Store.Remote.Logger]) -> m (Either ErrorCall a)
 parseStoreResult name res =
-  case res of
-    (Left msg, logs) -> pure $ Left $ ErrorCall $ "Failed to execute '" <> name <> "': " <> msg <> "\n" <> show logs
-    (Right result, _) -> pure $ Right result
+  pure $ either
+    (\ msg -> Left $ ErrorCall $ "Failed to execute '" <> toString name <> "': " <> msg <> "\n" <> show logs)
+    pure -- result
+    (fst res)
+ where
+  logs = snd res
 
 addTextToStore :: (Framed e m, MonadStore m) => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m StorePath
 addTextToStore a b c d = either throwError pure =<< addTextToStore' a b c d
 
 addPath :: (Framed e m, MonadStore m) => FilePath -> m StorePath
-addPath p = either throwError pure =<< addToStore (toText $ takeFileName p) p True False
+addPath p =
+  either
+    throwError
+    pure
+    =<< addToStore (toText $ takeFileName p) p True False
 
 toFile_ :: (Framed e m, MonadStore m) => FilePath -> String -> m StorePath
 toFile_ p contents = addTextToStore (toText p) (toText contents) HS.empty False
 
--- * misc
 
+-- * misc
 
 -- Please, get rid of pathExists in favour of @doesPathExist@
 pathExists :: MonadFile m => FilePath -> m Bool

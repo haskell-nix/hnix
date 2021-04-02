@@ -48,7 +48,8 @@ class (Show v, Monad m) => MonadEval v m where
   evalAssert      :: v -> m v -> m v
   evalApp         :: v -> m v -> m v
   evalAbs         :: Params (m v)
-                  -> ( forall a. m v
+                  -> ( forall a
+                    . m v
                     -> ( AttrSet (m v)
                       -> m v
                       -> m (a, v)

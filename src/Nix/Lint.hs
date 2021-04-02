@@ -32,6 +32,7 @@ import qualified Data.HashMap.Lazy             as M
 -- Plese, use NonEmpty
 import           Data.List
 import qualified Data.List.NonEmpty            as NE
+import qualified Data.Text                     as Text
 import qualified Text.Show
 import           Nix.Atoms
 import           Nix.Context
@@ -124,22 +125,22 @@ unpackSymbolic
   -> m (NSymbolicF (NTypeF m (Symbolic m)))
 unpackSymbolic = readVar . getSV <=< demand
 
-type MonadLint e m
-  = ( Scoped (Symbolic m) m
+type MonadLint e m =
+  ( Scoped (Symbolic m) m
   , Framed e m
   , MonadVar m
   , MonadCatch m
   , MonadThunkId m
   )
 
-symerr :: forall e m a . MonadLint e m => String -> m a
-symerr = evalError @(Symbolic m) . ErrorCall
+symerr :: forall e m a . MonadLint e m => Text -> m a
+symerr = evalError @(Symbolic m) . ErrorCall . toString
 
-renderSymbolic :: MonadLint e m => Symbolic m -> m String
+renderSymbolic :: MonadLint e m => Symbolic m -> m Text
 renderSymbolic = unpackSymbolic >=> \case
   NAny     -> pure "<any>"
-  NMany xs -> fmap (intercalate ", ") $ forM xs $ \case
-    TConstant ys -> fmap (intercalate ", ") $ forM ys $ pure . \case
+  NMany xs -> fmap (Text.intercalate ", ") $ forM xs $ \case
+    TConstant ys -> fmap (Text.intercalate ", ") $ forM ys $ pure . \case
       TInt   -> "int"
       TFloat -> "float"
       TBool  -> "bool"
@@ -303,11 +304,16 @@ instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
 
 
 instance MonadLint e m => MonadEval (Symbolic m) m where
-  freeVariable var = symerr $ "Undefined variable '" <> toString var <> "'"
+  freeVariable var = symerr $ "Undefined variable '" <> var <> "'"
 
-  attrMissing ks Nothing = evalError @(Symbolic m) $ ErrorCall $ "Inheriting unknown attribute: " <> intercalate "." (fmap toString (NE.toList ks))
-
-  attrMissing ks (Just s) = evalError @(Symbolic m) $ ErrorCall $ "Could not look up attribute " <> intercalate "." (fmap toString (NE.toList ks)) <> " in " <> show s
+  attrMissing ks ms =
+    evalError @(Symbolic m) $ ErrorCall $ toString $
+      maybe
+        ("Inheriting unknown attribute: " <> attr)
+        (\ s ->  "Could not look up attribute " <> attr <> " in " <> show s)
+        ms
+   where
+    attr = Text.intercalate "." (NE.toList ks)
 
   evalCurPos = do
     f <- mkSymbolic [TPath]

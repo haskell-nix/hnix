@@ -111,7 +111,7 @@ data Builtin v =
 
 -- | Types that support conversion to nix in a particular monad
 class ToBuiltin t f m a | a -> m where
-  toBuiltin :: String -> a -> m (NValue t f m)
+  toBuiltin :: Text -> a -> m (NValue t f m)
 
 instance
   ( MonadNix e t f m
@@ -127,7 +127,7 @@ instance
   )
   => ToBuiltin t f m (a -> b) where
   toBuiltin name f =
-    pure $ nvBuiltin (toText name) (toBuiltin name . f <=< fromValue . Deeper)
+    pure $ nvBuiltin name (toBuiltin name . f <=< fromValue . Deeper)
 
 -- *** @WValue@ closure wrapper to have @Ord@
 
@@ -190,7 +190,7 @@ foldNixPath z f =
     dataDir  <-
       maybe
         getDataDir
-        pure
+        (pure . toString)
         mDataDir
 
     foldrM
@@ -1246,7 +1246,7 @@ getEnvNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 getEnvNix v =
   do
     s <- fromStringNoContext =<< fromValue v
-    mres <- getEnvVar (toString s)
+    mres <- getEnvVar s
 
     toValue $ makeNixStringWithoutContext $
       maybe
@@ -1563,7 +1563,7 @@ execNix xs =
     -- 2018-11-19: NOTE: Still need to do something with the context here
     -- See prim_exec in nix/src/libexpr/primops.cc
     -- Requires the implementation of EvalState::realiseContext
-    exec (toString . stringIgnoreContext <$> xs)
+    exec (stringIgnoreContext <$> xs)
 
 fetchurlNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1895,7 +1895,7 @@ builtinsList = sequence
     -> Text
     -> a
     -> m (Builtin (NValue t f m))
-  add' t n v = mkBuiltin t n (toBuiltin (toString n) v)
+  add' t n v = mkBuiltin t n (toBuiltin n v)
 
 
 -- * Exported
