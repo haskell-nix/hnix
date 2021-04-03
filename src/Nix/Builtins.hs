@@ -984,7 +984,7 @@ genericClosureNix c =
               []           -> k
               WValue j : _ -> j
             )
-          (fmap . fmap) (t :) (go op (S.insert (WValue k) ks) (ts <> ys))
+          (t :) <<$>> go op (S.insert (WValue k) ks) (ts <> ys)
         )
         (go op ks ts)
         (S.member (WValue k) ks)
@@ -1937,9 +1937,9 @@ builtins =
     pushScope (M.fromList lst) currentScopes
  where
   buildMap         =  fmap (M.fromList . fmap mapping) builtinsList
-  topLevelBuiltins = (fmap . fmap) mapping fullBuiltinsList
+  topLevelBuiltins = mapping <<$>> fullBuiltinsList
 
-  fullBuiltinsList = (fmap . fmap) go builtinsList
+  fullBuiltinsList = go <<$>> builtinsList
    where
     go b@(Builtin TopLevel _) = b
     go (Builtin Normal (name, builtin)) =

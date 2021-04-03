@@ -339,7 +339,7 @@ setConfig args =
   case Text.words args of
     []       -> liftIO $ putStrLn "No option to set specified"
     (x:_xs)  ->
-      case filter ((==x) . (toText . helpSetOptionName)) helpSetOptions of
+      case filter ((==x) . helpSetOptionName) helpSetOptions of
         [opt] -> modify (\s -> s { replCfg = helpSetOptionFunction opt (replCfg s) })
         _     -> liftIO $ putStrLn "No such option"
 
@@ -431,7 +431,7 @@ completeFunc reversedPrev word
             f:fs ->
               maybe
                 (pure mempty)
-                (((fmap . fmap) (("." <> f) <>) . algebraicComplete fs) <=< demand)
+                ((<<$>>) (("." <> f) <>) . algebraicComplete fs <=< demand)
                 (Data.HashMap.Lazy.lookup f m)
       in
       case val of
