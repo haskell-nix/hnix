@@ -404,10 +404,10 @@ completeFunc reversedPrev word
           (Just (NVSet builtins _)) = Data.HashMap.Lazy.lookup "builtins" (replCtx s)
           shortBuiltins = Data.HashMap.Lazy.keys builtins
 
-      pure $ listCompletion
-        $ ["__includes"]
-        <> (toString <$> contextKeys)
-        <> (toString <$> shortBuiltins)
+      pure $ listCompletion $ toString <$>
+        ["__includes"]
+          <> contextKeys
+          <> shortBuiltins
 
   where
     listCompletion = fmap simpleCompletion . filter (word `isPrefixOf`)
