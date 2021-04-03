@@ -459,7 +459,7 @@ nvBuiltin' :: (Applicative f, Functor m)
   => Text
   -> (NValue t f m -> m r)
   -> NValue' t f m r
-nvBuiltin' name f = NValue' $ pure $ NVBuiltinF (toText name) f
+nvBuiltin' name f = NValue' $ pure $ NVBuiltinF name f
 
 
 -- So above we have maps of Hask subcategory objects to Nix objects,

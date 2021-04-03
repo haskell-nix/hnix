@@ -199,7 +199,7 @@ foldNixPath z f =
       $ (fromInclude . stringIgnoreContext <$> dirs)
         <> maybe
             mempty
-            (uriAwareSplit . toText)
+            (uriAwareSplit)
             mPath
         <> [ fromInclude $ "nix=" <> toText dataDir <> "/nix/corepkgs" ]
  where
@@ -1249,9 +1249,7 @@ getEnvNix v =
     mres <- getEnvVar s
 
     toValue $ makeNixStringWithoutContext $
-      maybe
-        mempty
-        toText mres
+      fromMaybe mempty mres
 
 sortNix
   :: MonadNix e t f m
