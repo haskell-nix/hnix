@@ -364,16 +364,25 @@ pruneTree opts =
       pure $ NHasAttr aset (NE.map pruneKeyName attr)
     NAbs params (Just body) -> pure $ NAbs (pruneParams params) body
 
-    NList l | reduceLists opts -> pure $ NList (catMaybes l)
-            | otherwise        -> pure $ NList (fmap (fromMaybe nNull) l)
-    NSet recur binds
-      | reduceSets opts -> pure $ NSet recur (mapMaybe sequence binds)
-      | otherwise -> pure $ NSet recur ((fmap . fmap) (fromMaybe nNull) binds)
+    NList l -> pure $ NList $
+      bool
+        (fmap (fromMaybe nNull))
+        catMaybes
+        (reduceLists opts)
+        l
+    NSet recur binds -> pure $ NSet recur $
+      bool
+        (fromMaybe nNull <<$>>)
+        (mapMaybe sequence)
+        (reduceSets opts)
+        binds
 
     NLet binds (Just body@(Fix (Compose (Ann _ x)))) ->
-      pure $ case mapMaybe pruneBinding binds of
-        [] -> x
-        xs -> NLet xs body
+      pure $
+        list
+          x
+          (`NLet` body)
+          (mapMaybe pruneBinding binds)
 
     NSelect (Just aset) attr alt ->
       pure $ NSelect aset (NE.map pruneKeyName attr) (join alt)

@@ -25,7 +25,7 @@ import           Prelude                 hiding ( traceM
 import qualified Prelude
 import           Nix.Utils
 import qualified Data.HashSet                  as HS
-import qualified Data.Text                     as T
+import qualified Data.Text                     as Text
 import           Network.HTTP.Client     hiding ( path, Proxy )
 import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
@@ -150,11 +150,11 @@ instance MonadExec IO where
     []            -> pure $ Left $ ErrorCall "exec: missing program"
     (prog : args) -> do
       (exitCode, out, _) <- liftIO $ readProcessWithExitCode (toString prog) (toString <$> args) ""
-      let t    = T.strip (toText out)
+      let t    = Text.strip (toText out)
       let emsg = "program[" <> prog <> "] args=" <> show args
       case exitCode of
         ExitSuccess ->
-          if T.null t
+          if Text.null t
             then pure $ Left $ ErrorCall $ toString $ "exec has no output :" <> emsg
             else
               either
@@ -242,7 +242,7 @@ class
 -- ** Instances
 
 instance MonadEnv IO where
-  getEnvVar            = (fmap . fmap) toText . Env.lookupEnv . toString
+  getEnvVar            = (<<$>>) toText . Env.lookupEnv . toString
 
   getCurrentSystemOS   = pure $ toText System.Info.os
 

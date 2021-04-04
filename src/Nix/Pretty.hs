@@ -326,7 +326,7 @@ valueToExpr = iterNValue (\_ _ -> thk) phi
     ]
   phi (NVClosure' _ _   ) = Fix . NSym $ "<closure>"
   phi (NVPath' p        ) = Fix $ NLiteralPath p
-  phi (NVBuiltin' name _) = Fix . NSym $ "builtins." <> toText name
+  phi (NVBuiltin' name _) = Fix . NSym $ "builtins." <> name
 
   mkStr ns = Fix $ NStr $ DoubleQuoted [Plain (stringIgnoreContext ns)]
 
@@ -381,7 +381,6 @@ printNix = iterNValue (\_ _ -> thk) phi
  where
   thk = "<thunk>"
 
-  -- Please, reduce this horrifying String -> Text -> String marshaling in favour of Text
   phi :: NValue' t f m String -> String
   phi (NVConstant' a ) = toString $ atomText a
   phi (NVStr'      ns) = show $ stringIgnoreContext ns

@@ -175,7 +175,7 @@ foldNixPath
   :: forall e t f m r
    . MonadNix e t f m
   => r
-  -> (FilePath -> Maybe String -> NixPathEntryType -> r -> m r)
+  -> (FilePath -> Maybe Text -> NixPathEntryType -> r -> m r)
   -> m r
 foldNixPath z f =
   do
@@ -199,9 +199,9 @@ foldNixPath z f =
       $ (fromInclude . stringIgnoreContext <$> dirs)
         <> maybe
             mempty
-            (uriAwareSplit . toText)
+            (uriAwareSplit)
             mPath
-        <> [ fromInclude $ toText $ "nix=" <> dataDir <> "/nix/corepkgs" ]
+        <> [ fromInclude $ "nix=" <> toText dataDir <> "/nix/corepkgs" ]
  where
 
   fromInclude x = (x, ) $
@@ -213,7 +213,7 @@ foldNixPath z f =
   go (x, ty) rest =
     case Text.splitOn "=" x of
       [p] -> f (toString p) mempty ty rest
-      [n, p] -> f (toString p) (pure (toString n)) ty rest
+      [n, p] -> f (toString p) (pure n) ty rest
       _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " <> show x
 
 attrsetGet :: MonadNix e t f m => Text -> AttrSet (NValue t f m) -> m (NValue t f m)
@@ -430,7 +430,7 @@ nixPathNix =
                   PathEntryPath -> ("path", nvPath p)
                   PathEntryURI  -> ( "uri", mkNvStr p)
 
-                , ( "prefix", mkNvStr $ fromMaybe "" mn)
+                , ( "prefix", mkNvStr $ toString $ fromMaybe "" mn)
                 ]
               )
             )
@@ -984,7 +984,7 @@ genericClosureNix c =
               []           -> k
               WValue j : _ -> j
             )
-          (fmap . fmap) (t :) (go op (S.insert (WValue k) ks) (ts <> ys))
+          (t :) <<$>> go op (S.insert (WValue k) ks) (ts <> ys)
         )
         (go op ks ts)
         (S.member (WValue k) ks)
@@ -1249,9 +1249,7 @@ getEnvNix v =
     mres <- getEnvVar s
 
     toValue $ makeNixStringWithoutContext $
-      maybe
-        mempty
-        toText mres
+      fromMaybe mempty mres
 
 sortNix
   :: MonadNix e t f m
@@ -1937,9 +1935,9 @@ builtins =
     pushScope (M.fromList lst) currentScopes
  where
   buildMap         =  fmap (M.fromList . fmap mapping) builtinsList
-  topLevelBuiltins = (fmap . fmap) mapping fullBuiltinsList
+  topLevelBuiltins = mapping <<$>> fullBuiltinsList
 
-  fullBuiltinsList = (fmap . fmap) go builtinsList
+  fullBuiltinsList = go <<$>> builtinsList
    where
     go b@(Builtin TopLevel _) = b
     go (Builtin Normal (name, builtin)) =

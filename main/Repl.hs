@@ -29,7 +29,6 @@ import           Nix.Value.Monad                ( demand )
 import qualified Data.HashMap.Lazy
 import           Data.Char                      ( isSpace )
 import           Data.List                      ( dropWhileEnd )
-import qualified Data.String                 as String
 import qualified Data.Text                   as Text
 import qualified Data.Text.IO                as Text.IO
 import           Data.Version                   ( showVersion )
@@ -76,7 +75,7 @@ main' iniVal =
     evalStateT
       (evalRepl
         banner
-        cmd
+        (cmd . toText)
         options
         (pure commandPrefix)
         (pure "paste")
@@ -108,13 +107,15 @@ main' iniVal =
 
       traverse_
         (\case
-          ((prefix:command) : xs) | prefix == commandPrefix ->
+          (prefixedCommand : xs) | Text.head prefixedCommand == commandPrefix ->
             do
-              let arguments = String.unwords xs
+              let
+                arguments = Text.unwords $ xs
+                command = Text.tail prefixedCommand
               optMatcher command options arguments
-          x -> cmd $ String.unwords x
+          x -> cmd $ Text.unwords x
         )
-        (String.words . toString <$> lines f)
+        (Text.words <$> lines f)
 
   handleMissing e
     | Error.isDoesNotExistError e = pure ""
@@ -125,13 +126,13 @@ main' iniVal =
   -- * @MonadIO m@ instead of @MonadHaskeline m@
   -- * @putStrLn@ instead of @outputStrLn@
   optMatcher :: MonadIO m
-             => String
+             => Text
              -> Console.Options m
-             -> String
+             -> Text
              -> m ()
-  optMatcher s [] _ = liftIO $ putStrLn $ "No such command :" <> s
+  optMatcher s [] _ = liftIO $ Text.IO.putStrLn $ "No such command :" <> s
   optMatcher s ((x, m) : xs) args
-    | s `isPrefixOf` x = m args
+    | s `Text.isPrefixOf` toText x = m $ toString args
     | otherwise = optMatcher s xs args
 
 
@@ -255,11 +256,11 @@ exec update source = do
 
 cmd
   :: (MonadNix e t f m, MonadIO m)
-  => String
+  => Text
   -> Repl e t f m ()
 cmd source =
   do
-    mVal <- exec True $ toText source
+    mVal <- exec True source
     maybe
       (pure ())
       printValue
@@ -271,27 +272,29 @@ printValue :: (MonadNix e t f m, MonadIO m)
 printValue val = do
   cfg <- replCfg <$> get
   lift $ lift $
-    if
-      | cfgStrict cfg -> liftIO . print . prettyNValue =<< normalForm val
-      | cfgValues cfg -> liftIO . print . prettyNValueProv =<< removeEffects val
-      | otherwise     -> liftIO . print . prettyNValue =<< removeEffects val
+    (if
+      | cfgStrict cfg -> liftIO . print . prettyNValue     <=< normalForm
+      | cfgValues cfg -> liftIO . print . prettyNValueProv <=< removeEffects
+      | otherwise     -> liftIO . print . prettyNValue     <=< removeEffects
+    ) val
 
 
 -- * Commands
 
 -- | @:browse@ command
 browse :: (MonadNix e t f m, MonadIO m)
-       => String
+       => Text
        -> Repl e t f m ()
 browse _ = do
   st <- get
   for_ (Data.HashMap.Lazy.toList $ replCtx st) $ \(k, v) -> do
-    liftIO $ putStr $ toString $ k <> " = "
+    liftIO $ Text.IO.putStr $ k <> " = "
     printValue v
 
 -- | @:load@ command
 load
   :: (MonadNix e t f m, MonadIO m)
+  -- This one does I String -> O String pretty fast, it is ugly to double marshall here.
   => String
   -> Repl e t f m ()
 load args =
@@ -306,7 +309,7 @@ load args =
 -- | @:type@ command
 typeof
   :: (MonadNix e t f m, MonadIO m)
-  => String
+  => Text
   -> Repl e t f m ()
 typeof args = do
   st <- get
@@ -319,7 +322,7 @@ typeof args = do
   traverse_ printValueType mVal
 
  where
-  line = toText args
+  line = args
   printValueType val =
     do
       s <- lift . lift . showValueType $ val
@@ -331,13 +334,14 @@ quit :: (MonadNix e t f m, MonadIO m) => a -> Repl e t f m ()
 quit _ = liftIO Exit.exitSuccess
 
 -- | @:set@ command
-setConfig :: (MonadNix e t f m, MonadIO m) => String -> Repl e t f m ()
-setConfig args = case String.words args of
-  []       -> liftIO $ putStrLn "No option to set specified"
-  (x:_xs)  ->
-    case filter ((==x) . helpSetOptionName) helpSetOptions of
-      [opt] -> modify (\s -> s { replCfg = helpSetOptionFunction opt (replCfg s) })
-      _     -> liftIO $ putStrLn "No such option"
+setConfig :: (MonadNix e t f m, MonadIO m) => Text -> Repl e t f m ()
+setConfig args =
+  case Text.words args of
+    []       -> liftIO $ putStrLn "No option to set specified"
+    (x:_xs)  ->
+      case filter ((==x) . helpSetOptionName) helpSetOptions of
+        [opt] -> modify (\s -> s { replCfg = helpSetOptionFunction opt (replCfg s) })
+        _     -> liftIO $ putStrLn "No such option"
 
 
 -- * Interactive Shell
@@ -364,6 +368,8 @@ completion = System.Console.Repline.Prefix
 -- adjusted to monadic variant able to `demand` thunks.
 completeFunc
   :: forall e t f m . (MonadNix e t f m, MonadIO m)
+  -- 2021-04-02: So far conversiton to Text here is not productive,
+  -- since Haskeline uses String of all this.
   => String
   -> String
   -> (StateT (IState t f m) m) [Completion]
@@ -371,7 +377,7 @@ completeFunc reversedPrev word
   -- Commands
   | reversedPrev == ":" =
     pure . listCompletion
-      $ fmap helpOptionName (helpOptions :: HelpOptions e t f m)
+      $ fmap (toString . helpOptionName) (helpOptions :: HelpOptions e t f m)
 
   -- Files
   | any (`isPrefixOf` word) [ "/", "./", "../", "~/" ] =
@@ -398,10 +404,10 @@ completeFunc reversedPrev word
           (Just (NVSet builtins _)) = Data.HashMap.Lazy.lookup "builtins" (replCtx s)
           shortBuiltins = Data.HashMap.Lazy.keys builtins
 
-      pure $ listCompletion
-        $ ["__includes"]
-        <> (toString <$> contextKeys)
-        <> (toString <$> shortBuiltins)
+      pure $ listCompletion $ toString <$>
+        ["__includes"]
+          <> contextKeys
+          <> shortBuiltins
 
   where
     listCompletion = fmap simpleCompletion . filter (word `isPrefixOf`)
@@ -425,7 +431,7 @@ completeFunc reversedPrev word
             f:fs ->
               maybe
                 (pure mempty)
-                (((fmap . fmap) (("." <> f) <>) . algebraicComplete fs) <=< demand)
+                ((<<$>>) (("." <> f) <>) . algebraicComplete fs <=< demand)
                 (Data.HashMap.Lazy.lookup f m)
       in
       case val of
@@ -435,7 +441,7 @@ completeFunc reversedPrev word
 -- | HelpOption inspired by Dhall Repl
 -- with `Doc` instead of String for syntax and doc
 data HelpOption e t f m = HelpOption
-  { helpOptionName     :: String
+  { helpOptionName     :: Text
   , helpOptionSyntax   :: Doc ()
   , helpOptionDoc      :: Doc ()
   , helpOptionFunction :: Cmd (Repl e t f m)
@@ -449,7 +455,7 @@ helpOptions =
       "help"
       ""
       "Print help text"
-      (help helpOptions)
+      (help helpOptions . toText)
   , HelpOption
       "paste"
       ""
@@ -464,12 +470,12 @@ helpOptions =
       "browse"
       ""
       "Browse bindings in interpreter context"
-      browse
+      (browse . toText)
   , HelpOption
       "type"
       "EXPRESSION"
       "Evaluate expression or binding from context and print the type of the result value"
-      typeof
+      (typeof . toText)
   , HelpOption
       "quit"
       ""
@@ -484,12 +490,12 @@ helpOptions =
         <> Prettyprinter.line
         <> renderSetOptions helpSetOptions
       )
-      setConfig
+      (setConfig . toText)
   ]
 
 -- | Options for :set
 data HelpSetOption = HelpSetOption
-  { helpSetOptionName     :: String
+  { helpSetOptionName     :: Text
   , helpSetOptionSyntax   :: Doc ()
   , helpSetOptionDoc      :: Doc ()
   , helpSetOptionFunction :: ReplConfig -> ReplConfig
@@ -542,7 +548,7 @@ renderSetOptions so =
 
 help :: (MonadNix e t f m, MonadIO m)
      => HelpOptions e t f m
-     -> String
+     -> Text
      -> Repl e t f m ()
 help hs _ = do
   liftIO $ putStrLn "Available commands:\n"
@@ -560,4 +566,4 @@ help hs _ = do
 options
   :: (MonadNix e t f m, MonadIO m)
   => Console.Options (Repl e t f m)
-options = (\h -> (helpOptionName h, helpOptionFunction h)) <$> helpOptions
+options = (\h -> (toString $ helpOptionName h, helpOptionFunction h)) <$> helpOptions

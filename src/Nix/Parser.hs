@@ -100,10 +100,8 @@ infixl 3 <+>
 nixExpr :: Parser NExprLoc
 nixExpr =
   makeExprParser
-    nixTerm $
-      (fmap . fmap)
-        snd
-        (nixOperators nixSelector)
+    nixTerm $ snd <<$>>
+        nixOperators nixSelector
 
 antiStart :: Parser Text
 antiStart = symbol "${" <?> show ("${" :: String)

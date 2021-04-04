@@ -259,7 +259,7 @@ inferType env ex = do
 -- | Solve for the toplevel type of an expression in a given environment
 inferExpr :: Env -> NExpr -> Either InferError [Scheme]
 inferExpr env ex =
-  (fmap . fmap) (\(subst, ty) -> closeOver (subst `apply` ty)) $ runInfer $ inferType env ex
+  (\ (subst, ty) -> closeOver $ subst `apply` ty) <<$>> runInfer (inferType env ex)
 
 -- | Canonicalize and return the polymorphic toplevel type.
 closeOver :: Type -> Scheme

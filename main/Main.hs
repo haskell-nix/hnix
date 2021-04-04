@@ -41,6 +41,7 @@ import           Prettyprinter.Render.Text
 import qualified Repl
 import           System.FilePath
 import qualified Text.Show.Pretty              as PS
+import           Nix.Utils.Fix1                 ( Fix1T )
 
 main :: IO ()
 main =
@@ -159,11 +160,11 @@ main =
    where
     printer
       | finder opts = findAttrs <=< fromValue @(AttrSet (StdValue (StandardT (StdIdT IO))))
-      | xml    opts = liftIO . putStrLn . toString . stringIgnoreContext . toXML <=< normalForm
-      | json   opts = liftIO . Text.putStrLn       . stringIgnoreContext         <=< nvalueToJSONNixString
-      | strict opts = liftIO . print               . prettyNValue                <=< normalForm
-      | values opts = liftIO . print               . prettyNValueProv            <=< removeEffects
-      | otherwise   = liftIO . print               . prettyNValue                <=< removeEffects
+      | xml    opts = liftIO . Text.putStrLn . stringIgnoreContext . toXML <=< normalForm
+      | json   opts = liftIO . Text.putStrLn . stringIgnoreContext         <=< nvalueToJSONNixString
+      | strict opts = liftIO . print         . prettyNValue                <=< normalForm
+      | values opts = liftIO . print         . prettyNValueProv            <=< removeEffects
+      | otherwise   = liftIO . print         . prettyNValue                <=< removeEffects
      where
       findAttrs
         :: AttrSet (StdValue (StandardT (StdIdT IO)))
@@ -179,7 +180,7 @@ main =
                     (\ (StdThunk (extract -> Thunk _ _ ref)) ->
                       do
                         let
-                          path         = prefix <> toString k
+                          path         = prefix <> k
                           (_, descend) = filterEntry path k
 
                         val <- readVar @(StandardT (StdIdT IO)) ref
@@ -200,11 +201,11 @@ main =
               (\ (k, mv) ->
                 do
                   let
-                    path              = prefix <> toString k
+                    path              = prefix <> k
                     (report, descend) = filterEntry path k
                   when report $
                     do
-                      liftIO $ putStrLn path
+                      liftIO $ Text.putStrLn path
                       when descend $
                         maybe
                           (pure ())
@@ -233,13 +234,18 @@ main =
             (_       , "drvAttrs"        ) -> (False, False)
             _                              -> (True , True )
 
+          forceEntry
+            :: MonadValue a (Fix1T StandardTF (StdIdT IO))
+            => Text
+            -> a
+            -> Fix1T StandardTF (StdIdT IO) (Maybe a)
           forceEntry k v =
             catch
               (pure <$> (pure =<< demand v))
               (\ (NixException frames) ->
                 do
                   liftIO
-                    . putStrLn
+                    . Text.putStrLn
                     . ("Exception forcing " <>) . (k <>) . (": " <>)
                     . show =<<
                       renderFrames
