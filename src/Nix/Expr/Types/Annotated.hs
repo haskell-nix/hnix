@@ -166,7 +166,7 @@ deltaInfo :: SourcePos -> (Text, Int, Int)
 deltaInfo (SourcePos fp l c) = (toText fp, unPos l, unPos c)
 
 nNull :: NExprLoc
-nNull = Fix (Compose (Ann nullSpan (NConstant NNull)))
+nNull = Fix $ Compose $ Ann nullSpan $ NConstant NNull
 {-# inline nNull #-}
 
 nullSpan :: SrcSpan

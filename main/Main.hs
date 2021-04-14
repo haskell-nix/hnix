@@ -176,7 +176,7 @@ main =
             xs <-
               traverse
                 (\ (k, nv) ->
-                  (free
+                  free
                     (\ (StdThunk (extract -> Thunk _ _ ref)) ->
                       do
                         let
@@ -194,7 +194,6 @@ main =
                     )
                     (\ v -> pure (k, pure (Free v)))
                     nv
-                  )
                 )
                 (sortWith fst (M.toList s))
             traverse_
