@@ -195,9 +195,10 @@ renderValueFrame level = fmap (: mempty) . \case
   CoercionToJson v ->
     ("CoercionToJson " <>) <$> renderValue level "" "" v
   CoercionFromJson _j -> pure "CoercionFromJson"
-  Expectation t v     -> do
-    v' <- renderValue @_ @t @f @m level "" "" v
-    pure $ "Saw " <> v' <> " but expected " <> pretty (describeValue t)
+  Expectation t v     ->
+    (msg <>) <$> renderValue @_ @t @f @m level "" "" v
+   where
+    msg = "Expected " <> pretty (describeValue t) <> ", but saw "
 
 renderValue
   :: forall e t f m ann
