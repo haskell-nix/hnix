@@ -186,12 +186,14 @@ renderValueFrame level = fmap (: mempty) . \case
   Coercion       x y -> pure
     $ mconcat [desc, pretty (describeValue x), " to ", pretty (describeValue y)]
    where
-    desc | level <= Error = "Cannot coerce "
-         | otherwise      = "While coercing "
+    desc =
+      bool
+      "While coercing "
+      "Cannot coerce "
+      (level <= Error)
 
-  CoercionToJson v -> do
-    v' <- renderValue level "" "" v
-    pure $ "CoercionToJson " <> v'
+  CoercionToJson v ->
+    ("CoercionToJson " <>) <$> renderValue level "" "" v
   CoercionFromJson _j -> pure "CoercionFromJson"
   Expectation t v     -> do
     v' <- renderValue @_ @t @f @m level "" "" v
