@@ -442,12 +442,18 @@ pruneTree opts =
 
   pruneParams :: Params (Maybe NExprLoc) -> Params NExprLoc
   pruneParams (Param n) = Param n
-  pruneParams (ParamSet xs b n)
-    | reduceSets opts = ParamSet
-      (fmap (second (pure . (maybe nNull (fromMaybe nNull)))) xs)
+  pruneParams (ParamSet xs b n) =
+    ParamSet
+      (second
+        (bool
+          fmap
+          (\ f -> pure . maybe nNull f)
+          (reduceSets opts)
+          (fromMaybe nNull)
+        ) <$> xs
+      )
       b
       n
-    | otherwise = ParamSet (fmap (second (fmap (fromMaybe nNull))) xs) b n
 
   pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
   pruneBinding (NamedVar _ Nothing _)           = Nothing
