@@ -83,15 +83,12 @@ isDerivationM f m =
   maybe
     (pure False)
     (\ t ->
-      do
-        mres <- f t
-
-        maybe
-          -- We should probably really make sure the context is empty here
-          -- but the C++ implementation ignores it.
-          (pure False)
-          (pure . (==) "derivation" . stringIgnoreContext)
-          mres
+      maybe
+        -- We should probably really make sure the context is empty here
+        -- but the C++ implementation ignores it.
+        False
+        ((==) "derivation" . stringIgnoreContext)
+        <$> f t
     )
     (HashMap.Lazy.lookup "type" m)
 
