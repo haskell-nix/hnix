@@ -30,7 +30,7 @@ import qualified Data.HashMap.Lazy
 import           Data.Char                      ( isSpace )
 import           Data.List                      ( dropWhileEnd )
 import qualified Data.Text                   as Text
-import qualified Data.Text.IO                as Text.IO
+import qualified Data.Text.IO                as Text
 import           Data.Version                   ( showVersion )
 import           Paths_hnix                     ( version )
 
@@ -103,14 +103,14 @@ main' iniVal =
 
   rcFile =
     do
-      f <- liftIO $ Text.IO.readFile ".hnixrc" `catch` handleMissing
+      f <- liftIO $ Text.readFile ".hnixrc" `catch` handleMissing
 
       traverse_
         (\case
           (prefixedCommand : xs) | Text.head prefixedCommand == commandPrefix ->
             do
               let
-                arguments = Text.unwords $ xs
+                arguments = Text.unwords xs
                 command = Text.tail prefixedCommand
               optMatcher command options arguments
           x -> cmd $ Text.unwords x
@@ -130,7 +130,7 @@ main' iniVal =
              -> Console.Options m
              -> Text
              -> m ()
-  optMatcher s [] _ = liftIO $ Text.IO.putStrLn $ "No such command :" <> s
+  optMatcher s [] _ = liftIO $ Text.putStrLn $ "No such command :" <> s
   optMatcher s ((x, m) : xs) args
     | s `Text.isPrefixOf` toText x = m $ toString args
     | otherwise = optMatcher s xs args
@@ -288,7 +288,7 @@ browse :: (MonadNix e t f m, MonadIO m)
 browse _ = do
   st <- get
   for_ (Data.HashMap.Lazy.toList $ replCtx st) $ \(k, v) -> do
-    liftIO $ Text.IO.putStr $ k <> " = "
+    liftIO $ Text.putStr $ k <> " = "
     printValue v
 
 -- | @:load@ command
@@ -299,9 +299,9 @@ load
   -> Repl e t f m ()
 load args =
   do
-    contents <- liftIO
-      $ Text.IO.readFile
-      $ trim args
+    contents <- liftIO $
+      Text.readFile $
+       trim args
     void $ exec True contents
  where
   trim = dropWhileEnd isSpace . dropWhile isSpace
@@ -554,7 +554,7 @@ help hs _ = do
   liftIO $ putStrLn "Available commands:\n"
   for_ hs $ \h ->
     liftIO .
-      Text.IO.putStrLn .
+      Text.putStrLn .
         Prettyprinter.renderStrict .
           Prettyprinter.layoutPretty Prettyprinter.defaultLayoutOptions $
             ":"
