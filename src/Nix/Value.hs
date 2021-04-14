@@ -727,7 +727,7 @@ valueType =
 
 
 -- | Describe type value
-describeValue :: ValueType -> String
+describeValue :: ValueType -> Text
 describeValue =
   \case
     TInt               -> "an integer"
@@ -745,7 +745,7 @@ describeValue =
 
 showValueType :: (MonadThunk t m (NValue t f m), Comonad f)
   => NValue t f m
-  -> m String
+  -> m Text
 showValueType (Pure t) = showValueType =<< force t
 showValueType (Free (NValue' (extract -> v))) =
   pure $ describeValue $ valueType v
