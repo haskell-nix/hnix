@@ -256,7 +256,7 @@ reduce (NSet_ ann NRecursive binds) =
 -- Encountering a 'with' construction eliminates any hope of inlining
 -- definitions.
 reduce (NWith_ ann scope body) =
-  clearScopes @NExprLoc $ fmap Fix $ NWith_ ann <$> scope <*> body
+  clearScopes @NExprLoc $ Fix <$> (NWith_ ann <$> scope <*> body)
 
 -- | Reduce a let binds section by pushing lambdas,
 --   constants and strings to the body scope.
@@ -279,8 +279,6 @@ reduce (NLet_ ann binds body) =
               defcase <$> def
 
             _ -> pure Nothing
-
-
           )
           binds
 
@@ -321,9 +319,9 @@ reduce (NAbs_ ann params body) = do
   let
     args =
       case params' of
-        Param    name     -> M.singleton name (Fix (NSym_ ann name))
+        Param    name     -> M.singleton name $ Fix $ NSym_ ann name
         ParamSet pset _ _ ->
-          M.fromList $ fmap (\(k, _) -> (k, Fix (NSym_ ann k))) pset
+          M.fromList $ (\(k, _) -> (k, Fix $ NSym_ ann k)) <$> pset
   Fix . NAbs_ ann params' <$> pushScope args body
 
 reduce v = Fix <$> sequence v
@@ -470,13 +468,15 @@ reducingEvalExpr
   -> Maybe FilePath
   -> NExprLoc
   -> m (NExprLoc, Either r a)
-reducingEvalExpr eval mpath expr = do
-  expr'           <- flagExprLoc =<< liftIO (reduceExpr mpath expr)
-  eres <- catch (Right <$> foldFix (addEvalFlags eval) expr') (pure . Left)
-  opts :: Options <- asks (view hasLens)
-  expr''          <- pruneTree opts expr'
-  pure (fromMaybe nNull expr'', eres)
-  where addEvalFlags k (FlaggedF (b, x)) = liftIO (writeIORef b True) *> k x
+reducingEvalExpr eval mpath expr =
+  do
+    expr'           <- flagExprLoc =<< liftIO (reduceExpr mpath expr)
+    eres <- catch (pure <$> foldFix (addEvalFlags eval) expr') (pure . Left)
+    opts :: Options <- asks (view hasLens)
+    expr''          <- pruneTree opts expr'
+    pure (fromMaybe nNull expr'', eres)
+ where
+  addEvalFlags k (FlaggedF (b, x)) = liftIO (writeIORef b True) *> k x
 
 instance Monad m => Scoped NExprLoc (Reducer m) where
   currentScopes = currentScopesReader
