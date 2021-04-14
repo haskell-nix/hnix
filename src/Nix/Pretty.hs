@@ -342,14 +342,16 @@ prettyNValueProv
   => NValue t f m
   -> Doc ann
 prettyNValueProv v =
-  case citations @m @(NValue t f m) v of
-    [] -> prettyNVal
-    ps ->
+  list
+    prettyNVal
+    (\ ps ->
       fillSep
         [ prettyNVal
         , indent 2 $
-          "(" <> mconcat ("from: ":(prettyOriginExpr . _originExpr <$> ps)) <> ")"
+          "(" <> mconcat ("from: " : (prettyOriginExpr . _originExpr <$> ps)) <> ")"
         ]
+    )
+    (citations @m @(NValue t f m) v)
  where
   prettyNVal = prettyNValue v
 
@@ -366,12 +368,12 @@ prettyNThunk t =
   do
     let ps = citations @m @(NValue t f m) @t t
     v' <- prettyNValue <$> dethunk t
-    pure
-      $ fillSep
-          [ v'
-          , indent 2 $
-              "(" <> mconcat ( "thunk from: " : fmap (prettyOriginExpr . _originExpr) ps) <> ")"
-          ]
+    pure $
+      fillSep
+        [ v'
+        , indent 2 $
+          "(" <> mconcat ( "thunk from: " : (prettyOriginExpr . _originExpr <$> ps)) <> ")"
+        ]
 
 -- | This function is used only by the testing code.
 printNix :: forall t f m . MonadDataContext f m => NValue t f m -> String
