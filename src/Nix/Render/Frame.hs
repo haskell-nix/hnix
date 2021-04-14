@@ -248,6 +248,4 @@ renderNormalLoop level =
     (: mempty)
     . \case
       NormalLoop v ->
-        do
-          v' <- renderValue level "" "" v
-          pure $ "Infinite recursion during normalization forcing " <> v'
+        ("Infinite recursion during normalization forcing " <>) <$> renderValue level "" "" v
