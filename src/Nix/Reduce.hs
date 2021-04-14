@@ -349,13 +349,10 @@ pruneTree :: MonadIO n => Options -> Flagged NExprLocF -> n (Maybe NExprLoc)
 pruneTree opts =
   foldFixM $
     \(FlaggedF (b, Compose x)) ->
-      do
-        used <- liftIO $ readIORef b
-        pure $
-          bool
-            Nothing
-            (Fix . Compose <$> traverse prune x)
-            used
+      bool
+        Nothing
+        (Fix . Compose <$> traverse prune x)
+        <$> liftIO (readIORef b)
  where
   prune :: NExprF (Maybe NExprLoc) -> Maybe (NExprF NExprLoc)
   prune = \case
