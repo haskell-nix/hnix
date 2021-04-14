@@ -57,10 +57,7 @@ alignEqM
   -> m Bool
 alignEqM eq fa fb =
   fmap
-    (either
-      (const False)
-      (const True)
-    )
+    isRight
     $ runExceptT $
       do
         pairs <-
