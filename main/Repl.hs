@@ -326,7 +326,7 @@ typeof args = do
   printValueType val =
     do
       s <- lift . lift . showValueType $ val
-      liftIO $ putStrLn s
+      liftIO $ Text.putStrLn s
 
 
 -- | @:quit@ command
@@ -337,11 +337,11 @@ quit _ = liftIO Exit.exitSuccess
 setConfig :: (MonadNix e t f m, MonadIO m) => Text -> Repl e t f m ()
 setConfig args =
   case Text.words args of
-    []       -> liftIO $ putStrLn "No option to set specified"
+    []       -> liftIO $ Text.putStrLn "No option to set specified"
     (x:_xs)  ->
       case filter ((==x) . helpSetOptionName) helpSetOptions of
         [opt] -> modify (\s -> s { replCfg = helpSetOptionFunction opt (replCfg s) })
-        _     -> liftIO $ putStrLn "No such option"
+        _     -> liftIO $ Text.putStrLn "No such option"
 
 
 -- * Interactive Shell
