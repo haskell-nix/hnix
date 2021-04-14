@@ -312,23 +312,21 @@ exprFNixDoc = \case
 
 
 valueToExpr :: forall t f m . MonadDataContext f m => NValue t f m -> NExpr
-valueToExpr = iterNValue (\_ _ -> thk) phi
+valueToExpr = iterNValue (\_ _ -> thk) (Fix . phi)
  where
   thk = Fix . NSym $ "<expr>"
 
-  phi :: NValue' t f m NExpr -> NExpr
-  phi (NVConstant' a ) = Fix $ NConstant a
-  phi (NVStr'      ns) = mkStr ns
-  phi (NVList'     l ) = Fix $ NList l
-  phi (NVSet' s p    ) = Fix $ NSet NNonRecursive
+  phi :: NValue' t f m NExpr -> NExprF NExpr
+  phi (NVConstant' a     ) = NConstant a
+  phi (NVStr'      ns    ) = NStr $ DoubleQuoted [Plain (stringIgnoreContext ns)]
+  phi (NVList'     l     ) = NList l
+  phi (NVSet'      s    p) = NSet NNonRecursive
     [ NamedVar (StaticKey k :| mempty) v (fromMaybe nullPos (M.lookup k p))
     | (k, v) <- toList s
     ]
-  phi (NVClosure' _ _   ) = Fix . NSym $ "<closure>"
-  phi (NVPath' p        ) = Fix $ NLiteralPath p
-  phi (NVBuiltin' name _) = Fix . NSym $ "builtins." <> name
-
-  mkStr ns = Fix $ NStr $ DoubleQuoted [Plain (stringIgnoreContext ns)]
+  phi (NVClosure'  _    _) = NSym "<closure>"
+  phi (NVPath'     p     ) = NLiteralPath p
+  phi (NVBuiltin'  name _) = NSym $ "builtins." <> name
 
 prettyNValue
   :: forall t f m ann . MonadDataContext f m => NValue t f m -> Doc ann
