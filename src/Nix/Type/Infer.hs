@@ -574,7 +574,7 @@ instance
   Monad m
   => FromValue NixString (InferT s m) (Judgment s)
  where
-  fromValueMay _ = pure mempty
+  fromValueMay _ = stub
   fromValue _ = error "Unused"
 
 instance
@@ -587,7 +587,7 @@ instance
     do
       let sing _ = Judgment As.empty mempty
       pure $ pure (M.mapWithKey sing xs, mempty)
-  fromValueMay _ = pure mempty
+  fromValueMay _ = stub
   fromValue =
     pure .
       fromMaybe

@@ -231,3 +231,9 @@ dup x = (x, x)
 mapPair :: (a -> c, b -> d) -> (a,b) -> (c,d)
 mapPair ~(f,g) ~(a,b) = (f a, g b)
 {-# inline mapPair #-}
+
+-- After migration from the @relude@ - @relude: pass -> stub@
+-- | @pure mempty@: Short-curcuit, stub.
+stub :: (Applicative f, Monoid a) => f a
+stub = pure mempty
+{-# inline stub #-}

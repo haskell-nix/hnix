@@ -21,6 +21,7 @@ import           Nix.Atoms
 import           Nix.Expr
 import           Nix.Parser
 import           Nix.Pretty
+import           Nix.Utils
 import           Prettyprinter
 import           Test.Tasty
 import           Test.Tasty.Hedgehog
@@ -93,7 +94,7 @@ genParams = Gen.choice
       ParamSet
       (Gen.list (Range.linear 0 10) (liftA2 (,) asciiText $ Gen.maybe genExpr))
       Gen.bool
-      (Gen.choice [pure mempty, pure <$> asciiText])
+      (Gen.choice [stub, pure <$> asciiText])
   ]
 
 genAtom :: Gen NAtom

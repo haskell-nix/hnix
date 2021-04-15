@@ -182,7 +182,7 @@ foldNixPath z f =
     mres <- lookupVar "__includes"
     dirs <-
       maybe
-        (pure mempty)
+        stub
         ((fromValue . Deeper) <=< demand)
         mres
     mPath    <- getEnvVar "NIX_PATH"
@@ -1687,7 +1687,7 @@ appendContextNix tx ty =
 
               getOutputs =
                 maybe
-                  (pure mempty)
+                  stub
                   (\ touts ->
                     do
                       outs <- demand touts

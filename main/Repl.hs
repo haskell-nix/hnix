@@ -388,7 +388,7 @@ completeFunc reversedPrev word
     do
       s <- get
       maybe
-        (pure mempty)
+        stub
         (\ binding ->
           do
             candidates <- lift $ algebraicComplete subFields binding
@@ -430,13 +430,13 @@ completeFunc reversedPrev word
             [_] -> pure $ keys m
             f:fs ->
               maybe
-                (pure mempty)
+                stub
                 ((<<$>>) (("." <> f) <>) . algebraicComplete fs <=< demand)
                 (Data.HashMap.Lazy.lookup f m)
       in
       case val of
         NVSet xs _ -> withMap xs
-        _          -> pure mempty
+        _          -> stub
 
 -- | HelpOption inspired by Dhall Repl
 -- with `Doc` instead of String for syntax and doc

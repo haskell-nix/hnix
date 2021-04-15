@@ -43,7 +43,7 @@ renderFrames
      )
   => Frames
   -> m (Doc ann)
-renderFrames []       = pure mempty
+renderFrames []       = stub
 renderFrames (x : xs) = do
   opts :: Options <- asks (view hasLens)
   frames          <- if
@@ -139,10 +139,10 @@ renderEvalFrame level f =
 
           [ renderLocation ann =<<
               renderExpr level "While evaluating" "Syntactic Hole" e
-          , pure $ pretty $ Text.show (_synHoleInfo_scope synfo)
+          , pure $ pretty $ Text.show $ _synHoleInfo_scope synfo
           ]
 
-      ForcingExpr _ _ -> pure mempty
+      ForcingExpr _ _ -> stub
 
 
 renderExpr

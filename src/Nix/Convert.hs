@@ -204,10 +204,10 @@ instance ( Convertible e t f m
           (addPath p)
       NVSet' s _ ->
         maybe
-          (pure mempty)
+          stub
           fromValueMay
           (M.lookup "outPath" s)
-      _ -> pure mempty
+      _ -> stub
 
   fromValue = fromMayToValue (TString NoContext)
 
@@ -262,7 +262,7 @@ instance ( Convertible e t f m
   fromValueMay =
     \case
       Deeper (NVList' l) -> sequence <$> traverse fromValueMay l
-      _                  -> pure mempty
+      _                  -> stub
 
 
   fromValue = fromMayToDeeperValue TList
@@ -286,7 +286,7 @@ instance ( Convertible e t f m
   fromValueMay =
     \case
       Deeper (NVSet' s _) -> sequence <$> traverse fromValueMay s
-      _                   -> pure mempty
+      _                   -> stub
 
   fromValue = fromMayToDeeperValue TSet
 
@@ -311,7 +311,7 @@ instance ( Convertible e t f m
   fromValueMay =
     \case
       Deeper (NVSet' s p) -> fmap (, p) . sequence <$> traverse fromValueMay s
-      _                   -> pure mempty
+      _                   -> stub
 
   fromValue = fromMayToDeeperValue TSet
 
@@ -400,7 +400,11 @@ instance Convertible e t f m
 
 instance (Convertible e t f m, ToValue a m (NValue t f m))
   => ToValue (AttrSet a) m (Deeper (NValue' t f m (NValue t f m))) where
-  toValue s = (\ v s -> Deeper $ nvSet' s v) <$> traverse toValue s <*> pure mempty
+  toValue s =
+    liftA2
+      (\ v s -> Deeper $ nvSet' s v)
+      (traverse toValue s)
+      stub
 
 instance Convertible e t f m
   => ToValue (AttrSet (NValue t f m), AttrSet SourcePos) m

@@ -177,8 +177,8 @@ merge context = go
     :: [NTypeF m (Symbolic m)]
     -> [NTypeF m (Symbolic m)]
     -> m [NTypeF m (Symbolic m)]
-  go []       _        = pure mempty
-  go _        []       = pure mempty
+  go []       _        = stub
+  go _        []       = stub
   go (x : xs) (y : ys) = case (x, y) of
     (TStr , TStr ) -> (TStr :) <$> go xs ys
     (TPath, TPath) -> (TPath :) <$> go xs ys
