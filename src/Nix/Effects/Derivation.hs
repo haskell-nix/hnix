@@ -123,35 +123,45 @@ hashDerivationModulo
     pure $ Store.hash @'Store.SHA256 $ encodeUtf8 $ unparseDrv (drv {inputs = (inputSrcs, inputsModulo)})
 
 unparseDrv :: Derivation -> Text
-unparseDrv Derivation{..} = Text.append "Derive" $ parens
-    [ -- outputs: [("out", "/nix/store/.....-out", "", ""), ...]
-      serializeList $ flip fmap (Map.toList outputs) (\(outputName, outputPath) ->
-        let prefix = if hashMode == Recursive then "r:" else "" in
+unparseDrv Derivation{..} =
+  Text.append
+    "Derive"
+    $ parens
+      [ -- outputs: [("out", "/nix/store/.....-out", "", ""), ...]
+        serializeList $
+          produceOutputInfo <$> Map.toList outputs
+      , -- inputDrvs
+        serializeList $
+          (\(path, outs) ->
+            parens [s path, serializeList $ s <$> sort outs]
+          ) <$> Map.toList (snd inputs)
+      , -- inputSrcs
+        serializeList $ s <$> Set.toList (fst inputs)
+      , s platform
+      , s builder
+      , -- run script args
+        serializeList $ s <$> args
+      , -- env (key value pairs)
+        serializeList $ (\(k, v) -> parens [s k, s v]) <$> Map.toList env
+      ]
+  where
+    produceOutputInfo (outputName, outputPath) =
+      let prefix = if hashMode == Recursive then "r:" else "" in
+      parens $ (s <$>) $ ([outputName, outputPath] <>) $
         maybe
-          (parens [s outputName, s outputPath, s "", s ""])
+          [mempty, mempty]
           (\ (Store.SomeDigest (digest :: Store.Digest hashType)) ->
-            parens [s outputName, s outputPath, s $ prefix <> Store.algoName @hashType, s $ Store.encodeInBase Store.Base16 digest]
+            [prefix <> Store.algoName @hashType, Store.encodeInBase Store.Base16 digest]
           )
           mFixed
-        )
-    , -- inputDrvs
-      serializeList $ (\(path, outs) ->
-        parens [s path, serializeList $ s <$> sort outs]) <$> Map.toList (snd inputs)
-    , -- inputSrcs
-      serializeList (fmap s $ Set.toList $ fst inputs)
-    , s platform
-    , s builder
-    , -- run script args
-      serializeList $ fmap s args
-    , -- env (key value pairs)
-      serializeList $ (\(k, v) -> parens [s k, s v]) <$> Map.toList env
-    ]
-  where
     parens :: [Text] -> Text
     parens ts = Text.concat ["(", Text.intercalate "," ts, ")"]
+
     serializeList   :: [Text] -> Text
     serializeList   ls = Text.concat ["[", Text.intercalate "," ls, "]"]
+
     s = Text.cons '\"' . (`Text.snoc` '\"') . Text.concatMap escape
+
     escape :: Char -> Text
     escape '\\' = "\\\\"
     escape '\"' = "\\\""
@@ -174,8 +184,8 @@ derivationParser = do
   fullOutputs <- serializeList $
     (\[n, p, ht, h] -> (n, p, ht, h)) <$> parens s
   _ <- ","
-  inputDrvs   <- fmap Map.fromList $ serializeList $
-    fmap (,) ("(" *> s <* ",") <*> (serializeList s <* ")")
+  inputDrvs   <- Map.fromList <$> serializeList
+    (liftA2 (,) ("(" *> s <* ",") (serializeList s <* ")"))
   _ <- ","
   inputSrcs   <- Set.fromList <$> serializeList s
   _ <- ","
