@@ -38,7 +38,12 @@ genPos :: Gen Pos
 genPos = mkPos <$> Gen.int (Range.linear 1 256)
 
 genSourcePos :: Gen SourcePos
-genSourcePos = SourcePos <$> asciiString <*> genPos <*> genPos
+genSourcePos =
+  liftA3
+    SourcePos
+    asciiString
+    genPos
+    genPos
 
 genKeyName :: Gen (NKeyName NExpr)
 genKeyName =
@@ -50,38 +55,52 @@ genAntiquoted gen =
 
 genBinding :: Gen (Binding NExpr)
 genBinding = Gen.choice
-  [ NamedVar <$> genAttrPath <*> genExpr <*> genSourcePos
-  , Inherit
-  <$> Gen.maybe genExpr
-  <*> Gen.list (Range.linear 0 5) genKeyName
-  <*> genSourcePos
+  [ liftA3
+      NamedVar
+      genAttrPath
+      genExpr
+      genSourcePos
+  , liftA3
+      Inherit
+      (Gen.maybe genExpr)
+      (Gen.list (Range.linear 0 5) genKeyName)
+      genSourcePos
   ]
 
 genString :: Gen (NString NExpr)
 genString = Gen.choice
   [ DoubleQuoted <$> Gen.list (Range.linear 0 5) (genAntiquoted asciiText)
-  , Indented <$> Gen.int (Range.linear 0 10) <*> Gen.list
-    (Range.linear 0 5)
-    (genAntiquoted asciiText)
+  , liftA2
+      Indented
+      (Gen.int (Range.linear 0 10))
+      (Gen.list
+        (Range.linear 0 5)
+        (genAntiquoted asciiText)
+      )
   ]
 
 genAttrPath :: Gen (NAttrPath NExpr)
-genAttrPath = (:|) <$> genKeyName <*> Gen.list (Range.linear 0 4) genKeyName
+genAttrPath =
+  liftA2
+    (:|)
+    genKeyName
+    $ Gen.list (Range.linear 0 4) genKeyName
 
 genParams :: Gen (Params NExpr)
 genParams = Gen.choice
   [ Param <$> asciiText
-  , ParamSet
-  <$> Gen.list (Range.linear 0 10) ((,) <$> asciiText <*> Gen.maybe genExpr)
-  <*> Gen.bool
-  <*> Gen.choice [pure mempty, pure <$> asciiText]
+  , liftA3
+      ParamSet
+      (Gen.list (Range.linear 0 10) (liftA2 (,) asciiText $ Gen.maybe genExpr))
+      Gen.bool
+      (Gen.choice [pure mempty, pure <$> asciiText])
   ]
 
 genAtom :: Gen NAtom
 genAtom = Gen.choice
-  [ NInt <$> Gen.integral (Range.linear 0 1000)
+  [ NInt   <$> Gen.integral (Range.linear 0 1000)
   , NFloat <$> Gen.float (Range.linearFrac 0.0 1000.0)
-  , NBool <$> Gen.bool
+  , NBool  <$> Gen.bool
   , pure NNull
   ]
 
@@ -138,22 +157,22 @@ equivUpToNormalization :: NExpr -> NExpr -> Bool
 equivUpToNormalization x y = normalize x == normalize y
 
 normalize :: NExpr -> NExpr
-normalize = foldFix $ \case
+normalize = foldFix $ Fix . \case
   NConstant (NInt n) | n < 0 ->
-    Fix (NUnary NNeg (Fix (NConstant (NInt (negate n)))))
+    NUnary NNeg $ Fix $ NConstant $ NInt $ negate n
   NConstant (NFloat n) | n < 0 ->
-    Fix (NUnary NNeg (Fix (NConstant (NFloat (negate n)))))
+    NUnary NNeg $ Fix $ NConstant $ NFloat $ negate n
 
-  NSet recur binds -> Fix (NSet recur (fmap normBinding binds))
-  NLet binds  r -> Fix (NLet (fmap normBinding binds) r)
+  NSet recur binds -> NSet recur $ normBinding <$> binds
+  NLet binds  r -> NLet (normBinding <$> binds) r
 
-  NAbs params r -> Fix (NAbs (normParams params) r)
+  NAbs params r -> NAbs (normParams params) r
 
-  r             -> Fix r
+  r             -> r
 
  where
-  normBinding (NamedVar path r     pos) = NamedVar (fmap normKey path) r pos
-  normBinding (Inherit  mr   names pos) = Inherit mr (fmap normKey names) pos
+  normBinding (NamedVar path r     pos) = NamedVar (normKey <$> path) r pos
+  normBinding (Inherit  mr   names pos) = Inherit mr (normKey <$> names) pos
 
   normKey (DynamicKey quoted) = DynamicKey (normAntiquotedString quoted)
   normKey (StaticKey  name  ) = StaticKey name
@@ -162,10 +181,11 @@ normalize = foldFix $ \case
     :: Antiquoted (NString NExpr) NExpr -> Antiquoted (NString NExpr) NExpr
   normAntiquotedString (Plain (DoubleQuoted [EscapedNewline])) = EscapedNewline
   normAntiquotedString (Plain (DoubleQuoted strs)) =
-    let strs' = fmap normAntiquotedText strs
-    in  if strs == strs'
-          then Plain (DoubleQuoted strs)
-          else normAntiquotedString (Plain (DoubleQuoted strs'))
+    let strs' = normAntiquotedText <$> strs
+    in
+    if strs == strs'
+      then Plain $ DoubleQuoted strs
+      else normAntiquotedString $ Plain $ DoubleQuoted strs'
   normAntiquotedString r = r
 
   normAntiquotedText :: Antiquoted Text NExpr -> Antiquoted Text NExpr
@@ -179,48 +199,53 @@ normalize = foldFix $ \case
 -- | Test that parse . pretty == id up to attribute position information.
 prop_prettyparse :: Monad m => NExpr -> PropertyT m ()
 prop_prettyparse p = do
-  let prog = show (prettyNix p)
-  case parse (toText prog) of
-    Left s -> do
+  let prog = show $ prettyNix p
+  either
+    (\ s -> do
       footnote $ show $ vsep
         -- Remove :: Text type annotation after String -> Text migration.
-        [fillSep ["Parse failed:", pretty (show s :: Text)], indent 2 (prettyNix p)]
+        [fillSep ["Parse failed:", pretty (show s :: Text)], indent 2 $ prettyNix p]
       discard
-    Right v
-      | equivUpToNormalization p v -> success
-      | otherwise ->
-        do
+    )
+    (\ v ->
+      bool
+        (do
           let
             pp = normalise prog
-            pv = normalise (show (prettyNix v))
+            pv = normalise $ show $ prettyNix v
 
           footnote $
             show $
               vsep
                 [ "----------------------------------------"
-                , vsep ["Expr before:", indent 2 (pretty (PS.ppShow p))]
+                , vsep ["Expr before:"      , indent 2 $ pretty $ PS.ppShow p]
                 , "----------------------------------------"
-                , vsep ["Expr after:", indent 2 (pretty (PS.ppShow v))]
+                , vsep ["Expr after:"       , indent 2 $ pretty $ PS.ppShow v]
                 , "----------------------------------------"
-                , vsep ["Pretty before:", indent 2 (pretty prog)]
+                , vsep ["Pretty before:"    , indent 2 $ pretty prog]
                 , "----------------------------------------"
-                , vsep ["Pretty after:", indent 2 (prettyNix v)]
+                , vsep ["Pretty after:"     , indent 2 $ prettyNix v]
                 , "----------------------------------------"
-                , vsep ["Normalised before:", indent 2 (pretty pp)]
+                , vsep ["Normalised before:", indent 2 $ pretty pp]
                 , "----------------------------------------"
-                , vsep ["Normalised after:", indent 2 (pretty pv)]
+                , vsep ["Normalised after:" , indent 2 $ pretty pv]
                 , "========================================"
-                , vsep ["Normalised diff:", pretty (ppDiff (ldiff pp pv))]
+                , vsep ["Normalised diff:"  , pretty $ ppDiff $ ldiff pp pv]
                 , "========================================"
                 ]
           assert (pp == pv)
+        )
+        success
+        (equivUpToNormalization p v)
+    )
+    (parse $ toText prog)
  where
   parse     = parseNixText
 
-  normalise = String.unlines . fmap (reverse . dropWhile isSpace . reverse) . String.lines
+  normalise s = String.unlines $ reverse . dropWhile isSpace . reverse <$> String.lines s
 
   ldiff :: String -> String -> [Diff [String]]
-  ldiff s1 s2 = getDiff (fmap (: mempty) (String.lines s1)) (fmap (: mempty) (String.lines s2))
+  ldiff s1 s2 = getDiff ((: mempty) <$> String.lines s1) ((: mempty) <$> String.lines s2)
 
 tests :: TestLimit -> TestTree
 tests n = testProperty "Pretty/Parse Property" $ withTests n $ property $ do
