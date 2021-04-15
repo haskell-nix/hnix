@@ -429,7 +429,7 @@ evalSetterKeyName
   -> m (Maybe Text)
 evalSetterKeyName =
   \case
-    StaticKey k -> pure (pure k)
+    StaticKey k -> pure $ pure k
     DynamicKey k ->
       maybe
         mempty
@@ -447,7 +447,7 @@ assembleString =
       Indented   _ parts -> parts
       DoubleQuoted parts -> parts
  where
-  fromParts = fmap (fmap mconcat . sequence) . traverse go
+  fromParts xs = (mconcat <$>) . sequence <$> traverse go xs
 
   go =
     runAntiquoted
@@ -469,7 +469,7 @@ buildArgument params arg =
             inject =
               maybe
                 id
-                (\ n -> M.insert n $ const $ defer (withScopes scope arg))
+                (\ n -> M.insert n $ const $ defer $ withScopes scope arg)
                 m
           loebM
             (inject $
@@ -478,7 +478,8 @@ buildArgument params arg =
                   (ialignWith
                     (assemble scope isVariadic)
                     args
-                    (M.fromList s))
+                    $ M.fromList s
+                  )
             )
  where
   assemble
