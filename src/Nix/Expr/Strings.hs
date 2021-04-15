@@ -64,15 +64,14 @@ stripIndent xs =
     . mergePlain
     . fmap snd
     . dropWhileEnd cleanup
-    . (\ys -> zip
-        (fmap
+    . (\ ys ->
+        zip
           (list
             Nothing
             (pure . Unsafe.last)
+            <$> inits ys
           )
-          (inits ys)
-        )
-        ys
+          ys
       )
     . unsplitLines
     $ ls'
@@ -80,9 +79,11 @@ stripIndent xs =
   ls        = stripEmptyOpening $ splitLines xs
   ls'       = fmap (dropSpaces minIndent) ls
 
-  minIndent = case stripEmptyLines ls of
-    []         -> 0
-    nonEmptyLs -> minimum $ fmap (countSpaces . mergePlain) nonEmptyLs
+  minIndent =
+    list
+      0
+      (minimum . (countSpaces . mergePlain <$>))
+      (stripEmptyLines ls)
 
   stripEmptyLines = filter $ \case
     [Plain t] -> not $ T.null $ T.strip t
