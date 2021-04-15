@@ -240,7 +240,7 @@ main =
             -> Fix1T StandardTF (StdIdT IO) (Maybe a)
           forceEntry k v =
             catch
-              (pure <$> (pure =<< demand v))
+              (pure <$> demand v)
               (\ (NixException frames) ->
                 do
                   liftIO

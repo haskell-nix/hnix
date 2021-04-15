@@ -303,7 +303,7 @@ evalBinds recursive binds =
         (\ (k, v) ->
           ( [k]
           , fromMaybe pos (M.lookup k p')
-          , pure =<< demand v
+          , demand v
           )
         ) <$>
         M.toList o'
@@ -403,9 +403,10 @@ evalSelect aset attr =
           | Just t <- M.lookup k s ->
             do
               list
-                (pure $ pure $ pure =<< demand t)
-                (\ (y : ys) -> (extract ?? (y :| ys)) =<< demand t)
+                (pure . pure)
+                (\ (y : ys) -> ((extract ?? (y :| ys)) =<<))
                 ks
+                $ demand t
           | otherwise -> Left . (, path) <$> toValue (s, p)
 
 -- | Evaluate a component of an attribute path in a context where we are
