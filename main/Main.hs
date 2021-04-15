@@ -207,10 +207,10 @@ main =
                       liftIO $ Text.putStrLn path
                       when descend $
                         maybe
-                          (pure ())
+                          pass
                           (\case
                             NVSet s' _ -> go (path <> ".") s'
-                            _          -> pure ()
+                            _          -> pass
                           )
                           mv
               )

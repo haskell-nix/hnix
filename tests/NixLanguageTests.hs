@@ -101,7 +101,7 @@ assertParse _opts file =
     x <- parseNixFileLoc file
     either
       (\ err -> assertFailure $ "Failed to parse " <> file <> ":\n" <> show err)
-      (const $ pure ())  -- pure $! runST $ void $ lint opts expr
+      (const pass)  -- pure $! runST $ void $ lint opts expr
       x
 
 assertParseFail :: Options -> FilePath -> Assertion
@@ -109,7 +109,7 @@ assertParseFail opts file = do
   eres <- parseNixFileLoc file
   catch
       (either
-        (const $ pure ())
+        (const pass)
         (\ expr ->
           do
             _ <- pure $! runST $ void $ lint opts expr
@@ -117,7 +117,7 @@ assertParseFail opts file = do
         )
         eres
       )
-      $ \(_ :: SomeException) -> pure ()
+      $ \(_ :: SomeException) -> pass
 
 assertLangOk :: Options -> FilePath -> Assertion
 assertLangOk opts file = do
@@ -141,8 +141,8 @@ assertEval _opts files = do
     []                 -> () <$ hnixEvalFile opts (name <> ".nix")
     [".exp"         ]  -> assertLangOk opts name
     [".exp.xml"     ]  -> assertLangOkXml opts name
-    [".exp.disabled"]  -> pure ()
-    [".exp-disabled"]  -> pure ()
+    [".exp.disabled"]  -> pass
+    [".exp-disabled"]  -> pass
     [".exp", ".flags"] -> do
       liftIO $ setEnv "NIX_PATH" "lang/dir4:lang/dir5"
       flags <- Text.readFile (name <> ".flags")
@@ -168,7 +168,7 @@ assertEval _opts files = do
   fixup []                          = mempty
 
 assertEvalFail :: FilePath -> Assertion
-assertEvalFail file = catch ?? (\(_ :: SomeException) -> pure ()) $ do
+assertEvalFail file = catch ?? (\(_ :: SomeException) -> pass) $ do
   time       <- liftIO getCurrentTime
   evalResult <- printNix <$> hnixEvalFile (defaultOptions time) file
   evalResult `seq`

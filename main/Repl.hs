@@ -230,7 +230,7 @@ exec update source = do
             -- If the result value is a set, update our context with it
             case val of
               NVSet xs _ -> put st { replCtx = Data.HashMap.Lazy.union xs (replCtx st) }
-              _          -> pure ()
+              _          -> pass
 
           pure $ pure val
         )
@@ -262,7 +262,7 @@ cmd source =
   do
     mVal <- exec True source
     maybe
-      (pure ())
+      pass
       printValue
       mVal
 

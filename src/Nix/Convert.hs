@@ -139,7 +139,7 @@ instance Convertible e t f m
   fromValueMay =
     pure .
       \case
-        NVConstant' NNull -> pure ()
+        NVConstant' NNull -> pass
         _                 -> mempty
 
   fromValue = fromMayToValue TNull
