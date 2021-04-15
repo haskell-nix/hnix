@@ -115,7 +115,7 @@ staticImport pann path = do
               (StaticKey "__cur_file" :| mempty)
               (Fix (NLiteralPath_ pann path))
               pos
-          x' = Fix (NLet_ span [cur] x)
+          x' = Fix $ NLet_ span [cur] x
         modify $ first $ M.insert path x'
         local
           (const (pure path, emptyScopes @m @NExprLoc)) $
@@ -362,15 +362,15 @@ pruneTree opts =
 
     NList l -> pure $ NList $
       bool
-        (fmap (fromMaybe nNull))
+        (fromMaybe nNull <$>)
         catMaybes
-        (reduceLists opts)
+        (reduceLists opts)  -- Reduce list members that aren't used; breaks if elemAt is used
         l
     NSet recur binds -> pure $ NSet recur $
       bool
         (fromMaybe nNull <<$>>)
         (mapMaybe sequence)
-        (reduceSets opts)
+        (reduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
         binds
 
     NLet binds (Just body@(Fix (Compose (Ann _ x)))) ->
@@ -421,9 +421,9 @@ pruneTree opts =
 
   pruneAntiquotedText
     :: Antiquoted Text (Maybe NExprLoc) -> Maybe (Antiquoted Text NExprLoc)
-  pruneAntiquotedText (Plain v)             = pure (Plain v)
+  pruneAntiquotedText (Plain v)             = pure $ Plain v
   pruneAntiquotedText EscapedNewline        = pure EscapedNewline
-  pruneAntiquotedText (Antiquoted (Just k)) = pure (Antiquoted k)
+  pruneAntiquotedText (Antiquoted (Just k)) = pure $ Antiquoted k
   pruneAntiquotedText (Antiquoted Nothing ) = Nothing
 
   pruneAntiquoted
@@ -442,17 +442,15 @@ pruneTree opts =
   pruneParams :: Params (Maybe NExprLoc) -> Params NExprLoc
   pruneParams (Param n) = Param n
   pruneParams (ParamSet xs b n) =
-    ParamSet
-      (second
-        (bool
+    ParamSet (reduceOrPassMode <$> xs) b n
+   where
+    reduceOrPassMode =
+      second $
+        bool
           fmap
           (\ f -> pure . maybe nNull f)
-          (reduceSets opts)
+          (reduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
           (fromMaybe nNull)
-        ) <$> xs
-      )
-      b
-      n
 
   pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
   pruneBinding (NamedVar _ Nothing _)           = Nothing
@@ -473,7 +471,7 @@ reducingEvalExpr eval mpath expr =
   do
     expr'           <- flagExprLoc =<< liftIO (reduceExpr mpath expr)
     eres <- catch (pure <$> foldFix (addEvalFlags eval) expr') $ pure . Left
-    opts :: Options <- asks (view hasLens)
+    opts :: Options <- asks $ view hasLens
     expr''          <- pruneTree opts expr'
     pure (fromMaybe nNull expr'', eres)
  where
