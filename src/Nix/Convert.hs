@@ -171,9 +171,9 @@ instance Convertible e t f m
 
   fromValueMay =
     pure .
-    \case
-      NVConstant' (NInt b) -> pure b
-      _                    -> Nothing
+      \case
+        NVConstant' (NInt b) -> pure b
+        _                    -> Nothing
 
   fromValue = fromMayToValue TInt
 

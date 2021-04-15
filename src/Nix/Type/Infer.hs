@@ -131,10 +131,10 @@ instance Substitutable TVar where
 instance Substitutable Type where
   apply _         (  TCon a   ) = TCon a
   apply s         (  TSet b a ) = TSet b (M.map (apply s) a)
-  apply s         (  TList a  ) = TList (fmap (apply s) a)
+  apply s         (  TList a  ) = TList (apply s <$> a)
   apply (Subst s) t@(TVar  a  ) = Map.findWithDefault t a s
   apply s         (  t1 :~> t2) = apply s t1 :~> apply s t2
-  apply s         (  TMany ts ) = TMany (fmap (apply s) ts)
+  apply s         (  TMany ts ) = TMany (apply s <$> ts)
 
 instance Substitutable Scheme where
   apply (Subst s) (Forall as t) = Forall as $ apply s' t
@@ -159,10 +159,10 @@ class FreeTypeVars a where
 instance FreeTypeVars Type where
   ftv TCon{}      = mempty
   ftv (TVar a   ) = Set.singleton a
-  ftv (TSet _ a ) = Set.unions (fmap ftv (M.elems a))
-  ftv (TList a  ) = Set.unions (fmap ftv a)
+  ftv (TSet _ a ) = Set.unions (ftv <$> M.elems a)
+  ftv (TList a  ) = Set.unions (ftv <$> a)
   ftv (t1 :~> t2) = ftv t1 `Set.union` ftv t2
-  ftv (TMany ts ) = Set.unions (fmap ftv ts)
+  ftv (TMany ts ) = Set.unions (ftv <$> ts)
 
 instance FreeTypeVars TVar where
   ftv = Set.singleton
@@ -548,7 +548,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
           (as1 `As.merge` As.singleton k t, M.insert k t t1)
       arg   = pure $ Judgment env mempty (TSet True tys)
       call  = k arg $ \args b -> (args, ) <$> b
-      names = fmap fst js
+      names = fst <$> js
 
     (args, Judgment as cs t) <- foldr (\(_, TVar a) -> extendMSet a) call js
 
@@ -598,10 +598,11 @@ instance MonadInfer m
   => ToValue (AttrSet (Judgment s), AttrSet SourcePos)
             (InferT s m) (Judgment s) where
   toValue (xs, _) =
-    Judgment
-      <$> foldrM go As.empty xs
-      <*> (concat <$> traverse ((pure . typeConstraints) <=< demand) xs)
-      <*> (TSet True <$> traverse ((pure . inferredType) <=< demand) xs)
+    liftA3
+      Judgment
+      (foldrM go As.empty xs)
+      (concat <$> traverse ((typeConstraints <$>) . demand) xs)
+      (TSet True <$> traverse ((inferredType <$>) . demand) xs)
    where
     go x rest =
       do
@@ -610,10 +611,11 @@ instance MonadInfer m
 
 instance MonadInfer m => ToValue [Judgment s] (InferT s m) (Judgment s) where
   toValue xs =
-    Judgment
-      <$> foldrM go As.empty xs
-      <*> (concat <$> traverse ((pure . typeConstraints) <=< demand) xs)
-      <*> (TList <$> traverse ((pure . inferredType) <=< demand) xs)
+    liftA3
+      Judgment
+      (foldrM go As.empty xs)
+      (concat <$> traverse ((typeConstraints <$>) . demand) xs)
+      (TList <$> traverse ((inferredType <$>) . demand) xs)
    where
     go x rest =
       do
@@ -635,9 +637,9 @@ inferTop env ((name, ex) : xs) =
     (inferExpr env ex)
 
 normalizeScheme :: Scheme -> Scheme
-normalizeScheme (Forall _ body) = Forall (fmap snd ord) (normtype body)
+normalizeScheme (Forall _ body) = Forall (snd <$> ord) (normtype body)
  where
-  ord = zip (ordNub $ fv body) (fmap (TV . toText) letters)
+  ord = zip (ordNub $ fv body) (TV . toText <$> letters)
 
   fv (TVar a  ) = [a]
   fv (a :~> b ) = fv a <> fv b
@@ -649,8 +651,8 @@ normalizeScheme (Forall _ body) = Forall (fmap snd ord) (normtype body)
   normtype (a :~> b ) = normtype a :~> normtype b
   normtype (TCon a  ) = TCon a
   normtype (TSet b a) = TSet b (M.map normtype a)
-  normtype (TList a ) = TList (fmap normtype a)
-  normtype (TMany ts) = TMany (fmap normtype ts)
+  normtype (TList a ) = TList (normtype <$> a)
+  normtype (TMany ts) = TMany (normtype <$> ts)
   normtype (TVar  a ) =
     maybe
       (error "type variable not in signature")

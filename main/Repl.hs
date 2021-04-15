@@ -376,8 +376,9 @@ completeFunc
 completeFunc reversedPrev word
   -- Commands
   | reversedPrev == ":" =
-    pure . listCompletion
-      $ fmap (toString . helpOptionName) (helpOptions :: HelpOptions e t f m)
+    pure . listCompletion $
+      toString . helpOptionName <$>
+        (helpOptions :: HelpOptions e t f m)
 
   -- Files
   | any (`isPrefixOf` word) [ "/", "./", "../", "~/" ] =
@@ -392,7 +393,12 @@ completeFunc reversedPrev word
         (\ binding ->
           do
             candidates <- lift $ algebraicComplete subFields binding
-            pure $ notFinished <$> listCompletion (toString . (var <>) <$> candidates)
+            pure $
+              notFinished <$>
+                listCompletion
+                  (toString . (var <>) <$>
+                    candidates
+                  )
         )
         (Data.HashMap.Lazy.lookup var (replCtx s))
 
@@ -431,7 +437,10 @@ completeFunc reversedPrev word
             f:fs ->
               maybe
                 stub
-                ((<<$>>) (("." <> f) <>) . algebraicComplete fs <=< demand)
+                ((<<$>>)
+                   (("." <> f) <>)
+                   . algebraicComplete fs <=< demand
+                )
                 (Data.HashMap.Lazy.lookup f m)
       in
       case val of
