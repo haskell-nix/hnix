@@ -889,6 +889,7 @@ unsafeDiscardStringContextNix mnv = do
   ns <- fromValue mnv
   toValue $ makeNixStringWithoutContext $ stringIgnoreContext ns
 
+-- | Evaluate `a` to WHNF to collect its topmost effect.
 seqNix
   :: MonadNix e t f m
   => NValue t f m
@@ -896,7 +897,7 @@ seqNix
   -> m (NValue t f m)
 seqNix a b = b <$ demand a
 
--- | We evaluate 'a' only for its effects, so data cycles are ignored.
+-- | Evaluate 'a' to NF to collect all of its effects, therefore data cycles are ignored.
 deepSeqNix
   :: MonadNix e t f m
   => NValue t f m
