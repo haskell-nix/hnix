@@ -894,7 +894,7 @@ seqNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-seqNix a b = const (pure b) =<< demand a
+seqNix a b = b <$ demand a
 
 -- | We evaluate 'a' only for its effects, so data cycles are ignored.
 deepSeqNix
