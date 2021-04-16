@@ -204,7 +204,11 @@ sequenceNValueF transform = \case
   NVStrF      s  -> pure $ NVStrF s
   NVPathF     p  -> pure $ NVPathF p
   NVListF     l  -> NVListF <$> sequenceA l
-  NVSetF     s p -> NVSetF <$> sequenceA s <*> pure p
+  NVSetF     s p ->
+    liftA2
+      NVSetF
+      (sequenceA s)
+      (pure p)
   NVClosureF p g -> pure $ NVClosureF p (transform <=< g)
   NVBuiltinF s g -> pure $ NVBuiltinF s (transform <=< g)
 
@@ -223,7 +227,11 @@ bindNValueF transform f = \case
   NVStrF      s  -> pure $ NVStrF s
   NVPathF     p  -> pure $ NVPathF p
   NVListF     l  -> NVListF <$> traverse f l
-  NVSetF     s p -> NVSetF <$> traverse f s <*> pure p
+  NVSetF     s p ->
+    liftA2
+      NVSetF
+      (traverse f s)
+      (pure p)
   NVClosureF p g -> pure $ NVClosureF p (transform . f <=< g)
   NVBuiltinF s g -> pure $ NVBuiltinF s (transform . f <=< g)
 

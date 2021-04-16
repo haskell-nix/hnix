@@ -245,7 +245,7 @@ main =
                 do
                   liftIO
                     . Text.putStrLn
-                    . ("Exception forcing " <>) . (k <>) . (": " <>)
+                    . (("Exception forcing " <> k <> ": ") <>)
                     . show =<<
                       renderFrames
                         @(StdValue (StandardT (StdIdT IO)))

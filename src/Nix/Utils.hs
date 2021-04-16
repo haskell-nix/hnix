@@ -32,7 +32,7 @@ import           Debug.Trace as X
 trace :: String -> a -> a
 trace = const id
 traceM :: Monad m => String -> m ()
-traceM = const $ pure ()
+traceM = const pass
 #endif
 
 $(makeLensesBy (\n -> pure ("_" <> n)) ''Fix)

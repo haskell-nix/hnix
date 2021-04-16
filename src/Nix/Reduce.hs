@@ -448,7 +448,7 @@ pruneTree opts =
       second $
         bool
           fmap
-          (\ f -> pure . maybe nNull f)
+          ((pure .) . maybe nNull)
           (reduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
           (fromMaybe nNull)
 
