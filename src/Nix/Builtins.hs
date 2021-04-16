@@ -1302,9 +1302,7 @@ concatListsNix
 concatListsNix =
   toValue . concat <=<
     traverse
-      (pure <=<
-        (fromValue @[NValue t f m]) <=< demand
-      )
+      (fromValue @[NValue t f m] <=< demand)
       <=< fromValue @[NValue t f m]
 
 concatMapNix

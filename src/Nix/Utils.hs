@@ -75,7 +75,10 @@ lifted
   => ((a -> m (StT u b)) -> m (StT u b))
   -> (a -> u m b)
   -> u m b
-lifted f k = restoreT . pure =<< liftWith (\run -> f (run . k))
+lifted f k =
+  do
+    lftd <- liftWith (\run -> f (run . k))
+    restoreT $ pure lftd
 
 -- | Replace:
 --  @Pure a -> a@

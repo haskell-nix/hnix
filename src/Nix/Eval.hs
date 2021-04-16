@@ -208,7 +208,7 @@ attrSetAlter (k : ks) pos m p val =
       (\x ->
         do
           (st, sp) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< x
-          recurse ((pure <=< demand) <$> st) sp
+          recurse (demand <$> st) sp
       )
       (M.lookup k m)
     )
@@ -359,7 +359,7 @@ evalBinds recursive binds =
             , pos
             , maybe
                 (attrMissing (key :| []) Nothing)
-                (pure <=< demand)
+                demand
                 =<< maybe
                     (withScopes scope $ lookupVar key)
                     (\ s ->
