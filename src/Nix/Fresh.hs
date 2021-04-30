@@ -18,9 +18,8 @@ import           Control.Monad.Catch  ( MonadCatch
                                       )
 import           Control.Monad.Except ( MonadFix )
 import           Control.Monad.Ref    ( MonadAtomicRef(..)
-                                      , MonadRef(writeRef, readRef)
+                                      , MonadRef()
                                       )
-import           Control.Monad.ST     ( ST )
 
 import           Nix.Var
 import           Nix.Thunk
@@ -66,19 +65,3 @@ instance
 
 runFreshIdT :: Functor m => Var m i -> FreshIdT i m a -> m a
 runFreshIdT i m = runReaderT (unFreshIdT m) i
-
--- Orphan instance needed by Infer.hs and Lint.hs
-
--- Since there's no forking, it's automatically atomic.
---  2021-02-09: NOTE: Submitted upstream: https://github.com/mainland/ref-tf/pull/4
-instance MonadAtomicRef (ST s) where
-  atomicModifyRef r f = do
-    v <- readRef r
-    let (a, b) = f v
-    writeRef r a
-    pure b
-  atomicModifyRef' r f = do
-    v <- readRef r
-    let (a, b) = f v
-    writeRef r $! a
-    pure b
