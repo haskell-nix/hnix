@@ -91,7 +91,7 @@
 #   , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
 #   ...
 #   }
-, rev ? "0aeba64fb26e4defa0842a942757144659c6e29f"
+, rev ? "39e6bf76474ce742eb027a88c4da6331f0a1526f"
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" > 0
@@ -185,6 +185,12 @@ let
     name = cabalName;
     # Do not include into closure the files listed in .gitignore
     root = packageRoot;
+
+    overrides = self: super: {
+
+      ref-tf = super.ref-tf_0_5;
+
+    };
 
     modifier = drv: hlib.overrideCabal drv (attrs: {
       buildTools = (attrs.buildTools or []) ++ [
