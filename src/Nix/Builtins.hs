@@ -182,7 +182,7 @@ foldNixPath z f =
     mres <- lookupVar "__includes"
     dirs <-
       maybe
-        (pure mempty)
+        stub
         ((fromValue . Deeper) <=< demand)
         mres
     mPath    <- getEnvVar "NIX_PATH"
@@ -199,7 +199,7 @@ foldNixPath z f =
       $ (fromInclude . stringIgnoreContext <$> dirs)
         <> maybe
             mempty
-            (uriAwareSplit)
+            uriAwareSplit
             mPath
         <> [ fromInclude $ "nix=" <> toText dataDir <> "/nix/corepkgs" ]
  where
@@ -889,14 +889,15 @@ unsafeDiscardStringContextNix mnv = do
   ns <- fromValue mnv
   toValue $ makeNixStringWithoutContext $ stringIgnoreContext ns
 
+-- | Evaluate `a` to WHNF to collect its topmost effect.
 seqNix
   :: MonadNix e t f m
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-seqNix a b = const (pure b) =<< demand a
+seqNix a b = b <$ demand a
 
--- | We evaluate 'a' only for its effects, so data cycles are ignored.
+-- | Evaluate 'a' to NF to collect all of its effects, therefore data cycles are ignored.
 deepSeqNix
   :: MonadNix e t f m
   => NValue t f m
@@ -1302,9 +1303,7 @@ concatListsNix
 concatListsNix =
   toValue . concat <=<
     traverse
-      (pure <=<
-        (fromValue @[NValue t f m]) <=< demand
-      )
+      (fromValue @[NValue t f m] <=< demand)
       <=< fromValue @[NValue t f m]
 
 concatMapNix
@@ -1687,7 +1686,7 @@ appendContextNix tx ty =
 
               getOutputs =
                 maybe
-                  (pure mempty)
+                  stub
                   (\ touts ->
                     do
                       outs <- demand touts

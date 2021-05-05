@@ -204,7 +204,11 @@ sequenceNValueF transform = \case
   NVStrF      s  -> pure $ NVStrF s
   NVPathF     p  -> pure $ NVPathF p
   NVListF     l  -> NVListF <$> sequenceA l
-  NVSetF     s p -> NVSetF <$> sequenceA s <*> pure p
+  NVSetF     s p ->
+    liftA2
+      NVSetF
+      (sequenceA s)
+      (pure p)
   NVClosureF p g -> pure $ NVClosureF p (transform <=< g)
   NVBuiltinF s g -> pure $ NVBuiltinF s (transform <=< g)
 
@@ -223,7 +227,11 @@ bindNValueF transform f = \case
   NVStrF      s  -> pure $ NVStrF s
   NVPathF     p  -> pure $ NVPathF p
   NVListF     l  -> NVListF <$> traverse f l
-  NVSetF     s p -> NVSetF <$> traverse f s <*> pure p
+  NVSetF     s p ->
+    liftA2
+      NVSetF
+      (traverse f s)
+      (pure p)
   NVClosureF p g -> pure $ NVClosureF p (transform . f <=< g)
   NVBuiltinF s g -> pure $ NVBuiltinF s (transform . f <=< g)
 
@@ -727,7 +735,7 @@ valueType =
 
 
 -- | Describe type value
-describeValue :: ValueType -> String
+describeValue :: ValueType -> Text
 describeValue =
   \case
     TInt               -> "an integer"
@@ -745,7 +753,7 @@ describeValue =
 
 showValueType :: (MonadThunk t m (NValue t f m), Comonad f)
   => NValue t f m
-  -> m String
+  -> m Text
 showValueType (Pure t) = showValueType =<< force t
 showValueType (Free (NValue' (extract -> v))) =
   pure $ describeValue $ valueType v

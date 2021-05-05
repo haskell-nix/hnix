@@ -59,30 +59,33 @@ unsplitLines = intercalate [Plain "\n"]
 stripIndent :: [Antiquoted Text r] -> NString r
 stripIndent [] = Indented 0 mempty
 stripIndent xs =
-  Indented minIndent
-    . removePlainEmpty
-    . mergePlain
-    . fmap snd
-    . dropWhileEnd cleanup
-    . (\ys -> zip
-        (fmap
-          (list
-            Nothing
-            (pure . Unsafe.last)
-          )
-          (inits ys)
-        )
-        ys
-      )
-    . unsplitLines
-    $ ls'
+  Indented
+    minIndent
+    (removePlainEmpty $
+      mergePlain $
+        (snd <$>) $
+          dropWhileEnd
+            cleanup
+            $ pairWithLast $ unsplitLines ls'
+    )
  where
-  ls        = stripEmptyOpening $ splitLines xs
-  ls'       = fmap (dropSpaces minIndent) ls
+  pairWithLast ys =
+    zip
+      (list
+        Nothing
+        (pure . Unsafe.last)
+        <$> inits ys
+      )
+      ys
 
-  minIndent = case stripEmptyLines ls of
-    []         -> 0
-    nonEmptyLs -> minimum $ fmap (countSpaces . mergePlain) nonEmptyLs
+  ls        = stripEmptyOpening $ splitLines xs
+  ls'       = dropSpaces minIndent <$> ls
+
+  minIndent =
+    list
+      0
+      (minimum . (countSpaces . mergePlain <$>))
+      (stripEmptyLines ls)
 
   stripEmptyLines = filter $ \case
     [Plain t] -> not $ T.null $ T.strip t

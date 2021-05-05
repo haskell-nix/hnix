@@ -92,7 +92,7 @@ staticImport pann path = do
   mfile <- asks fst
   path  <- liftIO $ pathToDefaultNixFile path
   path' <- liftIO $ pathToDefaultNixFile =<< canonicalizePath
-    (maybe path (\p -> takeDirectory p </> path) mfile)
+    (maybe id ((</>) . takeDirectory) mfile path)
 
   imports <- gets fst
   maybe
@@ -115,12 +115,13 @@ staticImport pann path = do
               (StaticKey "__cur_file" :| mempty)
               (Fix (NLiteralPath_ pann path))
               pos
-          x' = Fix (NLet_ span [cur] x)
-        modify (first (M.insert path x'))
-        local (const (pure path, emptyScopes @m @NExprLoc)) $
+          x' = Fix $ NLet_ span [cur] x
+        modify $ first $ M.insert path x'
+        local
+          (const (pure path, emptyScopes @m @NExprLoc)) $
           do
             x'' <- foldFix reduce x'
-            modify (first (M.insert path x''))
+            modify $ first $ M.insert path x''
             pure x''
       )
       eres
@@ -160,8 +161,8 @@ reduce (NUnary_ uann op arg) =
     x <- arg
     pure $ Fix $
       case (op, x) of
-        (NNeg, Fix (NConstant_ cann (NInt  n))) -> NConstant_ cann (NInt (negate n))
-        (NNot, Fix (NConstant_ cann (NBool b))) -> NConstant_ cann (NBool (not b))
+        (NNeg, Fix (NConstant_ cann (NInt  n))) -> NConstant_ cann $ NInt $ negate n
+        (NNot, Fix (NConstant_ cann (NBool b))) -> NConstant_ cann $ NBool $ not b
         _                                       -> NUnary_    uann op x
 
 -- | Reduce function applications.
@@ -194,7 +195,7 @@ reduce (NBinary_ bann op larg rarg) =
     rval <- rarg
     pure $ Fix $
       case (op, lval, rval) of
-        (NPlus, Fix (NConstant_ ann (NInt x)), Fix (NConstant_ _ (NInt y))) -> NConstant_ ann  (NInt (x + y))
+        (NPlus, Fix (NConstant_ ann (NInt x)), Fix (NConstant_ _ (NInt y))) -> NConstant_ ann  $ NInt $ x + y
         _                                                                   -> NBinary_   bann op lval rval
 
 -- | Reduce a select on a Set by substituting the set to the selected value.
@@ -256,7 +257,7 @@ reduce (NSet_ ann NRecursive binds) =
 -- Encountering a 'with' construction eliminates any hope of inlining
 -- definitions.
 reduce (NWith_ ann scope body) =
-  clearScopes @NExprLoc $ fmap Fix $ NWith_ ann <$> scope <*> body
+  clearScopes @NExprLoc $ Fix <$> (NWith_ ann <$> scope <*> body)
 
 -- | Reduce a let binds section by pushing lambdas,
 --   constants and strings to the body scope.
@@ -279,8 +280,6 @@ reduce (NLet_ ann binds body) =
               defcase <$> def
 
             _ -> pure Nothing
-
-
           )
           binds
 
@@ -321,9 +320,9 @@ reduce (NAbs_ ann params body) = do
   let
     args =
       case params' of
-        Param    name     -> M.singleton name (Fix (NSym_ ann name))
+        Param    name     -> M.singleton name $ Fix $ NSym_ ann name
         ParamSet pset _ _ ->
-          M.fromList $ fmap (\(k, _) -> (k, Fix (NSym_ ann k))) pset
+          M.fromList $ (\(k, _) -> (k, Fix $ NSym_ ann k)) <$> pset
   Fix . NAbs_ ann params' <$> pushScope args body
 
 reduce v = Fix <$> sequence v
@@ -349,32 +348,29 @@ pruneTree :: MonadIO n => Options -> Flagged NExprLocF -> n (Maybe NExprLoc)
 pruneTree opts =
   foldFixM $
     \(FlaggedF (b, Compose x)) ->
-      do
-        used <- liftIO $ readIORef b
-        pure $
-          bool
-            Nothing
-            (Fix . Compose <$> traverse prune x)
-            used
+      bool
+        Nothing
+        (Fix . Compose <$> traverse prune x)
+        <$> liftIO (readIORef b)
  where
   prune :: NExprF (Maybe NExprLoc) -> Maybe (NExprF NExprLoc)
   prune = \case
-    NStr str -> pure $ NStr (pruneString str)
+    NStr str -> pure $ NStr $ pruneString str
     NHasAttr (Just aset) attr ->
-      pure $ NHasAttr aset (NE.map pruneKeyName attr)
+      pure $ NHasAttr aset $ NE.map pruneKeyName attr
     NAbs params (Just body) -> pure $ NAbs (pruneParams params) body
 
     NList l -> pure $ NList $
       bool
-        (fmap (fromMaybe nNull))
+        (fromMaybe nNull <$>)
         catMaybes
-        (reduceLists opts)
+        (reduceLists opts)  -- Reduce list members that aren't used; breaks if elemAt is used
         l
     NSet recur binds -> pure $ NSet recur $
       bool
         (fromMaybe nNull <<$>>)
         (mapMaybe sequence)
-        (reduceSets opts)
+        (reduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
         binds
 
     NLet binds (Just body@(Fix (Compose (Ann _ x)))) ->
@@ -425,17 +421,17 @@ pruneTree opts =
 
   pruneAntiquotedText
     :: Antiquoted Text (Maybe NExprLoc) -> Maybe (Antiquoted Text NExprLoc)
-  pruneAntiquotedText (Plain v)             = pure (Plain v)
+  pruneAntiquotedText (Plain v)             = pure $ Plain v
   pruneAntiquotedText EscapedNewline        = pure EscapedNewline
-  pruneAntiquotedText (Antiquoted (Just k)) = pure (Antiquoted k)
+  pruneAntiquotedText (Antiquoted (Just k)) = pure $ Antiquoted k
   pruneAntiquotedText (Antiquoted Nothing ) = Nothing
 
   pruneAntiquoted
     :: Antiquoted (NString (Maybe NExprLoc)) (Maybe NExprLoc)
     -> Maybe (Antiquoted (NString NExprLoc) NExprLoc)
-  pruneAntiquoted (Plain v)             = pure (Plain (pruneString v))
+  pruneAntiquoted (Plain v)             = pure $ Plain $ pruneString v
   pruneAntiquoted EscapedNewline        = pure EscapedNewline
-  pruneAntiquoted (Antiquoted (Just k)) = pure (Antiquoted k)
+  pruneAntiquoted (Antiquoted (Just k)) = pure $ Antiquoted k
   pruneAntiquoted (Antiquoted Nothing ) = Nothing
 
   pruneKeyName :: NKeyName (Maybe NExprLoc) -> NKeyName NExprLoc
@@ -445,21 +441,25 @@ pruneTree opts =
 
   pruneParams :: Params (Maybe NExprLoc) -> Params NExprLoc
   pruneParams (Param n) = Param n
-  pruneParams (ParamSet xs b n)
-    | reduceSets opts = ParamSet
-      (fmap (second (pure . (maybe nNull (fromMaybe nNull)))) xs)
-      b
-      n
-    | otherwise = ParamSet (fmap (second (fmap (fromMaybe nNull))) xs) b n
+  pruneParams (ParamSet xs b n) =
+    ParamSet (reduceOrPassMode <$> xs) b n
+   where
+    reduceOrPassMode =
+      second $
+        bool
+          fmap
+          ((pure .) . maybe nNull)
+          (reduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
+          (fromMaybe nNull)
 
   pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
   pruneBinding (NamedVar _ Nothing _)           = Nothing
   pruneBinding (NamedVar xs (Just x) pos)       =
-    pure (NamedVar (NE.map pruneKeyName xs) x pos)
+    pure $ NamedVar (NE.map pruneKeyName xs) x pos
   pruneBinding (Inherit _                 [] _) = Nothing
   pruneBinding (Inherit (join -> Nothing) _  _)  = Nothing
   pruneBinding (Inherit (join -> m) xs pos)      =
-    pure (Inherit m (fmap pruneKeyName xs) pos)
+    pure $ Inherit m (pruneKeyName <$> xs) pos
 
 reducingEvalExpr
   :: (Framed e m, Has e Options, Exception r, MonadCatch m, MonadIO m)
@@ -467,13 +467,15 @@ reducingEvalExpr
   -> Maybe FilePath
   -> NExprLoc
   -> m (NExprLoc, Either r a)
-reducingEvalExpr eval mpath expr = do
-  expr'           <- flagExprLoc =<< liftIO (reduceExpr mpath expr)
-  eres <- catch (Right <$> foldFix (addEvalFlags eval) expr') (pure . Left)
-  opts :: Options <- asks (view hasLens)
-  expr''          <- pruneTree opts expr'
-  pure (fromMaybe nNull expr'', eres)
-  where addEvalFlags k (FlaggedF (b, x)) = liftIO (writeIORef b True) *> k x
+reducingEvalExpr eval mpath expr =
+  do
+    expr'           <- flagExprLoc =<< liftIO (reduceExpr mpath expr)
+    eres <- catch (pure <$> foldFix (addEvalFlags eval) expr') $ pure . Left
+    opts :: Options <- asks $ view hasLens
+    expr''          <- pruneTree opts expr'
+    pure (fromMaybe nNull expr'', eres)
+ where
+  addEvalFlags k (FlaggedF (b, x)) = liftIO (writeIORef b True) *> k x
 
 instance Monad m => Scoped NExprLoc (Reducer m) where
   currentScopes = currentScopesReader

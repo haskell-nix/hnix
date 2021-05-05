@@ -38,17 +38,17 @@ checkComparable
   -> m ()
 checkComparable x y =
   case (x, y) of
-    (NVConstant (NFloat _), NVConstant (NInt   _)) -> pure ()
-    (NVConstant (NInt   _), NVConstant (NFloat _)) -> pure ()
-    (NVConstant (NInt   _), NVConstant (NInt   _)) -> pure ()
-    (NVConstant (NFloat _), NVConstant (NFloat _)) -> pure ()
-    (NVStr       _        , NVStr       _        ) -> pure ()
-    (NVPath      _        , NVPath      _        ) -> pure ()
+    (NVConstant (NFloat _), NVConstant (NInt   _)) -> pass
+    (NVConstant (NInt   _), NVConstant (NFloat _)) -> pass
+    (NVConstant (NInt   _), NVConstant (NInt   _)) -> pass
+    (NVConstant (NFloat _), NVConstant (NFloat _)) -> pass
+    (NVStr       _        , NVStr       _        ) -> pass
+    (NVPath      _        , NVPath      _        ) -> pass
     _                                              -> throwError $ Comparison x y
 
 -- | Checks whether two containers are equal, using the given item equality
 --   predicate. If there are any item slots that don't match between the two
---   containers, the result will be False.
+--   containers, the result will be @False@.
 alignEqM
   :: (Align f, Traversable f, Monad m)
   => (a -> b -> m Bool)
@@ -57,10 +57,7 @@ alignEqM
   -> m Bool
 alignEqM eq fa fb =
   fmap
-    (either
-      (const False)
-      (const True)
-    )
+    isRight
     $ runExceptT $
       do
         pairs <-
@@ -86,15 +83,12 @@ isDerivationM f m =
   maybe
     (pure False)
     (\ t ->
-      do
-        mres <- f t
-
-        maybe
-          -- We should probably really make sure the context is empty here
-          -- but the C++ implementation ignores it.
-          (pure False)
-          (pure . (==) "derivation" . stringIgnoreContext)
-          mres
+      maybe
+        -- We should probably really make sure the context is empty here
+        -- but the C++ implementation ignores it.
+        False
+        ((==) "derivation" . stringIgnoreContext)
+        <$> f t
     )
     (HashMap.Lazy.lookup "type" m)
 

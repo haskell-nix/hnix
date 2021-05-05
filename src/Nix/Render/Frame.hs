@@ -43,7 +43,7 @@ renderFrames
      )
   => Frames
   -> m (Doc ann)
-renderFrames []       = pure mempty
+renderFrames []       = stub
 renderFrames (x : xs) = do
   opts :: Options <- asks (view hasLens)
   frames          <- if
@@ -139,10 +139,10 @@ renderEvalFrame level f =
 
           [ renderLocation ann =<<
               renderExpr level "While evaluating" "Syntactic Hole" e
-          , pure $ pretty $ Text.show (_synHoleInfo_scope synfo)
+          , pure $ pretty $ Text.show $ _synHoleInfo_scope synfo
           ]
 
-      ForcingExpr _ _ -> pure mempty
+      ForcingExpr _ _ -> stub
 
 
 renderExpr
@@ -186,16 +186,19 @@ renderValueFrame level = fmap (: mempty) . \case
   Coercion       x y -> pure
     $ mconcat [desc, pretty (describeValue x), " to ", pretty (describeValue y)]
    where
-    desc | level <= Error = "Cannot coerce "
-         | otherwise      = "While coercing "
+    desc =
+      bool
+      "While coercing "
+      "Cannot coerce "
+      (level <= Error)
 
-  CoercionToJson v -> do
-    v' <- renderValue level "" "" v
-    pure $ "CoercionToJson " <> v'
+  CoercionToJson v ->
+    ("CoercionToJson " <>) <$> renderValue level "" "" v
   CoercionFromJson _j -> pure "CoercionFromJson"
-  Expectation t v     -> do
-    v' <- renderValue @_ @t @f @m level "" "" v
-    pure $ "Saw " <> v' <> " but expected " <> pretty (describeValue t)
+  Expectation t v     ->
+    (msg <>) <$> renderValue @_ @t @f @m level "" "" v
+   where
+    msg = "Expected " <> pretty (describeValue t) <> ", but saw "
 
 renderValue
   :: forall e t f m ann
@@ -246,6 +249,4 @@ renderNormalLoop level =
     (: mempty)
     . \case
       NormalLoop v ->
-        do
-          v' <- renderValue level "" "" v
-          pure $ "Infinite recursion during normalization forcing " <> v'
+        ("Infinite recursion during normalization forcing " <>) <$> renderValue level "" "" v

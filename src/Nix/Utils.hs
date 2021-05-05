@@ -32,7 +32,7 @@ import           Debug.Trace as X
 trace :: String -> a -> a
 trace = const id
 traceM :: Monad m => String -> m ()
-traceM = const (pure ())
+traceM = const pass
 #endif
 
 $(makeLensesBy (\n -> pure ("_" <> n)) ''Fix)
@@ -49,7 +49,9 @@ type AlgM f m a = f a -> m a
 type Transform f a = (Fix f -> a) -> Fix f -> a
 
 loeb :: Functor f => f (f a -> a) -> f a
-loeb x = go where go = fmap ($ go) x
+loeb x = go
+ where
+  go = ($ go) <$> x
 
 loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
 -- Sectioning here insures optimization happening.
@@ -73,18 +75,26 @@ lifted
   => ((a -> m (StT u b)) -> m (StT u b))
   -> (a -> u m b)
   -> u m b
-lifted f k = restoreT . pure =<< liftWith (\run -> f (run . k))
+lifted f k =
+  do
+    lftd <- liftWith (\run -> f (run . k))
+    restoreT $ pure lftd
 
+-- | Replace:
+--  @Pure a -> a@
+--  @Free -> Fix@
 freeToFix :: Functor f => (a -> Fix f) -> Free f a -> Fix f
 freeToFix f = go
  where
   go =
     free
       f
-      (Fix . fmap go)
+      $ Fix . (go <$>)
 
 fixToFree :: Functor f => Fix f -> Free f a
-fixToFree = Free . go where go (Fix f) = fmap (Free . go) f
+fixToFree = Free . go
+ where
+  go (Fix f) = Free . go <$> f
 
 -- | adi is Abstracting Definitional Interpreters:
 --
@@ -121,7 +131,7 @@ toEncodingSorted = \case
   A.Object m ->
     A.pairs
       . mconcat
-      . fmap (\(k, v) -> A.pair k $ toEncodingSorted v)
+      . ((\(k, v) -> A.pair k $ toEncodingSorted v) <$>)
       . sortWith fst
       $ M.toList m
   A.Array l -> A.list toEncodingSorted $ V.toList l
@@ -148,12 +158,10 @@ alterF
   -> HashMap k v
   -> f (HashMap k v)
 alterF f k m =
-  fmap
-    (maybe
-      (M.delete k m)
-      (\ v -> M.insert k v m)
-    )
-    $ f $ M.lookup k m
+  maybe
+    (M.delete k m)
+    (\ v -> M.insert k v m)
+    <$> f (M.lookup k m)
 
 
 -- | Analog for @bool@ or @maybe@, for list-like cons structures.
@@ -226,3 +234,9 @@ dup x = (x, x)
 mapPair :: (a -> c, b -> d) -> (a,b) -> (c,d)
 mapPair ~(f,g) ~(a,b) = (f a, g b)
 {-# inline mapPair #-}
+
+-- After migration from the @relude@ - @relude: pass -> stub@
+-- | @pure mempty@: Short-curcuit, stub.
+stub :: (Applicative f, Monoid a) => f a
+stub = pure mempty
+{-# inline stub #-}

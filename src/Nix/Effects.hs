@@ -439,7 +439,11 @@ parseStoreResult name res =
   logs = snd res
 
 addTextToStore :: (Framed e m, MonadStore m) => StorePathName -> Text -> Store.StorePathSet -> RepairFlag -> m StorePath
-addTextToStore a b c d = either throwError pure =<< addTextToStore' a b c d
+addTextToStore a b c d =
+  either
+    throwError
+    pure
+    =<< addTextToStore' a b c d
 
 addPath :: (Framed e m, MonadStore m) => FilePath -> m StorePath
 addPath p =

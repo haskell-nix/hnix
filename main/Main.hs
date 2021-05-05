@@ -176,7 +176,7 @@ main =
             xs <-
               traverse
                 (\ (k, nv) ->
-                  (free
+                  free
                     (\ (StdThunk (extract -> Thunk _ _ ref)) ->
                       do
                         let
@@ -194,7 +194,6 @@ main =
                     )
                     (\ v -> pure (k, pure (Free v)))
                     nv
-                  )
                 )
                 (sortWith fst (M.toList s))
             traverse_
@@ -208,10 +207,10 @@ main =
                       liftIO $ Text.putStrLn path
                       when descend $
                         maybe
-                          (pure ())
+                          pass
                           (\case
                             NVSet s' _ -> go (path <> ".") s'
-                            _          -> pure ()
+                            _          -> pass
                           )
                           mv
               )
@@ -241,12 +240,12 @@ main =
             -> Fix1T StandardTF (StdIdT IO) (Maybe a)
           forceEntry k v =
             catch
-              (pure <$> (pure =<< demand v))
+              (pure <$> demand v)
               (\ (NixException frames) ->
                 do
                   liftIO
                     . Text.putStrLn
-                    . ("Exception forcing " <>) . (k <>) . (": " <>)
+                    . (("Exception forcing " <> k <> ": ") <>)
                     . show =<<
                       renderFrames
                         @(StdValue (StandardT (StdIdT IO)))

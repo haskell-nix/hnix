@@ -30,7 +30,7 @@ import qualified Data.HashMap.Lazy
 import           Data.Char                      ( isSpace )
 import           Data.List                      ( dropWhileEnd )
 import qualified Data.Text                   as Text
-import qualified Data.Text.IO                as Text.IO
+import qualified Data.Text.IO                as Text
 import           Data.Version                   ( showVersion )
 import           Paths_hnix                     ( version )
 
@@ -103,14 +103,14 @@ main' iniVal =
 
   rcFile =
     do
-      f <- liftIO $ Text.IO.readFile ".hnixrc" `catch` handleMissing
+      f <- liftIO $ Text.readFile ".hnixrc" `catch` handleMissing
 
       traverse_
         (\case
           (prefixedCommand : xs) | Text.head prefixedCommand == commandPrefix ->
             do
               let
-                arguments = Text.unwords $ xs
+                arguments = Text.unwords xs
                 command = Text.tail prefixedCommand
               optMatcher command options arguments
           x -> cmd $ Text.unwords x
@@ -130,7 +130,7 @@ main' iniVal =
              -> Console.Options m
              -> Text
              -> m ()
-  optMatcher s [] _ = liftIO $ Text.IO.putStrLn $ "No such command :" <> s
+  optMatcher s [] _ = liftIO $ Text.putStrLn $ "No such command :" <> s
   optMatcher s ((x, m) : xs) args
     | s `Text.isPrefixOf` toText x = m $ toString args
     | otherwise = optMatcher s xs args
@@ -230,7 +230,7 @@ exec update source = do
             -- If the result value is a set, update our context with it
             case val of
               NVSet xs _ -> put st { replCtx = Data.HashMap.Lazy.union xs (replCtx st) }
-              _          -> pure ()
+              _          -> pass
 
           pure $ pure val
         )
@@ -262,7 +262,7 @@ cmd source =
   do
     mVal <- exec True source
     maybe
-      (pure ())
+      pass
       printValue
       mVal
 
@@ -288,7 +288,7 @@ browse :: (MonadNix e t f m, MonadIO m)
 browse _ = do
   st <- get
   for_ (Data.HashMap.Lazy.toList $ replCtx st) $ \(k, v) -> do
-    liftIO $ Text.IO.putStr $ k <> " = "
+    liftIO $ Text.putStr $ k <> " = "
     printValue v
 
 -- | @:load@ command
@@ -299,9 +299,9 @@ load
   -> Repl e t f m ()
 load args =
   do
-    contents <- liftIO
-      $ Text.IO.readFile
-      $ trim args
+    contents <- liftIO $
+      Text.readFile $
+       trim args
     void $ exec True contents
  where
   trim = dropWhileEnd isSpace . dropWhile isSpace
@@ -326,7 +326,7 @@ typeof args = do
   printValueType val =
     do
       s <- lift . lift . showValueType $ val
-      liftIO $ putStrLn s
+      liftIO $ Text.putStrLn s
 
 
 -- | @:quit@ command
@@ -337,11 +337,11 @@ quit _ = liftIO Exit.exitSuccess
 setConfig :: (MonadNix e t f m, MonadIO m) => Text -> Repl e t f m ()
 setConfig args =
   case Text.words args of
-    []       -> liftIO $ putStrLn "No option to set specified"
+    []       -> liftIO $ Text.putStrLn "No option to set specified"
     (x:_xs)  ->
       case filter ((==x) . helpSetOptionName) helpSetOptions of
         [opt] -> modify (\s -> s { replCfg = helpSetOptionFunction opt (replCfg s) })
-        _     -> liftIO $ putStrLn "No such option"
+        _     -> liftIO $ Text.putStrLn "No such option"
 
 
 -- * Interactive Shell
@@ -376,8 +376,9 @@ completeFunc
 completeFunc reversedPrev word
   -- Commands
   | reversedPrev == ":" =
-    pure . listCompletion
-      $ fmap (toString . helpOptionName) (helpOptions :: HelpOptions e t f m)
+    pure . listCompletion $
+      toString . helpOptionName <$>
+        (helpOptions :: HelpOptions e t f m)
 
   -- Files
   | any (`isPrefixOf` word) [ "/", "./", "../", "~/" ] =
@@ -388,11 +389,16 @@ completeFunc reversedPrev word
     do
       s <- get
       maybe
-        (pure mempty)
+        stub
         (\ binding ->
           do
             candidates <- lift $ algebraicComplete subFields binding
-            pure $ notFinished <$> listCompletion (toString . (var <>) <$> candidates)
+            pure $
+              notFinished <$>
+                listCompletion
+                  (toString . (var <>) <$>
+                    candidates
+                  )
         )
         (Data.HashMap.Lazy.lookup var (replCtx s))
 
@@ -430,13 +436,16 @@ completeFunc reversedPrev word
             [_] -> pure $ keys m
             f:fs ->
               maybe
-                (pure mempty)
-                ((<<$>>) (("." <> f) <>) . algebraicComplete fs <=< demand)
+                stub
+                ((<<$>>)
+                   (("." <> f) <>)
+                   . algebraicComplete fs <=< demand
+                )
                 (Data.HashMap.Lazy.lookup f m)
       in
       case val of
         NVSet xs _ -> withMap xs
-        _          -> pure mempty
+        _          -> stub
 
 -- | HelpOption inspired by Dhall Repl
 -- with `Doc` instead of String for syntax and doc
@@ -554,7 +563,7 @@ help hs _ = do
   liftIO $ putStrLn "Available commands:\n"
   for_ hs $ \h ->
     liftIO .
-      Text.IO.putStrLn .
+      Text.putStrLn .
         Prettyprinter.renderStrict .
           Prettyprinter.layoutPretty Prettyprinter.defaultLayoutOptions $
             ":"

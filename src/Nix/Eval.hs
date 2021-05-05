@@ -172,7 +172,7 @@ eval (NAbs    params body) = do
   scope <- currentScopes :: m (Scopes m v)
   evalAbs params $ \arg k -> withScopes scope $ do
     args <- buildArgument params arg
-    pushScope args (k (fmap (withScopes scope . inform) args) body)
+    pushScope args (k (withScopes scope . inform <$> args) body)
 
 eval (NSynHole name) = synHole name
 
@@ -208,7 +208,7 @@ attrSetAlter (k : ks) pos m p val =
       (\x ->
         do
           (st, sp) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< x
-          recurse ((pure <=< demand) <$> st) sp
+          recurse (demand <$> st) sp
       )
       (M.lookup k m)
     )
@@ -303,7 +303,7 @@ evalBinds recursive binds =
         (\ (k, v) ->
           ( [k]
           , fromMaybe pos (M.lookup k p')
-          , pure =<< demand v
+          , demand v
           )
         ) <$>
         M.toList o'
@@ -359,7 +359,7 @@ evalBinds recursive binds =
             , pos
             , maybe
                 (attrMissing (key :| []) Nothing)
-                (pure <=< demand)
+                demand
                 =<< maybe
                     (withScopes scope $ lookupVar key)
                     (\ s ->
@@ -403,9 +403,10 @@ evalSelect aset attr =
           | Just t <- M.lookup k s ->
             do
               list
-                (pure $ pure $ pure =<< demand t)
-                (\ (y : ys) -> (extract ?? (y :| ys)) =<< demand t)
+                (pure . pure)
+                (\ (y : ys) -> ((extract ?? (y :| ys)) =<<))
                 ks
+                $ demand t
           | otherwise -> Left . (, path) <$> toValue (s, p)
 
 -- | Evaluate a component of an attribute path in a context where we are
@@ -429,7 +430,7 @@ evalSetterKeyName
   -> m (Maybe Text)
 evalSetterKeyName =
   \case
-    StaticKey k -> pure (pure k)
+    StaticKey k -> pure $ pure k
     DynamicKey k ->
       maybe
         mempty
@@ -447,7 +448,7 @@ assembleString =
       Indented   _ parts -> parts
       DoubleQuoted parts -> parts
  where
-  fromParts = fmap (fmap mconcat . sequence) . traverse go
+  fromParts xs = (mconcat <$>) . sequence <$> traverse go xs
 
   go =
     runAntiquoted
@@ -469,7 +470,7 @@ buildArgument params arg =
             inject =
               maybe
                 id
-                (\ n -> M.insert n $ const $ defer (withScopes scope arg))
+                (\ n -> M.insert n $ const $ defer $ withScopes scope arg)
                 m
           loebM
             (inject $
@@ -478,7 +479,8 @@ buildArgument params arg =
                   (ialignWith
                     (assemble scope isVariadic)
                     args
-                    (M.fromList s))
+                    $ M.fromList s
+                  )
             )
  where
   assemble

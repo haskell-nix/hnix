@@ -393,7 +393,7 @@ assertParseFile file expected =
 assertParseFail :: Text -> Assertion
 assertParseFail str =
   either
-    (const $ pure ())
+    (const pass)
     (\ r ->
       assertFailure $ toString $ "Unexpected success parsing `" <> str <> ":\nParsed value: " <> show r
     )
