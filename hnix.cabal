@@ -437,7 +437,7 @@ library
     , pretty-show >= 1.9.5 && < 1.11
     , prettyprinter >= 1.7.0 && < 1.8
     , process >= 1.6.3 && < 1.7
-    , ref-tf >= 0.4.0 && <= 0.4.0.2
+    , ref-tf >= 0.5 && < 0.6
     , regex-tdfa >= 1.2.3 && < 1.4
     , relude >= 0.7.0 && < 1.0.0
     , scientific >= 0.3.6 && < 0.4
