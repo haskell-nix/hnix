@@ -502,7 +502,6 @@ executable hnix
     , serialise
     , template-haskell
     , time
-    , unordered-containers
   mixins:
       base hiding (Prelude)
     , relude (Relude as Prelude)
@@ -565,7 +564,6 @@ test-suite hnix-tests
     , template-haskell
     , time
     , unix
-    , unordered-containers
   default-extensions:
     OverloadedStrings
   if flag(optimize)
@@ -600,7 +598,6 @@ benchmark hnix-benchmarks
     , serialise
     , template-haskell
     , time
-    , unordered-containers
   default-extensions:
     OverloadedStrings
   if flag(optimize)
