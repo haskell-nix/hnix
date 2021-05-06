@@ -485,7 +485,6 @@ executable hnix
   build-depends:
       aeson
     , base
-    , base16-bytestring
     , bytestring
     , comonad
     , containers
@@ -548,7 +547,6 @@ test-suite hnix-tests
       Diff
     , Glob
     , base
-    , base16-bytestring
     , bytestring
     , containers
     , data-fix
@@ -601,7 +599,6 @@ benchmark hnix-benchmarks
   ghc-options: -Wall
   build-depends:
       base
-    , base16-bytestring
     , bytestring
     , containers
     , criterion
