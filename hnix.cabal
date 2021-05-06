@@ -485,7 +485,6 @@ executable hnix
   build-depends:
       aeson
     , base
-    , bytestring
     , comonad
     , containers
     , data-fix
@@ -547,7 +546,6 @@ test-suite hnix-tests
       Diff
     , Glob
     , base
-    , bytestring
     , containers
     , data-fix
     , deepseq
@@ -599,7 +597,6 @@ benchmark hnix-benchmarks
   ghc-options: -Wall
   build-depends:
       base
-    , bytestring
     , containers
     , criterion
     , data-fix
