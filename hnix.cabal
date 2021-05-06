@@ -587,7 +587,6 @@ benchmark hnix-benchmarks
   ghc-options: -Wall
   build-depends:
       base
-    , containers
     , criterion
     , data-fix
     , exceptions
