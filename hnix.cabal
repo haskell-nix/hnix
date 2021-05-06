@@ -546,7 +546,6 @@ test-suite hnix-tests
     , base
     , containers
     , data-fix
-    , deepseq
     , directory
     , exceptions
     , filepath
@@ -597,7 +596,6 @@ benchmark hnix-benchmarks
     , containers
     , criterion
     , data-fix
-    , deepseq
     , exceptions
     , filepath
     , hnix
