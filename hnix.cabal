@@ -439,7 +439,7 @@ library
     , process >= 1.6.3 && < 1.7
     , ref-tf >= 0.5 && < 0.6
     , regex-tdfa >= 1.2.3 && < 1.4
-    , relude >= 0.7.0 && < 1.0.0
+    , relude >= 0.7.0 && < 1.1.0
     , scientific >= 0.3.6 && < 0.4
     , semialign >= 1 && < 1.2
     , semialign-indexed >= 1 && < 1.2
