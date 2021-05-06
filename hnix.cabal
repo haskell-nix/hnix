@@ -493,7 +493,6 @@ executable hnix
     , free
     , haskeline >= 0.8.0.0 && < 0.9
     , hnix
-    , mtl
     , optparse-applicative
     , pretty-show
     , prettyprinter
@@ -552,7 +551,6 @@ test-suite hnix-tests
     , hedgehog
     , hnix
     , megaparsec
-    , mtl
     , neat-interpolation
     , optparse-applicative
     , pretty-show
@@ -599,7 +597,6 @@ benchmark hnix-benchmarks
     , exceptions
     , filepath
     , hnix
-    , mtl
     , optparse-applicative
     , relude
     , serialise
