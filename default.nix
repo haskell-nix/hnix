@@ -189,6 +189,7 @@ let
     overrides = self: super: {
 
       ref-tf = super.ref-tf_0_5;
+      semialign = super.semialign_1_2;
       relude = super.relude_1_0_0_1;
 
     };
