@@ -4,6 +4,7 @@
 
 module Main where
 
+import           Prelude hiding (lookupEnv)
 import           Relude.Unsafe (read)
 import qualified Control.Exception as Exc
 import           GHC.Err (errorWithoutStackTrace)

@@ -8,6 +8,7 @@
 
 module EvalTests (tests, genEvalCompareTests) where
 
+import           Prelude hiding (lookupEnv)
 import           Control.Monad.Catch
 import           Data.List ((\\))
 import qualified Data.Set as S
