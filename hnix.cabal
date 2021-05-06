@@ -503,7 +503,6 @@ executable hnix
     , repline >= 0.4.0.0 && < 0.5
     , serialise
     , template-haskell
-    , text
     , time
     , transformers
     , unordered-containers
@@ -569,7 +568,6 @@ test-suite hnix-tests
     , tasty-th
     , serialise
     , template-haskell
-    , text
     , time
     , transformers
     , unix
@@ -609,7 +607,6 @@ benchmark hnix-benchmarks
     , relude
     , serialise
     , template-haskell
-    , text
     , time
     , transformers
     , unordered-containers
