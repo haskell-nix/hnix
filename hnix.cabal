@@ -502,7 +502,6 @@ executable hnix
     , serialise
     , template-haskell
     , time
-    , transformers
     , unordered-containers
   mixins:
       base hiding (Prelude)
@@ -565,7 +564,6 @@ test-suite hnix-tests
     , serialise
     , template-haskell
     , time
-    , transformers
     , unix
     , unordered-containers
   default-extensions:
@@ -602,7 +600,6 @@ benchmark hnix-benchmarks
     , serialise
     , template-haskell
     , time
-    , transformers
     , unordered-containers
   default-extensions:
     OverloadedStrings
