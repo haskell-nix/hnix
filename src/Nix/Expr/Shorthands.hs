@@ -224,7 +224,6 @@ infixl 1 @@
 -- | Lambda shorthand.
 (==>) :: Params NExpr -> NExpr -> NExpr
 (==>) = mkFunction
-
 infixr 1 ==>
 
 (@.) :: NExpr -> Text -> NExpr

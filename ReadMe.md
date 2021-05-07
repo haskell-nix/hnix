@@ -11,48 +11,12 @@
 Parser, evaluator and type checker for the Nix language written in Haskell.
 
 
-## Contents
-
-<!-- TOC generates automatically, do not bother editing any further TOC text -->
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-
-- [Prerequisites](#prerequisites)
-- [Getting Started](#getting-started)
-  - [Git clone](#git-clone)
-  - [(optional) Cachix prebuild binary caches](#optional-cachix-prebuild-binary-caches)
-  - [Using Cabal](#using-cabal)
-    - [Checking the project](#checking-the-project)
-      - [Benchmarks](#benchmarks)
-      - [Profiling](#profiling)
-      - [Full debug info](#full-debug-info)
-    - [Runing executable](#runing-executable)
-  - [Using Nix-build](#using-nix-build)
-    - [Checking the project](#checking-the-project-1)
-      - [Benchmarks](#benchmarks-1)
-      - [Profiling](#profiling-1)
-      - [Full debug info](#full-debug-info-1)
-    - [Runing executable](#runing-executable-1)
-- [Using HNix](#using-hnix)
-  - [Parse & print](#parse--print)
-  - [Evaluating and printing the resulting value](#evaluating-and-printing-the-resulting-value)
-  - [Evaluating Nixpkgs](#evaluating-nixpkgs)
-  - [Options supported only by HNix](#options-supported-only-by-hnix)
-  - [REPL](#repl)
-    - [Language laziness](#language-laziness)
-- [Contributing](#contributing)
-  - [(optional) Minimalistic development status loop with amazing `ghcid`](#optional-minimalistic-development-status-loop-with-amazing-ghcid)
-- [Current status](#current-status)
-
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
-
-
 ## Prerequisites
 Tooling is WIP, `nix-shell` and `nix-store` are still used for their purpose, so, to access them Nix is required to be installed.
 
 *Disclaimer*: Since still using Nix for some operations, current `derivationStrict` primOp implementation and so evaluations of a derivation into a store path currently rely on the `hnix-store-remote`, which for those operations relies on the running `nix-daemon`, and so operations use/produce effects into the `/nix/store`. Be cautious - it is effectful (produces `/nix/store` entries).
 
-## Getting Started
+## Building the project
 
 ### Git clone
 
@@ -74,7 +38,7 @@ If you would use our Nix-shell environment for development, you can connect to o
 2. Run: `cachix use hnix`
 
 
-### Using Cabal
+### Building with Cabal
 
 Cabal [Quickstart](https://cabal.readthedocs.io/en/3.4/nix-local-build.html).
 
@@ -166,7 +130,7 @@ cabal v2-run hnix -- --help
 (`--` is for separation between `cabal` & `hnix` args)
 
 
-### Using Nix-build
+### Building with Nix-build
 
 There is a number of build options to use with `nix-build`, documentation of them is in: `./default.nix`, keys essentially pass-through the [Nixpkgs Haskell Lib API](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/haskell-modules/lib.nix).
 
