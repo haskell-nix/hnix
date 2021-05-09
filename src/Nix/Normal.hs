@@ -6,6 +6,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | Code for normalization (reduction into a normal form) of Nix expressions.
 -- Nix language allows recursion, so some expressions do not converge.
@@ -58,8 +59,52 @@ normalizeValue v = run $ iterNValueM run go (fmap Free . sequenceNValue' run) v
         i <- ask
         when (i > 2000)
           $ fail "Exceeded maximum normalization depth of 2000 levels"
-        --  2021-02-22: NOTE: `normalizeValue` should be adopted to work without fliping of the force (f)
         lifted (lifted $ \f -> f =<< force t) $ local succ . k
+      )
+      (pure $ pure t)
+      b
+
+  seen t = do
+    let tid = thunkId t
+    lift $ do
+      res <- gets (member tid)
+      unless res $ modify (insert tid)
+      pure res
+
+-- 2021-05-09: NOTE: This seems a bit excessive. If these functorial versions are not used for recursion schemes - just free from it.
+-- | Normalization HOF (functorial) version of @normalizeValue@. Accepts the special thunk operating/forcing/nirmalizing function & internalizes it.
+normalizeValueF
+  :: forall e t m f
+   . ( Framed e m
+     , MonadThunk t m (NValue t f m)
+     , MonadDataErrorContext t f m
+     , Ord (ThunkId m)
+     )
+  => (forall r . t -> (NValue t f m -> m r) -> m r)
+  -> NValue t f m
+  -> m (NValue t f m)
+normalizeValueF f = run . iterNValueM run go (fmap Free . sequenceNValue' run)
+ where
+  start = 0 :: Int
+  table = mempty
+
+  run :: ReaderT Int (StateT (Set (ThunkId m)) m) r -> m r
+  run = (`evalStateT` table) . (`runReaderT` start)
+
+  go
+    :: t
+    -> (  NValue t f m
+       -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValue t f m)
+       )
+    -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValue t f m)
+  go t k = do
+    b <- seen t
+    bool
+      (do
+        i <- ask
+        when (i > 2000)
+          $ fail "Exceeded maximum normalization depth of 2000 levels"
+        lifted (lifted (f t)) $ local succ . k
       )
       (pure $ pure t)
       b
