@@ -16,7 +16,9 @@ module Nix.Normal where
 import           Prelude            hiding ( force )
 import           Nix.Utils
 import           Control.Monad.Free        ( Free(..) )
-import           Data.Set
+import           Data.Set                  ( member
+                                           , insert
+                                           )
 import           Nix.Cited
 import           Nix.Frames
 import           Nix.String
@@ -138,6 +140,7 @@ normalForm_
   -> m ()
 normalForm_ t = void (normalizeValue t)
 
+-- | Detect cycles & stub them.
 stubCycles
   :: forall t f m
    . ( MonadDataContext f m
@@ -146,12 +149,17 @@ stubCycles
      )
   => NValue t f m
   -> NValue t f m
-stubCycles = flip iterNValue Free $ \t _ ->
-  Free
-    $ NValue'
-    $ Prelude.foldr (addProvenance1 @m @(NValue t f m)) cyc
-    $ reverse
-    $ citations @m @(NValue t f m) t
+stubCycles =
+  iterNValue
+    (\t _ ->
+      Free $
+        NValue' $
+          foldr
+            (addProvenance1 @m @(NValue t f m))
+            cyc
+            (reverse $ citations @m @(NValue t f m) t)
+    )
+    Free
  where
   Free (NValue' cyc) = opaque
 
