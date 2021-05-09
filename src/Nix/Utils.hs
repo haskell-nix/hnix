@@ -104,7 +104,7 @@ fixToFree = Free . go
 --   representation: allows threading layers through existing structure, only
 --   in this case through behavior.
 adi :: Functor f => (f a -> a) -> ((Fix f -> a) -> Fix f -> a) -> Fix f -> a
-adi f g = g (f . fmap (adi f g) . unFix)
+adi f g = g $ f . (adi f g <$>) . unFix
 
 adiM
   :: (Traversable t, Monad m)
@@ -112,7 +112,7 @@ adiM
   -> ((Fix t -> m a) -> Fix t -> m a)
   -> Fix t
   -> m a
-adiM f g = g ((f <=< traverse (adiM f g)) . unFix)
+adiM f g = g $ f <=< traverse (adiM f g) . unFix
 
 class Has a b where
   hasLens :: Lens' a b
