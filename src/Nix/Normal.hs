@@ -59,8 +59,7 @@ normalizeValue v = run $ iterNValueM run go (fmap Free . sequenceNValue' run) v
     bool
       (do
         i <- ask
-        when (i > 2000)
-          $ fail "Exceeded maximum normalization depth of 2000 levels"
+        when (i > 2000) $ fail "Exceeded maximum normalization depth of 2000 levels"
         lifted (lifted $ \f -> f =<< force t) $ local succ . k
       )
       (pure $ pure t)
@@ -104,9 +103,8 @@ normalizeValueF f = run . iterNValueM run go (fmap Free . sequenceNValue' run)
     bool
       (do
         i <- ask
-        when (i > 2000)
-          $ fail "Exceeded maximum normalization depth of 2000 levels"
-        lifted (lifted (f t)) $ local succ . k
+        when (i > 2000) $ fail "Exceeded maximum normalization depth of 2000 levels"
+        lifted (lifted $ f t) $ local succ . k
       )
       (pure $ pure t)
       b
@@ -114,8 +112,8 @@ normalizeValueF f = run . iterNValueM run go (fmap Free . sequenceNValue' run)
   seen t = do
     let tid = thunkId t
     lift $ do
-      res <- gets (member tid)
-      unless res $ modify (insert tid)
+      res <- gets $ member tid
+      unless res $ modify $ insert tid
       pure res
 
 -- | Normalize value.
