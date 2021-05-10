@@ -41,7 +41,7 @@ newtype Cited t f m a = Cited { getCited :: NCited m (NValue t f m) a }
 
 instance HasCitations1 m (NValue t f m) (Cited t f m) where
   citations1 (Cited c) = citations c
-  addProvenance1 x (Cited c) = Cited (addProvenance x c)
+  addProvenance1 x (Cited c) = Cited $ addProvenance x c
 
 instance ( Has e Options
          , Framed e m
@@ -58,7 +58,7 @@ instance ( Has e Options
     opts :: Options <- asks (view hasLens)
 
     bool
-      (fmap (Cited . NCited mempty) . thunk $ mv)
+      (Cited . NCited mempty <$> thunk mv)
       (do
         frames :: Frames <- asks (view hasLens)
 
@@ -72,7 +72,7 @@ instance ( Has e Options
             go _ = mempty
             ps = concatMap (go . frame) frames
 
-        fmap (Cited . NCited ps) . thunk $ mv
+        Cited . NCited ps <$> thunk mv
       )
       (thunks opts)
 

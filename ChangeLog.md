@@ -58,7 +58,7 @@
         -- was :: v -> (m v -> m v) -> m v
       ```
       
-  * [(link)](https://github.com/haskell-nix/hnix/pull/863/files) `Nix.Normal`: `normalizeValue` removed first functional argument that was passing the function that did the thunk forcing. Now function provides the thunk forcing. Now to normalize simply use `normalizeValue v`.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/863/files) `Nix.Normal`: `normalizeValue` removed first functional argument that was passing the function that did the thunk forcing. Now function provides the thunk forcing. Now to normalize simply use `normalizeValue v`. Old implementation now is `normalizeValueF`.
 
   * [(link)](https://github.com/haskell-nix/hnix/pull/859/commits/8e043bcbda13ea4fd66d3eefd6da690bb3923edd) `Nix.Value.Equal`: `valueEqM`: freed from `RankNTypes: forall t f m .`.
 

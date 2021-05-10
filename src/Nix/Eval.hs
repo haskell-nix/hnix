@@ -172,7 +172,7 @@ eval (NAbs    params body) = do
   scope <- currentScopes :: m (Scopes m v)
   evalAbs params $ \arg k -> withScopes scope $ do
     args <- buildArgument params arg
-    pushScope args (k (withScopes scope . inform <$> args) body)
+    pushScope args $ k (withScopes scope . inform <$> args) body
 
 eval (NSynHole name) = synHole name
 
@@ -186,7 +186,7 @@ evalWithAttrSet aset body = do
   -- computed once.
   scope <- currentScopes :: m (Scopes m v)
   s     <- defer $ withScopes scope aset
-  let s' = (fmap fst . fromValue @(AttrSet v, AttrSet SourcePos)) =<< demand s
+  let s' = fst <$> (fromValue @(AttrSet v, AttrSet SourcePos) =<< demand s)
 
   pushWeakScope s' body
 
@@ -282,7 +282,7 @@ evalBinds recursive binds =
       res <-
         bool
           (traverse mkThunk s)
-          (loebM (encapsulate <$> s))
+          (loebM $ encapsulate <$> s)
           recursive
 
       pure (res, p)
@@ -290,7 +290,7 @@ evalBinds recursive binds =
    where
     mkThunk = defer . withScopes scope
 
-    encapsulate f attrs = mkThunk . pushScope attrs $ f
+    encapsulate f attrs = mkThunk $ pushScope attrs f
 
     insert (m, p) (path, pos, value) = attrSetAlter path pos m p value
 
@@ -305,19 +305,15 @@ evalBinds recursive binds =
           , fromMaybe pos (M.lookup k p')
           , demand v
           )
-        ) <$>
-        M.toList o'
+        ) <$> M.toList o'
 
   applyBindToAdt _ (NamedVar pathExpr finalValue pos) =
-    do
-      fmap
-        (\case
-          -- When there are no path segments, e.g. `${null} = 5;`, we don't
-          -- bind anything
-          ([], _, _) -> mempty
-          result     -> [result]
-        )
-        (processAttrSetKeys pathExpr)
+    (\case
+      -- When there are no path segments, e.g. `${null} = 5;`, we don't
+      -- bind anything
+      ([], _, _) -> mempty
+      result     -> [result]
+    ) <$> processAttrSetKeys pathExpr
 
    where
     processAttrSetKeys :: NAttrPath (m v) -> m ([Text], SourcePos, m v)
@@ -496,12 +492,12 @@ buildArgument params arg =
       This _
         | isVariadic -> Nothing
         | otherwise  -> pure $ const $ evalError @v $ ErrorCall $ "Unexpected parameter: " <> show k
-      These x _ -> pure (const (pure x))
+      These x _ -> pure $ const $ pure x
 
 addSourcePositions
   :: (MonadReader e m, Has e SrcSpan) => Transform NExprLocF (m a)
 addSourcePositions f v@(Fix (Compose (Ann ann _))) =
-  local (set hasLens ann) (f v)
+  local (set hasLens ann) $ f v
 
 addStackFrames
   :: forall v e m a
@@ -524,4 +520,4 @@ framedEvalExprLoc
   => NExprLoc
   -> m v
 framedEvalExprLoc =
-  adi (eval . annotated . getCompose) (addStackFrames @v . addSourcePositions)
+  adi (eval . annotated . getCompose) $ addStackFrames @v . addSourcePositions

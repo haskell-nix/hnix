@@ -104,18 +104,21 @@ evaluateExpression
   -> (NValue t f m -> m a)
   -> NExprLoc
   -> m a
-evaluateExpression mpath evaluator handler expr = do
-  opts :: Options <- asks (view hasLens)
-  args <- traverse (traverse eval') $ fmap (second parseArg) (arg opts) <> fmap
-    (second mkStr)
-    (argstr opts)
-  evaluator mpath expr >>= \f ->
-    (\f' ->
-      processResult handler =<<
-        case f' of
-          NVClosure _ g -> g (argmap args)
-          _             -> pure f
-    ) =<< demand f
+evaluateExpression mpath evaluator handler expr =
+  do
+    opts :: Options <- asks $ view hasLens
+    args <-
+      (traverse . traverse)
+        eval'
+        $ (second parseArg <$> arg opts) <>
+          (second mkStr <$> argstr opts)
+    f <- evaluator mpath expr
+    f' <- demand f
+    val <-
+      case f' of
+        NVClosure _ g -> g $ argmap args
+        _             -> pure f
+    processResult handler val
  where
   parseArg s =
     either

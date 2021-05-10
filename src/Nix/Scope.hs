@@ -19,7 +19,7 @@ newtype Scope a = Scope { getScope :: AttrSet a }
   deriving (Functor, Foldable, Traversable, Eq)
 
 instance Show (Scope a) where
-  show (Scope m) = show (M.keys m)
+  show (Scope m) = show $ M.keys m
 
 newScope :: AttrSet a -> Scope a
 newScope = Scope
@@ -65,7 +65,7 @@ currentScopesReader
     , Has e (Scopes m a)
     )
   => m (Scopes m a)
-currentScopesReader = asks (view hasLens)
+currentScopesReader = asks $ view hasLens
 
 clearScopesReader
   :: forall m a e r
@@ -74,14 +74,14 @@ clearScopesReader
     )
   => m r
   -> m r
-clearScopesReader = local (set hasLens (emptyScopes @m @a))
+clearScopesReader = local $ set hasLens $ emptyScopes @m @a
 
 pushScope
   :: Scoped a m
   => AttrSet a
   -> m r
   -> m r
-pushScope s = pushScopes (Scopes [Scope s] mempty)
+pushScope s = pushScopes $ Scopes [Scope s] mempty
 
 pushWeakScope
   :: ( Functor m
@@ -90,7 +90,7 @@ pushWeakScope
   => m (AttrSet a)
   -> m r
   -> m r
-pushWeakScope s = pushScopes (Scopes mempty [Scope <$> s])
+pushWeakScope s = pushScopes $ Scopes mempty [Scope <$> s]
 
 pushScopesReader
   :: ( MonadReader e m
@@ -99,7 +99,7 @@ pushScopesReader
   => Scopes m a
   -> m r
   -> m r
-pushScopesReader s = local (over hasLens (s <>))
+pushScopesReader s = local $ over hasLens (s <>)
 
 lookupVarReader
   :: forall m a e
@@ -110,11 +110,11 @@ lookupVarReader
   -> m (Maybe a)
 lookupVarReader k =
   do
-    mres <- asks (scopeLookup k . lexicalScopes @m . view hasLens)
+    mres <- asks $ scopeLookup k . lexicalScopes @m . view hasLens
 
     maybe
       (do
-        ws <- asks (dynamicScopes . view hasLens)
+        ws <- asks $ dynamicScopes . view hasLens
 
         foldr
           (\ x rest ->

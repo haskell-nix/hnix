@@ -6,6 +6,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | Code for normalization (reduction into a normal form) of Nix expressions.
 -- Nix language allows recursion, so some expressions do not converge.
@@ -15,7 +16,9 @@ module Nix.Normal where
 import           Prelude            hiding ( force )
 import           Nix.Utils
 import           Control.Monad.Free        ( Free(..) )
-import           Data.Set
+import           Data.Set                  ( member
+                                           , insert
+                                           )
 import           Nix.Cited
 import           Nix.Frames
 import           Nix.String
@@ -56,9 +59,7 @@ normalizeValue v = run $ iterNValueM run go (fmap Free . sequenceNValue' run) v
     bool
       (do
         i <- ask
-        when (i > 2000)
-          $ fail "Exceeded maximum normalization depth of 2000 levels"
-        --  2021-02-22: NOTE: `normalizeValue` should be adopted to work without fliping of the force (f)
+        when (i > 2000) $ fail "Exceeded maximum normalization depth of 2000 levels"
         lifted (lifted $ \f -> f =<< force t) $ local succ . k
       )
       (pure $ pure t)
@@ -67,10 +68,57 @@ normalizeValue v = run $ iterNValueM run go (fmap Free . sequenceNValue' run) v
   seen t = do
     let tid = thunkId t
     lift $ do
-      res <- gets (member tid)
-      unless res $ modify (insert tid)
+      res <- gets $ member tid
+      unless res $ modify $ insert tid
       pure res
 
+-- 2021-05-09: NOTE: This seems a bit excessive. If these functorial versions are not used for recursion schemes - just free from it.
+-- | Normalization HOF (functorial) version of @normalizeValue@. Accepts the special thunk operating/forcing/nirmalizing function & internalizes it.
+normalizeValueF
+  :: forall e t m f
+   . ( Framed e m
+     , MonadThunk t m (NValue t f m)
+     , MonadDataErrorContext t f m
+     , Ord (ThunkId m)
+     )
+  => (forall r . t -> (NValue t f m -> m r) -> m r)
+  -> NValue t f m
+  -> m (NValue t f m)
+normalizeValueF f = run . iterNValueM run go (fmap Free . sequenceNValue' run)
+ where
+  start = 0 :: Int
+  table = mempty
+
+  run :: ReaderT Int (StateT (Set (ThunkId m)) m) r -> m r
+  run = (`evalStateT` table) . (`runReaderT` start)
+
+  go
+    :: t
+    -> (  NValue t f m
+       -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValue t f m)
+       )
+    -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValue t f m)
+  go t k = do
+    b <- seen t
+    bool
+      (do
+        i <- ask
+        when (i > 2000) $ fail "Exceeded maximum normalization depth of 2000 levels"
+        lifted (lifted $ f t) $ local succ . k
+      )
+      (pure $ pure t)
+      b
+
+  seen t = do
+    let tid = thunkId t
+    lift $ do
+      res <- gets $ member tid
+      unless res $ modify $ insert tid
+      pure res
+
+-- | Normalize value.
+-- Detect cycles.
+-- If cycles were detected - put a stub on them.
 normalForm
   :: ( Framed e m
      , MonadThunk t m (NValue t f m)
@@ -83,6 +131,7 @@ normalForm
   -> m (NValue t f m)
 normalForm t = stubCycles <$> normalizeValue t
 
+-- | Monadic context of the result.
 normalForm_
   :: ( Framed e m
      , MonadThunk t m (NValue t f m)
@@ -91,8 +140,9 @@ normalForm_
      )
   => NValue t f m
   -> m ()
-normalForm_ t = void (normalizeValue t)
+normalForm_ t = void $ normalizeValue t
 
+-- | Detect cycles & stub them.
 stubCycles
   :: forall t f m
    . ( MonadDataContext f m
@@ -101,12 +151,17 @@ stubCycles
      )
   => NValue t f m
   -> NValue t f m
-stubCycles = flip iterNValue Free $ \t _ ->
-  Free
-    $ NValue'
-    $ Prelude.foldr (addProvenance1 @m @(NValue t f m)) cyc
-    $ reverse
-    $ citations @m @(NValue t f m) t
+stubCycles =
+  iterNValue
+    (\t _ ->
+      Free $
+        NValue' $
+          foldr
+            (addProvenance1 @m @(NValue t f m))
+            cyc
+            (reverse $ citations @m @(NValue t f m) t)
+    )
+    Free
  where
   Free (NValue' cyc) = opaque
 
@@ -122,7 +177,7 @@ removeEffects =
     (fmap Free . sequenceNValue' id)
 
 opaque :: Applicative f => NValue t f m
-opaque = nvStr $ makeNixStringWithoutContext "<expr>"
+opaque = nvStr $ makeNixStringWithoutContext "<cycle>"
 
 dethunk
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)

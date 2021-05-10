@@ -50,6 +50,10 @@ instance ComonadEnv [Provenance m v] (NCited m v) where
 $(makeLenses ''Provenance)
 $(makeLenses ''NCited)
 
+class HasCitations1 m v f where
+  citations1 :: f a -> [Provenance m v]
+  addProvenance1 :: Provenance m v -> f a -> f a
+
 class HasCitations m v a where
   citations :: a -> [Provenance m v]
   addProvenance :: Provenance m v -> a -> a
@@ -58,18 +62,14 @@ instance HasCitations m v (NCited m v a) where
   citations = _provenance
   addProvenance x (NCited p v) = NCited (x : p) v
 
-class HasCitations1 m v f where
-  citations1 :: f a -> [Provenance m v]
-  addProvenance1 :: Provenance m v -> f a -> f a
-
 instance HasCitations1 m v f
   => HasCitations m v (NValue' t f m a) where
   citations (NValue' f) = citations1 f
-  addProvenance x (NValue' f) = NValue' (addProvenance1 x f)
+  addProvenance x (NValue' f) = NValue' $ addProvenance1 x f
 
 instance (HasCitations1 m v f, HasCitations m v t)
   => HasCitations m v (NValue t f m) where
   citations (Pure t) = citations t
   citations (Free v) = citations v
-  addProvenance x (Pure t) = Pure (addProvenance x t)
-  addProvenance x (Free v) = Free (addProvenance x v)
+  addProvenance x (Pure t) = Pure $ addProvenance x t
+  addProvenance x (Free v) = Free $ addProvenance x v

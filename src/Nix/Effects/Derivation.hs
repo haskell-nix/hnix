@@ -199,7 +199,7 @@ derivationParser = do
   _ <- ")"
   eof
 
-  let outputs = Map.fromList $ fmap (\(a, b, _, _) -> (a, b)) fullOutputs
+  let outputs = Map.fromList $ (\(a, b, _, _) -> (a, b)) <$> fullOutputs
   let (mFixed, hashMode) = parseFixed fullOutputs
   let name = "" -- FIXME (extract from file path ?)
   let useJson = ["__json"] == Map.keys env
@@ -239,7 +239,8 @@ derivationParser = do
 
 
 defaultDerivationStrict :: forall e t f m b. (MonadNix e t f m, MonadState (b, MS.HashMap Text Text) m) => NValue t f m -> m (NValue t f m)
-defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
+defaultDerivationStrict val = do
+    s <- fromValue @(AttrSet (NValue t f m)) val
     (drv, ctx) <- runWithStringContextT' $ buildDerivationWithContext s
     drvName <- makeStorePathName $ name drv
     let inputs = toStorePaths ctx
@@ -270,9 +271,9 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
 
     -- Memoize here, as it may be our last chance in case of readonly stores.
     drvHash <- Store.encodeInBase Store.Base16 <$> hashDerivationModulo drv'
-    modify (second (MS.insert drvPath drvHash))
+    modify $ second $ MS.insert drvPath drvHash
 
-    let outputsWithContext = Map.mapWithKey (\out path -> makeNixStringWithSingletonContext path (StringContext drvPath (DerivationOutput out))) (outputs drv')
+    let outputsWithContext = Map.mapWithKey (\out path -> makeNixStringWithSingletonContext path (StringContext drvPath $ DerivationOutput out)) (outputs drv')
         drvPathWithContext = makeNixStringWithSingletonContext drvPath (StringContext drvPath AllOutputs)
         attrSet = M.map nvStr $ M.fromList $ ("drvPath", drvPathWithContext): Map.toList outputsWithContext
     -- TODO: Add location information for all the entries.
@@ -303,18 +304,18 @@ defaultDerivationStrict = fromValue @(AttrSet (NValue t f m)) >=> \s -> do
 buildDerivationWithContext :: forall e t f m. (MonadNix e t f m) => AttrSet (NValue t f m) -> WithStringContextT m Derivation
 buildDerivationWithContext drvAttrs = do
     -- Parse name first, so we can add an informative frame
-    drvName     <- getAttr   "name"                      $ extractNixString >=> assertDrvStoreName
+    drvName     <- getAttr   "name"                      $ assertDrvStoreName <=< extractNixString
     withFrame' Info (ErrorCall $ "While evaluating derivation " <> show drvName) $ do
 
       useJson     <- getAttrOr "__structuredAttrs" False     pure
       ignoreNulls <- getAttrOr "__ignoreNulls"     False     pure
 
-      args        <- getAttrOr "args"              mempty  $ traverse (fromValue' >=> extractNixString)
+      args        <- getAttrOr "args"              mempty  $ traverse (extractNixString <=< fromValue')
       builder     <- getAttr   "builder"                     extractNixString
-      platform    <- getAttr   "system"                    $ extractNoCtx >=> assertNonNull
-      mHash       <- getAttrOr "outputHash"        mempty  $ extractNoCtx >=> (pure . pure)
-      hashMode    <- getAttrOr "outputHashMode"    Flat    $ extractNoCtx >=> parseHashMode
-      outputs     <- getAttrOr "outputs"           ["out"] $ traverse (fromValue' >=> extractNoCtx)
+      platform    <- getAttr   "system"                    $ assertNonNull <=< extractNoCtx
+      mHash       <- getAttrOr "outputHash"        mempty  $ (pure . pure) <=< extractNoCtx
+      hashMode    <- getAttrOr "outputHashMode"    Flat    $ parseHashMode <=< extractNoCtx
+      outputs     <- getAttrOr "outputs"           ["out"] $ traverse (extractNoCtx <=< fromValue')
 
       mFixedOutput <-
         maybe
@@ -356,7 +357,7 @@ buildDerivationWithContext drvAttrs = do
 
       pure $ Derivation { platform, builder, args, env,  hashMode, useJson
         , name = drvName
-        , outputs = Map.fromList $ fmap (, mempty) outputs
+        , outputs = Map.fromList $ (, mempty) <$> outputs
         , mFixed = mFixedOutput
         , inputs = (mempty, mempty) -- stub for now
         }
