@@ -148,7 +148,7 @@
   * [(link)](https://github.com/haskell-nix/hnix/pull/884/files) `Nix.Thunk.Basic`: `instance MonadThunk (NThunkF m v) m v`: `queryM`: implementation no longer blocks the thunk resource it only reads from.
   
   * [(link)](https://github.com/haskell-nix/hnix/pull/908/files): Migrated `(String -> Text)`:
-    * `Nix.Value`: `{NValueF, nvBuiltin{,'}, builtin{,2,3}}`
+    * `Nix.Value`: `{NValueF, nvBuiltin{,'}, builtin{,2,3}, describeValue}`
     * `Nix.Eval`: `MonadNixEval`
     * `Nix.Render.Frame`: `render{Expr,Value}`
     * `Nix.Type`: `TVar`
@@ -161,10 +161,12 @@
         * `MonadInstantiate: instatiateExpr`
       * `parseStoreResult`
     * `Nix.Effects.Derivation`: `renderSymbolic`
+    * `Nix.Lint`: `{NTypeF, symerr}`
 
 * Additional:
   * [(link)](https://github.com/haskell-nix/hnix/commit/7e6cd97bf3288cb584241611fdb25bf85d7e0ba7) `cabal.project`: freed from the `cryptohash-sha512` override, Hackage trustees made a revision.
   * [(link)](https://github.com/haskell-nix/hnix/pull/824/commits/4422eb10959115f21045f39e302314a77df4b775) To be more approachable for user understanding, the thunk representation in outputs changed from `"<CYCLE>" -> "<expr>"`.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/925/commits/37e81c96996b07cbbdf9fa4bf380265e8c008482) The Nix evaluation cycle representation changed `"<CYCLE>" -> "<cycle>"`.
   * [(link)](https://github.com/haskell-nix/hnix/commit/51a3ff9e0065d50e5c625738696526c4a232b0cf) `Nix.Expr.Types`: added hacky implementation of `liftTyped` for `instance Lift (Fix NExprF)`.
   * [(link)](https://github.com/haskell-nix/hnix/commit/51a3ff9e0065d50e5c625738696526c4a232b0cf) `Nix.Builtins`: `derivation` primOp internal code always fully evaluated, so GHC now always ships only fully compiled version in the bytecode.
 
