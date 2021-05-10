@@ -1,7 +1,7 @@
 
 # ChangeLog
 
-## [(diff)](https://github.com/haskell-nix/hnix/compare/0.12.0...master#files_bucket) Progress
+## [(diff)](https://github.com/haskell-nix/hnix/compare/0.12.0...0.13.0#files_bucket) 0.13.0 (2021-05-10)
 
 * Breaking:
 
@@ -170,6 +170,7 @@
   * [(link)](https://github.com/haskell-nix/hnix/commit/51a3ff9e0065d50e5c625738696526c4a232b0cf) `Nix.Expr.Types`: added hacky implementation of `liftTyped` for `instance Lift (Fix NExprF)`.
   * [(link)](https://github.com/haskell-nix/hnix/commit/51a3ff9e0065d50e5c625738696526c4a232b0cf) `Nix.Builtins`: `derivation` primOp internal code always fully evaluated, so GHC now always ships only fully compiled version in the bytecode.
   * [(link)](https://github.com/haskell-nix/hnix/pull/890): Project switched to prelude `relude`.
+  * A bunch of other stuff that is not user-facing.
 
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.11.1...0.12.0#files_bucket) 0.12.0 (2021-01-05)
