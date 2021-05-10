@@ -467,7 +467,7 @@ library
   if flag(optimize)
     default-extensions:
       ApplicativeDo
-    ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O3
+    ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
   -- if !flag(profiling)
   --   build-depends:
   --       ghc-datasize
@@ -511,7 +511,7 @@ executable hnix
   if flag(optimize)
     default-extensions:
       ApplicativeDo
-    ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O3
+    ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
   if impl(ghc < 8.10)
     -- GHC < 8.10 comes with haskeline < 0.8, which we don't support.
     -- To simplify CI, we just disable the component.
@@ -569,7 +569,7 @@ test-suite hnix-tests
   if flag(optimize)
     default-extensions:
       ApplicativeDo
-    ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O3
+    ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
   default-language: Haskell2010
 
 benchmark hnix-benchmarks
@@ -602,5 +602,5 @@ benchmark hnix-benchmarks
   if flag(optimize)
     default-extensions:
       ApplicativeDo
-    ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O3
+    ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
   default-language: Haskell2010
