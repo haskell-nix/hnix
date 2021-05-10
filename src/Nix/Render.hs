@@ -71,9 +71,10 @@ instance MonadFile IO where
 instance (MonadFix1T t m, MonadFail (Fix1T t m), MonadFile m) => MonadFile (Fix1T t m)
 
 posAndMsg :: SourcePos -> Doc a -> ParseError s Void
-posAndMsg (SourcePos _ lineNo _) msg = FancyError
-  (unPos lineNo)
-  (Set.fromList [ErrorFail (show msg) :: ErrorFancy Void])
+posAndMsg (SourcePos _ lineNo _) msg =
+  FancyError
+    (unPos lineNo)
+    (Set.fromList [ErrorFail (show msg) :: ErrorFancy Void])
 
 renderLocation :: MonadFile m => SrcSpan -> Doc a -> m (Doc a)
 renderLocation (SrcSpan (SourcePos file begLine begCol) (SourcePos file' endLine endCol)) msg
@@ -88,9 +89,7 @@ renderLocation (SrcSpan (SourcePos file begLine begCol) (SourcePos file' endLine
         txt <- sourceContext file begLine begCol endLine endCol msg
         pure $
           vsep
-            [ "In file "
-            <> errorContext file begLine begCol endLine endCol
-            <> ":"
+            [ "In file " <> errorContext file begLine begCol endLine endCol <> ":"
             , txt
             ]
       else pure msg
@@ -104,8 +103,8 @@ sourceContext
   :: MonadFile m => FilePath -> Pos -> Pos -> Pos -> Pos -> Doc a -> m (Doc a)
 sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unPos -> _endCol) msg
   = do
-    let beg' = max 1 (min begLine (begLine - 3))
-        end' = max endLine (endLine + 3)
+    let beg' = max 1 $ min begLine $ begLine - 3
+        end' = max endLine $ endLine + 3
     ls <-
       fmap pretty
       .   take (end' - beg')
@@ -115,11 +114,13 @@ sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unP
       <$> readFile path
     let
       nums    = zipWith (curry (show . fst)) [beg' ..] ls
-      longest = maximum (fmap length nums)
-      nums'   = flip fmap nums $ \n -> replicate (longest - length n) ' ' <> n
+      longest = maximum $ length <$> nums
+      nums'   = (\n -> replicate (longest - length n) ' ' <> n) <$> nums
       pad n | read n == begLine = "==> " <> n
             | otherwise         = "    " <> n
-      ls' = zipWith (\ a b -> a <> space <> b)
-                    (fmap (pretty . pad) nums')
-                    (fmap ("|  " <>) ls)
+      ls' =
+        zipWith
+          (\ a b -> a <> space <> b)
+          (pretty . pad <$> nums')
+          (("|  " <>) <$> ls)
     pure $ vsep $ ls' <> [msg]
