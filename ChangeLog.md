@@ -169,6 +169,7 @@
   * [(link)](https://github.com/haskell-nix/hnix/pull/925/commits/37e81c96996b07cbbdf9fa4bf380265e8c008482) The Nix evaluation cycle representation changed `"<CYCLE>" -> "<cycle>"`.
   * [(link)](https://github.com/haskell-nix/hnix/commit/51a3ff9e0065d50e5c625738696526c4a232b0cf) `Nix.Expr.Types`: added hacky implementation of `liftTyped` for `instance Lift (Fix NExprF)`.
   * [(link)](https://github.com/haskell-nix/hnix/commit/51a3ff9e0065d50e5c625738696526c4a232b0cf) `Nix.Builtins`: `derivation` primOp internal code always fully evaluated, so GHC now always ships only fully compiled version in the bytecode.
+  * [(link)](https://github.com/haskell-nix/hnix/pull/890): Project switched to prelude `relude`.
 
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.11.1...0.12.0#files_bucket) 0.12.0 (2021-01-05)
