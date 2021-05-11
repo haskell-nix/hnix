@@ -392,6 +392,8 @@ library
     Nix.XML
   other-modules:
     Paths_hnix
+  autogen-modules:
+    Paths_hnix
   hs-source-dirs:
     src
   mixins:
@@ -479,6 +481,8 @@ executable hnix
   main-is: Main.hs
   other-modules:
     Repl
+    Paths_hnix
+  autogen-modules:
     Paths_hnix
   ghc-options: -Wall
   build-depends:
