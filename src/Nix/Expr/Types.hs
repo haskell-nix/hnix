@@ -54,7 +54,7 @@ import           Text.Read.Deriving
 import           Text.Show.Deriving
 import qualified Type.Reflection               as Reflection
 import           Type.Reflection                ( eqTypeRep )
-#if !MIN_VERSION_base(4,13,0)
+#if !MIN_VERSION_text(1,2,4)
 -- NOTE: Remove package @th-lift-instances@ removing this
 import           Instances.TH.Lift              ()  -- importing Lift Text fo GHC 8.6
 #endif
