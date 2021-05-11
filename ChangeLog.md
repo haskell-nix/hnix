@@ -19,28 +19,33 @@
         thunk    :: m a -> m t
       
         queryM   :: m a -> t -> m a
-        -- was :: t -> m r -> (a   -> m r) -> m r
         -- old became `queryMF`
       
         force    :: t -> m a
-        -- was :: t   -> (a   -> m r) -> m r
         -- old became `forceF`
       
         forceEff :: t -> m a
-        -- was :: t   -> (a   -> m r) -> m r
         -- old became `forceEffF`
       
         further  :: t -> m t
-        -- was :: t   -> (m a -> m a) -> m t
         -- old became `furtherF`
       
       
       -- | Class of Kleisli functors for easiness of customized implementation developlemnt.
       class MonadThunkF t m a | t -> m, t -> a where
+
         queryMF   :: (a   -> m r) -> m r -> t -> m r
+        -- was :: t -> m r -> (a   -> m r) -> m r
+
         forceF    :: (a   -> m r) -> t   -> m r
+        -- was :: t   -> (a   -> m r) -> m r
+
         forceEffF :: (a   -> m r) -> t   -> m r
+        -- was :: t   -> (a   -> m r) -> m r
+
         furtherF  :: (m a -> m a) -> t   -> m t
+        -- was :: t   -> (m a -> m a) -> m t
+
       ```
       
   * [(link)](https://github.com/haskell-nix/hnix/pull/862/files) [(link)](https://github.com/haskell-nix/hnix/pull/870/files) [(link)](https://github.com/haskell-nix/hnix/pull/871/files)  [(link)](https://github.com/haskell-nix/hnix/pull/872/files) [(link)](https://github.com/haskell-nix/hnix/pull/873/files) `Nix.Value.Monad`: `class MonadValue v m`: instances became specialized, Kleisli versions unflipped the arguments of methods into a classical order and moved to the `class MonadValueF`. As a result, `demand` now gets optimized by GHC and also tail recurse. Please, use `f =<< demand t`, or just use `demandF`, while `demandF` in fact just `kleisli =<< demand t`.
@@ -49,11 +54,17 @@
       class MonadValue v m where
       
         demand :: v       ->         m v
-        -- was :: v -> (v -> m r) -> m r
+        -- old became `demandF`
+
+        inform :: v -> m v
+        -- old became `informF`
       
+
       class MonadValueF v m where
+
         demandF :: (v -> m r) -> v -> m r
         -- was :: v -> (v -> m r) -> m r
+
         informF :: (m v -> m v) -> v -> m v
         -- was :: v -> (m v -> m v) -> m v
       ```
