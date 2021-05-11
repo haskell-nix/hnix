@@ -529,7 +529,6 @@ test-suite hnix-tests
     PrettyTests
     ReduceExprTests
     TestCommon
-    Paths_hnix
   mixins:
       base hiding (Prelude)
     , relude (Relude as Prelude)
@@ -577,7 +576,6 @@ benchmark hnix-benchmarks
   main-is: Main.hs
   other-modules:
     ParserBench
-    Paths_hnix
   hs-source-dirs:
     benchmarks
   mixins:
