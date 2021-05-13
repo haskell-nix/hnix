@@ -1,3 +1,5 @@
+-- | Basing on the Nix (Hindley–Milner) type system (that provides decidable type inference):
+-- gathering assumptions (inference evidence) about polymorphic types.
 module Nix.Type.Assumption
   ( Assumption(..)
   , empty
@@ -24,16 +26,27 @@ empty :: Assumption
 empty = Assumption mempty
 
 extend :: Assumption -> (Name, Type) -> Assumption
-extend (Assumption a) (x, s) = Assumption ((x, s) : a)
+extend (Assumption a) (x, s) =
+  Assumption $
+    (x, s) : a
 
 remove :: Assumption -> Name -> Assumption
-remove (Assumption a) var = Assumption (filter (\(n, _) -> n /= var) a)
+remove (Assumption a) var =
+  Assumption $
+    filter
+      (\(n, _) -> n /= var)
+      a
 
 lookup :: Name -> Assumption -> [Type]
-lookup key (Assumption a) = fmap snd (filter (\(n, _) -> n == key) a)
+lookup key (Assumption a) =
+  snd <$>
+    filter
+      (\(n, _) -> n == key)
+      a
 
 merge :: Assumption -> Assumption -> Assumption
-merge (Assumption a) (Assumption b) = Assumption (a <> b)
+merge (Assumption a) (Assumption b) =
+  Assumption $ a <> b
 
 mergeAssumptions :: [Assumption] -> Assumption
 mergeAssumptions = foldl' merge empty
@@ -42,4 +55,4 @@ singleton :: Name -> Type -> Assumption
 singleton x y = Assumption [(x, y)]
 
 keys :: Assumption -> [Name]
-keys (Assumption a) = fmap fst a
+keys (Assumption a) = fst <$> a
