@@ -662,10 +662,10 @@ ekey _ _ f e = fromMaybe e <$> f Nothing
 stripPositionInfo :: NExpr -> NExpr
 stripPositionInfo = transport phi
  where
-  transport f (Fix x) = Fix $ fmap (transport f) (f x)
+  transport f (Fix x) = Fix $ transport f <$> f x
 
-  phi (NSet recur binds) = NSet recur $ fmap go binds
-  phi (NLet binds body) = NLet (fmap go binds) body
+  phi (NSet recur binds) = NSet recur $ go <$> binds
+  phi (NLet binds body) = NLet (go <$> binds) body
   phi x                 = x
 
   go (NamedVar path r     _pos) = NamedVar path r nullPos

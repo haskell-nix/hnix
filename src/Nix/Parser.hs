@@ -557,23 +557,23 @@ type Parser = ParsecT Void Text (State SourcePos)
 type Result a = Either (Doc Void) a
 
 parseFromFileEx :: MonadFile m => Parser a -> FilePath -> m (Result a)
-parseFromFileEx p path =
+parseFromFileEx parser file =
   do
-    txt <- decodeUtf8 <$> readFile path
+    input <- decodeUtf8 <$> readFile file
 
     pure $
       either
         (Left . pretty . errorBundlePretty)
-        Right
-        $ (`evalState` initialPos path) $ runParserT p path txt
+        pure
+        $ (`evalState` initialPos file) $ runParserT parser file input
 
 parseFromText :: Parser a -> Text -> Result a
-parseFromText p txt =
-  let file = "<string>" in
+parseFromText parser input =
+  let stub = "<string>" in
   either
     (Left . pretty . errorBundlePretty)
-    Right
-    $ (`evalState` initialPos file) $ (`runParserT` file) p txt
+    pure
+    $ (`evalState` initialPos stub) $ (`runParserT` stub) parser input
 
 {- Parser.Operators -}
 
