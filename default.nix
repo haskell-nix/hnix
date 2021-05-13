@@ -91,7 +91,7 @@
 #   , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
 #   ...
 #   }
-, rev ? "39e6bf76474ce742eb027a88c4da6331f0a1526f"
+, rev ? "65d6153aec85c8cb46023f0a7248628f423ca4ee"
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" > 0
@@ -188,7 +188,6 @@ let
 
     overrides = self: super: {
 
-      ref-tf = super.ref-tf_0_5;
       semialign = super.semialign_1_2;
       relude = super.relude_1_0_0_1;
 
