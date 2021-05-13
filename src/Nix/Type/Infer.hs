@@ -73,7 +73,38 @@ import           Nix.Value.Monad
 import           Nix.Var
 
 
--- * Classes
+-- * @InferError@
+
+data InferError
+  = TypeInferenceErrors [TypeError]
+  | TypeInferenceAborted
+  | forall s. Exception s => EvaluationError s
+
+typeError :: MonadError InferError m => TypeError -> m ()
+typeError err = throwError $ TypeInferenceErrors [err]
+
+-- ** Instances
+
+deriving instance Show InferError
+instance Exception InferError
+
+instance Semigroup InferError where
+  x <> _ = x
+
+instance Monoid InferError where
+  mempty  = TypeInferenceAborted
+  mappend = (<>)
+
+-- * @InferState@: inderence state
+
+-- | Inference state
+newtype InferState = InferState { count :: Int }
+
+-- | Initial inference state
+initInfer :: InferState
+initInfer = InferState { count = 0 }
+
+-- * @InferT@: inference monad
 
 -- | Inference monad
 newtype InferT s m a =
@@ -97,18 +128,49 @@ newtype InferT s m a =
       , MonadError InferError
       )
 
+-- ** Instances
+
 instance MonadTrans (InferT s) where
   lift = InferT . lift . lift . lift
+
+instance MonadRef m => MonadRef (InferT s m) where
+  type Ref (InferT s m) = Ref m
+  newRef x = liftInfer $ newRef x
+  readRef x = liftInfer $ readRef x
+  writeRef x y = liftInfer $ writeRef x y
+
+instance MonadAtomicRef m => MonadAtomicRef (InferT s m) where
+  atomicModifyRef x f =
+    liftInfer $
+      do
+        res <- snd . f <$> readRef x
+        _   <- modifyRef x $ fst . f
+        pure res
+
+instance Monad m => MonadThrow (InferT s m) where
+  throwM = throwError . EvaluationError
+
+instance Monad m => MonadCatch (InferT s m) where
+  catch m h =
+    catchError m $
+      \case
+        EvaluationError e ->
+          maybe
+            (error $ "Exception was not an exception: " <> show e)
+            h
+            (fromException $ toException e)
+        err -> error $ "Unexpected error: " <> show err
 
 -- instance MonadThunkId m => MonadThunkId (InferT s m) where
 --   type ThunkId (InferT s m) = ThunkId m
 
--- | Inference state
-newtype InferState = InferState { count :: Int }
+-- * @Subst@ data type
 
--- | Initial inference state
-initInfer :: InferState
-initInfer = InferState { count = 0 }
+-- | Substitution of the basic type definition by a type variable.
+newtype Subst = Subst (Map TVar Type)
+  deriving (Eq, Ord, Show, Semigroup, Monoid)
+
+-- * @Constraint@ data type
 
 data Constraint
   = EqConst Type Type
@@ -116,12 +178,12 @@ data Constraint
   | ImpInstConst Type (Set.Set TVar) Type
   deriving (Show, Eq, Ord)
 
--- | Substitution of the basic type definition by a type variable.
-newtype Subst = Subst (Map TVar Type)
-  deriving (Eq, Ord, Show, Semigroup, Monoid)
+-- * class @Substitutable@
 
 class Substitutable a where
   apply :: Subst -> a -> a
+
+-- ** Instances
 
 instance Substitutable TVar where
   apply (Subst s) a = tv
@@ -164,8 +226,12 @@ instance (Ord a, Substitutable a) => Substitutable (Set.Set a) where
   apply = Set.map . apply
 
 
+-- * class @FreeTypeVars@
+
 class FreeTypeVars a where
   ftv :: a -> Set.Set TVar
+
+-- ** Instances
 
 instance FreeTypeVars Type where
   ftv TCon{}      = mempty
@@ -187,9 +253,12 @@ instance FreeTypeVars a => FreeTypeVars [a] where
 instance (Ord a, FreeTypeVars a) => FreeTypeVars (Set.Set a) where
   ftv = foldr (Set.union . ftv) mempty
 
+-- * class @ActiveTypeVars@
 
 class ActiveTypeVars a where
   atv :: a -> Set.Set TVar
+
+-- ** Instances
 
 instance ActiveTypeVars Constraint where
   atv (EqConst      t1 t2   ) = ftv t1 `Set.union` ftv t2
@@ -206,25 +275,6 @@ data TypeError
   | Ambigious [Constraint]
   | UnificationMismatch [Type] [Type]
   deriving (Eq, Show, Ord)
-
-data InferError
-  = TypeInferenceErrors [TypeError]
-  | TypeInferenceAborted
-  | forall s. Exception s => EvaluationError s
-
-typeError :: MonadError InferError m => TypeError -> m ()
-typeError err = throwError $ TypeInferenceErrors [err]
-
-deriving instance Show InferError
-instance Exception InferError
-
-instance Semigroup InferError where
-  x <> _ = x
-
-instance Monoid InferError where
-  mempty  = TypeInferenceAborted
-  mappend = (<>)
-
 
 -- * Inference
 
@@ -384,35 +434,7 @@ binops u1 op =
 liftInfer :: Monad m => m a -> InferT s m a
 liftInfer = InferT . lift . lift . lift
 
-instance MonadRef m => MonadRef (InferT s m) where
-  type Ref (InferT s m) = Ref m
-  newRef x = liftInfer $ newRef x
-  readRef x = liftInfer $ readRef x
-  writeRef x y = liftInfer $ writeRef x y
-
-instance MonadAtomicRef m => MonadAtomicRef (InferT s m) where
-  atomicModifyRef x f =
-    liftInfer $
-      do
-        res <- snd . f <$> readRef x
-        _   <- modifyRef x $ fst . f
-        pure res
-
 -- newtype JThunkT s m = JThunk (NThunkF (InferT s m) (Judgment s))
-
-instance Monad m => MonadThrow (InferT s m) where
-  throwM = throwError . EvaluationError
-
-instance Monad m => MonadCatch (InferT s m) where
-  catch m h =
-    catchError m $
-      \case
-        EvaluationError e ->
-          maybe
-            (error $ "Exception was not an exception: " <> show e)
-            h
-            (fromException $ toException e)
-        err -> error $ "Unexpected error: " <> show err
 
 type MonadInfer m
   = ({- MonadThunkId m,-}
@@ -600,7 +622,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
       (env, tys) =
         (\f -> foldl' f (Assumption.empty, mempty) js) $ \(as1, t1) (k, t) ->
           (as1 `Assumption.merge` Assumption.singleton k t, M.insert k t t1)
-      arg   = pure $ Judgment env mempty (TSet True tys)
+      arg   = pure $ Judgment env mempty $ TSet True tys
       call  = k arg $ \args b -> (args, ) <$> b
       names = fst <$> js
 
@@ -717,7 +739,7 @@ normalizeScheme (Forall _ body) = Forall (snd <$> ord) (normtype body)
       (List.lookup a ord)
 
 
--- * Constraint Solver
+-- * Constraint solver
 
 newtype Solver m a = Solver (LogicT (StateT [TypeError] m) a)
     deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
@@ -745,14 +767,19 @@ emptySubst = mempty
 -- | Compose substitutions
 compose :: Subst -> Subst -> Subst
 Subst s1 `compose` Subst s2 =
-  Subst $ Map.map (apply $ Subst s1) s2 `Map.union` s1
+  Subst $
+    apply (Subst s1) `Map.map`
+      (s2 `Map.union` s1)
 
 unifyMany :: Monad m => [Type] -> [Type] -> Solver m Subst
 unifyMany []         []         = pure emptySubst
 unifyMany (t1 : ts1) (t2 : ts2) = do
   su1 <- unifies t1 t2
-  su2 <- unifyMany (apply su1 ts1) (apply su1 ts2)
-  pure (su2 `compose` su1)
+  su2 <-
+    unifyMany
+      (apply su1 ts1)
+      (apply su1 ts2)
+  pure $ su2 `compose` su1
 unifyMany t1 t2 = throwError $ UnificationMismatch t1 t2
 
 -- | Check if all elements are of the same type.

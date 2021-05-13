@@ -193,7 +193,7 @@ instance Foldable (NValueF p m) where
 
 -- ** Traversable
 
--- | @traverse@
+-- | @sequence@
 sequenceNValueF
   :: (Functor n, Monad m, Applicative n)
   => (forall x . n x -> m x)
@@ -312,7 +312,7 @@ instance Comonad f => Show1 (NValue' t f m) where
 
 -- ** Traversable
 
--- | @traverse@
+-- | @sequence@
 sequenceNValue'
   :: (Functor n, Traversable f, Monad m, Applicative n)
   => (forall x . n x -> m x)
@@ -534,7 +534,7 @@ iterNValueM
   -> NValue t f m
   -> n r
 iterNValueM transform k f =
-    iterM f <=< go . fmap (\t -> k t (iterNValueM transform k f))
+    iterM f <=< go . ((\t -> k t $ iterNValueM transform k f) <$>)
   where
     go (Pure x) = Pure <$> x
     go (Free fa) = Free <$> bindNValue' transform go fa
@@ -548,7 +548,7 @@ hoistNValue
   -> (forall x . m x -> n x)
   -> NValue t f m
   -> NValue t f n
-hoistNValue run lft = hoistFree (hoistNValue' run lft)
+hoistNValue run lft = hoistFree $ hoistNValue' run lft
 {-# inline hoistNValue #-}
 
 -- ** MonadTrans
