@@ -107,17 +107,16 @@ assertParse _opts file =
 assertParseFail :: Options -> FilePath -> Assertion
 assertParseFail opts file = do
   eres <- parseNixFileLoc file
-  catch
-      (either
-        (const pass)
-        (\ expr ->
-          do
-            _ <- pure $! runST $ void $ lint opts expr
-            assertFailure $ "Unexpected success parsing `" <> file <> ":\nParsed value: " <> show expr
-        )
-        eres
+  (`catch` \(_ :: SomeException) -> pass)
+    (either
+      (const pass)
+      (\ expr ->
+        do
+          _ <- pure $! runST $ void $ lint opts expr
+          assertFailure $ "Unexpected success parsing `" <> file <> ":\nParsed value: " <> show expr
       )
-      $ \(_ :: SomeException) -> pass
+      eres
+    )
 
 assertLangOk :: Options -> FilePath -> Assertion
 assertLangOk opts file = do
@@ -168,7 +167,7 @@ assertEval _opts files = do
   fixup []                          = mempty
 
 assertEvalFail :: FilePath -> Assertion
-assertEvalFail file = catch ?? (\(_ :: SomeException) -> pass) $ do
+assertEvalFail file = (`catch` (\(_ :: SomeException) -> pass)) $ do
   time       <- liftIO getCurrentTime
   evalResult <- printNix <$> hnixEvalFile (defaultOptions time) file
   evalResult `seq`
