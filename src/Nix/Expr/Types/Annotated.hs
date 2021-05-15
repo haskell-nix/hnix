@@ -175,17 +175,14 @@ nullSpan = SrcSpan nullPos nullPos
 
 -- | Pattern systems for matching on NExprLocF constructions.
 
-pattern NSym_ :: SrcSpan -> VarName -> NExprLocF r
-pattern NSym_ ann x = Compose (Ann ann (NSym x))
-
-pattern NSynHole_ :: SrcSpan -> Text -> NExprLocF r
-pattern NSynHole_ ann x = Compose (Ann ann (NSynHole x))
-
 pattern NConstant_ :: SrcSpan -> NAtom -> NExprLocF r
 pattern NConstant_ ann x = Compose (Ann ann (NConstant x))
 
 pattern NStr_ :: SrcSpan -> NString r -> NExprLocF r
 pattern NStr_ ann x = Compose (Ann ann (NStr x))
+
+pattern NSym_ :: SrcSpan -> VarName -> NExprLocF r
+pattern NSym_ ann x = Compose (Ann ann (NSym x))
 
 pattern NList_ :: SrcSpan -> [r] -> NExprLocF r
 pattern NList_ ann x = Compose (Ann ann (NList x))
@@ -198,6 +195,12 @@ pattern NLiteralPath_ ann x = Compose (Ann ann (NLiteralPath x))
 
 pattern NEnvPath_ :: SrcSpan -> FilePath -> NExprLocF r
 pattern NEnvPath_ ann x = Compose (Ann ann (NEnvPath x))
+
+pattern NUnary_ :: SrcSpan -> NUnaryOp -> r -> NExprLocF r
+pattern NUnary_ ann op x = Compose (Ann ann (NUnary op x))
+
+pattern NBinary_ :: SrcSpan -> NBinaryOp -> r -> r -> NExprLocF r
+pattern NBinary_ ann op x y = Compose (Ann ann (NBinary op x y))
 
 pattern NSelect_ :: SrcSpan -> r -> NAttrPath r -> Maybe r -> NExprLocF r
 pattern NSelect_ ann x p v = Compose (Ann ann (NSelect x p v))
@@ -220,8 +223,5 @@ pattern NWith_ ann x y = Compose (Ann ann (NWith x y))
 pattern NAssert_ :: SrcSpan -> r -> r -> NExprLocF r
 pattern NAssert_ ann x y = Compose (Ann ann (NAssert x y))
 
-pattern NUnary_ :: SrcSpan -> NUnaryOp -> r -> NExprLocF r
-pattern NUnary_ ann op x = Compose (Ann ann (NUnary op x))
-
-pattern NBinary_ :: SrcSpan -> NBinaryOp -> r -> r -> NExprLocF r
-pattern NBinary_ ann op x y = Compose (Ann ann (NBinary op x y))
+pattern NSynHole_ :: SrcSpan -> Text -> NExprLocF r
+pattern NSynHole_ ann x = Compose (Ann ann (NSynHole x))
