@@ -74,6 +74,13 @@ instance Hashable ann => Hashable1 (Ann ann)
 #ifdef MIN_VERSION_serialise
 instance (Serialise ann, Serialise a) => Serialise (Ann ann a)
 #endif
+pattern AnnE
+  :: forall ann (g :: * -> *)
+  . ann
+  -> g (Fix (Compose (Ann ann) g))
+  -> Fix (Compose (Ann ann) g)
+pattern AnnE ann a = Fix (Compose (Ann ann a))
+{-# complete AnnE #-}
 
 instance NFData ann => NFData1 (Ann ann)
 
@@ -119,9 +126,6 @@ instance Serialise r => Serialise (Compose (Ann SrcSpan) NExprF r) where
   decode = (Compose .) . Ann <$> decode <*> decode
 #endif
 
-pattern AnnE :: forall ann (g :: * -> *). ann
-             -> g (Fix (Compose (Ann ann) g)) -> Fix (Compose (Ann ann) g)
-pattern AnnE ann a = Fix (Compose (Ann ann a))
 
 stripAnnotation :: Functor f => Fix (AnnF ann f) -> Fix f
 stripAnnotation = unfoldFix (annotated . getCompose . unFix)
@@ -131,33 +135,26 @@ stripAnn = annotated . getCompose
 
 nUnary :: Ann SrcSpan NUnaryOp -> NExprLoc -> NExprLoc
 nUnary (Ann s1 u) e1@(AnnE s2 _) = AnnE (s1 <> s2) $ NUnary u e1
-nUnary _          _              = error "nUnary: unexpected"
 {-# inline nUnary #-}
 
 nBinary :: Ann SrcSpan NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
 nBinary (Ann s1 b) e1@(AnnE s2 _) e2@(AnnE s3 _) =
   AnnE (s1 <> s2 <> s3) $ NBinary b e1 e2
-nBinary _ _ _ = error "nBinary: unexpected"
 
 nSelectLoc
   :: NExprLoc -> Ann SrcSpan (NAttrPath NExprLoc) -> Maybe NExprLoc -> NExprLoc
 nSelectLoc e1@(AnnE s1 _) (Ann s2 ats) d = case d of
   Nothing               -> AnnE (s1 <> s2) $ NSelect e1 ats Nothing
   Just e2@(AnnE s3 _) -> AnnE (s1 <> s2 <> s3) $ NSelect e1 ats $ pure e2
-  _                     -> error "nSelectLoc: unexpected"
-nSelectLoc _ _ _ = error "nSelectLoc: unexpected"
 
 nHasAttr :: NExprLoc -> Ann SrcSpan (NAttrPath NExprLoc) -> NExprLoc
 nHasAttr e1@(AnnE s1 _) (Ann s2 ats) = AnnE (s1 <> s2) $ NHasAttr e1 ats
-nHasAttr _              _            = error "nHasAttr: unexpected"
 
 nApp :: NExprLoc -> NExprLoc -> NExprLoc
 nApp e1@(AnnE s1 _) e2@(AnnE s2 _) = AnnE (s1 <> s2) $ NBinary NApp e1 e2
-nApp _              _              = error "nApp: unexpected"
 
 nAbs :: Ann SrcSpan (Params NExprLoc) -> NExprLoc -> NExprLoc
 nAbs (Ann s1 ps) e1@(AnnE s2 _) = AnnE (s1 <> s2) $ NAbs ps e1
-nAbs _           _              = error "nAbs: unexpected"
 
 nStr :: Ann SrcSpan (NString NExprLoc) -> NExprLoc
 nStr (Ann s1 s) = AnnE s1 $ NStr s
