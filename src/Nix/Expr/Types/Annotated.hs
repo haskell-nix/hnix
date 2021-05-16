@@ -157,9 +157,15 @@ nBinary (Ann s1 b) e1@(AnnE s2 _) e2@(AnnE s3 _) =
 
 nSelectLoc
   :: NExprLoc -> Ann SrcSpan (NAttrPath NExprLoc) -> Maybe NExprLoc -> NExprLoc
-nSelectLoc e1@(AnnE s1 _) (Ann s2 ats) d = case d of
-  Nothing               -> AnnE (s1 <> s2) $ NSelect e1 ats Nothing
-  Just e2@(AnnE s3 _) -> AnnE (s1 <> s2 <> s3) $ NSelect e1 ats $ pure e2
+nSelectLoc e1@(AnnE s1 _) (Ann s2 ats) =
+  --  2021-05-16: NOTE: This could been rewritten into function application of @(s3, pure e2)@
+  -- if @SrcSpan@ was Monoid, which requires @SorcePos@ to be a Monoid, and upstream code prevents it.
+  -- Question upstream: https://github.com/mrkkrp/megaparsec/issues/450
+  maybe
+    (                    AnnE  s1s2        $ NSelect e1 ats   Nothing)
+    (\ e2@(AnnE s3 _) -> AnnE (s1s2 <> s3) $ NSelect e1 ats $ pure e2)
+ where
+  s1s2 = s1 <> s2
 
 nHasAttr :: NExprLoc -> Ann SrcSpan (NAttrPath NExprLoc) -> NExprLoc
 nHasAttr e1@(AnnE s1 _) (Ann s2 ats) = AnnE (s1 <> s2) $ NHasAttr e1 ats
