@@ -108,6 +108,8 @@ data Params r
   --
   -- > Param "x"                                  ~  x
   | ParamSet !(ParamSet r) !Bool !(Maybe VarName)
+  --  2021-05-15: NOTE: Seems like we should flip the ParamSet, so partial application kicks in for Bool?
+  --  2021-05-15: NOTE: '...' variadic property probably needs a Bool synonym.
   -- ^ Explicit parameters (argument must be a set). Might specify a name to
   -- bind to the set in the function body. The bool indicates whether it is
   -- variadic or not.
@@ -432,6 +434,8 @@ data NExprF r
   -- > NBinary NPlus x y                           ~  x + y
   -- > NBinary NApp  f x                           ~  f x
   | NSelect !r !(NAttrPath r) !(Maybe r)
+  --  2021-05-15: NOTE: Default value should be first argument to leverage partial application.
+  -- Cascading change diff is not that big.
   -- ^ Dot-reference into an attribute set, optionally providing an
   -- alternative if the key doesn't exist.
   --
