@@ -47,16 +47,29 @@ import           Text.Megaparsec.Pos            ( SourcePos(..) )
 import           Text.Read.Deriving
 import           Text.Show.Deriving
 
--- | A location in a source file
+-- * data type @SrcSpan@ - a zone in a source file
+
+-- | Demarcation of a chunk in a source file.
 data SrcSpan = SrcSpan
     { spanBegin :: SourcePos
     , spanEnd   :: SourcePos
     }
     deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData, Hashable)
 
+-- ** Instances
+
+instance Semigroup SrcSpan where
+  s1 <> s2 = SrcSpan ((min `on` spanBegin) s1 s2) ((max `on` spanEnd) s1 s2)
+
+instance Binary SrcSpan
+instance ToJSON SrcSpan
+instance FromJSON SrcSpan
+
 #ifdef MIN_VERSION_serialise
 instance Serialise SrcSpan
 #endif
+
+-- * data type @Ann@
 
 -- | A type constructor applied to a type along with an annotation
 --
@@ -69,11 +82,8 @@ data Ann ann a = Ann
     deriving (Ord, Eq, Data, Generic, Generic1, Typeable, Functor, Foldable,
               Traversable, Read, Show, NFData, Hashable)
 
-instance Hashable ann => Hashable1 (Ann ann)
+type AnnF ann f = Compose (Ann ann) f
 
-#ifdef MIN_VERSION_serialise
-instance (Serialise ann, Serialise a) => Serialise (Ann ann a)
-#endif
 pattern AnnE
   :: forall ann (g :: * -> *)
   . ann
@@ -82,7 +92,16 @@ pattern AnnE
 pattern AnnE ann a = Fix (Compose (Ann ann a))
 {-# complete AnnE #-}
 
+annToAnnF :: Ann ann (f (Fix (AnnF ann f))) -> Fix (AnnF ann f)
+annToAnnF (Ann ann a) = AnnE ann a
+
+-- ** Instances
+
+instance Hashable ann => Hashable1 (Ann ann)
+
 instance NFData ann => NFData1 (Ann ann)
+
+instance (Binary ann, Binary a) => Binary (Ann ann a)
 
 $(deriveEq1   ''Ann)
 $(deriveEq2   ''Ann)
@@ -95,30 +114,9 @@ $(deriveShow2 ''Ann)
 $(deriveJSON1 defaultOptions ''Ann)
 $(deriveJSON2 defaultOptions ''Ann)
 
-instance Semigroup SrcSpan where
-  s1 <> s2 = SrcSpan ((min `on` spanBegin) s1 s2) ((max `on` spanEnd) s1 s2)
-
-type AnnF ann f = Compose (Ann ann) f
-
-annToAnnF :: Ann ann (f (Fix (AnnF ann f))) -> Fix (AnnF ann f)
-annToAnnF (Ann ann a) = AnnE ann a
-
-type NExprLocF = AnnF SrcSpan NExprF
-
--- | A nix expression with source location at each subexpression.
-type NExprLoc = Fix NExprLocF
-
 #ifdef MIN_VERSION_serialise
-instance Serialise NExprLoc
+instance (Serialise ann, Serialise a) => Serialise (Ann ann a)
 #endif
-
-instance Binary SrcSpan
-instance (Binary ann, Binary a) => Binary (Ann ann a)
-instance Binary r => Binary (NExprLocF r)
-instance Binary NExprLoc
-
-instance ToJSON SrcSpan
-instance FromJSON SrcSpan
 
 #ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (Compose (Ann SrcSpan) NExprF r) where
@@ -126,6 +124,22 @@ instance Serialise r => Serialise (Compose (Ann SrcSpan) NExprF r) where
   decode = (Compose .) . Ann <$> decode <*> decode
 #endif
 
+-- ** @NExprLoc{,F}@ - annotated Nix expression
+
+type NExprLocF = AnnF SrcSpan NExprF
+
+instance Binary r => Binary (NExprLocF r)
+
+-- | Annotated Nix expression (each subexpression direct to its source location).
+type NExprLoc = Fix NExprLocF
+
+#ifdef MIN_VERSION_serialise
+instance Serialise NExprLoc
+#endif
+
+instance Binary NExprLoc
+
+-- * Other
 
 stripAnnotation :: Functor f => Fix (AnnF ann f) -> Fix f
 stripAnnotation = unfoldFix (annotated . getCompose . unFix)
