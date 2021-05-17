@@ -35,7 +35,8 @@ data Deferred m v = Computed v | Deferred (m v)
 
 -- ** Utils
 
--- | @Deferred (Computed|Deferred)@ analog of @either@.
+-- | Apply second if @Deferred@, otherwise (@Computed@) - apply first.
+-- Analog of @either@ for @Deferred = Computed|Deferred@.
 deferred :: (v -> b) -> (m v -> b) -> Deferred m v -> b
 deferred f1 f2 def =
   case def of
@@ -147,26 +148,30 @@ forceMain
   => NThunkF m v
   -> m v
 forceMain (Thunk n thunkRef thunkValRef) =
-  do
-    deferred
-      pure
-      (\ action ->
-        do
-          lockedIt <- lockThunk thunkRef
-          bool
-            (throwM $ ThunkLoop $ show n)
-            (do
-              v <- catch action $ \(e :: SomeException) ->
-                do
-                  _unlockedIt <- unlockThunk thunkRef
-                  throwM e
-              writeVar thunkValRef (Computed v)
-              _unlockedIt <- unlockThunk thunkRef
-              pure v
-            )
-            (not lockedIt)
-      )
-      =<< readVar thunkValRef
+  deferred
+    pure
+    (\ action ->
+      do
+        lockedIt <- lockThunk thunkRef
+        bool
+          lockFailed
+          (do
+            v <- action `catch` actionFailed
+            writeVar thunkValRef (Computed v)
+            _unlockedIt <- unlockThunk thunkRef
+            pure v
+          )
+          (not lockedIt)
+    )
+    =<< readVar thunkValRef
+ where
+  lockFailed = throwM $ ThunkLoop $ show n
+
+  actionFailed (e :: SomeException) =
+    do
+      _unlockedIt <- unlockThunk thunkRef
+      throwM e
+
 {-# inline forceMain #-} -- it is big function, but internal, and look at its use.
 
 
