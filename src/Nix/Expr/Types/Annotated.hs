@@ -84,6 +84,7 @@ data Ann ann a = Ann
 
 type AnnF ann f = Compose (Ann ann) f
 
+-- | Pattern: @Fix (Compose (Ann _ _))@.
 pattern AnnE
   :: forall ann (g :: * -> *)
   . ann

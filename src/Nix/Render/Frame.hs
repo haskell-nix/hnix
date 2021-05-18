@@ -72,7 +72,7 @@ framePos
   -> Maybe SourcePos
 framePos (NixFrame _ f)
   | Just (e :: EvalFrame m v) <- fromException f = case e of
-    EvaluatingExpr _ (Fix (Compose (Ann (SrcSpan beg _) _))) -> pure beg
+    EvaluatingExpr _ (AnnE (SrcSpan beg _) _) -> pure beg
     _ -> Nothing
   | otherwise = Nothing
 
@@ -108,7 +108,7 @@ renderEvalFrame level f =
   do
     opts :: Options <- asks (view hasLens)
     case f of
-      EvaluatingExpr scope e@(Fix (Compose (Ann ann _))) ->
+      EvaluatingExpr scope e@(AnnE ann _) ->
         do
           let
             scopeInfo =
@@ -121,7 +121,7 @@ renderEvalFrame level f =
             $ renderLocation ann =<<
                 renderExpr level "While evaluating" "Expression" e
 
-      ForcingExpr _scope e@(Fix (Compose (Ann ann _))) | thunks opts ->
+      ForcingExpr _scope e@(AnnE ann _) | thunks opts ->
         fmap
           (: mempty)
           $ renderLocation ann =<<
@@ -135,7 +135,7 @@ renderEvalFrame level f =
 
       SynHole synfo ->
         sequence $
-          let e@(Fix (Compose (Ann ann _))) = _synHoleInfo_expr synfo in
+          let e@(AnnE ann _) = _synHoleInfo_expr synfo in
 
           [ renderLocation ann =<<
               renderExpr level "While evaluating" "Syntactic Hole" e
@@ -152,7 +152,7 @@ renderExpr
   -> Text
   -> NExprLoc
   -> m (Doc ann)
-renderExpr _level longLabel shortLabel e@(Fix (Compose (Ann _ x))) = do
+renderExpr _level longLabel shortLabel e@(AnnE _ x) = do
   opts :: Options <- asks (view hasLens)
   let rendered
           | verbose opts >= DebugInfo =

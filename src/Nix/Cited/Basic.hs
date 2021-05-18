@@ -16,7 +16,6 @@ import           Prelude                 hiding ( force )
 import           Control.Comonad                ( Comonad )
 import           Control.Comonad.Env            ( ComonadEnv )
 import           Control.Monad.Catch     hiding ( catchJust )
-import           Data.Fix
 import           Nix.Cited
 import           Nix.Eval                      as Eval
 import           Nix.Exec
@@ -64,13 +63,12 @@ instance ( Has e Options
 
         -- Gather the current evaluation context at the time of thunk
         -- creation, and record it along with the thunk.
-        let go (fromException ->
-                    Just (EvaluatingExpr scope
-                              (Fix (Compose (Ann s e))))) =
-                let e' = Compose (Ann s (Nothing <$ e))
-                in [Provenance scope e']
-            go _ = mempty
-            ps = concatMap (go . frame) frames
+        let
+          go (fromException -> Just (EvaluatingExpr scope (AnnE s e))) =
+            let e' = Compose (Ann s (Nothing <$ e)) in
+            [Provenance scope e']
+          go _ = mempty
+          ps = concatMap (go . frame) frames
 
         Cited . NCited ps <$> thunk mv
       )
