@@ -47,16 +47,29 @@ import           Text.Megaparsec.Pos            ( SourcePos(..) )
 import           Text.Read.Deriving
 import           Text.Show.Deriving
 
--- | A location in a source file
+-- * data type @SrcSpan@ - a zone in a source file
+
+-- | Demarcation of a chunk in a source file.
 data SrcSpan = SrcSpan
     { spanBegin :: SourcePos
     , spanEnd   :: SourcePos
     }
     deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData, Hashable)
 
+-- ** Instances
+
+instance Semigroup SrcSpan where
+  s1 <> s2 = SrcSpan ((min `on` spanBegin) s1 s2) ((max `on` spanEnd) s1 s2)
+
+instance Binary SrcSpan
+instance ToJSON SrcSpan
+instance FromJSON SrcSpan
+
 #ifdef MIN_VERSION_serialise
 instance Serialise SrcSpan
 #endif
+
+-- * data type @Ann@
 
 -- | A type constructor applied to a type along with an annotation
 --
@@ -69,13 +82,29 @@ data Ann ann a = Ann
     deriving (Ord, Eq, Data, Generic, Generic1, Typeable, Functor, Foldable,
               Traversable, Read, Show, NFData, Hashable)
 
+type AnnF ann f = Compose (Ann ann) f
+
+-- | Pattern: @Fix (Compose (Ann _ _))@.
+-- Fix composes units of (annotations & the annotated) into one object.
+-- Giving annotated expression.
+pattern AnnE
+  :: forall ann (g :: * -> *)
+  . ann
+  -> g (Fix (Compose (Ann ann) g))
+  -> Fix (Compose (Ann ann) g)
+pattern AnnE ann a = Fix (Compose (Ann ann a))
+{-# complete AnnE #-}
+
+annToAnnF :: Ann ann (f (Fix (AnnF ann f))) -> Fix (AnnF ann f)
+annToAnnF (Ann ann a) = AnnE ann a
+
+-- ** Instances
+
 instance Hashable ann => Hashable1 (Ann ann)
 
-#ifdef MIN_VERSION_serialise
-instance (Serialise ann, Serialise a) => Serialise (Ann ann a)
-#endif
-
 instance NFData ann => NFData1 (Ann ann)
+
+instance (Binary ann, Binary a) => Binary (Ann ann a)
 
 $(deriveEq1   ''Ann)
 $(deriveEq2   ''Ann)
@@ -88,30 +117,9 @@ $(deriveShow2 ''Ann)
 $(deriveJSON1 defaultOptions ''Ann)
 $(deriveJSON2 defaultOptions ''Ann)
 
-instance Semigroup SrcSpan where
-  s1 <> s2 = SrcSpan ((min `on` spanBegin) s1 s2) ((max `on` spanEnd) s1 s2)
-
-type AnnF ann f = Compose (Ann ann) f
-
-annToAnnF :: Ann ann (f (Fix (AnnF ann f))) -> Fix (AnnF ann f)
-annToAnnF (Ann ann a) = AnnE ann a
-
-type NExprLocF = AnnF SrcSpan NExprF
-
--- | A nix expression with source location at each subexpression.
-type NExprLoc = Fix NExprLocF
-
 #ifdef MIN_VERSION_serialise
-instance Serialise NExprLoc
+instance (Serialise ann, Serialise a) => Serialise (Ann ann a)
 #endif
-
-instance Binary SrcSpan
-instance (Binary ann, Binary a) => Binary (Ann ann a)
-instance Binary r => Binary (NExprLocF r)
-instance Binary NExprLoc
-
-instance ToJSON SrcSpan
-instance FromJSON SrcSpan
 
 #ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (Compose (Ann SrcSpan) NExprF r) where
@@ -119,9 +127,22 @@ instance Serialise r => Serialise (Compose (Ann SrcSpan) NExprF r) where
   decode = (Compose .) . Ann <$> decode <*> decode
 #endif
 
-pattern AnnE :: forall ann (g :: * -> *). ann
-             -> g (Fix (Compose (Ann ann) g)) -> Fix (Compose (Ann ann) g)
-pattern AnnE ann a = Fix (Compose (Ann ann a))
+-- ** @NExprLoc{,F}@ - annotated Nix expression
+
+type NExprLocF = AnnF SrcSpan NExprF
+
+instance Binary r => Binary (NExprLocF r)
+
+-- | Annotated Nix expression (each subexpression direct to its source location).
+type NExprLoc = Fix NExprLocF
+
+#ifdef MIN_VERSION_serialise
+instance Serialise NExprLoc
+#endif
+
+instance Binary NExprLoc
+
+-- * Other
 
 stripAnnotation :: Functor f => Fix (AnnF ann f) -> Fix f
 stripAnnotation = unfoldFix (annotated . getCompose . unFix)
@@ -131,33 +152,32 @@ stripAnn = annotated . getCompose
 
 nUnary :: Ann SrcSpan NUnaryOp -> NExprLoc -> NExprLoc
 nUnary (Ann s1 u) e1@(AnnE s2 _) = AnnE (s1 <> s2) $ NUnary u e1
-nUnary _          _              = error "nUnary: unexpected"
 {-# inline nUnary #-}
 
 nBinary :: Ann SrcSpan NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
 nBinary (Ann s1 b) e1@(AnnE s2 _) e2@(AnnE s3 _) =
   AnnE (s1 <> s2 <> s3) $ NBinary b e1 e2
-nBinary _ _ _ = error "nBinary: unexpected"
 
 nSelectLoc
   :: NExprLoc -> Ann SrcSpan (NAttrPath NExprLoc) -> Maybe NExprLoc -> NExprLoc
-nSelectLoc e1@(AnnE s1 _) (Ann s2 ats) d = case d of
-  Nothing               -> AnnE (s1 <> s2) $ NSelect e1 ats Nothing
-  Just e2@(AnnE s3 _) -> AnnE (s1 <> s2 <> s3) $ NSelect e1 ats $ pure e2
-  _                     -> error "nSelectLoc: unexpected"
-nSelectLoc _ _ _ = error "nSelectLoc: unexpected"
+nSelectLoc e1@(AnnE s1 _) (Ann s2 ats) =
+  --  2021-05-16: NOTE: This could been rewritten into function application of @(s3, pure e2)@
+  -- if @SrcSpan@ was Monoid, which requires @SorcePos@ to be a Monoid, and upstream code prevents it.
+  -- Question upstream: https://github.com/mrkkrp/megaparsec/issues/450
+  maybe
+    (                    AnnE  s1s2        $ NSelect e1 ats   Nothing)
+    (\ e2@(AnnE s3 _) -> AnnE (s1s2 <> s3) $ NSelect e1 ats $ pure e2)
+ where
+  s1s2 = s1 <> s2
 
 nHasAttr :: NExprLoc -> Ann SrcSpan (NAttrPath NExprLoc) -> NExprLoc
 nHasAttr e1@(AnnE s1 _) (Ann s2 ats) = AnnE (s1 <> s2) $ NHasAttr e1 ats
-nHasAttr _              _            = error "nHasAttr: unexpected"
 
 nApp :: NExprLoc -> NExprLoc -> NExprLoc
 nApp e1@(AnnE s1 _) e2@(AnnE s2 _) = AnnE (s1 <> s2) $ NBinary NApp e1 e2
-nApp _              _              = error "nApp: unexpected"
 
 nAbs :: Ann SrcSpan (Params NExprLoc) -> NExprLoc -> NExprLoc
 nAbs (Ann s1 ps) e1@(AnnE s2 _) = AnnE (s1 <> s2) $ NAbs ps e1
-nAbs _           _              = error "nAbs: unexpected"
 
 nStr :: Ann SrcSpan (NString NExprLoc) -> NExprLoc
 nStr (Ann s1 s) = AnnE s1 $ NStr s
@@ -175,17 +195,14 @@ nullSpan = SrcSpan nullPos nullPos
 
 -- | Pattern systems for matching on NExprLocF constructions.
 
-pattern NSym_ :: SrcSpan -> VarName -> NExprLocF r
-pattern NSym_ ann x = Compose (Ann ann (NSym x))
-
-pattern NSynHole_ :: SrcSpan -> Text -> NExprLocF r
-pattern NSynHole_ ann x = Compose (Ann ann (NSynHole x))
-
 pattern NConstant_ :: SrcSpan -> NAtom -> NExprLocF r
 pattern NConstant_ ann x = Compose (Ann ann (NConstant x))
 
 pattern NStr_ :: SrcSpan -> NString r -> NExprLocF r
 pattern NStr_ ann x = Compose (Ann ann (NStr x))
+
+pattern NSym_ :: SrcSpan -> VarName -> NExprLocF r
+pattern NSym_ ann x = Compose (Ann ann (NSym x))
 
 pattern NList_ :: SrcSpan -> [r] -> NExprLocF r
 pattern NList_ ann x = Compose (Ann ann (NList x))
@@ -198,6 +215,12 @@ pattern NLiteralPath_ ann x = Compose (Ann ann (NLiteralPath x))
 
 pattern NEnvPath_ :: SrcSpan -> FilePath -> NExprLocF r
 pattern NEnvPath_ ann x = Compose (Ann ann (NEnvPath x))
+
+pattern NUnary_ :: SrcSpan -> NUnaryOp -> r -> NExprLocF r
+pattern NUnary_ ann op x = Compose (Ann ann (NUnary op x))
+
+pattern NBinary_ :: SrcSpan -> NBinaryOp -> r -> r -> NExprLocF r
+pattern NBinary_ ann op x y = Compose (Ann ann (NBinary op x y))
 
 pattern NSelect_ :: SrcSpan -> r -> NAttrPath r -> Maybe r -> NExprLocF r
 pattern NSelect_ ann x p v = Compose (Ann ann (NSelect x p v))
@@ -220,8 +243,6 @@ pattern NWith_ ann x y = Compose (Ann ann (NWith x y))
 pattern NAssert_ :: SrcSpan -> r -> r -> NExprLocF r
 pattern NAssert_ ann x y = Compose (Ann ann (NAssert x y))
 
-pattern NUnary_ :: SrcSpan -> NUnaryOp -> r -> NExprLocF r
-pattern NUnary_ ann op x = Compose (Ann ann (NUnary op x))
-
-pattern NBinary_ :: SrcSpan -> NBinaryOp -> r -> r -> NExprLocF r
-pattern NBinary_ ann op x y = Compose (Ann ann (NBinary op x y))
+pattern NSynHole_ :: SrcSpan -> Text -> NExprLocF r
+pattern NSynHole_ ann x = Compose (Ann ann (NSynHole x))
+{-# complete NConstant_, NStr_, NSym_, NList_, NSet_, NLiteralPath_, NEnvPath_, NUnary_, NBinary_, NSelect_, NHasAttr_, NAbs_, NLet_, NIf_, NWith_, NAssert_, NSynHole_ #-}

@@ -15,7 +15,6 @@ module Nix.Eval where
 import           Control.Monad                  ( foldM )
 import           Control.Monad.Fix              ( MonadFix )
 import           Data.Semialign.Indexed         ( ialignWith )
-import           Data.Fix                       ( Fix(Fix) )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List                      ( partition )
 import           Data.These                     ( These(..) )
@@ -496,7 +495,7 @@ buildArgument params arg =
 
 addSourcePositions
   :: (MonadReader e m, Has e SrcSpan) => Transform NExprLocF (m a)
-addSourcePositions f v@(Fix (Compose (Ann ann _))) =
+addSourcePositions f v@(AnnE ann _) =
   local (set hasLens ann) $ f v
 
 addStackFrames

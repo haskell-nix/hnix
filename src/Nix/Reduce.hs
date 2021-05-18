@@ -373,7 +373,7 @@ pruneTree opts =
         (reduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
         binds
 
-    NLet binds (Just body@(Fix (Compose (Ann _ x)))) ->
+    NLet binds (Just body@(AnnE _ x)) ->
       pure $
         list
           x
@@ -384,8 +384,8 @@ pruneTree opts =
       pure $ NSelect aset (NE.map pruneKeyName attr) (join alt)
 
     -- These are the only short-circuiting binary operators
-    NBinary NAnd (Just (Fix (Compose (Ann _ larg)))) _ -> pure larg
-    NBinary NOr  (Just (Fix (Compose (Ann _ larg)))) _ -> pure larg
+    NBinary NAnd (Just (AnnE _ larg)) _ -> pure larg
+    NBinary NOr  (Just (AnnE _ larg)) _ -> pure larg
 
     -- If the function was never called, it means its argument was in a
     -- thunk that was forced elsewhere.
@@ -399,18 +399,18 @@ pruneTree opts =
     NBinary op (Just larg) Nothing -> pure $ NBinary op larg nNull
 
     -- If the scope of a with was never referenced, it's not needed
-    NWith Nothing (Just (Fix (Compose (Ann _ body)))) -> pure body
+    NWith Nothing (Just (AnnE _ body)) -> pure body
 
     NAssert Nothing _ ->
       fail "How can an assert be used, but its condition not?"
 
-    NAssert _ (Just (Fix (Compose (Ann _ body)))) -> pure body
+    NAssert _ (Just (AnnE _ body)) -> pure body
     NAssert (Just cond) _ -> pure $ NAssert cond nNull
 
     NIf Nothing _ _ -> fail "How can an if be used, but its condition not?"
 
-    NIf _ Nothing (Just (Fix (Compose (Ann _ f)))) -> pure f
-    NIf _ (Just (Fix (Compose (Ann _ t)))) Nothing -> pure t
+    NIf _ Nothing (Just (AnnE _ f)) -> pure f
+    NIf _ (Just (AnnE _ t)) Nothing -> pure t
 
     x                     -> sequence x
 

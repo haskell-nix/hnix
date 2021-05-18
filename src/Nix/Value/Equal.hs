@@ -15,8 +15,8 @@ import           Prelude                 hiding ( Comparison
                                                 , force
                                                 )
 import           Nix.Utils
-import           Control.Comonad
-import           Control.Monad.Free
+import           Control.Comonad                ( Comonad(extract))
+import           Control.Monad.Free             ( Free(Pure,Free) )
 import           Control.Monad.Trans.Except     ( throwE )
 import           Data.Semialign                 ( Align
                                                 , Semialign(align)
@@ -156,10 +156,8 @@ compareAttrSetsM f eq lm rm =
         r <- isDerivationM f rm
         case r of
           True
-            | Just lp <- HashMap.Lazy.lookup "outPath" lm, Just rp <- HashMap.Lazy.lookup "outPath" rm ->
-                eq
-                  lp
-                  rp
+            | Just lp <- HashMap.Lazy.lookup "outPath" lm,
+              Just rp <- HashMap.Lazy.lookup "outPath" rm -> eq lp rp
           _ -> compareAttrs
       )
       l
@@ -173,7 +171,7 @@ compareAttrSets
   -> AttrSet t
   -> Bool
 compareAttrSets f eq lm rm = runIdentity
-  $ compareAttrSetsM (Identity . f) (\x y -> Identity (eq x y)) lm rm
+  $ compareAttrSetsM (Identity . f) (\x y -> Identity $ eq x y) lm rm
 
 valueEqM
   :: (MonadThunk t m (NValue t f m), Comonad f)
