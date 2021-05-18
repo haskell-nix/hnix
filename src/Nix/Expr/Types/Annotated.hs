@@ -85,6 +85,8 @@ data Ann ann a = Ann
 type AnnF ann f = Compose (Ann ann) f
 
 -- | Pattern: @Fix (Compose (Ann _ _))@.
+-- Fix composes units of (annotations & the annotated) into one object.
+-- Giving annotated expression.
 pattern AnnE
   :: forall ann (g :: * -> *)
   . ann
