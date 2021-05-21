@@ -254,12 +254,18 @@ desugarBinds embed binds = evalState (traverse (go <=< collect) binds) mempty
   collect (NamedVar (StaticKey x :| y : ys) val p) =
     do
       m <- get
-      put $ M.insert x ?? m $
-        maybe
-          (p, [NamedVar (y :| ys) val p])
-          (\ (q, v) -> (q, NamedVar (y :| ys) val q : v))
-          (M.lookup x m)
+      put $
+        M.insert
+          x
+          (maybe
+            (p, [mkBinding p])
+            (\ (q, v) -> (q, mkBinding q : v))
+            (M.lookup x m)
+          )
+          m
       pure $ Left x
+   where
+    mkBinding pos = NamedVar (y :| ys) val pos
   collect x = pure $ pure x
 
   go
@@ -417,7 +423,7 @@ evalSelect aset attr =
             do
               list
                 (pure . pure)
-                (\ (y : ys) -> ((extract ?? (y :| ys)) =<<))
+                (\ (y : ys) -> ((`extract` (y :| ys)) =<<))
                 ks
                 $ demand t
           | otherwise -> Left . (, path) <$> toValue (s, p)
