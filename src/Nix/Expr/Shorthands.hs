@@ -144,11 +144,11 @@ inherit = Inherit Nothing
 inheritFrom :: e -> [NKeyName e] -> SourcePos -> Binding e
 inheritFrom expr = Inherit (pure expr)
 
--- | Shorthand for producing a binding of a name to an expression.
+-- | Shorthand for producing a binding of a name to an expression: @=
 bindTo :: Text -> NExpr -> Binding NExpr
 bindTo name x = NamedVar (mkSelector name) x nullPos
 
--- | Infix version of bindTo.
+-- | Infix version of @bindTo@: @=@
 ($=) :: Text -> NExpr -> Binding NExpr
 ($=) = bindTo
 
@@ -226,6 +226,7 @@ infixl 1 @@
 (==>) = mkFunction
 infixr 1 ==>
 
+-- | Dot-reference into an attribute set: @attrSet.k@
 (@.) :: NExpr -> Text -> NExpr
-obj @. name = Fix (NSelect obj (StaticKey name :| mempty) Nothing)
+(@.) obj name = Fix $ NSelect obj (StaticKey name :| mempty) Nothing
 infixl 2 @.
