@@ -165,13 +165,12 @@ appendBindings newBindings (Fix e) = case e of
 
 -- | Applies a transformation to the body of a nix function.
 modifyFunctionBody :: (NExpr -> NExpr) -> NExpr -> NExpr
-modifyFunctionBody f (Fix e) = case e of
-  NAbs params body -> Fix $ NAbs params (f body)
-  _                -> error "Not a function"
+modifyFunctionBody f (Fix (NAbs params body)) = Fix $ NAbs params $ f body
+modifyFunctionBody _ _ = error "Not a function"
 
 -- | A let statement with multiple assignments.
 letsE :: [(Text, NExpr)] -> NExpr -> NExpr
-letsE pairs = Fix . NLet (fmap (uncurry bindTo) pairs)
+letsE pairs = Fix . NLet (uncurry bindTo <$> pairs)
 
 -- | Wrapper for a single-variable @let@.
 letE :: Text -> NExpr -> NExpr -> NExpr
@@ -179,11 +178,11 @@ letE varName varExpr = letsE [(varName, varExpr)]
 
 -- | Make an attribute set (non-recursive).
 attrsE :: [(Text, NExpr)] -> NExpr
-attrsE pairs = Fix $ NSet NNonRecursive (fmap (uncurry bindTo) pairs)
+attrsE pairs = Fix $ NSet NNonRecursive $ uncurry bindTo <$> pairs
 
 -- | Make an attribute set (recursive).
 recAttrsE :: [(Text, NExpr)] -> NExpr
-recAttrsE pairs = Fix $ NSet NRecursive (fmap (uncurry bindTo) pairs)
+recAttrsE pairs = Fix $ NSet NRecursive $ uncurry bindTo <$> pairs
 
 -- | Logical negation.
 mkNot :: NExpr -> NExpr
