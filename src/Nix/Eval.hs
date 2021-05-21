@@ -340,25 +340,23 @@ evalBinds recursive binds =
 
    where
     processAttrSetKeys :: NAttrPath (m v) -> m ([Text], SourcePos, m v)
-    processAttrSetKeys =
-      \case
-        h :| t ->
-          maybe
-            -- Empty attrset - return a stub.
-            (pure ( mempty, nullPos, toValue @(AttrSet v, AttrSet SourcePos) (mempty, mempty)) )
-            (\ k ->
-              list
-                -- No more keys in the attrset - return the result
-                (pure ( [k], pos, finalValue ) )
-                -- There are unprocessed keys in attrset - recurse appending the results
-                (\ (x : xs) ->
-                  do
-                    (restOfPath, _, v) <- processAttrSetKeys (x :| xs)
-                    pure ( k : restOfPath, pos, v )
-                )
-                t
+    processAttrSetKeys (h :| t) =
+      maybe
+        -- Empty attrset - return a stub.
+        (pure ( mempty, nullPos, toValue @(AttrSet v, AttrSet SourcePos) (mempty, mempty)) )
+        (\ k ->
+          list
+            -- No more keys in the attrset - return the result
+            (pure ( [k], pos, finalValue ) )
+            -- There are unprocessed keys in attrset - recurse appending the results
+            (\ (x : xs) ->
+              do
+                (restOfPath, _, v) <- processAttrSetKeys (x :| xs)
+                pure ( k : restOfPath, pos, v )
             )
-            =<< evalSetterKeyName h
+            t
+        )
+        =<< evalSetterKeyName h
 
   applyBindToAdt scope (Inherit ms names pos) =
     catMaybes <$>
