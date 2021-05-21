@@ -111,11 +111,11 @@ eval (NSym "__curPos") = evalCurPos
 
 eval (NSym var       ) =
   do
-    mres <- lookupVar var
+    mVal <- lookupVar var
     maybe
       (freeVariable var)
       (evaledSym var <=< demand)
-      mres
+      mVal
 
 eval (NConstant    x      ) = evalConstant x
 eval (NStr         str    ) = evalString str
@@ -125,15 +125,20 @@ eval (NUnary op arg       ) = evalUnary op =<< arg
 
 eval (NBinary NApp fun arg) =
   do
+    f <- fun
     scope <- currentScopes :: m (Scopes m v)
-    (`evalApp` withScopes scope arg) =<< fun
+    evalApp f $ withScopes scope arg
 
-eval (NBinary op   larg rarg) = larg >>= evalBinary op ?? rarg
+eval (NBinary op   larg rarg) =
+  do
+    lav <- larg
+    evalBinary op lav rarg
 
-eval (NSelect aset attr alt ) = evalSelect aset attr >>= either go id
-  where go (s, ks) = fromMaybe (attrMissing ks (pure s)) alt
+eval (NSelect aset attr alt ) = either go id =<< evalSelect aset attr
+ where
+  go (s, ks) = fromMaybe (attrMissing ks $ pure s) alt
 
-eval (NHasAttr aset attr) = evalSelect aset attr >>= toValue . isRight
+eval (NHasAttr aset attr) = toValue . isRight =<< evalSelect aset attr
 
 eval (NList l           ) =
   do
@@ -169,9 +174,22 @@ eval (NAbs    params body) = do
   -- defer here so the present scope is restored when the parameters and body
   -- are forced during application.
   scope <- currentScopes :: m (Scopes m v)
-  evalAbs params $ \arg k -> withScopes scope $ do
-    args <- buildArgument params arg
-    pushScope args $ k (withScopes scope . inform <$> args) body
+  let
+    withScope = withScopes scope
+    withScopeInform = withScope . inform
+
+  evalAbs
+    params
+    (\arg k ->
+      withScope $
+        do
+          args <- buildArgument params arg
+          pushScope
+            args $
+            k
+              (withScopeInform <$> args)
+              body
+    )
 
 eval (NSynHole name) = synHole name
 
