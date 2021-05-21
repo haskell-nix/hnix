@@ -90,8 +90,8 @@ type AnnF ann f = Compose (Ann ann) f
 pattern AnnE
   :: forall ann (g :: * -> *)
   . ann
-  -> g (Fix (Compose (Ann ann) g))
-  -> Fix (Compose (Ann ann) g)
+  -> g (Fix (AnnF ann g))
+  -> Fix (AnnF ann g)
 pattern AnnE ann a = Fix (Compose (Ann ann a))
 {-# complete AnnE #-}
 
