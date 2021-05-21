@@ -23,6 +23,10 @@
 --
 -- For a brief introduction of the Nix expression language, see
 -- <https://nixos.org/nix/manual/#ch-expression-language>.
+--
+-- This module is a beginning of a deep embedding (term) of a Nix language into Haskell.
+-- Shallow/deep embedding brief:
+-- <https://web.archive.org/web/20201112031804/https://alessandrovermeulen.me/2013/07/13/the-difference-between-shallow-and-deep-embedding/>
 module Nix.Expr.Types where
 
 #ifdef MIN_VERSION_serialise
