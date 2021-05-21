@@ -197,15 +197,15 @@ eval (NSynHole name) = synHole name
 --   this implementation may be used as an implementation for 'evalWith'.
 evalWithAttrSet :: forall v m . MonadNixEval v m => m v -> m v -> m v
 evalWithAttrSet aset body = do
+  scope <- currentScopes :: m (Scopes m v)
   -- The scope is deliberately wrapped in a thunk here, since it is demanded
   -- each time a name is looked up within the weak scope, and we want to be
   -- sure the action it evaluates is to force a thunk, so its value is only
   -- computed once.
-  scope <- currentScopes :: m (Scopes m v)
-  s     <- defer $ withScopes scope aset
-  let s' = fst <$> (fromValue @(AttrSet v, AttrSet SourcePos) =<< demand s)
+  deferredAset <- defer $ withScopes scope aset
+  let attrSet = fst <$> (fromValue @(AttrSet v, AttrSet SourcePos) =<< demand deferredAset)
 
-  pushWeakScope s' body
+  pushWeakScope attrSet body
 
 attrSetAlter
   :: forall v m
