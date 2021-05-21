@@ -198,31 +198,29 @@ mkNot = Fix . NUnary NNot
 
 -- | Nix binary operator builder.
 mkBinop :: NBinaryOp -> NExpr -> NExpr -> NExpr
-mkBinop op e1 e2 = Fix (NBinary op e1 e2)
+mkBinop op e1 e2 = Fix $ NBinary op e1 e2
 
 -- | Various nix binary operators
-($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->), ($//), ($+), ($-), ($*), ($/), ($++)
+(@@), ($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->), ($//), ($+), ($-), ($*), ($/), ($++)
   :: NExpr -> NExpr -> NExpr
-e1 $== e2 = mkBinop NEq e1 e2
-e1 $!= e2 = mkBinop NNEq e1 e2
-e1 $< e2 = mkBinop NLt e1 e2
-e1 $<= e2 = mkBinop NLte e1 e2
-e1 $> e2 = mkBinop NGt e1 e2
-e1 $>= e2 = mkBinop NGte e1 e2
-e1 $&& e2 = mkBinop NAnd e1 e2
-e1 $|| e2 = mkBinop NOr e1 e2
-e1 $-> e2 = mkBinop NImpl e1 e2
-e1 $// e2 = mkBinop NUpdate e1 e2
-e1 $+ e2 = mkBinop NPlus e1 e2
-e1 $- e2 = mkBinop NMinus e1 e2
-e1 $* e2 = mkBinop NMult e1 e2
-e1 $/ e2 = mkBinop NDiv e1 e2
-e1 $++ e2 = mkBinop NConcat e1 e2
-
-(@@) :: NExpr -> NExpr -> NExpr
-f @@ arg = mkBinop NApp f arg
 -- | Function application (@' '@ in @f x@)
+(@@) = mkBinop NApp
 infixl 1 @@
+($==) = mkBinop NEq
+($!=) = mkBinop NNEq
+($<)  = mkBinop NLt
+($<=) = mkBinop NLte
+($>)  = mkBinop NGt
+($>=) = mkBinop NGte
+($&&) = mkBinop NAnd
+($||) = mkBinop NOr
+($->) = mkBinop NImpl
+($//) = mkBinop NUpdate
+($+)  = mkBinop NPlus
+($-)  = mkBinop NMinus
+($*)  = mkBinop NMult
+($/)  = mkBinop NDiv
+($++) = mkBinop NConcat
 
 
 -- | Lambda function.
