@@ -200,26 +200,40 @@ mkNot = Fix . NUnary NNot
 mkBinop :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkBinop op e1 e2 = Fix $ NBinary op e1 e2
 
--- | Various nix binary operators
 (@@), ($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->), ($//), ($+), ($-), ($*), ($/), ($++)
   :: NExpr -> NExpr -> NExpr
 -- | Function application (@' '@ in @f x@)
 (@@) = mkBinop NApp
 infixl 1 @@
+-- | Equality: @==@
 ($==) = mkBinop NEq
+-- | Inequality: @!=@
 ($!=) = mkBinop NNEq
+-- | Less than: @<@
 ($<)  = mkBinop NLt
+-- | Less than OR equal: @<=@
 ($<=) = mkBinop NLte
+-- | Greater than: @>@
 ($>)  = mkBinop NGt
+-- | Greater than OR equal: @>=@
 ($>=) = mkBinop NGte
+-- | AND: @&&@
 ($&&) = mkBinop NAnd
+-- | OR: @||@
 ($||) = mkBinop NOr
+-- | Logical implication: @->@
 ($->) = mkBinop NImpl
+-- | Extend/override the left attr set, with the right one: @//@
 ($//) = mkBinop NUpdate
+-- | Addition: @+@
 ($+)  = mkBinop NPlus
+-- | Subtraction: @-@
 ($-)  = mkBinop NMinus
+-- | Multiplication: @*@
 ($*)  = mkBinop NMult
+-- | Division: @/@
 ($/)  = mkBinop NDiv
+-- | List concatenation: @++@
 ($++) = mkBinop NConcat
 
 
