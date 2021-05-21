@@ -359,7 +359,7 @@ data NBinaryOp
   | NAnd     -- ^ Logical and (@&&@)
   | NOr      -- ^ Logical or (@||@)
   | NImpl    -- ^ Logical implication (@->@)
-  | NUpdate  -- ^ Joining two attribute sets (@//@)
+  | NUpdate  -- ^ Get the left attr set, extend it with the right one & override equal keys (@//@)
   | NPlus    -- ^ Addition (@+@)
   | NMinus   -- ^ Subtraction (@-@)
   | NMult    -- ^ Multiplication (@*@)
