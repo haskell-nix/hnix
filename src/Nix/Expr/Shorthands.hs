@@ -194,6 +194,9 @@ mkNot = Fix . NUnary NNot
 -- (!.) = mkDot
 -- infixl 8 !.
 
+-- * Nix binary operators
+
+-- | Nix binary operator builder.
 mkBinop :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkBinop op e1 e2 = Fix (NBinary op e1 e2)
 
@@ -216,12 +219,18 @@ e1 $* e2 = mkBinop NMult e1 e2
 e1 $/ e2 = mkBinop NDiv e1 e2
 e1 $++ e2 = mkBinop NConcat e1 e2
 
--- | Function application expression.
 (@@) :: NExpr -> NExpr -> NExpr
 f @@ arg = mkBinop NApp f arg
+-- | Function application (@' '@ in @f x@)
 infixl 1 @@
 
--- | Lambda shorthand.
+
+-- | Lambda function.
+-- > x ==> x
+--Haskell:
+-- > \\ x -> x
+--Nix:
+-- > x: x
 (==>) :: Params NExpr -> NExpr -> NExpr
 (==>) = mkFunction
 infixr 1 ==>
