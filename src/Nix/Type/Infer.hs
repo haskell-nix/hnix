@@ -613,14 +613,14 @@ occursCheck a t = a `Set.member` ftv t
 
 instance FreeTypeVars Type where
   ftv TCon{}      = mempty
-  ftv (TVar a   ) = Set.singleton a
+  ftv (TVar a   ) = one a
   ftv (TSet _ a ) = Set.unions $ ftv <$> M.elems a
   ftv (TList a  ) = Set.unions $ ftv <$> a
   ftv (t1 :~> t2) = ftv t1 `Set.union` ftv t2
   ftv (TMany ts ) = Set.unions $ ftv <$> ts
 
 instance FreeTypeVars TVar where
-  ftv = Set.singleton
+  ftv = one
 
 instance FreeTypeVars Scheme where
   ftv (Forall as t) = ftv t `Set.difference` Set.fromList as
@@ -815,7 +815,7 @@ instance Monad m => MonadError TypeError (Solver m) where
 bind :: Monad m => TVar -> Type -> Solver m Subst
 bind a t | t == TVar a     = stub
          | occursCheck a t = throwError $ InfiniteType a t
-         | otherwise       = pure $ Subst $ Map.singleton a t
+         | otherwise       = pure $ Subst $ one (a, t)
 
 considering :: [a] -> Solver m a
 considering xs = Solver $ LogicT $ \c n -> foldr c n xs

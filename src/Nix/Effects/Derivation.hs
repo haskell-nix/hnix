@@ -168,7 +168,7 @@ unparseDrv Derivation{..} =
     escape '\n' = "\\n"
     escape '\r' = "\\r"
     escape '\t' = "\\t"
-    escape c = Text.singleton c
+    escape c = one c
 
 readDerivation :: (Framed e m, MonadFile m) => FilePath -> m Derivation
 readDerivation path = do
@@ -251,7 +251,7 @@ defaultDerivationStrict val = do
       Just (Store.SomeDigest digest) -> do
         let out = pathToText $ Store.makeFixedOutputPath "/nix/store" (hashMode drv == Recursive) digest drvName
         let env' = if useJson drv then env drv else Map.insert "out" out (env drv)
-        pure $ drv { inputs, env = env', outputs = Map.singleton "out" out }
+        pure $ drv { inputs, env = env', outputs = one ("out", out) }
 
       Nothing -> do
         hash <- hashDerivationModulo $ drv
@@ -350,7 +350,7 @@ buildDerivationWithContext drvAttrs = do
           jsonString :: NixString <- lift $ nvalueToJSONNixString $ nvSet mempty $
             deleteKeys [ "args", "__ignoreNulls", "__structuredAttrs" ] attrs
           rawString :: Text <- extractNixString jsonString
-          pure $ Map.singleton "__json" rawString
+          pure $ one ("__json", rawString)
         else
           traverse (extractNixString <=< lift . coerceToString callFunc CopyToStore CoerceAny) $
             Map.fromList $ M.toList $ deleteKeys [ "args", "__ignoreNulls" ] attrs

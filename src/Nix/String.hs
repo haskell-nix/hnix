@@ -133,7 +133,7 @@ makeNixStringWithoutContext = (`NixString` mempty)
 -- | Create NixString using a singleton context
 makeNixStringWithSingletonContext
   :: Text -> StringContext -> NixString
-makeNixStringWithSingletonContext s c = NixString s $ S.singleton c
+makeNixStringWithSingletonContext s c = NixString s $ one c
 
 -- | Create NixString from a Text and context
 makeNixString :: Text -> S.HashSet StringContext -> NixString
@@ -224,7 +224,7 @@ addStringContext = WithStringContextT . tell
 
 -- | Add a 'StringContext' into the resulting set.
 addSingletonStringContext :: Monad m => StringContext -> WithStringContextT m ()
-addSingletonStringContext = WithStringContextT . tell . S.singleton
+addSingletonStringContext = WithStringContextT . tell . one
 
 -- | Run an action producing a string with a context and put those into a 'NixString'.
 runWithStringContextT :: Monad m => WithStringContextT m Text -> m NixString

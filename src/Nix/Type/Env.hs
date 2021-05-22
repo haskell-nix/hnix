@@ -57,7 +57,7 @@ mergeEnvs :: [Env] -> Env
 mergeEnvs = foldl' merge empty
 
 singleton :: Name -> Scheme -> Env
-singleton x y = TypeEnv $ Map.singleton x [y]
+singleton x y = TypeEnv $ one (x, [y])
 
 keys :: Env -> [Name]
 keys (TypeEnv env) = Map.keys env

@@ -1118,7 +1118,7 @@ functionArgsNix nvfun =
       NVClosure p _ ->
         toValue @(AttrSet (NValue t f m)) $ mkNVBool <$>
           case p of
-            Param name     -> M.singleton name False
+            Param name     -> one (name, False)
             ParamSet s _ _ -> isJust <$> M.fromList s
       _v -> throwError $ ErrorCall $ "builtins.functionArgs: expected function, got " <> show _v
 
@@ -1511,7 +1511,8 @@ typeOfNix nvv =
 
 tryEvalNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-tryEvalNix e = catch (onSuccess <$> demand e) (pure . onError)
+tryEvalNix e = (`catch` (pure . onError))
+  (onSuccess <$> demand e)
  where
   onSuccess v =
     nvSet
@@ -1911,14 +1912,14 @@ withNixContext mpath action =
     let
       i = nvList $ nvStr . makeNixStringWithoutContext . toText <$> include opts
 
-    pushScope (M.singleton "__includes" i) $ pushScopes base $
+    pushScope (one ("__includes", i)) $ pushScopes base $
       maybe
         action
         (\ path ->
           do
             traceM $ "Setting __cur_file = " <> show path
             let ref = nvPath path
-            pushScope (M.singleton "__cur_file" ref) action
+            pushScope (one ("__cur_file", ref)) action
         )
         mpath
 

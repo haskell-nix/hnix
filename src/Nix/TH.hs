@@ -43,7 +43,7 @@ freeVars :: NExpr -> Set VarName
 freeVars e = case unFix e of
   (NConstant    _               ) -> mempty
   (NStr         string          ) -> mapFreeVars string
-  (NSym         var             ) -> Set.singleton var
+  (NSym         var             ) -> one var
   (NList        list            ) -> mapFreeVars list
   (NSet   NNonRecursive bindings) -> bindFreeVars bindings
   (NSet   NRecursive    bindings) -> Set.difference (bindFreeVars bindings) (bindDefs bindings)
@@ -67,7 +67,7 @@ freeVars e = case unFix e of
       (Set.difference
         (Set.unions $ freeVars <$> mapMaybe snd set)
         (Set.difference
-          (maybe mempty Set.singleton varname)
+          (maybe mempty one varname)
           (Set.fromList $ fmap fst set)
         )
       )
@@ -93,7 +93,7 @@ freeVars e = case unFix e of
     bind1Def :: Binding r -> Set VarName
     bind1Def (Inherit   Nothing                  _    _) = mempty
     bind1Def (Inherit  (Just _                 ) keys _) = Set.fromList $ mapMaybe staticKey keys
-    bind1Def (NamedVar (StaticKey  varname :| _) _    _) = Set.singleton varname
+    bind1Def (NamedVar (StaticKey  varname :| _) _    _) = one varname
     bind1Def (NamedVar (DynamicKey _       :| _) _    _) = mempty
 
   bindFreeVars :: Foldable t => t (Binding NExpr) -> Set VarName
