@@ -609,9 +609,10 @@ annotateLocation :: Parser a -> Parser (Ann SrcSpan a)
 annotateLocation p =
   do
     begin <- getSourcePos
+    res <- p
     end   <- get -- The state set before the last whitespace
 
-    Ann (SrcSpan begin end) <$> p
+    pure $ Ann (SrcSpan begin end) res
 
 annotateLocation1 :: Parser (NExprF NExprLoc) -> Parser NExprLoc
 annotateLocation1 = fmap annToAnnF . annotateLocation

@@ -357,6 +357,42 @@ in null|] [text|let
         in (matcher.case or null).foo (v.case);
 in null|]
 
+case_simpleLoc =
+  let
+    mkSPos l c = SourcePos "<string>" (mkPos l) (mkPos c)
+    mkSpan l1 c1 l2 c2 = SrcSpan (mkSPos l1 c1) (mkSPos l2 c2)
+  in
+    assertParseTextLoc [text|let
+    foo = bar
+         baz "qux";
+    in foo
+    |]
+    (Fix
+      (NLet_
+        (mkSpan 1 1 4 7)
+        [ NamedVar
+            (StaticKey "foo" :| [])
+            (Fix
+              (NBinary_
+                (mkSpan 2 7 3 15)
+                NApp
+                (Fix
+                  (NBinary_ (mkSpan 2 7 3 9)
+                            NApp
+                            (Fix (NSym_ (mkSpan 2 7 2 10) "bar"))
+                            (Fix (NSym_ (mkSpan 3 6 3 9) "baz"))
+                  )
+                )
+                (Fix (NStr_ (mkSpan 3 10 3 15) (DoubleQuoted [Plain "qux"])))
+              )
+            )
+            (mkSPos 2 1)
+        ]
+        (Fix (NSym_ (mkSpan 4 4 4 7) "foo"))
+      )
+    )
+
+
 tests :: TestTree
 tests = $testGroupGenerator
 
@@ -374,6 +410,18 @@ assertParseText str expected =
       . stripPositionInfo
     )
     (parseNixText str)
+
+assertParseTextLoc :: Text -> NExprLoc -> Assertion
+assertParseTextLoc str expected =
+  either
+    (\ err ->
+      assertFailure $ toString $ "Unexpected fail parsing `" <> str <> "':\n" <> show err
+    )
+    (assertEqual
+      ("When parsing " <> toString str)
+      expected
+    )
+    (parseNixTextLoc str)
 
 assertParseFile :: FilePath -> NExpr -> Assertion
 assertParseFile file expected =
