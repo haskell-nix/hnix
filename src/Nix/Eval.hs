@@ -134,27 +134,38 @@ eval (NBinary op   larg rarg) =
     lav <- larg
     evalBinary op lav rarg
 
-eval (NSelect aset attr alt ) = either go id =<< evalSelect aset attr
- where
-  go (s, ks) = fromMaybe (attrMissing ks $ pure s) alt
+eval (NSelect aset attr alt ) =
+  do
+    let useAltOrReportMissing (s, ks) = fromMaybe (attrMissing ks $ pure s) alt
 
-eval (NHasAttr aset attr) = toValue . isRight =<< evalSelect aset attr
+    eAttr <- evalSelect aset attr
+    either useAltOrReportMissing id eAttr
+
+eval (NHasAttr aset attr) =
+  do
+    eAttr <- evalSelect aset attr
+    toValue $ isRight eAttr
 
 eval (NList l           ) =
   do
     scope <- currentScopes
-    toValue =<< traverse (defer @v @m . withScopes @v scope) l
+    lst <- traverse (defer @v @m . withScopes @v scope) l
+    toValue lst
 
 eval (NSet NNonRecursive binds) =
-  toValue =<< evalBinds False (desugarBinds (eval . NSet NNonRecursive) binds)
+  do
+    attrSet <- evalBinds False $ desugarBinds (eval . NSet NNonRecursive) binds
+    toValue attrSet
 
 eval (NSet NRecursive binds) =
-  toValue =<< evalBinds True (desugarBinds (eval . NSet NNonRecursive) binds)
+  do
+    attrSet <- evalBinds True $ desugarBinds (eval . NSet NNonRecursive) binds
+    toValue attrSet
 
 eval (NLet binds body    ) =
   do
-    (x, _) <- evalBinds True binds
-    pushScope x body
+    (attrSet, _) <- evalBinds True binds
+    pushScope attrSet body
 
 eval (NIf cond t f       ) =
   do
