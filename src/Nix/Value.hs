@@ -446,8 +446,8 @@ nvList' = NValue' . pure . NVListF
 
 -- | Haskell key-value to the Nix key-value,
 nvSet' :: Applicative f
-  => HashMap Text SourcePos
-  -> HashMap Text r
+  => AttrSet SourcePos
+  -> AttrSet r
   -> NValue' t f m r
 nvSet' x s = NValue' $ pure $ NVSetF s x
 
@@ -615,8 +615,8 @@ nvList = Free . nvList'
 
 
 nvSet :: Applicative f
-  => HashMap Text SourcePos
-  -> HashMap Text (NValue t f m)
+  => AttrSet SourcePos
+  -> AttrSet (NValue t f m)
   -> NValue t f m
 nvSet x s = Free $ nvSet' x s
 

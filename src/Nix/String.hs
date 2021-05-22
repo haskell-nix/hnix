@@ -65,7 +65,7 @@ instance Hashable ContextFlavor
 
 newtype NixLikeContext =
   NixLikeContext
-    { getNixLikeContext :: M.HashMap Text NixLikeContextValue
+    { getNixLikeContext :: AttrSet NixLikeContextValue
     }
   deriving (Eq, Ord, Show, Generic)
 
