@@ -13,6 +13,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE InstanceSigs #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 {-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
@@ -53,7 +54,7 @@ import           Nix.String
 import           Nix.Thunk
 
 
--- * @__NValueF__@: Base functor
+-- * @__NValueF__@: Base functor (F)
 
 -- | An NValueF p m r represents all the possible types of Nix values.
 --
@@ -126,6 +127,11 @@ data NValueF p m r
     | NVStrF NixString
     | NVPathF FilePath
     | NVListF [r]
+    --  2021-05-22: NOTE: Please flip this and dependent functions.
+    -- Quite frequently actions/processing happens with values
+    -- (for example - forcing of values & recreation of the monad),
+    -- but SourcePos does not change then
+    -- That would be good to flip all 'AttrSet.* AttrSet SourcePos'
     | NVSetF (AttrSet r) (AttrSet SourcePos)
     | NVClosureF (Params ()) (p -> m r)
       -- ^ A function is a closed set of parameters representing the "call
@@ -522,7 +528,7 @@ iterNValue
   -> (NValue' t f m r -> r)
   -> NValue t f m
   -> r
-iterNValue k f = iter f . fmap (\t -> k t (iterNValue k f))
+iterNValue k f = iter f . fmap (\t -> k t $ iterNValue k f)
 
 
 -- | @iter@ for monadic values
