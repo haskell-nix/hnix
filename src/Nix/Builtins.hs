@@ -1132,9 +1132,9 @@ toFileNix name s =
     name' <- fromStringNoContext =<< fromValue name
     s'    <- fromValue s
     mres  <-
-      toFile_
-        (toString name')
-        (toString $ stringIgnoreContext s')
+      (toFile_ `on` toString)
+        name'
+        (stringIgnoreContext s')
 
     let
       t  = toText $ unStorePath mres
@@ -1152,7 +1152,7 @@ pathExistsNix nvpath =
     toValue =<<
       case path of
         NVPath p  -> pathExists p
-        NVStr  ns -> pathExists (toString $ stringIgnoreContext ns)
+        NVStr  ns -> pathExists $ toString $ stringIgnoreContext ns
         _v -> throwError $ ErrorCall $ "builtins.pathExists: expected path, got " <> show _v
 
 isAttrsNix
@@ -1365,7 +1365,7 @@ hashStringNix nsAlgo ns =
        where
         -- This intermidiary `a` is only needed because of the type application
         mkHash :: (Show a, HashAlgorithm a) => Text -> a
-        mkHash s = hash (encodeUtf8 s)
+        mkHash s = hash $ encodeUtf8 s
 
 
 placeHolderNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1373,11 +1373,10 @@ placeHolderNix p =
   do
     t <- fromStringNoContext =<< fromValue p
     h <-
-      runPrim
-        (hashStringNix
-          (makeNixStringWithoutContext "sha256"           )
-          (makeNixStringWithoutContext ("nix-output:" <> t))
-        )
+      runPrim $
+        (hashStringNix `on` makeNixStringWithoutContext)
+          "sha256"
+          ("nix-output:" <> t)
     toValue
       $ makeNixStringWithoutContext
       $ Text.cons '/'
@@ -1519,7 +1518,7 @@ tryEvalNix e = (`catch` (pure . onError))
       mempty
       $ M.fromList
         [ ("success", mkNVBool True)
-        , ("value", v)
+        , ("value"  , v            )
         ]
 
   onError :: SomeException -> NValue t f m
@@ -1527,9 +1526,9 @@ tryEvalNix e = (`catch` (pure . onError))
     nvSet
       mempty
       $ M.fromList
-        $ ($ mkNVBool False) <$>
-          [ ("success",)
-          , ("value"  ,)
+        $ (, mkNVBool False) <$>
+          [ "success"
+          , "value"
           ]
 
 traceNix
@@ -1561,7 +1560,7 @@ execNix xs =
     -- 2018-11-19: NOTE: Still need to do something with the context here
     -- See prim_exec in nix/src/libexpr/primops.cc
     -- Requires the implementation of EvalState::realiseContext
-    exec (stringIgnoreContext <$> xs)
+    exec $ stringIgnoreContext <$> xs
 
 fetchurlNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1608,7 +1607,10 @@ partitionNix f nvlst =
       makeSide       = nvList . fmap snd
 
     toValue @(AttrSet (NValue t f m))
-      $ M.fromList [("right", makeSide right), ("wrong", makeSide wrong)]
+      $ M.fromList
+          [ ("right", makeSide right)
+          , ("wrong", makeSide wrong)
+          ]
 
 currentSystemNix :: MonadNix e t f m => m (NValue t f m)
 currentSystemNix =
@@ -1616,13 +1618,13 @@ currentSystemNix =
     os   <- getCurrentSystemOS
     arch <- getCurrentSystemArch
 
-    pure $ nvStr $ makeNixStringWithoutContext (arch <> "-" <> os)
+    pure $ nvStr $ makeNixStringWithoutContext $ arch <> "-" <> os
 
 currentTimeNix :: MonadNix e t f m => m (NValue t f m)
 currentTimeNix =
   do
     opts :: Options <- asks (view hasLens)
-    toValue @Integer $ round $ Time.utcTimeToPOSIXSeconds (currentTime opts)
+    toValue @Integer $ round $ Time.utcTimeToPOSIXSeconds $ currentTime opts
 
 derivationStrictNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 derivationStrictNix = derivationStrict
@@ -1673,17 +1675,11 @@ appendContextNix tx ty =
             -- TODO: Fail for unexpected keys.
 
             let
-              getPaths =
+              getK k =
                 maybe
                   (pure False)
                   (fromValue <=< demand)
-                  (M.lookup "path" attrs)
-
-              getAllOutputs =
-                maybe
-                  (pure False)
-                  (fromValue <=< demand)
-                  (M.lookup "allOutputs" attrs)
+                  (M.lookup k attrs)
 
               getOutputs =
                 maybe
@@ -1698,8 +1694,8 @@ appendContextNix tx ty =
                   )
                   (M.lookup "outputs" attrs)
 
-            path <- getPaths
-            allOutputs <- getAllOutputs
+            path <- getK "path"
+            allOutputs <- getK "allOutputs"
 
             NixLikeContextValue path allOutputs <$> getOutputs
 
@@ -1850,12 +1846,23 @@ builtinsList = sequence
     mkThunk :: Text -> m (NValue t f m) -> m (NValue t f m)
     mkThunk n = defer . withFrame Info (ErrorCall $ "While calling builtin " <> toString n <> "\n")
 
+  hAdd
+    :: ( Text
+      -> fun
+      -> m (NValue t f m)
+      )
+    -> BuiltinType
+    -> Text
+    -> fun
+    -> m (Builtin (NValue t f m))
+  hAdd f t n v = mkBuiltin t n $ f n v
+
   add0
     :: BuiltinType
     -> Text
     -> m (NValue t f m)
     -> m (Builtin (NValue t f m))
-  add0 t n v = mkBuiltin t n v
+  add0 = hAdd (\ _ x -> x)
 
   add
     :: BuiltinType
@@ -1864,7 +1871,7 @@ builtinsList = sequence
       -> m (NValue t f m)
       )
     -> m (Builtin (NValue t f m))
-  add  t n v = mkBuiltin t n (builtin n v)
+  add = hAdd builtin
 
   add2
     :: BuiltinType
@@ -1874,7 +1881,7 @@ builtinsList = sequence
       -> m (NValue t f m)
       )
     -> m (Builtin (NValue t f m))
-  add2 t n v = mkBuiltin t n (builtin2 n v)
+  add2 = hAdd builtin2
 
   add3
     :: BuiltinType
@@ -1885,7 +1892,7 @@ builtinsList = sequence
       -> m (NValue t f m)
       )
     -> m (Builtin (NValue t f m))
-  add3 t n v = mkBuiltin t n (builtin3 n v)
+  add3 = hAdd builtin3
 
   add'
     :: ToBuiltin t f m a
@@ -1893,7 +1900,7 @@ builtinsList = sequence
     -> Text
     -> a
     -> m (Builtin (NValue t f m))
-  add' t n v = mkBuiltin t n (toBuiltin n v)
+  add' = hAdd toBuiltin
 
 
 -- * Exported
