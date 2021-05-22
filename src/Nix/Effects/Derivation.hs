@@ -15,7 +15,7 @@ import           Data.Char                      ( isAscii
                                                 , isAlphaNum
                                                 )
 import qualified Data.HashMap.Lazy             as M
-import qualified Data.HashMap.Strict           as MS
+import qualified Data.HashMap.Strict           as MS ( insert )
 import qualified Data.HashSet                  as S
 import           Data.Foldable                  ( foldl )
 import qualified Data.Map.Strict               as Map
@@ -81,7 +81,7 @@ writeDerivation drv@Derivation{inputs, name} = do
 
 -- | Traverse the graph of inputDrvs to replace fixed output derivations with their fixed output hash.
 -- this avoids propagating changes to their .drv when the output hash stays the same.
-hashDerivationModulo :: (MonadNix e t f m, MonadState (b, MS.HashMap Text Text) m) => Derivation -> m (Store.Digest 'Store.SHA256)
+hashDerivationModulo :: (MonadNix e t f m, MonadState (b, HashMap Text Text) m) => Derivation -> m (Store.Digest 'Store.SHA256)
 hashDerivationModulo
   Derivation
     { mFixed = Just (Store.SomeDigest (digest :: Store.Digest hashType))
@@ -117,7 +117,7 @@ hashDerivationModulo
                 pure (hash, outs)
               )
               (\ hash -> pure (hash, outs))
-              (MS.lookup path cache)
+              (M.lookup path cache)
           )
           (Map.toList inputDrvs)
     pure $ Store.hash @'Store.SHA256 $ encodeUtf8 $ unparseDrv (drv {inputs = (inputSrcs, inputsModulo)})
@@ -238,7 +238,7 @@ derivationParser = do
     _ -> (Nothing, Flat)
 
 
-defaultDerivationStrict :: forall e t f m b. (MonadNix e t f m, MonadState (b, MS.HashMap Text Text) m) => NValue t f m -> m (NValue t f m)
+defaultDerivationStrict :: forall e t f m b. (MonadNix e t f m, MonadState (b, HashMap Text Text) m) => NValue t f m -> m (NValue t f m)
 defaultDerivationStrict val = do
     s <- fromValue @(AttrSet (NValue t f m)) val
     (drv, ctx) <- runWithStringContextT' $ buildDerivationWithContext s

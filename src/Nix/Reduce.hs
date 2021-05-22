@@ -38,8 +38,12 @@ import           Data.Fix                       ( Fix(..)
                                                 , foldFix
                                                 , foldFixM
                                                 )
-import qualified Data.HashMap.Lazy             as M
-import qualified Data.HashMap.Strict           as MS
+import qualified Data.HashMap.Internal         as HM
+                                                ( lookup
+                                                , insert
+                                                , singleton
+                                                , fromList
+                                                )
 import qualified Data.List.NonEmpty            as NE
 import qualified Text.Show
 import           Nix.Atoms
@@ -64,7 +68,7 @@ newtype Reducer m a = Reducer
           )
           ( StateT
               ( HashMap FilePath NExprLoc
-              , MS.HashMap Text Text
+              , HashMap Text Text
               )
             m
           )
@@ -74,7 +78,7 @@ newtype Reducer m a = Reducer
     ( Functor, Applicative, Alternative
     , Monad, MonadPlus, MonadFix, MonadIO, MonadFail
     , MonadReader (Maybe FilePath, Scopes (Reducer m) NExprLoc)
-    , MonadState (HashMap FilePath NExprLoc, MS.HashMap Text Text)
+    , MonadState (HashMap FilePath NExprLoc, HashMap Text Text)
     )
 
 staticImport
@@ -98,7 +102,7 @@ staticImport pann path = do
   maybe
     (go path')
     pure
-    (M.lookup path' imports)
+    (HM.lookup path' imports)
  where
   go path = do
     liftIO $ putStrLn $ "Importing file " <> path
@@ -116,12 +120,12 @@ staticImport pann path = do
               (Fix (NLiteralPath_ pann path))
               pos
           x' = Fix $ NLet_ span [cur] x
-        modify $ first $ M.insert path x'
+        modify $ first $ HM.insert path x'
         local
           (const (pure path, emptyScopes @m @NExprLoc)) $
           do
             x'' <- foldFix reduce x'
-            modify $ first $ M.insert path x''
+            modify $ first $ HM.insert path x''
             pure x''
       )
       eres
@@ -134,7 +138,7 @@ staticImport pann path = do
 reduceExpr
   :: (MonadIO m, MonadFail m) => Maybe FilePath -> NExprLoc -> m NExprLoc
 reduceExpr mpath expr =
-  (`evalStateT` (mempty, MS.empty))
+  (`evalStateT` (mempty, mempty))
     . (`runReaderT` (mpath, emptyScopes))
     . runReducer
     $ foldFix reduce expr
@@ -145,7 +149,7 @@ reduce
      , Scoped NExprLoc m
      , MonadFail m
      , MonadReader (Maybe FilePath, Scopes m NExprLoc) m
-     , MonadState (HashMap FilePath NExprLoc, MS.HashMap Text Text) m
+     , MonadState (HashMap FilePath NExprLoc, HashMap Text Text) m
      )
   => NExprLocF (m NExprLoc)
   -> m NExprLoc
@@ -183,7 +187,7 @@ reduce (NBinary_ bann NApp fun arg) = fun >>= \case
     do
       x <- arg
       pushScope
-        (M.singleton name x)
+        (HM.singleton name x)
         (foldFix reduce body)
 
   f -> Fix . NBinary_ bann NApp f <$> arg
@@ -265,7 +269,7 @@ reduce (NLet_ ann binds body) =
   do
     binds' <- traverse sequence binds
     body'  <-
-      (`pushScope` body) . M.fromList . catMaybes =<<
+      (`pushScope` body) . HM.fromList . catMaybes =<<
         traverse
           (\case
             NamedVar (StaticKey name :| []) def _pos ->
@@ -320,9 +324,9 @@ reduce (NAbs_ ann params body) = do
   let
     args =
       case params' of
-        Param    name     -> M.singleton name $ Fix $ NSym_ ann name
+        Param    name     -> HM.singleton name $ Fix $ NSym_ ann name
         ParamSet pset _ _ ->
-          M.fromList $ (\(k, _) -> (k, Fix $ NSym_ ann k)) <$> pset
+          HM.fromList $ (\(k, _) -> (k, Fix $ NSym_ ann k)) <$> pset
   Fix . NAbs_ ann params' <$> pushScope args body
 
 reduce v = Fix <$> sequence v
