@@ -37,12 +37,15 @@ traceM = const pass
 
 $(makeLensesBy (\n -> pure ("_" <> n)) ''Fix)
 
+-- | > Hashmap Text -- type synonym
 type AttrSet = HashMap Text
 
 -- | F-algebra defines how to reduce the fixed-point of a functor to a
 --   value.
+-- > type Alg f a = f a -> a
 type Alg f a = f a -> a
 
+-- | > type AlgM f m a = f a -> m a
 type AlgM f m a = f a -> m a
 
 -- | "Transform" here means a modification of a catamorphism.
