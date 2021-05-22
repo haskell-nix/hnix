@@ -261,7 +261,7 @@ reduce (NSet_ ann NRecursive binds) =
 -- Encountering a 'with' construction eliminates any hope of inlining
 -- definitions.
 reduce (NWith_ ann scope body) =
-  clearScopes @NExprLoc $ Fix <$> (NWith_ ann <$> scope <*> body)
+  clearScopes @NExprLoc $ Fix <$> liftA2 (NWith_ ann) scope body
 
 -- | Reduce a let binds section by pushing lambdas,
 --   constants and strings to the body scope.
@@ -276,9 +276,9 @@ reduce (NLet_ ann binds body) =
               let
                 defcase =
                   \case
-                    d@(Fix NAbs_{}     ) -> pure (name, d)
+                    d@(Fix NAbs_     {}) -> pure (name, d)
                     d@(Fix NConstant_{}) -> pure (name, d)
-                    d@(Fix NStr_{}     ) -> pure (name, d)
+                    d@(Fix NStr_     {}) -> pure (name, d)
                     _                    -> Nothing
               in
               defcase <$> def
@@ -405,11 +405,9 @@ pruneTree opts =
     -- If the scope of a with was never referenced, it's not needed
     NWith Nothing (Just (AnnE _ body)) -> pure body
 
-    NAssert Nothing _ ->
-      fail "How can an assert be used, but its condition not?"
-
+    NAssert Nothing _              -> fail "How can an assert be used, but its condition not?"
     NAssert _ (Just (AnnE _ body)) -> pure body
-    NAssert (Just cond) _ -> pure $ NAssert cond nNull
+    NAssert (Just cond) _          -> pure $ NAssert cond nNull
 
     NIf Nothing _ _ -> fail "How can an if be used, but its condition not?"
 
@@ -419,9 +417,8 @@ pruneTree opts =
     x                     -> sequence x
 
   pruneString :: NString (Maybe NExprLoc) -> NString NExprLoc
-  pruneString (DoubleQuoted xs) =
-    DoubleQuoted (mapMaybe pruneAntiquotedText xs)
-  pruneString (Indented n xs) = Indented n (mapMaybe pruneAntiquotedText xs)
+  pruneString (DoubleQuoted xs) = DoubleQuoted $ mapMaybe pruneAntiquotedText xs
+  pruneString (Indented n   xs) = Indented n   $ mapMaybe pruneAntiquotedText xs
 
   pruneAntiquotedText
     :: Antiquoted Text (Maybe NExprLoc) -> Maybe (Antiquoted Text NExprLoc)
@@ -457,13 +454,11 @@ pruneTree opts =
           (fromMaybe nNull)
 
   pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
-  pruneBinding (NamedVar _ Nothing _)           = Nothing
-  pruneBinding (NamedVar xs (Just x) pos)       =
-    pure $ NamedVar (NE.map pruneKeyName xs) x pos
-  pruneBinding (Inherit _                 [] _) = Nothing
-  pruneBinding (Inherit (join -> Nothing) _  _)  = Nothing
-  pruneBinding (Inherit (join -> m) xs pos)      =
-    pure $ Inherit m (pruneKeyName <$> xs) pos
+  pruneBinding (NamedVar _                 Nothing  _  ) = Nothing
+  pruneBinding (NamedVar xs                (Just x) pos) = pure $ NamedVar (NE.map pruneKeyName xs) x pos
+  pruneBinding (Inherit  _                 []       _  ) = Nothing
+  pruneBinding (Inherit  (join -> Nothing) _        _  ) = Nothing
+  pruneBinding (Inherit  (join -> m)       xs       pos) = pure $ Inherit m (pruneKeyName <$> xs) pos
 
 reducingEvalExpr
   :: (Framed e m, Has e Options, Exception r, MonadCatch m, MonadIO m)
@@ -474,7 +469,8 @@ reducingEvalExpr
 reducingEvalExpr eval mpath expr =
   do
     expr'           <- flagExprLoc =<< liftIO (reduceExpr mpath expr)
-    eres <- catch (pure <$> foldFix (addEvalFlags eval) expr') $ pure . Left
+    eres <- (`catch` pure . Left) $
+      pure <$> foldFix (addEvalFlags eval) expr'
     opts :: Options <- asks $ view hasLens
     expr''          <- pruneTree opts expr'
     pure (fromMaybe nNull expr'', eres)
