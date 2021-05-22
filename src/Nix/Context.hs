@@ -5,8 +5,7 @@
 module Nix.Context where
 
 import           Nix.Options                    ( Options )
-import           Nix.Scope                      ( Scopes
-                                                , emptyScopes )
+import           Nix.Scope                      ( Scopes )
 import           Nix.Frames                     ( Frames )
 import           Nix.Expr.Types.Annotated       ( SrcSpan
                                                 , nullSpan
@@ -33,4 +32,4 @@ instance Has (Context m t) Options where
   hasLens f a = (\x -> a { options = x }) <$> f (options a)
 
 newContext :: Options -> Context m t
-newContext = Context emptyScopes nullSpan mempty
+newContext = Context mempty nullSpan mempty

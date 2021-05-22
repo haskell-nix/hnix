@@ -658,7 +658,7 @@ runInfer' :: MonadInfer m => InferT s m a -> m (Either InferError a)
 runInfer' =
   runExceptT
     . (`evalStateT` initInfer)
-    . (`runReaderT` (mempty, emptyScopes))
+    . (`runReaderT` (mempty, mempty))
     . getInfer
 
 runInfer :: (forall s . InferT s (FreshIdT Int (ST s)) a) -> Either InferError a

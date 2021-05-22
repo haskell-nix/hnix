@@ -122,7 +122,7 @@ staticImport pann path = do
           x' = Fix $ NLet_ span [cur] x
         modify $ first $ HM.insert path x'
         local
-          (const (pure path, emptyScopes @m @NExprLoc)) $
+          (const (pure path, mempty)) $
           do
             x'' <- foldFix reduce x'
             modify $ first $ HM.insert path x''
@@ -139,7 +139,7 @@ reduceExpr
   :: (MonadIO m, MonadFail m) => Maybe FilePath -> NExprLoc -> m NExprLoc
 reduceExpr mpath expr =
   (`evalStateT` (mempty, mempty))
-    . (`runReaderT` (mpath, emptyScopes))
+    . (`runReaderT` (mpath, mempty))
     . runReducer
     $ foldFix reduce expr
 

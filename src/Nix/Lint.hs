@@ -481,7 +481,7 @@ runLintM opts action = do
 symbolicBaseEnv
   :: Monad m
   => m (Scopes m (Symbolic m))
-symbolicBaseEnv = pure emptyScopes
+symbolicBaseEnv = pure mempty
 
 lint :: Options -> NExprLoc -> ST s (Symbolic (Lint s))
 lint opts expr =
