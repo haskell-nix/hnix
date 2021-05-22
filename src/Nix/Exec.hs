@@ -384,7 +384,7 @@ execBinaryOp scope span op lval rarg =
   toBoolOp r b =
     pure $
       nvConstantP
-        (Provenance scope (NBinary_ span op (pure lval) r))
+        (Provenance scope $ NBinary_ span op (pure lval) r)
         (NBool b)
 
 execBinaryOpForced
@@ -452,7 +452,7 @@ execBinaryOpForced scope span op lval rval = case op of
 
  where
   prov :: Provenance m (NValue t f m)
-  prov = Provenance scope (NBinary_ span op (pure lval) (pure rval))
+  prov = Provenance scope $ NBinary_ span op (pure lval) (pure rval)
 
   toBool = pure . nvConstantP prov . NBool
   compare :: (forall a. Ord a => a -> a -> Bool) -> m (NValue t f m)
@@ -501,47 +501,51 @@ addTracing
   -> Alg NExprLocF (n (m a))
 addTracing k v = do
   depth <- ask
-  guard (depth < 2000)
+  guard $ depth < 2000
   local succ $ do
     v'@(Compose (Ann span x)) <- sequence v
     pure $ do
-      opts :: Options <- asks (view hasLens)
+      opts :: Options <- asks $ view hasLens
       let
         rendered =
           if verbose opts >= Chatty
             then
               pretty $
 #ifdef MIN_VERSION_pretty_show
-                PS.ppShow (void x)
+                PS.ppShow $ void x
 #else
-                show (void x)
+                show $ void x
 #endif
             else prettyNix (Fix (Fix (NSym "?") <$ x))
         msg x = pretty ("eval: " <> replicate depth ' ') <> x
-      loc <- renderLocation span (msg rendered <> " ...\n")
+      loc <- renderLocation span $ msg rendered <> " ...\n"
       putStr $ show loc
       res <- k v'
       print $ msg rendered <> " ...done"
       pure res
 
 evalExprLoc :: forall e t f m . MonadNix e t f m => NExprLoc -> m (NValue t f m)
-evalExprLoc expr = do
-  opts :: Options <- asks (view hasLens)
+evalExprLoc expr =
+  do
+    opts :: Options <- asks $ view hasLens
+    let
+      pTracedAdi =
+        bool
+          (adi phi addMetaInfo)
+          (join . (`runReaderT` (0 :: Int)) .
+            adi
+              (addTracing phi)
+              (raise addMetaInfo)
+          )
+          (tracing opts)
+    pTracedAdi expr
 
-  bool
-    (adi
-      phi
-      (addStackFrames @(NValue t f m) . addSourcePositions)
-      )
-    (join . (`runReaderT` (0 :: Int)) .
-      adi
-        (addTracing phi)
-        (raise (addStackFrames @(NValue t f m) . addSourcePositions))
-        )
-    (tracing opts)
-    expr
  where
   phi = Eval.eval . annotated . getCompose
+
+  addMetaInfo :: (Fix NExprLocF -> m a) -> Fix NExprLocF -> m a
+  addMetaInfo = addStackFrames @(NValue t f m) . addSourcePositions
+
   raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x
 
 exec :: (MonadNix e t f m, MonadInstantiate m) => [Text] -> m (NValue t f m)
