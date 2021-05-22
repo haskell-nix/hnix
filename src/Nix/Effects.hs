@@ -150,7 +150,7 @@ instance MonadExec IO where
     []            -> pure $ Left $ ErrorCall "exec: missing program"
     (prog : args) -> do
       (exitCode, out, _) <- liftIO $ readProcessWithExitCode (toString prog) (toString <$> args) ""
-      let t    = Text.strip (toText out)
+      let t    = Text.strip $ toText out
       let emsg = "program[" <> prog <> "] args=" <> show args
       case exitCode of
         ExitSuccess ->
@@ -206,7 +206,7 @@ instance MonadInstantiate IO where
             either
               (\ e -> Left $ ErrorCall $ "Error parsing output of nix-instantiate: " <> show e)
               pure
-              (parseNixTextLoc (toText out))
+              (parseNixTextLoc $ toText out)
           status -> Left $ ErrorCall $ "nix-instantiate failed: " <> show status <> ": " <> err
 
 deriving
@@ -312,7 +312,7 @@ instance MonadHttp IO where
         else newManager defaultManagerSettings
     -- print req
     response <- httpLbs (req { method = "GET" }) manager
-    let status = statusCode (responseStatus response)
+    let status = statusCode $ responseStatus response
     pure $ Left $ ErrorCall $ if status /= 200
       then
         "fail, got " <> show status <> " when fetching url:" <> urlstr
