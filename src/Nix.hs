@@ -110,8 +110,8 @@ evaluateExpression mpath evaluator handler expr =
     args <-
       (traverse . traverse)
         eval'
-        $ (second parseArg <$> arg opts) <>
-          (second mkStr <$> argstr opts)
+        $  (second parseArg <$> arg    opts)
+        <> (second mkStr    <$> argstr opts)
     f <- evaluator mpath expr
     f' <- demand f
     val <-
@@ -143,7 +143,7 @@ processResult h val = do
     (\ (Text.splitOn "." -> keys) -> go keys val)
     (attr opts)
  where
-  go :: [Text.Text] -> NValue t f m -> m a
+  go :: [Text] -> NValue t f m -> m a
   go [] v = h v
   go ((Text.decimal -> Right (n,"")) : ks) v =
     (\case

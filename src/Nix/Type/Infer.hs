@@ -67,14 +67,13 @@ import           Nix.String
 import           Nix.Scope
 import           Nix.Type.Assumption     hiding ( assumptions
                                                 , extend
-                                                , empty
                                                 )
 import qualified Nix.Type.Assumption           as Assumption
                                                 ( remove
                                                 , lookup
                                                 , keys
                                                 )
-import           Nix.Type.Env            hiding ( empty )
+import           Nix.Type.Env
 import qualified Nix.Type.Env                  as Env
 import           Nix.Type.Type
 import           Nix.Value.Monad
@@ -808,7 +807,7 @@ instance MonadTrans Solver where
   lift = Solver . lift . lift
 
 instance Monad m => MonadError TypeError (Solver m) where
-  throwError err = Solver $ lift (modify (err :)) *> empty
+  throwError err = Solver $ lift (modify (err :)) *> mempty
   catchError _ _ = error "This is never used"
 
 -- * Other
