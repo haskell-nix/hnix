@@ -236,7 +236,7 @@ merge context = go
                     <$> go xs ys
 -}
 
--- | unify raises an fail if the result is would be 'NMany mempty'.
+-- | Result @== NMany []@ -> @unify@ fails.
 unify
   :: forall e m
    . MonadLint e m
@@ -258,9 +258,10 @@ unify context (SV x) (SV y) = do
       m <- merge context xs ys
       bool
         (do
-          writeVar x (NMany m)
-          writeVar y (NMany m)
-          packSymbolic (NMany m))
+          writeVar x   (NMany m)
+          writeVar y   (NMany m)
+          packSymbolic (NMany m)
+        )
         (do
               -- x' <- renderSymbolic (Symbolic x)
               -- y' <- renderSymbolic (Symbolic y)

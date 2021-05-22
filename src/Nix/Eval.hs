@@ -269,14 +269,14 @@ desugarBinds embed binds = evalState (traverse (go <=< collect) binds) mempty
         M.insert
           x
           (maybe
-            (p, [mkBinding p])
-            (\ (q, v) -> (q, mkBinding q : v))
+            (p, [bindValAt p])
+            (\ (q, v) -> (q, bindValAt q : v))
             (M.lookup x m)
           )
           m
       pure $ Left x
    where
-    mkBinding pos = NamedVar (y :| ys) val pos
+    bindValAt pos = NamedVar (y :| ys) val pos
   collect x = pure $ pure x
 
   go
@@ -285,10 +285,10 @@ desugarBinds embed binds = evalState (traverse (go <=< collect) binds) mempty
   go =
     either
       (\ x -> do
-        maybeValue <- gets (M.lookup x)
+        maybeValue <- gets $ M.lookup x
         maybe
           (error $ "No binding " <> show x)
-          (\ (p, v) -> pure $ NamedVar (StaticKey x :| []) (embed v) p)
+          (\ (p, v) -> pure $ NamedVar (StaticKey x :| mempty) (embed v) p)
           maybeValue
       )
       pure
@@ -322,11 +322,11 @@ evalBinds recursive binds =
       pure (res, p)
 
    where
+    insert (m, p) (path, pos, value) = attrSetAlter path pos m p value
+
     mkThunk = defer . withScopes scope
 
     encapsulate f attrs = mkThunk $ pushScope attrs f
-
-    insert (m, p) (path, pos, value) = attrSetAlter path pos m p value
 
   applyBindToAdt :: Scopes m v -> Binding (m v) -> m [([Text], SourcePos, m v)]
   applyBindToAdt _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
@@ -336,7 +336,7 @@ evalBinds recursive binds =
       pure $
         (\ (k, v) ->
           ( [k]
-          , fromMaybe pos (M.lookup k p')
+          , fromMaybe pos $ M.lookup k p'
           , demand v
           )
         ) <$> M.toList o'
@@ -386,7 +386,7 @@ evalBinds recursive binds =
             ([key]
             , pos
             , maybe
-                (attrMissing (key :| []) Nothing)
+                (attrMissing (key :| mempty) Nothing)
                 demand
                 =<< maybe
                     (withScopes scope $ lookupVar key)

@@ -51,13 +51,17 @@ import           GHC.Generics
 import qualified Language.Haskell.TH.Syntax    as TH
 import           Lens.Family2
 import           Lens.Family2.TH
-import           Nix.Atoms
-import           Nix.Utils
-import           Text.Megaparsec.Pos
+import           Text.Megaparsec.Pos            ( SourcePos(SourcePos)
+                                                , Pos
+                                                , mkPos
+                                                , unPos
+                                                )
 import           Text.Read.Deriving
 import           Text.Show.Deriving
 import qualified Type.Reflection               as Reflection
 import           Type.Reflection                ( eqTypeRep )
+import           Nix.Atoms
+import           Nix.Utils
 #if !MIN_VERSION_text(1,2,4)
 -- NOTE: Remove package @th-lift-instances@ removing this
 import           Instances.TH.Lift              ()  -- importing Lift Text fo GHC 8.6
@@ -254,8 +258,15 @@ instance Serialise Pos where
   decode = mkPos <$> Serialise.decode
 
 instance Serialise SourcePos where
-  encode (SourcePos f l c) = Serialise.encode f <> Serialise.encode l <> Serialise.encode c
-  decode = SourcePos <$> Serialise.decode <*> Serialise.decode <*> Serialise.decode
+  encode (SourcePos f l c) =
+    Serialise.encode f <>
+    Serialise.encode l <>
+    Serialise.encode c
+  decode =
+    liftA3 SourcePos
+      Serialise.decode
+      Serialise.decode
+      Serialise.decode
 #endif
 
 instance Hashable Pos where
@@ -263,7 +274,10 @@ instance Hashable Pos where
 
 instance Hashable SourcePos where
   hashWithSalt salt (SourcePos f l c) =
-    salt `hashWithSalt` f `hashWithSalt` l `hashWithSalt` c
+    salt
+      `hashWithSalt` f
+      `hashWithSalt` l
+      `hashWithSalt` c
 
 instance NFData1 NKeyName where
   liftRnf _ (StaticKey  !_            ) = ()

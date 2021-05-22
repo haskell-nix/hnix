@@ -63,7 +63,7 @@ merge (Assumption a) (Assumption b) =
   Assumption $ a <> b
 
 mergeAssumptions :: [Assumption] -> Assumption
-mergeAssumptions = foldl' merge empty
+mergeAssumptions = foldl' (<>) mempty
 
 singleton :: Name -> Type -> Assumption
 singleton x y = Assumption [(x, y)]
