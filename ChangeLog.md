@@ -1,6 +1,9 @@
 
 # ChangeLog
 
+#### [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.0...0.13.0.1#files_bucket) 0.13.0.1 (2021-05-11)
+  * [(link)](https://github.com/haskell-nix/hnix/pull/931/files) `Nix.Expr.Types`: Fix CPP on `Instances.TH.Lift` import.
+
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.12.0...0.13.0#files_bucket) 0.13.0 (2021-05-10)
 
 * Breaking:
