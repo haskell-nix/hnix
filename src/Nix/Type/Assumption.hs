@@ -1,5 +1,6 @@
 -- | Basing on the Nix (Hindley–Milner) type system (that provides decidable type inference):
 -- gathering assumptions (inference evidence) about polymorphic types.
+{-# LANGUAGE TypeFamilies #-}
 module Nix.Type.Assumption
   ( Assumption(..)
   , empty
@@ -21,6 +22,19 @@ import           Nix.Type.Type
 
 newtype Assumption = Assumption { assumptions :: [(Name, Type)] }
   deriving (Eq, Show)
+
+-- We pretend that Assumptions can be inconsistent (nonunique keys),
+-- (just like people in real life).
+-- The consistency between assumptions is the inference responcibility.
+instance Semigroup Assumption where
+  (<>) = merge
+
+instance Monoid Assumption where
+  mempty = empty
+
+instance One Assumption where
+  type OneItem Assumption = (Name, Type)
+  one (x, y) = Assumption [(x, y)]
 
 empty :: Assumption
 empty = Assumption mempty

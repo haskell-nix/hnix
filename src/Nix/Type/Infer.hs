@@ -65,7 +65,15 @@ import           Nix.Expr.Types.Annotated
 import           Nix.Fresh
 import           Nix.String
 import           Nix.Scope
+import           Nix.Type.Assumption     hiding ( assumptions
+                                                , extend
+                                                , empty
+                                                )
 import qualified Nix.Type.Assumption           as Assumption
+                                                ( remove
+                                                , lookup
+                                                , keys
+                                                )
 import           Nix.Type.Env            hiding ( empty )
 import qualified Nix.Type.Env                  as Env
 import           Nix.Type.Type
@@ -219,10 +227,10 @@ instance Substitutable TVar where
 instance Substitutable Type where
   apply _         (  TCon a   ) = TCon a
   apply s         (  TSet b a ) = TSet b $ apply s `M.map` a
-  apply s         (  TList a  ) = TList $ apply s <$> a
+  apply s         (  TList a  ) = TList  $ apply s <$> a
   apply (Subst s) t@(TVar  a  ) = Map.findWithDefault t a s
   apply s         (  t1 :~> t2) = apply s t1 :~> apply s t2
-  apply s         (  TMany ts ) = TMany $ apply s <$> ts
+  apply s         (  TMany ts ) = TMany  $ apply s <$> ts
 
 instance Substitutable Scheme where
   apply (Subst s) (Forall as t) = Forall as $ apply s' t
@@ -255,7 +263,7 @@ instance (Ord a, Substitutable a) => Substitutable (Set.Set a) where
 
 data Judgment s =
   Judgment
-    { assumptions     :: Assumption.Assumption
+    { assumptions     :: Assumption
     , typeConstraints :: [Constraint]
     , inferredType    :: Type
     }
@@ -339,7 +347,7 @@ instance
  where
   fromValueMay (Judgment _ _ (TSet _ xs)) =
     do
-      let sing _ = Judgment Assumption.empty mempty
+      let sing _ = Judgment mempty mempty
       pure $ pure (M.mapWithKey sing xs, mempty)
   fromValueMay _ = stub
   fromValue =
@@ -354,30 +362,38 @@ instance MonadInfer m
   toValue (xs, _) =
     liftA3
       Judgment
-      (foldrM go Assumption.empty xs)
-      (concat <$> traverse ((typeConstraints <$>) . demand) xs)
-      (TSet True <$> traverse ((inferredType <$>) . demand) xs)
+      (foldrM go mempty xs)
+      (fun concat      typeConstraints)
+      (fun (TSet True) inferredType   )
    where
     go x rest =
       do
         x' <- demand x
-        pure $ Assumption.merge (assumptions x') rest
+        pure $ assumptions x' <> rest
+
+    fun :: (AttrSet b -> b1) -> (Judgment s -> b) -> InferT s m b1
+    fun g f =
+      g <$> traverse ((f <$>) . demand) xs
 
 instance MonadInfer m => ToValue [Judgment s] (InferT s m) (Judgment s) where
   toValue xs =
     liftA3
       Judgment
-      (foldrM go Assumption.empty xs)
-      (concat <$> traverse ((typeConstraints <$>) . demand) xs)
-      (TList <$> traverse ((inferredType <$>) . demand) xs)
+      (foldrM go mempty xs)
+      (fun concat typeConstraints)
+      (fun TList  inferredType   )
    where
     go x rest =
       do
         x' <- demand x
-        pure $ Assumption.merge (assumptions x') rest
+        pure $ assumptions x' <> rest
+
+    fun :: ([b] -> b1) -> (Judgment s -> b) -> InferT s m b1
+    fun g f =
+      g <$> traverse ((f <$>) . demand) xs
 
 instance MonadInfer m => ToValue Bool (InferT s m) (Judgment s) where
-  toValue _ = pure $ Judgment Assumption.empty mempty typeBool
+  toValue _ = pure $ Judgment mempty mempty typeBool
 
 instance
   Monad m
@@ -438,32 +454,32 @@ instance MonadInfer m
   -- If we have a thunk loop, we just don't know the type.
   force (JThunk t) = catch (force t)
     $ \(_ :: ThunkLoop) ->
-                           f =<< Judgment Assumption.empty mempty <$> fresh
+                           f =<< Judgment mempty mempty <$> fresh
 
   -- If we have a thunk loop, we just don't know the type.
   forceEff (JThunk t) = catch (forceEff t)
     $ \(_ :: ThunkLoop) ->
-                           f =<< Judgment Assumption.empty mempty <$> fresh
+                           f =<< Judgment mempty mempty <$> fresh
 -}
 
 instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
   freeVariable var = do
     tv <- fresh
-    pure $ Judgment (Assumption.singleton var tv) mempty tv
+    pure $ Judgment (one (var, tv)) mempty tv
 
   synHole var = do
     tv <- fresh
-    pure $ Judgment (Assumption.singleton var tv) mempty tv
+    pure $ Judgment (one (var, tv)) mempty tv
 
   -- If we fail to look up an attribute, we just don't know the type.
-  attrMissing _ _ = Judgment Assumption.empty mempty <$> fresh
+  attrMissing _ _ = Judgment mempty mempty <$> fresh
 
   evaledSym _ = pure
 
   evalCurPos =
     pure $
       Judgment
-        Assumption.empty
+        mempty
         mempty
         (TSet False $
           M.fromList
@@ -473,7 +489,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
             ]
         )
 
-  evalConstant c = pure $ Judgment Assumption.empty mempty $ go c
+  evalConstant c = pure $ Judgment mempty mempty $ go c
    where
     go = \case
       NURI   _ -> typeString
@@ -482,9 +498,9 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
       NBool  _ -> typeBool
       NNull    -> typeNull
 
-  evalString      = const $ pure $ Judgment Assumption.empty mempty typeString
-  evalLiteralPath = const $ pure $ Judgment Assumption.empty mempty typePath
-  evalEnvPath     = const $ pure $ Judgment Assumption.empty mempty typePath
+  evalString      = const $ pure $ Judgment mempty mempty typeString
+  evalLiteralPath = const $ pure $ Judgment mempty mempty typePath
+  evalEnvPath     = const $ pure $ Judgment mempty mempty typePath
 
   evalUnary op (Judgment as1 cs1 t1) = do
     tv <- fresh
@@ -499,7 +515,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     tv                  <- fresh
     pure $
       Judgment
-        (as1 `Assumption.merge` as2)
+        (as1 <> as2)
         ( cs1 <>
           cs2 <>
           binops
@@ -514,7 +530,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     Judgment as2 cs2 t2 <- t
     Judgment as3 cs3 t3 <- f
     pure $ Judgment
-      (as1 `Assumption.merge` as2 `Assumption.merge` as3)
+      (as1 <> as2 <> as3)
       (cs1 <> cs2 <> cs3 <> [EqConst t1 typeBool, EqConst t2 t3])
       t2
 
@@ -522,7 +538,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     Judgment as2 cs2 t2 <- body
     pure $
       Judgment
-        (as1 `Assumption.merge` as2)
+        (as1 <> as2)
         (cs1 <> cs2 <> [EqConst t1 typeBool])
         t2
 
@@ -531,7 +547,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     tv                  <- fresh
     pure $
       Judgment
-        (as1 `Assumption.merge` as2)
+        (as1 <> as2)
         (cs1 <> cs2 <> [EqConst t1 (t2 :~> tv)])
         tv
 
@@ -544,7 +560,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
         (k
           (pure $
              Judgment
-               (Assumption.singleton x tv)
+               (one (x, tv))
                mempty
                tv
           )
@@ -568,9 +584,8 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
           ps
 
     let
-      (env, tys) =
-        (\f -> foldl' f (Assumption.empty, mempty) js) $ \(as1, t1) (k, t) ->
-          (as1 `Assumption.merge` Assumption.singleton k t, M.insert k t t1)
+      f (as1, t1) (k, t) = (as1 <> one (k, t), M.insert k t t1)
+      (env, tys) = foldl' f (mempty, mempty) js
       arg   = pure $ Judgment env mempty $ TSet True tys
       call  = k arg $ \args b -> (args, ) <$> b
       names = fst <$> js
@@ -627,7 +642,7 @@ class ActiveTypeVars a where
 instance ActiveTypeVars Constraint where
   atv (EqConst      t1 t2   ) = ftv t1 `Set.union` ftv t2
   atv (ImpInstConst t1 ms t2) = ftv t1 `Set.union` (ftv ms `Set.intersection` ftv t2)
-  atv (ExpInstConst t  s     ) = ftv t  `Set.union` ftv s
+  atv (ExpInstConst t  s    ) = ftv t  `Set.union` ftv s
 
 instance ActiveTypeVars a => ActiveTypeVars [a] where
   atv = foldr (Set.union . atv) mempty
