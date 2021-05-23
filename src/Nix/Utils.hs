@@ -1,10 +1,7 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TupleSections #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 
@@ -108,6 +105,9 @@ fixToFree = Free . go
 --   in this case through behavior.
 adi :: Functor f => (f a -> a) -> ((Fix f -> a) -> Fix f -> a) -> Fix f -> a
 adi f g = g $ f . (adi f g <$>) . unFix
+
+adi' :: Functor f => ((Fix f -> a) -> Fix f -> a) -> (f a -> a) -> Fix f -> a
+adi' g f = g $ f . (adi' g f <$>) . unFix
 
 adiM
   :: (Traversable t, Monad m)

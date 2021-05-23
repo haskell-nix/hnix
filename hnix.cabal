@@ -465,7 +465,23 @@ library
     , vector >= 0.12.0 && < 0.13
     , xml >= 1.3.14 && < 1.4
   default-extensions:
-    OverloadedStrings
+      OverloadedStrings
+    , DeriveGeneric
+    , DeriveDataTypeable
+    , DeriveFunctor
+    , DeriveFoldable
+    , DeriveTraversable
+    , DeriveLift
+    , FlexibleContexts
+    , FlexibleInstances
+    , StandaloneDeriving
+    , TypeApplications
+    , TypeSynonymInstances
+    , InstanceSigs
+    , MultiParamTypeClasses
+    , TupleSections
+    , LambdaCase
+    , BangPatterns
   if flag(optimize)
     default-extensions:
       ApplicativeDo
@@ -511,7 +527,23 @@ executable hnix
     , relude (Relude as Prelude)
     , relude
   default-extensions:
-    OverloadedStrings
+      OverloadedStrings
+    , DeriveGeneric
+    , DeriveDataTypeable
+    , DeriveFunctor
+    , DeriveFoldable
+    , DeriveTraversable
+    , DeriveLift
+    , FlexibleContexts
+    , FlexibleInstances
+    , StandaloneDeriving
+    , TypeApplications
+    , TypeSynonymInstances
+    , InstanceSigs
+    , MultiParamTypeClasses
+    , TupleSections
+    , LambdaCase
+    , BangPatterns
   if flag(optimize)
     default-extensions:
       ApplicativeDo
@@ -568,7 +600,23 @@ test-suite hnix-tests
     , time
     , unix
   default-extensions:
-    OverloadedStrings
+      OverloadedStrings
+    , DeriveGeneric
+    , DeriveDataTypeable
+    , DeriveFunctor
+    , DeriveFoldable
+    , DeriveTraversable
+    , DeriveLift
+    , FlexibleContexts
+    , FlexibleInstances
+    , StandaloneDeriving
+    , TypeApplications
+    , TypeSynonymInstances
+    , InstanceSigs
+    , MultiParamTypeClasses
+    , TupleSections
+    , LambdaCase
+    , BangPatterns
   if flag(optimize)
     default-extensions:
       ApplicativeDo
@@ -600,7 +648,23 @@ benchmark hnix-benchmarks
     , template-haskell
     , time
   default-extensions:
-    OverloadedStrings
+      OverloadedStrings
+    , DeriveGeneric
+    , DeriveDataTypeable
+    , DeriveFunctor
+    , DeriveFoldable
+    , DeriveTraversable
+    , DeriveLift
+    , FlexibleContexts
+    , FlexibleInstances
+    , StandaloneDeriving
+    , TypeApplications
+    , TypeSynonymInstances
+    , InstanceSigs
+    , MultiParamTypeClasses
+    , TupleSections
+    , LambdaCase
+    , BangPatterns
   if flag(optimize)
     default-extensions:
       ApplicativeDo

@@ -1,7 +1,5 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Definitions of Frames. Frames are messages that gather and ship themself with a context related to the message. For example - the message about some exception would also gather, keep and bring with it the tracing information.

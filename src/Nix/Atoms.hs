@@ -1,7 +1,5 @@
 {-# LANGUAGE CPP            #-}
 {-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric #-}
 
 module Nix.Atoms where
 
