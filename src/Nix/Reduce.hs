@@ -355,7 +355,7 @@ pruneTree opts =
   prune = \case
     NStr str -> pure $ NStr $ pruneString str
     NHasAttr (Just aset) attr ->
-      pure $ NHasAttr aset $ NE.map pruneKeyName attr
+      pure $ NHasAttr aset $ pruneKeyName <$> attr
     NAbs params (Just body) -> pure $ NAbs (pruneParams params) body
 
     NList l -> pure $ NList $
@@ -379,7 +379,7 @@ pruneTree opts =
           (mapMaybe pruneBinding binds)
 
     NSelect (Just aset) attr alt ->
-      pure $ NSelect aset (NE.map pruneKeyName attr) (join alt)
+      pure $ NSelect aset (pruneKeyName <$> attr) $ join alt
 
     -- These are the only short-circuiting binary operators
     NBinary NAnd (Just (AnnE _ larg)) _ -> pure larg
@@ -449,7 +449,7 @@ pruneTree opts =
 
   pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
   pruneBinding (NamedVar _                 Nothing  _  ) = Nothing
-  pruneBinding (NamedVar xs                (Just x) pos) = pure $ NamedVar (NE.map pruneKeyName xs) x pos
+  pruneBinding (NamedVar xs                (Just x) pos) = pure $ NamedVar (pruneKeyName <$> xs) x pos
   pruneBinding (Inherit  _                 []       _  ) = Nothing
   pruneBinding (Inherit  (join -> Nothing) _        _  ) = Nothing
   pruneBinding (Inherit  (join -> m)       xs       pos) = pure $ Inherit m (pruneKeyName <$> xs) pos

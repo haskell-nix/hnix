@@ -650,8 +650,9 @@ ekey keys pos f e@(Fix x) | (NSet NNonRecursive xs, ann) <- fromNExpr x =
       maybe
         e
         (\ v ->
-          let entry = NamedVar (NE.map StaticKey keys) v pos in
-          Fix (toNExpr (NSet NNonRecursive (entry : xs), ann)))
+          let entry = NamedVar (StaticKey <$> keys) v pos in
+          Fix $ toNExpr ( NSet NNonRecursive $ [entry] <> xs, ann )
+        )
       <$>
         f Nothing
   where
