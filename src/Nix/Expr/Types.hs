@@ -496,24 +496,6 @@ instance Serialise r => Serialise (NExprF r)
 instance IsString NExpr where
   fromString = Fix . NSym . fromString
 
-instance TH.Lift (Fix NExprF) where
-  lift =
-    TH.dataToExpQ
-      (\b ->
-        do
-          -- Binding on constructor ensures type match and gives type inference to TH
-          HRefl <-
-            eqTypeRep
-              (Reflection.typeRep @Text)
-              (Reflection.typeOf  b    )
-          pure [| $(TH.lift b) |]
-      )
-#if MIN_VERSION_template_haskell(2,17,0)
-  liftTyped = unsafeCodeCoerce . lift
-#elif MIN_VERSION_template_haskell(2,16,0)
-  liftTyped = TH.unsafeTExpCoerce . TH.lift
-#endif
-
 #if !MIN_VERSION_hashable(1,3,1)
 -- there was none before, remove this in year >2022
 instance Hashable1 NonEmpty
@@ -529,6 +511,24 @@ type NExpr = Fix NExprF
 
 #ifdef MIN_VERSION_serialise
 instance Serialise NExpr
+#endif
+
+instance TH.Lift NExpr where
+  lift =
+    TH.dataToExpQ
+      (\b ->
+        do
+          -- Binding on constructor ensures type match and gives type inference to TH
+          HRefl <-
+            eqTypeRep
+              (Reflection.typeRep @Text)
+              (Reflection.typeOf  b    )
+          pure [| $(TH.lift b) |]
+      )
+#if MIN_VERSION_template_haskell(2,17,0)
+  liftTyped = unsafeCodeCoerce . lift
+#elif MIN_VERSION_template_haskell(2,16,0)
+  liftTyped = TH.unsafeTExpCoerce . TH.lift
 #endif
 
 
