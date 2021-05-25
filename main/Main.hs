@@ -271,7 +271,7 @@ main =
     do
       liftIO $
         do
-          putStrLn $ "Wrote winnowed expression tree to " <> path
+          putStrLn $ "Wrote sifted expression tree to " <> path
           writeFile path $ show $ prettyNix $ stripAnnotation expr'
       either
         throwM

@@ -141,10 +141,10 @@ nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
 
 currentPos :: forall e m . (MonadReader e m, Has e SrcSpan) => m SrcSpan
-currentPos = asks (view hasLens)
+currentPos = asks $ view hasLens
 
 wrapExprLoc :: SrcSpan -> NExprLocF r -> NExprLoc
-wrapExprLoc span x = Fix (Fix (NSym_ span "<?>") <$ x)
+wrapExprLoc span x = Fix $ Fix (NSym_ span "<?>") <$ x
 {-# inline wrapExprLoc #-}
 
 --  2021-01-07: NOTE: This instance belongs to be beside MonadEval type class.
@@ -172,13 +172,13 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
         )
         ms
        where
-        attr = Text.intercalate "." (NE.toList ks)
+        attr = Text.intercalate "." $ NE.toList ks
 
   evalCurPos = do
     scope                  <- currentScopes
     span@(SrcSpan delta _) <- currentPos
     addProvenance @_ @_ @(NValue t f m)
-      (Provenance scope (NSym_ span "__curPos")) <$>
+      (Provenance scope $ NSym_ span "__curPos") <$>
         toValue delta
 
   evaledSym name val = do
@@ -186,13 +186,13 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     span  <- currentPos
     pure $
       addProvenance @_ @_ @(NValue t f m)
-        (Provenance scope (NSym_ span name))
+        (Provenance scope $ NSym_ span name)
         val
 
   evalConstant c = do
     scope <- currentScopes
     span  <- currentPos
-    pure $ nvConstantP (Provenance scope (NConstant_ span c)) c
+    pure $ nvConstantP (Provenance scope $ NConstant_ span c) c
 
   evalString =
     maybe
@@ -205,7 +205,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
             nvStrP
               (Provenance
                 scope
-                (NStr_ span (DoubleQuoted [Plain (stringIgnoreContext ns)]))
+                (NStr_ span $ DoubleQuoted [Plain $ stringIgnoreContext ns])
               )
               ns
       )
@@ -214,13 +214,13 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalLiteralPath p = do
     scope <- currentScopes
     span  <- currentPos
-    nvPathP (Provenance scope (NLiteralPath_ span p)) <$>
+    nvPathP (Provenance scope $ NLiteralPath_ span p) <$>
       makeAbsolutePath @t @f @m p
 
   evalEnvPath p = do
     scope <- currentScopes
     span  <- currentPos
-    nvPathP (Provenance scope (NEnvPath_ span p)) <$>
+    nvPathP (Provenance scope $ NEnvPath_ span p) <$>
       findEnvPath @t @f @m p
 
   evalUnary op arg = do
@@ -236,8 +236,8 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalWith c b = do
     scope <- currentScopes
     span  <- currentPos
-    (\b -> addProvenance (Provenance scope (NWith_ span Nothing (pure b))) b)
-      <$> evalWithAttrSet c b
+    let f = join $ addProvenance . Provenance scope . NWith_ span Nothing . pure
+    f <$> evalWithAttrSet c b
 
   evalIf c t f = do
     scope <- currentScopes
@@ -245,11 +245,14 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     b <- fromValue c
 
     let
-      fun x y = addProvenance (Provenance scope (NIf_ span (pure c) x y))
+      fun x y z = addProvenance (Provenance scope $ NIf_ span (pure c) x y) z
+      -- Note: join == \ f x -> f x x
+      false = join (fun Nothing . pure) <$> f
+      true = join (flip fun Nothing . pure) <$> t
 
     bool
-      ( (\ f' -> fun Nothing     (pure f') f') <$> f )
-      ( (\ t' -> fun (pure t') Nothing     t') <$> t )
+      false
+      true
       b
 
   evalAssert c body =
@@ -260,17 +263,15 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
         (nverr $ Assertion span c)
         (do
           scope <- currentScopes
-          (\b ->
-              addProvenance (Provenance scope (NAssert_ span (pure c) (pure b))) b
-            ) <$>
-            body
+          let f = join (addProvenance . Provenance scope . NAssert_ span (pure c) . pure)
+          f <$> body
         )
         b
 
   evalApp f x = do
     scope <- currentScopes
     span  <- currentPos
-    addProvenance (Provenance scope (NBinary_ span NApp (pure f) Nothing)) <$>
+    addProvenance (Provenance scope $ NBinary_ span NApp (pure f) Nothing) <$>
       (callFunc f =<< defer x)
 
   evalAbs p k = do
@@ -278,7 +279,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     span  <- currentPos
     pure $
       nvClosureP
-        (Provenance scope (NAbs_ span (Nothing <$ p) Nothing))
+        (Provenance scope $ NAbs_ span (Nothing <$ p) Nothing)
         (void p)
         (\arg -> snd <$> k (pure arg) (\_ b -> ((), ) <$> b))
 
@@ -293,7 +294,7 @@ callFunc
   -> m (NValue t f m)
 callFunc fun arg =
   do
-    frames :: Frames <- asks (view hasLens)
+    frames :: Frames <- asks $ view hasLens
     when (length frames > 2000) $ throwError $ ErrorCall "Function call stack exhausted"
 
     fun' <- demand fun
@@ -304,8 +305,8 @@ callFunc fun arg =
           span <- currentPos
           withFrame Info ((Calling @m @(NValue t f m)) name span) (f arg)
       (NVSet m _) | Just f <- M.lookup "__functor" m ->
-        ((`callFunc` arg) <=< (`callFunc` fun')) =<< demand f
-      x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show x
+        (`callFunc` arg) =<< (`callFunc` fun') =<< demand f
+      _x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show _x
 
 execUnaryOp
   :: (Framed e m, MonadCited t f m, Show t)
@@ -321,12 +322,12 @@ execUnaryOp scope span op arg = do
         (NNeg, NInt i  ) -> unaryOp $ NInt (-i)
         (NNeg, NFloat f) -> unaryOp $ NFloat (-f)
         (NNot, NBool b ) -> unaryOp $ NBool (not b)
-        _ ->
-          throwError $  ErrorCall $ "unsupported argument type for unary operator " <> show op
-    x ->
-      throwError $ ErrorCall $ "argument to unary operator must evaluate to an atomic type: " <> show x
+        _seq ->
+          throwError $  ErrorCall $ "unsupported argument type for unary operator " <> show _seq
+    _x ->
+      throwError $ ErrorCall $ "argument to unary operator must evaluate to an atomic type: " <> show _x
  where
-  unaryOp = pure . nvConstantP (Provenance scope (NUnary_ span op (pure arg)))
+  unaryOp = pure . nvConstantP (Provenance scope $ NUnary_ span op $ pure arg)
 
 execBinaryOp
   :: forall e t f m
@@ -371,7 +372,7 @@ execBinaryOp scope span op lval rarg =
       )
       =<< fromValue lval
 
-  boolOp rval = toBoolOp (pure rval)
+  boolOp rval = toBoolOp $ pure rval
 
   bypass      = toBoolOp Nothing
 
@@ -511,7 +512,7 @@ addTracing k v = do
 #else
                 show $ void x
 #endif
-            else prettyNix (Fix (Fix (NSym "?") <$ x))
+            else prettyNix $ Fix $ Fix (NSym "?") <$ x
         msg x = pretty ("eval: " <> replicate depth ' ') <> x
       loc <- renderLocation span $ msg rendered <> " ...\n"
       putStr $ show loc
@@ -526,7 +527,7 @@ evalExprLoc expr =
     let
       pTracedAdi =
         bool
-          (adi Eval.evalContent Eval.addMetaInfo)
+          Eval.framedEvalExprLoc
           (join . (`runReaderT` (0 :: Int)) .
             adi
               (addTracing Eval.evalContent)

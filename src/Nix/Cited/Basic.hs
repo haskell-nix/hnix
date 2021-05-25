@@ -11,6 +11,7 @@ import           Control.Comonad.Env            ( ComonadEnv )
 import           Control.Monad.Catch     hiding ( catchJust )
 import           Nix.Cited
 import           Nix.Eval                      as Eval
+                                                ( EvalFrame(EvaluatingExpr,ForcingExpr) )
 import           Nix.Exec
 import           Nix.Expr
 import           Nix.Frames

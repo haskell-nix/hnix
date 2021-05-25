@@ -52,6 +52,9 @@ import           Nix.Atoms
 import           Nix.Convert
 import           Nix.Eval                       ( MonadEval(..) )
 import qualified Nix.Eval                      as Eval
+                                                ( eval
+                                                , evalWithAttrSet
+                                                )
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Fresh
