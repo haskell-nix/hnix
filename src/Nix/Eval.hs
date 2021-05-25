@@ -484,8 +484,9 @@ buildArgument
 buildArgument params arg =
   do
     scope <- currentScopes :: m (Scopes m v)
+    let argThunk = defer $ withScopes scope arg
     case params of
-      Param name -> M.singleton name <$> defer (withScopes scope arg)
+      Param name -> M.singleton name <$> argThunk
       ParamSet s isVariadic m ->
         do
           (args, _) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< arg
@@ -493,7 +494,7 @@ buildArgument params arg =
             inject =
               maybe
                 id
-                (\ n -> M.insert n $ const $ defer $ withScopes scope arg)
+                (\ n -> M.insert n $ const argThunk) -- why insert into const?
                 m
           loebM
             (inject $
