@@ -140,7 +140,7 @@ instance Binary NExprLoc
 -- * Other
 
 stripAnnotation :: Functor f => Fix (AnnF ann f) -> Fix f
-stripAnnotation = unfoldFix (annotated . getCompose . unFix)
+stripAnnotation = unfoldFix (stripAnn . unFix)
 
 stripAnn :: AnnF ann f r -> f r
 stripAnn = annotated . getCompose
@@ -181,7 +181,7 @@ deltaInfo :: SourcePos -> (Text, Int, Int)
 deltaInfo (SourcePos fp l c) = (toText fp, unPos l, unPos c)
 
 nNull :: NExprLoc
-nNull = Fix $ Compose $ Ann nullSpan $ NConstant NNull
+nNull = AnnE nullSpan $ NConstant NNull
 {-# inline nNull #-}
 
 nullSpan :: SrcSpan

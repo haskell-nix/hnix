@@ -562,7 +562,7 @@ framedEvalExprLoc =
 -- | Takes annotated expression. Strip from annotation. Evaluate.
 evalContent
   :: MonadNixEval v m
-  => Compose (Ann ann) NExprF (m v)
+  => AnnF ann NExprF (m v)
   -> m v
 evalContent = eval . annotated . getCompose
 
