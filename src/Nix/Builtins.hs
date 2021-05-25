@@ -1900,7 +1900,7 @@ builtinsList = sequence
 
 -- * Exported
 
--- | Evaluate a nix expression in the default context
+-- | Evaluate expression in the default context.
 withNixContext
   :: forall e t f m r
    . (MonadNix e t f m, Has e Options)
@@ -1914,16 +1914,21 @@ withNixContext mpath action =
     let
       i = nvList $ nvStr . makeNixStringWithoutContext . toText <$> include opts
 
-    pushScope (one ("__includes", i)) $ pushScopes base $
-      maybe
-        action
-        (\ path ->
-          do
-            traceM $ "Setting __cur_file = " <> show path
-            let ref = nvPath path
-            pushScope (one ("__cur_file", ref)) action
-        )
-        mpath
+    pushScope
+      (one ("__includes", i))
+      (pushScopes
+        base $
+        maybe
+          id
+          (\ path act ->
+            do
+              traceM $ "Setting __cur_file = " <> show path
+              let ref = nvPath path
+              pushScope (one ("__cur_file", ref)) act
+          )
+          mpath
+          action
+      )
 
 builtins
   :: ( MonadNix e t f m
