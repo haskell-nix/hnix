@@ -5,9 +5,13 @@
 
 * Additional:
 
+  * `Nix.Utils`:
+    * added type `TransformF`
+
   * `Nix.Eval`:
     * added fun
       * `evalContent`
+
 
 ### [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.0.1...0.13.1#files_bucket) 0.13.1 (2021-05-22)
   * [(link)](https://github.com/haskell-nix/hnix/pull/936/files) `Nix.Parser`: `annotateLocation`: Fix source location preservation.

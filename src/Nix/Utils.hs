@@ -34,21 +34,27 @@ traceM = const pass
 {-# inline traceM #-}
 #endif
 
-$(makeLensesBy (\n -> pure ("_" <> n)) ''Fix)
+$(makeLensesBy (\n -> pure $ "_" <> n) ''Fix)
 
 -- | > Hashmap Text -- type synonym
 type AttrSet = HashMap Text
 
--- | F-algebra defines how to reduce the fixed-point of a functor to a
---   value.
+-- | F-algebra defines how to reduce the fixed-point of a functor to a value.
 -- > type Alg f a = f a -> a
 type Alg f a = f a -> a
 
 -- | > type AlgM f m a = f a -> m a
 type AlgM f m a = f a -> m a
 
--- | "Transform" here means a modification of a catamorphism.
+-- | Do according transformation.
+--
+-- It is a transformation of a recursion scheme.
 type Transform f a = (Fix f -> a) -> Fix f -> a
+-- | Do according transformation.
+--
+-- It is a transformation of a recursion scheme.
+-- See @Transform@.
+type TransformF f a = (f -> a) -> f -> a
 
 loeb :: Functor f => f (f a -> a) -> f a
 loeb x = go

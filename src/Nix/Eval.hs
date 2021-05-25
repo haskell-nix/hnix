@@ -538,7 +538,7 @@ addSourcePositions f (v@(AnnE ann _) :: NExprLoc) =
 addStackFrames
   :: forall v e m a
    . (Scoped v m, Framed e m, Typeable v, Typeable m)
-  => Transform NExprLocF (m a)
+  => TransformF NExprLoc (m a)
 addStackFrames f v =
   do
     scopes <- currentScopes :: m (Scopes m v)
