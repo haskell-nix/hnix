@@ -47,12 +47,12 @@ instance ( Has e Options
 
   thunk :: m v -> m (Cited u f m t)
   thunk mv = do
-    opts :: Options <- asks (view hasLens)
+    opts :: Options <- asks $ view hasLens
 
     bool
       (Cited . NCited mempty <$> thunk mv)
       (do
-        frames :: Frames <- asks (view hasLens)
+        frames :: Frames <- asks $ view hasLens
 
         -- Gather the current evaluation context at the time of thunk
         -- creation, and record it along with the thunk.
@@ -144,5 +144,5 @@ displayProvenance =
   list
     id
     (\ (Provenance scope e@(Compose (Ann s _)) : _) ->
-      withFrame Info (ForcingExpr scope (wrapExprLoc s e))
+      withFrame Info $ ForcingExpr scope $ wrapExprLoc s e
     )

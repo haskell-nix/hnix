@@ -28,8 +28,10 @@ import           Debug.Trace as X
 -- Well, since it is currently CPP intermingled with Debug.Trace, required to use String here.
 trace :: String -> a -> a
 trace = const id
+{-# inline trace #-}
 traceM :: Monad m => String -> m ()
 traceM = const pass
+{-# inline traceM #-}
 #endif
 
 $(makeLensesBy (\n -> pure ("_" <> n)) ''Fix)

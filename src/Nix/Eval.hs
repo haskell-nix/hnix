@@ -543,7 +543,7 @@ addStackFrames f v =
 
 framedEvalExprLoc
   :: forall e v m
-   . (MonadNixEval v m, Framed e m, Has e SrcSpan, Typeable m, Typeable v)
+  . (MonadNixEval v m, Framed e m, Has e SrcSpan, Typeable m, Typeable v)
   => NExprLoc
   -> m v
 framedEvalExprLoc =
