@@ -54,7 +54,10 @@ data SrcSpan = SrcSpan
 -- ** Instances
 
 instance Semigroup SrcSpan where
-  s1 <> s2 = SrcSpan ((min `on` spanBegin) s1 s2) ((max `on` spanEnd) s1 s2)
+  s1 <> s2 =
+    SrcSpan
+      ((min `on` spanBegin) s1 s2)
+      ((max `on` spanEnd  ) s1 s2)
 
 instance Binary SrcSpan
 instance ToJSON SrcSpan
@@ -116,15 +119,18 @@ $(deriveJSON2 defaultOptions ''Ann)
 instance (Serialise ann, Serialise a) => Serialise (Ann ann a)
 #endif
 
-#ifdef MIN_VERSION_serialise
-instance Serialise r => Serialise (Compose (Ann SrcSpan) NExprF r) where
-  encode (Compose (Ann ann a)) = encode ann <> encode a
-  decode = (Compose .) . Ann <$> decode <*> decode
-#endif
-
 -- ** @NExprLoc{,F}@ - annotated Nix expression
 
 type NExprLocF = AnnF SrcSpan NExprF
+
+#ifdef MIN_VERSION_serialise
+instance Serialise r => Serialise (NExprLocF r) where
+  encode (Compose (Ann ann a)) = encode ann <> encode a
+  decode =
+    liftA2 ((Compose .) . Ann)
+      decode
+      decode
+#endif
 
 instance Binary r => Binary (NExprLocF r)
 
