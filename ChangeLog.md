@@ -1,6 +1,14 @@
 
 # ChangeLog
 
+## [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.1...master#files_bucket) WIP
+
+* Additional:
+
+  * `Nix.Eval`:
+    * added fun
+      * `evalContent`
+
 ### [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.0.1...0.13.1#files_bucket) 0.13.1 (2021-05-22)
   * [(link)](https://github.com/haskell-nix/hnix/pull/936/files) `Nix.Parser`: `annotateLocation`: Fix source location preservation.
   * [(link)](https://github.com/haskell-nix/hnix/pull/934/files) Require Cabal dependency `relude` `>= 1.0`: since imports & Cabal file got cleaned-up & that clean-up depends on `relude` reimports introduced in aforementioned version.

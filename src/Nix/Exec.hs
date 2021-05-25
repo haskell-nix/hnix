@@ -526,18 +526,16 @@ evalExprLoc expr =
     let
       pTracedAdi =
         bool
-          (adi phi addMetaInfo)
+          (adi Eval.evalContent addMetaInfo)
           (join . (`runReaderT` (0 :: Int)) .
             adi
-              (addTracing phi)
+              (addTracing Eval.evalContent)
               (raise addMetaInfo)
           )
           (tracing opts)
     pTracedAdi expr
 
  where
-  phi = Eval.eval . annotated . getCompose
-
   addMetaInfo :: (Fix NExprLocF -> m a) -> Fix NExprLocF -> m a
   addMetaInfo = addStackFrames @(NValue t f m) . addSourcePositions
 

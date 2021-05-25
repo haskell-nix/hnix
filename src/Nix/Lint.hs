@@ -485,7 +485,7 @@ lint opts expr =
       pushScopes
         basis
         (adi
-          (Eval.eval . annotated . getCompose)
+          Eval.evalContent
           Eval.addSourcePositions
           expr
         )

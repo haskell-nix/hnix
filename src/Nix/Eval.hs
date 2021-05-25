@@ -556,4 +556,11 @@ framedEvalExprLoc
   => NExprLoc
   -> m v
 framedEvalExprLoc =
-  adi (eval . annotated . getCompose) $ addStackFrames @v . addSourcePositions
+  adi evalContent $ addStackFrames @v . addSourcePositions
+
+-- | Takes annotated expression. Strip from annotation. Evaluate.
+evalContent
+  :: MonadNixEval v m
+  => Compose (Ann ann) NExprF (m v)
+  -> m v
+evalContent = eval . annotated . getCompose

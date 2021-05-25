@@ -81,7 +81,7 @@ nixEvalExprLoc mpath =
   nixEval
     mpath
     (Eval.addStackFrames . Eval.addSourcePositions)
-    (Eval.eval . annotated . getCompose)
+    Eval.evalContent
 
 -- | Evaluate a nix expression with tracing in the default context. Note that
 --   this function doesn't do any tracing itself, but 'evalExprLoc' will be
