@@ -71,13 +71,13 @@ parsePath p = case Store.parsePath "/nix/store" (encodeUtf8 p) of
 writeDerivation :: (Framed e m, MonadStore m) => Derivation -> m Store.StorePath
 writeDerivation drv@Derivation{inputs, name} = do
   let (inputSrcs, inputDrvs) = inputs
-  references <- fmap Set.fromList $ traverse parsePath $ Set.toList $ Set.union inputSrcs $ Set.fromList $ Map.keys inputDrvs
+  references <- Set.fromList <$> traverse parsePath (Set.toList $ Set.union inputSrcs $ Set.fromList $ Map.keys inputDrvs)
   path <- addTextToStore (Text.append name ".drv") (unparseDrv drv) (S.fromList $ Set.toList references) False
   parsePath $ toText $ unStorePath path
 
 -- | Traverse the graph of inputDrvs to replace fixed output derivations with their fixed output hash.
 -- this avoids propagating changes to their .drv when the output hash stays the same.
-hashDerivationModulo :: (MonadNix e t f m, MonadState (b, HashMap Text Text) m) => Derivation -> m (Store.Digest 'Store.SHA256)
+hashDerivationModulo :: (MonadNix e t f m, MonadState (b, AttrSet Text) m) => Derivation -> m (Store.Digest 'Store.SHA256)
 hashDerivationModulo
   Derivation
     { mFixed = Just (Store.SomeDigest (digest :: Store.Digest hashType))
@@ -212,10 +212,12 @@ derivationParser = do
     )
   regular = noneOf ['\\', '"']
 
+  wrap o c p =
+    string o *> sepBy p (string ",") <* string c
+
   parens :: Parsec () Text a -> Parsec () Text [a]
-  parens p =
-    (string "(") *> sepBy p (string ",") <* (string ")")
-  serializeList   p = (string "[") *> sepBy p (string ",") <* (string "]")
+  parens p = wrap "(" ")" p
+  serializeList p = wrap "[" "]" p
 
   parseFixed :: [(Text, Text, Text, Text)] -> (Maybe Store.SomeNamedDigest, HashMode)
   parseFixed fullOutputs = case fullOutputs of
@@ -234,33 +236,44 @@ derivationParser = do
     _ -> (Nothing, Flat)
 
 
-defaultDerivationStrict :: forall e t f m b. (MonadNix e t f m, MonadState (b, HashMap Text Text) m) => NValue t f m -> m (NValue t f m)
+defaultDerivationStrict :: forall e t f m b. (MonadNix e t f m, MonadState (b, AttrSet Text) m) => NValue t f m -> m (NValue t f m)
 defaultDerivationStrict val = do
     s <- fromValue @(AttrSet (NValue t f m)) val
     (drv, ctx) <- runWithStringContextT' $ buildDerivationWithContext s
     drvName <- makeStorePathName $ name drv
-    let inputs = toStorePaths ctx
+    let
+      inputs = toStorePaths ctx
+      ifNotJsonModEnv f =
+        bool f id (useJson drv)
+          (env drv)
 
     -- Compute the output paths, and add them to the environment if needed.
     -- Also add the inputs, just computed from the strings contexts.
     drv' <- case mFixed drv of
       Just (Store.SomeDigest digest) -> do
-        let out = pathToText $ Store.makeFixedOutputPath "/nix/store" (hashMode drv == Recursive) digest drvName
-        let env' = if useJson drv then env drv else Map.insert "out" out (env drv)
+        let
+          out = pathToText $ Store.makeFixedOutputPath "/nix/store" (hashMode drv == Recursive) digest drvName
+          env' = ifNotJsonModEnv $ Map.insert "out" out
         pure $ drv { inputs, env = env', outputs = one ("out", out) }
 
       Nothing -> do
         hash <- hashDerivationModulo $ drv
           { inputs
         --, outputs = Map.map (const "") (outputs drv)  -- not needed, this is already the case
-          , env = if useJson drv then env drv
-                  else foldl' (\m k -> Map.insert k "" m) (env drv) (Map.keys $ outputs drv)
+          , env =
+              ifNotJsonModEnv
+                (\ baseEnv ->
+                  foldl'
+                    (\m k -> Map.insert k "" m)
+                    baseEnv
+                    (Map.keys $ outputs drv)
+                )
           }
-        outputs' <- sequence $ Map.mapWithKey (\o _ -> makeOutputPath o hash drvName) (outputs drv)
+        outputs' <- sequence $ Map.mapWithKey (\o _ -> makeOutputPath o hash drvName) $ outputs drv
         pure $ drv
           { inputs
           , outputs = outputs'
-          , env = if useJson drv then env drv else Map.union outputs' (env drv)
+          , env = ifNotJsonModEnv $ Map.union outputs'
           }
 
     drvPath <- pathToText <$> writeDerivation drv'
@@ -269,9 +282,13 @@ defaultDerivationStrict val = do
     drvHash <- Store.encodeInBase Store.Base16 <$> hashDerivationModulo drv'
     modify $ second $ MS.insert drvPath drvHash
 
-    let outputsWithContext = Map.mapWithKey (\out path -> makeNixStringWithSingletonContext path (StringContext drvPath $ DerivationOutput out)) (outputs drv')
-        drvPathWithContext = makeNixStringWithSingletonContext drvPath (StringContext drvPath AllOutputs)
-        attrSet = nvStr <$> M.fromList (("drvPath", drvPathWithContext) : Map.toList outputsWithContext)
+    let
+      outputsWithContext =
+        Map.mapWithKey
+          (\out path -> makeNixStringWithSingletonContext path $ StringContext drvPath $ DerivationOutput out)
+          (outputs drv')
+      drvPathWithContext = makeNixStringWithSingletonContext drvPath $ StringContext drvPath AllOutputs
+      attrSet = nvStr <$> M.fromList (("drvPath", drvPathWithContext) : Map.toList outputsWithContext)
     -- TODO: Add location information for all the entries.
     --              here --v
     pure $ nvSet mempty attrSet
@@ -281,7 +298,7 @@ defaultDerivationStrict val = do
     pathToText = decodeUtf8 . Store.storePathToRawFilePath
 
     makeOutputPath o h n = do
-      name <- makeStorePathName (Store.unStorePathName n <> if o == "out" then "" else "-" <> o)
+      name <- makeStorePathName $ Store.unStorePathName n <> if o == "out" then "" else "-" <> o
       pure $ pathToText $ Store.makeStorePath "/nix/store" ("output:" <> encodeUtf8 o) h name
 
     toStorePaths ctx = foldl (flip addToInputs) (mempty, mempty) ctx
@@ -374,7 +391,7 @@ buildDerivationWithContext drvAttrs = do
     getAttrOr' n d f = case M.lookup n drvAttrs of
       Nothing -> lift d
       Just v  -> withFrame' Info (ErrorCall $ "While evaluating attribute '" <> show n <> "'") $
-                   fromValue' v >>= f
+                   f =<< fromValue' v
 
     getAttrOr n d f = getAttrOr' n (pure d) f
 
