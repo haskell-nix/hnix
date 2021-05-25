@@ -135,8 +135,9 @@
           $ Hashable1 NonEmpty:: Nix.Expr.Types -> Void -- please use upstreamed instance
 
         -- | Was upstreamed, released in `ref-tf >= 0.5`.
-        MonadAtomicRef   (Fix1T t m) :: Nix.Standard -> Void
+        MonadAtomicRef   (ST s) :: Nix.Standard -> Void
 
+        MonadAtomicRef   (Fix1T t m) :: Nix.Standard -> Nix.Utils.Fix1
         MonadRef         (Fix1T t m) :: Nix.Standard -> Nix.Utils.Fix1
         MonadEnv         (Fix1T t m) :: Nix.Standard -> Nix.Effects
         MonadExec        (Fix1T t m) :: Nix.Standard -> Nix.Effects
