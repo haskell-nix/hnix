@@ -246,7 +246,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
 
     let
       fun x y z = addProvenance (Provenance scope $ NIf_ span (pure c) x y) z
-      -- Note: join == \ f x -> f x x
+      -- Note: join acts as \ f x -> f x x
       false = join (fun Nothing . pure) <$> f
       true = join (flip fun Nothing . pure) <$> t
 
