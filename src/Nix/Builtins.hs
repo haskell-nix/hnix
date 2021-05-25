@@ -1146,8 +1146,8 @@ pathExistsNix nvpath =
     path <- demand nvpath
     toValue =<<
       case path of
-        NVPath p  -> pathExists p
-        NVStr  ns -> pathExists $ toString $ stringIgnoreContext ns
+        NVPath p  -> doesPathExist p
+        NVStr  ns -> doesPathExist $ toString $ stringIgnoreContext ns
         _v -> throwError $ ErrorCall $ "builtins.pathExists: expected path, got " <> show _v
 
 isAttrsNix

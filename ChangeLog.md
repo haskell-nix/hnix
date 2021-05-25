@@ -5,6 +5,9 @@
 
 * Additional:
 
+  * `Nix.Effects`:
+    * rm `pathExits` in favour of `doesPathExist` (in `Nix.Render`: `class MonadFile`: `doesPathExist`)
+
   * `Nix.Utils`:
     * added type `TransformF`
 
