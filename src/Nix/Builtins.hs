@@ -122,7 +122,7 @@ instance
   )
   => ToBuiltin t f m (a -> b) where
   toBuiltin name f =
-    pure $ nvBuiltin name (toBuiltin name . f <=< fromValue . Deeper)
+    pure $ nvBuiltin name $ toBuiltin name . f <=< fromValue . Deeper
 
 -- *** @WValue@ closure wrapper to have @Ord@
 
@@ -1071,7 +1071,7 @@ replaceStringsNix tfrom tto ts =
           bugPassOneChar input output =
             maybe
               (finish updatedCtx output)  -- The base case - there is no chars left to process -> finish
-              (\(c, i) -> go updatedCtx i (output <> Builder.singleton c)) -- If there are chars - pass one char & continue
+              (\(c, i) -> go updatedCtx i $ output <> Builder.singleton c) -- If there are chars - pass one char & continue
               (Text.uncons input)  -- chip first char
 
     toValue $ go (getContext string) (stringIgnoreContext string) mempty
@@ -1204,7 +1204,7 @@ throwNix mnv =
 
 importNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-importNix = scopedImportNix (nvSet mempty mempty)
+importNix = scopedImportNix $ nvSet mempty mempty
 
 scopedImportNix
   :: forall e t f m
@@ -1261,9 +1261,7 @@ sortNix comp = toValue <=< sortByM (cmp comp) <=< fromValue
         (do
           isGreaterThan <- (`callFunc` a) =<< callFunc f b
           fromValue isGreaterThan <&>
-            bool
-              EQ
-              GT
+            bool EQ GT
         )
         (pure LT)
         =<< fromValue isLessThan
@@ -1618,7 +1616,7 @@ currentSystemNix =
 currentTimeNix :: MonadNix e t f m => m (NValue t f m)
 currentTimeNix =
   do
-    opts :: Options <- asks (view hasLens)
+    opts :: Options <- asks $ view hasLens
     toValue @Integer $ round $ Time.utcTimeToPOSIXSeconds $ currentTime opts
 
 derivationStrictNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1944,9 +1942,9 @@ builtins =
   buildMap         =  fmap (M.fromList . fmap mapping) builtinsList
   topLevelBuiltins = mapping <<$>> fullBuiltinsList
 
-  fullBuiltinsList = go <<$>> builtinsList
+  fullBuiltinsList = nameBuiltins <<$>> builtinsList
    where
-    go b@(Builtin TopLevel _) = b
-    go (Builtin Normal (name, builtin)) =
-      Builtin TopLevel ("__" <> name, builtin)
+    nameBuiltins b@(Builtin TopLevel _) = b
+    nameBuiltins (Builtin Normal nB) =
+      Builtin TopLevel $ first ("__" <>) nB
 
