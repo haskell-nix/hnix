@@ -521,9 +521,18 @@ buildArgument params arg =
         | otherwise  -> pure $ const $ evalError @v $ ErrorCall $ "Unexpected parameter: " <> show k
       These x _ -> pure $ const $ pure x
 
+-- | Add source positions to @NExprLoc@.
+--
+-- Takes @NExprLoc@, by itself takes source position informatoin, does transformation,
+-- returns @NExprLoc@ with source positions.
+--
+-- Actually:
+--
+-- > => (NExprLoc -> m a)
+-- > -> NExprLoc -> m a
 addSourcePositions
   :: (MonadReader e m, Has e SrcSpan) => Transform NExprLocF (m a)
-addSourcePositions f v@(AnnE ann _) =
+addSourcePositions f (v@(AnnE ann _) :: NExprLoc) =
   local (set hasLens ann) $ f v
 
 addStackFrames
