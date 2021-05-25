@@ -92,7 +92,7 @@ normalizeScheme (Forall _ body) = Forall (snd <$> ord) (normtype body)
 
   normtype (a :~> b ) = normtype a :~> normtype b
   normtype (TCon a  ) = TCon a
-  normtype (TSet b a) = TSet b $ normtype `M.map` a
+  normtype (TSet b a) = TSet b $ normtype <$> a
   normtype (TList a ) = TList $ normtype <$> a
   normtype (TMany ts) = TMany $ normtype <$> ts
   normtype (TVar  a ) =
@@ -220,7 +220,7 @@ instance Substitutable TVar where
 
 instance Substitutable Type where
   apply _         (  TCon a   ) = TCon a
-  apply s         (  TSet b a ) = TSet b $ apply s `M.map` a
+  apply s         (  TSet b a ) = TSet b $ apply s <$> a
   apply s         (  TList a  ) = TList  $ apply s <$> a
   apply (Subst s) t@(TVar  a  ) = Map.findWithDefault t a s
   apply s         (  t1 :~> t2) = apply s t1 :~> apply s t2
