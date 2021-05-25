@@ -526,19 +526,15 @@ evalExprLoc expr =
     let
       pTracedAdi =
         bool
-          (adi Eval.evalContent addMetaInfo)
+          (adi Eval.evalContent Eval.addMetaInfo)
           (join . (`runReaderT` (0 :: Int)) .
             adi
               (addTracing Eval.evalContent)
-              (raise addMetaInfo)
+              (raise Eval.addMetaInfo)
           )
           (tracing opts)
     pTracedAdi expr
-
  where
-  addMetaInfo :: (Fix NExprLocF -> m a) -> Fix NExprLocF -> m a
-  addMetaInfo = addStackFrames @(NValue t f m) . addSourcePositions
-
   raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x
 
 exec :: (MonadNix e t f m, MonadInstantiate m) => [Text] -> m (NValue t f m)

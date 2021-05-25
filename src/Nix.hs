@@ -80,7 +80,7 @@ nixEvalExprLoc
 nixEvalExprLoc mpath =
   nixEval
     mpath
-    (Eval.addStackFrames . Eval.addSourcePositions)
+    Eval.addMetaInfo
     Eval.evalContent
 
 -- | Evaluate a nix expression with tracing in the default context. Note that

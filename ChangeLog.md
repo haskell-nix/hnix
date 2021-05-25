@@ -9,8 +9,9 @@
     * added type `TransformF`
 
   * `Nix.Eval`:
-    * added fun
+    * added fun:
       * `evalContent`
+      * `addMetaInfo`
 
 
 ### [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.0.1...0.13.1#files_bucket) 0.13.1 (2021-05-22)

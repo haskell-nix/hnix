@@ -556,7 +556,7 @@ framedEvalExprLoc
   => NExprLoc
   -> m v
 framedEvalExprLoc =
-  adi evalContent $ addStackFrames @v . addSourcePositions
+  adi evalContent addMetaInfo
 
 -- | Takes annotated expression. Strip from annotation. Evaluate.
 evalContent
@@ -564,3 +564,10 @@ evalContent
   => Compose (Ann ann) NExprF (m v)
   -> m v
 evalContent = eval . annotated . getCompose
+
+-- | Add source postionss & frame context system.
+addMetaInfo
+  :: forall v m e a
+  . (Framed e m, Scoped v m, Has e SrcSpan, Typeable m, Typeable v)
+  => TransformF NExprLoc (m a)
+addMetaInfo = addStackFrames @v . addSourcePositions
