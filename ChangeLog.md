@@ -3,10 +3,12 @@
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.1...master#files_bucket) WIP
 
-* Additional:
+Breaking:
 
   * `Nix.Effects`:
     * rm `pathExits` in favour of `doesPathExist` (in `Nix.Render`: `class MonadFile`: `doesPathExist`)
+
+* Additional:
 
   * `Nix.Utils`:
     * added type `TransformF`
