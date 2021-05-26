@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
 
 -- | A bunch of shorthands for making nix expressions.
 --
@@ -144,11 +143,11 @@ inherit = Inherit Nothing
 inheritFrom :: e -> [NKeyName e] -> SourcePos -> Binding e
 inheritFrom expr = Inherit (pure expr)
 
--- | Shorthand for producing a binding of a name to an expression.
+-- | Shorthand for producing a binding of a name to an expression: @=
 bindTo :: Text -> NExpr -> Binding NExpr
 bindTo name x = NamedVar (mkSelector name) x nullPos
 
--- | Infix version of bindTo.
+-- | Infix version of @bindTo@: @=@
 ($=) :: Text -> NExpr -> Binding NExpr
 ($=) = bindTo
 
@@ -165,13 +164,12 @@ appendBindings newBindings (Fix e) = case e of
 
 -- | Applies a transformation to the body of a nix function.
 modifyFunctionBody :: (NExpr -> NExpr) -> NExpr -> NExpr
-modifyFunctionBody f (Fix e) = case e of
-  NAbs params body -> Fix $ NAbs params (f body)
-  _                -> error "Not a function"
+modifyFunctionBody f (Fix (NAbs params body)) = Fix $ NAbs params $ f body
+modifyFunctionBody _ _ = error "Not a function"
 
 -- | A let statement with multiple assignments.
 letsE :: [(Text, NExpr)] -> NExpr -> NExpr
-letsE pairs = Fix . NLet (fmap (uncurry bindTo) pairs)
+letsE pairs = Fix . NLet (uncurry bindTo <$> pairs)
 
 -- | Wrapper for a single-variable @let@.
 letE :: Text -> NExpr -> NExpr -> NExpr
@@ -179,11 +177,11 @@ letE varName varExpr = letsE [(varName, varExpr)]
 
 -- | Make an attribute set (non-recursive).
 attrsE :: [(Text, NExpr)] -> NExpr
-attrsE pairs = Fix $ NSet NNonRecursive (fmap (uncurry bindTo) pairs)
+attrsE pairs = Fix $ NSet NNonRecursive $ uncurry bindTo <$> pairs
 
 -- | Make an attribute set (recursive).
 recAttrsE :: [(Text, NExpr)] -> NExpr
-recAttrsE pairs = Fix $ NSet NRecursive (fmap (uncurry bindTo) pairs)
+recAttrsE pairs = Fix $ NSet NRecursive $ uncurry bindTo <$> pairs
 
 -- | Logical negation.
 mkNot :: NExpr -> NExpr
@@ -194,38 +192,60 @@ mkNot = Fix . NUnary NNot
 -- (!.) = mkDot
 -- infixl 8 !.
 
+-- * Nix binary operators
+
+-- | Nix binary operator builder.
 mkBinop :: NBinaryOp -> NExpr -> NExpr -> NExpr
-mkBinop op e1 e2 = Fix (NBinary op e1 e2)
+mkBinop op e1 e2 = Fix $ NBinary op e1 e2
 
--- | Various nix binary operators
-($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->), ($//), ($+), ($-), ($*), ($/), ($++)
+(@@), ($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->), ($//), ($+), ($-), ($*), ($/), ($++)
   :: NExpr -> NExpr -> NExpr
-e1 $== e2 = mkBinop NEq e1 e2
-e1 $!= e2 = mkBinop NNEq e1 e2
-e1 $< e2 = mkBinop NLt e1 e2
-e1 $<= e2 = mkBinop NLte e1 e2
-e1 $> e2 = mkBinop NGt e1 e2
-e1 $>= e2 = mkBinop NGte e1 e2
-e1 $&& e2 = mkBinop NAnd e1 e2
-e1 $|| e2 = mkBinop NOr e1 e2
-e1 $-> e2 = mkBinop NImpl e1 e2
-e1 $// e2 = mkBinop NUpdate e1 e2
-e1 $+ e2 = mkBinop NPlus e1 e2
-e1 $- e2 = mkBinop NMinus e1 e2
-e1 $* e2 = mkBinop NMult e1 e2
-e1 $/ e2 = mkBinop NDiv e1 e2
-e1 $++ e2 = mkBinop NConcat e1 e2
-
--- | Function application expression.
-(@@) :: NExpr -> NExpr -> NExpr
-f @@ arg = mkBinop NApp f arg
+-- | Function application (@' '@ in @f x@)
+(@@) = mkBinop NApp
 infixl 1 @@
+-- | Equality: @==@
+($==) = mkBinop NEq
+-- | Inequality: @!=@
+($!=) = mkBinop NNEq
+-- | Less than: @<@
+($<)  = mkBinop NLt
+-- | Less than OR equal: @<=@
+($<=) = mkBinop NLte
+-- | Greater than: @>@
+($>)  = mkBinop NGt
+-- | Greater than OR equal: @>=@
+($>=) = mkBinop NGte
+-- | AND: @&&@
+($&&) = mkBinop NAnd
+-- | OR: @||@
+($||) = mkBinop NOr
+-- | Logical implication: @->@
+($->) = mkBinop NImpl
+-- | Extend/override the left attr set, with the right one: @//@
+($//) = mkBinop NUpdate
+-- | Addition: @+@
+($+)  = mkBinop NPlus
+-- | Subtraction: @-@
+($-)  = mkBinop NMinus
+-- | Multiplication: @*@
+($*)  = mkBinop NMult
+-- | Division: @/@
+($/)  = mkBinop NDiv
+-- | List concatenation: @++@
+($++) = mkBinop NConcat
 
--- | Lambda shorthand.
+
+-- | Lambda function.
+-- > x ==> x
+--Haskell:
+-- > \\ x -> x
+--Nix:
+-- > x: x
 (==>) :: Params NExpr -> NExpr -> NExpr
 (==>) = mkFunction
 infixr 1 ==>
 
+-- | Dot-reference into an attribute set: @attrSet.k@
 (@.) :: NExpr -> Text -> NExpr
-obj @. name = Fix (NSelect obj (StaticKey name :| mempty) Nothing)
+(@.) obj name = Fix $ NSelect obj (StaticKey name :| mempty) Nothing
 infixl 2 @.

@@ -1,8 +1,5 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE LambdaCase #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
@@ -66,9 +63,7 @@ import           Data.Data                      ( Data(..) )
 import           Data.Fix                       ( Fix(..) )
 import qualified Data.HashSet                  as HashSet
 import qualified Data.Map                      as Map
-import           Data.Text                      ( cons
-                                                , singleton
-                                                )
+import           Data.Text                      ( cons )
 import           Nix.Expr                hiding ( ($>) )
 import           Nix.Expr.Strings               ( escapeCodes
                                                 , stripIndent
@@ -339,7 +334,7 @@ nixString' = lexeme (doubleQuoted <+> indented <?> "string")
       <?> "double quoted string"
 
   doubleQ      = void $ char '"'
-  doubleEscape = Plain . singleton <$> (char '\\' *> escapeCode)
+  doubleEscape = Plain . one <$> (char '\\' *> escapeCode)
 
   indented :: Parser (NString NExprLoc)
   indented =
@@ -363,13 +358,13 @@ nixString' = lexeme (doubleQuoted <+> indented <?> "string")
             pure $
               bool
                 EscapedNewline
-                (Plain $ singleton c)
+                (Plain $ one c)
                 (c /= '\n')
 
   stringChar end escStart esc =
     Antiquoted <$>
       (antiStart *> nixToplevelForm <* char '}')
-        <+> Plain . singleton <$>
+        <+> Plain . one <$>
           char '$' <+> esc <+> Plain . toText <$>
             some plainChar
    where

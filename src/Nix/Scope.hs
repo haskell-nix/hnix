@@ -1,12 +1,8 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Nix.Scope where
 
@@ -47,8 +43,7 @@ instance Semigroup (Scopes m a) where
   Scopes ls lw <> Scopes rs rw = Scopes (ls <> rs) (lw <> rw)
 
 instance Monoid (Scopes m a) where
-  mempty  = emptyScopes
-  mappend = (<>)
+  mempty = emptyScopes
 
 emptyScopes :: forall m a . Scopes m a
 emptyScopes = Scopes mempty mempty

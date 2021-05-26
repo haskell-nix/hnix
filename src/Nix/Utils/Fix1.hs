@@ -1,12 +1,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Nix.Utils.Fix1 where
@@ -19,8 +15,9 @@ import           Control.Monad.Catch            ( MonadCatch
                                                 , MonadMask
                                                 , MonadThrow )
 
--- | The fixpoint combinator, courtesy of Gregory Malecha.
---   https://gist.github.com/gmalecha/ceb3778b9fdaa4374976e325ac8feced
+-- | The fixpoint combinator.
+-- Courtesy of Gregory Malecha.
+-- https://gist.github.com/gmalecha/ceb3778b9fdaa4374976e325ac8feced
 newtype Fix1 (t :: (k -> *) -> k -> *) (a :: k) = Fix1 { unFix1 :: t (Fix1 t) a }
 
 deriving instance Functor (t (Fix1 t))

@@ -1,10 +1,7 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TupleSections #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 
@@ -31,22 +28,33 @@ import           Debug.Trace as X
 -- Well, since it is currently CPP intermingled with Debug.Trace, required to use String here.
 trace :: String -> a -> a
 trace = const id
+{-# inline trace #-}
 traceM :: Monad m => String -> m ()
 traceM = const pass
+{-# inline traceM #-}
 #endif
 
-$(makeLensesBy (\n -> pure ("_" <> n)) ''Fix)
+$(makeLensesBy (\n -> pure $ "_" <> n) ''Fix)
 
+-- | > Hashmap Text -- type synonym
 type AttrSet = HashMap Text
 
--- | F-algebra defines how to reduce the fixed-point of a functor to a
---   value.
+-- | F-algebra defines how to reduce the fixed-point of a functor to a value.
+-- > type Alg f a = f a -> a
 type Alg f a = f a -> a
 
+-- | > type AlgM f m a = f a -> m a
 type AlgM f m a = f a -> m a
 
--- | "Transform" here means a modification of a catamorphism.
+-- | Do according transformation.
+--
+-- It is a transformation of a recursion scheme.
 type Transform f a = (Fix f -> a) -> Fix f -> a
+-- | Do according transformation.
+--
+-- It is a transformation of a recursion scheme.
+-- See @Transform@.
+type TransformF f a = (f -> a) -> f -> a
 
 loeb :: Functor f => f (f a -> a) -> f a
 loeb x = go
@@ -105,6 +113,9 @@ fixToFree = Free . go
 --   in this case through behavior.
 adi :: Functor f => (f a -> a) -> ((Fix f -> a) -> Fix f -> a) -> Fix f -> a
 adi f g = g $ f . (adi f g <$>) . unFix
+
+adi' :: Functor f => ((Fix f -> a) -> Fix f -> a) -> (f a -> a) -> Fix f -> a
+adi' g f = g $ f . (adi' g f <$>) . unFix
 
 adiM
   :: (Traversable t, Monad m)

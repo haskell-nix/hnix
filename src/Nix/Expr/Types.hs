@@ -1,20 +1,10 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE InstanceSigs #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
@@ -23,6 +13,10 @@
 --
 -- For a brief introduction of the Nix expression language, see
 -- <https://nixos.org/nix/manual/#ch-expression-language>.
+--
+-- This module is a beginning of a deep embedding (term) of a Nix language into Haskell.
+-- Shallow/deep embedding brief:
+-- <https://web.archive.org/web/20201112031804/https://alessandrovermeulen.me/2013/07/13/the-difference-between-shallow-and-deep-embedding/>
 module Nix.Expr.Types where
 
 #ifdef MIN_VERSION_serialise
@@ -47,13 +41,17 @@ import           GHC.Generics
 import qualified Language.Haskell.TH.Syntax    as TH
 import           Lens.Family2
 import           Lens.Family2.TH
-import           Nix.Atoms
-import           Nix.Utils
-import           Text.Megaparsec.Pos
+import           Text.Megaparsec.Pos            ( SourcePos(SourcePos)
+                                                , Pos
+                                                , mkPos
+                                                , unPos
+                                                )
 import           Text.Read.Deriving
 import           Text.Show.Deriving
 import qualified Type.Reflection               as Reflection
 import           Type.Reflection                ( eqTypeRep )
+import           Nix.Atoms
+import           Nix.Utils
 #if !MIN_VERSION_text(1,2,4)
 -- NOTE: Remove package @th-lift-instances@ removing this
 import           Instances.TH.Lift              ()  -- importing Lift Text fo GHC 8.6
@@ -250,8 +248,15 @@ instance Serialise Pos where
   decode = mkPos <$> Serialise.decode
 
 instance Serialise SourcePos where
-  encode (SourcePos f l c) = Serialise.encode f <> Serialise.encode l <> Serialise.encode c
-  decode = SourcePos <$> Serialise.decode <*> Serialise.decode <*> Serialise.decode
+  encode (SourcePos f l c) =
+    Serialise.encode f <>
+    Serialise.encode l <>
+    Serialise.encode c
+  decode =
+    liftA3 SourcePos
+      Serialise.decode
+      Serialise.decode
+      Serialise.decode
 #endif
 
 instance Hashable Pos where
@@ -259,7 +264,10 @@ instance Hashable Pos where
 
 instance Hashable SourcePos where
   hashWithSalt salt (SourcePos f l c) =
-    salt `hashWithSalt` f `hashWithSalt` l `hashWithSalt` c
+    salt
+      `hashWithSalt` f
+      `hashWithSalt` l
+      `hashWithSalt` c
 
 instance NFData1 NKeyName where
   liftRnf _ (StaticKey  !_            ) = ()
@@ -355,7 +363,7 @@ data NBinaryOp
   | NAnd     -- ^ Logical and (@&&@)
   | NOr      -- ^ Logical or (@||@)
   | NImpl    -- ^ Logical implication (@->@)
-  | NUpdate  -- ^ Joining two attribute sets (@//@)
+  | NUpdate  -- ^ Get the left attr set, extend it with the right one & override equal keys (@//@)
   | NPlus    -- ^ Addition (@+@)
   | NMinus   -- ^ Subtraction (@-@)
   | NMult    -- ^ Multiplication (@*@)
@@ -488,24 +496,6 @@ instance Serialise r => Serialise (NExprF r)
 instance IsString NExpr where
   fromString = Fix . NSym . fromString
 
-instance TH.Lift (Fix NExprF) where
-  lift =
-    TH.dataToExpQ
-      (\b ->
-        do
-          -- Binding on constructor ensures type match and gives type inference to TH
-          HRefl <-
-            eqTypeRep
-              (Reflection.typeRep @Text)
-              (Reflection.typeOf  b    )
-          pure [| $(TH.lift b) |]
-      )
-#if MIN_VERSION_template_haskell(2,17,0)
-  liftTyped = unsafeCodeCoerce . lift
-#elif MIN_VERSION_template_haskell(2,16,0)
-  liftTyped = TH.unsafeTExpCoerce . TH.lift
-#endif
-
 #if !MIN_VERSION_hashable(1,3,1)
 -- there was none before, remove this in year >2022
 instance Hashable1 NonEmpty
@@ -521,6 +511,24 @@ type NExpr = Fix NExprF
 
 #ifdef MIN_VERSION_serialise
 instance Serialise NExpr
+#endif
+
+instance TH.Lift NExpr where
+  lift =
+    TH.dataToExpQ
+      (\b ->
+        do
+          -- Binding on constructor ensures type match and gives type inference to TH
+          HRefl <-
+            eqTypeRep
+              (Reflection.typeRep @Text)
+              (Reflection.typeOf  b    )
+          pure [| $(TH.lift b) |]
+      )
+#if MIN_VERSION_template_haskell(2,17,0)
+  liftTyped = unsafeCodeCoerce . lift
+#elif MIN_VERSION_template_haskell(2,16,0)
+  liftTyped = TH.unsafeTExpCoerce . TH.lift
 #endif
 
 
@@ -642,8 +650,9 @@ ekey keys pos f e@(Fix x) | (NSet NNonRecursive xs, ann) <- fromNExpr x =
       maybe
         e
         (\ v ->
-          let entry = NamedVar (NE.map StaticKey keys) v pos in
-          Fix (toNExpr (NSet NNonRecursive (entry : xs), ann)))
+          let entry = NamedVar (StaticKey <$> keys) v pos in
+          Fix $ toNExpr ( NSet NNonRecursive $ [entry] <> xs, ann )
+        )
       <$>
         f Nothing
   where

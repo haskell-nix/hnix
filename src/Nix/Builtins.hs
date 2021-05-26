@@ -1,11 +1,8 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE PackageImports #-}
@@ -13,8 +10,6 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -127,7 +122,7 @@ instance
   )
   => ToBuiltin t f m (a -> b) where
   toBuiltin name f =
-    pure $ nvBuiltin name (toBuiltin name . f <=< fromValue . Deeper)
+    pure $ nvBuiltin name $ toBuiltin name . f <=< fromValue . Deeper
 
 -- *** @WValue@ closure wrapper to have @Ord@
 
@@ -1076,7 +1071,7 @@ replaceStringsNix tfrom tto ts =
           bugPassOneChar input output =
             maybe
               (finish updatedCtx output)  -- The base case - there is no chars left to process -> finish
-              (\(c, i) -> go updatedCtx i (output <> Builder.singleton c)) -- If there are chars - pass one char & continue
+              (\(c, i) -> go updatedCtx i $ output <> Builder.singleton c) -- If there are chars - pass one char & continue
               (Text.uncons input)  -- chip first char
 
     toValue $ go (getContext string) (stringIgnoreContext string) mempty
@@ -1118,7 +1113,7 @@ functionArgsNix nvfun =
       NVClosure p _ ->
         toValue @(AttrSet (NValue t f m)) $ mkNVBool <$>
           case p of
-            Param name     -> M.singleton name False
+            Param name     -> one (name, False)
             ParamSet s _ _ -> isJust <$> M.fromList s
       _v -> throwError $ ErrorCall $ "builtins.functionArgs: expected function, got " <> show _v
 
@@ -1132,9 +1127,9 @@ toFileNix name s =
     name' <- fromStringNoContext =<< fromValue name
     s'    <- fromValue s
     mres  <-
-      toFile_
-        (toString name')
-        (toString $ stringIgnoreContext s')
+      (toFile_ `on` toString)
+        name'
+        (stringIgnoreContext s')
 
     let
       t  = toText $ unStorePath mres
@@ -1151,8 +1146,8 @@ pathExistsNix nvpath =
     path <- demand nvpath
     toValue =<<
       case path of
-        NVPath p  -> pathExists p
-        NVStr  ns -> pathExists (toString $ stringIgnoreContext ns)
+        NVPath p  -> doesPathExist p
+        NVStr  ns -> doesPathExist $ toString $ stringIgnoreContext ns
         _v -> throwError $ ErrorCall $ "builtins.pathExists: expected path, got " <> show _v
 
 isAttrsNix
@@ -1209,7 +1204,7 @@ throwNix mnv =
 
 importNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-importNix = scopedImportNix (nvSet mempty mempty)
+importNix = scopedImportNix $ nvSet mempty mempty
 
 scopedImportNix
   :: forall e t f m
@@ -1266,9 +1261,7 @@ sortNix comp = toValue <=< sortByM (cmp comp) <=< fromValue
         (do
           isGreaterThan <- (`callFunc` a) =<< callFunc f b
           fromValue isGreaterThan <&>
-            bool
-              EQ
-              GT
+            bool EQ GT
         )
         (pure LT)
         =<< fromValue isLessThan
@@ -1365,7 +1358,7 @@ hashStringNix nsAlgo ns =
        where
         -- This intermidiary `a` is only needed because of the type application
         mkHash :: (Show a, HashAlgorithm a) => Text -> a
-        mkHash s = hash (encodeUtf8 s)
+        mkHash s = hash $ encodeUtf8 s
 
 
 placeHolderNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1373,11 +1366,10 @@ placeHolderNix p =
   do
     t <- fromStringNoContext =<< fromValue p
     h <-
-      runPrim
-        (hashStringNix
-          (makeNixStringWithoutContext "sha256"           )
-          (makeNixStringWithoutContext ("nix-output:" <> t))
-        )
+      runPrim $
+        (hashStringNix `on` makeNixStringWithoutContext)
+          "sha256"
+          ("nix-output:" <> t)
     toValue
       $ makeNixStringWithoutContext
       $ Text.cons '/'
@@ -1511,14 +1503,15 @@ typeOfNix nvv =
 
 tryEvalNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-tryEvalNix e = catch (onSuccess <$> demand e) (pure . onError)
+tryEvalNix e = (`catch` (pure . onError))
+  (onSuccess <$> demand e)
  where
   onSuccess v =
     nvSet
       mempty
       $ M.fromList
         [ ("success", mkNVBool True)
-        , ("value", v)
+        , ("value"  , v            )
         ]
 
   onError :: SomeException -> NValue t f m
@@ -1526,9 +1519,9 @@ tryEvalNix e = catch (onSuccess <$> demand e) (pure . onError)
     nvSet
       mempty
       $ M.fromList
-        $ ($ mkNVBool False) <$>
-          [ ("success",)
-          , ("value"  ,)
+        $ (, mkNVBool False) <$>
+          [ "success"
+          , "value"
           ]
 
 traceNix
@@ -1560,7 +1553,7 @@ execNix xs =
     -- 2018-11-19: NOTE: Still need to do something with the context here
     -- See prim_exec in nix/src/libexpr/primops.cc
     -- Requires the implementation of EvalState::realiseContext
-    exec (stringIgnoreContext <$> xs)
+    exec $ stringIgnoreContext <$> xs
 
 fetchurlNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1607,7 +1600,10 @@ partitionNix f nvlst =
       makeSide       = nvList . fmap snd
 
     toValue @(AttrSet (NValue t f m))
-      $ M.fromList [("right", makeSide right), ("wrong", makeSide wrong)]
+      $ M.fromList
+          [ ("right", makeSide right)
+          , ("wrong", makeSide wrong)
+          ]
 
 currentSystemNix :: MonadNix e t f m => m (NValue t f m)
 currentSystemNix =
@@ -1615,13 +1611,13 @@ currentSystemNix =
     os   <- getCurrentSystemOS
     arch <- getCurrentSystemArch
 
-    pure $ nvStr $ makeNixStringWithoutContext (arch <> "-" <> os)
+    pure $ nvStr $ makeNixStringWithoutContext $ arch <> "-" <> os
 
 currentTimeNix :: MonadNix e t f m => m (NValue t f m)
 currentTimeNix =
   do
-    opts :: Options <- asks (view hasLens)
-    toValue @Integer $ round $ Time.utcTimeToPOSIXSeconds (currentTime opts)
+    opts :: Options <- asks $ view hasLens
+    toValue @Integer $ round $ Time.utcTimeToPOSIXSeconds $ currentTime opts
 
 derivationStrictNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 derivationStrictNix = derivationStrict
@@ -1637,7 +1633,7 @@ getContextNix v =
     case v' of
       (NVStr ns) -> do
         let context = getNixLikeContext $ toNixLikeContext $ getContext ns
-        valued :: M.HashMap Text (NValue t f m) <- sequenceA $ M.map toValue context
+        valued :: AttrSet (NValue t f m) <- sequenceA $ toValue <$> context
         pure $ nvSet mempty valued
       x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: " <> show x
 
@@ -1672,17 +1668,11 @@ appendContextNix tx ty =
             -- TODO: Fail for unexpected keys.
 
             let
-              getPaths =
+              getK k =
                 maybe
                   (pure False)
                   (fromValue <=< demand)
-                  (M.lookup "path" attrs)
-
-              getAllOutputs =
-                maybe
-                  (pure False)
-                  (fromValue <=< demand)
-                  (M.lookup "allOutputs" attrs)
+                  (M.lookup k attrs)
 
               getOutputs =
                 maybe
@@ -1697,8 +1687,8 @@ appendContextNix tx ty =
                   )
                   (M.lookup "outputs" attrs)
 
-            path <- getPaths
-            allOutputs <- getAllOutputs
+            path <- getK "path"
+            allOutputs <- getK "allOutputs"
 
             NixLikeContextValue path allOutputs <$> getOutputs
 
@@ -1849,12 +1839,23 @@ builtinsList = sequence
     mkThunk :: Text -> m (NValue t f m) -> m (NValue t f m)
     mkThunk n = defer . withFrame Info (ErrorCall $ "While calling builtin " <> toString n <> "\n")
 
+  hAdd
+    :: ( Text
+      -> fun
+      -> m (NValue t f m)
+      )
+    -> BuiltinType
+    -> Text
+    -> fun
+    -> m (Builtin (NValue t f m))
+  hAdd f t n v = mkBuiltin t n $ f n v
+
   add0
     :: BuiltinType
     -> Text
     -> m (NValue t f m)
     -> m (Builtin (NValue t f m))
-  add0 t n v = mkBuiltin t n v
+  add0 = hAdd (\ _ x -> x)
 
   add
     :: BuiltinType
@@ -1863,7 +1864,7 @@ builtinsList = sequence
       -> m (NValue t f m)
       )
     -> m (Builtin (NValue t f m))
-  add  t n v = mkBuiltin t n (builtin n v)
+  add = hAdd builtin
 
   add2
     :: BuiltinType
@@ -1873,7 +1874,7 @@ builtinsList = sequence
       -> m (NValue t f m)
       )
     -> m (Builtin (NValue t f m))
-  add2 t n v = mkBuiltin t n (builtin2 n v)
+  add2 = hAdd builtin2
 
   add3
     :: BuiltinType
@@ -1884,7 +1885,7 @@ builtinsList = sequence
       -> m (NValue t f m)
       )
     -> m (Builtin (NValue t f m))
-  add3 t n v = mkBuiltin t n (builtin3 n v)
+  add3 = hAdd builtin3
 
   add'
     :: ToBuiltin t f m a
@@ -1892,12 +1893,12 @@ builtinsList = sequence
     -> Text
     -> a
     -> m (Builtin (NValue t f m))
-  add' t n v = mkBuiltin t n (toBuiltin n v)
+  add' = hAdd toBuiltin
 
 
 -- * Exported
 
--- | Evaluate a nix expression in the default context
+-- | Evaluate expression in the default context.
 withNixContext
   :: forall e t f m r
    . (MonadNix e t f m, Has e Options)
@@ -1911,16 +1912,21 @@ withNixContext mpath action =
     let
       i = nvList $ nvStr . makeNixStringWithoutContext . toText <$> include opts
 
-    pushScope (M.singleton "__includes" i) $ pushScopes base $
-      maybe
-        action
-        (\ path ->
-          do
-            traceM $ "Setting __cur_file = " <> show path
-            let ref = nvPath path
-            pushScope (M.singleton "__cur_file" ref) action
-        )
-        mpath
+    pushScope
+      (one ("__includes", i))
+      (pushScopes
+        base $
+        maybe
+          id
+          (\ path act ->
+            do
+              traceM $ "Setting __cur_file = " <> show path
+              let ref = nvPath path
+              pushScope (one ("__cur_file", ref)) act
+          )
+          mpath
+          action
+      )
 
 builtins
   :: ( MonadNix e t f m
@@ -1936,9 +1942,9 @@ builtins =
   buildMap         =  fmap (M.fromList . fmap mapping) builtinsList
   topLevelBuiltins = mapping <<$>> fullBuiltinsList
 
-  fullBuiltinsList = go <<$>> builtinsList
+  fullBuiltinsList = nameBuiltins <<$>> builtinsList
    where
-    go b@(Builtin TopLevel _) = b
-    go (Builtin Normal (name, builtin)) =
-      Builtin TopLevel ("__" <> name, builtin)
+    nameBuiltins b@(Builtin TopLevel _) = b
+    nameBuiltins (Builtin Normal nB) =
+      Builtin TopLevel $ first ("__" <>) nB
 

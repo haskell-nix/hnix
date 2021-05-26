@@ -1,9 +1,5 @@
 {-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -192,10 +188,10 @@ main =
                               ((k, ) <$> forceEntry path nv)
                               descend
                     )
-                    (\ v -> pure (k, pure (Free v)))
+                    (\ v -> pure (k, pure $ Free v))
                     nv
                 )
-                (sortWith fst (M.toList s))
+                (sortWith fst $ M.toList s)
             traverse_
               (\ (k, mv) ->
                 do
@@ -260,7 +256,7 @@ main =
         Nix.withNixContext
           mp
           (Nix.reducingEvalExpr
-            (Eval.eval . annotated . getCompose)
+            Eval.evalContent
             mp
             x
           )
@@ -275,8 +271,8 @@ main =
     do
       liftIO $
         do
-          putStrLn $ "Wrote winnowed expression tree to " <> path
-          writeFile path $ show $ prettyNix (stripAnnotation expr')
+          putStrLn $ "Wrote sifted expression tree to " <> path
+          writeFile path $ show $ prettyNix $ stripAnnotation expr'
       either
         throwM
         pure

@@ -2,15 +2,9 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -53,7 +47,7 @@ import           Nix.String
 import           Nix.Thunk
 
 
--- * @__NValueF__@: Base functor
+-- * @__NValueF__@: Base functor (F)
 
 -- | An NValueF p m r represents all the possible types of Nix values.
 --
@@ -126,6 +120,11 @@ data NValueF p m r
     | NVStrF NixString
     | NVPathF FilePath
     | NVListF [r]
+    --  2021-05-22: NOTE: Please flip this and dependent functions.
+    -- Quite frequently actions/processing happens with values
+    -- (for example - forcing of values & recreation of the monad),
+    -- but SourcePos does not change then
+    -- That would be good to flip all 'AttrSet.* AttrSet SourcePos'
     | NVSetF (AttrSet r) (AttrSet SourcePos)
     | NVClosureF (Params ()) (p -> m r)
       -- ^ A function is a closed set of parameters representing the "call
@@ -446,8 +445,8 @@ nvList' = NValue' . pure . NVListF
 
 -- | Haskell key-value to the Nix key-value,
 nvSet' :: Applicative f
-  => HashMap Text SourcePos
-  -> HashMap Text r
+  => AttrSet SourcePos
+  -> AttrSet r
   -> NValue' t f m r
 nvSet' x s = NValue' $ pure $ NVSetF s x
 
@@ -522,7 +521,7 @@ iterNValue
   -> (NValue' t f m r -> r)
   -> NValue t f m
   -> r
-iterNValue k f = iter f . fmap (\t -> k t (iterNValue k f))
+iterNValue k f = iter f . fmap (\t -> k t $ iterNValue k f)
 
 
 -- | @iter@ for monadic values
@@ -615,8 +614,8 @@ nvList = Free . nvList'
 
 
 nvSet :: Applicative f
-  => HashMap Text SourcePos
-  -> HashMap Text (NValue t f m)
+  => AttrSet SourcePos
+  -> AttrSet (NValue t f m)
   -> NValue t f m
 nvSet x s = Free $ nvSet' x s
 

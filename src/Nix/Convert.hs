@@ -1,14 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE IncoherentInstances #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -90,7 +83,7 @@ fromMayToDeeperValue t v =
   do
     v' <- fromValueMay v
     maybe
-      (throwError $ Expectation @t @f @m t (Free $ getDeeper v))
+      (throwError $ Expectation @t @f @m t $ Free $ getDeeper v)
       pure
       v'
 
@@ -161,7 +154,7 @@ instance Convertible e t f m
   fromValueMay =
     pure .
       \case
-        NVConstant' (NInt b) -> pure (fromInteger b)
+        NVConstant' (NInt b) -> pure $ fromInteger b
         _                    -> Nothing
 
   fromValue = fromMayToValue TInt
@@ -184,7 +177,7 @@ instance Convertible e t f m
     pure .
       \case
         NVConstant' (NFloat b) -> pure b
-        NVConstant' (NInt   i) -> pure (fromInteger i)
+        NVConstant' (NInt   i) -> pure $ fromInteger i
         _                      -> Nothing
 
   fromValue = fromMayToValue TFloat
@@ -209,7 +202,7 @@ instance ( Convertible e t f m
           (M.lookup "outPath" s)
       _ -> stub
 
-  fromValue = fromMayToValue (TString NoContext)
+  fromValue = fromMayToValue $ TString NoContext
 
 instance Convertible e t f m
   => FromValue ByteString m (NValue' t f m (NValue t f m)) where
@@ -220,7 +213,7 @@ instance Convertible e t f m
         NVStr' ns -> encodeUtf8 <$> getStringNoContext  ns
         _         -> mempty
 
-  fromValue = fromMayToValue (TString NoContext)
+  fromValue = fromMayToValue $ TString NoContext
 
 
 newtype Path = Path { getPath :: FilePath }
@@ -248,7 +241,7 @@ instance Convertible e t f m
   => FromValue [NValue t f m] m (NValue' t f m (NValue t f m)) where
 
   fromValueMay =
-    pure.
+    pure .
       \case
         NVList' l -> pure l
         _         -> mempty
@@ -327,17 +320,17 @@ instance ( Convertible e t f m
 -- * ToValue
 
 class ToValue a m v where
-    toValue :: a -> m v
+  toValue :: a -> m v
 
 instance (Convertible e t f m, ToValue a m (NValue' t f m (NValue t f m)))
   => ToValue a m (NValue t f m) where
-  toValue = fmap Free . toValue
+  toValue v = Free <$> toValue v
 
 instance ( Convertible e t f m
          , ToValue a m (Deeper (NValue' t f m (NValue t f m)))
          )
   => ToValue a m (Deeper (NValue t f m)) where
-  toValue = fmap (fmap Free) . toValue
+  toValue v = Free <<$>> toValue v
 
 instance Convertible e t f m
   => ToValue () m (NValue' t f m (NValue t f m)) where
@@ -379,9 +372,9 @@ instance ( Convertible e t f m
          )
   => ToValue SourcePos m (NValue' t f m (NValue t f m)) where
   toValue (SourcePos f l c) = do
-    f' <- toValue (makeNixStringWithoutContext (toText f))
-    l' <- toValue (unPos l)
-    c' <- toValue (unPos c)
+    f' <- toValue $ makeNixStringWithoutContext $ toText f
+    l' <- toValue $ unPos l
+    c' <- toValue $ unPos c
     let pos = M.fromList [("file" :: Text, f'), ("line", l'), ("column", c')]
     pure $ nvSet' mempty pos
 
@@ -392,7 +385,7 @@ instance Convertible e t f m
 
 instance (Convertible e t f m, ToValue a m (NValue t f m))
   => ToValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
-  toValue = fmap (Deeper . nvList') . traverse toValue
+  toValue l = Deeper . nvList' <$> traverse toValue l
 
 instance Convertible e t f m
   => ToValue (AttrSet (NValue t f m)) m (NValue' t f m (NValue t f m)) where
@@ -401,8 +394,7 @@ instance Convertible e t f m
 instance (Convertible e t f m, ToValue a m (NValue t f m))
   => ToValue (AttrSet a) m (Deeper (NValue' t f m (NValue t f m))) where
   toValue s =
-    liftA2
-      (\ v s -> Deeper $ nvSet' s v)
+    liftA2 (\ v s -> Deeper $ nvSet' s v)
       (traverse toValue s)
       stub
 
@@ -414,21 +406,22 @@ instance Convertible e t f m
 instance (Convertible e t f m, ToValue a m (NValue t f m))
   => ToValue (AttrSet a, AttrSet SourcePos) m
             (Deeper (NValue' t f m (NValue t f m))) where
-  toValue (s, p) = (\ v s -> Deeper $ nvSet' s v) <$> traverse toValue s <*> pure p
+  toValue (s, p) =
+    liftA2 (\ v s -> Deeper $ nvSet' s v)
+      (traverse toValue s)
+      (pure p)
 
 instance Convertible e t f m
   => ToValue NixLikeContextValue m (NValue' t f m (NValue t f m)) where
   toValue nlcv = do
-    path <-
-      bool
-        (pure Nothing)
-        (pure <$> toValue True)
-        (nlcvPath nlcv)
-    allOutputs <-
-      bool
-        (pure Nothing)
-        (pure <$> toValue True)
-        (nlcvAllOutputs nlcv)
+    let
+      g f =
+        bool
+          (pure Nothing)
+          (pure <$> toValue True)
+          (f nlcv)
+    path <- g nlcvPath
+    allOutputs <- g nlcvAllOutputs
     outputs <- do
       let
         outputs = makeNixStringWithoutContext <$> nlcvOutputs nlcv
@@ -439,9 +432,9 @@ instance Convertible e t f m
         (fmap pure . toValue)
         ts
     pure $ nvSet' mempty $ M.fromList $ catMaybes
-      [ ("path",) <$> path
+      [ ("path"      ,) <$> path
       , ("allOutputs",) <$> allOutputs
-      , ("outputs",) <$> outputs
+      , ("outputs"   ,) <$> outputs
       ]
 
 instance Convertible e t f m => ToValue () m (NExprF (NValue t f m)) where

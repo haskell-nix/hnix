@@ -1,14 +1,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE InstanceSigs #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -28,7 +22,6 @@ import           Control.Monad.Fail             ( MonadFail )
 import           Control.Monad.Free             ( Free(Pure, Free) )
 import           Control.Monad.Reader           ( MonadFix )
 import           Control.Monad.Ref              ( MonadAtomicRef )
-import qualified Data.HashMap.Strict
 import qualified Text.Show
 import           Nix.Cited
 import           Nix.Cited.Basic
@@ -105,7 +98,7 @@ instance
   , Typeable m
   , Scoped (StdValue m) m
   , MonadReader (Context m (StdValue m)) m
-  , MonadState (HashMap FilePath NExprLoc, Data.HashMap.Strict.HashMap Text Text) m
+  , MonadState (HashMap FilePath NExprLoc, HashMap Text Text) m
   , MonadDataErrorContext (StdThunk m) (StdCited m) m
   , MonadThunk (StdThunk m) m (StdValue m)
   , MonadValue (StdValue m) m
@@ -327,7 +320,7 @@ instance MonadThunkId m
 mkStandardT
   :: ReaderT
       (Context (StandardT m) (StdValue (StandardT m)))
-      (StateT (HashMap FilePath NExprLoc, Data.HashMap.Strict.HashMap Text Text) m)
+      (StateT (HashMap FilePath NExprLoc, HashMap Text Text) m)
       a
   -> StandardT m a
 mkStandardT = Fix1T . StandardTF
@@ -336,7 +329,7 @@ runStandardT
   :: StandardT m a
   -> ReaderT
       (Context (StandardT m) (StdValue (StandardT m)))
-      (StateT (HashMap FilePath NExprLoc, Data.HashMap.Strict.HashMap Text Text) m)
+      (StateT (HashMap FilePath NExprLoc, HashMap Text Text) m)
       a
 runStandardT (Fix1T (StandardTF m)) = m
 

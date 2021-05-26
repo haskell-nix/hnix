@@ -1,14 +1,8 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -150,16 +144,18 @@ instance MonadExec IO where
     []            -> pure $ Left $ ErrorCall "exec: missing program"
     (prog : args) -> do
       (exitCode, out, _) <- liftIO $ readProcessWithExitCode (toString prog) (toString <$> args) ""
-      let t    = Text.strip (toText out)
-      let emsg = "program[" <> prog <> "] args=" <> show args
+      let
+        t    = Text.strip $ toText out
+        emsg = "program[" <> prog <> "] args=" <> show args
       case exitCode of
         ExitSuccess ->
+          pure $
           if Text.null t
-            then pure $ Left $ ErrorCall $ toString $ "exec has no output :" <> emsg
+            then Left $ ErrorCall $ toString $ "exec has no output :" <> emsg
             else
               either
-                (\ err -> pure $ Left $ ErrorCall $ toString $ "Error parsing output of exec: " <> show err <> " " <> emsg)
-                (pure . pure)
+                (\ err -> Left $ ErrorCall $ toString $ "Error parsing output of exec: " <> show err <> " " <> emsg)
+                pure
                 (parseNixTextLoc t)
         err -> pure $ Left $ ErrorCall $ toString $ "exec  failed: " <> show err <> " " <> emsg
 
@@ -206,7 +202,7 @@ instance MonadInstantiate IO where
             either
               (\ e -> Left $ ErrorCall $ "Error parsing output of nix-instantiate: " <> show e)
               pure
-              (parseNixTextLoc (toText out))
+              (parseNixTextLoc $ toText out)
           status -> Left $ ErrorCall $ "nix-instantiate failed: " <> show status <> ": " <> err
 
 deriving
@@ -312,7 +308,7 @@ instance MonadHttp IO where
         else newManager defaultManagerSettings
     -- print req
     response <- httpLbs (req { method = "GET" }) manager
-    let status = statusCode (responseStatus response)
+    let status = statusCode $ responseStatus response
     pure $ Left $ ErrorCall $ if status /= 200
       then
         "fail, got " <> show status <> " when fetching url:" <> urlstr
@@ -454,10 +450,3 @@ addPath p =
 
 toFile_ :: (Framed e m, MonadStore m) => FilePath -> String -> m StorePath
 toFile_ p contents = addTextToStore (toText p) (toText contents) HS.empty False
-
-
--- * misc
-
--- Please, get rid of pathExists in favour of @doesPathExist@
-pathExists :: MonadFile m => FilePath -> m Bool
-pathExists = doesPathExist

@@ -1,11 +1,6 @@
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveAnyClass     #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE DeriveTraversable  #-}
-{-# LANGUAGE FlexibleInstances  #-}
 {-# LANGUAGE KindSignatures     #-}
-{-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE PatternSynonyms    #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE TemplateHaskell    #-}
@@ -59,7 +54,10 @@ data SrcSpan = SrcSpan
 -- ** Instances
 
 instance Semigroup SrcSpan where
-  s1 <> s2 = SrcSpan ((min `on` spanBegin) s1 s2) ((max `on` spanEnd) s1 s2)
+  s1 <> s2 =
+    SrcSpan
+      ((min `on` spanBegin) s1 s2)
+      ((max `on` spanEnd  ) s1 s2)
 
 instance Binary SrcSpan
 instance ToJSON SrcSpan
@@ -90,8 +88,8 @@ type AnnF ann f = Compose (Ann ann) f
 pattern AnnE
   :: forall ann (g :: * -> *)
   . ann
-  -> g (Fix (Compose (Ann ann) g))
-  -> Fix (Compose (Ann ann) g)
+  -> g (Fix (AnnF ann g))
+  -> Fix (AnnF ann g)
 pattern AnnE ann a = Fix (Compose (Ann ann a))
 {-# complete AnnE #-}
 
@@ -121,15 +119,18 @@ $(deriveJSON2 defaultOptions ''Ann)
 instance (Serialise ann, Serialise a) => Serialise (Ann ann a)
 #endif
 
-#ifdef MIN_VERSION_serialise
-instance Serialise r => Serialise (Compose (Ann SrcSpan) NExprF r) where
-  encode (Compose (Ann ann a)) = encode ann <> encode a
-  decode = (Compose .) . Ann <$> decode <*> decode
-#endif
-
 -- ** @NExprLoc{,F}@ - annotated Nix expression
 
 type NExprLocF = AnnF SrcSpan NExprF
+
+#ifdef MIN_VERSION_serialise
+instance Serialise r => Serialise (NExprLocF r) where
+  encode (Compose (Ann ann a)) = encode ann <> encode a
+  decode =
+    liftA2 ((Compose .) . Ann)
+      decode
+      decode
+#endif
 
 instance Binary r => Binary (NExprLocF r)
 
@@ -145,7 +146,7 @@ instance Binary NExprLoc
 -- * Other
 
 stripAnnotation :: Functor f => Fix (AnnF ann f) -> Fix f
-stripAnnotation = unfoldFix (annotated . getCompose . unFix)
+stripAnnotation = unfoldFix (stripAnn . unFix)
 
 stripAnn :: AnnF ann f r -> f r
 stripAnn = annotated . getCompose
@@ -186,7 +187,7 @@ deltaInfo :: SourcePos -> (Text, Int, Int)
 deltaInfo (SourcePos fp l c) = (toText fp, unPos l, unPos c)
 
 nNull :: NExprLoc
-nNull = Fix $ Compose $ Ann nullSpan $ NConstant NNull
+nNull = AnnE nullSpan $ NConstant NNull
 {-# inline nNull #-}
 
 nullSpan :: SrcSpan

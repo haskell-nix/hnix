@@ -1,15 +1,9 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -38,8 +32,12 @@ import           Data.Fix                       ( Fix(..)
                                                 , foldFix
                                                 , foldFixM
                                                 )
-import qualified Data.HashMap.Lazy             as M
-import qualified Data.HashMap.Strict           as MS
+import qualified Data.HashMap.Internal         as HM
+                                                ( lookup
+                                                , insert
+                                                , singleton
+                                                , fromList
+                                                )
 import qualified Data.List.NonEmpty            as NE
 import qualified Text.Show
 import           Nix.Atoms
@@ -64,7 +62,7 @@ newtype Reducer m a = Reducer
           )
           ( StateT
               ( HashMap FilePath NExprLoc
-              , MS.HashMap Text Text
+              , HashMap Text Text
               )
             m
           )
@@ -74,7 +72,7 @@ newtype Reducer m a = Reducer
     ( Functor, Applicative, Alternative
     , Monad, MonadPlus, MonadFix, MonadIO, MonadFail
     , MonadReader (Maybe FilePath, Scopes (Reducer m) NExprLoc)
-    , MonadState (HashMap FilePath NExprLoc, MS.HashMap Text Text)
+    , MonadState (HashMap FilePath NExprLoc, HashMap Text Text)
     )
 
 staticImport
@@ -98,7 +96,7 @@ staticImport pann path = do
   maybe
     (go path')
     pure
-    (M.lookup path' imports)
+    (HM.lookup path' imports)
  where
   go path = do
     liftIO $ putStrLn $ "Importing file " <> path
@@ -116,12 +114,12 @@ staticImport pann path = do
               (Fix (NLiteralPath_ pann path))
               pos
           x' = Fix $ NLet_ span [cur] x
-        modify $ first $ M.insert path x'
+        modify $ first $ HM.insert path x'
         local
-          (const (pure path, emptyScopes @m @NExprLoc)) $
+          (const (pure path, mempty)) $
           do
             x'' <- foldFix reduce x'
-            modify $ first $ M.insert path x''
+            modify $ first $ HM.insert path x''
             pure x''
       )
       eres
@@ -134,8 +132,8 @@ staticImport pann path = do
 reduceExpr
   :: (MonadIO m, MonadFail m) => Maybe FilePath -> NExprLoc -> m NExprLoc
 reduceExpr mpath expr =
-  (`evalStateT` (mempty, MS.empty))
-    . (`runReaderT` (mpath, emptyScopes))
+  (`evalStateT` (mempty, mempty))
+    . (`runReaderT` (mpath, mempty))
     . runReducer
     $ foldFix reduce expr
 
@@ -145,7 +143,7 @@ reduce
      , Scoped NExprLoc m
      , MonadFail m
      , MonadReader (Maybe FilePath, Scopes m NExprLoc) m
-     , MonadState (HashMap FilePath NExprLoc, MS.HashMap Text Text) m
+     , MonadState (HashMap FilePath NExprLoc, HashMap Text Text) m
      )
   => NExprLocF (m NExprLoc)
   -> m NExprLoc
@@ -183,7 +181,7 @@ reduce (NBinary_ bann NApp fun arg) = fun >>= \case
     do
       x <- arg
       pushScope
-        (M.singleton name x)
+        (HM.singleton name x)
         (foldFix reduce body)
 
   f -> Fix . NBinary_ bann NApp f <$> arg
@@ -257,7 +255,7 @@ reduce (NSet_ ann NRecursive binds) =
 -- Encountering a 'with' construction eliminates any hope of inlining
 -- definitions.
 reduce (NWith_ ann scope body) =
-  clearScopes @NExprLoc $ Fix <$> (NWith_ ann <$> scope <*> body)
+  clearScopes @NExprLoc $ Fix <$> liftA2 (NWith_ ann) scope body
 
 -- | Reduce a let binds section by pushing lambdas,
 --   constants and strings to the body scope.
@@ -265,16 +263,16 @@ reduce (NLet_ ann binds body) =
   do
     binds' <- traverse sequence binds
     body'  <-
-      (`pushScope` body) . M.fromList . catMaybes =<<
+      (`pushScope` body) . HM.fromList . catMaybes =<<
         traverse
           (\case
             NamedVar (StaticKey name :| []) def _pos ->
               let
                 defcase =
                   \case
-                    d@(Fix NAbs_{}     ) -> pure (name, d)
+                    d@(Fix NAbs_     {}) -> pure (name, d)
                     d@(Fix NConstant_{}) -> pure (name, d)
-                    d@(Fix NStr_{}     ) -> pure (name, d)
+                    d@(Fix NStr_     {}) -> pure (name, d)
                     _                    -> Nothing
               in
               defcase <$> def
@@ -320,9 +318,9 @@ reduce (NAbs_ ann params body) = do
   let
     args =
       case params' of
-        Param    name     -> M.singleton name $ Fix $ NSym_ ann name
+        Param    name     -> HM.singleton name $ Fix $ NSym_ ann name
         ParamSet pset _ _ ->
-          M.fromList $ (\(k, _) -> (k, Fix $ NSym_ ann k)) <$> pset
+          HM.fromList $ (\(k, _) -> (k, Fix $ NSym_ ann k)) <$> pset
   Fix . NAbs_ ann params' <$> pushScope args body
 
 reduce v = Fix <$> sequence v
@@ -357,7 +355,7 @@ pruneTree opts =
   prune = \case
     NStr str -> pure $ NStr $ pruneString str
     NHasAttr (Just aset) attr ->
-      pure $ NHasAttr aset $ NE.map pruneKeyName attr
+      pure $ NHasAttr aset $ pruneKeyName <$> attr
     NAbs params (Just body) -> pure $ NAbs (pruneParams params) body
 
     NList l -> pure $ NList $
@@ -381,7 +379,7 @@ pruneTree opts =
           (mapMaybe pruneBinding binds)
 
     NSelect (Just aset) attr alt ->
-      pure $ NSelect aset (NE.map pruneKeyName attr) (join alt)
+      pure $ NSelect aset (pruneKeyName <$> attr) $ join alt
 
     -- These are the only short-circuiting binary operators
     NBinary NAnd (Just (AnnE _ larg)) _ -> pure larg
@@ -401,11 +399,9 @@ pruneTree opts =
     -- If the scope of a with was never referenced, it's not needed
     NWith Nothing (Just (AnnE _ body)) -> pure body
 
-    NAssert Nothing _ ->
-      fail "How can an assert be used, but its condition not?"
-
+    NAssert Nothing _              -> fail "How can an assert be used, but its condition not?"
     NAssert _ (Just (AnnE _ body)) -> pure body
-    NAssert (Just cond) _ -> pure $ NAssert cond nNull
+    NAssert (Just cond) _          -> pure $ NAssert cond nNull
 
     NIf Nothing _ _ -> fail "How can an if be used, but its condition not?"
 
@@ -415,9 +411,8 @@ pruneTree opts =
     x                     -> sequence x
 
   pruneString :: NString (Maybe NExprLoc) -> NString NExprLoc
-  pruneString (DoubleQuoted xs) =
-    DoubleQuoted (mapMaybe pruneAntiquotedText xs)
-  pruneString (Indented n xs) = Indented n (mapMaybe pruneAntiquotedText xs)
+  pruneString (DoubleQuoted xs) = DoubleQuoted $ mapMaybe pruneAntiquotedText xs
+  pruneString (Indented n   xs) = Indented n   $ mapMaybe pruneAntiquotedText xs
 
   pruneAntiquotedText
     :: Antiquoted Text (Maybe NExprLoc) -> Maybe (Antiquoted Text NExprLoc)
@@ -453,13 +448,11 @@ pruneTree opts =
           (fromMaybe nNull)
 
   pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
-  pruneBinding (NamedVar _ Nothing _)           = Nothing
-  pruneBinding (NamedVar xs (Just x) pos)       =
-    pure $ NamedVar (NE.map pruneKeyName xs) x pos
-  pruneBinding (Inherit _                 [] _) = Nothing
-  pruneBinding (Inherit (join -> Nothing) _  _)  = Nothing
-  pruneBinding (Inherit (join -> m) xs pos)      =
-    pure $ Inherit m (pruneKeyName <$> xs) pos
+  pruneBinding (NamedVar _                 Nothing  _  ) = Nothing
+  pruneBinding (NamedVar xs                (Just x) pos) = pure $ NamedVar (pruneKeyName <$> xs) x pos
+  pruneBinding (Inherit  _                 []       _  ) = Nothing
+  pruneBinding (Inherit  (join -> Nothing) _        _  ) = Nothing
+  pruneBinding (Inherit  (join -> m)       xs       pos) = pure $ Inherit m (pruneKeyName <$> xs) pos
 
 reducingEvalExpr
   :: (Framed e m, Has e Options, Exception r, MonadCatch m, MonadIO m)
@@ -470,7 +463,8 @@ reducingEvalExpr
 reducingEvalExpr eval mpath expr =
   do
     expr'           <- flagExprLoc =<< liftIO (reduceExpr mpath expr)
-    eres <- catch (pure <$> foldFix (addEvalFlags eval) expr') $ pure . Left
+    eres <- (`catch` pure . Left) $
+      pure <$> foldFix (addEvalFlags eval) expr'
     opts :: Options <- asks $ view hasLens
     expr''          <- pruneTree opts expr'
     pure (fromMaybe nNull expr'', eres)

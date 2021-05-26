@@ -1,10 +1,5 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
@@ -89,7 +84,7 @@ wrapParens op sub =
   bool
     (\ a -> "(" <> a <> ")")
     id
-    (precedence (rootOp sub)       < precedence op
+    (   precedence (rootOp sub)   <  precedence op
     || (precedence (rootOp sub)   == precedence op
         && associativity (rootOp sub) == associativity op
         && associativity op /= NAssocNone)
@@ -165,7 +160,7 @@ prettyBind :: Binding (NixDoc ann) -> Doc ann
 prettyBind (NamedVar n v _p) =
   prettySelector n <> " = " <> withoutParens v <> ";"
 prettyBind (Inherit s ns _p) =
-  "inherit " <> scope <> align (fillSep (fmap prettyKeyName ns)) <> ";"
+  "inherit " <> scope <> align (fillSep $ prettyKeyName <$> ns) <> ";"
   where
     scope =
       maybe
