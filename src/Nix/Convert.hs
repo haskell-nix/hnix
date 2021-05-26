@@ -83,7 +83,7 @@ fromMayToDeeperValue t v =
   do
     v' <- fromValueMay v
     maybe
-      (throwError $ Expectation @t @f @m t (Free $ getDeeper v))
+      (throwError $ Expectation @t @f @m t $ Free $ getDeeper v)
       pure
       v'
 
@@ -154,7 +154,7 @@ instance Convertible e t f m
   fromValueMay =
     pure .
       \case
-        NVConstant' (NInt b) -> pure (fromInteger b)
+        NVConstant' (NInt b) -> pure $ fromInteger b
         _                    -> Nothing
 
   fromValue = fromMayToValue TInt
@@ -177,7 +177,7 @@ instance Convertible e t f m
     pure .
       \case
         NVConstant' (NFloat b) -> pure b
-        NVConstant' (NInt   i) -> pure (fromInteger i)
+        NVConstant' (NInt   i) -> pure $ fromInteger i
         _                      -> Nothing
 
   fromValue = fromMayToValue TFloat
@@ -202,7 +202,7 @@ instance ( Convertible e t f m
           (M.lookup "outPath" s)
       _ -> stub
 
-  fromValue = fromMayToValue (TString NoContext)
+  fromValue = fromMayToValue $ TString NoContext
 
 instance Convertible e t f m
   => FromValue ByteString m (NValue' t f m (NValue t f m)) where
@@ -213,7 +213,7 @@ instance Convertible e t f m
         NVStr' ns -> encodeUtf8 <$> getStringNoContext  ns
         _         -> mempty
 
-  fromValue = fromMayToValue (TString NoContext)
+  fromValue = fromMayToValue $ TString NoContext
 
 
 newtype Path = Path { getPath :: FilePath }
@@ -414,16 +414,14 @@ instance (Convertible e t f m, ToValue a m (NValue t f m))
 instance Convertible e t f m
   => ToValue NixLikeContextValue m (NValue' t f m (NValue t f m)) where
   toValue nlcv = do
-    path <-
-      bool
-        (pure Nothing)
-        (pure <$> toValue True)
-        (nlcvPath nlcv)
-    allOutputs <-
-      bool
-        (pure Nothing)
-        (pure <$> toValue True)
-        (nlcvAllOutputs nlcv)
+    let
+      g f =
+        bool
+          (pure Nothing)
+          (pure <$> toValue True)
+          (f nlcv)
+    path <- g nlcvPath
+    allOutputs <- g nlcvAllOutputs
     outputs <- do
       let
         outputs = makeNixStringWithoutContext <$> nlcvOutputs nlcv

@@ -59,7 +59,7 @@ merge :: Env -> Env -> Env
 merge (TypeEnv a) (TypeEnv b) = TypeEnv $ a `Map.union` b
 
 mergeEnvs :: [Env] -> Env
-mergeEnvs = foldl' merge empty
+mergeEnvs = foldl' (<>) mempty
 
 singleton :: Name -> Scheme -> Env
 singleton x y = TypeEnv $ one (x, [y])

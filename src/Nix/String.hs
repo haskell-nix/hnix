@@ -93,11 +93,7 @@ instance Monoid NixLikeContextValue where
 -- | A monad for accumulating string context while producing a result string.
 newtype WithStringContextT m a =
   WithStringContextT
-    (WriterT
-       (S.HashSet StringContext)
-       m
-       a
-    )
+    (WriterT (S.HashSet StringContext) m a )
   deriving (Functor, Applicative, Monad, MonadTrans, MonadWriter (S.HashSet StringContext))
 
 type WithStringContext = WithStringContextT Identity
@@ -143,7 +139,7 @@ makeNixString = NixString
 
 -- | Returns True if the NixString has an associated context
 stringHasContext :: NixString -> Bool
-stringHasContext (NixString _ c) = not (null c)
+stringHasContext (NixString _ c) = not $ null c
 
 
 -- ** Getters
@@ -169,8 +165,7 @@ stringIgnoreContext (NixString s _) = s
 extractNixString :: Monad m => NixString -> WithStringContextT m Text
 extractNixString (NixString s c) =
   WithStringContextT $
-    tell c $>
-      s
+    s <$ tell c
 
 
 -- ** Setters
@@ -189,7 +184,7 @@ toStringContexts ~(path, nlcv) =
       NixLikeContextValue _    True _ ->
         mkLstCtxFor AllOutputs cv { nlcvAllOutputs = False }
       NixLikeContextValue _    _    ls | not (null ls) ->
-        fmap (mkCtxFor . DerivationOutput) ls
+        mkCtxFor . DerivationOutput <$> ls
       _ -> mempty
    where
     mkCtxFor = StringContext path
@@ -256,7 +251,7 @@ intercalateNixString :: NixString -> [NixString] -> NixString
 intercalateNixString _   []   = mempty
 intercalateNixString _   [ns] = ns
 intercalateNixString sep nss  =
-  uncurry NixString (mapPair intertwine unpackNss)
+  uncurry NixString $ mapPair intertwine unpackNss
  where
 
   intertwine =

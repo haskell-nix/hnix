@@ -144,16 +144,18 @@ instance MonadExec IO where
     []            -> pure $ Left $ ErrorCall "exec: missing program"
     (prog : args) -> do
       (exitCode, out, _) <- liftIO $ readProcessWithExitCode (toString prog) (toString <$> args) ""
-      let t    = Text.strip $ toText out
-      let emsg = "program[" <> prog <> "] args=" <> show args
+      let
+        t    = Text.strip $ toText out
+        emsg = "program[" <> prog <> "] args=" <> show args
       case exitCode of
         ExitSuccess ->
+          pure $
           if Text.null t
-            then pure $ Left $ ErrorCall $ toString $ "exec has no output :" <> emsg
+            then Left $ ErrorCall $ toString $ "exec has no output :" <> emsg
             else
               either
-                (\ err -> pure $ Left $ ErrorCall $ toString $ "Error parsing output of exec: " <> show err <> " " <> emsg)
-                (pure . pure)
+                (\ err -> Left $ ErrorCall $ toString $ "Error parsing output of exec: " <> show err <> " " <> emsg)
+                pure
                 (parseNixTextLoc t)
         err -> pure $ Left $ ErrorCall $ toString $ "exec  failed: " <> show err <> " " <> emsg
 
