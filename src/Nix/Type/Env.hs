@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeFamilies #-}
 module Nix.Type.Env
   ( Env(..)
   , empty
@@ -35,6 +36,10 @@ instance Semigroup Env where
 instance Monoid Env where
   mempty = empty
 
+instance One Env where
+  type OneItem Env = (Name, Scheme)
+  one = uncurry singleton
+
 empty :: Env
 empty = TypeEnv mempty
 
@@ -42,7 +47,7 @@ extend :: Env -> (Name, [Scheme]) -> Env
 extend env (x, s) = env { types = Map.insert x s (types env) }
 
 remove :: Env -> Name -> Env
-remove (TypeEnv env) var = TypeEnv (Map.delete var env)
+remove (TypeEnv env) var = TypeEnv $ Map.delete var env
 
 extends :: Env -> [(Name, [Scheme])] -> Env
 extends env xs = env { types = Map.fromList xs `Map.union` types env }

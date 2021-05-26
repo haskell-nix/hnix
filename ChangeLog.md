@@ -15,6 +15,13 @@
     * added fun:
       * `evalContent`
       * `addMetaInfo`
+      
+  * `Nix.Types.Assumption`:
+    * added instances:
+      * `Assumption`: `{Semigroup,Monoid,One}`
+  * `Nix.Type.Env`:
+    * added instances:
+      * `Env`: `{Semigroup,Monoid,One}`
 
 
 ### [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.0.1...0.13.1#files_bucket) 0.13.1 (2021-05-22)
