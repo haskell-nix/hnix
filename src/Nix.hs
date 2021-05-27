@@ -126,7 +126,7 @@ evaluateExpression mpath evaluator handler expr =
 
   eval' = normalForm <=< nixEvalExpr mpath
 
-  argmap args = nvSet mempty (M.fromList args)
+  argmap args = nvSet mempty $ M.fromList args
 
 processResult
   :: forall e t f m a
@@ -135,34 +135,26 @@ processResult
   -> NValue t f m
   -> m a
 processResult h val = do
-  opts :: Options <- asks (view hasLens)
+  opts :: Options <- asks $ view hasLens
   maybe
     (h val)
-    (\ (Text.splitOn "." -> keys) -> go keys val)
+    (\ (Text.splitOn "." -> keys) -> processKeys keys val)
     (attr opts)
  where
-  go :: [Text] -> NValue t f m -> m a
-  go [] v = h v
-  go ((Text.decimal -> Right (n,"")) : ks) v =
-    (\case
-      NVList xs ->
-        list
-          h
-          go
-          ks
-        (xs !! n)
-      _ -> errorWithoutStackTrace $ "Expected a list for selector '" <> show n <> "', but got: " <> show v
-    ) =<< demand v
-  go (k : ks) v =
-    (\case
-      NVSet xs _ ->
-        maybe
-          (errorWithoutStackTrace $ toString $ "Set does not contain key '" <> k <> "'")
-          (list
-            h
-            go
-            ks
-          )
-          (M.lookup k xs)
-      _ -> errorWithoutStackTrace $ toString $ "Expected a set for selector '" <> k <> "', but got: " <> show v
-    ) =<< demand v
+  processKeys :: [Text] -> NValue t f m -> m a
+  processKeys kys v =
+    list
+      (h v)
+      (\ (k : ks) ->
+        do
+          v' <- demand v
+          case (k, v') of
+            (Text.decimal -> Right (n,""), NVList xs) -> processKeys ks $ xs !! n
+            (_,         NVSet xs _) ->
+              maybe
+                (errorWithoutStackTrace $ toString $ "Set does not contain key '" <> k <> "'")
+                (processKeys ks)
+                (M.lookup k xs)
+            (_, _) -> errorWithoutStackTrace $ toString $ "Expected a set or list for selector '" <> k <> "', but got: " <> show v
+      )
+      kys
