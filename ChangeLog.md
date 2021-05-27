@@ -38,6 +38,7 @@ Breaking:
         
   * `Nix.Normal`
     * add `thunkVal` literal & use it where appropriate `{deThunk, removeEffects}`
+    * rename `opaque(,->Val)`, indicate that it is a literal.
        
 
 

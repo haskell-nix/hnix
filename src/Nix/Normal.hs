@@ -140,6 +140,9 @@ normalForm_
   -> m ()
 normalForm_ t = void $ normalizeValue t
 
+opaqueVal :: Applicative f => NValue t f m
+opaqueVal = nvStr $ makeNixStringWithoutContext "<cycle>"
+
 -- | Detect cycles & stub them.
 stubCycles
   :: forall t f m
@@ -161,7 +164,8 @@ stubCycles =
     )
     Free
  where
-  Free (NValue' cyc) = opaque
+  Free (NValue' cyc) = opaqueVal
+
 thunkVal :: Applicative f => NValue t f m
 thunkVal = nvStr $ makeNixStringWithoutContext "<thunk>"
 
@@ -175,9 +179,6 @@ removeEffects =
     --  2021-02-25: NOTE: Please, unflip this up the stack
     (\ t f -> f =<< queryM (pure thunkVal) t)
     (fmap Free . sequenceNValue' id)
-
-opaque :: Applicative f => NValue t f m
-opaque = nvStr $ makeNixStringWithoutContext "<cycle>"
 
 dethunk
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
