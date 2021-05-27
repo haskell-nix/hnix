@@ -206,7 +206,7 @@ renderValue
   -> NValue t f m
   -> m (Doc ann)
 renderValue _level _longLabel _shortLabel v = do
-  opts :: Options <- asks (view hasLens)
+  opts :: Options <- asks $ view hasLens
   bool
     prettyNValue
     prettyNValueProv

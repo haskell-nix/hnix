@@ -162,6 +162,8 @@ stubCycles =
     Free
  where
   Free (NValue' cyc) = opaque
+thunkVal :: Applicative f => NValue t f m
+thunkVal = nvStr $ makeNixStringWithoutContext "<thunk>"
 
 removeEffects
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
@@ -171,7 +173,7 @@ removeEffects =
   iterNValueM
     id
     --  2021-02-25: NOTE: Please, unflip this up the stack
-    (\ t f -> f =<< queryM (pure opaque) t)
+    (\ t f -> f =<< queryM (pure thunkVal) t)
     (fmap Free . sequenceNValue' id)
 
 opaque :: Applicative f => NValue t f m
@@ -181,4 +183,4 @@ dethunk
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
   => t
   -> m (NValue t f m)
-dethunk = removeEffects <=< queryM (pure opaque)
+dethunk = removeEffects <=< queryM (pure thunkVal)

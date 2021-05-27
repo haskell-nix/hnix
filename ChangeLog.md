@@ -36,6 +36,8 @@ Breaking:
           => Transform g (m a) -> Alg g (m a) -> Maybe FilePath -> Fix g -> m a
         ```
         
+  * `Nix.Normal`
+    * add `thunkVal` literal & use it where appropriate `{deThunk, removeEffects}`
        
 
 
