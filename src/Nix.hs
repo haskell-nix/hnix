@@ -55,12 +55,12 @@ import           Nix.XML
 --   transformations, allowing them to be easily composed.
 nixEval
   :: (MonadNix e t f m, Has e Options, Functor g)
-  => Maybe FilePath
-  -> Transform g (m a)
+  => Transform g (m a)
   -> Alg g (m a)
+  -> Maybe FilePath
   -> Fix g
   -> m a
-nixEval mpath xform alg = withNixContext mpath . adi alg xform
+nixEval transform alg mpath = withNixContext mpath . adi alg transform
 
 -- | Evaluate a nix expression in the default context
 nixEvalExpr
@@ -68,7 +68,7 @@ nixEvalExpr
   => Maybe FilePath
   -> NExpr
   -> m (NValue t f m)
-nixEvalExpr mpath = nixEval mpath id Eval.eval
+nixEvalExpr = nixEval id Eval.eval
 
 -- | Evaluate a nix expression in the default context
 nixEvalExprLoc
@@ -77,9 +77,8 @@ nixEvalExprLoc
   => Maybe FilePath
   -> NExprLoc
   -> m (NValue t f m)
-nixEvalExprLoc mpath =
+nixEvalExprLoc =
   nixEval
-    mpath
     Eval.addMetaInfo
     Eval.evalContent
 
