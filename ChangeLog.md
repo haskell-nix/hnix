@@ -21,9 +21,25 @@ Breaking:
   * `Nix.Types.Assumption`:
     * added instances:
       * `Assumption`: `{Semigroup,Monoid,One}`
+
   * `Nix.Type.Env`:
     * added instances:
       * `Env`: `{Semigroup,Monoid,One}`
+  * `Nix`:
+    * changed argument order:
+      * `nixEval`:
+        
+        ```haskell
+        -- was:
+          => Maybe FilePath -> Transform g (m a) -> Alg g (m a) -> Fix g -> m a
+        -- became:
+          => Transform g (m a) -> Alg g (m a) -> Maybe FilePath -> Fix g -> m a
+        ```
+        
+  * `Nix.Normal`
+    * add `thunkVal` literal & use it where appropriate `{deThunk, removeEffects}`
+    * rename `opaque(,->Val)`, indicate that it is a literal.
+       
 
 
 ### [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.0.1...0.13.1#files_bucket) 0.13.1 (2021-05-22)

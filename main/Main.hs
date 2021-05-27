@@ -157,7 +157,12 @@ main =
     printer
       | finder opts = findAttrs <=< fromValue @(AttrSet (StdValue (StandardT (StdIdT IO))))
       | xml    opts = liftIO . Text.putStrLn . stringIgnoreContext . toXML <=< normalForm
-      | json   opts = liftIO . Text.putStrLn . stringIgnoreContext         <=< nvalueToJSONNixString
+      -- 2021-05-27: NOTE: With naive fix of the #941
+      -- This is overall a naive printer implementation, as options should interact/respect one another.
+      -- A nice question: "Should respect one another to what degree?": Go full combinator way, for which
+      -- old Nix CLI is nototrious for (and that would mean to reimplement the old Nix CLI),
+      -- OR: https://github.com/haskell-nix/hnix/issues/172 and have some sane standart/default behaviour for (most) keys.
+      | json   opts = liftIO . Text.putStrLn . stringIgnoreContext         <=< nvalueToJSONNixString <=< normalForm
       | strict opts = liftIO . print         . prettyNValue                <=< normalForm
       | values opts = liftIO . print         . prettyNValueProv            <=< removeEffects
       | otherwise   = liftIO . print         . prettyNValue                <=< removeEffects
