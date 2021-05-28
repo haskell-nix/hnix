@@ -45,8 +45,9 @@ import           Nix.Var
 import Prelude hiding (force)
 
 
-newtype StdCited m a = StdCited
-  { _stdCited :: Cited (StdThunk m) (StdCited m) m a }
+newtype StdCited m a =
+  StdCited
+    { _stdCited :: Cited (StdThunk m) (StdCited m) m a }
   deriving
     ( Generic
     , Typeable
@@ -58,8 +59,9 @@ newtype StdCited m a = StdCited
     , ComonadEnv [Provenance m (StdValue m)]
     )
 
-newtype StdThunk (m :: * -> *) = StdThunk
-  { _stdThunk :: StdCited m (NThunkF m (StdValue m)) }
+newtype StdThunk (m :: * -> *) =
+  StdThunk
+    { _stdThunk :: StdCited m (NThunkF m (StdValue m)) }
 
 type StdValue' m = NValue' (StdThunk m) (StdCited m) m (StdValue m)
 type StdValue m = NValue (StdThunk m) (StdCited m) m
@@ -69,11 +71,11 @@ instance Show (StdThunk m) where
 
 instance HasCitations1 m (StdValue m) (StdCited m) where
   citations1 (StdCited c) = citations1 c
-  addProvenance1 x (StdCited c) = StdCited (addProvenance1 x c)
+  addProvenance1 x (StdCited c) = StdCited $ addProvenance1 x c
 
 instance HasCitations m (StdValue m) (StdThunk m) where
   citations (StdThunk c) = citations1 c
-  addProvenance x (StdThunk c) = StdThunk (addProvenance1 x c)
+  addProvenance x (StdThunk c) = StdThunk $ addProvenance1 x c
 
 instance MonadReader (Context m (StdValue m)) m => Scoped (StdValue m) m where
   currentScopes = currentScopesReader
@@ -173,7 +175,7 @@ instance
     -> m r
     -> StdThunk m
     -> m r
-  queryF k b x = queryF k b (_stdCited (_stdThunk x))
+  queryF k b = queryF k b . _stdCited . _stdThunk
 
   forceF
     :: ( StdValue m
@@ -181,7 +183,7 @@ instance
        )
     -> StdThunk m
     -> m r
-  forceF k t = forceF k (_stdCited $ _stdThunk t)
+  forceF k = forceF k . _stdCited . _stdThunk
 
   forceEffF
     :: ( StdValue m
@@ -189,7 +191,7 @@ instance
        )
     -> StdThunk m
     -> m r
-  forceEffF k t = forceEffF k (_stdCited $ _stdThunk t)
+  forceEffF k = forceEffF k . _stdCited . _stdThunk
 
   furtherF
     :: ( m (StdValue m)
@@ -197,7 +199,7 @@ instance
        )
     ->    StdThunk m
     -> m (StdThunk m)
-  furtherF k t = StdThunk . StdCited <$> furtherF k (_stdCited $ _stdThunk t)
+  furtherF k = fmap (StdThunk . StdCited) . furtherF k . _stdCited . _stdThunk
 
 
 -- * @instance MonadValue (StdValue m) m@
@@ -210,6 +212,7 @@ instance
   , MonadThunkId m
   )
   => MonadValue (StdValue m) m where
+
   defer
     :: m (StdValue m)
     -> m (StdValue m)
