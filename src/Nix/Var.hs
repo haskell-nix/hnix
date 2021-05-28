@@ -5,7 +5,16 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 
-module Nix.Var where
+module Nix.Var
+  ( Var
+  , MonadVar
+  , eqVar
+  , newVar
+  , readVar
+  , writeVar
+  , atomicModifyVar
+  )
+where
 
 import           Control.Monad.Ref
 import           Data.GADT.Compare  ( GEq(..) )
