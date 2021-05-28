@@ -27,7 +27,7 @@ type Var m = Ref m
 
 type MonadVar m = MonadAtomicRef m
 
-eqVar :: forall m a . GEq (Ref m) => Ref m a -> Ref m a -> Bool
+eqVar :: GEq (Ref m) => Ref m a -> Ref m a -> Bool
 eqVar a b = isJust $ geq a b
 
 newVar :: MonadRef m => a -> m (Ref m a)
