@@ -32,8 +32,8 @@ data Deferred m v = Computed v | Deferred (m v)
 -- | Apply second if @Deferred@, otherwise (@Computed@) - apply first.
 -- Analog of @either@ for @Deferred = Computed|Deferred@.
 deferred :: (v -> b) -> (m v -> b) -> Deferred m v -> b
-deferred f1 f2 def =
-  case def of
+deferred f1 f2 =
+  \case
     Computed v -> f1 v
     Deferred action -> f2 action
 {-# inline deferred #-}
@@ -43,7 +43,7 @@ deferred f1 f2 def =
 
 -- | Thunk resource reference (@ref-tf: Ref m@), and as such also also hold
 -- a @Bool@ lock flag.
-type ThunkRef m = (Var m Bool)
+type ThunkRef m = Var m Bool
 
 -- | Reference (@ref-tf: Ref m v@) to a value that the thunk holds.
 type ThunkValueRef m v = Var m (Deferred m v)
@@ -95,16 +95,16 @@ type MonadBasicThunk m = (MonadThunkId m, MonadVar m)
 instance (MonadBasicThunk m, MonadCatch m)
   => MonadThunk (NThunkF m v) m v where
 
-  -- | Return thunk ID
   thunkId :: NThunkF m v -> ThunkId m
   thunkId (Thunk n _ _) = n
 
-  -- | Create new thunk
   thunk :: m v -> m (NThunkF m v)
   thunk action =
     do
       freshThunkId <- freshId
-      Thunk freshThunkId <$> newVar False <*> newVar (Deferred action)
+      liftA2 (Thunk freshThunkId)
+        (newVar   False          )
+        (newVar $ Deferred action)
 
   query :: m v -> NThunkF m v -> m v
   query n (Thunk _ _ ref) =
@@ -149,7 +149,7 @@ forceMain (Thunk n thunkRef thunkValRef) =
           lockFailed
           (do
             v <- action `catch` actionFailed
-            writeVar thunkValRef (Computed v)
+            writeVar thunkValRef $ Computed v
             _unlockedIt <- unlockThunk thunkRef
             pure v
           )
