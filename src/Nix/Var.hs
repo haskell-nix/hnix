@@ -34,17 +34,17 @@ atomicModifyVar :: MonadAtomicRef m => Ref m a -> (a -> (a, b)) -> m b
 atomicModifyVar = atomicModifyRef
 
 --TODO: Upstream GEq instances
---  2021-02-25: NOTE: Currently, upstreaming would require adding a dependency on the according packages.
+-- Upstream thread: https://github.com/haskellari/some/pull/34
 instance GEq IORef where
-  a `geq` b =
-    bool
-      Nothing
-      (pure $ unsafeCoerce Refl)
-      (a == unsafeCoerce b)
+  geq = gEqual
 
 instance GEq (STRef s) where
-  a `geq` b =
-    bool
-      Nothing
-      (pure $ unsafeCoerce Refl)
-      (a == unsafeCoerce b)
+  geq = gEqual
+
+-- | Simply a helper function
+gEqual :: Eq a => a -> b -> Maybe c
+gEqual a b =
+  bool
+    Nothing
+    (pure $ unsafeCoerce Refl)
+    (a == unsafeCoerce b)
