@@ -177,11 +177,11 @@ removeEffects =
   iterNValueM
     id
     --  2021-02-25: NOTE: Please, unflip this up the stack
-    (\ t f -> f =<< queryM (pure thunkVal) t)
+    (\ t f -> f =<< query (pure thunkVal) t)
     (fmap Free . sequenceNValue' id)
 
 dethunk
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
   => t
   -> m (NValue t f m)
-dethunk = removeEffects <=< queryM (pure thunkVal)
+dethunk = removeEffects <=< query (pure thunkVal)

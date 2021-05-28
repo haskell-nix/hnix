@@ -71,8 +71,8 @@ instance ( Has e Options
   thunkId :: Cited u f m t -> ThunkId m
   thunkId (Cited (NCited _ t)) = thunkId @_ @m t
 
-  queryM :: m v -> Cited u f m t -> m v
-  queryM m (Cited (NCited _ t)) = queryM m t
+  query :: m v -> Cited u f m t -> m v
+  query m (Cited (NCited _ t)) = query m t
 
   -- | The ThunkLoop exception is thrown as an exception with MonadThrow,
   --   which does not capture the current stack frame information to provide
@@ -101,8 +101,8 @@ instance ( Has e Options
          )
   => MonadThunkF (Cited u f m t) m v where
 
-  queryMF :: (v -> m r) -> m r -> Cited u f m t -> m r
-  queryMF k m (Cited (NCited _ t)) = queryMF k m t
+  queryF :: (v -> m r) -> m r -> Cited u f m t -> m r
+  queryF k m (Cited (NCited _ t)) = queryF k m t
 
   forceF :: (v -> m r) -> Cited u f m t -> m r
   forceF k (Cited (NCited ps t)) = handleDisplayProvenance ps $ forceF k t

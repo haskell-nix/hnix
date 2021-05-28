@@ -106,10 +106,8 @@ instance (MonadBasicThunk m, MonadCatch m)
       freshThunkId <- freshId
       Thunk freshThunkId <$> newVar False <*> newVar (Deferred action)
 
-  -- | Non-blocking query, return value if @Computed@,
-  -- return first argument otherwise.
-  queryM :: m v -> NThunkF m v -> m v
-  queryM n (Thunk _ _ ref) =
+  query :: m v -> NThunkF m v -> m v
+  query n (Thunk _ _ ref) =
     do
       deferred
         pure
@@ -175,12 +173,12 @@ forceMain (Thunk n thunkRef thunkValRef) =
 instance (MonadBasicThunk m, MonadCatch m)
   => MonadThunkF (NThunkF m v) m v where
 
-  queryMF
+  queryF
     :: (v -> m r)
     -> m r
     -> NThunkF m v
     -> m r
-  queryMF k n (Thunk _ thunkRef thunkValRef) =
+  queryF k n (Thunk _ thunkRef thunkValRef) =
     do
       lockedIt <- lockThunk thunkRef
       bool

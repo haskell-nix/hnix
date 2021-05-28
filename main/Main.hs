@@ -43,7 +43,7 @@ main :: IO ()
 main =
   do
     time <- getCurrentTime
-    opts <- execParser (nixOptionsInfo time)
+    opts <- execParser $ nixOptionsInfo time
 
     runWithBasicEffectsIO opts $ execContentsFilesOrRepl opts
 
@@ -278,7 +278,4 @@ main =
         do
           putStrLn $ "Wrote sifted expression tree to " <> path
           writeFile path $ show $ prettyNix $ stripAnnotation expr'
-      either
-        throwM
-        pure
-        eres
+      either throwM pure eres

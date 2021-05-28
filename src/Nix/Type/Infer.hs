@@ -443,7 +443,7 @@ instance MonadInfer m
 
   thunk = fmap JThunk . thunk
 
-  queryM b (JThunk x) = queryM b x
+  query b (JThunk x) = query b x
 
   -- If we have a thunk loop, we just don't know the type.
   force (JThunk t) = catch (force t)

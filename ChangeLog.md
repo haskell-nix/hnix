@@ -39,8 +39,11 @@ Breaking:
   * `Nix.Normal`
     * add `thunkVal` literal & use it where appropriate `{deThunk, removeEffects}`
     * rename `opaque(,->Val)`, indicate that it is a literal.
-       
-
+  
+  * `Nix.Thunk`:
+    * `class MonadThunkId m => MonadThunk{,F} t m a`:
+      * rename `query(M->){,F}`
+      
 
 ### [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.0.1...0.13.1#files_bucket) 0.13.1 (2021-05-22)
   * [(link)](https://github.com/haskell-nix/hnix/pull/936/files) `Nix.Parser`: `annotateLocation`: Fix source location preservation.

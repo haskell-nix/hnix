@@ -132,11 +132,11 @@ instance
     -> m (StdThunk m)
   thunk = fmap (StdThunk . StdCited) . thunk
 
-  queryM
+  query
     :: m (StdValue m)
     ->    StdThunk m
     -> m (StdValue m)
-  queryM b = queryM b . _stdCited . _stdThunk
+  query b = query b . _stdCited . _stdThunk
 
   force
     ::    StdThunk m
@@ -166,14 +166,14 @@ instance
   )
   => MonadThunkF (StdThunk m) m (StdValue m) where
 
-  queryMF
+  queryF
     :: ( StdValue m
        -> m r
        )
     -> m r
     -> StdThunk m
     -> m r
-  queryMF k b x = queryMF k b (_stdCited (_stdThunk x))
+  queryF k b x = queryF k b (_stdCited (_stdThunk x))
 
   forceF
     :: ( StdValue m
