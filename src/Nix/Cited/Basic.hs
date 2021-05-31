@@ -21,6 +21,9 @@ import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 
+
+-- * data type @Cited@
+
 newtype Cited t f m a = Cited (NCited m (NValue t f m) a)
   deriving
     ( Generic
@@ -32,6 +35,9 @@ newtype Cited t f m a = Cited (NCited m (NValue t f m) a)
     , Comonad
     , ComonadEnv [Provenance m (NValue t f m)]
     )
+
+
+-- ** Helpers
 
 -- | @Cited@ pattern.
 -- > pattern CitedP m a = Cited (NCited m a)
@@ -53,6 +59,8 @@ cite
   -> m (Cited t f m a)
 cite v = fmap (Cited . NCited v)
 
+
+-- ** instances
 
 instance
   HasCitations1 m (NValue t f m) (Cited t f m)
@@ -117,7 +125,7 @@ instance
   further (CitedP ps t) = cite ps $ further t
 
 
--- * Kleisli functor HOFs
+-- ** Kleisli functor HOFs
 
 -- Please, do not use MonadThunkF for MonadThunk, later uses more straight-forward specialized line of functions.
 instance
@@ -144,7 +152,7 @@ instance
   furtherF k (CitedP ps t) = cite ps $ furtherF k t
 
 
--- ** Utils
+-- * Representation
 
 handleDisplayProvenance
   :: (MonadCatch m
