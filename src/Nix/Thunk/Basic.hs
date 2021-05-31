@@ -1,7 +1,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
-
+{-# OPTIONS_GHC -Wno-unused-do-bind #-}
 
 
 module Nix.Thunk.Basic
@@ -107,12 +107,10 @@ instance (MonadBasicThunk m, MonadCatch m)
         (newVar $ Deferred action)
 
   query :: m v -> NThunkF m v -> m v
-  query n (Thunk _ _ ref) =
+  query vStub (Thunk _ _ lTValRef) =
     do
-      deferred
-        pure
-        (const n)
-        =<< readVar ref
+      v <- readVar lTValRef
+      deferred pure (const vStub) v
 
   force :: NThunkF m v -> m v
   force = forceMain
