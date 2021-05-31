@@ -95,7 +95,7 @@ instance
             -- creation, and record it along with the thunk.
             let
               go (fromException -> Just (EvaluatingExpr scope (AnnE s e))) =
-                let e' = Compose $ Ann s (Nothing <$ e) in
+                let e' = AnnFP s (Nothing <$ e) in
                 [Provenance scope e']
               go _ = mempty
               ps = concatMap (go . frame) frames
@@ -182,6 +182,6 @@ displayProvenance
 displayProvenance =
   list
     id
-    (\ (Provenance scope e@(Compose (Ann s _)) : _) ->
+    (\ (Provenance scope e@(AnnFP s _) : _) ->
       withFrame Info $ ForcingExpr scope $ wrapExprLoc s e
     )

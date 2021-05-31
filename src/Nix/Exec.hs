@@ -64,28 +64,28 @@ nvConstantP
   => Provenance m (NValue t f m)
   -> NAtom
   -> NValue t f m
-nvConstantP p x = addProvenance p (nvConstant x)
+nvConstantP p x = addProvenance p $ nvConstant x
 
 nvStrP
   :: MonadCited t f m
   => Provenance m (NValue t f m)
   -> NixString
   -> NValue t f m
-nvStrP p ns = addProvenance p (nvStr ns)
+nvStrP p ns = addProvenance p $ nvStr ns
 
 nvPathP
   :: MonadCited t f m
   => Provenance m (NValue t f m)
   -> FilePath
   -> NValue t f m
-nvPathP p x = addProvenance p (nvPath x)
+nvPathP p x = addProvenance p $ nvPath x
 
 nvListP
   :: MonadCited t f m
   => Provenance m (NValue t f m)
   -> [NValue t f m]
   -> NValue t f m
-nvListP p l = addProvenance p (nvList l)
+nvListP p l = addProvenance p $ nvList l
 
 nvSetP
   :: MonadCited t f m
@@ -93,7 +93,7 @@ nvSetP
   -> AttrSet SourcePos
   -> AttrSet (NValue t f m)
   -> NValue t f m
-nvSetP p x s = addProvenance p (nvSet x s)
+nvSetP p x s = addProvenance p $ nvSet x s
 
 nvClosureP
   :: MonadCited t f m
@@ -101,7 +101,7 @@ nvClosureP
   -> Params ()
   -> (NValue t f m -> m (NValue t f m))
   -> NValue t f m
-nvClosureP p x f = addProvenance p (nvClosure x f)
+nvClosureP p x f = addProvenance p $ nvClosure x f
 
 nvBuiltinP
   :: MonadCited t f m
@@ -109,17 +109,17 @@ nvBuiltinP
   -> Text
   -> (NValue t f m -> m (NValue t f m))
   -> NValue t f m
-nvBuiltinP p name f = addProvenance p (nvBuiltin name f)
+nvBuiltinP p name f = addProvenance p $ nvBuiltin name f
 
-type MonadCitedThunks t f m
-  = ( MonadThunk t m (NValue t f m)
+type MonadCitedThunks t f m =
+  ( MonadThunk t m (NValue t f m)
   , MonadDataErrorContext t f m
   , HasCitations m (NValue t f m) t
   , HasCitations1 m (NValue t f m) f
   )
 
-type MonadNix e t f m
-  = ( Has e SrcSpan
+type MonadNix e t f m =
+  ( Has e SrcSpan
   , Has e Options
   , Scoped (NValue t f m) m
   , Framed e m
@@ -484,7 +484,10 @@ execBinaryOpForced scope span op lval rval = case op of
 
 -- This function is here, rather than in 'Nix.String', because of the need to
 -- use 'throwError'.
-fromStringNoContext :: Framed e m => NixString -> m Text
+fromStringNoContext
+  :: Framed e m
+  => NixString
+  -> m Text
 fromStringNoContext ns =
   maybe
     (throwError $ ErrorCall $ "expected string with no context, but got " <> show ns)
@@ -492,14 +495,19 @@ fromStringNoContext ns =
     (getStringNoContext ns)
 
 addTracing
-  :: (MonadNix e t f m, Has e Options, MonadReader Int n, Alternative n)
+  ::( MonadNix e t f m
+    , Has e Options
+    , Alternative n
+    , MonadReader Int n
+    , MonadFail n
+    )
   => Alg NExprLocF (m a)
   -> Alg NExprLocF (n (m a))
 addTracing k v = do
   depth <- ask
   guard $ depth < 2000
   local succ $ do
-    v'@(Compose (Ann span x)) <- sequence v
+    v'@(AnnFP span x) <- sequence v
     pure $ do
       opts :: Options <- asks $ view hasLens
       let
