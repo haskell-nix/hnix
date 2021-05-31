@@ -42,6 +42,18 @@ pattern CitedP
 pattern CitedP m a = Cited (NCited m a)
 {-# complete CitedP #-}
 
+-- | Take:
+-- 1. Provenence info.
+-- 2. Value (like thunk)
+-- -> Produce cited value (thunk)
+cite
+  :: Functor m
+  => [Provenance m (NValue t f m)]
+  -> m a
+  -> m (Cited t f m a)
+cite v = fmap (Cited . NCited v)
+
+
 instance
   HasCitations1 m (NValue t f m) (Cited t f m)
  where
@@ -66,7 +78,7 @@ instance
       opts :: Options <- asks $ view hasLens
 
       bool
-        (citeThunk mempty)
+        (cite mempty)
         (\ t ->
           do
             frames :: Frames <- asks $ view hasLens
@@ -80,12 +92,10 @@ instance
               go _ = mempty
               ps = concatMap (go . frame) frames
 
-            citeThunk ps t
+            cite ps t
         )
         (thunks opts)
         (thunk mv)
-   where
-    citeThunk v = fmap (Cited . NCited v)
 
   thunkId :: Cited u f m t -> ThunkId m
   thunkId (CitedP _ t) = thunkId @_ @m t
@@ -104,9 +114,7 @@ instance
   forceEff (CitedP ps t) = handleDisplayProvenance ps $ forceEff t
 
   further :: Cited u f m t -> m (Cited u f m t)
-   where
-    citeThunk v = fmap (Cited . NCited v)
-  further (CitedP ps t) = citeThunk ps $ further t
+  further (CitedP ps t) = cite ps $ further t
 
 
 -- * Kleisli functor HOFs
@@ -133,7 +141,7 @@ instance
   forceEffF k (CitedP ps t) = handleDisplayProvenance ps $ forceEffF k t
 
   furtherF :: (m v -> m v) -> Cited u f m t -> m (Cited u f m t)
-  furtherF k (CitedP ps t) = Cited . NCited ps <$> furtherF k t
+  furtherF k (CitedP ps t) = cite ps $ furtherF k t
 
 
 -- ** Utils
