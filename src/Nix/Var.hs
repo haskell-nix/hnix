@@ -3,17 +3,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-
-module Nix.Var
-  ( Var
-  , MonadVar
-  , eqVar
-  , newVar
-  , readVar
-  , writeVar
-  , atomicModifyVar
-  )
+module Nix.Var ()
 where
 
 import           Control.Monad.Ref
@@ -23,24 +15,8 @@ import           Type.Reflection    ( (:~:)(Refl) )
 
 import           Unsafe.Coerce      ( unsafeCoerce )
 
-type Var m = Ref m
-
-type MonadVar m = MonadAtomicRef m
-
 eqVar :: GEq (Ref m) => Ref m a -> Ref m a -> Bool
 eqVar a b = isJust $ geq a b
-
-newVar :: MonadRef m => a -> m (Ref m a)
-newVar = newRef
-
-readVar :: MonadRef m => Ref m a -> m a
-readVar = readRef
-
-writeVar :: MonadRef m => Ref m a -> a -> m ()
-writeVar = writeRef
-
-atomicModifyVar :: MonadAtomicRef m => Ref m a -> (a -> (a, b)) -> m b
-atomicModifyVar = atomicModifyRef
 
 --TODO: Upstream GEq instances
 -- Upstream thread: https://github.com/haskellari/some/pull/34

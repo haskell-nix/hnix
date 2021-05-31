@@ -3,10 +3,19 @@
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.1...master#files_bucket) WIP
 
-Breaking:
+* Breaking:
 
   * `Nix.Effects`:
     * rm `pathExits` in favour of `doesPathExist` (in `Nix.Render`: `class MonadFile`: `doesPathExist`)
+
+  * `Nix.Var`: was found being superflous ([report](https://github.com/haskell-nix/hnix/issues/946)), so reduced. use `Control.Monad.Ref` instead.
+
+  * `Nix.Normal`
+    * rename `opaque(,->Val)`, indicate that it is a literal.
+  
+  * `Nix.Thunk`:
+    * `class MonadThunkId m => MonadThunk{,F} t m a`:
+      * rename `query(M->){,F}`
 
 * Additional:
 
@@ -25,6 +34,7 @@ Breaking:
   * `Nix.Type.Env`:
     * added instances:
       * `Env`: `{Semigroup,Monoid,One}`
+  
   * `Nix`:
     * changed argument order:
       * `nixEval`:
@@ -38,11 +48,6 @@ Breaking:
         
   * `Nix.Normal`
     * add `thunkVal` literal & use it where appropriate `{deThunk, removeEffects}`
-    * rename `opaque(,->Val)`, indicate that it is a literal.
-  
-  * `Nix.Thunk`:
-    * `class MonadThunkId m => MonadThunk{,F} t m a`:
-      * rename `query(M->){,F}`
       
 
 ### [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.0.1...0.13.1#files_bucket) 0.13.1 (2021-05-22)

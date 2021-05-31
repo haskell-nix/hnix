@@ -72,7 +72,6 @@ import           Nix.Type.Env
 import qualified Nix.Type.Env                  as Env
 import           Nix.Type.Type
 import           Nix.Value.Monad
-import           Nix.Var
 
 
 normalizeScheme :: Scheme -> Scheme
@@ -645,7 +644,7 @@ instance ActiveTypeVars a => ActiveTypeVars [a] where
 
 type MonadInfer m
   = ({- MonadThunkId m,-}
-     MonadVar m, MonadFix m)
+     MonadAtomicRef m, MonadFix m)
 
 -- | Run the inference monad
 runInfer' :: MonadInfer m => InferT s m a -> m (Either InferError a)
@@ -659,7 +658,7 @@ runInfer :: (forall s . InferT s (FreshIdT Int (ST s)) a) -> Either InferError a
 runInfer m =
   runST $
     do
-      i <- newVar (1 :: Int)
+      i <- newRef (1 :: Int)
       runFreshIdT i $ runInfer' m
 
 inferType

@@ -39,7 +39,6 @@ import           Nix.Options
 import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Thunk.Basic
-import           Nix.Var
 import           Nix.Value.Monad
 
 data TAtom
@@ -87,7 +86,7 @@ data NSymbolicF r
 
 type SThunk (m :: * -> *) = NThunkF m (Symbolic m)
 
-type SValue (m :: * -> *) = Var m (NSymbolicF (NTypeF m (Symbolic m)))
+type SValue (m :: * -> *) = Ref m (NSymbolicF (NTypeF m (Symbolic m)))
 
 data Symbolic m = SV { getSV :: SValue m } | ST { getST :: SThunk m }
 
@@ -95,32 +94,32 @@ instance Show (Symbolic m) where
   show _ = "<symbolic>"
 
 everyPossible
-  :: MonadVar m
+  :: MonadAtomicRef m
   => m (Symbolic m)
 everyPossible = packSymbolic NAny
 
 mkSymbolic
-  :: MonadVar m
+  :: MonadAtomicRef m
   => [NTypeF m (Symbolic m)]
   -> m (Symbolic m)
 mkSymbolic xs = packSymbolic (NMany xs)
 
 packSymbolic
-  :: MonadVar m
+  :: MonadAtomicRef m
   => NSymbolicF (NTypeF m (Symbolic m))
   -> m (Symbolic m)
-packSymbolic = fmap SV . newVar
+packSymbolic = fmap SV . newRef
 
 unpackSymbolic
-  :: (MonadVar m, MonadThunkId m, MonadCatch m)
+  :: (MonadAtomicRef m, MonadThunkId m, MonadCatch m)
   => Symbolic m
   -> m (NSymbolicF (NTypeF m (Symbolic m)))
-unpackSymbolic = readVar . getSV <=< demand
+unpackSymbolic = readRef . getSV <=< demand
 
 type MonadLint e m =
   ( Scoped (Symbolic m) m
   , Framed e m
-  , MonadVar m
+  , MonadAtomicRef m
   , MonadCatch m
   , MonadThunkId m
   )
@@ -237,21 +236,21 @@ unify
   -> Symbolic m
   -> m (Symbolic m)
 unify context (SV x) (SV y) = do
-  x' <- readVar x
-  y' <- readVar y
+  x' <- readRef x
+  y' <- readRef y
   case (x', y') of
     (NAny, _) -> do
-      writeVar x y'
+      writeRef x y'
       pure $ SV y
     (_, NAny) -> do
-      writeVar y x'
+      writeRef y x'
       pure $ SV x
     (NMany xs, NMany ys) -> do
       m <- merge context xs ys
       bool
         (do
-          writeVar x   (NMany m)
-          writeVar y   (NMany m)
+          writeRef x   (NMany m)
+          writeRef y   (NMany m)
           packSymbolic (NMany m)
         )
         (do
@@ -468,7 +467,7 @@ instance MonadCatch (Lint s) where
 
 runLintM :: Options -> Lint s a -> ST s a
 runLintM opts action = do
-  i <- newVar (1 :: Int)
+  i <- newRef (1 :: Int)
   runFreshIdT i $ (`runReaderT` newContext opts) $ runLint action
 
 symbolicBaseEnv

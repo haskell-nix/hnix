@@ -10,9 +10,10 @@ import           Control.Comonad                ( extract )
 import qualified Control.DeepSeq               as Deep
 import qualified Control.Exception             as Exc
 import           GHC.Err                        ( errorWithoutStackTrace )
+import           Control.Monad.Free
+import           Control.Monad.Ref              ( MonadRef(readRef) )
 import           Control.Monad.Catch
 import           System.IO                      ( hPutStrLn, getContents )
-import           Control.Monad.Free
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Map                      as Map
 import           Data.Maybe                     ( fromJust )
@@ -29,7 +30,6 @@ import           Nix.Standard
 import           Nix.Thunk.Basic
 import qualified Nix.Type.Env                  as Env
 import qualified Nix.Type.Infer                as HM
-import           Nix.Var
 import           Nix.Value.Monad
 import           Options.Applicative     hiding ( ParserResult(..) )
 import           Prettyprinter           hiding ( list )
@@ -184,7 +184,7 @@ main =
                           path         = prefix <> k
                           (_, descend) = filterEntry path k
 
-                        val <- readVar @(StandardT (StdIdT IO)) ref
+                        val <- readRef @(StandardT (StdIdT IO)) ref
                         case val of
                           Computed _    -> pure (k, Nothing)
                           _ ->

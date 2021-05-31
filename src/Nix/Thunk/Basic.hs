@@ -12,12 +12,14 @@ module Nix.Thunk.Basic
 
 import           Prelude                 hiding ( force )
 import           Relude.Extra                   ( dup )
+import           Control.Monad.Ref              ( MonadRef(Ref, newRef, readRef, writeRef)
+                                                , MonadAtomicRef(atomicModifyRef)
+                                                )
 import           Control.Monad.Catch            ( MonadCatch(..)
                                                 , MonadThrow(throwM)
                                                 )
 import qualified Text.Show
 import           Nix.Thunk
-import           Nix.Var
 
 
 -- * Data type @Deferred@
@@ -43,10 +45,10 @@ deferred f1 f2 =
 
 -- | Thunk resource reference (@ref-tf: Ref m@), and as such also also hold
 -- a @Bool@ lock flag.
-type ThunkRef m = Var m Bool
+type ThunkRef m = Ref m Bool
 
 -- | Reference (@ref-tf: Ref m v@) to a value that the thunk holds.
-type ThunkValueRef m v = Var m (Deferred m v)
+type ThunkValueRef m v = Ref m (Deferred m v)
 
 -- | @ref-tf@ lock instruction for @Ref m@ (@ThunkRef@).
 lock :: Bool -> (Bool, Bool)
@@ -63,7 +65,7 @@ lockThunk
     )
   => ThunkRef m
   -> m Bool
-lockThunk r = atomicModifyVar r lock
+lockThunk r = atomicModifyRef r lock
 
 -- | Takes @ref-tf: Ref m@ reference, returns Bool result of the operation.
 unlockThunk
@@ -72,7 +74,7 @@ unlockThunk
     )
   => ThunkRef m
   -> m Bool
-unlockThunk r = atomicModifyVar r unlock
+unlockThunk r = atomicModifyRef r unlock
 
 
 -- * Data type for thunks: @NThunkF@
@@ -87,7 +89,7 @@ instance (Eq v, Eq (ThunkId m)) => Eq (NThunkF m v) where
 instance Show (NThunkF m v) where
   show Thunk{} = "<thunk>"
 
-type MonadBasicThunk m = (MonadThunkId m, MonadVar m)
+type MonadBasicThunk m = (MonadThunkId m, MonadAtomicRef m)
 
 
 -- ** @instance MonadThunk NThunkF@
@@ -103,13 +105,13 @@ instance (MonadBasicThunk m, MonadCatch m)
     do
       freshThunkId <- freshId
       liftA2 (Thunk freshThunkId)
-        (newVar   False          )
-        (newVar $ Deferred action)
+        (newRef   False          )
+        (newRef $ Deferred action)
 
   query :: m v -> NThunkF m v -> m v
   query vStub (Thunk _ _ lTValRef) =
     do
-      v <- readVar lTValRef
+      v <- readRef lTValRef
       deferred pure (const vStub) v
 
   force :: NThunkF m v -> m v
@@ -122,7 +124,7 @@ instance (MonadBasicThunk m, MonadCatch m)
   further t@(Thunk _ _ ref) =
     do
       _ <-
-        atomicModifyVar
+        atomicModifyRef
           ref
           dup
       pure t
@@ -142,7 +144,7 @@ forceMain
   -> m v
 forceMain (Thunk vTId vTRef vTValRef) =
   do
-    v <- readVar vTValRef
+    v <- readRef vTValRef
     deferred pure fCompute v
  where
   fCompute vDefferred =
@@ -152,7 +154,7 @@ forceMain (Thunk vTId vTRef vTValRef) =
         fLockFailed
         (do
           v <- vDefferred `catch` fBindFailed
-          writeVar vTValRef $ Computed v  -- Proclaim value computed
+          writeRef vTValRef $ Computed v  -- Proclaim value computed
           unlockRef
           pure v
         )
@@ -190,7 +192,7 @@ instance (MonadBasicThunk m, MonadCatch m)
     where
       go =
         do
-          eres <- readVar thunkValRef
+          eres <- readRef thunkValRef
           res  <-
             deferred
               k
@@ -217,7 +219,7 @@ instance (MonadBasicThunk m, MonadCatch m)
     -> m (NThunkF m v)
   furtherF k t@(Thunk _ _ ref) =
     do
-      _modifiedIt <- atomicModifyVar ref $
+      _modifiedIt <- atomicModifyRef ref $
         \x ->
           deferred
             (const (x, x))

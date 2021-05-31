@@ -9,7 +9,7 @@
 
 module Nix.Standard where
 
-import           Control.Applicative
+import           Prelude hiding                 ( force )
 import           Control.Comonad                ( Comonad )
 import           Control.Comonad.Env            ( ComonadEnv )
 import           Control.Monad.Catch            ( MonadThrow
@@ -21,7 +21,9 @@ import           Control.Monad.Fail             ( MonadFail )
 #endif
 import           Control.Monad.Free             ( Free(Pure, Free) )
 import           Control.Monad.Reader           ( MonadFix )
-import           Control.Monad.Ref              ( MonadAtomicRef )
+import           Control.Monad.Ref              ( MonadRef(newRef)
+                                                , MonadAtomicRef
+                                                )
 import qualified Text.Show
 import           Nix.Cited
 import           Nix.Cited.Basic
@@ -41,8 +43,6 @@ import           Nix.Utils                      ( free )
 import           Nix.Utils.Fix1                 ( Fix1T(Fix1T) )
 import           Nix.Value
 import           Nix.Value.Monad
-import           Nix.Var
-import Prelude hiding (force)
 
 
 newtype StdCited m a =
@@ -345,7 +345,7 @@ runWithBasicEffects opts =
   go . (`evalStateT` mempty) . (`runReaderT` newContext opts) . runStandardT
  where
   go action = do
-    i <- newVar (1 :: Int)
+    i <- newRef (1 :: Int)
     runFreshIdT i action
 
 runWithBasicEffectsIO :: Options -> StandardT (StdIdT IO) a -> IO a

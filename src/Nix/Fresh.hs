@@ -15,14 +15,13 @@ import           Control.Monad.Catch  ( MonadCatch
                                       )
 import           Control.Monad.Except ( MonadFix )
 import           Control.Monad.Ref    ( MonadAtomicRef(..)
-                                      , MonadRef()
+                                      , MonadRef(Ref)
                                       )
 
-import           Nix.Var
 import           Nix.Thunk
 
 
-newtype FreshIdT i m a = FreshIdT { unFreshIdT :: ReaderT (Var m i) m a }
+newtype FreshIdT i m a = FreshIdT { unFreshIdT :: ReaderT (Ref m i) m a }
   deriving
     ( Functor
     , Applicative
@@ -46,7 +45,7 @@ instance MonadBase b m => MonadBase b (FreshIdT i m) where
   liftBase = FreshIdT . liftBase
 
 instance
-  ( MonadVar m
+  ( MonadAtomicRef m
   , Eq i
   , Ord i
   , Show i
@@ -58,7 +57,7 @@ instance
   type ThunkId (FreshIdT i m) = i
   freshId = FreshIdT $ do
     v <- ask
-    atomicModifyVar v (\i -> (succ i, i))
+    atomicModifyRef v (\i -> (succ i, i))
 
-runFreshIdT :: Functor m => Var m i -> FreshIdT i m a -> m a
+runFreshIdT :: Functor m => Ref m i -> FreshIdT i m a -> m a
 runFreshIdT i m = runReaderT (unFreshIdT m) i
