@@ -7,6 +7,7 @@
 module Nix.Thunk.Basic
   ( NThunkF(..)
   , Deferred(..)
+  , deferred
   , MonadBasicThunk
   ) where
 
