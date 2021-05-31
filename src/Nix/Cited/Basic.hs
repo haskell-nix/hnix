@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE PatternSynonyms    #-}
 
 module Nix.Cited.Basic where
 
@@ -31,6 +32,15 @@ newtype Cited t f m a = Cited (NCited m (NValue t f m) a)
     , Comonad
     , ComonadEnv [Provenance m (NValue t f m)]
     )
+
+-- | @Cited@ pattern.
+-- > pattern CitedP m a = Cited (NCited m a)
+pattern CitedP
+  :: [Provenance m (NValue t f m)]
+  -> a
+  -> Cited t f m a
+pattern CitedP m a = Cited (NCited m a)
+{-# complete CitedP #-}
 
 instance
   HasCitations1 m (NValue t f m) (Cited t f m)
@@ -78,25 +88,25 @@ instance
     citeThunk v = fmap (Cited . NCited v)
 
   thunkId :: Cited u f m t -> ThunkId m
-  thunkId (Cited (NCited _ t)) = thunkId @_ @m t
+  thunkId (CitedP _ t) = thunkId @_ @m t
 
   query :: m v -> Cited u f m t -> m v
-  query m (Cited (NCited _ t)) = query m t
+  query m (CitedP _ t) = query m t
 
   -- | The ThunkLoop exception is thrown as an exception with MonadThrow,
   --   which does not capture the current stack frame information to provide
   --   it in a NixException, so we catch and re-throw it here using
   --   'throwError' from Frames.hs.
   force :: Cited u f m t -> m v
-  force (Cited (NCited ps t)) = handleDisplayProvenance ps $ force t
+  force (CitedP ps t) = handleDisplayProvenance ps $ force t
 
   forceEff :: Cited u f m t -> m v
-  forceEff (Cited (NCited ps t)) = handleDisplayProvenance ps $ forceEff t
+  forceEff (CitedP ps t) = handleDisplayProvenance ps $ forceEff t
 
   further :: Cited u f m t -> m (Cited u f m t)
-  further (Cited (NCited ps t)) = citeThunk ps $ further t
    where
     citeThunk v = fmap (Cited . NCited v)
+  further (CitedP ps t) = citeThunk ps $ further t
 
 
 -- * Kleisli functor HOFs
@@ -114,16 +124,16 @@ instance
   => MonadThunkF (Cited u f m t) m v where
 
   queryF :: (v -> m r) -> m r -> Cited u f m t -> m r
-  queryF k m (Cited (NCited _ t)) = queryF k m t
+  queryF k m (CitedP _ t) = queryF k m t
 
   forceF :: (v -> m r) -> Cited u f m t -> m r
-  forceF k (Cited (NCited ps t)) = handleDisplayProvenance ps $ forceF k t
+  forceF k (CitedP ps t) = handleDisplayProvenance ps $ forceF k t
 
   forceEffF :: (v -> m r) -> Cited u f m t -> m r
-  forceEffF k (Cited (NCited ps t)) = handleDisplayProvenance ps $ forceEffF k t
+  forceEffF k (CitedP ps t) = handleDisplayProvenance ps $ forceEffF k t
 
   furtherF :: (m v -> m v) -> Cited u f m t -> m (Cited u f m t)
-  furtherF k (Cited (NCited ps t)) = Cited . NCited ps <$> furtherF k t
+  furtherF k (CitedP ps t) = Cited . NCited ps <$> furtherF k t
 
 
 -- ** Utils
