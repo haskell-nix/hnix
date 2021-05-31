@@ -177,6 +177,7 @@ main =
             xs <-
               traverse
                 (\ (k, nv) ->
+                  (k, ) <$>
                   free
                     (\ (StdThunk (extract -> Thunk _ _ ref)) ->
                       do
@@ -185,15 +186,17 @@ main =
                           (_, descend) = filterEntry path k
 
                         val <- readRef @(StandardT (StdIdT IO)) ref
-                        case val of
-                          Computed _    -> pure (k, Nothing)
-                          _ ->
-                            bool
-                              (pure (k, Nothing))
-                              ((k, ) <$> forceEntry path nv)
-                              descend
+                        bool
+                          (pure Nothing)
+                          (forceEntry path nv)
+                          (descend &&
+                           deferred
+                            (const False)
+                            (const True)
+                            val
+                          )
                     )
-                    (\ v -> pure (k, pure $ Free v))
+                    (pure . pure . Free)
                     nv
                 )
                 (sortWith fst $ M.toList s)
