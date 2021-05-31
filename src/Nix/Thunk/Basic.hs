@@ -78,8 +78,8 @@ unlockThunk r = atomicModifyVar r unlock
 -- * Data type for thunks: @NThunkF@
 
 -- | The type of very basic thunks
-data NThunkF m v
-  = Thunk (ThunkId m) (ThunkRef m) (ThunkValueRef m v)
+data NThunkF m v =
+  Thunk (ThunkId m) (ThunkRef m) (ThunkValueRef m v)
 
 instance (Eq v, Eq (ThunkId m)) => Eq (NThunkF m v) where
   Thunk x _ _ == Thunk y _ _ = x == y
@@ -130,38 +130,42 @@ instance (MonadBasicThunk m, MonadCatch m)
 
 -- *** United body of `force*`
 
--- | If @m v@ is @Computed@ - returns is
+-- | Always returns computed @m v@.
+--
+-- Checks if resource is computed,
+-- if not - with locking evaluates the resource.
 forceMain
   :: ( MonadBasicThunk m
     , MonadCatch m
     )
   => NThunkF m v
   -> m v
-forceMain (Thunk n thunkRef thunkValRef) =
-  deferred
-    pure
-    (\ action ->
-      do
-        lockedIt <- lockThunk thunkRef
-        bool
-          lockFailed
-          (do
-            v <- action `catch` actionFailed
-            writeVar thunkValRef $ Computed v
-            _unlockedIt <- unlockThunk thunkRef
-            pure v
-          )
-          (not lockedIt)
-    )
-    =<< readVar thunkValRef
+forceMain (Thunk vTId vTRef vTValRef) =
+  do
+    v <- readVar vTValRef
+    deferred pure fCompute v
  where
-  lockFailed = throwM $ ThunkLoop $ show n
-
-  actionFailed (e :: SomeException) =
+  fCompute vDefferred =
     do
-      _unlockedIt <- unlockThunk thunkRef
+      lockedIt <- lockThunk vTRef
+      bool
+        fLockFailed
+        (do
+          v <- vDefferred `catch` fBindFailed
+          writeVar vTValRef $ Computed v  -- Proclaim value computed
+          unlockRef
+          pure v
+        )
+        (not lockedIt)
+
+  fLockFailed = throwM $ ThunkLoop $ show vTId
+
+  fBindFailed (e :: SomeException) =
+    do
+      unlockRef
       throwM e
 
+  unlockRef = unlockThunk vTRef
 {-# inline forceMain #-} -- it is big function, but internal, and look at its use.
 
 
