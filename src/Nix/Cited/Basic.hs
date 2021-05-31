@@ -20,7 +20,7 @@ import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 
-newtype Cited t f m a = Cited { getCited :: NCited m (NValue t f m) a }
+newtype Cited t f m a = Cited (NCited m (NValue t f m) a)
   deriving
     ( Generic
     , Typeable
@@ -32,7 +32,10 @@ newtype Cited t f m a = Cited { getCited :: NCited m (NValue t f m) a }
     , ComonadEnv [Provenance m (NValue t f m)]
     )
 
-instance HasCitations1 m (NValue t f m) (Cited t f m) where
+instance
+  HasCitations1 m (NValue t f m) (Cited t f m)
+ where
+
   citations1 (Cited c) = citations c
   addProvenance1 x (Cited c) = Cited $ addProvenance x c
 
