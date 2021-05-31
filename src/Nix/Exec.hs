@@ -538,8 +538,8 @@ evalExprLoc expr =
           Eval.framedEvalExprLoc
           (join . (`runReaderT` (0 :: Int)) .
             adi
-              (addTracing Eval.evalContent)
               (raise Eval.addMetaInfo)
+              (addTracing Eval.evalContent)
           )
           (tracing opts)
     pTracedAdi expr

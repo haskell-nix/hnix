@@ -60,7 +60,7 @@ nixEval
   -> Maybe FilePath
   -> Fix g
   -> m a
-nixEval transform alg mpath = withNixContext mpath . adi alg transform
+nixEval transform alg mpath = withNixContext mpath . adi transform alg
 
 -- | Evaluate a nix expression in the default context
 nixEvalExpr

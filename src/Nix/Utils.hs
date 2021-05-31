@@ -101,6 +101,9 @@ freeToFix f = go
       f
       $ Fix . (go <$>)
 
+-- | Replace:
+--  @a -> Pure a@
+--  @Fix -> Free@
 fixToFree :: Functor f => Fix f -> Free f a
 fixToFree = Free . go
  where
@@ -115,32 +118,13 @@ fixToFree = Free . go
 --   in this case through behavior.
 adi
   :: Functor f
-  => Alg f a
-  -> Transform f a
-  -> Fix f
-  -> a
-adi f g = g $ f . (adi f g <$>) . unFix
-
-adi'
-  :: Functor f
   => Transform f a
   -> Alg f a
   -> Fix f
   -> a
-adi' g f = g $ f . (adi' g f <$>) . unFix
+adi g f = g $ f . (adi g f <$>) . unFix
 
 adiM
-  :: ( Traversable t
-     , Monad m
-     )
-  => AlgM t m a
-  -> Transform t (m a)
-  -> Fix t
-  -> m a
-adiM f g = g $ f <=< traverse (adiM f g) . unFix
-
-
-adiM'
   :: ( Traversable t
      , Monad m
      )
@@ -148,7 +132,8 @@ adiM'
   -> AlgM t m a
   -> Fix t
   -> m a
-adiM' g f = g $ f <=< traverse (adiM' g f) . unFix
+adiM g f = g $ f <=< traverse (adiM g f) . unFix
+
 
 class Has a b where
   hasLens :: Lens' a b
