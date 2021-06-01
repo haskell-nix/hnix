@@ -599,6 +599,11 @@ nvStr :: Applicative f
   -> NValue t f m
 nvStr = Free . nvStr'
 
+nvStrWithoutContext :: Applicative f
+  => Text
+  -> NValue t f m
+nvStrWithoutContext = nvStr . makeNixStringWithoutContext
+
 
 -- | Life of a Haskell FilePath to the life of a Nix path
 nvPath :: Applicative f

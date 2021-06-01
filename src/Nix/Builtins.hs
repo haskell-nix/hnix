@@ -319,7 +319,7 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
       (s >= 0)
 
 thunkStr :: Applicative f => ByteString -> NValue t f m
-thunkStr s = nvStr $ makeNixStringWithoutContext $ decodeUtf8 s
+thunkStr s = nvStrWithoutContext $ decodeUtf8 s
 
 elemAt :: [a] -> Int -> Maybe a
 elemAt ls i =
@@ -432,7 +432,7 @@ nixPathNix =
           <> rest
     )
  where
-  mkNvStr = nvStr . makeNixStringWithoutContext . toText
+  mkNvStr = nvStrWithoutContext . toText
 
 toStringNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toStringNix = toValue <=< coerceToString callFunc DontCopyToStore CoerceAny
@@ -602,7 +602,7 @@ splitVersionNix v =
     version <- fromStringNoContext =<< fromValue v
     pure $
       nvList $
-        nvStr . makeNixStringWithoutContext . versionComponentToString <$>
+        nvStrWithoutContext . versionComponentToString <$>
           splitVersion version
 
 compareVersionsNix
@@ -647,7 +647,7 @@ parseDrvNameNix drvname =
         ]
 
  where
-  mkNVStr = nvStr . makeNixStringWithoutContext
+  mkNVStr = nvStrWithoutContext
 
 matchNix
   :: forall e t f m
@@ -774,7 +774,7 @@ mapAttrsNix f xs =
 
       applyFunToKeyVal (key, val) =
         do
-          runFunForKey <- callFunc f $ nvStr $ makeNixStringWithoutContext key
+          runFunForKey <- callFunc f $ nvStrWithoutContext key
           callFunc runFunForKey val
 
     newVals <-
@@ -1460,7 +1460,7 @@ fromJSONNix nvjson =
   jsonToNValue = \case
     A.Object m -> nvSet mempty <$> traverse jsonToNValue m
     A.Array  l -> nvList <$> traverse jsonToNValue (V.toList l)
-    A.String s -> pure $ nvStr $ makeNixStringWithoutContext s
+    A.String s -> pure $ nvStrWithoutContext s
     A.Number n ->
       pure $
         nvConstant $
@@ -1611,7 +1611,7 @@ currentSystemNix =
     os   <- getCurrentSystemOS
     arch <- getCurrentSystemArch
 
-    pure $ nvStr $ makeNixStringWithoutContext $ arch <> "-" <> os
+    pure $ nvStrWithoutContext $ arch <> "-" <> os
 
 currentTimeNix :: MonadNix e t f m => m (NValue t f m)
 currentTimeNix =
@@ -1802,7 +1802,7 @@ builtinsList = sequence
   , add2 Normal   "sort"             sortNix
   , add2 Normal   "split"            splitNix
   , add  Normal   "splitVersion"     splitVersionNix
-  , add0 Normal   "storeDir"         (pure $ nvStr $ makeNixStringWithoutContext "/nix/store")
+  , add0 Normal   "storeDir"         (pure $ nvStrWithoutContext "/nix/store")
   --, add  Normal   "storePath"        storePath
   , add' Normal   "stringLength"     (arity1 $ Text.length . stringIgnoreContext)
   , add' Normal   "sub"              (arity2 ((-) @Integer))
@@ -1910,7 +1910,7 @@ withNixContext mpath action =
     base            <- builtins
     opts :: Options <- asks $ view hasLens
     let
-      i = nvList $ nvStr . makeNixStringWithoutContext . toText <$> include opts
+      i = nvList $ nvStrWithoutContext . toText <$> include opts
 
     pushScope
       (one ("__includes", i))
