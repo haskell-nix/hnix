@@ -273,7 +273,7 @@ defaultDerivationStrict val = do
         pure $ drv
           { inputs
           , outputs = outputs'
-          , env = ifNotJsonModEnv $ Map.union outputs'
+          , env = ifNotJsonModEnv $ (outputs' <>)
           }
 
     drvPath <- pathToText <$> writeDerivation drv'

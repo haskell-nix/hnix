@@ -202,7 +202,7 @@ compose :: Subst -> Subst -> Subst
 Subst s1 `compose` Subst s2 =
   Subst $
     apply (Subst s1) <$>
-      (s2 `Map.union` s1)
+      (s2 <> s1)
 
 -- * class @Substitutable@
 

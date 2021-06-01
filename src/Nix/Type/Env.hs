@@ -52,16 +52,16 @@ remove :: Env -> Name -> Env
 remove (TypeEnv env) var = TypeEnv $ Map.delete var env
 
 extends :: Env -> [(Name, [Scheme])] -> Env
-extends env xs = TypeEnv $ Map.fromList xs `Map.union` coerce env
+extends env xs = TypeEnv $ Map.fromList xs <> coerce env
 
 lookup :: Name -> Env -> Maybe [Scheme]
 lookup key (TypeEnv tys) = Map.lookup key tys
 
 merge :: Env -> Env -> Env
-merge (TypeEnv a) (TypeEnv b) = TypeEnv $ a `Map.union` b
+merge (TypeEnv a) (TypeEnv b) = TypeEnv $ a <> b
 
 mergeRight :: Env -> Env -> Env
-mergeRight (TypeEnv a) (TypeEnv b) = TypeEnv $ b `Map.union` a
+mergeRight (TypeEnv a) (TypeEnv b) = TypeEnv $ b <> a
 
 mergeEnvs :: [Env] -> Env
 mergeEnvs = foldl' (<>) mempty
