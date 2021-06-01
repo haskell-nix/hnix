@@ -71,7 +71,7 @@ parsePath p = case Store.parsePath "/nix/store" (encodeUtf8 p) of
 writeDerivation :: (Framed e m, MonadStore m) => Derivation -> m Store.StorePath
 writeDerivation drv@Derivation{inputs, name} = do
   let (inputSrcs, inputDrvs) = inputs
-  references <- Set.fromList <$> traverse parsePath (Set.toList $ Set.union inputSrcs $ Set.fromList $ Map.keys inputDrvs)
+  references <- Set.fromList <$> traverse parsePath (Set.toList $ inputSrcs <> Set.fromList (Map.keys inputDrvs))
   path <- addTextToStore (Text.append name ".drv") (unparseDrv drv) (S.fromList $ Set.toList references) False
   parsePath $ toText $ unStorePath path
 

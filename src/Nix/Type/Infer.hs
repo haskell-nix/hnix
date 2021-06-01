@@ -610,7 +610,7 @@ instance FreeTypeVars Type where
   ftv (TVar a   ) = one a
   ftv (TSet _ a ) = Set.unions $ ftv <$> M.elems a
   ftv (TList a  ) = Set.unions $ ftv <$> a
-  ftv (t1 :~> t2) = ftv t1 `Set.union` ftv t2
+  ftv (t1 :~> t2) = ftv t1 <> ftv t2
   ftv (TMany ts ) = Set.unions $ ftv <$> ts
 
 instance FreeTypeVars TVar where
@@ -620,10 +620,10 @@ instance FreeTypeVars Scheme where
   ftv (Forall as t) = ftv t `Set.difference` Set.fromList as
 
 instance FreeTypeVars a => FreeTypeVars [a] where
-  ftv = foldr (Set.union . ftv) mempty
+  ftv = foldr ((<>) . ftv) mempty
 
 instance (Ord a, FreeTypeVars a) => FreeTypeVars (Set.Set a) where
-  ftv = foldr (Set.union . ftv) mempty
+  ftv = foldr ((<>) . ftv) mempty
 
 -- * class @ActiveTypeVars@
 
@@ -633,12 +633,12 @@ class ActiveTypeVars a where
 -- ** Instances
 
 instance ActiveTypeVars Constraint where
-  atv (EqConst      t1 t2   ) = ftv t1 `Set.union` ftv t2
-  atv (ImpInstConst t1 ms t2) = ftv t1 `Set.union` (ftv ms `Set.intersection` ftv t2)
-  atv (ExpInstConst t  s    ) = ftv t  `Set.union` ftv s
+  atv (EqConst      t1 t2   ) = ftv t1 <> ftv t2
+  atv (ImpInstConst t1 ms t2) = ftv t1 <> (ftv ms `Set.intersection` ftv t2)
+  atv (ExpInstConst t  s    ) = ftv t  <> ftv s
 
 instance ActiveTypeVars a => ActiveTypeVars [a] where
-  atv = foldr (Set.union . atv) mempty
+  atv = foldr ((<>) . atv) mempty
 
 -- * Other
 
