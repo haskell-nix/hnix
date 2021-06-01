@@ -532,13 +532,6 @@ instance TH.Lift NExpr where
 #endif
 
 
--- ** @class NExprAnn@
-
-class NExprAnn ann g | g -> ann where
-  fromNExpr :: g r -> (NExprF r, ann)
-  toNExpr :: (NExprF r, ann) -> g r
-
-
 -- ** Additional instances
 
 $(deriveEq1 ''NExprF)
@@ -636,6 +629,31 @@ paramName :: Params r -> Maybe VarName
 paramName (Param n       ) = pure n
 paramName (ParamSet _ _ n) = n
 
+stripPositionInfo :: NExpr -> NExpr
+stripPositionInfo = transport phi
+ where
+  transport f (Fix x) = Fix $ transport f <$> f x
+
+  phi (NSet recur binds) = NSet recur $ go <$> binds
+  phi (NLet binds body) = NLet (go <$> binds) body
+  phi x                 = x
+
+  go (NamedVar path r     _pos) = NamedVar path r     nullPos
+  go (Inherit  ms   names _pos) = Inherit  ms   names nullPos
+
+nullPos :: SourcePos
+nullPos = SourcePos "<string>" (mkPos 1) (mkPos 1)
+
+-- * Dead code
+
+-- ** @class NExprAnn@
+
+class NExprAnn ann g | g -> ann where
+  fromNExpr :: g r -> (NExprF r, ann)
+  toNExpr :: (NExprF r, ann) -> g r
+
+-- ** Other
+
 ekey
   :: NExprAnn ann g
   => NonEmpty Text
@@ -671,18 +689,3 @@ ekey keys pos f e@(Fix x) | (NSet NNonRecursive xs, ann) <- fromNExpr x =
           ks
 
 ekey _ _ f e = fromMaybe e <$> f Nothing
-
-stripPositionInfo :: NExpr -> NExpr
-stripPositionInfo = transport phi
- where
-  transport f (Fix x) = Fix $ transport f <$> f x
-
-  phi (NSet recur binds) = NSet recur $ go <$> binds
-  phi (NLet binds body) = NLet (go <$> binds) body
-  phi x                 = x
-
-  go (NamedVar path r     _pos) = NamedVar path r nullPos
-  go (Inherit  ms   names _pos) = Inherit ms names nullPos
-
-nullPos :: SourcePos
-nullPos = SourcePos "<string>" (mkPos 1) (mkPos 1)
