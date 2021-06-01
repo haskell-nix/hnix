@@ -408,7 +408,7 @@ execBinaryOpForced scope span op lval rval = case op of
 
   NUpdate ->
     case (lval, rval) of
-      (NVSet ls lp, NVSet rs rp) -> pure $ nvSetP prov (rp `M.union` lp) (rs `M.union` ls)
+      (NVSet ls lp, NVSet rs rp) -> pure $ nvSetP prov (rp <> lp) (rs <> ls)
       (NVSet ls lp, NVConstant NNull) -> pure $ nvSetP prov lp ls
       (NVConstant NNull, NVSet rs rp) -> pure $ nvSetP prov rp rs
       _ -> unsupportedTypes
