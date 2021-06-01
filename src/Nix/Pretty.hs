@@ -374,7 +374,7 @@ prettyNThunk t =
 printNix :: forall t f m . MonadDataContext f m => NValue t f m -> String
 printNix = iterNValue (\_ _ -> thk) phi
  where
-  thk = "<thunk>"
+  thk = toString thunkStubText
 
   phi :: NValue' t f m String -> String
   phi (NVConstant' a ) = toString $ atomText a

@@ -67,7 +67,7 @@ type StdValue' m = NValue' (StdThunk m) (StdCited m) m (StdValue m)
 type StdValue m = NValue (StdThunk m) (StdCited m) m
 
 instance Show (StdThunk m) where
-  show _ = "<thunk>"
+  show _ = toString thunkStubText
 
 instance HasCitations1 m (StdValue m) (StdCited m) where
   citations1 (StdCited c) = citations1 c

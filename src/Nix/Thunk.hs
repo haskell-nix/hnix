@@ -108,3 +108,8 @@ instance Show ThunkLoop where
   show (ThunkLoop i) = toString $ "ThunkLoop " <> i
 
 instance Exception ThunkLoop
+
+-- ** Utils
+
+thunkStubText :: Text
+thunkStubText = "<thunk>"

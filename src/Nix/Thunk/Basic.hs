@@ -88,7 +88,7 @@ instance (Eq v, Eq (ThunkId m)) => Eq (NThunkF m v) where
   Thunk x _ _ == Thunk y _ _ = x == y
 
 instance Show (NThunkF m v) where
-  show Thunk{} = "<thunk>"
+  show Thunk{} = toString thunkStubText
 
 type MonadBasicThunk m = (MonadThunkId m, MonadAtomicRef m)
 
