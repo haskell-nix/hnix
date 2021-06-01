@@ -19,7 +19,6 @@ import           Data.Set                  ( member
                                            )
 import           Nix.Cited
 import           Nix.Frames
-import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
 
@@ -156,7 +155,7 @@ stubCycles
   -> NValue t f m
 stubCycles =
   iterNValue
-    (\t _ ->
+    (\_ t ->
       Free $
         NValue' $
           foldr

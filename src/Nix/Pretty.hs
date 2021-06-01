@@ -307,7 +307,7 @@ exprFNixDoc = \case
 
 
 valueToExpr :: forall t f m . MonadDataContext f m => NValue t f m -> NExpr
-valueToExpr = iterNValue (\_ _ -> thk) (Fix . phi)
+valueToExpr = iterNValueByDiscardWith thk (Fix . phi)
  where
   thk = Fix . NSym $ "<expr>"
 
@@ -372,7 +372,7 @@ prettyNThunk t =
 
 -- | This function is used only by the testing code.
 printNix :: forall t f m . MonadDataContext f m => NValue t f m -> String
-printNix = iterNValue (\_ _ -> thk) phi
+printNix = iterNValueByDiscardWith thk phi
  where
   thk = toString thunkStubText
 
