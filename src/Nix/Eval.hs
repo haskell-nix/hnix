@@ -571,4 +571,4 @@ evalContent
   :: MonadNixEval v m
   => AnnF ann NExprF (m v)
   -> m v
-evalContent = eval . annotated . getCompose
+evalContent = eval . stripAnn

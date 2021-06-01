@@ -53,7 +53,7 @@ mkNixDoc o d = NixDoc { withoutParens = d, rootOp = o, wasPath = False }
 --   behaves as if its root operator had a precedence higher than all
 --   other operators (including function application).
 simpleExpr :: Doc ann -> NixDoc ann
-simpleExpr = mkNixDoc (OperatorInfo minBound NAssocNone "simple expr")
+simpleExpr = mkNixDoc $ OperatorInfo minBound NAssocNone "simple expr"
 
 pathExpr :: Doc ann -> NixDoc ann
 pathExpr d = (simpleExpr d) { wasPath = True }
@@ -195,7 +195,7 @@ prettyOriginExpr
   -> Doc ann
 prettyOriginExpr = withoutParens . go
  where
-  go = exprFNixDoc . annotated . getCompose . fmap render
+  go = exprFNixDoc . stripAnn . fmap render
 
   render :: Maybe (NValue t f m) -> NixDoc ann
   render Nothing = simpleExpr "_"
@@ -235,8 +235,11 @@ exprFNixDoc = \case
         ]
    where
     opInfo = getBinaryOperator op
-    f x | associativity opInfo /= x = opInfo { associativity = NAssocNone }
-        | otherwise                 = opInfo
+    f x =
+      bool
+        opInfo
+        (opInfo { associativity = NAssocNone })
+        (associativity opInfo /= x)
   NUnary op r1 ->
     mkNixDoc
       opInfo
