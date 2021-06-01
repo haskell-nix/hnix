@@ -171,6 +171,18 @@ stubCycles =
 thunkStubVal :: Applicative f => NValue t f m
 thunkStubVal = nvStr $ makeNixStringWithoutContext thunkStubText
 
+-- | Check if thunk @t@ is computed,
+-- then bind it into first arg.
+-- else bind the thunk stub val.
+bindComputedThunkOrStub
+  :: ( Applicative f
+    , MonadThunk t m (NValue t f m)
+    )
+  => (NValue t f m -> m a)
+  -> t
+  -> m a
+bindComputedThunkOrStub = (<=< query (pure thunkStubVal))
+
 removeEffects
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
   => NValue t f m
@@ -178,11 +190,11 @@ removeEffects
 removeEffects =
   iterNValueM
     id
-    (<=< query (pure thunkStubVal))
+    bindComputedThunkOrStub
     (fmap Free . sequenceNValue' id)
 
 dethunk
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
   => t
   -> m (NValue t f m)
-dethunk = removeEffects <=< query (pure thunkStubVal)
+dethunk = bindComputedThunkOrStub removeEffects
