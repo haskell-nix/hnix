@@ -28,7 +28,8 @@ import           Nix.Json
 import           Nix.Options.Parser
 import           Nix.Standard
 import           Nix.Thunk.Basic
-import qualified Nix.Type.Env                  as Env
+import           Nix.Type.Env                   ( Env(..) )
+import           Nix.Type.Type                  ( Scheme )
 import qualified Nix.Type.Infer                as HM
 import           Nix.Value.Monad
 import           Options.Applicative     hiding ( ParserResult(..) )
@@ -103,7 +104,7 @@ main =
               either
                 (\ err -> errorWithoutStackTrace $ "Type error: " <> PS.ppShow err)
                 (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <> PS.ppShow
-                  (fromJust $ Map.lookup "it" $ Env.types ty)
+                  (fromJust $ Map.lookup "it" (coerce ty :: Map Text [Scheme]))
                 )
                 (HM.inferTop mempty [("it", stripAnnotation expr')])
 
