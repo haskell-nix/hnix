@@ -528,12 +528,12 @@ iterNValue k f = iter f . fmap (\t -> k t $ iterNValue k f)
 iterNValueM
   :: (MonadDataContext f m, Monad n)
   => (forall x . n x -> m x)
-  -> (t -> (NValue t f m -> n r) -> n r)
+  -> ((NValue t f m -> n r) -> t -> n r)
   -> (NValue' t f m (n r) -> n r)
   -> NValue t f m
   -> n r
 iterNValueM transform k f =
-    iterM f <=< go . ((\t -> k t $ iterNValueM transform k f) <$>)
+    iterM f <=< go . (k (iterNValueM transform k f) <$>)
   where
     go (Pure x) = Pure <$> x
     go (Free fa) = Free <$> bindNValue' transform go fa

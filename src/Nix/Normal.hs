@@ -38,7 +38,7 @@ normalizeValue
      )
   => NValue t f m
   -> m (NValue t f m)
-normalizeValue v = run $ iterNValueM run go (fmap Free . sequenceNValue' run) v
+normalizeValue v = run $ iterNValueM run (flip go) (fmap Free . sequenceNValue' run) v
  where
   start = 0 :: Int
   table = mempty
@@ -58,7 +58,9 @@ normalizeValue v = run $ iterNValueM run go (fmap Free . sequenceNValue' run) v
       (do
         i <- ask
         when (i > 2000) $ fail "Exceeded maximum normalization depth of 2000 levels"
-        lifted (lifted $ \f -> f =<< force t) $ local succ . k
+        (lifted . lifted)
+          (=<< force t)
+          (local succ . k)
       )
       (pure $ pure t)
       b
@@ -82,7 +84,7 @@ normalizeValueF
   => (forall r . t -> (NValue t f m -> m r) -> m r)
   -> NValue t f m
   -> m (NValue t f m)
-normalizeValueF f = run . iterNValueM run go (fmap Free . sequenceNValue' run)
+normalizeValueF f = run . iterNValueM run (flip go) (fmap Free . sequenceNValue' run)
  where
   start = 0 :: Int
   table = mempty
@@ -176,8 +178,7 @@ removeEffects
 removeEffects =
   iterNValueM
     id
-    --  2021-02-25: NOTE: Please, unflip this up the stack
-    (\ t f -> f =<< query (pure thunkStubVal) t)
+    (<=< query (pure thunkStubVal))
     (fmap Free . sequenceNValue' id)
 
 dethunk
