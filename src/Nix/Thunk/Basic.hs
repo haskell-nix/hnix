@@ -52,30 +52,30 @@ type ThunkRef m = Ref m Bool
 type ThunkValueRef m v = Ref m (Deferred m v)
 
 -- | @ref-tf@ lock instruction for @Ref m@ (@ThunkRef@).
-lock :: Bool -> (Bool, Bool)
-lock = (True, )
+lockVal :: Bool -> (Bool, Bool)
+lockVal = (True, )
 
 -- | @ref-tf@ unlock instruction for @Ref m@ (@ThunkRef@).
-unlock :: Bool -> (Bool, Bool)
-unlock = (False, )
+unlockVal :: Bool -> (Bool, Bool)
+unlockVal = (False, )
 
 -- | Takes @ref-tf: Ref m@ reference, returns Bool result of the operation.
-lockThunk
+lock
   :: ( MonadBasicThunk m
     , MonadCatch m
     )
   => ThunkRef m
   -> m Bool
-lockThunk r = atomicModifyRef r lock
+lock r = atomicModifyRef r lockVal
 
 -- | Takes @ref-tf: Ref m@ reference, returns Bool result of the operation.
-unlockThunk
+unlock
   :: ( MonadBasicThunk m
     , MonadCatch m
     )
   => ThunkRef m
   -> m Bool
-unlockThunk r = atomicModifyRef r unlock
+unlock r = atomicModifyRef r unlockVal
 
 
 -- * Data type for thunks: @NThunkF@
@@ -143,32 +143,32 @@ forceMain
     )
   => NThunkF m v
   -> m v
-forceMain (Thunk vTId vTRef vTValRef) =
+forceMain (Thunk tIdV tRefV tValRefV) =
   do
-    v <- readRef vTValRef
-    deferred pure fCompute v
+    v <- readRef tValRefV
+    deferred pure computeW v
  where
-  fCompute vDefferred =
+  computeW vDefferred =
     do
-      lockedIt <- lockThunk vTRef
+      locked <- lock tRefV
       bool
-        fLockFailed
+        lockFailedV
         (do
-          v <- vDefferred `catch` fBindFailed
-          writeRef vTValRef $ Computed v  -- Proclaim value computed
+          v <- vDefferred `catch` bindFailedW
+          writeRef tValRefV $ Computed v  -- Proclaim value computed
           unlockRef
           pure v
         )
-        (not lockedIt)
+        (not locked)
 
-  fLockFailed = throwM $ ThunkLoop $ show vTId
+  lockFailedV = throwM $ ThunkLoop $ show tIdV
 
-  fBindFailed (e :: SomeException) =
+  bindFailedW (e :: SomeException) =
     do
       unlockRef
       throwM e
 
-  unlockRef = unlockThunk vTRef
+  unlockRef = unlock tRefV
 {-# inline forceMain #-} -- it is big function, but internal, and look at its use.
 
 
@@ -185,11 +185,11 @@ instance (MonadBasicThunk m, MonadCatch m)
     -> m r
   queryF k n (Thunk _ thunkRef thunkValRef) =
     do
-      lockedIt <- lockThunk thunkRef
+      locked <- lock thunkRef
       bool
         n
         go
-        (not lockedIt)
+        (not locked)
     where
       go =
         do
@@ -199,8 +199,10 @@ instance (MonadBasicThunk m, MonadCatch m)
               k
               (const n)
               eres
-          _unlockedIt <- unlockThunk thunkRef
+          unlockRef
           pure res
+
+      unlockRef = unlock thunkRef
 
   forceF
     :: (v -> m a)
