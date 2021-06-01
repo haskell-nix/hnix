@@ -105,7 +105,7 @@ main =
                 (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <> PS.ppShow
                   (fromJust $ Map.lookup "it" $ Env.types ty)
                 )
-                (HM.inferTop Env.empty [("it", stripAnnotation expr')])
+                (HM.inferTop mempty [("it", stripAnnotation expr')])
 
                 -- liftIO $ putStrLn $ runST $
                 --     runLintM opts . renderSymbolic =<< lint opts expr

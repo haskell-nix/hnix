@@ -449,4 +449,4 @@ addPath p =
     =<< addToStore (toText $ takeFileName p) p True False
 
 toFile_ :: (Framed e m, MonadStore m) => FilePath -> String -> m StorePath
-toFile_ p contents = addTextToStore (toText p) (toText contents) HS.empty False
+toFile_ p contents = addTextToStore (toText p) (toText contents) mempty False

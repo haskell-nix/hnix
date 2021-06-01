@@ -959,7 +959,7 @@ genericClosureNix c =
         ss <- fromValue @[NValue t f m] =<< demand startSet
         op <- demand operator
 
-        toValue @[NValue t f m] =<< snd <$> go op S.empty ss
+        toValue @[NValue t f m] =<< snd <$> go op mempty ss
  where
   go
     :: NValue t f m

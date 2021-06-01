@@ -208,7 +208,7 @@ exec update source = do
       -- import qualified Nix.Type.Env                  as Env
       -- import           Nix.Type.Infer
       --
-      -- let tyctx' = inferTop Env.empty [("repl", stripAnnotation expr)]
+      -- let tyctx' = inferTop mempty [("repl", stripAnnotation expr)]
       -- liftIO $ print tyctx'
 
       mVal <- lift $ lift $ try $ pushScope (replCtx st) (evalExprLoc expr)
