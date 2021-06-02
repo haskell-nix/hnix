@@ -730,7 +730,7 @@ substringNix start len str =
 attrNamesNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 attrNamesNix =
-  (fmap getDeeper . toValue . fmap makeNixStringWithoutContext . sort . M.keys)
+  (fmap (coerce :: CoerceDeeperToNValue t f m) . toValue . fmap makeNixStringWithoutContext . sort . M.keys)
   <=< fromValue @(AttrSet (NValue t f m))
 
 attrValuesNix
@@ -1441,7 +1441,7 @@ readDirNix nvpath =
         detectFileTypes
         items
 
-    getDeeper <$> toValue (M.fromList itemsWithTypes)
+    (coerce :: CoerceDeeperToNValue t f m) <$> toValue (M.fromList itemsWithTypes)
 
 fromJSONNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
