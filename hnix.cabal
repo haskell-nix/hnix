@@ -400,7 +400,9 @@ library
       base hiding (Prelude)
     , relude (Relude as Prelude)
     , relude
-  ghc-options: -Wall -fprint-potential-instances
+  ghc-options:
+    -Wall
+    -fprint-potential-instances
   build-depends:
       aeson >= 1.4.2 && < 1.6
     , array >= 0.4 && < 0.6
@@ -485,7 +487,10 @@ library
   if flag(optimize)
     default-extensions:
       ApplicativeDo
-    ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
+    ghc-options:
+      -O2
+      -fexpose-all-unfoldings
+      -fspecialise-aggressively
   -- if !flag(profiling)
   --   build-depends:
   --       ghc-datasize
@@ -500,7 +505,8 @@ executable hnix
     Paths_hnix
   autogen-modules:
     Paths_hnix
-  ghc-options: -Wall
+  ghc-options:
+    -Wall
   build-depends:
       aeson
     , base
@@ -547,7 +553,10 @@ executable hnix
   if flag(optimize)
     default-extensions:
       ApplicativeDo
-    ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
+    ghc-options:
+      -O2
+      -fexpose-all-unfoldings
+      -fspecialise-aggressively
   if impl(ghc < 8.10)
     -- GHC < 8.10 comes with haskeline < 0.8, which we don't support.
     -- To simplify CI, we just disable the component.
@@ -571,7 +580,9 @@ test-suite hnix-tests
     , relude
   hs-source-dirs:
     tests
-  ghc-options: -Wall -threaded
+  ghc-options:
+    -Wall
+    -threaded
   build-depends:
       Diff
     , Glob
@@ -620,7 +631,10 @@ test-suite hnix-tests
   if flag(optimize)
     default-extensions:
       ApplicativeDo
-    ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
+    ghc-options:
+      -O2
+      -fexpose-all-unfoldings
+      -fspecialise-aggressively
   default-language: Haskell2010
 
 benchmark hnix-benchmarks
@@ -634,7 +648,8 @@ benchmark hnix-benchmarks
       base hiding (Prelude)
     , relude (Relude as Prelude)
     , relude
-  ghc-options: -Wall
+  ghc-options:
+    -Wall
   build-depends:
       base
     , criterion
@@ -668,5 +683,8 @@ benchmark hnix-benchmarks
   if flag(optimize)
     default-extensions:
       ApplicativeDo
-    ghc-options: -fexpose-all-unfoldings -fspecialise-aggressively -O2
+    ghc-options:
+      -O2
+      -fexpose-all-unfoldings
+      -fspecialise-aggressively
   default-language: Haskell2010
