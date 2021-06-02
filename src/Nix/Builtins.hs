@@ -1407,7 +1407,7 @@ findFileNix nvaset nvfilepath =
     case (aset, filePath) of
       (NVList x, NVStr ns) ->
         do
-          mres <- findPath @t @f @m x (toString (stringIgnoreContext ns))
+          mres <- findPath @t @f @m x $ toString $ stringIgnoreContext ns
 
           pure $ nvPath mres
 

@@ -33,7 +33,7 @@ instance (MonadEffects t f m, MonadDataContext f m)
   findEnvPath      = lift . findEnvPath @t @f @m
   findPath vs path = do
     i <- FreshIdT ask
-    let vs' = fmap (unliftNValue (runFreshIdT i)) vs
+    let vs' = unliftNValue (runFreshIdT i) <$> vs
     lift $ findPath @t @f @m vs' path
   importPath path = do
     i <- FreshIdT ask

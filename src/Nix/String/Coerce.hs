@@ -110,12 +110,13 @@ coerceToString call ctsm clevel = go
       err v = throwError $ ErrorCall $ "Expected a string, but saw: " <> show v
       castToNixString = pure . makeNixStringWithoutContext
 
-  nixStringUnwords = intercalateNixString (makeNixStringWithoutContext " ")
+  nixStringUnwords = intercalateNixString $ makeNixStringWithoutContext " "
 
   storePathToNixString :: StorePath -> NixString
-  storePathToNixString sp = makeNixStringWithSingletonContext
-    t
-    (StringContext t DirectPath)
+  storePathToNixString sp =
+    makeNixStringWithSingletonContext
+      t
+      (StringContext t DirectPath)
    where
     t = toText $ unStorePath sp
 

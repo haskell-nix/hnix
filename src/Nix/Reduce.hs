@@ -283,14 +283,14 @@ reduce (NLet_ ann binds body) =
 
     -- let names = gatherNames body'
     -- binds' <- traverse sequence binds <&> \b -> flip filter b $ \case
-    --     NamedVar (StaticKey name _ :| mempty) _ ->
+    --     NamedVar (StaticKey name _ :| []) _ ->
     --         name `S.member` names
     --     _ -> True
     pure $ Fix $ NLet_ ann binds' body'
     -- where
     --   go m [] = pure m
     --   go m (x:xs) = case x of
-    --       NamedVar (StaticKey name _ :| mempty) def -> do
+    --       NamedVar (StaticKey name _ :| []) def -> do
     --           v <- pushScope m def
     --           go (M.insert name v m) xs
     --       _ -> go m xs

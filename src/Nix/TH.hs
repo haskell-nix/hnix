@@ -65,7 +65,7 @@ freeVars e = case unFix e of
       (Set.unions $ freeVars <$> mapMaybe snd set)
       (Set.difference
         (maybe mempty one varname)
-        (Set.fromList $ fmap fst set)
+        (Set.fromList $ fst <$> set)
       )
   (NLet         bindings expr   ) ->
     freeVars expr <>

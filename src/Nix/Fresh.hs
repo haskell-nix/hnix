@@ -20,7 +20,7 @@ import           Control.Monad.Ref    ( MonadAtomicRef(..)
 
 import           Nix.Thunk
 
-
+--  2021-06-02: NOTE: Remove singleton newtype accessor in favour of free coerce
 newtype FreshIdT i m a = FreshIdT { unFreshIdT :: ReaderT (Ref m i) m a }
   deriving
     ( Functor
