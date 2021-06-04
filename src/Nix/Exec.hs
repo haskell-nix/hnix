@@ -303,7 +303,7 @@ callFunc fun arg =
       NVBuiltin name f    ->
         do
           span <- currentPos
-          withFrame Info ((Calling @m @(NValue t f m)) name span) (f arg)
+          withFrame Info ((Calling @m @(NValue t f m)) name span) $ f arg -- Is this cool?
       (NVSet m _) | Just f <- M.lookup "__functor" m ->
         (`callFunc` arg) =<< (`callFunc` fun') =<< demand f
       _x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show _x
@@ -319,11 +319,11 @@ execUnaryOp scope span op arg = do
   case arg of
     NVConstant c ->
       case (op, c) of
-        (NNeg, NInt i  ) -> unaryOp $ NInt (-i)
-        (NNeg, NFloat f) -> unaryOp $ NFloat (-f)
-        (NNot, NBool b ) -> unaryOp $ NBool (not b)
+        (NNeg, NInt   i) -> unaryOp $ NInt   (  - i)
+        (NNeg, NFloat f) -> unaryOp $ NFloat (  - f)
+        (NNot, NBool  b) -> unaryOp $ NBool  (not b)
         _seq ->
-          throwError $  ErrorCall $ "unsupported argument type for unary operator " <> show _seq
+          throwError $ ErrorCall $ "unsupported argument type for unary operator " <> show _seq
     _x ->
       throwError $ ErrorCall $ "argument to unary operator must evaluate to an atomic type: " <> show _x
  where
@@ -338,7 +338,6 @@ execBinaryOp
   -> NValue t f m
   -> m (NValue t f m)
   -> m (NValue t f m)
-
 execBinaryOp scope span op lval rarg =
   case op of
     NEq   -> helperEq id
