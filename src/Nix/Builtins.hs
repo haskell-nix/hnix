@@ -1325,42 +1325,50 @@ lessThanNix ta tb =
     vb <- demand tb
 
     let
-      badType = throwError $ ErrorCall $ "builtins.lessThan: expected two numbers or two strings, " <> "got " <> show va <> " and " <> show vb
+      badType = throwError $ ErrorCall $ "builtins.lessThan: expected two numbers or two strings, got '" <> show va <> "' and '" <> show vb <> "'."
 
     mkNVBool <$>
       case (va, vb) of
         (NVConstant ca, NVConstant cb) ->
           case (ca, cb) of
-            (NInt   a, NInt b  ) -> pure $             a < b
-            (NFloat a, NInt b  ) -> pure $             a < fromInteger b
+            (NInt   a, NInt   b) -> pure $             a < b
             (NInt   a, NFloat b) -> pure $ fromInteger a < b
+            (NFloat a, NInt   b) -> pure $             a < fromInteger b
             (NFloat a, NFloat b) -> pure $             a < b
             _                    -> badType
         (NVStr a, NVStr b) -> pure $ stringIgnoreContext a < stringIgnoreContext b
         _ -> badType
 
-concatListsNix
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-concatListsNix =
+-- | Helper function, generalization of @concat@ operations.
+concatWith
+  :: forall e t f m
+   . MonadNix e t f m
+  => (NValue t f m -> m (NValue t f m))
+  -> NValue t f m
+  -> m (NValue t f m)
+concatWith f =
   toValue . concat <=<
     traverse
-      (fromValue @[NValue t f m] <=< demand)
+      (fromValue @[NValue t f m] <=< f)
       <=< fromValue @[NValue t f m]
 
+-- | Nix function of Haskell:
+-- > concat :: [[a]] -> [a]
+--
+-- Concatenate a list of lists into a single list.
+concatListsNix
+  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
+concatListsNix = concatWith demand
+
+-- | Nix function of Haskell:
+-- > concatMap :: Foldable t => (a -> [b]) -> t a -> [b]
 concatMapNix
   :: forall e t f m
    . MonadNix e t f m
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-concatMapNix f =
-  toValue . concat <=<
-    traverse
-      applyFunc
-      <=< fromValue @[NValue t f m]
- where
-  applyFunc :: NValue t f m  -> m [NValue t f m]
-  applyFunc =  fromValue <=< callFunc f
+concatMapNix f = concatWith (callFunc f)
 
 listToAttrsNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
