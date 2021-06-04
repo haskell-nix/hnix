@@ -72,7 +72,6 @@ import           Nix.Type.Env
 import qualified Nix.Type.Env                  as Env
 import           Nix.Type.Type
 import           Nix.Value.Monad
-import           Nix.Var
 
 
 normalizeScheme :: Scheme -> Scheme
@@ -203,7 +202,7 @@ compose :: Subst -> Subst -> Subst
 Subst s1 `compose` Subst s2 =
   Subst $
     apply (Subst s1) <$>
-      (s2 `Map.union` s1)
+      (s2 <> s1)
 
 -- * class @Substitutable@
 
@@ -443,7 +442,7 @@ instance MonadInfer m
 
   thunk = fmap JThunk . thunk
 
-  queryM b (JThunk x) = queryM b x
+  query b (JThunk x) = query b x
 
   -- If we have a thunk loop, we just don't know the type.
   force (JThunk t) = catch (force t)
@@ -611,7 +610,7 @@ instance FreeTypeVars Type where
   ftv (TVar a   ) = one a
   ftv (TSet _ a ) = Set.unions $ ftv <$> M.elems a
   ftv (TList a  ) = Set.unions $ ftv <$> a
-  ftv (t1 :~> t2) = ftv t1 `Set.union` ftv t2
+  ftv (t1 :~> t2) = ftv t1 <> ftv t2
   ftv (TMany ts ) = Set.unions $ ftv <$> ts
 
 instance FreeTypeVars TVar where
@@ -621,10 +620,10 @@ instance FreeTypeVars Scheme where
   ftv (Forall as t) = ftv t `Set.difference` Set.fromList as
 
 instance FreeTypeVars a => FreeTypeVars [a] where
-  ftv = foldr (Set.union . ftv) mempty
+  ftv = foldr ((<>) . ftv) mempty
 
 instance (Ord a, FreeTypeVars a) => FreeTypeVars (Set.Set a) where
-  ftv = foldr (Set.union . ftv) mempty
+  ftv = foldr ((<>) . ftv) mempty
 
 -- * class @ActiveTypeVars@
 
@@ -634,18 +633,18 @@ class ActiveTypeVars a where
 -- ** Instances
 
 instance ActiveTypeVars Constraint where
-  atv (EqConst      t1 t2   ) = ftv t1 `Set.union` ftv t2
-  atv (ImpInstConst t1 ms t2) = ftv t1 `Set.union` (ftv ms `Set.intersection` ftv t2)
-  atv (ExpInstConst t  s    ) = ftv t  `Set.union` ftv s
+  atv (EqConst      t1 t2   ) = ftv t1 <> ftv t2
+  atv (ImpInstConst t1 ms t2) = ftv t1 <> (ftv ms `Set.intersection` ftv t2)
+  atv (ExpInstConst t  s    ) = ftv t  <> ftv s
 
 instance ActiveTypeVars a => ActiveTypeVars [a] where
-  atv = foldr (Set.union . atv) mempty
+  atv = foldr ((<>) . atv) mempty
 
 -- * Other
 
 type MonadInfer m
   = ({- MonadThunkId m,-}
-     MonadVar m, MonadFix m)
+     MonadAtomicRef m, MonadFix m)
 
 -- | Run the inference monad
 runInfer' :: MonadInfer m => InferT s m a -> m (Either InferError a)
@@ -659,7 +658,7 @@ runInfer :: (forall s . InferT s (FreshIdT Int (ST s)) a) -> Either InferError a
 runInfer m =
   runST $
     do
-      i <- newVar (1 :: Int)
+      i <- newRef (1 :: Int)
       runFreshIdT i $ runInfer' m
 
 inferType

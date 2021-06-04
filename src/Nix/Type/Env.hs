@@ -27,11 +27,13 @@ import qualified Data.Map                      as Map
 
 -- * Typing Environment
 
-newtype Env = TypeEnv { types :: Map.Map Name [Scheme] }
+newtype Env = TypeEnv (Map.Map Name [Scheme])
   deriving (Eq, Show)
 
 instance Semigroup Env where
-  (<>) = merge
+  -- | Right-biased merge (override). Analogous to @//@ in @Nix@
+  -- Since nature of environment is to update & grow.
+  (<>) = mergeRight
 
 instance Monoid Env where
   mempty = empty
@@ -44,19 +46,22 @@ empty :: Env
 empty = TypeEnv mempty
 
 extend :: Env -> (Name, [Scheme]) -> Env
-extend env (x, s) = env { types = Map.insert x s (types env) }
+extend env (x, s) = TypeEnv $ Map.insert x s $ coerce env
 
 remove :: Env -> Name -> Env
 remove (TypeEnv env) var = TypeEnv $ Map.delete var env
 
 extends :: Env -> [(Name, [Scheme])] -> Env
-extends env xs = env { types = Map.fromList xs `Map.union` types env }
+extends env xs = TypeEnv $ Map.fromList xs <> coerce env
 
 lookup :: Name -> Env -> Maybe [Scheme]
 lookup key (TypeEnv tys) = Map.lookup key tys
 
 merge :: Env -> Env -> Env
-merge (TypeEnv a) (TypeEnv b) = TypeEnv $ a `Map.union` b
+merge (TypeEnv a) (TypeEnv b) = TypeEnv $ a <> b
+
+mergeRight :: Env -> Env -> Env
+mergeRight (TypeEnv a) (TypeEnv b) = TypeEnv $ b <> a
 
 mergeEnvs :: [Env] -> Env
 mergeEnvs = foldl' (<>) mempty

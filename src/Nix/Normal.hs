@@ -19,7 +19,6 @@ import           Data.Set                  ( member
                                            )
 import           Nix.Cited
 import           Nix.Frames
-import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
 
@@ -38,7 +37,7 @@ normalizeValue
      )
   => NValue t f m
   -> m (NValue t f m)
-normalizeValue v = run $ iterNValueM run go (fmap Free . sequenceNValue' run) v
+normalizeValue v = run $ iterNValueM run (flip go) (fmap Free . sequenceNValue' run) v
  where
   start = 0 :: Int
   table = mempty
@@ -58,7 +57,9 @@ normalizeValue v = run $ iterNValueM run go (fmap Free . sequenceNValue' run) v
       (do
         i <- ask
         when (i > 2000) $ fail "Exceeded maximum normalization depth of 2000 levels"
-        lifted (lifted $ \f -> f =<< force t) $ local succ . k
+        (lifted . lifted)
+          (=<< force t)
+          (local succ . k)
       )
       (pure $ pure t)
       b
@@ -82,7 +83,7 @@ normalizeValueF
   => (forall r . t -> (NValue t f m -> m r) -> m r)
   -> NValue t f m
   -> m (NValue t f m)
-normalizeValueF f = run . iterNValueM run go (fmap Free . sequenceNValue' run)
+normalizeValueF f = run . iterNValueM run (flip go) (fmap Free . sequenceNValue' run)
  where
   start = 0 :: Int
   table = mempty
@@ -141,7 +142,7 @@ normalForm_
 normalForm_ t = void $ normalizeValue t
 
 opaqueVal :: Applicative f => NValue t f m
-opaqueVal = nvStr $ makeNixStringWithoutContext "<cycle>"
+opaqueVal = nvStrWithoutContext "<cycle>"
 
 -- | Detect cycles & stub them.
 stubCycles
@@ -154,7 +155,7 @@ stubCycles
   -> NValue t f m
 stubCycles =
   iterNValue
-    (\t _ ->
+    (\_ t ->
       Free $
         NValue' $
           foldr
@@ -166,8 +167,20 @@ stubCycles =
  where
   Free (NValue' cyc) = opaqueVal
 
-thunkVal :: Applicative f => NValue t f m
-thunkVal = nvStr $ makeNixStringWithoutContext "<thunk>"
+thunkStubVal :: Applicative f => NValue t f m
+thunkStubVal = nvStrWithoutContext thunkStubText
+
+-- | Check if thunk @t@ is computed,
+-- then bind it into first arg.
+-- else bind the thunk stub val.
+bindComputedThunkOrStub
+  :: ( Applicative f
+    , MonadThunk t m (NValue t f m)
+    )
+  => (NValue t f m -> m a)
+  -> t
+  -> m a
+bindComputedThunkOrStub = (<=< query (pure thunkStubVal))
 
 removeEffects
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
@@ -176,12 +189,11 @@ removeEffects
 removeEffects =
   iterNValueM
     id
-    --  2021-02-25: NOTE: Please, unflip this up the stack
-    (\ t f -> f =<< queryM (pure thunkVal) t)
+    bindComputedThunkOrStub
     (fmap Free . sequenceNValue' id)
 
 dethunk
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
   => t
   -> m (NValue t f m)
-dethunk = removeEffects <=< queryM (pure thunkVal)
+dethunk = bindComputedThunkOrStub removeEffects

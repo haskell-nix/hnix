@@ -3,9 +3,7 @@
 
 module Nix.Atoms where
 
-#ifdef MIN_VERSION_serialise
 import           Codec.Serialise                ( Serialise )
-#endif
 
 import           Data.Data                      ( Data)
 import           Data.Fixed                     ( mod' )
@@ -48,9 +46,7 @@ data NAtom
     , Hashable
     )
 
-#ifdef MIN_VERSION_serialise
 instance Serialise NAtom
-#endif
 
 instance Binary NAtom
 instance ToJSON NAtom

@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE PatternSynonyms    #-}
 
 module Nix.Cited.Basic where
 
@@ -20,7 +21,10 @@ import           Nix.Thunk
 import           Nix.Utils
 import           Nix.Value
 
-newtype Cited t f m a = Cited { getCited :: NCited m (NValue t f m) a }
+
+-- * data type @Cited@
+
+newtype Cited t f m a = Cited (NCited m (NValue t f m) a)
   deriving
     ( Generic
     , Typeable
@@ -32,89 +36,123 @@ newtype Cited t f m a = Cited { getCited :: NCited m (NValue t f m) a }
     , ComonadEnv [Provenance m (NValue t f m)]
     )
 
-instance HasCitations1 m (NValue t f m) (Cited t f m) where
+
+-- ** Helpers
+
+-- | @Cited@ pattern.
+-- > pattern CitedP m a = Cited (NCited m a)
+pattern CitedP
+  :: [Provenance m (NValue t f m)]
+  -> a
+  -> Cited t f m a
+pattern CitedP m a = Cited (NCited m a)
+{-# complete CitedP #-}
+
+-- | Take:
+-- 1. Provenence info.
+-- 2. Value (like thunk)
+-- -> Produce cited value (thunk)
+cite
+  :: Functor m
+  => [Provenance m (NValue t f m)]
+  -> m a
+  -> m (Cited t f m a)
+cite v = fmap (Cited . NCited v)
+
+
+-- ** instances
+
+instance
+  HasCitations1 m (NValue t f m) (Cited t f m)
+ where
+
   citations1 (Cited c) = citations c
   addProvenance1 x (Cited c) = Cited $ addProvenance x c
 
-instance ( Has e Options
-         , Framed e m
-         , MonadThunk t m v
-         , Typeable m
-         , Typeable f
-         , Typeable u
-         , MonadCatch m
-         )
+instance
+  ( Has e Options
+  , Framed e m
+  , MonadThunk t m v
+  , Typeable m
+  , Typeable f
+  , Typeable u
+  , MonadCatch m
+  )
   => MonadThunk (Cited u f m t) m v where
 
   thunk :: m v -> m (Cited u f m t)
-  thunk mv = do
-    opts :: Options <- asks $ view hasLens
+  thunk mv =
+    do
+      opts :: Options <- asks $ view hasLens
 
-    bool
-      (Cited . NCited mempty <$> thunk mv)
-      (do
-        frames :: Frames <- asks $ view hasLens
+      bool
+        (cite mempty)
+        (\ t ->
+          do
+            frames :: Frames <- asks $ view hasLens
 
-        -- Gather the current evaluation context at the time of thunk
-        -- creation, and record it along with the thunk.
-        let
-          go (fromException -> Just (EvaluatingExpr scope (AnnE s e))) =
-            let e' = Compose (Ann s (Nothing <$ e)) in
-            [Provenance scope e']
-          go _ = mempty
-          ps = concatMap (go . frame) frames
+            -- Gather the current evaluation context at the time of thunk
+            -- creation, and record it along with the thunk.
+            let
+              go (fromException -> Just (EvaluatingExpr scope (AnnE s e))) =
+                let e' = AnnFP s (Nothing <$ e) in
+                [Provenance scope e']
+              go _ = mempty
+              ps = concatMap (go . frame) frames
 
-        Cited . NCited ps <$> thunk mv
-      )
-      (thunks opts)
+            cite ps t
+        )
+        (thunks opts)
+        (thunk mv)
 
   thunkId :: Cited u f m t -> ThunkId m
-  thunkId (Cited (NCited _ t)) = thunkId @_ @m t
+  thunkId (CitedP _ t) = thunkId @_ @m t
 
-  queryM :: m v -> Cited u f m t -> m v
-  queryM m (Cited (NCited _ t)) = queryM m t
+  query :: m v -> Cited u f m t -> m v
+  query m (CitedP _ t) = query m t
 
   -- | The ThunkLoop exception is thrown as an exception with MonadThrow,
   --   which does not capture the current stack frame information to provide
   --   it in a NixException, so we catch and re-throw it here using
   --   'throwError' from Frames.hs.
   force :: Cited u f m t -> m v
-  force (Cited (NCited ps t)) = handleDisplayProvenance ps $ force t
+  force (CitedP ps t) = handleDisplayProvenance ps $ force t
 
   forceEff :: Cited u f m t -> m v
-  forceEff (Cited (NCited ps t)) = handleDisplayProvenance ps $ forceEff t
+  forceEff (CitedP ps t) = handleDisplayProvenance ps $ forceEff t
 
   further :: Cited u f m t -> m (Cited u f m t)
-  further (Cited (NCited ps t)) = Cited . NCited ps <$> further t
+  further (CitedP ps t) = cite ps $ further t
 
 
--- * Kleisli functor HOFs
+-- ** Kleisli functor HOFs
 
 -- Please, do not use MonadThunkF for MonadThunk, later uses more straight-forward specialized line of functions.
-instance ( Has e Options
-         , Framed e m
-         , MonadThunkF t m v
-         , Typeable m
-         , Typeable f
-         , Typeable u
-         , MonadCatch m
-         )
+instance
+  ( Has e Options
+  , Framed e m
+  , MonadThunkF t m v
+  , Typeable m
+  , Typeable f
+  , Typeable u
+  , MonadCatch m
+  )
   => MonadThunkF (Cited u f m t) m v where
 
-  queryMF :: (v -> m r) -> m r -> Cited u f m t -> m r
-  queryMF k m (Cited (NCited _ t)) = queryMF k m t
+  queryF :: (v -> m r) -> m r -> Cited u f m t -> m r
+  queryF k m (CitedP _ t) = queryF k m t
 
   forceF :: (v -> m r) -> Cited u f m t -> m r
-  forceF k (Cited (NCited ps t)) = handleDisplayProvenance ps $ forceF k t
+  forceF k (CitedP ps t) = handleDisplayProvenance ps $ forceF k t
 
   forceEffF :: (v -> m r) -> Cited u f m t -> m r
-  forceEffF k (Cited (NCited ps t)) = handleDisplayProvenance ps $ forceEffF k t
+  forceEffF k (CitedP ps t) = handleDisplayProvenance ps $ forceEffF k t
 
   furtherF :: (m v -> m v) -> Cited u f m t -> m (Cited u f m t)
-  furtherF k (Cited (NCited ps t)) = Cited . NCited ps <$> furtherF k t
+  furtherF k (CitedP ps t) = cite ps $ furtherF k t
 
 
--- ** Utils
+-- * Representation
 
 handleDisplayProvenance
   :: (MonadCatch m
@@ -144,6 +182,6 @@ displayProvenance
 displayProvenance =
   list
     id
-    (\ (Provenance scope e@(Compose (Ann s _)) : _) ->
+    (\ (Provenance scope e@(AnnFP s _) : _) ->
       withFrame Info $ ForcingExpr scope $ wrapExprLoc s e
     )

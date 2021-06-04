@@ -1,23 +1,26 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
-
+{-# OPTIONS_GHC -Wno-unused-do-bind #-}
 
 
 module Nix.Thunk.Basic
   ( NThunkF(..)
   , Deferred(..)
+  , deferred
   , MonadBasicThunk
   ) where
 
 import           Prelude                 hiding ( force )
 import           Relude.Extra                   ( dup )
+import           Control.Monad.Ref              ( MonadRef(Ref, newRef, readRef, writeRef)
+                                                , MonadAtomicRef(atomicModifyRef)
+                                                )
 import           Control.Monad.Catch            ( MonadCatch(..)
                                                 , MonadThrow(throwM)
                                                 )
 import qualified Text.Show
 import           Nix.Thunk
-import           Nix.Var
 
 
 -- * Data type @Deferred@
@@ -32,8 +35,8 @@ data Deferred m v = Computed v | Deferred (m v)
 -- | Apply second if @Deferred@, otherwise (@Computed@) - apply first.
 -- Analog of @either@ for @Deferred = Computed|Deferred@.
 deferred :: (v -> b) -> (m v -> b) -> Deferred m v -> b
-deferred f1 f2 def =
-  case def of
+deferred f1 f2 =
+  \case
     Computed v -> f1 v
     Deferred action -> f2 action
 {-# inline deferred #-}
@@ -43,51 +46,51 @@ deferred f1 f2 def =
 
 -- | Thunk resource reference (@ref-tf: Ref m@), and as such also also hold
 -- a @Bool@ lock flag.
-type ThunkRef m = (Var m Bool)
+type ThunkRef m = Ref m Bool
 
 -- | Reference (@ref-tf: Ref m v@) to a value that the thunk holds.
-type ThunkValueRef m v = Var m (Deferred m v)
+type ThunkValueRef m v = Ref m (Deferred m v)
 
 -- | @ref-tf@ lock instruction for @Ref m@ (@ThunkRef@).
-lock :: Bool -> (Bool, Bool)
-lock = (True, )
+lockVal :: Bool -> (Bool, Bool)
+lockVal = (True, )
 
 -- | @ref-tf@ unlock instruction for @Ref m@ (@ThunkRef@).
-unlock :: Bool -> (Bool, Bool)
-unlock = (False, )
+unlockVal :: Bool -> (Bool, Bool)
+unlockVal = (False, )
 
 -- | Takes @ref-tf: Ref m@ reference, returns Bool result of the operation.
-lockThunk
+lock
   :: ( MonadBasicThunk m
     , MonadCatch m
     )
   => ThunkRef m
   -> m Bool
-lockThunk r = atomicModifyVar r lock
+lock r = atomicModifyRef r lockVal
 
 -- | Takes @ref-tf: Ref m@ reference, returns Bool result of the operation.
-unlockThunk
+unlock
   :: ( MonadBasicThunk m
     , MonadCatch m
     )
   => ThunkRef m
   -> m Bool
-unlockThunk r = atomicModifyVar r unlock
+unlock r = atomicModifyRef r unlockVal
 
 
 -- * Data type for thunks: @NThunkF@
 
 -- | The type of very basic thunks
-data NThunkF m v
-  = Thunk (ThunkId m) (ThunkRef m) (ThunkValueRef m v)
+data NThunkF m v =
+  Thunk (ThunkId m) (ThunkRef m) (ThunkValueRef m v)
 
 instance (Eq v, Eq (ThunkId m)) => Eq (NThunkF m v) where
   Thunk x _ _ == Thunk y _ _ = x == y
 
 instance Show (NThunkF m v) where
-  show Thunk{} = "<thunk>"
+  show Thunk{} = toString thunkStubText
 
-type MonadBasicThunk m = (MonadThunkId m, MonadVar m)
+type MonadBasicThunk m = (MonadThunkId m, MonadAtomicRef m)
 
 
 -- ** @instance MonadThunk NThunkF@
@@ -95,26 +98,22 @@ type MonadBasicThunk m = (MonadThunkId m, MonadVar m)
 instance (MonadBasicThunk m, MonadCatch m)
   => MonadThunk (NThunkF m v) m v where
 
-  -- | Return thunk ID
   thunkId :: NThunkF m v -> ThunkId m
   thunkId (Thunk n _ _) = n
 
-  -- | Create new thunk
   thunk :: m v -> m (NThunkF m v)
   thunk action =
     do
       freshThunkId <- freshId
-      Thunk freshThunkId <$> newVar False <*> newVar (Deferred action)
+      liftA2 (Thunk freshThunkId)
+        (newRef   False          )
+        (newRef $ Deferred action)
 
-  -- | Non-blocking query, return value if @Computed@,
-  -- return first argument otherwise.
-  queryM :: m v -> NThunkF m v -> m v
-  queryM n (Thunk _ _ ref) =
+  query :: m v -> NThunkF m v -> m v
+  query vStub (Thunk _ _ lTValRef) =
     do
-      deferred
-        pure
-        (const n)
-        =<< readVar ref
+      v <- readRef lTValRef
+      deferred pure (const vStub) v
 
   force :: NThunkF m v -> m v
   force = forceMain
@@ -126,7 +125,7 @@ instance (MonadBasicThunk m, MonadCatch m)
   further t@(Thunk _ _ ref) =
     do
       _ <-
-        atomicModifyVar
+        atomicModifyRef
           ref
           dup
       pure t
@@ -134,38 +133,42 @@ instance (MonadBasicThunk m, MonadCatch m)
 
 -- *** United body of `force*`
 
--- | If @m v@ is @Computed@ - returns is
+-- | Always returns computed @m v@.
+--
+-- Checks if resource is computed,
+-- if not - with locking evaluates the resource.
 forceMain
   :: ( MonadBasicThunk m
     , MonadCatch m
     )
   => NThunkF m v
   -> m v
-forceMain (Thunk n thunkRef thunkValRef) =
-  deferred
-    pure
-    (\ action ->
-      do
-        lockedIt <- lockThunk thunkRef
-        bool
-          lockFailed
-          (do
-            v <- action `catch` actionFailed
-            writeVar thunkValRef (Computed v)
-            _unlockedIt <- unlockThunk thunkRef
-            pure v
-          )
-          (not lockedIt)
-    )
-    =<< readVar thunkValRef
+forceMain (Thunk tIdV tRefV tValRefV) =
+  do
+    v <- readRef tValRefV
+    deferred pure computeW v
  where
-  lockFailed = throwM $ ThunkLoop $ show n
-
-  actionFailed (e :: SomeException) =
+  computeW vDefferred =
     do
-      _unlockedIt <- unlockThunk thunkRef
+      locked <- lock tRefV
+      bool
+        lockFailedV
+        (do
+          v <- vDefferred `catch` bindFailedW
+          writeRef tValRefV $ Computed v  -- Proclaim value computed
+          unlockRef
+          pure v
+        )
+        (not locked)
+
+  lockFailedV = throwM $ ThunkLoop $ show tIdV
+
+  bindFailedW (e :: SomeException) =
+    do
+      unlockRef
       throwM e
 
+  unlockRef = unlock tRefV
 {-# inline forceMain #-} -- it is big function, but internal, and look at its use.
 
 
@@ -175,29 +178,31 @@ forceMain (Thunk n thunkRef thunkValRef) =
 instance (MonadBasicThunk m, MonadCatch m)
   => MonadThunkF (NThunkF m v) m v where
 
-  queryMF
+  queryF
     :: (v -> m r)
     -> m r
     -> NThunkF m v
     -> m r
-  queryMF k n (Thunk _ thunkRef thunkValRef) =
+  queryF k n (Thunk _ thunkRef thunkValRef) =
     do
-      lockedIt <- lockThunk thunkRef
+      locked <- lock thunkRef
       bool
         n
         go
-        (not lockedIt)
+        (not locked)
     where
       go =
         do
-          eres <- readVar thunkValRef
+          eres <- readRef thunkValRef
           res  <-
             deferred
               k
               (const n)
               eres
-          _unlockedIt <- unlockThunk thunkRef
+          unlockRef
           pure res
+
+      unlockRef = unlock thunkRef
 
   forceF
     :: (v -> m a)
@@ -217,7 +222,7 @@ instance (MonadBasicThunk m, MonadCatch m)
     -> m (NThunkF m v)
   furtherF k t@(Thunk _ _ ref) =
     do
-      _modifiedIt <- atomicModifyVar ref $
+      _modifiedIt <- atomicModifyRef ref $
         \x ->
           deferred
             (const (x, x))

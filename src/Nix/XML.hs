@@ -17,7 +17,7 @@ import           Text.XML.Light                 ( Element(Element)
                                                 )
 
 toXML :: forall t f m . MonadDataContext f m => NValue t f m -> NixString
-toXML = runWithStringContext . fmap pp . iterNValue (\_ _ -> cyc) phi
+toXML = runWithStringContext . fmap pp . iterNValueByDiscardWith cyc phi
  where
   cyc = pure $ mkEVal "string" "<expr>"
 

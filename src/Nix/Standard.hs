@@ -9,7 +9,7 @@
 
 module Nix.Standard where
 
-import           Control.Applicative
+import           Prelude hiding                 ( force )
 import           Control.Comonad                ( Comonad )
 import           Control.Comonad.Env            ( ComonadEnv )
 import           Control.Monad.Catch            ( MonadThrow
@@ -21,7 +21,9 @@ import           Control.Monad.Fail             ( MonadFail )
 #endif
 import           Control.Monad.Free             ( Free(Pure, Free) )
 import           Control.Monad.Reader           ( MonadFix )
-import           Control.Monad.Ref              ( MonadAtomicRef )
+import           Control.Monad.Ref              ( MonadRef(newRef)
+                                                , MonadAtomicRef
+                                                )
 import qualified Text.Show
 import           Nix.Cited
 import           Nix.Cited.Basic
@@ -41,12 +43,11 @@ import           Nix.Utils                      ( free )
 import           Nix.Utils.Fix1                 ( Fix1T(Fix1T) )
 import           Nix.Value
 import           Nix.Value.Monad
-import           Nix.Var
-import Prelude hiding (force)
 
 
-newtype StdCited m a = StdCited
-  { _stdCited :: Cited (StdThunk m) (StdCited m) m a }
+newtype StdCited m a =
+  StdCited
+    { _stdCited :: Cited (StdThunk m) (StdCited m) m a }
   deriving
     ( Generic
     , Typeable
@@ -58,22 +59,23 @@ newtype StdCited m a = StdCited
     , ComonadEnv [Provenance m (StdValue m)]
     )
 
-newtype StdThunk (m :: * -> *) = StdThunk
-  { _stdThunk :: StdCited m (NThunkF m (StdValue m)) }
+newtype StdThunk (m :: * -> *) =
+  StdThunk
+    { _stdThunk :: StdCited m (NThunkF m (StdValue m)) }
 
 type StdValue' m = NValue' (StdThunk m) (StdCited m) m (StdValue m)
 type StdValue m = NValue (StdThunk m) (StdCited m) m
 
 instance Show (StdThunk m) where
-  show _ = "<thunk>"
+  show _ = toString thunkStubText
 
 instance HasCitations1 m (StdValue m) (StdCited m) where
   citations1 (StdCited c) = citations1 c
-  addProvenance1 x (StdCited c) = StdCited (addProvenance1 x c)
+  addProvenance1 x (StdCited c) = StdCited $ addProvenance1 x c
 
 instance HasCitations m (StdValue m) (StdThunk m) where
   citations (StdThunk c) = citations1 c
-  addProvenance x (StdThunk c) = StdThunk (addProvenance1 x c)
+  addProvenance x (StdThunk c) = StdThunk $ addProvenance1 x c
 
 instance MonadReader (Context m (StdValue m)) m => Scoped (StdValue m) m where
   currentScopes = currentScopesReader
@@ -132,11 +134,11 @@ instance
     -> m (StdThunk m)
   thunk = fmap (StdThunk . StdCited) . thunk
 
-  queryM
+  query
     :: m (StdValue m)
     ->    StdThunk m
     -> m (StdValue m)
-  queryM b = queryM b . _stdCited . _stdThunk
+  query b = query b . _stdCited . _stdThunk
 
   force
     ::    StdThunk m
@@ -166,14 +168,14 @@ instance
   )
   => MonadThunkF (StdThunk m) m (StdValue m) where
 
-  queryMF
+  queryF
     :: ( StdValue m
        -> m r
        )
     -> m r
     -> StdThunk m
     -> m r
-  queryMF k b x = queryMF k b (_stdCited (_stdThunk x))
+  queryF k b = queryF k b . _stdCited . _stdThunk
 
   forceF
     :: ( StdValue m
@@ -181,7 +183,7 @@ instance
        )
     -> StdThunk m
     -> m r
-  forceF k t = forceF k (_stdCited $ _stdThunk t)
+  forceF k = forceF k . _stdCited . _stdThunk
 
   forceEffF
     :: ( StdValue m
@@ -189,7 +191,7 @@ instance
        )
     -> StdThunk m
     -> m r
-  forceEffF k t = forceEffF k (_stdCited $ _stdThunk t)
+  forceEffF k = forceEffF k . _stdCited . _stdThunk
 
   furtherF
     :: ( m (StdValue m)
@@ -197,7 +199,7 @@ instance
        )
     ->    StdThunk m
     -> m (StdThunk m)
-  furtherF k t = StdThunk . StdCited <$> furtherF k (_stdCited $ _stdThunk t)
+  furtherF k = fmap (StdThunk . StdCited) . furtherF k . _stdCited . _stdThunk
 
 
 -- * @instance MonadValue (StdValue m) m@
@@ -210,6 +212,7 @@ instance
   , MonadThunkId m
   )
   => MonadValue (StdValue m) m where
+
   defer
     :: m (StdValue m)
     -> m (StdValue m)
@@ -342,7 +345,7 @@ runWithBasicEffects opts =
   go . (`evalStateT` mempty) . (`runReaderT` newContext opts) . runStandardT
  where
   go action = do
-    i <- newVar (1 :: Int)
+    i <- newRef (1 :: Int)
     runFreshIdT i action
 
 runWithBasicEffectsIO :: Options -> StandardT (StdIdT IO) a -> IO a

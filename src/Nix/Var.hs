@@ -3,9 +3,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-
-module Nix.Var where
+module Nix.Var ()
+where
 
 import           Control.Monad.Ref
 import           Data.GADT.Compare  ( GEq(..) )
@@ -14,37 +15,21 @@ import           Type.Reflection    ( (:~:)(Refl) )
 
 import           Unsafe.Coerce      ( unsafeCoerce )
 
-type Var m = Ref m
-
-type MonadVar m = MonadAtomicRef m
-
-eqVar :: forall m a . GEq (Ref m) => Ref m a -> Ref m a -> Bool
+eqVar :: GEq (Ref m) => Ref m a -> Ref m a -> Bool
 eqVar a b = isJust $ geq a b
 
-newVar :: MonadRef m => a -> m (Ref m a)
-newVar = newRef
-
-readVar :: MonadRef m => Ref m a -> m a
-readVar = readRef
-
-writeVar :: MonadRef m => Ref m a -> a -> m ()
-writeVar = writeRef
-
-atomicModifyVar :: MonadAtomicRef m => Ref m a -> (a -> (a, b)) -> m b
-atomicModifyVar = atomicModifyRef
-
 --TODO: Upstream GEq instances
---  2021-02-25: NOTE: Currently, upstreaming would require adding a dependency on the according packages.
+-- Upstream thread: https://github.com/haskellari/some/pull/34
 instance GEq IORef where
-  a `geq` b =
-    bool
-      Nothing
-      (pure $ unsafeCoerce Refl)
-      (a == unsafeCoerce b)
+  geq = gEqual
 
 instance GEq (STRef s) where
-  a `geq` b =
-    bool
-      Nothing
-      (pure $ unsafeCoerce Refl)
-      (a == unsafeCoerce b)
+  geq = gEqual
+
+-- | Simply a helper function
+gEqual :: Eq a => a -> b -> Maybe c
+gEqual a b =
+  bool
+    Nothing
+    (pure $ unsafeCoerce Refl)
+    (a == unsafeCoerce b)

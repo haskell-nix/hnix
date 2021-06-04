@@ -31,9 +31,7 @@ import           Nix.Value
 import           Nix.Value.Monad
 
 #ifdef MIN_VERSION_ghc_datasize
-#if MIN_VERSION_ghc_datasize(0,2,0)
 import           GHC.DataSize
-#endif
 #endif
 
 defaultMakeAbsolutePath :: MonadNix e t f m => FilePath -> m FilePath

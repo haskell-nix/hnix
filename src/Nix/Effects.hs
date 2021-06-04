@@ -105,13 +105,9 @@ class
 instance MonadIntrospect IO where
   recursiveSize =
 #ifdef MIN_VERSION_ghc_datasize
-#if MIN_VERSION_ghc_datasize(0,2,0)
     recursiveSize
 #else
-      \_ -> pure 0
-#endif
-#else
-      \_ -> pure 0
+    \_ -> pure 0
 #endif
 
 deriving
@@ -449,4 +445,4 @@ addPath p =
     =<< addToStore (toText $ takeFileName p) p True False
 
 toFile_ :: (Framed e m, MonadStore m) => FilePath -> String -> m StorePath
-toFile_ p contents = addTextToStore (toText p) (toText contents) HS.empty False
+toFile_ p contents = addTextToStore (toText p) (toText contents) mempty False

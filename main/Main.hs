@@ -10,9 +10,10 @@ import           Control.Comonad                ( extract )
 import qualified Control.DeepSeq               as Deep
 import qualified Control.Exception             as Exc
 import           GHC.Err                        ( errorWithoutStackTrace )
+import           Control.Monad.Free
+import           Control.Monad.Ref              ( MonadRef(readRef) )
 import           Control.Monad.Catch
 import           System.IO                      ( hPutStrLn, getContents )
-import           Control.Monad.Free
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Map                      as Map
 import           Data.Maybe                     ( fromJust )
@@ -27,9 +28,9 @@ import           Nix.Json
 import           Nix.Options.Parser
 import           Nix.Standard
 import           Nix.Thunk.Basic
-import qualified Nix.Type.Env                  as Env
+import           Nix.Type.Env                   ( Env(..) )
+import           Nix.Type.Type                  ( Scheme )
 import qualified Nix.Type.Infer                as HM
-import           Nix.Var
 import           Nix.Value.Monad
 import           Options.Applicative     hiding ( ParserResult(..) )
 import           Prettyprinter           hiding ( list )
@@ -43,7 +44,7 @@ main :: IO ()
 main =
   do
     time <- getCurrentTime
-    opts <- execParser (nixOptionsInfo time)
+    opts <- execParser $ nixOptionsInfo time
 
     runWithBasicEffectsIO opts $ execContentsFilesOrRepl opts
 
@@ -103,9 +104,9 @@ main =
               either
                 (\ err -> errorWithoutStackTrace $ "Type error: " <> PS.ppShow err)
                 (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <> PS.ppShow
-                  (fromJust $ Map.lookup "it" $ Env.types ty)
+                  (fromJust $ Map.lookup "it" (coerce ty :: Map Text [Scheme]))
                 )
-                (HM.inferTop Env.empty [("it", stripAnnotation expr')])
+                (HM.inferTop mempty [("it", stripAnnotation expr')])
 
                 -- liftIO $ putStrLn $ runST $
                 --     runLintM opts . renderSymbolic =<< lint opts expr
@@ -177,6 +178,7 @@ main =
             xs <-
               traverse
                 (\ (k, nv) ->
+                  (k, ) <$>
                   free
                     (\ (StdThunk (extract -> Thunk _ _ ref)) ->
                       do
@@ -184,16 +186,18 @@ main =
                           path         = prefix <> k
                           (_, descend) = filterEntry path k
 
-                        val <- readVar @(StandardT (StdIdT IO)) ref
-                        case val of
-                          Computed _    -> pure (k, Nothing)
-                          _ ->
-                            bool
-                              (pure (k, Nothing))
-                              ((k, ) <$> forceEntry path nv)
-                              descend
+                        val <- readRef @(StandardT (StdIdT IO)) ref
+                        bool
+                          (pure Nothing)
+                          (forceEntry path nv)
+                          (descend &&
+                           deferred
+                            (const False)
+                            (const True)
+                            val
+                          )
                     )
-                    (\ v -> pure (k, pure $ Free v))
+                    (pure . pure . Free)
                     nv
                 )
                 (sortWith fst $ M.toList s)
@@ -278,7 +282,4 @@ main =
         do
           putStrLn $ "Wrote sifted expression tree to " <> path
           writeFile path $ show $ prettyNix $ stripAnnotation expr'
-      either
-        throwM
-        pure
-        eres
+      either throwM pure eres

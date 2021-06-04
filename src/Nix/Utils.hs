@@ -49,11 +49,13 @@ type AlgM f m a = f a -> m a
 -- | Do according transformation.
 --
 -- It is a transformation of a recursion scheme.
-type Transform f a = (Fix f -> a) -> Fix f -> a
+-- See @TransformF@.
+type Transform f a = TransformF (Fix f) a
 -- | Do according transformation.
 --
--- It is a transformation of a recursion scheme.
--- See @Transform@.
+-- It is a transformation between functors.
+-- ...
+-- You got me, it is a natural transformation.
 type TransformF f a = (f -> a) -> f -> a
 
 loeb :: Functor f => f (f a -> a) -> f a
@@ -99,6 +101,9 @@ freeToFix f = go
       f
       $ Fix . (go <$>)
 
+-- | Replace:
+--  @a -> Pure a@
+--  @Fix -> Free@
 fixToFree :: Functor f => Fix f -> Free f a
 fixToFree = Free . go
  where
@@ -111,19 +116,24 @@ fixToFree = Free . go
 --   Essentially, it does for evaluation what recursion schemes do for
 --   representation: allows threading layers through existing structure, only
 --   in this case through behavior.
-adi :: Functor f => (f a -> a) -> ((Fix f -> a) -> Fix f -> a) -> Fix f -> a
-adi f g = g $ f . (adi f g <$>) . unFix
-
-adi' :: Functor f => ((Fix f -> a) -> Fix f -> a) -> (f a -> a) -> Fix f -> a
-adi' g f = g $ f . (adi' g f <$>) . unFix
+adi
+  :: Functor f
+  => Transform f a
+  -> Alg f a
+  -> Fix f
+  -> a
+adi g f = g $ f . (adi g f <$>) . unFix
 
 adiM
-  :: (Traversable t, Monad m)
-  => (t a -> m a)
-  -> ((Fix t -> m a) -> Fix t -> m a)
+  :: ( Traversable t
+     , Monad m
+     )
+  => Transform t (m a)
+  -> AlgM t m a
   -> Fix t
   -> m a
-adiM f g = g $ f <=< traverse (adiM f g) . unFix
+adiM g f = g $ f <=< traverse (adiM g f) . unFix
+
 
 class Has a b where
   hasLens :: Lens' a b

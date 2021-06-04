@@ -43,14 +43,10 @@ import           Nix.Value
 import           Nix.Value.Equal
 import           Nix.Value.Monad
 import           Prettyprinter
-#ifdef MIN_VERSION_pretty_show
 import qualified Text.Show.Pretty              as PS
-#endif
 
 #ifdef MIN_VERSION_ghc_datasize
-#if MIN_VERSION_ghc_datasize(0,2,0)
 import           GHC.DataSize
-#endif
 #endif
 
 type MonadCited t f m =
@@ -64,28 +60,28 @@ nvConstantP
   => Provenance m (NValue t f m)
   -> NAtom
   -> NValue t f m
-nvConstantP p x = addProvenance p (nvConstant x)
+nvConstantP p x = addProvenance p $ nvConstant x
 
 nvStrP
   :: MonadCited t f m
   => Provenance m (NValue t f m)
   -> NixString
   -> NValue t f m
-nvStrP p ns = addProvenance p (nvStr ns)
+nvStrP p ns = addProvenance p $ nvStr ns
 
 nvPathP
   :: MonadCited t f m
   => Provenance m (NValue t f m)
   -> FilePath
   -> NValue t f m
-nvPathP p x = addProvenance p (nvPath x)
+nvPathP p x = addProvenance p $ nvPath x
 
 nvListP
   :: MonadCited t f m
   => Provenance m (NValue t f m)
   -> [NValue t f m]
   -> NValue t f m
-nvListP p l = addProvenance p (nvList l)
+nvListP p l = addProvenance p $ nvList l
 
 nvSetP
   :: MonadCited t f m
@@ -93,7 +89,7 @@ nvSetP
   -> AttrSet SourcePos
   -> AttrSet (NValue t f m)
   -> NValue t f m
-nvSetP p x s = addProvenance p (nvSet x s)
+nvSetP p x s = addProvenance p $ nvSet x s
 
 nvClosureP
   :: MonadCited t f m
@@ -101,7 +97,7 @@ nvClosureP
   -> Params ()
   -> (NValue t f m -> m (NValue t f m))
   -> NValue t f m
-nvClosureP p x f = addProvenance p (nvClosure x f)
+nvClosureP p x f = addProvenance p $ nvClosure x f
 
 nvBuiltinP
   :: MonadCited t f m
@@ -109,17 +105,17 @@ nvBuiltinP
   -> Text
   -> (NValue t f m -> m (NValue t f m))
   -> NValue t f m
-nvBuiltinP p name f = addProvenance p (nvBuiltin name f)
+nvBuiltinP p name f = addProvenance p $ nvBuiltin name f
 
-type MonadCitedThunks t f m
-  = ( MonadThunk t m (NValue t f m)
+type MonadCitedThunks t f m =
+  ( MonadThunk t m (NValue t f m)
   , MonadDataErrorContext t f m
   , HasCitations m (NValue t f m) t
   , HasCitations1 m (NValue t f m) f
   )
 
-type MonadNix e t f m
-  = ( Has e SrcSpan
+type MonadNix e t f m =
+  ( Has e SrcSpan
   , Has e Options
   , Scoped (NValue t f m) m
   , Framed e m
@@ -303,7 +299,7 @@ callFunc fun arg =
       NVBuiltin name f    ->
         do
           span <- currentPos
-          withFrame Info ((Calling @m @(NValue t f m)) name span) (f arg)
+          withFrame Info ((Calling @m @(NValue t f m)) name span) $ f arg -- Is this cool?
       (NVSet m _) | Just f <- M.lookup "__functor" m ->
         (`callFunc` arg) =<< (`callFunc` fun') =<< demand f
       _x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show _x
@@ -319,11 +315,11 @@ execUnaryOp scope span op arg = do
   case arg of
     NVConstant c ->
       case (op, c) of
-        (NNeg, NInt i  ) -> unaryOp $ NInt (-i)
-        (NNeg, NFloat f) -> unaryOp $ NFloat (-f)
-        (NNot, NBool b ) -> unaryOp $ NBool (not b)
+        (NNeg, NInt   i) -> unaryOp $ NInt   (  - i)
+        (NNeg, NFloat f) -> unaryOp $ NFloat (  - f)
+        (NNot, NBool  b) -> unaryOp $ NBool  (not b)
         _seq ->
-          throwError $  ErrorCall $ "unsupported argument type for unary operator " <> show _seq
+          throwError $ ErrorCall $ "unsupported argument type for unary operator " <> show _seq
     _x ->
       throwError $ ErrorCall $ "argument to unary operator must evaluate to an atomic type: " <> show _x
  where
@@ -338,7 +334,6 @@ execBinaryOp
   -> NValue t f m
   -> m (NValue t f m)
   -> m (NValue t f m)
-
 execBinaryOp scope span op lval rarg =
   case op of
     NEq   -> helperEq id
@@ -408,7 +403,7 @@ execBinaryOpForced scope span op lval rval = case op of
 
   NUpdate ->
     case (lval, rval) of
-      (NVSet ls lp, NVSet rs rp) -> pure $ nvSetP prov (rp `M.union` lp) (rs `M.union` ls)
+      (NVSet ls lp, NVSet rs rp) -> pure $ nvSetP prov (rp <> lp) (rs <> ls)
       (NVSet ls lp, NVConstant NNull) -> pure $ nvSetP prov lp ls
       (NVConstant NNull, NVSet rs rp) -> pure $ nvSetP prov rp rs
       _ -> unsupportedTypes
@@ -484,7 +479,10 @@ execBinaryOpForced scope span op lval rval = case op of
 
 -- This function is here, rather than in 'Nix.String', because of the need to
 -- use 'throwError'.
-fromStringNoContext :: Framed e m => NixString -> m Text
+fromStringNoContext
+  :: Framed e m
+  => NixString
+  -> m Text
 fromStringNoContext ns =
   maybe
     (throwError $ ErrorCall $ "expected string with no context, but got " <> show ns)
@@ -492,14 +490,19 @@ fromStringNoContext ns =
     (getStringNoContext ns)
 
 addTracing
-  :: (MonadNix e t f m, Has e Options, MonadReader Int n, Alternative n)
+  ::( MonadNix e t f m
+    , Has e Options
+    , Alternative n
+    , MonadReader Int n
+    , MonadFail n
+    )
   => Alg NExprLocF (m a)
   -> Alg NExprLocF (n (m a))
 addTracing k v = do
   depth <- ask
   guard $ depth < 2000
   local succ $ do
-    v'@(Compose (Ann span x)) <- sequence v
+    v'@(AnnFP span x) <- sequence v
     pure $ do
       opts :: Options <- asks $ view hasLens
       let
@@ -507,11 +510,7 @@ addTracing k v = do
           if verbose opts >= Chatty
             then
               pretty $
-#ifdef MIN_VERSION_pretty_show
                 PS.ppShow $ void x
-#else
-                show $ void x
-#endif
             else prettyNix $ Fix $ Fix (NSym "?") <$ x
         msg x = pretty ("eval: " <> replicate depth ' ') <> x
       loc <- renderLocation span $ msg rendered <> " ...\n"
@@ -530,8 +529,8 @@ evalExprLoc expr =
           Eval.framedEvalExprLoc
           (join . (`runReaderT` (0 :: Int)) .
             adi
-              (addTracing Eval.evalContent)
               (raise Eval.addMetaInfo)
+              (addTracing Eval.evalContent)
           )
           (tracing opts)
     pTracedAdi expr

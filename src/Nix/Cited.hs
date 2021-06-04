@@ -25,7 +25,8 @@ data Provenance m v =
     }
     deriving (Generic, Typeable, Show)
 
-data NCited m v a = NCited
+data NCited m v a =
+  NCited
     { _provenance :: [Provenance m v]
     , _cited      :: a
     }
@@ -33,7 +34,7 @@ data NCited m v a = NCited
 
 instance Applicative (NCited m v) where
   pure = NCited mempty
-  NCited xs f <*> NCited ys x = NCited (xs <> ys) (f x)
+  (<*>) (NCited xs f) (NCited ys x) = NCited (xs <> ys) (f x)
 
 instance Comonad (NCited m v) where
   duplicate p = NCited (_provenance p) p

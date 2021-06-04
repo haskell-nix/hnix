@@ -319,7 +319,7 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
       (s >= 0)
 
 thunkStr :: Applicative f => ByteString -> NValue t f m
-thunkStr s = nvStr $ makeNixStringWithoutContext $ decodeUtf8 s
+thunkStr s = nvStrWithoutContext $ decodeUtf8 s
 
 elemAt :: [a] -> Int -> Maybe a
 elemAt ls i =
@@ -432,7 +432,7 @@ nixPathNix =
           <> rest
     )
  where
-  mkNvStr = nvStr . makeNixStringWithoutContext . toText
+  mkNvStr = nvStrWithoutContext . toText
 
 toStringNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toStringNix = toValue <=< coerceToString callFunc DontCopyToStore CoerceAny
@@ -602,7 +602,7 @@ splitVersionNix v =
     version <- fromStringNoContext =<< fromValue v
     pure $
       nvList $
-        nvStr . makeNixStringWithoutContext . versionComponentToString <$>
+        nvStrWithoutContext . versionComponentToString <$>
           splitVersion version
 
 compareVersionsNix
@@ -647,7 +647,7 @@ parseDrvNameNix drvname =
         ]
 
  where
-  mkNVStr = nvStr . makeNixStringWithoutContext
+  mkNVStr = nvStrWithoutContext
 
 matchNix
   :: forall e t f m
@@ -730,7 +730,7 @@ substringNix start len str =
 attrNamesNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 attrNamesNix =
-  (fmap getDeeper . toValue . fmap makeNixStringWithoutContext . sort . M.keys)
+  (fmap (coerce :: CoerceDeeperToNValue t f m) . toValue . fmap makeNixStringWithoutContext . sort . M.keys)
   <=< fromValue @(AttrSet (NValue t f m))
 
 attrValuesNix
@@ -774,7 +774,7 @@ mapAttrsNix f xs =
 
       applyFunToKeyVal (key, val) =
         do
-          runFunForKey <- callFunc f $ nvStr $ makeNixStringWithoutContext key
+          runFunForKey <- callFunc f $ nvStrWithoutContext key
           callFunc runFunForKey val
 
     newVals <-
@@ -959,7 +959,7 @@ genericClosureNix c =
         ss <- fromValue @[NValue t f m] =<< demand startSet
         op <- demand operator
 
-        toValue @[NValue t f m] =<< snd <$> go op S.empty ss
+        toValue @[NValue t f m] =<< snd <$> go op mempty ss
  where
   go
     :: NValue t f m
@@ -1202,10 +1202,58 @@ throwNix mnv =
 
     throwError . ErrorCall . toString $ stringIgnoreContext ns
 
+-- | Implementation of Nix @import@ clause.
+--
+-- Because Nix @import@s work strictly
+-- (import gets fully evaluated befor bringing it into the scope it was called from)
+-- - that property raises a requirement for execution phase of the interpreter go into evaluation phase
+-- & then also go into parsing phase on the imports.
+-- So it is not possible (more precise - not practical) to do a full parse Nix code phase fully & then go into evaluation phase.
+-- As it is not possible to "import them lazily", as import is strict & it is not possible to establish
+-- what imports whould be needed up until where it would be determined & they import strictly
+--
 importNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 importNix = scopedImportNix $ nvSet mempty mempty
 
+-- | @scopedImport scope path@
+-- An undocumented secret powerful function.
+--
+-- At the same time it is strongly forbidden to be used, as prolonged use of it would bring devastating consequences.
+-- As it is essentially allows rewriting(redefinition) paradigm.
+--
+-- Allows to import the environment into the scope of a file expression that gets imported.
+-- It is as if the contents at @path@ were given to @import@ wrapped as: @with scope; path@
+-- meaning:
+--
+-- > -- Nix pseudocode:
+-- > import (with scope; path)
+--
+-- For example, it allows to use itself as:
+-- > bar = scopedImport pkgs ./bar.nix;
+-- > -- & declare @./bar.nix@ without a header, so as:
+-- > stdenv.mkDerivation { ... buildInputs = [ libfoo ]; }
+--
+-- But that breaks the evaluation/execution sharing of the @import@s.
+--
+-- Function also allows to redefine or extend the builtins.
+--
+-- For instance, to trace all calls to function ‘map’:
+--
+-- >  let
+-- >    overrides = {
+-- >      map = f: xs: builtins.trace "call of map!" (map f xs);
+--
+-- >      # Propagate override by calls to import&scopedImport.
+-- >      import = fn: scopedImport overrides fn;
+-- >      scopedImport = attrs: fn: scopedImport (overrides // attrs) fn;
+--
+-- >      # Update ‘builtins’.
+-- >      builtins = builtins // overrides;
+-- >    };
+-- >  in scopedImport overrides ./bla.nix
+--
+-- In the related matter the function can be added and passed around as builtin.
 scopedImportNix
   :: forall e t f m
    . MonadNix e t f m
@@ -1277,42 +1325,50 @@ lessThanNix ta tb =
     vb <- demand tb
 
     let
-      badType = throwError $ ErrorCall $ "builtins.lessThan: expected two numbers or two strings, " <> "got " <> show va <> " and " <> show vb
+      badType = throwError $ ErrorCall $ "builtins.lessThan: expected two numbers or two strings, got '" <> show va <> "' and '" <> show vb <> "'."
 
     mkNVBool <$>
       case (va, vb) of
         (NVConstant ca, NVConstant cb) ->
           case (ca, cb) of
-            (NInt   a, NInt b  ) -> pure $             a < b
-            (NFloat a, NInt b  ) -> pure $             a < fromInteger b
+            (NInt   a, NInt   b) -> pure $             a < b
             (NInt   a, NFloat b) -> pure $ fromInteger a < b
+            (NFloat a, NInt   b) -> pure $             a < fromInteger b
             (NFloat a, NFloat b) -> pure $             a < b
             _                    -> badType
         (NVStr a, NVStr b) -> pure $ stringIgnoreContext a < stringIgnoreContext b
         _ -> badType
 
-concatListsNix
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-concatListsNix =
+-- | Helper function, generalization of @concat@ operations.
+concatWith
+  :: forall e t f m
+   . MonadNix e t f m
+  => (NValue t f m -> m (NValue t f m))
+  -> NValue t f m
+  -> m (NValue t f m)
+concatWith f =
   toValue . concat <=<
     traverse
-      (fromValue @[NValue t f m] <=< demand)
+      (fromValue @[NValue t f m] <=< f)
       <=< fromValue @[NValue t f m]
 
+-- | Nix function of Haskell:
+-- > concat :: [[a]] -> [a]
+--
+-- Concatenate a list of lists into a single list.
+concatListsNix
+  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
+concatListsNix = concatWith demand
+
+-- | Nix function of Haskell:
+-- > concatMap :: Foldable t => (a -> [b]) -> t a -> [b]
 concatMapNix
   :: forall e t f m
    . MonadNix e t f m
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-concatMapNix f =
-  toValue . concat <=<
-    traverse
-      applyFunc
-      <=< fromValue @[NValue t f m]
- where
-  applyFunc :: NValue t f m  -> m [NValue t f m]
-  applyFunc =  fromValue <=< callFunc f
+concatMapNix f = concatWith (callFunc f)
 
 listToAttrsNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1407,7 +1463,7 @@ findFileNix nvaset nvfilepath =
     case (aset, filePath) of
       (NVList x, NVStr ns) ->
         do
-          mres <- findPath @t @f @m x (toString (stringIgnoreContext ns))
+          mres <- findPath @t @f @m x $ toString $ stringIgnoreContext ns
 
           pure $ nvPath mres
 
@@ -1441,7 +1497,7 @@ readDirNix nvpath =
         detectFileTypes
         items
 
-    getDeeper <$> toValue (M.fromList itemsWithTypes)
+    (coerce :: CoerceDeeperToNValue t f m) <$> toValue (M.fromList itemsWithTypes)
 
 fromJSONNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1460,7 +1516,7 @@ fromJSONNix nvjson =
   jsonToNValue = \case
     A.Object m -> nvSet mempty <$> traverse jsonToNValue m
     A.Array  l -> nvList <$> traverse jsonToNValue (V.toList l)
-    A.String s -> pure $ nvStr $ makeNixStringWithoutContext s
+    A.String s -> pure $ nvStrWithoutContext s
     A.Number n ->
       pure $
         nvConstant $
@@ -1611,7 +1667,7 @@ currentSystemNix =
     os   <- getCurrentSystemOS
     arch <- getCurrentSystemArch
 
-    pure $ nvStr $ makeNixStringWithoutContext $ arch <> "-" <> os
+    pure $ nvStrWithoutContext $ arch <> "-" <> os
 
 currentTimeNix :: MonadNix e t f m => m (NValue t f m)
 currentTimeNix =
@@ -1802,7 +1858,7 @@ builtinsList = sequence
   , add2 Normal   "sort"             sortNix
   , add2 Normal   "split"            splitNix
   , add  Normal   "splitVersion"     splitVersionNix
-  , add0 Normal   "storeDir"         (pure $ nvStr $ makeNixStringWithoutContext "/nix/store")
+  , add0 Normal   "storeDir"         (pure $ nvStrWithoutContext "/nix/store")
   --, add  Normal   "storePath"        storePath
   , add' Normal   "stringLength"     (arity1 $ Text.length . stringIgnoreContext)
   , add' Normal   "sub"              (arity2 ((-) @Integer))
@@ -1910,7 +1966,7 @@ withNixContext mpath action =
     base            <- builtins
     opts :: Options <- asks $ view hasLens
     let
-      i = nvList $ nvStr . makeNixStringWithoutContext . toText <$> include opts
+      i = nvList $ nvStrWithoutContext . toText <$> include opts
 
     pushScope
       (one ("__includes", i))

@@ -208,7 +208,7 @@ exec update source = do
       -- import qualified Nix.Type.Env                  as Env
       -- import           Nix.Type.Infer
       --
-      -- let tyctx' = inferTop Env.empty [("repl", stripAnnotation expr)]
+      -- let tyctx' = inferTop mempty [("repl", stripAnnotation expr)]
       -- liftIO $ print tyctx'
 
       mVal <- lift $ lift $ try $ pushScope (replCtx st) (evalExprLoc expr)
@@ -225,7 +225,7 @@ exec update source = do
 
             -- If the result value is a set, update our context with it
             case val of
-              NVSet xs _ -> put st { replCtx = Data.HashMap.Lazy.union xs (replCtx st) }
+              NVSet xs _ -> put st { replCtx = xs <> replCtx st }
               _          -> pass
 
           pure $ pure val

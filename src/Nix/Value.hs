@@ -513,27 +513,35 @@ type NValue t f m = Free (NValue' t f m) t
 
 -- ** Free
 
--- | @iter@
+-- | HOF of @iter@ from @Free@
 iterNValue
   :: forall t f m r
    . MonadDataContext f m
-  => (t -> (NValue t f m -> r) -> r)
+  => ((Free (NValue' t f m) t -> r) -> t -> r)
   -> (NValue' t f m r -> r)
-  -> NValue t f m
+  -> Free (NValue' t f m) t
   -> r
-iterNValue k f = iter f . fmap (\t -> k t $ iterNValue k f)
+iterNValue k f = iter f . fmap (k (iterNValue k f))
+
+iterNValueByDiscardWith
+  :: MonadDataContext f m
+  => r
+  -> (NValue' t f m r -> r)
+  -> Free (NValue' t f m) t
+  -> r
+iterNValueByDiscardWith dflt = iterNValue (\ _ _ -> dflt)
 
 
--- | @iter@ for monadic values
+-- | HOF of @iterM@ from @Free@
 iterNValueM
   :: (MonadDataContext f m, Monad n)
   => (forall x . n x -> m x)
-  -> (t -> (NValue t f m -> n r) -> n r)
+  -> ((NValue t f m -> n r) -> t -> n r)
   -> (NValue' t f m (n r) -> n r)
   -> NValue t f m
   -> n r
 iterNValueM transform k f =
-    iterM f <=< go . ((\t -> k t $ iterNValueM transform k f) <$>)
+    iterM f <=< go . (k (iterNValueM transform k f) <$>)
   where
     go (Pure x) = Pure <$> x
     go (Free fa) = Free <$> bindNValue' transform go fa
@@ -598,6 +606,11 @@ nvStr :: Applicative f
   => NixString
   -> NValue t f m
 nvStr = Free . nvStr'
+
+nvStrWithoutContext :: Applicative f
+  => Text
+  -> NValue t f m
+nvStrWithoutContext = nvStr . makeNixStringWithoutContext
 
 
 -- | Life of a Haskell FilePath to the life of a Nix path

@@ -398,7 +398,7 @@ evalBinds recursive binds =
 
   moveOverridesLast = uncurry (<>) . partition
     (\case
-      NamedVar (StaticKey "__overrides" :| []) _ _pos -> False
+      NamedVar (StaticKey "__overrides" :| []) _ _ -> False
       _ -> True
     )
 
@@ -557,14 +557,7 @@ framedEvalExprLoc
   => NExprLoc
   -> m v
 framedEvalExprLoc =
-  adi evalContent addMetaInfo
-
--- | Takes annotated expression. Strip from annotation. Evaluate.
-evalContent
-  :: MonadNixEval v m
-  => AnnF ann NExprF (m v)
-  -> m v
-evalContent = eval . annotated . getCompose
+  adi addMetaInfo evalContent
 
 -- | Add source postionss & frame context system.
 addMetaInfo
@@ -572,3 +565,10 @@ addMetaInfo
   . (Framed e m, Scoped v m, Has e SrcSpan, Typeable m, Typeable v)
   => TransformF NExprLoc (m a)
 addMetaInfo = addStackFrames @v . addSourcePositions
+
+-- | Takes annotated expression. Strip from annotation. Evaluate.
+evalContent
+  :: MonadNixEval v m
+  => AnnF ann NExprF (m v)
+  -> m v
+evalContent = eval . stripAnn

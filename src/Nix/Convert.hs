@@ -27,11 +27,14 @@ import           Nix.Frames
 import           Nix.String
 import           Nix.Value
 import           Nix.Value.Monad
-import           Nix.Thunk
+import           Nix.Thunk                      ( MonadThunk(force) )
 import           Nix.Utils
 
-newtype Deeper a = Deeper { getDeeper :: a }
+newtype Deeper a = Deeper a
   deriving (Typeable, Functor, Foldable, Traversable)
+
+type CoerceDeeperToNValue t f m = Deeper (NValue t f m) -> NValue t f m
+type CoerceDeeperToNValue' t f m = Deeper (NValue' t f m (NValue t f m)) -> NValue' t f m (NValue t f m)
 
 {-
 
@@ -83,7 +86,7 @@ fromMayToDeeperValue t v =
   do
     v' <- fromValueMay v
     maybe
-      (throwError $ Expectation @t @f @m t $ Free $ getDeeper v)
+      (throwError $ Expectation @t @f @m t $ Free $ (coerce :: CoerceDeeperToNValue' t f m) v)
       pure
       v'
 
@@ -208,7 +211,7 @@ instance Convertible e t f m
   => FromValue ByteString m (NValue' t f m (NValue t f m)) where
 
   fromValueMay =
-    pure.
+    pure .
       \case
         NVStr' ns -> encodeUtf8 <$> getStringNoContext  ns
         _         -> mempty
@@ -313,8 +316,8 @@ instance ( Convertible e t f m
          , FromValue a m (NValue' t f m (NValue t f m))
          )
   => FromValue a m (Deeper (NValue' t f m (NValue t f m))) where
-  fromValueMay = fromValueMay . getDeeper
-  fromValue    = fromValue . getDeeper
+  fromValueMay = fromValueMay . (coerce :: CoerceDeeperToNValue' t f m)
+  fromValue    = fromValue . (coerce :: CoerceDeeperToNValue' t f m)
 
 
 -- * ToValue

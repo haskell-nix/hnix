@@ -68,14 +68,17 @@ class
   => MonadThunk t m a | t -> m, t -> a
  where
 
-  -- | Return an identifier for the thunk unless it is a pure value (i.e.,
-  --   strictly an encapsulation of some 'a' without any additional
-  --   structure). For pure values represented as thunks, returns mempty.
+  -- | Return thunk ID.
   thunkId  :: t -> ThunkId m
 
+  -- | Create new thunk
   thunk    :: m a -> m t
 
-  queryM   :: m a -> t -> m a
+  -- | Non-blocking query.
+  --   If thunk got computed
+  --   then return its value
+  --   otherwise return default value (1st arg).
+  query   :: m a -> t -> m a
   force    :: t -> m a
   forceEff :: t -> m a
 
@@ -90,7 +93,7 @@ class
 class
   MonadThunkF t m a | t -> m, t -> a
  where
-  queryMF   :: (a   -> m r) -> m r -> t -> m r
+  queryF   :: (a   -> m r) -> m r -> t -> m r
   forceF    :: (a   -> m r) -> t   -> m r
   forceEffF :: (a   -> m r) -> t   -> m r
   furtherF  :: (m a -> m a) -> t   -> m t
@@ -105,3 +108,8 @@ instance Show ThunkLoop where
   show (ThunkLoop i) = toString $ "ThunkLoop " <> i
 
 instance Exception ThunkLoop
+
+-- ** Utils
+
+thunkStubText :: Text
+thunkStubText = "<thunk>"

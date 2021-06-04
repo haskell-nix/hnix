@@ -26,9 +26,7 @@ import           Nix.Value
 import           Prettyprinter       hiding ( list )
 import qualified Text.Show                 as Text
 import           Text.Megaparsec.Pos        ( sourcePosPretty)
-#ifdef MIN_VERSION_pretty_show
 import qualified Text.Show.Pretty          as PS
-#endif
 
 renderFrames
   :: forall v t f e m ann
@@ -153,11 +151,7 @@ renderExpr _level longLabel shortLabel e@(AnnE _ x) = do
   opts :: Options <- asks (view hasLens)
   let rendered
           | verbose opts >= DebugInfo =
-#ifdef MIN_VERSION_pretty_show
               pretty (PS.ppShow (stripAnnotation e))
-#else
-              pretty (show (stripAnnotation e))
-#endif
           | verbose opts >= Chatty = prettyNix (stripAnnotation e)
           | otherwise = prettyNix (Fix (Fix (NSym "<?>") <$ x))
   pure $

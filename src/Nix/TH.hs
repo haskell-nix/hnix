@@ -48,39 +48,35 @@ freeVars e = case unFix e of
   (NLiteralPath _               ) -> mempty
   (NEnvPath     _               ) -> mempty
   (NUnary       _    expr       ) -> freeVars expr
-  (NBinary      _    left right ) -> Set.union (freeVars left) (freeVars right)
+  (NBinary      _    left right ) -> ((<>) `on` freeVars) left right
   (NSelect      expr path orExpr) ->
     Set.unions
       [ freeVars expr
       , pathFree path
       , maybe mempty freeVars orExpr
       ]
-  (NHasAttr expr            path) -> Set.union (freeVars expr) (pathFree path)
+  (NHasAttr expr            path) -> freeVars expr <> pathFree path
   (NAbs     (Param varname) expr) -> Set.delete varname (freeVars expr)
   (NAbs (ParamSet set _ varname) expr) ->
-    Set.union
-      -- Include all free variables from the expression and the default arguments
-      (freeVars expr)
-      -- But remove the argument name if existing, and all arguments in the parameter set
+    -- Include all free variables from the expression and the default arguments
+    freeVars expr <>
+    -- But remove the argument name if existing, and all arguments in the parameter set
+    Set.difference
+      (Set.unions $ freeVars <$> mapMaybe snd set)
       (Set.difference
-        (Set.unions $ freeVars <$> mapMaybe snd set)
-        (Set.difference
-          (maybe mempty one varname)
-          (Set.fromList $ fmap fst set)
-        )
+        (maybe mempty one varname)
+        (Set.fromList $ fst <$> set)
       )
   (NLet         bindings expr   ) ->
-    Set.union
-      (freeVars expr)
-      (Set.difference
-        (bindFreeVars bindings)
-        (bindDefs  bindings)
-      )
+    freeVars expr <>
+    Set.difference
+      (bindFreeVars bindings)
+      (bindDefs  bindings)
   (NIf          cond th   el    ) -> Set.unions $ freeVars <$> [cond, th, el]
   -- Evaluation is needed to find out whether x is a "real" free variable in `with y; x`, we just include it
   -- This also makes sense because its value can be overridden by `x: with y; x`
-  (NWith        set  expr       ) -> Set.union (freeVars set      ) (freeVars expr)
-  (NAssert      assertion expr  ) -> Set.union (freeVars assertion) (freeVars expr)
+  (NWith        set  expr       ) -> ((<>) `on` freeVars) set expr
+  (NAssert      assertion expr  ) -> ((<>) `on` freeVars) assertion expr
   (NSynHole     _               ) -> mempty
 
  where
@@ -100,7 +96,7 @@ freeVars e = case unFix e of
     bind1Free :: Binding NExpr -> Set VarName
     bind1Free (Inherit  Nothing     keys _) = Set.fromList $ mapMaybe staticKey keys
     bind1Free (Inherit (Just scope) _    _) = freeVars scope
-    bind1Free (NamedVar path        expr _) = Set.union (pathFree path) (freeVars expr)
+    bind1Free (NamedVar path        expr _) = pathFree path <> freeVars expr
 
   staticKey :: NKeyName r -> Maybe VarName
   staticKey (StaticKey  varname) = pure varname
