@@ -105,13 +105,9 @@ class
 instance MonadIntrospect IO where
   recursiveSize =
 #ifdef MIN_VERSION_ghc_datasize
-#if MIN_VERSION_ghc_datasize(0,2,0)
     recursiveSize
 #else
-      \_ -> pure 0
-#endif
-#else
-      \_ -> pure 0
+    \_ -> pure 0
 #endif
 
 deriving

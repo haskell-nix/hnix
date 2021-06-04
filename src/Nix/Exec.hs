@@ -43,14 +43,10 @@ import           Nix.Value
 import           Nix.Value.Equal
 import           Nix.Value.Monad
 import           Prettyprinter
-#ifdef MIN_VERSION_pretty_show
 import qualified Text.Show.Pretty              as PS
-#endif
 
 #ifdef MIN_VERSION_ghc_datasize
-#if MIN_VERSION_ghc_datasize(0,2,0)
 import           GHC.DataSize
-#endif
 #endif
 
 type MonadCited t f m =
@@ -514,11 +510,7 @@ addTracing k v = do
           if verbose opts >= Chatty
             then
               pretty $
-#ifdef MIN_VERSION_pretty_show
                 PS.ppShow $ void x
-#else
-                show $ void x
-#endif
             else prettyNix $ Fix $ Fix (NSym "?") <$ x
         msg x = pretty ("eval: " <> replicate depth ' ') <> x
       loc <- renderLocation span $ msg rendered <> " ...\n"
