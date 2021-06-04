@@ -211,7 +211,7 @@ instance Convertible e t f m
   => FromValue ByteString m (NValue' t f m (NValue t f m)) where
 
   fromValueMay =
-    pure.
+    pure .
       \case
         NVStr' ns -> encodeUtf8 <$> getStringNoContext  ns
         _         -> mempty

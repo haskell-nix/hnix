@@ -1202,6 +1202,16 @@ throwNix mnv =
 
     throwError . ErrorCall . toString $ stringIgnoreContext ns
 
+-- | Implementation of Nix @import@ clause.
+--
+-- Because Nix @import@s work strictly
+-- (import gets fully evaluated befor bringing it into the scope it was called from)
+-- - that property raises a requirement for execution phase of the interpreter go into evaluation phase
+-- & then also go into parsing phase on the imports.
+-- So it is not possible (more precise - not practical) to do a full parse Nix code phase fully & then go into evaluation phase.
+-- As it is not possible to "import them lazily", as import is strict & it is not possible to establish
+-- what imports whould be needed up until where it would be determined & they import strictly
+--
 importNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 importNix = scopedImportNix $ nvSet mempty mempty
