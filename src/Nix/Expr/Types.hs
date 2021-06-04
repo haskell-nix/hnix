@@ -19,10 +19,8 @@
 -- <https://web.archive.org/web/20201112031804/https://alessandrovermeulen.me/2013/07/13/the-difference-between-shallow-and-deep-embedding/>
 module Nix.Expr.Types where
 
-#ifdef MIN_VERSION_serialise
 import qualified Codec.Serialise                as Serialise
 import           Codec.Serialise                ( Serialise )
-#endif
 import           Control.DeepSeq
 import           Data.Aeson
 import           Data.Aeson.TH
@@ -91,9 +89,7 @@ instance NFData1 Binding
 
 instance Hashable1 Binding
 
-#ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (Binding r)
-#endif
 
 
 -- ** @Params@
@@ -122,9 +118,7 @@ instance Hashable1 Params
 
 instance NFData1 Params
 
-#ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (Params r)
-#endif
 
 instance IsString (Params r) where
   fromString = Param . fromString
@@ -163,9 +157,7 @@ instance Hashable2 Antiquoted where
 
 instance NFData v => NFData1 (Antiquoted v)
 
-#ifdef MIN_VERSION_serialise
 instance (Serialise v, Serialise r) => Serialise (Antiquoted v r)
-#endif
 
 
 -- ** @NString@
@@ -198,9 +190,7 @@ instance Hashable1 NString
 
 instance NFData1 NString
 
-#ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (NString r)
-#endif
 
 -- | For the the 'IsString' instance, we use a plain doublequoted string.
 instance IsString (NString r) where
@@ -240,7 +230,6 @@ data NKeyName r
   -- > StaticKey "x"                                     ~  x
   deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData, Hashable)
 
-#ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (NKeyName r)
 
 instance Serialise Pos where
@@ -257,7 +246,6 @@ instance Serialise SourcePos where
       Serialise.decode
       Serialise.decode
       Serialise.decode
-#endif
 
 instance Hashable Pos where
   hashWithSalt salt = hashWithSalt salt . unPos
@@ -345,9 +333,7 @@ data NUnaryOp
   deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
             NFData, Hashable)
 
-#ifdef MIN_VERSION_serialise
 instance Serialise NUnaryOp
-#endif
 
 
 -- ** @NBinaryOp@
@@ -375,9 +361,7 @@ data NBinaryOp
   deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
             NFData, Hashable)
 
-#ifdef MIN_VERSION_serialise
 instance Serialise NBinaryOp
-#endif
 
 
 -- ** @NRecordType@
@@ -390,9 +374,7 @@ data NRecordType
   deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
             NFData, Hashable)
 
-#ifdef MIN_VERSION_serialise
 instance Serialise NRecordType
-#endif
 
 -- * @NExprF@ - Nix expressions, base functor
 
@@ -487,9 +469,7 @@ data NExprF r
 
 instance NFData1 NExprF
 
-#ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (NExprF r)
-#endif
 
 -- | We make an `IsString` for expressions, where the string is interpreted
 -- as an identifier. This is the most common use-case...
@@ -509,9 +489,7 @@ instance Hashable1 NExprF
 -- | The monomorphic expression type is a fixed point of the polymorphic one.
 type NExpr = Fix NExprF
 
-#ifdef MIN_VERSION_serialise
 instance Serialise NExpr
-#endif
 
 instance TH.Lift NExpr where
   lift =

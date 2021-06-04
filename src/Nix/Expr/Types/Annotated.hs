@@ -16,9 +16,7 @@ module Nix.Expr.Types.Annotated
   )
 where
 
-#ifdef MIN_VERSION_serialise
 import           Codec.Serialise
-#endif
 import           Control.DeepSeq
 import           Data.Aeson                     ( ToJSON(..)
                                                 , FromJSON(..)
@@ -63,9 +61,7 @@ instance Binary SrcSpan
 instance ToJSON SrcSpan
 instance FromJSON SrcSpan
 
-#ifdef MIN_VERSION_serialise
 instance Serialise SrcSpan
-#endif
 
 -- * data type @Ann@
 
@@ -123,31 +119,25 @@ $(deriveShow2 ''Ann)
 $(deriveJSON1 defaultOptions ''Ann)
 $(deriveJSON2 defaultOptions ''Ann)
 
-#ifdef MIN_VERSION_serialise
 instance (Serialise ann, Serialise a) => Serialise (Ann ann a)
-#endif
 
 -- ** @NExprLoc{,F}@ - annotated Nix expression
 
 type NExprLocF = AnnF SrcSpan NExprF
 
-#ifdef MIN_VERSION_serialise
 instance Serialise r => Serialise (NExprLocF r) where
   encode (AnnFP ann a) = encode ann <> encode a
   decode =
     liftA2 AnnFP
       decode
       decode
-#endif
 
 instance Binary r => Binary (NExprLocF r)
 
 -- | Annotated Nix expression (each subexpression direct to its source location).
 type NExprLoc = Fix NExprLocF
 
-#ifdef MIN_VERSION_serialise
 instance Serialise NExprLoc
-#endif
 
 instance Binary NExprLoc
 
