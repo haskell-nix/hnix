@@ -1216,6 +1216,44 @@ importNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 importNix = scopedImportNix $ nvSet mempty mempty
 
+-- | @scopedImport scope path@
+-- An undocumented secret powerful function.
+--
+-- At the same time it is strongly forbidden to be used, as prolonged use of it would bring devastating consequences.
+-- As it is essentially allows rewriting(redefinition) paradigm.
+--
+-- Allows to import the environment into the scope of a file expression that gets imported.
+-- It is as if the contents at @path@ were given to @import@ wrapped as: @with scope; path@
+-- meaning:
+--
+-- > -- Nix pseudocode:
+-- > import (with scope; path)
+--
+-- For example, it allows to use itself as:
+-- > bar = scopedImport pkgs ./bar.nix;
+-- > -- & declare @./bar.nix@ without a header, so as:
+-- > stdenv.mkDerivation { ... buildInputs = [ libfoo ]; }
+--
+-- But that breaks the evaluation/execution sharing of the @import@s.
+--
+-- Function also allows to redefine or extend the builtins.
+--
+-- For instance, to trace all calls to function ‘map’:
+--
+-- >  let
+-- >    overrides = {
+-- >      map = f: xs: builtins.trace "call of map!" (map f xs);
+--
+-- >      # Propagate override by calls to import&scopedImport.
+-- >      import = fn: scopedImport overrides fn;
+-- >      scopedImport = attrs: fn: scopedImport (overrides // attrs) fn;
+--
+-- >      # Update ‘builtins’.
+-- >      builtins = builtins // overrides;
+-- >    };
+-- >  in scopedImport overrides ./bla.nix
+--
+-- In the related matter the function can be added and passed around as builtin.
 scopedImportNix
   :: forall e t f m
    . MonadNix e t f m
