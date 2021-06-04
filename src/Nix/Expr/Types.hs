@@ -518,7 +518,10 @@ instance TH.Lift NExpr where
     TH.dataToExpQ
       (\b ->
         do
-          -- Binding on constructor ensures type match and gives type inference to TH
+          -- Binding on constructor ensures type match and gives type inference to TH.
+          -- Reflection is the ability of a process to examine, introspect, and modify its own structure and behavior.
+          -- Reflection is a key strategy in metaprogramming.
+          -- <https://en.wikipedia.org/wiki/Reflective_programming>
           HRefl <-
             eqTypeRep
               (Reflection.typeRep @Text)
