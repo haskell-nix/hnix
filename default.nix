@@ -24,6 +24,8 @@
 , sdistTarball ? false
 # The strict packaging process as used on Hackage. Tests consistency of the Cabal file.
 , buildFromSdist ? true
+# Allow a shell environment to be requested
+, returnShellEnv ? false
 
 # Turn all warn into err with {-Wall,-Werror}
 , failOnAllWarnings ? false
@@ -225,7 +227,7 @@ let
       };
     });
 
-    returnShellEnv = false;
+    inherit returnShellEnv;
   };
 
   # One part of Haskell.lib options are argument switches, those are in `inherit`ed list.
