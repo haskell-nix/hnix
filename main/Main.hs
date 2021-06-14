@@ -2,8 +2,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE RecordWildCards #-}
 
-module Main where
+module Main ( main ) where
 
 import           Nix.Utils
 import           Control.Comonad                ( extract )
@@ -46,59 +47,61 @@ main =
     time <- getCurrentTime
     opts <- execParser $ nixOptionsInfo time
 
-    runWithBasicEffectsIO opts $ execContentsFilesOrRepl opts
+    main' opts
 
+main' :: Options -> IO ()
+main' (opts@Options{..}) = runWithBasicEffectsIO opts execContentsFilesOrRepl
  where
-  execContentsFilesOrRepl opts =
-    maybe
-      (maybe
-        (maybe
-          (list
-            (withNixContext mempty Repl.main) -- run REPL
-            (\case
-              ["-"] -> handleResult opts mempty . parseNixTextLoc =<< liftIO Text.getContents
-              _paths -> traverse_ (processFile opts) _paths
-            )
-            (filePaths opts)
-          )
-          (\ x ->
-            -- We can start use Text as in the base case, requires changing FilePath -> Text
-            traverse_ (processFile opts) . String.lines =<< liftIO
-              (case x of
-                "-" ->  getContents  -- get user input
-                _path -> readFile _path
-              )
-          )
-          (fromFile opts)
-        )
-        (handleResult opts mempty . parseNixTextLoc)
-        (expression opts)
-      )
-      (\ path ->
-        do
+  execContentsFilesOrRepl =
+    firstJust
+      -- The `--read` option: load expression from a serialized file.
+      [ readFrom <&> \path -> do
           let file = addExtension (dropExtension path) "nixc"
-          process opts (pure file) =<< liftIO (readCache path)
-      )
-      (readFrom opts)
+          process (Just file) =<< liftIO (readCache path)
 
-  processFile opts path =
-    do
-      eres <- parseNixFileLoc path
-      handleResult opts (pure path) eres
+      -- The `--expr` option: read expression from the argument string
+      , expression <&> processText
 
-  handleResult opts mpath =
+      -- The `--file` argument: read expressions from the files listed in the argument file
+      , fromFile <&> \x ->
+          -- We can start use Text as in the base case, requires changing FilePath -> Text
+          traverse_ processFile . String.lines =<< liftIO
+            (case x of
+              "-" -> getContents
+              fp -> readFile fp
+            )
+      ]
+    `orElse`
+      -- The base case: read expressions from the files listed on the command line
+      case filePaths of
+        -- With no files, fall back to running the REPL
+        [] -> withNixContext mempty Repl.main
+        ["-"] -> processText =<< liftIO Text.getContents
+        _paths -> traverse_ processFile _paths
+
+  firstJust :: [Maybe a] -> Maybe a
+  firstJust = asum
+
+  orElse :: Maybe a -> a -> a
+  orElse = flip fromMaybe
+
+  processText text = handleResult Nothing     $   parseNixTextLoc text
+
+  processFile path = handleResult (Just path) =<< parseNixFileLoc path
+
+  handleResult mpath =
     either
       (\ err ->
         bool
           errorWithoutStackTrace
           (liftIO . hPutStrLn stderr)
-          (ignoreErrors opts)
+          ignoreErrors
           $ "Parse failed: " <> show err
       )
 
       (\ expr ->
         do
-          when (check opts) $
+          when check $
             do
               expr' <- liftIO (reduceExpr mpath expr)
               either
@@ -111,7 +114,7 @@ main =
                 -- liftIO $ putStrLn $ runST $
                 --     runLintM opts . renderSymbolic =<< lint opts expr
 
-          catch (process opts mpath expr) $
+          catch (process mpath expr) $
             \case
               NixException frames ->
                 errorWithoutStackTrace . show =<<
@@ -120,7 +123,7 @@ main =
                     @(StdThunk (StandardT (StdIdT IO)))
                     frames
 
-          when (repl opts) $
+          when repl $
             withNixContext mempty $
               bool
                 Repl.main
@@ -128,45 +131,42 @@ main =
                   val <- Nix.nixEvalExprLoc mpath expr
                   Repl.main' $ pure val
                 )
-                (evaluate opts)
+                evaluate
       )
 
-  process opts mpath expr
-    | evaluate opts =
+  process mpath expr
+    | evaluate =
       if
-        | tracing opts             -> evaluateExpression mpath Nix.nixTracingEvalExprLoc printer expr
-        | Just path <- reduce opts -> evaluateExpression mpath (reduction path) printer expr
-        | not (  null (arg opts)
-              && null (argstr opts)
-              )                    -> evaluateExpression mpath Nix.nixEvalExprLoc printer expr
-        | otherwise                -> processResult printer =<< Nix.nixEvalExprLoc mpath expr
-    | xml opts                     =  fail "Rendering expression trees to XML is not yet implemented"
-    | json opts                    =  fail "Rendering expression trees to JSON is not implemented"
-    | verbose opts >= DebugInfo    =  liftIO $ putStr $ PS.ppShow $ stripAnnotation expr
-    | cache opts
-      , Just path <- mpath         =  liftIO $ writeCache (addExtension (dropExtension path) "nixc") expr
-    | parseOnly opts               =  void $ liftIO $ Exc.evaluate $ Deep.force expr
-    | otherwise                    =
+        | tracing                       -> evaluateExpression mpath Nix.nixTracingEvalExprLoc printer expr
+        | Just path <- reduce           -> evaluateExpression mpath (reduction path) printer expr
+        | not (null arg && null argstr) -> evaluateExpression mpath Nix.nixEvalExprLoc printer expr
+        | otherwise                     -> processResult printer =<< Nix.nixEvalExprLoc mpath expr
+    | xml                        =  fail "Rendering expression trees to XML is not yet implemented"
+    | json                       =  fail "Rendering expression trees to JSON is not implemented"
+    | verbose >= DebugInfo       =  liftIO $ putStr $ PS.ppShow $ stripAnnotation expr
+    | cache , Just path <- mpath =  liftIO $ writeCache (addExtension (dropExtension path) "nixc") expr
+    | parseOnly                  =  void $ liftIO $ Exc.evaluate $ Deep.force expr
+    | otherwise                  =
       liftIO $
         renderIO
           stdout
           . layoutPretty (LayoutOptions $ AvailablePerLine 80 0.4)
           . prettyNix
-          . stripAnnotation $
-            expr
+          . stripAnnotation
+          $ expr
    where
     printer
-      | finder opts = findAttrs <=< fromValue @(AttrSet (StdValue (StandardT (StdIdT IO))))
-      | xml    opts = liftIO . Text.putStrLn . stringIgnoreContext . toXML <=< normalForm
+      | finder    = findAttrs <=< fromValue @(AttrSet (StdValue (StandardT (StdIdT IO))))
+      | xml       = liftIO . Text.putStrLn . stringIgnoreContext . toXML <=< normalForm
       -- 2021-05-27: NOTE: With naive fix of the #941
       -- This is overall a naive printer implementation, as options should interact/respect one another.
       -- A nice question: "Should respect one another to what degree?": Go full combinator way, for which
       -- old Nix CLI is nototrious for (and that would mean to reimplement the old Nix CLI),
       -- OR: https://github.com/haskell-nix/hnix/issues/172 and have some sane standart/default behaviour for (most) keys.
-      | json   opts = liftIO . Text.putStrLn . stringIgnoreContext         <=< nvalueToJSONNixString <=< normalForm
-      | strict opts = liftIO . print         . prettyNValue                <=< normalForm
-      | values opts = liftIO . print         . prettyNValueProv            <=< removeEffects
-      | otherwise   = liftIO . print         . prettyNValue                <=< removeEffects
+      | json      = liftIO . Text.putStrLn . stringIgnoreContext         <=< nvalueToJSONNixString <=< normalForm
+      | strict    = liftIO . print         . prettyNValue                <=< normalForm
+      | values    = liftIO . print         . prettyNValueProv            <=< removeEffects
+      | otherwise = liftIO . print         . prettyNValue                <=< removeEffects
      where
       findAttrs
         :: AttrSet (StdValue (StandardT (StdIdT IO)))
