@@ -30,6 +30,7 @@ import           Nix.Convert
 import           Nix.Effects
 import           Nix.Eval                      as Eval
 import           Nix.Expr
+import           Nix.Expr.Strings               ( runAntiquoted )
 import           Nix.Frames
 import           Nix.Options
 import           Nix.Pretty
@@ -190,22 +191,31 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     span  <- currentPos
     pure $ nvConstantP (Provenance scope $ NConstant_ span c) c
 
-  evalString =
-    maybe
-      (nverr $ ErrorCall "Failed to assemble string")
-      (\ ns ->
-        do
-          scope <- currentScopes
-          span  <- currentPos
-          pure $
-            nvStrP
-              (Provenance
-                scope
-                (NStr_ span $ DoubleQuoted [Plain $ stringIgnoreContext ns])
-              )
-              ns
-      )
-      <=< assembleString
+  evalString v =
+    do
+      scope <- currentScopes
+      span  <- currentPos
+      ns <- assembleString v
+      pure $
+        nvStrP
+          (Provenance
+            scope
+            (NStr_ span $ DoubleQuoted [Plain $ stringIgnoreContext ns])
+          )
+          ns
+     where
+      -- XXX: A mere copy of the code from Nix.Eval
+      -- But this one fails properly at the right antiquotation.
+      assembleString =
+        (mconcat <$>) . traverse go . \case
+          Indented   _ parts -> parts
+          DoubleQuoted parts -> parts
+
+      go =
+        runAntiquoted
+          "\n"
+          (pure . makeNixStringWithoutContext)
+          (fromValue =<<)
 
   evalLiteralPath p = do
     scope <- currentScopes
