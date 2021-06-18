@@ -363,7 +363,7 @@ nixString' = lexeme (doubleQuoted <+> indented <?> "string")
 
   stringChar end escStart esc =
     Antiquoted <$>
-      (antiStart *> nixToplevelForm <* char '}')
+      (annotateLocation1 $ NStr . DoubleQuoted . one . Antiquoted <$> lexeme (antiStart *> nixToplevelForm <* char '}'))
         <+> Plain . one <$>
           char '$' <+> esc <+> Plain . toText <$>
             some plainChar
