@@ -13,7 +13,6 @@ module Nix.Render where
 
 import           Prelude                 hiding ( readFile )
 
--- Please reduce Unsafe
 import qualified Data.ByteString               as BS
 import qualified Data.Set                      as Set
 import           Nix.Utils.Fix1                 ( Fix1T
