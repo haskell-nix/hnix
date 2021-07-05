@@ -2,7 +2,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-
+{-# LANGUAGE PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 
 module Nix.Effects.Derivation ( defaultDerivationStrict ) where
 
@@ -17,6 +17,11 @@ import           Data.Foldable                  ( foldl )
 import qualified Data.Map.Strict               as Map
 import qualified Data.Set                      as Set
 import qualified Data.Text                     as Text
+
+import           Text.Megaparsec
+import           Text.Megaparsec.Char
+
+import qualified "cryptonite" Crypto.Hash      as Hash -- 2021-07-05: Attrocity of Haskell hashing situation, in HNix we ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 
 import           Nix.Atoms
 import           Nix.Convert
@@ -35,9 +40,6 @@ import           Nix.Value.Monad
 import qualified System.Nix.ReadonlyStore      as Store
 import qualified System.Nix.Hash               as Store
 import qualified System.Nix.StorePath          as Store
-
-import           Text.Megaparsec
-import           Text.Megaparsec.Char
 import Prelude hiding (readFile)
 
 
@@ -77,21 +79,21 @@ writeDerivation drv@Derivation{inputs, name} = do
 
 -- | Traverse the graph of inputDrvs to replace fixed output derivations with their fixed output hash.
 -- this avoids propagating changes to their .drv when the output hash stays the same.
-hashDerivationModulo :: (MonadNix e t f m, MonadState (b, AttrSet Text) m) => Derivation -> m (Store.Digest 'Store.SHA256)
+hashDerivationModulo :: (MonadNix e t f m, MonadState (b, AttrSet Text) m) => Derivation -> m (Hash.Digest Hash.SHA256)
 hashDerivationModulo
   Derivation
-    { mFixed = Just (Store.SomeDigest (digest :: Store.Digest hashType))
+    { mFixed = Just (Store.SomeDigest (digest :: Hash.Digest hashType))
     , outputs
     , hashMode
     } =
   case Map.toList outputs of
     [("out", path)] -> pure $
-      Store.hash @'Store.SHA256 $
+      Hash.hash @ByteString @Hash.SHA256 $
         encodeUtf8 $
           "fixed:out"
           <> (if hashMode == Recursive then ":r" else "")
           <> ":" <> (Store.algoName @hashType)
-          <> ":" <> Store.encodeInBase Store.Base16 digest
+          <> ":" <> Store.encodeDigestWith Store.Base16 digest
           <> ":" <> path
     _outputsList -> throwError $ ErrorCall $ "This is weird. A fixed output drv should only have one output named 'out'. Got " <> show _outputsList
 hashDerivationModulo
@@ -109,14 +111,14 @@ hashDerivationModulo
             maybe
               (do
                 drv' <- readDerivation $ toString path
-                hash <- Store.encodeInBase Store.Base16 <$> hashDerivationModulo drv'
+                hash <- Store.encodeDigestWith Store.Base16 <$> hashDerivationModulo drv'
                 pure (hash, outs)
               )
               (\ hash -> pure (hash, outs))
               (M.lookup path cache)
           )
           (Map.toList inputDrvs)
-    pure $ Store.hash @'Store.SHA256 $ encodeUtf8 $ unparseDrv (drv {inputs = (inputSrcs, inputsModulo)})
+    pure $ Hash.hash @ByteString @Hash.SHA256 $ encodeUtf8 $ unparseDrv $ drv {inputs = (inputSrcs, inputsModulo)}
 
 unparseDrv :: Derivation -> Text
 unparseDrv Derivation{..} =
@@ -146,8 +148,8 @@ unparseDrv Derivation{..} =
       parens $ (s <$>) $ ([outputName, outputPath] <>) $
         maybe
           [mempty, mempty]
-          (\ (Store.SomeDigest (digest :: Store.Digest hashType)) ->
-            [prefix <> Store.algoName @hashType, Store.encodeInBase Store.Base16 digest]
+          (\ (Store.SomeDigest (digest :: Hash.Digest hashType)) ->
+            [prefix <> Store.algoName @hashType, Store.encodeDigestWith Store.Base16 digest]
           )
           mFixed
     parens :: [Text] -> Text
@@ -279,7 +281,7 @@ defaultDerivationStrict val = do
     drvPath <- pathToText <$> writeDerivation drv'
 
     -- Memoize here, as it may be our last chance in case of readonly stores.
-    drvHash <- Store.encodeInBase Store.Base16 <$> hashDerivationModulo drv'
+    drvHash <- Store.encodeDigestWith Store.Base16 <$> hashDerivationModulo drv'
     modify $ second $ MS.insert drvPath drvHash
 
     let

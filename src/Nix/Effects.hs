@@ -5,6 +5,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -23,6 +24,7 @@ import qualified Data.Text                     as Text
 import           Network.HTTP.Client     hiding ( path, Proxy )
 import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
+import qualified "cryptonite" Crypto.Hash      as Hash
 import           Nix.Utils.Fix1
 import           Nix.Expr
 import           Nix.Frames              hiding ( Proxy )
@@ -36,7 +38,6 @@ import           System.FilePath                ( takeFileName )
 import qualified System.Info
 import           System.Process
 
-import qualified System.Nix.Hash               as Store
 import qualified System.Nix.Store.Remote       as Store.Remote
 import qualified System.Nix.StorePath          as Store
 
@@ -402,7 +403,7 @@ instance MonadStore IO where
       (\ pathName ->
         do
           -- TODO: redesign the filter parameter
-          res <- Store.Remote.runStore $ Store.Remote.addToStore @'Store.SHA256 pathName path recursive (const False) repair
+          res <- Store.Remote.runStore $ Store.Remote.addToStore @Hash.SHA256 pathName path recursive (const False) repair
           either
             Left -- err
             (pure . StorePath . decodeUtf8 . Store.storePathToRawFilePath) -- store path

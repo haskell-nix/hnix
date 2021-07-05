@@ -12,6 +12,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
@@ -30,11 +31,11 @@ import           Control.Comonad                ( Comonad )
 import           Control.Monad                  ( foldM )
 import           Control.Monad.Catch            ( MonadCatch(catch) )
 import           Control.Monad.ListM            ( sortByM )
-import           Crypto.Hash
-import qualified Crypto.Hash.MD5               as MD5
-import qualified Crypto.Hash.SHA1              as SHA1
-import qualified Crypto.Hash.SHA256            as SHA256
-import qualified Crypto.Hash.SHA512            as SHA512
+import           "hashing" Crypto.Hash
+import qualified "hashing" Crypto.Hash.MD5     as MD5
+import qualified "hashing" Crypto.Hash.SHA1    as SHA1
+import qualified "hashing" Crypto.Hash.SHA256  as SHA256
+import qualified "hashing" Crypto.Hash.SHA512  as SHA512
 import qualified Data.Aeson                    as A
 import           Data.Align                     ( alignWith )
 import           Data.Array
