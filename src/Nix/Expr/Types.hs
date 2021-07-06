@@ -376,7 +376,7 @@ data NRecordType
 
 instance Serialise NRecordType
 
--- * @NExprF@ - Nix expressions, base functor
+-- ** @NExprF@ - Nix expressions, base functor
 
 -- | The main Nix expression type. As it is polimophic, has a functor,
 -- which allows to traverse expressions and map functions over them.
