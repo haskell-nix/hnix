@@ -507,7 +507,7 @@ instance TH.Lift NExpr where
           pure [| $(TH.lift b) |]
       )
 #if MIN_VERSION_template_haskell(2,17,0)
-  liftTyped = unsafeCodeCoerce . lift
+  liftTyped = TH.liftTyped
 #elif MIN_VERSION_template_haskell(2,16,0)
   liftTyped = TH.unsafeTExpCoerce . TH.lift
 #endif
