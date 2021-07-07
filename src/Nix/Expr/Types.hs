@@ -65,6 +65,16 @@ import           Instances.TH.Lift              ()  -- importing Lift Text fo GH
 
 type VarName = Text
 
+
+-- ** @NAttrPath@
+
+-- | A selector (for example in a @let@ or an attribute set) is made up
+-- of strung-together key names.
+--
+-- > StaticKey "x" :| [DynamicKey (Antiquoted y)]  ~  x.${y}
+type NAttrPath r = NonEmpty (NKeyName r)
+
+
 -- ** @Binding@
 
 -- | A single line of the bindings section of a let expression or of a set.
@@ -322,14 +332,6 @@ instance Traversable NKeyName where
     DynamicKey EscapedNewline   -> pure $ DynamicKey EscapedNewline
     StaticKey  key              -> pure $ StaticKey key
 
-
--- ** @NAttrPath@
-
--- | A selector (for example in a @let@ or an attribute set) is made up
--- of strung-together key names.
---
--- > StaticKey "x" :| [DynamicKey (Antiquoted y)]  ~  x.${y}
-type NAttrPath r = NonEmpty (NKeyName r)
 
 -- ** @NUnaryOp
 
