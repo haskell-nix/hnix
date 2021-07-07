@@ -379,6 +379,23 @@ instance ToJSON a => ToJSON (Binding a)
 instance FromJSON a => FromJSON (Binding a)
 
 
+-- ** @NRecordType@
+
+-- | 'NRecordType' distinguishes between recursive and non-recursive attribute
+-- sets.
+data NRecordType
+  = NNonRecursive  -- ^ >     { ... }
+  | NRecursive     -- ^ > rec { ... }
+  deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
+            NFData, Hashable)
+
+instance Serialise NRecordType
+
+instance Binary NRecordType
+
+instance ToJSON NRecordType
+instance FromJSON NRecordType
+
 -- ** @NUnaryOp
 
 -- | There are two unary operations: logical not and integer negation.
@@ -428,23 +445,6 @@ instance Binary NBinaryOp
 instance ToJSON NBinaryOp
 instance FromJSON NBinaryOp
 
-
--- ** @NRecordType@
-
--- | 'NRecordType' distinguishes between recursive and non-recursive attribute
--- sets.
-data NRecordType
-  = NNonRecursive  -- ^ >     { ... }
-  | NRecursive     -- ^ > rec { ... }
-  deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
-            NFData, Hashable)
-
-instance Serialise NRecordType
-
-instance Binary NRecordType
-
-instance ToJSON NRecordType
-instance FromJSON NRecordType
 
 -- ** @NExprF@ - Nix expressions, base functor
 
