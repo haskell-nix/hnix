@@ -62,6 +62,31 @@ import           Instances.TH.Lift              ()  -- importing Lift Text fo GH
 
 -- Upstreaming so far was not pursued.
 
+instance Serialise Pos where
+  encode = Serialise.encode . unPos
+  decode = mkPos <$> Serialise.decode
+
+instance Serialise SourcePos where
+  encode (SourcePos f l c) =
+    Serialise.encode f <>
+    Serialise.encode l <>
+    Serialise.encode c
+  decode =
+    liftA3 SourcePos
+      Serialise.decode
+      Serialise.decode
+      Serialise.decode
+
+instance Hashable Pos where
+  hashWithSalt salt = hashWithSalt salt . unPos
+
+instance Hashable SourcePos where
+  hashWithSalt salt (SourcePos f l c) =
+    salt
+      `hashWithSalt` f
+      `hashWithSalt` l
+      `hashWithSalt` c
+
 instance Binary Pos where
   put = Binary.put . unPos
   get = mkPos <$> Binary.get
@@ -222,31 +247,6 @@ data NKeyName r
     , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
     , Show, Read, Hashable
     )
-
-instance Serialise Pos where
-  encode = Serialise.encode . unPos
-  decode = mkPos <$> Serialise.decode
-
-instance Serialise SourcePos where
-  encode (SourcePos f l c) =
-    Serialise.encode f <>
-    Serialise.encode l <>
-    Serialise.encode c
-  decode =
-    liftA3 SourcePos
-      Serialise.decode
-      Serialise.decode
-      Serialise.decode
-
-instance Hashable Pos where
-  hashWithSalt salt = hashWithSalt salt . unPos
-
-instance Hashable SourcePos where
-  hashWithSalt salt (SourcePos f l c) =
-    salt
-      `hashWithSalt` f
-      `hashWithSalt` l
-      `hashWithSalt` c
 
 instance NFData1 NKeyName where
   liftRnf _ (StaticKey  !_            ) = ()
