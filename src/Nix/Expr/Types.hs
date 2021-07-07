@@ -55,6 +55,27 @@ import           Nix.Utils
 import           Instances.TH.Lift              ()  -- importing Lift Text fo GHC 8.6
 #endif
 
+
+-- * Utilitary: orphan instances
+
+-- Placed here because TH inference depends on declaration sequence.
+
+-- Upstreaming so far was not pursued.
+
+instance Binary Pos where
+  put = Binary.put . unPos
+  get = mkPos <$> Binary.get
+instance Binary SourcePos
+
+instance ToJSON Pos where
+  toJSON = toJSON . unPos
+instance ToJSON SourcePos
+
+instance FromJSON Pos where
+  parseJSON = fmap mkPos . parseJSON
+instance FromJSON SourcePos
+
+
 -- * Components of Nix expressions
 
 -- NExpr is a composition of
@@ -108,6 +129,11 @@ instance Hashable1 Binding
 
 instance Serialise r => Serialise (Binding r)
 
+instance Binary a => Binary (Binding a)
+
+instance ToJSON a => ToJSON (Binding a)
+instance FromJSON a => FromJSON (Binding a)
+
 
 -- ** @Params@
 
@@ -139,6 +165,11 @@ instance Serialise r => Serialise (Params r)
 
 instance IsString (Params r) where
   fromString = Param . fromString
+
+instance Binary a => Binary (Params a)
+
+instance ToJSON a => ToJSON (Params a)
+instance FromJSON a => FromJSON (Params a)
 
 -- *** @ParamSet@
 
@@ -175,6 +206,11 @@ instance Hashable2 Antiquoted where
 instance NFData v => NFData1 (Antiquoted v)
 
 instance (Serialise v, Serialise r) => Serialise (Antiquoted v r)
+
+instance (Binary v, Binary a) => Binary (Antiquoted v a)
+
+instance (ToJSON v, ToJSON a) => ToJSON (Antiquoted v a)
+instance (FromJSON v, FromJSON a) => FromJSON (Antiquoted v a)
 
 
 -- ** @NString@
@@ -213,6 +249,11 @@ instance Serialise r => Serialise (NString r)
 instance IsString (NString r) where
   fromString ""     = DoubleQuoted mempty
   fromString string = DoubleQuoted [Plain $ toText string]
+
+instance Binary a => Binary (NString a)
+
+instance ToJSON a => ToJSON (NString a)
+instance FromJSON a => FromJSON (NString a)
 
 
 -- ** @NKeyName@
@@ -332,6 +373,11 @@ instance Traversable NKeyName where
     DynamicKey EscapedNewline   -> pure $ DynamicKey EscapedNewline
     StaticKey  key              -> pure $ StaticKey key
 
+instance Binary a => Binary (NKeyName a)
+
+instance ToJSON a => ToJSON (NKeyName a)
+instance FromJSON a => FromJSON (NKeyName a)
+
 
 -- ** @NUnaryOp
 
@@ -343,6 +389,11 @@ data NUnaryOp
             NFData, Hashable)
 
 instance Serialise NUnaryOp
+
+instance Binary NUnaryOp
+
+instance ToJSON NUnaryOp
+instance FromJSON NUnaryOp
 
 
 -- ** @NBinaryOp@
@@ -372,6 +423,11 @@ data NBinaryOp
 
 instance Serialise NBinaryOp
 
+instance Binary NBinaryOp
+
+instance ToJSON NBinaryOp
+instance FromJSON NBinaryOp
+
 
 -- ** @NRecordType@
 
@@ -384,6 +440,11 @@ data NRecordType
             NFData, Hashable)
 
 instance Serialise NRecordType
+
+instance Binary NRecordType
+
+instance ToJSON NRecordType
+instance FromJSON NRecordType
 
 -- ** @NExprF@ - Nix expressions, base functor
 
@@ -492,6 +553,11 @@ instance Hashable1 NonEmpty
 
 instance Hashable1 NExprF
 
+instance Binary a => Binary (NExprF a)
+
+instance ToJSON a => ToJSON (NExprF a)
+instance FromJSON a => FromJSON (NExprF a)
+
 
 -- *** @NExpr@
 
@@ -556,46 +622,6 @@ $(deriveJSON1 defaultOptions ''Params)
 --x $(deriveJSON1 defaultOptions ''Binding)
 $(deriveJSON1 defaultOptions ''Antiquoted)
 $(deriveJSON2 defaultOptions ''Antiquoted)
-
-instance (Binary v, Binary a) => Binary (Antiquoted v a)
-instance Binary a => Binary (NString a)
-instance Binary a => Binary (Binding a)
-instance Binary Pos where
-  put = Binary.put . unPos
-  get = mkPos <$> Binary.get
-instance Binary SourcePos
-instance Binary a => Binary (NKeyName a)
-instance Binary a => Binary (Params a)
-instance Binary NUnaryOp
-instance Binary NBinaryOp
-instance Binary NRecordType
-instance Binary a => Binary (NExprF a)
-
-instance (ToJSON v, ToJSON a) => ToJSON (Antiquoted v a)
-instance ToJSON a => ToJSON (NString a)
-instance ToJSON a => ToJSON (Binding a)
-instance ToJSON Pos where
-  toJSON = toJSON . unPos
-instance ToJSON SourcePos
-instance ToJSON a => ToJSON (NKeyName a)
-instance ToJSON a => ToJSON (Params a)
-instance ToJSON NUnaryOp
-instance ToJSON NBinaryOp
-instance ToJSON NRecordType
-instance ToJSON a => ToJSON (NExprF a)
-
-instance (FromJSON v, FromJSON a) => FromJSON (Antiquoted v a)
-instance FromJSON a => FromJSON (NString a)
-instance FromJSON a => FromJSON (Binding a)
-instance FromJSON Pos where
-  parseJSON = fmap mkPos . parseJSON
-instance FromJSON SourcePos
-instance FromJSON a => FromJSON (NKeyName a)
-instance FromJSON a => FromJSON (Params a)
-instance FromJSON NUnaryOp
-instance FromJSON NBinaryOp
-instance FromJSON NRecordType
-instance FromJSON a => FromJSON (NExprF a)
 
 $(makeTraversals ''NExprF)
 $(makeTraversals ''Binding)
