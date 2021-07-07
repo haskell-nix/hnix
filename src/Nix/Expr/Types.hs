@@ -605,7 +605,16 @@ instance TH.Lift NExpr where
 
 -- ** Methods
 
+#if __GLASGOW_HASKELL__ >= 900
+hashAt
+  :: Functor f
+  => VarName
+  -> (Maybe v -> f (Maybe v))
+  -> AttrSet v
+  -> f (AttrSet v)
+#else
 hashAt :: VarName -> Lens' (AttrSet v) (Maybe v)
+#endif
 hashAt = flip alterF
 
 -- | Get the name out of the parameter (there might be none).
