@@ -402,15 +402,11 @@ data NBinaryOp
   | NApp     -- ^ Apply a function to an argument.
              --
              -- > NBinary NApp f x  ~  f x
-  deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
-            NFData, Hashable)
-
-instance Serialise NBinaryOp
-
-instance Binary NBinaryOp
-
-instance ToJSON NBinaryOp
-instance FromJSON NBinaryOp
+  deriving
+    ( Eq, Ord, Enum, Bounded, Generic
+    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Show, Read, Hashable
+    )
 
 
 -- ** @NExprF@ - Nix expressions, base functor
@@ -613,7 +609,7 @@ stripPositionInfo = transport phi
   go (Inherit  ms   names _pos) = Inherit  ms   names nullPos
 
 nullPos :: SourcePos
-nullPos = SourcePos "<string>" (mkPos 1) (mkPos 1)
+nullPos = on (SourcePos "<string>") mkPos 1 1
 
 -- * Dead code
 
