@@ -122,45 +122,6 @@ instance (ToJSON v, ToJSON a) => ToJSON (Antiquoted v a)
 instance (FromJSON v, FromJSON a) => FromJSON (Antiquoted v a)
 
 
--- ** @Binding@
-
--- | A single line of the bindings section of a let expression or of a set.
-data Binding r
-  = NamedVar !(NAttrPath r) !r !SourcePos
-  -- ^ An explicit naming.
-  --
-  -- > NamedVar (StaticKey "x" :| [StaticKey "y"]) z SourcePos{}  ~  x.y = z;
-  | Inherit !(Maybe r) ![NKeyName r] !SourcePos
-  -- ^ Inheriting an attribute (binding) into the attribute set from the other scope (attribute set). No denoted scope means to inherit from the closest outside scope.
-  --
-  -- +---------------------------------------------------------------+--------------------+-----------------------+
-  -- | Hask                                                          | Nix                | pseudocode            |
-  -- +===============================================================+====================+=======================+
-  -- | @Inherit Nothing  [StaticKey "a"] SourcePos{}@                | @inherit a;@       | @a = outside.a;@      |
-  -- +---------------------------------------------------------------+--------------------+-----------------------+
-  -- | @Inherit (pure x) [StaticKey "a"] SourcePos{}@                | @inherit (x) a;@   | @a = x.a;@            |
-  -- +---------------------------------------------------------------+--------------------+-----------------------+
-  -- | @Inherit (pure x) [StaticKey "a", StaticKey "b"] SourcePos{}@ | @inherit (x) a b;@ | @a = x.a;@            |
-  -- |                                                               |                    | @b = x.b;@            |
-  -- +---------------------------------------------------------------+--------------------+-----------------------+
-  --
-  -- (2021-07-07 use details):
-  -- Inherits the position of the first name through @unsafeGetAttrPos@. The position of the scope inherited from else - the position of the first member of the binds list.
-  deriving (Generic, Generic1, Typeable, Data, Eq, Ord, Functor,
-            Foldable, Traversable, Show, NFData, Hashable)
-
-instance NFData1 Binding
-
-instance Hashable1 Binding
-
-instance Serialise r => Serialise (Binding r)
-
-instance Binary a => Binary (Binding a)
-
-instance ToJSON a => ToJSON (Binding a)
-instance FromJSON a => FromJSON (Binding a)
-
-
 -- ** @Params@
 
 -- | @Params@ represents all the ways the formal parameters to a
@@ -377,6 +338,45 @@ instance FromJSON a => FromJSON (NKeyName a)
 --
 -- > StaticKey "x" :| [DynamicKey (Antiquoted y)]  ~  x.${y}
 type NAttrPath r = NonEmpty (NKeyName r)
+
+
+-- ** @Binding@
+
+-- | A single line of the bindings section of a let expression or of a set.
+data Binding r
+  = NamedVar !(NAttrPath r) !r !SourcePos
+  -- ^ An explicit naming.
+  --
+  -- > NamedVar (StaticKey "x" :| [StaticKey "y"]) z SourcePos{}  ~  x.y = z;
+  | Inherit !(Maybe r) ![NKeyName r] !SourcePos
+  -- ^ Inheriting an attribute (binding) into the attribute set from the other scope (attribute set). No denoted scope means to inherit from the closest outside scope.
+  --
+  -- +---------------------------------------------------------------+--------------------+-----------------------+
+  -- | Hask                                                          | Nix                | pseudocode            |
+  -- +===============================================================+====================+=======================+
+  -- | @Inherit Nothing  [StaticKey "a"] SourcePos{}@                | @inherit a;@       | @a = outside.a;@      |
+  -- +---------------------------------------------------------------+--------------------+-----------------------+
+  -- | @Inherit (pure x) [StaticKey "a"] SourcePos{}@                | @inherit (x) a;@   | @a = x.a;@            |
+  -- +---------------------------------------------------------------+--------------------+-----------------------+
+  -- | @Inherit (pure x) [StaticKey "a", StaticKey "b"] SourcePos{}@ | @inherit (x) a b;@ | @a = x.a;@            |
+  -- |                                                               |                    | @b = x.b;@            |
+  -- +---------------------------------------------------------------+--------------------+-----------------------+
+  --
+  -- (2021-07-07 use details):
+  -- Inherits the position of the first name through @unsafeGetAttrPos@. The position of the scope inherited from else - the position of the first member of the binds list.
+  deriving (Generic, Generic1, Typeable, Data, Eq, Ord, Functor,
+            Foldable, Traversable, Show, NFData, Hashable)
+
+instance NFData1 Binding
+
+instance Hashable1 Binding
+
+instance Serialise r => Serialise (Binding r)
+
+instance Binary a => Binary (Binding a)
+
+instance ToJSON a => ToJSON (Binding a)
+instance FromJSON a => FromJSON (Binding a)
 
 
 -- ** @NUnaryOp
