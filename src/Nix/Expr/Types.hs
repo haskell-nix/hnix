@@ -146,6 +146,11 @@ data Params r
 instance IsString (Params r) where
   fromString = Param . fromString
 
+$(deriveShow1 ''Params)
+$(deriveRead1 ''Params)
+$(deriveEq1   ''Params)
+$(deriveOrd1  ''Params)
+
 -- *** Lens traversals
 
 $(makeTraversals ''Params)
@@ -178,6 +183,17 @@ instance Hashable2 Antiquoted where
   liftHashWithSalt2 ha _  salt (Plain a)      = ha (salt `hashWithSalt` (0 :: Int)) a
   liftHashWithSalt2 _  _  salt EscapedNewline =     salt `hashWithSalt` (1 :: Int)
   liftHashWithSalt2 _  hb salt (Antiquoted b) = hb (salt `hashWithSalt` (2 :: Int)) b
+
+$(deriveShow1 ''Antiquoted)
+$(deriveShow2 ''Antiquoted)
+$(deriveRead1 ''Antiquoted)
+$(deriveRead2 ''Antiquoted)
+$(deriveEq1   ''Antiquoted)
+$(deriveEq2   ''Antiquoted)
+$(deriveOrd1  ''Antiquoted)
+$(deriveOrd2  ''Antiquoted)
+$(deriveJSON2 defaultOptions ''Antiquoted)
+
 
 -- *** Lens traversals
 
@@ -218,6 +234,11 @@ data NString r
 instance IsString (NString r) where
   fromString ""     = DoubleQuoted mempty
   fromString string = DoubleQuoted [Plain $ toText string]
+
+$(deriveShow1 ''NString)
+$(deriveRead1 ''NString)
+$(deriveEq1   ''NString)
+$(deriveOrd1  ''NString)
 
 -- *** Lens traversals
 
@@ -367,6 +388,11 @@ data Binding r
     , Functor, Foldable, Traversable
     , Show, Hashable, Hashable1
     )
+
+$(deriveShow1 ''Binding)
+$(deriveEq1   ''Binding)
+$(deriveOrd1  ''Binding)
+--x $(deriveJSON1 defaultOptions ''Binding)
 
 -- *** Lens traversals
 
@@ -533,6 +559,11 @@ data NExprF r
     )
 
 
+$(deriveShow1 ''NExprF)
+$(deriveEq1   ''NExprF)
+$(deriveOrd1  ''NExprF)
+--x $(deriveJSON1 defaultOptions ''NExprF)
+
 -- *** Lens traversals
 
 $(makeTraversals ''NExprF)
@@ -570,41 +601,6 @@ instance TH.Lift NExpr where
 #elif MIN_VERSION_template_haskell(2,16,0)
   liftTyped = TH.unsafeTExpCoerce . TH.lift
 #endif
-
-
--- ** Additional instances
-
-$(deriveShow1 ''Params)
-$(deriveShow1 ''Antiquoted)
-$(deriveShow2 ''Antiquoted)
-$(deriveShow1 ''NString)
-$(deriveShow1 ''Binding)
-$(deriveShow1 ''NExprF)
-
-$(deriveRead1 ''Params)
-$(deriveRead1 ''Antiquoted)
-$(deriveRead2 ''Antiquoted)
-$(deriveRead1 ''NString)
-
-$(deriveEq1 ''Params)
-$(deriveEq1 ''Antiquoted)
-$(deriveEq2 ''Antiquoted)
-$(deriveEq1 ''NString)
-$(deriveEq1 ''Binding)
-$(deriveEq1 ''NExprF)
-
-$(deriveOrd1 ''Params)
-$(deriveOrd1 ''Antiquoted)
-$(deriveOrd2 ''Antiquoted)
-$(deriveOrd1 ''NString)
-$(deriveOrd1 ''Binding)
-$(deriveOrd1 ''NExprF)
-
-$(deriveJSON2 defaultOptions ''Antiquoted)
---x $(deriveJSON1 defaultOptions ''Binding)
---x $(deriveJSON1 defaultOptions ''NExprF)
-
---x $(makeLenses ''Fix)
 
 
 -- ** Methods
