@@ -132,7 +132,7 @@ data Params r
   -- > ParamSet [("x",pure y)]  True  (pure "s")  ~  s@{ x ? y, ... }
   deriving
     ( Eq, Ord, Generic, Generic1
-    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
+    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, ToJSON1, FromJSON, FromJSON1
     , Functor, Foldable, Traversable
     , Show, Hashable, Hashable1
     )
@@ -165,7 +165,8 @@ data Antiquoted (v :: Type) (r :: Type)
   | Antiquoted !r
   deriving
     ( Eq, Ord, Generic, Generic1
-    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
+    , Typeable, Data, NFData, NFData1, Serialise, Binary
+    , ToJSON, ToJSON1, FromJSON, FromJSON1
     , Functor, Foldable, Traversable
     , Show, Read, Hashable, Hashable1
     )
@@ -201,7 +202,7 @@ data NString r
   -- >                                             ${y}''
   deriving
     ( Eq, Ord, Generic, Generic1
-    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
+    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, ToJSON1, FromJSON, FromJSON1
     , Functor, Foldable, Traversable
     , Show, Read, Hashable, Hashable1
     )
@@ -567,10 +568,7 @@ $(deriveOrd1 ''NString)
 $(deriveOrd1 ''Binding)
 $(deriveOrd1 ''NExprF)
 
-$(deriveJSON1 defaultOptions ''Params)
-$(deriveJSON1 defaultOptions ''Antiquoted)
 $(deriveJSON2 defaultOptions ''Antiquoted)
-$(deriveJSON1 defaultOptions ''NString)
 --x $(deriveJSON1 defaultOptions ''Binding)
 --x $(deriveJSON1 defaultOptions ''NExprF)
 
