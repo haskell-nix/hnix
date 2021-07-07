@@ -534,12 +534,12 @@ data NExprF r
   -- See <https://github.com/haskell-nix/hnix/issues/197> for context.
   --
   -- > NSynHole "x"                                ~  ^x
-  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
-            Foldable, Traversable, Show, NFData, Hashable)
-
-instance NFData1 NExprF
-
-instance Serialise r => Serialise (NExprF r)
+  deriving
+    ( Eq, Ord, Generic, Generic1
+    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
+    , Functor, Foldable, Traversable
+    , Show, Hashable, Hashable1
+    )
 
 -- | We make an `IsString` for expressions, where the string is interpreted
 -- as an identifier. This is the most common use-case...
@@ -547,16 +547,9 @@ instance IsString NExpr where
   fromString = Fix . NSym . fromString
 
 #if !MIN_VERSION_hashable(1,3,1)
--- there was none before, remove this in year >2022
+-- Required by Hashable NExprF. There was none this Hashable before, remove this in year >2022
 instance Hashable1 NonEmpty
 #endif
-
-instance Hashable1 NExprF
-
-instance Binary a => Binary (NExprF a)
-
-instance ToJSON a => ToJSON (NExprF a)
-instance FromJSON a => FromJSON (NExprF a)
 
 
 -- *** @NExpr@
