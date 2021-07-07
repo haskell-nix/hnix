@@ -74,15 +74,22 @@ data Binding r
   --
   -- > NamedVar (StaticKey "x" :| [StaticKey "y"]) z SourcePos{}  ~  x.y = z;
   | Inherit !(Maybe r) ![NKeyName r] !SourcePos
-  -- ^ Using a name already in scope, such as @inherit x;@ which is shorthand
-  --   for @x = x;@ or @inherit (x) y;@ which means @y = x.y;@. The
-  --   @unsafeGetAttrPos@ for every name so inherited is the position of the
-  --   first name, whether that be the first argument to this constructor, or
-  --   the first member of the list in the second argument.
+  -- ^ Inheriting an attribute (binding) into the attribute set from the other scope (attribute set). No denoted scope means to inherit from the closest outside scope.
   --
-  -- > Inherit Nothing  [StaticKey "x"] SourcePos{}               ~  inherit x;
-  -- > Inherit (pure x) mempty          SourcePos{}               ~  inherit (x);
-  deriving (Generic, Generic1, Typeable, Data, Ord, Eq, Functor,
+  -- +---------------------------------------------------------------+--------------------+-----------------------+
+  -- | Hask                                                          | Nix                | pseudocode            |
+  -- +===============================================================+====================+=======================+
+  -- | @Inherit Nothing  [StaticKey "a"] SourcePos{}@                | @inherit a;@       | @a = outside.a;@      |
+  -- +---------------------------------------------------------------+--------------------+-----------------------+
+  -- | @Inherit (pure x) [StaticKey "a"] SourcePos{}@                | @inherit (x) a;@   | @a = x.a;@            |
+  -- +---------------------------------------------------------------+--------------------+-----------------------+
+  -- | @Inherit (pure x) [StaticKey "a", StaticKey "b"] SourcePos{}@ | @inherit (x) a b;@ | @a = x.a;@            |
+  -- |                                                               |                    | @b = x.b;@            |
+  -- +---------------------------------------------------------------+--------------------+-----------------------+
+  --
+  -- (2021-07-07 use details):
+  -- Inherits the position of the first name through @unsafeGetAttrPos@. The position of the scope inherited from else - the position of the first member of the binds list.
+  deriving (Generic, Generic1, Typeable, Data, Eq, Ord, Functor,
             Foldable, Traversable, Show, NFData, Hashable)
 
 instance NFData1 Binding
