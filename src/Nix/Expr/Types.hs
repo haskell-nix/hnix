@@ -217,9 +217,11 @@ data NKeyName r
   | StaticKey !VarName
   -- ^
   -- > StaticKey "x"                                     ~  x
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData, Hashable)
-
-instance Serialise r => Serialise (NKeyName r)
+  deriving
+    ( Eq, Ord, Generic
+    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Show, Read, Hashable
+    )
 
 instance Serialise Pos where
   encode = Serialise.encode . unPos
@@ -303,11 +305,6 @@ instance Traversable NKeyName where
     DynamicKey (Antiquoted e  ) -> DynamicKey . Antiquoted <$> f e
     DynamicKey EscapedNewline   -> pure $ DynamicKey EscapedNewline
     StaticKey  key              -> pure $ StaticKey key
-
-instance Binary a => Binary (NKeyName a)
-
-instance ToJSON a => ToJSON (NKeyName a)
-instance FromJSON a => FromJSON (NKeyName a)
 
 
 -- ** @NAttrPath@
