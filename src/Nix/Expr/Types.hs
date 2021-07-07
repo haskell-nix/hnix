@@ -345,19 +345,12 @@ data Binding r
   --
   -- (2021-07-07 use details):
   -- Inherits the position of the first name through @unsafeGetAttrPos@. The position of the scope inherited from else - the position of the first member of the binds list.
-  deriving (Generic, Generic1, Typeable, Data, Eq, Ord, Functor,
-            Foldable, Traversable, Show, NFData, Hashable)
-
-instance NFData1 Binding
-
-instance Hashable1 Binding
-
-instance Serialise r => Serialise (Binding r)
-
-instance Binary a => Binary (Binding a)
-
-instance ToJSON a => ToJSON (Binding a)
-instance FromJSON a => FromJSON (Binding a)
+  deriving
+    ( Eq, Ord, Generic, Generic1
+    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
+    , Functor, Foldable, Traversable
+    , Show, Hashable, Hashable1
+    )
 
 
 -- ** @NRecordType@
