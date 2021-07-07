@@ -360,15 +360,12 @@ data Binding r
 data NRecordType
   = NNonRecursive  -- ^ >     { ... }
   | NRecursive     -- ^ > rec { ... }
-  deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
-            NFData, Hashable)
+  deriving
+    ( Eq, Ord, Enum, Bounded, Generic
+    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Show, Read, Hashable
+    )
 
-instance Serialise NRecordType
-
-instance Binary NRecordType
-
-instance ToJSON NRecordType
-instance FromJSON NRecordType
 
 -- ** @NUnaryOp
 
