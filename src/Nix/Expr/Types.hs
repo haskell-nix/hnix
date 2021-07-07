@@ -373,15 +373,11 @@ data NRecordType
 data NUnaryOp
   = NNeg  -- ^ @-@
   | NNot  -- ^ @!@
-  deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
-            NFData, Hashable)
-
-instance Serialise NUnaryOp
-
-instance Binary NUnaryOp
-
-instance ToJSON NUnaryOp
-instance FromJSON NUnaryOp
+  deriving
+    ( Eq, Ord, Enum, Bounded, Generic
+    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Show, Read, Hashable
+    )
 
 
 -- ** @NBinaryOp@
