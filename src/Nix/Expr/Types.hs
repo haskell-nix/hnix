@@ -318,6 +318,11 @@ type NAttrPath r = NonEmpty (NKeyName r)
 
 -- ** @Binding@
 
+#if !MIN_VERSION_hashable(1,3,1)
+-- Required by Hashable Binding deriving. There was none of this Hashable instance before mentioned version, remove this in year >2022
+instance Hashable1 NonEmpty
+#endif
+
 -- | A single line of the bindings section of a let expression or of a set.
 data Binding r
   = NamedVar !(NAttrPath r) !r !SourcePos
@@ -521,11 +526,6 @@ data NExprF r
 -- as an identifier. This is the most common use-case...
 instance IsString NExpr where
   fromString = Fix . NSym . fromString
-
-#if !MIN_VERSION_hashable(1,3,1)
--- Required by Hashable NExprF. There was none this Hashable before, remove this in year >2022
-instance Hashable1 NonEmpty
-#endif
 
 
 -- *** @NExpr@
