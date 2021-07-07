@@ -87,41 +87,6 @@ instance FromJSON SourcePos
 type VarName = Text
 
 
--- ** @Antiquoted@
-
--- | 'Antiquoted' represents an expression that is either
--- antiquoted (surrounded by ${...}) or plain (not antiquoted).
-data Antiquoted (v :: Type) (r :: Type)
-  = Plain !v
-  | EscapedNewline
-  -- ^ 'EscapedNewline' corresponds to the special newline form
-  --
-  -- > ''\n
-  --
-  -- in an indented string. It is equivalent to a single newline character:
-  --
-  -- > ''''\n''  ≡  "\n"
-  | Antiquoted !r
-  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Foldable,
-            Traversable, Show, Read, NFData, Hashable)
-
-instance Hashable v => Hashable1 (Antiquoted v)
-
-instance Hashable2 Antiquoted where
-  liftHashWithSalt2 ha _  salt (Plain a)      = ha (salt `hashWithSalt` (0 :: Int)) a
-  liftHashWithSalt2 _  _  salt EscapedNewline =     salt `hashWithSalt` (1 :: Int)
-  liftHashWithSalt2 _  hb salt (Antiquoted b) = hb (salt `hashWithSalt` (2 :: Int)) b
-
-instance NFData v => NFData1 (Antiquoted v)
-
-instance (Serialise v, Serialise r) => Serialise (Antiquoted v r)
-
-instance (Binary v, Binary a) => Binary (Antiquoted v a)
-
-instance (ToJSON v, ToJSON a) => ToJSON (Antiquoted v a)
-instance (FromJSON v, FromJSON a) => FromJSON (Antiquoted v a)
-
-
 -- ** @Params@
 
 -- | @Params@ represents all the ways the formal parameters to a
@@ -163,6 +128,41 @@ instance FromJSON a => FromJSON (Params a)
 -- This uses an association list because nix XML serialization preserves the
 -- order of the param set.
 type ParamSet r = [(VarName, Maybe r)]
+
+
+-- ** @Antiquoted@
+
+-- | 'Antiquoted' represents an expression that is either
+-- antiquoted (surrounded by ${...}) or plain (not antiquoted).
+data Antiquoted (v :: Type) (r :: Type)
+  = Plain !v
+  | EscapedNewline
+  -- ^ 'EscapedNewline' corresponds to the special newline form
+  --
+  -- > ''\n
+  --
+  -- in an indented string. It is equivalent to a single newline character:
+  --
+  -- > ''''\n''  ≡  "\n"
+  | Antiquoted !r
+  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Foldable,
+            Traversable, Show, Read, NFData, Hashable)
+
+instance Hashable v => Hashable1 (Antiquoted v)
+
+instance Hashable2 Antiquoted where
+  liftHashWithSalt2 ha _  salt (Plain a)      = ha (salt `hashWithSalt` (0 :: Int)) a
+  liftHashWithSalt2 _  _  salt EscapedNewline =     salt `hashWithSalt` (1 :: Int)
+  liftHashWithSalt2 _  hb salt (Antiquoted b) = hb (salt `hashWithSalt` (2 :: Int)) b
+
+instance NFData v => NFData1 (Antiquoted v)
+
+instance (Serialise v, Serialise r) => Serialise (Antiquoted v r)
+
+instance (Binary v, Binary a) => Binary (Antiquoted v a)
+
+instance (ToJSON v, ToJSON a) => ToJSON (Antiquoted v a)
+instance (FromJSON v, FromJSON a) => FromJSON (Antiquoted v a)
 
 
 -- ** @NString@
