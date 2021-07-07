@@ -15,11 +15,11 @@ jobs:
 
   build10:
     name: "GHC"
-    runs-on: macOS-latest
+    runs-on: macos-latest
     strategy:
       matrix:
         # It is dev env, so trying to stick to last GHC.
-        ghc: [ "8.10" ]
+        ghc: [ "9.0" ]
     steps:
 
       - name: "Git checkout"
