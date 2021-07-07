@@ -17,6 +17,8 @@
 -- This module is a beginning of a deep embedding (term) of a Nix language into Haskell.
 -- Shallow/deep embedding brief:
 -- <https://web.archive.org/web/20201112031804/https://alessandrovermeulen.me/2013/07/13/the-difference-between-shallow-and-deep-embedding/>
+--
+-- (additiona info for dev): Big use of TemplateHaskell in the module requires proper (top-down) organization of declarations
 module Nix.Expr.Types where
 
 import qualified Codec.Serialise                as Serialise
@@ -114,6 +116,10 @@ type VarName = Text
 
 -- ** @Params@
 
+-- This uses an association list because nix XML serialization preserves the
+-- order of the param set.
+type ParamSet r = [(VarName, Maybe r)]
+
 -- | @Params@ represents all the ways the formal parameters to a
 -- function can be represented.
 data Params r
@@ -139,13 +145,6 @@ data Params r
 
 instance IsString (Params r) where
   fromString = Param . fromString
-
-
--- *** @ParamSet@
-
--- This uses an association list because nix XML serialization preserves the
--- order of the param set.
-type ParamSet r = [(VarName, Maybe r)]
 
 
 -- ** @Antiquoted@
@@ -505,16 +504,16 @@ data NExprF r
     , Show, Hashable, Hashable1
     )
 
--- | We make an `IsString` for expressions, where the string is interpreted
--- as an identifier. This is the most common use-case...
-instance IsString NExpr where
-  fromString = Fix . NSym . fromString
-
 
 -- *** @NExpr@
 
 -- | The monomorphic expression type is a fixed point of the polymorphic one.
 type NExpr = Fix NExprF
+
+-- | We make an `IsString` for expressions, where the string is interpreted
+-- as an identifier. This is the most common use-case...
+instance IsString NExpr where
+  fromString = Fix . NSym . fromString
 
 instance Serialise NExpr
 
