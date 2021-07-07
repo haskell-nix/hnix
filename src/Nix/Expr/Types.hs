@@ -590,6 +590,18 @@ instance TH.Lift NExpr where
 
 -- ** Additional instances
 
+$(deriveShow1 ''Params)
+$(deriveShow1 ''Antiquoted)
+$(deriveShow2 ''Antiquoted)
+$(deriveShow1 ''NString)
+$(deriveShow1 ''Binding)
+$(deriveShow1 ''NExprF)
+
+$(deriveRead1 ''Params)
+$(deriveRead1 ''Antiquoted)
+$(deriveRead2 ''Antiquoted)
+$(deriveRead1 ''NString)
+
 $(deriveEq1 ''Params)
 $(deriveEq1 ''Antiquoted)
 $(deriveEq2 ''Antiquoted)
@@ -603,18 +615,6 @@ $(deriveOrd2 ''Antiquoted)
 $(deriveOrd1 ''NString)
 $(deriveOrd1 ''Binding)
 $(deriveOrd1 ''NExprF)
-
-$(deriveRead1 ''Params)
-$(deriveRead1 ''Antiquoted)
-$(deriveRead2 ''Antiquoted)
-$(deriveRead1 ''NString)
-
-$(deriveShow1 ''Params)
-$(deriveShow1 ''Antiquoted)
-$(deriveShow2 ''Antiquoted)
-$(deriveShow1 ''NString)
-$(deriveShow1 ''Binding)
-$(deriveShow1 ''NExprF)
 
 $(deriveJSON1 defaultOptions ''Params)
 $(deriveJSON1 defaultOptions ''Antiquoted)
