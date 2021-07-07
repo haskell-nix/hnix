@@ -134,7 +134,7 @@ type ParamSet r = [(VarName, Maybe r)]
 
 -- | 'Antiquoted' represents an expression that is either
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
-data Antiquoted (v :: *) (r :: *)
+data Antiquoted (v :: Type) (r :: Type)
   = Plain !v
   | EscapedNewline
   -- ^ 'EscapedNewline' corresponds to the special newline form

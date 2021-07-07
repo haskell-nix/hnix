@@ -18,7 +18,7 @@ import           Control.Monad.Catch            ( MonadCatch
 -- | The fixpoint combinator.
 -- Courtesy of Gregory Malecha.
 -- https://gist.github.com/gmalecha/ceb3778b9fdaa4374976e325ac8feced
-newtype Fix1 (t :: (k -> *) -> k -> *) (a :: k) = Fix1 { unFix1 :: t (Fix1 t) a }
+newtype Fix1 (t :: (k -> Type) -> k -> Type) (a :: k) = Fix1 { unFix1 :: t (Fix1 t) a }
 
 deriving instance Functor (t (Fix1 t))
   => Functor (Fix1 t)
@@ -44,7 +44,7 @@ deriving instance MonadReader e (t (Fix1 t))
 deriving instance MonadState s (t (Fix1 t))
   => MonadState s (Fix1 t)
 
-newtype Fix1T (t :: (k -> *) -> (* -> *) -> k -> *) (m :: * -> *) (a :: k)
+newtype Fix1T (t :: (k -> Type) -> (Type -> Type) -> k -> Type) (m :: Type -> Type) (a :: k)
   = Fix1T { unFix1T :: t (Fix1T t m) m a }
 
 deriving instance Functor (t (Fix1T t m) m)

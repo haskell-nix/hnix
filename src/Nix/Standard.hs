@@ -59,7 +59,7 @@ newtype StdCited m a =
     , ComonadEnv [Provenance m (StdValue m)]
     )
 
-newtype StdThunk (m :: * -> *) =
+newtype StdThunk (m :: Type -> Type) =
   StdThunk
     { _stdThunk :: StdCited m (NThunkF m (StdValue m)) }
 

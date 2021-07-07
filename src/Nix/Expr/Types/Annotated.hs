@@ -90,7 +90,7 @@ pattern AnnFP ann f = Compose (Ann ann f)
 -- Fix composes units of (annotations & the annotated) into one object.
 -- Giving annotated expression.
 pattern AnnE
-  :: forall ann (f :: * -> *)
+  :: forall ann (f :: Type -> Type)
   . ann
   -> f (Fix (AnnF ann f))
   -> Fix (AnnF ann f)
