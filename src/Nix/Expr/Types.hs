@@ -146,6 +146,10 @@ data Params r
 instance IsString (Params r) where
   fromString = Param . fromString
 
+-- *** Lens traversals
+
+$(makeTraversals ''Params)
+
 
 -- ** @Antiquoted@
 
@@ -174,6 +178,10 @@ instance Hashable2 Antiquoted where
   liftHashWithSalt2 ha _  salt (Plain a)      = ha (salt `hashWithSalt` (0 :: Int)) a
   liftHashWithSalt2 _  _  salt EscapedNewline =     salt `hashWithSalt` (1 :: Int)
   liftHashWithSalt2 _  hb salt (Antiquoted b) = hb (salt `hashWithSalt` (2 :: Int)) b
+
+-- *** Lens traversals
+
+$(makeTraversals ''Antiquoted)
 
 
 -- ** @NString@
@@ -210,6 +218,10 @@ data NString r
 instance IsString (NString r) where
   fromString ""     = DoubleQuoted mempty
   fromString string = DoubleQuoted [Plain $ toText string]
+
+-- *** Lens traversals
+
+$(makeTraversals ''NString)
 
 
 -- ** @NKeyName@
@@ -306,6 +318,10 @@ instance Traversable NKeyName where
     DynamicKey EscapedNewline   -> pure $ DynamicKey EscapedNewline
     StaticKey  key              -> pure $ StaticKey key
 
+-- *** Lens traversals
+
+$(makeTraversals ''NKeyName)
+
 
 -- ** @NAttrPath@
 
@@ -352,6 +368,10 @@ data Binding r
     , Show, Hashable, Hashable1
     )
 
+-- *** Lens traversals
+
+$(makeTraversals ''Binding)
+
 
 -- ** @NRecordType@
 
@@ -367,7 +387,7 @@ data NRecordType
     )
 
 
--- ** @NUnaryOp
+-- ** @NUnaryOp@
 
 -- | There are two unary operations: logical not and integer negation.
 data NUnaryOp
@@ -378,6 +398,10 @@ data NUnaryOp
     , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
     , Show, Read, Hashable
     )
+
+-- *** Lens traversals
+
+$(makeTraversals ''NUnaryOp)
 
 
 -- ** @NBinaryOp@
@@ -407,6 +431,10 @@ data NBinaryOp
     , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
     , Show, Read, Hashable
     )
+
+-- *** Lens traversals
+
+$(makeTraversals ''NBinaryOp)
 
 
 -- ** @NExprF@ - Nix expressions, base functor
@@ -505,6 +533,11 @@ data NExprF r
     )
 
 
+-- *** Lens traversals
+
+$(makeTraversals ''NExprF)
+
+
 -- *** @NExpr@
 
 -- | The monomorphic expression type is a fixed point of the polymorphic one.
@@ -570,15 +603,6 @@ $(deriveOrd1 ''NExprF)
 $(deriveJSON2 defaultOptions ''Antiquoted)
 --x $(deriveJSON1 defaultOptions ''Binding)
 --x $(deriveJSON1 defaultOptions ''NExprF)
-
-$(makeTraversals ''Params)
-$(makeTraversals ''Antiquoted)
-$(makeTraversals ''NString)
-$(makeTraversals ''NKeyName)
-$(makeTraversals ''Binding)
-$(makeTraversals ''NUnaryOp)
-$(makeTraversals ''NBinaryOp)
-$(makeTraversals ''NExprF)
 
 --x $(makeLenses ''Fix)
 
