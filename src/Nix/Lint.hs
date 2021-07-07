@@ -1,4 +1,5 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -48,7 +49,7 @@ data TAtom
   | TNull
   deriving (Show, Eq, Ord)
 
-data NTypeF (m :: * -> *) r
+data NTypeF (m :: Type -> Type) r
   = TConstant [TAtom]
   | TStr
   | TList r
@@ -84,9 +85,9 @@ data NSymbolicF r
   | NMany [r]
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
-type SThunk (m :: * -> *) = NThunkF m (Symbolic m)
+type SThunk (m :: Type -> Type) = NThunkF m (Symbolic m)
 
-type SValue (m :: * -> *) = Ref m (NSymbolicF (NTypeF m (Symbolic m)))
+type SValue (m :: Type -> Type) = Ref m (NSymbolicF (NTypeF m (Symbolic m)))
 
 data Symbolic m = SV { getSV :: SValue m } | ST { getST :: SThunk m }
 
@@ -406,8 +407,9 @@ lintBinaryOp op lsym rarg =
           NUpdate -> [TSet mempty]
 
           NConcat -> [TList y]
-
+#if __GLASGOW_HASKELL__ < 900
           _ -> fail "Should not be possible"  -- symerr or this fun signature should be changed to work in type scope
+#endif
  where
   check lsym rsym xs =
     do

@@ -791,7 +791,7 @@ deriving instance (Comonad f, Show t) => Show (ValueFrame t f m)
 
 -- * @MonadDataContext@
 
-type MonadDataContext f (m :: * -> *)
+type MonadDataContext f (m :: Type -> Type)
   = (Comonad f, Applicative f, Traversable f, Monad m)
 
 -- * @MonadDataErrorContext@

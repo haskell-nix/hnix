@@ -6,7 +6,6 @@ module Nix.Thunk where
 
 import           Control.Monad.Trans.Writer ( WriterT )
 import qualified Text.Show
-import qualified Data.Kind
 
 
 -- ** @class MonadThunkId@ & @instances@
@@ -20,7 +19,7 @@ class
   )
   => MonadThunkId m
  where
-  type ThunkId m :: Data.Kind.Type
+  type ThunkId m :: Type
 
   freshId :: m (ThunkId m)
   default freshId

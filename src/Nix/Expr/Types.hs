@@ -17,6 +17,8 @@
 -- This module is a beginning of a deep embedding (term) of a Nix language into Haskell.
 -- Shallow/deep embedding brief:
 -- <https://web.archive.org/web/20201112031804/https://alessandrovermeulen.me/2013/07/13/the-difference-between-shallow-and-deep-embedding/>
+--
+-- (additiona info for dev): Big use of TemplateHaskell in the module requires proper (top-down) organization of declarations
 module Nix.Expr.Types where
 
 import qualified Codec.Serialise                as Serialise
@@ -27,12 +29,10 @@ import           Data.Aeson.TH
 import qualified Data.Binary                   as Binary
 import           Data.Binary                    ( Binary )
 import           Data.Data
-import           Data.Eq.Deriving
 import           Data.Fix
 import           Data.Functor.Classes
 import           Data.Hashable.Lifted
 import qualified Data.List.NonEmpty            as NE
-import           Data.Ord.Deriving
 import qualified Text.Show
 import           Data.Traversable
 import           GHC.Generics
@@ -44,8 +44,10 @@ import           Text.Megaparsec.Pos            ( SourcePos(SourcePos)
                                                 , mkPos
                                                 , unPos
                                                 )
-import           Text.Read.Deriving
 import           Text.Show.Deriving
+import           Text.Read.Deriving
+import           Data.Eq.Deriving
+import           Data.Ord.Deriving
 import qualified Type.Reflection               as Reflection
 import           Type.Reflection                ( eqTypeRep )
 import           Nix.Atoms
@@ -54,6 +56,52 @@ import           Nix.Utils
 -- NOTE: Remove package @th-lift-instances@ removing this
 import           Instances.TH.Lift              ()  -- importing Lift Text fo GHC 8.6
 #endif
+
+
+-- * Utilitary: orphan instances
+
+-- Placed here because TH inference depends on declaration sequence.
+
+-- Upstreaming so far was not pursued.
+
+instance Serialise Pos where
+  encode = Serialise.encode . unPos
+  decode = mkPos <$> Serialise.decode
+
+instance Serialise SourcePos where
+  encode (SourcePos f l c) =
+    Serialise.encode f <>
+    Serialise.encode l <>
+    Serialise.encode c
+  decode =
+    liftA3 SourcePos
+      Serialise.decode
+      Serialise.decode
+      Serialise.decode
+
+instance Hashable Pos where
+  hashWithSalt salt = hashWithSalt salt . unPos
+
+instance Hashable SourcePos where
+  hashWithSalt salt (SourcePos f l c) =
+    salt
+      `hashWithSalt` f
+      `hashWithSalt` l
+      `hashWithSalt` c
+
+instance Binary Pos where
+  put = Binary.put . unPos
+  get = mkPos <$> Binary.get
+instance Binary SourcePos
+
+instance ToJSON Pos where
+  toJSON = toJSON . unPos
+instance ToJSON SourcePos
+
+instance FromJSON Pos where
+  parseJSON = fmap mkPos . parseJSON
+instance FromJSON SourcePos
+
 
 -- * Components of Nix expressions
 
@@ -65,34 +113,12 @@ import           Instances.TH.Lift              ()  -- importing Lift Text fo GH
 
 type VarName = Text
 
--- ** @Binding@
-
--- | A single line of the bindings section of a let expression or of a set.
-data Binding r
-  = NamedVar !(NAttrPath r) !r !SourcePos
-  -- ^ An explicit naming.
-  --
-  -- > NamedVar (StaticKey "x" :| [StaticKey "y"]) z SourcePos{}  ~  x.y = z;
-  | Inherit !(Maybe r) ![NKeyName r] !SourcePos
-  -- ^ Using a name already in scope, such as @inherit x;@ which is shorthand
-  --   for @x = x;@ or @inherit (x) y;@ which means @y = x.y;@. The
-  --   @unsafeGetAttrPos@ for every name so inherited is the position of the
-  --   first name, whether that be the first argument to this constructor, or
-  --   the first member of the list in the second argument.
-  --
-  -- > Inherit Nothing  [StaticKey "x"] SourcePos{}               ~  inherit x;
-  -- > Inherit (pure x) mempty          SourcePos{}               ~  inherit (x);
-  deriving (Generic, Generic1, Typeable, Data, Ord, Eq, Functor,
-            Foldable, Traversable, Show, NFData, Hashable)
-
-instance NFData1 Binding
-
-instance Hashable1 Binding
-
-instance Serialise r => Serialise (Binding r)
-
 
 -- ** @Params@
+
+-- This uses an association list because nix XML serialization preserves the
+-- order of the param set.
+type ParamSet r = [(VarName, Maybe r)]
 
 -- | @Params@ represents all the ways the formal parameters to a
 -- function can be represented.
@@ -111,30 +137,30 @@ data Params r
   -- > ParamSet [("x",Nothing)] False Nothing     ~  { x }
   -- > ParamSet [("x",pure y)]  True  (pure "s")  ~  s@{ x ? y, ... }
   deriving
-    (Ord, Eq, Generic, Generic1, Typeable, Data, NFData, Hashable, Show,
-    Functor, Foldable, Traversable)
-
-instance Hashable1 Params
-
-instance NFData1 Params
-
-instance Serialise r => Serialise (Params r)
+    ( Eq, Ord, Generic, Generic1
+    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, ToJSON1, FromJSON, FromJSON1
+    , Functor, Foldable, Traversable
+    , Show, Hashable, Hashable1
+    )
 
 instance IsString (Params r) where
   fromString = Param . fromString
 
--- *** @ParamSet@
+$(deriveShow1 ''Params)
+$(deriveRead1 ''Params)
+$(deriveEq1   ''Params)
+$(deriveOrd1  ''Params)
 
--- This uses an association list because nix XML serialization preserves the
--- order of the param set.
-type ParamSet r = [(VarName, Maybe r)]
+-- *** Lens traversals
+
+$(makeTraversals ''Params)
 
 
 -- ** @Antiquoted@
 
 -- | 'Antiquoted' represents an expression that is either
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
-data Antiquoted (v :: *) (r :: *)
+data Antiquoted (v :: Type) (r :: Type)
   = Plain !v
   | EscapedNewline
   -- ^ 'EscapedNewline' corresponds to the special newline form
@@ -145,19 +171,33 @@ data Antiquoted (v :: *) (r :: *)
   --
   -- > ''''\n''  ≡  "\n"
   | Antiquoted !r
-  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Foldable,
-            Traversable, Show, Read, NFData, Hashable)
-
-instance Hashable v => Hashable1 (Antiquoted v)
+  deriving
+    ( Eq, Ord, Generic, Generic1
+    , Typeable, Data, NFData, NFData1, Serialise, Binary
+    , ToJSON, ToJSON1, FromJSON, FromJSON1
+    , Functor, Foldable, Traversable
+    , Show, Read, Hashable, Hashable1
+    )
 
 instance Hashable2 Antiquoted where
   liftHashWithSalt2 ha _  salt (Plain a)      = ha (salt `hashWithSalt` (0 :: Int)) a
   liftHashWithSalt2 _  _  salt EscapedNewline =     salt `hashWithSalt` (1 :: Int)
   liftHashWithSalt2 _  hb salt (Antiquoted b) = hb (salt `hashWithSalt` (2 :: Int)) b
 
-instance NFData v => NFData1 (Antiquoted v)
+$(deriveShow1 ''Antiquoted)
+$(deriveShow2 ''Antiquoted)
+$(deriveRead1 ''Antiquoted)
+$(deriveRead2 ''Antiquoted)
+$(deriveEq1   ''Antiquoted)
+$(deriveEq2   ''Antiquoted)
+$(deriveOrd1  ''Antiquoted)
+$(deriveOrd2  ''Antiquoted)
+$(deriveJSON2 defaultOptions ''Antiquoted)
 
-instance (Serialise v, Serialise r) => Serialise (Antiquoted v r)
+
+-- *** Lens traversals
+
+$(makeTraversals ''Antiquoted)
 
 
 -- ** @NString@
@@ -183,19 +223,26 @@ data NString r
   -- > Indented 0 [Plain "x\n ",Antiquoted y]  ~  ''
   -- >                                            x
   -- >                                             ${y}''
-  deriving (Eq, Ord, Generic, Generic1, Typeable, Data, Functor, Foldable,
-            Traversable, Show, Read, NFData, Hashable)
-
-instance Hashable1 NString
-
-instance NFData1 NString
-
-instance Serialise r => Serialise (NString r)
+  deriving
+    ( Eq, Ord, Generic, Generic1
+    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, ToJSON1, FromJSON, FromJSON1
+    , Functor, Foldable, Traversable
+    , Show, Read, Hashable, Hashable1
+    )
 
 -- | For the the 'IsString' instance, we use a plain doublequoted string.
 instance IsString (NString r) where
   fromString ""     = DoubleQuoted mempty
   fromString string = DoubleQuoted [Plain $ toText string]
+
+$(deriveShow1 ''NString)
+$(deriveRead1 ''NString)
+$(deriveEq1   ''NString)
+$(deriveOrd1  ''NString)
+
+-- *** Lens traversals
+
+$(makeTraversals ''NString)
 
 
 -- ** @NKeyName@
@@ -228,34 +275,11 @@ data NKeyName r
   | StaticKey !VarName
   -- ^
   -- > StaticKey "x"                                     ~  x
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, Read, NFData, Hashable)
-
-instance Serialise r => Serialise (NKeyName r)
-
-instance Serialise Pos where
-  encode = Serialise.encode . unPos
-  decode = mkPos <$> Serialise.decode
-
-instance Serialise SourcePos where
-  encode (SourcePos f l c) =
-    Serialise.encode f <>
-    Serialise.encode l <>
-    Serialise.encode c
-  decode =
-    liftA3 SourcePos
-      Serialise.decode
-      Serialise.decode
-      Serialise.decode
-
-instance Hashable Pos where
-  hashWithSalt salt = hashWithSalt salt . unPos
-
-instance Hashable SourcePos where
-  hashWithSalt salt (SourcePos f l c) =
-    salt
-      `hashWithSalt` f
-      `hashWithSalt` l
-      `hashWithSalt` c
+  deriving
+    ( Eq, Ord, Generic
+    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Show, Read, Hashable
+    )
 
 instance NFData1 NKeyName where
   liftRnf _ (StaticKey  !_            ) = ()
@@ -315,6 +339,10 @@ instance Traversable NKeyName where
     DynamicKey EscapedNewline   -> pure $ DynamicKey EscapedNewline
     StaticKey  key              -> pure $ StaticKey key
 
+-- *** Lens traversals
+
+$(makeTraversals ''NKeyName)
+
 
 -- ** @NAttrPath@
 
@@ -324,16 +352,82 @@ instance Traversable NKeyName where
 -- > StaticKey "x" :| [DynamicKey (Antiquoted y)]  ~  x.${y}
 type NAttrPath r = NonEmpty (NKeyName r)
 
--- ** @NUnaryOp
+
+-- ** @Binding@
+
+#if !MIN_VERSION_hashable(1,3,1)
+-- Required by Hashable Binding deriving. There was none of this Hashable instance before mentioned version, remove this in year >2022
+instance Hashable1 NonEmpty
+#endif
+
+-- | A single line of the bindings section of a let expression or of a set.
+data Binding r
+  = NamedVar !(NAttrPath r) !r !SourcePos
+  -- ^ An explicit naming.
+  --
+  -- > NamedVar (StaticKey "x" :| [StaticKey "y"]) z SourcePos{}  ~  x.y = z;
+  | Inherit !(Maybe r) ![NKeyName r] !SourcePos
+  -- ^ Inheriting an attribute (binding) into the attribute set from the other scope (attribute set). No denoted scope means to inherit from the closest outside scope.
+  --
+  -- +---------------------------------------------------------------+--------------------+-----------------------+
+  -- | Hask                                                          | Nix                | pseudocode            |
+  -- +===============================================================+====================+=======================+
+  -- | @Inherit Nothing  [StaticKey "a"] SourcePos{}@                | @inherit a;@       | @a = outside.a;@      |
+  -- +---------------------------------------------------------------+--------------------+-----------------------+
+  -- | @Inherit (pure x) [StaticKey "a"] SourcePos{}@                | @inherit (x) a;@   | @a = x.a;@            |
+  -- +---------------------------------------------------------------+--------------------+-----------------------+
+  -- | @Inherit (pure x) [StaticKey "a", StaticKey "b"] SourcePos{}@ | @inherit (x) a b;@ | @a = x.a;@            |
+  -- |                                                               |                    | @b = x.b;@            |
+  -- +---------------------------------------------------------------+--------------------+-----------------------+
+  --
+  -- (2021-07-07 use details):
+  -- Inherits the position of the first name through @unsafeGetAttrPos@. The position of the scope inherited from else - the position of the first member of the binds list.
+  deriving
+    ( Eq, Ord, Generic, Generic1
+    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
+    , Functor, Foldable, Traversable
+    , Show, Hashable, Hashable1
+    )
+
+$(deriveShow1 ''Binding)
+$(deriveEq1   ''Binding)
+$(deriveOrd1  ''Binding)
+--x $(deriveJSON1 defaultOptions ''Binding)
+
+-- *** Lens traversals
+
+$(makeTraversals ''Binding)
+
+
+-- ** @NRecordType@
+
+-- | 'NRecordType' distinguishes between recursive and non-recursive attribute
+-- sets.
+data NRecordType
+  = NNonRecursive  -- ^ >     { ... }
+  | NRecursive     -- ^ > rec { ... }
+  deriving
+    ( Eq, Ord, Enum, Bounded, Generic
+    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Show, Read, Hashable
+    )
+
+
+-- ** @NUnaryOp@
 
 -- | There are two unary operations: logical not and integer negation.
 data NUnaryOp
   = NNeg  -- ^ @-@
   | NNot  -- ^ @!@
-  deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
-            NFData, Hashable)
+  deriving
+    ( Eq, Ord, Enum, Bounded, Generic
+    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Show, Read, Hashable
+    )
 
-instance Serialise NUnaryOp
+-- *** Lens traversals
+
+$(makeTraversals ''NUnaryOp)
 
 
 -- ** @NBinaryOp@
@@ -358,23 +452,16 @@ data NBinaryOp
   | NApp     -- ^ Apply a function to an argument.
              --
              -- > NBinary NApp f x  ~  f x
-  deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
-            NFData, Hashable)
+  deriving
+    ( Eq, Ord, Enum, Bounded, Generic
+    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Show, Read, Hashable
+    )
 
-instance Serialise NBinaryOp
+-- *** Lens traversals
 
+$(makeTraversals ''NBinaryOp)
 
--- ** @NRecordType@
-
--- | 'NRecordType' distinguishes between recursive and non-recursive attribute
--- sets.
-data NRecordType
-  = NNonRecursive  -- ^ >     { ... }
-  | NRecursive     -- ^ > rec { ... }
-  deriving (Eq, Ord, Enum, Bounded, Generic, Typeable, Data, Show, Read,
-            NFData, Hashable)
-
-instance Serialise NRecordType
 
 -- ** @NExprF@ - Nix expressions, base functor
 
@@ -464,30 +551,33 @@ data NExprF r
   -- See <https://github.com/haskell-nix/hnix/issues/197> for context.
   --
   -- > NSynHole "x"                                ~  ^x
-  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor,
-            Foldable, Traversable, Show, NFData, Hashable)
+  deriving
+    ( Eq, Ord, Generic, Generic1
+    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
+    , Functor, Foldable, Traversable
+    , Show, Hashable, Hashable1
+    )
 
-instance NFData1 NExprF
 
-instance Serialise r => Serialise (NExprF r)
+$(deriveShow1 ''NExprF)
+$(deriveEq1   ''NExprF)
+$(deriveOrd1  ''NExprF)
+--x $(deriveJSON1 defaultOptions ''NExprF)
 
--- | We make an `IsString` for expressions, where the string is interpreted
--- as an identifier. This is the most common use-case...
-instance IsString NExpr where
-  fromString = Fix . NSym . fromString
+-- *** Lens traversals
 
-#if !MIN_VERSION_hashable(1,3,1)
--- there was none before, remove this in year >2022
-instance Hashable1 NonEmpty
-#endif
-
-instance Hashable1 NExprF
+$(makeTraversals ''NExprF)
 
 
 -- *** @NExpr@
 
 -- | The monomorphic expression type is a fixed point of the polymorphic one.
 type NExpr = Fix NExprF
+
+-- | We make an `IsString` for expressions, where the string is interpreted
+-- as an identifier. This is the most common use-case...
+instance IsString NExpr where
+  fromString = Fix . NSym . fromString
 
 instance Serialise NExpr
 
@@ -513,96 +603,18 @@ instance TH.Lift NExpr where
 #endif
 
 
--- ** Additional instances
-
-$(deriveEq1 ''NExprF)
-$(deriveEq1 ''NString)
-$(deriveEq1 ''Binding)
-$(deriveEq1 ''Params)
-$(deriveEq1 ''Antiquoted)
-$(deriveEq2 ''Antiquoted)
-
-$(deriveOrd1 ''NExprF)
-$(deriveOrd1 ''NString)
-$(deriveOrd1 ''Binding)
-$(deriveOrd1 ''Params)
-$(deriveOrd1 ''Antiquoted)
-$(deriveOrd2 ''Antiquoted)
-
-$(deriveRead1 ''NString)
-$(deriveRead1 ''Params)
-$(deriveRead1 ''Antiquoted)
-$(deriveRead2 ''Antiquoted)
-
-$(deriveShow1 ''NExprF)
-$(deriveShow1 ''NString)
-$(deriveShow1 ''Params)
-$(deriveShow1 ''Binding)
-$(deriveShow1 ''Antiquoted)
-$(deriveShow2 ''Antiquoted)
-
---x $(deriveJSON1 defaultOptions ''NExprF)
-$(deriveJSON1 defaultOptions ''NString)
-$(deriveJSON1 defaultOptions ''Params)
---x $(deriveJSON1 defaultOptions ''Binding)
-$(deriveJSON1 defaultOptions ''Antiquoted)
-$(deriveJSON2 defaultOptions ''Antiquoted)
-
-instance (Binary v, Binary a) => Binary (Antiquoted v a)
-instance Binary a => Binary (NString a)
-instance Binary a => Binary (Binding a)
-instance Binary Pos where
-  put = Binary.put . unPos
-  get = mkPos <$> Binary.get
-instance Binary SourcePos
-instance Binary a => Binary (NKeyName a)
-instance Binary a => Binary (Params a)
-instance Binary NUnaryOp
-instance Binary NBinaryOp
-instance Binary NRecordType
-instance Binary a => Binary (NExprF a)
-
-instance (ToJSON v, ToJSON a) => ToJSON (Antiquoted v a)
-instance ToJSON a => ToJSON (NString a)
-instance ToJSON a => ToJSON (Binding a)
-instance ToJSON Pos where
-  toJSON = toJSON . unPos
-instance ToJSON SourcePos
-instance ToJSON a => ToJSON (NKeyName a)
-instance ToJSON a => ToJSON (Params a)
-instance ToJSON NUnaryOp
-instance ToJSON NBinaryOp
-instance ToJSON NRecordType
-instance ToJSON a => ToJSON (NExprF a)
-
-instance (FromJSON v, FromJSON a) => FromJSON (Antiquoted v a)
-instance FromJSON a => FromJSON (NString a)
-instance FromJSON a => FromJSON (Binding a)
-instance FromJSON Pos where
-  parseJSON = fmap mkPos . parseJSON
-instance FromJSON SourcePos
-instance FromJSON a => FromJSON (NKeyName a)
-instance FromJSON a => FromJSON (Params a)
-instance FromJSON NUnaryOp
-instance FromJSON NBinaryOp
-instance FromJSON NRecordType
-instance FromJSON a => FromJSON (NExprF a)
-
-$(makeTraversals ''NExprF)
-$(makeTraversals ''Binding)
-$(makeTraversals ''Params)
-$(makeTraversals ''Antiquoted)
-$(makeTraversals ''NString)
-$(makeTraversals ''NKeyName)
-$(makeTraversals ''NUnaryOp)
-$(makeTraversals ''NBinaryOp)
-
---x $(makeLenses ''Fix)
-
-
 -- ** Methods
 
+#if __GLASGOW_HASKELL__ >= 900
+hashAt
+  :: Functor f
+  => VarName
+  -> (Maybe v -> f (Maybe v))
+  -> AttrSet v
+  -> f (AttrSet v)
+#else
 hashAt :: VarName -> Lens' (AttrSet v) (Maybe v)
+#endif
 hashAt = flip alterF
 
 -- | Get the name out of the parameter (there might be none).
@@ -623,7 +635,7 @@ stripPositionInfo = transport phi
   go (Inherit  ms   names _pos) = Inherit  ms   names nullPos
 
 nullPos :: SourcePos
-nullPos = SourcePos "<string>" (mkPos 1) (mkPos 1)
+nullPos = on (SourcePos "<string>") mkPos 1 1
 
 -- * Dead code
 

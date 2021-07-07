@@ -61,7 +61,7 @@ renderFrames (x : xs) = do
       (framePos @v @m f)
 
 framePos
-  :: forall v (m :: * -> *)
+  :: forall v (m :: Type -> Type)
    . (Typeable m, Typeable v)
   => NixFrame
   -> Maybe SourcePos
