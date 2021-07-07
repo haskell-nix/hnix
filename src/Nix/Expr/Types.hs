@@ -106,22 +106,15 @@ data Params r
   -- > ParamSet [("x",Nothing)] False Nothing     ~  { x }
   -- > ParamSet [("x",pure y)]  True  (pure "s")  ~  s@{ x ? y, ... }
   deriving
-    (Ord, Eq, Generic, Generic1, Typeable, Data, NFData, Hashable, Show,
-    Functor, Foldable, Traversable)
-
-instance Hashable1 Params
-
-instance NFData1 Params
-
-instance Serialise r => Serialise (Params r)
+    ( Eq, Ord, Generic, Generic1
+    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
+    , Functor, Foldable, Traversable
+    , Show, Hashable, Hashable1
+    )
 
 instance IsString (Params r) where
   fromString = Param . fromString
 
-instance Binary a => Binary (Params a)
-
-instance ToJSON a => ToJSON (Params a)
-instance FromJSON a => FromJSON (Params a)
 
 -- *** @ParamSet@
 
