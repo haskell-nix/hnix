@@ -174,24 +174,17 @@ data NString r
   -- > Indented 0 [Plain "x\n ",Antiquoted y]  ~  ''
   -- >                                            x
   -- >                                             ${y}''
-  deriving (Eq, Ord, Generic, Generic1, Typeable, Data, Functor, Foldable,
-            Traversable, Show, Read, NFData, Hashable)
-
-instance Hashable1 NString
-
-instance NFData1 NString
-
-instance Serialise r => Serialise (NString r)
+  deriving
+    ( Eq, Ord, Generic, Generic1
+    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
+    , Functor, Foldable, Traversable
+    , Show, Read, Hashable, Hashable1
+    )
 
 -- | For the the 'IsString' instance, we use a plain doublequoted string.
 instance IsString (NString r) where
   fromString ""     = DoubleQuoted mempty
   fromString string = DoubleQuoted [Plain $ toText string]
-
-instance Binary a => Binary (NString a)
-
-instance ToJSON a => ToJSON (NString a)
-instance FromJSON a => FromJSON (NString a)
 
 
 -- ** @NKeyName@
