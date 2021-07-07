@@ -138,24 +138,17 @@ data Antiquoted (v :: Type) (r :: Type)
   --
   -- > ''''\n''  ≡  "\n"
   | Antiquoted !r
-  deriving (Ord, Eq, Generic, Generic1, Typeable, Data, Functor, Foldable,
-            Traversable, Show, Read, NFData, Hashable)
-
-instance Hashable v => Hashable1 (Antiquoted v)
+  deriving
+    ( Eq, Ord, Generic, Generic1
+    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
+    , Functor, Foldable, Traversable
+    , Show, Read, Hashable, Hashable1
+    )
 
 instance Hashable2 Antiquoted where
   liftHashWithSalt2 ha _  salt (Plain a)      = ha (salt `hashWithSalt` (0 :: Int)) a
   liftHashWithSalt2 _  _  salt EscapedNewline =     salt `hashWithSalt` (1 :: Int)
   liftHashWithSalt2 _  hb salt (Antiquoted b) = hb (salt `hashWithSalt` (2 :: Int)) b
-
-instance NFData v => NFData1 (Antiquoted v)
-
-instance (Serialise v, Serialise r) => Serialise (Antiquoted v r)
-
-instance (Binary v, Binary a) => Binary (Antiquoted v a)
-
-instance (ToJSON v, ToJSON a) => ToJSON (Antiquoted v a)
-instance (FromJSON v, FromJSON a) => FromJSON (Antiquoted v a)
 
 
 -- ** @NString@
