@@ -27,12 +27,10 @@ import           Data.Aeson.TH
 import qualified Data.Binary                   as Binary
 import           Data.Binary                    ( Binary )
 import           Data.Data
-import           Data.Eq.Deriving
 import           Data.Fix
 import           Data.Functor.Classes
 import           Data.Hashable.Lifted
 import qualified Data.List.NonEmpty            as NE
-import           Data.Ord.Deriving
 import qualified Text.Show
 import           Data.Traversable
 import           GHC.Generics
@@ -44,8 +42,10 @@ import           Text.Megaparsec.Pos            ( SourcePos(SourcePos)
                                                 , mkPos
                                                 , unPos
                                                 )
-import           Text.Read.Deriving
 import           Text.Show.Deriving
+import           Text.Read.Deriving
+import           Data.Eq.Deriving
+import           Data.Ord.Deriving
 import qualified Type.Reflection               as Reflection
 import           Type.Reflection                ( eqTypeRep )
 import           Nix.Atoms
@@ -590,47 +590,47 @@ instance TH.Lift NExpr where
 
 -- ** Additional instances
 
-$(deriveEq1 ''NExprF)
-$(deriveEq1 ''NString)
-$(deriveEq1 ''Binding)
 $(deriveEq1 ''Params)
 $(deriveEq1 ''Antiquoted)
 $(deriveEq2 ''Antiquoted)
+$(deriveEq1 ''NString)
+$(deriveEq1 ''Binding)
+$(deriveEq1 ''NExprF)
 
-$(deriveOrd1 ''NExprF)
-$(deriveOrd1 ''NString)
-$(deriveOrd1 ''Binding)
 $(deriveOrd1 ''Params)
 $(deriveOrd1 ''Antiquoted)
 $(deriveOrd2 ''Antiquoted)
+$(deriveOrd1 ''NString)
+$(deriveOrd1 ''Binding)
+$(deriveOrd1 ''NExprF)
 
-$(deriveRead1 ''NString)
 $(deriveRead1 ''Params)
 $(deriveRead1 ''Antiquoted)
 $(deriveRead2 ''Antiquoted)
+$(deriveRead1 ''NString)
 
-$(deriveShow1 ''NExprF)
-$(deriveShow1 ''NString)
 $(deriveShow1 ''Params)
-$(deriveShow1 ''Binding)
 $(deriveShow1 ''Antiquoted)
 $(deriveShow2 ''Antiquoted)
+$(deriveShow1 ''NString)
+$(deriveShow1 ''Binding)
+$(deriveShow1 ''NExprF)
 
---x $(deriveJSON1 defaultOptions ''NExprF)
-$(deriveJSON1 defaultOptions ''NString)
 $(deriveJSON1 defaultOptions ''Params)
---x $(deriveJSON1 defaultOptions ''Binding)
 $(deriveJSON1 defaultOptions ''Antiquoted)
 $(deriveJSON2 defaultOptions ''Antiquoted)
+$(deriveJSON1 defaultOptions ''NString)
+--x $(deriveJSON1 defaultOptions ''Binding)
+--x $(deriveJSON1 defaultOptions ''NExprF)
 
-$(makeTraversals ''NExprF)
-$(makeTraversals ''Binding)
 $(makeTraversals ''Params)
 $(makeTraversals ''Antiquoted)
 $(makeTraversals ''NString)
 $(makeTraversals ''NKeyName)
+$(makeTraversals ''Binding)
 $(makeTraversals ''NUnaryOp)
 $(makeTraversals ''NBinaryOp)
+$(makeTraversals ''NExprF)
 
 --x $(makeLenses ''Fix)
 
