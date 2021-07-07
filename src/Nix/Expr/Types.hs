@@ -122,15 +122,6 @@ instance (ToJSON v, ToJSON a) => ToJSON (Antiquoted v a)
 instance (FromJSON v, FromJSON a) => FromJSON (Antiquoted v a)
 
 
--- ** @NAttrPath@
-
--- | A selector (for example in a @let@ or an attribute set) is made up
--- of strung-together key names.
---
--- > StaticKey "x" :| [DynamicKey (Antiquoted y)]  ~  x.${y}
-type NAttrPath r = NonEmpty (NKeyName r)
-
-
 -- ** @Binding@
 
 -- | A single line of the bindings section of a let expression or of a set.
@@ -377,6 +368,15 @@ instance Binary a => Binary (NKeyName a)
 
 instance ToJSON a => ToJSON (NKeyName a)
 instance FromJSON a => FromJSON (NKeyName a)
+
+
+-- ** @NAttrPath@
+
+-- | A selector (for example in a @let@ or an attribute set) is made up
+-- of strung-together key names.
+--
+-- > StaticKey "x" :| [DynamicKey (Antiquoted y)]  ~  x.${y}
+type NAttrPath r = NonEmpty (NKeyName r)
 
 
 -- ** @NUnaryOp
