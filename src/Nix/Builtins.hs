@@ -25,7 +25,6 @@ where
 
 
 import           Prelude                 hiding ( traceM )
-import           Relude.Unsafe                 as Unsafe
 import           Nix.Utils
 import           Control.Comonad                ( Comonad )
 import           Control.Monad                  ( foldM )
@@ -83,7 +82,11 @@ import           System.Posix.Files             ( isRegularFile
                                                 , isDirectory
                                                 , isSymbolicLink
                                                 )
-import           Text.Regex.TDFA
+import           Text.Regex.TDFA                ( Regex
+                                                , makeRegex
+                                                , matchOnceText
+                                                , matchAllText
+                                                )
 
 
 -- This is a big module. There is recursive reuse:
@@ -156,10 +159,10 @@ instance Comonad f => Ord (WValue t f m) where
 
 -- ** Helpers
 
-nVNull
+nvNull
   :: MonadNix e t f m
   => NValue t f m
-nVNull = nvConstant NNull
+nvNull = nvConstant NNull
 
 mkNVBool
   :: MonadNix e t f m
@@ -221,8 +224,8 @@ attrsetGet k s =
 
 data VersionComponent
   = VersionComponentPre -- ^ The string "pre"
-  | VersionComponentString Text -- ^ A string other than "pre"
-  | VersionComponentNumber Integer -- ^ A number
+  | VersionComponentString !Text -- ^ A string other than "pre"
+  | VersionComponentNumber !Integer -- ^ A number
   deriving (Show, Read, Eq, Ord)
 
 versionComponentToString :: VersionComponent -> Text
@@ -315,19 +318,12 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
   caps           = nvList (f <$> captures)
   f (a, (s, _))  =
     bool
-      nVNull
+      nvNull
       (thunkStr a)
       (s >= 0)
 
 thunkStr :: Applicative f => ByteString -> NValue t f m
 thunkStr s = nvStrWithoutContext $ decodeUtf8 s
-
-elemAt :: [a] -> Int -> Maybe a
-elemAt ls i =
-  list
-    Nothing
-    (pure . Unsafe.head)
-    (drop i ls)
 
 hasKind
   :: forall a e t f m
@@ -481,7 +477,7 @@ unsafeGetAttrPosNix nvX nvY =
     case (x, y) of
       (NVStr ns, NVSet _ apos) ->
         maybe
-          (pure nVNull)
+          (pure nvNull)
           toValue
           (M.lookup (stringIgnoreContext ns) apos)
       _xy -> throwError $ ErrorCall $ "Invalid types for builtins.unsafeGetAttrPosNix: " <> show _xy
@@ -583,19 +579,19 @@ foldl'Nix f z xs =  foldM go z =<< fromValue @[NValue t f m] xs
  where
   go b a = (`callFunc` a) =<< callFunc f b
 
-headNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
+headNix :: forall e t f m. MonadNix e t f m => NValue t f m -> m (NValue t f m)
 headNix =
-  list
+  maybe
     (throwError $ ErrorCall "builtins.head: empty list")
-    (pure . Unsafe.head)
-    <=< fromValue
+    (pure)
+  . viaNonEmpty head <=< fromValue @[NValue t f m]
 
-tailNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
+tailNix :: forall e t f m. MonadNix e t f m => NValue t f m -> m (NValue t f m)
 tailNix =
-  list
+  maybe
     (throwError $ ErrorCall "builtins.tail: empty list")
-    (pure . nvList . Unsafe.tail)
-    <=< fromValue
+    (pure . nvList)
+  . viaNonEmpty tail <=< fromValue @[NValue t f m]
 
 splitVersionNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 splitVersionNix v =
@@ -674,24 +670,19 @@ matchNix pat str =
           (toValue $ makeNixStringWithoutContext t)
           (not $ Text.null t)
 
-    maybe
-      (pure nVNull)
-      (\case
-        ("", sarr, "") ->
-          do
-            let s = fst <$> elems sarr
-            nvList <$>
-              traverse
-                mkMatch
-                (bool
-                    id -- (length <= 1) allowed & passes-through here the full string
-                    Unsafe.tail
-                    (length s > 1)
-                    s
-                )
-        _ -> (pure nVNull)
-      )
-      (matchOnceText re s)
+    case matchOnceText re s of
+      Just ("", sarr, "") ->
+        do
+          let submatches = fst <$> elems sarr
+          nvList <$>
+            traverse
+              mkMatch
+              (case submatches of
+                 [] -> []
+                 [a] -> [a]
+                 _:xs -> xs -- return only the matched groups, drop the full string
+              )
+      _ -> pure nvNull
 
 splitNix
   :: forall e t f m
@@ -929,7 +920,7 @@ elemAtNix xs n =
     maybe
       (throwError $ ErrorCall $ "builtins.elem: Index " <> show n' <> " too large for list of length " <> show (length xs'))
       pure
-      (elemAt xs' n')
+      (xs' !!? n')
 
 genListNix
   :: forall e t f m
@@ -1022,7 +1013,7 @@ replaceStringsNix tfrom tto ts =
           maybePrefixMatch
 
        where
-        -- When prefix matched something - returns (match, replacement, reminder)
+        -- When prefix matched something - returns (match, replacement, remainder)
         maybePrefixMatch :: Maybe (Text, NixString, Text)
         maybePrefixMatch = formMatchReplaceTailInfo <$> find ((`Text.isPrefixOf` input) . fst) fromKeysToValsMap
          where
@@ -1526,7 +1517,7 @@ fromJSONNix nvjson =
             NInt
             (floatingOrInteger n)
     A.Bool   b -> pure $ mkNVBool b
-    A.Null     -> pure nVNull
+    A.Null     -> pure nvNull
 
 toJSONNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toJSONNix = (fmap nvStr . nvalueToJSONNixString) <=< demand
@@ -1844,7 +1835,7 @@ builtinsList = sequence
   , add2 Normal   "match"            matchNix
   , add2 Normal   "mul"              mulNix
   , add0 Normal   "nixPath"          nixPathNix
-  , add0 Normal   "null"             (pure nVNull)
+  , add0 Normal   "null"             (pure nvNull)
   , add  Normal   "parseDrvName"     parseDrvNameNix
   , add2 Normal   "partition"        partitionNix
   --, add  Normal   "path"             path
