@@ -77,14 +77,14 @@ genTests = do
     <$> globDir1 (compile "*-*-*.*") "data/nix/tests/lang"
   let testsByName = groupBy (takeFileName . dropExtensions) testFiles
   let testsByType = groupBy testType (Map.toList testsByName)
-  let testGroups  = fmap mkTestGroup (Map.toList testsByType)
+  let testGroups  = mkTestGroup <$> Map.toList testsByType
   pure $ localOption (mkTimeout 2000000) $ testGroup
     "Nix (upstream) language tests"
     testGroups
  where
   testType (fullpath, _files) = take 2 $ splitOn "-" $ takeFileName fullpath
   mkTestGroup (kind, tests) =
-    testGroup (String.unwords kind) $ fmap (mkTestCase kind) tests
+    testGroup (String.unwords kind) $ mkTestCase kind <$> tests
   mkTestCase kind (basename, files) = testCase (takeFileName basename) $ do
     time <- liftIO getCurrentTime
     let opts = defaultOptions time

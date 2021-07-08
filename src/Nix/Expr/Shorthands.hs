@@ -98,10 +98,10 @@ mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
 mkParamset params variadic = ParamSet params variadic mempty
 
 mkRecSet :: [Binding NExpr] -> NExpr
-mkRecSet = Fix . NSet NRecursive
+mkRecSet = Fix . NSet Recursive
 
 mkNonRecSet :: [Binding NExpr] -> NExpr
-mkNonRecSet = Fix . NSet NNonRecursive
+mkNonRecSet = Fix . NSet NonRecursive
 
 mkLets :: [Binding NExpr] -> NExpr -> NExpr
 mkLets bindings = Fix . NLet bindings
@@ -177,11 +177,11 @@ letE varName varExpr = letsE [(varName, varExpr)]
 
 -- | Make an attribute set (non-recursive).
 attrsE :: [(Text, NExpr)] -> NExpr
-attrsE pairs = Fix $ NSet NNonRecursive $ uncurry bindTo <$> pairs
+attrsE pairs = Fix $ NSet NonRecursive $ uncurry bindTo <$> pairs
 
 -- | Make an attribute set (recursive).
 recAttrsE :: [(Text, NExpr)] -> NExpr
-recAttrsE pairs = Fix $ NSet NRecursive $ uncurry bindTo <$> pairs
+recAttrsE pairs = Fix $ NSet Recursive $ uncurry bindTo <$> pairs
 
 -- | Logical negation.
 mkNot :: NExpr -> NExpr

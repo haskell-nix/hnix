@@ -399,13 +399,13 @@ $(deriveOrd1  ''Binding)
 $(makeTraversals ''Binding)
 
 
--- ** @NRecordType@
+-- ** @Recursivity@
 
--- | 'NRecordType' distinguishes between recursive and non-recursive attribute
+-- | Distinguishes between recursive and non-recursive. Mainly for attribute
 -- sets.
-data NRecordType
-  = NNonRecursive  -- ^ >     { ... }
-  | NRecursive     -- ^ > rec { ... }
+data Recursivity
+  = NonRecursive  -- ^ >     { ... }
+  | Recursive     -- ^ > rec { ... }
   deriving
     ( Eq, Ord, Enum, Bounded, Generic
     , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
@@ -483,11 +483,11 @@ data NExprF r
   -- ^ A list literal.
   --
   -- > NList [x,y]                                 ~  [ x y ]
-  | NSet !NRecordType ![Binding r]
+  | NSet !Recursivity ![Binding r]
   -- ^ An attribute set literal
   --
-  -- > NSet NRecursive    [NamedVar x y _]         ~  rec { x = y; }
-  -- > NSet NNonRecursive [Inherit Nothing [x] _]  ~  { inherit x; }
+  -- > NSet Recursive    [NamedVar x y _]         ~  rec { x = y; }
+  -- > NSet NonRecursive [Inherit Nothing [x] _]  ~  { inherit x; }
   | NLiteralPath !FilePath
   -- ^ A path expression, which is evaluated to a store path. The path here
   -- can be relative, in which case it's evaluated relative to the file in
@@ -652,7 +652,7 @@ ekey
   => NonEmpty Text
   -> SourcePos
   -> Lens' (Fix g) (Maybe (Fix g))
-ekey keys pos f e@(Fix x) | (NSet NNonRecursive xs, ann) <- fromNExpr x =
+ekey keys pos f e@(Fix x) | (NSet NonRecursive xs, ann) <- fromNExpr x =
   case go xs of
     ((v, []      ) : _) -> fromMaybe e <$> f (pure v)
     ((v, r : rest) : _) -> ekey (r :| rest) pos f v
@@ -662,7 +662,7 @@ ekey keys pos f e@(Fix x) | (NSet NNonRecursive xs, ann) <- fromNExpr x =
         e
         (\ v ->
           let entry = NamedVar (StaticKey <$> keys) v pos in
-          Fix $ toNExpr ( NSet NNonRecursive $ [entry] <> xs, ann )
+          Fix $ toNExpr ( NSet NonRecursive $ [entry] <> xs, ann )
         )
       <$>
         f Nothing
