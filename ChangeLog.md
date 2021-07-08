@@ -1,7 +1,7 @@
 
 # ChangeLog
 
-## [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.1...master#files_bucket) WIP
+## [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.1...0.14.0#files_bucket) WIP
 
 * GHC 9.0 support.
 
