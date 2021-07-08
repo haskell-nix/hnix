@@ -3,6 +3,14 @@
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.1...master#files_bucket) WIP
 
+* GHC 9.0 support.
+
+* HNix switched to pre-0.9 style of log (aka "no log"). We temporarily stopped producing log, choosing effectiveness over writing about it.
+
+* All changes seem trivial (from the inside). There is no changes in `Nix.Expr.Shorthands` module. Would there be difficulties in migration - please write to us - we would tackle & solve it togather.
+
+A partial log:
+
 * Breaking:
 
   * `Nix.Effects`:
