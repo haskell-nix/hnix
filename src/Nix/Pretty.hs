@@ -212,9 +212,9 @@ exprFNixDoc = \case
   NStr      str  -> simpleExpr $ prettyString str
   NList xs ->
     prettyContainer "[" (wrapParens appOpNonAssoc) "]" xs
-  NSet NNonRecursive xs ->
+  NSet NonRecursive xs ->
     prettyContainer "{" prettyBind "}" xs
-  NSet NRecursive xs ->
+  NSet Recursive xs ->
     prettyContainer "rec {" prettyBind "}" xs
   NAbs args body ->
     leastPrecedence $
@@ -318,7 +318,7 @@ valueToExpr = iterNValueByDiscardWith thk (Fix . phi)
   phi (NVConstant' a     ) = NConstant a
   phi (NVStr'      ns    ) = NStr $ DoubleQuoted [Plain (stringIgnoreContext ns)]
   phi (NVList'     l     ) = NList l
-  phi (NVSet'      s    p) = NSet NNonRecursive
+  phi (NVSet'      s    p) = NSet NonRecursive
     [ NamedVar (StaticKey k :| mempty) v (fromMaybe nullPos (M.lookup k p))
     | (k, v) <- toList s
     ]

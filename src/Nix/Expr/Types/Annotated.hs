@@ -206,7 +206,7 @@ pattern NSym_ ann x = AnnFP ann (NSym x)
 pattern NList_ :: SrcSpan -> [r] -> NExprLocF r
 pattern NList_ ann x = AnnFP ann (NList x)
 
-pattern NSet_ :: SrcSpan -> NRecordType -> [Binding r] -> NExprLocF r
+pattern NSet_ :: SrcSpan -> Recursivity -> [Binding r] -> NExprLocF r
 pattern NSet_ ann recur x = AnnFP ann (NSet recur x)
 
 pattern NLiteralPath_ :: SrcSpan -> FilePath -> NExprLocF r

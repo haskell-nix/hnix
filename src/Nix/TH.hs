@@ -43,8 +43,8 @@ freeVars e = case unFix e of
   (NStr         string          ) -> mapFreeVars string
   (NSym         var             ) -> one var
   (NList        list            ) -> mapFreeVars list
-  (NSet   NNonRecursive bindings) -> bindFreeVars bindings
-  (NSet   NRecursive    bindings) -> Set.difference (bindFreeVars bindings) (bindDefs bindings)
+  (NSet   NonRecursive  bindings) -> bindFreeVars bindings
+  (NSet   Recursive     bindings) -> Set.difference (bindFreeVars bindings) (bindDefs bindings)
   (NLiteralPath _               ) -> mempty
   (NEnvPath     _               ) -> mempty
   (NUnary       _    expr       ) -> freeVars expr

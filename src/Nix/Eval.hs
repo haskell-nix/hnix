@@ -147,14 +147,14 @@ eval (NList l           ) =
     lst <- traverse (defer @v @m . withScopes @v scope) l
     toValue lst
 
-eval (NSet NNonRecursive binds) =
+eval (NSet NonRecursive binds) =
   do
-    attrSet <- evalBinds False $ desugarBinds (eval . NSet NNonRecursive) binds
+    attrSet <- evalBinds False $ desugarBinds (eval . NSet NonRecursive) binds
     toValue attrSet
 
-eval (NSet NRecursive binds) =
+eval (NSet Recursive binds) =
   do
-    attrSet <- evalBinds True $ desugarBinds (eval . NSet NNonRecursive) binds
+    attrSet <- evalBinds True $ desugarBinds (eval . NSet NonRecursive) binds
     toValue attrSet
 
 eval (NLet binds body    ) =

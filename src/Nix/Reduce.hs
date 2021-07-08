@@ -220,7 +220,7 @@ reduce base@(NSelect_ _ _ attrs _)
     n@(NamedVar (a' :| _) _ _) | a' == a -> pure n
     _ -> findBind xs attrs
   -- Follow the attrpath recursively in sets.
-  inspectSet (NSet_ _ NNonRecursive binds) attrs = case findBind binds attrs of
+  inspectSet (NSet_ _ NonRecursive binds) attrs = case findBind binds attrs of
     Just (NamedVar _ e _) -> case NE.uncons attrs of
       (_, Just attrs) -> inspectSet (unFix e) attrs
       _               -> pure e
@@ -231,7 +231,7 @@ reduce base@(NSelect_ _ _ attrs _)
 
 -- | Reduce a set by inlining its binds outside of the set
 --   if none of the binds inherit the super set.
-reduce e@(NSet_ ann NNonRecursive binds) =
+reduce e@(NSet_ ann NonRecursive binds) =
   do
     let
       usesInherit =
@@ -244,13 +244,13 @@ reduce e@(NSet_ ann NNonRecursive binds) =
 
     bool
       (Fix <$> sequence e)
-      (clearScopes @NExprLoc $ Fix . NSet_ ann NNonRecursive <$> traverse sequence binds)
+      (clearScopes @NExprLoc $ Fix . NSet_ ann NonRecursive <$> traverse sequence binds)
       usesInherit
 
 -- Encountering a 'rec set' construction eliminates any hope of inlining
 -- definitions.
-reduce (NSet_ ann NRecursive binds) =
-  clearScopes @NExprLoc $ Fix . NSet_ ann NRecursive <$> traverse sequence binds
+reduce (NSet_ ann Recursive binds) =
+  clearScopes @NExprLoc $ Fix . NSet_ ann Recursive <$> traverse sequence binds
 
 -- Encountering a 'with' construction eliminates any hope of inlining
 -- definitions.
