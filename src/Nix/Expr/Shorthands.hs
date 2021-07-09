@@ -9,6 +9,8 @@ import           Data.Fix
 import           Nix.Atoms
 import           Nix.Expr.Types
 
+-- * Basic expression builders
+
 -- | Make @Null@.
 mkNull :: NExpr
 mkNull = Fix mkNullF
@@ -73,11 +75,11 @@ mkRecSet = Fix . NSet Recursive
 mkNonRecSet :: [Binding NExpr] -> NExpr
 mkNonRecSet = Fix . NSet NonRecursive
 
-mkLets :: [Binding NExpr] -> NExpr -> NExpr
-mkLets bindings = Fix . NLet bindings
-
 mkList :: [NExpr] -> NExpr
 mkList = Fix . NList
+
+mkLets :: [Binding NExpr] -> NExpr -> NExpr
+mkLets bindings = Fix . NLet bindings
 
 mkWith :: NExpr -> NExpr -> NExpr
 mkWith e = Fix . NWith e
@@ -115,6 +117,8 @@ mkDots (Fix (NSelect e keys' x)) keys =
 mkDots e keys = Fix $ NSelect e (fmap (`StaticKey` Nothing) keys) Nothing
 -}
 
+-- ** Basic base functor builders
+
 mkNullF :: NExprF a
 mkNullF = NConstant NNull
 
@@ -143,6 +147,8 @@ mkSymF = NSym
 mkSynHoleF :: Text -> NExprF a
 mkSynHoleF = NSynHole
 
+-- * Other
+-- (org this better/make a better name for section(s))
 
 -- | An `inherit` clause without an expression to pull from.
 inherit :: [NKeyName e] -> Binding e
@@ -152,11 +158,11 @@ inherit ks = Inherit Nothing ks nullPos
 inheritFrom :: e -> [NKeyName e] -> Binding e
 inheritFrom expr ks = Inherit (pure expr) ks nullPos
 
--- | Shorthand for producing a binding of a name to an expression: @=
+-- | Shorthand for producing a binding of a name to an expression: @=@
 bindTo :: Text -> NExpr -> Binding NExpr
 bindTo name x = NamedVar (mkSelector name) x nullPos
 
--- | Infix version of @bindTo@: @=@
+-- | @=@. @bindTo@ infix version. Bind name to an expression.
 ($=) :: Text -> NExpr -> Binding NExpr
 ($=) = bindTo
 infixr 2 $=
@@ -165,19 +171,20 @@ infixr 2 $=
 -- For example, adding `[a = 1, b = 2]` to `let c = 3; in 4` produces
 -- `let a = 1; b = 2; c = 3; in 4`.
 appendBindings :: [Binding NExpr] -> NExpr -> NExpr
-appendBindings newBindings (Fix e) = case e of
-  NLet bindings e'    -> Fix $ NLet (bindings <> newBindings) e'
-  NSet recur bindings -> Fix $ NSet recur (bindings <> newBindings)
-  _                   -> error "Can only append bindings to a set or a let"
+appendBindings newBindings (Fix e) =
+  case e of
+    NLet bindings e'    -> mkLets (bindings <> newBindings) e'
+    NSet recur bindings -> Fix $ NSet recur (bindings <> newBindings)
+    _                   -> error "Can only append bindings to a set or a let"
 
 -- | Applies a transformation to the body of a nix function.
 modifyFunctionBody :: (NExpr -> NExpr) -> NExpr -> NExpr
-modifyFunctionBody f (Fix (NAbs params body)) = Fix $ NAbs params $ f body
+modifyFunctionBody f (Fix (NAbs params body)) = mkFunction params $ f body
 modifyFunctionBody _ _ = error "Not a function"
 
 -- | A let statement with multiple assignments.
 letsE :: [(Text, NExpr)] -> NExpr -> NExpr
-letsE pairs = Fix . NLet (uncurry bindTo <$> pairs)
+letsE pairs = mkLets $ uncurry ($=) <$> pairs
 
 -- | Wrapper for a single-variable @let@.
 letE :: Text -> NExpr -> NExpr -> NExpr
@@ -185,15 +192,15 @@ letE varName varExpr = letsE [(varName, varExpr)]
 
 -- | Make an attribute set (non-recursive).
 attrsE :: [(Text, NExpr)] -> NExpr
-attrsE pairs = Fix $ NSet NonRecursive $ uncurry bindTo <$> pairs
+attrsE pairs = mkNonRecSet $ uncurry ($=) <$> pairs
 
 -- | Make an attribute set (recursive).
 recAttrsE :: [(Text, NExpr)] -> NExpr
-recAttrsE pairs = Fix $ NSet Recursive $ uncurry bindTo <$> pairs
+recAttrsE pairs = mkRecSet $ uncurry ($=) <$> pairs
 
 -- | Logical negation.
 mkNot :: NExpr -> NExpr
-mkNot = Fix . NUnary NNot
+mkNot = mkOper NNot
 
 -- | Dot-reference into an attribute set: @attrSet.k@
 (@.) :: NExpr -> Text -> NExpr
