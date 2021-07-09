@@ -110,7 +110,7 @@ mkLets bindings = Fix . NLet bindings
 -- | Haskell            | Nix               |
 -- +====================+===================+
 -- | @mkWith body main@ | @with body; expr@ |
--- +--------------------+----00-------------+
+-- +--------------------+-------------------+
 mkWith :: NExpr -> NExpr -> NExpr
 mkWith e = Fix . NWith e
 
@@ -133,19 +133,7 @@ mkFunction params = Fix . NAbs params
 (==>) = mkFunction
 infixr 1 ==>
 
-{-
-mkDot :: NExpr -> Text -> NExpr
-mkDot e key = mkDots e [key]
 
--- | Create a dotted expression using only text.
-mkDots :: NExpr -> [Text] -> NExpr
-mkDots e [] = e
-mkDots (Fix (NSelect e keys' x)) keys =
-  -- Special case: if the expression in the first argument is already
-  -- a dotted expression, just extend it.
-  Fix (NSelect e (keys' <> fmap (`StaticKey` Nothing) keys) x)
-mkDots e keys = Fix $ NSelect e (fmap (`StaticKey` Nothing) keys) Nothing
--}
 
 -- ** Basic base functor builders
 
