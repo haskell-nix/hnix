@@ -115,7 +115,7 @@ mkWith :: NExpr -> NExpr -> NExpr
 mkWith e = Fix . NWith e
 
 mkAssert :: NExpr -> NExpr -> NExpr
-mkAssert e = Fix . NWith e
+mkAssert e = Fix . NAssert e
 
 mkIf :: NExpr -> NExpr -> NExpr -> NExpr
 mkIf e1 e2 = Fix . NIf e1 e2
