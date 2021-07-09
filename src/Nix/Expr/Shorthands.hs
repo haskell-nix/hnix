@@ -63,16 +63,17 @@ mkSelector :: Text -> NAttrPath NExpr
 mkSelector = (:| mempty) . StaticKey
 
 -- | Put an unary operator.
-mkOper :: NUnaryOp -> NExpr -> NExpr
-mkOper op = Fix . NUnary op
+mkOp :: NUnaryOp -> NExpr -> NExpr
+mkOp op = Fix . NUnary op
 
 -- | Logical negation.
 mkNot :: NExpr -> NExpr
-mkNot = mkOper NNot
+mkNot = mkOp NNot
+
 
 -- | Put a binary operator.
-mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
-mkOper2 op a = Fix . NBinary op a
+mkOp2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
+mkOp2 op a = Fix . NBinary op a
 
 mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
 mkParamset params variadic = ParamSet params variadic mempty
@@ -277,41 +278,53 @@ recAttrsE pairs = mkRecSet $ uncurry ($=) <$> pairs
 
 -- | Nix binary operator builder.
 mkBinop :: NBinaryOp -> NExpr -> NExpr -> NExpr
-mkBinop = mkOper2
+mkBinop = mkOp2
 
 (@@), ($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->), ($//), ($+), ($-), ($*), ($/), ($++)
   :: NExpr -> NExpr -> NExpr
 -- | Function application (@' '@ in @f x@)
-(@@) = mkOper2 NApp
+(@@) = mkOp2 NApp
 infixl 1 @@
 -- | Equality: @==@
-($==) = mkOper2 NEq
+($==) = mkOp2 NEq
 -- | Inequality: @!=@
-($!=) = mkOper2 NNEq
+($!=) = mkOp2 NNEq
 -- | Less than: @<@
-($<)  = mkOper2 NLt
+($<)  = mkOp2 NLt
 -- | Less than OR equal: @<=@
-($<=) = mkOper2 NLte
+($<=) = mkOp2 NLte
 -- | Greater than: @>@
-($>)  = mkOper2 NGt
+($>)  = mkOp2 NGt
 -- | Greater than OR equal: @>=@
-($>=) = mkOper2 NGte
+($>=) = mkOp2 NGte
 -- | AND: @&&@
-($&&) = mkOper2 NAnd
+($&&) = mkOp2 NAnd
 -- | OR: @||@
-($||) = mkOper2 NOr
+($||) = mkOp2 NOr
 -- | Logical implication: @->@
-($->) = mkOper2 NImpl
+($->) = mkOp2 NImpl
 -- | Extend/override the left attr set, with the right one: @//@
-($//) = mkOper2 NUpdate
+($//) = mkOp2 NUpdate
 -- | Addition: @+@
-($+)  = mkOper2 NPlus
+($+)  = mkOp2 NPlus
 -- | Subtraction: @-@
-($-)  = mkOper2 NMinus
+($-)  = mkOp2 NMinus
 -- | Multiplication: @*@
-($*)  = mkOper2 NMult
+($*)  = mkOp2 NMult
 -- | Division: @/@
-($/)  = mkOper2 NDiv
+($/)  = mkOp2 NDiv
 -- | List concatenation: @++@
-($++) = mkOper2 NConcat
+($++) = mkOp2 NConcat
 
+
+-- * Under deprecation
+
+-- NOTE: Remove after 2023-07
+-- | Put an unary operator.
+mkOper :: NUnaryOp -> NExpr -> NExpr
+mkOper op = Fix . NUnary op
+
+-- NOTE: Remove after 2023-07
+-- | Put a binary operator.
+mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
+mkOper2 op a = Fix . NBinary op a

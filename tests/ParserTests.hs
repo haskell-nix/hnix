@@ -37,10 +37,10 @@ case_constant_path = do
   assertParseText "../abc" $ mkPath False "../abc"
   assertParseText "<abc>" $ mkPath True "abc"
   assertParseText "<../cdef>" $ mkPath True "../cdef"
-  assertParseText "a//b" $ mkOper2 NUpdate (mkSym "a") (mkSym "b")
+  assertParseText "a//b" $ mkOp2 NUpdate (mkSym "a") (mkSym "b")
   assertParseText "rec+def/cdef" $ mkPath False "rec+def/cdef"
-  assertParseText "a/b//c/def//<g> < def/d" $ mkOper2 NLt
-    (mkOper2 NUpdate (mkPath False "a/b") $ mkOper2 NUpdate
+  assertParseText "a/b//c/def//<g> < def/d" $ mkOp2 NLt
+    (mkOp2 NUpdate (mkPath False "a/b") $ mkOp2 NUpdate
       (mkPath False "c/def") (mkPath True "g"))
     (mkPath False "def/d")
   assertParseText "a'b/c" $ Fix $ NBinary NApp (mkSym "a'b") (mkPath False "/c")
@@ -300,24 +300,24 @@ case_indented_string_escape = assertParseText
   mkIndentedStr 1 "\n \t \\ ${ \\ \\n ' '' "
 
 case_operator_fun_app = do
-  assertParseText "a ++ b" $ mkOper2 NConcat (mkSym "a") (mkSym "b")
-  assertParseText "a ++ f b" $ mkOper2 NConcat (mkSym "a") $ Fix $ NBinary NApp
+  assertParseText "a ++ b" $ mkOp2 NConcat (mkSym "a") (mkSym "b")
+  assertParseText "a ++ f b" $ mkOp2 NConcat (mkSym "a") $ Fix $ NBinary NApp
     (mkSym "f") (mkSym "b")
 
 case_operators = do
-  assertParseText "1 + 2 - 3" $ mkOper2 NMinus
-    (mkOper2 NPlus (mkInt 1) (mkInt 2)) (mkInt 3)
+  assertParseText "1 + 2 - 3" $ mkOp2 NMinus
+    (mkOp2 NPlus (mkInt 1) (mkInt 2)) (mkInt 3)
   assertParseFail "1 + if true then 1 else 2"
-  assertParseText "1 + (if true then 2 else 3)" $ mkOper2 NPlus (mkInt 1) $ Fix $ NIf
+  assertParseText "1 + (if true then 2 else 3)" $ mkOp2 NPlus (mkInt 1) $ Fix $ NIf
    (mkBool True) (mkInt 2) (mkInt 3)
-  assertParseText "{ a = 3; } // rec { b = 4; }" $ mkOper2 NUpdate
+  assertParseText "{ a = 3; } // rec { b = 4; }" $ mkOp2 NUpdate
     (Fix $ NSet NonRecursive [NamedVar (mkSelector "a") (mkInt 3) nullPos])
     (Fix $ NSet Recursive [NamedVar (mkSelector "b") (mkInt 4) nullPos])
-  assertParseText "--a" $ mkOper NNeg $ mkOper NNeg $ mkSym "a"
-  assertParseText "a - b - c" $ mkOper2 NMinus
-    (mkOper2 NMinus (mkSym "a") (mkSym "b")) $
+  assertParseText "--a" $ mkOp NNeg $ mkOp NNeg $ mkSym "a"
+  assertParseText "a - b - c" $ mkOp2 NMinus
+    (mkOp2 NMinus (mkSym "a") (mkSym "b")) $
     mkSym "c"
-  assertParseText "foo<bar" $ mkOper2 NLt (mkSym "foo") (mkSym "bar")
+  assertParseText "foo<bar" $ mkOp2 NLt (mkSym "foo") (mkSym "bar")
   assertParseFail "+ 3"
   assertParseFail "foo +"
 
