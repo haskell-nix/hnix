@@ -1,28 +1,28 @@
 
 -- | A bunch of shorthands for making nix expressions.
 --
--- Functions with an @F@ suffix return a more general type without the outer
--- 'Fix' wrapper.
+-- Functions with an @F@ suffix return a more general type (base functor @F a@) without the outer
+-- 'Fix' wrapper that creates @a@.
 module Nix.Expr.Shorthands where
 
 import           Data.Fix
 import           Nix.Atoms
 import           Nix.Expr.Types
 
+-- | Make @Null@.
+mkNull :: NExpr
+mkNull = Fix mkNullF
+
 -- | Make an integer literal expression.
+mkBool :: Bool -> NExpr
+mkBool = Fix . mkBoolF
+
 mkInt :: Integer -> NExpr
 mkInt = Fix . mkIntF
-
-
-mkIntF :: Integer -> NExprF a
-mkIntF = NConstant . NInt
 
 -- | Make an floating point literal expression.
 mkFloat :: Float -> NExpr
 mkFloat = Fix . mkFloatF
-
-mkFloatF :: Float -> NExprF a
-mkFloatF = NConstant . NFloat
 
 -- | Make a regular (double-quoted) string.
 mkStr :: Text -> NExpr
@@ -41,51 +41,23 @@ mkIndentedStr w = Fix . NStr . Indented w . \case
 mkPath :: Bool -> FilePath -> NExpr
 mkPath b = Fix . mkPathF b
 
-mkPathF :: Bool -> FilePath -> NExprF a
-mkPathF False = NLiteralPath
-mkPathF True  = NEnvPath
-
 -- | Make a path expression which pulls from the NIX_PATH env variable.
 mkEnvPath :: FilePath -> NExpr
 mkEnvPath = Fix . mkEnvPathF
-
-mkEnvPathF :: FilePath -> NExprF a
-mkEnvPathF = mkPathF True
 
 -- | Make a path expression which references a relative path.
 mkRelPath :: FilePath -> NExpr
 mkRelPath = Fix . mkRelPathF
 
-mkRelPathF :: FilePath -> NExprF a
-mkRelPathF = mkPathF False
-
 -- | Make a variable (symbol)
 mkSym :: Text -> NExpr
 mkSym = Fix . mkSymF
 
-mkSymF :: Text -> NExprF a
-mkSymF = NSym
-
 mkSynHole :: Text -> NExpr
 mkSynHole = Fix . mkSynHoleF
 
-mkSynHoleF :: Text -> NExprF a
-mkSynHoleF = NSynHole
-
 mkSelector :: Text -> NAttrPath NExpr
 mkSelector = (:| mempty) . StaticKey
-
-mkBool :: Bool -> NExpr
-mkBool = Fix . mkBoolF
-
-mkBoolF :: Bool -> NExprF a
-mkBoolF = NConstant . NBool
-
-mkNull :: NExpr
-mkNull = Fix mkNullF
-
-mkNullF :: NExprF a
-mkNullF = NConstant NNull
 
 mkOper :: NUnaryOp -> NExpr -> NExpr
 mkOper op = Fix . NUnary op
@@ -133,6 +105,35 @@ mkDots (Fix (NSelect e keys' x)) keys =
   Fix (NSelect e (keys' <> fmap (`StaticKey` Nothing) keys) x)
 mkDots e keys = Fix $ NSelect e (fmap (`StaticKey` Nothing) keys) Nothing
 -}
+
+mkNullF :: NExprF a
+mkNullF = NConstant NNull
+
+mkBoolF :: Bool -> NExprF a
+mkBoolF = NConstant . NBool
+
+mkIntF :: Integer -> NExprF a
+mkIntF = NConstant . NInt
+
+mkFloatF :: Float -> NExprF a
+mkFloatF = NConstant . NFloat
+
+mkPathF :: Bool -> FilePath -> NExprF a
+mkPathF False = NLiteralPath
+mkPathF True  = NEnvPath
+
+mkEnvPathF :: FilePath -> NExprF a
+mkEnvPathF = mkPathF True
+
+mkRelPathF :: FilePath -> NExprF a
+mkRelPathF = mkPathF False
+
+mkSymF :: Text -> NExprF a
+mkSymF = NSym
+
+mkSynHoleF :: Text -> NExprF a
+mkSynHoleF = NSynHole
+
 
 -- | An `inherit` clause without an expression to pull from.
 inherit :: [NKeyName e] -> Binding e
