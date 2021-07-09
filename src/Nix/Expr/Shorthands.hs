@@ -86,13 +86,17 @@ mkParamset params variadic = ParamSet params variadic mempty
 --
 -- @rec { .. };@
 mkRecSet :: [Binding NExpr] -> NExpr
-mkRecSet = Fix . NSet Recursive
+mkRecSet = mkSet Recursive
 
 -- | Put a non-recursive set.
 --
 -- > { .. }
 mkNonRecSet :: [Binding NExpr] -> NExpr
-mkNonRecSet = Fix . NSet NonRecursive
+mkNonRecSet = mkSet NonRecursive
+
+-- | General set builder function.
+mkSet :: Recursivity -> [Binding NExpr] -> NExpr
+mkSet r = Fix . NSet r
 
 -- | Put a list.
 mkList :: [NExpr] -> NExpr
