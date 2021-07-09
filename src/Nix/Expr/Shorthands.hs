@@ -216,36 +216,36 @@ mkBinop = mkOper2
 (@@), ($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->), ($//), ($+), ($-), ($*), ($/), ($++)
   :: NExpr -> NExpr -> NExpr
 -- | Function application (@' '@ in @f x@)
-(@@) = mkBinop NApp
+(@@) = mkOper2 NApp
 infixl 1 @@
 -- | Equality: @==@
-($==) = mkBinop NEq
+($==) = mkOper2 NEq
 -- | Inequality: @!=@
-($!=) = mkBinop NNEq
+($!=) = mkOper2 NNEq
 -- | Less than: @<@
-($<)  = mkBinop NLt
+($<)  = mkOper2 NLt
 -- | Less than OR equal: @<=@
-($<=) = mkBinop NLte
+($<=) = mkOper2 NLte
 -- | Greater than: @>@
-($>)  = mkBinop NGt
+($>)  = mkOper2 NGt
 -- | Greater than OR equal: @>=@
-($>=) = mkBinop NGte
+($>=) = mkOper2 NGte
 -- | AND: @&&@
-($&&) = mkBinop NAnd
+($&&) = mkOper2 NAnd
 -- | OR: @||@
-($||) = mkBinop NOr
+($||) = mkOper2 NOr
 -- | Logical implication: @->@
-($->) = mkBinop NImpl
+($->) = mkOper2 NImpl
 -- | Extend/override the left attr set, with the right one: @//@
-($//) = mkBinop NUpdate
+($//) = mkOper2 NUpdate
 -- | Addition: @+@
-($+)  = mkBinop NPlus
+($+)  = mkOper2 NPlus
 -- | Subtraction: @-@
-($-)  = mkBinop NMinus
+($-)  = mkOper2 NMinus
 -- | Multiplication: @*@
-($*)  = mkBinop NMult
+($*)  = mkOper2 NMult
 -- | Division: @/@
-($/)  = mkBinop NDiv
+($/)  = mkOper2 NDiv
 -- | List concatenation: @++@
-($++) = mkBinop NConcat
+($++) = mkOper2 NConcat
 
