@@ -102,9 +102,9 @@ mkList = Fix . NList
 mkLets :: [Binding NExpr] -> NExpr -> NExpr
 mkLets bindings = Fix . NLet bindings
 
--- | Create @where@:
--- 1st expr - @where@ body
--- 2nd - main expression @where@ serves to.
+-- | Create a @whith@:
+-- 1st expr - what to bring into the scope.
+-- 2nd - expression that recieves the scope extention.
 --
 -- +--------------------+-------------------+
 -- | Haskell            | Nix               |
@@ -114,56 +114,88 @@ mkLets bindings = Fix . NLet bindings
 mkWith :: NExpr -> NExpr -> NExpr
 mkWith e = Fix . NWith e
 
+-- | Create an @assert@:
+-- 1st expr - asserting itself, must return @true@.
+-- 2nd - main expression to evaluated after assertion.
+--
+-- +-----------------------+----------------------+
+-- | Haskell               | Nix                  |
+-- +=======================+======================+
+-- | @mkAssert check eval@ | @assert check; eval@ |
+-- +-----------------------+----------------------+
 mkAssert :: NExpr -> NExpr -> NExpr
 mkAssert e = Fix . NAssert e
 
+-- | Put:
+--
+-- > if expr1
+-- >   then expr2
+-- >   else expr3
 mkIf :: NExpr -> NExpr -> NExpr -> NExpr
 mkIf e1 e2 = Fix . NIf e1 e2
 
+-- | Lambda function, analog of Haskell's @\\ x -> x@:
+--
+-- +-----------------------+-----------+
+-- | Haskell               | Nix       |
+-- +=======================+===========+
+-- | @ mkFunction x expr @ | @x: expr@ |
+-- +-----------------------+-----------+
 mkFunction :: Params NExpr -> NExpr -> NExpr
 mkFunction params = Fix . NAbs params
 
--- | Lambda function.
--- > x ==> x
---Haskell:
--- > \\ x -> x
---Nix:
--- > x: x
+-- | Lambda function, analog of Haskell's @\\ x -> x@:
+--
+-- +---------------+-----------+
+-- | Haskell       | Nix       |
+-- +===============+===========+
+-- | @x ==> expr @ | @x: expr@ |
+-- +---------------+-----------+
 (==>) :: Params NExpr -> NExpr -> NExpr
 (==>) = mkFunction
 infixr 1 ==>
 
 
 
--- ** Basic base functor builders
+-- ** Base functor builders for basic expressions builders *sic
 
+-- | Unfixed @mkNull@.
 mkNullF :: NExprF a
 mkNullF = NConstant NNull
 
+-- | Unfixed @mkBool@.
 mkBoolF :: Bool -> NExprF a
 mkBoolF = NConstant . NBool
 
+-- | Unfixed @mkInt@.
 mkIntF :: Integer -> NExprF a
 mkIntF = NConstant . NInt
 
+-- | Unfixed @mkFloat@.
 mkFloatF :: Float -> NExprF a
 mkFloatF = NConstant . NFloat
 
+-- | Unfixed @mkPath@.
 mkPathF :: Bool -> FilePath -> NExprF a
 mkPathF False = NLiteralPath
 mkPathF True  = NEnvPath
 
+-- | Unfixed @mkEnvPath@.
 mkEnvPathF :: FilePath -> NExprF a
 mkEnvPathF = mkPathF True
 
+-- | Unfixed @mkRelPath@.
 mkRelPathF :: FilePath -> NExprF a
 mkRelPathF = mkPathF False
 
+-- | Unfixed @mkSym@.
 mkSymF :: Text -> NExprF a
 mkSymF = NSym
 
+-- | Unfixed @mkSynHole@.
 mkSynHoleF :: Text -> NExprF a
 mkSynHoleF = NSynHole
+
 
 -- * Other
 -- (org this better/make a better name for section(s))
@@ -173,6 +205,13 @@ inherit :: [NKeyName e] -> Binding e
 inherit ks = Inherit Nothing ks nullPos
 
 -- | An `inherit` clause with an expression to pull from.
+--
+-- +------------------------+--------------------+------------+
+-- | Hask                   | Nix                | pseudocode |
+-- +========================+====================+============+
+-- | @inheritFrom x [a, b]@ | @inherit (x) a b;@ | @a = x.a;@ |
+-- |                        |                    | @b = x.b;@ |
+-- +------------------------+--------------------+------------+
 inheritFrom :: e -> [NKeyName e] -> Binding e
 inheritFrom expr ks = Inherit (pure expr) ks nullPos
 
@@ -180,14 +219,16 @@ inheritFrom expr ks = Inherit (pure expr) ks nullPos
 bindTo :: Text -> NExpr -> Binding NExpr
 bindTo name x = NamedVar (mkSelector name) x nullPos
 
--- | @=@. @bindTo@ infix version. Bind name to an expression.
+-- | Nix @=@ (bind operator).
 ($=) :: Text -> NExpr -> Binding NExpr
 ($=) = bindTo
 infixr 2 $=
 
 -- | Append a list of bindings to a set or let expression.
--- For example, adding `[a = 1, b = 2]` to `let c = 3; in 4` produces
--- `let a = 1; b = 2; c = 3; in 4`.
+-- For example:
+-- adding      `[a = 1, b = 2]`
+-- to       `let               c = 3; in 4`
+-- produces `let a = 1; b = 2; c = 3; in 4`.
 appendBindings :: [Binding NExpr] -> NExpr -> NExpr
 appendBindings newBindings (Fix e) =
   case e of
@@ -195,12 +236,12 @@ appendBindings newBindings (Fix e) =
     NSet recur bindings -> Fix $ NSet recur (bindings <> newBindings)
     _                   -> error "Can only append bindings to a set or a let"
 
--- | Applies a transformation to the body of a nix function.
+-- | Applies a transformation to the body of a Nix function.
 modifyFunctionBody :: (NExpr -> NExpr) -> NExpr -> NExpr
 modifyFunctionBody f (Fix (NAbs params body)) = mkFunction params $ f body
 modifyFunctionBody _ _ = error "Not a function"
 
--- | A let statement with multiple assignments.
+-- | A @let@ statement with multiple assignments.
 letsE :: [(Text, NExpr)] -> NExpr -> NExpr
 letsE pairs = mkLets $ uncurry ($=) <$> pairs
 
@@ -208,11 +249,11 @@ letsE pairs = mkLets $ uncurry ($=) <$> pairs
 letE :: Text -> NExpr -> NExpr -> NExpr
 letE varName varExpr = letsE [(varName, varExpr)]
 
--- | Make an attribute set (non-recursive).
+-- | Make a non-recursive attribute set.
 attrsE :: [(Text, NExpr)] -> NExpr
 attrsE pairs = mkNonRecSet $ uncurry ($=) <$> pairs
 
--- | Make an attribute set (recursive).
+-- | Make a recursive attribute set.
 recAttrsE :: [(Text, NExpr)] -> NExpr
 recAttrsE pairs = mkRecSet $ uncurry ($=) <$> pairs
 
