@@ -11,76 +11,106 @@ import           Nix.Expr.Types
 
 -- * Basic expression builders
 
--- | Make @Null@.
+-- | Put null.
 mkNull :: NExpr
 mkNull = Fix mkNullF
 
+-- | Put boolean.
 mkBool :: Bool -> NExpr
 mkBool = Fix . mkBoolF
 
--- | Make an integer.
+-- | Put integer.
 mkInt :: Integer -> NExpr
 mkInt = Fix . mkIntF
 
--- | Make a floating point.
+-- | Put floating point number.
 mkFloat :: Float -> NExpr
 mkFloat = Fix . mkFloatF
 
--- | Make a regular (double-quoted) string.
+-- | Put a regular (double-quoted) string.
 mkStr :: Text -> NExpr
 mkStr = Fix . NStr . DoubleQuoted . \case
   "" -> mempty
   x  -> [Plain x]
 
--- | Make an indented string.
+-- | Put an indented string.
 mkIndentedStr :: Int -> Text -> NExpr
 mkIndentedStr w = Fix . NStr . Indented w . \case
   "" -> mempty
   x  -> [Plain x]
 
--- | Make a path. Use 'True' if the path should be read from the environment, else 'False'.
+-- | Put a path. Use @True@ if the path should be read from the environment, else use @False@.
 mkPath :: Bool -> FilePath -> NExpr
 mkPath b = Fix . mkPathF b
 
--- | Make a path expression which pulls from the NIX_PATH env variable.
+-- | Put a path expression which pulls from the @NIX_PATH@ @env@ variable.
 mkEnvPath :: FilePath -> NExpr
 mkEnvPath = Fix . mkEnvPathF
 
--- | Make a path expression which references a relative path.
+-- | Put a path which references a relative path.
 mkRelPath :: FilePath -> NExpr
 mkRelPath = Fix . mkRelPathF
 
--- | Make a variable (symbol)
+-- | Put a variable (symbol).
 mkSym :: Text -> NExpr
 mkSym = Fix . mkSymF
 
+-- | Put syntactic hole.
 mkSynHole :: Text -> NExpr
 mkSynHole = Fix . mkSynHoleF
 
 mkSelector :: Text -> NAttrPath NExpr
 mkSelector = (:| mempty) . StaticKey
 
+-- | Put an unary operator.
 mkOper :: NUnaryOp -> NExpr -> NExpr
 mkOper op = Fix . NUnary op
 
+-- | Put a binary operator.
 mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkOper2 op a = Fix . NBinary op a
 
 mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
 mkParamset params variadic = ParamSet params variadic mempty
 
+-- | Put a recursive set.
+--
+-- @rec { .. };@
 mkRecSet :: [Binding NExpr] -> NExpr
 mkRecSet = Fix . NSet Recursive
 
+-- | Put a non-recursive set.
+--
+-- > { .. }
 mkNonRecSet :: [Binding NExpr] -> NExpr
 mkNonRecSet = Fix . NSet NonRecursive
 
+-- | Put a list.
 mkList :: [NExpr] -> NExpr
 mkList = Fix . NList
 
+-- | Wrap in a @let@.
+--
+-- (Evaluate the second argument after introducing the bindings.)
+--
+-- +------------------------+-----------------+
+-- | Haskell                | Nix             |
+-- +========================+=================+
+-- | @mkLets bindings expr@ | @let bindings;@ |
+-- |                        | @in expr@       |
+-- +------------------------+-----------------+
 mkLets :: [Binding NExpr] -> NExpr -> NExpr
 mkLets bindings = Fix . NLet bindings
 
+-- | Create @where@:
+-- 1st expr - @where@ body
+-- 2nd - main expression @where@ serves to.
+--
+-- +--------------------+-------------------+
+-- | Haskell            | Nix               |
+-- +====================+===================+
+-- | @mkWith body main@ | @with body; expr@ |
+-- +--------------------+----00-------------+
 mkWith :: NExpr -> NExpr -> NExpr
 mkWith e = Fix . NWith e
 
