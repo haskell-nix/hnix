@@ -11,6 +11,10 @@ import           Nix.Expr.Types
 
 -- * Basic expression builders
 
+-- | Put @NAtom@ as expression
+mkConst :: NAtom -> NExpr
+mkConst = Fix . NConstant
+
 -- | Put null.
 mkNull :: NExpr
 mkNull = Fix mkNullF
