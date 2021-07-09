@@ -66,6 +66,10 @@ mkSelector = (:| mempty) . StaticKey
 mkOper :: NUnaryOp -> NExpr -> NExpr
 mkOper op = Fix . NUnary op
 
+-- | Logical negation.
+mkNot :: NExpr -> NExpr
+mkNot = mkOper NNot
+
 -- | Put a binary operator.
 mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkOper2 op a = Fix . NBinary op a
@@ -155,6 +159,10 @@ mkFunction params = Fix . NAbs params
 (==>) = mkFunction
 infixr 1 ==>
 
+-- | Dot-reference into an attribute set: @attrSet.k@
+(@.) :: NExpr -> Text -> NExpr
+(@.) obj name = Fix $ NSelect obj (StaticKey name :| mempty) Nothing
+infixl 2 @.
 
 
 -- ** Base functor builders for basic expressions builders *sic
@@ -200,10 +208,6 @@ mkSynHoleF = NSynHole
 -- * Other
 -- (org this better/make a better name for section(s))
 
--- | An `inherit` clause without an expression to pull from.
-inherit :: [NKeyName e] -> Binding e
-inherit ks = Inherit Nothing ks nullPos
-
 -- | An `inherit` clause with an expression to pull from.
 --
 -- +------------------------+--------------------+------------+
@@ -215,14 +219,25 @@ inherit ks = Inherit Nothing ks nullPos
 inheritFrom :: e -> [NKeyName e] -> Binding e
 inheritFrom expr ks = Inherit (pure expr) ks nullPos
 
--- | Shorthand for producing a binding of a name to an expression: @=@
-bindTo :: Text -> NExpr -> Binding NExpr
-bindTo name x = NamedVar (mkSelector name) x nullPos
+-- | An `inherit` clause without an expression to pull from.
+--
+-- +----------------------+----------------+------------------+
+-- | Hask                 | Nix            | pseudocode       |
+-- +======================+================+==================+
+-- | @inheritFrom [a, b]@ | @inherit a b;@ | @a = outside.a;@ |
+-- |                      |                | @b = outside.b;@ |
+-- +----------------------+----------------+------------------+
+inherit :: [NKeyName e] -> Binding e
+inherit ks = Inherit Nothing ks nullPos
 
 -- | Nix @=@ (bind operator).
 ($=) :: Text -> NExpr -> Binding NExpr
 ($=) = bindTo
 infixr 2 $=
+
+-- | Shorthand for producing a binding of a name to an expression: Nix's @=@.
+bindTo :: Text -> NExpr -> Binding NExpr
+bindTo name x = NamedVar (mkSelector name) x nullPos
 
 -- | Append a list of bindings to a set or let expression.
 -- For example:
@@ -238,7 +253,7 @@ appendBindings newBindings (Fix e) =
 
 -- | Applies a transformation to the body of a Nix function.
 modifyFunctionBody :: (NExpr -> NExpr) -> NExpr -> NExpr
-modifyFunctionBody f (Fix (NAbs params body)) = mkFunction params $ f body
+modifyFunctionBody transform (Fix (NAbs params body)) = mkFunction params $ transform body
 modifyFunctionBody _ _ = error "Not a function"
 
 -- | A @let@ statement with multiple assignments.
@@ -257,14 +272,6 @@ attrsE pairs = mkNonRecSet $ uncurry ($=) <$> pairs
 recAttrsE :: [(Text, NExpr)] -> NExpr
 recAttrsE pairs = mkRecSet $ uncurry ($=) <$> pairs
 
--- | Logical negation.
-mkNot :: NExpr -> NExpr
-mkNot = mkOper NNot
-
--- | Dot-reference into an attribute set: @attrSet.k@
-(@.) :: NExpr -> Text -> NExpr
-(@.) obj name = Fix $ NSelect obj (StaticKey name :| mempty) Nothing
-infixl 2 @.
 
 -- * Nix binary operators
 
