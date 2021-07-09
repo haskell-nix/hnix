@@ -2,6 +2,7 @@
 # ChangeLog
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.1...0.14.0#files_bucket) 0.14.0
+## [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.1...0.14.0#files_bucket) 0.14.0 (2021-07-08)
 
 * GHC 9.0 support.
 
