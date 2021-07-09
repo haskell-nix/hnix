@@ -13,14 +13,14 @@ import           Nix.Expr.Types
 mkNull :: NExpr
 mkNull = Fix mkNullF
 
--- | Make an integer literal expression.
 mkBool :: Bool -> NExpr
 mkBool = Fix . mkBoolF
 
+-- | Make an integer.
 mkInt :: Integer -> NExpr
 mkInt = Fix . mkIntF
 
--- | Make an floating point literal expression.
+-- | Make a floating point.
 mkFloat :: Float -> NExpr
 mkFloat = Fix . mkFloatF
 
@@ -36,8 +36,7 @@ mkIndentedStr w = Fix . NStr . Indented w . \case
   "" -> mempty
   x  -> [Plain x]
 
--- | Make a path. Use 'True' if the path should be read from the
--- environment, else 'False'.
+-- | Make a path. Use 'True' if the path should be read from the environment, else 'False'.
 mkPath :: Bool -> FilePath -> NExpr
 mkPath b = Fix . mkPathF b
 
@@ -91,6 +90,16 @@ mkIf e1 e2 = Fix . NIf e1 e2
 
 mkFunction :: Params NExpr -> NExpr -> NExpr
 mkFunction params = Fix . NAbs params
+
+-- | Lambda function.
+-- > x ==> x
+--Haskell:
+-- > \\ x -> x
+--Nix:
+-- > x: x
+(==>) :: Params NExpr -> NExpr -> NExpr
+(==>) = mkFunction
+infixr 1 ==>
 
 {-
 mkDot :: NExpr -> Text -> NExpr
@@ -150,7 +159,6 @@ bindTo name x = NamedVar (mkSelector name) x nullPos
 -- | Infix version of @bindTo@: @=@
 ($=) :: Text -> NExpr -> Binding NExpr
 ($=) = bindTo
-
 infixr 2 $=
 
 -- | Append a list of bindings to a set or let expression.
@@ -187,16 +195,16 @@ recAttrsE pairs = Fix $ NSet Recursive $ uncurry bindTo <$> pairs
 mkNot :: NExpr -> NExpr
 mkNot = Fix . NUnary NNot
 
--- -- | Dot-reference into an attribute set.
--- (!.) :: NExpr -> Text -> NExpr
--- (!.) = mkDot
--- infixl 8 !.
+-- | Dot-reference into an attribute set: @attrSet.k@
+(@.) :: NExpr -> Text -> NExpr
+(@.) obj name = Fix $ NSelect obj (StaticKey name :| mempty) Nothing
+infixl 2 @.
 
 -- * Nix binary operators
 
 -- | Nix binary operator builder.
 mkBinop :: NBinaryOp -> NExpr -> NExpr -> NExpr
-mkBinop op e1 e2 = Fix $ NBinary op e1 e2
+mkBinop = mkOper2
 
 (@@), ($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->), ($//), ($+), ($-), ($*), ($/), ($++)
   :: NExpr -> NExpr -> NExpr
@@ -234,18 +242,3 @@ infixl 1 @@
 -- | List concatenation: @++@
 ($++) = mkBinop NConcat
 
-
--- | Lambda function.
--- > x ==> x
---Haskell:
--- > \\ x -> x
---Nix:
--- > x: x
-(==>) :: Params NExpr -> NExpr -> NExpr
-(==>) = mkFunction
-infixr 1 ==>
-
--- | Dot-reference into an attribute set: @attrSet.k@
-(@.) :: NExpr -> Text -> NExpr
-(@.) obj name = Fix $ NSelect obj (StaticKey name :| mempty) Nothing
-infixl 2 @.
