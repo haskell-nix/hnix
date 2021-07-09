@@ -1,7 +1,15 @@
 
 # ChangeLog
 
-## [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.1...0.14.0#files_bucket) 0.14.0
+## [(diff)](https://github.com/haskell-nix/hnix/compare/0.14.0...0.15.0#files_bucket) 0.15.0
+
+Partial log (for now):
+
+* Breaking:
+
+  * `Nix.Expr.Shorthands`: `inherit{,From}`: dropped second argument as irrelevant ([report](https://github.com/haskell-nix/hnix/issues/326)).
+
+
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.1...0.14.0#files_bucket) 0.14.0 (2021-07-08)
 
 * GHC 9.0 support.

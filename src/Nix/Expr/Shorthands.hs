@@ -8,7 +8,6 @@ module Nix.Expr.Shorthands where
 import           Data.Fix
 import           Nix.Atoms
 import           Nix.Expr.Types
-import           Text.Megaparsec.Pos            ( SourcePos )
 
 -- | Make an integer literal expression.
 mkInt :: Integer -> NExpr
@@ -136,12 +135,12 @@ mkDots e keys = Fix $ NSelect e (fmap (`StaticKey` Nothing) keys) Nothing
 -}
 
 -- | An `inherit` clause without an expression to pull from.
-inherit :: [NKeyName e] -> SourcePos -> Binding e
-inherit = Inherit Nothing
+inherit :: [NKeyName e] -> Binding e
+inherit ks = Inherit Nothing ks nullPos
 
 -- | An `inherit` clause with an expression to pull from.
-inheritFrom :: e -> [NKeyName e] -> SourcePos -> Binding e
-inheritFrom expr = Inherit (pure expr)
+inheritFrom :: e -> [NKeyName e] -> Binding e
+inheritFrom expr ks = Inherit (pure expr) ks nullPos
 
 -- | Shorthand for producing a binding of a name to an expression: @=
 bindTo :: Text -> NExpr -> Binding NExpr
