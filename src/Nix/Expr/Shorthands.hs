@@ -170,9 +170,13 @@ infixr 1 ==>
 
 -- | Dot-reference into an attribute set: @attrSet.k@
 (@.) :: NExpr -> Text -> NExpr
-(@.) obj name = Fix $ NSelect obj (StaticKey name :| mempty) Nothing
+(@.) obj name = getRefOrDefault obj name Nothing
 infixl 2 @.
 
+
+-- | General dot-reference with optional alternative if the jey does not exist.
+getRefOrDefault :: NExpr -> VarName -> Maybe NExpr -> NExpr
+getRefOrDefault obj name alt = Fix $ NSelect obj (StaticKey name :| mempty) alt
 
 -- ** Base functor builders for basic expressions builders *sic
 
