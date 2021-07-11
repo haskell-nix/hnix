@@ -169,16 +169,6 @@ mkIf e1 e2 = Fix . NIf e1 e2
 mkFunction :: Params NExpr -> NExpr -> NExpr
 mkFunction params = Fix . NAbs params
 
--- | Lambda function, analog of Haskell's @\\ x -> x@:
---
--- +---------------+-----------+
--- | Haskell       | Nix       |
--- +===============+===========+
--- | @x ==> expr @ | @x: expr@ |
--- +---------------+-----------+
-(==>) :: Params NExpr -> NExpr -> NExpr
-(==>) = mkFunction
-infixr 1 ==>
 
 -- | Dot-reference into an attribute set: @attrSet.k@
 (@.) :: NExpr -> Text -> NExpr
@@ -340,6 +330,16 @@ infixl 1 @@
 -- | List concatenation: @++@
 ($++) = mkOp2 NConcat
 
+-- | Lambda function, analog of Haskell's @\\ x -> x@:
+--
+-- +---------------+-----------+
+-- | Haskell       | Nix       |
+-- +===============+===========+
+-- | @x ==> expr @ | @x: expr@ |
+-- +---------------+-----------+
+(==>) :: Params NExpr -> NExpr -> NExpr
+(==>) = mkFunction
+infixr 1 ==>
 
 -- * Under deprecation
 
