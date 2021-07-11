@@ -10,7 +10,7 @@ import           Data.List                      ( dropWhileEnd
                                                 , lookup
                                                 )
 import qualified Data.Text                     as T
-import           Nix.Expr
+import           Nix.Expr.Types
 
 -- | Merge adjacent @Plain@ values with @<>@.
 mergePlain :: [Antiquoted Text r] -> [Antiquoted Text r]
@@ -111,7 +111,7 @@ escapeCodes =
   [('\n', 'n'), ('\r', 'r'), ('\t', 't'), ('\\', '\\'), ('$', '$'), ('"', '"')]
 
 fromEscapeCode :: Char -> Maybe Char
-fromEscapeCode = (`lookup` fmap swap escapeCodes)
+fromEscapeCode = (`lookup` (swap <$> escapeCodes))
 
 toEscapeCode :: Char -> Maybe Char
 toEscapeCode = (`lookup` escapeCodes)

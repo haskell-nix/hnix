@@ -1,13 +1,16 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ExtendedDefaultRules #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
+{-# OPTIONS_GHC -Wno-type-defaults #-}
 
 
 module ParserTests (tests) where
 
+import Prelude hiding (($<))
 import Data.Fix
 import NeatInterpolation (text)
 import Nix.Atoms
@@ -20,312 +23,525 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.TH
 
-case_constant_int = assertParseText "234" $ mkInt 234
+default (NixLang)
+
+-- * Tests
+
+
+-- ** Literals
+
+case_constant_int =
+  checks
+    ( mkInt 234
+    , "234"
+    )
 
 case_constant_bool = do
-  assertParseText "true" $ mkBool True
-  assertParseText "false" $ mkBool False
+  checks
+    ( mkBool True
+    , "true"
+    )
+    ( mkBool False
+    , "false"
+    )
 
 case_constant_bool_respects_attributes = do
-  assertParseText "true-foo"  $ mkSym "true-foo"
-  assertParseText "false-bar" $ mkSym "false-bar"
+  invariantVals
+    "true-foo"
+    "false-bar"
 
-case_constant_path = do
-  assertParseText "./." $ mkPath False "./."
-  assertParseText "./+-_/cdef/09ad+-" $ mkPath False "./+-_/cdef/09ad+-"
-  assertParseText "/abc" $ mkPath False "/abc"
-  assertParseText "../abc" $ mkPath False "../abc"
-  assertParseText "<abc>" $ mkPath True "abc"
-  assertParseText "<../cdef>" $ mkPath True "../cdef"
-  assertParseText "a//b" $ mkOper2 NUpdate (mkSym "a") (mkSym "b")
-  assertParseText "rec+def/cdef" $ mkPath False "rec+def/cdef"
-  assertParseText "a/b//c/def//<g> < def/d" $ mkOper2 NLt
-    (mkOper2 NUpdate (mkPath False "a/b") $ mkOper2 NUpdate
-      (mkPath False "c/def") (mkPath True "g"))
-    (mkPath False "def/d")
-  assertParseText "a'b/c" $ Fix $ NBinary NApp (mkSym "a'b") (mkPath False "/c")
-  assertParseText "a/b" $ mkPath False "a/b"
-  assertParseText "4/2" $ mkPath False "4/2"
-  assertParseFail "."
-  assertParseFail ".."
-  assertParseFail "/"
-  assertParseFail "a/"
-  assertParseFail "a/def/"
-  assertParseFail "~"
-  assertParseFail "~/"
-  assertParseText "~/a" $ mkPath False "~/a"
-  assertParseText "~/a/b" $ mkPath False "~/a/b"
+case_constant_path_invariants =
+  knownAs (staysInvariantUnder (mkRelPath . toString))
+    "./."
+    "./+-_/cdef/09ad+-"
+    "/abc"
+    "../abc"
+    "~/a"
+    "~/a/b"
+    "a/b"
+    "4/2"
+    "rec+def/cdef"
 
-case_constant_uri = do
-  assertParseText "a:a" $ mkStr "a:a"
-  assertParseText "http://foo.bar" $ mkStr "http://foo.bar"
-  assertParseText "a+de+.adA+-:%%%ads%5asdk&/" $ mkStr "a+de+.adA+-:%%%ads%5asdk&/"
-  assertParseText "rec+def:c" $ mkStr "rec+def:c"
-  assertParseText "f.foo:bar" $ mkStr "f.foo:bar"
-  assertParseFail "http://foo${\"bar\"}"
-  assertParseFail ":bcdef"
-  assertParseFail "a%20:asda"
-  assertParseFail ".:adasd"
-  assertParseFail "+:acdcd"
+case_constant_path =
+  checks
+    ( var "a'b" @@ mkRelPath "/c"
+    , "a'b/c"
+    )
+    ( mkRelPath "a/b" $// mkRelPath "c/def" $// mkEnvPath "g" $<  mkRelPath "def/d"
+    , "a/b//c/def//<g> < def/d"
+    )
+    ( mkEnvPath "abc"
+    , "<abc>"
+    )
+    ( mkEnvPath "../cdef"
+    , "<../cdef>"
+    )
+    ( var "a" $// var "b"
+    , "a//b"
+    )
 
-case_simple_set = do
-  assertParseText "{ a = 23; b = 4; }" $ Fix $ NSet NonRecursive
-    [ NamedVar (mkSelector "a") (mkInt 23) nullPos
-    , NamedVar (mkSelector "b") (mkInt 4) nullPos
-    ]
-  assertParseFail "{ a = 23 }"
+case_constant_path_syntax_mistakes =
+  mistakes
+    "."
+    ".."
+    "/"
+    "a/"
+    "a/def/"
+    "~"
+    "~/"
 
-case_set_inherit = do
-  assertParseText "{ e = 3; inherit a b; }" $ Fix $ NSet NonRecursive
-    [ NamedVar (mkSelector "e") (mkInt 3) nullPos
-    , Inherit Nothing (StaticKey <$> ["a", "b"]) nullPos
-    ]
-  assertParseText "{ inherit; }" $ Fix $ NSet NonRecursive [ Inherit Nothing mempty nullPos ]
+case_constant_uri =
+  knownAs (staysInvariantUnder mkStr)
+    "a:a"
+    "http://foo.bar"
+    "a+de+.adA+-:%%%ads%5asdk&/"
+    "rec+def:c"
+    "f.foo:bar"
 
-case_set_scoped_inherit = assertParseText "{ inherit (a) b c; e = 4; inherit(a)b c; }" $ Fix $ NSet NonRecursive
-  [ Inherit (pure (mkSym "a")) (StaticKey <$> ["b", "c"]) nullPos
-  , NamedVar (mkSelector "e") (mkInt 4) nullPos
-  , Inherit (pure (mkSym "a")) (StaticKey <$> ["b", "c"]) nullPos
-  ]
 
-case_set_rec = assertParseText "rec { a = 3; b = a; }" $ Fix $ NSet Recursive
-  [ NamedVar (mkSelector "a") (mkInt 3) nullPos
-  , NamedVar (mkSelector "b") (mkSym "a") nullPos
-  ]
+case_constant_uri_syntax_mistakes =
+  mistakes
+    "http://foo${\"bar\"}"
+    ":bcdef"
+    "a%20:asda"
+    ".:adasd"
+    "+:acdcd"
 
-case_set_complex_keynames = do
-  assertParseText "{ \"\" = null; }" $ Fix $ NSet NonRecursive
-    [ NamedVar (DynamicKey (Plain (DoubleQuoted mempty)) :| mempty) mkNull nullPos ]
-  assertParseText "{ a.b = 3; a.c = 4; }" $ Fix $ NSet NonRecursive
-    [ NamedVar (StaticKey "a" :| [StaticKey "b"]) (mkInt 3) nullPos
-    , NamedVar (StaticKey "a" :| [StaticKey "c"]) (mkInt 4) nullPos
-    ]
-  assertParseText "{ ${let a = \"b\"; in a} = 4; }" $ Fix $ NSet NonRecursive
-    [ NamedVar (DynamicKey (Antiquoted letExpr) :| mempty) (mkInt 4) nullPos ]
-  assertParseText "{ \"a${let a = \"b\"; in a}c\".e = 4; }" $ Fix $ NSet NonRecursive
-    [ NamedVar (DynamicKey (Plain str) :| [StaticKey "e"]) (mkInt 4) nullPos ]
+
+-- *** Special chars in vals
+
+case_identifier_special_chars =
+  invariantVals
+    "_a"
+    "a_b"
+    "a'b"
+    "a''b"
+    "a-b"
+    "a--b"
+    "a12a"
+
+case_identifier_special_chars_syntax_mistakes =
+  mistakes
+    ".a"
+    "'a"
+
+-- ** Sets
+
+-- *** Non-recursive sets
+
+case_simple_set =
+  checks
+    ( mkNonRecSet
+        [ "a" $= mkInt 23
+        , "b" $= mkInt  4
+        ]
+    , "{ a = 23; b = 4; }"
+    )
+
+case_simple_set_syntax_mistakes =
+  mistakes
+    "{ a = 23 }"
+
+case_set_complex_keynames =
+  checks
+    ( mkNonRecSet
+        [ NamedVar (DynamicKey (Plain (DoubleQuoted mempty)) :| mempty) mkNull nullPos ]
+    , "{ \"\" = null; }"
+    )
+    ( mkNonRecSet
+        [ NamedVar (StaticKey "a" :| [StaticKey "b"]) (mkInt 3) nullPos
+        , NamedVar (StaticKey "a" :| [StaticKey "c"]) (mkInt 4) nullPos
+        ]
+    , "{ a.b = 3; a.c = 4; }"
+    )
+    ( mkNonRecSet
+        [ NamedVar (DynamicKey (Antiquoted letExpr) :| mempty) (mkInt 4) nullPos ]
+    , "{ ${let a = \"b\"; in a} = 4; }"
+    )
+    ( mkNonRecSet
+        [ NamedVar (DynamicKey (Plain str) :| [StaticKey "e"]) (mkInt 4) nullPos ]
+    , "{ \"a${let a = \"b\"; in a}c\".e = 4; }"
+    )
  where
-  letExpr = Fix $ NLet [NamedVar (mkSelector "a") (mkStr "b") nullPos] (mkSym "a")
+  letExpr = mkLets ["a" $= mkStr "b"] (var "a")
   str = DoubleQuoted [Plain "a", Antiquoted letExpr, Plain "c"]
 
-case_set_inherit_direct = assertParseText "{ inherit ({a = 3;}); }" $ Fix $ NSet NonRecursive
-  [ Inherit (pure $ Fix $ NSet NonRecursive [NamedVar (mkSelector "a") (mkInt 3) nullPos]) mempty nullPos
-  ]
 
-case_inherit_selector = do
-  assertParseText "{ inherit \"a\"; }" $ Fix $ NSet NonRecursive
-    [Inherit Nothing [DynamicKey (Plain (DoubleQuoted [Plain "a"]))] nullPos]
-  assertParseFail "{ inherit a.x; }"
+-- *** Recursivity in sets
 
-case_int_list = assertParseText "[1 2 3]" $ Fix $ NList
-  [ mkInt i | i <- [1,2,3] ]
+case_set_rec =
+  checks
+    ( mkRecSet
+        [ "a" $= mkInt 3
+        , "b" $= var "a"
+        ]
+    , "rec { a = 3; b = a; }"
+    )
 
-case_int_null_list = assertParseText "[1 2 3 null 4]" $ Fix (NList (fmap (Fix . NConstant) [NInt 1, NInt 2, NInt 3, NNull, NInt 4]))
 
-case_mixed_list = do
-  assertParseText "[{a = 3;}.a (if true then null else false) null false 4 [] c.d or null]" $ Fix $ NList
-    [ Fix (NSelect (Fix (NSet NonRecursive [NamedVar (mkSelector "a") (mkInt 3) nullPos]))
-                   (mkSelector "a") Nothing)
-    , Fix (NIf (mkBool True) mkNull (mkBool False))
-    , mkNull, mkBool False, mkInt 4, Fix (NList mempty)
-    , Fix (NSelect (mkSym "c") (mkSelector "d") (pure mkNull))
-    ]
-  assertParseFail "[if true then null else null]"
-  assertParseFail "[a ? b]"
-  assertParseFail "[a : a]"
-  assertParseFail "[${\"test\")]"
+-- *** Inheritance
 
-case_simple_lambda = assertParseText "a: a" $ Fix $ NAbs (Param "a") (mkSym "a")
+case_set_inherit =
+  checks
+    ( mkNonRecSet
+        [ "e" $= mkInt 3
+        , inherit (StaticKey <$> ["a", "b"])
+        ]
+    , "{ e = 3; inherit a b; }"
+    )
+    ( mkNonRecSet [ inherit mempty ]
+    , "{ inherit; }"
+    )
 
-case_lambda_or_uri = do
-  assertParseText "a :b" $ Fix $ NAbs (Param "a") (mkSym "b")
-  assertParseText "a c:def" $ Fix $ NBinary NApp (mkSym "a") (mkStr "c:def")
-  assertParseText "c:def: c" $ Fix $ NBinary NApp (mkStr "c:def:") (mkSym "c")
-  assertParseText "a:{}" $ Fix $ NAbs (Param "a") $ Fix $ NSet NonRecursive mempty
-  assertParseText "a:[a]" $ Fix $ NAbs (Param "a") $ Fix $ NList [mkSym "a"]
-  assertParseFail "def:"
+case_set_scoped_inherit =
+  checks
+    ( mkNonRecSet $
+        (\ x -> [x, "e" $= mkInt 4, x]) $
+          inheritFrom (var "a") (StaticKey <$> ["b", "c"])
+    , "{ inherit (a) b c; e = 4; inherit(a)b c; }"
+    )
 
-case_lambda_pattern = do
-  assertParseText "{b, c ? 1}: b" $
-    Fix $ NAbs (fixed args mempty) (mkSym "b")
-  assertParseText "{ b ? x: x  }: b" $
-    Fix $ NAbs (fixed args2 mempty) (mkSym "b")
-  assertParseText "a@{b,c ? 1}: b" $
-    Fix $ NAbs (fixed args (pure "a")) (mkSym "b")
-  assertParseText "{b,c?1}@a: c" $
-    Fix $ NAbs (fixed args (pure "a")) (mkSym "c")
-  assertParseText "{b,c?1,...}@a: c" $
-    Fix $ NAbs (variadic vargs (pure "a")) (mkSym "c")
-  assertParseText "{...}: 1" $
-    Fix $ NAbs (variadic mempty mempty) (mkInt 1)
-  assertParseFail "a@b: a"
-  assertParseFail "{a}@{b}: a"
+case_set_inherit_direct =
+  checks
+    ( mkNonRecSet [ inheritFrom (mkNonRecSet ["a" $= mkInt 3]) mempty ]
+    , "{ inherit ({a = 3;}); }"
+    )
+
+case_inherit_selector =
+  checks
+    ( mkNonRecSet [inherit [DynamicKey (Plain (DoubleQuoted [Plain "a"]))]]
+    , "{ inherit \"a\"; }"
+    )
+
+case_inherit_selector_syntax_mistakes =
+  mistakes
+    "{ inherit a.x; }"
+
+
+-- ** Lists
+
+case_int_list =
+  checks
+    ( mkList $ mkInt <$> [ i | i <- [1,2,3] ]
+    , "[1 2 3]"
+    )
+
+case_int_null_list =
+  checks
+    ( mkList (mkConst <$> [NInt 1, NInt 2, NInt 3, NNull, NInt 4])
+    , "[1 2 3 null 4]"
+    )
+
+case_mixed_list =
+  checks
+    ( mkList
+        [ mkNonRecSet ["a" $= mkInt 3] @. "a"
+        , mkIf (mkBool True) mkNull (mkBool False)
+        , mkNull
+        , mkBool False
+        , mkInt 4
+        , emptyList
+        , (@.<|>) (var "c") "d" mkNull
+        ]
+    , "[{a = 3;}.a (if true then null else false) null false 4 [] c.d or null]"
+    )
+
+case_mixed_list_syntax_mistakes =
+  mistakes
+    "[if true then null else null]"
+    "[a ? b]"
+    "[a : a]"
+    "[${\"test\")]"
+
+
+-- ** Lambdas
+
+case_simple_lambda =
+  checks
+    ( mkFunction (Param "a") (var "a")
+    , "a: a"
+    )
+
+case_lambda_or_uri =
+  checks
+    ( mkFunction (Param "a") $ var "b"
+    , "a :b"
+    )
+    ( var "a" @@ mkStr "c:def"
+    , "a c:def"
+    )
+    ( mkStr "c:def:" @@ var "c"
+    , "c:def: c"
+    )
+    ( mkFunction (Param "a") emptySet
+    , "a:{}"
+    )
+    ( mkFunction (Param "a") $ mkList [var "a"]
+    , "a:[a]"
+    )
+
+case_lambda_or_uri_syntax_mistakes =
+  mistakes
+    "def:"
+
+case_lambda_pattern =
+  checks
+    ( mkFunction (fixed args mempty) $ var "b"
+    , "{b, c ? 1}: b"
+    )
+    ( mkFunction (fixed args2 mempty) $ var "b"
+    , "{ b ? x: x  }: b"
+    )
+    ( mkFunction (fixed args $ pure "a") $ var "b"
+    , "a@{b,c ? 1}: b"
+    )
+    ( mkFunction (fixed args $ pure "a") $ var "c"
+    , "{b,c?1}@a: c"
+    )
+    ( mkFunction (variadic vargs $ pure "a") $ var "c"
+    , "{b,c?1,...}@a: c"
+    )
+    ( mkFunction (variadic mempty mempty) $ mkInt 1
+    , "{...}: 1"
+    )
  where
-  fixed args = ParamSet args False
+  fixed    args = ParamSet args False
   variadic args = ParamSet args True
-  args = [("b", Nothing), ("c", pure $ mkInt 1)]
+  args  = [("b", Nothing), ("c", pure $ mkInt 1)]
   vargs = [("b", Nothing), ("c", pure $ mkInt 1)]
   args2 = [("b", pure lam)]
-  lam = Fix $ NAbs (Param "x") (mkSym "x")
+  lam = mkFunction (Param "x") $ var "x"
 
-case_lambda_app_int = assertParseText "(a: a) 3" $ Fix (NBinary NApp lam int) where
-  int = mkInt 3
-  lam = Fix (NAbs (Param "a") asym)
-  asym = mkSym "a"
+case_lambda_pattern_syntax_mistakes =
+  mistakes
+    "a@b: a"
+    "{a}@{b}: a"
 
-case_simple_let = do
-  assertParseText "let a = 4; in a" $ Fix (NLet binds $ mkSym "a")
-  assertParseFail "let a = 4 in a"
- where
-  binds = [NamedVar (mkSelector "a") (mkInt 4) nullPos]
+case_lambda_app_int =
+  checks
+    ( mkFunction (Param "a") (var "a") @@ mkInt 3
+    , "(a: a) 3"
+    )
 
-case_let_body = assertParseText "let { body = 1; }" letBody
-  where
-    letBody = Fix $ NSelect aset (mkSelector "body") Nothing
-    aset = Fix $ NSet Recursive [NamedVar (mkSelector "body") (mkInt 1) nullPos]
 
-case_nested_let = do
-  assertParseText "let a = 4; in let b = 5; in a" $ Fix $ NLet
-    [NamedVar (mkSelector "a") (mkInt 4) nullPos]
-    (Fix $ NLet [NamedVar (mkSelector "b") (mkInt 5) nullPos] $ mkSym "a")
-  assertParseFail "let a = 4; let b = 3; in b"
+-- ** Let
 
-case_let_scoped_inherit = do
-  assertParseText "let a = null; inherit (b) c; in c" $ Fix $ NLet
-    [ NamedVar (mkSelector "a") mkNull nullPos
-    , Inherit (pure $ mkSym "b") [StaticKey "c"] nullPos ]
-    (mkSym "c")
-  assertParseFail "let inherit (b) c in c"
+case_simple_let =
+  checks
+    ( mkLets ["a" $= mkInt 4] $ var "a"
+    , "let a = 4; in a"
+    )
 
-case_if = do
-  assertParseText "if true then true else false" $
-      Fix $ NIf (mkBool True) (mkBool True) (mkBool False)
-  assertParseFail "if true then false"
-  assertParseFail "else"
-  assertParseFail "if true then false else"
-  assertParseFail "if true then false else false else"
-  assertParseFail "1 + 2 then"
+case_simple_let_syntax_mistakes =
+  mistakes
+    "let a = 4 in a"
 
-case_identifier_special_chars = do
-  assertParseText "_a" $ mkSym "_a"
-  assertParseText "a_b" $ mkSym "a_b"
-  assertParseText "a'b" $ mkSym "a'b"
-  assertParseText "a''b" $ mkSym "a''b"
-  assertParseText "a-b" $ mkSym "a-b"
-  assertParseText "a--b" $ mkSym "a--b"
-  assertParseText "a12a" $ mkSym "a12a"
-  assertParseFail ".a"
-  assertParseFail "'a"
+case_let_body =
+  checks
+    ( mkRecSet ["body" $= mkInt 1] @. "body"
+    , "let { body = 1; }"
+    )
 
-case_identifier_keyword_prefix = do
-  assertParseText "true-name" $ mkSym "true-name"
-  assertParseText "trueName" $ mkSym "trueName"
-  assertParseText "null-name" $ mkSym "null-name"
-  assertParseText "nullName" $ mkSym "nullName"
-  assertParseText "[ null-name ]" $ mkList [ mkSym "null-name" ]
+case_nested_let =
+  checks
+    ( mkLets ["a" $= mkInt 4] $
+        mkLets ["b" $= mkInt 5] $ var "a"
+    , "let a = 4; in let b = 5; in a"
+    )
 
-makeTextParseTest str = assertParseText ("\"" <> str <> "\"") $ mkStr str
+case_nested_let_syntax_mistakes =
+  mistakes
+    "let a = 4; let b = 3; in b"
 
-case_simple_string = traverse_ makeTextParseTest ["abcdef", "a", "A", "   a a  ", ""]
+case_let_scoped_inherit =
+  checks
+    ( mkLets
+        [ "a" $= mkNull
+        , inheritFrom (var "b") [StaticKey "c"]
+        ]
+        $ var "c"
+    , "let a = null; inherit (b) c; in c"
+    )
 
-case_string_dollar = traverse_ makeTextParseTest ["a$b", "a$$b", "$cdef", "gh$i"]
+case_let_scoped_inherit_syntax_mistakes =
+  mistakes
+    "let inherit (b) c in c"
 
-case_string_escape = do
-  assertParseText "\"\\$\\n\\t\\r\\\\\"" $ mkStr "$\n\t\r\\"
-  assertParseText "\" \\\" \\' \"" $ mkStr " \" ' "
 
-case_string_antiquote = do
-  assertParseText "\"abc${  if true then \"def\" else \"abc\"  } g\"" $
-    Fix $ NStr $ DoubleQuoted
-      [ Plain "abc"
-      , Antiquoted $ Fix $ NIf (mkBool True) (mkStr "def") (mkStr "abc")
-      , Plain " g"
-      ]
-  assertParseText "\"\\${a}\"" $ mkStr "${a}"
-  assertParseFail "\"a"
-  assertParseFail "${true}"
-  assertParseFail "\"${true\""
+-- ** If
 
-case_select = do
-  assertParseText "a .  e .di. f" $ Fix $ NSelect (mkSym "a")
-    (StaticKey "e" :| [StaticKey "di", StaticKey "f"])
-    Nothing
-  assertParseText "a.e . d    or null" $ Fix $ NSelect (mkSym "a")
-    (StaticKey "e" :| [StaticKey "d"])
-    (pure mkNull)
-  assertParseText "{}.\"\"or null" $ Fix $ NSelect (Fix (NSet NonRecursive mempty))
-    (DynamicKey (Plain (DoubleQuoted mempty)) :| mempty) (pure mkNull)
-  assertParseText "{ a = [1]; }.a or [2] ++ [3]" $ Fix $ NBinary NConcat
-      (Fix (NSelect
-                (Fix (NSet NonRecursive [NamedVar (StaticKey "a" :| mempty)
-                                     (Fix (NList [Fix (NConstant (NInt 1))]))
-                                     nullPos]))
-                (StaticKey "a" :| mempty)
-                (pure (Fix (NList [Fix (NConstant (NInt 2))])))))
-      (Fix (NList [Fix (NConstant (NInt 3))]))
+case_if =
+  checks
+    ( mkIf (mkBool True) (mkBool True) (mkBool False)
+    , "if true then true else false"
+    )
 
-case_select_path = do
-  assertParseText "f ./." $ Fix $ NBinary NApp (mkSym "f") (mkPath False "./.")
-  assertParseText "f.b ../a" $ Fix $ NBinary NApp select (mkPath False "../a")
-  assertParseText "{}./def" $ Fix $ NBinary NApp (Fix (NSet NonRecursive mempty)) (mkPath False "./def")
-  assertParseText "{}.\"\"./def" $ Fix $ NBinary NApp
-    (Fix $ NSelect (Fix (NSet NonRecursive mempty)) (DynamicKey (Plain (DoubleQuoted mempty)) :| mempty) Nothing)
-    (mkPath False "./def")
- where select = Fix $ NSelect (mkSym "f") (mkSelector "b") Nothing
+case_if_syntax_mistakes =
+  mistakes
+    "if true then false"
+    "else"
+    "if true then false else"
+    "if true then false else false else"
+    "1 + 2 then"
 
-case_select_keyword = do
-  assertParseText "{ false = \"foo\"; }" $ Fix $ NSet NonRecursive [NamedVar (mkSelector "false") (mkStr "foo") nullPos]
 
-case_fun_app = do
-  assertParseText "f a b" $ Fix $ NBinary NApp (Fix $ NBinary NApp (mkSym "f") (mkSym "a")) (mkSym "b")
-  assertParseText "f a.x or null" $ Fix $ NBinary NApp (mkSym "f") $ Fix $
-    NSelect (mkSym "a") (mkSelector "x") (pure mkNull)
-  assertParseFail "f if true then null else null"
+-- ** Literal expressions in vals
 
-case_indented_string = do
-  assertParseText "''a''" $ mkIndentedStr 0 "a"
-  assertParseText "''\n  foo\n  bar''" $ mkIndentedStr 2 "foo\nbar"
-  assertParseText "''        ''" $ mkIndentedStr 0 ""
-  assertParseText "'''''''" $ mkIndentedStr 0 "''"
-  assertParseText "''   ${null}\n   a${null}''" $ Fix $ NStr $ Indented 3
-    [ Antiquoted mkNull
-    , Plain "\na"
-    , Antiquoted mkNull
-    ]
-  assertParseFail "'''''"
-  assertParseFail "''   '"
+case_identifier_keyword_prefix_invariants =
+  invariantVals
+    "true-name"
+    "trueName"
+    "null-name"
+    "nullName"
 
-case_indented_string_escape = assertParseText
-  "'' ''\\n ''\\t ''\\\\ ''${ \\ \\n ' ''' ''" $
-  mkIndentedStr 1 "\n \t \\ ${ \\ \\n ' '' "
+case_identifier_keyword_prefix =
+  checks
+    ( mkList [ var "null-name" ]
+    , "[ null-name ]"
+    )
 
-case_operator_fun_app = do
-  assertParseText "a ++ b" $ mkOper2 NConcat (mkSym "a") (mkSym "b")
-  assertParseText "a ++ f b" $ mkOper2 NConcat (mkSym "a") $ Fix $ NBinary NApp
-    (mkSym "f") (mkSym "b")
 
-case_operators = do
-  assertParseText "1 + 2 - 3" $ mkOper2 NMinus
-    (mkOper2 NPlus (mkInt 1) (mkInt 2)) (mkInt 3)
-  assertParseFail "1 + if true then 1 else 2"
-  assertParseText "1 + (if true then 2 else 3)" $ mkOper2 NPlus (mkInt 1) $ Fix $ NIf
-   (mkBool True) (mkInt 2) (mkInt 3)
-  assertParseText "{ a = 3; } // rec { b = 4; }" $ mkOper2 NUpdate
-    (Fix $ NSet NonRecursive [NamedVar (mkSelector "a") (mkInt 3) nullPos])
-    (Fix $ NSet Recursive [NamedVar (mkSelector "b") (mkInt 4) nullPos])
-  assertParseText "--a" $ mkOper NNeg $ mkOper NNeg $ mkSym "a"
-  assertParseText "a - b - c" $ mkOper2 NMinus
-    (mkOper2 NMinus (mkSym "a") (mkSym "b")) $
-    mkSym "c"
-  assertParseText "foo<bar" $ mkOper2 NLt (mkSym "foo") (mkSym "bar")
-  assertParseFail "+ 3"
-  assertParseFail "foo +"
+-- ** Strings
 
-case_comments =
-  do
-    Right expected <- parseNixFile "data/let.nix"
-    assertParseFile "let-comments-multiline.nix" expected
-    assertParseFile "let-comments.nix" expected
+invariantString str =
+  checks
+    ( mkStr str
+    , "\"" <> str <> "\""
+    )
+
+case_simple_string =
+  knownAs invariantString
+    "abcdef"
+    "a"
+    "A"
+    "   a a  "
+    ""
+
+case_string_dollar =
+  knownAs invariantString
+    "a$b"
+    "a$$b"
+    "$cdef"
+    "gh$i"
+
+case_string_escape =
+  checks
+    ( mkStr "$\n\t\r\\"
+    , "\"\\$\\n\\t\\r\\\\\""
+    )
+    ( mkStr " \" ' "
+    , "\" \\\" \\' \""
+    )
+
+case_string_antiquote =
+  checks
+    ( Fix $ NStr $ DoubleQuoted
+        [ Plain "abc"
+        , Antiquoted $ mkIf (mkBool True) (mkStr "def") (mkStr "abc")
+        , Plain " g"
+        ]
+    , "\"abc${  if true then \"def\" else \"abc\"  } g\""
+    )
+    ( mkStr "${a}"
+    , "\"\\${a}\""
+    )
+
+case_string_antiquote_syntax_mistakes =
+  mistakes
+    "\"a"
+    "${true}"
+    "\"${true\""
+
+
+-- *** Indented string
+
+case_indented_string =
+  checks
+    ( mkIndentedStr 0 "a"
+    , "''a''"
+    )
+    ( mkIndentedStr 2 "foo\nbar"
+    , "''\n  foo\n  bar''"
+    )
+    ( mkIndentedStr 0 ""
+    , "''        ''"
+    )
+    ( mkIndentedStr 0 "''"
+    , "'''''''"
+    )
+    ( Fix $ NStr $ Indented 3
+        [ Antiquoted mkNull
+        , Plain "\na"
+        , Antiquoted mkNull
+        ]
+    , "''   ${null}\n   a${null}''"
+    )
+
+case_indented_string_syntax_mistakes =
+  mistakes
+    "'''''"
+    "''   '"
+
+case_indented_string_escape =
+  checks
+    ( mkIndentedStr 1 "\n \t \\ ${ \\ \\n ' '' "
+    , "'' ''\\n ''\\t ''\\\\ ''${ \\ \\n ' ''' ''"
+    )
+
+-- ** Selection
+
+case_select =
+  checks
+    ( Fix $ NSelect (var "a")
+        (StaticKey "e" :| [StaticKey "di", StaticKey "f"])
+        Nothing
+    , "a .  e .di. f"
+    )
+    ( Fix $ NSelect (var "a")
+        (StaticKey "e" :| [StaticKey "d"])
+        (pure mkNull)
+    , "a.e . d    or null"
+    )
+    ( Fix $ NSelect emptySet
+        (DynamicKey (Plain (DoubleQuoted mempty)) :| mempty) (pure mkNull)
+    , "{}.\"\"or null"
+    )
+    ( Fix $ NBinary NConcat
+        ((@.<|>)
+          (mkNonRecSet
+            [NamedVar
+              (mkSelector "a")
+              (mkList $ one $ mkInt 1)
+              nullPos
+            ]
+          )
+          "a"
+          (mkList $ one $ mkInt 2)
+        )
+        (mkList $ one $ mkInt 3)
+    , "{ a = [1]; }.a or [2] ++ [3]"
+    )
+
+case_select_path =
+  checks
+    ( var "f" @@ mkRelPath "./."
+    , "f ./."
+    )
+    ( var "f" @. "b" @@ mkRelPath "../a"
+    , "f.b ../a"
+    )
+    ( emptySet @@ mkRelPath "./def"
+    , "{}./def"
+    )
+    ( Fix (NSelect emptySet (DynamicKey (Plain $ DoubleQuoted mempty) :| mempty) Nothing) @@ mkRelPath "./def"
+    , "{}.\"\"./def"
+    )
+
+case_select_keyword =
+  checks
+    ( mkNonRecSet ["false" $= mkStr "foo"]
+    , "{ false = \"foo\"; }"
+    )
 
 case_select_or_precedence =
     assertParsePrint [text|let
@@ -357,6 +573,72 @@ in null|] [text|let
         in (matcher.case or null).foo (v.case);
 in null|]
 
+-- ** Function application
+
+case_fun_app =
+  checks
+    ( var "f" @@ var "a" @@ var "b"
+    , "f a b"
+    )
+    ( var "f" @@ (@.<|>) (var "a") "x" mkNull
+    , "f a.x or null"
+    )
+
+case_fun_app_syntax_mistakes =
+  mistakes
+   "f if true then null else null"
+
+
+-- ** Operators
+
+case_operator_fun_app =
+  checks
+    ( var "a" $++ var "b"
+    , "a ++ b"
+    )
+    ( var "a" $++ var "f" @@ var "b"
+    , "a ++ f b"
+    )
+
+case_operators =
+  checks
+    ( mkInt 1 $+ mkInt 2 $- mkInt 3
+    , "1 + 2 - 3"
+    )
+    ( mkInt 1 $+ mkIf (mkBool True) (mkInt 2) (mkInt 3)
+    , "1 + (if true then 2 else 3)"
+    )
+    ( mkNonRecSet ["a" $= mkInt 3] $// mkRecSet ["b" $= mkInt 4]
+    , "{ a = 3; } // rec { b = 4; }"
+    )
+    ( mkNeg $ mkNeg $ var "a"
+    , "--a"
+    )
+    ( var "a" $- var "b" $- var "c"
+    , "a - b - c"
+    )
+    ( var "foo" $< var "bar"
+    , "foo<bar"
+    )
+
+case_operators_syntax_mistakes =
+  mistakes
+    "+ 3"
+    "foo +"
+    "1 + if true then 1 else 2"
+
+
+-- ** Comments
+
+case_comments =
+  do
+    Right expected <- parseNixFile "data/let.nix"
+    assertParseFile "let-comments-multiline.nix" expected
+    assertParseFile "let-comments.nix" expected
+
+
+-- ** Location
+
 case_simpleLoc =
   let
     mkSPos l c = SourcePos "<string>" (mkPos l) (mkPos c)
@@ -377,10 +659,11 @@ case_simpleLoc =
                 (mkSpan 2 7 3 15)
                 NApp
                 (Fix
-                  (NBinary_ (mkSpan 2 7 3 9)
-                            NApp
-                            (Fix (NSym_ (mkSpan 2 7 2 10) "bar"))
-                            (Fix (NSym_ (mkSpan 3 6 3 9) "baz"))
+                  (NBinary_
+                    (mkSpan 2 7 3 9)
+                    NApp
+                    (Fix (NSym_ (mkSpan 2 7 2 10) "bar"))
+                    (Fix (NSym_ (mkSpan 3 6 3 9) "baz"))
                   )
                 )
                 (Fix (NStr_ (mkSpan 3 10 3 15) (DoubleQuoted [Plain "qux"])))
@@ -398,12 +681,35 @@ tests = $testGroupGenerator
 
 ---------------------------------------------------------------------------------
 
-assertParseText :: Text -> NExpr -> Assertion
-assertParseText str expected =
-  either
-    (\ err ->
-      assertFailure $ toString $ "Unexpected fail parsing `" <> str <> "':\n" <> show err
+-- * Helpers
+
+var = mkSym
+
+invariantVal = staysInvariantUnder var
+
+staysInvariantUnder :: (NixLang -> ExpectedHask) -> NixLang -> Assertion
+staysInvariantUnder f v =
+  (<=>) (f v) v
+
+type NixLang = Text
+type ExpectedHask = NExpr
+
+(<=>) :: ExpectedHask -> NixLang -> Assertion
+(<=>) = assertParseText
+
+throwParseError
+  :: ( IsString a
+    , ToString a
+    , Semigroup a
+    , Show b
     )
+  => a -> a -> b -> IO c
+throwParseError what str err = assertFailure $ toString $ "Unexpected fail parsing " <> what <> ":\n  ''\n" <> str <> "\n''\n  Error: ''" <> show err <> "''."
+
+assertParseText :: ExpectedHask -> NixLang -> Assertion
+assertParseText expected str =
+  either
+    (throwParseError "expression" str)
     (assertEqual
       ("When parsing " <> toString str)
       (stripPositionInfo expected)
@@ -411,12 +717,10 @@ assertParseText str expected =
     )
     (parseNixText str)
 
-assertParseTextLoc :: Text -> NExprLoc -> Assertion
+assertParseTextLoc :: NixLang -> NExprLoc -> Assertion
 assertParseTextLoc str expected =
   either
-    (\ err ->
-      assertFailure $ toString $ "Unexpected fail parsing `" <> str <> "':\n" <> show err
-    )
+    (throwParseError "expression" str)
     (assertEqual
       ("When parsing " <> toString str)
       expected
@@ -428,9 +732,7 @@ assertParseFile file expected =
   do
   res <- parseNixFile $ "data/" <> file
   either
-    (\ err ->
-      assertFailure $ "Unexpected fail parsing data file `" <> file <> "':\n" <> show err
-    )
+    (throwParseError "data file" file)
     (assertEqual
       ("Parsing data file " <> file)
       (stripPositionInfo expected)
@@ -438,12 +740,12 @@ assertParseFile file expected =
     )
     res
 
-assertParseFail :: Text -> Assertion
+assertParseFail :: NixLang -> Assertion
 assertParseFail str =
   either
     (const pass)
     (\ r ->
-      assertFailure $ toString $ "Unexpected success parsing `" <> str <> ":\nParsed value: " <> show r
+      assertFailure $ toString $ "Unexpected success parsing ''" <> str <> "'':\n  Parsed value: ''" <> show r <> "''."
     )
     (parseNixText str)
 
@@ -461,3 +763,47 @@ assertParsePrint src expect =
       . stripAnnotation $
         expr
   in assertEqual "" expect result
+
+
+-----
+
+-- | This class constructs functions that accept variacic number of argumets.
+-- Every argument is an assertion.
+-- So now the new assertions can be added just by adding it to a block of according assertions.
+class VariadicAssertions t where
+  checkListPairs' :: ((ExpectedHask, NixLang) -> Assertion) -> [(ExpectedHask, NixLang)] -> t
+
+instance VariadicAssertions (IO a) where
+  checkListPairs' f acc =
+    do
+      traverse_ f acc
+      pure $ error "never would be reached, cuz `I'm lazy`."
+
+instance (VariadicAssertions a) => VariadicAssertions ((ExpectedHask, NixLang) -> a) where
+  checkListPairs' f acc x = checkListPairs' f (acc <> [x])
+
+checks :: (VariadicAssertions a) => a
+checks = checkListPairs' (uncurry assertParseText) []
+
+
+class VariadicArgs t where
+  checkList' :: (NixLang -> Assertion) -> [NixLang] -> t
+
+instance VariadicArgs (IO a) where
+  checkList' f acc =
+    do
+      traverse_ f acc
+      pure $ error "never would be reached, cuz `I'm lazy`."
+
+instance (VariadicArgs a) => VariadicArgs (NixLang -> a) where
+  checkList' f acc x = checkList' f (acc <> [x])
+
+knownAs :: (VariadicArgs a) => (NixLang -> Assertion) -> a
+knownAs f = checkList' f []
+
+mistakes :: (VariadicArgs a) => a
+mistakes = knownAs assertParseFail
+
+invariantVals :: (VariadicArgs a) => a
+invariantVals = knownAs invariantVal
+

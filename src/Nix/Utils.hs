@@ -196,6 +196,14 @@ list e f l =
     (null l)
 {-# inline list #-}
 
+whenText
+  :: a -> (Text -> a) -> Text -> a
+whenText e f t =
+  bool
+    (f t)
+    e
+    (Text.null t)
+
 -- | Lambda analog of @maybe@ or @either@ for Free monad.
 free :: (a -> b) -> (f (Free f a) -> b) -> Free f a -> b
 free fP fF fr =

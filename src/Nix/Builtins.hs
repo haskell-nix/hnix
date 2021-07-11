@@ -583,7 +583,7 @@ headNix :: forall e t f m. MonadNix e t f m => NValue t f m -> m (NValue t f m)
 headNix =
   maybe
     (throwError $ ErrorCall "builtins.head: empty list")
-    (pure)
+    pure
   . viaNonEmpty head <=< fromValue @[NValue t f m]
 
 tailNix :: forall e t f m. MonadNix e t f m => NValue t f m -> m (NValue t f m)
