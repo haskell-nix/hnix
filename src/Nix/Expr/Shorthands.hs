@@ -300,36 +300,36 @@ infix 2 @.
 -- | Function application (@' '@ in @f x@)
 (@@) = mkOp2 NApp
 infixl 1 @@
--- | Equality: @==@
-($==) = mkOp2 NEq
--- | Inequality: @!=@
-($!=) = mkOp2 NNEq
--- | Less than: @<@
-($<)  = mkOp2 NLt
--- | Less than OR equal: @<=@
-($<=) = mkOp2 NLte
+-- | List concatenation: @++@
+($++) = mkOp2 NConcat
+-- | Multiplication: @*@
+($*)  = mkOp2 NMult
+-- | Division: @/@
+($/)  = mkOp2 NDiv
+-- | Addition: @+@
+($+)  = mkOp2 NPlus
+-- | Subtraction: @-@
+($-)  = mkOp2 NMinus
+-- | Extend/override the left attr set, with the right one: @//@
+($//) = mkOp2 NUpdate
 -- | Greater than: @>@
 ($>)  = mkOp2 NGt
 -- | Greater than OR equal: @>=@
 ($>=) = mkOp2 NGte
+-- | Less than OR equal: @<=@
+($<=) = mkOp2 NLte
+-- | Less than: @<@
+($<)  = mkOp2 NLt
+-- | Equality: @==@
+($==) = mkOp2 NEq
+-- | Inequality: @!=@
+($!=) = mkOp2 NNEq
 -- | AND: @&&@
 ($&&) = mkOp2 NAnd
 -- | OR: @||@
 ($||) = mkOp2 NOr
 -- | Logical implication: @->@
 ($->) = mkOp2 NImpl
--- | Extend/override the left attr set, with the right one: @//@
-($//) = mkOp2 NUpdate
--- | Addition: @+@
-($+)  = mkOp2 NPlus
--- | Subtraction: @-@
-($-)  = mkOp2 NMinus
--- | Multiplication: @*@
-($*)  = mkOp2 NMult
--- | Division: @/@
-($/)  = mkOp2 NDiv
--- | List concatenation: @++@
-($++) = mkOp2 NConcat
 
 -- | Lambda function, analog of Haskell's @\\ x -> x@:
 --
@@ -341,6 +341,7 @@ infixl 1 @@
 (==>) :: Params NExpr -> NExpr -> NExpr
 (==>) = mkFunction
 infixr 1 ==>
+
 
 -- * Under deprecation
 
