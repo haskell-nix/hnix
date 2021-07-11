@@ -10,6 +10,18 @@ Partial log (for now):
   * `Nix.Expr.Shorthands`:
     * `inherit{,From}`: dropped second argument as irrelevant ([report](https://github.com/haskell-nix/hnix/issues/326)).
     * `mkAssert`: fixed ([report](https://github.com/haskell-nix/hnix/issues/969)).
+    * fx presedence between the operators:
+        
+        ```haskell
+        (@@), (@.), (@./), ($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->), ($//), ($+), ($-), ($*), ($/), ($++), (==>)
+        ```
+        
+        Now these shorthands can be used without sectioning & so represent the Nix expressions one to one.
+        
+        ```haskell
+        nix = "           a/b   //            c/def   //           <g>  <             def/d"
+        hask = mkRelPath "a/b" $// mkRelPath "c/def" $// mkEnvPath "g" $<  mkRelPath "def/d"
+        ```
 
 * Additional
   * `Nix.Expr.Shorthands`:

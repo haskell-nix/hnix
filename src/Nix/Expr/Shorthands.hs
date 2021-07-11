@@ -284,49 +284,83 @@ recAttrsE pairs = mkRecSet $ uncurry ($=) <$> pairs
 
 (@@), ($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->), ($//), ($+), ($-), ($*), ($/), ($++)
   :: NExpr -> NExpr -> NExpr
+--  2021-07-10: NOTE: Probably the presedence of some operators is still needs to be tweaked.
 
 -- | Dot-reference into an attribute set: @attrSet.k@
 (@.) :: NExpr -> Text -> NExpr
 (@.) obj name = getRefOrDefault obj name Nothing
 infix 9 @.
+
 -- | Dot-reference into an attribute set with alternative if the key does not exist.
 --
 -- > s.x or y
 (@.<|>) :: NExpr -> VarName -> NExpr -> NExpr
 (@.<|>) obj name alt = getRefOrDefault obj name $ pure alt
+infix 9 @.<|>
+
 -- | Function application (@' '@ in @f x@)
 (@@) = mkOp2 NApp
 infixl 8 @@
+
 -- | List concatenation: @++@
 ($++) = mkOp2 NConcat
+infixr 7 $++
+
 -- | Multiplication: @*@
 ($*)  = mkOp2 NMult
+infixl 6 $*
+
 -- | Division: @/@
 ($/)  = mkOp2 NDiv
+infixl 6 $/
+
 -- | Addition: @+@
 ($+)  = mkOp2 NPlus
+infixl 5 $+
+
 -- | Subtraction: @-@
 ($-)  = mkOp2 NMinus
+infixl 5 $-
+
 -- | Extend/override the left attr set, with the right one: @//@
 ($//) = mkOp2 NUpdate
+infixr 5 $//
+
 -- | Greater than: @>@
 ($>)  = mkOp2 NGt
+infix 4 $>
+
 -- | Greater than OR equal: @>=@
+infix 4 $>=
 ($>=) = mkOp2 NGte
+
 -- | Less than OR equal: @<=@
 ($<=) = mkOp2 NLte
+infix 4 $<=
+
 -- | Less than: @<@
 ($<)  = mkOp2 NLt
+infix 4 $<
+
 -- | Equality: @==@
 ($==) = mkOp2 NEq
+infix 3 $==
+
 -- | Inequality: @!=@
 ($!=) = mkOp2 NNEq
+infix 3 $!=
+
 -- | AND: @&&@
 ($&&) = mkOp2 NAnd
+infixl 2 $&&
+
 -- | OR: @||@
 ($||) = mkOp2 NOr
+infixl 2 $||
+
 -- | Logical implication: @->@
 ($->) = mkOp2 NImpl
+infix 1 $->
 
 -- | Lambda function, analog of Haskell's @\\ x -> x@:
 --
