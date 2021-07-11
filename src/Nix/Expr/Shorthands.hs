@@ -170,11 +170,6 @@ mkFunction :: Params NExpr -> NExpr -> NExpr
 mkFunction params = Fix . NAbs params
 
 
--- | Dot-reference into an attribute set: @attrSet.k@
-(@.) :: NExpr -> Text -> NExpr
-(@.) obj name = getRefOrDefault obj name Nothing
-infixl 2 @.
-
 
 -- | General dot-reference with optional alternative if the jey does not exist.
 getRefOrDefault :: NExpr -> VarName -> Maybe NExpr -> NExpr
@@ -292,6 +287,11 @@ recAttrsE pairs = mkRecSet $ uncurry ($=) <$> pairs
 
 (@@), ($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->), ($//), ($+), ($-), ($*), ($/), ($++)
   :: NExpr -> NExpr -> NExpr
+
+-- | Dot-reference into an attribute set: @attrSet.k@
+(@.) :: NExpr -> Text -> NExpr
+(@.) obj name = getRefOrDefault obj name Nothing
+infix 2 @.
 -- | Function application (@' '@ in @f x@)
 (@@) = mkOp2 NApp
 infixl 1 @@
