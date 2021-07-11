@@ -8,6 +8,7 @@ module Nix.Expr.Shorthands where
 import           Data.Fix
 import           Nix.Atoms
 import           Nix.Expr.Types
+import           Nix.Utils
 
 -- * Basic expression builders
 
@@ -33,15 +34,17 @@ mkFloat = Fix . mkFloatF
 
 -- | Put a regular (double-quoted) string.
 mkStr :: Text -> NExpr
-mkStr = Fix . NStr . DoubleQuoted . \case
-  "" -> mempty
-  x  -> [Plain x]
+mkStr = Fix . NStr . DoubleQuoted .
+  whenText
+    mempty
+    (one . Plain)
 
 -- | Put an indented string.
 mkIndentedStr :: Int -> Text -> NExpr
-mkIndentedStr w = Fix . NStr . Indented w . \case
-  "" -> mempty
-  x  -> [Plain x]
+mkIndentedStr w = Fix . NStr . Indented w .
+  whenText
+    mempty
+    (one . Plain)
 
 -- | Put a path. Use @True@ if the path should be read from the environment, else use @False@.
 mkPath :: Bool -> FilePath -> NExpr
