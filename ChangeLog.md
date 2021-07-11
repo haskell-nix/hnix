@@ -28,6 +28,7 @@ Partial log (for now):
     * `mkOper{,2}` entered deprecation, superceeded by new name `mkOp{,2}`.
     * `mkBinop` entered deprecation, supeceeded by new name `mkBinop`.
     * added `@.<|>` for Nix language `s.x or y` expession.
+    * add `mkNeg` number negation.
 
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.1...0.14.0#files_bucket) 0.14.0 (2021-07-08)

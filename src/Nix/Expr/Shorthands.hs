@@ -73,9 +73,15 @@ mkSelector = (:| mempty) . StaticKey
 mkOp :: NUnaryOp -> NExpr -> NExpr
 mkOp op = Fix . NUnary op
 
--- | Logical negation.
+-- | Logical negation: @not@.
 mkNot :: NExpr -> NExpr
 mkNot = mkOp NNot
+
+-- | Number negation: @-@.
+--
+-- Negation in the language works with integers and floating point.
+mkNeg :: NExpr -> NExpr
+mkNeg = mkOp NNeg
 
 -- | Put a binary operator.
 mkOp2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
