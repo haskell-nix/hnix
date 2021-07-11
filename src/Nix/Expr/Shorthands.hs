@@ -296,7 +296,7 @@ infix 9 @.
 (@.<|>) obj name alt = getRefOrDefault obj name $ pure alt
 -- | Function application (@' '@ in @f x@)
 (@@) = mkOp2 NApp
-infixl 1 @@
+infixl 8 @@
 -- | List concatenation: @++@
 ($++) = mkOp2 NConcat
 -- | Multiplication: @*@
