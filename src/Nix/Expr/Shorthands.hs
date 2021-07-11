@@ -288,7 +288,7 @@ recAttrsE pairs = mkRecSet $ uncurry ($=) <$> pairs
 -- | Dot-reference into an attribute set: @attrSet.k@
 (@.) :: NExpr -> Text -> NExpr
 (@.) obj name = getRefOrDefault obj name Nothing
-infix 2 @.
+infix 9 @.
 -- | Dot-reference into an attribute set with alternative if the key does not exist.
 --
 -- > s.x or y
