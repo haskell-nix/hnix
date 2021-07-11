@@ -77,7 +77,6 @@ mkOp op = Fix . NUnary op
 mkNot :: NExpr -> NExpr
 mkNot = mkOp NNot
 
-
 -- | Put a binary operator.
 mkOp2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkOp2 op a = Fix . NBinary op a
@@ -169,11 +168,9 @@ mkIf e1 e2 = Fix . NIf e1 e2
 mkFunction :: Params NExpr -> NExpr -> NExpr
 mkFunction params = Fix . NAbs params
 
-
-
 -- | General dot-reference with optional alternative if the jey does not exist.
 getRefOrDefault :: NExpr -> VarName -> Maybe NExpr -> NExpr
-getRefOrDefault obj name alt = Fix $ NSelect obj (StaticKey name :| mempty) alt
+getRefOrDefault obj name alt = Fix $ NSelect obj (mkSelector name) alt
 
 -- ** Base functor builders for basic expressions builders *sic
 
