@@ -292,6 +292,11 @@ recAttrsE pairs = mkRecSet $ uncurry ($=) <$> pairs
 (@.) :: NExpr -> Text -> NExpr
 (@.) obj name = getRefOrDefault obj name Nothing
 infix 2 @.
+-- | Dot-reference into an attribute set with alternative if the key does not exist.
+--
+-- > s.x or y
+(@.<|>) :: NExpr -> VarName -> NExpr -> NExpr
+(@.<|>) obj name alt = getRefOrDefault obj name $ pure alt
 -- | Function application (@' '@ in @f x@)
 (@@) = mkOp2 NApp
 infixl 1 @@
