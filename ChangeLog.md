@@ -10,7 +10,11 @@ Partial log (for now):
   * `Nix.Expr.Shorthands`:
     * `inherit{,From}`: dropped second argument as irrelevant ([report](https://github.com/haskell-nix/hnix/issues/326)).
     * `mkAssert`: fixed ([report](https://github.com/haskell-nix/hnix/issues/969)).
-    * `mkOper{,2}`: renamed to `mkOp{,2}` accordingly. The old names left as aliases but under deprecation.
+
+* Additional
+  * `Nix.Expr.Shorthands`:
+    * `mkOper{,2}` entered deprecation, superceeded by new name `mkOp{,2}`.
+    * `mkBinop` entered deprecation, supeceeded by new name `mkBinop`.
 
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.1...0.14.0#files_bucket) 0.14.0 (2021-07-08)

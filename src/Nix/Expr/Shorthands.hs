@@ -290,10 +290,6 @@ recAttrsE pairs = mkRecSet $ uncurry ($=) <$> pairs
 
 -- * Nix binary operators
 
--- | Nix binary operator builder.
-mkBinop :: NBinaryOp -> NExpr -> NExpr -> NExpr
-mkBinop = mkOp2
-
 (@@), ($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->), ($//), ($+), ($-), ($*), ($/), ($++)
   :: NExpr -> NExpr -> NExpr
 -- | Function application (@' '@ in @f x@)
@@ -352,3 +348,8 @@ mkOper op = Fix . NUnary op
 -- | Put a binary operator.
 mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkOper2 op a = Fix . NBinary op a
+
+-- NOTE: Remove after 2023-07
+-- | Nix binary operator builder.
+mkBinop :: NBinaryOp -> NExpr -> NExpr -> NExpr
+mkBinop = mkOp2
