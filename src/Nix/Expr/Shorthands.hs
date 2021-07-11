@@ -101,9 +101,18 @@ mkNonRecSet = mkSet NonRecursive
 mkSet :: Recursivity -> [Binding NExpr] -> NExpr
 mkSet r = Fix . NSet r
 
+-- | Empty set.
+--
+-- Monoid. Use @//@ operation (shorthand $//) to extend the set.
+emptySet :: NExpr
+emptySet = mkNonRecSet mempty
+
 -- | Put a list.
 mkList :: [NExpr] -> NExpr
 mkList = Fix . NList
+
+emptyList :: NExpr
+emptyList = mkList mempty
 
 -- | Wrap in a @let@.
 --
