@@ -64,7 +64,6 @@ newFailingTests = Set.fromList
   , "eval-okay-path"  -- #128
   , "eval-okay-types"
   , "eval-okay-fromTOML"
-  , "eval-okay-context-introspection"
   ]
 
 genTests :: IO TestTree
