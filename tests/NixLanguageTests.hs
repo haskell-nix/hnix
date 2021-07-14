@@ -61,7 +61,7 @@ newFailingTests :: Set String
 newFailingTests = Set.fromList
   [ "eval-okay-hash"
   , "eval-okay-hashfile"
-  , "eval-okay-path"
+  , "eval-okay-path"  -- #128
   , "eval-okay-types"
   , "eval-okay-fromTOML"
   , "eval-okay-context-introspection"
@@ -71,9 +71,9 @@ genTests :: IO TestTree
 genTests = do
   testFiles <-
     sort
-        -- jww (2018-05-07): Temporarily disable this test until #128 is fixed.
-    .   filter ((`Set.notMember` newFailingTests) . takeBaseName)
-    .   filter ((/= ".xml") . takeExtension)
+    -- Disabling the not yet done tests cases.
+    . filter ((`Set.notMember` newFailingTests) . takeBaseName)
+    . filter ((/= ".xml") . takeExtension)
     <$> globDir1 (compile "*-*-*.*") "data/nix/tests/lang"
   let testsByName = groupBy (takeFileName . dropExtensions) testFiles
   let testsByType = groupBy testType (Map.toList testsByName)
