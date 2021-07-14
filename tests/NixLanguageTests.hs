@@ -75,12 +75,14 @@ genTests = do
     . filter ((`Set.notMember` newFailingTests) . takeBaseName)
     . filter ((/= ".xml") . takeExtension)
     <$> globDir1 (compile "*-*-*.*") "data/nix/tests/lang"
-  let testsByName = groupBy (takeFileName . dropExtensions) testFiles
-  let testsByType = groupBy testType (Map.toList testsByName)
-  let testGroups  = mkTestGroup <$> Map.toList testsByType
-  pure $ localOption (mkTimeout 2000000) $ testGroup
-    "Nix (upstream) language tests"
-    testGroups
+  let
+    testsByName = groupBy (takeFileName . dropExtensions) testFiles
+    testsByType = groupBy testType (Map.toList testsByName)
+    testGroups  = mkTestGroup <$> Map.toList testsByType
+  pure $ localOption (mkTimeout 2000000) $
+    testGroup
+      "Nix (upstream) language tests"
+      testGroups
  where
   testType (fullpath, _files) = take 2 $ splitOn "-" $ takeFileName fullpath
   mkTestGroup (kind, tests) =
@@ -126,53 +128,50 @@ assertLangOk opts file = do
 
 assertLangOkXml :: Options -> FilePath -> Assertion
 assertLangOkXml opts file = do
-  actual <- stringIgnoreContext . toXML <$> hnixEvalFile
-    opts
-    (file <> ".nix")
+  actual <- stringIgnoreContext . toXML <$> hnixEvalFile opts (file <> ".nix")
   expected <- Text.readFile $ file <> ".exp.xml"
   assertEqual "" expected actual
 
 assertEval :: Options -> [FilePath] -> Assertion
-assertEval _opts files = do
-  time <- liftIO getCurrentTime
-  let opts = defaultOptions time
-  case delete ".nix" $ sort $ fmap takeExtensions files of
-    []                 -> () <$ hnixEvalFile opts (name <> ".nix")
-    [".exp"         ]  -> assertLangOk opts name
-    [".exp.xml"     ]  -> assertLangOkXml opts name
-    [".exp.disabled"]  -> pass
-    [".exp-disabled"]  -> pass
-    [".exp", ".flags"] -> do
-      liftIO $ setEnv "NIX_PATH" "lang/dir4:lang/dir5"
-      flags <- Text.readFile (name <> ".flags")
-      let flags' | Text.last flags == '\n' = Text.init flags
-                 | otherwise               = flags
-      case
-          Opts.execParserPure
-            Opts.defaultPrefs
-            (nixOptionsInfo time)
-            (fixup (fmap toString (Text.splitOn " " flags')))
-        of
-          Opts.Failure err   -> errorWithoutStackTrace $ "Error parsing flags from " <> name <> ".flags: " <> show err
-          Opts.Success opts' -> assertLangOk opts' name
-          Opts.CompletionInvoked _ -> fail "unused"
-    _ -> assertFailure $ "Unknown test type " <> show files
+assertEval _opts files =
+  do
+    time <- liftIO getCurrentTime
+    let opts = defaultOptions time
+    case delete ".nix" $ sort $ toText . takeExtensions <$> files of
+      []                 -> void $ hnixEvalFile opts (name <> ".nix")
+      [".exp"          ]  -> assertLangOk    opts name
+      [".exp.xml"      ]  -> assertLangOkXml opts name
+      [".exp.disabled" ]  -> pass
+      [".exp-disabled" ]  -> pass
+      [".exp", ".flags"] ->
+        do
+          liftIO $ setEnv "NIX_PATH" "lang/dir4:lang/dir5"
+          flags <- Text.readFile $ name <> ".flags"
+          let flags' | Text.last flags == '\n' = Text.init flags
+                    | otherwise               = flags
+          case runParserGetResult time flags' of
+            Opts.Failure           err   -> errorWithoutStackTrace $ "Error parsing flags from " <> name <> ".flags: " <> show err
+            Opts.CompletionInvoked _     -> fail "unused"
+            Opts.Success           opts' -> assertLangOk opts' name
+      _ -> assertFailure $ "Unknown test type " <> show files
  where
-  name =
-    "data/nix/tests/lang/" <> the (fmap (takeFileName . dropExtensions) files)
+  runParserGetResult time flags' =
+    Opts.execParserPure
+      Opts.defaultPrefs
+      (nixOptionsInfo time)
+      (fmap toString $ fixup $ Text.splitOn " " flags')
 
-  fixup ("--arg"    : x : y : rest) = "--arg" : (x <> "=" <> y) : fixup rest
+  name =
+    "data/nix/tests/lang/" <> the (takeFileName . dropExtensions <$> files)
+
+  fixup :: [Text] -> [Text]
+  fixup ("--arg"    : x : y : rest) = "--arg"    : (x <> "=" <> y) : fixup rest
   fixup ("--argstr" : x : y : rest) = "--argstr" : (x <> "=" <> y) : fixup rest
-  fixup (x                  : rest) = x : fixup rest
+  fixup (x                  : rest) =                          x  : fixup rest
   fixup []                          = mempty
 
 assertEvalFail :: FilePath -> Assertion
 assertEvalFail file = (`catch` (\(_ :: SomeException) -> pass)) $ do
   time       <- liftIO getCurrentTime
   evalResult <- printNix <$> hnixEvalFile (defaultOptions time) file
-  evalResult `seq`
-    assertFailure $
-      file
-      <> " should not evaluate.\nThe evaluation result was `"
-      <> evalResult
-      <> "`."
+  evalResult `seq` assertFailure $ "File: ''" <> file <> "'' should not evaluate.\nThe evaluation result was `" <> evalResult <> "`."
