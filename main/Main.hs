@@ -8,20 +8,22 @@ module Main ( main ) where
 
 import           Nix.Utils
 import           Control.Comonad                ( extract )
-import qualified Control.DeepSeq               as Deep
-import qualified Control.Exception             as Exc
+import qualified Control.Exception             as Exception
 import           GHC.Err                        ( errorWithoutStackTrace )
 import           Control.Monad.Free
 import           Control.Monad.Ref              ( MonadRef(readRef) )
 import           Control.Monad.Catch
-import           System.IO                      ( hPutStrLn, getContents )
+import           System.IO                      ( hPutStrLn
+                                                , getContents
+                                                )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Map                      as Map
 import           Data.Maybe                     ( fromJust )
 import qualified Data.String                   as String
 import           Data.Time
 import qualified Data.Text.IO                  as Text
-import           Nix
+import           Text.Show.Pretty               ( ppShow )
+import           Nix                     hiding ( force )
 import           Nix.Convert
 import           Nix.Fresh.Basic
 import           Nix.Json
@@ -34,11 +36,9 @@ import qualified Nix.Type.Infer                as HM
 import           Nix.Value.Monad
 import           Options.Applicative     hiding ( ParserResult(..) )
 import           Prettyprinter           hiding ( list )
-import           Prettyprinter.Render.Text
+import           Prettyprinter.Render.Text      ( renderIO )
 import qualified Repl
 import           System.FilePath
-import qualified Text.Show.Pretty              as PS
-import           Nix.Utils.Fix1                 ( Fix1T )
 import           Nix.Eval
 
 main :: IO ()
@@ -108,7 +108,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
 
   withEmptyNixContext = withNixContext mempty
 
-  --  2021-07-15: NOTE: @handleResult@ & @process@ - are atrocious size, they need to be decomposed & refactored.
+  --  2021-07-15: NOTE: @handleResult@ & @process@ - have atrocious size & compexity, they need to be decomposed & refactored.
   handleResult mpath =
     either
       (\ err ->
@@ -125,8 +125,8 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
             do
               expr' <- liftIO $ reduceExpr mpath expr
               either
-                (\ err -> errorWithoutStackTrace $ "Type error: " <> PS.ppShow err)
-                (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <> PS.ppShow
+                (\ err -> errorWithoutStackTrace $ "Type error: " <> ppShow err)
+                (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <> ppShow
                   (fromJust $ Map.lookup "it" (coerce ty :: Map Text [Scheme]))
                 )
                 (HM.inferTop mempty [("it", stripAnnotation expr')])
@@ -155,20 +155,21 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       )
 
   --  2021-07-15: NOTE: Logic of CLI Option processing is scattered over several functions, needs to be consolicated.
+  processCLIOptions :: Maybe FilePath -> NExprLoc -> StandardT (StdIdT IO) ()
   processCLIOptions mpath expr
     | evaluate =
       if
-        | tracing                       -> evaluateExpression mpath nixTracingEvalExprLoc printer expr
-        | Just path <- reduce           -> evaluateExpression mpath (reduction path) printer expr
-        | not (null arg && null argstr) -> evaluateExpression mpath nixEvalExprLoc printer expr
-        | otherwise                     -> processResult printer =<< nixEvalExprLoc mpath expr
-    | xml                        =  fail "Rendering expression trees to XML is not yet implemented"
-    | json                       =  fail "Rendering expression trees to JSON is not implemented"
-    | verbose >= DebugInfo       =  liftIO $ putStr $ PS.ppShow $ stripAnnotation expr
-    | cache , Just path <- mpath =  liftIO $ writeCache (replaceExtension path "nixc") expr
-    | parseOnly                  =  void $ liftIO $ Exc.evaluate $ Deep.force expr
+        | tracing                       -> evaluateExprWithEvaluator nixTracingEvalExprLoc expr
+        | Just path <- reduce           -> evaluateExprWithEvaluator (reduction path) expr
+        | null arg || null argstr       -> evaluateExprWithEvaluator nixEvalExprLoc expr
+        | otherwise                     -> processResult printer <=< nixEvalExprLoc mpath $ expr
+    | xml                        = fail "Rendering expression trees to XML is not yet implemented"
+    | json                       = fail "Rendering expression trees to JSON is not implemented"
+    | verbose >= DebugInfo       =  liftIO . putStr . ppShow . stripAnnotation $ expr
+    | cache , Just path <- mpath =  liftIO . writeCache (replaceExtension path "nixc") $ expr
+    | parseOnly                  =  void . liftIO . Exception.evaluate . force $ expr
     | otherwise                  =
-      liftIO $
+      liftIO .
         renderIO
           stdout
           . layoutPretty (LayoutOptions $ AvailablePerLine 80 0.4)
@@ -176,19 +177,31 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
           . stripAnnotation
           $ expr
    where
+    evaluateExprWithEvaluator evaluator = evaluateExpression mpath evaluator printer
+
     printer
       | finder    = findAttrs <=< fromValue @(AttrSet (StdValue (StandardT (StdIdT IO))))
-      | xml       = liftIO . Text.putStrLn . stringIgnoreContext . toXML <=< normalForm
-      -- 2021-05-27: NOTE: With naive fix of the #941
-      -- This is overall a naive printer implementation, as options should interact/respect one another.
-      -- A nice question: "Should respect one another to what degree?": Go full combinator way, for which
-      -- old Nix CLI is nototrious for (and that would mean to reimplement the old Nix CLI),
-      -- OR: https://github.com/haskell-nix/hnix/issues/172 and have some sane standart/default behaviour for (most) keys.
-      | json      = liftIO . Text.putStrLn . stringIgnoreContext         <=< nvalueToJSONNixString <=< normalForm
-      | strict    = liftIO . print         . prettyNValue                <=< normalForm
-      | values    = liftIO . print         . prettyNValueProv            <=< removeEffects
-      | otherwise = liftIO . print         . prettyNValue                <=< removeEffects
+      | otherwise = printer'
      where
+      printer'
+        | xml       = go (stringIgnoreContext . toXML)                     normalForm
+        -- 2021-05-27: NOTE: With naive fix of the #941
+        -- This is overall a naive printer implementation, as options should interact/respect one another.
+        -- A nice question: "Should respect one another to what degree?": Go full combinator way, for which
+        -- old Nix CLI is nototrious for (and that would mean to reimplement the old Nix CLI),
+        -- OR: https://github.com/haskell-nix/hnix/issues/172 and have some sane standart/default behaviour for (most) keys.
+        | json      = go (stringIgnoreContext . mempty . nvalueToJSONNixString) normalForm
+        | strict    = go (show . prettyNValue)                             normalForm
+        | values    = go (show . prettyNValueProv)                         removeEffects
+        | otherwise = go (show . prettyNValue)                             removeEffects
+       where
+        go
+          :: (b -> Text)
+          -> (a -> StandardT (StdIdT IO) b)
+          -> a
+          -> StandardT (StdIdT IO) ()
+        go g f = liftIO . Text.putStrLn . g <=< f
+
       findAttrs
         :: AttrSet (StdValue (StandardT (StdIdT IO)))
         -> StandardT (StdIdT IO) ()
@@ -260,10 +273,10 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
             _                              -> (True , True )
 
           forceEntry
-            :: MonadValue a (Fix1T StandardTF (StdIdT IO))
+            :: MonadValue a (StandardT (StdIdT IO))
             => Text
             -> a
-            -> Fix1T StandardTF (StdIdT IO) (Maybe a)
+            -> StandardT (StdIdT IO) (Maybe a)
           forceEntry k v =
             catch
               (pure <$> demand v)
