@@ -194,6 +194,7 @@ nullSpan = SrcSpan nullPos nullPos
 
 -- | Pattern systems for matching on NExprLocF constructions.
 
+--  2021-07-15: NOTE: Make versions of these for NExprLoc, since source code actually uses just fixed versions of these shorthands.
 pattern NConstant_ :: SrcSpan -> NAtom -> NExprLocF r
 pattern NConstant_ ann x = AnnFP ann (NConstant x)
 

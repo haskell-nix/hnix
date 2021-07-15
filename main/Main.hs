@@ -23,7 +23,6 @@ import           Data.Time
 import qualified Data.Text.IO                  as Text
 import           Nix
 import           Nix.Convert
-import qualified Nix.Eval                      as Eval
 import           Nix.Fresh.Basic
 import           Nix.Json
 import           Nix.Options.Parser
@@ -40,6 +39,7 @@ import qualified Repl
 import           System.FilePath
 import qualified Text.Show.Pretty              as PS
 import           Nix.Utils.Fix1                 ( Fix1T )
+import           Nix.Eval
 
 main :: IO ()
 main =
@@ -50,45 +50,65 @@ main =
     main' opts
 
 main' :: Options -> IO ()
-main' (opts@Options{..}) = runWithBasicEffectsIO opts execContentsFilesOrRepl
+main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
  where
+  --  2021-07-15: NOTE: This logic should be weaved stronger through CLI options logic (OptParse-Applicative code)
+  -- As this logic is not stated in the CLI documentation, for example. So user has no knowledge of these.
+  execContentsFilesOrRepl :: StandardT (StdIdT IO) ()
   execContentsFilesOrRepl =
-    firstJust
-      -- The `--read` option: load expression from a serialized file.
-      [ readFrom <&> \path -> do
-          let file = addExtension (dropExtension path) "nixc"
-          process (Just file) =<< liftIO (readCache path)
-
-      -- The `--expr` option: read expression from the argument string
-      , expression <&> processText
-
-      -- The `--file` argument: read expressions from the files listed in the argument file
-      , fromFile <&> \x ->
-          -- We can start use Text as in the base case, requires changing FilePath -> Text
-          traverse_ processFile . String.lines =<< liftIO
-            (case x of
-              "-" -> getContents
-              fp -> readFile fp
-            )
-      ]
-    `orElse`
-      -- The base case: read expressions from the files listed on the command line
+    fromMaybe
+      loadFromCLIFilePathList
+      ( loadBinaryCacheFile <|>
+        loadLiteralExpression <|>
+        loadExpressionFromFile
+      )
+   where
+    -- | The base case: read expressions from the last CLI directive (@[FILE]@) listed on the command line.
+    loadFromCLIFilePathList =
       case filePaths of
-        -- With no files, fall back to running the REPL
-        [] -> withNixContext mempty Repl.main
-        ["-"] -> processText =<< liftIO Text.getContents
-        _paths -> traverse_ processFile _paths
+        []     -> runRepl
+        ["-"]  -> readExpressionFromStdin
+        _paths -> processSeveralFiles _paths
+     where
+      -- | Fall back to running the REPL
+      runRepl = withEmptyNixContext Repl.main
 
-  firstJust :: [Maybe a] -> Maybe a
-  firstJust = asum
+      readExpressionFromStdin =
+        do
+          expr <- liftIO Text.getContents
+          processExpr expr
 
-  orElse :: Maybe a -> a -> a
-  orElse = flip fromMaybe
+    processSeveralFiles files = traverse_ processFile files
+     where
+      processFile path = handleResult (pure path) =<< parseNixFileLoc path
 
-  processText text = handleResult Nothing     $   parseNixTextLoc text
+    -- |  The `--read` option: load expression from a serialized file.
+    loadBinaryCacheFile =
+      (\binaryCacheFile ->
+        do
+          let file = replaceExtension binaryCacheFile "nixc"
+          processCLIOptions (Just file) =<< liftIO (readCache binaryCacheFile)
+      ) <$> readFrom
 
-  processFile path = handleResult (Just path) =<< parseNixFileLoc path
+    -- | The `--expr` option: read expression from the argument string
+    loadLiteralExpression = processExpr <$> expression
 
+    -- | The `--file` argument: read expressions from the files listed in the argument file
+    loadExpressionFromFile =
+      -- We can start use Text as in the base case, requires changing FilePath -> Text
+      -- But that is a gradual process:
+      -- https://github.com/haskell-nix/hnix/issues/912
+      (processSeveralFiles . String.lines <=< liftIO) .
+        (\case
+          "-" -> getContents
+          _fp -> readFile _fp
+        ) <$> fromFile
+
+  processExpr text = handleResult Nothing     $   parseNixTextLoc text
+
+  withEmptyNixContext = withNixContext mempty
+
+  --  2021-07-15: NOTE: @handleResult@ & @process@ - are atrocious size, they need to be decomposed & refactored.
   handleResult mpath =
     either
       (\ err ->
@@ -103,7 +123,7 @@ main' (opts@Options{..}) = runWithBasicEffectsIO opts execContentsFilesOrRepl
         do
           when check $
             do
-              expr' <- liftIO (reduceExpr mpath expr)
+              expr' <- liftIO $ reduceExpr mpath expr
               either
                 (\ err -> errorWithoutStackTrace $ "Type error: " <> PS.ppShow err)
                 (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <> PS.ppShow
@@ -114,7 +134,7 @@ main' (opts@Options{..}) = runWithBasicEffectsIO opts execContentsFilesOrRepl
                 -- liftIO $ putStrLn $ runST $
                 --     runLintM opts . renderSymbolic =<< lint opts expr
 
-          catch (process mpath expr) $
+          catch (processCLIOptions mpath expr) $
             \case
               NixException frames ->
                 errorWithoutStackTrace . show =<<
@@ -124,27 +144,28 @@ main' (opts@Options{..}) = runWithBasicEffectsIO opts execContentsFilesOrRepl
                     frames
 
           when repl $
-            withNixContext mempty $
+            withEmptyNixContext $
               bool
                 Repl.main
                 (do
-                  val <- Nix.nixEvalExprLoc mpath expr
+                  val <- nixEvalExprLoc mpath expr
                   Repl.main' $ pure val
                 )
                 evaluate
       )
 
-  process mpath expr
+  --  2021-07-15: NOTE: Logic of CLI Option processing is scattered over several functions, needs to be consolicated.
+  processCLIOptions mpath expr
     | evaluate =
       if
-        | tracing                       -> evaluateExpression mpath Nix.nixTracingEvalExprLoc printer expr
+        | tracing                       -> evaluateExpression mpath nixTracingEvalExprLoc printer expr
         | Just path <- reduce           -> evaluateExpression mpath (reduction path) printer expr
-        | not (null arg && null argstr) -> evaluateExpression mpath Nix.nixEvalExprLoc printer expr
-        | otherwise                     -> processResult printer =<< Nix.nixEvalExprLoc mpath expr
+        | not (null arg && null argstr) -> evaluateExpression mpath nixEvalExprLoc printer expr
+        | otherwise                     -> processResult printer =<< nixEvalExprLoc mpath expr
     | xml                        =  fail "Rendering expression trees to XML is not yet implemented"
     | json                       =  fail "Rendering expression trees to JSON is not implemented"
     | verbose >= DebugInfo       =  liftIO $ putStr $ PS.ppShow $ stripAnnotation expr
-    | cache , Just path <- mpath =  liftIO $ writeCache (addExtension (dropExtension path) "nixc") expr
+    | cache , Just path <- mpath =  liftIO $ writeCache (replaceExtension path "nixc") expr
     | parseOnly                  =  void $ liftIO $ Exc.evaluate $ Deep.force expr
     | otherwise                  =
       liftIO $
@@ -259,15 +280,15 @@ main' (opts@Options{..}) = runWithBasicEffectsIO opts execContentsFilesOrRepl
                   pure Nothing
               )
 
-  reduction path mp x =
+  reduction path mpathToContext annExpr =
     do
       eres <-
-        Nix.withNixContext
-          mp
-          (Nix.reducingEvalExpr
-            Eval.evalContent
-            mp
-            x
+        withNixContext
+          mpathToContext
+          (reducingEvalExpr
+            evalContent
+            mpathToContext
+            annExpr
           )
       handleReduced path eres
 

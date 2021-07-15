@@ -337,7 +337,7 @@ type Flagged f = Fix (FlaggedF f)
 flagExprLoc :: (MonadIO n, Traversable f) => Fix f -> n (Flagged f)
 flagExprLoc = foldFixM $ \x -> do
   flag <- liftIO $ newIORef False
-  pure $ Fix $ FlaggedF (flag, x)
+  pure $ coerce (flag, x)
 
 -- stripFlags :: Functor f => Flagged f -> Fix f
 -- stripFlags = foldFix $ Fix . snd . flagged
