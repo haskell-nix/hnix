@@ -106,12 +106,12 @@ main' iniVal =
           (prefixedCommand : xs) | Text.head prefixedCommand == commandPrefix ->
             do
               let
-                arguments = Text.unwords xs
+                arguments = unwords xs
                 command = Text.tail prefixedCommand
               optMatcher command options arguments
-          x -> cmd $ Text.unwords x
+          x -> cmd $ unwords x
         )
-        (Text.words <$> lines f)
+        (words <$> lines f)
 
   handleMissing e
     | Error.isDoesNotExistError e = pure ""
@@ -332,12 +332,14 @@ quit _ = liftIO Exit.exitSuccess
 -- | @:set@ command
 setConfig :: (MonadNix e t f m, MonadIO m) => Text -> Repl e t f m ()
 setConfig args =
-  case Text.words args of
-    []       -> liftIO $ Text.putStrLn "No option to set specified"
-    (x:_xs)  ->
+  list
+    (liftIO $ Text.putStrLn "No option to set specified")
+    (\ (x:_xs)  ->
       case filter ((==x) . helpSetOptionName) helpSetOptions of
         [opt] -> modify (\s -> s { replCfg = helpSetOptionFunction opt (replCfg s) })
         _     -> liftIO $ Text.putStrLn "No such option"
+    )
+    $ words args
 
 
 -- * Interactive Shell

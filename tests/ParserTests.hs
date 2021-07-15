@@ -222,7 +222,7 @@ case_inherit_selector_syntax_mistakes =
 
 case_int_list =
   checks
-    ( mkList $ mkInt <$> [ i | i <- [1,2,3] ]
+    ( mkList $ mkInt <$> [1,2,3]
     , "[1 2 3]"
     )
 

@@ -5,7 +5,6 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE PackageImports #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -49,7 +48,6 @@ import qualified Data.HashMap.Lazy             as M
 import           Data.Scientific
 import qualified Data.Set                      as S
 import qualified Data.Text                     as Text
-import qualified Data.Text.Lazy                as LazyText
 import qualified Data.Text.Lazy.Builder        as Builder
 import           Data.These                     ( fromThese )
 import qualified Data.Time.Clock.POSIX         as Time
@@ -1030,7 +1028,7 @@ replaceStringsNix tfrom tto ts =
 
         --  2021-02-18: NOTE: rly?: toStrict . toLazyText
         --  Maybe `text-builder`, `text-show`?
-        finish ctx output = makeNixString (LazyText.toStrict $ Builder.toLazyText output) ctx
+        finish ctx output = makeNixString (toStrict $ Builder.toLazyText output) ctx
 
         replace (key, replacementNS, unprocessedInput) = replaceWithNixBug unprocessedInput updatedOutput
 

@@ -33,7 +33,6 @@ import           Nix.Render
 import           Nix.Value
 import qualified Paths_hnix
 import           System.Exit
-import qualified System.Environment            as Env
 import           System.FilePath                ( takeFileName )
 import qualified System.Info
 import           System.Process
@@ -235,7 +234,7 @@ class
 -- ** Instances
 
 instance MonadEnv IO where
-  getEnvVar            = (<<$>>) toText . Env.lookupEnv . toString
+  getEnvVar            = (<<$>>) toText . lookupEnv . toString
 
   getCurrentSystemOS   = pure $ toText System.Info.os
 
