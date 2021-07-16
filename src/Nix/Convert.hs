@@ -219,7 +219,7 @@ instance Convertible e t f m
   fromValue = fromMayToValue $ TString NoContext
 
 
-newtype Path = Path { getPath :: FilePath }
+newtype Path = Path FilePath
     deriving Show
 
 instance ( Convertible e t f m
@@ -365,7 +365,7 @@ instance Convertible e t f m
 
 instance Convertible e t f m
   => ToValue Path m (NValue' t f m (NValue t f m)) where
-  toValue = pure . nvPath' . getPath
+  toValue = pure . nvPath' . coerce
 
 instance Convertible e t f m
   => ToValue StorePath m (NValue' t f m (NValue t f m)) where
