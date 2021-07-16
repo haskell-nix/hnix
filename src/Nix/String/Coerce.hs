@@ -116,5 +116,5 @@ coerceToString call ctsm clevel = go
       t
       (StringContext t DirectPath)
    where
-    t = toText @FilePath $ coerce sp
+    t = fromString $ coerce sp
 

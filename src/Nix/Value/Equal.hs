@@ -25,6 +25,7 @@ import           Nix.Frames
 import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
+import           Nix.Expr.Types                 ( AttrSet )
 
 checkComparable
   :: ( Framed e m

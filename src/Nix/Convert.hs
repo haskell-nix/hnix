@@ -195,7 +195,7 @@ instance ( Convertible e t f m
     \case
       NVStr' ns -> pure $ pure ns
       NVPath' p ->
-        (\path -> pure $ makeNixStringWithSingletonContext path (StringContext path DirectPath)) . toText @FilePath . coerce <$>
+        (\path -> pure $ makeNixStringWithSingletonContext path (StringContext path DirectPath)) . fromString . coerce <$>
           addPath p
       NVSet' s _ ->
         maybe
@@ -285,7 +285,7 @@ instance ( Convertible e t f m
   fromValue = fromMayToDeeperValue TSet
 
 instance Convertible e t f m
-  => FromValue (AttrSet (NValue t f m), AttrSet SourcePos) m
+  => FromValue (AttrSet (NValue t f m), KeyMap SourcePos) m
               (NValue' t f m (NValue t f m)) where
 
   fromValueMay =
@@ -299,7 +299,7 @@ instance Convertible e t f m
 instance ( Convertible e t f m
          , FromValue a m (NValue t f m)
          )
-  => FromValue (AttrSet a, AttrSet SourcePos) m
+  => FromValue (AttrSet a, KeyMap SourcePos) m
               (Deeper (NValue' t f m (NValue t f m))) where
 
   fromValueMay =
@@ -376,7 +376,7 @@ instance ( Convertible e t f m
     f' <- toValue $ makeNixStringWithoutContext $ toText f
     l' <- toValue $ unPos l
     c' <- toValue $ unPos c
-    let pos = M.fromList [("file" :: Text, f'), ("line", l'), ("column", c')]
+    let pos = M.fromList [("file" :: VarName, f'), ("line", l'), ("column", c')]
     pure $ nvSet' mempty pos
 
 -- | With 'ToValue', we can always act recursively
@@ -400,12 +400,12 @@ instance (Convertible e t f m, ToValue a m (NValue t f m))
       stub
 
 instance Convertible e t f m
-  => ToValue (AttrSet (NValue t f m), AttrSet SourcePos) m
+  => ToValue (AttrSet (NValue t f m), KeyMap SourcePos) m
             (NValue' t f m (NValue t f m)) where
   toValue (s, p) = pure $ nvSet' p s
 
 instance (Convertible e t f m, ToValue a m (NValue t f m))
-  => ToValue (AttrSet a, AttrSet SourcePos) m
+  => ToValue (AttrSet a, KeyMap SourcePos) m
             (Deeper (NValue' t f m (NValue t f m))) where
   toValue (s, p) =
     liftA2 (\ v s -> Deeper $ nvSet' s v)

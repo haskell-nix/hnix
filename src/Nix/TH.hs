@@ -117,7 +117,7 @@ freeVars e = case unFix e of
 
   staticKey :: NKeyName r -> Maybe VarName
   staticKey (StaticKey  varname) = pure varname
-  staticKey (DynamicKey _      ) = mempty
+  staticKey (DynamicKey _      ) = Nothing
 
   pathFree :: NAttrPath NExpr -> Set VarName
   pathFree = foldMap mapFreeVars

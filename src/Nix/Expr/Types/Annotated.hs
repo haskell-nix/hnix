@@ -243,6 +243,6 @@ pattern NWith_ ann x y = AnnFP ann (NWith x y)
 pattern NAssert_ :: SrcSpan -> r -> r -> NExprLocF r
 pattern NAssert_ ann x y = AnnFP ann (NAssert x y)
 
-pattern NSynHole_ :: SrcSpan -> Text -> NExprLocF r
+pattern NSynHole_ :: SrcSpan -> VarName -> NExprLocF r
 pattern NSynHole_ ann x = AnnFP ann (NSynHole x)
 {-# complete NConstant_, NStr_, NSym_, NList_, NSet_, NLiteralPath_, NEnvPath_, NUnary_, NBinary_, NSelect_, NHasAttr_, NAbs_, NLet_, NIf_, NWith_, NAssert_, NSynHole_ #-}

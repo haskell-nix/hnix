@@ -126,8 +126,8 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
               expr' <- liftIO $ reduceExpr mpath expr
               either
                 (\ err -> errorWithoutStackTrace $ "Type error: " <> ppShow err)
-                (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <> ppShow
-                  (fromJust $ Map.lookup "it" (coerce ty :: Map Text [Scheme]))
+                (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <>
+                  ppShow (fromJust $ Map.lookup @VarName @[Scheme] "it" (coerce ty))
                 )
                 (HM.inferTop mempty [("it", stripAnnotation expr')])
 
@@ -234,7 +234,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
                     (pure . pure . Free)
                     nv
                 )
-                (sortWith fst $ M.toList s)
+                (sortWith fst $ M.toList $ M.mapKeys coerce s)
             traverse_
               (\ (k, mv) ->
                 do

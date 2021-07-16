@@ -5,6 +5,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
@@ -112,10 +113,24 @@ instance FromJSON SourcePos
 --   * Types in this section
 --   * Fixpoint nature
 
-type VarName = Text
+newtype VarName = VarName Text
+  deriving
+    ( Eq, Ord, Generic
+    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Show, Read, Hashable
+    )
 
+instance IsString VarName where
+  fromString = coerce . fromString @Text
+
+instance ToString VarName where
+  toString = toString @Text . coerce
 
 -- ** @Params@
+
+--  2021-07-16: NOTE: Should replace @ParamSet@ List
+-- | > Hashmap VarName -- type synonym
+type AttrSet = HashMap VarName
 
 -- This uses an association list because nix XML serialization preserves the
 -- order of the param set.
@@ -620,11 +635,11 @@ hashAt = alterF
  where
   alterF
     :: (Functor f)
-    => Text
+    => VarName
     -> (Maybe v -> f (Maybe v))
     -> AttrSet v
     -> f (AttrSet v)
-  alterF k f m =
+  alterF (coerce -> k) f m =
     maybe
       (MapL.delete k m)
       (\ v -> MapL.insert k v m)
@@ -662,7 +677,7 @@ class NExprAnn ann g | g -> ann where
 
 ekey
   :: NExprAnn ann g
-  => NonEmpty Text
+  => NonEmpty VarName
   -> SourcePos
   -> Lens' (Fix g) (Maybe (Fix g))
 ekey keys pos f e@(Fix x) | (NSet NonRecursive xs, ann) <- fromNExpr x =

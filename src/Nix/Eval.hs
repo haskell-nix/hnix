@@ -24,10 +24,10 @@ import           Nix.Utils
 import           Nix.Value.Monad
 
 class (Show v, Monad m) => MonadEval v m where
-  freeVariable    :: Text -> m v
-  synHole         :: Text -> m v
-  attrMissing     :: NonEmpty Text -> Maybe v -> m v
-  evaledSym       :: Text -> v -> m v
+  freeVariable    :: VarName -> m v
+  synHole         :: VarName -> m v
+  attrMissing     :: NonEmpty VarName -> Maybe v -> m v
+  evaledSym       :: VarName -> v -> m v
   evalCurPos      :: m v
   evalConstant    :: NAtom -> m v
   evalString      :: NString (m v) -> m v
@@ -60,9 +60,9 @@ class (Show v, Monad m) => MonadEval v m where
   evalListElem   :: [m v] -> Int -> m v -> m v
   evalList       :: [v] -> m v
   evalSetElem    :: AttrSet (m v) -> Text -> m v -> m v
-  evalSet        :: AttrSet v -> AttrSet SourcePos -> m v
+  evalSet        :: AttrSet v -> KeyMap SourcePos -> m v
   evalRecSetElem :: AttrSet (m v) -> Text -> m v -> m v
-  evalRecSet     :: AttrSet v -> AttrSet SourcePos -> m v
+  evalRecSet     :: AttrSet v -> KeyMap SourcePos -> m v
   evalLetElem    :: Text -> m v -> m v
   evalLet        :: m v -> m v
 -}
@@ -76,8 +76,8 @@ type MonadNixEval v m
   , ToValue Bool m v
   , ToValue [v] m v
   , FromValue NixString m v
-  , ToValue (AttrSet v, AttrSet SourcePos) m v
-  , FromValue (AttrSet v, AttrSet SourcePos) m v
+  , ToValue (AttrSet v, KeyMap SourcePos) m v
+  , FromValue (AttrSet v, KeyMap SourcePos) m v
   )
 
 data EvalFrame m v
@@ -134,7 +134,7 @@ eval (NSelect aset attr alt ) =
     let useAltOrReportMissing (s, ks) = fromMaybe (attrMissing ks $ pure s) alt
 
     eAttr <- evalSelect aset attr
-    either useAltOrReportMissing id eAttr
+    either useAltOrReportMissing id (coerce eAttr)
 
 eval (NHasAttr aset attr) =
   do
@@ -209,19 +209,19 @@ evalWithAttrSet aset body = do
   -- sure the action it evaluates is to force a thunk, so its value is only
   -- computed once.
   deferredAset <- defer $ withScopes scope aset
-  let attrSet = fst <$> (fromValue @(AttrSet v, AttrSet SourcePos) =<< demand deferredAset)
+  let attrSet = fst <$> (fromValue @(AttrSet v, KeyMap SourcePos) =<< demand deferredAset)
 
   pushWeakScope attrSet body
 
 attrSetAlter
   :: forall v m
    . MonadNixEval v m
-  => [Text]
+  => [VarName]
   -> SourcePos
   -> AttrSet (m v)
-  -> AttrSet SourcePos
+  -> KeyMap SourcePos
   -> m v
-  -> m (AttrSet (m v), AttrSet SourcePos)
+  -> m (AttrSet (m v), KeyMap SourcePos)
 attrSetAlter [] _ _ _ _ = evalError @v $ ErrorCall "invalid selector with no components"
 attrSetAlter (k : ks) pos m p val =
   bool
@@ -230,22 +230,22 @@ attrSetAlter (k : ks) pos m p val =
       (recurse mempty mempty)
       (\x ->
         do
-          (st, sp) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< x
+          (st, sp) <- fromValue @(AttrSet v, KeyMap SourcePos) =<< x
           recurse (demand <$> st) sp
       )
       (M.lookup k m)
     )
     (not $ null ks)
  where
-  go = pure (M.insert k val m, M.insert k pos p)
+  go = pure (M.insert k val m, M.insert (coerce k) pos p)
 
   recurse st sp =
     (\(st', _) ->
       (M.insert
         k
-        (toValue @(AttrSet v, AttrSet SourcePos) =<< (, mempty) <$> sequence st')
+        (toValue @(AttrSet v, KeyMap SourcePos) =<< (, mempty) <$> sequence st')
         m
-      , M.insert k pos p
+      , M.insert (coerce k) pos p
       )
     ) <$> attrSetAlter ks pos st sp val
 
@@ -293,7 +293,7 @@ evalBinds
    . MonadNixEval v m
   => Bool
   -> [Binding (m v)]
-  -> m (AttrSet v, AttrSet SourcePos)
+  -> m (AttrSet v, KeyMap SourcePos)
 evalBinds recursive binds =
   do
     scope <- currentScopes :: m (Scopes m v)
@@ -303,8 +303,8 @@ evalBinds recursive binds =
  where
   buildResult
     :: Scopes m v
-    -> [([Text], SourcePos, m v)]
-    -> m (AttrSet v, AttrSet SourcePos)
+    -> [([VarName], SourcePos, m v)]
+    -> m (AttrSet v, KeyMap SourcePos)
   buildResult scope bindings =
     do
       (s, p) <- foldM insert (mempty, mempty) bindings
@@ -323,7 +323,7 @@ evalBinds recursive binds =
 
     encapsulate f attrs = mkThunk $ pushScope attrs f
 
-  applyBindToAdt :: Scopes m v -> Binding (m v) -> m [([Text], SourcePos, m v)]
+  applyBindToAdt :: Scopes m v -> Binding (m v) -> m [([VarName], SourcePos, m v)]
   applyBindToAdt _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
     do
       (o', p') <- fromValue =<< finalValue
@@ -331,7 +331,7 @@ evalBinds recursive binds =
       pure $
         (\ (k, v) ->
           ( [k]
-          , fromMaybe pos $ M.lookup k p'
+          , fromMaybe pos $ M.lookup @Text (coerce k) p'
           , demand v
           )
         ) <$> M.toList o'
@@ -345,11 +345,11 @@ evalBinds recursive binds =
     ) <$> processAttrSetKeys pathExpr
 
    where
-    processAttrSetKeys :: NAttrPath (m v) -> m ([Text], SourcePos, m v)
+    processAttrSetKeys :: NAttrPath (m v) -> m ([VarName], SourcePos, m v)
     processAttrSetKeys (h :| t) =
       maybe
         -- Empty attrset - return a stub.
-        (pure ( mempty, nullPos, toValue @(AttrSet v, AttrSet SourcePos) (mempty, mempty)) )
+        (pure ( mempty, nullPos, toValue @(AttrSet v, KeyMap SourcePos) (mempty, mempty)) )
         (\ k ->
           list
             -- No more keys in the attrset - return the result
@@ -372,7 +372,7 @@ evalBinds recursive binds =
    where
     processScope
       :: NKeyName (m v)
-      -> m (Maybe ([Text], SourcePos, m v))
+      -> m (Maybe ([VarName], SourcePos, m v))
     processScope nkeyname =
       (\ mkey ->
         do
@@ -387,7 +387,7 @@ evalBinds recursive binds =
                     (withScopes scope $ lookupVar key)
                     (\ s ->
                       do
-                        (attrset, _) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< s
+                        (attrset, _) <- fromValue @(AttrSet v, KeyMap SourcePos) =<< s
 
                         clearScopes @v $ pushScope attrset $ lookupVar key
                     )
@@ -407,7 +407,7 @@ evalSelect
    . MonadNixEval v m
   => m v
   -> NAttrPath (m v)
-  -> m (Either (v, NonEmpty Text) (m v))
+  -> m (Either (v, NonEmpty VarName) (m v))
 evalSelect aset attr =
   do
     s    <- aset
@@ -416,13 +416,14 @@ evalSelect aset attr =
     extract s path
 
  where
+  extract :: v -> NonEmpty VarName -> m (Either (v, NonEmpty VarName) (m v))
   extract x path@(k :| ks) =
     do
       x' <- fromValueMay x
 
       case x' of
         Nothing -> pure $ Left (x, path)
-        Just (s :: AttrSet v, p :: AttrSet SourcePos)
+        Just (s :: AttrSet v, p :: KeyMap SourcePos)
           | Just t <- M.lookup k s ->
             do
               list
@@ -438,7 +439,7 @@ evalGetterKeyName
   :: forall v m
    . (MonadEval v m, FromValue NixString m v)
   => NKeyName (m v)
-  -> m Text
+  -> m VarName
 evalGetterKeyName =
   maybe
     (evalError @v $ ErrorCall "value is null while a string was expected")
@@ -450,14 +451,14 @@ evalGetterKeyName =
 evalSetterKeyName
   :: (MonadEval v m, FromValue NixString m v)
   => NKeyName (m v)
-  -> m (Maybe Text)
+  -> m (Maybe VarName)
 evalSetterKeyName =
   \case
     StaticKey k -> pure $ pure k
     DynamicKey k ->
       maybe
-        mempty
-        (pure . stringIgnoreContext)
+        Nothing
+        (pure . coerce . stringIgnoreContext)
         <$> runAntiquoted "\n" assembleString (fromValueMay =<<) k
 
 assembleString
@@ -489,7 +490,7 @@ buildArgument params arg =
       Param name -> M.singleton name <$> argThunk
       ParamSet s isVariadic m ->
         do
-          (args, _) <- fromValue @(AttrSet v, AttrSet SourcePos) =<< arg
+          (args, _) <- fromValue @(AttrSet v, KeyMap SourcePos) =<< arg
           let
             inject =
               maybe
@@ -510,12 +511,12 @@ buildArgument params arg =
   assemble
     :: Scopes m v
     -> Bool
-    -> Text
+    -> VarName
     -> These v (Maybe (m v))
     -> Maybe (AttrSet v -> m v)
   assemble scope isVariadic k =
     \case
-      That Nothing -> pure $ const $ evalError @v $ ErrorCall $ "Missing value for parameter: " <> show k
+      That Nothing -> pure $ const $ evalError @v $ ErrorCall $ "Missing value for parameter: ''" <> show k
       That (Just f) -> pure $ \args -> defer $ withScopes scope $ pushScope args f
       This _
         | isVariadic -> Nothing

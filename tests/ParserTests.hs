@@ -286,10 +286,11 @@ case_lambda_or_uri_syntax_mistakes =
 
 case_lambda_pattern =
   checks
-    ( mkFunction (fixed args mempty) $ var "b"
+    ( mkFunction (fixed args Nothing) $ var "b"
     , "{b, c ? 1}: b"
+    -- Fix (NAbs (ParamSet [("b",Nothing),("c",Just (Fix (NConstant (NInt 1))))] False Nothing) (Fix (NSym "b")))
     )
-    ( mkFunction (fixed args2 mempty) $ var "b"
+    ( mkFunction (fixed args2 Nothing) $ var "b"
     , "{ b ? x: x  }: b"
     )
     ( mkFunction (fixed args $ pure "a") $ var "b"
@@ -301,7 +302,7 @@ case_lambda_pattern =
     ( mkFunction (variadic vargs $ pure "a") $ var "c"
     , "{b,c?1,...}@a: c"
     )
-    ( mkFunction (variadic mempty mempty) $ mkInt 1
+    ( mkFunction (variadic mempty Nothing) $ mkInt 1
     , "{...}: 1"
     )
  where

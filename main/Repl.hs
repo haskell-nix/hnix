@@ -281,11 +281,16 @@ printValue val = do
 browse :: (MonadNix e t f m, MonadIO m)
        => Text
        -> Repl e t f m ()
-browse _ = do
-  st <- get
-  for_ (Data.HashMap.Lazy.toList $ replCtx st) $ \(k, v) -> do
-    liftIO $ Text.putStr $ k <> " = "
-    printValue v
+browse _ =
+  do
+    st <- get
+    traverse_
+      (\(k, v) ->
+        do
+          liftIO $ Text.putStr $ coerce k <> " = "
+          printValue v
+      )
+      (Data.HashMap.Lazy.toList $ replCtx st)
 
 -- | @:load@ command
 load
@@ -313,7 +318,7 @@ typeof args = do
     maybe
       (exec False line)
       (pure . pure)
-      (Data.HashMap.Lazy.lookup line (replCtx st))
+      (Data.HashMap.Lazy.lookup (coerce line) (replCtx st))
 
   traverse_ printValueType mVal
 
@@ -398,7 +403,7 @@ completeFunc reversedPrev word
                     candidates
                   )
         )
-        (Data.HashMap.Lazy.lookup var (replCtx s))
+        (Data.HashMap.Lazy.lookup (coerce var) (replCtx s))
 
   -- Builtins, context variables
   | otherwise =
@@ -439,10 +444,10 @@ completeFunc reversedPrev word
                    (("." <> f) <>)
                    . algebraicComplete fs <=< demand
                 )
-                (Data.HashMap.Lazy.lookup f m)
+                (Data.HashMap.Lazy.lookup (coerce f) m)
       in
       case val of
-        NVSet xs _ -> withMap xs
+        NVSet xs _ -> withMap (Data.HashMap.Lazy.mapKeys coerce xs)
         _          -> stub
 
 -- | HelpOption inspired by Dhall Repl

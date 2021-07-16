@@ -124,8 +124,8 @@ data NValueF p m r
     -- Quite frequently actions/processing happens with values
     -- (for example - forcing of values & recreation of the monad),
     -- but SourcePos does not change then
-    -- That would be good to flip all 'AttrSet.* AttrSet SourcePos'
-    | NVSetF (AttrSet r) (AttrSet SourcePos)
+    -- That would be good to flip all 'AttrSet.* KeyMap SourcePos'
+    | NVSetF (AttrSet r) (KeyMap SourcePos)
     | NVClosureF (Params ()) (p -> m r)
       -- ^ A function is a closed set of parameters representing the "call
       --   signature", used at application time to check the type of arguments
@@ -138,7 +138,7 @@ data NValueF p m r
       --   Note that 'm r' is being used here because effectively a function
       --   and its set of default arguments is "never fully evaluated". This
       --   enforces in the type that it must be re-evaluated for each call.
-    | NVBuiltinF Text (p -> m r)
+    | NVBuiltinF VarName (p -> m r)
       -- ^ A builtin function is itself already in normal form. Also, it may
       --   or may not choose to evaluate its argument in the production of a
       --   result.
@@ -445,10 +445,11 @@ nvList' = NValue' . pure . NVListF
 
 -- | Haskell key-value to the Nix key-value,
 nvSet' :: Applicative f
-  => AttrSet SourcePos
+  => KeyMap SourcePos
   -> AttrSet r
   -> NValue' t f m r
-nvSet' x s = NValue' $ pure $ NVSetF s x
+--  2021-07-16: NOTE: that the arguments are flipped.
+nvSet' p s = NValue' $ pure $ NVSetF s p
 
 
 -- | Haskell closure to the Nix closure,
@@ -463,7 +464,7 @@ nvClosure' x f = NValue' $ pure $ NVClosureF x f
 
 -- | Haskell functions to the Nix functions!
 nvBuiltin' :: (Applicative f, Functor m)
-  => Text
+  => VarName
   -> (NValue t f m -> m r)
   -> NValue' t f m r
 nvBuiltin' name f = NValue' $ pure $ NVBuiltinF name f
@@ -627,11 +628,10 @@ nvList = Free . nvList'
 
 
 nvSet :: Applicative f
-  => AttrSet SourcePos
+  => KeyMap SourcePos
   -> AttrSet (NValue t f m)
   -> NValue t f m
-nvSet x s = Free $ nvSet' x s
-
+nvSet p s = Free $ nvSet' p s
 
 nvClosure :: (Applicative f, Functor m)
   => Params ()
@@ -643,7 +643,7 @@ nvClosure x f = Free $ nvClosure' x f
 
 
 nvBuiltin :: (Applicative f, Functor m)
-  => Text
+  => VarName
   -> (NValue t f m
     -> m (NValue t f m)
     )
@@ -654,7 +654,7 @@ nvBuiltin name f = Free $ nvBuiltin' name f
 builtin
   :: forall m f t
    . (MonadThunk t m (NValue t f m), MonadDataContext f m)
-  => Text
+  => VarName
   -> ( NValue t f m
     -> m (NValue t f m)
     )
@@ -664,7 +664,7 @@ builtin name f = pure $ nvBuiltin name $ \a -> f a
 
 builtin2
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
-  => Text
+  => VarName
   -> ( NValue t f m
     -> NValue t f m
     -> m (NValue t f m)
@@ -675,7 +675,7 @@ builtin2 name f = builtin name $ \a -> builtin name $ \b -> f a b
 
 builtin3
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
-  => Text
+  => VarName
   -> ( NValue t f m
     -> NValue t f m
     -> NValue t f m
