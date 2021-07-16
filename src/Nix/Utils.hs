@@ -172,19 +172,6 @@ uriAwareSplit txt =
         (e1 <> "://" <> suffix, PathEntryURI) : path
       | otherwise                                 -> (e1, PathEntryPath) : uriAwareSplit (Text.drop 1 e2)
 
-alterF
-  :: (Eq k, Hashable k, Functor f)
-  => (Maybe v -> f (Maybe v))
-  -> k
-  -> HashMap k v
-  -> f (HashMap k v)
-alterF f k m =
-  maybe
-    (M.delete k m)
-    (\ v -> M.insert k v m)
-    <$> f (M.lookup k m)
-
-
 -- | Analog for @bool@ or @maybe@, for list-like cons structures.
 list
   :: Foldable t

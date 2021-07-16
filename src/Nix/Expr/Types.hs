@@ -32,6 +32,7 @@ import           Data.Data
 import           Data.Fix
 import           Data.Functor.Classes
 import           Data.Hashable.Lifted
+import qualified Data.HashMap.Lazy             as MapL
 import qualified Data.List.NonEmpty            as NE
 import qualified Text.Show
 import           Data.Traversable
@@ -615,7 +616,19 @@ hashAt
 #else
 hashAt :: VarName -> Lens' (AttrSet v) (Maybe v)
 #endif
-hashAt = flip alterF
+hashAt = alterF
+ where
+  alterF
+    :: (Functor f)
+    => Text
+    -> (Maybe v -> f (Maybe v))
+    -> AttrSet v
+    -> f (AttrSet v)
+  alterF k f m =
+    maybe
+      (MapL.delete k m)
+      (\ v -> MapL.insert k v m)
+      <$> f (MapL.lookup k m)
 
 -- | Get the name out of the parameter (there might be none).
 paramName :: Params r -> Maybe VarName
