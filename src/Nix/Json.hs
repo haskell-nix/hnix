@@ -42,8 +42,8 @@ nvalueToJSON = \case
       (HM.lookup "outPath" m)
   NVPath p ->
     do
-      fp <- lift $ unStorePath <$> addPath p
-      addSingletonStringContext $ StringContext (toText fp) DirectPath
+      fp <- lift $ coerce <$> addPath p
+      addSingletonStringContext $ StringContext (toText @FilePath fp) DirectPath
       pure $ A.toJSON fp
   v -> lift $ throwError $ CoercionToJson v
 

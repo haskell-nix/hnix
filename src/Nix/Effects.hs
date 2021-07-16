@@ -41,7 +41,7 @@ import qualified System.Nix.Store.Remote       as Store.Remote
 import qualified System.Nix.StorePath          as Store
 
 -- | A path into the nix store
-newtype StorePath = StorePath { unStorePath :: FilePath }
+newtype StorePath = StorePath FilePath
 
 
 -- All of the following type classes defer to the underlying 'm'.

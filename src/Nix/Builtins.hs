@@ -1122,7 +1122,7 @@ toFileNix name s =
         (stringIgnoreContext s')
 
     let
-      t  = toText $ unStorePath mres
+      t  = toText @FilePath $ coerce mres
       sc = StringContext t DirectPath
 
     toValue $ makeNixStringWithSingletonContext t sc

@@ -195,9 +195,8 @@ instance ( Convertible e t f m
     \case
       NVStr' ns -> pure $ pure ns
       NVPath' p ->
-        fmap
-          (pure . (\s -> makeNixStringWithSingletonContext s (StringContext s DirectPath)) . toText . unStorePath)
-          (addPath p)
+        (\path -> pure $ makeNixStringWithSingletonContext path (StringContext path DirectPath)) . toText @FilePath . coerce <$>
+          addPath p
       NVSet' s _ ->
         maybe
           stub
@@ -368,7 +367,7 @@ instance Convertible e t f m
 
 instance Convertible e t f m
   => ToValue StorePath m (NValue' t f m (NValue t f m)) where
-  toValue = toValue . Path . unStorePath
+  toValue = toValue @Path . coerce
 
 instance ( Convertible e t f m
          )

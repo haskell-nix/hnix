@@ -75,7 +75,7 @@ writeDerivation drv@Derivation{inputs, name} = do
   let (inputSrcs, inputDrvs) = inputs
   references <- Set.fromList <$> traverse parsePath (Set.toList $ inputSrcs <> Set.fromList (Map.keys inputDrvs))
   path <- addTextToStore (Text.append name ".drv") (unparseDrv drv) (S.fromList $ Set.toList references) False
-  parsePath $ toText $ unStorePath path
+  parsePath $ toText @FilePath $ coerce path
 
 -- | Traverse the graph of inputDrvs to replace fixed output derivations with their fixed output hash.
 -- this avoids propagating changes to their .drv when the output hash stays the same.
@@ -275,7 +275,7 @@ defaultDerivationStrict val = do
         pure $ drv
           { inputs
           , outputs = outputs'
-          , env = ifNotJsonModEnv $ (outputs' <>)
+          , env = ifNotJsonModEnv (outputs' <>)
           }
 
     drvPath <- pathToText <$> writeDerivation drv'
