@@ -205,7 +205,7 @@ instance ( Convertible e t f m
           (M.lookup "outPath" s)
       _ -> stub
 
-  fromValue = fromMayToValue $ TString NoContext
+  fromValue = fromMayToValue $ TString mempty
 
 instance Convertible e t f m
   => FromValue ByteString m (NValue' t f m (NValue t f m)) where
@@ -213,11 +213,10 @@ instance Convertible e t f m
   fromValueMay =
     pure .
       \case
-        NVStr' ns -> encodeUtf8 <$> getStringNoContext  ns
+        NVStr' ns -> encodeUtf8 <$> getStringNoContext ns
         _         -> mempty
 
-  fromValue = fromMayToValue $ TString NoContext
-
+  fromValue = fromMayToValue $ TString mempty
 
 newtype Path = Path FilePath
     deriving Show
@@ -229,8 +228,8 @@ instance ( Convertible e t f m
 
   fromValueMay =
     \case
-      NVPath' p  -> pure $ pure $ Path p
-      NVStr'  ns -> pure $ Path . toString <$> getStringNoContext  ns
+      NVPath' p  -> pure $ pure $ coerce p
+      NVStr'  ns -> pure $ coerce . toString <$> getStringNoContext  ns
       NVSet' s _ ->
         maybe
           (pure Nothing)

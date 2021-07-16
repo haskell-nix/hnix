@@ -706,6 +706,15 @@ pattern NVBuiltin name f <- Free (NVBuiltin' name f)
 data TStringContext = NoContext | HasContext
   deriving Show
 
+instance Semigroup TStringContext where
+  (<>) HasContext _ = HasContext
+  (<>) _ HasContext = HasContext
+  (<>) _          _ = NoContext
+
+
+instance Monoid TStringContext where
+  mempty = NoContext
+
 -- * @ValueType@
 
 data ValueType
@@ -728,7 +737,7 @@ valueType =
   \case
     NVConstantF a ->
       case a of
-        NURI   _ -> TString NoContext
+        NURI   _ -> TString mempty
         NInt   _ -> TInt
         NFloat _ -> TFloat
         NBool  _ -> TBool
@@ -736,7 +745,7 @@ valueType =
     NVStrF ns  ->
       TString $
         bool
-          NoContext
+          mempty
           HasContext
           (stringHasContext ns)
     NVListF{}    -> TList
