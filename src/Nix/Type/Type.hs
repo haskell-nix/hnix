@@ -7,8 +7,6 @@ import           Prelude                 hiding ( Type, TVar )
 import           Data.Foldable                  ( foldr1 )
 import           Nix.Utils                      ( AttrSet )
 
-type Name = Text
-
 -- | Hindrey-Milner type interface
 
 -- | Type variable in the Nix type system.
