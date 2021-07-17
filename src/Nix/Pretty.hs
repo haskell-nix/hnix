@@ -248,7 +248,7 @@ exprFNixDoc = \case
       opInfo
       (pretty (operatorName opInfo) <> wrapParens opInfo r1)
     where opInfo = getUnaryOperator op
-  NSelect r' attr o ->
+  NSelect o r' attr ->
     maybe
       (mkNixDoc selectOp)
       (const leastPrecedence)

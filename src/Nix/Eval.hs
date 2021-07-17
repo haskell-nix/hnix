@@ -129,7 +129,7 @@ eval (NBinary op   larg rarg) =
     lav <- larg
     evalBinary op lav rarg
 
-eval (NSelect aset attr alt ) =
+eval (NSelect alt aset attr) =
   do
     let useAltOrReportMissing (s, ks) = fromMaybe (attrMissing ks $ pure s) alt
 

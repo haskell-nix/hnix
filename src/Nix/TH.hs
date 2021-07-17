@@ -62,7 +62,7 @@ freeVars e = case unFix e of
   (NEnvPath     _               ) -> mempty
   (NUnary       _    expr       ) -> freeVars expr
   (NBinary      _    left right ) -> collectFreeVars left right
-  (NSelect      expr path orExpr) ->
+  (NSelect      orExpr expr path) ->
     Set.unions
       [ freeVars expr
       , pathFree path

@@ -493,18 +493,15 @@ case_indented_string_escape =
 
 case_select =
   checks
-    ( Fix $ NSelect (var "a")
-        (StaticKey "e" :| [StaticKey "di", StaticKey "f"])
-        Nothing
+    ( Fix $ NSelect Nothing (var "a") (StaticKey "e" :| [StaticKey "di", StaticKey "f"])
     , "a .  e .di. f"
     )
-    ( Fix $ NSelect (var "a")
+    ( Fix $ NSelect (pure mkNull) (var "a")
         (StaticKey "e" :| [StaticKey "d"])
-        (pure mkNull)
     , "a.e . d    or null"
     )
-    ( Fix $ NSelect emptySet
-        (DynamicKey (Plain (DoubleQuoted mempty)) :| mempty) (pure mkNull)
+    ( Fix $ NSelect (pure mkNull) emptySet
+        (DynamicKey (Plain (DoubleQuoted mempty)) :| mempty)
     , "{}.\"\"or null"
     )
     ( Fix $ NBinary NConcat
@@ -534,7 +531,7 @@ case_select_path =
     ( emptySet @@ mkRelPath "./def"
     , "{}./def"
     )
-    ( Fix (NSelect emptySet (DynamicKey (Plain $ DoubleQuoted mempty) :| mempty) Nothing) @@ mkRelPath "./def"
+    ( Fix (NSelect Nothing emptySet (DynamicKey (Plain $ DoubleQuoted mempty) :| mempty)) @@ mkRelPath "./def"
     , "{}.\"\"./def"
     )
 

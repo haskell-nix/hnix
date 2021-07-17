@@ -530,14 +530,14 @@ data NExprF r
   --
   -- > NBinary NPlus x y                           ~  x + y
   -- > NBinary NApp  f x                           ~  f x
-  | NSelect !r !(NAttrPath r) !(Maybe r)
+  | NSelect !(Maybe r) !r !(NAttrPath r)
   --  2021-05-15: NOTE: Default value should be first argument to leverage partial application.
   -- Cascading change diff is not that big.
   -- ^ Dot-reference into an attribute set, optionally providing an
   -- alternative if the key doesn't exist.
   --
-  -- > NSelect s (x :| []) Nothing                 ~  s.x
-  -- > NSelect s (x :| []) (pure y)                ~  s.x or y
+  -- > NSelect Nothing  s (x :| [])                ~  s.x
+  -- > NSelect (pure y) s (x :| [])                ~  s.x or y
   | NHasAttr !r !(NAttrPath r)
   -- ^ Ask if a set contains a given attribute path.
   --

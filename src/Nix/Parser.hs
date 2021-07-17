@@ -144,10 +144,9 @@ nixSelect term =
     -> NExprLoc
   build t mexpr =
     maybe
-      id
-      (\ expr t -> (uncurry $ nSelectLoc t) expr)
-      mexpr
       t
+      (\ (a, m) -> (`nSelectLoc` t) m a)
+      mexpr
 
 nixSelector :: Parser (Ann SrcSpan (NAttrPath NExprLoc))
 nixSelector =
@@ -265,7 +264,7 @@ nixLet = annotateLocation1
       (reserved "in" *> nixToplevelForm)
   -- Let expressions `let {..., body = ...}' are just desugared
   -- into `(rec {..., body = ...}).body'.
-  letBody    = (\x -> NSelect x (StaticKey "body" :| mempty) Nothing) <$> aset
+  letBody    = (\x -> NSelect Nothing x (StaticKey "body" :| mempty)) <$> aset
   aset       = annotateLocation1 $ NSet Recursive <$> braces nixBinders
 
 nixIf :: Parser NExprLoc
