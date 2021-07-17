@@ -21,7 +21,8 @@ import           Nix.Exec                       ( MonadNix
                                                 , evalExprLoc
                                                 , nixInstantiateExpr
                                                 )
-import           Nix.Expr
+import           Nix.Expr.Types
+import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Parser
 import           Nix.Render

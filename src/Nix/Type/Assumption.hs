@@ -18,7 +18,7 @@ import           Prelude                 hiding ( Type
                                                 , empty
                                                 )
 
-import           Nix.Expr
+import           Nix.Expr.Types
 import           Nix.Type.Type
 
 newtype Assumption = Assumption { assumptions :: [(VarName, Type)] }

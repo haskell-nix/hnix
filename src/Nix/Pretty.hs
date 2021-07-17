@@ -23,7 +23,8 @@ import qualified Data.Text                     as Text
 import           Prettyprinter           hiding ( list )
 import           Nix.Atoms
 import           Nix.Cited
-import           Nix.Expr
+import           Nix.Expr.Types
+import           Nix.Expr.Types.Annotated
 import           Nix.Expr.Strings
 import           Nix.Normal
 import           Nix.Parser

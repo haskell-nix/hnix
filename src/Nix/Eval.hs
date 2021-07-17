@@ -15,7 +15,8 @@ import           Data.List                      ( partition )
 import           Data.These                     ( These(..) )
 import           Nix.Atoms
 import           Nix.Convert
-import           Nix.Expr
+import           Nix.Expr.Types
+import           Nix.Expr.Types.Annotated
 import           Nix.Expr.Strings               ( runAntiquoted )
 import           Nix.Frames
 import           Nix.String

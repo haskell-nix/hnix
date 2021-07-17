@@ -29,7 +29,8 @@ import           Nix.Cited
 import           Nix.Convert
 import           Nix.Effects
 import           Nix.Eval                      as Eval
-import           Nix.Expr
+import           Nix.Expr.Types
+import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Options
 import           Nix.Pretty

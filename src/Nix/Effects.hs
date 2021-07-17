@@ -26,7 +26,7 @@ import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
 import qualified "cryptonite" Crypto.Hash      as Hash
 import           Nix.Utils.Fix1
-import           Nix.Expr
+import           Nix.Expr.Types.Annotated
 import           Nix.Frames              hiding ( Proxy )
 import           Nix.Parser
 import           Nix.Render

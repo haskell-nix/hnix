@@ -42,7 +42,8 @@ import qualified Data.List.NonEmpty            as NE
 import qualified Text.Show
 import           Nix.Atoms
 import           Nix.Effects.Basic              ( pathToDefaultNixFile )
-import           Nix.Expr
+import           Nix.Expr.Types
+import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Options                    ( Options
                                                 , reduceSets

@@ -32,7 +32,8 @@ import           Nix.Context
 import           Nix.Convert
 import           Nix.Eval                       ( MonadEval(..) )
 import qualified Nix.Eval                      as Eval
-import           Nix.Expr
+import           Nix.Expr.Types
+import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Fresh
 import           Nix.String

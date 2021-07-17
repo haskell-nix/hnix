@@ -12,7 +12,8 @@ import           Language.Haskell.TH
 import qualified Language.Haskell.TH.Syntax    as TH
 import           Language.Haskell.TH.Quote
 import           Nix.Atoms
-import           Nix.Expr
+import           Nix.Expr.Types
+import           Nix.Expr.Types.Annotated
 import           Nix.Parser
 
 quoteExprExp :: String -> ExpQ
