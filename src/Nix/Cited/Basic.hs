@@ -14,7 +14,7 @@ import           Nix.Cited
 import           Nix.Eval                      as Eval
                                                 ( EvalFrame(EvaluatingExpr,ForcingExpr) )
 import           Nix.Exec
-import           Nix.Expr
+import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Options
 import           Nix.Thunk

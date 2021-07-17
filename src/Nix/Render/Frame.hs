@@ -15,7 +15,8 @@ import           Nix.Utils
 import           Data.Fix                   ( Fix(..) )
 import           Nix.Eval
 import           Nix.Exec
-import           Nix.Expr
+import           Nix.Expr.Types
+import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Normal
 import           Nix.Options

@@ -26,14 +26,13 @@ import           Network.HTTP.Client.TLS
 import           Network.HTTP.Types
 import qualified "cryptonite" Crypto.Hash      as Hash
 import           Nix.Utils.Fix1
-import           Nix.Expr
+import           Nix.Expr.Types.Annotated
 import           Nix.Frames              hiding ( Proxy )
 import           Nix.Parser
 import           Nix.Render
 import           Nix.Value
 import qualified Paths_hnix
 import           System.Exit
-import qualified System.Environment            as Env
 import           System.FilePath                ( takeFileName )
 import qualified System.Info
 import           System.Process
@@ -42,7 +41,7 @@ import qualified System.Nix.Store.Remote       as Store.Remote
 import qualified System.Nix.StorePath          as Store
 
 -- | A path into the nix store
-newtype StorePath = StorePath { unStorePath :: FilePath }
+newtype StorePath = StorePath FilePath
 
 
 -- All of the following type classes defer to the underlying 'm'.
@@ -235,7 +234,7 @@ class
 -- ** Instances
 
 instance MonadEnv IO where
-  getEnvVar            = (<<$>>) toText . Env.lookupEnv . toString
+  getEnvVar            = (<<$>>) toText . lookupEnv . toString
 
   getCurrentSystemOS   = pure $ toText System.Info.os
 

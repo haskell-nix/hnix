@@ -12,7 +12,8 @@ import           Language.Haskell.TH
 import qualified Language.Haskell.TH.Syntax    as TH
 import           Language.Haskell.TH.Quote
 import           Nix.Atoms
-import           Nix.Expr
+import           Nix.Expr.Types
+import           Nix.Expr.Types.Annotated
 import           Nix.Parser
 
 quoteExprExp :: String -> ExpQ
@@ -62,7 +63,7 @@ freeVars e = case unFix e of
   (NEnvPath     _               ) -> mempty
   (NUnary       _    expr       ) -> freeVars expr
   (NBinary      _    left right ) -> collectFreeVars left right
-  (NSelect      expr path orExpr) ->
+  (NSelect      orExpr expr path) ->
     Set.unions
       [ freeVars expr
       , pathFree path
@@ -117,7 +118,7 @@ freeVars e = case unFix e of
 
   staticKey :: NKeyName r -> Maybe VarName
   staticKey (StaticKey  varname) = pure varname
-  staticKey (DynamicKey _      ) = mempty
+  staticKey (DynamicKey _      ) = Nothing
 
   pathFree :: NAttrPath NExpr -> Set VarName
   pathFree = foldMap mapFreeVars
