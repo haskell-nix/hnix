@@ -248,7 +248,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
                         maybe
                           pass
                           (\case
-                            NVSet s' _ -> go (path <> ".") s'
+                            NVSet _ s' -> go (path <> ".") s'
                             _          -> pass
                           )
                           mv

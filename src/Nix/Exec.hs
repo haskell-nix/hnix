@@ -300,7 +300,7 @@ callFunc fun arg =
         do
           span <- currentPos
           withFrame Info ((Calling @m @(NValue t f m)) (coerce name) span) $ f arg -- Is this cool?
-      (NVSet m _) | Just f <- M.lookup "__functor" m ->
+      (NVSet _ m) | Just f <- M.lookup "__functor" m ->
         (`callFunc` arg) =<< (`callFunc` fun') =<< demand f
       _x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show _x
 
@@ -403,9 +403,9 @@ execBinaryOpForced scope span op lval rval = case op of
 
   NUpdate ->
     case (lval, rval) of
-      (NVSet ls lp, NVSet rs rp) -> pure $ nvSetP prov (rp <> lp) (rs <> ls)
-      (NVSet ls lp, NVConstant NNull) -> pure $ nvSetP prov lp ls
-      (NVConstant NNull, NVSet rs rp) -> pure $ nvSetP prov rp rs
+      (NVSet lp ls, NVSet rp rs) -> pure $ nvSetP prov (rp <> lp) (rs <> ls)
+      (NVSet lp ls, NVConstant NNull) -> pure $ nvSetP prov lp ls
+      (NVConstant NNull, NVSet rp rs) -> pure $ nvSetP prov rp rs
       _ -> unsupportedTypes
 
   NPlus ->

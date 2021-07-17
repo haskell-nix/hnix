@@ -179,7 +179,7 @@ fetchTarball
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 fetchTarball =
   \case
-    NVSet s _ ->
+    NVSet _ s ->
       maybe
         (throwError $ ErrorCall "builtins.fetchTarball: Missing url attribute")
         (go (M.lookup "sha256" s) <=< demand)

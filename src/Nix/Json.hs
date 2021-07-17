@@ -36,7 +36,7 @@ nvalueToJSON = \case
   NVConstant NNull      -> pure   A.Null
   NVStr      ns         -> A.toJSON <$> extractNixString ns
   NVList l -> A.Array . V.fromList <$> traverse intoJson l
-  NVSet m _ ->
+  NVSet _ m ->
     maybe
       (A.Object <$> traverse intoJson (HM.mapKeys (coerce @VarName @Text) m))
       intoJson

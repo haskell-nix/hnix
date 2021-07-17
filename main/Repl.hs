@@ -225,7 +225,7 @@ exec update source = do
 
             -- If the result value is a set, update our context with it
             case val of
-              NVSet xs _ -> put st { replCtx = xs <> replCtx st }
+              NVSet _ xs -> put st { replCtx = xs <> replCtx st }
               _          -> pass
 
           pure $ pure val
@@ -410,7 +410,7 @@ completeFunc reversedPrev word
     do
       s <- get
       let contextKeys = Data.HashMap.Lazy.keys (replCtx s)
-          (Just (NVSet builtins _)) = Data.HashMap.Lazy.lookup "builtins" (replCtx s)
+          (Just (NVSet _ builtins)) = Data.HashMap.Lazy.lookup "builtins" (replCtx s)
           shortBuiltins = Data.HashMap.Lazy.keys builtins
 
       pure $ listCompletion $ toString <$>
@@ -447,7 +447,7 @@ completeFunc reversedPrev word
                 (Data.HashMap.Lazy.lookup (coerce f) m)
       in
       case val of
-        NVSet xs _ -> withMap (Data.HashMap.Lazy.mapKeys coerce xs)
+        NVSet _ xs -> withMap (Data.HashMap.Lazy.mapKeys coerce xs)
         _          -> stub
 
 -- | HelpOption inspired by Dhall Repl

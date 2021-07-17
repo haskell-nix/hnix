@@ -321,7 +321,7 @@ valueToExpr = iterNValueByDiscardWith thk (Fix . phi)
   phi (NVConstant' a     ) = NConstant a
   phi (NVStr'      ns    ) = NStr $ DoubleQuoted [Plain (stringIgnoreContext ns)]
   phi (NVList'     l     ) = NList l
-  phi (NVSet'      s    p) = NSet NonRecursive
+  phi (NVSet'      p    s) = NSet NonRecursive
     [ NamedVar (StaticKey k :| mempty) v (fromMaybe nullPos (M.lookup (coerce k) p))
     | (k, v) <- toList s
     ]
@@ -386,7 +386,7 @@ printNix = iterNValueByDiscardWith thk phi
   phi (NVConstant' a ) = toString $ atomText a
   phi (NVStr'      ns) = show $ stringIgnoreContext ns
   phi (NVList'     l ) = toString $ "[ " <> unwords (fmap toText l) <> " ]"
-  phi (NVSet' s _) =
+  phi (NVSet' _ s) =
     "{ " <>
       concat
         [ check (toString k) <> " = " <> v <> "; "

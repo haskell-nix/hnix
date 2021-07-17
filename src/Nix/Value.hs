@@ -36,7 +36,7 @@ import           Text.Show                      ( showsPrec
                                                 , showString
                                                 , showParen
                                                 )
-import           Lens.Family2.Stock             ( _1 )
+import           Lens.Family2.Stock             ( _2 )
 import           Lens.Family2.TH                ( makeTraversals
                                                 , makeLenses
                                                 )
@@ -119,12 +119,11 @@ data NValueF p m r
     | NVStrF NixString
     | NVPathF FilePath
     | NVListF [r]
-    --  2021-05-22: NOTE: Please flip this and dependent functions.
-    -- Quite frequently actions/processing happens with values
-    -- (for example - forcing of values & recreation of the monad),
-    -- but SourcePos does not change then
-    -- That would be good to flip all 'AttrSet.* PositionSet'
-    | NVSetF (AttrSet r) PositionSet
+    | NVSetF PositionSet (AttrSet r)
+      -- ^
+      --   Quite frequently actions/processing happens with values
+      --   (for example - forcing of values & recreation of the monad),
+      --   but @SourcePos@ does not change then.
     | NVClosureF (Params ()) (p -> m r)
       -- ^ A function is a closed set of parameters representing the "call
       --   signature", used at application time to check the type of arguments
@@ -150,8 +149,8 @@ instance Eq1 (NValueF p m) where
   liftEq _  (NVConstantF x) (NVConstantF y) = x == y
   liftEq _  (NVStrF      x) (NVStrF      y) = x == y
   liftEq eq (NVListF     x) (NVListF     y) = liftEq eq x y
-  liftEq eq (NVSetF x _   ) (NVSetF y _   ) = liftEq eq x y
-  liftEq _  (NVPathF x    ) (NVPathF y    ) = x == y
+  liftEq eq (NVSetF  _   x) (NVSetF _    y) = liftEq eq x y
+  liftEq _  (NVPathF     x) (NVPathF     y) = x == y
   liftEq _  _               _               = False
 
 
@@ -165,7 +164,7 @@ instance Show r => Show (NValueF p m r) where
       (NVConstantF atom     ) -> showsCon1 "NVConstant" atom
       (NVStrF      ns       ) -> showsCon1 "NVStr"      (stringIgnoreContext ns)
       (NVListF     lst      ) -> showsCon1 "NVList"     lst
-      (NVSetF      attrs  _ ) -> showsCon1 "NVSet"      attrs
+      (NVSetF      _   attrs) -> showsCon1 "NVSet"      attrs
       (NVClosureF  params _ ) -> showsCon1 "NVClosure"  params
       (NVPathF     path     ) -> showsCon1 "NVPath"     path
       (NVBuiltinF  name   _ ) -> showsCon1 "NVBuiltin"  name
@@ -184,7 +183,7 @@ instance Foldable (NValueF p m) where
     NVStrF      _  -> mempty
     NVPathF     _  -> mempty
     NVListF     l  -> foldMap f l
-    NVSetF     s _ -> foldMap f s
+    NVSetF     _ s -> foldMap f s
     NVClosureF _ _ -> mempty
     NVBuiltinF _ _ -> mempty
 
@@ -202,11 +201,7 @@ sequenceNValueF transform = \case
   NVStrF      s  -> pure $ NVStrF s
   NVPathF     p  -> pure $ NVPathF p
   NVListF     l  -> NVListF <$> sequenceA l
-  NVSetF     s p ->
-    liftA2
-      NVSetF
-      (sequenceA s)
-      (pure p)
+  NVSetF     p s -> NVSetF p <$> sequenceA s
   NVClosureF p g -> pure $ NVClosureF p (transform <=< g)
   NVBuiltinF s g -> pure $ NVBuiltinF s (transform <=< g)
 
@@ -225,11 +220,7 @@ bindNValueF transform f = \case
   NVStrF      s  -> pure $ NVStrF s
   NVPathF     p  -> pure $ NVPathF p
   NVListF     l  -> NVListF <$> traverse f l
-  NVSetF     s p ->
-    liftA2
-      NVSetF
-      (traverse f s)
-      (pure p)
+  NVSetF     p s -> NVSetF p <$> traverse f s
   NVClosureF p g -> pure $ NVClosureF p (transform . f <=< g)
   NVBuiltinF s g -> pure $ NVBuiltinF s (transform . f <=< g)
 
@@ -267,13 +258,13 @@ hoistNValueF lft =
     --   , NVStrF s
     --   , NVPathF p
     --   , NVListF l
-    --   , NVSetF s p
+    --   , NVSetF p s
     --   ]
     NVConstantF a  -> NVConstantF a
     NVStrF      s  -> NVStrF s
     NVPathF     p  -> NVPathF p
     NVListF     l  -> NVListF l
-    NVSetF     s p -> NVSetF s p
+    NVSetF     p s -> NVSetF p s
     NVBuiltinF s g -> NVBuiltinF s (lft . g)
     NVClosureF p g -> NVClosureF p (lft . g)
 {-# inline hoistNValueF #-}
@@ -302,7 +293,7 @@ instance Comonad f => Show1 (NValue' t f m) where
     NVStr' ns ->
       showsUnaryWith showsPrec "NVStrF" p (stringIgnoreContext ns)
     NVList' lst       -> showsUnaryWith (liftShowsPrec sp sl) "NVListF" p lst
-    NVSet' attrs _    -> showsUnaryWith (liftShowsPrec sp sl) "NVSetF" p attrs
+    NVSet'  _   attrs -> showsUnaryWith (liftShowsPrec sp sl) "NVSetF" p attrs
     NVPath' path      -> showsUnaryWith showsPrec "NVPathF" p path
     NVClosure' c    _ -> showsUnaryWith showsPrec "NVClosureF" p c
     NVBuiltin' name _ -> showsUnaryWith showsPrec "NVBuiltinF" p name
@@ -329,7 +320,7 @@ lmapNValueF f = \case
   NVStrF      s  -> NVStrF s
   NVPathF     p  -> NVPathF p
   NVListF     l  -> NVListF l
-  NVSetF     s p -> NVSetF s p
+  NVSetF     p s -> NVSetF p s
   NVClosureF p g -> NVClosureF p (g . f)
   NVBuiltinF s g -> NVBuiltinF s (g . f)
 
@@ -448,7 +439,7 @@ nvSet' :: Applicative f
   -> AttrSet r
   -> NValue' t f m r
 --  2021-07-16: NOTE: that the arguments are flipped.
-nvSet' p s = NValue' $ pure $ NVSetF s p
+nvSet' p s = NValue' $ pure $ NVSetF p s
 
 
 -- | Haskell closure to the Nix closure,
@@ -485,7 +476,7 @@ pattern NVConstant' x <- NValue' (extract -> NVConstantF x)
 pattern NVStr' ns <- NValue' (extract -> NVStrF ns)
 pattern NVPath' x <- NValue' (extract -> NVPathF x)
 pattern NVList' l <- NValue' (extract -> NVListF l)
-pattern NVSet' s x <- NValue' (extract -> NVSetF s x)
+pattern NVSet' p s <- NValue' (extract -> NVSetF p s)
 pattern NVClosure' x f <- NValue' (extract -> NVClosureF x f)
 pattern NVBuiltin' name f <- NValue' (extract -> NVBuiltinF name f)
 {-# COMPLETE NVConstant', NVStr', NVPath', NVList', NVSet', NVClosure', NVBuiltin' #-}
@@ -830,4 +821,4 @@ key
   :: (Traversable f, Applicative g)
   => VarName
   -> LensLike' g (NValue' t f m a) (Maybe a)
-key k = nValue . traverse . _NVSetF . _1 . hashAt k
+key k = nValue . traverse . _NVSetF . _2 . hashAt k

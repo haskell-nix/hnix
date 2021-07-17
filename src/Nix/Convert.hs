@@ -197,7 +197,7 @@ instance ( Convertible e t f m
       NVPath' p ->
         (\path -> pure $ makeNixStringWithSingletonContext path (StringContext path DirectPath)) . fromString . coerce <$>
           addPath p
-      NVSet' s _ ->
+      NVSet' _ s ->
         maybe
           stub
           fromValueMay
@@ -229,7 +229,7 @@ instance ( Convertible e t f m
     \case
       NVPath' p  -> pure $ pure $ coerce p
       NVStr'  ns -> pure $ coerce . toString <$> getStringNoContext  ns
-      NVSet' s _ ->
+      NVSet' _ s ->
         maybe
           (pure Nothing)
           (fromValueMay @Path)
@@ -267,7 +267,7 @@ instance Convertible e t f m
   fromValueMay =
     pure .
       \case
-        NVSet' s _ -> pure s
+        NVSet' _ s -> pure s
         _          -> mempty
 
   fromValue = fromMayToValue TSet
@@ -279,7 +279,7 @@ instance ( Convertible e t f m
 
   fromValueMay =
     \case
-      Deeper (NVSet' s _) -> sequence <$> traverse fromValueMay s
+      Deeper (NVSet' _ s) -> sequence <$> traverse fromValueMay s
       _                   -> stub
 
   fromValue = fromMayToDeeperValue TSet
@@ -291,7 +291,7 @@ instance Convertible e t f m
   fromValueMay =
     pure .
       \case
-        NVSet' s p -> pure (s, p)
+        NVSet' p s -> pure (s, p)
         _          -> mempty
 
   fromValue = fromMayToValue TSet
@@ -304,7 +304,7 @@ instance ( Convertible e t f m
 
   fromValueMay =
     \case
-      Deeper (NVSet' s p) -> fmap (, p) . sequence <$> traverse fromValueMay s
+      Deeper (NVSet' p s) -> fmap (, p) . sequence <$> traverse fromValueMay s
       _                   -> stub
 
   fromValue = fromMayToDeeperValue TSet

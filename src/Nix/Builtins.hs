@@ -472,7 +472,7 @@ unsafeGetAttrPosNix nvX nvY =
     y <- demand nvY
 
     case (x, y) of
-      (NVStr ns, NVSet _ apos) ->
+      (NVStr ns, NVSet apos _) ->
         maybe
           (pure nvNull)
           toValue
@@ -1607,7 +1607,7 @@ fetchurlNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 fetchurlNix =
   (\case
-    NVSet s _ -> go (M.lookup "sha256" s) =<< demand =<< attrsetGet "url" s
+    NVSet _ s -> go (M.lookup "sha256" s) =<< demand =<< attrsetGet "url" s
     v@NVStr{} -> go Nothing v
     v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI or set, got " <> show v
   ) <=< demand
@@ -1697,7 +1697,7 @@ appendContextNix tx ty =
     y <- demand ty
 
     case (x, y) of
-      (NVStr ns, NVSet attrs _) ->
+      (NVStr ns, NVSet _ attrs) ->
         do
           newContextValues <- traverse getPathNOuts attrs
 
@@ -1711,7 +1711,7 @@ appendContextNix tx ty =
       x <- demand tx
 
       case x of
-        NVSet attrs _ ->
+        NVSet _ attrs->
           do
             -- TODO: Fail for unexpected keys.
 

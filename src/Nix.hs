@@ -149,7 +149,7 @@ processResult h val = do
           v' <- demand v
           case (k, v') of
             (Text.decimal . coerce -> Right (n,""), NVList xs) -> processKeys ks $ xs !! n
-            (_,         NVSet xs _) ->
+            (_,         NVSet _ xs) ->
               maybe
                 (errorWithoutStackTrace $ "Set does not contain key ''" <> show k <> "''.")
                 (processKeys ks)
