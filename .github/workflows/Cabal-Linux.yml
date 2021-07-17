@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ghc: [ "8.10", "8.6" ]
+        ghc: [ "9.0", "8.8" ]
     steps:
 
       - name: "Git checkout"
@@ -62,9 +62,9 @@ jobs:
         run: cabal v2-test $cabalConfig
 
       - name: "Haddock"
-        if: ${{ matrix.ghc == '8.10' }}
+        if: ${{ matrix.ghc == '9.0' }}
         run: cabal v2-haddock $cabalConfig
 
       - name: "Source distribution file"
-        if: ${{ matrix.ghc == '8.10' }}
+        if: ${{ matrix.ghc == '9.0' }}
         run: cabal v2-sdist

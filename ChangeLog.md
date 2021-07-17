@@ -1,7 +1,45 @@
 
 # ChangeLog
 
-## [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.1...master#files_bucket) WIP
+## [(diff)](https://github.com/haskell-nix/hnix/compare/0.14.0...0.15.0#files_bucket) 0.15.0
+
+Partial log (for now):
+
+* Breaking:
+
+  * `Nix.Expr.Shorthands`:
+    * `inherit{,From}`: dropped second argument as irrelevant ([report](https://github.com/haskell-nix/hnix/issues/326)).
+    * `mkAssert`: fixed ([report](https://github.com/haskell-nix/hnix/issues/969)).
+    * fx presedence between the operators:
+        
+        ```haskell
+        (@@), (@.), (@./), ($==), ($!=), ($<), ($<=), ($>), ($>=), ($&&), ($||), ($->), ($//), ($+), ($-), ($*), ($/), ($++), (==>)
+        ```
+        
+        Now these shorthands can be used without sectioning & so represent the Nix expressions one to one.
+        
+        ```haskell
+        nix = "           a/b   //            c/def   //           <g>  <             def/d"
+        hask = mkRelPath "a/b" $// mkRelPath "c/def" $// mkEnvPath "g" $<  mkRelPath "def/d"
+        ```
+
+* Additional
+  * `Nix.Expr.Shorthands`:
+    * `mkOper{,2}` entered deprecation, superceeded by new name `mkOp{,2}`.
+    * `mkBinop` entered deprecation, supeceeded by new name `mkBinop`.
+    * added `@.<|>` for Nix language `s.x or y` expession.
+    * add `mkNeg` number negation.
+
+
+## [(diff)](https://github.com/haskell-nix/hnix/compare/0.13.1...0.14.0#files_bucket) 0.14.0 (2021-07-08)
+
+* GHC 9.0 support.
+
+* HNix switched to pre-0.9 style of log (aka "no log"). We temporarily stopped producing log, choosing effectiveness over writing about it.
+
+* All changes seem trivial (from the inside). There is no changes in `Nix.Expr.Shorthands` module. Would there be difficulties in migration - please write to us - we would tackle & solve it togather.
+
+A partial log:
 
 * Breaking:
 

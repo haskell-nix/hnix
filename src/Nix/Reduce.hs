@@ -42,7 +42,8 @@ import qualified Data.List.NonEmpty            as NE
 import qualified Text.Show
 import           Nix.Atoms
 import           Nix.Effects.Basic              ( pathToDefaultNixFile )
-import           Nix.Expr
+import           Nix.Expr.Types
+import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Options                    ( Options
                                                 , reduceSets
@@ -203,9 +204,9 @@ reduce (NBinary_ bann op larg rarg) =
 --   1. The selected expr is indeed a set.
 --   2. The selection AttrPath is a list of StaticKeys.
 --   3. The selected AttrPath exists in the set.
-reduce base@(NSelect_ _ _ attrs _)
+reduce base@(NSelect_ _ _ _ attrs)
   | sAttrPath $ NE.toList attrs = do
-    (NSelect_ _ aset attrs _) <- sequence base
+    (NSelect_ _ _ aset attrs) <- sequence base
     inspectSet (unFix aset) attrs
   | otherwise = sId
  where
@@ -220,7 +221,7 @@ reduce base@(NSelect_ _ _ attrs _)
     n@(NamedVar (a' :| _) _ _) | a' == a -> pure n
     _ -> findBind xs attrs
   -- Follow the attrpath recursively in sets.
-  inspectSet (NSet_ _ NNonRecursive binds) attrs = case findBind binds attrs of
+  inspectSet (NSet_ _ NonRecursive binds) attrs = case findBind binds attrs of
     Just (NamedVar _ e _) -> case NE.uncons attrs of
       (_, Just attrs) -> inspectSet (unFix e) attrs
       _               -> pure e
@@ -231,7 +232,7 @@ reduce base@(NSelect_ _ _ attrs _)
 
 -- | Reduce a set by inlining its binds outside of the set
 --   if none of the binds inherit the super set.
-reduce e@(NSet_ ann NNonRecursive binds) =
+reduce e@(NSet_ ann NonRecursive binds) =
   do
     let
       usesInherit =
@@ -244,13 +245,13 @@ reduce e@(NSet_ ann NNonRecursive binds) =
 
     bool
       (Fix <$> sequence e)
-      (clearScopes @NExprLoc $ Fix . NSet_ ann NNonRecursive <$> traverse sequence binds)
+      (clearScopes @NExprLoc $ Fix . NSet_ ann NonRecursive <$> traverse sequence binds)
       usesInherit
 
 -- Encountering a 'rec set' construction eliminates any hope of inlining
 -- definitions.
-reduce (NSet_ ann NRecursive binds) =
-  clearScopes @NExprLoc $ Fix . NSet_ ann NRecursive <$> traverse sequence binds
+reduce (NSet_ ann Recursive binds) =
+  clearScopes @NExprLoc $ Fix . NSet_ ann Recursive <$> traverse sequence binds
 
 -- Encountering a 'with' construction eliminates any hope of inlining
 -- definitions.
@@ -337,7 +338,7 @@ type Flagged f = Fix (FlaggedF f)
 flagExprLoc :: (MonadIO n, Traversable f) => Fix f -> n (Flagged f)
 flagExprLoc = foldFixM $ \x -> do
   flag <- liftIO $ newIORef False
-  pure $ Fix $ FlaggedF (flag, x)
+  pure $ coerce (flag, x)
 
 -- stripFlags :: Functor f => Flagged f -> Fix f
 -- stripFlags = foldFix $ Fix . snd . flagged
@@ -378,8 +379,8 @@ pruneTree opts =
           (`NLet` body)
           (mapMaybe pruneBinding binds)
 
-    NSelect (Just aset) attr alt ->
-      pure $ NSelect aset (pruneKeyName <$> attr) $ join alt
+    NSelect alt (Just aset) attr ->
+      pure $ NSelect (join alt) aset $ pruneKeyName <$> attr
 
     -- These are the only short-circuiting binary operators
     NBinary NAnd (Just (AnnE _ larg)) _ -> pure larg

@@ -1,14 +1,13 @@
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 module ReduceExprTests (tests) where
-import           Data.Fix
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
-import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Parser
 import           Nix.Reduce                     ( reduceExpr )
+import           Nix.Expr.Shorthands
 
 
 tests :: TestTree
@@ -46,13 +45,13 @@ selectBasic :: Result NExprLoc
 selectBasic = parseNixTextLoc "{b=2;a=42;}.a"
 
 selectBasicExpect :: NExpr
-selectBasicExpect = Fix . NConstant $ NInt 42
+selectBasicExpect = mkInt 42
 
 selectNested :: Result NExprLoc
 selectNested = parseNixTextLoc "{a={b=2;a=42;};b={a=2;};}.a.a"
 
 selectNestedExpect :: NExpr
-selectNestedExpect = Fix . NConstant $ NInt 42
+selectNestedExpect = mkInt 42
 
 selectIncorrectAttrPath :: Result NExprLoc
 selectIncorrectAttrPath = parseNixTextLoc "{a=42;}.b"

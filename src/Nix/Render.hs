@@ -7,16 +7,14 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE MultiWayIf #-}
 
 module Nix.Render where
 
 import           Prelude                 hiding ( readFile )
 
--- Please reduce Unsafe
-import           Relude.Unsafe                  ( read )
 import qualified Data.ByteString               as BS
 import qualified Data.Set                      as Set
-import           Data.List                      ( maximum )
 import           Nix.Utils.Fix1                 ( Fix1T
                                                 , MonadFix1T )
 import           Nix.Expr.Types.Annotated
@@ -25,6 +23,7 @@ import qualified System.Directory              as S
 import qualified System.Posix.Files            as S
 import           Text.Megaparsec.Error
 import           Text.Megaparsec.Pos
+import qualified Data.Text                     as Text
 
 class MonadFail m => MonadFile m where
     readFile :: FilePath -> m ByteString
@@ -102,8 +101,8 @@ sourceContext
   :: MonadFile m => FilePath -> Pos -> Pos -> Pos -> Pos -> Doc a -> m (Doc a)
 sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unPos -> _endCol) msg
   = do
-    let beg' = max 1 $ min begLine $ begLine - 3
-        end' = max endLine $ endLine + 3
+    let beg' = max 1 $ begLine - 3
+        end' =         endLine + 3
     ls <-
       fmap pretty
       .   take (end' - beg')
@@ -112,14 +111,32 @@ sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unP
       .   decodeUtf8
       <$> readFile path
     let
-      nums    = zipWith (curry (show . fst)) [beg' ..] ls
-      longest = maximum $ length <$> nums
-      nums'   = (\n -> replicate (longest - length n) ' ' <> n) <$> nums
-      pad n | read n == begLine = "==> " <> n
-            | otherwise         = "    " <> n
-      ls' =
-        zipWith
-          (\ a b -> a <> space <> b)
-          (pretty . pad <$> nums')
-          (("|  " <>) <$> ls)
-    pure $ vsep $ ls' <> [msg]
+      longest = Text.length $ show $ beg' + length ls - 1
+      pad :: Int -> Text
+      pad n =
+        let
+          ns :: Text
+          ns = show n
+          nsp = Text.replicate (longest - Text.length ns) " " <> ns
+        in
+          if
+          | n == begLine && n == endLine -> "==> " <> nsp <> " |  "
+          | n >= begLine && n <= endLine -> "  > " <> nsp <> " |  "
+          | otherwise                    -> "    " <> nsp <> " |  "
+      composeLine n l =
+        [pretty (pad n) <> l]
+        <> bool mempty
+          [ pretty $
+              Text.replicate (Text.length (pad n) - 3) " "
+              <> "|"
+              <> Text.replicate (_begCol + 1) " "
+              <> Text.replicate (_endCol - _begCol) "^"
+          ]
+          (begLine == endLine && n == endLine)
+        -- XXX: Consider inserting the message here when it is small enough.
+        -- ATM some messages are so huge that they take prevalence over the source listing.
+        -- ++ [ indent (length $ pad n) msg | n == endLine ]
+
+      ls' = concat $ zipWith composeLine [beg' ..] ls
+
+    pure $ vsep $ ls' <> [ indent (Text.length $ pad begLine) msg ]

@@ -37,7 +37,7 @@ traceM = const pass
 $(makeLensesBy (\n -> pure $ "_" <> n) ''Fix)
 
 -- | > Hashmap Text -- type synonym
-type AttrSet = HashMap Text
+type KeyMap = HashMap Text
 
 -- | F-algebra defines how to reduce the fixed-point of a functor to a value.
 -- > type Alg f a = f a -> a
@@ -172,19 +172,6 @@ uriAwareSplit txt =
         (e1 <> "://" <> suffix, PathEntryURI) : path
       | otherwise                                 -> (e1, PathEntryPath) : uriAwareSplit (Text.drop 1 e2)
 
-alterF
-  :: (Eq k, Hashable k, Functor f)
-  => (Maybe v -> f (Maybe v))
-  -> k
-  -> HashMap k v
-  -> f (HashMap k v)
-alterF f k m =
-  maybe
-    (M.delete k m)
-    (\ v -> M.insert k v m)
-    <$> f (M.lookup k m)
-
-
 -- | Analog for @bool@ or @maybe@, for list-like cons structures.
 list
   :: Foldable t
@@ -195,6 +182,14 @@ list e f l =
     e
     (null l)
 {-# inline list #-}
+
+whenText
+  :: a -> (Text -> a) -> Text -> a
+whenText e f t =
+  bool
+    (f t)
+    e
+    (Text.null t)
 
 -- | Lambda analog of @maybe@ or @either@ for Free monad.
 free :: (a -> b) -> (f (Free f a) -> b) -> Free f a -> b

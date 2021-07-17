@@ -19,7 +19,7 @@ class
   )
   => MonadThunkId m
  where
-  type ThunkId m :: *
+  type ThunkId m :: Type
 
   freshId :: m (ThunkId m)
   default freshId

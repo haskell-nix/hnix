@@ -15,7 +15,8 @@ import           Nix.Utils
 import           Data.Fix                   ( Fix(..) )
 import           Nix.Eval
 import           Nix.Exec
-import           Nix.Expr
+import           Nix.Expr.Types
+import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Normal
 import           Nix.Options
@@ -61,7 +62,7 @@ renderFrames (x : xs) = do
       (framePos @v @m f)
 
 framePos
-  :: forall v (m :: * -> *)
+  :: forall v (m :: Type -> Type)
    . (Typeable m, Typeable v)
   => NixFrame
   -> Maybe SourcePos

@@ -37,15 +37,14 @@ genPos = mkPos <$> Gen.int (Range.linear 1 256)
 
 genSourcePos :: Gen SourcePos
 genSourcePos =
-  liftA3
-    SourcePos
+  liftA3 SourcePos
     asciiString
     genPos
     genPos
 
 genKeyName :: Gen (NKeyName NExpr)
 genKeyName =
-  Gen.choice [DynamicKey <$> genAntiquoted genString, StaticKey <$> asciiText]
+  Gen.choice [DynamicKey <$> genAntiquoted genString, StaticKey . coerce <$> asciiText]
 
 genAntiquoted :: Gen a -> Gen (Antiquoted a NExpr)
 genAntiquoted gen =
@@ -53,13 +52,11 @@ genAntiquoted gen =
 
 genBinding :: Gen (Binding NExpr)
 genBinding = Gen.choice
-  [ liftA3
-      NamedVar
+  [ liftA3 NamedVar
       genAttrPath
       genExpr
       genSourcePos
-  , liftA3
-      Inherit
+  , liftA3 Inherit
       (Gen.maybe genExpr)
       (Gen.list (Range.linear 0 5) genKeyName)
       genSourcePos
@@ -68,8 +65,7 @@ genBinding = Gen.choice
 genString :: Gen (NString NExpr)
 genString = Gen.choice
   [ DoubleQuoted <$> Gen.list (Range.linear 0 5) (genAntiquoted asciiText)
-  , liftA2
-      Indented
+  , liftA2 Indented
       (Gen.int (Range.linear 0 10))
       (Gen.list
         (Range.linear 0 5)
@@ -79,16 +75,14 @@ genString = Gen.choice
 
 genAttrPath :: Gen (NAttrPath NExpr)
 genAttrPath =
-  liftA2
-    (:|)
+  liftA2 (:|)
     genKeyName
     $ Gen.list (Range.linear 0 4) genKeyName
 
 genParams :: Gen (Params NExpr)
 genParams = Gen.choice
-  [ Param <$> asciiText
-  , liftA3
-      ParamSet
+  [ Param . coerce <$> asciiText
+  , liftA3 (\ a b c -> ParamSet (coerce a) b (coerce <$> c))
       (Gen.list (Range.linear 0 10) (liftA2 (,) asciiText $ Gen.maybe genExpr))
       Gen.bool
       (Gen.choice [stub, pure <$> asciiText])
@@ -96,8 +90,8 @@ genParams = Gen.choice
 
 genAtom :: Gen NAtom
 genAtom = Gen.choice
-  [ NInt   <$> Gen.integral (Range.linear 0 1000)
-  , NFloat <$> Gen.float (Range.linearFrac 0.0 1000.0)
+  [ NInt   <$> Gen.integral (Range.linear     0   1000  )
+  , NFloat <$> Gen.float    (Range.linearFrac 0.0 1000.0)
   , NBool  <$> Gen.bool
   , pure NNull
   ]
@@ -106,36 +100,39 @@ genAtom = Gen.choice
 -- list Arbitrary instance which makes the generator terminate. The
 -- distribution is not scientifically chosen.
 genExpr :: Gen NExpr
-genExpr = Gen.sized $ \(Size n) -> Fix <$> if n < 2
-  then Gen.choice [genConstant, genStr, genSym, genLiteralPath, genEnvPath]
-  else Gen.frequency
-    [ (1 , genConstant)
-    , (1 , genSym)
-    , (4 , Gen.resize (Size (n `div` 3)) genIf)
-    , (10, genRecSet)
-    , (20, genSet)
-    , (5 , genList)
-    , (2 , genUnary)
-    , (2, Gen.resize (Size (n `div` 3)) genBinary)
-    , (3, Gen.resize (Size (n `div` 3)) genSelect)
-    , (20, Gen.resize (Size (n `div` 2)) genAbs)
-    , (2, Gen.resize (Size (n `div` 2)) genHasAttr)
-    , (10, Gen.resize (Size (n `div` 2)) genLet)
-    , (10, Gen.resize (Size (n `div` 2)) genWith)
-    , (1, Gen.resize (Size (n `div` 2)) genAssert)
-    ]
+genExpr =
+  Gen.sized $
+    \(Size n) -> Fix <$>
+      if n < 2
+        then Gen.choice [genConstant, genStr, genSym, genLiteralPath, genEnvPath]
+        else Gen.frequency
+          [ (1 , genConstant)
+          , (1 , genSym)
+          , (4 , Gen.resize (Size (n `div` 3)) genIf)
+          , (10, genRecSet)
+          , (20, genSet)
+          , (5 , genList)
+          , (2 , genUnary)
+          , (2 , Gen.resize (Size (n `div` 3)) genBinary)
+          , (3 , Gen.resize (Size (n `div` 3)) genSelect)
+          , (20, Gen.resize (Size (n `div` 2)) genAbs)
+          , (2 , Gen.resize (Size (n `div` 2)) genHasAttr)
+          , (10, Gen.resize (Size (n `div` 2)) genLet)
+          , (10, Gen.resize (Size (n `div` 2)) genWith)
+          , (1 , Gen.resize (Size (n `div` 2)) genAssert)
+          ]
  where
   genConstant    = NConstant                <$> genAtom
   genStr         = NStr                     <$> genString
-  genSym         = NSym                     <$> asciiText
+  genSym         = NSym . coerce            <$> asciiText
   genList        = NList                    <$> fairList genExpr
-  genSet         = NSet NNonRecursive       <$> fairList genBinding
-  genRecSet      = NSet NRecursive          <$> fairList genBinding
+  genSet         = NSet NonRecursive        <$> fairList genBinding
+  genRecSet      = NSet Recursive           <$> fairList genBinding
   genLiteralPath = NLiteralPath . ("./" <>) <$> asciiString
   genEnvPath     = NEnvPath                 <$> asciiString
   genUnary       = liftA2 NUnary   Gen.enumBounded       genExpr
   genBinary      = liftA3 NBinary  Gen.enumBounded       genExpr     genExpr
-  genSelect      = liftA3 NSelect  genExpr               genAttrPath (Gen.maybe genExpr)
+  genSelect      = liftA3 NSelect  (Gen.maybe genExpr)   genExpr     genAttrPath
   genHasAttr     = liftA2 NHasAttr genExpr               genAttrPath
   genAbs         = liftA2 NAbs     genParams             genExpr
   genLet         = liftA2 NLet     (fairList genBinding) genExpr
@@ -155,18 +152,21 @@ equivUpToNormalization :: NExpr -> NExpr -> Bool
 equivUpToNormalization x y = normalize x == normalize y
 
 normalize :: NExpr -> NExpr
-normalize = foldFix $ Fix . \case
+normalize = foldFix $ \case
   NConstant (NInt n) | n < 0 ->
-    NUnary NNeg $ Fix $ NConstant $ NInt $ negate n
+    mkNeg $ mkInt $ negate n
   NConstant (NFloat n) | n < 0 ->
-    NUnary NNeg $ Fix $ NConstant $ NFloat $ negate n
+    mkNeg $ mkFloat $ negate n
 
-  NSet recur binds -> NSet recur $ normBinding <$> binds
-  NLet binds  r -> NLet (normBinding <$> binds) r
+  NSet recur binds ->
+    mkSet recur $ normBinding <$> binds
+  NLet binds  r ->
+    mkLets (normBinding <$> binds) r
 
-  NAbs params r -> NAbs (normParams params) r
+  NAbs params r ->
+    mkFunction (normParams params) r
 
-  r             -> r
+  r             -> Fix r
 
  where
   normBinding (NamedVar path r     pos) = NamedVar (normKey <$> path) r pos
@@ -176,22 +176,24 @@ normalize = foldFix $ Fix . \case
   normKey (StaticKey  name  ) = StaticKey name
 
   normAntiquotedString
-    :: Antiquoted (NString NExpr) NExpr -> Antiquoted (NString NExpr) NExpr
+    :: Antiquoted (NString NExpr) NExpr
+    -> Antiquoted (NString NExpr) NExpr
   normAntiquotedString (Plain (DoubleQuoted [EscapedNewline])) = EscapedNewline
   normAntiquotedString (Plain (DoubleQuoted strs)) =
-    let strs' = normAntiquotedText <$> strs
-    in
-    if strs == strs'
-      then Plain $ DoubleQuoted strs
-      else normAntiquotedString $ Plain $ DoubleQuoted strs'
+    bool normAntiquotedString id (strs == strs')
+      (Plain $ DoubleQuoted strs')
+    where
+     strs' = normAntiquotedText <$> strs
   normAntiquotedString r = r
 
-  normAntiquotedText :: Antiquoted Text NExpr -> Antiquoted Text NExpr
+  normAntiquotedText
+    :: Antiquoted Text NExpr
+    -> Antiquoted Text NExpr
   normAntiquotedText (Plain "\n"  ) = EscapedNewline
   normAntiquotedText (Plain "''\n") = EscapedNewline
   normAntiquotedText r              = r
 
-  normParams (ParamSet binds var (Just "")) = ParamSet binds var mempty
+  normParams (ParamSet binds var (Just "")) = ParamSet binds var (coerce @Text <$> mempty)
   normParams r                              = r
 
 -- | Test that parse . pretty == id up to attribute position information.

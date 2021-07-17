@@ -2,7 +2,8 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-
+{-# LANGUAGE PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
+{-# LANGUAGE ViewPatterns #-}
 
 module Nix.Effects.Derivation ( defaultDerivationStrict ) where
 
@@ -18,7 +19,13 @@ import qualified Data.Map.Strict               as Map
 import qualified Data.Set                      as Set
 import qualified Data.Text                     as Text
 
+import           Text.Megaparsec
+import           Text.Megaparsec.Char
+
+import qualified "cryptonite" Crypto.Hash      as Hash -- 2021-07-05: Attrocity of Haskell hashing situation, in HNix we ended-up with 2 hash package dependencies @{hashing, cryptonite}@
+
 import           Nix.Atoms
+import           Nix.Expr.Types          hiding ( Recursive )
 import           Nix.Convert
 import           Nix.Effects
 import           Nix.Exec                       ( MonadNix
@@ -35,12 +42,10 @@ import           Nix.Value.Monad
 import qualified System.Nix.ReadonlyStore      as Store
 import qualified System.Nix.Hash               as Store
 import qualified System.Nix.StorePath          as Store
-
-import           Text.Megaparsec
-import           Text.Megaparsec.Char
 import Prelude hiding (readFile)
 
 
+--  2021-07-17: NOTE: Derivation consists of @"keys"@ @"vals"@ (of text), so underlining type boundary currently stops here.
 data Derivation = Derivation
   { name :: Text
   , outputs :: Map Text Text
@@ -73,25 +78,25 @@ writeDerivation drv@Derivation{inputs, name} = do
   let (inputSrcs, inputDrvs) = inputs
   references <- Set.fromList <$> traverse parsePath (Set.toList $ inputSrcs <> Set.fromList (Map.keys inputDrvs))
   path <- addTextToStore (Text.append name ".drv") (unparseDrv drv) (S.fromList $ Set.toList references) False
-  parsePath $ toText $ unStorePath path
+  parsePath $ toText @FilePath $ coerce path
 
 -- | Traverse the graph of inputDrvs to replace fixed output derivations with their fixed output hash.
 -- this avoids propagating changes to their .drv when the output hash stays the same.
-hashDerivationModulo :: (MonadNix e t f m, MonadState (b, AttrSet Text) m) => Derivation -> m (Store.Digest 'Store.SHA256)
+hashDerivationModulo :: (MonadNix e t f m, MonadState (b, KeyMap Text) m) => Derivation -> m (Hash.Digest Hash.SHA256)
 hashDerivationModulo
   Derivation
-    { mFixed = Just (Store.SomeDigest (digest :: Store.Digest hashType))
+    { mFixed = Just (Store.SomeDigest (digest :: Hash.Digest hashType))
     , outputs
     , hashMode
     } =
   case Map.toList outputs of
     [("out", path)] -> pure $
-      Store.hash @'Store.SHA256 $
+      Hash.hash @ByteString @Hash.SHA256 $
         encodeUtf8 $
           "fixed:out"
           <> (if hashMode == Recursive then ":r" else "")
           <> ":" <> (Store.algoName @hashType)
-          <> ":" <> Store.encodeInBase Store.Base16 digest
+          <> ":" <> Store.encodeDigestWith Store.Base16 digest
           <> ":" <> path
     _outputsList -> throwError $ ErrorCall $ "This is weird. A fixed output drv should only have one output named 'out'. Got " <> show _outputsList
 hashDerivationModulo
@@ -109,14 +114,14 @@ hashDerivationModulo
             maybe
               (do
                 drv' <- readDerivation $ toString path
-                hash <- Store.encodeInBase Store.Base16 <$> hashDerivationModulo drv'
+                hash <- Store.encodeDigestWith Store.Base16 <$> hashDerivationModulo drv'
                 pure (hash, outs)
               )
               (\ hash -> pure (hash, outs))
               (M.lookup path cache)
           )
           (Map.toList inputDrvs)
-    pure $ Store.hash @'Store.SHA256 $ encodeUtf8 $ unparseDrv (drv {inputs = (inputSrcs, inputsModulo)})
+    pure $ Hash.hash @ByteString @Hash.SHA256 $ encodeUtf8 $ unparseDrv $ drv {inputs = (inputSrcs, inputsModulo)}
 
 unparseDrv :: Derivation -> Text
 unparseDrv Derivation{..} =
@@ -146,8 +151,8 @@ unparseDrv Derivation{..} =
       parens $ (s <$>) $ ([outputName, outputPath] <>) $
         maybe
           [mempty, mempty]
-          (\ (Store.SomeDigest (digest :: Store.Digest hashType)) ->
-            [prefix <> Store.algoName @hashType, Store.encodeInBase Store.Base16 digest]
+          (\ (Store.SomeDigest (digest :: Hash.Digest hashType)) ->
+            [prefix <> Store.algoName @hashType, Store.encodeDigestWith Store.Base16 digest]
           )
           mFixed
     parens :: [Text] -> Text
@@ -236,9 +241,9 @@ derivationParser = do
     _ -> (Nothing, Flat)
 
 
-defaultDerivationStrict :: forall e t f m b. (MonadNix e t f m, MonadState (b, AttrSet Text) m) => NValue t f m -> m (NValue t f m)
+defaultDerivationStrict :: forall e t f m b. (MonadNix e t f m, MonadState (b, KeyMap Text) m) => NValue t f m -> m (NValue t f m)
 defaultDerivationStrict val = do
-    s <- fromValue @(AttrSet (NValue t f m)) val
+    s <- M.mapKeys coerce <$> fromValue @(AttrSet (NValue t f m)) val
     (drv, ctx) <- runWithStringContextT' $ buildDerivationWithContext s
     drvName <- makeStorePathName $ name drv
     let
@@ -273,25 +278,25 @@ defaultDerivationStrict val = do
         pure $ drv
           { inputs
           , outputs = outputs'
-          , env = ifNotJsonModEnv $ (outputs' <>)
+          , env = ifNotJsonModEnv (outputs' <>)
           }
 
-    drvPath <- pathToText <$> writeDerivation drv'
+    (coerce @Text @VarName -> drvPath) <- pathToText <$> writeDerivation drv'
 
     -- Memoize here, as it may be our last chance in case of readonly stores.
-    drvHash <- Store.encodeInBase Store.Base16 <$> hashDerivationModulo drv'
-    modify $ second $ MS.insert drvPath drvHash
+    drvHash <- Store.encodeDigestWith Store.Base16 <$> hashDerivationModulo drv'
+    modify $ second $ MS.insert (coerce drvPath) drvHash
 
     let
       outputsWithContext =
         Map.mapWithKey
-          (\out path -> makeNixStringWithSingletonContext path $ StringContext drvPath $ DerivationOutput out)
+          (\out (coerce -> path) -> makeNixStringWithSingletonContext path $ StringContext drvPath $ DerivationOutput out)
           (outputs drv')
       drvPathWithContext = makeNixStringWithSingletonContext drvPath $ StringContext drvPath AllOutputs
       attrSet = nvStr <$> M.fromList (("drvPath", drvPathWithContext) : Map.toList outputsWithContext)
     -- TODO: Add location information for all the entries.
     --              here --v
-    pure $ nvSet mempty attrSet
+    pure $ nvSet mempty (M.mapKeys coerce attrSet)
 
   where
 
@@ -301,10 +306,13 @@ defaultDerivationStrict val = do
       name <- makeStorePathName $ Store.unStorePathName n <> if o == "out" then "" else "-" <> o
       pure $ pathToText $ Store.makeStorePath "/nix/store" ("output:" <> encodeUtf8 o) h name
 
+    toStorePaths :: HashSet StringContext -> (Set Text, Map Text [Text])
     toStorePaths ctx = foldl (flip addToInputs) (mempty, mempty) ctx
+
+    addToInputs :: Bifunctor p => StringContext -> p (Set Text) (Map Text [Text])  -> p (Set Text) (Map Text [Text])
     addToInputs (StringContext path kind) = case kind of
-      DirectPath -> first (Set.insert path)
-      DerivationOutput o -> second (Map.insertWith (<>) path [o])
+      DirectPath -> first (Set.insert (coerce path))
+      DerivationOutput o -> second (Map.insertWith (<>) (coerce path) [o])
       AllOutputs ->
         -- TODO: recursive lookup. See prim_derivationStrict
         -- XXX: When is this really used ?
@@ -314,7 +322,7 @@ defaultDerivationStrict val = do
 -- | Build a derivation in a context collecting string contexts.
 -- This is complex from a typing standpoint, but it allows to perform the
 -- full computation without worrying too much about all the string's contexts.
-buildDerivationWithContext :: forall e t f m. (MonadNix e t f m) => AttrSet (NValue t f m) -> WithStringContextT m Derivation
+buildDerivationWithContext :: forall e t f m. (MonadNix e t f m) => KeyMap (NValue t f m) -> WithStringContextT m Derivation
 buildDerivationWithContext drvAttrs = do
     -- Parse name first, so we can add an informative frame
     drvName     <- getAttr   "name"                      $ assertDrvStoreName <=< extractNixString
@@ -360,7 +368,7 @@ buildDerivationWithContext drvAttrs = do
 
       env <- if useJson
         then do
-          jsonString :: NixString <- lift $ nvalueToJSONNixString $ nvSet mempty $
+          jsonString :: NixString <- lift $ nvalueToJSONNixString $ nvSet mempty $ M.mapKeys coerce $
             deleteKeys [ "args", "__ignoreNulls", "__structuredAttrs" ] attrs
           rawString :: Text <- extractNixString jsonString
           pure $ one ("__json", rawString)
@@ -384,7 +392,7 @@ buildDerivationWithContext drvAttrs = do
     withFrame' :: (Framed e m, Exception s) => NixLevel -> s -> WithStringContextT m a -> WithStringContextT m a
     withFrame' level f = join . lift . withFrame level f . pure
 
-    -- shortcuts to get the (forced) value of an AttrSet field
+    -- shortcuts to get the (forced) value of an KeyMap field
 
     getAttrOr' :: forall v a. (MonadNix e t f m, FromValue v m (NValue' t f m (NValue t f m)))
       => Text -> m a -> (v -> WithStringContextT m a) -> WithStringContextT m a
@@ -429,6 +437,6 @@ buildDerivationWithContext drvAttrs = do
 
     -- Other helpers
 
-    deleteKeys :: [Text] -> AttrSet a -> AttrSet a
+    deleteKeys :: [Text] -> KeyMap a -> KeyMap a
     deleteKeys keys attrSet = foldl' (flip M.delete) attrSet keys
 
