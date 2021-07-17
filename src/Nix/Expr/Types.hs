@@ -104,6 +104,10 @@ instance FromJSON Pos where
   parseJSON = fmap mkPos . parseJSON
 instance FromJSON SourcePos
 
+-- | Holds file positionng information for abstrations.
+-- A type synonym for @HashMap VarName SourcePos@.
+type PositionSet = HashMap VarName SourcePos
+
 
 -- * Components of Nix expressions
 

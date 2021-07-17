@@ -60,9 +60,9 @@ class (Show v, Monad m) => MonadEval v m where
   evalListElem   :: [m v] -> Int -> m v -> m v
   evalList       :: [v] -> m v
   evalSetElem    :: AttrSet (m v) -> Text -> m v -> m v
-  evalSet        :: AttrSet v -> KeyMap SourcePos -> m v
+  evalSet        :: AttrSet v -> PositionSet -> m v
   evalRecSetElem :: AttrSet (m v) -> Text -> m v -> m v
-  evalRecSet     :: AttrSet v -> KeyMap SourcePos -> m v
+  evalRecSet     :: AttrSet v -> PositionSet -> m v
   evalLetElem    :: Text -> m v -> m v
   evalLet        :: m v -> m v
 -}
@@ -76,8 +76,8 @@ type MonadNixEval v m
   , ToValue Bool m v
   , ToValue [v] m v
   , FromValue NixString m v
-  , ToValue (AttrSet v, KeyMap SourcePos) m v
-  , FromValue (AttrSet v, KeyMap SourcePos) m v
+  , ToValue (AttrSet v, PositionSet) m v
+  , FromValue (AttrSet v, PositionSet) m v
   )
 
 data EvalFrame m v
@@ -209,7 +209,7 @@ evalWithAttrSet aset body = do
   -- sure the action it evaluates is to force a thunk, so its value is only
   -- computed once.
   deferredAset <- defer $ withScopes scope aset
-  let attrSet = fst <$> (fromValue @(AttrSet v, KeyMap SourcePos) =<< demand deferredAset)
+  let attrSet = fst <$> (fromValue @(AttrSet v, PositionSet) =<< demand deferredAset)
 
   pushWeakScope attrSet body
 
@@ -219,9 +219,9 @@ attrSetAlter
   => [VarName]
   -> SourcePos
   -> AttrSet (m v)
-  -> KeyMap SourcePos
+  -> PositionSet
   -> m v
-  -> m (AttrSet (m v), KeyMap SourcePos)
+  -> m (AttrSet (m v), PositionSet)
 attrSetAlter [] _ _ _ _ = evalError @v $ ErrorCall "invalid selector with no components"
 attrSetAlter (k : ks) pos m p val =
   bool
@@ -230,7 +230,7 @@ attrSetAlter (k : ks) pos m p val =
       (recurse mempty mempty)
       (\x ->
         do
-          (st, sp) <- fromValue @(AttrSet v, KeyMap SourcePos) =<< x
+          (st, sp) <- fromValue @(AttrSet v, PositionSet) =<< x
           recurse (demand <$> st) sp
       )
       (M.lookup k m)
@@ -243,7 +243,7 @@ attrSetAlter (k : ks) pos m p val =
     (\(st', _) ->
       (M.insert
         k
-        (toValue @(AttrSet v, KeyMap SourcePos) =<< (, mempty) <$> sequence st')
+        (toValue @(AttrSet v, PositionSet) =<< (, mempty) <$> sequence st')
         m
       , M.insert (coerce k) pos p
       )
@@ -293,7 +293,7 @@ evalBinds
    . MonadNixEval v m
   => Bool
   -> [Binding (m v)]
-  -> m (AttrSet v, KeyMap SourcePos)
+  -> m (AttrSet v, PositionSet)
 evalBinds recursive binds =
   do
     scope <- currentScopes :: m (Scopes m v)
@@ -304,7 +304,7 @@ evalBinds recursive binds =
   buildResult
     :: Scopes m v
     -> [([VarName], SourcePos, m v)]
-    -> m (AttrSet v, KeyMap SourcePos)
+    -> m (AttrSet v, PositionSet)
   buildResult scope bindings =
     do
       (s, p) <- foldM insert (mempty, mempty) bindings
@@ -331,7 +331,7 @@ evalBinds recursive binds =
       pure $
         (\ (k, v) ->
           ( [k]
-          , fromMaybe pos $ M.lookup @Text (coerce k) p'
+          , fromMaybe pos $ M.lookup k p'
           , demand v
           )
         ) <$> M.toList o'
@@ -349,7 +349,7 @@ evalBinds recursive binds =
     processAttrSetKeys (h :| t) =
       maybe
         -- Empty attrset - return a stub.
-        (pure ( mempty, nullPos, toValue @(AttrSet v, KeyMap SourcePos) (mempty, mempty)) )
+        (pure ( mempty, nullPos, toValue @(AttrSet v, PositionSet) (mempty, mempty)) )
         (\ k ->
           list
             -- No more keys in the attrset - return the result
@@ -387,7 +387,7 @@ evalBinds recursive binds =
                     (withScopes scope $ lookupVar key)
                     (\ s ->
                       do
-                        (attrset, _) <- fromValue @(AttrSet v, KeyMap SourcePos) =<< s
+                        (attrset, _) <- fromValue @(AttrSet v, PositionSet) =<< s
 
                         clearScopes @v $ pushScope attrset $ lookupVar key
                     )
@@ -423,7 +423,7 @@ evalSelect aset attr =
 
       case x' of
         Nothing -> pure $ Left (x, path)
-        Just (s :: AttrSet v, p :: KeyMap SourcePos)
+        Just (s :: AttrSet v, p :: PositionSet)
           | Just t <- M.lookup k s ->
             do
               list
@@ -490,7 +490,7 @@ buildArgument params arg =
       Param name -> M.singleton name <$> argThunk
       ParamSet s isVariadic m ->
         do
-          (args, _) <- fromValue @(AttrSet v, KeyMap SourcePos) =<< arg
+          (args, _) <- fromValue @(AttrSet v, PositionSet) =<< arg
           let
             inject =
               maybe

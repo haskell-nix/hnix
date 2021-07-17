@@ -56,7 +56,6 @@ import qualified Nix.Eval                      as Eval
                                                 , evalWithAttrSet
                                                 )
 import           Nix.Expr.Types
-import           Nix.Expr.Types.Annotated
 import           Nix.Fresh
 import           Nix.String
 import           Nix.Scope
@@ -335,7 +334,7 @@ instance
 instance
   MonadInfer m
   => FromValue ( AttrSet (Judgment s)
-              , KeyMap SourcePos
+              , PositionSet
               ) (InferT s m) (Judgment s)
  where
   fromValueMay (Judgment _ _ (TSet _ xs)) =
@@ -350,7 +349,7 @@ instance
       <=< fromValueMay
 
 instance MonadInfer m
-  => ToValue (AttrSet (Judgment s), KeyMap SourcePos)
+  => ToValue (AttrSet (Judgment s), PositionSet)
             (InferT s m) (Judgment s) where
   toValue (xs, _) =
     liftA3

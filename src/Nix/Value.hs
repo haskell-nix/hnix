@@ -42,7 +42,6 @@ import           Lens.Family2.TH                ( makeTraversals
                                                 )
 import           Nix.Atoms
 import           Nix.Expr.Types
-import           Nix.Expr.Types.Annotated
 import           Nix.String
 import           Nix.Thunk
 
@@ -124,8 +123,8 @@ data NValueF p m r
     -- Quite frequently actions/processing happens with values
     -- (for example - forcing of values & recreation of the monad),
     -- but SourcePos does not change then
-    -- That would be good to flip all 'AttrSet.* KeyMap SourcePos'
-    | NVSetF (AttrSet r) (KeyMap SourcePos)
+    -- That would be good to flip all 'AttrSet.* PositionSet'
+    | NVSetF (AttrSet r) PositionSet
     | NVClosureF (Params ()) (p -> m r)
       -- ^ A function is a closed set of parameters representing the "call
       --   signature", used at application time to check the type of arguments
@@ -445,7 +444,7 @@ nvList' = NValue' . pure . NVListF
 
 -- | Haskell key-value to the Nix key-value,
 nvSet' :: Applicative f
-  => KeyMap SourcePos
+  => PositionSet
   -> AttrSet r
   -> NValue' t f m r
 --  2021-07-16: NOTE: that the arguments are flipped.
@@ -628,7 +627,7 @@ nvList = Free . nvList'
 
 
 nvSet :: Applicative f
-  => KeyMap SourcePos
+  => PositionSet
   -> AttrSet (NValue t f m)
   -> NValue t f m
 nvSet p s = Free $ nvSet' p s

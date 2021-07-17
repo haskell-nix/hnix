@@ -59,7 +59,6 @@ import           Nix.Effects
 import           Nix.Effects.Basic              ( fetchTarball )
 import           Nix.Exec
 import           Nix.Expr.Types
-import           Nix.Expr.Types.Annotated
 import qualified Nix.Eval                      as Eval
 import           Nix.Frames
 import           Nix.Json
@@ -441,7 +440,7 @@ hasAttrNix
 hasAttrNix x y =
   do
     (coerce -> key) <- fromStringNoContext =<< fromValue x
-    (aset, _) <- fromValue @(AttrSet (NValue t f m), KeyMap SourcePos) y
+    (aset, _) <- fromValue @(AttrSet (NValue t f m), PositionSet) y
 
     toValue $ M.member key aset
 
@@ -457,7 +456,7 @@ getAttrNix
 getAttrNix x y =
   do
     (coerce -> key) <- fromStringNoContext =<< fromValue x
-    (aset, _) <- fromValue @(AttrSet (NValue t f m), KeyMap SourcePos) y
+    (aset, _) <- fromValue @(AttrSet (NValue t f m), PositionSet) y
 
     attrsetGet key aset
 
@@ -477,7 +476,7 @@ unsafeGetAttrPosNix nvX nvY =
         maybe
           (pure nvNull)
           toValue
-          (M.lookup (stringIgnoreContext ns) apos)
+          (M.lookup @VarName (coerce $ stringIgnoreContext ns) apos)
       _xy -> throwError $ ErrorCall $ "Invalid types for builtins.unsafeGetAttrPosNix: " <> show _xy
 
 -- This function is a bit special in that it doesn't care about the contents
@@ -1074,10 +1073,10 @@ removeAttrsNix
   -> m (NValue t f m)
 removeAttrsNix set v =
   do
-    (m, p) <- fromValue @(AttrSet (NValue t f m), KeyMap SourcePos) set
+    (m, p) <- fromValue @(AttrSet (NValue t f m), PositionSet) set
     (nsToRemove :: [NixString]) <- fromValue $ Deeper v
-    toRemove <- traverse (fmap (coerce @Text @VarName) . fromStringNoContext) nsToRemove
-    toValue (go @VarName m toRemove, go @Text p (coerce @VarName <$> toRemove))
+    (coerce -> toRemove) <- traverse fromStringNoContext nsToRemove
+    toValue (go m toRemove, go p toRemove)
  where
   go :: forall k v . (Eq k, Hashable k) => HashMap k v -> [k] -> HashMap k v
   go = foldl' (flip M.delete)
@@ -1090,8 +1089,8 @@ intersectAttrsNix
   -> m (NValue t f m)
 intersectAttrsNix set1 set2 =
   do
-    (s1, p1) <- fromValue @(AttrSet (NValue t f m), KeyMap SourcePos) set1
-    (s2, p2) <- fromValue @(AttrSet (NValue t f m), KeyMap SourcePos) set2
+    (s1, p1) <- fromValue @(AttrSet (NValue t f m), PositionSet) set1
+    (s2, p2) <- fromValue @(AttrSet (NValue t f m), PositionSet) set2
 
     pure $ nvSet (p2 `M.intersection` p1) (s2 `M.intersection` s1)
 

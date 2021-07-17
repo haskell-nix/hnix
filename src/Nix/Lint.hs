@@ -273,9 +273,9 @@ instance ToValue [Symbolic m] m (Symbolic m) where
 
 instance FromValue NixString m (Symbolic m) where
 
-instance FromValue (AttrSet (Symbolic m), KeyMap SourcePos) m (Symbolic m) where
+instance FromValue (AttrSet (Symbolic m), PositionSet) m (Symbolic m) where
 
-instance ToValue (AttrSet (Symbolic m), KeyMap SourcePos) m (Symbolic m) where
+instance ToValue (AttrSet (Symbolic m), PositionSet) m (Symbolic m) where
 
 instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
   => MonadValue (Symbolic m) m where

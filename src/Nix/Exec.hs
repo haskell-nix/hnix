@@ -86,7 +86,7 @@ nvListP p l = addProvenance p $ nvList l
 nvSetP
   :: MonadCited t f m
   => Provenance m (NValue t f m)
-  -> KeyMap SourcePos
+  -> PositionSet
   -> AttrSet (NValue t f m)
   -> NValue t f m
 nvSetP p x s = addProvenance p $ nvSet x s

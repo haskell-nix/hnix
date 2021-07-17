@@ -285,7 +285,7 @@ instance ( Convertible e t f m
   fromValue = fromMayToDeeperValue TSet
 
 instance Convertible e t f m
-  => FromValue (AttrSet (NValue t f m), KeyMap SourcePos) m
+  => FromValue (AttrSet (NValue t f m), PositionSet) m
               (NValue' t f m (NValue t f m)) where
 
   fromValueMay =
@@ -299,7 +299,7 @@ instance Convertible e t f m
 instance ( Convertible e t f m
          , FromValue a m (NValue t f m)
          )
-  => FromValue (AttrSet a, KeyMap SourcePos) m
+  => FromValue (AttrSet a, PositionSet) m
               (Deeper (NValue' t f m (NValue t f m))) where
 
   fromValueMay =
@@ -400,12 +400,12 @@ instance (Convertible e t f m, ToValue a m (NValue t f m))
       stub
 
 instance Convertible e t f m
-  => ToValue (AttrSet (NValue t f m), KeyMap SourcePos) m
+  => ToValue (AttrSet (NValue t f m), PositionSet) m
             (NValue' t f m (NValue t f m)) where
   toValue (s, p) = pure $ nvSet' p s
 
 instance (Convertible e t f m, ToValue a m (NValue t f m))
-  => ToValue (AttrSet a, KeyMap SourcePos) m
+  => ToValue (AttrSet a, PositionSet) m
             (Deeper (NValue' t f m (NValue t f m))) where
   toValue (s, p) =
     liftA2 (\ v s -> Deeper $ nvSet' s v)
