@@ -9,6 +9,7 @@ import           Nix.Expr.Types.Annotated       ( SrcSpan
                                                 )
 import           Nix.Utils                      ( Has(..) )
 
+--  2021-07-18: NOTE: It should be Options -> Scopes -> Frames -> Source(span)
 data Context m t = Context
     { scopes  :: Scopes m t
     , source  :: SrcSpan

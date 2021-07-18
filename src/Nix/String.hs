@@ -46,6 +46,7 @@ import           Nix.Expr.Types                 ( VarName(..)
 
 -- ** Context
 
+--  2021-07-18: NOTE: it should be ContextFlavor -> Varname.
 -- | A Nix 'StringContext' ...
 data StringContext =
   StringContext
@@ -104,6 +105,7 @@ type WithStringContext = WithStringContextT Identity
 
 -- ** NixString
 
+--  2021-07-18: NOTE: It should be Context -> Contents.
 data NixString =
   NixString
     { nsContents :: !Text

@@ -204,6 +204,8 @@ instance ( Convertible e t f m
           (M.lookup "outPath" s)
       _ -> stub
 
+  --  2021-07-18: NOTE: There may be cases where conversion wrongly marks the content to have a context.
+  --  See: https://github.com/haskell-nix/hnix/pull/958#issuecomment-881949183 thread.
   fromValue = fromMayToValue $ TString HasContext
 
 instance Convertible e t f m
