@@ -104,6 +104,7 @@ type WithStringContext = WithStringContextT Identity
 
 -- ** NixString
 
+--  2021-07-18: NOTE: It should be Context -> Contents.
 data NixString =
   NixString
     { nsContents :: !Text
