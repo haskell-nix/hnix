@@ -415,19 +415,19 @@ argExpr =
   params = braces getParams
 
   -- Collects the parameters within curly braces. Returns the parameters and
-  -- a boolean indicating if the parameters are variadic.
-  getParams :: Parser (ParamSet NExprLoc, Bool)
+  -- an flag indication if the parameters are variadic.
   getParams = go mempty
    where
     -- Attempt to parse `...`. If this succeeds, stop and return True.
     -- Otherwise, attempt to parse an argument, optionally with a
     -- default. If this fails, then return what has been accumulated
     -- so far.
-    go acc = ((acc, True) <$ symbol "...") <+> getMore
+    go acc = ((acc, coerce True) <$ symbol "...") <+> getMore
      where
+      getMore :: ParsecT  Void Text (State SourcePos) ([(VarName, Maybe NExprLoc)], VariadicBool)
       getMore =
         -- Could be nothing, in which just return what we have so far.
-        option (acc, False) $
+        option (acc, coerce False) $
           do
             -- Get an argument name and an optional default.
             pair <-
@@ -438,7 +438,7 @@ argExpr =
             let args = acc <> [pair]
 
             -- Either return this, or attempt to get a comma and restart.
-            option (args, False) $ comma *> go args
+            option (args, coerce False) $ comma *> go args
 
 nixBinders :: Parser [Binding NExprLoc]
 nixBinders = (inherit <+> namedVar) `endBy` semi where

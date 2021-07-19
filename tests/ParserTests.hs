@@ -306,8 +306,8 @@ case_lambda_pattern =
     , "{...}: 1"
     )
  where
-  fixed    args = ParamSet args False
-  variadic args = ParamSet args True
+  fixed    args = ParamSet args (coerce False)
+  variadic args = ParamSet args (coerce True)
   args  = [("b", Nothing), ("c", pure $ mkInt 1)]
   vargs = [("b", Nothing), ("c", pure $ mkInt 1)]
   args2 = [("b", pure lam)]

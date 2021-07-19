@@ -140,6 +140,15 @@ type AttrSet = HashMap VarName
 -- order of the param set.
 type ParamSet r = [(VarName, Maybe r)]
 
+newtype VariadicBool = VariadicBool Bool
+  deriving
+    ( Eq, Ord, Generic
+    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Show, Read, Hashable
+    )
+
+--  2021-07-19: NOTE: mkParamSet with default types
+
 -- | @Params@ represents all the ways the formal parameters to a
 -- function can be represented.
 data Params r
@@ -147,7 +156,7 @@ data Params r
   -- ^ For functions with a single named argument, such as @x: x + 1@.
   --
   -- > Param "x"                                  ~  x
-  | ParamSet !(ParamSet r) !Bool !(Maybe VarName)
+  | ParamSet !(ParamSet r) !VariadicBool !(Maybe VarName)
   --  2021-05-15: NOTE: Seems like we should flip the ParamSet, so partial application kicks in for Bool?
   --  2021-05-15: NOTE: '...' variadic property probably needs a Bool synonym.
   -- ^ Explicit parameters (argument must be a set). Might specify a name to

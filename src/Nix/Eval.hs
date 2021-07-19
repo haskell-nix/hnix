@@ -2,6 +2,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns #-}
 
 
 
@@ -506,11 +507,11 @@ buildArgument params arg =
  where
   assemble
     :: Scopes m v
-    -> Bool
+    -> VariadicBool
     -> VarName
     -> These v (Maybe (m v))
     -> Maybe (AttrSet v -> m v)
-  assemble scope isVariadic k =
+  assemble scope (coerce -> isVariadic) k =
     \case
       That Nothing -> pure $ const $ evalError @v $ ErrorCall $ "Missing value for parameter: ''" <> show k
       That (Just f) -> pure $ \args -> defer $ withScopes scope $ pushScope args f
