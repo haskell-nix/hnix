@@ -1252,7 +1252,7 @@ scopedImportNix
   -> m (NValue t f m)
 scopedImportNix asetArg pathArg =
   do
-    s        <- fromValue @(AttrSet (NValue t f m)) asetArg
+    (coerce -> scope) <- fromValue @(AttrSet (NValue t f m)) asetArg
     (Path p) <- fromValue pathArg
 
     path  <- pathToDefaultNix @t @f @m p
@@ -1273,7 +1273,7 @@ scopedImportNix asetArg pathArg =
 
     clearScopes @(NValue t f m)
       $ withNixContext (pure path')
-      $ pushScope s
+      $ pushScope scope
       $ importPath @t @f @m path'
 
 getEnvNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1961,7 +1961,7 @@ withNixContext mpath action =
       i = nvList $ nvStrWithoutContext . toText <$> include opts
 
     pushScope
-      (one ("__includes", i))
+      (coerce $ M.fromList $ one ("__includes", i))
       (pushScopes
         base $
         maybe
@@ -1970,7 +1970,7 @@ withNixContext mpath action =
             do
               traceM $ "Setting __cur_file = " <> show path
               let ref = nvPath path
-              pushScope (one ("__cur_file", ref)) act
+              pushScope (coerce $ M.fromList (one ("__cur_file", ref))) act
           )
           mpath
           action
@@ -1985,7 +1985,7 @@ builtins =
   do
     ref <- defer $ nvSet mempty <$> buildMap
     lst <- ([("builtins", ref)] <>) <$> topLevelBuiltins
-    pushScope (M.fromList lst) currentScopes
+    pushScope (coerce (M.fromList lst)) currentScopes
  where
   buildMap
     :: ( MonadNix e t f m
