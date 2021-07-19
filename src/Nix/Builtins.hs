@@ -94,7 +94,7 @@ import           Text.Regex.TDFA                ( Regex
 
 -- ** Nix Builtins Haskell type level
 
-newtype Prim m a = Prim { runPrim :: m a }
+newtype Prim m a = Prim (m a)
 
 data BuiltinType = Normal | TopLevel
 data Builtin v =
@@ -114,7 +114,7 @@ instance
   , ToValue a m (NValue t f m)
   )
   => ToBuiltin t f m (Prim m a) where
-  toBuiltin _ p = toValue =<< runPrim p
+  toBuiltin _ p = toValue @a @m =<< coerce p
 
 instance
   ( MonadNix e t f m
@@ -1407,12 +1407,12 @@ hashStringNix nsAlgo ns =
         mkHash s = hash $ encodeUtf8 s
 
 
-placeHolderNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
+placeHolderNix :: forall t f m e . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 placeHolderNix p =
   do
     t <- fromStringNoContext =<< fromValue p
     h <-
-      runPrim $
+      coerce @(Prim m NixString) @(m NixString) $
         (hashStringNix `on` makeNixStringWithoutContext)
           "sha256"
           ("nix-output:" <> t)
