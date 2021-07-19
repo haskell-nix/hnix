@@ -149,12 +149,20 @@ instance Monoid InferError where
 
 -- * @InferState@: inference state
 
--- | Inference state
-newtype InferState = InferState { count :: Int }
+-- | Inference state (stage).
+newtype InferState = InferState Int
+ deriving
+  (Eq, Num, Enum, Ord)
+
+instance Semigroup InferState where
+  (<>) a b = a + b
+
+instance Monoid InferState where
+  mempty = 0
 
 -- | Initial inference state
 initInfer :: InferState
-initInfer = InferState { count = 0 }
+initInfer = InferState 0
 
 letters :: [String]
 letters =
@@ -168,8 +176,8 @@ freshTVar :: MonadState InferState m => m TVar
 freshTVar =
   do
     s <- get
-    put s { count = count s + 1 }
-    pure $ TV $ toText $ letters !! count s
+    put $ succ s
+    pure $ TV $ toText $ letters !! coerce s
 
 fresh :: MonadState InferState m => m Type
 fresh = TVar <$> freshTVar
