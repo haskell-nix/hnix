@@ -422,12 +422,12 @@ argExpr =
     -- Otherwise, attempt to parse an argument, optionally with a
     -- default. If this fails, then return what has been accumulated
     -- so far.
-    go acc = ((acc, coerce True) <$ symbol "...") <+> getMore
+    go acc = ((acc, Variadic) <$ symbol "...") <+> getMore
      where
-      getMore :: ParsecT  Void Text (State SourcePos) ([(VarName, Maybe NExprLoc)], VariadicBool)
+      getMore :: ParsecT  Void Text (State SourcePos) ([(VarName, Maybe NExprLoc)], Variadic)
       getMore =
         -- Could be nothing, in which just return what we have so far.
-        option (acc, coerce False) $
+        option (acc, Closed) $
           do
             -- Get an argument name and an optional default.
             pair <-
@@ -438,7 +438,7 @@ argExpr =
             let args = acc <> [pair]
 
             -- Either return this, or attempt to get a comma and restart.
-            option (args, coerce False) $ comma *> go args
+            option (args, Closed) $ comma *> go args
 
 nixBinders :: Parser [Binding NExprLoc]
 nixBinders = (inherit <+> namedVar) `endBy` semi where

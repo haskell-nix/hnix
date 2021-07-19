@@ -140,7 +140,7 @@ type AttrSet = HashMap VarName
 -- order of the param set.
 type ParamSet r = [(VarName, Maybe r)]
 
-newtype VariadicBool = VariadicBool Bool
+data Variadic = Closed | Variadic
   deriving
     ( Eq, Ord, Generic
     , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
@@ -156,7 +156,7 @@ data Params r
   -- ^ For functions with a single named argument, such as @x: x + 1@.
   --
   -- > Param "x"                                  ~  x
-  | ParamSet !(ParamSet r) !VariadicBool !(Maybe VarName)
+  | ParamSet !(ParamSet r) !Variadic !(Maybe VarName)
   --  2021-05-15: NOTE: Seems like we should flip the ParamSet, so partial application kicks in for Bool?
   --  2021-05-15: NOTE: '...' variadic property probably needs a Bool synonym.
   -- ^ Explicit parameters (argument must be a set). Might specify a name to

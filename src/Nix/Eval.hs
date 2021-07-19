@@ -507,16 +507,16 @@ buildArgument params arg =
  where
   assemble
     :: Scopes m v
-    -> VariadicBool
+    -> Variadic
     -> VarName
     -> These v (Maybe (m v))
     -> Maybe (AttrSet v -> m v)
-  assemble scope (coerce -> isVariadic) k =
+  assemble scope variadic k =
     \case
       That Nothing -> pure $ const $ evalError @v $ ErrorCall $ "Missing value for parameter: ''" <> show k
       That (Just f) -> pure $ \args -> defer $ withScopes scope $ pushScope args f
       This _
-        | isVariadic -> Nothing
+        | variadic == Variadic -> Nothing
         | otherwise  -> pure $ const $ evalError @v $ ErrorCall $ "Unexpected parameter: " <> show k
       These x _ -> pure $ const $ pure x
 

@@ -82,7 +82,7 @@ genAttrPath =
 genParams :: Gen (Params NExpr)
 genParams = Gen.choice
   [ Param . coerce <$> asciiText
-  , liftA3 (\ a b c -> ParamSet (coerce a) (coerce b) (pure $ coerce c))
+  , liftA3 (\ a b c -> ParamSet (coerce a) (bool Closed Variadic b) (pure $ coerce c))
       (Gen.list (Range.linear 0 10) $ liftA2 (,) asciiText $ Gen.maybe genExpr)
       Gen.bool
       (Gen.choice [stub, asciiText])

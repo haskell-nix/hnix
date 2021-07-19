@@ -286,17 +286,17 @@ case_lambda_or_uri_syntax_mistakes =
 
 case_lambda_pattern =
   checks
-    ( mkFunction (fixed args Nothing) $ var "b"
+    ( mkFunction (closed args Nothing) $ var "b"
     , "{b, c ? 1}: b"
     -- Fix (NAbs (ParamSet [("b",Nothing),("c",Just (Fix (NConstant (NInt 1))))] False Nothing) (Fix (NSym "b")))
     )
-    ( mkFunction (fixed args2 Nothing) $ var "b"
+    ( mkFunction (closed args2 Nothing) $ var "b"
     , "{ b ? x: x  }: b"
     )
-    ( mkFunction (fixed args $ pure "a") $ var "b"
+    ( mkFunction (closed args $ pure "a") $ var "b"
     , "a@{b,c ? 1}: b"
     )
-    ( mkFunction (fixed args $ pure "a") $ var "c"
+    ( mkFunction (closed args $ pure "a") $ var "c"
     , "{b,c?1}@a: c"
     )
     ( mkFunction (variadic vargs $ pure "a") $ var "c"
@@ -306,8 +306,8 @@ case_lambda_pattern =
     , "{...}: 1"
     )
  where
-  fixed    args = ParamSet args (coerce False)
-  variadic args = ParamSet args (coerce True)
+  closed    args = ParamSet args Closed
+  variadic args = ParamSet args Variadic
   args  = [("b", Nothing), ("c", pure $ mkInt 1)]
   vargs = [("b", Nothing), ("c", pure $ mkInt 1)]
   args2 = [("b", pure lam)]

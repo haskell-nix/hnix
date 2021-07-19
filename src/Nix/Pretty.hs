@@ -144,20 +144,19 @@ prettyParams (ParamSet s v mname) = prettyParamSet s v <>
     )
     mname
 
-prettyParamSet :: ParamSet (NixDoc ann) -> VariadicBool -> Doc ann
-prettyParamSet args (coerce -> isVariadic) =
+prettyParamSet :: ParamSet (NixDoc ann) -> Variadic -> Doc ann
+prettyParamSet args variadic =
   encloseSep
     "{ "
     (align " }")
     sep
-    (fmap prettySetArg args <> prettyVariadic)
+    (fmap prettySetArg args <> bool mempty ["..."] (variadic == Variadic))
  where
   prettySetArg (n, maybeDef) =
     maybe
       (prettyVarName n)
       (\x -> prettyVarName n <> " ? " <> withoutParens x)
       maybeDef
-  prettyVariadic = [ "..." | isVariadic ]
   sep            = align ", "
 
 prettyBind :: Binding (NixDoc ann) -> Doc ann

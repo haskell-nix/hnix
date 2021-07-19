@@ -104,10 +104,14 @@ mkEName = (`mkElem` "name")
 
 paramsXML :: Params r -> [Content]
 paramsXML (Param name) = [Elem $ mkEName "varpat" (toString name)]
-paramsXML (ParamSet s (coerce -> isVariadic) mname) =
+paramsXML (ParamSet s isVariadic mname) =
   [Elem $ Element (unqual "attrspat") (battr <> nattr) (paramSetXML s) Nothing]
  where
-  battr = [ Attr (unqual "ellipsis") "1" | isVariadic ]
+  battr =
+    bool
+      mempty
+      [ Attr (unqual "ellipsis") "1" ]
+      (isVariadic == Variadic)
   nattr =
     maybe
       mempty
