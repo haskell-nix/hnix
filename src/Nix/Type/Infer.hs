@@ -60,9 +60,7 @@ import           Nix.Expr.Types
 import           Nix.Fresh
 import           Nix.String
 import           Nix.Scope
-import           Nix.Type.Assumption     hiding ( assumptions
-                                                , extend
-                                                )
+import           Nix.Type.Assumption     hiding ( extend )
 import qualified Nix.Type.Assumption           as Assumption
                                                 ( remove
                                                 , lookup

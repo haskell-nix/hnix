@@ -21,7 +21,7 @@ import           Prelude                 hiding ( Type
 import           Nix.Expr.Types
 import           Nix.Type.Type
 
-newtype Assumption = Assumption { assumptions :: [(VarName, Type)] }
+newtype Assumption = Assumption [(VarName, Type)]
   deriving (Eq, Show)
 
 -- We pretend that Assumptions can be inconsistent (nonunique keys),
