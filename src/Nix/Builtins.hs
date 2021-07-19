@@ -1104,7 +1104,7 @@ functionArgsNix nvfun =
         toValue @(AttrSet (NValue t f m)) $ mkNVBool <$>
           case p of
             Param name     -> one (name, False)
-            ParamSet s _ _ -> isJust <$> M.fromList s
+            ParamSet _ _ pset -> isJust <$> M.fromList pset
       _v -> throwError $ ErrorCall $ "builtins.functionArgs: expected function, got " <> show _v
 
 toFileNix

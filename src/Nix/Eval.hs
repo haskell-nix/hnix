@@ -485,7 +485,7 @@ buildArgument params arg =
     let argThunk = defer $ withScopes scope arg
     case params of
       Param name -> M.singleton name <$> argThunk
-      ParamSet s isVariadic m ->
+      ParamSet mname variadic pset ->
         do
           (args, _) <- fromValue @(AttrSet v, PositionSet) =<< arg
           let
@@ -493,15 +493,15 @@ buildArgument params arg =
               maybe
                 id
                 (\ n -> M.insert n $ const argThunk) -- why insert into const?
-                m
+                mname
           loebM
             (inject $
                 M.mapMaybe
                   id
                   (ialignWith
-                    (assemble scope isVariadic)
+                    (assemble scope variadic)
                     args
-                    $ M.fromList s
+                    $ M.fromList pset
                   )
             )
  where

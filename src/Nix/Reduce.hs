@@ -320,7 +320,7 @@ reduce (NAbs_ ann params body) = do
     args =
       case params' of
         Param    name     -> HM.singleton name $ Fix $ NSym_ ann name
-        ParamSet pset _ _ ->
+        ParamSet _ _ pset ->
           HM.fromList $ (\(k, _) -> (k, Fix $ NSym_ ann k)) <$> pset
   Fix . NAbs_ ann params' <$> pushScope args body
 
@@ -437,8 +437,8 @@ pruneTree opts =
 
   pruneParams :: Params (Maybe NExprLoc) -> Params NExprLoc
   pruneParams (Param n) = Param n
-  pruneParams (ParamSet xs b n) =
-    ParamSet (reduceOrPassMode <$> xs) b n
+  pruneParams (ParamSet mname variadic pset) =
+    ParamSet mname variadic (reduceOrPassMode <$> pset)
    where
     reduceOrPassMode =
       second $

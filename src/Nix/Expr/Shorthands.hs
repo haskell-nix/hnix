@@ -88,7 +88,7 @@ mkOp2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkOp2 op a = Fix . NBinary op a
 
 mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
-mkParamset params isVariadic = ParamSet (coerce params) (bool Closed Variadic isVariadic) Nothing
+mkParamset params variadic = ParamSet Nothing (bool Closed Variadic variadic) (coerce params)
 
 -- | Put a recursive set.
 --

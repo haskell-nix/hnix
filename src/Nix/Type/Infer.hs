@@ -565,7 +565,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
         (cs <> [ EqConst t' tv | t' <- Assumption.lookup x as ])
         (tv :~> t)
 
-  evalAbs (ParamSet ps variadic _mname) k = do
+  evalAbs (ParamSet _mname variadic pset) k = do
     js <-
       concat <$>
         traverse
@@ -574,7 +574,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
               tv <- fresh
               pure [(name, tv)]
           )
-          ps
+          pset
 
     let
       f (as1, t1) (k, t) = (as1 <> one (k, t), M.insert k t t1)

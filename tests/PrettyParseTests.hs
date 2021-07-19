@@ -82,7 +82,7 @@ genAttrPath =
 genParams :: Gen (Params NExpr)
 genParams = Gen.choice
   [ Param . coerce <$> asciiText
-  , liftA3 (\ a b c -> ParamSet (coerce a) (bool Closed Variadic b) (pure $ coerce c))
+  , liftA3 (\ a b c -> ParamSet (pure $ coerce c) (bool Closed Variadic b) (coerce a))
       (Gen.list (Range.linear 0 10) $ liftA2 (,) asciiText $ Gen.maybe genExpr)
       Gen.bool
       (Gen.choice [stub, asciiText])
@@ -193,7 +193,7 @@ normalize = foldFix $ \case
   normAntiquotedText (Plain "''\n") = EscapedNewline
   normAntiquotedText r              = r
 
-  normParams (ParamSet binds var (Just "")) = ParamSet binds var (coerce @Text <$> mempty)
+  normParams (ParamSet (Just "") variadic pset) = ParamSet Nothing variadic pset
   normParams r                              = r
 
 -- | Test that parse . pretty == id up to attribute position information.

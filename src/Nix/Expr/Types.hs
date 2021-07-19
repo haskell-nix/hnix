@@ -156,15 +156,13 @@ data Params r
   -- ^ For functions with a single named argument, such as @x: x + 1@.
   --
   -- > Param "x"                                  ~  x
-  | ParamSet !(ParamSet r) !Variadic !(Maybe VarName)
-  --  2021-05-15: NOTE: Seems like we should flip the ParamSet, so partial application kicks in for Bool?
-  --  2021-05-15: NOTE: '...' variadic property probably needs a Bool synonym.
+  | ParamSet !(Maybe VarName) !Variadic !(ParamSet r)
   -- ^ Explicit parameters (argument must be a set). Might specify a name to
   -- bind to the set in the function body. The bool indicates whether it is
   -- variadic or not.
   --
-  -- > ParamSet [("x",Nothing)] False Nothing     ~  { x }
-  -- > ParamSet [("x",pure y)]  True  (pure "s")  ~  s@{ x ? y, ... }
+  -- > ParamSet  Nothing   False [("x",Nothing)]  ~  { x }
+  -- > ParamSet (pure "s") True  [("x", pure y)]  ~  s@{ x ? y, ... }
   deriving
     ( Eq, Ord, Generic, Generic1
     , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, ToJSON1, FromJSON, FromJSON1
@@ -660,8 +658,8 @@ hashAt = alterF
 
 -- | Get the name out of the parameter (there might be none).
 paramName :: Params r -> Maybe VarName
-paramName (Param n       ) = pure n
-paramName (ParamSet _ _ n) = n
+paramName (Param name        ) = pure name
+paramName (ParamSet mname _ _) = mname
 
 stringParts :: NString r -> [Antiquoted Text r]
 stringParts (DoubleQuoted parts) = parts

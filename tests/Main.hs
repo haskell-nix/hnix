@@ -42,9 +42,9 @@ ensureLangTestsPresent = do
 ensureNixpkgsCanParse :: Assertion
 ensureNixpkgsCanParse =
   consider "default.nix" (parseNixFile "default.nix") $ \case
-    Fix (NAbs (ParamSet params _ _) _) -> do
-      let rev    = getString "rev" params
-          sha256 = getString "sha256" params
+    Fix (NAbs (ParamSet _ _ pset) _) -> do
+      let rev    = getString "rev" pset
+          sha256 = getString "sha256" pset
       consider "fetchTarball expression" (pure $ parseNixTextLoc [text|
         builtins.fetchTarball {
           url    = "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz";

@@ -71,15 +71,15 @@ freeVars e = case unFix e of
       ]
   (NHasAttr expr            path) -> freeVars expr <> pathFree path
   (NAbs     (Param varname) expr) -> Set.delete varname (freeVars expr)
-  (NAbs (ParamSet set _ varname) expr) ->
+  (NAbs (ParamSet varname _ pset) expr) ->
     -- Include all free variables from the expression and the default arguments
     freeVars expr <>
     -- But remove the argument name if existing, and all arguments in the parameter set
     Set.difference
-      (Set.unions $ freeVars <$> mapMaybe snd set)
+      (Set.unions $ freeVars <$> mapMaybe snd pset)
       (Set.difference
         (maybe mempty one varname)
-        (Set.fromList $ fst <$> set)
+        (Set.fromList $ fst <$> pset)
       )
   (NLet         bindings expr   ) ->
     freeVars expr <>

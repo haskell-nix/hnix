@@ -133,19 +133,20 @@ prettyVarName = pretty @Text . coerce
 
 prettyParams :: Params (NixDoc ann) -> Doc ann
 prettyParams (Param n           ) = prettyVarName n
-prettyParams (ParamSet s v mname) = prettyParamSet s v <>
-  maybe
-    mempty
-    (\ (coerce -> name) ->
-       bool
-         mempty
-         ("@" <> pretty name)
-         (not (Text.null name))
-    )
-    mname
+prettyParams (ParamSet mname variadic pset) =
+  prettyParamSet variadic pset <>
+    maybe
+      mempty
+      (\ (coerce -> name) ->
+        bool
+          mempty
+          ("@" <> pretty name)
+          (not (Text.null name))
+      )
+      mname
 
-prettyParamSet :: ParamSet (NixDoc ann) -> Variadic -> Doc ann
-prettyParamSet args variadic =
+prettyParamSet :: Variadic -> ParamSet (NixDoc ann) -> Doc ann
+prettyParamSet variadic args =
   encloseSep
     "{ "
     (align " }")

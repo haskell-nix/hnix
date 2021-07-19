@@ -400,16 +400,16 @@ argExpr =
   atLeft =
     try $
       do
-        name               <- identifier <* symbol "@"
-        (params, variadic) <- params
-        pure $ ParamSet params variadic $ pure name
+        name             <- identifier <* symbol "@"
+        (pset, variadic) <- params
+        pure $ ParamSet (pure name) variadic pset
 
   -- Parameters named by an identifier on the right, or none (`{x, y} @ args`)
   atRight =
     do
-      (params, variadic) <- params
-      name               <- optional $ symbol "@" *> identifier
-      pure $ ParamSet params variadic name
+      (pset, variadic) <- params
+      name             <- optional $ symbol "@" *> identifier
+      pure $ ParamSet name variadic pset
 
   -- Return the parameters set.
   params = braces getParams
