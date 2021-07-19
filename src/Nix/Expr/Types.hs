@@ -538,8 +538,6 @@ data NExprF r
   -- > NBinary NPlus x y                           ~  x + y
   -- > NBinary NApp  f x                           ~  f x
   | NSelect !(Maybe r) !r !(NAttrPath r)
-  --  2021-05-15: NOTE: Default value should be first argument to leverage partial application.
-  -- Cascading change diff is not that big.
   -- ^ Dot-reference into an attribute set, optionally providing an
   -- alternative if the key doesn't exist.
   --
@@ -569,7 +567,7 @@ data NExprF r
   --
   -- > NWith x y                                   ~  with x; y
   | NAssert !r !r
-  -- ^ Assert that the first returns @true@ before evaluating the second.
+  -- ^ Checks that the first argument is a predicate that is @true@ before evaluating the second argument.
   --
   -- > NAssert x y                                 ~  assert x; y
   | NSynHole !VarName
