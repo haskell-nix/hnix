@@ -327,14 +327,9 @@ hasKind
    . (MonadNix e t f m, FromValue a m (NValue t f m))
   => NValue t f m
   -> m (NValue t f m)
-hasKind nv =
-  do
-    v <- fromValueMay nv
-
-    toValue $
-      case v of
-        Just (_ :: a) -> True
-        _             -> False
+hasKind =
+  inHaskMay
+    (isJust @a)
 
 
 absolutePathFromValue :: MonadNix e t f m => NValue t f m -> m FilePath
@@ -445,7 +440,7 @@ hasAttrNix x y =
     toValue $ M.member key aset
 
 hasContextNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-hasContextNix = toValue . stringHasContext <=< fromValue
+hasContextNix = inHask stringHasContext
 
 getAttrNix
   :: forall e t f m
@@ -483,7 +478,7 @@ unsafeGetAttrPosNix nvX nvY =
 -- of the list.
 lengthNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-lengthNix = toValue . (length :: [NValue t f m] -> Int) <=< fromValue
+lengthNix = inHask (length :: [NValue t f m] -> Int)
 
 addNix
   :: MonadNix e t f m
@@ -719,8 +714,10 @@ substringNix start len str =
 attrNamesNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 attrNamesNix =
-  (fmap (coerce :: CoerceDeeperToNValue t f m) . toValue . fmap (makeNixStringWithoutContext . coerce @VarName @Text) . sort . M.keys)
-  <=< fromValue @(AttrSet (NValue t f m))
+    coersion . inHask @(AttrSet (NValue t f m))
+      (fmap (makeNixStringWithoutContext . coerce) . sort . M.keys)
+ where
+  coersion = fmap (coerce :: CoerceDeeperToNValue t f m)
 
 attrValuesNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -740,13 +737,13 @@ mapNix
   -> NValue t f m
   -> m (NValue t f m)
 mapNix f =
-  toValue <=<
-    traverse
-      (defer @(NValue t f m)
+  inHaskM @[NValue t f m]
+    (traverse
+      (defer
       . withFrame Debug (ErrorCall "While applying f in map:\n")
       . callFunc f
       )
-      <=< fromValue @[NValue t f m]
+    )
 
 mapAttrsNix
   :: forall e t f m
@@ -780,10 +777,10 @@ filterNix
   -> NValue t f m
   -> m (NValue t f m)
 filterNix f =
-  toValue <=<
-    filterM
-      (fromValue <=< callFunc f)
-      <=< fromValue
+  inHaskM
+    (filterM fh)
+ where
+  fh = fromValue <=< callFunc f
 
 catAttrsNix
   :: forall e t f m
@@ -798,7 +795,7 @@ catAttrsNix attrName xs =
 
     nvList . catMaybes <$>
       traverse
-        (fmap (M.lookup (coerce @Text @VarName n)) . fromValue <=< demand)
+        (fmap (M.lookup @VarName $ coerce n) . fromValue <=< demand)
         l
 
 baseNameOfNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -822,7 +819,7 @@ bitAndNix x y =
     a <- fromValue @Integer x
     b <- fromValue @Integer y
 
-    toValue (a .&. b)
+    toValue $ a .&. b
 
 bitOrNix
   :: forall e t f m
@@ -835,7 +832,7 @@ bitOrNix x y =
     a <- fromValue @Integer x
     b <- fromValue @Integer y
 
-    toValue (a .|. b)
+    toValue $ a .|. b
 
 bitXorNix
   :: forall e t f m
@@ -848,7 +845,7 @@ bitXorNix x y =
     a <- fromValue @Integer x
     b <- fromValue @Integer y
 
-    toValue (a `xor` b)
+    toValue $ a `xor` b
 
 builtinsBuiltinNix
   :: forall e t f m
@@ -869,9 +866,8 @@ dirOfNix nvdir =
 -- jww (2018-04-28): This should only be a string argument, and not coerced?
 unsafeDiscardStringContextNix
   :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-unsafeDiscardStringContextNix mnv = do
-  ns <- fromValue mnv
-  toValue $ makeNixStringWithoutContext $ stringIgnoreContext ns
+unsafeDiscardStringContextNix =
+  inHask (makeNixStringWithoutContext . stringIgnoreContext)
 
 -- | Evaluate `a` to WHNF to collect its topmost effect.
 seqNix
@@ -895,15 +891,19 @@ elemNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-elemNix x = toValue <=< anyMNix (valueEqM x) <=< fromValue
+elemNix x = inHaskM (anyMNix $ valueEqM x)
  where
   anyMNix :: Monad m => (a -> m Bool) -> [a] -> m Bool
-  anyMNix _ []       = pure False
-  anyMNix p (x : xs) =
-    bool
-      (anyMNix p xs)
-      (pure True)
-      =<< p x
+  anyMNix p xs =
+    list
+      (pure False)
+      (\ (x : xss) ->
+        bool
+          (anyMNix p xss)
+          (pure True)
+          =<< p x
+      )
+      xs
 
 elemAtNix
   :: MonadNix e t f m
@@ -1278,19 +1278,15 @@ scopedImportNix asetArg pathArg =
 
 getEnvNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 getEnvNix v =
-  do
-    s <- fromStringNoContext =<< fromValue v
-    mres <- getEnvVar s
-
-    toValue $ makeNixStringWithoutContext $
-      fromMaybe mempty mres
+  (toValue . makeNixStringWithoutContext . fromMaybe mempty) =<< getEnvVar =<< fromStringNoContext =<< fromValue v
 
 sortNix
   :: MonadNix e t f m
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-sortNix comp = toValue <=< sortByM (cmp comp) <=< fromValue
+sortNix comp =
+  inHaskM (sortByM $ cmp comp)
  where
   cmp f a b =
     do
@@ -1337,10 +1333,11 @@ concatWith
   -> NValue t f m
   -> m (NValue t f m)
 concatWith f =
-  toValue . concat <=<
-    traverse
-      (fromValue @[NValue t f m] <=< f)
-      <=< fromValue @[NValue t f m]
+  toValue .
+    concat <=<
+      traverse
+        (fromValue @[NValue t f m] <=< f)
+        <=< fromValue @[NValue t f m]
 
 -- | Nix function of Haskell:
 -- > concat :: [[a]] -> [a]

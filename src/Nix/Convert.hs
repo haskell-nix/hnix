@@ -50,6 +50,24 @@ Do not add these instances back!
 -}
 
 
+type Convertible e t f m
+  = (Framed e m, MonadDataErrorContext t f m, MonadThunk t m (NValue t f m))
+
+-- | Transform Nix -> Hask. Run function. Convert Hask -> Nix.
+inHask :: forall a1 a2 v b m . (Monad m, FromValue a1 m v, ToValue a2 m b) => (a1 -> a2) -> v -> m b
+inHask f = toValue . f <=< fromValue
+
+inHaskM :: forall a1 a2 v b m . (Monad m, FromValue a1 m v, ToValue a2 m b) => (a1 -> m a2) -> v -> m b
+inHaskM f = toValue <=< f <=< fromValue
+
+-- | Maybe transform Nix -> Hask. Run function. Convert Hask -> Nix.
+inHaskMay :: forall a1 a2 v b m . (Monad m, FromValue a1 m v, ToValue a2 m b) => (Maybe a1 -> a2) -> v -> m b
+inHaskMay f a =
+  do
+    v <- fromValueMay a
+    toValue $ f v
+
+
 -- * FromValue
 
 class FromValue a m v where
@@ -89,9 +107,6 @@ fromMayToDeeperValue t v =
       (throwError $ Expectation @t @f @m t $ Free $ (coerce :: CoerceDeeperToNValue' t f m) v)
       pure
       v'
-
-type Convertible e t f m
-  = (Framed e m, MonadDataErrorContext t f m, MonadThunk t m (NValue t f m))
 
 instance ( Convertible e t f m
          , MonadValue (NValue t f m) m
