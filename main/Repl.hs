@@ -23,7 +23,7 @@ import           Nix.Scope
 import           Nix.Utils
 import           Nix.Value.Monad                ( demand )
 
-import qualified Data.HashMap.Lazy
+import qualified Data.HashMap.Lazy           as M
 import           Data.Char                      ( isSpace )
 import           Data.List                      ( dropWhileEnd )
 import qualified Data.Text                   as Text
@@ -163,7 +163,7 @@ initState mIni = do
 
   let
     scope = coerce $
-      Data.HashMap.Lazy.fromList $
+      M.fromList $
       ("builtins", builtins) : fmap ("input",) (maybeToList mIni)
 
   opts :: Nix.Options <- asks $ view hasLens
@@ -295,7 +295,7 @@ browse _ =
           liftIO $ Text.putStr $ coerce k <> " = "
           printValue v
       )
-      (Data.HashMap.Lazy.toList $ coerce $ replCtx state)
+      (M.toList $ coerce $ replCtx state)
 
 -- | @:load@ command
 load
@@ -323,7 +323,7 @@ typeof args = do
     maybe
       (exec False line)
       (pure . pure)
-      (Data.HashMap.Lazy.lookup (coerce line) (coerce $ replCtx state))
+      (M.lookup (coerce line) (coerce $ replCtx state))
 
   traverse_ printValueType mVal
 
@@ -408,15 +408,15 @@ completeFunc reversedPrev word
                     candidates
                   )
         )
-        (Data.HashMap.Lazy.lookup (coerce var) (coerce $ replCtx state))
+        (M.lookup (coerce var) (coerce $ replCtx state))
 
   -- Builtins, context variables
   | otherwise =
     do
       state <- get
-      let contextKeys = Data.HashMap.Lazy.keys @VarName @(NValue t f m) (coerce $ replCtx state)
-          (Just (NVSet _ builtins)) = Data.HashMap.Lazy.lookup "builtins" (coerce $ replCtx state)
-          shortBuiltins = Data.HashMap.Lazy.keys builtins
+      let contextKeys = M.keys @VarName @(NValue t f m) (coerce $ replCtx state)
+          (Just (NVSet _ builtins)) = M.lookup "builtins" (coerce $ replCtx state)
+          shortBuiltins = M.keys builtins
 
       pure $ listCompletion $ toString <$>
         ["__includes"]
@@ -435,7 +435,7 @@ completeFunc reversedPrev word
       -> m [Text]
     algebraicComplete subFields val =
       let
-        keys = fmap ("." <>) . Data.HashMap.Lazy.keys
+        keys = fmap ("." <>) . M.keys
 
         withMap m =
           case subFields of
@@ -449,10 +449,10 @@ completeFunc reversedPrev word
                    (("." <> f) <>)
                    . algebraicComplete fs <=< demand
                 )
-                (Data.HashMap.Lazy.lookup (coerce f) m)
+                (M.lookup (coerce f) m)
       in
       case val of
-        NVSet _ xs -> withMap (Data.HashMap.Lazy.mapKeys coerce xs)
+        NVSet _ xs -> withMap (M.mapKeys coerce xs)
         _          -> stub
 
 -- | HelpOption inspired by Dhall Repl
