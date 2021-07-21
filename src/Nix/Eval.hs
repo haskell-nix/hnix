@@ -2,6 +2,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns #-}
 
 
 
@@ -161,7 +162,7 @@ eval (NSet Recursive binds) =
 eval (NLet binds body    ) =
   do
     (attrSet, _) <- evalBinds True binds
-    pushScope attrSet body
+    pushScope (coerce attrSet) body
 
 eval (NIf cond t f       ) =
   do
@@ -180,9 +181,9 @@ eval (NAbs    params body) = do
   -- needs to be used when evaluating the body and default arguments, hence we
   -- defer here so the present scope is restored when the parameters and body
   -- are forced during application.
-  scope <- currentScopes :: m (Scopes m v)
+  scopes <- currentScopes
   let
-    withScope = withScopes scope
+    withScope = withScopes scopes
     withScopeInform = withScope . inform
 
   evalAbs
@@ -190,11 +191,11 @@ eval (NAbs    params body) = do
     (\arg k ->
       withScope $
         do
-          args <- buildArgument params arg
+          (coerce -> scope) <- buildArgument params arg
           pushScope
-            args $
+            scope $
             k
-              (withScopeInform <$> args)
+              (withScopeInform <$> coerce scope)
               body
     )
 
@@ -204,15 +205,15 @@ eval (NSynHole name) = synHole name
 --   this implementation may be used as an implementation for 'evalWith'.
 evalWithAttrSet :: forall v m . MonadNixEval v m => m v -> m v -> m v
 evalWithAttrSet aset body = do
-  scope <- currentScopes :: m (Scopes m v)
+  scopes <- currentScopes :: m (Scopes m v)
   -- The scope is deliberately wrapped in a thunk here, since it is demanded
   -- each time a name is looked up within the weak scope, and we want to be
   -- sure the action it evaluates is to force a thunk, so its value is only
   -- computed once.
-  deferredAset <- defer $ withScopes scope aset
-  let attrSet = fst <$> (fromValue @(AttrSet v, PositionSet) =<< demand deferredAset)
+  deferredAset <- defer $ withScopes scopes aset
+  let weakscope = coerce . fst <$> (fromValue @(AttrSet v, PositionSet) =<< demand deferredAset)
 
-  pushWeakScope attrSet body
+  pushWeakScope weakscope body
 
 attrSetAlter
   :: forall v m
@@ -292,8 +293,10 @@ desugarBinds embed binds = evalState (traverse (go <=< collect) binds) mempty
 evalBinds
   :: forall v m
    . MonadNixEval v m
+--  2021-07-19: NOTE: Recutsivity data type
   => Bool
   -> [Binding (m v)]
+--  2021-07-19: NOTE: AttrSet is a Scope
   -> m (AttrSet v, PositionSet)
 evalBinds recursive binds =
   do
@@ -306,21 +309,21 @@ evalBinds recursive binds =
     :: Scopes m v
     -> [([VarName], SourcePos, m v)]
     -> m (AttrSet v, PositionSet)
-  buildResult scope bindings =
+  buildResult scopes bindings =
     do
-      (s, p) <- foldM insert (mempty, mempty) bindings
+      (coerce -> scope, p) <- foldM insert (mempty, mempty) bindings
       res <-
         bool
-          (traverse mkThunk s)
-          (loebM $ encapsulate <$> s)
+          (traverse mkThunk scope)
+          (loebM $ encapsulate <$> scope)
           recursive
 
-      pure (res, p)
+      pure (coerce res, p)
 
    where
     insert (m, p) (path, pos, value) = attrSetAlter path pos m p value
 
-    mkThunk = defer . withScopes scope
+    mkThunk = defer . withScopes scopes
 
     encapsulate f attrs = mkThunk $ pushScope attrs f
 
@@ -365,37 +368,28 @@ evalBinds recursive binds =
         )
         =<< evalSetterKeyName h
 
-  applyBindToAdt scope (Inherit ms names pos) =
-    catMaybes <$>
-      traverse
-        processScope
-        names
+  applyBindToAdt scopes (Inherit ms names pos) =
+    pure $ processScope <$> names
    where
     processScope
-      :: NKeyName (m v)
-      -> m (Maybe ([VarName], SourcePos, m v))
-    processScope nkeyname =
-      (\ mkey ->
-        do
-          key <- mkey
-          pure
-            ([key]
-            , pos
-            , maybe
-                (attrMissing (key :| mempty) Nothing)
-                demand
-                =<< maybe
-                    (withScopes scope $ lookupVar key)
-                    (\ s ->
-                      do
-                        (attrset, _) <- fromValue @(AttrSet v, PositionSet) =<< s
+      :: VarName
+      -> ([VarName], SourcePos, m v)
+    processScope var =
+      ([var]
+      , pos
+      , maybe
+          (attrMissing (var :| mempty) Nothing)
+          demand
+          =<< maybe
+              (withScopes scopes $ lookupVar var)
+              (\ s ->
+                do
+                  (coerce -> scope, _) <- fromValue @(AttrSet v, PositionSet) =<< s
 
-                        clearScopes @v $ pushScope attrset $ lookupVar key
-                    )
-                    ms
-            )
-      ) <$>
-        evalSetterKeyName nkeyname
+                  clearScopes @v $ pushScope scope $ lookupVar var
+              )
+              ms
+      )
 
   moveOverridesLast = uncurry (<>) . partition
     (\case
@@ -484,7 +478,7 @@ buildArgument params arg =
     let argThunk = defer $ withScopes scope arg
     case params of
       Param name -> M.singleton name <$> argThunk
-      ParamSet s isVariadic m ->
+      ParamSet mname variadic pset ->
         do
           (args, _) <- fromValue @(AttrSet v, PositionSet) =<< arg
           let
@@ -492,30 +486,30 @@ buildArgument params arg =
               maybe
                 id
                 (\ n -> M.insert n $ const argThunk) -- why insert into const?
-                m
+                mname
           loebM
             (inject $
                 M.mapMaybe
                   id
                   (ialignWith
-                    (assemble scope isVariadic)
+                    (assemble scope variadic)
                     args
-                    $ M.fromList s
+                    $ M.fromList pset
                   )
             )
  where
   assemble
     :: Scopes m v
-    -> Bool
+    -> Variadic
     -> VarName
     -> These v (Maybe (m v))
     -> Maybe (AttrSet v -> m v)
-  assemble scope isVariadic k =
+  assemble scope variadic k =
     \case
       That Nothing -> pure $ const $ evalError @v $ ErrorCall $ "Missing value for parameter: ''" <> show k
-      That (Just f) -> pure $ \args -> defer $ withScopes scope $ pushScope args f
+      That (Just f) -> pure $ coerce $ \args -> defer $ withScopes scope $ pushScope args f
       This _
-        | isVariadic -> Nothing
+        | variadic == Variadic -> Nothing
         | otherwise  -> pure $ const $ evalError @v $ ErrorCall $ "Unexpected parameter: " <> show k
       These x _ -> pure $ const $ pure x
 

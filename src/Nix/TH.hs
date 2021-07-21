@@ -71,15 +71,15 @@ freeVars e = case unFix e of
       ]
   (NHasAttr expr            path) -> freeVars expr <> pathFree path
   (NAbs     (Param varname) expr) -> Set.delete varname (freeVars expr)
-  (NAbs (ParamSet set _ varname) expr) ->
+  (NAbs (ParamSet varname _ pset) expr) ->
     -- Include all free variables from the expression and the default arguments
     freeVars expr <>
     -- But remove the argument name if existing, and all arguments in the parameter set
     Set.difference
-      (Set.unions $ freeVars <$> mapMaybe snd set)
+      (Set.unions $ freeVars <$> mapMaybe snd pset)
       (Set.difference
         (maybe mempty one varname)
-        (Set.fromList $ fst <$> set)
+        (Set.fromList $ fst <$> pset)
       )
   (NLet         bindings expr   ) ->
     freeVars expr <>
@@ -104,7 +104,7 @@ freeVars e = case unFix e of
    where
     bind1Def :: Binding r -> Set VarName
     bind1Def (Inherit   Nothing                  _    _) = mempty
-    bind1Def (Inherit  (Just _                 ) keys _) = Set.fromList $ mapMaybe staticKey keys
+    bind1Def (Inherit  (Just _                 ) keys _) = Set.fromList keys
     bind1Def (NamedVar (StaticKey  varname :| _) _    _) = one varname
     bind1Def (NamedVar (DynamicKey _       :| _) _    _) = mempty
 
@@ -112,13 +112,9 @@ freeVars e = case unFix e of
   bindFreeVars = foldMap bind1Free
    where
     bind1Free :: Binding NExpr -> Set VarName
-    bind1Free (Inherit  Nothing     keys _) = Set.fromList $ mapMaybe staticKey keys
+    bind1Free (Inherit  Nothing     keys _) = Set.fromList keys
     bind1Free (Inherit (Just scope) _    _) = freeVars scope
     bind1Free (NamedVar path        expr _) = pathFree path <> freeVars expr
-
-  staticKey :: NKeyName r -> Maybe VarName
-  staticKey (StaticKey  varname) = pure varname
-  staticKey (DynamicKey _      ) = Nothing
 
   pathFree :: NAttrPath NExpr -> Set VarName
   pathFree = foldMap mapFreeVars

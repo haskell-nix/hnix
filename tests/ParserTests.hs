@@ -185,7 +185,7 @@ case_set_inherit =
   checks
     ( mkNonRecSet
         [ "e" $= mkInt 3
-        , inherit (StaticKey <$> ["a", "b"])
+        , inherit ["a", "b"]
         ]
     , "{ e = 3; inherit a b; }"
     )
@@ -197,7 +197,7 @@ case_set_scoped_inherit =
   checks
     ( mkNonRecSet $
         (\ x -> [x, "e" $= mkInt 4, x]) $
-          inheritFrom (var "a") (StaticKey <$> ["b", "c"])
+          inheritFrom (var "a") ["b", "c"]
     , "{ inherit (a) b c; e = 4; inherit(a)b c; }"
     )
 
@@ -207,15 +207,14 @@ case_set_inherit_direct =
     , "{ inherit ({a = 3;}); }"
     )
 
-case_inherit_selector =
-  checks
-    ( mkNonRecSet [inherit [DynamicKey (Plain (DoubleQuoted [Plain "a"]))]]
-    , "{ inherit \"a\"; }"
-    )
-
 case_inherit_selector_syntax_mistakes =
   mistakes
     "{ inherit a.x; }"
+    ( -- A rare quirk of Nix that is proper to fix then to support (see git commit history)
+      -- (old parser test result was):
+      -- mkNonRecSet [inherit [DynamicKey (Plain (DoubleQuoted [Plain "a"]))]],
+      "{ inherit \"a\"; }"
+    )
 
 
 -- ** Lists
@@ -286,28 +285,26 @@ case_lambda_or_uri_syntax_mistakes =
 
 case_lambda_pattern =
   checks
-    ( mkFunction (fixed args Nothing) $ var "b"
+    ( mkFunction (mkParamSet args) $ var "b"
     , "{b, c ? 1}: b"
     -- Fix (NAbs (ParamSet [("b",Nothing),("c",Just (Fix (NConstant (NInt 1))))] False Nothing) (Fix (NSym "b")))
     )
-    ( mkFunction (fixed args2 Nothing) $ var "b"
+    ( mkFunction (mkParamSet args2) $ var "b"
     , "{ b ? x: x  }: b"
     )
-    ( mkFunction (fixed args $ pure "a") $ var "b"
+    ( mkFunction (mkNamedParamSet "a" args) $ var "b"
     , "a@{b,c ? 1}: b"
     )
-    ( mkFunction (fixed args $ pure "a") $ var "c"
+    ( mkFunction (mkNamedParamSet "a" args) $ var "c"
     , "{b,c?1}@a: c"
     )
-    ( mkFunction (variadic vargs $ pure "a") $ var "c"
+    ( mkFunction (mkNamedVariadicParamSet "a" vargs) $ var "c"
     , "{b,c?1,...}@a: c"
     )
-    ( mkFunction (variadic mempty Nothing) $ mkInt 1
+    ( mkFunction (mkVariadicParamSet mempty) $ mkInt 1
     , "{...}: 1"
     )
  where
-  fixed    args = ParamSet args False
-  variadic args = ParamSet args True
   args  = [("b", Nothing), ("c", pure $ mkInt 1)]
   vargs = [("b", Nothing), ("c", pure $ mkInt 1)]
   args2 = [("b", pure lam)]
@@ -358,7 +355,7 @@ case_let_scoped_inherit =
   checks
     ( mkLets
         [ "a" $= mkNull
-        , inheritFrom (var "b") [StaticKey "c"]
+        , inheritFrom (var "b") $ one "c"
         ]
         $ var "c"
     , "let a = null; inherit (b) c; in c"

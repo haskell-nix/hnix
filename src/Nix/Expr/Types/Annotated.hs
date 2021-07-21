@@ -44,10 +44,10 @@ import           Text.Show.Deriving
 
 -- | Demarcation of a chunk in a source file.
 data SrcSpan = SrcSpan
-    { spanBegin :: SourcePos
-    , spanEnd   :: SourcePos
-    }
-    deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData, Hashable)
+  { spanBegin :: SourcePos
+  , spanEnd   :: SourcePos
+  }
+  deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData, Hashable)
 
 -- ** Instances
 

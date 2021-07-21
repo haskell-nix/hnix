@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Nix.XML
   ( toXML )
@@ -103,10 +104,14 @@ mkEName = (`mkElem` "name")
 
 paramsXML :: Params r -> [Content]
 paramsXML (Param name) = [Elem $ mkEName "varpat" (toString name)]
-paramsXML (ParamSet s b mname) =
-  [Elem $ Element (unqual "attrspat") (battr <> nattr) (paramSetXML s) Nothing]
+paramsXML (ParamSet mname variadic pset) =
+  [Elem $ Element (unqual "attrspat") (battr <> nattr) (paramSetXML pset) Nothing]
  where
-  battr = [ Attr (unqual "ellipsis") "1" | b ]
+  battr =
+    bool
+      mempty
+      [ Attr (unqual "ellipsis") "1" ]
+      (variadic == Variadic)
   nattr =
     maybe
       mempty

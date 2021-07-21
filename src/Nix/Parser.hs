@@ -400,34 +400,34 @@ argExpr =
   atLeft =
     try $
       do
-        name               <- identifier <* symbol "@"
-        (params, variadic) <- params
-        pure $ ParamSet params variadic $ pure name
+        name             <- identifier <* symbol "@"
+        (pset, variadic) <- params
+        pure $ ParamSet (pure name) variadic pset
 
   -- Parameters named by an identifier on the right, or none (`{x, y} @ args`)
   atRight =
     do
-      (params, variadic) <- params
-      name               <- optional $ symbol "@" *> identifier
-      pure $ ParamSet params variadic name
+      (pset, variadic) <- params
+      name             <- optional $ symbol "@" *> identifier
+      pure $ ParamSet name variadic pset
 
   -- Return the parameters set.
   params = braces getParams
 
   -- Collects the parameters within curly braces. Returns the parameters and
-  -- a boolean indicating if the parameters are variadic.
-  getParams :: Parser (ParamSet NExprLoc, Bool)
+  -- an flag indication if the parameters are variadic.
   getParams = go mempty
    where
     -- Attempt to parse `...`. If this succeeds, stop and return True.
     -- Otherwise, attempt to parse an argument, optionally with a
     -- default. If this fails, then return what has been accumulated
     -- so far.
-    go acc = ((acc, True) <$ symbol "...") <+> getMore
+    go acc = ((acc, Variadic) <$ symbol "...") <+> getMore
      where
+      getMore :: ParsecT  Void Text (State SourcePos) ([(VarName, Maybe NExprLoc)], Variadic)
       getMore =
         -- Could be nothing, in which just return what we have so far.
-        option (acc, False) $
+        option (acc, Closed) $
           do
             -- Get an argument name and an optional default.
             pair <-
@@ -438,7 +438,7 @@ argExpr =
             let args = acc <> [pair]
 
             -- Either return this, or attempt to get a comma and restart.
-            option (args, False) $ comma *> go args
+            option (args, Closed) $ comma *> go args
 
 nixBinders :: Parser [Binding NExprLoc]
 nixBinders = (inherit <+> namedVar) `endBy` semi where
@@ -450,7 +450,7 @@ nixBinders = (inherit <+> namedVar) `endBy` semi where
       p <- getSourcePos
       x <- whiteSpace *> optional scope
       liftA2 (Inherit x)
-        (many keyName)
+        (many identifier)
         (pure p)
         <?> "inherited binding"
   namedVar =

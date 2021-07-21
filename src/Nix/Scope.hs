@@ -12,14 +12,21 @@ import           Lens.Family2
 import           Nix.Utils
 import           Nix.Expr.Types
 
-newtype Scope a = Scope { getScope :: AttrSet a }
-  deriving (Functor, Foldable, Traversable, Eq)
+--  2021-07-19: NOTE: Scopes can gain from sequentiality, HashMap (aka AttrSet) may not be proper to it.
+newtype Scope a = Scope (AttrSet a)
+  deriving
+    ( Eq, Ord, Generic
+    , Typeable, NFData
+    , Read, Hashable
+    , Semigroup, Monoid
+    , Functor, Foldable, Traversable
+    )
 
 instance Show (Scope a) where
   show (Scope m) = show $ M.keys m
 
 newScope :: AttrSet a -> Scope a
-newScope = Scope
+newScope = coerce
 
 scopeLookup :: VarName -> [Scope a] -> Maybe a
 scopeLookup key = foldr go Nothing
@@ -46,7 +53,7 @@ instance Semigroup (Scopes m a) where
 instance Monoid (Scopes m a) where
   mempty = emptyScopes
 
-emptyScopes :: forall m a . Scopes m a
+emptyScopes :: Scopes m a
 emptyScopes = Scopes mempty mempty
 
 class Scoped a m | m -> a where
@@ -74,19 +81,19 @@ clearScopesReader = local $ set hasLens $ emptyScopes @m @a
 
 pushScope
   :: Scoped a m
-  => AttrSet a
+  => Scope a
   -> m r
   -> m r
-pushScope s = pushScopes $ Scopes [Scope s] mempty
+pushScope scope = pushScopes $ Scopes [scope] mempty
 
 pushWeakScope
   :: ( Functor m
      , Scoped a m
      )
-  => m (AttrSet a)
+  => m (Scope a)
   -> m r
   -> m r
-pushWeakScope s = pushScopes $ Scopes mempty [Scope <$> s]
+pushWeakScope scope = pushScopes $ Scopes mempty [scope]
 
 pushScopesReader
   :: ( MonadReader e m
@@ -113,9 +120,9 @@ lookupVarReader k =
         ws <- asks $ dynamicScopes . view hasLens
 
         foldr
-          (\ x rest ->
+          (\ weakscope rest ->
             do
-              mres' <- M.lookup k . getScope <$> x
+              mres' <- M.lookup k . coerce @(Scope a) <$> weakscope
 
               maybe
                 rest
@@ -133,4 +140,4 @@ withScopes
   => Scopes m a
   -> m r
   -> m r
-withScopes scope = clearScopes . pushScopes scope
+withScopes scopes = clearScopes . pushScopes scopes

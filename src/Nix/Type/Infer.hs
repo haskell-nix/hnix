@@ -9,6 +9,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Nix.Type.Infer
   ( Constraint(..)
@@ -59,9 +60,7 @@ import           Nix.Expr.Types
 import           Nix.Fresh
 import           Nix.String
 import           Nix.Scope
-import           Nix.Type.Assumption     hiding ( assumptions
-                                                , extend
-                                                )
+import           Nix.Type.Assumption     hiding ( extend )
 import qualified Nix.Type.Assumption           as Assumption
                                                 ( remove
                                                 , lookup
@@ -150,12 +149,20 @@ instance Monoid InferError where
 
 -- * @InferState@: inference state
 
--- | Inference state
-newtype InferState = InferState { count :: Int }
+-- | Inference state (stage).
+newtype InferState = InferState Int
+ deriving
+  (Eq, Num, Enum, Ord)
+
+instance Semigroup InferState where
+  (<>) a b = a + b
+
+instance Monoid InferState where
+  mempty = 0
 
 -- | Initial inference state
 initInfer :: InferState
-initInfer = InferState { count = 0 }
+initInfer = InferState 0
 
 letters :: [String]
 letters =
@@ -169,8 +176,8 @@ freshTVar :: MonadState InferState m => m TVar
 freshTVar =
   do
     s <- get
-    put s { count = count s + 1 }
-    pure $ TV $ toText $ letters !! count s
+    put $ succ s
+    pure $ TV $ toText $ letters !! coerce s
 
 fresh :: MonadState InferState m => m Type
 fresh = TVar <$> freshTVar
@@ -356,7 +363,7 @@ instance MonadInfer m
       Judgment
       (foldrM go mempty xs)
       (fun concat      typeConstraints)
-      (fun (TSet True) inferredType   )
+      (fun (TSet Variadic) inferredType)
    where
     go x rest =
       do
@@ -473,7 +480,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
       Judgment
         mempty
         mempty
-        (TSet False $
+        (TSet Closed $
           M.fromList
             [ ("file", typePath)
             , ("line", typeInt )
@@ -564,7 +571,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
         (cs <> [ EqConst t' tv | t' <- Assumption.lookup x as ])
         (tv :~> t)
 
-  evalAbs (ParamSet ps variadic _mname) k = do
+  evalAbs (ParamSet _mname variadic pset) k = do
     js <-
       concat <$>
         traverse
@@ -573,12 +580,12 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
               tv <- fresh
               pure [(name, tv)]
           )
-          ps
+          pset
 
     let
       f (as1, t1) (k, t) = (as1 <> one (k, t), M.insert k t t1)
       (env, tys) = foldl' f (mempty, mempty) js
-      arg   = pure $ Judgment env mempty $ TSet True tys
+      arg   = pure $ Judgment env mempty $ TSet Variadic tys
       call  = k arg $ \args b -> (args, ) <$> b
       names = fst <$> js
 
@@ -826,13 +833,10 @@ unifies (TList xs) (TList ys)
 -- Putting a statement that lists of different lengths containing various types would not
 -- be unified.
 unifies t1@(TList _    ) t2@(TList _    ) = throwError $ UnificationFail t1 t2
-unifies (   TSet True _) (   TSet True _) = stub
-unifies (TSet False b) (TSet True s)
-  | M.keys b `intersect` M.keys s == M.keys s = stub
-unifies (TSet True s) (TSet False b)
-  | M.keys b `intersect` M.keys s == M.keys b = stub
-unifies (TSet False s) (TSet False b)
-  | null (M.keys b \\ M.keys s) = stub
+unifies (TSet Variadic _) (TSet Variadic _)                                             = stub
+unifies (TSet Closed   b) (TSet Variadic s) | M.keys b `intersect` M.keys s == M.keys s = stub
+unifies (TSet Variadic s) (TSet Closed   b) | M.keys b `intersect` M.keys s == M.keys b = stub
+unifies (TSet Closed   s) (TSet Closed   b) | null (M.keys b \\ M.keys s)               = stub
 unifies (t1 :~> t2) (t3 :~> t4) = unifyMany [t1, t2] [t3, t4]
 unifies (TMany t1s) t2          = considering t1s >>- (`unifies` t2)
 unifies t1          (TMany t2s) = considering t2s >>- unifies t1

@@ -9,6 +9,7 @@
 
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Repl
   ( main
@@ -22,7 +23,7 @@ import           Nix.Scope
 import           Nix.Utils
 import           Nix.Value.Monad                ( demand )
 
-import qualified Data.HashMap.Lazy
+import qualified Data.HashMap.Lazy           as M
 import           Data.Char                      ( isSpace )
 import           Data.List                      ( dropWhileEnd )
 import qualified Data.Text                   as Text
@@ -55,6 +56,7 @@ import           System.Console.Repline         ( Cmd
 import qualified System.Console.Repline      as Console
 import qualified System.Exit                 as Exit
 import qualified System.IO.Error             as Error
+import Prelude hiding (state)
 
 -- | Repl entry point
 main :: (MonadNix e t f m, MonadIO m, MonadMask m) =>  m ()
@@ -136,7 +138,7 @@ main' iniVal =
 
 data IState t f m = IState
   { replIt  :: Maybe NExprLoc          -- ^ Last expression entered
-  , replCtx :: AttrSet (NValue t f m)  -- ^ Value environment
+  , replCtx :: Scope (NValue t f m)  -- ^ Scope. Value environment.
   , replCfg :: ReplConfig              -- ^ REPL configuration
   } deriving (Eq, Show)
 
@@ -159,14 +161,17 @@ initState mIni = do
 
   builtins <- evalText "builtins"
 
-  opts :: Nix.Options <- asks (view hasLens)
+  let
+    scope = coerce $
+      M.fromList $
+      ("builtins", builtins) : fmap ("input",) (maybeToList mIni)
+
+  opts :: Nix.Options <- asks $ view hasLens
 
   pure $
     IState
       Nothing
-      (Data.HashMap.Lazy.fromList $
-        ("builtins", builtins) : fmap ("input",) (maybeToList mIni)
-      )
+      scope
       defReplConfig
         { cfgStrict = strict opts
         , cfgValues = values opts
@@ -192,9 +197,9 @@ exec
   -> Repl e t f m (Maybe (NValue t f m))
 exec update source = do
   -- Get the current interpreter state
-  st <- get
+  state <- get
 
-  when (cfgDebug $ replCfg st) $ liftIO $ print st
+  when (cfgDebug $ replCfg state) $ liftIO $ print state
 
   -- Parser ( returns AST as `NExprLoc` )
   case parseExprOrBinding source of
@@ -211,7 +216,7 @@ exec update source = do
       -- let tyctx' = inferTop mempty [("repl", stripAnnotation expr)]
       -- liftIO $ print tyctx'
 
-      mVal <- lift $ lift $ try $ pushScope (replCtx st) (evalExprLoc expr)
+      mVal <- lift $ lift $ try $ pushScope (replCtx state) (evalExprLoc expr)
 
       either
         (\ (NixException frames) -> do
@@ -221,11 +226,11 @@ exec update source = do
           -- Update the interpreter state
           when (update && isBinding) $ do
             -- Set `replIt` to last entered expression
-            put st { replIt = pure expr }
+            put state { replIt = pure expr }
 
             -- If the result value is a set, update our context with it
             case val of
-              NVSet _ xs -> put st { replCtx = xs <> replCtx st }
+              NVSet _ (coerce -> scope) -> put state { replCtx = scope <> replCtx state }
               _          -> pass
 
           pure $ pure val
@@ -283,14 +288,14 @@ browse :: (MonadNix e t f m, MonadIO m)
        -> Repl e t f m ()
 browse _ =
   do
-    st <- get
+    state <- get
     traverse_
       (\(k, v) ->
         do
           liftIO $ Text.putStr $ coerce k <> " = "
           printValue v
       )
-      (Data.HashMap.Lazy.toList $ replCtx st)
+      (M.toList $ coerce $ replCtx state)
 
 -- | @:load@ command
 load
@@ -313,12 +318,12 @@ typeof
   => Text
   -> Repl e t f m ()
 typeof args = do
-  st <- get
+  state <- get
   mVal <-
     maybe
       (exec False line)
       (pure . pure)
-      (Data.HashMap.Lazy.lookup (coerce line) (replCtx st))
+      (M.lookup (coerce line) (coerce $ replCtx state))
 
   traverse_ printValueType mVal
 
@@ -390,7 +395,7 @@ completeFunc reversedPrev word
   -- Attributes of sets in REPL context
   | var : subFields <- Text.split (== '.') (toText word) , not $ null subFields =
     do
-      s <- get
+      state <- get
       maybe
         stub
         (\ binding ->
@@ -403,15 +408,15 @@ completeFunc reversedPrev word
                     candidates
                   )
         )
-        (Data.HashMap.Lazy.lookup (coerce var) (replCtx s))
+        (M.lookup (coerce var) (coerce $ replCtx state))
 
   -- Builtins, context variables
   | otherwise =
     do
-      s <- get
-      let contextKeys = Data.HashMap.Lazy.keys (replCtx s)
-          (Just (NVSet _ builtins)) = Data.HashMap.Lazy.lookup "builtins" (replCtx s)
-          shortBuiltins = Data.HashMap.Lazy.keys builtins
+      state <- get
+      let contextKeys = M.keys @VarName @(NValue t f m) (coerce $ replCtx state)
+          (Just (NVSet _ builtins)) = M.lookup "builtins" (coerce $ replCtx state)
+          shortBuiltins = M.keys builtins
 
       pure $ listCompletion $ toString <$>
         ["__includes"]
@@ -430,7 +435,7 @@ completeFunc reversedPrev word
       -> m [Text]
     algebraicComplete subFields val =
       let
-        keys = fmap ("." <>) . Data.HashMap.Lazy.keys
+        keys = fmap ("." <>) . M.keys
 
         withMap m =
           case subFields of
@@ -444,10 +449,10 @@ completeFunc reversedPrev word
                    (("." <> f) <>)
                    . algebraicComplete fs <=< demand
                 )
-                (Data.HashMap.Lazy.lookup (coerce f) m)
+                (M.lookup (coerce f) m)
       in
       case val of
-        NVSet _ xs -> withMap (Data.HashMap.Lazy.mapKeys coerce xs)
+        NVSet _ xs -> withMap (M.mapKeys coerce xs)
         _          -> stub
 
 -- | HelpOption inspired by Dhall Repl

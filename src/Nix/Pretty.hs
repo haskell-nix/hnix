@@ -133,38 +133,38 @@ prettyVarName = pretty @Text . coerce
 
 prettyParams :: Params (NixDoc ann) -> Doc ann
 prettyParams (Param n           ) = prettyVarName n
-prettyParams (ParamSet s v mname) = prettyParamSet s v <>
-  maybe
-    mempty
-    (\ (coerce -> name) ->
-       bool
-         mempty
-         ("@" <> pretty name)
-         (not (Text.null name))
-    )
-    mname
+prettyParams (ParamSet mname variadic pset) =
+  prettyParamSet variadic pset <>
+    maybe
+      mempty
+      (\ (coerce -> name) ->
+        bool
+          mempty
+          ("@" <> pretty name)
+          (not (Text.null name))
+      )
+      mname
 
-prettyParamSet :: ParamSet (NixDoc ann) -> Bool -> Doc ann
-prettyParamSet args var =
+prettyParamSet :: Variadic -> ParamSet (NixDoc ann) -> Doc ann
+prettyParamSet variadic args =
   encloseSep
     "{ "
     (align " }")
     sep
-    (fmap prettySetArg args <> prettyVariadic)
+    (fmap prettySetArg args <> bool mempty ["..."] (variadic == Variadic))
  where
   prettySetArg (n, maybeDef) =
     maybe
       (prettyVarName n)
       (\x -> prettyVarName n <> " ? " <> withoutParens x)
       maybeDef
-  prettyVariadic = [ "..." | var ]
   sep            = align ", "
 
 prettyBind :: Binding (NixDoc ann) -> Doc ann
 prettyBind (NamedVar n v _p) =
   prettySelector n <> " = " <> withoutParens v <> ";"
 prettyBind (Inherit s ns _p) =
-  "inherit " <> scope <> align (fillSep $ prettyKeyName <$> ns) <> ";"
+  "inherit " <> scope <> align (fillSep $ prettyVarName <$> ns) <> ";"
   where
     scope =
       maybe

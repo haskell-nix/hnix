@@ -58,7 +58,7 @@ genBinding = Gen.choice
       genSourcePos
   , liftA3 Inherit
       (Gen.maybe genExpr)
-      (Gen.list (Range.linear 0 5) genKeyName)
+      (Gen.list (Range.linear 0 5) (coerce <$> asciiText))
       genSourcePos
   ]
 
@@ -82,10 +82,10 @@ genAttrPath =
 genParams :: Gen (Params NExpr)
 genParams = Gen.choice
   [ Param . coerce <$> asciiText
-  , liftA3 (\ a b c -> ParamSet (coerce a) b (coerce <$> c))
-      (Gen.list (Range.linear 0 10) (liftA2 (,) asciiText $ Gen.maybe genExpr))
+  , liftA3 (\ a b c -> ParamSet (pure $ coerce c) (bool Closed Variadic b) (coerce a))
+      (Gen.list (Range.linear 0 10) $ liftA2 (,) asciiText $ Gen.maybe genExpr)
       Gen.bool
-      (Gen.choice [stub, pure <$> asciiText])
+      (Gen.choice [stub, asciiText])
   ]
 
 genAtom :: Gen NAtom
@@ -170,7 +170,7 @@ normalize = foldFix $ \case
 
  where
   normBinding (NamedVar path r     pos) = NamedVar (normKey <$> path) r pos
-  normBinding (Inherit  mr   names pos) = Inherit mr (normKey <$> names) pos
+  normBinding (Inherit  mr   names pos) = Inherit mr names pos
 
   normKey (DynamicKey quoted) = DynamicKey (normAntiquotedString quoted)
   normKey (StaticKey  name  ) = StaticKey name
@@ -193,7 +193,7 @@ normalize = foldFix $ \case
   normAntiquotedText (Plain "''\n") = EscapedNewline
   normAntiquotedText r              = r
 
-  normParams (ParamSet binds var (Just "")) = ParamSet binds var (coerce @Text <$> mempty)
+  normParams (ParamSet (Just "") variadic pset) = ParamSet Nothing variadic pset
   normParams r                              = r
 
 -- | Test that parse . pretty == id up to attribute position information.

@@ -5,7 +5,7 @@ module Nix.Type.Type where
 
 import           Prelude                 hiding ( Type, TVar )
 import           Data.Foldable                  ( foldr1 )
-import           Nix.Expr.Types                 ( AttrSet )
+import           Nix.Expr.Types
 
 -- | Hindrey-Milner type interface
 
@@ -17,7 +17,7 @@ newtype TVar = TV Text
 data Type
   = TVar TVar                -- ^ Type variable in the Nix type system.
   | TCon Text                -- ^ Concrete (non-polymorphic, constant) type in the Nix type system.
-  | TSet Bool (AttrSet Type) -- ^ Heterogeneous map in the Nix type system. @True@ -> variadic.
+  | TSet Variadic (AttrSet Type) -- ^ Heterogeneous map in the Nix type system. @True@ -> variadic.
   | TList [Type]             -- ^ Heterogeneous list in the Nix type system.
   | (:~>) Type Type          -- ^ Type arrow (@Type -> Type@) in the Nix type system.
   | TMany [Type]             -- ^ Variant type (term). Since relating to Nix type system, more precicely -
@@ -34,7 +34,7 @@ data Scheme = Forall [TVar] Type -- ^ @Forall [TVar] Type@: the Nix type system 
 
 -- This models a set that unifies with any other set.
 typeSet :: Type
-typeSet = TSet True mempty
+typeSet = TSet Variadic mempty
 
 typeList :: Type
 typeList = TList mempty

@@ -70,6 +70,7 @@ mkSelector :: Text -> NAttrPath NExpr
 mkSelector = (:| mempty) . StaticKey . coerce
 
 -- | Put an unary operator.
+--  @since 0.15.0
 mkOp :: NUnaryOp -> NExpr -> NExpr
 mkOp op = Fix . NUnary op
 
@@ -80,19 +81,53 @@ mkNot = mkOp NNot
 -- | Number negation: @-@.
 --
 -- Negation in the language works with integers and floating point.
+--  @since 0.15.0
 mkNeg :: NExpr -> NExpr
 mkNeg = mkOp NNeg
 
 -- | Put a binary operator.
+--  @since 0.15.0
 mkOp2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkOp2 op a = Fix . NBinary op a
 
-mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
-mkParamset params variadic = ParamSet (coerce params) variadic Nothing
+-- | > { x }
+--  @since 0.15.0
+mkParamSet :: [(Text, Maybe NExpr)] -> Params NExpr
+mkParamSet pset = mkGeneralParamSet Nothing pset False
 
--- | Put a recursive set.
+-- | > { x, ... }
+--  @since 0.15.0
+mkVariadicParamSet :: [(Text, Maybe NExpr)] -> Params NExpr
+mkVariadicParamSet pset = mkGeneralParamSet Nothing pset True
+
+-- | > s@{ x }
+--  @since 0.15.0
+mkNamedParamSet :: Text -> [(Text, Maybe NExpr)] -> Params NExpr
+mkNamedParamSet name pset = mkGeneralParamSet (pure name) pset False
+
+-- | > s@{ x, ... }
+--  @since 0.15.0
+mkNamedVariadicParamSet :: Text -> [(Text, Maybe NExpr)] -> Params NExpr
+mkNamedVariadicParamSet name params = mkGeneralParamSet (pure name) params True
+
+-- | Args:
 --
--- @rec { .. };@
+-- 1. Maybe name:
+--
+-- > Nothing  ->   {}
+-- > Just "s" -> s@{}
+--
+-- 2. key:expr pairs
+--
+-- 3. Is variadic or not:
+--
+-- > True  -> {...}
+-- > False -> {}
+--  @since 0.15.0
+mkGeneralParamSet :: Maybe Text -> [(Text, Maybe NExpr)] -> Bool -> Params NExpr
+mkGeneralParamSet mname params variadic = ParamSet (coerce mname) (bool Closed Variadic variadic) (coerce params)
+
+-- | > rec { .. }
 mkRecSet :: [Binding NExpr] -> NExpr
 mkRecSet = mkSet Recursive
 
@@ -109,6 +144,7 @@ mkSet r = Fix . NSet r
 -- | Empty set.
 --
 -- Monoid. Use @//@ operation (shorthand $//) to extend the set.
+--  @since 0.15.0
 emptySet :: NExpr
 emptySet = mkNonRecSet mempty
 
@@ -116,6 +152,7 @@ emptySet = mkNonRecSet mempty
 mkList :: [NExpr] -> NExpr
 mkList = Fix . NList
 
+--  @since 0.15.0
 emptyList :: NExpr
 emptyList = mkList mempty
 
@@ -175,8 +212,9 @@ mkFunction :: Params NExpr -> NExpr -> NExpr
 mkFunction params = Fix . NAbs params
 
 -- | General dot-reference with optional alternative if the jey does not exist.
+--  @since 0.15.0
 getRefOrDefault :: Maybe NExpr -> NExpr -> Text -> NExpr
-getRefOrDefault alt obj name = Fix $ NSelect alt obj (mkSelector name)
+getRefOrDefault alt obj = Fix . NSelect alt obj . mkSelector
 
 -- ** Base functor builders for basic expressions builders *sic
 
@@ -229,7 +267,7 @@ mkSynHoleF = NSynHole . coerce
 -- | @inheritFrom x [a, b]@ | @inherit (x) a b;@ | @a = x.a;@ |
 -- |                        |                    | @b = x.b;@ |
 -- +------------------------+--------------------+------------+
-inheritFrom :: e -> [NKeyName e] -> Binding e
+inheritFrom :: e -> [VarName] -> Binding e
 inheritFrom expr ks = Inherit (pure expr) ks nullPos
 
 -- | An `inherit` clause without an expression to pull from.
@@ -240,7 +278,7 @@ inheritFrom expr ks = Inherit (pure expr) ks nullPos
 -- | @inheritFrom [a, b]@ | @inherit a b;@ | @a = outside.a;@ |
 -- |                      |                | @b = outside.b;@ |
 -- +----------------------+----------------+------------------+
-inherit :: [NKeyName e] -> Binding e
+inherit :: [VarName] -> Binding e
 inherit ks = Inherit Nothing ks nullPos
 
 -- | Nix @=@ (bind operator).
@@ -300,6 +338,7 @@ infix 9 @.
 -- | Dot-reference into an attribute set with alternative if the key does not exist.
 --
 -- > s.x or y
+--  @since 0.15.0
 (@.<|>) :: NExpr -> Text -> NExpr -> NExpr
 (@.<|>) obj name alt = getRefOrDefault (pure alt ) obj name
 infix 9 @.<|>
@@ -383,16 +422,27 @@ infixr 1 ==>
 -- * Under deprecation
 
 -- NOTE: Remove after 2023-07
--- | Put an unary operator.
+-- | __@Deprecated@__: Please, use `mkOp`
+-- Put an unary operator.
 mkOper :: NUnaryOp -> NExpr -> NExpr
 mkOper op = Fix . NUnary op
 
 -- NOTE: Remove after 2023-07
+-- | __@Deprecated@__: Please, use `mkOp2`
 -- | Put a binary operator.
 mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkOper2 op a = Fix . NBinary op a
 
 -- NOTE: Remove after 2023-07
+-- | __@Deprecated@__: Please, use `mkOp2`
 -- | Nix binary operator builder.
 mkBinop :: NBinaryOp -> NExpr -> NExpr -> NExpr
 mkBinop = mkOp2
+
+-- NOTE: Remove after 2023-07
+-- | __@Deprecated@__: Please, use:
+--   * `mkParamSet` is for closed sets;
+--   * `mkVariadicSet` is for variadic;
+--   * `mkGeneralParamSet` a general constructor.
+mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
+mkParamset params variadic = ParamSet Nothing (bool Closed Variadic variadic) (coerce params)

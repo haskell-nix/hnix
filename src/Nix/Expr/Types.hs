@@ -140,6 +140,15 @@ type AttrSet = HashMap VarName
 -- order of the param set.
 type ParamSet r = [(VarName, Maybe r)]
 
+data Variadic = Closed | Variadic
+  deriving
+    ( Eq, Ord, Generic
+    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Show, Read, Hashable
+    )
+
+--  2021-07-19: NOTE: mkParamSet with default types
+
 -- | @Params@ represents all the ways the formal parameters to a
 -- function can be represented.
 data Params r
@@ -147,15 +156,13 @@ data Params r
   -- ^ For functions with a single named argument, such as @x: x + 1@.
   --
   -- > Param "x"                                  ~  x
-  | ParamSet !(ParamSet r) !Bool !(Maybe VarName)
-  --  2021-05-15: NOTE: Seems like we should flip the ParamSet, so partial application kicks in for Bool?
-  --  2021-05-15: NOTE: '...' variadic property probably needs a Bool synonym.
+  | ParamSet !(Maybe VarName) !Variadic !(ParamSet r)
   -- ^ Explicit parameters (argument must be a set). Might specify a name to
   -- bind to the set in the function body. The bool indicates whether it is
   -- variadic or not.
   --
-  -- > ParamSet [("x",Nothing)] False Nothing     ~  { x }
-  -- > ParamSet [("x",pure y)]  True  (pure "s")  ~  s@{ x ? y, ... }
+  -- > ParamSet  Nothing   False [("x",Nothing)]  ~  { x }
+  -- > ParamSet (pure "s") True  [("x", pure y)]  ~  s@{ x ? y, ... }
   deriving
     ( Eq, Ord, Generic, Generic1
     , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, ToJSON1, FromJSON, FromJSON1
@@ -386,7 +393,7 @@ data Binding r
   -- ^ An explicit naming.
   --
   -- > NamedVar (StaticKey "x" :| [StaticKey "y"]) z SourcePos{}  ~  x.y = z;
-  | Inherit !(Maybe r) ![NKeyName r] !SourcePos
+  | Inherit !(Maybe r) ![VarName] !SourcePos
   -- ^ Inheriting an attribute (binding) into the attribute set from the other scope (attribute set). No denoted scope means to inherit from the closest outside scope.
   --
   -- +---------------------------------------------------------------+--------------------+-----------------------+
@@ -531,8 +538,6 @@ data NExprF r
   -- > NBinary NPlus x y                           ~  x + y
   -- > NBinary NApp  f x                           ~  f x
   | NSelect !(Maybe r) !r !(NAttrPath r)
-  --  2021-05-15: NOTE: Default value should be first argument to leverage partial application.
-  -- Cascading change diff is not that big.
   -- ^ Dot-reference into an attribute set, optionally providing an
   -- alternative if the key doesn't exist.
   --
@@ -562,7 +567,7 @@ data NExprF r
   --
   -- > NWith x y                                   ~  with x; y
   | NAssert !r !r
-  -- ^ Assert that the first returns @true@ before evaluating the second.
+  -- ^ Checks that the first argument is a predicate that is @true@ before evaluating the second argument.
   --
   -- > NAssert x y                                 ~  assert x; y
   | NSynHole !VarName
@@ -651,8 +656,8 @@ hashAt = alterF
 
 -- | Get the name out of the parameter (there might be none).
 paramName :: Params r -> Maybe VarName
-paramName (Param n       ) = pure n
-paramName (ParamSet _ _ n) = n
+paramName (Param name        ) = pure name
+paramName (ParamSet mname _ _) = mname
 
 stringParts :: NString r -> [Antiquoted Text r]
 stringParts (DoubleQuoted parts) = parts
