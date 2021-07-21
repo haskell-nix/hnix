@@ -267,7 +267,7 @@ mkSynHoleF = NSynHole . coerce
 -- | @inheritFrom x [a, b]@ | @inherit (x) a b;@ | @a = x.a;@ |
 -- |                        |                    | @b = x.b;@ |
 -- +------------------------+--------------------+------------+
-inheritFrom :: e -> [NKeyName e] -> Binding e
+inheritFrom :: e -> [VarName] -> Binding e
 inheritFrom expr ks = Inherit (pure expr) ks nullPos
 
 -- | An `inherit` clause without an expression to pull from.
@@ -278,7 +278,7 @@ inheritFrom expr ks = Inherit (pure expr) ks nullPos
 -- | @inheritFrom [a, b]@ | @inherit a b;@ | @a = outside.a;@ |
 -- |                      |                | @b = outside.b;@ |
 -- +----------------------+----------------+------------------+
-inherit :: [NKeyName e] -> Binding e
+inherit :: [VarName] -> Binding e
 inherit ks = Inherit Nothing ks nullPos
 
 -- | Nix @=@ (bind operator).

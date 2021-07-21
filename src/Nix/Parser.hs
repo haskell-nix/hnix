@@ -450,7 +450,7 @@ nixBinders = (inherit <+> namedVar) `endBy` semi where
       p <- getSourcePos
       x <- whiteSpace *> optional scope
       liftA2 (Inherit x)
-        (many keyName)
+        (many identifier)
         (pure p)
         <?> "inherited binding"
   namedVar =

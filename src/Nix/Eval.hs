@@ -369,36 +369,27 @@ evalBinds recursive binds =
         =<< evalSetterKeyName h
 
   applyBindToAdt scopes (Inherit ms names pos) =
-    catMaybes <$>
-      traverse
-        processScope
-        names
+    pure $ processScope <$> names
    where
     processScope
-      :: NKeyName (m v)
-      -> m (Maybe ([VarName], SourcePos, m v))
-    processScope nkeyname =
-      (\ mkey ->
-        do
-          key <- mkey
-          pure
-            ([key]
-            , pos
-            , maybe
-                (attrMissing (key :| mempty) Nothing)
-                demand
-                =<< maybe
-                    (withScopes scopes $ lookupVar key)
-                    (\ s ->
-                      do
-                        (coerce -> scope, _) <- fromValue @(AttrSet v, PositionSet) =<< s
+      :: VarName
+      -> ([VarName], SourcePos, m v)
+    processScope var =
+      ([var]
+      , pos
+      , maybe
+          (attrMissing (var :| mempty) Nothing)
+          demand
+          =<< maybe
+              (withScopes scopes $ lookupVar var)
+              (\ s ->
+                do
+                  (coerce -> scope, _) <- fromValue @(AttrSet v, PositionSet) =<< s
 
-                        clearScopes @v $ pushScope scope $ lookupVar key
-                    )
-                    ms
-            )
-      ) <$>
-        evalSetterKeyName nkeyname
+                  clearScopes @v $ pushScope scope $ lookupVar var
+              )
+              ms
+      )
 
   moveOverridesLast = uncurry (<>) . partition
     (\case

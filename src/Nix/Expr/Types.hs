@@ -393,7 +393,7 @@ data Binding r
   -- ^ An explicit naming.
   --
   -- > NamedVar (StaticKey "x" :| [StaticKey "y"]) z SourcePos{}  ~  x.y = z;
-  | Inherit !(Maybe r) ![NKeyName r] !SourcePos
+  | Inherit !(Maybe r) ![VarName] !SourcePos
   -- ^ Inheriting an attribute (binding) into the attribute set from the other scope (attribute set). No denoted scope means to inherit from the closest outside scope.
   --
   -- +---------------------------------------------------------------+--------------------+-----------------------+

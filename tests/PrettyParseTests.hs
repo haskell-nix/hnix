@@ -58,7 +58,7 @@ genBinding = Gen.choice
       genSourcePos
   , liftA3 Inherit
       (Gen.maybe genExpr)
-      (Gen.list (Range.linear 0 5) genKeyName)
+      (Gen.list (Range.linear 0 5) (coerce <$> asciiText))
       genSourcePos
   ]
 
@@ -170,7 +170,7 @@ normalize = foldFix $ \case
 
  where
   normBinding (NamedVar path r     pos) = NamedVar (normKey <$> path) r pos
-  normBinding (Inherit  mr   names pos) = Inherit mr (normKey <$> names) pos
+  normBinding (Inherit  mr   names pos) = Inherit mr names pos
 
   normKey (DynamicKey quoted) = DynamicKey (normAntiquotedString quoted)
   normKey (StaticKey  name  ) = StaticKey name

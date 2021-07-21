@@ -66,12 +66,21 @@ newFailingTests = Set.fromList
   , "eval-okay-fromTOML"
   ]
 
+-- | Upstream tests that test cases that HNix disaded as a misfeature that is used so rarely
+-- that it more effective to fix it & lint it out of existance.
+deprecatedRareNixQuirkTests :: Set String
+deprecatedRareNixQuirkTests = Set.fromList
+  [
+    -- A rare quirk of Nix that is proper to fix&enforce then to support (see git commit history)
+    "eval-okay-strings-as-attrs-names"
+  ]
+
 genTests :: IO TestTree
 genTests = do
   testFiles <-
     sort
     -- Disabling the not yet done tests cases.
-    . filter ((`Set.notMember` newFailingTests) . takeBaseName)
+    . filter ((`Set.notMember` (newFailingTests `Set.union` deprecatedRareNixQuirkTests)) . takeBaseName)
     . filter ((/= ".xml") . takeExtension)
     <$> globDir1 (compile "*-*-*.*") "data/nix/tests/lang"
   let

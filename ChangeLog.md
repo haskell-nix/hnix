@@ -8,7 +8,10 @@ Partial log (for now):
 * Breaking:
 
   * `Nix.Expr.Shorthands`:
-    * `inherit{,From}`: dropped second argument as irrelevant ([report](https://github.com/haskell-nix/hnix/issues/326)).
+    * `inherit{,From}`:
+      * dropped second(/third) argument as irrelevant ([report](https://github.com/haskell-nix/hnix/issues/326))
+      * bindings to inherit changed type from complex `[NKeyName]` (which is for static & dynamic keys) to `[VarName]` (`VarName` is newtype of `Text`).
+      * So examples of use now are: `inherit ["a", "b"]`, `inheritFrom (var "a") ["b", "c"]`
     * `mkAssert`: fixed ([report](https://github.com/haskell-nix/hnix/issues/969)).
     * fx presedence between the operators:
         

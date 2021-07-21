@@ -453,7 +453,7 @@ pruneTree opts =
   pruneBinding (NamedVar xs                (Just x) pos) = pure $ NamedVar (pruneKeyName <$> xs) x pos
   pruneBinding (Inherit  _                 []       _  ) = Nothing
   pruneBinding (Inherit  (join -> Nothing) _        _  ) = Nothing
-  pruneBinding (Inherit  (join -> m)       xs       pos) = pure $ Inherit m (pruneKeyName <$> xs) pos
+  pruneBinding (Inherit  (join -> m)       xs       pos) = pure $ Inherit m xs pos
 
 reducingEvalExpr
   :: (Framed e m, Has e Options, Exception r, MonadCatch m, MonadIO m)

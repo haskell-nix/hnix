@@ -164,7 +164,7 @@ prettyBind :: Binding (NixDoc ann) -> Doc ann
 prettyBind (NamedVar n v _p) =
   prettySelector n <> " = " <> withoutParens v <> ";"
 prettyBind (Inherit s ns _p) =
-  "inherit " <> scope <> align (fillSep $ prettyKeyName <$> ns) <> ";"
+  "inherit " <> scope <> align (fillSep $ prettyVarName <$> ns) <> ";"
   where
     scope =
       maybe
