@@ -73,7 +73,7 @@ nvStrP p ns = addProvenance p $ nvStr ns
 nvPathP
   :: MonadCited t f m
   => Provenance m (NValue t f m)
-  -> FilePath
+  -> Path
   -> NValue t f m
 nvPathP p x = addProvenance p $ nvPath x
 
@@ -148,7 +148,7 @@ wrapExprLoc span x = Fix $ Fix (NSym_ span "<?>") <$ x
 -- Currently instance is stuck in orphanage between the requirements to be MonadEval, aka Eval stage, and emposed requirement to be MonadNix (Execution stage). MonadNix constraint tries to put the cart before horse and seems superflous, since Eval in Nix also needs and can throw exceptions. It is between `nverr` and `evalError`.
 instance MonadNix e t f m => MonadEval (NValue t f m) m where
   freeVariable var =
-    nverr @e @t @f $ ErrorCall $ "Undefined variable '" <> toString var <> "'"
+    nverr @e @t @f $ ErrorCall $ toString @Text $ "Undefined variable '" <> coerce var <> "'"
 
   synHole name = do
     span  <- currentPos
@@ -218,7 +218,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     scope <- currentScopes
     span  <- currentPos
     nvPathP (Provenance scope $ NEnvPath_ span p) <$>
-      findEnvPath @t @f @m p
+      findEnvPath @t @f @m (coerce p)
 
   evalUnary op arg = do
     scope <- currentScopes
@@ -422,7 +422,7 @@ execBinaryOpForced scope span op lval rval = case op of
           (throwError $ ErrorCall "A string that refers to a store path cannot be appended to a path.") -- data/nix/src/libexpr/eval.cc:1412
           (\ rs2 ->
             nvPathP prov <$>
-              makeAbsolutePath @t @f (ls <> toString rs2)
+              makeAbsolutePath @t @f (ls <> (coerce $ toString rs2))
           )
           (getStringNoContext rs)
       (NVPath ls, NVPath rs) -> nvPathP prov <$> makeAbsolutePath @t @f (ls <> rs)

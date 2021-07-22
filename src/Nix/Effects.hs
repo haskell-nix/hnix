@@ -41,7 +41,7 @@ import qualified System.Nix.Store.Remote       as Store.Remote
 import qualified System.Nix.StorePath          as Store
 
 -- | A path into the nix store
-newtype StorePath = StorePath FilePath
+newtype StorePath = StorePath Path
 
 
 -- All of the following type classes defer to the underlying 'm'.
@@ -62,15 +62,15 @@ class
   => MonadEffects t f m where
 
   -- | Determine the absolute path of relative path in the current context
-  makeAbsolutePath :: FilePath -> m FilePath
-  findEnvPath :: String -> m FilePath
+  makeAbsolutePath :: Path -> m Path
+  findEnvPath :: String -> m Path
 
   -- | Having an explicit list of sets corresponding to the NIX_PATH
   -- and a file path try to find an existing path
-  findPath :: [NValue t f m] -> FilePath -> m FilePath
+  findPath :: [NValue t f m] -> Path -> m Path
 
-  importPath :: FilePath -> m (NValue t f m)
-  pathToDefaultNix :: FilePath -> m FilePath
+  importPath :: Path -> m (NValue t f m)
+  pathToDefaultNix :: Path -> m Path
 
   derivationStrict :: NValue t f m -> m (NValue t f m)
 
@@ -259,15 +259,15 @@ deriving
 class
   Monad m
   => MonadPaths m where
-  getDataDir :: m FilePath
-  default getDataDir :: (MonadTrans t, MonadPaths m', m ~ t m') => m FilePath
+  getDataDir :: m Path
+  default getDataDir :: (MonadTrans t, MonadPaths m', m ~ t m') => m Path
   getDataDir = lift getDataDir
 
 
 -- ** Instances
 
 instance MonadPaths IO where
-  getDataDir = Paths_hnix.getDataDir
+  getDataDir = coerce <$> Paths_hnix.getDataDir
 
 deriving
   instance
@@ -369,7 +369,7 @@ print = putStrLn . show
 type RecursiveFlag = Bool
 type RepairFlag = Bool
 type StorePathName = Text
-type FilePathFilter m = FilePath -> m Bool
+type PathFilter m = Path -> m Bool
 type StorePathSet = HS.HashSet StorePath
 
 -- ** @class MonadStore m@
@@ -381,8 +381,8 @@ class
   -- | Copy the contents of a local path to the store.  The resulting store
   -- path is returned.  Note: This does not support yet support the expected
   -- `filter` function that allows excluding some files.
-  addToStore :: StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
-  default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> FilePath -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
+  addToStore :: StorePathName -> Path -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
+  default addToStore :: (MonadTrans t, MonadStore m', m ~ t m') => StorePathName -> Path -> RecursiveFlag -> RepairFlag -> m (Either ErrorCall StorePath)
   addToStore a b c d = lift $ addToStore a b c d
 
   -- | Like addToStore, but the contents written to the output path is a
@@ -402,10 +402,10 @@ instance MonadStore IO where
       (\ pathName ->
         do
           -- TODO: redesign the filter parameter
-          res <- Store.Remote.runStore $ Store.Remote.addToStore @Hash.SHA256 pathName path recursive (const False) repair
+          res <- Store.Remote.runStore $ Store.Remote.addToStore @Hash.SHA256 pathName (coerce path) recursive (const False) repair
           either
             Left -- err
-            (pure . StorePath . decodeUtf8 . Store.storePathToRawFilePath) -- store path
+            (pure . StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.storePathToRawFilePath) -- store path
             <$> parseStoreResult "addToStore" res
       )
       (Store.makeStorePathName name)
@@ -415,7 +415,7 @@ instance MonadStore IO where
       res <- Store.Remote.runStore $ Store.Remote.addTextToStore name text references repair
       either
         Left -- err
-        (pure . StorePath . decodeUtf8 . Store.storePathToRawFilePath) -- path
+        (pure . StorePath . coerce . decodeUtf8 @FilePath @ByteString . Store.storePathToRawFilePath) -- path
         <$> parseStoreResult "addTextToStore" res
 
 
@@ -437,12 +437,12 @@ addTextToStore a b c d =
     pure
     =<< addTextToStore' a b c d
 
-addPath :: (Framed e m, MonadStore m) => FilePath -> m StorePath
+addPath :: (Framed e m, MonadStore m) => Path -> m StorePath
 addPath p =
   either
     throwError
     pure
-    =<< addToStore (toText $ takeFileName p) p True False
+    =<< addToStore (toText $ takeFileName (coerce p)) p True False
 
-toFile_ :: (Framed e m, MonadStore m) => FilePath -> String -> m StorePath
+toFile_ :: (Framed e m, MonadStore m) => Path -> String -> m StorePath
 toFile_ p contents = addTextToStore (toText p) (toText contents) mempty False

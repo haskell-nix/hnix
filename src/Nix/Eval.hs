@@ -32,8 +32,8 @@ class (Show v, Monad m) => MonadEval v m where
   evalCurPos      :: m v
   evalConstant    :: NAtom -> m v
   evalString      :: NString (m v) -> m v
-  evalLiteralPath :: FilePath -> m v
-  evalEnvPath     :: FilePath -> m v
+  evalLiteralPath :: Path -> m v
+  evalEnvPath     :: Path -> m v
   evalUnary       :: NUnaryOp -> v -> m v
   evalBinary      :: NBinaryOp -> v -> m v -> m v
   -- ^ The second argument is an action because operators such as boolean &&

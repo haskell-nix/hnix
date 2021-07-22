@@ -57,11 +57,11 @@ import           System.FilePath
 newtype Reducer m a = Reducer
     { runReducer ::
         ReaderT
-          ( Maybe FilePath
+          ( Maybe Path
           , Scopes (Reducer m) NExprLoc
           )
           ( StateT
-              ( HashMap FilePath NExprLoc
+              ( HashMap Path NExprLoc
               , HashMap Text Text
               )
             m
@@ -71,8 +71,8 @@ newtype Reducer m a = Reducer
   deriving
     ( Functor, Applicative, Alternative
     , Monad, MonadPlus, MonadFix, MonadIO, MonadFail
-    , MonadReader (Maybe FilePath, Scopes (Reducer m) NExprLoc)
-    , MonadState (HashMap FilePath NExprLoc, HashMap Text Text)
+    , MonadReader (Maybe Path, Scopes (Reducer m) NExprLoc)
+    , MonadState (HashMap Path NExprLoc, HashMap Text Text)
     )
 
 staticImport
@@ -80,17 +80,17 @@ staticImport
    . ( MonadIO m
      , Scoped NExprLoc m
      , MonadFail m
-     , MonadReader (Maybe FilePath, Scopes m NExprLoc) m
-     , MonadState (HashMap FilePath NExprLoc, HashMap Text Text) m
+     , MonadReader (Maybe Path, Scopes m NExprLoc) m
+     , MonadState (HashMap Path NExprLoc, HashMap Text Text) m
      )
   => SrcSpan
-  -> FilePath
+  -> Path
   -> m NExprLoc
 staticImport pann path = do
-  mfile <- asks fst
+  mfile <- asks (coerce . fst)
   path  <- liftIO $ pathToDefaultNixFile path
-  path' <- liftIO $ pathToDefaultNixFile =<< canonicalizePath
-    (maybe id ((</>) . takeDirectory) mfile path)
+  path' <- liftIO $ pathToDefaultNixFile =<< (coerce <$> canonicalizePath . coerce)
+    (maybe id ((</>) . takeDirectory) mfile (coerce path))
 
   imports <- gets fst
   maybe
@@ -98,8 +98,9 @@ staticImport pann path = do
     pure
     (HM.lookup path' imports)
  where
+  go :: Path -> m NExprLoc
   go path = do
-    liftIO $ putStrLn $ "Importing file " <> path
+    liftIO $ putStrLn $ "Importing file " <> (coerce path)
 
     eres <- liftIO $ parseNixFileLoc path
     either
@@ -130,7 +131,7 @@ staticImport pann path = do
 --     Compose (Ann _ x) -> fold x
 
 reduceExpr
-  :: (MonadIO m, MonadFail m) => Maybe FilePath -> NExprLoc -> m NExprLoc
+  :: (MonadIO m, MonadFail m) => Maybe Path -> NExprLoc -> m NExprLoc
 reduceExpr mpath expr =
   (`evalStateT` (mempty, mempty))
     . (`runReaderT` (mpath, mempty))
@@ -142,8 +143,8 @@ reduce
    . ( MonadIO m
      , Scoped NExprLoc m
      , MonadFail m
-     , MonadReader (Maybe FilePath, Scopes m NExprLoc) m
-     , MonadState (HashMap FilePath NExprLoc, HashMap Text Text) m
+     , MonadReader (Maybe Path, Scopes m NExprLoc) m
+     , MonadState (HashMap Path NExprLoc, HashMap Text Text) m
      )
   => NExprLocF (m NExprLoc)
   -> m NExprLoc
@@ -457,7 +458,7 @@ pruneTree opts =
 reducingEvalExpr
   :: (Framed e m, Has e Options, Exception r, MonadCatch m, MonadIO m)
   => (NExprLocF (m a) -> m a)
-  -> Maybe FilePath
+  -> Maybe Path
   -> NExprLoc
   -> m (NExprLoc, Either r a)
 reducingEvalExpr eval mpath expr =

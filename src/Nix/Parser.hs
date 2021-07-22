@@ -64,6 +64,7 @@ import           Data.Fix                       ( Fix(..) )
 import qualified Data.HashSet                  as HashSet
 import qualified Data.Map                      as Map
 import           Data.Text                      ( cons )
+import           Nix.Utils
 import           Nix.Expr                hiding ( ($>) )
 import           Nix.Expr.Strings               ( escapeCodes
                                                 , stripIndent
@@ -237,9 +238,9 @@ nixSearchPath =
       <?> "spath"
     )
 
-pathStr :: Parser FilePath
+pathStr :: Parser Path
 pathStr =
-  lexeme $
+  lexeme $ coerce $
     liftA2 (<>)
       (many $ satisfy pathChar)
       (concat <$>
@@ -251,7 +252,7 @@ pathStr =
       )
 
 nixPath :: Parser NExprLoc
-nixPath = annotateLocation1 (try (mkPathF False <$> pathStr) <?> "path")
+nixPath = annotateLocation1 (try (mkPathF False <$> coerce pathStr) <?> "path")
 
 nixLet :: Parser NExprLoc
 nixLet = annotateLocation1
@@ -473,11 +474,11 @@ nixSet = annotateLocation1 ((isRec <*> braces nixBinders) <?> "set")
  where
   isRec = (reserved "rec" $> NSet Recursive <?> "recursive set") <+> pure (NSet NonRecursive)
 
-parseNixFile :: MonadFile m => FilePath -> m (Result NExpr)
+parseNixFile :: MonadFile m => Path -> m (Result NExpr)
 parseNixFile =
   parseFromFileEx $ stripAnnotation <$> (whiteSpace *> nixToplevelForm <* eof)
 
-parseNixFileLoc :: MonadFile m => FilePath -> m (Result NExprLoc)
+parseNixFileLoc :: MonadFile m => Path -> m (Result NExprLoc)
 parseNixFileLoc = parseFromFileEx (whiteSpace *> nixToplevelForm <* eof)
 
 parseNixText :: Text -> Result NExpr
@@ -566,7 +567,7 @@ type Parser = ParsecT Void Text (State SourcePos)
 
 type Result a = Either (Doc Void) a
 
-parseFromFileEx :: MonadFile m => Parser a -> FilePath -> m (Result a)
+parseFromFileEx :: MonadFile m => Parser a -> Path -> m (Result a)
 parseFromFileEx parser file =
   do
     input <- decodeUtf8 <$> readFile file
@@ -575,7 +576,7 @@ parseFromFileEx parser file =
       either
         (Left . pretty . errorBundlePretty)
         pure
-        $ (`evalState` initialPos file) $ runParserT parser file input
+        $ (`evalState` initialPos (coerce file)) $ runParserT parser (coerce file) input
 
 parseFromText :: Parser a -> Text -> Result a
 parseFromText parser input =

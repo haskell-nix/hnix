@@ -122,14 +122,14 @@ genExpr =
           , (1 , Gen.resize (Size (n `div` 2)) genAssert)
           ]
  where
-  genConstant    = NConstant                <$> genAtom
-  genStr         = NStr                     <$> genString
-  genSym         = NSym . coerce            <$> asciiText
-  genList        = NList                    <$> fairList genExpr
-  genSet         = NSet NonRecursive        <$> fairList genBinding
-  genRecSet      = NSet Recursive           <$> fairList genBinding
-  genLiteralPath = NLiteralPath . ("./" <>) <$> asciiString
-  genEnvPath     = NEnvPath                 <$> asciiString
+  genConstant    = NConstant                         <$> genAtom
+  genStr         = NStr                              <$> genString
+  genSym         = NSym . coerce                     <$> asciiText
+  genList        = NList                             <$> fairList genExpr
+  genSet         = NSet NonRecursive                 <$> fairList genBinding
+  genRecSet      = NSet Recursive                    <$> fairList genBinding
+  genLiteralPath = NLiteralPath . ("./" <>) . coerce <$> asciiString
+  genEnvPath     = NEnvPath . coerce                 <$> asciiString
   genUnary       = liftA2 NUnary   Gen.enumBounded       genExpr
   genBinary      = liftA3 NBinary  Gen.enumBounded       genExpr     genExpr
   genSelect      = liftA3 NSelect  (Gen.maybe genExpr)   genExpr     genAttrPath

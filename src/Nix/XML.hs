@@ -5,6 +5,7 @@ module Nix.XML
 where
 
 import qualified Data.HashMap.Lazy             as M
+import           Nix.Utils
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.String
@@ -76,7 +77,7 @@ toXML = runWithStringContext . fmap pp . iterNValueByDiscardWith cyc phi
         mkE
           "function"
           (paramsXML p)
-    NVPath' fp        -> pure $ mkEVal "path" fp
+    NVPath' fp        -> pure $ mkEVal "path" (coerce fp)
     NVBuiltin' name _ -> pure $ mkEName "function" $ toString name
 
 mkE :: String -> [Content] -> Element

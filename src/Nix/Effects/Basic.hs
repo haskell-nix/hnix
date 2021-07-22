@@ -34,7 +34,7 @@ import           Nix.Value.Monad
 import           GHC.DataSize
 #endif
 
-defaultMakeAbsolutePath :: MonadNix e t f m => FilePath -> m FilePath
+defaultMakeAbsolutePath :: MonadNix e t f m => Path -> m Path
 defaultMakeAbsolutePath origPath = do
   origPathExpanded <- expandHomePath origPath
   absPath          <-
@@ -46,7 +46,7 @@ defaultMakeAbsolutePath origPath = do
             getCurrentDirectory
             (
               (\case
-                NVPath s -> pure $ takeDirectory s
+                NVPath s -> pure $ coerce $ takeDirectory (coerce s)
                 val -> throwError $ ErrorCall $ "when resolving relative path, __cur_file is in scope, but is not a path; it is: " <> show val
               ) <=< demand
             )
@@ -54,37 +54,37 @@ defaultMakeAbsolutePath origPath = do
         pure $ cwd <///> origPathExpanded
       )
       (pure origPathExpanded)
-      (isAbsolute origPathExpanded)
+      (isAbsolute $ coerce origPathExpanded)
   removeDotDotIndirections <$> canonicalizePath absPath
 
-expandHomePath :: MonadFile m => FilePath -> m FilePath
-expandHomePath ('~' : xs) = (<> xs) <$> getHomeDirectory
+expandHomePath :: MonadFile m => Path -> m Path
+expandHomePath (coerce -> ('~' : xs)) = (<> (coerce xs)) <$> getHomeDirectory
 expandHomePath p          = pure p
 
 -- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
 --   This is incorrect on POSIX systems, because if @b@ is a symlink, its
 --   parent may be a different directory from @a@. See the discussion at
 --   https://hackage.haskell.org/package/directory-1.3.1.5/docs/System-Directory.html#v:canonicalizePath
-removeDotDotIndirections :: FilePath -> FilePath
-removeDotDotIndirections = intercalate "/" . go mempty . splitOn "/"
+removeDotDotIndirections :: Path -> Path
+removeDotDotIndirections = coerce . intercalate "/" . go mempty . splitOn "/" . coerce
  where
   go s       []            = reverse s
   go (_ : s) (".." : rest) = go s rest
   go s       (this : rest) = go (this : s) rest
 
 infixr 9 <///>
-(<///>) :: FilePath -> FilePath -> FilePath
-x <///> y | isAbsolute y || "." `isPrefixOf` y = x </> y
+(<///>) :: Path -> Path -> Path
+(coerce -> x) <///> (coerce -> y) | isAbsolute y || "." `isPrefixOf` y = coerce $ x </> y
           | otherwise                          = joinByLargestOverlap x y
  where
-  joinByLargestOverlap (splitDirectories -> xs) (splitDirectories -> ys) =
+  joinByLargestOverlap (splitDirectories -> xs) (splitDirectories -> ys) = coerce $
     joinPath $ head
       [ xs <> drop (length tx) ys | tx <- tails xs, tx `elem` inits ys ]
 
-defaultFindEnvPath :: MonadNix e t f m => String -> m FilePath
-defaultFindEnvPath = findEnvPathM
+defaultFindEnvPath :: MonadNix e t f m => String -> m Path
+defaultFindEnvPath = findEnvPathM . coerce
 
-findEnvPathM :: forall e t f m . MonadNix e t f m => FilePath -> m FilePath
+findEnvPathM :: forall e t f m . MonadNix e t f m => Path -> m Path
 findEnvPathM name = do
   mres <- lookupVar "__nixPath"
 
@@ -100,14 +100,14 @@ findEnvPathM name = do
     mres
 
  where
-  nixFilePath :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
+  nixFilePath :: MonadEffects t f m => Path -> m (Maybe Path)
   nixFilePath path = do
     absPath <- makeAbsolutePath @t @f path
     isDir   <- doesDirectoryExist absPath
     absFile <-
       bool
         (pure absPath)
-        (makeAbsolutePath @t @f $ absPath </> "default.nix")
+        (makeAbsolutePath @t @f $ coerce $ (coerce absPath) </> "default.nix")
         isDir
     exists <- doesFileExist absFile
     pure $
@@ -119,18 +119,18 @@ findEnvPathM name = do
 findPathBy
   :: forall e t f m
    . MonadNix e t f m
-  => (FilePath -> m (Maybe FilePath))
+  => (Path -> m (Maybe Path))
   -> [NValue t f m]
-  -> FilePath
-  -> m FilePath
+  -> Path
+  -> m Path
 findPathBy finder ls name = do
   mpath <- foldM go mempty ls
   maybe
-    (throwError $ ErrorCall $ "file ''" <> name <> "'' was not found in the Nix search path (add it's using $NIX_PATH or -I)")
+    (throwError $ ErrorCall $ "file ''" <> (coerce name) <> "'' was not found in the Nix search path (add it's using $NIX_PATH or -I)")
     pure
     mpath
  where
-  go :: MonadNix e t f m => Maybe FilePath -> NValue t f m -> m (Maybe FilePath)
+  go :: MonadNix e t f m => Maybe Path -> NValue t f m -> m (Maybe Path)
   go mp =
     maybe
       (\ nv ->
@@ -138,7 +138,7 @@ findPathBy finder ls name = do
           (s :: HashMap VarName (NValue t f m)) <- fromValue =<< demand nv
           p <- resolvePath s
           nvpath <- demand p
-          (Path path) <- fromValue nvpath
+          path <- fromValue nvpath
 
           maybe
             (tryPath path mempty)
@@ -151,7 +151,7 @@ findPathBy finder ls name = do
                       let pfx = stringIgnoreContext nsPfx in
                       bool
                         mempty
-                        (pure (toString pfx))
+                        (pure $ coerce $ toString pfx)
                         (not $ Text.null pfx)
                     _ -> mempty
             )
@@ -160,9 +160,9 @@ findPathBy finder ls name = do
       (const . pure . pure)
       mp
 
-  tryPath :: FilePath -> Maybe FilePath -> m (Maybe FilePath)
-  tryPath p (Just n) | n' : ns <- splitDirectories name, n == n' =
-    finder $ p <///> joinPath ns
+  tryPath :: Path -> Maybe Path -> m (Maybe Path)
+  tryPath p (Just n) | n' : ns <- splitDirectories (coerce name), n == (coerce n') =
+    finder $ p <///> (coerce $ joinPath ns)
   tryPath p _ = finder $ p <///> name
 
   resolvePath s =
@@ -218,18 +218,18 @@ fetchTarball =
           $ "builtins.fetchTarball { " <> "url    = \"" <> url <> "\"; " <> "sha256 = \"" <> sha <> "\"; }"
       ) =<< demand t
 
-defaultFindPath :: MonadNix e t f m => [NValue t f m] -> FilePath -> m FilePath
+defaultFindPath :: MonadNix e t f m => [NValue t f m] -> Path -> m Path
 defaultFindPath = findPathM
 
 findPathM
   :: forall e t f m
    . MonadNix e t f m
   => [NValue t f m]
-  -> FilePath
-  -> m FilePath
+  -> Path
+  -> m Path
 findPathM = findPathBy existingPath
  where
-  existingPath :: MonadEffects t f m => FilePath -> m (Maybe FilePath)
+  existingPath :: MonadEffects t f m => Path -> m (Maybe Path)
   existingPath path =
     do
       apath  <- makeAbsolutePath @t @f path
@@ -237,11 +237,11 @@ findPathM = findPathBy existingPath
       pure $ pure apath `whenTrue` doesExist
 
 defaultImportPath
-  :: (MonadNix e t f m, MonadState (HashMap FilePath NExprLoc, b) m)
-  => FilePath
+  :: (MonadNix e t f m, MonadState (HashMap Path NExprLoc, b) m)
+  => Path
   -> m (NValue t f m)
 defaultImportPath path = do
-  traceM $ "Importing file " <> path
+  traceM $ coerce $ "Importing file " <> path
   withFrame Info (ErrorCall $ "While importing file " <> show path) $ do
     imports <- gets fst
     evalExprLoc =<<
@@ -260,14 +260,14 @@ defaultImportPath path = do
         pure  -- return expr
         (M.lookup path imports)
 
-defaultPathToDefaultNix :: MonadNix e t f m => FilePath -> m FilePath
+defaultPathToDefaultNix :: MonadNix e t f m => Path -> m Path
 defaultPathToDefaultNix = pathToDefaultNixFile
 
 -- Given a path, determine the nix file to load
-pathToDefaultNixFile :: MonadFile m => FilePath -> m FilePath
+pathToDefaultNixFile :: MonadFile m => Path -> m Path
 pathToDefaultNixFile p = do
   isDir <- doesDirectoryExist p
-  pure $ p </> "default.nix" `whenTrue` isDir
+  pure $ coerce $ coerce p </> "default.nix" `whenTrue` isDir
 
 defaultTraceEffect :: MonadPutStr m => String -> m ()
 defaultTraceEffect = Nix.Effects.putStrLn

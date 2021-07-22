@@ -11,6 +11,7 @@ import qualified Data.String as String
 import           Data.Time
 import qualified EvalTests
 import           NeatInterpolation (text)
+import           Nix.Utils
 import qualified Nix
 import           Nix.Expr.Types
 import           Nix.String
@@ -68,7 +69,7 @@ ensureNixpkgsCanParse =
                   "os-specific/linux/udisks/2-default.nix"  `isSuffixOf` file) $ do
             -- Parse and deepseq the resulting expression tree, to ensure the
             -- parser is fully executed.
-            _ <- consider file (parseNixFileLoc file) $ Exc.evaluate . force
+            _ <- consider (coerce file) (parseNixFileLoc (coerce file)) $ Exc.evaluate . force
             pass
     v -> fail $ "Unexpected parse from default.nix: " <> show v
  where
@@ -80,7 +81,7 @@ ensureNixpkgsCanParse =
     do
       x <- action
       either
-        (\ err -> errorWithoutStackTrace $ "Parsing " <> path <> " failed: " <> show err)
+        (\ err -> errorWithoutStackTrace $ "Parsing " <> (coerce @Path path) <> " failed: " <> show err)
         k
         x
 

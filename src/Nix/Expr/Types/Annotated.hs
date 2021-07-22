@@ -31,6 +31,7 @@ import           Data.Functor.Compose
 import           Data.Hashable.Lifted
 import           Data.Ord.Deriving
 import           GHC.Generics
+import           Nix.Utils
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Text.Megaparsec                ( unPos
@@ -203,10 +204,10 @@ pattern NList_ ann x = AnnFP ann (NList x)
 pattern NSet_ :: SrcSpan -> Recursivity -> [Binding r] -> NExprLocF r
 pattern NSet_ ann recur x = AnnFP ann (NSet recur x)
 
-pattern NLiteralPath_ :: SrcSpan -> FilePath -> NExprLocF r
+pattern NLiteralPath_ :: SrcSpan -> Path -> NExprLocF r
 pattern NLiteralPath_ ann x = AnnFP ann (NLiteralPath x)
 
-pattern NEnvPath_ :: SrcSpan -> FilePath -> NExprLocF r
+pattern NEnvPath_ :: SrcSpan -> Path -> NExprLocF r
 pattern NEnvPath_ ann x = AnnFP ann (NEnvPath x)
 
 pattern NUnary_ :: SrcSpan -> NUnaryOp -> r -> NExprLocF r

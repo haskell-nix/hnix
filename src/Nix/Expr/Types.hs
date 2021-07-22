@@ -113,7 +113,7 @@ instance FromJSON SourcePos
 -- * Components of Nix expressions
 
 -- NExpr is a composition of
---   * direct reuse of the Haskell types (list, FilePath, Text)
+--   * direct reuse of the Haskell types (list, Path, Text)
 --   * NAtom
 --   * Types in this section
 --   * Fixpoint nature
@@ -524,14 +524,14 @@ data NExprF r
   --
   -- > NSet Recursive    [NamedVar x y _]         ~  rec { x = y; }
   -- > NSet NonRecursive [Inherit Nothing [x] _]  ~  { inherit x; }
-  | NLiteralPath !FilePath
+  | NLiteralPath !Path
   -- ^ A path expression, which is evaluated to a store path. The path here
   -- can be relative, in which case it's evaluated relative to the file in
   -- which it appears.
   --
   -- > NLiteralPath "/x"                           ~  /x
   -- > NLiteralPath "x/y"                          ~  x/y
-  | NEnvPath !FilePath
+  | NEnvPath !Path
   -- ^ A path which refers to something in the Nix search path (the NIX_PATH
   -- environment variable. For example, @<nixpkgs/pkgs>@.
   --

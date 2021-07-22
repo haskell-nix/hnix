@@ -2,11 +2,15 @@
 {-# language FunctionalDependencies #-}
 {-# language ScopedTypeVariables #-}
 {-# language TemplateHaskell #-}
+{-# language GeneralizedNewtypeDeriving #-}
 
 {-# options_ghc -Wno-missing-signatures #-}
 
 module Nix.Utils (module Nix.Utils, module X) where
 
+import           Data.Binary                    ( Binary )
+import           Data.Data                      ( Data )
+import           Codec.Serialise                ( Serialise )
 import           Control.Monad.Fix              ( MonadFix(..) )
 import           Control.Monad.Free             ( Free(..) )
 import           Control.Monad.Trans.Control    ( MonadTransControl(..) )
@@ -35,6 +39,22 @@ traceM = const pass
 #endif
 
 $(makeLensesBy (\n -> pure $ "_" <> n) ''Fix)
+
+-- | To have explicit type boundary between FilePath & String.
+newtype Path = Path FilePath
+  deriving
+    ( Eq, Ord, Generic
+    , Typeable, Data, NFData, Serialise, Binary, A.ToJSON, A.FromJSON
+    , Show, Read, Hashable
+    , Semigroup, Monoid
+    )
+
+instance ToText Path where
+  toText = toText @String . coerce
+
+instance IsString Path where
+  fromString = coerce
+
 
 -- | > Hashmap Text -- type synonym
 type KeyMap = HashMap Text
@@ -256,3 +276,4 @@ mapPair ~(f,g) ~(a,b) = (f a, g b)
 stub :: (Applicative f, Monoid a) => f a
 stub = pure mempty
 {-# inline stub #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}

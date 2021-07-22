@@ -234,9 +234,6 @@ instance Convertible e t f m
 
   fromValue = fromMayToValue $ TString mempty
 
-newtype Path = Path FilePath
-    deriving Show
-
 instance ( Convertible e t f m
          , MonadValue (NValue t f m) m
          )

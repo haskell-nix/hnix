@@ -236,8 +236,8 @@ mkFloatF = NConstant . NFloat
 
 -- | Unfixed @mkPath@.
 mkPathF :: Bool -> FilePath -> NExprF a
-mkPathF False = NLiteralPath
-mkPathF True  = NEnvPath
+mkPathF False = NLiteralPath . coerce
+mkPathF True  = NEnvPath . coerce
 
 -- | Unfixed @mkEnvPath@.
 mkEnvPathF :: FilePath -> NExprF a

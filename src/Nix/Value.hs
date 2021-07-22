@@ -116,7 +116,7 @@ data NValueF p m r
      -- | A string has a value and a context, which can be used to record what a
      -- string has been build from
     | NVStrF NixString
-    | NVPathF FilePath
+    | NVPathF Path
     | NVListF [r]
     | NVSetF PositionSet (AttrSet r)
       -- ^
@@ -418,11 +418,11 @@ nvStr' :: Applicative f
 nvStr' = NValue' . pure . NVStrF
 
 
--- | Haskell @FilePath@ to the Nix path,
+-- | Haskell @Path@ to the Nix path,
 nvPath' :: Applicative f
-  => FilePath
+  => Path
   -> NValue' t f m r
-nvPath' = NValue' . pure . NVPathF
+nvPath' = NValue' . pure . NVPathF . coerce
 
 
 -- | Haskell @[]@ to the Nix @[]@,
@@ -605,7 +605,7 @@ nvStrWithoutContext = nvStr . makeNixStringWithoutContext
 
 -- | Life of a Haskell FilePath to the life of a Nix path
 nvPath :: Applicative f
-  => FilePath
+  => Path
   -> NValue t f m
 nvPath = Free . nvPath'
 

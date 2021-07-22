@@ -170,7 +170,7 @@ foldNixPath
   :: forall e t f m r
    . MonadNix e t f m
   => r
-  -> (FilePath -> Maybe Text -> NixPathEntryType -> r -> m r)
+  -> (Path -> Maybe Text -> NixPathEntryType -> r -> m r)
   -> m r
 foldNixPath z f =
   do
@@ -185,7 +185,7 @@ foldNixPath z f =
     dataDir  <-
       maybe
         getDataDir
-        (pure . toString)
+        (pure . coerce . toString)
         mDataDir
 
     foldrM
@@ -207,8 +207,8 @@ foldNixPath z f =
 
   go (x, ty) rest =
     case Text.splitOn "=" x of
-      [p] -> f (toString p) mempty ty rest
-      [n, p] -> f (toString p) (pure n) ty rest
+      [p] -> f (coerce $ toString p) mempty ty rest
+      [n, p] -> f (coerce $ toString p) (pure n) ty rest
       _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " <> show x
 
 attrsetGet :: MonadNix e t f m => VarName -> AttrSet (NValue t f m) -> m (NValue t f m)
@@ -331,7 +331,7 @@ hasKind =
     (isJust @a)
 
 
-absolutePathFromValue :: MonadNix e t f m => NValue t f m -> m FilePath
+absolutePathFromValue :: MonadNix e t f m => NValue t f m -> m Path
 absolutePathFromValue =
   \case
     NVStr ns ->
@@ -340,7 +340,7 @@ absolutePathFromValue =
           path = toString $ stringIgnoreContext ns
 
         unless (isAbsolute path) $ throwError $ ErrorCall $ "string " <> show path <> " doesn't represent an absolute path"
-        pure path
+        pure $ coerce path
 
     NVPath path -> pure path
     v           -> throwError $ ErrorCall $ "expected a path, got " <> show v
@@ -413,7 +413,7 @@ nixPathNix =
                   PathEntryPath -> ("path", nvPath p)
                   PathEntryURI  -> ( "uri", mkNvStr p)
 
-                , ( "prefix", mkNvStr $ toString $ fromMaybe "" mn)
+                , ( "prefix", mkNvStr $ coerce $ toString $ fromMaybe "" mn)
                 ]
               )
             )
@@ -859,7 +859,7 @@ dirOfNix nvdir =
 
     case dir of
       NVStr ns -> pure $ nvStr $ modifyNixContents (toText . takeDirectory . toString) ns
-      NVPath path -> pure $ nvPath $ takeDirectory path
+      NVPath path -> pure $ nvPath $ coerce $ takeDirectory $ coerce path
       v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " <> show v
 
 -- jww (2018-04-28): This should only be a string argument, and not coerced?
@@ -1116,9 +1116,9 @@ toFileNix name s =
     name' <- fromStringNoContext =<< fromValue name
     s'    <- fromValue s
     mres  <-
-      (toFile_ `on` toString)
-        name'
-        (stringIgnoreContext s')
+      toFile_
+        (coerce $ toString name')
+        (toString $ stringIgnoreContext s')
 
     let
       t  = coerce $ toText @FilePath $ coerce mres
@@ -1136,7 +1136,7 @@ pathExistsNix nvpath =
     toValue =<<
       case path of
         NVPath p  -> doesPathExist p
-        NVStr  ns -> doesPathExist $ toString $ stringIgnoreContext ns
+        NVStr  ns -> doesPathExist $ coerce $ toString $ stringIgnoreContext ns
         _v -> throwError $ ErrorCall $ "builtins.pathExists: expected path, got " <> show _v
 
 isAttrsNix
@@ -1252,7 +1252,7 @@ scopedImportNix
 scopedImportNix asetArg pathArg =
   do
     (coerce -> scope) <- fromValue @(AttrSet (NValue t f m)) asetArg
-    (Path p) <- fromValue pathArg
+    p <- fromValue pathArg
 
     path  <- pathToDefaultNix @t @f @m p
     path' <-
@@ -1263,10 +1263,10 @@ scopedImportNix asetArg pathArg =
         )
         (\ res ->
           do
-            (Path p') <- fromValue =<< demand res
+            p' <- fromValue @Path =<< demand res
 
             traceM $ "Current file being evaluated is: " <> show p'
-            pure $ takeDirectory p' </> path
+            pure $ coerce $ takeDirectory (coerce p') </> (coerce path)
         )
         =<< lookupVar "__cur_file"
 
@@ -1449,7 +1449,7 @@ findFileNix nvaset nvfilepath =
     case (aset, filePath) of
       (NVList x, NVStr ns) ->
         do
-          mres <- findPath @t @f @m x $ toString $ stringIgnoreContext ns
+          mres <- findPath @t @f @m x $ coerce $ toString $ stringIgnoreContext ns
 
           pure $ nvPath mres
 
@@ -1465,9 +1465,10 @@ readDirNix nvpath =
     items          <- listDirectory path
 
     let
+      detectFileTypes :: Path -> m (VarName, FileType)
       detectFileTypes item =
         do
-          s <- getSymbolicLinkStatus $ path </> item
+          s <- getSymbolicLinkStatus $ coerce $ (coerce path) </> (coerce item)
           let
             t =
               if
@@ -1946,7 +1947,7 @@ builtinsList = sequence
 withNixContext
   :: forall e t f m r
    . (MonadNix e t f m, Has e Options)
-  => Maybe FilePath
+  => Maybe Path
   -> m r
   -> m r
 withNixContext mpath action =

@@ -59,7 +59,7 @@ nixEval
   -> Maybe FilePath
   -> Fix g
   -> m a
-nixEval transform alg mpath = withNixContext mpath . adi transform alg
+nixEval transform alg mpath = withNixContext (coerce mpath) . adi transform alg
 
 -- | Evaluate a nix expression in the default context
 nixEvalExpr
@@ -91,7 +91,7 @@ nixTracingEvalExprLoc
   => Maybe FilePath
   -> NExprLoc
   -> m (NValue t f m)
-nixTracingEvalExprLoc mpath = withNixContext mpath . evalExprLoc
+nixTracingEvalExprLoc mpath = withNixContext (coerce mpath) . evalExprLoc
 
 evaluateExpression
   :: (MonadNix e t f m, Has e Options)

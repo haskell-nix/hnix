@@ -13,6 +13,7 @@ module ParserTests (tests) where
 import Prelude hiding (($<))
 import Data.Fix
 import NeatInterpolation (text)
+import Nix.Utils
 import Nix.Atoms
 import Nix.Expr
 import Nix.Parser
@@ -722,18 +723,18 @@ assertParseTextLoc str expected =
     )
     (parseNixTextLoc str)
 
-assertParseFile :: FilePath -> NExpr -> Assertion
+assertParseFile :: Path -> NExpr -> Assertion
 assertParseFile file expected =
   do
-  res <- parseNixFile $ "data/" <> file
-  either
-    (throwParseError "data file" file)
-    (assertEqual
-      ("Parsing data file " <> file)
-      (stripPositionInfo expected)
-      . stripPositionInfo
-    )
-    res
+    res <- parseNixFile $ "data/" <> file
+    either
+      (throwParseError "data file" $ toText file)
+      (assertEqual
+        ("Parsing data file " <> (coerce file))
+        (stripPositionInfo expected)
+        . stripPositionInfo
+      )
+      res
 
 assertParseFail :: NixLang -> Assertion
 assertParseFail str =

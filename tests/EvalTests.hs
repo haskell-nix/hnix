@@ -435,14 +435,14 @@ tests :: TestTree
 tests = $testGroupGenerator
 
 genEvalCompareTests = do
-    td <- D.listDirectory testDir
+    td <- D.listDirectory (coerce testDir)
 
     let unmaskedFiles = filter ((==".nix") . takeExtension) td
-    let files = unmaskedFiles \\ maskedFiles
+    let files = unmaskedFiles \\ (coerce maskedFiles)
 
     pure $ testGroup "Eval comparison tests" $ fmap (mkTestCase testDir) files
   where
-    mkTestCase td f = testCase f $ assertEvalFileMatchesNix (td </> f)
+    mkTestCase td f = testCase f $ assertEvalFileMatchesNix $ coerce $ (coerce td) </> f
 
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
 constantEqual expected actual = do
@@ -499,9 +499,9 @@ freeVarsEqual a xs =
       free' = freeVars a'
     assertEqual "" xs' free'
 
-maskedFiles :: [FilePath]
+maskedFiles :: [Path]
 maskedFiles =
   [ "builtins.fetchurl-01.nix" ]
 
-testDir :: FilePath
+testDir :: Path
 testDir = "tests/eval-compare"
