@@ -57,7 +57,17 @@ import           Instances.TH.Lift              ()  -- importing Lift Text fo GH
 #endif
 
 
--- * Utilitary: orphan instances
+-- * Utils
+
+-- | Holds file positionng information for abstrations.
+-- A type synonym for @HashMap VarName SourcePos@.
+type PositionSet = HashMap VarName SourcePos
+
+--  2021-07-16: NOTE: Should replace @ParamSet@ List
+-- | > Hashmap VarName -- type synonym
+type AttrSet = HashMap VarName
+
+-- ** Orphan instances
 
 -- Placed here because TH inference depends on declaration sequence.
 
@@ -101,11 +111,6 @@ instance FromJSON Pos where
   parseJSON = fmap mkPos . parseJSON
 instance FromJSON SourcePos
 
--- | Holds file positionng information for abstrations.
--- A type synonym for @HashMap VarName SourcePos@.
-type PositionSet = HashMap VarName SourcePos
-
-
 -- * Components of Nix expressions
 
 -- NExpr is a composition of
@@ -128,10 +133,6 @@ instance ToString VarName where
   toString = toString @Text . coerce
 
 -- ** @Params@
-
---  2021-07-16: NOTE: Should replace @ParamSet@ List
--- | > Hashmap VarName -- type synonym
-type AttrSet = HashMap VarName
 
 -- This uses an association list because nix XML serialization preserves the
 -- order of the param set.
