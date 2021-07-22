@@ -9,7 +9,6 @@
 {-# LANGUAGE TypeFamilies #-}
 
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
-{-# LANGUAGE ViewPatterns #-}
 
 module Nix.Type.Infer
   ( Constraint(..)
