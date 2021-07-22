@@ -21,19 +21,18 @@ module Nix.Expr.Types where
 
 import qualified Codec.Serialise                as Serialise
 import           Codec.Serialise                ( Serialise )
-import           Control.DeepSeq
+import           Control.DeepSeq                ( NFData1(..) )
 import           Data.Aeson
-import           Data.Aeson.TH
 import qualified Data.Binary                   as Binary
 import           Data.Binary                    ( Binary )
 import           Data.Data
-import           Data.Fix
+import           Data.Fix                       ( Fix(Fix) )
 import           Data.Functor.Classes
 import           Data.Hashable.Lifted
 import qualified Data.HashMap.Lazy             as MapL
 import qualified Data.List.NonEmpty            as NE
 import qualified Text.Show
-import           Data.Traversable
+import           Data.Traversable               ( fmapDefault, foldMapDefault )
 import           GHC.Generics
 import qualified Language.Haskell.TH.Syntax    as TH
 import           Lens.Family2
@@ -43,17 +42,17 @@ import           Text.Megaparsec.Pos            ( SourcePos(SourcePos)
                                                 , mkPos
                                                 , unPos
                                                 )
-import           Text.Show.Deriving
-import           Text.Read.Deriving
-import           Data.Eq.Deriving
-import           Data.Ord.Deriving
+import           Text.Show.Deriving             ( deriveShow1, deriveShow2 )
+import           Text.Read.Deriving             ( deriveRead1, deriveRead2 )
+import           Data.Eq.Deriving               ( deriveEq1  , deriveEq2   )
+import           Data.Ord.Deriving              ( deriveOrd1 , deriveOrd2  )
+import           Data.Aeson.TH                  ( deriveJSON2 )
 import qualified Type.Reflection               as Reflection
-import           Type.Reflection                ( eqTypeRep )
 import           Nix.Atoms
 import           Nix.Utils
 #if !MIN_VERSION_text(1,2,4)
 -- NOTE: Remove package @th-lift-instances@ removing this
-import           Instances.TH.Lift              ()  -- importing Lift Text fo GHC 8.6
+import           Instances.TH.Lift              ()  -- importing Lift Text for GHC 8.6
 #endif
 
 
@@ -625,7 +624,7 @@ instance TH.Lift NExpr where
           -- Reflection is a key strategy in metaprogramming.
           -- <https://en.wikipedia.org/wiki/Reflective_programming>
           HRefl <-
-            eqTypeRep
+            Reflection.eqTypeRep
               (Reflection.typeRep @Text)
               (Reflection.typeOf  b    )
           pure [| $(TH.lift b) |]
