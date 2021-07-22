@@ -427,7 +427,7 @@ argExpr =
       getMore :: ParsecT  Void Text (State SourcePos) ([(VarName, Maybe NExprLoc)], Variadic)
       getMore =
         -- Could be nothing, in which just return what we have so far.
-        option (acc, Closed) $
+        option (acc, mempty) $
           do
             -- Get an argument name and an optional default.
             pair <-
@@ -438,7 +438,7 @@ argExpr =
             let args = acc <> [pair]
 
             -- Either return this, or attempt to get a comma and restart.
-            option (args, Closed) $ comma *> go args
+            option (args, mempty) $ comma *> go args
 
 nixBinders :: Parser [Binding NExprLoc]
 nixBinders = (inherit <+> namedVar) `endBy` semi where

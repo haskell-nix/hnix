@@ -480,7 +480,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
       Judgment
         mempty
         mempty
-        (TSet Closed $
+        (TSet mempty $
           M.fromList
             [ ("file", typePath)
             , ("line", typeInt )

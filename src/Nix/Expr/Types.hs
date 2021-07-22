@@ -147,6 +147,13 @@ data Variadic = Closed | Variadic
     , Show, Read, Hashable
     )
 
+instance Semigroup (Variadic) where
+  (<>) Closed Closed = Closed
+  (<>) _      _      = Variadic
+
+instance Monoid Variadic where
+  mempty = Closed
+
 --  2021-07-19: NOTE: mkParamSet with default types
 
 -- | @Params@ represents all the ways the formal parameters to a
