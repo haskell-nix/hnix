@@ -7,8 +7,8 @@
 {-# language TypeFamilies #-}
 {-# language UndecidableInstances #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# options_ghc -Wno-orphans #-}
+{-# options_ghc -fno-warn-name-shadowing #-}
 
 
 module Nix.Exec where

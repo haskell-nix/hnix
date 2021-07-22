@@ -3,7 +3,7 @@
 {-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 
-{-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
+{-# options_ghc -Wno-missing-pattern-synonym-signatures #-}
 
 module Nix.Value.Equal where
 

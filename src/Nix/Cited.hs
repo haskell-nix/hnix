@@ -1,7 +1,7 @@
 {-# language DeriveAnyClass #-}
 {-# language TemplateHaskell #-}
 
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
+{-# options_ghc -Wno-missing-signatures #-}
 
 module Nix.Cited where
 

@@ -3,7 +3,7 @@
 {-# language ScopedTypeVariables #-}
 {-# language TemplateHaskell #-}
 
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
+{-# options_ghc -Wno-missing-signatures #-}
 
 module Nix.Utils (module Nix.Utils, module X) where
 

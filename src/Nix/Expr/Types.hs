@@ -6,8 +6,8 @@
 {-# language TemplateHaskell #-}
 {-# language TypeFamilies #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
+{-# options_ghc -Wno-orphans #-}
+{-# options_ghc -Wno-missing-signatures #-}
 
 -- | The Nix expression type and supporting types.
 --

@@ -7,8 +7,8 @@
 {-# language ScopedTypeVariables #-}
 {-# language TemplateHaskell #-}
 
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
-{-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
+{-# options_ghc -Wno-missing-signatures #-}
+{-# options_ghc -Wno-missing-pattern-synonym-signatures #-}
 
 -- | The core of the type system, Nix language values
 module Nix.Value

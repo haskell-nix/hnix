@@ -8,7 +8,7 @@
 {-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
+{-# options_ghc -Wno-name-shadowing #-}
 
 module Nix.Type.Infer
   ( Constraint(..)

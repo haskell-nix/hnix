@@ -2,7 +2,7 @@
 {-# language ScopedTypeVariables #-}
 {-# language TemplateHaskell #-}
 
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
+{-# options_ghc -Wno-missing-signatures #-}
 
 
 module EvalTests (tests, genEvalCompareTests) where

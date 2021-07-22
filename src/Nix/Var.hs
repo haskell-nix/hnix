@@ -2,8 +2,8 @@
 {-# language ConstraintKinds #-}
 {-# language ScopedTypeVariables #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
-{-# OPTIONS_GHC -Wno-unused-top-binds #-}
+{-# options_ghc -Wno-orphans #-}
+{-# options_ghc -Wno-unused-top-binds #-}
 
 module Nix.Var ()
 where

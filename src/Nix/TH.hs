@@ -1,7 +1,7 @@
 {-# language QuasiQuotes #-}
 {-# language TemplateHaskell #-}
 
-{-# OPTIONS_GHC -Wno-missing-fields #-}
+{-# options_ghc -Wno-missing-fields #-}
 
 module Nix.TH where
 

@@ -3,7 +3,7 @@
 {-# language TypeFamilies #-}
 {-# language UndecidableInstances #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
+{-# options_ghc -Wno-orphans #-}
 
 
 module Nix.Fresh where

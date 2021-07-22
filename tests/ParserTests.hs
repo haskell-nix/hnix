@@ -3,9 +3,9 @@
 {-# language RankNTypes #-}
 {-# language ExtendedDefaultRules #-}
 
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
-{-# OPTIONS_GHC -Wno-type-defaults #-}
+{-# options_ghc -fno-warn-name-shadowing #-}
+{-# options_ghc -Wno-missing-signatures #-}
+{-# options_ghc -Wno-type-defaults #-}
 
 
 module ParserTests (tests) where

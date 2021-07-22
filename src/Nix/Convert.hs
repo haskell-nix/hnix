@@ -5,7 +5,7 @@
 {-# language TypeFamilies #-}
 {-# language UndecidableInstances #-}
 
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# options_ghc -fno-warn-name-shadowing #-}
 
 -- | Although there are a lot of instances in this file, really it's just a
 --   combinatorial explosion of the following combinations:

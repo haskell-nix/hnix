@@ -1,7 +1,7 @@
 {-# language CPP #-}
 {-# language DeriveAnyClass #-}
 
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# options_ghc -fno-warn-name-shadowing #-}
 
 -- | Main module for parsing Nix expressions.
 module Nix.Parser

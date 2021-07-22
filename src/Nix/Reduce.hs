@@ -6,7 +6,7 @@
 {-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# options_ghc -fno-warn-name-shadowing #-}
 
 
 -- | This module provides a "reducing" expression evaluator, which reduces

@@ -7,8 +7,8 @@
 {-# language TypeFamilies #-}
 {-# language UndecidableInstances #-}
 
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-{-# OPTIONS_GHC -Wno-missing-methods #-}
+{-# options_ghc -fno-warn-name-shadowing #-}
+{-# options_ghc -Wno-missing-methods #-}
 
 module Nix.Lint where
 

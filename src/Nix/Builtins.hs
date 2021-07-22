@@ -12,7 +12,7 @@
 {-# language UndecidableInstances #-}
 {-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# options_ghc -fno-warn-name-shadowing #-}
 
 -- | Code that implements Nix builtins. Lists the functions that are built into the Nix expression evaluator. Some built-ins (aka `derivation`), are always in the scope, so they can be accessed by the name. To keap the namespace clean, most built-ins are inside the `builtins` scope - a set that contains all what is a built-in.
 module Nix.Builtins

@@ -1,7 +1,7 @@
 {-# language CPP #-}
 {-# language ScopedTypeVariables #-}
 
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# options_ghc -fno-warn-name-shadowing #-}
 
 
 module Nix.Pretty where
