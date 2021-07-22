@@ -57,7 +57,7 @@ import           Instances.TH.Lift              ()  -- importing Lift Text fo GH
 #endif
 
 
--- * Utils
+-- * utils
 
 -- | Holds file positionng information for abstrations.
 -- A type synonym for @HashMap VarName SourcePos@.
@@ -67,7 +67,7 @@ type PositionSet = HashMap VarName SourcePos
 -- | > Hashmap VarName -- type synonym
 type AttrSet = HashMap VarName
 
--- ** Orphan instances
+-- ** orphan instances
 
 -- Placed here because TH inference depends on declaration sequence.
 
@@ -119,6 +119,8 @@ instance FromJSON SourcePos
 --   * Types in this section
 --   * Fixpoint nature
 
+-- ** newtype VarName
+
 newtype VarName = VarName Text
   deriving
     ( Eq, Ord, Generic
@@ -132,7 +134,9 @@ instance IsString VarName where
 instance ToString VarName where
   toString = toString @Text . coerce
 
--- ** @Params@
+-- ** data Params
+
+-- *** utils
 
 -- This uses an association list because nix XML serialization preserves the
 -- order of the param set.
@@ -152,7 +156,7 @@ instance Semigroup (Variadic) where
 instance Monoid Variadic where
   mempty = Closed
 
---  2021-07-19: NOTE: mkParamSet with default types
+-- *** data Params
 
 -- | @Params@ represents all the ways the formal parameters to a
 -- function can be represented.
@@ -183,12 +187,12 @@ $(deriveRead1 ''Params)
 $(deriveEq1   ''Params)
 $(deriveOrd1  ''Params)
 
--- *** Lens traversals
+-- *** lens traversals
 
 $(makeTraversals ''Params)
 
 
--- ** @Antiquoted@
+-- ** data Antiquoted
 
 -- | 'Antiquoted' represents an expression that is either
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
@@ -227,12 +231,12 @@ $(deriveOrd2  ''Antiquoted)
 $(deriveJSON2 defaultOptions ''Antiquoted)
 
 
--- *** Lens traversals
+-- *** lens traversals
 
 $(makeTraversals ''Antiquoted)
 
 
--- ** @NString@
+-- ** data NString
 
 -- | An 'NString' is a list of things that are either a plain string
 -- or an antiquoted expression. After the antiquotes have been evaluated,
@@ -272,12 +276,12 @@ $(deriveRead1 ''NString)
 $(deriveEq1   ''NString)
 $(deriveOrd1  ''NString)
 
--- *** Lens traversals
+-- *** lens traversals
 
 $(makeTraversals ''NString)
 
 
--- ** @NKeyName@
+-- ** data NKeyName
 
 -- | A 'KeyName' is something that can appear on the left side of an
 -- equals sign. For example, @a@ is a 'KeyName' in @{ a = 3; }@, @let a = 3;
@@ -371,12 +375,12 @@ instance Traversable NKeyName where
     DynamicKey EscapedNewline   -> pure $ DynamicKey EscapedNewline
     StaticKey  key              -> pure $ StaticKey key
 
--- *** Lens traversals
+-- *** lens traversals
 
 $(makeTraversals ''NKeyName)
 
 
--- ** @NAttrPath@
+-- ** type NAttrPath
 
 -- | A selector (for example in a @let@ or an attribute set) is made up
 -- of strung-together key names.
@@ -385,7 +389,7 @@ $(makeTraversals ''NKeyName)
 type NAttrPath r = NonEmpty (NKeyName r)
 
 
--- ** @Binding@
+-- ** data Binding
 
 #if !MIN_VERSION_hashable(1,3,1)
 -- Required by Hashable Binding deriving. There was none of this Hashable instance before mentioned version, remove this in year >2022
@@ -426,12 +430,12 @@ $(deriveEq1   ''Binding)
 $(deriveOrd1  ''Binding)
 --x $(deriveJSON1 defaultOptions ''Binding)
 
--- *** Lens traversals
+-- *** lens traversals
 
 $(makeTraversals ''Binding)
 
 
--- ** @Recursivity@
+-- ** data Recursivity
 
 -- | Distinguishes between recursive and non-recursive. Mainly for attribute
 -- sets.
@@ -445,7 +449,7 @@ data Recursivity
     )
 
 
--- ** @NUnaryOp@
+-- ** data NUnaryOp
 
 -- | There are two unary operations: logical not and integer negation.
 data NUnaryOp
@@ -457,12 +461,12 @@ data NUnaryOp
     , Show, Read, Hashable
     )
 
--- *** Lens traversals
+-- *** lens traversals
 
 $(makeTraversals ''NUnaryOp)
 
 
--- ** @NBinaryOp@
+-- ** data NBinaryOp
 
 -- | Binary operators expressible in the nix language.
 data NBinaryOp
@@ -490,12 +494,12 @@ data NBinaryOp
     , Show, Read, Hashable
     )
 
--- *** Lens traversals
+-- *** lens traversals
 
 $(makeTraversals ''NBinaryOp)
 
 
--- ** @NExprF@ - Nix expressions, base functor
+-- * data NExprF - Nix expressions, base functor
 
 -- | The main Nix expression type. As it is polimophic, has a functor,
 -- which allows to traverse expressions and map functions over them.
@@ -594,12 +598,12 @@ $(deriveEq1   ''NExprF)
 $(deriveOrd1  ''NExprF)
 --x $(deriveJSON1 defaultOptions ''NExprF)
 
--- *** Lens traversals
+-- ** lens traversals
 
 $(makeTraversals ''NExprF)
 
 
--- *** @NExpr@
+-- ** type NExpr
 
 -- | The monomorphic expression type is a fixed point of the polymorphic one.
 type NExpr = Fix NExprF
@@ -685,7 +689,7 @@ nullPos = on (SourcePos "<string>") mkPos 1 1
 
 -- * Dead code
 
--- ** @class NExprAnn@
+-- ** class NExprAnn
 
 class NExprAnn ann g | g -> ann where
   fromNExpr :: g r -> (NExprF r, ann)
