@@ -3,7 +3,9 @@
 module Nix
   ( module Nix.Cache
   , module Nix.Exec
-  , module Nix.Expr
+  , module Nix.Expr.Types
+  , module Nix.Expr.Shorthands
+  , module Nix.Expr.Types.Annotated
   , module Nix.Frames
   , module Nix.Render.Frame
   , module Nix.Normal
@@ -34,7 +36,9 @@ import           Nix.Builtins
 import           Nix.Cache
 import qualified Nix.Eval                      as Eval
 import           Nix.Exec
-import           Nix.Expr
+import           Nix.Expr.Types
+import           Nix.Expr.Shorthands
+import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.String
 import           Nix.Normal

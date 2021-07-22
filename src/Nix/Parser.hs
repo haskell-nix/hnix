@@ -65,7 +65,9 @@ import qualified Data.HashSet                  as HashSet
 import qualified Data.Map                      as Map
 import           Data.Text                      ( cons )
 import           Nix.Utils
-import           Nix.Expr                hiding ( ($>) )
+import           Nix.Expr.Types
+import           Nix.Expr.Shorthands     hiding ( ($>) )
+import           Nix.Expr.Types.Annotated
 import           Nix.Expr.Strings               ( escapeCodes
                                                 , stripIndent
                                                 , mergePlain
