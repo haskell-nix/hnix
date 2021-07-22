@@ -11,14 +11,12 @@
 
 -- | The Nix expression type and supporting types.
 --
--- For a brief introduction of the Nix expression language, see
--- <https://nixos.org/nix/manual/#ch-expression-language>.
+-- [Brief introduction of the Nix expression language.](https://nixos.org/nix/manual/#ch-expression-language)
 --
 -- This module is a beginning of a deep embedding (term) of a Nix language into Haskell.
--- Shallow/deep embedding brief:
--- <https://web.archive.org/web/20201112031804/https://alessandrovermeulen.me/2013/07/13/the-difference-between-shallow-and-deep-embedding/>
+-- [Brief on shallow & deep embedding.](https://web.archive.org/web/20201112031804/https://alessandrovermeulen.me/2013/07/13/the-difference-between-shallow-and-deep-embedding/)
 --
--- (additiona info for dev): Big use of TemplateHaskell in the module requires proper (top-down) organization of declarations
+-- (additiona info for dev): Big use of TemplateHaskell in the module requires proper (top-down) organization of declarations.
 module Nix.Expr.Types where
 
 import qualified Codec.Serialise                as Serialise
