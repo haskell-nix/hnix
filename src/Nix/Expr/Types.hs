@@ -1,10 +1,10 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# language ConstraintKinds #-}
+{-# language CPP #-}
+{-# language DeriveAnyClass #-}
+{-# language FunctionalDependencies #-}
+{-# language RankNTypes #-}
+{-# language TemplateHaskell #-}
+{-# language TypeFamilies #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}

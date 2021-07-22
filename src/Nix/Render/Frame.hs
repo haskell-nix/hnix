@@ -1,10 +1,10 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# language CPP #-}
+{-# language AllowAmbiguousTypes #-}
+{-# language ConstraintKinds #-}
+{-# language MultiWayIf #-}
+{-# language GADTs #-}
+{-# language ScopedTypeVariables #-}
+{-# language TypeFamilies #-}
 
 
 -- | Code for rendering/representation of the messages packaged with their context (Frames).

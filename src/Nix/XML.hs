@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# language ScopedTypeVariables #-}
 
 module Nix.XML
   ( toXML )

@@ -1,6 +1,6 @@
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# language DefaultSignatures #-}
+{-# language FunctionalDependencies #-}
+{-# language TypeFamilies #-}
 
 module Nix.Thunk where
 

@@ -1,9 +1,9 @@
-{-# LANGUAGE CPP                #-}
-{-# LANGUAGE DeriveAnyClass     #-}
-{-# LANGUAGE KindSignatures     #-}
-{-# LANGUAGE PatternSynonyms    #-}
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE TemplateHaskell    #-}
+{-# language CPP                #-}
+{-# language DeriveAnyClass     #-}
+{-# language KindSignatures     #-}
+{-# language PatternSynonyms    #-}
+{-# language RankNTypes         #-}
+{-# language TemplateHaskell    #-}
 
 -- | The source location annotated nix expression type and supporting types.
 --

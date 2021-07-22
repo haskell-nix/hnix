@@ -7,8 +7,8 @@
    directory for more details.
 -}
 
-{-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# language MultiWayIf #-}
+{-# language ScopedTypeVariables #-}
 
 module Repl
   ( main

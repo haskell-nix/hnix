@@ -1,10 +1,10 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE PartialTypeSignatures #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# language CPP #-}
+{-# language AllowAmbiguousTypes #-}
+{-# language ConstraintKinds #-}
+{-# language GeneralizedNewtypeDeriving #-}
+{-# language PartialTypeSignatures #-}
+{-# language ScopedTypeVariables #-}
+{-# language TypeFamilies #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 

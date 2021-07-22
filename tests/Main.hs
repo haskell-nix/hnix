@@ -1,4 +1,4 @@
-{-# LANGUAGE QuasiQuotes #-}
+{-# language QuasiQuotes #-}
 
 module Main where
 

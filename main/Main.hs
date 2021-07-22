@@ -1,7 +1,7 @@
-{-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# language MultiWayIf #-}
+{-# language ScopedTypeVariables #-}
+{-# language TypeFamilies #-}
+{-# language RecordWildCards #-}
 
 module Main ( main ) where
 

@@ -1,6 +1,6 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE MonoLocalBinds #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# language DataKinds #-}
+{-# language MonoLocalBinds #-}
+{-# language NoMonomorphismRestriction #-}
 
 
 

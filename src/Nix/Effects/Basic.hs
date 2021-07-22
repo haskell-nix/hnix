@@ -1,5 +1,5 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# language CPP #-}
+{-# language ScopedTypeVariables #-}
 
 module Nix.Effects.Basic where
 

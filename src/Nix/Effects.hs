@@ -1,11 +1,11 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
+{-# language AllowAmbiguousTypes #-}
+{-# language CPP #-}
+{-# language DefaultSignatures #-}
+{-# language TypeFamilies #-}
+{-# language DataKinds #-}
+{-# language GeneralizedNewtypeDeriving #-}
+{-# language UndecidableInstances #-}
+{-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 

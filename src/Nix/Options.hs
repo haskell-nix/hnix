@@ -1,4 +1,4 @@
-{-# LANGUAGE StrictData #-}
+{-# language StrictData #-}
 
 -- | Definitions & defaults for the CLI options
 module Nix.Options where

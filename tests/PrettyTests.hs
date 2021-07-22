@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# language TemplateHaskell #-}
 module PrettyTests (tests) where
 
 import           Test.Tasty

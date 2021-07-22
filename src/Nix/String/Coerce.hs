@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-}
+{-# language CPP #-}
 
 module Nix.String.Coerce where
 

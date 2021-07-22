@@ -1,6 +1,6 @@
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# language QuasiQuotes #-}
+{-# language ScopedTypeVariables #-}
+{-# language TemplateHaskell #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 

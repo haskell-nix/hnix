@@ -1,5 +1,5 @@
-{-# LANGUAGE PartialTypeSignatures #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# language PartialTypeSignatures #-}
+{-# language ScopedTypeVariables #-}
 
 module TestCommon where
 

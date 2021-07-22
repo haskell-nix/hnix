@@ -1,7 +1,7 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# language CPP #-}
+{-# language FunctionalDependencies #-}
+{-# language ScopedTypeVariables #-}
+{-# language TemplateHaskell #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 

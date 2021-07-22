@@ -1,5 +1,5 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveAnyClass #-}
+{-# language CPP #-}
+{-# language DeriveAnyClass #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 

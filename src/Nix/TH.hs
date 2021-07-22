@@ -1,5 +1,5 @@
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# language QuasiQuotes #-}
+{-# language TemplateHaskell #-}
 
 {-# OPTIONS_GHC -Wno-missing-fields #-}
 

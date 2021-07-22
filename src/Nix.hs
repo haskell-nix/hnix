@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# language ScopedTypeVariables #-}
 
 module Nix
   ( module Nix.Cache

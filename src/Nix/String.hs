@@ -1,4 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# language GeneralizedNewtypeDeriving #-}
 
 module Nix.String
   ( NixString

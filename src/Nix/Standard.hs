@@ -1,8 +1,8 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# language TypeFamilies #-}
+{-# language CPP #-}
+{-# language ScopedTypeVariables #-}
+{-# language GeneralizedNewtypeDeriving #-}
+{-# language UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-orphans #-}
 

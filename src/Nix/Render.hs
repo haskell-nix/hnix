@@ -1,12 +1,12 @@
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE MultiWayIf #-}
+{-# language UndecidableInstances #-}
+{-# language CPP #-}
+{-# language ConstraintKinds #-}
+{-# language DefaultSignatures #-}
+{-# language GADTs #-}
+{-# language ScopedTypeVariables #-}
+{-# language TypeFamilies #-}
+{-# language TypeOperators #-}
+{-# language MultiWayIf #-}
 
 module Nix.Render where
 

@@ -1,5 +1,5 @@
-{-# LANGUAGE CPP            #-}
-{-# LANGUAGE DeriveAnyClass #-}
+{-# language CPP            #-}
+{-# language DeriveAnyClass #-}
 
 module Nix.Atoms where
 

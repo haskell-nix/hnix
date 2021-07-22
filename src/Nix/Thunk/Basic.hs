@@ -1,6 +1,6 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# language ConstraintKinds #-}
+{-# language ScopedTypeVariables #-}
+{-# language UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-unused-do-bind #-}
 
 

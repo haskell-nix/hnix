@@ -1,5 +1,5 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# language DeriveAnyClass #-}
+{-# language TemplateHaskell #-}
 
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 

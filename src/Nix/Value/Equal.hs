@@ -1,7 +1,7 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# language AllowAmbiguousTypes #-}
+{-# language ConstraintKinds #-}
+{-# language ScopedTypeVariables #-}
+{-# language TypeFamilies #-}
 
 {-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
 

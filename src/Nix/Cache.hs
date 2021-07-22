@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-}
+{-# language CPP #-}
 
 -- | Reading and writing Nix cache files
 module Nix.Cache where

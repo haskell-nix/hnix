@@ -1,7 +1,7 @@
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ExtendedDefaultRules #-}
+{-# language QuasiQuotes #-}
+{-# language TemplateHaskell #-}
+{-# language RankNTypes #-}
+{-# language ExtendedDefaultRules #-}
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}

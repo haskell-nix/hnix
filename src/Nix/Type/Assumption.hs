@@ -1,6 +1,6 @@
 -- | Basing on the Nix (Hindley–Milner) type system (that provides decidable type inference):
 -- gathering assumptions (inference evidence) about polymorphic types.
-{-# LANGUAGE TypeFamilies #-}
+{-# language TypeFamilies #-}
 module Nix.Type.Assumption
   ( Assumption(..)
   , empty
