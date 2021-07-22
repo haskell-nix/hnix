@@ -348,11 +348,12 @@ instance Hashable1 NKeyName where
 -- occurs not only as last argument in @Antiquoted (NString r) r@
 instance Show1 NKeyName where
   liftShowsPrec sp sl p = \case
-    DynamicKey a -> showsUnaryWith
-      (liftShowsPrec2 (liftShowsPrec sp sl) (liftShowList sp sl) sp sl)
-      "DynamicKey"
-      p
-      a
+    DynamicKey a ->
+      showsUnaryWith
+        (liftShowsPrec2 (liftShowsPrec sp sl) (liftShowList sp sl) sp sl)
+        "DynamicKey"
+        p
+        a
     StaticKey t -> showsUnaryWith Text.Show.showsPrec "StaticKey" p t
 
 -- Deriving this instance automatically is not possible because @r@
