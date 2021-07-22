@@ -242,12 +242,12 @@ $(makeTraversals ''Antiquoted)
 -- the final string is constructed by concatenating all the parts.
 data NString r
   = DoubleQuoted ![Antiquoted Text r]
-  -- ^ Strings wrapped with double-quotes (") can contain literal newline
+  -- ^ Strings wrapped with double-quotes (__@"@__) can contain literal newline
   -- characters, but the newlines are preserved and no indentation is stripped.
   --
   -- > DoubleQuoted [Plain "x",Antiquoted y]   ~  "x${y}"
   | Indented !Int ![Antiquoted Text r]
-  -- ^ Strings wrapped with two single quotes ('') can contain newlines, and
+  -- ^ Strings wrapped with two single quotes (__@''@__) can contain newlines, and
   --   their indentation will be stripped, but the amount stripped is
   --   remembered.
   --
@@ -729,5 +729,4 @@ ekey keys pos f e@(Fix x) | (NSet NonRecursive xs, ann) <- fromNExpr x =
               pure (v, rest)
           )
           ks
-
 ekey _ _ f e = fromMaybe e <$> f Nothing
