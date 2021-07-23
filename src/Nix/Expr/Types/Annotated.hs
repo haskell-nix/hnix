@@ -100,7 +100,7 @@ pattern AnnE ann a = Fix (AnnFP ann a)
 
 type AnnA ann f = Fix (AnnF ann f)
 
-annToAnnF :: Ann ann (f (Fix (AnnF ann f))) -> Fix (AnnF ann f)
+annToAnnF :: Ann ann (f (AnnA ann f)) -> AnnA ann f
 annToAnnF (Ann ann a) = AnnE ann a
 
 -- ** Instances
