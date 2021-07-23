@@ -91,18 +91,19 @@ pattern AnnF
 pattern AnnF ann f = Compose (AnnUnit ann f)
 {-# complete AnnF #-}
 
+
+type Ann ann f = Fix (AnnF ann f)
+
 -- | Pattern: @Fix (Compose (AnnUnit _ _))@.
 -- Fix composes units of (annotations & the annotated) into one object.
 -- Giving annotated expression.
 pattern Ann
   :: forall ann (f :: Type -> Type)
   . ann
-  -> f (Fix (AnnF ann f))
-  -> Fix (AnnF ann f)
+  -> f (Ann ann f)
+  -> Ann ann f
 pattern Ann ann a = Fix (AnnF ann a)
 {-# complete Ann #-}
-
-type Ann ann f = Fix (AnnF ann f)
 
 annToAnnF :: AnnUnit ann (f (Ann ann f)) -> Ann ann f
 annToAnnF (AnnUnit ann a) = Ann ann a
@@ -150,11 +151,11 @@ instance Binary NExprLoc
 
 -- * Other
 
-stripAnnotation :: Functor f => Fix (AnnF ann f) -> Fix f
-stripAnnotation = unfoldFix (stripAnn . unFix)
+stripAnnF :: AnnF ann f r -> f r
+stripAnnF = annotated . getCompose
 
-stripAnn :: AnnF ann f r -> f r
-stripAnn = annotated . getCompose
+stripAnnotation :: Functor f => Ann ann f -> Fix f
+stripAnnotation = unfoldFix (stripAnnF . unFix)
 
 nUnary :: AnnUnit SrcSpan NUnaryOp -> NExprLoc -> NExprLoc
 nUnary (AnnUnit s1 u) e1@(Ann s2 _) = Ann (s1 <> s2) $ NUnary u e1

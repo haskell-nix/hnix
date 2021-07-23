@@ -214,7 +214,7 @@ nixNull = annotateLocation1 (mkNullF <$ reserved "null" <?> "null")
 -- however this position doesn't include the parsed parentheses, so remove the
 -- "inner" location annotateion and annotate again, including the parentheses.
 nixParens :: Parser NExprLoc
-nixParens = annotateLocation1 (parens (stripAnn . unFix <$> nixToplevelForm) <?> "parens")
+nixParens = annotateLocation1 (parens (stripAnnF . unFix <$> nixToplevelForm) <?> "parens")
 
 nixList :: Parser NExprLoc
 nixList = annotateLocation1 (brackets (NList <$> many nixTerm) <?> "list")

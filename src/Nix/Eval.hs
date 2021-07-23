@@ -561,4 +561,4 @@ evalContent
   :: MonadNixEval v m
   => AnnF ann NExprF (m v)
   -> m v
-evalContent = eval . stripAnn
+evalContent = eval . stripAnnF

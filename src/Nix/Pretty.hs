@@ -198,7 +198,7 @@ prettyOriginExpr
   -> Doc ann
 prettyOriginExpr = withoutParens . go
  where
-  go = exprFNixDoc . stripAnn . fmap render
+  go = exprFNixDoc . stripAnnF . fmap render
 
   render :: Maybe (NValue t f m) -> NixDoc ann
   render Nothing = simpleExpr "_"
