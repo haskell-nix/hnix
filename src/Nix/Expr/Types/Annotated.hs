@@ -158,35 +158,34 @@ stripAnnotation :: Functor f => Ann ann f -> Fix f
 stripAnnotation = unfoldFix (stripAnnF . unFix)
 
 annNUnary :: AnnUnit SrcSpan NUnaryOp -> NExprLoc -> NExprLoc
-annNUnary (AnnUnit s1 u) e1@(Ann s2 _) = Ann (s1 <> s2) $ NUnary u e1
+annNUnary (AnnUnit s1 u) e1@(Ann s2 _) = NUnaryAnn (s1 <> s2) u e1
 {-# inline annNUnary #-}
 
 annNBinary :: AnnUnit SrcSpan NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
-annNBinary (AnnUnit s1 b) e1@(Ann s2 _) e2@(Ann s3 _) =
-  Ann (s1 <> s2 <> s3) $ NBinary b e1 e2
+annNBinary (AnnUnit s1 b) e1@(Ann s2 _) e2@(Ann s3 _) = NBinaryAnn (s1 <> s2 <> s3) b e1 e2
 
 annNSelect
   :: Maybe NExprLoc -> NExprLoc -> AnnUnit SrcSpan (NAttrPath NExprLoc) -> NExprLoc
-annNSelect Nothing e1@(Ann s2 _) (AnnUnit s1 ats) = Ann (s2 <> s1) $ NSelect Nothing e1 ats
-annNSelect (Just e3@(Ann s3 _)) e2@(Ann s2 _) (AnnUnit s1 ats) = Ann (s3 <> s2 <> s1) $ NSelect (pure e3) e2 ats
+annNSelect  Nothing             e2@(Ann s2 _) (AnnUnit s1 ats) = NSelectAnn (      s2 <> s1)  Nothing  e2 ats
+annNSelect (Just e3@(Ann s3 _)) e2@(Ann s2 _) (AnnUnit s1 ats) = NSelectAnn (s3 <> s2 <> s1) (pure e3) e2 ats
 
 annNHasAttr :: NExprLoc -> AnnUnit SrcSpan (NAttrPath NExprLoc) -> NExprLoc
-annNHasAttr e1@(Ann s1 _) (AnnUnit s2 ats) = Ann (s1 <> s2) $ NHasAttr e1 ats
+annNHasAttr e1@(Ann s1 _) (AnnUnit s2 ats) = NHasAttrAnn (s1 <> s2) e1 ats
 
 annNApp :: NExprLoc -> NExprLoc -> NExprLoc
-annNApp e1@(Ann s1 _) e2@(Ann s2 _) = Ann (s1 <> s2) $ NBinary NApp e1 e2
+annNApp e1@(Ann s1 _) e2@(Ann s2 _) = NBinaryAnn (s1 <> s2) NApp e1 e2
 
 annNAbs :: AnnUnit SrcSpan (Params NExprLoc) -> NExprLoc -> NExprLoc
-annNAbs (AnnUnit s1 ps) e1@(Ann s2 _) = Ann (s1 <> s2) $ NAbs ps e1
+annNAbs (AnnUnit s1 ps) e1@(Ann s2 _) = NAbsAnn (s1 <> s2) ps e1
 
 annNStr :: AnnUnit SrcSpan (NString NExprLoc) -> NExprLoc
-annNStr (AnnUnit s1 s) = Ann s1 $ NStr s
+annNStr (AnnUnit s1 s) = NStrAnn s1 s
 
 deltaInfo :: SourcePos -> (Text, Int, Int)
 deltaInfo (SourcePos fp l c) = (toText fp, unPos l, unPos c)
 
 annNNull :: NExprLoc
-annNNull = Ann nullSpan $ NConstant NNull
+annNNull = NConstantAnn nullSpan NNull
 {-# inline annNNull #-}
 
 nullSpan :: SrcSpan
