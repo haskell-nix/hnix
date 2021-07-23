@@ -198,8 +198,8 @@ nullSpan = SrcSpan nullPos nullPos
 pattern NConstantAnnF :: SrcSpan -> NAtom -> NExprLocF r
 pattern NConstantAnnF ann x = AnnF ann (NConstant x)
 
-pattern NStr_ :: SrcSpan -> NString r -> NExprLocF r
-pattern NStr_ ann x = AnnF ann (NStr x)
+pattern NStrAnnF :: SrcSpan -> NString r -> NExprLocF r
+pattern NStrAnnF ann x = AnnF ann (NStr x)
 
 pattern NSym_ :: SrcSpan -> VarName -> NExprLocF r
 pattern NSym_ ann x = AnnF ann (NSym x)
@@ -245,7 +245,7 @@ pattern NAssert_ ann x y = AnnF ann (NAssert x y)
 
 pattern NSynHole_ :: SrcSpan -> VarName -> NExprLocF r
 pattern NSynHole_ ann x = AnnF ann (NSynHole x)
-{-# complete NConstantAnnF, NStr_, NSym_, NList_, NSet_, NLiteralPath_, NEnvPath_, NUnary_, NBinary_, NSelect_, NHasAttr_, NAbs_, NLet_, NIf_, NWith_, NAssert_, NSynHole_ #-}
+{-# complete NConstantAnnF, NStrAnnF, NSym_, NList_, NSet_, NLiteralPath_, NEnvPath_, NUnary_, NBinary_, NSelect_, NHasAttr_, NAbs_, NLet_, NIf_, NWith_, NAssert_, NSynHole_ #-}
 
 
 pattern PNConstant :: SrcSpan -> NAtom -> NExprLoc

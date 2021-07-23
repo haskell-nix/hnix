@@ -273,7 +273,7 @@ reduce (NLet_ ann binds body) =
                   \case
                     d@(Fix NAbs_     {}) -> pure (name, d)
                     d@(Fix NConstantAnnF{}) -> pure (name, d)
-                    d@(Fix NStr_     {}) -> pure (name, d)
+                    d@(Fix NStrAnnF     {}) -> pure (name, d)
                     _                    -> Nothing
               in
               defcase <$> def

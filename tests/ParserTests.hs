@@ -662,7 +662,7 @@ case_simpleLoc =
                     (Fix (NSym_ (mkSpan 3 6 3 9) "baz"))
                   )
                 )
-                (Fix (NStr_ (mkSpan 3 10 3 15) (DoubleQuoted [Plain "qux"])))
+                (Fix (NStrAnnF (mkSpan 3 10 3 15) (DoubleQuoted [Plain "qux"])))
               )
             )
             (mkSPos 2 1)

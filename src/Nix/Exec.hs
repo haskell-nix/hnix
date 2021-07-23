@@ -202,7 +202,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
             nvStrP
               (Provenance
                 scope
-                (NStr_ span $ DoubleQuoted [Plain $ stringIgnoreContext ns])
+                (NStrAnnF span $ DoubleQuoted [Plain $ stringIgnoreContext ns])
               )
               ns
       )
