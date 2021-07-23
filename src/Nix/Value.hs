@@ -696,9 +696,8 @@ data TStringContext = NoContext | HasContext
   deriving Show
 
 instance Semigroup TStringContext where
-  (<>) HasContext _ = HasContext
-  (<>) _ HasContext = HasContext
-  (<>) _          _ = NoContext
+  (<>) NoContext NoContext = NoContext
+  (<>) _         _         = HasContext
 
 
 instance Monoid TStringContext where
