@@ -155,14 +155,14 @@ reduce (NSymAnnF ann var) =
   fromMaybe (Fix (NSymAnnF ann var)) <$> lookupVar var
 
 -- | Reduce binary and integer negation.
-reduce (NUnary_ uann op arg) =
+reduce (NUnaryAnnF uann op arg) =
   do
     x <- arg
     pure $ Fix $
       case (op, x) of
         (NNeg, Fix (NConstantAnnF cann (NInt  n))) -> NConstantAnnF cann $ NInt $ negate n
         (NNot, Fix (NConstantAnnF cann (NBool b))) -> NConstantAnnF cann $ NBool $ not b
-        _                                       -> NUnary_    uann op x
+        _                                       -> NUnaryAnnF    uann op x
 
 -- | Reduce function applications.
 --

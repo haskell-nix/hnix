@@ -324,7 +324,7 @@ execUnaryOp scope span op arg = do
     _x ->
       throwError $ ErrorCall $ "argument to unary operator must evaluate to an atomic type: " <> show _x
  where
-  unaryOp = pure . nvConstantP (Provenance scope $ NUnary_ span op $ pure arg)
+  unaryOp = pure . nvConstantP (Provenance scope $ NUnaryAnnF span op $ pure arg)
 
 execBinaryOp
   :: forall e t f m
