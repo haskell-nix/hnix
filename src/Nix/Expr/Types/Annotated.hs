@@ -98,6 +98,8 @@ pattern AnnE
 pattern AnnE ann a = Fix (AnnFP ann a)
 {-# complete AnnE #-}
 
+type AnnA ann f = Fix (AnnF ann f)
+
 annToAnnF :: Ann ann (f (Fix (AnnF ann f))) -> Fix (AnnF ann f)
 annToAnnF (Ann ann a) = AnnE ann a
 
