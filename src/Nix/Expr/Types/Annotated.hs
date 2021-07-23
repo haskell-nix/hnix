@@ -176,8 +176,8 @@ annNHasAttr e1@(Ann s1 _) (AnnUnit s2 ats) = Ann (s1 <> s2) $ NHasAttr e1 ats
 annNApp :: NExprLoc -> NExprLoc -> NExprLoc
 annNApp e1@(Ann s1 _) e2@(Ann s2 _) = Ann (s1 <> s2) $ NBinary NApp e1 e2
 
-nAbs :: AnnUnit SrcSpan (Params NExprLoc) -> NExprLoc -> NExprLoc
-nAbs (AnnUnit s1 ps) e1@(Ann s2 _) = Ann (s1 <> s2) $ NAbs ps e1
+annNAbs :: AnnUnit SrcSpan (Params NExprLoc) -> NExprLoc -> NExprLoc
+annNAbs (AnnUnit s1 ps) e1@(Ann s2 _) = Ann (s1 <> s2) $ NAbs ps e1
 
 nStr :: AnnUnit SrcSpan (NString NExprLoc) -> NExprLoc
 nStr (AnnUnit s1 s) = Ann s1 $ NStr s

@@ -297,7 +297,7 @@ nixWith = annotateLocation1
 
 nixLambda :: Parser NExprLoc
 nixLambda =
-  liftA2 nAbs
+  liftA2 annNAbs
     (annotateLocation $ try argExpr)
     nixToplevelForm
 
