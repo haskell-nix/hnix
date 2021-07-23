@@ -127,7 +127,7 @@ staticImport pann path = do
 
 -- gatherNames :: NExprLoc -> HashSet VarName
 -- gatherNames = foldFix $ \case
---     NSym_ _ var -> S.singleton var
+--     NSymAnnF _ var -> S.singleton var
 --     AnnF _ x -> fold x
 
 reduceExpr
@@ -151,8 +151,8 @@ reduce
 
 -- | Reduce the variable to its value if defined.
 --   Leave it as it is otherwise.
-reduce (NSym_ ann var) =
-  fromMaybe (Fix (NSym_ ann var)) <$> lookupVar var
+reduce (NSymAnnF ann var) =
+  fromMaybe (Fix (NSymAnnF ann var)) <$> lookupVar var
 
 -- | Reduce binary and integer negation.
 reduce (NUnary_ uann op arg) =
@@ -171,7 +171,7 @@ reduce (NUnary_ uann op arg) =
 --     * Reduce a lambda function by adding its name to the local
 --       scope and recursively reducing its body.
 reduce (NBinary_ bann NApp fun arg) = fun >>= \case
-  f@(Fix (NSym_ _ "import")) ->
+  f@(Fix (NSymAnnF _ "import")) ->
     (\case
         -- Fix (NEnvPath_     pann origPath) -> staticImport pann origPath
       Fix (NLiteralPath_ pann origPath) -> staticImport pann origPath
@@ -319,9 +319,9 @@ reduce (NAbs_ ann params body) = do
   let
     scope = coerce $
       case params' of
-        Param    name     -> one (name, Fix $ NSym_ ann name)
+        Param    name     -> one (name, Fix $ NSymAnnF ann name)
         ParamSet _ _ pset ->
-          HM.fromList $ (\(k, _) -> (k, Fix $ NSym_ ann k)) <$> pset
+          HM.fromList $ (\(k, _) -> (k, Fix $ NSymAnnF ann k)) <$> pset
   Fix . NAbs_ ann params' <$> pushScope scope body
 
 reduce v = Fix <$> sequence v

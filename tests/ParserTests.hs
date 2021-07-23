@@ -658,8 +658,8 @@ case_simpleLoc =
                   (NBinary_
                     (mkSpan 2 7 3 9)
                     NApp
-                    (Fix (NSym_ (mkSpan 2 7 2 10) "bar"))
-                    (Fix (NSym_ (mkSpan 3 6 3 9) "baz"))
+                    (Fix (NSymAnnF (mkSpan 2 7 2 10) "bar"))
+                    (Fix (NSymAnnF (mkSpan 3 6 3 9) "baz"))
                   )
                 )
                 (Fix (NStrAnnF (mkSpan 3 10 3 15) (DoubleQuoted [Plain "qux"])))
@@ -667,7 +667,7 @@ case_simpleLoc =
             )
             (mkSPos 2 1)
         ]
-        (Fix (NSym_ (mkSpan 4 4 4 7) "foo"))
+        (Fix (NSymAnnF (mkSpan 4 4 4 7) "foo"))
       )
     )
 

@@ -141,7 +141,7 @@ currentPos :: forall e m . (MonadReader e m, Has e SrcSpan) => m SrcSpan
 currentPos = asks $ view hasLens
 
 wrapExprLoc :: SrcSpan -> NExprLocF r -> NExprLoc
-wrapExprLoc span x = Fix $ Fix (NSym_ span "<?>") <$ x
+wrapExprLoc span x = Fix $ Fix (NSymAnnF span "<?>") <$ x
 {-# inline wrapExprLoc #-}
 
 --  2021-01-07: NOTE: This instance belongs to be beside MonadEval type class.
@@ -175,7 +175,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     scope                  <- currentScopes
     span@(SrcSpan delta _) <- currentPos
     addProvenance @_ @_ @(NValue t f m)
-      (Provenance scope $ NSym_ span (coerce @Text "__curPos")) <$>
+      (Provenance scope $ NSymAnnF span (coerce @Text "__curPos")) <$>
         toValue delta
 
   evaledSym name val = do
@@ -183,7 +183,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     span  <- currentPos
     pure $
       addProvenance @_ @_ @(NValue t f m)
-        (Provenance scope $ NSym_ span name)
+        (Provenance scope $ NSymAnnF span name)
         val
 
   evalConstant c = do
