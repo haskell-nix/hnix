@@ -207,8 +207,8 @@ pattern NSymAnnF ann x = AnnF ann (NSym x)
 pattern NListAnnF :: SrcSpan -> [r] -> NExprLocF r
 pattern NListAnnF ann x = AnnF ann (NList x)
 
-pattern NSet_ :: SrcSpan -> Recursivity -> [Binding r] -> NExprLocF r
-pattern NSet_ ann recur x = AnnF ann (NSet recur x)
+pattern NSetAnnF :: SrcSpan -> Recursivity -> [Binding r] -> NExprLocF r
+pattern NSetAnnF ann recur x = AnnF ann (NSet recur x)
 
 pattern NLiteralPath_ :: SrcSpan -> Path -> NExprLocF r
 pattern NLiteralPath_ ann x = AnnF ann (NLiteralPath x)
@@ -245,7 +245,7 @@ pattern NAssert_ ann x y = AnnF ann (NAssert x y)
 
 pattern NSynHole_ :: SrcSpan -> VarName -> NExprLocF r
 pattern NSynHole_ ann x = AnnF ann (NSynHole x)
-{-# complete NConstantAnnF, NStrAnnF, NSymAnnF, NListAnnF, NSet_, NLiteralPath_, NEnvPath_, NUnary_, NBinary_, NSelect_, NHasAttr_, NAbs_, NLet_, NIf_, NWith_, NAssert_, NSynHole_ #-}
+{-# complete NConstantAnnF, NStrAnnF, NSymAnnF, NListAnnF, NSetAnnF, NLiteralPath_, NEnvPath_, NUnary_, NBinary_, NSelect_, NHasAttr_, NAbs_, NLet_, NIf_, NWith_, NAssert_, NSynHole_ #-}
 
 
 pattern PNConstant :: SrcSpan -> NAtom -> NExprLoc
