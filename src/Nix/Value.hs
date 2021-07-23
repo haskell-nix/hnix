@@ -478,7 +478,7 @@ pattern NVList' l <- NValue' (extract -> NVListF l)
 pattern NVSet' p s <- NValue' (extract -> NVSetF p s)
 pattern NVClosure' x f <- NValue' (extract -> NVClosureF x f)
 pattern NVBuiltin' name f <- NValue' (extract -> NVBuiltinF name f)
-{-# COMPLETE NVConstant', NVStr', NVPath', NVList', NVSet', NVClosure', NVBuiltin' #-}
+{-# complete NVConstant', NVStr', NVPath', NVList', NVSet', NVClosure', NVBuiltin' #-}
 
 
 -- * @__NValue__@: Nix language values
@@ -678,7 +678,7 @@ builtin3 name f =
 
 pattern NVThunk t <- Pure t
 pattern NVValue v <- Free v
-{-# COMPLETE NVThunk, NVValue #-}
+{-# complete NVThunk, NVValue #-}
 pattern NVConstant x <- Free (NVConstant' x)
 pattern NVStr ns <- Free (NVStr' ns)
 pattern NVPath x <- Free (NVPath' x)
@@ -686,7 +686,7 @@ pattern NVList l <- Free (NVList' l)
 pattern NVSet s x <- Free (NVSet' s x)
 pattern NVClosure x f <- Free (NVClosure' x f)
 pattern NVBuiltin name f <- Free (NVBuiltin' name f)
-{-# COMPLETE NVThunk, NVConstant, NVStr, NVPath, NVList, NVSet, NVClosure, NVBuiltin #-}
+{-# complete NVThunk, NVConstant, NVStr, NVPath, NVList, NVSet, NVClosure, NVBuiltin #-}
 
 
 
