@@ -157,9 +157,9 @@ stripAnnF = annotated . getCompose
 stripAnnotation :: Functor f => Ann ann f -> Fix f
 stripAnnotation = unfoldFix (stripAnnF . unFix)
 
-nUnary :: AnnUnit SrcSpan NUnaryOp -> NExprLoc -> NExprLoc
-nUnary (AnnUnit s1 u) e1@(Ann s2 _) = Ann (s1 <> s2) $ NUnary u e1
-{-# inline nUnary #-}
+annNUnary :: AnnUnit SrcSpan NUnaryOp -> NExprLoc -> NExprLoc
+annNUnary (AnnUnit s1 u) e1@(Ann s2 _) = Ann (s1 <> s2) $ NUnary u e1
+{-# inline annNUnary #-}
 
 nBinary :: AnnUnit SrcSpan NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
 nBinary (AnnUnit s1 b) e1@(Ann s2 _) e2@(Ann s3 _) =

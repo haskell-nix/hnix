@@ -651,9 +651,9 @@ binaryR name op =
   (NBinaryDef name op NAssocRight, InfixR $ opWithLoc name op nBinary)
 prefix :: Text -> NUnaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 prefix name op =
-  (NUnaryDef name op, Prefix $ manyUnaryOp $ opWithLoc name op nUnary)
+  (NUnaryDef name op, Prefix $ manyUnaryOp $ opWithLoc name op annNUnary)
 -- postfix name op = (NUnaryDef name op,
---                    Postfix (opWithLoc name op nUnary))
+--                    Postfix (opWithLoc name op annNUnary))
 
 nixOperators
   :: Parser (AnnUnit SrcSpan (NAttrPath NExprLoc))
