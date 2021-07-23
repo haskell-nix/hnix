@@ -298,7 +298,7 @@ reduce (NLetAnnF ann binds body) =
 
 -- | Reduce an if to the relevant path if
 --   the condition is a boolean constant.
-reduce e@(NIf_ _ b t f) =
+reduce e@(NIfAnnF _ b t f) =
   (\case
     Fix (NConstantAnnF _ (NBool b')) -> if b' then t else f
     _                             -> Fix <$> sequence e
