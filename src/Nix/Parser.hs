@@ -675,7 +675,7 @@ nixOperators selector =
     [ ( NBinaryDef " " NApp NAssocLeft
       ,
         -- Thanks to Brent Yorgey for showing me this trick!
-        InfixL $ nApp <$ symbol ""
+        InfixL $ annNApp <$ symbol ""
       )
     ]
   , {-  3 -}
