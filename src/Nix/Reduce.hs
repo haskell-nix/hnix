@@ -361,13 +361,13 @@ pruneTree opts =
 
     NList l -> pure $ NList $
       bool
-        (fromMaybe nNull <$>)
+        (fromMaybe annNNull <$>)
         catMaybes
         (reduceLists opts)  -- Reduce list members that aren't used; breaks if elemAt is used
         l
     NSet recur binds -> pure $ NSet recur $
       bool
-        (fromMaybe nNull <<$>>)
+        (fromMaybe annNNull <<$>>)
         (mapMaybe sequence)
         (reduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
         binds
@@ -394,15 +394,15 @@ pruneTree opts =
     -- invalid is that we're trying to emit what will reproduce whatever
     -- fail the user encountered, which means providing all aspects of
     -- the evaluation path they ultimately followed.
-    NBinary op Nothing (Just rarg) -> pure $ NBinary op nNull rarg
-    NBinary op (Just larg) Nothing -> pure $ NBinary op larg nNull
+    NBinary op Nothing (Just rarg) -> pure $ NBinary op annNNull rarg
+    NBinary op (Just larg) Nothing -> pure $ NBinary op larg annNNull
 
     -- If the scope of a with was never referenced, it's not needed
     NWith Nothing (Just (Ann _ body)) -> pure body
 
     NAssert Nothing _              -> fail "How can an assert be used, but its condition not?"
     NAssert _ (Just (Ann _ body)) -> pure body
-    NAssert (Just cond) _          -> pure $ NAssert cond nNull
+    NAssert (Just cond) _          -> pure $ NAssert cond annNNull
 
     NIf Nothing _ _ -> fail "How can an if be used, but its condition not?"
 
@@ -444,9 +444,9 @@ pruneTree opts =
       second $
         bool
           fmap
-          ((pure .) . maybe nNull)
+          ((pure .) . maybe annNNull)
           (reduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
-          (fromMaybe nNull)
+          (fromMaybe annNNull)
 
   pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
   pruneBinding (NamedVar _                 Nothing  _  ) = Nothing
@@ -468,7 +468,7 @@ reducingEvalExpr eval mpath expr =
       pure <$> foldFix (addEvalFlags eval) expr'
     opts :: Options <- asks $ view hasLens
     expr''          <- pruneTree opts expr'
-    pure (fromMaybe nNull expr'', eres)
+    pure (fromMaybe annNNull expr'', eres)
  where
   addEvalFlags k (FlaggedF (b, x)) = liftIO (writeIORef b True) *> k x
 

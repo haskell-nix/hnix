@@ -185,9 +185,9 @@ annNStr (AnnUnit s1 s) = Ann s1 $ NStr s
 deltaInfo :: SourcePos -> (Text, Int, Int)
 deltaInfo (SourcePos fp l c) = (toText fp, unPos l, unPos c)
 
-nNull :: NExprLoc
-nNull = Ann nullSpan $ NConstant NNull
-{-# inline nNull #-}
+annNNull :: NExprLoc
+annNNull = Ann nullSpan $ NConstant NNull
+{-# inline annNNull #-}
 
 nullSpan :: SrcSpan
 nullSpan = SrcSpan nullPos nullPos
