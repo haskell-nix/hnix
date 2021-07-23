@@ -276,7 +276,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     span  <- currentPos
     pure $
       nvClosureP
-        (Provenance scope $ NAbs_ span (Nothing <$ p) Nothing)
+        (Provenance scope $ NAbsAnnF span (Nothing <$ p) Nothing)
         (void p)
         (\arg -> snd <$> k (pure arg) (\_ b -> ((), ) <$> b))
 

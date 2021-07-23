@@ -178,7 +178,7 @@ reduce (NBinaryAnnF bann NApp fun arg) = fun >>= \case
       v -> pure $ Fix $ NBinaryAnnF bann NApp f v
     ) =<< arg
 
-  Fix (NAbs_ _ (Param name) body) ->
+  Fix (NAbsAnnF _ (Param name) body) ->
     do
       x <- arg
       pushScope
@@ -271,7 +271,7 @@ reduce (NLet_ ann binds body) =
               let
                 defcase =
                   \case
-                    d@(Fix NAbs_     {}) -> pure (name, d)
+                    d@(Fix NAbsAnnF     {}) -> pure (name, d)
                     d@(Fix NConstantAnnF{}) -> pure (name, d)
                     d@(Fix NStrAnnF     {}) -> pure (name, d)
                     _                    -> Nothing
@@ -312,7 +312,7 @@ reduce e@(NAssert_ _ b body) =
     _ -> Fix <$> sequence e
   ) =<< b
 
-reduce (NAbs_ ann params body) = do
+reduce (NAbsAnnF ann params body) = do
   params' <- sequence params
   -- Make sure that variable definitions in scope do not override function
   -- arguments.
@@ -322,7 +322,7 @@ reduce (NAbs_ ann params body) = do
         Param    name     -> one (name, Fix $ NSymAnnF ann name)
         ParamSet _ _ pset ->
           HM.fromList $ (\(k, _) -> (k, Fix $ NSymAnnF ann k)) <$> pset
-  Fix . NAbs_ ann params' <$> pushScope scope body
+  Fix . NAbsAnnF ann params' <$> pushScope scope body
 
 reduce v = Fix <$> sequence v
 
