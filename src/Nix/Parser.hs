@@ -613,7 +613,7 @@ annotateLocation p =
     pure $ AnnUnit (SrcSpan begin end) res
 
 annotateLocation1 :: Parser (NExprF NExprLoc) -> Parser NExprLoc
-annotateLocation1 = fmap annToAnnF . annotateLocation
+annotateLocation1 = fmap annUnitToAnn . annotateLocation
 
 manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
 manyUnaryOp f = foldr1 (.) <$> some f

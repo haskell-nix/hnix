@@ -105,8 +105,8 @@ pattern Ann
 pattern Ann ann a = Fix (AnnF ann a)
 {-# complete Ann #-}
 
-annToAnnF :: AnnUnit ann (f (Ann ann f)) -> Ann ann f
-annToAnnF (AnnUnit ann a) = Ann ann a
+annUnitToAnn :: AnnUnit ann (f (Ann ann f)) -> Ann ann f
+annUnitToAnn (AnnUnit ann a) = Ann ann a
 
 -- ** Instances
 
