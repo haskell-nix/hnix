@@ -642,13 +642,13 @@ opWithLoc name op f =
 
 binaryN :: Text -> NBinaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 binaryN name op =
-  (NBinaryDef name op NAssocNone, InfixN $ opWithLoc name op nBinary)
+  (NBinaryDef name op NAssocNone, InfixN $ opWithLoc name op annNBinary)
 binaryL :: Text -> NBinaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 binaryL name op =
-  (NBinaryDef name op NAssocLeft, InfixL $ opWithLoc name op nBinary)
+  (NBinaryDef name op NAssocLeft, InfixL $ opWithLoc name op annNBinary)
 binaryR :: Text -> NBinaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 binaryR name op =
-  (NBinaryDef name op NAssocRight, InfixR $ opWithLoc name op nBinary)
+  (NBinaryDef name op NAssocRight, InfixR $ opWithLoc name op annNBinary)
 prefix :: Text -> NUnaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 prefix name op =
   (NUnaryDef name op, Prefix $ manyUnaryOp $ opWithLoc name op annNUnary)

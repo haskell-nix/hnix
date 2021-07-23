@@ -161,8 +161,8 @@ annNUnary :: AnnUnit SrcSpan NUnaryOp -> NExprLoc -> NExprLoc
 annNUnary (AnnUnit s1 u) e1@(Ann s2 _) = Ann (s1 <> s2) $ NUnary u e1
 {-# inline annNUnary #-}
 
-nBinary :: AnnUnit SrcSpan NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
-nBinary (AnnUnit s1 b) e1@(Ann s2 _) e2@(Ann s3 _) =
+annNBinary :: AnnUnit SrcSpan NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
+annNBinary (AnnUnit s1 b) e1@(Ann s2 _) e2@(Ann s3 _) =
   Ann (s1 <> s2 <> s3) $ NBinary b e1 e2
 
 nSelectLoc
