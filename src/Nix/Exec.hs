@@ -211,7 +211,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalLiteralPath p = do
     scope <- currentScopes
     span  <- currentPos
-    nvPathP (Provenance scope $ NLiteralPath_ span p) <$>
+    nvPathP (Provenance scope $ NLiteralPathAnnF span p) <$>
       makeAbsolutePath @t @f @m p
 
   evalEnvPath p = do

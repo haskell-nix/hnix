@@ -112,7 +112,7 @@ staticImport pann path = do
           cur  =
             NamedVar
               (StaticKey "__cur_file" :| mempty)
-              (Fix (NLiteralPath_ pann path))
+              (Fix (NLiteralPathAnnF pann path))
               pos
           x' = Fix $ NLet_ span [cur] x
         modify $ first $ HM.insert path x'
@@ -174,7 +174,7 @@ reduce (NBinary_ bann NApp fun arg) = fun >>= \case
   f@(Fix (NSymAnnF _ "import")) ->
     (\case
         -- Fix (NEnvPath_     pann origPath) -> staticImport pann origPath
-      Fix (NLiteralPath_ pann origPath) -> staticImport pann origPath
+      Fix (NLiteralPathAnnF pann origPath) -> staticImport pann origPath
       v -> pure $ Fix $ NBinary_ bann NApp f v
     ) =<< arg
 
