@@ -217,7 +217,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalEnvPath p = do
     scope <- currentScopes
     span  <- currentPos
-    nvPathP (Provenance scope $ NEnvPath_ span p) <$>
+    nvPathP (Provenance scope $ NEnvPathAnnF span p) <$>
       findEnvPath @t @f @m (coerce p)
 
   evalUnary op arg = do

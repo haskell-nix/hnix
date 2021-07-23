@@ -173,7 +173,7 @@ reduce (NUnary_ uann op arg) =
 reduce (NBinary_ bann NApp fun arg) = fun >>= \case
   f@(Fix (NSymAnnF _ "import")) ->
     (\case
-        -- Fix (NEnvPath_     pann origPath) -> staticImport pann origPath
+        -- Fix (NEnvPathAnnF     pann origPath) -> staticImport pann origPath
       Fix (NLiteralPathAnnF pann origPath) -> staticImport pann origPath
       v -> pure $ Fix $ NBinary_ bann NApp f v
     ) =<< arg
