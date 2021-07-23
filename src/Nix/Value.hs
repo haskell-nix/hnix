@@ -693,7 +693,7 @@ pattern NVBuiltin name f <- Free (NVBuiltin' name f)
 -- * @TStringContext@
 
 data TStringContext = NoContext | HasContext
-  deriving Show
+ deriving Show
 
 instance Semigroup TStringContext where
   (<>) NoContext NoContext = NoContext
@@ -706,17 +706,17 @@ instance Monoid TStringContext where
 -- * @ValueType@
 
 data ValueType
-    = TInt
-    | TFloat
-    | TBool
-    | TNull
-    | TString TStringContext
-    | TList
-    | TSet
-    | TClosure
-    | TPath
-    | TBuiltin
-    deriving Show
+  = TInt
+  | TFloat
+  | TBool
+  | TNull
+  | TString TStringContext
+  | TList
+  | TSet
+  | TClosure
+  | TPath
+  | TBuiltin
+ deriving Show
 
 
 -- | Determine type of a value
