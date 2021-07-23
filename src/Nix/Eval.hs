@@ -523,7 +523,7 @@ buildArgument params arg =
 -- > -> NExprLoc -> m a
 addSourcePositions
   :: (MonadReader e m, Has e SrcSpan) => Transform NExprLocF (m a)
-addSourcePositions f (v@(AnnE ann _) :: NExprLoc) =
+addSourcePositions f (v@(Ann ann _) :: NExprLoc) =
   local (set hasLens ann) $ f v
 
 addStackFrames

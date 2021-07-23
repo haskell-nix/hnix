@@ -93,8 +93,8 @@ instance
             -- Gather the current evaluation context at the time of thunk
             -- creation, and record it along with the thunk.
             let
-              go (fromException -> Just (EvaluatingExpr scope (AnnE s e))) =
-                let e' = AnnFP s (Nothing <$ e) in
+              go (fromException -> Just (EvaluatingExpr scope (Ann s e))) =
+                let e' = AnnF s (Nothing <$ e) in
                 [Provenance scope e']
               go _ = mempty
               ps = concatMap (go . frame) frames
@@ -181,6 +181,6 @@ displayProvenance
 displayProvenance =
   list
     id
-    (\ (Provenance scope e@(AnnFP s _) : _) ->
+    (\ (Provenance scope e@(AnnF s _) : _) ->
       withFrame Info $ ForcingExpr scope $ wrapExprLoc s e
     )

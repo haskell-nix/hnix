@@ -128,7 +128,7 @@ staticImport pann path = do
 -- gatherNames :: NExprLoc -> HashSet VarName
 -- gatherNames = foldFix $ \case
 --     NSym_ _ var -> S.singleton var
---     Compose (Ann _ x) -> fold x
+--     AnnF _ x -> fold x
 
 reduceExpr
   :: (MonadIO m, MonadFail m) => Maybe Path -> NExprLoc -> m NExprLoc
@@ -372,7 +372,7 @@ pruneTree opts =
         (reduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
         binds
 
-    NLet binds (Just body@(AnnE _ x)) ->
+    NLet binds (Just body@(Ann _ x)) ->
       pure $
         list
           x
@@ -383,8 +383,8 @@ pruneTree opts =
       pure $ NSelect (join alt) aset $ pruneKeyName <$> attr
 
     -- These are the only short-circuiting binary operators
-    NBinary NAnd (Just (AnnE _ larg)) _ -> pure larg
-    NBinary NOr  (Just (AnnE _ larg)) _ -> pure larg
+    NBinary NAnd (Just (Ann _ larg)) _ -> pure larg
+    NBinary NOr  (Just (Ann _ larg)) _ -> pure larg
 
     -- If the function was never called, it means its argument was in a
     -- thunk that was forced elsewhere.
@@ -398,16 +398,16 @@ pruneTree opts =
     NBinary op (Just larg) Nothing -> pure $ NBinary op larg nNull
 
     -- If the scope of a with was never referenced, it's not needed
-    NWith Nothing (Just (AnnE _ body)) -> pure body
+    NWith Nothing (Just (Ann _ body)) -> pure body
 
     NAssert Nothing _              -> fail "How can an assert be used, but its condition not?"
-    NAssert _ (Just (AnnE _ body)) -> pure body
+    NAssert _ (Just (Ann _ body)) -> pure body
     NAssert (Just cond) _          -> pure $ NAssert cond nNull
 
     NIf Nothing _ _ -> fail "How can an if be used, but its condition not?"
 
-    NIf _ Nothing (Just (AnnE _ f)) -> pure f
-    NIf _ (Just (AnnE _ t)) Nothing -> pure t
+    NIf _ Nothing (Just (Ann _ f)) -> pure f
+    NIf _ (Just (Ann _ t)) Nothing -> pure t
 
     x                     -> sequence x
 
