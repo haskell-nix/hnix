@@ -155,7 +155,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     scope <- currentScopes
     evalError @(NValue t f m) $ SynHole $
       SynHoleInfo
-        { _synHoleInfo_expr  = Fix $ NSynHole_ span name
+        { _synHoleInfo_expr  = Fix $ NSynHoleAnnF span name
         , _synHoleInfo_scope = scope
         }
 

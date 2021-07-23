@@ -243,9 +243,9 @@ pattern NWithAnnF ann x y = AnnF ann (NWith x y)
 pattern NAssertAnnF :: SrcSpan -> r -> r -> NExprLocF r
 pattern NAssertAnnF ann x y = AnnF ann (NAssert x y)
 
-pattern NSynHole_ :: SrcSpan -> VarName -> NExprLocF r
-pattern NSynHole_ ann x = AnnF ann (NSynHole x)
-{-# complete NConstantAnnF, NStrAnnF, NSymAnnF, NListAnnF, NSetAnnF, NLiteralPathAnnF, NEnvPathAnnF, NUnaryAnnF, NBinaryAnnF, NSelectAnnF, NHasAttrAnnF, NAbsAnnF, NLetAnnF, NIfAnnF, NWithAnnF, NAssertAnnF, NSynHole_ #-}
+pattern NSynHoleAnnF :: SrcSpan -> VarName -> NExprLocF r
+pattern NSynHoleAnnF ann x = AnnF ann (NSynHole x)
+{-# complete NConstantAnnF, NStrAnnF, NSymAnnF, NListAnnF, NSetAnnF, NLiteralPathAnnF, NEnvPathAnnF, NUnaryAnnF, NBinaryAnnF, NSelectAnnF, NHasAttrAnnF, NAbsAnnF, NLetAnnF, NIfAnnF, NWithAnnF, NAssertAnnF, NSynHoleAnnF #-}
 
 
 pattern PNConstant :: SrcSpan -> NAtom -> NExprLoc
