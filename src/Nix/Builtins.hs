@@ -1753,6 +1753,9 @@ appendContextNix tx ty =
             )
       )
 
+nixVersionNix :: MonadNix e t f m => m (NValue t f m)
+nixVersionNix = toValue $ makeNixStringWithoutContext "2.3"
+
 langVersionNix :: MonadNix e t f m => m (NValue t f m)
 langVersionNix = toValue (5 :: Int)
 
@@ -1760,9 +1763,7 @@ langVersionNix = toValue (5 :: Int)
 
 builtinsList :: forall e t f m . MonadNix e t f m => m [Builtin (NValue t f m)]
 builtinsList = sequence
-  [ do
-      version <- toValue (makeNixStringWithoutContext "2.3")
-      pure $ Builtin Normal ("nixVersion", version)
+  [ add0 Normal   "nixVersion"       nixVersionNix
   , add0 Normal   "langVersion"      langVersionNix
   , add  TopLevel "abort"            throwNix -- for now
   , add2 Normal   "add"              addNix
