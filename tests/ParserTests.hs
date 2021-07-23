@@ -651,11 +651,11 @@ case_simpleLoc =
         [ NamedVar
             (StaticKey "foo" :| [])
             (Fix
-              (NBinary_
+              (NBinaryAnnF
                 (mkSpan 2 7 3 15)
                 NApp
                 (Fix
-                  (NBinary_
+                  (NBinaryAnnF
                     (mkSpan 2 7 3 9)
                     NApp
                     (Fix (NSymAnnF (mkSpan 2 7 2 10) "bar"))

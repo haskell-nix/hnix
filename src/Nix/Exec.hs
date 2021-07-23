@@ -268,7 +268,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalApp f x = do
     scope <- currentScopes
     span  <- currentPos
-    addProvenance (Provenance scope $ NBinary_ span NApp (pure f) Nothing) <$>
+    addProvenance (Provenance scope $ NBinaryAnnF span NApp (pure f) Nothing) <$>
       (callFunc f =<< defer x)
 
   evalAbs p k = do
@@ -376,7 +376,7 @@ execBinaryOp scope span op lval rarg =
   toBoolOp r b =
     pure $
       nvConstantP
-        (Provenance scope $ NBinary_ span op (pure lval) r)
+        (Provenance scope $ NBinaryAnnF span op (pure lval) r)
         (NBool b)
 
 execBinaryOpForced
@@ -444,7 +444,7 @@ execBinaryOpForced scope span op lval rval = case op of
 
  where
   prov :: Provenance m (NValue t f m)
-  prov = Provenance scope $ NBinary_ span op (pure lval) (pure rval)
+  prov = Provenance scope $ NBinaryAnnF span op (pure lval) (pure rval)
 
   toBool = pure . nvConstantP prov . NBool
   compare :: (forall a. Ord a => a -> a -> Bool) -> m (NValue t f m)

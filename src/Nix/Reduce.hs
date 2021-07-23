@@ -170,12 +170,12 @@ reduce (NUnaryAnnF uann op arg) =
 --
 --     * Reduce a lambda function by adding its name to the local
 --       scope and recursively reducing its body.
-reduce (NBinary_ bann NApp fun arg) = fun >>= \case
+reduce (NBinaryAnnF bann NApp fun arg) = fun >>= \case
   f@(Fix (NSymAnnF _ "import")) ->
     (\case
         -- Fix (NEnvPathAnnF     pann origPath) -> staticImport pann origPath
       Fix (NLiteralPathAnnF pann origPath) -> staticImport pann origPath
-      v -> pure $ Fix $ NBinary_ bann NApp f v
+      v -> pure $ Fix $ NBinaryAnnF bann NApp f v
     ) =<< arg
 
   Fix (NAbs_ _ (Param name) body) ->
@@ -185,17 +185,17 @@ reduce (NBinary_ bann NApp fun arg) = fun >>= \case
         (coerce $ HM.singleton name x)
         (foldFix reduce body)
 
-  f -> Fix . NBinary_ bann NApp f <$> arg
+  f -> Fix . NBinaryAnnF bann NApp f <$> arg
 
 -- | Reduce an integer addition to its result.
-reduce (NBinary_ bann op larg rarg) =
+reduce (NBinaryAnnF bann op larg rarg) =
   do
     lval <- larg
     rval <- rarg
     pure $ Fix $
       case (op, lval, rval) of
         (NPlus, Fix (NConstantAnnF ann (NInt x)), Fix (NConstantAnnF _ (NInt y))) -> NConstantAnnF ann  $ NInt $ x + y
-        _                                                                   -> NBinary_   bann op lval rval
+        _                                                                   -> NBinaryAnnF   bann op lval rval
 
 -- | Reduce a select on a Set by substituting the set to the selected value.
 --
