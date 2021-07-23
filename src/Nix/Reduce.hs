@@ -112,9 +112,9 @@ staticImport pann path = do
           cur  =
             NamedVar
               (StaticKey "__cur_file" :| mempty)
-              (Fix (NLiteralPathAnnF pann path))
+              (NLiteralPathAnn pann path)
               pos
-          x' = Fix $ NLetAnnF span [cur] x
+          x' = NLetAnn span [cur] x
         modify $ first $ HM.insert path x'
         local
           (const (pure path, mempty)) $
@@ -152,17 +152,17 @@ reduce
 -- | Reduce the variable to its value if defined.
 --   Leave it as it is otherwise.
 reduce (NSymAnnF ann var) =
-  fromMaybe (Fix (NSymAnnF ann var)) <$> lookupVar var
+  fromMaybe (NSymAnn ann var) <$> lookupVar var
 
 -- | Reduce binary and integer negation.
 reduce (NUnaryAnnF uann op arg) =
   do
     x <- arg
-    pure $ Fix $
+    pure $
       case (op, x) of
-        (NNeg, Fix (NConstantAnnF cann (NInt  n))) -> NConstantAnnF cann $ NInt $ negate n
-        (NNot, Fix (NConstantAnnF cann (NBool b))) -> NConstantAnnF cann $ NBool $ not b
-        _                                       -> NUnaryAnnF    uann op x
+        (NNeg, NConstantAnn cann (NInt  n)) -> NConstantAnn cann $ NInt $ negate n
+        (NNot, NConstantAnn cann (NBool b)) -> NConstantAnn cann $ NBool $ not b
+        _                                   -> NUnaryAnn    uann op x
 
 -- | Reduce function applications.
 --
@@ -171,31 +171,31 @@ reduce (NUnaryAnnF uann op arg) =
 --     * Reduce a lambda function by adding its name to the local
 --       scope and recursively reducing its body.
 reduce (NBinaryAnnF bann NApp fun arg) = fun >>= \case
-  f@(Fix (NSymAnnF _ "import")) ->
+  f@(NSymAnn _ "import") ->
     (\case
-        -- Fix (NEnvPathAnnF     pann origPath) -> staticImport pann origPath
-      Fix (NLiteralPathAnnF pann origPath) -> staticImport pann origPath
-      v -> pure $ Fix $ NBinaryAnnF bann NApp f v
+        -- NEnvPathAnn     pann origPath -> staticImport pann origPath
+      NLiteralPathAnn pann origPath -> staticImport pann origPath
+      v -> pure $ NBinaryAnn bann NApp f v
     ) =<< arg
 
-  Fix (NAbsAnnF _ (Param name) body) ->
+  NAbsAnn _ (Param name) body ->
     do
       x <- arg
       pushScope
         (coerce $ HM.singleton name x)
         (foldFix reduce body)
 
-  f -> Fix . NBinaryAnnF bann NApp f <$> arg
+  f -> NBinaryAnn bann NApp f <$> arg
 
 -- | Reduce an integer addition to its result.
 reduce (NBinaryAnnF bann op larg rarg) =
   do
     lval <- larg
     rval <- rarg
-    pure $ Fix $
+    pure $
       case (op, lval, rval) of
-        (NPlus, Fix (NConstantAnnF ann (NInt x)), Fix (NConstantAnnF _ (NInt y))) -> NConstantAnnF ann  $ NInt $ x + y
-        _                                                                   -> NBinaryAnnF   bann op lval rval
+        (NPlus, NConstantAnn ann (NInt x), NConstantAnn _ (NInt y)) -> NConstantAnn ann  $ NInt $ x + y
+        _                                                           -> NBinaryAnn   bann op lval rval
 
 -- | Reduce a select on a Set by substituting the set to the selected value.
 --
@@ -245,18 +245,18 @@ reduce e@(NSetAnnF ann NonRecursive binds) =
 
     bool
       (Fix <$> sequence e)
-      (clearScopes @NExprLoc $ Fix . NSetAnnF ann NonRecursive <$> traverse sequence binds)
+      (clearScopes @NExprLoc $ NSetAnn ann NonRecursive <$> traverse sequence binds)
       usesInherit
 
 -- Encountering a 'rec set' construction eliminates any hope of inlining
 -- definitions.
 reduce (NSetAnnF ann Recursive binds) =
-  clearScopes @NExprLoc $ Fix . NSetAnnF ann Recursive <$> traverse sequence binds
+  clearScopes @NExprLoc $ NSetAnn ann Recursive <$> traverse sequence binds
 
 -- Encountering a 'with' construction eliminates any hope of inlining
 -- definitions.
 reduce (NWithAnnF ann scope body) =
-  clearScopes @NExprLoc $ Fix <$> liftA2 (NWithAnnF ann) scope body
+  clearScopes @NExprLoc $ liftA2 (NWithAnn ann) scope body
 
 -- | Reduce a let binds section by pushing lambdas,
 --   constants and strings to the body scope.
@@ -271,9 +271,9 @@ reduce (NLetAnnF ann binds body) =
               let
                 defcase =
                   \case
-                    d@(Fix NAbsAnnF     {}) -> pure (name, d)
-                    d@(Fix NConstantAnnF{}) -> pure (name, d)
-                    d@(Fix NStrAnnF     {}) -> pure (name, d)
+                    d@(NAbsAnn     {}) -> pure (name, d)
+                    d@(NConstantAnn{}) -> pure (name, d)
+                    d@(NStrAnn     {}) -> pure (name, d)
                     _                    -> Nothing
               in
               defcase <$> def
@@ -287,7 +287,7 @@ reduce (NLetAnnF ann binds body) =
     --     NamedVar (StaticKey name _ :| []) _ ->
     --         name `S.member` names
     --     _ -> True
-    pure $ Fix $ NLetAnnF ann binds' body'
+    pure $ NLetAnn ann binds' body'
     -- where
     --   go m [] = pure m
     --   go m (x:xs) = case x of
@@ -300,15 +300,15 @@ reduce (NLetAnnF ann binds body) =
 --   the condition is a boolean constant.
 reduce e@(NIfAnnF _ b t f) =
   (\case
-    Fix (NConstantAnnF _ (NBool b')) -> if b' then t else f
-    _                             -> Fix <$> sequence e
+    NConstantAnn _ (NBool b') -> bool f t b'
+    _                         -> Fix <$> sequence e
   ) =<< b
 
 -- | Reduce an assert atom to its encapsulated
 --   symbol if the assertion is a boolean constant.
 reduce e@(NAssertAnnF _ b body) =
   (\case
-    Fix (NConstantAnnF _ (NBool b')) | b' -> body
+    NConstantAnn _ (NBool b') | b' -> body
     _ -> Fix <$> sequence e
   ) =<< b
 
@@ -319,10 +319,10 @@ reduce (NAbsAnnF ann params body) = do
   let
     scope = coerce $
       case params' of
-        Param    name     -> one (name, Fix $ NSymAnnF ann name)
+        Param    name     -> one (name, NSymAnn ann name)
         ParamSet _ _ pset ->
-          HM.fromList $ (\(k, _) -> (k, Fix $ NSymAnnF ann k)) <$> pset
-  Fix . NAbsAnnF ann params' <$> pushScope scope body
+          HM.fromList $ (\(k, _) -> (k, NSymAnn ann k)) <$> pset
+  NAbsAnn ann params' <$> pushScope scope body
 
 reduce v = Fix <$> sequence v
 
@@ -349,7 +349,7 @@ pruneTree opts =
     \(FlaggedF (b, Compose x)) ->
       bool
         Nothing
-        (Fix . Compose <$> traverse prune x)
+        (annUnitToAnn <$> traverse prune x)
         <$> liftIO (readIORef b)
  where
   prune :: NExprF (Maybe NExprLoc) -> Maybe (NExprF NExprLoc)
