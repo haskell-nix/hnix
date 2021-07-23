@@ -255,8 +255,8 @@ reduce (NSetAnnF ann Recursive binds) =
 
 -- Encountering a 'with' construction eliminates any hope of inlining
 -- definitions.
-reduce (NWith_ ann scope body) =
-  clearScopes @NExprLoc $ Fix <$> liftA2 (NWith_ ann) scope body
+reduce (NWithAnnF ann scope body) =
+  clearScopes @NExprLoc $ Fix <$> liftA2 (NWithAnnF ann) scope body
 
 -- | Reduce a let binds section by pushing lambdas,
 --   constants and strings to the body scope.

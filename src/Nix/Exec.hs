@@ -233,7 +233,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalWith c b = do
     scope <- currentScopes
     span  <- currentPos
-    let f = join $ addProvenance . Provenance scope . NWith_ span Nothing . pure
+    let f = join $ addProvenance . Provenance scope . NWithAnnF span Nothing . pure
     f <$> evalWithAttrSet c b
 
   evalIf c t f = do
