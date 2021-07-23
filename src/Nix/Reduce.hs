@@ -204,9 +204,9 @@ reduce (NBinaryAnnF bann op larg rarg) =
 --   1. The selected expr is indeed a set.
 --   2. The selection AttrPath is a list of StaticKeys.
 --   3. The selected AttrPath exists in the set.
-reduce base@(NSelect_ _ _ _ attrs)
+reduce base@(NSelectAnnF _ _ _ attrs)
   | sAttrPath $ NE.toList attrs = do
-    (NSelect_ _ _ aset attrs) <- sequence base
+    (NSelectAnnF _ _ aset attrs) <- sequence base
     inspectSet (unFix aset) attrs
   | otherwise = sId
  where

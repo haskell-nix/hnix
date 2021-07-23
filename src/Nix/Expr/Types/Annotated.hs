@@ -222,8 +222,8 @@ pattern NUnaryAnnF ann op x = AnnF ann (NUnary op x)
 pattern NBinaryAnnF :: SrcSpan -> NBinaryOp -> r -> r -> NExprLocF r
 pattern NBinaryAnnF ann op x y = AnnF ann (NBinary op x y)
 
-pattern NSelect_ :: SrcSpan ->  Maybe r -> r -> NAttrPath r -> NExprLocF r
-pattern NSelect_ ann v x p = AnnF ann (NSelect v x p)
+pattern NSelectAnnF :: SrcSpan ->  Maybe r -> r -> NAttrPath r -> NExprLocF r
+pattern NSelectAnnF ann v x p = AnnF ann (NSelect v x p)
 
 pattern NHasAttr_ :: SrcSpan -> r -> NAttrPath r -> NExprLocF r
 pattern NHasAttr_ ann x p = AnnF ann (NHasAttr x p)
@@ -245,7 +245,7 @@ pattern NAssert_ ann x y = AnnF ann (NAssert x y)
 
 pattern NSynHole_ :: SrcSpan -> VarName -> NExprLocF r
 pattern NSynHole_ ann x = AnnF ann (NSynHole x)
-{-# complete NConstantAnnF, NStrAnnF, NSymAnnF, NListAnnF, NSetAnnF, NLiteralPathAnnF, NEnvPathAnnF, NUnaryAnnF, NBinaryAnnF, NSelect_, NHasAttr_, NAbs_, NLet_, NIf_, NWith_, NAssert_, NSynHole_ #-}
+{-# complete NConstantAnnF, NStrAnnF, NSymAnnF, NListAnnF, NSetAnnF, NLiteralPathAnnF, NEnvPathAnnF, NUnaryAnnF, NBinaryAnnF, NSelectAnnF, NHasAttr_, NAbs_, NLet_, NIf_, NWith_, NAssert_, NSynHole_ #-}
 
 
 pattern PNConstant :: SrcSpan -> NAtom -> NExprLoc
