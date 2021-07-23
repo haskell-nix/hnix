@@ -1,10 +1,10 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# language TypeFamilies #-}
+{-# language CPP #-}
+{-# language ScopedTypeVariables #-}
+{-# language GeneralizedNewtypeDeriving #-}
+{-# language UndecidableInstances #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
+{-# options_ghc -Wno-orphans #-}
 
 
 module Nix.Standard where
@@ -39,7 +39,7 @@ import           Nix.Render
 import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Thunk.Basic
-import           Nix.Utils                      ( free )
+import           Nix.Utils
 import           Nix.Utils.Fix1                 ( Fix1T(Fix1T) )
 import           Nix.Value
 import           Nix.Value.Monad
@@ -100,7 +100,7 @@ instance
   , Typeable m
   , Scoped (StdValue m) m
   , MonadReader (Context m (StdValue m)) m
-  , MonadState (HashMap FilePath NExprLoc, HashMap Text Text) m
+  , MonadState (HashMap Path NExprLoc, HashMap Text Text) m
   , MonadDataErrorContext (StdThunk m) (StdCited m) m
   , MonadThunk (StdThunk m) m (StdValue m)
   , MonadValue (StdValue m) m
@@ -274,7 +274,7 @@ newtype StandardTF r m a
   = StandardTF
       (ReaderT
         (Context r (StdValue r))
-        (StateT (HashMap FilePath NExprLoc, HashMap Text Text) m)
+        (StateT (HashMap Path NExprLoc, HashMap Text Text) m)
         a
       )
   deriving
@@ -290,7 +290,7 @@ newtype StandardTF r m a
     , MonadThrow
     , MonadMask
     , MonadReader (Context r (StdValue r))
-    , MonadState (HashMap FilePath NExprLoc, HashMap Text Text)
+    , MonadState (HashMap Path NExprLoc, HashMap Text Text)
     )
 
 instance MonadTrans (StandardTF r) where
@@ -327,7 +327,7 @@ instance MonadThunkId m
 mkStandardT
   :: ReaderT
       (Context (StandardT m) (StdValue (StandardT m)))
-      (StateT (HashMap FilePath NExprLoc, HashMap Text Text) m)
+      (StateT (HashMap Path NExprLoc, HashMap Text Text) m)
       a
   -> StandardT m a
 mkStandardT = coerce
@@ -336,7 +336,7 @@ runStandardT
   :: StandardT m a
   -> ReaderT
       (Context (StandardT m) (StdValue (StandardT m)))
-      (StateT (HashMap FilePath NExprLoc, HashMap Text Text) m)
+      (StateT (HashMap Path NExprLoc, HashMap Text Text) m)
       a
 runStandardT = coerce
 

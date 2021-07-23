@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# options_ghc -fno-warn-name-shadowing #-}
 module ReduceExprTests (tests) where
 import           Test.Tasty
 import           Test.Tasty.HUnit

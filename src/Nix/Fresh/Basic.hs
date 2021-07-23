@@ -1,7 +1,7 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# language CPP #-}
+{-# language ScopedTypeVariables #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
+{-# options_ghc -Wno-orphans #-}
 
 
 module Nix.Fresh.Basic where

@@ -1,8 +1,7 @@
-{-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# language MultiWayIf #-}
+{-# language ScopedTypeVariables #-}
+{-# language TypeFamilies #-}
+{-# language RecordWildCards #-}
 
 module Main ( main ) where
 
@@ -68,7 +67,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       case filePaths of
         []     -> runRepl
         ["-"]  -> readExpressionFromStdin
-        _paths -> processSeveralFiles _paths
+        _paths -> processSeveralFiles (coerce _paths)
      where
       -- | Fall back to running the REPL
       runRepl = withEmptyNixContext Repl.main
@@ -87,7 +86,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       (\binaryCacheFile ->
         do
           let file = replaceExtension binaryCacheFile "nixc"
-          processCLIOptions (Just file) =<< liftIO (readCache binaryCacheFile)
+          processCLIOptions (Just $ coerce file) =<< liftIO (readCache $ coerce $ binaryCacheFile)
       ) <$> readFrom
 
     -- | The `--expr` option: read expression from the argument string
@@ -95,10 +94,10 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
 
     -- | The `--file` argument: read expressions from the files listed in the argument file
     loadExpressionFromFile =
-      -- We can start use Text as in the base case, requires changing FilePath -> Text
+      -- We can start use Text as in the base case, requires changing Path -> Text
       -- But that is a gradual process:
       -- https://github.com/haskell-nix/hnix/issues/912
-      (processSeveralFiles . String.lines <=< liftIO) .
+      (processSeveralFiles . (coerce <$>) . String.lines <=< liftIO) .
         (\case
           "-" -> getContents
           _fp -> readFile _fp
@@ -148,25 +147,25 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
               bool
                 Repl.main
                 (do
-                  val <- nixEvalExprLoc mpath expr
+                  val <- nixEvalExprLoc (coerce mpath) expr
                   Repl.main' $ pure val
                 )
                 evaluate
       )
 
   --  2021-07-15: NOTE: Logic of CLI Option processing is scattered over several functions, needs to be consolicated.
-  processCLIOptions :: Maybe FilePath -> NExprLoc -> StandardT (StdIdT IO) ()
+  processCLIOptions :: Maybe Path -> NExprLoc -> StandardT (StdIdT IO) ()
   processCLIOptions mpath expr
     | evaluate =
       if
         | tracing                       -> evaluateExprWithEvaluator nixTracingEvalExprLoc expr
-        | Just path <- reduce           -> evaluateExprWithEvaluator (reduction path) expr
+        | Just path <- reduce           -> evaluateExprWithEvaluator (reduction (coerce path) . coerce) expr
         | null arg || null argstr       -> evaluateExprWithEvaluator nixEvalExprLoc expr
-        | otherwise                     -> processResult printer <=< nixEvalExprLoc mpath $ expr
+        | otherwise                     -> processResult printer <=< nixEvalExprLoc (coerce mpath) $ expr
     | xml                        = fail "Rendering expression trees to XML is not yet implemented"
     | json                       = fail "Rendering expression trees to JSON is not implemented"
     | verbose >= DebugInfo       =  liftIO . putStr . ppShow . stripAnnotation $ expr
-    | cache , Just path <- mpath =  liftIO . writeCache (replaceExtension path "nixc") $ expr
+    | cache , Just path <- mpath =  liftIO . writeCache (coerce $ replaceExtension (coerce path) "nixc") $ expr
     | parseOnly                  =  void . liftIO . Exception.evaluate . force $ expr
     | otherwise                  =
       liftIO .
@@ -177,7 +176,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
           . stripAnnotation
           $ expr
    where
-    evaluateExprWithEvaluator evaluator = evaluateExpression mpath evaluator printer
+    evaluateExprWithEvaluator evaluator = evaluateExpression (coerce mpath) evaluator printer
 
     printer
       | finder    = findAttrs <=< fromValue @(AttrSet (StdValue (StandardT (StdIdT IO))))
@@ -307,10 +306,10 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
 
   handleReduced
     :: (MonadThrow m, MonadIO m)
-    => FilePath
+    => Path
     -> (NExprLoc, Either SomeException (NValue t f m))
     -> m (NValue t f m)
-  handleReduced path (expr', eres) =
+  handleReduced (coerce -> path) (expr', eres) =
     do
       liftIO $
         do

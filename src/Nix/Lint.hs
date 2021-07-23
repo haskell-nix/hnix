@@ -1,15 +1,14 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# language ConstraintKinds #-}
+{-# language CPP #-}
+{-# language DataKinds #-}
+{-# language GADTs #-}
+{-# language GeneralizedNewtypeDeriving #-}
+{-# language ScopedTypeVariables #-}
+{-# language TypeFamilies #-}
+{-# language UndecidableInstances #-}
 
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-{-# OPTIONS_GHC -Wno-missing-methods #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# options_ghc -fno-warn-name-shadowing #-}
+{-# options_ghc -Wno-missing-methods #-}
 
 module Nix.Lint where
 

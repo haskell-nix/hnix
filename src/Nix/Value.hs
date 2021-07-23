@@ -1,15 +1,14 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# language CPP #-}
+{-# language DeriveAnyClass #-}
+{-# language KindSignatures #-}
+{-# language ConstraintKinds #-}
+{-# language PatternSynonyms #-}
+{-# language RankNTypes #-}
+{-# language ScopedTypeVariables #-}
+{-# language TemplateHaskell #-}
 
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
-{-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
+{-# options_ghc -Wno-missing-signatures #-}
+{-# options_ghc -Wno-missing-pattern-synonym-signatures #-}
 
 -- | The core of the type system, Nix language values
 module Nix.Value
@@ -117,7 +116,7 @@ data NValueF p m r
      -- | A string has a value and a context, which can be used to record what a
      -- string has been build from
     | NVStrF NixString
-    | NVPathF FilePath
+    | NVPathF Path
     | NVListF [r]
     | NVSetF PositionSet (AttrSet r)
       -- ^
@@ -419,11 +418,11 @@ nvStr' :: Applicative f
 nvStr' = NValue' . pure . NVStrF
 
 
--- | Haskell @FilePath@ to the Nix path,
+-- | Haskell @Path@ to the Nix path,
 nvPath' :: Applicative f
-  => FilePath
+  => Path
   -> NValue' t f m r
-nvPath' = NValue' . pure . NVPathF
+nvPath' = NValue' . pure . NVPathF . coerce
 
 
 -- | Haskell @[]@ to the Nix @[]@,
@@ -479,7 +478,7 @@ pattern NVList' l <- NValue' (extract -> NVListF l)
 pattern NVSet' p s <- NValue' (extract -> NVSetF p s)
 pattern NVClosure' x f <- NValue' (extract -> NVClosureF x f)
 pattern NVBuiltin' name f <- NValue' (extract -> NVBuiltinF name f)
-{-# COMPLETE NVConstant', NVStr', NVPath', NVList', NVSet', NVClosure', NVBuiltin' #-}
+{-# complete NVConstant', NVStr', NVPath', NVList', NVSet', NVClosure', NVBuiltin' #-}
 
 
 -- * @__NValue__@: Nix language values
@@ -606,7 +605,7 @@ nvStrWithoutContext = nvStr . makeNixStringWithoutContext
 
 -- | Life of a Haskell FilePath to the life of a Nix path
 nvPath :: Applicative f
-  => FilePath
+  => Path
   -> NValue t f m
 nvPath = Free . nvPath'
 
@@ -679,7 +678,7 @@ builtin3 name f =
 
 pattern NVThunk t <- Pure t
 pattern NVValue v <- Free v
-{-# COMPLETE NVThunk, NVValue #-}
+{-# complete NVThunk, NVValue #-}
 pattern NVConstant x <- Free (NVConstant' x)
 pattern NVStr ns <- Free (NVStr' ns)
 pattern NVPath x <- Free (NVPath' x)
@@ -687,19 +686,18 @@ pattern NVList l <- Free (NVList' l)
 pattern NVSet s x <- Free (NVSet' s x)
 pattern NVClosure x f <- Free (NVClosure' x f)
 pattern NVBuiltin name f <- Free (NVBuiltin' name f)
-{-# COMPLETE NVThunk, NVConstant, NVStr, NVPath, NVList, NVSet, NVClosure, NVBuiltin #-}
+{-# complete NVThunk, NVConstant, NVStr, NVPath, NVList, NVSet, NVClosure, NVBuiltin #-}
 
 
 
 -- * @TStringContext@
 
 data TStringContext = NoContext | HasContext
-  deriving Show
+ deriving Show
 
 instance Semigroup TStringContext where
-  (<>) HasContext _ = HasContext
-  (<>) _ HasContext = HasContext
-  (<>) _          _ = NoContext
+  (<>) NoContext NoContext = NoContext
+  (<>) _         _         = HasContext
 
 
 instance Monoid TStringContext where
@@ -708,17 +706,17 @@ instance Monoid TStringContext where
 -- * @ValueType@
 
 data ValueType
-    = TInt
-    | TFloat
-    | TBool
-    | TNull
-    | TString TStringContext
-    | TList
-    | TSet
-    | TClosure
-    | TPath
-    | TBuiltin
-    deriving Show
+  = TInt
+  | TFloat
+  | TBool
+  | TNull
+  | TString TStringContext
+  | TList
+  | TSet
+  | TClosure
+  | TPath
+  | TBuiltin
+ deriving Show
 
 
 -- | Determine type of a value

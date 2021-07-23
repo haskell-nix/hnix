@@ -1,8 +1,7 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# language AllowAmbiguousTypes #-}
+{-# language ConstraintKinds #-}
+{-# language RankNTypes #-}
+{-# language ScopedTypeVariables #-}
 
 
 
@@ -33,8 +32,8 @@ class (Show v, Monad m) => MonadEval v m where
   evalCurPos      :: m v
   evalConstant    :: NAtom -> m v
   evalString      :: NString (m v) -> m v
-  evalLiteralPath :: FilePath -> m v
-  evalEnvPath     :: FilePath -> m v
+  evalLiteralPath :: Path -> m v
+  evalEnvPath     :: Path -> m v
   evalUnary       :: NUnaryOp -> v -> m v
   evalBinary      :: NBinaryOp -> v -> m v -> m v
   -- ^ The second argument is an action because operators such as boolean &&
@@ -524,7 +523,7 @@ buildArgument params arg =
 -- > -> NExprLoc -> m a
 addSourcePositions
   :: (MonadReader e m, Has e SrcSpan) => Transform NExprLocF (m a)
-addSourcePositions f (v@(AnnE ann _) :: NExprLoc) =
+addSourcePositions f (v@(Ann ann _) :: NExprLoc) =
   local (set hasLens ann) $ f v
 
 addStackFrames
@@ -562,4 +561,4 @@ evalContent
   :: MonadNixEval v m
   => AnnF ann NExprF (m v)
   -> m v
-evalContent = eval . stripAnn
+evalContent = eval . stripAnnF

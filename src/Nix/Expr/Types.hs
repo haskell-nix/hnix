@@ -1,42 +1,38 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# language ConstraintKinds #-}
+{-# language CPP #-}
+{-# language DeriveAnyClass #-}
+{-# language FunctionalDependencies #-}
+{-# language RankNTypes #-}
+{-# language TemplateHaskell #-}
+{-# language TypeFamilies #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
+{-# options_ghc -Wno-orphans #-}
+{-# options_ghc -Wno-missing-signatures #-}
 
 -- | The Nix expression type and supporting types.
 --
--- For a brief introduction of the Nix expression language, see
--- <https://nixos.org/nix/manual/#ch-expression-language>.
+-- [Brief introduction of the Nix expression language.](https://nixos.org/nix/manual/#ch-expression-language)
 --
 -- This module is a beginning of a deep embedding (term) of a Nix language into Haskell.
--- Shallow/deep embedding brief:
--- <https://web.archive.org/web/20201112031804/https://alessandrovermeulen.me/2013/07/13/the-difference-between-shallow-and-deep-embedding/>
+-- [Brief on shallow & deep embedding.](https://web.archive.org/web/20201112031804/https://alessandrovermeulen.me/2013/07/13/the-difference-between-shallow-and-deep-embedding/)
 --
--- (additiona info for dev): Big use of TemplateHaskell in the module requires proper (top-down) organization of declarations
+-- (additiona info for dev): Big use of TemplateHaskell in the module requires proper (top-down) organization of declarations.
 module Nix.Expr.Types where
 
 import qualified Codec.Serialise                as Serialise
 import           Codec.Serialise                ( Serialise )
-import           Control.DeepSeq
+import           Control.DeepSeq                ( NFData1(..) )
 import           Data.Aeson
-import           Data.Aeson.TH
 import qualified Data.Binary                   as Binary
 import           Data.Binary                    ( Binary )
 import           Data.Data
-import           Data.Fix
+import           Data.Fix                       ( Fix(Fix) )
 import           Data.Functor.Classes
 import           Data.Hashable.Lifted
 import qualified Data.HashMap.Lazy             as MapL
 import qualified Data.List.NonEmpty            as NE
 import qualified Text.Show
-import           Data.Traversable
+import           Data.Traversable               ( fmapDefault, foldMapDefault )
 import           GHC.Generics
 import qualified Language.Haskell.TH.Syntax    as TH
 import           Lens.Family2
@@ -46,21 +42,31 @@ import           Text.Megaparsec.Pos            ( SourcePos(SourcePos)
                                                 , mkPos
                                                 , unPos
                                                 )
-import           Text.Show.Deriving
-import           Text.Read.Deriving
-import           Data.Eq.Deriving
-import           Data.Ord.Deriving
+import           Text.Show.Deriving             ( deriveShow1, deriveShow2 )
+import           Text.Read.Deriving             ( deriveRead1, deriveRead2 )
+import           Data.Eq.Deriving               ( deriveEq1  , deriveEq2   )
+import           Data.Ord.Deriving              ( deriveOrd1 , deriveOrd2  )
+import           Data.Aeson.TH                  ( deriveJSON2 )
 import qualified Type.Reflection               as Reflection
-import           Type.Reflection                ( eqTypeRep )
 import           Nix.Atoms
 import           Nix.Utils
 #if !MIN_VERSION_text(1,2,4)
 -- NOTE: Remove package @th-lift-instances@ removing this
-import           Instances.TH.Lift              ()  -- importing Lift Text fo GHC 8.6
+import           Instances.TH.Lift              ()  -- importing Lift Text for GHC 8.6
 #endif
 
 
--- * Utilitary: orphan instances
+-- * utils
+
+-- | Holds file positionng information for abstrations.
+-- A type synonym for @HashMap VarName SourcePos@.
+type PositionSet = HashMap VarName SourcePos
+
+--  2021-07-16: NOTE: Should replace @ParamSet@ List
+-- | > Hashmap VarName -- type synonym
+type AttrSet = HashMap VarName
+
+-- ** orphan instances
 
 -- Placed here because TH inference depends on declaration sequence.
 
@@ -104,18 +110,15 @@ instance FromJSON Pos where
   parseJSON = fmap mkPos . parseJSON
 instance FromJSON SourcePos
 
--- | Holds file positionng information for abstrations.
--- A type synonym for @HashMap VarName SourcePos@.
-type PositionSet = HashMap VarName SourcePos
-
-
 -- * Components of Nix expressions
 
 -- NExpr is a composition of
---   * direct reuse of the Haskell types (list, FilePath, Text)
+--   * direct reuse of the Haskell types (list, Path, Text)
 --   * NAtom
 --   * Types in this section
 --   * Fixpoint nature
+
+-- ** newtype VarName
 
 newtype VarName = VarName Text
   deriving
@@ -130,11 +133,9 @@ instance IsString VarName where
 instance ToString VarName where
   toString = toString @Text . coerce
 
--- ** @Params@
+-- ** data Params
 
---  2021-07-16: NOTE: Should replace @ParamSet@ List
--- | > Hashmap VarName -- type synonym
-type AttrSet = HashMap VarName
+-- *** utils
 
 -- This uses an association list because nix XML serialization preserves the
 -- order of the param set.
@@ -147,7 +148,14 @@ data Variadic = Closed | Variadic
     , Show, Read, Hashable
     )
 
---  2021-07-19: NOTE: mkParamSet with default types
+instance Semigroup (Variadic) where
+  (<>) Closed Closed = Closed
+  (<>) _      _      = Variadic
+
+instance Monoid Variadic where
+  mempty = Closed
+
+-- *** data Params
 
 -- | @Params@ represents all the ways the formal parameters to a
 -- function can be represented.
@@ -178,12 +186,12 @@ $(deriveRead1 ''Params)
 $(deriveEq1   ''Params)
 $(deriveOrd1  ''Params)
 
--- *** Lens traversals
+-- *** lens traversals
 
 $(makeTraversals ''Params)
 
 
--- ** @Antiquoted@
+-- ** data Antiquoted
 
 -- | 'Antiquoted' represents an expression that is either
 -- antiquoted (surrounded by ${...}) or plain (not antiquoted).
@@ -222,24 +230,24 @@ $(deriveOrd2  ''Antiquoted)
 $(deriveJSON2 defaultOptions ''Antiquoted)
 
 
--- *** Lens traversals
+-- *** lens traversals
 
 $(makeTraversals ''Antiquoted)
 
 
--- ** @NString@
+-- ** data NString
 
 -- | An 'NString' is a list of things that are either a plain string
 -- or an antiquoted expression. After the antiquotes have been evaluated,
 -- the final string is constructed by concatenating all the parts.
 data NString r
   = DoubleQuoted ![Antiquoted Text r]
-  -- ^ Strings wrapped with double-quotes (") can contain literal newline
+  -- ^ Strings wrapped with double-quotes (__@"@__) can contain literal newline
   -- characters, but the newlines are preserved and no indentation is stripped.
   --
   -- > DoubleQuoted [Plain "x",Antiquoted y]   ~  "x${y}"
   | Indented !Int ![Antiquoted Text r]
-  -- ^ Strings wrapped with two single quotes ('') can contain newlines, and
+  -- ^ Strings wrapped with two single quotes (__@''@__) can contain newlines, and
   --   their indentation will be stripped, but the amount stripped is
   --   remembered.
   --
@@ -267,12 +275,12 @@ $(deriveRead1 ''NString)
 $(deriveEq1   ''NString)
 $(deriveOrd1  ''NString)
 
--- *** Lens traversals
+-- *** lens traversals
 
 $(makeTraversals ''NString)
 
 
--- ** @NKeyName@
+-- ** data NKeyName
 
 -- | A 'KeyName' is something that can appear on the left side of an
 -- equals sign. For example, @a@ is a 'KeyName' in @{ a = 3; }@, @let a = 3;
@@ -340,11 +348,12 @@ instance Hashable1 NKeyName where
 -- occurs not only as last argument in @Antiquoted (NString r) r@
 instance Show1 NKeyName where
   liftShowsPrec sp sl p = \case
-    DynamicKey a -> showsUnaryWith
-      (liftShowsPrec2 (liftShowsPrec sp sl) (liftShowList sp sl) sp sl)
-      "DynamicKey"
-      p
-      a
+    DynamicKey a ->
+      showsUnaryWith
+        (liftShowsPrec2 (liftShowsPrec sp sl) (liftShowList sp sl) sp sl)
+        "DynamicKey"
+        p
+        a
     StaticKey t -> showsUnaryWith Text.Show.showsPrec "StaticKey" p t
 
 -- Deriving this instance automatically is not possible because @r@
@@ -366,12 +375,12 @@ instance Traversable NKeyName where
     DynamicKey EscapedNewline   -> pure $ DynamicKey EscapedNewline
     StaticKey  key              -> pure $ StaticKey key
 
--- *** Lens traversals
+-- *** lens traversals
 
 $(makeTraversals ''NKeyName)
 
 
--- ** @NAttrPath@
+-- ** type NAttrPath
 
 -- | A selector (for example in a @let@ or an attribute set) is made up
 -- of strung-together key names.
@@ -380,7 +389,7 @@ $(makeTraversals ''NKeyName)
 type NAttrPath r = NonEmpty (NKeyName r)
 
 
--- ** @Binding@
+-- ** data Binding
 
 #if !MIN_VERSION_hashable(1,3,1)
 -- Required by Hashable Binding deriving. There was none of this Hashable instance before mentioned version, remove this in year >2022
@@ -421,12 +430,12 @@ $(deriveEq1   ''Binding)
 $(deriveOrd1  ''Binding)
 --x $(deriveJSON1 defaultOptions ''Binding)
 
--- *** Lens traversals
+-- *** lens traversals
 
 $(makeTraversals ''Binding)
 
 
--- ** @Recursivity@
+-- ** data Recursivity
 
 -- | Distinguishes between recursive and non-recursive. Mainly for attribute
 -- sets.
@@ -440,7 +449,7 @@ data Recursivity
     )
 
 
--- ** @NUnaryOp@
+-- ** data NUnaryOp
 
 -- | There are two unary operations: logical not and integer negation.
 data NUnaryOp
@@ -452,12 +461,12 @@ data NUnaryOp
     , Show, Read, Hashable
     )
 
--- *** Lens traversals
+-- *** lens traversals
 
 $(makeTraversals ''NUnaryOp)
 
 
--- ** @NBinaryOp@
+-- ** data NBinaryOp
 
 -- | Binary operators expressible in the nix language.
 data NBinaryOp
@@ -485,12 +494,12 @@ data NBinaryOp
     , Show, Read, Hashable
     )
 
--- *** Lens traversals
+-- *** lens traversals
 
 $(makeTraversals ''NBinaryOp)
 
 
--- ** @NExprF@ - Nix expressions, base functor
+-- * data NExprF - Nix expressions, base functor
 
 -- | The main Nix expression type. As it is polimophic, has a functor,
 -- which allows to traverse expressions and map functions over them.
@@ -515,14 +524,14 @@ data NExprF r
   --
   -- > NSet Recursive    [NamedVar x y _]         ~  rec { x = y; }
   -- > NSet NonRecursive [Inherit Nothing [x] _]  ~  { inherit x; }
-  | NLiteralPath !FilePath
+  | NLiteralPath !Path
   -- ^ A path expression, which is evaluated to a store path. The path here
   -- can be relative, in which case it's evaluated relative to the file in
   -- which it appears.
   --
   -- > NLiteralPath "/x"                           ~  /x
   -- > NLiteralPath "x/y"                          ~  x/y
-  | NEnvPath !FilePath
+  | NEnvPath !Path
   -- ^ A path which refers to something in the Nix search path (the NIX_PATH
   -- environment variable. For example, @<nixpkgs/pkgs>@.
   --
@@ -589,12 +598,12 @@ $(deriveEq1   ''NExprF)
 $(deriveOrd1  ''NExprF)
 --x $(deriveJSON1 defaultOptions ''NExprF)
 
--- *** Lens traversals
+-- ** lens traversals
 
 $(makeTraversals ''NExprF)
 
 
--- *** @NExpr@
+-- ** type NExpr
 
 -- | The monomorphic expression type is a fixed point of the polymorphic one.
 type NExpr = Fix NExprF
@@ -616,7 +625,7 @@ instance TH.Lift NExpr where
           -- Reflection is a key strategy in metaprogramming.
           -- <https://en.wikipedia.org/wiki/Reflective_programming>
           HRefl <-
-            eqTypeRep
+            Reflection.eqTypeRep
               (Reflection.typeRep @Text)
               (Reflection.typeOf  b    )
           pure [| $(TH.lift b) |]
@@ -680,7 +689,7 @@ nullPos = on (SourcePos "<string>") mkPos 1 1
 
 -- * Dead code
 
--- ** @class NExprAnn@
+-- ** class NExprAnn
 
 class NExprAnn ann g | g -> ann where
   fromNExpr :: g r -> (NExprF r, ann)
@@ -721,5 +730,4 @@ ekey keys pos f e@(Fix x) | (NSet NonRecursive xs, ann) <- fromNExpr x =
               pure (v, rest)
           )
           ks
-
 ekey _ _ f e = fromMaybe e <$> f Nothing

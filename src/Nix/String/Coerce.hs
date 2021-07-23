@@ -1,9 +1,10 @@
-{-# LANGUAGE CPP #-}
+{-# language CPP #-}
 
 module Nix.String.Coerce where
 
 import           Control.Monad.Catch            ( MonadThrow )
 import qualified Data.HashMap.Lazy             as M
+import           Nix.Utils
 import           Nix.Atoms
 import           Nix.Effects
 import           Nix.Frames

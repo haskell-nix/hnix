@@ -1,13 +1,12 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE PartialTypeSignatures #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# language CPP #-}
+{-# language AllowAmbiguousTypes #-}
+{-# language ConstraintKinds #-}
+{-# language GeneralizedNewtypeDeriving #-}
+{-# language PartialTypeSignatures #-}
+{-# language ScopedTypeVariables #-}
+{-# language TypeFamilies #-}
 
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# options_ghc -fno-warn-name-shadowing #-}
 
 
 -- | This module provides a "reducing" expression evaluator, which reduces
@@ -58,11 +57,11 @@ import           System.FilePath
 newtype Reducer m a = Reducer
     { runReducer ::
         ReaderT
-          ( Maybe FilePath
+          ( Maybe Path
           , Scopes (Reducer m) NExprLoc
           )
           ( StateT
-              ( HashMap FilePath NExprLoc
+              ( HashMap Path NExprLoc
               , HashMap Text Text
               )
             m
@@ -72,8 +71,8 @@ newtype Reducer m a = Reducer
   deriving
     ( Functor, Applicative, Alternative
     , Monad, MonadPlus, MonadFix, MonadIO, MonadFail
-    , MonadReader (Maybe FilePath, Scopes (Reducer m) NExprLoc)
-    , MonadState (HashMap FilePath NExprLoc, HashMap Text Text)
+    , MonadReader (Maybe Path, Scopes (Reducer m) NExprLoc)
+    , MonadState (HashMap Path NExprLoc, HashMap Text Text)
     )
 
 staticImport
@@ -81,17 +80,17 @@ staticImport
    . ( MonadIO m
      , Scoped NExprLoc m
      , MonadFail m
-     , MonadReader (Maybe FilePath, Scopes m NExprLoc) m
-     , MonadState (HashMap FilePath NExprLoc, HashMap Text Text) m
+     , MonadReader (Maybe Path, Scopes m NExprLoc) m
+     , MonadState (HashMap Path NExprLoc, HashMap Text Text) m
      )
   => SrcSpan
-  -> FilePath
+  -> Path
   -> m NExprLoc
 staticImport pann path = do
-  mfile <- asks fst
+  mfile <- asks (coerce . fst)
   path  <- liftIO $ pathToDefaultNixFile path
-  path' <- liftIO $ pathToDefaultNixFile =<< canonicalizePath
-    (maybe id ((</>) . takeDirectory) mfile path)
+  path' <- liftIO $ pathToDefaultNixFile =<< (coerce <$> canonicalizePath . coerce)
+    (maybe id ((</>) . takeDirectory) mfile (coerce path))
 
   imports <- gets fst
   maybe
@@ -99,8 +98,9 @@ staticImport pann path = do
     pure
     (HM.lookup path' imports)
  where
+  go :: Path -> m NExprLoc
   go path = do
-    liftIO $ putStrLn $ "Importing file " <> path
+    liftIO $ putStrLn $ "Importing file " <> (coerce path)
 
     eres <- liftIO $ parseNixFileLoc path
     either
@@ -112,9 +112,9 @@ staticImport pann path = do
           cur  =
             NamedVar
               (StaticKey "__cur_file" :| mempty)
-              (Fix (NLiteralPath_ pann path))
+              (NLiteralPathAnn pann path)
               pos
-          x' = Fix $ NLet_ span [cur] x
+          x' = NLetAnn span [cur] x
         modify $ first $ HM.insert path x'
         local
           (const (pure path, mempty)) $
@@ -127,11 +127,11 @@ staticImport pann path = do
 
 -- gatherNames :: NExprLoc -> HashSet VarName
 -- gatherNames = foldFix $ \case
---     NSym_ _ var -> S.singleton var
---     Compose (Ann _ x) -> fold x
+--     NSymAnnF _ var -> S.singleton var
+--     AnnF _ x -> fold x
 
 reduceExpr
-  :: (MonadIO m, MonadFail m) => Maybe FilePath -> NExprLoc -> m NExprLoc
+  :: (MonadIO m, MonadFail m) => Maybe Path -> NExprLoc -> m NExprLoc
 reduceExpr mpath expr =
   (`evalStateT` (mempty, mempty))
     . (`runReaderT` (mpath, mempty))
@@ -143,26 +143,26 @@ reduce
    . ( MonadIO m
      , Scoped NExprLoc m
      , MonadFail m
-     , MonadReader (Maybe FilePath, Scopes m NExprLoc) m
-     , MonadState (HashMap FilePath NExprLoc, HashMap Text Text) m
+     , MonadReader (Maybe Path, Scopes m NExprLoc) m
+     , MonadState (HashMap Path NExprLoc, HashMap Text Text) m
      )
   => NExprLocF (m NExprLoc)
   -> m NExprLoc
 
 -- | Reduce the variable to its value if defined.
 --   Leave it as it is otherwise.
-reduce (NSym_ ann var) =
-  fromMaybe (Fix (NSym_ ann var)) <$> lookupVar var
+reduce (NSymAnnF ann var) =
+  fromMaybe (NSymAnn ann var) <$> lookupVar var
 
 -- | Reduce binary and integer negation.
-reduce (NUnary_ uann op arg) =
+reduce (NUnaryAnnF uann op arg) =
   do
     x <- arg
-    pure $ Fix $
+    pure $
       case (op, x) of
-        (NNeg, Fix (NConstant_ cann (NInt  n))) -> NConstant_ cann $ NInt $ negate n
-        (NNot, Fix (NConstant_ cann (NBool b))) -> NConstant_ cann $ NBool $ not b
-        _                                       -> NUnary_    uann op x
+        (NNeg, NConstantAnn cann (NInt  n)) -> NConstantAnn cann $ NInt $ negate n
+        (NNot, NConstantAnn cann (NBool b)) -> NConstantAnn cann $ NBool $ not b
+        _                                   -> NUnaryAnn    uann op x
 
 -- | Reduce function applications.
 --
@@ -170,32 +170,32 @@ reduce (NUnary_ uann op arg) =
 --
 --     * Reduce a lambda function by adding its name to the local
 --       scope and recursively reducing its body.
-reduce (NBinary_ bann NApp fun arg) = fun >>= \case
-  f@(Fix (NSym_ _ "import")) ->
+reduce (NBinaryAnnF bann NApp fun arg) = fun >>= \case
+  f@(NSymAnn _ "import") ->
     (\case
-        -- Fix (NEnvPath_     pann origPath) -> staticImport pann origPath
-      Fix (NLiteralPath_ pann origPath) -> staticImport pann origPath
-      v -> pure $ Fix $ NBinary_ bann NApp f v
+        -- NEnvPathAnn     pann origPath -> staticImport pann origPath
+      NLiteralPathAnn pann origPath -> staticImport pann origPath
+      v -> pure $ NBinaryAnn bann NApp f v
     ) =<< arg
 
-  Fix (NAbs_ _ (Param name) body) ->
+  NAbsAnn _ (Param name) body ->
     do
       x <- arg
       pushScope
         (coerce $ HM.singleton name x)
         (foldFix reduce body)
 
-  f -> Fix . NBinary_ bann NApp f <$> arg
+  f -> NBinaryAnn bann NApp f <$> arg
 
 -- | Reduce an integer addition to its result.
-reduce (NBinary_ bann op larg rarg) =
+reduce (NBinaryAnnF bann op larg rarg) =
   do
     lval <- larg
     rval <- rarg
-    pure $ Fix $
+    pure $
       case (op, lval, rval) of
-        (NPlus, Fix (NConstant_ ann (NInt x)), Fix (NConstant_ _ (NInt y))) -> NConstant_ ann  $ NInt $ x + y
-        _                                                                   -> NBinary_   bann op lval rval
+        (NPlus, NConstantAnn ann (NInt x), NConstantAnn _ (NInt y)) -> NConstantAnn ann  $ NInt $ x + y
+        _                                                           -> NBinaryAnn   bann op lval rval
 
 -- | Reduce a select on a Set by substituting the set to the selected value.
 --
@@ -204,9 +204,9 @@ reduce (NBinary_ bann op larg rarg) =
 --   1. The selected expr is indeed a set.
 --   2. The selection AttrPath is a list of StaticKeys.
 --   3. The selected AttrPath exists in the set.
-reduce base@(NSelect_ _ _ _ attrs)
+reduce base@(NSelectAnnF _ _ _ attrs)
   | sAttrPath $ NE.toList attrs = do
-    (NSelect_ _ _ aset attrs) <- sequence base
+    (NSelectAnnF _ _ aset attrs) <- sequence base
     inspectSet (unFix aset) attrs
   | otherwise = sId
  where
@@ -221,7 +221,7 @@ reduce base@(NSelect_ _ _ _ attrs)
     n@(NamedVar (a' :| _) _ _) | a' == a -> pure n
     _ -> findBind xs attrs
   -- Follow the attrpath recursively in sets.
-  inspectSet (NSet_ _ NonRecursive binds) attrs = case findBind binds attrs of
+  inspectSet (NSetAnnF _ NonRecursive binds) attrs = case findBind binds attrs of
     Just (NamedVar _ e _) -> case NE.uncons attrs of
       (_, Just attrs) -> inspectSet (unFix e) attrs
       _               -> pure e
@@ -232,7 +232,7 @@ reduce base@(NSelect_ _ _ _ attrs)
 
 -- | Reduce a set by inlining its binds outside of the set
 --   if none of the binds inherit the super set.
-reduce e@(NSet_ ann NonRecursive binds) =
+reduce e@(NSetAnnF ann NonRecursive binds) =
   do
     let
       usesInherit =
@@ -245,22 +245,22 @@ reduce e@(NSet_ ann NonRecursive binds) =
 
     bool
       (Fix <$> sequence e)
-      (clearScopes @NExprLoc $ Fix . NSet_ ann NonRecursive <$> traverse sequence binds)
+      (clearScopes @NExprLoc $ NSetAnn ann NonRecursive <$> traverse sequence binds)
       usesInherit
 
 -- Encountering a 'rec set' construction eliminates any hope of inlining
 -- definitions.
-reduce (NSet_ ann Recursive binds) =
-  clearScopes @NExprLoc $ Fix . NSet_ ann Recursive <$> traverse sequence binds
+reduce (NSetAnnF ann Recursive binds) =
+  clearScopes @NExprLoc $ NSetAnn ann Recursive <$> traverse sequence binds
 
 -- Encountering a 'with' construction eliminates any hope of inlining
 -- definitions.
-reduce (NWith_ ann scope body) =
-  clearScopes @NExprLoc $ Fix <$> liftA2 (NWith_ ann) scope body
+reduce (NWithAnnF ann scope body) =
+  clearScopes @NExprLoc $ liftA2 (NWithAnn ann) scope body
 
 -- | Reduce a let binds section by pushing lambdas,
 --   constants and strings to the body scope.
-reduce (NLet_ ann binds body) =
+reduce (NLetAnnF ann binds body) =
   do
     binds' <- traverse sequence binds
     body'  <-
@@ -271,9 +271,9 @@ reduce (NLet_ ann binds body) =
               let
                 defcase =
                   \case
-                    d@(Fix NAbs_     {}) -> pure (name, d)
-                    d@(Fix NConstant_{}) -> pure (name, d)
-                    d@(Fix NStr_     {}) -> pure (name, d)
+                    d@(NAbsAnn     {}) -> pure (name, d)
+                    d@(NConstantAnn{}) -> pure (name, d)
+                    d@(NStrAnn     {}) -> pure (name, d)
                     _                    -> Nothing
               in
               defcase <$> def
@@ -287,7 +287,7 @@ reduce (NLet_ ann binds body) =
     --     NamedVar (StaticKey name _ :| []) _ ->
     --         name `S.member` names
     --     _ -> True
-    pure $ Fix $ NLet_ ann binds' body'
+    pure $ NLetAnn ann binds' body'
     -- where
     --   go m [] = pure m
     --   go m (x:xs) = case x of
@@ -298,31 +298,31 @@ reduce (NLet_ ann binds body) =
 
 -- | Reduce an if to the relevant path if
 --   the condition is a boolean constant.
-reduce e@(NIf_ _ b t f) =
+reduce e@(NIfAnnF _ b t f) =
   (\case
-    Fix (NConstant_ _ (NBool b')) -> if b' then t else f
-    _                             -> Fix <$> sequence e
+    NConstantAnn _ (NBool b') -> bool f t b'
+    _                         -> Fix <$> sequence e
   ) =<< b
 
 -- | Reduce an assert atom to its encapsulated
 --   symbol if the assertion is a boolean constant.
-reduce e@(NAssert_ _ b body) =
+reduce e@(NAssertAnnF _ b body) =
   (\case
-    Fix (NConstant_ _ (NBool b')) | b' -> body
+    NConstantAnn _ (NBool b') | b' -> body
     _ -> Fix <$> sequence e
   ) =<< b
 
-reduce (NAbs_ ann params body) = do
+reduce (NAbsAnnF ann params body) = do
   params' <- sequence params
   -- Make sure that variable definitions in scope do not override function
   -- arguments.
   let
     scope = coerce $
       case params' of
-        Param    name     -> one (name, Fix $ NSym_ ann name)
+        Param    name     -> one (name, NSymAnn ann name)
         ParamSet _ _ pset ->
-          HM.fromList $ (\(k, _) -> (k, Fix $ NSym_ ann k)) <$> pset
-  Fix . NAbs_ ann params' <$> pushScope scope body
+          HM.fromList $ (\(k, _) -> (k, NSymAnn ann k)) <$> pset
+  NAbsAnn ann params' <$> pushScope scope body
 
 reduce v = Fix <$> sequence v
 
@@ -349,7 +349,7 @@ pruneTree opts =
     \(FlaggedF (b, Compose x)) ->
       bool
         Nothing
-        (Fix . Compose <$> traverse prune x)
+        (annUnitToAnn <$> traverse prune x)
         <$> liftIO (readIORef b)
  where
   prune :: NExprF (Maybe NExprLoc) -> Maybe (NExprF NExprLoc)
@@ -361,18 +361,18 @@ pruneTree opts =
 
     NList l -> pure $ NList $
       bool
-        (fromMaybe nNull <$>)
+        (fromMaybe annNNull <$>)
         catMaybes
         (reduceLists opts)  -- Reduce list members that aren't used; breaks if elemAt is used
         l
     NSet recur binds -> pure $ NSet recur $
       bool
-        (fromMaybe nNull <<$>>)
+        (fromMaybe annNNull <<$>>)
         (mapMaybe sequence)
         (reduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
         binds
 
-    NLet binds (Just body@(AnnE _ x)) ->
+    NLet binds (Just body@(Ann _ x)) ->
       pure $
         list
           x
@@ -383,8 +383,8 @@ pruneTree opts =
       pure $ NSelect (join alt) aset $ pruneKeyName <$> attr
 
     -- These are the only short-circuiting binary operators
-    NBinary NAnd (Just (AnnE _ larg)) _ -> pure larg
-    NBinary NOr  (Just (AnnE _ larg)) _ -> pure larg
+    NBinary NAnd (Just (Ann _ larg)) _ -> pure larg
+    NBinary NOr  (Just (Ann _ larg)) _ -> pure larg
 
     -- If the function was never called, it means its argument was in a
     -- thunk that was forced elsewhere.
@@ -394,20 +394,20 @@ pruneTree opts =
     -- invalid is that we're trying to emit what will reproduce whatever
     -- fail the user encountered, which means providing all aspects of
     -- the evaluation path they ultimately followed.
-    NBinary op Nothing (Just rarg) -> pure $ NBinary op nNull rarg
-    NBinary op (Just larg) Nothing -> pure $ NBinary op larg nNull
+    NBinary op Nothing (Just rarg) -> pure $ NBinary op annNNull rarg
+    NBinary op (Just larg) Nothing -> pure $ NBinary op larg annNNull
 
     -- If the scope of a with was never referenced, it's not needed
-    NWith Nothing (Just (AnnE _ body)) -> pure body
+    NWith Nothing (Just (Ann _ body)) -> pure body
 
     NAssert Nothing _              -> fail "How can an assert be used, but its condition not?"
-    NAssert _ (Just (AnnE _ body)) -> pure body
-    NAssert (Just cond) _          -> pure $ NAssert cond nNull
+    NAssert _ (Just (Ann _ body)) -> pure body
+    NAssert (Just cond) _          -> pure $ NAssert cond annNNull
 
     NIf Nothing _ _ -> fail "How can an if be used, but its condition not?"
 
-    NIf _ Nothing (Just (AnnE _ f)) -> pure f
-    NIf _ (Just (AnnE _ t)) Nothing -> pure t
+    NIf _ Nothing (Just (Ann _ f)) -> pure f
+    NIf _ (Just (Ann _ t)) Nothing -> pure t
 
     x                     -> sequence x
 
@@ -444,9 +444,9 @@ pruneTree opts =
       second $
         bool
           fmap
-          ((pure .) . maybe nNull)
+          ((pure .) . maybe annNNull)
           (reduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
-          (fromMaybe nNull)
+          (fromMaybe annNNull)
 
   pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
   pruneBinding (NamedVar _                 Nothing  _  ) = Nothing
@@ -458,7 +458,7 @@ pruneTree opts =
 reducingEvalExpr
   :: (Framed e m, Has e Options, Exception r, MonadCatch m, MonadIO m)
   => (NExprLocF (m a) -> m a)
-  -> Maybe FilePath
+  -> Maybe Path
   -> NExprLoc
   -> m (NExprLoc, Either r a)
 reducingEvalExpr eval mpath expr =
@@ -468,7 +468,7 @@ reducingEvalExpr eval mpath expr =
       pure <$> foldFix (addEvalFlags eval) expr'
     opts :: Options <- asks $ view hasLens
     expr''          <- pruneTree opts expr'
-    pure (fromMaybe nNull expr'', eres)
+    pure (fromMaybe annNNull expr'', eres)
  where
   addEvalFlags k (FlaggedF (b, x)) = liftIO (writeIORef b True) *> k x
 

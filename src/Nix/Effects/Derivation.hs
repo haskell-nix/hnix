@@ -1,9 +1,8 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
-{-# LANGUAGE ViewPatterns #-}
+{-# language DataKinds #-}
+{-# language NamedFieldPuns #-}
+{-# language RecordWildCards #-}
+{-# language ScopedTypeVariables #-}
+{-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 
 module Nix.Effects.Derivation ( defaultDerivationStrict ) where
 
@@ -78,7 +77,7 @@ writeDerivation drv@Derivation{inputs, name} = do
   let (inputSrcs, inputDrvs) = inputs
   references <- Set.fromList <$> traverse parsePath (Set.toList $ inputSrcs <> Set.fromList (Map.keys inputDrvs))
   path <- addTextToStore (Text.append name ".drv") (unparseDrv drv) (S.fromList $ Set.toList references) False
-  parsePath $ toText @FilePath $ coerce path
+  parsePath $ toText @Path $ coerce path
 
 -- | Traverse the graph of inputDrvs to replace fixed output derivations with their fixed output hash.
 -- this avoids propagating changes to their .drv when the output hash stays the same.
@@ -113,7 +112,7 @@ hashDerivationModulo
           (\(path, outs) ->
             maybe
               (do
-                drv' <- readDerivation $ toString path
+                drv' <- readDerivation $ coerce $ toString path
                 hash <- Store.encodeDigestWith Store.Base16 <$> hashDerivationModulo drv'
                 pure (hash, outs)
               )
@@ -171,13 +170,13 @@ unparseDrv Derivation{..} =
     escape '\t' = "\\t"
     escape c = one c
 
-readDerivation :: (Framed e m, MonadFile m) => FilePath -> m Derivation
+readDerivation :: (Framed e m, MonadFile m) => Path -> m Derivation
 readDerivation path = do
   content <- decodeUtf8 <$> readFile path
   either
     (\ err -> throwError $ ErrorCall $ "Failed to parse " <> show path <> ":\n" <> show err)
     pure
-    (parse derivationParser path content)
+    (parse derivationParser (coerce path) content)
 
 derivationParser :: Parsec () Text Derivation
 derivationParser = do

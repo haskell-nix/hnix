@@ -1,11 +1,12 @@
 module ParserBench (benchmarks) where
 
+import           Nix.Utils
 import           Nix.Parser
 
 import           Criterion
 
-benchFile :: FilePath -> Benchmark
-benchFile = bench <*> whnfIO . parseNixFile . ("data/" <>)
+benchFile :: Path -> Benchmark
+benchFile = bench . coerce <*> whnfIO . parseNixFile . ("data/" <>)
 
 benchmarks :: Benchmark
 benchmarks = bgroup

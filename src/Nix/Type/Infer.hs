@@ -1,15 +1,14 @@
-{-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# language MultiWayIf #-}
+{-# language CPP #-}
+{-# language AllowAmbiguousTypes #-}
+{-# language ConstraintKinds #-}
+{-# language ExistentialQuantification #-}
+{-# language GeneralizedNewtypeDeriving #-}
+{-# language RankNTypes #-}
+{-# language ScopedTypeVariables #-}
+{-# language TypeFamilies #-}
 
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# options_ghc -Wno-name-shadowing #-}
 
 module Nix.Type.Infer
   ( Constraint(..)
@@ -480,7 +479,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
       Judgment
         mempty
         mempty
-        (TSet Closed $
+        (TSet mempty $
           M.fromList
             [ ("file", typePath)
             , ("line", typeInt )

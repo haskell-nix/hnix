@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# language TemplateHaskell #-}
 
 -- | Code that configures presentation parser for the CLI options
 module Nix.Options.Parser where

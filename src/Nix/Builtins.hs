@@ -1,19 +1,18 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE MonoLocalBinds #-}
-{-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE PartialTypeSignatures #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
+{-# language CPP #-}
+{-# language AllowAmbiguousTypes #-}
+{-# language ConstraintKinds #-}
+{-# language FunctionalDependencies #-}
+{-# language KindSignatures #-}
+{-# language MonoLocalBinds #-}
+{-# language MultiWayIf #-}
+{-# language PartialTypeSignatures #-}
+{-# language QuasiQuotes #-}
+{-# language ScopedTypeVariables #-}
+{-# language TemplateHaskell #-}
+{-# language UndecidableInstances #-}
+{-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# options_ghc -fno-warn-name-shadowing #-}
 
 -- | Code that implements Nix builtins. Lists the functions that are built into the Nix expression evaluator. Some built-ins (aka `derivation`), are always in the scope, so they can be accessed by the name. To keap the namespace clean, most built-ins are inside the `builtins` scope - a set that contains all what is a built-in.
 module Nix.Builtins
@@ -171,7 +170,7 @@ foldNixPath
   :: forall e t f m r
    . MonadNix e t f m
   => r
-  -> (FilePath -> Maybe Text -> NixPathEntryType -> r -> m r)
+  -> (Path -> Maybe Text -> NixPathEntryType -> r -> m r)
   -> m r
 foldNixPath z f =
   do
@@ -186,7 +185,7 @@ foldNixPath z f =
     dataDir  <-
       maybe
         getDataDir
-        (pure . toString)
+        (pure . coerce . toString)
         mDataDir
 
     foldrM
@@ -208,8 +207,8 @@ foldNixPath z f =
 
   go (x, ty) rest =
     case Text.splitOn "=" x of
-      [p] -> f (toString p) mempty ty rest
-      [n, p] -> f (toString p) (pure n) ty rest
+      [p] -> f (coerce $ toString p) mempty ty rest
+      [n, p] -> f (coerce $ toString p) (pure n) ty rest
       _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " <> show x
 
 attrsetGet :: MonadNix e t f m => VarName -> AttrSet (NValue t f m) -> m (NValue t f m)
@@ -265,14 +264,10 @@ splitVersion s =
 
 compareVersions :: Text -> Text -> Ordering
 compareVersions s1 s2 =
-  mconcat $
-    alignWith
-      f
-      (splitVersion s1)
-      (splitVersion s2)
+  mconcat $ (alignWith cmp `on` splitVersion) s1 s2
  where
   z = VersionComponentString ""
-  f = uncurry compare . fromThese z z
+  cmp = uncurry compare . fromThese z z
 
 splitDrvName :: Text -> (Text, Text)
 splitDrvName s =
@@ -332,7 +327,7 @@ hasKind =
     (isJust @a)
 
 
-absolutePathFromValue :: MonadNix e t f m => NValue t f m -> m FilePath
+absolutePathFromValue :: MonadNix e t f m => NValue t f m -> m Path
 absolutePathFromValue =
   \case
     NVStr ns ->
@@ -341,7 +336,7 @@ absolutePathFromValue =
           path = toString $ stringIgnoreContext ns
 
         unless (isAbsolute path) $ throwError $ ErrorCall $ "string " <> show path <> " doesn't represent an absolute path"
-        pure path
+        pure $ coerce path
 
     NVPath path -> pure path
     v           -> throwError $ ErrorCall $ "expected a path, got " <> show v
@@ -411,10 +406,10 @@ nixPathNix =
               mempty
               (M.fromList
                 [case ty of
-                  PathEntryPath -> ("path", nvPath p)
+                  PathEntryPath -> ("path", nvPath  p)
                   PathEntryURI  -> ( "uri", mkNvStr p)
 
-                , ( "prefix", mkNvStr $ toString $ fromMaybe "" mn)
+                , ( "prefix", mkNvStr $ coerce $ toString $ fromMaybe "" mn)
                 ]
               )
             )
@@ -860,7 +855,7 @@ dirOfNix nvdir =
 
     case dir of
       NVStr ns -> pure $ nvStr $ modifyNixContents (toText . takeDirectory . toString) ns
-      NVPath path -> pure $ nvPath $ takeDirectory path
+      NVPath path -> pure $ nvPath $ coerce $ takeDirectory $ coerce path
       v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " <> show v
 
 -- jww (2018-04-28): This should only be a string argument, and not coerced?
@@ -1117,9 +1112,9 @@ toFileNix name s =
     name' <- fromStringNoContext =<< fromValue name
     s'    <- fromValue s
     mres  <-
-      (toFile_ `on` toString)
-        name'
-        (stringIgnoreContext s')
+      toFile_
+        (coerce $ toString name')
+        (toString $ stringIgnoreContext s')
 
     let
       t  = coerce $ toText @FilePath $ coerce mres
@@ -1137,7 +1132,7 @@ pathExistsNix nvpath =
     toValue =<<
       case path of
         NVPath p  -> doesPathExist p
-        NVStr  ns -> doesPathExist $ toString $ stringIgnoreContext ns
+        NVStr  ns -> doesPathExist $ coerce $ toString $ stringIgnoreContext ns
         _v -> throwError $ ErrorCall $ "builtins.pathExists: expected path, got " <> show _v
 
 isAttrsNix
@@ -1253,7 +1248,7 @@ scopedImportNix
 scopedImportNix asetArg pathArg =
   do
     (coerce -> scope) <- fromValue @(AttrSet (NValue t f m)) asetArg
-    (Path p) <- fromValue pathArg
+    p <- fromValue pathArg
 
     path  <- pathToDefaultNix @t @f @m p
     path' <-
@@ -1264,10 +1259,10 @@ scopedImportNix asetArg pathArg =
         )
         (\ res ->
           do
-            (Path p') <- fromValue =<< demand res
+            p' <- fromValue @Path =<< demand res
 
             traceM $ "Current file being evaluated is: " <> show p'
-            pure $ takeDirectory p' </> path
+            pure $ coerce $ takeDirectory (coerce p') </> (coerce path)
         )
         =<< lookupVar "__cur_file"
 
@@ -1450,7 +1445,7 @@ findFileNix nvaset nvfilepath =
     case (aset, filePath) of
       (NVList x, NVStr ns) ->
         do
-          mres <- findPath @t @f @m x $ toString $ stringIgnoreContext ns
+          mres <- findPath @t @f @m x $ coerce $ toString $ stringIgnoreContext ns
 
           pure $ nvPath mres
 
@@ -1466,9 +1461,10 @@ readDirNix nvpath =
     items          <- listDirectory path
 
     let
+      detectFileTypes :: Path -> m (VarName, FileType)
       detectFileTypes item =
         do
-          s <- getSymbolicLinkStatus $ path </> item
+          s <- getSymbolicLinkStatus $ coerce $ (coerce path) </> (coerce item)
           let
             t =
               if
@@ -1753,18 +1749,18 @@ appendContextNix tx ty =
             )
       )
 
+nixVersionNix :: MonadNix e t f m => m (NValue t f m)
+nixVersionNix = toValue $ makeNixStringWithoutContext "2.3"
+
+langVersionNix :: MonadNix e t f m => m (NValue t f m)
+langVersionNix = toValue (5 :: Int)
 
 -- ** @builtinsList@
 
 builtinsList :: forall e t f m . MonadNix e t f m => m [Builtin (NValue t f m)]
 builtinsList = sequence
-  [ do
-      version <- toValue (makeNixStringWithoutContext "2.3")
-      pure $ Builtin Normal ("nixVersion", version)
-  , do
-      version <- toValue (5 :: Int)
-      pure $ Builtin Normal ("langVersion", version)
-
+  [ add0 Normal   "nixVersion"       nixVersionNix
+  , add0 Normal   "langVersion"      langVersionNix
   , add  TopLevel "abort"            throwNix -- for now
   , add2 Normal   "add"              addNix
   , add2 Normal   "addErrorContext"  addErrorContextNix
@@ -1947,7 +1943,7 @@ builtinsList = sequence
 withNixContext
   :: forall e t f m r
    . (MonadNix e t f m, Has e Options)
-  => Maybe FilePath
+  => Maybe Path
   -> m r
   -> m r
 withNixContext mpath action =
@@ -1989,7 +1985,7 @@ builtins =
       , Scoped (NValue t f m) m
       )
     => m (HashMap VarName (NValue t f m))
-  buildMap         =  fmap (M.fromList . fmap mapping) builtinsList
+  buildMap         =  M.fromList . (mapping <$>) <$> builtinsList
   topLevelBuiltins = mapping <<$>> fullBuiltinsList
 
   fullBuiltinsList = nameBuiltins <<$>> builtinsList

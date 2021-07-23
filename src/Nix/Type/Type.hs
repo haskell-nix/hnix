@@ -34,7 +34,7 @@ data Scheme = Forall [TVar] Type -- ^ @Forall [TVar] Type@: the Nix type system 
 
 -- This models a set that unifies with any other set.
 typeSet :: Type
-typeSet = TSet Variadic mempty
+typeSet = TSet mempty mempty
 
 typeList :: Type
 typeList = TList mempty

@@ -1,7 +1,7 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# OPTIONS_GHC -Wno-unused-do-bind #-}
+{-# language ConstraintKinds #-}
+{-# language ScopedTypeVariables #-}
+{-# language UndecidableInstances #-}
+{-# options_ghc -Wno-unused-do-bind #-}
 
 
 module Nix.Thunk.Basic

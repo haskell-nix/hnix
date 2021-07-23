@@ -1,8 +1,8 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# language AllowAmbiguousTypes #-}
+{-# language ConstraintKinds #-}
+{-# language FunctionalDependencies #-}
+{-# language GeneralizedNewtypeDeriving #-}
+{-# language ScopedTypeVariables #-}
 
 module Nix.Scope where
 

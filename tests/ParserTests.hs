@@ -1,11 +1,11 @@
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ExtendedDefaultRules #-}
+{-# language QuasiQuotes #-}
+{-# language TemplateHaskell #-}
+{-# language RankNTypes #-}
+{-# language ExtendedDefaultRules #-}
 
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
-{-# OPTIONS_GHC -Wno-type-defaults #-}
+{-# options_ghc -fno-warn-name-shadowing #-}
+{-# options_ghc -Wno-missing-signatures #-}
+{-# options_ghc -Wno-type-defaults #-}
 
 
 module ParserTests (tests) where
@@ -13,6 +13,7 @@ module ParserTests (tests) where
 import Prelude hiding (($<))
 import Data.Fix
 import NeatInterpolation (text)
+import Nix.Utils
 import Nix.Atoms
 import Nix.Expr
 import Nix.Parser
@@ -645,28 +646,28 @@ case_simpleLoc =
     in foo
     |]
     (Fix
-      (NLet_
+      (NLetAnnF
         (mkSpan 1 1 4 7)
         [ NamedVar
             (StaticKey "foo" :| [])
             (Fix
-              (NBinary_
+              (NBinaryAnnF
                 (mkSpan 2 7 3 15)
                 NApp
                 (Fix
-                  (NBinary_
+                  (NBinaryAnnF
                     (mkSpan 2 7 3 9)
                     NApp
-                    (Fix (NSym_ (mkSpan 2 7 2 10) "bar"))
-                    (Fix (NSym_ (mkSpan 3 6 3 9) "baz"))
+                    (Fix (NSymAnnF (mkSpan 2 7 2 10) "bar"))
+                    (Fix (NSymAnnF (mkSpan 3 6 3 9) "baz"))
                   )
                 )
-                (Fix (NStr_ (mkSpan 3 10 3 15) (DoubleQuoted [Plain "qux"])))
+                (Fix (NStrAnnF (mkSpan 3 10 3 15) (DoubleQuoted [Plain "qux"])))
               )
             )
             (mkSPos 2 1)
         ]
-        (Fix (NSym_ (mkSpan 4 4 4 7) "foo"))
+        (Fix (NSymAnnF (mkSpan 4 4 4 7) "foo"))
       )
     )
 
@@ -722,18 +723,18 @@ assertParseTextLoc str expected =
     )
     (parseNixTextLoc str)
 
-assertParseFile :: FilePath -> NExpr -> Assertion
+assertParseFile :: Path -> NExpr -> Assertion
 assertParseFile file expected =
   do
-  res <- parseNixFile $ "data/" <> file
-  either
-    (throwParseError "data file" file)
-    (assertEqual
-      ("Parsing data file " <> file)
-      (stripPositionInfo expected)
-      . stripPositionInfo
-    )
-    res
+    res <- parseNixFile $ "data/" <> file
+    either
+      (throwParseError "data file" $ toText file)
+      (assertEqual
+        ("Parsing data file " <> (coerce file))
+        (stripPositionInfo expected)
+        . stripPositionInfo
+      )
+      res
 
 assertParseFail :: NixLang -> Assertion
 assertParseFail str =

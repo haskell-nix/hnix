@@ -1,9 +1,9 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# language TypeFamilies #-}
+{-# language ConstraintKinds #-}
+{-# language CPP #-}
+{-# language GeneralizedNewtypeDeriving #-}
+{-# language PolyKinds #-}
+{-# language UndecidableInstances #-}
 
 module Nix.Utils.Fix1 where
 

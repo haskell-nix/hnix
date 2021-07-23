@@ -1,11 +1,11 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE IncoherentInstances #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# language AllowAmbiguousTypes #-}
+{-# language ConstraintKinds #-}
+{-# language IncoherentInstances #-}
+{-# language ScopedTypeVariables #-}
+{-# language TypeFamilies #-}
+{-# language UndecidableInstances #-}
 
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# options_ghc -fno-warn-name-shadowing #-}
 
 -- | Although there are a lot of instances in this file, really it's just a
 --   combinatorial explosion of the following combinations:
@@ -233,9 +233,6 @@ instance Convertible e t f m
         _         -> mempty
 
   fromValue = fromMayToValue $ TString mempty
-
-newtype Path = Path FilePath
-    deriving Show
 
 instance ( Convertible e t f m
          , MonadValue (NValue t f m) m

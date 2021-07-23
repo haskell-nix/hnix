@@ -485,6 +485,7 @@ library
     , TupleSections
     , LambdaCase
     , BangPatterns
+    , ViewPatterns
   if flag(optimize)
     default-extensions:
       ApplicativeDo
@@ -551,6 +552,7 @@ executable hnix
     , TupleSections
     , LambdaCase
     , BangPatterns
+    , ViewPatterns
   if flag(optimize)
     default-extensions:
       ApplicativeDo
@@ -629,6 +631,7 @@ test-suite hnix-tests
     , TupleSections
     , LambdaCase
     , BangPatterns
+    , ViewPatterns
   if flag(optimize)
     default-extensions:
       ApplicativeDo
@@ -681,6 +684,7 @@ benchmark hnix-benchmarks
     , TupleSections
     , LambdaCase
     , BangPatterns
+    , ViewPatterns
   if flag(optimize)
     default-extensions:
       ApplicativeDo

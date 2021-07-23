@@ -1,8 +1,7 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# language CPP #-}
+{-# language ScopedTypeVariables #-}
 
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# options_ghc -fno-warn-name-shadowing #-}
 
 
 module Nix.Pretty where
@@ -199,7 +198,7 @@ prettyOriginExpr
   -> Doc ann
 prettyOriginExpr = withoutParens . go
  where
-  go = exprFNixDoc . stripAnn . fmap render
+  go = exprFNixDoc . stripAnnF . fmap render
 
   render :: Maybe (NValue t f m) -> NixDoc ann
   render Nothing = simpleExpr "_"
@@ -264,10 +263,10 @@ exprFNixDoc = \case
         o
   NHasAttr r attr ->
     mkNixDoc hasAttrOp (wrapParens hasAttrOp r <> " ? " <> prettySelector attr)
-  NEnvPath     p -> simpleExpr $ pretty ("<" <> p <> ">")
+  NEnvPath     p -> simpleExpr $ pretty @String $ coerce $ "<" <> p <> ">"
   NLiteralPath p ->
     pathExpr $
-      pretty $
+      pretty @FilePath $ coerce $
         case p of
           "./"  -> "./."
           "../" -> "../."
@@ -276,7 +275,7 @@ exprFNixDoc = \case
             bool
               ("./" <> _txt)
               _txt
-              (any (`isPrefixOf` _txt) ["/", "~/", "./", "../"])
+              (any (`isPrefixOf` (coerce _txt)) ["/", "~/", "./", "../"])
   NSym name -> simpleExpr $ prettyVarName name
   NLet binds body ->
     leastPrecedence $
@@ -403,5 +402,5 @@ printNix = iterNValueByDiscardWith thk phi
         )
       where surround s = "\"" <> s <> "\""
   phi NVClosure'{}        = "<<lambda>>"
-  phi (NVPath' fp       ) = fp
+  phi (NVPath' fp       ) = coerce fp
   phi (NVBuiltin' name _) = toString @Text $ "<<builtin " <> coerce name <> ">>"

@@ -1,8 +1,7 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# language CPP #-}
+{-# language DeriveAnyClass #-}
 
-{-# OPTIONS_GHC -fno-warn-name-shadowing #-}
+{-# options_ghc -fno-warn-name-shadowing #-}
 
 -- | Main module for parsing Nix expressions.
 module Nix.Parser
@@ -65,7 +64,10 @@ import           Data.Fix                       ( Fix(..) )
 import qualified Data.HashSet                  as HashSet
 import qualified Data.Map                      as Map
 import           Data.Text                      ( cons )
-import           Nix.Expr                hiding ( ($>) )
+import           Nix.Utils
+import           Nix.Expr.Types
+import           Nix.Expr.Shorthands     hiding ( ($>) )
+import           Nix.Expr.Types.Annotated
 import           Nix.Expr.Strings               ( escapeCodes
                                                 , stripIndent
                                                 , mergePlain
@@ -138,17 +140,18 @@ nixSelect term =
  where
   build
     :: NExprLoc
-    -> Maybe ( Ann SrcSpan (NAttrPath NExprLoc)
-        , Maybe NExprLoc
-        )
+    -> Maybe
+      ( AnnUnit SrcSpan (NAttrPath NExprLoc)
+      , Maybe NExprLoc
+      )
     -> NExprLoc
   build t mexpr =
     maybe
       t
-      (\ (a, m) -> (`nSelectLoc` t) m a)
+      (\ (a, m) -> (`annNSelect` t) m a)
       mexpr
 
-nixSelector :: Parser (Ann SrcSpan (NAttrPath NExprLoc))
+nixSelector :: Parser (AnnUnit SrcSpan (NAttrPath NExprLoc))
 nixSelector =
   annotateLocation $
     do
@@ -211,7 +214,7 @@ nixNull = annotateLocation1 (mkNullF <$ reserved "null" <?> "null")
 -- however this position doesn't include the parsed parentheses, so remove the
 -- "inner" location annotateion and annotate again, including the parentheses.
 nixParens :: Parser NExprLoc
-nixParens = annotateLocation1 (parens (stripAnn . unFix <$> nixToplevelForm) <?> "parens")
+nixParens = annotateLocation1 (parens (stripAnnF . unFix <$> nixToplevelForm) <?> "parens")
 
 nixList :: Parser NExprLoc
 nixList = annotateLocation1 (brackets (NList <$> many nixTerm) <?> "list")
@@ -238,9 +241,9 @@ nixSearchPath =
       <?> "spath"
     )
 
-pathStr :: Parser FilePath
+pathStr :: Parser Path
 pathStr =
-  lexeme $
+  lexeme $ coerce $
     liftA2 (<>)
       (many $ satisfy pathChar)
       (concat <$>
@@ -252,7 +255,7 @@ pathStr =
       )
 
 nixPath :: Parser NExprLoc
-nixPath = annotateLocation1 (try (mkPathF False <$> pathStr) <?> "path")
+nixPath = annotateLocation1 (try (mkPathF False <$> coerce pathStr) <?> "path")
 
 nixLet :: Parser NExprLoc
 nixLet = annotateLocation1
@@ -294,12 +297,12 @@ nixWith = annotateLocation1
 
 nixLambda :: Parser NExprLoc
 nixLambda =
-  liftA2 nAbs
+  liftA2 annNAbs
     (annotateLocation $ try argExpr)
     nixToplevelForm
 
 nixString :: Parser NExprLoc
-nixString = nStr <$> annotateLocation nixString'
+nixString = annNStr <$> annotateLocation nixString'
 
 nixUri :: Parser NExprLoc
 nixUri = lexeme $ annotateLocation1 $ try $ do
@@ -427,7 +430,7 @@ argExpr =
       getMore :: ParsecT  Void Text (State SourcePos) ([(VarName, Maybe NExprLoc)], Variadic)
       getMore =
         -- Could be nothing, in which just return what we have so far.
-        option (acc, Closed) $
+        option (acc, mempty) $
           do
             -- Get an argument name and an optional default.
             pair <-
@@ -438,7 +441,7 @@ argExpr =
             let args = acc <> [pair]
 
             -- Either return this, or attempt to get a comma and restart.
-            option (args, Closed) $ comma *> go args
+            option (args, mempty) $ comma *> go args
 
 nixBinders :: Parser [Binding NExprLoc]
 nixBinders = (inherit <+> namedVar) `endBy` semi where
@@ -474,11 +477,11 @@ nixSet = annotateLocation1 ((isRec <*> braces nixBinders) <?> "set")
  where
   isRec = (reserved "rec" $> NSet Recursive <?> "recursive set") <+> pure (NSet NonRecursive)
 
-parseNixFile :: MonadFile m => FilePath -> m (Result NExpr)
+parseNixFile :: MonadFile m => Path -> m (Result NExpr)
 parseNixFile =
   parseFromFileEx $ stripAnnotation <$> (whiteSpace *> nixToplevelForm <* eof)
 
-parseNixFileLoc :: MonadFile m => FilePath -> m (Result NExprLoc)
+parseNixFileLoc :: MonadFile m => Path -> m (Result NExprLoc)
 parseNixFileLoc = parseFromFileEx (whiteSpace *> nixToplevelForm <* eof)
 
 parseNixText :: Text -> Result NExpr
@@ -567,7 +570,7 @@ type Parser = ParsecT Void Text (State SourcePos)
 
 type Result a = Either (Doc Void) a
 
-parseFromFileEx :: MonadFile m => Parser a -> FilePath -> m (Result a)
+parseFromFileEx :: MonadFile m => Parser a -> Path -> m (Result a)
 parseFromFileEx parser file =
   do
     input <- decodeUtf8 <$> readFile file
@@ -576,7 +579,7 @@ parseFromFileEx parser file =
       either
         (Left . pretty . errorBundlePretty)
         pure
-        $ (`evalState` initialPos file) $ runParserT parser file input
+        $ (`evalState` initialPos (coerce file)) $ runParserT parser (coerce file) input
 
 parseFromText :: Parser a -> Text -> Result a
 parseFromText parser input =
@@ -600,17 +603,17 @@ data NOperatorDef
   | NSpecialDef Text NSpecialOp NAssoc
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
-annotateLocation :: Parser a -> Parser (Ann SrcSpan a)
+annotateLocation :: Parser a -> Parser (AnnUnit SrcSpan a)
 annotateLocation p =
   do
     begin <- getSourcePos
     res <- p
     end   <- get -- The state set before the last whitespace
 
-    pure $ Ann (SrcSpan begin end) res
+    pure $ AnnUnit (SrcSpan begin end) res
 
 annotateLocation1 :: Parser (NExprF NExprLoc) -> Parser NExprLoc
-annotateLocation1 = fmap annToAnnF . annotateLocation
+annotateLocation1 = fmap annUnitToAnn . annotateLocation
 
 manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
 manyUnaryOp f = foldr1 (.) <$> some f
@@ -627,33 +630,33 @@ operator op =
   tuneLexer opchar nonextchar =
     lexeme . try $ string opchar <* notFollowedBy (char nonextchar)
 
-opWithLoc :: Text -> o -> (Ann SrcSpan o -> a) -> Parser a
+opWithLoc :: Text -> o -> (AnnUnit SrcSpan o -> a) -> Parser a
 opWithLoc name op f =
   do
-    Ann ann _ <-
+    AnnUnit ann _ <-
       annotateLocation $
         {- dbg (toString name) $ -}
         operator name
 
-    pure $ f $ Ann ann op
+    pure $ f $ AnnUnit ann op
 
 binaryN :: Text -> NBinaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 binaryN name op =
-  (NBinaryDef name op NAssocNone, InfixN $ opWithLoc name op nBinary)
+  (NBinaryDef name op NAssocNone, InfixN $ opWithLoc name op annNBinary)
 binaryL :: Text -> NBinaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 binaryL name op =
-  (NBinaryDef name op NAssocLeft, InfixL $ opWithLoc name op nBinary)
+  (NBinaryDef name op NAssocLeft, InfixL $ opWithLoc name op annNBinary)
 binaryR :: Text -> NBinaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 binaryR name op =
-  (NBinaryDef name op NAssocRight, InfixR $ opWithLoc name op nBinary)
+  (NBinaryDef name op NAssocRight, InfixR $ opWithLoc name op annNBinary)
 prefix :: Text -> NUnaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 prefix name op =
-  (NUnaryDef name op, Prefix $ manyUnaryOp $ opWithLoc name op nUnary)
+  (NUnaryDef name op, Prefix $ manyUnaryOp $ opWithLoc name op annNUnary)
 -- postfix name op = (NUnaryDef name op,
---                    Postfix (opWithLoc name op nUnary))
+--                    Postfix (opWithLoc name op annNUnary))
 
 nixOperators
-  :: Parser (Ann SrcSpan (NAttrPath NExprLoc))
+  :: Parser (AnnUnit SrcSpan (NAttrPath NExprLoc))
   -> [[(NOperatorDef, Operator Parser NExprLoc)]]
 nixOperators selector =
   [ -- This is not parsed here, even though technically it's part of the
@@ -666,20 +669,20 @@ nixOperators selector =
     --             Postfix $ do
     --                    sel <- seldot *> selector
     --                    mor <- optional (reserved "or" *> term)
-    --                    pure $ \x -> nSelectLoc x sel mor) ]
+    --                    pure $ \x -> annNSelect x sel mor) ]
 
     {-  2 -}
     [ ( NBinaryDef " " NApp NAssocLeft
       ,
         -- Thanks to Brent Yorgey for showing me this trick!
-        InfixL $ nApp <$ symbol ""
+        InfixL $ annNApp <$ symbol ""
       )
     ]
   , {-  3 -}
     [ prefix  "-"  NNeg ]
   , {-  4 -}
     [ ( NSpecialDef "?" NHasAttrOp NAssocLeft
-      , Postfix $ symbol "?" *> (flip nHasAttr <$> selector)
+      , Postfix $ symbol "?" *> (flip annNHasAttr <$> selector)
       )
     ]
   , {-  5 -}

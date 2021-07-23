@@ -1,9 +1,9 @@
-{-# LANGUAGE CPP                #-}
-{-# LANGUAGE DeriveAnyClass     #-}
-{-# LANGUAGE KindSignatures     #-}
-{-# LANGUAGE PatternSynonyms    #-}
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE TemplateHaskell    #-}
+{-# language CPP                #-}
+{-# language DeriveAnyClass     #-}
+{-# language KindSignatures     #-}
+{-# language PatternSynonyms    #-}
+{-# language RankNTypes         #-}
+{-# language TemplateHaskell    #-}
 
 -- | The source location annotated nix expression type and supporting types.
 --
@@ -31,6 +31,7 @@ import           Data.Functor.Compose
 import           Data.Hashable.Lifted
 import           Data.Ord.Deriving
 import           GHC.Generics
+import           Nix.Utils
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Text.Megaparsec                ( unPos
@@ -47,7 +48,7 @@ data SrcSpan = SrcSpan
   { spanBegin :: SourcePos
   , spanEnd   :: SourcePos
   }
-  deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData, Hashable)
+ deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData, Hashable)
 
 -- ** Instances
 
@@ -68,67 +69,74 @@ instance Serialise SrcSpan
 -- | A type constructor applied to a type along with an annotation
 --
 -- Intended to be used with 'Fix':
--- @type MyType = Fix (Compose (Ann Annotation) F)@
-data Ann ann a = Ann
-    { annotation :: ann
-    , annotated  :: a
-    }
-    deriving (Ord, Eq, Data, Generic, Generic1, Typeable, Functor, Foldable,
-              Traversable, Read, Show, NFData, Hashable)
+-- @type MyType = Fix (Compose (AnnUnit Annotation) F)@
+data AnnUnit ann expr = AnnUnit
+  { annotation :: ann
+  , annotated  :: expr
+  }
+ deriving
+  ( Eq, Ord, Data, Typeable, Hashable
+  , Generic, Generic1, NFData
+  , Functor, Foldable, Traversable
+  , Show, Read
+  )
 
-type AnnF ann f = Compose (Ann ann) f
+type AnnF ann f = Compose (AnnUnit ann) f
 
--- | Pattern: @(Compose (Ann _ _))@.
-pattern AnnFP
+-- | Pattern: @(Compose (AnnUnit _ _))@.
+pattern AnnF
   :: ann
   -> f a
-  -> Compose (Ann ann) f a
-pattern AnnFP ann f = Compose (Ann ann f)
-{-# complete AnnFP #-}
+  -> Compose (AnnUnit ann) f a
+pattern AnnF ann f = Compose (AnnUnit ann f)
+{-# complete AnnF #-}
 
--- | Pattern: @Fix (Compose (Ann _ _))@.
+
+type Ann ann f = Fix (AnnF ann f)
+
+-- | Pattern: @Fix (Compose (AnnUnit _ _))@.
 -- Fix composes units of (annotations & the annotated) into one object.
 -- Giving annotated expression.
-pattern AnnE
+pattern Ann
   :: forall ann (f :: Type -> Type)
   . ann
-  -> f (Fix (AnnF ann f))
-  -> Fix (AnnF ann f)
-pattern AnnE ann a = Fix (AnnFP ann a)
-{-# complete AnnE #-}
+  -> f (Ann ann f)
+  -> Ann ann f
+pattern Ann ann a = Fix (AnnF ann a)
+{-# complete Ann #-}
 
-annToAnnF :: Ann ann (f (Fix (AnnF ann f))) -> Fix (AnnF ann f)
-annToAnnF (Ann ann a) = AnnE ann a
+annUnitToAnn :: AnnUnit ann (f (Ann ann f)) -> Ann ann f
+annUnitToAnn (AnnUnit ann a) = Ann ann a
 
 -- ** Instances
 
-instance Hashable ann => Hashable1 (Ann ann)
+instance Hashable ann => Hashable1 (AnnUnit ann)
 
-instance NFData ann => NFData1 (Ann ann)
+instance NFData ann => NFData1 (AnnUnit ann)
 
-instance (Binary ann, Binary a) => Binary (Ann ann a)
+instance (Binary ann, Binary a) => Binary (AnnUnit ann a)
 
-$(deriveEq1   ''Ann)
-$(deriveEq2   ''Ann)
-$(deriveOrd1  ''Ann)
-$(deriveOrd2  ''Ann)
-$(deriveRead1 ''Ann)
-$(deriveRead2 ''Ann)
-$(deriveShow1 ''Ann)
-$(deriveShow2 ''Ann)
-$(deriveJSON1 defaultOptions ''Ann)
-$(deriveJSON2 defaultOptions ''Ann)
+$(deriveEq1   ''AnnUnit)
+$(deriveEq2   ''AnnUnit)
+$(deriveOrd1  ''AnnUnit)
+$(deriveOrd2  ''AnnUnit)
+$(deriveRead1 ''AnnUnit)
+$(deriveRead2 ''AnnUnit)
+$(deriveShow1 ''AnnUnit)
+$(deriveShow2 ''AnnUnit)
+$(deriveJSON1 defaultOptions ''AnnUnit)
+$(deriveJSON2 defaultOptions ''AnnUnit)
 
-instance (Serialise ann, Serialise a) => Serialise (Ann ann a)
+instance (Serialise ann, Serialise a) => Serialise (AnnUnit ann a)
 
 -- ** @NExprLoc{,F}@ - annotated Nix expression
 
 type NExprLocF = AnnF SrcSpan NExprF
 
 instance Serialise r => Serialise (NExprLocF r) where
-  encode (AnnFP ann a) = encode ann <> encode a
+  encode (AnnF ann a) = encode ann <> encode a
   decode =
-    liftA2 AnnFP
+    liftA2 AnnF
       decode
       decode
 
@@ -143,99 +151,150 @@ instance Binary NExprLoc
 
 -- * Other
 
-stripAnnotation :: Functor f => Fix (AnnF ann f) -> Fix f
-stripAnnotation = unfoldFix (stripAnn . unFix)
+stripAnnF :: AnnF ann f r -> f r
+stripAnnF = annotated . getCompose
 
-stripAnn :: AnnF ann f r -> f r
-stripAnn = annotated . getCompose
+stripAnnotation :: Functor f => Ann ann f -> Fix f
+stripAnnotation = unfoldFix (stripAnnF . unFix)
 
-nUnary :: Ann SrcSpan NUnaryOp -> NExprLoc -> NExprLoc
-nUnary (Ann s1 u) e1@(AnnE s2 _) = AnnE (s1 <> s2) $ NUnary u e1
-{-# inline nUnary #-}
+annNUnary :: AnnUnit SrcSpan NUnaryOp -> NExprLoc -> NExprLoc
+annNUnary (AnnUnit s1 u) e1@(Ann s2 _) = NUnaryAnn (s1 <> s2) u e1
+{-# inline annNUnary #-}
 
-nBinary :: Ann SrcSpan NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
-nBinary (Ann s1 b) e1@(AnnE s2 _) e2@(AnnE s3 _) =
-  AnnE (s1 <> s2 <> s3) $ NBinary b e1 e2
+annNBinary :: AnnUnit SrcSpan NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
+annNBinary (AnnUnit s1 b) e1@(Ann s2 _) e2@(Ann s3 _) = NBinaryAnn (s1 <> s2 <> s3) b e1 e2
 
-nSelectLoc
-  :: Maybe NExprLoc -> NExprLoc -> Ann SrcSpan (NAttrPath NExprLoc) -> NExprLoc
-nSelectLoc Nothing e1@(AnnE s2 _) (Ann s1 ats) = AnnE (s2 <> s1) $ NSelect Nothing e1 ats
-nSelectLoc (Just e2@(AnnE s3 _)) e1@(AnnE s2 _) (Ann s1 ats) = AnnE (s3 <> s2 <> s1) $ NSelect (pure e2) e1 ats
+annNSelect
+  :: Maybe NExprLoc -> NExprLoc -> AnnUnit SrcSpan (NAttrPath NExprLoc) -> NExprLoc
+annNSelect  Nothing             e2@(Ann s2 _) (AnnUnit s1 ats) = NSelectAnn (      s2 <> s1)  Nothing  e2 ats
+annNSelect (Just e3@(Ann s3 _)) e2@(Ann s2 _) (AnnUnit s1 ats) = NSelectAnn (s3 <> s2 <> s1) (pure e3) e2 ats
 
-nHasAttr :: NExprLoc -> Ann SrcSpan (NAttrPath NExprLoc) -> NExprLoc
-nHasAttr e1@(AnnE s1 _) (Ann s2 ats) = AnnE (s1 <> s2) $ NHasAttr e1 ats
+annNHasAttr :: NExprLoc -> AnnUnit SrcSpan (NAttrPath NExprLoc) -> NExprLoc
+annNHasAttr e1@(Ann s1 _) (AnnUnit s2 ats) = NHasAttrAnn (s1 <> s2) e1 ats
 
-nApp :: NExprLoc -> NExprLoc -> NExprLoc
-nApp e1@(AnnE s1 _) e2@(AnnE s2 _) = AnnE (s1 <> s2) $ NBinary NApp e1 e2
+annNApp :: NExprLoc -> NExprLoc -> NExprLoc
+annNApp e1@(Ann s1 _) e2@(Ann s2 _) = NBinaryAnn (s1 <> s2) NApp e1 e2
 
-nAbs :: Ann SrcSpan (Params NExprLoc) -> NExprLoc -> NExprLoc
-nAbs (Ann s1 ps) e1@(AnnE s2 _) = AnnE (s1 <> s2) $ NAbs ps e1
+annNAbs :: AnnUnit SrcSpan (Params NExprLoc) -> NExprLoc -> NExprLoc
+annNAbs (AnnUnit s1 ps) e1@(Ann s2 _) = NAbsAnn (s1 <> s2) ps e1
 
-nStr :: Ann SrcSpan (NString NExprLoc) -> NExprLoc
-nStr (Ann s1 s) = AnnE s1 $ NStr s
+annNStr :: AnnUnit SrcSpan (NString NExprLoc) -> NExprLoc
+annNStr (AnnUnit s1 s) = NStrAnn s1 s
 
 deltaInfo :: SourcePos -> (Text, Int, Int)
 deltaInfo (SourcePos fp l c) = (toText fp, unPos l, unPos c)
 
-nNull :: NExprLoc
-nNull = AnnE nullSpan $ NConstant NNull
-{-# inline nNull #-}
+annNNull :: NExprLoc
+annNNull = NConstantAnn nullSpan NNull
+{-# inline annNNull #-}
 
 nullSpan :: SrcSpan
 nullSpan = SrcSpan nullPos nullPos
 {-# inline nullSpan #-}
 
--- | Pattern systems for matching on NExprLocF constructions.
+-- | Pattern systems for matching on @NExprLocF@ constructions.
 
---  2021-07-15: NOTE: Make versions of these for NExprLoc, since source code actually uses just fixed versions of these shorthands.
-pattern NConstant_ :: SrcSpan -> NAtom -> NExprLocF r
-pattern NConstant_ ann x = AnnFP ann (NConstant x)
+pattern NConstantAnnF    :: SrcSpan -> NAtom -> NExprLocF r
+pattern NConstantAnnF    ann x      = AnnF ann (NConstant x)
 
-pattern NStr_ :: SrcSpan -> NString r -> NExprLocF r
-pattern NStr_ ann x = AnnFP ann (NStr x)
+pattern NStrAnnF         :: SrcSpan -> NString r -> NExprLocF r
+pattern NStrAnnF         ann x      = AnnF ann (NStr x)
 
-pattern NSym_ :: SrcSpan -> VarName -> NExprLocF r
-pattern NSym_ ann x = AnnFP ann (NSym x)
+pattern NSymAnnF         :: SrcSpan -> VarName -> NExprLocF r
+pattern NSymAnnF         ann x      = AnnF ann (NSym x)
 
-pattern NList_ :: SrcSpan -> [r] -> NExprLocF r
-pattern NList_ ann x = AnnFP ann (NList x)
+pattern NListAnnF        :: SrcSpan -> [r] -> NExprLocF r
+pattern NListAnnF        ann x      = AnnF ann (NList x)
 
-pattern NSet_ :: SrcSpan -> Recursivity -> [Binding r] -> NExprLocF r
-pattern NSet_ ann recur x = AnnFP ann (NSet recur x)
+pattern NSetAnnF         :: SrcSpan -> Recursivity -> [Binding r] -> NExprLocF r
+pattern NSetAnnF         ann rec x  = AnnF ann (NSet rec x)
 
-pattern NLiteralPath_ :: SrcSpan -> FilePath -> NExprLocF r
-pattern NLiteralPath_ ann x = AnnFP ann (NLiteralPath x)
+pattern NLiteralPathAnnF :: SrcSpan -> Path -> NExprLocF r
+pattern NLiteralPathAnnF ann x      = AnnF ann (NLiteralPath x)
 
-pattern NEnvPath_ :: SrcSpan -> FilePath -> NExprLocF r
-pattern NEnvPath_ ann x = AnnFP ann (NEnvPath x)
+pattern NEnvPathAnnF     :: SrcSpan -> Path -> NExprLocF r
+pattern NEnvPathAnnF     ann x      = AnnF ann (NEnvPath x)
 
-pattern NUnary_ :: SrcSpan -> NUnaryOp -> r -> NExprLocF r
-pattern NUnary_ ann op x = AnnFP ann (NUnary op x)
+pattern NUnaryAnnF       :: SrcSpan -> NUnaryOp -> r -> NExprLocF r
+pattern NUnaryAnnF       ann op x   = AnnF ann (NUnary op x)
 
-pattern NBinary_ :: SrcSpan -> NBinaryOp -> r -> r -> NExprLocF r
-pattern NBinary_ ann op x y = AnnFP ann (NBinary op x y)
+pattern NBinaryAnnF      :: SrcSpan -> NBinaryOp -> r -> r -> NExprLocF r
+pattern NBinaryAnnF      ann op x y = AnnF ann (NBinary op x y)
 
-pattern NSelect_ :: SrcSpan ->  Maybe r -> r -> NAttrPath r -> NExprLocF r
-pattern NSelect_ ann v x p = AnnFP ann (NSelect v x p)
+pattern NSelectAnnF      :: SrcSpan ->  Maybe r -> r -> NAttrPath r -> NExprLocF r
+pattern NSelectAnnF      ann v x p  = AnnF ann (NSelect v x p)
 
-pattern NHasAttr_ :: SrcSpan -> r -> NAttrPath r -> NExprLocF r
-pattern NHasAttr_ ann x p = AnnFP ann (NHasAttr x p)
+pattern NHasAttrAnnF     :: SrcSpan -> r -> NAttrPath r -> NExprLocF r
+pattern NHasAttrAnnF     ann x p    = AnnF ann (NHasAttr x p)
 
-pattern NAbs_ :: SrcSpan -> Params r-> r -> NExprLocF r
-pattern NAbs_ ann x b = AnnFP ann (NAbs x b)
+pattern NAbsAnnF         :: SrcSpan -> Params r-> r -> NExprLocF r
+pattern NAbsAnnF         ann x b    = AnnF ann (NAbs x b)
 
-pattern NLet_ :: SrcSpan -> [Binding r] -> r -> NExprLocF r
-pattern NLet_ ann x b = AnnFP ann (NLet x b)
+pattern NLetAnnF         :: SrcSpan -> [Binding r] -> r -> NExprLocF r
+pattern NLetAnnF         ann x b    = AnnF ann (NLet x b)
 
-pattern NIf_ :: SrcSpan -> r -> r -> r -> NExprLocF r
-pattern NIf_ ann c t e = AnnFP ann (NIf c t e)
+pattern NIfAnnF          :: SrcSpan -> r -> r -> r -> NExprLocF r
+pattern NIfAnnF          ann c t e  = AnnF ann (NIf c t e)
 
-pattern NWith_ :: SrcSpan -> r -> r -> NExprLocF r
-pattern NWith_ ann x y = AnnFP ann (NWith x y)
+pattern NWithAnnF        :: SrcSpan -> r -> r -> NExprLocF r
+pattern NWithAnnF        ann x y    = AnnF ann (NWith x y)
 
-pattern NAssert_ :: SrcSpan -> r -> r -> NExprLocF r
-pattern NAssert_ ann x y = AnnFP ann (NAssert x y)
+pattern NAssertAnnF      :: SrcSpan -> r -> r -> NExprLocF r
+pattern NAssertAnnF      ann x y    = AnnF ann (NAssert x y)
 
-pattern NSynHole_ :: SrcSpan -> VarName -> NExprLocF r
-pattern NSynHole_ ann x = AnnFP ann (NSynHole x)
-{-# complete NConstant_, NStr_, NSym_, NList_, NSet_, NLiteralPath_, NEnvPath_, NUnary_, NBinary_, NSelect_, NHasAttr_, NAbs_, NLet_, NIf_, NWith_, NAssert_, NSynHole_ #-}
+pattern NSynHoleAnnF     :: SrcSpan -> VarName -> NExprLocF r
+pattern NSynHoleAnnF     ann x      = AnnF ann (NSynHole x)
+{-# complete NConstantAnnF, NStrAnnF, NSymAnnF, NListAnnF, NSetAnnF, NLiteralPathAnnF, NEnvPathAnnF, NUnaryAnnF, NBinaryAnnF, NSelectAnnF, NHasAttrAnnF, NAbsAnnF, NLetAnnF, NIfAnnF, NWithAnnF, NAssertAnnF, NSynHoleAnnF #-}
+
+
+pattern NConstantAnn    :: SrcSpan -> NAtom -> NExprLoc
+pattern NConstantAnn    ann x      = Ann ann (NConstant x)
+
+pattern NStrAnn         :: SrcSpan -> NString NExprLoc -> NExprLoc
+pattern NStrAnn         ann x      = Ann ann (NStr x)
+
+pattern NSymAnn         :: SrcSpan -> VarName -> NExprLoc
+pattern NSymAnn         ann x      = Ann ann (NSym x)
+
+pattern NListAnn        :: SrcSpan -> [NExprLoc] -> NExprLoc
+pattern NListAnn        ann x      = Ann ann (NList x)
+
+pattern NSetAnn         :: SrcSpan -> Recursivity -> [Binding NExprLoc] -> NExprLoc
+pattern NSetAnn         ann rec x  = Ann ann (NSet rec x)
+
+pattern NLiteralPathAnn :: SrcSpan -> Path -> NExprLoc
+pattern NLiteralPathAnn ann x      = Ann ann (NLiteralPath x)
+
+pattern NEnvPathAnn     :: SrcSpan -> Path -> NExprLoc
+pattern NEnvPathAnn     ann x      = Ann ann (NEnvPath x)
+
+pattern NUnaryAnn       :: SrcSpan -> NUnaryOp -> NExprLoc -> NExprLoc
+pattern NUnaryAnn       ann op x   = Ann ann (NUnary op x)
+
+pattern NBinaryAnn      :: SrcSpan -> NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
+pattern NBinaryAnn      ann op x y = Ann ann (NBinary op x y)
+
+pattern NSelectAnn      :: SrcSpan ->  Maybe NExprLoc -> NExprLoc -> NAttrPath NExprLoc -> NExprLoc
+pattern NSelectAnn      ann v x p  = Ann ann (NSelect v x p)
+
+pattern NHasAttrAnn     :: SrcSpan -> NExprLoc -> NAttrPath NExprLoc -> NExprLoc
+pattern NHasAttrAnn     ann x p    = Ann ann (NHasAttr x p)
+
+pattern NAbsAnn         :: SrcSpan -> Params NExprLoc -> NExprLoc -> NExprLoc
+pattern NAbsAnn         ann x b    = Ann ann (NAbs x b)
+
+pattern NLetAnn         :: SrcSpan -> [Binding NExprLoc] -> NExprLoc -> NExprLoc
+pattern NLetAnn         ann x b    = Ann ann (NLet x b)
+
+pattern NIfAnn          :: SrcSpan -> NExprLoc -> NExprLoc -> NExprLoc -> NExprLoc
+pattern NIfAnn          ann c t e  = Ann ann (NIf c t e)
+
+pattern NWithAnn        :: SrcSpan -> NExprLoc -> NExprLoc -> NExprLoc
+pattern NWithAnn        ann x y    = Ann ann (NWith x y)
+
+pattern NAssertAnn      :: SrcSpan -> NExprLoc -> NExprLoc -> NExprLoc
+pattern NAssertAnn      ann x y    = Ann ann (NAssert x y)
+
+pattern NSynHoleAnn     :: SrcSpan -> VarName -> NExprLoc
+pattern NSynHoleAnn     ann x      = Ann ann (NSynHole x)
+{-# complete NConstantAnn, NStrAnn, NSymAnn, NListAnn, NSetAnn, NLiteralPathAnn, NEnvPathAnn, NUnaryAnn, NBinaryAnn, NSelectAnn, NHasAttrAnn, NAbsAnn, NLetAnn, NIfAnn, NWithAnn, NAssertAnn, NSynHoleAnn #-}

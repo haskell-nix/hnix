@@ -1,10 +1,10 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE RankNTypes #-}
+{-# language AllowAmbiguousTypes #-}
+{-# language ConstraintKinds #-}
+{-# language DataKinds #-}
+{-# language GADTs #-}
+{-# language ScopedTypeVariables #-}
+{-# language TypeFamilies #-}
+{-# language RankNTypes #-}
 
 -- | Code for normalization (reduction into a normal form) of Nix expressions.
 -- Nix language allows recursion, so some expressions do not converge.

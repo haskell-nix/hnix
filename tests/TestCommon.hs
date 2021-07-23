@@ -1,11 +1,12 @@
-{-# LANGUAGE PartialTypeSignatures #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# language PartialTypeSignatures #-}
+{-# language ScopedTypeVariables #-}
 
 module TestCommon where
 
 import           GHC.Err                        ( errorWithoutStackTrace )
 import           Control.Monad.Catch
 import           Data.Time
+import           Nix.Utils
 import           Nix
 import           Nix.Standard
 import           Nix.Fresh.Basic
@@ -16,17 +17,17 @@ import           System.Posix.Temp
 import           System.Process
 import           Test.Tasty.HUnit
 
-hnixEvalFile :: Options -> FilePath -> IO (StdValue (StandardT (StdIdT IO)))
+hnixEvalFile :: Options -> Path -> IO (StdValue (StandardT (StdIdT IO)))
 hnixEvalFile opts file =
   do
     parseResult <- parseNixFileLoc file
     either
-      (\ err -> fail $ "Parsing failed for file `" <> file <> "`.\n" <> show err)
+      (\ err -> fail $ "Parsing failed for file `" <> (coerce file) <> "`.\n" <> show err)
       (\ expr ->
         do
           setEnv "TEST_VAR" "foo"
           runWithBasicEffects opts $
-            catch (evaluateExpression (pure file) nixEvalExprLoc normalForm expr) $
+            catch (evaluateExpression (pure $ coerce $ file) nixEvalExprLoc normalForm expr) $
             \case
               NixException frames ->
                 errorWithoutStackTrace . show
@@ -48,22 +49,22 @@ hnixEvalText opts src =
 
 nixEvalString :: String -> IO String
 nixEvalString expr = do
-  (fp, h) <- mkstemp "nix-test-eval"
+  (coerce -> fp, h) <- mkstemp "nix-test-eval"
   hPutStr h expr
   hClose h
   res <- nixEvalFile fp
-  removeLink fp
+  removeLink $ coerce fp
   pure res
 
-nixEvalFile :: FilePath -> IO String
-nixEvalFile fp = readProcess "nix-instantiate" ["--eval", "--strict", fp] ""
+nixEvalFile :: Path -> IO String
+nixEvalFile fp = readProcess "nix-instantiate" ["--eval", "--strict", coerce fp] ""
 
-assertEvalFileMatchesNix :: FilePath -> Assertion
+assertEvalFileMatchesNix :: Path -> Assertion
 assertEvalFileMatchesNix fp = do
   time    <- liftIO getCurrentTime
   hnixVal <- (<> "\n") . printNix <$> hnixEvalFile (defaultOptions time) fp
   nixVal  <- nixEvalFile fp
-  assertEqual fp nixVal hnixVal
+  assertEqual (coerce fp) nixVal hnixVal
 
 assertEvalMatchesNix :: Text -> Assertion
 assertEvalMatchesNix expr = do
