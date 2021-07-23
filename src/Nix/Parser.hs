@@ -140,9 +140,10 @@ nixSelect term =
  where
   build
     :: NExprLoc
-    -> Maybe ( Ann SrcSpan (NAttrPath NExprLoc)
-        , Maybe NExprLoc
-        )
+    -> Maybe
+      ( AnnUnit SrcSpan (NAttrPath NExprLoc)
+      , Maybe NExprLoc
+      )
     -> NExprLoc
   build t mexpr =
     maybe
@@ -150,7 +151,7 @@ nixSelect term =
       (\ (a, m) -> (`nSelectLoc` t) m a)
       mexpr
 
-nixSelector :: Parser (Ann SrcSpan (NAttrPath NExprLoc))
+nixSelector :: Parser (AnnUnit SrcSpan (NAttrPath NExprLoc))
 nixSelector =
   annotateLocation $
     do
@@ -602,14 +603,14 @@ data NOperatorDef
   | NSpecialDef Text NSpecialOp NAssoc
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
-annotateLocation :: Parser a -> Parser (Ann SrcSpan a)
+annotateLocation :: Parser a -> Parser (AnnUnit SrcSpan a)
 annotateLocation p =
   do
     begin <- getSourcePos
     res <- p
     end   <- get -- The state set before the last whitespace
 
-    pure $ Ann (SrcSpan begin end) res
+    pure $ AnnUnit (SrcSpan begin end) res
 
 annotateLocation1 :: Parser (NExprF NExprLoc) -> Parser NExprLoc
 annotateLocation1 = fmap annToAnnF . annotateLocation
@@ -629,15 +630,15 @@ operator op =
   tuneLexer opchar nonextchar =
     lexeme . try $ string opchar <* notFollowedBy (char nonextchar)
 
-opWithLoc :: Text -> o -> (Ann SrcSpan o -> a) -> Parser a
+opWithLoc :: Text -> o -> (AnnUnit SrcSpan o -> a) -> Parser a
 opWithLoc name op f =
   do
-    Ann ann _ <-
+    AnnUnit ann _ <-
       annotateLocation $
         {- dbg (toString name) $ -}
         operator name
 
-    pure $ f $ Ann ann op
+    pure $ f $ AnnUnit ann op
 
 binaryN :: Text -> NBinaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
 binaryN name op =
@@ -655,7 +656,7 @@ prefix name op =
 --                    Postfix (opWithLoc name op nUnary))
 
 nixOperators
-  :: Parser (Ann SrcSpan (NAttrPath NExprLoc))
+  :: Parser (AnnUnit SrcSpan (NAttrPath NExprLoc))
   -> [[(NOperatorDef, Operator Parser NExprLoc)]]
 nixOperators selector =
   [ -- This is not parsed here, even though technically it's part of the

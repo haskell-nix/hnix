@@ -69,25 +69,25 @@ instance Serialise SrcSpan
 -- | A type constructor applied to a type along with an annotation
 --
 -- Intended to be used with 'Fix':
--- @type MyType = Fix (Compose (Ann Annotation) F)@
-data Ann ann a = Ann
+-- @type MyType = Fix (Compose (AnnUnit Annotation) F)@
+data AnnUnit ann expr = AnnUnit
     { annotation :: ann
-    , annotated  :: a
+    , annotated  :: expr
     }
     deriving (Ord, Eq, Data, Generic, Generic1, Typeable, Functor, Foldable,
               Traversable, Read, Show, NFData, Hashable)
 
-type AnnF ann f = Compose (Ann ann) f
+type AnnF ann f = Compose (AnnUnit ann) f
 
--- | Pattern: @(Compose (Ann _ _))@.
+-- | Pattern: @(Compose (AnnUnit _ _))@.
 pattern AnnFP
   :: ann
   -> f a
-  -> Compose (Ann ann) f a
-pattern AnnFP ann f = Compose (Ann ann f)
+  -> Compose (AnnUnit ann) f a
+pattern AnnFP ann f = Compose (AnnUnit ann f)
 {-# complete AnnFP #-}
 
--- | Pattern: @Fix (Compose (Ann _ _))@.
+-- | Pattern: @Fix (Compose (AnnUnit _ _))@.
 -- Fix composes units of (annotations & the annotated) into one object.
 -- Giving annotated expression.
 pattern AnnE
@@ -100,29 +100,29 @@ pattern AnnE ann a = Fix (AnnFP ann a)
 
 type AnnA ann f = Fix (AnnF ann f)
 
-annToAnnF :: Ann ann (f (AnnA ann f)) -> AnnA ann f
-annToAnnF (Ann ann a) = AnnE ann a
+annToAnnF :: AnnUnit ann (f (AnnA ann f)) -> AnnA ann f
+annToAnnF (AnnUnit ann a) = AnnE ann a
 
 -- ** Instances
 
-instance Hashable ann => Hashable1 (Ann ann)
+instance Hashable ann => Hashable1 (AnnUnit ann)
 
-instance NFData ann => NFData1 (Ann ann)
+instance NFData ann => NFData1 (AnnUnit ann)
 
-instance (Binary ann, Binary a) => Binary (Ann ann a)
+instance (Binary ann, Binary a) => Binary (AnnUnit ann a)
 
-$(deriveEq1   ''Ann)
-$(deriveEq2   ''Ann)
-$(deriveOrd1  ''Ann)
-$(deriveOrd2  ''Ann)
-$(deriveRead1 ''Ann)
-$(deriveRead2 ''Ann)
-$(deriveShow1 ''Ann)
-$(deriveShow2 ''Ann)
-$(deriveJSON1 defaultOptions ''Ann)
-$(deriveJSON2 defaultOptions ''Ann)
+$(deriveEq1   ''AnnUnit)
+$(deriveEq2   ''AnnUnit)
+$(deriveOrd1  ''AnnUnit)
+$(deriveOrd2  ''AnnUnit)
+$(deriveRead1 ''AnnUnit)
+$(deriveRead2 ''AnnUnit)
+$(deriveShow1 ''AnnUnit)
+$(deriveShow2 ''AnnUnit)
+$(deriveJSON1 defaultOptions ''AnnUnit)
+$(deriveJSON2 defaultOptions ''AnnUnit)
 
-instance (Serialise ann, Serialise a) => Serialise (Ann ann a)
+instance (Serialise ann, Serialise a) => Serialise (AnnUnit ann a)
 
 -- ** @NExprLoc{,F}@ - annotated Nix expression
 
@@ -152,30 +152,30 @@ stripAnnotation = unfoldFix (stripAnn . unFix)
 stripAnn :: AnnF ann f r -> f r
 stripAnn = annotated . getCompose
 
-nUnary :: Ann SrcSpan NUnaryOp -> NExprLoc -> NExprLoc
-nUnary (Ann s1 u) e1@(AnnE s2 _) = AnnE (s1 <> s2) $ NUnary u e1
+nUnary :: AnnUnit SrcSpan NUnaryOp -> NExprLoc -> NExprLoc
+nUnary (AnnUnit s1 u) e1@(AnnE s2 _) = AnnE (s1 <> s2) $ NUnary u e1
 {-# inline nUnary #-}
 
-nBinary :: Ann SrcSpan NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
-nBinary (Ann s1 b) e1@(AnnE s2 _) e2@(AnnE s3 _) =
+nBinary :: AnnUnit SrcSpan NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
+nBinary (AnnUnit s1 b) e1@(AnnE s2 _) e2@(AnnE s3 _) =
   AnnE (s1 <> s2 <> s3) $ NBinary b e1 e2
 
 nSelectLoc
-  :: Maybe NExprLoc -> NExprLoc -> Ann SrcSpan (NAttrPath NExprLoc) -> NExprLoc
-nSelectLoc Nothing e1@(AnnE s2 _) (Ann s1 ats) = AnnE (s2 <> s1) $ NSelect Nothing e1 ats
-nSelectLoc (Just e2@(AnnE s3 _)) e1@(AnnE s2 _) (Ann s1 ats) = AnnE (s3 <> s2 <> s1) $ NSelect (pure e2) e1 ats
+  :: Maybe NExprLoc -> NExprLoc -> AnnUnit SrcSpan (NAttrPath NExprLoc) -> NExprLoc
+nSelectLoc Nothing e1@(AnnE s2 _) (AnnUnit s1 ats) = AnnE (s2 <> s1) $ NSelect Nothing e1 ats
+nSelectLoc (Just e2@(AnnE s3 _)) e1@(AnnE s2 _) (AnnUnit s1 ats) = AnnE (s3 <> s2 <> s1) $ NSelect (pure e2) e1 ats
 
-nHasAttr :: NExprLoc -> Ann SrcSpan (NAttrPath NExprLoc) -> NExprLoc
-nHasAttr e1@(AnnE s1 _) (Ann s2 ats) = AnnE (s1 <> s2) $ NHasAttr e1 ats
+nHasAttr :: NExprLoc -> AnnUnit SrcSpan (NAttrPath NExprLoc) -> NExprLoc
+nHasAttr e1@(AnnE s1 _) (AnnUnit s2 ats) = AnnE (s1 <> s2) $ NHasAttr e1 ats
 
 nApp :: NExprLoc -> NExprLoc -> NExprLoc
 nApp e1@(AnnE s1 _) e2@(AnnE s2 _) = AnnE (s1 <> s2) $ NBinary NApp e1 e2
 
-nAbs :: Ann SrcSpan (Params NExprLoc) -> NExprLoc -> NExprLoc
-nAbs (Ann s1 ps) e1@(AnnE s2 _) = AnnE (s1 <> s2) $ NAbs ps e1
+nAbs :: AnnUnit SrcSpan (Params NExprLoc) -> NExprLoc -> NExprLoc
+nAbs (AnnUnit s1 ps) e1@(AnnE s2 _) = AnnE (s1 <> s2) $ NAbs ps e1
 
-nStr :: Ann SrcSpan (NString NExprLoc) -> NExprLoc
-nStr (Ann s1 s) = AnnE s1 $ NStr s
+nStr :: AnnUnit SrcSpan (NString NExprLoc) -> NExprLoc
+nStr (AnnUnit s1 s) = AnnE s1 $ NStr s
 
 deltaInfo :: SourcePos -> (Text, Int, Int)
 deltaInfo (SourcePos fp l c) = (toText fp, unPos l, unPos c)
