@@ -160,8 +160,8 @@ reduce (NUnary_ uann op arg) =
     x <- arg
     pure $ Fix $
       case (op, x) of
-        (NNeg, Fix (NConstant_ cann (NInt  n))) -> NConstant_ cann $ NInt $ negate n
-        (NNot, Fix (NConstant_ cann (NBool b))) -> NConstant_ cann $ NBool $ not b
+        (NNeg, Fix (NConstantAnnF cann (NInt  n))) -> NConstantAnnF cann $ NInt $ negate n
+        (NNot, Fix (NConstantAnnF cann (NBool b))) -> NConstantAnnF cann $ NBool $ not b
         _                                       -> NUnary_    uann op x
 
 -- | Reduce function applications.
@@ -194,7 +194,7 @@ reduce (NBinary_ bann op larg rarg) =
     rval <- rarg
     pure $ Fix $
       case (op, lval, rval) of
-        (NPlus, Fix (NConstant_ ann (NInt x)), Fix (NConstant_ _ (NInt y))) -> NConstant_ ann  $ NInt $ x + y
+        (NPlus, Fix (NConstantAnnF ann (NInt x)), Fix (NConstantAnnF _ (NInt y))) -> NConstantAnnF ann  $ NInt $ x + y
         _                                                                   -> NBinary_   bann op lval rval
 
 -- | Reduce a select on a Set by substituting the set to the selected value.
@@ -272,7 +272,7 @@ reduce (NLet_ ann binds body) =
                 defcase =
                   \case
                     d@(Fix NAbs_     {}) -> pure (name, d)
-                    d@(Fix NConstant_{}) -> pure (name, d)
+                    d@(Fix NConstantAnnF{}) -> pure (name, d)
                     d@(Fix NStr_     {}) -> pure (name, d)
                     _                    -> Nothing
               in
@@ -300,7 +300,7 @@ reduce (NLet_ ann binds body) =
 --   the condition is a boolean constant.
 reduce e@(NIf_ _ b t f) =
   (\case
-    Fix (NConstant_ _ (NBool b')) -> if b' then t else f
+    Fix (NConstantAnnF _ (NBool b')) -> if b' then t else f
     _                             -> Fix <$> sequence e
   ) =<< b
 
@@ -308,7 +308,7 @@ reduce e@(NIf_ _ b t f) =
 --   symbol if the assertion is a boolean constant.
 reduce e@(NAssert_ _ b body) =
   (\case
-    Fix (NConstant_ _ (NBool b')) | b' -> body
+    Fix (NConstantAnnF _ (NBool b')) | b' -> body
     _ -> Fix <$> sequence e
   ) =<< b
 

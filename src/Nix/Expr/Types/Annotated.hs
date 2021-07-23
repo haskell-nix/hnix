@@ -193,11 +193,10 @@ nullSpan :: SrcSpan
 nullSpan = SrcSpan nullPos nullPos
 {-# inline nullSpan #-}
 
--- | Pattern systems for matching on NExprLocF constructions.
+-- | Pattern systems for matching on @NExprLocF@ constructions.
 
---  2021-07-15: NOTE: Make versions of these for NExprLoc, since source code actually uses just fixed versions of these shorthands.
-pattern NConstant_ :: SrcSpan -> NAtom -> NExprLocF r
-pattern NConstant_ ann x = AnnF ann (NConstant x)
+pattern NConstantAnnF :: SrcSpan -> NAtom -> NExprLocF r
+pattern NConstantAnnF ann x = AnnF ann (NConstant x)
 
 pattern NStr_ :: SrcSpan -> NString r -> NExprLocF r
 pattern NStr_ ann x = AnnF ann (NStr x)
@@ -246,7 +245,7 @@ pattern NAssert_ ann x y = AnnF ann (NAssert x y)
 
 pattern NSynHole_ :: SrcSpan -> VarName -> NExprLocF r
 pattern NSynHole_ ann x = AnnF ann (NSynHole x)
-{-# complete NConstant_, NStr_, NSym_, NList_, NSet_, NLiteralPath_, NEnvPath_, NUnary_, NBinary_, NSelect_, NHasAttr_, NAbs_, NLet_, NIf_, NWith_, NAssert_, NSynHole_ #-}
+{-# complete NConstantAnnF, NStr_, NSym_, NList_, NSet_, NLiteralPath_, NEnvPath_, NUnary_, NBinary_, NSelect_, NHasAttr_, NAbs_, NLet_, NIf_, NWith_, NAssert_, NSynHole_ #-}
 
 
 pattern PNConstant :: SrcSpan -> NAtom -> NExprLoc

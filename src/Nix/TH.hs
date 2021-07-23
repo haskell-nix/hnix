@@ -133,13 +133,13 @@ instance ToExpr VarName where
   toExpr = Fix . NSym_ nullSpan
 
 instance ToExpr Int where
-  toExpr = Fix . NConstant_ nullSpan . NInt . fromIntegral
+  toExpr = Fix . NConstantAnnF nullSpan . NInt . fromIntegral
 
 instance ToExpr Integer where
-  toExpr = Fix . NConstant_ nullSpan . NInt
+  toExpr = Fix . NConstantAnnF nullSpan . NInt
 
 instance ToExpr Float where
-  toExpr = Fix . NConstant_ nullSpan . NFloat
+  toExpr = Fix . NConstantAnnF nullSpan . NFloat
 
 metaExp :: Set VarName -> NExprLoc -> Maybe ExpQ
 metaExp fvs (Fix (NSym_ _ x)) | x `Set.member` fvs =

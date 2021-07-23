@@ -189,7 +189,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalConstant c = do
     scope <- currentScopes
     span  <- currentPos
-    pure $ nvConstantP (Provenance scope $ NConstant_ span c) c
+    pure $ nvConstantP (Provenance scope $ NConstantAnnF span c) c
 
   evalString =
     maybe
