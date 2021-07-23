@@ -148,7 +148,7 @@ nixSelect term =
   build t mexpr =
     maybe
       t
-      (\ (a, m) -> (`nSelectLoc` t) m a)
+      (\ (a, m) -> (`annNSelect` t) m a)
       mexpr
 
 nixSelector :: Parser (AnnUnit SrcSpan (NAttrPath NExprLoc))
@@ -669,7 +669,7 @@ nixOperators selector =
     --             Postfix $ do
     --                    sel <- seldot *> selector
     --                    mor <- optional (reserved "or" *> term)
-    --                    pure $ \x -> nSelectLoc x sel mor) ]
+    --                    pure $ \x -> annNSelect x sel mor) ]
 
     {-  2 -}
     [ ( NBinaryDef " " NApp NAssocLeft
