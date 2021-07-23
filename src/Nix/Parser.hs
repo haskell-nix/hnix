@@ -302,7 +302,7 @@ nixLambda =
     nixToplevelForm
 
 nixString :: Parser NExprLoc
-nixString = nStr <$> annotateLocation nixString'
+nixString = annNStr <$> annotateLocation nixString'
 
 nixUri :: Parser NExprLoc
 nixUri = lexeme $ annotateLocation1 $ try $ do

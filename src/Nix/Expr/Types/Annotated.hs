@@ -179,8 +179,8 @@ annNApp e1@(Ann s1 _) e2@(Ann s2 _) = Ann (s1 <> s2) $ NBinary NApp e1 e2
 annNAbs :: AnnUnit SrcSpan (Params NExprLoc) -> NExprLoc -> NExprLoc
 annNAbs (AnnUnit s1 ps) e1@(Ann s2 _) = Ann (s1 <> s2) $ NAbs ps e1
 
-nStr :: AnnUnit SrcSpan (NString NExprLoc) -> NExprLoc
-nStr (AnnUnit s1 s) = Ann s1 $ NStr s
+annNStr :: AnnUnit SrcSpan (NString NExprLoc) -> NExprLoc
+annNStr (AnnUnit s1 s) = Ann s1 $ NStr s
 
 deltaInfo :: SourcePos -> (Text, Int, Int)
 deltaInfo (SourcePos fp l c) = (toText fp, unPos l, unPos c)
