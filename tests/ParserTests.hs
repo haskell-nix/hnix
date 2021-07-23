@@ -646,7 +646,7 @@ case_simpleLoc =
     in foo
     |]
     (Fix
-      (NLet_
+      (NLetAnnF
         (mkSpan 1 1 4 7)
         [ NamedVar
             (StaticKey "foo" :| [])

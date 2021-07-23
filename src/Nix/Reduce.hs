@@ -114,7 +114,7 @@ staticImport pann path = do
               (StaticKey "__cur_file" :| mempty)
               (Fix (NLiteralPathAnnF pann path))
               pos
-          x' = Fix $ NLet_ span [cur] x
+          x' = Fix $ NLetAnnF span [cur] x
         modify $ first $ HM.insert path x'
         local
           (const (pure path, mempty)) $
@@ -260,7 +260,7 @@ reduce (NWith_ ann scope body) =
 
 -- | Reduce a let binds section by pushing lambdas,
 --   constants and strings to the body scope.
-reduce (NLet_ ann binds body) =
+reduce (NLetAnnF ann binds body) =
   do
     binds' <- traverse sequence binds
     body'  <-
@@ -287,7 +287,7 @@ reduce (NLet_ ann binds body) =
     --     NamedVar (StaticKey name _ :| []) _ ->
     --         name `S.member` names
     --     _ -> True
-    pure $ Fix $ NLet_ ann binds' body'
+    pure $ Fix $ NLetAnnF ann binds' body'
     -- where
     --   go m [] = pure m
     --   go m (x:xs) = case x of
