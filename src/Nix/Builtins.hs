@@ -1753,6 +1753,8 @@ appendContextNix tx ty =
             )
       )
 
+langVersionNix :: MonadNix e t f m => m (NValue t f m)
+langVersionNix = toValue (5 :: Int)
 
 -- ** @builtinsList@
 
@@ -1761,10 +1763,7 @@ builtinsList = sequence
   [ do
       version <- toValue (makeNixStringWithoutContext "2.3")
       pure $ Builtin Normal ("nixVersion", version)
-  , do
-      version <- toValue (5 :: Int)
-      pure $ Builtin Normal ("langVersion", version)
-
+  , add0 Normal   "langVersion"      langVersionNix
   , add  TopLevel "abort"            throwNix -- for now
   , add2 Normal   "add"              addNix
   , add2 Normal   "addErrorContext"  addErrorContextNix
