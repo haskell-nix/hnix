@@ -264,14 +264,10 @@ splitVersion s =
 
 compareVersions :: Text -> Text -> Ordering
 compareVersions s1 s2 =
-  mconcat $
-    alignWith
-      f
-      (splitVersion s1)
-      (splitVersion s2)
+  mconcat $ (alignWith cmp `on` splitVersion) s1 s2
  where
   z = VersionComponentString ""
-  f = uncurry compare . fromThese z z
+  cmp = uncurry compare . fromThese z z
 
 splitDrvName :: Text -> (Text, Text)
 splitDrvName s =
@@ -410,7 +406,7 @@ nixPathNix =
               mempty
               (M.fromList
                 [case ty of
-                  PathEntryPath -> ("path", nvPath p)
+                  PathEntryPath -> ("path", nvPath  p)
                   PathEntryURI  -> ( "uri", mkNvStr p)
 
                 , ( "prefix", mkNvStr $ coerce $ toString $ fromMaybe "" mn)
@@ -1989,7 +1985,7 @@ builtins =
       , Scoped (NValue t f m) m
       )
     => m (HashMap VarName (NValue t f m))
-  buildMap         =  fmap (M.fromList . fmap mapping) builtinsList
+  buildMap         =  M.fromList . (mapping <$>) <$> builtinsList
   topLevelBuiltins = mapping <<$>> fullBuiltinsList
 
   fullBuiltinsList = nameBuiltins <<$>> builtinsList
