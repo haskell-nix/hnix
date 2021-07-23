@@ -682,7 +682,7 @@ nixOperators selector =
     [ prefix  "-"  NNeg ]
   , {-  4 -}
     [ ( NSpecialDef "?" NHasAttrOp NAssocLeft
-      , Postfix $ symbol "?" *> (flip nHasAttr <$> selector)
+      , Postfix $ symbol "?" *> (flip annNHasAttr <$> selector)
       )
     ]
   , {-  5 -}

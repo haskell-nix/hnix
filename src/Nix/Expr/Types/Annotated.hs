@@ -170,8 +170,8 @@ annNSelect
 annNSelect Nothing e1@(Ann s2 _) (AnnUnit s1 ats) = Ann (s2 <> s1) $ NSelect Nothing e1 ats
 annNSelect (Just e2@(Ann s3 _)) e1@(Ann s2 _) (AnnUnit s1 ats) = Ann (s3 <> s2 <> s1) $ NSelect (pure e2) e1 ats
 
-nHasAttr :: NExprLoc -> AnnUnit SrcSpan (NAttrPath NExprLoc) -> NExprLoc
-nHasAttr e1@(Ann s1 _) (AnnUnit s2 ats) = Ann (s1 <> s2) $ NHasAttr e1 ats
+annNHasAttr :: NExprLoc -> AnnUnit SrcSpan (NAttrPath NExprLoc) -> NExprLoc
+annNHasAttr e1@(Ann s1 _) (AnnUnit s2 ats) = Ann (s1 <> s2) $ NHasAttr e1 ats
 
 nApp :: NExprLoc -> NExprLoc -> NExprLoc
 nApp e1@(Ann s1 _) e2@(Ann s2 _) = Ann (s1 <> s2) $ NBinary NApp e1 e2
