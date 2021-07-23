@@ -306,7 +306,7 @@ reduce e@(NIfAnnF _ b t f) =
 
 -- | Reduce an assert atom to its encapsulated
 --   symbol if the assertion is a boolean constant.
-reduce e@(NAssert_ _ b body) =
+reduce e@(NAssertAnnF _ b body) =
   (\case
     Fix (NConstantAnnF _ (NBool b')) | b' -> body
     _ -> Fix <$> sequence e

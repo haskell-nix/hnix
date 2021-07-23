@@ -260,7 +260,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
         (nverr $ Assertion span c)
         (do
           scope <- currentScopes
-          let f = join (addProvenance . Provenance scope . NAssert_ span (pure c) . pure)
+          let f = join (addProvenance . Provenance scope . NAssertAnnF span (pure c) . pure)
           f <$> body
         )
         b
