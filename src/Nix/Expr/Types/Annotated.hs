@@ -248,54 +248,54 @@ pattern NSynHoleAnnF     ann x      = AnnF ann (NSynHole x)
 {-# complete NConstantAnnF, NStrAnnF, NSymAnnF, NListAnnF, NSetAnnF, NLiteralPathAnnF, NEnvPathAnnF, NUnaryAnnF, NBinaryAnnF, NSelectAnnF, NHasAttrAnnF, NAbsAnnF, NLetAnnF, NIfAnnF, NWithAnnF, NAssertAnnF, NSynHoleAnnF #-}
 
 
-pattern PNConstant :: SrcSpan -> NAtom -> NExprLoc
-pattern PNConstant ann x = Ann ann (NConstant x)
+pattern NConstantAnn :: SrcSpan -> NAtom -> NExprLoc
+pattern NConstantAnn ann x = Ann ann (NConstant x)
 
-pattern PNStr :: SrcSpan -> NString NExprLoc -> NExprLoc
-pattern PNStr ann x = Ann ann (NStr x)
+pattern NStrAnn :: SrcSpan -> NString NExprLoc -> NExprLoc
+pattern NStrAnn ann x = Ann ann (NStr x)
 
-pattern PNSym :: SrcSpan -> VarName -> NExprLoc
-pattern PNSym ann x = Ann ann (NSym x)
+pattern NSymAnn :: SrcSpan -> VarName -> NExprLoc
+pattern NSymAnn ann x = Ann ann (NSym x)
 
-pattern PNList :: SrcSpan -> [NExprLoc] -> NExprLoc
-pattern PNList ann x = Ann ann (NList x)
+pattern NListAnn :: SrcSpan -> [NExprLoc] -> NExprLoc
+pattern NListAnn ann x = Ann ann (NList x)
 
-pattern PNSet :: SrcSpan -> Recursivity -> [Binding NExprLoc] -> NExprLoc
-pattern PNSet ann recur x = Ann ann (NSet recur x)
+pattern NSetAnn :: SrcSpan -> Recursivity -> [Binding NExprLoc] -> NExprLoc
+pattern NSetAnn ann recur x = Ann ann (NSet recur x)
 
-pattern PNLiteralPath :: SrcSpan -> Path -> NExprLoc
-pattern PNLiteralPath ann x = Ann ann (NLiteralPath x)
+pattern NLiteralPathAnn :: SrcSpan -> Path -> NExprLoc
+pattern NLiteralPathAnn ann x = Ann ann (NLiteralPath x)
 
-pattern PNEnvPath :: SrcSpan -> Path -> NExprLoc
-pattern PNEnvPath ann x = Ann ann (NEnvPath x)
+pattern NEnvPathAnn :: SrcSpan -> Path -> NExprLoc
+pattern NEnvPathAnn ann x = Ann ann (NEnvPath x)
 
-pattern PNUnary :: SrcSpan -> NUnaryOp -> NExprLoc -> NExprLoc
-pattern PNUnary ann op x = Ann ann (NUnary op x)
+pattern NUnaryAnn :: SrcSpan -> NUnaryOp -> NExprLoc -> NExprLoc
+pattern NUnaryAnn ann op x = Ann ann (NUnary op x)
 
-pattern PNBinary :: SrcSpan -> NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
-pattern PNBinary ann op x y = Ann ann (NBinary op x y)
+pattern NBinaryAnn :: SrcSpan -> NBinaryOp -> NExprLoc -> NExprLoc -> NExprLoc
+pattern NBinaryAnn ann op x y = Ann ann (NBinary op x y)
 
-pattern PNSelect :: SrcSpan ->  Maybe NExprLoc -> NExprLoc -> NAttrPath NExprLoc -> NExprLoc
-pattern PNSelect ann v x p = Ann ann (NSelect v x p)
+pattern NSelectAnn :: SrcSpan ->  Maybe NExprLoc -> NExprLoc -> NAttrPath NExprLoc -> NExprLoc
+pattern NSelectAnn ann v x p = Ann ann (NSelect v x p)
 
-pattern PNHasAttr :: SrcSpan -> NExprLoc -> NAttrPath NExprLoc -> NExprLoc
-pattern PNHasAttr ann x p = Ann ann (NHasAttr x p)
+pattern NHasAttrAnn :: SrcSpan -> NExprLoc -> NAttrPath NExprLoc -> NExprLoc
+pattern NHasAttrAnn ann x p = Ann ann (NHasAttr x p)
 
-pattern PNAbs :: SrcSpan -> Params NExprLoc -> NExprLoc -> NExprLoc
-pattern PNAbs ann x b = Ann ann (NAbs x b)
+pattern NAbsAnn :: SrcSpan -> Params NExprLoc -> NExprLoc -> NExprLoc
+pattern NAbsAnn ann x b = Ann ann (NAbs x b)
 
-pattern PNLet :: SrcSpan -> [Binding NExprLoc] -> NExprLoc -> NExprLoc
-pattern PNLet ann x b = Ann ann (NLet x b)
+pattern NLetAnn :: SrcSpan -> [Binding NExprLoc] -> NExprLoc -> NExprLoc
+pattern NLetAnn ann x b = Ann ann (NLet x b)
 
-pattern PNIf :: SrcSpan -> NExprLoc -> NExprLoc -> NExprLoc -> NExprLoc
-pattern PNIf ann c t e = Ann ann (NIf c t e)
+pattern NIfAnn :: SrcSpan -> NExprLoc -> NExprLoc -> NExprLoc -> NExprLoc
+pattern NIfAnn ann c t e = Ann ann (NIf c t e)
 
-pattern PNWith :: SrcSpan -> NExprLoc -> NExprLoc -> NExprLoc
-pattern PNWith ann x y = Ann ann (NWith x y)
+pattern NWithAnn :: SrcSpan -> NExprLoc -> NExprLoc -> NExprLoc
+pattern NWithAnn ann x y = Ann ann (NWith x y)
 
-pattern PNAssert :: SrcSpan -> NExprLoc -> NExprLoc -> NExprLoc
-pattern PNAssert ann x y = Ann ann (NAssert x y)
+pattern NAssertAnn :: SrcSpan -> NExprLoc -> NExprLoc -> NExprLoc
+pattern NAssertAnn ann x y = Ann ann (NAssert x y)
 
-pattern PNSynHole :: SrcSpan -> VarName -> NExprLoc
-pattern PNSynHole ann x = Ann ann (NSynHole x)
-{-# complete PNConstant, PNStr, PNSym, PNList, PNSet, PNLiteralPath, PNEnvPath, PNUnary, PNBinary, PNSelect, PNHasAttr, PNAbs, PNLet, PNIf, PNWith, PNAssert, PNSynHole #-}
+pattern NSynHoleAnn :: SrcSpan -> VarName -> NExprLoc
+pattern NSynHoleAnn ann x = Ann ann (NSynHole x)
+{-# complete NConstantAnn, NStrAnn, NSymAnn, NListAnn, NSetAnn, NLiteralPathAnn, NEnvPathAnn, NUnaryAnn, NBinaryAnn, NSelectAnn, NHasAttrAnn, NAbsAnn, NLetAnn, NIfAnn, NWithAnn, NAssertAnn, NSynHoleAnn #-}
