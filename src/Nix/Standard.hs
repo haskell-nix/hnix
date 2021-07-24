@@ -119,6 +119,10 @@ instance
   derivationStrict = defaultDerivationStrict
   traceEffect      = defaultTraceEffect
 
+-- 2021-07-24:
+-- This instance currently is to satisfy @MonadThunk@ requirements for @normalForm@ function.
+-- As it is seen from the instance - it does superficial type class jump.
+-- It is just a type boundary for thunking.
 instance
   ( Typeable       m
   , MonadThunkId   m
@@ -221,22 +225,27 @@ instance
   defer
     :: m (StdValue m)
     -> m (StdValue m)
-  defer = fmap pure . thunk
+  defer = fmap (pure . coerce) . thunk @(CitedStdThunk m)
 
   demand
     :: StdValue m
     -> m (StdValue m)
-  demand v =
-    free
-      (demand <=< force)
-      (const $ pure v)
-      v
+  demand = go -- lock to ensure no type class jumps.
+   where
+    go :: StdValue m -> m (StdValue m)
+    go =
+      free
+        (go <=< force @(CitedStdThunk m) . coerce)
+        (pure . Free)
 
   inform
     :: StdValue m
     -> m (StdValue m)
-  inform (Pure t) = Pure <$> further t
-  inform (Free v) = Free <$> bindNValue' id inform v
+  inform = go -- lock to ensure no type class jumps.
+   where
+    go :: StdValue m -> m (StdValue m)
+    go (Pure t) = (Pure . coerce <$>) . (further @(CitedStdThunk m) . coerce) $ t
+    go (Free v) = (Free <$>) . bindNValue' id go $ v
 
 
 -- * @instance MonadValueF (StdValue m) m@
