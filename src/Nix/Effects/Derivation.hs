@@ -289,9 +289,9 @@ defaultDerivationStrict val = do
     let
       outputsWithContext =
         Map.mapWithKey
-          (\out (coerce -> path) -> makeNixStringWithSingletonContext path $ StringContext drvPath $ DerivationOutput out)
+          (\out (coerce -> path) -> mkNixStringWithSingletonContext path $ StringContext drvPath $ DerivationOutput out)
           (outputs drv')
-      drvPathWithContext = makeNixStringWithSingletonContext drvPath $ StringContext drvPath AllOutputs
+      drvPathWithContext = mkNixStringWithSingletonContext drvPath $ StringContext drvPath AllOutputs
       attrSet = nvStr <$> M.fromList (("drvPath", drvPathWithContext) : Map.toList outputsWithContext)
     -- TODO: Add location information for all the entries.
     --              here --v

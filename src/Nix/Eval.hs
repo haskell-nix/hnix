@@ -466,7 +466,7 @@ assembleString = fromParts . stringParts
   go =
     runAntiquoted
       "\n"
-      (pure . pure . makeNixStringWithoutContext)
+      (pure . pure . mkNixStringWithoutContext)
       (fromValueMay =<<)
 
 buildArgument

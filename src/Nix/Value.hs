@@ -600,7 +600,7 @@ nvStr = Free . nvStr'
 nvStrWithoutContext :: Applicative f
   => Text
   -> NValue t f m
-nvStrWithoutContext = nvStr . makeNixStringWithoutContext
+nvStrWithoutContext = nvStr . mkNixStringWithoutContext
 
 
 -- | Life of a Haskell FilePath to the life of a Nix path
