@@ -19,7 +19,7 @@ import           Control.Monad.Catch            ( MonadThrow
 #if !MIN_VERSION_base(4,13,0)
 import           Control.Monad.Fail             ( MonadFail )
 #endif
-import           Control.Monad.Free             ( Free(Pure, Free) )
+import           Control.Monad.Free             ( Free(Pure,Free) )
 import           Control.Monad.Reader           ( MonadFix )
 import           Control.Monad.Ref              ( MonadRef(newRef)
                                                 , MonadAtomicRef
@@ -47,7 +47,7 @@ import           Nix.Value.Monad
 
 newtype StdCited m a =
   StdCited
-    { _stdCited :: Cited (StdThunk m) (StdCited m) m a }
+    (Cited (StdThunk m) (StdCited m) m a)
   deriving
     ( Generic
     , Typeable
@@ -59,12 +59,17 @@ newtype StdCited m a =
     , ComonadEnv [Provenance m (StdValue m)]
     )
 
-newtype StdThunk (m :: Type -> Type) =
+newtype StdThunk m =
   StdThunk
-    { _stdThunk :: StdCited m (NThunkF m (StdValue m)) }
+    (StdCited m (NThunkF m (StdValue m)))
 
 type StdValue' m = NValue' (StdThunk m) (StdCited m) m (StdValue m)
 type StdValue m = NValue (StdThunk m) (StdCited m) m
+
+-- | Type alias:
+--
+-- > Cited (StdThunk m) (StdCited m) m (NThunkF m (StdValue m))
+type CitedStdThunk m = Cited (StdThunk m) (StdCited m) m (NThunkF m (StdValue m))
 
 instance Show (StdThunk m) where
   show _ = toString thunkStubText
@@ -126,34 +131,34 @@ instance
   thunkId
     :: StdThunk m
     -> ThunkId  m
-  thunkId = thunkId . _stdCited . _stdThunk
+  thunkId = thunkId @(CitedStdThunk m) . coerce
   {-# inline thunkId #-}
 
   thunk
     :: m (StdValue m)
     -> m (StdThunk m)
-  thunk = fmap (StdThunk . StdCited) . thunk
+  thunk = fmap coerce . thunk @(CitedStdThunk m)
 
   query
     :: m (StdValue m)
     ->    StdThunk m
     -> m (StdValue m)
-  query b = query b . _stdCited . _stdThunk
+  query b = query @(CitedStdThunk m) b . coerce
 
   force
     ::    StdThunk m
     -> m (StdValue m)
-  force = force . _stdCited . _stdThunk
+  force = force @(CitedStdThunk m) . coerce
 
   forceEff
     ::    StdThunk m
     -> m (StdValue m)
-  forceEff = forceEff . _stdCited . _stdThunk
+  forceEff = forceEff @(CitedStdThunk m) . coerce
 
   further
     ::    StdThunk m
     -> m (StdThunk m)
-  further = fmap (StdThunk . StdCited) . further . _stdCited . _stdThunk
+  further = fmap coerce . further @(CitedStdThunk m) . coerce
 
 
 -- * @instance MonadThunkF@ (Kleisli functor HOFs)
@@ -175,7 +180,7 @@ instance
     -> m r
     -> StdThunk m
     -> m r
-  queryF k b = queryF k b . _stdCited . _stdThunk
+  queryF k b = queryF @(CitedStdThunk m) k b . coerce
 
   forceF
     :: ( StdValue m
@@ -183,7 +188,7 @@ instance
        )
     -> StdThunk m
     -> m r
-  forceF k = forceF k . _stdCited . _stdThunk
+  forceF k = forceF @(CitedStdThunk m) k . coerce
 
   forceEffF
     :: ( StdValue m
@@ -191,7 +196,7 @@ instance
        )
     -> StdThunk m
     -> m r
-  forceEffF k = forceEffF k . _stdCited . _stdThunk
+  forceEffF k = forceEffF @(CitedStdThunk m) k . coerce
 
   furtherF
     :: ( m (StdValue m)
@@ -199,7 +204,7 @@ instance
        )
     ->    StdThunk m
     -> m (StdThunk m)
-  furtherF k = fmap (StdThunk . StdCited) . furtherF k . _stdCited . _stdThunk
+  furtherF k = fmap coerce . furtherF @(CitedStdThunk m) k . coerce
 
 
 -- * @instance MonadValue (StdValue m) m@
