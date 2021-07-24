@@ -30,12 +30,12 @@ import           Nix.Utils                      ( Has(..)
                                                 )
 
 data NixLevel = Fatal | Error | Warning | Info | Debug
-    deriving (Ord, Eq, Bounded, Enum, Show)
+  deriving (Ord, Eq, Bounded, Enum, Show)
 
 data NixFrame = NixFrame
-    { frameLevel :: NixLevel
-    , frame      :: SomeException
-    }
+  { frameLevel :: NixLevel
+  , frame      :: SomeException
+  }
 
 instance Show NixFrame where
   show (NixFrame level f) =
@@ -46,7 +46,7 @@ type Frames = [NixFrame]
 type Framed e m = (MonadReader e m, Has e Frames, MonadThrow m)
 
 newtype NixException = NixException Frames
-    deriving Show
+  deriving Show
 
 instance Exception NixException
 

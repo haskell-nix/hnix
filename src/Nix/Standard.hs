@@ -106,7 +106,7 @@ instance
   , MonadValue (StdValue m) m
   )
   => MonadEffects (StdThunk m) (StdCited m) m where
-  makeAbsolutePath = defaultMakeAbsolutePath
+  toAbsolutePath   = defaultToAbsolutePath
   findEnvPath      = defaultFindEnvPath
   findPath         = defaultFindPath
   importPath       = defaultImportPath

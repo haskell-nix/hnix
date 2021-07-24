@@ -29,7 +29,7 @@ instance MonadExec m => MonadExec (StdIdT m)
 
 instance (MonadEffects t f m, MonadDataContext f m)
   => MonadEffects t f (StdIdT m) where
-  makeAbsolutePath = lift . makeAbsolutePath @t @f @m
+  toAbsolutePath = lift . toAbsolutePath @t @f @m
   findEnvPath      = lift . findEnvPath @t @f @m
   findPath vs path = do
     i <- FreshIdT ask
