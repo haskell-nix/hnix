@@ -142,27 +142,32 @@ instance
     :: m (StdValue m)
     -> m (StdThunk m)
   thunk = fmap coerce . thunk @(CitedStdThunk m)
+  {-# inline thunk #-}
 
   query
     :: m (StdValue m)
     ->    StdThunk m
     -> m (StdValue m)
   query b = query @(CitedStdThunk m) b . coerce
+  {-# inline query #-}
 
   force
     ::    StdThunk m
     -> m (StdValue m)
   force = force @(CitedStdThunk m) . coerce
+  {-# inline force #-}
 
   forceEff
     ::    StdThunk m
     -> m (StdValue m)
   forceEff = forceEff @(CitedStdThunk m) . coerce
+  {-# inline forceEff #-}
 
   further
     ::    StdThunk m
     -> m (StdThunk m)
   further = fmap coerce . further @(CitedStdThunk m) . coerce
+  {-# inline further #-}
 
 
 -- * @instance MonadThunkF@ (Kleisli functor HOFs)
