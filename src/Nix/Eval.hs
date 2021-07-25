@@ -407,25 +407,28 @@ evalSelect aset attr =
     s    <- aset
     path <- traverse evalGetterKeyName attr
 
-    extract s path
+    extract path s
 
  where
-  extract :: v -> NonEmpty VarName -> m (Either (v, NonEmpty VarName) (m v))
-  extract x path@(k :| ks) =
+  extract :: NonEmpty VarName -> v -> m (Either (v, NonEmpty VarName) (m v))
+  extract path@(k :| ks) x =
     do
       x' <- fromValueMay x
 
-      case x' of
-        Nothing -> pure $ Left (x, path)
-        Just (s :: AttrSet v, p :: PositionSet)
-          | Just t <- M.lookup k s ->
-            do
-              list
-                (pure . pure)
-                (\ (y : ys) -> ((`extract` (y :| ys)) =<<))
-                ks
-                $ demand t
-          | otherwise -> Left . (, path) <$> toValue (s, p)
+      maybe
+        (pure $ Left (x, path))
+        (\ (s :: AttrSet v, _ :: PositionSet) ->
+          maybe
+            (pure $ Left (x, path))
+            (list
+              (pure . pure)
+              (\ (y : ys) -> ((extract (y :| ys)) =<<))
+              ks
+              . demand
+            )
+            ((`M.lookup` s) k)
+        )
+        x'
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value
