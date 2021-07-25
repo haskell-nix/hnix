@@ -337,6 +337,7 @@ type StandardT m = Fix1T StandardTF m
 
 instance MonadTrans (Fix1T StandardTF) where
   lift = Fix1T . lift
+  {-# inline lift #-}
 
 instance MonadThunkId m
   => MonadThunkId (StandardT m) where
