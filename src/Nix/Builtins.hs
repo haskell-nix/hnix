@@ -23,6 +23,7 @@ where
 
 
 import           Prelude                 hiding ( traceM )
+import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Nix.Utils
 import           Control.Comonad                ( Comonad )
 import           Control.Monad                  ( foldM )
@@ -1262,7 +1263,7 @@ scopedImportNix asetArg pathArg =
             p' <- fromValue @Path =<< demand res
 
             traceM $ "Current file being evaluated is: " <> show p'
-            pure $ coerce $ takeDirectory (coerce p') </> (coerce path)
+            pure $ coerce $ takeDirectory (coerce p') </> coerce path
         )
         =<< lookupVar "__cur_file"
 
@@ -1273,7 +1274,7 @@ scopedImportNix asetArg pathArg =
 
 getEnvNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 getEnvNix v =
-  (toValue . mkNixStringWithoutContext . fromMaybe mempty) =<< getEnvVar =<< fromStringNoContext =<< fromValue v
+  (toValue . mkNixStringWithoutContext . maybeToMonoid) =<< getEnvVar =<< fromStringNoContext =<< fromValue v
 
 sortNix
   :: MonadNix e t f m
@@ -1464,7 +1465,7 @@ readDirNix nvpath =
       detectFileTypes :: Path -> m (VarName, FileType)
       detectFileTypes item =
         do
-          s <- getSymbolicLinkStatus $ coerce $ (coerce path) </> (coerce item)
+          s <- getSymbolicLinkStatus $ coerce $ on (</>) coerce path item
           let
             t =
               if

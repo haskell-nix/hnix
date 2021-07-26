@@ -276,4 +276,3 @@ mapPair ~(f,g) ~(a,b) = (f a, g b)
 stub :: (Applicative f, Monoid a) => f a
 stub = pure mempty
 {-# inline stub #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}

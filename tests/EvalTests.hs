@@ -7,7 +7,6 @@
 
 module EvalTests (tests, genEvalCompareTests) where
 
-import           Prelude hiding (lookupEnv)
 import           Control.Monad.Catch
 import           Data.List ((\\))
 import qualified Data.Set as S
@@ -19,7 +18,6 @@ import           Nix.TH
 import           Nix.Value.Equal
 import           Nix.Utils
 import qualified System.Directory as D
-import           System.Environment (lookupEnv)
 import           System.FilePath
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -438,11 +436,11 @@ genEvalCompareTests = do
     td <- D.listDirectory (coerce testDir)
 
     let unmaskedFiles = filter ((==".nix") . takeExtension) td
-    let files = unmaskedFiles \\ (coerce maskedFiles)
+    let files = unmaskedFiles \\ coerce maskedFiles
 
     pure $ testGroup "Eval comparison tests" $ fmap (mkTestCase testDir) files
   where
-    mkTestCase td f = testCase f $ assertEvalFileMatchesNix $ coerce $ (coerce td) </> f
+    mkTestCase td f = testCase f $ assertEvalFileMatchesNix $ coerce $ coerce td </> f
 
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
 constantEqual expected actual = do

@@ -9,6 +9,7 @@ module Nix.Eval where
 
 import           Control.Monad                  ( foldM )
 import           Control.Monad.Fix              ( MonadFix )
+import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Data.Semialign.Indexed         ( ialignWith )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List                      ( partition )
@@ -422,7 +423,7 @@ evalSelect aset attr =
             (pure $ Left (x, path))
             (list
               (pure . pure)
-              (\ (y : ys) -> ((extract (y :| ys)) =<<))
+              (\ (y : ys) -> (extract (y :| ys) =<<))
               ks
               . demand
             )
@@ -477,9 +478,10 @@ buildArgument
 buildArgument params arg =
   do
     scope <- currentScopes :: m (Scopes m v)
-    let argThunk = defer $ withScopes scope arg
+    let
+      argThunk = defer $ withScopes scope arg
     case params of
-      Param name -> M.singleton name <$> argThunk
+      Param name -> one . (name,) <$> argThunk
       ParamSet mname variadic pset ->
         do
           (args, _) <- fromValue @(AttrSet v, PositionSet) =<< arg
@@ -487,18 +489,16 @@ buildArgument params arg =
             inject =
               maybe
                 id
-                (\ n -> M.insert n $ const argThunk) -- why insert into const?
+                (\ n -> M.insert n $ const argThunk) -- why insert into const? Thunk value getting magic point?
                 mname
-          loebM
-            (inject $
-                M.mapMaybe
-                  id
-                  (ialignWith
+          loebM $
+            inject $
+              M.mapMaybe
+                id
+                $ ialignWith
                     (assemble scope variadic)
                     args
                     $ M.fromList pset
-                  )
-            )
  where
   assemble
     :: Scopes m v

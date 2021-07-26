@@ -3,7 +3,7 @@
 -- | Reading and writing Nix cache files
 module Nix.Cache where
 
-import qualified Data.ByteString.Lazy          as BS
+import qualified Data.ByteString.Lazy          as BSL
 import           Nix.Utils
 import           Nix.Expr.Types.Annotated
 
@@ -27,7 +27,7 @@ readCache path = do
     (\ expr -> pure $ C.getCompact expr)
     eres
 #else
-  eres <- S.deserialiseOrFail <$> BS.readFile (coerce path)
+  eres <- S.deserialiseOrFail <$> BSL.readFile (coerce path)
   either
     (\ err  -> fail $ "Error reading cache file: " <> show err)
     pure
@@ -39,5 +39,5 @@ writeCache path expr =
 #ifdef USE_COMPACT
   C.writeCompact path =<< C.compact expr
 #else
-  BS.writeFile (coerce path) (S.serialise expr)
+  BSL.writeFile (coerce path) (S.serialise expr)
 #endif

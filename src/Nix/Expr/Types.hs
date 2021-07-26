@@ -148,7 +148,7 @@ data Variadic = Closed | Variadic
     , Show, Read, Hashable
     )
 
-instance Semigroup (Variadic) where
+instance Semigroup Variadic where
   (<>) Closed Closed = Closed
   (<>) _      _      = Variadic
 

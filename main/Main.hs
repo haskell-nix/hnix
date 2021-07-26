@@ -86,7 +86,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       (\binaryCacheFile ->
         do
           let file = replaceExtension binaryCacheFile "nixc"
-          processCLIOptions (Just $ coerce file) =<< liftIO (readCache $ coerce $ binaryCacheFile)
+          processCLIOptions (Just $ coerce file) =<< liftIO (readCache $ coerce binaryCacheFile)
       ) <$> readFrom
 
     -- | The `--expr` option: read expression from the argument string

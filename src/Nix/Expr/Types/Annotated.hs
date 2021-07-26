@@ -26,7 +26,8 @@ import           Data.Binary                    ( Binary(..) )
 import           Data.Data
 import           Data.Eq.Deriving
 import           Data.Fix                       ( Fix(..)
-                                                , unfoldFix )
+                                                , unfoldFix
+                                                )
 import           Data.Functor.Compose
 import           Data.Hashable.Lifted
 import           Data.Ord.Deriving

@@ -15,9 +15,8 @@ module Repl
   , main'
   ) where
 
-import           Nix                     hiding ( exec
-                                                , try
-                                                )
+import           Prelude                 hiding ( state )
+import           Nix                     hiding ( exec )
 import           Nix.Scope
 import           Nix.Utils
 import           Nix.Value.Monad                ( demand )
@@ -55,7 +54,6 @@ import           System.Console.Repline         ( Cmd
 import qualified System.Console.Repline      as Console
 import qualified System.Exit                 as Exit
 import qualified System.IO.Error             as Error
-import Prelude hiding (state)
 
 -- | Repl entry point
 main :: (MonadNix e t f m, MonadIO m, MonadMask m) =>  m ()
@@ -116,7 +114,7 @@ main' iniVal =
 
   handleMissing e
     | Error.isDoesNotExistError e = pure ""
-    | otherwise = throwIO e
+    | otherwise = throwM e
 
   -- Replicated and slightly adjusted `optMatcher` from `System.Console.Repline`
   -- which doesn't export it.
@@ -136,9 +134,9 @@ main' iniVal =
 -- * Types
 
 data IState t f m = IState
-  { replIt  :: Maybe NExprLoc          -- ^ Last expression entered
+  { replIt  :: Maybe NExprLoc        -- ^ Last expression entered
   , replCtx :: Scope (NValue t f m)  -- ^ Scope. Value environment.
-  , replCfg :: ReplConfig              -- ^ REPL configuration
+  , replCfg :: ReplConfig            -- ^ REPL configuration
   } deriving (Eq, Show)
 
 data ReplConfig = ReplConfig

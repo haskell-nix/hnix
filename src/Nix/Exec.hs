@@ -17,7 +17,7 @@ import           Prelude                 hiding ( putStr
                                                 , putStrLn
                                                 , print
                                                 )
-
+import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Control.Monad.Catch     hiding ( catchJust )
 import           Control.Monad.Fix
 import           Data.Fix
@@ -422,7 +422,7 @@ execBinaryOpForced scope span op lval rval = case op of
           (throwError $ ErrorCall "A string that refers to a store path cannot be appended to a path.") -- data/nix/src/libexpr/eval.cc:1412
           (\ rs2 ->
             nvPathP prov <$>
-              toAbsolutePath @t @f (ls <> (coerce $ toString rs2))
+              toAbsolutePath @t @f (ls <> coerce (toString rs2))
           )
           (getStringNoContext rs)
       (NVPath ls, NVPath rs) -> nvPathP prov <$> toAbsolutePath @t @f (ls <> rs)

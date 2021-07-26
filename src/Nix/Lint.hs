@@ -15,6 +15,8 @@ module Nix.Lint where
 import           Prelude                 hiding ( head
                                                 , force
                                                 )
+import           Control.Exception              ( throw )
+import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Nix.Utils
 import           Control.Monad                  ( foldM )
 import           Control.Monad.Catch

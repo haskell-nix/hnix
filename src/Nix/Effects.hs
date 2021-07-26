@@ -18,6 +18,7 @@ import           Prelude                 hiding ( traceM
                                                 , print
                                                 )
 import qualified Prelude
+import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Nix.Utils
 import qualified Data.HashSet                  as HS
 import qualified Data.Text                     as Text

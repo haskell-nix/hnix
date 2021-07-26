@@ -81,7 +81,7 @@ ensureNixpkgsCanParse =
     do
       x <- action
       either
-        (\ err -> errorWithoutStackTrace $ "Parsing " <> (coerce @Path path) <> " failed: " <> show err)
+        (\ err -> errorWithoutStackTrace $ "Parsing " <> coerce @Path path <> " failed: " <> show err)
         k
         x
 

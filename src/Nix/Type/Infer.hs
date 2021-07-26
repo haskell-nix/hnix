@@ -22,7 +22,7 @@ where
 import           Control.Monad.Catch            ( MonadThrow(..)
                                                 , MonadCatch(..)
                                                 )
-import           Control.Monad.Except           ( MonadError(..) )
+import           Control.Monad.Except           ( MonadError(throwError,catchError) )
 import           Prelude                 hiding ( Type
                                                 , TVar
                                                 , Constraint
