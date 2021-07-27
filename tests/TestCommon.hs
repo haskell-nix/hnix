@@ -22,12 +22,12 @@ hnixEvalFile opts file =
   do
     parseResult <- parseNixFileLoc file
     either
-      (\ err -> fail $ "Parsing failed for file `" <> (coerce file) <> "`.\n" <> show err)
+      (\ err -> fail $ "Parsing failed for file `" <> coerce file <> "`.\n" <> show err)
       (\ expr ->
         do
           setEnv "TEST_VAR" "foo"
           runWithBasicEffects opts $
-            catch (evaluateExpression (pure $ coerce $ file) nixEvalExprLoc normalForm expr) $
+            catch (evaluateExpression (pure $ coerce file) nixEvalExprLoc normalForm expr) $
             \case
               NixException frames ->
                 errorWithoutStackTrace . show

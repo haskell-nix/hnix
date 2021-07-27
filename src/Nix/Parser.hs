@@ -319,8 +319,7 @@ nixUri = lexeme $ annotateLocation1 $ try $ do
         \ x ->
           isAlphanumeric x
           || (`elem` ("%/?:@&=+$,-_.!~*'" :: String)) x
-  pure $ NStr $ DoubleQuoted
-    [Plain $ toText $ start : protocol ++ ':' : address]
+  pure $ NStr $ DoubleQuoted $ one $ Plain $ toText $ one start <> protocol <> ":" <> address
 
 nixString' :: Parser (NString NExprLoc)
 nixString' = lexeme (doubleQuoted <+> indented <?> "string")

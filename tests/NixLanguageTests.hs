@@ -111,7 +111,7 @@ assertParse _opts file =
   do
     x <- parseNixFileLoc file
     either
-      (\ err -> assertFailure $ "Failed to parse " <> (coerce file) <> ":\n" <> show err)
+      (\ err -> assertFailure $ "Failed to parse " <> coerce file <> ":\n" <> show err)
       (const pass)  -- pure $! runST $ void $ lint opts expr
       x
 
@@ -124,7 +124,7 @@ assertParseFail opts file = do
       (\ expr ->
         do
           _ <- pure $! runST $ void $ lint opts expr
-          assertFailure $ "Unexpected success parsing `" <> (coerce file) <> ":\nParsed value: " <> show expr
+          assertFailure $ "Unexpected success parsing `" <> coerce file <> ":\nParsed value: " <> show expr
       )
       eres
     )
@@ -159,7 +159,7 @@ assertEval _opts files =
           let flags' | Text.last flags == '\n' = Text.init flags
                     | otherwise               = flags
           case runParserGetResult time flags' of
-            Opts.Failure           err   -> errorWithoutStackTrace $ "Error parsing flags from " <> (coerce name) <> ".flags: " <> show err
+            Opts.Failure           err   -> errorWithoutStackTrace $ "Error parsing flags from " <> coerce name <> ".flags: " <> show err
             Opts.CompletionInvoked _     -> fail "unused"
             Opts.Success           opts' -> assertLangOk opts' name
       _ -> assertFailure $ "Unknown test type " <> show files
@@ -183,4 +183,4 @@ assertEvalFail :: Path -> Assertion
 assertEvalFail file = (`catch` (\(_ :: SomeException) -> pass)) $ do
   time       <- liftIO getCurrentTime
   evalResult <- printNix <$> hnixEvalFile (defaultOptions time) file
-  evalResult `seq` assertFailure $ "File: ''" <> (coerce file) <> "'' should not evaluate.\nThe evaluation result was `" <> evalResult <> "`."
+  evalResult `seq` assertFailure $ "File: ''" <> coerce file <> "'' should not evaluate.\nThe evaluation result was `" <> evalResult <> "`."

@@ -23,7 +23,7 @@ import           Nix.Thunk
 import           Nix.Value
 
 newtype NormalLoop t f m = NormalLoop (NValue t f m)
-    deriving Show
+  deriving Show
 
 instance MonadDataErrorContext t f m => Exception (NormalLoop t f m)
 
@@ -158,10 +158,10 @@ stubCycles =
     (\_ t ->
       Free $
         NValue' $
-          foldr
-            (addProvenance1 @m @(NValue t f m))
+          foldl'
+            (flip $ addProvenance1 @m @(NValue t f m))
             cyc
-            (reverse $ citations @m @(NValue t f m) t)
+            (citations @m @(NValue t f m) t)
     )
     Free
  where

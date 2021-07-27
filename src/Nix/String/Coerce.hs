@@ -3,6 +3,7 @@
 module Nix.String.Coerce where
 
 import           Control.Monad.Catch            ( MonadThrow )
+import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import qualified Data.HashMap.Lazy             as M
 import           Nix.Utils
 import           Nix.Atoms

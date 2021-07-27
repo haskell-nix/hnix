@@ -7,6 +7,7 @@ import           Prelude                 hiding ( traceM
                                                 , head
                                                 )
 import           Relude.Unsafe                  ( head )
+import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Nix.Utils
 import           Control.Monad                  ( foldM )
 import qualified Data.HashMap.Lazy             as M
@@ -58,7 +59,7 @@ defaultToAbsolutePath origPath = do
   removeDotDotIndirections <$> canonicalizePath absPath
 
 expandHomePath :: MonadFile m => Path -> m Path
-expandHomePath (coerce -> ('~' : xs)) = (<> (coerce xs)) <$> getHomeDirectory
+expandHomePath (coerce -> ('~' : xs)) = (<> coerce xs) <$> getHomeDirectory
 expandHomePath p          = pure p
 
 -- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
@@ -107,7 +108,7 @@ findEnvPathM name = do
     absFile <-
       bool
         (pure absPath)
-        (toAbsolutePath @t @f $ coerce $ (coerce absPath) </> "default.nix")
+        (toAbsolutePath @t @f $ coerce $ coerce absPath </> "default.nix")
         isDir
     exists <- doesFileExist absFile
     pure $
@@ -126,7 +127,7 @@ findPathBy
 findPathBy finder ls name = do
   mpath <- foldM go mempty ls
   maybe
-    (throwError $ ErrorCall $ "file ''" <> (coerce name) <> "'' was not found in the Nix search path (add it's using $NIX_PATH or -I)")
+    (throwError $ ErrorCall $ "file ''" <> coerce name <> "'' was not found in the Nix search path (add it's using $NIX_PATH or -I)")
     pure
     mpath
  where
@@ -161,8 +162,8 @@ findPathBy finder ls name = do
       mp
 
   tryPath :: Path -> Maybe Path -> m (Maybe Path)
-  tryPath p (Just n) | n' : ns <- splitDirectories (coerce name), n == (coerce n') =
-    finder $ p <///> (coerce $ joinPath ns)
+  tryPath p (Just n) | n' : ns <- splitDirectories (coerce name), n == coerce n' =
+    finder $ p <///> coerce (joinPath ns)
   tryPath p _ = finder $ p <///> name
 
   resolvePath s =

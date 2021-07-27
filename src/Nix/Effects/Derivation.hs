@@ -6,6 +6,8 @@
 
 module Nix.Effects.Derivation ( defaultDerivationStrict ) where
 
+import           Prelude                 hiding ( readFile )
+import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Nix.Utils
 import           Data.Char                      ( isAscii
                                                 , isAlphaNum
@@ -41,7 +43,6 @@ import           Nix.Value.Monad
 import qualified System.Nix.ReadonlyStore      as Store
 import qualified System.Nix.Hash               as Store
 import qualified System.Nix.StorePath          as Store
-import Prelude hiding (readFile)
 
 
 --  2021-07-17: NOTE: Derivation consists of @"keys"@ @"vals"@ (of text), so underlining type boundary currently stops here.

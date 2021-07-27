@@ -11,6 +11,7 @@
 module Nix.Render.Frame where
 
 import           Prelude             hiding ( Comparison )
+import           GHC.Exception              ( ErrorCall )
 import           Nix.Utils
 import           Data.Fix                   ( Fix(..) )
 import           Nix.Eval

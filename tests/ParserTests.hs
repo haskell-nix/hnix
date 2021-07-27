@@ -211,11 +211,10 @@ case_set_inherit_direct =
 case_inherit_selector_syntax_mistakes =
   mistakes
     "{ inherit a.x; }"
-    ( -- A rare quirk of Nix that is proper to fix then to support (see git commit history)
-      -- (old parser test result was):
-      -- mkNonRecSet [inherit [DynamicKey (Plain (DoubleQuoted [Plain "a"]))]],
-      "{ inherit \"a\"; }"
-    )
+    -- A rare quirk of Nix that is proper to fix then to support (see git commit history)
+    -- (old parser test result was):
+    -- mkNonRecSet [inherit [DynamicKey (Plain (DoubleQuoted [Plain "a"]))]],
+    "{ inherit \"a\"; }"
 
 
 -- ** Lists
@@ -730,7 +729,7 @@ assertParseFile file expected =
     either
       (throwParseError "data file" $ toText file)
       (assertEqual
-        ("Parsing data file " <> (coerce file))
+        ("Parsing data file " <> coerce file)
         (stripPositionInfo expected)
         . stripPositionInfo
       )

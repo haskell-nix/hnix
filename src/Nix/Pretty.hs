@@ -275,7 +275,7 @@ exprFNixDoc = \case
             bool
               ("./" <> _txt)
               _txt
-              (any (`isPrefixOf` (coerce _txt)) ["/", "~/", "./", "../"])
+              (any (`isPrefixOf` coerce _txt) ["/", "~/", "./", "../"])
   NSym name -> simpleExpr $ prettyVarName name
   NLet binds body ->
     leastPrecedence $

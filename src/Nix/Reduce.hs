@@ -100,7 +100,7 @@ staticImport pann path = do
  where
   go :: Path -> m NExprLoc
   go path = do
-    liftIO $ putStrLn $ "Importing file " <> (coerce path)
+    liftIO $ putStrLn $ "Importing file " <> coerce path
 
     eres <- liftIO $ parseNixFileLoc path
     either
@@ -271,10 +271,10 @@ reduce (NLetAnnF ann binds body) =
               let
                 defcase =
                   \case
-                    d@(NAbsAnn     {}) -> pure (name, d)
-                    d@(NConstantAnn{}) -> pure (name, d)
-                    d@(NStrAnn     {}) -> pure (name, d)
-                    _                    -> Nothing
+                    d@NAbsAnn     {} -> pure (name, d)
+                    d@NConstantAnn{} -> pure (name, d)
+                    d@NStrAnn     {} -> pure (name, d)
+                    _                -> Nothing
               in
               defcase <$> def
 
