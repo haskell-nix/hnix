@@ -1,3 +1,7 @@
+- group: {name: generalise, enabled: true}
+- group: {name: future, enabled: true}
+- group: {name: attoparsec, enabled: true}
+- group: {name: use-lens, enabled: true}
 - arguments:
   - "-XConstraintKinds"
   - "-XDeriveGeneric"
