@@ -212,7 +212,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     scope <- currentScopes
     span  <- currentPos
     nvPathP (Provenance scope $ NLiteralPathAnnF span p) <$>
-      makeAbsolutePath @t @f @m p
+      toAbsolutePath @t @f @m p
 
   evalEnvPath p = do
     scope <- currentScopes
@@ -422,10 +422,10 @@ execBinaryOpForced scope span op lval rval = case op of
           (throwError $ ErrorCall "A string that refers to a store path cannot be appended to a path.") -- data/nix/src/libexpr/eval.cc:1412
           (\ rs2 ->
             nvPathP prov <$>
-              makeAbsolutePath @t @f (ls <> (coerce $ toString rs2))
+              toAbsolutePath @t @f (ls <> (coerce $ toString rs2))
           )
           (getStringNoContext rs)
-      (NVPath ls, NVPath rs) -> nvPathP prov <$> makeAbsolutePath @t @f (ls <> rs)
+      (NVPath ls, NVPath rs) -> nvPathP prov <$> toAbsolutePath @t @f (ls <> rs)
 
       (ls@NVSet{}, NVStr rs) ->
         (\ls2 -> nvStrP prov (ls2 <> rs)) <$>

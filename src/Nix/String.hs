@@ -3,7 +3,7 @@
 module Nix.String
   ( NixString
   , getContext
-  , makeNixString
+  , mkNixString
   , StringContext(..)
   , ContextFlavor(..)
   , NixLikeContext(..)
@@ -14,8 +14,8 @@ module Nix.String
   , intercalateNixString
   , getStringNoContext
   , stringIgnoreContext
-  , makeNixStringWithoutContext
-  , makeNixStringWithSingletonContext
+  , mkNixStringWithoutContext
+  , mkNixStringWithSingletonContext
   , modifyNixContents
   , WithStringContext
   , WithStringContextT(..)
@@ -127,17 +127,17 @@ instance Hashable NixString
 -- ** Makers
 
 -- | Constructs NixString without a context
-makeNixStringWithoutContext :: Text -> NixString
-makeNixStringWithoutContext = (`NixString` mempty)
+mkNixStringWithoutContext :: Text -> NixString
+mkNixStringWithoutContext = (`NixString` mempty)
 
 -- | Create NixString using a singleton context
-makeNixStringWithSingletonContext
+mkNixStringWithSingletonContext
   :: VarName -> StringContext -> NixString
-makeNixStringWithSingletonContext s c = NixString (coerce @VarName @Text s) $ one c
+mkNixStringWithSingletonContext s c = NixString (coerce @VarName @Text s) $ one c
 
 -- | Create NixString from a Text and context
-makeNixString :: Text -> S.HashSet StringContext -> NixString
-makeNixString = NixString
+mkNixString :: Text -> S.HashSet StringContext -> NixString
+mkNixString = NixString
 
 
 -- ** Checkers

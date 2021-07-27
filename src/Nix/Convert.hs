@@ -210,7 +210,7 @@ instance ( Convertible e t f m
     \case
       NVStr' ns -> pure $ pure ns
       NVPath' p ->
-        (\path -> pure $ makeNixStringWithSingletonContext path (StringContext path DirectPath)) . fromString . coerce <$>
+        (\path -> pure $ mkNixStringWithSingletonContext path (StringContext path DirectPath)) . fromString . coerce <$>
           addPath p
       NVSet' _ s ->
         maybe
@@ -373,7 +373,7 @@ instance Convertible e t f m
 
 instance Convertible e t f m
   => ToValue ByteString m (NValue' t f m (NValue t f m)) where
-  toValue = pure . nvStr' . makeNixStringWithoutContext . decodeUtf8
+  toValue = pure . nvStr' . mkNixStringWithoutContext . decodeUtf8
 
 instance Convertible e t f m
   => ToValue Path m (NValue' t f m (NValue t f m)) where
@@ -387,7 +387,7 @@ instance ( Convertible e t f m
          )
   => ToValue SourcePos m (NValue' t f m (NValue t f m)) where
   toValue (SourcePos f l c) = do
-    f' <- toValue $ makeNixStringWithoutContext $ toText f
+    f' <- toValue $ mkNixStringWithoutContext $ toText f
     l' <- toValue $ unPos l
     c' <- toValue $ unPos c
     let pos = M.fromList [("file" :: VarName, f'), ("line", l'), ("column", c')]
@@ -439,7 +439,7 @@ instance Convertible e t f m
     allOutputs <- g nlcvAllOutputs
     outputs <- do
       let
-        outputs = makeNixStringWithoutContext <$> nlcvOutputs nlcv
+        outputs = mkNixStringWithoutContext <$> nlcvOutputs nlcv
 
       ts :: [NValue t f m] <- traverse toValue outputs
       list

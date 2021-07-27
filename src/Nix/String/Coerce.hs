@@ -107,13 +107,13 @@ coerceToString call ctsm clevel = go
 
           v -> err v
       err v = throwError $ ErrorCall $ "Expected a string, but saw: " <> show v
-      castToNixString = pure . makeNixStringWithoutContext
+      castToNixString = pure . mkNixStringWithoutContext
 
-  nixStringUnwords = intercalateNixString $ makeNixStringWithoutContext " "
+  nixStringUnwords = intercalateNixString $ mkNixStringWithoutContext " "
 
   storePathToNixString :: StorePath -> NixString
   storePathToNixString sp =
-    makeNixStringWithSingletonContext
+    mkNixStringWithSingletonContext
       t
       (StringContext t DirectPath)
    where

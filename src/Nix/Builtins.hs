@@ -351,7 +351,7 @@ data FileType
 
 instance Convertible e t f m => ToValue FileType m (NValue t f m) where
   toValue =
-    toValue . makeNixStringWithoutContext .
+    toValue . mkNixStringWithoutContext .
       \case
         FileTypeRegular   -> "regular" :: Text
         FileTypeDirectory -> "directory"
@@ -654,7 +654,7 @@ matchNix pat str =
       mkMatch t =
         bool
           (toValue ()) -- Shorthand for Null
-          (toValue $ makeNixStringWithoutContext t)
+          (toValue $ mkNixStringWithoutContext t)
           (not $ Text.null t)
 
     case matchOnceText re s of
@@ -710,7 +710,7 @@ attrNamesNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 attrNamesNix =
     coersion . inHask @(AttrSet (NValue t f m))
-      (fmap (makeNixStringWithoutContext . coerce) . sort . M.keys)
+      (fmap (mkNixStringWithoutContext . coerce) . sort . M.keys)
  where
   coersion = fmap (coerce :: CoerceDeeperToNValue t f m)
 
@@ -862,7 +862,7 @@ dirOfNix nvdir =
 unsafeDiscardStringContextNix
   :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 unsafeDiscardStringContextNix =
-  inHask (makeNixStringWithoutContext . stringIgnoreContext)
+  inHask (mkNixStringWithoutContext . stringIgnoreContext)
 
 -- | Evaluate `a` to WHNF to collect its topmost effect.
 seqNix
@@ -1022,7 +1022,7 @@ replaceStringsNix tfrom tto ts =
 
         --  2021-02-18: NOTE: rly?: toStrict . toLazyText
         --  Maybe `text-builder`, `text-show`?
-        finish ctx output = makeNixString (toStrict $ Builder.toLazyText output) ctx
+        finish ctx output = mkNixString (toStrict $ Builder.toLazyText output) ctx
 
         replace (key, replacementNS, unprocessedInput) = replaceWithNixBug unprocessedInput updatedOutput
 
@@ -1120,7 +1120,7 @@ toFileNix name s =
       t  = coerce $ toText @FilePath $ coerce mres
       sc = StringContext t DirectPath
 
-    toValue $ makeNixStringWithSingletonContext t sc
+    toValue $ mkNixStringWithSingletonContext t sc
 
 toPathNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toPathNix = toValue @Path <=< fromValue @Path
@@ -1273,7 +1273,7 @@ scopedImportNix asetArg pathArg =
 
 getEnvNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 getEnvNix v =
-  (toValue . makeNixStringWithoutContext . fromMaybe mempty) =<< getEnvVar =<< fromStringNoContext =<< fromValue v
+  (toValue . mkNixStringWithoutContext . fromMaybe mempty) =<< getEnvVar =<< fromStringNoContext =<< fromValue v
 
 sortNix
   :: MonadNix e t f m
@@ -1405,11 +1405,11 @@ placeHolderNix p =
     t <- fromStringNoContext =<< fromValue p
     h <-
       coerce @(Prim m NixString) @(m NixString) $
-        (hashStringNix `on` makeNixStringWithoutContext)
+        (hashStringNix `on` mkNixStringWithoutContext)
           "sha256"
           ("nix-output:" <> t)
     toValue
-      $ makeNixStringWithoutContext
+      $ mkNixStringWithoutContext
       $ Text.cons '/'
       $ Base32.encode
       -- Please, stop Text -> Bytestring here after migration to Text
@@ -1540,7 +1540,7 @@ typeOfNix nvv =
           NVBuiltin _ _ -> "lambda"
           _             -> error "Pattern synonyms obscure complete patterns"
 
-    toValue $ makeNixStringWithoutContext detectType
+    toValue $ mkNixStringWithoutContext detectType
 
 tryEvalNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1736,7 +1736,7 @@ appendContextNix tx ty =
         _x -> throwError $ ErrorCall $ "Invalid types for context value in builtins.appendContext: " <> show _x
 
   addContext ns newContextValues =
-    makeNixString
+    mkNixString
       (stringIgnoreContext ns)
       (fromNixLikeContext $
         NixLikeContext $
@@ -1750,7 +1750,7 @@ appendContextNix tx ty =
       )
 
 nixVersionNix :: MonadNix e t f m => m (NValue t f m)
-nixVersionNix = toValue $ makeNixStringWithoutContext "2.3"
+nixVersionNix = toValue $ mkNixStringWithoutContext "2.3"
 
 langVersionNix :: MonadNix e t f m => m (NValue t f m)
 langVersionNix = toValue (5 :: Int)

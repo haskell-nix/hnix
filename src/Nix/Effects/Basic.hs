@@ -34,8 +34,8 @@ import           Nix.Value.Monad
 import           GHC.DataSize
 #endif
 
-defaultMakeAbsolutePath :: MonadNix e t f m => Path -> m Path
-defaultMakeAbsolutePath origPath = do
+defaultToAbsolutePath :: MonadNix e t f m => Path -> m Path
+defaultToAbsolutePath origPath = do
   origPathExpanded <- expandHomePath origPath
   absPath          <-
     bool
@@ -102,12 +102,12 @@ findEnvPathM name = do
  where
   nixFilePath :: MonadEffects t f m => Path -> m (Maybe Path)
   nixFilePath path = do
-    absPath <- makeAbsolutePath @t @f path
+    absPath <- toAbsolutePath @t @f path
     isDir   <- doesDirectoryExist absPath
     absFile <-
       bool
         (pure absPath)
-        (makeAbsolutePath @t @f $ coerce $ (coerce absPath) </> "default.nix")
+        (toAbsolutePath @t @f $ coerce $ (coerce absPath) </> "default.nix")
         isDir
     exists <- doesFileExist absFile
     pure $
@@ -232,7 +232,7 @@ findPathM = findPathBy existingPath
   existingPath :: MonadEffects t f m => Path -> m (Maybe Path)
   existingPath path =
     do
-      apath  <- makeAbsolutePath @t @f path
+      apath  <- toAbsolutePath @t @f path
       doesExist <- doesPathExist apath
       pure $ pure apath `whenTrue` doesExist
 

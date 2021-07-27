@@ -61,12 +61,11 @@ class
   )
   => MonadEffects t f m where
 
-  -- | Determine the absolute path of relative path in the current context
-  makeAbsolutePath :: Path -> m Path
+  -- | Determine the absolute path in the current context.
+  toAbsolutePath :: Path -> m Path
   findEnvPath :: String -> m Path
 
-  -- | Having an explicit list of sets corresponding to the NIX_PATH
-  -- and a file path try to find an existing path
+  -- | Having an explicit list of sets corresponding to the @NIX_PATH@ and a file path try to find an existing path.
   findPath :: [NValue t f m] -> Path -> m Path
 
   importPath :: Path -> m (NValue t f m)

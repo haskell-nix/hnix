@@ -631,7 +631,7 @@ instance TH.Lift NExpr where
           pure [| $(TH.lift b) |]
       )
 #if MIN_VERSION_template_haskell(2,17,0)
-  liftTyped = TH.liftTyped
+  liftTyped = TH.unsafeCodeCoerce . TH.lift
 #elif MIN_VERSION_template_haskell(2,16,0)
   liftTyped = TH.unsafeTExpCoerce . TH.lift
 #endif
@@ -677,12 +677,12 @@ stripPositionInfo = transport phi
  where
   transport f (Fix x) = Fix $ transport f <$> f x
 
-  phi (NSet recur binds) = NSet recur $ go <$> binds
-  phi (NLet binds body) = NLet (go <$> binds) body
+  phi (NSet recur binds) = NSet recur $ erasePositions <$> binds
+  phi (NLet binds body) = NLet (erasePositions <$> binds) body
   phi x                 = x
 
-  go (NamedVar path r     _pos) = NamedVar path r     nullPos
-  go (Inherit  ms   names _pos) = Inherit  ms   names nullPos
+  erasePositions (NamedVar path r     _pos) = NamedVar path r     nullPos
+  erasePositions (Inherit  ms   names _pos) = Inherit  ms   names nullPos
 
 nullPos :: SourcePos
 nullPos = on (SourcePos "<string>") mkPos 1 1
