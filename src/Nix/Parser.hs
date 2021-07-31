@@ -106,18 +106,17 @@ nixExpr =
         nixOperators nixSelector
 
 antiStart :: Parser Text
-antiStart = symbol "${" <?> "${"
+antiStart = label "${" $ symbol "${"
 
 nixAntiquoted :: Parser a -> Parser (Antiquoted a NExprLoc)
 nixAntiquoted p =
-  Antiquoted <$>
-    (antiStart *> nixToplevelForm <* symbol "}")
-      <+> Plain <$>
-        p
-      <?> "anti-quotation"
+  label "anti-quotation" $
+    Antiquoted <$>
+      (antiStart *> nixToplevelForm <* symbol "}")
+        <+> Plain <$> p
 
 selDot :: Parser ()
-selDot = try (symbol "." *> notFollowedBy nixPath) <?> "."
+selDot = label "." $ try (symbol "." *> notFollowedBy nixPath)
 
 nixSelect :: Parser NExprLoc -> Parser NExprLoc
 nixSelect term =
@@ -472,9 +471,11 @@ keyName = dynamicKey <+> staticKey
   dynamicKey = DynamicKey <$> nixAntiquoted nixString'
 
 nixSet :: Parser NExprLoc
-nixSet = annotateLocation1 ((isRec <*> braces nixBinders) <?> "set")
+nixSet = annotateLocation1 $ label "set" $ isRec <*> braces nixBinders
  where
-  isRec = (reserved "rec" $> NSet Recursive <?> "recursive set") <+> pure (NSet NonRecursive)
+  isRec =
+    label "recursive set" (reserved "rec" $> NSet Recursive)
+    <+> pure (NSet NonRecursive)
 
 parseNixFile :: MonadFile m => Path -> m (Result NExpr)
 parseNixFile =
