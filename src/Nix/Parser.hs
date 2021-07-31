@@ -620,14 +620,15 @@ manyUnaryOp f = foldr1 (.) <$> some f
 operator :: Text -> Parser Text
 operator op =
   case op of
-    "-" -> tuneLexer "-" '>'
-    "/" -> tuneLexer "/" '/'
-    "<" -> tuneLexer "<" '='
-    ">" -> tuneLexer ">" '='
+    c@"-" -> c `without` '>'
+    c@"/" -> c `without` '/'
+    c@"<" -> c `without` '='
+    c@">" -> c `without` '='
     n   -> symbol n
  where
-  tuneLexer opchar nonextchar =
-    lexeme . try $ string opchar <* notFollowedBy (char nonextchar)
+  without :: Text -> Char -> Parser Text
+  without opChar noNextChar =
+    lexeme . try $ string opChar <* notFollowedBy (char noNextChar)
 
 opWithLoc :: Text -> o -> (AnnUnit SrcSpan o -> a) -> Parser a
 opWithLoc name op f =
