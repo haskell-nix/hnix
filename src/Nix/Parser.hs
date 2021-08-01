@@ -40,7 +40,8 @@ module Nix.Parser
   )
 where
 
-import           Prelude                 hiding ( some
+import           Prelude                 hiding ( (<|>)
+                                                , some
                                                 , many
                                                 , readFile
                                                 )
@@ -79,7 +80,9 @@ import           Prettyprinter                  ( Doc
                                                 )
 -- `parser-combinators` ships performance enhanced & MonadPlus-aware combinators.
 -- For example `smome` and `many` impoted here.
-import           Text.Megaparsec         hiding ( State )
+import           Text.Megaparsec         hiding ( (<|>)
+                                                , State
+                                                )
 import           Text.Megaparsec.Char           ( space1
                                                 , string
                                                 , letterChar
@@ -92,9 +95,10 @@ isAlphanumeric :: Char -> Bool
 isAlphanumeric x = isAlpha x || isDigit x
 {-# inline isAlphanumeric #-}
 
-infixl 3 <+>
-(<+>) :: MonadPlus m => m a -> m a -> m a
-(<+>) = mplus
+-- | @<|>@ with additional preservation of @MonadPlus@ constraint.
+infixl 3 <|>
+(<|>) :: MonadPlus m => m a -> m a -> m a
+(<|>) = mplus
 
 ---------------------------------------------------------------------------------
 
@@ -113,7 +117,7 @@ nixAntiquoted p =
   label "anti-quotation" $
     Antiquoted <$>
       (antiStart *> nixToplevelForm <* symbol "}")
-        <+> Plain <$> p
+        <|> Plain <$> p
 
 selDot :: Parser ()
 selDot = label "." $ try (symbol "." *> notFollowedBy nixPath)
@@ -183,9 +187,9 @@ nixTerm = do
                <> [ nixSelect nixSym ]
 
 nixToplevelForm :: Parser NExprLoc
-nixToplevelForm = keywords <+> nixLambda <+> nixExpr
+nixToplevelForm = keywords <|> nixLambda <|> nixExpr
  where
-  keywords = nixLet <+> nixIf <+> nixAssert <+> nixWith
+  keywords = nixLet <|> nixIf <|> nixAssert <|> nixWith
 
 nixSym :: Parser NExprLoc
 nixSym = annotateLocation1 $ mkSymF . coerce <$> identifier
@@ -194,29 +198,29 @@ nixSynHole :: Parser NExprLoc
 nixSynHole = annotateLocation1 $ mkSynHoleF . coerce <$> (char '^' *> identifier)
 
 nixInt :: Parser NExprLoc
-nixInt = annotateLocation1 (mkIntF <$> integer <?> "integer")
+nixInt = annotateLocation1 . label "integer" $ mkIntF <$> integer
 
 nixFloat :: Parser NExprLoc
 nixFloat =
-  annotateLocation1 (try (mkFloatF . realToFrac <$> float) <?> "float")
+  annotateLocation1 . label "float" . try $ mkFloatF . realToFrac <$> float
 
 nixBool :: Parser NExprLoc
 nixBool =
-  annotateLocation1 (bool "true" True <+> bool "false" False) <?> "bool"
+  annotateLocation1 . label "bool" $ bool "true" True <|> bool "false" False
  where
   bool str b = mkBoolF b <$ reserved str
 
 nixNull :: Parser NExprLoc
-nixNull = annotateLocation1 (mkNullF <$ reserved "null" <?> "null")
+nixNull = annotateLocation1 . label "null" $ mkNullF <$ reserved "null"
 
 -- | 'nixTopLevelForm' returns an expression annotated with a source position,
 -- however this position doesn't include the parsed parentheses, so remove the
 -- "inner" location annotateion and annotate again, including the parentheses.
 nixParens :: Parser NExprLoc
-nixParens = annotateLocation1 (parens (stripAnnF . unFix <$> nixToplevelForm) <?> "parens")
+nixParens = annotateLocation1 . label "parens" . parens $ stripAnnF . unFix <$> nixToplevelForm
 
 nixList :: Parser NExprLoc
-nixList = annotateLocation1 (brackets (NList <$> many nixTerm) <?> "list")
+nixList = annotateLocation1 . label "list" . brackets $ NList <$> many nixTerm
 
 pathChar :: Char -> Bool
 pathChar x =
@@ -224,25 +228,20 @@ pathChar x =
 
 slash :: Parser Char
 slash =
-  try
-    (  char '/'
-    <* notFollowedBy (satisfy (\x -> x == '/' || x == '*' || isSpace x))
-    )
-    <?> "slash"
+  label "slash " .
+    try $
+      char '/' <* notFollowedBy (satisfy $ \x -> x == '/' || x == '*' || isSpace x)
 
 -- | A path surrounded by angle brackets, indicating that it should be
 -- looked up in the NIX_PATH environment variable at evaluation.
 nixSearchPath :: Parser NExprLoc
 nixSearchPath =
-  annotateLocation1
-    (mkPathF True <$>
-      try (char '<' *> many (satisfy pathChar <+> slash) <* symbol ">")
-      <?> "spath"
-    )
+  annotateLocation1 .
+    label "spath" $ mkPathF True <$> try (char '<' *> many (satisfy pathChar <|> slash) <* symbol ">")
 
 pathStr :: Parser Path
 pathStr =
-  lexeme $ coerce $
+  lexeme . coerce $
     liftA2 (<>)
       (many $ satisfy pathChar)
       (concat <$>
@@ -254,11 +253,11 @@ pathStr =
       )
 
 nixPath :: Parser NExprLoc
-nixPath = annotateLocation1 (try (mkPathF False <$> coerce pathStr) <?> "path")
+nixPath = annotateLocation1 $ label "path" $ try (mkPathF False <$> coerce pathStr)
 
 nixLet :: Parser NExprLoc
 nixLet = annotateLocation1
-  (reserved "let" *> (letBody <+> letBinders) <?> "let block")
+  (reserved "let" *> (letBody <|> letBinders) <?> "let block")
  where
   letBinders =
     liftA2 NLet
@@ -321,7 +320,7 @@ nixUri = lexeme $ annotateLocation1 $ try $ do
   pure $ NStr $ DoubleQuoted $ one $ Plain $ toText $ one start <> protocol <> ":" <> address
 
 nixString' :: Parser (NString NExprLoc)
-nixString' = lexeme (doubleQuoted <+> indented <?> "string")
+nixString' = lexeme (doubleQuoted <|> indented <?> "string")
  where
   doubleQuoted :: Parser (NString NExprLoc)
   doubleQuoted =
@@ -351,7 +350,7 @@ nixString' = lexeme (doubleQuoted <+> indented <?> "string")
     try $
       do
         indentedQ
-        (Plain <$> ("''" <$ char '\'' <+> "$" <$ char '$')) <+>
+        (Plain <$> ("''" <$ char '\'' <|> "$" <$ char '$')) <|>
           do
             _ <- char '\\'
             c <- escapeCode
@@ -365,17 +364,17 @@ nixString' = lexeme (doubleQuoted <+> indented <?> "string")
   stringChar end escStart esc =
     Antiquoted <$>
       (antiStart *> nixToplevelForm <* char '}')
-        <+> Plain . one <$>
-          char '$' <+> esc <+> Plain . toText <$>
+        <|> Plain . one <$>
+          char '$' <|> esc <|> Plain . toText <$>
             some plainChar
    where
     plainChar =
-      notFollowedBy (end <+> void (char '$') <+> escStart) *> anySingle
+      notFollowedBy (end <|> void (char '$') <|> escStart) *> anySingle
 
   escapeCode =
     msum
       [ c <$ char e | (c, e) <- escapeCodes ]
-    <+> anySingle
+    <|> anySingle
 
 -- | Gets all of the arguments for a function.
 argExpr :: Parser (Params NExprLoc)
@@ -423,7 +422,7 @@ argExpr =
     -- Otherwise, attempt to parse an argument, optionally with a
     -- default. If this fails, then return what has been accumulated
     -- so far.
-    go acc = ((acc, Variadic) <$ symbol "...") <+> getMore
+    go acc = ((acc, Variadic) <$ symbol "...") <|> getMore
      where
       getMore :: ParsecT  Void Text (State SourcePos) ([(VarName, Maybe NExprLoc)], Variadic)
       getMore =
@@ -442,7 +441,7 @@ argExpr =
             option (args, mempty) $ comma *> go args
 
 nixBinders :: Parser [Binding NExprLoc]
-nixBinders = (inherit <+> namedVar) `endBy` semi where
+nixBinders = (inherit <|> namedVar) `endBy` semi where
   inherit =
     do
       -- We can't use 'reserved' here because it would consume the whitespace
@@ -465,7 +464,7 @@ nixBinders = (inherit <+> namedVar) `endBy` semi where
   scope = nixParens <?> "inherit scope"
 
 keyName :: Parser (NKeyName NExprLoc)
-keyName = dynamicKey <+> staticKey
+keyName = dynamicKey <|> staticKey
  where
   staticKey  = StaticKey <$> identifier
   dynamicKey = DynamicKey <$> nixAntiquoted nixString'
@@ -475,7 +474,7 @@ nixSet = annotateLocation1 $ label "set" $ isRec <*> braces nixBinders
  where
   isRec =
     label "recursive set" (reserved "rec" $> NSet Recursive)
-    <+> pure (NSet NonRecursive)
+    <|> pure (NSet NonRecursive)
 
 parseNixFile :: MonadFile m => Path -> m (Result NExpr)
 parseNixFile =
