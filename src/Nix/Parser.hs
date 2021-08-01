@@ -84,7 +84,6 @@ import           Text.Megaparsec         hiding ( (<|>)
                                                 , State
                                                 )
 import           Text.Megaparsec.Char           ( space1
-                                                , string
                                                 , letterChar
                                                 , char
                                                 )
@@ -336,7 +335,7 @@ nixUri = lexeme $ annotateLocation $ try $ do
       \ x ->
         isAlphanumeric x
         || (`elem` ("+-." :: String)) x
-  _       <- string ":"
+  _       <- chunk ":"
   address <-
     some $
       satisfy $
@@ -370,7 +369,7 @@ nixString' = lexeme $ label "string" $ doubleQuoted <|> indented
         )
 
   indentedQ :: Parser ()
-  indentedQ = void . label "\"''\"" $ string "''"
+  indentedQ = void . label "\"''\"" $ chunk "''"
 
   indentedEscape =
     try $
@@ -473,7 +472,7 @@ nixBinders = (inherit <|> namedVar) `endBy` semi where
     do
       -- We can't use 'reserved' here because it would consume the whitespace
       -- after the keyword, which is not exactly the semantics of C++ Nix.
-      try $ string "inherit" *> lookAhead (void (satisfy reservedEnd))
+      try $ chunk "inherit" *> lookAhead (void (satisfy reservedEnd))
       p <- getSourcePos
       x <- whiteSpace *> optional scope
       label "inherited binding" $
@@ -523,7 +522,7 @@ parseNixTextLoc = parseFromText (whiteSpace *> nixToplevelForm <* eof)
 
 skipLineComment' :: Tokens Text -> Parser ()
 skipLineComment' prefix =
-  string prefix *> void (takeWhileP (pure "character") (\x -> x /= '\n' && x /= '\r'))
+  chunk prefix *> void (takeWhileP (pure "character") (\x -> x /= '\n' && x /= '\r'))
 
 whiteSpace :: Parser ()
 whiteSpace = do
@@ -537,7 +536,7 @@ lexeme :: Parser a -> Parser a
 lexeme p = p <* whiteSpace
 
 symbol :: Text -> Parser Text
-symbol = lexeme . string
+symbol = lexeme . chunk
 
 reservedEnd :: Char -> Bool
 reservedEnd x =
@@ -546,7 +545,7 @@ reservedEnd x =
 
 reserved :: Text -> Parser ()
 reserved n =
-  lexeme $ try $ string n *> lookAhead (void (satisfy reservedEnd) <|> eof)
+  lexeme $ try $ chunk n *> lookAhead (void (satisfy reservedEnd) <|> eof)
 
 identifier :: Parser VarName
 identifier = lexeme $ try $ do
@@ -645,7 +644,7 @@ operator op =
  where
   without :: Text -> Char -> Parser Text
   without opChar noNextChar =
-    lexeme . try $ string opChar <* notFollowedBy (char noNextChar)
+    lexeme . try $ chunk opChar <* notFollowedBy (char noNextChar)
 
 opWithLoc :: Text -> o -> (AnnUnit SrcSpan o -> a) -> Parser a
 opWithLoc name op f =
