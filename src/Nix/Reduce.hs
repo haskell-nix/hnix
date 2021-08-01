@@ -245,7 +245,7 @@ reduce e@(NSetAnnF ann NonRecursive binds) =
 
     bool
       (Fix <$> sequence e)
-      (clearScopes @NExprLoc $ NSetAnn ann NonRecursive <$> traverse sequence binds)
+      (clearScopes @NExprLoc $ NSetAnn ann mempty <$> traverse sequence binds)
       usesInherit
 
 -- Encountering a 'rec set' construction eliminates any hope of inlining

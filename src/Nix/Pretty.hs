@@ -319,10 +319,10 @@ valueToExpr = iterNValueByDiscardWith thk (Fix . phi)
 
   phi :: NValue' t f m NExpr -> NExprF NExpr
   phi (NVConstant' a     ) = NConstant a
-  phi (NVStr'      ns    ) = NStr $ DoubleQuoted [Plain (stringIgnoreContext ns)]
+  phi (NVStr'      ns    ) = NStr $ DoubleQuoted [Plain $ stringIgnoreContext ns]
   phi (NVList'     l     ) = NList l
-  phi (NVSet'      p    s) = NSet NonRecursive
-    [ NamedVar (StaticKey k :| mempty) v (fromMaybe nullPos (M.lookup (coerce k) p))
+  phi (NVSet'      p    s) = NSet mempty
+    [ NamedVar (StaticKey k :| mempty) v (fromMaybe nullPos $ (`M.lookup` p) $ coerce k)
     | (k, v) <- toList s
     ]
   phi (NVClosure'  _    _) = NSym "<closure>"

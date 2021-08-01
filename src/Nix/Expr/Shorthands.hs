@@ -135,7 +135,7 @@ mkRecSet = mkSet Recursive
 --
 -- > { .. }
 mkNonRecSet :: [Binding NExpr] -> NExpr
-mkNonRecSet = mkSet NonRecursive
+mkNonRecSet = mkSet mempty
 
 -- | General set builder function.
 mkSet :: Recursivity -> [Binding NExpr] -> NExpr

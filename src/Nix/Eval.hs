@@ -151,12 +151,12 @@ eval (NList l           ) =
 
 eval (NSet NonRecursive binds) =
   do
-    attrSet <- evalBinds False $ desugarBinds (eval . NSet NonRecursive) binds
+    attrSet <- evalBinds False $ desugarBinds (eval . NSet mempty) binds
     toValue attrSet
 
 eval (NSet Recursive binds) =
   do
-    attrSet <- evalBinds True $ desugarBinds (eval . NSet NonRecursive) binds
+    attrSet <- evalBinds True $ desugarBinds (eval . NSet mempty) binds
     toValue attrSet
 
 eval (NLet binds body    ) =

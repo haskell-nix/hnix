@@ -503,7 +503,7 @@ nixSet =
  where
   isRec =
     label "recursive set" (reserved "rec" $> NSet Recursive)
-    <|> pure (NSet NonRecursive)
+    <|> pure (NSet mempty)
 
 parseNixFile :: MonadFile m => Path -> m (Result NExpr)
 parseNixFile =
