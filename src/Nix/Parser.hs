@@ -100,6 +100,21 @@ infixl 3 <|>
 (<|>) :: MonadPlus m => m a -> m a -> m a
 (<|>) = mplus
 
+annotateLocation1 :: Parser a -> Parser (AnnUnit SrcSpan a)
+annotateLocation1 p =
+  do
+    begin <- getSourcePos
+    res <- p
+    end   <- get -- The state set before the last whitespace
+
+    pure $ AnnUnit (SrcSpan begin end) res
+
+annotateLocation :: Parser (NExprF NExprLoc) -> Parser NExprLoc
+annotateLocation = (annUnitToAnn <$>) . annotateLocation1
+
+annotateNamedLocation :: String -> Parser (NExprF NExprLoc) -> Parser NExprLoc
+annotateNamedLocation name = annotateLocation . label name
+
 ---------------------------------------------------------------------------------
 
 nixExpr :: Parser NExprLoc
@@ -614,21 +629,6 @@ data NOperatorDef
   | NBinaryDef  Text NBinaryOp  NAssoc
   | NSpecialDef Text NSpecialOp NAssoc
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
-
-annotateLocation1 :: Parser a -> Parser (AnnUnit SrcSpan a)
-annotateLocation1 p =
-  do
-    begin <- getSourcePos
-    res <- p
-    end   <- get -- The state set before the last whitespace
-
-    pure $ AnnUnit (SrcSpan begin end) res
-
-annotateLocation :: Parser (NExprF NExprLoc) -> Parser NExprLoc
-annotateLocation = (annUnitToAnn <$>) . annotateLocation1
-
-annotateNamedLocation :: String -> Parser (NExprF NExprLoc) -> Parser NExprLoc
-annotateNamedLocation name = annotateLocation . label name
 
 manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
 manyUnaryOp f = foldr1 (.) <$> some f
