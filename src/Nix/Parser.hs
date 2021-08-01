@@ -156,7 +156,7 @@ nixSelect term =
 
 nixSelector :: Parser (AnnUnit SrcSpan (NAttrPath NExprLoc))
 nixSelector =
-  annotateLocation $
+  annotateLocation1 $
     do
       (x : xs) <- keyName `sepBy1` selDot
       pure $ x :| xs
@@ -192,10 +192,10 @@ nixToplevelForm = keywords <|> nixLambda <|> nixExpr
   keywords = nixLet <|> nixIf <|> nixAssert <|> nixWith
 
 nixSym :: Parser NExprLoc
-nixSym = annotateLocation1 $ mkSymF . coerce <$> identifier
+nixSym = annotateLocation $ mkSymF . coerce <$> identifier
 
 nixSynHole :: Parser NExprLoc
-nixSynHole = annotateLocation1 $ mkSynHoleF . coerce <$> (char '^' *> identifier)
+nixSynHole = annotateLocation $ mkSynHoleF . coerce <$> (char '^' *> identifier)
 
 nixInt :: Parser NExprLoc
 nixInt =
@@ -280,7 +280,7 @@ nixLet =
   -- Let expressions `let {..., body = ...}' are just desugared
   -- into `(rec {..., body = ...}).body'.
   letBody    = (\x -> NSelect Nothing x (StaticKey "body" :| mempty)) <$> aset
-  aset       = annotateLocation1 $ NSet Recursive <$> braces nixBinders
+  aset       = annotateLocation $ NSet Recursive <$> braces nixBinders
 
 nixIf :: Parser NExprLoc
 nixIf =
@@ -307,14 +307,14 @@ nixWith =
 nixLambda :: Parser NExprLoc
 nixLambda =
   liftA2 annNAbs
-    (annotateLocation $ try argExpr)
+    (annotateLocation1 $ try argExpr)
     nixToplevelForm
 
 nixString :: Parser NExprLoc
-nixString = annNStr <$> annotateLocation nixString'
+nixString = annNStr <$> annotateLocation1 nixString'
 
 nixUri :: Parser NExprLoc
-nixUri = lexeme $ annotateLocation1 $ try $ do
+nixUri = lexeme $ annotateLocation $ try $ do
   start    <- letterChar
   protocol <- many $
     satisfy $
@@ -615,8 +615,8 @@ data NOperatorDef
   | NSpecialDef Text NSpecialOp NAssoc
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
-annotateLocation :: Parser a -> Parser (AnnUnit SrcSpan a)
-annotateLocation p =
+annotateLocation1 :: Parser a -> Parser (AnnUnit SrcSpan a)
+annotateLocation1 p =
   do
     begin <- getSourcePos
     res <- p
@@ -624,11 +624,11 @@ annotateLocation p =
 
     pure $ AnnUnit (SrcSpan begin end) res
 
-annotateLocation1 :: Parser (NExprF NExprLoc) -> Parser NExprLoc
-annotateLocation1 = (annUnitToAnn <$>) . annotateLocation
+annotateLocation :: Parser (NExprF NExprLoc) -> Parser NExprLoc
+annotateLocation = (annUnitToAnn <$>) . annotateLocation1
 
 annotateNamedLocation :: String -> Parser (NExprF NExprLoc) -> Parser NExprLoc
-annotateNamedLocation name = annotateLocation1 . label name
+annotateNamedLocation name = annotateLocation . label name
 
 manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
 manyUnaryOp f = foldr1 (.) <$> some f
@@ -650,7 +650,7 @@ opWithLoc :: Text -> o -> (AnnUnit SrcSpan o -> a) -> Parser a
 opWithLoc name op f =
   do
     AnnUnit ann _ <-
-      annotateLocation $
+      annotateLocation1 $
         {- dbg (toString name) $ -}
         operator name
 
