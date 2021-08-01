@@ -551,7 +551,7 @@ identifier = lexeme $ try $ do
 -- restriction would not be useful.
 parens :: Parser (NExprF f) -> Parser (NExprF f)
 parens   = between (symbol "(") (symbol ")")
-braces :: ParsecT Void Text (State SourcePos) a -> ParsecT Void Text (State SourcePos) a
+braces :: Parser a -> Parser a
 braces   = between (symbol "{") (symbol "}")
 -- angles    = between (symbol "<") (symbol ">")
 brackets :: Parser (NExprF f) -> Parser (NExprF f)
@@ -656,16 +656,16 @@ opWithLoc name op f =
 
     pure $ f $ AnnUnit ann op
 
-binaryN :: Text -> NBinaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
+binaryN :: Text -> NBinaryOp -> (NOperatorDef, Operator Parser NExprLoc)
 binaryN name op =
   (NBinaryDef name op NAssocNone, InfixN $ opWithLoc name op annNBinary)
-binaryL :: Text -> NBinaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
+binaryL :: Text -> NBinaryOp -> (NOperatorDef, Operator Parser NExprLoc)
 binaryL name op =
   (NBinaryDef name op NAssocLeft, InfixL $ opWithLoc name op annNBinary)
-binaryR :: Text -> NBinaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
+binaryR :: Text -> NBinaryOp -> (NOperatorDef, Operator Parser NExprLoc)
 binaryR name op =
   (NBinaryDef name op NAssocRight, InfixR $ opWithLoc name op annNBinary)
-prefix :: Text -> NUnaryOp -> (NOperatorDef, Operator (ParsecT Void Text (State SourcePos)) NExprLoc)
+prefix :: Text -> NUnaryOp -> (NOperatorDef, Operator Parser NExprLoc)
 prefix name op =
   (NUnaryDef name op, Prefix $ manyUnaryOp $ opWithLoc name op annNUnary)
 -- postfix name op = (NUnaryDef name op,
