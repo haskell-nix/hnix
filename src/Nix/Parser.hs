@@ -198,29 +198,40 @@ nixSynHole :: Parser NExprLoc
 nixSynHole = annotateLocation1 $ mkSynHoleF . coerce <$> (char '^' *> identifier)
 
 nixInt :: Parser NExprLoc
-nixInt = annotateLocation1 . label "integer" $ mkIntF <$> integer
+nixInt =
+  annotateLocationNamed1 "integer" $
+    mkIntF <$> integer
 
 nixFloat :: Parser NExprLoc
 nixFloat =
-  annotateLocation1 . label "float" . try $ mkFloatF . realToFrac <$> float
+  annotateLocationNamed1 "float" $
+    try $
+      mkFloatF . realToFrac <$> float
 
 nixBool :: Parser NExprLoc
 nixBool =
-  annotateLocation1 . label "bool" $ bool "true" True <|> bool "false" False
+  annotateLocationNamed1 "bool" $
+    on (<|>) lmkBool (True, "true") (False, "false")
  where
-  bool str b = mkBoolF b <$ reserved str
+  lmkBool (b, txt) = mkBoolF b <$ reserved txt
 
 nixNull :: Parser NExprLoc
-nixNull = annotateLocation1 . label "null" $ mkNullF <$ reserved "null"
+nixNull =
+  annotateLocationNamed1 "null" $
+    mkNullF <$ reserved "null"
 
 -- | 'nixTopLevelForm' returns an expression annotated with a source position,
 -- however this position doesn't include the parsed parentheses, so remove the
 -- "inner" location annotateion and annotate again, including the parentheses.
 nixParens :: Parser NExprLoc
-nixParens = annotateLocation1 . label "parens" . parens $ stripAnnF . unFix <$> nixToplevelForm
+nixParens =
+  annotateLocationNamed1 "parens" $
+    parens $ stripAnnF . unFix <$> nixToplevelForm
 
 nixList :: Parser NExprLoc
-nixList = annotateLocation1 . label "list" . brackets $ NList <$> many nixTerm
+nixList =
+  annotateLocationNamed1 "list" $
+    brackets $ NList <$> many nixTerm
 
 pathChar :: Char -> Bool
 pathChar x =
@@ -228,7 +239,7 @@ pathChar x =
 
 slash :: Parser Char
 slash =
-  label "slash " .
+  label "slash " $
     try $
       char '/' <* notFollowedBy (satisfy $ \x -> x == '/' || x == '*' || isSpace x)
 
@@ -236,8 +247,8 @@ slash =
 -- looked up in the NIX_PATH environment variable at evaluation.
 nixSearchPath :: Parser NExprLoc
 nixSearchPath =
-  annotateLocation1 .
-    label "spath" $ mkPathF True <$> try (char '<' *> many (satisfy pathChar <|> slash) <* symbol ">")
+  annotateLocationNamed1 "spath" $
+    mkPathF True <$> try (char '<' *> many (satisfy pathChar <|> slash) <* symbol ">")
 
 pathStr :: Parser Path
 pathStr =
@@ -253,11 +264,14 @@ pathStr =
       )
 
 nixPath :: Parser NExprLoc
-nixPath = annotateLocation1 $ label "path" $ try (mkPathF False <$> coerce pathStr)
+nixPath =
+  annotateLocationNamed1 "path" $
+    try $ mkPathF False <$> coerce pathStr
 
 nixLet :: Parser NExprLoc
-nixLet = annotateLocation1
-  (reserved "let" *> (letBody <|> letBinders) <?> "let block")
+nixLet =
+  annotateLocationNamed1 "let block" $
+    reserved "let" *> (letBody <|> letBinders)
  where
   letBinders =
     liftA2 NLet
@@ -269,29 +283,26 @@ nixLet = annotateLocation1
   aset       = annotateLocation1 $ NSet Recursive <$> braces nixBinders
 
 nixIf :: Parser NExprLoc
-nixIf = annotateLocation1
-  (liftA3 NIf
-    (reserved "if"   *> nixExpr        )
-    (reserved "then" *> nixToplevelForm)
-    (reserved "else" *> nixToplevelForm)
-  <?> "if"
-  )
+nixIf =
+  annotateLocationNamed1 "if" $
+    liftA3 NIf
+      (reserved "if"   *> nixExpr        )
+      (reserved "then" *> nixToplevelForm)
+      (reserved "else" *> nixToplevelForm)
 
 nixAssert :: Parser NExprLoc
-nixAssert = annotateLocation1
-  (liftA2 NAssert
-    (reserved "assert" *> nixToplevelForm)
-    (semi              *> nixToplevelForm)
-  <?> "assert"
-  )
+nixAssert =
+  annotateLocationNamed1 "assert" $
+    liftA2 NAssert
+      (reserved "assert" *> nixToplevelForm)
+      (semi              *> nixToplevelForm)
 
 nixWith :: Parser NExprLoc
-nixWith = annotateLocation1
-  (liftA2 NWith
-    (reserved "with" *> nixToplevelForm)
-    (semi            *> nixToplevelForm)
-  <?> "with"
-  )
+nixWith =
+  annotateLocationNamed1 "with" $
+    liftA2 NWith
+      (reserved "with" *> nixToplevelForm)
+      (semi            *> nixToplevelForm)
 
 nixLambda :: Parser NExprLoc
 nixLambda =
@@ -320,32 +331,32 @@ nixUri = lexeme $ annotateLocation1 $ try $ do
   pure $ NStr $ DoubleQuoted $ one $ Plain $ toText $ one start <> protocol <> ":" <> address
 
 nixString' :: Parser (NString NExprLoc)
-nixString' = lexeme (doubleQuoted <|> indented <?> "string")
+nixString' = lexeme $ label "string" $ doubleQuoted <|> indented
  where
   doubleQuoted :: Parser (NString NExprLoc)
   doubleQuoted =
-    DoubleQuoted
-    . removePlainEmpty
-    . mergePlain <$>
-      ( doubleQ
-      *> many (stringChar doubleQ (void $ char '\\') doubleEscape)
-      <* doubleQ
-      )
-      <?> "double quoted string"
+    label "double quoted string" $
+      DoubleQuoted . removePlainEmpty . mergePlain <$>
+        ( doubleQ *>
+            many (stringChar doubleQ (void $ char '\\') doubleEscape)
+          <* doubleQ
+        )
 
   doubleQ      = void $ char '"'
   doubleEscape = Plain . one <$> (char '\\' *> escapeCode)
 
   indented :: Parser (NString NExprLoc)
   indented =
-    stripIndent <$>
-      (indentedQ
-      *> many (stringChar indentedQ indentedQ indentedEscape)
-      <* indentedQ
-      )
-      <?> "indented string"
+    label "indented string" $
+      stripIndent <$>
+        ( indentedQ *>
+            many (stringChar indentedQ indentedQ indentedEscape)
+          <* indentedQ
+        )
 
-  indentedQ      = void (string "''" <?> "\"''\"")
+  indentedQ :: Parser ()
+  indentedQ = void . label "\"''\"" $ string "''"
+
   indentedEscape =
     try $
       do
@@ -449,19 +460,19 @@ nixBinders = (inherit <|> namedVar) `endBy` semi where
       try $ string "inherit" *> lookAhead (void (satisfy reservedEnd))
       p <- getSourcePos
       x <- whiteSpace *> optional scope
-      liftA2 (Inherit x)
-        (many identifier)
-        (pure p)
-        <?> "inherited binding"
+      label "inherited binding" $
+        liftA2 (Inherit x)
+          (many identifier)
+          (pure p)
   namedVar =
     do
       p <- getSourcePos
-      liftA3 NamedVar
-        (annotated <$> nixSelector)
-        (equals *> nixToplevelForm)
-        (pure p)
-        <?> "variable binding"
-  scope = nixParens <?> "inherit scope"
+      label "variable binding" $
+        liftA3 NamedVar
+          (annotated <$> nixSelector)
+          (equals *> nixToplevelForm)
+          (pure p)
+  scope = label "inherit scope" nixParens
 
 keyName :: Parser (NKeyName NExprLoc)
 keyName = dynamicKey <|> staticKey
@@ -470,7 +481,9 @@ keyName = dynamicKey <|> staticKey
   dynamicKey = DynamicKey <$> nixAntiquoted nixString'
 
 nixSet :: Parser NExprLoc
-nixSet = annotateLocation1 $ label "set" $ isRec <*> braces nixBinders
+nixSet =
+  annotateLocationNamed1 "set" $
+    isRec <*> braces nixBinders
  where
   isRec =
     label "recursive set" (reserved "rec" $> NSet Recursive)
@@ -612,7 +625,10 @@ annotateLocation p =
     pure $ AnnUnit (SrcSpan begin end) res
 
 annotateLocation1 :: Parser (NExprF NExprLoc) -> Parser NExprLoc
-annotateLocation1 = fmap annUnitToAnn . annotateLocation
+annotateLocation1 = (annUnitToAnn <$>) . annotateLocation
+
+annotateLocationNamed1 :: String -> Parser (NExprF NExprLoc) -> Parser NExprLoc
+annotateLocationNamed1 name = (annUnitToAnn <$>) . annotateLocation . label name
 
 manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
 manyUnaryOp f = foldr1 (.) <$> some f
