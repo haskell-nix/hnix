@@ -132,7 +132,7 @@ nixAntiquoted p =
   label "anti-quotation" $
     Antiquoted <$>
       (antiStart *> nixToplevelForm <* symbol "}")
-        <|> Plain <$> p
+    <|> Plain <$> p
 
 selDot :: Parser ()
 selDot = label "." $ try (symbol "." *> notFollowedBy nixPath)
@@ -376,23 +376,24 @@ nixString' = lexeme $ label "string" $ doubleQuoted <|> indented
     try $
       do
         indentedQ
-        (Plain <$> ("''" <$ char '\'' <|> "$" <$ char '$')) <|>
-          do
-            _ <- char '\\'
-            c <- escapeCode
+        (Plain <$> ("''" <$ char '\'' <|> "$" <$ char '$'))
+          <|>
+            do
+              _ <- char '\\'
+              c <- escapeCode
 
-            pure $
-              bool
-                EscapedNewline
-                (Plain $ one c)
-                (c /= '\n')
+              pure $
+                bool
+                  EscapedNewline
+                  (Plain $ one c)
+                  (c /= '\n')
 
   stringChar end escStart esc =
     Antiquoted <$>
       (antiStart *> nixToplevelForm <* char '}')
-        <|> Plain . one <$>
-          char '$' <|> esc <|> Plain . toText <$>
-            some plainChar
+    <|> Plain . one <$> char '$'
+    <|> esc
+    <|> Plain . toText <$> some plainChar
    where
     plainChar =
       notFollowedBy (end <|> void (char '$') <|> escStart) *> anySingle
