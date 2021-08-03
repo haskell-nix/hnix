@@ -498,7 +498,7 @@ case_select =
     , "a.e . d    or null"
     )
     ( Fix $ NSelect (pure mkNull) emptySet
-        (DynamicKey (Plain (DoubleQuoted mempty)) :| mempty)
+        (DynamicKey (Plain $ DoubleQuoted mempty) :| mempty)
     , "{}.\"\"or null"
     )
     ( Fix $ NBinary NConcat
@@ -636,8 +636,8 @@ case_comments =
 
 case_simpleLoc =
   let
-    mkSPos l c = SourcePos "<string>" (mkPos l) (mkPos c)
-    mkSpan l1 c1 l2 c2 = SrcSpan (mkSPos l1 c1) (mkSPos l2 c2)
+    mkSPos = on (SourcePos "<string>") mkPos
+    mkSpan = on SrcSpan (uncurry mkSPos)
   in
     assertParseTextLoc [text|let
     foo = bar
