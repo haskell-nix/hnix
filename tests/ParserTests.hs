@@ -644,30 +644,24 @@ case_simpleLoc =
          baz "qux";
     in foo
     |]
-    (Fix
-      (NLetAnnF
-        (mkSpan 1 1 4 7)
-        [ NamedVar
-            (StaticKey "foo" :| [])
-            (Fix
-              (NBinaryAnnF
-                (mkSpan 2 7 3 15)
-                NApp
-                (Fix
-                  (NBinaryAnnF
-                    (mkSpan 2 7 3 9)
-                    NApp
-                    (Fix (NSymAnnF (mkSpan 2 7 2 10) "bar"))
-                    (Fix (NSymAnnF (mkSpan 3 6 3 9) "baz"))
-                  )
-                )
-                (Fix (NStrAnnF (mkSpan 3 10 3 15) (DoubleQuoted [Plain "qux"])))
-              )
+    (NLetAnn
+      (mkSpan (1, 1) (4, 7))
+      [ NamedVar
+          (StaticKey "foo" :| [])
+          (NBinaryAnn
+            (mkSpan (2, 7) (3, 15))
+            NApp
+            (NBinaryAnn
+              (mkSpan (2, 7) (3, 9))
+              NApp
+              (NSymAnn (mkSpan (2, 7) (2, 10)) "bar")
+              (NSymAnn (mkSpan (3, 6) (3, 9 )) "baz")
             )
-            (mkSPos 2 1)
-        ]
-        (Fix (NSymAnnF (mkSpan 4 4 4 7) "foo"))
-      )
+            (NStrAnn (mkSpan (3, 10) (3, 15)) $ DoubleQuoted [Plain "qux"])
+          )
+          (mkSPos 2 1)
+      ]
+      (NSymAnn (mkSpan (4, 4) (4, 7)) "foo")
     )
 
 
