@@ -23,6 +23,8 @@ import Prettyprinter.Render.Text
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.TH
+import Prettyprinter.Render.String (renderString)
+import Prettyprinter.Util (reflow)
 
 default (NixLang)
 
@@ -686,14 +688,21 @@ type ExpectedHask = NExpr
 (<=>) :: ExpectedHask -> NixLang -> Assertion
 (<=>) = assertParseText
 
-throwParseError
-  :: ( IsString a
-    , ToString a
-    , Semigroup a
-    , Show b
-    )
-  => a -> a -> b -> IO c
-throwParseError what str err = assertFailure $ toString $ "Unexpected fail parsing " <> what <> ":\n  ''\n" <> str <> "\n''\n  Error: ''" <> show err <> "''."
+throwParseError :: forall ann . Text -> Text -> Doc ann -> Assertion
+throwParseError entity expr err =
+  assertFailure $
+    renderString $
+      layoutSmart Prettyprinter.defaultLayoutOptions $
+        nest 2 $
+          vsep
+            [ ""
+            , "Unexpected fail parsing " <> reflow entity <> ":"
+            , nest 2 $ vsep
+              [ "Expression:"
+              , reflow expr
+              , "Error: " <> nest 2 err
+              ]
+            ]
 
 assertParseText :: ExpectedHask -> NixLang -> Assertion
 assertParseText expected str =
