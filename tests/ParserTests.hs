@@ -734,7 +734,7 @@ assertParseFail str =
   either
     (const pass)
     (\ r ->
-      assertFailure $ toString $ "Unexpected success parsing ''" <> str <> "'':\n  Parsed value: ''" <> show r <> "''."
+      assertFailure $ toString $ "\nUnexpected success parsing string ''" <> str <> "'':\n''Parsed value: ''" <> show r <> "''."
     )
     (parseNixText str)
 
