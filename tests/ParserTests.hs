@@ -747,7 +747,7 @@ assertParsePrint src expect =
     Right expr = parseNixTextLoc src
     result =
       renderStrict
-      . layoutPretty (LayoutOptions $ AvailablePerLine 80 0.4)
+      . layoutPretty defaultLayoutOptions
       . prettyNix
       . stripAnnotation $
         expr
