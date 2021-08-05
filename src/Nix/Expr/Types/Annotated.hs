@@ -67,6 +67,7 @@ instance Serialise SrcSpan
 
 -- * data type @Ann@
 
+--  2021-08-02: NOTE: Annotation needs to be after what is annotated.
 -- | A type constructor applied to a type along with an annotation
 --
 -- Intended to be used with 'Fix':

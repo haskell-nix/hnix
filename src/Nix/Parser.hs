@@ -72,7 +72,7 @@ import           Nix.Expr.Types.Annotated
 import           Nix.Expr.Strings               ( escapeCodes
                                                 , stripIndent
                                                 , mergePlain
-                                                , removePlainEmpty
+                                                , removeEmptyPlains
                                                 )
 import           Nix.Render                     ( MonadFile(readFile) )
 import           Prettyprinter                  ( Doc
@@ -259,7 +259,7 @@ nixString' = lexeme $ label "string" $ doubleQuoted <|> indented
   doubleQuoted :: Parser (NString NExprLoc)
   doubleQuoted =
     label "double quoted string" $
-      DoubleQuoted . removePlainEmpty . mergePlain <$>
+      DoubleQuoted . removeEmptyPlains . mergePlain <$>
         ( doubleQ *>
             many (stringChar doubleQ (void $ char '\\') doubleEscape)
           <* doubleQ

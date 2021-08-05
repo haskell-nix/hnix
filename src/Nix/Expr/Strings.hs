@@ -22,8 +22,8 @@ mergePlain (x                 : xs) = x : mergePlain xs
 
 -- | Remove 'Plain' values equal to 'mempty', as they don't have any
 -- informational content.
-removePlainEmpty :: [Antiquoted Text r] -> [Antiquoted Text r]
-removePlainEmpty = filter f where
+removeEmptyPlains :: [Antiquoted Text r] -> [Antiquoted Text r]
+removeEmptyPlains = filter f where
   f (Plain x) = x /= mempty
   f _         = True
 
@@ -60,7 +60,7 @@ stripIndent [] = Indented 0 mempty
 stripIndent xs =
   Indented
     minIndent
-    (removePlainEmpty $
+    (removeEmptyPlains $
       mergePlain $
         (snd <$>) $
           dropWhileEnd
