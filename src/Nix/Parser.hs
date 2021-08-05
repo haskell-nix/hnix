@@ -440,9 +440,9 @@ data NAssoc = NAssocNone | NAssocLeft | NAssocRight
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 data NOperatorDef
-  = NUnaryDef   NUnaryOp Text
-  | NBinaryDef  NBinaryOp  NAssoc Text
-  | NSpecialDef NSpecialOp NAssoc Text
+  = NUnaryDef          NUnaryOp   Text
+  | NBinaryDef  NAssoc NBinaryOp  Text
+  | NSpecialDef NAssoc NSpecialOp Text
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
@@ -478,7 +478,7 @@ binary
   -> Text
   -> (NOperatorDef, b)
 binary assoc fixity op name =
-  (NBinaryDef op assoc name, fixity $ opWithLoc annNBinary name op)
+  (NBinaryDef assoc op name, fixity $ opWithLoc annNBinary name op)
 
 binaryN, binaryL, binaryR :: NBinaryOp -> Text -> (NOperatorDef, Operator Parser NExprLoc)
 binaryN =
@@ -517,7 +517,7 @@ nixOperators selector =
     -- ]
 
     {-  2 -}
-    [ ( NBinaryDef NApp NAssocLeft " "
+    [ ( NBinaryDef NAssocLeft NApp " "
       ,
         -- Thanks to Brent Yorgey for showing me this trick!
         InfixL $ annNApp <$ symbol ""
@@ -526,7 +526,7 @@ nixOperators selector =
   , {-  3 -}
     [ prefix  "-"  NNeg ]
   , {-  4 -}
-    [ ( NSpecialDef NHasAttrOp NAssocLeft "?"
+    [ ( NSpecialDef NAssocLeft NHasAttrOp "?"
       , Postfix $ symbol "?" *> (flip annNHasAttr <$> selector)
       )
     ]
@@ -599,7 +599,7 @@ getBinaryOperator = (m Map.!)
   buildEntry i =
     concatMap $
       \case
-        (NBinaryDef op assoc name, _) -> [(op, OperatorInfo i assoc name)]
+        (NBinaryDef assoc op name, _) -> [(op, OperatorInfo i assoc name)]
         _                             -> mempty
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
@@ -617,7 +617,7 @@ getSpecialOperator o         = m Map.! o
   buildEntry i =
     concatMap $
       \case
-        (NSpecialDef op assoc name, _) -> [(op, OperatorInfo i assoc name)]
+        (NSpecialDef assoc op name, _) -> [(op, OperatorInfo i assoc name)]
         _                              -> mempty
 
 -- ** x: y lambda function
