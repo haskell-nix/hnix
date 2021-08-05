@@ -320,13 +320,16 @@ nixString = annNStr <$> annotateLocation1 nixString'
 -- ** Names (variables aka symbols)
 
 identifier :: Parser VarName
-identifier = lexeme $ try $ do
-  (coerce -> ident) <-
-    liftA2 cons
-      (satisfy (\x -> isAlpha x || x == '_'))
-      (takeWhileP mempty identLetter)
-  guard $ not $ ident `HashSet.member` reservedNames
-  pure ident
+identifier =
+  lexeme $
+    try $
+      do
+        (coerce -> iD) <-
+          liftA2 cons
+            (satisfy (\x -> isAlpha x || x == '_'))
+            (takeWhileP mempty identLetter)
+        guard $ not $ iD `HashSet.member` reservedNames
+        pure iD
  where
   identLetter x = isAlphanumeric x || x == '_' || x == '\'' || x == '-'
 
