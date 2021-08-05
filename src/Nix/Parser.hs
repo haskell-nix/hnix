@@ -488,8 +488,8 @@ binaryL =
 binaryR =
   binary NAssocRight InfixR
 
-prefix :: Text -> NUnaryOp -> (NOperatorDef, Operator Parser NExprLoc)
-prefix name op =
+prefix :: NUnaryOp -> Text -> (NOperatorDef, Operator Parser NExprLoc)
+prefix op name =
   (NUnaryDef op name, Prefix $ manyUnaryOp $ opWithLoc annNUnary op name)
 -- postfix name op = (NUnaryDef name op,
 --                    Postfix (opWithLoc name op annNUnary))
@@ -524,7 +524,7 @@ nixOperators selector =
       )
     ]
   , {-  3 -}
-    [ prefix  "-"  NNeg ]
+    [ prefix  NNeg "-" ]
   , {-  4 -}
     [ ( NSpecialDef NAssocLeft NHasAttrOp "?"
       , Postfix $ symbol "?" *> (flip annNHasAttr <$> selector)
@@ -541,7 +541,7 @@ nixOperators selector =
     , binaryL NMinus "-"
     ]
   , {-  8 -}
-    [ prefix  "!"  NNot ]
+    [ prefix  NNot "!" ]
   , {-  9 -}
     [ binaryR NUpdate "//" ]
   , {- 10 -}
