@@ -439,11 +439,10 @@ data NSpecialOp = NHasAttrOp | NSelectOp
 data NAssoc = NAssocNone | NAssocLeft | NAssocRight
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
---  2021-08-01: NOTE: Flip so Text is last
 data NOperatorDef
-  = NUnaryDef   Text NUnaryOp
-  | NBinaryDef  Text NBinaryOp  NAssoc
-  | NSpecialDef Text NSpecialOp NAssoc
+  = NUnaryDef   NUnaryOp Text
+  | NBinaryDef  NBinaryOp  NAssoc Text
+  | NSpecialDef NSpecialOp NAssoc Text
   deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
 
 manyUnaryOp :: MonadPlus f => f (a -> a) -> f (a -> a)
@@ -475,13 +474,13 @@ opWithLoc f name op =
 binary
   :: NAssoc
   -> (Parser (NExprLoc -> NExprLoc -> NExprLoc) -> b)
-  -> Text
   -> NBinaryOp
+  -> Text
   -> (NOperatorDef, b)
-binary assoc fixity name op =
-  (NBinaryDef name op assoc, fixity $ opWithLoc annNBinary name op)
+binary assoc fixity op name =
+  (NBinaryDef op assoc name, fixity $ opWithLoc annNBinary name op)
 
-binaryN, binaryL, binaryR :: Text -> NBinaryOp -> (NOperatorDef, Operator Parser NExprLoc)
+binaryN, binaryL, binaryR :: NBinaryOp -> Text -> (NOperatorDef, Operator Parser NExprLoc)
 binaryN =
   binary NAssocNone InfixN
 binaryL =
@@ -491,7 +490,7 @@ binaryR =
 
 prefix :: Text -> NUnaryOp -> (NOperatorDef, Operator Parser NExprLoc)
 prefix name op =
-  (NUnaryDef name op, Prefix $ manyUnaryOp $ opWithLoc annNUnary name op)
+  (NUnaryDef op name, Prefix $ manyUnaryOp $ opWithLoc annNUnary name op)
 -- postfix name op = (NUnaryDef name op,
 --                    Postfix (opWithLoc name op annNUnary))
 
@@ -518,7 +517,7 @@ nixOperators selector =
     -- ]
 
     {-  2 -}
-    [ ( NBinaryDef " " NApp NAssocLeft
+    [ ( NBinaryDef NApp NAssocLeft " "
       ,
         -- Thanks to Brent Yorgey for showing me this trick!
         InfixL $ annNApp <$ symbol ""
@@ -527,40 +526,40 @@ nixOperators selector =
   , {-  3 -}
     [ prefix  "-"  NNeg ]
   , {-  4 -}
-    [ ( NSpecialDef "?" NHasAttrOp NAssocLeft
+    [ ( NSpecialDef NHasAttrOp NAssocLeft "?"
       , Postfix $ symbol "?" *> (flip annNHasAttr <$> selector)
       )
     ]
   , {-  5 -}
-    [ binaryR "++" NConcat ]
+    [ binaryR NConcat "++" ]
   , {-  6 -}
-    [ binaryL "*"  NMult
-    , binaryL "/"  NDiv
+    [ binaryL NMult "*"
+    , binaryL NDiv  "/"
     ]
   , {-  7 -}
-    [ binaryL "+"  NPlus
-    , binaryL "-"  NMinus
+    [ binaryL NPlus "+"
+    , binaryL NMinus "-"
     ]
   , {-  8 -}
     [ prefix  "!"  NNot ]
   , {-  9 -}
-    [ binaryR "//" NUpdate ]
+    [ binaryR NUpdate "//" ]
   , {- 10 -}
-    [ binaryL "<"  NLt
-    , binaryL ">"  NGt
-    , binaryL "<=" NLte
-    , binaryL ">=" NGte
+    [ binaryL NLt "<"
+    , binaryL NGt ">"
+    , binaryL NLte "<="
+    , binaryL NGte ">="
     ]
   , {- 11 -}
-    [ binaryN "==" NEq
-    , binaryN "!=" NNEq
+    [ binaryN NEq "=="
+    , binaryN NNEq "!="
     ]
   , {- 12 -}
-    [ binaryL "&&" NAnd ]
+    [ binaryL NAnd "&&" ]
   , {- 13 -}
-    [ binaryL "||" NOr ]
+    [ binaryL NOr "||" ]
   , {- 14 -}
-    [ binaryR "->" NImpl ]
+    [ binaryR NImpl "->" ]
   ]
 
 data OperatorInfo = OperatorInfo
@@ -583,7 +582,7 @@ getUnaryOperator = (m Map.!)
   buildEntry i =
     concatMap $
       \case
-        (NUnaryDef name op, _) -> [(op, OperatorInfo i NAssocNone name)]
+        (NUnaryDef op name, _) -> [(op, OperatorInfo i NAssocNone name)]
         _                      -> mempty
 
 getBinaryOperator :: NBinaryOp -> OperatorInfo
@@ -600,7 +599,7 @@ getBinaryOperator = (m Map.!)
   buildEntry i =
     concatMap $
       \case
-        (NBinaryDef name op assoc, _) -> [(op, OperatorInfo i assoc name)]
+        (NBinaryDef op assoc name, _) -> [(op, OperatorInfo i assoc name)]
         _                             -> mempty
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
@@ -618,7 +617,7 @@ getSpecialOperator o         = m Map.! o
   buildEntry i =
     concatMap $
       \case
-        (NSpecialDef name op assoc, _) -> [(op, OperatorInfo i assoc name)]
+        (NSpecialDef op assoc name, _) -> [(op, OperatorInfo i assoc name)]
         _                              -> mempty
 
 -- ** x: y lambda function
