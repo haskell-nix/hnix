@@ -461,8 +461,8 @@ operator op =
   without opChar noNextChar =
     lexeme . try $ chunk opChar <* notFollowedBy (char noNextChar)
 
-opWithLoc :: (AnnUnit SrcSpan o -> a) -> Text -> o -> Parser a
-opWithLoc f name op =
+opWithLoc :: (AnnUnit SrcSpan o -> a) -> o -> Text -> Parser a
+opWithLoc f op name =
   do
     AnnUnit ann _ <-
       annotateLocation1 $
@@ -478,7 +478,7 @@ binary
   -> Text
   -> (NOperatorDef, b)
 binary assoc fixity op name =
-  (NBinaryDef assoc op name, fixity $ opWithLoc annNBinary name op)
+  (NBinaryDef assoc op name, fixity $ opWithLoc annNBinary op name)
 
 binaryN, binaryL, binaryR :: NBinaryOp -> Text -> (NOperatorDef, Operator Parser NExprLoc)
 binaryN =
@@ -490,7 +490,7 @@ binaryR =
 
 prefix :: Text -> NUnaryOp -> (NOperatorDef, Operator Parser NExprLoc)
 prefix name op =
-  (NUnaryDef op name, Prefix $ manyUnaryOp $ opWithLoc annNUnary name op)
+  (NUnaryDef op name, Prefix $ manyUnaryOp $ opWithLoc annNUnary op name)
 -- postfix name op = (NUnaryDef name op,
 --                    Postfix (opWithLoc name op annNUnary))
 
