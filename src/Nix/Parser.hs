@@ -462,8 +462,8 @@ operator op =
   without opChar noNextChar =
     lexeme . try $ chunk opChar <* notFollowedBy (char noNextChar)
 
-opWithLoc :: Text -> o -> (AnnUnit SrcSpan o -> a) -> Parser a
-opWithLoc name op f =
+opWithLoc :: (AnnUnit SrcSpan o -> a) -> Text -> o -> Parser a
+opWithLoc f name op =
   do
     AnnUnit ann _ <-
       annotateLocation1 $
@@ -472,17 +472,26 @@ opWithLoc name op f =
 
     pure $ f $ AnnUnit ann op
 
+binary
+  :: NAssoc
+  -> (Parser (NExprLoc -> NExprLoc -> NExprLoc) -> b)
+  -> Text
+  -> NBinaryOp
+  -> (NOperatorDef, b)
+binary assoc fixity name op =
+  (NBinaryDef name op assoc, fixity $ opWithLoc annNBinary name op)
+
 binaryN, binaryL, binaryR :: Text -> NBinaryOp -> (NOperatorDef, Operator Parser NExprLoc)
-binaryN name op =
-  (NBinaryDef name op NAssocNone, InfixN $ opWithLoc name op annNBinary)
-binaryL name op =
-  (NBinaryDef name op NAssocLeft, InfixL $ opWithLoc name op annNBinary)
-binaryR name op =
-  (NBinaryDef name op NAssocRight, InfixR $ opWithLoc name op annNBinary)
+binaryN =
+  binary NAssocNone InfixN
+binaryL =
+  binary NAssocLeft InfixL
+binaryR =
+  binary NAssocRight InfixR
 
 prefix :: Text -> NUnaryOp -> (NOperatorDef, Operator Parser NExprLoc)
 prefix name op =
-  (NUnaryDef name op, Prefix $ manyUnaryOp $ opWithLoc name op annNUnary)
+  (NUnaryDef name op, Prefix $ manyUnaryOp $ opWithLoc annNUnary name op)
 -- postfix name op = (NUnaryDef name op,
 --                    Postfix (opWithLoc name op annNUnary))
 
