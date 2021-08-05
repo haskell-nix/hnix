@@ -188,8 +188,12 @@ equals   = symbol "="
 question :: Parser Text
 question = symbol "?"
 
-antiStart :: Parser Text
-antiStart = label "${" $ symbol "${"
+antiquoteWithEnd :: Parser b -> Parser a -> Parser (Antiquoted v a)
+antiquoteWithEnd t expr = Antiquoted <$> (antiStart *> expr <* t)
+ where
+  antiStart :: Parser Text
+  antiStart = label "${" $ symbol "${"
+
 
 ---------------------------------------------------------------------------------
 
@@ -249,8 +253,7 @@ nixUri = lexeme $ annotateLocation $ try $ do
 nixAntiquoted :: Parser a -> Parser (Antiquoted a NExprLoc)
 nixAntiquoted p =
   label "anti-quotation" $
-    Antiquoted <$>
-      (antiStart *> nixToplevelForm <* symbol "}")
+    antiquoteWithEnd (symbol "}") nixToplevelForm
     <|> Plain <$> p
 
 nixString' :: Parser (NString NExprLoc)
@@ -297,8 +300,7 @@ nixString' = lexeme $ label "string" $ doubleQuoted <|> indented
                   (c /= '\n')
 
   stringChar end escStart esc =
-    Antiquoted <$>
-      (antiStart *> nixToplevelForm <* char '}')
+    antiquoteWithEnd (char '}') nixToplevelForm
     <|> Plain . one <$> char '$'
     <|> esc
     <|> Plain . toText <$> some plainChar
