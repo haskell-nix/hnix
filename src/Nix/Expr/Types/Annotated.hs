@@ -56,8 +56,8 @@ data SrcSpan = SrcSpan
 instance Semigroup SrcSpan where
   s1 <> s2 =
     SrcSpan
-      ((min `on` spanBegin) s1 s2)
-      ((max `on` spanEnd  ) s1 s2)
+      (on min spanBegin s1 s2)
+      (on max spanEnd   s1 s2)
 
 instance Binary SrcSpan
 instance ToJSON SrcSpan
