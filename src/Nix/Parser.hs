@@ -244,21 +244,26 @@ nixFloat =
       mkFloatF . realToFrac <$> float
 
 nixUri :: Parser NExprLoc
-nixUri = lexeme $ annotateLocation $ try $ do
-  start    <- letterChar
-  protocol <- many $
-    satisfy $
-      \ x ->
-        isAlphanumeric x
-        || (`elem` ("+-." :: String)) x
-  _       <- chunk ":"
-  address <-
-    some $
-      satisfy $
-        \ x ->
-          isAlphanumeric x
-          || (`elem` ("%/?:@&=+$,-_.!~*'" :: String)) x
-  pure $ NStr $ DoubleQuoted $ one $ Plain $ toText $ one start <> protocol <> ":" <> address
+nixUri =
+  lexeme $
+    annotateLocation $
+      try $
+        do
+          start    <- letterChar
+          protocol <-
+            many $
+              satisfy $
+                \ x ->
+                  isAlphanumeric x
+                  || (`elem` ("+-." :: String)) x
+          _       <- chunk ":"
+          address <-
+            some $
+              satisfy $
+                \ x ->
+                  isAlphanumeric x
+                  || (`elem` ("%/?:@&=+$,-_.!~*'" :: String)) x
+          pure $ NStr $ DoubleQuoted $ one $ Plain $ toText $ one start <> protocol <> ":" <> address
 
 
 -- ** Strings
@@ -377,7 +382,7 @@ nixBinders = (inherit <|> namedVar) `endBy` symbol ';' where
     do
       -- We can't use 'reserved' here because it would consume the whitespace
       -- after the keyword, which is not exactly the semantics of C++ Nix.
-      try $ chunk "inherit" *> lookAhead (void (satisfy reservedEnd))
+      try $ chunk "inherit" *> lookAhead (void $ satisfy reservedEnd)
       p <- getSourcePos
       x <- whiteSpace *> optional scope
       label "inherited binding" $
