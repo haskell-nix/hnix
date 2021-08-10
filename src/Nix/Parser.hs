@@ -827,6 +827,8 @@ nixTerm = do
                <> [ nixNull | c == 'n' ]
                <> [ nixSelect nixSym ]
 
+-- | Nix expression algebra parser.
+-- "Expression algebra" is to explain @megaparsec@ use of the term "Expression" (parser for language algebraic coperators without any statements (without @let@ etc.)), which is essentially an algebra inside the language.
 nixExpr :: Parser NExprLoc
 nixExpr =
   makeExprParser
