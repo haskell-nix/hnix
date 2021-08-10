@@ -474,7 +474,7 @@ opWithLoc f op name =
         {- dbg (toString name) $ -}
         operator name
 
-    pure $ f $ AnnUnit ann op
+    pure . f $ AnnUnit ann op
 
 binary
   :: NAssoc
@@ -573,54 +573,50 @@ data OperatorInfo = OperatorInfo
   , operatorName  :: Text
   } deriving (Eq, Ord, Generic, Typeable, Data, Show)
 
-getUnaryOperator :: NUnaryOp -> OperatorInfo
-getUnaryOperator = (m Map.!)
+detectPrecedence
+  :: Ord a
+  => ( Int
+    -> (NOperatorDef, Operator Parser NExprLoc)
+    -> [(a, OperatorInfo)]
+    )
+  -> a
+  -> OperatorInfo
+detectPrecedence spec = (mapOfOpWithPrecedence Map.!)
  where
-  m =
+  mapOfOpWithPrecedence =
     Map.fromList $
       concat $
         zipWith
-          buildEntry
+          (concatMap . spec)
           [1 ..]
-          (nixOperators $ fail "unused")
+          l
+    where
+    l :: [[(NOperatorDef, Operator Parser NExprLoc)]]
+    l = nixOperators $ fail "unused"
 
-  buildEntry i =
-    concatMap $
-      \case
-        (NUnaryDef op name, _) -> [(op, OperatorInfo i NAssocNone name)]
-        _                      -> mempty
+getUnaryOperator :: NUnaryOp -> OperatorInfo
+getUnaryOperator = detectPrecedence spec
+ where
+  spec :: Int -> (NOperatorDef, b) -> [(NUnaryOp, OperatorInfo)]
+  spec i =
+    \case
+      (NUnaryDef op name, _) -> [(op, OperatorInfo i NAssocNone name)]
+      _                      -> mempty
 
 getBinaryOperator :: NBinaryOp -> OperatorInfo
-getBinaryOperator = (m Map.!)
+getBinaryOperator = detectPrecedence spec
  where
-  m =
-    Map.fromList $
-      concat $
-        zipWith
-          buildEntry
-          [1 ..]
-          (nixOperators $ fail "unused")
-
-  buildEntry i =
-    concatMap $
-      \case
-        (NBinaryDef assoc op name, _) -> [(op, OperatorInfo i assoc name)]
-        _                             -> mempty
-
+  spec :: Int -> (NOperatorDef, b) -> [(NBinaryOp, OperatorInfo)]
+  spec i =
+    \case
+      (NBinaryDef assoc op name, _) -> [(op, OperatorInfo i assoc name)]
+      _                             -> mempty
 getSpecialOperator :: NSpecialOp -> OperatorInfo
 getSpecialOperator NSelectOp = OperatorInfo 1 NAssocLeft "."
-getSpecialOperator o         = m Map.! o
+getSpecialOperator o         = detectPrecedence spec o
  where
-  m =
-    Map.fromList $
-      concat $
-        zipWith
-          buildEntry
-          [1 ..]
-          (nixOperators $ fail "unused")
-
-  buildEntry i =
-    concatMap $
+  spec :: Int -> (NOperatorDef, b) -> [(NSpecialOp, OperatorInfo)]
+  spec i =
       \case
         (NSpecialDef assoc op name, _) -> [(op, OperatorInfo i assoc name)]
         _                              -> mempty
