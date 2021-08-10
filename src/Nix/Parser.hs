@@ -141,6 +141,9 @@ reserved n =
 getExprAfterP :: Parser a -> Parser NExprLoc
 getExprAfterP p = p *> nixToplevelForm
 
+getExprAfterReservedWord :: Text -> Parser NExprLoc
+getExprAfterReservedWord word = getExprAfterP $ reserved word
+
 -- | A literal copy of @megaparsec@ one but with addition of the @\r@ for Windows EOL case (@\r\n@).
 -- Overall, parser should simply @\r\n -> \n@.
 skipLineComment' :: Tokens Text -> Parser ()
@@ -347,7 +350,7 @@ nixSym = annotateLocation $ mkSymF . coerce <$> identifier
 
 -- ** ( ) parens
 
--- | 'nixTopLevelForm' returns an expression annotated with a source position,
+-- | 'nixToplevelForm' returns an expression annotated with a source position,
 -- however this position doesn't include the parsed parentheses, so remove the
 -- "inner" location annotateion and annotate again, including the parentheses.
 nixParens :: Parser NExprLoc
@@ -716,7 +719,7 @@ nixLet =
   letBinders =
     liftA2 NLet
       nixBinders
-      (reserved "in" *> nixToplevelForm)
+      (getExprAfterReservedWord "in")
   -- Let expressions `let {..., body = ...}' are just desugared
   -- into `(rec {..., body = ...}).body'.
   letBody    = (\x -> NSelect Nothing x (StaticKey "body" :| mempty)) <$> aset
@@ -729,8 +732,8 @@ nixIf =
   annotateNamedLocation "if" $
     liftA3 NIf
       (reserved "if"   *> nixExpr        )
-      (reserved "then" *> nixToplevelForm)
-      (reserved "else" *> nixToplevelForm)
+      (getExprAfterReservedWord "then")
+      (getExprAfterReservedWord "else")
 
 -- ** with
 
@@ -738,7 +741,7 @@ nixWith :: Parser NExprLoc
 nixWith =
   annotateNamedLocation "with" $
     liftA2 NWith
-      (reserved "with" *> nixToplevelForm)
+      (getExprAfterReservedWord "with")
       (semi            *> nixToplevelForm)
 
 
@@ -748,7 +751,7 @@ nixAssert :: Parser NExprLoc
 nixAssert =
   annotateNamedLocation "assert" $
     liftA2 NAssert
-      (reserved "assert" *> nixToplevelForm)
+      (getExprAfterReservedWord "assert")
       (semi              *> nixToplevelForm)
 
 -- ** . - reference (selector) into attr
