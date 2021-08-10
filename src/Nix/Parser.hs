@@ -187,9 +187,6 @@ brackets = on between symbol "[" "]"
 -- colon     = symbol ":"
 -- dot       = symbol "."
 
-question :: Parser Text
-question = symbol "?"
-
 antiquoteWithEnd :: Parser b -> Parser a -> Parser (Antiquoted v a)
 antiquoteWithEnd t expr = Antiquoted <$> (antiStart *> expr <* t)
  where
@@ -686,7 +683,7 @@ argExpr =
             pair <-
               liftA2 (,)
                 identifier
-                (optional $ question *> nixToplevelForm)
+                (optional $ symbol "?" *> nixToplevelForm)
 
             let args = acc <> [pair]
 
