@@ -880,11 +880,15 @@ parseNixFileLoc :: MonadFile m => Path -> m (Result NExprLoc)
 parseNixFileLoc =
   parseNixFile' id
 
+parseNixText' :: (Parser NExprLoc -> Parser a) -> Text -> Result a
+parseNixText' f =
+  parseFromText $ f fullExprParser
 
 parseNixText :: Text -> Result NExpr
 parseNixText =
-  parseFromText $ stripAnnotation <$> (whiteSpace *> nixToplevelForm <* eof)
+  parseNixText' (stripAnnotation <$>)
 
 parseNixTextLoc :: Text -> Result NExprLoc
-parseNixTextLoc = parseFromText (whiteSpace *> nixToplevelForm <* eof)
+parseNixTextLoc =
+  parseNixText' id
 
