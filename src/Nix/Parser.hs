@@ -865,6 +865,9 @@ parseFromText parser input =
     pure
     $ (`evalState` initialPos stub) $ (`runParserT` stub) parser input
 
+fullExprParser :: Parser NExprLoc
+fullExprParser = whiteSpace *> nixToplevelForm <* eof
+
 parseNixFile :: MonadFile m => Path -> m (Result NExpr)
 parseNixFile =
   parseFromFileEx $ stripAnnotation <$> (whiteSpace *> nixToplevelForm <* eof)
