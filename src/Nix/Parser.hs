@@ -138,6 +138,9 @@ reserved :: Text -> Parser ()
 reserved n =
   lexeme $ try $ chunk n *> lookAhead (void (satisfy reservedEnd) <|> eof)
 
+getExprAfterP :: Parser a -> Parser NExprLoc
+getExprAfterP p = p *> nixToplevelForm
+
 -- | A literal copy of @megaparsec@ one but with addition of the @\r@ for Windows EOL case (@\r\n@).
 -- Overall, parser should simply @\r\n -> \n@.
 skipLineComment' :: Tokens Text -> Parser ()
