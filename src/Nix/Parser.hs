@@ -153,6 +153,9 @@ whiteSpace =
   lineCmnt  = skipLineComment' "#"
   blockCmnt = Lexer.skipBlockComment "/*" "*/"
 
+-- | Lexeme is a unit of the language.
+-- Convention is that after lexeme an arbitrary amount of empty entities (space, comments, line breaks) are allowed.
+-- This lexeme definition just skips over superflous @megaparsec: lexeme@ abstraction.
 lexeme :: Parser a -> Parser a
 lexeme p = p <* whiteSpace
 
