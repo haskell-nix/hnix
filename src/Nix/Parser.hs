@@ -36,6 +36,7 @@ module Nix.Parser
   , nixBool
   , nixNull
   , symbol
+  , symbols
   , whiteSpace
   )
 where
@@ -165,8 +166,11 @@ whiteSpace =
 lexeme :: Parser a -> Parser a
 lexeme p = p <* whiteSpace
 
-symbol :: Text -> Parser Text
-symbol = lexeme . chunk
+symbol :: Char -> Parser Char
+symbol = lexeme . char
+
+symbols :: Text -> Parser Text
+symbols = lexeme . chunk
 
 -- We restrict the type of 'parens' and 'brackets' here because if they were to
 -- take a @Parser NExprLoc@ argument they would parse additional text which
@@ -175,14 +179,14 @@ symbol = lexeme . chunk
 -- Braces and angles in hnix don't enclose a single expression so this type
 -- restriction would not be useful.
 parens :: Parser (NExprF f) -> Parser (NExprF f)
-parens   = on between symbol "(" ")"
+parens   = on between symbol '(' ')'
 
 braces :: Parser a -> Parser a
-braces   = on between symbol "{" "}"
+braces   = on between symbol '{' '}'
 
 -- angles    = between (symbol "<") (symbol ">")
 brackets :: Parser (NExprF f) -> Parser (NExprF f)
-brackets = on between symbol "[" "]"
+brackets = on between symbol '[' ']'
 
 -- colon     = symbol ":"
 -- dot       = symbol "."
@@ -191,7 +195,7 @@ antiquoteWithEnd :: Parser b -> Parser a -> Parser (Antiquoted v a)
 antiquoteWithEnd t expr = Antiquoted <$> (antiStart *> expr <* t)
  where
   antiStart :: Parser Text
-  antiStart = label "${" $ symbol "${"
+  antiStart = label "${" $ symbols "${"
 
 
 ---------------------------------------------------------------------------------
@@ -252,7 +256,7 @@ nixUri = lexeme $ annotateLocation $ try $ do
 nixAntiquoted :: Parser a -> Parser (Antiquoted a NExprLoc)
 nixAntiquoted p =
   label "anti-quotation" $
-    antiquoteWithEnd (symbol "}") nixToplevelForm
+    antiquoteWithEnd (symbol '}') nixToplevelForm
     <|> Plain <$> p
 
 nixString' :: Parser (NString NExprLoc)
@@ -358,7 +362,7 @@ nixList =
 -- ** { } set
 
 nixBinders :: Parser [Binding NExprLoc]
-nixBinders = (inherit <|> namedVar) `endBy` symbol ";" where
+nixBinders = (inherit <|> namedVar) `endBy` symbol ';' where
   inherit =
     do
       -- We can't use 'reserved' here because it would consume the whitespace
@@ -376,7 +380,7 @@ nixBinders = (inherit <|> namedVar) `endBy` symbol ";" where
       label "variable binding" $
         liftA3 NamedVar
           (annotated <$> nixSelector)
-          (symbol "=" *> nixToplevelForm)
+          (symbol '=' *> nixToplevelForm)
           (pure p)
   scope = label "inherit scope" nixParens
 
@@ -427,7 +431,7 @@ nixPath =
 nixSearchPath :: Parser NExprLoc
 nixSearchPath =
   annotateNamedLocation "spath" $
-    mkPathF True <$> try (char '<' *> many (satisfy pathChar <|> slash) <* symbol ">")
+    mkPathF True <$> try (char '<' *> many (satisfy pathChar <|> slash) <* symbol '>')
 
 
 -- ** Operators
@@ -454,7 +458,7 @@ operator op =
     c@"/" -> c `without` '/'
     c@"<" -> c `without` '='
     c@">" -> c `without` '='
-    n   -> symbol n
+    n   -> symbols n
  where
   without :: Text -> Char -> Parser Text
   without opChar noNextChar =
@@ -519,14 +523,14 @@ nixOperators selector =
     [ ( NBinaryDef NAssocLeft NApp " "
       ,
         -- Thanks to Brent Yorgey for showing me this trick!
-        InfixL $ annNApp <$ symbol ""
+        InfixL $ annNApp <$ symbols ""
       )
     ]
   , {-  3 -}
     [ prefix  NNeg "-" ]
   , {-  4 -}
     [ ( NSpecialDef NAssocLeft NHasAttrOp "?"
-      , Postfix $ symbol "?" *> (flip annNHasAttr <$> selector)
+      , Postfix $ symbol '?' *> (flip annNHasAttr <$> selector)
       )
     ]
   , {-  5 -}
@@ -634,7 +638,7 @@ argExpr =
     , onlyname
     , atRight
     ]
-  <* symbol ":"
+  <* symbol ':'
  where
   -- An argument not in curly braces. There's some potential ambiguity
   -- in the case of, for example `x:y`. Is it a lambda function `x: y`, or
@@ -650,7 +654,7 @@ argExpr =
   atLeft =
     try $
       do
-        name             <- identifier <* symbol "@"
+        name             <- identifier <* symbol '@'
         (pset, variadic) <- params
         pure $ ParamSet (pure name) variadic pset
 
@@ -658,7 +662,7 @@ argExpr =
   atRight =
     do
       (pset, variadic) <- params
-      name             <- optional $ symbol "@" *> identifier
+      name             <- optional $ symbol '@' *> identifier
       pure $ ParamSet name variadic pset
 
   -- Return the parameters set.
@@ -672,7 +676,7 @@ argExpr =
     -- Otherwise, attempt to parse an argument, optionally with a
     -- default. If this fails, then return what has been accumulated
     -- so far.
-    go acc = ((acc, Variadic) <$ symbol "...") <|> getMore
+    go acc = ((acc, Variadic) <$ symbols "...") <|> getMore
      where
       getMore :: Parser ([(VarName, Maybe NExprLoc)], Variadic)
       getMore =
@@ -683,12 +687,12 @@ argExpr =
             pair <-
               liftA2 (,)
                 identifier
-                (optional $ symbol "?" *> nixToplevelForm)
+                (optional $ symbol '?' *> nixToplevelForm)
 
             let args = acc <> [pair]
 
             -- Either return this, or attempt to get a comma and restart.
-            option (args, mempty) $ symbol "," *> go args
+            option (args, mempty) $ symbol ',' *> go args
 
 nixLambda :: Parser NExprLoc
 nixLambda =
@@ -719,7 +723,7 @@ nixIf :: Parser NExprLoc
 nixIf =
   annotateNamedLocation "if" $
     liftA3 NIf
-      (reserved "if"   *> nixExpr        )
+      (reserved "if"   *> nixExpr     )
       (getExprAfterReservedWord "then")
       (getExprAfterReservedWord "else")
 
@@ -730,7 +734,7 @@ nixWith =
   annotateNamedLocation "with" $
     liftA2 NWith
       (getExprAfterReservedWord "with")
-      (symbol ";" *> nixToplevelForm)
+      (symbol ';' *> nixToplevelForm)
 
 
 -- ** assert
@@ -740,12 +744,12 @@ nixAssert =
   annotateNamedLocation "assert" $
     liftA2 NAssert
       (getExprAfterReservedWord "assert")
-      (symbol ";" *> nixToplevelForm)
+      (symbol ';' *> nixToplevelForm)
 
 -- ** . - reference (selector) into attr
 
 selDot :: Parser ()
-selDot = label "." $ try (symbol "." *> notFollowedBy nixPath)
+selDot = label "." $ try (symbol '.' *> notFollowedBy nixPath)
 
 keyName :: Parser (NKeyName NExprLoc)
 keyName = dynamicKey <|> staticKey
