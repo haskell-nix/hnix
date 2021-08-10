@@ -22,7 +22,7 @@ module Nix.Parser
   , getBinaryOperator
   , getSpecialOperator
   , nixTopLevelForm
-  , nixExpr
+  , nixExprAlgebra
   , nixSet
   , nixBinders
   , nixSelector
@@ -739,9 +739,9 @@ nixIf :: Parser NExprLoc
 nixIf =
   annotateNamedLocation "if" $
     liftA3 NIf
-      (reserved "if"   *> nixExpr     )
-      (getExprAfterReservedWord "then")
-      (getExprAfterReservedWord "else")
+      (reserved "if"   *> nixExprAlgebra)
+      (getExprAfterReservedWord "then"  )
+      (getExprAfterReservedWord "else"  )
 
 -- ** with
 
@@ -848,15 +848,15 @@ nixTerm = do
 
 -- | Nix expression algebra parser.
 -- "Expression algebra" is to explain @megaparsec@ use of the term "Expression" (parser for language algebraic coperators without any statements (without @let@ etc.)), which is essentially an algebra inside the language.
-nixExpr :: Parser NExprLoc
-nixExpr =
+nixExprAlgebra :: Parser NExprLoc
+nixExprAlgebra =
   makeExprParser
     nixTerm $
       snd <<$>>
         nixOperators nixSelector
 
 nixTopLevelForm :: Parser NExprLoc
-nixTopLevelForm = keywords <|> nixLambda <|> nixExpr
+nixTopLevelForm = keywords <|> nixLambda <|> nixExprAlgebra
  where
   keywords = nixLet <|> nixIf <|> nixAssert <|> nixWith
 
