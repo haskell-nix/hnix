@@ -194,12 +194,25 @@ brackets = on between symbol '[' ']'
 -- colon     = symbol ":"
 -- dot       = symbol "."
 
-antiquoteWithEnd :: Parser b -> Parser a -> Parser (Antiquoted v a)
-antiquoteWithEnd t expr = Antiquoted <$> (antiStart *> expr <* t)
+antiquotedIsHungryForTrailingSpaces :: Bool -> Parser (Antiquoted v NExprLoc)
+antiquotedIsHungryForTrailingSpaces hungry = Antiquoted <$> (antiStart *> nixToplevelForm <* antiEnd)
  where
   antiStart :: Parser Text
   antiStart = label "${" $ symbols "${"
 
+  antiEnd :: Parser Char
+  antiEnd = label "}" $
+    bool
+      id
+      lexeme
+      hungry
+      (char '}')
+
+antiquotedLexeme :: Parser (Antiquoted v NExprLoc)
+antiquotedLexeme = antiquotedIsHungryForTrailingSpaces True
+
+antiquoted :: Parser (Antiquoted v NExprLoc)
+antiquoted = antiquotedIsHungryForTrailingSpaces False
 
 ---------------------------------------------------------------------------------
 
@@ -259,7 +272,7 @@ nixUri = lexeme $ annotateLocation $ try $ do
 nixAntiquoted :: Parser a -> Parser (Antiquoted a NExprLoc)
 nixAntiquoted p =
   label "anti-quotation" $
-    antiquoteWithEnd (symbol '}') nixToplevelForm
+    antiquotedLexeme
     <|> Plain <$> p
 
 nixString' :: Parser (NString NExprLoc)
@@ -306,7 +319,7 @@ nixString' = lexeme $ label "string" $ doubleQuoted <|> indented
                   (c /= '\n')
 
   stringChar end escStart esc =
-    antiquoteWithEnd (char '}') nixToplevelForm
+    antiquoted
     <|> Plain . one <$> char '$'
     <|> esc
     <|> Plain . toText <$> some plainChar
