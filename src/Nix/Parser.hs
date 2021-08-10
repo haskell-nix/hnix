@@ -819,7 +819,7 @@ nixSynHole :: Parser NExprLoc
 nixSynHole = annotateLocation $ mkSynHoleF . coerce <$> (char '^' *> identifier)
 
 
--- ** Language term, expression, top level form
+-- ** Expr & its constituents (Language term, expr algebra)
 
 nixTerm :: Parser NExprLoc
 nixTerm = do
@@ -851,9 +851,10 @@ nixTerm = do
 nixExprAlgebra :: Parser NExprLoc
 nixExprAlgebra =
   makeExprParser
-    nixTerm $
-      snd <<$>>
-        nixOperators nixSelector
+    nixTerm
+    (snd <<$>>
+      nixOperators nixSelector
+    )
 
 nixExpr :: Parser NExprLoc
 nixExpr = keywords <|> nixLambda <|> nixExprAlgebra
@@ -884,12 +885,12 @@ parseFromText parser input =
     pure
     $ (`evalState` initialPos stub) $ (`runParserT` stub) parser input
 
-fullExprParser :: Parser NExprLoc
-fullExprParser = whiteSpace *> nixExpr <* eof
+fullContent :: Parser NExprLoc
+fullContent = whiteSpace *> nixExpr <* eof
 
 parseNixFile' :: MonadFile m => (Parser NExprLoc -> Parser a) -> Path -> m (Result a)
 parseNixFile' f =
-  parseFromFileEx $ f fullExprParser
+  parseFromFileEx $ f fullContent
 
 parseNixFile :: MonadFile m => Path -> m (Result NExpr)
 parseNixFile =
@@ -901,7 +902,7 @@ parseNixFileLoc =
 
 parseNixText' :: (Parser NExprLoc -> Parser a) -> Text -> Result a
 parseNixText' f =
-  parseFromText $ f fullExprParser
+  parseFromText $ f fullContent
 
 parseNixText :: Text -> Result NExpr
 parseNixText =
