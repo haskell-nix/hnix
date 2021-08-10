@@ -80,7 +80,7 @@ import           Prettyprinter                  ( Doc
                                                 , pretty
                                                 )
 -- `parser-combinators` ships performance enhanced & MonadPlus-aware combinators.
--- For example `smome` and `many` impoted here.
+-- For example `some` and `many` impoted here.
 import           Text.Megaparsec         hiding ( (<|>)
                                                 , State
                                                 )
@@ -139,14 +139,14 @@ reserved :: Text -> Parser ()
 reserved n =
   lexeme $ try $ chunk n *> lookAhead (void (satisfy reservedEnd) <|> eof)
 
-getExprAfterP :: Parser a -> Parser NExprLoc
-getExprAfterP p = p *> nixExpr
+exprAfterP :: Parser a -> Parser NExprLoc
+exprAfterP p = p *> nixExpr
 
-getExprAfterSymbol :: Char -> Parser NExprLoc
-getExprAfterSymbol p = getExprAfterP $ symbol p
+exprAfterSymbol :: Char -> Parser NExprLoc
+exprAfterSymbol p = exprAfterP $ symbol p
 
-getExprAfterReservedWord :: Text -> Parser NExprLoc
-getExprAfterReservedWord word = getExprAfterP $ reserved word
+exprAfterReservedWord :: Text -> Parser NExprLoc
+exprAfterReservedWord word = exprAfterP $ reserved word
 
 -- | A literal copy of @megaparsec@ one but with addition of the @\r@ for Windows EOL case (@\r\n@).
 -- Overall, parser should simply @\r\n -> \n@.
@@ -396,7 +396,7 @@ nixBinders = (inherit <|> namedVar) `endBy` symbol ';' where
       label "variable binding" $
         liftA3 NamedVar
           (annotated <$> nixSelector)
-          (getExprAfterSymbol '=')
+          (exprAfterSymbol '=')
           (pure p)
   scope = label "inherit scope" nixParens
 
@@ -703,7 +703,7 @@ argExpr =
             pair <-
               liftA2 (,)
                 identifier
-                (optional $ getExprAfterSymbol '?')
+                (optional $ exprAfterSymbol '?')
 
             let args = acc <> [pair]
 
@@ -727,7 +727,7 @@ nixLet =
   letBinders =
     liftA2 NLet
       nixBinders
-      (getExprAfterReservedWord "in")
+      (exprAfterReservedWord "in")
   -- Let expressions `let {..., body = ...}' are just desugared
   -- into `(rec {..., body = ...}).body'.
   letBody    = (\x -> NSelect Nothing x (StaticKey "body" :| mempty)) <$> aset
@@ -740,8 +740,8 @@ nixIf =
   annotateNamedLocation "if" $
     liftA3 NIf
       (reserved "if"   *> nixExprAlgebra)
-      (getExprAfterReservedWord "then"  )
-      (getExprAfterReservedWord "else"  )
+      (exprAfterReservedWord "then"  )
+      (exprAfterReservedWord "else"  )
 
 -- ** with
 
@@ -749,8 +749,8 @@ nixWith :: Parser NExprLoc
 nixWith =
   annotateNamedLocation "with" $
     liftA2 NWith
-      (getExprAfterReservedWord "with")
-      (getExprAfterSymbol       ';'   )
+      (exprAfterReservedWord "with")
+      (exprAfterSymbol       ';'   )
 
 
 -- ** assert
@@ -759,8 +759,8 @@ nixAssert :: Parser NExprLoc
 nixAssert =
   annotateNamedLocation "assert" $
     liftA2 NAssert
-      (getExprAfterReservedWord "assert")
-      (getExprAfterSymbol       ';'     )
+      (exprAfterReservedWord "assert")
+      (exprAfterSymbol       ';'     )
 
 -- ** . - reference (selector) into attr
 
