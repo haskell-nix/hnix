@@ -35,8 +35,6 @@ module Nix.Parser
   , nixInt
   , nixBool
   , nixNull
-  , symbol
-  , symbols
   , whiteSpace
   )
 where
@@ -187,7 +185,6 @@ parens   = on between symbol '(' ')'
 braces :: Parser a -> Parser a
 braces   = on between symbol '{' '}'
 
--- angles    = between (symbol "<") (symbol ">")
 brackets :: Parser (NExprF f) -> Parser (NExprF f)
 brackets = on between symbol '[' ']'
 
