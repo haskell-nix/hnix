@@ -567,6 +567,15 @@ nixOperators selector =
     [ binaryR NImpl "->" ]
   ]
 
+--  2021-08-10: NOTE:
+--  All this is a sidecar:
+--  * This type
+--  * detectPrecedence
+--  * getUnaryOperation
+--  * getBinaryOperation
+--  * getSpecialOperation
+--  can reduced in favour of adding precedence field into @NOperatorDef@.
+-- details: https://github.com/haskell-nix/hnix/issues/982
 data OperatorInfo = OperatorInfo
   { precedence    :: Int
   , associativity :: NAssoc
