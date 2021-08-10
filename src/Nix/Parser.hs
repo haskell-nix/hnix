@@ -21,7 +21,7 @@ module Nix.Parser
   , getUnaryOperator
   , getBinaryOperator
   , getSpecialOperator
-  , nixTopLevelForm
+  , nixExpr
   , nixExprAlgebra
   , nixSet
   , nixBinders
@@ -140,7 +140,7 @@ reserved n =
   lexeme $ try $ chunk n *> lookAhead (void (satisfy reservedEnd) <|> eof)
 
 getExprAfterP :: Parser a -> Parser NExprLoc
-getExprAfterP p = p *> nixTopLevelForm
+getExprAfterP p = p *> nixExpr
 
 getExprAfterSymbol :: Char -> Parser NExprLoc
 getExprAfterSymbol p = getExprAfterP $ symbol p
@@ -195,7 +195,7 @@ brackets = on between symbol '[' ']'
 -- dot       = symbol "."
 
 antiquotedIsHungryForTrailingSpaces :: Bool -> Parser (Antiquoted v NExprLoc)
-antiquotedIsHungryForTrailingSpaces hungry = Antiquoted <$> (antiStart *> nixTopLevelForm <* antiEnd)
+antiquotedIsHungryForTrailingSpaces hungry = Antiquoted <$> (antiStart *> nixExpr <* antiEnd)
  where
   antiStart :: Parser Text
   antiStart = label "${" $ symbols "${"
@@ -358,13 +358,13 @@ nixSym = annotateLocation $ mkSymF . coerce <$> identifier
 
 -- ** ( ) parens
 
--- | 'nixTopLevelForm' returns an expression annotated with a source position,
+-- | 'nixExpr' returns an expression annotated with a source position,
 -- however this position doesn't include the parsed parentheses, so remove the
 -- "inner" location annotateion and annotate again, including the parentheses.
 nixParens :: Parser NExprLoc
 nixParens =
   annotateNamedLocation "parens" $
-    parens $ stripAnnF . unFix <$> nixTopLevelForm
+    parens $ stripAnnF . unFix <$> nixExpr
 
 
 -- ** [ ] list
@@ -714,7 +714,7 @@ nixLambda :: Parser NExprLoc
 nixLambda =
   liftA2 annNAbs
     (annotateLocation1 $ try argExpr)
-    nixTopLevelForm
+    nixExpr
 
 
 -- ** let expression
@@ -855,8 +855,8 @@ nixExprAlgebra =
       snd <<$>>
         nixOperators nixSelector
 
-nixTopLevelForm :: Parser NExprLoc
-nixTopLevelForm = keywords <|> nixLambda <|> nixExprAlgebra
+nixExpr :: Parser NExprLoc
+nixExpr = keywords <|> nixLambda <|> nixExprAlgebra
  where
   keywords = nixLet <|> nixIf <|> nixAssert <|> nixWith
 
@@ -885,7 +885,7 @@ parseFromText parser input =
     $ (`evalState` initialPos stub) $ (`runParserT` stub) parser input
 
 fullExprParser :: Parser NExprLoc
-fullExprParser = whiteSpace *> nixTopLevelForm <* eof
+fullExprParser = whiteSpace *> nixExpr <* eof
 
 parseNixFile' :: MonadFile m => (Parser NExprLoc -> Parser a) -> Path -> m (Result a)
 parseNixFile' f =
