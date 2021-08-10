@@ -184,9 +184,6 @@ braces   = on between symbol "{" "}"
 brackets :: Parser (NExprF f) -> Parser (NExprF f)
 brackets = on between symbol "[" "]"
 
-semi :: Parser Text
-semi     = symbol ";"
-
 comma :: Parser Text
 comma    = symbol ","
 
@@ -370,7 +367,7 @@ nixList =
 -- ** { } set
 
 nixBinders :: Parser [Binding NExprLoc]
-nixBinders = (inherit <|> namedVar) `endBy` semi where
+nixBinders = (inherit <|> namedVar) `endBy` symbol ";" where
   inherit =
     do
       -- We can't use 'reserved' here because it would consume the whitespace
@@ -742,7 +739,7 @@ nixWith =
   annotateNamedLocation "with" $
     liftA2 NWith
       (getExprAfterReservedWord "with")
-      (semi            *> nixToplevelForm)
+      (symbol ";" *> nixToplevelForm)
 
 
 -- ** assert
@@ -752,7 +749,7 @@ nixAssert =
   annotateNamedLocation "assert" $
     liftA2 NAssert
       (getExprAfterReservedWord "assert")
-      (semi              *> nixToplevelForm)
+      (symbol ";" *> nixToplevelForm)
 
 -- ** . - reference (selector) into attr
 
