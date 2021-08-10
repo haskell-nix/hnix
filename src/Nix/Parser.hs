@@ -868,12 +868,18 @@ parseFromText parser input =
 fullExprParser :: Parser NExprLoc
 fullExprParser = whiteSpace *> nixToplevelForm <* eof
 
+parseNixFile' :: MonadFile m => (Parser NExprLoc -> Parser a) -> Path -> m (Result a)
+parseNixFile' f =
+  parseFromFileEx $ f fullExprParser
+
 parseNixFile :: MonadFile m => Path -> m (Result NExpr)
 parseNixFile =
-  parseFromFileEx $ stripAnnotation <$> (whiteSpace *> nixToplevelForm <* eof)
+  parseNixFile' (stripAnnotation <$>)
 
 parseNixFileLoc :: MonadFile m => Path -> m (Result NExprLoc)
-parseNixFileLoc = parseFromFileEx (whiteSpace *> nixToplevelForm <* eof)
+parseNixFileLoc =
+  parseNixFile' id
+
 
 parseNixText :: Text -> Result NExpr
 parseNixText =
