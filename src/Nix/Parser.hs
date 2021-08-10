@@ -142,6 +142,9 @@ reserved n =
 getExprAfterP :: Parser a -> Parser NExprLoc
 getExprAfterP p = p *> nixToplevelForm
 
+getExprAfterSymbol :: Char -> Parser NExprLoc
+getExprAfterSymbol p = getExprAfterP $ symbol p
+
 getExprAfterReservedWord :: Text -> Parser NExprLoc
 getExprAfterReservedWord word = getExprAfterP $ reserved word
 
@@ -380,7 +383,7 @@ nixBinders = (inherit <|> namedVar) `endBy` symbol ';' where
       label "variable binding" $
         liftA3 NamedVar
           (annotated <$> nixSelector)
-          (symbol '=' *> nixToplevelForm)
+          (getExprAfterSymbol '=')
           (pure p)
   scope = label "inherit scope" nixParens
 
@@ -687,7 +690,7 @@ argExpr =
             pair <-
               liftA2 (,)
                 identifier
-                (optional $ symbol '?' *> nixToplevelForm)
+                (optional $ getExprAfterSymbol '?')
 
             let args = acc <> [pair]
 
@@ -734,7 +737,7 @@ nixWith =
   annotateNamedLocation "with" $
     liftA2 NWith
       (getExprAfterReservedWord "with")
-      (symbol ';' *> nixToplevelForm)
+      (getExprAfterSymbol       ';'   )
 
 
 -- ** assert
@@ -744,7 +747,7 @@ nixAssert =
   annotateNamedLocation "assert" $
     liftA2 NAssert
       (getExprAfterReservedWord "assert")
-      (symbol ';' *> nixToplevelForm)
+      (getExprAfterSymbol       ';'     )
 
 -- ** . - reference (selector) into attr
 
