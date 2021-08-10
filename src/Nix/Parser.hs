@@ -191,9 +191,6 @@ braces   = on between symbol '{' '}'
 brackets :: Parser (NExprF f) -> Parser (NExprF f)
 brackets = on between symbol '[' ']'
 
--- colon     = symbol ":"
--- dot       = symbol "."
-
 antiquotedIsHungryForTrailingSpaces :: Bool -> Parser (Antiquoted v NExprLoc)
 antiquotedIsHungryForTrailingSpaces hungry = Antiquoted <$> (antiStart *> nixExpr <* antiEnd)
  where
@@ -447,7 +444,7 @@ nixPath =
 nixSearchPath :: Parser NExprLoc
 nixSearchPath =
   annotateNamedLocation "spath" $
-    mkPathF True <$> try (char '<' *> many (satisfy pathChar <|> slash) <* symbol '>')
+    mkPathF True <$> try (lexeme $ char '<' *> many (satisfy pathChar <|> slash) <* char '>')
 
 
 -- ** Operators
@@ -662,7 +659,7 @@ argExpr =
   -- there's a valid URI parse here.
   onlyname =
     msum
-      [ nixUri *> unexpected (Label $ 'v' :| "alid uri")
+      [ nixUri *> unexpected (Label $ fromList "valid uri" )
       , Param <$> identifier
       ]
 
