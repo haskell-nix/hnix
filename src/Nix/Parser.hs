@@ -187,9 +187,6 @@ brackets = on between symbol "[" "]"
 -- colon     = symbol ":"
 -- dot       = symbol "."
 
-equals :: Parser Text
-equals   = symbol "="
-
 question :: Parser Text
 question = symbol "?"
 
@@ -382,7 +379,7 @@ nixBinders = (inherit <|> namedVar) `endBy` symbol ";" where
       label "variable binding" $
         liftA3 NamedVar
           (annotated <$> nixSelector)
-          (equals *> nixToplevelForm)
+          (symbol "=" *> nixToplevelForm)
           (pure p)
   scope = label "inherit scope" nixParens
 
