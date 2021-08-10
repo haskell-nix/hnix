@@ -184,9 +184,6 @@ braces   = on between symbol "{" "}"
 brackets :: Parser (NExprF f) -> Parser (NExprF f)
 brackets = on between symbol "[" "]"
 
-comma :: Parser Text
-comma    = symbol ","
-
 -- colon     = symbol ":"
 -- dot       = symbol "."
 
@@ -697,7 +694,7 @@ argExpr =
             let args = acc <> [pair]
 
             -- Either return this, or attempt to get a comma and restart.
-            option (args, mempty) $ comma *> go args
+            option (args, mempty) $ symbol "," *> go args
 
 nixLambda :: Parser NExprLoc
 nixLambda =
