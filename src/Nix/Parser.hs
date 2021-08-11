@@ -63,7 +63,7 @@ import           Data.Data                      ( Data(..) )
 import           Data.Fix                       ( Fix(..) )
 import qualified Data.HashSet                  as HashSet
 import qualified Data.Map                      as Map
-import           Data.Text                      ( cons )
+import qualified Data.Text                     as Text
 import           Nix.Utils
 import           Nix.Expr.Types
 import           Nix.Expr.Shorthands     hiding ( ($>) )
@@ -251,19 +251,17 @@ nixUri =
         do
           start    <- letterChar
           protocol <-
-            many $
-              satisfy $
-                \ x ->
-                  isAlphanumeric x
-                  || (`elem` ("+-." :: String)) x
-          _       <- chunk ":"
+            takeWhileP Nothing $
+              \ x ->
+                isAlphanumeric x
+                || (`elem` ("+-." :: String)) x
+          _       <- single ':'
           address <-
-            some $
-              satisfy $
+            takeWhile1P Nothing $
                 \ x ->
                   isAlphanumeric x
                   || (`elem` ("%/?:@&=+$,-_.!~*'" :: String)) x
-          pure $ NStr $ DoubleQuoted $ one $ Plain $ toText $ one start <> protocol <> ":" <> address
+          pure $ NStr $ DoubleQuoted $ one $ Plain $ start `Text.cons` protocol <> ":" <> address
 
 
 -- ** Strings
@@ -343,7 +341,7 @@ identifier =
     try $
       do
         (coerce -> iD) <-
-          liftA2 cons
+          liftA2 Text.cons
             (satisfy (\x -> isAlpha x || x == '_'))
             (takeWhileP mempty identLetter)
         guard $ not $ iD `HashSet.member` reservedNames
@@ -422,14 +420,14 @@ slash =
 
 pathStr :: Parser Path
 pathStr =
-  lexeme . coerce $
+  lexeme $ coerce . toString <$>
     liftA2 (<>)
-      (many $ satisfy pathChar)
-      (concat <$>
+      (takeWhileP Nothing pathChar)
+      (Text.concat <$>
         some
-          (liftA2 (:)
+          (liftA2 Text.cons
             slash
-            (some $ satisfy pathChar)
+            (takeWhile1P Nothing pathChar)
           )
       )
 
