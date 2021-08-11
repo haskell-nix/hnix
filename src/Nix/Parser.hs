@@ -150,7 +150,7 @@ exprAfterReservedWord word = exprAfterP $ reserved word
 -- Overall, parser should simply @\r\n -> \n@.
 skipLineComment' :: Tokens Text -> Parser ()
 skipLineComment' prefix =
-  chunk prefix *> void (takeWhileP (pure "character") (\x -> x /= '\n' && x /= '\r'))
+  chunk prefix *> void (takeWhileP (pure "character") $ \x -> x /= '\n' && x /= '\r')
 
 whiteSpace :: Parser ()
 whiteSpace =
@@ -273,57 +273,68 @@ nixAntiquoted p =
     <|> Plain <$> p
 
 nixString' :: Parser (NString NExprLoc)
-nixString' = lexeme $ label "string" $ doubleQuoted <|> indented
+nixString' = label "string" $ lexeme $ doubleQuoted <|> indented
  where
   doubleQuoted :: Parser (NString NExprLoc)
   doubleQuoted =
     label "double quoted string" $
       DoubleQuoted . removeEmptyPlains . mergePlain <$>
-        ( doubleQ *>
-            many (stringChar doubleQ (void $ char '\\') doubleEscape)
-          <* doubleQ
-        )
+        inQuotationMarks (many $ stringChar quotationMark (void $ char '\\') doubleEscape)
+   where
+    inQuotationMarks :: Parser a -> Parser a
+    inQuotationMarks expr = quotationMark *> expr <* quotationMark
 
-  doubleQ      = void $ char '"'
-  doubleEscape = Plain . one <$> (char '\\' *> escapeCode)
+    quotationMark :: Parser ()
+    quotationMark = void $ char '"'
+
+    doubleEscape :: Parser (Antiquoted Text r)
+    doubleEscape = Plain . one <$> (char '\\' *> escapeCode)
 
   indented :: Parser (NString NExprLoc)
   indented =
     label "indented string" $
       stripIndent <$>
-        ( indentedQ *>
-            many (stringChar indentedQ indentedQ indentedEscape)
-          <* indentedQ
-        )
+        inIndentedQuotation (many $ stringChar indentedQuotationMark indentedQuotationMark indentedEscape)
+   where
+    indentedEscape :: Parser (Antiquoted Text r)
+    indentedEscape =
+      try $
+        do
+          indentedQuotationMark
+          (Plain <$> ("''" <$ char '\'' <|> "$" <$ char '$'))
+            <|>
+              do
+                _ <- char '\\'
+                c <- escapeCode
 
-  indentedQ :: Parser ()
-  indentedQ = void . label "\"''\"" $ chunk "''"
+                pure $
+                  bool
+                    EscapedNewline
+                    (Plain $ one c)
+                    (c /= '\n')
 
-  indentedEscape =
-    try $
-      do
-        indentedQ
-        (Plain <$> ("''" <$ char '\'' <|> "$" <$ char '$'))
-          <|>
-            do
-              _ <- char '\\'
-              c <- escapeCode
+    inIndentedQuotation :: Parser a -> Parser a
+    inIndentedQuotation expr = indentedQuotationMark *> expr <* indentedQuotationMark
 
-              pure $
-                bool
-                  EscapedNewline
-                  (Plain $ one c)
-                  (c /= '\n')
+    indentedQuotationMark :: Parser ()
+    indentedQuotationMark = label "\"''\"" . void $ chunk "''"
 
+  stringChar
+    :: Parser ()
+    -> Parser ()
+    -> Parser (Antiquoted Text NExprLoc)
+    -> Parser (Antiquoted Text NExprLoc)
   stringChar end escStart esc =
     antiquoted
     <|> Plain . one <$> char '$'
     <|> esc
     <|> Plain . toText <$> some plainChar
    where
+    plainChar :: Parser Char
     plainChar =
       notFollowedBy (end <|> void (char '$') <|> escStart) *> anySingle
 
+  escapeCode :: Parser Char
   escapeCode =
     msum
       [ c <$ char e | (c, e) <- escapeCodes ]
@@ -737,8 +748,8 @@ nixIf =
   annotateNamedLocation "if" $
     liftA3 NIf
       (reserved "if"   *> nixExprAlgebra)
-      (exprAfterReservedWord "then"  )
-      (exprAfterReservedWord "else"  )
+      (exprAfterReservedWord "then")
+      (exprAfterReservedWord "else")
 
 -- ** with
 
