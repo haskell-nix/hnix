@@ -5,7 +5,7 @@
 
 module Nix.TH where
 
-import           Data.Fix                       ( Fix(..) )
+import           Data.Fix                       ( Fix(unFix) )
 import           Data.Generics.Aliases          ( extQ )
 import qualified Data.Set                      as Set
 import           Language.Haskell.TH
@@ -130,24 +130,24 @@ instance ToExpr NExprLoc where
   toExpr = id
 
 instance ToExpr VarName where
-  toExpr = Fix . NSymAnnF nullSpan
+  toExpr = NSymAnn nullSpan
 
 instance ToExpr Int where
-  toExpr = Fix . NConstantAnnF nullSpan . NInt . fromIntegral
+  toExpr = NConstantAnn nullSpan . NInt . fromIntegral
 
 instance ToExpr Integer where
-  toExpr = Fix . NConstantAnnF nullSpan . NInt
+  toExpr = NConstantAnn nullSpan . NInt
 
 instance ToExpr Float where
-  toExpr = Fix . NConstantAnnF nullSpan . NFloat
+  toExpr = NConstantAnn nullSpan . NFloat
 
 metaExp :: Set VarName -> NExprLoc -> Maybe ExpQ
-metaExp fvs (Fix (NSymAnnF _ x)) | x `Set.member` fvs =
+metaExp fvs (NSymAnn _ x) | x `Set.member` fvs =
   pure [| toExpr $(varE (mkName $ toString x)) |]
 metaExp _ _ = Nothing
 
 metaPat :: Set VarName -> NExprLoc -> Maybe PatQ
-metaPat fvs (Fix (NSymAnnF _ x)) | x `Set.member` fvs =
+metaPat fvs (NSymAnn _ x) | x `Set.member` fvs =
   pure $ varP $ mkName $ toString x
 metaPat _ _ = Nothing
 

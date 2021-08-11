@@ -141,7 +141,7 @@ currentPos :: forall e m . (MonadReader e m, Has e SrcSpan) => m SrcSpan
 currentPos = asks $ view hasLens
 
 wrapExprLoc :: SrcSpan -> NExprLocF r -> NExprLoc
-wrapExprLoc span x = Fix $ Fix (NSymAnnF span "<?>") <$ x
+wrapExprLoc span x = Fix $ NSymAnn span "<?>" <$ x
 {-# inline wrapExprLoc #-}
 
 --  2021-01-07: NOTE: This instance belongs to be beside MonadEval type class.
@@ -155,7 +155,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     scope <- currentScopes
     evalError @(NValue t f m) $ SynHole $
       SynHoleInfo
-        { _synHoleInfo_expr  = Fix $ NSynHoleAnnF span name
+        { _synHoleInfo_expr  = NSynHoleAnn span name
         , _synHoleInfo_scope = scope
         }
 
