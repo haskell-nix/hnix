@@ -93,7 +93,7 @@
 #   , nixos-20.03  # Last stable release, gets almost no updates to recipes, gets only required backports
 #   ...
 #   }
-, rev ? "20887e4bbfdae3aed6bfa1f53ddf138ee325515e"
+, rev ? "9df2cb074d72ea80ac9fd225b29060c8cf13dd39"
 
 , pkgs ?
     if builtins.compareVersions builtins.nixVersion "2.0" > 0
@@ -192,8 +192,6 @@ let
 
       semialign = super.semialign_1_2;
       relude = super.relude_1_0_0_1;
-      hnix-store-core = super.hnix-store-core_0_5_0_0;
-      hnix-store-remote = super.hnix-store-remote_0_5_0_0;
 
     };
 
