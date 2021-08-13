@@ -13,30 +13,30 @@ data Options = Options
     , thunks       :: Bool
     , values       :: Bool
     , showScopes   :: Bool
-    , reduce       :: Maybe FilePath
+    , reduce       :: Maybe Path
     , reduceSets   :: Bool
     , reduceLists  :: Bool
     , parse        :: Bool
     , parseOnly    :: Bool
     , finder       :: Bool
-    , findFile     :: Maybe FilePath
+    , findFile     :: Maybe Path
     , strict       :: Bool
     , evaluate     :: Bool
     , json         :: Bool
     , xml          :: Bool
     , attr         :: Maybe Text
-    , include      :: [FilePath]
+    , include      :: [Path]
     , check        :: Bool
-    , readFrom     :: Maybe FilePath
+    , readFrom     :: Maybe Path
     , cache        :: Bool
     , repl         :: Bool
     , ignoreErrors :: Bool
     , expression   :: Maybe Text
     , arg          :: [(Text, Text)]
     , argstr       :: [(Text, Text)]
-    , fromFile     :: Maybe FilePath
+    , fromFile     :: Maybe Path
     , currentTime  :: UTCTime
-    , filePaths    :: [FilePath]
+    , filePaths    :: [Path]
     }
     deriving Show
 
