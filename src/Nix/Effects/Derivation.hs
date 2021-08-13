@@ -1,7 +1,6 @@
 {-# language DataKinds #-}
 {-# language NamedFieldPuns #-}
 {-# language RecordWildCards #-}
-{-# language ScopedTypeVariables #-}
 {-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 
 module Nix.Effects.Derivation ( defaultDerivationStrict ) where

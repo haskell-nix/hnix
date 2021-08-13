@@ -1,6 +1,5 @@
 {-# language TypeFamilies #-}
 {-# language CPP #-}
-{-# language ScopedTypeVariables #-}
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language UndecidableInstances #-}
 

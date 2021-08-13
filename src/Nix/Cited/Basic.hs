@@ -1,5 +1,4 @@
 {-# language GeneralizedNewtypeDeriving #-}
-{-# language ScopedTypeVariables #-}
 {-# language UndecidableInstances #-}
 {-# language PatternSynonyms    #-}
 

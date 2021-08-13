@@ -477,6 +477,7 @@ library
     , DeriveLift
     , FlexibleContexts
     , FlexibleInstances
+    , ScopedTypeVariables
     , StandaloneDeriving
     , TypeApplications
     , TypeSynonymInstances
@@ -544,6 +545,7 @@ executable hnix
     , DeriveLift
     , FlexibleContexts
     , FlexibleInstances
+    , ScopedTypeVariables
     , StandaloneDeriving
     , TypeApplications
     , TypeSynonymInstances
@@ -623,6 +625,7 @@ test-suite hnix-tests
     , DeriveLift
     , FlexibleContexts
     , FlexibleInstances
+    , ScopedTypeVariables
     , StandaloneDeriving
     , TypeApplications
     , TypeSynonymInstances
@@ -676,6 +679,7 @@ benchmark hnix-benchmarks
     , DeriveLift
     , FlexibleContexts
     , FlexibleInstances
+    , ScopedTypeVariables
     , StandaloneDeriving
     , TypeApplications
     , TypeSynonymInstances

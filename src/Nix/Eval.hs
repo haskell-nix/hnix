@@ -1,7 +1,6 @@
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
 {-# language RankNTypes #-}
-{-# language ScopedTypeVariables #-}
 
 
 

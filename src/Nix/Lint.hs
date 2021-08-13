@@ -3,7 +3,6 @@
 {-# language DataKinds #-}
 {-# language GADTs #-}
 {-# language GeneralizedNewtypeDeriving #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 {-# language UndecidableInstances #-}
 

@@ -4,7 +4,6 @@
 {-# language ConstraintKinds #-}
 {-# language PatternSynonyms #-}
 {-# language RankNTypes #-}
-{-# language ScopedTypeVariables #-}
 {-# language TemplateHaskell #-}
 
 {-# options_ghc -Wno-missing-signatures #-}

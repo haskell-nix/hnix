@@ -1,7 +1,6 @@
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
 {-# language IncoherentInstances #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 {-# language UndecidableInstances #-}
 

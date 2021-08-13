@@ -1,5 +1,4 @@
 {-# language CPP #-}
-{-# language ScopedTypeVariables #-}
 
 {-# options_ghc -fno-warn-name-shadowing #-}
 

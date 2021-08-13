@@ -1,6 +1,5 @@
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 
 {-# options_ghc -Wno-missing-pattern-synonym-signatures #-}

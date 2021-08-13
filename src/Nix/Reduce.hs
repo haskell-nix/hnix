@@ -3,7 +3,6 @@
 {-# language ConstraintKinds #-}
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language PartialTypeSignatures #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 
 {-# options_ghc -fno-warn-name-shadowing #-}

@@ -3,7 +3,6 @@
 {-# language ConstraintKinds #-}
 {-# language DefaultSignatures #-}
 {-# language GADTs #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 {-# language TypeOperators #-}
 {-# language MultiWayIf #-}

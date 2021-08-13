@@ -1,5 +1,4 @@
 {-# language MultiWayIf #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 {-# language RecordWildCards #-}
 

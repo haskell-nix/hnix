@@ -2,7 +2,6 @@
 {-# language ConstraintKinds #-}
 {-# language DataKinds #-}
 {-# language GADTs #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 {-# language RankNTypes #-}
 

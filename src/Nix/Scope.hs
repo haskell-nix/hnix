@@ -2,7 +2,6 @@
 {-# language ConstraintKinds #-}
 {-# language FunctionalDependencies #-}
 {-# language GeneralizedNewtypeDeriving #-}
-{-# language ScopedTypeVariables #-}
 
 module Nix.Scope where
 

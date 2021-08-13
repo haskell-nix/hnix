@@ -1,5 +1,4 @@
 {-# language ConstraintKinds #-}
-{-# language ScopedTypeVariables #-}
 {-# language UndecidableInstances #-}
 {-# options_ghc -Wno-unused-do-bind #-}
 

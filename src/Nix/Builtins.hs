@@ -7,7 +7,6 @@
 {-# language MultiWayIf #-}
 {-# language PartialTypeSignatures #-}
 {-# language QuasiQuotes #-}
-{-# language ScopedTypeVariables #-}
 {-# language TemplateHaskell #-}
 {-# language UndecidableInstances #-}
 {-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@

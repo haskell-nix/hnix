@@ -8,7 +8,6 @@
 -}
 
 {-# language MultiWayIf #-}
-{-# language ScopedTypeVariables #-}
 
 module Repl
   ( main

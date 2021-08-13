@@ -1,4 +1,3 @@
-{-# language ScopedTypeVariables #-}
 
 module NixLanguageTests (genTests) where
 

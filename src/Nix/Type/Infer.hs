@@ -5,7 +5,6 @@
 {-# language ExistentialQuantification #-}
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language RankNTypes #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 
 {-# options_ghc -Wno-name-shadowing #-}

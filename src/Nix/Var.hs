@@ -1,6 +1,5 @@
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
-{-# language ScopedTypeVariables #-}
 
 {-# options_ghc -Wno-orphans #-}
 {-# options_ghc -Wno-unused-top-binds #-}

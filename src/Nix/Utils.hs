@@ -1,6 +1,5 @@
 {-# language CPP #-}
 {-# language FunctionalDependencies #-}
-{-# language ScopedTypeVariables #-}
 {-# language TemplateHaskell #-}
 {-# language GeneralizedNewtypeDeriving #-}
 

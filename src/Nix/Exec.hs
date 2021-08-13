@@ -3,7 +3,6 @@
 {-# language ConstraintKinds #-}
 {-# language PartialTypeSignatures #-}
 {-# language RankNTypes #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 {-# language UndecidableInstances #-}
 
