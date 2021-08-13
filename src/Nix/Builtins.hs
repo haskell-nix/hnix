@@ -798,7 +798,7 @@ baseNameOfNix x =
     pure $
       nvStr $
         modifyNixContents
-          (toText . takeFileName . toString)
+          (fromString . takeFileName . toString)
           ns
 
 bitAndNix
@@ -852,7 +852,7 @@ dirOfNix nvdir =
     dir <- demand nvdir
 
     case dir of
-      NVStr ns -> pure $ nvStr $ modifyNixContents (toText . takeDirectory . toString) ns
+      NVStr ns -> pure $ nvStr $ modifyNixContents (fromString . takeDirectory . toString) ns
       NVPath path -> pure $ nvPath $ coerce $ takeDirectory $ coerce path
       v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " <> show v
 
@@ -1112,7 +1112,7 @@ toFileNix name s =
     mres  <-
       toFile_
         (coerce $ toString name')
-        (toString $ stringIgnoreContext s')
+        (stringIgnoreContext s')
 
     let
       t  = coerce $ toText @FilePath $ coerce mres

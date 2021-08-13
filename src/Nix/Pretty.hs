@@ -383,7 +383,7 @@ printNix = iterNValueByDiscardWith thk phi
   phi :: NValue' t f m String -> String
   phi (NVConstant' a ) = toString $ atomText a
   phi (NVStr'      ns) = show $ stringIgnoreContext ns
-  phi (NVList'     l ) = toString $ "[ " <> unwords (fmap toText l) <> " ]"
+  phi (NVList'     l ) = toString $ "[ " <> unwords (fmap fromString l) <> " ]"
   phi (NVSet' _ s) =
     "{ " <>
       concat

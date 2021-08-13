@@ -121,7 +121,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
               either
                 (\ err -> errorWithoutStackTrace $ "Type error: " <> ppShow err)
                 (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <>
-                  ppShow (fromMaybe mempty $ Map.lookup @VarName @[Scheme] "it" $ coerce ty)
+                  ppShow (maybeToMonoid $ Map.lookup @VarName @[Scheme] "it" $ coerce ty)
                 )
                 (HM.inferTop mempty [("it", stripAnnotation expr')])
 

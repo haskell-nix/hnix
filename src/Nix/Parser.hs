@@ -326,7 +326,7 @@ nixString' = label "string" $ lexeme $ doubleQuoted <|> indented
     antiquoted
     <|> Plain . one <$> char '$'
     <|> esc
-    <|> Plain . toText <$> some plainChar
+    <|> Plain . fromString <$> some plainChar
    where
     plainChar :: Parser Char
     plainChar =

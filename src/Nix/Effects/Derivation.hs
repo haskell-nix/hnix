@@ -76,7 +76,7 @@ writeDerivation drv@Derivation{inputs, name} = do
   let (inputSrcs, inputDrvs) = inputs
   references <- Set.fromList <$> traverse parsePath (Set.toList $ inputSrcs <> Set.fromList (Map.keys inputDrvs))
   path <- addTextToStore (Text.append name ".drv") (unparseDrv drv) (S.fromList $ Set.toList references) False
-  parsePath $ toText @Path $ coerce path
+  parsePath $ fromString $ coerce path
 
 -- | Traverse the graph of inputDrvs to replace fixed output derivations with their fixed output hash.
 -- this avoids propagating changes to their .drv when the output hash stays the same.
@@ -206,7 +206,7 @@ derivationParser = do
   pure $ Derivation {inputs = (inputSrcs, inputDrvs), ..}
  where
   s :: Parsec () Text Text
-  s = fmap toText $ string "\"" *> manyTill (escaped <|> regular) (string "\"")
+  s = fmap fromString $ string "\"" *> manyTill (escaped <|> regular) (string "\"")
   escaped = char '\\' *>
     (   '\n' <$ string "n"
     <|> '\r' <$ string "r"

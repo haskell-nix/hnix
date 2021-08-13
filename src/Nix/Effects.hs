@@ -137,7 +137,7 @@ instance MonadExec IO where
     (prog : args) -> do
       (exitCode, out, _) <- liftIO $ readProcessWithExitCode (toString prog) (toString <$> args) ""
       let
-        t    = Text.strip $ toText out
+        t    = Text.strip $ fromString out
         emsg = "program[" <> prog <> "] args=" <> show args
       case exitCode of
         ExitSuccess ->
@@ -194,7 +194,7 @@ instance MonadInstantiate IO where
             either
               (\ e -> Left $ ErrorCall $ "Error parsing output of nix-instantiate: " <> show e)
               pure
-              (parseNixTextLoc $ toText out)
+              (parseNixTextLoc $ fromString out)
           status -> Left $ ErrorCall $ "nix-instantiate failed: " <> show status <> ": " <> err
 
 deriving
@@ -230,12 +230,12 @@ class
 -- ** Instances
 
 instance MonadEnv IO where
-  getEnvVar            = (<<$>>) toText . lookupEnv . toString
+  getEnvVar            = (<<$>>) fromString . lookupEnv . toString
 
-  getCurrentSystemOS   = pure $ toText System.Info.os
+  getCurrentSystemOS   = pure $ fromString System.Info.os
 
   -- Invert the conversion done by GHC_CONVERT_CPU in GHC's aclocal.m4
-  getCurrentSystemArch = pure $ toText $ case System.Info.arch of
+  getCurrentSystemArch = pure $ fromString $ case System.Info.arch of
     "i386" -> "i686"
     arch   -> arch
 
@@ -438,7 +438,7 @@ addPath p =
   either
     throwError
     pure
-    =<< addToStore (toText $ takeFileName (coerce p)) p True False
+    =<< addToStore (fromString $ takeFileName (coerce p)) p True False
 
-toFile_ :: (Framed e m, MonadStore m) => Path -> String -> m StorePath
-toFile_ p contents = addTextToStore (toText p) (toText contents) mempty False
+toFile_ :: (Framed e m, MonadStore m) => Path -> Text -> m StorePath
+toFile_ p contents = addTextToStore (toText p) contents mempty False

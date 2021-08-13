@@ -68,7 +68,7 @@ main' iniVal =
     evalStateT
       (evalRepl
         banner
-        (cmd . toText)
+        (cmd . fromString)
         options
         (pure commandPrefix)
         (pure "paste")
@@ -125,7 +125,7 @@ main' iniVal =
              -> m ()
   optMatcher s [] _ = liftIO $ Text.putStrLn $ "No such command :" <> s
   optMatcher s ((x, m) : xs) args
-    | s `Text.isPrefixOf` toText x = m $ toString args
+    | s `Text.isPrefixOf` fromString x = m $ toString args
     | otherwise = optMatcher s xs args
 
 
@@ -392,7 +392,7 @@ completeFunc reversedPrev word
     listFiles word
 
   -- Attributes of sets in REPL context
-  | var : subFields <- Text.split (== '.') (toText word) , not $ null subFields =
+  | var : subFields <- Text.split (== '.') (fromString word) , not $ null subFields =
     do
       state <- get
       maybe

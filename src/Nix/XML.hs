@@ -22,7 +22,7 @@ toXML = runWithStringContext . fmap pp . iterNValueByDiscardWith cyc phi
 
   pp e =
     heading
-    <> toText
+    <> fromString
         (ppElement $
           mkE
             "expr"

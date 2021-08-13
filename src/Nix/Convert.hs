@@ -399,7 +399,7 @@ instance ( Convertible e t f m
          )
   => ToValue SourcePos m (NValue' t f m (NValue t f m)) where
   toValue (SourcePos f l c) = do
-    f' <- toValue $ mkNixStringWithoutContext $ toText f
+    f' <- toValue $ mkNixStringWithoutContext $ fromString f
     l' <- toValue $ unPos l
     c' <- toValue $ unPos c
     let pos = M.fromList [("file" :: VarName, f'), ("line", l'), ("column", c')]
