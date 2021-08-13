@@ -15,7 +15,6 @@
 
 module Nix.Convert where
 
-import           Prelude                 hiding ( force )
 import           Control.Monad.Free
 import qualified Data.HashMap.Lazy             as M
 import           Nix.Atoms
@@ -27,7 +26,6 @@ import           Nix.String
 import           Nix.Value
 import           Nix.Value.Monad
 import           Nix.Thunk                      ( MonadThunk(force) )
-import           Nix.Utils
 
 newtype Deeper a = Deeper a
   deriving (Typeable, Functor, Foldable, Traversable)
@@ -233,6 +231,17 @@ instance Convertible e t f m
 
   fromValue = fromMayToValue $ TString mempty
 
+instance Convertible e t f m
+  => FromValue Text m (NValue' t f m (NValue t f m)) where
+
+  fromValueMay =
+    pure .
+      \case
+        NVStr' ns -> getStringNoContext ns
+        _         -> mempty
+
+  fromValue = fromMayToValue $ TString mempty
+
 instance ( Convertible e t f m
          , MonadValue (NValue t f m) m
          )
@@ -373,6 +382,10 @@ instance Convertible e t f m
 instance Convertible e t f m
   => ToValue ByteString m (NValue' t f m (NValue t f m)) where
   toValue = pure . nvStr' . mkNixStringWithoutContext . decodeUtf8
+
+instance Convertible e t f m
+  => ToValue Text m (NValue' t f m (NValue t f m)) where
+  toValue = pure . nvStr' . mkNixStringWithoutContext
 
 instance Convertible e t f m
   => ToValue Path m (NValue' t f m (NValue t f m)) where

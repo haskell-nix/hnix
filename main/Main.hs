@@ -4,20 +4,16 @@
 
 module Main ( main ) where
 
-import           Nix.Utils
+import           Relude                        as Prelude ( force )
 import           Control.Comonad                ( extract )
 import qualified Control.Exception             as Exception
 import           GHC.Err                        ( errorWithoutStackTrace )
 import           Control.Monad.Free
 import           Control.Monad.Ref              ( MonadRef(readRef) )
 import           Control.Monad.Catch
-import           System.IO                      ( hPutStrLn
-                                                , getContents
-                                                )
+import           System.IO                      ( hPutStrLn )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Map                      as Map
-import           Data.Maybe                     ( fromJust )
-import qualified Data.String                   as String
 import           Data.Time
 import qualified Data.Text.IO                  as Text
 import           Text.Show.Pretty               ( ppShow )
@@ -55,14 +51,14 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
   execContentsFilesOrRepl :: StandardT (StdIdT IO) ()
   execContentsFilesOrRepl =
     fromMaybe
-      loadFromCLIFilePathList
+      loadFromCliFilePathList
       ( loadBinaryCacheFile <|>
         loadLiteralExpression <|>
         loadExpressionFromFile
       )
    where
     -- | The base case: read expressions from the last CLI directive (@[FILE]@) listed on the command line.
-    loadFromCLIFilePathList =
+    loadFromCliFilePathList =
       case filePaths of
         []     -> runRepl
         ["-"]  -> readExpressionFromStdin
@@ -96,10 +92,10 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       -- We can start use Text as in the base case, requires changing Path -> Text
       -- But that is a gradual process:
       -- https://github.com/haskell-nix/hnix/issues/912
-      (processSeveralFiles . (coerce <$>) . String.lines <=< liftIO) .
+      (processSeveralFiles . (coerce . toString <$>) . lines <=< liftIO) .
         (\case
-          "-" -> getContents
-          _fp -> readFile _fp
+          "-" -> Text.getContents
+          _fp -> Text.readFile _fp
         ) <$> fromFile
 
   processExpr text = handleResult Nothing     $   parseNixTextLoc text
@@ -125,7 +121,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
               either
                 (\ err -> errorWithoutStackTrace $ "Type error: " <> ppShow err)
                 (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <>
-                  ppShow (fromJust $ Map.lookup @VarName @[Scheme] "it" (coerce ty))
+                  ppShow (fromMaybe mempty $ Map.lookup @VarName @[Scheme] "it" $ coerce ty)
                 )
                 (HM.inferTop mempty [("it", stripAnnotation expr')])
 

@@ -15,7 +15,6 @@ import           Nix
 import           Nix.Standard
 import           Nix.TH
 import           Nix.Value.Equal
-import           Nix.Utils
 import qualified System.Directory as D
 import           System.FilePath
 import           Test.Tasty

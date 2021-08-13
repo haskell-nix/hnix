@@ -64,7 +64,6 @@ import           Data.Fix                       ( Fix(..) )
 import qualified Data.HashSet                  as HashSet
 import qualified Data.Map                      as Map
 import qualified Data.Text                     as Text
-import           Nix.Utils
 import           Nix.Expr.Types
 import           Nix.Expr.Shorthands     hiding ( ($>) )
 import           Nix.Expr.Types.Annotated
@@ -877,7 +876,7 @@ type Result a = Either (Doc Void) a
 parseFromFileEx :: MonadFile m => Parser a -> Path -> m (Result a)
 parseFromFileEx parser file =
   do
-    input <- decodeUtf8 <$> readFile file
+    input <- readFile file
 
     pure $
       either

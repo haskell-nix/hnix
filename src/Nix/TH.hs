@@ -2,6 +2,7 @@
 {-# language TemplateHaskell #-}
 
 {-# options_ghc -Wno-missing-fields #-}
+{-# options_ghc -Wno-name-shadowing #-}
 
 module Nix.TH where
 

@@ -11,12 +11,9 @@
 
 module Nix.Lint where
 
-import           Prelude                 hiding ( head
-                                                , force
-                                                )
+import           Relude.Unsafe                 as Unsafe ( head )
 import           Control.Exception              ( throw )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
-import           Nix.Utils
 import           Control.Monad                  ( foldM )
 import           Control.Monad.Catch
 import           Control.Monad.Fix
@@ -24,7 +21,7 @@ import           Control.Monad.Ref
 import           Control.Monad.ST
 import qualified Data.HashMap.Lazy             as M
 -- Plese, use NonEmpty
-import           Data.List
+import           Data.List                      ( intersect )
 import qualified Data.List.NonEmpty            as NE
 import qualified Data.Text                     as Text
 import qualified Text.Show
@@ -451,7 +448,7 @@ lintApp context fun arg =
         _x            -> throwError $ ErrorCall "Attempt to call non-function"
 
       y <- everyPossible
-      (head args, ) <$> foldM (unify context) y ys
+      (Unsafe.head args, ) <$> foldM (unify context) y ys
   ) =<< unpackSymbolic fun
 
 newtype Lint s a = Lint

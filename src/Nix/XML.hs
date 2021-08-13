@@ -4,7 +4,6 @@ module Nix.XML
 where
 
 import qualified Data.HashMap.Lazy             as M
-import           Nix.Utils
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.String

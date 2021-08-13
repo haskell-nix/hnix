@@ -13,7 +13,6 @@ module ParserTests (tests) where
 import Prelude hiding (($<))
 import Data.Fix
 import NeatInterpolation (text)
-import Nix.Utils
 import Nix.Atoms
 import Nix.Expr
 import Nix.Parser

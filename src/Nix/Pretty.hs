@@ -6,7 +6,6 @@
 module Nix.Pretty where
 
 import           Prelude                  hiding ( toList, group )
-import           Nix.Utils
 import           Control.Monad.Free             ( Free(Free) )
 import           Data.Fix                       ( Fix(..)
                                                 , foldFix )

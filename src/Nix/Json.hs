@@ -11,7 +11,6 @@ import           Nix.Effects
 import           Nix.Exec
 import           Nix.Frames
 import           Nix.String
-import           Nix.Utils
 import           Nix.Value
 import           Nix.Value.Monad
 import           Nix.Expr.Types

@@ -5,7 +5,20 @@
 
 {-# options_ghc -Wno-missing-signatures #-}
 
-module Nix.Utils (module Nix.Utils, module X) where
+module Prelude
+    ( module Prelude
+    , module Relude
+    , Text.readFile
+    , module X
+    ) where
+
+import           Relude                  hiding ( force
+                                                , readFile
+                                                , whenJust
+                                                , whenNothing
+                                                , trace
+                                                , traceM
+                                                )
 
 import           Data.Binary                    ( Binary )
 import           Data.Data                      ( Data )
@@ -18,15 +31,21 @@ import qualified Data.Aeson.Encoding           as A
 import           Data.Fix                       ( Fix(..) )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Text                     as Text
+import qualified Data.Text.IO                 as Text
 import qualified Data.Vector                   as V
-import           Lens.Family2                  as X hiding ((&))
+import           Lens.Family2                  as X
+                                                ( view
+                                                , over
+                                                , LensLike'
+                                                , Lens'
+                                                )
 import           Lens.Family2.Stock             ( _1
                                                 , _2
                                                 )
 import           Lens.Family2.TH                ( makeLensesBy )
 
 #if ENABLE_TRACING
-import           Debug.Trace as X
+import qualified Relude.Debug                 as X
 #else
 -- Well, since it is currently CPP intermingled with Debug.Trace, required to use String here.
 trace :: String -> a -> a

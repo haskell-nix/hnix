@@ -2,6 +2,7 @@
 
 module Main where
 
+import           Relude (force)
 import           Relude.Unsafe (read)
 import qualified Control.Exception as Exc
 import           GHC.Err (errorWithoutStackTrace)
@@ -11,7 +12,6 @@ import qualified Data.String as String
 import           Data.Time
 import qualified EvalTests
 import           NeatInterpolation (text)
-import           Nix.Utils
 import qualified Nix
 import           Nix.Expr.Types
 import           Nix.String

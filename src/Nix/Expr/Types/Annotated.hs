@@ -32,7 +32,6 @@ import           Data.Functor.Compose
 import           Data.Hashable.Lifted
 import           Data.Ord.Deriving
 import           GHC.Generics
-import           Nix.Utils
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Text.Megaparsec                ( unPos

@@ -12,14 +12,10 @@
 
 module Nix.Effects where
 
-import           Prelude                 hiding ( traceM
-                                                , putStr
-                                                , putStrLn
+import           Prelude                 hiding ( putStrLn
                                                 , print
                                                 )
-import qualified Prelude
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
-import           Nix.Utils
 import qualified Data.HashSet                  as HS
 import qualified Data.Text                     as Text
 import           Network.HTTP.Client     hiding ( path, Proxy )
@@ -327,7 +323,7 @@ deriving
 -- * @class MonadPutStr m@
 
 class
-  Monad m
+  (Monad m, MonadIO m)
   => MonadPutStr m where
 
   --TODO: Should this be used *only* when the Nix to be evaluated invokes a
@@ -335,7 +331,7 @@ class
   --  2021-04-01: Due to trace operation here, leaving it as String.
   putStr :: String -> m ()
   default putStr :: (MonadTrans t, MonadPutStr m', m ~ t m') => String -> m ()
-  putStr = lift . putStr
+  putStr = lift . Prelude.putStr
 
 
 -- ** Instances
@@ -357,7 +353,7 @@ deriving
 -- ** Functions
 
 putStrLn :: MonadPutStr m => String -> m ()
-putStrLn = putStr . (<> "\n")
+putStrLn = Nix.Effects.putStr . (<> "\n")
 
 print :: (MonadPutStr m, Show a) => a -> m ()
 print = putStrLn . show

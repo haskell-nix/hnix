@@ -384,7 +384,6 @@ library
     Nix.Type.Env
     Nix.Type.Infer
     Nix.Type.Type
-    Nix.Utils
     Nix.Utils.Fix1
     Nix.Value
     Nix.Value.Equal
@@ -399,7 +398,6 @@ library
     src
   mixins:
       base hiding (Prelude)
-    , relude (Relude as Prelude)
     , relude
   ghc-options:
     -Wall
@@ -534,7 +532,6 @@ executable hnix
     , time
   mixins:
       base hiding (Prelude)
-    , relude (Relude as Prelude)
     , relude
   default-extensions:
       OverloadedStrings
@@ -582,7 +579,6 @@ test-suite hnix-tests
     TestCommon
   mixins:
       base hiding (Prelude)
-    , relude (Relude as Prelude)
     , relude
   hs-source-dirs:
     tests
@@ -654,7 +650,6 @@ benchmark hnix-benchmarks
     benchmarks
   mixins:
       base hiding (Prelude)
-    , relude (Relude as Prelude)
     , relude
   ghc-options:
     -Wall

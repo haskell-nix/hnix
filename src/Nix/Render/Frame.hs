@@ -11,7 +11,6 @@ module Nix.Render.Frame where
 
 import           Prelude             hiding ( Comparison )
 import           GHC.Exception              ( ErrorCall )
-import           Nix.Utils
 import           Data.Fix                   ( Fix(..) )
 import           Nix.Eval
 import           Nix.Exec
@@ -41,7 +40,7 @@ renderFrames
   -> m (Doc ann)
 renderFrames []       = stub
 renderFrames (x : xs) = do
-  opts :: Options <- asks (view hasLens)
+  opts :: Options <- asks $ view hasLens
   frames          <- if
     | verbose opts <= ErrorsOnly -> renderFrame @v @t @f x
     | verbose opts <= Informational -> do

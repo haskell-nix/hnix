@@ -21,9 +21,7 @@ module Nix.Builtins
 where
 
 
-import           Prelude                 hiding ( traceM )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
-import           Nix.Utils
 import           Control.Comonad                ( Comonad )
 import           Control.Monad                  ( foldM )
 import           Control.Monad.Catch            ( MonadCatch(catch) )

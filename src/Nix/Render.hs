@@ -9,11 +9,7 @@
 
 module Nix.Render where
 
-import           Prelude                 hiding ( readFile )
-
-import qualified Data.ByteString               as BS
 import qualified Data.Set                      as Set
-import           Nix.Utils
 import           Nix.Utils.Fix1                 ( Fix1T
                                                 , MonadFix1T )
 import           Nix.Expr.Types.Annotated
@@ -24,10 +20,10 @@ import           Text.Megaparsec.Error
 import           Text.Megaparsec.Pos
 import qualified Data.Text                     as Text
 
-class MonadFail m => MonadFile m where
-    readFile :: Path -> m ByteString
-    default readFile :: (MonadTrans t, MonadFile m', m ~ t m') => Path -> m ByteString
-    readFile = lift . readFile
+class (MonadFail m, MonadIO m) => MonadFile m where
+    readFile :: Path -> m Text
+    default readFile :: (MonadTrans t, MonadIO m', MonadFile m', m ~ t m') => Path -> m Text
+    readFile = liftIO . Prelude.readFile . coerce
     listDirectory :: Path -> m [Path]
     default listDirectory :: (MonadTrans t, MonadFile m', m ~ t m') => Path -> m [Path]
     listDirectory = lift . listDirectory
@@ -54,7 +50,7 @@ class MonadFail m => MonadFile m where
     getSymbolicLinkStatus = lift . getSymbolicLinkStatus
 
 instance MonadFile IO where
-  readFile              = BS.readFile . coerce
+  readFile              = liftIO . Prelude.readFile . coerce
   listDirectory         = coerce <$> (S.listDirectory . coerce)
   getCurrentDirectory   = coerce <$> S.getCurrentDirectory
   canonicalizePath      = coerce <$> (S.canonicalizePath . coerce)
@@ -65,7 +61,7 @@ instance MonadFile IO where
   getSymbolicLinkStatus = S.getSymbolicLinkStatus . coerce
 
 
-instance (MonadFix1T t m, MonadFail (Fix1T t m), MonadFile m) => MonadFile (Fix1T t m)
+instance (MonadFix1T t m, MonadIO (Fix1T t m), MonadFail (Fix1T t m), MonadFile m) => MonadFile (Fix1T t m)
 
 posAndMsg :: SourcePos -> Doc a -> ParseError s Void
 posAndMsg (SourcePos _ lineNo _) msg =
@@ -107,8 +103,7 @@ sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unP
       .   take (end' - beg')
       .   drop (pred beg')
       .   lines
-      .   decodeUtf8
-      <$> readFile path
+      <$> Nix.Render.readFile path
     let
       longest = Text.length $ show $ beg' + length ls - 1
       pad :: Int -> Text

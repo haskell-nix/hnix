@@ -7,7 +7,6 @@ module Nix.Effects.Derivation ( defaultDerivationStrict ) where
 
 import           Prelude                 hiding ( readFile )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
-import           Nix.Utils
 import           Data.Char                      ( isAscii
                                                 , isAlphaNum
                                                 )
@@ -172,7 +171,7 @@ unparseDrv Derivation{..} =
 
 readDerivation :: (Framed e m, MonadFile m) => Path -> m Derivation
 readDerivation path = do
-  content <- decodeUtf8 <$> readFile path
+  content <- readFile path
   either
     (\ err -> throwError $ ErrorCall $ "Failed to parse " <> show path <> ":\n" <> show err)
     pure

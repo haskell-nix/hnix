@@ -26,7 +26,6 @@ import           Prelude                 hiding ( Type
                                                 , TVar
                                                 , Constraint
                                                 )
-import           Nix.Utils
 import           Control.Monad.Logic     hiding ( fail )
 import           Control.Monad.Reader           ( MonadFix )
 import           Control.Monad.Ref              ( MonadAtomicRef(..)

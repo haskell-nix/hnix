@@ -49,7 +49,6 @@ import           Nix.Options                    ( Options
                                                 )
 import           Nix.Parser
 import           Nix.Scope
-import           Nix.Utils
 import           System.Directory
 import           System.FilePath
 

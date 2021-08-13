@@ -8,7 +8,6 @@ module Nix.Expr.Shorthands where
 import           Data.Fix
 import           Nix.Atoms
 import           Nix.Expr.Types
-import           Nix.Utils
 
 -- * Basic expression builders
 

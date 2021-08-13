@@ -6,6 +6,7 @@
 
 module Nix.Eval where
 
+import           Relude.Extra                   ( set )
 import           Control.Monad                  ( foldM )
 import           Control.Monad.Fix              ( MonadFix )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
@@ -21,7 +22,6 @@ import           Nix.Expr.Strings               ( runAntiquoted )
 import           Nix.Frames
 import           Nix.String
 import           Nix.Scope
-import           Nix.Utils
 import           Nix.Value.Monad
 
 class (Show v, Monad m) => MonadEval v m where

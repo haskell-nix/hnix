@@ -38,7 +38,6 @@ import           Nix.Scope
 import           Nix.String
 import           Nix.String.Coerce
 import           Nix.Thunk
-import           Nix.Utils
 import           Nix.Value
 import           Nix.Value.Equal
 import           Nix.Value.Monad

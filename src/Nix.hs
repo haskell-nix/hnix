@@ -47,7 +47,6 @@ import           Nix.Pretty
 import           Nix.Reduce
 import           Nix.Render.Frame
 import           Nix.Thunk
-import           Nix.Utils
 import           Nix.Value
 import           Nix.Value.Monad
 import           Nix.XML

@@ -2,12 +2,10 @@
 
 module Nix.Effects.Basic where
 
-import           Prelude                 hiding ( traceM
-                                                , head
+import           Prelude                 hiding ( head
                                                 )
 import           Relude.Unsafe                  ( head )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
-import           Nix.Utils
 import           Control.Monad                  ( foldM )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List.Split                ( splitOn )

@@ -14,15 +14,9 @@ module Nix.Frames
   )
 where
 
-import           Prelude                 hiding ( traceM )
 import           Data.Typeable           hiding ( typeOf )
 import           Control.Monad.Catch            ( MonadThrow(..) )
 import qualified Text.Show
-import           Nix.Utils                      ( Has(..)
-                                                , view
-                                                , over
-                                                , traceM
-                                                )
 
 data NixLevel = Fatal | Error | Warning | Info | Debug
   deriving (Ord, Eq, Bounded, Enum, Show)

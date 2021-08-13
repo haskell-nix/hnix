@@ -18,7 +18,6 @@ import           Nix.Atoms
 import           Nix.Expr
 import           Nix.Parser
 import           Nix.Pretty
-import           Nix.Utils
 import           Prettyprinter
 import           Test.Tasty
 import           Test.Tasty.Hedgehog

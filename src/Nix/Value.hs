@@ -13,8 +13,6 @@
 module Nix.Value
 where
 
-import           Prelude                 hiding ( force )
-import           Nix.Utils
 import           Control.Comonad                ( Comonad
                                                 , extract
                                                 )
