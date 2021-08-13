@@ -341,6 +341,7 @@ flag profiling
 
 library
   exposed-modules:
+    Prelude
     Nix
     Nix.Atoms
     Nix.Builtins
