@@ -11,6 +11,7 @@ import           Data.Binary                    ( Binary )
 import           Data.Aeson.Types               ( FromJSON
                                                 , ToJSON
                                                 )
+--  2021-08-01: NOTE: Check the order efficience of NAtom constructors.
 
 -- | Atoms are values that evaluate to themselves.
 -- In other words - this is a constructors that are literals in Nix.

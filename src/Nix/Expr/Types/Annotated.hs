@@ -56,8 +56,8 @@ data SrcSpan = SrcSpan
 instance Semigroup SrcSpan where
   s1 <> s2 =
     SrcSpan
-      ((min `on` spanBegin) s1 s2)
-      ((max `on` spanEnd  ) s1 s2)
+      (on min spanBegin s1 s2)
+      (on max spanEnd   s1 s2)
 
 instance Binary SrcSpan
 instance ToJSON SrcSpan
@@ -67,6 +67,7 @@ instance Serialise SrcSpan
 
 -- * data type @Ann@
 
+--  2021-08-02: NOTE: Annotation needs to be after what is annotated.
 -- | A type constructor applied to a type along with an annotation
 --
 -- Intended to be used with 'Fix':

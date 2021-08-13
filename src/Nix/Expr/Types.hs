@@ -448,6 +448,12 @@ data Recursivity
     , Show, Read, Hashable
     )
 
+instance Semigroup Recursivity where
+  (<>) NonRecursive NonRecursive = NonRecursive
+  (<>) _ _ = Recursive
+
+instance Monoid Recursivity where
+  mempty = NonRecursive
 
 -- ** data NUnaryOp
 
@@ -712,7 +718,7 @@ ekey keys pos f e@(Fix x) | (NSet NonRecursive xs, ann) <- fromNExpr x =
         e
         (\ v ->
           let entry = NamedVar (StaticKey <$> keys) v pos in
-          Fix $ toNExpr ( NSet NonRecursive $ [entry] <> xs, ann )
+          Fix $ toNExpr ( NSet mempty $ [entry] <> xs, ann )
         )
       <$>
         f Nothing

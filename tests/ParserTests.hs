@@ -23,6 +23,8 @@ import Prettyprinter.Render.Text
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.TH
+import Prettyprinter.Render.String (renderString)
+import Prettyprinter.Util (reflow)
 
 default (NixLang)
 
@@ -498,7 +500,7 @@ case_select =
     , "a.e . d    or null"
     )
     ( Fix $ NSelect (pure mkNull) emptySet
-        (DynamicKey (Plain (DoubleQuoted mempty)) :| mempty)
+        (DynamicKey (Plain $ DoubleQuoted mempty) :| mempty)
     , "{}.\"\"or null"
     )
     ( Fix $ NBinary NConcat
@@ -636,38 +638,32 @@ case_comments =
 
 case_simpleLoc =
   let
-    mkSPos l c = SourcePos "<string>" (mkPos l) (mkPos c)
-    mkSpan l1 c1 l2 c2 = SrcSpan (mkSPos l1 c1) (mkSPos l2 c2)
+    mkSPos = on (SourcePos "<string>") mkPos
+    mkSpan = on SrcSpan (uncurry mkSPos)
   in
     assertParseTextLoc [text|let
     foo = bar
          baz "qux";
     in foo
     |]
-    (Fix
-      (NLetAnnF
-        (mkSpan 1 1 4 7)
-        [ NamedVar
-            (StaticKey "foo" :| [])
-            (Fix
-              (NBinaryAnnF
-                (mkSpan 2 7 3 15)
-                NApp
-                (Fix
-                  (NBinaryAnnF
-                    (mkSpan 2 7 3 9)
-                    NApp
-                    (Fix (NSymAnnF (mkSpan 2 7 2 10) "bar"))
-                    (Fix (NSymAnnF (mkSpan 3 6 3 9) "baz"))
-                  )
-                )
-                (Fix (NStrAnnF (mkSpan 3 10 3 15) (DoubleQuoted [Plain "qux"])))
-              )
+    (NLetAnn
+      (mkSpan (1, 1) (4, 7))
+      [ NamedVar
+          (StaticKey "foo" :| [])
+          (NBinaryAnn
+            (mkSpan (2, 7) (3, 15))
+            NApp
+            (NBinaryAnn
+              (mkSpan (2, 7) (3, 9))
+              NApp
+              (NSymAnn (mkSpan (2, 7) (2, 10)) "bar")
+              (NSymAnn (mkSpan (3, 6) (3, 9 )) "baz")
             )
-            (mkSPos 2 1)
-        ]
-        (Fix (NSymAnnF (mkSpan 4 4 4 7) "foo"))
-      )
+            (NStrAnn (mkSpan (3, 10) (3, 15)) $ DoubleQuoted [Plain "qux"])
+          )
+          (mkSPos 2 1)
+      ]
+      (NSymAnn (mkSpan (4, 4) (4, 7)) "foo")
     )
 
 
@@ -692,14 +688,21 @@ type ExpectedHask = NExpr
 (<=>) :: ExpectedHask -> NixLang -> Assertion
 (<=>) = assertParseText
 
-throwParseError
-  :: ( IsString a
-    , ToString a
-    , Semigroup a
-    , Show b
-    )
-  => a -> a -> b -> IO c
-throwParseError what str err = assertFailure $ toString $ "Unexpected fail parsing " <> what <> ":\n  ''\n" <> str <> "\n''\n  Error: ''" <> show err <> "''."
+throwParseError :: forall ann . Text -> Text -> Doc ann -> Assertion
+throwParseError entity expr err =
+  assertFailure $
+    renderString $
+      layoutSmart Prettyprinter.defaultLayoutOptions $
+        nest 2 $
+          vsep
+            [ ""
+            , "Unexpected fail parsing " <> reflow entity <> ":"
+            , nest 2 $ vsep
+              [ "Expression:"
+              , reflow expr
+              , "Error: " <> nest 2 err
+              ]
+            ]
 
 assertParseText :: ExpectedHask -> NixLang -> Assertion
 assertParseText expected str =
@@ -740,7 +743,7 @@ assertParseFail str =
   either
     (const pass)
     (\ r ->
-      assertFailure $ toString $ "Unexpected success parsing ''" <> str <> "'':\n  Parsed value: ''" <> show r <> "''."
+      assertFailure $ toString $ "\nUnexpected success parsing string ''" <> str <> "'':\n''Parsed value: ''" <> show r <> "''."
     )
     (parseNixText str)
 
@@ -753,7 +756,7 @@ assertParsePrint src expect =
     Right expr = parseNixTextLoc src
     result =
       renderStrict
-      . layoutPretty (LayoutOptions $ AvailablePerLine 80 0.4)
+      . layoutPretty defaultLayoutOptions
       . prettyNix
       . stripAnnotation $
         expr
