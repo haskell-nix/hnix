@@ -23,7 +23,7 @@ import qualified Data.Text                     as Text
 class (MonadFail m, MonadIO m) => MonadFile m where
     readFile :: Path -> m Text
     default readFile :: (MonadTrans t, MonadIO m', MonadFile m', m ~ t m') => Path -> m Text
-    readFile = liftIO . Prelude.readFile . coerce
+    readFile = liftIO . Prelude.readFile
     listDirectory :: Path -> m [Path]
     default listDirectory :: (MonadTrans t, MonadFile m', m ~ t m') => Path -> m [Path]
     listDirectory = lift . listDirectory
@@ -50,7 +50,7 @@ class (MonadFail m, MonadIO m) => MonadFile m where
     getSymbolicLinkStatus = lift . getSymbolicLinkStatus
 
 instance MonadFile IO where
-  readFile              = liftIO . Prelude.readFile . coerce
+  readFile              = Prelude.readFile
   listDirectory         = coerce <$> (S.listDirectory . coerce)
   getCurrentDirectory   = coerce <$> S.getCurrentDirectory
   canonicalizePath      = coerce <$> (S.canonicalizePath . coerce)

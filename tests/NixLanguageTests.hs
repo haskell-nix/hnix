@@ -10,7 +10,6 @@ import qualified Data.Map                      as Map
 import qualified Data.Set                      as Set
 import qualified Data.String                   as String
 import qualified Data.Text                     as Text
-import qualified Data.Text.IO                  as Text
 import           Data.Time
 import           GHC.Exts
 import           Nix.Lint
@@ -130,13 +129,13 @@ assertParseFail opts file = do
 assertLangOk :: Options -> Path -> Assertion
 assertLangOk opts file = do
   actual   <- printNix <$> hnixEvalFile opts (file <> ".nix")
-  expected <- Text.readFile $ coerce $ file <> ".exp"
-  assertEqual "" expected $ toText (actual <> "\n")
+  expected <- readFile $ file <> ".exp"
+  assertEqual "" expected $ fromString (actual <> "\n")
 
 assertLangOkXml :: Options -> Path -> Assertion
 assertLangOkXml opts file = do
   actual <- stringIgnoreContext . toXML <$> hnixEvalFile opts (file <> ".nix")
-  expected <- Text.readFile $ coerce $ file <> ".exp.xml"
+  expected <- readFile $ file <> ".exp.xml"
   assertEqual "" expected actual
 
 assertEval :: Options -> [Path] -> Assertion
@@ -144,7 +143,7 @@ assertEval _opts files =
   do
     time <- liftIO getCurrentTime
     let opts = defaultOptions time
-    case delete ".nix" $ sort $ toText . takeExtensions . coerce <$> files of
+    case delete ".nix" $ sort $ fromString @Text . takeExtensions . coerce <$> files of
       []                 -> void $ hnixEvalFile opts (name <> ".nix")
       [".exp"          ]  -> assertLangOk    opts name
       [".exp.xml"      ]  -> assertLangOkXml opts name
@@ -153,7 +152,7 @@ assertEval _opts files =
       [".exp", ".flags"] ->
         do
           liftIO $ setEnv "NIX_PATH" "lang/dir4:lang/dir5"
-          flags <- Text.readFile $ coerce $ name <> ".flags"
+          flags <- readFile $ name <> ".flags"
           let flags' | Text.last flags == '\n' = Text.init flags
                     | otherwise               = flags
           case runParserGetResult time flags' of

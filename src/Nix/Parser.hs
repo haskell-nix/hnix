@@ -42,7 +42,6 @@ where
 import           Prelude                 hiding ( (<|>)
                                                 , some
                                                 , many
-                                                , readFile
                                                 )
 import           Data.Foldable                  ( foldr1 )
 
@@ -72,7 +71,7 @@ import           Nix.Expr.Strings               ( escapeCodes
                                                 , mergePlain
                                                 , removeEmptyPlains
                                                 )
-import           Nix.Render                     ( MonadFile(readFile) )
+import           Nix.Render                     ( MonadFile() )
 import           Prettyprinter                  ( Doc
                                                 , pretty
                                                 )
@@ -876,7 +875,7 @@ type Result a = Either (Doc Void) a
 parseFromFileEx :: MonadFile m => Parser a -> Path -> m (Result a)
 parseFromFileEx parser file =
   do
-    input <- readFile file
+    input <- liftIO $ readFile file
 
     pure $
       either

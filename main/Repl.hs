@@ -96,7 +96,7 @@ main' iniVal =
 
   rcFile =
     do
-      f <- liftIO $ Text.readFile ".hnixrc" `catch` handleMissing
+      f <- liftIO $ readFile ".hnixrc" `catch` handleMissing
 
       traverse_
         (\case
@@ -116,8 +116,8 @@ main' iniVal =
 
   -- Replicated and slightly adjusted `optMatcher` from `System.Console.Repline`
   -- which doesn't export it.
-  -- * @MonadIO m@ instead of @MonadHaskeline m@
-  -- * @putStrLn@ instead of @outputStrLn@
+  --  * @MonadIO m@ instead of @MonadHaskeline m@
+  --  * @putStrLn@ instead of @outputStrLn@
   optMatcher :: MonadIO m
              => Text
              -> Console.Options m
@@ -304,11 +304,12 @@ load
   -> Repl e t f m ()
 load path =
   do
-    contents <- liftIO $ Prelude.readFile $
+    contents <- liftIO $ readFile $
        trim path
     void $ exec True contents
  where
-  trim = dropWhileEnd isSpace . dropWhile isSpace . coerce
+  trim :: Path -> Path
+  trim = coerce . dropWhileEnd isSpace . dropWhile isSpace . coerce
 
 -- | @:type@ command
 typeof

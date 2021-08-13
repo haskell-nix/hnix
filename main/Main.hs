@@ -81,7 +81,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       (\ (binaryCacheFile :: Path) ->
         do
           let file = coerce $ (replaceExtension . coerce) binaryCacheFile "nixc"
-          processCLIOptions (Just file) =<< liftIO (readCache $ binaryCacheFile)
+          processCLIOptions (Just file) =<< liftIO (readCache binaryCacheFile)
       ) <$> readFrom
 
     -- | The `--expr` option: read expression from the argument string
@@ -95,7 +95,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       (processSeveralFiles . (coerce . toString <$>) . lines <=< liftIO) .
         (\case
           "-" -> Text.getContents
-          _fp -> readFile $ coerce _fp
+          _fp -> readFile _fp
         ) <$> fromFile
 
   processExpr text = handleResult Nothing     $   parseNixTextLoc text

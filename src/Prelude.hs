@@ -8,7 +8,6 @@
 module Prelude
     ( module Prelude
     , module Relude
-    , Text.readFile
     , module X
     ) where
 
@@ -294,3 +293,6 @@ mapPair ~(f,g) ~(a,b) = (f a, g b)
 stub :: (Applicative f, Monoid a) => f a
 stub = pure mempty
 {-# inline stub #-}
+
+readFile :: Path -> IO Text
+readFile = Text.readFile . coerce
