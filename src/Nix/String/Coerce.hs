@@ -75,7 +75,7 @@ coerceToString call ctsm clevel = go
             castToNixString ""
           -- NVConstant: NAtom (NURI Text) is not matched
           NVList l ->
-            nixStringUnwords <$> traverse (go <=< demand) l
+            nixStringUnwords <$> traverse go l
           v -> coerceStringy v
 
       coerceStringy x' =
