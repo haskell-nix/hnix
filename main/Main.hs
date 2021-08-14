@@ -154,7 +154,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
     | evaluate =
       if
         | tracing                       -> evaluateExprWithEvaluator nixTracingEvalExprLoc expr
-        | Just path <- reduce           -> evaluateExprWithEvaluator (reduction (coerce path) . coerce) expr
+        | Just path <- reduce           -> evaluateExprWithEvaluator (reduction path . coerce) expr
         | null arg || null argstr       -> evaluateExprWithEvaluator nixEvalExprLoc expr
         | otherwise                     -> processResult printer <=< nixEvalExprLoc (coerce mpath) $ expr
     | xml                        = fail "Rendering expression trees to XML is not yet implemented"
