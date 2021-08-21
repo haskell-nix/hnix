@@ -1,14 +1,12 @@
 {-# language DataKinds #-}
 {-# language NamedFieldPuns #-}
 {-# language RecordWildCards #-}
-{-# language ScopedTypeVariables #-}
 {-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
 
 module Nix.Effects.Derivation ( defaultDerivationStrict ) where
 
 import           Prelude                 hiding ( readFile )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
-import           Nix.Utils
 import           Data.Char                      ( isAscii
                                                 , isAlphaNum
                                                 )
@@ -78,7 +76,7 @@ writeDerivation drv@Derivation{inputs, name} = do
   let (inputSrcs, inputDrvs) = inputs
   references <- Set.fromList <$> traverse parsePath (Set.toList $ inputSrcs <> Set.fromList (Map.keys inputDrvs))
   path <- addTextToStore (Text.append name ".drv") (unparseDrv drv) (S.fromList $ Set.toList references) False
-  parsePath $ toText @Path $ coerce path
+  parsePath $ fromString $ coerce path
 
 -- | Traverse the graph of inputDrvs to replace fixed output derivations with their fixed output hash.
 -- this avoids propagating changes to their .drv when the output hash stays the same.
@@ -173,7 +171,7 @@ unparseDrv Derivation{..} =
 
 readDerivation :: (Framed e m, MonadFile m) => Path -> m Derivation
 readDerivation path = do
-  content <- decodeUtf8 <$> readFile path
+  content <- readFile path
   either
     (\ err -> throwError $ ErrorCall $ "Failed to parse " <> show path <> ":\n" <> show err)
     pure
@@ -208,7 +206,7 @@ derivationParser = do
   pure $ Derivation {inputs = (inputSrcs, inputDrvs), ..}
  where
   s :: Parsec () Text Text
-  s = fmap toText $ string "\"" *> manyTill (escaped <|> regular) (string "\"")
+  s = fmap fromString $ string "\"" *> manyTill (escaped <|> regular) (string "\"")
   escaped = char '\\' *>
     (   '\n' <$ string "n"
     <|> '\r' <$ string "r"
@@ -274,7 +272,7 @@ defaultDerivationStrict val = do
                     (Map.keys $ outputs drv)
                 )
           }
-        outputs' <- sequence $ Map.mapWithKey (\o _ -> makeOutputPath o hash drvName) $ outputs drv
+        outputs' <- sequenceA $ Map.mapWithKey (\o _ -> makeOutputPath o hash drvName) $ outputs drv
         pure $ drv
           { inputs
           , outputs = outputs'

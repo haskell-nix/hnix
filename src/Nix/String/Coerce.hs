@@ -5,7 +5,6 @@ module Nix.String.Coerce where
 import           Control.Monad.Catch            ( MonadThrow )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import qualified Data.HashMap.Lazy             as M
-import           Nix.Utils
 import           Nix.Atoms
 import           Nix.Effects
 import           Nix.Frames
@@ -75,7 +74,7 @@ coerceToString call ctsm clevel = go
             castToNixString ""
           -- NVConstant: NAtom (NURI Text) is not matched
           NVList l ->
-            nixStringUnwords <$> traverse (go <=< demand) l
+            nixStringUnwords <$> traverse go l
           v -> coerceStringy v
 
       coerceStringy x' =

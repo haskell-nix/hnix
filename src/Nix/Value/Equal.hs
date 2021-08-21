@@ -1,16 +1,12 @@
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 
 {-# options_ghc -Wno-missing-pattern-synonym-signatures #-}
 
 module Nix.Value.Equal where
 
-import           Prelude                 hiding ( Comparison
-                                                , force
-                                                )
-import           Nix.Utils
+import           Prelude                 hiding ( Comparison )
 import           Control.Comonad                ( Comonad(extract))
 import           Control.Monad.Free             ( Free(Pure,Free) )
 import           Control.Monad.Trans.Except     ( throwE )
@@ -35,12 +31,12 @@ checkComparable
   -> m ()
 checkComparable x y =
   case (x, y) of
-    (NVConstant (NFloat _), NVConstant (NInt   _)) -> pass
-    (NVConstant (NInt   _), NVConstant (NFloat _)) -> pass
-    (NVConstant (NInt   _), NVConstant (NInt   _)) -> pass
-    (NVConstant (NFloat _), NVConstant (NFloat _)) -> pass
-    (NVStr       _        , NVStr       _        ) -> pass
-    (NVPath      _        , NVPath      _        ) -> pass
+    (NVConstant (NFloat _), NVConstant (NInt   _)) -> stub
+    (NVConstant (NInt   _), NVConstant (NFloat _)) -> stub
+    (NVConstant (NInt   _), NVConstant (NInt   _)) -> stub
+    (NVConstant (NFloat _), NVConstant (NFloat _)) -> stub
+    (NVStr       _        , NVStr       _        ) -> stub
+    (NVPath      _        , NVPath      _        ) -> stub
     _                                              -> throwError $ Comparison x y
 
 -- | Checks whether two containers are equal, using the given item equality

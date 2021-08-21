@@ -3,18 +3,13 @@
 {-# language ConstraintKinds #-}
 {-# language DefaultSignatures #-}
 {-# language GADTs #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 {-# language TypeOperators #-}
 {-# language MultiWayIf #-}
 
 module Nix.Render where
 
-import           Prelude                 hiding ( readFile )
-
-import qualified Data.ByteString               as BS
 import qualified Data.Set                      as Set
-import           Nix.Utils
 import           Nix.Utils.Fix1                 ( Fix1T
                                                 , MonadFix1T )
 import           Nix.Expr.Types.Annotated
@@ -25,10 +20,10 @@ import           Text.Megaparsec.Error
 import           Text.Megaparsec.Pos
 import qualified Data.Text                     as Text
 
-class MonadFail m => MonadFile m where
-    readFile :: Path -> m ByteString
-    default readFile :: (MonadTrans t, MonadFile m', m ~ t m') => Path -> m ByteString
-    readFile = lift . readFile
+class (MonadFail m, MonadIO m) => MonadFile m where
+    readFile :: Path -> m Text
+    default readFile :: (MonadTrans t, MonadIO m', MonadFile m', m ~ t m') => Path -> m Text
+    readFile = liftIO . Prelude.readFile
     listDirectory :: Path -> m [Path]
     default listDirectory :: (MonadTrans t, MonadFile m', m ~ t m') => Path -> m [Path]
     listDirectory = lift . listDirectory
@@ -55,7 +50,7 @@ class MonadFail m => MonadFile m where
     getSymbolicLinkStatus = lift . getSymbolicLinkStatus
 
 instance MonadFile IO where
-  readFile              = BS.readFile . coerce
+  readFile              = Prelude.readFile
   listDirectory         = coerce <$> (S.listDirectory . coerce)
   getCurrentDirectory   = coerce <$> S.getCurrentDirectory
   canonicalizePath      = coerce <$> (S.canonicalizePath . coerce)
@@ -66,7 +61,7 @@ instance MonadFile IO where
   getSymbolicLinkStatus = S.getSymbolicLinkStatus . coerce
 
 
-instance (MonadFix1T t m, MonadFail (Fix1T t m), MonadFile m) => MonadFile (Fix1T t m)
+instance (MonadFix1T t m, MonadIO (Fix1T t m), MonadFail (Fix1T t m), MonadFile m) => MonadFile (Fix1T t m)
 
 posAndMsg :: SourcePos -> Doc a -> ParseError s Void
 posAndMsg (SourcePos _ lineNo _) msg =
@@ -108,8 +103,7 @@ sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unP
       .   take (end' - beg')
       .   drop (pred beg')
       .   lines
-      .   decodeUtf8
-      <$> readFile path
+      <$> Nix.Render.readFile path
     let
       longest = Text.length $ show $ beg' + length ls - 1
       pad :: Int -> Text
@@ -125,14 +119,13 @@ sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unP
           | otherwise                    -> "    " <> nsp <> " |  "
       composeLine n l =
         [pretty (pad n) <> l]
-        <> bool mempty
-          [ pretty $
+        <> ([ pretty $
               Text.replicate (Text.length (pad n) - 3) " "
               <> "|"
               <> Text.replicate (_begCol + 1) " "
               <> Text.replicate (_endCol - _begCol) "^"
-          ]
-          (begLine == endLine && n == endLine)
+            ] `whenTrue` (begLine == endLine && n == endLine)
+          )
         -- XXX: Consider inserting the message here when it is small enough.
         -- ATM some messages are so huge that they take prevalence over the source listing.
         -- ++ [ indent (length $ pad n) msg | n == endLine ]

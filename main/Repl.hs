@@ -8,7 +8,6 @@
 -}
 
 {-# language MultiWayIf #-}
-{-# language ScopedTypeVariables #-}
 
 module Repl
   ( main
@@ -18,7 +17,6 @@ module Repl
 import           Prelude                 hiding ( state )
 import           Nix                     hiding ( exec )
 import           Nix.Scope
-import           Nix.Utils
 import           Nix.Value.Monad                ( demand )
 
 import qualified Data.HashMap.Lazy           as M
@@ -70,7 +68,7 @@ main' iniVal =
     evalStateT
       (evalRepl
         banner
-        (cmd . toText)
+        (cmd . fromString)
         options
         (pure commandPrefix)
         (pure "paste")
@@ -98,7 +96,7 @@ main' iniVal =
 
   rcFile =
     do
-      f <- liftIO $ Text.readFile ".hnixrc" `catch` handleMissing
+      f <- liftIO $ readFile ".hnixrc" `catch` handleMissing
 
       traverse_
         (\case
@@ -118,8 +116,8 @@ main' iniVal =
 
   -- Replicated and slightly adjusted `optMatcher` from `System.Console.Repline`
   -- which doesn't export it.
-  -- * @MonadIO m@ instead of @MonadHaskeline m@
-  -- * @putStrLn@ instead of @outputStrLn@
+  --  * @MonadIO m@ instead of @MonadHaskeline m@
+  --  * @putStrLn@ instead of @outputStrLn@
   optMatcher :: MonadIO m
              => Text
              -> Console.Options m
@@ -127,7 +125,7 @@ main' iniVal =
              -> m ()
   optMatcher s [] _ = liftIO $ Text.putStrLn $ "No such command :" <> s
   optMatcher s ((x, m) : xs) args
-    | s `Text.isPrefixOf` toText x = m $ toString args
+    | s `Text.isPrefixOf` fromString x = m $ toString args
     | otherwise = optMatcher s xs args
 
 
@@ -228,7 +226,7 @@ exec update source = do
             -- If the result value is a set, update our context with it
             case val of
               NVSet _ (coerce -> scope) -> put state { replCtx = scope <> replCtx state }
-              _          -> pass
+              _          -> stub
 
           pure $ pure val
         )
@@ -250,7 +248,7 @@ exec update source = do
         (parseNixTextLoc i)
 
     toAttrSet i =
-      "{" <> i <> bool ";" mempty (Text.isSuffixOf ";" i) <> "}"
+      "{" <> i <> whenFalse ";" (Text.isSuffixOf ";" i) <> "}"
 
 cmd
   :: (MonadNix e t f m, MonadIO m)
@@ -260,7 +258,7 @@ cmd source =
   do
     mVal <- exec True source
     maybe
-      pass
+      stub
       printValue
       mVal
 
@@ -269,11 +267,15 @@ printValue :: (MonadNix e t f m, MonadIO m)
            -> Repl e t f m ()
 printValue val = do
   cfg <- replCfg <$> get
+  let
+    g :: MonadIO m => Doc ann0 -> m ()
+    g = liftIO . print
+
   lift $ lift $
     (if
-      | cfgStrict cfg -> liftIO . print . prettyNValue     <=< normalForm
-      | cfgValues cfg -> liftIO . print . prettyNValueProv <=< removeEffects
-      | otherwise     -> liftIO . print . prettyNValue     <=< removeEffects
+      | cfgStrict cfg -> g . prettyNValue     <=< normalForm
+      | cfgValues cfg -> g . prettyNValueProv <=< removeEffects
+      | otherwise     -> g . prettyNValue     <=< removeEffects
     ) val
 
 
@@ -298,16 +300,16 @@ browse _ =
 load
   :: (MonadNix e t f m, MonadIO m)
   -- This one does I String -> O String pretty fast, it is ugly to double marshall here.
-  => String
+  => Path
   -> Repl e t f m ()
-load args =
+load path =
   do
-    contents <- liftIO $
-      Text.readFile $
-       trim args
+    contents <- liftIO $ readFile $
+       trim path
     void $ exec True contents
  where
-  trim = dropWhileEnd isSpace . dropWhile isSpace
+  trim :: Path -> Path
+  trim = coerce . dropWhileEnd isSpace . dropWhile isSpace . coerce
 
 -- | @:type@ command
 typeof
@@ -390,7 +392,7 @@ completeFunc reversedPrev word
     listFiles word
 
   -- Attributes of sets in REPL context
-  | var : subFields <- Text.split (== '.') (toText word) , not $ null subFields =
+  | var : subFields <- Text.split (== '.') (fromString word) , not $ null subFields =
     do
       state <- get
       maybe
@@ -405,14 +407,20 @@ completeFunc reversedPrev word
                     candidates
                   )
         )
-        (M.lookup (coerce var) (coerce $ replCtx state))
+        (M.lookup (coerce var) $ coerce $ replCtx state)
 
   -- Builtins, context variables
   | otherwise =
     do
       state <- get
-      let contextKeys = M.keys @VarName @(NValue t f m) (coerce $ replCtx state)
-          (Just (NVSet _ builtins)) = M.lookup "builtins" (coerce $ replCtx state)
+      let
+          scopeHashMap :: HashMap VarName (NValue t f m)
+          scopeHashMap = coerce $ replCtx state
+          contextKeys :: [VarName]
+          contextKeys = M.keys scopeHashMap
+          builtins :: AttrSet (NValue t f m)
+          (Just (NVSet _ builtins)) = M.lookup "builtins" scopeHashMap
+          shortBuiltins :: [VarName]
           shortBuiltins = M.keys builtins
 
       pure $ listCompletion $ toString <$>
@@ -469,7 +477,7 @@ helpOptions =
       "help"
       ""
       "Print help text"
-      (help helpOptions . toText)
+      (help helpOptions . fromString)
   , HelpOption
       "paste"
       ""
@@ -479,17 +487,17 @@ helpOptions =
       "load"
       "FILENAME"
       "Load .nix file into scope"
-      load
+      (load . fromString)
   , HelpOption
       "browse"
       ""
       "Browse bindings in interpreter context"
-      (browse . toText)
+      (browse . fromString)
   , HelpOption
       "type"
       "EXPRESSION"
       "Evaluate expression or binding from context and print the type of the result value"
-      (typeof . toText)
+      (typeof . fromString)
   , HelpOption
       "quit"
       ""
@@ -504,7 +512,7 @@ helpOptions =
         <> Prettyprinter.line
         <> renderSetOptions helpSetOptions
       )
-      (setConfig . toText)
+      (setConfig . fromString)
   ]
 
 -- | Options for :set

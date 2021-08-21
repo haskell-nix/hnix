@@ -1,6 +1,5 @@
 {-# language TypeFamilies #-}
 {-# language CPP #-}
-{-# language ScopedTypeVariables #-}
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language UndecidableInstances #-}
 
@@ -9,7 +8,6 @@
 
 module Nix.Standard where
 
-import           Prelude hiding                 ( force )
 import           Control.Comonad                ( Comonad )
 import           Control.Comonad.Env            ( ComonadEnv )
 import           Control.Monad.Catch            ( MonadThrow
@@ -39,7 +37,6 @@ import           Nix.Render
 import           Nix.Scope
 import           Nix.Thunk
 import           Nix.Thunk.Basic
-import           Nix.Utils
 import           Nix.Utils.Fix1                 ( Fix1T(Fix1T) )
 import           Nix.Value
 import           Nix.Value.Monad

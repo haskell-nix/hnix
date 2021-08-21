@@ -3,7 +3,6 @@
 {-# language ConstraintKinds #-}
 {-# language PartialTypeSignatures #-}
 {-# language RankNTypes #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 {-# language UndecidableInstances #-}
 
@@ -39,7 +38,6 @@ import           Nix.Scope
 import           Nix.String
 import           Nix.String.Coerce
 import           Nix.Thunk
-import           Nix.Utils
 import           Nix.Value
 import           Nix.Value.Equal
 import           Nix.Value.Monad
@@ -260,8 +258,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
         (nverr $ Assertion span c)
         (do
           scope <- currentScopes
-          let f = join (addProvenance . Provenance scope . NAssertAnnF span (pure c) . pure)
-          f <$> body
+          join (addProvenance . Provenance scope . NAssertAnnF span (pure c) . pure) <$> body
         )
         b
 
@@ -503,7 +500,7 @@ addTracing k v = do
   depth <- ask
   guard $ depth < 2000
   local succ $ do
-    v'@(AnnF span x) <- sequence v
+    v'@(AnnF span x) <- sequenceA v
     pure $ do
       opts :: Options <- asks $ view hasLens
       let

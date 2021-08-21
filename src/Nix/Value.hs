@@ -4,7 +4,6 @@
 {-# language ConstraintKinds #-}
 {-# language PatternSynonyms #-}
 {-# language RankNTypes #-}
-{-# language ScopedTypeVariables #-}
 {-# language TemplateHaskell #-}
 
 {-# options_ghc -Wno-missing-signatures #-}
@@ -14,8 +13,6 @@
 module Nix.Value
 where
 
-import           Prelude                 hiding ( force )
-import           Nix.Utils
 import           Control.Comonad                ( Comonad
                                                 , extract
                                                 )
@@ -732,10 +729,7 @@ valueType =
         NNull    -> TNull
     NVStrF ns  ->
       TString $
-        bool
-          mempty
-          HasContext
-          (stringHasContext ns)
+        HasContext `whenTrue` stringHasContext ns
     NVListF{}    -> TList
     NVSetF{}     -> TSet
     NVClosureF{} -> TClosure

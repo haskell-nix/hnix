@@ -32,7 +32,6 @@ import           Data.Functor.Compose
 import           Data.Hashable.Lifted
 import           Data.Ord.Deriving
 import           GHC.Generics
-import           Nix.Utils
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Text.Megaparsec                ( unPos
@@ -184,7 +183,7 @@ annNStr :: AnnUnit SrcSpan (NString NExprLoc) -> NExprLoc
 annNStr (AnnUnit s1 s) = NStrAnn s1 s
 
 deltaInfo :: SourcePos -> (Text, Int, Int)
-deltaInfo (SourcePos fp l c) = (toText fp, unPos l, unPos c)
+deltaInfo (SourcePos fp l c) = (fromString fp, unPos l, unPos c)
 
 annNNull :: NExprLoc
 annNNull = NConstantAnn nullSpan NNull

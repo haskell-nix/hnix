@@ -18,7 +18,6 @@ import           Nix.Atoms
 import           Nix.Expr
 import           Nix.Parser
 import           Nix.Pretty
-import           Nix.Utils
 import           Prettyprinter
 import           Test.Tasty
 import           Test.Tasty.Hedgehog
@@ -29,7 +28,7 @@ asciiString :: MonadGen m => m String
 asciiString = Gen.list (Range.linear 1 15) Gen.lower
 
 asciiText :: Gen Text
-asciiText = toText <$> asciiString
+asciiText = fromString <$> asciiString
 
 -- Might want to replace this instance with a constant value
 genPos :: Gen Pos
@@ -238,7 +237,7 @@ prop_prettyparse p = do
         success
         (equivUpToNormalization p v)
     )
-    (parse $ toText prog)
+    (parse $ fromString prog)
  where
   parse     = parseNixText
 

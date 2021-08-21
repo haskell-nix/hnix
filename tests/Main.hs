@@ -2,6 +2,7 @@
 
 module Main where
 
+import           Relude (force)
 import           Relude.Unsafe (read)
 import qualified Control.Exception as Exc
 import           GHC.Err (errorWithoutStackTrace)
@@ -11,7 +12,6 @@ import qualified Data.String as String
 import           Data.Time
 import qualified EvalTests
 import           NeatInterpolation (text)
-import           Nix.Utils
 import qualified Nix
 import           Nix.Expr.Types
 import           Nix.String
@@ -70,7 +70,7 @@ ensureNixpkgsCanParse =
             -- Parse and deepseq the resulting expression tree, to ensure the
             -- parser is fully executed.
             _ <- consider (coerce file) (parseNixFileLoc (coerce file)) $ Exc.evaluate . force
-            pass
+            stub
     v -> fail $ "Unexpected parse from default.nix: " <> show v
  where
   getExpr   k m = let Just (Just r) = lookup k m in r

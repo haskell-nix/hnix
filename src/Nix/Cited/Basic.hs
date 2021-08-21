@@ -1,11 +1,9 @@
 {-# language GeneralizedNewtypeDeriving #-}
-{-# language ScopedTypeVariables #-}
 {-# language UndecidableInstances #-}
 {-# language PatternSynonyms    #-}
 
 module Nix.Cited.Basic where
 
-import           Prelude                 hiding ( force )
 import           Control.Comonad                ( Comonad )
 import           Control.Comonad.Env            ( ComonadEnv )
 import           Control.Monad.Catch     hiding ( catchJust )
@@ -17,7 +15,6 @@ import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Options
 import           Nix.Thunk
-import           Nix.Utils
 import           Nix.Value
 
 

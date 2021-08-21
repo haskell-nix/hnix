@@ -12,14 +12,10 @@
 
 module Nix.Effects where
 
-import           Prelude                 hiding ( traceM
-                                                , putStr
-                                                , putStrLn
+import           Prelude                 hiding ( putStrLn
                                                 , print
                                                 )
-import qualified Prelude
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
-import           Nix.Utils
 import qualified Data.HashSet                  as HS
 import qualified Data.Text                     as Text
 import           Network.HTTP.Client     hiding ( path, Proxy )
@@ -141,7 +137,7 @@ instance MonadExec IO where
     (prog : args) -> do
       (exitCode, out, _) <- liftIO $ readProcessWithExitCode (toString prog) (toString <$> args) ""
       let
-        t    = Text.strip $ toText out
+        t    = Text.strip $ fromString out
         emsg = "program[" <> prog <> "] args=" <> show args
       case exitCode of
         ExitSuccess ->
@@ -198,7 +194,7 @@ instance MonadInstantiate IO where
             either
               (\ e -> Left $ ErrorCall $ "Error parsing output of nix-instantiate: " <> show e)
               pure
-              (parseNixTextLoc $ toText out)
+              (parseNixTextLoc $ fromString out)
           status -> Left $ ErrorCall $ "nix-instantiate failed: " <> show status <> ": " <> err
 
 deriving
@@ -234,12 +230,12 @@ class
 -- ** Instances
 
 instance MonadEnv IO where
-  getEnvVar            = (<<$>>) toText . lookupEnv . toString
+  getEnvVar            = (<<$>>) fromString . lookupEnv . toString
 
-  getCurrentSystemOS   = pure $ toText System.Info.os
+  getCurrentSystemOS   = pure $ fromString System.Info.os
 
   -- Invert the conversion done by GHC_CONVERT_CPU in GHC's aclocal.m4
-  getCurrentSystemArch = pure $ toText $ case System.Info.arch of
+  getCurrentSystemArch = pure $ fromString $ case System.Info.arch of
     "i386" -> "i686"
     arch   -> arch
 
@@ -327,7 +323,7 @@ deriving
 -- * @class MonadPutStr m@
 
 class
-  Monad m
+  (Monad m, MonadIO m)
   => MonadPutStr m where
 
   --TODO: Should this be used *only* when the Nix to be evaluated invokes a
@@ -335,7 +331,7 @@ class
   --  2021-04-01: Due to trace operation here, leaving it as String.
   putStr :: String -> m ()
   default putStr :: (MonadTrans t, MonadPutStr m', m ~ t m') => String -> m ()
-  putStr = lift . putStr
+  putStr = lift . Prelude.putStr
 
 
 -- ** Instances
@@ -357,7 +353,7 @@ deriving
 -- ** Functions
 
 putStrLn :: MonadPutStr m => String -> m ()
-putStrLn = putStr . (<> "\n")
+putStrLn = Nix.Effects.putStr . (<> "\n")
 
 print :: (MonadPutStr m, Show a) => a -> m ()
 print = putStrLn . show
@@ -442,7 +438,7 @@ addPath p =
   either
     throwError
     pure
-    =<< addToStore (toText $ takeFileName (coerce p)) p True False
+    =<< addToStore (fromString $ takeFileName (coerce p)) p True False
 
-toFile_ :: (Framed e m, MonadStore m) => Path -> String -> m StorePath
-toFile_ p contents = addTextToStore (toText p) (toText contents) mempty False
+toFile_ :: (Framed e m, MonadStore m) => Path -> Text -> m StorePath
+toFile_ p contents = addTextToStore (toText p) contents mempty False

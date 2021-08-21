@@ -3,7 +3,6 @@
 {-# language ConstraintKinds #-}
 {-# language MultiWayIf #-}
 {-# language GADTs #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 
 
@@ -12,7 +11,6 @@ module Nix.Render.Frame where
 
 import           Prelude             hiding ( Comparison )
 import           GHC.Exception              ( ErrorCall )
-import           Nix.Utils
 import           Data.Fix                   ( Fix(..) )
 import           Nix.Eval
 import           Nix.Exec
@@ -42,7 +40,7 @@ renderFrames
   -> m (Doc ann)
 renderFrames []       = stub
 renderFrames (x : xs) = do
-  opts :: Options <- asks (view hasLens)
+  opts :: Options <- asks $ view hasLens
   frames          <- if
     | verbose opts <= ErrorsOnly -> renderFrame @v @t @f x
     | verbose opts <= Informational -> do
@@ -57,10 +55,7 @@ renderFrames (x : xs) = do
  where
   go :: NixFrame -> [Doc ann]
   go f =
-    maybe
-      mempty
-      (\ pos -> ["While evaluating at " <> pretty (sourcePosPretty pos) <> colon])
-      (framePos @v @m f)
+    (\ pos -> ["While evaluating at " <> pretty (sourcePosPretty pos) <> colon]) `whenJust` framePos @v @m f
 
 framePos
   :: forall v (m :: Type -> Type)
@@ -109,10 +104,7 @@ renderEvalFrame level f =
         do
           let
             scopeInfo =
-              bool
-                mempty
-                [pretty $ Text.show scope]
-                (showScopes opts)
+              [pretty $ Text.show scope] `whenTrue` showScopes opts
           fmap
             (\x -> scopeInfo <> [x])
             $ renderLocation ann =<<
@@ -131,7 +123,7 @@ renderEvalFrame level f =
               "While calling builtins." <> pretty name
 
       SynHole synfo ->
-        sequence $
+        sequenceA $
           let e@(Ann ann _) = _synHoleInfo_expr synfo in
 
           [ renderLocation ann =<<

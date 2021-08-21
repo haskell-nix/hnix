@@ -2,6 +2,7 @@
 {-# language TemplateHaskell #-}
 
 {-# options_ghc -Wno-missing-fields #-}
+{-# options_ghc -Wno-name-shadowing #-}
 
 module Nix.TH where
 
@@ -67,7 +68,7 @@ freeVars e = case unFix e of
     Set.unions
       [ freeVars expr
       , pathFree path
-      , maybe mempty freeVars orExpr
+      , freeVars `whenJust` orExpr
       ]
   (NHasAttr expr            path) -> freeVars expr <> pathFree path
   (NAbs     (Param varname) expr) -> Set.delete varname (freeVars expr)
@@ -78,7 +79,7 @@ freeVars e = case unFix e of
     Set.difference
       (Set.unions $ freeVars <$> mapMaybe snd pset)
       (Set.difference
-        (maybe mempty one varname)
+        (one `whenJust` varname)
         (Set.fromList $ fst <$> pset)
       )
   (NLet         bindings expr   ) ->

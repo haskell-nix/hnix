@@ -13,7 +13,6 @@ module ParserTests (tests) where
 import Prelude hiding (($<))
 import Data.Fix
 import NeatInterpolation (text)
-import Nix.Utils
 import Nix.Atoms
 import Nix.Expr
 import Nix.Parser
@@ -741,7 +740,7 @@ assertParseFile file expected =
 assertParseFail :: NixLang -> Assertion
 assertParseFail str =
   either
-    (const pass)
+    (const stub)
     (\ r ->
       assertFailure $ toString $ "\nUnexpected success parsing string ''" <> str <> "'':\n''Parsed value: ''" <> show r <> "''."
     )

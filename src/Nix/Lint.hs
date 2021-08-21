@@ -3,7 +3,6 @@
 {-# language DataKinds #-}
 {-# language GADTs #-}
 {-# language GeneralizedNewtypeDeriving #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 {-# language UndecidableInstances #-}
 
@@ -12,12 +11,9 @@
 
 module Nix.Lint where
 
-import           Prelude                 hiding ( head
-                                                , force
-                                                )
+import           Relude.Unsafe                 as Unsafe ( head )
 import           Control.Exception              ( throw )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
-import           Nix.Utils
 import           Control.Monad                  ( foldM )
 import           Control.Monad.Catch
 import           Control.Monad.Fix
@@ -25,7 +21,7 @@ import           Control.Monad.Ref
 import           Control.Monad.ST
 import qualified Data.HashMap.Lazy             as M
 -- Plese, use NonEmpty
-import           Data.List
+import           Data.List                      ( intersect )
 import qualified Data.List.NonEmpty            as NE
 import qualified Data.Text                     as Text
 import qualified Text.Show
@@ -132,31 +128,48 @@ symerr :: forall e m a . MonadLint e m => Text -> m a
 symerr = evalError @(Symbolic m) . ErrorCall . toString
 
 renderSymbolic :: MonadLint e m => Symbolic m -> m Text
-renderSymbolic = unpackSymbolic >=> \case
-  NAny     -> pure "<any>"
-  NMany xs -> fmap (Text.intercalate ", ") $ forM xs $ \case
-    TConstant ys -> fmap (Text.intercalate ", ") $ forM ys $ pure . \case
-      TInt   -> "int"
-      TFloat -> "float"
-      TBool  -> "bool"
-      TNull  -> "null"
-    TStr    -> pure "string"
-    TList r -> do
-      x <- renderSymbolic =<< demand r
-      pure $ "[" <> x <> "]"
-    TSet Nothing  -> pure "<any set>"
-    TSet (Just s) -> do
-      x <- traverse (renderSymbolic <=< demand) s
-      pure $ "{" <> show x <> "}"
-    f@(TClosure p) -> do
-      (args, sym) <- do
-        f' <- mkSymbolic [f]
-        lintApp (NAbs (void p) ()) f' everyPossible
-      args' <- traverse renderSymbolic args
-      sym'  <- renderSymbolic sym
-      pure $ "(" <> show args' <> " -> " <> sym' <> ")"
-    TPath          -> pure "path"
-    TBuiltin _n _f -> pure "<builtin function>"
+renderSymbolic =
+  (\case
+    NAny     -> pure "<any>"
+    NMany xs ->
+      Text.intercalate ", " <$>
+        traverse
+          (\case
+            TConstant ys ->
+              Text.intercalate ", " <$>
+                traverse
+                  (pure .
+                    \case
+                      TInt   -> "int"
+                      TFloat -> "float"
+                      TBool  -> "bool"
+                      TNull  -> "null"
+                  )
+                  ys
+            TStr    -> pure "string"
+            TList r ->
+              do
+                x <- renderSymbolic =<< demand r
+                pure $ "[" <> x <> "]"
+            TSet Nothing  -> pure "<any set>"
+            TSet (Just s) ->
+              do
+                x <- traverse (renderSymbolic <=< demand) s
+                pure $ "{" <> show x <> "}"
+            f@(TClosure p) ->
+              do
+                (args, sym) <-
+                  do
+                    f' <- mkSymbolic [f]
+                    lintApp (NAbs p ()) f' everyPossible
+                args' <- traverse renderSymbolic args
+                sym'  <- renderSymbolic sym
+                pure $ "(" <> show args' <> " -> " <> sym' <> ")"
+            TPath          -> pure "path"
+            TBuiltin _n _f -> pure "<builtin function>"
+          )
+          xs
+  ) <=< unpackSymbolic
 
 -- This function is order and uniqueness preserving (of types).
 merge
@@ -174,20 +187,19 @@ merge context = go
     -> m [NTypeF m (Symbolic m)]
   go []       _        = stub
   go _        []       = stub
-  go (x : xs) (y : ys) = case (x, y) of
-    (TStr , TStr ) -> (TStr :) <$> go xs ys
-    (TPath, TPath) -> (TPath :) <$> go xs ys
+  go xxs@(x : xs) yys@(y : ys) = case (x, y) of
+    (TStr , TStr ) -> (TStr :) <$> rest
+    (TPath, TPath) -> (TPath :) <$> rest
     (TConstant ls, TConstant rs) ->
-      (TConstant (ls `intersect` rs) :) <$> go xs ys
+      (TConstant (ls `intersect` rs) :) <$> rest
     (TList l, TList r) ->
-      (\l' ->
-        (\r' -> do
-          m <- defer $ unify context l' r'
-          (TList m :) <$> go xs ys
-        ) =<< demand r
-      ) =<< demand l
-    (TSet x       , TSet Nothing ) -> (TSet x :) <$> go xs ys
-    (TSet Nothing , TSet x       ) -> (TSet x :) <$> go xs ys
+      do
+        l' <- demand l
+        r' <- demand r
+        m <- defer $ unify context l' r'
+        (TList m :) <$> rest
+    (TSet x       , TSet Nothing ) -> (TSet x :) <$> rest
+    (TSet Nothing , TSet x       ) -> (TSet x :) <$> rest
     (TSet (Just l), TSet (Just r)) -> do
       m <- sequenceA $ M.intersectionWith
         (\ i j ->
@@ -202,23 +214,26 @@ merge context = go
         id
         ((TSet (pure m) :) <$>)
         (not $ M.null m)
-        (go xs ys)
+        rest
 
     (TClosure{}, TClosure{}) ->
       throwError $ ErrorCall "Cannot unify functions"
     (TBuiltin _ _, TBuiltin _ _) ->
       throwError $ ErrorCall "Cannot unify builtin functions"
-    _ | compareTypes x y == LT -> go xs (y : ys)
-      | compareTypes x y == GT -> go (x : xs) ys
+    _ | compareTypes x y == LT -> go xs yys
+      | compareTypes x y == GT -> go xxs ys
       | otherwise              -> error "impossible"
+   where
+    rest :: m [NTypeF m (Symbolic m)]
+    rest = go xs ys
 
 {-
     mergeFunctions pl nl fl pr fr xs ys = do
         m <- sequenceA $ M.intersectionWith
             (\i j -> i >>= \i' -> j >>= \j' -> case (i', j') of
-                    (Nothing, Nothing) -> pure $ pure Nothing
-                    (_, Nothing) -> pure Nothing
-                    (Nothing, _) -> pure Nothing
+                    (Nothing, Nothing) -> stub
+                    (_, Nothing) -> stub
+                    (Nothing, _) -> stub
                     (Just i'', Just j'') ->
                         pure . pure <$> unify context i'' j'')
             (pure <$> pl) (pure <$> pr)
@@ -452,7 +467,7 @@ lintApp context fun arg =
         _x            -> throwError $ ErrorCall "Attempt to call non-function"
 
       y <- everyPossible
-      (head args, ) <$> foldM (unify context) y ys
+      (Unsafe.head args, ) <$> foldM (unify context) y ys
   ) =<< unpackSymbolic fun
 
 newtype Lint s a = Lint
@@ -482,7 +497,7 @@ runLintM opts action = do
 symbolicBaseEnv
   :: Monad m
   => m (Scopes m (Symbolic m))
-symbolicBaseEnv = pure mempty
+symbolicBaseEnv = stub
 
 lint :: Options -> NExprLoc -> ST s (Symbolic (Lint s))
 lint opts expr =

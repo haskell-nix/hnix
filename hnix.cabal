@@ -341,7 +341,9 @@ flag profiling
 
 library
   exposed-modules:
+    Prelude
     Nix
+    Nix.Utils
     Nix.Atoms
     Nix.Builtins
     Nix.Cache
@@ -383,7 +385,6 @@ library
     Nix.Type.Env
     Nix.Type.Infer
     Nix.Type.Type
-    Nix.Utils
     Nix.Utils.Fix1
     Nix.Value
     Nix.Value.Equal
@@ -392,13 +393,13 @@ library
     Nix.XML
   other-modules:
     Paths_hnix
+    Nix.Unused
   autogen-modules:
     Paths_hnix
   hs-source-dirs:
     src
   mixins:
       base hiding (Prelude)
-    , relude (Relude as Prelude)
     , relude
   ghc-options:
     -Wall
@@ -477,6 +478,7 @@ library
     , DeriveLift
     , FlexibleContexts
     , FlexibleInstances
+    , ScopedTypeVariables
     , StandaloneDeriving
     , TypeApplications
     , TypeSynonymInstances
@@ -532,7 +534,6 @@ executable hnix
     , time
   mixins:
       base hiding (Prelude)
-    , relude (Relude as Prelude)
     , relude
   default-extensions:
       OverloadedStrings
@@ -544,6 +545,7 @@ executable hnix
     , DeriveLift
     , FlexibleContexts
     , FlexibleInstances
+    , ScopedTypeVariables
     , StandaloneDeriving
     , TypeApplications
     , TypeSynonymInstances
@@ -579,7 +581,6 @@ test-suite hnix-tests
     TestCommon
   mixins:
       base hiding (Prelude)
-    , relude (Relude as Prelude)
     , relude
   hs-source-dirs:
     tests
@@ -623,6 +624,7 @@ test-suite hnix-tests
     , DeriveLift
     , FlexibleContexts
     , FlexibleInstances
+    , ScopedTypeVariables
     , StandaloneDeriving
     , TypeApplications
     , TypeSynonymInstances
@@ -650,7 +652,6 @@ benchmark hnix-benchmarks
     benchmarks
   mixins:
       base hiding (Prelude)
-    , relude (Relude as Prelude)
     , relude
   ghc-options:
     -Wall
@@ -676,6 +677,7 @@ benchmark hnix-benchmarks
     , DeriveLift
     , FlexibleContexts
     , FlexibleInstances
+    , ScopedTypeVariables
     , StandaloneDeriving
     , TypeApplications
     , TypeSynonymInstances

@@ -2,7 +2,6 @@
 {-# language ConstraintKinds #-}
 {-# language DataKinds #-}
 {-# language GADTs #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 {-# language RankNTypes #-}
 
@@ -11,8 +10,6 @@
 -- And so do not converge into a normal form.
 module Nix.Normal where
 
-import           Prelude            hiding ( force )
-import           Nix.Utils
 import           Control.Monad.Free        ( Free(..) )
 import           Data.Set                  ( member
                                            , insert

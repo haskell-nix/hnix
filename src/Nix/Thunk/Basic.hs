@@ -1,5 +1,4 @@
 {-# language ConstraintKinds #-}
-{-# language ScopedTypeVariables #-}
 {-# language UndecidableInstances #-}
 {-# options_ghc -Wno-unused-do-bind #-}
 
@@ -11,8 +10,6 @@ module Nix.Thunk.Basic
   , MonadBasicThunk
   ) where
 
-import           Prelude                 hiding ( force )
-import           Relude.Extra                   ( dup )
 import           Control.Monad.Ref              ( MonadRef(Ref, newRef, readRef, writeRef)
                                                 , MonadAtomicRef(atomicModifyRef)
                                                 )

@@ -1,7 +1,6 @@
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
 {-# language IncoherentInstances #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 {-# language UndecidableInstances #-}
 
@@ -16,7 +15,6 @@
 
 module Nix.Convert where
 
-import           Prelude                 hiding ( force )
 import           Control.Monad.Free
 import qualified Data.HashMap.Lazy             as M
 import           Nix.Atoms
@@ -28,7 +26,6 @@ import           Nix.String
 import           Nix.Value
 import           Nix.Value.Monad
 import           Nix.Thunk                      ( MonadThunk(force) )
-import           Nix.Utils
 
 newtype Deeper a = Deeper a
   deriving (Typeable, Functor, Foldable, Traversable)
@@ -74,6 +71,17 @@ class FromValue a m v where
   fromValue    :: v -> m a
   fromValueMay :: v -> m (Maybe a)
 
+traverseFromM
+  :: ( Applicative m
+     , Traversable t
+     , FromValue b m a
+     )
+  => t a
+  -> m (Maybe (t b))
+traverseFromM = traverseM fromValueMay
+
+traverseToValue :: ((Traversable t, Applicative f, ToValue a f b) => t a -> f (t b))
+traverseToValue = traverse toValue
 
 -- Please, hide these helper function from export, to be sure they get optimized away.
 fromMayToValue
@@ -150,7 +158,7 @@ instance Convertible e t f m
   fromValueMay =
     pure .
       \case
-        NVConstant' NNull -> pass
+        NVConstant' NNull -> stub
         _                 -> mempty
 
   fromValue = fromMayToValue TNull
@@ -234,6 +242,17 @@ instance Convertible e t f m
 
   fromValue = fromMayToValue $ TString mempty
 
+instance Convertible e t f m
+  => FromValue Text m (NValue' t f m (NValue t f m)) where
+
+  fromValueMay =
+    pure .
+      \case
+        NVStr' ns -> getStringNoContext ns
+        _         -> mempty
+
+  fromValue = fromMayToValue $ TString mempty
+
 instance ( Convertible e t f m
          , MonadValue (NValue t f m) m
          )
@@ -245,10 +264,10 @@ instance ( Convertible e t f m
       NVStr'  ns -> pure $ coerce . toString <$> getStringNoContext  ns
       NVSet' _ s ->
         maybe
-          (pure Nothing)
+          stub
           (fromValueMay @Path)
           (M.lookup "outPath" s)
-      _ -> pure Nothing
+      _ -> stub
 
   fromValue = fromMayToValue TPath
 
@@ -269,7 +288,7 @@ instance ( Convertible e t f m
   => FromValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
   fromValueMay =
     \case
-      Deeper (NVList' l) -> sequence <$> traverse fromValueMay l
+      Deeper (NVList' l) -> traverseFromM l
       _                  -> stub
 
 
@@ -293,7 +312,7 @@ instance ( Convertible e t f m
 
   fromValueMay =
     \case
-      Deeper (NVSet' _ s) -> sequence <$> traverse fromValueMay s
+      Deeper (NVSet' _ s) -> traverseFromM s
       _                   -> stub
 
   fromValue = fromMayToDeeperValue TSet
@@ -318,7 +337,7 @@ instance ( Convertible e t f m
 
   fromValueMay =
     \case
-      Deeper (NVSet' p s) -> fmap (, p) . sequence <$> traverse fromValueMay s
+      Deeper (NVSet' p s) -> (, p) <<$>> traverseFromM s
       _                   -> stub
 
   fromValue = fromMayToDeeperValue TSet
@@ -337,13 +356,15 @@ instance ( Convertible e t f m
 class ToValue a m v where
   toValue :: a -> m v
 
-instance (Convertible e t f m, ToValue a m (NValue' t f m (NValue t f m)))
+instance (Convertible e t f m
+  , ToValue a m (NValue' t f m (NValue t f m))
+  )
   => ToValue a m (NValue t f m) where
   toValue v = Free <$> toValue v
 
 instance ( Convertible e t f m
-         , ToValue a m (Deeper (NValue' t f m (NValue t f m)))
-         )
+  , ToValue a m (Deeper (NValue' t f m (NValue t f m)))
+  )
   => ToValue a m (Deeper (NValue t f m)) where
   toValue v = Free <<$>> toValue v
 
@@ -376,6 +397,10 @@ instance Convertible e t f m
   toValue = pure . nvStr' . mkNixStringWithoutContext . decodeUtf8
 
 instance Convertible e t f m
+  => ToValue Text m (NValue' t f m (NValue t f m)) where
+  toValue = pure . nvStr' . mkNixStringWithoutContext
+
+instance Convertible e t f m
   => ToValue Path m (NValue' t f m (NValue t f m)) where
   toValue = pure . nvPath' . coerce
 
@@ -383,11 +408,10 @@ instance Convertible e t f m
   => ToValue StorePath m (NValue' t f m (NValue t f m)) where
   toValue = toValue @Path . coerce
 
-instance ( Convertible e t f m
-         )
+instance Convertible e t f m
   => ToValue SourcePos m (NValue' t f m (NValue t f m)) where
   toValue (SourcePos f l c) = do
-    f' <- toValue $ mkNixStringWithoutContext $ toText f
+    f' <- toValue $ mkNixStringWithoutContext $ fromString f
     l' <- toValue $ unPos l
     c' <- toValue $ unPos c
     let pos = M.fromList [("file" :: VarName, f'), ("line", l'), ("column", c')]
@@ -398,9 +422,11 @@ instance Convertible e t f m
   => ToValue [NValue t f m] m (NValue' t f m (NValue t f m)) where
   toValue = pure . nvList'
 
-instance (Convertible e t f m, ToValue a m (NValue t f m))
+instance (Convertible e t f m
+  , ToValue a m (NValue t f m)
+  )
   => ToValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
-  toValue l = Deeper . nvList' <$> traverse toValue l
+  toValue l = Deeper . nvList' <$> traverseToValue l
 
 instance Convertible e t f m
   => ToValue (AttrSet (NValue t f m)) m (NValue' t f m (NValue t f m)) where
@@ -410,7 +436,7 @@ instance (Convertible e t f m, ToValue a m (NValue t f m))
   => ToValue (AttrSet a) m (Deeper (NValue' t f m (NValue t f m))) where
   toValue s =
     liftA2 (\ v s -> Deeper $ nvSet' s v)
-      (traverse toValue s)
+      (traverseToValue s)
       stub
 
 instance Convertible e t f m
@@ -423,7 +449,7 @@ instance (Convertible e t f m, ToValue a m (NValue t f m))
             (Deeper (NValue' t f m (NValue t f m))) where
   toValue (s, p) =
     liftA2 (\ v s -> Deeper $ nvSet' s v)
-      (traverse toValue s)
+      (traverseToValue s)
       (pure p)
 
 instance Convertible e t f m
@@ -441,7 +467,7 @@ instance Convertible e t f m
       let
         outputs = mkNixStringWithoutContext <$> nlcvOutputs nlcv
 
-      ts :: [NValue t f m] <- traverse toValue outputs
+      ts :: [NValue t f m] <- traverseToValue outputs
       list
         (pure Nothing)
         (fmap pure . toValue)

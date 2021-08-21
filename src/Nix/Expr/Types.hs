@@ -49,7 +49,6 @@ import           Data.Ord.Deriving              ( deriveOrd1 , deriveOrd2  )
 import           Data.Aeson.TH                  ( deriveJSON2 )
 import qualified Type.Reflection               as Reflection
 import           Nix.Atoms
-import           Nix.Utils
 #if !MIN_VERSION_text(1,2,4)
 -- NOTE: Remove package @th-lift-instances@ removing this
 import           Instances.TH.Lift              ()  -- importing Lift Text for GHC 8.6
@@ -268,7 +267,7 @@ data NString r
 -- | For the the 'IsString' instance, we use a plain doublequoted string.
 instance IsString (NString r) where
   fromString ""     = DoubleQuoted mempty
-  fromString string = DoubleQuoted [Plain $ toText string]
+  fromString string = DoubleQuoted [Plain $ fromString string]
 
 $(deriveShow1 ''NString)
 $(deriveRead1 ''NString)

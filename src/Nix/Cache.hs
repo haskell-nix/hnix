@@ -4,7 +4,6 @@
 module Nix.Cache where
 
 import qualified Data.ByteString.Lazy          as BSL
-import           Nix.Utils
 import           Nix.Expr.Types.Annotated
 
 #if defined (__linux__)

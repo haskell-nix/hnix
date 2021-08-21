@@ -1,24 +1,19 @@
 {-# language MultiWayIf #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 {-# language RecordWildCards #-}
 
 module Main ( main ) where
 
-import           Nix.Utils
+import           Relude                        as Prelude ( force )
 import           Control.Comonad                ( extract )
 import qualified Control.Exception             as Exception
 import           GHC.Err                        ( errorWithoutStackTrace )
 import           Control.Monad.Free
 import           Control.Monad.Ref              ( MonadRef(readRef) )
 import           Control.Monad.Catch
-import           System.IO                      ( hPutStrLn
-                                                , getContents
-                                                )
+import           System.IO                      ( hPutStrLn )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Map                      as Map
-import           Data.Maybe                     ( fromJust )
-import qualified Data.String                   as String
 import           Data.Time
 import qualified Data.Text.IO                  as Text
 import           Text.Show.Pretty               ( ppShow )
@@ -56,14 +51,14 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
   execContentsFilesOrRepl :: StandardT (StdIdT IO) ()
   execContentsFilesOrRepl =
     fromMaybe
-      loadFromCLIFilePathList
+      loadFromCliFilePathList
       ( loadBinaryCacheFile <|>
         loadLiteralExpression <|>
         loadExpressionFromFile
       )
    where
     -- | The base case: read expressions from the last CLI directive (@[FILE]@) listed on the command line.
-    loadFromCLIFilePathList =
+    loadFromCliFilePathList =
       case filePaths of
         []     -> runRepl
         ["-"]  -> readExpressionFromStdin
@@ -83,10 +78,10 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
 
     -- |  The `--read` option: load expression from a serialized file.
     loadBinaryCacheFile =
-      (\binaryCacheFile ->
+      (\ (binaryCacheFile :: Path) ->
         do
-          let file = replaceExtension binaryCacheFile "nixc"
-          processCLIOptions (Just $ coerce file) =<< liftIO (readCache $ coerce binaryCacheFile)
+          let file = coerce $ (replaceExtension . coerce) binaryCacheFile "nixc"
+          processCLIOptions (Just file) =<< liftIO (readCache binaryCacheFile)
       ) <$> readFrom
 
     -- | The `--expr` option: read expression from the argument string
@@ -97,9 +92,9 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       -- We can start use Text as in the base case, requires changing Path -> Text
       -- But that is a gradual process:
       -- https://github.com/haskell-nix/hnix/issues/912
-      (processSeveralFiles . (coerce <$>) . String.lines <=< liftIO) .
+      (processSeveralFiles . (coerce . toString <$>) . lines <=< liftIO) .
         (\case
-          "-" -> getContents
+          "-" -> Text.getContents
           _fp -> readFile _fp
         ) <$> fromFile
 
@@ -126,7 +121,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
               either
                 (\ err -> errorWithoutStackTrace $ "Type error: " <> ppShow err)
                 (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <>
-                  ppShow (fromJust $ Map.lookup @VarName @[Scheme] "it" (coerce ty))
+                  ppShow (maybeToMonoid $ Map.lookup @VarName @[Scheme] "it" $ coerce ty)
                 )
                 (HM.inferTop mempty [("it", stripAnnotation expr')])
 
@@ -159,7 +154,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
     | evaluate =
       if
         | tracing                       -> evaluateExprWithEvaluator nixTracingEvalExprLoc expr
-        | Just path <- reduce           -> evaluateExprWithEvaluator (reduction (coerce path) . coerce) expr
+        | Just path <- reduce           -> evaluateExprWithEvaluator (reduction path . coerce) expr
         | null arg || null argstr       -> evaluateExprWithEvaluator nixEvalExprLoc expr
         | otherwise                     -> processResult printer <=< nixEvalExprLoc (coerce mpath) $ expr
     | xml                        = fail "Rendering expression trees to XML is not yet implemented"
@@ -245,10 +240,10 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
                       liftIO $ Text.putStrLn path
                       when descend $
                         maybe
-                          pass
+                          stub
                           (\case
                             NVSet _ s' -> go (path <> ".") s'
-                            _          -> pass
+                            _          -> stub
                           )
                           mv
               )

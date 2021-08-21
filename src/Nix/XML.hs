@@ -1,11 +1,9 @@
-{-# language ScopedTypeVariables #-}
 
 module Nix.XML
   ( toXML )
 where
 
 import qualified Data.HashMap.Lazy             as M
-import           Nix.Utils
 import           Nix.Atoms
 import           Nix.Expr.Types
 import           Nix.String
@@ -24,7 +22,7 @@ toXML = runWithStringContext . fmap pp . iterNValueByDiscardWith cyc phi
 
   pp e =
     heading
-    <> toText
+    <> fromString
         (ppElement $
           mkE
             "expr"
@@ -49,7 +47,7 @@ toXML = runWithStringContext . fmap pp . iterNValueByDiscardWith cyc phi
       mkEVal "string" . toString <$> extractNixString str
     NVList' l ->
       do
-        els <- sequence l
+        els <- sequenceA l
         pure $
           mkE
             "list"
@@ -57,7 +55,7 @@ toXML = runWithStringContext . fmap pp . iterNValueByDiscardWith cyc phi
 
     NVSet' _ s ->
       do
-        kvs <- sequence s
+        kvs <- sequenceA s
         pure $
           mkE
             "attrs"
@@ -108,15 +106,9 @@ paramsXML (ParamSet mname variadic pset) =
   [Elem $ Element (unqual "attrspat") (battr <> nattr) (paramSetXML pset) Nothing]
  where
   battr =
-    bool
-      mempty
-      [ Attr (unqual "ellipsis") "1" ]
-      (variadic == Variadic)
+    [ Attr (unqual "ellipsis") "1" ] `whenTrue` (variadic == Variadic)
   nattr =
-    maybe
-      mempty
-      ((: mempty) . Attr (unqual "name") . toString)
-      mname
+    ((: mempty) . Attr (unqual "name") . toString) `whenJust` mname
 
 paramSetXML :: ParamSet r -> [Content]
 paramSetXML = fmap (\(k, _) -> Elem $ mkEName "attr" (toString k))

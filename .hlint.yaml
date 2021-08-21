@@ -20,12 +20,12 @@
     name: Use Foldable.forM_
 - hint:
     lhs: "pure ()"
-    note: "Use 'pass'"
-    rhs: pass
+    note: "Use 'stub'"
+    rhs: stub
 - hint:
     lhs: "return ()"
-    note: "Use 'pass'"
-    rhs: pass
+    note: "Use 'stub'"
+    rhs: stub
 - hint:
     lhs: "(: [])"
     note: "Use `one`"
@@ -2667,11 +2667,32 @@
     lhs: sum xs / length xs
     note: "Use `average` from `Relude.Extra.Foldable`"
     rhs: average xs
+
 - hint:
     lhs: "\\a -> (a, a)"
-    note: "Use `dup` from `Relude.Extra.Tuple`"
+    note: "Use `dup`"
     rhs: dup
 
 - warn:
     lhs: "() <$ a"
     rhs: void a
+
+- hint:
+    lhs: "pass"
+    note: "Use 'stub'"
+    rhs: stub
+
+- hint:
+    lhs: "bool mempty a b"
+    note: "Use `whenTrue`"
+    rhs: a `whenTrue` b
+
+- hint:
+    lhs: "bool a mempty b"
+    note: "Use `whenFalse`"
+    rhs: a `whenFalse` b
+
+- hint:
+    lhs: "maybe mempty a b"
+    note: "Use `whenJust`"
+    rhs: a `whenJust` b

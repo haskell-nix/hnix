@@ -2,14 +2,12 @@
 {-# language ConstraintKinds #-}
 {-# language FunctionalDependencies #-}
 {-# language GeneralizedNewtypeDeriving #-}
-{-# language ScopedTypeVariables #-}
 
 module Nix.Scope where
 
 import qualified Data.HashMap.Lazy             as M
 import qualified Text.Show
 import           Lens.Family2
-import           Nix.Utils
 import           Nix.Expr.Types
 
 --  2021-07-19: NOTE: Scopes can gain from sequentiality, HashMap (aka AttrSet) may not be proper to it.

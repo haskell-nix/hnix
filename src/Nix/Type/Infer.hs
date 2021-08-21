@@ -5,7 +5,6 @@
 {-# language ExistentialQuantification #-}
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language RankNTypes #-}
-{-# language ScopedTypeVariables #-}
 {-# language TypeFamilies #-}
 
 {-# options_ghc -Wno-name-shadowing #-}
@@ -27,7 +26,6 @@ import           Prelude                 hiding ( Type
                                                 , TVar
                                                 , Constraint
                                                 )
-import           Nix.Utils
 import           Control.Monad.Logic     hiding ( fail )
 import           Control.Monad.Reader           ( MonadFix )
 import           Control.Monad.Ref              ( MonadAtomicRef(..)
@@ -77,7 +75,7 @@ normalizeScheme (Forall _ body) = Forall (snd <$> ord) (normtype body)
   ord =
     zip
       (ordNub $ fv body)
-      (TV . toText <$> letters)
+      (TV . fromString <$> letters)
 
   fv (TVar a  ) = [a]
   fv (a :~> b ) = fv a <> fv b
@@ -176,7 +174,7 @@ freshTVar =
   do
     s <- get
     put $ succ s
-    pure $ TV $ toText $ letters !! coerce s
+    pure $ TV $ fromString $ letters !! coerce s
 
 fresh :: MonadState InferState m => m Type
 fresh = TVar <$> freshTVar

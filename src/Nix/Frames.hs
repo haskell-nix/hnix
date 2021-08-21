@@ -1,6 +1,5 @@
 {-# language ConstraintKinds #-}
 {-# language ExistentialQuantification #-}
-{-# language ScopedTypeVariables #-}
 
 -- | Definitions of Frames. Frames are messages that gather and ship themself with a context related to the message. For example - the message about some exception would also gather, keep and bring with it the tracing information.
 module Nix.Frames
@@ -15,15 +14,9 @@ module Nix.Frames
   )
 where
 
-import           Prelude                 hiding ( traceM )
 import           Data.Typeable           hiding ( typeOf )
 import           Control.Monad.Catch            ( MonadThrow(..) )
 import qualified Text.Show
-import           Nix.Utils                      ( Has(..)
-                                                , view
-                                                , over
-                                                , traceM
-                                                )
 
 data NixLevel = Fatal | Error | Warning | Info | Debug
   deriving (Ord, Eq, Bounded, Enum, Show)

@@ -42,7 +42,6 @@ where
 import           Prelude                 hiding ( (<|>)
                                                 , some
                                                 , many
-                                                , readFile
                                                 )
 import           Data.Foldable                  ( foldr1 )
 
@@ -64,7 +63,6 @@ import           Data.Fix                       ( Fix(..) )
 import qualified Data.HashSet                  as HashSet
 import qualified Data.Map                      as Map
 import qualified Data.Text                     as Text
-import           Nix.Utils
 import           Nix.Expr.Types
 import           Nix.Expr.Shorthands     hiding ( ($>) )
 import           Nix.Expr.Types.Annotated
@@ -73,7 +71,7 @@ import           Nix.Expr.Strings               ( escapeCodes
                                                 , mergePlain
                                                 , removeEmptyPlains
                                                 )
-import           Nix.Render                     ( MonadFile(readFile) )
+import           Nix.Render                     ( MonadFile() )
 import           Prettyprinter                  ( Doc
                                                 , pretty
                                                 )
@@ -328,7 +326,7 @@ nixString' = label "string" $ lexeme $ doubleQuoted <|> indented
     antiquoted
     <|> Plain . one <$> char '$'
     <|> esc
-    <|> Plain . toText <$> some plainChar
+    <|> Plain . fromString <$> some plainChar
    where
     plainChar :: Parser Char
     plainChar =
@@ -877,7 +875,7 @@ type Result a = Either (Doc Void) a
 parseFromFileEx :: MonadFile m => Parser a -> Path -> m (Result a)
 parseFromFileEx parser file =
   do
-    input <- decodeUtf8 <$> readFile file
+    input <- liftIO $ readFile file
 
     pure $
       either

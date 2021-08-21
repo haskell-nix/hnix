@@ -1,4 +1,3 @@
-{-# language ScopedTypeVariables #-}
 
 module Nix
   ( module Nix.Cache
@@ -48,7 +47,6 @@ import           Nix.Pretty
 import           Nix.Reduce
 import           Nix.Render.Frame
 import           Nix.Thunk
-import           Nix.Utils
 import           Nix.Value
 import           Nix.Value.Monad
 import           Nix.XML
@@ -60,15 +58,15 @@ nixEval
   :: (MonadNix e t f m, Has e Options, Functor g)
   => Transform g (m a)
   -> Alg g (m a)
-  -> Maybe FilePath
+  -> Maybe Path
   -> Fix g
   -> m a
-nixEval transform alg mpath = withNixContext (coerce mpath) . adi transform alg
+nixEval transform alg mpath = withNixContext mpath . adi transform alg
 
 -- | Evaluate a nix expression in the default context
 nixEvalExpr
   :: (MonadNix e t f m, Has e Options)
-  => Maybe FilePath
+  => Maybe Path
   -> NExpr
   -> m (NValue t f m)
 nixEvalExpr = nixEval id Eval.eval
@@ -77,7 +75,7 @@ nixEvalExpr = nixEval id Eval.eval
 nixEvalExprLoc
   :: forall e t f m
    . (MonadNix e t f m, Has e Options)
-  => Maybe FilePath
+  => Maybe Path
   -> NExprLoc
   -> m (NValue t f m)
 nixEvalExprLoc =
@@ -92,15 +90,15 @@ nixEvalExprLoc =
 --   context.
 nixTracingEvalExprLoc
   :: (MonadNix e t f m, Has e Options, MonadIO m, Alternative m)
-  => Maybe FilePath
+  => Maybe Path
   -> NExprLoc
   -> m (NValue t f m)
-nixTracingEvalExprLoc mpath = withNixContext (coerce mpath) . evalExprLoc
+nixTracingEvalExprLoc mpath = withNixContext mpath . evalExprLoc
 
 evaluateExpression
   :: (MonadNix e t f m, Has e Options)
-  => Maybe FilePath
-  -> (Maybe FilePath -> NExprLoc -> m (NValue t f m))
+  => Maybe Path
+  -> (Maybe Path -> NExprLoc -> m (NValue t f m))
   -> (NValue t f m -> m a)
   -> NExprLoc
   -> m a

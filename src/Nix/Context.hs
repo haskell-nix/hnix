@@ -7,7 +7,6 @@ import           Nix.Frames                     ( Frames )
 import           Nix.Expr.Types.Annotated       ( SrcSpan
                                                 , nullSpan
                                                 )
-import           Nix.Utils                      ( Has(..) )
 
 --  2021-07-18: NOTE: It should be Options -> Scopes -> Frames -> Source(span)
 data Context m t = Context

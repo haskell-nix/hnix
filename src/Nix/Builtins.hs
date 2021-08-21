@@ -7,7 +7,6 @@
 {-# language MultiWayIf #-}
 {-# language PartialTypeSignatures #-}
 {-# language QuasiQuotes #-}
-{-# language ScopedTypeVariables #-}
 {-# language TemplateHaskell #-}
 {-# language UndecidableInstances #-}
 {-# language PackageImports #-} -- 2021-07-05: Due to hashing Haskell IT system situation, in HNix we currently ended-up with 2 hash package dependencies @{hashing, cryptonite}@
@@ -22,9 +21,7 @@ module Nix.Builtins
 where
 
 
-import           Prelude                 hiding ( traceM )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
-import           Nix.Utils
 import           Control.Comonad                ( Comonad )
 import           Control.Monad                  ( foldM )
 import           Control.Monad.Catch            ( MonadCatch(catch) )
@@ -167,6 +164,23 @@ mkNVBool
   -> NValue t f m
 mkNVBool = nvConstant . NBool
 
+data NixPathEntryType
+  = PathEntryPath
+  | PathEntryURI
+ deriving (Show, Eq)
+
+-- | @NIX_PATH@ is colon-separated, but can also contain URLs, which have a colon
+-- (i.e. @https://...@)
+uriAwareSplit :: Text -> [(Text, NixPathEntryType)]
+uriAwareSplit txt =
+  case Text.break (== ':') txt of
+    (e1, e2)
+      | Text.null e2                              -> [(e1, PathEntryPath)]
+      | "://" `Text.isPrefixOf` e2      ->
+        let ((suffix, _) : path) = uriAwareSplit (Text.drop 3 e2) in
+        (e1 <> "://" <> suffix, PathEntryURI) : path
+      | otherwise                                 -> (e1, PathEntryPath) : uriAwareSplit (Text.drop 1 e2)
+
 foldNixPath
   :: forall e t f m r
    . MonadNix e t f m
@@ -193,10 +207,7 @@ foldNixPath z f =
       go
       z
       $ (fromInclude . stringIgnoreContext <$> dirs)
-        <> maybe
-            mempty
-            uriAwareSplit
-            mPath
+        <> uriAwareSplit `whenJust` mPath
         <> [ fromInclude $ "nix=" <> toText dataDir <> "/nix/corepkgs" ]
  where
 
@@ -801,7 +812,7 @@ baseNameOfNix x =
     pure $
       nvStr $
         modifyNixContents
-          (toText . takeFileName . toString)
+          (fromString . takeFileName . toString)
           ns
 
 bitAndNix
@@ -855,7 +866,7 @@ dirOfNix nvdir =
     dir <- demand nvdir
 
     case dir of
-      NVStr ns -> pure $ nvStr $ modifyNixContents (toText . takeDirectory . toString) ns
+      NVStr ns -> pure $ nvStr $ modifyNixContents (fromString . takeDirectory . toString) ns
       NVPath path -> pure $ nvPath $ coerce $ takeDirectory $ coerce path
       v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " <> show v
 
@@ -1115,13 +1126,13 @@ toFileNix name s =
     mres  <-
       toFile_
         (coerce $ toString name')
-        (toString $ stringIgnoreContext s')
+        (stringIgnoreContext s')
 
     let
-      t  = coerce $ toText @FilePath $ coerce mres
-      sc = StringContext t DirectPath
+      storepath  = coerce $ toText @FilePath $ coerce mres
+      sc = StringContext storepath DirectPath
 
-    toValue $ mkNixStringWithSingletonContext t sc
+    toValue $ mkNixStringWithSingletonContext storepath sc
 
 toPathNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toPathNix = toValue @Path <=< fromValue @Path
@@ -1759,7 +1770,7 @@ langVersionNix = toValue (5 :: Int)
 -- ** @builtinsList@
 
 builtinsList :: forall e t f m . MonadNix e t f m => m [Builtin (NValue t f m)]
-builtinsList = sequence
+builtinsList = sequenceA
   [ add0 Normal   "nixVersion"       nixVersionNix
   , add0 Normal   "langVersion"      langVersionNix
   , add  TopLevel "abort"            throwNix -- for now

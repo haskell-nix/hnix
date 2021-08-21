@@ -1,12 +1,12 @@
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
 {-# language RankNTypes #-}
-{-# language ScopedTypeVariables #-}
 
 
 
 module Nix.Eval where
 
+import           Relude.Extra                   ( set )
 import           Control.Monad                  ( foldM )
 import           Control.Monad.Fix              ( MonadFix )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
@@ -22,7 +22,6 @@ import           Nix.Expr.Strings               ( runAntiquoted )
 import           Nix.Frames
 import           Nix.String
 import           Nix.Scope
-import           Nix.Utils
 import           Nix.Value.Monad
 
 class (Show v, Monad m) => MonadEval v m where
@@ -245,7 +244,7 @@ attrSetAlter (k : ks) pos m p val =
     (\(st', _) ->
       (M.insert
         k
-        (toValue @(AttrSet v, PositionSet) =<< (, mempty) <$> sequence st')
+        (toValue @(AttrSet v, PositionSet) =<< (, mempty) <$> sequenceA st')
         m
       , M.insert (coerce k) pos p
       )
@@ -466,7 +465,7 @@ assembleString
   -> m (Maybe NixString)
 assembleString = fromParts . stringParts
  where
-  fromParts xs = (mconcat <$>) . sequence <$> traverse go xs
+  fromParts xs = mconcat <<$>> traverseM go xs
   go =
     runAntiquoted
       "\n"

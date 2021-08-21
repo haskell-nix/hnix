@@ -1,5 +1,4 @@
 {-# language CPP #-}
-{-# language ScopedTypeVariables #-}
 
 {-# options_ghc -fno-warn-name-shadowing #-}
 
@@ -7,7 +6,6 @@
 module Nix.Pretty where
 
 import           Prelude                  hiding ( toList, group )
-import           Nix.Utils
 import           Control.Monad.Free             ( Free(Free) )
 import           Data.Fix                       ( Fix(..)
                                                 , foldFix )
@@ -134,15 +132,11 @@ prettyParams :: Params (NixDoc ann) -> Doc ann
 prettyParams (Param n           ) = prettyVarName n
 prettyParams (ParamSet mname variadic pset) =
   prettyParamSet variadic pset <>
-    maybe
-      mempty
-      (\ (coerce -> name) ->
-        bool
-          mempty
-          ("@" <> pretty name)
-          (not (Text.null name))
-      )
-      mname
+     toDoc `whenJust` mname
+ where
+  toDoc :: VarName -> Doc ann
+  toDoc (coerce -> name) =
+    ("@" <> pretty name) `whenFalse` Text.null name
 
 prettyParamSet :: Variadic -> ParamSet (NixDoc ann) -> Doc ann
 prettyParamSet variadic args =
@@ -150,7 +144,7 @@ prettyParamSet variadic args =
     "{ "
     (align " }")
     sep
-    (fmap prettySetArg args <> bool mempty ["..."] (variadic == Variadic))
+    (fmap prettySetArg args <> ["..."] `whenTrue` (variadic == Variadic))
  where
   prettySetArg (n, maybeDef) =
     maybe
@@ -166,10 +160,7 @@ prettyBind (Inherit s ns _p) =
   "inherit " <> scope <> align (fillSep $ prettyVarName <$> ns) <> ";"
   where
     scope =
-      maybe
-        mempty
-        ((<> " ") . parens . withoutParens)
-        s
+      ((<> " ") . parens . withoutParens) `whenJust` s
 
 prettyKeyName :: NKeyName (NixDoc ann) -> Doc ann
 prettyKeyName (StaticKey "") = "\"\""
@@ -257,10 +248,7 @@ exprFNixDoc = \case
    where
     r     = mkNixDoc selectOp (wrapParens appOpNonAssoc r')
     ordoc =
-      maybe
-        mempty
-        ((" or " <>) . wrapParens appOpNonAssoc)
-        o
+      ((" or " <>) . wrapParens appOpNonAssoc) `whenJust` o
   NHasAttr r attr ->
     mkNixDoc hasAttrOp (wrapParens hasAttrOp r <> " ? " <> prettySelector attr)
   NEnvPath     p -> simpleExpr $ pretty @String $ coerce $ "<" <> p <> ">"
@@ -385,7 +373,7 @@ printNix = iterNValueByDiscardWith thk phi
   phi :: NValue' t f m String -> String
   phi (NVConstant' a ) = toString $ atomText a
   phi (NVStr'      ns) = show $ stringIgnoreContext ns
-  phi (NVList'     l ) = toString $ "[ " <> unwords (fmap toText l) <> " ]"
+  phi (NVList'     l ) = toString $ "[ " <> unwords (fmap fromString l) <> " ]"
   phi (NVSet' _ s) =
     "{ " <>
       concat

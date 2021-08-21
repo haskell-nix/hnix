@@ -1,12 +1,10 @@
 {-# language PartialTypeSignatures #-}
-{-# language ScopedTypeVariables #-}
 
 module TestCommon where
 
 import           GHC.Err                        ( errorWithoutStackTrace )
 import           Control.Monad.Catch
 import           Data.Time
-import           Nix.Utils
 import           Nix
 import           Nix.Standard
 import           Nix.Fresh.Basic

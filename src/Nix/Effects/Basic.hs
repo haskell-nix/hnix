@@ -1,14 +1,11 @@
 {-# language CPP #-}
-{-# language ScopedTypeVariables #-}
 
 module Nix.Effects.Basic where
 
-import           Prelude                 hiding ( traceM
-                                                , head
+import           Prelude                 hiding ( head
                                                 )
 import           Relude.Unsafe                  ( head )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
-import           Nix.Utils
 import           Control.Monad                  ( foldM )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List.Split                ( splitOn )
@@ -111,11 +108,7 @@ findEnvPathM name = do
         (toAbsolutePath @t @f $ coerce $ coerce absPath </> "default.nix")
         isDir
     exists <- doesFileExist absFile
-    pure $
-      bool
-        mempty
-        (pure absFile)
-        exists
+    pure $ pure absFile `whenTrue` exists
 
 findPathBy
   :: forall e t f m
@@ -150,10 +143,7 @@ findPathBy finder ls name = do
                   case mns of
                     Just (nsPfx :: NixString) ->
                       let pfx = stringIgnoreContext nsPfx in
-                      bool
-                        mempty
-                        (pure $ coerce $ toString pfx)
-                        (not $ Text.null pfx)
+                        pure $ coerce $ toString pfx `whenFalse` Text.null pfx
                     _ -> mempty
             )
             (M.lookup "prefix" s)

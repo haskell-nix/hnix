@@ -1,4 +1,3 @@
-{-# language ScopedTypeVariables #-}
 
 module NixLanguageTests (genTests) where
 
@@ -11,10 +10,8 @@ import qualified Data.Map                      as Map
 import qualified Data.Set                      as Set
 import qualified Data.String                   as String
 import qualified Data.Text                     as Text
-import qualified Data.Text.IO                  as Text
 import           Data.Time
 import           GHC.Exts
-import           Nix.Utils
 import           Nix.Lint
 import           Nix.Options
 import           Nix.Options.Parser
@@ -112,15 +109,15 @@ assertParse _opts file =
     x <- parseNixFileLoc file
     either
       (\ err -> assertFailure $ "Failed to parse " <> coerce file <> ":\n" <> show err)
-      (const pass)  -- pure $! runST $ void $ lint opts expr
+      (const stub)  -- pure $! runST $ void $ lint opts expr
       x
 
 assertParseFail :: Options -> Path -> Assertion
 assertParseFail opts file = do
   eres <- parseNixFileLoc file
-  (`catch` \(_ :: SomeException) -> pass)
+  (`catch` \(_ :: SomeException) -> stub)
     (either
-      (const pass)
+      (const stub)
       (\ expr ->
         do
           _ <- pure $! runST $ void $ lint opts expr
@@ -132,13 +129,13 @@ assertParseFail opts file = do
 assertLangOk :: Options -> Path -> Assertion
 assertLangOk opts file = do
   actual   <- printNix <$> hnixEvalFile opts (file <> ".nix")
-  expected <- Text.readFile $ coerce $ file <> ".exp"
-  assertEqual "" expected $ toText (actual <> "\n")
+  expected <- readFile $ file <> ".exp"
+  assertEqual "" expected $ fromString (actual <> "\n")
 
 assertLangOkXml :: Options -> Path -> Assertion
 assertLangOkXml opts file = do
   actual <- stringIgnoreContext . toXML <$> hnixEvalFile opts (file <> ".nix")
-  expected <- Text.readFile $ coerce $ file <> ".exp.xml"
+  expected <- readFile $ file <> ".exp.xml"
   assertEqual "" expected actual
 
 assertEval :: Options -> [Path] -> Assertion
@@ -146,16 +143,16 @@ assertEval _opts files =
   do
     time <- liftIO getCurrentTime
     let opts = defaultOptions time
-    case delete ".nix" $ sort $ toText . takeExtensions . coerce <$> files of
+    case delete ".nix" $ sort $ fromString @Text . takeExtensions . coerce <$> files of
       []                 -> void $ hnixEvalFile opts (name <> ".nix")
       [".exp"          ]  -> assertLangOk    opts name
       [".exp.xml"      ]  -> assertLangOkXml opts name
-      [".exp.disabled" ]  -> pass
-      [".exp-disabled" ]  -> pass
+      [".exp.disabled" ]  -> stub
+      [".exp-disabled" ]  -> stub
       [".exp", ".flags"] ->
         do
           liftIO $ setEnv "NIX_PATH" "lang/dir4:lang/dir5"
-          flags <- Text.readFile $ coerce $ name <> ".flags"
+          flags <- readFile $ name <> ".flags"
           let flags' | Text.last flags == '\n' = Text.init flags
                     | otherwise               = flags
           case runParserGetResult time flags' of
@@ -180,7 +177,7 @@ assertEval _opts files =
   fixup []                          = mempty
 
 assertEvalFail :: Path -> Assertion
-assertEvalFail file = (`catch` (\(_ :: SomeException) -> pass)) $ do
+assertEvalFail file = (`catch` (\(_ :: SomeException) -> stub)) $ do
   time       <- liftIO getCurrentTime
   evalResult <- printNix <$> hnixEvalFile (defaultOptions time) file
   evalResult `seq` assertFailure $ "File: ''" <> coerce file <> "'' should not evaluate.\nThe evaluation result was `" <> evalResult <> "`."
