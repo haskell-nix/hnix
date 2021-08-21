@@ -170,20 +170,19 @@ merge context = go
     -> m [NTypeF m (Symbolic m)]
   go []       _        = stub
   go _        []       = stub
-  go (x : xs) (y : ys) = case (x, y) of
-    (TStr , TStr ) -> (TStr :) <$> go xs ys
-    (TPath, TPath) -> (TPath :) <$> go xs ys
+  go xxs@(x : xs) yys@(y : ys) = case (x, y) of
+    (TStr , TStr ) -> (TStr :) <$> rest
+    (TPath, TPath) -> (TPath :) <$> rest
     (TConstant ls, TConstant rs) ->
-      (TConstant (ls `intersect` rs) :) <$> go xs ys
+      (TConstant (ls `intersect` rs) :) <$> rest
     (TList l, TList r) ->
-      (\l' ->
-        (\r' -> do
-          m <- defer $ unify context l' r'
-          (TList m :) <$> go xs ys
-        ) =<< demand r
-      ) =<< demand l
-    (TSet x       , TSet Nothing ) -> (TSet x :) <$> go xs ys
-    (TSet Nothing , TSet x       ) -> (TSet x :) <$> go xs ys
+      do
+        l' <- demand l
+        r' <- demand r
+        m <- defer $ unify context l' r'
+        (TList m :) <$> rest
+    (TSet x       , TSet Nothing ) -> (TSet x :) <$> rest
+    (TSet Nothing , TSet x       ) -> (TSet x :) <$> rest
     (TSet (Just l), TSet (Just r)) -> do
       m <- sequenceA $ M.intersectionWith
         (\ i j ->
@@ -198,15 +197,18 @@ merge context = go
         id
         ((TSet (pure m) :) <$>)
         (not $ M.null m)
-        (go xs ys)
+        rest
 
     (TClosure{}, TClosure{}) ->
       throwError $ ErrorCall "Cannot unify functions"
     (TBuiltin _ _, TBuiltin _ _) ->
       throwError $ ErrorCall "Cannot unify builtin functions"
-    _ | compareTypes x y == LT -> go xs (y : ys)
-      | compareTypes x y == GT -> go (x : xs) ys
+    _ | compareTypes x y == LT -> go xs yys
+      | compareTypes x y == GT -> go xxs ys
       | otherwise              -> error "impossible"
+   where
+    rest :: m [NTypeF m (Symbolic m)]
+    rest = go xs ys
 
 {-
     mergeFunctions pl nl fl pr fr xs ys = do
