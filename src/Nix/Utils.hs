@@ -1,16 +1,31 @@
 {-# language NoImplicitPrelude #-}
 {-# language CPP #-}
-{-# language FunctionalDependencies #-}
-{-# language TemplateHaskell #-}
 {-# language GeneralizedNewtypeDeriving #-}
-
-{-# options_ghc -Wno-missing-signatures #-}
 
 -- | This is a module of custom "Prelude" code.
 -- It is for import for projects other then @HNix@.
 -- For @HNix@ - this module gets reexported by "Prelude", so for @HNix@ please fix-up pass-through there.
 module Nix.Utils
-  ( module Nix.Utils
+  ( KeyMap
+  , TransformF
+  , Transform
+  , Alg
+  , Path(..)
+  , Has(..)
+  , trace
+  , traceM
+  , stub
+  , whenTrue
+  , list
+  , whenText
+  , free
+  , dup
+  , mapPair
+  , both
+  , readFile
+  , lifted
+  , loebM
+  , adi
   , module X
   )
  where
@@ -30,12 +45,9 @@ import           Control.Monad.Fix              ( MonadFix(..) )
 import           Control.Monad.Free             ( Free(..) )
 import           Control.Monad.Trans.Control    ( MonadTransControl(..) )
 import qualified Data.Aeson                    as A
-import qualified Data.Aeson.Encoding           as A
 import           Data.Fix                       ( Fix(..) )
-import qualified Data.HashMap.Lazy             as M
 import qualified Data.Text                     as Text
 import qualified Data.Text.IO                 as Text
-import qualified Data.Vector                   as V
 import           Lens.Family2                  as X
                                                 ( view
                                                 , over
@@ -45,7 +57,6 @@ import           Lens.Family2                  as X
 import           Lens.Family2.Stock             ( _1
                                                 , _2
                                                 )
-import           Lens.Family2.TH                ( makeLensesBy )
 
 #if ENABLE_TRACING
 import qualified Relude.Debug                 as X
@@ -58,8 +69,6 @@ traceM :: Monad m => String -> m ()
 traceM = const pass
 {-# inline traceM #-}
 #endif
-
-$(makeLensesBy (\n -> pure $ "_" <> n) ''Fix)
 
 -- | To have explicit type boundary between FilePath & String.
 newtype Path = Path FilePath
@@ -84,9 +93,6 @@ type KeyMap = HashMap Text
 -- > type Alg f a = f a -> a
 type Alg f a = f a -> a
 
--- | > type AlgM f m a = f a -> m a
-type AlgM f m a = f a -> m a
-
 -- | Do according transformation.
 --
 -- It is a transformation of a recursion scheme.
@@ -98,83 +104,6 @@ type Transform f a = TransformF (Fix f) a
 -- ...
 -- You got me, it is a natural transformation.
 type TransformF f a = (f -> a) -> f -> a
-
-loeb :: Functor f => f (f a -> a) -> f a
-loeb x = go
- where
-  go = ($ go) <$> x
-
-loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
--- Sectioning here insures optimization happening.
-loebM f = mfix $ \a -> (`traverse` f) ($ a)
-{-# inline loebM #-}
-
-para :: Functor f => (f (Fix f, a) -> a) -> Fix f -> a
-para f = f . fmap (id &&& para f) . unFix
-
-paraM :: (Traversable f, Monad m) => (f (Fix f, a) -> m a) -> Fix f -> m a
-paraM f = f <=< traverse (\x -> (x, ) <$> paraM f x) . unFix
-
-cataP :: Functor f => (Fix f -> f a -> a) -> Fix f -> a
-cataP f x = f x . fmap (cataP f) . unFix $ x
-
-cataPM :: (Traversable f, Monad m) => (Fix f -> f a -> m a) -> Fix f -> m a
-cataPM f x = f x <=< traverse (cataPM f) . unFix $ x
-
-lifted
-  :: (MonadTransControl u, Monad (u m), Monad m)
-  => ((a -> m (StT u b)) -> m (StT u b))
-  -> (a -> u m b)
-  -> u m b
-lifted f k =
-  do
-    lftd <- liftWith (\run -> f (run . k))
-    restoreT $ pure lftd
-
--- | Replace:
---  @Pure a -> a@
---  @Free -> Fix@
-freeToFix :: Functor f => (a -> Fix f) -> Free f a -> Fix f
-freeToFix f = go
- where
-  go =
-    free
-      f
-      $ Fix . (go <$>)
-
--- | Replace:
---  @a -> Pure a@
---  @Fix -> Free@
-fixToFree :: Functor f => Fix f -> Free f a
-fixToFree = Free . go
- where
-  go (Fix f) = Free . go <$> f
-
--- | adi is Abstracting Definitional Interpreters:
---
---     https://arxiv.org/abs/1707.04755
---
---   Essentially, it does for evaluation what recursion schemes do for
---   representation: allows threading layers through existing structure, only
---   in this case through behavior.
-adi
-  :: Functor f
-  => Transform f a
-  -> Alg f a
-  -> Fix f
-  -> a
-adi g f = g $ f . (adi g f <$>) . unFix
-
-adiM
-  :: ( Traversable t
-     , Monad m
-     )
-  => Transform t (m a)
-  -> AlgM t m a
-  -> Fix t
-  -> m a
-adiM g f = g $ f <=< traverse (adiM g f) . unFix
-
 
 class Has a b where
   hasLens :: Lens' a b
@@ -188,30 +117,40 @@ instance Has (a, b) a where
 instance Has (a, b) b where
   hasLens = _2
 
-toEncodingSorted :: A.Value -> A.Encoding
-toEncodingSorted = \case
-  A.Object m ->
-    A.pairs
-      . mconcat
-      . ((\(k, v) -> A.pair k $ toEncodingSorted v) <$>)
-      . sortWith fst
-      $ M.toList m
-  A.Array l -> A.list toEncodingSorted $ V.toList l
-  v         -> A.toEncoding v
+loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
+-- Sectioning here insures optimization happening.
+loebM f = mfix $ \a -> (`traverse` f) ($ a)
+{-# inline loebM #-}
 
-data NixPathEntryType = PathEntryPath | PathEntryURI deriving (Show, Eq)
+--  2021-08-21: NOTE: Someone needs to put in normal words, what this does.
+-- This function is pretty spefic & used only once, in "Nix.Normal".
+lifted
+  :: (MonadTransControl u, Monad (u m), Monad m)
+  => ((a -> m (StT u b)) -> m (StT u b))
+  -> (a -> u m b)
+  -> u m b
+lifted f k =
+  do
+    lftd <- liftWith (\run -> f (run . k))
+    restoreT $ pure lftd
 
--- | @NIX_PATH@ is colon-separated, but can also contain URLs, which have a colon
--- (i.e. @https://...@)
-uriAwareSplit :: Text -> [(Text, NixPathEntryType)]
-uriAwareSplit txt =
-  case Text.break (== ':') txt of
-    (e1, e2)
-      | Text.null e2                              -> [(e1, PathEntryPath)]
-      | "://" `Text.isPrefixOf` e2      ->
-        let ((suffix, _) : path) = uriAwareSplit (Text.drop 3 e2) in
-        (e1 <> "://" <> suffix, PathEntryURI) : path
-      | otherwise                                 -> (e1, PathEntryPath) : uriAwareSplit (Text.drop 1 e2)
+-- | adi is Abstracting Definitional Interpreters:
+--
+--     https://arxiv.org/abs/1707.04755
+--
+--   All ADI does is interleaves every layer of evaluation by inserting intermitten layers between them, in that way the evaluation can be extended/embelished in any way wanted. Look at its use to see great examples.
+--
+--   Essentially, it does for evaluation what recursion schemes do for
+--   representation: allows threading layers through existing structure, only
+--   in this case through behavior.
+adi
+  :: Functor f
+  => Transform f a
+  -> Alg f a
+  -> Fix f
+  -> a
+adi g f = g $ f . (adi g f <$>) . unFix
+
 
 -- | Analog for @bool@ or @maybe@, for list-like cons structures.
 list
@@ -248,29 +187,6 @@ whenTrue =
     mempty
 {-# inline whenTrue #-}
 
-whenFalse :: (Monoid a)
-  => a  -> Bool  -> a
-whenFalse f =
-  bool
-    f
-    mempty
-{-# inline whenFalse #-}
-
-whenFree :: (Monoid b)
-  => (f (Free f a) -> b) -> Free f a -> b
-whenFree =
-  free
-    mempty
-{-# inline whenFree #-}
-
-whenPure :: (Monoid b)
-  => (a -> b) -> Free f a -> b
-whenPure f =
-  free
-    f
-    mempty
-{-# inline whenPure #-}
-
 
 -- | Apply a single function to both components of a pair.
 --
@@ -300,3 +216,5 @@ stub = pure mempty
 
 readFile :: Path -> IO Text
 readFile = Text.readFile . coerce
+
+

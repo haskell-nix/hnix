@@ -393,6 +393,7 @@ library
     Nix.XML
   other-modules:
     Paths_hnix
+    Nix.Unused
   autogen-modules:
     Paths_hnix
   hs-source-dirs:

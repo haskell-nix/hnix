@@ -3,9 +3,8 @@ module Nix.Json where
 
 import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Encoding           as A
-import qualified Data.HashMap.Lazy             as HM
-import qualified Data.Text.Lazy.Encoding       as TL
 import qualified Data.Vector                   as V
+import qualified Data.HashMap.Strict           as HM
 import           Nix.Atoms
 import           Nix.Effects
 import           Nix.Exec
@@ -15,12 +14,24 @@ import           Nix.Value
 import           Nix.Value.Monad
 import           Nix.Expr.Types
 
+-- This was moved from Utils.
+toEncodingSorted :: A.Value -> A.Encoding
+toEncodingSorted = \case
+  A.Object m ->
+    A.pairs
+      . mconcat
+      . ((\(k, v) -> A.pair k $ toEncodingSorted v) <$>)
+      . sortWith fst
+      $ HM.toList m
+  A.Array l -> A.list toEncodingSorted $ V.toList l
+  v         -> A.toEncoding v
+
 nvalueToJSONNixString :: MonadNix e t f m => NValue t f m -> m NixString
 nvalueToJSONNixString =
   runWithStringContextT .
     fmap
-      ( toStrict
-      . TL.decodeUtf8
+      ( decodeUtf8
+      -- This is completely not optimal, but seems we do not have better encoding analog (except for @unsafe*@), Aeson gatekeeps through this.
       . A.encodingToLazyByteString
       . toEncodingSorted
       )

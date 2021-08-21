@@ -164,6 +164,23 @@ mkNVBool
   -> NValue t f m
 mkNVBool = nvConstant . NBool
 
+data NixPathEntryType
+  = PathEntryPath
+  | PathEntryURI
+ deriving (Show, Eq)
+
+-- | @NIX_PATH@ is colon-separated, but can also contain URLs, which have a colon
+-- (i.e. @https://...@)
+uriAwareSplit :: Text -> [(Text, NixPathEntryType)]
+uriAwareSplit txt =
+  case Text.break (== ':') txt of
+    (e1, e2)
+      | Text.null e2                              -> [(e1, PathEntryPath)]
+      | "://" `Text.isPrefixOf` e2      ->
+        let ((suffix, _) : path) = uriAwareSplit (Text.drop 3 e2) in
+        (e1 <> "://" <> suffix, PathEntryURI) : path
+      | otherwise                                 -> (e1, PathEntryPath) : uriAwareSplit (Text.drop 1 e2)
+
 foldNixPath
   :: forall e t f m r
    . MonadNix e t f m
