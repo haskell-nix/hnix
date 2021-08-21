@@ -2686,3 +2686,7 @@
     lhs: "Data.Bool.bool True"
     rhs: "Use `whenTrue` from HNix Prelude"
 
+- hint:
+    lhs: "maybe mempty"
+    note: "Use `whenJust`"
+    rhs: whenJust

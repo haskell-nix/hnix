@@ -195,11 +195,10 @@ whenJust
   => (a -> b)
   -> Maybe a
   -> b
-whenJust f ma =
+whenJust =
   maybe
     mempty
-    f
-    ma
+{-# inline whenJust #-}
 
 
 -- | Apply a single function to both components of a pair.

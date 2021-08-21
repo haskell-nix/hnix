@@ -55,10 +55,7 @@ renderFrames (x : xs) = do
  where
   go :: NixFrame -> [Doc ann]
   go f =
-    maybe
-      mempty
-      (\ pos -> ["While evaluating at " <> pretty (sourcePosPretty pos) <> colon])
-      (framePos @v @m f)
+    (\ pos -> ["While evaluating at " <> pretty (sourcePosPretty pos) <> colon]) `whenJust` framePos @v @m f
 
 framePos
   :: forall v (m :: Type -> Type)

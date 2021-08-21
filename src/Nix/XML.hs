@@ -111,10 +111,7 @@ paramsXML (ParamSet mname variadic pset) =
       [ Attr (unqual "ellipsis") "1" ]
       (variadic == Variadic)
   nattr =
-    maybe
-      mempty
-      ((: mempty) . Attr (unqual "name") . toString)
-      mname
+    ((: mempty) . Attr (unqual "name") . toString) `whenJust` mname
 
 paramSetXML :: ParamSet r -> [Content]
 paramSetXML = fmap (\(k, _) -> Elem $ mkEName "attr" (toString k))

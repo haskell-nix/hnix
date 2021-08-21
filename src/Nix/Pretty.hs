@@ -132,15 +132,14 @@ prettyParams :: Params (NixDoc ann) -> Doc ann
 prettyParams (Param n           ) = prettyVarName n
 prettyParams (ParamSet mname variadic pset) =
   prettyParamSet variadic pset <>
-    maybe
+     toDoc `whenJust` mname
+ where
+  toDoc :: VarName -> Doc ann
+  toDoc (coerce -> name) =
+    bool
       mempty
-      (\ (coerce -> name) ->
-        bool
-          mempty
-          ("@" <> pretty name)
-          (not (Text.null name))
-      )
-      mname
+      ("@" <> pretty name)
+      (not (Text.null name))
 
 prettyParamSet :: Variadic -> ParamSet (NixDoc ann) -> Doc ann
 prettyParamSet variadic args =
@@ -164,10 +163,7 @@ prettyBind (Inherit s ns _p) =
   "inherit " <> scope <> align (fillSep $ prettyVarName <$> ns) <> ";"
   where
     scope =
-      maybe
-        mempty
-        ((<> " ") . parens . withoutParens)
-        s
+      ((<> " ") . parens . withoutParens) `whenJust` s
 
 prettyKeyName :: NKeyName (NixDoc ann) -> Doc ann
 prettyKeyName (StaticKey "") = "\"\""
@@ -255,10 +251,7 @@ exprFNixDoc = \case
    where
     r     = mkNixDoc selectOp (wrapParens appOpNonAssoc r')
     ordoc =
-      maybe
-        mempty
-        ((" or " <>) . wrapParens appOpNonAssoc)
-        o
+      ((" or " <>) . wrapParens appOpNonAssoc) `whenJust` o
   NHasAttr r attr ->
     mkNixDoc hasAttrOp (wrapParens hasAttrOp r <> " ? " <> prettySelector attr)
   NEnvPath     p -> simpleExpr $ pretty @String $ coerce $ "<" <> p <> ">"

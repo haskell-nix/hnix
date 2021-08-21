@@ -207,10 +207,7 @@ foldNixPath z f =
       go
       z
       $ (fromInclude . stringIgnoreContext <$> dirs)
-        <> maybe
-            mempty
-            uriAwareSplit
-            mPath
+        <> uriAwareSplit `whenJust` mPath
         <> [ fromInclude $ "nix=" <> toText dataDir <> "/nix/corepkgs" ]
  where
 
