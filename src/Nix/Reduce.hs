@@ -208,7 +208,7 @@ reduce base@(NSelectAnnF _ _ _ attrs)
     inspectSet (unFix aset) attrs
   | otherwise = sId
  where
-  sId = Fix <$> sequence base
+  sId = reduceLayer base
   -- The selection AttrPath is composed of StaticKeys.
   sAttrPath (StaticKey _ : xs) = sAttrPath xs
   sAttrPath []                 = True
@@ -242,8 +242,8 @@ reduce e@(NSetAnnF ann NonRecursive binds) =
           binds
 
     bool
-      (Fix <$> sequence e)
       (clearScopes @NExprLoc $ NSetAnn ann mempty <$> traverse sequence binds)
+      (reduceLayer e)
       usesInherit
 
 -- Encountering a 'rec set' construction eliminates any hope of inlining
@@ -299,7 +299,7 @@ reduce (NLetAnnF ann binds body) =
 reduce e@(NIfAnnF _ b t f) =
   (\case
     NConstantAnn _ (NBool b') -> bool f t b'
-    _                         -> Fix <$> sequence e
+    _                         -> reduceLayer e
   ) =<< b
 
 -- | Reduce an assert atom to its encapsulated
@@ -322,7 +322,10 @@ reduce (NAbsAnnF ann params body) = do
           HM.fromList $ (\(k, _) -> (k, NSymAnn ann k)) <$> pset
   NAbsAnn ann params' <$> pushScope scope body
 
-reduce v = Fix <$> sequence v
+reduce v = reduceLayer v
+
+reduceLayer :: (Traversable f1, Applicative f2) => f1 (f2 (Fix f1)) -> f2 (Fix f1)
+reduceLayer v = Fix <$> sequenceA v
 
 -- newtype FlaggedF f r = FlaggedF { flagged :: (IORef Bool, f r) }
 newtype FlaggedF f r = FlaggedF (IORef Bool, f r)
