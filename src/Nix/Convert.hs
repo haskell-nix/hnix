@@ -253,10 +253,10 @@ instance ( Convertible e t f m
       NVStr'  ns -> pure $ coerce . toString <$> getStringNoContext  ns
       NVSet' _ s ->
         maybe
-          (pure Nothing)
+          stub
           (fromValueMay @Path)
           (M.lookup "outPath" s)
-      _ -> pure Nothing
+      _ -> stub
 
   fromValue = fromMayToValue TPath
 

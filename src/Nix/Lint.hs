@@ -212,9 +212,9 @@ merge context = go
     mergeFunctions pl nl fl pr fr xs ys = do
         m <- sequenceA $ M.intersectionWith
             (\i j -> i >>= \i' -> j >>= \j' -> case (i', j') of
-                    (Nothing, Nothing) -> pure $ pure Nothing
-                    (_, Nothing) -> pure Nothing
-                    (Nothing, _) -> pure Nothing
+                    (Nothing, Nothing) -> stub
+                    (_, Nothing) -> stub
+                    (Nothing, _) -> stub
                     (Just i'', Just j'') ->
                         pure . pure <$> unify context i'' j'')
             (pure <$> pl) (pure <$> pr)
@@ -478,7 +478,7 @@ runLintM opts action = do
 symbolicBaseEnv
   :: Monad m
   => m (Scopes m (Symbolic m))
-symbolicBaseEnv = pure mempty
+symbolicBaseEnv = stub
 
 lint :: Options -> NExprLoc -> ST s (Symbolic (Lint s))
 lint opts expr =
