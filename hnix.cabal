@@ -343,6 +343,7 @@ library
   exposed-modules:
     Prelude
     Nix
+    Nix.Utils
     Nix.Atoms
     Nix.Builtins
     Nix.Cache
