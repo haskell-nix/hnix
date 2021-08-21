@@ -106,10 +106,7 @@ paramsXML (ParamSet mname variadic pset) =
   [Elem $ Element (unqual "attrspat") (battr <> nattr) (paramSetXML pset) Nothing]
  where
   battr =
-    bool
-      mempty
-      [ Attr (unqual "ellipsis") "1" ]
-      (variadic == Variadic)
+    [ Attr (unqual "ellipsis") "1" ] `whenTrue` (variadic == Variadic)
   nattr =
     ((: mempty) . Attr (unqual "name") . toString) `whenJust` mname
 

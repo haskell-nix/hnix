@@ -124,7 +124,7 @@ mkNamedVariadicParamSet name params = mkGeneralParamSet (pure name) params True
 -- > False -> {}
 --  @since 0.15.0
 mkGeneralParamSet :: Maybe Text -> [(Text, Maybe NExpr)] -> Bool -> Params NExpr
-mkGeneralParamSet mname params variadic = ParamSet (coerce mname) (bool mempty Variadic variadic) (coerce params)
+mkGeneralParamSet mname params variadic = ParamSet (coerce mname) (Variadic `whenTrue` variadic) (coerce params)
 
 -- | > rec { .. }
 mkRecSet :: [Binding NExpr] -> NExpr
@@ -444,4 +444,4 @@ mkBinop = mkOp2
 --   * `mkVariadicSet` is for variadic;
 --   * `mkGeneralParamSet` a general constructor.
 mkParamset :: [(Text, Maybe NExpr)] -> Bool -> Params NExpr
-mkParamset params variadic = ParamSet Nothing (bool mempty Variadic variadic) (coerce params)
+mkParamset params variadic = ParamSet Nothing (Variadic `whenTrue` variadic) (coerce params)

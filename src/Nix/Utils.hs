@@ -17,6 +17,7 @@ module Nix.Utils
   , stub
   , pass
   , whenTrue
+  , whenFalse
   , list
   , whenText
   , free
@@ -189,6 +190,14 @@ whenTrue =
   bool
     mempty
 {-# inline whenTrue #-}
+
+whenFalse :: (Monoid a)
+  => a  -> Bool  -> a
+whenFalse f =
+  bool
+    f
+    mempty
+{-# inline whenFalse #-}
 
 whenJust
   :: Monoid b

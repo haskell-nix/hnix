@@ -729,10 +729,7 @@ valueType =
         NNull    -> TNull
     NVStrF ns  ->
       TString $
-        bool
-          mempty
-          HasContext
-          (stringHasContext ns)
+        HasContext `whenTrue` stringHasContext ns
     NVListF{}    -> TList
     NVSetF{}     -> TSet
     NVClosureF{} -> TClosure

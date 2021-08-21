@@ -248,7 +248,7 @@ exec update source = do
         (parseNixTextLoc i)
 
     toAttrSet i =
-      "{" <> i <> bool ";" mempty (Text.isSuffixOf ";" i) <> "}"
+      "{" <> i <> whenFalse ";" (Text.isSuffixOf ";" i) <> "}"
 
 cmd
   :: (MonadNix e t f m, MonadIO m)

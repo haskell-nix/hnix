@@ -136,10 +136,7 @@ prettyParams (ParamSet mname variadic pset) =
  where
   toDoc :: VarName -> Doc ann
   toDoc (coerce -> name) =
-    bool
-      mempty
-      ("@" <> pretty name)
-      (not (Text.null name))
+    ("@" <> pretty name) `whenFalse` Text.null name
 
 prettyParamSet :: Variadic -> ParamSet (NixDoc ann) -> Doc ann
 prettyParamSet variadic args =
@@ -147,7 +144,7 @@ prettyParamSet variadic args =
     "{ "
     (align " }")
     sep
-    (fmap prettySetArg args <> bool mempty ["..."] (variadic == Variadic))
+    (fmap prettySetArg args <> ["..."] `whenTrue` (variadic == Variadic))
  where
   prettySetArg (n, maybeDef) =
     maybe

@@ -2682,11 +2682,17 @@
     note: "Use 'stub'"
     rhs: stub
 
-- warn:
-    lhs: "Data.Bool.bool True"
-    rhs: "Use `whenTrue` from HNix Prelude"
+- hint:
+    lhs: "bool mempty a b"
+    note: "Use `whenTrue`"
+    rhs: a `whenTrue` b
 
 - hint:
-    lhs: "maybe mempty"
+    lhs: "bool a mempty b"
+    note: "Use `whenFalse`"
+    rhs: a `whenFalse` b
+
+- hint:
+    lhs: "maybe mempty a b"
     note: "Use `whenJust`"
-    rhs: whenJust
+    rhs: a `whenJust` b

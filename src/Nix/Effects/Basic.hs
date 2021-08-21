@@ -108,11 +108,7 @@ findEnvPathM name = do
         (toAbsolutePath @t @f $ coerce $ coerce absPath </> "default.nix")
         isDir
     exists <- doesFileExist absFile
-    pure $
-      bool
-        mempty
-        (pure absFile)
-        exists
+    pure $ pure absFile `whenTrue` exists
 
 findPathBy
   :: forall e t f m
@@ -147,10 +143,7 @@ findPathBy finder ls name = do
                   case mns of
                     Just (nsPfx :: NixString) ->
                       let pfx = stringIgnoreContext nsPfx in
-                      bool
-                        mempty
-                        (pure $ coerce $ toString pfx)
-                        (not $ Text.null pfx)
+                        pure $ coerce $ toString pfx `whenFalse` Text.null pfx
                     _ -> mempty
             )
             (M.lookup "prefix" s)

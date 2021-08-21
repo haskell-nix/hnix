@@ -104,10 +104,7 @@ renderEvalFrame level f =
         do
           let
             scopeInfo =
-              bool
-                mempty
-                [pretty $ Text.show scope]
-                (showScopes opts)
+              [pretty $ Text.show scope] `whenTrue` showScopes opts
           fmap
             (\x -> scopeInfo <> [x])
             $ renderLocation ann =<<
