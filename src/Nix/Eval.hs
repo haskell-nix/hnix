@@ -465,7 +465,7 @@ assembleString
   -> m (Maybe NixString)
 assembleString = fromParts . stringParts
  where
-  fromParts xs = (mconcat <$>) . sequenceA <$> traverse go xs
+  fromParts xs = mconcat <<$>> traverseM go xs
   go =
     runAntiquoted
       "\n"

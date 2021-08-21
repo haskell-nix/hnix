@@ -71,6 +71,14 @@ class FromValue a m v where
   fromValue    :: v -> m a
   fromValueMay :: v -> m (Maybe a)
 
+traverseFromM
+  :: ( Applicative m
+     , Traversable t
+     , FromValue b m a
+     )
+  => t a
+  -> m (Maybe (t b))
+traverseFromM = traverseM fromValueMay
 
 -- Please, hide these helper function from export, to be sure they get optimized away.
 fromMayToValue
@@ -277,7 +285,7 @@ instance ( Convertible e t f m
   => FromValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
   fromValueMay =
     \case
-      Deeper (NVList' l) -> sequenceA <$> traverse fromValueMay l
+      Deeper (NVList' l) -> traverseFromM l
       _                  -> stub
 
 
@@ -301,7 +309,7 @@ instance ( Convertible e t f m
 
   fromValueMay =
     \case
-      Deeper (NVSet' _ s) -> sequenceA <$> traverse fromValueMay s
+      Deeper (NVSet' _ s) -> traverseFromM s
       _                   -> stub
 
   fromValue = fromMayToDeeperValue TSet
@@ -326,7 +334,7 @@ instance ( Convertible e t f m
 
   fromValueMay =
     \case
-      Deeper (NVSet' p s) -> fmap (, p) . sequenceA <$> traverse fromValueMay s
+      Deeper (NVSet' p s) -> (, p) <<$>> traverseFromM s
       _                   -> stub
 
   fromValue = fromMayToDeeperValue TSet
@@ -345,13 +353,15 @@ instance ( Convertible e t f m
 class ToValue a m v where
   toValue :: a -> m v
 
-instance (Convertible e t f m, ToValue a m (NValue' t f m (NValue t f m)))
+instance (Convertible e t f m
+  , ToValue a m (NValue' t f m (NValue t f m))
+  )
   => ToValue a m (NValue t f m) where
   toValue v = Free <$> toValue v
 
 instance ( Convertible e t f m
-         , ToValue a m (Deeper (NValue' t f m (NValue t f m)))
-         )
+  , ToValue a m (Deeper (NValue' t f m (NValue t f m)))
+  )
   => ToValue a m (Deeper (NValue t f m)) where
   toValue v = Free <<$>> toValue v
 
@@ -395,8 +405,7 @@ instance Convertible e t f m
   => ToValue StorePath m (NValue' t f m (NValue t f m)) where
   toValue = toValue @Path . coerce
 
-instance ( Convertible e t f m
-         )
+instance Convertible e t f m
   => ToValue SourcePos m (NValue' t f m (NValue t f m)) where
   toValue (SourcePos f l c) = do
     f' <- toValue $ mkNixStringWithoutContext $ fromString f
@@ -410,7 +419,9 @@ instance Convertible e t f m
   => ToValue [NValue t f m] m (NValue' t f m (NValue t f m)) where
   toValue = pure . nvList'
 
-instance (Convertible e t f m, ToValue a m (NValue t f m))
+instance (Convertible e t f m
+  , ToValue a m (NValue t f m)
+  )
   => ToValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
   toValue l = Deeper . nvList' <$> traverse toValue l
 

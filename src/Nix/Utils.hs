@@ -26,6 +26,7 @@ module Nix.Utils
   , mapPair
   , both
   , readFile
+  , traverseM
   , lifted
   , loebM
   , adi
@@ -244,4 +245,14 @@ pass = stub
 readFile :: Path -> IO Text
 readFile = Text.readFile . coerce
 
-
+traverseM
+  :: ( Applicative m
+     , Applicative f
+     , Traversable t
+     )
+  => ( a
+     -> m (f b)
+     )
+  -> t a
+  -> m (f (t b))
+traverseM f x = sequenceA <$> traverse f x
