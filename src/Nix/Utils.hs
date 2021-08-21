@@ -15,10 +15,12 @@ module Nix.Utils
   , trace
   , traceM
   , stub
+  , pass
   , whenTrue
   , list
   , whenText
   , free
+  , whenJust
   , dup
   , mapPair
   , both
@@ -30,7 +32,8 @@ module Nix.Utils
   )
  where
 
-import           Relude                  hiding ( force
+import           Relude                  hiding ( pass
+                                                , force
                                                 , readFile
                                                 , whenJust
                                                 , whenNothing
@@ -66,7 +69,7 @@ trace :: String -> a -> a
 trace = const id
 {-# inline trace #-}
 traceM :: Monad m => String -> m ()
-traceM = const pass
+traceM = const stub
 {-# inline traceM #-}
 #endif
 
@@ -187,6 +190,17 @@ whenTrue =
     mempty
 {-# inline whenTrue #-}
 
+whenJust
+  :: Monoid b
+  => (a -> b)
+  -> Maybe a
+  -> b
+whenJust f ma =
+  maybe
+    mempty
+    f
+    ma
+
 
 -- | Apply a single function to both components of a pair.
 --
@@ -213,6 +227,11 @@ mapPair ~(f,g) ~(a,b) = (f a, g b)
 stub :: (Applicative f, Monoid a) => f a
 stub = pure mempty
 {-# inline stub #-}
+
+-- | Alias for @stub@, since @Relude@ has more specialized @pure ()@.
+pass :: (Applicative f) => f ()
+pass = stub
+{-# inline pass #-}
 
 readFile :: Path -> IO Text
 readFile = Text.readFile . coerce

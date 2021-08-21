@@ -109,15 +109,15 @@ assertParse _opts file =
     x <- parseNixFileLoc file
     either
       (\ err -> assertFailure $ "Failed to parse " <> coerce file <> ":\n" <> show err)
-      (const pass)  -- pure $! runST $ void $ lint opts expr
+      (const stub)  -- pure $! runST $ void $ lint opts expr
       x
 
 assertParseFail :: Options -> Path -> Assertion
 assertParseFail opts file = do
   eres <- parseNixFileLoc file
-  (`catch` \(_ :: SomeException) -> pass)
+  (`catch` \(_ :: SomeException) -> stub)
     (either
-      (const pass)
+      (const stub)
       (\ expr ->
         do
           _ <- pure $! runST $ void $ lint opts expr
@@ -147,8 +147,8 @@ assertEval _opts files =
       []                 -> void $ hnixEvalFile opts (name <> ".nix")
       [".exp"          ]  -> assertLangOk    opts name
       [".exp.xml"      ]  -> assertLangOkXml opts name
-      [".exp.disabled" ]  -> pass
-      [".exp-disabled" ]  -> pass
+      [".exp.disabled" ]  -> stub
+      [".exp-disabled" ]  -> stub
       [".exp", ".flags"] ->
         do
           liftIO $ setEnv "NIX_PATH" "lang/dir4:lang/dir5"
@@ -177,7 +177,7 @@ assertEval _opts files =
   fixup []                          = mempty
 
 assertEvalFail :: Path -> Assertion
-assertEvalFail file = (`catch` (\(_ :: SomeException) -> pass)) $ do
+assertEvalFail file = (`catch` (\(_ :: SomeException) -> stub)) $ do
   time       <- liftIO getCurrentTime
   evalResult <- printNix <$> hnixEvalFile (defaultOptions time) file
   evalResult `seq` assertFailure $ "File: ''" <> coerce file <> "'' should not evaluate.\nThe evaluation result was `" <> evalResult <> "`."

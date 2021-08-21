@@ -740,7 +740,7 @@ assertParseFile file expected =
 assertParseFail :: NixLang -> Assertion
 assertParseFail str =
   either
-    (const pass)
+    (const stub)
     (\ r ->
       assertFailure $ toString $ "\nUnexpected success parsing string ''" <> str <> "'':\n''Parsed value: ''" <> show r <> "''."
     )

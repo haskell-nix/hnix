@@ -240,10 +240,10 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
                       liftIO $ Text.putStrLn path
                       when descend $
                         maybe
-                          pass
+                          stub
                           (\case
                             NVSet _ s' -> go (path <> ".") s'
-                            _          -> pass
+                            _          -> stub
                           )
                           mv
               )

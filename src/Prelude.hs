@@ -9,7 +9,8 @@ module Prelude
     ) where
 
 import           Nix.Utils
-import           Relude                  hiding ( force
+import           Relude                  hiding ( pass
+                                                , force
                                                 , readFile
                                                 , whenJust
                                                 , whenNothing

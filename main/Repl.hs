@@ -226,7 +226,7 @@ exec update source = do
             -- If the result value is a set, update our context with it
             case val of
               NVSet _ (coerce -> scope) -> put state { replCtx = scope <> replCtx state }
-              _          -> pass
+              _          -> stub
 
           pure $ pure val
         )
@@ -258,7 +258,7 @@ cmd source =
   do
     mVal <- exec True source
     maybe
-      pass
+      stub
       printValue
       mVal
 
