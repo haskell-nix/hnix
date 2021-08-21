@@ -128,31 +128,48 @@ symerr :: forall e m a . MonadLint e m => Text -> m a
 symerr = evalError @(Symbolic m) . ErrorCall . toString
 
 renderSymbolic :: MonadLint e m => Symbolic m -> m Text
-renderSymbolic = unpackSymbolic >=> \case
-  NAny     -> pure "<any>"
-  NMany xs -> fmap (Text.intercalate ", ") $ forM xs $ \case
-    TConstant ys -> fmap (Text.intercalate ", ") $ forM ys $ pure . \case
-      TInt   -> "int"
-      TFloat -> "float"
-      TBool  -> "bool"
-      TNull  -> "null"
-    TStr    -> pure "string"
-    TList r -> do
-      x <- renderSymbolic =<< demand r
-      pure $ "[" <> x <> "]"
-    TSet Nothing  -> pure "<any set>"
-    TSet (Just s) -> do
-      x <- traverse (renderSymbolic <=< demand) s
-      pure $ "{" <> show x <> "}"
-    f@(TClosure p) -> do
-      (args, sym) <- do
-        f' <- mkSymbolic [f]
-        lintApp (NAbs (void p) ()) f' everyPossible
-      args' <- traverse renderSymbolic args
-      sym'  <- renderSymbolic sym
-      pure $ "(" <> show args' <> " -> " <> sym' <> ")"
-    TPath          -> pure "path"
-    TBuiltin _n _f -> pure "<builtin function>"
+renderSymbolic =
+  (\case
+    NAny     -> pure "<any>"
+    NMany xs ->
+      Text.intercalate ", " <$>
+        traverse
+          (\case
+            TConstant ys ->
+              Text.intercalate ", " <$>
+                traverse
+                  (pure .
+                    \case
+                      TInt   -> "int"
+                      TFloat -> "float"
+                      TBool  -> "bool"
+                      TNull  -> "null"
+                  )
+                  ys
+            TStr    -> pure "string"
+            TList r ->
+              do
+                x <- renderSymbolic =<< demand r
+                pure $ "[" <> x <> "]"
+            TSet Nothing  -> pure "<any set>"
+            TSet (Just s) ->
+              do
+                x <- traverse (renderSymbolic <=< demand) s
+                pure $ "{" <> show x <> "}"
+            f@(TClosure p) ->
+              do
+                (args, sym) <-
+                  do
+                    f' <- mkSymbolic [f]
+                    lintApp (NAbs p ()) f' everyPossible
+                args' <- traverse renderSymbolic args
+                sym'  <- renderSymbolic sym
+                pure $ "(" <> show args' <> " -> " <> sym' <> ")"
+            TPath          -> pure "path"
+            TBuiltin _n _f -> pure "<builtin function>"
+          )
+          xs
+  ) <=< unpackSymbolic
 
 -- This function is order and uniqueness preserving (of types).
 merge
