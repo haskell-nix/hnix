@@ -80,6 +80,9 @@ traverseFromM
   -> m (Maybe (t b))
 traverseFromM = traverseM fromValueMay
 
+traverseToValue :: ((Traversable t, Applicative f, ToValue a f b) => t a -> f (t b))
+traverseToValue = traverse toValue
+
 -- Please, hide these helper function from export, to be sure they get optimized away.
 fromMayToValue
   :: forall t f m a e
@@ -423,7 +426,7 @@ instance (Convertible e t f m
   , ToValue a m (NValue t f m)
   )
   => ToValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
-  toValue l = Deeper . nvList' <$> traverse toValue l
+  toValue l = Deeper . nvList' <$> traverseToValue l
 
 instance Convertible e t f m
   => ToValue (AttrSet (NValue t f m)) m (NValue' t f m (NValue t f m)) where
@@ -433,7 +436,7 @@ instance (Convertible e t f m, ToValue a m (NValue t f m))
   => ToValue (AttrSet a) m (Deeper (NValue' t f m (NValue t f m))) where
   toValue s =
     liftA2 (\ v s -> Deeper $ nvSet' s v)
-      (traverse toValue s)
+      (traverseToValue s)
       stub
 
 instance Convertible e t f m
@@ -446,7 +449,7 @@ instance (Convertible e t f m, ToValue a m (NValue t f m))
             (Deeper (NValue' t f m (NValue t f m))) where
   toValue (s, p) =
     liftA2 (\ v s -> Deeper $ nvSet' s v)
-      (traverse toValue s)
+      (traverseToValue s)
       (pure p)
 
 instance Convertible e t f m
@@ -464,7 +467,7 @@ instance Convertible e t f m
       let
         outputs = mkNixStringWithoutContext <$> nlcvOutputs nlcv
 
-      ts :: [NValue t f m] <- traverse toValue outputs
+      ts :: [NValue t f m] <- traverseToValue outputs
       list
         (pure Nothing)
         (fmap pure . toValue)
