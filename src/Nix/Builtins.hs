@@ -1770,7 +1770,7 @@ langVersionNix = toValue (5 :: Int)
 -- ** @builtinsList@
 
 builtinsList :: forall e t f m . MonadNix e t f m => m [Builtin (NValue t f m)]
-builtinsList = sequence
+builtinsList = sequenceA
   [ add0 Normal   "nixVersion"       nixVersionNix
   , add0 Normal   "langVersion"      langVersionNix
   , add  TopLevel "abort"            throwNix -- for now

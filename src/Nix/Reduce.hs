@@ -204,7 +204,7 @@ reduce (NBinaryAnnF bann op larg rarg) =
 --   3. The selected AttrPath exists in the set.
 reduce base@(NSelectAnnF _ _ _ attrs)
   | sAttrPath $ NE.toList attrs = do
-    (NSelectAnnF _ _ aset attrs) <- sequence base
+    (NSelectAnnF _ _ aset attrs) <- sequenceA base
     inspectSet (unFix aset) attrs
   | otherwise = sId
  where
@@ -242,14 +242,14 @@ reduce e@(NSetAnnF ann NonRecursive binds) =
           binds
 
     bool
-      (clearScopes @NExprLoc $ NSetAnn ann mempty <$> traverse sequence binds)
       (reduceLayer e)
+      (clearScopes @NExprLoc $ NSetAnn ann mempty <$> traverse sequenceA binds)
       usesInherit
 
 -- Encountering a 'rec set' construction eliminates any hope of inlining
 -- definitions.
 reduce (NSetAnnF ann Recursive binds) =
-  clearScopes @NExprLoc $ NSetAnn ann Recursive <$> traverse sequence binds
+  clearScopes @NExprLoc $ NSetAnn ann Recursive <$> traverse sequenceA binds
 
 -- Encountering a 'with' construction eliminates any hope of inlining
 -- definitions.
@@ -260,7 +260,7 @@ reduce (NWithAnnF ann scope body) =
 --   constants and strings to the body scope.
 reduce (NLetAnnF ann binds body) =
   do
-    binds' <- traverse sequence binds
+    binds' <- traverse sequenceA binds
     body'  <-
       (`pushScope` body) . coerce . HM.fromList . catMaybes =<<
         traverse
@@ -281,7 +281,7 @@ reduce (NLetAnnF ann binds body) =
           binds
 
     -- let names = gatherNames body'
-    -- binds' <- traverse sequence binds <&> \b -> flip filter b $ \case
+    -- binds' <- traverse sequenceA binds <&> \b -> flip filter b $ \case
     --     NamedVar (StaticKey name _ :| []) _ ->
     --         name `S.member` names
     --     _ -> True
@@ -307,11 +307,11 @@ reduce e@(NIfAnnF _ b t f) =
 reduce e@(NAssertAnnF _ b body) =
   (\case
     NConstantAnn _ (NBool b') | b' -> body
-    _ -> Fix <$> sequence e
+    _ -> reduceLayer e
   ) =<< b
 
 reduce (NAbsAnnF ann params body) = do
-  params' <- sequence params
+  params' <- sequenceA params
   -- Make sure that variable definitions in scope do not override function
   -- arguments.
   let
@@ -369,7 +369,7 @@ pruneTree opts =
     NSet recur binds -> pure $ NSet recur $
       bool
         (fromMaybe annNNull <<$>>)
-        (mapMaybe sequence)
+        (mapMaybe sequenceA)
         (reduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
         binds
 
@@ -410,7 +410,7 @@ pruneTree opts =
     NIf _ Nothing (Just (Ann _ f)) -> pure f
     NIf _ (Just (Ann _ t)) Nothing -> pure t
 
-    x                     -> sequence x
+    x                     -> sequenceA x
 
   pruneString :: NString (Maybe NExprLoc) -> NString NExprLoc
   pruneString (DoubleQuoted xs) = DoubleQuoted $ mapMaybe pruneAntiquotedText xs

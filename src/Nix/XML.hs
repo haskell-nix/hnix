@@ -47,7 +47,7 @@ toXML = runWithStringContext . fmap pp . iterNValueByDiscardWith cyc phi
       mkEVal "string" . toString <$> extractNixString str
     NVList' l ->
       do
-        els <- sequence l
+        els <- sequenceA l
         pure $
           mkE
             "list"
@@ -55,7 +55,7 @@ toXML = runWithStringContext . fmap pp . iterNValueByDiscardWith cyc phi
 
     NVSet' _ s ->
       do
-        kvs <- sequence s
+        kvs <- sequenceA s
         pure $
           mkE
             "attrs"

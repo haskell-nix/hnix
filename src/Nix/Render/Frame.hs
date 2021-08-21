@@ -123,7 +123,7 @@ renderEvalFrame level f =
               "While calling builtins." <> pretty name
 
       SynHole synfo ->
-        sequence $
+        sequenceA $
           let e@(Ann ann _) = _synHoleInfo_expr synfo in
 
           [ renderLocation ann =<<

@@ -244,7 +244,7 @@ attrSetAlter (k : ks) pos m p val =
     (\(st', _) ->
       (M.insert
         k
-        (toValue @(AttrSet v, PositionSet) =<< (, mempty) <$> sequence st')
+        (toValue @(AttrSet v, PositionSet) =<< (, mempty) <$> sequenceA st')
         m
       , M.insert (coerce k) pos p
       )
@@ -465,7 +465,7 @@ assembleString
   -> m (Maybe NixString)
 assembleString = fromParts . stringParts
  where
-  fromParts xs = (mconcat <$>) . sequence <$> traverse go xs
+  fromParts xs = (mconcat <$>) . sequenceA <$> traverse go xs
   go =
     runAntiquoted
       "\n"

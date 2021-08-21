@@ -500,7 +500,7 @@ addTracing k v = do
   depth <- ask
   guard $ depth < 2000
   local succ $ do
-    v'@(AnnF span x) <- sequence v
+    v'@(AnnF span x) <- sequenceA v
     pure $ do
       opts :: Options <- asks $ view hasLens
       let

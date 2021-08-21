@@ -272,7 +272,7 @@ defaultDerivationStrict val = do
                     (Map.keys $ outputs drv)
                 )
           }
-        outputs' <- sequence $ Map.mapWithKey (\o _ -> makeOutputPath o hash drvName) $ outputs drv
+        outputs' <- sequenceA $ Map.mapWithKey (\o _ -> makeOutputPath o hash drvName) $ outputs drv
         pure $ drv
           { inputs
           , outputs = outputs'

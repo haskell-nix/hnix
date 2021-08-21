@@ -277,7 +277,7 @@ instance ( Convertible e t f m
   => FromValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
   fromValueMay =
     \case
-      Deeper (NVList' l) -> sequence <$> traverse fromValueMay l
+      Deeper (NVList' l) -> sequenceA <$> traverse fromValueMay l
       _                  -> stub
 
 
@@ -301,7 +301,7 @@ instance ( Convertible e t f m
 
   fromValueMay =
     \case
-      Deeper (NVSet' _ s) -> sequence <$> traverse fromValueMay s
+      Deeper (NVSet' _ s) -> sequenceA <$> traverse fromValueMay s
       _                   -> stub
 
   fromValue = fromMayToDeeperValue TSet
@@ -326,7 +326,7 @@ instance ( Convertible e t f m
 
   fromValueMay =
     \case
-      Deeper (NVSet' p s) -> fmap (, p) . sequence <$> traverse fromValueMay s
+      Deeper (NVSet' p s) -> fmap (, p) . sequenceA <$> traverse fromValueMay s
       _                   -> stub
 
   fromValue = fromMayToDeeperValue TSet
