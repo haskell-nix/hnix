@@ -259,7 +259,7 @@ nixUri =
                 \ x ->
                   isAlphanumeric x
                   || (`elem` ("%/?:@&=+$,-_.!~*'" :: String)) x
-          pure $ NStr $ DoubleQuoted $ one $ Plain $ start `Text.cons` protocol <> ":" <> address
+          pure . NStr . DoubleQuoted . one . Plain $ start `Text.cons` protocol <> ":" <> address
 
 
 -- ** Strings
@@ -828,29 +828,30 @@ nixSynHole = annotateLocation $ mkSynHoleF . coerce <$> (char '^' *> identifier)
 -- ** Expr & its constituents (Language term, expr algebra)
 
 nixTerm :: Parser NExprLoc
-nixTerm = do
-  c <- try $ lookAhead $ satisfy $ \x ->
-    pathChar x || (`elem` ("({[</\"'^" :: String)) x
-  case c of
-    '('  -> nixSelect nixParens
-    '{'  -> nixSelect nixSet
-    '['  -> nixList
-    '<'  -> nixSearchPath
-    '/'  -> nixPath
-    '"'  -> nixString
-    '\'' -> nixString
-    '^'  -> nixSynHole
-    _ ->
-      msum
-        $  [ nixSelect nixSet | c == 'r' ]
-        <> [ nixPath | pathChar c ]
-        <> if isDigit c
-             then [ nixFloat, nixInt ]
-             else
-               [ nixUri | isAlpha c ]
-               <> [ nixBool | c == 't' || c == 'f' ]
-               <> [ nixNull | c == 'n' ]
-               <> [ nixSelect nixSym ]
+nixTerm =
+  do
+    c <- try . lookAhead . satisfy $
+      \x -> (`elem` ("({[</\"'^" :: String)) x || pathChar x
+    case c of
+      '('  -> nixSelect nixParens
+      '{'  -> nixSelect nixSet
+      '['  -> nixList
+      '<'  -> nixSearchPath
+      '/'  -> nixPath
+      '"'  -> nixString
+      '\'' -> nixString
+      '^'  -> nixSynHole
+      _ ->
+        msum
+          $  [ nixSelect nixSet | c == 'r' ]
+          <> [ nixPath | pathChar c ]
+          <> if isDigit c
+              then [ nixFloat, nixInt ]
+              else
+                [ nixUri | isAlpha c ]
+                <> [ nixBool | c == 't' || c == 'f' ]
+                <> [ nixNull | c == 'n' ]
+                <> [ nixSelect nixSym ]
 
 -- | Nix expression algebra parser.
 -- "Expression algebra" is to explain @megaparsec@ use of the term "Expression" (parser for language algebraic coperators without any statements (without @let@ etc.)), which is essentially an algebra inside the language.
@@ -862,6 +863,8 @@ nixExprAlgebra =
       nixOperators nixSelector
     )
 
+-- | Nix term parser.
+-- | Term is a language unit on the level where precedence and associativity matters.
 nixExpr :: Parser NExprLoc
 nixExpr = keywords <|> nixLambda <|> nixExprAlgebra
  where
