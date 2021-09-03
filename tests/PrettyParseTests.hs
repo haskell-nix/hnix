@@ -108,21 +108,25 @@ genExpr =
     \(Size n) -> Fix <$>
       if n < 2
         then Gen.choice [genConstant, genStr, genSym, genLiteralPath, genEnvPath]
-        else Gen.frequency
+        else
+          let
+            sizeBy i = Size $ n `div` i
+          in
+          Gen.frequency
           [ (1 , genConstant)
           , (1 , genSym)
-          , (4 , Gen.resize (Size (n `div` 3)) genIf)
+          , (4 , Gen.resize (sizeBy 3) genIf)
           , (10, genRecSet)
           , (20, genSet)
           , (5 , genList)
           , (2 , genUnary)
-          , (2 , Gen.resize (Size (n `div` 3)) genBinary)
-          , (3 , Gen.resize (Size (n `div` 3)) genSelect)
-          , (20, Gen.resize (Size (n `div` 2)) genAbs)
-          , (2 , Gen.resize (Size (n `div` 2)) genHasAttr)
-          , (10, Gen.resize (Size (n `div` 2)) genLet)
-          , (10, Gen.resize (Size (n `div` 2)) genWith)
-          , (1 , Gen.resize (Size (n `div` 2)) genAssert)
+          , (2 , Gen.resize (sizeBy 3) genBinary)
+          , (3 , Gen.resize (sizeBy 3) genSelect)
+          , (20, Gen.resize (sizeBy 2) genAbs)
+          , (2 , Gen.resize (sizeBy 2) genHasAttr)
+          , (10, Gen.resize (sizeBy 2) genLet)
+          , (10, Gen.resize (sizeBy 2) genWith)
+          , (1 , Gen.resize (sizeBy 2) genAssert)
           ]
  where
   genConstant    = NConstant                         <$> genAtom
@@ -147,7 +151,7 @@ genExpr =
 --   it divides the size by the length of the generated list.
 fairList :: Gen a -> Gen [a]
 fairList g = Gen.sized $ \s -> do
-  k <- Gen.int (Range.linear 0 (unSize s))
+  k <- Gen.int $ Range.linear 0 $ unSize s
   -- Use max here to avoid dividing by zero when there is the empty list
   Gen.resize (Size (unSize s `div` max 1 k)) $ Gen.list (Range.singleton k) g
 
