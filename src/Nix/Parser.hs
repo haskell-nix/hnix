@@ -249,13 +249,13 @@ nixUri =
         do
           start    <- letterChar
           protocol <-
-            takeWhileP Nothing $
+            takeWhileP mempty $
               \ x ->
                 isAlphanumeric x
                 || (`elem` ("+-." :: String)) x
           _       <- single ':'
           address <-
-            takeWhile1P Nothing $
+            takeWhile1P mempty $
                 \ x ->
                   isAlphanumeric x
                   || (`elem` ("%/?:@&=+$,-_.!~*'" :: String)) x
@@ -431,12 +431,12 @@ pathStr :: Parser Path
 pathStr =
   lexeme $ coerce . toString <$>
     liftA2 (<>)
-      (takeWhileP Nothing pathChar)
+      (takeWhileP mempty pathChar)
       (Text.concat <$>
         some
           (liftA2 Text.cons
             slash
-            (takeWhile1P Nothing pathChar)
+            (takeWhile1P mempty pathChar)
           )
       )
 
@@ -491,7 +491,6 @@ opWithLoc f op name =
   do
     AnnUnit ann _ <-
       annotateLocation1 $
-        {- dbg (toString name) $ -}
         operator name
 
     pure . f $ AnnUnit ann op
@@ -640,6 +639,7 @@ getBinaryOperator = detectPrecedence spec
     \case
       (NBinaryDef assoc op name, _) -> [(op, OperatorInfo i assoc name)]
       _                             -> mempty
+
 getSpecialOperator :: NSpecialOp -> OperatorInfo
 getSpecialOperator NSelectOp = OperatorInfo 1 NAssocLeft "."
 getSpecialOperator o         = detectPrecedence spec o
