@@ -188,97 +188,102 @@ case_inherit_from_set_has_no_scope =
 --       }.__overrides.a)
 --     |]
 
-case_unsafegetattrpos1 =
-    constantEqualText "[ 5 14 ]" [text|
-      let e = 1;
-          f = 1;
-          t = {};
-          s = {
-            inherit t e f;
-            a = 1;
-            "b" = 2;
-            c.d = 3;
-          };
-          p = builtins.unsafeGetAttrPos "e" s; in
-      [ p.line p.column ]
-    |]
+case_unsafegetattrpos =
+  traverse_ (uncurry constantEqualText)
+    [ ( "[ 5 14 ]"
+      , [text|
+          let e = 1;
+              f = 1;
+              t = {};
+              s = {
+                inherit t e f;
+                a = 1;
+                "b" = 2;
+                c.d = 3;
+              };
+              p = builtins.unsafeGetAttrPos "e" s; in
+          [ p.line p.column ]
+          |]
+      )
+    , ( "[ 5 14 ]"
+      , [text|
+          let e = 1;
+              f = 1;
+              t = {};
+              s = {
+                inherit t e f;
+                a = 1;
+                "b" = 2;
+                c.d = 3;
+              };
+              p = builtins.unsafeGetAttrPos "f" s; in
+          [ p.line p.column ]
+        |]
+      )
+    , ( "[ 6 7 ]"
+      , [text|
+          let e = 1;
+              f = 1;
+              t = {};
+              s = {
+                inherit t e f;
+                a = 1;
+                "b" = 2;
+                c.d = 3;
+              };
+              p = builtins.unsafeGetAttrPos "a" s; in
+            [ p.line p.column ]
+          |]
+      )
+    , ( "[ 7 7 ]"
+      , [text|
+        let e = 1;
+            f = 1;
+            t = {};
+            s = {
+              inherit t e f;
+              a = 1;
+              "b" = 2;
+              c.d = 3;
+            };
+            p = builtins.unsafeGetAttrPos "b" s; in
+          [ p.line p.column ]
+        |]
+      )
+    -- jww (2018-05-09): These two are failing but they shouldn't be
+    --
+    -- , ( "[ 7 13 ]"
+    --   , [text|
+    --       let e = 1;
+    --           f = 1;
+    --           t = {};
+    --           s = {
+    --             inherit t e f;
+    --             a = 1;
+    --             "b" = 2;
+    --             c.d = 3;
+    --           };
+    --           p = builtins.unsafeGetAttrPos "c.d" s; in
+    --         [ p.line p.column ]
+    --       |]
+    --   )
 
-case_unsafegetattrpos2 =
-    constantEqualText "[ 5 14 ]" [text|
-      let e = 1;
-          f = 1;
-          t = {};
-          s = {
-            inherit t e f;
-            a = 1;
-            "b" = 2;
-            c.d = 3;
-          };
-          p = builtins.unsafeGetAttrPos "f" s; in
-      [ p.line p.column ]
-    |]
-
-case_unsafegetattrpos3 =
-    constantEqualText "[ 6 7 ]" [text|
-      let e = 1;
-          f = 1;
-          t = {};
-          s = {
-            inherit t e f;
-            a = 1;
-            "b" = 2;
-            c.d = 3;
-          };
-          p = builtins.unsafeGetAttrPos "a" s; in
-      [ p.line p.column ]
-    |]
-
-case_unsafegetattrpos4 =
-    constantEqualText "[ 7 7 ]" [text|
-      let e = 1;
-          f = 1;
-          t = {};
-          s = {
-            inherit t e f;
-            a = 1;
-            "b" = 2;
-            c.d = 3;
-          };
-          p = builtins.unsafeGetAttrPos "b" s; in
-      [ p.line p.column ]
-    |]
-
--- jww (2018-05-09): These two are failing but they shouldn't be
-
--- case_unsafegetattrpos5 =
---     constantEqualText "[ 7 13 ]" [text|
---       let e = 1;
---           f = 1;
---           t = {};
---           s = {
---             inherit t e f;
---             a = 1;
---             "b" = 2;
---             c.d = 3;
---           };
---           p = builtins.unsafeGetAttrPos "c.d" s; in
---       [ p.line p.column ]
---     |]
-
--- case_unsafegetattrpos6 =
---     constantEqualText "[ 7 13 ]" [text|
---       let e = 1;
---           f = 1;
---           t = {};
---           s = {
---             inherit t e f;
---             a = 1;
---             "b" = 2;
---             c.d = 3;
---           };
---           p = builtins.unsafeGetAttrPos "d" s; in
---       [ p.line p.column ]
---     |]
+    -- , ( "[ 7 13 ]"
+    --   , [text|
+    --       let e = 1;
+    --           f = 1;
+    --           t = {};
+    --           s = {
+    --             inherit t e f;
+    --             a = 1;
+    --             "b" = 2;
+    --             c.d = 3;
+    --           };
+    --           p = builtins.unsafeGetAttrPos "d" s; in
+    --         [ p.line p.column ]
+    --       |]
+    --   )
+    ]
 
 case_fixed_points =
     constantEqualText [text|[
@@ -323,20 +328,27 @@ case_fixed_points_attrsets =
       in fix f
     |]
 
--- case_function_equals1 =
---     constantEqualText "true" "{f = x: x;} == {f = x: x;}"
-
--- case_function_equals2 =
---     constantEqualText "true" "[(x: x)] == [(x: x)]"
-
-case_function_equals3 =
-    constantEqualText "false" "(let a = (x: x); in a == a)"
-
-case_function_equals4 =
-    constantEqualText "true" "(let a = {f = x: x;}; in a == a)"
-
-case_function_equals5 =
-    constantEqualText "true" "(let a = [(x: x)]; in a == a)"
+case_function_equals =
+    traverse_ (uncurry constantEqualText)
+      [ -- ( "true"
+        -- , "{f = x: x;} == {f = x: x;}"
+        -- )
+        -- ( "true"
+        -- , "[(x: x)] == [(x: x)]"
+        -- )
+        ( "false"
+        , "(let a = (x: x); in a == a)"
+        )
+      , ( "true"
+        , "(let a = {f = x: x;}; in a == a)"
+        )
+      , ( "true"
+        , "(let a = [(x: x)]; in a == a)"
+        )
+      , ( "false"
+        , "builtins.pathExists \"/var/empty/invalid-directory\""
+        )
+      ]
 
 case_directory_pathexists =
     constantEqualText "false" "builtins.pathExists \"/var/empty/invalid-directory\""
@@ -435,11 +447,16 @@ tests = $testGroupGenerator
 genEvalCompareTests = do
     td <- D.listDirectory (coerce testDir)
 
-    let unmaskedFiles = filter ((==".nix") . takeExtension) td
-    let files = unmaskedFiles \\ coerce maskedFiles
+    let
+      unmaskedFiles :: [String]
+      unmaskedFiles = filter ((==".nix") . takeExtension) td
+
+      files :: [String]
+      files = unmaskedFiles \\ coerce maskedFiles
 
     pure $ testGroup "Eval comparison tests" $ fmap (mkTestCase testDir) files
   where
+    mkTestCase :: Path -> TestName -> TestTree
     mkTestCase td f = testCase f $ assertEvalFileMatchesNix $ coerce $ coerce td </> f
 
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
@@ -452,10 +469,11 @@ constantEqual expected actual = do
         actualNF <- normalForm =<< nixEvalExprLoc mempty actual
         eq <- valueEqM expectedNF actualNF
         pure (eq, expectedNF, actualNF)
-    let message =
-                "Inequal normal forms:\n"
-            <>  "Expected: " <> printNix expectedNF <> "\n"
-            <>  "Actual:   " <> printNix actualNF
+    let
+      message =
+        "Inequal normal forms:\n"
+        <> "Expected: " <> printNix expectedNF <> "\n"
+        <>  "Actual:   " <> printNix actualNF
     assertBool message eq
 
 constantEqualText' :: Text -> Text -> Assertion
