@@ -27,7 +27,7 @@ import qualified PrettyParseTests
 import           System.Directory
 import           System.Environment (setEnv)
 import           System.FilePath.Glob
-import           System.Posix.Files
+import           System.PosixCompat.Files
 import           Test.Tasty
 import           Test.Tasty.HUnit
 

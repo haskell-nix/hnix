@@ -72,7 +72,7 @@ import           Nix.Value.Monad
 import           Nix.XML
 import           System.Nix.Base32             as Base32
 import           System.FilePath
-import           System.Posix.Files             ( isRegularFile
+import           System.PosixCompat.Files       ( isRegularFile
                                                 , isDirectory
                                                 , isSymbolicLink
                                                 )
