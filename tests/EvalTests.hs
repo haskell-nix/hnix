@@ -161,7 +161,7 @@ case_inherit_from_set_has_no_scope =
     |]
 
 -- github/orblivion (2018-08-05): Adding these failing tests so we fix this feature
-
+--
 -- case_overrides =
 --     constantEqualText' "2" [text|
 --       let
@@ -354,10 +354,10 @@ case_directory_pathexists =
     constantEqualText "false" "builtins.pathExists \"/var/empty/invalid-directory\""
 
 -- jww (2018-05-02): This constantly changes!
--- case_placeholder =
---   constantEqualText
---       "\"/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9\""
---       "builtins.placeholder \"out\""
+case_placeholder =
+  constantEqualText
+      "\"/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9\""
+      "builtins.placeholder \"out\""
 
 case_rec_path_attr =
     constantEqualText "10"
