@@ -460,21 +460,26 @@ genEvalCompareTests = do
     mkTestCase td f = testCase f $ assertEvalFileMatchesNix $ coerce $ coerce td </> f
 
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
-constantEqual expected actual = do
+constantEqual expected actual =
+  do
     time <- getCurrentTime
     let opts = defaultOptions time
     -- putStrLn =<< lint (stripAnnotation a)
-    (eq, expectedNF, actualNF) <- runWithBasicEffectsIO opts $ do
-        expectedNF <- normalForm =<< nixEvalExprLoc mempty expected
-        actualNF <- normalForm =<< nixEvalExprLoc mempty actual
-        eq <- valueEqM expectedNF actualNF
-        pure (eq, expectedNF, actualNF)
+    (eq, expectedNF, actualNF) <-
+      runWithBasicEffectsIO opts $
+        do
+          expectedNF <- getNormForm expected
+          actualNF <- getNormForm actual
+          eq <- valueEqM expectedNF actualNF
+          pure (eq, expectedNF, actualNF)
     let
       message =
         "Inequal normal forms:\n"
         <> "Expected: " <> printNix expectedNF <> "\n"
         <>  "Actual:   " <> printNix actualNF
     assertBool message eq
+ where
+  getNormForm = normalForm <=< nixEvalExprLoc mempty
 
 constantEqualText' :: Text -> Text -> Assertion
 constantEqualText' expected actual =
@@ -483,11 +488,11 @@ constantEqualText' expected actual =
     constantEqual expected' actual'
 
 constantEqualText :: Text -> Text -> Assertion
-constantEqualText expected actual = do
-  constantEqualText' expected actual
-  mres <- liftIO $ lookupEnv "ALL_TESTS" <|> lookupEnv "MATCHING_TESTS"
-  when (isJust mres) $
-      assertEvalMatchesNix actual
+constantEqualText expected actual =
+  do
+    constantEqualText' expected actual
+    mres <- liftIO $ lookupEnv "ALL_TESTS" <|> lookupEnv "MATCHING_TESTS"
+    whenJust (const $ assertEvalMatchesNix actual) mres
 
 assertNixEvalThrows :: Text -> Assertion
 assertNixEvalThrows a =
