@@ -10,7 +10,7 @@ import           Control.Monad                  ( foldM )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List.Split                ( splitOn )
 import qualified Data.Text                     as Text
-import           Data.Text.Prettyprint.Doc      ( fillSep )
+import           Prettyprinter                  ( fillSep )
 import           System.FilePath
 import           Nix.Convert
 import           Nix.Effects
