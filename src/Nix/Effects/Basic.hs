@@ -44,7 +44,7 @@ defaultToAbsolutePath origPath = do
             getCurrentDirectory
             (
               (\case
-                NVPath s -> pure $ coerce $ takeDirectory (coerce s)
+                NVPath s -> pure $ coerce takeDirectory s
                 val -> throwError $ ErrorCall $ "when resolving relative path, __cur_file is in scope, but is not a path; it is: " <> show val
               ) <=< demand
             )
@@ -72,8 +72,9 @@ removeDotDotIndirections = coerce . intercalate "/" . go mempty . splitOn "/" . 
 
 infixr 9 <///>
 (<///>) :: Path -> Path -> Path
-(coerce -> x) <///> (coerce -> y) | isAbsolute y || "." `isPrefixOf` y = coerce $ x </> y
-          | otherwise                          = joinByLargestOverlap x y
+(coerce -> x) <///> (coerce -> y)
+  | isAbsolute y || "." `isPrefixOf` y = coerce $ x </> y
+  | otherwise                          = joinByLargestOverlap x y
  where
   joinByLargestOverlap (splitDirectories -> xs) (splitDirectories -> ys) = coerce $
     joinPath $ head
@@ -83,19 +84,16 @@ defaultFindEnvPath :: MonadNix e t f m => String -> m Path
 defaultFindEnvPath = findEnvPathM . coerce
 
 findEnvPathM :: forall e t f m . MonadNix e t f m => Path -> m Path
-findEnvPathM name = do
-  mres <- lookupVar "__nixPath"
-
+findEnvPathM name =
   maybe
     (fail "impossible")
-    (
-      (\ nv ->
-        do
-          (l :: [NValue t f m]) <- fromValue nv
-          findPathBy nixFilePath l name
-      ) <=< demand
+    (\ v ->
+      do
+        nv <- demand v
+        l <- fromValue @[NValue t f m] nv
+        findPathBy nixFilePath l name
     )
-    mres
+    =<< lookupVar "__nixPath"
 
  where
   nixFilePath :: MonadEffects t f m => Path -> m (Maybe Path)
@@ -118,14 +116,13 @@ findPathBy
   -> Path
   -> m Path
 findPathBy finder ls name = do
-  mpath <- foldM go mempty ls
   maybe
     (throwError $ ErrorCall $ "file ''" <> coerce name <> "'' was not found in the Nix search path (add it's using $NIX_PATH or -I)")
     pure
-    mpath
+    =<< foldM go mempty ls
  where
   go :: MonadNix e t f m => Maybe Path -> NValue t f m -> m (Maybe Path)
-  go mp =
+  go =
     maybe
       (\ nv ->
         do
@@ -138,18 +135,18 @@ findPathBy finder ls name = do
             (tryPath path mempty)
             (\ nv' ->
               do
-                mns <- fromValueMay =<< demand nv'
+                mns <- fromValueMay @NixString =<< demand nv'
                 tryPath path $
-                  case mns of
-                    Just (nsPfx :: NixString) ->
+                  whenJust
+                    (\ nsPfx ->
                       let pfx = stringIgnoreContext nsPfx in
-                        pure $ coerce $ toString pfx `whenFalse` Text.null pfx
-                    _ -> mempty
+                      pure $ coerce $ toString pfx `whenFalse` Text.null pfx
+                    )
+                    mns
             )
             (M.lookup "prefix" s)
       )
       (const . pure . pure)
-      mp
 
   tryPath :: Path -> Maybe Path -> m (Maybe Path)
   tryPath p (Just n) | n' : ns <- splitDirectories (coerce name), n == coerce n' =
@@ -197,17 +194,21 @@ fetchTarball =
 -}
 
   fetch :: Text -> Maybe (NValue t f m) -> m (NValue t f m)
-  fetch uri Nothing =
-    nixInstantiateExpr $ "builtins.fetchTarball \"" <> uri <> "\""
-  fetch url (Just t) =
-      (\nv -> do
-        nsSha <- fromValue nv
+  fetch uri =
+    maybe
+      (nixInstantiateExpr $
+        "builtins.fetchTarball \"" <> uri <> "\""
+      )
+      (\ v ->
+        do
+          nv <- demand v
+          nsSha <- fromValue nv
 
-        let sha = stringIgnoreContext nsSha
+          let sha = stringIgnoreContext nsSha
 
-        nixInstantiateExpr
-          $ "builtins.fetchTarball { " <> "url    = \"" <> url <> "\"; " <> "sha256 = \"" <> sha <> "\"; }"
-      ) =<< demand t
+          nixInstantiateExpr $
+            "builtins.fetchTarball { " <> "url    = \"" <> uri <> "\"; " <> "sha256 = \"" <> sha <> "\"; }"
+      )
 
 defaultFindPath :: MonadNix e t f m => [NValue t f m] -> Path -> m Path
 defaultFindPath = findPathM
@@ -233,23 +234,25 @@ defaultImportPath
   -> m (NValue t f m)
 defaultImportPath path = do
   traceM $ coerce $ "Importing file " <> path
-  withFrame Info (ErrorCall $ "While importing file " <> show path) $ do
-    imports <- gets fst
-    evalExprLoc =<<
-      maybe
-        (do
-          eres <- parseNixFileLoc path
-          either
-            (\ err -> throwError $ ErrorCall . show $ fillSep ["Parse during import failed:", err])
-            (\ expr ->
-              do
-                modify (first (M.insert path expr))
-                pure expr
+  withFrame
+    Info
+    (ErrorCall $ "While importing file " <> show path)
+    $ do
+        imports <- gets fst
+        evalExprLoc =<<
+          maybe
+            (do
+              either
+                (\ err -> throwError $ ErrorCall . show $ fillSep ["Parse during import failed:", err])
+                (\ expr ->
+                  do
+                    modify $ first $ M.insert path expr
+                    pure expr
+                )
+                =<< parseNixFileLoc path
             )
-            eres
-        )
-        pure  -- return expr
-        (M.lookup path imports)
+            pure  -- return expr
+            (M.lookup path imports)
 
 defaultPathToDefaultNix :: MonadNix e t f m => Path -> m Path
 defaultPathToDefaultNix = pathToDefaultNixFile
