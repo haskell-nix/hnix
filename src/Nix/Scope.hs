@@ -23,9 +23,6 @@ newtype Scope a = Scope (AttrSet a)
 instance Show (Scope a) where
   show (Scope m) = show $ M.keys m
 
-newScope :: AttrSet a -> Scope a
-newScope = coerce
-
 scopeLookup :: VarName -> [Scope a] -> Maybe a
 scopeLookup key = foldr go Nothing
  where
