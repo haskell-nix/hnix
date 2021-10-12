@@ -187,7 +187,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalConstant c = do
     scope <- currentScopes
     span  <- currentPos
-    pure $ nvConstantP (Provenance scope $ NConstantAnnF span c) c
+    pure $ join (nvConstantP . Provenance scope . NConstantAnnF span) c
 
   evalString =
     maybe
@@ -197,10 +197,11 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
           scope <- currentScopes
           span  <- currentPos
           pure $
-            nvStrP
-              (Provenance
-                scope
-                (NStrAnnF span $ DoubleQuoted [Plain $ stringIgnoreContext ns])
+            join
+              (nvStrP
+                . Provenance
+                  scope
+                  . NStrAnnF span . DoubleQuoted . one . Plain . stringIgnoreContext
               )
               ns
       )
@@ -209,8 +210,18 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalLiteralPath p = do
     scope <- currentScopes
     span  <- currentPos
-    nvPathP (Provenance scope $ NLiteralPathAnnF span p) <$>
-      toAbsolutePath @t @f @m p
+    let
+      evalPath :: Path -> m (NValue t f m)
+      evalPath p1 =
+        fmap
+          (g p1)
+          (f p1)
+       where
+        g :: Path -> Path -> NValue t f m
+        g = nvPathP . Provenance scope . NLiteralPathAnnF span
+        f :: Path -> m Path
+        f = toAbsolutePath @t @f @m
+    evalPath p
 
   evalEnvPath p = do
     scope <- currentScopes
@@ -234,21 +245,21 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     let f = join $ addProvenance . Provenance scope . NWithAnnF span Nothing . pure
     f <$> evalWithAttrSet c b
 
-  evalIf c t f = do
+  evalIf c tVal fVal = do
     scope <- currentScopes
     span  <- currentPos
-    b <- fromValue c
+    bl <- fromValue c
 
     let
-      fun x y z = addProvenance (Provenance scope $ NIfAnnF span (pure c) x y) z
+      fun x y = addProvenance (Provenance scope $ NIfAnnF span (pure c) x y)
       -- Note: join acts as \ f x -> f x x
-      false = join (fun Nothing . pure) <$> f
-      true = join (flip fun Nothing . pure) <$> t
+      falseVal = join (fun Nothing . pure) <$> fVal
+      trueVal = join (flip fun Nothing . pure) <$> tVal
 
     bool
-      false
-      true
-      b
+      falseVal
+      trueVal
+      bl
 
   evalAssert c body =
     do
@@ -269,13 +280,15 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
       (callFunc f =<< defer x)
 
   evalAbs p k = do
+    let
+      fk = flip k
     scope <- currentScopes
     span  <- currentPos
     pure $
       nvClosureP
         (Provenance scope $ NAbsAnnF span (Nothing <$ p) Nothing)
         (void p)
-        (\arg -> snd <$> k (pure arg) (\_ b -> ((), ) <$> b))
+        $ fmap snd . fk (const $ fmap ((), )) . pure
 
   evalError = throwError
 
@@ -349,6 +362,7 @@ execBinaryOp scope span op lval rarg =
 
  where
 
+  helperEq :: (Bool -> Bool) -> m (NValue t f m)
   helperEq flag =
     do
       rval <- rarg
@@ -450,8 +464,8 @@ execBinaryOpForced scope span op lval rval = case op of
     (NVStr l, NVStr r) -> toBool $ l `op` r
     _ -> unsupportedTypes
 
-  toInt = pure . nvConstantP prov . NInt
-  toFloat = pure . nvConstantP prov . NFloat
+  nvInt = pure . nvConstantP prov . NInt
+  nvFloat = pure . nvConstantP prov . NFloat
 
   numBinOp :: (forall a. Num a => a -> a -> a) -> m (NValue t f m)
   numBinOp op = numBinOp' op op
@@ -460,13 +474,12 @@ execBinaryOpForced scope span op lval rval = case op of
     :: (Integer -> Integer -> Integer)
     -> (Float -> Float -> Float)
     -> m (NValue t f m)
-
   numBinOp' intOp floatOp = case (lval, rval) of
     (NVConstant l, NVConstant r) -> case (l, r) of
-      (NInt   li, NInt   ri) -> toInt $ li `intOp` ri
-      (NInt   li, NFloat rf) -> toFloat $ fromInteger li `floatOp` rf
-      (NFloat lf, NInt   ri) -> toFloat $ lf `floatOp` fromInteger ri
-      (NFloat lf, NFloat rf) -> toFloat $ lf `floatOp` rf
+      (NInt   li, NInt   ri) -> nvInt $ li `intOp` ri
+      (NInt   li, NFloat rf) -> nvFloat $ fromInteger li `floatOp` rf
+      (NFloat lf, NInt   ri) -> nvFloat $ lf `floatOp` fromInteger ri
+      (NFloat lf, NFloat rf) -> nvFloat $ lf `floatOp` rf
       _ -> unsupportedTypes
     _ -> unsupportedTypes
 
