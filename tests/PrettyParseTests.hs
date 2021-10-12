@@ -66,14 +66,16 @@ genBinding = Gen.choice
 
 genString :: Gen (NString NExpr)
 genString = Gen.choice
-  [ DoubleQuoted <$> Gen.list (Range.linear 0 5) (genAntiquoted asciiText)
+  [ DoubleQuoted <$> genLines
   , liftA2 Indented
-      (Gen.int (Range.linear 0 10))
-      (Gen.list
-        (Range.linear 0 5)
-        (genAntiquoted asciiText)
-      )
+      (Gen.int $ Range.linear 0 10)
+      genLines
   ]
+ where
+  genLines =
+    Gen.list
+      (Range.linear 0 5)
+      (genAntiquoted asciiText)
 
 genAttrPath :: Gen (NAttrPath NExpr)
 genAttrPath =
