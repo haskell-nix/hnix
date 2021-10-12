@@ -222,32 +222,48 @@ attrSetAlter
   -> PositionSet
   -> m v
   -> m (AttrSet (m v), PositionSet)
-attrSetAlter [] _ _ _ _ = evalError @v $ ErrorCall "invalid selector with no components"
-attrSetAlter (k : ks) pos m p val =
-  bool
-    go
-    (maybe
-      (recurse mempty mempty)
-      (\x ->
-        do
-          (st, sp) <- fromValue @(AttrSet v, PositionSet) =<< x
-          recurse (demand <$> st) sp
-      )
-      (M.lookup k m)
-    )
-    (not $ null ks)
+attrSetAlter ks' pos m' p' val =
+  swap <$> go p' m' ks'
  where
-  go = pure (M.insert k val m, M.insert (coerce k) pos p)
-
-  recurse st sp =
-    (\(st', _) ->
-      (M.insert
-        k
-        (toValue @(AttrSet v, PositionSet) =<< (, mempty) <$> sequenceA st')
-        m
-      , M.insert (coerce k) pos p
+  -- This `go` does traverse in disquise. Notice how it traverses `ks`.
+  go
+    :: PositionSet
+    -> AttrSet (m v)
+    -> [VarName]
+    -> m (PositionSet, AttrSet (m v))
+  go _ _ [] = evalError @v $ ErrorCall "invalid selector with no components"
+  go p m (k : ks) =
+    bool
+      (pure $ insertVal val)
+      (maybe
+        (recurse mempty mempty)
+        (\x ->
+          do
+            --  2021-10-12: NOTE: swapping sourcewide into (PositionSet, AttrSet) would optimize code and remove this `swap`
+            (swap -> (sp, st)) <- fromValue @(AttrSet v, PositionSet) =<< x
+            recurse sp $ demand <$> st
+        )
+        ((`M.lookup` m) k)
       )
-    ) <$> attrSetAlter ks pos st sp val
+      (not $ null ks)
+   where
+    insertVal :: m v -> (PositionSet, AttrSet (m v))
+    insertVal v =
+      ( insertPos
+      , insertV v
+      )
+     where
+      insertV v' = M.insert k v' m
+      insertPos = M.insert k pos p
+
+    recurse
+      :: PositionSet
+      -> AttrSet (m v)
+      -> m ( PositionSet
+          , AttrSet (m v)
+          )
+    recurse p'' m'' =
+      insertVal . (=<<) (toValue @(AttrSet v, PositionSet)) . fmap (,mempty) . sequenceA . snd <$> go p'' m'' ks
 
 desugarBinds :: forall r . ([Binding r] -> r) -> [Binding r] -> [Binding r]
 desugarBinds embed binds = evalState (traverse (go <=< collect) binds) mempty
