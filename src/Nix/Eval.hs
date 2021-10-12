@@ -184,9 +184,8 @@ eval (NAbs    params body) = do
   let
     withCurScope = withScopes curScope
 
-  evalAbs
-    params
-    (\arg k ->
+    fun :: m v -> (AttrSet (m v) -> m v -> m r) -> m r
+    fun arg k =
       withCurScope $
         do
           (coerce -> newScope) <- buildArgument params arg
@@ -195,7 +194,10 @@ eval (NAbs    params body) = do
             k
               (coerce $ withCurScope . inform <$> newScope)
               body
-    )
+
+  evalAbs
+    params
+    fun
 
 eval (NSynHole name) = synHole name
 
@@ -518,14 +520,14 @@ buildArgument params arg =
     -> VarName
     -> These v (Maybe (m v))
     -> Maybe (AttrSet v -> m v)
-  assemble scope variadic k =
-    \case
-      That Nothing -> pure $ const $ evalError @v $ ErrorCall $ "Missing value for parameter: ''" <> show k
-      That (Just f) -> pure $ coerce $ \args -> defer $ withScopes scope $ pushScope args f
-      This _
-        | variadic == Variadic -> Nothing
-        | otherwise  -> pure $ const $ evalError @v $ ErrorCall $ "Unexpected parameter: " <> show k
-      These x _ -> pure $ const $ pure x
+  assemble _ Variadic _ (This _) = Nothing
+  assemble scope _ k t =
+    pure $
+    case t of
+      That Nothing -> const $ evalError @v $ ErrorCall $ "Missing value for parameter: ''" <> show k
+      That (Just f) -> coerce $ \ args -> defer $ withScopes scope $ pushScope args f
+      This _ -> const $ evalError @v $ ErrorCall $ "Unexpected parameter: " <> show k
+      These x _ -> const $ pure x
 
 -- | Add source positions to @NExprLoc@.
 --
