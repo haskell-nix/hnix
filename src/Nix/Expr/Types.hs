@@ -703,36 +703,39 @@ class NExprAnn ann g | g -> ann where
 -- ** Other
 
 ekey
-  :: NExprAnn ann g
+  :: forall ann g
+  . NExprAnn ann g
   => NonEmpty VarName
   -> SourcePos
   -> Lens' (Fix g) (Maybe (Fix g))
-ekey keys pos f e@(Fix x) | (NSet NonRecursive xs, ann) <- fromNExpr x =
-  case go xs of
-    ((v, []      ) : _) -> fromMaybe e <$> f (pure v)
-    ((v, r : rest) : _) -> ekey (r :| rest) pos f v
+ekey keys pos f e@(Fix x)
+  | (NSet NonRecursive xs, ann) <- fromNExpr x =
+    let
+      vals :: [(Fix g, [VarName])]
+      vals =
+        do
+          let keys' = NE.toList keys
+          (ks, rest) <- zip (inits keys') (tails keys')
+          list
+            mempty
+            (\ (j : js) ->
+              do
+                NamedVar ns v _p <- xs
+                guard $ (j : js) == (NE.toList ns ^.. traverse . _StaticKey)
+                pure (v, rest)
+            )
+            ks
+    in
+    case vals of
+      ((v, []      ) : _) -> fromMaybe e <$> f (pure v)
+      ((v, r : rest) : _) -> ekey (r :| rest) pos f v
 
-    _                   ->
-      maybe
-        e
-        (\ v ->
-          let entry = NamedVar (StaticKey <$> keys) v pos in
-          Fix $ toNExpr ( NSet mempty $ [entry] <> xs, ann )
-        )
-      <$>
-        f Nothing
-  where
-    go xs =
-      do
-        let keys' = NE.toList keys
-        (ks, rest) <- zip (inits keys') (tails keys')
-        list
-          mempty
-          (\ (j : js) ->
-            do
-              NamedVar ns v _p <- xs
-              guard $ (j : js) == (NE.toList ns ^.. traverse . _StaticKey)
-              pure (v, rest)
+      _                   ->
+        maybe
+          e
+          (\ v ->
+            let entry = NamedVar (StaticKey <$> keys) v pos in
+            Fix $ toNExpr ( NSet mempty $ one entry <> xs, ann )
           )
-          ks
+        <$> f Nothing
 ekey _ _ f e = fromMaybe e <$> f Nothing
