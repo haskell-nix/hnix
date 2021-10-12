@@ -288,24 +288,26 @@ compareVersions s1 s2 =
 
 splitDrvName :: Text -> (Text, Text)
 splitDrvName s =
-  let
-    sep    = "-"
-    pieces = Text.splitOn sep s
-    isFirstVersionPiece p =
-      case Text.uncons p of
-        Just (h, _) -> isDigit h
-        _           -> False
-    -- Like 'break', but always puts the first item into the first result
-    -- list
-    breakAfterFirstItem :: (a -> Bool) -> [a] -> ([a], [a])
-    breakAfterFirstItem f =
-      list
-        (mempty, mempty)
-        (\ (h : t) -> let (a, b) = break f t in (h : a, b))
-    (namePieces, versionPieces) =
-      breakAfterFirstItem isFirstVersionPiece pieces
-  in
   (Text.intercalate sep namePieces, Text.intercalate sep versionPieces)
+ where
+  sep    = "-"
+  pieces :: [Text]
+  pieces = Text.splitOn sep s
+  isFirstVersionPiece :: Text -> Bool
+  isFirstVersionPiece p =
+    maybe
+      False
+      (isDigit . fst)
+      (Text.uncons p)
+  -- Like 'break', but always puts the first item into the first result
+  -- list
+  breakAfterFirstItem :: (a -> Bool) -> [a] -> ([a], [a])
+  breakAfterFirstItem f =
+    list
+      (mempty, mempty)
+      (\ (h : t) -> let (a, b) = break f t in (h : a, b))
+  (namePieces, versionPieces) =
+    breakAfterFirstItem isFirstVersionPiece pieces
 
 splitMatches
   :: forall e t f m
