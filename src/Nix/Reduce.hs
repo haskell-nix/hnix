@@ -84,44 +84,46 @@ staticImport
   => SrcSpan
   -> Path
   -> m NExprLoc
-staticImport pann path = do
-  mfile <- asks (coerce . fst)
-  path  <- liftIO $ pathToDefaultNixFile path
-  path' <- liftIO $ pathToDefaultNixFile =<< (coerce <$> canonicalizePath . coerce)
-    (maybe id ((</>) . takeDirectory) mfile (coerce path))
+staticImport pann path =
+  do
+    mfile <- asks (coerce . fst)
+    path'  <- liftIO $ pathToDefaultNixFile path
+    path'' <- liftIO $ pathToDefaultNixFile =<< coerce canonicalizePath
+      (maybe id ((</>) . takeDirectory) mfile (coerce path'))
 
-  imports <- gets fst
-  maybe
-    (go path')
-    pure
-    (HM.lookup path' imports)
- where
-  go :: Path -> m NExprLoc
-  go path = do
-    liftIO $ putStrLn $ "Importing file " <> coerce path
+    let
+      importIt :: m NExprLoc
+      importIt = do
+        liftIO $ putStrLn $ "Importing file " <> coerce path''
 
-    eres <- liftIO $ parseNixFileLoc path
-    either
-      (\ err -> fail $ "Parse failed: " <> show err)
-      (\ x -> do
-        let
-          pos  = SourcePos "Reduce.hs" (mkPos 1) (mkPos 1)
-          span = SrcSpan pos pos
-          cur  =
-            NamedVar
-              (StaticKey "__cur_file" :| mempty)
-              (NLiteralPathAnn pann path)
-              pos
-          x' = NLetAnn span [cur] x
-        modify $ first $ HM.insert path x'
-        local
-          (const (pure path, mempty)) $
-          do
-            x'' <- foldFix reduce x'
-            modify $ first $ HM.insert path x''
-            pure x''
-      )
-      eres
+        eres <- liftIO $ parseNixFileLoc path''
+        either
+          (\ err -> fail $ "Parse failed: " <> show err)
+          (\ x -> do
+            let
+              pos  = SourcePos "Reduce.hs" (mkPos 1) (mkPos 1)
+              span = SrcSpan pos pos
+              cur  =
+                NamedVar
+                  (StaticKey "__cur_file" :| mempty)
+                  (NLiteralPathAnn pann path'')
+                  pos
+              x' = NLetAnn span [cur] x
+            modify $ first $ HM.insert path'' x'
+            local
+              (const (pure path'', mempty)) $
+              do
+                x'' <- foldFix reduce x'
+                modify $ first $ HM.insert path'' x''
+                pure x''
+          )
+          eres
+
+    imports <- gets fst
+    maybe
+      importIt
+      pure
+      (HM.lookup path'' imports)
 
 -- gatherNames :: NExprLoc -> HashSet VarName
 -- gatherNames = foldFix $ \case
