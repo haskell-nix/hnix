@@ -359,7 +359,7 @@ identifier =
   identLetter x = isAlphanumeric x || x == '_' || x == '\'' || x == '-'
 
 nixSym :: Parser NExprLoc
-nixSym = annotateLocation $ mkSymF . coerce <$> identifier
+nixSym = annotateLocation $ mkSymF <$> coerce identifier
 
 
 -- ** ( ) parens
@@ -822,7 +822,7 @@ nixSelect term =
 -- ** _ - syntax hole
 
 nixSynHole :: Parser NExprLoc
-nixSynHole = annotateLocation $ mkSynHoleF . coerce <$> (char '^' *> identifier)
+nixSynHole = annotateLocation $ mkSynHoleF <$> coerce (char '^' *> identifier)
 
 
 -- ** Expr & its constituents (Language term, expr algebra)

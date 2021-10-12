@@ -89,7 +89,7 @@ genTests = do
     testsByType = groupBy testType (Map.toList testsByName)
 
     testGroups :: [TestTree]
-    testGroups  = mkTestGroup . coerce <$> Map.toList testsByType
+    testGroups  = mkTestGroup <$> coerce (Map.toList testsByType)
   pure $ localOption (mkTimeout 2000000) $
     testGroup
       "Nix (upstream) language tests"
@@ -152,7 +152,7 @@ assertEval _opts files =
   do
     time <- liftIO getCurrentTime
     let opts = defaultOptions time
-    case delete ".nix" $ sort $ fromString @Text . takeExtensions . coerce <$> files of
+    case delete ".nix" $ sort $ fromString @Text . takeExtensions <$> coerce files of
       []                  -> void $ hnixEvalFile opts (name <> ".nix")
       [".exp"          ]  -> assertLangOk    opts name
       [".exp.xml"      ]  -> assertLangOkXml opts name
@@ -185,7 +185,7 @@ assertEval _opts files =
 
   name :: Path
   name = coerce $
-    "data/nix/tests/lang/" <> the (takeFileName . dropExtensions . coerce <$> files)
+    "data/nix/tests/lang/" <> the (takeFileName . dropExtensions <$> coerce files)
 
   fixup :: [Text] -> [Text]
   fixup ("--arg"    : x : y : rest) = "--arg"    : (x <> "=" <> y) : fixup rest

@@ -263,7 +263,7 @@ class
 -- ** Instances
 
 instance MonadPaths IO where
-  getDataDir = coerce <$> Paths_hnix.getDataDir
+  getDataDir = coerce Paths_hnix.getDataDir
 
 deriving
   instance

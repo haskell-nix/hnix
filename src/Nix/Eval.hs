@@ -180,21 +180,20 @@ eval (NAbs    params body) = do
   -- needs to be used when evaluating the body and default arguments, hence we
   -- defer here so the present scope is restored when the parameters and body
   -- are forced during application.
-  scopes <- currentScopes
+  curScope <- currentScopes
   let
-    withScope = withScopes scopes
-    withScopeInform = withScope . inform
+    withCurScope = withScopes curScope
 
   evalAbs
     params
     (\arg k ->
-      withScope $
+      withCurScope $
         do
-          (coerce -> scope) <- buildArgument params arg
+          (coerce -> newScope) <- buildArgument params arg
           pushScope
-            scope $
+            newScope $
             k
-              (withScopeInform <$> coerce scope)
+              (coerce $ withCurScope . inform <$> newScope)
               body
     )
 

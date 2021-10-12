@@ -167,7 +167,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
         )
         ms
        where
-        attr = Text.intercalate "." $ NE.toList $ coerce <$> ks
+        attr = Text.intercalate "." $ NE.toList $ coerce ks
 
   evalCurPos = do
     scope                  <- currentScopes
