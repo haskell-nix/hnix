@@ -237,9 +237,6 @@ data VersionComponent
   | VersionComponentNumber !Integer -- ^ A number
   deriving (Read, Eq, Ord)
 
--- | Based on https://github.com/NixOS/nix/blob/4ee4fda521137fed6af0446948b3877e0c5db803/src/libexpr/names.cc#L44
-versionComponentSeparators :: String
-versionComponentSeparators = ".-"
 instance Show VersionComponent where
   show =
     \case
@@ -273,6 +270,11 @@ splitVersion s =
               x     -> VersionComponentString x
         in
         thisComponent : splitVersion rest
+ where
+  -- | Based on https://github.com/NixOS/nix/blob/4ee4fda521137fed6af0446948b3877e0c5db803/src/libexpr/names.cc#L44
+  versionComponentSeparators :: String
+  versionComponentSeparators = ".-"
+
 
 compareVersions :: Text -> Text -> Ordering
 compareVersions s1 s2 =
