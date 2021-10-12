@@ -76,6 +76,7 @@ import           System.PosixCompat.Files       ( isRegularFile
                                                 , isDirectory
                                                 , isSymbolicLink
                                                 )
+import qualified Text.Show
 import           Text.Regex.TDFA                ( Regex
                                                 , makeRegex
                                                 , matchOnceText
@@ -234,18 +235,17 @@ data VersionComponent
   = VersionComponentPre -- ^ The string "pre"
   | VersionComponentString !Text -- ^ A string other than "pre"
   | VersionComponentNumber !Integer -- ^ A number
-  deriving (Show, Read, Eq, Ord)
-
-versionComponentToString :: VersionComponent -> Text
-versionComponentToString =
-  \case
-    VersionComponentPre      -> "pre"
-    VersionComponentString s -> s
-    VersionComponentNumber n -> show n
+  deriving (Read, Eq, Ord)
 
 -- | Based on https://github.com/NixOS/nix/blob/4ee4fda521137fed6af0446948b3877e0c5db803/src/libexpr/names.cc#L44
 versionComponentSeparators :: String
 versionComponentSeparators = ".-"
+instance Show VersionComponent where
+  show =
+    \case
+      VersionComponentPre      -> "pre"
+      VersionComponentString s -> show s
+      VersionComponentNumber n -> show n
 
 splitVersion :: Text -> [VersionComponent]
 splitVersion s =
@@ -598,7 +598,7 @@ splitVersionNix v =
     version <- fromStringNoContext =<< fromValue v
     pure $
       nvList $
-        nvStrWithoutContext . versionComponentToString <$>
+        nvStrWithoutContext . show <$>
           splitVersion version
 
 compareVersionsNix
