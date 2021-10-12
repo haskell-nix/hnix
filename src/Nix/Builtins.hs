@@ -212,12 +212,15 @@ foldNixPath z f =
         <> [ fromInclude $ "nix=" <> toText dataDir <> "/nix/corepkgs" ]
  where
 
-  fromInclude x = (x, ) $
-    bool
-      PathEntryPath
-      PathEntryURI
-      ("://" `Text.isInfixOf` x)
+  fromInclude :: Text -> (Text, NixPathEntryType)
+  fromInclude x =
+    (x, ) $
+      bool
+        PathEntryPath
+        PathEntryURI
+        ("://" `Text.isInfixOf` x)
 
+  go :: (Text, NixPathEntryType) -> r -> m r
   go (x, ty) rest =
     case Text.splitOn "=" x of
       [p] -> f (coerce $ toString p) mempty ty rest
@@ -321,7 +324,9 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
  where
   relStart       = max 0 start - numDropped
   (before, rest) = B.splitAt relStart haystack
+  caps :: NValue t f m
   caps           = nvList (f <$> captures)
+  f :: (ByteString, (Int, b)) -> NValue t f m
   f (a, (s, _))  =
     bool
       nvNull
@@ -789,6 +794,7 @@ filterNix f =
   inHaskM
     (filterM fh)
  where
+  fh :: NValue t f m -> m Bool
   fh = fromValue <=< callFunc f
 
 catAttrsNix
@@ -903,7 +909,7 @@ elemNix
 elemNix x = inHaskM (anyMNix $ valueEqM x)
  where
   anyMNix :: Monad m => (a -> m Bool) -> [a] -> m Bool
-  anyMNix p xs =
+  anyMNix p =
     list
       (pure False)
       (\ (x : xss) ->
@@ -912,7 +918,6 @@ elemNix x = inHaskM (anyMNix $ valueEqM x)
           (pure True)
           =<< p x
       )
-      xs
 
 elemAtNix
   :: MonadNix e t f m
@@ -974,9 +979,10 @@ genericClosureNix c =
         (do
           ys <- fromValue @[NValue t f m] =<< callFunc op v
           checkComparable k
-            (case S.toList ks of
-              []           -> k
-              WValue j : _ -> j
+            (list
+              k
+              (\ (WValue j:_) -> j)
+              (S.toList ks)
             )
           (t :) <<$>> go op (S.insert (WValue k) ks) (ts <> ys)
         )
@@ -1023,7 +1029,7 @@ replaceStringsNix tfrom tto ts =
         maybePrefixMatch :: Maybe (Text, NixString, Text)
         maybePrefixMatch = formMatchReplaceTailInfo <$> find ((`Text.isPrefixOf` input) . fst) fromKeysToValsMap
          where
-          formMatchReplaceTailInfo = (\(m, r) -> (m, r, Text.drop (Text.length m) input))
+          formMatchReplaceTailInfo (m, r) = (m, r, Text.drop (Text.length m) input)
 
           fromKeysToValsMap = zip (stringIgnoreContext <$> fromKeys) toVals
 
@@ -1440,7 +1446,7 @@ placeHolderNix p =
       bytes :: NixString -> ByteString
       bytes = encodeUtf8 . body
 
-      body h = stringIgnoreContext h
+      body = stringIgnoreContext
 
 readFileNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 readFileNix = toValue <=< Nix.Render.readFile <=< absolutePathFromValue <=< demand
@@ -1510,21 +1516,24 @@ fromJSONNix nvjson =
       (A.eitherDecodeStrict' @A.Value $ encodeUtf8 jText)
 
  where
-  -- jsonToNValue :: MonadNix e t f m => A.Value -> f (NValue t f m)
   jsonToNValue :: (A.Value -> m (NValue t f m))
-  jsonToNValue = \case
-    A.Object m -> nvSet mempty <$> traverse jsonToNValue (M.mapKeys coerce m)
-    A.Array  l -> nvList <$> traverse jsonToNValue (V.toList l)
-    A.String s -> pure $ nvStrWithoutContext s
-    A.Number n ->
-      pure $
-        nvConstant $
-          either
-            NFloat
-            NInt
-            (floatingOrInteger n)
-    A.Bool   b -> pure $ mkNVBool b
-    A.Null     -> pure nvNull
+  jsonToNValue =
+    \case
+      A.Object m -> traverseToNValue (nvSet mempty) (M.mapKeys coerce m)
+      A.Array  l -> traverseToNValue nvList (V.toList l)
+      A.String s -> pure $ nvStrWithoutContext s
+      A.Number n ->
+        pure $
+          nvConstant $
+            either
+              NFloat
+              NInt
+              (floatingOrInteger n)
+      A.Bool   b -> pure $ mkNVBool b
+      A.Null     -> pure nvNull
+   where
+    traverseToNValue :: Traversable t0 => (t0 (NValue t f m) -> b) -> t0 A.Value -> m b
+    traverseToNValue f v = f <$> traverse jsonToNValue v
 
 toJSONNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toJSONNix = (fmap nvStr . nvalueToJSONNixString) <=< demand
@@ -1879,11 +1888,15 @@ builtinsList = sequenceA
   , add  Normal   "valueSize"        getRecursiveSizeNix
   ]
  where
+
+  arity0 :: a -> Prim m a
+  arity0 = Prim . pure
+
   arity1 :: (a -> b) -> (a -> Prim m b)
-  arity1 f = Prim . pure . f
+  arity1 g = arity0 . g
 
   arity2 :: (a -> b -> c) -> (a -> b -> Prim m c)
-  arity2 f = ((Prim . pure) .) . f
+  arity2 f = arity1 . f
 
   mkBuiltin :: BuiltinType -> VarName -> m (NValue t f m) -> m (Builtin (NValue t f m))
   mkBuiltin t n v = wrap t n <$> mkThunk n v
@@ -1977,14 +1990,15 @@ withNixContext mpath action =
             do
               traceM $ "Setting __cur_file = " <> show path
               let ref = nvPath path
-              pushScope (coerce $ M.fromList (one ("__cur_file", ref))) act
+              pushScope (coerce $ M.fromList $ one ("__cur_file", ref)) act
           )
           mpath
           action
       )
 
 builtins
-  :: ( MonadNix e t f m
+  :: forall e t f m
+  . ( MonadNix e t f m
      , Scoped (NValue t f m) m
      )
   => m (Scopes m (NValue t f m))
@@ -1994,16 +2008,16 @@ builtins =
     lst <- ([("builtins", ref)] <>) <$> topLevelBuiltins
     pushScope (coerce (M.fromList lst)) currentScopes
  where
-  buildMap
-    :: ( MonadNix e t f m
-      , Scoped (NValue t f m) m
-      )
-    => m (HashMap VarName (NValue t f m))
+  buildMap :: m (HashMap VarName (NValue t f m))
   buildMap         =  M.fromList . (mapping <$>) <$> builtinsList
+
+  topLevelBuiltins :: m [(VarName, NValue t f m)]
   topLevelBuiltins = mapping <<$>> fullBuiltinsList
 
+  fullBuiltinsList :: m [Builtin (NValue t f m)]
   fullBuiltinsList = nameBuiltins <<$>> builtinsList
    where
+    nameBuiltins :: Builtin v -> Builtin v
     nameBuiltins b@(Builtin TopLevel _) = b
     nameBuiltins (Builtin Normal nB) =
       Builtin TopLevel $ first (coerce @Text . ("__" <>) . coerce @VarName) nB
