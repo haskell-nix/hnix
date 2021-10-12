@@ -30,6 +30,9 @@ asciiString = Gen.list (Range.linear 1 15) Gen.lower
 asciiText :: Gen Text
 asciiText = fromString <$> asciiString
 
+asciiVarName :: Gen VarName
+asciiVarName = coerce <$> asciiText
+
 -- Might want to replace this instance with a constant value
 genPos :: Gen Pos
 genPos = mkPos <$> Gen.int (Range.linear 1 256)
@@ -43,7 +46,7 @@ genSourcePos =
 
 genKeyName :: Gen (NKeyName NExpr)
 genKeyName =
-  Gen.choice [DynamicKey <$> genAntiquoted genString, StaticKey . coerce <$> asciiText]
+  Gen.choice [DynamicKey <$> genAntiquoted genString, StaticKey <$> asciiVarName]
 
 genAntiquoted :: Gen a -> Gen (Antiquoted a NExpr)
 genAntiquoted gen =
@@ -57,7 +60,7 @@ genBinding = Gen.choice
       genSourcePos
   , liftA3 Inherit
       (Gen.maybe genExpr)
-      (Gen.list (Range.linear 0 5) (coerce <$> asciiText))
+      (Gen.list (Range.linear 0 5) asciiVarName)
       genSourcePos
   ]
 
@@ -80,8 +83,8 @@ genAttrPath =
 
 genParams :: Gen (Params NExpr)
 genParams = Gen.choice
-  [ Param . coerce <$> asciiText
   , liftA3 (\ c b a -> ParamSet (pure $ coerce c) (Variadic `whenTrue` b) (coerce a))
+  [ Param <$> asciiVarName
       (Gen.choice [stub, asciiText])
       Gen.bool
       (Gen.list (Range.linear 0 10) $
