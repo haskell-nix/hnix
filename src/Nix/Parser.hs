@@ -812,11 +812,10 @@ nixSelect term =
       , Maybe NExprLoc
       )
     -> NExprLoc
-  build t mexpr =
+  build t =
     maybe
       t
       (\ (a, m) -> (`annNSelect` t) m a)
-      mexpr
 
 
 -- ** _ - syntax hole

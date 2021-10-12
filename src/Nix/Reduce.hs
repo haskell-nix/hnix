@@ -308,7 +308,7 @@ reduce e@(NIfAnnF _ b t f) =
 --   symbol if the assertion is a boolean constant.
 reduce e@(NAssertAnnF _ b body) =
   (\case
-    NConstantAnn _ (NBool b') | b' -> body
+    NConstantAnn _ (NBool True) -> body
     _ -> reduceLayer e
   ) =<< b
 

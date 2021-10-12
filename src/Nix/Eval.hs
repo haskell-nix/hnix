@@ -264,14 +264,14 @@ desugarBinds embed binds = evalState (traverse (go <=< collect) binds) mempty
         M.insert
           x
           (maybe
-            (p, [bindValAt p])
+            (p, one $ bindValAt p)
             (\ (q, v) -> (q, bindValAt q : v))
             (M.lookup x m)
           )
           m
       pure $ Left x
    where
-    bindValAt pos = NamedVar (y :| ys) val pos
+    bindValAt = NamedVar (y :| ys) val
   collect x = pure $ pure x
 
   go
@@ -332,7 +332,7 @@ evalBinds recursive binds =
       -- jww (2018-05-09): What to do with the key position here?
       pure $
         (\ (k, v) ->
-          ( [k]
+          ( one k
           , fromMaybe pos $ M.lookup k p'
           , demand v
           )
@@ -343,7 +343,7 @@ evalBinds recursive binds =
       -- When there are no path segments, e.g. `${null} = 5;`, we don't
       -- bind anything
       ([], _, _) -> mempty
-      result     -> [result]
+      result     -> one result
     ) <$> processAttrSetKeys pathExpr
 
    where
@@ -355,7 +355,7 @@ evalBinds recursive binds =
         (\ k ->
           list
             -- No more keys in the attrset - return the result
-            (pure ( [k], pos, finalValue ) )
+            (pure ( one k, pos, finalValue ) )
             -- There are unprocessed keys in attrset - recurse appending the results
             (\ (x : xs) ->
               do
@@ -384,7 +384,7 @@ evalBinds recursive binds =
                 do
                   (coerce -> scope, _) <- fromValue @(AttrSet v, PositionSet) =<< s
 
-                  clearScopes @v $ pushScope scope $ lookupVar var
+                  clearScopes $ pushScope @v scope $ lookupVar var
               )
               ms
       )
@@ -452,10 +452,8 @@ evalSetterKeyName =
   \case
     StaticKey k -> pure $ pure k
     DynamicKey k ->
-      maybe
-        Nothing
-        (pure . coerce . stringIgnoreContext)
-        <$> runAntiquoted "\n" assembleString (fromValueMay =<<) k
+      (coerce . stringIgnoreContext) <<$>>
+        runAntiquoted "\n" assembleString (fromValueMay =<<) k
 
 assembleString
   :: forall v m

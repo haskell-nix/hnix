@@ -79,7 +79,7 @@ pushScope
   => Scope a
   -> m r
   -> m r
-pushScope scope = pushScopes $ Scopes [scope] mempty
+pushScope scope = pushScopes $ Scopes (one scope) mempty
 
 pushWeakScope
   :: ( Functor m
@@ -88,7 +88,7 @@ pushWeakScope
   => m (Scope a)
   -> m r
   -> m r
-pushWeakScope scope = pushScopes $ Scopes mempty [scope]
+pushWeakScope scope = pushScopes $ Scopes mempty $ one scope
 
 pushScopesReader
   :: ( MonadReader e m
