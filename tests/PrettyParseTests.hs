@@ -110,48 +110,58 @@ genAtom = Gen.choice
 -- distribution is not scientifically chosen.
 genExpr :: Gen NExpr
 genExpr =
-  Gen.sized $
-    \(Size n) -> Fix <$>
-      if n < 2
-        then Gen.choice [genConstant, genStr, genSym, genLiteralPath, genEnvPath]
-        else
-          let
-            sizeBy i = Size $ n `div` i
-          in
-          Gen.frequency
-          [ (1 , genConstant)
-          , (1 , genSym)
-          , (4 , Gen.resize (sizeBy 3) genIf)
-          , (10, genRecSet)
-          , (20, genSet)
-          , (5 , genList)
-          , (2 , genUnary)
-          , (2 , Gen.resize (sizeBy 3) genBinary)
-          , (3 , Gen.resize (sizeBy 3) genSelect)
-          , (20, Gen.resize (sizeBy 2) genAbs)
-          , (2 , Gen.resize (sizeBy 2) genHasAttr)
-          , (10, Gen.resize (sizeBy 2) genLet)
-          , (10, Gen.resize (sizeBy 2) genWith)
-          , (1 , Gen.resize (sizeBy 2) genAssert)
-          ]
+  Gen.sized genCurbed
  where
-  genConstant    = NConstant                         <$> genAtom
-  genStr         = NStr                              <$> genString
-  genSym         = NSym . coerce                     <$> asciiText
-  genList        = NList                             <$> fairList genExpr
-  genSet         = NSet mempty                       <$> fairList genBinding
-  genRecSet      = NSet Recursive                    <$> fairList genBinding
-  genLiteralPath = NLiteralPath . ("./" <>) . coerce <$> asciiString
-  genEnvPath     = NEnvPath . coerce                 <$> asciiString
-  genUnary       = liftA2 NUnary   Gen.enumBounded       genExpr
-  genBinary      = liftA3 NBinary  Gen.enumBounded       genExpr     genExpr
-  genSelect      = liftA3 NSelect  (Gen.maybe genExpr)   genExpr     genAttrPath
-  genHasAttr     = liftA2 NHasAttr genExpr               genAttrPath
-  genAbs         = liftA2 NAbs     genParams             genExpr
-  genLet         = liftA2 NLet     (fairList genBinding) genExpr
-  genIf          = liftA3 NIf      genExpr               genExpr     genExpr
-  genWith        = liftA2 NWith    genExpr               genExpr
-  genAssert      = liftA2 NAssert  genExpr               genExpr
+  genCurbed (coerce -> n) =
+    Fix <$>
+      bool
+        small
+        big
+        (n >= 2)
+   where
+
+    genConstant    = NConstant                         <$> genAtom
+    genStr         = NStr                              <$> genString
+    genSym         = NSym                              <$> asciiVarName
+    genLiteralPath = NLiteralPath . ("./" <>) . coerce <$> asciiString
+    genEnvPath     = NEnvPath . coerce                 <$> asciiString
+
+    small = Gen.choice [genConstant, genStr, genSym, genLiteralPath, genEnvPath]
+
+    big =
+      let
+          sizeDivBy i = Size $ n `div` i
+          resizeDivBy i = Gen.resize (sizeDivBy i)
+      in
+      Gen.frequency
+        [ (1 , genConstant)
+        , (1 , genSym)
+        , (2 , genUnary)
+        , (5 , genList)
+        , (20, genSet)
+        , (10, genRecSet)
+        , (1 , resizeDivBy 2 genAssert)
+        , (4 , resizeDivBy 3 genIf)
+        , (2 , resizeDivBy 3 genBinary)
+        , (3 , resizeDivBy 3 genSelect)
+        , (20, resizeDivBy 2 genAbs)
+        , (2 , resizeDivBy 2 genHasAttr)
+        , (10, resizeDivBy 2 genLet)
+        , (10, resizeDivBy 2 genWith)
+        ]
+     where
+      genList        = NList                             <$> fairList genExpr
+      genSet         = NSet mempty                       <$> fairList genBinding
+      genRecSet      = NSet Recursive                    <$> fairList genBinding
+      genUnary       = liftA2 NUnary   Gen.enumBounded       genExpr
+      genBinary      = liftA3 NBinary  Gen.enumBounded       genExpr     genExpr
+      genSelect      = liftA3 NSelect  (Gen.maybe genExpr)   genExpr     genAttrPath
+      genHasAttr     = liftA2 NHasAttr genExpr               genAttrPath
+      genAbs         = liftA2 NAbs     genParams             genExpr
+      genLet         = liftA2 NLet     (fairList genBinding) genExpr
+      genIf          = liftA3 NIf      genExpr               genExpr     genExpr
+      genWith        = liftA2 NWith    genExpr               genExpr
+      genAssert      = liftA2 NAssert  genExpr               genExpr
 
 -- | Useful when there are recursive positions at each element of the list as
 --   it divides the size by the length of the generated list.
