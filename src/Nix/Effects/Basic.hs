@@ -11,8 +11,6 @@ import qualified Data.HashMap.Lazy             as M
 import           Data.List.Split                ( splitOn )
 import qualified Data.Text                     as Text
 import           Prettyprinter                  ( fillSep )
-import           System.FilePath                ( joinPath
-                                                )
 import           Nix.Convert
 import           Nix.Effects
 import           Nix.Exec                       ( MonadNix

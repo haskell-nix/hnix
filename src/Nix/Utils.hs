@@ -15,6 +15,7 @@ module Nix.Utils
   , takeDirectory
   , isAbsolute
   , splitDirectories
+  , joinPath
   , (</>)
   , Has(..)
   , trace
@@ -111,6 +112,9 @@ infixr 5 </>
 
 splitDirectories :: FilePath -> [FilePath]
 splitDirectories = FilePath.splitDirectories
+
+joinPath :: [FilePath] -> FilePath
+joinPath = FilePath.joinPath
 
 -- | > Hashmap Text -- type synonym
 type KeyMap = HashMap Text
