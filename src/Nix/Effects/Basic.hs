@@ -11,8 +11,7 @@ import qualified Data.HashMap.Lazy             as M
 import           Data.List.Split                ( splitOn )
 import qualified Data.Text                     as Text
 import           Prettyprinter                  ( fillSep )
-import           System.FilePath                ( takeDirectory
-                                                , splitDirectories
+import           System.FilePath                ( splitDirectories
                                                 , joinPath
                                                 )
 import           Nix.Convert

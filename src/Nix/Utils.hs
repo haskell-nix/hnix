@@ -12,6 +12,7 @@ module Nix.Utils
   , Alg
   , Path(..)
   , takeFileName
+  , takeDirectory
   , isAbsolute
   , (</>)
   , Has(..)
@@ -99,6 +100,9 @@ takeFileName = FilePath.takeFileName
 
 isAbsolute :: FilePath -> Bool
 isAbsolute = FilePath.isAbsolute
+
+takeDirectory :: FilePath -> FilePath
+takeDirectory = FilePath.takeDirectory
 
 (</>) :: FilePath -> FilePath -> FilePath
 (</>) = (FilePath.</>)
