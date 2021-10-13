@@ -82,7 +82,7 @@ genTests = do
     <$> globDir1 (compile "*-*-*.*") "data/nix/tests/lang"
   let
     testsByName :: Map FilePath [FilePath]
-    testsByName = groupBy (takeFileName . coerce dropExtensions) testFiles
+    testsByName = groupBy (coerce (takeFileName . dropExtensions)) testFiles
 
     testsByType :: Map [String] [(FilePath, [FilePath])]
     testsByType = groupBy testType (Map.toList testsByName)
@@ -95,14 +95,14 @@ genTests = do
       testGroups
  where
   testType :: (FilePath, b) -> [String]
-  testType (fullpath, _files) = take 2 $ splitOn "-" $ takeFileName fullpath
+  testType (fullpath, _files) = take 2 $ splitOn "-" $ coerce takeFileName fullpath
 
   mkTestGroup :: ([String], [(String, [Path])]) -> TestTree
   mkTestGroup (kind, tests) =
     testGroup (String.unwords kind) $ mkTestCase kind <$> tests
 
   mkTestCase :: [String] -> (String, [Path]) -> TestTree
-  mkTestCase kind (basename, files) = testCase (takeFileName basename) $
+  mkTestCase kind (basename, files) = testCase (coerce takeFileName basename) $
     do
       time <- liftIO getCurrentTime
       let opts = defaultOptions time
@@ -183,8 +183,8 @@ assertEval _opts files =
       (fmap toString $ fixup $ Text.splitOn " " flags')
 
   name :: Path
-  name = coerce $
-    "data/nix/tests/lang/" <> the (takeFileName . coerce dropExtensions <$> files)
+  name =
+    "data/nix/tests/lang/" <> the (takeFileName . dropExtensions <$> files)
 
   fixup :: [Text] -> [Text]
   fixup ("--arg"    : x : y : rest) = "--arg"    : (x <> "=" <> y) : fixup rest

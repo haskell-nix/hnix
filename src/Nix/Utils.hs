@@ -124,8 +124,9 @@ splitDirectories = FilePath.splitDirectories
 takeDirectory :: Path -> Path
 takeDirectory = coerce FilePath.takeDirectory
 
-takeFileName :: FilePath -> FilePath
-takeFileName = FilePath.takeFileName
+-- | @takeFileName@ specialized to @Path@
+takeFileName :: Path -> Path
+takeFileName = coerce FilePath.takeFileName
 
 takeBaseName :: FilePath -> String
 takeBaseName = FilePath.takeBaseName

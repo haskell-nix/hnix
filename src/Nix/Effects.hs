@@ -437,7 +437,7 @@ addPath p =
   either
     throwError
     pure
-    =<< addToStore (fromString $ takeFileName (coerce p)) p True False
+    =<< addToStore (fromString $ coerce takeFileName p) p True False
 
 toFile_ :: (Framed e m, MonadStore m) => Path -> Text -> m StorePath
 toFile_ p contents = addTextToStore (toText p) contents mempty False

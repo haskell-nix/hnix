@@ -821,7 +821,7 @@ baseNameOfNix x =
     pure $
       nvStr $
         modifyNixContents
-          (fromString . takeFileName . toString)
+          (fromString . coerce takeFileName . toString)
           ns
 
 bitAndNix
