@@ -12,7 +12,6 @@ import           Data.List.Split                ( splitOn )
 import qualified Data.Text                     as Text
 import           Prettyprinter                  ( fillSep )
 import           System.FilePath                ( takeDirectory
-                                                , isAbsolute
                                                 , splitDirectories
                                                 , (</>)
                                                 , joinPath
