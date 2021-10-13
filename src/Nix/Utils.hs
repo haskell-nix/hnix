@@ -18,6 +18,7 @@ module Nix.Utils
   , joinPath
   , (</>)
   , replaceExtension
+  , takeExtension
   , Has(..)
   , trace
   , traceM
@@ -100,6 +101,9 @@ instance IsString Path where
 
 takeFileName :: FilePath -> FilePath
 takeFileName = FilePath.takeFileName
+
+takeExtension :: FilePath -> String
+takeExtension = FilePath.takeExtensions
 
 isAbsolute :: FilePath -> Bool
 isAbsolute = FilePath.isAbsolute

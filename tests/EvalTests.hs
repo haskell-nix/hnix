@@ -16,7 +16,6 @@ import           Nix.Standard
 import           Nix.TH
 import           Nix.Value.Equal
 import qualified System.Directory as D
-import           System.FilePath (takeExtension)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.TH
