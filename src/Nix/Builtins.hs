@@ -1283,7 +1283,7 @@ scopedImportNix asetArg pathArg =
             p' <- fromValue @Path =<< demand res
 
             traceM $ "Current file being evaluated is: " <> show p'
-            pure $ coerce $ coerce takeDirectory p' </> coerce path
+            pure $ takeDirectory p' </> path
         )
         =<< lookupVar "__cur_file"
 
@@ -1485,7 +1485,7 @@ readDirNix nvpath =
       detectFileTypes :: Path -> m (VarName, FileType)
       detectFileTypes item =
         do
-          s <- getSymbolicLinkStatus $ coerce $ on (</>) coerce path item
+          s <- getSymbolicLinkStatus $ path </> item
           let
             t =
               if

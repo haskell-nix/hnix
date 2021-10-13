@@ -72,7 +72,7 @@ removeDotDotIndirections = coerce . intercalate "/" . go mempty . splitOn "/" . 
 infixr 9 <///>
 (<///>) :: Path -> Path -> Path
 x <///> y
-  | isAbsolute y || "." `isPrefixOf` coerce y = coerce $ coerce x </> coerce y
+  | isAbsolute y || "." `isPrefixOf` coerce y = x </> y
   | otherwise                          = joinByLargestOverlap x y
  where
   joinByLargestOverlap :: Path -> Path -> Path
@@ -103,7 +103,7 @@ findEnvPathM name =
     absFile <-
       bool
         (pure absPath)
-        (toAbsolutePath @t @f $ coerce $ coerce absPath </> "default.nix")
+        (toAbsolutePath @t @f $ absPath </> "default.nix")
         isDir
     exists <- doesFileExist absFile
     pure $ pure absFile `whenTrue` exists
@@ -259,9 +259,10 @@ defaultPathToDefaultNix = pathToDefaultNixFile
 
 -- Given a path, determine the nix file to load
 pathToDefaultNixFile :: MonadFile m => Path -> m Path
-pathToDefaultNixFile p = do
-  isDir <- doesDirectoryExist p
-  pure $ coerce $ coerce p </> "default.nix" `whenTrue` isDir
+pathToDefaultNixFile p =
+  do
+    isDir <- doesDirectoryExist p
+    pure $ p </> "default.nix" `whenTrue` isDir
 
 defaultTraceEffect :: MonadPutStr m => String -> m ()
 defaultTraceEffect = Nix.Effects.putStrLn

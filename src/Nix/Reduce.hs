@@ -88,7 +88,7 @@ staticImport pann path =
     mfile <- asks fst
     path'  <- liftIO $ pathToDefaultNixFile path
     path'' <- liftIO $ pathToDefaultNixFile =<< coerce canonicalizePath
-      (maybe id ((</>) . coerce takeDirectory) mfile (coerce path'))
+      (maybe id ((</>) . takeDirectory) mfile path')
 
     let
       importIt :: m NExprLoc

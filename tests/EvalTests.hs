@@ -457,7 +457,7 @@ genEvalCompareTests =
     pure $ testGroup "Eval comparison tests" $ fmap (mkTestCase testDir) files
   where
     mkTestCase :: Path -> TestName -> TestTree
-    mkTestCase td f = testCase f $ assertEvalFileMatchesNix $ coerce $ coerce td </> f
+    mkTestCase td f = testCase f $ assertEvalFileMatchesNix $ td </> coerce f
 
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
 constantEqual expected actual =

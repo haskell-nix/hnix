@@ -110,11 +110,12 @@ instance IsString Path where
 isAbsolute :: Path -> Bool
 isAbsolute = coerce FilePath.isAbsolute
 
-(</>) :: FilePath -> FilePath -> FilePath
-(</>) = (FilePath.</>)
+-- | @(</>)@ specialized to @Path@
+(</>) :: Path -> Path -> Path
+(</>) = coerce (FilePath.</>)
 infixr 5 </>
 
--- @joinPath@ specialized to @Path@
+-- | @joinPath@ specialized to @Path@
 joinPath :: [Path] -> Path
 joinPath = coerce FilePath.joinPath
 
