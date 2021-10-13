@@ -50,7 +50,9 @@ import           Nix.Options                    ( Options
 import           Nix.Parser
 import           Nix.Scope
 import           System.Directory
-import           System.FilePath
+import           System.FilePath                ( (</>)
+                                                , takeDirectory
+                                                )
 
 newtype Reducer m a = Reducer
     { runReducer ::

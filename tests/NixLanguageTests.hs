@@ -21,7 +21,12 @@ import           Nix.String
 import           Nix.XML
 import qualified Options.Applicative           as Opts
 import           System.Environment
-import           System.FilePath
+import           System.FilePath                ( takeBaseName
+                                                , takeExtension
+                                                , takeFileName
+                                                , takeExtensions
+                                                , dropExtensions
+                                                )
 import           System.FilePath.Glob           ( compile
                                                 , globDir1
                                                 )

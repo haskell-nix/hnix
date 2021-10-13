@@ -32,7 +32,8 @@ import           Options.Applicative     hiding ( ParserResult(..) )
 import           Prettyprinter           hiding ( list )
 import           Prettyprinter.Render.Text      ( renderIO )
 import qualified Repl
-import           System.FilePath
+import           System.FilePath                (replaceExtension
+                                                )
 import           Nix.Eval
 
 main :: IO ()
