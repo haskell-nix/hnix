@@ -1297,24 +1297,26 @@ getEnvNix v =
   (toValue . mkNixStringWithoutContext . maybeToMonoid) =<< getEnvVar =<< fromStringNoContext =<< fromValue v
 
 sortNix
-  :: MonadNix e t f m
+  :: forall e t f m
+  . MonadNix e t f m
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
 sortNix comp =
-  inHaskM (sortByM $ cmp comp)
+  inHaskM (sortByM cmp)
  where
-  cmp f a b =
-    do
-      isLessThan <- (`callFunc` b) =<< callFunc f a
-      bool
-        (do
-          isGreaterThan <- (`callFunc` a) =<< callFunc f b
-          fromValue isGreaterThan <&>
-            bool EQ GT
-        )
-        (pure LT)
-        =<< fromValue isLessThan
+  cmp :: NValue t f m -> NValue t f m -> m Ordering
+  cmp a b =
+    bool
+      (fmap
+         (bool EQ GT)
+         (compare b a)
+      )
+      (pure LT)
+      =<< compare a b
+   where
+    compare :: NValue t f m -> NValue t f m -> m Bool
+    compare a2 a1 = fromValue =<< (`callFunc` a1) =<< callFunc comp a2
 
 lessThanNix
   :: MonadNix e t f m
