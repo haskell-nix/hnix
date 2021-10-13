@@ -51,7 +51,7 @@ defaultToAbsolutePath origPath = do
         pure $ cwd <///> origPathExpanded
       )
       (pure origPathExpanded)
-      (isAbsolute $ coerce origPathExpanded)
+      (isAbsolute origPathExpanded)
   removeDotDotIndirections <$> canonicalizePath absPath
 
 expandHomePath :: MonadFile m => Path -> m Path
@@ -71,11 +71,12 @@ removeDotDotIndirections = coerce . intercalate "/" . go mempty . splitOn "/" . 
 
 infixr 9 <///>
 (<///>) :: Path -> Path -> Path
-(coerce -> x) <///> (coerce -> y)
-  | isAbsolute y || "." `isPrefixOf` y = coerce $ x </> y
+(coerce -> x) <///> y
+  | isAbsolute y || "." `isPrefixOf` coerce y = coerce $ x </> coerce y
   | otherwise                          = joinByLargestOverlap x y
  where
-  joinByLargestOverlap (splitDirectories -> xs) (splitDirectories -> ys) = coerce $
+  joinByLargestOverlap :: FilePath -> Path -> Path
+  joinByLargestOverlap (splitDirectories -> xs) (splitDirectories . coerce -> ys) = coerce $
     joinPath $ head
       [ xs <> drop (length tx) ys | tx <- tails xs, tx `elem` inits ys ]
 

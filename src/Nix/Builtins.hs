@@ -353,10 +353,10 @@ absolutePathFromValue =
     NVStr ns ->
       do
         let
-          path = toString $ stringIgnoreContext ns
+          path = coerce . toString $ stringIgnoreContext ns
 
         unless (isAbsolute path) $ throwError $ ErrorCall $ "string " <> show path <> " doesn't represent an absolute path"
-        pure $ coerce path
+        pure path
 
     NVPath path -> pure path
     v           -> throwError $ ErrorCall $ "expected a path, got " <> show v

@@ -104,8 +104,9 @@ instance ToText Path where
 instance IsString Path where
   fromString = coerce
 
-isAbsolute :: FilePath -> Bool
-isAbsolute = FilePath.isAbsolute
+-- | @isAbsolute@ specialized to @Path@.
+isAbsolute :: Path -> Bool
+isAbsolute = coerce FilePath.isAbsolute
 
 (</>) :: FilePath -> FilePath -> FilePath
 (</>) = (FilePath.</>)
