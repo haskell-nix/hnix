@@ -169,22 +169,29 @@ findPathBy finder ls name = do
       (M.lookup "path" s)
 
 fetchTarball
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
+  :: forall e t f m
+   . MonadNix e t f m
+  => NValue t f m
+  -> m (NValue t f m)
 fetchTarball =
   \case
     NVSet _ s ->
       maybe
         (throwError $ ErrorCall "builtins.fetchTarball: Missing url attribute")
-        (go (M.lookup "sha256" s) <=< demand)
+        (fetchFromString (M.lookup "sha256" s) <=< demand)
         (M.lookup "url" s)
-    v@NVStr{} -> go Nothing v
+    v@NVStr{} -> fetchFromString Nothing v
     v -> throwError $ ErrorCall $ "builtins.fetchTarball: Expected URI or set, got " <> show v
   <=< demand
  where
-  go :: Maybe (NValue t f m) -> NValue t f m -> m (NValue t f m)
-  go msha = \case
-    NVStr ns -> fetch (stringIgnoreContext ns) msha
-    v -> throwError $ ErrorCall $ "builtins.fetchTarball: Expected URI or string, got " <> show v
+  fetchFromString
+    :: Maybe (NValue t f m)
+    -> NValue t f m
+    -> m (NValue t f m)
+  fetchFromString msha =
+    \case
+      NVStr ns -> fetch (stringIgnoreContext ns) msha
+      v -> throwError $ ErrorCall $ "builtins.fetchTarball: Expected URI or string, got " <> show v
 
 {- jww (2018-04-11): This should be written using pipes in another module
     fetch :: Text -> Maybe (NThunk m) -> m (NValue t f m)
@@ -238,7 +245,7 @@ defaultImportPath
   => Path
   -> m (NValue t f m)
 defaultImportPath path = do
-  traceM $ coerce $ "Importing file " <> path
+  traceM $ "Importing file " <> coerce path
   withFrame
     Info
     (ErrorCall $ "While importing file " <> show path)
