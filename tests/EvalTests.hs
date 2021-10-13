@@ -445,19 +445,19 @@ tests = $testGroupGenerator
 
 genEvalCompareTests =
   do
-    td :: [FilePath] <- D.listDirectory (coerce testDir)
+    (coerce -> files :: [Path]) <- D.listDirectory (coerce testDir)
 
     let
       unmaskedFiles :: [Path]
-      unmaskedFiles = filter ((==".nix") . takeExtension) $ coerce td
+      unmaskedFiles = filter ((== ".nix") . takeExtension) files
 
-      files :: [TestName]
-      files = coerce $ unmaskedFiles \\ maskedFiles
+      testFiles :: [Path]
+      testFiles = unmaskedFiles \\ maskedFiles
 
-    pure $ testGroup "Eval comparison tests" $ fmap (mkTestCase testDir) files
+    pure $ testGroup "Eval comparison tests" $ fmap (mkTestCase testDir) testFiles
   where
-    mkTestCase :: Path -> TestName -> TestTree
-    mkTestCase td f = testCase f $ assertEvalFileMatchesNix $ td </> coerce f
+    mkTestCase :: Path -> Path -> TestTree
+    mkTestCase dir f = testCase (coerce f :: TestName) $ assertEvalFileMatchesNix $ dir </> f
 
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
 constantEqual expected actual =
