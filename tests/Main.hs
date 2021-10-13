@@ -73,17 +73,18 @@ ensureNixpkgsCanParse =
             stub
     v -> fail $ "Unexpected parse from default.nix: " <> show v
  where
-  getExpr   k m = let Just (Just r) = lookup k m in r
+  getExpr   k m =
+    let Just (Just r) = lookup k m in
+    r
   getString k m =
-      let Fix (NStr (DoubleQuoted [Plain str])) = getExpr k m in str
+    let Fix (NStr (DoubleQuoted [Plain str])) = getExpr k m in
+    str
 
   consider path action k =
-    do
-      x <- action
-      either
-        (\ err -> errorWithoutStackTrace $ "Parsing " <> coerce @Path path <> " failed: " <> show err)
-        k
-        x
+    either
+      (\ err -> errorWithoutStackTrace $ "Parsing " <> coerce @Path path <> " failed: " <> show err)
+      k
+      =<< action
 
 main :: IO ()
 main = do
