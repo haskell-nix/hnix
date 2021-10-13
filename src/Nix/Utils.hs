@@ -12,6 +12,7 @@ module Nix.Utils
   , Alg
   , Path(..)
   , takeFileName
+  , takeBaseName
   , takeDirectory
   , isAbsolute
   , splitDirectories
@@ -103,6 +104,9 @@ instance IsString Path where
 
 takeFileName :: FilePath -> FilePath
 takeFileName = FilePath.takeFileName
+
+takeBaseName :: FilePath -> String
+takeBaseName = FilePath.takeBaseName
 
 takeExtension :: FilePath -> String
 takeExtension = FilePath.takeExtensions
