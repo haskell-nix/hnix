@@ -17,6 +17,7 @@ module Nix.Utils
   , splitDirectories
   , joinPath
   , (</>)
+  , replaceExtension
   , Has(..)
   , trace
   , traceM
@@ -115,6 +116,9 @@ splitDirectories = FilePath.splitDirectories
 
 joinPath :: [FilePath] -> FilePath
 joinPath = FilePath.joinPath
+
+replaceExtension :: FilePath -> String -> FilePath
+replaceExtension = FilePath.replaceExtension
 
 -- | > Hashmap Text -- type synonym
 type KeyMap = HashMap Text
