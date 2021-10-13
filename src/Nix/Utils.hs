@@ -11,6 +11,7 @@ module Nix.Utils
   , Transform
   , Alg
   , Path(..)
+  , takeFileName
   , Has(..)
   , trace
   , traceM
@@ -62,6 +63,7 @@ import           Lens.Family2                  as X
 import           Lens.Family2.Stock             ( _1
                                                 , _2
                                                 )
+import qualified System.FilePath              as FilePath
 
 #if ENABLE_TRACING
 import qualified Relude.Debug                 as X
@@ -90,6 +92,8 @@ instance ToText Path where
 instance IsString Path where
   fromString = coerce
 
+takeFileName :: FilePath -> FilePath
+takeFileName = FilePath.takeFileName
 
 -- | > Hashmap Text -- type synonym
 type KeyMap = HashMap Text

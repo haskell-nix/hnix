@@ -72,7 +72,6 @@ import           Nix.Value.Monad
 import           Nix.XML
 import           System.Nix.Base32             as Base32
 import           System.FilePath                ( isAbsolute
-                                                , takeFileName
                                                 , takeDirectory
                                                 , (</>)
                                                 )

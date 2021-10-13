@@ -23,7 +23,6 @@ import qualified Options.Applicative           as Opts
 import           System.Environment
 import           System.FilePath                ( takeBaseName
                                                 , takeExtension
-                                                , takeFileName
                                                 , takeExtensions
                                                 , dropExtensions
                                                 )

@@ -30,7 +30,6 @@ import           Nix.Render
 import           Nix.Value
 import qualified Paths_hnix
 import           System.Exit
-import           System.FilePath                ( takeFileName )
 import qualified System.Info
 import           System.Process
 
