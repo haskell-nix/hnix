@@ -132,8 +132,9 @@ takeFileName = coerce FilePath.takeFileName
 takeBaseName :: Path -> String
 takeBaseName = coerce FilePath.takeBaseName
 
-takeExtension :: FilePath -> String
-takeExtension = FilePath.takeExtensions
+-- | @takeExtension@ specialized to @Path@
+takeExtension :: Path -> String
+takeExtension = coerce FilePath.takeExtensions
 
 takeExtensions :: FilePath -> String
 takeExtensions = FilePath.takeExtensions

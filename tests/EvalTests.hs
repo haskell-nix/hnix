@@ -443,15 +443,16 @@ case_concat_thunk_rigth =
 tests :: TestTree
 tests = $testGroupGenerator
 
-genEvalCompareTests = do
-    td <- D.listDirectory (coerce testDir)
+genEvalCompareTests =
+  do
+    td :: [FilePath] <- D.listDirectory (coerce testDir)
 
     let
-      unmaskedFiles :: [String]
-      unmaskedFiles = filter ((==".nix") . takeExtension) td
+      unmaskedFiles :: [Path]
+      unmaskedFiles = filter ((==".nix") . takeExtension) $ coerce td
 
-      files :: [String]
-      files = unmaskedFiles \\ coerce maskedFiles
+      files :: [TestName]
+      files = coerce $ unmaskedFiles \\ maskedFiles
 
     pure $ testGroup "Eval comparison tests" $ fmap (mkTestCase testDir) files
   where

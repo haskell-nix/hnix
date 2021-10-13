@@ -74,12 +74,12 @@ deprecatedRareNixQuirkTests = Set.fromList
 
 genTests :: IO TestTree
 genTests = do
-  testFiles :: [FilePath] <-
+  (coerce -> testFiles :: [FilePath]) <-
     sort
     -- Disabling the not yet done tests cases.
-    . filter ((`Set.notMember` (newFailingTests `Set.union` deprecatedRareNixQuirkTests)) . takeBaseName . coerce)
+    . filter ((`Set.notMember` (newFailingTests `Set.union` deprecatedRareNixQuirkTests)) . takeBaseName)
     . filter ((/= ".xml") . takeExtension)
-    <$> globDir1 (compile "*-*-*.*") "data/nix/tests/lang"
+    <$> coerce (globDir1 (compile "*-*-*.*") "data/nix/tests/lang")
   let
     testsByName :: Map FilePath [FilePath]
     testsByName = groupBy (coerce (takeFileName . dropExtensions)) testFiles
@@ -89,6 +89,7 @@ genTests = do
 
     testGroups :: [TestTree]
     testGroups  = mkTestGroup <$> coerce (Map.toList testsByType)
+
   pure $ localOption (mkTimeout 2000000) $
     testGroup
       "Nix (upstream) language tests"
