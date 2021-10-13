@@ -152,7 +152,7 @@ assertEval _opts files =
   do
     time <- liftIO getCurrentTime
     let opts = defaultOptions time
-    case delete ".nix" $ sort $ fromString @Text . takeExtensions <$> coerce files of
+    case delete ".nix" $ sort $ fromString @Text . takeExtensions <$> files of
       []                  -> void $ hnixEvalFile opts (name <> ".nix")
       [".exp"          ]  -> assertLangOk    opts name
       [".exp.xml"      ]  -> assertLangOkXml opts name
