@@ -26,7 +26,7 @@ import qualified ReduceExprTests
 import qualified PrettyParseTests
 import           System.Directory
 import           System.Environment (setEnv)
-import           System.FilePath.Glob
+import           System.FilePath.Glob (compile, globDir1)
 import           System.PosixCompat.Files
 import           Test.Tasty
 import           Test.Tasty.HUnit

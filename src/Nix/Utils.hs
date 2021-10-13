@@ -19,6 +19,7 @@ module Nix.Utils
   , (</>)
   , replaceExtension
   , takeExtension
+  , takeExtensions
   , Has(..)
   , trace
   , traceM
@@ -104,6 +105,9 @@ takeFileName = FilePath.takeFileName
 
 takeExtension :: FilePath -> String
 takeExtension = FilePath.takeExtensions
+
+takeExtensions :: FilePath -> String
+takeExtensions = FilePath.takeExtensions
 
 isAbsolute :: FilePath -> Bool
 isAbsolute = FilePath.isAbsolute

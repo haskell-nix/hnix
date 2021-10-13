@@ -22,7 +22,6 @@ import           Nix.XML
 import qualified Options.Applicative           as Opts
 import           System.Environment
 import           System.FilePath                ( takeBaseName
-                                                , takeExtensions
                                                 , dropExtensions
                                                 )
 import           System.FilePath.Glob           ( compile
