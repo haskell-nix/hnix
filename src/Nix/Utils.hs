@@ -128,8 +128,9 @@ takeDirectory = coerce FilePath.takeDirectory
 takeFileName :: Path -> Path
 takeFileName = coerce FilePath.takeFileName
 
-takeBaseName :: FilePath -> String
-takeBaseName = FilePath.takeBaseName
+-- | @takeBaseName@ specialized to @Path@
+takeBaseName :: Path -> String
+takeBaseName = coerce FilePath.takeBaseName
 
 takeExtension :: FilePath -> String
 takeExtension = FilePath.takeExtensions

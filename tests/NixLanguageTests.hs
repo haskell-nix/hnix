@@ -74,10 +74,10 @@ deprecatedRareNixQuirkTests = Set.fromList
 
 genTests :: IO TestTree
 genTests = do
-  testFiles <-
+  testFiles :: [FilePath] <-
     sort
     -- Disabling the not yet done tests cases.
-    . filter ((`Set.notMember` (newFailingTests `Set.union` deprecatedRareNixQuirkTests)) . takeBaseName)
+    . filter ((`Set.notMember` (newFailingTests `Set.union` deprecatedRareNixQuirkTests)) . takeBaseName . coerce)
     . filter ((/= ".xml") . takeExtension)
     <$> globDir1 (compile "*-*-*.*") "data/nix/tests/lang"
   let
