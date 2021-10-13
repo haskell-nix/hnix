@@ -119,10 +119,14 @@ findPathBy finder ls name = do
   maybe
     (throwError $ ErrorCall $ "file ''" <> coerce name <> "'' was not found in the Nix search path (add it's using $NIX_PATH or -I)")
     pure
-    =<< foldM go mempty ls
+    =<< foldM fun mempty ls
  where
-  go :: MonadNix e t f m => Maybe Path -> NValue t f m -> m (Maybe Path)
-  go =
+  fun
+    :: MonadNix e t f m
+    => Maybe Path
+    -> NValue t f m
+    -> m (Maybe Path)
+  fun =
     maybe
       (\ nv ->
         do
@@ -149,10 +153,11 @@ findPathBy finder ls name = do
       (const . pure . pure)
 
   tryPath :: Path -> Maybe Path -> m (Maybe Path)
-  tryPath p (Just n) | n' : ns <- splitDirectories (coerce name), n == coerce n' =
-    finder $ p <///> coerce joinPath ns
+  tryPath p (Just n) | n' : ns <- splitDirectories name, n == n' =
+    finder $ p <///> joinPath ns
   tryPath p _ = finder $ p <///> name
 
+  resolvePath :: HashMap VarName (NValue t f m) -> m (NValue t f m)
   resolvePath s =
     maybe
       (maybe
