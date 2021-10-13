@@ -10,18 +10,20 @@ module Nix.Utils
   , TransformF
   , Transform
   , Alg
+
   , Path(..)
+  , isAbsolute
+  , (</>)
+  , joinPath
+  , splitDirectories
+  , takeDirectory
   , takeFileName
   , takeBaseName
-  , takeDirectory
-  , isAbsolute
-  , splitDirectories
-  , joinPath
-  , (</>)
-  , replaceExtension
   , takeExtension
   , takeExtensions
   , dropExtensions
+  , replaceExtension
+
   , Has(..)
   , trace
   , traceM
@@ -102,6 +104,22 @@ instance ToText Path where
 instance IsString Path where
   fromString = coerce
 
+isAbsolute :: FilePath -> Bool
+isAbsolute = FilePath.isAbsolute
+
+(</>) :: FilePath -> FilePath -> FilePath
+(</>) = (FilePath.</>)
+infixr 5 </>
+
+joinPath :: [FilePath] -> FilePath
+joinPath = FilePath.joinPath
+
+splitDirectories :: FilePath -> [FilePath]
+splitDirectories = FilePath.splitDirectories
+
+takeDirectory :: FilePath -> FilePath
+takeDirectory = FilePath.takeDirectory
+
 takeFileName :: FilePath -> FilePath
 takeFileName = FilePath.takeFileName
 
@@ -117,24 +135,9 @@ takeExtensions = FilePath.takeExtensions
 dropExtensions :: FilePath -> FilePath
 dropExtensions = FilePath.dropExtensions
 
-isAbsolute :: FilePath -> Bool
-isAbsolute = FilePath.isAbsolute
-
-takeDirectory :: FilePath -> FilePath
-takeDirectory = FilePath.takeDirectory
-
-(</>) :: FilePath -> FilePath -> FilePath
-(</>) = (FilePath.</>)
-infixr 5 </>
-
-splitDirectories :: FilePath -> [FilePath]
-splitDirectories = FilePath.splitDirectories
-
-joinPath :: [FilePath] -> FilePath
-joinPath = FilePath.joinPath
-
 replaceExtension :: FilePath -> String -> FilePath
 replaceExtension = FilePath.replaceExtension
+
 
 -- | > Hashmap Text -- type synonym
 type KeyMap = HashMap Text
