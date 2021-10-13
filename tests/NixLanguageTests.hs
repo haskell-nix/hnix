@@ -82,7 +82,7 @@ genTests = do
     <$> globDir1 (compile "*-*-*.*") "data/nix/tests/lang"
   let
     testsByName :: Map FilePath [FilePath]
-    testsByName = groupBy (takeFileName . dropExtensions) testFiles
+    testsByName = groupBy (takeFileName . coerce dropExtensions) testFiles
 
     testsByType :: Map [String] [(FilePath, [FilePath])]
     testsByType = groupBy testType (Map.toList testsByName)
@@ -184,7 +184,7 @@ assertEval _opts files =
 
   name :: Path
   name = coerce $
-    "data/nix/tests/lang/" <> the (takeFileName . dropExtensions <$> coerce files)
+    "data/nix/tests/lang/" <> the (takeFileName . coerce dropExtensions <$> files)
 
   fixup :: [Text] -> [Text]
   fixup ("--arg"    : x : y : rest) = "--arg"    : (x <> "=" <> y) : fixup rest

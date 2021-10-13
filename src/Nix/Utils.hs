@@ -104,6 +104,8 @@ instance ToText Path where
 instance IsString Path where
   fromString = coerce
 
+-- This set of @Path@ funcs is to control system filepath types & typesafety and to easy migrate from FilePath to anything suitable (like @path@ or so).
+
 -- | @isAbsolute@ specialized to @Path@.
 isAbsolute :: Path -> Bool
 isAbsolute = coerce FilePath.isAbsolute
@@ -134,8 +136,9 @@ takeExtension = FilePath.takeExtensions
 takeExtensions :: FilePath -> String
 takeExtensions = FilePath.takeExtensions
 
-dropExtensions :: FilePath -> FilePath
-dropExtensions = FilePath.dropExtensions
+-- | @dropExtensions@ specialized to @Path@
+dropExtensions :: Path -> Path
+dropExtensions = coerce FilePath.dropExtensions
 
 replaceExtension :: FilePath -> String -> FilePath
 replaceExtension = FilePath.replaceExtension
