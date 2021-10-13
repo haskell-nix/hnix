@@ -118,8 +118,9 @@ infixr 5 </>
 joinPath :: [Path] -> Path
 joinPath = coerce FilePath.joinPath
 
-splitDirectories :: FilePath -> [FilePath]
-splitDirectories = FilePath.splitDirectories
+-- | @splitDirectories@ specialized to @Path@
+splitDirectories :: Path -> [Path]
+splitDirectories = coerce FilePath.splitDirectories
 
 -- | @takeDirectory@ specialized to @Path@
 takeDirectory :: Path -> Path

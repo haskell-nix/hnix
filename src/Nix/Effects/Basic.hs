@@ -71,13 +71,13 @@ removeDotDotIndirections = coerce . intercalate "/" . go mempty . splitOn "/" . 
 
 infixr 9 <///>
 (<///>) :: Path -> Path -> Path
-(coerce -> x) <///> y
-  | isAbsolute y || "." `isPrefixOf` coerce y = coerce $ x </> coerce y
+x <///> y
+  | isAbsolute y || "." `isPrefixOf` coerce y = coerce $ coerce x </> coerce y
   | otherwise                          = joinByLargestOverlap x y
  where
-  joinByLargestOverlap :: FilePath -> Path -> Path
-  joinByLargestOverlap (splitDirectories -> xs) (splitDirectories . coerce -> ys) =
-    joinPath $ coerce $ head
+  joinByLargestOverlap :: Path -> Path -> Path
+  joinByLargestOverlap (splitDirectories -> xs) (splitDirectories -> ys) =
+    joinPath $ head
       [ xs <> drop (length tx) ys | tx <- tails xs, tx `elem` inits ys ]
 
 defaultFindEnvPath :: MonadNix e t f m => String -> m Path
