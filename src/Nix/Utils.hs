@@ -118,8 +118,9 @@ joinPath = FilePath.joinPath
 splitDirectories :: FilePath -> [FilePath]
 splitDirectories = FilePath.splitDirectories
 
-takeDirectory :: FilePath -> FilePath
-takeDirectory = FilePath.takeDirectory
+-- | @takeDirectory@ specialized to @Path@
+takeDirectory :: Path -> Path
+takeDirectory = coerce FilePath.takeDirectory
 
 takeFileName :: FilePath -> FilePath
 takeFileName = FilePath.takeFileName

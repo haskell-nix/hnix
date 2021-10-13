@@ -875,8 +875,8 @@ dirOfNix nvdir =
     dir <- demand nvdir
 
     case dir of
-      NVStr ns -> pure $ nvStr $ modifyNixContents (fromString . takeDirectory . toString) ns
-      NVPath path -> pure $ nvPath $ coerce $ takeDirectory $ coerce path
+      NVStr ns -> pure $ nvStr $ modifyNixContents (fromString . coerce takeDirectory . toString) ns
+      NVPath path -> pure $ nvPath $ takeDirectory path
       v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " <> show v
 
 -- jww (2018-04-28): This should only be a string argument, and not coerced?
@@ -1283,7 +1283,7 @@ scopedImportNix asetArg pathArg =
             p' <- fromValue @Path =<< demand res
 
             traceM $ "Current file being evaluated is: " <> show p'
-            pure $ coerce $ takeDirectory (coerce p') </> coerce path
+            pure $ coerce $ coerce takeDirectory p' </> coerce path
         )
         =<< lookupVar "__cur_file"
 

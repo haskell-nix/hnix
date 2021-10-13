@@ -43,7 +43,7 @@ defaultToAbsolutePath origPath = do
             getCurrentDirectory
             (
               (\case
-                NVPath s -> pure $ coerce takeDirectory s
+                NVPath s -> pure $ takeDirectory s
                 val -> throwError $ ErrorCall $ "when resolving relative path, __cur_file is in scope, but is not a path; it is: " <> show val
               ) <=< demand
             )
