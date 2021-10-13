@@ -140,8 +140,9 @@ takeExtensions = FilePath.takeExtensions
 dropExtensions :: Path -> Path
 dropExtensions = coerce FilePath.dropExtensions
 
-replaceExtension :: FilePath -> String -> FilePath
-replaceExtension = FilePath.replaceExtension
+-- | @replaceExtension@ specialized to @Path@
+replaceExtension :: Path -> String -> Path
+replaceExtension = coerce FilePath.replaceExtension
 
 
 -- | > Hashmap Text -- type synonym
