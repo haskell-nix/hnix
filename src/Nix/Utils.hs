@@ -114,8 +114,9 @@ isAbsolute = coerce FilePath.isAbsolute
 (</>) = (FilePath.</>)
 infixr 5 </>
 
-joinPath :: [FilePath] -> FilePath
-joinPath = FilePath.joinPath
+-- @joinPath@ specialized to @Path@
+joinPath :: [Path] -> Path
+joinPath = coerce FilePath.joinPath
 
 splitDirectories :: FilePath -> [FilePath]
 splitDirectories = FilePath.splitDirectories

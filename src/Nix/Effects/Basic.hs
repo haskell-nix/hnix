@@ -76,8 +76,8 @@ infixr 9 <///>
   | otherwise                          = joinByLargestOverlap x y
  where
   joinByLargestOverlap :: FilePath -> Path -> Path
-  joinByLargestOverlap (splitDirectories -> xs) (splitDirectories . coerce -> ys) = coerce $
-    joinPath $ head
+  joinByLargestOverlap (splitDirectories -> xs) (splitDirectories . coerce -> ys) =
+    joinPath $ coerce $ head
       [ xs <> drop (length tx) ys | tx <- tails xs, tx `elem` inits ys ]
 
 defaultFindEnvPath :: MonadNix e t f m => String -> m Path
@@ -150,7 +150,7 @@ findPathBy finder ls name = do
 
   tryPath :: Path -> Maybe Path -> m (Maybe Path)
   tryPath p (Just n) | n' : ns <- splitDirectories (coerce name), n == coerce n' =
-    finder $ p <///> coerce (joinPath ns)
+    finder $ p <///> coerce joinPath ns
   tryPath p _ = finder $ p <///> name
 
   resolvePath s =
