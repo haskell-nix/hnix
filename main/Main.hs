@@ -73,7 +73,8 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
           expr <- liftIO Text.getContents
           processExpr expr
 
-    processSeveralFiles files = traverse_ processFile files
+    processSeveralFiles :: [Path] -> StandardT (StdIdT IO) ()
+    processSeveralFiles = traverse_ processFile
      where
       processFile path = handleResult (pure path) =<< parseNixFileLoc path
 
