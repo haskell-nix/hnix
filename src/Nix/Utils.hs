@@ -13,6 +13,7 @@ module Nix.Utils
   , Path(..)
   , takeFileName
   , isAbsolute
+  , (</>)
   , Has(..)
   , trace
   , traceM
@@ -98,6 +99,10 @@ takeFileName = FilePath.takeFileName
 
 isAbsolute :: FilePath -> Bool
 isAbsolute = FilePath.isAbsolute
+
+(</>) :: FilePath -> FilePath -> FilePath
+(</>) = (FilePath.</>)
+infixr 5 </>
 
 -- | > Hashmap Text -- type synonym
 type KeyMap = HashMap Text

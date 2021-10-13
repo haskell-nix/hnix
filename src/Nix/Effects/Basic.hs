@@ -13,7 +13,6 @@ import qualified Data.Text                     as Text
 import           Prettyprinter                  ( fillSep )
 import           System.FilePath                ( takeDirectory
                                                 , splitDirectories
-                                                , (</>)
                                                 , joinPath
                                                 )
 import           Nix.Convert
