@@ -134,17 +134,17 @@ assertParseFail opts file =
       =<< parseNixFileLoc file
 
 assertLangOk :: Options -> Path -> Assertion
-assertLangOk opts file =
+assertLangOk opts fileBaseName =
   do
-    actual   <- printNix <$> hnixEvalFile opts (file <> ".nix")
-    expected <- readFile $ file <> ".exp"
+    actual   <- printNix <$> hnixEvalFile opts (addNixExt fileBaseName)
+    expected <- read fileBaseName ".exp"
     assertEqual "" expected $ fromString (actual <> "\n")
 
 assertLangOkXml :: Options -> Path -> Assertion
-assertLangOkXml opts file =
+assertLangOkXml opts fileBaseName =
   do
-    actual <- stringIgnoreContext . toXML <$> hnixEvalFile opts (file <> ".nix")
-    expected <- readFile $ file <> ".exp.xml"
+    actual <- stringIgnoreContext . toXML <$> hnixEvalFile opts (addNixExt fileBaseName)
+    expected <- read fileBaseName ".exp.xml"
     assertEqual "" expected actual
 
 assertEval :: Options -> [Path] -> Assertion
@@ -153,7 +153,7 @@ assertEval _opts files =
     time <- liftIO getCurrentTime
     let opts = defaultOptions time
     case delete ".nix" $ sort $ fromString @Text . takeExtensions <$> files of
-      []                  -> void $ hnixEvalFile opts (name <> ".nix")
+      []                  -> void $ hnixEvalFile opts (addNixExt name)
       [".exp"          ]  -> assertLangOk    opts name
       [".exp.xml"      ]  -> assertLangOkXml opts name
       [".exp.disabled" ]  -> stub
@@ -161,7 +161,7 @@ assertEval _opts files =
       [".exp", ".flags"]  ->
         do
           liftIO $ setEnv "NIX_PATH" "lang/dir4:lang/dir5"
-          flags <- readFile $ name <> ".flags"
+          flags <- read name ".flags"
           let
             flags' :: Text
             flags' =
@@ -202,3 +202,9 @@ assertEvalFail file =
 
 nixTestDir :: FilePath
 nixTestDir = "data/nix/tests/lang/"
+
+addNixExt :: Path -> Path
+addNixExt path = addExtension path ".nix"
+
+read :: Path -> String -> IO Text
+read path ext = readFile $ addExtension path ext
