@@ -73,46 +73,67 @@ deprecatedRareNixQuirkTests = Set.fromList
   ]
 
 genTests :: IO TestTree
-genTests = do
-  (coerce -> testFiles :: [FilePath]) <-
-    sort
-    -- Disabling the not yet done tests cases.
-    . filter ((`Set.notMember` (newFailingTests `Set.union` deprecatedRareNixQuirkTests)) . takeBaseName)
-    . filter ((/= ".xml") . takeExtension)
-    <$> coerce (globDir1 (compile "*-*-*.*") "data/nix/tests/lang")
-  let
-    testsByName :: Map FilePath [FilePath]
-    testsByName = groupBy (coerce (takeFileName . dropExtensions)) testFiles
+genTests =
+  do
+    testFiles <- getTestFiles
+    let
+      testsGroupedByName :: Map Path [Path]
+      testsGroupedByName = groupBy (takeFileName . dropExtensions) testFiles
 
-    testsByType :: Map [String] [(FilePath, [FilePath])]
-    testsByType = groupBy testType (Map.toList testsByName)
+      testsGroupedByTypeThenName :: Map [String] [(Path, [Path])]
+      testsGroupedByTypeThenName = groupBy testType (Map.toList testsGroupedByName)
 
-    testGroups :: [TestTree]
-    testGroups  = mkTestGroup <$> coerce (Map.toList testsByType)
+      testTree :: [TestTree]
+      testTree = mkTestGroup <$> Map.toList testsGroupedByTypeThenName
 
-  pure $ localOption (mkTimeout 2000000) $
-    testGroup
-      "Nix (upstream) language tests"
-      testGroups
+    pure $
+      localOption
+        (mkTimeout 2000000)
+        $ testGroup
+            "Nix (upstream) language tests"
+            testTree
  where
-  testType :: (FilePath, b) -> [String]
-  testType (fullpath, _files) = take 2 $ splitOn "-" $ coerce takeFileName fullpath
 
-  mkTestGroup :: ([String], [(String, [Path])]) -> TestTree
-  mkTestGroup (kind, tests) =
-    testGroup (String.unwords kind) $ mkTestCase kind <$> tests
+  getTestFiles :: IO [Path]
+  getTestFiles = sortTestFiles <$> collectTestFiles
+   where
+    collectTestFiles :: IO [Path]
+    collectTestFiles = coerce (globDir1 (compile "*-*-*.*") nixTestDir)
 
-  mkTestCase :: [String] -> (String, [Path]) -> TestTree
-  mkTestCase kind (basename, files) = testCase (coerce takeFileName basename) $
-    do
-      time <- liftIO getCurrentTime
-      let opts = defaultOptions time
-      case kind of
-        ["parse", "okay"] -> assertParse opts $ the files
-        ["parse", "fail"] -> assertParseFail opts $ the files
-        ["eval" , "okay"] -> assertEval opts files
-        ["eval" , "fail"] -> assertEvalFail $ the files
-        _                 -> fail $ "Unexpected: " <> show kind
+    sortTestFiles :: [Path] -> [Path]
+    sortTestFiles =
+      sort
+        -- Disabling the not yet done tests cases.
+        . filter withoutDisabledTests
+        . filter withoutXml
+     where
+      withoutDisabledTests :: Path -> Bool
+      withoutDisabledTests = (`Set.notMember` (newFailingTests `Set.union` deprecatedRareNixQuirkTests)) . takeBaseName
+
+      withoutXml :: Path -> Bool
+      withoutXml = (/= ".xml") . takeExtension
+
+  testType :: (Path, b) -> [String]
+  testType (fullpath, _files) = coerce (take 2 . splitOn "-") $ takeFileName fullpath
+
+  mkTestGroup :: ([String], [(Path, [Path])]) -> TestTree
+  mkTestGroup (tType, tests) =
+    testGroup (String.unwords tType) $ mkTestCase <$> tests
+   where
+    mkTestCase :: (Path, [Path]) -> TestTree
+    mkTestCase (basename, files) =
+      testCase
+        (coerce $ takeFileName basename)
+        $ do
+            time <- liftIO getCurrentTime
+            let opts = defaultOptions time
+            case tType of
+              ["parse", "okay"] -> assertParse opts $ the files
+              ["parse", "fail"] -> assertParseFail opts $ the files
+              ["eval" , "okay"] -> assertEval opts files
+              ["eval" , "fail"] -> assertEvalFail $ the files
+              _                 -> fail $ "Unexpected: " <> show tType
+
 
 assertParse :: Options -> Path -> Assertion
 assertParse _opts file =
