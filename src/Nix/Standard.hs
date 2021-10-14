@@ -17,7 +17,7 @@ import           Control.Monad.Catch            ( MonadThrow
 #if !MIN_VERSION_base(4,13,0)
 import           Control.Monad.Fail             ( MonadFail )
 #endif
-import           Control.Monad.Free             ( Free(Pure,Free) )
+import           Control.Monad.Free             ( Free(Free) )
 import           Control.Monad.Reader           ( MonadFix )
 import           Control.Monad.Ref              ( MonadRef(newRef)
                                                 , MonadAtomicRef
@@ -246,8 +246,10 @@ instance
   inform = go -- lock to ensure no type class jumps.
    where
     go :: StdValue m -> m (StdValue m)
-    go (Pure t) = (Pure . coerce <$>) . (further @(CitedStdThunk m) . coerce) $ t
-    go (Free v) = (Free <$>) . bindNValue' id go $ v
+    go =
+      free
+        ((pure . coerce <$>) . (further @(CitedStdThunk m) . coerce))
+        ((Free <$>) . bindNValue' id go)
 
 
 -- * @instance MonadValueF (StdValue m) m@

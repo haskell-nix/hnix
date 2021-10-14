@@ -10,8 +10,8 @@ import           Nix.Standard
 import           Nix.Fresh.Basic
 import           System.Environment
 import           System.IO
-import           System.Posix.Files
-import           System.Posix.Temp
+import           System.PosixCompat.Files
+import           System.PosixCompat.Temp
 import           System.Process
 import           Test.Tasty.HUnit
 

@@ -50,7 +50,6 @@ import           Nix.Options                    ( Options
 import           Nix.Parser
 import           Nix.Scope
 import           System.Directory
-import           System.FilePath
 
 newtype Reducer m a = Reducer
     { runReducer ::
@@ -84,44 +83,46 @@ staticImport
   => SrcSpan
   -> Path
   -> m NExprLoc
-staticImport pann path = do
-  mfile <- asks (coerce . fst)
-  path  <- liftIO $ pathToDefaultNixFile path
-  path' <- liftIO $ pathToDefaultNixFile =<< (coerce <$> canonicalizePath . coerce)
-    (maybe id ((</>) . takeDirectory) mfile (coerce path))
+staticImport pann path =
+  do
+    mfile <- asks fst
+    path'  <- liftIO $ pathToDefaultNixFile path
+    path'' <- liftIO $ pathToDefaultNixFile =<< coerce canonicalizePath
+      (maybe id ((</>) . takeDirectory) mfile path')
 
-  imports <- gets fst
-  maybe
-    (go path')
-    pure
-    (HM.lookup path' imports)
- where
-  go :: Path -> m NExprLoc
-  go path = do
-    liftIO $ putStrLn $ "Importing file " <> coerce path
+    let
+      importIt :: m NExprLoc
+      importIt = do
+        liftIO $ putStrLn $ "Importing file " <> coerce path''
 
-    eres <- liftIO $ parseNixFileLoc path
-    either
-      (\ err -> fail $ "Parse failed: " <> show err)
-      (\ x -> do
-        let
-          pos  = SourcePos "Reduce.hs" (mkPos 1) (mkPos 1)
-          span = SrcSpan pos pos
-          cur  =
-            NamedVar
-              (StaticKey "__cur_file" :| mempty)
-              (NLiteralPathAnn pann path)
-              pos
-          x' = NLetAnn span [cur] x
-        modify $ first $ HM.insert path x'
-        local
-          (const (pure path, mempty)) $
-          do
-            x'' <- foldFix reduce x'
-            modify $ first $ HM.insert path x''
-            pure x''
-      )
-      eres
+        eres <- liftIO $ parseNixFileLoc path''
+        either
+          (\ err -> fail $ "Parse failed: " <> show err)
+          (\ x -> do
+            let
+              pos  = SourcePos "Reduce.hs" (mkPos 1) (mkPos 1)
+              span = SrcSpan pos pos
+              cur  =
+                NamedVar
+                  (StaticKey "__cur_file" :| mempty)
+                  (NLiteralPathAnn pann path'')
+                  pos
+              x' = NLetAnn span [cur] x
+            modify $ first $ HM.insert path'' x'
+            local
+              (const (pure path'', mempty)) $
+              do
+                x'' <- foldFix reduce x'
+                modify $ first $ HM.insert path'' x''
+                pure x''
+          )
+          eres
+
+    imports <- gets fst
+    maybe
+      importIt
+      pure
+      (HM.lookup path'' imports)
 
 -- gatherNames :: NExprLoc -> HashSet VarName
 -- gatherNames = foldFix $ \case
@@ -306,7 +307,7 @@ reduce e@(NIfAnnF _ b t f) =
 --   symbol if the assertion is a boolean constant.
 reduce e@(NAssertAnnF _ b body) =
   (\case
-    NConstantAnn _ (NBool b') | b' -> body
+    NConstantAnn _ (NBool True) -> body
     _ -> reduceLayer e
   ) =<< b
 

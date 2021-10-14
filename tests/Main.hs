@@ -26,8 +26,8 @@ import qualified ReduceExprTests
 import qualified PrettyParseTests
 import           System.Directory
 import           System.Environment (setEnv)
-import           System.FilePath.Glob
-import           System.Posix.Files
+import           System.FilePath.Glob (compile, globDir1)
+import           System.PosixCompat.Files
 import           Test.Tasty
 import           Test.Tasty.HUnit
 
@@ -73,17 +73,18 @@ ensureNixpkgsCanParse =
             stub
     v -> fail $ "Unexpected parse from default.nix: " <> show v
  where
-  getExpr   k m = let Just (Just r) = lookup k m in r
+  getExpr   k m =
+    let Just (Just r) = lookup k m in
+    r
   getString k m =
-      let Fix (NStr (DoubleQuoted [Plain str])) = getExpr k m in str
+    let Fix (NStr (DoubleQuoted [Plain str])) = getExpr k m in
+    str
 
   consider path action k =
-    do
-      x <- action
-      either
-        (\ err -> errorWithoutStackTrace $ "Parsing " <> coerce @Path path <> " failed: " <> show err)
-        k
-        x
+    either
+      (\ err -> errorWithoutStackTrace $ "Parsing " <> coerce @Path path <> " failed: " <> show err)
+      k
+      =<< action
 
 main :: IO ()
 main = do

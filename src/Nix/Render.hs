@@ -11,11 +11,12 @@ module Nix.Render where
 
 import qualified Data.Set                      as Set
 import           Nix.Utils.Fix1                 ( Fix1T
-                                                , MonadFix1T )
+                                                , MonadFix1T
+                                                )
 import           Nix.Expr.Types.Annotated
 import           Prettyprinter
 import qualified System.Directory              as S
-import qualified System.Posix.Files            as S
+import qualified System.PosixCompat.Files      as S
 import           Text.Megaparsec.Error
 import           Text.Megaparsec.Pos
 import qualified Data.Text                     as Text
@@ -51,14 +52,14 @@ class (MonadFail m, MonadIO m) => MonadFile m where
 
 instance MonadFile IO where
   readFile              = Prelude.readFile
-  listDirectory         = coerce <$> (S.listDirectory . coerce)
-  getCurrentDirectory   = coerce <$> S.getCurrentDirectory
-  canonicalizePath      = coerce <$> (S.canonicalizePath . coerce)
-  getHomeDirectory      = coerce <$> S.getHomeDirectory
-  doesPathExist         = S.doesPathExist . coerce
-  doesFileExist         = S.doesFileExist . coerce
-  doesDirectoryExist    = S.doesDirectoryExist . coerce
-  getSymbolicLinkStatus = S.getSymbolicLinkStatus . coerce
+  listDirectory         = coerce S.listDirectory
+  getCurrentDirectory   = coerce S.getCurrentDirectory
+  canonicalizePath      = coerce S.canonicalizePath
+  getHomeDirectory      = coerce S.getHomeDirectory
+  doesPathExist         = coerce S.doesPathExist
+  doesFileExist         = coerce S.doesFileExist
+  doesDirectoryExist    = coerce S.doesDirectoryExist
+  getSymbolicLinkStatus = coerce S.getSymbolicLinkStatus
 
 
 instance (MonadFix1T t m, MonadIO (Fix1T t m), MonadFail (Fix1T t m), MonadFile m) => MonadFile (Fix1T t m)
@@ -67,25 +68,25 @@ posAndMsg :: SourcePos -> Doc a -> ParseError s Void
 posAndMsg (SourcePos _ lineNo _) msg =
   FancyError
     (unPos lineNo)
-    (Set.fromList [ErrorFail (show msg) :: ErrorFancy Void])
+    (Set.fromList $ one (ErrorFail (show msg) :: ErrorFancy Void))
 
 renderLocation :: MonadFile m => SrcSpan -> Doc a -> m (Doc a)
 renderLocation (SrcSpan (SourcePos (coerce -> file) begLine begCol) (SourcePos (coerce -> file') endLine endCol)) msg
-  | file == file' && file == "<string>" && begLine == endLine
-  = pure $ "In raw input string at position " <> pretty (unPos begCol)
+  | file == file' && file == "<string>" && begLine == endLine =
+    pure $ "In raw input string at position " <> pretty (unPos begCol)
 
-  | file /= "<string>" && file == file'
-  = do
-    exist <- doesFileExist file
-    if exist
-      then do
+  | file /= "<string>" && file == file' =
+    bool
+      (pure msg)
+      (do
         txt <- sourceContext file begLine begCol endLine endCol msg
         pure $
           vsep
             [ "In file " <> errorContext file begLine begCol endLine endCol <> ":"
             , txt
             ]
-      else pure msg
+      )
+      =<< doesFileExist file
 renderLocation (SrcSpan beg end) msg = fail $ "Don't know how to render range from " <> show beg <>" to " <> show end <>" for fail: " <> show msg
 
 errorContext :: Path -> Pos -> Pos -> Pos -> Pos -> Doc a
@@ -132,4 +133,4 @@ sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unP
 
       ls' = concat $ zipWith composeLine [beg' ..] ls
 
-    pure $ vsep $ ls' <> [ indent (Text.length $ pad begLine) msg ]
+    pure $ vsep $ ls' <> one (indent (Text.length $ pad begLine) msg)

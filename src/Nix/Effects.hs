@@ -30,7 +30,6 @@ import           Nix.Render
 import           Nix.Value
 import qualified Paths_hnix
 import           System.Exit
-import           System.FilePath                ( takeFileName )
 import qualified System.Info
 import           System.Process
 
@@ -103,7 +102,7 @@ instance MonadIntrospect IO where
 #ifdef MIN_VERSION_ghc_datasize
     recursiveSize
 #else
-    \_ -> pure 0
+    const $ pure 0
 #endif
 
 deriving
@@ -263,7 +262,7 @@ class
 -- ** Instances
 
 instance MonadPaths IO where
-  getDataDir = coerce <$> Paths_hnix.getDataDir
+  getDataDir = coerce Paths_hnix.getDataDir
 
 deriving
   instance
@@ -438,7 +437,7 @@ addPath p =
   either
     throwError
     pure
-    =<< addToStore (fromString $ takeFileName (coerce p)) p True False
+    =<< addToStore (fromString $ coerce takeFileName p) p True False
 
 toFile_ :: (Framed e m, MonadStore m) => Path -> Text -> m StorePath
 toFile_ p contents = addTextToStore (toText p) contents mempty False

@@ -10,7 +10,21 @@ module Nix.Utils
   , TransformF
   , Transform
   , Alg
+
   , Path(..)
+  , isAbsolute
+  , (</>)
+  , joinPath
+  , splitDirectories
+  , takeDirectory
+  , takeFileName
+  , takeBaseName
+  , takeExtension
+  , takeExtensions
+  , addExtension
+  , dropExtensions
+  , replaceExtension
+
   , Has(..)
   , trace
   , traceM
@@ -62,6 +76,7 @@ import           Lens.Family2                  as X
 import           Lens.Family2.Stock             ( _1
                                                 , _2
                                                 )
+import qualified System.FilePath              as FilePath
 
 #if ENABLE_TRACING
 import qualified Relude.Debug                 as X
@@ -89,6 +104,56 @@ instance ToText Path where
 
 instance IsString Path where
   fromString = coerce
+
+-- This set of @Path@ funcs is to control system filepath types & typesafety and to easy migrate from FilePath to anything suitable (like @path@ or so).
+
+-- | @isAbsolute@ specialized to @Path@.
+isAbsolute :: Path -> Bool
+isAbsolute = coerce FilePath.isAbsolute
+
+-- | @(</>)@ specialized to @Path@
+(</>) :: Path -> Path -> Path
+(</>) = coerce (FilePath.</>)
+infixr 5 </>
+
+-- | @joinPath@ specialized to @Path@
+joinPath :: [Path] -> Path
+joinPath = coerce FilePath.joinPath
+
+-- | @splitDirectories@ specialized to @Path@
+splitDirectories :: Path -> [Path]
+splitDirectories = coerce FilePath.splitDirectories
+
+-- | @takeDirectory@ specialized to @Path@
+takeDirectory :: Path -> Path
+takeDirectory = coerce FilePath.takeDirectory
+
+-- | @takeFileName@ specialized to @Path@
+takeFileName :: Path -> Path
+takeFileName = coerce FilePath.takeFileName
+
+-- | @takeBaseName@ specialized to @Path@
+takeBaseName :: Path -> String
+takeBaseName = coerce FilePath.takeBaseName
+
+-- | @takeExtension@ specialized to @Path@
+takeExtension :: Path -> String
+takeExtension = coerce FilePath.takeExtensions
+
+-- | @takeExtensions@ specialized to @Path@
+takeExtensions :: Path -> String
+takeExtensions = coerce FilePath.takeExtensions
+
+addExtension :: Path -> String -> Path
+addExtension = coerce FilePath.addExtension
+
+-- | @dropExtensions@ specialized to @Path@
+dropExtensions :: Path -> Path
+dropExtensions = coerce FilePath.dropExtensions
+
+-- | @replaceExtension@ specialized to @Path@
+replaceExtension :: Path -> String -> Path
+replaceExtension = coerce FilePath.replaceExtension
 
 
 -- | > Hashmap Text -- type synonym

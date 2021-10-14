@@ -249,17 +249,17 @@ nixUri =
         do
           start    <- letterChar
           protocol <-
-            takeWhileP Nothing $
+            takeWhileP mempty $
               \ x ->
                 isAlphanumeric x
                 || (`elem` ("+-." :: String)) x
           _       <- single ':'
           address <-
-            takeWhile1P Nothing $
+            takeWhile1P mempty $
                 \ x ->
                   isAlphanumeric x
                   || (`elem` ("%/?:@&=+$,-_.!~*'" :: String)) x
-          pure $ NStr $ DoubleQuoted $ one $ Plain $ start `Text.cons` protocol <> ":" <> address
+          pure . NStr . DoubleQuoted . one . Plain $ start `Text.cons` protocol <> ":" <> address
 
 
 -- ** Strings
@@ -359,7 +359,7 @@ identifier =
   identLetter x = isAlphanumeric x || x == '_' || x == '\'' || x == '-'
 
 nixSym :: Parser NExprLoc
-nixSym = annotateLocation $ mkSymF . coerce <$> identifier
+nixSym = annotateLocation $ mkSymF <$> coerce identifier
 
 
 -- ** ( ) parens
@@ -431,12 +431,12 @@ pathStr :: Parser Path
 pathStr =
   lexeme $ coerce . toString <$>
     liftA2 (<>)
-      (takeWhileP Nothing pathChar)
+      (takeWhileP mempty pathChar)
       (Text.concat <$>
         some
           (liftA2 Text.cons
             slash
-            (takeWhile1P Nothing pathChar)
+            (takeWhile1P mempty pathChar)
           )
       )
 
@@ -491,7 +491,6 @@ opWithLoc f op name =
   do
     AnnUnit ann _ <-
       annotateLocation1 $
-        {- dbg (toString name) $ -}
         operator name
 
     pure . f $ AnnUnit ann op
@@ -640,6 +639,7 @@ getBinaryOperator = detectPrecedence spec
     \case
       (NBinaryDef assoc op name, _) -> [(op, OperatorInfo i assoc name)]
       _                             -> mempty
+
 getSpecialOperator :: NSpecialOp -> OperatorInfo
 getSpecialOperator NSelectOp = OperatorInfo 1 NAssocLeft "."
 getSpecialOperator o         = detectPrecedence spec o
@@ -812,45 +812,45 @@ nixSelect term =
       , Maybe NExprLoc
       )
     -> NExprLoc
-  build t mexpr =
+  build t =
     maybe
       t
       (\ (a, m) -> (`annNSelect` t) m a)
-      mexpr
 
 
 -- ** _ - syntax hole
 
 nixSynHole :: Parser NExprLoc
-nixSynHole = annotateLocation $ mkSynHoleF . coerce <$> (char '^' *> identifier)
+nixSynHole = annotateLocation $ mkSynHoleF <$> coerce (char '^' *> identifier)
 
 
 -- ** Expr & its constituents (Language term, expr algebra)
 
 nixTerm :: Parser NExprLoc
-nixTerm = do
-  c <- try $ lookAhead $ satisfy $ \x ->
-    pathChar x || (`elem` ("({[</\"'^" :: String)) x
-  case c of
-    '('  -> nixSelect nixParens
-    '{'  -> nixSelect nixSet
-    '['  -> nixList
-    '<'  -> nixSearchPath
-    '/'  -> nixPath
-    '"'  -> nixString
-    '\'' -> nixString
-    '^'  -> nixSynHole
-    _ ->
-      msum
-        $  [ nixSelect nixSet | c == 'r' ]
-        <> [ nixPath | pathChar c ]
-        <> if isDigit c
-             then [ nixFloat, nixInt ]
-             else
-               [ nixUri | isAlpha c ]
-               <> [ nixBool | c == 't' || c == 'f' ]
-               <> [ nixNull | c == 'n' ]
-               <> [ nixSelect nixSym ]
+nixTerm =
+  do
+    c <- try . lookAhead . satisfy $
+      \x -> (`elem` ("({[</\"'^" :: String)) x || pathChar x
+    case c of
+      '('  -> nixSelect nixParens
+      '{'  -> nixSelect nixSet
+      '['  -> nixList
+      '<'  -> nixSearchPath
+      '/'  -> nixPath
+      '"'  -> nixString
+      '\'' -> nixString
+      '^'  -> nixSynHole
+      _ ->
+        msum
+          $  [ nixSelect nixSet | c == 'r' ]
+          <> [ nixPath | pathChar c ]
+          <> if isDigit c
+              then [ nixFloat, nixInt ]
+              else
+                [ nixUri | isAlpha c ]
+                <> [ nixBool | c == 't' || c == 'f' ]
+                <> [ nixNull | c == 'n' ]
+                <> [ nixSelect nixSym ]
 
 -- | Nix expression algebra parser.
 -- "Expression algebra" is to explain @megaparsec@ use of the term "Expression" (parser for language algebraic coperators without any statements (without @let@ etc.)), which is essentially an algebra inside the language.

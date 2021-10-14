@@ -71,11 +71,11 @@ import           Nix.Value.Equal
 import           Nix.Value.Monad
 import           Nix.XML
 import           System.Nix.Base32             as Base32
-import           System.FilePath
-import           System.Posix.Files             ( isRegularFile
+import           System.PosixCompat.Files       ( isRegularFile
                                                 , isDirectory
                                                 , isSymbolicLink
                                                 )
+import qualified Text.Show
 import           Text.Regex.TDFA                ( Regex
                                                 , makeRegex
                                                 , matchOnceText
@@ -211,12 +211,15 @@ foldNixPath z f =
         <> [ fromInclude $ "nix=" <> toText dataDir <> "/nix/corepkgs" ]
  where
 
-  fromInclude x = (x, ) $
-    bool
-      PathEntryPath
-      PathEntryURI
-      ("://" `Text.isInfixOf` x)
+  fromInclude :: Text -> (Text, NixPathEntryType)
+  fromInclude x =
+    (x, ) $
+      bool
+        PathEntryPath
+        PathEntryURI
+        ("://" `Text.isInfixOf` x)
 
+  go :: (Text, NixPathEntryType) -> r -> m r
   go (x, ty) rest =
     case Text.splitOn "=" x of
       [p] -> f (coerce $ toString p) mempty ty rest
@@ -234,18 +237,14 @@ data VersionComponent
   = VersionComponentPre -- ^ The string "pre"
   | VersionComponentString !Text -- ^ A string other than "pre"
   | VersionComponentNumber !Integer -- ^ A number
-  deriving (Show, Read, Eq, Ord)
+  deriving (Read, Eq, Ord)
 
-versionComponentToString :: VersionComponent -> Text
-versionComponentToString =
-  \case
-    VersionComponentPre      -> "pre"
-    VersionComponentString s -> s
-    VersionComponentNumber n -> show n
-
--- | Based on https://github.com/NixOS/nix/blob/4ee4fda521137fed6af0446948b3877e0c5db803/src/libexpr/names.cc#L44
-versionComponentSeparators :: String
-versionComponentSeparators = ".-"
+instance Show VersionComponent where
+  show =
+    \case
+      VersionComponentPre      -> "pre"
+      VersionComponentString s -> show s
+      VersionComponentNumber n -> show n
 
 splitVersion :: Text -> [VersionComponent]
 splitVersion s =
@@ -273,6 +272,11 @@ splitVersion s =
               x     -> VersionComponentString x
         in
         thisComponent : splitVersion rest
+ where
+  -- | Based on https://github.com/NixOS/nix/blob/4ee4fda521137fed6af0446948b3877e0c5db803/src/libexpr/names.cc#L44
+  versionComponentSeparators :: String
+  versionComponentSeparators = ".-"
+
 
 compareVersions :: Text -> Text -> Ordering
 compareVersions s1 s2 =
@@ -283,24 +287,26 @@ compareVersions s1 s2 =
 
 splitDrvName :: Text -> (Text, Text)
 splitDrvName s =
-  let
-    sep    = "-"
-    pieces = Text.splitOn sep s
-    isFirstVersionPiece p =
-      case Text.uncons p of
-        Just (h, _) -> isDigit h
-        _           -> False
-    -- Like 'break', but always puts the first item into the first result
-    -- list
-    breakAfterFirstItem :: (a -> Bool) -> [a] -> ([a], [a])
-    breakAfterFirstItem f =
-      list
-        (mempty, mempty)
-        (\ (h : t) -> let (a, b) = break f t in (h : a, b))
-    (namePieces, versionPieces) =
-      breakAfterFirstItem isFirstVersionPiece pieces
-  in
   (Text.intercalate sep namePieces, Text.intercalate sep versionPieces)
+ where
+  sep    = "-"
+  pieces :: [Text]
+  pieces = Text.splitOn sep s
+  isFirstVersionPiece :: Text -> Bool
+  isFirstVersionPiece p =
+    maybe
+      False
+      (isDigit . fst)
+      (Text.uncons p)
+  -- Like 'break', but always puts the first item into the first result
+  -- list
+  breakAfterFirstItem :: (a -> Bool) -> [a] -> ([a], [a])
+  breakAfterFirstItem f =
+    list
+      (mempty, mempty)
+      (\ (h : t) -> let (a, b) = break f t in (h : a, b))
+  (namePieces, versionPieces) =
+    breakAfterFirstItem isFirstVersionPiece pieces
 
 splitMatches
   :: forall e t f m
@@ -319,7 +325,9 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
  where
   relStart       = max 0 start - numDropped
   (before, rest) = B.splitAt relStart haystack
+  caps :: NValue t f m
   caps           = nvList (f <$> captures)
+  f :: (ByteString, (Int, b)) -> NValue t f m
   f (a, (s, _))  =
     bool
       nvNull
@@ -345,10 +353,10 @@ absolutePathFromValue =
     NVStr ns ->
       do
         let
-          path = toString $ stringIgnoreContext ns
+          path = coerce . toString $ stringIgnoreContext ns
 
         unless (isAbsolute path) $ throwError $ ErrorCall $ "string " <> show path <> " doesn't represent an absolute path"
-        pure $ coerce path
+        pure path
 
     NVPath path -> pure path
     v           -> throwError $ ErrorCall $ "expected a path, got " <> show v
@@ -598,7 +606,7 @@ splitVersionNix v =
     version <- fromStringNoContext =<< fromValue v
     pure $
       nvList $
-        nvStrWithoutContext . versionComponentToString <$>
+        nvStrWithoutContext . show <$>
           splitVersion version
 
 compareVersionsNix
@@ -787,6 +795,7 @@ filterNix f =
   inHaskM
     (filterM fh)
  where
+  fh :: NValue t f m -> m Bool
   fh = fromValue <=< callFunc f
 
 catAttrsNix
@@ -812,7 +821,7 @@ baseNameOfNix x =
     pure $
       nvStr $
         modifyNixContents
-          (fromString . takeFileName . toString)
+          (fromString . coerce takeFileName . toString)
           ns
 
 bitAndNix
@@ -866,8 +875,8 @@ dirOfNix nvdir =
     dir <- demand nvdir
 
     case dir of
-      NVStr ns -> pure $ nvStr $ modifyNixContents (fromString . takeDirectory . toString) ns
-      NVPath path -> pure $ nvPath $ coerce $ takeDirectory $ coerce path
+      NVStr ns -> pure $ nvStr $ modifyNixContents (fromString . coerce takeDirectory . toString) ns
+      NVPath path -> pure $ nvPath $ takeDirectory path
       v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " <> show v
 
 -- jww (2018-04-28): This should only be a string argument, and not coerced?
@@ -901,7 +910,7 @@ elemNix
 elemNix x = inHaskM (anyMNix $ valueEqM x)
  where
   anyMNix :: Monad m => (a -> m Bool) -> [a] -> m Bool
-  anyMNix p xs =
+  anyMNix p =
     list
       (pure False)
       (\ (x : xss) ->
@@ -910,7 +919,6 @@ elemNix x = inHaskM (anyMNix $ valueEqM x)
           (pure True)
           =<< p x
       )
-      xs
 
 elemAtNix
   :: MonadNix e t f m
@@ -972,9 +980,10 @@ genericClosureNix c =
         (do
           ys <- fromValue @[NValue t f m] =<< callFunc op v
           checkComparable k
-            (case S.toList ks of
-              []           -> k
-              WValue j : _ -> j
+            (list
+              k
+              (\ (WValue j:_) -> j)
+              (S.toList ks)
             )
           (t :) <<$>> go op (S.insert (WValue k) ks) (ts <> ys)
         )
@@ -1021,7 +1030,7 @@ replaceStringsNix tfrom tto ts =
         maybePrefixMatch :: Maybe (Text, NixString, Text)
         maybePrefixMatch = formMatchReplaceTailInfo <$> find ((`Text.isPrefixOf` input) . fst) fromKeysToValsMap
          where
-          formMatchReplaceTailInfo = (\(m, r) -> (m, r, Text.drop (Text.length m) input))
+          formMatchReplaceTailInfo (m, r) = (m, r, Text.drop (Text.length m) input)
 
           fromKeysToValsMap = zip (stringIgnoreContext <$> fromKeys) toVals
 
@@ -1274,7 +1283,7 @@ scopedImportNix asetArg pathArg =
             p' <- fromValue @Path =<< demand res
 
             traceM $ "Current file being evaluated is: " <> show p'
-            pure $ coerce $ takeDirectory (coerce p') </> coerce path
+            pure $ takeDirectory p' </> path
         )
         =<< lookupVar "__cur_file"
 
@@ -1288,24 +1297,26 @@ getEnvNix v =
   (toValue . mkNixStringWithoutContext . maybeToMonoid) =<< getEnvVar =<< fromStringNoContext =<< fromValue v
 
 sortNix
-  :: MonadNix e t f m
+  :: forall e t f m
+  . MonadNix e t f m
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
 sortNix comp =
-  inHaskM (sortByM $ cmp comp)
+  inHaskM (sortByM cmp)
  where
-  cmp f a b =
-    do
-      isLessThan <- (`callFunc` b) =<< callFunc f a
-      bool
-        (do
-          isGreaterThan <- (`callFunc` a) =<< callFunc f b
-          fromValue isGreaterThan <&>
-            bool EQ GT
-        )
-        (pure LT)
-        =<< fromValue isLessThan
+  cmp :: NValue t f m -> NValue t f m -> m Ordering
+  cmp a b =
+    bool
+      (fmap
+         (bool EQ GT)
+         (compare b a)
+      )
+      (pure LT)
+      =<< compare a b
+   where
+    compare :: NValue t f m -> NValue t f m -> m Bool
+    compare a2 a1 = fromValue =<< (`callFunc` a1) =<< callFunc comp a2
 
 lessThanNix
   :: MonadNix e t f m
@@ -1438,7 +1449,7 @@ placeHolderNix p =
       bytes :: NixString -> ByteString
       bytes = encodeUtf8 . body
 
-      body h = stringIgnoreContext h
+      body = stringIgnoreContext
 
 readFileNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 readFileNix = toValue <=< Nix.Render.readFile <=< absolutePathFromValue <=< demand
@@ -1476,7 +1487,7 @@ readDirNix nvpath =
       detectFileTypes :: Path -> m (VarName, FileType)
       detectFileTypes item =
         do
-          s <- getSymbolicLinkStatus $ coerce $ on (</>) coerce path item
+          s <- getSymbolicLinkStatus $ path </> item
           let
             t =
               if
@@ -1508,21 +1519,24 @@ fromJSONNix nvjson =
       (A.eitherDecodeStrict' @A.Value $ encodeUtf8 jText)
 
  where
-  -- jsonToNValue :: MonadNix e t f m => A.Value -> f (NValue t f m)
   jsonToNValue :: (A.Value -> m (NValue t f m))
-  jsonToNValue = \case
-    A.Object m -> nvSet mempty <$> traverse jsonToNValue (M.mapKeys coerce m)
-    A.Array  l -> nvList <$> traverse jsonToNValue (V.toList l)
-    A.String s -> pure $ nvStrWithoutContext s
-    A.Number n ->
-      pure $
-        nvConstant $
-          either
-            NFloat
-            NInt
-            (floatingOrInteger n)
-    A.Bool   b -> pure $ mkNVBool b
-    A.Null     -> pure nvNull
+  jsonToNValue =
+    \case
+      A.Object m -> traverseToNValue (nvSet mempty) (M.mapKeys coerce m)
+      A.Array  l -> traverseToNValue nvList (V.toList l)
+      A.String s -> pure $ nvStrWithoutContext s
+      A.Number n ->
+        pure $
+          nvConstant $
+            either
+              NFloat
+              NInt
+              (floatingOrInteger n)
+      A.Bool   b -> pure $ mkNVBool b
+      A.Null     -> pure nvNull
+   where
+    traverseToNValue :: Traversable t0 => (t0 (NValue t f m) -> b) -> t0 A.Value -> m b
+    traverseToNValue f v = f <$> traverse jsonToNValue v
 
 toJSONNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toJSONNix = (fmap nvStr . nvalueToJSONNixString) <=< demand
@@ -1877,11 +1891,15 @@ builtinsList = sequenceA
   , add  Normal   "valueSize"        getRecursiveSizeNix
   ]
  where
+
+  arity0 :: a -> Prim m a
+  arity0 = Prim . pure
+
   arity1 :: (a -> b) -> (a -> Prim m b)
-  arity1 f = Prim . pure . f
+  arity1 g = arity0 . g
 
   arity2 :: (a -> b -> c) -> (a -> b -> Prim m c)
-  arity2 f = ((Prim . pure) .) . f
+  arity2 f = arity1 . f
 
   mkBuiltin :: BuiltinType -> VarName -> m (NValue t f m) -> m (Builtin (NValue t f m))
   mkBuiltin t n v = wrap t n <$> mkThunk n v
@@ -1975,14 +1993,15 @@ withNixContext mpath action =
             do
               traceM $ "Setting __cur_file = " <> show path
               let ref = nvPath path
-              pushScope (coerce $ M.fromList (one ("__cur_file", ref))) act
+              pushScope (coerce $ M.fromList $ one ("__cur_file", ref)) act
           )
           mpath
           action
       )
 
 builtins
-  :: ( MonadNix e t f m
+  :: forall e t f m
+  . ( MonadNix e t f m
      , Scoped (NValue t f m) m
      )
   => m (Scopes m (NValue t f m))
@@ -1992,16 +2011,16 @@ builtins =
     lst <- ([("builtins", ref)] <>) <$> topLevelBuiltins
     pushScope (coerce (M.fromList lst)) currentScopes
  where
-  buildMap
-    :: ( MonadNix e t f m
-      , Scoped (NValue t f m) m
-      )
-    => m (HashMap VarName (NValue t f m))
+  buildMap :: m (HashMap VarName (NValue t f m))
   buildMap         =  M.fromList . (mapping <$>) <$> builtinsList
+
+  topLevelBuiltins :: m [(VarName, NValue t f m)]
   topLevelBuiltins = mapping <<$>> fullBuiltinsList
 
+  fullBuiltinsList :: m [Builtin (NValue t f m)]
   fullBuiltinsList = nameBuiltins <<$>> builtinsList
    where
+    nameBuiltins :: Builtin v -> Builtin v
     nameBuiltins b@(Builtin TopLevel _) = b
     nameBuiltins (Builtin Normal nB) =
       Builtin TopLevel $ first (coerce @Text . ("__" <>) . coerce @VarName) nB

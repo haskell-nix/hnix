@@ -20,8 +20,7 @@ import           Nix.Pretty
 import           Nix.String
 import           Nix.XML
 import qualified Options.Applicative           as Opts
-import           System.Environment
-import           System.FilePath
+import           System.Environment             ( setEnv )
 import           System.FilePath.Glob           ( compile
                                                 , globDir1
                                                 )
@@ -74,101 +73,139 @@ deprecatedRareNixQuirkTests = Set.fromList
   ]
 
 genTests :: IO TestTree
-genTests = do
-  testFiles <-
-    sort
-    -- Disabling the not yet done tests cases.
-    . filter ((`Set.notMember` (newFailingTests `Set.union` deprecatedRareNixQuirkTests)) . takeBaseName)
-    . filter ((/= ".xml") . takeExtension)
-    <$> globDir1 (compile "*-*-*.*") "data/nix/tests/lang"
-  let
-    testsByName = groupBy (takeFileName . dropExtensions) testFiles
-    testsByType = groupBy testType (Map.toList testsByName)
-    testGroups  = mkTestGroup . coerce <$> Map.toList testsByType
-  pure $ localOption (mkTimeout 2000000) $
-    testGroup
-      "Nix (upstream) language tests"
-      testGroups
+genTests =
+  do
+    testFiles <- getTestFiles
+    let
+      testsGroupedByName :: Map Path [Path]
+      testsGroupedByName = groupBy (takeFileName . dropExtensions) testFiles
+
+      testsGroupedByTypeThenName :: Map [String] [(Path, [Path])]
+      testsGroupedByTypeThenName = groupBy testType (Map.toList testsGroupedByName)
+
+      testTree :: [TestTree]
+      testTree = mkTestGroup <$> Map.toList testsGroupedByTypeThenName
+
+    pure $
+      localOption
+        (mkTimeout 2000000)
+        $ testGroup
+            "Nix (upstream) language tests"
+            testTree
  where
-  testType (fullpath, _files) = take 2 $ splitOn "-" $ takeFileName fullpath
-  mkTestGroup (kind, tests) =
-    testGroup (String.unwords kind) $ mkTestCase kind <$> tests
-  mkTestCase kind (basename, files) = testCase (takeFileName basename) $ do
-    time <- liftIO getCurrentTime
-    let opts = defaultOptions time
-    case kind of
-      ["parse", "okay"] -> assertParse opts $ the files
-      ["parse", "fail"] -> assertParseFail opts $ the files
-      ["eval" , "okay"] -> assertEval opts files
-      ["eval" , "fail"] -> assertEvalFail $ the files
-      _                 -> fail $ "Unexpected: " <> show kind
+
+  getTestFiles :: IO [Path]
+  getTestFiles = sortTestFiles <$> collectTestFiles
+   where
+    collectTestFiles :: IO [Path]
+    collectTestFiles = coerce (globDir1 (compile "*-*-*.*") nixTestDir)
+
+    sortTestFiles :: [Path] -> [Path]
+    sortTestFiles =
+      sort
+        -- Disabling the not yet done tests cases.
+        . filter withoutDisabledTests
+        . filter withoutXml
+     where
+      withoutDisabledTests :: Path -> Bool
+      withoutDisabledTests = (`Set.notMember` (newFailingTests `Set.union` deprecatedRareNixQuirkTests)) . takeBaseName
+
+      withoutXml :: Path -> Bool
+      withoutXml = (/= ".xml") . takeExtension
+
+  testType :: (Path, b) -> [String]
+  testType (fullpath, _files) = coerce (take 2 . splitOn "-") $ takeFileName fullpath
+
+  mkTestGroup :: ([String], [(Path, [Path])]) -> TestTree
+  mkTestGroup (tType, tests) =
+    testGroup (String.unwords tType) $ mkTestCase <$> tests
+   where
+    mkTestCase :: (Path, [Path]) -> TestTree
+    mkTestCase (basename, files) =
+      testCase
+        (coerce $ takeFileName basename)
+        $ do
+            time <- liftIO getCurrentTime
+            let opts = defaultOptions time
+            case tType of
+              ["parse", "okay"] -> assertParse opts $ the files
+              ["parse", "fail"] -> assertParseFail opts $ the files
+              ["eval" , "okay"] -> assertEval opts files
+              ["eval" , "fail"] -> assertEvalFail $ the files
+              _                 -> fail $ "Unexpected: " <> show tType
+
 
 assertParse :: Options -> Path -> Assertion
 assertParse _opts file =
-  do
-    x <- parseNixFileLoc file
-    either
-      (\ err -> assertFailure $ "Failed to parse " <> coerce file <> ":\n" <> show err)
-      (const stub)  -- pure $! runST $ void $ lint opts expr
-      x
+  either
+    (\ err -> assertFailure $ "Failed to parse " <> coerce file <> ":\n" <> show err)
+    (const stub)  -- pure $! runST $ void $ lint opts expr
+    =<< parseNixFileLoc file
 
 assertParseFail :: Options -> Path -> Assertion
-assertParseFail opts file = do
-  eres <- parseNixFileLoc file
-  (`catch` \(_ :: SomeException) -> stub)
-    (either
+assertParseFail opts file =
+  (`catch` \(_ :: SomeException) -> stub) $
+    either
       (const stub)
       (\ expr ->
         do
           _ <- pure $! runST $ void $ lint opts expr
           assertFailure $ "Unexpected success parsing `" <> coerce file <> ":\nParsed value: " <> show expr
       )
-      eres
-    )
+      =<< parseNixFileLoc file
 
 assertLangOk :: Options -> Path -> Assertion
-assertLangOk opts file = do
-  actual   <- printNix <$> hnixEvalFile opts (file <> ".nix")
-  expected <- readFile $ file <> ".exp"
-  assertEqual "" expected $ fromString (actual <> "\n")
+assertLangOk opts fileBaseName =
+  do
+    actual   <- printNix <$> hnixEvalFile opts (addNixExt fileBaseName)
+    expected <- read fileBaseName ".exp"
+    assertEqual "" expected $ fromString (actual <> "\n")
 
 assertLangOkXml :: Options -> Path -> Assertion
-assertLangOkXml opts file = do
-  actual <- stringIgnoreContext . toXML <$> hnixEvalFile opts (file <> ".nix")
-  expected <- readFile $ file <> ".exp.xml"
-  assertEqual "" expected actual
+assertLangOkXml opts fileBaseName =
+  do
+    actual <- stringIgnoreContext . toXML <$> hnixEvalFile opts (addNixExt fileBaseName)
+    expected <- read fileBaseName ".exp.xml"
+    assertEqual "" expected actual
 
 assertEval :: Options -> [Path] -> Assertion
 assertEval _opts files =
   do
     time <- liftIO getCurrentTime
     let opts = defaultOptions time
-    case delete ".nix" $ sort $ fromString @Text . takeExtensions . coerce <$> files of
-      []                 -> void $ hnixEvalFile opts (name <> ".nix")
+    case delete ".nix" $ sort $ fromString @Text . takeExtensions <$> files of
+      []                  -> void $ hnixEvalFile opts (addNixExt name)
       [".exp"          ]  -> assertLangOk    opts name
       [".exp.xml"      ]  -> assertLangOkXml opts name
       [".exp.disabled" ]  -> stub
       [".exp-disabled" ]  -> stub
-      [".exp", ".flags"] ->
+      [".exp", ".flags"]  ->
         do
           liftIO $ setEnv "NIX_PATH" "lang/dir4:lang/dir5"
-          flags <- readFile $ name <> ".flags"
-          let flags' | Text.last flags == '\n' = Text.init flags
-                    | otherwise               = flags
+          flags <- read name ".flags"
+          let
+            flags' :: Text
+            flags' =
+              bool
+                id
+                Text.init
+                (Text.last flags == '\n')
+                flags
           case runParserGetResult time flags' of
             Opts.Failure           err   -> errorWithoutStackTrace $ "Error parsing flags from " <> coerce name <> ".flags: " <> show err
             Opts.CompletionInvoked _     -> fail "unused"
             Opts.Success           opts' -> assertLangOk opts' name
       _ -> assertFailure $ "Unknown test type " <> show files
  where
+  runParserGetResult :: UTCTime -> Text -> Opts.ParserResult Options
   runParserGetResult time flags' =
     Opts.execParserPure
       Opts.defaultPrefs
       (nixOptionsInfo time)
       (fmap toString $ fixup $ Text.splitOn " " flags')
 
-  name = coerce $
-    "data/nix/tests/lang/" <> the (takeFileName . dropExtensions . coerce <$> files)
+  name :: Path
+  name = coerce nixTestDir <> the (takeFileName . dropExtensions <$> files)
 
   fixup :: [Text] -> [Text]
   fixup ("--arg"    : x : y : rest) = "--arg"    : (x <> "=" <> y) : fixup rest
@@ -177,7 +214,18 @@ assertEval _opts files =
   fixup []                          = mempty
 
 assertEvalFail :: Path -> Assertion
-assertEvalFail file = (`catch` (\(_ :: SomeException) -> stub)) $ do
-  time       <- liftIO getCurrentTime
-  evalResult <- printNix <$> hnixEvalFile (defaultOptions time) file
-  evalResult `seq` assertFailure $ "File: ''" <> coerce file <> "'' should not evaluate.\nThe evaluation result was `" <> evalResult <> "`."
+assertEvalFail file =
+  (`catch` (\(_ :: SomeException) -> stub)) $
+  do
+    time       <- liftIO getCurrentTime
+    evalResult <- printNix <$> hnixEvalFile (defaultOptions time) file
+    evalResult `seq` assertFailure $ "File: ''" <> coerce file <> "'' should not evaluate.\nThe evaluation result was `" <> evalResult <> "`."
+
+nixTestDir :: FilePath
+nixTestDir = "data/nix/tests/lang/"
+
+addNixExt :: Path -> Path
+addNixExt path = addExtension path ".nix"
+
+read :: Path -> String -> IO Text
+read path ext = readFile $ addExtension path ext

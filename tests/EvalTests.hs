@@ -16,7 +16,6 @@ import           Nix.Standard
 import           Nix.TH
 import           Nix.Value.Equal
 import qualified System.Directory as D
-import           System.FilePath
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.TH
@@ -28,18 +27,20 @@ case_basic_sum =
 case_basic_div =
     constantEqualText "3" "builtins.div 6 2"
 
-case_zero_div = do
-  assertNixEvalThrows "builtins.div 1 0"
-  assertNixEvalThrows "builtins.div 1.0 0"
-  assertNixEvalThrows "builtins.div 1 0.0"
-  assertNixEvalThrows "builtins.div 1.0 0.0"
+case_zero_div =
+  traverse_ assertNixEvalThrows
+    [ "builtins.div 1 0"
+    , "builtins.div 1.0 0"
+    , "builtins.div 1 0.0"
+    , "builtins.div 1.0 0.0"
+    ]
 
-case_bit_ops = do
-    -- mic92 (2018-08-20): change to constantEqualText,
-    -- when hnix's nix fork supports bitAnd/bitOr/bitXor
-    constantEqualText' "0" "builtins.bitAnd 1 0"
-    constantEqualText' "1" "builtins.bitOr 1 1"
-    constantEqualText' "3" "builtins.bitXor 1 2"
+case_bit_ops =
+  traverse_ (uncurry constantEqualText)
+    [ ("0", "builtins.bitAnd 1 0")
+    , ("1", "builtins.bitOr 1 1")
+    , ("3", "builtins.bitXor 1 2")
+    ]
 
 case_basic_function =
     constantEqualText "2" "(a: a) 2"
@@ -159,7 +160,7 @@ case_inherit_from_set_has_no_scope =
     |]
 
 -- github/orblivion (2018-08-05): Adding these failing tests so we fix this feature
-
+--
 -- case_overrides =
 --     constantEqualText' "2" [text|
 --       let
@@ -186,97 +187,102 @@ case_inherit_from_set_has_no_scope =
 --       }.__overrides.a)
 --     |]
 
-case_unsafegetattrpos1 =
-    constantEqualText "[ 5 14 ]" [text|
-      let e = 1;
-          f = 1;
-          t = {};
-          s = {
-            inherit t e f;
-            a = 1;
-            "b" = 2;
-            c.d = 3;
-          };
-          p = builtins.unsafeGetAttrPos "e" s; in
-      [ p.line p.column ]
-    |]
+case_unsafegetattrpos =
+  traverse_ (uncurry constantEqualText)
+    [ ( "[ 5 14 ]"
+      , [text|
+          let e = 1;
+              f = 1;
+              t = {};
+              s = {
+                inherit t e f;
+                a = 1;
+                "b" = 2;
+                c.d = 3;
+              };
+              p = builtins.unsafeGetAttrPos "e" s; in
+          [ p.line p.column ]
+          |]
+      )
+    , ( "[ 5 14 ]"
+      , [text|
+          let e = 1;
+              f = 1;
+              t = {};
+              s = {
+                inherit t e f;
+                a = 1;
+                "b" = 2;
+                c.d = 3;
+              };
+              p = builtins.unsafeGetAttrPos "f" s; in
+          [ p.line p.column ]
+        |]
+      )
+    , ( "[ 6 7 ]"
+      , [text|
+          let e = 1;
+              f = 1;
+              t = {};
+              s = {
+                inherit t e f;
+                a = 1;
+                "b" = 2;
+                c.d = 3;
+              };
+              p = builtins.unsafeGetAttrPos "a" s; in
+            [ p.line p.column ]
+          |]
+      )
+    , ( "[ 7 7 ]"
+      , [text|
+        let e = 1;
+            f = 1;
+            t = {};
+            s = {
+              inherit t e f;
+              a = 1;
+              "b" = 2;
+              c.d = 3;
+            };
+            p = builtins.unsafeGetAttrPos "b" s; in
+          [ p.line p.column ]
+        |]
+      )
+    -- jww (2018-05-09): These two are failing but they shouldn't be
+    --
+    -- , ( "[ 7 13 ]"
+    --   , [text|
+    --       let e = 1;
+    --           f = 1;
+    --           t = {};
+    --           s = {
+    --             inherit t e f;
+    --             a = 1;
+    --             "b" = 2;
+    --             c.d = 3;
+    --           };
+    --           p = builtins.unsafeGetAttrPos "c.d" s; in
+    --         [ p.line p.column ]
+    --       |]
+    --   )
 
-case_unsafegetattrpos2 =
-    constantEqualText "[ 5 14 ]" [text|
-      let e = 1;
-          f = 1;
-          t = {};
-          s = {
-            inherit t e f;
-            a = 1;
-            "b" = 2;
-            c.d = 3;
-          };
-          p = builtins.unsafeGetAttrPos "f" s; in
-      [ p.line p.column ]
-    |]
-
-case_unsafegetattrpos3 =
-    constantEqualText "[ 6 7 ]" [text|
-      let e = 1;
-          f = 1;
-          t = {};
-          s = {
-            inherit t e f;
-            a = 1;
-            "b" = 2;
-            c.d = 3;
-          };
-          p = builtins.unsafeGetAttrPos "a" s; in
-      [ p.line p.column ]
-    |]
-
-case_unsafegetattrpos4 =
-    constantEqualText "[ 7 7 ]" [text|
-      let e = 1;
-          f = 1;
-          t = {};
-          s = {
-            inherit t e f;
-            a = 1;
-            "b" = 2;
-            c.d = 3;
-          };
-          p = builtins.unsafeGetAttrPos "b" s; in
-      [ p.line p.column ]
-    |]
-
--- jww (2018-05-09): These two are failing but they shouldn't be
-
--- case_unsafegetattrpos5 =
---     constantEqualText "[ 7 13 ]" [text|
---       let e = 1;
---           f = 1;
---           t = {};
---           s = {
---             inherit t e f;
---             a = 1;
---             "b" = 2;
---             c.d = 3;
---           };
---           p = builtins.unsafeGetAttrPos "c.d" s; in
---       [ p.line p.column ]
---     |]
-
--- case_unsafegetattrpos6 =
---     constantEqualText "[ 7 13 ]" [text|
---       let e = 1;
---           f = 1;
---           t = {};
---           s = {
---             inherit t e f;
---             a = 1;
---             "b" = 2;
---             c.d = 3;
---           };
---           p = builtins.unsafeGetAttrPos "d" s; in
---       [ p.line p.column ]
---     |]
+    -- , ( "[ 7 13 ]"
+    --   , [text|
+    --       let e = 1;
+    --           f = 1;
+    --           t = {};
+    --           s = {
+    --             inherit t e f;
+    --             a = 1;
+    --             "b" = 2;
+    --             c.d = 3;
+    --           };
+    --           p = builtins.unsafeGetAttrPos "d" s; in
+    --         [ p.line p.column ]
+    --       |]
+    --   )
+    ]
 
 case_fixed_points =
     constantEqualText [text|[
@@ -321,29 +327,36 @@ case_fixed_points_attrsets =
       in fix f
     |]
 
--- case_function_equals1 =
---     constantEqualText "true" "{f = x: x;} == {f = x: x;}"
-
--- case_function_equals2 =
---     constantEqualText "true" "[(x: x)] == [(x: x)]"
-
-case_function_equals3 =
-    constantEqualText "false" "(let a = (x: x); in a == a)"
-
-case_function_equals4 =
-    constantEqualText "true" "(let a = {f = x: x;}; in a == a)"
-
-case_function_equals5 =
-    constantEqualText "true" "(let a = [(x: x)]; in a == a)"
+case_function_equals =
+    traverse_ (uncurry constantEqualText)
+      [ -- ( "true"
+        -- , "{f = x: x;} == {f = x: x;}"
+        -- )
+        -- ( "true"
+        -- , "[(x: x)] == [(x: x)]"
+        -- )
+        ( "false"
+        , "(let a = (x: x); in a == a)"
+        )
+      , ( "true"
+        , "(let a = {f = x: x;}; in a == a)"
+        )
+      , ( "true"
+        , "(let a = [(x: x)]; in a == a)"
+        )
+      , ( "false"
+        , "builtins.pathExists \"/var/empty/invalid-directory\""
+        )
+      ]
 
 case_directory_pathexists =
     constantEqualText "false" "builtins.pathExists \"/var/empty/invalid-directory\""
 
 -- jww (2018-05-02): This constantly changes!
--- case_placeholder =
---   constantEqualText
---       "\"/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9\""
---       "builtins.placeholder \"out\""
+case_placeholder =
+  constantEqualText
+      "\"/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9\""
+      "builtins.placeholder \"out\""
 
 case_rec_path_attr =
     constantEqualText "10"
@@ -359,10 +372,18 @@ case_mapattrs_builtin =
 
 -- Regression test for #373
 case_regression_373 :: Assertion
-case_regression_373 = do
-  freeVarsEqual "{ inherit a; }" ["a"]
-  freeVarsEqual "rec {inherit a; }" ["a"]
-  freeVarsEqual "let inherit a; in { }" ["a"]
+case_regression_373 =
+  traverse_ (uncurry freeVarsEqual)
+    [ ( "{ inherit a; }"
+      , one "a"
+      )
+    , ("rec {inherit a; }"
+      , one "a"
+      )
+    , ( "let inherit a; in { }"
+      , one "a"
+      )
+    ]
 
 case_expression_split =
   constantEqualText
@@ -430,31 +451,43 @@ case_concat_thunk_rigth =
 tests :: TestTree
 tests = $testGroupGenerator
 
-genEvalCompareTests = do
-    td <- D.listDirectory (coerce testDir)
+genEvalCompareTests =
+  do
+    (coerce -> files :: [Path]) <- D.listDirectory (coerce testDir)
 
-    let unmaskedFiles = filter ((==".nix") . takeExtension) td
-    let files = unmaskedFiles \\ coerce maskedFiles
+    let
+      unmaskedFiles :: [Path]
+      unmaskedFiles = filter ((== ".nix") . takeExtension) files
 
-    pure $ testGroup "Eval comparison tests" $ fmap (mkTestCase testDir) files
+      testFiles :: [Path]
+      testFiles = unmaskedFiles \\ maskedFiles
+
+    pure $ testGroup "Eval comparison tests" $ fmap (mkTestCase testDir) testFiles
   where
-    mkTestCase td f = testCase f $ assertEvalFileMatchesNix $ coerce $ coerce td </> f
+    mkTestCase :: Path -> Path -> TestTree
+    mkTestCase dir f = testCase (coerce f :: TestName) $ assertEvalFileMatchesNix $ dir </> f
 
 constantEqual :: NExprLoc -> NExprLoc -> Assertion
-constantEqual expected actual = do
+constantEqual expected actual =
+  do
     time <- getCurrentTime
     let opts = defaultOptions time
     -- putStrLn =<< lint (stripAnnotation a)
-    (eq, expectedNF, actualNF) <- runWithBasicEffectsIO opts $ do
-        expectedNF <- normalForm =<< nixEvalExprLoc mempty expected
-        actualNF <- normalForm =<< nixEvalExprLoc mempty actual
-        eq <- valueEqM expectedNF actualNF
-        pure (eq, expectedNF, actualNF)
-    let message =
-                "Inequal normal forms:\n"
-            <>  "Expected: " <> printNix expectedNF <> "\n"
-            <>  "Actual:   " <> printNix actualNF
+    (eq, expectedNF, actualNF) <-
+      runWithBasicEffectsIO opts $
+        do
+          expectedNF <- getNormForm expected
+          actualNF <- getNormForm actual
+          eq <- valueEqM expectedNF actualNF
+          pure (eq, expectedNF, actualNF)
+    let
+      message =
+        "Inequal normal forms:\n"
+        <> "Expected: " <> printNix expectedNF <> "\n"
+        <>  "Actual:   " <> printNix actualNF
     assertBool message eq
+ where
+  getNormForm = normalForm <=< nixEvalExprLoc mempty
 
 constantEqualText' :: Text -> Text -> Assertion
 constantEqualText' expected actual =
@@ -463,11 +496,11 @@ constantEqualText' expected actual =
     constantEqual expected' actual'
 
 constantEqualText :: Text -> Text -> Assertion
-constantEqualText expected actual = do
-  constantEqualText' expected actual
-  mres <- liftIO $ lookupEnv "ALL_TESTS" <|> lookupEnv "MATCHING_TESTS"
-  when (isJust mres) $
-      assertEvalMatchesNix actual
+constantEqualText expected actual =
+  do
+    constantEqualText' expected actual
+    mres <- liftIO $ lookupEnv "ALL_TESTS" <|> lookupEnv "MATCHING_TESTS"
+    whenJust (const $ assertEvalMatchesNix actual) mres
 
 assertNixEvalThrows :: Text -> Assertion
 assertNixEvalThrows a =

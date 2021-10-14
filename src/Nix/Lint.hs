@@ -324,7 +324,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
         (\ s ->  "Could not look up attribute " <> attr <> " in " <> show s)
         ms
    where
-    attr = Text.intercalate "." $ NE.toList $ coerce <$> ks
+    attr = Text.intercalate "." $ NE.toList $ coerce ks
 
   evalCurPos = do
     f <- mkSymbolic [TPath]

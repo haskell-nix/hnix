@@ -180,23 +180,24 @@ eval (NAbs    params body) = do
   -- needs to be used when evaluating the body and default arguments, hence we
   -- defer here so the present scope is restored when the parameters and body
   -- are forced during application.
-  scopes <- currentScopes
+  curScope <- currentScopes
   let
-    withScope = withScopes scopes
-    withScopeInform = withScope . inform
+    withCurScope = withScopes curScope
+
+    fun :: m v -> (AttrSet (m v) -> m v -> m r) -> m r
+    fun arg k =
+      withCurScope $
+        do
+          (coerce -> newScope) <- buildArgument params arg
+          pushScope
+            newScope $
+            k
+              (coerce $ withCurScope . inform <$> newScope)
+              body
 
   evalAbs
     params
-    (\arg k ->
-      withScope $
-        do
-          (coerce -> scope) <- buildArgument params arg
-          pushScope
-            scope $
-            k
-              (withScopeInform <$> coerce scope)
-              body
-    )
+    fun
 
 eval (NSynHole name) = synHole name
 
@@ -223,32 +224,48 @@ attrSetAlter
   -> PositionSet
   -> m v
   -> m (AttrSet (m v), PositionSet)
-attrSetAlter [] _ _ _ _ = evalError @v $ ErrorCall "invalid selector with no components"
-attrSetAlter (k : ks) pos m p val =
-  bool
-    go
-    (maybe
-      (recurse mempty mempty)
-      (\x ->
-        do
-          (st, sp) <- fromValue @(AttrSet v, PositionSet) =<< x
-          recurse (demand <$> st) sp
-      )
-      (M.lookup k m)
-    )
-    (not $ null ks)
+attrSetAlter ks' pos m' p' val =
+  swap <$> go p' m' ks'
  where
-  go = pure (M.insert k val m, M.insert (coerce k) pos p)
-
-  recurse st sp =
-    (\(st', _) ->
-      (M.insert
-        k
-        (toValue @(AttrSet v, PositionSet) =<< (, mempty) <$> sequenceA st')
-        m
-      , M.insert (coerce k) pos p
+  -- This `go` does traverse in disquise. Notice how it traverses `ks`.
+  go
+    :: PositionSet
+    -> AttrSet (m v)
+    -> [VarName]
+    -> m (PositionSet, AttrSet (m v))
+  go _ _ [] = evalError @v $ ErrorCall "invalid selector with no components"
+  go p m (k : ks) =
+    bool
+      (pure $ insertVal val)
+      (maybe
+        (recurse mempty mempty)
+        (\x ->
+          do
+            --  2021-10-12: NOTE: swapping sourcewide into (PositionSet, AttrSet) would optimize code and remove this `swap`
+            (swap -> (sp, st)) <- fromValue @(AttrSet v, PositionSet) =<< x
+            recurse sp $ demand <$> st
+        )
+        ((`M.lookup` m) k)
       )
-    ) <$> attrSetAlter ks pos st sp val
+      (not $ null ks)
+   where
+    insertVal :: m v -> (PositionSet, AttrSet (m v))
+    insertVal v =
+      ( insertPos
+      , insertV v
+      )
+     where
+      insertV v' = M.insert k v' m
+      insertPos = M.insert k pos p
+
+    recurse
+      :: PositionSet
+      -> AttrSet (m v)
+      -> m ( PositionSet
+          , AttrSet (m v)
+          )
+    recurse p'' m'' =
+      insertVal . (=<<) (toValue @(AttrSet v, PositionSet)) . fmap (,mempty) . sequenceA . snd <$> go p'' m'' ks
 
 desugarBinds :: forall r . ([Binding r] -> r) -> [Binding r] -> [Binding r]
 desugarBinds embed binds = evalState (traverse (go <=< collect) binds) mempty
@@ -265,14 +282,14 @@ desugarBinds embed binds = evalState (traverse (go <=< collect) binds) mempty
         M.insert
           x
           (maybe
-            (p, [bindValAt p])
+            (p, one $ bindValAt p)
             (\ (q, v) -> (q, bindValAt q : v))
             (M.lookup x m)
           )
           m
       pure $ Left x
    where
-    bindValAt pos = NamedVar (y :| ys) val pos
+    bindValAt = NamedVar (y :| ys) val
   collect x = pure $ pure x
 
   go
@@ -333,7 +350,7 @@ evalBinds recursive binds =
       -- jww (2018-05-09): What to do with the key position here?
       pure $
         (\ (k, v) ->
-          ( [k]
+          ( one k
           , fromMaybe pos $ M.lookup k p'
           , demand v
           )
@@ -344,7 +361,7 @@ evalBinds recursive binds =
       -- When there are no path segments, e.g. `${null} = 5;`, we don't
       -- bind anything
       ([], _, _) -> mempty
-      result     -> [result]
+      result     -> one result
     ) <$> processAttrSetKeys pathExpr
 
    where
@@ -356,7 +373,7 @@ evalBinds recursive binds =
         (\ k ->
           list
             -- No more keys in the attrset - return the result
-            (pure ( [k], pos, finalValue ) )
+            (pure ( one k, pos, finalValue ) )
             -- There are unprocessed keys in attrset - recurse appending the results
             (\ (x : xs) ->
               do
@@ -385,7 +402,7 @@ evalBinds recursive binds =
                 do
                   (coerce -> scope, _) <- fromValue @(AttrSet v, PositionSet) =<< s
 
-                  clearScopes @v $ pushScope scope $ lookupVar var
+                  clearScopes $ pushScope @v scope $ lookupVar var
               )
               ms
       )
@@ -453,10 +470,8 @@ evalSetterKeyName =
   \case
     StaticKey k -> pure $ pure k
     DynamicKey k ->
-      maybe
-        Nothing
-        (pure . coerce . stringIgnoreContext)
-        <$> runAntiquoted "\n" assembleString (fromValueMay =<<) k
+      (coerce . stringIgnoreContext) <<$>>
+        runAntiquoted "\n" assembleString (fromValueMay =<<) k
 
 assembleString
   :: forall v m
@@ -505,14 +520,14 @@ buildArgument params arg =
     -> VarName
     -> These v (Maybe (m v))
     -> Maybe (AttrSet v -> m v)
-  assemble scope variadic k =
-    \case
-      That Nothing -> pure $ const $ evalError @v $ ErrorCall $ "Missing value for parameter: ''" <> show k
-      That (Just f) -> pure $ coerce $ \args -> defer $ withScopes scope $ pushScope args f
-      This _
-        | variadic == Variadic -> Nothing
-        | otherwise  -> pure $ const $ evalError @v $ ErrorCall $ "Unexpected parameter: " <> show k
-      These x _ -> pure $ const $ pure x
+  assemble _ Variadic _ (This _) = Nothing
+  assemble scope _ k t =
+    pure $
+    case t of
+      That Nothing -> const $ evalError @v $ ErrorCall $ "Missing value for parameter: ''" <> show k
+      That (Just f) -> coerce $ \ args -> defer $ withScopes scope $ pushScope args f
+      This _ -> const $ evalError @v $ ErrorCall $ "Unexpected parameter: " <> show k
+      These x _ -> const $ pure x
 
 -- | Add source positions to @NExprLoc@.
 --

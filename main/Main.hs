@@ -32,7 +32,6 @@ import           Options.Applicative     hiding ( ParserResult(..) )
 import           Prettyprinter           hiding ( list )
 import           Prettyprinter.Render.Text      ( renderIO )
 import qualified Repl
-import           System.FilePath
 import           Nix.Eval
 
 main :: IO ()
@@ -72,7 +71,8 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
           expr <- liftIO Text.getContents
           processExpr expr
 
-    processSeveralFiles files = traverse_ processFile files
+    processSeveralFiles :: [Path] -> StandardT (StdIdT IO) ()
+    processSeveralFiles = traverse_ processFile
      where
       processFile path = handleResult (pure path) =<< parseNixFileLoc path
 
@@ -80,7 +80,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
     loadBinaryCacheFile =
       (\ (binaryCacheFile :: Path) ->
         do
-          let file = coerce $ (replaceExtension . coerce) binaryCacheFile "nixc"
+          let file = replaceExtension binaryCacheFile "nixc"
           processCLIOptions (Just file) =<< liftIO (readCache binaryCacheFile)
       ) <$> readFrom
 
@@ -160,7 +160,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
     | xml                        = fail "Rendering expression trees to XML is not yet implemented"
     | json                       = fail "Rendering expression trees to JSON is not implemented"
     | verbose >= DebugInfo       =  liftIO . putStr . ppShow . stripAnnotation $ expr
-    | cache , Just path <- mpath =  liftIO . writeCache (coerce $ replaceExtension (coerce path) "nixc") $ expr
+    | cache , Just path <- mpath =  liftIO . writeCache (replaceExtension path "nixc") $ expr
     | parseOnly                  =  void . liftIO . Exception.evaluate . force $ expr
     | otherwise                  =
       liftIO .

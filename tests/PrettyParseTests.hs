@@ -30,6 +30,9 @@ asciiString = Gen.list (Range.linear 1 15) Gen.lower
 asciiText :: Gen Text
 asciiText = fromString <$> asciiString
 
+asciiVarName :: Gen VarName
+asciiVarName = coerce <$> asciiText
+
 -- Might want to replace this instance with a constant value
 genPos :: Gen Pos
 genPos = mkPos <$> Gen.int (Range.linear 1 256)
@@ -43,7 +46,7 @@ genSourcePos =
 
 genKeyName :: Gen (NKeyName NExpr)
 genKeyName =
-  Gen.choice [DynamicKey <$> genAntiquoted genString, StaticKey . coerce <$> asciiText]
+  Gen.choice [DynamicKey <$> genAntiquoted genString, StaticKey <$> asciiVarName]
 
 genAntiquoted :: Gen a -> Gen (Antiquoted a NExpr)
 genAntiquoted gen =
@@ -57,20 +60,22 @@ genBinding = Gen.choice
       genSourcePos
   , liftA3 Inherit
       (Gen.maybe genExpr)
-      (Gen.list (Range.linear 0 5) (coerce <$> asciiText))
+      (Gen.list (Range.linear 0 5) asciiVarName)
       genSourcePos
   ]
 
 genString :: Gen (NString NExpr)
 genString = Gen.choice
-  [ DoubleQuoted <$> Gen.list (Range.linear 0 5) (genAntiquoted asciiText)
+  [ DoubleQuoted <$> genLines
   , liftA2 Indented
-      (Gen.int (Range.linear 0 10))
-      (Gen.list
-        (Range.linear 0 5)
-        (genAntiquoted asciiText)
-      )
+      (Gen.int $ Range.linear 0 10)
+      genLines
   ]
+ where
+  genLines =
+    Gen.list
+      (Range.linear 0 5)
+      (genAntiquoted asciiText)
 
 genAttrPath :: Gen (NAttrPath NExpr)
 genAttrPath =
@@ -80,12 +85,17 @@ genAttrPath =
 
 genParams :: Gen (Params NExpr)
 genParams = Gen.choice
-  [ Param . coerce <$> asciiText
-  , liftA3 (\ a b c -> ParamSet (pure $ coerce c) (bool Closed Variadic b) (coerce a))
-      (Gen.list (Range.linear 0 10) $ liftA2 (,) asciiText $ Gen.maybe genExpr)
-      Gen.bool
+  [ Param <$> asciiVarName
+  , liftA3 (mkGeneralParamSet . pure)
       (Gen.choice [stub, asciiText])
+      (Gen.list (Range.linear 0 10) $
+        liftA2 (,)
+          asciiText
+          (Gen.maybe genExpr)
+      )
+      Gen.bool
   ]
+
 
 genAtom :: Gen NAtom
 genAtom = Gen.choice
@@ -100,50 +110,64 @@ genAtom = Gen.choice
 -- distribution is not scientifically chosen.
 genExpr :: Gen NExpr
 genExpr =
-  Gen.sized $
-    \(Size n) -> Fix <$>
-      if n < 2
-        then Gen.choice [genConstant, genStr, genSym, genLiteralPath, genEnvPath]
-        else Gen.frequency
-          [ (1 , genConstant)
-          , (1 , genSym)
-          , (4 , Gen.resize (Size (n `div` 3)) genIf)
-          , (10, genRecSet)
-          , (20, genSet)
-          , (5 , genList)
-          , (2 , genUnary)
-          , (2 , Gen.resize (Size (n `div` 3)) genBinary)
-          , (3 , Gen.resize (Size (n `div` 3)) genSelect)
-          , (20, Gen.resize (Size (n `div` 2)) genAbs)
-          , (2 , Gen.resize (Size (n `div` 2)) genHasAttr)
-          , (10, Gen.resize (Size (n `div` 2)) genLet)
-          , (10, Gen.resize (Size (n `div` 2)) genWith)
-          , (1 , Gen.resize (Size (n `div` 2)) genAssert)
-          ]
+  Gen.sized genCurbed
  where
-  genConstant    = NConstant                         <$> genAtom
-  genStr         = NStr                              <$> genString
-  genSym         = NSym . coerce                     <$> asciiText
-  genList        = NList                             <$> fairList genExpr
-  genSet         = NSet mempty                       <$> fairList genBinding
-  genRecSet      = NSet Recursive                    <$> fairList genBinding
-  genLiteralPath = NLiteralPath . ("./" <>) . coerce <$> asciiString
-  genEnvPath     = NEnvPath . coerce                 <$> asciiString
-  genUnary       = liftA2 NUnary   Gen.enumBounded       genExpr
-  genBinary      = liftA3 NBinary  Gen.enumBounded       genExpr     genExpr
-  genSelect      = liftA3 NSelect  (Gen.maybe genExpr)   genExpr     genAttrPath
-  genHasAttr     = liftA2 NHasAttr genExpr               genAttrPath
-  genAbs         = liftA2 NAbs     genParams             genExpr
-  genLet         = liftA2 NLet     (fairList genBinding) genExpr
-  genIf          = liftA3 NIf      genExpr               genExpr     genExpr
-  genWith        = liftA2 NWith    genExpr               genExpr
-  genAssert      = liftA2 NAssert  genExpr               genExpr
+  genCurbed (coerce -> n) =
+    Fix <$>
+      bool
+        small
+        big
+        (n >= 2)
+   where
+
+    genConstant    = NConstant                         <$> genAtom
+    genStr         = NStr                              <$> genString
+    genSym         = NSym                              <$> asciiVarName
+    genLiteralPath = NLiteralPath . ("./" <>) . coerce <$> asciiString
+    genEnvPath     = NEnvPath . coerce                 <$> asciiString
+
+    small = Gen.choice [genConstant, genStr, genSym, genLiteralPath, genEnvPath]
+
+    big =
+      let
+          sizeDivBy i = Size $ n `div` i
+          resizeDivBy i = Gen.resize (sizeDivBy i)
+      in
+      Gen.frequency
+        [ (1 , genConstant)
+        , (1 , genSym)
+        , (2 , genUnary)
+        , (5 , genList)
+        , (20, genSet)
+        , (10, genRecSet)
+        , (1 , resizeDivBy 2 genAssert)
+        , (4 , resizeDivBy 3 genIf)
+        , (2 , resizeDivBy 3 genBinary)
+        , (3 , resizeDivBy 3 genSelect)
+        , (20, resizeDivBy 2 genAbs)
+        , (2 , resizeDivBy 2 genHasAttr)
+        , (10, resizeDivBy 2 genLet)
+        , (10, resizeDivBy 2 genWith)
+        ]
+     where
+      genList        = NList                             <$> fairList genExpr
+      genSet         = NSet mempty                       <$> fairList genBinding
+      genRecSet      = NSet Recursive                    <$> fairList genBinding
+      genUnary       = liftA2 NUnary   Gen.enumBounded       genExpr
+      genBinary      = liftA3 NBinary  Gen.enumBounded       genExpr     genExpr
+      genSelect      = liftA3 NSelect  (Gen.maybe genExpr)   genExpr     genAttrPath
+      genHasAttr     = liftA2 NHasAttr genExpr               genAttrPath
+      genAbs         = liftA2 NAbs     genParams             genExpr
+      genLet         = liftA2 NLet     (fairList genBinding) genExpr
+      genIf          = liftA3 NIf      genExpr               genExpr     genExpr
+      genWith        = liftA2 NWith    genExpr               genExpr
+      genAssert      = liftA2 NAssert  genExpr               genExpr
 
 -- | Useful when there are recursive positions at each element of the list as
 --   it divides the size by the length of the generated list.
 fairList :: Gen a -> Gen [a]
 fairList g = Gen.sized $ \s -> do
-  k <- Gen.int (Range.linear 0 (unSize s))
+  k <- Gen.int $ Range.linear 0 $ unSize s
   -- Use max here to avoid dividing by zero when there is the empty list
   Gen.resize (Size (unSize s `div` max 1 k)) $ Gen.list (Range.singleton k) g
 
@@ -197,8 +221,7 @@ normalize = foldFix $ \case
 
 -- | Test that parse . pretty == id up to attribute position information.
 prop_prettyparse :: Monad m => NExpr -> PropertyT m ()
-prop_prettyparse p = do
-  let prog = show $ prettyNix p
+prop_prettyparse p =
   either
     (\ s -> do
       footnote $ show $ vsep
@@ -239,6 +262,8 @@ prop_prettyparse p = do
     )
     (parse $ fromString prog)
  where
+  prog = show $ prettyNix p
+
   parse     = parseNixText
 
   normalise s = String.unlines $ reverse . dropWhile isSpace . reverse <$> String.lines s
@@ -247,6 +272,6 @@ prop_prettyparse p = do
   ldiff s1 s2 = getDiff ((: mempty) <$> String.lines s1) ((: mempty) <$> String.lines s2)
 
 tests :: TestLimit -> TestTree
-tests n = testProperty "Pretty/Parse Property" $ withTests n $ property $ do
-  x <- forAll genExpr
-  prop_prettyparse x
+tests n =
+  testProperty "Pretty/Parse Property" $
+    withTests n $ property $ prop_prettyparse =<< forAll genExpr
