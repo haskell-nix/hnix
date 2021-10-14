@@ -21,6 +21,7 @@ module Nix.Utils
   , takeBaseName
   , takeExtension
   , takeExtensions
+  , addExtension
   , dropExtensions
   , replaceExtension
 
@@ -142,6 +143,9 @@ takeExtension = coerce FilePath.takeExtensions
 -- | @takeExtensions@ specialized to @Path@
 takeExtensions :: Path -> String
 takeExtensions = coerce FilePath.takeExtensions
+
+addExtension :: Path -> String -> Path
+addExtension = coerce FilePath.addExtension
 
 -- | @dropExtensions@ specialized to @Path@
 dropExtensions :: Path -> Path
