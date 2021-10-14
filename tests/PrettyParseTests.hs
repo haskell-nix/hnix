@@ -221,8 +221,7 @@ normalize = foldFix $ \case
 
 -- | Test that parse . pretty == id up to attribute position information.
 prop_prettyparse :: Monad m => NExpr -> PropertyT m ()
-prop_prettyparse p = do
-  let prog = show $ prettyNix p
+prop_prettyparse p =
   either
     (\ s -> do
       footnote $ show $ vsep
@@ -263,6 +262,8 @@ prop_prettyparse p = do
     )
     (parse $ fromString prog)
  where
+  prog = show $ prettyNix p
+
   parse     = parseNixText
 
   normalise s = String.unlines $ reverse . dropWhile isSpace . reverse <$> String.lines s
@@ -271,6 +272,6 @@ prop_prettyparse p = do
   ldiff s1 s2 = getDiff ((: mempty) <$> String.lines s1) ((: mempty) <$> String.lines s2)
 
 tests :: TestLimit -> TestTree
-tests n = testProperty "Pretty/Parse Property" $ withTests n $ property $ do
-  x <- forAll genExpr
-  prop_prettyparse x
+tests n =
+  testProperty "Pretty/Parse Property" $
+    withTests n $ property $ prop_prettyparse =<< forAll genExpr

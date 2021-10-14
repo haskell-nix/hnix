@@ -20,7 +20,7 @@ import           Nix.Pretty
 import           Nix.String
 import           Nix.XML
 import qualified Options.Applicative           as Opts
-import           System.Environment
+import           System.Environment             ( setEnv )
 import           System.FilePath.Glob           ( compile
                                                 , globDir1
                                                 )
