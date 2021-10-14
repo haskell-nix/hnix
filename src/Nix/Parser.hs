@@ -862,8 +862,6 @@ nixExprAlgebra =
       nixOperators nixSelector
     )
 
--- | Nix term parser.
--- | Term is a language unit on the level where precedence and associativity matters.
 nixExpr :: Parser NExprLoc
 nixExpr = keywords <|> nixLambda <|> nixExprAlgebra
  where
