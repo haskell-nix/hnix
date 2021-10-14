@@ -184,8 +184,7 @@ assertEval _opts files =
       (fmap toString $ fixup $ Text.splitOn " " flags')
 
   name :: Path
-  name =
-    "data/nix/tests/lang/" <> the (takeFileName . dropExtensions <$> files)
+  name = coerce nixTestDir <> the (takeFileName . dropExtensions <$> files)
 
   fixup :: [Text] -> [Text]
   fixup ("--arg"    : x : y : rest) = "--arg"    : (x <> "=" <> y) : fixup rest
@@ -200,3 +199,6 @@ assertEvalFail file =
     time       <- liftIO getCurrentTime
     evalResult <- printNix <$> hnixEvalFile (defaultOptions time) file
     evalResult `seq` assertFailure $ "File: ''" <> coerce file <> "'' should not evaluate.\nThe evaluation result was `" <> evalResult <> "`."
+
+nixTestDir :: FilePath
+nixTestDir = "data/nix/tests/lang/"
