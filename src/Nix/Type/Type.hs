@@ -4,7 +4,6 @@
 module Nix.Type.Type where
 
 import           Prelude                 hiding ( Type, TVar )
-import           Data.Foldable                  ( foldr1 )
 import           Nix.Expr.Types
 
 -- | Hindrey-Milner type interface
@@ -39,9 +38,8 @@ typeSet = TSet mempty mempty
 typeList :: Type
 typeList = TList mempty
 
-typeFun :: [Type] -> Type
--- Please, replace with safe analog to `foldr1`
-typeFun = foldr1 (:~>)
+typeFun :: NonEmpty Type -> Type
+typeFun (head_ :| tail_) = foldr (:~>) head_ tail_
 
 -- | Concrete types in the Nix type system.
 typeInt, typeFloat, typeBool, typeString, typePath, typeNull :: Type
