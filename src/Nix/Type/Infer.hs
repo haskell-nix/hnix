@@ -706,8 +706,9 @@ unops :: Type -> NUnaryOp -> [Constraint]
 unops u1 op =
   [ EqConst u1
    (case op of
-      NNot -> typeFun [typeBool                   , typeBool                       ]
-      NNeg -> TMany   [typeFun  [typeInt, typeInt], typeFun  [typeFloat, typeFloat]]
+      NNot -> typeFun $ typeBool :| [typeBool]
+      NNeg -> TMany   [ typeFun $ typeInt :| [typeInt]
+                      , typeFun $ typeFloat :| [typeFloat] ]
     )
   ]
 
@@ -727,46 +728,46 @@ binops u1 op =
 
  where
 
-  gate          = eqCnst [typeBool, typeBool, typeBool]
-  concatenation = eqCnst [typeList, typeList, typeList]
+  gate          = eqCnst $ typeBool :| [typeBool, typeBool]
+  concatenation = eqCnst $ typeList :| [typeList, typeList]
 
-  eqCnst l = [EqConst u1 $ typeFun l]
+  eqCnst ne = [EqConst u1 $ typeFun ne]
 
   inequality =
     eqCnstMtx
-      [ [typeInt  , typeInt  , typeBool]
-      , [typeFloat, typeFloat, typeBool]
-      , [typeInt  , typeFloat, typeBool]
-      , [typeFloat, typeInt  , typeBool]
+      [ typeInt   :| [typeInt  , typeBool]
+      , typeFloat :| [typeFloat, typeBool]
+      , typeInt   :| [typeFloat, typeBool]
+      , typeFloat :| [typeInt  , typeBool]
       ]
 
   arithmetic =
     eqCnstMtx
-      [ [typeInt  , typeInt  , typeInt  ]
-      , [typeFloat, typeFloat, typeFloat]
-      , [typeInt  , typeFloat, typeFloat]
-      , [typeFloat, typeInt  , typeFloat]
+      [ typeInt   :| [typeInt  , typeInt  ]
+      , typeFloat :| [typeFloat, typeFloat]
+      , typeInt   :| [typeFloat, typeFloat]
+      , typeFloat :| [typeInt  , typeFloat]
       ]
 
   rUnion =
     eqCnstMtx
-      [ [typeSet , typeSet , typeSet]
-      , [typeSet , typeNull, typeSet]
-      , [typeNull, typeSet , typeSet]
+      [ typeSet  :| [typeSet , typeSet]
+      , typeSet  :| [typeNull, typeSet]
+      , typeNull :| [typeSet , typeSet]
       ]
 
   addition =
     eqCnstMtx
-      [ [typeInt   , typeInt   , typeInt   ]
-      , [typeFloat , typeFloat , typeFloat ]
-      , [typeInt   , typeFloat , typeFloat ]
-      , [typeFloat , typeInt   , typeFloat ]
-      , [typeString, typeString, typeString]
-      , [typePath  , typePath  , typePath  ]
-      , [typeString, typeString, typePath  ]
+      [ typeInt    :| [typeInt   , typeInt   ]
+      , typeFloat  :| [typeFloat , typeFloat ]
+      , typeInt    :| [typeFloat , typeFloat ]
+      , typeFloat  :| [typeInt   , typeFloat ]
+      , typeString :| [typeString, typeString]
+      , typePath   :| [typePath  , typePath  ]
+      , typeString :| [typeString, typePath  ]
       ]
 
-  eqCnstMtx mtx = [EqConst u1 $ TMany $ typeFun <$> mtx]
+  eqCnstMtx mtx = [EqConst u1 $ TMany $ map typeFun mtx]
 
 liftInfer :: Monad m => m a -> InferT s m a
 liftInfer = InferT . lift . lift . lift
