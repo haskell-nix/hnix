@@ -38,7 +38,7 @@ case_constant_int =
     , "234"
     )
 
-case_constant_bool = do
+case_constant_bool =
   checks
     ( mkBool True
     , "true"
@@ -47,7 +47,7 @@ case_constant_bool = do
     , "false"
     )
 
-case_constant_bool_respects_attributes = do
+case_constant_bool_respects_attributes =
   invariantVals
     "true-foo"
     "false-bar"

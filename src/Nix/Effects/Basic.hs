@@ -115,7 +115,7 @@ findPathBy
   -> [NValue t f m]
   -> Path
   -> m Path
-findPathBy finder ls name = do
+findPathBy finder ls name =
   maybe
     (throwError $ ErrorCall $ "file ''" <> coerce name <> "'' was not found in the Nix search path (add it's using $NIX_PATH or -I)")
     pure
@@ -253,15 +253,14 @@ defaultImportPath path = do
         imports <- gets fst
         evalExprLoc =<<
           maybe
-            (do
-              either
-                (\ err -> throwError $ ErrorCall . show $ fillSep ["Parse during import failed:", err])
-                (\ expr ->
-                  do
-                    modify $ first $ M.insert path expr
-                    pure expr
-                )
-                =<< parseNixFileLoc path
+            (either
+              (\ err -> throwError $ ErrorCall . show $ fillSep ["Parse during import failed:", err])
+              (\ expr ->
+                do
+                  modify $ first $ M.insert path expr
+                  pure expr
+              )
+              =<< parseNixFileLoc path
             )
             pure  -- return expr
             (M.lookup path imports)

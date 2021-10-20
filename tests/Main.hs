@@ -64,7 +64,7 @@ ensureNixpkgsCanParse =
         when (null files) $
           errorWithoutStackTrace $
             "Directory " <> show dir <> " does not have any files"
-        for_ files $ \file -> do
+        for_ files $ \file ->
           unless ("azure-cli/default.nix" `isSuffixOf` file ||
                   "os-specific/linux/udisks/2-default.nix"  `isSuffixOf` file) $ do
             -- Parse and deepseq the resulting expression tree, to ensure the

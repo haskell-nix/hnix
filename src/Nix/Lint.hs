@@ -272,7 +272,7 @@ unify context (SV x) (SV y) = do
           writeRef y   (NMany m)
           packSymbolic (NMany m)
         )
-        (do
+        (
               -- x' <- renderSymbolic (Symbolic x)
               -- y' <- renderSymbolic (Symbolic y)
           throwError $ ErrorCall "Cannot unify "
