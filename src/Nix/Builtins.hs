@@ -280,7 +280,7 @@ splitVersion s =
 
 compareVersions :: Text -> Text -> Ordering
 compareVersions s1 s2 =
-  mconcat $ (alignWith cmp `on` splitVersion) s1 s2
+  fold $ (alignWith cmp `on` splitVersion) s1 s2
  where
   z = VersionComponentString ""
   cmp = uncurry compare . fromThese z z

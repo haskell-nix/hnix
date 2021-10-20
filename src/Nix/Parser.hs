@@ -613,9 +613,9 @@ detectPrecedence spec = (mapOfOpWithPrecedence Map.!)
  where
   mapOfOpWithPrecedence =
     Map.fromList $
-      concat $
+      fold $
         zipWith
-          (concatMap . spec)
+          (foldMap . spec)
           [1 ..]
           l
     where

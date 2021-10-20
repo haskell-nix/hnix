@@ -212,7 +212,7 @@ versionOpt = shortVersionOpt <*> debugVersionOpt
   debugVersionOpt :: Parser (a -> a)
   debugVersionOpt =
     infoOption
-      ( concat
+      ( fold
           [ "Version: ", showVersion version
           , "\nCommit: ", $(gitHash)
           , "\n  date: ", $(gitCommitDate)

@@ -80,9 +80,9 @@ normalizeScheme (Forall _ body) = Forall (snd <$> ord) (normtype body)
   fv (TVar a  ) = [a]
   fv (a :~> b ) = fv a <> fv b
   fv (TCon _  ) = mempty
-  fv (TSet _ a) = concatMap fv $ M.elems a
-  fv (TList a ) = concatMap fv a
-  fv (TMany ts) = concatMap fv ts
+  fv (TSet _ a) = foldMap fv $ M.elems a
+  fv (TList a ) = foldMap fv a
+  fv (TMany ts) = foldMap fv ts
 
   normtype (a :~> b ) = normtype a :~> normtype b
   normtype (TCon a  ) = TCon a

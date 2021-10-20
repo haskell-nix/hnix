@@ -318,7 +318,7 @@ evalBinds recursive binds =
   do
     scope <- currentScopes :: m (Scopes m v)
 
-    buildResult scope . concat =<< traverse (applyBindToAdt scope) (moveOverridesLast binds)
+    buildResult scope . fold =<< (`traverse` moveOverridesLast binds) (applyBindToAdt scope)
 
  where
   buildResult
@@ -480,8 +480,11 @@ assembleString
   -> m (Maybe NixString)
 assembleString = fromParts . stringParts
  where
-  fromParts xs = mconcat <<$>> traverseM go xs
-  go =
+  fromParts :: [Antiquoted Text (m v)] -> m (Maybe NixString)
+  fromParts xs = fold <<$>> traverseM fun xs
+
+  fun :: Antiquoted Text (m v) -> m (Maybe NixString)
+  fun =
     runAntiquoted
       "\n"
       (pure . pure . mkNixStringWithoutContext)

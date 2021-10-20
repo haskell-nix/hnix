@@ -45,16 +45,16 @@ renderFrames (x : xs) = do
     | verbose opts <= ErrorsOnly -> renderFrame @v @t @f x
     | verbose opts <= Informational -> do
       f <- renderFrame @v @t @f x
-      pure $ concatMap go (reverse xs) <> f
-    | otherwise -> concat <$> traverse (renderFrame @v @t @f) (reverse (x : xs))
+      pure $ foldMap fun (reverse xs) <> f
+    | otherwise -> fold <$> traverse (renderFrame @v @t @f) (reverse (x : xs))
   pure $
     list
       mempty
       vsep
       frames
  where
-  go :: NixFrame -> [Doc ann]
-  go f =
+  fun :: NixFrame -> [Doc ann]
+  fun f =
     (\ pos -> ["While evaluating at " <> pretty (sourcePosPretty pos) <> colon]) `whenJust` framePos @v @m f
 
 framePos
@@ -169,7 +169,7 @@ renderValueFrame level = fmap (: mempty) . \case
   Multiplication _ _ -> pure "Multiplying"
 
   Coercion       x y -> pure
-    $ mconcat [desc, pretty (describeValue x), " to ", pretty (describeValue y)]
+    $ fold [desc, pretty (describeValue x), " to ", pretty (describeValue y)]
    where
     desc =
       bool

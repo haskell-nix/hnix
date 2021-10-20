@@ -2702,3 +2702,18 @@
     note: "Is `mempty`"
     rhs: mempty
 
+- hint:
+    lhs: "concat a"
+    note: "Use `fold`"
+    rhs: fold a
+
+- hint:
+    lhs: "mconcat a"
+    note: "Use `fold`"
+    rhs: fold a
+
+- hint:
+    lhs: "concatMap a"
+    note: "Use `foldMap`"
+    rhs: foldMap a
+

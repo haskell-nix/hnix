@@ -131,6 +131,6 @@ sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unP
         -- ATM some messages are so huge that they take prevalence over the source listing.
         -- ++ [ indent (length $ pad n) msg | n == endLine ]
 
-      ls' = concat $ zipWith composeLine [beg' ..] ls
+      ls' = fold $ zipWith composeLine [beg' ..] ls
 
     pure $ vsep $ ls' <> one (indent (Text.length $ pad begLine) msg)

@@ -19,7 +19,7 @@ toEncodingSorted :: A.Value -> A.Encoding
 toEncodingSorted = \case
   A.Object m ->
     A.pairs
-      . mconcat
+      . fold
       . ((\(k, v) -> A.pair k $ toEncodingSorted v) <$>)
       . sortWith fst
       $ HM.toList m

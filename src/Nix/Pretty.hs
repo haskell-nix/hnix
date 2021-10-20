@@ -99,11 +99,11 @@ wrapPath op sub =
     (wasPath sub)
 
 prettyString :: NString (NixDoc ann) -> Doc ann
-prettyString (DoubleQuoted parts) = "\"" <> (mconcat . fmap prettyPart $ parts) <> "\""
+prettyString (DoubleQuoted parts) = "\"" <> foldMap prettyPart parts <> "\""
  where
   -- It serializes Text -> String, because the helper code is done for String,
   -- please, can someone break that code.
-  prettyPart (Plain t)      = pretty . concatMap escape . toString $ t
+  prettyPart (Plain t)      = pretty . foldMap escape . toString $ t
   prettyPart EscapedNewline = "''\\n"
   prettyPart (Antiquoted r) = "${" <> withoutParens r <> "}"
   escape '"' = "\\\""
@@ -337,7 +337,7 @@ prettyNValueProv v =
       fillSep
         [ prettyNVal
         , indent 2 $
-          "(" <> mconcat ("from: " : (prettyOriginExpr . _originExpr <$> ps)) <> ")"
+          "(" <> fold ("from: " : (prettyOriginExpr . _originExpr <$> ps)) <> ")"
         ]
     )
     (citations @m @(NValue t f m) v)
@@ -361,7 +361,7 @@ prettyNThunk t =
       fillSep
         [ v'
         , indent 2 $
-          "(" <> mconcat ( "thunk from: " : (prettyOriginExpr . _originExpr <$> ps)) <> ")"
+          "(" <> fold ( "thunk from: " : (prettyOriginExpr . _originExpr <$> ps)) <> ")"
         ]
 
 -- | This function is used only by the testing code.
@@ -376,7 +376,7 @@ printNix = iterNValueByDiscardWith thk phi
   phi (NVList'     l ) = toString $ "[ " <> unwords (fmap fromString l) <> " ]"
   phi (NVSet' _ s) =
     "{ " <>
-      concat
+      fold
         [ check (toString k) <> " = " <> v <> "; "
         | (k, v) <- sort $ toList s
         ] <> "}"

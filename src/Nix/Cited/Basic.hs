@@ -94,7 +94,7 @@ instance
                 let e' = AnnF s (Nothing <$ e) in
                 [Provenance scope e']
               go _ = mempty
-              ps = concatMap (go . frame) frames
+              ps = foldMap (go . frame) frames
 
             cite ps t
         )
