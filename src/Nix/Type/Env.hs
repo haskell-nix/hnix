@@ -41,7 +41,7 @@ instance Monoid Env where
 
 instance One Env where
   type OneItem Env = (VarName, Scheme)
-  one = uncurry singleton
+  one (x, y) = TypeEnv $ one (x, one y)
 
 empty :: Env
 empty = TypeEnv mempty
@@ -68,7 +68,7 @@ mergeEnvs :: [Env] -> Env
 mergeEnvs = foldl' (<>) mempty
 
 singleton :: VarName -> Scheme -> Env
-singleton x y = TypeEnv $ one (x, [y])
+singleton = curry one
 
 keys :: Env -> [VarName]
 keys (TypeEnv env) = Map.keys env
