@@ -767,7 +767,7 @@ binops u1 op =
       , typeString :| [typeString, typePath  ]
       ]
 
-  eqCnstMtx mtx = [EqConst u1 $ TMany $ map typeFun mtx]
+  eqCnstMtx mtx = [EqConst u1 $ TMany $ fmap typeFun mtx]
 
 liftInfer :: Monad m => m a -> InferT s m a
 liftInfer = InferT . lift . lift . lift
