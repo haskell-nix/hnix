@@ -3,7 +3,7 @@
 --   Therefore -> from this the type inference follows.
 module Nix.Type.Type where
 
-import           Prelude                 hiding ( Type, TVar )
+import           Prelude                 hiding (Type, TVar)
 import           Nix.Expr.Types
 
 -- | Hindrey-Milner type interface
@@ -31,6 +31,15 @@ infixr 1 :~>
 data Scheme = Forall [TVar] Type -- ^ @Forall [TVar] Type@: the Nix type system @forall vars. type@.
   deriving (Show, Eq, Ord)
 
+-- | Concrete types in the Nix type system.
+typeNull, typeBool, typeInt, typeFloat, typeString, typePath :: Type
+typeNull   = TCon "null"
+typeBool   = TCon "boolean"
+typeInt    = TCon "integer"
+typeFloat  = TCon "float"
+typeString = TCon "string"
+typePath   = TCon "path"
+
 -- This models a set that unifies with any other set.
 typeSet :: Type
 typeSet = TSet mempty mempty
@@ -40,12 +49,3 @@ typeList = TList mempty
 
 typeFun :: NonEmpty Type -> Type
 typeFun (head_ :| tail_) = foldr (:~>) head_ tail_
-
--- | Concrete types in the Nix type system.
-typeInt, typeFloat, typeBool, typeString, typePath, typeNull :: Type
-typeInt    = TCon "integer"
-typeFloat  = TCon "float"
-typeBool   = TCon "boolean"
-typeString = TCon "string"
-typePath   = TCon "path"
-typeNull   = TCon "null"
