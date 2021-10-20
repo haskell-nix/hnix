@@ -303,7 +303,7 @@ splitDrvName s =
   breakAfterFirstItem :: (a -> Bool) -> [a] -> ([a], [a])
   breakAfterFirstItem f =
     list
-      (mempty, mempty)
+      mempty
       (\ (h : t) -> let (a, b) = break f t in (h : a, b))
   (namePieces, versionPieces) =
     breakAfterFirstItem isFirstVersionPiece pieces

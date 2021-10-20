@@ -46,7 +46,7 @@ splitLines = uncurry (flip (:)) . go where
     f prefix (finished, current) = ((Plain prefix : current) : finished, mempty)
   go (Antiquoted a   : xs) = (Antiquoted a :) <$> go xs
   go (EscapedNewline : xs) = (EscapedNewline :) <$> go xs
-  go []                    = (mempty, mempty)
+  go []                    = mempty
 
 -- | Join a stream of strings containing antiquotes again. This is the inverse
 -- of 'splitLines'.

@@ -2696,3 +2696,9 @@
     lhs: "maybe mempty a b"
     note: "Use `whenJust`"
     rhs: a `whenJust` b
+
+- hint:
+    lhs: "(mempty, mempty)"
+    note: "Is `mempty`"
+    rhs: mempty
+

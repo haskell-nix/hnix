@@ -327,7 +327,7 @@ evalBinds recursive binds =
     -> m (AttrSet v, PositionSet)
   buildResult scopes bindings =
     do
-      (coerce -> scope, p) <- foldM insert (mempty, mempty) bindings
+      (coerce -> scope, p) <- foldM insert mempty bindings
       res <-
         bool
           (traverse mkThunk scope)
@@ -369,7 +369,7 @@ evalBinds recursive binds =
     processAttrSetKeys (h :| t) =
       maybe
         -- Empty attrset - return a stub.
-        (pure ( mempty, nullPos, toValue @(AttrSet v, PositionSet) (mempty, mempty)) )
+        (pure (mempty, nullPos, toValue @(AttrSet v, PositionSet) mempty) )
         (\ k ->
           list
             -- No more keys in the attrset - return the result

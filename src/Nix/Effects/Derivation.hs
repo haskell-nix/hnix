@@ -305,7 +305,7 @@ defaultDerivationStrict val = do
       pure $ pathToText $ Store.makeStorePath "/nix/store" ("output:" <> encodeUtf8 o) h name
 
     toStorePaths :: HashSet StringContext -> (Set Text, Map Text [Text])
-    toStorePaths ctx = foldl (flip addToInputs) (mempty, mempty) ctx
+    toStorePaths ctx = foldl (flip addToInputs) mempty ctx
 
     addToInputs :: Bifunctor p => StringContext -> p (Set Text) (Map Text [Text])  -> p (Set Text) (Map Text [Text])
     addToInputs (StringContext path kind) = case kind of
@@ -378,7 +378,7 @@ buildDerivationWithContext drvAttrs = do
         , name = drvName
         , outputs = Map.fromList $ (, mempty) <$> outputs
         , mFixed = mFixedOutput
-        , inputs = (mempty, mempty) -- stub for now
+        , inputs = mempty -- stub for now
         }
   where
 

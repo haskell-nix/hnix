@@ -348,8 +348,7 @@ instance
   fromValueMay _ = stub
   fromValue =
     pure .
-      fromMaybe
-      (mempty, mempty)
+      maybeToMonoid
       <=< fromValueMay
 
 instance MonadInfer m
@@ -581,7 +580,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
 
     let
       f (as1, t1) (k, t) = (as1 <> one (k, t), M.insert k t t1)
-      (env, tys) = foldl' f (mempty, mempty) js
+      (env, tys) = foldl' f mempty js
       arg   = pure $ Judgment env mempty $ TSet Variadic tys
       call  = k arg $ \args b -> (args, ) <$> b
       names = fst <$> js
@@ -654,7 +653,7 @@ runInfer' :: MonadInfer m => InferT s m a -> m (Either InferError a)
 runInfer' =
   runExceptT
     . (`evalStateT` initInfer)
-    . (`runReaderT` (mempty, mempty))
+    . (`runReaderT` mempty)
     . getInfer
 
 runInfer :: (forall s . InferT s (FreshIdT Int (ST s)) a) -> Either InferError a
