@@ -800,13 +800,15 @@ newtype Solver m a = Solver (LogicT (StateT [TypeError] m) a)
     deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
               MonadLogic, MonadState [TypeError])
 
-runSolver :: Monad m => Solver m a -> m (Either [TypeError] [a])
-runSolver (Solver s) = do
-  res <- runStateT (observeAllT s) mempty
-  pure $
-    case res of
-      (x : xs, _ ) -> pure (x : xs)
-      (_     , es) -> Left (ordNub es)
+runSolver :: forall m a . Monad m => Solver m a -> m (Either [TypeError] [a])
+runSolver (Solver s) =
+  uncurry report <$> runStateT (observeAllT s) mempty
+ where
+  report :: [a] -> [TypeError] -> Either [TypeError] [a]
+  report xs e =
+    if null xs
+      then Left (ordNub e)
+      else pure xs
 
 -- ** Instances
 
