@@ -875,18 +875,23 @@ nextSolvable = fromJust . find solvable . pickFirstOne
   solvable (ImpInstConst _t1 ms t2, cs) =
     Set.null $ (ms `Set.difference` ftv t2) `Set.intersection` atv cs
 
-solve :: MonadState InferState m => [Constraint] -> Solver m Subst
+solve :: forall m . MonadState InferState m => [Constraint] -> Solver m Subst
 solve [] = stub
 solve cs = solve' $ nextSolvable cs
  where
-  solve' (EqConst t1 t2, cs) =
-    unifies t1 t2 >>-
-      \su1 -> solve (apply su1 cs) >>-
-          \su2 -> pure $ su2 `compose` su1
-
   solve' (ImpInstConst t1 ms t2, cs) =
     solve (ExpInstConst t1 (generalize ms t2) : cs)
+  solve' (ExpInstConst t s, cs) =
+    do
+      s' <- lift $ instantiate s
+      solve (EqConst t s' : cs)
+  solve' (EqConst t1 t2, cs) =
+    (\ su1 ->
+      (pure . compose su1) -<< solve ((`apply` cs) su1)
+    ) -<<
+    unifies t1 t2
 
-  solve' (ExpInstConst t s, cs) = do
-    s' <- lift $ instantiate s
-    solve (EqConst t s' : cs)
+infixr 1 -<<
+-- | @LogicT@ fair conjunction, since library has only @>>-@
+(-<<) :: Monad m => (a -> Solver m b) -> Solver m a -> Solver m b
+(-<<) = flip (>>-)
