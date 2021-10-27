@@ -459,9 +459,10 @@ instance MonadInfer m
 -}
 
 instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
-  freeVariable var = do
-    tv <- fresh
-    pure $ Judgment (one (var, tv)) mempty tv
+  freeVariable var =
+    fmap
+      (join ((`Judgment` mempty) . curry one var))
+      fresh
 
   synHole var = do
     tv <- fresh
