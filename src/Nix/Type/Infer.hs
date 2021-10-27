@@ -520,13 +520,14 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
   evalLiteralPath = const $ pure $ inferred typePath
   evalEnvPath     = const $ pure $ inferred typePath
 
-  evalUnary op (Judgment as1 cs1 t1) = do
-    tv <- fresh
-    pure $
-      Judgment
-        as1
-        (cs1 <> unops (t1 :~> tv) op)
-        tv
+  evalUnary op (Judgment as1 cs1 t1) =
+    fmap
+      (join
+        $ Judgment
+            as1
+            . (cs1 <>) . (`unops` op) . (t1 :~>)
+      )
+      fresh
 
   evalBinary op (Judgment as1 cs1 t1) e2 = do
     Judgment as2 cs2 t2 <- e2
