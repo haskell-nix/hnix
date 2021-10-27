@@ -357,6 +357,11 @@ instance
       maybeToMonoid
       <=< fromValueMay
 
+foldInitializedWith :: (Traversable t, Applicative f) => (t c -> c) -> (b -> c) -> (a -> f b) -> t a -> f c
+foldInitializedWith fld getter init =
+  -- maybe here is some law?
+  fmap fld . traverse (fmap getter . init)
+
 instance MonadInfer m
   => ToValue (AttrSet (Judgment s), PositionSet)
             (InferT s m) (Judgment s) where
