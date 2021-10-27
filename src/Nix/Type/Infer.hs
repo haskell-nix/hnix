@@ -731,46 +731,54 @@ binops u1 op =
 
  where
 
-  gate          = eqCnst $ typeBool :| [typeBool, typeBool]
-  concatenation = eqCnst $ typeList :| [typeList, typeList]
+  mk3 :: a -> a -> a -> NonEmpty a
+  mk3 a b c = a :| [b, c]
 
-  eqCnst ne = [EqConst u1 $ typeFun ne]
+  mk3same :: a -> NonEmpty a
+  mk3same a = a :| [a, a]
+
+  eqConst :: NonEmpty Type -> [Constraint]
+  eqConst = one . EqConst u1 . typeFun
+
+  gate          = eqConst $ mk3same typeBool
+  concatenation = eqConst $ mk3same typeList
+
+  eqConstrMtx :: [NonEmpty Type] -> [Constraint]
+  eqConstrMtx = one . EqConst u1 . TMany . fmap typeFun
 
   inequality =
-    eqCnstMtx
-      [ typeInt   :| [typeInt  , typeBool]
-      , typeFloat :| [typeFloat, typeBool]
-      , typeInt   :| [typeFloat, typeBool]
-      , typeFloat :| [typeInt  , typeBool]
+    eqConstrMtx
+      [ mk3 typeInt   typeInt   typeBool
+      , mk3 typeFloat typeFloat typeBool
+      , mk3 typeInt   typeFloat typeBool
+      , mk3 typeFloat typeInt   typeBool
       ]
 
   arithmetic =
-    eqCnstMtx
-      [ typeInt   :| [typeInt  , typeInt  ]
-      , typeFloat :| [typeFloat, typeFloat]
-      , typeInt   :| [typeFloat, typeFloat]
-      , typeFloat :| [typeInt  , typeFloat]
+    eqConstrMtx
+      [ mk3same typeInt
+      , mk3same typeFloat
+      , mk3 typeInt   typeFloat typeFloat
+      , mk3 typeFloat typeInt   typeFloat
       ]
 
   rUnion =
-    eqCnstMtx
-      [ typeSet  :| [typeSet , typeSet]
-      , typeSet  :| [typeNull, typeSet]
-      , typeNull :| [typeSet , typeSet]
+    eqConstrMtx
+      [ mk3same typeSet
+      , mk3 typeSet  typeNull typeSet
+      , mk3 typeNull typeSet  typeSet
       ]
 
   addition =
-    eqCnstMtx
-      [ typeInt    :| [typeInt   , typeInt   ]
-      , typeFloat  :| [typeFloat , typeFloat ]
-      , typeInt    :| [typeFloat , typeFloat ]
-      , typeFloat  :| [typeInt   , typeFloat ]
-      , typeString :| [typeString, typeString]
-      , typePath   :| [typePath  , typePath  ]
-      , typeString :| [typeString, typePath  ]
+    eqConstrMtx
+      [ mk3same typeInt
+      , mk3same typeFloat
+      , mk3 typeInt    typeFloat  typeFloat
+      , mk3 typeFloat  typeInt    typeFloat
+      , mk3same typeString
+      , mk3same typePath
+      , mk3 typeString typeString typePath
       ]
-
-  eqCnstMtx mtx = [EqConst u1 $ TMany $ fmap typeFun mtx]
 
 liftInfer :: Monad m => m a -> InferT s m a
 liftInfer = InferT . lift . lift . lift
