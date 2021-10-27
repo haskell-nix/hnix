@@ -464,9 +464,10 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
       (join ((`Judgment` mempty) . curry one var))
       fresh
 
-  synHole var = do
-    tv <- fresh
-    pure $ Judgment (one (var, tv)) mempty tv
+  synHole var =
+    fmap
+      (join ((`Judgment` mempty) . curry one var))
+      fresh
 
   -- If we fail to look up an attribute, we just don't know the type.
   attrMissing _ _ = inferred <$> fresh
