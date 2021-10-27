@@ -703,13 +703,17 @@ inferExpr env ex =
 
 unops :: Type -> NUnaryOp -> [Constraint]
 unops u1 op =
-  [ EqConst u1
-   (case op of
-      NNot -> typeFun $ typeBool :| [typeBool]
-      NNeg -> TMany   [ typeFun $ typeInt :| [typeInt]
-                      , typeFun $ typeFloat :| [typeFloat] ]
-    )
-  ]
+  one $
+    EqConst u1 $
+      case op of
+        NNot -> mkUnaryConstr typeBool
+        NNeg -> TMany $ mkUnaryConstr <$> [typeInt, typeFloat]
+ where
+  mkUnaryConstr :: Type -> Type
+  mkUnaryConstr = typeFun . mk2same
+   where
+    mk2same :: a -> NonEmpty a
+    mk2same a = a :| one a
 
 binops :: Type -> NBinaryOp -> [Constraint]
 binops u1 op =
