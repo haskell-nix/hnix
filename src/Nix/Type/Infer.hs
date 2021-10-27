@@ -35,7 +35,6 @@ import           Control.Monad.ST               ( ST
                                                 , runST
                                                 )
 import           Data.Fix                       ( foldFix )
-import           Data.Foldable                  ( foldrM )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List                      ( delete
                                                 , intersect
@@ -378,38 +377,11 @@ toJudgment c xs =
 instance MonadInfer m
   => ToValue (AttrSet (Judgment s), PositionSet)
             (InferT s m) (Judgment s) where
-  toValue (xs, _) =
-    liftA3
-      Judgment
-      (foldrM go mempty xs)
-      (fun concat      typeConstraints)
-      (fun (TSet Variadic) inferredType)
-   where
-    go x rest =
-      do
-        x' <- demand x
-        pure $ assumptions x' <> rest
-
-    fun :: (AttrSet b -> b1) -> (Judgment s -> b) -> InferT s m b1
-    fun g f =
-      g <$> traverse ((f <$>) . demand) xs
+  toValue :: (AttrSet (Judgment s), PositionSet) -> InferT s m (Judgment s)
+  toValue (xs, _) = toJudgment (TSet Variadic) xs -- why variadic? Probably `Closed` (`mempty`)?
 
 instance MonadInfer m => ToValue [Judgment s] (InferT s m) (Judgment s) where
-  toValue xs =
-    liftA3
-      Judgment
-      (foldrM go mempty xs)
-      (fun concat typeConstraints)
-      (fun TList  inferredType   )
-   where
-    go x rest =
-      do
-        x' <- demand x
-        pure $ assumptions x' <> rest
-
-    fun :: ([b] -> b1) -> (Judgment s -> b) -> InferT s m b1
-    fun g f =
-      g <$> traverse ((f <$>) . demand) xs
+  toValue = toJudgment TList
 
 instance MonadInfer m => ToValue Bool (InferT s m) (Judgment s) where
   toValue _ = pure $ inferred typeBool
