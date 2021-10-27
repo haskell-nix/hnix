@@ -696,8 +696,7 @@ inferType env ex =
 -- | Solve for the toplevel type of an expression in a given environment
 inferExpr :: Env -> NExpr -> Either InferError [Scheme]
 inferExpr env ex =
-  (\ (subst, ty) -> closeOver $ subst `apply` ty) <<$>>
-    runInfer (inferType env ex)
+  closeOver . uncurry apply <<$>> runInfer (inferType env ex)
 
 unops :: Type -> NUnaryOp -> [Constraint]
 unops u1 op =
