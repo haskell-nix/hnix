@@ -201,9 +201,9 @@ newtype Subst = Subst (Map TVar Type)
 
 -- | Compose substitutions
 compose :: Subst -> Subst -> Subst
-Subst s1 `compose` Subst s2 =
-  Subst $
-    apply (Subst s1) <$>
+compose a@(Subst s2) (Subst s1) =
+  coerce $ --
+    apply a <$>
       (s2 <> s1)
 
 -- * class @Substitutable@
