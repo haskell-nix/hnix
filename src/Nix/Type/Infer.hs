@@ -265,6 +265,9 @@ data Judgment s =
     }
     deriving Show
 
+inferred :: Type -> Judgment s
+inferred = Judgment mempty mempty
+
 -- * @InferT@: inference monad
 
 -- | Inference monad
@@ -343,7 +346,7 @@ instance
  where
   fromValueMay (Judgment _ _ (TSet _ xs)) =
     do
-      let sing _ = Judgment mempty mempty
+      let sing = const inferred
       pure $ pure (M.mapWithKey sing xs, mempty)
   fromValueMay _ = stub
   fromValue =
@@ -388,7 +391,7 @@ instance MonadInfer m => ToValue [Judgment s] (InferT s m) (Judgment s) where
       g <$> traverse ((f <$>) . demand) xs
 
 instance MonadInfer m => ToValue Bool (InferT s m) (Judgment s) where
-  toValue _ = pure $ Judgment mempty mempty typeBool
+  toValue _ = pure $ inferred typeBool
 
 instance
   Monad m
@@ -467,35 +470,32 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     pure $ Judgment (one (var, tv)) mempty tv
 
   -- If we fail to look up an attribute, we just don't know the type.
-  attrMissing _ _ = Judgment mempty mempty <$> fresh
+  attrMissing _ _ = inferred <$> fresh
 
   evaledSym _ = pure
 
   evalCurPos =
     pure $
-      Judgment
-        mempty
-        mempty
-        (TSet mempty $
+      inferred $
+        TSet mempty $
           M.fromList
             [ ("file", typePath)
             , ("line", typeInt )
             , ("col" , typeInt )
             ]
-        )
 
-  evalConstant c = pure $ Judgment mempty mempty $ go c
+  evalConstant c = pure $ inferred $ fun c
    where
-    go = \case
+    fun = \case
       NURI   _ -> typeString
       NInt   _ -> typeInt
       NFloat _ -> typeFloat
       NBool  _ -> typeBool
       NNull    -> typeNull
 
-  evalString      = const $ pure $ Judgment mempty mempty typeString
-  evalLiteralPath = const $ pure $ Judgment mempty mempty typePath
-  evalEnvPath     = const $ pure $ Judgment mempty mempty typePath
+  evalString      = const $ pure $ inferred typeString
+  evalLiteralPath = const $ pure $ inferred typePath
+  evalEnvPath     = const $ pure $ inferred typePath
 
   evalUnary op (Judgment as1 cs1 t1) = do
     tv <- fresh
