@@ -268,14 +268,17 @@ inferred = Judgment mempty mempty
 
 -- * @InferT@: inference monad
 
+type InferTInternals s m a =
+  ReaderT
+    (Set.Set TVar, Scopes (InferT s m) (Judgment s))
+    (StateT InferState (ExceptT InferError m))
+    a
+
 -- | Inference monad
 newtype InferT s m a =
   InferT
     { getInfer ::
-        ReaderT
-          (Set.Set TVar, Scopes (InferT s m) (Judgment s))
-          (StateT InferState (ExceptT InferError m))
-          a
+        InferTInternals s m a
     }
     deriving
       ( Functor
@@ -290,8 +293,11 @@ newtype InferT s m a =
       , MonadError InferError
       )
 
-extendMSet :: Monad m => TVar -> InferT s m a -> InferT s m a
-extendMSet x = InferT . local (first $ Set.insert x) . getInfer
+extendMSet :: forall s m a . Monad m => TVar -> InferT s m a -> InferT s m a
+extendMSet x = coerce putSetElementM
+ where
+  putSetElementM :: InferTInternals s m a -> InferTInternals s m a
+  putSetElementM = local (first . Set.insert $ x)
 
 -- ** Instances
 
