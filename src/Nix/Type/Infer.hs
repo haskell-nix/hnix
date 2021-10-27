@@ -544,10 +544,11 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
   evalIf (Judgment as1 cs1 t1) t f = do
     Judgment as2 cs2 t2 <- t
     Judgment as3 cs3 t3 <- f
-    pure $ Judgment
-      (as1 <> as2 <> as3)
-      (cs1 <> cs2 <> cs3 <> [EqConst t1 typeBool, EqConst t2 t3])
-      t2
+    pure $
+      Judgment
+        (as1 <> as2 <> as3)
+        (cs1 <> cs2 <> cs3 <> [EqConst t1 typeBool, EqConst t2 t3])
+        t2
 
   evalAssert (Judgment as1 cs1 t1) body = do
     Judgment as2 cs2 t2 <- body
@@ -588,15 +589,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
         (tv :~> t)
 
   evalAbs (ParamSet _mname variadic pset) k = do
-    js <-
-      concat <$>
-        traverse
-          (\(name, _) ->
-            do
-              tv <- fresh
-              pure [(name, tv)]
-          )
-          pset
+    js <- foldInitializedWith fold one intoFresh pset
 
     let
       f (as1, t1) (k, t) = (as1 <> one (k, t), M.insert k t t1)
@@ -607,7 +600,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
 
     (args, Judgment as cs t) <- foldr (\(_, TVar a) -> extendMSet a) call js
 
-    ty <- TSet variadic <$> traverse (inferredType <$>) args
+    ty <- foldInitializedWith (TSet variadic) inferredType id args
 
     pure $
       Judgment
