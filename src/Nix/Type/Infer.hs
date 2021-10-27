@@ -532,7 +532,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     pure $
       Judgment
         (as1 <> as2)
-        (cs1 <> cs2 <> [EqConst t1 typeBool])
+        (cs1 <> cs2 <> one (EqConst t1 typeBool))
         t2
 
   evalApp (Judgment as1 cs1 t1) e2 = do
@@ -541,7 +541,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     pure $
       Judgment
         (as1 <> as2)
-        (cs1 <> cs2 <> [EqConst t1 (t2 :~> tv)])
+        (cs1 <> cs2 <> one (EqConst t1 (t2 :~> tv)))
         tv
 
   evalAbs (Param x) k = do
@@ -667,6 +667,7 @@ inferType env ex =
   do
     Judgment as cs t <- infer ex
     let
+      unbounds :: Set VarName
       unbounds =
         (Set.difference `on` Set.fromList)
           (Assumption.keys as )
@@ -683,15 +684,13 @@ inferType env ex =
             , s       <- ss
             , t       <- Assumption.lookup x as
         ]
-      eres = (`evalState` inferState) $ runSolver $
-        do
-          subst <- solve $ cs <> cs'
-          pure (subst, subst `apply` t)
+      evalResult =
+        (`evalState` inferState) . runSolver $ second (`apply` t) . join (,) <$> solve (cs <> cs')
 
     either
       (throwError . TypeInferenceErrors)
       pure
-      eres
+      evalResult
 
 -- | Solve for the toplevel type of an expression in a given environment
 inferExpr :: Env -> NExpr -> Either InferError [Scheme]
