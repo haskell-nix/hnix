@@ -842,10 +842,9 @@ unifies (TList xs) (TList ys)
 -- Putting a statement that lists of different lengths containing various types would not
 -- be unified.
 unifies t1@(TList _    ) t2@(TList _    ) = throwError $ UnificationFail t1 t2
-unifies (TSet Variadic _) (TSet Variadic _)                                             = stub
-unifies (TSet Closed   b) (TSet Variadic s) | M.keys b `intersect` M.keys s == M.keys s = stub
-unifies (TSet Variadic s) (TSet Closed   b) | M.keys b `intersect` M.keys s == M.keys b = stub
-unifies (TSet Closed   s) (TSet Closed   b) | null (M.keys b \\ M.keys s)               = stub
+unifies (TSet Variadic _) (TSet Variadic _)                                 = stub
+unifies (TSet Closed   s) (TSet Closed   b) | null (M.keys b \\ M.keys s)   = stub
+unifies (TSet _ a) (TSet _ b) | (M.keys a `intersect` M.keys b) == M.keys b = stub
 unifies (t1 :~> t2) (t3 :~> t4) = unifyMany [t1, t2] [t3, t4]
 unifies (TMany t1s) t2          = considering t1s >>- (`unifies` t2)
 unifies t1          (TMany t2s) = considering t2s >>- unifies t1
