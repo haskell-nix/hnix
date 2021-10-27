@@ -789,10 +789,8 @@ infer = foldFix Eval.eval
 inferTop :: Env -> [(VarName, NExpr)] -> Either InferError Env
 inferTop env []                = pure env
 inferTop env ((name, ex) : xs) =
-  either
-    Left
-    (\ ty -> inferTop (extend env (name, ty)) xs)
-    (inferExpr env ex)
+  (\ ty -> inferTop (extend env (name, ty)) xs)
+    =<< inferExpr env ex
 
 -- * Other
 
