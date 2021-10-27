@@ -77,8 +77,8 @@ normalizeScheme (Forall _ body) = Forall (snd <$> ord) (normtype body)
       (ordNub $ fv body)
       (TV . fromString <$> letters)
 
-  fv (TVar a  ) = [a]
-  fv (a :~> b ) = fv a <> fv b
+  fv (TVar a  ) = one a
+  fv (a :~> b ) = on (<>) fv a b
   fv (TCon _  ) = mempty
   fv (TSet _ a) = foldMap fv $ M.elems a
   fv (TList a ) = foldMap fv a
@@ -130,7 +130,7 @@ data InferError
   | forall s. Exception s => EvaluationError s
 
 typeError :: MonadError InferError m => TypeError -> m ()
-typeError err = throwError $ TypeInferenceErrors [err]
+typeError err = throwError $ TypeInferenceErrors $ one err
 
 -- ** Instances
 
@@ -138,11 +138,10 @@ deriving instance Show InferError
 instance Exception InferError
 
 instance Semigroup InferError where
-  x <> _ = x
+  (<>) = const
 
 instance Monoid InferError where
   mempty  = TypeInferenceAborted
-  mappend = (<>)
 
 -- * @InferState@: inference state
 
@@ -152,7 +151,7 @@ newtype InferState = InferState Int
   (Eq, Num, Enum, Ord)
 
 instance Semigroup InferState where
-  (<>) a b = a + b
+  (<>) = (+)
 
 instance Monoid InferState where
   mempty = 0
@@ -217,15 +216,14 @@ class Substitutable a where
 instance Substitutable TVar where
   apply (Subst s) a = tv
    where
-    t         = TVar a
-    (TVar tv) = Map.findWithDefault t a s
+    (TVar tv) = Map.findWithDefault (TVar a) a s
 
 instance Substitutable Type where
   apply _         (  TCon a   ) = TCon a
   apply s         (  TSet b a ) = TSet b $ apply s <$> a
   apply s         (  TList a  ) = TList  $ apply s <$> a
   apply (Subst s) t@(TVar  a  ) = Map.findWithDefault t a s
-  apply s         (  t1 :~> t2) = apply s t1 :~> apply s t2
+  apply s         (  t1 :~> t2) = ((:~>) `on` apply s) t1 t2
   apply s         (  TMany ts ) = TMany  $ apply s <$> ts
 
 instance Substitutable Scheme where
@@ -255,7 +253,7 @@ instance (Ord a, Substitutable a) => Substitutable (Set.Set a) where
   apply = Set.map . apply
 
 
--- * data type @Judgement@
+-- * data type @Judgment@
 
 data Judgment s =
   Judgment
@@ -429,7 +427,7 @@ instance Monad m => MonadValueF (Judgment s) (InferT s m) where
       -> InferT s m r)
     -> Judgment s
     -> InferT s m r
-  demandF f a = f a
+  demandF f = f
 
   informF
     :: ( InferT s m (Judgment s)
