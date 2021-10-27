@@ -362,6 +362,19 @@ foldInitializedWith fld getter init =
   -- maybe here is some law?
   fmap fld . traverse (fmap getter . init)
 
+toJudgment :: forall t m s . (Traversable t, Monad m) => (t Type -> Type) -> t (Judgment s) -> InferT s m (Judgment s)
+toJudgment c xs =
+  liftA3 Judgment
+    (foldWith fold assumptions    )
+    (foldWith fold typeConstraints)
+    (foldWith c    inferredType   )
+   where
+    foldWith :: ((t a -> a) -> (Judgment s -> a) -> InferT s m a)
+    foldWith g f = uncurry (foldInitializedWith g f) tpl
+
+    tpl :: (Judgment s -> InferT s m (Judgment s), t (Judgment s))
+    tpl = (demand, xs)
+
 instance MonadInfer m
   => ToValue (AttrSet (Judgment s), PositionSet)
             (InferT s m) (Judgment s) where
