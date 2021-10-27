@@ -104,6 +104,7 @@ generalize free t = Forall as t
 closeOver :: Type -> Scheme
 closeOver = normalizeScheme . generalize mempty
 
+-- When `[]` becomes `NonEmpty` - function becomes just `all`
 -- | Check if all elements are of the same type.
 allSameType :: [Type] -> Bool
 allSameType = allSame
@@ -178,12 +179,13 @@ freshTVar =
 fresh :: MonadState InferState m => m Type
 fresh = TVar <$> freshTVar
 
+intoFresh :: (Traversable t, MonadState InferState f) => t a -> f (t Type)
+intoFresh =
+  traverse (const fresh)
+
 instantiate :: MonadState InferState m => Scheme -> m Type
 instantiate (Forall as t) =
-  do
-    as' <- traverse (const fresh) as
-    let s = Subst $ Map.fromList $ zip as as'
-    pure $ apply s t
+  fmap ((`apply` t) . coerce . Map.fromList . zip as) (intoFresh as)
 
 -- * @Constraint@ data type
 
@@ -232,10 +234,7 @@ instance Substitutable Scheme where
     s' = Subst $ foldr Map.delete s as
 
 instance Substitutable Constraint where
-  apply s (EqConst      t1 t2) =
-    EqConst
-      (apply s t1)
-      (apply s t2)
+  apply s (EqConst      t1 t2) = on EqConst (apply s) t1 t2
   apply s (ExpInstConst t  sc) =
     ExpInstConst
       (apply s t)
