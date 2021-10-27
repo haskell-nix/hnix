@@ -531,17 +531,13 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
 
   evalBinary op (Judgment as1 cs1 t1) e2 = do
     Judgment as2 cs2 t2 <- e2
-    tv                  <- fresh
-    pure $
-      Judgment
-        (as1 <> as2)
-        ( cs1 <>
-          cs2 <>
-          binops
-            (t1 :~> t2 :~> tv)
-            op
-        )
-        tv
+    fmap
+      (join
+        $ Judgment
+          (as1 <> as2)
+          . (\ cs3 -> cs1 <> cs2 <> cs3) . (`binops` op) . (\ t3 -> t1 :~> t2 :~> t3)
+      )
+      fresh
 
   evalWith = Eval.evalWithAttrSet
 
