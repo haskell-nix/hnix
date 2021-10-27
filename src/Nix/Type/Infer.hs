@@ -844,17 +844,15 @@ unifyMany []         []         = stub
 unifyMany (t1 : ts1) (t2 : ts2) = do
   su1 <- unifies t1 t2
   su2 <-
-    unifyMany
-      (apply su1 ts1)
-      (apply su1 ts2)
-  pure $ su2 `compose` su1
+    (unifyMany `on` apply su1) ts1 ts2
+  pure $ compose su1 su2
 unifyMany t1 t2 = throwError $ UnificationMismatch t1 t2
 
 nextSolvable :: [Constraint] -> (Constraint, [Constraint])
-nextSolvable xs = fromJust $ find solvable $ takeFirstOnes xs
+nextSolvable = fromJust . find solvable . pickFirstOne
  where
-  takeFirstOnes :: Eq a => [a] -> [(a, [a])]
-  takeFirstOnes xs = [ (x, ys) | x <- xs, let ys = delete x xs ]
+  pickFirstOne :: Eq a => [a] -> [(a, [a])]
+  pickFirstOne xs = [ (x, ys) | x <- xs, let ys = delete x xs ]
 
   solvable :: (Constraint, [Constraint]) -> Bool
   solvable (EqConst{}     , _) = True
