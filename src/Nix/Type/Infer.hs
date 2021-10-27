@@ -464,16 +464,16 @@ instance MonadInfer m
                            f =<< Judgment mempty mempty <$> fresh
 -}
 
-instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
-  freeVariable var =
+polymorphicVar :: MonadInfer m => VarName -> InferT s m (Judgment s)
+polymorphicVar var =
     fmap
       (join ((`Judgment` mempty) . curry one var))
       fresh
 
-  synHole var =
-    fmap
-      (join ((`Judgment` mempty) . curry one var))
-      fresh
+instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
+  freeVariable = polymorphicVar
+
+  synHole = polymorphicVar
 
   -- If we fail to look up an attribute, we just don't know the type.
   attrMissing _ _ = inferred <$> fresh
