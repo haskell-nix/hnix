@@ -38,14 +38,14 @@ toXML = runWithStringContext . fmap pp . iterNValueByDiscardWith cyc phi
     NVConstant' a ->
       pure $
         case a of
-          NURI   t -> mkEVal "string" $ toString t
+          NURI   t -> mkEVal "string" t
           NInt   n -> mkEVal "int"    $ show n
           NFloat f -> mkEVal "float"  $ show f
           NBool  b -> mkEVal "bool"   $ if b then "true" else "false"
           NNull    -> mkE    "null"     mempty
 
     NVStr' str ->
-      mkEVal "string" . toString <$> extractNixString str
+      mkEVal "string" <$> extractNixString str
     NVList' l ->
       do
         els <- sequenceA l
@@ -76,33 +76,33 @@ toXML = runWithStringContext . fmap pp . iterNValueByDiscardWith cyc phi
         mkE
           "function"
           (paramsXML p)
-    NVPath' fp        -> pure $ mkEVal "path" (coerce fp)
-    NVBuiltin' name _ -> pure $ mkEName "function" $ toString name
+    NVPath' fp        -> pure $ mkEVal "path" (fromString $ coerce fp)
+    NVBuiltin' name _ -> pure $ mkEName "function" name
 
-mkE :: String -> [Content] -> Element
-mkE n c =
+mkE :: Text -> [Content] -> Element
+mkE (toString -> n) c =
   Element
     (unqual n)
     mempty
     c
     Nothing
 
-mkElem :: String -> String -> String -> Element
-mkElem n a v =
+mkElem :: Text -> Text -> Text -> Element
+mkElem (toString -> n) (toString -> a) (toString -> v) =
   Element
     (unqual n)
     (one $ Attr (unqual a) v)
     mempty
     Nothing
 
-mkEVal :: String -> String -> Element
+mkEVal :: Text -> Text -> Element
 mkEVal = (`mkElem` "value")
 
-mkEName :: String -> String -> Element
-mkEName = (`mkElem` "name")
+mkEName :: Text -> VarName -> Element
+mkEName x (coerce -> y) = (`mkElem` "name") x y
 
 paramsXML :: Params r -> [Content]
-paramsXML (Param name) = one $ Elem $ mkEName "varpat" $ toString name
+paramsXML (Param name) = one $ Elem $ mkEName "varpat" name
 paramsXML (ParamSet mname variadic pset) =
   one $ Elem $ Element (unqual "attrspat") (battr <> nattr) (paramSetXML pset) Nothing
  where
@@ -112,4 +112,4 @@ paramsXML (ParamSet mname variadic pset) =
     (one . Attr (unqual "name") . toString) `whenJust` mname
 
 paramSetXML :: ParamSet r -> [Content]
-paramSetXML = fmap (Elem . mkEName "attr" . toString . fst)
+paramSetXML = fmap (Elem . mkEName "attr" . fst)
