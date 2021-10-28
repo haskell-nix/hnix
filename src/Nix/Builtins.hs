@@ -1700,7 +1700,7 @@ getContextNix v =
     case v' of
       (NVStr ns) -> do
         let context = getNixLikeContext $ toNixLikeContext $ getContext ns
-        valued :: AttrSet (NValue t f m) <- sequenceA $ toValue <$> context
+        valued :: AttrSet (NValue t f m) <- traverseToValue context
         pure $ nvSet mempty valued
       x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: " <> show x
 
