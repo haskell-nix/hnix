@@ -618,7 +618,7 @@ detectPrecedence spec = (mapOfOpWithPrecedence Map.!)
           (foldMap . spec)
           [1 ..]
           l
-    where
+   where
     l :: [[(NOperatorDef, Operator Parser NExprLoc)]]
     l = nixOperators $ fail "unused"
 

@@ -93,12 +93,10 @@ fromMayToValue
   -> NValue' t f m (NValue t f m)
   -> m a
 fromMayToValue t v =
-  do
-    v' <- fromValueMay v
-    maybe
-      (throwError $ Expectation @t @f @m t (Free v))
-      pure
-      v'
+  maybe
+    (throwError $ Expectation @t @f @m t (Free v))
+    pure
+    =<< fromValueMay v
 
 fromMayToDeeperValue
   :: forall t f m a e m1
@@ -109,12 +107,10 @@ fromMayToDeeperValue
   -> Deeper (NValue' t f m (NValue t f m))
   -> m (m1 a)
 fromMayToDeeperValue t v =
-  do
-    v' <- fromValueMay v
-    maybe
-      (throwError $ Expectation @t @f @m t $ Free $ (coerce :: CoerceDeeperToNValue' t f m) v)
-      pure
-      v'
+  maybe
+    (throwError $ Expectation @t @f @m t $ Free $ (coerce :: CoerceDeeperToNValue' t f m) v)
+    pure
+    =<< fromValueMay v
 
 instance ( Convertible e t f m
          , MonadValue (NValue t f m) m
