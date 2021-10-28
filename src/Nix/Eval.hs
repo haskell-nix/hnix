@@ -507,7 +507,7 @@ buildArgument params arg =
             inject =
               maybe
                 id
-                (\ n -> M.insert n $ const argThunk) -- why insert into const? Thunk value getting magic point?
+                (`M.insert` const argThunk) -- why insert into const? Thunk value getting magic point?
                 mname
           loebM $
             inject $
@@ -527,11 +527,11 @@ buildArgument params arg =
   assemble _ Variadic _ (This _) = Nothing
   assemble scope _ k t =
     pure $
-    case t of
-      That Nothing -> const $ evalError @v $ ErrorCall $ "Missing value for parameter: ''" <> show k
-      That (Just f) -> coerce $ \ args -> defer $ withScopes scope $ pushScope args f
-      This _ -> const $ evalError @v $ ErrorCall $ "Unexpected parameter: " <> show k
-      These x _ -> const $ pure x
+      case t of
+        That Nothing -> const $ evalError @v $ ErrorCall $ "Missing value for parameter: ''" <> show k
+        That (Just f) -> coerce $ defer . withScopes scope . (`pushScope` f)
+        This _ -> const $ evalError @v $ ErrorCall $ "Unexpected parameter: " <> show k
+        These x _ -> const $ pure x
 
 -- | Add source positions to @NExprLoc@.
 --
