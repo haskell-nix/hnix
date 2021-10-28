@@ -315,7 +315,7 @@ evalBinds
   -> [Binding (m v)]
 --  2021-07-19: NOTE: AttrSet is a Scope
   -> m (AttrSet v, PositionSet)
-evalBinds recursive binds =
+evalBinds isRecursive binds =
   do
     scope <- currentScopes :: m (Scopes m v)
 
@@ -331,9 +331,10 @@ evalBinds recursive binds =
       (coerce -> scope, p) <- foldM insert mempty bindings
       res <-
         bool
-          (traverse mkThunk scope)
-          (loebM $ encapsulate <$> scope)
-          recursive
+          (traverse mkThunk)
+          (loebM . fmap encapsulate)
+          isRecursive
+          scope
 
       pure (coerce res, p)
 
@@ -392,10 +393,10 @@ evalBinds recursive binds =
       :: VarName
       -> ([VarName], SourcePos, m v)
     processScope var =
-      ([var]
+      ( one var
       , pos
       , maybe
-          (attrMissing (var :| mempty) Nothing)
+          (attrMissing (one var) Nothing)
           demand
           =<< maybe
               (withScopes scopes $ lookupVar var)
