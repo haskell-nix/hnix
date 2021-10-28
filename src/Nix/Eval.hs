@@ -269,7 +269,7 @@ attrSetAlter ks' pos m' p' val =
         (go p'' m'' ks)
 
 desugarBinds :: forall r . ([Binding r] -> r) -> [Binding r] -> [Binding r]
-desugarBinds embed binds = evalState (traverse (go <=< collect) binds) mempty
+desugarBinds embed binds = evalState (traverse (findBinding <=< collect) binds) mempty
  where
   collect
     :: Binding r
@@ -280,12 +280,13 @@ desugarBinds embed binds = evalState (traverse (go <=< collect) binds) mempty
     do
       m <- get
       put $
-        M.insert
-          x
-          (maybe
-            (p, one $ bindValAt p)
-            (\ (q, v) -> (q, bindValAt q : v))
-            (M.lookup x m)
+        join
+          (M.insert
+            x
+            . maybe
+              (p, one $ bindValAt p)
+              (\ (sp, bnd) -> (sp, one (bindValAt sp) <> bnd))
+              . M.lookup x
           )
           m
       pure $ Left x
@@ -293,17 +294,16 @@ desugarBinds embed binds = evalState (traverse (go <=< collect) binds) mempty
     bindValAt = NamedVar (y :| ys) val
   collect x = pure $ pure x
 
-  go
+  findBinding
     :: Either VarName (Binding r)
     -> State (HashMap VarName (SourcePos, [Binding r])) (Binding r)
-  go =
+  findBinding =
     either
-      (\ x -> do
-        maybeValue <- gets $ M.lookup x
+      (\ x ->
         maybe
           (error $ "No binding " <> show x)
-          (\ (p, v) -> pure $ NamedVar (StaticKey x :| mempty) (embed v) p)
-          maybeValue
+          (\ (p, v) -> pure $ NamedVar (one $ StaticKey x) (embed v) p)
+          =<< gets (M.lookup x)
       )
       pure
 
