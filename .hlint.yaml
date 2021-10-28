@@ -2752,3 +2752,23 @@
     note: "Use `one`"
     rhs: one x
 
+- hint:
+    lhs: "join . fmap join"
+    note: "Monad law"
+    rhs: join . join
+
+- hint:
+    lhs: "join . fmap pure"
+    note: "Monad law"
+    rhs: id
+
+- hint:
+    lhs: "join . pure"
+    note: "Monad law"
+    rhs: id
+
+- hint:
+    lhs: "join . (f <<$>>)"
+    note: "Monad law"
+    rhs: fmap f . join
+
