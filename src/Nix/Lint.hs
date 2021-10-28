@@ -136,40 +136,42 @@ renderSymbolic =
         traverse
           (\case
             TConstant ys ->
-              Text.intercalate ", " <$>
-                traverse
-                  (pure .
-                    \case
+              pure $
+                Text.intercalate ", "
+                  (fmap
+                    (\case
                       TInt   -> "int"
                       TFloat -> "float"
                       TBool  -> "bool"
                       TNull  -> "null"
+                    )
+                    ys
                   )
-                  ys
             TStr    -> pure "string"
             TList r ->
-              do
-                x <- renderSymbolic =<< demand r
-                pure $ "[" <> x <> "]"
+              fmap brackets $ renderSymbolic =<< demand r
             TSet Nothing  -> pure "<any set>"
             TSet (Just s) ->
-              do
-                x <- traverse (renderSymbolic <=< demand) s
-                pure $ "{" <> show x <> "}"
+              braces . show <$> traverse (renderSymbolic <=< demand) s
             f@(TClosure p) ->
               do
                 (args, sym) <-
                   do
-                    f' <- mkSymbolic [f]
-                    lintApp (NAbs p ()) f' everyPossible
+                    f' <- mkSymbolic $ one f
+                    lintApp (NAbs p mempty) f' everyPossible
                 args' <- traverse renderSymbolic args
                 sym'  <- renderSymbolic sym
-                pure $ "(" <> show args' <> " -> " <> sym' <> ")"
+                pure $ parens $ show args' <> " -> " <> sym'
             TPath          -> pure "path"
             TBuiltin _n _f -> pure "<builtin function>"
           )
           xs
   ) <=< unpackSymbolic
+ where
+  between a b c = a <> b <> c
+  parens = between "(" ")"
+  brackets = between "[" "]"
+  braces = between "{" "}"
 
 -- This function is order and uniqueness preserving (of types).
 merge
