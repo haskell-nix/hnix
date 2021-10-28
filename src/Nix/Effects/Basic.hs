@@ -91,8 +91,7 @@ findEnvPathM name =
     (fail "impossible")
     (\ v ->
       do
-        nv <- demand v
-        l <- fromValue @[NValue t f m] nv
+        l <- fromValue @[NValue t f m] =<< demand v
         findPathBy nixFilePath l name
     )
     =<< lookupVar "__nixPath"
@@ -134,8 +133,7 @@ findPathBy finder ls name =
         do
           (s :: HashMap VarName (NValue t f m)) <- fromValue =<< demand nv
           p <- resolvePath s
-          nvpath <- demand p
-          path <- fromValue nvpath
+          path <- fromValue =<< demand p
 
           maybe
             (tryPath path mempty)
@@ -215,8 +213,7 @@ fetchTarball =
       )
       (\ v ->
         do
-          nv <- demand v
-          nsSha <- fromValue nv
+          nsSha <- fromValue =<< demand v
 
           let sha = stringIgnoreContext nsSha
 
