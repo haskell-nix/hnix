@@ -2722,3 +2722,9 @@
     note: "Use `one`"
     rhs: (one a)
 
+# Submitted upstream: https://github.com/ndmitchell/hlint/pull/1309 remove when merges
+- hint:
+    lhs: "either Left f e"
+    note: "Use `=<<`"
+    rhs: f =<< e
+
