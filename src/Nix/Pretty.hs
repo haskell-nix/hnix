@@ -309,15 +309,15 @@ valueToExpr = iterNValueByDiscardWith thk (Fix . phi)
 
   phi :: NValue' t f m NExpr -> NExprF NExpr
   phi (NVConstant' a     ) = NConstant a
-  phi (NVStr'      ns    ) = NStr $ DoubleQuoted [Plain $ stringIgnoreContext ns]
+  phi (NVStr'      ns    ) = NStr $ DoubleQuoted $ one $ Plain $ stringIgnoreContext ns
   phi (NVList'     l     ) = NList l
   phi (NVSet'      p    s) = NSet mempty
-    [ NamedVar (StaticKey k :| mempty) v (fromMaybe nullPos $ (`M.lookup` p) $ coerce k)
+    [ NamedVar (one $ StaticKey k) v (fromMaybe nullPos $ (`M.lookup` p) k)
     | (k, v) <- toList s
     ]
   phi (NVClosure'  _    _) = NSym "<closure>"
   phi (NVPath'     p     ) = NLiteralPath p
-  phi (NVBuiltin'  name _) = NSym $ coerce @Text $ "builtins." <> coerce name
+  phi (NVBuiltin'  name _) = NSym $ coerce ((mappend @Text) "builtins.") name
 
 prettyNValue
   :: forall t f m ann . MonadDataContext f m => NValue t f m -> Doc ann
