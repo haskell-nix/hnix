@@ -12,7 +12,7 @@ module Nix.Render.Frame where
 import           Prelude             hiding ( Comparison )
 import           GHC.Exception              ( ErrorCall )
 import           Data.Fix                   ( Fix(..) )
-import           Nix.Eval
+import           Nix.Eval            hiding ( addMetaInfo )
 import           Nix.Exec
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
@@ -106,8 +106,8 @@ renderEvalFrame level f =
   do
     opts :: Options <- asks (view hasLens)
     let
-      fun :: ([Doc ann] -> [Doc ann]) -> SrcSpan -> Doc ann -> m [Doc ann]
-      fun trans loc = fmap (trans . one) . renderLocation loc
+      addMetaInfo :: ([Doc ann] -> [Doc ann]) -> SrcSpan -> Doc ann -> m [Doc ann]
+      addMetaInfo trans loc = fmap (trans . one) . renderLocation loc
 
     case f of
       EvaluatingExpr scope e@(Ann loc _) ->
@@ -116,19 +116,19 @@ renderEvalFrame level f =
             scopeInfo :: [Doc ann]
             scopeInfo =
               one (pretty $ Text.show scope) `whenTrue` showScopes opts
-          fun
+          addMetaInfo
             (scopeInfo <>)
             loc
             =<< renderExpr level "While evaluating" "Expression" e
 
       ForcingExpr _scope e@(Ann loc _) | thunks opts ->
-        fun
+        addMetaInfo
           id
           loc
           =<< renderExpr level "While forcing thunk from" "Forcing thunk" e
 
       Calling name loc ->
-        fun
+        addMetaInfo
           id
           loc
           $ "While calling builtins." <> pretty name
