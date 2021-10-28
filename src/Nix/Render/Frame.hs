@@ -89,49 +89,55 @@ renderFrame (NixFrame level f)
   | Just (e :: ValueFrame t f m  ) <- fromException f = renderValueFrame level  e
   | Just (e :: NormalLoop t f m  ) <- fromException f = renderNormalLoop level  e
   | Just (e :: ExecFrame  t f m  ) <- fromException f = renderExecFrame  level  e
-  | Just (e :: ErrorCall         ) <- fromException f = pure [pretty (Text.show e)]
-  | Just (e :: SynHoleInfo    m v) <- fromException f = pure [pretty (Text.show e)]
+  | Just (e :: ErrorCall         ) <- fromException f = pure $ one $ pretty (Text.show e)
+  | Just (e :: SynHoleInfo    m v) <- fromException f = pure $ one $ pretty (Text.show e)
   | otherwise = fail $ "Unrecognized frame: " <> show f
 
 wrapExpr :: NExprF r -> NExpr
 wrapExpr x = Fix (Fix (NSym "<?>") <$ x)
 
 renderEvalFrame
-  :: (MonadReader e m, Has e Options, MonadFile m)
+  :: forall e m v ann
+  . (MonadReader e m, Has e Options, MonadFile m)
   => NixLevel
   -> EvalFrame m v
   -> m [Doc ann]
 renderEvalFrame level f =
   do
     opts :: Options <- asks (view hasLens)
+    let
+      fun :: ([Doc ann] -> [Doc ann]) -> SrcSpan -> Doc ann -> m [Doc ann]
+      fun trans loc = fmap (trans . one) . renderLocation loc
+
     case f of
-      EvaluatingExpr scope e@(Ann ann _) ->
+      EvaluatingExpr scope e@(Ann loc _) ->
         do
           let
+            scopeInfo :: [Doc ann]
             scopeInfo =
-              [pretty $ Text.show scope] `whenTrue` showScopes opts
-          fmap
-            (\x -> scopeInfo <> [x])
-            $ renderLocation ann =<<
-                renderExpr level "While evaluating" "Expression" e
+              one (pretty $ Text.show scope) `whenTrue` showScopes opts
+          fun
+            (scopeInfo <>)
+            loc
+            =<< renderExpr level "While evaluating" "Expression" e
 
-      ForcingExpr _scope e@(Ann ann _) | thunks opts ->
-        fmap
-          (: mempty)
-          $ renderLocation ann =<<
-              renderExpr level "While forcing thunk from" "Forcing thunk" e
+      ForcingExpr _scope e@(Ann loc _) | thunks opts ->
+        fun
+          id
+          loc
+          =<< renderExpr level "While forcing thunk from" "Forcing thunk" e
 
-      Calling name ann ->
-        fmap
-          (: mempty)
-          $ renderLocation ann $
-              "While calling builtins." <> pretty name
+      Calling name loc ->
+        fun
+          id
+          loc
+          $ "While calling builtins." <> pretty name
 
       SynHole synfo ->
         sequenceA $
-          let e@(Ann ann _) = _synHoleInfo_expr synfo in
+          let e@(Ann loc _) = _synHoleInfo_expr synfo in
 
-          [ renderLocation ann =<<
+          [ renderLocation loc =<<
               renderExpr level "While evaluating" "Syntactic Hole" e
           , pure $ pretty $ Text.show $ _synHoleInfo_scope synfo
           ]
