@@ -459,6 +459,9 @@ polymorphicVar var =
       (join ((`Judgment` mempty) . curry one var))
       fresh
 
+constInfer :: Applicative f => Type -> b -> f (Judgment s)
+constInfer x = const $ pure $ inferred x
+
 instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
   freeVariable = polymorphicVar
 
@@ -488,9 +491,9 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
       NBool  _ -> typeBool
       NNull    -> typeNull
 
-  evalString      = const $ pure $ inferred typeString
-  evalLiteralPath = const $ pure $ inferred typePath
-  evalEnvPath     = const $ pure $ inferred typePath
+  evalString      = constInfer typeString
+  evalLiteralPath = constInfer typePath
+  evalEnvPath     = constInfer typePath
 
   evalUnary op (Judgment as1 cs1 t1) =
     fmap
@@ -720,11 +723,11 @@ binops u1 op =
   mk3same :: a -> NonEmpty a
   mk3same a = a :| [a, a]
 
-  eqConst :: NonEmpty Type -> [Constraint]
-  eqConst = one . EqConst u1 . typeFun
+  allConst :: Type -> [Constraint]
+  allConst = one . EqConst u1 . typeFun . mk3same
 
-  gate          = eqConst $ mk3same typeBool
-  concatenation = eqConst $ mk3same typeList
+  gate          = allConst typeBool
+  concatenation = allConst typeList
 
   eqConstrMtx :: [NonEmpty Type] -> [Constraint]
   eqConstrMtx = one . EqConst u1 . TMany . fmap typeFun
