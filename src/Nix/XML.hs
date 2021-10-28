@@ -50,28 +50,28 @@ toXML = runWithStringContext . fmap pp . iterNValueByDiscardWith cyc phi
       mkE "list" . fmap Elem <$> sequenceA l
 
     NVSet' _ s ->
-      do
-        kvs <- sequenceA s
-        pure $
-          mkE
-            "attrs"
-            ((\ (k, v) ->
-                Elem $
-                  Element
-                    (unqual "attr")
-                    (one $ Attr (unqual "name") $ toString k)
-                    (one $ Elem v)
-                    Nothing
-              ) <$>
-                sortWith fst (M.toList kvs)
-            )
+      mkE
+        "attrs"
+        . fmap
+            mkElem'
+            . sortWith fst . M.toList
+        <$> sequenceA s
+     where
+      mkElem' :: (VarName, Element) -> Content
+      mkElem' (k, v) =
+        Elem $
+          Element
+            (unqual "attr")
+            (one $ Attr (unqual "name") $ toString k)
+            (one $ Elem v)
+            Nothing
 
     NVClosure' p _ ->
       pure $
         mkE
           "function"
           (paramsXML p)
-    NVPath' fp        -> pure $ mkEVal "path" (fromString $ coerce fp)
+    NVPath' fp        -> pure $ mkEVal "path" $ fromString $ coerce fp
     NVBuiltin' name _ -> pure $ mkEName "function" name
 
 mkE :: Text -> [Content] -> Element
