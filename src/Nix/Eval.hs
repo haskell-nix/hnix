@@ -431,23 +431,22 @@ evalSelect aset attr =
  where
   extract :: NonEmpty VarName -> v -> m (Either (v, NonEmpty VarName) (m v))
   extract path@(k :| ks) x =
-    do
-      x' <- fromValueMay x
-
-      maybe
-        (pure $ Left (x, path))
-        (\ (s :: AttrSet v, _ :: PositionSet) ->
-          maybe
-            (pure $ Left (x, path))
-            (list
-              (pure . pure)
-              (\ (y : ys) -> (extract (y :| ys) =<<))
-              ks
-              . demand
-            )
-            ((`M.lookup` s) k)
+    maybe
+      left
+      (maybe
+        left
+        (list
+          (pure . pure)
+          (\ (y : ys) -> (extract (y :| ys) =<<))
+          ks
+          . demand
         )
-        x'
+        . M.lookup k . fst
+      )
+      =<< fromValueMay @(AttrSet v, PositionSet) x
+   where
+    left :: m (Either (v, NonEmpty VarName) b)
+    left = pure $ Left (x, path)
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value
