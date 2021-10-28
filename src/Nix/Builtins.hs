@@ -414,29 +414,26 @@ derivationNix = foldFix Eval.eval $$(do
     [|| expr ||]
   )
 
-nixPathNix :: MonadNix e t f m => m (NValue t f m)
+nixPathNix :: forall e t f m . MonadNix e t f m => m (NValue t f m)
 nixPathNix =
   fmap
     nvList
-    (foldNixPath mempty $
-      \p mn ty rest ->
-        pure $
-          pure
-            (nvSet
-              mempty
-              (M.fromList
-                [case ty of
-                  PathEntryPath -> ("path", nvPath  p)
-                  PathEntryURI  -> ( "uri", mkNvStr p)
+    $ foldNixPath mempty $
+        \p mn ty rest ->
+          pure $
+            pure
+              (nvSet
+                mempty
+                (M.fromList
+                  [case ty of
+                    PathEntryPath -> ("path", nvPath  p)
+                    PathEntryURI  -> ( "uri", nvStrWithoutContext $ fromString $ coerce p)
 
-                , ( "prefix", mkNvStr $ coerce $ toString $ fromMaybe "" mn)
-                ]
+                  , ( "prefix", nvStrWithoutContext $ maybeToMonoid mn)
+                  ]
+                )
               )
-            )
-          <> rest
-    )
- where
-  mkNvStr = nvStrWithoutContext . toText
+            <> rest
 
 toStringNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toStringNix = toValue <=< coerceToString callFunc DontCopyToStore CoerceAny
