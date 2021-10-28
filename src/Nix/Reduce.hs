@@ -231,26 +231,29 @@ reduce base@(NSelectAnnF _ _ _ attrs)
 
 -- | Reduce a set by inlining its binds outside of the set
 --   if none of the binds inherit the super set.
-reduce e@(NSetAnnF ann NonRecursive binds) =
-  do
-    let
-      usesInherit =
-        any
-          (\case
-            Inherit{} -> True
-            _         -> False
-          )
-          binds
-
-    bool
+reduce e@(NSetAnnF ann r binds) =
+  bool
+    -- Encountering a 'rec set' construction eliminates any hope of inlining
+    -- definitions.
+    mExprLoc
+    (bool
       (reduceLayer e)
-      (clearScopes @NExprLoc $ NSetAnn ann mempty <$> traverse sequenceA binds)
+      mExprLoc
       usesInherit
+    )
+    (r == NonRecursive)
+ where
+  mExprLoc :: m NExprLoc
+  mExprLoc =
+    clearScopes @NExprLoc $ NSetAnn ann r <$> traverse sequenceA binds
 
--- Encountering a 'rec set' construction eliminates any hope of inlining
--- definitions.
-reduce (NSetAnnF ann Recursive binds) =
-  clearScopes @NExprLoc $ NSetAnn ann Recursive <$> traverse sequenceA binds
+  usesInherit =
+    any
+      (\case
+        Inherit{} -> True
+        _         -> False
+      )
+      binds
 
 -- Encountering a 'with' construction eliminates any hope of inlining
 -- definitions.
