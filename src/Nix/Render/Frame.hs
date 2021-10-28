@@ -217,15 +217,10 @@ renderExecFrame
   => NixLevel
   -> ExecFrame t f m
   -> m [Doc ann]
-renderExecFrame level =
-  \case
-    Assertion ann v ->
-      fmap
-        (: mempty)
-        (do
-          d <- renderValue level "" "" v
-          renderLocation ann $ fillSep ["Assertion failed:", d]
-        )
+renderExecFrame level (Assertion ann v) =
+  fmap
+    one
+    $ renderLocation ann . fillSep . on (<>) one "Assertion failed:" =<< renderValue level mempty mempty v
 
 renderThunkLoop
   :: (MonadReader e m, Has e Options, MonadFile m, Show (ThunkId m))
