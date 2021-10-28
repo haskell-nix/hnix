@@ -2717,3 +2717,8 @@
     note: "Use `foldMap`"
     rhs: foldMap a
 
+- hint:
+    lhs: "[a]"
+    note: "Use `one`"
+    rhs: (one a)
+
