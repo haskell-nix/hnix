@@ -1,4 +1,5 @@
 {-# language CPP #-}
+{-# language AllowAmbiguousTypes #-}
 
 {-# options_ghc -fno-warn-name-shadowing #-}
 
@@ -28,6 +29,7 @@ import           Nix.Parser
 import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
+import qualified GHC.OldList                   as OldList
 
 -- | This type represents a pretty printed nix expression
 -- together with some information about the expression.
@@ -373,7 +375,7 @@ printNix = iterNValueByDiscardWith thk phi
   phi :: NValue' t f m String -> String
   phi (NVConstant' a ) = toString $ atomText a
   phi (NVStr'      ns) = show $ stringIgnoreContext ns
-  phi (NVList'     l ) = toString $ "[ " <> unwords (fmap fromString l) <> " ]"
+  phi (NVList'     l ) = "[ " <> OldList.unwords l <> " ]"
   phi (NVSet' _ s) =
     "{ " <>
       fold
@@ -385,10 +387,12 @@ printNix = iterNValueByDiscardWith thk phi
     check v =
       fromMaybe
         v
-        (fmap (surround . show) (readMaybe v :: Maybe Int)
-        <|> fmap (surround . show) (readMaybe v :: Maybe Float)
-        )
-      where surround s = "\"" <> s <> "\""
+        (tryRead @Int <|> tryRead @Float)
+     where
+      surround s = "\"" <> s <> "\""
+
+      tryRead :: forall a . (Read a, Show a) => Maybe String
+      tryRead = fmap (surround . show) (readMaybe v :: Maybe a)
   phi NVClosure'{}        = "<<lambda>>"
   phi (NVPath' fp       ) = coerce fp
   phi (NVBuiltin' name _) = toString @Text $ "<<builtin " <> coerce name <> ">>"
