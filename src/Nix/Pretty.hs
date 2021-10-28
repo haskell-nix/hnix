@@ -118,9 +118,13 @@ prettyString (Indented _ parts) = group $ nest 2 $ vcat
   ["''", content, "''"]
  where
   content = vsep . fmap prettyLine . stripLastIfEmpty . splitLines $ parts
-  stripLastIfEmpty = reverse . f . reverse   where
-    f ([Plain t] : xs) | Text.null (strip t) = xs
-    f xs = xs
+  stripLastIfEmpty :: [[Antiquoted Text r]] -> [[Antiquoted Text r]]
+  stripLastIfEmpty = filter flt
+   where
+    flt :: [Antiquoted Text r] -> Bool
+    flt [Plain t] | Text.null (strip t) = False
+    flt _ = True
+
   prettyLine = hcat . fmap prettyPart
   prettyPart (Plain t) =
     pretty . replace "${" "''${" . replace "''" "'''" $ t
