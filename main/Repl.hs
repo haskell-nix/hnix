@@ -111,7 +111,7 @@ main' iniVal =
         (words <$> lines f)
 
   handleMissing e
-    | Error.isDoesNotExistError e = pure ""
+    | Error.isDoesNotExistError e = pure mempty
     | otherwise = throwM e
 
   -- Replicated and slightly adjusted `optMatcher` from `System.Console.Repline`
@@ -356,8 +356,7 @@ setConfig args =
 -- | Prefix tab completer
 defaultMatcher :: MonadIO m => [(String, CompletionFunc m)]
 defaultMatcher =
-  [ (":load", Console.fileCompleter)
-  ]
+  one (":load", Console.fileCompleter)
 
 completion
   :: (MonadNix e t f m, MonadIO m)
@@ -424,7 +423,7 @@ completeFunc reversedPrev word
           shortBuiltins = M.keys builtins
 
       pure $ listCompletion $ toString <$>
-        ["__includes"]
+        one "__includes"
           <> contextKeys
           <> shortBuiltins
 
@@ -475,12 +474,12 @@ helpOptions :: (MonadNix e t f m, MonadIO m) => HelpOptions e t f m
 helpOptions =
   [ HelpOption
       "help"
-      ""
+      mempty
       "Print help text"
       (help helpOptions . fromString)
   , HelpOption
       "paste"
-      ""
+      mempty
       "Enter multi-line mode"
       (error "Unreachable")
   , HelpOption
@@ -490,7 +489,7 @@ helpOptions =
       (load . fromString)
   , HelpOption
       "browse"
-      ""
+      mempty
       "Browse bindings in interpreter context"
       (browse . fromString)
   , HelpOption
@@ -500,12 +499,12 @@ helpOptions =
       (typeof . fromString)
   , HelpOption
       "quit"
-      ""
+      mempty
       "Quit interpreter"
       quit
   , HelpOption
       "set"
-      ""
+      mempty
       ("Set REPL option"
         <> Prettyprinter.line
         <> "Available options:"
@@ -527,32 +526,32 @@ helpSetOptions :: [HelpSetOption]
 helpSetOptions =
   [ HelpSetOption
       "strict"
-      ""
+      mempty
       "Enable strict evaluation of REPL expressions"
       (\x -> x { cfgStrict = True})
   , HelpSetOption
       "lazy"
-      ""
+      mempty
       "Disable strict evaluation of REPL expressions"
       (\x -> x { cfgStrict = False})
   , HelpSetOption
       "values"
-      ""
+      mempty
       "Enable printing of value provenance information"
       (\x -> x { cfgValues = True})
   , HelpSetOption
       "novalues"
-      ""
+      mempty
       "Disable printing of value provenance information"
       (\x -> x { cfgValues = False})
   , HelpSetOption
       "debug"
-      ""
+      mempty
       "Enable printing of REPL debug information"
       (\x -> x { cfgDebug = True})
   , HelpSetOption
       "nodebug"
-      ""
+      mempty
       "Disable REPL debugging"
       (\x -> x { cfgDebug = False})
   ]

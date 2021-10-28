@@ -66,11 +66,10 @@ newFailingTests = Set.fromList
 -- | Upstream tests that test cases that HNix disaded as a misfeature that is used so rarely
 -- that it more effective to fix it & lint it out of existance.
 deprecatedRareNixQuirkTests :: Set String
-deprecatedRareNixQuirkTests = Set.fromList
-  [
+deprecatedRareNixQuirkTests = Set.fromList $
+  one
     -- A rare quirk of Nix that is proper to fix&enforce then to support (see git commit history)
     "eval-okay-strings-as-attrs-names"
-  ]
 
 genTests :: IO TestTree
 genTests =
@@ -81,7 +80,7 @@ genTests =
       testsGroupedByName = groupBy (takeFileName . dropExtensions) testFiles
 
       testsGroupedByTypeThenName :: Map [String] [(Path, [Path])]
-      testsGroupedByTypeThenName = groupBy testType (Map.toList testsGroupedByName)
+      testsGroupedByTypeThenName = groupBy testType $ Map.toList testsGroupedByName
 
       testTree :: [TestTree]
       testTree = mkTestGroup <$> Map.toList testsGroupedByTypeThenName
@@ -159,14 +158,14 @@ assertLangOk opts fileBaseName =
   do
     actual   <- printNix <$> hnixEvalFile opts (addNixExt fileBaseName)
     expected <- read fileBaseName ".exp"
-    assertEqual "" expected $ fromString (actual <> "\n")
+    assertEqual mempty expected $ fromString (actual <> "\n")
 
 assertLangOkXml :: Options -> Path -> Assertion
 assertLangOkXml opts fileBaseName =
   do
     actual <- stringIgnoreContext . toXML <$> hnixEvalFile opts (addNixExt fileBaseName)
     expected <- read fileBaseName ".exp.xml"
-    assertEqual "" expected actual
+    assertEqual mempty expected actual
 
 assertEval :: Options -> [Path] -> Assertion
 assertEval _opts files =

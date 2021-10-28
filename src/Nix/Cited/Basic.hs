@@ -90,9 +90,9 @@ instance
             -- Gather the current evaluation context at the time of thunk
             -- creation, and record it along with the thunk.
             let
+              go :: SomeException -> [Provenance m (NValue u f m)]
               go (fromException -> Just (EvaluatingExpr scope (Ann s e))) =
-                let e' = AnnF s (Nothing <$ e) in
-                [Provenance scope e']
+                one $ Provenance scope $ AnnF s (Nothing <$ e)
               go _ = mempty
               ps = foldMap (go . frame) frames
 

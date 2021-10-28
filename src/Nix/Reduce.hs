@@ -100,14 +100,14 @@ staticImport pann path =
           (\ err -> fail $ "Parse failed: " <> show err)
           (\ x -> do
             let
-              pos  = SourcePos "Reduce.hs" (mkPos 1) (mkPos 1)
-              span = SrcSpan pos pos
+              pos  = join (SourcePos "Reduce.hs") $ mkPos 1
+              span = join SrcSpan pos
               cur  =
                 NamedVar
-                  (StaticKey "__cur_file" :| mempty)
+                  (one $ StaticKey "__cur_file")
                   (NLiteralPathAnn pann path'')
                   pos
-              x' = NLetAnn span [cur] x
+              x' = NLetAnn span (one cur) x
             modify $ first $ HM.insert path'' x'
             local
               (const (pure path'', mempty)) $

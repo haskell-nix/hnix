@@ -526,11 +526,10 @@ freeVarsEqual a xs =
       Right a' = parseNixText a
       xs' = S.fromList xs
       free' = freeVars a'
-    assertEqual "" xs' free'
+    assertEqual mempty xs' free'
 
 maskedFiles :: [Path]
-maskedFiles =
-  [ "builtins.fetchurl-01.nix" ]
+maskedFiles = one "builtins.fetchurl-01.nix"
 
 testDir :: Path
 testDir = "tests/eval-compare"

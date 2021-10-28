@@ -119,14 +119,16 @@ sourceContext path (unPos -> begLine) (unPos -> _begCol) (unPos -> endLine) (unP
           | n >= begLine && n <= endLine -> "  > " <> nsp <> " |  "
           | otherwise                    -> "    " <> nsp <> " |  "
       composeLine n l =
-        [pretty (pad n) <> l]
-        <> ([ pretty $
-              Text.replicate (Text.length (pad n) - 3) " "
-              <> "|"
-              <> Text.replicate (_begCol + 1) " "
-              <> Text.replicate (_endCol - _begCol) "^"
-            ] `whenTrue` (begLine == endLine && n == endLine)
-          )
+        one (pretty (pad n) <> l)
+        <> whenTrue
+            (one $
+              pretty $
+                Text.replicate (Text.length (pad n) - 3) " "
+                <> "|"
+                <> Text.replicate (_begCol + 1) " "
+                <> Text.replicate (_endCol - _begCol) "^"
+            )
+            (begLine == endLine && n == endLine)
         -- XXX: Consider inserting the message here when it is small enough.
         -- ATM some messages are so huge that they take prevalence over the source listing.
         -- ++ [ indent (length $ pad n) msg | n == endLine ]

@@ -154,9 +154,11 @@ prettyParamSet variadic args =
  where
   prettySetArg (n, maybeDef) =
     maybe
-      (prettyVarName n)
-      (\x -> prettyVarName n <> " ? " <> withoutParens x)
+      varName
+      (\x -> varName <> " ? " <> withoutParens x)
       maybeDef
+   where
+    varName = prettyVarName n
   sep            = align ", "
 
 prettyBind :: Binding (NixDoc ann) -> Doc ann
@@ -169,9 +171,17 @@ prettyBind (Inherit s ns _p) =
       ((<> " ") . parens . withoutParens) `whenJust` s
 
 prettyKeyName :: NKeyName (NixDoc ann) -> Doc ann
-prettyKeyName (StaticKey "") = "\"\""
-prettyKeyName (StaticKey key) | HashSet.member key reservedNames = "\"" <> prettyVarName key <> "\""
-prettyKeyName (StaticKey  key) = prettyVarName key
+prettyKeyName (StaticKey key) =
+  bool
+    "\"\""
+    (bool
+      varName
+      ("\"" <> varName <> "\"")
+      (HashSet.member key reservedNames)
+    )
+    (not $ Text.null $ coerce key)
+ where
+  varName = prettyVarName key
 prettyKeyName (DynamicKey key) =
   runAntiquoted
     (DoubleQuoted $ one $ Plain "\n")
@@ -183,7 +193,7 @@ prettySelector :: NAttrPath (NixDoc ann) -> Doc ann
 prettySelector = hcat . punctuate "." . fmap prettyKeyName . NE.toList
 
 prettyAtom :: NAtom -> NixDoc ann
-prettyAtom atom = simpleExpr $ pretty $ atomText atom
+prettyAtom = simpleExpr . pretty . atomText
 
 prettyNix :: NExpr -> Doc ann
 prettyNix = withoutParens . foldFix exprFNixDoc
@@ -260,7 +270,7 @@ exprFNixDoc = \case
       ((" or " <>) . wrapParens appOpNonAssoc) `whenJust` o
   NHasAttr r attr ->
     mkNixDoc hasAttrOp (wrapParens hasAttrOp r <> " ? " <> prettySelector attr)
-  NEnvPath     p -> simpleExpr $ pretty @String $ coerce $ "<" <> p <> ">"
+  NEnvPath     p -> simpleExpr $ pretty @String $ "<" <> coerce p <> ">"
   NLiteralPath p ->
     pathExpr $
       pretty @FilePath $ coerce $

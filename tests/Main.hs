@@ -95,18 +95,18 @@ main = do
   prettyTestsEnv      <- lookupEnv "PRETTY_TESTS"
 
   pwd <- getCurrentDirectory
-  setEnv "NIX_REMOTE" (pwd <> "/real-store")
-  setEnv "NIX_DATA_DIR" (pwd <> "/data")
+  setEnv "NIX_REMOTE" $ pwd <> "/real-store"
+  setEnv "NIX_DATA_DIR" $ pwd <> "/data"
 
   defaultMain $ testGroup "hnix" $
     [ ParserTests.tests
     , EvalTests.tests
     , PrettyTests.tests
-    , ReduceExprTests.tests] <>
-    [ PrettyParseTests.tests
-        (fromIntegral (read (fromMaybe "0" prettyTestsEnv) :: Int)) ] <>
-    [ evalComparisonTests ] <>
-    [ testCase "Nix language tests present" ensureLangTestsPresent
+    , ReduceExprTests.tests
+    , PrettyParseTests.tests $ fromIntegral $ read @Int $ fromMaybe "0" prettyTestsEnv
+    , evalComparisonTests
+    , testCase "Nix language tests present" ensureLangTestsPresent
     , nixLanguageTests ] <>
     [ testCase "Nixpkgs parses without errors" ensureNixpkgsCanParse
-      | isJust nixpkgsTestsEnv ]
+      | isJust nixpkgsTestsEnv
+    ]

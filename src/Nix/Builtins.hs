@@ -689,8 +689,8 @@ matchNix pat str =
             traverse
               mkMatch
               (case submatches of
-                 [] -> []
-                 [a] -> [a]
+                 [] -> mempty
+                 [a] -> one a
                  _:xs -> xs -- return only the matched groups, drop the full string
               )
       _ -> pure nvNull
@@ -2010,7 +2010,7 @@ builtins
 builtins =
   do
     ref <- defer $ nvSet mempty <$> buildMap
-    lst <- ([("builtins", ref)] <>) <$> topLevelBuiltins
+    lst <- (one ("builtins", ref) <>) <$> topLevelBuiltins
     pushScope (coerce (M.fromList lst)) currentScopes
  where
   buildMap :: m (HashMap VarName (NValue t f m))
