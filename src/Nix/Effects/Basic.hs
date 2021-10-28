@@ -244,15 +244,14 @@ defaultImportPath
   :: (MonadNix e t f m, MonadState (HashMap Path NExprLoc, b) m)
   => Path
   -> m (NValue t f m)
-defaultImportPath path = do
-  traceM $ "Importing file " <> coerce path
-  withFrame
-    Info
-    (ErrorCall $ "While importing file " <> show path)
-    $ do
-        imports <- gets fst
-        evalExprLoc =<<
-          maybe
+defaultImportPath path =
+  do
+    traceM $ "Importing file " <> coerce path
+    withFrame
+      Info
+      (ErrorCall $ "While importing file " <> show path)
+      $ evalExprLoc =<<
+          (maybe
             (either
               (\ err -> throwError $ ErrorCall . show $ fillSep ["Parse during import failed:", err])
               (\ expr ->
@@ -263,7 +262,8 @@ defaultImportPath path = do
               =<< parseNixFileLoc path
             )
             pure  -- return expr
-            (M.lookup path imports)
+            . M.lookup path
+          ) =<< gets fst
 
 defaultPathToDefaultNix :: MonadNix e t f m => Path -> m Path
 defaultPathToDefaultNix = pathToDefaultNixFile
