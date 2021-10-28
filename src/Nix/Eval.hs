@@ -147,14 +147,9 @@ eval (NList l           ) =
     scope <- currentScopes
     toValue =<< traverse (defer @v @m . withScopes @v scope) l
 
-eval (NSet NonRecursive binds) =
+eval (NSet r binds) =
   do
-    attrSet <- evalBinds False $ desugarBinds (eval . NSet mempty) binds
-    toValue attrSet
-
-eval (NSet Recursive binds) =
-  do
-    attrSet <- evalBinds True $ desugarBinds (eval . NSet mempty) binds
+    attrSet <- evalBinds (r == Recursive) $ desugarBinds (eval . NSet mempty) binds
     toValue attrSet
 
 eval (NLet binds body    ) =
