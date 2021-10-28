@@ -2743,3 +2743,12 @@
 - warn: {lhs: "head $ x <> one y", rhs: "headDef y x"}
 - warn: {lhs: "pictures (one p)", rhs: p, name: Evaluate}
 
+- hint:
+    lhs: "x : mempty"
+    note: "Use `one`"
+    rhs: one x
+- hint:
+    lhs: "x :| mempty"
+    note: "Use `one`"
+    rhs: one x
+
