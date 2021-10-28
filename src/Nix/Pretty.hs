@@ -192,15 +192,15 @@ prettyOriginExpr
 prettyOriginExpr = withoutParens . go
  where
   go = exprFNixDoc . stripAnnF . fmap render
-
-  render :: Maybe (NValue t f m) -> NixDoc ann
-  render Nothing = simpleExpr "_"
-  render (Just (Free (reverse . citations @m -> p:_))) = go (_originExpr p)
-  render _       = simpleExpr "?"
-    -- render (Just (NValue (citations -> ps))) =
-        -- simpleExpr $ foldr ((\x y -> vsep [x, y]) . parens . indent 2 . withoutParens
-        --                           . go . originExpr)
-        --     mempty (reverse ps)
+   where
+    render :: Maybe (NValue t f m) -> NixDoc ann
+    render Nothing = simpleExpr "_"
+    render (Just (Free (reverse . citations @m -> p:_))) = go (_originExpr p)
+    render _       = simpleExpr "?"
+      -- render (Just (NValue (citations -> ps))) =
+          -- simpleExpr $ foldr ((\x y -> vsep [x, y]) . parens . indent 2 . withoutParens
+          --                           . go . originExpr)
+          --     mempty (reverse ps)
 
 exprFNixDoc :: NExprF (NixDoc ann) -> NixDoc ann
 exprFNixDoc = \case
