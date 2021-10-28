@@ -46,7 +46,7 @@ import           Data.Scientific
 import qualified Data.Set                      as S
 import qualified Data.Text                     as Text
 import qualified Data.Text.Lazy.Builder        as Builder
-import           Data.These                     ( fromThese )
+import           Data.These                     ( fromThese, These )
 import qualified Data.Time.Clock.POSIX         as Time
 import qualified Data.Vector                   as V
 import           NeatInterpolation              ( text )
@@ -175,7 +175,7 @@ uriAwareSplit :: Text -> [(Text, NixPathEntryType)]
 uriAwareSplit txt =
   case Text.break (== ':') txt of
     (e1, e2)
-      | Text.null e2                              -> [(e1, PathEntryPath)]
+      | Text.null e2                              -> one (e1, PathEntryPath)
       | "://" `Text.isPrefixOf` e2      ->
         let ((suffix, _) : path) = uriAwareSplit (Text.drop 3 e2) in
         (e1 <> "://" <> suffix, PathEntryURI) : path
@@ -208,7 +208,7 @@ foldNixPath z f =
       z
       $ (fromInclude . stringIgnoreContext <$> dirs)
         <> uriAwareSplit `whenJust` mPath
-        <> [ fromInclude $ "nix=" <> toText dataDir <> "/nix/corepkgs" ]
+        <> one (fromInclude $ "nix=" <> fromString (coerce dataDir) <> "/nix/corepkgs")
  where
 
   fromInclude :: Text -> (Text, NixPathEntryType)
@@ -282,8 +282,8 @@ compareVersions :: Text -> Text -> Ordering
 compareVersions s1 s2 =
   fold $ (alignWith cmp `on` splitVersion) s1 s2
  where
-  z = VersionComponentString ""
-  cmp = uncurry compare . fromThese z z
+  cmp :: These VersionComponent VersionComponent -> Ordering
+  cmp = uncurry compare . join fromThese (VersionComponentString mempty)
 
 splitDrvName :: Text -> (Text, Text)
 splitDrvName s =
@@ -315,7 +315,7 @@ splitMatches
   -> [[(ByteString, (Int, Int))]]
   -> ByteString
   -> [NValue t f m]
-splitMatches _ [] haystack = [thunkStr haystack]
+splitMatches _ [] haystack = one $ thunkStr haystack
 splitMatches _ ([] : _) _ =
   fail "Fail in splitMatches: this should never happen!"
 splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
