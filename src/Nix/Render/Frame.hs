@@ -171,7 +171,7 @@ renderValueFrame
   => NixLevel
   -> ValueFrame t f m
   -> m [Doc ann]
-renderValueFrame level = fmap (: mempty) . \case
+renderValueFrame level = fmap one . \case
   ForcingThunk    _t -> pure "ForcingThunk" -- jww (2019-03-18): NYI
   ConcerningValue _v -> pure "ConcerningValue"
   Comparison     _ _ -> pure "Comparing"
@@ -189,10 +189,10 @@ renderValueFrame level = fmap (: mempty) . \case
       (level <= Error)
 
   CoercionToJson v ->
-    ("CoercionToJson " <>) <$> renderValue level "" "" v
+    ("CoercionToJson " <>) <$> renderValue level mempty mempty v
   CoercionFromJson _j -> pure "CoercionFromJson"
   Expectation t v     ->
-    (msg <>) <$> renderValue @_ @t @f @m level "" "" v
+    (msg <>) <$> renderValue level mempty mempty v
    where
     msg = "Expected " <> pretty (describeValue t) <> ", but saw "
 
