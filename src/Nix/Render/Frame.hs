@@ -184,9 +184,9 @@ renderValueFrame level = fmap one . \case
    where
     desc =
       bool
-      "While coercing "
-      "Cannot coerce "
-      (level <= Error)
+        "While coercing "
+        "Cannot coerce "
+        (level <= Error)
 
   CoercionToJson v ->
     ("CoercionToJson " <>) <$> renderValue level mempty mempty v
@@ -227,8 +227,8 @@ renderThunkLoop
   => NixLevel
   -> ThunkLoop
   -> m [Doc ann]
-renderThunkLoop _level = pure . one . \case
-  ThunkLoop n -> pretty $ "Infinite recursion in thunk " <> n
+renderThunkLoop _level (ThunkLoop n) =
+  pure . one . pretty $ "Infinite recursion in thunk " <> n
 
 renderNormalLoop
   :: (MonadReader e m, Has e Options, MonadFile m, MonadCitedThunks t f m)
