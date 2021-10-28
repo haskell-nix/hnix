@@ -232,7 +232,7 @@ renderThunkLoop
   => NixLevel
   -> ThunkLoop
   -> m [Doc ann]
-renderThunkLoop _level = pure . (: mempty) . \case
+renderThunkLoop _level = pure . one . \case
   ThunkLoop n -> pretty $ "Infinite recursion in thunk " <> n
 
 renderNormalLoop
@@ -242,7 +242,7 @@ renderNormalLoop
   -> m [Doc ann]
 renderNormalLoop level =
   fmap
-    (: mempty)
+    one
     . \case
       NormalLoop v ->
-        ("Infinite recursion during normalization forcing " <>) <$> renderValue level "" "" v
+        ("Infinite recursion during normalization forcing " <>) <$> renderValue level mempty mempty v
