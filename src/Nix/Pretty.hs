@@ -109,8 +109,8 @@ prettyString (DoubleQuoted parts) = "\"" <> foldMap prettyPart parts <> "\""
   escape '"' = "\\\""
   escape x   =
     maybe
-      [x]
-      (('\\' :) . (: mempty))
+      (one x)
+      (('\\' :) . one)
       (toEscapeCode x)
 prettyString (Indented _ parts) = group $ nest 2 $ vcat
   ["''", content, "''"]
@@ -144,7 +144,7 @@ prettyParamSet variadic args =
     "{ "
     (align " }")
     sep
-    (fmap prettySetArg args <> ["..."] `whenTrue` (variadic == Variadic))
+    (fmap prettySetArg args <> one "..." `whenTrue` (variadic == Variadic))
  where
   prettySetArg (n, maybeDef) =
     maybe
@@ -168,7 +168,7 @@ prettyKeyName (StaticKey key) | HashSet.member key reservedNames = "\"" <> prett
 prettyKeyName (StaticKey  key) = prettyVarName key
 prettyKeyName (DynamicKey key) =
   runAntiquoted
-    (DoubleQuoted [Plain "\n"])
+    (DoubleQuoted $ one $ Plain "\n")
     prettyString
     (\ x -> "${" <> withoutParens x <> "}")
     key
@@ -291,7 +291,7 @@ exprFNixDoc = \case
   prettyContainer h f t c =
     list
       (simpleExpr (h <> t))
-      (const $ simpleExpr $ group $ nest 2 $ vsep $ [h] <> (f <$> c) <> [t])
+      (const $ simpleExpr $ group $ nest 2 $ vsep $ one h <> (f <$> c) <> one t)
       c
 
   prettyAddScope h c b =
