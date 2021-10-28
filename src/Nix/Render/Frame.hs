@@ -66,11 +66,12 @@ framePos
    . (Typeable m, Typeable v)
   => NixFrame
   -> Maybe SourcePos
-framePos (NixFrame _ f)
-  | Just (e :: EvalFrame m v) <- fromException f = case e of
+framePos (NixFrame _ f) =
+  (\case
     EvaluatingExpr _ (Ann (SrcSpan beg _) _) -> pure beg
     _ -> Nothing
-  | otherwise = Nothing
+  )
+  =<< fromException @(EvalFrame m v) f
 
 renderFrame
   :: forall v t f e m ann
