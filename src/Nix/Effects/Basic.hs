@@ -31,28 +31,30 @@ import           Nix.Value.Monad
 import           GHC.DataSize
 #endif
 
-defaultToAbsolutePath :: MonadNix e t f m => Path -> m Path
-defaultToAbsolutePath origPath = do
-  origPathExpanded <- expandHomePath origPath
-  absPath          <-
-    bool
-      (do
-        cwd <- do
-          mres <- lookupVar "__cur_file"
-          maybe
-            getCurrentDirectory
-            (
-              (\case
-                NVPath s -> pure $ takeDirectory s
-                val -> throwError $ ErrorCall $ "when resolving relative path, __cur_file is in scope, but is not a path; it is: " <> show val
-              ) <=< demand
+
+
+
+defaultToAbsolutePath :: forall e t f m . MonadNix e t f m => Path -> m Path
+defaultToAbsolutePath origPath =
+  do
+    origPathExpanded <- expandHomePath origPath
+    fmap
+      removeDotDotIndirections
+      . canonicalizePath
+        =<< bool
+            (fmap
+              (<///> origPathExpanded)
+              $ maybe
+                  getCurrentDirectory
+                  ( (\case
+                      NVPath s -> pure $ takeDirectory s
+                      val -> throwError $ ErrorCall $ "when resolving relative path, __cur_file is in scope, but is not a path; it is: " <> show val
+                    ) <=< demand
+                  )
+                  =<< lookupVar "__cur_file"
             )
-            mres
-        pure $ cwd <///> origPathExpanded
-      )
-      (pure origPathExpanded)
-      (isAbsolute origPathExpanded)
-  removeDotDotIndirections <$> canonicalizePath absPath
+            (pure origPathExpanded)
+            (isAbsolute origPathExpanded)
 
 expandHomePath :: MonadFile m => Path -> m Path
 expandHomePath (coerce -> ('~' : xs)) = (<> coerce xs) <$> getHomeDirectory
