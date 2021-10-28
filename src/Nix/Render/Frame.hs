@@ -235,9 +235,5 @@ renderNormalLoop
   => NixLevel
   -> NormalLoop t f m
   -> m [Doc ann]
-renderNormalLoop level =
-  fmap
-    one
-    . \case
-      NormalLoop v ->
-        ("Infinite recursion during normalization forcing " <>) <$> renderValue level mempty mempty v
+renderNormalLoop level (NormalLoop v) =
+  one . ("Infinite recursion during normalization forcing " <>) <$> renderValue level mempty mempty v
