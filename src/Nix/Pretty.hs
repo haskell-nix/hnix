@@ -225,22 +225,25 @@ exprFNixDoc = \case
     mkNixDoc
       opInfo $
       hsep
-        [ wrapParens (f NAssocLeft) r1
+        [ f NAssocLeft r1
         , pretty $ operatorName opInfo
-        , wrapParens (f NAssocRight) r2
+        , f NAssocRight r2
         ]
    where
     opInfo = getBinaryOperator op
+    f :: NAssoc -> NixDoc ann1 -> Doc ann1
     f x =
-      bool
-        opInfo
-        (opInfo { associativity = NAssocNone })
-        (associativity opInfo /= x)
+      wrapParens
+        $ bool
+            opInfo
+            (opInfo { associativity = NAssocNone })
+            (associativity opInfo /= x)
   NUnary op r1 ->
     mkNixDoc
-      opInfo
-      (pretty (operatorName opInfo) <> wrapParens opInfo r1)
-    where opInfo = getUnaryOperator op
+      opInfo $
+      pretty (operatorName opInfo) <> wrapParens opInfo r1
+   where
+    opInfo = getUnaryOperator op
   NSelect o r' attr ->
     maybe
       (mkNixDoc selectOp)
