@@ -45,6 +45,7 @@ import qualified Data.HashMap.Lazy             as M
 import           Data.Scientific
 import qualified Data.Set                      as S
 import qualified Data.Text                     as Text
+import           Data.Text.Read                 ( decimal )
 import qualified Data.Text.Lazy.Builder        as Builder
 import           Data.These                     ( fromThese, These )
 import qualified Data.Time.Clock.POSIX         as Time
@@ -248,34 +249,40 @@ instance Show VersionComponent where
 
 splitVersion :: Text -> [VersionComponent]
 splitVersion s =
-  case Text.uncons s of
-    Nothing -> mempty
-    Just (h, t)
+ whenJust
+   (\ (x, xs) -> if
+      | isRight eDigitsPart ->
+          either
+            (\ e -> error $ "splitVersion: did hit impossible: '" <> toText e <> "' while parsing '" <> s <> "'.")
+            (\ res ->
+              one (VersionComponentNumber $ fst res)
+              <> splitVersion (snd res)
+            )
+            eDigitsPart
 
-      | h `elem` versionComponentSeparators -> splitVersion t
+      | x `elem` separators -> splitVersion xs
 
-      | isDigit h ->
-        let (digits, rest) = Text.span isDigit s
-        in
-        VersionComponentNumber
-            (fromMaybe (error $ "splitVersion: couldn't parse " <> show digits) $ readMaybe $ toString digits) : splitVersion rest
-
-      | otherwise ->
-        let
-          (chars, rest) =
-            Text.span
-              (\c -> not $ isDigit c || c `elem` versionComponentSeparators)
-              s
-          thisComponent =
-            case chars of
-              "pre" -> VersionComponentPre
-              x     -> VersionComponentString x
-        in
-        thisComponent : splitVersion rest
+      | otherwise -> one charsPart <> splitVersion rest2
+  )
+  (Text.uncons s)
  where
   -- | Based on https://github.com/NixOS/nix/blob/4ee4fda521137fed6af0446948b3877e0c5db803/src/libexpr/names.cc#L44
-  versionComponentSeparators :: String
-  versionComponentSeparators = ".-"
+  separators :: String
+  separators = ".-"
+
+  eDigitsPart :: Either String (Integer, Text)
+  eDigitsPart = decimal @Integer $ s
+
+  (charsSpan, rest2) =
+    Text.span
+      (\c -> not $ isDigit c || c `elem` separators)
+      s
+
+  charsPart :: VersionComponent
+  charsPart =
+    case charsSpan of
+      "pre" -> VersionComponentPre
+      xs'   -> VersionComponentString xs'
 
 
 compareVersions :: Text -> Text -> Ordering
@@ -287,7 +294,7 @@ compareVersions s1 s2 =
 
 splitDrvName :: Text -> (Text, Text)
 splitDrvName s =
-  (Text.intercalate sep namePieces, Text.intercalate sep versionPieces)
+  both (Text.intercalate sep) (namePieces, versionPieces)
  where
   sep    = "-"
   pieces :: [Text]
