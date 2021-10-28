@@ -145,8 +145,7 @@ eval (NHasAttr aset attr) =
 eval (NList l           ) =
   do
     scope <- currentScopes
-    lst <- traverse (defer @v @m . withScopes @v scope) l
-    toValue lst
+    toValue =<< traverse (defer @v @m . withScopes @v scope) l
 
 eval (NSet NonRecursive binds) =
   do
@@ -188,11 +187,11 @@ eval (NAbs    params body) = do
     fun arg k =
       withCurScope $
         do
-          (coerce -> newScope) <- buildArgument params arg
+          (coerce -> newScopeToAdd) <- buildArgument params arg
           pushScope
-            newScope $
+            newScopeToAdd $
             k
-              (coerce $ withCurScope . inform <$> newScope)
+              (coerce $ withCurScope . inform <$> newScopeToAdd)
               body
 
   evalAbs
@@ -265,7 +264,9 @@ attrSetAlter ks' pos m' p' val =
           , AttrSet (m v)
           )
     recurse p'' m'' =
-      insertVal . (=<<) (toValue @(AttrSet v, PositionSet)) . fmap (,mempty) . sequenceA . snd <$> go p'' m'' ks
+      fmap
+        (insertVal . (=<<) (toValue @(AttrSet v, PositionSet)) . fmap (,mempty) . sequenceA . snd)
+        (go p'' m'' ks)
 
 desugarBinds :: forall r . ([Binding r] -> r) -> [Binding r] -> [Binding r]
 desugarBinds embed binds = evalState (traverse (go <=< collect) binds) mempty
