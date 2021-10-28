@@ -227,4 +227,4 @@ nixOptionsInfo :: UTCTime -> ParserInfo Options
 nixOptionsInfo current =
   info
     (helper <*> versionOpt <*> nixOptions current)
-    (fullDesc <> progDesc "" <> header "hnix")
+    (fullDesc <> progDesc mempty <> header "hnix")

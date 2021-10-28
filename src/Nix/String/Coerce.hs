@@ -59,11 +59,7 @@ coerceToString call ctsm clevel = go
         case x' of
           -- TODO Return a singleton for "" and "1"
           NVConstant (NBool b) ->
-            castToNixString $
-              bool
-                ""
-                "1"
-                b
+            castToNixString $ "1" `whenTrue` b
           NVConstant (NInt n) ->
             castToNixString $
               show n
@@ -71,7 +67,7 @@ coerceToString call ctsm clevel = go
             castToNixString $
               show n
           NVConstant NNull ->
-            castToNixString ""
+            castToNixString mempty
           -- NVConstant: NAtom (NURI Text) is not matched
           NVList l ->
             nixStringUnwords <$> traverse go l

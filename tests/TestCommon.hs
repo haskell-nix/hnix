@@ -55,7 +55,7 @@ nixEvalString expr = do
   pure res
 
 nixEvalFile :: Path -> IO String
-nixEvalFile fp = readProcess "nix-instantiate" ["--eval", "--strict", coerce fp] ""
+nixEvalFile fp = readProcess "nix-instantiate" ["--eval", "--strict", coerce fp] mempty
 
 assertEvalFileMatchesNix :: Path -> Assertion
 assertEvalFileMatchesNix fp = do

@@ -134,7 +134,7 @@ instance MonadExec IO where
   exec' = \case
     []            -> pure $ Left $ ErrorCall "exec: missing program"
     (prog : args) -> do
-      (exitCode, out, _) <- liftIO $ readProcessWithExitCode (toString prog) (toString <$> args) ""
+      (exitCode, out, _) <- liftIO $ readProcessWithExitCode (toString prog) (toString <$> args) mempty
       let
         t    = Text.strip $ fromString out
         emsg = "program[" <> prog <> "] args=" <> show args
@@ -185,7 +185,7 @@ instance MonadInstantiate IO where
         readProcessWithExitCode
           "nix-instantiate"
           ["--eval", "--expr", toString expr]
-          ""
+          mempty
 
       pure $
         case exitCode of
