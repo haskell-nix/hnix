@@ -39,23 +39,27 @@ renderFrames
   => Frames
   -> m (Doc ann)
 renderFrames []       = stub
-renderFrames (x : xs) = do
-  opts :: Options <- asks $ view hasLens
-  frames          <- if
-    | verbose opts <= ErrorsOnly -> renderFrame @v @t @f x
-    | verbose opts <= Informational -> do
-      f <- renderFrame @v @t @f x
-      pure $ foldMap fun (reverse xs) <> f
-    | otherwise -> fold <$> traverse (renderFrame @v @t @f) (reverse (x : xs))
-  pure $
-    list
-      mempty
-      vsep
-      frames
+renderFrames xss@(x : xs) =
+  do
+    opts :: Options <- asks $ view hasLens
+    let
+      verbosity :: Verbosity
+      verbosity = verbose opts
+    renderedFrames <- if
+        | verbosity <= ErrorsOnly -> render1 x
+      --  2021-10-22: NOTE: List reverse is completely conterproductive. `reverse` of list famously neest to traverse the whole list to take the last element
+        | verbosity <= Informational -> (foldMap renderPosition (reverse xs) <>) <$> render1 x
+        | otherwise -> foldMapM render1 (reverse xss)
+    pure $ list mempty vsep renderedFrames
  where
-  fun :: NixFrame -> [Doc ann]
-  fun f =
-    (\ pos -> ["While evaluating at " <> pretty (sourcePosPretty pos) <> colon]) `whenJust` framePos @v @m f
+  render1 :: NixFrame -> m [Doc ann1]
+  render1 = renderFrame @v @t @f
+
+  renderPosition :: NixFrame -> [Doc ann]
+  renderPosition =
+    whenJust
+      (\ pos -> one ("While evaluating at " <> pretty (sourcePosPretty pos) <> colon))
+      . framePos @v @m
 
 framePos
   :: forall v (m :: Type -> Type)
