@@ -102,7 +102,7 @@ mkSymbolic
   :: MonadAtomicRef m
   => [NTypeF m (Symbolic m)]
   -> m (Symbolic m)
-mkSymbolic xs = packSymbolic (NMany xs)
+mkSymbolic = packSymbolic . NMany
 
 packSymbolic
   :: MonadAtomicRef m
@@ -427,21 +427,23 @@ lintBinaryOp op lsym rarg =
           NUpdate -> one $ TSet mempty
 
           NConcat -> one $ TList y
-
-
-
 #if __GLASGOW_HASKELL__ < 900
           _ -> fail "Should not be possible"  -- symerr or this fun signature should be changed to work in type scope
 #endif
+
+
+
  where
   check lsym rsym xs =
     do
-      let e = NBinary op lsym rsym
+      let
+        e = NBinary op lsym rsym
+        unifyE = unify (void e)
 
       m <- mkSymbolic xs
-      _ <- unify (void e) lsym m
-      _ <- unify (void e) rsym m
-      unify (void e) lsym rsym
+      _ <- unifyE lsym m
+      _ <- unifyE rsym m
+      unifyE lsym rsym
 
 infixl 1 `lintApp`
 lintApp
