@@ -20,13 +20,14 @@ toXML = runWithStringContext . fmap pp . iterNValueByDiscardWith cyc phi
  where
   cyc = pure $ mkEVal "string" "<expr>"
 
+  pp :: Element -> Text
   pp e =
     heading
     <> fromString
         (ppElement $
           mkE
             "expr"
-            [Elem e]
+            (one $ Elem e)
         )
     <> "\n"
    where
@@ -63,8 +64,8 @@ toXML = runWithStringContext . fmap pp . iterNValueByDiscardWith cyc phi
                 Elem $
                   Element
                     (unqual "attr")
-                    [Attr (unqual "name") (toString k)]
-                    [Elem v]
+                    (one $ Attr (unqual "name") $ toString k)
+                    (one $ Elem v)
                     Nothing
               ) <$>
                 sortWith fst (M.toList kvs)
@@ -90,7 +91,7 @@ mkElem :: String -> String -> String -> Element
 mkElem n a v =
   Element
     (unqual n)
-    [Attr (unqual a) v]
+    (one $ Attr (unqual a) v)
     mempty
     Nothing
 
@@ -101,14 +102,14 @@ mkEName :: String -> String -> Element
 mkEName = (`mkElem` "name")
 
 paramsXML :: Params r -> [Content]
-paramsXML (Param name) = [Elem $ mkEName "varpat" (toString name)]
+paramsXML (Param name) = one $ Elem $ mkEName "varpat" $ toString name
 paramsXML (ParamSet mname variadic pset) =
-  [Elem $ Element (unqual "attrspat") (battr <> nattr) (paramSetXML pset) Nothing]
+  one $ Elem $ Element (unqual "attrspat") (battr <> nattr) (paramSetXML pset) Nothing
  where
   battr =
-    [ Attr (unqual "ellipsis") "1" ] `whenTrue` (variadic == Variadic)
+    one (Attr (unqual "ellipsis") "1") `whenTrue` (variadic == Variadic)
   nattr =
-    ((: mempty) . Attr (unqual "name") . toString) `whenJust` mname
+    (one . Attr (unqual "name") . toString) `whenJust` mname
 
 paramSetXML :: ParamSet r -> [Content]
-paramSetXML = fmap (\(k, _) -> Elem $ mkEName "attr" (toString k))
+paramSetXML = fmap (Elem . mkEName "attr" . toString . fst)
