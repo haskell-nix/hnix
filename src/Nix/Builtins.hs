@@ -959,33 +959,31 @@ genericClosureNix c =
       do
         ss <- fromValue @[NValue t f m] =<< demand startSet
         op <- demand operator
+        let
+          go
+            :: Set (WValue t f m)
+            -> [NValue t f m]
+            -> m (Set (WValue t f m), [NValue t f m])
+          go ks []       = pure (ks, mempty)
+          go ks (t : ts) =
+            do
+              v <- demand t
+              k <- demand =<< attrsetGet "key" =<< fromValue @(AttrSet (NValue t f m)) v
 
-        toValue @[NValue t f m] =<< snd <$> go op mempty ss
- where
-  go
-    :: NValue t f m
-    -> Set (WValue t f m)
-    -> [NValue t f m]
-    -> m (Set (WValue t f m), [NValue t f m])
-  go _  ks []       = pure (ks, mempty)
-  go op ks (t : ts) =
-    do
-      v <- demand t
-      k <- demand =<< attrsetGet "key" =<< fromValue @(AttrSet (NValue t f m)) v
+              bool
+                (do
+                  checkComparable k $
+                    list
+                      k
+                      (\ (WValue j:_) -> j)
+                      (S.toList ks)
 
-      bool
-        (do
-          ys <- fromValue @[NValue t f m] =<< callFunc op v
-          checkComparable k
-            (list
-              k
-              (\ (WValue j:_) -> j)
-              (S.toList ks)
-            )
-          (t :) <<$>> go op (S.insert (WValue k) ks) (ts <> ys)
-        )
-        (go op ks ts)
-        (S.member (WValue k) ks)
+                  (<<$>>) (v :) . go (S.insert (WValue k) ks) . (<>) ts =<< fromValue @[NValue t f m] =<< callFunc op v
+                )
+                (go ks ts)
+                (S.member (WValue k) ks)
+
+        toValue @[NValue t f m] =<< snd <$> go mempty ss
 
 -- | Takes:
 -- 1. List of strings to match.
