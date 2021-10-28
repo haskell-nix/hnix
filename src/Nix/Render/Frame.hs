@@ -189,13 +189,14 @@ renderValueFrame level = fmap one . \case
         (level <= Error)
 
   CoercionToJson v ->
-    ("CoercionToJson " <>) <$> renderValue level mempty mempty v
+    ("CoercionToJson " <>) <$> dumbRenderValue v
   CoercionFromJson _j -> pure "CoercionFromJson"
   Expectation t v     ->
-    (msg <>) <$> renderValue level mempty mempty v
+    (msg <>) <$> dumbRenderValue v
    where
     msg = "Expected " <> pretty (describeValue t) <> ", but saw "
 
+--  2021-10-28: NOTE: notice it ignores `level`, `longlabel` & `shortlabel`, to underline that `dumbRenderValue` synonym was created
 renderValue
   :: forall e t f m ann
    . (MonadReader e m, Has e Options, MonadFile m, MonadCitedThunks t f m)
@@ -212,15 +213,21 @@ renderValue _level _longLabel _shortLabel v = do
     (values opts)
     <$> removeEffects v
 
+dumbRenderValue
+  :: forall e t f m ann
+   . (MonadReader e m, Has e Options, MonadFile m, MonadCitedThunks t f m)
+   => (NValue t f m -> m (Doc ann))
+dumbRenderValue = renderValue Info mempty mempty
+
 renderExecFrame
   :: (MonadReader e m, Has e Options, MonadFile m, MonadCitedThunks t f m)
   => NixLevel
   -> ExecFrame t f m
   -> m [Doc ann]
-renderExecFrame level (Assertion ann v) =
+renderExecFrame _level (Assertion ann v) =
   fmap
     one
-    $ renderLocation ann . fillSep . on (<>) one "Assertion failed:" =<< renderValue level mempty mempty v
+    $ renderLocation ann . fillSep . on (<>) one "Assertion failed:" =<< dumbRenderValue v
 
 renderThunkLoop
   :: (MonadReader e m, Has e Options, MonadFile m, Show (ThunkId m))
@@ -235,5 +242,5 @@ renderNormalLoop
   => NixLevel
   -> NormalLoop t f m
   -> m [Doc ann]
-renderNormalLoop level (NormalLoop v) =
-  one . ("Infinite recursion during normalization forcing " <>) <$> renderValue level mempty mempty v
+renderNormalLoop _level (NormalLoop v) =
+  one . ("Infinite recursion during normalization forcing " <>) <$> dumbRenderValue v
