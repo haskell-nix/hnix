@@ -98,16 +98,17 @@ findEnvPathM name =
 
  where
   nixFilePath :: MonadEffects t f m => Path -> m (Maybe Path)
-  nixFilePath path = do
-    absPath <- toAbsolutePath @t @f path
-    isDir   <- doesDirectoryExist absPath
-    absFile <-
-      bool
-        (pure absPath)
-        (toAbsolutePath @t @f $ absPath </> "default.nix")
-        isDir
-    exists <- doesFileExist absFile
-    pure $ pure absFile `whenTrue` exists
+  nixFilePath path =
+    do
+      absPath <- toAbsolutePath @t @f path
+      isDir   <- doesDirectoryExist absPath
+      absFile <-
+        bool
+          (pure absPath)
+          (toAbsolutePath @t @f $ absPath </> "default.nix")
+          isDir
+
+      (pure absFile `whenTrue`) <$> doesFileExist absFile
 
 findPathBy
   :: forall e t f m
