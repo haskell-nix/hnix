@@ -36,6 +36,10 @@ import qualified "hashing" Crypto.Hash.SHA1    as SHA1
 import qualified "hashing" Crypto.Hash.SHA256  as SHA256
 import qualified "hashing" Crypto.Hash.SHA512  as SHA512
 import qualified Data.Aeson                    as A
+#if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.Key                as AKM
+import qualified Data.Aeson.KeyMap             as AKM
+#endif
 import           Data.Align                     ( alignWith )
 import           Data.Array
 import           Data.Bits
@@ -1505,19 +1509,31 @@ fromJSONNix nvjson =
       (A.eitherDecodeStrict' @A.Value $ encodeUtf8 jText)
 
  where
-  jsonToNValue = \case
-    A.Object m -> nvSet mempty <$> traverse jsonToNValue m
-    A.Array  l -> nvList <$> traverse jsonToNValue (V.toList l)
-    A.String s -> pure $ nvStrWithoutContext s
-    A.Number n ->
-      pure $
-        nvConstant $
-          either
-            NFloat
-            NInt
-            (floatingOrInteger n)
-    A.Bool   b -> pure $ mkNVBool b
-    A.Null     -> pure nvNull
+  jsonToNValue :: (A.Value -> m (NValue t f m))
+  jsonToNValue =
+    \case
+      A.Object m ->
+        traverseToNValue
+          (nvSet mempty)
+#if MIN_VERSION_aeson(2,0,0)
+          (M.mapKeys (coerce . AKM.toText)  $ AKM.toHashMap m)
+#else
+          (M.mapKeys coerce m)
+#endif
+      A.Array  l -> traverseToNValue nvList (V.toList l)
+      A.String s -> pure $ nvStrWithoutContext s
+      A.Number n ->
+        pure $
+          nvConstant $
+            either
+              NFloat
+              NInt
+              (floatingOrInteger n)
+      A.Bool   b -> pure $ mkNVBool b
+      A.Null     -> pure nvNull
+   where
+    traverseToNValue :: Traversable t0 => (t0 (NValue t f m) -> b) -> t0 A.Value -> m b
+    traverseToNValue f v = f <$> traverse jsonToNValue v
 
 toJSONNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toJSONNix = (fmap nvStr . nvalueToJSONNixString) <=< demand

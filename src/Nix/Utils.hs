@@ -12,6 +12,9 @@ import           Control.Monad.Free             ( Free(..) )
 import           Control.Monad.Trans.Control    ( MonadTransControl(..) )
 import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Encoding           as A
+#if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.KeyMap             as AKM
+#endif
 import           Data.Fix                       ( Fix(..) )
 import qualified Data.HashMap.Lazy             as M
 import qualified Data.Text                     as Text
@@ -153,8 +156,13 @@ toEncodingSorted = \case
     A.pairs
       . mconcat
       . ((\(k, v) -> A.pair k $ toEncodingSorted v) <$>)
-      . sortWith fst
-      $ M.toList m
+      . sortWith fst $
+#if MIN_VERSION_aeson(2,0,0)
+          AKM.toList
+#else
+          HM.toList
+#endif
+          m
   A.Array l -> A.list toEncodingSorted $ V.toList l
   v         -> A.toEncoding v
 

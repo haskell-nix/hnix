@@ -404,7 +404,7 @@ library
     -Wall
     -fprint-potential-instances
   build-depends:
-      aeson >= 1.4.2 && < 1.6
+      aeson >= 1.4.2 && < 1.6 || >= 2.0 && < 2.1
     , array >= 0.4 && < 0.6
     , base >= 4.12 && < 5
     , base16-bytestring >= 0.1.1 && < 1.1

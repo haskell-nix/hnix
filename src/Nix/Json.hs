@@ -1,3 +1,4 @@
+{-# language CPP #-}
 
 module Nix.Json where
 
@@ -5,6 +6,10 @@ import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Encoding           as A
 import qualified Data.HashMap.Lazy             as HM
 import qualified Data.Text.Lazy.Encoding       as TL
+#if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.Key                as AKM
+import qualified Data.Aeson.KeyMap             as AKM
+#endif
 import qualified Data.Vector                   as V
 import           Nix.Atoms
 import           Nix.Effects
@@ -37,9 +42,17 @@ nvalueToJSON = \case
   NVList l -> A.Array . V.fromList <$> traverse intoJson l
   NVSet m _ ->
     maybe
-      (A.Object <$> traverse intoJson m)
+      (A.Object <$> traverse intoJson kmap)
       intoJson
-      (HM.lookup "outPath" m)
+      (lkup "outPath" kmap)
+   where
+#if MIN_VERSION_aeson(2,0,0)
+    lkup = AKM.lookup
+    kmap = AKM.fromHashMap (HM.mapKeys (AKM.fromText . coerce) m)
+#else
+    lkup = HM.lookup
+    kmap = HM.mapKeys (coerce @VarName @Text) m
+#endif
   NVPath p ->
     do
       fp <- lift $ unStorePath <$> addPath p
