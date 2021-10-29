@@ -78,7 +78,7 @@ coerceToString call ctsm clevel = go
           NVStr ns -> pure ns
           NVPath p ->
             bool
-              (castToNixString . toText)
+              (castToNixString . fromString . coerce)
               (fmap storePathToNixString . addPath)
               (ctsm == CopyToStore)
               p
