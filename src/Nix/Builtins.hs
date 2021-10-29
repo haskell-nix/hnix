@@ -45,8 +45,9 @@ import qualified Data.HashMap.Lazy             as M
 import           Data.Scientific
 import qualified Data.Set                      as S
 import qualified Data.Text                     as Text
+import           Data.Text.Read                 ( decimal )
 import qualified Data.Text.Lazy.Builder        as Builder
-import           Data.These                     ( fromThese )
+import           Data.These                     ( fromThese, These )
 import qualified Data.Time.Clock.POSIX         as Time
 import qualified Data.Vector                   as V
 import           NeatInterpolation              ( text )
@@ -175,7 +176,7 @@ uriAwareSplit :: Text -> [(Text, NixPathEntryType)]
 uriAwareSplit txt =
   case Text.break (== ':') txt of
     (e1, e2)
-      | Text.null e2                              -> [(e1, PathEntryPath)]
+      | Text.null e2                              -> one (e1, PathEntryPath)
       | "://" `Text.isPrefixOf` e2      ->
         let ((suffix, _) : path) = uriAwareSplit (Text.drop 3 e2) in
         (e1 <> "://" <> suffix, PathEntryURI) : path
@@ -208,7 +209,7 @@ foldNixPath z f =
       z
       $ (fromInclude . stringIgnoreContext <$> dirs)
         <> uriAwareSplit `whenJust` mPath
-        <> [ fromInclude $ "nix=" <> toText dataDir <> "/nix/corepkgs" ]
+        <> one (fromInclude $ "nix=" <> fromString (coerce dataDir) <> "/nix/corepkgs")
  where
 
   fromInclude :: Text -> (Text, NixPathEntryType)
@@ -248,46 +249,52 @@ instance Show VersionComponent where
 
 splitVersion :: Text -> [VersionComponent]
 splitVersion s =
-  case Text.uncons s of
-    Nothing -> mempty
-    Just (h, t)
+ whenJust
+   (\ (x, xs) -> if
+      | isRight eDigitsPart ->
+          either
+            (\ e -> error $ "splitVersion: did hit impossible: '" <> toText e <> "' while parsing '" <> s <> "'.")
+            (\ res ->
+              one (VersionComponentNumber $ fst res)
+              <> splitVersion (snd res)
+            )
+            eDigitsPart
 
-      | h `elem` versionComponentSeparators -> splitVersion t
+      | x `elem` separators -> splitVersion xs
 
-      | isDigit h ->
-        let (digits, rest) = Text.span isDigit s
-        in
-        VersionComponentNumber
-            (fromMaybe (error $ "splitVersion: couldn't parse " <> show digits) $ readMaybe $ toString digits) : splitVersion rest
-
-      | otherwise ->
-        let
-          (chars, rest) =
-            Text.span
-              (\c -> not $ isDigit c || c `elem` versionComponentSeparators)
-              s
-          thisComponent =
-            case chars of
-              "pre" -> VersionComponentPre
-              x     -> VersionComponentString x
-        in
-        thisComponent : splitVersion rest
+      | otherwise -> one charsPart <> splitVersion rest2
+  )
+  (Text.uncons s)
  where
   -- | Based on https://github.com/NixOS/nix/blob/4ee4fda521137fed6af0446948b3877e0c5db803/src/libexpr/names.cc#L44
-  versionComponentSeparators :: String
-  versionComponentSeparators = ".-"
+  separators :: String
+  separators = ".-"
+
+  eDigitsPart :: Either String (Integer, Text)
+  eDigitsPart = decimal @Integer $ s
+
+  (charsSpan, rest2) =
+    Text.span
+      (\c -> not $ isDigit c || c `elem` separators)
+      s
+
+  charsPart :: VersionComponent
+  charsPart =
+    case charsSpan of
+      "pre" -> VersionComponentPre
+      xs'   -> VersionComponentString xs'
 
 
 compareVersions :: Text -> Text -> Ordering
 compareVersions s1 s2 =
-  mconcat $ (alignWith cmp `on` splitVersion) s1 s2
+  fold $ (alignWith cmp `on` splitVersion) s1 s2
  where
-  z = VersionComponentString ""
-  cmp = uncurry compare . fromThese z z
+  cmp :: These VersionComponent VersionComponent -> Ordering
+  cmp = uncurry compare . join fromThese (VersionComponentString mempty)
 
 splitDrvName :: Text -> (Text, Text)
 splitDrvName s =
-  (Text.intercalate sep namePieces, Text.intercalate sep versionPieces)
+  both (Text.intercalate sep) (namePieces, versionPieces)
  where
   sep    = "-"
   pieces :: [Text]
@@ -303,7 +310,7 @@ splitDrvName s =
   breakAfterFirstItem :: (a -> Bool) -> [a] -> ([a], [a])
   breakAfterFirstItem f =
     list
-      (mempty, mempty)
+      mempty
       (\ (h : t) -> let (a, b) = break f t in (h : a, b))
   (namePieces, versionPieces) =
     breakAfterFirstItem isFirstVersionPiece pieces
@@ -315,7 +322,7 @@ splitMatches
   -> [[(ByteString, (Int, Int))]]
   -> ByteString
   -> [NValue t f m]
-splitMatches _ [] haystack = [thunkStr haystack]
+splitMatches _ [] haystack = one $ thunkStr haystack
 splitMatches _ ([] : _) _ =
   fail "Fail in splitMatches: this should never happen!"
 splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
@@ -414,29 +421,26 @@ derivationNix = foldFix Eval.eval $$(do
     [|| expr ||]
   )
 
-nixPathNix :: MonadNix e t f m => m (NValue t f m)
+nixPathNix :: forall e t f m . MonadNix e t f m => m (NValue t f m)
 nixPathNix =
   fmap
     nvList
-    (foldNixPath mempty $
-      \p mn ty rest ->
-        pure $
-          pure
-            (nvSet
-              mempty
-              (M.fromList
-                [case ty of
-                  PathEntryPath -> ("path", nvPath  p)
-                  PathEntryURI  -> ( "uri", mkNvStr p)
+    $ foldNixPath mempty $
+        \p mn ty rest ->
+          pure $
+            pure
+              (nvSet
+                mempty
+                (M.fromList
+                  [case ty of
+                    PathEntryPath -> ("path", nvPath  p)
+                    PathEntryURI  -> ( "uri", nvStrWithoutContext $ fromString $ coerce p)
 
-                , ( "prefix", mkNvStr $ coerce $ toString $ fromMaybe "" mn)
-                ]
+                  , ( "prefix", nvStrWithoutContext $ maybeToMonoid mn)
+                  ]
+                )
               )
-            )
-          <> rest
-    )
- where
-  mkNvStr = nvStrWithoutContext . toText
+            <> rest
 
 toStringNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toStringNix = toValue <=< coerceToString callFunc DontCopyToStore CoerceAny
@@ -685,8 +689,8 @@ matchNix pat str =
             traverse
               mkMatch
               (case submatches of
-                 [] -> []
-                 [a] -> [a]
+                 [] -> mempty
+                 [a] -> one a
                  _:xs -> xs -- return only the matched groups, drop the full string
               )
       _ -> pure nvNull
@@ -962,33 +966,31 @@ genericClosureNix c =
       do
         ss <- fromValue @[NValue t f m] =<< demand startSet
         op <- demand operator
+        let
+          go
+            :: Set (WValue t f m)
+            -> [NValue t f m]
+            -> m (Set (WValue t f m), [NValue t f m])
+          go ks []       = pure (ks, mempty)
+          go ks (t : ts) =
+            do
+              v <- demand t
+              k <- demand =<< attrsetGet "key" =<< fromValue @(AttrSet (NValue t f m)) v
 
-        toValue @[NValue t f m] =<< snd <$> go op mempty ss
- where
-  go
-    :: NValue t f m
-    -> Set (WValue t f m)
-    -> [NValue t f m]
-    -> m (Set (WValue t f m), [NValue t f m])
-  go _  ks []       = pure (ks, mempty)
-  go op ks (t : ts) =
-    do
-      v <- demand t
-      k <- demand =<< attrsetGet "key" =<< fromValue @(AttrSet (NValue t f m)) v
+              bool
+                (do
+                  checkComparable k $
+                    list
+                      k
+                      (\ (WValue j:_) -> j)
+                      (S.toList ks)
 
-      bool
-        (do
-          ys <- fromValue @[NValue t f m] =<< callFunc op v
-          checkComparable k
-            (list
-              k
-              (\ (WValue j:_) -> j)
-              (S.toList ks)
-            )
-          (t :) <<$>> go op (S.insert (WValue k) ks) (ts <> ys)
-        )
-        (go op ks ts)
-        (S.member (WValue k) ks)
+                  (<<$>>) (v :) . go (S.insert (WValue k) ks) . (<>) ts =<< fromValue @[NValue t f m] =<< callFunc op v
+                )
+                (go ks ts)
+                (S.member (WValue k) ks)
+
+        toValue @[NValue t f m] =<< snd <$> go mempty ss
 
 -- | Takes:
 -- 1. List of strings to match.
@@ -1138,13 +1140,13 @@ toFileNix name s =
         (stringIgnoreContext s')
 
     let
-      storepath  = coerce $ toText @FilePath $ coerce mres
+      storepath  = coerce (fromString @Text) mres
       sc = StringContext storepath DirectPath
 
     toValue $ mkNixStringWithSingletonContext storepath sc
 
 toPathNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-toPathNix = toValue @Path <=< fromValue @Path
+toPathNix = inHask @Path id
 
 pathExistsNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 pathExistsNix nvpath =
@@ -1700,7 +1702,7 @@ getContextNix v =
     case v' of
       (NVStr ns) -> do
         let context = getNixLikeContext $ toNixLikeContext $ getContext ns
-        valued :: AttrSet (NValue t f m) <- sequenceA $ toValue <$> context
+        valued :: AttrSet (NValue t f m) <- traverseToValue context
         pure $ nvSet mempty valued
       x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: " <> show x
 
@@ -2008,7 +2010,7 @@ builtins
 builtins =
   do
     ref <- defer $ nvSet mempty <$> buildMap
-    lst <- ([("builtins", ref)] <>) <$> topLevelBuiltins
+    lst <- (one ("builtins", ref) <>) <$> topLevelBuiltins
     pushScope (coerce (M.fromList lst)) currentScopes
  where
   buildMap :: m (HashMap VarName (NValue t f m))

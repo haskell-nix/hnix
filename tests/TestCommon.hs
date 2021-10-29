@@ -5,6 +5,7 @@ module TestCommon where
 import           GHC.Err                        ( errorWithoutStackTrace )
 import           Control.Monad.Catch
 import           Data.Time
+import           Data.Text.IO as Text
 import           Nix
 import           Nix.Standard
 import           Nix.Fresh.Basic
@@ -45,30 +46,31 @@ hnixEvalText opts src =
     )
     (parseNixText src)
 
-nixEvalString :: String -> IO String
-nixEvalString expr = do
-  (coerce -> fp, h) <- mkstemp "nix-test-eval"
-  hPutStr h expr
-  hClose h
-  res <- nixEvalFile fp
-  removeLink $ coerce fp
-  pure res
+nixEvalString :: Text -> IO Text
+nixEvalString expr =
+  do
+    (coerce -> fp, h) <- mkstemp "nix-test-eval"
+    Text.hPutStr h expr
+    hClose h
+    res <- nixEvalFile fp
+    removeLink $ coerce fp
+    pure res
 
-nixEvalFile :: Path -> IO String
-nixEvalFile fp = readProcess "nix-instantiate" ["--eval", "--strict", coerce fp] ""
+nixEvalFile :: Path -> IO Text
+nixEvalFile fp = fromString <$> readProcess "nix-instantiate" ["--eval", "--strict", coerce fp] mempty
 
 assertEvalFileMatchesNix :: Path -> Assertion
-assertEvalFileMatchesNix fp = do
-  time    <- liftIO getCurrentTime
-  hnixVal <- (<> "\n") . printNix <$> hnixEvalFile (defaultOptions time) fp
-  nixVal  <- nixEvalFile fp
-  assertEqual (coerce fp) nixVal hnixVal
+assertEvalFileMatchesNix fp =
+  do
+    time    <- liftIO getCurrentTime
+    hnixVal <- (<> "\n") . printNix <$> hnixEvalFile (defaultOptions time) fp
+    nixVal  <- nixEvalFile fp
+    assertEqual (coerce fp) nixVal hnixVal
 
 assertEvalMatchesNix :: Text -> Assertion
-assertEvalMatchesNix expr = do
-  time    <- liftIO getCurrentTime
-  hnixVal <- (<> "\n") . printNix <$> hnixEvalText (defaultOptions time) expr
-  nixVal  <- nixEvalString expr'
-  assertEqual expr' nixVal hnixVal
- where
-  expr' = toString expr
+assertEvalMatchesNix expr =
+  do
+    time    <- liftIO getCurrentTime
+    hnixVal <- (<> "\n") . printNix <$> hnixEvalText (defaultOptions time) expr
+    nixVal  <- nixEvalString expr
+    assertEqual (toString expr) nixVal hnixVal

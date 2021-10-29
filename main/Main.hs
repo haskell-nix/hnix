@@ -123,7 +123,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
                 (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <>
                   ppShow (maybeToMonoid $ Map.lookup @VarName @[Scheme] "it" $ coerce ty)
                 )
-                (HM.inferTop mempty [("it", stripAnnotation expr')])
+                (HM.inferTop mempty (one ("it", stripAnnotation expr')))
 
                 -- liftIO $ putStrLn $ runST $
                 --     runLintM opts . renderSymbolic =<< lint opts expr

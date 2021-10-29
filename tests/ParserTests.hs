@@ -38,7 +38,7 @@ case_constant_int =
     , "234"
     )
 
-case_constant_bool = do
+case_constant_bool =
   checks
     ( mkBool True
     , "true"
@@ -47,7 +47,7 @@ case_constant_bool = do
     , "false"
     )
 
-case_constant_bool_respects_attributes = do
+case_constant_bool_respects_attributes =
   invariantVals
     "true-foo"
     "false-bar"
@@ -146,26 +146,26 @@ case_simple_set_syntax_mistakes =
 
 case_set_complex_keynames =
   checks
-    ( mkNonRecSet
-        [ NamedVar (DynamicKey (Plain (DoubleQuoted mempty)) :| mempty) mkNull nullPos ]
+    ( mkNonRecSet $
+        one (NamedVar (one (DynamicKey (Plain (DoubleQuoted mempty)))) mkNull nullPos)
     , "{ \"\" = null; }"
     )
     ( mkNonRecSet
-        [ NamedVar (StaticKey "a" :| [StaticKey "b"]) (mkInt 3) nullPos
-        , NamedVar (StaticKey "a" :| [StaticKey "c"]) (mkInt 4) nullPos
+        [ NamedVar (StaticKey "a" :| one (StaticKey "b")) (mkInt 3) nullPos
+        , NamedVar (StaticKey "a" :| one (StaticKey "c")) (mkInt 4) nullPos
         ]
     , "{ a.b = 3; a.c = 4; }"
     )
-    ( mkNonRecSet
-        [ NamedVar (DynamicKey (Antiquoted letExpr) :| mempty) (mkInt 4) nullPos ]
+    ( mkNonRecSet $
+        one (NamedVar (one (DynamicKey (Antiquoted letExpr))) (mkInt 4) nullPos)
     , "{ ${let a = \"b\"; in a} = 4; }"
     )
-    ( mkNonRecSet
-        [ NamedVar (DynamicKey (Plain str) :| [StaticKey "e"]) (mkInt 4) nullPos ]
+    ( mkNonRecSet $
+        one (NamedVar (DynamicKey (Plain str) :| one (StaticKey "e")) (mkInt 4) nullPos)
     , "{ \"a${let a = \"b\"; in a}c\".e = 4; }"
     )
  where
-  letExpr = mkLets ["a" $= mkStr "b"] (var "a")
+  letExpr = mkLets (one ("a" $= mkStr "b")) (var "a")
   str = DoubleQuoted [Plain "a", Antiquoted letExpr, Plain "c"]
 
 
@@ -191,7 +191,7 @@ case_set_inherit =
         ]
     , "{ e = 3; inherit a b; }"
     )
-    ( mkNonRecSet [ inherit mempty ]
+    ( mkNonRecSet $ one $ inherit mempty
     , "{ inherit; }"
     )
 
@@ -205,7 +205,7 @@ case_set_scoped_inherit =
 
 case_set_inherit_direct =
   checks
-    ( mkNonRecSet [ inheritFrom (mkNonRecSet ["a" $= mkInt 3]) mempty ]
+    ( mkNonRecSet $ one (inheritFrom (mkNonRecSet $ one ("a" $= mkInt 3)) mempty)
     , "{ inherit ({a = 3;}); }"
     )
 
@@ -235,7 +235,7 @@ case_int_null_list =
 case_mixed_list =
   checks
     ( mkList
-        [ mkNonRecSet ["a" $= mkInt 3] @. "a"
+        [ mkNonRecSet (one $ "a" $= mkInt 3) @. "a"
         , mkIf (mkBool True) mkNull (mkBool False)
         , mkNull
         , mkBool False
@@ -276,7 +276,7 @@ case_lambda_or_uri =
     ( mkFunction (Param "a") emptySet
     , "a:{}"
     )
-    ( mkFunction (Param "a") $ mkList [var "a"]
+    ( mkFunction (Param "a") $ mkList $ one $ var "a"
     , "a:[a]"
     )
 
@@ -308,7 +308,7 @@ case_lambda_pattern =
  where
   args  = [("b", Nothing), ("c", pure $ mkInt 1)]
   vargs = [("b", Nothing), ("c", pure $ mkInt 1)]
-  args2 = [("b", pure lam)]
+  args2 = one ("b", pure lam)
   lam = mkFunction (Param "x") $ var "x"
 
 case_lambda_pattern_syntax_mistakes =
@@ -327,7 +327,7 @@ case_lambda_app_int =
 
 case_simple_let =
   checks
-    ( mkLets ["a" $= mkInt 4] $ var "a"
+    ( mkLets (one $ "a" $= mkInt 4) $ var "a"
     , "let a = 4; in a"
     )
 
@@ -337,14 +337,14 @@ case_simple_let_syntax_mistakes =
 
 case_let_body =
   checks
-    ( mkRecSet ["body" $= mkInt 1] @. "body"
+    ( mkRecSet (one $ "body" $= mkInt 1) @. "body"
     , "let { body = 1; }"
     )
 
 case_nested_let =
   checks
-    ( mkLets ["a" $= mkInt 4] $
-        mkLets ["b" $= mkInt 5] $ var "a"
+    ( mkLets (one $ "a" $= mkInt 4) $
+        mkLets (one $ "b" $= mkInt 5) $ var "a"
     , "let a = 4; in let b = 5; in a"
     )
 
@@ -395,7 +395,7 @@ case_identifier_keyword_prefix_invariants =
 
 case_identifier_keyword_prefix =
   checks
-    ( mkList [ var "null-name" ]
+    ( mkList $ one $ var "null-name"
     , "[ null-name ]"
     )
 
@@ -462,7 +462,7 @@ case_indented_string =
     ( mkIndentedStr 2 "foo\nbar"
     , "''\n  foo\n  bar''"
     )
-    ( mkIndentedStr 0 ""
+    ( mkIndentedStr 0 mempty
     , "''        ''"
     )
     ( mkIndentedStr 0 "''"
@@ -495,21 +495,21 @@ case_select =
     , "a .  e .di. f"
     )
     ( Fix $ NSelect (pure mkNull) (var "a")
-        (StaticKey "e" :| [StaticKey "d"])
+        (StaticKey "e" :| one (StaticKey "d"))
     , "a.e . d    or null"
     )
     ( Fix $ NSelect (pure mkNull) emptySet
-        (DynamicKey (Plain $ DoubleQuoted mempty) :| mempty)
+        (one $ DynamicKey (Plain $ DoubleQuoted mempty))
     , "{}.\"\"or null"
     )
     ( Fix $ NBinary NConcat
         ((@.<|>)
-          (mkNonRecSet
-            [NamedVar
-              (mkSelector "a")
-              (mkList $ one $ mkInt 1)
-              nullPos
-            ]
+          (mkNonRecSet $
+            one $
+              NamedVar
+                (mkSelector "a")
+                (mkList $ one $ mkInt 1)
+                nullPos
           )
           "a"
           (mkList $ one $ mkInt 2)
@@ -529,13 +529,13 @@ case_select_path =
     ( emptySet @@ mkRelPath "./def"
     , "{}./def"
     )
-    ( Fix (NSelect Nothing emptySet (DynamicKey (Plain $ DoubleQuoted mempty) :| mempty)) @@ mkRelPath "./def"
+    ( Fix (NSelect Nothing emptySet $ one $ DynamicKey $ Plain $ DoubleQuoted mempty) @@ mkRelPath "./def"
     , "{}.\"\"./def"
     )
 
 case_select_keyword =
   checks
-    ( mkNonRecSet ["false" $= mkStr "foo"]
+    ( mkNonRecSet $ one $ "false" $= mkStr "foo"
     , "{ false = \"foo\"; }"
     )
 
@@ -604,7 +604,7 @@ case_operators =
     ( mkInt 1 $+ mkIf (mkBool True) (mkInt 2) (mkInt 3)
     , "1 + (if true then 2 else 3)"
     )
-    ( mkNonRecSet ["a" $= mkInt 3] $// mkRecSet ["b" $= mkInt 4]
+    ( mkNonRecSet (one $ "a" $= mkInt 3) $// mkRecSet (one $ "b" $= mkInt 4)
     , "{ a = 3; } // rec { b = 4; }"
     )
     ( mkNeg $ mkNeg $ var "a"
@@ -647,8 +647,9 @@ case_simpleLoc =
     |]
     (NLetAnn
       (mkSpan (1, 1) (4, 7))
-      [ NamedVar
-          (StaticKey "foo" :| [])
+      (one $
+        NamedVar
+          (one $ StaticKey "foo")
           (NBinaryAnn
             (mkSpan (2, 7) (3, 15))
             NApp
@@ -658,10 +659,10 @@ case_simpleLoc =
               (NSymAnn (mkSpan (2, 7) (2, 10)) "bar")
               (NSymAnn (mkSpan (3, 6) (3, 9 )) "baz")
             )
-            (NStrAnn (mkSpan (3, 10) (3, 15)) $ DoubleQuoted [Plain "qux"])
+            (NStrAnn (mkSpan (3, 10) (3, 15)) $ DoubleQuoted $ one $ Plain "qux")
           )
           (mkSPos 2 1)
-      ]
+      )
       (NSymAnn (mkSpan (4, 4) (4, 7)) "foo")
     )
 
@@ -694,7 +695,7 @@ throwParseError entity expr err =
       layoutSmart Prettyprinter.defaultLayoutOptions $
         nest 2 $
           vsep
-            [ ""
+            [ mempty
             , "Unexpected fail parsing " <> reflow entity <> ":"
             , nest 2 $ vsep
               [ "Expression:"
@@ -759,7 +760,8 @@ assertParsePrint src expect =
       . prettyNix
       . stripAnnotation $
         expr
-  in assertEqual "" expect result
+  in
+  assertEqual mempty expect result
 
 
 -----
@@ -777,7 +779,7 @@ instance VariadicAssertions (IO a) where
       pure $ error "never would be reached, cuz `I'm lazy`."
 
 instance (VariadicAssertions a) => VariadicAssertions ((ExpectedHask, NixLang) -> a) where
-  checkListPairs' f acc x = checkListPairs' f (acc <> [x])
+  checkListPairs' f acc x = checkListPairs' f (acc <> one x)
 
 checks :: (VariadicAssertions a) => a
 checks = checkListPairs' (uncurry assertParseText) []
@@ -793,7 +795,7 @@ instance VariadicArgs (IO a) where
       pure $ error "never would be reached, cuz `I'm lazy`."
 
 instance (VariadicArgs a) => VariadicArgs (NixLang -> a) where
-  checkList' f acc x = checkList' f (acc <> [x])
+  checkList' f acc x = checkList' f (acc <> one x)
 
 knownAs :: (VariadicArgs a) => (NixLang -> Assertion) -> a
 knownAs f = checkList' f []

@@ -41,17 +41,18 @@ runAntiquoted _  _ k (Antiquoted r) = k r
 -- | Split a stream representing a string with antiquotes on line breaks.
 splitLines :: [Antiquoted Text r] -> [[Antiquoted Text r]]
 splitLines = uncurry (flip (:)) . go where
-  go (Plain t : xs) = (Plain l :) <$> foldr f (go xs) ls   where
+  go (Plain t : xs) = (Plain l :) <$> foldr f (go xs) ls
+   where
     (l : ls) = T.split (== '\n') t
     f prefix (finished, current) = ((Plain prefix : current) : finished, mempty)
   go (Antiquoted a   : xs) = (Antiquoted a :) <$> go xs
   go (EscapedNewline : xs) = (EscapedNewline :) <$> go xs
-  go []                    = (mempty, mempty)
+  go []                    = mempty
 
 -- | Join a stream of strings containing antiquotes again. This is the inverse
 -- of 'splitLines'.
 unsplitLines :: [[Antiquoted Text r]] -> [Antiquoted Text r]
-unsplitLines = intercalate [Plain "\n"]
+unsplitLines = intercalate $ one $ Plain "\n"
 
 -- | Form an indented string by stripping spaces equal to the minimal indent.
 stripIndent :: [Antiquoted Text r] -> NString r

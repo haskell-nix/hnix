@@ -145,17 +145,11 @@ eval (NHasAttr aset attr) =
 eval (NList l           ) =
   do
     scope <- currentScopes
-    lst <- traverse (defer @v @m . withScopes @v scope) l
-    toValue lst
+    toValue =<< traverse (defer @v @m . withScopes @v scope) l
 
-eval (NSet NonRecursive binds) =
+eval (NSet r binds) =
   do
-    attrSet <- evalBinds False $ desugarBinds (eval . NSet mempty) binds
-    toValue attrSet
-
-eval (NSet Recursive binds) =
-  do
-    attrSet <- evalBinds True $ desugarBinds (eval . NSet mempty) binds
+    attrSet <- evalBinds (r == Recursive) $ desugarBinds (eval . NSet mempty) binds
     toValue attrSet
 
 eval (NLet binds body    ) =
@@ -188,11 +182,11 @@ eval (NAbs    params body) = do
     fun arg k =
       withCurScope $
         do
-          (coerce -> newScope) <- buildArgument params arg
+          (coerce -> newScopeToAdd) <- buildArgument params arg
           pushScope
-            newScope $
+            newScopeToAdd $
             k
-              (coerce $ withCurScope . inform <$> newScope)
+              (coerce $ withCurScope . inform <$> newScopeToAdd)
               body
 
   evalAbs
@@ -265,10 +259,12 @@ attrSetAlter ks' pos m' p' val =
           , AttrSet (m v)
           )
     recurse p'' m'' =
-      insertVal . (=<<) (toValue @(AttrSet v, PositionSet)) . fmap (,mempty) . sequenceA . snd <$> go p'' m'' ks
+      fmap
+        (insertVal . (=<<) (toValue @(AttrSet v, PositionSet)) . fmap (,mempty) . sequenceA . snd)
+        (go p'' m'' ks)
 
 desugarBinds :: forall r . ([Binding r] -> r) -> [Binding r] -> [Binding r]
-desugarBinds embed binds = evalState (traverse (go <=< collect) binds) mempty
+desugarBinds embed binds = evalState (traverse (findBinding <=< collect) binds) mempty
  where
   collect
     :: Binding r
@@ -279,12 +275,13 @@ desugarBinds embed binds = evalState (traverse (go <=< collect) binds) mempty
     do
       m <- get
       put $
-        M.insert
-          x
-          (maybe
-            (p, one $ bindValAt p)
-            (\ (q, v) -> (q, bindValAt q : v))
-            (M.lookup x m)
+        join
+          (M.insert
+            x
+            . maybe
+              (p, one $ bindValAt p)
+              (\ (sp, bnd) -> (sp, one (bindValAt sp) <> bnd))
+              . M.lookup x
           )
           m
       pure $ Left x
@@ -292,17 +289,16 @@ desugarBinds embed binds = evalState (traverse (go <=< collect) binds) mempty
     bindValAt = NamedVar (y :| ys) val
   collect x = pure $ pure x
 
-  go
+  findBinding
     :: Either VarName (Binding r)
     -> State (HashMap VarName (SourcePos, [Binding r])) (Binding r)
-  go =
+  findBinding =
     either
-      (\ x -> do
-        maybeValue <- gets $ M.lookup x
+      (\ x ->
         maybe
           (error $ "No binding " <> show x)
-          (\ (p, v) -> pure $ NamedVar (StaticKey x :| mempty) (embed v) p)
-          maybeValue
+          (\ (p, v) -> pure $ NamedVar (one $ StaticKey x) (embed v) p)
+          =<< gets (M.lookup x)
       )
       pure
 
@@ -314,11 +310,11 @@ evalBinds
   -> [Binding (m v)]
 --  2021-07-19: NOTE: AttrSet is a Scope
   -> m (AttrSet v, PositionSet)
-evalBinds recursive binds =
+evalBinds isRecursive binds =
   do
     scope <- currentScopes :: m (Scopes m v)
 
-    buildResult scope . concat =<< traverse (applyBindToAdt scope) (moveOverridesLast binds)
+    buildResult scope . fold =<< (`traverse` moveOverridesLast binds) (applyBindToAdt scope)
 
  where
   buildResult
@@ -327,12 +323,13 @@ evalBinds recursive binds =
     -> m (AttrSet v, PositionSet)
   buildResult scopes bindings =
     do
-      (coerce -> scope, p) <- foldM insert (mempty, mempty) bindings
+      (coerce -> scope, p) <- foldM insert mempty bindings
       res <-
         bool
-          (traverse mkThunk scope)
-          (loebM $ encapsulate <$> scope)
-          recursive
+          (traverse mkThunk)
+          (loebM . fmap encapsulate)
+          isRecursive
+          scope
 
       pure (coerce res, p)
 
@@ -369,7 +366,7 @@ evalBinds recursive binds =
     processAttrSetKeys (h :| t) =
       maybe
         -- Empty attrset - return a stub.
-        (pure ( mempty, nullPos, toValue @(AttrSet v, PositionSet) (mempty, mempty)) )
+        (pure (mempty, nullPos, toValue @(AttrSet v, PositionSet) mempty) )
         (\ k ->
           list
             -- No more keys in the attrset - return the result
@@ -391,10 +388,10 @@ evalBinds recursive binds =
       :: VarName
       -> ([VarName], SourcePos, m v)
     processScope var =
-      ([var]
+      ( one var
       , pos
       , maybe
-          (attrMissing (var :| mempty) Nothing)
+          (attrMissing (one var) Nothing)
           demand
           =<< maybe
               (withScopes scopes $ lookupVar var)
@@ -429,23 +426,22 @@ evalSelect aset attr =
  where
   extract :: NonEmpty VarName -> v -> m (Either (v, NonEmpty VarName) (m v))
   extract path@(k :| ks) x =
-    do
-      x' <- fromValueMay x
-
-      maybe
-        (pure $ Left (x, path))
-        (\ (s :: AttrSet v, _ :: PositionSet) ->
-          maybe
-            (pure $ Left (x, path))
-            (list
-              (pure . pure)
-              (\ (y : ys) -> (extract (y :| ys) =<<))
-              ks
-              . demand
-            )
-            ((`M.lookup` s) k)
+    maybe
+      left
+      (maybe
+        left
+        (list
+          (pure . pure)
+          (\ (y : ys) -> (extract (y :| ys) =<<))
+          ks
+          . demand
         )
-        x'
+        . M.lookup k . fst
+      )
+      =<< fromValueMay @(AttrSet v, PositionSet) x
+   where
+    left :: m (Either (v, NonEmpty VarName) b)
+    left = pure $ Left (x, path)
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value
@@ -480,8 +476,11 @@ assembleString
   -> m (Maybe NixString)
 assembleString = fromParts . stringParts
  where
-  fromParts xs = mconcat <<$>> traverseM go xs
-  go =
+  fromParts :: [Antiquoted Text (m v)] -> m (Maybe NixString)
+  fromParts xs = fold <<$>> traverseM fun xs
+
+  fun :: Antiquoted Text (m v) -> m (Maybe NixString)
+  fun =
     runAntiquoted
       "\n"
       (pure . pure . mkNixStringWithoutContext)
@@ -503,7 +502,7 @@ buildArgument params arg =
             inject =
               maybe
                 id
-                (\ n -> M.insert n $ const argThunk) -- why insert into const? Thunk value getting magic point?
+                (`M.insert` const argThunk) -- why insert into const? Thunk value getting magic point?
                 mname
           loebM $
             inject $
@@ -523,11 +522,11 @@ buildArgument params arg =
   assemble _ Variadic _ (This _) = Nothing
   assemble scope _ k t =
     pure $
-    case t of
-      That Nothing -> const $ evalError @v $ ErrorCall $ "Missing value for parameter: ''" <> show k
-      That (Just f) -> coerce $ \ args -> defer $ withScopes scope $ pushScope args f
-      This _ -> const $ evalError @v $ ErrorCall $ "Unexpected parameter: " <> show k
-      These x _ -> const $ pure x
+      case t of
+        That Nothing -> const $ evalError @v $ ErrorCall $ "Missing value for parameter: ''" <> show k
+        That (Just f) -> coerce $ defer . withScopes scope . (`pushScope` f)
+        This _ -> const $ evalError @v $ ErrorCall $ "Unexpected parameter: " <> show k
+        These x _ -> const $ pure x
 
 -- | Add source positions to @NExprLoc@.
 --

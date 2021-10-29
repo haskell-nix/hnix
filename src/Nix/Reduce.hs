@@ -100,14 +100,14 @@ staticImport pann path =
           (\ err -> fail $ "Parse failed: " <> show err)
           (\ x -> do
             let
-              pos  = SourcePos "Reduce.hs" (mkPos 1) (mkPos 1)
-              span = SrcSpan pos pos
+              pos  = join (SourcePos "Reduce.hs") $ mkPos 1
+              span = join SrcSpan pos
               cur  =
                 NamedVar
-                  (StaticKey "__cur_file" :| mempty)
+                  (one $ StaticKey "__cur_file")
                   (NLiteralPathAnn pann path'')
                   pos
-              x' = NLetAnn span [cur] x
+              x' = NLetAnn span (one cur) x
             modify $ first $ HM.insert path'' x'
             local
               (const (pure path'', mempty)) $
@@ -132,7 +132,7 @@ staticImport pann path =
 reduceExpr
   :: (MonadIO m, MonadFail m) => Maybe Path -> NExprLoc -> m NExprLoc
 reduceExpr mpath expr =
-  (`evalStateT` (mempty, mempty))
+  (`evalStateT` mempty)
     . (`runReaderT` (mpath, mempty))
     . runReducer
     $ foldFix reduce expr
@@ -231,26 +231,29 @@ reduce base@(NSelectAnnF _ _ _ attrs)
 
 -- | Reduce a set by inlining its binds outside of the set
 --   if none of the binds inherit the super set.
-reduce e@(NSetAnnF ann NonRecursive binds) =
-  do
-    let
-      usesInherit =
-        any
-          (\case
-            Inherit{} -> True
-            _         -> False
-          )
-          binds
-
-    bool
+reduce e@(NSetAnnF ann r binds) =
+  bool
+    -- Encountering a 'rec set' construction eliminates any hope of inlining
+    -- definitions.
+    mExprLoc
+    (bool
       (reduceLayer e)
-      (clearScopes @NExprLoc $ NSetAnn ann mempty <$> traverse sequenceA binds)
+      mExprLoc
       usesInherit
+    )
+    (r == NonRecursive)
+ where
+  mExprLoc :: m NExprLoc
+  mExprLoc =
+    clearScopes @NExprLoc $ NSetAnn ann r <$> traverse sequenceA binds
 
--- Encountering a 'rec set' construction eliminates any hope of inlining
--- definitions.
-reduce (NSetAnnF ann Recursive binds) =
-  clearScopes @NExprLoc $ NSetAnn ann Recursive <$> traverse sequenceA binds
+  usesInherit =
+    any
+      (\case
+        Inherit{} -> True
+        _         -> False
+      )
+      binds
 
 -- Encountering a 'with' construction eliminates any hope of inlining
 -- definitions.

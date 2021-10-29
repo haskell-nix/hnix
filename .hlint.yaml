@@ -2696,3 +2696,79 @@
     lhs: "maybe mempty a b"
     note: "Use `whenJust`"
     rhs: a `whenJust` b
+
+- hint:
+    lhs: "(mempty, mempty)"
+    note: "Is `mempty`"
+    rhs: mempty
+
+- hint:
+    lhs: "concat a"
+    note: "Use `fold`"
+    rhs: fold a
+
+- hint:
+    lhs: "mconcat a"
+    note: "Use `fold`"
+    rhs: fold a
+
+- hint:
+    lhs: "concatMap a"
+    note: "Use `foldMap`"
+    rhs: foldMap a
+
+- hint:
+    lhs: "[a]"
+    note: "Use `one`"
+    rhs: (one a)
+
+# Submitted upstream: https://github.com/ndmitchell/hlint/pull/1309 remove when merges
+- hint:
+    lhs: "either Left f e"
+    note: "Use `=<<`"
+    rhs: f =<< e
+
+- warn: {lhs: "init (one x)", rhs: "mempty", name: Evaluate}
+- warn: {lhs: "null (one x)", rhs: "False", name: Evaluate}
+- warn: {lhs: "foldr1 f (one x)", rhs: x, name: Evaluate}
+- warn: {lhs: "scanr f z mempty", rhs: "one z", name: Evaluate}
+- warn: {lhs: "scanr1 f mempty", rhs: "mempty", name: Evaluate}
+- warn: {lhs: "scanr1 f (one x)", rhs: "one x", name: Evaluate}
+- warn: {lhs: "fold (one a)", rhs: a, name: Evaluate}
+- warn: {lhs: "cycle (one x)", rhs: repeat x}
+- hint: {lhs: "\\x -> one x", rhs: "(one x)"}
+- hint: {lhs: "elem x (one y)", rhs: x == y, note: ValidInstance Eq a}
+- hint: {lhs: "notElem x (one y)", rhs: x /= y, note: ValidInstance Eq a}
+- warn: {lhs: "sequenceA (one a)", rhs: "pure <$> a"}
+- warn: {lhs: "head $ x <> one y", rhs: "headDef y x"}
+- warn: {lhs: "pictures (one p)", rhs: p, name: Evaluate}
+
+- hint:
+    lhs: "x : mempty"
+    note: "Use `one`"
+    rhs: one x
+- hint:
+    lhs: "x :| mempty"
+    note: "Use `one`"
+    rhs: one x
+
+- hint:
+    lhs: "join . fmap join"
+    note: "Monad law"
+    rhs: join . join
+
+- hint:
+    lhs: "join . fmap pure"
+    note: "Monad law"
+    rhs: id
+
+- hint:
+    lhs: "join . pure"
+    note: "Monad law"
+    rhs: id
+
+- hint:
+    lhs: "join . (f <<$>>)"
+    note: "Monad law"
+    rhs: fmap f . join
+

@@ -292,7 +292,7 @@ nixString' = label "string" $ lexeme $ doubleQuoted <|> indented
   indented =
     label "indented string" $
       stripIndent <$>
-        inIndentedQuotation (many $ stringChar indentedQuotationMark indentedQuotationMark indentedEscape)
+        inIndentedQuotation (many $ join stringChar indentedQuotationMark indentedEscape)
    where
     indentedEscape :: Parser (Antiquoted Text r)
     indentedEscape =
@@ -541,21 +541,21 @@ nixOperators selector =
     -- ]
 
     {-  2 -}
-    [ ( NBinaryDef NAssocLeft NApp " "
+    one
+      ( NBinaryDef NAssocLeft NApp " "
       ,
         -- Thanks to Brent Yorgey for showing me this trick!
-        InfixL $ annNApp <$ symbols ""
+        InfixL $ annNApp <$ symbols mempty
       )
-    ]
   , {-  3 -}
-    [ prefix  NNeg "-" ]
+    one $ prefix  NNeg "-"
   , {-  4 -}
-    [ ( NSpecialDef NAssocLeft NHasAttrOp "?"
+    one
+      ( NSpecialDef NAssocLeft NHasAttrOp "?"
       , Postfix $ symbol '?' *> (flip annNHasAttr <$> selector)
       )
-    ]
   , {-  5 -}
-    [ binaryR NConcat "++" ]
+    one $ binaryR NConcat "++"
   , {-  6 -}
     [ binaryL NMult "*"
     , binaryL NDiv  "/"
@@ -565,9 +565,9 @@ nixOperators selector =
     , binaryL NMinus "-"
     ]
   , {-  8 -}
-    [ prefix  NNot "!" ]
+    one $ prefix  NNot "!"
   , {-  9 -}
-    [ binaryR NUpdate "//" ]
+    one $ binaryR NUpdate "//"
   , {- 10 -}
     [ binaryL NLt "<"
     , binaryL NGt ">"
@@ -579,11 +579,11 @@ nixOperators selector =
     , binaryN NNEq "!="
     ]
   , {- 12 -}
-    [ binaryL NAnd "&&" ]
+    one $ binaryL NAnd "&&"
   , {- 13 -}
-    [ binaryL NOr "||" ]
+    one $ binaryL NOr "||"
   , {- 14 -}
-    [ binaryR NImpl "->" ]
+    one $ binaryR NImpl "->"
   ]
 
 --  2021-08-10: NOTE:
@@ -613,12 +613,12 @@ detectPrecedence spec = (mapOfOpWithPrecedence Map.!)
  where
   mapOfOpWithPrecedence =
     Map.fromList $
-      concat $
+      fold $
         zipWith
-          (concatMap . spec)
+          (foldMap . spec)
           [1 ..]
           l
-    where
+   where
     l :: [[(NOperatorDef, Operator Parser NExprLoc)]]
     l = nixOperators $ fail "unused"
 
@@ -628,7 +628,7 @@ getUnaryOperator = detectPrecedence spec
   spec :: Int -> (NOperatorDef, b) -> [(NUnaryOp, OperatorInfo)]
   spec i =
     \case
-      (NUnaryDef op name, _) -> [(op, OperatorInfo i NAssocNone name)]
+      (NUnaryDef op name, _) -> one (op, OperatorInfo i NAssocNone name)
       _                      -> mempty
 
 getBinaryOperator :: NBinaryOp -> OperatorInfo
@@ -637,7 +637,7 @@ getBinaryOperator = detectPrecedence spec
   spec :: Int -> (NOperatorDef, b) -> [(NBinaryOp, OperatorInfo)]
   spec i =
     \case
-      (NBinaryDef assoc op name, _) -> [(op, OperatorInfo i assoc name)]
+      (NBinaryDef assoc op name, _) -> one (op, OperatorInfo i assoc name)
       _                             -> mempty
 
 getSpecialOperator :: NSpecialOp -> OperatorInfo
@@ -647,7 +647,7 @@ getSpecialOperator o         = detectPrecedence spec o
   spec :: Int -> (NOperatorDef, b) -> [(NSpecialOp, OperatorInfo)]
   spec i =
       \case
-        (NSpecialDef assoc op name, _) -> [(op, OperatorInfo i assoc name)]
+        (NSpecialDef assoc op name, _) -> one (op, OperatorInfo i assoc name)
         _                              -> mempty
 
 -- ** x: y lambda function
@@ -711,7 +711,7 @@ argExpr =
                 identifier
                 (optional $ exprAfterSymbol '?')
 
-            let args = acc <> [pair]
+            let args = acc <> one pair
 
             -- Either return this, or attempt to get a comma and restart.
             option (args, mempty) $ symbol ',' *> go args
@@ -736,7 +736,7 @@ nixLet =
       (exprAfterReservedWord "in")
   -- Let expressions `let {..., body = ...}' are just desugared
   -- into `(rec {..., body = ...}).body'.
-  letBody    = (\x -> NSelect Nothing x (StaticKey "body" :| mempty)) <$> aset
+  letBody    = (\x -> NSelect Nothing x (one $ StaticKey "body")) <$> aset
   aset       = annotateLocation $ NSet Recursive <$> braces nixBinders
 
 -- ** if then else
@@ -850,7 +850,7 @@ nixTerm =
                 [ nixUri | isAlpha c ]
                 <> [ nixBool | c == 't' || c == 'f' ]
                 <> [ nixNull | c == 'n' ]
-                <> [ nixSelect nixSym ]
+                <> one (nixSelect nixSym)
 
 -- | Nix expression algebra parser.
 -- "Expression algebra" is to explain @megaparsec@ use of the term "Expression" (parser for language algebraic coperators without any statements (without @let@ etc.)), which is essentially an algebra inside the language.

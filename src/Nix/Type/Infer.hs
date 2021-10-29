@@ -35,7 +35,6 @@ import           Control.Monad.ST               ( ST
                                                 , runST
                                                 )
 import           Data.Fix                       ( foldFix )
-import           Data.Foldable                  ( foldrM )
 import qualified Data.HashMap.Lazy             as M
 import           Data.List                      ( delete
                                                 , intersect
@@ -77,12 +76,12 @@ normalizeScheme (Forall _ body) = Forall (snd <$> ord) (normtype body)
       (ordNub $ fv body)
       (TV . fromString <$> letters)
 
-  fv (TVar a  ) = [a]
-  fv (a :~> b ) = fv a <> fv b
+  fv (TVar a  ) = one a
+  fv (a :~> b ) = on (<>) fv a b
   fv (TCon _  ) = mempty
-  fv (TSet _ a) = concatMap fv $ M.elems a
-  fv (TList a ) = concatMap fv a
-  fv (TMany ts) = concatMap fv ts
+  fv (TSet _ a) = foldMap fv $ M.elems a
+  fv (TList a ) = foldMap fv a
+  fv (TMany ts) = foldMap fv ts
 
   normtype (a :~> b ) = normtype a :~> normtype b
   normtype (TCon a  ) = TCon a
@@ -104,6 +103,7 @@ generalize free t = Forall as t
 closeOver :: Type -> Scheme
 closeOver = normalizeScheme . generalize mempty
 
+-- When `[]` becomes `NonEmpty` - function becomes just `all`
 -- | Check if all elements are of the same type.
 allSameType :: [Type] -> Bool
 allSameType = allSame
@@ -130,7 +130,7 @@ data InferError
   | forall s. Exception s => EvaluationError s
 
 typeError :: MonadError InferError m => TypeError -> m ()
-typeError err = throwError $ TypeInferenceErrors [err]
+typeError err = throwError $ TypeInferenceErrors $ one err
 
 -- ** Instances
 
@@ -138,11 +138,10 @@ deriving instance Show InferError
 instance Exception InferError
 
 instance Semigroup InferError where
-  x <> _ = x
+  (<>) = const
 
 instance Monoid InferError where
   mempty  = TypeInferenceAborted
-  mappend = (<>)
 
 -- * @InferState@: inference state
 
@@ -152,7 +151,7 @@ newtype InferState = InferState Int
   (Eq, Num, Enum, Ord)
 
 instance Semigroup InferState where
-  (<>) a b = a + b
+  (<>) = (+)
 
 instance Monoid InferState where
   mempty = 0
@@ -179,12 +178,13 @@ freshTVar =
 fresh :: MonadState InferState m => m Type
 fresh = TVar <$> freshTVar
 
+intoFresh :: (Traversable t, MonadState InferState f) => t a -> f (t Type)
+intoFresh =
+  traverse (const fresh)
+
 instantiate :: MonadState InferState m => Scheme -> m Type
 instantiate (Forall as t) =
-  do
-    as' <- traverse (const fresh) as
-    let s = Subst $ Map.fromList $ zip as as'
-    pure $ apply s t
+  fmap ((`apply` t) . coerce . Map.fromList . zip as) (intoFresh as)
 
 -- * @Constraint@ data type
 
@@ -202,9 +202,9 @@ newtype Subst = Subst (Map TVar Type)
 
 -- | Compose substitutions
 compose :: Subst -> Subst -> Subst
-Subst s1 `compose` Subst s2 =
-  Subst $
-    apply (Subst s1) <$>
+compose a@(Subst s2) (Subst s1) =
+  coerce $ --
+    apply a <$>
       (s2 <> s1)
 
 -- * class @Substitutable@
@@ -217,15 +217,14 @@ class Substitutable a where
 instance Substitutable TVar where
   apply (Subst s) a = tv
    where
-    t         = TVar a
-    (TVar tv) = Map.findWithDefault t a s
+    (TVar tv) = Map.findWithDefault (TVar a) a s
 
 instance Substitutable Type where
   apply _         (  TCon a   ) = TCon a
   apply s         (  TSet b a ) = TSet b $ apply s <$> a
   apply s         (  TList a  ) = TList  $ apply s <$> a
   apply (Subst s) t@(TVar  a  ) = Map.findWithDefault t a s
-  apply s         (  t1 :~> t2) = apply s t1 :~> apply s t2
+  apply s         (  t1 :~> t2) = ((:~>) `on` apply s) t1 t2
   apply s         (  TMany ts ) = TMany  $ apply s <$> ts
 
 instance Substitutable Scheme where
@@ -234,10 +233,7 @@ instance Substitutable Scheme where
     s' = Subst $ foldr Map.delete s as
 
 instance Substitutable Constraint where
-  apply s (EqConst      t1 t2) =
-    EqConst
-      (apply s t1)
-      (apply s t2)
+  apply s (EqConst      t1 t2) = on EqConst (apply s) t1 t2
   apply s (ExpInstConst t  sc) =
     ExpInstConst
       (apply s t)
@@ -255,7 +251,7 @@ instance (Ord a, Substitutable a) => Substitutable (Set.Set a) where
   apply = Set.map . apply
 
 
--- * data type @Judgement@
+-- * data type @Judgment@
 
 data Judgment s =
   Judgment
@@ -265,16 +261,22 @@ data Judgment s =
     }
     deriving Show
 
+inferred :: Type -> Judgment s
+inferred = Judgment mempty mempty
+
 -- * @InferT@: inference monad
+
+type InferTInternals s m a =
+  ReaderT
+    (Set.Set TVar, Scopes (InferT s m) (Judgment s))
+    (StateT InferState (ExceptT InferError m))
+    a
 
 -- | Inference monad
 newtype InferT s m a =
   InferT
     { getInfer ::
-        ReaderT
-          (Set.Set TVar, Scopes (InferT s m) (Judgment s))
-          (StateT InferState (ExceptT InferError m))
-          a
+        InferTInternals s m a
     }
     deriving
       ( Functor
@@ -289,8 +291,11 @@ newtype InferT s m a =
       , MonadError InferError
       )
 
-extendMSet :: Monad m => TVar -> InferT s m a -> InferT s m a
-extendMSet x = InferT . local (first $ Set.insert x) . getInfer
+extendMSet :: forall s m a . Monad m => TVar -> InferT s m a -> InferT s m a
+extendMSet x = coerce putSetElementM
+ where
+  putSetElementM :: InferTInternals s m a -> InferTInternals s m a
+  putSetElementM = local (first . Set.insert $ x)
 
 -- ** Instances
 
@@ -343,53 +348,43 @@ instance
  where
   fromValueMay (Judgment _ _ (TSet _ xs)) =
     do
-      let sing _ = Judgment mempty mempty
+      let sing = const inferred
       pure $ pure (M.mapWithKey sing xs, mempty)
   fromValueMay _ = stub
   fromValue =
     pure .
-      fromMaybe
-      (mempty, mempty)
+      maybeToMonoid
       <=< fromValueMay
+
+foldInitializedWith :: (Traversable t, Applicative f) => (t c -> c) -> (b -> c) -> (a -> f b) -> t a -> f c
+foldInitializedWith fld getter init =
+  -- maybe here is some law?
+  fmap fld . traverse (fmap getter . init)
+
+toJudgment :: forall t m s . (Traversable t, Monad m) => (t Type -> Type) -> t (Judgment s) -> InferT s m (Judgment s)
+toJudgment c xs =
+  liftA3 Judgment
+    (foldWith fold assumptions    )
+    (foldWith fold typeConstraints)
+    (foldWith c    inferredType   )
+   where
+    foldWith :: ((t a -> a) -> (Judgment s -> a) -> InferT s m a)
+    foldWith g f = uncurry (foldInitializedWith g f) tpl
+
+    tpl :: (Judgment s -> InferT s m (Judgment s), t (Judgment s))
+    tpl = (demand, xs)
 
 instance MonadInfer m
   => ToValue (AttrSet (Judgment s), PositionSet)
             (InferT s m) (Judgment s) where
-  toValue (xs, _) =
-    liftA3
-      Judgment
-      (foldrM go mempty xs)
-      (fun concat      typeConstraints)
-      (fun (TSet Variadic) inferredType)
-   where
-    go x rest =
-      do
-        x' <- demand x
-        pure $ assumptions x' <> rest
-
-    fun :: (AttrSet b -> b1) -> (Judgment s -> b) -> InferT s m b1
-    fun g f =
-      g <$> traverse ((f <$>) . demand) xs
+  toValue :: (AttrSet (Judgment s), PositionSet) -> InferT s m (Judgment s)
+  toValue (xs, _) = toJudgment (TSet Variadic) xs -- why variadic? Probably `Closed` (`mempty`)?
 
 instance MonadInfer m => ToValue [Judgment s] (InferT s m) (Judgment s) where
-  toValue xs =
-    liftA3
-      Judgment
-      (foldrM go mempty xs)
-      (fun concat typeConstraints)
-      (fun TList  inferredType   )
-   where
-    go x rest =
-      do
-        x' <- demand x
-        pure $ assumptions x' <> rest
-
-    fun :: ([b] -> b1) -> (Judgment s -> b) -> InferT s m b1
-    fun g f =
-      g <$> traverse ((f <$>) . demand) xs
+  toValue = toJudgment TList
 
 instance MonadInfer m => ToValue Bool (InferT s m) (Judgment s) where
-  toValue _ = pure $ Judgment mempty mempty typeBool
+  toValue _ = pure $ inferred typeBool
 
 instance
   Monad m
@@ -427,7 +422,7 @@ instance Monad m => MonadValueF (Judgment s) (InferT s m) where
       -> InferT s m r)
     -> Judgment s
     -> InferT s m r
-  demandF f a = f a
+  demandF f = f
 
   informF
     :: ( InferT s m (Judgment s)
@@ -458,84 +453,84 @@ instance MonadInfer m
                            f =<< Judgment mempty mempty <$> fresh
 -}
 
-instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
-  freeVariable var = do
-    tv <- fresh
-    pure $ Judgment (one (var, tv)) mempty tv
+polymorphicVar :: MonadInfer m => VarName -> InferT s m (Judgment s)
+polymorphicVar var =
+    fmap
+      (join ((`Judgment` mempty) . curry one var))
+      fresh
 
-  synHole var = do
-    tv <- fresh
-    pure $ Judgment (one (var, tv)) mempty tv
+constInfer :: Applicative f => Type -> b -> f (Judgment s)
+constInfer x = const $ pure $ inferred x
+
+instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
+  freeVariable = polymorphicVar
+
+  synHole = polymorphicVar
 
   -- If we fail to look up an attribute, we just don't know the type.
-  attrMissing _ _ = Judgment mempty mempty <$> fresh
+  attrMissing _ _ = inferred <$> fresh
 
   evaledSym _ = pure
 
   evalCurPos =
     pure $
-      Judgment
-        mempty
-        mempty
-        (TSet mempty $
+      inferred $
+        TSet mempty $
           M.fromList
             [ ("file", typePath)
             , ("line", typeInt )
             , ("col" , typeInt )
             ]
-        )
 
-  evalConstant c = pure $ Judgment mempty mempty $ go c
+  evalConstant c = pure $ inferred $ fun c
    where
-    go = \case
+    fun = \case
       NURI   _ -> typeString
       NInt   _ -> typeInt
       NFloat _ -> typeFloat
       NBool  _ -> typeBool
       NNull    -> typeNull
 
-  evalString      = const $ pure $ Judgment mempty mempty typeString
-  evalLiteralPath = const $ pure $ Judgment mempty mempty typePath
-  evalEnvPath     = const $ pure $ Judgment mempty mempty typePath
+  evalString      = constInfer typeString
+  evalLiteralPath = constInfer typePath
+  evalEnvPath     = constInfer typePath
 
-  evalUnary op (Judgment as1 cs1 t1) = do
-    tv <- fresh
-    pure $
-      Judgment
-        as1
-        (cs1 <> unops (t1 :~> tv) op)
-        tv
+  evalUnary op (Judgment as1 cs1 t1) =
+    fmap
+      (join
+        $ Judgment
+            as1
+            . (cs1 <>) . (`unops` op) . (t1 :~>)
+      )
+      fresh
 
   evalBinary op (Judgment as1 cs1 t1) e2 = do
     Judgment as2 cs2 t2 <- e2
-    tv                  <- fresh
-    pure $
-      Judgment
-        (as1 <> as2)
-        ( cs1 <>
-          cs2 <>
-          binops
-            (t1 :~> t2 :~> tv)
-            op
-        )
-        tv
+    fmap
+      (join
+        $ Judgment
+          (as1 <> as2)
+          . (\ cs3 -> cs1 <> cs2 <> cs3) . (`binops` op) . (\ t3 -> t1 :~> t2 :~> t3)
+      )
+      fresh
 
   evalWith = Eval.evalWithAttrSet
 
   evalIf (Judgment as1 cs1 t1) t f = do
     Judgment as2 cs2 t2 <- t
     Judgment as3 cs3 t3 <- f
-    pure $ Judgment
-      (as1 <> as2 <> as3)
-      (cs1 <> cs2 <> cs3 <> [EqConst t1 typeBool, EqConst t2 t3])
-      t2
+    pure $
+      Judgment
+        (as1 <> as2 <> as3)
+        (cs1 <> cs2 <> cs3 <> [EqConst t1 typeBool, EqConst t2 t3])
+        t2
 
   evalAssert (Judgment as1 cs1 t1) body = do
     Judgment as2 cs2 t2 <- body
     pure $
       Judgment
         (as1 <> as2)
-        (cs1 <> cs2 <> [EqConst t1 typeBool])
+        (cs1 <> cs2 <> one (EqConst t1 typeBool))
         t2
 
   evalApp (Judgment as1 cs1 t1) e2 = do
@@ -544,7 +539,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     pure $
       Judgment
         (as1 <> as2)
-        (cs1 <> cs2 <> [EqConst t1 (t2 :~> tv)])
+        (cs1 <> cs2 <> one (EqConst t1 (t2 :~> tv)))
         tv
 
   evalAbs (Param x) k = do
@@ -569,26 +564,18 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
         (tv :~> t)
 
   evalAbs (ParamSet _mname variadic pset) k = do
-    js <-
-      concat <$>
-        traverse
-          (\(name, _) ->
-            do
-              tv <- fresh
-              pure [(name, tv)]
-          )
-          pset
+    js <- foldInitializedWith fold one intoFresh pset
 
     let
       f (as1, t1) (k, t) = (as1 <> one (k, t), M.insert k t t1)
-      (env, tys) = foldl' f (mempty, mempty) js
+      (env, tys) = foldl' f mempty js
       arg   = pure $ Judgment env mempty $ TSet Variadic tys
       call  = k arg $ \args b -> (args, ) <$> b
       names = fst <$> js
 
     (args, Judgment as cs t) <- foldr (\(_, TVar a) -> extendMSet a) call js
 
-    ty <- TSet variadic <$> traverse (inferredType <$>) args
+    ty <- foldInitializedWith (TSet variadic) inferredType id args
 
     pure $
       Judgment
@@ -654,7 +641,7 @@ runInfer' :: MonadInfer m => InferT s m a -> m (Either InferError a)
 runInfer' =
   runExceptT
     . (`evalStateT` initInfer)
-    . (`runReaderT` (mempty, mempty))
+    . (`runReaderT` mempty)
     . getInfer
 
 runInfer :: (forall s . InferT s (FreshIdT Int (ST s)) a) -> Either InferError a
@@ -670,6 +657,7 @@ inferType env ex =
   do
     Judgment as cs t <- infer ex
     let
+      unbounds :: Set VarName
       unbounds =
         (Set.difference `on` Set.fromList)
           (Assumption.keys as )
@@ -686,31 +674,32 @@ inferType env ex =
             , s       <- ss
             , t       <- Assumption.lookup x as
         ]
-      eres = (`evalState` inferState) $ runSolver $
-        do
-          subst <- solve $ cs <> cs'
-          pure (subst, subst `apply` t)
+      evalResult =
+        (`evalState` inferState) . runSolver $ second (`apply` t) . join (,) <$> solve (cs <> cs')
 
     either
       (throwError . TypeInferenceErrors)
       pure
-      eres
+      evalResult
 
 -- | Solve for the toplevel type of an expression in a given environment
 inferExpr :: Env -> NExpr -> Either InferError [Scheme]
 inferExpr env ex =
-  (\ (subst, ty) -> closeOver $ subst `apply` ty) <<$>>
-    runInfer (inferType env ex)
+  closeOver . uncurry apply <<$>> runInfer (inferType env ex)
 
 unops :: Type -> NUnaryOp -> [Constraint]
 unops u1 op =
-  [ EqConst u1
-   (case op of
-      NNot -> typeFun $ typeBool :| [typeBool]
-      NNeg -> TMany   [ typeFun $ typeInt :| [typeInt]
-                      , typeFun $ typeFloat :| [typeFloat] ]
-    )
-  ]
+  one $
+    EqConst u1 $
+      case op of
+        NNot -> mkUnaryConstr typeBool
+        NNeg -> TMany $ mkUnaryConstr <$> [typeInt, typeFloat]
+ where
+  mkUnaryConstr :: Type -> Type
+  mkUnaryConstr = typeFun . mk2same
+   where
+    mk2same :: a -> NonEmpty a
+    mk2same a = a :| one a
 
 binops :: Type -> NBinaryOp -> [Constraint]
 binops u1 op =
@@ -728,46 +717,54 @@ binops u1 op =
 
  where
 
-  gate          = eqCnst $ typeBool :| [typeBool, typeBool]
-  concatenation = eqCnst $ typeList :| [typeList, typeList]
+  mk3 :: a -> a -> a -> NonEmpty a
+  mk3 a b c = a :| [b, c]
 
-  eqCnst ne = [EqConst u1 $ typeFun ne]
+  mk3same :: a -> NonEmpty a
+  mk3same a = a :| [a, a]
+
+  allConst :: Type -> [Constraint]
+  allConst = one . EqConst u1 . typeFun . mk3same
+
+  gate          = allConst typeBool
+  concatenation = allConst typeList
+
+  eqConstrMtx :: [NonEmpty Type] -> [Constraint]
+  eqConstrMtx = one . EqConst u1 . TMany . fmap typeFun
 
   inequality =
-    eqCnstMtx
-      [ typeInt   :| [typeInt  , typeBool]
-      , typeFloat :| [typeFloat, typeBool]
-      , typeInt   :| [typeFloat, typeBool]
-      , typeFloat :| [typeInt  , typeBool]
+    eqConstrMtx
+      [ mk3 typeInt   typeInt   typeBool
+      , mk3 typeFloat typeFloat typeBool
+      , mk3 typeInt   typeFloat typeBool
+      , mk3 typeFloat typeInt   typeBool
       ]
 
   arithmetic =
-    eqCnstMtx
-      [ typeInt   :| [typeInt  , typeInt  ]
-      , typeFloat :| [typeFloat, typeFloat]
-      , typeInt   :| [typeFloat, typeFloat]
-      , typeFloat :| [typeInt  , typeFloat]
+    eqConstrMtx
+      [ mk3same typeInt
+      , mk3same typeFloat
+      , mk3 typeInt   typeFloat typeFloat
+      , mk3 typeFloat typeInt   typeFloat
       ]
 
   rUnion =
-    eqCnstMtx
-      [ typeSet  :| [typeSet , typeSet]
-      , typeSet  :| [typeNull, typeSet]
-      , typeNull :| [typeSet , typeSet]
+    eqConstrMtx
+      [ mk3same typeSet
+      , mk3 typeSet  typeNull typeSet
+      , mk3 typeNull typeSet  typeSet
       ]
 
   addition =
-    eqCnstMtx
-      [ typeInt    :| [typeInt   , typeInt   ]
-      , typeFloat  :| [typeFloat , typeFloat ]
-      , typeInt    :| [typeFloat , typeFloat ]
-      , typeFloat  :| [typeInt   , typeFloat ]
-      , typeString :| [typeString, typeString]
-      , typePath   :| [typePath  , typePath  ]
-      , typeString :| [typeString, typePath  ]
+    eqConstrMtx
+      [ mk3same typeInt
+      , mk3same typeFloat
+      , mk3 typeInt    typeFloat  typeFloat
+      , mk3 typeFloat  typeInt    typeFloat
+      , mk3same typeString
+      , mk3same typePath
+      , mk3 typeString typeString typePath
       ]
-
-  eqCnstMtx mtx = [EqConst u1 $ TMany $ map typeFun mtx]
 
 liftInfer :: Monad m => m a -> InferT s m a
 liftInfer = InferT . lift . lift . lift
@@ -780,10 +777,8 @@ infer = foldFix Eval.eval
 inferTop :: Env -> [(VarName, NExpr)] -> Either InferError Env
 inferTop env []                = pure env
 inferTop env ((name, ex) : xs) =
-  either
-    Left
-    (\ ty -> inferTop (extend env (name, ty)) xs)
-    (inferExpr env ex)
+  (\ ty -> inferTop (extend env (name, ty)) xs)
+    =<< inferExpr env ex
 
 -- * Other
 
@@ -791,13 +786,15 @@ newtype Solver m a = Solver (LogicT (StateT [TypeError] m) a)
     deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
               MonadLogic, MonadState [TypeError])
 
-runSolver :: Monad m => Solver m a -> m (Either [TypeError] [a])
-runSolver (Solver s) = do
-  res <- runStateT (observeAllT s) mempty
-  pure $
-    case res of
-      (x : xs, _ ) -> pure (x : xs)
-      (_     , es) -> Left (ordNub es)
+runSolver :: forall m a . Monad m => Solver m a -> m (Either [TypeError] [a])
+runSolver (Solver s) =
+  uncurry report <$> runStateT (observeAllT s) mempty
+ where
+  report :: [a] -> [TypeError] -> Either [TypeError] [a]
+  report xs e =
+    if null xs
+      then Left (ordNub e)
+      else pure xs
 
 -- ** Instances
 
@@ -831,10 +828,9 @@ unifies (TList xs) (TList ys)
 -- Putting a statement that lists of different lengths containing various types would not
 -- be unified.
 unifies t1@(TList _    ) t2@(TList _    ) = throwError $ UnificationFail t1 t2
-unifies (TSet Variadic _) (TSet Variadic _)                                             = stub
-unifies (TSet Closed   b) (TSet Variadic s) | M.keys b `intersect` M.keys s == M.keys s = stub
-unifies (TSet Variadic s) (TSet Closed   b) | M.keys b `intersect` M.keys s == M.keys b = stub
-unifies (TSet Closed   s) (TSet Closed   b) | null (M.keys b \\ M.keys s)               = stub
+unifies (TSet Variadic _) (TSet Variadic _)                                 = stub
+unifies (TSet Closed   s) (TSet Closed   b) | null (M.keys b \\ M.keys s)   = stub
+unifies (TSet _ a) (TSet _ b) | (M.keys a `intersect` M.keys b) == M.keys b = stub
 unifies (t1 :~> t2) (t3 :~> t4) = unifyMany [t1, t2] [t3, t4]
 unifies (TMany t1s) t2          = considering t1s >>- (`unifies` t2)
 unifies t1          (TMany t2s) = considering t2s >>- unifies t1
@@ -845,17 +841,15 @@ unifyMany []         []         = stub
 unifyMany (t1 : ts1) (t2 : ts2) = do
   su1 <- unifies t1 t2
   su2 <-
-    unifyMany
-      (apply su1 ts1)
-      (apply su1 ts2)
-  pure $ su2 `compose` su1
+    (unifyMany `on` apply su1) ts1 ts2
+  pure $ compose su1 su2
 unifyMany t1 t2 = throwError $ UnificationMismatch t1 t2
 
 nextSolvable :: [Constraint] -> (Constraint, [Constraint])
-nextSolvable xs = fromJust $ find solvable $ takeFirstOnes xs
+nextSolvable = fromJust . find solvable . pickFirstOne
  where
-  takeFirstOnes :: Eq a => [a] -> [(a, [a])]
-  takeFirstOnes xs = [ (x, ys) | x <- xs, let ys = delete x xs ]
+  pickFirstOne :: Eq a => [a] -> [(a, [a])]
+  pickFirstOne xs = [ (x, ys) | x <- xs, let ys = delete x xs ]
 
   solvable :: (Constraint, [Constraint]) -> Bool
   solvable (EqConst{}     , _) = True
@@ -863,18 +857,23 @@ nextSolvable xs = fromJust $ find solvable $ takeFirstOnes xs
   solvable (ImpInstConst _t1 ms t2, cs) =
     Set.null $ (ms `Set.difference` ftv t2) `Set.intersection` atv cs
 
-solve :: MonadState InferState m => [Constraint] -> Solver m Subst
+solve :: forall m . MonadState InferState m => [Constraint] -> Solver m Subst
 solve [] = stub
 solve cs = solve' $ nextSolvable cs
  where
-  solve' (EqConst t1 t2, cs) =
-    unifies t1 t2 >>-
-      \su1 -> solve (apply su1 cs) >>-
-          \su2 -> pure $ su2 `compose` su1
-
   solve' (ImpInstConst t1 ms t2, cs) =
     solve (ExpInstConst t1 (generalize ms t2) : cs)
+  solve' (ExpInstConst t s, cs) =
+    do
+      s' <- lift $ instantiate s
+      solve (EqConst t s' : cs)
+  solve' (EqConst t1 t2, cs) =
+    (\ su1 ->
+      (pure . compose su1) -<< solve ((`apply` cs) su1)
+    ) -<<
+    unifies t1 t2
 
-  solve' (ExpInstConst t s, cs) = do
-    s' <- lift $ instantiate s
-    solve (EqConst t s' : cs)
+infixr 1 -<<
+-- | @LogicT@ fair conjunction, since library has only @>>-@
+(-<<) :: Monad m => (a -> Solver m b) -> Solver m a -> Solver m b
+(-<<) = flip (>>-)

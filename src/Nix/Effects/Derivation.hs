@@ -92,7 +92,7 @@ hashDerivationModulo
       Hash.hash @ByteString @Hash.SHA256 $
         encodeUtf8 $
           "fixed:out"
-          <> (if hashMode == Recursive then ":r" else "")
+          <> (if hashMode == Recursive then ":r" else mempty)
           <> ":" <> (Store.algoName @hashType)
           <> ":" <> Store.encodeDigestWith Store.Base16 digest
           <> ":" <> path
@@ -145,7 +145,7 @@ unparseDrv Derivation{..} =
       ]
   where
     produceOutputInfo (outputName, outputPath) =
-      let prefix = if hashMode == Recursive then "r:" else "" in
+      let prefix = if hashMode == Recursive then "r:" else mempty in
       parens $ (s <$>) $ ([outputName, outputPath] <>) $
         maybe
           [mempty, mempty]
@@ -200,8 +200,8 @@ derivationParser = do
 
   let outputs = Map.fromList $ (\(a, b, _, _) -> (a, b)) <$> fullOutputs
   let (mFixed, hashMode) = parseFixed fullOutputs
-  let name = "" -- FIXME (extract from file path ?)
-  let useJson = ["__json"] == Map.keys env
+  let name = mempty -- FIXME (extract from file path ?)
+  let useJson = one "__json" == Map.keys env
 
   pure $ Derivation {inputs = (inputSrcs, inputDrvs), ..}
  where
@@ -219,12 +219,13 @@ derivationParser = do
     string o *> sepBy p (string ",") <* string c
 
   parens :: Parsec () Text a -> Parsec () Text [a]
-  parens p = wrap "(" ")" p
-  serializeList p = wrap "[" "]" p
+  parens = wrap "(" ")"
+  serializeList :: Parsec () Text a -> Parsec () Text [a]
+  serializeList = wrap "[" "]"
 
   parseFixed :: [(Text, Text, Text, Text)] -> (Maybe Store.SomeNamedDigest, HashMode)
   parseFixed fullOutputs = case fullOutputs of
-    [("out", _path, rht, hash)] | rht /= "" && hash /= "" ->
+    [("out", _path, rht, hash)] | rht /= mempty && hash /= mempty ->
       let
         (hashType, hashMode) = case Text.splitOn ":" rht of
           ["r", ht] -> (ht, Recursive)
@@ -267,7 +268,7 @@ defaultDerivationStrict val = do
               ifNotJsonModEnv
                 (\ baseEnv ->
                   foldl'
-                    (\m k -> Map.insert k "" m)
+                    (\m k -> Map.insert k mempty m)
                     baseEnv
                     (Map.keys $ outputs drv)
                 )
@@ -301,16 +302,16 @@ defaultDerivationStrict val = do
     pathToText = decodeUtf8 . Store.storePathToRawFilePath
 
     makeOutputPath o h n = do
-      name <- makeStorePathName $ Store.unStorePathName n <> if o == "out" then "" else "-" <> o
+      name <- makeStorePathName $ Store.unStorePathName n <> if o == "out" then mempty else "-" <> o
       pure $ pathToText $ Store.makeStorePath "/nix/store" ("output:" <> encodeUtf8 o) h name
 
     toStorePaths :: HashSet StringContext -> (Set Text, Map Text [Text])
-    toStorePaths ctx = foldl (flip addToInputs) (mempty, mempty) ctx
+    toStorePaths = foldl (flip addToInputs) mempty
 
     addToInputs :: Bifunctor p => StringContext -> p (Set Text) (Map Text [Text])  -> p (Set Text) (Map Text [Text])
     addToInputs (StringContext path kind) = case kind of
       DirectPath -> first (Set.insert (coerce path))
-      DerivationOutput o -> second (Map.insertWith (<>) (coerce path) [o])
+      DerivationOutput o -> second (Map.insertWith (<>) (coerce path) $ one o)
       AllOutputs ->
         -- TODO: recursive lookup. See prim_derivationStrict
         -- XXX: When is this really used ?
@@ -334,13 +335,13 @@ buildDerivationWithContext drvAttrs = do
       platform    <- getAttr   "system"                    $ assertNonNull <=< extractNoCtx
       mHash       <- getAttrOr "outputHash"        mempty  $ (pure . pure) <=< extractNoCtx
       hashMode    <- getAttrOr "outputHashMode"    Flat    $ parseHashMode <=< extractNoCtx
-      outputs     <- getAttrOr "outputs"           ["out"] $ traverse (extractNoCtx <=< fromValue')
+      outputs     <- getAttrOr "outputs"       (one "out") $ traverse (extractNoCtx <=< fromValue')
 
       mFixedOutput <-
         maybe
           (pure Nothing)
           (\ hash -> do
-            when (outputs /= ["out"]) $ lift $ throwError $ ErrorCall "Multiple outputs are not supported for fixed-output derivations"
+            when (outputs /= one "out") $ lift $ throwError $ ErrorCall "Multiple outputs are not supported for fixed-output derivations"
             hashType <- getAttr "outputHashAlgo" extractNoCtx
             digest <- lift $ either (throwError . ErrorCall) pure $ Store.mkNamedDigest hashType hash
             pure $ pure digest)
@@ -378,7 +379,7 @@ buildDerivationWithContext drvAttrs = do
         , name = drvName
         , outputs = Map.fromList $ (, mempty) <$> outputs
         , mFixed = mFixedOutput
-        , inputs = (mempty, mempty) -- stub for now
+        , inputs = mempty -- stub for now
         }
   where
 
@@ -399,7 +400,7 @@ buildDerivationWithContext drvAttrs = do
       Just v  -> withFrame' Info (ErrorCall $ "While evaluating attribute '" <> show n <> "'") $
                    f =<< fromValue' v
 
-    getAttrOr n d f = getAttrOr' n (pure d) f
+    getAttrOr n = getAttrOr' n . pure
 
     getAttr n = getAttrOr' n (throwError $ ErrorCall $ "Required attribute '" <> show n <> "' not found.")
 

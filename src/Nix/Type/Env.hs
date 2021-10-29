@@ -28,7 +28,7 @@ import qualified Data.Map                      as Map
 
 -- * Typing Environment
 
-newtype Env = TypeEnv (Map.Map VarName [Scheme])
+newtype Env = TypeEnv (Map VarName [Scheme])
   deriving (Eq, Show)
 
 instance Semigroup Env where
@@ -41,40 +41,40 @@ instance Monoid Env where
 
 instance One Env where
   type OneItem Env = (VarName, Scheme)
-  one = uncurry singleton
+  one (x, y) = TypeEnv $ one (x, one y)
 
 empty :: Env
 empty = TypeEnv mempty
 
 extend :: Env -> (VarName, [Scheme]) -> Env
-extend env (x, s) = TypeEnv $ Map.insert x s $ coerce env
+extend env (x, s) = coerce (Map.insert x s) env
 
 remove :: Env -> VarName -> Env
-remove (TypeEnv env) var = TypeEnv $ Map.delete var env
+remove env var = TypeEnv $ Map.delete var $ coerce env
 
 extends :: Env -> [(VarName, [Scheme])] -> Env
-extends env xs = TypeEnv $ Map.fromList xs <> coerce env
+extends env xs = fromList xs <> coerce env
 
 lookup :: VarName -> Env -> Maybe [Scheme]
-lookup key (TypeEnv tys) = Map.lookup key tys
+lookup key tys = Map.lookup key $ coerce tys
 
 merge :: Env -> Env -> Env
-merge (TypeEnv a) (TypeEnv b) = TypeEnv $ a <> b
+merge a b = TypeEnv $ coerce a <> coerce b
 
 mergeRight :: Env -> Env -> Env
-mergeRight (TypeEnv a) (TypeEnv b) = TypeEnv $ b <> a
+mergeRight = flip merge
 
 mergeEnvs :: [Env] -> Env
 mergeEnvs = foldl' (<>) mempty
 
 singleton :: VarName -> Scheme -> Env
-singleton x y = TypeEnv $ one (x, [y])
+singleton = curry one
 
 keys :: Env -> [VarName]
 keys (TypeEnv env) = Map.keys env
 
 fromList :: [(VarName, [Scheme])] -> Env
-fromList xs = TypeEnv $ Map.fromList xs
+fromList xs = coerce $ Map.fromList xs
 
 toList :: Env -> [(VarName, [Scheme])]
 toList (TypeEnv env) = Map.toList env

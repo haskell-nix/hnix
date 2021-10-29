@@ -9,7 +9,6 @@ module Nix.Type.Assumption
   , extend
   , keys
   , merge
-  , mergeAssumptions
   , singleton
   )
 where
@@ -35,39 +34,39 @@ instance Monoid Assumption where
 
 instance One Assumption where
   type OneItem Assumption = (VarName, Type)
-  one (x, y) = Assumption [(x, y)]
+  one vt = Assumption $ one vt
 
 empty :: Assumption
 empty = Assumption mempty
 
 extend :: Assumption -> (VarName, Type) -> Assumption
-extend (Assumption a) (x, s) =
-  Assumption $
-    (x, s) : a
+extend a vt =
+  one (coerce vt) <> a
 
 remove :: Assumption -> VarName -> Assumption
-remove (Assumption a) var =
-  Assumption $
+remove a var =
+  coerce
+    rmVar
+    a
+ where
+  rmVar :: [(VarName, Type)] -> [(VarName, Type)]
+  rmVar =
     filter
-      (\(n, _) -> n /= var)
-      a
+      ((/=) var . fst)
 
 lookup :: VarName -> Assumption -> [Type]
-lookup key (Assumption a) =
+lookup key a =
   snd <$>
     filter
-      (\(n, _) -> n == key)
-      a
+      ((==) key . fst)
+      (coerce a)
 
 merge :: Assumption -> Assumption -> Assumption
-merge (Assumption a) (Assumption b) =
-  Assumption $ a <> b
-
-mergeAssumptions :: [Assumption] -> Assumption
-mergeAssumptions = foldl' (<>) mempty
+merge =
+  coerce ((<>) @[(VarName, Type)])
 
 singleton :: VarName -> Type -> Assumption
-singleton x y = Assumption [(x, y)]
+singleton = curry one
 
 keys :: Assumption -> [VarName]
 keys (Assumption a) = fst <$> a

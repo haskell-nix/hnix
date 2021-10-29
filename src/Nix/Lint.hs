@@ -102,7 +102,7 @@ mkSymbolic
   :: MonadAtomicRef m
   => [NTypeF m (Symbolic m)]
   -> m (Symbolic m)
-mkSymbolic xs = packSymbolic (NMany xs)
+mkSymbolic = packSymbolic . NMany
 
 packSymbolic
   :: MonadAtomicRef m
@@ -136,40 +136,42 @@ renderSymbolic =
         traverse
           (\case
             TConstant ys ->
-              Text.intercalate ", " <$>
-                traverse
-                  (pure .
-                    \case
+              pure $
+                Text.intercalate ", "
+                  (fmap
+                    (\case
                       TInt   -> "int"
                       TFloat -> "float"
                       TBool  -> "bool"
                       TNull  -> "null"
+                    )
+                    ys
                   )
-                  ys
             TStr    -> pure "string"
             TList r ->
-              do
-                x <- renderSymbolic =<< demand r
-                pure $ "[" <> x <> "]"
+              fmap brackets $ renderSymbolic =<< demand r
             TSet Nothing  -> pure "<any set>"
             TSet (Just s) ->
-              do
-                x <- traverse (renderSymbolic <=< demand) s
-                pure $ "{" <> show x <> "}"
+              braces . show <$> traverse (renderSymbolic <=< demand) s
             f@(TClosure p) ->
               do
                 (args, sym) <-
                   do
-                    f' <- mkSymbolic [f]
-                    lintApp (NAbs p ()) f' everyPossible
+                    f' <- mkSymbolic $ one f
+                    lintApp (NAbs p mempty) f' everyPossible
                 args' <- traverse renderSymbolic args
                 sym'  <- renderSymbolic sym
-                pure $ "(" <> show args' <> " -> " <> sym' <> ")"
+                pure $ parens $ show args' <> " -> " <> sym'
             TPath          -> pure "path"
             TBuiltin _n _f -> pure "<builtin function>"
           )
           xs
   ) <=< unpackSymbolic
+ where
+  between a b c = a <> b <> c
+  parens = between "(" ")"
+  brackets = between "[" "]"
+  braces = between "{" "}"
 
 -- This function is order and uniqueness preserving (of types).
 merge
@@ -188,18 +190,18 @@ merge context = go
   go []       _        = stub
   go _        []       = stub
   go xxs@(x : xs) yys@(y : ys) = case (x, y) of
-    (TStr , TStr ) -> (TStr :) <$> rest
-    (TPath, TPath) -> (TPath :) <$> rest
+    (TStr , TStr ) -> (one TStr <>) <$> rest
+    (TPath, TPath) -> (one TPath <>) <$> rest
     (TConstant ls, TConstant rs) ->
-      (TConstant (ls `intersect` rs) :) <$> rest
+      (one (TConstant (ls `intersect` rs)) <>) <$> rest
     (TList l, TList r) ->
       do
         l' <- demand l
         r' <- demand r
         m <- defer $ unify context l' r'
-        (TList m :) <$> rest
-    (TSet x       , TSet Nothing ) -> (TSet x :) <$> rest
-    (TSet Nothing , TSet x       ) -> (TSet x :) <$> rest
+        (one (TList m) <>) <$> rest
+    (TSet x       , TSet Nothing ) -> (one (TSet x) <>) <$> rest
+    (TSet Nothing , TSet x       ) -> (one (TSet x) <>) <$> rest
     (TSet (Just l), TSet (Just r)) -> do
       m <- sequenceA $ M.intersectionWith
         (\ i j ->
@@ -272,7 +274,7 @@ unify context (SV x) (SV y) = do
           writeRef y   (NMany m)
           packSymbolic (NMany m)
         )
-        (do
+        (
               -- x' <- renderSymbolic (Symbolic x)
               -- y' <- renderSymbolic (Symbolic y)
           throwError $ ErrorCall "Cannot unify "
@@ -327,27 +329,27 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
     attr = Text.intercalate "." $ NE.toList $ coerce ks
 
   evalCurPos = do
-    f <- mkSymbolic [TPath]
-    l <- mkSymbolic [TConstant [TInt]]
-    c <- mkSymbolic [TConstant [TInt]]
-    mkSymbolic [TSet (pure (M.fromList [("file", f), ("line", l), ("col", c)]))]
+    f <- mkSymbolic $ one TPath
+    l <- mkSymbolic $ one $ TConstant $ one TInt
+    c <- mkSymbolic $ one $ TConstant $ one TInt
+    mkSymbolic $ one $ TSet (pure (M.fromList [("file", f), ("line", l), ("col", c)]))
 
-  evalConstant c = mkSymbolic [go c]
+  evalConstant c = mkSymbolic $ one $ fun c
    where
-    go =
+    fun =
       \case
         NURI   _ -> TStr
-        NInt   _ -> TConstant [TInt]
-        NFloat _ -> TConstant [TFloat]
-        NBool  _ -> TConstant [TBool]
-        NNull    -> TConstant [TNull]
+        NInt   _ -> TConstant $ one TInt
+        NFloat _ -> TConstant $ one TFloat
+        NBool  _ -> TConstant $ one TBool
+        NNull    -> TConstant $ one TNull
 
-  evalString      = const $ mkSymbolic [TStr]
-  evalLiteralPath = const $ mkSymbolic [TPath]
-  evalEnvPath     = const $ mkSymbolic [TPath]
+  evalString      = const $ mkSymbolic $ one TStr
+  evalLiteralPath = const $ mkSymbolic $ one TPath
+  evalEnvPath     = const $ mkSymbolic $ one TPath
 
   evalUnary op arg =
-    unify (void (NUnary op arg)) arg =<< mkSymbolic [TConstant [TInt, TBool]]
+    unify (void (NUnary op arg)) arg =<< mkSymbolic (one (TConstant [TInt, TBool]))
 
   evalBinary = lintBinaryOp
 
@@ -373,18 +375,18 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
       f' <- f
       let e = NIf cond t' f'
 
-      _ <- unify (void e) cond =<< mkSymbolic [TConstant [TBool]]
+      _ <- unify (void e) cond =<< mkSymbolic (one $ TConstant $ one TBool)
       unify (void e) t' f'
 
   evalAssert cond body =
     do
       body' <- body
       let e = NAssert cond body'
-      _ <- unify (void e) cond =<< mkSymbolic [TConstant [TBool]]
+      _ <- unify (void e) cond =<< mkSymbolic (one $ TConstant $ one TBool)
       pure body'
 
   evalApp = (fmap snd .) . lintApp (NBinary NApp () ())
-  evalAbs params _ = mkSymbolic [TClosure (void params)]
+  evalAbs params _ = mkSymbolic (one $ TClosure $ void params)
 
   evalError = throwError
 
@@ -407,36 +409,41 @@ lintBinaryOp op lsym rarg =
           NEq     -> [TConstant [TInt, TBool, TNull], TStr, TList y]
           NNEq    -> [TConstant [TInt, TBool, TNull], TStr, TList y]
 
-          NLt     -> [TConstant [TInt, TBool, TNull]]
-          NLte    -> [TConstant [TInt, TBool, TNull]]
-          NGt     -> [TConstant [TInt, TBool, TNull]]
-          NGte    -> [TConstant [TInt, TBool, TNull]]
+          NLt     -> one $ TConstant [TInt, TBool, TNull]
+          NLte    -> one $ TConstant [TInt, TBool, TNull]
+          NGt     -> one $ TConstant [TInt, TBool, TNull]
+          NGte    -> one $ TConstant [TInt, TBool, TNull]
 
-          NAnd    -> [TConstant [TBool]]
-          NOr     -> [TConstant [TBool]]
-          NImpl   -> [TConstant [TBool]]
+          NAnd    -> one $ TConstant $ one TBool
+          NOr     -> one $ TConstant $ one TBool
+          NImpl   -> one $ TConstant $ one TBool
 
           -- jww (2018-04-01): NYI: Allow Path + Str
-          NPlus   -> [TConstant [TInt], TStr, TPath]
-          NMinus  -> [TConstant [TInt]]
-          NMult   -> [TConstant [TInt]]
-          NDiv    -> [TConstant [TInt]]
+          NPlus   -> [TConstant $ one TInt, TStr, TPath]
+          NMinus  -> one $ TConstant $ one TInt
+          NMult   -> one $ TConstant $ one TInt
+          NDiv    -> one $ TConstant $ one TInt
 
-          NUpdate -> [TSet mempty]
+          NUpdate -> one $ TSet mempty
 
-          NConcat -> [TList y]
+          NConcat -> one $ TList y
 #if __GLASGOW_HASKELL__ < 900
           _ -> fail "Should not be possible"  -- symerr or this fun signature should be changed to work in type scope
 #endif
+
+
+
  where
   check lsym rsym xs =
     do
-      let e = NBinary op lsym rsym
+      let
+        e = NBinary op lsym rsym
+        unifyE = unify (void e)
 
       m <- mkSymbolic xs
-      _ <- unify (void e) lsym m
-      _ <- unify (void e) rsym m
-      unify (void e) lsym rsym
+      _ <- unifyE lsym m
+      _ <- unifyE rsym m
+      unifyE lsym rsym
 
 infixl 1 `lintApp`
 lintApp

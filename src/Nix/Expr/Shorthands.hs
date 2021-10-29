@@ -66,7 +66,7 @@ mkSynHole :: Text -> NExpr
 mkSynHole = Fix . mkSynHoleF
 
 mkSelector :: Text -> NAttrPath NExpr
-mkSelector = (:| mempty) . StaticKey . coerce
+mkSelector = one . StaticKey . coerce
 
 -- | Put an unary operator.
 --  @since 0.15.0
@@ -312,7 +312,7 @@ letsE pairs = mkLets $ uncurry ($=) <$> pairs
 
 -- | Wrapper for a single-variable @let@.
 letE :: Text -> NExpr -> NExpr -> NExpr
-letE varName varExpr = letsE [(varName, varExpr)]
+letE varName varExpr = letsE $ one (varName, varExpr)
 
 -- | Make a non-recursive attribute set.
 attrsE :: [(Text, NExpr)] -> NExpr

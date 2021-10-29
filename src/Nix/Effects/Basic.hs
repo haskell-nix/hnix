@@ -31,28 +31,30 @@ import           Nix.Value.Monad
 import           GHC.DataSize
 #endif
 
-defaultToAbsolutePath :: MonadNix e t f m => Path -> m Path
-defaultToAbsolutePath origPath = do
-  origPathExpanded <- expandHomePath origPath
-  absPath          <-
-    bool
-      (do
-        cwd <- do
-          mres <- lookupVar "__cur_file"
-          maybe
-            getCurrentDirectory
-            (
-              (\case
-                NVPath s -> pure $ takeDirectory s
-                val -> throwError $ ErrorCall $ "when resolving relative path, __cur_file is in scope, but is not a path; it is: " <> show val
-              ) <=< demand
+
+
+
+defaultToAbsolutePath :: forall e t f m . MonadNix e t f m => Path -> m Path
+defaultToAbsolutePath origPath =
+  do
+    origPathExpanded <- expandHomePath origPath
+    fmap
+      removeDotDotIndirections
+      . canonicalizePath
+        =<< bool
+            (fmap
+              (<///> origPathExpanded)
+              $ maybe
+                  getCurrentDirectory
+                  ( (\case
+                      NVPath s -> pure $ takeDirectory s
+                      val -> throwError $ ErrorCall $ "when resolving relative path, __cur_file is in scope, but is not a path; it is: " <> show val
+                    ) <=< demand
+                  )
+                  =<< lookupVar "__cur_file"
             )
-            mres
-        pure $ cwd <///> origPathExpanded
-      )
-      (pure origPathExpanded)
-      (isAbsolute origPathExpanded)
-  removeDotDotIndirections <$> canonicalizePath absPath
+            (pure origPathExpanded)
+            (isAbsolute origPathExpanded)
 
 expandHomePath :: MonadFile m => Path -> m Path
 expandHomePath (coerce -> ('~' : xs)) = (<> coerce xs) <$> getHomeDirectory
@@ -89,24 +91,24 @@ findEnvPathM name =
     (fail "impossible")
     (\ v ->
       do
-        nv <- demand v
-        l <- fromValue @[NValue t f m] nv
+        l <- fromValue @[NValue t f m] =<< demand v
         findPathBy nixFilePath l name
     )
     =<< lookupVar "__nixPath"
 
  where
   nixFilePath :: MonadEffects t f m => Path -> m (Maybe Path)
-  nixFilePath path = do
-    absPath <- toAbsolutePath @t @f path
-    isDir   <- doesDirectoryExist absPath
-    absFile <-
-      bool
-        (pure absPath)
-        (toAbsolutePath @t @f $ absPath </> "default.nix")
-        isDir
-    exists <- doesFileExist absFile
-    pure $ pure absFile `whenTrue` exists
+  nixFilePath path =
+    do
+      absPath <- toAbsolutePath @t @f path
+      isDir   <- doesDirectoryExist absPath
+      absFile <-
+        bool
+          (pure absPath)
+          (toAbsolutePath @t @f $ absPath </> "default.nix")
+          isDir
+
+      (pure absFile `whenTrue`) <$> doesFileExist absFile
 
 findPathBy
   :: forall e t f m
@@ -115,7 +117,7 @@ findPathBy
   -> [NValue t f m]
   -> Path
   -> m Path
-findPathBy finder ls name = do
+findPathBy finder ls name =
   maybe
     (throwError $ ErrorCall $ "file ''" <> coerce name <> "'' was not found in the Nix search path (add it's using $NIX_PATH or -I)")
     pure
@@ -132,8 +134,7 @@ findPathBy finder ls name = do
         do
           (s :: HashMap VarName (NValue t f m)) <- fromValue =<< demand nv
           p <- resolvePath s
-          nvpath <- demand p
-          path <- fromValue nvpath
+          path <- fromValue =<< demand p
 
           maybe
             (tryPath path mempty)
@@ -213,8 +214,7 @@ fetchTarball =
       )
       (\ v ->
         do
-          nv <- demand v
-          nsSha <- fromValue nv
+          nsSha <- fromValue =<< demand v
 
           let sha = stringIgnoreContext nsSha
 
@@ -244,27 +244,26 @@ defaultImportPath
   :: (MonadNix e t f m, MonadState (HashMap Path NExprLoc, b) m)
   => Path
   -> m (NValue t f m)
-defaultImportPath path = do
-  traceM $ "Importing file " <> coerce path
-  withFrame
-    Info
-    (ErrorCall $ "While importing file " <> show path)
-    $ do
-        imports <- gets fst
-        evalExprLoc =<<
-          maybe
-            (do
-              either
-                (\ err -> throwError $ ErrorCall . show $ fillSep ["Parse during import failed:", err])
-                (\ expr ->
-                  do
-                    modify $ first $ M.insert path expr
-                    pure expr
-                )
-                =<< parseNixFileLoc path
+defaultImportPath path =
+  do
+    traceM $ "Importing file " <> coerce path
+    withFrame
+      Info
+      (ErrorCall $ "While importing file " <> show path)
+      $ evalExprLoc =<<
+          (maybe
+            (either
+              (\ err -> throwError $ ErrorCall . show $ fillSep ["Parse during import failed:", err])
+              (\ expr ->
+                do
+                  modify $ first $ M.insert path expr
+                  pure expr
+              )
+              =<< parseNixFileLoc path
             )
             pure  -- return expr
-            (M.lookup path imports)
+            . M.lookup path
+          ) =<< gets fst
 
 defaultPathToDefaultNix :: MonadNix e t f m => Path -> m Path
 defaultPathToDefaultNix = pathToDefaultNixFile

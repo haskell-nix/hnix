@@ -322,7 +322,7 @@ execUnaryOp
   -> NUnaryOp
   -> NValue t f m
   -> m (NValue t f m)
-execUnaryOp scope span op arg = do
+execUnaryOp scope span op arg =
   case arg of
     NVConstant c ->
       case (op, c) of

@@ -39,9 +39,10 @@ genPos = mkPos <$> Gen.int (Range.linear 1 256)
 
 genSourcePos :: Gen SourcePos
 genSourcePos =
-  liftA3 SourcePos
-    asciiString
-    genPos
+  join (liftA3
+      SourcePos
+      asciiString
+    )
     genPos
 
 genKeyName :: Gen (NKeyName NExpr)
@@ -154,14 +155,14 @@ genExpr =
       genSet         = NSet mempty                       <$> fairList genBinding
       genRecSet      = NSet Recursive                    <$> fairList genBinding
       genUnary       = liftA2 NUnary   Gen.enumBounded       genExpr
-      genBinary      = liftA3 NBinary  Gen.enumBounded       genExpr     genExpr
+      genBinary      = join (liftA3 NBinary  Gen.enumBounded) genExpr
       genSelect      = liftA3 NSelect  (Gen.maybe genExpr)   genExpr     genAttrPath
       genHasAttr     = liftA2 NHasAttr genExpr               genAttrPath
       genAbs         = liftA2 NAbs     genParams             genExpr
       genLet         = liftA2 NLet     (fairList genBinding) genExpr
-      genIf          = liftA3 NIf      genExpr               genExpr     genExpr
-      genWith        = liftA2 NWith    genExpr               genExpr
-      genAssert      = liftA2 NAssert  genExpr               genExpr
+      genIf          = join (liftA3 NIf      genExpr) genExpr
+      genWith        = join (liftA2 NWith) genExpr
+      genAssert      = join (liftA2 NAssert) genExpr
 
 -- | Useful when there are recursive positions at each element of the list as
 --   it divides the size by the length of the generated list.
@@ -269,7 +270,7 @@ prop_prettyparse p =
   normalise s = String.unlines $ reverse . dropWhile isSpace . reverse <$> String.lines s
 
   ldiff :: String -> String -> [Diff [String]]
-  ldiff s1 s2 = getDiff ((: mempty) <$> String.lines s1) ((: mempty) <$> String.lines s2)
+  ldiff s1 s2 = getDiff (one <$> String.lines s1) (one <$> String.lines s2)
 
 tests :: TestLimit -> TestTree
 tests n =

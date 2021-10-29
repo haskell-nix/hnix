@@ -212,7 +212,7 @@ versionOpt = shortVersionOpt <*> debugVersionOpt
   debugVersionOpt :: Parser (a -> a)
   debugVersionOpt =
     infoOption
-      ( concat
+      ( fold
           [ "Version: ", showVersion version
           , "\nCommit: ", $(gitHash)
           , "\n  date: ", $(gitCommitDate)
@@ -227,4 +227,4 @@ nixOptionsInfo :: UTCTime -> ParserInfo Options
 nixOptionsInfo current =
   info
     (helper <*> versionOpt <*> nixOptions current)
-    (fullDesc <> progDesc "" <> header "hnix")
+    (fullDesc <> progDesc mempty <> header "hnix")

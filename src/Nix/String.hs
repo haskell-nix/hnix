@@ -200,7 +200,7 @@ toNixLikeContextValue sc =
   , case scFlavor sc of
       DirectPath         -> NixLikeContextValue True False mempty
       AllOutputs         -> NixLikeContextValue False True mempty
-      DerivationOutput t -> NixLikeContextValue False False [t]
+      DerivationOutput t -> NixLikeContextValue False False $ one t
   )
 
 toNixLikeContext :: S.HashSet StringContext -> NixLikeContext
