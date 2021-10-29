@@ -1,3 +1,4 @@
+{-# language CPP #-}
 
 module Nix.Json where
 
@@ -5,6 +6,10 @@ import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Encoding           as A
 import qualified Data.Vector                   as V
 import qualified Data.HashMap.Strict           as HM
+#if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.Key                as AKM
+import qualified Data.Aeson.KeyMap             as AKM
+#endif
 import           Nix.Atoms
 import           Nix.Effects
 import           Nix.Exec
@@ -21,8 +26,13 @@ toEncodingSorted = \case
     A.pairs
       . fold
       . ((\(k, v) -> A.pair k $ toEncodingSorted v) <$>)
-      . sortWith fst
-      $ HM.toList m
+      . sortWith fst $
+#if MIN_VERSION_aeson(2,0,0)
+          AKM.toList
+#else
+          HM.toList
+#endif
+            m
   A.Array l -> A.list toEncodingSorted $ V.toList l
   v         -> A.toEncoding v
 
@@ -48,9 +58,17 @@ nvalueToJSON = \case
   NVList l -> A.Array . V.fromList <$> traverse intoJson l
   NVSet _ m ->
     maybe
-      (A.Object <$> traverse intoJson (HM.mapKeys (coerce @VarName @Text) m))
+      (A.Object <$> traverse intoJson kmap)
       intoJson
-      (HM.lookup "outPath" m)
+      (lkup "outPath" kmap)
+   where
+#if MIN_VERSION_aeson(2,0,0)
+    lkup = AKM.lookup
+    kmap = AKM.fromHashMap $ HM.mapKeys (AKM.fromText . coerce) m
+#else
+    lkup = HM.lookup
+    kmap = HM.mapKeys (coerce @VarName @Text) m
+#endif
   NVPath p ->
     do
       fp <- lift $ coerce <$> addPath p
