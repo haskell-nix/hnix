@@ -3,6 +3,8 @@
 
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.14.0...0.15.0#files_bucket) 0.15.0
 
+For support refere to: https://github.com/haskell-nix/hnix/issues/984
+
 Partial log (for now):
 
 * Breaking:
