@@ -111,15 +111,14 @@ renderEvalFrame level f =
 
     case f of
       EvaluatingExpr scope e@(Ann loc _) ->
-        do
-          let
-            scopeInfo :: [Doc ann]
-            scopeInfo =
-              one (pretty $ Text.show scope) `whenTrue` showScopes opts
-          addMetaInfo
-            (scopeInfo <>)
-            loc
-            =<< renderExpr level "While evaluating" "Expression" e
+        addMetaInfo
+          (scopeInfo <>)
+          loc
+          =<< renderExpr level "While evaluating" "Expression" e
+         where
+          scopeInfo :: [Doc ann]
+          scopeInfo =
+            one (pretty $ Text.show scope) `whenTrue` showScopes opts
 
       ForcingExpr _scope e@(Ann loc _) | thunks opts ->
         addMetaInfo
@@ -134,13 +133,13 @@ renderEvalFrame level f =
           $ "While calling builtins." <> pretty name
 
       SynHole synfo ->
-        sequenceA $
-          let e@(Ann loc _) = _synHoleInfo_expr synfo in
-
+        sequenceA
           [ renderLocation loc =<<
               renderExpr level "While evaluating" "Syntactic Hole" e
           , pure $ pretty $ Text.show $ _synHoleInfo_scope synfo
           ]
+         where
+          e@(Ann loc _) = _synHoleInfo_expr synfo
 
       ForcingExpr _ _ -> stub
 
@@ -154,11 +153,15 @@ renderExpr
   -> m (Doc ann)
 renderExpr _level longLabel shortLabel e@(Ann _ x) = do
   opts :: Options <- asks (view hasLens)
-  let rendered
-          | verbose opts >= DebugInfo =
-              pretty (PS.ppShow (stripAnnotation e))
-          | verbose opts >= Chatty = prettyNix (stripAnnotation e)
-          | otherwise = prettyNix (Fix (Fix (NSym "<?>") <$ x))
+  let
+    expr :: NExpr
+    expr = stripAnnotation e
+
+    rendered
+      | verbose opts >= DebugInfo = pretty $ PS.ppShow expr
+      | verbose opts >= Chatty = prettyNix expr
+      | otherwise = prettyNix (Fix (Fix (NSym "<?>") <$ x))
+
   pure $
     bool
       (pretty shortLabel <> fillSep [": ", rendered])
