@@ -1140,13 +1140,13 @@ toFileNix name s =
         (stringIgnoreContext s')
 
     let
-      storepath  = coerce $ toText @FilePath $ coerce mres
+      storepath  = coerce (fromString @Text) mres
       sc = StringContext storepath DirectPath
 
     toValue $ mkNixStringWithSingletonContext storepath sc
 
 toPathNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-toPathNix = toValue @Path <=< fromValue @Path
+toPathNix = inHask @Path id
 
 pathExistsNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 pathExistsNix nvpath =
