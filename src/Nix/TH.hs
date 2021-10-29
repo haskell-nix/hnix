@@ -18,18 +18,20 @@ import           Nix.Expr.Types.Annotated
 import           Nix.Parser
 
 quoteExprExp :: String -> ExpQ
-quoteExprExp s = do
-  expr <- parseExpr s
-  dataToExpQ
-    (extQOnFreeVars metaExp expr `extQ` (pure . (TH.lift :: Text -> Q Exp)))
-    expr
+quoteExprExp s =
+  do
+    expr <- parseExpr $ fromString s
+    dataToExpQ
+      (extQOnFreeVars metaExp expr `extQ` (pure . (TH.lift :: Text -> Q Exp)))
+      expr
 
 quoteExprPat :: String -> PatQ
-quoteExprPat s = do
-  expr <- parseExpr s
-  dataToPatQ
-    (extQOnFreeVars metaPat expr)
-    expr
+quoteExprPat s =
+  do
+    expr <- parseExpr $ fromString s
+    dataToPatQ
+      (extQOnFreeVars metaPat expr)
+      expr
 
 -- | Helper function.
 extQOnFreeVars
@@ -43,14 +45,14 @@ extQOnFreeVars
   -> NExpr
   -> b
   -> Maybe q
-extQOnFreeVars f e = extQ (const Nothing) (f $ freeVars e)
+extQOnFreeVars f = extQ (const Nothing) . f . freeVars
 
-parseExpr :: (MonadFail m, ToText a) => a -> m NExpr
-parseExpr s =
+parseExpr :: (MonadFail m) => Text -> m NExpr
+parseExpr =
   either
     (fail . show)
     pure
-    (parseNixText $ toText s)
+    . parseNixText
 
 freeVars :: NExpr -> Set VarName
 freeVars e = case unFix e of
