@@ -158,7 +158,7 @@ assertLangOk opts fileBaseName =
   do
     actual   <- printNix <$> hnixEvalFile opts (addNixExt fileBaseName)
     expected <- read fileBaseName ".exp"
-    assertEqual mempty expected $ fromString (actual <> "\n")
+    assertEqual mempty expected (actual <> "\n")
 
 assertLangOkXml :: Options -> Path -> Assertion
 assertLangOkXml opts fileBaseName =
@@ -218,7 +218,7 @@ assertEvalFail file =
   do
     time       <- liftIO getCurrentTime
     evalResult <- printNix <$> hnixEvalFile (defaultOptions time) file
-    evalResult `seq` assertFailure $ "File: ''" <> coerce file <> "'' should not evaluate.\nThe evaluation result was `" <> evalResult <> "`."
+    evalResult `seq` assertFailure $ "File: ''" <> coerce file <> "'' should not evaluate.\nThe evaluation result was `" <> toString evalResult <> "`."
 
 nixTestDir :: FilePath
 nixTestDir = "data/nix/tests/lang/"

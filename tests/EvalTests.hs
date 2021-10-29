@@ -598,7 +598,7 @@ constantEqual expected actual =
         "Inequal normal forms:\n"
         <> "Expected: " <> printNix expectedNF <> "\n"
         <>  "Actual:   " <> printNix actualNF
-    assertBool message eq
+    assertBool (toString message) eq
  where
   getNormForm = normalForm <=< nixEvalExprLoc mempty
 

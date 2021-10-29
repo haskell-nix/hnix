@@ -29,7 +29,6 @@ import           Nix.Parser
 import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
-import qualified GHC.OldList                   as OldList
 
 -- | This type represents a pretty printed nix expression
 -- together with some information about the expression.
@@ -356,7 +355,7 @@ prettyNValueProv v =
       fillSep
         [ prettyNVal
         , indent 2 $
-          "(" <> fold ("from: " : (prettyOriginExpr . _originExpr <$> ps)) <> ")"
+          "(" <> fold (one "from: " <> (prettyOriginExpr . _originExpr <$> ps)) <> ")"
         ]
     )
     (citations @m @(NValue t f m) v)
@@ -380,27 +379,27 @@ prettyNThunk t =
       fillSep
         [ v'
         , indent 2 $
-          "(" <> fold ( "thunk from: " : (prettyOriginExpr . _originExpr <$> ps)) <> ")"
+          "(" <> fold (one "thunk from: " <> (prettyOriginExpr . _originExpr <$> ps)) <> ")"
         ]
 
 -- | This function is used only by the testing code.
-printNix :: forall t f m . MonadDataContext f m => NValue t f m -> String
+printNix :: forall t f m . MonadDataContext f m => NValue t f m -> Text
 printNix = iterNValueByDiscardWith thk phi
  where
-  thk = toString thunkStubText
+  thk = thunkStubText
 
-  phi :: NValue' t f m String -> String
-  phi (NVConstant' a ) = toString $ atomText a
+  phi :: NValue' t f m Text -> Text
+  phi (NVConstant' a ) = atomText a
   phi (NVStr'      ns) = show $ stringIgnoreContext ns
-  phi (NVList'     l ) = "[ " <> OldList.unwords l <> " ]"
+  phi (NVList'     l ) = "[ " <> unwords l <> " ]"
   phi (NVSet' _ s) =
     "{ " <>
       fold
-        [ check (toString k) <> " = " <> v <> "; "
-        | (k, v) <- sort $ toList s
+        [ check k <> " = " <> v <> "; "
+        | (coerce -> k, v) <- sort $ toList s
         ] <> "}"
    where
-    check :: [Char] -> [Char]
+    check :: Text -> Text
     check v =
       fromMaybe
         v
@@ -408,8 +407,8 @@ printNix = iterNValueByDiscardWith thk phi
      where
       surround s = "\"" <> s <> "\""
 
-      tryRead :: forall a . (Read a, Show a) => Maybe String
-      tryRead = fmap (surround . show) (readMaybe v :: Maybe a)
+      tryRead :: forall a . (Read a, Show a) => Maybe Text
+      tryRead = fmap (surround . show) (readMaybe (toString v) :: Maybe a)
   phi NVClosure'{}        = "<<lambda>>"
-  phi (NVPath' fp       ) = coerce fp
-  phi (NVBuiltin' name _) = toString @Text $ "<<builtin " <> coerce name <> ">>"
+  phi (NVPath' fp       ) = fromString $ coerce fp
+  phi (NVBuiltin' name _) = "<<builtin " <> coerce name <> ">>"
