@@ -154,19 +154,25 @@ renderExpr
 renderExpr _level longLabel shortLabel e@(Ann _ x) = do
   opts :: Options <- asks (view hasLens)
   let
+    lvl :: Verbosity
+    lvl = verbose opts
+
     expr :: NExpr
     expr = stripAnnotation e
 
-    rendered
-      | verbose opts >= DebugInfo = pretty $ PS.ppShow expr
-      | verbose opts >= Chatty = prettyNix expr
-      | otherwise = prettyNix (Fix (Fix (NSym "<?>") <$ x))
+    concise = prettyNix $ Fix $ Fix (NSym "<?>") <$ x
+
+    chatty =
+      bool
+        (pretty $ PS.ppShow expr)
+        (prettyNix expr)
+        (lvl == Chatty)
 
   pure $
     bool
-      (pretty shortLabel <> fillSep [": ", rendered])
-      (vsep [pretty (longLabel <> ":\n>>>>>>>>"), indent 2 rendered, "<<<<<<<<"])
-      (verbose opts >= Chatty)
+      (pretty shortLabel <> fillSep [": ", concise])
+      (vsep [pretty (longLabel <> ":\n>>>>>>>>"), indent 2 chatty, "<<<<<<<<"])
+      (lvl >= Chatty)
 
 renderValueFrame
   :: forall e t f m ann
