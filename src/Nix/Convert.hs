@@ -59,10 +59,7 @@ inHaskM f = toValue <=< f <=< fromValue
 
 -- | Maybe transform Nix -> Hask. Run function. Convert Hask -> Nix.
 inHaskMay :: forall a1 a2 v b m . (Monad m, FromValue a1 m v, ToValue a2 m b) => (Maybe a1 -> a2) -> v -> m b
-inHaskMay f a =
-  do
-    v <- fromValueMay a
-    toValue $ f v
+inHaskMay f = toValue . f <=< fromValueMay
 
 
 -- * FromValue
