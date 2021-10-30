@@ -54,7 +54,6 @@ coerceToString call ctsm clevel =
     (coerceAnyToNixString call ctsm)
     (coerceStringlikeToNixString ctsm)
     (clevel == CoerceStringy)
-    <=< demand
 
 coerceAnyToNixString
   :: forall e t f m
