@@ -1208,11 +1208,9 @@ isFunctionNix nv =
         _           -> False
 
 throwNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-throwNix mnv =
-  do
-    ns <- coerceToString callFunc CopyToStore CoerceStringy mnv
-
-    throwError . ErrorCall . toString $ stringIgnoreContext ns
+throwNix =
+  throwError . ErrorCall . toString . stringIgnoreContext
+    <=< coerceToString callFunc CopyToStore CoerceStringy
 
 -- | Implementation of Nix @import@ clause.
 --

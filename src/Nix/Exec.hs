@@ -425,9 +425,9 @@ execBinaryOpForced scope span op lval rval = case op of
       (NVConstant _, NVConstant _) -> numBinOp (+)
 
       (NVStr ls, NVStr rs) -> pure $ nvStrP prov (ls <> rs)
-      (NVStr ls, rs@NVPath{}) ->
+      (NVStr ls, NVPath p) ->
         (\rs2 -> nvStrP prov (ls <> rs2)) <$>
-          coerceToString callFunc CopyToStore CoerceStringy rs
+          coercePathToNixString CopyToStore p
       (NVPath ls, NVStr rs) ->
         maybe
           (throwError $ ErrorCall "A string that refers to a store path cannot be appended to a path.") -- data/nix/src/libexpr/eval.cc:1412

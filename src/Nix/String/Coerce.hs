@@ -85,16 +85,7 @@ coerceToString call ctsm clevel = go
       coerceStringy =
         \case
           NVStr ns -> pure ns
-          NVPath p ->
-            bool
-              (castToNixString . fromString . coerce)
-              (fmap storePathToNixString . addPath)
-              (ctsm == CopyToStore)
-              p
-           where
-            storePathToNixString :: StorePath -> NixString
-            storePathToNixString (fromString . coerce -> sp) =
-              join (flip mkNixStringWithSingletonContext . (`StringContext` DirectPath)) sp
+          NVPath p -> coercePathToNixString ctsm p
           v@(NVSet _ s) ->
             fromMaybe
               (err v)
@@ -107,4 +98,15 @@ coerceToString call ctsm clevel = go
          where
           err v = throwError $ ErrorCall $ "Expected a string, but saw: " <> show v
 
-
+-- | Convert @Path@ into @NixString@.
+-- With an additional option to store the resolved path into Nix Store.
+coercePathToNixString :: (MonadStore m, Framed e m) => CopyToStoreMode -> Path -> m NixString
+coercePathToNixString ctsm =
+  bool
+    (pure . mkNixStringWithoutContext . fromString . coerce)
+    (fmap storePathToNixString . addPath)
+    (ctsm == CopyToStore)
+ where
+  storePathToNixString :: StorePath -> NixString
+  storePathToNixString (fromString . coerce -> sp) =
+    join (flip mkNixStringWithSingletonContext . (`StringContext` DirectPath)) sp
