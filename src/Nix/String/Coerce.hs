@@ -19,8 +19,8 @@ import           GHC.DataSize
 
 -- | Data type to avoid boolean blindness on what used to be called coerceMore
 data CoercionLevel
-  = CoerceStringy
-  -- ^ Coerce only stringlike types: strings, paths, and appropriate sets
+  = CoerceStringlike
+  -- ^ Coerce only stringlike types: strings, paths
   | CoerceAny
   -- ^ Coerce everything but functions
   deriving (Eq,Ord,Enum,Bounded)
@@ -53,7 +53,7 @@ coerceToString call ctsm clevel =
   bool
     (coerceAnyToNixString call ctsm)
     (coerceStringlikeToNixString ctsm)
-    (clevel == CoerceStringy)
+    (clevel == CoerceStringlike)
 
 coerceAnyToNixString
   :: forall e t f m
@@ -97,14 +97,14 @@ coerceAnyToNixString call ctsm = go
             continueOnKey :: (NValue t f m -> m (NValue t f m)) -> VarName -> Maybe (m NixString)
             continueOnKey f = fmap (go <=< f) . (`M.lookup` s)
             err v' = throwError $ ErrorCall $ "Expected a Set that has `__toString` or `outpath`, but saw: " <> show v'
-          v -> coerceStringy v
+          v -> coerceStringlike v
        where
         castToNixString = pure . mkNixStringWithoutContext
 
         nixStringUnwords = intercalateNixString $ mkNixStringWithoutContext " "
 
-      coerceStringy :: NValue t f m -> m NixString
-      coerceStringy = coerceStringlikeToNixString ctsm
+      coerceStringlike :: NValue t f m -> m NixString
+      coerceStringlike = coerceStringlikeToNixString ctsm
 
 coerceStringlikeToNixString
   :: forall e t f m
