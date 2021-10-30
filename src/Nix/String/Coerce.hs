@@ -52,7 +52,7 @@ coerceToString
 coerceToString call ctsm clevel =
   bool
     (coerceAnyToNixString call ctsm)
-    (coerceStringlikeToNixString call ctsm)
+    (coerceStringlikeToNixString ctsm)
     (clevel == CoerceStringy)
     <=< demand
 
@@ -89,6 +89,15 @@ coerceAnyToNixString call ctsm = go
           -- NVConstant: NAtom (NURI Text) is not matched
           NVList l ->
             nixStringUnwords <$> traverse go l
+          v@(NVSet _ s) ->
+            fromMaybe
+              (err v)
+              $ continueOnKey (`call` v) "__toString"
+              <|> continueOnKey pure "outPath"
+           where
+            continueOnKey :: (NValue t f m -> m (NValue t f m)) -> VarName -> Maybe (m NixString)
+            continueOnKey f = fmap (go <=< f <=< demand) . (`M.lookup` s)
+            err v' = throwError $ ErrorCall $ "Expected a Set that has `__toString` or `outpath`, but saw: " <> show v'
           v -> coerceStringy v
        where
         castToNixString = pure . mkNixStringWithoutContext
@@ -96,7 +105,7 @@ coerceAnyToNixString call ctsm = go
         nixStringUnwords = intercalateNixString $ mkNixStringWithoutContext " "
 
       coerceStringy :: NValue t f m -> m NixString
-      coerceStringy = coerceStringlikeToNixString call ctsm
+      coerceStringy = coerceStringlikeToNixString ctsm
 
 coerceStringlikeToNixString
   :: forall e t f m
@@ -106,30 +115,19 @@ coerceStringlikeToNixString
      , MonadDataErrorContext t f m
      , MonadValue (NValue t f m) m
      )
-  => (NValue t f m -> NValue t f m -> m (NValue t f m))
-  -> CopyToStoreMode
+  => CopyToStoreMode
   -> NValue t f m
   -> m NixString
-coerceStringlikeToNixString call ctsm = go <=< demand
+coerceStringlikeToNixString ctsm = go <=< demand
  where
   go :: NValue t f m -> m NixString
   go =
     \case
       NVStr ns -> pure ns
       NVPath p -> coercePathToNixString ctsm p
-      --  2021-10-30: NOTE: Code quality famously counts in WTFs. Set is String-like?
-      -- It probaly needs a separate function with an understandable name.
-      v@(NVSet _ s) ->
-        fromMaybe
-          (err v)
-          $ continueOnKey (`call` v) "__toString"
-          <|> continueOnKey pure "outPath"
-       where
-        continueOnKey :: (NValue t f m -> m (NValue t f m)) -> VarName -> Maybe (m NixString)
-        continueOnKey f = fmap (go <=< f <=< demand) . (`M.lookup` s)
       v -> err v
-      where
-      err v = throwError $ ErrorCall $ "Expected a string, but saw: " <> show v
+     where
+      err v = throwError $ ErrorCall $ "Expected a path or string, but saw: " <> show v
 
 -- | Convert @Path@ into @NixString@.
 -- With an additional option to store the resolved path into Nix Store.

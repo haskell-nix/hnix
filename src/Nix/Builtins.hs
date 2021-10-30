@@ -825,7 +825,7 @@ catAttrsNix attrName xs =
 baseNameOfNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 baseNameOfNix x =
   do
-    ns <- coerceStringlikeToNixString callFunc DontCopyToStore x
+    ns <- coerceStringlikeToNixString DontCopyToStore x
     pure $
       nvStr $
         modifyNixContents
@@ -1210,7 +1210,7 @@ isFunctionNix nv =
 throwNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 throwNix =
   throwError . ErrorCall . toString . stringIgnoreContext
-    <=< coerceStringlikeToNixString callFunc CopyToStore
+    <=< coerceStringlikeToNixString CopyToStore
 
 -- | Implementation of Nix @import@ clause.
 --
@@ -1626,7 +1626,7 @@ execNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 execNix xs =
   do
-    xs' <- traverse (coerceStringlikeToNixString callFunc DontCopyToStore) =<< fromValue @[NValue t f m] xs
+    xs' <- traverse (coerceStringlikeToNixString DontCopyToStore) =<< fromValue @[NValue t f m] xs
     -- 2018-11-19: NOTE: Still need to do something with the context here
     -- See prim_exec in nix/src/libexpr/primops.cc
     -- Requires the implementation of EvalState::realiseContext

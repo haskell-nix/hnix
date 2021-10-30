@@ -440,10 +440,10 @@ execBinaryOpForced scope span op lval rval = case op of
 
       (ls@NVSet{}, NVStr rs) ->
         (\ls2 -> nvStrP prov (ls2 <> rs)) <$>
-          coerceStringlikeToNixString callFunc DontCopyToStore ls
+          coerceAnyToNixString callFunc DontCopyToStore ls
       (NVStr ls, rs@NVSet{}) ->
         (\rs2 -> nvStrP prov (ls <> rs2)) <$>
-          coerceStringlikeToNixString callFunc DontCopyToStore rs
+          coerceAnyToNixString callFunc DontCopyToStore rs
       _ -> unsupportedTypes
 
   NEq   -> alreadyHandled
