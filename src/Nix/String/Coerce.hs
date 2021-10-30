@@ -96,7 +96,7 @@ coerceAnyToNixString call ctsm = go
               <|> continueOnKey pure "outPath"
            where
             continueOnKey :: (NValue t f m -> m (NValue t f m)) -> VarName -> Maybe (m NixString)
-            continueOnKey f = fmap (go <=< f <=< demand) . (`M.lookup` s)
+            continueOnKey f = fmap (go <=< f) . (`M.lookup` s)
             err v' = throwError $ ErrorCall $ "Expected a Set that has `__toString` or `outpath`, but saw: " <> show v'
           v -> coerceStringy v
        where
