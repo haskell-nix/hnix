@@ -309,9 +309,9 @@ defaultDerivationStrict val = do
     toStorePaths = foldl (flip addToInputs) mempty
 
     addToInputs :: Bifunctor p => StringContext -> p (Set Text) (Map Text [Text])  -> p (Set Text) (Map Text [Text])
-    addToInputs (StringContext path kind) = case kind of
-      DirectPath -> first (Set.insert (coerce path))
-      DerivationOutput o -> second (Map.insertWith (<>) (coerce path) $ one o)
+    addToInputs (StringContext (coerce -> path) kind) = case kind of
+      DirectPath -> first $ Set.insert path
+      DerivationOutput o -> second $ Map.insertWith (<>) path $ one o
       AllOutputs ->
         -- TODO: recursive lookup. See prim_derivationStrict
         -- XXX: When is this really used ?
