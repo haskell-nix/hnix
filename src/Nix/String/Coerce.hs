@@ -85,7 +85,6 @@ coerceAnyToNixString call ctsm = go
             castToNixString $ show n
           NVConstant NNull ->
             castToNixString mempty
-          -- NVConstant: NAtom (NURI Text) is not matched
           NVList l ->
             nixStringUnwords <$> traverse go l
           v@(NVSet _ s) ->

@@ -108,9 +108,7 @@ instance (MonadBasicThunk m, MonadCatch m)
 
   query :: m v -> NThunkF m v -> m v
   query vStub (Thunk _ _ lTValRef) =
-    do
-      v <- readRef lTValRef
-      deferred pure (const vStub) v
+    deferred pure (const vStub) =<< readRef lTValRef
 
   force :: NThunkF m v -> m v
   force = forceMain
@@ -120,12 +118,7 @@ instance (MonadBasicThunk m, MonadCatch m)
 
   further :: NThunkF m v -> m (NThunkF m v)
   further t@(Thunk _ _ ref) =
-    do
-      _ <-
-        atomicModifyRef
-          ref
-          dup
-      pure t
+    const (pure t) =<< atomicModifyRef ref dup
 
 
 -- *** United body of `force*`
