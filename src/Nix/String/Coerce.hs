@@ -82,21 +82,40 @@ coerceToString call ctsm clevel = go
         nixStringUnwords = intercalateNixString $ mkNixStringWithoutContext " "
 
       coerceStringy :: NValue t f m -> m NixString
-      coerceStringy =
-        \case
-          NVStr ns -> pure ns
-          NVPath p -> coercePathToNixString ctsm p
-          v@(NVSet _ s) ->
-            fromMaybe
-              (err v)
-              $ continueOnKey (`call` v) "__toString"
-              <|> continueOnKey pure "outPath"
-           where
-            continueOnKey :: (NValue t f m -> m (NValue t f m)) -> VarName -> Maybe (m NixString)
-            continueOnKey f = fmap (go <=< f <=< demand) . (`M.lookup` s)
-          v -> err v
-         where
-          err v = throwError $ ErrorCall $ "Expected a string, but saw: " <> show v
+      coerceStringy = coerceStringlikeToNixString call ctsm
+
+coerceStringlikeToNixString
+  :: forall e t f m
+   . ( Framed e m
+     , MonadStore m
+     , MonadThrow m
+     , MonadDataErrorContext t f m
+     , MonadValue (NValue t f m) m
+     )
+  => (NValue t f m -> NValue t f m -> m (NValue t f m))
+  -> CopyToStoreMode
+  -> NValue t f m
+  -> m NixString
+coerceStringlikeToNixString call ctsm = go <=< demand
+ where
+  go :: NValue t f m -> m NixString
+  go =
+    \case
+      NVStr ns -> pure ns
+      NVPath p -> coercePathToNixString ctsm p
+      --  2021-10-30: NOTE: Code quality famously counts in WTFs. Set is String-like?
+      -- It probaly needs a separate function with an understandable name.
+      v@(NVSet _ s) ->
+        fromMaybe
+          (err v)
+          $ continueOnKey (`call` v) "__toString"
+          <|> continueOnKey pure "outPath"
+       where
+        continueOnKey :: (NValue t f m -> m (NValue t f m)) -> VarName -> Maybe (m NixString)
+        continueOnKey f = fmap (go <=< f <=< demand) . (`M.lookup` s)
+      v -> err v
+      where
+      err v = throwError $ ErrorCall $ "Expected a string, but saw: " <> show v
 
 -- | Convert @Path@ into @NixString@.
 -- With an additional option to store the resolved path into Nix Store.
