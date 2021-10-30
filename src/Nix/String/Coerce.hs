@@ -49,19 +49,31 @@ coerceToString
   -> CoercionLevel
   -> NValue t f m
   -> m NixString
-coerceToString call ctsm clevel = go
+coerceToString call ctsm clevel =
+  bool
+    (coerceAnyToNixString call ctsm)
+    (coerceStringlikeToNixString call ctsm)
+    (clevel == CoerceStringy)
+    <=< demand
+
+coerceAnyToNixString
+  :: forall e t f m
+   . ( Framed e m
+     , MonadStore m
+     , MonadThrow m
+     , MonadDataErrorContext t f m
+     , MonadValue (NValue t f m) m
+     )
+  => (NValue t f m -> NValue t f m -> m (NValue t f m))
+  -> CopyToStoreMode
+  -> NValue t f m
+  -> m NixString
+coerceAnyToNixString call ctsm = go
  where
   go :: NValue t f m -> m NixString
   go x =
-    bool
-      coerceAny
-      coerceStringy
-      (clevel == CoerceStringy)
-      =<< demand x
+    coerceAny =<< demand x
      where
-
-      castToNixString = pure . mkNixStringWithoutContext
-
       coerceAny :: NValue t f m -> m NixString
       coerceAny =
         \case
@@ -79,6 +91,8 @@ coerceToString call ctsm clevel = go
             nixStringUnwords <$> traverse go l
           v -> coerceStringy v
        where
+        castToNixString = pure . mkNixStringWithoutContext
+
         nixStringUnwords = intercalateNixString $ mkNixStringWithoutContext " "
 
       coerceStringy :: NValue t f m -> m NixString

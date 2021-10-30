@@ -447,7 +447,7 @@ nixPathNix =
             <> rest
 
 toStringNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-toStringNix = toValue <=< coerceToString callFunc DontCopyToStore CoerceAny
+toStringNix = toValue <=< coerceAnyToNixString callFunc DontCopyToStore
 
 hasAttrNix
   :: forall e t f m

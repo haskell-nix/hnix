@@ -372,7 +372,7 @@ buildDerivationWithContext drvAttrs = do
           rawString :: Text <- extractNixString jsonString
           pure $ one ("__json", rawString)
         else
-          traverse (extractNixString <=< lift . coerceToString callFunc CopyToStore CoerceAny) $
+          traverse (extractNixString <=< lift . coerceAnyToNixString callFunc CopyToStore) $
             Map.fromList $ M.toList $ deleteKeys [ "args", "__ignoreNulls" ] attrs
 
       pure $ Derivation { platform, builder, args, env,  hashMode, useJson
