@@ -118,16 +118,12 @@ coerceStringlikeToNixString
   => CopyToStoreMode
   -> NValue t f m
   -> m NixString
-coerceStringlikeToNixString ctsm = go <=< demand
- where
-  go :: NValue t f m -> m NixString
-  go =
-    \case
-      NVStr ns -> pure ns
-      NVPath p -> coercePathToNixString ctsm p
-      v -> err v
-     where
-      err v = throwError $ ErrorCall $ "Expected a path or string, but saw: " <> show v
+coerceStringlikeToNixString ctsm =
+  (\case
+    NVStr ns -> pure ns
+    NVPath p -> coercePathToNixString ctsm p
+    v -> throwError $ ErrorCall $ "Expected a path or string, but saw: " <> show v
+  ) <=< demand
 
 -- | Convert @Path@ into @NixString@.
 -- With an additional option to store the resolved path into Nix Store.
