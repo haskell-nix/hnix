@@ -6,6 +6,7 @@ import           Control.Monad.Catch            ( MonadThrow )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import qualified Data.HashMap.Lazy             as M
 import           Nix.Atoms
+import           Nix.Expr.Types                 ( VarName )
 import           Nix.Effects
 import           Nix.Frames
 import           Nix.String
@@ -32,8 +33,12 @@ data CopyToStoreMode
   -- ^ Add paths to the store as they are encountered
   deriving (Eq,Ord,Enum,Bounded)
 
+--  2021-10-30: NOTE: This seems like metafunction that really is a bunch of functions thrown together.
+-- Both code blocks are `\case` - which means they can be or 2 functions, or just as well can be one `\case` that goes through all of them and does not require a `CoercionLevel`. Use of function shows that - the `CoercionLevel` not once was used polymorphically.
+-- Also `CopyToStoreMode` acts only in case of `NVPath` - that is a separate function
 coerceToString
-  :: ( Framed e m
+  :: forall e t f m
+   . ( Framed e m
      , MonadStore m
      , MonadThrow m
      , MonadDataErrorContext t f m
@@ -46,35 +51,39 @@ coerceToString
   -> m NixString
 coerceToString call ctsm clevel = go
  where
+  go :: NValue t f m -> m NixString
   go x =
-    do
-      x' <- demand x
-      bool
-        (coerceStringy x')
-        (coerceAny x')
-        (clevel == CoerceAny)
+    bool
+      coerceAny
+      coerceStringy
+      (clevel == CoerceStringy)
+      =<< demand x
      where
 
-      coerceAny x' =
-        case x' of
+      castToNixString = pure . mkNixStringWithoutContext
+
+      coerceAny :: NValue t f m -> m NixString
+      coerceAny =
+        \case
           -- TODO Return a singleton for "" and "1"
           NVConstant (NBool b) ->
             castToNixString $ "1" `whenTrue` b
           NVConstant (NInt n) ->
-            castToNixString $
-              show n
+            castToNixString $ show n
           NVConstant (NFloat n) ->
-            castToNixString $
-              show n
+            castToNixString $ show n
           NVConstant NNull ->
             castToNixString mempty
           -- NVConstant: NAtom (NURI Text) is not matched
           NVList l ->
             nixStringUnwords <$> traverse go l
           v -> coerceStringy v
+       where
+        nixStringUnwords = intercalateNixString $ mkNixStringWithoutContext " "
 
-      coerceStringy x' =
-        case x' of
+      coerceStringy :: NValue t f m -> m NixString
+      coerceStringy =
+        \case
           NVStr ns -> pure ns
           NVPath p ->
             bool
@@ -82,36 +91,20 @@ coerceToString call ctsm clevel = go
               (fmap storePathToNixString . addPath)
               (ctsm == CopyToStore)
               p
-          v@(NVSet _ s) ->
-            maybe
-              (maybe
-                (err v)
-                (gosw False)
-                (M.lookup "outPath" s)
-              )
-              (gosw True)
-              (M.lookup "__toString" s)
            where
-            gosw b p =
-              do
-                p' <- demand p
-                bool
-                  go
-                  (go <=< (`call` v))
-                  b
-                  p'
-
+            storePathToNixString :: StorePath -> NixString
+            storePathToNixString (fromString . coerce -> sp) =
+              join (flip mkNixStringWithSingletonContext . (`StringContext` DirectPath)) sp
+          v@(NVSet _ s) ->
+            fromMaybe
+              (err v)
+              $ continueOnKey (`call` v) "__toString"
+              <|> continueOnKey pure "outPath"
+           where
+            continueOnKey :: (NValue t f m -> m (NValue t f m)) -> VarName -> Maybe (m NixString)
+            continueOnKey f = fmap (go <=< f <=< demand) . (`M.lookup` s)
           v -> err v
-      err v = throwError $ ErrorCall $ "Expected a string, but saw: " <> show v
-      castToNixString = pure . mkNixStringWithoutContext
+         where
+          err v = throwError $ ErrorCall $ "Expected a string, but saw: " <> show v
 
-  nixStringUnwords = intercalateNixString $ mkNixStringWithoutContext " "
-
-  storePathToNixString :: StorePath -> NixString
-  storePathToNixString sp =
-    mkNixStringWithSingletonContext
-      t
-      (StringContext t DirectPath)
-   where
-    t = fromString $ coerce sp
 
