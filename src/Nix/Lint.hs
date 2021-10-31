@@ -214,7 +214,7 @@ merge context = go
         (pure <$> r)
       bool
         id
-        ((TSet (pure m) :) <$>)
+        ((one (TSet $ pure m) <>) <$>)
         (not $ M.null m)
         rest
 
@@ -270,9 +270,11 @@ unify context (SV x) (SV y) = do
       m <- merge context xs ys
       bool
         (do
-          writeRef x   (NMany m)
-          writeRef y   (NMany m)
-          packSymbolic (NMany m)
+          let
+           nm = NMany m
+          writeRef x   nm
+          writeRef y   nm
+          packSymbolic nm
         )
         (
               -- x' <- renderSymbolic (Symbolic x)
@@ -304,16 +306,16 @@ instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
   defer = fmap ST . thunk
 
   demand :: Symbolic m -> m (Symbolic m)
-  demand (ST v)= demand =<< force v
-  demand (SV v)= pure (SV v)
+  demand (ST v) = demand =<< force v
+  demand (SV v) = pure (SV v)
 
 
 instance (MonadThunkId m, MonadAtomicRef m, MonadCatch m)
   => MonadValueF (Symbolic m) m where
 
   demandF :: (Symbolic m -> m r) -> Symbolic m -> m r
-  demandF f (ST v)= demandF f =<< force v
-  demandF f (SV v)= f (SV v)
+  demandF f (ST v) = demandF f =<< force v
+  demandF f (SV v) = f (SV v)
 
 
 instance MonadLint e m => MonadEval (Symbolic m) m where
@@ -349,7 +351,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
   evalEnvPath     = const $ mkSymbolic $ one TPath
 
   evalUnary op arg =
-    unify (void (NUnary op arg)) arg =<< mkSymbolic (one (TConstant [TInt, TBool]))
+    unify (void $ NUnary op arg) arg =<< mkSymbolic (one $ TConstant [TInt, TBool])
 
   evalBinary = lintBinaryOp
 
@@ -491,6 +493,7 @@ newtype Lint s a = Lint
     )
 
 instance MonadThrow (Lint s) where
+  throwM :: forall e a . Exception e => e -> Lint s a
   throwM e = Lint $ ReaderT $ const (throw e)
 
 instance MonadCatch (Lint s) where
