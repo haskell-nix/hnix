@@ -12,6 +12,7 @@ import qualified Data.Aeson.KeyMap             as AKM
 #endif
 import qualified Data.Vector                   as V
 import           Nix.Atoms
+import           Nix.Expr.Types
 import           Nix.Effects
 import           Nix.Exec
 import           Nix.Frames
