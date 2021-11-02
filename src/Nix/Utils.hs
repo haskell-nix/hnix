@@ -15,7 +15,7 @@ import qualified Data.Aeson.Encoding           as A
 #if MIN_VERSION_aeson(2,0,0)
 import qualified Data.Aeson.KeyMap             as AKM
 #else
-import qualified Data.HashMap                  as HM
+import qualified Data.HashMap.Strict           as HM
 #endif
 import           Data.Fix                       ( Fix(..) )
 import qualified Data.HashMap.Lazy             as M
