@@ -40,6 +40,7 @@ module Nix.Utils
   , mapPair
   , both
   , readFile
+  , iterateN
   , traverseM
   , lifted
   , loebM
@@ -321,3 +322,9 @@ traverseM
   -> t a
   -> m (f (t b))
 traverseM f x = sequenceA <$> traverse f x
+
+-- | Apply a function @n@ times to a given value.
+iterateN  :: Int -> (a -> a) -> (a -> a)
+iterateN 0 _ = id
+iterateN 1 f = f
+iterateN n f = f . iterateN (pred n) f
