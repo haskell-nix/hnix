@@ -267,7 +267,7 @@ data NString r
 -- | For the the 'IsString' instance, we use a plain doublequoted string.
 instance IsString (NString r) where
   fromString ""     = DoubleQuoted mempty
-  fromString string = DoubleQuoted [Plain $ fromString string]
+  fromString string = DoubleQuoted $ one $ Plain $ fromString string
 
 $(deriveShow1 ''NString)
 $(deriveRead1 ''NString)
