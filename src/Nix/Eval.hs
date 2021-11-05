@@ -565,7 +565,7 @@ framedEvalExprLoc
 framedEvalExprLoc =
   adi addMetaInfo evalContent
 
--- | Add source postionss & frame context system.
+-- | Add source positions & frame context system.
 addMetaInfo
   :: forall v m e a
   . (Framed e m, Scoped v m, Has e SrcSpan, Typeable m, Typeable v)

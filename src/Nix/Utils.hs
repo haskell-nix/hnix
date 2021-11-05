@@ -24,6 +24,7 @@ module Nix.Utils
   , addExtension
   , dropExtensions
   , replaceExtension
+  , readFile
 
   , Has(..)
   , trace
@@ -39,7 +40,8 @@ module Nix.Utils
   , dup
   , mapPair
   , both
-  , readFile
+  , iterateN
+  , nestM
   , traverseM
   , lifted
   , loebM
@@ -77,6 +79,7 @@ import           Lens.Family2.Stock             ( _1
                                                 , _2
                                                 )
 import qualified System.FilePath              as FilePath
+import Control.Monad.List (foldM)
 
 #if ENABLE_TRACING
 import qualified Relude.Debug                 as X
@@ -321,3 +324,18 @@ traverseM
   -> t a
   -> m (f (t b))
 traverseM f x = sequenceA <$> traverse f x
+
+iterateN
+  :: forall a
+   . Int -- ^ times
+  -> (a -> a) -- ^ function apply
+  -> a -- ^ on value
+  -> a
+iterateN n f x = fix ((<*> (0 /=)) . ((bool x . f) .) . (. pred)) n -- It is hard to read - yes. It is a non-recursive momoized action - yes.
+
+-- | Apply Kleisli arrow N times, join 'm's.
+nestM :: Monad m => Int -> (a -> m a) -> a -> m a
+nestM 0 _ x = pure x
+nestM n f x = foldM (\ xx () -> f xx) x $ replicate n () -- fuses. But also, can it be fix join?
+{-# INLINE nestM #-}
+

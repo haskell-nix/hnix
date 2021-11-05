@@ -20,7 +20,6 @@ import           Control.Monad.Ref    ( MonadAtomicRef(..)
 
 import           Nix.Thunk
 
---  2021-06-02: NOTE: Remove singleton newtype accessor in favour of free coerce
 newtype FreshIdT i m a = FreshIdT (ReaderT (Ref m i) m a)
   deriving
     ( Functor
@@ -59,5 +58,5 @@ instance
     v <- ask
     atomicModifyRef v (\i -> (succ i, i))
 
-runFreshIdT :: Functor m => Ref m i -> FreshIdT i m a -> m a
-runFreshIdT i m = runReaderT (coerce m) i
+runFreshIdT :: Functor m => FreshIdT i m a -> Ref m i -> m a
+runFreshIdT = runReaderT . coerce

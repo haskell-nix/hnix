@@ -432,6 +432,8 @@ addTextToStore a b c d =
     pure
     =<< addTextToStore' a b c d
 
+--  2021-10-30: NOTE: Misleading name, please rename.
+-- | Add @Path@ into the Nix Store
 addPath :: (Framed e m, MonadStore m) => Path -> m StorePath
 addPath p =
   either

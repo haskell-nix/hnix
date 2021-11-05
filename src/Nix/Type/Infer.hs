@@ -368,11 +368,8 @@ toJudgment c xs =
     (foldWith fold typeConstraints)
     (foldWith c    inferredType   )
    where
-    foldWith :: ((t a -> a) -> (Judgment s -> a) -> InferT s m a)
-    foldWith g f = uncurry (foldInitializedWith g f) tpl
-
-    tpl :: (Judgment s -> InferT s m (Judgment s), t (Judgment s))
-    tpl = (demand, xs)
+    foldWith :: (t a -> a) -> (Judgment s -> a) -> InferT s m a
+    foldWith g f = foldInitializedWith g f demand xs
 
 instance MonadInfer m
   => ToValue (AttrSet (Judgment s), PositionSet)
@@ -646,10 +643,7 @@ runInfer' =
 
 runInfer :: (forall s . InferT s (FreshIdT Int (ST s)) a) -> Either InferError a
 runInfer m =
-  runST $
-    do
-      i <- newRef (1 :: Int)
-      runFreshIdT i $ runInfer' m
+  runST $ runFreshIdT (runInfer' m) =<< newRef (1 :: Int)
 
 inferType
   :: forall s m . MonadInfer m => Env -> NExpr -> InferT s m [(Subst, Type)]
@@ -838,11 +832,12 @@ unifies t1          t2          = throwError $ UnificationFail t1 t2
 
 unifyMany :: Monad m => [Type] -> [Type] -> Solver m Subst
 unifyMany []         []         = stub
-unifyMany (t1 : ts1) (t2 : ts2) = do
-  su1 <- unifies t1 t2
-  su2 <-
-    (unifyMany `on` apply su1) ts1 ts2
-  pure $ compose su1 su2
+unifyMany (t1 : ts1) (t2 : ts2) =
+  do
+    su1 <- unifies t1 t2
+    su2 <-
+      (unifyMany `on` apply su1) ts1 ts2
+    pure $ compose su1 su2
 unifyMany t1 t2 = throwError $ UnificationMismatch t1 t2
 
 nextSolvable :: [Constraint] -> (Constraint, [Constraint])

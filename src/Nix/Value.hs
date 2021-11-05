@@ -207,10 +207,10 @@ sequenceNValueF transform = \case
 -- | @bind@
 bindNValueF
   :: (Monad m, Monad n)
-  => (forall x . n x -> m x)
-  -> (a -> n b)
-  -> NValueF p m a
-  -> n (NValueF p m b)
+  => (forall x . n x -> m x) -- ^ Transform @n@ into @m@.
+  -> (a -> n b) -- ^ A Kleisli arrow (see 'Control.Arrow.Kleisli' & Kleisli catagory).
+  -> NValueF p m a -- ^ "Unfixed" (openly recursive) value of an embedded Nix language.
+  -> n (NValueF p m b) -- ^ An implementation of @transform (f =<< x)@ for embedded Nix language values.
 bindNValueF transform f = \case
   NVConstantF a  -> pure $ NVConstantF a
   NVStrF      s  -> pure $ NVStrF s
@@ -327,11 +327,11 @@ lmapNValueF f = \case
 iterNValue'
   :: forall t f m a r
    . MonadDataContext f m
-  => (a -> (NValue' t f m a -> r) -> r)
+  => ((NValue' t f m a -> r) -> a -> r)
   -> (NValue' t f m r -> r)
   -> NValue' t f m a
   -> r
-iterNValue' k f = f . fmap (\a -> k a (iterNValue' k f))
+iterNValue' k f = fix ((f .) . fmap . k)
 
 -- *** Utils
 
@@ -504,19 +504,19 @@ type NValue t f m = Free (NValue' t f m) t
 iterNValue
   :: forall t f m r
    . MonadDataContext f m
-  => ((Free (NValue' t f m) t -> r) -> t -> r)
+  => ((NValue t f m -> r) -> t -> r)
   -> (NValue' t f m r -> r)
-  -> Free (NValue' t f m) t
+  -> NValue t f m
   -> r
-iterNValue k f = iter f . fmap (k (iterNValue k f))
+iterNValue k f = fix ((iter f .) . fmap . k) -- already almost iterNValue'
 
 iterNValueByDiscardWith
   :: MonadDataContext f m
   => r
   -> (NValue' t f m r -> r)
-  -> Free (NValue' t f m) t
+  -> NValue t f m
   -> r
-iterNValueByDiscardWith dflt = iterNValue (\ _ _ -> dflt)
+iterNValueByDiscardWith = iterNValue . const . const
 
 
 -- | HOF of @iterM@ from @Free@
@@ -527,10 +527,9 @@ iterNValueM
   -> (NValue' t f m (n r) -> n r)
   -> NValue t f m
   -> n r
-iterNValueM transform k f =
-    iterM f <=< go . (k (iterNValueM transform k f) <$>)
+iterNValueM transform k f = fix (((iterM f <=< go) .) . fmap . k)
   where
-    go (Pure x) = Pure <$> x
+    go (Pure x) = Pure <$> x -- It should be a 'sequenceA' if to remote 'transform' form function.
     go (Free fa) = Free <$> bindNValue' transform go fa
 
 -- *** Utils
@@ -640,36 +639,35 @@ nvBuiltin name f = Free $ nvBuiltin' name f
 builtin
   :: forall m f t
    . (MonadThunk t m (NValue t f m), MonadDataContext f m)
-  => VarName
+  => VarName -- ^ function name
   -> ( NValue t f m
     -> m (NValue t f m)
-    )
+    ) -- ^ unary function
   -> m (NValue t f m)
-builtin name f = pure $ nvBuiltin name $ \a -> f a
+builtin = (pure .) . nvBuiltin
 
 
 builtin2
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
-  => VarName
+  => VarName -- ^ function name
   -> ( NValue t f m
     -> NValue t f m
     -> m (NValue t f m)
-    )
+    ) -- ^ binary function
   -> m (NValue t f m)
-builtin2 name f = builtin name $ \a -> builtin name $ \b -> f a b
+builtin2 = ((.) <*> (.)) . builtin
 
 
 builtin3
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
-  => VarName
+  => VarName -- ^ function name
   -> ( NValue t f m
     -> NValue t f m
     -> NValue t f m
     -> m (NValue t f m)
-    )
+    ) -- ^ ternary function
   -> m (NValue t f m)
-builtin3 name f =
-  builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
+builtin3 = liftA3 (.) (.) ((.) . (.)) ((.) . (.)) . builtin
 
 -- *** @F: Evaluation -> NValue@
 

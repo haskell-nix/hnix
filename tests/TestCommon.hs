@@ -1,4 +1,3 @@
-{-# language PartialTypeSignatures #-}
 
 module TestCommon where
 
@@ -8,7 +7,6 @@ import           Data.Time
 import           Data.Text.IO as Text
 import           Nix
 import           Nix.Standard
-import           Nix.Fresh.Basic
 import           System.Environment
 import           System.IO
 import           System.PosixCompat.Files
@@ -16,7 +14,7 @@ import           System.PosixCompat.Temp
 import           System.Process
 import           Test.Tasty.HUnit
 
-hnixEvalFile :: Options -> Path -> IO (StdValue (StandardT (StdIdT IO)))
+hnixEvalFile :: Options -> Path -> IO StdVal
 hnixEvalFile opts file =
   do
     parseResult <- parseNixFileLoc file
@@ -31,29 +29,29 @@ hnixEvalFile opts file =
               NixException frames ->
                 errorWithoutStackTrace . show
                   =<< renderFrames
-                        @(StdValue (StandardT (StdIdT IO)))
-                        @(StdThunk (StandardT (StdIdT IO)))
-                        frames
+                      @StdVal
+                      @StdThun
+                      frames
       )
       parseResult
 
-hnixEvalText :: Options -> Text -> IO (StdValue (StandardT (StdIdT IO)))
+hnixEvalText :: Options -> Text -> IO StdVal
 hnixEvalText opts src =
   either
     (\ err -> fail $ toString $ "Parsing failed for expression `" <> src <> "`.\n" <> show err)
     (\ expr ->
       runWithBasicEffects opts $ normalForm =<< nixEvalExpr mempty expr
     )
-    (parseNixText src)
+    $ parseNixText src
 
 nixEvalString :: Text -> IO Text
 nixEvalString expr =
   do
-    (coerce -> fp, h) <- mkstemp "nix-test-eval"
+    (fp, h) <- mkstemp "nix-test-eval"
     Text.hPutStr h expr
     hClose h
-    res <- nixEvalFile fp
-    removeLink $ coerce fp
+    res <- nixEvalFile $ coerce fp
+    removeLink $ fp
     pure res
 
 nixEvalFile :: Path -> IO Text

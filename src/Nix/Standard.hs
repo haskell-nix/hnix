@@ -59,9 +59,12 @@ newtype StdCited m a =
 newtype StdThunk m =
   StdThunk
     (StdCited m (NThunkF m (StdValue m)))
-
 type StdValue' m = NValue' (StdThunk m) (StdCited m) m (StdValue m)
 type StdValue m = NValue (StdThunk m) (StdCited m) m
+type StandardIO = StandardT (StdIdT IO)
+type StdVal = StdValue StandardIO
+type StdThun = StdThunk StandardIO
+type StdIO = StandardIO ()
 
 -- | Type alias:
 --
@@ -365,11 +368,10 @@ runWithBasicEffects
   -> StandardT (StdIdT m) a
   -> m a
 runWithBasicEffects opts =
-  go . (`evalStateT` mempty) . (`runReaderT` newContext opts) . runStandardT
+  fun . (`evalStateT` mempty) . (`runReaderT` newContext opts) . runStandardT
  where
-  go action = do
-    i <- newRef (1 :: Int)
-    runFreshIdT i action
+  fun action =
+    runFreshIdT action =<< newRef (1 :: Int)
 
-runWithBasicEffectsIO :: Options -> StandardT (StdIdT IO) a -> IO a
+runWithBasicEffectsIO :: Options -> StandardIO a -> IO a
 runWithBasicEffectsIO = runWithBasicEffects

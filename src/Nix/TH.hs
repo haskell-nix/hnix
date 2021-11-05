@@ -22,16 +22,17 @@ quoteExprExp s =
   do
     expr <- parseExpr $ fromString s
     dataToExpQ
-      (extQOnFreeVars metaExp expr `extQ` (pure . (TH.lift :: Text -> Q Exp)))
+      (extQOnFreeVars metaExp expr `extQ` (pure . (TH.lift :: Text -> ExpQ)))
       expr
 
 quoteExprPat :: String -> PatQ
 quoteExprPat s =
   do
-    expr <- parseExpr $ fromString s
-    dataToPatQ
-      (extQOnFreeVars metaPat expr)
+    expr <- parseExpr @Q $ fromString s
+    (dataToPatQ @NExpr)
+      (extQOnFreeVars @_ @NExprLoc @PatQ metaPat expr)
       expr
+
 
 -- | Helper function.
 extQOnFreeVars

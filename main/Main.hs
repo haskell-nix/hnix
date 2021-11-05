@@ -19,7 +19,6 @@ import qualified Data.Text.IO                  as Text
 import           Text.Show.Pretty               ( ppShow )
 import           Nix                     hiding ( force )
 import           Nix.Convert
-import           Nix.Fresh.Basic
 import           Nix.Json
 import           Nix.Options.Parser
 import           Nix.Standard
@@ -47,16 +46,16 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
  where
   --  2021-07-15: NOTE: This logic should be weaved stronger through CLI options logic (OptParse-Applicative code)
   -- As this logic is not stated in the CLI documentation, for example. So user has no knowledge of these.
-  execContentsFilesOrRepl :: StandardT (StdIdT IO) ()
+  execContentsFilesOrRepl :: StdIO
   execContentsFilesOrRepl =
     fromMaybe
       loadFromCliFilePathList
-      ( loadBinaryCacheFile <|>
+      $ loadBinaryCacheFile <|>
         loadLiteralExpression <|>
         loadExpressionFromFile
-      )
    where
     -- | The base case: read expressions from the last CLI directive (@[FILE]@) listed on the command line.
+    loadFromCliFilePathList :: StdIO
     loadFromCliFilePathList =
       case filePaths of
         []     -> runRepl
@@ -67,27 +66,28 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       runRepl = withEmptyNixContext Repl.main
 
       readExpressionFromStdin =
-        do
-          expr <- liftIO Text.getContents
-          processExpr expr
+        processExpr =<< liftIO Text.getContents
 
-    processSeveralFiles :: [Path] -> StandardT (StdIdT IO) ()
+    processSeveralFiles :: [Path] -> StdIO
     processSeveralFiles = traverse_ processFile
      where
       processFile path = handleResult (pure path) =<< parseNixFileLoc path
 
     -- |  The `--read` option: load expression from a serialized file.
+    loadBinaryCacheFile :: Maybe StdIO
     loadBinaryCacheFile =
       (\ (binaryCacheFile :: Path) ->
         do
           let file = replaceExtension binaryCacheFile "nixc"
-          processCLIOptions (Just file) =<< liftIO (readCache binaryCacheFile)
+          processCLIOptions (pure file) =<< liftIO (readCache binaryCacheFile)
       ) <$> readFrom
 
     -- | The `--expr` option: read expression from the argument string
+    loadLiteralExpression :: Maybe StdIO
     loadLiteralExpression = processExpr <$> expression
 
     -- | The `--file` argument: read expressions from the files listed in the argument file
+    loadExpressionFromFile :: Maybe StdIO
     loadExpressionFromFile =
       -- We can start use Text as in the base case, requires changing Path -> Text
       -- But that is a gradual process:
@@ -98,7 +98,8 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
           _fp -> readFile _fp
         ) <$> fromFile
 
-  processExpr text = handleResult Nothing     $   parseNixTextLoc text
+  processExpr :: Text -> StdIO
+  processExpr = handleResult mempty . parseNixTextLoc
 
   withEmptyNixContext = withNixContext mempty
 
@@ -120,10 +121,10 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
               expr' <- liftIO $ reduceExpr mpath expr
               either
                 (\ err -> errorWithoutStackTrace $ "Type error: " <> ppShow err)
-                (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <>
-                  ppShow (maybeToMonoid $ Map.lookup @VarName @[Scheme] "it" $ coerce ty)
+                (liftIO . putStrLn . (<>) "Type of expression: " .
+                  ppShow . maybeToMonoid . Map.lookup @VarName @[Scheme] "it" . coerce
                 )
-                (HM.inferTop mempty (one ("it", stripAnnotation expr')))
+                $ HM.inferTop mempty $ curry one "it" $ stripAnnotation expr'
 
                 -- liftIO $ putStrLn $ runST $
                 --     runLintM opts . renderSymbolic =<< lint opts expr
@@ -133,23 +134,20 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
               NixException frames ->
                 errorWithoutStackTrace . show =<<
                   renderFrames
-                    @(StdValue (StandardT (StdIdT IO)))
-                    @(StdThunk (StandardT (StdIdT IO)))
+                    @StdVal
+                    @StdThun
                     frames
 
           when repl $
             withEmptyNixContext $
               bool
                 Repl.main
-                (do
-                  val <- nixEvalExprLoc (coerce mpath) expr
-                  Repl.main' $ pure val
-                )
+                ((Repl.main' . pure) =<< nixEvalExprLoc (coerce mpath) expr)
                 evaluate
       )
 
   --  2021-07-15: NOTE: Logic of CLI Option processing is scattered over several functions, needs to be consolicated.
-  processCLIOptions :: Maybe Path -> NExprLoc -> StandardT (StdIdT IO) ()
+  processCLIOptions :: Maybe Path -> NExprLoc -> StdIO
   processCLIOptions mpath expr
     | evaluate =
       if
@@ -174,37 +172,57 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
     evaluateExprWithEvaluator evaluator = evaluateExpression (coerce mpath) evaluator printer
 
     printer
-      | finder    = findAttrs <=< fromValue @(AttrSet (StdValue (StandardT (StdIdT IO))))
+      :: StdVal
+      -> StdIO
+    printer
+      | finder    = findAttrs <=< fromValue @(AttrSet StdVal)
       | otherwise = printer'
      where
       printer'
-        | xml       = go (stringIgnoreContext . toXML)                     normalForm
+        | xml       = fun (stringIgnoreContext . toXML)                     normalForm
         -- 2021-05-27: NOTE: With naive fix of the #941
         -- This is overall a naive printer implementation, as options should interact/respect one another.
         -- A nice question: "Should respect one another to what degree?": Go full combinator way, for which
         -- old Nix CLI is nototrious for (and that would mean to reimplement the old Nix CLI),
         -- OR: https://github.com/haskell-nix/hnix/issues/172 and have some sane standart/default behaviour for (most) keys.
-        | json      = go (stringIgnoreContext . mempty . nvalueToJSONNixString) normalForm
-        | strict    = go (show . prettyNValue)                             normalForm
-        | values    = go (show . prettyNValueProv)                         removeEffects
-        | otherwise = go (show . prettyNValue)                             removeEffects
+        | json      = fun (stringIgnoreContext . mempty . nvalueToJSONNixString) normalForm
+        | strict    = fun (show . prettyNValue)                             normalForm
+        | values    = fun (show . prettyNValueProv)                         removeEffects
+        | otherwise = fun (show . prettyNValue)                             removeEffects
        where
-        go
+        fun
           :: (b -> Text)
-          -> (a -> StandardT (StdIdT IO) b)
+          -> (a -> StandardIO b)
           -> a
-          -> StandardT (StdIdT IO) ()
-        go g f = liftIO . Text.putStrLn . g <=< f
+          -> StdIO
+        fun g f = liftIO . Text.putStrLn . g <=< f
 
       findAttrs
-        :: AttrSet (StdValue (StandardT (StdIdT IO)))
-        -> StandardT (StdIdT IO) ()
+        :: AttrSet StdVal
+        -> StdIO
       findAttrs = go mempty
        where
+        go :: Text -> AttrSet StdVal -> StdIO
         go prefix s =
-          do
-            xs <-
-              traverse
+          traverse_
+            (\ (k, mv) ->
+              do
+                let
+                  path              = prefix <> k
+                  (report, descend) = filterEntry path k
+                when report $
+                  do
+                    liftIO $ Text.putStrLn path
+                    when descend $
+                      maybe
+                        stub
+                        (\case
+                          NVSet _ s' -> go (path <> ".") s'
+                          _          -> stub
+                        )
+                        mv
+            )
+            =<< traverse
                 (\ (k, nv) ->
                   (k, ) <$>
                   free
@@ -214,12 +232,12 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
                           path         = prefix <> k
                           (_, descend) = filterEntry path k
 
-                        val <- readRef @(StandardT (StdIdT IO)) ref
+                        val <- readRef @StandardIO ref
                         bool
                           (pure Nothing)
                           (forceEntry path nv)
                           (descend &&
-                           deferred
+                            deferred
                             (const False)
                             (const True)
                             val
@@ -229,25 +247,6 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
                     nv
                 )
                 (sortWith fst $ M.toList $ M.mapKeys coerce s)
-            traverse_
-              (\ (k, mv) ->
-                do
-                  let
-                    path              = prefix <> k
-                    (report, descend) = filterEntry path k
-                  when report $
-                    do
-                      liftIO $ Text.putStrLn path
-                      when descend $
-                        maybe
-                          stub
-                          (\case
-                            NVSet _ s' -> go (path <> ".") s'
-                            _          -> stub
-                          )
-                          mv
-              )
-              xs
          where
           filterEntry path k = case (path, k) of
             ("stdenv", "stdenv"          ) -> (True , True )
@@ -267,36 +266,37 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
             _                              -> (True , True )
 
           forceEntry
-            :: MonadValue a (StandardT (StdIdT IO))
+            :: MonadValue a StandardIO
             => Text
             -> a
-            -> StandardT (StdIdT IO) (Maybe a)
+            -> StandardIO (Maybe a)
           forceEntry k v =
             catch
               (pure <$> demand v)
-              (\ (NixException frames) ->
-                do
-                  liftIO
-                    . Text.putStrLn
-                    . (("Exception forcing " <> k <> ": ") <>)
-                    . show =<<
-                      renderFrames
-                        @(StdValue (StandardT (StdIdT IO)))
-                        @(StdThunk (StandardT (StdIdT IO)))
-                        frames
-                  pure Nothing
-              )
+              fun
+           where
+            fun :: NixException -> StandardIO (Maybe a)
+            fun (coerce -> frames) =
+              do
+                liftIO
+                  . Text.putStrLn
+                  . (("Exception forcing " <> k <> ": ") <>)
+                  . show =<<
+                    renderFrames
+                      @StdVal
+                      @StdThun
+                      frames
+                pure Nothing
 
   reduction path mpathToContext annExpr =
     do
       eres <-
         withNixContext
           mpathToContext
-          (reducingEvalExpr
-            evalContent
-            mpathToContext
-            annExpr
-          )
+          $ reducingEvalExpr
+              evalContent
+              mpathToContext
+              annExpr
       handleReduced path eres
 
   handleReduced
