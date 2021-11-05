@@ -504,11 +504,11 @@ type NValue t f m = Free (NValue' t f m) t
 iterNValue
   :: forall t f m r
    . MonadDataContext f m
-  => ((Free (NValue' t f m) t -> r) -> t -> r)
+  => ((NValue t f m -> r) -> t -> r)
   -> (NValue' t f m r -> r)
-  -> Free (NValue' t f m) t
+  -> NValue t f m
   -> r
-iterNValue k f = iter f . fmap (k (iterNValue k f))
+iterNValue k f = fix ((iter f .) . fmap . k) -- already almost iterNValue'
 
 iterNValueByDiscardWith
   :: MonadDataContext f m
