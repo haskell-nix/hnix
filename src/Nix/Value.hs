@@ -639,12 +639,12 @@ nvBuiltin name f = Free $ nvBuiltin' name f
 builtin
   :: forall m f t
    . (MonadThunk t m (NValue t f m), MonadDataContext f m)
-  => VarName
+  => VarName -- ^ function name
   -> ( NValue t f m
     -> m (NValue t f m)
-    )
+    ) -- ^ function
   -> m (NValue t f m)
-builtin name f = pure $ nvBuiltin name $ \a -> f a
+builtin = (pure .) . nvBuiltin
 
 
 builtin2
