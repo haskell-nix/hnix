@@ -642,20 +642,20 @@ builtin
   => VarName -- ^ function name
   -> ( NValue t f m
     -> m (NValue t f m)
-    ) -- ^ function
+    ) -- ^ unary function
   -> m (NValue t f m)
 builtin = (pure .) . nvBuiltin
 
 
 builtin2
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
-  => VarName
+  => VarName -- ^ function name
   -> ( NValue t f m
     -> NValue t f m
     -> m (NValue t f m)
-    )
+    ) -- ^ binary function
   -> m (NValue t f m)
-builtin2 name f = builtin name $ \a -> builtin name $ \b -> f a b
+builtin2 = ((.) <*> (.)) . builtin
 
 
 builtin3
