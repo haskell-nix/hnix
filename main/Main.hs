@@ -50,10 +50,9 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
   execContentsFilesOrRepl =
     fromMaybe
       loadFromCliFilePathList
-      ( loadBinaryCacheFile <|>
+      $ loadBinaryCacheFile <|>
         loadLiteralExpression <|>
         loadExpressionFromFile
-      )
    where
     -- | The base case: read expressions from the last CLI directive (@[FILE]@) listed on the command line.
     loadFromCliFilePathList :: StdIO
@@ -67,9 +66,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       runRepl = withEmptyNixContext Repl.main
 
       readExpressionFromStdin =
-        do
-          expr <- liftIO Text.getContents
-          processExpr expr
+        processExpr =<< liftIO Text.getContents
 
     processSeveralFiles :: [Path] -> StdIO
     processSeveralFiles = traverse_ processFile
@@ -82,7 +79,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       (\ (binaryCacheFile :: Path) ->
         do
           let file = replaceExtension binaryCacheFile "nixc"
-          processCLIOptions (Just file) =<< liftIO (readCache binaryCacheFile)
+          processCLIOptions (pure file) =<< liftIO (readCache binaryCacheFile)
       ) <$> readFrom
 
     -- | The `--expr` option: read expression from the argument string
@@ -101,8 +98,8 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
           _fp -> readFile _fp
         ) <$> fromFile
 
-  processExpr text = handleResult Nothing     $   parseNixTextLoc text
   processExpr :: Text -> StdIO
+  processExpr = handleResult mempty . parseNixTextLoc
 
   withEmptyNixContext = withNixContext mempty
 
@@ -124,10 +121,10 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
               expr' <- liftIO $ reduceExpr mpath expr
               either
                 (\ err -> errorWithoutStackTrace $ "Type error: " <> ppShow err)
-                (\ ty  -> liftIO $ putStrLn $ "Type of expression: " <>
-                  ppShow (maybeToMonoid $ Map.lookup @VarName @[Scheme] "it" $ coerce ty)
+                (liftIO . putStrLn . (<>) "Type of expression: " .
+                  ppShow . maybeToMonoid . Map.lookup @VarName @[Scheme] "it" . coerce
                 )
-                (HM.inferTop mempty (one ("it", stripAnnotation expr')))
+                $ HM.inferTop mempty $ curry one "it" $ stripAnnotation expr'
 
                 -- liftIO $ putStrLn $ runST $
                 --     runLintM opts . renderSymbolic =<< lint opts expr
@@ -145,10 +142,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
             withEmptyNixContext $
               bool
                 Repl.main
-                (do
-                  val <- nixEvalExprLoc (coerce mpath) expr
-                  Repl.main' $ pure val
-                )
+                ((Repl.main' . pure) =<< nixEvalExprLoc (coerce mpath) expr)
                 evaluate
       )
 
@@ -185,23 +179,23 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       | otherwise = printer'
      where
       printer'
-        | xml       = go (stringIgnoreContext . toXML)                     normalForm
+        | xml       = fun (stringIgnoreContext . toXML)                     normalForm
         -- 2021-05-27: NOTE: With naive fix of the #941
         -- This is overall a naive printer implementation, as options should interact/respect one another.
         -- A nice question: "Should respect one another to what degree?": Go full combinator way, for which
         -- old Nix CLI is nototrious for (and that would mean to reimplement the old Nix CLI),
         -- OR: https://github.com/haskell-nix/hnix/issues/172 and have some sane standart/default behaviour for (most) keys.
-        | json      = go (stringIgnoreContext . mempty . nvalueToJSONNixString) normalForm
-        | strict    = go (show . prettyNValue)                             normalForm
-        | values    = go (show . prettyNValueProv)                         removeEffects
-        | otherwise = go (show . prettyNValue)                             removeEffects
+        | json      = fun (stringIgnoreContext . mempty . nvalueToJSONNixString) normalForm
+        | strict    = fun (show . prettyNValue)                             normalForm
+        | values    = fun (show . prettyNValueProv)                         removeEffects
+        | otherwise = fun (show . prettyNValue)                             removeEffects
        where
-        go
+        fun
           :: (b -> Text)
           -> (a -> StandardIO b)
           -> a
-        go g f = liftIO . Text.putStrLn . g <=< f
           -> StdIO
+        fun g f = liftIO . Text.putStrLn . g <=< f
 
       findAttrs
         :: AttrSet StdVal
