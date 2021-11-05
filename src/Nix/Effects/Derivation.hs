@@ -31,7 +31,7 @@ import           Nix.Exec                       ( MonadNix
                                                 , callFunc
                                                 )
 import           Nix.Frames
-import           Nix.Json                       ( nvalueToJSONNixString )
+import           Nix.Json                       ( toJSONNixString )
 import           Nix.Render
 import           Nix.String
 import           Nix.String.Coerce
@@ -367,7 +367,7 @@ buildDerivationWithContext drvAttrs = do
 
       env <- if useJson
         then do
-          jsonString :: NixString <- lift $ nvalueToJSONNixString $ mkNVSet mempty $ M.mapKeys coerce $
+          jsonString :: NixString <- lift $ toJSONNixString $ mkNVSet mempty $ M.mapKeys coerce $
             deleteKeys [ "args", "__ignoreNulls", "__structuredAttrs" ] attrs
           rawString :: Text <- extractNixString jsonString
           pure $ one ("__json", rawString)

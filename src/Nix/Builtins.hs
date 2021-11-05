@@ -1550,7 +1550,7 @@ fromJSONNix nvjson =
     traverseToNValue f v = f <$> traverse jsonToNValue v
 
 toJSONNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-toJSONNix = (fmap mkNVStr . nvalueToJSONNixString) <=< demand
+toJSONNix = (fmap mkNVStr . toJSONNixString) <=< demand
 
 toXMLNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toXMLNix = (fmap (mkNVStr . toXML) . normalForm) <=< demand

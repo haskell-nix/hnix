@@ -36,8 +36,8 @@ toEncodingSorted = \case
   A.Array l -> A.list toEncodingSorted $ V.toList l
   v         -> A.toEncoding v
 
-nvalueToJSONNixString :: MonadNix e t f m => NValue t f m -> m NixString
-nvalueToJSONNixString =
+toJSONNixString :: MonadNix e t f m => NValue t f m -> m NixString
+toJSONNixString =
   runWithStringContextT .
     fmap
       ( decodeUtf8

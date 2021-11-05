@@ -185,7 +185,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
         -- A nice question: "Should respect one another to what degree?": Go full combinator way, for which
         -- old Nix CLI is nototrious for (and that would mean to reimplement the old Nix CLI),
         -- OR: https://github.com/haskell-nix/hnix/issues/172 and have some sane standart/default behaviour for (most) keys.
-        | json      = fun (ignoreContext . mempty . nvalueToJSONNixString) normalForm
+        | json      = fun (ignoreContext . mempty . toJSONNixString) normalForm
         | strict    = fun (show . prettyNValue)                       normalForm
         | values    = fun (show . prettyNValueProv)                   removeEffects
         | otherwise = fun (show . prettyNValue)                       removeEffects
