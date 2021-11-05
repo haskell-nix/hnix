@@ -368,11 +368,10 @@ runWithBasicEffects
   -> StandardT (StdIdT m) a
   -> m a
 runWithBasicEffects opts =
-  go . (`evalStateT` mempty) . (`runReaderT` newContext opts) . runStandardT
+  fun . (`evalStateT` mempty) . (`runReaderT` newContext opts) . runStandardT
  where
-  go action = do
-    i <- newRef (1 :: Int)
-    runFreshIdT i action
+  fun action =
+    runFreshIdT action =<< newRef (1 :: Int)
 
 runWithBasicEffectsIO :: Options -> StandardIO a -> IO a
 runWithBasicEffectsIO = runWithBasicEffects

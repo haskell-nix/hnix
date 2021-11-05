@@ -500,9 +500,8 @@ instance MonadCatch (Lint s) where
   catch _m _h = Lint $ ReaderT $ const (fail "Cannot catch in 'Lint s'")
 
 runLintM :: Options -> Lint s a -> ST s a
-runLintM opts action = do
-  i <- newRef (1 :: Int)
-  runFreshIdT i $ (`runReaderT` newContext opts) $ runLint action
+runLintM opts action =
+  runFreshIdT ((`runReaderT` newContext opts) $ runLint action) =<< newRef (1 :: Int)
 
 symbolicBaseEnv
   :: Monad m

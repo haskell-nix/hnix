@@ -28,19 +28,36 @@ instance MonadExec m => MonadExec (StdIdT m)
 
 instance (MonadEffects t f m, MonadDataContext f m)
   => MonadEffects t f (StdIdT m) where
+
+  toAbsolutePath :: Path -> StdIdT m Path
   toAbsolutePath = lift . toAbsolutePath @t @f @m
+
+  findEnvPath :: String -> StdIdT m Path
   findEnvPath      = lift . findEnvPath @t @f @m
-  findPath vs path = do
-    i <- FreshIdT ask
-    let vs' = unliftNValue (runFreshIdT i) <$> vs
-    lift $ findPath @t @f @m vs' path
-  importPath path = do
-    i <- FreshIdT ask
-    p <- lift $ importPath @t @f @m path
-    pure $ liftNValue (runFreshIdT i) p
+
+  findPath :: [NValue t f (StdIdT m)] -> Path -> StdIdT m Path
+  findPath vs path =
+    do
+      i <- FreshIdT ask
+      lift $ findPath @t @f @m (unliftNValue (`runFreshIdT` i) <$> vs) path
+
+  importPath :: Path -> StdIdT m (NValue t f (StdIdT m))
+  importPath path =
+    do
+      i <- FreshIdT ask
+      lift $ liftNValue (`runFreshIdT` i) <$> (importPath @t @f @m $ path)
+
+  pathToDefaultNix :: Path -> StdIdT m Path
   pathToDefaultNix = lift . pathToDefaultNix @t @f @m
-  derivationStrict v = do
-    i <- FreshIdT ask
-    p <- lift $ derivationStrict @t @f @m $ unliftNValue (runFreshIdT i) v
-    pure $ liftNValue (runFreshIdT i) p
+
+  derivationStrict :: NValue t f (StdIdT m) -> StdIdT m (NValue t f (StdIdT m))
+  derivationStrict v =
+    do
+      i <- FreshIdT ask
+      let
+        fresh :: FreshIdT Int m a -> m a
+        fresh = (`runFreshIdT` i)
+      lift $ liftNValue fresh <$> (derivationStrict @t @f @m . unliftNValue fresh $ v)
+
+  traceEffect :: String -> StdIdT m ()
   traceEffect = lift . traceEffect @t @f @m
