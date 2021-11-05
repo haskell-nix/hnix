@@ -59,28 +59,28 @@ nvConstantP
   => Provenance m (NValue t f m)
   -> NAtom
   -> NValue t f m
-nvConstantP p x = addProvenance p $ nvConstant x
+nvConstantP p x = addProvenance p $ mkNVConstant x
 
 nvStrP
   :: MonadCited t f m
   => Provenance m (NValue t f m)
   -> NixString
   -> NValue t f m
-nvStrP p ns = addProvenance p $ nvStr ns
+nvStrP p ns = addProvenance p $ mkNVStr ns
 
 nvPathP
   :: MonadCited t f m
   => Provenance m (NValue t f m)
   -> Path
   -> NValue t f m
-nvPathP p x = addProvenance p $ nvPath x
+nvPathP p x = addProvenance p $ mkNVPath x
 
 nvListP
   :: MonadCited t f m
   => Provenance m (NValue t f m)
   -> [NValue t f m]
   -> NValue t f m
-nvListP p l = addProvenance p $ nvList l
+nvListP p l = addProvenance p $ mkNVList l
 
 nvSetP
   :: MonadCited t f m
@@ -88,7 +88,7 @@ nvSetP
   -> PositionSet
   -> AttrSet (NValue t f m)
   -> NValue t f m
-nvSetP p x s = addProvenance p $ nvSet x s
+nvSetP p x s = addProvenance p $ mkNVSet x s
 
 nvClosureP
   :: MonadCited t f m
@@ -96,7 +96,7 @@ nvClosureP
   -> Params ()
   -> (NValue t f m -> m (NValue t f m))
   -> NValue t f m
-nvClosureP p x f = addProvenance p $ nvClosure x f
+nvClosureP p x f = addProvenance p $ mkNVClosure x f
 
 nvBuiltinP
   :: MonadCited t f m
@@ -104,7 +104,7 @@ nvBuiltinP
   -> VarName
   -> (NValue t f m -> m (NValue t f m))
   -> NValue t f m
-nvBuiltinP p name f = addProvenance p $ nvBuiltin name f
+nvBuiltinP p name f = addProvenance p $ mkNVBuiltin name f
 
 type MonadCitedThunks t f m =
   ( MonadThunk t m (NValue t f m)

@@ -292,10 +292,10 @@ defaultDerivationStrict val = do
           (\out (coerce -> path) -> mkNixStringWithSingletonContext path $ StringContext drvPath $ DerivationOutput out)
           (outputs drv')
       drvPathWithContext = mkNixStringWithSingletonContext drvPath $ StringContext drvPath AllOutputs
-      attrSet = nvStr <$> M.fromList (("drvPath", drvPathWithContext) : Map.toList outputsWithContext)
+      attrSet = mkNVStr <$> M.fromList (("drvPath", drvPathWithContext) : Map.toList outputsWithContext)
     -- TODO: Add location information for all the entries.
     --              here --v
-    pure $ nvSet mempty (M.mapKeys coerce attrSet)
+    pure $ mkNVSet mempty (M.mapKeys coerce attrSet)
 
   where
 
@@ -367,7 +367,7 @@ buildDerivationWithContext drvAttrs = do
 
       env <- if useJson
         then do
-          jsonString :: NixString <- lift $ nvalueToJSONNixString $ nvSet mempty $ M.mapKeys coerce $
+          jsonString :: NixString <- lift $ nvalueToJSONNixString $ mkNVSet mempty $ M.mapKeys coerce $
             deleteKeys [ "args", "__ignoreNulls", "__structuredAttrs" ] attrs
           rawString :: Text <- extractNixString jsonString
           pure $ one ("__json", rawString)

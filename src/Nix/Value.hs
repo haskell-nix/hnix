@@ -402,58 +402,58 @@ unliftNValue' = hoistNValue' lift
 
 
 -- | Haskell constant to the Nix constant,
-nvConstant' :: Applicative f
+mkNVConstant' :: Applicative f
   => NAtom
   -> NValue' t f m r
-nvConstant' = NValue' . pure . NVConstantF
+mkNVConstant' = NValue' . pure . NVConstantF
 
 
 -- | Haskell text & context to the Nix text & context,
-nvStr' :: Applicative f
+mkNVStr' :: Applicative f
   => NixString
   -> NValue' t f m r
-nvStr' = NValue' . pure . NVStrF
+mkNVStr' = NValue' . pure . NVStrF
 
 
 -- | Haskell @Path@ to the Nix path,
-nvPath' :: Applicative f
+mkNVPath' :: Applicative f
   => Path
   -> NValue' t f m r
-nvPath' = NValue' . pure . NVPathF . coerce
+mkNVPath' = NValue' . pure . NVPathF . coerce
 
 
 -- | Haskell @[]@ to the Nix @[]@,
-nvList' :: Applicative f
+mkNVList' :: Applicative f
   => [r]
   -> NValue' t f m r
-nvList' = NValue' . pure . NVListF
+mkNVList' = NValue' . pure . NVListF
 
 
 -- | Haskell key-value to the Nix key-value,
-nvSet' :: Applicative f
+mkNVSet' :: Applicative f
   => PositionSet
   -> AttrSet r
   -> NValue' t f m r
 --  2021-07-16: NOTE: that the arguments are flipped.
-nvSet' p s = NValue' $ pure $ NVSetF p s
+mkNVSet' p s = NValue' $ pure $ NVSetF p s
 
 
 -- | Haskell closure to the Nix closure,
-nvClosure' :: (Applicative f, Functor m)
+mkNVClosure' :: (Applicative f, Functor m)
   => Params ()
   -> (NValue t f m
       -> m r
     )
   -> NValue' t f m r
-nvClosure' x f = NValue' $ pure $ NVClosureF x f
+mkNVClosure' x f = NValue' $ pure $ NVClosureF x f
 
 
 -- | Haskell functions to the Nix functions!
-nvBuiltin' :: (Applicative f, Functor m)
+mkNVBuiltin' :: (Applicative f, Functor m)
   => VarName
   -> (NValue t f m -> m r)
   -> NValue' t f m r
-nvBuiltin' name f = NValue' $ pure $ NVBuiltinF name f
+mkNVBuiltin' name f = NValue' $ pure $ NVBuiltinF name f
 
 
 -- So above we have maps of Hask subcategory objects to Nix objects,
@@ -574,66 +574,66 @@ unliftNValue = hoistNValue lift
 
 
 -- | Life of a Haskell thunk to the life of a Nix thunk,
-nvThunk :: Applicative f
+mkNVThunk :: Applicative f
   => t
   -> NValue t f m
-nvThunk = Pure
+mkNVThunk = Pure
 
 
 -- | Life of a Haskell constant to the life of a Nix constant,
-nvConstant :: Applicative f
+mkNVConstant :: Applicative f
   => NAtom
   -> NValue t f m
-nvConstant = Free . nvConstant'
+mkNVConstant = Free . mkNVConstant'
 
 
 -- | Life of a Haskell sting & context to the life of a Nix string & context,
-nvStr :: Applicative f
+mkNVStr :: Applicative f
   => NixString
   -> NValue t f m
-nvStr = Free . nvStr'
+mkNVStr = Free . mkNVStr'
 
-nvStrWithoutContext :: Applicative f
+mkNVStrWithoutContext :: Applicative f
   => Text
   -> NValue t f m
-nvStrWithoutContext = nvStr . mkNixStringWithoutContext
+mkNVStrWithoutContext = mkNVStr . mkNixStringWithoutContext
 
 
 -- | Life of a Haskell FilePath to the life of a Nix path
-nvPath :: Applicative f
+mkNVPath :: Applicative f
   => Path
   -> NValue t f m
-nvPath = Free . nvPath'
+mkNVPath = Free . mkNVPath'
 
 
-nvList :: Applicative f
+mkNVList :: Applicative f
   => [NValue t f m]
   -> NValue t f m
-nvList = Free . nvList'
+mkNVList = Free . mkNVList'
 
 
-nvSet :: Applicative f
+mkNVSet :: Applicative f
   => PositionSet
   -> AttrSet (NValue t f m)
   -> NValue t f m
-nvSet p s = Free $ nvSet' p s
+mkNVSet p s = Free $ mkNVSet' p s
 
-nvClosure :: (Applicative f, Functor m)
+mkNVClosure :: (Applicative f, Functor m)
   => Params ()
   -> (NValue t f m
       -> m (NValue t f m)
     )
   -> NValue t f m
-nvClosure x f = Free $ nvClosure' x f
+mkNVClosure x f = Free $ mkNVClosure' x f
 
 
-nvBuiltin :: (Applicative f, Functor m)
+mkNVBuiltin :: (Applicative f, Functor m)
   => VarName
   -> (NValue t f m
     -> m (NValue t f m)
     )
   -> NValue t f m
-nvBuiltin name f = Free $ nvBuiltin' name f
+mkNVBuiltin name f = Free $ mkNVBuiltin' name f
 
 
 builtin
@@ -644,7 +644,7 @@ builtin
     -> m (NValue t f m)
     ) -- ^ unary function
   -> m (NValue t f m)
-builtin = (pure .) . nvBuiltin
+builtin = (pure .) . mkNVBuiltin
 
 
 builtin2

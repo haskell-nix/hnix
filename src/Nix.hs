@@ -126,7 +126,7 @@ evaluateExpression mpath evaluator handler expr =
 
   eval' = normalForm <=< nixEvalExpr mpath
 
-  argmap args = nvSet mempty $ M.fromList args
+  argmap args = mkNVSet mempty $ M.fromList args
 
 processResult
   :: forall e t f m a
