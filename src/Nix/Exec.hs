@@ -173,7 +173,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     scope                  <- currentScopes
     span@(SrcSpan delta _) <- currentPos
     addProvenance @_ @_ @(NValue t f m)
-      (Provenance scope $ NSymAnnF span (coerce @Text "__curPos")) <$>
+      (Provenance scope . NSymAnnF span $ coerce @Text "__curPos") <$>
         toValue delta
 
   evaledSym name val = do

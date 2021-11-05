@@ -151,9 +151,9 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
   processCLIOptions mpath expr
     | evaluate =
       if
-        | tracing                       -> evaluateExprWithEvaluator nixTracingEvalExprLoc expr
-        | Just path <- reduce           -> evaluateExprWithEvaluator (reduction path . coerce) expr
-        | null arg || null argstr       -> evaluateExprWithEvaluator nixEvalExprLoc expr
+        | tracing                       -> evaluateExprWith nixTracingEvalExprLoc expr
+        | Just path <- reduce           -> evaluateExprWith (reduction path . coerce) expr
+        | null arg || null argstr       -> evaluateExprWith nixEvalExprLoc expr
         | otherwise                     -> processResult printer <=< nixEvalExprLoc (coerce mpath) $ expr
     | xml                        = fail "Rendering expression trees to XML is not yet implemented"
     | json                       = fail "Rendering expression trees to JSON is not implemented"
@@ -169,7 +169,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
           . stripAnnotation
           $ expr
    where
-    evaluateExprWithEvaluator evaluator = evaluateExpression (coerce mpath) evaluator printer
+    evaluateExprWith evaluator = evaluateExpression (coerce mpath) evaluator printer
 
     printer
       :: StdVal
@@ -186,9 +186,9 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
         -- old Nix CLI is nototrious for (and that would mean to reimplement the old Nix CLI),
         -- OR: https://github.com/haskell-nix/hnix/issues/172 and have some sane standart/default behaviour for (most) keys.
         | json      = fun (ignoreContext . mempty . nvalueToJSONNixString) normalForm
-        | strict    = fun (show . prettyNValue)                             normalForm
-        | values    = fun (show . prettyNValueProv)                         removeEffects
-        | otherwise = fun (show . prettyNValue)                             removeEffects
+        | strict    = fun (show . prettyNValue)                       normalForm
+        | values    = fun (show . prettyNValueProv)                   removeEffects
+        | otherwise = fun (show . prettyNValue)                       removeEffects
        where
         fun
           :: (b -> Text)
