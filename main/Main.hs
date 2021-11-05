@@ -204,9 +204,25 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
        where
         go :: Text -> AttrSet StdVal -> StdIO
         go prefix s =
-          do
-            xs <-
-              traverse
+          traverse_
+            (\ (k, mv) ->
+              do
+                let
+                  path              = prefix <> k
+                  (report, descend) = filterEntry path k
+                when report $
+                  do
+                    liftIO $ Text.putStrLn path
+                    when descend $
+                      maybe
+                        stub
+                        (\case
+                          NVSet _ s' -> go (path <> ".") s'
+                          _          -> stub
+                        )
+                        mv
+            )
+            =<< traverse
                 (\ (k, nv) ->
                   (k, ) <$>
                   free
@@ -221,7 +237,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
                           (pure Nothing)
                           (forceEntry path nv)
                           (descend &&
-                           deferred
+                            deferred
                             (const False)
                             (const True)
                             val
@@ -231,25 +247,6 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
                     nv
                 )
                 (sortWith fst $ M.toList $ M.mapKeys coerce s)
-            traverse_
-              (\ (k, mv) ->
-                do
-                  let
-                    path              = prefix <> k
-                    (report, descend) = filterEntry path k
-                  when report $
-                    do
-                      liftIO $ Text.putStrLn path
-                      when descend $
-                        maybe
-                          stub
-                          (\case
-                            NVSet _ s' -> go (path <> ".") s'
-                            _          -> stub
-                          )
-                          mv
-              )
-              xs
          where
           filterEntry path k = case (path, k) of
             ("stdenv", "stdenv"          ) -> (True , True )
@@ -276,29 +273,30 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
           forceEntry k v =
             catch
               (pure <$> demand v)
-              (\ (NixException frames) ->
-                do
-                  liftIO
-                    . Text.putStrLn
-                    . (("Exception forcing " <> k <> ": ") <>)
-                    . show =<<
-                      renderFrames
-                        @(StdValue (StandardT (StdIdT IO)))
-                        @(StdThunk (StandardT (StdIdT IO)))
-                        frames
-                  pure Nothing
-              )
+              fun
+           where
+            fun :: NixException -> StandardIO (Maybe a)
+            fun (coerce -> frames) =
+              do
+                liftIO
+                  . Text.putStrLn
+                  . (("Exception forcing " <> k <> ": ") <>)
+                  . show =<<
+                    renderFrames
+                      @StdVal
+                      @StdThun
+                      frames
+                pure Nothing
 
   reduction path mpathToContext annExpr =
     do
       eres <-
         withNixContext
           mpathToContext
-          (reducingEvalExpr
-            evalContent
-            mpathToContext
-            annExpr
-          )
+          $ reducingEvalExpr
+              evalContent
+              mpathToContext
+              annExpr
       handleReduced path eres
 
   handleReduced
