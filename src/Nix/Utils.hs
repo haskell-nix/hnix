@@ -326,10 +326,8 @@ traverseM
 traverseM f x = sequenceA <$> traverse f x
 
 -- | Apply a function @n@ times to a given value.
-iterateN  :: Int -> (a -> a) -> (a -> a)
-iterateN 0 _ = id
-iterateN 1 f = f
-iterateN n f = f . iterateN (pred n) f
+iterateN :: Int -> (a -> a) -> a -> a
+iterateN n f x = fix ((<*> (0 /=)) . ((bool x . f) .) . (. pred)) $ n -- It is hard to read - yes. It is a single action without recursion - yes.
 
 -- | Apply Kleisli arrow N times, join 'm's.
 nestM :: Monad m => Int -> (a -> m a) -> a -> m a
