@@ -660,15 +660,14 @@ builtin2 = ((.) <*> (.)) . builtin
 
 builtin3
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
-  => VarName
+  => VarName -- ^ function name
   -> ( NValue t f m
     -> NValue t f m
     -> NValue t f m
     -> m (NValue t f m)
-    )
+    ) -- ^ ternary function
   -> m (NValue t f m)
-builtin3 name f =
-  builtin name $ \a -> builtin name $ \b -> builtin name $ \c -> f a b c
+builtin3 = liftA3 (.) (.) ((.) . (.)) ((.) . (.)) . builtin
 
 -- *** @F: Evaluation -> NValue@
 
