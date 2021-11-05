@@ -47,11 +47,11 @@ hnixEvalText opts src =
 nixEvalString :: Text -> IO Text
 nixEvalString expr =
   do
-    (coerce -> fp, h) <- mkstemp "nix-test-eval"
+    (fp, h) <- mkstemp "nix-test-eval"
     Text.hPutStr h expr
     hClose h
-    res <- nixEvalFile fp
-    removeLink $ coerce fp
+    res <- nixEvalFile $ coerce fp
+    removeLink $ fp
     pure res
 
 nixEvalFile :: Path -> IO Text
