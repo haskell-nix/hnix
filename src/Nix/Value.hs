@@ -327,11 +327,11 @@ lmapNValueF f = \case
 iterNValue'
   :: forall t f m a r
    . MonadDataContext f m
-  => (a -> (NValue' t f m a -> r) -> r)
+  => ((NValue' t f m a -> r) -> a -> r)
   -> (NValue' t f m r -> r)
   -> NValue' t f m a
   -> r
-iterNValue' k f = f . fmap (\a -> k a (iterNValue' k f))
+iterNValue' k f = fix ((f .) . fmap . k)
 
 -- *** Utils
 
