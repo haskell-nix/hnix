@@ -114,7 +114,7 @@ evaluateExpression mpath evaluator handler expr =
     f' <- demand f
     val <-
       case f' of
-        NVClosure _ g -> g $ argmap args
+        NVClosure _ g -> g $ mkNVSet mempty $ M.fromList args
         _             -> pure f
     processResult handler val
  where
@@ -125,8 +125,6 @@ evaluateExpression mpath evaluator handler expr =
       (parseNixText s)
 
   eval' = normalForm <=< nixEvalExpr mpath
-
-  argmap args = mkNVSet mempty $ M.fromList args
 
 processResult
   :: forall e t f m a

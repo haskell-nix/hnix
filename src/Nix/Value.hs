@@ -153,18 +153,16 @@ instance Eq1 (NValueF p m) where
 -- ** Show
 
 instance Show r => Show (NValueF p m r) where
-  showsPrec d = go
-   where
-    go :: NValueF p m r -> String -> String
-    go = \case
+  showsPrec d =
+    \case
       (NVConstantF atom     ) -> showsCon1 "NVConstant" atom
-      (NVStrF      ns       ) -> showsCon1 "NVStr"      (stringIgnoreContext ns)
+      (NVStrF      ns       ) -> showsCon1 "NVStr"      $ stringIgnoreContext ns
       (NVListF     lst      ) -> showsCon1 "NVList"     lst
       (NVSetF      _   attrs) -> showsCon1 "NVSet"      attrs
       (NVClosureF  params _ ) -> showsCon1 "NVClosure"  params
       (NVPathF     path     ) -> showsCon1 "NVPath"     path
       (NVBuiltinF  name   _ ) -> showsCon1 "NVBuiltin"  name
-
+   where
     showsCon1 :: Show a => String -> a -> String -> String
     showsCon1 con a =
       showParen (d > 10) $ showString (con <> " ") . showsPrec 11 a
