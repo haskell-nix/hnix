@@ -10,7 +10,7 @@ module Nix.String
   , NixLikeContextValue(..)
   , toNixLikeContext
   , fromNixLikeContext
-  , stringHasContext
+  , hasContext
   , intercalateNixString
   , getStringNoContext
   , ignoreContext
@@ -142,8 +142,8 @@ mkNixString = NixString
 -- ** Checkers
 
 -- | Returns True if the NixString has an associated context
-stringHasContext :: NixString -> Bool
-stringHasContext (NixString _ c) = not $ null c
+hasContext :: NixString -> Bool
+hasContext (NixString _ c) = not $ null c
 
 
 -- ** Getters
