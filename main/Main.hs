@@ -19,7 +19,6 @@ import qualified Data.Text.IO                  as Text
 import           Text.Show.Pretty               ( ppShow )
 import           Nix                     hiding ( force )
 import           Nix.Convert
-import           Nix.Fresh.Basic
 import           Nix.Json
 import           Nix.Options.Parser
 import           Nix.Standard
@@ -47,7 +46,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
  where
   --  2021-07-15: NOTE: This logic should be weaved stronger through CLI options logic (OptParse-Applicative code)
   -- As this logic is not stated in the CLI documentation, for example. So user has no knowledge of these.
-  execContentsFilesOrRepl :: StandardT (StdIdT IO) ()
+  execContentsFilesOrRepl :: StdIO
   execContentsFilesOrRepl =
     fromMaybe
       loadFromCliFilePathList
@@ -57,6 +56,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       )
    where
     -- | The base case: read expressions from the last CLI directive (@[FILE]@) listed on the command line.
+    loadFromCliFilePathList :: StdIO
     loadFromCliFilePathList =
       case filePaths of
         []     -> runRepl
@@ -71,12 +71,13 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
           expr <- liftIO Text.getContents
           processExpr expr
 
-    processSeveralFiles :: [Path] -> StandardT (StdIdT IO) ()
+    processSeveralFiles :: [Path] -> StdIO
     processSeveralFiles = traverse_ processFile
      where
       processFile path = handleResult (pure path) =<< parseNixFileLoc path
 
     -- |  The `--read` option: load expression from a serialized file.
+    loadBinaryCacheFile :: Maybe StdIO
     loadBinaryCacheFile =
       (\ (binaryCacheFile :: Path) ->
         do
@@ -85,9 +86,11 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       ) <$> readFrom
 
     -- | The `--expr` option: read expression from the argument string
+    loadLiteralExpression :: Maybe StdIO
     loadLiteralExpression = processExpr <$> expression
 
     -- | The `--file` argument: read expressions from the files listed in the argument file
+    loadExpressionFromFile :: Maybe StdIO
     loadExpressionFromFile =
       -- We can start use Text as in the base case, requires changing Path -> Text
       -- But that is a gradual process:
@@ -99,6 +102,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
         ) <$> fromFile
 
   processExpr text = handleResult Nothing     $   parseNixTextLoc text
+  processExpr :: Text -> StdIO
 
   withEmptyNixContext = withNixContext mempty
 
@@ -133,8 +137,8 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
               NixException frames ->
                 errorWithoutStackTrace . show =<<
                   renderFrames
-                    @(StdValue (StandardT (StdIdT IO)))
-                    @(StdThunk (StandardT (StdIdT IO)))
+                    @StdVal
+                    @StdThun
                     frames
 
           when repl $
@@ -149,7 +153,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       )
 
   --  2021-07-15: NOTE: Logic of CLI Option processing is scattered over several functions, needs to be consolicated.
-  processCLIOptions :: Maybe Path -> NExprLoc -> StandardT (StdIdT IO) ()
+  processCLIOptions :: Maybe Path -> NExprLoc -> StdIO
   processCLIOptions mpath expr
     | evaluate =
       if
@@ -174,7 +178,10 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
     evaluateExprWithEvaluator evaluator = evaluateExpression (coerce mpath) evaluator printer
 
     printer
-      | finder    = findAttrs <=< fromValue @(AttrSet (StdValue (StandardT (StdIdT IO))))
+      :: StdVal
+      -> StdIO
+    printer
+      | finder    = findAttrs <=< fromValue @(AttrSet StdVal)
       | otherwise = printer'
      where
       printer'
@@ -191,16 +198,17 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
        where
         go
           :: (b -> Text)
-          -> (a -> StandardT (StdIdT IO) b)
+          -> (a -> StandardIO b)
           -> a
-          -> StandardT (StdIdT IO) ()
         go g f = liftIO . Text.putStrLn . g <=< f
+          -> StdIO
 
       findAttrs
-        :: AttrSet (StdValue (StandardT (StdIdT IO)))
-        -> StandardT (StdIdT IO) ()
+        :: AttrSet StdVal
+        -> StdIO
       findAttrs = go mempty
        where
+        go :: Text -> AttrSet StdVal -> StdIO
         go prefix s =
           do
             xs <-
@@ -214,7 +222,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
                           path         = prefix <> k
                           (_, descend) = filterEntry path k
 
-                        val <- readRef @(StandardT (StdIdT IO)) ref
+                        val <- readRef @StandardIO ref
                         bool
                           (pure Nothing)
                           (forceEntry path nv)
@@ -267,10 +275,10 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
             _                              -> (True , True )
 
           forceEntry
-            :: MonadValue a (StandardT (StdIdT IO))
+            :: MonadValue a StandardIO
             => Text
             -> a
-            -> StandardT (StdIdT IO) (Maybe a)
+            -> StandardIO (Maybe a)
           forceEntry k v =
             catch
               (pure <$> demand v)

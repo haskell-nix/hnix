@@ -59,9 +59,12 @@ newtype StdCited m a =
 newtype StdThunk m =
   StdThunk
     (StdCited m (NThunkF m (StdValue m)))
-
 type StdValue' m = NValue' (StdThunk m) (StdCited m) m (StdValue m)
 type StdValue m = NValue (StdThunk m) (StdCited m) m
+type StandardIO = StandardT (StdIdT IO)
+type StdVal = StdValue StandardIO
+type StdThun = StdThunk StandardIO
+type StdIO = StandardIO ()
 
 -- | Type alias:
 --
@@ -371,5 +374,5 @@ runWithBasicEffects opts =
     i <- newRef (1 :: Int)
     runFreshIdT i action
 
-runWithBasicEffectsIO :: Options -> StandardT (StdIdT IO) a -> IO a
+runWithBasicEffectsIO :: Options -> StandardIO a -> IO a
 runWithBasicEffectsIO = runWithBasicEffects
