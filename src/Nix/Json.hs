@@ -46,10 +46,10 @@ nvalueToJSONNixString =
       . toEncodingSorted
       )
 
-      . nvalueToJSON
+      . toJSON
 
-nvalueToJSON :: MonadNix e t f m => NValue t f m -> WithStringContextT m A.Value
-nvalueToJSON = \case
+toJSON :: MonadNix e t f m => NValue t f m -> WithStringContextT m A.Value
+toJSON = \case
   NVConstant (NInt   n) -> pure $ A.toJSON n
   NVConstant (NFloat n) -> pure $ A.toJSON n
   NVConstant (NBool  b) -> pure $ A.toJSON b
@@ -78,4 +78,4 @@ nvalueToJSON = \case
 
  where
   intoJson :: MonadNix e t f m => NValue t f m -> WithStringContextT m A.Value
-  intoJson nv = join $ lift $ nvalueToJSON <$> demand nv
+  intoJson nv = join $ lift $ toJSON <$> demand nv
