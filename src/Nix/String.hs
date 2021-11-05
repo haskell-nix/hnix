@@ -13,7 +13,7 @@ module Nix.String
   , stringHasContext
   , intercalateNixString
   , getStringNoContext
-  , stringIgnoreContext
+  , ignoreContext
   , mkNixStringWithoutContext
   , mkNixStringWithSingletonContext
   , modifyNixContents
@@ -162,8 +162,8 @@ getStringNoContext (NixString s c)
   | otherwise = mempty
 
 -- | Extract the string contents from a NixString even if the NixString has an associated context
-stringIgnoreContext :: NixString -> Text
-stringIgnoreContext (NixString s _) = s
+ignoreContext :: NixString -> Text
+ignoreContext (NixString s _) = s
 
 -- | Get the contents of a 'NixString' and write its context into the resulting set.
 extractNixString :: Monad m => NixString -> WithStringContextT m Text

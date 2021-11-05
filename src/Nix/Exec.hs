@@ -201,7 +201,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
               (nvStrP
                 . Provenance
                   scope
-                  . NStrAnnF span . DoubleQuoted . one . Plain . stringIgnoreContext
+                  . NStrAnnF span . DoubleQuoted . one . Plain . ignoreContext
               )
               ns
       )

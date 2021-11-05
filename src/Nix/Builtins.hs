@@ -141,7 +141,7 @@ instance Comonad f => Eq (WValue t f m) where
   WValue (NVConstant (NFloat x)) == WValue (NVConstant (NFloat y)) = x == y
   WValue (NVPath     x         ) == WValue (NVPath     y         ) = x == y
   WValue (NVStr x) == WValue (NVStr y) =
-    stringIgnoreContext x == stringIgnoreContext y
+    ignoreContext x == ignoreContext y
   _ == _ = False
 
 instance Comonad f => Ord (WValue t f m) where
@@ -153,7 +153,7 @@ instance Comonad f => Ord (WValue t f m) where
   WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NFloat y)) = x <= y
   WValue (NVPath     x         ) <= WValue (NVPath     y         ) = x <= y
   WValue (NVStr x) <= WValue (NVStr y) =
-    stringIgnoreContext x <= stringIgnoreContext y
+    ignoreContext x <= ignoreContext y
   _ <= _ = False
 
 -- ** Helpers
@@ -211,7 +211,7 @@ foldNixPath z f =
     foldrM
       go
       z
-      $ (fromInclude . stringIgnoreContext <$> dirs)
+      $ (fromInclude . ignoreContext <$> dirs)
         <> uriAwareSplit `whenJust` mPath
         <> one (fromInclude $ "nix=" <> fromString (coerce dataDir) <> "/nix/corepkgs")
  where
@@ -364,7 +364,7 @@ absolutePathFromValue =
     NVStr ns ->
       do
         let
-          path = coerce . toString $ stringIgnoreContext ns
+          path = coerce . toString $ ignoreContext ns
 
         unless (isAbsolute path) $ throwError $ ErrorCall $ "string " <> show path <> " doesn't represent an absolute path"
         pure path
@@ -494,7 +494,7 @@ unsafeGetAttrPosNix nvX nvY =
         maybe
           (pure nvNull)
           toValue
-          (M.lookup @VarName (coerce $ stringIgnoreContext ns) apos)
+          (M.lookup @VarName (coerce $ ignoreContext ns) apos)
       _xy -> throwError $ ErrorCall $ "Invalid types for builtins.unsafeGetAttrPosNix: " <> show _xy
 
 -- This function is a bit special in that it doesn't care about the contents
@@ -677,7 +677,7 @@ matchNix pat str =
     -- going to preserve the behavior here until it is fixed upstream.
     -- Relevant issue: https://github.com/NixOS/nix/issues/2547
     let
-      s  = stringIgnoreContext ns
+      s  = ignoreContext ns
       re = makeRegex p :: Regex
       mkMatch t =
         bool
@@ -714,7 +714,7 @@ splitNix pat str =
         -- going to preserve the behavior here until it is fixed upstream.
         -- Relevant issue: https://github.com/NixOS/nix/issues/2547
     let
-      s = stringIgnoreContext ns
+      s = ignoreContext ns
       regex       = makeRegex p :: Regex
       haystack = encodeUtf8 s
 
@@ -891,7 +891,7 @@ dirOfNix nvdir =
 unsafeDiscardStringContextNix
   :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 unsafeDiscardStringContextNix =
-  inHask (mkNixStringWithoutContext . stringIgnoreContext)
+  inHask (mkNixStringWithoutContext . ignoreContext)
 
 -- | Evaluate `a` to WHNF to collect its topmost effect.
 seqNix
@@ -1038,7 +1038,7 @@ replaceStringsNix tfrom tto ts =
          where
           formMatchReplaceTailInfo (m, r) = (m, r, Text.drop (Text.length m) input)
 
-          fromKeysToValsMap = zip (stringIgnoreContext <$> fromKeys) toVals
+          fromKeysToValsMap = zip (ignoreContext <$> fromKeys) toVals
 
         -- Not passing args => It is constant that gets embedded into `go` => It is simple `go` tail recursion
         passOneChar =
@@ -1073,7 +1073,7 @@ replaceStringsNix tfrom tto ts =
           updatedOutput  = output <> replacement
           updatedCtx     = ctx <> replacementCtx
 
-          replacement    = Builder.fromText $ stringIgnoreContext replacementNS
+          replacement    = Builder.fromText $ ignoreContext replacementNS
           replacementCtx = getContext replacementNS
 
           -- The bug modifies the content => bug demands `pass` to be a real function =>
@@ -1085,7 +1085,7 @@ replaceStringsNix tfrom tto ts =
               (\(c, i) -> go updatedCtx i $ output <> Builder.singleton c) -- If there are chars - pass one char & continue
               (Text.uncons input)  -- chip first char
 
-    toValue $ go (getContext string) (stringIgnoreContext string) mempty
+    toValue $ go (getContext string) (ignoreContext string) mempty
 
 removeAttrsNix
   :: forall e t f m
@@ -1141,7 +1141,7 @@ toFileNix name s =
     mres  <-
       toFile_
         (coerce $ toString name')
-        (stringIgnoreContext s')
+        (ignoreContext s')
 
     let
       storepath  = coerce (fromString @Text) mres
@@ -1159,7 +1159,7 @@ pathExistsNix nvpath =
     toValue =<<
       case path of
         NVPath p  -> doesPathExist p
-        NVStr  ns -> doesPathExist $ coerce $ toString $ stringIgnoreContext ns
+        NVStr  ns -> doesPathExist $ coerce $ toString $ ignoreContext ns
         _v -> throwError $ ErrorCall $ "builtins.pathExists: expected path, got " <> show _v
 
 isAttrsNix
@@ -1209,7 +1209,7 @@ isFunctionNix nv =
 
 throwNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 throwNix =
-  throwError . ErrorCall . toString . stringIgnoreContext
+  throwError . ErrorCall . toString . ignoreContext
     <=< coerceStringlikeToNixString CopyToStore
 
 -- | Implementation of Nix @import@ clause.
@@ -1344,7 +1344,7 @@ lessThanNix ta tb =
             (NFloat a, NInt   b) -> pure $             a < fromInteger b
             (NFloat a, NFloat b) -> pure $             a < b
             _                    -> badType
-        (NVStr a, NVStr b) -> pure $ stringIgnoreContext a < stringIgnoreContext b
+        (NVStr a, NVStr b) -> pure $ ignoreContext a < ignoreContext b
         _ -> badType
 
 -- | Helper function, generalization of @concat@ operations.
@@ -1453,7 +1453,7 @@ placeHolderNix p =
       bytes :: NixString -> ByteString
       bytes = encodeUtf8 . body
 
-      body = stringIgnoreContext
+      body = ignoreContext
 
 readFileNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 readFileNix = toValue <=< Nix.Render.readFile <=< absolutePathFromValue <=< demand
@@ -1472,7 +1472,7 @@ findFileNix nvaset nvfilepath =
     case (aset, filePath) of
       (NVList x, NVStr ns) ->
         do
-          mres <- findPath @t @f @m x $ coerce $ toString $ stringIgnoreContext ns
+          mres <- findPath @t @f @m x $ coerce $ toString $ ignoreContext ns
 
           pure $ mkNVPath mres
 
@@ -1610,7 +1610,7 @@ traceNix
   -> m (NValue t f m)
 traceNix msg action =
   do
-    traceEffect @t @f @m . toString . stringIgnoreContext =<< fromValue msg
+    traceEffect @t @f @m . toString . ignoreContext =<< fromValue msg
     pure action
 
 -- Please, can function remember fail context
@@ -1630,7 +1630,7 @@ execNix xs =
     -- 2018-11-19: NOTE: Still need to do something with the context here
     -- See prim_exec in nix/src/libexpr/primops.cc
     -- Requires the implementation of EvalState::realiseContext
-    exec $ stringIgnoreContext <$> xs'
+    exec $ ignoreContext <$> xs'
 
 fetchurlNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1759,7 +1759,7 @@ appendContextNix tx ty =
                       outs <- demand touts
 
                       case outs of
-                        NVList vs -> traverse (fmap stringIgnoreContext . fromValue) vs
+                        NVList vs -> traverse (fmap ignoreContext . fromValue) vs
                         _x -> throwError $ ErrorCall $ "Invalid types for context value outputs in builtins.appendContext: " <> show _x
                   )
                   (M.lookup "outputs" attrs)
@@ -1773,7 +1773,7 @@ appendContextNix tx ty =
 
   addContext ns newContextValues =
     mkNixString
-      (stringIgnoreContext ns)
+      (ignoreContext ns)
       (fromNixLikeContext $
         NixLikeContext $
           M.unionWith
@@ -1881,7 +1881,7 @@ builtinsList = sequenceA
   , add  Normal   "splitVersion"     splitVersionNix
   , add0 Normal   "storeDir"         (pure $ mkNVStrWithoutContext "/nix/store")
   --, add  Normal   "storePath"        storePath
-  , add' Normal   "stringLength"     (arity1 $ Text.length . stringIgnoreContext)
+  , add' Normal   "stringLength"     (arity1 $ Text.length . ignoreContext)
   , add' Normal   "sub"              (arity2 ((-) @Integer))
   , add' Normal   "substring"        substringNix
   , add  Normal   "tail"             tailNix
