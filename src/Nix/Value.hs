@@ -514,9 +514,9 @@ iterNValueByDiscardWith
   :: MonadDataContext f m
   => r
   -> (NValue' t f m r -> r)
-  -> Free (NValue' t f m) t
+  -> NValue t f m
   -> r
-iterNValueByDiscardWith dflt = iterNValue (\ _ _ -> dflt)
+iterNValueByDiscardWith = iterNValue . const . const
 
 
 -- | HOF of @iterM@ from @Free@
