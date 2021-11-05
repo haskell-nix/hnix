@@ -39,9 +39,7 @@ hnixEvalText :: Options -> Text -> IO StdVal
 hnixEvalText opts src =
   either
     (\ err -> fail $ toString $ "Parsing failed for expression `" <> src <> "`.\n" <> show err)
-    (\ expr ->
-      runWithBasicEffects opts $ normalForm =<< nixEvalExpr mempty expr
-    )
+    (runWithBasicEffects opts . (normalForm <=< nixEvalExpr mempty))
     $ parseNixText src
 
 nixEvalString :: Text -> IO Text
@@ -51,7 +49,7 @@ nixEvalString expr =
     Text.hPutStr h expr
     hClose h
     res <- nixEvalFile $ coerce fp
-    removeLink $ fp
+    removeLink fp
     pure res
 
 nixEvalFile :: Path -> IO Text

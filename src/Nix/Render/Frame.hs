@@ -44,7 +44,7 @@ renderFrames xss@(x : xs) =
     opts :: Options <- asks $ view hasLens
     let
       verbosity :: Verbosity
-      verbosity = verbose opts
+      verbosity = getVerbosity opts
     renderedFrames <- if
         | verbosity <= ErrorsOnly -> render1 x
       --  2021-10-22: NOTE: List reverse is completely conterproductive. `reverse` of list famously neest to traverse the whole list to take the last element
@@ -118,9 +118,9 @@ renderEvalFrame level f =
          where
           scopeInfo :: [Doc ann]
           scopeInfo =
-            one (pretty $ Text.show scope) `whenTrue` showScopes opts
+            one (pretty $ Text.show scope) `whenTrue` isShowScopes opts
 
-      ForcingExpr _scope e@(Ann loc _) | thunks opts ->
+      ForcingExpr _scope e@(Ann loc _) | isThunks opts ->
         addMetaInfo
           id
           loc
@@ -154,8 +154,8 @@ renderExpr
 renderExpr _level longLabel shortLabel e@(Ann _ x) = do
   opts :: Options <- asks (view hasLens)
   let
-    lvl :: Verbosity
-    lvl = verbose opts
+    verbosity :: Verbosity
+    verbosity = getVerbosity opts
 
     expr :: NExpr
     expr = stripAnnotation e
@@ -166,13 +166,13 @@ renderExpr _level longLabel shortLabel e@(Ann _ x) = do
       bool
         (pretty $ PS.ppShow expr)
         (prettyNix expr)
-        (lvl == Chatty)
+        (verbosity == Chatty)
 
   pure $
     bool
       (pretty shortLabel <> fillSep [": ", concise])
       (vsep [pretty (longLabel <> ":\n>>>>>>>>"), indent 2 chatty, "<<<<<<<<"])
-      (lvl >= Chatty)
+      (verbosity >= Chatty)
 
 renderValueFrame
   :: forall e t f m ann
@@ -219,7 +219,7 @@ renderValue _level _longLabel _shortLabel v = do
   bool
     prettyNValue
     prettyNValueProv
-    (values opts)
+    (isValues opts)
     <$> removeEffects v
 
 dumbRenderValue

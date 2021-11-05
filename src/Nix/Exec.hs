@@ -518,11 +518,10 @@ addTracing k v = do
       opts :: Options <- asks $ view hasLens
       let
         rendered =
-          if verbose opts >= Chatty
-            then
-              pretty $
-                PS.ppShow $ void x
-            else prettyNix $ Fix $ Fix (NSym "?") <$ x
+          bool
+            (prettyNix $ Fix $ Fix (NSym "?") <$ x)
+            (pretty $ PS.ppShow $ void x)
+            (getVerbosity opts >= Chatty)
         msg x = pretty ("eval: " <> replicate depth ' ') <> x
       loc <- renderLocation span $ msg rendered <> " ...\n"
       putStr $ show loc
@@ -540,17 +539,19 @@ evalExprLoc expr =
           Eval.framedEvalExprLoc
           (join . (`runReaderT` (0 :: Int)) .
             adi
-              (raise Eval.addMetaInfo)
+              raise
               (addTracing Eval.evalContent)
           )
-          (tracing opts)
+          (isTrace opts)
     pTracedAdi expr
  where
-  raise k f x = ReaderT $ \e -> k (\t -> runReaderT (f t) e) x
+  raise :: (NExprLoc -> ReaderT r m a) -> NExprLoc -> ReaderT r m a
+  raise = (ReaderT .) . flip . (Eval.addMetaInfo .) . flip . (runReaderT .)
 
 exec :: (MonadNix e t f m, MonadInstantiate m) => [Text] -> m (NValue t f m)
 exec args = either throwError evalExprLoc =<< exec' args
 
+-- Please, delete `nix` from the name
 nixInstantiateExpr
   :: (MonadNix e t f m, MonadInstantiate m) => Text -> m (NValue t f m)
 nixInstantiateExpr s = either throwError evalExprLoc =<< instantiateExpr s

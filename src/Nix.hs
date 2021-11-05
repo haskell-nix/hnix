@@ -108,8 +108,8 @@ evaluateExpression mpath evaluator handler expr =
     (coerce -> args) <-
       (traverse . traverse)
         eval'
-        $  (second parseArg <$> arg    opts)
-        <> (second mkStr    <$> argstr opts)
+        $  (second parseArg <$> getArg    opts)
+        <> (second mkStr    <$> getArgstr opts)
     f <- evaluator mpath expr
     f' <- demand f
     val <-
@@ -137,7 +137,7 @@ processResult h val = do
   maybe
     (h val)
     (\ (coerce . Text.splitOn "." -> keys) -> processKeys keys val)
-    (attr opts)
+    (getAttr opts)
  where
   processKeys :: [VarName] -> NValue t f m -> m a
   processKeys kys v =

@@ -98,7 +98,7 @@ instance
 
             cite ps t
         )
-        (thunks opts)
+        (isThunks opts)
         (thunk mv)
 
   thunkId :: Cited u f m t -> ThunkId m

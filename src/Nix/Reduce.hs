@@ -44,8 +44,8 @@ import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Options                    ( Options
-                                                , reduceSets
-                                                , reduceLists
+                                                , isReduceSets
+                                                , isReduceLists
                                                 )
 import           Nix.Parser
 import           Nix.Scope
@@ -368,13 +368,13 @@ pruneTree opts =
       bool
         (fromMaybe annNNull <$>)
         catMaybes
-        (reduceLists opts)  -- Reduce list members that aren't used; breaks if elemAt is used
+        (isReduceLists opts)  -- Reduce list members that aren't used; breaks if elemAt is used
         l
     NSet recur binds -> pure $ NSet recur $
       bool
         (fromMaybe annNNull <<$>>)
         (mapMaybe sequenceA)
-        (reduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
+        (isReduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
         binds
 
     NLet binds (Just body@(Ann _ x)) ->
@@ -450,7 +450,7 @@ pruneTree opts =
         bool
           fmap
           ((pure .) . maybe annNNull)
-          (reduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
+          (isReduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
           (fromMaybe annNNull)
 
   pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)

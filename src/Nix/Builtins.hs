@@ -1694,7 +1694,7 @@ currentTimeNix :: MonadNix e t f m => m (NValue t f m)
 currentTimeNix =
   do
     opts :: Options <- asks $ view hasLens
-    toValue @Integer $ round $ Time.utcTimeToPOSIXSeconds $ currentTime opts
+    toValue @Integer $ round $ Time.utcTimeToPOSIXSeconds $ getTime opts
 
 derivationStrictNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 derivationStrictNix = derivationStrict
@@ -1991,7 +1991,7 @@ withNixContext mpath action =
     base            <- builtins
     opts :: Options <- asks $ view hasLens
     let
-      i = mkNVList $ mkNVStrWithoutContext . toText <$> include opts
+      i = mkNVList $ mkNVStrWithoutContext . toText <$> getInclude opts
 
     pushScope
       (coerce $ M.fromList $ one ("__includes", i))

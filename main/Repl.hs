@@ -168,8 +168,8 @@ initState mIni = do
       Nothing
       scope
       defReplConfig
-        { cfgStrict = strict opts
-        , cfgValues = values opts
+        { cfgStrict = isStrict opts
+        , cfgValues = isValues opts
         }
   where
     evalText :: (MonadNix e t f m) => Text -> m (NValue t f m)
