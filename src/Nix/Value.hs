@@ -207,10 +207,10 @@ sequenceNValueF transform = \case
 -- | @bind@
 bindNValueF
   :: (Monad m, Monad n)
-  => (forall x . n x -> m x)
-  -> (a -> n b)
-  -> NValueF p m a
-  -> n (NValueF p m b)
+  => (forall x . n x -> m x) -- ^ Transform @n@ into @m@.
+  -> (a -> n b) -- ^ A Kleisli arrow (see 'Control.Arrow.Kleisli' & Kleisli catagory).
+  -> NValueF p m a -- ^ "Unfixed" (openly recursive) value of an embedded Nix language.
+  -> n (NValueF p m b) -- ^ An implementation of @transform (f =<< x)@ for embedded Nix language values.
 bindNValueF transform f = \case
   NVConstantF a  -> pure $ NVConstantF a
   NVStrF      s  -> pure $ NVStrF s
