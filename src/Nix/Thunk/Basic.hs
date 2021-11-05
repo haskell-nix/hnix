@@ -128,16 +128,16 @@ instance (MonadBasicThunk m, MonadCatch m)
 -- Checks if resource is computed,
 -- if not - with locking evaluates the resource.
 forceMain
-  :: ( MonadBasicThunk m
+  :: forall v m
+   . ( MonadBasicThunk m
     , MonadCatch m
     )
   => NThunkF m v
   -> m v
 forceMain (Thunk tIdV tRefV tValRefV) =
-  do
-    v <- readRef tValRefV
-    deferred pure computeW v
+  deferred pure computeW =<< readRef tValRefV
  where
+  computeW :: m v -> m v
   computeW vDefferred =
     do
       locked <- lock tRefV
@@ -149,16 +149,19 @@ forceMain (Thunk tIdV tRefV tValRefV) =
           unlockRef
           pure v
         )
-        (not locked)
+        $ not locked
+   where
+    lockFailedV :: m a
+    lockFailedV = throwM $ ThunkLoop $ show tIdV
 
-  lockFailedV = throwM $ ThunkLoop $ show tIdV
+    bindFailedW :: SomeException -> m b
+    bindFailedW (e :: SomeException) =
+      do
+        unlockRef
+        throwM e
 
-  bindFailedW (e :: SomeException) =
-    do
-      unlockRef
-      throwM e
-
-  unlockRef = unlock tRefV
+    unlockRef :: m Bool
+    unlockRef = unlock tRefV
 {-# inline forceMain #-} -- it is big function, but internal, and look at its use.
 
 
