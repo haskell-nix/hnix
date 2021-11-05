@@ -527,10 +527,9 @@ iterNValueM
   -> (NValue' t f m (n r) -> n r)
   -> NValue t f m
   -> n r
-iterNValueM transform k f =
-    iterM f <=< go . (k (iterNValueM transform k f) <$>)
+iterNValueM transform k f = fix (((iterM f <=< go) .) . fmap . k)
   where
-    go (Pure x) = Pure <$> x
+    go (Pure x) = Pure <$> x -- It should be a 'sequenceA' if to remote 'transform' form function.
     go (Free fa) = Free <$> bindNValue' transform go fa
 
 -- *** Utils
