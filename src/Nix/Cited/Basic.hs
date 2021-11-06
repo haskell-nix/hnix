@@ -79,13 +79,13 @@ instance
   thunk :: m v -> m (Cited u f m t)
   thunk mv =
     do
-      opts :: Options <- asks $ view hasLens
+      opts :: Options <- askLocal
 
       bool
         (cite mempty)
         (\ t ->
           do
-            frames :: Frames <- asks $ view hasLens
+            frames :: Frames <- askLocal
 
             -- Gather the current evaluation context at the time of thunk
             -- creation, and record it along with the thunk.

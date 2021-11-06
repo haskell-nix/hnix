@@ -104,7 +104,7 @@ evaluateExpression
   -> m a
 evaluateExpression mpath evaluator handler expr =
   do
-    opts :: Options <- asks $ view hasLens
+    opts :: Options <- askLocal
     (coerce -> args) <-
       (traverse . traverse)
         eval'
@@ -132,12 +132,13 @@ processResult
   => (NValue t f m -> m a)
   -> NValue t f m
   -> m a
-processResult h val = do
-  opts :: Options <- asks $ view hasLens
-  maybe
-    (h val)
-    (\ (coerce . Text.splitOn "." -> keys) -> processKeys keys val)
-    (getAttr opts)
+processResult h val =
+  do
+    opts :: Options <- askLocal
+    maybe
+      (h val)
+      (\ (coerce . Text.splitOn "." -> keys) -> processKeys keys val)
+      (getAttr opts)
  where
   processKeys :: [VarName] -> NValue t f m -> m a
   processKeys kys v =

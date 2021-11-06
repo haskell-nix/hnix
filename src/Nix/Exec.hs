@@ -145,7 +145,7 @@ nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
 
 currentPos :: forall e m . (MonadReader e m, Has e SrcSpan) => m SrcSpan
-currentPos = asks $ view hasLens
+currentPos = askLocal
 
 wrapExprLoc :: SrcSpan -> NExprLocF r -> NExprLoc
 wrapExprLoc span x = Fix $ NSymAnn span "<?>" <$ x
@@ -295,7 +295,7 @@ callFunc
   -> m (NValue t f m)
 callFunc fun arg =
   do
-    frames :: Frames <- asks $ view hasLens
+    frames :: Frames <- askLocal
     when (length frames > 2000) $ throwError $ ErrorCall "Function call stack exhausted"
 
     fun' <- demand fun
@@ -521,7 +521,7 @@ addTracing k v = do
   local succ $ do
     v'@(AnnF span x) <- sequenceA v
     pure $ do
-      opts :: Options <- asks $ view hasLens
+      opts :: Options <- askLocal
       let
         rendered =
           bool
@@ -538,7 +538,7 @@ addTracing k v = do
 evalExprLoc :: forall e t f m . MonadNix e t f m => NExprLoc -> m (NValue t f m)
 evalExprLoc expr =
   do
-    opts :: Options <- asks $ view hasLens
+    opts :: Options <- askLocal
     let
       pTracedAdi =
         bool

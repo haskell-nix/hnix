@@ -41,7 +41,7 @@ renderFrames
 renderFrames []       = stub
 renderFrames xss@(x : xs) =
   do
-    opts :: Options <- asks $ view hasLens
+    opts :: Options <- askLocal
     let
       verbosity :: Verbosity
       verbosity = getVerbosity opts
@@ -104,7 +104,7 @@ renderEvalFrame
   -> m [Doc ann]
 renderEvalFrame level f =
   do
-    opts :: Options <- asks (view hasLens)
+    opts :: Options <- askLocal
     let
       addMetaInfo :: ([Doc ann] -> [Doc ann]) -> SrcSpan -> Doc ann -> m [Doc ann]
       addMetaInfo trans loc = fmap (trans . one) . renderLocation loc
@@ -152,7 +152,7 @@ renderExpr
   -> NExprLoc
   -> m (Doc ann)
 renderExpr _level longLabel shortLabel e@(Ann _ x) = do
-  opts :: Options <- asks (view hasLens)
+  opts :: Options <- askLocal
   let
     verbosity :: Verbosity
     verbosity = getVerbosity opts
@@ -215,7 +215,7 @@ renderValue
   -> NValue t f m
   -> m (Doc ann)
 renderValue _level _longLabel _shortLabel v = do
-  opts :: Options <- asks $ view hasLens
+  opts :: Options <- askLocal
   bool
     prettyNValue
     prettyNValueProv

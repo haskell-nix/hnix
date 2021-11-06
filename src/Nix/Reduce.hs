@@ -471,7 +471,7 @@ reducingEvalExpr eval mpath expr =
     expr'           <- flagExprLoc =<< liftIO (reduceExpr mpath expr)
     eres <- (`catch` pure . Left) $
       pure <$> foldFix (addEvalFlags eval) expr'
-    opts :: Options <- asks $ view hasLens
+    opts :: Options <- askLocal
     expr''          <- pruneTree opts expr'
     pure (fromMaybe annNNull expr'', eres)
  where

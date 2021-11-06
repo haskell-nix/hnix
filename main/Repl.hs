@@ -161,7 +161,7 @@ initState mIni = do
       M.fromList $
       ("builtins", builtins) : fmap ("input",) (maybeToList mIni)
 
-  opts :: Nix.Options <- asks $ view hasLens
+  opts :: Nix.Options <- askLocal
 
   pure $
     IState

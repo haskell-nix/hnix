@@ -45,7 +45,8 @@ withFrame level f = local $ over hasLens (NixFrame level (toException f) :)
 
 throwError
   :: forall s e m a . (Framed e m, Exception s, MonadThrow m) => s -> m a
-throwError err = do
-  context <- asks (view hasLens)
-  traceM "Throwing fail..."
-  throwM $ NixException $ NixFrame Error (toException err) : context
+throwError err =
+  do
+    context <- askLocal
+    traceM "Throwing fail..."
+    throwM $ NixException $ NixFrame Error (toException err) : context

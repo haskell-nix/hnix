@@ -26,13 +26,13 @@ instance Show (Scope a) where
   show (Scope m) = show $ M.keys m
 
 scopeLookup :: VarName -> [Scope a] -> Maybe a
-scopeLookup key = foldr go Nothing
+scopeLookup key = foldr fun Nothing
  where
-  go
+  fun
     :: Scope a
     -> Maybe a
     -> Maybe a
-  go (Scope m) rest = M.lookup key m <|> rest
+  fun (Scope m) rest = M.lookup key m <|> rest
 
 data Scopes m a =
   Scopes
@@ -65,7 +65,7 @@ currentScopesReader
     , Has e (Scopes m a)
     )
   => m (Scopes m a)
-currentScopesReader = asks $ view hasLens
+currentScopesReader = askLocal
 
 clearScopesReader
   :: forall m a e r

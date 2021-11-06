@@ -36,8 +36,8 @@ import           Nix.Eval
 main :: IO ()
 main =
   do
-    time <- getCurrentTime
-    opts <- execParser $ nixOptionsInfo time
+    currentTime <- getCurrentTime
+    opts <- execParser $ nixOptionsInfo currentTime
 
     main' opts
 
