@@ -1098,10 +1098,10 @@ removeAttrsNix set v =
     (m, p) <- fromValue @(AttrSet (NValue t f m), PositionSet) set
     (nsToRemove :: [NixString]) <- fromValue $ Deeper v
     (coerce -> toRemove) <- traverse fromStringNoContext nsToRemove
-    toValue (go m toRemove, go p toRemove)
+    toValue (fun m toRemove, fun p toRemove)
  where
-  go :: forall k v . (Eq k, Hashable k) => HashMap k v -> [k] -> HashMap k v
-  go = foldl' (flip M.delete)
+  fun :: forall k v . (Eq k, Hashable k) => HashMap k v -> [k] -> HashMap k v
+  fun = foldl' (flip M.delete)
 
 intersectAttrsNix
   :: forall e t f m
