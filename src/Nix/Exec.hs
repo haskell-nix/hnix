@@ -144,8 +144,8 @@ instance MonadDataErrorContext t f m => Exception (ExecFrame t f m)
 nverr :: forall e t f s m a . (MonadNix e t f m, Exception s) => s -> m a
 nverr = evalError @(NValue t f m)
 
-currentPos :: forall e m . (MonadReader e m, Has e SrcSpan) => m SrcSpan
-currentPos = askLocal
+askSpan :: forall e m . (MonadReader e m, Has e SrcSpan) => m SrcSpan
+askSpan = askLocal
 
 wrapExprLoc :: SrcSpan -> NExprLocF r -> NExprLoc
 wrapExprLoc span x = Fix $ NSymAnn span "<?>" <$ x
@@ -159,7 +159,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
 
   synHole name =
     do
-      span  <- currentPos
+      span  <- askSpan
       scope <- askScopes
       evalError @(NValue t f m) $ SynHole $
         SynHoleInfo
@@ -182,7 +182,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalCurPos =
     do
       scope                  <- askScopes
-      span@(SrcSpan delta _) <- currentPos
+      span@(SrcSpan delta _) <- askSpan
       addProvenance @_ @_ @(NValue t f m)
         (Provenance scope . NSymAnnF span $ coerce @Text "__curPos") <$>
           toValue delta
@@ -190,7 +190,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evaledSym name val =
     do
       scope <- askScopes
-      span  <- currentPos
+      span  <- askSpan
       pure $
         addProvenance @_ @_ @(NValue t f m)
           (Provenance scope $ NSymAnnF span name)
@@ -199,7 +199,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalConstant c =
     do
       scope <- askScopes
-      span  <- currentPos
+      span  <- askSpan
       pure $ mkNVConstantWithProvenance scope span c
 
   evalString =
@@ -208,7 +208,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
       (\ ns ->
         do
           scope <- askScopes
-          span  <- currentPos
+          span  <- askSpan
           pure $ mkNVStrWithProvenance scope span ns
       )
       <=< assembleString
@@ -216,37 +216,37 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalLiteralPath p =
     do
       scope <- askScopes
-      span  <- currentPos
+      span  <- askSpan
       mkNVPathWithProvenance scope span p <$> toAbsolutePath @t @f @m p
 
   evalEnvPath p =
     do
       scope <- askScopes
-      span  <- currentPos
+      span  <- askSpan
       mkNVPathWithProvenance scope span p <$> findEnvPath @t @f @m (coerce p)
 
   evalUnary op arg =
     do
       scope <- askScopes
-      span  <- currentPos
+      span  <- askSpan
       execUnaryOp scope span op arg
 
   evalBinary op larg rarg =
     do
       scope <- askScopes
-      span  <- currentPos
+      span  <- askSpan
       execBinaryOp scope span op larg rarg
 
   evalWith c b =
     do
       scope <- askScopes
-      span  <- currentPos
+      span  <- askSpan
       let f = join $ addProvenance . Provenance scope . NWithAnnF span Nothing . pure
       f <$> evalWithAttrSet c b
 
   evalIf c tVal fVal = do
     scope <- askScopes
-    span  <- currentPos
+    span  <- askSpan
     bl <- fromValue c
 
     let
@@ -262,7 +262,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
 
   evalAssert c body =
     do
-      span <- currentPos
+      span <- askSpan
       b <- fromValue c
       bool
         (nverr $ Assertion span c)
@@ -275,13 +275,13 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   evalApp f x =
     do
       scope <- askScopes
-      span  <- currentPos
+      span  <- askSpan
       mkNVBinaryOpWithProvenance scope span NApp (pure f) Nothing <$> (callFunc f =<< defer x)
 
   evalAbs p k =
     do
       scope <- askScopes
-      span  <- currentPos
+      span  <- askSpan
       pure $ mkNVClosureWithProvenance scope span (void p) . (fmap snd .) . (. pure) $ flip k (const (fmap ((),)))
 
   evalError = throwError
@@ -303,7 +303,7 @@ callFunc fun arg =
       NVClosure _params f -> f arg
       NVBuiltin name f    ->
         do
-          span <- currentPos
+          span <- askSpan
           withFrame Info ((Calling @m @(NValue t f m)) name span) $ f arg -- Is this cool?
       (NVSet _ m) | Just f <- M.lookup "__functor" m ->
         (`callFunc` arg) =<< (`callFunc` fun') f
