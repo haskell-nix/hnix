@@ -299,7 +299,6 @@ browse _ =
 -- | @:load@ command
 load
   :: (MonadNix e t f m, MonadIO m)
-  -- This one does I String -> O String pretty fast, it is ugly to double marshall here.
   => Path
   -> Repl e t f m ()
 load path =
@@ -316,22 +315,18 @@ typeof
   :: (MonadNix e t f m, MonadIO m)
   => Text
   -> Repl e t f m ()
-typeof args = do
+typeof src = do
   state <- get
   mVal <-
     maybe
-      (exec False line)
+      (exec False src)
       (pure . pure)
-      (M.lookup (coerce line) (coerce $ replCtx state))
+      (M.lookup (coerce src) (coerce $ replCtx state))
 
   traverse_ printValueType mVal
 
  where
-  line = args
-  printValueType val =
-    do
-      s <- lift . lift . showValueType $ val
-      liftIO $ Text.putStrLn s
+  printValueType = liftIO . Text.putStrLn <=< lift . lift . showValueType
 
 
 -- | @:quit@ command
@@ -361,12 +356,13 @@ defaultMatcher =
 completion
   :: (MonadNix e t f m, MonadIO m)
   => CompleterStyle (StateT (IState t f m) m)
-completion = System.Console.Repline.Prefix
-  (completeWordWithPrev (pure '\\') separators completeFunc)
-  defaultMatcher
-  where
-    separators :: String
-    separators = " \t[(,=+*&|}#?>:"
+completion =
+  System.Console.Repline.Prefix
+    (completeWordWithPrev (pure '\\') separators completeFunc)
+    defaultMatcher
+ where
+  separators :: String
+  separators = " \t[(,=+*&|}#?>:"
 
 -- | Main completion function
 --
@@ -587,4 +583,4 @@ help hs _ = do
 options
   :: (MonadNix e t f m, MonadIO m)
   => Console.Options (Repl e t f m)
-options = (\h -> (toString $ helpOptionName h, helpOptionFunction h)) <$> helpOptions
+options = (\ h -> (toString $ helpOptionName h, helpOptionFunction h)) <$> helpOptions
