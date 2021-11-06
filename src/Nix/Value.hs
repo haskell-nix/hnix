@@ -664,7 +664,10 @@ builtin3
     -> m (NValue t f m)
     ) -- ^ ternary function
   -> m (NValue t f m)
-builtin3 = liftA3 (.) (.) ((.) . (.)) ((.) . (.)) . builtin
+builtin3 =
+  liftA2 (.) -- compose 2 together
+    builtin
+    ((.) . builtin2)
 
 -- *** @F: Evaluation -> NValue@
 
