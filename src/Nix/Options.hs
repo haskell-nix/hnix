@@ -84,3 +84,6 @@ data Verbosity
     | DebugInfo
     | Vomit
     deriving (Eq, Ord, Enum, Bounded, Show)
+
+askOptions :: forall e m . (MonadReader e m, Has e Options) => m Options
+askOptions = askLocal

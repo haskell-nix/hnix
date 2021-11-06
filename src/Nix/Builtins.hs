@@ -1693,7 +1693,7 @@ currentSystemNix =
 currentTimeNix :: MonadNix e t f m => m (NValue t f m)
 currentTimeNix =
   do
-    opts :: Options <- askLocal
+    opts <- askOptions
     toValue @Integer $ round $ Time.utcTimeToPOSIXSeconds $ getTime opts
 
 derivationStrictNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1989,13 +1989,11 @@ withNixContext
   -> m r
 withNixContext mpath action =
   do
-    base            <- builtins
-    opts :: Options <- askLocal
-    let
-      i = mkNVList $ mkNVStrWithoutContext . fromString . coerce <$> getInclude opts
+    base <- builtins
+    opts <- askOptions
 
     pushScope
-      (one ("__includes", i))
+      (one ("__includes", mkNVList $ mkNVStrWithoutContext . fromString . coerce <$> getInclude opts))
       (pushScopes
         base $
         maybe

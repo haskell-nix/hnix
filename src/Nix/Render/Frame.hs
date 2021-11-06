@@ -41,7 +41,7 @@ renderFrames
 renderFrames []       = stub
 renderFrames xss@(x : xs) =
   do
-    opts :: Options <- askLocal
+    opts <- askOptions
     let
       verbosity :: Verbosity
       verbosity = getVerbosity opts
@@ -104,7 +104,7 @@ renderEvalFrame
   -> m [Doc ann]
 renderEvalFrame level f =
   do
-    opts :: Options <- askLocal
+    opts <- askOptions
     let
       addMetaInfo :: ([Doc ann] -> [Doc ann]) -> SrcSpan -> Doc ann -> m [Doc ann]
       addMetaInfo trans loc = fmap (trans . one) . renderLocation loc
@@ -151,28 +151,29 @@ renderExpr
   -> Text
   -> NExprLoc
   -> m (Doc ann)
-renderExpr _level longLabel shortLabel e@(Ann _ x) = do
-  opts :: Options <- askLocal
-  let
-    verbosity :: Verbosity
-    verbosity = getVerbosity opts
+renderExpr _level longLabel shortLabel e@(Ann _ x) =
+  do
+    opts <- askOptions
+    let
+      verbosity :: Verbosity
+      verbosity = getVerbosity opts
 
-    expr :: NExpr
-    expr = stripAnnotation e
+      expr :: NExpr
+      expr = stripAnnotation e
 
-    concise = prettyNix $ Fix $ Fix (NSym "<?>") <$ x
+      concise = prettyNix $ Fix $ Fix (NSym "<?>") <$ x
 
-    chatty =
+      chatty =
+        bool
+          (pretty $ PS.ppShow expr)
+          (prettyNix expr)
+          (verbosity == Chatty)
+
+    pure $
       bool
-        (pretty $ PS.ppShow expr)
-        (prettyNix expr)
-        (verbosity == Chatty)
-
-  pure $
-    bool
-      (pretty shortLabel <> fillSep [": ", concise])
-      (vsep [pretty (longLabel <> ":\n>>>>>>>>"), indent 2 chatty, "<<<<<<<<"])
-      (verbosity >= Chatty)
+        (pretty shortLabel <> fillSep [": ", concise])
+        (vsep [pretty (longLabel <> ":\n>>>>>>>>"), indent 2 chatty, "<<<<<<<<"])
+        (verbosity >= Chatty)
 
 renderValueFrame
   :: forall e t f m ann
@@ -214,13 +215,14 @@ renderValue
   -> Text
   -> NValue t f m
   -> m (Doc ann)
-renderValue _level _longLabel _shortLabel v = do
-  opts :: Options <- askLocal
-  bool
-    prettyNValue
-    prettyNValueProv
-    (isValues opts)
-    <$> removeEffects v
+renderValue _level _longLabel _shortLabel v =
+  do
+    opts <- askOptions
+    bool
+      prettyNValue
+      prettyNValueProv
+      (isValues opts)
+      <$> removeEffects v
 
 dumbRenderValue
   :: forall e t f m ann

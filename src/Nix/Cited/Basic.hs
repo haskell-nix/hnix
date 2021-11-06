@@ -79,24 +79,26 @@ instance
   thunk :: m v -> m (Cited u f m t)
   thunk mv =
     do
-      opts :: Options <- askLocal
+      opts <- askOptions
 
       bool
         (cite mempty)
-        (\ t ->
+        (\ mt ->
           do
             frames :: Frames <- askLocal
 
             -- Gather the current evaluation context at the time of thunk
             -- creation, and record it along with the thunk.
             let
-              go :: SomeException -> [Provenance m (NValue u f m)]
-              go (fromException -> Just (EvaluatingExpr scope (Ann s e))) =
+              fun :: SomeException -> [Provenance m (NValue u f m)]
+              fun (fromException -> Just (EvaluatingExpr scope (Ann s e))) =
                 one $ Provenance scope $ AnnF s (Nothing <$ e)
-              go _ = mempty
-              ps = foldMap (go . frame) frames
+              fun _ = mempty
 
-            cite ps t
+              ps :: [Provenance m (NValue u f m)]
+              ps = foldMap (fun . frame) frames
+
+            cite ps mt
         )
         (isThunks opts)
         (thunk mv)

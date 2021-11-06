@@ -521,7 +521,7 @@ addTracing k v = do
   local succ $ do
     v'@(AnnF span x) <- sequenceA v
     pure $ do
-      opts :: Options <- askLocal
+      opts <- askOptions
       let
         rendered =
           bool
@@ -538,7 +538,7 @@ addTracing k v = do
 evalExprLoc :: forall e t f m . MonadNix e t f m => NExprLoc -> m (NValue t f m)
 evalExprLoc expr =
   do
-    opts :: Options <- askLocal
+    opts <- askOptions
     let
       pTracedAdi =
         bool

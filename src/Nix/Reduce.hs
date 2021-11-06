@@ -46,6 +46,7 @@ import           Nix.Frames
 import           Nix.Options                    ( Options
                                                 , isReduceSets
                                                 , isReduceLists
+                                                , askOptions
                                                 )
 import           Nix.Parser
 import           Nix.Scope
@@ -471,7 +472,7 @@ reducingEvalExpr eval mpath expr =
     expr'           <- flagExprLoc =<< liftIO (reduceExpr mpath expr)
     eres <- (`catch` pure . Left) $
       pure <$> foldFix (addEvalFlags eval) expr'
-    opts :: Options <- askLocal
+    opts <- askOptions
     expr''          <- pruneTree opts expr'
     pure (fromMaybe annNNull expr'', eres)
  where
