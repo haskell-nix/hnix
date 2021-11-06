@@ -68,7 +68,7 @@ class FromValue a m v where
   fromValue    :: v -> m a
   fromValueMay :: v -> m (Maybe a)
 
-traverseFromM
+traverseFromValue
   :: ( Applicative m
      , Traversable t
      , FromValue b m a
@@ -77,7 +77,13 @@ traverseFromM
   -> m (Maybe (t b))
 traverseFromValue = traverse2 fromValueMay
 
-traverseToValue :: ((Traversable t, Applicative f, ToValue a f b) => t a -> f (t b))
+traverseToValue
+  :: ( Traversable t
+     , Applicative f
+     , ToValue a f b
+     )
+  => t a
+  -> f (t b)
 traverseToValue = traverse toValue
 
 -- Please, hide these helper function from export, to be sure they get optimized away.
@@ -281,7 +287,7 @@ instance ( Convertible e t f m
   => FromValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
   fromValueMay =
     \case
-      Deeper (NVList' l) -> traverseFromM l
+      Deeper (NVList' l) -> traverseFromValue l
       _                  -> stub
 
 
@@ -305,7 +311,7 @@ instance ( Convertible e t f m
 
   fromValueMay =
     \case
-      Deeper (NVSet' _ s) -> traverseFromM s
+      Deeper (NVSet' _ s) -> traverseFromValue s
       _                   -> stub
 
   fromValue = fromMayToDeeperValue TSet
@@ -330,7 +336,7 @@ instance ( Convertible e t f m
 
   fromValueMay =
     \case
-      Deeper (NVSet' p s) -> (, p) <<$>> traverseFromM s
+      Deeper (NVSet' p s) -> (, p) <<$>> traverseFromValue s
       _                   -> stub
 
   fromValue = fromMayToDeeperValue TSet
