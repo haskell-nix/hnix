@@ -543,16 +543,18 @@ evalExprLoc expr =
       pTracedAdi =
         bool
           Eval.framedEvalExprLoc
-          (join . (`runReaderT` (0 :: Int)) .
-            adi
-              addMetaInfo
-              (addTracing Eval.evalContent)
-          )
+          (join . (`runReaderT` (0 :: Int)) . evalWithTracingAndMetaInfo)
           (isTrace opts)
     pTracedAdi expr
  where
-  addMetaInfo :: (NExprLoc -> ReaderT r m a) -> NExprLoc -> ReaderT r m a
-  addMetaInfo = (ReaderT .) . flip . (Eval.addMetaInfo .) . flip . (runReaderT .)
+  evalWithTracingAndMetaInfo :: NExprLoc -> ReaderT Int m (m (NValue t f m))
+  evalWithTracingAndMetaInfo =
+    adi
+      addMetaInfo
+      (addTracing Eval.evalContent)
+   where
+    addMetaInfo :: (NExprLoc -> ReaderT r m a) -> NExprLoc -> ReaderT r m a
+    addMetaInfo = (ReaderT .) . flip . (Eval.addMetaInfo .) . flip . (runReaderT .)
 
 exec :: (MonadNix e t f m, MonadInstantiate m) => [Text] -> m (NValue t f m)
 exec args = either throwError evalExprLoc =<< exec' args
