@@ -133,9 +133,9 @@ mapPair ~(f,g) ~(a,b) = (f a, g b)
 
 iterateN
   :: forall a
-   . Int -- ^ times
-  -> (a -> a) -- ^ function apply
-  -> a -- ^ on value
+   . Int -- ^ Recursively apply 'Int' times
+  -> (a -> a) -- ^ the function
+  -> a -- ^ starting from argument
   -> a
 iterateN n f x =
   -- It is hard to read - yes. It is a non-recursive momoized action - yes.
