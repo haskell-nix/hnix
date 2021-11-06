@@ -1991,10 +1991,10 @@ withNixContext mpath action =
     base            <- builtins
     opts :: Options <- asks $ view hasLens
     let
-      i = mkNVList $ mkNVStrWithoutContext . toText <$> getInclude opts
+      i = mkNVList $ mkNVStrWithoutContext . fromString . coerce <$> getInclude opts
 
     pushScope
-      (coerce $ M.fromList $ one ("__includes", i))
+      (one ("__includes", i))
       (pushScopes
         base $
         maybe
@@ -2002,8 +2002,7 @@ withNixContext mpath action =
           (\ path act ->
             do
               traceM $ "Setting __cur_file = " <> show path
-              let ref = mkNVPath path
-              pushScope (coerce $ M.fromList $ one ("__cur_file", ref)) act
+              pushScope (one ("__cur_file", mkNVPath path)) act
           )
           mpath
           action
