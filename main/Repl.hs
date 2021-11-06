@@ -111,7 +111,7 @@ main' iniVal =
         (words <$> lines f)
 
   handleMissing e
-    | Error.isDoesNotExistError e = pure mempty
+    | Error.isDoesNotExistError e = stub
     | otherwise = throwM e
 
   -- Replicated and slightly adjusted `optMatcher` from `System.Console.Repline`
@@ -190,65 +190,71 @@ exec
   => Bool
   -> Text
   -> Repl e t f m (Maybe (NValue t f m))
-exec update source = do
-  -- Get the current interpreter state
-  state <- get
+exec update source =
+  do
+    -- Get the current interpreter state
+    state <- get
 
-  when (cfgDebug $ replCfg state) $ liftIO $ print state
+    when (cfgDebug $ replCfg state) $ liftIO $ print state
 
-  -- Parser ( returns AST as `NExprLoc` )
-  case parseExprOrBinding source of
-    (Left err, _) -> do
-      liftIO $ print err
-      pure Nothing
-    (Right expr, isBinding) -> do
+    -- Parser ( returns AST as `NExprLoc` )
+    case parseExprOrBinding source of
+      (Left err, _) ->
+        do
+          liftIO $ print err
+          pure Nothing
+      (Right expr, isBinding) ->
+        do
 
-      -- Type Inference ( returns Typing Environment )
-      --
-      -- import qualified Nix.Type.Env                  as Env
-      -- import           Nix.Type.Infer
-      --
-      -- let tyctx' = inferTop mempty [("repl", stripAnnotation expr)]
-      -- liftIO $ print tyctx'
+          -- Type Inference ( returns Typing Environment )
+          --
+          -- import qualified Nix.Type.Env                  as Env
+          -- import           Nix.Type.Infer
+          --
+          -- let tyctx' = inferTop mempty [("repl", stripAnnotation expr)]
+          -- liftIO $ print tyctx'
 
-      mVal <- lift $ lift $ try $ pushScope (replCtx state) (evalExprLoc expr)
+          mVal <- lift $ lift $ try $ pushScope (replCtx state) (evalExprLoc expr)
 
-      either
-        (\ (NixException frames) -> do
-          lift $ lift $ liftIO . print =<< renderFrames @(NValue t f m) @t frames
-          pure Nothing)
-        (\ val -> do
-          -- Update the interpreter state
-          when (update && isBinding) $ do
-            -- Set `replIt` to last entered expression
-            put state { replIt = pure expr }
-
-            -- If the result value is a set, update our context with it
-            case val of
-              NVSet _ (coerce -> scope) -> put state { replCtx = scope <> replCtx state }
-              _          -> stub
-
-          pure $ pure val
-        )
-        mVal
-  where
-    -- If parsing fails, turn the input into singleton attribute set
-    -- and try again.
-    --
-    -- This allows us to handle assignments like @a = 42@
-    -- which get turned into @{ a = 42; }@
-    parseExprOrBinding i =
-      either
-        (\ e    ->
           either
-            (const (Left e, False)) -- return the first parsing failure
-            (\ e' -> (pure e', True))
-            (parseNixTextLoc $ toAttrSet i))
-        (\ expr -> (pure expr, False))
-        (parseNixTextLoc i)
+            (\ (NixException frames) ->
+              do
+                lift $ lift $ liftIO . print =<< renderFrames @(NValue t f m) @t frames
+                pure Nothing
+            )
+            (\ val ->
+              do
+                -- Update the interpreter state
+                when (update && isBinding) $ do
+                  -- Set `replIt` to last entered expression
+                  put state { replIt = pure expr }
 
-    toAttrSet i =
-      "{" <> i <> whenFalse ";" (Text.isSuffixOf ";" i) <> "}"
+                  -- If the result value is a set, update our context with it
+                  case val of
+                    NVSet _ (coerce -> scope) -> put state { replCtx = scope <> replCtx state }
+                    _          -> stub
+
+                pure $ pure val
+            )
+            mVal
+ where
+  -- If parsing fails, turn the input into singleton attribute set
+  -- and try again.
+  --
+  -- This allows us to handle assignments like @a = 42@
+  -- which get turned into @{ a = 42; }@
+  parseExprOrBinding i =
+    either
+      (\ e    ->
+        either
+          (const (Left e, False)) -- return the first parsing failure
+          (\ e' -> (pure e', True))
+          (parseNixTextLoc $ toAttrSet i))
+      (\ expr -> (pure expr, False))
+      (parseNixTextLoc i)
+
+  toAttrSet i =
+    "{" <> i <> whenFalse ";" (Text.isSuffixOf ";" i) <> "}"
 
 cmd
   :: (MonadNix e t f m, MonadIO m)
