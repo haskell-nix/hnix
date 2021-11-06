@@ -1,3 +1,4 @@
+{-# LANGUAGE UndecidableInstances #-}
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
 {-# language FunctionalDependencies #-}
@@ -18,6 +19,7 @@ newtype Scope a = Scope (AttrSet a)
     , Read, Hashable
     , Semigroup, Monoid
     , Functor, Foldable, Traversable
+    , One
     )
 
 instance Show (Scope a) where
