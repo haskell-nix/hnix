@@ -159,9 +159,9 @@ traverseM
      )
   => ( a
      -> m (n b)
-     )
-  -> t a
-  -> m (n (t b))
+     ) -- ^ Run function that runs 2 'Applicative' actions
+  -> t a -- ^ on every element of a 'Traversable'
+  -> m (n (t b)) -- ^ collect the results.
 traverseM f x = sequenceA <$> traverse f x
 
 --  2021-08-21: NOTE: Someone needs to put in normal words, what this does.
