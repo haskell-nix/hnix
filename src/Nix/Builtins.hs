@@ -2016,7 +2016,7 @@ builtins
 builtins =
   do
     ref <- defer $ mkNVSet mempty <$> buildMap
-    (`pushScope` currentScopes) . coerce . M.fromList . (one ("builtins", ref) <>) =<< topLevelBuiltins
+    (`pushScope` askScopes) . coerce . M.fromList . (one ("builtins", ref) <>) =<< topLevelBuiltins
  where
   buildMap :: m (HashMap VarName (NValue t f m))
   buildMap         =  M.fromList . (mapping <$>) <$> builtinsList

@@ -54,18 +54,18 @@ emptyScopes :: Scopes m a
 emptyScopes = Scopes mempty mempty
 
 class Scoped a m | m -> a where
-  currentScopes :: m (Scopes m a)
+  askScopes :: m (Scopes m a)
   clearScopes   :: m r -> m r
   pushScopes    :: Scopes m a -> m r -> m r
   lookupVar     :: VarName -> m (Maybe a)
 
-currentScopesReader
+askScopesReader
   :: forall m a e
   . ( MonadReader e m
     , Has e (Scopes m a)
     )
   => m (Scopes m a)
-currentScopesReader = askLocal
+askScopesReader = askLocal
 
 clearScopesReader
   :: forall m a e r

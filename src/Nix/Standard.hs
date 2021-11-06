@@ -83,10 +83,10 @@ instance HasCitations m (StdValue m) (StdThunk m) where
   addProvenance x (StdThunk c) = StdThunk $ addProvenance1 x c
 
 instance MonadReader (Context m (StdValue m)) m => Scoped (StdValue m) m where
-  currentScopes = currentScopesReader
-  clearScopes   = clearScopesReader @m @(StdValue m)
-  pushScopes    = pushScopesReader
-  lookupVar     = lookupVarReader
+  askScopes   = askScopesReader
+  clearScopes = clearScopesReader @m @(StdValue m)
+  pushScopes  = pushScopesReader
+  lookupVar   = lookupVarReader
 
 instance
   ( MonadFix m

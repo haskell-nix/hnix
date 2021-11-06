@@ -160,7 +160,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   synHole name =
     do
       span  <- currentPos
-      scope <- currentScopes
+      scope <- askScopes
       evalError @(NValue t f m) $ SynHole $
         SynHoleInfo
           { _synHoleInfo_expr  = NSynHoleAnn span name
@@ -181,7 +181,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
 
   evalCurPos =
     do
-      scope                  <- currentScopes
+      scope                  <- askScopes
       span@(SrcSpan delta _) <- currentPos
       addProvenance @_ @_ @(NValue t f m)
         (Provenance scope . NSymAnnF span $ coerce @Text "__curPos") <$>
@@ -189,7 +189,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
 
   evaledSym name val =
     do
-      scope <- currentScopes
+      scope <- askScopes
       span  <- currentPos
       pure $
         addProvenance @_ @_ @(NValue t f m)
@@ -198,7 +198,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
 
   evalConstant c =
     do
-      scope <- currentScopes
+      scope <- askScopes
       span  <- currentPos
       pure $ mkNVConstantWithProvenance scope span c
 
@@ -207,7 +207,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
       (nverr $ ErrorCall "Failed to assemble string")
       (\ ns ->
         do
-          scope <- currentScopes
+          scope <- askScopes
           span  <- currentPos
           pure $ mkNVStrWithProvenance scope span ns
       )
@@ -215,37 +215,37 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
 
   evalLiteralPath p =
     do
-      scope <- currentScopes
+      scope <- askScopes
       span  <- currentPos
       mkNVPathWithProvenance scope span p <$> toAbsolutePath @t @f @m p
 
   evalEnvPath p =
     do
-      scope <- currentScopes
+      scope <- askScopes
       span  <- currentPos
       mkNVPathWithProvenance scope span p <$> findEnvPath @t @f @m (coerce p)
 
   evalUnary op arg =
     do
-      scope <- currentScopes
+      scope <- askScopes
       span  <- currentPos
       execUnaryOp scope span op arg
 
   evalBinary op larg rarg =
     do
-      scope <- currentScopes
+      scope <- askScopes
       span  <- currentPos
       execBinaryOp scope span op larg rarg
 
   evalWith c b =
     do
-      scope <- currentScopes
+      scope <- askScopes
       span  <- currentPos
       let f = join $ addProvenance . Provenance scope . NWithAnnF span Nothing . pure
       f <$> evalWithAttrSet c b
 
   evalIf c tVal fVal = do
-    scope <- currentScopes
+    scope <- askScopes
     span  <- currentPos
     bl <- fromValue c
 
@@ -267,20 +267,20 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
       bool
         (nverr $ Assertion span c)
         (do
-          scope <- currentScopes
+          scope <- askScopes
           join (addProvenance . Provenance scope . NAssertAnnF span (pure c) . pure) <$> body
         )
         b
 
   evalApp f x =
     do
-      scope <- currentScopes
+      scope <- askScopes
       span  <- currentPos
       mkNVBinaryOpWithProvenance scope span NApp (pure f) Nothing <$> (callFunc f =<< defer x)
 
   evalAbs p k =
     do
-      scope <- currentScopes
+      scope <- askScopes
       span  <- currentPos
       pure $ mkNVClosureWithProvenance scope span (void p) . (fmap snd .) . (. pure) $ flip k (const (fmap ((),)))
 

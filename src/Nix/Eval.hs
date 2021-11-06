@@ -122,7 +122,7 @@ eval (NUnary op arg       ) = evalUnary op =<< arg
 eval (NBinary NApp fun arg) =
   do
     f <- fun
-    scope <- currentScopes :: m (Scopes m v)
+    scope <- askScopes
     evalApp f $ withScopes scope arg
 
 eval (NBinary op   larg rarg) =
@@ -144,7 +144,7 @@ eval (NHasAttr aset attr) =
 
 eval (NList l           ) =
   do
-    scope <- currentScopes
+    scope <- askScopes
     toValue =<< traverse (defer @v @m . withScopes @v scope) l
 
 eval (NSet r binds) =
@@ -174,7 +174,7 @@ eval (NAbs    params body) = do
   -- needs to be used when evaluating the body and default arguments, hence we
   -- defer here so the present scope is restored when the parameters and body
   -- are forced during application.
-  curScope <- currentScopes
+  curScope <- askScopes
   let
     withCurScope = withScopes curScope
 
@@ -199,7 +199,7 @@ eval (NSynHole name) = synHole name
 --   this implementation may be used as an implementation for 'evalWith'.
 evalWithAttrSet :: forall v m . MonadNixEval v m => m v -> m v -> m v
 evalWithAttrSet aset body = do
-  scopes <- currentScopes :: m (Scopes m v)
+  scopes <- askScopes
   -- The scope is deliberately wrapped in a thunk here, since it is demanded
   -- each time a name is looked up within the weak scope, and we want to be
   -- sure the action it evaluates is to force a thunk, so its value is only
@@ -312,7 +312,7 @@ evalBinds
   -> m (AttrSet v, PositionSet)
 evalBinds isRecursive binds =
   do
-    scope <- currentScopes :: m (Scopes m v)
+    scope <- askScopes
 
     buildResult scope . fold =<< (`traverse` moveOverridesLast binds) (applyBindToAdt scope)
 
@@ -490,7 +490,7 @@ buildArgument
   :: forall v m . MonadNixEval v m => Params (m v) -> m v -> m (AttrSet v)
 buildArgument params arg =
   do
-    scope <- currentScopes :: m (Scopes m v)
+    scope <- askScopes
     let
       argThunk = defer $ withScopes scope arg
     case params of
@@ -548,7 +548,7 @@ addStackFrames
   => TransformF NExprLoc (m a)
 addStackFrames f v =
   do
-    scopes <- currentScopes :: m (Scopes m v)
+    scopes <- askScopes
 
     -- sectioning gives GHC optimization
     -- If opimization question would arrive again, check the @(`withFrameInfo` f v) $ EvaluatingExpr scopes v@

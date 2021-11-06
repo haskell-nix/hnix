@@ -524,7 +524,7 @@ lint opts expr =
 
 instance
   Scoped (Symbolic (Lint s)) (Lint s) where
-  currentScopes = currentScopesReader
+  askScopes = askScopesReader
   clearScopes   = clearScopesReader @(Lint s) @(Symbolic (Lint s))
   pushScopes    = pushScopesReader
   lookupVar     = lookupVarReader

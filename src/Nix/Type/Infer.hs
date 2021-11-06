@@ -386,10 +386,10 @@ instance MonadInfer m => ToValue Bool (InferT s m) (Judgment s) where
 instance
   Monad m
   => Scoped (Judgment s) (InferT s m) where
-  currentScopes = currentScopesReader
-  clearScopes   = clearScopesReader @(InferT s m) @(Judgment s)
-  pushScopes    = pushScopesReader
-  lookupVar     = lookupVarReader
+  askScopes   = askScopesReader
+  clearScopes = clearScopesReader @(InferT s m) @(Judgment s)
+  pushScopes  = pushScopesReader
+  lookupVar   = lookupVarReader
 
 -- newtype JThunkT s m = JThunk (NThunkF (InferT s m) (Judgment s))
 
