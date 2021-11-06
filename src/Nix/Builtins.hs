@@ -1795,9 +1795,23 @@ langVersionNix = toValue (5 :: Int)
 
 builtinsList :: forall e t f m . MonadNix e t f m => m [Builtin (NValue t f m)]
 builtinsList = sequenceA
-  [ add0 Normal   "nixVersion"       nixVersionNix
+  [ add  TopLevel "abort"            throwNix -- for now
+  , add  TopLevel "baseNameOf"       baseNameOfNix
+  , add0 TopLevel "derivation"       derivationNix
+  , add  TopLevel "derivationStrict" derivationStrictNix
+  , add  TopLevel "dirOf"            dirOfNix
+  , add  TopLevel "import"           importNix
+  , add  TopLevel "isNull"           isNullNix
+  , add2 TopLevel "map"              mapNix
+  , add2 TopLevel "mapAttrs"         mapAttrsNix
+  , add  TopLevel "placeholder"      placeHolderNix
+  , add2 TopLevel "removeAttrs"      removeAttrsNix
+  , add2 TopLevel "scopedImport"     scopedImportNix
+  , add  TopLevel "throw"            throwNix
+  , add  TopLevel "toString"         toStringNix
+  , add2 TopLevel "trace"            traceNix
+  , add0 Normal   "nixVersion"       nixVersionNix
   , add0 Normal   "langVersion"      langVersionNix
-  , add  TopLevel "abort"            throwNix -- for now
   , add2 Normal   "add"              addNix
   , add2 Normal   "addErrorContext"  addErrorContextNix
   , add2 Normal   "all"              allNix
@@ -1805,7 +1819,6 @@ builtinsList = sequenceA
   , add2 Normal   "appendContext"    appendContextNix
   , add  Normal   "attrNames"        attrNamesNix
   , add  Normal   "attrValues"       attrValuesNix
-  , add  TopLevel "baseNameOf"       baseNameOfNix
   , add2 Normal   "bitAnd"           bitAndNix
   , add2 Normal   "bitOr"            bitOrNix
   , add2 Normal   "bitXor"           bitXorNix
@@ -1818,9 +1831,6 @@ builtinsList = sequenceA
   , add0 Normal   "currentSystem"    currentSystemNix
   , add0 Normal   "currentTime"      currentTimeNix
   , add2 Normal   "deepSeq"          deepSeqNix
-  , add0 TopLevel "derivation"       derivationNix
-  , add  TopLevel "derivationStrict" derivationStrictNix
-  , add  TopLevel "dirOf"            dirOfNix
   , add2 Normal   "div"              divNix
   , add2 Normal   "elem"             elemNix
   , add2 Normal   "elemAt"           elemAtNix
@@ -1846,7 +1856,6 @@ builtinsList = sequenceA
   , add  Normal   "hasContext"       hasContextNix
   , add' Normal   "hashString"       (hashStringNix @e @t @f @m)
   , add  Normal   "head"             headNix
-  , add  TopLevel "import"           importNix
   , add2 Normal   "intersectAttrs"   intersectAttrsNix
   , add  Normal   "isAttrs"          isAttrsNix
   , add  Normal   "isBool"           isBoolNix
@@ -1854,13 +1863,10 @@ builtinsList = sequenceA
   , add  Normal   "isFunction"       isFunctionNix
   , add  Normal   "isInt"            isIntNix
   , add  Normal   "isList"           isListNix
-  , add  TopLevel "isNull"           isNullNix
   , add  Normal   "isString"         isStringNix
   , add  Normal   "length"           lengthNix
   , add2 Normal   "lessThan"         lessThanNix
   , add  Normal   "listToAttrs"      listToAttrsNix
-  , add2 TopLevel "map"              mapNix
-  , add2 TopLevel "mapAttrs"         mapAttrsNix
   , add2 Normal   "match"            matchNix
   , add2 Normal   "mul"              mulNix
   , add0 Normal   "nixPath"          nixPathNix
@@ -1869,12 +1875,9 @@ builtinsList = sequenceA
   , add2 Normal   "partition"        partitionNix
   --, add  Normal   "path"             path
   , add  Normal   "pathExists"       pathExistsNix
-  , add  TopLevel "placeholder"      placeHolderNix
   , add  Normal   "readDir"          readDirNix
   , add  Normal   "readFile"         readFileNix
-  , add2 TopLevel "removeAttrs"      removeAttrsNix
   , add3 Normal   "replaceStrings"   replaceStringsNix
-  , add2 TopLevel "scopedImport"     scopedImportNix
   , add2 Normal   "seq"              seqNix
   , add2 Normal   "sort"             sortNix
   , add2 Normal   "split"            splitNix
@@ -1885,13 +1888,10 @@ builtinsList = sequenceA
   , add' Normal   "sub"              (arity2 ((-) @Integer))
   , add' Normal   "substring"        substringNix
   , add  Normal   "tail"             tailNix
-  , add  TopLevel "throw"            throwNix
   , add2 Normal   "toFile"           toFileNix
   , add  Normal   "toJSON"           toJSONNix
   , add  Normal   "toPath"           toPathNix
-  , add  TopLevel "toString"         toStringNix
   , add  Normal   "toXML"            toXMLNix
-  , add2 TopLevel "trace"            traceNix
   , add0 Normal   "true"             (pure $ mkNVBool True)
   , add  Normal   "tryEval"          tryEvalNix
   , add  Normal   "typeOf"           typeOfNix
