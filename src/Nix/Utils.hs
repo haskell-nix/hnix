@@ -189,7 +189,6 @@ instance Has (a, b) b where
   hasLens = _2
 
 loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
--- Sectioning here insures optimization happening.
 loebM f = mfix $ \a -> (`traverse` f) ($ a)
 {-# inline loebM #-}
 
@@ -201,9 +200,7 @@ lifted
   -> (a -> u m b)
   -> u m b
 lifted f k =
-  do
-    lftd <- liftWith (\run -> f (run . k))
-    restoreT $ pure lftd
+  (restoreT . pure) =<< liftWith (\run -> f (run . k))
 
 -- | adi is Abstracting Definitional Interpreters:
 --
