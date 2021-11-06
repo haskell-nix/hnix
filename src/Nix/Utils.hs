@@ -174,8 +174,6 @@ type Transform f a = TransformF (Fix f) a
 -- | Do according transformation.
 --
 -- It is a transformation between functors.
--- ...
--- You got me, it is a natural transformation.
 type TransformF f a = (f -> a) -> f -> a
 
 class Has a b where
