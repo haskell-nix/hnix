@@ -7,9 +7,10 @@
 -- For @HNix@ - this module gets reexported by "Prelude", so for @HNix@ please fix-up pass-through there.
 module Nix.Utils
   ( KeyMap
-  , TransformF
-  , Transform
   , Alg
+  , Transform
+  , TransformF
+  , Has(..)
 
   , Path(..)
   , isAbsolute
@@ -26,17 +27,15 @@ module Nix.Utils
   , replaceExtension
   , readFile
 
-  , Has(..)
-  , trace
-  , traceM
   , stub
   , pass
   , whenTrue
   , whenFalse
-  , list
   , whenText
-  , free
   , whenJust
+  , list
+  , free
+
   , dup
   , mapPair
   , both
@@ -44,8 +43,12 @@ module Nix.Utils
   , nestM
   , traverseM
   , lifted
+
   , loebM
   , adi
+
+  , trace
+  , traceM
   , module X
   )
  where
