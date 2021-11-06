@@ -242,54 +242,56 @@ instance IsString Path where
 
 -- | This set of @Path@ funcs is to control system filepath types & typesafety and to easily migrate from FilePath to anything suitable (like @path@ or so).
 
--- | @isAbsolute@ specialized to @Path@.
+-- | 'Path's 'FilePath.isAbsolute'.
 isAbsolute :: Path -> Bool
 isAbsolute = coerce FilePath.isAbsolute
 
--- | @(</>)@ specialized to @Path@
+-- | 'Path's 'FilePath.(</>)'.
 (</>) :: Path -> Path -> Path
 (</>) = coerce (FilePath.</>)
 infixr 5 </>
 
--- | @joinPath@ specialized to @Path@
+-- | 'Path's 'FilePath.joinPath'.
 joinPath :: [Path] -> Path
 joinPath = coerce FilePath.joinPath
 
--- | @splitDirectories@ specialized to @Path@
+-- | 'Path's 'FilePath.splitDirectories'.
 splitDirectories :: Path -> [Path]
 splitDirectories = coerce FilePath.splitDirectories
 
--- | @takeDirectory@ specialized to @Path@
+-- | 'Path's 'FilePath.takeDirectory'.
 takeDirectory :: Path -> Path
 takeDirectory = coerce FilePath.takeDirectory
 
--- | @takeFileName@ specialized to @Path@
+-- | 'Path's 'FilePath.takeFileName'.
 takeFileName :: Path -> Path
 takeFileName = coerce FilePath.takeFileName
 
--- | @takeBaseName@ specialized to @Path@
+-- | 'Path's 'FilePath.takeBaseName'.
 takeBaseName :: Path -> String
 takeBaseName = coerce FilePath.takeBaseName
 
--- | @takeExtension@ specialized to @Path@
+-- | 'Path's 'FilePath.takeExtension'.
 takeExtension :: Path -> String
 takeExtension = coerce FilePath.takeExtensions
 
--- | @takeExtensions@ specialized to @Path@
+-- | 'Path's 'FilePath.takeExtensions'.
 takeExtensions :: Path -> String
 takeExtensions = coerce FilePath.takeExtensions
 
+-- | 'Path's 'FilePath.addExtensions'.
 addExtension :: Path -> String -> Path
 addExtension = coerce FilePath.addExtension
 
--- | @dropExtensions@ specialized to @Path@
+-- | 'Path's 'FilePath.dropExtensions'.
 dropExtensions :: Path -> Path
 dropExtensions = coerce FilePath.dropExtensions
 
--- | @replaceExtension@ specialized to @Path@
+-- | 'Path's 'FilePath.replaceExtension'.
 replaceExtension :: Path -> String -> Path
 replaceExtension = coerce FilePath.replaceExtension
 
+-- | 'Path's 'FilePath.readFile'.
 readFile :: Path -> IO Text
 readFile = Text.readFile . coerce
 
