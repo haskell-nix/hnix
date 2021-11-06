@@ -130,7 +130,7 @@ renderEvalFrame level f =
         addMetaInfo
           id
           loc
-          $ "While calling builtins." <> pretty name
+          $ "While calling `builtins." <> prettyVarName name <> "`"
 
       SynHole synfo ->
         sequenceA
