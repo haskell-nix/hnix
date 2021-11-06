@@ -295,7 +295,7 @@ callFunc
   -> m (NValue t f m)
 callFunc fun arg =
   do
-    frames :: Frames <- askLocal
+    frames <- askFrames
     when (length frames > 2000) $ throwError $ ErrorCall "Function call stack exhausted"
 
     fun' <- demand fun

@@ -85,7 +85,7 @@ instance
         (cite mempty)
         (\ mt ->
           do
-            frames :: Frames <- askLocal
+            frames <- askFrames
 
             -- Gather the current evaluation context at the time of thunk
             -- creation, and record it along with the thunk.
