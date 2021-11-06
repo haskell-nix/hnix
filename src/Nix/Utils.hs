@@ -45,6 +45,7 @@ module Nix.Utils
   , adi
 
   , Has(..)
+  , askLocal
 
   , KeyMap
 
@@ -172,7 +173,7 @@ lifted
   -> (a -> u m b)
   -> u m b
 lifted f k =
-  (restoreT . pure) =<< liftWith (\run -> f (run . k))
+  restoreT . pure =<< liftWith (\run -> f (run . k))
 
 
 -- * Eliminators
@@ -357,6 +358,9 @@ instance Has (a, b) a where
 instance Has (a, b) b where
   hasLens = _2
 
+-- | Retrive monad state by 'Lens''.
+askLocal :: (MonadReader t m, Has t a) => m a
+askLocal = asks $ view hasLens
 
 -- * Other
 
