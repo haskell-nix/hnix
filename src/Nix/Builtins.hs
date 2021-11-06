@@ -209,7 +209,7 @@ foldNixPath z f =
         mDataDir
 
     foldrM
-      go
+      fun
       z
       $ (fromInclude . ignoreContext <$> dirs)
         <> uriAwareSplit `whenJust` mPath
@@ -224,8 +224,8 @@ foldNixPath z f =
         PathEntryURI
         ("://" `Text.isInfixOf` x)
 
-  go :: (Text, NixPathEntryType) -> r -> m r
-  go (x, ty) rest =
+  fun :: (Text, NixPathEntryType) -> r -> m r
+  fun (x, ty) rest =
     case Text.splitOn "=" x of
       [p] -> f (coerce $ toString p) mempty ty rest
       [n, p] -> f (coerce $ toString p) (pure n) ty rest
@@ -1794,112 +1794,113 @@ langVersionNix = toValue (5 :: Int)
 -- ** @builtinsList@
 
 builtinsList :: forall e t f m . MonadNix e t f m => m [Builtin (NValue t f m)]
-builtinsList = sequenceA
-  [ add  TopLevel "abort"            throwNix -- for now
-  , add  TopLevel "baseNameOf"       baseNameOfNix
-  , add0 TopLevel "derivation"       derivationNix
-  , add  TopLevel "derivationStrict" derivationStrictNix
-  , add  TopLevel "dirOf"            dirOfNix
-  , add  TopLevel "import"           importNix
-  , add  TopLevel "isNull"           isNullNix
-  , add2 TopLevel "map"              mapNix
-  , add2 TopLevel "mapAttrs"         mapAttrsNix
-  , add  TopLevel "placeholder"      placeHolderNix
-  , add2 TopLevel "removeAttrs"      removeAttrsNix
-  , add2 TopLevel "scopedImport"     scopedImportNix
-  , add  TopLevel "throw"            throwNix
-  , add  TopLevel "toString"         toStringNix
-  , add2 TopLevel "trace"            traceNix
-  , add0 Normal   "nixVersion"       nixVersionNix
-  , add0 Normal   "langVersion"      langVersionNix
-  , add2 Normal   "add"              addNix
-  , add2 Normal   "addErrorContext"  addErrorContextNix
-  , add2 Normal   "all"              allNix
-  , add2 Normal   "any"              anyNix
-  , add2 Normal   "appendContext"    appendContextNix
-  , add  Normal   "attrNames"        attrNamesNix
-  , add  Normal   "attrValues"       attrValuesNix
-  , add2 Normal   "bitAnd"           bitAndNix
-  , add2 Normal   "bitOr"            bitOrNix
-  , add2 Normal   "bitXor"           bitXorNix
-  , add0 Normal   "builtins"         builtinsBuiltinNix
-  , add2 Normal   "catAttrs"         catAttrsNix
-  , add2 Normal   "compareVersions"  compareVersionsNix
-  , add  Normal   "concatLists"      concatListsNix
-  , add2 Normal   "concatMap"        concatMapNix
-  , add' Normal   "concatStringsSep" (arity2 intercalateNixString)
-  , add0 Normal   "currentSystem"    currentSystemNix
-  , add0 Normal   "currentTime"      currentTimeNix
-  , add2 Normal   "deepSeq"          deepSeqNix
-  , add2 Normal   "div"              divNix
-  , add2 Normal   "elem"             elemNix
-  , add2 Normal   "elemAt"           elemAtNix
-  , add  Normal   "exec"             execNix
-  , add0 Normal   "false"            (pure $ mkNVBool False)
-  --, add  Normal   "fetchGit"         fetchGit
-  --, add  Normal   "fetchMercurial"   fetchMercurial
-  , add  Normal   "fetchTarball"     fetchTarball
-  , add  Normal   "fetchurl"         fetchurlNix
-  , add2 Normal   "filter"           filterNix
-  --, add  Normal   "filterSource"     filterSource
-  , add2 Normal   "findFile"         findFileNix
-  , add3 Normal   "foldl'"           foldl'Nix
-  , add  Normal   "fromJSON"         fromJSONNix
-  --, add  Normal   "fromTOML"         fromTOML
-  , add  Normal   "functionArgs"     functionArgsNix
-  , add  Normal   "genericClosure"   genericClosureNix
-  , add2 Normal   "genList"          genListNix
-  , add2 Normal   "getAttr"          getAttrNix
-  , add  Normal   "getContext"       getContextNix
-  , add  Normal   "getEnv"           getEnvNix
-  , add2 Normal   "hasAttr"          hasAttrNix
-  , add  Normal   "hasContext"       hasContextNix
-  , add' Normal   "hashString"       (hashStringNix @e @t @f @m)
-  , add  Normal   "head"             headNix
-  , add2 Normal   "intersectAttrs"   intersectAttrsNix
-  , add  Normal   "isAttrs"          isAttrsNix
-  , add  Normal   "isBool"           isBoolNix
-  , add  Normal   "isFloat"          isFloatNix
-  , add  Normal   "isFunction"       isFunctionNix
-  , add  Normal   "isInt"            isIntNix
-  , add  Normal   "isList"           isListNix
-  , add  Normal   "isString"         isStringNix
-  , add  Normal   "length"           lengthNix
-  , add2 Normal   "lessThan"         lessThanNix
-  , add  Normal   "listToAttrs"      listToAttrsNix
-  , add2 Normal   "match"            matchNix
-  , add2 Normal   "mul"              mulNix
-  , add0 Normal   "nixPath"          nixPathNix
-  , add0 Normal   "null"             (pure nvNull)
-  , add  Normal   "parseDrvName"     parseDrvNameNix
-  , add2 Normal   "partition"        partitionNix
-  --, add  Normal   "path"             path
-  , add  Normal   "pathExists"       pathExistsNix
-  , add  Normal   "readDir"          readDirNix
-  , add  Normal   "readFile"         readFileNix
-  , add3 Normal   "replaceStrings"   replaceStringsNix
-  , add2 Normal   "seq"              seqNix
-  , add2 Normal   "sort"             sortNix
-  , add2 Normal   "split"            splitNix
-  , add  Normal   "splitVersion"     splitVersionNix
-  , add0 Normal   "storeDir"         (pure $ mkNVStrWithoutContext "/nix/store")
-  --, add  Normal   "storePath"        storePath
-  , add' Normal   "stringLength"     (arity1 $ Text.length . ignoreContext)
-  , add' Normal   "sub"              (arity2 ((-) @Integer))
-  , add' Normal   "substring"        substringNix
-  , add  Normal   "tail"             tailNix
-  , add2 Normal   "toFile"           toFileNix
-  , add  Normal   "toJSON"           toJSONNix
-  , add  Normal   "toPath"           toPathNix
-  , add  Normal   "toXML"            toXMLNix
-  , add0 Normal   "true"             (pure $ mkNVBool True)
-  , add  Normal   "tryEval"          tryEvalNix
-  , add  Normal   "typeOf"           typeOfNix
-  --, add0 Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependency
-  , add  Normal   "unsafeDiscardStringContext"    unsafeDiscardStringContextNix
-  , add2 Normal   "unsafeGetAttrPos"              unsafeGetAttrPosNix
-  , add  Normal   "valueSize"        getRecursiveSizeNix
-  ]
+builtinsList =
+  sequenceA
+    [ add  TopLevel "abort"            throwNix -- for now
+    , add  TopLevel "baseNameOf"       baseNameOfNix
+    , add0 TopLevel "derivation"       derivationNix
+    , add  TopLevel "derivationStrict" derivationStrictNix
+    , add  TopLevel "dirOf"            dirOfNix
+    , add  TopLevel "import"           importNix
+    , add  TopLevel "isNull"           isNullNix
+    , add2 TopLevel "map"              mapNix
+    , add2 TopLevel "mapAttrs"         mapAttrsNix
+    , add  TopLevel "placeholder"      placeHolderNix
+    , add2 TopLevel "removeAttrs"      removeAttrsNix
+    , add2 TopLevel "scopedImport"     scopedImportNix
+    , add  TopLevel "throw"            throwNix
+    , add  TopLevel "toString"         toStringNix
+    , add2 TopLevel "trace"            traceNix
+    , add0 Normal   "nixVersion"       nixVersionNix
+    , add0 Normal   "langVersion"      langVersionNix
+    , add2 Normal   "add"              addNix
+    , add2 Normal   "addErrorContext"  addErrorContextNix
+    , add2 Normal   "all"              allNix
+    , add2 Normal   "any"              anyNix
+    , add2 Normal   "appendContext"    appendContextNix
+    , add  Normal   "attrNames"        attrNamesNix
+    , add  Normal   "attrValues"       attrValuesNix
+    , add2 Normal   "bitAnd"           bitAndNix
+    , add2 Normal   "bitOr"            bitOrNix
+    , add2 Normal   "bitXor"           bitXorNix
+    , add0 Normal   "builtins"         builtinsBuiltinNix
+    , add2 Normal   "catAttrs"         catAttrsNix
+    , add2 Normal   "compareVersions"  compareVersionsNix
+    , add  Normal   "concatLists"      concatListsNix
+    , add2 Normal   "concatMap"        concatMapNix
+    , add' Normal   "concatStringsSep" (arity2 intercalateNixString)
+    , add0 Normal   "currentSystem"    currentSystemNix
+    , add0 Normal   "currentTime"      currentTimeNix
+    , add2 Normal   "deepSeq"          deepSeqNix
+    , add2 Normal   "div"              divNix
+    , add2 Normal   "elem"             elemNix
+    , add2 Normal   "elemAt"           elemAtNix
+    , add  Normal   "exec"             execNix
+    , add0 Normal   "false"            (pure $ mkNVBool False)
+    --, add  Normal   "fetchGit"         fetchGit
+    --, add  Normal   "fetchMercurial"   fetchMercurial
+    , add  Normal   "fetchTarball"     fetchTarball
+    , add  Normal   "fetchurl"         fetchurlNix
+    , add2 Normal   "filter"           filterNix
+    --, add  Normal   "filterSource"     filterSource
+    , add2 Normal   "findFile"         findFileNix
+    , add3 Normal   "foldl'"           foldl'Nix
+    , add  Normal   "fromJSON"         fromJSONNix
+    --, add  Normal   "fromTOML"         fromTOML
+    , add  Normal   "functionArgs"     functionArgsNix
+    , add  Normal   "genericClosure"   genericClosureNix
+    , add2 Normal   "genList"          genListNix
+    , add2 Normal   "getAttr"          getAttrNix
+    , add  Normal   "getContext"       getContextNix
+    , add  Normal   "getEnv"           getEnvNix
+    , add2 Normal   "hasAttr"          hasAttrNix
+    , add  Normal   "hasContext"       hasContextNix
+    , add' Normal   "hashString"       (hashStringNix @e @t @f @m)
+    , add  Normal   "head"             headNix
+    , add2 Normal   "intersectAttrs"   intersectAttrsNix
+    , add  Normal   "isAttrs"          isAttrsNix
+    , add  Normal   "isBool"           isBoolNix
+    , add  Normal   "isFloat"          isFloatNix
+    , add  Normal   "isFunction"       isFunctionNix
+    , add  Normal   "isInt"            isIntNix
+    , add  Normal   "isList"           isListNix
+    , add  Normal   "isString"         isStringNix
+    , add  Normal   "length"           lengthNix
+    , add2 Normal   "lessThan"         lessThanNix
+    , add  Normal   "listToAttrs"      listToAttrsNix
+    , add2 Normal   "match"            matchNix
+    , add2 Normal   "mul"              mulNix
+    , add0 Normal   "nixPath"          nixPathNix
+    , add0 Normal   "null"             (pure nvNull)
+    , add  Normal   "parseDrvName"     parseDrvNameNix
+    , add2 Normal   "partition"        partitionNix
+    --, add  Normal   "path"             path
+    , add  Normal   "pathExists"       pathExistsNix
+    , add  Normal   "readDir"          readDirNix
+    , add  Normal   "readFile"         readFileNix
+    , add3 Normal   "replaceStrings"   replaceStringsNix
+    , add2 Normal   "seq"              seqNix
+    , add2 Normal   "sort"             sortNix
+    , add2 Normal   "split"            splitNix
+    , add  Normal   "splitVersion"     splitVersionNix
+    , add0 Normal   "storeDir"         (pure $ mkNVStrWithoutContext "/nix/store")
+    --, add  Normal   "storePath"        storePath
+    , add' Normal   "stringLength"     (arity1 $ Text.length . ignoreContext)
+    , add' Normal   "sub"              (arity2 ((-) @Integer))
+    , add' Normal   "substring"        substringNix
+    , add  Normal   "tail"             tailNix
+    , add2 Normal   "toFile"           toFileNix
+    , add  Normal   "toJSON"           toJSONNix
+    , add  Normal   "toPath"           toPathNix
+    , add  Normal   "toXML"            toXMLNix
+    , add0 Normal   "true"             (pure $ mkNVBool True)
+    , add  Normal   "tryEval"          tryEvalNix
+    , add  Normal   "typeOf"           typeOfNix
+    --, add0 Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependency
+    , add  Normal   "unsafeDiscardStringContext"    unsafeDiscardStringContextNix
+    , add2 Normal   "unsafeGetAttrPos"              unsafeGetAttrPosNix
+    , add  Normal   "valueSize"        getRecursiveSizeNix
+    ]
  where
 
   arity0 :: a -> Prim m a
