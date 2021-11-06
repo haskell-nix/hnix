@@ -148,14 +148,15 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
   freeVariable var =
     nverr @e @t @f $ ErrorCall $ toString @Text $ "Undefined variable '" <> coerce var <> "'"
 
-  synHole name = do
-    span  <- currentPos
-    scope <- currentScopes
-    evalError @(NValue t f m) $ SynHole $
-      SynHoleInfo
-        { _synHoleInfo_expr  = NSynHoleAnn span name
-        , _synHoleInfo_scope = scope
-        }
+  synHole name =
+    do
+      span  <- currentPos
+      scope <- currentScopes
+      evalError @(NValue t f m) $ SynHole $
+        SynHoleInfo
+          { _synHoleInfo_expr  = NSynHoleAnn span name
+          , _synHoleInfo_scope = scope
+          }
 
 
   attrMissing ks ms =
@@ -316,7 +317,8 @@ callFunc fun arg =
       _x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show _x
 
 execUnaryOp
-  :: (Framed e m, MonadCited t f m, Show t)
+  :: forall e t f m
+   . (Framed e m, MonadCited t f m, Show t)
   => Scopes m (NValue t f m)
   -> SrcSpan
   -> NUnaryOp
