@@ -477,7 +477,7 @@ assembleString
 assembleString = fromParts . stringParts
  where
   fromParts :: [Antiquoted Text (m v)] -> m (Maybe NixString)
-  fromParts xs = fold <<$>> traverseM fun xs
+  fromParts xs = fold <<$>> traverse2 fun xs
 
   fun :: Antiquoted Text (m v) -> m (Maybe NixString)
   fun =

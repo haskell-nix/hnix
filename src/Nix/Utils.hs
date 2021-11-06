@@ -13,7 +13,7 @@ module Nix.Utils
   , mapPair
   , iterateN
   , nestM
-  , traverseM
+  , traverse2
   , lifted
 
   , whenTrue
@@ -152,7 +152,7 @@ nestM n f x =
   foldM (\ xx () -> f xx) x $ replicate n () -- fuses. But also, can it be fix join?
 {-# inline nestM #-}
 
-traverseM
+traverse2
   :: ( Applicative m
      , Applicative n
      , Traversable t
@@ -160,9 +160,9 @@ traverseM
   => ( a
      -> m (n b)
      ) -- ^ Run function that runs 2 'Applicative' actions
-  -> t a -- ^ on every element of a 'Traversable'
+  -> t a -- ^ on every element in 'Traversable'
   -> m (n (t b)) -- ^ collect the results.
-traverseM f x = sequenceA <$> traverse f x
+traverse2 f x = sequenceA <$> traverse f x
 
 --  2021-08-21: NOTE: Someone needs to put in normal words, what this does.
 -- This function is pretty spefic & used only once, in "Nix.Normal".

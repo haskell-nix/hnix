@@ -75,7 +75,7 @@ traverseFromM
      )
   => t a
   -> m (Maybe (t b))
-traverseFromM = traverseM fromValueMay
+traverseFromValue = traverse2 fromValueMay
 
 traverseToValue :: ((Traversable t, Applicative f, ToValue a f b) => t a -> f (t b))
 traverseToValue = traverse toValue
