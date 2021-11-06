@@ -97,6 +97,130 @@ traceM = const stub
 {-# inline traceM #-}
 #endif
 
+-- * Helpers
+
+-- After migration from the @relude@ - @relude: pass -> stub@
+-- | @pure mempty@: Short-curcuit, stub.
+stub :: (Applicative f, Monoid a) => f a
+stub = pure mempty
+{-# inline stub #-}
+
+-- | Alias for @stub@, since @Relude@ has more specialized @pure ()@.
+pass :: (Applicative f) => f ()
+pass = stub
+{-# inline pass #-}
+
+-- | Duplicates object into a tuple.
+dup :: a -> (a, a)
+dup x = (x, x)
+{-# inline dup #-}
+
+-- | Apply a single function to both components of a pair.
+--
+-- > both succ (1,2) == (2,3)
+--
+-- Taken From package @extra@
+both :: (a -> b) -> (a, a) -> (b, b)
+both f (x,y) = (f x, f y)
+{-# inline both #-}
+
+-- | From @utility-ht@ for tuple laziness.
+mapPair :: (a -> c, b -> d) -> (a,b) -> (c,d)
+mapPair ~(f,g) ~(a,b) = (f a, g b)
+{-# inline mapPair #-}
+
+iterateN
+  :: forall a
+   . Int -- ^ times
+  -> (a -> a) -- ^ function apply
+  -> a -- ^ on value
+  -> a
+iterateN n f x = fix ((<*> (0 /=)) . ((bool x . f) .) . (. pred)) n -- It is hard to read - yes. It is a non-recursive momoized action - yes.
+
+-- | Apply Kleisli arrow N times, join 'm's.
+nestM :: Monad m => Int -> (a -> m a) -> a -> m a
+nestM 0 _ x = pure x
+nestM n f x = foldM (\ xx () -> f xx) x $ replicate n () -- fuses. But also, can it be fix join?
+{-# inline nestM #-}
+
+traverseM
+  :: ( Applicative m
+     , Applicative f
+     , Traversable t
+     )
+  => ( a
+     -> m (f b)
+     )
+  -> t a
+  -> m (f (t b))
+traverseM f x = sequenceA <$> traverse f x
+
+--  2021-08-21: NOTE: Someone needs to put in normal words, what this does.
+-- This function is pretty spefic & used only once, in "Nix.Normal".
+lifted
+  :: (MonadTransControl u, Monad (u m), Monad m)
+  => ((a -> m (StT u b)) -> m (StT u b))
+  -> (a -> u m b)
+  -> u m b
+lifted f k =
+  (restoreT . pure) =<< liftWith (\run -> f (run . k))
+
+
+-- * Eliminators
+
+whenTrue :: (Monoid a)
+  => a -> Bool -> a
+whenTrue =
+  bool
+    mempty
+{-# inline whenTrue #-}
+
+whenFalse :: (Monoid a)
+  => a  -> Bool  -> a
+whenFalse f =
+  bool
+    f
+    mempty
+{-# inline whenFalse #-}
+
+whenJust
+  :: Monoid b
+  => (a -> b)
+  -> Maybe a
+  -> b
+whenJust =
+  maybe
+    mempty
+{-# inline whenJust #-}
+
+-- | Analog for @bool@ or @maybe@, for list-like cons structures.
+list
+  :: Foldable t
+  => b -> (t a -> b) -> t a -> b
+list e f l =
+  bool
+    (f l)
+    e
+    (null l)
+{-# inline list #-}
+
+whenText
+  :: a -> (Text -> a) -> Text -> a
+whenText e f t =
+  bool
+    (f t)
+    e
+    (Text.null t)
+
+-- | Lambda analog of @maybe@ or @either@ for Free monad.
+free :: (a -> b) -> (f (Free f a) -> b) -> Free f a -> b
+free fP fF fr =
+  case fr of
+    Pure a -> fP a
+    Free fa -> fF fa
+{-# inline free #-}
+
+
 -- * Path
 
 -- | To have explicit type boundary between FilePath & String.
@@ -114,7 +238,9 @@ instance ToText Path where
 instance IsString Path where
   fromString = coerce
 
--- This set of @Path@ funcs is to control system filepath types & typesafety and to easy migrate from FilePath to anything suitable (like @path@ or so).
+-- ** Path functions
+
+-- | This set of @Path@ funcs is to control system filepath types & typesafety and to easily migrate from FilePath to anything suitable (like @path@ or so).
 
 -- | @isAbsolute@ specialized to @Path@.
 isAbsolute :: Path -> Bool
@@ -164,9 +290,9 @@ dropExtensions = coerce FilePath.dropExtensions
 replaceExtension :: Path -> String -> Path
 replaceExtension = coerce FilePath.replaceExtension
 
+readFile :: Path -> IO Text
+readFile = Text.readFile . coerce
 
--- | > Hashmap Text -- type synonym
-type KeyMap = HashMap Text
 
 -- * Recursion scheme
 
@@ -184,32 +310,9 @@ type Transform f a = TransformF (Fix f) a
 -- It is a transformation between functors.
 type TransformF f a = (f -> a) -> f -> a
 
-class Has a b where
-  hasLens :: Lens' a b
-
-instance Has a a where
-  hasLens f = f
-
-instance Has (a, b) a where
-  hasLens = _1
-
-instance Has (a, b) b where
-  hasLens = _2
-
-
 loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
 loebM f = mfix $ \a -> (`traverse` f) ($ a)
 {-# inline loebM #-}
-
---  2021-08-21: NOTE: Someone needs to put in normal words, what this does.
--- This function is pretty spefic & used only once, in "Nix.Normal".
-lifted
-  :: (MonadTransControl u, Monad (u m), Monad m)
-  => ((a -> m (StT u b)) -> m (StT u b))
-  -> (a -> u m b)
-  -> u m b
-lifted f k =
-  (restoreT . pure) =<< liftWith (\run -> f (run . k))
 
 -- | adi is Abstracting Definitional Interpreters:
 --
@@ -229,117 +332,22 @@ adi
 adi g f = g $ f . (adi g f <$>) . unFix
 
 
--- | Analog for @bool@ or @maybe@, for list-like cons structures.
-list
-  :: Foldable t
-  => b -> (t a -> b) -> t a -> b
-list e f l =
-  bool
-    (f l)
-    e
-    (null l)
-{-# inline list #-}
+-- * Has lens
 
-whenText
-  :: a -> (Text -> a) -> Text -> a
-whenText e f t =
-  bool
-    (f t)
-    e
-    (Text.null t)
+class Has a b where
+  hasLens :: Lens' a b
 
--- | Lambda analog of @maybe@ or @either@ for Free monad.
-free :: (a -> b) -> (f (Free f a) -> b) -> Free f a -> b
-free fP fF fr =
-  case fr of
-    Pure a -> fP a
-    Free fa -> fF fa
-{-# inline free #-}
+instance Has a a where
+  hasLens f = f
+
+instance Has (a, b) a where
+  hasLens = _1
+
+instance Has (a, b) b where
+  hasLens = _2
 
 
-whenTrue :: (Monoid a)
-  => a -> Bool -> a
-whenTrue =
-  bool
-    mempty
-{-# inline whenTrue #-}
+-- * Other
 
-whenFalse :: (Monoid a)
-  => a  -> Bool  -> a
-whenFalse f =
-  bool
-    f
-    mempty
-{-# inline whenFalse #-}
-
-whenJust
-  :: Monoid b
-  => (a -> b)
-  -> Maybe a
-  -> b
-whenJust =
-  maybe
-    mempty
-{-# inline whenJust #-}
-
-
--- | Apply a single function to both components of a pair.
---
--- > both succ (1,2) == (2,3)
---
--- Taken From package @extra@
-both :: (a -> b) -> (a, a) -> (b, b)
-both f (x,y) = (f x, f y)
-{-# inline both #-}
-
-
--- | Duplicates object into a tuple.
-dup :: a -> (a, a)
-dup x = (x, x)
-{-# inline dup #-}
-
--- | From @utility-ht@ for tuple laziness.
-mapPair :: (a -> c, b -> d) -> (a,b) -> (c,d)
-mapPair ~(f,g) ~(a,b) = (f a, g b)
-{-# inline mapPair #-}
-
--- After migration from the @relude@ - @relude: pass -> stub@
--- | @pure mempty@: Short-curcuit, stub.
-stub :: (Applicative f, Monoid a) => f a
-stub = pure mempty
-{-# inline stub #-}
-
--- | Alias for @stub@, since @Relude@ has more specialized @pure ()@.
-pass :: (Applicative f) => f ()
-pass = stub
-{-# inline pass #-}
-
-readFile :: Path -> IO Text
-readFile = Text.readFile . coerce
-
-traverseM
-  :: ( Applicative m
-     , Applicative f
-     , Traversable t
-     )
-  => ( a
-     -> m (f b)
-     )
-  -> t a
-  -> m (f (t b))
-traverseM f x = sequenceA <$> traverse f x
-
-iterateN
-  :: forall a
-   . Int -- ^ times
-  -> (a -> a) -- ^ function apply
-  -> a -- ^ on value
-  -> a
-iterateN n f x = fix ((<*> (0 /=)) . ((bool x . f) .) . (. pred)) n -- It is hard to read - yes. It is a non-recursive momoized action - yes.
-
--- | Apply Kleisli arrow N times, join 'm's.
-nestM :: Monad m => Int -> (a -> m a) -> a -> m a
-nestM 0 _ x = pure x
-nestM n f x = foldM (\ xx () -> f xx) x $ replicate n () -- fuses. But also, can it be fix join?
-{-# INLINE nestM #-}
-
+-- | > Hashmap Text -- type synonym
+type KeyMap = HashMap Text
