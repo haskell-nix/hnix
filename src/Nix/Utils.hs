@@ -105,7 +105,7 @@ stub :: (Applicative f, Monoid a) => f a
 stub = pure mempty
 {-# inline stub #-}
 
--- | Alias for @stub@, since @Relude@ has more specialized @pure ()@.
+-- | Alias for 'stub', since "Relude" has more specialized @pure ()@.
 pass :: (Applicative f) => f ()
 pass = stub
 {-# inline pass #-}
@@ -124,7 +124,9 @@ both :: (a -> b) -> (a, a) -> (b, b)
 both f (x,y) = (f x, f y)
 {-# inline both #-}
 
--- | From @utility-ht@ for tuple laziness.
+-- | Gives tuple laziness.
+--
+-- Takem from @utility-ht@.
 mapPair :: (a -> c, b -> d) -> (a,b) -> (c,d)
 mapPair ~(f,g) ~(a,b) = (f a, g b)
 {-# inline mapPair #-}
@@ -135,24 +137,31 @@ iterateN
   -> (a -> a) -- ^ function apply
   -> a -- ^ on value
   -> a
-iterateN n f x = fix ((<*> (0 /=)) . ((bool x . f) .) . (. pred)) n -- It is hard to read - yes. It is a non-recursive momoized action - yes.
+iterateN n f x =
+  -- It is hard to read - yes. It is a non-recursive momoized action - yes.
+  fix ((<*> (0 /=)) . ((bool x . f) .) . (. pred)) n
 
--- | Apply Kleisli arrow N times, join 'm's.
-nestM :: Monad m => Int -> (a -> m a) -> a -> m a
+nestM
+  :: Monad m
+  => Int -- ^ Recursively apply 'Int' times
+  -> (a -> m a) -- ^ function (Kleisli arrow).
+  -> a -- ^ to value
+  -> m a -- ^ & join layers of 'm'
 nestM 0 _ x = pure x
-nestM n f x = foldM (\ xx () -> f xx) x $ replicate n () -- fuses. But also, can it be fix join?
+nestM n f x =
+  foldM (\ xx () -> f xx) x $ replicate n () -- fuses. But also, can it be fix join?
 {-# inline nestM #-}
 
 traverseM
   :: ( Applicative m
-     , Applicative f
+     , Applicative n
      , Traversable t
      )
   => ( a
-     -> m (f b)
+     -> m (n b)
      )
   -> t a
-  -> m (f (t b))
+  -> m (n (t b))
 traverseM f x = sequenceA <$> traverse f x
 
 --  2021-08-21: NOTE: Someone needs to put in normal words, what this does.
@@ -223,7 +232,7 @@ free fP fF fr =
 
 -- * Path
 
--- | To have explicit type boundary between FilePath & String.
+-- | Explicit type boundary between FilePath & String.
 newtype Path = Path FilePath
   deriving
     ( Eq, Ord, Generic
