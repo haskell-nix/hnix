@@ -172,9 +172,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     evalError @(NValue t f m) $ ErrorCall $ toString $
       maybe
         ("Inheriting unknown attribute: " <> attr)
-        (\ s ->
-          "Could not look up attribute " <> attr <> " in " <> show (prettyNValue s)
-        )
+        (\ s -> "Could not look up attribute " <> attr <> " in " <> show (prettyNValue s))
         ms
        where
         attr = Text.intercalate "." $ NE.toList $ coerce ks
@@ -535,6 +533,19 @@ addTracing k v = do
       print $ msg rendered <> " ...done"
       pure res
 
+evalWithTracingAndMetaInfo
+  :: forall e t f m
+  . MonadNix e t f m
+  => NExprLoc
+  -> ReaderT Int m (m (NValue t f m))
+evalWithTracingAndMetaInfo =
+  adi
+    addMetaInfo
+    (addTracing Eval.evalContent)
+  where
+  addMetaInfo :: (NExprLoc -> ReaderT r m a) -> NExprLoc -> ReaderT r m a
+  addMetaInfo = (ReaderT .) . flip . (Eval.addMetaInfo .) . flip . (runReaderT .)
+
 evalExprLoc :: forall e t f m . MonadNix e t f m => NExprLoc -> m (NValue t f m)
 evalExprLoc expr =
   do
@@ -546,15 +557,6 @@ evalExprLoc expr =
           (join . (`runReaderT` (0 :: Int)) . evalWithTracingAndMetaInfo)
           (isTrace opts)
     pTracedAdi expr
- where
-  evalWithTracingAndMetaInfo :: NExprLoc -> ReaderT Int m (m (NValue t f m))
-  evalWithTracingAndMetaInfo =
-    adi
-      addMetaInfo
-      (addTracing Eval.evalContent)
-   where
-    addMetaInfo :: (NExprLoc -> ReaderT r m a) -> NExprLoc -> ReaderT r m a
-    addMetaInfo = (ReaderT .) . flip . (Eval.addMetaInfo .) . flip . (runReaderT .)
 
 exec :: (MonadNix e t f m, MonadInstantiate m) => [Text] -> m (NValue t f m)
 exec args = either throwError evalExprLoc =<< exec' args
