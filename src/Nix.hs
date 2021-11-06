@@ -104,7 +104,7 @@ evaluateExpression
   -> m a
 evaluateExpression mpath evaluator handler expr =
   do
-    opts :: Options <- askLocal
+    opts <- askOptions
     (coerce -> args) <-
       (traverse . traverse)
         eval'
@@ -134,7 +134,7 @@ processResult
   -> m a
 processResult h val =
   do
-    opts :: Options <- askLocal
+    opts <- askOptions
     maybe
       (h val)
       (\ (coerce . Text.splitOn "." -> keys) -> processKeys keys val)
