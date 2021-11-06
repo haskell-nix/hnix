@@ -306,7 +306,7 @@ callFunc fun arg =
           span <- currentPos
           withFrame Info ((Calling @m @(NValue t f m)) name span) $ f arg -- Is this cool?
       (NVSet _ m) | Just f <- M.lookup "__functor" m ->
-        (`callFunc` arg) =<< (`callFunc` fun') =<< demand f
+        (`callFunc` arg) =<< (`callFunc` fun') f
       _x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show _x
 
 execUnaryOp
