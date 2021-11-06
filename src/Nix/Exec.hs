@@ -542,7 +542,7 @@ evalExprLoc expr =
     let
       pTracedAdi =
         bool
-          Eval.framedEvalExprLoc
+          Eval.evalWithMetaInfo
           (join . (`runReaderT` (0 :: Int)) . evalWithTracingAndMetaInfo)
           (isTrace opts)
     pTracedAdi expr

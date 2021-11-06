@@ -557,12 +557,12 @@ addStackFrames f v =
  where
   withFrameInfo = withFrame Info
 
-framedEvalExprLoc
+evalWithMetaInfo
   :: forall e v m
   . (MonadNixEval v m, Framed e m, Has e SrcSpan, Typeable m, Typeable v)
   => NExprLoc
   -> m v
-framedEvalExprLoc =
+evalWithMetaInfo =
   adi addMetaInfo evalContent
 
 -- | Add source positions & frame context system.
