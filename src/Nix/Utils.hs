@@ -6,11 +6,22 @@
 -- It is for import for projects other then @HNix@.
 -- For @HNix@ - this module gets reexported by "Prelude", so for @HNix@ please fix-up pass-through there.
 module Nix.Utils
-  ( KeyMap
-  , Alg
-  , Transform
-  , TransformF
-  , Has(..)
+  ( stub
+  , pass
+  , dup
+  , both
+  , mapPair
+  , iterateN
+  , nestM
+  , traverseM
+  , lifted
+
+  , whenTrue
+  , whenFalse
+  , whenJust
+  , whenText
+  , list
+  , free
 
   , Path(..)
   , isAbsolute
@@ -27,25 +38,15 @@ module Nix.Utils
   , replaceExtension
   , readFile
 
-  , stub
-  , pass
-  , whenTrue
-  , whenFalse
-  , whenText
-  , whenJust
-  , list
-  , free
-
-  , dup
-  , mapPair
-  , both
-  , iterateN
-  , nestM
-  , traverseM
-  , lifted
-
+  , Alg
+  , Transform
+  , TransformF
   , loebM
   , adi
+
+  , Has(..)
+
+  , KeyMap
 
   , trace
   , traceM
@@ -95,6 +96,8 @@ traceM :: Monad m => String -> m ()
 traceM = const stub
 {-# inline traceM #-}
 #endif
+
+-- * Path
 
 -- | To have explicit type boundary between FilePath & String.
 newtype Path = Path FilePath
@@ -165,6 +168,8 @@ replaceExtension = coerce FilePath.replaceExtension
 -- | > Hashmap Text -- type synonym
 type KeyMap = HashMap Text
 
+-- * Recursion scheme
+
 -- | F-algebra defines how to reduce the fixed-point of a functor to a value.
 -- > type Alg f a = f a -> a
 type Alg f a = f a -> a
@@ -190,6 +195,7 @@ instance Has (a, b) a where
 
 instance Has (a, b) b where
   hasLens = _2
+
 
 loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
 loebM f = mfix $ \a -> (`traverse` f) ($ a)
