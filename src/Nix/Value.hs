@@ -340,7 +340,7 @@ hoistNValue'
   -> NValue' t f m a
   -> NValue' t f n a
 hoistNValue' run lft (NValue' v) =
-    NValue' $ lmapNValueF (hoistNValue lft run) . hoistNValueF lft <$> v
+  NValue' $ lmapNValueF (hoistNValue lft run) . hoistNValueF lft <$> v
 {-# inline hoistNValue' #-}
 
 -- ** Monad
@@ -763,17 +763,17 @@ showValueType (Free (NValue' (extract -> v))) =
 -- * @ValueFrame@
 
 data ValueFrame t f m
-    = ForcingThunk t
-    | ConcerningValue (NValue t f m)
-    | Comparison (NValue t f m) (NValue t f m)
-    | Addition (NValue t f m) (NValue t f m)
-    | Multiplication (NValue t f m) (NValue t f m)
-    | Division (NValue t f m) (NValue t f m)
-    | Coercion ValueType ValueType
-    | CoercionToJson (NValue t f m)
-    | CoercionFromJson Aeson.Value
-    | Expectation ValueType (NValue t f m)
-    deriving Typeable
+  = ForcingThunk t
+  | ConcerningValue (NValue t f m)
+  | Comparison (NValue t f m) (NValue t f m)
+  | Addition (NValue t f m) (NValue t f m)
+  | Multiplication (NValue t f m) (NValue t f m)
+  | Division (NValue t f m) (NValue t f m)
+  | Coercion ValueType ValueType
+  | CoercionToJson (NValue t f m)
+  | CoercionFromJson Aeson.Value
+  | Expectation ValueType (NValue t f m)
+ deriving Typeable
 
 deriving instance (Comonad f, Show t) => Show (ValueFrame t f m)
 
@@ -796,7 +796,7 @@ instance MonadDataErrorContext t f m => Exception (ValueFrame t f m)
 $(deriveEq1 ''NValue')
 
 
--- * @NValue'@ traversals, getter & setters
+-- * @NValueF@ traversals, getter & setters
 
 -- | Make traversals for Nix traversable structures.
 $(makeTraversals ''NValueF)
