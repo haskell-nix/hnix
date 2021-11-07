@@ -495,15 +495,10 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
   evalUnary op (Judgment as1 cs1 t1) =
     (Judgment as1 =<< (cs1 <>) . (`unops` op) . (t1 :~>)) <$> fresh
 
-  evalBinary op (Judgment as1 cs1 t1) e2 = do
-    Judgment as2 cs2 t2 <- e2
-    fmap
-      (join
-        $ Judgment
-          (as1 <> as2)
-          . (\ cs3 -> cs1 <> cs2 <> cs3) . (`binops` op) . (\ t3 -> t1 :~> t2 :~> t3)
-      )
-      fresh
+  evalBinary op (Judgment as1 cs1 t1) e2 =
+    do
+      Judgment as2 cs2 t2 <- e2
+      (Judgment (as1 <> as2) =<< ((cs1 <> cs2) <>) . (`binops` op) . ((t1 :~> t2) :~>)) <$> fresh
 
   evalWith = Eval.evalWithAttrSet
 
