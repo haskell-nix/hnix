@@ -87,7 +87,6 @@ import           Text.Regex.TDFA                ( Regex
                                                 , matchAllText
                                                 )
 
-
 -- This is a big module. There is recursive reuse:
 -- @builtins -> builtinsList -> scopedImport -> withNixContext -> builtins@,
 -- since @builtins@ is self-recursive: aka we ship @builtins.builtins.builtins...@.
@@ -676,7 +675,7 @@ matchNix pat str =
       re = makeRegex p :: Regex
       mkMatch t =
         bool
-          (toValue ()) -- Shorthand for Null
+          (pure nvNull)
           (toValue $ mkNixStringWithoutContext t)
           (not $ Text.null t)
 
