@@ -50,17 +50,16 @@ alignEqM
   -> m Bool
 alignEqM eq fa fb =
   fmap
-    isRight
+    (isRight @() @())
     $ runExceptT $
-      do
-        pairs <-
-          traverse
+      traverse_
+        (guard <=< lift . uncurry eq)
+        =<< traverse
             (\case
               These a b -> pure (a, b)
-              _         -> throwE ()
+              _         -> throwE mempty
             )
             (Data.Semialign.align fa fb)
-        traverse_ (\ (a, b) -> guard =<< lift (eq a b)) pairs
 
 alignEq :: (Align f, Traversable f) => (a -> b -> Bool) -> f a -> f b -> Bool
 alignEq eq fa fb = runIdentity $ alignEqM (\x y -> Identity (eq x y)) fa fb
