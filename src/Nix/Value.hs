@@ -588,6 +588,10 @@ mkNVConstant :: Applicative f
   -> NValue t f m
 mkNVConstant = Free . mkNVConstant'
 
+-- | Using of Nulls is generally discouraged (in programming language design et al.), but, if you need it.
+nvNull :: Applicative f
+  => NValue t f m
+nvNull = mkNVConstant NNull
 
 -- | Life of a Haskell sting & context to the life of a Nix string & context,
 mkNVStr :: Applicative f

@@ -158,11 +158,6 @@ instance Comonad f => Ord (WValue t f m) where
 
 -- ** Helpers
 
-nvNull
-  :: MonadNix e t f m
-  => NValue t f m
-nvNull = mkNVConstant NNull
-
 mkNVBool
   :: MonadNix e t f m
   => Bool
