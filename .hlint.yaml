@@ -159,22 +159,6 @@
     lhs: "fmap (fmap f) x"
     note: "Use '(<<$>>)'"
     rhs: "f <<$>> x"
-- hint:
-    lhs: "(\\f -> f x) <$> ff"
-    note: Use flap operator
-    rhs: "ff ?? x"
-- hint:
-    lhs: "fmap (\\f -> f x) ff"
-    note: Use flap operator
-    rhs: "ff ?? x"
-- hint:
-    lhs: "fmap ($ x) ff"
-    note: Use flap operator
-    rhs: "ff ?? x"
-- hint:
-    lhs: "($ x) <$> ff"
-    note: Use flap operator
-    rhs: "ff ?? x"
 - warn:
     lhs: "fmap f (nonEmpty x)"
     rhs: viaNonEmpty f x
