@@ -126,12 +126,12 @@ coerceStringlikeToNixString ctsm =
 -- | Convert @Path@ into @NixString@.
 -- With an additional option to store the resolved path into Nix Store.
 coercePathToNixString :: (MonadStore m, Framed e m) => CopyToStoreMode -> Path -> m NixString
-coercePathToNixString ctsm =
+coercePathToNixString =
   bool
     (pure . mkNixStringWithoutContext . fromString . coerce)
-    (fmap storePathToNixString . addPath)
-    (ctsm == CopyToStore)
+    ((storePathToNixString <$>) . addPath)
+    . (CopyToStore ==)
  where
   storePathToNixString :: StorePath -> NixString
-  storePathToNixString (fromString . coerce -> sp) =
-    join (flip mkNixStringWithSingletonContext . (`StringContext` DirectPath)) sp
+  storePathToNixString =
+    (mkNixStringWithSingletonContext <*> (`StringContext` DirectPath)) . fromString . coerce
