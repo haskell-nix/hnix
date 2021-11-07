@@ -139,9 +139,10 @@ instance ( Convertible e t f m
          )
   => FromValue a m (Deeper (NValue t f m)) where
 
+  fromValueMay :: Deeper (NValue t f m) -> m (Maybe a)
   fromValueMay (Deeper v) =
     free
-      ((fromValueMay . Deeper) <=< force)
+      ((fromValueMay . Deeper) <=< force)  -- these places are complex in types
       (fromValueMay . Deeper)
       =<< demand v
 
@@ -217,7 +218,7 @@ instance ( Convertible e t f m
     \case
       NVStr' ns -> pure $ pure ns
       NVPath' p ->
-        (\path -> pure $ mkNixStringWithSingletonContext path (StringContext path DirectPath)) . fromString . coerce <$>
+        (\path -> pure $ (`mkNixStringWithSingletonContext` (`StringContext` DirectPath) path) path ) . fromString . coerce <$>
           addPath p
       NVSet' _ s ->
         maybe
@@ -369,7 +370,7 @@ instance ( Convertible e t f m
 
 instance Convertible e t f m
   => ToValue () m (NValue' t f m (NValue t f m)) where
-  toValue _ = pure $ nvNull'
+  toValue = const $ pure nvNull'
 
 instance Convertible e t f m
   => ToValue Bool m (NValue' t f m (NValue t f m)) where
@@ -478,7 +479,7 @@ instance Convertible e t f m
       ]
 
 instance Convertible e t f m => ToValue () m (NExprF (NValue t f m)) where
-  toValue _ = pure . NConstant $ NNull
+  toValue = const . pure . NConstant $ NNull
 
 instance Convertible e t f m => ToValue Bool m (NExprF (NValue t f m)) where
   toValue = pure . NConstant . NBool
