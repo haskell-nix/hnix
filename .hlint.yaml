@@ -270,25 +270,13 @@
     lhs: "MaybeT (pure m)"
     rhs: hoistMaybe m
 - warn:
-    lhs: "MaybeT (return m)"
-    rhs: hoistMaybe m
-- warn:
     lhs: MaybeT . pure
-    rhs: hoistMaybe
-- warn:
-    lhs: MaybeT . return
     rhs: hoistMaybe
 - warn:
     lhs: "ExceptT (pure m)"
     rhs: hoistEither m
 - warn:
-    lhs: "ExceptT (return m)"
-    rhs: hoistEither m
-- warn:
     lhs: ExceptT . pure
-    rhs: hoistEither
-- warn:
-    lhs: ExceptT . return
     rhs: hoistEither
 - warn:
     lhs: fromMaybe mempty
