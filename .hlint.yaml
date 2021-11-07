@@ -2736,7 +2736,7 @@
 - hint:
     lhs: "return"
     note: "Please, use `pure` instead. even GHC already deprecates `return` starting from `9.2`."
-    rhs: mempty
+    rhs: pure
 
 - hint:
     lhs: "map"
