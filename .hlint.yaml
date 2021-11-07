@@ -149,11 +149,11 @@
     note: "Use 'asumMap'"
     rhs: asumMap f
 - hint:
-    lhs: "asum (map f xs)"
+    lhs: "asum (fmap f xs)"
     note: "Use 'asumMap'"
     rhs: asumMap f xs
 - warn:
-    lhs: "map fst &&& map snd"
+    lhs: "fmap fst &&& fmap snd"
     rhs: unzip
 - hint:
     lhs: "fmap (fmap f) x"
@@ -169,10 +169,10 @@
     lhs: "f <$> nonEmpty x"
     rhs: viaNonEmpty f x
 - warn:
-    lhs: partitionEithers . map f
+    lhs: partitionEithers . fmap f
     rhs: partitionWith f
 - warn:
-    lhs: partitionEithers $ map f x
+    lhs: partitionEithers $ fmap f x
     rhs: partitionWith f x
 - warn:
     lhs: forever
