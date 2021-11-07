@@ -289,9 +289,9 @@ defaultDerivationStrict val = do
     let
       outputsWithContext =
         Map.mapWithKey
-          (\out (coerce -> path) -> mkNixStringWithSingletonContext path $ StringContext drvPath $ DerivationOutput out)
+          (\out (coerce -> path) -> mkNixStringWithSingletonContext path $ StringContext (DerivationOutput out) drvPath)
           (outputs drv')
-      drvPathWithContext = mkNixStringWithSingletonContext drvPath $ StringContext drvPath AllOutputs
+      drvPathWithContext = mkNixStringWithSingletonContext drvPath $ StringContext AllOutputs drvPath 
       attrSet = mkNVStr <$> M.fromList (("drvPath", drvPathWithContext) : Map.toList outputsWithContext)
     -- TODO: Add location information for all the entries.
     --              here --v
@@ -309,13 +309,14 @@ defaultDerivationStrict val = do
     toStorePaths = foldl (flip addToInputs) mempty
 
     addToInputs :: Bifunctor p => StringContext -> p (Set Text) (Map Text [Text])  -> p (Set Text) (Map Text [Text])
-    addToInputs (StringContext (coerce -> path) kind) = case kind of
-      DirectPath -> first $ Set.insert path
-      DerivationOutput o -> second $ Map.insertWith (<>) path $ one o
-      AllOutputs ->
-        -- TODO: recursive lookup. See prim_derivationStrict
-        -- XXX: When is this really used ?
-        error "Not implemented: derivations depending on a .drv file are not yet supported."
+    addToInputs (StringContext kind (coerce -> path)) =
+      case kind of
+        DirectPath -> first $ Set.insert path
+        DerivationOutput o -> second $ Map.insertWith (<>) path $ one o
+        AllOutputs ->
+          -- TODO: recursive lookup. See prim_derivationStrict
+          -- XXX: When is this really used ?
+          error "Not implemented: derivations depending on a .drv file are not yet supported."
 
 
 -- | Build a derivation in a context collecting string contexts.

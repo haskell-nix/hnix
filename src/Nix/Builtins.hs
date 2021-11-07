@@ -1139,7 +1139,7 @@ toFileNix name s =
 
     let
       storepath  = coerce (fromString @Text) mres
-      sc = StringContext storepath DirectPath
+      sc = StringContext DirectPath storepath
 
     toValue $ mkNixStringWithSingletonContext storepath sc
 

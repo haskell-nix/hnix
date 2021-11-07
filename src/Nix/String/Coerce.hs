@@ -134,4 +134,4 @@ coercePathToNixString =
  where
   storePathToNixString :: StorePath -> NixString
   storePathToNixString =
-    (mkNixStringWithSingletonContext <*> (`StringContext` DirectPath)) . fromString . coerce
+    (mkNixStringWithSingletonContext <*> StringContext DirectPath) . fromString . coerce

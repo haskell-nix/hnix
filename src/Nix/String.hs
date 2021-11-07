@@ -45,12 +45,11 @@ import           Nix.Expr.Types                 ( VarName(..)
 
 -- ** Context
 
---  2021-07-18: NOTE: it should be ContextFlavor -> Varname.
 -- | A Nix 'StringContext' ...
 data StringContext =
   StringContext
-    { scPath :: !VarName
-    , scFlavor :: !ContextFlavor
+    { scFlavor :: !ContextFlavor
+    , scPath :: !VarName
     }
   deriving (Eq, Ord, Show, Generic)
 
@@ -153,7 +152,7 @@ getContext = nsContext
 
 fromNixLikeContext :: NixLikeContext -> S.HashSet StringContext
 fromNixLikeContext =
-  S.fromList . (toStringContexts <=< (M.toList . getNixLikeContext))
+  S.fromList . (uncurry toStringContexts <=< M.toList . getNixLikeContext)
 
 -- | Extract the string contents from a NixString that has no context
 getStringNoContext :: NixString -> Maybe Text
@@ -176,9 +175,8 @@ extractNixString (NixString s c) =
 
 -- this really should be 2 args, then with @toStringContexts path@ laziness it would tail recurse.
 -- for now tuple dissected internaly with laziness preservation.
-toStringContexts :: (VarName, NixLikeContextValue) -> [StringContext]
-toStringContexts ~(path, nlcv) =
-  go nlcv
+toStringContexts :: VarName -> NixLikeContextValue -> [StringContext]
+toStringContexts path = go
  where
   go :: NixLikeContextValue -> [StringContext]
   go cv =
@@ -192,10 +190,10 @@ toStringContexts ~(path, nlcv) =
       _ -> mempty
    where
     mkCtxFor :: ContextFlavor -> StringContext
-    mkCtxFor = StringContext path
-
+    mkCtxFor context = StringContext context path
     mkLstCtxFor :: ContextFlavor -> NixLikeContextValue -> [StringContext]
-    mkLstCtxFor t c = mkCtxFor t : go c
+    mkLstCtxFor t c = one (mkCtxFor t) <> go c
+
 
 toNixLikeContextValue :: StringContext -> (VarName, NixLikeContextValue)
 toNixLikeContextValue sc =
