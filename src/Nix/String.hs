@@ -106,8 +106,8 @@ type WithStringContext = WithStringContextT Identity
 --  2021-07-18: NOTE: It should be Context -> Contents.
 data NixString =
   NixString
-    { nsContents :: !Text
-    , nsContext :: !(S.HashSet StringContext)
+    { nsContext :: !(S.HashSet StringContext)
+    , nsContents :: !Text
     }
   deriving (Eq, Ord, Show, Generic)
 
@@ -126,23 +126,23 @@ instance Hashable NixString
 
 -- | Constructs NixString without a context
 mkNixStringWithoutContext :: Text -> NixString
-mkNixStringWithoutContext = (`NixString` mempty)
+mkNixStringWithoutContext = NixString mempty
 
 -- | Create NixString using a singleton context
 mkNixStringWithSingletonContext
   :: VarName -> StringContext -> NixString
-mkNixStringWithSingletonContext s c = NixString (coerce @VarName @Text s) $ one c
+mkNixStringWithSingletonContext s c = NixString (one c) (coerce @VarName @Text s)
 
 -- | Create NixString from a Text and context
 mkNixString :: Text -> S.HashSet StringContext -> NixString
-mkNixString = NixString
+mkNixString t = (`NixString` t)
 
 
 -- ** Checkers
 
 -- | Returns True if the NixString has an associated context
 hasContext :: NixString -> Bool
-hasContext (NixString _ c) = not $ null c
+hasContext (NixString c _) = not $ null c
 
 
 -- ** Getters
@@ -156,17 +156,17 @@ fromNixLikeContext =
 
 -- | Extract the string contents from a NixString that has no context
 getStringNoContext :: NixString -> Maybe Text
-getStringNoContext (NixString s c)
+getStringNoContext (NixString c s)
   | null c    = pure s
   | otherwise = mempty
 
 -- | Extract the string contents from a NixString even if the NixString has an associated context
 ignoreContext :: NixString -> Text
-ignoreContext (NixString s _) = s
+ignoreContext (NixString _ s) = s
 
 -- | Get the contents of a 'NixString' and write its context into the resulting set.
 extractNixString :: Monad m => NixString -> WithStringContextT m Text
-extractNixString (NixString s c) =
+extractNixString (NixString c s) =
   WithStringContextT $
     s <$ tell c
 
@@ -229,7 +229,7 @@ addSingletonStringContext = WithStringContextT . tell . one
 -- | Run an action producing a string with a context and put those into a 'NixString'.
 runWithStringContextT :: Monad m => WithStringContextT m Text -> m NixString
 runWithStringContextT (WithStringContextT m) =
-  uncurry NixString <$> runWriterT m
+  uncurry (flip NixString) <$> runWriterT m
 
 -- | Run an action producing a string with a context and put those into a 'NixString'.
 runWithStringContext :: WithStringContextT Identity Text -> NixString
@@ -240,7 +240,7 @@ runWithStringContext = runIdentity . runWithStringContextT
 
 -- | Modify the string part of the NixString, leaving the context unchanged
 modifyNixContents :: (Text -> Text) -> NixString -> NixString
-modifyNixContents f (NixString s c) = NixString (f s) c
+modifyNixContents f (NixString c s) = NixString c (f s)
 
 -- | Run an action that manipulates nix strings, and collect the contexts encountered.
 -- Warning: this may be unsafe, depending on how you handle the resulting context list.
@@ -260,14 +260,14 @@ intercalateNixString sep nss  =
   uncurry NixString $ mapPair intertwine unpackNss
  where
 
-  intertwine :: ([Text] -> Text, [HashSet StringContext] -> HashSet StringContext)
+  intertwine :: ([HashSet StringContext] -> HashSet StringContext, [Text] -> Text)
   intertwine =
-    ( Text.intercalate (nsContents sep)
-    , S.unions . (:)   (nsContext  sep)
+    ( S.unions . (:)   (nsContext  sep)
+    , Text.intercalate (nsContents sep)
     )
 
-  unpackNss :: ([Text], [HashSet StringContext])
-  unpackNss = (fnss nsContents, fnss nsContext)
+  unpackNss :: ([HashSet StringContext], [Text])
+  unpackNss = (fnss nsContext, fnss nsContents)
    where
     fnss :: (NixString -> b) -> [b]
     fnss = (`fmap` nss) -- do once
