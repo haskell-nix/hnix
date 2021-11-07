@@ -235,7 +235,7 @@
     lhs: "case m of [] -> stub  ; (x:xs) -> f (x :| xs)"
     rhs: whenNotNull m f
 - warn:
-    lhs: "case m of [] -> pass     ; (x:xs) -> f (x :| xs)"
+    lhs: "case m of [] -> stub     ; (x:xs) -> f (x :| xs)"
     rhs: whenNotNull m f
 - warn:
     lhs: "case m of (x:xs) -> f (x :| xs); [] -> return ()"
@@ -244,10 +244,10 @@
     lhs: "case m of (x:xs) -> f (x :| xs); [] -> stub  "
     rhs: whenNotNull m f
 - warn:
-    lhs: "case m of (x:xs) -> f (x :| xs); [] -> pass     "
+    lhs: "case m of (x:xs) -> f (x :| xs); [] -> stub     "
     rhs: whenNotNull m f
 - warn:
-    lhs: "m >>= \\case [] -> pass     ; (x:xs) -> f (x :| xs)"
+    lhs: "m >>= \\case [] -> stub     ; (x:xs) -> f (x :| xs)"
     rhs: whenNotNullM m f
 - warn:
     lhs: "m >>= \\case [] -> stub  ; (x:xs) -> f (x :| xs)"
@@ -256,7 +256,7 @@
     lhs: "m >>= \\case [] -> return (); (x:xs) -> f (x :| xs)"
     rhs: whenNotNullM m f
 - warn:
-    lhs: "m >>= \\case (x:xs) -> f (x :| xs); [] -> pass     "
+    lhs: "m >>= \\case (x:xs) -> f (x :| xs); [] -> stub     "
     rhs: whenNotNullM m f
 - warn:
     lhs: "m >>= \\case (x:xs) -> f (x :| xs); [] -> stub  "
