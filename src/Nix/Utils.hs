@@ -150,7 +150,7 @@ nestM
   -> m a -- ^ & join layers of 'm'
 nestM 0 _ x = pure x
 nestM n f x =
-  foldM (\ xx () -> f xx) x $ replicate n () -- fuses. But also, can it be fix join?
+  foldM (const . f) x $ replicate @() n mempty -- fuses. But also, can it be fix join?
 {-# inline nestM #-}
 
 traverse2
