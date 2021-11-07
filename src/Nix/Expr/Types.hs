@@ -7,6 +7,7 @@
 {-# language TypeFamilies #-}
 
 {-# options_ghc -Wno-orphans #-}
+{-# options_ghc -Wno-name-shadowing #-}
 {-# options_ghc -Wno-missing-signatures #-}
 
 -- | The Nix expression type and supporting types.
@@ -26,10 +27,11 @@ import           Data.Aeson
 import qualified Data.Binary                   as Binary
 import           Data.Binary                    ( Binary )
 import           Data.Data
-import           Data.Fix                       ( Fix(Fix) )
+import           Data.Fix                       ( Fix(..) )
 import           Data.Functor.Classes
 import           Data.Hashable.Lifted
 import qualified Data.HashMap.Lazy             as MapL
+import qualified Data.Set                      as Set
 import qualified Data.List.NonEmpty            as NE
 import qualified Text.Show
 import           Data.Traversable               ( fmapDefault, foldMapDefault )
@@ -739,3 +741,74 @@ ekey keys pos f e@(Fix x)
           )
         <$> f Nothing
 ekey _ _ f e = fromMaybe e <$> f Nothing
+
+
+freeVars :: NExpr -> Set VarName
+freeVars e =
+  case unFix e of
+    (NConstant    _               ) -> mempty
+    (NStr         string          ) -> mapFreeVars string
+    (NSym         var             ) -> one var
+    (NList        list            ) -> mapFreeVars list
+    (NSet   NonRecursive  bindings) -> bindFreeVars bindings
+    (NSet   Recursive     bindings) -> diffBetween bindFreeVars bindDefs bindings
+    (NLiteralPath _               ) -> mempty
+    (NEnvPath     _               ) -> mempty
+    (NUnary       _    expr       ) -> freeVars expr
+    (NBinary      _    left right ) -> collectFreeVars left right
+    (NSelect      orExpr expr path) ->
+      Set.unions
+        [ freeVars expr
+        , pathFree path
+        , freeVars `whenJust` orExpr
+        ]
+    (NHasAttr expr            path) -> freeVars expr <> pathFree path
+    (NAbs     (Param varname) expr) -> Set.delete varname (freeVars expr)
+    (NAbs (ParamSet varname _ pset) expr) ->
+      -- Include all free variables from the expression and the default arguments
+      freeVars expr <>
+      -- But remove the argument name if existing, and all arguments in the parameter set
+      Set.difference
+        (Set.unions $ freeVars <$> mapMaybe snd pset)
+        (Set.difference
+          (one `whenJust` varname)
+          (Set.fromList $ fst <$> pset)
+        )
+    (NLet         bindings expr   ) ->
+      freeVars expr <>
+      diffBetween bindFreeVars bindDefs bindings
+    (NIf          cond th   el    ) -> Set.unions $ freeVars <$> [cond, th, el]
+    -- Evaluation is needed to find out whether x is a "real" free variable in `with y; x`, we just include it
+    -- This also makes sense because its value can be overridden by `x: with y; x`
+    (NWith        set  expr       ) -> collectFreeVars set expr
+    (NAssert      assertion expr  ) -> collectFreeVars assertion expr
+    (NSynHole     _               ) -> mempty
+ where
+  diffBetween :: (a -> Set VarName) -> (a -> Set VarName) -> a -> Set VarName
+  diffBetween g f b = Set.difference (g b) (f b)
+
+  collectFreeVars :: NExpr -> NExpr -> Set VarName
+  collectFreeVars = (<>) `on` freeVars
+
+  bindDefs :: Foldable t => t (Binding NExpr) -> Set VarName
+  bindDefs = foldMap bind1Def
+   where
+    bind1Def :: Binding r -> Set VarName
+    bind1Def (Inherit   Nothing                  _    _) = mempty
+    bind1Def (Inherit  (Just _                 ) keys _) = Set.fromList keys
+    bind1Def (NamedVar (StaticKey  varname :| _) _    _) = one varname
+    bind1Def (NamedVar (DynamicKey _       :| _) _    _) = mempty
+
+  bindFreeVars :: Foldable t => t (Binding NExpr) -> Set VarName
+  bindFreeVars = foldMap bind1Free
+   where
+    bind1Free :: Binding NExpr -> Set VarName
+    bind1Free (Inherit  Nothing     keys _) = Set.fromList keys
+    bind1Free (Inherit (Just scope) _    _) = freeVars scope
+    bind1Free (NamedVar path        expr _) = pathFree path <> freeVars expr
+
+  pathFree :: NAttrPath NExpr -> Set VarName
+  pathFree = foldMap mapFreeVars
+
+  mapFreeVars :: Foldable t => t NExpr -> Set VarName
+  mapFreeVars = foldMap freeVars

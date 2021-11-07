@@ -13,7 +13,6 @@ import           Data.Time
 import           NeatInterpolation (text)
 import           Nix
 import           Nix.Standard
-import           Nix.TH
 import           Nix.Value.Equal
 import qualified System.Directory as D
 import           Test.Tasty
