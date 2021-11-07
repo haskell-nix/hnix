@@ -180,7 +180,7 @@ toStringContexts :: (VarName, NixLikeContextValue) -> [StringContext]
 toStringContexts ~(path, nlcv) =
   go nlcv
  where
-
+  go :: NixLikeContextValue -> [StringContext]
   go cv =
     case cv of
       NixLikeContextValue True _    _ ->
@@ -191,7 +191,10 @@ toStringContexts ~(path, nlcv) =
         mkCtxFor . DerivationOutput <$> ls
       _ -> mempty
    where
+    mkCtxFor :: ContextFlavor -> StringContext
     mkCtxFor = StringContext path
+
+    mkLstCtxFor :: ContextFlavor -> NixLikeContextValue -> [StringContext]
     mkLstCtxFor t c = mkCtxFor t : go c
 
 toNixLikeContextValue :: StringContext -> (VarName, NixLikeContextValue)
@@ -207,11 +210,12 @@ toNixLikeContext :: S.HashSet StringContext -> NixLikeContext
 toNixLikeContext stringContext =
   NixLikeContext $
     S.foldr
-      go
+      fun
       mempty
       stringContext
  where
-  go sc hm =
+  fun :: (StringContext -> AttrSet NixLikeContextValue -> AttrSet NixLikeContextValue)
+  fun sc hm =
     let (t, nlcv) = toNixLikeContextValue sc in
     M.insertWith (<>) t nlcv hm
 
@@ -258,12 +262,15 @@ intercalateNixString sep nss  =
   uncurry NixString $ mapPair intertwine unpackNss
  where
 
+  intertwine :: ([Text] -> Text, [HashSet StringContext] -> HashSet StringContext)
   intertwine =
     ( Text.intercalate (nsContents sep)
     , S.unions . (:)   (nsContext  sep)
     )
 
+  unpackNss :: ([Text], [HashSet StringContext])
   unpackNss = (fnss nsContents, fnss nsContext)
    where
+    fnss :: (NixString -> b) -> [b]
     fnss = (`fmap` nss) -- do once
 
