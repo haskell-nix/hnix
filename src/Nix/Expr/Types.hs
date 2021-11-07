@@ -59,13 +59,13 @@ import           Instances.TH.Lift              ()  -- importing Lift Text for G
 
 -- * utils
 
--- | Holds file positionng information for abstrations.
--- A type synonym for @HashMap VarName SourcePos@.
-type PositionSet = HashMap VarName SourcePos
-
 --  2021-07-16: NOTE: Should replace @ParamSet@ List
 -- | > Hashmap VarName -- type synonym
 type AttrSet = HashMap VarName
+
+-- | Holds file positionng information for abstrations.
+-- A type synonym for @HashMap VarName SourcePos@.
+type PositionSet = AttrSet SourcePos
 
 -- ** orphan instances
 
