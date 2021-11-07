@@ -276,11 +276,22 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
       span  <- askSpan
       mkNVBinaryOpWithProvenance scope span NApp (pure f) Nothing <$> (callFunc f =<< defer x)
 
+  evalAbs
+    :: Params (m (NValue t f m))
+    -> ( forall a
+      . m (NValue t f m)
+      -> ( AttrSet (m (NValue t f m))
+        -> m (NValue t f m)
+        -> m (a, NValue t f m)
+        )
+      -> m (a, NValue t f m)
+      )
+    -> m (NValue t f m)
   evalAbs p k =
     do
       scope <- askScopes
       span  <- askSpan
-      pure $ mkNVClosureWithProvenance scope span (void p) (fmap snd . flip k (const (fmap (() ,))) . pure)
+      pure $ mkNVClosureWithProvenance scope span (void p) (fmap snd . flip (k @()) (const (fmap (mempty ,))) . pure)
 
   evalError = throwError
 
