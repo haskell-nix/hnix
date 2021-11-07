@@ -794,7 +794,7 @@ instance (VariadicAssertions a) => VariadicAssertions ((ExpectedHask, NixLang) -
   checkListPairs' f acc x = checkListPairs' f (acc <> one x)
 
 checks :: (VariadicAssertions a) => a
-checks = checkListPairs' (uncurry assertParseText) []
+checks = checkListPairs' (uncurry assertParseText) mempty
 
 
 class VariadicArgs t where
@@ -810,7 +810,7 @@ instance (VariadicArgs a) => VariadicArgs (NixLang -> a) where
   checkList' f acc x = checkList' f (acc <> one x)
 
 knownAs :: (VariadicArgs a) => (NixLang -> Assertion) -> a
-knownAs f = checkList' f []
+knownAs f = checkList' f mempty
 
 mistakes :: (VariadicArgs a) => a
 mistakes = knownAs assertParseFail
