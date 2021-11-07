@@ -2782,3 +2782,7 @@
     note: "Modern name is `sequenceA`"
     rhs: sequenceA
 
+- hint:
+    lhs: "()"
+    note: "Use `mempty`"
+    rhs: mempty
