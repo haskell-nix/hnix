@@ -2758,3 +2758,8 @@
     lhs: "()"
     note: "Use `mempty`"
     rhs: mempty
+
+- hint:
+    lhs: "return"
+    note: "Please, use `pure` instead. even GHC already deprecates `return` starting from `9.2`."
+    rhs: mempty
