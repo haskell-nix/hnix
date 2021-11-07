@@ -111,19 +111,19 @@
     lhs: "foldl' (*) 1"
     rhs: product
 - hint:
-    lhs: "fmap and (sequence s)"
+    lhs: "fmap and (sequenceA s)"
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: andM s
 - hint:
-    lhs: "and <$> sequence s"
+    lhs: "and <$> sequenceA s"
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: andM s
 - hint:
-    lhs: "fmap or (sequence s)"
+    lhs: "fmap or (sequenceA s)"
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: orM s
 - hint:
-    lhs: "or <$> sequence s"
+    lhs: "or <$> sequenceA s"
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: orM s
 - hint:
