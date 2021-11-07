@@ -19,10 +19,6 @@
 - ignore:
     name: Use Foldable.forM_
 - hint:
-    lhs: "pure ()"
-    note: "Use 'stub'"
-    rhs: stub
-- hint:
     lhs: "pure mempty"
     note: "Use 'stub'"
     rhs: stub
@@ -98,7 +94,7 @@
     note: "Use `one`"
     rhs: one
 - warn:
-    lhs: "Control.Exception.evaluate (x `deepseq` ())"
+    lhs: "Control.Exception.evaluate (x `deepseq` mempty)"
     rhs: evaluateNF_ x
 - warn:
     lhs: "void (evaluateWHNF x)"
@@ -1480,16 +1476,16 @@
     note: "'writeIORef' is already exported from Relude"
     rhs: writeIORef
 - warn:
-    lhs: "atomicModifyIORef ref (\\a -> (f a, ()))"
+    lhs: "atomicModifyIORef ref (\\a -> (f a, mempty))"
     rhs: atomicModifyIORef_ ref f
 - warn:
-    lhs: "atomicModifyIORef ref $ \\a -> (f a, ())"
+    lhs: "atomicModifyIORef ref $ \\a -> (f a, mempty)"
     rhs: atomicModifyIORef_ ref f
 - warn:
-    lhs: "atomicModifyIORef' ref $ \\a -> (f a, ())"
+    lhs: "atomicModifyIORef' ref $ \\a -> (f a, mempty)"
     rhs: "atomicModifyIORef'_ ref f"
 - warn:
-    lhs: "atomicModifyIORef' ref (\\a -> (f a, ()))"
+    lhs: "atomicModifyIORef' ref (\\a -> (f a, mempty))"
     rhs: "atomicModifyIORef'_ ref f"
 - warn:
     lhs: Data.Text.IO.getLine
