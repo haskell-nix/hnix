@@ -27,7 +27,7 @@ quoteExprPat :: String -> PatQ
 quoteExprPat s =
   do
     expr <- parseExpr @Q $ fromString s
-    (dataToPatQ @NExpr)
+    dataToPatQ
       (extQOnFreeVars @_ @NExprLoc @PatQ metaPat expr)
       expr
 
