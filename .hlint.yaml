@@ -2719,6 +2719,11 @@
     rhs: id
 
 - hint:
+    lhs: "join (f . pure)"
+    note: "Monad law"
+    rhs: (f =<< pure)
+
+- hint:
     lhs: "join . (f <<$>>)"
     note: "Monad law"
     rhs: fmap f . join
