@@ -33,13 +33,14 @@
     rhs: mempty
 
 - hint:
-    lhs: "(: [])"
+    lhs: "(: mempty)"
     note: "Use `one`"
     rhs: one
 - hint:
-    lhs: "(:| [])"
+    lhs: "(:| mempty)"
     note: "Use `one`"
     rhs: one
+
 - hint:
     lhs: Data.Sequence.singleton
     note: "Use `one`"
