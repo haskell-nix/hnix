@@ -262,34 +262,37 @@ attrSetAlter ks' pos m' p' val =
       insertVal . ((toValue @(AttrSet v, PositionSet)) <=< ((,mempty) <$>) . sequenceA . snd) <$> go p'' m'' ks
 
 desugarBinds :: forall r . ([Binding r] -> r) -> [Binding r] -> [Binding r]
-desugarBinds embed binds = evalState (traverse (findBinding <=< collect) binds) mempty
+desugarBinds embed = (`evalState` mempty) . traverse (findBinding <=< collect)
  where
   collect
     :: Binding r
     -> State
-         (HashMap VarName (SourcePos, [Binding r]))
+         (AttrSet (SourcePos, [Binding r]))
          (Either VarName (Binding r))
-  collect (NamedVar (StaticKey x :| y : ys) val p) =
+  collect (NamedVar (StaticKey x :| y : ys) val oldPosition) =
     do
-      m <- get
-      put $
-        join
-          (M.insert
-            x
-            . maybe
-              (p, one $ bindValAt p)
-              (\ (sp, bnd) -> (sp, one (bindValAt sp) <> bnd))
-              . M.lookup x
-          )
-          m
+      modify updateBindingInformation
       pure $ Left x
    where
-    bindValAt = NamedVar (y :| ys) val
+    updateBindingInformation
+      :: AttrSet (SourcePos, [Binding r])
+      -> AttrSet (SourcePos, [Binding r])
+    updateBindingInformation =
+      M.insert x
+        =<< maybe
+            (mkBindingSingleton oldPosition)
+            (\ (foundPosition, newBindings) -> second (<> newBindings) $ mkBindingSingleton foundPosition)
+            . M.lookup x
+    mkBindingSingleton :: SourcePos -> (SourcePos, [Binding r])
+    mkBindingSingleton np = (np , one $ bindValAt np)
+     where
+      bindValAt :: SourcePos -> Binding r
+      bindValAt = NamedVar (y :| ys) val
   collect x = pure $ pure x
 
   findBinding
     :: Either VarName (Binding r)
-    -> State (HashMap VarName (SourcePos, [Binding r])) (Binding r)
+    -> State (AttrSet (SourcePos, [Binding r])) (Binding r)
   findBinding =
     either
       (\ x ->
