@@ -257,7 +257,7 @@ splitVersion s =
    (\ (x, xs) -> if
       | isRight eDigitsPart ->
           either
-            (\ e -> error $ "splitVersion: did hit impossible: '" <> toText e <> "' while parsing '" <> s <> "'.")
+            (\ e -> error $ "splitVersion: did hit impossible: '" <> fromString e <> "' while parsing '" <> s <> "'.")
             (\ res ->
               one (VersionComponentNumber $ fst res)
               <> splitVersion (snd res)
@@ -1488,6 +1488,7 @@ readDirNix nvpath =
     items          <- listDirectory path
 
     let
+      -- | Function indeed binds filepaths as keys ('VarNames') in Nix attrset.
       detectFileTypes :: Path -> m (VarName, FileType)
       detectFileTypes item =
         do
@@ -1500,7 +1501,7 @@ readDirNix nvpath =
                 | isSymbolicLink s -> FileTypeSymlink
                 | otherwise        -> FileTypeUnknown
 
-          pure (coerce @Text @VarName $ toText item, t) -- function indeed binds filepaths as keys (VarNames) in Nix attrset.
+          pure (coerce @(String -> Text) fromString item, t)
 
     itemsWithTypes <-
       traverse

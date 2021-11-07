@@ -730,7 +730,7 @@ assertParseFile file expected =
   do
     res <- parseNixFile $ "data/" <> file
     either
-      (throwParseError "data file" $ toText file)
+      (throwParseError "data file" $ coerce fromString file)
       (assertEqual
         ("Parsing data file " <> coerce file)
         (stripPositionInfo expected)
