@@ -144,9 +144,9 @@ data NValueF p m r
 instance Eq1 (NValueF p m) where
   liftEq _  (NVConstantF x) (NVConstantF y) = x == y
   liftEq _  (NVStrF      x) (NVStrF      y) = x == y
+  liftEq _  (NVPathF     x) (NVPathF     y) = x == y
   liftEq eq (NVListF     x) (NVListF     y) = liftEq eq x y
   liftEq eq (NVSetF  _   x) (NVSetF _    y) = liftEq eq x y
-  liftEq _  (NVPathF     x) (NVPathF     y) = x == y
   liftEq _  _               _               = False
 
 
@@ -176,10 +176,10 @@ instance Foldable (NValueF p m) where
     NVConstantF _  -> mempty
     NVStrF      _  -> mempty
     NVPathF     _  -> mempty
-    NVListF     l  -> foldMap f l
-    NVSetF     _ s -> foldMap f s
     NVClosureF _ _ -> mempty
     NVBuiltinF _ _ -> mempty
+    NVListF     l  -> foldMap f l
+    NVSetF     _ s -> foldMap f s
 
 
 -- ** Traversable
@@ -283,13 +283,13 @@ instance (Comonad f, Show a) => Show (NValue' t f m a) where
 
 instance Comonad f => Show1 (NValue' t f m) where
   liftShowsPrec sp sl p = \case
-    NVConstant' atom  -> showsUnaryWith showsPrec "NVConstantF" p atom
-    NVStr' ns         -> showsUnaryWith showsPrec "NVStrF" p $ ignoreContext ns
-    NVList' lst       -> showsUnaryWith (liftShowsPrec sp sl) "NVListF" p lst
-    NVSet'  _   attrs -> showsUnaryWith (liftShowsPrec sp sl) "NVSetF" p attrs
-    NVPath' path      -> showsUnaryWith showsPrec "NVPathF" p path
-    NVClosure' c    _ -> showsUnaryWith showsPrec "NVClosureF" p c
-    NVBuiltin' name _ -> showsUnaryWith showsPrec "NVBuiltinF" p name
+    NVConstant' atom  -> showsUnaryWith showsPrec             "NVConstantF" p atom
+    NVStr' ns         -> showsUnaryWith showsPrec             "NVStrF"      p $ ignoreContext ns
+    NVList' lst       -> showsUnaryWith (liftShowsPrec sp sl) "NVListF"     p lst
+    NVSet'  _   attrs -> showsUnaryWith (liftShowsPrec sp sl) "NVSetF"      p attrs
+    NVPath' path      -> showsUnaryWith showsPrec             "NVPathF"     p path
+    NVClosure' c    _ -> showsUnaryWith showsPrec             "NVClosureF"  p c
+    NVBuiltin' name _ -> showsUnaryWith showsPrec             "NVBuiltinF"  p name
 
 
 -- ** Traversable
@@ -436,7 +436,6 @@ mkNVSet' :: Applicative f
   => PositionSet
   -> AttrSet r
   -> NValue' t f m r
---  2021-07-16: NOTE: that the arguments are flipped.
 mkNVSet' p s = NValue' $ pure $ NVSetF p s
 
 
@@ -554,7 +553,7 @@ liftNValue
   => (forall x . u m x -> m x)
   -> NValue t f m
   -> NValue t f (u m)
-liftNValue run = hoistNValue run lift
+liftNValue = (`hoistNValue` lift)
 
 
 -- *** MonadTransUnlift
