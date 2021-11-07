@@ -280,7 +280,7 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
     do
       scope <- askScopes
       span  <- askSpan
-      pure $ mkNVClosureWithProvenance scope span (void p) . (fmap snd .) . (. pure) $ flip k (const (fmap ((),)))
+      pure $ mkNVClosureWithProvenance scope span (void p) (fmap snd . flip k (const (fmap (() ,))) . pure)
 
   evalError = throwError
 
