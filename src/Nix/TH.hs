@@ -48,13 +48,6 @@ extQOnFreeVars
   -> Maybe q
 extQOnFreeVars f = extQ (const Nothing) . f . freeVars
 
-parseExpr :: (MonadFail m) => Text -> m NExpr
-parseExpr =
-  either
-    (fail . show)
-    pure
-    . parseNixText
-
 freeVars :: NExpr -> Set VarName
 freeVars e = case unFix e of
   (NConstant    _               ) -> mempty

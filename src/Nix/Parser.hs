@@ -9,6 +9,7 @@ module Nix.Parser
   , parseNixFileLoc
   , parseNixText
   , parseNixTextLoc
+  , parseExpr
   , parseFromFileEx
   , Parser
   , parseFromText
@@ -918,3 +919,9 @@ parseNixTextLoc :: Text -> Result NExprLoc
 parseNixTextLoc =
   parseNixText' id
 
+parseExpr :: (MonadFail m) => Text -> m NExpr
+parseExpr =
+  either
+    (fail . show)
+    pure
+    . parseNixText
