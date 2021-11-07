@@ -62,7 +62,7 @@ alignEqM eq fa fb =
             (Data.Semialign.align fa fb)
 
 alignEq :: (Align f, Traversable f) => (a -> b -> Bool) -> f a -> f b -> Bool
-alignEq eq fa fb = runIdentity $ alignEqM (\x y -> Identity (eq x y)) fa fb
+alignEq eq fa fb = runIdentity $ alignEqM ((Identity .) . eq) fa fb
 
 isDerivationM
   :: Monad m
@@ -128,8 +128,8 @@ valueFEq
 valueFEq attrsEq eq x y =
   runIdentity $
     valueFEqM
-      (\x' y' -> Identity $ attrsEq x' y')
-      (\x' y' -> Identity $ eq x' y')
+      ((Identity .) . attrsEq)
+      ((Identity .) . eq)
       x
       y
 
@@ -164,7 +164,7 @@ compareAttrSets
   -> AttrSet t
   -> Bool
 compareAttrSets f eq lm rm = runIdentity
-  $ compareAttrSetsM (Identity . f) (\x y -> Identity $ eq x y) lm rm
+  $ compareAttrSetsM (Identity . f) ((Identity .) . eq) lm rm
 
 valueEqM
   :: (MonadThunk t m (NValue t f m), Comonad f)
