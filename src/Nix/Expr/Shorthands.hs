@@ -1,5 +1,5 @@
 
--- | A bunch of shorthands for making nix expressions.
+-- | Shorthands for making Nix expressions.
 --
 -- Functions with an @F@ suffix return a more general type (base functor @F a@) without the outer
 -- 'Fix' wrapper that creates @a@.
@@ -424,13 +424,13 @@ infixr 1 ==>
 -- | __@Deprecated@__: Please, use `mkOp`
 -- Put an unary operator.
 mkOper :: NUnaryOp -> NExpr -> NExpr
-mkOper op = Fix . NUnary op
+mkOper = mkOp
 
 -- NOTE: Remove after 2023-07
 -- | __@Deprecated@__: Please, use `mkOp2`
 -- | Put a binary operator.
 mkOper2 :: NBinaryOp -> NExpr -> NExpr -> NExpr
-mkOper2 op a = Fix . NBinary op a
+mkOper2 = mkOp2
 
 -- NOTE: Remove after 2023-07
 -- | __@Deprecated@__: Please, use `mkOp2`
