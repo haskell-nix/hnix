@@ -27,6 +27,11 @@
     note: "Use 'stub'"
     rhs: stub
 - hint:
+    lhs: "pure mempty"
+    note: "Use 'stub'"
+    rhs: stub
+
+- hint:
     lhs: "(: [])"
     note: "Use `one`"
     rhs: one
