@@ -540,34 +540,46 @@ case_select_keyword =
     )
 
 case_select_or_precedence =
-    assertParsePrint [text|let
-  matchDef = def:   matcher:
-                      v:   let
-                             case = builtins.head (builtins.attrNames v);
-                           in (matcher.case or def case) (v.case);
-in null|] [text|let
-  matchDef = def:
-    matcher:
-      v:
+    assertParsePrint
+      [text|
         let
-          case = builtins.head (builtins.attrNames v);
-        in (matcher.case or def) case (v.case);
-in null|]
+          matchDef = def:   matcher:
+                              v:   let
+                                    case = builtins.head (builtins.attrNames v);
+                                  in (matcher.case or def case) (v.case);
+        in null
+      |]
+      [text|
+         let
+          matchDef = def:
+            matcher:
+              v:
+                let
+                  case = builtins.head (builtins.attrNames v);
+                in (matcher.case or def) case (v.case);
+        in null
+      |]
 
 case_select_or_precedence2 =
-    assertParsePrint [text|let
-  matchDef = def:   matcher:
-                      v:   let
-                             case = builtins.head (builtins.attrNames v);
-                           in (matcher.case or null.foo) (v.case);
-in null|] [text|let
-  matchDef = def:
-    matcher:
-      v:
+    assertParsePrint
+      [text|
         let
-          case = builtins.head (builtins.attrNames v);
-        in (matcher.case or null).foo (v.case);
-in null|]
+          matchDef = def:   matcher:
+                              v:   let
+                                    case = builtins.head (builtins.attrNames v);
+                                  in (matcher.case or null.foo) (v.case);
+        in null
+      |]
+      [text|
+        let
+          matchDef = def:
+            matcher:
+              v:
+                let
+                  case = builtins.head (builtins.attrNames v);
+                in (matcher.case or null).foo (v.case);
+        in null
+      |]
 
 -- ** Function application
 
