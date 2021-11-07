@@ -369,7 +369,7 @@ instance ( Convertible e t f m
 
 instance Convertible e t f m
   => ToValue () m (NValue' t f m (NValue t f m)) where
-  toValue _ = pure . mkNVConstant' $ NNull
+  toValue _ = pure $ nvNull'
 
 instance Convertible e t f m
   => ToValue Bool m (NValue' t f m (NValue t f m)) where
