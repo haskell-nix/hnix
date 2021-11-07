@@ -242,21 +242,21 @@ instance MonadNix e t f m => MonadEval (NValue t f m) m where
       let f = join $ addProvenance . Provenance scope . NWithAnnF span Nothing . pure
       f <$> evalWithAttrSet c b
 
-  evalIf c tVal fVal = do
-    scope <- askScopes
-    span  <- askSpan
-    bl <- fromValue c
+  evalIf c tVal fVal =
+    do
+      scope <- askScopes
+      span  <- askSpan
+      bl <- fromValue c
 
-    let
-      fun x y = addProvenance (Provenance scope $ NIfAnnF span (pure c) x y)
-      -- Note: join acts as \ f x -> f x x
-      falseVal = join (fun Nothing . pure) <$> fVal
-      trueVal = join (flip fun Nothing . pure) <$> tVal
+      let
+        fun x y = addProvenance (Provenance scope $ NIfAnnF span (pure c) x y)
+        falseVal = (fun Nothing =<< pure) <$> fVal
+        trueVal = (flip fun Nothing =<< pure) <$> tVal
 
-    bool
-      falseVal
-      trueVal
-      bl
+      bool
+        falseVal
+        trueVal
+        bl
 
   evalAssert c body =
     do
