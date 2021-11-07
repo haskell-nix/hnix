@@ -493,13 +493,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
   evalEnvPath     = constInfer typePath
 
   evalUnary op (Judgment as1 cs1 t1) =
-    fmap
-      (join
-        $ Judgment
-            as1
-            . (cs1 <>) . (`unops` op) . (t1 :~>)
-      )
-      fresh
+    (Judgment as1 =<< (cs1 <>) . (`unops` op) . (t1 :~>)) <$> fresh
 
   evalBinary op (Judgment as1 cs1 t1) e2 = do
     Judgment as2 cs2 t2 <- e2
