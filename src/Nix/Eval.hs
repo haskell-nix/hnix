@@ -466,8 +466,7 @@ evalSetterKeyName =
   \case
     StaticKey k -> pure $ pure k
     DynamicKey k ->
-      (coerce . ignoreContext) <<$>>
-        runAntiquoted "\n" assembleString (fromValueMay =<<) k
+      coerce . ignoreContext <<$>> runAntiquoted "\n" assembleString (fromValueMay =<<) k
 
 assembleString
   :: forall v m
