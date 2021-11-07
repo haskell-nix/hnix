@@ -2777,3 +2777,8 @@
     note: "Monad law"
     rhs: fmap f . join
 
+- hint:
+    lhs: "Data.Traversable.sequence"
+    note: "Modern name is `sequenceA`"
+    rhs: sequenceA
+
