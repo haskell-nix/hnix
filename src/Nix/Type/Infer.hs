@@ -534,15 +534,9 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     ((), Judgment as cs t) <-
       extendMSet
         a
-        (k
-          (pure $
-             Judgment
-               (one (x, tv))
-               mempty
-               tv
-          )
-          (\_ b -> ((), ) <$> b)
-        )
+        $ k @()
+            ((pure . ((`Judgment` mempty) =<< curry one x)) tv)
+            $ const $ fmap (mempty,)
     pure $
       Judgment
         (as `Assumption.remove` x)
