@@ -318,9 +318,9 @@ data NKeyName r
     )
 
 instance NFData1 NKeyName where
-  liftRnf _ (StaticKey  !_            ) = ()
-  liftRnf _ (DynamicKey (Plain !_)    ) = ()
-  liftRnf _ (DynamicKey EscapedNewline) = ()
+  liftRnf _ (StaticKey  !_            ) = mempty
+  liftRnf _ (DynamicKey (Plain !_)    ) = mempty
+  liftRnf _ (DynamicKey EscapedNewline) = mempty
   liftRnf k (DynamicKey (Antiquoted r)) = k r
 
 -- | Most key names are just static text, so this instance is convenient.

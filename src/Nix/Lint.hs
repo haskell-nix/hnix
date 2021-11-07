@@ -387,7 +387,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
       _ <- unify (void e) cond =<< mkSymbolic (one $ TConstant $ one TBool)
       pure body'
 
-  evalApp = (fmap snd .) . lintApp (NBinary NApp () ())
+  evalApp = (fmap snd .) . lintApp (join (NBinary NApp) mempty)
   evalAbs params _ = mkSymbolic (one $ TClosure $ void params)
 
   evalError = throwError
