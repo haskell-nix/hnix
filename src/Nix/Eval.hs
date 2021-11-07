@@ -259,9 +259,7 @@ attrSetAlter ks' pos m' p' val =
           , AttrSet (m v)
           )
     recurse p'' m'' =
-      fmap
-        (insertVal . (=<<) (toValue @(AttrSet v, PositionSet)) . fmap (,mempty) . sequenceA . snd)
-        (go p'' m'' ks)
+      insertVal . ((toValue @(AttrSet v, PositionSet)) <=< ((,mempty) <$>) . sequenceA . snd) <$> go p'' m'' ks
 
 desugarBinds :: forall r . ([Binding r] -> r) -> [Binding r] -> [Binding r]
 desugarBinds embed binds = evalState (traverse (findBinding <=< collect) binds) mempty
