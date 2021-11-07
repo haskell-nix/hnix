@@ -44,7 +44,7 @@ extQOnFreeVars
   -> NExpr
   -> b
   -> Maybe q
-extQOnFreeVars f = extQ (const Nothing) . f . freeVars
+extQOnFreeVars f = extQ (const Nothing) . f . getFreeVars
 
 class ToExpr a where
   toExpr :: a -> NExprLoc

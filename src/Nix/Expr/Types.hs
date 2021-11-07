@@ -743,8 +743,8 @@ ekey keys pos f e@(Fix x)
 ekey _ _ f e = fromMaybe e <$> f Nothing
 
 
-freeVars :: NExpr -> Set VarName
-freeVars e =
+getFreeVars :: NExpr -> Set VarName
+getFreeVars e =
   case unFix e of
     (NConstant    _               ) -> mempty
     (NStr         string          ) -> mapFreeVars string
@@ -754,30 +754,30 @@ freeVars e =
     (NSet   Recursive     bindings) -> diffBetween bindFreeVars bindDefs bindings
     (NLiteralPath _               ) -> mempty
     (NEnvPath     _               ) -> mempty
-    (NUnary       _    expr       ) -> freeVars expr
+    (NUnary       _    expr       ) -> getFreeVars expr
     (NBinary      _    left right ) -> collectFreeVars left right
     (NSelect      orExpr expr path) ->
       Set.unions
-        [ freeVars expr
+        [ getFreeVars expr
         , pathFree path
-        , freeVars `whenJust` orExpr
+        , getFreeVars `whenJust` orExpr
         ]
-    (NHasAttr expr            path) -> freeVars expr <> pathFree path
-    (NAbs     (Param varname) expr) -> Set.delete varname (freeVars expr)
+    (NHasAttr expr            path) -> getFreeVars expr <> pathFree path
+    (NAbs     (Param varname) expr) -> Set.delete varname (getFreeVars expr)
     (NAbs (ParamSet varname _ pset) expr) ->
       -- Include all free variables from the expression and the default arguments
-      freeVars expr <>
+      getFreeVars expr <>
       -- But remove the argument name if existing, and all arguments in the parameter set
       Set.difference
-        (Set.unions $ freeVars <$> mapMaybe snd pset)
+        (Set.unions $ getFreeVars <$> mapMaybe snd pset)
         (Set.difference
           (one `whenJust` varname)
           (Set.fromList $ fst <$> pset)
         )
     (NLet         bindings expr   ) ->
-      freeVars expr <>
+      getFreeVars expr <>
       diffBetween bindFreeVars bindDefs bindings
-    (NIf          cond th   el    ) -> Set.unions $ freeVars <$> [cond, th, el]
+    (NIf          cond th   el    ) -> Set.unions $ getFreeVars <$> [cond, th, el]
     -- Evaluation is needed to find out whether x is a "real" free variable in `with y; x`, we just include it
     -- This also makes sense because its value can be overridden by `x: with y; x`
     (NWith        set  expr       ) -> collectFreeVars set expr
@@ -788,7 +788,7 @@ freeVars e =
   diffBetween g f b = Set.difference (g b) (f b)
 
   collectFreeVars :: NExpr -> NExpr -> Set VarName
-  collectFreeVars = (<>) `on` freeVars
+  collectFreeVars = (<>) `on` getFreeVars
 
   bindDefs :: Foldable t => t (Binding NExpr) -> Set VarName
   bindDefs = foldMap bind1Def
@@ -804,11 +804,11 @@ freeVars e =
    where
     bind1Free :: Binding NExpr -> Set VarName
     bind1Free (Inherit  Nothing     keys _) = Set.fromList keys
-    bind1Free (Inherit (Just scope) _    _) = freeVars scope
-    bind1Free (NamedVar path        expr _) = pathFree path <> freeVars expr
+    bind1Free (Inherit (Just scope) _    _) = getFreeVars scope
+    bind1Free (NamedVar path        expr _) = pathFree path <> getFreeVars expr
 
   pathFree :: NAttrPath NExpr -> Set VarName
   pathFree = foldMap mapFreeVars
 
   mapFreeVars :: Foldable t => t NExpr -> Set VarName
-  mapFreeVars = foldMap freeVars
+  mapFreeVars = foldMap getFreeVars
