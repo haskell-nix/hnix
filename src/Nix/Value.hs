@@ -404,6 +404,11 @@ mkNVConstant' :: Applicative f
   -> NValue' t f m r
 mkNVConstant' = NValue' . pure . NVConstantF
 
+-- | Using of Nulls is generally discouraged (in programming language design et al.), but, if you need it.
+nvNull' :: Applicative f
+  => NValue' t f m r
+nvNull' = mkNVConstant' NNull
+
 
 -- | Haskell text & context to the Nix text & context,
 mkNVStr' :: Applicative f
