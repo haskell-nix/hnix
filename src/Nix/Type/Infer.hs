@@ -553,7 +553,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
       call  = k arg $ \args b -> (args, ) <$> b
       names = fst <$> js
 
-    (args, Judgment as cs t) <- foldr (\(_, TVar a) -> extendMSet a) call js
+    (args, Judgment as cs t) <- foldr (extendMSet . (\ (TVar a) -> a) . snd) call js
 
     ty <- foldInitializedWith (TSet variadic) inferredType id args
 
