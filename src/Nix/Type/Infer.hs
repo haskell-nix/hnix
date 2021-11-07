@@ -452,9 +452,9 @@ instance MonadInfer m
 
 polymorphicVar :: MonadInfer m => VarName -> InferT s m (Judgment s)
 polymorphicVar var =
-    fmap
-      (join ((`Judgment` mempty) . curry one var))
-      fresh
+  fmap
+    (join $ (`Judgment` mempty) . curry one var)
+    fresh
 
 constInfer :: Applicative f => Type -> b -> f (Judgment s)
 constInfer x = const $ pure $ inferred x
@@ -534,9 +534,9 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     ((), Judgment as cs t) <-
       extendMSet
         a
-        $ k @()
-            ((pure . ((`Judgment` mempty) =<< curry one x)) tv)
-            $ const $ fmap (mempty,)
+        $ k
+          (pure (join ((`Judgment` mempty) . curry one x ) tv))
+          $ const $ fmap (mempty,)
     pure $
       Judgment
         (as `Assumption.remove` x)
