@@ -225,40 +225,16 @@
     lhs: "maybe (Right r) Left"
     rhs: maybeToLeft r
 - warn:
-    lhs: "case m of [] -> return (); (x:xs) -> f (x :| xs)"
+    lhs: "case m of [] -> stub ; (x:xs) -> f (x :| xs)"
     rhs: whenNotNull m f
 - warn:
-    lhs: "case m of [] -> stub  ; (x:xs) -> f (x :| xs)"
+    lhs: "case m of (x:xs) -> f (x :| xs); [] -> stub"
     rhs: whenNotNull m f
 - warn:
-    lhs: "case m of [] -> stub     ; (x:xs) -> f (x :| xs)"
-    rhs: whenNotNull m f
-- warn:
-    lhs: "case m of (x:xs) -> f (x :| xs); [] -> return ()"
-    rhs: whenNotNull m f
-- warn:
-    lhs: "case m of (x:xs) -> f (x :| xs); [] -> stub  "
-    rhs: whenNotNull m f
-- warn:
-    lhs: "case m of (x:xs) -> f (x :| xs); [] -> stub     "
-    rhs: whenNotNull m f
-- warn:
-    lhs: "m >>= \\case [] -> stub     ; (x:xs) -> f (x :| xs)"
+    lhs: "m >>= \\case [] -> stub ; (x:xs) -> f (x :| xs)"
     rhs: whenNotNullM m f
 - warn:
-    lhs: "m >>= \\case [] -> stub  ; (x:xs) -> f (x :| xs)"
-    rhs: whenNotNullM m f
-- warn:
-    lhs: "m >>= \\case [] -> return (); (x:xs) -> f (x :| xs)"
-    rhs: whenNotNullM m f
-- warn:
-    lhs: "m >>= \\case (x:xs) -> f (x :| xs); [] -> stub     "
-    rhs: whenNotNullM m f
-- warn:
-    lhs: "m >>= \\case (x:xs) -> f (x :| xs); [] -> stub  "
-    rhs: whenNotNullM m f
-- warn:
-    lhs: "m >>= \\case (x:xs) -> f (x :| xs); [] -> return ()"
+    lhs: "m >>= \\case (x:xs) -> f (x :| xs); [] -> stub"
     rhs: whenNotNullM m f
 - warn:
     lhs: mapMaybe leftToMaybe
