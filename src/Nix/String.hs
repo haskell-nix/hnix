@@ -2,7 +2,7 @@
 
 module Nix.String
   ( NixString
-  , getContext
+  , getStringContext
   , mkNixString
   , StringContext(..)
   , ContextFlavor(..)
@@ -103,11 +103,10 @@ type WithStringContext = WithStringContextT Identity
 
 -- ** NixString
 
---  2021-07-18: NOTE: It should be Context -> Contents.
 data NixString =
   NixString
-    { nsContext :: !(S.HashSet StringContext)
-    , nsContents :: !Text
+    { getStringContext :: !(S.HashSet StringContext)
+    , getStringContent :: !Text
     }
   deriving (Eq, Ord, Show, Generic)
 
@@ -147,9 +146,6 @@ hasContext (NixString c _) = not $ null c
 
 
 -- ** Getters
-
-getContext :: NixString -> S.HashSet StringContext
-getContext = nsContext
 
 fromNixLikeContext :: NixLikeContext -> S.HashSet StringContext
 fromNixLikeContext =
@@ -258,18 +254,9 @@ intercalateNixString :: NixString -> [NixString] -> NixString
 intercalateNixString _   []   = mempty
 intercalateNixString _   [ns] = ns
 intercalateNixString sep nss  =
-  uncurry NixString $ mapPair intertwine unpackNss
- where
-
-  intertwine :: ([HashSet StringContext] -> HashSet StringContext, [Text] -> Text)
-  intertwine =
-    ( S.unions . (:)   (nsContext  sep)
-    , Text.intercalate (nsContents sep)
-    )
-
-  unpackNss :: ([HashSet StringContext], [Text])
-  unpackNss = (fnss nsContext, fnss nsContents)
-   where
-    fnss :: (NixString -> b) -> [b]
-    fnss = (`fmap` nss) -- do once
-
+  uncurry NixString $
+    mapPair
+      (S.unions . (one (getStringContext  sep) <>) . (getStringContext <$>)
+      , Text.intercalate (getStringContent sep) . (getStringContent <$>)
+      )
+      $ dup nss

@@ -1068,7 +1068,7 @@ replaceStringsNix tfrom tto ts =
           updatedCtx     = ctx <> replacementCtx
 
           replacement    = Builder.fromText $ ignoreContext replacementNS
-          replacementCtx = getContext replacementNS
+          replacementCtx = getStringContext replacementNS
 
           -- The bug modifies the content => bug demands `pass` to be a real function =>
           -- `go` calls `pass` function && `pass` calls `go` function
@@ -1079,7 +1079,7 @@ replaceStringsNix tfrom tto ts =
               (\(c, i) -> go updatedCtx i $ output <> Builder.singleton c) -- If there are chars - pass one char & continue
               (Text.uncons input)  -- chip first char
 
-    toValue $ go (getContext string) (ignoreContext string) mempty
+    toValue $ go (getStringContext string) (ignoreContext string) mempty
 
 removeAttrsNix
   :: forall e t f m
@@ -1702,7 +1702,7 @@ getContextNix
 getContextNix =
   \case
     (NVStr ns) ->
-      mkNVSet mempty <$> traverseToValue (getNixLikeContext $ toNixLikeContext $ getContext ns)
+      mkNVSet mempty <$> traverseToValue (getNixLikeContext $ toNixLikeContext $ getStringContext ns)
     x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: " <> show x
   <=< demand
 
@@ -1769,7 +1769,7 @@ appendContextNix tx ty =
                       newContextValues
                       $ getNixLikeContext $
                           toNixLikeContext $
-                            getContext ns
+                            getStringContext ns
                 )
                 $ ignoreContext ns
 
