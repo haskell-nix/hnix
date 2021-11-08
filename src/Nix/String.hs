@@ -48,8 +48,8 @@ import           Nix.Expr.Types                 ( VarName(..)
 -- | A Nix 'StringContext' ...
 data StringContext =
   StringContext
-    { scFlavor :: !ContextFlavor
-    , scPath :: !VarName
+    { getStringContextFlavor :: !ContextFlavor
+    , getStringContextPath   :: !VarName
     }
   deriving (Eq, Ord, Show, Generic)
 
@@ -192,13 +192,13 @@ toStringContexts path = go
     mkLstCtxFor t c = one (mkCtxFor t) <> go c
 
 
-toNixLikeContextValue :: StringContext -> (VarName, NixLikeContextValue)
+toNixLikeContextValue :: StringContext -> (NixLikeContextValue, VarName)
 toNixLikeContextValue sc =
-  ( scPath sc
-  , case scFlavor sc of
+  ( case getStringContextFlavor sc of
       DirectPath         -> NixLikeContextValue True False mempty
       AllOutputs         -> NixLikeContextValue False True mempty
       DerivationOutput t -> NixLikeContextValue False False $ one t
+  , getStringContextPath sc
   )
 
 toNixLikeContext :: S.HashSet StringContext -> NixLikeContext
@@ -211,8 +211,7 @@ toNixLikeContext stringContext =
  where
   fun :: (StringContext -> AttrSet NixLikeContextValue -> AttrSet NixLikeContextValue)
   fun sc hm =
-    let (t, nlcv) = toNixLikeContextValue sc in
-    M.insertWith (<>) t nlcv hm
+    uncurry (M.insertWith (<>)) (swap $ toNixLikeContextValue sc) hm
 
 -- | Add 'StringContext's into the resulting set.
 addStringContext
