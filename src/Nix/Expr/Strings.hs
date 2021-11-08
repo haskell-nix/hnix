@@ -39,14 +39,16 @@ runAntiquoted nl f _ EscapedNewline = f nl
 runAntiquoted _  _ k (Antiquoted r) = k r
 
 -- | Split a stream representing a string with antiquotes on line breaks.
-splitLines :: [Antiquoted Text r] -> [[Antiquoted Text r]]
-splitLines = uncurry (flip (:)) . go where
-  go (Plain t : xs) = (Plain l :) <$> foldr f (go xs) ls
+splitLines :: forall r . [Antiquoted Text r] -> [[Antiquoted Text r]]
+splitLines = uncurry (flip (:)) . go
+ where
+  go :: [Antiquoted Text r] -> ([[Antiquoted Text r]], [Antiquoted Text r])
+  go (Plain t : xs) = (one (Plain l) <>) <$> foldr f (go xs) ls
    where
     (l : ls) = T.split (== '\n') t
     f prefix (finished, current) = ((Plain prefix : current) : finished, mempty)
-  go (Antiquoted a   : xs) = (Antiquoted a :) <$> go xs
-  go (EscapedNewline : xs) = (EscapedNewline :) <$> go xs
+  go (Antiquoted a   : xs) = (one (Antiquoted a) <>) <$> go xs
+  go (EscapedNewline : xs) = (one EscapedNewline <>) <$> go xs
   go []                    = mempty
 
 -- | Join a stream of strings containing antiquotes again. This is the inverse

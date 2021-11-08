@@ -24,14 +24,15 @@ hnixEvalFile opts file =
         do
           setEnv "TEST_VAR" "foo"
           runWithBasicEffects opts $
-            catch (evaluateExpression (pure $ coerce file) nixEvalExprLoc normalForm expr) $
-            \case
-              NixException frames ->
-                errorWithoutStackTrace . show
-                  =<< renderFrames
-                      @StdVal
-                      @StdThun
-                      frames
+            evaluateExpression (pure $ coerce file) nixEvalExprLoc normalForm expr
+              `catch`
+                \case
+                  NixException frames ->
+                    errorWithoutStackTrace . show
+                      =<< renderFrames
+                          @StdVal
+                          @StdThun
+                          frames
       )
       parseResult
 
