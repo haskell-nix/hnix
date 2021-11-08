@@ -1043,7 +1043,7 @@ replaceStringsNix tfrom tto ts =
 
         --  2021-02-18: NOTE: rly?: toStrict . toLazyText
         --  Maybe `text-builder`, `text-show`?
-        finish ctx output = mkNixString (toStrict $ Builder.toLazyText output) ctx
+        finish ctx output = mkNixString ctx (toStrict $ Builder.toLazyText output)
 
         replace (key, replacementNS, unprocessedInput) = replaceWithNixBug unprocessedInput updatedOutput
 
@@ -1141,7 +1141,7 @@ toFileNix name s =
       storepath  = coerce (fromString @Text) mres
       sc = StringContext DirectPath storepath
 
-    toValue $ mkNixStringWithSingletonContext storepath sc
+    toValue $ mkNixStringWithSingletonContext sc storepath
 
 toPathNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toPathNix = inHask @Path id
@@ -1699,15 +1699,12 @@ getRecursiveSizeNix = fmap (mkNVConstant . NInt . fromIntegral) . recursiveSize
 
 getContextNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-getContextNix v =
-  do
-    v' <- demand v
-    case v' of
-      (NVStr ns) -> do
-        let context = getNixLikeContext $ toNixLikeContext $ getContext ns
-        valued :: AttrSet (NValue t f m) <- traverseToValue context
-        pure $ mkNVSet mempty valued
-      x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: " <> show x
+getContextNix =
+  \case
+    (NVStr ns) ->
+      mkNVSet mempty <$> traverseToValue (getNixLikeContext $ toNixLikeContext $ getContext ns)
+    x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: " <> show x
+  <=< demand
 
 appendContextNix
   :: forall e t f m
@@ -1723,62 +1720,63 @@ appendContextNix tx ty =
     case (x, y) of
       (NVStr ns, NVSet _ attrs) ->
         do
-          newContextValues <- traverse getPathNOuts attrs
+          let
+            getPathNOuts :: NValue t f m -> m NixLikeContextValue
+            getPathNOuts tx =
+              do
+                x <- demand tx
 
-          toValue $ addContext ns newContextValues
+                case x of
+                  NVSet _ atts ->
+                    do
+                      -- TODO: Fail for unexpected keys.
+
+                      let
+                        getK :: VarName -> m Bool
+                        getK k =
+                          maybe
+                            (pure False)
+                            (fromValue <=< demand)
+                            $ M.lookup k atts
+
+                        getOutputs :: m [Text]
+                        getOutputs =
+                          maybe
+                            stub
+                            (\ touts ->
+                              do
+                                outs <- demand touts
+
+                                case outs of
+                                  NVList vs -> traverse (fmap ignoreContext . fromValue) vs
+                                  _x -> throwError $ ErrorCall $ "Invalid types for context value outputs in builtins.appendContext: " <> show _x
+                            )
+                            (M.lookup "outputs" atts)
+
+                      path <- getK "path"
+                      allOutputs <- getK "allOutputs"
+
+                      NixLikeContextValue path allOutputs <$> getOutputs
+
+                  _x -> throwError $ ErrorCall $ "Invalid types for context value in builtins.appendContext: " <> show _x
+            addContext :: HashMap VarName NixLikeContextValue -> NixString
+            addContext newContextValues =
+              mkNixString
+                (fromNixLikeContext $
+                  NixLikeContext $
+                    M.unionWith
+                      (<>)
+                      newContextValues
+                      $ getNixLikeContext $
+                          toNixLikeContext $
+                            getContext ns
+                )
+                $ ignoreContext ns
+
+          toValue . addContext =<< traverse getPathNOuts attrs
 
       _xy -> throwError $ ErrorCall $ "Invalid types for builtins.appendContext: " <> show _xy
 
- where
-  getPathNOuts tx =
-    do
-      x <- demand tx
-
-      case x of
-        NVSet _ attrs->
-          do
-            -- TODO: Fail for unexpected keys.
-
-            let
-              getK k =
-                maybe
-                  (pure False)
-                  (fromValue <=< demand)
-                  (M.lookup k attrs)
-
-              getOutputs =
-                maybe
-                  stub
-                  (\ touts ->
-                    do
-                      outs <- demand touts
-
-                      case outs of
-                        NVList vs -> traverse (fmap ignoreContext . fromValue) vs
-                        _x -> throwError $ ErrorCall $ "Invalid types for context value outputs in builtins.appendContext: " <> show _x
-                  )
-                  (M.lookup "outputs" attrs)
-
-            path <- getK "path"
-            allOutputs <- getK "allOutputs"
-
-            NixLikeContextValue path allOutputs <$> getOutputs
-
-        _x -> throwError $ ErrorCall $ "Invalid types for context value in builtins.appendContext: " <> show _x
-
-  addContext ns newContextValues =
-    mkNixString
-      (ignoreContext ns)
-      (fromNixLikeContext $
-        NixLikeContext $
-          M.unionWith
-            (<>)
-            newContextValues
-            (getNixLikeContext $
-              toNixLikeContext $
-                getContext ns
-            )
-      )
 
 nixVersionNix :: MonadNix e t f m => m (NValue t f m)
 nixVersionNix = toValue $ mkNixStringWithoutContext "2.3"

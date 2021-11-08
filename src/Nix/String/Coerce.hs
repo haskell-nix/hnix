@@ -133,5 +133,5 @@ coercePathToNixString =
     . (CopyToStore ==)
  where
   storePathToNixString :: StorePath -> NixString
-  storePathToNixString =
-    (mkNixStringWithSingletonContext <*> StringContext DirectPath) . fromString . coerce
+  storePathToNixString (fromString . coerce -> sp) =
+    (mkNixStringWithSingletonContext . StringContext DirectPath) sp sp

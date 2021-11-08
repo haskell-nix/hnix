@@ -130,12 +130,13 @@ mkNixStringWithoutContext = NixString mempty
 
 -- | Create NixString using a singleton context
 mkNixStringWithSingletonContext
-  :: VarName -> StringContext -> NixString
-mkNixStringWithSingletonContext s c = NixString (one c) (coerce @VarName @Text s)
+  :: StringContext -> VarName -> NixString
+mkNixStringWithSingletonContext c s = NixString (one c) (coerce @VarName @Text s)
 
 -- | Create NixString from a Text and context
-mkNixString :: Text -> S.HashSet StringContext -> NixString
-mkNixString t = (`NixString` t)
+mkNixString
+  :: S.HashSet StringContext -> Text -> NixString
+mkNixString = NixString
 
 
 -- ** Checkers
