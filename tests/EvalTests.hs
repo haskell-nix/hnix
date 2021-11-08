@@ -13,7 +13,6 @@ import           Data.Time
 import           NeatInterpolation (text)
 import           Nix
 import           Nix.Standard
-import           Nix.TH
 import           Nix.Value.Equal
 import qualified System.Directory as D
 import           Test.Tasty
@@ -444,7 +443,7 @@ case_mapattrs_builtin =
 -- Regression test for #373
 case_regression_373 :: Assertion
 case_regression_373 =
-  traverse_ (uncurry freeVarsEqual)
+  traverse_ (uncurry sameFreeVars)
     [ ( "{ inherit a; }"
       , one "a"
       )
@@ -564,9 +563,10 @@ case_concat_thunk_rigth =
 tests :: TestTree
 tests = $testGroupGenerator
 
+genEvalCompareTests :: IO TestTree
 genEvalCompareTests =
   do
-    (coerce -> files :: [Path]) <- D.listDirectory $ coerce testDir
+    files <- coerce D.listDirectory testDir
 
     let
       unmaskedFiles :: [Path]
@@ -632,13 +632,13 @@ assertNixEvalThrows a =
         (\(_ :: NixException) -> pure True)
     unless errored $ assertFailure "Did not catch nix exception"
 
-freeVarsEqual :: Text -> [VarName] -> Assertion
-freeVarsEqual a xs =
+sameFreeVars :: Text -> [VarName] -> Assertion
+sameFreeVars a xs =
   do
     let
       Right a' = parseNixText a
       xs' = S.fromList xs
-      free' = freeVars a'
+      free' = getFreeVars a'
     assertEqual mempty xs' free'
 
 maskedFiles :: [Path]

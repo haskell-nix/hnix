@@ -36,8 +36,8 @@ import           Nix.Eval
 main :: IO ()
 main =
   do
-    time <- getCurrentTime
-    opts <- execParser $ nixOptionsInfo time
+    currentTime <- getCurrentTime
+    opts <- execParser $ nixOptionsInfo currentTime
 
     main' opts
 
@@ -57,7 +57,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
     -- | The base case: read expressions from the last CLI directive (@[FILE]@) listed on the command line.
     loadFromCliFilePathList :: StdIO
     loadFromCliFilePathList =
-      case filePaths of
+      case getFilePaths of
         []     -> runRepl
         ["-"]  -> readExpressionFromStdin
         _paths -> processSeveralFiles (coerce _paths)
@@ -80,11 +80,11 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
         do
           let file = replaceExtension binaryCacheFile "nixc"
           processCLIOptions (pure file) =<< liftIO (readCache binaryCacheFile)
-      ) <$> readFrom
+      ) <$> getReadFrom
 
     -- | The `--expr` option: read expression from the argument string
     loadLiteralExpression :: Maybe StdIO
-    loadLiteralExpression = processExpr <$> expression
+    loadLiteralExpression = processExpr <$> getExpression
 
     -- | The `--file` argument: read expressions from the files listed in the argument file
     loadExpressionFromFile :: Maybe StdIO
@@ -96,7 +96,7 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
         (\case
           "-" -> Text.getContents
           _fp -> readFile _fp
-        ) <$> fromFile
+        ) <$> getFromFile
 
   processExpr :: Text -> StdIO
   processExpr = handleResult mempty . parseNixTextLoc
@@ -110,13 +110,13 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
         bool
           errorWithoutStackTrace
           (liftIO . hPutStrLn stderr)
-          ignoreErrors
+          isIgnoreErrors
           $ "Parse failed: " <> show err
       )
 
       (\ expr ->
         do
-          when check $
+          when isCheck $
             do
               expr' <- liftIO $ reduceExpr mpath expr
               either
@@ -138,28 +138,28 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
                     @StdThun
                     frames
 
-          when repl $
+          when isRepl $
             withEmptyNixContext $
               bool
                 Repl.main
                 ((Repl.main' . pure) =<< nixEvalExprLoc (coerce mpath) expr)
-                evaluate
+                isEvaluate
       )
 
   --  2021-07-15: NOTE: Logic of CLI Option processing is scattered over several functions, needs to be consolicated.
   processCLIOptions :: Maybe Path -> NExprLoc -> StdIO
   processCLIOptions mpath expr
-    | evaluate =
+    | isEvaluate =
       if
-        | tracing                       -> evaluateExprWithEvaluator nixTracingEvalExprLoc expr
-        | Just path <- reduce           -> evaluateExprWithEvaluator (reduction path . coerce) expr
-        | null arg || null argstr       -> evaluateExprWithEvaluator nixEvalExprLoc expr
+        | isTrace                       -> evaluateExprWith nixTracingEvalExprLoc expr
+        | Just path <- getReduce           -> evaluateExprWith (reduction path . coerce) expr
+        | null getArg || null getArgstr       -> evaluateExprWith nixEvalExprLoc expr
         | otherwise                     -> processResult printer <=< nixEvalExprLoc (coerce mpath) $ expr
-    | xml                        = fail "Rendering expression trees to XML is not yet implemented"
-    | json                       = fail "Rendering expression trees to JSON is not implemented"
-    | verbose >= DebugInfo       =  liftIO . putStr . ppShow . stripAnnotation $ expr
-    | cache , Just path <- mpath =  liftIO . writeCache (replaceExtension path "nixc") $ expr
-    | parseOnly                  =  void . liftIO . Exception.evaluate . force $ expr
+    | isXml                        = fail "Rendering expression trees to XML is not yet implemented"
+    | isJson                       = fail "Rendering expression trees to JSON is not implemented"
+    | getVerbosity >= DebugInfo       =  liftIO . putStr . ppShow . stripAnnotation $ expr
+    | isCache , Just path <- mpath =  liftIO . writeCache (replaceExtension path "nixc") $ expr
+    | isParseOnly                  =  void . liftIO . Exception.evaluate . force $ expr
     | otherwise                  =
       liftIO .
         renderIO
@@ -169,26 +169,26 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
           . stripAnnotation
           $ expr
    where
-    evaluateExprWithEvaluator evaluator = evaluateExpression (coerce mpath) evaluator printer
+    evaluateExprWith evaluator = evaluateExpression (coerce mpath) evaluator printer
 
     printer
       :: StdVal
       -> StdIO
     printer
-      | finder    = findAttrs <=< fromValue @(AttrSet StdVal)
+      | isFinder    = findAttrs <=< fromValue @(AttrSet StdVal)
       | otherwise = printer'
      where
       printer'
-        | xml       = fun (stringIgnoreContext . toXML)                     normalForm
+        | isXml       = fun (ignoreContext . toXML)                     normalForm
         -- 2021-05-27: NOTE: With naive fix of the #941
         -- This is overall a naive printer implementation, as options should interact/respect one another.
         -- A nice question: "Should respect one another to what degree?": Go full combinator way, for which
         -- old Nix CLI is nototrious for (and that would mean to reimplement the old Nix CLI),
         -- OR: https://github.com/haskell-nix/hnix/issues/172 and have some sane standart/default behaviour for (most) keys.
-        | json      = fun (stringIgnoreContext . mempty . nvalueToJSONNixString) normalForm
-        | strict    = fun (show . prettyNValue)                             normalForm
-        | values    = fun (show . prettyNValueProv)                         removeEffects
-        | otherwise = fun (show . prettyNValue)                             removeEffects
+        | isJson      = fun (ignoreContext . mempty . toJSONNixString) normalForm
+        | isStrict    = fun (show . prettyNValue)                       normalForm
+        | isValues    = fun (show . prettyNValueProv)                   removeEffects
+        | otherwise = fun (show . prettyNValue)                       removeEffects
        where
         fun
           :: (b -> Text)

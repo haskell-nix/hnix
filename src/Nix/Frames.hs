@@ -5,6 +5,7 @@
 module Nix.Frames
   ( NixLevel(..)
   , Frames
+  , askFrames
   , Framed
   , NixFrame(..)
   , NixException(..)
@@ -21,16 +22,20 @@ import qualified Text.Show
 data NixLevel = Fatal | Error | Warning | Info | Debug
   deriving (Ord, Eq, Bounded, Enum, Show)
 
-data NixFrame = NixFrame
-  { frameLevel :: NixLevel
-  , frame      :: SomeException
-  }
+data NixFrame =
+  NixFrame
+    { frameLevel :: NixLevel
+    , frame      :: SomeException
+    }
 
 instance Show NixFrame where
   show (NixFrame level f) =
     "Nix frame at level " <> show level <> ": " <> show f
 
 type Frames = [NixFrame]
+
+askFrames :: forall e m . (MonadReader e m, Has e Frames) => m Frames
+askFrames = askLocal
 
 type Framed e m = (MonadReader e m, Has e Frames, MonadThrow m)
 
@@ -45,7 +50,8 @@ withFrame level f = local $ over hasLens (NixFrame level (toException f) :)
 
 throwError
   :: forall s e m a . (Framed e m, Exception s, MonadThrow m) => s -> m a
-throwError err = do
-  context <- asks (view hasLens)
-  traceM "Throwing fail..."
-  throwM $ NixException $ NixFrame Error (toException err) : context
+throwError err =
+  do
+    context <- askLocal
+    traceM "Throwing fail..."
+    throwM $ NixException $ NixFrame Error (toException err) : context

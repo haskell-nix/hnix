@@ -19,21 +19,24 @@
 - ignore:
     name: Use Foldable.forM_
 - hint:
-    lhs: "pure ()"
+    lhs: "pure mempty"
     note: "Use 'stub'"
     rhs: stub
+
 - hint:
-    lhs: "return ()"
-    note: "Use 'stub'"
-    rhs: stub
+    lhs: "[]"
+    note: "Use `mempty`"
+    rhs: mempty
+
 - hint:
-    lhs: "(: [])"
+    lhs: "(: mempty)"
     note: "Use `one`"
     rhs: one
 - hint:
-    lhs: "(:| [])"
+    lhs: "(:| mempty)"
     note: "Use `one`"
     rhs: one
+
 - hint:
     lhs: Data.Sequence.singleton
     note: "Use `one`"
@@ -91,7 +94,7 @@
     note: "Use `one`"
     rhs: one
 - warn:
-    lhs: "Control.Exception.evaluate (x `deepseq` ())"
+    lhs: "Control.Exception.evaluate (x `deepseq` mempty)"
     rhs: evaluateNF_ x
 - warn:
     lhs: "void (evaluateWHNF x)"
@@ -106,19 +109,19 @@
     lhs: "foldl' (*) 1"
     rhs: product
 - hint:
-    lhs: "fmap and (sequence s)"
+    lhs: "fmap and (sequenceA s)"
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: andM s
 - hint:
-    lhs: "and <$> sequence s"
+    lhs: "and <$> sequenceA s"
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: andM s
 - hint:
-    lhs: "fmap or (sequence s)"
+    lhs: "fmap or (sequenceA s)"
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: orM s
 - hint:
-    lhs: "or <$> sequence s"
+    lhs: "or <$> sequenceA s"
     note: Applying this hint would mean that some actions that were being executed previously would no longer be executed.
     rhs: orM s
 - hint:
@@ -148,32 +151,16 @@
     note: "Use 'asumMap'"
     rhs: asumMap f
 - hint:
-    lhs: "asum (map f xs)"
+    lhs: "asum (fmap f xs)"
     note: "Use 'asumMap'"
     rhs: asumMap f xs
 - warn:
-    lhs: "map fst &&& map snd"
+    lhs: "fmap fst &&& fmap snd"
     rhs: unzip
 - hint:
     lhs: "fmap (fmap f) x"
     note: "Use '(<<$>>)'"
     rhs: "f <<$>> x"
-- hint:
-    lhs: "(\\f -> f x) <$> ff"
-    note: Use flap operator
-    rhs: "ff ?? x"
-- hint:
-    lhs: "fmap (\\f -> f x) ff"
-    note: Use flap operator
-    rhs: "ff ?? x"
-- hint:
-    lhs: "fmap ($ x) ff"
-    note: Use flap operator
-    rhs: "ff ?? x"
-- hint:
-    lhs: "($ x) <$> ff"
-    note: Use flap operator
-    rhs: "ff ?? x"
 - warn:
     lhs: "fmap f (nonEmpty x)"
     rhs: viaNonEmpty f x
@@ -184,10 +171,10 @@
     lhs: "f <$> nonEmpty x"
     rhs: viaNonEmpty f x
 - warn:
-    lhs: partitionEithers . map f
+    lhs: partitionEithers . fmap f
     rhs: partitionWith f
 - warn:
-    lhs: partitionEithers $ map f x
+    lhs: partitionEithers $ fmap f x
     rhs: partitionWith f x
 - warn:
     lhs: forever
@@ -224,40 +211,16 @@
     lhs: "maybe (Right r) Left"
     rhs: maybeToLeft r
 - warn:
-    lhs: "case m of [] -> return (); (x:xs) -> f (x :| xs)"
+    lhs: "case m of [] -> stub ; (x:xs) -> f (x :| xs)"
     rhs: whenNotNull m f
 - warn:
-    lhs: "case m of [] -> pure ()  ; (x:xs) -> f (x :| xs)"
+    lhs: "case m of (x:xs) -> f (x :| xs); [] -> stub"
     rhs: whenNotNull m f
 - warn:
-    lhs: "case m of [] -> pass     ; (x:xs) -> f (x :| xs)"
-    rhs: whenNotNull m f
-- warn:
-    lhs: "case m of (x:xs) -> f (x :| xs); [] -> return ()"
-    rhs: whenNotNull m f
-- warn:
-    lhs: "case m of (x:xs) -> f (x :| xs); [] -> pure ()  "
-    rhs: whenNotNull m f
-- warn:
-    lhs: "case m of (x:xs) -> f (x :| xs); [] -> pass     "
-    rhs: whenNotNull m f
-- warn:
-    lhs: "m >>= \\case [] -> pass     ; (x:xs) -> f (x :| xs)"
+    lhs: "m >>= \\case [] -> stub ; (x:xs) -> f (x :| xs)"
     rhs: whenNotNullM m f
 - warn:
-    lhs: "m >>= \\case [] -> pure ()  ; (x:xs) -> f (x :| xs)"
-    rhs: whenNotNullM m f
-- warn:
-    lhs: "m >>= \\case [] -> return (); (x:xs) -> f (x :| xs)"
-    rhs: whenNotNullM m f
-- warn:
-    lhs: "m >>= \\case (x:xs) -> f (x :| xs); [] -> pass     "
-    rhs: whenNotNullM m f
-- warn:
-    lhs: "m >>= \\case (x:xs) -> f (x :| xs); [] -> pure ()  "
-    rhs: whenNotNullM m f
-- warn:
-    lhs: "m >>= \\case (x:xs) -> f (x :| xs); [] -> return ()"
+    lhs: "m >>= \\case (x:xs) -> f (x :| xs); [] -> stub"
     rhs: whenNotNullM m f
 - warn:
     lhs: mapMaybe leftToMaybe
@@ -293,25 +256,13 @@
     lhs: "MaybeT (pure m)"
     rhs: hoistMaybe m
 - warn:
-    lhs: "MaybeT (return m)"
-    rhs: hoistMaybe m
-- warn:
     lhs: MaybeT . pure
-    rhs: hoistMaybe
-- warn:
-    lhs: MaybeT . return
     rhs: hoistMaybe
 - warn:
     lhs: "ExceptT (pure m)"
     rhs: hoistEither m
 - warn:
-    lhs: "ExceptT (return m)"
-    rhs: hoistEither m
-- warn:
     lhs: ExceptT . pure
-    rhs: hoistEither
-- warn:
-    lhs: ExceptT . return
     rhs: hoistEither
 - warn:
     lhs: fromMaybe mempty
@@ -1525,16 +1476,16 @@
     note: "'writeIORef' is already exported from Relude"
     rhs: writeIORef
 - warn:
-    lhs: "atomicModifyIORef ref (\\a -> (f a, ()))"
+    lhs: "atomicModifyIORef ref (\\a -> (f a, mempty))"
     rhs: atomicModifyIORef_ ref f
 - warn:
-    lhs: "atomicModifyIORef ref $ \\a -> (f a, ())"
+    lhs: "atomicModifyIORef ref $ \\a -> (f a, mempty)"
     rhs: atomicModifyIORef_ ref f
 - warn:
-    lhs: "atomicModifyIORef' ref $ \\a -> (f a, ())"
+    lhs: "atomicModifyIORef' ref $ \\a -> (f a, mempty)"
     rhs: "atomicModifyIORef'_ ref f"
 - warn:
-    lhs: "atomicModifyIORef' ref (\\a -> (f a, ()))"
+    lhs: "atomicModifyIORef' ref (\\a -> (f a, mempty))"
     rhs: "atomicModifyIORef'_ ref f"
 - warn:
     lhs: Data.Text.IO.getLine
@@ -2768,7 +2719,31 @@
     rhs: id
 
 - hint:
+    lhs: "join (f . pure)"
+    note: "Monad law"
+    rhs: (f =<< pure)
+
+- hint:
     lhs: "join . (f <<$>>)"
     note: "Monad law"
     rhs: fmap f . join
 
+- hint:
+    lhs: "Data.Traversable.sequence"
+    note: "Modern name is `sequenceA`"
+    rhs: sequenceA
+
+- hint:
+    lhs: "()"
+    note: "Use `mempty`"
+    rhs: mempty
+
+- hint:
+    lhs: "return"
+    note: "Please, use `pure` instead. even GHC already deprecates `return` starting from `9.2`."
+    rhs: pure
+
+- hint:
+    lhs: "map"
+    note: "Use `fmap`"
+    rhs: fmap

@@ -163,7 +163,7 @@ assertLangOk opts fileBaseName =
 assertLangOkXml :: Options -> Path -> Assertion
 assertLangOkXml opts fileBaseName =
   do
-    actual <- stringIgnoreContext . toXML <$> hnixEvalFile opts (addNixExt fileBaseName)
+    actual <- ignoreContext . toXML <$> hnixEvalFile opts (addNixExt fileBaseName)
     expected <- read fileBaseName ".exp.xml"
     assertEqual mempty expected actual
 
@@ -173,7 +173,7 @@ assertEval _opts files =
     time <- liftIO getCurrentTime
     let opts = defaultOptions time
     case delete ".nix" $ sort $ fromString @Text . takeExtensions <$> files of
-      []                  -> void $ hnixEvalFile opts (addNixExt name)
+      []                  -> void $ hnixEvalFile opts $ addNixExt name
       [".exp"          ]  -> assertLangOk    opts name
       [".exp.xml"      ]  -> assertLangOkXml opts name
       [".exp.disabled" ]  -> stub

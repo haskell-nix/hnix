@@ -540,34 +540,46 @@ case_select_keyword =
     )
 
 case_select_or_precedence =
-    assertParsePrint [text|let
-  matchDef = def:   matcher:
-                      v:   let
-                             case = builtins.head (builtins.attrNames v);
-                           in (matcher.case or def case) (v.case);
-in null|] [text|let
-  matchDef = def:
-    matcher:
-      v:
+    assertParsePrint
+      [text|
         let
-          case = builtins.head (builtins.attrNames v);
-        in (matcher.case or def) case (v.case);
-in null|]
+          matchDef = def:   matcher:
+                              v:   let
+                                    case = builtins.head (builtins.attrNames v);
+                                  in (matcher.case or def case) (v.case);
+        in null
+      |]
+      [text|
+         let
+          matchDef = def:
+            matcher:
+              v:
+                let
+                  case = builtins.head (builtins.attrNames v);
+                in (matcher.case or def) case (v.case);
+        in null
+      |]
 
 case_select_or_precedence2 =
-    assertParsePrint [text|let
-  matchDef = def:   matcher:
-                      v:   let
-                             case = builtins.head (builtins.attrNames v);
-                           in (matcher.case or null.foo) (v.case);
-in null|] [text|let
-  matchDef = def:
-    matcher:
-      v:
+    assertParsePrint
+      [text|
         let
-          case = builtins.head (builtins.attrNames v);
-        in (matcher.case or null).foo (v.case);
-in null|]
+          matchDef = def:   matcher:
+                              v:   let
+                                    case = builtins.head (builtins.attrNames v);
+                                  in (matcher.case or null.foo) (v.case);
+        in null
+      |]
+      [text|
+        let
+          matchDef = def:
+            matcher:
+              v:
+                let
+                  case = builtins.head (builtins.attrNames v);
+                in (matcher.case or null).foo (v.case);
+        in null
+      |]
 
 -- ** Function application
 
@@ -730,7 +742,7 @@ assertParseFile file expected =
   do
     res <- parseNixFile $ "data/" <> file
     either
-      (throwParseError "data file" $ toText file)
+      (throwParseError "data file" $ coerce fromString file)
       (assertEqual
         ("Parsing data file " <> coerce file)
         (stripPositionInfo expected)
@@ -782,7 +794,7 @@ instance (VariadicAssertions a) => VariadicAssertions ((ExpectedHask, NixLang) -
   checkListPairs' f acc x = checkListPairs' f (acc <> one x)
 
 checks :: (VariadicAssertions a) => a
-checks = checkListPairs' (uncurry assertParseText) []
+checks = checkListPairs' (uncurry assertParseText) mempty
 
 
 class VariadicArgs t where
@@ -798,7 +810,7 @@ instance (VariadicArgs a) => VariadicArgs (NixLang -> a) where
   checkList' f acc x = checkList' f (acc <> one x)
 
 knownAs :: (VariadicArgs a) => (NixLang -> Assertion) -> a
-knownAs f = checkList' f []
+knownAs f = checkList' f mempty
 
 mistakes :: (VariadicArgs a) => a
 mistakes = knownAs assertParseFail

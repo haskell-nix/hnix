@@ -36,8 +36,8 @@ toEncodingSorted = \case
   A.Array l -> A.list toEncodingSorted $ V.toList l
   v         -> A.toEncoding v
 
-nvalueToJSONNixString :: MonadNix e t f m => NValue t f m -> m NixString
-nvalueToJSONNixString =
+toJSONNixString :: MonadNix e t f m => NValue t f m -> m NixString
+toJSONNixString =
   runWithStringContextT .
     fmap
       ( decodeUtf8
@@ -46,10 +46,10 @@ nvalueToJSONNixString =
       . toEncodingSorted
       )
 
-      . nvalueToJSON
+      . toJSON
 
-nvalueToJSON :: MonadNix e t f m => NValue t f m -> WithStringContextT m A.Value
-nvalueToJSON = \case
+toJSON :: MonadNix e t f m => NValue t f m -> WithStringContextT m A.Value
+toJSON = \case
   NVConstant (NInt   n) -> pure $ A.toJSON n
   NVConstant (NFloat n) -> pure $ A.toJSON n
   NVConstant (NBool  b) -> pure $ A.toJSON b
@@ -72,10 +72,10 @@ nvalueToJSON = \case
   NVPath p ->
     do
       fp <- lift $ coerce <$> addPath p
-      addSingletonStringContext $ StringContext (fromString fp) DirectPath
+      addSingletonStringContext $ StringContext DirectPath $ fromString fp
       pure $ A.toJSON fp
   v -> lift $ throwError $ CoercionToJson v
 
  where
   intoJson :: MonadNix e t f m => NValue t f m -> WithStringContextT m A.Value
-  intoJson nv = join $ lift $ nvalueToJSON <$> demand nv
+  intoJson nv = join $ lift $ toJSON <$> demand nv

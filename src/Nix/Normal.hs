@@ -139,7 +139,7 @@ normalForm_
 normalForm_ t = void $ normalizeValue t
 
 opaqueVal :: Applicative f => NValue t f m
-opaqueVal = nvStrWithoutContext "<cycle>"
+opaqueVal = mkNVStrWithoutContext "<cycle>"
 
 -- | Detect cycles & stub them.
 stubCycles
@@ -165,7 +165,7 @@ stubCycles =
   Free (NValue' cyc) = opaqueVal
 
 thunkStubVal :: Applicative f => NValue t f m
-thunkStubVal = nvStrWithoutContext thunkStubText
+thunkStubVal = mkNVStrWithoutContext thunkStubText
 
 -- | Check if thunk @t@ is computed,
 -- then bind it into first arg.

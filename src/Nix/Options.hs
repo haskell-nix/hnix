@@ -7,70 +7,74 @@ import           Data.Time
 
 --  2021-07-15: NOTE: What these are? They need to be documented.
 -- Also need better names. Foe example, Maybes & lists names need to show their type in the name.
-data Options = Options
-    { verbose      :: Verbosity
-    , tracing      :: Bool
-    , thunks       :: Bool
-    , values       :: Bool
-    , showScopes   :: Bool
-    , reduce       :: Maybe Path
-    , reduceSets   :: Bool
-    , reduceLists  :: Bool
-    , parse        :: Bool
-    , parseOnly    :: Bool
-    , finder       :: Bool
-    , findFile     :: Maybe Path
-    , strict       :: Bool
-    , evaluate     :: Bool
-    , json         :: Bool
-    , xml          :: Bool
-    , attr         :: Maybe Text
-    , include      :: [Path]
-    , check        :: Bool
-    , readFrom     :: Maybe Path
-    , cache        :: Bool
-    , repl         :: Bool
-    , ignoreErrors :: Bool
-    , expression   :: Maybe Text
-    , arg          :: [(Text, Text)]
-    , argstr       :: [(Text, Text)]
-    , fromFile     :: Maybe Path
-    , currentTime  :: UTCTime
-    , filePaths    :: [Path]
+data Options =
+  Options
+    { getVerbosity   :: Verbosity
+    , isTrace        :: Bool
+    , isThunks       :: Bool
+    , isValues       :: Bool
+    , isShowScopes   :: Bool
+    , getReduce      :: Maybe Path
+    , isReduceSets   :: Bool
+    , isReduceLists  :: Bool
+    , isParse        :: Bool
+    , isParseOnly    :: Bool
+    , isFinder       :: Bool
+    , getFindFile    :: Maybe Path
+    , isStrict       :: Bool
+    , isEvaluate     :: Bool
+    , isJson         :: Bool
+    , isXml          :: Bool
+    , getAttr        :: Maybe Text
+    , getInclude     :: [Path]
+    , isCheck        :: Bool
+    , getReadFrom    :: Maybe Path
+    , isCache        :: Bool
+    , isRepl         :: Bool
+    , isIgnoreErrors :: Bool
+    , getExpression  :: Maybe Text
+    , getArg         :: [(Text, Text)]
+    , getArgstr      :: [(Text, Text)]
+    , getFromFile    :: Maybe Path
+    , getTime        :: UTCTime
+    -- ^ The time can be set to reproduce time-dependent states.
+    , getFilePaths   :: [Path]
     }
     deriving Show
 
 defaultOptions :: UTCTime -> Options
-defaultOptions current = Options { verbose      = ErrorsOnly
-                                 , tracing      = False
-                                 , thunks       = False
-                                 , values       = False
-                                 , showScopes   = False
-                                 , reduce       = mempty
-                                 , reduceSets   = False
-                                 , reduceLists  = False
-                                 , parse        = False
-                                 , parseOnly    = False
-                                 , finder       = False
-                                 , findFile     = mempty
-                                 , strict       = False
-                                 , evaluate     = False
-                                 , json         = False
-                                 , xml          = False
-                                 , attr         = mempty
-                                 , include      = mempty
-                                 , check        = False
-                                 , readFrom     = mempty
-                                 , cache        = False
-                                 , repl         = False
-                                 , ignoreErrors = False
-                                 , expression   = mempty
-                                 , arg          = mempty
-                                 , argstr       = mempty
-                                 , fromFile     = mempty
-                                 , currentTime  = current
-                                 , filePaths    = mempty
-                                 }
+defaultOptions currentTime =
+  Options
+    { getVerbosity   = ErrorsOnly
+    , isTrace        = False
+    , isThunks       = False
+    , isValues       = False
+    , isShowScopes   = False
+    , getReduce      = mempty
+    , isReduceSets   = False
+    , isReduceLists  = False
+    , isParse        = False
+    , isParseOnly    = False
+    , isFinder       = False
+    , getFindFile    = mempty
+    , isStrict       = False
+    , isEvaluate     = False
+    , isJson         = False
+    , isXml          = False
+    , getAttr        = mempty
+    , getInclude     = mempty
+    , isCheck        = False
+    , getReadFrom    = mempty
+    , isCache        = False
+    , isRepl         = False
+    , isIgnoreErrors = False
+    , getExpression  = mempty
+    , getArg         = mempty
+    , getArgstr      = mempty
+    , getFromFile    = mempty
+    , getTime        = currentTime
+    , getFilePaths   = mempty
+    }
 
 data Verbosity
     = ErrorsOnly
@@ -80,3 +84,6 @@ data Verbosity
     | DebugInfo
     | Vomit
     deriving (Eq, Ord, Enum, Bounded, Show)
+
+askOptions :: forall e m . (MonadReader e m, Has e Options) => m Options
+askOptions = askLocal

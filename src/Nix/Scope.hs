@@ -1,3 +1,4 @@
+{-# LANGUAGE UndecidableInstances #-}
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
 {-# language FunctionalDependencies #-}
@@ -18,19 +19,20 @@ newtype Scope a = Scope (AttrSet a)
     , Read, Hashable
     , Semigroup, Monoid
     , Functor, Foldable, Traversable
+    , One
     )
 
 instance Show (Scope a) where
   show (Scope m) = show $ M.keys m
 
 scopeLookup :: VarName -> [Scope a] -> Maybe a
-scopeLookup key = foldr go Nothing
+scopeLookup key = foldr fun Nothing
  where
-  go
+  fun
     :: Scope a
     -> Maybe a
     -> Maybe a
-  go (Scope m) rest = M.lookup key m <|> rest
+  fun (Scope m) rest = M.lookup key m <|> rest
 
 data Scopes m a =
   Scopes
@@ -52,18 +54,18 @@ emptyScopes :: Scopes m a
 emptyScopes = Scopes mempty mempty
 
 class Scoped a m | m -> a where
-  currentScopes :: m (Scopes m a)
+  askScopes :: m (Scopes m a)
   clearScopes   :: m r -> m r
   pushScopes    :: Scopes m a -> m r -> m r
   lookupVar     :: VarName -> m (Maybe a)
 
-currentScopesReader
+askScopesReader
   :: forall m a e
   . ( MonadReader e m
     , Has e (Scopes m a)
     )
   => m (Scopes m a)
-currentScopesReader = asks $ view hasLens
+askScopesReader = askLocal
 
 clearScopesReader
   :: forall m a e r

@@ -84,7 +84,7 @@ type MonadNixEval v m
 data EvalFrame m v
   = EvaluatingExpr (Scopes m v) NExprLoc
   | ForcingExpr (Scopes m v) NExprLoc
-  | Calling Text SrcSpan
+  | Calling VarName SrcSpan
   | SynHole (SynHoleInfo m v)
   deriving (Show, Typeable)
 
@@ -122,7 +122,7 @@ eval (NUnary op arg       ) = evalUnary op =<< arg
 eval (NBinary NApp fun arg) =
   do
     f <- fun
-    scope <- currentScopes :: m (Scopes m v)
+    scope <- askScopes
     evalApp f $ withScopes scope arg
 
 eval (NBinary op   larg rarg) =
@@ -144,7 +144,7 @@ eval (NHasAttr aset attr) =
 
 eval (NList l           ) =
   do
-    scope <- currentScopes
+    scope <- askScopes
     toValue =<< traverse (defer @v @m . withScopes @v scope) l
 
 eval (NSet r binds) =
@@ -174,7 +174,7 @@ eval (NAbs    params body) = do
   -- needs to be used when evaluating the body and default arguments, hence we
   -- defer here so the present scope is restored when the parameters and body
   -- are forced during application.
-  curScope <- currentScopes
+  curScope <- askScopes
   let
     withCurScope = withScopes curScope
 
@@ -199,7 +199,7 @@ eval (NSynHole name) = synHole name
 --   this implementation may be used as an implementation for 'evalWith'.
 evalWithAttrSet :: forall v m . MonadNixEval v m => m v -> m v -> m v
 evalWithAttrSet aset body = do
-  scopes <- currentScopes :: m (Scopes m v)
+  scopes <- askScopes
   -- The scope is deliberately wrapped in a thunk here, since it is demanded
   -- each time a name is looked up within the weak scope, and we want to be
   -- sure the action it evaluates is to force a thunk, so its value is only
@@ -259,39 +259,40 @@ attrSetAlter ks' pos m' p' val =
           , AttrSet (m v)
           )
     recurse p'' m'' =
-      fmap
-        (insertVal . (=<<) (toValue @(AttrSet v, PositionSet)) . fmap (,mempty) . sequenceA . snd)
-        (go p'' m'' ks)
+      insertVal . ((toValue @(AttrSet v, PositionSet)) <=< ((,mempty) <$>) . sequenceA . snd) <$> go p'' m'' ks
 
 desugarBinds :: forall r . ([Binding r] -> r) -> [Binding r] -> [Binding r]
-desugarBinds embed binds = evalState (traverse (findBinding <=< collect) binds) mempty
+desugarBinds embed = (`evalState` mempty) . traverse (findBinding <=< collect)
  where
   collect
     :: Binding r
     -> State
-         (HashMap VarName (SourcePos, [Binding r]))
+         (AttrSet (SourcePos, [Binding r]))
          (Either VarName (Binding r))
-  collect (NamedVar (StaticKey x :| y : ys) val p) =
+  collect (NamedVar (StaticKey x :| y : ys) val oldPosition) =
     do
-      m <- get
-      put $
-        join
-          (M.insert
-            x
-            . maybe
-              (p, one $ bindValAt p)
-              (\ (sp, bnd) -> (sp, one (bindValAt sp) <> bnd))
-              . M.lookup x
-          )
-          m
+      modify updateBindingInformation
       pure $ Left x
    where
-    bindValAt = NamedVar (y :| ys) val
+    updateBindingInformation
+      :: AttrSet (SourcePos, [Binding r])
+      -> AttrSet (SourcePos, [Binding r])
+    updateBindingInformation =
+      M.insert x
+        =<< maybe
+            (mkBindingSingleton oldPosition)
+            (\ (foundPosition, newBindings) -> second (<> newBindings) $ mkBindingSingleton foundPosition)
+            . M.lookup x
+    mkBindingSingleton :: SourcePos -> (SourcePos, [Binding r])
+    mkBindingSingleton np = (np , one $ bindValAt np)
+     where
+      bindValAt :: SourcePos -> Binding r
+      bindValAt = NamedVar (y :| ys) val
   collect x = pure $ pure x
 
   findBinding
     :: Either VarName (Binding r)
-    -> State (HashMap VarName (SourcePos, [Binding r])) (Binding r)
+    -> State (AttrSet (SourcePos, [Binding r])) (Binding r)
   findBinding =
     either
       (\ x ->
@@ -312,7 +313,7 @@ evalBinds
   -> m (AttrSet v, PositionSet)
 evalBinds isRecursive binds =
   do
-    scope <- currentScopes :: m (Scopes m v)
+    scope <- askScopes
 
     buildResult scope . fold =<< (`traverse` moveOverridesLast binds) (applyBindToAdt scope)
 
@@ -466,8 +467,7 @@ evalSetterKeyName =
   \case
     StaticKey k -> pure $ pure k
     DynamicKey k ->
-      (coerce . stringIgnoreContext) <<$>>
-        runAntiquoted "\n" assembleString (fromValueMay =<<) k
+      coerce . ignoreContext <<$>> runAntiquoted "\n" assembleString (fromValueMay =<<) k
 
 assembleString
   :: forall v m
@@ -477,7 +477,7 @@ assembleString
 assembleString = fromParts . stringParts
  where
   fromParts :: [Antiquoted Text (m v)] -> m (Maybe NixString)
-  fromParts xs = fold <<$>> traverseM fun xs
+  fromParts xs = fold <<$>> traverse2 fun xs
 
   fun :: Antiquoted Text (m v) -> m (Maybe NixString)
   fun =
@@ -490,7 +490,7 @@ buildArgument
   :: forall v m . MonadNixEval v m => Params (m v) -> m v -> m (AttrSet v)
 buildArgument params arg =
   do
-    scope <- currentScopes :: m (Scopes m v)
+    scope <- askScopes
     let
       argThunk = defer $ withScopes scope arg
     case params of
@@ -548,7 +548,7 @@ addStackFrames
   => TransformF NExprLoc (m a)
 addStackFrames f v =
   do
-    scopes <- currentScopes :: m (Scopes m v)
+    scopes <- askScopes
 
     -- sectioning gives GHC optimization
     -- If opimization question would arrive again, check the @(`withFrameInfo` f v) $ EvaluatingExpr scopes v@
@@ -557,12 +557,12 @@ addStackFrames f v =
  where
   withFrameInfo = withFrame Info
 
-framedEvalExprLoc
+evalWithMetaInfo
   :: forall e v m
   . (MonadNixEval v m, Framed e m, Has e SrcSpan, Typeable m, Typeable v)
   => NExprLoc
   -> m v
-framedEvalExprLoc =
+evalWithMetaInfo =
   adi addMetaInfo evalContent
 
 -- | Add source positions & frame context system.

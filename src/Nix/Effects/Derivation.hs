@@ -31,7 +31,7 @@ import           Nix.Exec                       ( MonadNix
                                                 , callFunc
                                                 )
 import           Nix.Frames
-import           Nix.Json                       ( nvalueToJSONNixString )
+import           Nix.Json                       ( toJSONNixString )
 import           Nix.Render
 import           Nix.String
 import           Nix.String.Coerce
@@ -289,13 +289,13 @@ defaultDerivationStrict val = do
     let
       outputsWithContext =
         Map.mapWithKey
-          (\out (coerce -> path) -> mkNixStringWithSingletonContext path $ StringContext drvPath $ DerivationOutput out)
+          (\out (coerce -> path) -> mkNixStringWithSingletonContext (StringContext (DerivationOutput out) drvPath) path)
           (outputs drv')
-      drvPathWithContext = mkNixStringWithSingletonContext drvPath $ StringContext drvPath AllOutputs
-      attrSet = nvStr <$> M.fromList (("drvPath", drvPathWithContext) : Map.toList outputsWithContext)
+      drvPathWithContext = mkNixStringWithSingletonContext (StringContext AllOutputs drvPath) drvPath
+      attrSet = mkNVStr <$> M.fromList (("drvPath", drvPathWithContext) : Map.toList outputsWithContext)
     -- TODO: Add location information for all the entries.
     --              here --v
-    pure $ nvSet mempty (M.mapKeys coerce attrSet)
+    pure $ mkNVSet mempty $ M.mapKeys coerce attrSet
 
   where
 
@@ -309,13 +309,14 @@ defaultDerivationStrict val = do
     toStorePaths = foldl (flip addToInputs) mempty
 
     addToInputs :: Bifunctor p => StringContext -> p (Set Text) (Map Text [Text])  -> p (Set Text) (Map Text [Text])
-    addToInputs (StringContext (coerce -> path) kind) = case kind of
-      DirectPath -> first $ Set.insert path
-      DerivationOutput o -> second $ Map.insertWith (<>) path $ one o
-      AllOutputs ->
-        -- TODO: recursive lookup. See prim_derivationStrict
-        -- XXX: When is this really used ?
-        error "Not implemented: derivations depending on a .drv file are not yet supported."
+    addToInputs (StringContext kind (coerce -> path)) =
+      case kind of
+        DirectPath -> first $ Set.insert path
+        DerivationOutput o -> second $ Map.insertWith (<>) path $ one o
+        AllOutputs ->
+          -- TODO: recursive lookup. See prim_derivationStrict
+          -- XXX: When is this really used ?
+          error "Not implemented: derivations depending on a .drv file are not yet supported."
 
 
 -- | Build a derivation in a context collecting string contexts.
@@ -367,7 +368,7 @@ buildDerivationWithContext drvAttrs = do
 
       env <- if useJson
         then do
-          jsonString :: NixString <- lift $ nvalueToJSONNixString $ nvSet mempty $ M.mapKeys coerce $
+          jsonString :: NixString <- lift $ toJSONNixString $ mkNVSet mempty $ M.mapKeys coerce $
             deleteKeys [ "args", "__ignoreNulls", "__structuredAttrs" ] attrs
           rawString :: Text <- extractNixString jsonString
           pure $ one ("__json", rawString)

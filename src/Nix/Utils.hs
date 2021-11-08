@@ -6,10 +6,22 @@
 -- It is for import for projects other then @HNix@.
 -- For @HNix@ - this module gets reexported by "Prelude", so for @HNix@ please fix-up pass-through there.
 module Nix.Utils
-  ( KeyMap
-  , TransformF
-  , Transform
-  , Alg
+  ( stub
+  , pass
+  , dup
+  , both
+  , mapPair
+  , iterateN
+  , nestM
+  , traverse2
+  , lifted
+
+  , whenTrue
+  , whenFalse
+  , whenJust
+  , whenText
+  , list
+  , free
 
   , Path(..)
   , isAbsolute
@@ -26,26 +38,19 @@ module Nix.Utils
   , replaceExtension
   , readFile
 
-  , Has(..)
-  , trace
-  , traceM
-  , stub
-  , pass
-  , whenTrue
-  , whenFalse
-  , list
-  , whenText
-  , free
-  , whenJust
-  , dup
-  , mapPair
-  , both
-  , iterateN
-  , nestM
-  , traverseM
-  , lifted
+  , Alg
+  , Transform
+  , TransformF
   , loebM
   , adi
+
+  , Has(..)
+  , askLocal
+
+  , KeyMap
+
+  , trace
+  , traceM
   , module X
   )
  where
@@ -93,107 +98,72 @@ traceM = const stub
 {-# inline traceM #-}
 #endif
 
--- | To have explicit type boundary between FilePath & String.
-newtype Path = Path FilePath
-  deriving
-    ( Eq, Ord, Generic
-    , Typeable, Data, NFData, Serialise, Binary, A.ToJSON, A.FromJSON
-    , Show, Read, Hashable
-    , Semigroup, Monoid
-    )
+-- * Helpers
 
-instance ToText Path where
-  toText = toText @String . coerce
+-- After migration from the @relude@ - @relude: pass -> stub@
+-- | @pure mempty@: Short-curcuit, stub.
+stub :: (Applicative f, Monoid a) => f a
+stub = pure mempty
+{-# inline stub #-}
 
-instance IsString Path where
-  fromString = coerce
+-- | Alias for 'stub', since "Relude" has more specialized @pure ()@.
+pass :: (Applicative f) => f ()
+pass = stub
+{-# inline pass #-}
 
--- This set of @Path@ funcs is to control system filepath types & typesafety and to easy migrate from FilePath to anything suitable (like @path@ or so).
+-- | Duplicates object into a tuple.
+dup :: a -> (a, a)
+dup x = (x, x)
+{-# inline dup #-}
 
--- | @isAbsolute@ specialized to @Path@.
-isAbsolute :: Path -> Bool
-isAbsolute = coerce FilePath.isAbsolute
-
--- | @(</>)@ specialized to @Path@
-(</>) :: Path -> Path -> Path
-(</>) = coerce (FilePath.</>)
-infixr 5 </>
-
--- | @joinPath@ specialized to @Path@
-joinPath :: [Path] -> Path
-joinPath = coerce FilePath.joinPath
-
--- | @splitDirectories@ specialized to @Path@
-splitDirectories :: Path -> [Path]
-splitDirectories = coerce FilePath.splitDirectories
-
--- | @takeDirectory@ specialized to @Path@
-takeDirectory :: Path -> Path
-takeDirectory = coerce FilePath.takeDirectory
-
--- | @takeFileName@ specialized to @Path@
-takeFileName :: Path -> Path
-takeFileName = coerce FilePath.takeFileName
-
--- | @takeBaseName@ specialized to @Path@
-takeBaseName :: Path -> String
-takeBaseName = coerce FilePath.takeBaseName
-
--- | @takeExtension@ specialized to @Path@
-takeExtension :: Path -> String
-takeExtension = coerce FilePath.takeExtensions
-
--- | @takeExtensions@ specialized to @Path@
-takeExtensions :: Path -> String
-takeExtensions = coerce FilePath.takeExtensions
-
-addExtension :: Path -> String -> Path
-addExtension = coerce FilePath.addExtension
-
--- | @dropExtensions@ specialized to @Path@
-dropExtensions :: Path -> Path
-dropExtensions = coerce FilePath.dropExtensions
-
--- | @replaceExtension@ specialized to @Path@
-replaceExtension :: Path -> String -> Path
-replaceExtension = coerce FilePath.replaceExtension
-
-
--- | > Hashmap Text -- type synonym
-type KeyMap = HashMap Text
-
--- | F-algebra defines how to reduce the fixed-point of a functor to a value.
--- > type Alg f a = f a -> a
-type Alg f a = f a -> a
-
--- | Do according transformation.
+-- | Apply a single function to both components of a pair.
 --
--- It is a transformation of a recursion scheme.
--- See @TransformF@.
-type Transform f a = TransformF (Fix f) a
--- | Do according transformation.
+-- > both succ (1,2) == (2,3)
 --
--- It is a transformation between functors.
--- ...
--- You got me, it is a natural transformation.
-type TransformF f a = (f -> a) -> f -> a
+-- Taken From package @extra@
+both :: (a -> b) -> (a, a) -> (b, b)
+both f (x,y) = (f x, f y)
+{-# inline both #-}
 
-class Has a b where
-  hasLens :: Lens' a b
+-- | Gives tuple laziness.
+--
+-- Takem from @utility-ht@.
+mapPair :: (a -> c, b -> d) -> (a,b) -> (c,d)
+mapPair ~(f,g) ~(a,b) = (f a, g b)
+{-# inline mapPair #-}
 
-instance Has a a where
-  hasLens f = f
+iterateN
+  :: forall a
+   . Int -- ^ Recursively apply 'Int' times
+  -> (a -> a) -- ^ the function
+  -> a -- ^ starting from argument
+  -> a
+iterateN n f x =
+  -- It is hard to read - yes. It is a non-recursive momoized action - yes.
+  fix ((<*> (0 /=)) . ((bool x . f) .) . (. pred)) n
 
-instance Has (a, b) a where
-  hasLens = _1
+nestM
+  :: Monad m
+  => Int -- ^ Recursively apply 'Int' times
+  -> (a -> m a) -- ^ function (Kleisli arrow).
+  -> a -- ^ to value
+  -> m a -- ^ & join layers of 'm'
+nestM 0 _ x = pure x
+nestM n f x =
+  foldM (const . f) x $ replicate @() n mempty -- fuses. But also, can it be fix join?
+{-# inline nestM #-}
 
-instance Has (a, b) b where
-  hasLens = _2
-
-loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
--- Sectioning here insures optimization happening.
-loebM f = mfix $ \a -> (`traverse` f) ($ a)
-{-# inline loebM #-}
+traverse2
+  :: ( Applicative m
+     , Applicative n
+     , Traversable t
+     )
+  => ( a
+     -> m (n b)
+     ) -- ^ Run function that runs 2 'Applicative' actions
+  -> t a -- ^ on every element in 'Traversable'
+  -> m (n (t b)) -- ^ collect the results.
+traverse2 f x = sequenceA <$> traverse f x
 
 --  2021-08-21: NOTE: Someone needs to put in normal words, what this does.
 -- This function is pretty spefic & used only once, in "Nix.Normal".
@@ -203,27 +173,35 @@ lifted
   -> (a -> u m b)
   -> u m b
 lifted f k =
-  do
-    lftd <- liftWith (\run -> f (run . k))
-    restoreT $ pure lftd
+  restoreT . pure =<< liftWith (\run -> f (run . k))
 
--- | adi is Abstracting Definitional Interpreters:
---
---     https://arxiv.org/abs/1707.04755
---
---   All ADI does is interleaves every layer of evaluation by inserting intermitten layers between them, in that way the evaluation can be extended/embelished in any way wanted. Look at its use to see great examples.
---
---   Essentially, it does for evaluation what recursion schemes do for
---   representation: allows threading layers through existing structure, only
---   in this case through behavior.
-adi
-  :: Functor f
-  => Transform f a
-  -> Alg f a
-  -> Fix f
-  -> a
-adi g f = g $ f . (adi g f <$>) . unFix
 
+-- * Eliminators
+
+whenTrue :: (Monoid a)
+  => a -> Bool -> a
+whenTrue =
+  bool
+    mempty
+{-# inline whenTrue #-}
+
+whenFalse :: (Monoid a)
+  => a  -> Bool  -> a
+whenFalse f =
+  bool
+    f
+    mempty
+{-# inline whenFalse #-}
+
+whenJust
+  :: Monoid b
+  => (a -> b)
+  -> Maybe a
+  -> b
+whenJust =
+  maybe
+    mempty
+{-# inline whenJust #-}
 
 -- | Analog for @bool@ or @maybe@, for list-like cons structures.
 list
@@ -253,89 +231,138 @@ free fP fF fr =
 {-# inline free #-}
 
 
-whenTrue :: (Monoid a)
-  => a -> Bool -> a
-whenTrue =
-  bool
-    mempty
-{-# inline whenTrue #-}
+-- * Path
 
-whenFalse :: (Monoid a)
-  => a  -> Bool  -> a
-whenFalse f =
-  bool
-    f
-    mempty
-{-# inline whenFalse #-}
+-- | Explicit type boundary between FilePath & String.
+newtype Path = Path FilePath
+  deriving
+    ( Eq, Ord, Generic
+    , Typeable, Data, NFData, Serialise, Binary, A.ToJSON, A.FromJSON
+    , Show, Read, Hashable
+    , Semigroup, Monoid
+    )
 
-whenJust
-  :: Monoid b
-  => (a -> b)
-  -> Maybe a
-  -> b
-whenJust =
-  maybe
-    mempty
-{-# inline whenJust #-}
+instance ToText Path where
+  toText = toText @String . coerce
 
+instance IsString Path where
+  fromString = coerce
 
--- | Apply a single function to both components of a pair.
---
--- > both succ (1,2) == (2,3)
---
--- Taken From package @extra@
-both :: (a -> b) -> (a, a) -> (b, b)
-both f (x,y) = (f x, f y)
-{-# inline both #-}
+-- ** Path functions
 
+-- | This set of @Path@ funcs is to control system filepath types & typesafety and to easily migrate from FilePath to anything suitable (like @path@ or so).
 
--- | Duplicates object into a tuple.
-dup :: a -> (a, a)
-dup x = (x, x)
-{-# inline dup #-}
+-- | 'Path's 'FilePath.isAbsolute'.
+isAbsolute :: Path -> Bool
+isAbsolute = coerce FilePath.isAbsolute
 
--- | From @utility-ht@ for tuple laziness.
-mapPair :: (a -> c, b -> d) -> (a,b) -> (c,d)
-mapPair ~(f,g) ~(a,b) = (f a, g b)
-{-# inline mapPair #-}
+-- | 'Path's 'FilePath.(</>)'.
+(</>) :: Path -> Path -> Path
+(</>) = coerce (FilePath.</>)
+infixr 5 </>
 
--- After migration from the @relude@ - @relude: pass -> stub@
--- | @pure mempty@: Short-curcuit, stub.
-stub :: (Applicative f, Monoid a) => f a
-stub = pure mempty
-{-# inline stub #-}
+-- | 'Path's 'FilePath.joinPath'.
+joinPath :: [Path] -> Path
+joinPath = coerce FilePath.joinPath
 
--- | Alias for @stub@, since @Relude@ has more specialized @pure ()@.
-pass :: (Applicative f) => f ()
-pass = stub
-{-# inline pass #-}
+-- | 'Path's 'FilePath.splitDirectories'.
+splitDirectories :: Path -> [Path]
+splitDirectories = coerce FilePath.splitDirectories
 
+-- | 'Path's 'FilePath.takeDirectory'.
+takeDirectory :: Path -> Path
+takeDirectory = coerce FilePath.takeDirectory
+
+-- | 'Path's 'FilePath.takeFileName'.
+takeFileName :: Path -> Path
+takeFileName = coerce FilePath.takeFileName
+
+-- | 'Path's 'FilePath.takeBaseName'.
+takeBaseName :: Path -> String
+takeBaseName = coerce FilePath.takeBaseName
+
+-- | 'Path's 'FilePath.takeExtension'.
+takeExtension :: Path -> String
+takeExtension = coerce FilePath.takeExtensions
+
+-- | 'Path's 'FilePath.takeExtensions'.
+takeExtensions :: Path -> String
+takeExtensions = coerce FilePath.takeExtensions
+
+-- | 'Path's 'FilePath.addExtensions'.
+addExtension :: Path -> String -> Path
+addExtension = coerce FilePath.addExtension
+
+-- | 'Path's 'FilePath.dropExtensions'.
+dropExtensions :: Path -> Path
+dropExtensions = coerce FilePath.dropExtensions
+
+-- | 'Path's 'FilePath.replaceExtension'.
+replaceExtension :: Path -> String -> Path
+replaceExtension = coerce FilePath.replaceExtension
+
+-- | 'Path's 'FilePath.readFile'.
 readFile :: Path -> IO Text
 readFile = Text.readFile . coerce
 
-traverseM
-  :: ( Applicative m
-     , Applicative f
-     , Traversable t
-     )
-  => ( a
-     -> m (f b)
-     )
-  -> t a
-  -> m (f (t b))
-traverseM f x = sequenceA <$> traverse f x
 
-iterateN
-  :: forall a
-   . Int -- ^ times
-  -> (a -> a) -- ^ function apply
-  -> a -- ^ on value
+-- * Recursion scheme
+
+-- | F-algebra defines how to reduce the fixed-point of a functor to a value.
+-- > type Alg f a = f a -> a
+type Alg f a = f a -> a
+
+-- | Do according transformation.
+--
+-- It is a transformation of a recursion scheme.
+-- See @TransformF@.
+type Transform f a = TransformF (Fix f) a
+-- | Do according transformation.
+--
+-- It is a transformation between functors.
+type TransformF f a = (f -> a) -> f -> a
+
+loebM :: (MonadFix m, Traversable t) => t (t a -> m a) -> m (t a)
+loebM f = mfix $ \a -> (`traverse` f) ($ a)
+{-# inline loebM #-}
+
+-- | adi is Abstracting Definitional Interpreters:
+--
+--     https://arxiv.org/abs/1707.04755
+--
+--   All ADI does is interleaves every layer of evaluation by inserting intermitten layers between them, in that way the evaluation can be extended/embelished in any way wanted. Look at its use to see great examples.
+--
+--   Essentially, it does for evaluation what recursion schemes do for
+--   representation: allows threading layers through existing structure, only
+--   in this case through behavior.
+adi
+  :: Functor f
+  => Transform f a
+  -> Alg f a
+  -> Fix f
   -> a
-iterateN n f x = fix ((<*> (0 /=)) . ((bool x . f) .) . (. pred)) n -- It is hard to read - yes. It is a non-recursive momoized action - yes.
+adi g f = g $ f . (adi g f <$>) . unFix
 
--- | Apply Kleisli arrow N times, join 'm's.
-nestM :: Monad m => Int -> (a -> m a) -> a -> m a
-nestM 0 _ x = pure x
-nestM n f x = foldM (\ xx () -> f xx) x $ replicate n () -- fuses. But also, can it be fix join?
-{-# INLINE nestM #-}
 
+-- * Has lens
+
+class Has a b where
+  hasLens :: Lens' a b
+
+instance Has a a where
+  hasLens f = f
+
+instance Has (a, b) a where
+  hasLens = _1
+
+instance Has (a, b) b where
+  hasLens = _2
+
+-- | Retrive monad state by 'Lens''.
+askLocal :: (MonadReader t m, Has t a) => m a
+askLocal = asks $ view hasLens
+
+-- * Other
+
+-- | > Hashmap Text -- type synonym
+type KeyMap = HashMap Text

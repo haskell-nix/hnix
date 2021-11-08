@@ -44,8 +44,9 @@ import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Options                    ( Options
-                                                , reduceSets
-                                                , reduceLists
+                                                , isReduceSets
+                                                , isReduceLists
+                                                , askOptions
                                                 )
 import           Nix.Parser
 import           Nix.Scope
@@ -169,22 +170,24 @@ reduce (NUnaryAnnF uann op arg) =
 --
 --     * Reduce a lambda function by adding its name to the local
 --       scope and recursively reducing its body.
-reduce (NBinaryAnnF bann NApp fun arg) = fun >>= \case
-  f@(NSymAnn _ "import") ->
-    (\case
-        -- NEnvPathAnn     pann origPath -> staticImport pann origPath
-      NLiteralPathAnn pann origPath -> staticImport pann origPath
-      v -> pure $ NBinaryAnn bann NApp f v
-    ) =<< arg
+reduce (NBinaryAnnF bann NApp fun arg) =
+  (\case
+    f@(NSymAnn _ "import") ->
+      (\case
+          -- NEnvPathAnn     pann origPath -> staticImport pann origPath
+        NLiteralPathAnn pann origPath -> staticImport pann origPath
+        v -> pure $ NBinaryAnn bann NApp f v
+      ) =<< arg
 
-  NAbsAnn _ (Param name) body ->
-    do
-      x <- arg
-      pushScope
-        (coerce $ HM.singleton name x)
-        (foldFix reduce body)
+    NAbsAnn _ (Param name) body ->
+      do
+        x <- arg
+        pushScope
+          (coerce $ HM.singleton name x)
+          (foldFix reduce body)
 
-  f -> NBinaryAnn bann NApp f <$> arg
+    f -> NBinaryAnn bann NApp f <$> arg
+  ) =<< fun
 
 -- | Reduce an integer addition to its result.
 reduce (NBinaryAnnF bann op larg rarg) =
@@ -368,13 +371,13 @@ pruneTree opts =
       bool
         (fromMaybe annNNull <$>)
         catMaybes
-        (reduceLists opts)  -- Reduce list members that aren't used; breaks if elemAt is used
+        (isReduceLists opts)  -- Reduce list members that aren't used; breaks if elemAt is used
         l
     NSet recur binds -> pure $ NSet recur $
       bool
         (fromMaybe annNNull <<$>>)
         (mapMaybe sequenceA)
-        (reduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
+        (isReduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
         binds
 
     NLet binds (Just body@(Ann _ x)) ->
@@ -450,7 +453,7 @@ pruneTree opts =
         bool
           fmap
           ((pure .) . maybe annNNull)
-          (reduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
+          (isReduceSets opts)  -- Reduce set members that aren't used; breaks if hasAttr is used
           (fromMaybe annNNull)
 
   pruneBinding :: Binding (Maybe NExprLoc) -> Maybe (Binding NExprLoc)
@@ -471,14 +474,14 @@ reducingEvalExpr eval mpath expr =
     expr'           <- flagExprLoc =<< liftIO (reduceExpr mpath expr)
     eres <- (`catch` pure . Left) $
       pure <$> foldFix (addEvalFlags eval) expr'
-    opts :: Options <- asks $ view hasLens
+    opts <- askOptions
     expr''          <- pruneTree opts expr'
     pure (fromMaybe annNNull expr'', eres)
  where
   addEvalFlags k (FlaggedF (b, x)) = liftIO (writeIORef b True) *> k x
 
 instance Monad m => Scoped NExprLoc (Reducer m) where
-  currentScopes = currentScopesReader
-  clearScopes   = clearScopesReader @(Reducer m) @NExprLoc
-  pushScopes    = pushScopesReader
-  lookupVar     = lookupVarReader
+  askScopes   = askScopesReader
+  clearScopes = clearScopesReader @(Reducer m) @NExprLoc
+  pushScopes  = pushScopesReader
+  lookupVar   = lookupVarReader

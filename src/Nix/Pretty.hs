@@ -325,7 +325,7 @@ valueToExpr = iterNValueByDiscardWith thk (Fix . phi)
 
   phi :: NValue' t f m NExpr -> NExprF NExpr
   phi (NVConstant' a     ) = NConstant a
-  phi (NVStr'      ns    ) = NStr $ DoubleQuoted $ one $ Plain $ stringIgnoreContext ns
+  phi (NVStr'      ns    ) = NStr $ DoubleQuoted $ one $ Plain $ ignoreContext ns
   phi (NVList'     l     ) = NList l
   phi (NVSet'      p    s) = NSet mempty
     [ NamedVar (one $ StaticKey k) v (fromMaybe nullPos $ (`M.lookup` p) k)
@@ -390,7 +390,7 @@ printNix = iterNValueByDiscardWith thk phi
 
   phi :: NValue' t f m Text -> Text
   phi (NVConstant' a ) = atomText a
-  phi (NVStr'      ns) = show $ stringIgnoreContext ns
+  phi (NVStr'      ns) = show $ ignoreContext ns
   phi (NVList'     l ) = "[ " <> unwords l <> " ]"
   phi (NVSet' _ s) =
     "{ " <>

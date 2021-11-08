@@ -144,27 +144,25 @@ data NValueF p m r
 instance Eq1 (NValueF p m) where
   liftEq _  (NVConstantF x) (NVConstantF y) = x == y
   liftEq _  (NVStrF      x) (NVStrF      y) = x == y
+  liftEq _  (NVPathF     x) (NVPathF     y) = x == y
   liftEq eq (NVListF     x) (NVListF     y) = liftEq eq x y
   liftEq eq (NVSetF  _   x) (NVSetF _    y) = liftEq eq x y
-  liftEq _  (NVPathF     x) (NVPathF     y) = x == y
   liftEq _  _               _               = False
 
 
 -- ** Show
 
 instance Show r => Show (NValueF p m r) where
-  showsPrec d = go
-   where
-    go :: NValueF p m r -> String -> String
-    go = \case
+  showsPrec d =
+    \case
       (NVConstantF atom     ) -> showsCon1 "NVConstant" atom
-      (NVStrF      ns       ) -> showsCon1 "NVStr"      (stringIgnoreContext ns)
+      (NVStrF      ns       ) -> showsCon1 "NVStr"      $ ignoreContext ns
       (NVListF     lst      ) -> showsCon1 "NVList"     lst
       (NVSetF      _   attrs) -> showsCon1 "NVSet"      attrs
       (NVClosureF  params _ ) -> showsCon1 "NVClosure"  params
       (NVPathF     path     ) -> showsCon1 "NVPath"     path
       (NVBuiltinF  name   _ ) -> showsCon1 "NVBuiltin"  name
-
+   where
     showsCon1 :: Show a => String -> a -> String -> String
     showsCon1 con a =
       showParen (d > 10) $ showString (con <> " ") . showsPrec 11 a
@@ -178,10 +176,10 @@ instance Foldable (NValueF p m) where
     NVConstantF _  -> mempty
     NVStrF      _  -> mempty
     NVPathF     _  -> mempty
-    NVListF     l  -> foldMap f l
-    NVSetF     _ s -> foldMap f s
     NVClosureF _ _ -> mempty
     NVBuiltinF _ _ -> mempty
+    NVListF     l  -> foldMap f l
+    NVSetF     _ s -> foldMap f s
 
 
 -- ** Traversable
@@ -285,14 +283,13 @@ instance (Comonad f, Show a) => Show (NValue' t f m a) where
 
 instance Comonad f => Show1 (NValue' t f m) where
   liftShowsPrec sp sl p = \case
-    NVConstant' atom  -> showsUnaryWith showsPrec "NVConstantF" p atom
-    NVStr' ns ->
-      showsUnaryWith showsPrec "NVStrF" p (stringIgnoreContext ns)
-    NVList' lst       -> showsUnaryWith (liftShowsPrec sp sl) "NVListF" p lst
-    NVSet'  _   attrs -> showsUnaryWith (liftShowsPrec sp sl) "NVSetF" p attrs
-    NVPath' path      -> showsUnaryWith showsPrec "NVPathF" p path
-    NVClosure' c    _ -> showsUnaryWith showsPrec "NVClosureF" p c
-    NVBuiltin' name _ -> showsUnaryWith showsPrec "NVBuiltinF" p name
+    NVConstant' atom  -> showsUnaryWith showsPrec             "NVConstantF" p atom
+    NVStr' ns         -> showsUnaryWith showsPrec             "NVStrF"      p $ ignoreContext ns
+    NVList' lst       -> showsUnaryWith (liftShowsPrec sp sl) "NVListF"     p lst
+    NVSet'  _   attrs -> showsUnaryWith (liftShowsPrec sp sl) "NVSetF"      p attrs
+    NVPath' path      -> showsUnaryWith showsPrec             "NVPathF"     p path
+    NVClosure' c    _ -> showsUnaryWith showsPrec             "NVClosureF"  p c
+    NVBuiltin' name _ -> showsUnaryWith showsPrec             "NVBuiltinF"  p name
 
 
 -- ** Traversable
@@ -343,7 +340,7 @@ hoistNValue'
   -> NValue' t f m a
   -> NValue' t f n a
 hoistNValue' run lft (NValue' v) =
-    NValue' $ lmapNValueF (hoistNValue lft run) . hoistNValueF lft <$> v
+  NValue' $ lmapNValueF (hoistNValue lft run) . hoistNValueF lft <$> v
 {-# inline hoistNValue' #-}
 
 -- ** Monad
@@ -402,58 +399,62 @@ unliftNValue' = hoistNValue' lift
 
 
 -- | Haskell constant to the Nix constant,
-nvConstant' :: Applicative f
+mkNVConstant' :: Applicative f
   => NAtom
   -> NValue' t f m r
-nvConstant' = NValue' . pure . NVConstantF
+mkNVConstant' = NValue' . pure . NVConstantF
+
+-- | Using of Nulls is generally discouraged (in programming language design et al.), but, if you need it.
+nvNull' :: Applicative f
+  => NValue' t f m r
+nvNull' = mkNVConstant' NNull
 
 
 -- | Haskell text & context to the Nix text & context,
-nvStr' :: Applicative f
+mkNVStr' :: Applicative f
   => NixString
   -> NValue' t f m r
-nvStr' = NValue' . pure . NVStrF
+mkNVStr' = NValue' . pure . NVStrF
 
 
 -- | Haskell @Path@ to the Nix path,
-nvPath' :: Applicative f
+mkNVPath' :: Applicative f
   => Path
   -> NValue' t f m r
-nvPath' = NValue' . pure . NVPathF . coerce
+mkNVPath' = NValue' . pure . NVPathF . coerce
 
 
 -- | Haskell @[]@ to the Nix @[]@,
-nvList' :: Applicative f
+mkNVList' :: Applicative f
   => [r]
   -> NValue' t f m r
-nvList' = NValue' . pure . NVListF
+mkNVList' = NValue' . pure . NVListF
 
 
 -- | Haskell key-value to the Nix key-value,
-nvSet' :: Applicative f
+mkNVSet' :: Applicative f
   => PositionSet
   -> AttrSet r
   -> NValue' t f m r
---  2021-07-16: NOTE: that the arguments are flipped.
-nvSet' p s = NValue' $ pure $ NVSetF p s
+mkNVSet' p s = NValue' $ pure $ NVSetF p s
 
 
 -- | Haskell closure to the Nix closure,
-nvClosure' :: (Applicative f, Functor m)
+mkNVClosure' :: (Applicative f, Functor m)
   => Params ()
   -> (NValue t f m
       -> m r
     )
   -> NValue' t f m r
-nvClosure' x f = NValue' $ pure $ NVClosureF x f
+mkNVClosure' x f = NValue' $ pure $ NVClosureF x f
 
 
 -- | Haskell functions to the Nix functions!
-nvBuiltin' :: (Applicative f, Functor m)
+mkNVBuiltin' :: (Applicative f, Functor m)
   => VarName
   -> (NValue t f m -> m r)
   -> NValue' t f m r
-nvBuiltin' name f = NValue' $ pure $ NVBuiltinF name f
+mkNVBuiltin' name f = NValue' $ pure $ NVBuiltinF name f
 
 
 -- So above we have maps of Hask subcategory objects to Nix objects,
@@ -552,7 +553,7 @@ liftNValue
   => (forall x . u m x -> m x)
   -> NValue t f m
   -> NValue t f (u m)
-liftNValue run = hoistNValue run lift
+liftNValue = (`hoistNValue` lift)
 
 
 -- *** MonadTransUnlift
@@ -574,66 +575,70 @@ unliftNValue = hoistNValue lift
 
 
 -- | Life of a Haskell thunk to the life of a Nix thunk,
-nvThunk :: Applicative f
+mkNVThunk :: Applicative f
   => t
   -> NValue t f m
-nvThunk = Pure
+mkNVThunk = Pure
 
 
 -- | Life of a Haskell constant to the life of a Nix constant,
-nvConstant :: Applicative f
+mkNVConstant :: Applicative f
   => NAtom
   -> NValue t f m
-nvConstant = Free . nvConstant'
+mkNVConstant = Free . mkNVConstant'
 
+-- | Using of Nulls is generally discouraged (in programming language design et al.), but, if you need it.
+nvNull :: Applicative f
+  => NValue t f m
+nvNull = mkNVConstant NNull
 
 -- | Life of a Haskell sting & context to the life of a Nix string & context,
-nvStr :: Applicative f
+mkNVStr :: Applicative f
   => NixString
   -> NValue t f m
-nvStr = Free . nvStr'
+mkNVStr = Free . mkNVStr'
 
-nvStrWithoutContext :: Applicative f
+mkNVStrWithoutContext :: Applicative f
   => Text
   -> NValue t f m
-nvStrWithoutContext = nvStr . mkNixStringWithoutContext
+mkNVStrWithoutContext = mkNVStr . mkNixStringWithoutContext
 
 
 -- | Life of a Haskell FilePath to the life of a Nix path
-nvPath :: Applicative f
+mkNVPath :: Applicative f
   => Path
   -> NValue t f m
-nvPath = Free . nvPath'
+mkNVPath = Free . mkNVPath'
 
 
-nvList :: Applicative f
+mkNVList :: Applicative f
   => [NValue t f m]
   -> NValue t f m
-nvList = Free . nvList'
+mkNVList = Free . mkNVList'
 
 
-nvSet :: Applicative f
+mkNVSet :: Applicative f
   => PositionSet
   -> AttrSet (NValue t f m)
   -> NValue t f m
-nvSet p s = Free $ nvSet' p s
+mkNVSet p s = Free $ mkNVSet' p s
 
-nvClosure :: (Applicative f, Functor m)
+mkNVClosure :: (Applicative f, Functor m)
   => Params ()
   -> (NValue t f m
       -> m (NValue t f m)
     )
   -> NValue t f m
-nvClosure x f = Free $ nvClosure' x f
+mkNVClosure x f = Free $ mkNVClosure' x f
 
 
-nvBuiltin :: (Applicative f, Functor m)
+mkNVBuiltin :: (Applicative f, Functor m)
   => VarName
   -> (NValue t f m
     -> m (NValue t f m)
     )
   -> NValue t f m
-nvBuiltin name f = Free $ nvBuiltin' name f
+mkNVBuiltin name f = Free $ mkNVBuiltin' name f
 
 
 builtin
@@ -644,7 +649,7 @@ builtin
     -> m (NValue t f m)
     ) -- ^ unary function
   -> m (NValue t f m)
-builtin = (pure .) . nvBuiltin
+builtin = (pure .) . mkNVBuiltin
 
 
 builtin2
@@ -667,7 +672,10 @@ builtin3
     -> m (NValue t f m)
     ) -- ^ ternary function
   -> m (NValue t f m)
-builtin3 = liftA3 (.) (.) ((.) . (.)) ((.) . (.)) . builtin
+builtin3 =
+  liftA2 (.) -- compose 2 together
+    builtin
+    ((.) . builtin2)
 
 -- *** @F: Evaluation -> NValue@
 
@@ -727,7 +735,7 @@ valueType =
         NNull    -> TNull
     NVStrF ns  ->
       TString $
-        HasContext `whenTrue` stringHasContext ns
+        HasContext `whenTrue` hasContext ns
     NVListF{}    -> TList
     NVSetF{}     -> TSet
     NVClosureF{} -> TClosure
@@ -763,17 +771,17 @@ showValueType (Free (NValue' (extract -> v))) =
 -- * @ValueFrame@
 
 data ValueFrame t f m
-    = ForcingThunk t
-    | ConcerningValue (NValue t f m)
-    | Comparison (NValue t f m) (NValue t f m)
-    | Addition (NValue t f m) (NValue t f m)
-    | Multiplication (NValue t f m) (NValue t f m)
-    | Division (NValue t f m) (NValue t f m)
-    | Coercion ValueType ValueType
-    | CoercionToJson (NValue t f m)
-    | CoercionFromJson Aeson.Value
-    | Expectation ValueType (NValue t f m)
-    deriving Typeable
+  = ForcingThunk t
+  | ConcerningValue (NValue t f m)
+  | Comparison (NValue t f m) (NValue t f m)
+  | Addition (NValue t f m) (NValue t f m)
+  | Multiplication (NValue t f m) (NValue t f m)
+  | Division (NValue t f m) (NValue t f m)
+  | Coercion ValueType ValueType
+  | CoercionToJson (NValue t f m)
+  | CoercionFromJson Aeson.Value
+  | Expectation ValueType (NValue t f m)
+ deriving Typeable
 
 deriving instance (Comonad f, Show t) => Show (ValueFrame t f m)
 
@@ -796,7 +804,7 @@ instance MonadDataErrorContext t f m => Exception (ValueFrame t f m)
 $(deriveEq1 ''NValue')
 
 
--- * @NValue'@ traversals, getter & setters
+-- * @NValueF@ traversals, getter & setters
 
 -- | Make traversals for Nix traversable structures.
 $(makeTraversals ''NValueF)

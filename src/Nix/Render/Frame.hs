@@ -41,10 +41,10 @@ renderFrames
 renderFrames []       = stub
 renderFrames xss@(x : xs) =
   do
-    opts :: Options <- asks $ view hasLens
+    opts <- askOptions
     let
       verbosity :: Verbosity
-      verbosity = verbose opts
+      verbosity = getVerbosity opts
     renderedFrames <- if
         | verbosity <= ErrorsOnly -> render1 x
       --  2021-10-22: NOTE: List reverse is completely conterproductive. `reverse` of list famously neest to traverse the whole list to take the last element
@@ -104,7 +104,7 @@ renderEvalFrame
   -> m [Doc ann]
 renderEvalFrame level f =
   do
-    opts :: Options <- asks (view hasLens)
+    opts <- askOptions
     let
       addMetaInfo :: ([Doc ann] -> [Doc ann]) -> SrcSpan -> Doc ann -> m [Doc ann]
       addMetaInfo trans loc = fmap (trans . one) . renderLocation loc
@@ -118,9 +118,9 @@ renderEvalFrame level f =
          where
           scopeInfo :: [Doc ann]
           scopeInfo =
-            one (pretty $ Text.show scope) `whenTrue` showScopes opts
+            one (pretty $ Text.show scope) `whenTrue` isShowScopes opts
 
-      ForcingExpr _scope e@(Ann loc _) | thunks opts ->
+      ForcingExpr _scope e@(Ann loc _) | isThunks opts ->
         addMetaInfo
           id
           loc
@@ -130,7 +130,7 @@ renderEvalFrame level f =
         addMetaInfo
           id
           loc
-          $ "While calling builtins." <> pretty name
+          $ "While calling `builtins." <> prettyVarName name <> "`"
 
       SynHole synfo ->
         sequenceA
@@ -151,28 +151,29 @@ renderExpr
   -> Text
   -> NExprLoc
   -> m (Doc ann)
-renderExpr _level longLabel shortLabel e@(Ann _ x) = do
-  opts :: Options <- asks (view hasLens)
-  let
-    lvl :: Verbosity
-    lvl = verbose opts
+renderExpr _level longLabel shortLabel e@(Ann _ x) =
+  do
+    opts <- askOptions
+    let
+      verbosity :: Verbosity
+      verbosity = getVerbosity opts
 
-    expr :: NExpr
-    expr = stripAnnotation e
+      expr :: NExpr
+      expr = stripAnnotation e
 
-    concise = prettyNix $ Fix $ Fix (NSym "<?>") <$ x
+      concise = prettyNix $ Fix $ Fix (NSym "<?>") <$ x
 
-    chatty =
+      chatty =
+        bool
+          (pretty $ PS.ppShow expr)
+          (prettyNix expr)
+          (verbosity == Chatty)
+
+    pure $
       bool
-        (pretty $ PS.ppShow expr)
-        (prettyNix expr)
-        (lvl == Chatty)
-
-  pure $
-    bool
-      (pretty shortLabel <> fillSep [": ", concise])
-      (vsep [pretty (longLabel <> ":\n>>>>>>>>"), indent 2 chatty, "<<<<<<<<"])
-      (lvl >= Chatty)
+        (pretty shortLabel <> fillSep [": ", concise])
+        (vsep [pretty (longLabel <> ":\n>>>>>>>>"), indent 2 chatty, "<<<<<<<<"])
+        (verbosity >= Chatty)
 
 renderValueFrame
   :: forall e t f m ann
@@ -214,13 +215,14 @@ renderValue
   -> Text
   -> NValue t f m
   -> m (Doc ann)
-renderValue _level _longLabel _shortLabel v = do
-  opts :: Options <- asks $ view hasLens
-  bool
-    prettyNValue
-    prettyNValueProv
-    (values opts)
-    <$> removeEffects v
+renderValue _level _longLabel _shortLabel v =
+  do
+    opts <- askOptions
+    bool
+      prettyNValue
+      prettyNValueProv
+      (isValues opts)
+      <$> removeEffects v
 
 dumbRenderValue
   :: forall e t f m ann

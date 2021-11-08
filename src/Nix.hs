@@ -104,17 +104,17 @@ evaluateExpression
   -> m a
 evaluateExpression mpath evaluator handler expr =
   do
-    opts :: Options <- asks $ view hasLens
+    opts <- askOptions
     (coerce -> args) <-
       (traverse . traverse)
         eval'
-        $  (second parseArg <$> arg    opts)
-        <> (second mkStr    <$> argstr opts)
+        $  (second parseArg <$> getArg    opts)
+        <> (second mkStr    <$> getArgstr opts)
     f <- evaluator mpath expr
     f' <- demand f
     val <-
       case f' of
-        NVClosure _ g -> g $ argmap args
+        NVClosure _ g -> g $ mkNVSet mempty $ M.fromList args
         _             -> pure f
     processResult handler val
  where
@@ -126,20 +126,19 @@ evaluateExpression mpath evaluator handler expr =
 
   eval' = normalForm <=< nixEvalExpr mpath
 
-  argmap args = nvSet mempty $ M.fromList args
-
 processResult
   :: forall e t f m a
    . (MonadNix e t f m, Has e Options)
   => (NValue t f m -> m a)
   -> NValue t f m
   -> m a
-processResult h val = do
-  opts :: Options <- asks $ view hasLens
-  maybe
-    (h val)
-    (\ (coerce . Text.splitOn "." -> keys) -> processKeys keys val)
-    (attr opts)
+processResult h val =
+  do
+    opts <- askOptions
+    maybe
+      (h val)
+      (\ (coerce . Text.splitOn "." -> keys) -> processKeys keys val)
+      (getAttr opts)
  where
   processKeys :: [VarName] -> NValue t f m -> m a
   processKeys kys v =

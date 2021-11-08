@@ -386,10 +386,10 @@ instance MonadInfer m => ToValue Bool (InferT s m) (Judgment s) where
 instance
   Monad m
   => Scoped (Judgment s) (InferT s m) where
-  currentScopes = currentScopesReader
-  clearScopes   = clearScopesReader @(InferT s m) @(Judgment s)
-  pushScopes    = pushScopesReader
-  lookupVar     = lookupVarReader
+  askScopes   = askScopesReader
+  clearScopes = clearScopesReader @(InferT s m) @(Judgment s)
+  pushScopes  = pushScopesReader
+  lookupVar   = lookupVarReader
 
 -- newtype JThunkT s m = JThunk (NThunkF (InferT s m) (Judgment s))
 
@@ -452,9 +452,9 @@ instance MonadInfer m
 
 polymorphicVar :: MonadInfer m => VarName -> InferT s m (Judgment s)
 polymorphicVar var =
-    fmap
-      (join ((`Judgment` mempty) . curry one var))
-      fresh
+  fmap
+    (join $ (`Judgment` mempty) . curry one var)
+    fresh
 
 constInfer :: Applicative f => Type -> b -> f (Judgment s)
 constInfer x = const $ pure $ inferred x
@@ -493,23 +493,12 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
   evalEnvPath     = constInfer typePath
 
   evalUnary op (Judgment as1 cs1 t1) =
-    fmap
-      (join
-        $ Judgment
-            as1
-            . (cs1 <>) . (`unops` op) . (t1 :~>)
-      )
-      fresh
+    (Judgment as1 =<< (cs1 <>) . (`unops` op) . (t1 :~>)) <$> fresh
 
-  evalBinary op (Judgment as1 cs1 t1) e2 = do
-    Judgment as2 cs2 t2 <- e2
-    fmap
-      (join
-        $ Judgment
-          (as1 <> as2)
-          . (\ cs3 -> cs1 <> cs2 <> cs3) . (`binops` op) . (\ t3 -> t1 :~> t2 :~> t3)
-      )
-      fresh
+  evalBinary op (Judgment as1 cs1 t1) e2 =
+    do
+      Judgment as2 cs2 t2 <- e2
+      (Judgment (as1 <> as2) =<< ((cs1 <> cs2) <>) . (`binops` op) . ((t1 :~> t2) :~>)) <$> fresh
 
   evalWith = Eval.evalWithAttrSet
 
@@ -545,15 +534,9 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     ((), Judgment as cs t) <-
       extendMSet
         a
-        (k
-          (pure $
-             Judgment
-               (one (x, tv))
-               mempty
-               tv
-          )
-          (\_ b -> ((), ) <$> b)
-        )
+        $ k
+          (pure (join ((`Judgment` mempty) . curry one x ) tv))
+          $ const $ fmap (mempty,)
     pure $
       Judgment
         (as `Assumption.remove` x)
@@ -570,7 +553,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
       call  = k arg $ \args b -> (args, ) <$> b
       names = fst <$> js
 
-    (args, Judgment as cs t) <- foldr (\(_, TVar a) -> extendMSet a) call js
+    (args, Judgment as cs t) <- foldr (extendMSet . (\ (TVar a) -> a) . snd) call js
 
     ty <- foldInitializedWith (TSet variadic) inferredType id args
 
