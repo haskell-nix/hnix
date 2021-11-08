@@ -625,7 +625,7 @@ constantEqualText expected actual =
   do
     constantEqualText' expected actual
     mres <- liftIO $ on (<|>) lookupEnv "ALL_TESTS" "MATCHING_TESTS"
-    whenJust (const $ assertEvalMatchesNix actual) mres
+    whenJust (const $ assertEvalTextMatchesNix actual) mres
 
 assertNixEvalThrows :: Text -> Assertion
 assertNixEvalThrows a =

@@ -35,6 +35,8 @@ hnixEvalFile opts file =
       )
       parseResult
 
+nixEvalFile :: Path -> IO Text
+nixEvalFile (coerce -> fp) = fromString <$> readProcess "nix-instantiate" ["--eval", "--strict", fp] mempty
 hnixEvalText :: Options -> Text -> IO StdVal
 hnixEvalText opts src =
   either
@@ -42,8 +44,8 @@ hnixEvalText opts src =
     (runWithBasicEffects opts . (normalForm <=< nixEvalExpr mempty))
     $ parseNixText src
 
-nixEvalString :: Text -> IO Text
-nixEvalString expr =
+nixEvalText :: Text -> IO Text
+nixEvalText expr =
   do
     (fp, h) <- mkstemp "nix-test-eval"
     Text.hPutStr h expr
@@ -52,21 +54,27 @@ nixEvalString expr =
     removeLink fp
     pure res
 
-nixEvalFile :: Path -> IO Text
-nixEvalFile fp = fromString <$> readProcess "nix-instantiate" ["--eval", "--strict", coerce fp] mempty
+assertEvalMatchesNix
+  :: ( Options
+    -> Text -> IO (NValue t (StdCited StandardIO) StandardIO)
+    )
+  -> (Text -> IO Text)
+  -> Text
+  -> IO ()
+assertEvalMatchesNix evalHNix evalNix fp =
+  do
+    time    <- liftIO getCurrentTime
+    hnixVal <- (<> "\n") . printNix <$> evalHNix (defaultOptions time) fp
+    nixVal  <- evalNix fp
+    assertEqual (toString fp) nixVal hnixVal
 
 assertEvalFileMatchesNix :: Path -> Assertion
 assertEvalFileMatchesNix fp =
-  do
-    time    <- liftIO getCurrentTime
-    hnixVal <- (<> "\n") . printNix <$> hnixEvalFile (defaultOptions time) fp
-    nixVal  <- nixEvalFile fp
-    assertEqual (coerce fp) nixVal hnixVal
+  assertEvalMatchesNix
+    (\ o -> hnixEvalFile o . coerce . toString)
+    (nixEvalFile . coerce . toString)
+    $ fromString $ coerce fp
 
-assertEvalMatchesNix :: Text -> Assertion
-assertEvalMatchesNix expr =
-  do
-    time    <- liftIO getCurrentTime
-    hnixVal <- (<> "\n") . printNix <$> hnixEvalText (defaultOptions time) expr
-    nixVal  <- nixEvalString expr
-    assertEqual (toString expr) nixVal hnixVal
+assertEvalTextMatchesNix :: Text -> Assertion
+assertEvalTextMatchesNix =
+  assertEvalMatchesNix hnixEvalText nixEvalText
