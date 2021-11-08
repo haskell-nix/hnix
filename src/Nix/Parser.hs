@@ -307,12 +307,14 @@ doubleQuoted =
   doubleEscape :: Parser (Antiquoted Text r)
   doubleEscape = Plain . one <$> (char '\\' *> escapeCode)
 
+
 indented :: Parser (NString NExprLoc)
 indented =
   label "indented string" $
     stripIndent <$>
       inIndentedQuotation (many $ join stringChar indentedQuotationMark indentedEscape)
-  where
+ where
+  -- | Read escaping inside of the "'' <expr> ''"
   indentedEscape :: Parser (Antiquoted Text r)
   indentedEscape =
     try $
@@ -330,11 +332,14 @@ indented =
                   (Plain $ one c)
                   (c /= '\n')
 
+  -- | Enclosed into indented quatation "'' <expr> ''"
   inIndentedQuotation :: Parser a -> Parser a
   inIndentedQuotation expr = indentedQuotationMark *> expr <* indentedQuotationMark
 
+  -- | Symbol "''"
   indentedQuotationMark :: Parser ()
   indentedQuotationMark = label "\"''\"" . void $ chunk "''"
+
 
 nixString' :: Parser (NString NExprLoc)
 nixString' = label "string" $ lexeme $ doubleQuoted <|> indented
