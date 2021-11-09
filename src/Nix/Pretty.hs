@@ -83,7 +83,7 @@ hasAttrOp = getSpecialOperator NHasAttrOp
 wrapParens :: OperatorInfo -> NixDoc ann -> Doc ann
 wrapParens op sub =
   bool
-    (\ a -> "(" <> a <> ")")
+    parens
     id
     (   precedence (rootOp sub)   <  precedence op
     || (precedence (rootOp sub)   == precedence op
@@ -188,9 +188,10 @@ prettyKeyName (StaticKey key) =
   bool
     "\"\""
     (bool
-      varName
-      ("\"" <> varName <> "\"")
+      id
+      dquotes
       (HashSet.member key reservedNames)
+      varName
     )
     (not $ Text.null $ coerce key)
  where
@@ -258,7 +259,7 @@ exprFNixDoc = \case
         ]
    where
     opInfo = getBinaryOperator op
-    f :: NAssoc -> NixDoc ann1 -> Doc ann1
+    f :: NAssoc -> NixDoc ann -> Doc ann
     f x =
       wrapParens
         $ bool
@@ -276,11 +277,8 @@ exprFNixDoc = \case
       (mkNixDoc selectOp)
       (const leastPrecedence)
       o
-      $ wrapPath selectOp r <> "." <> prettySelector attr <> ordoc
-   where
-    r     = mkNixDoc selectOp (wrapParens appOpNonAssoc r')
-    ordoc =
-      ((" or " <>) . wrapParens appOpNonAssoc) `whenJust` o
+      $ wrapPath selectOp (mkNixDoc selectOp (wrapParens appOpNonAssoc r')) <> "." <> prettySelector attr <>
+        ((" or " <>) . wrapParens appOpNonAssoc) `whenJust` o
   NHasAttr r attr ->
     mkNixDoc hasAttrOp (wrapParens hasAttrOp r <> " ? " <> prettySelector attr)
   NEnvPath     p -> simpleExpr $ pretty @String $ "<" <> coerce p <> ">"
