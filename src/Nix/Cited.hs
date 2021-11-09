@@ -16,8 +16,9 @@ import           Control.Monad.Free             ( Free(Pure, Free) )
 
 data Provenance m v =
   Provenance
-    { _lexicalScope :: Scopes m v
-    , _originExpr   :: NExprLocF (Maybe v)
+    { getLexicalScope :: Scopes m v
+      --  2021-11-09: NOTE: Better name?
+    , getOriginExpr   :: NExprLocF (Maybe v)
       -- ^ When calling the function x: x + 2 with argument x = 3, the
       --   'originExpr' for the resulting value will be 3 + 2, while the
       --   'contextExpr' will be @(x: x + 2) 3@, preserving not only the
@@ -27,8 +28,8 @@ data Provenance m v =
 
 data NCited m v a =
   NCited
-    { _provenance :: [Provenance m v]
-    , _cited      :: a
+    { getProvenance :: [Provenance m v]
+    , getCited      :: a
     }
     deriving (Generic, Typeable, Functor, Foldable, Traversable, Show)
 
@@ -37,11 +38,11 @@ instance Applicative (NCited m v) where
   (<*>) (NCited xs f) (NCited ys x) = NCited (xs <> ys) (f x)
 
 instance Comonad (NCited m v) where
-  duplicate p = NCited (_provenance p) p
-  extract = _cited
+  duplicate p = NCited (getProvenance p) p
+  extract = getCited
 
 instance ComonadEnv [Provenance m v] (NCited m v) where
-  ask = _provenance
+  ask = getProvenance
 
 $(makeLenses ''Provenance)
 $(makeLenses ''NCited)
@@ -55,7 +56,7 @@ class HasCitations m v a where
   addProvenance :: Provenance m v -> a -> a
 
 instance HasCitations m v (NCited m v a) where
-  citations = _provenance
+  citations = getProvenance
   addProvenance x (NCited p v) = NCited (x : p) v
 
 instance HasCitations1 m v f

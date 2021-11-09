@@ -73,7 +73,7 @@ appOp :: OperatorInfo
 appOp = getBinaryOperator NApp
 
 appOpNonAssoc :: OperatorInfo
-appOpNonAssoc = (getBinaryOperator NApp) { associativity = NAssocNone }
+appOpNonAssoc = appOp { associativity = NAssocNone }
 
 selectOp :: OperatorInfo
 selectOp = getSpecialOperator NSelectOp
@@ -236,11 +236,12 @@ prettyOriginExpr
   -> Doc ann
 prettyOriginExpr = getDoc . go
  where
+  go :: NExprLocF (Maybe (NValue t f m)) -> NixDoc ann
   go = exprFNixDoc . stripAnnF . fmap render
    where
     render :: Maybe (NValue t f m) -> NixDoc ann
     render Nothing = simpleExpr "_"
-    render (Just (Free (reverse . citations @m -> p:_))) = go (_originExpr p)
+    render (Just (Free (reverse . citations @m -> p:_))) = go (getOriginExpr p)
     render _       = simpleExpr "?"
       -- render (Just (NValue (citations -> ps))) =
           -- simpleExpr $ foldr ((\x y -> vsep [x, y]) . parens . indent 2 . getDoc
@@ -388,7 +389,7 @@ prettyNValueProv v =
       fillSep
         [ prettyNVal
         , indent 2 $
-          "(" <> fold (one "from: " <> (prettyOriginExpr . _originExpr <$> ps)) <> ")"
+          "(" <> fold (one "from: " <> (prettyOriginExpr . getOriginExpr <$> ps)) <> ")"
         ]
     )
     (citations @m @(NValue t f m) v)
@@ -412,7 +413,7 @@ prettyNThunk t =
       fillSep
         [ v'
         , indent 2 $
-          "(" <> fold (one "thunk from: " <> (prettyOriginExpr . _originExpr <$> ps)) <> ")"
+          "(" <> fold (one "thunk from: " <> (prettyOriginExpr . getOriginExpr <$> ps)) <> ")"
         ]
 
 
