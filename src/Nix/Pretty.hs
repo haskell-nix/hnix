@@ -230,7 +230,7 @@ prettyOriginExpr = withoutParens . go
           --                           . go . originExpr)
           --     mempty (reverse ps)
 
-exprFNixDoc :: NExprF (NixDoc ann) -> NixDoc ann
+exprFNixDoc :: forall ann . NExprF (NixDoc ann) -> NixDoc ann
 exprFNixDoc = \case
   NConstant atom -> prettyAtom atom
   NStr      str  -> simpleExpr $ prettyString str
@@ -307,11 +307,15 @@ exprFNixDoc = \case
     leastPrecedence $
       group $
         nest 2 $
-          sep
-            [ "if " <> withoutParens cond
-            , align ("then " <> withoutParens trueBody)
-            , align ("else " <> withoutParens falseBody)
-            ]
+          sep $
+            ifThenElse withoutParens
+    where
+     ifThenElse :: (NixDoc ann -> Doc ann) -> [Doc ann]
+     ifThenElse wp =
+      [ "if " <> wp cond
+      , align ("then " <> wp trueBody)
+      , align ("else " <> wp falseBody)
+      ]
   NWith scope body ->
     prettyAddScope "with " scope body
   NAssert cond body ->
@@ -418,10 +422,8 @@ printNix = iterNValueByDiscardWith thk phi
         v
         (tryRead @Int <|> tryRead @Float)
      where
-      surround s = "\"" <> s <> "\""
-
       tryRead :: forall a . (Read a, Show a) => Maybe Text
-      tryRead = fmap (surround . show) (readMaybe (toString v) :: Maybe a)
+      tryRead = fmap ((\ s -> "\"" <> s <> "\"") . show) $ readMaybe @a $ toString v
   phi NVClosure'{}        = "<<lambda>>"
   phi (NVPath' fp       ) = fromString $ coerce fp
   phi (NVBuiltin' name _) = "<<builtin " <> coerce name <> ">>"
