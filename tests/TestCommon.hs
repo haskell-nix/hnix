@@ -69,6 +69,7 @@ assertEvalMatchesNix evalHNix evalNix fp =
     nixVal  <- evalNix fp
     assertEqual (toString fp) nixVal hnixVal
 
+-- | Compares @HNix@ & @Nix@ return results.
 assertEvalFileMatchesNix :: Path -> Assertion
 assertEvalFileMatchesNix fp =
   assertEvalMatchesNix

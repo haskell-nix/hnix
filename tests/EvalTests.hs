@@ -649,9 +649,8 @@ sameFreeVars a xs =
   do
     let
       Right a' = parseNixText a
-      xs' = S.fromList xs
       free' = getFreeVars a'
-    assertEqual mempty xs' free'
+    assertEqual mempty (S.fromList xs) free'
 
 maskedFiles :: [Path]
 maskedFiles = one "builtins.fetchurl-01.nix"
