@@ -765,18 +765,15 @@ getFreeVars e =
     (NHasAttr expr            path) -> getFreeVars expr <> pathFree path
     (NAbs     (Param varname) expr) -> Set.delete varname (getFreeVars expr)
     (NAbs (ParamSet varname _ pset) expr) ->
-      -- Include all free variables from the expression and the default arguments
-      getFreeVars expr <>
-      -- But remove the argument name if existing, and all arguments in the parameter set
       Set.difference
-        (Set.unions $ getFreeVars <$> mapMaybe snd pset)
-        (Set.difference
-          (one `whenJust` varname)
-          (Set.fromList $ fst <$> pset)
-        )
+        -- Include all free variables from the expression and the default arguments
+        (getFreeVars expr <> (Set.unions $ getFreeVars <$> mapMaybe snd pset))
+        -- But remove the argument name if existing, and all arguments in the parameter set
+        ((one `whenJust` varname) <> (Set.fromList $ fst <$> pset))
     (NLet         bindings expr   ) ->
-      getFreeVars expr <>
-      diffBetween bindFreeVars bindDefs bindings
+      Set.difference
+        (getFreeVars expr <> bindFreeVars bindings)
+        (bindDefs bindings)
     (NIf          cond th   el    ) -> Set.unions $ getFreeVars <$> [cond, th, el]
     -- Evaluation is needed to find out whether x is a "real" free variable in `with y; x`, we just include it
     -- This also makes sense because its value can be overridden by `x: with y; x`
