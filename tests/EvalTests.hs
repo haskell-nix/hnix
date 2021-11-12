@@ -455,6 +455,18 @@ case_regression_373 =
       )
     ]
 
+case_bound_vars :: Assertion
+case_bound_vars =
+  traverse_ noFreeVars
+    [ "a: a"
+    , "{b}: b"
+    , "let c = 5; d = c; in d"
+    , "rec { e = 5; f = e; }"
+    ]
+  where
+    noFreeVars = flip sameFreeVars mempty
+
+
 case_expression_split =
   constantEqualText
     "[ \"\" [ \"a\" ] \"c\" ]"
