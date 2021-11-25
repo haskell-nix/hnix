@@ -109,6 +109,7 @@
       else abort "Requires Nix >= 2.0"
 
 , mkDerivation   ? null
+, inNixShell ? false
 }:
 
 let
