@@ -508,7 +508,7 @@ $(makeTraversals ''NBinaryOp)
 
 -- * data NExprF - Nix expressions, base functor
 
--- | The main Nix expression type. As it is polimophic, has a functor,
+-- | The main Nix expression type. As it is polimorphic, has a functor,
 -- which allows to traverse expressions and map functions over them.
 -- The actual 'NExpr' type is a fixed point of this functor, defined
 -- below.
