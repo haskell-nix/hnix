@@ -104,10 +104,11 @@ prettyString (DoubleQuoted parts) = "\"" <> foldMap prettyPart parts <> "\""
  where
   -- It serializes Text -> String, because the helper code is done for String,
   -- please, can someone break that code.
-  prettyPart (Plain t)      = pretty . foldMap escape . toString $ t
+  prettyPart (Plain t)      = pretty . dollarEscape . toText . foldMap escape . toString $ t
   prettyPart EscapedNewline = "''\\n"
   prettyPart (Antiquoted r) = "${" <> withoutParens r <> "}"
   escape '"' = "\\\""
+  escape '$' = "$" -- do not print $ as \$ if no { is following 
   escape x   =
     maybe
       (one x)
@@ -382,6 +383,10 @@ prettyNThunk t =
           "(" <> fold (one "thunk from: " <> (prettyOriginExpr . _originExpr <$> ps)) <> ")"
         ]
 
+-- | dollarEscape for double quoted string 
+dollarEscape :: Text -> Text
+dollarEscape = replace "${" "\\${"
+
 -- | This function is used only by the testing code.
 printNix :: forall t f m . MonadDataContext f m => NValue t f m -> Text
 printNix = iterNValueByDiscardWith thk phi
@@ -390,7 +395,7 @@ printNix = iterNValueByDiscardWith thk phi
 
   phi :: NValue' t f m Text -> Text
   phi (NVConstant' a ) = atomText a
-  phi (NVStr'      ns) = show $ ignoreContext ns
+  phi (NVStr'      ns) = dollarEscape $ show $ ignoreContext ns
   phi (NVList'     l ) = "[ " <> unwords l <> " ]"
   phi (NVSet' _ s) =
     "{ " <>

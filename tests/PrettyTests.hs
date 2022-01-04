@@ -23,7 +23,7 @@ case_string_antiquotation =
   do
     assertPretty
       (mkStr "echo $foo")
-      "\"echo \\$foo\""
+      "\"echo $foo\""
     assertPretty
       (mkStr "echo ${foo}")
       "\"echo \\${foo}\""
