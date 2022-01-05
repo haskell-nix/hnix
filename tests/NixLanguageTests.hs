@@ -56,8 +56,8 @@ groupBy key = Map.fromListWith (<>) . fmap (key &&& pure)
 -- previously passed.
 newFailingTests :: Set String
 newFailingTests = Set.fromList
-  [ "eval-okay-hash"
-  , "eval-okay-hashfile"
+  [ 
+    "eval-okay-hash"
   , "eval-okay-path"  -- #128
   , "eval-okay-fromTOML"
   , "eval-okay-ind-string" -- #1000 #610 

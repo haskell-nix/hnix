@@ -1424,6 +1424,18 @@ hashStringNix nsAlgo ns =
         mkHash s = hash $ encodeUtf8 s
 
 
+-- | hashFileNix
+-- use hashStringNix to hash file content
+hashFileNix
+  :: forall e t f m . MonadNix e t f m => NixString -> Path -> Prim m NixString
+hashFileNix nsAlgo nvfilepath = Prim $ hash =<< fileContent
+ where
+  hash = outPrim . hashStringNix nsAlgo
+  outPrim (Prim x) = x
+  fileContent :: m NixString
+  fileContent = mkNixStringWithoutContext <$> Nix.Render.readFile nvfilepath
+
+
 placeHolderNix :: forall t f m e . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 placeHolderNix p =
   do
@@ -1853,6 +1865,7 @@ builtinsList =
     , add2 Normal   "hasAttr"          hasAttrNix
     , add  Normal   "hasContext"       hasContextNix
     , add' Normal   "hashString"       (hashStringNix @e @t @f @m)
+    , add' Normal   "hashFile"         hashFileNix
     , add  Normal   "head"             headNix
     , add2 Normal   "intersectAttrs"   intersectAttrsNix
     , add  Normal   "isAttrs"          isAttrsNix
