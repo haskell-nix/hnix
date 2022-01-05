@@ -108,12 +108,12 @@ pattern t :< ts <- (Text.uncons -> Just (t, ts))
   where (:<) = Text.cons
 
 escapeDoubleQuoteString :: Text -> Text
-escapeDoubleQuoteString ('"':<xs) = "\\\"" <> escapeDoubleQuoteString xs
+escapeDoubleQuoteString ('"':<xs)      = "\\\"" <> escapeDoubleQuoteString xs
 escapeDoubleQuoteString ('$':<'{':<xs) = "\\${" <> escapeDoubleQuoteString xs
-escapeDoubleQuoteString ('$':<xs) = '$' :< escapeDoubleQuoteString xs
-escapeDoubleQuoteString (x:<xs) = maybe (one x) (('\\' :<) . one) (toEscapeCode x)
-  <> escapeDoubleQuoteString xs
-escapeDoubleQuoteString a = a
+escapeDoubleQuoteString ('$':<xs)      = '$' :< escapeDoubleQuoteString xs
+escapeDoubleQuoteString (x:<xs)        = maybe (one x) (('\\' :<) . one) (toEscapeCode x) 
+                                         <> escapeDoubleQuoteString xs
+escapeDoubleQuoteString a              = a
 
 
 prettyString :: NString (NixDoc ann) -> Doc ann
