@@ -1156,6 +1156,10 @@ pathExistsNix nvpath =
         NVStr  ns -> doesPathExist $ coerce $ toString $ ignoreContext ns
         _v -> throwError $ ErrorCall $ "builtins.pathExists: expected path, got " <> show _v
 
+isPathNix
+  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
+isPathNix = hasKind @Path
+
 isAttrsNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isAttrsNix = hasKind @(AttrSet (NValue t f m))
@@ -1858,6 +1862,7 @@ builtinsList =
     , add  Normal   "isInt"            isIntNix
     , add  Normal   "isList"           isListNix
     , add  Normal   "isString"         isStringNix
+    , add  Normal   "isPath"           isPathNix
     , add  Normal   "length"           lengthNix
     , add2 Normal   "lessThan"         lessThanNix
     , add  Normal   "listToAttrs"      listToAttrsNix

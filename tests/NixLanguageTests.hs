@@ -59,7 +59,6 @@ newFailingTests = Set.fromList
   [ "eval-okay-hash"
   , "eval-okay-hashfile"
   , "eval-okay-path"  -- #128
-  , "eval-okay-types"
   , "eval-okay-fromTOML"
   ]
 
