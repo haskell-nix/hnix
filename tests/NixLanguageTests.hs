@@ -61,6 +61,7 @@ newFailingTests = Set.fromList
   , "eval-okay-path"  -- #128
   , "eval-okay-types"
   , "eval-okay-fromTOML"
+  , "eval-okay-ind-string" -- #1000 #610 
   ]
 
 -- | Upstream tests that test cases that HNix disaded as a misfeature that is used so rarely

@@ -1,5 +1,7 @@
 {-# language CPP #-}
 {-# language AllowAmbiguousTypes #-}
+{-# language ViewPatterns, PatternSynonyms, OverloadedStrings #-}
+
 
 {-# options_ghc -fno-warn-name-shadowing #-}
 
@@ -99,20 +101,27 @@ wrapPath op sub =
     ("\"${" <> withoutParens sub <> "}\"")
     (wasPath sub)
 
+
+infixr 5 :<
+pattern (:<) :: Char -> Text -> Text
+pattern t :< ts <- (Text.uncons -> Just (t, ts))
+  where (:<) = Text.cons
+
+escapeDoubleQuoteString :: Text -> Text
+escapeDoubleQuoteString ('"':<xs)      = "\\\"" <> escapeDoubleQuoteString xs
+escapeDoubleQuoteString ('$':<'{':<xs) = "\\${" <> escapeDoubleQuoteString xs
+escapeDoubleQuoteString ('$':<xs)      = '$' :< escapeDoubleQuoteString xs
+escapeDoubleQuoteString (x:<xs)        = maybe (one x) (('\\' :<) . one) (toEscapeCode x) 
+                                         <> escapeDoubleQuoteString xs
+escapeDoubleQuoteString a              = a
+
+
 prettyString :: NString (NixDoc ann) -> Doc ann
 prettyString (DoubleQuoted parts) = "\"" <> foldMap prettyPart parts <> "\""
  where
-  -- It serializes Text -> String, because the helper code is done for String,
-  -- please, can someone break that code.
-  prettyPart (Plain t)      = pretty . foldMap escape . toString $ t
+  prettyPart (Plain t)      = pretty $ escapeDoubleQuoteString t
   prettyPart EscapedNewline = "''\\n"
   prettyPart (Antiquoted r) = "${" <> withoutParens r <> "}"
-  escape '"' = "\\\""
-  escape x   =
-    maybe
-      (one x)
-      (('\\' :) . one)
-      (toEscapeCode x)
 prettyString (Indented _ parts) = group $ nest 2 $ vcat
   ["''", content, "''"]
  where
@@ -382,6 +391,7 @@ prettyNThunk t =
           "(" <> fold (one "thunk from: " <> (prettyOriginExpr . _originExpr <$> ps)) <> ")"
         ]
 
+
 -- | This function is used only by the testing code.
 printNix :: forall t f m . MonadDataContext f m => NValue t f m -> Text
 printNix = iterNValueByDiscardWith thk phi
@@ -390,7 +400,7 @@ printNix = iterNValueByDiscardWith thk phi
 
   phi :: NValue' t f m Text -> Text
   phi (NVConstant' a ) = atomText a
-  phi (NVStr'      ns) = show $ ignoreContext ns
+  phi (NVStr'      ns) = "\"" <> escapeDoubleQuoteString (ignoreContext ns) <> "\""
   phi (NVList'     l ) = "[ " <> unwords l <> " ]"
   phi (NVSet' _ s) =
     "{ " <>
