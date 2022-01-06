@@ -17,8 +17,12 @@ jobs:
     name: "GHC"
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        ghc: [ "9.0", "8.8" ]
+        ghc:
+          [ "8.8"
+          , "9.0"
+          ]
     steps:
 
       - name: "Git checkout"
@@ -55,15 +59,12 @@ jobs:
           key: ${{ runner.os }}-Cabal-${{ matrix.ghc }}-${{ hashFiles('cabal.project.freeze') }}
           restore-keys: ${{ runner.os }}-Cabal-${{ matrix.ghc }}-
 
-      #  2022-01-06: NOTE: remove `--allow-newer hashable` after `relude` updates to `hashable` 1.4
       - name: "Build"
-        run: cabal v2-build $cabalConfig --allow-newer hashable
+        run: cabal v2-build $cabalConfig
 
-      #  2022-01-06: NOTE: remove `--allow-newer hashable` after `relude` updates to `hashable` 1.4
       - name: "Tests"
         run: cabal v2-test $cabalConfig
 
-      #  2022-01-06: NOTE: remove `--allow-newer hashable` after `relude` updates to `hashable` 1.4
       - name: "Haddock"
         if: ${{ matrix.ghc == '9.0' }}
         run: cabal v2-haddock $cabalConfig
