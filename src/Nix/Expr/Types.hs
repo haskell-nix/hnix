@@ -176,7 +176,7 @@ data Params r
     ( Eq, Ord, Generic, Generic1
     , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, ToJSON1, FromJSON, FromJSON1
     , Functor, Foldable, Traversable
-    , Show, Hashable, Hashable1
+    , Show, Hashable
     )
 
 instance IsString (Params r) where
@@ -186,6 +186,8 @@ $(deriveShow1 ''Params)
 $(deriveRead1 ''Params)
 $(deriveEq1   ''Params)
 $(deriveOrd1  ''Params)
+
+deriving instance Hashable1 Params
 
 -- *** lens traversals
 
@@ -212,13 +214,8 @@ data Antiquoted (v :: Type) (r :: Type)
     , Typeable, Data, NFData, NFData1, Serialise, Binary
     , ToJSON, ToJSON1, FromJSON, FromJSON1
     , Functor, Foldable, Traversable
-    , Show, Read, Hashable, Hashable1
+    , Show, Read, Hashable
     )
-
-instance Hashable2 Antiquoted where
-  liftHashWithSalt2 ha _  salt (Plain a)      = ha (salt `hashWithSalt` (0 :: Int)) a
-  liftHashWithSalt2 _  _  salt EscapedNewline =     salt `hashWithSalt` (1 :: Int)
-  liftHashWithSalt2 _  hb salt (Antiquoted b) = hb (salt `hashWithSalt` (2 :: Int)) b
 
 $(deriveShow1 ''Antiquoted)
 $(deriveShow2 ''Antiquoted)
@@ -230,6 +227,12 @@ $(deriveOrd1  ''Antiquoted)
 $(deriveOrd2  ''Antiquoted)
 $(deriveJSON2 defaultOptions ''Antiquoted)
 
+instance Hashable2 Antiquoted where
+  liftHashWithSalt2 ha _  salt (Plain a)      = ha (salt `hashWithSalt` (0 :: Int)) a
+  liftHashWithSalt2 _  _  salt EscapedNewline =     salt `hashWithSalt` (1 :: Int)
+  liftHashWithSalt2 _  hb salt (Antiquoted b) = hb (salt `hashWithSalt` (2 :: Int)) b
+
+deriving instance (Hashable v) => Hashable1 (Antiquoted (v :: Type))
 
 -- *** lens traversals
 
@@ -263,7 +266,7 @@ data NString r
     ( Eq, Ord, Generic, Generic1
     , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, ToJSON1, FromJSON, FromJSON1
     , Functor, Foldable, Traversable
-    , Show, Read, Hashable, Hashable1
+    , Show, Read, Hashable
     )
 
 -- | For the the 'IsString' instance, we use a plain doublequoted string.
@@ -275,6 +278,8 @@ $(deriveShow1 ''NString)
 $(deriveRead1 ''NString)
 $(deriveEq1   ''NString)
 $(deriveOrd1  ''NString)
+
+deriving instance Hashable1 NString
 
 -- *** lens traversals
 
@@ -423,13 +428,15 @@ data Binding r
     ( Eq, Ord, Generic, Generic1
     , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
     , Functor, Foldable, Traversable
-    , Show, Hashable, Hashable1
+    , Show, Hashable
     )
 
 $(deriveShow1 ''Binding)
 $(deriveEq1   ''Binding)
 $(deriveOrd1  ''Binding)
 --x $(deriveJSON1 defaultOptions ''Binding)
+
+deriving instance Hashable1 Binding
 
 -- *** lens traversals
 
@@ -596,7 +603,7 @@ data NExprF r
     ( Eq, Ord, Generic, Generic1
     , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
     , Functor, Foldable, Traversable
-    , Show, Hashable, Hashable1
+    , Show, Hashable
     )
 
 
@@ -604,6 +611,8 @@ $(deriveShow1 ''NExprF)
 $(deriveEq1   ''NExprF)
 $(deriveOrd1  ''NExprF)
 --x $(deriveJSON1 defaultOptions ''NExprF)
+
+deriving instance Hashable1 NExprF
 
 -- ** lens traversals
 

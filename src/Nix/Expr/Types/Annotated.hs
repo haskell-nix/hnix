@@ -111,8 +111,6 @@ annUnitToAnn (AnnUnit ann a) = Ann ann a
 
 -- ** Instances
 
-instance Hashable ann => Hashable1 (AnnUnit ann)
-
 instance NFData ann => NFData1 (AnnUnit ann)
 
 instance (Binary ann, Binary a) => Binary (AnnUnit ann a)
@@ -127,6 +125,8 @@ $(deriveShow1 ''AnnUnit)
 $(deriveShow2 ''AnnUnit)
 $(deriveJSON1 defaultOptions ''AnnUnit)
 $(deriveJSON2 defaultOptions ''AnnUnit)
+
+instance Hashable ann => Hashable1 (AnnUnit ann)
 
 instance (Serialise ann, Serialise a) => Serialise (AnnUnit ann a)
 

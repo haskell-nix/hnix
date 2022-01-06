@@ -17,8 +17,12 @@ jobs:
     name: "GHC"
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        ghc: [ "9.0", "8.8" ]
+        ghc:
+          [ "8.8"
+          , "9.0"
+          ]
     steps:
 
       - name: "Git checkout"
@@ -42,9 +46,9 @@ jobs:
       - name: "Repository update"
         run: cabal v2-update
 
-      # NOTE: Freeze is for the caching
+      # Freeze is for the caching
       - name: "Configuration freeze"
-        run: cabal v2-freeze $cabalConfig
+        run: cabal v2-freeze $cabalConfig --minimize-conflict-set
 
       - name: "Configuring GitHub cache"
         uses: actions/cache@v2
