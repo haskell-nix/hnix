@@ -109,6 +109,7 @@
       else abort "Requires Nix >= 2.0"
 
 , mkDerivation   ? null
+, inNixShell ? false
 }:
 
 let
@@ -190,10 +191,8 @@ let
 
     overrides = self: super: {
 
-      semialign = super.semialign_1_2;
+      semialign = super.semialign_1_2_0_1;
       relude = super.relude_1_0_0_1;
-      hnix-store-core = super.hnix-store-core_0_5_0_0;
-      hnix-store-remote = super.hnix-store-remote_0_5_0_0;
 
     };
 

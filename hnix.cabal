@@ -406,7 +406,7 @@ library
   build-depends:
       aeson >= 1.4.2 && < 1.6 || >= 2.0 && < 2.1
     , array >= 0.4 && < 0.6
-    , base >= 4.12 && < 5
+    , base >= 4.12 && < 4.16
     , base16-bytestring >= 0.1.1 && < 1.1
     , binary >= 0.8.5 && < 0.9
     , bytestring >= 0.10.8 && < 0.12
@@ -421,7 +421,7 @@ library
     , filepath >= 1.4.2 && < 1.5
     , free >= 5.1 && < 5.2
     , gitrev >= 1.1.0 && < 1.4
-    , hashable >= 1.2.5 && < 1.4
+    , hashable >= 1.2.5 && < 1.5
     , hashing >= 0.1.0 && < 0.2
     , hnix-store-core >= 0.5.0 && < 0.6
     , hnix-store-remote >= 0.5.0 && < 0.6
@@ -432,7 +432,7 @@ library
     , lens-family-core >= 1.2.2 && < 2.2
     , lens-family-th >= 0.5.0 && < 0.6
     , logict >= 0.6.0 && < 0.7 || >= 0.7.0.2 && < 0.8
-    , megaparsec >= 7.0 && < 9.2
+    , megaparsec >= 7.0 && < 9.3
     , monad-control >= 1.0.2 && < 1.1
     , monadlist >= 0.0.2 && < 0.1
     , mtl >= 2.2.2 && < 2.3
