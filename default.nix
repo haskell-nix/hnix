@@ -191,7 +191,7 @@ let
 
     overrides = self: super: {
 
-      semialign = super.semialign_1_2;
+      semialign = super.semialign_1_2_0_1;
       relude = super.relude_1_0_0_1;
 
     };
