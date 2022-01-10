@@ -193,8 +193,6 @@ let
 
       semialign = super.semialign_1_2;
       relude = super.relude_1_0_0_1;
-      hnix-store-core = super.hnix-store-core_0_5_0_0;
-      hnix-store-remote = super.hnix-store-remote_0_5_0_0;
 
     };
 
