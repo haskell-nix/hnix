@@ -1,6 +1,6 @@
 cabal-version:  2.2
 name:           hnix
-version:        0.14.0.6
+version:        0.14.0.7
 synopsis:       Haskell implementation of the Nix language
 description:    Haskell implementation of the Nix language.
 category:       System, Data, Nix
