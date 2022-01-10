@@ -336,9 +336,9 @@ exprFNixDoc = \case
         nest 2 $
           sep $
             ifThenElse getDoc
-    where
-     ifThenElse :: (NixDoc ann -> Doc ann) -> [Doc ann]
-     ifThenElse wp =
+   where
+    ifThenElse :: (NixDoc ann -> Doc ann) -> [Doc ann]
+    ifThenElse wp =
       [ "if " <> wp cond
       , align ("then " <> wp trueBody)
       , align ("else " <> wp falseBody)
