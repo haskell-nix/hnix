@@ -140,7 +140,7 @@ data Params r
     ( Eq, Ord, Generic, Generic1
     , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, ToJSON1, FromJSON, FromJSON1
     , Functor, Foldable, Traversable
-    , Show, Hashable, Hashable1
+    , Show, Hashable
     )
 
 instance IsString (Params r) where
@@ -150,6 +150,8 @@ $(deriveShow1 ''Params)
 $(deriveRead1 ''Params)
 $(deriveEq1   ''Params)
 $(deriveOrd1  ''Params)
+
+deriving instance Hashable1 Params
 
 -- *** Lens traversals
 
@@ -176,7 +178,7 @@ data Antiquoted (v :: Type) (r :: Type)
     , Typeable, Data, NFData, NFData1, Serialise, Binary
     , ToJSON, ToJSON1, FromJSON, FromJSON1
     , Functor, Foldable, Traversable
-    , Show, Read, Hashable, Hashable1
+    , Show, Read, Hashable
     )
 
 instance Hashable2 Antiquoted where
@@ -194,6 +196,7 @@ $(deriveOrd1  ''Antiquoted)
 $(deriveOrd2  ''Antiquoted)
 $(deriveJSON2 defaultOptions ''Antiquoted)
 
+deriving instance Hashable v => Hashable1 (Antiquoted v)
 
 -- *** Lens traversals
 
@@ -227,7 +230,7 @@ data NString r
     ( Eq, Ord, Generic, Generic1
     , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, ToJSON1, FromJSON, FromJSON1
     , Functor, Foldable, Traversable
-    , Show, Read, Hashable, Hashable1
+    , Show, Read, Hashable
     )
 
 -- | For the the 'IsString' instance, we use a plain doublequoted string.
@@ -239,6 +242,8 @@ $(deriveShow1 ''NString)
 $(deriveRead1 ''NString)
 $(deriveEq1   ''NString)
 $(deriveOrd1  ''NString)
+
+deriving instance Hashable1 NString
 
 -- *** Lens traversals
 
@@ -386,13 +391,15 @@ data Binding r
     ( Eq, Ord, Generic, Generic1
     , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
     , Functor, Foldable, Traversable
-    , Show, Hashable, Hashable1
+    , Show, Hashable
     )
 
 $(deriveShow1 ''Binding)
 $(deriveEq1   ''Binding)
 $(deriveOrd1  ''Binding)
 --x $(deriveJSON1 defaultOptions ''Binding)
+
+deriving instance Hashable1 Binding
 
 -- *** Lens traversals
 
@@ -555,7 +562,7 @@ data NExprF r
     ( Eq, Ord, Generic, Generic1
     , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
     , Functor, Foldable, Traversable
-    , Show, Hashable, Hashable1
+    , Show, Hashable
     )
 
 
@@ -563,6 +570,8 @@ $(deriveShow1 ''NExprF)
 $(deriveEq1   ''NExprF)
 $(deriveOrd1  ''NExprF)
 --x $(deriveJSON1 defaultOptions ''NExprF)
+
+deriving instance Hashable1 NExprF
 
 -- *** Lens traversals
 
