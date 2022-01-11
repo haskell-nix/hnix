@@ -100,7 +100,9 @@ normalizeValueF f = run . iterNValueM run (flip go) (fmap Free . sequenceNValue'
       (do
         i <- ask
         when (i > 2000) $ fail "Exceeded maximum normalization depth of 2000 levels"
-        lifted (lifted $ f t) $ local succ . k
+        (lifted . lifted)
+          (f t)
+          (local succ . k)
       )
       (pure $ pure t)
       b
