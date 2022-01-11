@@ -297,11 +297,11 @@ exprFNixDoc = \case
           "./"  -> "./."
           "../" -> "../."
           ".."  -> "../."
-          _txt  ->
+          path  ->
             bool
-              ("./" <> _txt)
-              _txt
-              (any (`isPrefixOf` coerce _txt) ["/", "~/", "./", "../"])
+              ("./" <> path)
+              path
+              (any (`isPrefixOf` coerce path) ["/", "~/", "./", "../"])
   NSym name -> simpleExpr $ prettyVarName name
   NLet binds body ->
     leastPrecedence $
@@ -418,10 +418,9 @@ prettyNThunk t =
 
 -- | This function is used only by the testing code.
 printNix :: forall t f m . MonadDataContext f m => NValue t f m -> Text
-printNix = iterNValueByDiscardWith thk phi
+printNix =
+  iterNValueByDiscardWith thunkStubText phi
  where
-  thk = thunkStubText
-
   phi :: NValue' t f m Text -> Text
   phi (NVConstant' a ) = atomText a
   phi (NVStr'      ns) = "\"" <> escapeString (ignoreContext ns) <> "\""
