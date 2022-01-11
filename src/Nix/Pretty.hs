@@ -195,11 +195,9 @@ prettyKeyName (StaticKey key) =
       id
       dquotes
       (HashSet.member key reservedNames)
-      varName
+      (prettyVarName key)
     )
     (not $ Text.null $ coerce key)
- where
-  varName = prettyVarName key
 prettyKeyName (DynamicKey key) =
   runAntiquoted
     (DoubleQuoted $ one $ Plain "\n")
@@ -240,9 +238,10 @@ prettyOriginExpr = getDoc . go
 prettyExtractFromProvenance
   :: forall t f m ann
    . HasCitations1 m (NValue t f m) f
-  => [Provenance m (NValue t f m)] -> [Doc ann]
+  => [Provenance m (NValue t f m)] -> Doc ann
 prettyExtractFromProvenance =
-  fmap (prettyOriginExpr . getOriginExpr)
+  sep .
+    fmap (prettyOriginExpr . getOriginExpr)
 
 exprFNixDoc :: forall ann . NExprF (NixDoc ann) -> NixDoc ann
 exprFNixDoc = \case
@@ -321,15 +320,15 @@ exprFNixDoc = \case
     leastPrecedence $
       group $
         nest 2 $
-          sep $
-            ifThenElse getDoc
+          ifThenElse getDoc
    where
-    ifThenElse :: (NixDoc ann -> Doc ann) -> [Doc ann]
+    ifThenElse :: (NixDoc ann -> Doc ann) -> Doc ann
     ifThenElse wp =
-      [ "if " <> wp cond
-      , align ("then " <> wp trueBody)
-      , align ("else " <> wp falseBody)
-      ]
+      sep
+        [ "if " <> wp cond
+        , align ("then " <> wp trueBody)
+        , align ("else " <> wp falseBody)
+        ]
   NWith scope body ->
     prettyAddScope "with " scope body
   NAssert cond body ->
@@ -392,7 +391,7 @@ prettyProv wasThunk v =
       fillSep
         [ pv
         , indent 2 $
-          "(" <> ("thunk " `whenTrue` (wasThunk == WasThunk) <> "from: " <> fold (prettyExtractFromProvenance ps)) <> ")"
+          "(" <> ("thunk " `whenTrue` (wasThunk == WasThunk) <> "from: " <> prettyExtractFromProvenance ps) <> ")"
         ]
     )
     (citations @m @(NValue t f m) v)
