@@ -1,10 +1,8 @@
 {-# language CPP #-}
 {-# language AllowAmbiguousTypes #-}
-{-# language ViewPatterns, PatternSynonyms, OverloadedStrings #-}
 
 
 {-# options_ghc -fno-warn-name-shadowing #-}
-
 
 module Nix.Pretty where
 
@@ -35,8 +33,8 @@ import           Nix.Value
 -- | This type represents a pretty printed nix expression
 -- together with some information about the expression.
 data NixDoc ann = NixDoc
-  { -- | The rendered expression, without any parentheses.
-    withoutParens    :: Doc ann
+  { -- | Rendered expression. Without surrounding parenthesis.
+    getDoc :: Doc ann
 
     -- | The root operator is the operator at the root of
     -- the expression tree. For example, in '(a * b) + c', '+' would be the root
@@ -47,8 +45,16 @@ data NixDoc ann = NixDoc
                     -- we can add brackets appropriately
   }
 
+-- | Represent Nix antiquotes.
+--
+-- >
+-- > ${ expr }
+-- >
+antiquote :: NixDoc ann -> Doc ann
+antiquote x = "${" <> getDoc x <> "}"
+
 mkNixDoc :: OperatorInfo -> Doc ann -> NixDoc ann
-mkNixDoc o d = NixDoc { withoutParens = d, rootOp = o, wasPath = False }
+mkNixDoc o d = NixDoc { getDoc = d, rootOp = o, wasPath = False }
 
 -- | A simple expression is never wrapped in parentheses. The expression
 --   behaves as if its root operator had a precedence higher than all
@@ -66,13 +72,13 @@ pathExpr d = (simpleExpr d) { wasPath = True }
 --   binding).
 leastPrecedence :: Doc ann -> NixDoc ann
 leastPrecedence =
-  mkNixDoc (OperatorInfo maxBound NAssocNone "least precedence")
+  mkNixDoc $ OperatorInfo maxBound NAssocNone "least precedence"
 
 appOp :: OperatorInfo
 appOp = getBinaryOperator NApp
 
 appOpNonAssoc :: OperatorInfo
-appOpNonAssoc = (getBinaryOperator NApp) { associativity = NAssocNone }
+appOpNonAssoc = appOp { associativity = NAssocNone }
 
 selectOp :: OperatorInfo
 selectOp = getSpecialOperator NSelectOp
@@ -80,64 +86,68 @@ selectOp = getSpecialOperator NSelectOp
 hasAttrOp :: OperatorInfo
 hasAttrOp = getSpecialOperator NHasAttrOp
 
-wrapParens :: OperatorInfo -> NixDoc ann -> Doc ann
-wrapParens op sub =
-  bool
-    (\ a -> "(" <> a <> ")")
-    id
-    (   precedence (rootOp sub)   <  precedence op
-    || (precedence (rootOp sub)   == precedence op
-        && associativity (rootOp sub) == associativity op
-        && associativity op /= NAssocNone)
-    )
-    (withoutParens sub)
+-- | Determine if to return doc wraped into parens,
+-- according the given operator.
+precedenceWrap :: OperatorInfo -> NixDoc ann -> Doc ann
+precedenceWrap op subExpr =
+  maybeWrap $ getDoc subExpr
+ where
+  maybeWrap :: Doc ann -> Doc ann
+  maybeWrap =
+    bool
+      parens
+      id
+      needsParens
+   where
+    needsParens :: Bool
+    needsParens =
+      precedence root < precedence op
+      || (  precedence    root == precedence    op
+         && associativity root == associativity op
+         && associativity op   /= NAssocNone
+         )
+
+    root = rootOp subExpr
+
 
 -- Used in the selector case to print a path in a selector as
 -- "${./abc}"
 wrapPath :: OperatorInfo -> NixDoc ann -> Doc ann
 wrapPath op sub =
   bool
-    (wrapParens op sub)
-    ("\"${" <> withoutParens sub <> "}\"")
+    (precedenceWrap op sub)
+    (dquotes $ antiquote sub)
     (wasPath sub)
 
-
-infixr 5 :<
-pattern (:<) :: Char -> Text -> Text
-pattern t :< ts <- (Text.uncons -> Just (t, ts))
-  where (:<) = Text.cons
-
-escapeDoubleQuoteString :: Text -> Text
-escapeDoubleQuoteString ('"':<xs)      = "\\\"" <> escapeDoubleQuoteString xs
-escapeDoubleQuoteString ('$':<'{':<xs) = "\\${" <> escapeDoubleQuoteString xs
-escapeDoubleQuoteString ('$':<xs)      = '$' :< escapeDoubleQuoteString xs
-escapeDoubleQuoteString (x:<xs)        = maybe (one x) (('\\' :<) . one) (toEscapeCode x) 
-                                         <> escapeDoubleQuoteString xs
-escapeDoubleQuoteString a              = a
-
-
+-- | Handle Output representation of the string escape codes.
 prettyString :: NString (NixDoc ann) -> Doc ann
-prettyString (DoubleQuoted parts) = "\"" <> foldMap prettyPart parts <> "\""
+prettyString (DoubleQuoted parts) =
+  dquotes $ foldMap prettyPart parts
  where
-  prettyPart (Plain t)      = pretty $ escapeDoubleQuoteString t
+  prettyPart (Plain t)      = pretty $ escapeString t
   prettyPart EscapedNewline = "''\\n"
-  prettyPart (Antiquoted r) = "${" <> withoutParens r <> "}"
-prettyString (Indented _ parts) = group $ nest 2 $ vcat
-  ["''", content, "''"]
+  prettyPart (Antiquoted r) = antiquote r
+prettyString (Indented _ parts) =
+  group $ nest 2 $ vcat ["''", content, "''"]
  where
   content = vsep . fmap prettyLine . stripLastIfEmpty . splitLines $ parts
   stripLastIfEmpty :: [[Antiquoted Text r]] -> [[Antiquoted Text r]]
-  stripLastIfEmpty = filter flt
+  stripLastIfEmpty =
+    filter flt
    where
     flt :: [Antiquoted Text r] -> Bool
     flt [Plain t] | Text.null (strip t) = False
     flt _ = True
 
-  prettyLine = hcat . fmap prettyPart
-  prettyPart (Plain t) =
-    pretty . replace "${" "''${" . replace "''" "'''" $ t
-  prettyPart EscapedNewline = "\\n"
-  prettyPart (Antiquoted r) = "${" <> withoutParens r <> "}"
+  prettyLine :: [Antiquoted Text (NixDoc ann)] -> Doc ann
+  prettyLine =
+    hcat . fmap prettyPart
+   where
+    prettyPart :: Antiquoted Text (NixDoc ann) -> Doc ann
+    prettyPart (Plain t) =
+      pretty . replace "${" "''${" . replace "''" "'''" $ t
+    prettyPart EscapedNewline = "\\n"
+    prettyPart (Antiquoted r) = antiquote r
 
 prettyVarName :: VarName -> Doc ann
 prettyVarName = pretty @Text . coerce
@@ -146,55 +156,49 @@ prettyParams :: Params (NixDoc ann) -> Doc ann
 prettyParams (Param n           ) = prettyVarName n
 prettyParams (ParamSet mname variadic pset) =
   prettyParamSet variadic pset <>
-     toDoc `whenJust` mname
+    toDoc `whenJust` mname
  where
   toDoc :: VarName -> Doc ann
   toDoc (coerce -> name) =
     ("@" <> pretty name) `whenFalse` Text.null name
 
-prettyParamSet :: Variadic -> ParamSet (NixDoc ann) -> Doc ann
+prettyParamSet :: forall ann . Variadic -> ParamSet (NixDoc ann) -> Doc ann
 prettyParamSet variadic args =
   encloseSep
     "{ "
     (align " }")
-    sep
+    (align ", ")
     (fmap prettySetArg args <> one "..." `whenTrue` (variadic == Variadic))
  where
+  prettySetArg :: (VarName, Maybe (NixDoc ann)) -> Doc ann
   prettySetArg (n, maybeDef) =
-    maybe
-      varName
-      (\x -> varName <> " ? " <> withoutParens x)
-      maybeDef
-   where
-    varName = prettyVarName n
-  sep            = align ", "
+    (prettyVarName n <>) $ ((" ? " <>) . getDoc) `whenJust` maybeDef
 
 prettyBind :: Binding (NixDoc ann) -> Doc ann
 prettyBind (NamedVar n v _p) =
-  prettySelector n <> " = " <> withoutParens v <> ";"
+  prettySelector n <> " = " <> getDoc v <> ";"
 prettyBind (Inherit s ns _p) =
   "inherit " <> scope <> align (fillSep $ prettyVarName <$> ns) <> ";"
-  where
-    scope =
-      ((<> " ") . parens . withoutParens) `whenJust` s
+ where
+  scope =
+    ((<> " ") . parens . getDoc) `whenJust` s
 
 prettyKeyName :: NKeyName (NixDoc ann) -> Doc ann
 prettyKeyName (StaticKey key) =
   bool
     "\"\""
     (bool
-      varName
-      ("\"" <> varName <> "\"")
+      id
+      dquotes
       (HashSet.member key reservedNames)
+      (prettyVarName key)
     )
     (not $ Text.null $ coerce key)
- where
-  varName = prettyVarName key
 prettyKeyName (DynamicKey key) =
   runAntiquoted
     (DoubleQuoted $ one $ Plain "\n")
     prettyString
-    (\ x -> "${" <> withoutParens x <> "}")
+    antiquote
     key
 
 prettySelector :: NAttrPath (NixDoc ann) -> Doc ann
@@ -204,32 +208,43 @@ prettyAtom :: NAtom -> NixDoc ann
 prettyAtom = simpleExpr . pretty . atomText
 
 prettyNix :: NExpr -> Doc ann
-prettyNix = withoutParens . foldFix exprFNixDoc
+prettyNix = getDoc . foldFix exprFNixDoc
 
 prettyOriginExpr
   :: forall t f m ann
    . HasCitations1 m (NValue t f m) f
   => NExprLocF (Maybe (NValue t f m))
   -> Doc ann
-prettyOriginExpr = withoutParens . go
+prettyOriginExpr = getDoc . go
  where
+  go :: NExprLocF (Maybe (NValue t f m)) -> NixDoc ann
   go = exprFNixDoc . stripAnnF . fmap render
    where
     render :: Maybe (NValue t f m) -> NixDoc ann
     render Nothing = simpleExpr "_"
-    render (Just (Free (reverse . citations @m -> p:_))) = go (_originExpr p)
+    render (Just (Free (reverse . citations @m -> p:_))) = go (getOriginExpr p)
     render _       = simpleExpr "?"
       -- render (Just (NValue (citations -> ps))) =
-          -- simpleExpr $ foldr ((\x y -> vsep [x, y]) . parens . indent 2 . withoutParens
+          -- simpleExpr $ foldr ((\x y -> vsep [x, y]) . parens . indent 2 . getDoc
           --                           . go . originExpr)
           --     mempty (reverse ps)
 
-exprFNixDoc :: NExprF (NixDoc ann) -> NixDoc ann
+-- | Takes original expression from inside provenance information.
+-- Prettifies that expression.
+prettyExtractFromProvenance
+  :: forall t f m ann
+   . HasCitations1 m (NValue t f m) f
+  => [Provenance m (NValue t f m)] -> Doc ann
+prettyExtractFromProvenance =
+  sep .
+    fmap (prettyOriginExpr . getOriginExpr)
+
+exprFNixDoc :: forall ann . NExprF (NixDoc ann) -> NixDoc ann
 exprFNixDoc = \case
   NConstant atom -> prettyAtom atom
   NStr      str  -> simpleExpr $ prettyString str
   NList xs ->
-    prettyContainer "[" (wrapParens appOpNonAssoc) "]" xs
+    prettyContainer "[" (precedenceWrap appOpNonAssoc) "]" xs
   NSet NonRecursive xs ->
     prettyContainer "{" prettyBind "}" xs
   NSet Recursive xs ->
@@ -239,10 +254,10 @@ exprFNixDoc = \case
       nest 2 $
         vsep
           [ prettyParams args <> ":"
-          , withoutParens body
+          , getDoc body
           ]
   NBinary NApp fun arg ->
-    mkNixDoc appOp (wrapParens appOp fun <> " " <> wrapParens appOpNonAssoc arg)
+    mkNixDoc appOp (precedenceWrap appOp fun <> " " <> precedenceWrap appOpNonAssoc arg)
   NBinary op r1 r2 ->
     mkNixDoc
       opInfo $
@@ -253,9 +268,9 @@ exprFNixDoc = \case
         ]
    where
     opInfo = getBinaryOperator op
-    f :: NAssoc -> NixDoc ann1 -> Doc ann1
+    f :: NAssoc -> NixDoc ann -> Doc ann
     f x =
-      wrapParens
+      precedenceWrap
         $ bool
             opInfo
             (opInfo { associativity = NAssocNone })
@@ -263,7 +278,7 @@ exprFNixDoc = \case
   NUnary op r1 ->
     mkNixDoc
       opInfo $
-      pretty (operatorName opInfo) <> wrapParens opInfo r1
+      pretty (operatorName opInfo) <> precedenceWrap opInfo r1
    where
     opInfo = getUnaryOperator op
   NSelect o r' attr ->
@@ -271,13 +286,10 @@ exprFNixDoc = \case
       (mkNixDoc selectOp)
       (const leastPrecedence)
       o
-      $ wrapPath selectOp r <> "." <> prettySelector attr <> ordoc
-   where
-    r     = mkNixDoc selectOp (wrapParens appOpNonAssoc r')
-    ordoc =
-      ((" or " <>) . wrapParens appOpNonAssoc) `whenJust` o
+      $ wrapPath selectOp (mkNixDoc selectOp (precedenceWrap appOpNonAssoc r')) <> "." <> prettySelector attr <>
+        ((" or " <>) . precedenceWrap appOpNonAssoc) `whenJust` o
   NHasAttr r attr ->
-    mkNixDoc hasAttrOp (wrapParens hasAttrOp r <> " ? " <> prettySelector attr)
+    mkNixDoc hasAttrOp (precedenceWrap hasAttrOp r <> " ? " <> prettySelector attr)
   NEnvPath     p -> simpleExpr $ pretty @String $ "<" <> coerce p <> ">"
   NLiteralPath p ->
     pathExpr $
@@ -286,29 +298,33 @@ exprFNixDoc = \case
           "./"  -> "./."
           "../" -> "../."
           ".."  -> "../."
-          _txt  ->
+          path  ->
             bool
-              ("./" <> _txt)
-              _txt
-              (any (`isPrefixOf` coerce _txt) ["/", "~/", "./", "../"])
+              ("./" <> path)
+              path
+              (any (`isPrefixOf` coerce path) ["/", "~/", "./", "../"])
   NSym name -> simpleExpr $ prettyVarName name
   NLet binds body ->
     leastPrecedence $
       group $
         vsep
           [ "let"
-          , indent 2 (vsep (fmap prettyBind binds))
-          , "in " <> withoutParens body
+          , indent 2 (vsep $ fmap prettyBind binds)
+          , "in " <> getDoc body
           ]
   NIf cond trueBody falseBody ->
     leastPrecedence $
       group $
         nest 2 $
-          sep
-            [ "if " <> withoutParens cond
-            , align ("then " <> withoutParens trueBody)
-            , align ("else " <> withoutParens falseBody)
-            ]
+          ifThenElse getDoc
+   where
+    ifThenElse :: (NixDoc ann -> Doc ann) -> Doc ann
+    ifThenElse wp =
+      sep
+        [ "if " <> wp cond
+        , align ("then " <> wp trueBody)
+        , align ("else " <> wp falseBody)
+        ]
   NWith scope body ->
     prettyAddScope "with " scope body
   NAssert cond body ->
@@ -324,7 +340,7 @@ exprFNixDoc = \case
   prettyAddScope h c b =
     leastPrecedence $
       vsep
-        [h <> withoutParens c <> ";", align $ withoutParens b]
+        [h <> getDoc c <> ";", align $ getDoc b]
 
 
 valueToExpr :: forall t f m . MonadDataContext f m => NValue t f m -> NExpr
@@ -348,6 +364,35 @@ prettyNValue
   :: forall t f m ann . MonadDataContext f m => NValue t f m -> Doc ann
 prettyNValue = prettyNix . valueToExpr
 
+-- | During the output, which can print only representation of value,
+-- lazy thunks need to looked into & so - be evaluated (*sic)
+-- This type is a simple manual witness "is the thunk gets shown".
+data ValueOrigin = WasThunk | Value
+ deriving Eq
+
+prettyProv
+  :: forall t f m ann
+   . ( HasCitations m (NValue t f m) t
+     , HasCitations1 m (NValue t f m) f
+     , MonadThunk t m (NValue t f m)
+     , MonadDataContext f m
+     )
+  => ValueOrigin  -- ^ Was thunk?
+  -> NValue t f m
+  -> Doc ann
+prettyProv wasThunk v =
+  list
+    id
+    (\ ps pv ->
+      fillSep
+        [ pv
+        , indent 2 $
+          "(" <> ("thunk " `whenTrue` (wasThunk == WasThunk) <> "from: " <> prettyExtractFromProvenance ps) <> ")"
+        ]
+    )
+    (citations @m @(NValue t f m) v)
+    (prettyNValue v)
+
 prettyNValueProv
   :: forall t f m ann
    . ( HasCitations m (NValue t f m) t
@@ -357,19 +402,8 @@ prettyNValueProv
      )
   => NValue t f m
   -> Doc ann
-prettyNValueProv v =
-  list
-    prettyNVal
-    (\ ps ->
-      fillSep
-        [ prettyNVal
-        , indent 2 $
-          "(" <> fold (one "from: " <> (prettyOriginExpr . _originExpr <$> ps)) <> ")"
-        ]
-    )
-    (citations @m @(NValue t f m) v)
- where
-  prettyNVal = prettyNValue v
+prettyNValueProv =
+  prettyProv Value
 
 prettyNThunk
   :: forall t f m ann
@@ -381,26 +415,16 @@ prettyNThunk
   => t
   -> m (Doc ann)
 prettyNThunk t =
-  do
-    let ps = citations @m @(NValue t f m) @t t
-    v' <- prettyNValue <$> dethunk t
-    pure $
-      fillSep
-        [ v'
-        , indent 2 $
-          "(" <> fold (one "thunk from: " <> (prettyOriginExpr . _originExpr <$> ps)) <> ")"
-        ]
-
+  prettyProv WasThunk <$> dethunk t
 
 -- | This function is used only by the testing code.
 printNix :: forall t f m . MonadDataContext f m => NValue t f m -> Text
-printNix = iterNValueByDiscardWith thk phi
+printNix =
+  iterNValueByDiscardWith thunkStubText phi
  where
-  thk = thunkStubText
-
   phi :: NValue' t f m Text -> Text
   phi (NVConstant' a ) = atomText a
-  phi (NVStr'      ns) = "\"" <> escapeDoubleQuoteString (ignoreContext ns) <> "\""
+  phi (NVStr'      ns) = "\"" <> escapeString (ignoreContext ns) <> "\""
   phi (NVList'     l ) = "[ " <> unwords l <> " ]"
   phi (NVSet' _ s) =
     "{ " <>
@@ -415,10 +439,8 @@ printNix = iterNValueByDiscardWith thk phi
         v
         (tryRead @Int <|> tryRead @Float)
      where
-      surround s = "\"" <> s <> "\""
-
       tryRead :: forall a . (Read a, Show a) => Maybe Text
-      tryRead = fmap (surround . show) (readMaybe (toString v) :: Maybe a)
+      tryRead = fmap ((\ s -> "\"" <> s <> "\"") . show) $ readMaybe @a $ toString v
   phi NVClosure'{}        = "<<lambda>>"
   phi (NVPath' fp       ) = fromString $ coerce fp
   phi (NVBuiltin' name _) = "<<builtin " <> coerce name <> ">>"

@@ -625,7 +625,7 @@ constantEqualText expected actual =
   do
     constantEqualText' expected actual
     mres <- liftIO $ on (<|>) lookupEnv "ALL_TESTS" "MATCHING_TESTS"
-    whenJust (const $ assertEvalMatchesNix actual) mres
+    whenJust (const $ assertEvalTextMatchesNix actual) mres
 
 assertNixEvalThrows :: Text -> Assertion
 assertNixEvalThrows a =
@@ -649,9 +649,8 @@ sameFreeVars a xs =
   do
     let
       Right a' = parseNixText a
-      xs' = S.fromList xs
       free' = getFreeVars a'
-    assertEqual mempty xs' free'
+    assertEqual mempty (S.fromList xs) free'
 
 maskedFiles :: [Path]
 maskedFiles = one "builtins.fetchurl-01.nix"

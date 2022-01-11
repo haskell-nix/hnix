@@ -13,6 +13,7 @@ module Nix.Utils
   , mapPair
   , iterateN
   , nestM
+  , applyAll
   , traverse2
   , lifted
 
@@ -152,6 +153,10 @@ nestM 0 _ x = pure x
 nestM n f x =
   foldM (const . f) x $ replicate @() n mempty -- fuses. But also, can it be fix join?
 {-# inline nestM #-}
+
+-- | In `foldr` order apply functions.
+applyAll :: Foldable t => t (a -> a) -> a -> a
+applyAll = flip (foldr id)
 
 traverse2
   :: ( Applicative m

@@ -271,73 +271,78 @@ nixAntiquoted p =
     antiquotedLexeme
     <|> Plain <$> p
 
+escapeCode :: Parser Char
+escapeCode =
+  msum
+    [ c <$ char e | (c, e) <- escapeCodes ]
+  <|> anySingle
+
+stringChar
+  :: Parser ()
+  -> Parser ()
+  -> Parser (Antiquoted Text NExprLoc)
+  -> Parser (Antiquoted Text NExprLoc)
+stringChar end escStart esc =
+  antiquoted
+  <|> Plain . one <$> char '$'
+  <|> esc
+  <|> Plain . fromString <$> some plainChar
+  where
+  plainChar :: Parser Char
+  plainChar =
+    notFollowedBy (end <|> void (char '$') <|> escStart) *> anySingle
+
+doubleQuoted :: Parser (NString NExprLoc)
+doubleQuoted =
+  label "double quoted string" $
+    DoubleQuoted . removeEmptyPlains . mergePlain <$>
+      inQuotationMarks (many $ stringChar quotationMark (void $ char '\\') doubleEscape)
+  where
+  inQuotationMarks :: Parser a -> Parser a
+  inQuotationMarks expr = quotationMark *> expr <* quotationMark
+
+  quotationMark :: Parser ()
+  quotationMark = void $ char '"'
+
+  doubleEscape :: Parser (Antiquoted Text r)
+  doubleEscape = Plain . one <$> (char '\\' *> escapeCode)
+
+
+indented :: Parser (NString NExprLoc)
+indented =
+  label "indented string" $
+    stripIndent <$>
+      inIndentedQuotation (many $ join stringChar indentedQuotationMark indentedEscape)
+ where
+  -- | Read escaping inside of the "'' <expr> ''"
+  indentedEscape :: Parser (Antiquoted Text r)
+  indentedEscape =
+    try $
+      do
+        indentedQuotationMark
+        (Plain <$> ("''" <$ char '\'' <|> "$" <$ char '$'))
+          <|>
+            do
+              _ <- char '\\'
+              c <- escapeCode
+
+              pure $
+                bool
+                  EscapedNewline
+                  (Plain $ one c)
+                  (c /= '\n')
+
+  -- | Enclosed into indented quatation "'' <expr> ''"
+  inIndentedQuotation :: Parser a -> Parser a
+  inIndentedQuotation expr = indentedQuotationMark *> expr <* indentedQuotationMark
+
+  -- | Symbol "''"
+  indentedQuotationMark :: Parser ()
+  indentedQuotationMark = label "\"''\"" . void $ chunk "''"
+
+
 nixString' :: Parser (NString NExprLoc)
 nixString' = label "string" $ lexeme $ doubleQuoted <|> indented
- where
-  doubleQuoted :: Parser (NString NExprLoc)
-  doubleQuoted =
-    label "double quoted string" $
-      DoubleQuoted . removeEmptyPlains . mergePlain <$>
-        inQuotationMarks (many $ stringChar quotationMark (void $ char '\\') doubleEscape)
-   where
-    inQuotationMarks :: Parser a -> Parser a
-    inQuotationMarks expr = quotationMark *> expr <* quotationMark
-
-    quotationMark :: Parser ()
-    quotationMark = void $ char '"'
-
-    doubleEscape :: Parser (Antiquoted Text r)
-    doubleEscape = Plain . one <$> (char '\\' *> escapeCode)
-
-  indented :: Parser (NString NExprLoc)
-  indented =
-    label "indented string" $
-      stripIndent <$>
-        inIndentedQuotation (many $ join stringChar indentedQuotationMark indentedEscape)
-   where
-    indentedEscape :: Parser (Antiquoted Text r)
-    indentedEscape =
-      try $
-        do
-          indentedQuotationMark
-          (Plain <$> ("''" <$ char '\'' <|> "$" <$ char '$'))
-            <|>
-              do
-                _ <- char '\\'
-                c <- escapeCode
-
-                pure $
-                  bool
-                    EscapedNewline
-                    (Plain $ one c)
-                    (c /= '\n')
-
-    inIndentedQuotation :: Parser a -> Parser a
-    inIndentedQuotation expr = indentedQuotationMark *> expr <* indentedQuotationMark
-
-    indentedQuotationMark :: Parser ()
-    indentedQuotationMark = label "\"''\"" . void $ chunk "''"
-
-  stringChar
-    :: Parser ()
-    -> Parser ()
-    -> Parser (Antiquoted Text NExprLoc)
-    -> Parser (Antiquoted Text NExprLoc)
-  stringChar end escStart esc =
-    antiquoted
-    <|> Plain . one <$> char '$'
-    <|> esc
-    <|> Plain . fromString <$> some plainChar
-   where
-    plainChar :: Parser Char
-    plainChar =
-      notFollowedBy (end <|> void (char '$') <|> escStart) *> anySingle
-
-  escapeCode :: Parser Char
-  escapeCode =
-    msum
-      [ c <$ char e | (c, e) <- escapeCodes ]
-    <|> anySingle
 
 nixString :: Parser NExprLoc
 nixString = annNStr <$> annotateLocation1 nixString'
@@ -587,6 +592,7 @@ nixOperators selector =
     one $ binaryR NImpl "->"
   ]
 
+--  2021-11-09: NOTE: rename OperatorInfo accessors to `get*`
 --  2021-08-10: NOTE:
 --  All this is a sidecar:
 --  * This type
@@ -596,11 +602,13 @@ nixOperators selector =
 --  * getSpecialOperation
 --  can reduced in favour of adding precedence field into @NOperatorDef@.
 -- details: https://github.com/haskell-nix/hnix/issues/982
-data OperatorInfo = OperatorInfo
-  { precedence    :: Int
-  , associativity :: NAssoc
-  , operatorName  :: Text
-  } deriving (Eq, Ord, Generic, Typeable, Data, Show)
+data OperatorInfo =
+  OperatorInfo
+    { precedence    :: Int
+    , associativity :: NAssoc
+    , operatorName  :: Text
+    }
+ deriving (Eq, Ord, Generic, Typeable, Data, Show)
 
 detectPrecedence
   :: Ord a

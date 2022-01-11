@@ -776,9 +776,9 @@ getFreeVars e =
     (NAbs (ParamSet varname _ pset) expr) ->
       Set.difference
         -- Include all free variables from the expression and the default arguments
-        (getFreeVars expr <> (Set.unions $ getFreeVars <$> mapMaybe snd pset))
+        (getFreeVars expr <> Set.unions (getFreeVars <$> mapMaybe snd pset))
         -- But remove the argument name if existing, and all arguments in the parameter set
-        ((one `whenJust` varname) <> (Set.fromList $ fst <$> pset))
+        ((one `whenJust` varname) <> Set.fromList (fst <$> pset))
     (NLet         bindings expr   ) ->
       Set.difference
         (getFreeVars expr <> bindFreeVars bindings)

@@ -247,22 +247,20 @@ instance Show VersionComponent where
 
 splitVersion :: Text -> [VersionComponent]
 splitVersion s =
- whenJust
-   (\ (x, xs) -> if
-      | isRight eDigitsPart ->
-          either
-            (\ e -> error $ "splitVersion: did hit impossible: '" <> fromString e <> "' while parsing '" <> s <> "'.")
-            (\ res ->
-              one (VersionComponentNumber $ fst res)
-              <> splitVersion (snd res)
-            )
-            eDigitsPart
+  (\ (x, xs) -> if
+    | isRight eDigitsPart ->
+        either
+          (\ e -> error $ "splitVersion: did hit impossible: '" <> fromString e <> "' while parsing '" <> s <> "'.")
+          (\ res ->
+            one (VersionComponentNumber $ fst res)
+            <> splitVersion (snd res)
+          )
+          eDigitsPart
 
-      | x `elem` separators -> splitVersion xs
+    | x `elem` separators -> splitVersion xs
 
-      | otherwise -> one charsPart <> splitVersion rest2
-  )
-  (Text.uncons s)
+    | otherwise -> one charsPart <> splitVersion rest2
+  ) `whenJust` Text.uncons s
  where
   -- | Based on https://github.com/NixOS/nix/blob/4ee4fda521137fed6af0446948b3877e0c5db803/src/libexpr/names.cc#L44
   separators :: String
