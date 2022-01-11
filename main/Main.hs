@@ -178,24 +178,24 @@ main' opts@Options{..} = runWithBasicEffectsIO opts execContentsFilesOrRepl
       | isFinder    = findAttrs <=< fromValue @(AttrSet StdVal)
       | otherwise = printer'
      where
+      -- 2021-05-27: NOTE: With naive fix of the #941
+      -- This is overall a naive printer implementation, as options should interact/respect one another.
+      -- A nice question: "Should respect one another to what degree?": Go full combinator way, for which
+      -- old Nix CLI is nototrious for (and that would mean to reimplement the old Nix CLI),
+      -- OR: https://github.com/haskell-nix/hnix/issues/172 and have some sane standart/default behaviour for (most) keys.
       printer'
-        | isXml     = fun (ignoreContext . toXML)                    normalForm
-        -- 2021-05-27: NOTE: With naive fix of the #941
-        -- This is overall a naive printer implementation, as options should interact/respect one another.
-        -- A nice question: "Should respect one another to what degree?": Go full combinator way, for which
-        -- old Nix CLI is nototrious for (and that would mean to reimplement the old Nix CLI),
-        -- OR: https://github.com/haskell-nix/hnix/issues/172 and have some sane standart/default behaviour for (most) keys.
-        | isJson    = fun (ignoreContext . mempty . toJSONNixString) normalForm
-        | isStrict  = fun (show . prettyNValue)                      normalForm
-        | isValues  = fun (show . prettyNValueProv)                  removeEffects
-        | otherwise = fun (show . prettyNValue)                      removeEffects
+        | isXml     = out (ignoreContext . toXML)                    normalForm
+        | isJson    = out (ignoreContext . mempty . toJSONNixString) normalForm
+        | isStrict  = out (show . prettyNValue)                      normalForm
+        | isValues  = out (show . prettyNValueProv)                  removeEffects
+        | otherwise = out (show . prettyNValue)                      removeEffects
        where
-        fun
+        out
           :: (b -> Text)
           -> (a -> StandardIO b)
           -> a
           -> StdIO
-        fun g f = liftIO . Text.putStrLn . g <=< f
+        out transform val = liftIO . Text.putStrLn . transform <=< val
 
       findAttrs
         :: AttrSet StdVal
