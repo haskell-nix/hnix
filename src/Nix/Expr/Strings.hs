@@ -119,3 +119,5 @@ escapeMap = [("\\", "\\\\"), ("${", "\\${"), ("\"", "\\\""), ("\n", "\\n"), ("\r
 
 toEscapeCode :: Char -> Maybe Char
 toEscapeCode = (`lookup` escapeCodes)
+escapeString :: Text -> Text
+escapeString = flip (foldl' (flip id)) (fmap (uncurry T.replace) escapeMap)

@@ -1,6 +1,5 @@
 {-# language CPP #-}
 {-# language AllowAmbiguousTypes #-}
-{-# language ViewPatterns, PatternSynonyms, OverloadedStrings #-}
 
 
 {-# options_ghc -fno-warn-name-shadowing #-}
@@ -112,26 +111,11 @@ wrapPath op sub =
     ("\"${" <> getDoc sub <> "}\"")
     (wasPath sub)
 
-
-infixr 5 :<
-pattern (:<) :: Char -> Text -> Text
-pattern t :< ts <- (Text.uncons -> Just (t, ts))
-  where (:<) = Text.cons
-
-escapeDoubleQuoteString :: Text -> Text
-escapeDoubleQuoteString ('"':<xs)      = "\\\"" <> escapeDoubleQuoteString xs
-escapeDoubleQuoteString ('$':<'{':<xs) = "\\${" <> escapeDoubleQuoteString xs
-escapeDoubleQuoteString ('$':<xs)      = '$' :< escapeDoubleQuoteString xs
-escapeDoubleQuoteString (x:<xs)        = maybe (one x) (('\\' :<) . one) (toEscapeCode x) 
-                                         <> escapeDoubleQuoteString xs
-escapeDoubleQuoteString a              = a
-
-
 -- | Handle Output representation of the string escape codes.
 prettyString :: NString (NixDoc ann) -> Doc ann
 prettyString (DoubleQuoted parts) = "\"" <> foldMap prettyPart parts <> "\""
  where
-  prettyPart (Plain t)      = pretty $ escapeDoubleQuoteString t
+  prettyPart (Plain t)      = pretty $ escapeString t
   prettyPart EscapedNewline = "''\\n"
   prettyPart (Antiquoted r) = "${" <> getDoc r <> "}"
   escape '"' = "\\\""
@@ -434,7 +418,7 @@ printNix = iterNValueByDiscardWith thk phi
 
   phi :: NValue' t f m Text -> Text
   phi (NVConstant' a ) = atomText a
-  phi (NVStr'      ns) = "\"" <> escapeDoubleQuoteString (ignoreContext ns) <> "\""
+  phi (NVStr'      ns) = "\"" <> escapeString (ignoreContext ns) <> "\""
   phi (NVList'     l ) = "[ " <> unwords l <> " ]"
   phi (NVSet' _ s) =
     "{ " <>
