@@ -369,6 +369,35 @@ prettyNValue
   :: forall t f m ann . MonadDataContext f m => NValue t f m -> Doc ann
 prettyNValue = prettyNix . valueToExpr
 
+-- | During the output, which can print only representation of value,
+-- lazy thunks need to looked into & so - be evaluated (*sic)
+-- This type is a simple manual witness "is the thunk gets shown".
+data ValueOrigin = WasThunk | Value
+ deriving Eq
+
+prettyProv
+  :: forall t f m ann
+   . ( HasCitations m (NValue t f m) t
+     , HasCitations1 m (NValue t f m) f
+     , MonadThunk t m (NValue t f m)
+     , MonadDataContext f m
+     )
+  => ValueOrigin  -- ^ Was thunk?
+  -> NValue t f m
+  -> Doc ann
+prettyProv wasThunk v =
+  list
+    id
+    (\ ps pv ->
+      fillSep
+        [ pv
+        , indent 2 $
+          "(" <> ("thunk " `whenTrue` (wasThunk == WasThunk) <> "from: " <> fold (prettyExtractFromProvenance ps)) <> ")"
+        ]
+    )
+    (citations @m @(NValue t f m) v)
+    (prettyNValue v)
+
 prettyNValueProv
   :: forall t f m ann
    . ( HasCitations m (NValue t f m) t
@@ -378,19 +407,8 @@ prettyNValueProv
      )
   => NValue t f m
   -> Doc ann
-prettyNValueProv v =
-  list
-    prettyNVal
-    (\ ps ->
-      fillSep
-        [ prettyNVal
-        , indent 2 $
-          "(" <> fold (one "from: " <> prettyExtractFromProvenance ps) <> ")"
-        ]
-    )
-    (citations @m @(NValue t f m) v)
- where
-  prettyNVal = prettyNValue v
+prettyNValueProv =
+  prettyProv Value
 
 prettyNThunk
   :: forall t f m ann
@@ -402,16 +420,7 @@ prettyNThunk
   => t
   -> m (Doc ann)
 prettyNThunk t =
-  do
-    let ps = citations @m @(NValue t f m) @t t
-    v' <- prettyNValue <$> dethunk t
-    pure $
-      fillSep
-        [ v'
-        , indent 2 $
-          "(" <> fold (one "thunk from: " <> prettyExtractFromProvenance ps) <> ")"
-        ]
-
+  prettyProv WasThunk <$> dethunk t
 
 -- | This function is used only by the testing code.
 printNix :: forall t f m . MonadDataContext f m => NValue t f m -> Text
