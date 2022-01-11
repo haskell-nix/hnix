@@ -114,10 +114,12 @@ escapeCodes =
 
 fromEscapeCode :: Char -> Maybe Char
 fromEscapeCode = (`lookup` (swap <$> escapeCodes))
-escapeMap :: [(Text, Text)]
-escapeMap = [("\\", "\\\\"), ("${", "\\${"), ("\"", "\\\""), ("\n", "\\n"), ("\r", "\\r"), ("\t", "\\t")]
 
 toEscapeCode :: Char -> Maybe Char
 toEscapeCode = (`lookup` escapeCodes)
+
+escapeMap :: [(Text, Text)]
+escapeMap = [("\\", "\\\\"), ("${", "\\${"), ("\"", "\\\""), ("\n", "\\n"), ("\r", "\\r"), ("\t", "\\t")]
+
 escapeString :: Text -> Text
 escapeString = flip (foldl' (flip id)) (fmap (uncurry T.replace) escapeMap)
