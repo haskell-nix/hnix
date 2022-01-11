@@ -89,7 +89,8 @@ hasAttrOp = getSpecialOperator NHasAttrOp
 -- | Determine if to return doc wraped into parens,
 -- according the given operator.
 precedenceWrap :: OperatorInfo -> NixDoc ann -> Doc ann
-precedenceWrap op sub = maybeWrap (getDoc sub)
+precedenceWrap op sub =
+  maybeWrap (getDoc sub)
  where
   maybeWrap :: Doc ann -> Doc ann
   maybeWrap =
