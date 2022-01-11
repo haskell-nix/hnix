@@ -110,7 +110,7 @@ stripIndent xs =
 
 escapeCodes :: [(Char, Char)]
 escapeCodes =
-  [('\n', 'n'), ('\r', 'r'), ('\t', 't'), ('\\', '\\'), ('$', '$'), ('"', '"')]
+  [('\\', '\\'), ('$', '$'), ('"', '"'), ('\n', 'n'), ('\r', 'r'), ('\t', 't')]
 
 fromEscapeCode :: Char -> Maybe Char
 fromEscapeCode = (`lookup` (swap <$> escapeCodes))
