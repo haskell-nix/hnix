@@ -119,7 +119,8 @@ toEscapeCode :: Char -> Maybe Char
 toEscapeCode = (`lookup` escapeCodes)
 
 escapeMap :: [(Text, Text)]
-escapeMap = [("\\", "\\\\"), ("${", "\\${"), ("\"", "\\\""), ("\n", "\\n"), ("\r", "\\r"), ("\t", "\\t")]
+escapeMap =
+  [("\n", "\\n"), ("\r", "\\r"), ("\t", "\\t"), ("\"", "\\\""), ("${", "\\${"), ("\\", "\\\\")]
 
 escapeString :: Text -> Text
-escapeString = flip (foldl' (flip id)) (fmap (uncurry T.replace) escapeMap)
+escapeString = applyAll (fmap (uncurry T.replace) escapeMap)
