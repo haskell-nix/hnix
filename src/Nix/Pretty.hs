@@ -114,13 +114,13 @@ wrapPath :: OperatorInfo -> NixDoc ann -> Doc ann
 wrapPath op sub =
   bool
     (precedenceWrap op sub)
-    ("\"" <> antiquote sub <> "\"")
+    (dquotes $ antiquote sub)
     (wasPath sub)
 
 -- | Handle Output representation of the string escape codes.
 prettyString :: NString (NixDoc ann) -> Doc ann
 prettyString (DoubleQuoted parts) =
-  "\"" <> foldMap prettyPart parts <> "\""
+  dquotes $ foldMap prettyPart parts
  where
   prettyPart (Plain t)      = pretty $ escapeString t
   prettyPart EscapedNewline = "''\\n"
