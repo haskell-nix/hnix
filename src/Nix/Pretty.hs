@@ -119,24 +119,27 @@ wrapPath op sub =
 
 -- | Handle Output representation of the string escape codes.
 prettyString :: NString (NixDoc ann) -> Doc ann
-prettyString (DoubleQuoted parts) = "\"" <> foldMap prettyPart parts <> "\""
+prettyString (DoubleQuoted parts) =
+  "\"" <> foldMap prettyPart parts <> "\""
  where
   prettyPart (Plain t)      = pretty $ escapeString t
   prettyPart EscapedNewline = "''\\n"
   prettyPart (Antiquoted r) = antiquote r
-prettyString (Indented _ parts) = group $ nest 2 $ vcat
-  ["''", content, "''"]
+prettyString (Indented _ parts) =
+  group $ nest 2 $ vcat ["''", content, "''"]
  where
   content = vsep . fmap prettyLine . stripLastIfEmpty . splitLines $ parts
   stripLastIfEmpty :: [[Antiquoted Text r]] -> [[Antiquoted Text r]]
-  stripLastIfEmpty = filter flt
+  stripLastIfEmpty =
+    filter flt
    where
     flt :: [Antiquoted Text r] -> Bool
     flt [Plain t] | Text.null (strip t) = False
     flt _ = True
 
   prettyLine :: [Antiquoted Text (NixDoc ann)] -> Doc ann
-  prettyLine = hcat . fmap prettyPart
+  prettyLine =
+    hcat . fmap prettyPart
    where
     prettyPart :: Antiquoted Text (NixDoc ann) -> Doc ann
     prettyPart (Plain t) =
@@ -311,7 +314,7 @@ exprFNixDoc = \case
       group $
         vsep
           [ "let"
-          , indent 2 (vsep (fmap prettyBind binds))
+          , indent 2 (vsep $ fmap prettyBind binds)
           , "in " <> getDoc body
           ]
   NIf cond trueBody falseBody ->
