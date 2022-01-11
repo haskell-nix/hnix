@@ -4,8 +4,6 @@
 
 {-# options_ghc -fno-warn-name-shadowing #-}
 
---  2021-11-09: NOTE: Please do not reduce explicit `"${" <> a <> "}"` types of wrappings - as they are readable and so analyzable at eyesight. HNix already has a difficult task of 100% matching the escaping of an unpstream project.
-
 module Nix.Pretty where
 
 import           Prelude                  hiding ( toList, group )
@@ -46,6 +44,14 @@ data NixDoc ann = NixDoc
   , wasPath :: Bool -- This is needed so that when a path is used in a selector path
                     -- we can add brackets appropriately
   }
+
+-- | Represent Nix antiquotes.
+--
+-- >
+-- > ${ expr }
+-- >
+antiquote :: NixDoc ann -> Doc ann
+antiquote x = "${" <> getDoc x <> "}"
 
 mkNixDoc :: OperatorInfo -> Doc ann -> NixDoc ann
 mkNixDoc o d = NixDoc { getDoc = d, rootOp = o, wasPath = False }
@@ -108,7 +114,7 @@ wrapPath :: OperatorInfo -> NixDoc ann -> Doc ann
 wrapPath op sub =
   bool
     (precedenceWrap op sub)
-    ("\"${" <> getDoc sub <> "}\"")
+    ("\"" <> antiquote sub <> "\"")
     (wasPath sub)
 
 -- | Handle Output representation of the string escape codes.
@@ -117,13 +123,7 @@ prettyString (DoubleQuoted parts) = "\"" <> foldMap prettyPart parts <> "\""
  where
   prettyPart (Plain t)      = pretty $ escapeString t
   prettyPart EscapedNewline = "''\\n"
-  prettyPart (Antiquoted r) = "${" <> getDoc r <> "}"
-  escape '"' = "\\\""
-  escape x   =
-    maybe
-      (one x)
-      (('\\' :) . one)
-      (toEscapeCode x)
+  prettyPart (Antiquoted r) = antiquote r
 prettyString (Indented _ parts) = group $ nest 2 $ vcat
   ["''", content, "''"]
  where
@@ -142,7 +142,7 @@ prettyString (Indented _ parts) = group $ nest 2 $ vcat
     prettyPart (Plain t) =
       pretty . replace "${" "''${" . replace "''" "'''" $ t
     prettyPart EscapedNewline = "\\n"
-    prettyPart (Antiquoted r) = "${" <> getDoc r <> "}"
+    prettyPart (Antiquoted r) = antiquote r
 
 prettyVarName :: VarName -> Doc ann
 prettyVarName = pretty @Text . coerce
@@ -201,7 +201,7 @@ prettyKeyName (DynamicKey key) =
   runAntiquoted
     (DoubleQuoted $ one $ Plain "\n")
     prettyString
-    (\ x -> "${" <> getDoc x <> "}")
+    antiquote
     key
 
 prettySelector :: NAttrPath (NixDoc ann) -> Doc ann
