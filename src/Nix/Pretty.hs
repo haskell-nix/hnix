@@ -89,8 +89,8 @@ hasAttrOp = getSpecialOperator NHasAttrOp
 -- | Determine if to return doc wraped into parens,
 -- according the given operator.
 precedenceWrap :: OperatorInfo -> NixDoc ann -> Doc ann
-precedenceWrap op sub =
-  maybeWrap (getDoc sub)
+precedenceWrap op subExpr =
+  maybeWrap $ getDoc subExpr
  where
   maybeWrap :: Doc ann -> Doc ann
   maybeWrap =
@@ -98,16 +98,17 @@ precedenceWrap op sub =
       parens
       id
       needsParens
+   where
+    needsParens :: Bool
+    needsParens =
+      precedence root < precedence op
+      || (  precedence    root == precedence    op
+         && associativity root == associativity op
+         && associativity op   /= NAssocNone
+         )
 
-  root = rootOp sub
+    root = rootOp subExpr
 
-  needsParens :: Bool
-  needsParens =
-    precedence root       <  precedence op
-    || (precedence root       == precedence op
-        && associativity root == associativity op
-        && associativity op   /= NAssocNone
-      )
 
 -- Used in the selector case to print a path in a selector as
 -- "${./abc}"
